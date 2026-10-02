@@ -14,9 +14,9 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 
 from accounts.cookies import REFRESH_COOKIE_NAME, REFRESH_COOKIE_PATH
 from accounts.models import User
+from accounts.tests.helpers import log_in
 from accounts.tokens import RefreshToken, issue_token_pair, revoke_all_sessions
 
-LOGIN_URL = reverse('accounts:login')
 REFRESH_URL = reverse('accounts:refresh')
 LOGOUT_URL = reverse('accounts:logout')
 LOGOUT_ALL_URL = reverse('accounts:logout-all')
@@ -46,11 +46,7 @@ class RefreshTestCase(APITestCase):
         self.login_response = self.login(self.client)
 
     def login(self, client: APIClient):
-        return client.post(
-            LOGIN_URL,
-            {'username': 'player_01', 'password': PASSWORD},
-            format='json',
-        )
+        return log_in(client, 'player_01', PASSWORD)
 
     def refresh_cookie_value(self, client: APIClient | None = None) -> str:
         return (client or self.client).cookies[REFRESH_COOKIE_NAME].value

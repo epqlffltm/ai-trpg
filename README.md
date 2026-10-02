@@ -78,6 +78,10 @@ cd auth-server
 uv run python manage.py test
 ```
 
+테스트에서는 비밀번호 해셔를 가벼운 것으로 바꾼다(`config/test_runner.py`). 기본 해셔는 일부러
+느리게 만든 계산이라 가입과 로그인을 반복하는 테스트 시간의 대부분을 차지한다.
+137개 기준 122.0초에서 4.5초로 줄었다. `runserver`와 측정 스크립트는 원래의 해셔를 쓴다.
+
 ## API
 
 인증 서버의 API는 `/api/v1/auth/` 아래에 있다. 요청과 응답은 JSON이다.

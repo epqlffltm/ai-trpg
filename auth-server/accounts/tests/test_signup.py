@@ -64,6 +64,7 @@ class SignupTestCase(APITestCase):
         return self.client.post(RESEND_URL, {'email': email}, format='json')
 
     def login(self, username: str = 'player_01', password: str = PASSWORD):
+        """로그인의 1단계만 보낸다. 가입 인증을 끝냈는지에 따라 여기서 갈린다."""
         return self.client.post(
             LOGIN_URL,
             {'username': username, 'password': password},
@@ -477,13 +478,14 @@ class LoginRequiresVerificationTests(SignupTestCase):
         # 비밀번호가 틀리면 계정이 있는지조차 알려 주지 않는다
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_can_log_in_after_verification(self):
+    def test_can_start_login_after_verification(self):
         self.verify(self.code)
 
         response = self.login()
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('access_token', response.data)
+        # 로그인의 1단계를 통과한다. 토큰은 2단계에서 나온다(test_login.py)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertIn('login_ticket', response.data)
 
 
 class DeleteUnverifiedUsersCommandTests(SignupTestCase):
@@ -519,4 +521,4 @@ class SuperuserTests(SignupTestCase):
         )
 
         self.assertTrue(user.is_email_verified)
-        self.assertEqual(self.login(username='owner_01').status_code, status.HTTP_200_OK)
+        self.assertEqual(self.login(username='owner_01').status_code, status.HTTP_202_ACCEPTED)

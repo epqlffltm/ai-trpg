@@ -7,6 +7,9 @@ accounts 앱의 API 뷰.
 결과를 응답으로 바꾼다. 규칙과 DB 작업은 여기에 두지 않는다.
 """
 
+import math
+from datetime import timedelta
+
 from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -17,10 +20,14 @@ from rest_framework.views import APIView
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
 from accounts.jwks import build_jwks
 from accounts.email_codes import InvalidEmailCodeError
+from accounts.login_tickets import InvalidLoginTicketError
 from accounts.serializers import (
     EmailSerializer,
+    LoginChallengeSerializer,
     LoginResponseSerializer,
     LoginSerializer,
+    LoginTicketSerializer,
+    LoginVerifySerializer,
     SignupSerializer,
     SignupVerifySerializer,
     UserSerializer,
@@ -30,8 +37,11 @@ from accounts.services import (
     EmailNotVerifiedError,
     FieldTakenError,
     InvalidCredentialsError,
-    authenticate_user,
+    LoginCodeUnavailableError,
+    complete_login,
+    resend_login_code,
     resend_signup_code,
+    start_login,
     start_signup,
     verify_signup,
 )
@@ -73,6 +83,33 @@ def build_session_expired_response() -> Response:
         status=status.HTTP_401_UNAUTHORIZED,
     )
     clear_refresh_cookie(response)
+    return response
+
+
+def build_login_ticket_invalid_response() -> Response:
+    """로그인 티켓을 쓸 수 없을 때의 응답. 위조, 만료, 계정 상태 변경을 구분해 알려 주지 않는다."""
+    return Response(
+        {'detail': '로그인을 처음부터 다시 해 주세요.', 'code': 'login_ticket_invalid'},
+        status=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
+def build_code_unavailable_response(retry_after: timedelta) -> Response:
+    """
+    인증 코드를 지금은 보낼 수 없을 때의 응답.
+
+    기다릴 시간을 본문과 Retry-After 머리말에 초 단위로 싣는다. 올림해서, 그 시간 뒤에는 반드시 되게 한다.
+    """
+    seconds = max(1, math.ceil(retry_after.total_seconds()))
+    response = Response(
+        {
+            'detail': '인증 코드를 너무 자주 요청했습니다. 잠시 뒤에 다시 시도해 주세요.',
+            'code': 'login_code_unavailable',
+            'retry_after': seconds,
+        },
+        status=status.HTTP_429_TOO_MANY_REQUESTS,
+    )
+    response['Retry-After'] = str(seconds)
     return response
 
 
@@ -164,7 +201,7 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            user = authenticate_user(**serializer.validated_data)
+            challenge = start_login(**serializer.validated_data)
         except InvalidCredentialsError:
             # 아이디가 없든 비밀번호가 틀리든 같은 응답을 준다
             return Response(
@@ -177,8 +214,62 @@ class LoginView(APIView):
                 {'detail': '이메일 인증이 필요합니다.', 'code': 'email_not_verified'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        except LoginCodeUnavailableError as exc:
+            return build_code_unavailable_response(exc.retry_after)
+
+        if challenge.code_sent:
+            detail = '인증 메일을 보냈습니다. 메일에 적힌 코드를 입력해 주세요.'
+        else:
+            detail = '조금 전에 보낸 인증 코드를 입력해 주세요.'
+        body = LoginChallengeSerializer({'detail': detail, 'login_ticket': challenge.ticket})
+        # 로그인이 아직 끝나지 않았으므로 200 이 아니라 202(접수됨)다. 토큰도 쿠키도 주지 않는다
+        return Response(body.data, status=status.HTTP_202_ACCEPTED)
+
+
+class LoginVerifyView(APIView):
+    """POST /api/v1/auth/login/verify"""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = LoginVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            user = complete_login(**serializer.validated_data)
+        except InvalidLoginTicketError:
+            return build_login_ticket_invalid_response()
+        except InvalidEmailCodeError:
+            return Response(
+                {'detail': '인증 코드가 올바르지 않거나 만료되었습니다.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return build_token_response(issue_token_pair(user))
+
+
+class LoginResendView(APIView):
+    """POST /api/v1/auth/login/resend"""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = LoginTicketSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            resend_login_code(**serializer.validated_data)
+        except InvalidLoginTicketError:
+            return build_login_ticket_invalid_response()
+        except LoginCodeUnavailableError as exc:
+            return build_code_unavailable_response(exc.retry_after)
+
+        return Response(
+            {'detail': '인증 메일을 다시 보냈습니다.'},
+            status=status.HTTP_200_OK,
+        )
 
 
 class RefreshView(APIView):
