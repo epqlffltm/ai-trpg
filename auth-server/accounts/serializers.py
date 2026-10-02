@@ -126,8 +126,30 @@ class LoginSerializer(serializers.Serializer):
         return username.lower()
 
 
+class LoginTicketSerializer(serializers.Serializer):
+    """로그인 티켓 하나만 받는 요청. 로그인 코드 재발송에 쓴다."""
+
+    login_ticket = serializers.CharField()
+
+
+class LoginVerifySerializer(LoginTicketSerializer):
+    """로그인 2단계 요청을 검증한다."""
+
+    code = serializers.RegexField(
+        regex=rf'\A[0-9]{{{CODE_LENGTH}}}\Z',
+        error_messages={'invalid': f'인증 코드는 숫자 {CODE_LENGTH}자리입니다.'},
+    )
+
+
+class LoginChallengeSerializer(serializers.Serializer):
+    """로그인 1단계 응답. 토큰이 아니라 다음 단계에 쓸 티켓을 준다."""
+
+    detail = serializers.CharField()
+    login_ticket = serializers.CharField()
+
+
 class LoginResponseSerializer(serializers.Serializer):
-    """로그인 응답."""
+    """토큰을 발급하는 응답. 로그인 2단계와 토큰 갱신이 쓴다."""
 
     access_token = serializers.CharField()
     token_type = serializers.CharField()
