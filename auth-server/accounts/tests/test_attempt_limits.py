@@ -22,17 +22,11 @@ from accounts.attempt_limits import (
     count_failure,
     ensure_not_blocked,
 )
+from accounts.tests.helpers import delete_attempt_keys
 from config.redis_client import get_redis
 
 LIMIT = AttemptLimit(name='test-limit', max_attempts=3, window=timedelta(minutes=10))
 OTHER_LIMIT = AttemptLimit(name='test-other', max_attempts=3, window=timedelta(minutes=10))
-
-
-def delete_test_keys() -> None:
-    """테스트용 앞머리가 붙은 키를 모두 지운다. 개발용 횟수는 건드리지 않는다."""
-    client = get_redis()
-    for key in client.scan_iter(match=f'{settings.ATTEMPT_LIMIT_KEY_PREFIX}:*'):
-        client.delete(key)
 
 
 @override_settings(ATTEMPT_LIMITS_ENABLED=True)
@@ -40,8 +34,8 @@ class AttemptLimitTestCase(SimpleTestCase):
     """DB 를 쓰지 않는다. Redis 만 쓴다."""
 
     def setUp(self):
-        delete_test_keys()
-        self.addCleanup(delete_test_keys)
+        delete_attempt_keys()
+        self.addCleanup(delete_attempt_keys)
 
     def key_for(self, subject: str) -> str:
         return _key(LIMIT, subject)
