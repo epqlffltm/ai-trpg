@@ -171,3 +171,54 @@ class EmailCode(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user} / {self.get_purpose_display()}'
+
+
+class OutgoingMailStatus(models.TextChoices):
+    PENDING = 'pending', '발송 대기'
+    DISCARDED = 'discarded', '버림'
+
+
+class OutgoingMail(models.Model):
+    """
+    보내야 할 메일. 발송함(outbox)이다.
+
+    요청을 처리하는 쪽은 메일을 직접 보내지 않고 여기에 적기만 한다.
+    따로 도는 워커가 꺼내 보낸다. 그래서 메일 서버가 느리거나 죽어도 요청은 영향을 받지 않고,
+    응답 시간으로 메일을 보냈는지(= 가입된 주소인지)가 드러나지 않는다.
+
+    보낸 메일의 행은 지운다. 본문에 인증 코드가 들어 있어 남겨 두면 안 된다.
+    끝내 못 보낸 메일은 본문만 지우고 행을 남겨, 운영자가 관리자 화면에서 볼 수 있게 한다.
+    """
+
+    to_email = models.EmailField('받는 사람')
+    subject = models.CharField('제목', max_length=200)
+    # 버린 메일은 본문을 비운다
+    body = models.TextField('본문', blank=True)
+
+    status = models.CharField(
+        '상태',
+        max_length=20,
+        choices=OutgoingMailStatus.choices,
+        default=OutgoingMailStatus.PENDING,
+    )
+    attempts = models.PositiveSmallIntegerField('시도 횟수', default=0)
+    # 마지막 실패의 이유. 메일 서버가 돌려준 오류 문구다
+    last_error = models.CharField('마지막 오류', max_length=500, blank=True)
+
+    created_at = models.DateTimeField('만든 시각', auto_now_add=True)
+    # 이 시각부터 보낼 수 있다. 실패하면 뒤로 미룬다
+    next_attempt_at = models.DateTimeField('다음 시도 시각')
+    # 이 시각이 지나면 보내지 않고 버린다. 늦게 도착한 인증 코드는 쓸모가 없다
+    expires_at = models.DateTimeField('버리는 시각')
+    discarded_at = models.DateTimeField('버린 시각', null=True, blank=True)
+
+    class Meta:
+        verbose_name = '보낼 메일'
+        verbose_name_plural = '보낼 메일'
+        indexes = [
+            # 워커가 "지금 보낼 수 있는 대기 중인 메일" 을 찾을 때 쓴다
+            models.Index(fields=['status', 'next_attempt_at'], name='accounts_mail_due_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.to_email} / {self.subject}'
