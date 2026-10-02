@@ -1,5 +1,7 @@
 # ai-trpg
 
+[![auth-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/auth-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/auth-server.yml)
+
 AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 서술만 담당한다.
 
 ## 현재 상태
@@ -70,6 +72,20 @@ cd auth-server
 uv run python manage.py test
 ```
 
+## CI
+
+PR과 `main` 푸시마다 GitHub Actions가 인증 서버를 검사한다. `auth-server/`,
+`docker/postgres/init/`, 워크플로 파일 중 하나가 바뀐 경우에만 돈다.
+
+1. 의존성 설치 (`uv sync --locked`): `uv.lock`과 `pyproject.toml`이 어긋나면 실패한다
+2. 설정 검사 (`manage.py check`)
+3. 마이그레이션 누락 검사 (`makemigrations --check --dry-run`): 모델을 바꾸고
+   마이그레이션을 만들지 않았으면 실패한다
+4. 테스트 (`manage.py test`)
+
+CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 계정으로 테스트한다.
+슈퍼유저로 테스트하면 권한 때문에 실패할 코드가 CI를 통과하기 때문이다.
+
 ## 설계 메모
 
 **설정 파일을 서버마다 따로 둔다.** 루트 `.env`는 인프라용이고, 서버의 비밀값은
@@ -112,6 +128,7 @@ docker compose up -d
 ## 구조
 
 ```
+.github/workflows/        서버별 CI
 auth-server/              Django 인증 서버 (독립된 uv 프로젝트)
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
 docker-compose.yml        PostgreSQL, Redis
