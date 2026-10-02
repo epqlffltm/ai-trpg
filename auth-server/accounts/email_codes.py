@@ -11,6 +11,7 @@ HTTP 를 모른다. 메일 발송도 여기서 하지 않는다(mail.py).
 """
 
 import secrets
+from collections.abc import Callable
 from datetime import timedelta
 
 from django.db import transaction
@@ -108,12 +109,39 @@ def issue_email_code(*, user: User, purpose: str) -> str:
 
     return code
 
+def reserve_email_slot(*, user: User, purpose: str) -> None:
+    """
+    코드를 발급하지 않고 발송 횟수만 센다.
 
-def consume_email_code(*, user: User, purpose: str, code: str) -> None:
+    코드가 없는 안내 메일에도 같은 발급 제한을 적용할 때 쓴다.
+    제한 없이 보내면 남의 메일함에 안내 메일을 쏟아부을 수 있다.
+    제한에 걸리면 issue_email_code 와 같은 예외를 낸다. 이미 발급된 코드는 건드리지 않는다.
+    """
+    now = timezone.now()
+
+    with transaction.atomic():
+        record = _lock_record(user=user, purpose=purpose, now=now)
+        _ensure_issue_allowed(record, now)
+        _count_issue(record, now)
+        record.last_issued_at = now
+        record.save()
+
+
+def consume_email_code(
+    *,
+    user: User,
+    purpose: str,
+    code: str,
+    on_success: Callable[[], None] | None = None,
+) -> None:
     """
     인증 코드가 맞는지 확인하고, 맞으면 다시 쓸 수 없게 한다.
 
     틀리면 InvalidEmailCodeError 를 낸다. 틀린 횟수는 그 전에 반드시 저장된다.
+
+    on_success 는 코드가 맞았을 때 같은 트랜잭션 안에서 실행된다.
+    "코드 소비" 와 "그 결과로 바뀌는 상태" 를 한 덩어리로 묶는다.
+    on_success 가 실패하면 코드 소비도 취소되어, 코드는 썼는데 상태는 안 바뀐 경우가 생기지 않는다.
 
     durable=True 는 이 블록이 다른 트랜잭션 안에서 실행되는 것을 금지한다.
     바깥에 트랜잭션이 있으면, 여기서 낸 예외가 바깥 트랜잭션까지 되돌려
@@ -127,6 +155,8 @@ def consume_email_code(*, user: User, purpose: str, code: str) -> None:
         matched = record is not None and _matches(record, code, now)
         if matched:
             _discard_code(record)
+            if on_success is not None:
+                on_success()
         elif record is not None:
             _record_failure(record)
 

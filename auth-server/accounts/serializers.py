@@ -9,8 +9,8 @@ Serializer 는 검증과 변환만 한다. 계정을 만드는 일은 services.p
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator
 
+from accounts.email_codes import CODE_LENGTH
 from accounts.models import User
 from accounts.validators import (
     validate_nickname_format,
@@ -25,38 +25,19 @@ PASSWORD_MAX_LENGTH = 128
 
 
 class SignupSerializer(serializers.Serializer):
-    """회원가입 요청을 검증한다."""
+    """
+    회원가입 요청의 형식을 검증한다.
+
+    중복은 여기서 보지 않는다. 미인증 계정은 교체될 수 있어서
+    "겹치는지" 의 판단이 필드 하나로 끝나지 않는다. services.py 가 한다.
+    """
 
     username = serializers.CharField(
-        validators=[
-            validate_username_format,
-            validate_username_not_reserved,
-            # 사전 조회. 사용자에게 어느 값이 겹쳤는지 알려 주는 용도다.
-            # 동시에 들어온 요청은 이 검사를 둘 다 통과할 수 있고, 그 경우는 DB 제약이 막는다
-            UniqueValidator(
-                queryset=User.objects.all(),
-                message='이미 사용 중인 아이디입니다.',
-            ),
-        ],
+        validators=[validate_username_format, validate_username_not_reserved],
     )
-    email = serializers.EmailField(
-        validators=[
-            UniqueValidator(
-                queryset=User.objects.all(),
-                lookup='iexact',
-                message='이미 사용 중인 이메일입니다.',
-            ),
-        ],
-    )
+    email = serializers.EmailField()
     nickname = serializers.CharField(
-        validators=[
-            validate_nickname_format,
-            validate_nickname_not_reserved,
-            UniqueValidator(
-                queryset=User.objects.all(),
-                message='이미 사용 중인 닉네임입니다.',
-            ),
-        ],
+        validators=[validate_nickname_format, validate_nickname_not_reserved],
     )
     password = serializers.CharField(
         max_length=PASSWORD_MAX_LENGTH,
@@ -106,19 +87,25 @@ class SignupSerializer(serializers.Serializer):
             raise serializers.ValidationError({'password': exc.messages}) from exc
 
 
-class SignupResponseSerializer(serializers.ModelSerializer):
-    """
-    회원가입 응답.
+class EmailSerializer(serializers.Serializer):
+    """이메일 주소 하나만 받는 요청. 인증 코드 재발송에 쓴다."""
 
-    여기 적은 필드만 나간다. 정수 PK, 이메일, 비밀번호 해시는 목록에 없으므로
-    실수로도 응답에 실리지 않는다.
-    """
+    email = serializers.EmailField()
 
-    class Meta:
-        model = User
-        fields = ('public_id', 'username', 'nickname')
-        read_only_fields = fields
-        
+    def validate_email(self, email: str) -> str:
+        return email.lower()
+
+
+class SignupVerifySerializer(EmailSerializer):
+    """가입 인증 요청을 검증한다."""
+
+    # 형식이 맞지 않는 코드는 DB 까지 가지 않고 여기서 거른다
+    code = serializers.RegexField(
+        regex=rf'\A[0-9]{{{CODE_LENGTH}}}\Z',
+        error_messages={'invalid': f'인증 코드는 숫자 {CODE_LENGTH}자리입니다.'},
+    )
+
+
 class LoginSerializer(serializers.Serializer):
     """
     로그인 요청을 검증한다.
@@ -145,7 +132,8 @@ class LoginResponseSerializer(serializers.Serializer):
     access_token = serializers.CharField()
     token_type = serializers.CharField()
     expires_in = serializers.IntegerField()
-    
+
+
 class UserSerializer(serializers.ModelSerializer):
     """로그인한 본인에게 보여 주는 계정 정보."""
 

@@ -17,6 +17,7 @@ import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from django.conf import settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -37,6 +38,8 @@ def create_user(**overrides) -> User:
         'email': 'someone@example.com',
         'nickname': '플레이어',
         'password': PASSWORD,
+        # 이메일 인증을 끝낸 계정이어야 로그인할 수 있다
+        'email_verified_at': timezone.now(),
     }
     fields.update(overrides)
     return User.objects.create_user(**fields)
