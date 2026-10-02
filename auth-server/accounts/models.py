@@ -10,8 +10,10 @@ Django 기본 User 를 그대로 쓰지 않고 AbstractUser 를 상속해 필요
 import uuid
 
 from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.db import models
 from django.db.models.functions import Lower
+from django.utils import timezone
 
 from accounts.validators import (
     NICKNAME_MAX_LENGTH,
@@ -21,6 +23,18 @@ from accounts.validators import (
     validate_username_not_reserved,
 )
 
+class UserManager(DjangoUserManager):
+    """User 를 만드는 방법을 모아 둔 매니저."""
+
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        """
+        관리자 계정은 만들 때부터 이메일이 인증된 것으로 둔다.
+
+        createsuperuser 는 서버에 직접 접근할 수 있는 사람만 실행한다.
+        인증 메일을 거치게 하면 메일 설정이 없는 환경에서 첫 관리자를 만들 수 없다.
+        """
+        extra_fields.setdefault('email_verified_at', timezone.now())
+        return super().create_superuser(username, email, password, **extra_fields)
 
 class User(AbstractUser):
     # 로그인 ID. 이메일과 분리한다.
@@ -56,6 +70,10 @@ class User(AbstractUser):
         editable=False,
     )
     
+    # 이메일 주소의 주인임을 확인한 시각. 비어 있으면 아직 인증하지 않은 계정이다.
+    # 참/거짓 대신 시각을 저장한다. 언제 인증했는지도 함께 남는다
+    email_verified_at = models.DateTimeField('이메일 인증 시각', null=True, blank=True)
+    
     # 세션 버전. 토큰에 이 값을 넣어 발급하고, 검증할 때 현재 값과 비교한다.
     # 값을 올리면 그 전에 발급된 토큰이 전부 무효가 된다.
     # 비밀번호를 바꿨을 때나 토큰 탈취가 의심될 때 올린다
@@ -68,6 +86,7 @@ class User(AbstractUser):
     # createsuperuser 가 아이디와 비밀번호 외에 추가로 묻는 필드
     REQUIRED_FIELDS = ['email', 'nickname']
 
+    objects = UserManager()
     class Meta:
         verbose_name = '회원'
         verbose_name_plural = '회원'
@@ -83,6 +102,10 @@ class User(AbstractUser):
 
     def __str__(self) -> str:
         return self.username
+    
+    @property
+    def is_email_verified(self) -> bool:
+        return self.email_verified_at is not None
 
     @classmethod
     def normalize_username(cls, username):

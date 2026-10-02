@@ -15,6 +15,8 @@ from accounts.views import (
     LogoutView,
     MeView,
     RefreshView,
+    SignupResendView,
+    SignupVerifyView,
     SignupView,
 )
 
@@ -22,6 +24,8 @@ app_name = 'accounts'
 
 urlpatterns = [
     path('signup', SignupView.as_view(), name='signup'),
+    path('signup/verify', SignupVerifyView.as_view(), name='signup-verify'),
+    path('signup/resend', SignupResendView.as_view(), name='signup-resend'),
     path('login', LoginView.as_view(), name='login'),
     path('refresh', RefreshView.as_view(), name='refresh'),
     path('logout', LogoutView.as_view(), name='logout'),

@@ -49,3 +49,22 @@ def send_email_code(*, user: User, purpose: str, code: str) -> None:
         from_email=None,
         recipient_list=[user.email],
     )
+    
+def send_already_registered_notice(*, user: User) -> None:
+    """
+    이미 가입된 이메일로 누군가 가입을 시도했음을 그 주소의 주인에게 알린다.
+
+    가입 화면에서는 이 사실을 알려 주지 않는다. 화면에 알리면 누구나
+    특정 이메일의 가입 여부를 확인할 수 있게 된다. 메일은 주소의 주인만 본다.
+    """
+    send_mail(
+        subject='[AI TRPG] 이미 가입된 이메일입니다',
+        message=(
+            '이 이메일 주소로 회원가입 요청이 들어왔습니다.\n'
+            '이 주소는 이미 가입되어 있어 새 계정을 만들지 않았습니다.\n\n'
+            '본인이 요청했다면 기존 계정으로 로그인해 주세요.\n'
+            '요청한 적이 없다면 이 메일을 무시해 주세요. 계정에는 아무 변화가 없습니다.'
+        ),
+        from_email=None,
+        recipient_list=[user.email],
+    )
