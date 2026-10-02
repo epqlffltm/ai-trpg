@@ -14,7 +14,9 @@ from django.db import models
 from django.db.models.functions import Lower
 
 from accounts.validators import (
+    NICKNAME_MAX_LENGTH,
     USERNAME_MAX_LENGTH,
+    validate_nickname_format,
     validate_username_format,
     validate_username_not_reserved,
 )
@@ -36,13 +38,14 @@ class User(AbstractUser):
     email = models.EmailField('이메일')
 
     # 다른 사용자에게 보이는 이름
+        # 다른 사용자에게 보이는 이름
     nickname = models.CharField(
         '닉네임',
-        max_length=20,
+        max_length=NICKNAME_MAX_LENGTH,
         unique=True,
+        validators=[validate_nickname_format],
         error_messages={'unique': '이미 사용 중인 닉네임입니다.'},
     )
-
     # 외부에 내보내는 식별자. JWT 의 sub 와 API 응답에 쓴다.
     # 정수 PK 를 노출하면 가입자 수와 가입 순서를 추측할 수 있다.
     # 정수 PK 는 내부 조인용으로 그대로 둔다

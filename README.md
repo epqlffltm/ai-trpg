@@ -11,7 +11,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 구성 요소 | 폴더 | 상태 |
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
-| 인증 서버 (Django) | `auth-server/` | User 모델과 관리자 화면까지 완료, API 없음 |
+| 인증 서버 (Django) | `auth-server/` | 회원가입 API까지 완료, 로그인 없음 |
 | 게임 서버 (FastAPI) | `game-server/` | 예정 |
 | 프론트엔드 | `web/` | 예정 |
 
@@ -72,6 +72,17 @@ cd auth-server
 uv run python manage.py test
 ```
 
+## API
+
+인증 서버의 API는 `/api/v1/auth/` 아래에 있다. 요청과 응답은 JSON이다.
+
+| 메서드 | 경로 | 설명 | 인증 |
+| --- | --- | --- | --- |
+| POST | `/api/v1/auth/signup` | 회원가입 | 불필요 |
+
+회원가입 요청 본문은 `username`, `email`, `nickname`, `password`다.
+성공하면 `201`과 함께 `public_id`, `username`, `nickname`을 돌려준다.
+
 ## CI
 
 PR과 `main` 푸시마다 GitHub Actions가 인증 서버를 검사한다. `auth-server/`,
@@ -95,6 +106,17 @@ CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 
 아이디는 영문 소문자, 숫자, 밑줄만 허용해 이메일 주소를 아이디로 쓸 수 없게 한다.
 이메일 중복은 대소문자를 무시하는 DB 제약으로 막는다.
 
+**검증, 생성, HTTP 처리를 나눈다.** Serializer는 입력 검증만, service는 계정 생성만,
+뷰는 요청과 응답 변환만 한다. DRF 관례는 Serializer의 `create()`에 생성 로직을 두는 것인데,
+그러면 검증과 상태 변경이 한 클래스에 섞인다.
+
+**중복은 두 번 막는다.** Serializer의 사전 조회는 어느 값이 겹쳤는지 알려 주는 용도다.
+동시에 들어온 요청은 사전 조회를 둘 다 통과할 수 있으므로, 최종 방어는 DB의 유니크 제약이고
+그때는 `409`로 응답한다.
+
+**API의 기본 권한은 "인증된 사용자만"이다.** 공개 API는 뷰에서 직접 열어야 한다.
+권한 설정을 빠뜨린 뷰가 열려 있는 것보다 닫혀 있는 쪽이 안전하다.
+
 **외부에는 정수 PK 대신 UUID(`public_id`)를 내보낸다.** 정수 PK는 가입자 수와
 가입 순서를 추측하게 해 준다. 정수 PK는 내부 조인용으로 남긴다.
 
@@ -106,31 +128,4 @@ CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 
 
 **`docker compose ps`에서 db의 포트 칸이 비어 있다**
 
-Windows에서 Hyper-V가 해당 포트를 예약한 경우다. 예약 구간을 확인하고
-`.env`의 `POSTGRES_PORT`를 구간 밖의 값으로 바꾼다. `auth-server/.env`의
-`DATABASE_URL` 포트도 함께 맞춘다.
-
-```
-netsh interface ipv4 show excludedportrange protocol=tcp
-```
-
-**`password authentication failed for user "auth"`**
-
-`auth` 계정이 없거나 비밀번호가 다르다. 초기화 스크립트는 볼륨이 비어 있을 때만
-실행되므로, 스크립트를 추가하기 전에 만든 볼륨에는 계정이 없다.
-데이터를 지워도 되는 상태라면 볼륨을 지우고 다시 띄운다.
-
-```
-docker compose down -v
-docker compose up -d
-```
-
-## 구조
-
-```
-.github/workflows/        서버별 CI
-auth-server/              Django 인증 서버 (독립된 uv 프로젝트)
-docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
-docker-compose.yml        PostgreSQL, Redis
-.env.example              인프라 환경 변수 목록
-```
+Windows에서 Hyper-V가 해당 포트를 예약한

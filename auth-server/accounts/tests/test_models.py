@@ -1,4 +1,4 @@
-# auth-server/accounts/tests.py
+# auth-server/accounts/tests/test_models.py
 
 """
 User 모델의 규칙을 검증한다.
