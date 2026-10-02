@@ -9,7 +9,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 구성 요소 | 폴더 | 상태 |
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
-| 인증 서버 (Django) | `auth-server/` | 설정과 DB 연결까지 완료, 기능 없음 |
+| 인증 서버 (Django) | `auth-server/` | User 모델과 관리자 화면까지 완료, API 없음 |
 | 게임 서버 (FastAPI) | `game-server/` | 예정 |
 | 프론트엔드 | `web/` | 예정 |
 
@@ -54,13 +54,33 @@ uv sync
 루트 `.env`의 `AUTH_DB_PASSWORD`와 같은 값으로 맞춘다.
 
 ```
-uv run python manage.py check --database default
+uv run python manage.py migrate
+uv run python manage.py createsuperuser
+uv run python manage.py runserver
+```
+
+`http://127.0.0.1:8000/admin/` 에서 관리자 화면에 로그인한다.
+
+### 4. 테스트
+
+실제 PostgreSQL에서 돈다. 인프라가 떠 있어야 한다.
+
+```
+cd auth-server
+uv run python manage.py test
 ```
 
 ## 설계 메모
 
 **설정 파일을 서버마다 따로 둔다.** 루트 `.env`는 인프라용이고, 서버의 비밀값은
 각 서버 폴더의 `.env`에 둔다. 한 서버가 다른 서버의 비밀값을 읽을 수 없게 하기 위해서다.
+
+**아이디와 이메일을 분리한다.** 로그인은 아이디로 하고, 이메일은 인증 코드를 받는 용도로만 쓴다.
+아이디는 영문 소문자, 숫자, 밑줄만 허용해 이메일 주소를 아이디로 쓸 수 없게 한다.
+이메일 중복은 대소문자를 무시하는 DB 제약으로 막는다.
+
+**외부에는 정수 PK 대신 UUID(`public_id`)를 내보낸다.** 정수 PK는 가입자 수와
+가입 순서를 추측하게 해 준다. 정수 PK는 내부 조인용으로 남긴다.
 
 **DB 인스턴스는 하나, 계정과 스키마는 서버마다 따로 쓴다.** 인증 서버는 `auth` 계정으로
 `auth` 스키마만 쓴다. 다른 서버의 테이블을 직접 읽는 코드는 DB 권한에서 거부된다.
