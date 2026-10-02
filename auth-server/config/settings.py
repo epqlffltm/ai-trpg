@@ -187,6 +187,8 @@ DATABASES = {
     'default': env.db('DATABASE_URL'),
 }
 
+# 테스트에서만 가벼운 비밀번호 해셔를 쓰는 실행기. manage.py test 에만 적용된다
+TEST_RUNNER = 'config.test_runner.FastHasherTestRunner'
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
