@@ -233,6 +233,17 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 
+# Redis
+# 없어도 서비스가 도는 보조 장치(시도 횟수)만 둔다. 죽어 있으면 제한 없이 통과시킨다
+REDIS_URL = env('REDIS_URL', default='redis://127.0.0.1:6379/0')
+
+# 시도 횟수 제한을 켤지. 테스트 실행기가 끈다(config/test_runner.py)
+ATTEMPT_LIMITS_ENABLED = True
+
+# Redis 키의 앞머리. 같은 Redis 를 다른 서버와 함께 쓰므로 서버 이름을 붙인다
+ATTEMPT_LIMIT_KEY_PREFIX = 'auth:attempts'
+
+
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
