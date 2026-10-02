@@ -3,16 +3,17 @@
 """
 accounts 앱이 보내는 메일.
 
-메일의 문구와 발송만 맡는다. 코드와 토큰을 만들거나 검증하지 않는다(email_codes.py).
+메일의 문구를 만들어 발송함에 맡긴다. 실제 발송은 워커가 한다(outbox.py).
+코드와 토큰을 만들거나 검증하지 않는다(email_codes.py).
 """
 
 from urllib.parse import urlencode
 
 from django.conf import settings
-from django.core.mail import send_mail
 
 from accounts.email_codes import CODE_LIFETIME, TOKEN_LIFETIME
 from accounts.models import EmailCodePurpose, User
+from accounts.outbox import enqueue_mail
 
 # 용도별 메일 제목과 안내 문구
 EMAIL_CODE_MESSAGES = {
@@ -39,15 +40,9 @@ def send_email_code(*, user: User, purpose: str, code: str) -> None:
     회원의 이메일로 인증 코드를 보낸다.
 
     보내는 주소는 settings 의 DEFAULT_FROM_EMAIL 이다.
-    개발 환경에서는 실제로 보내지 않고 서버를 띄운 터미널에 출력한다.
     """
     subject, body = build_email_code_message(purpose=purpose, code=code)
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=None,
-        recipient_list=[user.email],
-    )
+    enqueue_mail(to_email=user.email, subject=subject, body=body)
 
 
 def send_already_registered_notice(*, user: User) -> None:
@@ -57,16 +52,15 @@ def send_already_registered_notice(*, user: User) -> None:
     가입 화면에서는 이 사실을 알려 주지 않는다. 화면에 알리면 누구나
     특정 이메일의 가입 여부를 확인할 수 있게 된다. 메일은 주소의 주인만 본다.
     """
-    send_mail(
+    enqueue_mail(
+        to_email=user.email,
         subject='[AI TRPG] 이미 가입된 이메일입니다',
-        message=(
+        body=(
             '이 이메일 주소로 회원가입 요청이 들어왔습니다.\n'
             '이 주소는 이미 가입되어 있어 새 계정을 만들지 않았습니다.\n\n'
             '본인이 요청했다면 기존 계정으로 로그인해 주세요.\n'
             '요청한 적이 없다면 이 메일을 무시해 주세요. 계정에는 아무 변화가 없습니다.'
         ),
-        from_email=None,
-        recipient_list=[user.email],
     )
 
 
@@ -90,16 +84,15 @@ def send_password_reset_link(*, user: User, token: str) -> None:
     """
     minutes = int(TOKEN_LIFETIME.total_seconds() // 60)
     link = build_password_reset_link(email=user.email, token=token)
-    send_mail(
+    enqueue_mail(
+        to_email=user.email,
         subject='[AI TRPG] 비밀번호 재설정',
-        message=(
+        body=(
             f'아이디 {user.username} 의 비밀번호를 다시 설정하려면 아래 링크를 열어 주세요.\n\n'
             f'{link}\n\n'
             f'이 링크는 {minutes}분 동안, 한 번만 쓸 수 있습니다.\n'
             '요청한 적이 없다면 이 메일을 무시해 주세요. 비밀번호는 바뀌지 않습니다.'
         ),
-        from_email=None,
-        recipient_list=[user.email],
     )
 
 
@@ -109,13 +102,12 @@ def send_password_changed_notice(*, user: User) -> None:
 
     본인이 바꾼 것이라면 확인으로 끝난다. 남이 바꾼 것이라면 이 메일이 알아챌 기회다.
     """
-    send_mail(
+    enqueue_mail(
+        to_email=user.email,
         subject='[AI TRPG] 비밀번호가 변경되었습니다',
-        message=(
+        body=(
             f'아이디 {user.username} 의 비밀번호가 변경되었습니다.\n\n'
             '본인이 변경했다면 이 메일을 무시해 주세요.\n'
             '변경한 적이 없다면 로그인 화면의 "비밀번호 찾기" 로 비밀번호를 즉시 다시 설정해 주세요.'
         ),
-        from_email=None,
-        recipient_list=[user.email],
     )

@@ -18,6 +18,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 from config.jwt_keys import compute_key_id, derive_public_key_pem, read_private_key_pem
 
@@ -235,15 +236,43 @@ STATIC_URL = 'static/'
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-# 지금은 메일을 실제로 보내지 않고 서버를 띄운 터미널에 출력한다.
+# SMTP_HOST 가 있으면 그 메일 서버로 실제로 보낸다.
+# 없으면 보내지 않고 터미널에 출력한다. 메일 설정 없이도 개발과 CI 가 돌게 하기 위해서다.
 # Django 기본 console 백엔드는 한글 본문을 base64 로 출력해 읽을 수 없어서
-# 읽을 수 있게 출력하는 백엔드를 쓴다.
-# 실제 발송(SMTP)은 메일을 쓰는 기능을 붙일 때 설정한다
-MAILERS = {
-    'default': {
-        'BACKEND': 'config.mail_backends.ReadableConsoleEmailBackend',
-    },
-}
+# 읽을 수 있게 출력하는 백엔드를 쓴다
+smtp_host = env('SMTP_HOST', default='')
+
+if smtp_host:
+    MAILERS = {
+        'default': {
+            'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+            'OPTIONS': {
+                'host': smtp_host,
+                # 587 은 STARTTLS 로 암호화하는 제출용 포트다
+                'port': env.int('SMTP_PORT', default=587),
+                'username': env('SMTP_USER'),
+                'password': env('SMTP_PASSWORD'),
+                'use_tls': True,
+                # 메일 서버가 응답하지 않을 때 워커가 무한정 기다리지 않게 한다(초)
+                'timeout': env.int('SMTP_TIMEOUT', default=10),
+            },
+        },
+    }
+else:
+    MAILERS = {
+        'default': {
+            'BACKEND': 'config.mail_backends.ReadableConsoleEmailBackend',
+        },
+    }
+
+# 메일을 언제 보내는가.
+#   outbox: 발송함(DB)에 적어 두고 워커(manage.py send_outgoing_mail)가 보낸다
+#   inline: 요청을 처리하는 자리에서 바로 보낸다. 워커 없이 개발할 때와 테스트에서만 쓴다.
+#           메일 서버를 기다리는 시간이 응답 시간에 그대로 드러나므로 운영에서는 쓰지 않는다
+# 실제 메일 서버를 쓰면 outbox, 터미널 출력이면 inline 이 기본값이다
+MAIL_DELIVERY = env('MAIL_DELIVERY', default='outbox' if smtp_host else 'inline')
+if MAIL_DELIVERY not in ('outbox', 'inline'):
+    raise ImproperlyConfigured("MAIL_DELIVERY 는 'outbox' 또는 'inline' 이어야 합니다.")
 
 # 메일의 보내는 사람 주소
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='AI TRPG <no-reply@localhost>')

@@ -101,7 +101,7 @@ def main() -> None:
 
     try:
         # 메일 발송 시간은 재지 않는다. 해싱 유무의 차이만 본다
-        with patch('accounts.mail.send_mail'):
+        with patch('accounts.outbox.send_mail'):
             # 첫 요청은 모듈을 불러오느라 느리다. 한 번 버리고 시작한다
             measure_signup_ms(client, unique_payload())
 
