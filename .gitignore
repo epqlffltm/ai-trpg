@@ -8,3 +8,4 @@ db.sqlite3
 # 서명용 개인키. 저장소에 올라가면 누구나 토큰을 만들 수 있다
 *.pem
 keys/
+trpg_key.txt
