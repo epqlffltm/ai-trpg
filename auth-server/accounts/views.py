@@ -16,18 +16,24 @@ from rest_framework.views import APIView
 
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
 from accounts.jwks import build_jwks
+from accounts.email_codes import InvalidEmailCodeError
 from accounts.serializers import (
+    EmailSerializer,
     LoginResponseSerializer,
     LoginSerializer,
-    SignupResponseSerializer,
     SignupSerializer,
+    SignupVerifySerializer,
     UserSerializer,
 )
 from accounts.services import (
     DuplicateAccountError,
+    EmailNotVerifiedError,
+    FieldTakenError,
     InvalidCredentialsError,
     authenticate_user,
-    register_user,
+    resend_signup_code,
+    start_signup,
+    verify_signup,
 )
 from accounts.tokens import (
     InvalidRefreshTokenError,
@@ -85,16 +91,65 @@ class SignupView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            user = register_user(**serializer.validated_data)
+            start_signup(**serializer.validated_data)
+        except FieldTakenError as exc:
+            # DRF 의 검증 오류와 같은 모양으로 응답한다
+            return Response({exc.field: [exc.message]}, status=status.HTTP_400_BAD_REQUEST)
         except DuplicateAccountError:
             return Response(
-                {'detail': '이미 사용 중인 아이디, 이메일 또는 닉네임입니다.'},
+                {'detail': '이미 사용 중인 아이디 또는 닉네임입니다.'},
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # 새 이메일이든 이미 가입된 이메일이든 같은 응답을 준다.
+        # 계정이 아직 완성되지 않았으므로 201(만들어짐)이 아니라 202(접수됨)다
         return Response(
-            SignupResponseSerializer(user).data,
-            status=status.HTTP_201_CREATED,
+            {'detail': '인증 메일을 보냈습니다. 메일에 적힌 코드를 입력해 주세요.'},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class SignupVerifyView(APIView):
+    """POST /api/v1/auth/signup/verify"""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = SignupVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            verify_signup(**serializer.validated_data)
+        except InvalidEmailCodeError:
+            # 틀림, 만료, 이미 씀, 그런 가입이 없음을 구분해 알려 주지 않는다
+            return Response(
+                {'detail': '인증 코드가 올바르지 않거나 만료되었습니다.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {'detail': '이메일 인증이 끝났습니다. 로그인해 주세요.'},
+            status=status.HTTP_200_OK,
+        )
+
+
+class SignupResendView(APIView):
+    """POST /api/v1/auth/signup/resend"""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = EmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        resend_signup_code(**serializer.validated_data)
+
+        # 진행 중인 가입이 있든 없든, 발급 제한에 걸렸든 아니든 같은 응답을 준다
+        return Response(
+            {'detail': '가입을 진행 중인 주소라면 인증 메일을 다시 보냈습니다.'},
+            status=status.HTTP_200_OK,
         )
 
 
@@ -115,6 +170,12 @@ class LoginView(APIView):
             return Response(
                 {'detail': '아이디 또는 비밀번호가 올바르지 않습니다.'},
                 status=status.HTTP_401_UNAUTHORIZED,
+            )
+        except EmailNotVerifiedError:
+            # 비밀번호가 맞은 뒤에만 도달한다. code 는 프론트가 인증 화면으로 보낼 때 쓴다
+            return Response(
+                {'detail': '이메일 인증이 필요합니다.', 'code': 'email_not_verified'},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         return build_token_response(issue_token_pair(user))
