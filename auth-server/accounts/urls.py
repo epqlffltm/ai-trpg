@@ -10,6 +10,8 @@ from django.urls import path
 
 from accounts.views import (
     JwksView,
+    LoginResendView,
+    LoginVerifyView,
     LoginView,
     LogoutAllView,
     LogoutView,
@@ -27,6 +29,8 @@ urlpatterns = [
     path('signup/verify', SignupVerifyView.as_view(), name='signup-verify'),
     path('signup/resend', SignupResendView.as_view(), name='signup-resend'),
     path('login', LoginView.as_view(), name='login'),
+    path('login/verify', LoginVerifyView.as_view(), name='login-verify'),
+    path('login/resend', LoginResendView.as_view(), name='login-resend'),
     path('refresh', RefreshView.as_view(), name='refresh'),
     path('logout', LogoutView.as_view(), name='logout'),
     path('logout-all', LogoutAllView.as_view(), name='logout-all'),

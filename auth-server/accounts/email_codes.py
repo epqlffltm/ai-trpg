@@ -109,6 +109,7 @@ def issue_email_code(*, user: User, purpose: str) -> str:
 
     return code
 
+
 def reserve_email_slot(*, user: User, purpose: str) -> None:
     """
     코드를 발급하지 않고 발송 횟수만 센다.
@@ -125,6 +126,14 @@ def reserve_email_slot(*, user: User, purpose: str) -> None:
         _count_issue(record, now)
         record.last_issued_at = now
         record.save()
+
+
+def has_usable_code(*, user: User, purpose: str) -> bool:
+    """아직 쓸 수 있는 코드가 있는지 본다. 코드를 다시 보낼 수 없을 때 안내를 정하는 데 쓴다."""
+    record = EmailCode.objects.filter(user=user, purpose=purpose).first()
+    if record is None or not record.code_hash:
+        return False
+    return timezone.now() < record.expires_at
 
 
 def consume_email_code(
@@ -154,7 +163,7 @@ def consume_email_code(
         record = _lock_existing_record(user=user, purpose=purpose)
         matched = record is not None and _matches(record, code, now)
         if matched:
-            _discard_code(record)
+            _discard_code(record, now)
             if on_success is not None:
                 on_success()
         elif record is not None:
@@ -243,7 +252,14 @@ def _record_failure(record: EmailCode) -> None:
     record.save(update_fields=['failed_attempts', 'code_hash'])
 
 
-def _discard_code(record: EmailCode) -> None:
-    """코드를 다시 쓸 수 없게 한다. 발급 이력은 남긴다."""
+def _discard_code(record: EmailCode, now) -> None:
+    """
+    맞게 쓰인 코드를 다시 쓸 수 없게 한다. 구간 안의 발급 횟수는 남긴다.
+
+    직전 발급으로부터의 대기 시간은 푼다. 대기 시간은 받는 사람이 원하지 않는 메일이
+    연달아 가는 것을 막는 장치인데, 코드를 맞혔다는 것은 메일함의 주인이 직접 받아 썼다는 뜻이다.
+    풀지 않으면 로그아웃한 직후나 다른 기기에서 바로 로그인할 때 1분을 기다려야 한다.
+    """
     record.code_hash = ''
-    record.save(update_fields=['code_hash'])
+    record.last_issued_at = now - ISSUE_COOLDOWN
+    record.save(update_fields=['code_hash', 'last_issued_at'])

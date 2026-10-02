@@ -7,6 +7,7 @@ HTTP 를 모른다. 요청과 응답 객체를 받지 않고, 검증이 끝난 �
 그래서 뷰 없이도 테스트하고 다른 곳(관리 명령 등)에서 다시 쓸 수 있다.
 """
 
+from dataclasses import dataclass
 from datetime import timedelta
 
 from django.contrib.auth import authenticate
@@ -20,9 +21,11 @@ from accounts.email_codes import (
     EmailCodeLimitError,
     InvalidEmailCodeError,
     consume_email_code,
+    has_usable_code,
     issue_email_code,
     reserve_email_slot,
 )
+from accounts.login_tickets import issue_login_ticket, read_login_ticket
 from accounts.mail import send_already_registered_notice, send_email_code
 from accounts.models import EmailCodePurpose, User
 
@@ -66,6 +69,27 @@ class EmailNotVerifiedError(Exception):
     비밀번호가 맞을 때만 낸다. 비밀번호를 아는 사람에게만 알려 주므로
     계정이 있다는 사실이 새지 않는다.
     """
+
+
+class LoginCodeUnavailableError(Exception):
+    """
+    로그인 코드를 지금은 보낼 수 없다. 발급 제한에 걸렸다.
+
+    비밀번호를 통과한 사람에게만 낸다. 그래서 가입과 달리 숨기지 않고 사실대로 알린다.
+    """
+
+    def __init__(self, retry_after: timedelta):
+        super().__init__()
+        self.retry_after = retry_after
+
+
+@dataclass(frozen=True)
+class LoginChallenge:
+    """비밀번호 확인을 통과한 뒤 다음 단계로 넘기는 것."""
+
+    ticket: str
+    # False 면 새 코드를 보내지 않았다. 직전에 보낸 코드가 아직 유효하다
+    code_sent: bool
 
 
 def start_signup(*, username: str, email: str, nickname: str, password: str) -> None:
@@ -147,6 +171,43 @@ def delete_expired_pending_accounts() -> int:
     """보관 시간이 지난 미인증 계정을 모두 지우고, 지운 개수를 돌려준다."""
     deleted_count, _ = _expired_pending_accounts(timezone.now()).delete()
     return deleted_count
+
+
+def start_login(*, username: str, password: str) -> LoginChallenge:
+    """
+    로그인의 1단계. 아이디와 비밀번호를 확인하고 이메일로 인증 코드를 보낸다.
+
+    토큰은 아직 주지 않는다. 2단계에서 쓸 티켓만 돌려준다.
+    비밀번호가 틀리면 InvalidCredentialsError, 코드를 보낼 수 없으면 LoginCodeUnavailableError 를 낸다.
+    """
+    user = authenticate_user(username=username, password=password)
+    code_sent = _send_login_code(user)
+    return LoginChallenge(ticket=issue_login_ticket(user), code_sent=code_sent)
+
+
+def complete_login(*, login_ticket: str, code: str) -> User:
+    """
+    로그인의 2단계. 티켓과 인증 코드를 확인하고 로그인한 사용자를 돌려준다.
+
+    티켓을 쓸 수 없으면 InvalidLoginTicketError, 코드가 틀리면 InvalidEmailCodeError 를 낸다.
+    """
+    user = read_login_ticket(login_ticket)
+    consume_email_code(user=user, purpose=EmailCodePurpose.LOGIN, code=code)
+    return user
+
+
+def resend_login_code(*, login_ticket: str) -> None:
+    """
+    로그인 인증 코드를 다시 보낸다. 전에 보낸 코드는 못 쓰게 된다.
+
+    발급 제한에 걸리면 LoginCodeUnavailableError 를 낸다.
+    """
+    user = read_login_ticket(login_ticket)
+    try:
+        code = issue_email_code(user=user, purpose=EmailCodePurpose.LOGIN)
+    except (EmailCodeCooldownError, EmailCodeLimitError) as exc:
+        raise LoginCodeUnavailableError(exc.retry_after) from exc
+    send_email_code(user=user, purpose=EmailCodePurpose.LOGIN, code=code)
 
 
 def authenticate_user(*, username: str, password: str) -> User:
@@ -241,3 +302,22 @@ def _send_already_registered_notice(user: User) -> None:
     except (EmailCodeCooldownError, EmailCodeLimitError):
         return
     send_already_registered_notice(user=user)
+
+
+def _send_login_code(user: User) -> bool:
+    """
+    로그인 인증 코드를 발급해 보낸다. 새 코드를 보냈으면 True 를 돌려준다.
+
+    직전 발급에서 1분이 지나지 않았더라도, 그때 보낸 코드가 아직 유효하면 그것을 쓰면 된다.
+    그 경우 False 를 돌려준다. 쓸 코드도 없고 새로 보낼 수도 없으면 예외를 낸다.
+    """
+    try:
+        code = issue_email_code(user=user, purpose=EmailCodePurpose.LOGIN)
+    except EmailCodeCooldownError as exc:
+        if has_usable_code(user=user, purpose=EmailCodePurpose.LOGIN):
+            return False
+        raise LoginCodeUnavailableError(exc.retry_after) from exc
+    except EmailCodeLimitError as exc:
+        raise LoginCodeUnavailableError(exc.retry_after) from exc
+    send_email_code(user=user, purpose=EmailCodePurpose.LOGIN, code=code)
+    return True

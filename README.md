@@ -11,7 +11,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 구성 요소 | 폴더 | 상태 |
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
-| 인증 서버 (Django) | `auth-server/` | 회원가입(이메일 인증), 로그인, 토큰 갱신, 로그아웃, JWKS까지 완료 |
+| 인증 서버 (Django) | `auth-server/` | 회원가입(이메일 인증), 로그인(이메일 인증), 토큰 갱신, 로그아웃, JWKS까지 완료 |
 | 게임 서버 (FastAPI) | `game-server/` | 예정 |
 | 프론트엔드 | `web/` | 예정 |
 
@@ -78,6 +78,10 @@ cd auth-server
 uv run python manage.py test
 ```
 
+테스트에서는 비밀번호 해셔를 가벼운 것으로 바꾼다(`config/test_runner.py`). 기본 해셔는 일부러
+느리게 만든 계산이라 가입과 로그인을 반복하는 테스트 시간의 대부분을 차지한다.
+당시 137개 기준 122.0초에서 4.5초로 줄었다. `runserver`와 측정 스크립트는 원래의 해셔를 쓴다.
+
 ## API
 
 인증 서버의 API는 `/api/v1/auth/` 아래에 있다. 요청과 응답은 JSON이다.
@@ -87,7 +91,9 @@ uv run python manage.py test
 | POST | `/api/v1/auth/signup` | 회원가입 시작. 인증 코드를 메일로 보냄 | 불필요 |
 | POST | `/api/v1/auth/signup/verify` | 인증 코드 확인. 가입 완료 | 불필요 |
 | POST | `/api/v1/auth/signup/resend` | 인증 코드 재발송 | 불필요 |
-| POST | `/api/v1/auth/login` | 로그인. access 토큰과 refresh 쿠키 발급 | 불필요 |
+| POST | `/api/v1/auth/login` | 로그인 시작. 비밀번호를 확인하고 인증 코드를 메일로 보냄 | 불필요 |
+| POST | `/api/v1/auth/login/verify` | 인증 코드 확인. access 토큰과 refresh 쿠키 발급 | 로그인 티켓 |
+| POST | `/api/v1/auth/login/resend` | 로그인 인증 코드 재발송 | 로그인 티켓 |
 | POST | `/api/v1/auth/refresh` | refresh 쿠키로 새 access 토큰 발급 | refresh 쿠키 |
 | POST | `/api/v1/auth/logout` | 이 기기의 refresh 토큰 폐기 | refresh 쿠키 |
 | POST | `/api/v1/auth/logout-all` | 모든 기기의 세션 종료 | 필요 |
@@ -109,9 +115,24 @@ uv run python manage.py test
 인증을 끝내지 않은 계정은 1시간 뒤에 지워진다. 그 전에 같은 이메일로 다시 가입하면
 새 요청의 내용으로 바뀐다. 코드는 1분에 1통, 1시간에 5통까지만 나간다.
 
-로그인 요청 본문은 `username`, `password`다. 성공하면 `access_token`, `token_type`,
-`expires_in`을 돌려준다. 아이디가 없든 비밀번호가 틀리든 같은 `401` 응답을 준다.
-비밀번호는 맞지만 이메일 인증을 끝내지 않은 계정은 `403`과 `code: email_not_verified`를 받는다.
+로그인도 두 단계다.
+
+1. `/login`에 `username`, `password`를 보낸다. `202`와 `login_ticket`이 오고,
+   가입한 이메일로 6자리 인증 코드가 간다. 토큰은 아직 나오지 않는다
+2. `/login/verify`에 `login_ticket`, `code`를 보낸다. `200`과 함께 `access_token`, `token_type`,
+   `expires_in`이 오고 refresh 쿠키가 설정된다
+
+`/login`의 실패 응답은 세 가지다.
+
+| 상태 | 뜻 |
+| --- | --- |
+| `401` | 아이디가 없거나 비밀번호가 틀렸다. 둘을 구분하지 않는다 |
+| `403` `code: email_not_verified` | 비밀번호는 맞지만 가입 이메일 인증을 끝내지 않았다 |
+| `429` `code: login_code_unavailable` | 비밀번호는 맞지만 코드를 지금은 보낼 수 없다. `retry_after`(초) 뒤에 다시 시도한다 |
+
+`login_ticket`은 10분 동안 유효하다. 쓸 수 없는 티켓에는 `401`과 `code: login_ticket_invalid`가 오고,
+그때는 `/login`부터 다시 한다. 코드는 1분에 1통, 1시간에 5통까지 나간다. 코드를 맞게 쓰면
+1분 대기는 풀려서, 로그아웃한 직후나 다른 기기에서 바로 다시 로그인할 수 있다.
 
 ### 토큰 두 종류
 
@@ -237,6 +258,20 @@ Redis는 없어도 서비스가 도는 보조 장치(시도 횟수 제한)에만
 **이메일 인증 전의 기존 계정은 데이터 마이그레이션으로 인증 처리했다.** 인증 필드를 추가하면
 기존 계정은 값이 비어 로그인이 막힌다. 가입 시각을 인증 시각으로 채웠다.
 관리자 계정(`createsuperuser`)은 만들 때부터 인증된 것으로 둔다.
+
+**로그인의 두 요청은 서명한 티켓으로 잇는다.** 2단계에서 아이디를 다시 받으면, 아이디만 아는
+제3자가 틀린 코드를 5번 보내 남의 코드를 폐기시킬 수 있다. 비밀번호를 통과한 쪽에게만 티켓을 주고,
+2단계는 티켓이 있어야 받는다. 티켓은 DB에 저장하지 않고 서버의 비밀키로 서명한다
+(`django.core.signing`). 인증 서버만 만들고 확인하므로 access 토큰과 달리 공개키가 필요 없다.
+티켓에는 `public_id`와 세션 버전만 담아, 모든 기기 로그아웃 뒤에는 진행 중이던 로그인도 끊긴다.
+
+**발급 제한을 가입에서는 숨기고 로그인에서는 알린다.** 가입은 상대가 누구인지 모르는 자리라
+제한에 걸려도 같은 응답을 준다. 로그인 1단계를 통과한 쪽은 비밀번호를 증명했으므로,
+숨길 이유가 없고 숨기면 오지 않는 메일을 기다리게 된다. `429`와 기다릴 시간을 준다.
+
+**코드를 맞게 쓰면 1분 대기를 푼다.** 대기는 원하지 않는 메일이 연달아 가는 것을 막는 장치다.
+코드를 맞혔다는 것은 메일함의 주인이 직접 받아 썼다는 뜻이다. 풀지 않으면 다른 기기에서 바로
+로그인할 때 1분을 기다려야 한다. 1시간 5통 제한은 그대로 두고, 틀린 코드는 대기를 풀지 못한다.
 
 **검증, 생성, HTTP 처리를 나눈다.** Serializer는 입력 검증만, service는 계정 생성만,
 뷰는 요청과 응답 변환만 한다. DRF 관례는 Serializer의 `create()`에 생성 로직을 두는 것인데,

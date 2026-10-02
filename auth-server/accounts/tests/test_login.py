@@ -1,7 +1,7 @@
 # auth-server/accounts/tests/test_login.py
 
 """
-로그인, JWKS, 토큰 검증을 확인한다.
+로그인(비밀번호 → 이메일 코드), JWKS, 토큰 검증을 확인한다.
 
 토큰을 받는 쪽(게임 서버)의 입장도 여기서 검증한다.
 JWKS 에서 공개키를 가져와 서명을 확인하는 과정을 그대로 따라 한다.
@@ -11,20 +11,40 @@ import base64
 import hashlib
 import hmac
 import json
+import time
 from datetime import timedelta
+from unittest.mock import patch
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from django.conf import settings
+from django.core import mail, signing
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
-from accounts.models import User
-from accounts.tokens import AccessToken, issue_token_pair
+from accounts.cookies import REFRESH_COOKIE_NAME
+from accounts.email_codes import (
+    CODE_LIFETIME,
+    ISSUE_COOLDOWN,
+    MAX_FAILED_ATTEMPTS,
+    MAX_ISSUES_PER_WINDOW,
+    issue_email_code,
+)
+from accounts.login_tickets import LOGIN_TICKET_LIFETIME, LOGIN_TICKET_SALT
+from accounts.models import EmailCodePurpose, User
+from accounts.tests.helpers import (
+    LOGIN_URL,
+    LOGIN_VERIFY_URL,
+    code_from,
+    log_in,
+    start_login,
+    wrong_code_for,
+)
+from accounts.tokens import AccessToken, issue_token_pair, revoke_all_sessions
 
-LOGIN_URL = reverse('accounts:login')
+LOGIN_RESEND_URL = reverse('accounts:login-resend')
 JWKS_URL = reverse('accounts:jwks')
 ME_URL = reverse('accounts:me')
 
@@ -53,44 +73,74 @@ def base64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b'=').decode('ascii')
 
 
-class LoginTests(APITestCase):
+class LoginTestCase(APITestCase):
     def setUp(self):
         self.user = create_user()
 
-    def login(self, username: str = 'player_01', password: str = PASSWORD):
+    def start(self, username: str = 'player_01', password: str = PASSWORD):
+        """1단계: 아이디와 비밀번호."""
+        return start_login(self.client, username, password)
+
+    def verify(self, login_ticket: str, code: str):
+        """2단계: 티켓과 인증 코드."""
         return self.client.post(
-            LOGIN_URL,
-            {'username': username, 'password': password},
+            LOGIN_VERIFY_URL,
+            {'login_ticket': login_ticket, 'code': code},
             format='json',
         )
 
-    def test_returns_access_token(self):
-        response = self.login()
+    def resend(self, login_ticket: str):
+        return self.client.post(LOGIN_RESEND_URL, {'login_ticket': login_ticket}, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(set(response.data), {'access_token', 'token_type', 'expires_in'})
-        self.assertEqual(response.data['token_type'], 'Bearer')
-        self.assertEqual(response.data['expires_in'], 15 * 60)
+    def after(self, elapsed: timedelta):
+        """인증 코드 쪽의 시계를 elapsed 만큼 뒤로 옮긴다."""
+        return patch(
+            'accounts.email_codes.timezone.now',
+            return_value=timezone.now() + elapsed,
+        )
+
+
+class LoginStartTests(LoginTestCase):
+    def test_returns_ticket_instead_of_tokens(self):
+        response = self.start()
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(set(response.data), {'detail', 'login_ticket'})
+        # 비밀번호만으로는 토큰도 쿠키도 나오지 않는다
+        self.assertNotIn(REFRESH_COOKIE_NAME, response.cookies)
+
+    def test_sends_login_code_to_the_email(self):
+        self.start()
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.user.email])
+        self.assertIn('로그인', mail.outbox[0].subject)
 
     def test_username_is_case_insensitive(self):
-        response = self.login(username='Player_01')
+        response = self.start(username='Player_01')
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
 
     def test_wrong_password_and_unknown_user_get_the_same_response(self):
-        wrong_password = self.login(password='wrong-password')
-        unknown_user = self.login(username='nobody_here')
+        wrong_password = self.start(password='wrong-password')
+        unknown_user = self.start(username='nobody_here')
 
         self.assertEqual(wrong_password.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(unknown_user.status_code, status.HTTP_401_UNAUTHORIZED)
         # 응답 본문이 완전히 같아야 가입 여부가 드러나지 않는다
         self.assertEqual(wrong_password.data, unknown_user.data)
 
+    def test_wrong_password_sends_no_mail(self):
+        self.start(password='wrong-password')
+
+        # 비밀번호를 모르는 사람이 남의 메일함에 코드를 보낼 수 없어야 한다
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_inactive_user_cannot_log_in(self):
         self.user.is_active = False
         self.user.save()
 
-        response = self.login()
+        response = self.start()
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -98,6 +148,192 @@ class LoginTests(APITestCase):
         response = self.client.post(LOGIN_URL, {'username': 'player_01'}, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_second_start_within_cooldown_reuses_the_sent_code(self):
+        first = self.start()
+        code = code_from(mail.outbox[0])
+
+        second = self.start()
+
+        # 새 메일은 가지 않지만, 방금 보낸 코드로 로그인을 이어 갈 수 있다
+        self.assertEqual(second.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertNotEqual(second.data['detail'], first.data['detail'])
+        self.assertEqual(self.verify(second.data['login_ticket'], code).status_code, status.HTTP_200_OK)
+
+    def test_returns_429_when_no_code_can_be_sent(self):
+        now = timezone.now()
+        for index in range(MAX_ISSUES_PER_WINDOW):
+            with patch('accounts.email_codes.timezone.now', return_value=now + CODE_LIFETIME * index):
+                self.start()
+
+        with patch('accounts.email_codes.timezone.now', return_value=now + CODE_LIFETIME * MAX_ISSUES_PER_WINDOW):
+            response = self.start()
+
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(response.data['code'], 'login_code_unavailable')
+        self.assertEqual(response['Retry-After'], str(response.data['retry_after']))
+        self.assertNotIn('login_ticket', response.data)
+
+
+class LoginVerifyTests(LoginTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ticket = self.start().data['login_ticket']
+        self.code = code_from(mail.outbox[0])
+
+    def test_returns_access_token(self):
+        response = self.verify(self.ticket, self.code)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # refresh 토큰은 본문에 싣지 않는다
+        self.assertEqual(set(response.data), {'access_token', 'token_type', 'expires_in'})
+        self.assertEqual(response.data['token_type'], 'Bearer')
+        self.assertEqual(response.data['expires_in'], 15 * 60)
+        self.assertIn(REFRESH_COOKIE_NAME, response.cookies)
+
+    def test_rejects_wrong_code(self):
+        response = self.verify(self.ticket, wrong_code_for(self.code))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn(REFRESH_COOKIE_NAME, response.cookies)
+
+    def test_code_cannot_be_used_twice(self):
+        self.verify(self.ticket, self.code)
+
+        response = self.verify(self.ticket, self.code)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_code_is_discarded_after_too_many_wrong_attempts(self):
+        for _ in range(MAX_FAILED_ATTEMPTS):
+            self.verify(self.ticket, wrong_code_for(self.code))
+
+        response = self.verify(self.ticket, self.code)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rejects_malformed_code(self):
+        response = self.verify(self.ticket, '12345')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('code', response.data)
+
+    def test_signup_code_cannot_be_used_for_login(self):
+        signup_code = issue_email_code(user=self.user, purpose=EmailCodePurpose.SIGNUP)
+
+        response = self.verify(self.ticket, signup_code)
+
+        # 두 코드가 우연히 같을 수 있다. 그때는 이 검증이 의미가 없으므로 건너뛴다
+        if signup_code != self.code:
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_can_log_in_again_right_after_logging_in(self):
+        self.verify(self.ticket, self.code)
+
+        # 다른 기기에서 곧바로 로그인한다. 1분을 기다리게 하면 안 된다
+        other_device = APIClient()
+        response = log_in(other_device, 'player_01', PASSWORD)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 2)
+
+
+class LoginTicketTests(LoginTestCase):
+    """티켓이 없거나 쓸 수 없으면 2단계에 들어올 수 없다."""
+
+    def setUp(self):
+        super().setUp()
+        self.ticket = self.start().data['login_ticket']
+        self.code = code_from(mail.outbox[0])
+
+    def assert_ticket_rejected(self, response) -> None:
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data['code'], 'login_ticket_invalid')
+        self.assertNotIn(REFRESH_COOKIE_NAME, response.cookies)
+
+    def test_rejects_forged_ticket(self):
+        self.assert_ticket_rejected(self.verify('not-a-real-ticket', self.code))
+
+    def test_rejects_tampered_ticket(self):
+        # 서명은 그대로 두고 내용의 한 글자만 바꾼다
+        tampered = ('A' if self.ticket[0] != 'A' else 'B') + self.ticket[1:]
+
+        self.assert_ticket_rejected(self.verify(tampered, self.code))
+
+    def test_rejects_expired_ticket(self):
+        with patch('django.core.signing.time.time', return_value=time.time() + LOGIN_TICKET_LIFETIME.total_seconds() + 1):
+            response = self.verify(self.ticket, self.code)
+
+        self.assert_ticket_rejected(response)
+
+    def test_rejects_ticket_made_for_another_purpose(self):
+        # 같은 비밀키로 서명했지만 용도(salt)가 다른 값은 티켓으로 쓸 수 없다
+        other = signing.dumps({'sub': str(self.user.public_id), 'ver': 0}, salt='something.else')
+
+        self.assert_ticket_rejected(self.verify(other, self.code))
+
+    def test_rejects_ticket_after_all_sessions_are_revoked(self):
+        revoke_all_sessions(self.user)
+
+        self.assert_ticket_rejected(self.verify(self.ticket, self.code))
+
+    def test_rejects_ticket_of_deactivated_user(self):
+        self.user.is_active = False
+        self.user.save()
+
+        self.assert_ticket_rejected(self.verify(self.ticket, self.code))
+
+    def test_wrong_code_without_ticket_does_not_burn_the_code(self):
+        # 아이디만 아는 제3자가 남의 로그인을 방해할 수 없어야 한다
+        for _ in range(MAX_FAILED_ATTEMPTS):
+            self.verify('not-a-real-ticket', wrong_code_for(self.code))
+
+        response = self.verify(self.ticket, self.code)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_ticket_does_not_carry_private_data(self):
+        payload = signing.loads(self.ticket, salt=LOGIN_TICKET_SALT)
+
+        # 티켓은 서명만 되어 있고 암호화되어 있지 않다
+        self.assertEqual(set(payload), {'sub', 'ver'})
+        self.assertNotIn(self.user.email, self.ticket)
+
+
+class LoginResendTests(LoginTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ticket = self.start().data['login_ticket']
+        self.first_code = code_from(mail.outbox[0])
+
+    def test_sends_a_new_code_and_retires_the_old_one(self):
+        with self.after(ISSUE_COOLDOWN):
+            response = self.resend(self.ticket)
+            new_code = code_from(mail.outbox[-1])
+            old_code_response = self.verify(self.ticket, self.first_code)
+            new_code_response = self.verify(self.ticket, new_code)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 2)
+        if new_code != self.first_code:
+            self.assertEqual(old_code_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(new_code_response.status_code, status.HTTP_200_OK)
+
+    def test_returns_429_within_cooldown(self):
+        response = self.resend(self.ticket)
+
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertGreaterEqual(response.data['retry_after'], 1)
+        self.assertLessEqual(response.data['retry_after'], ISSUE_COOLDOWN.total_seconds())
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_requires_a_valid_ticket(self):
+        with self.after(ISSUE_COOLDOWN):
+            response = self.resend('not-a-real-ticket')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(len(mail.outbox), 1)
 
 
 class AccessTokenContentTests(APITestCase):
@@ -127,8 +363,6 @@ class AccessTokenContentTests(APITestCase):
         self.assertNotIn(self.user.email, json.dumps(claims))
         self.assertNotIn('user_id', claims)
         self.assertNotEqual(claims['sub'], str(self.user.pk))
-
-
 class JwksTests(APITestCase):
     def test_is_public(self):
         response = self.client.get(JWKS_URL)
