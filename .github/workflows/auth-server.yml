@@ -78,6 +78,11 @@ jobs:
       - name: 의존성 설치
         run: uv sync --locked
 
+      # 설정이 개인키 파일을 읽으므로 그 전에 만든다.
+      # 이 실행에서만 쓰고 버리는 키다
+      - name: JWT 키 만들기
+        run: uv run python scripts/generate_jwt_key.py
+
       - name: 설정 검사
         run: uv run python manage.py check
 

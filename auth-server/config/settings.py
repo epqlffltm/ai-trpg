@@ -13,9 +13,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
+
+from config.jwt_keys import compute_key_id, derive_public_key_pem, read_private_key_pem
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -110,6 +113,50 @@ REST_FRAMEWORK = {
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
     ],
+    # Authorization: Bearer <토큰> 헤더의 JWT 로 사용자를 확인한다.
+    # 기본값인 세션 인증과 Basic 인증은 쓰지 않는다
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+}
+
+# JWT
+# https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html
+
+# 개인키는 파일로 두고 .env 에는 경로만 적는다. PEM 은 여러 줄이라 .env 값으로 넣기 불편하다.
+# 상대 경로는 auth-server 폴더를 기준으로 한다
+JWT_PRIVATE_KEY_PATH = BASE_DIR / env('JWT_PRIVATE_KEY_PATH', default='keys/jwt-private.pem')
+
+_jwt_private_key_pem = read_private_key_pem(JWT_PRIVATE_KEY_PATH)
+
+# 공개키. JWKS 로 내보내고, 인증 서버 자신도 토큰을 검증할 때 쓴다
+JWT_PUBLIC_KEY_PEM = derive_public_key_pem(_jwt_private_key_pem)
+
+# 토큰 머리말의 kid 와 JWKS 의 kid 에 같은 값이 들어간다
+JWT_KEY_ID = compute_key_id(JWT_PUBLIC_KEY_PEM)
+
+SIMPLE_JWT = {
+    # 비대칭 서명. 개인키는 이 서버만 갖고, 다른 서버는 공개키로 검증만 한다.
+    # 대칭키(HS256)를 여러 서버가 공유하면 검증만 해야 할 서버도 토큰을 만들 수 있다
+    'ALGORITHM': 'RS256',
+    'SIGNING_KEY': _jwt_private_key_pem,
+    'VERIFYING_KEY': JWT_PUBLIC_KEY_PEM,
+
+    # 누가 발급했고(iss) 누구에게 쓰라고 발급했는지(aud).
+    # 검증하는 서버는 aud 에 자기 이름이 있는지 확인한다
+    'ISSUER': env('JWT_ISSUER', default='ai-trpg-auth'),
+    'AUDIENCE': env.list('JWT_AUDIENCE', default=['ai-trpg-auth', 'ai-trpg-game']),
+
+    # 다른 서버는 블랙리스트를 보지 않고 서명과 만료만 확인한다.
+    # 그래서 탈취됐을 때 쓸 수 있는 시간을 짧게 잡는다
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+
+    # 토큰의 주체는 정수 PK 가 아니라 public_id 다
+    'USER_ID_FIELD': 'public_id',
+    'USER_ID_CLAIM': 'sub',
+
+    # 머리말에 kid 를 넣는 토큰 클래스. 검증할 때도 같은 클래스를 쓴다
+    'AUTH_TOKEN_CLASSES': ('accounts.tokens.AccessToken',),
 }
 
 # Database
