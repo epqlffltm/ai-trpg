@@ -108,6 +108,8 @@ AUTH_USER_MODEL = 'accounts.User'
 # https://www.django-rest-framework.org/api-guide/settings/
 
 REST_FRAMEWORK = {
+    # 시도 횟수 제한에 걸렸을 때의 429 응답을 한 모양으로 맞춘다. 나머지는 DRF 의 기본 처리에 넘긴다
+    'EXCEPTION_HANDLER': 'accounts.exception_handlers.handle_exception',
     # Authorization: Bearer <토큰> 헤더의 JWT 로 사용자를 확인한다.
     # simplejwt 의 인증 클래스에 세션 버전 확인을 더한 것이다.
     # 기본값인 세션 인증과 Basic 인증은 쓰지 않는다

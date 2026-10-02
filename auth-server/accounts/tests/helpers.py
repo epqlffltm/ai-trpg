@@ -8,9 +8,12 @@
 
 import re
 
+from django.conf import settings
 from django.core import mail
 from django.urls import reverse
 from rest_framework import status
+
+from config.redis_client import get_redis
 
 LOGIN_URL = reverse('accounts:login')
 LOGIN_VERIFY_URL = reverse('accounts:login-verify')
@@ -43,3 +46,14 @@ def log_in(client, username: str, password: str):
         {'login_ticket': started.data['login_ticket'], 'code': code_from(mail.outbox[-1])},
         format='json',
     )
+
+
+def delete_attempt_keys() -> None:
+    """
+    시도 횟수를 모두 지운다. 테스트용 앞머리가 붙은 키만 지워서, 개발용 횟수는 건드리지 않는다.
+
+    제한을 켜고 도는 테스트가 앞뒤로 부른다. 지우지 않으면 앞 테스트의 횟수가 다음 테스트를 막는다.
+    """
+    client = get_redis()
+    for key in client.scan_iter(match=f'{settings.ATTEMPT_LIMIT_KEY_PREFIX}:*'):
+        client.delete(key)
