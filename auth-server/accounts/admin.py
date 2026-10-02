@@ -21,14 +21,14 @@ class UserAdmin(DjangoUserAdmin):
     ordering = ('-date_joined',)
 
     # 값이 자동으로 정해지는 필드는 화면에서 고칠 수 없게 한다
-    readonly_fields = ('public_id', 'last_login', 'date_joined')
+    readonly_fields = ('public_id', 'token_version', 'last_login', 'date_joined')
 
     # 수정 화면. 기본 구성에서 first_name, last_name 을 빼고 nickname, public_id 를 넣는다
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('프로필', {'fields': ('email', 'nickname', 'public_id')}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
-        ('기록', {'fields': ('last_login', 'date_joined')}),
+        ('기록', {'fields': ('token_version', 'last_login', 'date_joined')}),
     )
 
     # 추가 화면. 기본 구성은 아이디와 비밀번호만 묻는다.

@@ -55,6 +55,11 @@ class User(AbstractUser):
         unique=True,
         editable=False,
     )
+    
+    # 세션 버전. 토큰에 이 값을 넣어 발급하고, 검증할 때 현재 값과 비교한다.
+    # 값을 올리면 그 전에 발급된 토큰이 전부 무효가 된다.
+    # 비밀번호를 바꿨을 때나 토큰 탈취가 의심될 때 올린다
+    token_version = models.PositiveIntegerField('세션 버전', default=0)
 
     # AbstractUser 가 가진 실명 필드를 없앤다. 수집하지 않는 정보의 컬럼은 두지 않는다
     first_name = None
