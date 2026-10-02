@@ -28,6 +28,8 @@ from accounts.serializers import (
     LoginSerializer,
     LoginTicketSerializer,
     LoginVerifySerializer,
+    PasswordChangeSerializer,
+    PasswordResetConfirmSerializer,
     SignupSerializer,
     SignupVerifySerializer,
     UserSerializer,
@@ -38,9 +40,14 @@ from accounts.services import (
     FieldTakenError,
     InvalidCredentialsError,
     LoginCodeUnavailableError,
+    UnacceptablePasswordError,
+    WrongCurrentPasswordError,
+    change_password,
     complete_login,
+    request_password_reset,
     resend_login_code,
     resend_signup_code,
+    reset_password,
     start_login,
     start_signup,
     verify_signup,
@@ -268,6 +275,77 @@ class LoginResendView(APIView):
 
         return Response(
             {'detail': '인증 메일을 다시 보냈습니다.'},
+            status=status.HTTP_200_OK,
+        )
+
+
+class PasswordChangeView(APIView):
+    """POST /api/v1/auth/password/change"""
+
+    # 로그인한 본인만 바꿀 수 있다. 기본 권한(IsAuthenticated)을 쓴다
+
+    def post(self, request: Request) -> Response:
+        serializer = PasswordChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            change_password(user=request.user, **serializer.validated_data)
+        except WrongCurrentPasswordError:
+            return Response(
+                {'current_password': ['현재 비밀번호가 올바르지 않습니다.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except UnacceptablePasswordError as exc:
+            return Response({'new_password': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 비밀번호가 바뀌면서 이 기기의 토큰도 무효가 됐다.
+        # 새 토큰을 발급해, 다른 기기만 로그아웃되고 이 기기는 로그인이 이어지게 한다
+        return build_token_response(issue_token_pair(request.user))
+
+
+class PasswordResetRequestView(APIView):
+    """POST /api/v1/auth/password/reset"""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = EmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        request_password_reset(**serializer.validated_data)
+
+        # 가입된 주소든 아니든, 발급 제한에 걸렸든 아니든 같은 응답을 준다
+        return Response(
+            {'detail': '가입된 주소라면 비밀번호 재설정 메일을 보냈습니다.'},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class PasswordResetConfirmView(APIView):
+    """POST /api/v1/auth/password/reset/confirm"""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            reset_password(**serializer.validated_data)
+        except InvalidEmailCodeError:
+            # 틀림, 만료, 이미 씀, 그런 계정이 없음을 구분해 알려 주지 않는다
+            return Response(
+                {'detail': '재설정 링크가 올바르지 않거나 만료되었습니다.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except UnacceptablePasswordError as exc:
+            return Response({'new_password': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 토큰을 주지 않는다. 새 비밀번호로 로그인하게 한다
+        return Response(
+            {'detail': '비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.'},
             status=status.HTTP_200_OK,
         )
 

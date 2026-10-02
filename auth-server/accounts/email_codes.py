@@ -1,7 +1,11 @@
 # auth-server/accounts/email_codes.py
 
 """
-이메일 인증 코드의 발급과 검증.
+이메일로 보내는 인증 코드와 인증 토큰의 발급과 검증.
+
+코드는 사람이 보고 입력하는 6자리 숫자다. 앞 단계(비밀번호 등)를 통과한 뒤에만 쓰인다.
+토큰은 링크에 담는 긴 무작위 문자열이다. 그것 하나로 본인을 확인해야 하는 곳(비밀번호 재설정)에 쓴다.
+둘은 같은 테이블과 같은 발급 제한을 쓴다. 다른 것은 값의 길이, 유효 시간, 틀렸을 때의 처리뿐이다.
 
 코드는 PostgreSQL 에 둔다. 로그인마다 인증 코드가 필요한데, 로그인은 이미
 PostgreSQL 없이는 동작하지 않는다. 코드를 다른 저장소에 두면 로그인이 의존하는 것이
@@ -28,6 +32,12 @@ CODE_LIFETIME = timedelta(minutes=5)
 # 코드 하나에 허용하는 오답 횟수.
 # 6자리는 100만 가지뿐이라, 횟수를 제한하지 않으면 전부 넣어 볼 수 있다
 MAX_FAILED_ATTEMPTS = 5
+
+# 토큰은 링크로 열어 새 비밀번호를 정하는 데 쓰인다. 코드보다 넉넉하게 잡는다
+TOKEN_LIFETIME = timedelta(minutes=30)
+
+# 토큰의 무작위 바이트 수. 32바이트(256비트)는 추측이 불가능한 크기다
+TOKEN_BYTES = 32
 
 # 발급 제한. 남의 메일함에 코드를 쏟아붓는 것을 막는다
 ISSUE_COOLDOWN = timedelta(minutes=1)
@@ -70,6 +80,11 @@ def generate_code() -> str:
     return f'{secrets.randbelow(10 ** CODE_LENGTH):0{CODE_LENGTH}d}'
 
 
+def generate_token() -> str:
+    """링크에 넣을 수 있는 글자(영문, 숫자, -, _)로 된 긴 무작위 문자열을 만든다."""
+    return secrets.token_urlsafe(TOKEN_BYTES)
+
+
 def hash_code(code: str, *, user: User, purpose: str) -> str:
     """
     코드를 서버의 비밀키와 섞어 해시한다.
@@ -94,20 +109,34 @@ def issue_email_code(*, user: User, purpose: str) -> str:
     전에 발급한 코드는 덮어써서 못 쓰게 된다. 유효한 코드는 항상 하나뿐이다.
     발급 제한에 걸리면 EmailCodeCooldownError 나 EmailCodeLimitError 를 낸다.
     """
-    code = generate_code()
+    return _issue(user=user, purpose=purpose, secret=generate_code(), lifetime=CODE_LIFETIME)
+
+
+def issue_email_token(*, user: User, purpose: str) -> str:
+    """
+    새 인증 토큰을 발급하고 원문을 돌려준다. 발급 제한은 코드와 같다.
+
+    6자리 코드는 한 시간에 25번(코드 5개 × 5번) 추측할 수 있다. 앞 단계 없이
+    그것 하나로 계정을 넘겨주는 곳에는 약하다. 토큰은 추측이 불가능한 길이다.
+    """
+    return _issue(user=user, purpose=purpose, secret=generate_token(), lifetime=TOKEN_LIFETIME)
+
+
+def _issue(*, user: User, purpose: str, secret: str, lifetime: timedelta) -> str:
+    """값을 해시해 저장하고 원문을 돌려준다. 코드와 토큰의 발급이 함께 쓴다."""
     now = timezone.now()
 
     with transaction.atomic():
         record = _lock_record(user=user, purpose=purpose, now=now)
         _ensure_issue_allowed(record, now)
         _count_issue(record, now)
-        record.code_hash = hash_code(code, user=user, purpose=purpose)
-        record.expires_at = now + CODE_LIFETIME
+        record.code_hash = hash_code(secret, user=user, purpose=purpose)
+        record.expires_at = now + lifetime
         record.failed_attempts = 0
         record.last_issued_at = now
         record.save()
 
-    return code
+    return secret
 
 
 def reserve_email_slot(*, user: User, purpose: str) -> None:
@@ -146,11 +175,42 @@ def consume_email_code(
     """
     인증 코드가 맞는지 확인하고, 맞으면 다시 쓸 수 없게 한다.
 
-    틀리면 InvalidEmailCodeError 를 낸다. 틀린 횟수는 그 전에 반드시 저장된다.
+    틀리면 InvalidEmailCodeError 를 낸다. 틀린 횟수는 그 전에 반드시 저장되고,
+    MAX_FAILED_ATTEMPTS 번 틀리면 코드가 폐기된다.
 
     on_success 는 코드가 맞았을 때 같은 트랜잭션 안에서 실행된다.
     "코드 소비" 와 "그 결과로 바뀌는 상태" 를 한 덩어리로 묶는다.
     on_success 가 실패하면 코드 소비도 취소되어, 코드는 썼는데 상태는 안 바뀐 경우가 생기지 않는다.
+    """
+    _consume(user=user, purpose=purpose, secret=code, on_success=on_success, count_failures=True)
+
+
+def consume_email_token(
+    *,
+    user: User,
+    purpose: str,
+    token: str,
+    on_success: Callable[[], None] | None = None,
+) -> None:
+    """
+    인증 토큰이 맞는지 확인하고, 맞으면 다시 쓸 수 없게 한다.
+
+    코드와 달리 틀린 횟수를 세지 않는다. 토큰은 추측할 수 없으므로 횟수 제한이 지키는 것이 없다.
+    오히려 세면, 이메일 주소만 아는 제3자가 틀린 값을 보내 남의 토큰을 폐기시킬 수 있다.
+    """
+    _consume(user=user, purpose=purpose, secret=token, on_success=on_success, count_failures=False)
+
+
+def _consume(
+    *,
+    user: User,
+    purpose: str,
+    secret: str,
+    on_success: Callable[[], None] | None,
+    count_failures: bool,
+) -> None:
+    """
+    값을 확인하고 소비한다. 코드와 토큰의 검증이 함께 쓴다.
 
     durable=True 는 이 블록이 다른 트랜잭션 안에서 실행되는 것을 금지한다.
     바깥에 트랜잭션이 있으면, 여기서 낸 예외가 바깥 트랜잭션까지 되돌려
@@ -159,14 +219,14 @@ def consume_email_code(
     now = timezone.now()
 
     with transaction.atomic(durable=True):
-        # 행을 잠가, 같은 코드로 동시에 들어온 요청 중 하나만 통과시킨다
+        # 행을 잠가, 같은 값으로 동시에 들어온 요청 중 하나만 통과시킨다
         record = _lock_existing_record(user=user, purpose=purpose)
-        matched = record is not None and _matches(record, code, now)
+        matched = record is not None and _matches(record, secret, now)
         if matched:
             _discard_code(record, now)
             if on_success is not None:
                 on_success()
-        elif record is not None:
+        elif record is not None and count_failures:
             _record_failure(record)
 
     # 예외를 블록 밖에서 낸다. 블록 안에서 내면 틀린 횟수의 저장이 취소된다
