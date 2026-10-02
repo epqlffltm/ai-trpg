@@ -118,3 +118,38 @@ class SignupResponseSerializer(serializers.ModelSerializer):
         model = User
         fields = ('public_id', 'username', 'nickname')
         read_only_fields = fields
+        
+class LoginSerializer(serializers.Serializer):
+    """
+    로그인 요청을 검증한다.
+
+    형식만 본다. 아이디 규칙이나 비밀번호 강도는 검사하지 않는다.
+    규칙에 어긋난 입력에 다른 오류를 주면 "이런 아이디는 존재할 수 없다" 를 알려 주게 된다.
+    """
+
+    username = serializers.CharField()
+    password = serializers.CharField(
+        max_length=PASSWORD_MAX_LENGTH,
+        write_only=True,
+        trim_whitespace=False,
+    )
+
+    def validate_username(self, username: str) -> str:
+        """아이디는 소문자로 저장되어 있다. 입력도 소문자로 바꿔 대소문자를 무시한다."""
+        return username.lower()
+
+
+class LoginResponseSerializer(serializers.Serializer):
+    """로그인 응답."""
+
+    access_token = serializers.CharField()
+    token_type = serializers.CharField()
+    expires_in = serializers.IntegerField()
+    
+class UserSerializer(serializers.ModelSerializer):
+    """로그인한 본인에게 보여 주는 계정 정보."""
+
+    class Meta:
+        model = User
+        fields = ('public_id', 'username', 'email', 'nickname')
+        read_only_fields = fields
