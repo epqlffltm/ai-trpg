@@ -11,7 +11,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 구성 요소 | 폴더 | 상태 |
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
-| 인증 서버 (Django) | `auth-server/` | 회원가입, 로그인(access 토큰), JWKS까지 완료 |
+| 인증 서버 (Django) | `auth-server/` | 회원가입, 로그인, 토큰 갱신, 로그아웃, JWKS까지 완료 |
 | 게임 서버 (FastAPI) | `game-server/` | 예정 |
 | 프론트엔드 | `web/` | 예정 |
 
@@ -85,7 +85,10 @@ uv run python manage.py test
 | 메서드 | 경로 | 설명 | 인증 |
 | --- | --- | --- | --- |
 | POST | `/api/v1/auth/signup` | 회원가입 | 불필요 |
-| POST | `/api/v1/auth/login` | 로그인. access 토큰 발급 | 불필요 |
+| POST | `/api/v1/auth/login` | 로그인. access 토큰과 refresh 쿠키 발급 | 불필요 |
+| POST | `/api/v1/auth/refresh` | refresh 쿠키로 새 access 토큰 발급 | refresh 쿠키 |
+| POST | `/api/v1/auth/logout` | 이 기기의 refresh 토큰 폐기 | refresh 쿠키 |
+| POST | `/api/v1/auth/logout-all` | 모든 기기의 세션 종료 | 필요 |
 | GET | `/api/v1/auth/jwks` | 토큰 검증용 공개키 목록 | 불필요 |
 | GET | `/api/v1/auth/me` | 내 계정 정보 | 필요 |
 
@@ -96,6 +99,21 @@ uv run python manage.py test
 
 로그인 요청 본문은 `username`, `password`다. 성공하면 `access_token`, `token_type`,
 `expires_in`을 돌려준다. 아이디가 없든 비밀번호가 틀리든 같은 `401` 응답을 준다.
+
+### 토큰 두 종류
+
+| | access 토큰 | refresh 토큰 |
+| --- | --- | --- |
+| 수명 | 15분 | 14일 (쓸 때마다 새것으로 교체) |
+| 전달 | 응답 본문 | httpOnly 쿠키 (`Path=/api/v1/auth`, `SameSite=Strict`) |
+| 쓰는 곳 | 인증 서버와 다른 서버의 API | 인증 서버의 `/refresh`, `/logout` |
+| 프론트의 보관 | 메모리 | 브라우저가 보관. 스크립트는 읽을 수 없음 |
+
+access 토큰이 만료되면 프론트는 `/refresh`를 호출해 새 access 토큰을 받는다.
+`/refresh`가 `401`이면 다시 로그인해야 한다.
+
+프론트는 `/refresh`를 한 번에 하나만 호출해야 한다. 같은 refresh 토큰으로 두 요청이
+동시에 가면 하나만 성공하고, 나머지는 폐기된 토큰의 재사용으로 처리되어 모든 세션이 끊긴다.
 
 ### 다른 서버에서 토큰을 검증하는 방법
 
@@ -139,9 +157,28 @@ CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 
 **access 토큰은 15분만 유효하다.** 다른 서버는 인증 서버에 묻지 않고 서명과 만료만 확인한다.
 탈취된 토큰을 중간에 취소할 방법이 없으므로 수명을 짧게 잡는다.
 
-**토큰 발급과 검증은 simplejwt에 맡긴다.** 다만 simplejwt는 머리말에 `kid`를 넣지 않아
-그 부분만 상속으로 덧붙였다. 로그인 뷰는 직접 두고 발급은 함수 하나(`issue_access_token`)로
-감쌌다. 로그인 흐름이 바뀌어도 발급 코드는 그대로 쓴다.
+**refresh 토큰은 httpOnly 쿠키에 담는다.** 14일짜리라 탈취 피해가 크다. 스크립트가 읽을 수 없는
+곳에 두면 XSS로는 훔칠 수 없다. 쿠키 경로를 인증 API로 제한해 다른 요청에는 실리지 않고,
+`SameSite=Strict`로 다른 사이트에서 시작된 요청에도 실리지 않는다. access 토큰은 다른 서버에도
+보내야 해서 쿠키에 담지 않는다.
+
+**refresh 토큰은 쓸 때마다 교체하고, 폐기된 토큰이 다시 쓰이면 모든 세션을 끊는다.**
+폐기된 토큰이 다시 들어왔다는 것은 정상 사용자와 공격자 중 한쪽이 옛 토큰을 쓴 것이다.
+누가 진짜인지 가릴 수 없으므로 양쪽 다 끊고 다시 로그인하게 한다.
+같은 토큰으로 동시에 들어온 요청은 행 잠금으로 하나만 통과시킨다.
+
+**세션을 한 번에 끊는 장치는 세션 버전(`token_version`)이다.** 토큰에 버전을 넣어 발급하고,
+회원의 버전을 올리면 그 전의 토큰이 전부 무효가 된다. 토큰을 하나씩 찾아 폐기할 필요가 없다.
+다른 서버는 버전을 확인할 수 없어 옛 access 토큰이 최대 15분 통한다.
+
+**폐기 기록은 PostgreSQL에 둔다(simplejwt의 블랙리스트 테이블).** 폐기 여부는 갱신과 로그아웃
+때만 확인하므로 조회가 드물다. Redis 캐시를 덧붙이면 두 저장소가 어긋나는 순간 폐기된 토큰이
+통과할 수 있어 쓰지 않는다. 발급한 토큰의 원문은 저장하지 않고 토큰 ID만 남긴다.
+
+**토큰의 서명과 검증, 폐기 기록 테이블은 simplejwt에 맡긴다.** 그 위에 세 가지를 직접 얹었다.
+머리말의 `kid`(simplejwt는 넣지 않는다), 로그인 뷰, refresh 회전이다. simplejwt의 내장 갱신에는
+폐기된 토큰이 다시 쓰였을 때 모든 세션을 끊는 동작이 없다. 발급은 함수 하나(`issue_token_pair`)로
+감싸, 로그인 흐름이 바뀌어도 그대로 쓴다.
 
 **검증, 생성, HTTP 처리를 나눈다.** Serializer는 입력 검증만, service는 계정 생성만,
 뷰는 요청과 응답 변환만 한다. DRF 관례는 Serializer의 `create()`에 생성 로직을 두는 것인데,
@@ -160,6 +197,15 @@ CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 
 **DB 인스턴스는 하나, 계정과 스키마는 서버마다 따로 쓴다.** 인증 서버는 `auth` 계정으로
 `auth` 스키마만 쓴다. 다른 서버의 테이블을 직접 읽는 코드는 DB 권한에서 거부된다.
 서버 간 데이터 교환은 API로만 한다.
+
+## 운영 메모
+
+**만료된 토큰 기록 정리.** 발급 기록과 폐기 기록은 토큰이 만료된 뒤에도 테이블에 남는다.
+배포 환경에서는 아래 명령을 하루에 한 번 실행한다.
+
+```
+uv run python manage.py flushexpiredtokens
+```
 
 ## 자주 겪는 문제
 
@@ -183,6 +229,11 @@ netsh interface ipv4 show excludedportrange protocol=tcp
 docker compose down -v
 docker compose up -d
 ```
+
+**로컬에서 로그인은 되는데 `/refresh`가 항상 `401`이다**
+
+`auth-server/.env`에 `REFRESH_COOKIE_SECURE=false`가 없는 경우다. 기본값은 HTTPS에서만
+쿠키를 보내는 것이라, HTTP로 도는 로컬에서는 브라우저가 쿠키를 싣지 않는다.
 
 ## 구조
 

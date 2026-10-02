@@ -39,8 +39,9 @@ services:
 
   redis:
     image: redis:7-alpine
-    # AOF 를 켠다. JWT 블랙리스트가 들어가므로, 재시작으로 데이터가 사라지면
-    # 로그아웃한 refresh 토큰이 만료 전까지 다시 유효해진다
+    # AOF 를 켠다. 로그인 시도 횟수와 IP 차단 기록이 들어갈 자리다.
+    # 재시작으로 데이터가 사라지면 차단이 풀리고 시도 횟수가 처음부터 다시 세어진다.
+    # (폐기한 refresh 토큰은 Redis 가 아니라 PostgreSQL 에 기록한다)
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
