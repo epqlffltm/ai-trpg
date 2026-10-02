@@ -21,7 +21,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import User
-from accounts.tokens import AccessToken, issue_access_token
+from accounts.tokens import AccessToken, issue_token_pair
 
 LOGIN_URL = reverse('accounts:login')
 JWKS_URL = reverse('accounts:jwks')
@@ -41,6 +41,9 @@ def create_user(**overrides) -> User:
     fields.update(overrides)
     return User.objects.create_user(**fields)
 
+def issue_access_token(user: User) -> str:
+    """테스트에서는 access 토큰만 필요한 경우가 많다."""
+    return issue_token_pair(user).access
 
 def base64url(data: bytes) -> str:
     """JWT 가 쓰는 base64url 인코딩. 끝의 = 를 뗀다."""
@@ -221,7 +224,8 @@ class MeTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_rejects_expired_token(self):
-        token = AccessToken.for_user(self.user)
+        # 정상 토큰을 읽어 들인 뒤 만료 시각만 과거로 바꿔 다시 서명한다
+        token = AccessToken(issue_access_token(self.user))
         token.set_exp(lifetime=-timedelta(minutes=1))
 
         response = self.get_me(str(token))

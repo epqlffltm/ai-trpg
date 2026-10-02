@@ -1,4 +1,5 @@
 # auth-server/config/settings.py
+
 """
 인증 서버의 Django 설정.
 
@@ -54,9 +55,13 @@ INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
-    'django.contrib.staticfiles',
     'django.contrib.messages',
+    'django.contrib.staticfiles',
+    # 외부 패키지
     'rest_framework',
+    # 발급한 refresh 토큰과 폐기 목록을 DB 에 기록한다
+    'rest_framework_simplejwt.token_blacklist',
+    # 이 프로젝트의 앱
     'accounts',
 ]
 
@@ -89,17 +94,25 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
+
+# 사용자 모델
+# https://docs.djangoproject.com/en/6.1/topics/auth/customizing/#substituting-a-custom-user-model
+
 # Django 기본 User 대신 accounts 앱의 User 를 쓴다.
 # 첫 migrate 전에 정해야 한다. 나중에 바꾸면 기존 테이블과 외래 키를 전부 다시 만들어야 한다
 AUTH_USER_MODEL = 'accounts.User'
+
 
 # Django REST framework
 # https://www.django-rest-framework.org/api-guide/settings/
 
 REST_FRAMEWORK = {
-    # 인증 수단은 로그인 API 를 만들 때 JWT 로 채운다.
-    # 기본값인 세션 인증과 Basic 인증은 쓰지 않으므로 비워 둔다
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    # Authorization: Bearer <토큰> 헤더의 JWT 로 사용자를 확인한다.
+    # simplejwt 의 인증 클래스에 세션 버전 확인을 더한 것이다.
+    # 기본값인 세션 인증과 Basic 인증은 쓰지 않는다
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'accounts.authentication.SessionVersionJWTAuthentication',
+    ],
     # 기본을 "인증된 사용자만" 으로 둔다.
     # 공개 API 는 뷰에서 AllowAny 를 직접 적어야 열린다.
     # 권한 설정을 빠뜨린 뷰가 열려 있는 것보다 닫혀 있는 쪽이 안전하다
@@ -113,12 +126,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
     ],
-    # Authorization: Bearer <토큰> 헤더의 JWT 로 사용자를 확인한다.
-    # 기본값인 세션 인증과 Basic 인증은 쓰지 않는다
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ],
 }
+
 
 # JWT
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html
@@ -151,6 +160,10 @@ SIMPLE_JWT = {
     # 그래서 탈취됐을 때 쓸 수 있는 시간을 짧게 잡는다
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
 
+    # 이 기간 안에 한 번이라도 접속하면 로그인이 유지된다.
+    # refresh 토큰은 쓸 때마다 새것으로 바뀌고 기간도 다시 시작한다
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
+
     # 토큰의 주체는 정수 PK 가 아니라 public_id 다
     'USER_ID_FIELD': 'public_id',
     'USER_ID_CLAIM': 'sub',
@@ -158,6 +171,11 @@ SIMPLE_JWT = {
     # 머리말에 kid 를 넣는 토큰 클래스. 검증할 때도 같은 클래스를 쓴다
     'AUTH_TOKEN_CLASSES': ('accounts.tokens.AccessToken',),
 }
+
+# refresh 토큰 쿠키를 HTTPS 에서만 보낼지.
+# 적지 않으면 True. 로컬 개발은 HTTP 라서 .env 에서 false 로 둔다
+REFRESH_COOKIE_SECURE = env.bool('REFRESH_COOKIE_SECURE', default=True)
+
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
@@ -174,7 +192,7 @@ DATABASES = {
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
-        {
+    {
         # 비밀번호가 아이디, 이메일, 닉네임과 비슷하면 거부한다.
         # 기본값은 first_name, last_name 을 보는데 이 프로젝트의 User 에는 그 필드가 없다
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
