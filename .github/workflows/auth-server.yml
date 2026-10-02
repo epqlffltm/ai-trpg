@@ -1,0 +1,89 @@
+# .github/workflows/auth-server.yml
+# 인증 서버의 CI. PR 과 main 푸시마다 설정, 마이그레이션, 테스트를 검사한다.
+#
+# 서버마다 워크플로 파일을 따로 둔다. 서버별로 의존성과 검사 항목이 다르고,
+# 한 서버만 고친 PR 에서 다른 서버의 검사까지 돌릴 이유가 없다.
+
+name: auth-server
+
+on:
+  pull_request:
+    paths:
+      - "auth-server/**"
+      - "docker/postgres/init/**"
+      - ".github/workflows/auth-server.yml"
+  push:
+    branches: [main]
+    paths:
+      - "auth-server/**"
+      - "docker/postgres/init/**"
+      - ".github/workflows/auth-server.yml"
+
+# 이 워크플로는 저장소를 읽기만 한다. 필요한 권한만 준다
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      # docker-compose.yml 과 같은 이미지를 쓴다
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: trpg
+          POSTGRES_PASSWORD: ci-root-password
+          POSTGRES_DB: trpg
+        ports:
+          - 5432:5432
+        # 접속을 받을 때까지 기다린 뒤 다음 단계로 넘어간다
+        options: >-
+          --health-cmd "pg_isready -U trpg -d trpg"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    # CI 전용 값. 이 실행이 끝나면 사라지는 DB 에만 쓰이므로 비밀값이 아니다.
+    # .env 파일 없이 환경 변수만으로 설정을 읽는다
+    env:
+      SECRET_KEY: ci-only-secret-key-not-used-anywhere-else
+      AUTH_DB_PASSWORD: ci-auth-password
+      DATABASE_URL: postgres://auth:ci-auth-password@127.0.0.1:5432/trpg
+
+    defaults:
+      run:
+        working-directory: auth-server
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # 로컬과 같은 초기화 스크립트로 auth 계정과 스키마를 만든다.
+      # 슈퍼유저로 테스트하면 로컬에서 권한 때문에 실패할 코드가 CI 를 통과한다
+      - name: DB 계정과 스키마 만들기
+        working-directory: .
+        env:
+          PGPASSWORD: ci-root-password
+        run: >-
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg
+          -f docker/postgres/init/01-auth-role.sql
+
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      # uv.lock 과 pyproject.toml 이 어긋나면 실패한다
+      - name: 의존성 설치
+        run: uv sync --locked
+
+      - name: 설정 검사
+        run: uv run python manage.py check
+
+      # 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
+      - name: 마이그레이션 누락 검사
+        run: uv run python manage.py makemigrations --check --dry-run
+
+      - name: 테스트
+        run: uv run python manage.py test
