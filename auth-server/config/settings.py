@@ -247,3 +247,7 @@ MAILERS = {
 
 # 메일의 보내는 사람 주소
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='AI TRPG <no-reply@localhost>')
+
+# 비밀번호 재설정 메일의 링크가 가리키는 프론트 화면.
+# 인증 서버의 주소가 아니다. 링크는 화면을 열기만 하고, 변경은 그 화면이 API 에 POST 로 요청한다
+PASSWORD_RESET_URL = env('PASSWORD_RESET_URL', default='http://localhost:5173/reset-password')

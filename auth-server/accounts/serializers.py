@@ -148,6 +148,37 @@ class LoginChallengeSerializer(serializers.Serializer):
     login_ticket = serializers.CharField()
 
 
+class PasswordChangeSerializer(serializers.Serializer):
+    """
+    비밀번호 변경 요청의 형식을 검증한다.
+
+    새 비밀번호의 강도는 여기서 보지 않는다. services.py 가 사용자와 함께 검사한다.
+    """
+
+    current_password = serializers.CharField(
+        max_length=PASSWORD_MAX_LENGTH,
+        write_only=True,
+        trim_whitespace=False,
+    )
+    new_password = serializers.CharField(
+        max_length=PASSWORD_MAX_LENGTH,
+        write_only=True,
+        trim_whitespace=False,
+    )
+
+
+class PasswordResetConfirmSerializer(EmailSerializer):
+    """비밀번호 재설정 요청의 형식을 검증한다."""
+
+    # 토큰은 43글자다. 지나치게 긴 입력은 해시하기 전에 거른다
+    token = serializers.CharField(max_length=200)
+    new_password = serializers.CharField(
+        max_length=PASSWORD_MAX_LENGTH,
+        write_only=True,
+        trim_whitespace=False,
+    )
+
+
 class LoginResponseSerializer(serializers.Serializer):
     """토큰을 발급하는 응답. 로그인 2단계와 토큰 갱신이 쓴다."""
 

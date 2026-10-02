@@ -12,6 +12,8 @@ from datetime import timedelta
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -21,13 +23,21 @@ from accounts.email_codes import (
     EmailCodeLimitError,
     InvalidEmailCodeError,
     consume_email_code,
+    consume_email_token,
     has_usable_code,
     issue_email_code,
+    issue_email_token,
     reserve_email_slot,
 )
 from accounts.login_tickets import issue_login_ticket, read_login_ticket
-from accounts.mail import send_already_registered_notice, send_email_code
+from accounts.mail import (
+    send_already_registered_notice,
+    send_email_code,
+    send_password_changed_notice,
+    send_password_reset_link,
+)
 from accounts.models import EmailCodePurpose, User
+from accounts.tokens import revoke_all_sessions
 
 # 인증을 끝내지 않은 계정을 보관하는 시간.
 # 인증 코드의 발급 구간(1시간에 5회)과 같게 잡았다.
@@ -81,6 +91,18 @@ class LoginCodeUnavailableError(Exception):
     def __init__(self, retry_after: timedelta):
         super().__init__()
         self.retry_after = retry_after
+
+
+class WrongCurrentPasswordError(Exception):
+    """비밀번호를 바꾸려는데 현재 비밀번호가 틀렸다."""
+
+
+class UnacceptablePasswordError(Exception):
+    """새 비밀번호가 규칙에 맞지 않는다. 이유를 사람이 읽을 문장으로 담는다."""
+
+    def __init__(self, messages: list[str]):
+        super().__init__()
+        self.messages = messages
 
 
 @dataclass(frozen=True)
@@ -210,6 +232,67 @@ def resend_login_code(*, login_ticket: str) -> None:
     send_email_code(user=user, purpose=EmailCodePurpose.LOGIN, code=code)
 
 
+def change_password(*, user: User, current_password: str, new_password: str) -> None:
+    """
+    로그인한 사용자의 비밀번호를 바꾸고, 발급돼 있던 토큰을 전부 무효로 만든다.
+
+    현재 비밀번호를 다시 확인한다. access 토큰만으로 바꿀 수 있으면,
+    자리를 비운 사이 열려 있는 화면에서 남이 바꿀 수 있다.
+    호출한 쪽이 이 기기에 새 토큰을 발급해야 한다. 그러지 않으면 이 기기도 로그아웃된다.
+    """
+    if not user.check_password(current_password):
+        raise WrongCurrentPasswordError
+    if current_password == new_password:
+        raise UnacceptablePasswordError(['새 비밀번호는 현재 비밀번호와 달라야 합니다.'])
+
+    with transaction.atomic():
+        _set_new_password(user, new_password)
+
+    send_password_changed_notice(user=user)
+
+
+def request_password_reset(*, email: str) -> None:
+    """
+    비밀번호 재설정 링크를 메일로 보낸다.
+
+    가입된 주소가 아니거나 발급 제한에 걸리면 아무 일도 하지 않는다. 예외도 내지 않는다.
+    호출한 쪽이 경우를 구분할 수 없어야 이메일의 가입 여부가 드러나지 않는다.
+    """
+    user = _find_verified_user(email)
+    if user is None or not user.is_active:
+        return
+
+    try:
+        token = issue_email_token(user=user, purpose=EmailCodePurpose.PASSWORD_RESET)
+    except (EmailCodeCooldownError, EmailCodeLimitError):
+        return
+    send_password_reset_link(user=user, token=token)
+
+
+def reset_password(*, email: str, token: str, new_password: str) -> None:
+    """
+    재설정 토큰을 확인하고 새 비밀번호로 바꾼다. 모든 기기에서 로그아웃된다.
+
+    토큰이 틀렸거나 그런 계정이 없으면 InvalidEmailCodeError 를 낸다. 둘을 구분하지 않는다.
+    새 비밀번호가 규칙에 맞지 않으면 UnacceptablePasswordError 를 내고, 토큰은 쓰이지 않은 채로 남는다.
+    """
+    user = _find_verified_user(email)
+    if user is None or not user.is_active:
+        raise InvalidEmailCodeError
+
+    consume_email_token(
+        user=user,
+        purpose=EmailCodePurpose.PASSWORD_RESET,
+        token=token,
+        # 토큰 소비, 비밀번호 저장, 세션 종료가 한 트랜잭션이다.
+        # 비밀번호 규칙 검사도 여기서 한다. 토큰이 맞은 뒤에만 실행되므로,
+        # "이 비밀번호는 이 계정의 아이디와 비슷하다" 같은 답이 토큰을 가진 사람에게만 간다
+        on_success=lambda: _set_new_password(user, new_password),
+    )
+
+    send_password_changed_notice(user=user)
+
+
 def authenticate_user(*, username: str, password: str) -> User:
     """
     아이디와 비밀번호가 맞는 사용자를 돌려준다.
@@ -279,6 +362,23 @@ def _save_pending_user(*, username: str, email: str, nickname: str, password_has
     user.date_joined = now
     user.save()
     return user
+
+
+def _set_new_password(user: User, new_password: str) -> None:
+    """
+    새 비밀번호를 검사해 저장하고, 발급돼 있던 토큰을 전부 무효로 만든다.
+
+    트랜잭션 안에서 불러야 한다. 비밀번호만 바뀌고 옛 세션이 살아남는 일이 없어야 한다.
+    """
+    try:
+        # 아이디, 이메일, 닉네임과 비슷한 비밀번호를 걸러내려면 검증기가 사용자를 알아야 한다
+        validate_password(new_password, user=user)
+    except ValidationError as exc:
+        raise UnacceptablePasswordError(list(exc.messages)) from exc
+
+    user.set_password(new_password)
+    user.save(update_fields=['password'])
+    revoke_all_sessions(user)
 
 
 def _mark_email_verified(user: User) -> None:
