@@ -51,8 +51,9 @@ INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
-    'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.messages',
+    'rest_framework',
     'accounts',
 ]
 
@@ -89,6 +90,28 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # 첫 migrate 전에 정해야 한다. 나중에 바꾸면 기존 테이블과 외래 키를 전부 다시 만들어야 한다
 AUTH_USER_MODEL = 'accounts.User'
 
+# Django REST framework
+# https://www.django-rest-framework.org/api-guide/settings/
+
+REST_FRAMEWORK = {
+    # 인증 수단은 로그인 API 를 만들 때 JWT 로 채운다.
+    # 기본값인 세션 인증과 Basic 인증은 쓰지 않으므로 비워 둔다
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    # 기본을 "인증된 사용자만" 으로 둔다.
+    # 공개 API 는 뷰에서 AllowAny 를 직접 적어야 열린다.
+    # 권한 설정을 빠뜨린 뷰가 열려 있는 것보다 닫혀 있는 쪽이 안전하다
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    # 서버 간 통신과 프론트 모두 JSON 만 쓴다
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+    ],
+}
+
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
@@ -104,8 +127,13 @@ DATABASES = {
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
-    {
+        {
+        # 비밀번호가 아이디, 이메일, 닉네임과 비슷하면 거부한다.
+        # 기본값은 first_name, last_name 을 보는데 이 프로젝트의 User 에는 그 필드가 없다
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        'OPTIONS': {
+            'user_attributes': ('username', 'email', 'nickname'),
+        },
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
