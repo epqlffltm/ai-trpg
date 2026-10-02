@@ -95,3 +95,56 @@ class User(AbstractUser):
 
     def get_short_name(self) -> str:
         return self.nickname
+    
+class EmailCodePurpose(models.TextChoices):
+    """
+    인증 코드의 용도.
+
+    코드는 발급받은 용도로만 쓸 수 있다. 용도를 구분하지 않으면
+    가입 인증용으로 받은 코드로 비밀번호를 바꿀 수 있게 된다.
+    """
+
+    SIGNUP = 'signup', '가입 인증'
+    LOGIN = 'login', '로그인 인증'
+    PASSWORD_RESET = 'password_reset', '비밀번호 재설정'
+
+
+class EmailCode(models.Model):
+    """
+    이메일로 보낸 인증 코드와 그 발급 이력.
+
+    회원과 용도마다 행이 하나뿐이다. 새 코드를 발급하면 행을 새로 만들지 않고 덮어쓴다.
+    그래서 테이블이 계속 불어나지 않고, 만료된 코드를 따로 지울 필요가 없다.
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='email_codes',
+        verbose_name='회원',
+    )
+    purpose = models.CharField('용도', max_length=20, choices=EmailCodePurpose.choices)
+
+    # 코드의 원문은 저장하지 않는다. 비교만 하면 되는 값이라 해시로 충분하다.
+    # 빈 문자열이면 쓸 수 있는 코드가 없다는 뜻이다(이미 썼거나 폐기됐다)
+    code_hash = models.CharField('코드 해시', max_length=64, blank=True)
+    expires_at = models.DateTimeField('만료 시각')
+    failed_attempts = models.PositiveSmallIntegerField('틀린 횟수', default=0)
+
+    # 발급 횟수 제한에 쓴다
+    last_issued_at = models.DateTimeField('마지막 발급 시각')
+    window_started_at = models.DateTimeField('발급 횟수를 세기 시작한 시각')
+    issued_in_window = models.PositiveSmallIntegerField('구간 안의 발급 횟수', default=0)
+
+    class Meta:
+        verbose_name = '인증 코드'
+        verbose_name_plural = '인증 코드'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'purpose'],
+                name='accounts_emailcode_user_purpose_unique',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.get_purpose_display()}'

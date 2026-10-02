@@ -233,8 +233,15 @@ STATIC_URL = 'static/'
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
+# 지금은 메일을 실제로 보내지 않고 서버를 띄운 터미널에 출력한다.
+# Django 기본 console 백엔드는 한글 본문을 base64 로 출력해 읽을 수 없어서
+# 읽을 수 있게 출력하는 백엔드를 쓴다.
+# 실제 발송(SMTP)은 메일을 쓰는 기능을 붙일 때 설정한다
 MAILERS = {
     'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        'BACKEND': 'config.mail_backends.ReadableConsoleEmailBackend',
     },
 }
+
+# 메일의 보내는 사람 주소
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='AI TRPG <no-reply@localhost>')
