@@ -233,6 +233,13 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 
+# 서버 앞에 선, 우리가 운영하는 프록시(nginx, 로드밸런서)의 수.
+# 요청을 보낸 쪽의 IP 를 알아낼 때 X-Forwarded-For 헤더를 어디까지 믿을지 정한다(accounts/client_ip.py).
+# 0 이면 헤더를 보지 않는다. 프록시가 없는데 1 이상으로 두면 누구나 IP 를 지어낼 수 있고,
+# 프록시가 있는데 0 으로 두면 모든 요청이 프록시의 IP 로 보여 한 사람의 시도가 모두를 막는다
+TRUSTED_PROXY_COUNT = env.int('TRUSTED_PROXY_COUNT', default=0)
+
+
 # Redis
 # 없어도 서비스가 도는 보조 장치(시도 횟수)만 둔다. 죽어 있으면 제한 없이 통과시킨다
 REDIS_URL = env('REDIS_URL', default='redis://127.0.0.1:6379/0')
