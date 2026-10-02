@@ -126,6 +126,9 @@ def start_signup(*, username: str, email: str, nickname: str, password: str) -> 
     """
     now = timezone.now()
 
+    # 계정 저장, 코드 발급, 보낼 메일 적기가 한 트랜잭션이다.
+    # 메일을 여기서 직접 보내지 않는다. 발송함에 적을 뿐이고, 보내는 것은 워커다.
+    # 그래서 메일 서버를 기다리며 DB 잠금을 쥐고 있지도, 메일만 나가고 계정은 취소되지도 않는다
     try:
         with transaction.atomic():
             _delete_expired_pending_accounts(username=username, nickname=nickname, now=now)
@@ -144,17 +147,12 @@ def start_signup(*, username: str, email: str, nickname: str, password: str) -> 
                     password_hash=password_hash,
                     now=now,
                 )
+                _send_signup_code(pending_user)
+            else:
+                _send_already_registered_notice(registered_user)
     except IntegrityError as exc:
         # 사전 조회를 통과한 뒤 다른 요청이 같은 값으로 먼저 저장한 경우
         raise DuplicateAccountError from exc
-
-    # 메일은 트랜잭션이 끝난 뒤에 보낸다.
-    # 안에서 보내면 메일 서버를 기다리는 동안 DB 잠금을 쥐고 있게 되고,
-    # 메일은 나갔는데 트랜잭션이 취소되는 경우도 생긴다
-    if registered_user is None:
-        _send_signup_code(pending_user)
-    else:
-        _send_already_registered_notice(registered_user)
 
 
 def verify_signup(*, email: str, code: str) -> None:
@@ -226,10 +224,9 @@ def resend_login_code(*, login_ticket: str) -> None:
     """
     user = read_login_ticket(login_ticket)
     try:
-        code = issue_email_code(user=user, purpose=EmailCodePurpose.LOGIN)
+        _issue_and_send_code(user, EmailCodePurpose.LOGIN)
     except (EmailCodeCooldownError, EmailCodeLimitError) as exc:
         raise LoginCodeUnavailableError(exc.retry_after) from exc
-    send_email_code(user=user, purpose=EmailCodePurpose.LOGIN, code=code)
 
 
 def change_password(*, user: User, current_password: str, new_password: str) -> None:
@@ -248,8 +245,6 @@ def change_password(*, user: User, current_password: str, new_password: str) -> 
     with transaction.atomic():
         _set_new_password(user, new_password)
 
-    send_password_changed_notice(user=user)
-
 
 def request_password_reset(*, email: str) -> None:
     """
@@ -263,10 +258,12 @@ def request_password_reset(*, email: str) -> None:
         return
 
     try:
-        token = issue_email_token(user=user, purpose=EmailCodePurpose.PASSWORD_RESET)
+        # 토큰 발급과 보낼 메일 적기가 한 트랜잭션이다
+        with transaction.atomic():
+            token = issue_email_token(user=user, purpose=EmailCodePurpose.PASSWORD_RESET)
+            send_password_reset_link(user=user, token=token)
     except (EmailCodeCooldownError, EmailCodeLimitError):
         return
-    send_password_reset_link(user=user, token=token)
 
 
 def reset_password(*, email: str, token: str, new_password: str) -> None:
@@ -284,13 +281,11 @@ def reset_password(*, email: str, token: str, new_password: str) -> None:
         user=user,
         purpose=EmailCodePurpose.PASSWORD_RESET,
         token=token,
-        # 토큰 소비, 비밀번호 저장, 세션 종료가 한 트랜잭션이다.
+        # 토큰 소비, 비밀번호 저장, 세션 종료, 알림 메일 적기가 한 트랜잭션이다.
         # 비밀번호 규칙 검사도 여기서 한다. 토큰이 맞은 뒤에만 실행되므로,
         # "이 비밀번호는 이 계정의 아이디와 비슷하다" 같은 답이 토큰을 가진 사람에게만 간다
         on_success=lambda: _set_new_password(user, new_password),
     )
-
-    send_password_changed_notice(user=user)
 
 
 def authenticate_user(*, username: str, password: str) -> User:
@@ -366,9 +361,10 @@ def _save_pending_user(*, username: str, email: str, nickname: str, password_has
 
 def _set_new_password(user: User, new_password: str) -> None:
     """
-    새 비밀번호를 검사해 저장하고, 발급돼 있던 토큰을 전부 무효로 만든다.
+    새 비밀번호를 검사해 저장하고, 발급돼 있던 토큰을 전부 무효로 만들고, 알림 메일을 맡긴다.
 
-    트랜잭션 안에서 불러야 한다. 비밀번호만 바뀌고 옛 세션이 살아남는 일이 없어야 한다.
+    트랜잭션 안에서 불러야 한다. 비밀번호만 바뀌고 옛 세션이 살아남거나,
+    비밀번호는 바뀌었는데 알림이 빠지는 일이 없어야 한다.
     """
     try:
         # 아이디, 이메일, 닉네임과 비슷한 비밀번호를 걸러내려면 검증기가 사용자를 알아야 한다
@@ -379,6 +375,7 @@ def _set_new_password(user: User, new_password: str) -> None:
     user.set_password(new_password)
     user.save(update_fields=['password'])
     revoke_all_sessions(user)
+    send_password_changed_notice(user=user)
 
 
 def _mark_email_verified(user: User) -> None:
@@ -389,19 +386,19 @@ def _mark_email_verified(user: User) -> None:
 def _send_signup_code(user: User) -> None:
     """가입 인증 코드를 발급해 보낸다. 발급 제한에 걸리면 조용히 넘어간다."""
     try:
-        code = issue_email_code(user=user, purpose=EmailCodePurpose.SIGNUP)
+        _issue_and_send_code(user, EmailCodePurpose.SIGNUP)
     except (EmailCodeCooldownError, EmailCodeLimitError):
         return
-    send_email_code(user=user, purpose=EmailCodePurpose.SIGNUP, code=code)
 
 
 def _send_already_registered_notice(user: User) -> None:
     """안내 메일을 보낸다. 인증 코드와 같은 발급 제한을 적용한다."""
     try:
-        reserve_email_slot(user=user, purpose=EmailCodePurpose.SIGNUP)
+        with transaction.atomic():
+            reserve_email_slot(user=user, purpose=EmailCodePurpose.SIGNUP)
+            send_already_registered_notice(user=user)
     except (EmailCodeCooldownError, EmailCodeLimitError):
         return
-    send_already_registered_notice(user=user)
 
 
 def _send_login_code(user: User) -> bool:
@@ -412,12 +409,24 @@ def _send_login_code(user: User) -> bool:
     그 경우 False 를 돌려준다. 쓸 코드도 없고 새로 보낼 수도 없으면 예외를 낸다.
     """
     try:
-        code = issue_email_code(user=user, purpose=EmailCodePurpose.LOGIN)
+        _issue_and_send_code(user, EmailCodePurpose.LOGIN)
     except EmailCodeCooldownError as exc:
         if has_usable_code(user=user, purpose=EmailCodePurpose.LOGIN):
             return False
         raise LoginCodeUnavailableError(exc.retry_after) from exc
     except EmailCodeLimitError as exc:
         raise LoginCodeUnavailableError(exc.retry_after) from exc
-    send_email_code(user=user, purpose=EmailCodePurpose.LOGIN, code=code)
     return True
+
+
+def _issue_and_send_code(user: User, purpose: str) -> None:
+    """
+    인증 코드를 발급하고 그 코드를 담은 메일을 발송함에 적는다. 둘이 한 트랜잭션이다.
+
+    따로 하면 "코드는 발급됐는데 보낼 메일은 적히지 않은" 순간이 생긴다.
+    그때는 사용자가 받지 못한 코드 때문에 1분을 기다려야 한다.
+    발급 제한에 걸리면 EmailCodeCooldownError 나 EmailCodeLimitError 가 그대로 올라간다.
+    """
+    with transaction.atomic():
+        code = issue_email_code(user=user, purpose=purpose)
+        send_email_code(user=user, purpose=purpose, code=code)
