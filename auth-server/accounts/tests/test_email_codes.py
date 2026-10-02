@@ -22,6 +22,7 @@ from accounts.email_codes import (
     InvalidEmailCodeError,
     consume_email_code,
     generate_code,
+    has_usable_code,
     issue_email_code,
 )
 from accounts.mail import send_email_code
@@ -233,6 +234,48 @@ class IssueLimitTests(TimeTravelMixin, TestCase):
         self.issue_at(self.start)
 
         self.issue_at(self.start + ISSUE_COOLDOWN)
+
+    def test_using_a_code_lifts_the_cooldown(self):
+        code = self.issue_at(self.start)
+        with self.at(self.start + timedelta(seconds=10)):
+            consume_email_code(user=self.user, purpose=SIGNUP, code=code)
+
+        # 코드를 맞게 쓴 뒤에는 1분을 기다리지 않고 다시 발급받을 수 있다
+        self.issue_at(self.start + timedelta(seconds=20))
+
+    def test_using_a_code_does_not_reset_the_window_count(self):
+        moment = self.start
+        for index in range(MAX_ISSUES_PER_WINDOW):
+            moment = self.start + timedelta(seconds=index)
+            code = self.issue_at(moment)
+            with self.at(moment):
+                consume_email_code(user=self.user, purpose=SIGNUP, code=code)
+
+        # 대기 시간은 풀려도, 한 구간의 발급 횟수 제한은 그대로다
+        with self.assertRaises(EmailCodeLimitError):
+            self.issue_at(moment + timedelta(seconds=1))
+
+    def test_wrong_attempts_do_not_lift_the_cooldown(self):
+        code = self.issue_at(self.start)
+        with self.at(self.start + timedelta(seconds=10)):
+            with self.assertRaises(InvalidEmailCodeError):
+                consume_email_code(user=self.user, purpose=SIGNUP, code=wrong_code_for(code))
+
+        with self.assertRaises(EmailCodeCooldownError):
+            self.issue_at(self.start + timedelta(seconds=20))
+
+    def test_has_usable_code(self):
+        self.assertFalse(has_usable_code(user=self.user, purpose=SIGNUP))
+
+        code = self.issue_at(self.start)
+        with self.at(self.start + timedelta(seconds=10)):
+            self.assertTrue(has_usable_code(user=self.user, purpose=SIGNUP))
+            self.assertFalse(has_usable_code(user=self.user, purpose=LOGIN))
+        with self.at(self.start + CODE_LIFETIME):
+            self.assertFalse(has_usable_code(user=self.user, purpose=SIGNUP))
+        with self.at(self.start + timedelta(seconds=20)):
+            consume_email_code(user=self.user, purpose=SIGNUP, code=code)
+            self.assertFalse(has_usable_code(user=self.user, purpose=SIGNUP))
 
     def test_rejects_issue_over_the_window_limit(self):
         last_issue = self.issue_as_many_as_allowed()
