@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     # 켜는 것을 잊으면 불편할 뿐이지만, 끄는 것을 잊으면 운영 서버의 API 구조가 드러난다
     debug: bool = False
 
+    # DB 접속 주소. 기본값이 없다. 적지 않으면 서버가 뜨지 않는다.
+    # 예: postgresql+asyncpg://game:비밀번호@127.0.0.1:5432/trpg
+    database_url: str
+
+    # 테이블을 두는 스키마. 테스트는 game_test 로 바꿔서 개발용 데이터와 섞이지 않게 한다
+    db_schema: str = 'game'
+
 
 @lru_cache
 def get_settings() -> Settings:

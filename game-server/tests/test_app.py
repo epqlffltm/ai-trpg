@@ -6,16 +6,15 @@
 
 from fastapi import status
 
-from app.core.config import Settings
 from app.main import API_PREFIX, create_app
-from tests.conftest import make_client
+from tests.conftest import make_client, make_test_settings
 
 DOCS_URL = f'{API_PREFIX}/docs'
 OPENAPI_URL = f'{API_PREFIX}/openapi.json'
 
 
 async def test_docs_are_closed_by_default():
-    app = create_app(Settings(_env_file=None))
+    app = create_app(make_test_settings())
 
     async with make_client(app) as client:
         docs = await client.get(DOCS_URL)
@@ -27,7 +26,7 @@ async def test_docs_are_closed_by_default():
 
 
 async def test_docs_open_when_debugging():
-    app = create_app(Settings(_env_file=None, debug=True))
+    app = create_app(make_test_settings(debug=True))
 
     async with make_client(app) as client:
         docs = await client.get(DOCS_URL)
@@ -38,7 +37,7 @@ async def test_docs_open_when_debugging():
 
 
 async def test_default_docs_address_is_not_used():
-    app = create_app(Settings(_env_file=None, debug=True))
+    app = create_app(make_test_settings(debug=True))
 
     async with make_client(app) as client:
         response = await client.get('/docs')
