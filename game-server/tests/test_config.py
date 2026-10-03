@@ -10,14 +10,19 @@ from pydantic import ValidationError
 from app.core.config import Settings
 
 DATABASE_URL = 'postgresql+asyncpg://game:password@127.0.0.1:5432/trpg'
+AUTH_JWKS_URL = 'http://127.0.0.1:8000/api/v1/auth/jwks'
+
+# 기본값이 있는 설정. 개발자의 환경에 남아 있으면 기본값을 검증할 수 없으므로 지우고 시작한다
+OPTIONAL_VARIABLES = ('DEBUG', 'DB_SCHEMA', 'JWT_ISSUER', 'JWT_AUDIENCE')
 
 
 @pytest.fixture(autouse=True)
-def only_the_database_url_is_set(monkeypatch: pytest.MonkeyPatch):
-    """이 파일의 테스트는 DB 주소만 정해진 환경에서 시작한다."""
-    monkeypatch.delenv('DEBUG', raising=False)
-    monkeypatch.delenv('DB_SCHEMA', raising=False)
+def only_the_required_values_are_set(monkeypatch: pytest.MonkeyPatch):
+    """이 파일의 테스트는 필수 값만 정해진 환경에서 시작한다."""
+    for name in OPTIONAL_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv('DATABASE_URL', DATABASE_URL)
+    monkeypatch.setenv('AUTH_JWKS_URL', AUTH_JWKS_URL)
 
 
 def test_debug_is_off_by_default():
@@ -56,6 +61,22 @@ def test_refuses_to_start_without_a_database_url(monkeypatch: pytest.MonkeyPatch
     # 기본 주소로 엉뚱한 DB 에 붙는 것보다 뜨지 않는 쪽이 낫다
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_refuses_to_start_without_a_jwks_url(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv('AUTH_JWKS_URL')
+
+    # 어느 서버의 키를 믿을지 모르는 채로 뜨면 안 된다
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_token_names_match_the_auth_server_by_default():
+    settings = Settings(_env_file=None)
+
+    # 인증 서버의 JWT_ISSUER, JWT_AUDIENCE 기본값과 짝이 맞아야 한다
+    assert settings.jwt_issuer == 'ai-trpg-auth'
+    assert settings.jwt_audience == 'ai-trpg-game'
 
 
 def test_ignores_unknown_values_in_the_env_file(tmp_path):
