@@ -1,0 +1,41 @@
+[project]
+name = "game-server"
+version = "0.1.0"
+description = "Game service for an AI-driven TRPG platform"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.142.2",
+    "pydantic-settings>=2.15.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# async def 로 쓴 테스트를 표시 없이 그대로 실행한다
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+# E, W: 모양 / F: 쓰지 않는 이름, 정의되지 않은 이름 / I: import 순서
+# B: 흔한 실수 / UP: 옛 문법 / SIM: 더 단순하게 쓸 수 있는 코드
+select = ["E", "W", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.format]
+# 인증 서버와 같은 모양을 쓴다
+quote-style = "single"
+
