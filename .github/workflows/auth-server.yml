@@ -45,12 +45,24 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
+      # 시도 횟수 제한의 테스트가 실제 Redis 에서 돈다
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     # CI 전용 값. 이 실행이 끝나면 사라지는 DB 에만 쓰이므로 비밀값이 아니다.
     # .env 파일 없이 환경 변수만으로 설정을 읽는다
     env:
       SECRET_KEY: ci-only-secret-key-not-used-anywhere-else
       AUTH_DB_PASSWORD: ci-auth-password
       DATABASE_URL: postgres://auth:ci-auth-password@127.0.0.1:5432/trpg
+      REDIS_URL: redis://127.0.0.1:6379/0
 
     defaults:
       run:

@@ -173,6 +173,71 @@ class EmailCode(models.Model):
         return f'{self.user} / {self.get_purpose_display()}'
 
 
+class SecurityEventKind(models.TextChoices):
+    LOGIN_IP_LIMITED = 'login_ip_limited', '로그인: IP 시도 제한'
+    LOGIN_FAILURES_LIMITED = 'login_failures_limited', '로그인: 비밀번호 틀림 제한'
+    RESERVED_USERNAME_LOGIN = 'reserved_username_login', '로그인: 예약어 아이디로 시도해 IP 차단'
+    SIGNUP_IP_LIMITED = 'signup_ip_limited', '가입: IP 시도 제한'
+    SIGNUP_RESEND_IP_LIMITED = 'signup_resend_ip_limited', '가입 코드 재전송: IP 시도 제한'
+    PASSWORD_RESET_IP_LIMITED = 'password_reset_ip_limited', '비밀번호 재설정: IP 시도 제한'
+    PASSWORD_CHANGE_FAILURES_LIMITED = 'password_change_failures_limited', '비밀번호 변경: 현재 비밀번호 틀림 제한'
+    # 공격은 아니지만 운영자가 알아야 하는 사건이라 같은 곳에 남긴다
+    MAIL_DISCARDED = 'mail_discarded', '메일: 보내지 못하고 버림'
+
+
+class SecurityEvent(models.Model):
+    """
+    운영자가 알아야 할 보안 사건의 기록. "누가 시도 제한에 걸렸는가" 가 남는다.
+
+    시도 횟수는 Redis 에 있고 시간이 지나면 사라진다. 그것만으로는 공격이 있었는지 나중에 알 수 없다.
+    남겨야 하는 사실은 여기(PostgreSQL)에 적는다.
+
+    내용은 추가만 한다. 바뀌는 것은 "운영자에게 알렸는가"(reported_at) 뿐이다.
+    보관 기간이 지난 기록은 지운다(security_digest.py).
+    """
+
+    kind = models.CharField('종류', max_length=40, choices=SecurityEventKind.choices)
+    # 시도 횟수를 센 단위다. IPv4 는 주소, IPv6 는 앞 64비트의 묶음(예: 2001:db8:1:2::/64).
+    # 로그인한 뒤의 API(비밀번호 변경)에서도 남긴다
+    # 요청과 무관한 사건(메일 버림)에서는 비어 있다
+    ip = models.CharField('IP', max_length=64, blank=True)
+    # 대상이 된 계정. 없는 아이디로 시도했거나 계정과 무관한 제한(IP)이면 비어 있다.
+    # 입력된 아이디 문자열은 남기지 않는다. 아이디 칸에 비밀번호를 잘못 넣는 일이 흔하다.
+    # 계정이 지워져도 사건의 기록은 남긴다
+    user = models.ForeignKey(
+        'accounts.User',
+        verbose_name='대상 계정',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='security_events',
+    )
+    created_at = models.DateTimeField('일어난 시각', auto_now_add=True)
+    # 요약 메일에 실어 운영자에게 알린 시각. 아직 알리지 않았으면 비어 있다.
+    # "지난 한 시간" 처럼 시간으로 자르지 않고 이 표시로 고른다.
+    # 요약이 늦게 돌거나 두 번 돌아도 빠지거나 겹치는 사건이 없다
+    reported_at = models.DateTimeField('알린 시각', null=True, blank=True)
+
+    class Meta:
+        verbose_name = '보안 이벤트'
+        verbose_name_plural = '보안 이벤트'
+        ordering = ['-created_at']
+        indexes = [
+            # "지난 한 시간의 사건" 처럼 시간으로 잘라 볼 때 쓴다
+            models.Index(fields=['created_at'], name='accounts_secevent_time_idx'),
+            # 요약이 "아직 알리지 않은 사건" 을 찾을 때 쓴다. 알린 사건은 색인에 넣지 않는다.
+            # 대부분의 행은 알린 사건이라, 색인이 작게 유지된다
+            models.Index(
+                fields=['created_at'],
+                name='accounts_secevent_unrep_idx',
+                condition=models.Q(reported_at__isnull=True),
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.get_kind_display()} / {self.ip or "-"}'
+
+
 class OutgoingMailStatus(models.TextChoices):
     PENDING = 'pending', '발송 대기'
     DISCARDED = 'discarded', '버림'

@@ -108,6 +108,8 @@ AUTH_USER_MODEL = 'accounts.User'
 # https://www.django-rest-framework.org/api-guide/settings/
 
 REST_FRAMEWORK = {
+    # 시도 횟수 제한에 걸렸을 때의 429 응답을 한 모양으로 맞춘다. 나머지는 DRF 의 기본 처리에 넘긴다
+    'EXCEPTION_HANDLER': 'accounts.exception_handlers.handle_exception',
     # Authorization: Bearer <토큰> 헤더의 JWT 로 사용자를 확인한다.
     # simplejwt 의 인증 클래스에 세션 버전 확인을 더한 것이다.
     # 기본값인 세션 인증과 Basic 인증은 쓰지 않는다
@@ -233,6 +235,24 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 
+# 서버 앞에 선, 우리가 운영하는 프록시(nginx, 로드밸런서)의 수.
+# 요청을 보낸 쪽의 IP 를 알아낼 때 X-Forwarded-For 헤더를 어디까지 믿을지 정한다(accounts/client_ip.py).
+# 0 이면 헤더를 보지 않는다. 프록시가 없는데 1 이상으로 두면 누구나 IP 를 지어낼 수 있고,
+# 프록시가 있는데 0 으로 두면 모든 요청이 프록시의 IP 로 보여 한 사람의 시도가 모두를 막는다
+TRUSTED_PROXY_COUNT = env.int('TRUSTED_PROXY_COUNT', default=0)
+
+
+# Redis
+# 없어도 서비스가 도는 보조 장치(시도 횟수)만 둔다. 죽어 있으면 제한 없이 통과시킨다
+REDIS_URL = env('REDIS_URL', default='redis://127.0.0.1:6379/0')
+
+# 시도 횟수 제한을 켤지. 테스트 실행기가 끈다(config/test_runner.py)
+ATTEMPT_LIMITS_ENABLED = True
+
+# Redis 키의 앞머리. 같은 Redis 를 다른 서버와 함께 쓰므로 서버 이름을 붙인다
+ATTEMPT_LIMIT_KEY_PREFIX = 'auth:attempts'
+
+
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
@@ -264,6 +284,10 @@ else:
             'BACKEND': 'config.mail_backends.ReadableConsoleEmailBackend',
         },
     }
+
+# 보안 이벤트 요약 메일(manage.py send_security_digest)을 받을 운영자의 주소. 쉼표로 여러 개를 적는다.
+# 비어 있으면 요약 메일을 보내지 않는다. 사건은 관리자 화면에서만 볼 수 있다
+SECURITY_DIGEST_TO = env.list('SECURITY_DIGEST_TO', default=[])
 
 # 메일을 언제 보내는가.
 #   outbox: 발송함(DB)에 적어 두고 워커(manage.py send_outgoing_mail)가 보낸다
