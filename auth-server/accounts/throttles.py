@@ -24,22 +24,30 @@ from accounts.attempt_policies import (
     SIGNUP_RESEND_PER_IP,
 )
 from accounts.client_ip import get_attempt_subject
+from accounts.models import SecurityEventKind
+from accounts.security_events import record_security_event
 
 
 class IpAttemptThrottle(BaseThrottle):
     """
-    한 IP 의 시도를 limit 만큼만 허용한다. 물려받는 쪽이 limit 을 정한다.
+    한 IP 의 시도를 limit 만큼만 허용한다. 물려받는 쪽이 limit 과 event_kind 를 정한다.
 
     DRF 는 allow_request 가 False 를 돌려주면 wait 를 불러 기다릴 시간을 묻고, 429 로 응답한다.
     """
 
     limit: AttemptLimit
+    # 막히기 시작할 때 남길 보안 이벤트의 종류
+    event_kind: str
 
     def allow_request(self, request: Request, view: APIView) -> bool:
+        ip = get_attempt_subject(request)
         try:
-            count_attempt(self.limit, get_attempt_subject(request))
+            count_attempt(self.limit, ip)
         except TooManyAttemptsError as exc:
             self.retry_after = exc.retry_after
+            if exc.first_block:
+                # 막힌 뒤에도 계속 들어오는 요청마다 남기지 않는다. 구간마다 한 번이다
+                record_security_event(kind=self.event_kind, ip=ip)
             return False
         return True
 
@@ -49,15 +57,19 @@ class IpAttemptThrottle(BaseThrottle):
 
 class LoginIpThrottle(IpAttemptThrottle):
     limit = LOGIN_PER_IP
+    event_kind = SecurityEventKind.LOGIN_IP_LIMITED
 
 
 class SignupIpThrottle(IpAttemptThrottle):
     limit = SIGNUP_PER_IP
+    event_kind = SecurityEventKind.SIGNUP_IP_LIMITED
 
 
 class SignupResendIpThrottle(IpAttemptThrottle):
     limit = SIGNUP_RESEND_PER_IP
+    event_kind = SecurityEventKind.SIGNUP_RESEND_IP_LIMITED
 
 
 class PasswordResetIpThrottle(IpAttemptThrottle):
     limit = PASSWORD_RESET_PER_IP
+    event_kind = SecurityEventKind.PASSWORD_RESET_IP_LIMITED

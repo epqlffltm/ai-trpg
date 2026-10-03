@@ -5,13 +5,13 @@
 
 User 는 Django 의 UserAdmin 을 상속해 비밀번호 해싱과 변경 화면을 그대로 쓰고,
 화면에 보이는 필드 구성만 이 프로젝트의 User 모델에 맞춘다.
-인증 코드와 보낼 메일은 조회만 한다.
+인증 코드, 보낼 메일, 보안 이벤트는 조회만 한다.
 """
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from accounts.models import EmailCode, OutgoingMail, User
+from accounts.models import EmailCode, OutgoingMail, SecurityEvent, User
 
 
 @admin.register(User)
@@ -98,3 +98,28 @@ class OutgoingMailAdmin(admin.ModelAdmin):
         return False
 
     # 삭제는 막지 않는다. 확인이 끝난 버려진 메일의 기록을 운영자가 지울 수 있어야 한다
+
+
+@admin.register(SecurityEvent)
+class SecurityEventAdmin(admin.ModelAdmin):
+    """
+    보안 이벤트를 조회만 한다. 운영자가 누가 시도 제한에 걸렸는지 확인하는 곳이다.
+
+    기록이다. 관리자 화면에서 만들거나 고치거나 지울 수 있으면 기록으로서 믿을 수 없다.
+    """
+
+    list_display = ('created_at', 'kind', 'ip', 'user')
+    list_filter = ('kind',)
+    search_fields = ('ip', 'user__username')
+    date_hierarchy = 'created_at'
+    # 목록을 그릴 때 행마다 계정을 따로 조회하지 않게 한다
+    list_select_related = ('user',)
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False

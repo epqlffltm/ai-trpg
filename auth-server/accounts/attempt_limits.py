@@ -54,9 +54,12 @@ class AttemptLimit:
 class TooManyAttemptsError(Exception):
     """정해진 시간 안에 허용된 횟수를 넘었다. 언제 다시 시도할 수 있는지를 담는다."""
 
-    def __init__(self, retry_after: timedelta):
+    def __init__(self, retry_after: timedelta, first_block: bool = False):
         super().__init__()
         self.retry_after = retry_after
+        # 이번 구간에서 처음 막힌 것인가. 막힌 뒤에도 계속 두드리는 요청과 구분한다.
+        # "막혔다" 는 기록을 구간마다 한 번만 남기는 데 쓴다
+        self.first_block = first_block
 
 
 def count_attempt(limit: AttemptLimit, subject: str) -> None:
@@ -73,7 +76,10 @@ def count_attempt(limit: AttemptLimit, subject: str) -> None:
         _log_redis_failure(exc)
         return
     if count > limit.max_attempts:
-        raise TooManyAttemptsError(_retry_after(limit, seconds_left))
+        raise TooManyAttemptsError(
+            _retry_after(limit, seconds_left),
+            first_block=count == limit.max_attempts + 1,
+        )
 
 
 def ensure_not_blocked(limit: AttemptLimit, subject: str) -> None:
@@ -93,14 +99,20 @@ def ensure_not_blocked(limit: AttemptLimit, subject: str) -> None:
         raise TooManyAttemptsError(_retry_after(limit, seconds_left))
 
 
-def count_failure(limit: AttemptLimit, subject: str) -> None:
-    """실패한 시도 한 번을 센다. 예외를 내지 않는다. 막는 것은 다음 시도의 ensure_not_blocked 가 한다."""
+def count_failure(limit: AttemptLimit, subject: str) -> bool:
+    """
+    실패한 시도 한 번을 센다. 예외를 내지 않는다. 막는 것은 다음 시도의 ensure_not_blocked 가 한다.
+
+    이번 실패로 허용된 횟수를 막 채웠으면(= 지금부터 막힌다) True 를 돌려준다.
+    """
     if not settings.ATTEMPT_LIMITS_ENABLED:
-        return
+        return False
     try:
-        _increment(limit, subject)
+        count, _ = _increment(limit, subject)
     except redis.RedisError as exc:
         _log_redis_failure(exc)
+        return False
+    return count == limit.max_attempts
 
 
 def clear_attempts(limit: AttemptLimit, subject: str) -> None:

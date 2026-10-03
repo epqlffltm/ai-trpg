@@ -21,7 +21,8 @@ from accounts.attempt_limits import (
     count_failure,
     ensure_not_blocked,
 )
-from accounts.models import User
+from accounts.models import SecurityEventKind, User
+from accounts.security_events import find_user_by_username, record_security_event
 
 # 한 IP 의 로그인 시도. 성공도 센다. 여러 계정을 돌아가며 찔러 보는 것을 늦춘다.
 # 공유기 뒤의 여러 사람(학교, 회사)이 한 IP 로 보이므로 넉넉하게 잡는다
@@ -63,8 +64,15 @@ def record_login_failure(*, ip: str, username: str) -> None:
     아이디 또는 비밀번호가 틀렸음을 센다.
 
     없는 아이디여도 똑같이 센다. 있는 아이디만 세면, 막히는지 여부로 가입 여부가 드러난다.
+    이번 실패로 막히기 시작했으면 보안 이벤트를 남긴다.
     """
-    count_failure(LOGIN_FAILURES_PER_ACCOUNT_AND_IP, _account_and_ip(username, ip))
+    now_blocked = count_failure(LOGIN_FAILURES_PER_ACCOUNT_AND_IP, _account_and_ip(username, ip))
+    if now_blocked:
+        record_security_event(
+            kind=SecurityEventKind.LOGIN_FAILURES_LIMITED,
+            ip=ip,
+            user=find_user_by_username(username),
+        )
 
 
 def record_login_success(*, ip: str, username: str) -> None:
@@ -81,8 +89,19 @@ def check_password_change_attempt(*, user: User) -> None:
     ensure_not_blocked(PASSWORD_CHANGE_FAILURES_PER_USER, _user(user))
 
 
-def record_password_change_failure(*, user: User) -> None:
-    count_failure(PASSWORD_CHANGE_FAILURES_PER_USER, _user(user))
+def record_password_change_failure(*, user: User, ip: str) -> None:
+    """
+    현재 비밀번호가 틀렸음을 센다. 이번 실패로 막히기 시작했으면 보안 이벤트를 남긴다.
+
+    횟수는 사용자로 센다. ip 는 이벤트에 "어디서 시도했는가" 를 적는 데만 쓴다.
+    """
+    now_blocked = count_failure(PASSWORD_CHANGE_FAILURES_PER_USER, _user(user))
+    if now_blocked:
+        record_security_event(
+            kind=SecurityEventKind.PASSWORD_CHANGE_FAILURES_LIMITED,
+            ip=ip,
+            user=user,
+        )
 
 
 def record_password_change_success(*, user: User) -> None:
