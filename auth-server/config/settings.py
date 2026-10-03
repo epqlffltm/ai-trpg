@@ -285,6 +285,10 @@ else:
         },
     }
 
+# 보안 이벤트 요약 메일(manage.py send_security_digest)을 받을 운영자의 주소. 쉼표로 여러 개를 적는다.
+# 비어 있으면 요약 메일을 보내지 않는다. 사건은 관리자 화면에서만 볼 수 있다
+SECURITY_DIGEST_TO = env.list('SECURITY_DIGEST_TO', default=[])
+
 # 메일을 언제 보내는가.
 #   outbox: 발송함(DB)에 적어 두고 워커(manage.py send_outgoing_mail)가 보낸다
 #   inline: 요청을 처리하는 자리에서 바로 보낸다. 워커 없이 개발할 때와 테스트에서만 쓴다.
