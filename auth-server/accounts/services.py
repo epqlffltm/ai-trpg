@@ -288,6 +288,16 @@ def reset_password(*, email: str, token: str, new_password: str) -> None:
     )
 
 
+def spend_password_check_time(*, password: str) -> None:
+    """
+    비밀번호를 확인할 때만큼의 시간을 쓴다. 결과는 버린다.
+
+    확인도 하지 않고 거절하는 요청(막힌 IP 의 로그인)에 쓴다.
+    바로 응답하면 평소의 거절보다 훨씬 빨라서, 응답 시간으로 막혔다는 것이 드러난다.
+    """
+    make_password(password)
+
+
 def authenticate_user(*, username: str, password: str) -> User:
     """
     아이디와 비밀번호가 맞는 사용자를 돌려준다.

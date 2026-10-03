@@ -18,7 +18,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.attempt_policies import (
+    block_ip_if_reserved_username,
     check_login_attempt,
+    is_login_blocked_ip,
     check_password_change_attempt,
     record_login_failure,
     record_login_success,
@@ -57,6 +59,7 @@ from accounts.services import (
     resend_login_code,
     resend_signup_code,
     reset_password,
+    spend_password_check_time,
     start_login,
     start_signup,
     verify_signup,
@@ -133,6 +136,18 @@ def build_code_unavailable_response(retry_after: timedelta) -> Response:
     )
     response['Retry-After'] = str(seconds)
     return response
+
+
+def build_invalid_credentials_response() -> Response:
+    """
+    로그인을 거절하는 응답. 아이디가 없든 비밀번호가 틀리든 같은 응답을 준다.
+
+    로그인이 막힌 IP 에도 이 응답을 준다. 막혔다는 것을 알려 주지 않는다.
+    """
+    return Response(
+        {'detail': '아이디 또는 비밀번호가 올바르지 않습니다.'},
+        status=status.HTTP_401_UNAUTHORIZED,
+    )
 
 
 class SignupView(APIView):
@@ -233,6 +248,15 @@ class LoginView(APIView):
             'username': serializer.validated_data['username'],
         }
 
+        if is_login_blocked_ip(ip=attempt['ip']):
+            # 맞는 비밀번호여도 확인하지 않는다. 걸리는 시간만 평소의 거절과 맞춘다
+            spend_password_check_time(password=serializer.validated_data['password'])
+            return build_invalid_credentials_response()
+
+        # 예약어 아이디면 이 IP 를 막는다. 이 요청은 그대로 진행한다.
+        # 예약어인 계정은 없으므로 아래에서 평소처럼 거절된다
+        block_ip_if_reserved_username(**attempt)
+
         # 이 IP 가 이 계정에서 너무 많이 틀렸으면 여기서 TooManyAttemptsError 가 난다.
         # 잡지 않는다. 예외 처리기(exception_handlers.py)가 429 로 바꾼다
         check_login_attempt(**attempt)
@@ -241,11 +265,7 @@ class LoginView(APIView):
             challenge = start_login(**serializer.validated_data)
         except InvalidCredentialsError:
             record_login_failure(**attempt)
-            # 아이디가 없든 비밀번호가 틀리든 같은 응답을 준다
-            return Response(
-                {'detail': '아이디 또는 비밀번호가 올바르지 않습니다.'},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+            return build_invalid_credentials_response()
         except EmailNotVerifiedError:
             # 비밀번호가 맞은 뒤에만 도달한다. code 는 프론트가 인증 화면으로 보낼 때 쓴다
             return Response(
