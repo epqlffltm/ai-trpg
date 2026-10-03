@@ -11,6 +11,7 @@
     결과를 몰라도 되므로 뷰가 실행되기 전에 throttle 이 센다(throttles.py).
   - 실패만 센다(이름에 FAILURES 가 있다): 비밀번호를 틀린 횟수를 묶는다. 성공하면 지운다.
     결과를 알아야 하므로 뷰가 이 파일의 함수를 직접 부른다.
+    확인하기 전에 먼저 세고, 맞았으면 지운다. 확인한 뒤에 세면 동시에 온 요청이 한도를 넘긴다.
 """
 
 from datetime import timedelta
@@ -19,6 +20,7 @@ from accounts.attempt_limits import (
     AttemptLimit,
     TooManyAttemptsError,
     clear_attempts,
+    count_attempt,
     count_failure,
     ensure_not_blocked,
 )
@@ -36,11 +38,12 @@ LOGIN_FAILURES_PER_ACCOUNT_AND_IP = AttemptLimit(
     name='login-fail-account-ip', max_attempts=5, window=timedelta(minutes=15),
 )
 
-# 예약어 아이디(admin, root 등)로 로그인을 시도한 IP 를 막아 두는 시간.
+# 한 IP 가 예약어 아이디(admin, root 등)로 로그인을 시도한 횟수. 채우면 그 IP 의 로그인을 막는다.
 # 예약어는 누구도 아이디로 쓸 수 없다(운영자 계정도 마찬가지다). 그 아이디로 로그인해 보는 것은
-# 실수로 일어나지 않는다. 관리자 계정을 찾는 탐색이다. 한 번이면 막는다.
-# "한 번 세면 막힌다" 로 표현해, 시도 횟수를 세는 장치를 그대로 쓴다
-LOGIN_IP_BLOCK = AttemptLimit(name='login-ip-block', max_attempts=1, window=timedelta(hours=1))
+# 오타로 일어나지 않는다. 관리자 계정을 찾는 탐색에 가깝다.
+# 그래도 한 번에 막지는 않는다. 공유기 뒤의 여러 사람이 한 IP 로 보이는데,
+# 한 사람의 호기심 한 번으로 모두가 한 시간 동안 로그인하지 못하게 되면 지나치다
+LOGIN_IP_BLOCK = AttemptLimit(name='login-ip-block', max_attempts=3, window=timedelta(hours=1))
 
 # 한 IP 의 가입 요청. 가입은 메일을 보낸다. 남의 주소로 메일을 쏟아붓는 것을 막는다
 SIGNUP_PER_IP = AttemptLimit(name='signup-ip', max_attempts=10, window=timedelta(hours=1))
@@ -74,7 +77,7 @@ def is_login_blocked_ip(*, ip: str) -> bool:
 
 def block_ip_if_reserved_username(*, ip: str, username: str) -> None:
     """
-    예약어 아이디로 로그인을 시도했으면 그 IP 의 로그인을 막고 보안 이벤트를 남긴다.
+    예약어 아이디로 로그인을 시도했으면 센다. 한도를 채우면 그 IP 의 로그인이 막히고 보안 이벤트가 남는다.
 
     이미 막혀 있는 IP 는 이 함수까지 오지 않는다. 그래서 이벤트는 막을 때마다 한 번 남는다.
     """
@@ -85,62 +88,57 @@ def block_ip_if_reserved_username(*, ip: str, username: str) -> None:
         record_security_event(kind=SecurityEventKind.RESERVED_USERNAME_LOGIN, ip=ip)
 
 
-def check_login_attempt(*, ip: str, username: str) -> None:
+def count_login_attempt(*, ip: str, username: str) -> None:
     """
-    이 IP 가 이 계정에 로그인을 시도해도 되는지 본다. 너무 많이 틀렸으면 TooManyAttemptsError 를 낸다.
+    이 IP 가 이 계정에 비밀번호를 한 번 넣어 본다고 센다. 한도를 넘었으면 TooManyAttemptsError 를 낸다.
 
-    비밀번호를 확인하기 전에 부른다. 막힌 동안에는 맞는 비밀번호도 확인하지 않는다.
-    확인해 주면 막힌 상태에서도 비밀번호를 계속 맞혀 볼 수 있다.
-    """
-    ensure_not_blocked(LOGIN_FAILURES_PER_ACCOUNT_AND_IP, _account_and_ip(username, ip))
+    비밀번호를 확인하기 전에 부른다. 확인한 뒤에 세면, 동시에 들어온 요청들이
+    전부 "아직 한도 전" 을 보고 통과해 한도보다 많이 확인받는다.
+    먼저 세면 Redis 가 요청마다 다른 횟수를 돌려주므로 한도까지만 통과한다.
 
-
-def record_login_failure(*, ip: str, username: str) -> None:
-    """
-    아이디 또는 비밀번호가 틀렸음을 센다.
-
+    맞았는지는 아직 모른다. 맞았으면 clear_login_attempts 로 지운다. 그래서 남는 것은 틀린 횟수다.
     없는 아이디여도 똑같이 센다. 있는 아이디만 세면, 막히는지 여부로 가입 여부가 드러난다.
-    이번 실패로 막히기 시작했으면 보안 이벤트를 남긴다.
+    막힌 동안에는 맞는 비밀번호도 확인하지 않는다.
     """
-    now_blocked = count_failure(LOGIN_FAILURES_PER_ACCOUNT_AND_IP, _account_and_ip(username, ip))
-    if now_blocked:
-        record_security_event(
-            kind=SecurityEventKind.LOGIN_FAILURES_LIMITED,
-            ip=ip,
-            user=find_user_by_username(username),
-        )
+    try:
+        count_attempt(LOGIN_FAILURES_PER_ACCOUNT_AND_IP, _account_and_ip(username, ip))
+    except TooManyAttemptsError as exc:
+        if exc.first_block:
+            # 막히기 시작한 순간에 한 번만 남긴다
+            record_security_event(
+                kind=SecurityEventKind.LOGIN_FAILURES_LIMITED,
+                ip=ip,
+                user=find_user_by_username(username),
+            )
+        raise
 
 
-def record_login_success(*, ip: str, username: str) -> None:
-    """비밀번호가 맞았다. 이 IP 가 이 계정에서 틀린 횟수를 지운다. IP 의 시도 횟수는 지우지 않는다."""
+def clear_login_attempts(*, ip: str, username: str) -> None:
+    """비밀번호가 맞았다. 이 IP 가 이 계정에서 센 횟수를 지운다. IP 의 시도 횟수(throttle)는 지우지 않는다."""
     clear_attempts(LOGIN_FAILURES_PER_ACCOUNT_AND_IP, _account_and_ip(username, ip))
 
 
-def check_password_change_attempt(*, user: User) -> None:
+def count_password_change_attempt(*, user: User, ip: str) -> None:
     """
-    비밀번호 변경을 시도해도 되는지 본다. 현재 비밀번호를 너무 많이 틀렸으면 TooManyAttemptsError 를 낸다.
+    이 사용자가 현재 비밀번호를 한 번 넣어 본다고 센다. 한도를 넘었으면 TooManyAttemptsError 를 낸다.
 
-    현재 비밀번호를 확인하기 전에 부른다.
-    """
-    ensure_not_blocked(PASSWORD_CHANGE_FAILURES_PER_USER, _user(user))
-
-
-def record_password_change_failure(*, user: User, ip: str) -> None:
-    """
-    현재 비밀번호가 틀렸음을 센다. 이번 실패로 막히기 시작했으면 보안 이벤트를 남긴다.
-
+    현재 비밀번호를 확인하기 전에 부른다. 맞았으면 clear_password_change_attempts 로 지운다.
     횟수는 사용자로 센다. ip 는 이벤트에 "어디서 시도했는가" 를 적는 데만 쓴다.
     """
-    now_blocked = count_failure(PASSWORD_CHANGE_FAILURES_PER_USER, _user(user))
-    if now_blocked:
-        record_security_event(
-            kind=SecurityEventKind.PASSWORD_CHANGE_FAILURES_LIMITED,
-            ip=ip,
-            user=user,
-        )
+    try:
+        count_attempt(PASSWORD_CHANGE_FAILURES_PER_USER, _user(user))
+    except TooManyAttemptsError as exc:
+        if exc.first_block:
+            record_security_event(
+                kind=SecurityEventKind.PASSWORD_CHANGE_FAILURES_LIMITED,
+                ip=ip,
+                user=user,
+            )
+        raise
 
 
-def record_password_change_success(*, user: User) -> None:
+def clear_password_change_attempts(*, user: User) -> None:
+    """현재 비밀번호가 맞았다. 센 횟수를 지운다."""
     clear_attempts(PASSWORD_CHANGE_FAILURES_PER_USER, _user(user))
 
 

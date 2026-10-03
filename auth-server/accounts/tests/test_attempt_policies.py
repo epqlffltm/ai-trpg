@@ -18,6 +18,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.attempt_limits import _key
 from accounts.attempt_policies import (
     LOGIN_FAILURES_PER_ACCOUNT_AND_IP,
     LOGIN_PER_IP,
@@ -27,7 +28,9 @@ from accounts.attempt_policies import (
     SIGNUP_RESEND_PER_IP,
 )
 from accounts.models import User
+from accounts.services import InvalidCredentialsError
 from accounts.tests.helpers import LOGIN_URL, delete_attempt_keys, log_in
+from config.redis_client import get_redis
 
 SIGNUP_URL = reverse('accounts:signup')
 SIGNUP_RESEND_URL = reverse('accounts:signup-resend')
@@ -141,6 +144,32 @@ class LoginFailureLimitTests(AttemptPolicyTestCase):
         self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts - 1)
 
         self.assertEqual(self.login().status_code, status.HTTP_202_ACCEPTED)
+
+
+    def test_counts_before_checking_the_password(self):
+        counts_seen = []
+
+        def check_password_and_look_at_the_counter(**credentials):
+            key = _key(LOGIN_FAILURES_PER_ACCOUNT_AND_IP, f'{USERNAME}|{IP}')
+            counts_seen.append(int(get_redis().get(key) or 0))
+            raise InvalidCredentialsError
+
+        with patch('accounts.views.start_login', side_effect=check_password_and_look_at_the_counter):
+            self.login(password=WRONG_PASSWORD)
+            self.login(password=WRONG_PASSWORD)
+
+        # 확인한 뒤에 세면, 동시에 들어온 요청들이 전부 "아직 한도 전" 을 보고 통과한다.
+        # 먼저 세면 요청마다 다른 횟수를 받으므로 한도까지만 통과한다
+        self.assertEqual(counts_seen, [1, 2])
+
+    def test_right_password_of_an_unverified_account_is_not_a_failure(self):
+        create_user(username='pending_01', email='pending@example.com', nickname='대기중', email_verified_at=None)
+
+        for _ in range(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts + 1):
+            response = self.login(username='pending_01')
+
+            # 비밀번호는 맞았다. 이메일 인증을 끝내지 않았을 뿐이다
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class LoginIpLimitTests(AttemptPolicyTestCase):
@@ -295,6 +324,17 @@ class PasswordChangeLimitTests(AttemptPolicyTestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {response.data["access_token"]}')
         # 지워지지 않았다면 여기서 한 번만 틀려도 막힌다
         self.fail_change(PASSWORD_CHANGE_FAILURES_PER_USER.max_attempts - 1)
+
+
+    def test_rejected_new_password_is_not_a_failure(self):
+        for _ in range(PASSWORD_CHANGE_FAILURES_PER_USER.max_attempts + 1):
+            # 현재 비밀번호는 맞다. 새 비밀번호가 현재와 같아서 거절된다
+            response = self.client.post(
+                CHANGE_URL, {'current_password': PASSWORD, 'new_password': PASSWORD}, format='json',
+            )
+
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn('new_password', response.data)
 
 
 class RedisDownTests(AttemptPolicyTestCase):

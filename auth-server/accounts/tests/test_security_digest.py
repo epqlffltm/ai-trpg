@@ -6,6 +6,7 @@
 
 from datetime import timedelta
 from io import StringIO
+from unittest.mock import patch
 
 from django.core import mail
 from django.core.management import call_command
@@ -13,6 +14,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from accounts.mail import DIGEST_MAX_LISTED_EVENTS
+from accounts.mail_crypto import decrypt_mail_body
 from accounts.models import OutgoingMail, OutgoingMailStatus, SecurityEvent, SecurityEventKind, User
 from accounts.outbox import deliver_due_mail, enqueue_mail
 from accounts.security_digest import (
@@ -135,6 +137,23 @@ class ReportTests(TestCase):
         self.assertIn('앞선 7건은', body)
         self.assertEqual(body.count(IP), DIGEST_MAX_LISTED_EVENTS)
 
+    def test_reports_the_oldest_events_first_and_leaves_the_rest(self):
+        events = [record() for _ in range(5)]
+
+        with patch('accounts.security_digest.MAX_EVENTS_PER_DIGEST', 3):
+            first_run = report_new_security_events()
+            reported_after_first_run = list(
+                SecurityEvent.objects.filter(reported_at__isnull=False).order_by('id')
+            )
+            second_run = report_new_security_events()
+
+        # 한 번에 읽는 양에 한도가 있다. 남은 사건은 다음 실행에서 알린다
+        self.assertEqual(first_run, 3)
+        self.assertEqual(reported_after_first_run, events[:3])
+        self.assertEqual(second_run, 2)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertFalse(SecurityEvent.objects.filter(reported_at__isnull=True).exists())
+
     @override_settings(SECURITY_DIGEST_TO=[OPERATOR, 'second@example.com'])
     def test_sends_to_every_operator(self):
         record()
@@ -200,9 +219,9 @@ class DiscardedMailEventTests(TestCase):
         report_new_security_events()
 
         # 누구의 메일이었는지는 요약에 적지 않는다. 관리자 화면에서 확인한다
-        digest = OutgoingMail.objects.get(to_email=OPERATOR)
-        self.assertIn(SecurityEventKind.MAIL_DISCARDED.label, digest.body)
-        self.assertNotIn('someone@example.com', digest.body)
+        digest_body = decrypt_mail_body(OutgoingMail.objects.get(to_email=OPERATOR).body)
+        self.assertIn(SecurityEventKind.MAIL_DISCARDED.label, digest_body)
+        self.assertNotIn('someone@example.com', digest_body)
 
 
 class CleanupTests(TestCase):

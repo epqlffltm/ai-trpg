@@ -23,10 +23,17 @@ from accounts.models import SecurityEvent
 # IP 주소와 "어느 계정이 공격받았는가" 가 들어 있다. 필요한 기간을 넘겨 쌓아 두지 않는다
 EVENT_RETENTION = timedelta(days=30)
 
+# 요약 한 통에 싣는 사건의 최대 수. 남은 사건은 다음 실행에서 알린다.
+# 한도 없이 전부 읽으면, 사건이 한꺼번에 많이 쌓였을 때 그 전부를 메모리에 올리고
+# 그 전부를 잠근 채로 트랜잭션을 오래 쥔다. 공격자가 사건을 많이 만들수록 요약이 무거워진다
+MAX_EVENTS_PER_DIGEST = 1000
+
 
 def report_new_security_events() -> int:
     """
     아직 알리지 않은 보안 이벤트를 모아 운영자에게 메일로 보내고, 알린 건수를 돌려준다.
+
+    한 번에 MAX_EVENTS_PER_DIGEST 건까지, 오래된 것부터 알린다. 남은 것은 다음 실행에서 알린다.
 
     받는 사람(SECURITY_DIGEST_TO)이 없으면 아무것도 하지 않는다. 사건은 알리지 않은 채로 남는다.
 
@@ -55,7 +62,7 @@ def delete_old_security_events() -> int:
 
 def _lock_unreported_events() -> list[SecurityEvent]:
     """
-    아직 알리지 않은 사건을 잠그고 시간순으로 가져온다.
+    아직 알리지 않은 사건을 오래된 것부터 MAX_EVENTS_PER_DIGEST 건까지 잠그고 가져온다.
 
     잠그는 이유: 요약이 동시에 두 번 돌면 둘 다 같은 사건을 읽어 메일이 두 통 나간다.
     skip_locked 로, 늦게 온 쪽은 먼저 온 쪽이 잡은 사건을 건너뛴다.
@@ -66,7 +73,7 @@ def _lock_unreported_events() -> list[SecurityEvent]:
         .select_for_update(skip_locked=True, of=('self',))
         .filter(reported_at__isnull=True)
         .select_related('user')
-        .order_by('created_at', 'id')
+        .order_by('created_at', 'id')[:MAX_EVENTS_PER_DIGEST]
     )
 
 
