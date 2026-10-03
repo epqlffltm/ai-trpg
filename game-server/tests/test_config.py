@@ -71,6 +71,22 @@ def test_refuses_to_start_without_a_jwks_url(monkeypatch: pytest.MonkeyPatch):
         Settings(_env_file=None)
 
 
+def test_an_error_does_not_show_the_values_it_read(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv('AUTH_JWKS_URL')
+    env_file = tmp_path / '.env'
+    env_file.write_text('DEBUG=maybe\nSOME_PASSWORD=do-not-print-me\n', encoding='utf-8')
+
+    with pytest.raises(ValidationError) as caught:
+        Settings(_env_file=env_file)
+
+    # 오류 메시지는 화면과 로그에 남는다. 어느 설정이 틀렸는지만 알려 주고 값은 싣지 않는다
+    message = str(caught.value)
+    assert 'auth_jwks_url' in message
+    assert 'do-not-print-me' not in message
+    assert 'maybe' not in message
+    assert 'password@' not in message
+
+
 def test_token_names_match_the_auth_server_by_default():
     settings = Settings(_env_file=None)
 

@@ -6,8 +6,10 @@
 자산은 사용자가 만들어 두고 플레이할 때 조립해 쓰는 재료다(세계관, 로어북, NPC, 몬스터 등).
 
 테이블을 둘로 나눈다.
-- assets: 모든 자산이 똑같이 갖는 것. 누구 것인가, 무슨 종류인가, 누구에게 보이는가.
-- worlds 등: 그 종류만 갖는 내용. 종류마다 테이블이 하나씩 있고, 모두 AssetContent 를 물려받는다.
+  - assets: 모든 자산이 똑같이 갖는 것. 누구 것인가, 무슨 종류인가, 누구에게 보이는가.
+  - worlds 등: 그 종류만 갖는 내용. 종류마다 테이블이 하나씩 있고, 모두 AssetContent 를 물려받는다.
+
+자산이 다른 자산을 가리킬 수 있다. 시나리오가 룰북과 세계관을 가리킨다.
 
 공통 부분을 한 테이블에 두면, 권한 검사 같은 규칙을 종류마다 다시 짜지 않아도 되고,
 "아무 자산이나 가리키는 것"(방이 쓴 자산, 구매한 자산)이 외래 키 하나로 된다.
@@ -31,6 +33,8 @@ DESCRIPTION_MAX_LENGTH = 1000
 WORLD_SETTING_MAX_LENGTH = 8000
 WORLD_GM_NOTES_MAX_LENGTH = 4000
 RULEBOOK_GM_GUIDE_MAX_LENGTH = 4000
+# 테이블이 시작될 때 한 번 읽어 주는 글이다. 턴마다 다시 들어가지 않는다
+SCENARIO_OPENING_MAX_LENGTH = 2000
 
 
 class AssetType(enum.StrEnum):
@@ -38,6 +42,7 @@ class AssetType(enum.StrEnum):
 
     WORLD = 'world'
     RULEBOOK = 'rulebook'
+    SCENARIO = 'scenario'
 
 
 class Visibility(enum.StrEnum):
@@ -158,3 +163,30 @@ class Rulebook(AssetContent):
 
     # 진행 지침. AI 만 본다. 턴마다 AI 의 입력에 들어간다
     gm_guide: Mapped[str] = mapped_column(Text, default='')
+
+
+class Scenario(AssetContent):
+    """
+    시나리오의 내용. 테이블이 고르는 것이다.
+
+    시나리오는 다른 자산을 모아 만든 조립물이다. 룰북을 중심으로 세계관 등을 붙인다.
+    지금은 룰북과 세계관만 가리킨다. 로어북, NPC 같은 재료는 그 자산을 만들 때 더한다.
+
+    초안일 때는 룰북을 비워 둘 수 있다(임시 저장). 게시할 때 룰북이 있는지 검사한다.
+    """
+
+    __tablename__ = 'scenarios'
+    __table_args__ = (CheckConstraint(at_most('opening', SCENARIO_OPENING_MAX_LENGTH), name='opening_length'),)
+
+    # 가리키는 대상이 assets 가 아니라 rulebooks 다. 룰북 자리에 세계관을 넣는 일을 DB 가 막는다.
+    # 가리키는 쪽에서 찾는 일("이 룰북을 쓰는 시나리오가 있는가")이 있어서 색인을 건다.
+    # RESTRICT: 시나리오가 가리키는 동안에는 룰북의 행을 지울 수 없다
+    rulebook_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('rulebooks.asset_id', ondelete='RESTRICT'), index=True
+    )
+
+    # 세계관은 없어도 된다. 붙여도 하나만 붙인다
+    world_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('worlds.asset_id', ondelete='RESTRICT'), index=True)
+
+    # 도입부. 테이블이 시작될 때 AI 가 처음 읽어 주는 장면이다. 플레이어와 AI 가 함께 본다
+    opening: Mapped[str] = mapped_column(Text, default='')

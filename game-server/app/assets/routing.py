@@ -1,7 +1,7 @@
 # game-server/app/assets/routing.py
 
 """
-자산 API 들이 함께 쓰는 것. 세션, 쪽 나누기, 목록용 응답, "없다"의 응답.
+자산 API 들이 함께 쓰는 것. 세션, 쪽 나누기, 목록용 응답, 서비스의 예외를 바꾼 응답.
 
 종류별 라우터(worlds/router.py 등)가 이것을 가져다 쓴다.
 """
@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Asset, AssetContent
 from app.assets.schemas import AssetPage, AssetSummary
-from app.assets.service import AssetNotFoundError
+from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
 from app.core.database import get_session
 
 # 요청 하나가 쓰는 DB 세션
@@ -63,3 +63,26 @@ async def handle_asset_not_found(request: Request, error: AssetNotFoundError) ->
     남의 자산도 404 다. 403 을 주면 그 ID 의 자산이 있다는 것이 드러난다.
     """
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={'detail': '찾을 수 없습니다.'})
+
+
+async def handle_asset_in_use(request: Request, error: AssetInUseError) -> JSONResponse:
+    """
+    서비스가 "다른 자산이 쓰고 있다"고 하면 409 로 답한다.
+
+    409 는 요청은 맞지만 지금 상태와 부딪힌다는 뜻이다. 가리키는 쪽에서 떼어 낸 뒤에 다시 지울 수 있다.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT, content={'detail': '이 자산을 쓰는 시나리오가 있어 지울 수 없습니다.'}
+    )
+
+
+async def handle_asset_reference(request: Request, error: AssetReferenceError) -> JSONResponse:
+    """
+    서비스가 "가리키려는 자산이 없다"고 하면 422 로 답한다.
+
+    404 가 아니다. 주소는 맞고, 본문에 적은 값이 틀렸다. 남의 자산을 적어도 답이 같다.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': f'{error.field} 가 가리키는 자산을 찾을 수 없습니다.'},
+    )

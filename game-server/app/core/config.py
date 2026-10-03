@@ -25,6 +25,9 @@ class Settings(BaseSettings):
         env_file_encoding='utf-8',
         # .env 에 이 서버가 모르는 값이 있어도 무시한다
         extra='ignore',
+        # 설정이 틀렸을 때의 오류 메시지에 읽은 값을 싣지 않는다.
+        # 싣게 두면 비밀번호가 든 주소나 .env 의 다른 값이 화면과 로그에 찍힌다
+        hide_input_in_errors=True,
     )
 
     # 개발용 기능(API 문서 화면)을 켠다. 기본은 꺼짐이다.

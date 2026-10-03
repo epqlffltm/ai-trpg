@@ -9,7 +9,7 @@ DB 의 CHECK 는 마지막 방어선이고, 사용자에게 "어느 칸이 왜 �
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -36,9 +36,14 @@ class AssetUpdate(BaseModel):
     자산을 고칠 때 받는 공통 값. 보낸 칸만 바꾼다.
 
     None 은 "보내지 않았다"는 뜻이다. 글을 비우려면 빈 문자열을 보낸다.
+    clearable 에 적힌 칸만 예외다. 그 칸에 null 을 보내면 값을 비운다.
     """
 
     model_config = ConfigDict(extra='forbid')
+
+    # null 을 보내 비울 수 있는 칸의 이름. 종류별 모양이 필요하면 다시 정한다.
+    # ClassVar: 입력으로 받는 칸이 아니라 클래스에 붙은 값이다
+    clearable: ClassVar[frozenset[str]] = frozenset()
 
     title: Title | None = None
     description: Description | None = None
