@@ -11,7 +11,7 @@
 from accounts.models import SecurityEvent, User
 
 
-def record_security_event(*, kind: str, ip: str, user: User | None = None) -> None:
+def record_security_event(*, kind: str, ip: str = '', user: User | None = None) -> None:
     """보안 이벤트 하나를 남긴다."""
     SecurityEvent.objects.create(kind=kind, ip=ip, user=user)
 

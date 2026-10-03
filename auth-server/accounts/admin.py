@@ -108,7 +108,7 @@ class SecurityEventAdmin(admin.ModelAdmin):
     기록이다. 관리자 화면에서 만들거나 고치거나 지울 수 있으면 기록으로서 믿을 수 없다.
     """
 
-    list_display = ('created_at', 'kind', 'ip', 'user')
+    list_display = ('created_at', 'kind', 'ip', 'user', 'reported_at')
     list_filter = ('kind',)
     search_fields = ('ip', 'user__username')
     date_hierarchy = 'created_at'
