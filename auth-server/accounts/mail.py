@@ -10,10 +10,15 @@ accounts 앱이 보내는 메일.
 from urllib.parse import urlencode
 
 from django.conf import settings
+from django.utils import timezone
 
 from accounts.email_codes import CODE_LIFETIME, TOKEN_LIFETIME
-from accounts.models import EmailCodePurpose, User
+from accounts.models import EmailCodePurpose, SecurityEvent, User
 from accounts.outbox import enqueue_mail
+
+# 보안 이벤트 요약 메일에 한 줄씩 적는 사건의 최대 수. 넘는 만큼은 건수만 알린다.
+# 공격이 크면 사건이 수백 건이 된다. 전부 적으면 메일이 읽을 수 없게 길어진다
+DIGEST_MAX_LISTED_EVENTS = 50
 
 # 용도별 메일 제목과 안내 문구
 EMAIL_CODE_MESSAGES = {
@@ -111,3 +116,51 @@ def send_password_changed_notice(*, user: User) -> None:
             '변경한 적이 없다면 로그인 화면의 "비밀번호 찾기" 로 비밀번호를 즉시 다시 설정해 주세요.'
         ),
     )
+
+
+def build_security_digest_message(*, events: list[SecurityEvent]) -> tuple[str, str]:
+    """
+    보안 이벤트 요약 메일의 제목과 본문을 만든다. events 는 시간순이다.
+
+    종류별 건수를 먼저 적고, 그 아래에 사건을 한 줄씩 적는다.
+    """
+    counts: dict[str, int] = {}
+    for event in events:
+        label = event.get_kind_display()
+        counts[label] = counts.get(label, 0) + 1
+    count_lines = [f'  {label}: {count}건' for label, count in counts.items()]
+
+    listed = events[-DIGEST_MAX_LISTED_EVENTS:]
+    event_lines = [_describe_security_event(event) for event in listed]
+    if len(events) > len(listed):
+        event_lines.insert(0, f'  (앞선 {len(events) - len(listed)}건은 관리자 화면에서 확인해 주세요)')
+
+    body = '\n'.join([
+        f'새 보안 이벤트가 {len(events)}건 있습니다.',
+        '',
+        '종류별',
+        *count_lines,
+        '',
+        f'자세히 (시각은 {timezone.get_current_timezone_name()} 기준)',
+        *event_lines,
+        '',
+        '전체 기록은 관리자 화면의 "보안 이벤트" 에 있습니다.',
+    ])
+    return f'[AI TRPG] 보안 이벤트 {len(events)}건', body
+
+
+def send_security_digest(*, recipients: list[str], events: list[SecurityEvent]) -> None:
+    """보안 이벤트 요약을 운영자들에게 보낸다."""
+    subject, body = build_security_digest_message(events=events)
+    for recipient in recipients:
+        enqueue_mail(to_email=recipient, subject=subject, body=body)
+
+
+def _describe_security_event(event: SecurityEvent) -> str:
+    """사건 하나를 한 줄로 적는다. 시각은 서버의 시간대(TIME_ZONE)로 적는다."""
+    parts = [timezone.localtime(event.created_at).strftime('%m-%d %H:%M'), event.get_kind_display()]
+    if event.ip:
+        parts.append(event.ip)
+    if event.user is not None:
+        parts.append(f'계정 {event.user.username}')
+    return '  ' + '  '.join(parts)

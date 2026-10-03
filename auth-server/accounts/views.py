@@ -17,6 +17,17 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.attempt_policies import (
+    block_ip_if_reserved_username,
+    check_login_attempt,
+    is_login_blocked_ip,
+    check_password_change_attempt,
+    record_login_failure,
+    record_login_success,
+    record_password_change_failure,
+    record_password_change_success,
+)
+from accounts.client_ip import get_attempt_subject
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
 from accounts.jwks import build_jwks
 from accounts.email_codes import InvalidEmailCodeError
@@ -48,9 +59,16 @@ from accounts.services import (
     resend_login_code,
     resend_signup_code,
     reset_password,
+    spend_password_check_time,
     start_login,
     start_signup,
     verify_signup,
+)
+from accounts.throttles import (
+    LoginIpThrottle,
+    PasswordResetIpThrottle,
+    SignupIpThrottle,
+    SignupResendIpThrottle,
 )
 from accounts.tokens import (
     InvalidRefreshTokenError,
@@ -120,6 +138,18 @@ def build_code_unavailable_response(retry_after: timedelta) -> Response:
     return response
 
 
+def build_invalid_credentials_response() -> Response:
+    """
+    로그인을 거절하는 응답. 아이디가 없든 비밀번호가 틀리든 같은 응답을 준다.
+
+    로그인이 막힌 IP 에도 이 응답을 준다. 막혔다는 것을 알려 주지 않는다.
+    """
+    return Response(
+        {'detail': '아이디 또는 비밀번호가 올바르지 않습니다.'},
+        status=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
 class SignupView(APIView):
     """POST /api/v1/auth/signup"""
 
@@ -128,6 +158,8 @@ class SignupView(APIView):
     # 로그인 전에 부르는 API 다. 토큰을 읽지 않는다.
     # 만료된 토큰이 헤더에 남아 있어도 가입과 로그인은 되어야 한다
     authentication_classes = []
+    # 가입은 메일을 보낸다. 한 IP 가 낼 수 있는 요청 수를 묶는다
+    throttle_classes = [SignupIpThrottle]
 
     def post(self, request: Request) -> Response:
         serializer = SignupSerializer(data=request.data)
@@ -183,6 +215,7 @@ class SignupResendView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [SignupResendIpThrottle]
 
     def post(self, request: Request) -> Response:
         serializer = EmailSerializer(data=request.data)
@@ -202,19 +235,37 @@ class LoginView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    # 한 IP 의 로그인 시도 전체를 묶는다. 계정별로 틀린 횟수는 post 안에서 따로 센다
+    throttle_classes = [LoginIpThrottle]
 
     def post(self, request: Request) -> Response:
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # 누가 어느 계정에 시도하는지. 횟수를 세는 기준이다
+        attempt = {
+            'ip': get_attempt_subject(request),
+            'username': serializer.validated_data['username'],
+        }
+
+        if is_login_blocked_ip(ip=attempt['ip']):
+            # 맞는 비밀번호여도 확인하지 않는다. 걸리는 시간만 평소의 거절과 맞춘다
+            spend_password_check_time(password=serializer.validated_data['password'])
+            return build_invalid_credentials_response()
+
+        # 예약어 아이디면 이 IP 를 막는다. 이 요청은 그대로 진행한다.
+        # 예약어인 계정은 없으므로 아래에서 평소처럼 거절된다
+        block_ip_if_reserved_username(**attempt)
+
+        # 이 IP 가 이 계정에서 너무 많이 틀렸으면 여기서 TooManyAttemptsError 가 난다.
+        # 잡지 않는다. 예외 처리기(exception_handlers.py)가 429 로 바꾼다
+        check_login_attempt(**attempt)
+
         try:
             challenge = start_login(**serializer.validated_data)
         except InvalidCredentialsError:
-            # 아이디가 없든 비밀번호가 틀리든 같은 응답을 준다
-            return Response(
-                {'detail': '아이디 또는 비밀번호가 올바르지 않습니다.'},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+            record_login_failure(**attempt)
+            return build_invalid_credentials_response()
         except EmailNotVerifiedError:
             # 비밀번호가 맞은 뒤에만 도달한다. code 는 프론트가 인증 화면으로 보낼 때 쓴다
             return Response(
@@ -223,6 +274,8 @@ class LoginView(APIView):
             )
         except LoginCodeUnavailableError as exc:
             return build_code_unavailable_response(exc.retry_after)
+
+        record_login_success(**attempt)
 
         if challenge.code_sent:
             detail = '인증 메일을 보냈습니다. 메일에 적힌 코드를 입력해 주세요.'
@@ -288,15 +341,21 @@ class PasswordChangeView(APIView):
         serializer = PasswordChangeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # 현재 비밀번호를 너무 많이 틀렸으면 여기서 TooManyAttemptsError 가 난다. 예외 처리기가 429 로 바꾼다
+        check_password_change_attempt(user=request.user)
+
         try:
             change_password(user=request.user, **serializer.validated_data)
         except WrongCurrentPasswordError:
+            record_password_change_failure(user=request.user, ip=get_attempt_subject(request))
             return Response(
                 {'current_password': ['현재 비밀번호가 올바르지 않습니다.']},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except UnacceptablePasswordError as exc:
             return Response({'new_password': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        record_password_change_success(user=request.user)
 
         # 비밀번호가 바뀌면서 이 기기의 토큰도 무효가 됐다.
         # 새 토큰을 발급해, 다른 기기만 로그아웃되고 이 기기는 로그인이 이어지게 한다
@@ -308,6 +367,7 @@ class PasswordResetRequestView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [PasswordResetIpThrottle]
 
     def post(self, request: Request) -> Response:
         serializer = EmailSerializer(data=request.data)

@@ -20,7 +20,8 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
-from accounts.models import OutgoingMail, OutgoingMailStatus
+from accounts.models import OutgoingMail, OutgoingMailStatus, SecurityEventKind
+from accounts.security_events import record_security_event
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,8 @@ def _discard(mail: OutgoingMail, now) -> None:
     mail.body = ''
     mail.discarded_at = now
     mail.save(update_fields=['status', 'body', 'discarded_at'])
+    # 운영자에게 가는 요약 메일에 실린다. 버리는 것과 같은 트랜잭션이라 둘 중 하나만 남는 일이 없다
+    record_security_event(kind=SecurityEventKind.MAIL_DISCARDED)
     # 받는 사람의 주소는 로그에 적지 않는다. 관리자 화면에서 번호로 찾는다
     logger.error(
         '메일을 보내지 못하고 버렸다. id=%s 제목=%s 시도=%s 마지막 오류=%s',
