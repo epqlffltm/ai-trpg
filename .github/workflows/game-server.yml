@@ -1,0 +1,54 @@
+# .github/workflows/game-server.yml
+# 게임 서버의 CI. PR 과 main 푸시마다 린트, 모양, 테스트를 검사한다.
+#
+# 서버마다 워크플로 파일을 따로 둔다. 서버별로 의존성과 검사 항목이 다르고,
+# 한 서버만 고친 PR 에서 다른 서버의 검사까지 돌릴 이유가 없다.
+
+name: game-server
+
+on:
+  pull_request:
+    paths:
+      - "game-server/**"
+      - ".github/workflows/game-server.yml"
+  push:
+    branches: [main]
+    paths:
+      - "game-server/**"
+      - ".github/workflows/game-server.yml"
+
+# 이 워크플로는 저장소를 읽기만 한다. 필요한 권한만 준다
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: game-server
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      # uv.lock 과 pyproject.toml 이 어긋나면 실패한다
+      - name: 의존성 설치
+        run: uv sync --locked
+
+      # 쓰지 않는 import, 정의되지 않은 이름 같은 문제를 실행하지 않고 찾는다
+      - name: 린트
+        run: uv run ruff check .
+
+      # 모양을 고치지 않고 검사만 한다. 어긋나면 실패한다
+      - name: 모양 검사
+        run: uv run ruff format --check .
+
+      - name: 테스트
+        run: uv run pytest
