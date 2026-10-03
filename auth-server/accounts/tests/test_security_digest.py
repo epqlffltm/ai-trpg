@@ -6,6 +6,7 @@
 
 from datetime import timedelta
 from io import StringIO
+from unittest.mock import patch
 
 from django.core import mail
 from django.core.management import call_command
@@ -135,6 +136,23 @@ class ReportTests(TestCase):
         self.assertIn(f'{DIGEST_MAX_LISTED_EVENTS + 7}건', mail.outbox[0].subject)
         self.assertIn('앞선 7건은', body)
         self.assertEqual(body.count(IP), DIGEST_MAX_LISTED_EVENTS)
+
+    def test_reports_the_oldest_events_first_and_leaves_the_rest(self):
+        events = [record() for _ in range(5)]
+
+        with patch('accounts.security_digest.MAX_EVENTS_PER_DIGEST', 3):
+            first_run = report_new_security_events()
+            reported_after_first_run = list(
+                SecurityEvent.objects.filter(reported_at__isnull=False).order_by('id')
+            )
+            second_run = report_new_security_events()
+
+        # 한 번에 읽는 양에 한도가 있다. 남은 사건은 다음 실행에서 알린다
+        self.assertEqual(first_run, 3)
+        self.assertEqual(reported_after_first_run, events[:3])
+        self.assertEqual(second_run, 2)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertFalse(SecurityEvent.objects.filter(reported_at__isnull=True).exists())
 
     @override_settings(SECURITY_DIGEST_TO=[OPERATOR, 'second@example.com'])
     def test_sends_to_every_operator(self):
