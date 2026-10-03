@@ -12,10 +12,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets import service
 from app.assets.models import WORLD_SETTING_MAX_LENGTH, Asset, AssetType, Rating, Visibility, World
-from app.assets.schemas import WorldCreate, WorldUpdate
-from app.assets.service import WorldNotFoundError
+from app.assets.service import AssetNotFoundError
+from app.assets.worlds import service
+from app.assets.worlds.schemas import WorldCreate, WorldUpdate
 
 # 이 파일의 모든 테스트는 빈 테이블에서 시작한다
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -80,7 +80,7 @@ async def test_a_created_world_is_really_saved(session: AsyncSession, app):
 
 
 async def test_cannot_read_a_world_that_does_not_exist(session: AsyncSession):
-    with pytest.raises(WorldNotFoundError):
+    with pytest.raises(AssetNotFoundError):
         await service.get_world(session, OWNER, uuid.uuid4())
 
 
@@ -88,7 +88,7 @@ async def test_cannot_read_someone_elses_world(session: AsyncSession):
     world = await make_world(session, owner_id=SOMEONE_ELSE, gm_notes='비밀')
 
     # "네 것이 아니다"가 아니라 "없다"로 답한다. 그 ID 의 자산이 있다는 것을 알려 주지 않는다
-    with pytest.raises(WorldNotFoundError):
+    with pytest.raises(AssetNotFoundError):
         await service.get_world(session, OWNER, world.asset_id)
 
 
@@ -155,7 +155,7 @@ async def test_update_moves_the_updated_time_even_when_only_the_content_changed(
 async def test_cannot_update_someone_elses_world(session: AsyncSession):
     world = await make_world(session, owner_id=SOMEONE_ELSE)
 
-    with pytest.raises(WorldNotFoundError):
+    with pytest.raises(AssetNotFoundError):
         await service.update_world(session, OWNER, world.asset_id, WorldUpdate(title='빼앗음'))
 
     untouched = await service.get_world(session, SOMEONE_ELSE, world.asset_id)
@@ -170,7 +170,7 @@ async def test_a_deleted_world_cannot_be_read_or_listed(session: AsyncSession):
 
     await service.delete_world(session, OWNER, world.asset_id)
 
-    with pytest.raises(WorldNotFoundError):
+    with pytest.raises(AssetNotFoundError):
         await service.get_world(session, OWNER, world.asset_id)
     worlds, total = await service.list_worlds(session, OWNER, limit=10, offset=0)
     assert worlds == []
@@ -191,14 +191,14 @@ async def test_cannot_delete_twice(session: AsyncSession):
     world = await make_world(session)
     await service.delete_world(session, OWNER, world.asset_id)
 
-    with pytest.raises(WorldNotFoundError):
+    with pytest.raises(AssetNotFoundError):
         await service.delete_world(session, OWNER, world.asset_id)
 
 
 async def test_cannot_delete_someone_elses_world(session: AsyncSession):
     world = await make_world(session, owner_id=SOMEONE_ELSE)
 
-    with pytest.raises(WorldNotFoundError):
+    with pytest.raises(AssetNotFoundError):
         await service.delete_world(session, OWNER, world.asset_id)
 
     assert await service.get_world(session, SOMEONE_ELSE, world.asset_id)

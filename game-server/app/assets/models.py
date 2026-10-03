@@ -6,8 +6,8 @@
 자산은 사용자가 만들어 두고 플레이할 때 조립해 쓰는 재료다(세계관, 로어북, NPC, 몬스터 등).
 
 테이블을 둘로 나눈다.
-  - assets: 모든 자산이 똑같이 갖는 것. 누구 것인가, 무슨 종류인가, 누구에게 보이는가.
-  - worlds: 세계관만 갖는 내용. 종류가 늘면 이런 테이블이 종류마다 하나씩 생긴다.
+- assets: 모든 자산이 똑같이 갖는 것. 누구 것인가, 무슨 종류인가, 누구에게 보이는가.
+- worlds 등: 그 종류만 갖는 내용. 종류마다 테이블이 하나씩 있고, 모두 AssetContent 를 물려받는다.
 
 공통 부분을 한 테이블에 두면, 권한 검사 같은 규칙을 종류마다 다시 짜지 않아도 되고,
 "아무 자산이나 가리키는 것"(방이 쓴 자산, 구매한 자산)이 외래 키 하나로 된다.
@@ -20,7 +20,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, Uuid, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -30,12 +30,14 @@ DESCRIPTION_MAX_LENGTH = 1000
 # 아래 둘은 턴마다 AI 의 입력에 들어간다. 길이가 곧 비용이다
 WORLD_SETTING_MAX_LENGTH = 8000
 WORLD_GM_NOTES_MAX_LENGTH = 4000
+RULEBOOK_GM_GUIDE_MAX_LENGTH = 4000
 
 
 class AssetType(enum.StrEnum):
     """자산의 종류. 종류마다 내용을 담는 테이블이 따로 있다."""
 
     WORLD = 'world'
+    RULEBOOK = 'rulebook'
 
 
 class Visibility(enum.StrEnum):
@@ -103,8 +105,29 @@ class Asset(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-class World(Base):
-    """세계관의 내용. 자산 하나에 하나씩 붙는다."""
+class AssetContent(Base):
+    """
+    종류별 내용 테이블의 공통 부분. 세계관, 룰북처럼 자산의 내용을 담는 모델이 물려받는다.
+
+    이 클래스 자체는 테이블이 아니다(__abstract__). 물려받은 클래스마다 아래 두 가지가 똑같이 생긴다.
+    """
+
+    __abstract__ = True
+
+    # 기본 키이면서 assets 를 가리킨다. 자산 하나에 내용이 둘 붙을 수 없다(1:1).
+    # 자산의 행이 지워지면 내용도 함께 지워진다. 내용만 남아 떠도는 일이 없다
+    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id', ondelete='CASCADE'), primary_key=True)
+
+    # 내용을 읽을 때 공통 부분도 항상 함께 읽는다.
+    # 비동기에서는 나중에 따로 읽어 오는 방식(lazy)을 쓸 수 없어서, 한 번의 조회로 같이 가져오게 한다.
+    # 물려받는 클래스마다 관계를 따로 만들어야 해서 declared_attr 로 적는다
+    @declared_attr
+    def asset(cls) -> Mapped[Asset]:
+        return relationship(lazy='joined', innerjoin=True)
+
+
+class World(AssetContent):
+    """세계관의 내용."""
 
     __tablename__ = 'worlds'
     __table_args__ = (
@@ -112,16 +135,26 @@ class World(Base):
         CheckConstraint(at_most('gm_notes', WORLD_GM_NOTES_MAX_LENGTH), name='gm_notes_length'),
     )
 
-    # 기본 키이면서 assets 를 가리킨다. 자산 하나에 세계관 내용이 둘 붙을 수 없다(1:1).
-    # 자산의 행이 지워지면 내용도 함께 지워진다. 내용만 남아 떠도는 일이 없다
-    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id', ondelete='CASCADE'), primary_key=True)
-
     # 공개 설정. 플레이어와 AI 가 함께 본다
     setting: Mapped[str] = mapped_column(Text, default='')
 
     # GM 전용. AI 만 본다. 소유자가 아닌 사람에게 가는 응답에 실으면 안 된다
     gm_notes: Mapped[str] = mapped_column(Text, default='')
 
-    # 세계관을 읽을 때 공통 부분도 항상 함께 읽는다.
-    # 비동기에서는 나중에 따로 읽어 오는 방식(lazy)을 쓸 수 없어서, 한 번의 조회로 같이 가져오게 한다
-    asset: Mapped[Asset] = relationship(lazy='joined', innerjoin=True)
+
+class Rulebook(AssetContent):
+    """
+    룰북의 내용. 시나리오를 만들 때 중심이 되는 자산이다.
+
+    룰북에는 두 가지가 들어간다.
+    - 진행 지침: 컨셉, 분위기, GM 의 진행 방식. AI 가 읽는 글이다.
+    - 게임 규칙: 능력치, 주사위, 판정. 엔진이 실행하는 데이터다.
+    지금은 진행 지침만 있다. 게임 규칙의 칸은 엔진을 만들 때 더한다.
+    규칙을 글로 적어 AI 에게 주지 않는다. 그러면 판정을 AI 가 하게 된다.
+    """
+
+    __tablename__ = 'rulebooks'
+    __table_args__ = (CheckConstraint(at_most('gm_guide', RULEBOOK_GM_GUIDE_MAX_LENGTH), name='gm_guide_length'),)
+
+    # 진행 지침. AI 만 본다. 턴마다 AI 의 입력에 들어간다
+    gm_guide: Mapped[str] = mapped_column(Text, default='')
