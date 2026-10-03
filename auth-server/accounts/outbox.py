@@ -6,6 +6,8 @@
 적는 쪽(enqueue_mail)은 요청을 처리하는 중에 불린다. DB 에 한 줄을 쓰고 끝난다.
 보내는 쪽(deliver_due_mail)은 워커가 부른다. 메일 서버와 통신하고, 실패하면 다시 시도한다.
 
+본문은 암호화해서 적는다(mail_crypto.py). 워커가 꺼낼 때 복호화한다.
+
 적는 일이 계정 생성이나 코드 발급과 같은 트랜잭션에 들어간다. 그래서
 "계정은 만들어졌는데 보낼 메일은 적히지 않은" 상태나 그 반대가 생기지 않는다.
 """
@@ -20,6 +22,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+from accounts.mail_crypto import UnreadableMailBodyError, decrypt_mail_body, encrypt_mail_body
 from accounts.models import OutgoingMail, OutgoingMailStatus, SecurityEventKind
 from accounts.security_events import record_security_event
 
@@ -65,7 +68,8 @@ def enqueue_mail(*, to_email: str, subject: str, body: str) -> None:
     OutgoingMail.objects.create(
         to_email=to_email,
         subject=subject,
-        body=body,
+        # 본문에는 인증 코드나 재설정 토큰이 들어 있다. 암호화해서 적는다
+        body=encrypt_mail_body(body),
         next_attempt_at=now,
         expires_at=now + MAIL_SEND_DEADLINE,
     )
@@ -99,7 +103,14 @@ def _deliver_next() -> str | None:
             _discard(mail, now)
             return 'discarded'
         try:
-            _send(to_email=mail.to_email, subject=mail.subject, body=mail.body)
+            body = decrypt_mail_body(mail.body)
+        except UnreadableMailBodyError as exc:
+            # 다시 시도해도 읽을 수 없다. 바로 버린다
+            mail.last_error = _describe(exc)
+            _discard(mail, now)
+            return 'discarded'
+        try:
+            _send(to_email=mail.to_email, subject=mail.subject, body=body)
         except (smtplib.SMTPException, OSError) as exc:
             # OSError 는 연결 실패와 시간 초과를 포함한다
             _schedule_retry(mail, exc, now)
@@ -153,7 +164,7 @@ def _discard(mail: OutgoingMail, now) -> None:
     mail.status = OutgoingMailStatus.DISCARDED
     mail.body = ''
     mail.discarded_at = now
-    mail.save(update_fields=['status', 'body', 'discarded_at'])
+    mail.save(update_fields=['status', 'body', 'discarded_at', 'last_error'])
     # 운영자에게 가는 요약 메일에 실린다. 버리는 것과 같은 트랜잭션이라 둘 중 하나만 남는 일이 없다
     record_security_event(kind=SecurityEventKind.MAIL_DISCARDED)
     # 받는 사람의 주소는 로그에 적지 않는다. 관리자 화면에서 번호로 찾는다

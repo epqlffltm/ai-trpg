@@ -21,6 +21,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.mail_crypto import decrypt_mail_body
 from accounts.models import OutgoingMail, OutgoingMailStatus, User
 from accounts.outbox import (
     FIRST_RETRY_DELAY,
@@ -69,6 +70,20 @@ class EnqueueTests(TestCase):
         self.assertEqual(queued.expires_at - queued.next_attempt_at, MAIL_SEND_DEADLINE)
         self.assertEqual(len(mail.outbox), 0)
 
+    def test_body_is_not_stored_as_written(self):
+        queued = enqueue(body='인증 코드 123456')
+
+        # DB 를 읽을 수 있는 사람이 보내기 전의 코드를 얻지 못하게 한다
+        self.assertNotIn('123456', queued.body)
+        self.assertNotIn('인증 코드', queued.body)
+
+    def test_same_body_is_stored_differently_each_time(self):
+        first = enqueue(body='인증 코드 123456')
+        second = enqueue(body='인증 코드 123456')
+
+        # 같으면, 저장된 값끼리 비교해 "같은 코드가 나갔다" 를 알 수 있다
+        self.assertNotEqual(first.body, second.body)
+
     def test_row_disappears_when_the_surrounding_transaction_fails(self):
         with self.assertRaises(RuntimeError):
             with transaction.atomic():
@@ -100,6 +115,32 @@ class DeliverTests(TestCase):
         self.assertEqual(mail.outbox[0].body, '본문 123456')
         # 본문에 인증 코드가 들어 있다. 보낸 메일은 남기지 않는다
         self.assertEqual(OutgoingMail.objects.count(), 0)
+
+    def test_mail_that_cannot_be_decrypted_is_discarded(self):
+        queued = enqueue()
+        # 암호화한 뒤에 비밀키가 바뀌었거나 DB 의 값을 누가 고친 경우
+        OutgoingMail.objects.filter(pk=queued.pk).update(body='not-a-valid-ciphertext')
+
+        with self.assertLogs('accounts.outbox', level='ERROR'):
+            report = deliver_due_mail()
+
+        queued.refresh_from_db()
+        self.assertEqual(report.discarded, 1)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(queued.status, OutgoingMailStatus.DISCARDED)
+        self.assertEqual(queued.body, '')
+        self.assertIn('UnreadableMailBodyError', queued.last_error)
+
+    @override_settings(SECRET_KEY='another-secret-key-for-this-test-only')
+    def test_mail_encrypted_with_another_key_is_discarded(self):
+        with override_settings(SECRET_KEY='the-key-used-when-the-mail-was-queued'):
+            enqueue()
+
+        with self.assertLogs('accounts.outbox', level='ERROR'):
+            report = deliver_due_mail()
+
+        self.assertEqual(report.discarded, 1)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_does_nothing_when_the_outbox_is_empty(self):
         report = deliver_due_mail()
@@ -144,7 +185,7 @@ class RetryTests(TestCase):
         self.assertEqual(self.queued.attempts, 1)
         self.assertIn('SMTPServerDisconnected', self.queued.last_error)
         # 다시 보내야 하므로 본문은 그대로 있다
-        self.assertEqual(self.queued.body, '본문 123456')
+        self.assertEqual(decrypt_mail_body(self.queued.body), '본문 123456')
 
     def test_failed_mail_waits_before_the_next_attempt(self):
         self.fail_at(self.start)
