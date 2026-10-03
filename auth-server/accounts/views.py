@@ -251,7 +251,7 @@ class LoginView(APIView):
             spend_password_check_time(password=serializer.validated_data['password'])
             return build_invalid_credentials_response()
 
-        # 예약어 아이디면 이 IP 를 막는다. 이 요청은 그대로 진행한다.
+        # 예약어 아이디면 센다. 한도를 채우면 다음 요청부터 이 IP 가 막힌다. 이 요청은 그대로 진행한다.
         # 예약어인 계정은 없으므로 아래에서 평소처럼 거절된다
         block_ip_if_reserved_username(**attempt)
 

@@ -38,11 +38,12 @@ LOGIN_FAILURES_PER_ACCOUNT_AND_IP = AttemptLimit(
     name='login-fail-account-ip', max_attempts=5, window=timedelta(minutes=15),
 )
 
-# 예약어 아이디(admin, root 등)로 로그인을 시도한 IP 를 막아 두는 시간.
+# 한 IP 가 예약어 아이디(admin, root 등)로 로그인을 시도한 횟수. 채우면 그 IP 의 로그인을 막는다.
 # 예약어는 누구도 아이디로 쓸 수 없다(운영자 계정도 마찬가지다). 그 아이디로 로그인해 보는 것은
-# 실수로 일어나지 않는다. 관리자 계정을 찾는 탐색이다. 한 번이면 막는다.
-# "한 번 세면 막힌다" 로 표현해, 시도 횟수를 세는 장치를 그대로 쓴다
-LOGIN_IP_BLOCK = AttemptLimit(name='login-ip-block', max_attempts=1, window=timedelta(hours=1))
+# 오타로 일어나지 않는다. 관리자 계정을 찾는 탐색에 가깝다.
+# 그래도 한 번에 막지는 않는다. 공유기 뒤의 여러 사람이 한 IP 로 보이는데,
+# 한 사람의 호기심 한 번으로 모두가 한 시간 동안 로그인하지 못하게 되면 지나치다
+LOGIN_IP_BLOCK = AttemptLimit(name='login-ip-block', max_attempts=3, window=timedelta(hours=1))
 
 # 한 IP 의 가입 요청. 가입은 메일을 보낸다. 남의 주소로 메일을 쏟아붓는 것을 막는다
 SIGNUP_PER_IP = AttemptLimit(name='signup-ip', max_attempts=10, window=timedelta(hours=1))
@@ -76,7 +77,7 @@ def is_login_blocked_ip(*, ip: str) -> bool:
 
 def block_ip_if_reserved_username(*, ip: str, username: str) -> None:
     """
-    예약어 아이디로 로그인을 시도했으면 그 IP 의 로그인을 막고 보안 이벤트를 남긴다.
+    예약어 아이디로 로그인을 시도했으면 센다. 한도를 채우면 그 IP 의 로그인이 막히고 보안 이벤트가 남는다.
 
     이미 막혀 있는 IP 는 이 함수까지 오지 않는다. 그래서 이벤트는 막을 때마다 한 번 남는다.
     """
