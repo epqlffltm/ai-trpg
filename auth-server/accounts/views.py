@@ -327,7 +327,7 @@ class PasswordChangeView(APIView):
         try:
             change_password(user=request.user, **serializer.validated_data)
         except WrongCurrentPasswordError:
-            record_password_change_failure(user=request.user)
+            record_password_change_failure(user=request.user, ip=get_attempt_subject(request))
             return Response(
                 {'current_password': ['현재 비밀번호가 올바르지 않습니다.']},
                 status=status.HTTP_400_BAD_REQUEST,

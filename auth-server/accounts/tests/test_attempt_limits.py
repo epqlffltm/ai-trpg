@@ -60,6 +60,19 @@ class CountAttemptTests(AttemptLimitTestCase):
         self.assertGreater(caught.exception.retry_after, timedelta(minutes=9))
         self.assertLessEqual(caught.exception.retry_after, LIMIT.window)
 
+    def test_only_the_first_blocked_attempt_is_marked(self):
+        for _ in range(LIMIT.max_attempts):
+            count_attempt(LIMIT, 'someone')
+
+        with self.assertRaises(TooManyAttemptsError) as first:
+            count_attempt(LIMIT, 'someone')
+        with self.assertRaises(TooManyAttemptsError) as second:
+            count_attempt(LIMIT, 'someone')
+
+        # "막혔다" 는 기록을 구간마다 한 번만 남기는 데 쓴다
+        self.assertTrue(first.exception.first_block)
+        self.assertFalse(second.exception.first_block)
+
     def test_subjects_are_counted_separately(self):
         for _ in range(LIMIT.max_attempts):
             count_attempt(LIMIT, 'someone')
@@ -116,6 +129,12 @@ class FailureCountingTests(AttemptLimitTestCase):
 
     def test_not_blocked_before_any_failure(self):
         ensure_not_blocked(LIMIT, 'someone')
+
+    def test_tells_when_a_failure_starts_the_block(self):
+        results = [count_failure(LIMIT, 'someone') for _ in range(LIMIT.max_attempts + 1)]
+
+        # 허용된 횟수를 막 채운 실패에서만 True 다. 그 뒤의 실패는 이미 막힌 뒤다
+        self.assertEqual(results, [False, False, True, False])
 
     def test_blocked_once_failures_reach_the_limit(self):
         for _ in range(LIMIT.max_attempts):
