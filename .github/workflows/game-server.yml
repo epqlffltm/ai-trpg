@@ -51,6 +51,9 @@ jobs:
       AUTH_DB_PASSWORD: ci-auth-password
       GAME_DB_PASSWORD: ci-game-password
       DATABASE_URL: postgresql+asyncpg://game:ci-game-password@127.0.0.1:5432/trpg
+      # 필수 설정이라 적는다. CI 에는 인증 서버가 없고, 테스트는 가짜 인증 서버를 쓴다.
+      # 이 주소로는 요청이 가지 않는다
+      AUTH_JWKS_URL: http://127.0.0.1:8000/api/v1/auth/jwks
 
     defaults:
       run:
