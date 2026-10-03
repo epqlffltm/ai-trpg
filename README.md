@@ -13,7 +13,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
 | 인증 서버 (Django) | [`auth-server/`](auth-server/README.md) | 회원가입(이메일 인증), 로그인(이메일 인증), 비밀번호 변경과 재설정, 메일 발송, 토큰 갱신, 로그아웃, JWKS, 시도 횟수 제한, 보안 이벤트 기록까지 완료 |
-| 게임 서버 (FastAPI) | [`game-server/`](game-server/README.md) | 뼈대(서버 실행, 설정, 테스트, CI)까지 완료 |
+| 게임 서버 (FastAPI) | [`game-server/`](game-server/README.md) | 뼈대(서버 실행, 설정, DB 연결, 마이그레이션 도구, 테스트, CI)까지 완료 |
 | 프론트엔드 | `web/` | 예정 |
 
 ## 문서
@@ -23,7 +23,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 문서 | 내용 |
 | --- | --- |
 | [auth-server/README.md](auth-server/README.md) | 인증 서버의 실행, API, 설계 메모, 운영 메모, 자주 겪는 문제 |
-| [game-server/README.md](game-server/README.md) | 게임 서버의 실행, API, 설계 메모 |
+| [game-server/README.md](game-server/README.md) | 게임 서버의 실행, DB와 마이그레이션, API, 설계 메모 |
 
 ## 요구 사항
 
@@ -37,8 +37,8 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 
 ### 1. 인프라 환경 변수
 
-`.env.example`을 복사해 `.env`를 만들고 `POSTGRES_PASSWORD`와
-`AUTH_DB_PASSWORD`를 채운다. 이 파일은 커밋하지 않는다.
+`.env.example`을 복사해 `.env`를 만들고 `POSTGRES_PASSWORD`, `AUTH_DB_PASSWORD`,
+`GAME_DB_PASSWORD`를 채운다. 이 파일은 커밋하지 않는다.
 
 ```
 cp .env.example .env
@@ -69,7 +69,7 @@ docker compose ps
 각 서버 폴더의 `.env`에 둔다. 한 서버가 다른 서버의 비밀값을 읽을 수 없게 하기 위해서다.
 
 **DB 인스턴스는 하나, 계정과 스키마는 서버마다 따로 쓴다.** 인증 서버는 `auth` 계정으로
-`auth` 스키마만 쓴다. 다른 서버의 테이블을 직접 읽는 코드는 DB 권한에서 거부된다.
+`auth` 스키마만, 게임 서버는 `game` 계정으로 `game` 스키마만 쓴다. 다른 서버의 테이블을 직접 읽는 코드는 DB 권한에서 거부된다.
 서버 간 데이터 교환은 API로만 한다.
 
 ## 자주 겪는 문제

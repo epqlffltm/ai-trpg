@@ -20,6 +20,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-trpg}
       # 인증 서버 전용 계정의 비밀번호. 초기화 스크립트가 읽는다
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?.env 에 AUTH_DB_PASSWORD 를 설정하세요}
+      # 게임 서버 전용 계정의 비밀번호. 초기화 스크립트가 읽는다
+      GAME_DB_PASSWORD: ${GAME_DB_PASSWORD:?.env 에 GAME_DB_PASSWORD 를 설정하세요}
     volumes:
       - pgdata:/var/lib/postgresql/data
       # 서버별 계정과 스키마를 만드는 초기화 스크립트.
