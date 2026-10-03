@@ -29,6 +29,22 @@ class AssetNotFoundError(Exception):
     """
 
 
+class AssetInUseError(Exception):
+    """다른 자산이 이 자산을 가리키고 있어서 지울 수 없다."""
+
+
+class AssetReferenceError(Exception):
+    """
+    가리키려는 자산이 없다. 남의 것이거나 지운 것인 경우도 이 예외다.
+
+    field 는 입력의 어느 칸이 틀렸는지다(rulebook_id 등).
+    """
+
+    def __init__(self, field: str) -> None:
+        super().__init__(field)
+        self.field = field
+
+
 def build_asset(owner_id: uuid.UUID, asset_type: AssetType, data: AssetCreate) -> Asset:
     """입력에서 자산의 공통 부분을 만든다. 아직 저장하지 않는다."""
     return Asset(
@@ -43,8 +59,11 @@ def build_asset(owner_id: uuid.UUID, asset_type: AssetType, data: AssetCreate) -
 def apply_changes(content: AssetContent, data: AssetUpdate) -> None:
     """보낸 칸만 자산에 반영한다. 공통 칸은 공통 부분에, 나머지는 내용에 적는다."""
     # exclude_unset: 요청에 실제로 들어 있던 칸만 꺼낸다. 보내지 않은 칸을 None 으로 덮어쓰지 않는다
-    changes = data.model_dump(exclude_unset=True, exclude_none=True)
+    changes = data.model_dump(exclude_unset=True)
     for field, value in changes.items():
+        # null 은 "보내지 않았다"로 본다. 비울 수 있다고 정해 둔 칸만 null 로 비운다
+        if value is None and field not in data.clearable:
+            continue
         target = content.asset if field in ASSET_FIELDS else content
         setattr(target, field, value)
 
@@ -67,6 +86,19 @@ async def get_owned[Content: AssetContent](
     if content is None:
         raise AssetNotFoundError
     return content
+
+
+async def hold_reference(
+    session: AsyncSession, model: type[AssetContent], owner_id: uuid.UUID, asset_id: uuid.UUID, field: str
+) -> None:
+    """
+    다른 자산이 가리키려는 자산이 자기 것으로 있는지 확인하고, 저장이 끝날 때까지 지워지지 않게 붙잡는다.
+
+    없으면 AssetReferenceError. 확인과 저장 사이에 그 자산이 지워지는 일을 막는다.
+    """
+    target = await repository.hold_owned(session, model, owner_id, asset_id)
+    if target is None:
+        raise AssetReferenceError(field)
 
 
 async def list_owned[Content: AssetContent](
@@ -94,10 +126,16 @@ async def delete_owned(
     session: AsyncSession, model: type[AssetContent], owner_id: uuid.UUID, asset_id: uuid.UUID
 ) -> None:
     """
-    자기 자산을 지운다. 없으면 AssetNotFoundError.
+    자기 자산을 지운다. 없으면 AssetNotFoundError, 다른 자산이 가리키고 있으면 AssetInUseError.
 
     행을 지우지 않고 지운 시각을 적는다. 그 뒤로는 어떤 조회에도 나오지 않는다.
     """
-    content = await get_owned(session, model, owner_id, asset_id)
+    # 먼저 잠그고, 그다음에 쓰이는지 본다. 순서가 반대면 보고 난 뒤에 누가 가리킬 수 있다
+    content = await repository.find_owned_for_delete(session, model, owner_id, asset_id)
+    if content is None:
+        raise AssetNotFoundError
+    if await repository.is_referenced(session, asset_id):
+        raise AssetInUseError
+
     content.asset.deleted_at = func.now()
     await session.commit()
