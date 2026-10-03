@@ -1,6 +1,7 @@
 # ai-trpg
 
 [![auth-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/auth-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/auth-server.yml)
+[![game-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/game-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/game-server.yml)
 
 AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 서술만 담당한다.
 
@@ -12,7 +13,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
 | 인증 서버 (Django) | [`auth-server/`](auth-server/README.md) | 회원가입(이메일 인증), 로그인(이메일 인증), 비밀번호 변경과 재설정, 메일 발송, 토큰 갱신, 로그아웃, JWKS, 시도 횟수 제한, 보안 이벤트 기록까지 완료 |
-| 게임 서버 (FastAPI) | `game-server/` | 예정 |
+| 게임 서버 (FastAPI) | [`game-server/`](game-server/README.md) | 뼈대(서버 실행, 설정, 테스트, CI)까지 완료 |
 | 프론트엔드 | `web/` | 예정 |
 
 ## 문서
@@ -22,6 +23,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 문서 | 내용 |
 | --- | --- |
 | [auth-server/README.md](auth-server/README.md) | 인증 서버의 실행, API, 설계 메모, 운영 메모, 자주 겪는 문제 |
+| [game-server/README.md](game-server/README.md) | 게임 서버의 실행, API, 설계 메모 |
 
 ## 요구 사항
 
@@ -57,6 +59,7 @@ docker compose ps
 ### 3. 서버
 
 - 인증 서버: [auth-server/README.md](auth-server/README.md#실행)
+- 게임 서버: [game-server/README.md](game-server/README.md#실행)
 
 ## 설계 메모
 
@@ -99,6 +102,7 @@ docker compose up -d
 ```
 .github/workflows/        서버별 CI
 auth-server/              Django 인증 서버 (독립된 uv 프로젝트)
+game-server/              FastAPI 게임 서버 (독립된 uv 프로젝트)
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
 docker-compose.yml        PostgreSQL, Redis
 .env.example              인프라 환경 변수 목록
