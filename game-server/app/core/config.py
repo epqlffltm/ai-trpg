@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     # 테이블을 두는 스키마. 테스트는 game_test 로 바꿔서 개발용 데이터와 섞이지 않게 한다
     db_schema: str = 'game'
 
+    # 인증 서버가 공개키를 내주는 주소(JWKS). 기본값이 없다.
+    # 여기서 받은 키로 서명된 토큰을 믿는다. 엉뚱한 주소를 기본으로 믿는 것보다 뜨지 않는 쪽이 낫다.
+    # 예: http://127.0.0.1:8000/api/v1/auth/jwks
+    auth_jwks_url: str
+
+    # 토큰을 발급한 서버의 이름(iss). 인증 서버의 JWT_ISSUER 와 같아야 한다
+    jwt_issuer: str = 'ai-trpg-auth'
+
+    # 이 서버의 이름. 토큰의 대상 목록(aud)에 이 이름이 있어야 받는다.
+    # 다른 서버용으로 발급된 토큰을 이 서버에 쓰는 것을 막는다
+    jwt_audience: str = 'ai-trpg-game'
+
 
 @lru_cache
 def get_settings() -> Settings:

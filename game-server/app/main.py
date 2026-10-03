@@ -9,9 +9,11 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 
-from app.api import health, readiness
+from app.api import health, me, readiness
+from app.auth.jwks import JwksCache
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
 
@@ -24,18 +26,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     서버가 뜰 때와 꺼질 때 할 일. yield 앞이 뜰 때, 뒤가 꺼질 때다.
 
-    꺼질 때 DB 연결을 전부 닫는다. 닫지 않으면 DB 쪽에 끊긴 연결이 한동안 남는다.
+    꺼질 때 DB 연결과 인증 서버로 가는 연결을 전부 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     """
     yield
     await app.state.engine.dispose()
+    await app.state.http_client.aclose()
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient | None = None) -> FastAPI:
     """
     FastAPI 앱을 만들어 돌려준다.
 
     모듈을 불러올 때 바로 만들지 않고 함수로 둔다.
     테스트가 설정을 바꿔 가며 앱을 여러 개 만들 수 있다.
+
+    http_client 는 다른 서버에 요청을 보낼 때 쓰는 클라이언트다.
+    테스트가 가짜 인증 서버로 가는 클라이언트를 넣을 수 있게 밖에서 받는다.
     """
     settings = settings or get_settings()
 
@@ -48,15 +54,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    # 요청을 처리하는 코드가 설정을 꺼내 쓸 수 있게 앱에 붙여 둔다
+    app.state.settings = settings
+
     # 엔진과 세션 틀을 앱에 붙여 둔다. 전역 변수로 두지 않는다.
     # 앱마다 자기 엔진을 가지므로, 테스트가 다른 설정의 앱을 만들어도 서로 섞이지 않는다.
     # 엔진을 만드는 것만으로는 DB 에 연결하지 않는다
     app.state.engine = create_engine(settings)
     app.state.session_factory = create_session_factory(app.state.engine)
 
+    # 인증 서버의 공개키를 기억하는 곳. 앱에 하나만 두고 모든 요청이 함께 쓴다.
+    # 만드는 것만으로는 인증 서버에 요청을 보내지 않는다. 처음 토큰을 검증할 때 가져온다
+    app.state.http_client = http_client or httpx.AsyncClient()
+    app.state.jwks = JwksCache(app.state.http_client, settings.auth_jwks_url)
+
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
     app.include_router(readiness.router)
+
+    app.include_router(me.router, prefix=API_PREFIX)
 
     return app
 

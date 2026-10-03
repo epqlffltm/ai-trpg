@@ -18,8 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.main import create_app
+from tests.signing import FakeAuthServer, SigningKey, make_signing_key
 
 TEST_SCHEMA = 'game_test'
+
+# 존재하지 않는 주소. 테스트는 실제 인증 서버에 요청을 보내지 않는다
+TEST_JWKS_URL = 'http://auth.test/api/v1/auth/jwks'
 
 
 def make_test_settings(**overrides) -> Settings:
@@ -29,7 +33,7 @@ def make_test_settings(**overrides) -> Settings:
     DB 주소는 개발 환경의 것(.env 또는 환경 변수)을 그대로 읽는다. 비밀번호를 테스트 코드에 적지 않는다.
     동작을 바꾸는 값은 여기서 고정한다. 개발자의 .env 에 무엇이 적혀 있든 테스트 결과가 같아야 한다.
     """
-    values = {'debug': False, 'db_schema': TEST_SCHEMA}
+    values = {'debug': False, 'db_schema': TEST_SCHEMA, 'auth_jwks_url': TEST_JWKS_URL}
     values.update(overrides)
     return Settings(**values)
 
@@ -52,12 +56,29 @@ def settings() -> Settings:
     return settings
 
 
+@pytest.fixture(scope='session')
+def signing_key() -> SigningKey:
+    """인증 서버의 서명 키. 만드는 데 시간이 걸려서 테스트 전체에서 한 번만 만든다."""
+    return make_signing_key('test-key')
+
+
 @pytest.fixture
-async def app(settings: Settings) -> AsyncIterator[FastAPI]:
-    """테스트용 설정으로 만든 앱. 테스트가 끝나면 DB 연결을 닫는다."""
-    app = create_app(settings)
+def auth_server(signing_key: SigningKey) -> FakeAuthServer:
+    """가짜 인증 서버. 테스트마다 새로 만든다. 죽이거나 키를 바꿔도 다른 테스트에 번지지 않는다."""
+    return FakeAuthServer(keys=[signing_key])
+
+
+@pytest.fixture
+async def app(settings: Settings, auth_server: FakeAuthServer) -> AsyncIterator[FastAPI]:
+    """
+    테스트용 설정으로 만든 앱. 인증 서버 자리에 가짜를 꽂는다.
+
+    테스트가 끝나면 연결을 닫는다. 테스트에서는 lifespan 이 돌지 않으므로 직접 닫는다.
+    """
+    app = create_app(settings, http_client=auth_server.make_client())
     yield app
     await app.state.engine.dispose()
+    await app.state.http_client.aclose()
 
 
 @pytest.fixture
