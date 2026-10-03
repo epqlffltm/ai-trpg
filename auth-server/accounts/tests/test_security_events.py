@@ -42,13 +42,19 @@ class LoginFailureEventTests(AttemptPolicyTestCase):
         super().setUp()
         self.user = create_user()
 
-    def test_nothing_is_recorded_below_the_limit(self):
-        self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts - 1)
+    def get_blocked(self, **kwargs) -> None:
+        """한도까지 틀린 뒤 한 번 더 시도해서 막힌다."""
+        self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts, **kwargs)
+        self.assert_too_many_attempts(self.login(password=WRONG_PASSWORD, **kwargs))
+
+    def test_nothing_is_recorded_up_to_the_limit(self):
+        # 한도까지는 허용된 시도다. 아직 막힌 것이 아니다
+        self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts)
 
         self.assertEqual(SecurityEvent.objects.count(), 0)
 
     def test_records_the_moment_the_block_starts(self):
-        self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts)
+        self.get_blocked()
 
         event = SecurityEvent.objects.get()
         self.assertEqual(event.kind, SecurityEventKind.LOGIN_FAILURES_LIMITED)
@@ -56,7 +62,7 @@ class LoginFailureEventTests(AttemptPolicyTestCase):
         self.assertEqual(event.user, self.user)
 
     def test_requests_after_the_block_do_not_add_events(self):
-        self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts)
+        self.get_blocked()
 
         for _ in range(5):
             self.assert_too_many_attempts(self.login(password=WRONG_PASSWORD))
@@ -64,15 +70,15 @@ class LoginFailureEventTests(AttemptPolicyTestCase):
         self.assertEqual(SecurityEvent.objects.count(), 1)
 
     def test_unknown_username_is_recorded_without_an_account(self):
-        self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts, username='nobody_here')
+        self.get_blocked(username='nobody_here')
 
         event = SecurityEvent.objects.get()
         self.assertIsNone(event.user)
         self.assertEqual(event.ip, IP)
 
     def test_each_ip_gets_its_own_event(self):
-        self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts)
-        self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts, ip=OTHER_IP)
+        self.get_blocked()
+        self.get_blocked(ip=OTHER_IP)
 
         self.assertEqual(
             sorted(SecurityEvent.objects.values_list('ip', flat=True)),
@@ -80,7 +86,7 @@ class LoginFailureEventTests(AttemptPolicyTestCase):
         )
 
     def test_event_survives_when_the_account_is_deleted(self):
-        self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts)
+        self.get_blocked()
 
         self.user.delete()
 

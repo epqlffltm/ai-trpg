@@ -19,13 +19,11 @@ from rest_framework.views import APIView
 
 from accounts.attempt_policies import (
     block_ip_if_reserved_username,
-    check_login_attempt,
+    clear_login_attempts,
+    clear_password_change_attempts,
+    count_login_attempt,
+    count_password_change_attempt,
     is_login_blocked_ip,
-    check_password_change_attempt,
-    record_login_failure,
-    record_login_success,
-    record_password_change_failure,
-    record_password_change_success,
 )
 from accounts.client_ip import get_attempt_subject
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
@@ -253,29 +251,32 @@ class LoginView(APIView):
             spend_password_check_time(password=serializer.validated_data['password'])
             return build_invalid_credentials_response()
 
-        # 예약어 아이디면 이 IP 를 막는다. 이 요청은 그대로 진행한다.
+        # 예약어 아이디면 센다. 한도를 채우면 다음 요청부터 이 IP 가 막힌다. 이 요청은 그대로 진행한다.
         # 예약어인 계정은 없으므로 아래에서 평소처럼 거절된다
         block_ip_if_reserved_username(**attempt)
 
-        # 이 IP 가 이 계정에서 너무 많이 틀렸으면 여기서 TooManyAttemptsError 가 난다.
+        # 비밀번호를 확인하기 전에 먼저 센다. 한도를 넘었으면 여기서 TooManyAttemptsError 가 난다.
         # 잡지 않는다. 예외 처리기(exception_handlers.py)가 429 로 바꾼다
-        check_login_attempt(**attempt)
+        count_login_attempt(**attempt)
 
         try:
             challenge = start_login(**serializer.validated_data)
         except InvalidCredentialsError:
-            record_login_failure(**attempt)
+            # 센 횟수를 그대로 둔다. 그것이 틀린 횟수가 된다
             return build_invalid_credentials_response()
         except EmailNotVerifiedError:
             # 비밀번호가 맞은 뒤에만 도달한다. code 는 프론트가 인증 화면으로 보낼 때 쓴다
+            clear_login_attempts(**attempt)
             return Response(
                 {'detail': '이메일 인증이 필요합니다.', 'code': 'email_not_verified'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         except LoginCodeUnavailableError as exc:
+            # 이것도 비밀번호가 맞은 뒤다
+            clear_login_attempts(**attempt)
             return build_code_unavailable_response(exc.retry_after)
 
-        record_login_success(**attempt)
+        clear_login_attempts(**attempt)
 
         if challenge.code_sent:
             detail = '인증 메일을 보냈습니다. 메일에 적힌 코드를 입력해 주세요.'
@@ -341,21 +342,23 @@ class PasswordChangeView(APIView):
         serializer = PasswordChangeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # 현재 비밀번호를 너무 많이 틀렸으면 여기서 TooManyAttemptsError 가 난다. 예외 처리기가 429 로 바꾼다
-        check_password_change_attempt(user=request.user)
+        # 현재 비밀번호를 확인하기 전에 먼저 센다. 한도를 넘었으면 예외 처리기가 429 로 바꾼다
+        count_password_change_attempt(user=request.user, ip=get_attempt_subject(request))
 
         try:
             change_password(user=request.user, **serializer.validated_data)
         except WrongCurrentPasswordError:
-            record_password_change_failure(user=request.user, ip=get_attempt_subject(request))
+            # 센 횟수를 그대로 둔다. 그것이 틀린 횟수가 된다
             return Response(
                 {'current_password': ['현재 비밀번호가 올바르지 않습니다.']},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except UnacceptablePasswordError as exc:
+            # 현재 비밀번호는 맞았다. 새 비밀번호가 규칙에 어긋났을 뿐이다
+            clear_password_change_attempts(user=request.user)
             return Response({'new_password': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
 
-        record_password_change_success(user=request.user)
+        clear_password_change_attempts(user=request.user)
 
         # 비밀번호가 바뀌면서 이 기기의 토큰도 무효가 됐다.
         # 새 토큰을 발급해, 다른 기기만 로그아웃되고 이 기기는 로그인이 이어지게 한다
