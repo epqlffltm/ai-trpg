@@ -176,6 +176,7 @@ class EmailCode(models.Model):
 class SecurityEventKind(models.TextChoices):
     LOGIN_IP_LIMITED = 'login_ip_limited', '로그인: IP 시도 제한'
     LOGIN_FAILURES_LIMITED = 'login_failures_limited', '로그인: 비밀번호 틀림 제한'
+    RESERVED_USERNAME_LOGIN = 'reserved_username_login', '로그인: 예약어 아이디로 시도해 IP 차단'
     SIGNUP_IP_LIMITED = 'signup_ip_limited', '가입: IP 시도 제한'
     SIGNUP_RESEND_IP_LIMITED = 'signup_resend_ip_limited', '가입 코드 재전송: IP 시도 제한'
     PASSWORD_RESET_IP_LIMITED = 'password_reset_ip_limited', '비밀번호 재설정: IP 시도 제한'

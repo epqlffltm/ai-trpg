@@ -17,11 +17,13 @@ from datetime import timedelta
 
 from accounts.attempt_limits import (
     AttemptLimit,
+    TooManyAttemptsError,
     clear_attempts,
     count_failure,
     ensure_not_blocked,
 )
 from accounts.models import SecurityEventKind, User
+from accounts.reserved import is_reserved_name
 from accounts.security_events import find_user_by_username, record_security_event
 
 # 한 IP 의 로그인 시도. 성공도 센다. 여러 계정을 돌아가며 찔러 보는 것을 늦춘다.
@@ -33,6 +35,12 @@ LOGIN_PER_IP = AttemptLimit(name='login-ip', max_attempts=30, window=timedelta(m
 LOGIN_FAILURES_PER_ACCOUNT_AND_IP = AttemptLimit(
     name='login-fail-account-ip', max_attempts=5, window=timedelta(minutes=15),
 )
+
+# 예약어 아이디(admin, root 등)로 로그인을 시도한 IP 를 막아 두는 시간.
+# 예약어는 누구도 아이디로 쓸 수 없다(운영자 계정도 마찬가지다). 그 아이디로 로그인해 보는 것은
+# 실수로 일어나지 않는다. 관리자 계정을 찾는 탐색이다. 한 번이면 막는다.
+# "한 번 세면 막힌다" 로 표현해, 시도 횟수를 세는 장치를 그대로 쓴다
+LOGIN_IP_BLOCK = AttemptLimit(name='login-ip-block', max_attempts=1, window=timedelta(hours=1))
 
 # 한 IP 의 가입 요청. 가입은 메일을 보낸다. 남의 주소로 메일을 쏟아붓는 것을 막는다
 SIGNUP_PER_IP = AttemptLimit(name='signup-ip', max_attempts=10, window=timedelta(hours=1))
@@ -47,6 +55,34 @@ PASSWORD_RESET_PER_IP = AttemptLimit(name='password-reset-ip', max_attempts=5, w
 PASSWORD_CHANGE_FAILURES_PER_USER = AttemptLimit(
     name='password-change-fail-user', max_attempts=5, window=timedelta(minutes=15),
 )
+
+
+def is_login_blocked_ip(*, ip: str) -> bool:
+    """
+    이 IP 의 로그인이 막혀 있는지 본다.
+
+    예외가 아니라 참/거짓으로 답한다. 막힌 IP 에는 429 가 아니라
+    평소의 "아이디 또는 비밀번호가 올바르지 않습니다" 로 응답하기 때문이다.
+    막혔다는 것을 알려 주면 IP 를 바꿔 다시 시도한다.
+    """
+    try:
+        ensure_not_blocked(LOGIN_IP_BLOCK, ip)
+    except TooManyAttemptsError:
+        return True
+    return False
+
+
+def block_ip_if_reserved_username(*, ip: str, username: str) -> None:
+    """
+    예약어 아이디로 로그인을 시도했으면 그 IP 의 로그인을 막고 보안 이벤트를 남긴다.
+
+    이미 막혀 있는 IP 는 이 함수까지 오지 않는다. 그래서 이벤트는 막을 때마다 한 번 남는다.
+    """
+    if not is_reserved_name(username):
+        return
+    now_blocked = count_failure(LOGIN_IP_BLOCK, ip)
+    if now_blocked:
+        record_security_event(kind=SecurityEventKind.RESERVED_USERNAME_LOGIN, ip=ip)
 
 
 def check_login_attempt(*, ip: str, username: str) -> None:
