@@ -13,8 +13,10 @@ import httpx
 from fastapi import FastAPI
 
 from app.api import health, me, readiness
-from app.assets import router as assets_router
-from app.assets.service import WorldNotFoundError
+from app.assets.routing import handle_asset_not_found
+from app.assets.rulebooks import router as rulebooks
+from app.assets.service import AssetNotFoundError
+from app.assets.worlds import router as worlds
 from app.auth.jwks import JwksCache
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
@@ -75,10 +77,11 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.include_router(readiness.router)
 
     app.include_router(me.router, prefix=API_PREFIX)
-    app.include_router(assets_router.router, prefix=API_PREFIX)
+    app.include_router(worlds.router, prefix=API_PREFIX)
+    app.include_router(rulebooks.router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다
-    app.add_exception_handler(WorldNotFoundError, assets_router.handle_world_not_found)
+    app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)
 
     return app
 
