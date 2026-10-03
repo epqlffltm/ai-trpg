@@ -98,5 +98,11 @@ jobs:
       - name: 마이그레이션 누락 검사
         run: uv run alembic check
 
+      # 테스트는 game_test 스키마에서 돈다. 그 스키마에도 테이블을 만든다
+      - name: 테스트용 스키마에 마이그레이션 적용
+        env:
+          DB_SCHEMA: game_test
+        run: uv run alembic upgrade head
+
       - name: 테스트
         run: uv run pytest
