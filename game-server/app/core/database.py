@@ -10,11 +10,22 @@ DB 연결. 엔진과 세션을 만들고, 요청마다 세션 하나를 내준�
 from collections.abc import AsyncGenerator
 
 from fastapi import Request
-from sqlalchemy import text
+from sqlalchemy import MetaData, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import Settings
+
+# 제약과 색인의 이름을 짓는 규칙.
+# 정해 두지 않으면 DB 가 제멋대로 이름을 붙이거나(색인, 외래 키) 이름 없이 만든다(CHECK).
+# 이름을 모르면 나중에 마이그레이션에서 그 제약을 고치거나 지울 수 없다
+NAMING_CONVENTION = {
+    'ix': 'ix_%(column_0_label)s',
+    'uq': 'uq_%(table_name)s_%(column_0_name)s',
+    'ck': 'ck_%(table_name)s_%(constraint_name)s',
+    'fk': 'fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s',
+    'pk': 'pk_%(table_name)s',
+}
 
 
 class Base(DeclarativeBase):
@@ -24,6 +35,8 @@ class Base(DeclarativeBase):
     이 클래스를 물려받은 모델은 Base.metadata 에 등록된다.
     Alembic 이 그 목록과 실제 DB 를 비교해 마이그레이션을 만든다.
     """
+
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
 # DB 에 연결을 맺을 때 기다리는 최대 시간(초).

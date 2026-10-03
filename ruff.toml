@@ -1,0 +1,8 @@
+# ruff.toml
+# 저장소 루트에서 ruff 를 돌렸을 때 auth-server 를 건드리지 않게 한다.
+#
+# auth-server 에는 아직 ruff 설정이 없다. 설정 없이 돌리면 모든 파일의 모양이 ruff 의 기본 규칙으로 바뀐다.
+# game-server 는 자기 폴더의 pyproject.toml 을 따르므로 이 파일의 영향을 받지 않는다.
+#
+# 임시 파일이다. auth-server 에 ruff 설정을 넣을 때(#27) 지운다.
+extend-exclude = ["auth-server"]

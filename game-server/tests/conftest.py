@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -93,3 +94,17 @@ async def session(app: FastAPI) -> AsyncIterator[AsyncSession]:
     """테스트가 DB 를 직접 들여다볼 때 쓰는 세션."""
     async with app.state.session_factory() as db_session:
         yield db_session
+
+
+@pytest.fixture
+async def clean_tables(app: FastAPI) -> None:
+    """
+    테이블을 비우고 테스트를 시작한다. DB 에 쓰는 테스트가 쓴다.
+
+    테스트를 트랜잭션으로 감싸 되돌리는 방법을 쓰지 않는다.
+    그러면 앱의 커밋이 진짜로 일어나지 않아, 저장의 경계가 맞는지 볼 수 없다.
+    끝난 뒤가 아니라 시작할 때 비운다. 앞의 테스트가 도중에 죽어 찌꺼기를 남겨도 영향을 받지 않는다.
+    """
+    async with app.state.engine.begin() as connection:
+        # worlds 는 assets 를 가리키므로 CASCADE 로 함께 비워진다
+        await connection.execute(text('TRUNCATE TABLE assets CASCADE'))
