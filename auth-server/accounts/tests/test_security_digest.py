@@ -13,6 +13,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from accounts.mail import DIGEST_MAX_LISTED_EVENTS
+from accounts.mail_crypto import decrypt_mail_body
 from accounts.models import OutgoingMail, OutgoingMailStatus, SecurityEvent, SecurityEventKind, User
 from accounts.outbox import deliver_due_mail, enqueue_mail
 from accounts.security_digest import (
@@ -200,9 +201,9 @@ class DiscardedMailEventTests(TestCase):
         report_new_security_events()
 
         # 누구의 메일이었는지는 요약에 적지 않는다. 관리자 화면에서 확인한다
-        digest = OutgoingMail.objects.get(to_email=OPERATOR)
-        self.assertIn(SecurityEventKind.MAIL_DISCARDED.label, digest.body)
-        self.assertNotIn('someone@example.com', digest.body)
+        digest_body = decrypt_mail_body(OutgoingMail.objects.get(to_email=OPERATOR).body)
+        self.assertIn(SecurityEventKind.MAIL_DISCARDED.label, digest_body)
+        self.assertNotIn('someone@example.com', digest_body)
 
 
 class CleanupTests(TestCase):

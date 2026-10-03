@@ -257,7 +257,7 @@ class OutgoingMail(models.Model):
 
     to_email = models.EmailField('받는 사람')
     subject = models.CharField('제목', max_length=200)
-    # 버린 메일은 본문을 비운다
+    # 암호화된 본문이다(mail_crypto.py). 버린 메일은 본문을 비운다
     body = models.TextField('본문', blank=True)
 
     status = models.CharField(
