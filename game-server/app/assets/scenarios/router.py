@@ -28,6 +28,7 @@ from app.assets.scenarios.schemas import (
     VersionDetail,
     VersionSummary,
 )
+from app.assets.scenarios.snapshot import read_snapshot
 from app.auth.dependencies import CurrentUser
 
 router = APIRouter(prefix='/scenarios', tags=['scenarios'])
@@ -45,7 +46,7 @@ def to_detail(scenario: Scenario) -> ScenarioDetail:
         rulebook_id=scenario.rulebook_id,
         world_id=scenario.world_id,
         lorebook_ids=scenario.lorebook_ids,
-        opening=scenario.opening,
+        openings=scenario.openings,
     )
 
 
@@ -56,7 +57,7 @@ def to_version_summary(version: ScenarioVersion) -> VersionSummary:
 
 def to_version_detail(version: ScenarioVersion) -> VersionDetail:
     """판을 만든 사람에게 보여 주는 응답으로 바꾼다. 굳힌 내용을 계약의 모양으로 다시 읽어 싣는다."""
-    return VersionDetail(**to_version_summary(version).model_dump(), snapshot=version.snapshot)
+    return VersionDetail(**to_version_summary(version).model_dump(), snapshot=read_snapshot(version.snapshot))
 
 
 async def handle_scenario_not_ready(request: Request, error: ScenarioNotReadyError) -> JSONResponse:

@@ -159,7 +159,7 @@ async def test_updating_a_scenario_waits_for_another_update(session: AsyncSessio
 
 async def test_publishing_waits_for_another_publish(session: AsyncSession, other_session: AsyncSession):
     rulebook_id = (await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰'))).asset_id
-    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook_id, opening='도입부')
+    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook_id, openings=['도입부'])
     scenario_id = (await scenarios.create_scenario(session, ME, data)).asset_id
 
     # A: 시나리오를 잠그고 1번 판을 올렸지만 아직 커밋하지 않았다

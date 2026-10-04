@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import (
     SCENARIO_MAX_LOREBOOKS,
+    SCENARIO_MAX_OPENINGS,
     SCENARIO_OPENING_MAX_LENGTH,
     Asset,
     AssetType,
@@ -108,7 +109,7 @@ async def test_creates_a_draft_with_only_a_title(client: AsyncClient, my_headers
     assert body['rulebook_id'] is None
     assert body['world_id'] is None
     assert body['lorebook_ids'] == []
-    assert body['opening'] == ''
+    assert body['openings'] == []
     # 성인용으로 올리는 것은 제작자가 직접 골라야 한다
     assert body['rating'] == 'all'
 
@@ -118,12 +119,12 @@ async def test_creates_a_scenario_that_points_to_my_assets(client: AsyncClient, 
     world = await create(client, WORLDS_URL, my_headers)
 
     body = await create(
-        client, SCENARIOS_URL, my_headers, rulebook_id=rulebook['id'], world_id=world['id'], opening=OPENING
+        client, SCENARIOS_URL, my_headers, rulebook_id=rulebook['id'], world_id=world['id'], openings=[OPENING]
     )
 
     assert body['rulebook_id'] == rulebook['id']
     assert body['world_id'] == world['id']
-    assert body['opening'] == OPENING
+    assert body['openings'] == [OPENING]
 
 
 async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, my_headers: dict[str, str]):
@@ -140,7 +141,7 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'rulebook_id',
         'world_id',
         'lorebook_ids',
-        'opening',
+        'openings',
     }
 
 
@@ -159,7 +160,16 @@ async def test_a_scenario_is_saved_as_the_scenario_type(
     [
         {},
         {'title': '   '},
-        {'title': '시나리오', 'opening': '가' * (SCENARIO_OPENING_MAX_LENGTH + 1)},
+        {'title': '시나리오', 'openings': ['가' * (SCENARIO_OPENING_MAX_LENGTH + 1)]},
+        # 스타팅은 목록으로 보낸다
+        {'title': '시나리오', 'openings': '도입부'},
+        {'title': '시나리오', 'openings': None},
+        # 빈 스타팅은 고를 수 없으니 받지 않는다. 공백뿐인 것도 빈 것이다
+        {'title': '시나리오', 'openings': ['']},
+        {'title': '시나리오', 'openings': ['도입부', '   \n  ']},
+        {'title': '시나리오', 'openings': ['도입부'] * (SCENARIO_MAX_OPENINGS + 1)},
+        # 옛 이름의 칸은 받지 않는다
+        {'title': '시나리오', 'opening': '도입부'},
         {'title': '시나리오', 'rulebook_id': 'not-a-uuid'},
         {'title': '시나리오', 'rating': 'teen'},
         {'title': '시나리오', 'lorebook_ids': ['not-a-uuid']},
@@ -190,7 +200,7 @@ async def test_the_rating_is_chosen_on_the_scenario(client: AsyncClient, my_head
     url = f'{SCENARIOS_URL}/{scenario["id"]}'
 
     lowered = await client.patch(url, json={'rating': 'all'}, headers=my_headers)
-    untouched = await client.patch(url, json={'opening': OPENING}, headers=my_headers)
+    untouched = await client.patch(url, json={'openings': [OPENING]}, headers=my_headers)
 
     assert scenario['rating'] == 'adult'
     assert lowered.json()['rating'] == 'all'
@@ -290,7 +300,7 @@ async def test_nothing_is_saved_when_a_reference_is_rejected(client: AsyncClient
 
 
 async def test_attaches_a_rulebook_later(client: AsyncClient, my_headers: dict[str, str]):
-    scenario = await create(client, SCENARIOS_URL, my_headers, opening=OPENING)
+    scenario = await create(client, SCENARIOS_URL, my_headers, openings=[OPENING])
     rulebook = await create(client, RULEBOOKS_URL, my_headers)
 
     response = await client.patch(
@@ -301,7 +311,7 @@ async def test_attaches_a_rulebook_later(client: AsyncClient, my_headers: dict[s
     body = response.json()
     assert body['rulebook_id'] == rulebook['id']
     # 보내지 않은 칸은 그대로다
-    assert body['opening'] == OPENING
+    assert body['openings'] == [OPENING]
     assert body['updated_at'] > scenario['updated_at']
 
 
@@ -322,25 +332,72 @@ async def test_a_reference_that_is_not_sent_stays(client: AsyncClient, my_header
     rulebook = await create(client, RULEBOOKS_URL, my_headers)
     scenario = await create(client, SCENARIOS_URL, my_headers, rulebook_id=rulebook['id'])
 
-    response = await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'opening': OPENING}, headers=my_headers)
+    response = await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'openings': [OPENING]}, headers=my_headers)
 
     body = response.json()
-    assert body['opening'] == OPENING
+    assert body['openings'] == [OPENING]
     assert body['rulebook_id'] == rulebook['id']
 
 
+async def test_keeps_the_openings_in_the_order_they_were_sent(client: AsyncClient, my_headers: dict[str, str]):
+    openings = [f'{number}번째 스타팅' for number in range(1, SCENARIO_MAX_OPENINGS + 1)]
+
+    scenario = await create(client, SCENARIOS_URL, my_headers, openings=openings)
+
+    # 상한까지 받는다. 순서가 고르는 화면의 순서라 바꾸지 않는다
+    read = await client.get(f'{SCENARIOS_URL}/{scenario["id"]}', headers=my_headers)
+    assert read.json()['openings'] == openings
+
+
+async def test_an_opening_keeps_its_whitespace(client: AsyncClient, my_headers: dict[str, str]):
+    opening = '\n  비가 온다.\n\n문이 열린다.  '
+
+    scenario = await create(client, SCENARIOS_URL, my_headers, openings=[opening])
+
+    # 앞뒤 공백과 줄바꿈도 제작자의 글이다
+    assert scenario['openings'] == [opening]
+
+
+async def test_replaces_the_openings_as_a_whole(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(client, SCENARIOS_URL, my_headers, openings=['첫째', '둘째', '셋째'])
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    # 보낸 목록이 그대로 새 목록이 된다. 순서를 바꾸는 것도, 하나를 빼는 것도 이렇게 한다
+    replaced = await client.patch(url, json={'openings': ['셋째', '첫째']}, headers=my_headers)
+    not_sent = await client.patch(url, json={'title': '바꾼 제목'}, headers=my_headers)
+    cleared = await client.patch(url, json={'openings': []}, headers=my_headers)
+
+    assert replaced.json()['openings'] == ['셋째', '첫째']
+    assert not_sent.json()['openings'] == ['셋째', '첫째']
+    assert cleared.json()['openings'] == []
+
+
+@pytest.mark.parametrize(
+    'openings',
+    [['도입부', ''], ['도입부'] * (SCENARIO_MAX_OPENINGS + 1), ['가' * (SCENARIO_OPENING_MAX_LENGTH + 1)], '도입부'],
+)
+async def test_rejects_bad_openings_when_updating(client: AsyncClient, my_headers: dict[str, str], openings):
+    scenario = await create(client, SCENARIOS_URL, my_headers, openings=[OPENING])
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    response = await client.patch(url, json={'openings': openings}, headers=my_headers)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert (await client.get(url, headers=my_headers)).json()['openings'] == [OPENING]
+
+
 async def test_null_does_not_clear_other_fields(client: AsyncClient, my_headers: dict[str, str]):
-    scenario = await create(client, SCENARIOS_URL, my_headers, opening=OPENING)
+    scenario = await create(client, SCENARIOS_URL, my_headers, openings=[OPENING])
 
     # null 로 비울 수 있는 칸은 룰북과 세계관뿐이다. 나머지 칸의 null 은 "보내지 않았다"와 같다
     response = await client.patch(
-        f'{SCENARIOS_URL}/{scenario["id"]}', json={'title': None, 'opening': None}, headers=my_headers
+        f'{SCENARIOS_URL}/{scenario["id"]}', json={'title': None, 'openings': None}, headers=my_headers
     )
 
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
     assert body['title'] == TITLE
-    assert body['opening'] == OPENING
+    assert body['openings'] == [OPENING]
 
 
 async def test_a_rejected_update_changes_nothing(client: AsyncClient, my_headers: dict[str, str]):
@@ -465,7 +522,7 @@ async def test_lorebooks_that_are_not_sent_stay(client: AsyncClient, my_headers:
     scenario = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=lorebook_ids)
     url = f'{SCENARIOS_URL}/{scenario["id"]}'
 
-    not_sent = await client.patch(url, json={'opening': OPENING}, headers=my_headers)
+    not_sent = await client.patch(url, json={'openings': [OPENING]}, headers=my_headers)
     sent_null = await client.patch(url, json={'lorebook_ids': None}, headers=my_headers)
 
     # 전부 떼는 것은 빈 목록이다. null 은 "보내지 않았다"와 같다
@@ -568,7 +625,7 @@ async def test_the_refusal_does_not_name_deleted_scenarios(client: AsyncClient, 
 async def test_someone_elses_scenario_looks_like_it_does_not_exist(
     client: AsyncClient, my_headers: dict[str, str], their_headers: dict[str, str]
 ):
-    theirs = await create(client, SCENARIOS_URL, their_headers, opening=OPENING)
+    theirs = await create(client, SCENARIOS_URL, their_headers, openings=[OPENING])
     url = f'{SCENARIOS_URL}/{theirs["id"]}'
 
     read = await client.get(url, headers=my_headers)
@@ -581,22 +638,32 @@ async def test_someone_elses_scenario_looks_like_it_does_not_exist(
     assert (await client.get(url, headers=their_headers)).json()['title'] == TITLE
 
 
-async def test_the_list_does_not_carry_the_opening(client: AsyncClient, my_headers: dict[str, str]):
-    await create(client, SCENARIOS_URL, my_headers, opening=OPENING)
+async def test_the_list_does_not_carry_the_openings(client: AsyncClient, my_headers: dict[str, str]):
+    await create(client, SCENARIOS_URL, my_headers, openings=[OPENING])
 
     response = await client.get(SCENARIOS_URL, headers=my_headers)
 
     body = response.json()
     assert body['total'] == 1
-    assert 'opening' not in body['items'][0]
+    assert 'openings' not in body['items'][0]
 
 
 # --- DB 의 마지막 방어선 ---
 
 
-async def test_the_database_rejects_an_opening_that_is_too_long(session: AsyncSession):
+async def test_the_database_rejects_too_many_openings(session: AsyncSession):
     asset = Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오')
-    session.add(Scenario(asset=asset, opening='가' * (SCENARIO_OPENING_MAX_LENGTH + 1)))
+    session.add(Scenario(asset=asset, openings=['도입부'] * (SCENARIO_MAX_OPENINGS + 1)))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+
+
+async def test_the_database_rejects_openings_that_are_too_long_in_total(session: AsyncSession):
+    asset = Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오')
+    # 하나의 길이는 DB 가 보지 못한다. 전부 이은 길이가 상한(개수 × 하나의 길이)을 넘는 것만 막는다
+    too_long = '가' * (SCENARIO_MAX_OPENINGS * SCENARIO_OPENING_MAX_LENGTH + 1)
+    session.add(Scenario(asset=asset, openings=[too_long]))
 
     with pytest.raises(IntegrityError):
         await session.commit()

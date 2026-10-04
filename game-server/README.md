@@ -123,7 +123,7 @@ uv run alembic check                               # 모델을 바꾸고 마이�
 | POST | `/api/v1/game/scenarios` | 시나리오 만들기. 201. 제목만 있어도 된다(임시 저장) | access 토큰 |
 | GET | `/api/v1/game/scenarios` | 내 시나리오 목록. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/scenarios/{id}` | 내 시나리오 하나 | access 토큰 |
-| PATCH | `/api/v1/game/scenarios/{id}` | 내 시나리오 고치기. `rulebook_id`, `world_id` 는 `null` 을 보내면 떼어 낸다. `lorebook_ids` 는 보낸 목록으로 통째로 바꾼다 | access 토큰 |
+| PATCH | `/api/v1/game/scenarios/{id}` | 내 시나리오 고치기. `rulebook_id`, `world_id` 는 `null` 을 보내면 떼어 낸다. `lorebook_ids` 와 `openings` 는 보낸 목록으로 통째로 바꾼다 | access 토큰 |
 | DELETE | `/api/v1/game/scenarios/{id}` | 내 시나리오 지우기. 204 | access 토큰 |
 | POST | `/api/v1/game/scenarios/{id}/versions` | 게시. 지금의 내용을 새 판으로 굳힌다. 201. 조건을 못 갖췄으면 409 | access 토큰 |
 | GET | `/api/v1/game/scenarios/{id}/versions` | 내 시나리오의 판 목록. 최근 것부터. 굳힌 내용은 싣지 않는다 | access 토큰 |
@@ -191,7 +191,7 @@ access 토큰이 만료되면(15분) 갱신은 인증 서버가 해야 하므로
 | `assets` | 모든 자산의 공통 부분. 소유자, 종류, 제목, 메모, 공개 범위, 등급(시나리오만 쓴다), 만든 시각과 고친 시각, 지운 시각 |
 | `worlds` | 세계관의 내용. `setting`, `gm_notes` |
 | `rulebooks` | 룰북의 내용. `gm_guide` |
-| `scenarios` | 시나리오의 내용. `rulebook_id`, `world_id`, `opening` |
+| `scenarios` | 시나리오의 내용. `rulebook_id`, `world_id`, `openings` |
 | `lorebooks` | 로어북. 자신의 칸은 없다 |
 | `lore_entries` | 로어북의 항목. `name`, `keywords`, `content`. 자산이 아니다 |
 | `scenario_lorebooks` | 시나리오와 로어북의 연결. 행 하나가 "이 시나리오에 이 로어북이 붙어 있다"는 뜻이다 |
@@ -242,7 +242,7 @@ app/assets/
 | `rulebook_id` | 가리키는 룰북. 초안일 때는 비워 둘 수 있다(임시 저장). 게시할 때 필수로 검사한다 |
 | `world_id` | 가리키는 세계관. 없어도 되고, 붙여도 하나다 |
 | `lorebook_ids` | 붙인 로어북들. 10개까지. 순서에 뜻이 없고, 응답에는 ID 순서로 싣는다 |
-| `opening` (도입부, 2,000자) | 테이블이 시작될 때 AI 가 처음 읽어 주는 장면. 사람과 AI 가 함께 본다 |
+| `openings` (스타팅, 5개, 각 2,000자) | 스타팅 하나하나가 도입부다. 테이블이 시작될 때 AI 가 처음 읽어 주는 장면이고, 사람과 AI 가 함께 본다. 테이블을 만드는 사람이 하나를 고른다. 목록의 순서가 고르는 화면의 순서다. 빈 글(공백뿐인 것 포함)은 받지 않는다 |
 
 가리킬 수 있는 것은 자기 것이고 지우지 않은 자산뿐이다. 아니면 422 다. 남의 자산과 없는 자산의 응답이 같다.
 시나리오가 가리키는 세계관, 룰북, 로어북은 지울 수 없다(409). 시나리오에서 떼어 내거나 시나리오를 지운 뒤에 지운다.
@@ -292,7 +292,7 @@ app/assets/
 | 판 | 게시할 때 굳힌 묶음. 테이블이 복사해 갈 원본 | 바뀌지 않는다 |
 | 테이블의 복사본 (나중에) | 테이블을 만들 때 판에서 통째로 복사한 것 | 플레이하면서 고친다 |
 
-판에는 시나리오(제목, 메모, 등급, 도입부)와 그것이 가리키던 룰북, 세계관, 로어북과 항목이 통째로 들어간다.
+판에는 시나리오(제목, 메모, 등급, 스타팅 전부)와 그것이 가리키던 룰북, 세계관, 로어북과 항목이 통째로 들어간다.
 게시한 뒤에 초안을 고치거나, 재료를 떼어 내고 지워도 판은 그대로다. 고칠 것이 있으면 초안을 고치고 새 판을 낸다.
 
 게시의 조건은 둘이다. 못 갖췄으면 409 와 함께 이유를 전부 알려 준다.
@@ -300,15 +300,16 @@ app/assets/
 | `problems` 의 값 | 뜻 |
 | --- | --- |
 | `rulebook_missing` | 룰북이 붙어 있지 않다 |
-| `opening_empty` | 도입부가 비어 있다(공백뿐인 것 포함) |
+| `opening_missing` | 스타팅이 하나도 없다 |
 
 ```json
-{"detail": "게시할 조건을 갖추지 못했습니다.", "problems": ["rulebook_missing", "opening_empty"]}
+{"detail": "게시할 조건을 갖추지 못했습니다.", "problems": ["rulebook_missing", "opening_missing"]}
 ```
 
 - 판의 번호는 시나리오마다 1 부터 하나씩 올라간다.
 - 게시할 때 변경 내용(`note`, 500자)을 적을 수 있다. 비워도 된다.
 - 판을 고치거나 지우는 주소는 없다.
+- 굳힌 내용의 모양이 바뀌어도 이미 굳힌 판은 고쳐 쓰지 않는다. 문서에 형식 번호(`format`)가 있고, 옛 형식은 읽을 때 지금의 모양으로 올려 읽는다. 형식 1 은 도입부가 하나(`opening`), 형식 2 는 스타팅이 여러 개(`openings`)다.
 - 게시는 "굳히기"다. 남에게 보이게 하는 것은 따로다([공개와 소개 페이지](#공개와-소개-페이지)). 굳힌 내용(`snapshot`)은 공개해도 만든 사람만 본다.
 - 등급은 시나리오의 것만 굳힌다. 등급은 시나리오를 조립할 때 제작자가 고르고, 재료는 등급을 가리지 않는다.
 
