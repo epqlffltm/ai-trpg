@@ -18,6 +18,7 @@ from app.assets.lorebooks.service import LorebookFullError
 from app.assets.routing import handle_asset_in_use, handle_asset_not_found, handle_asset_reference
 from app.assets.rulebooks import router as rulebooks
 from app.assets.scenarios import router as scenarios
+from app.assets.scenarios.publishing import ScenarioNotReadyError
 from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
 from app.assets.worlds import router as worlds
 from app.auth.jwks import JwksCache
@@ -90,6 +91,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.add_exception_handler(AssetInUseError, handle_asset_in_use)
     app.add_exception_handler(AssetReferenceError, handle_asset_reference)
     app.add_exception_handler(LorebookFullError, lorebooks.handle_lorebook_full)
+    app.add_exception_handler(ScenarioNotReadyError, scenarios.handle_scenario_not_ready)
 
     return app
 
