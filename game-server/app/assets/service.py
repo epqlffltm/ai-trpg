@@ -68,7 +68,7 @@ def apply_changes(content: AssetContent, data: AssetUpdate) -> None:
         setattr(target, field, value)
 
     # 내용만 바뀌어도 고친 시각은 공통 부분(assets)에 있다. 직접 갱신한다
-    content.asset.updated_at = func.now()
+    touch(content)
 
 
 async def create[Content: AssetContent](session: AsyncSession, content: Content) -> Content:
@@ -101,6 +101,21 @@ async def hold_reference(
         raise AssetReferenceError(field)
 
 
+async def lock_owned[Content: AssetContent](
+    session: AsyncSession, model: type[Content], owner_id: uuid.UUID, asset_id: uuid.UUID
+) -> Content:
+    """자기 자산 하나를 혼자 잠그고 돌려준다. 없으면 AssetNotFoundError. 저장이 끝나면 잠금이 풀린다."""
+    content = await repository.lock_owned(session, model, owner_id, asset_id)
+    if content is None:
+        raise AssetNotFoundError
+    return content
+
+
+def touch(content: AssetContent) -> None:
+    """자산의 고친 시각을 지금으로 바꾼다. 내용 테이블이나 딸린 행만 바뀌었을 때 부른다."""
+    content.asset.updated_at = func.now()
+
+
 async def list_owned[Content: AssetContent](
     session: AsyncSession, model: type[Content], owner_id: uuid.UUID, limit: int, offset: int
 ) -> tuple[list[Content], int]:
@@ -131,9 +146,7 @@ async def delete_owned(
     행을 지우지 않고 지운 시각을 적는다. 그 뒤로는 어떤 조회에도 나오지 않는다.
     """
     # 먼저 잠그고, 그다음에 쓰이는지 본다. 순서가 반대면 보고 난 뒤에 누가 가리킬 수 있다
-    content = await repository.find_owned_for_delete(session, model, owner_id, asset_id)
-    if content is None:
-        raise AssetNotFoundError
+    content = await lock_owned(session, model, owner_id, asset_id)
     if await repository.is_referenced(session, asset_id):
         raise AssetInUseError
 

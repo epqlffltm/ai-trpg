@@ -1,13 +1,17 @@
 # game-server/tests/test_asset_locking.py
 
 """
-자산을 가리키는 일과 지우는 일이 동시에 일어날 때를 검증한다.
+"확인하고 나서 쓰는" 일 둘이 동시에 일어날 때를 검증한다.
+
+1) 자산을 가리키는 일과 지우는 일.
 
 잠금이 없으면 이런 일이 생긴다.
   1. A: 룰북이 있는지 확인한다. 있다.
   2. B: 그 룰북을 쓰는 시나리오가 있는지 확인한다. 없다(A 가 아직 저장하지 않았다).
   3. A: 시나리오를 저장한다.   4. B: 룰북을 지운다.
 결과: 지운 룰북을 가리키는 시나리오가 남는다.
+
+2) 로어북에 항목을 더하는 일 둘. 둘 다 개수를 세고 "자리가 있다"고 보면 상한을 넘긴다.
 
 두 연결(세션)을 따로 열어 이 순서를 직접 만든다. 한쪽이 잠근 채로 멈춰 있을 때 다른 쪽이 기다리는지 본다.
 """
@@ -22,7 +26,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import repository
 from app.assets import service as assets
-from app.assets.models import Rulebook
+from app.assets.lorebooks import service as lorebooks
+from app.assets.lorebooks.schemas import EntryCreate, LorebookCreate
+from app.assets.lorebooks.service import LorebookFullError
+from app.assets.models import Lorebook, Rulebook
 from app.assets.rulebooks import service as rulebooks
 from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import service as scenarios
@@ -73,7 +80,7 @@ async def test_saving_a_scenario_waits_for_a_delete(session: AsyncSession, other
     rulebook_id = (await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰'))).asset_id
 
     # A: 룰북을 잠그고 지운 시각을 적었지만 아직 커밋하지 않았다
-    rulebook = await repository.find_owned_for_delete(session, Rulebook, ME, rulebook_id)
+    rulebook = await repository.lock_owned(session, Rulebook, ME, rulebook_id)
     rulebook.asset.deleted_at = func.now()
     await session.flush()
 
@@ -96,3 +103,25 @@ async def test_two_scenarios_can_hold_the_same_rulebook_at_once(session: AsyncSe
 
     # 붙잡는 쪽끼리는 서로 기다리지 않는다. 같은 룰북으로 시나리오를 동시에 만들 수 있다
     await asyncio.wait_for(assets.hold_reference(other_session, Rulebook, ME, rulebook_id, 'rulebook_id'), WAIT)
+
+
+async def test_adding_an_entry_waits_for_another_entry_being_added(
+    session: AsyncSession, other_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(lorebooks, 'LOREBOOK_MAX_ENTRIES', 1)
+    lorebook_id = (await lorebooks.create_lorebook(session, ME, LorebookCreate(title='로어북'))).asset_id
+
+    # A: 로어북을 잠그고 마지막 자리에 항목을 올렸지만 아직 커밋하지 않았다
+    await assets.lock_owned(session, Lorebook, ME, lorebook_id)
+    session.add(lorebooks.build_entry(lorebook_id, EntryCreate(name='첫째')))
+    await session.flush()
+
+    # B: 같은 로어북에 항목을 더하려 한다. A 가 끝날 때까지 기다려야 한다
+    adding = asyncio.create_task(lorebooks.add_entry(other_session, ME, lorebook_id, EntryCreate(name='둘째')))
+    assert await is_waiting(adding)
+
+    await session.commit()
+
+    # 기다린 뒤에는 A 의 항목이 세어진다. 자리가 없다
+    with pytest.raises(LorebookFullError):
+        await adding
