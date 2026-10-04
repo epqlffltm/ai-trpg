@@ -3,11 +3,12 @@
 """
 시나리오의 게시를 검증한다.
 
-게시는 초안의 지금 내용을 판으로 굳히는 일이다. 보는 것은 넷이다.
+게시는 초안의 지금 내용을 판으로 굳히는 일이다. 보는 것은 다섯이다.
   - 조건을 갖춘 시나리오만 게시된다. 못 갖췄으면 이유를 전부 알려 준다.
   - 판에는 시나리오와 그것이 가리키는 자산의 내용이 통째로 들어간다.
   - 판은 굳는다. 게시한 뒤에 초안을 고치거나 지워도 판은 그대로다.
   - 판은 만든 사람만 본다.
+  - 옛 형식으로 굳힌 판도 지금의 모양으로 읽힌다. 저장된 것은 바뀌지 않는다.
 """
 
 import uuid
@@ -15,11 +16,12 @@ import uuid
 import pytest
 from fastapi import status
 from httpx import AsyncClient
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import VERSION_NOTE_MAX_LENGTH, Asset, AssetType, Scenario, ScenarioVersion
-from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT
+from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot, upgrade_from_1
 from app.main import API_PREFIX
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -74,9 +76,9 @@ async def create(client: AsyncClient, url: str, headers: dict[str, str], **field
 
 
 async def create_ready_scenario(client: AsyncClient, headers: dict[str, str], **fields) -> dict:
-    """게시할 조건을 갖춘 시나리오를 만든다. 룰북이 붙어 있고 도입부가 있다."""
+    """게시할 조건을 갖춘 시나리오를 만든다. 룰북이 붙어 있고 스타팅이 하나 있다."""
     rulebook = await create(client, RULEBOOKS_URL, headers, title='룰북', gm_guide=GM_GUIDE)
-    values = {'rulebook_id': rulebook['id'], 'opening': OPENING}
+    values = {'rulebook_id': rulebook['id'], 'openings': [OPENING]}
     values.update(fields)
     return await create(client, SCENARIOS_URL, headers, **values)
 
@@ -170,7 +172,7 @@ async def test_rejects_bad_input(client: AsyncClient, my_headers: dict[str, str]
 
 
 async def test_a_scenario_without_a_rulebook_cannot_be_published(client: AsyncClient, my_headers: dict[str, str]):
-    scenario = await create(client, SCENARIOS_URL, my_headers, opening=OPENING)
+    scenario = await create(client, SCENARIOS_URL, my_headers, openings=[OPENING])
 
     response = await client.post(versions_url(scenario), json={}, headers=my_headers)
 
@@ -179,17 +181,14 @@ async def test_a_scenario_without_a_rulebook_cannot_be_published(client: AsyncCl
     assert (await client.get(versions_url(scenario), headers=my_headers)).json() == []
 
 
-@pytest.mark.parametrize('opening', ['', '   \n  '])
-async def test_a_scenario_without_an_opening_cannot_be_published(
-    client: AsyncClient, my_headers: dict[str, str], opening: str
-):
-    scenario = await create_ready_scenario(client, my_headers, opening=opening)
+async def test_a_scenario_without_an_opening_cannot_be_published(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_ready_scenario(client, my_headers, openings=[])
 
     response = await client.post(versions_url(scenario), json={}, headers=my_headers)
 
-    # 공백뿐인 도입부도 비어 있는 것이다
+    # 스타팅이 하나는 있어야 한다. 테이블이 시작할 장면이 없다
     assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json()['problems'] == ['opening_empty']
+    assert response.json()['problems'] == ['opening_missing']
 
 
 async def test_the_refusal_lists_every_problem(client: AsyncClient, my_headers: dict[str, str]):
@@ -198,7 +197,7 @@ async def test_the_refusal_lists_every_problem(client: AsyncClient, my_headers: 
     response = await client.post(versions_url(scenario), json={}, headers=my_headers)
 
     # 하나씩 고치고 다시 시도하지 않게 한 번에 알려 준다
-    assert response.json()['problems'] == ['rulebook_missing', 'opening_empty']
+    assert response.json()['problems'] == ['rulebook_missing', 'opening_missing']
 
 
 async def test_the_rating_comes_from_the_scenario_alone(client: AsyncClient, my_headers: dict[str, str]):
@@ -216,7 +215,7 @@ async def test_fixing_the_problems_lets_it_publish(client: AsyncClient, my_heade
     rulebook = await create(client, RULEBOOKS_URL, my_headers)
     await client.patch(
         f'{SCENARIOS_URL}/{scenario["id"]}',
-        json={'rulebook_id': rulebook['id'], 'opening': OPENING},
+        json={'rulebook_id': rulebook['id'], 'openings': [OPENING]},
         headers=my_headers,
     )
 
@@ -246,7 +245,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         rulebook_id=rulebook['id'],
         world_id=world['id'],
         lorebook_ids=[lorebook['id']],
-        opening=OPENING,
+        openings=[OPENING],
     )
 
     version = await publish(client, my_headers, scenario)
@@ -256,7 +255,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'title': TITLE,
         'description': '메모',
         'rating': 'all',
-        'opening': OPENING,
+        'openings': [OPENING],
         'rulebook': {'id': rulebook['id'], 'title': '룰북', 'gm_guide': GM_GUIDE},
         'world': {'id': world['id'], 'title': '세계관', 'setting': SETTING, 'gm_notes': GM_NOTES},
         'lorebooks': [
@@ -279,25 +278,35 @@ async def test_the_snapshot_of_a_minimal_scenario(client: AsyncClient, my_header
     assert version['snapshot']['lorebooks'] == []
 
 
+async def test_the_snapshot_carries_every_opening_in_order(client: AsyncClient, my_headers: dict[str, str]):
+    openings = ['추격전으로 시작', '법정에서 시작', '꿈에서 시작']
+    scenario = await create_ready_scenario(client, my_headers, openings=openings)
+
+    version = await publish(client, my_headers, scenario)
+
+    # 테이블을 만드는 사람이 이 중 하나를 순번으로 고른다
+    assert version['snapshot']['openings'] == openings
+
+
 # --- 판은 굳는다 ---
 
 
 async def test_editing_the_draft_does_not_change_a_version(client: AsyncClient, my_headers: dict[str, str]):
     rulebook = await create(client, RULEBOOKS_URL, my_headers, gm_guide=GM_GUIDE)
-    scenario = await create(client, SCENARIOS_URL, my_headers, rulebook_id=rulebook['id'], opening=OPENING)
+    scenario = await create(client, SCENARIOS_URL, my_headers, rulebook_id=rulebook['id'], openings=[OPENING])
     first = await publish(client, my_headers, scenario)
 
     # 게시한 뒤에 시나리오와 룰북을 둘 다 고친다
-    await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'opening': '바뀐 도입부'}, headers=my_headers)
+    await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'openings': ['바뀐 도입부']}, headers=my_headers)
     await client.patch(f'{RULEBOOKS_URL}/{rulebook["id"]}', json={'gm_guide': '바뀐 지침'}, headers=my_headers)
     second = await publish(client, my_headers, scenario)
 
     first_again = (await client.get(f'{versions_url(scenario)}/1', headers=my_headers)).json()
     assert first_again == first
-    assert first_again['snapshot']['opening'] == OPENING
+    assert first_again['snapshot']['openings'] == [OPENING]
     assert first_again['snapshot']['rulebook']['gm_guide'] == GM_GUIDE
     # 새 판에는 고친 내용이 들어간다
-    assert second['snapshot']['opening'] == '바뀐 도입부'
+    assert second['snapshot']['openings'] == ['바뀐 도입부']
     assert second['snapshot']['rulebook']['gm_guide'] == '바뀐 지침'
 
 
@@ -398,6 +407,75 @@ async def test_versions_of_a_deleted_scenario_cannot_be_reached(client: AsyncCli
 
     assert listed.status_code == status.HTTP_404_NOT_FOUND
     assert published.status_code == status.HTTP_404_NOT_FOUND
+
+
+# --- 옛 형식의 판 ---
+
+# 형식 1 로 굳힌 판의 문서. 도입부가 하나(opening)였다
+FORMAT_1 = {
+    'format': 1,
+    'title': TITLE,
+    'description': '',
+    'rating': 'all',
+    'opening': OPENING,
+    'rulebook': {'id': NO_SUCH_ID, 'title': '룰북', 'gm_guide': GM_GUIDE},
+    'world': None,
+    'lorebooks': [],
+}
+
+
+def test_upgrades_a_format_1_document():
+    upgraded = upgrade_from_1(FORMAT_1)
+
+    # 하나뿐이던 도입부가 첫 번째 스타팅이 된다
+    assert upgraded['format'] == 2
+    assert upgraded['openings'] == [OPENING]
+    assert 'opening' not in upgraded
+    # 받은 문서는 고치지 않는다
+    assert FORMAT_1['format'] == 1
+    assert 'openings' not in FORMAT_1
+
+
+def test_reads_a_document_of_any_format():
+    current = upgrade_from_1(FORMAT_1)
+
+    # 옛 형식은 올려서, 지금 형식은 그대로 읽는다. 결과가 같다
+    assert read_snapshot(FORMAT_1) == read_snapshot(current)
+    assert read_snapshot(FORMAT_1).format == SNAPSHOT_FORMAT
+    assert read_snapshot(FORMAT_1).openings == [OPENING]
+
+
+async def test_a_version_in_the_old_format_is_read_in_the_current_one(
+    client: AsyncClient, my_headers: dict[str, str], session: AsyncSession
+):
+    scenario = await create_ready_scenario(client, my_headers)
+    # 형식이 바뀌기 전에 굳힌 판을 흉내 낸다. 서비스를 거치지 않고 옛 문서를 그대로 저장한다
+    session.add(ScenarioVersion(scenario_id=uuid.UUID(scenario['id']), number=1, snapshot=FORMAT_1))
+    await session.commit()
+
+    response = await client.get(f'{versions_url(scenario)}/1', headers=my_headers)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()['snapshot']['format'] == SNAPSHOT_FORMAT
+    assert response.json()['snapshot']['openings'] == [OPENING]
+    # 저장된 문서는 옛 모양 그대로다. 판은 고치지 않는다
+    stored = await session.scalar(
+        text('SELECT snapshot FROM scenario_versions WHERE scenario_id = :id'), {'id': scenario['id']}
+    )
+    assert stored == FORMAT_1
+
+
+async def test_the_next_version_after_an_old_one_uses_the_current_format(
+    client: AsyncClient, my_headers: dict[str, str], session: AsyncSession
+):
+    scenario = await create_ready_scenario(client, my_headers)
+    session.add(ScenarioVersion(scenario_id=uuid.UUID(scenario['id']), number=1, snapshot=FORMAT_1))
+    await session.commit()
+
+    second = await publish(client, my_headers, scenario)
+
+    assert second['number'] == 2
+    assert second['snapshot']['format'] == SNAPSHOT_FORMAT
 
 
 # --- DB 의 마지막 방어선 ---
