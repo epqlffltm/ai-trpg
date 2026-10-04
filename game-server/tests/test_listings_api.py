@@ -1,14 +1,14 @@
 # game-server/tests/test_listings_api.py
 
 """
-시나리오의 공개와 홍보 페이지를 검증한다.
+시나리오의 공개와 소개 페이지를 검증한다.
 
 두 부류의 사람이 쓴다.
-  - 제작자: 홍보 페이지(한줄소개, 설명, 장르, 태그)를 고치고, 공개할 판을 하나 고른다.
+  - 제작자: 소개 페이지(한줄소개, 소개글, 장르, 태그)를 고치고, 공개할 판을 하나 고른다.
   - 다른 사용자: 공개된 시나리오의 목록과 상세를 본다.
 
 보는 것은 셋이다.
-  - 홍보 페이지는 판과 따로 고친다. 공개할 판은 시나리오마다 하나다.
+  - 소개 페이지는 판과 따로 고친다. 공개할 판은 시나리오마다 하나다.
   - 남에게는 공개된 것만, 정해 둔 칸만 보인다. GM 전용 글은 나가지 않는다.
   - 성인용은 지금 누구에게도 목록에 보이지 않는다(성인 인증이 아직 없다).
 """
@@ -87,7 +87,7 @@ async def publish_version(client: AsyncClient, headers: dict[str, str], scenario
 
 
 async def write_page(client: AsyncClient, headers: dict[str, str], scenario: dict, **fields) -> dict:
-    """홍보 페이지를 쓴다. 공개할 조건(한줄소개, 장르)을 갖춘 내용이 기본이다."""
+    """소개 페이지를 쓴다. 공개할 조건(한줄소개, 장르)을 갖춘 내용이 기본이다."""
     body = {'tagline': TAGLINE, 'genres': GENRES}
     body.update(fields)
     response = await client.patch(listing_url(scenario), json=body, headers=headers)
@@ -96,7 +96,7 @@ async def write_page(client: AsyncClient, headers: dict[str, str], scenario: dic
 
 
 async def make_public(client: AsyncClient, headers: dict[str, str], **fields) -> dict:
-    """시나리오를 만들고, 게시하고, 홍보 페이지를 쓰고, 공개까지 한다. 시나리오를 돌려준다."""
+    """시나리오를 만들고, 게시하고, 소개 페이지를 쓰고, 공개까지 한다. 시나리오를 돌려준다."""
     page = {key: fields.pop(key) for key in ('tagline', 'description', 'genres', 'tags') if key in fields}
     scenario = await create_scenario(client, headers, **fields)
     number = await publish_version(client, headers, scenario)
@@ -126,7 +126,7 @@ async def test_every_address_requires_login(client: AsyncClient, method: str, ur
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-# --- 홍보 페이지 ---
+# --- 소개 페이지 ---
 
 
 async def test_a_scenario_starts_with_an_empty_page(client: AsyncClient, my_headers: dict[str, str]):
@@ -158,7 +158,7 @@ async def test_writes_the_page(client: AsyncClient, my_headers: dict[str, str]):
     assert page['description'] == DESCRIPTION
     assert page['genres'] == GENRES
     assert page['tags'] == TAGS
-    # 홍보 페이지를 쓰는 것과 공개하는 것은 따로다
+    # 소개 페이지를 쓰는 것과 공개하는 것은 따로다
     assert page['version'] is None
     assert (await client.get(listing_url(scenario), headers=my_headers)).json() == page
 
@@ -323,7 +323,7 @@ async def test_taking_it_down_keeps_the_page(client: AsyncClient, my_headers: di
     assert page['version'] is None
     assert page['rating'] is None
     assert page['published_at'] is None
-    # 홍보 페이지의 글은 남는다. 다시 공개할 때 그대로 쓴다
+    # 소개 페이지의 글은 남는다. 다시 공개할 때 그대로 쓴다
     assert page['tagline'] == TAGLINE
     assert page['tags'] == TAGS
 
@@ -510,7 +510,7 @@ async def test_the_title_follows_the_scenario(client: AsyncClient, my_headers: d
 
     await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'title': '바꾼 제목'}, headers=my_headers)
 
-    # 제목은 홍보 페이지에 따로 두지 않는다. 시나리오의 제목을 고치면 바로 따라간다
+    # 제목은 소개 페이지에 따로 두지 않는다. 시나리오의 제목을 고치면 바로 따라간다
     public = (await client.get(f'{LISTINGS_URL}/{scenario["id"]}', headers=my_headers)).json()
     assert public['title'] == '바꾼 제목'
 
