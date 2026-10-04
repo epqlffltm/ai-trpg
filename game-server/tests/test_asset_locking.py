@@ -13,6 +13,7 @@
 
 2) 로어북에 항목을 더하는 일 둘. 둘 다 개수를 세고 "자리가 있다"고 보면 상한을 넘긴다.
 3) 시나리오의 로어북 목록을 바꾸는 일 둘. 둘 다 같은 옛 목록과 비교하면 둘의 것이 합쳐진다.
+4) 같은 시나리오를 게시하는 일 둘. 둘 다 "가장 큰 번호 + 1"을 세면 같은 번호를 얻는다.
 
 두 연결(세션)을 따로 열어 이 순서를 직접 만든다. 한쪽이 잠근 채로 멈춰 있을 때 다른 쪽이 기다리는지 본다.
 """
@@ -30,11 +31,12 @@ from app.assets import service as assets
 from app.assets.lorebooks import service as lorebooks
 from app.assets.lorebooks.schemas import EntryCreate, LorebookCreate
 from app.assets.lorebooks.service import LorebookFullError
-from app.assets.models import Lorebook, Rulebook, Scenario, ScenarioLorebook
+from app.assets.models import Lorebook, Rulebook, Scenario, ScenarioLorebook, ScenarioVersion
 from app.assets.rulebooks import service as rulebooks
 from app.assets.rulebooks.schemas import RulebookCreate
+from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
-from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate
+from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate, VersionCreate
 from app.assets.service import AssetInUseError, AssetReferenceError
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -153,3 +155,23 @@ async def test_updating_a_scenario_waits_for_another_update(session: AsyncSessio
         select(ScenarioLorebook.lorebook_id).where(ScenarioLorebook.scenario_id == scenario_id)
     )
     assert list(stored) == [second]
+
+
+async def test_publishing_waits_for_another_publish(session: AsyncSession, other_session: AsyncSession):
+    rulebook_id = (await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰'))).asset_id
+    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook_id, opening='도입부')
+    scenario_id = (await scenarios.create_scenario(session, ME, data)).asset_id
+
+    # A: 시나리오를 잠그고 1번 판을 올렸지만 아직 커밋하지 않았다
+    await assets.lock_owned(session, Scenario, ME, scenario_id)
+    session.add(ScenarioVersion(scenario_id=scenario_id, number=1, snapshot={}))
+    await session.flush()
+
+    # B: 같은 시나리오를 게시하려 한다. A 가 끝날 때까지 기다려야 한다
+    publishing_task = asyncio.create_task(publishing.publish(other_session, ME, scenario_id, VersionCreate()))
+    assert await is_waiting(publishing_task)
+
+    await session.commit()
+
+    # 기다린 뒤에는 A 의 판이 보인다. 그다음 번호를 얻는다
+    assert (await publishing_task).number == 2

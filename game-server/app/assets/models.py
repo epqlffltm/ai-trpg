@@ -12,6 +12,9 @@
 자산이 다른 자산을 가리킬 수 있다. 시나리오가 룰북과 세계관을 하나씩, 로어북을 여러 개 가리킨다.
 자산에 딸린 행이 여럿일 수 있다. 로어북에 항목이 딸린다. 항목은 자산이 아니다.
 
+지금까지의 것은 모두 초안이다. 제작자가 언제든 고친다.
+시나리오를 게시하면 그 순간의 내용이 판(ScenarioVersion)으로 굳는다. 판은 고치지 않는다.
+
 공통 부분을 한 테이블에 두면, 권한 검사 같은 규칙을 종류마다 다시 짜지 않아도 되고,
 "아무 자산이나 가리키는 것"(방이 쓴 자산, 구매한 자산)이 외래 키 하나로 된다.
 
@@ -22,8 +25,8 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, Uuid, func
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from app.core.database import Base
@@ -39,6 +42,8 @@ RULEBOOK_GM_GUIDE_MAX_LENGTH = 4000
 SCENARIO_OPENING_MAX_LENGTH = 2000
 # 시나리오 하나에 붙일 수 있는 로어북의 수. 플레이할 때 살펴볼 항목의 수가 이 값에 비례한다
 SCENARIO_MAX_LOREBOOKS = 10
+# 판을 낼 때 적는 변경 내용. 사람이 읽는다
+VERSION_NOTE_MAX_LENGTH = 500
 
 # 로어북의 항목. 항목은 통째로 AI 의 입력에 들어가는 단위다. 짧게 쪼개 둘수록 필요한 것만 넣을 수 있다
 LOREBOOK_MAX_ENTRIES = 100
@@ -298,3 +303,39 @@ class ScenarioLorebook(Base):
     lorebook_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('lorebooks.asset_id', ondelete='RESTRICT'), primary_key=True, index=True
     )
+
+
+class ScenarioVersion(Base):
+    """
+    시나리오의 판. 게시한 순간의 시나리오와, 그것이 가리키던 룰북, 세계관, 로어북을 통째로 굳힌 것이다.
+
+    테이블(같이 플레이하는 자리)은 만들 때 판 하나를 고르고, 그 내용을 복사해 간다.
+    그래서 판은 고치지 않는다. 고칠 것이 있으면 초안을 고치고 새 판을 낸다.
+    행을 고치거나 지우는 코드를 만들지 않는다.
+    """
+
+    __tablename__ = 'scenario_versions'
+    __table_args__ = (
+        # 한 시나리오에 같은 번호의 판이 둘 있을 수 없다. 동시에 게시해도 하나만 들어간다
+        UniqueConstraint('scenario_id', 'number'),
+        CheckConstraint('number >= 1', name='number_positive'),
+        CheckConstraint(at_most('note', VERSION_NOTE_MAX_LENGTH), name='note_length'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    # 어느 시나리오의 판인가. 판이 있는 시나리오의 행은 지울 수 없다.
+    # "이 시나리오의 판들"을 찾는 색인은 위의 UNIQUE 가 겸한다(시나리오가 앞에 있다)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('scenarios.asset_id', ondelete='RESTRICT'))
+
+    # 판의 번호. 시나리오마다 1 부터 하나씩 올라간다
+    number: Mapped[int] = mapped_column(Integer)
+
+    # 변경 내용. 제작자가 적는다. 새 판이 나왔다고 알릴 때 보여 준다
+    note: Mapped[str] = mapped_column(Text, default='')
+
+    # 굳힌 내용. 한 번 쓰고 고치지 않는 기록이라 문서 하나로 둔다.
+    # 모양은 app/assets/scenarios/snapshot.py 가 정한다. 그 모양을 거치지 않고 쓰지 않는다
+    snapshot: Mapped[dict] = mapped_column(JSONB)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
