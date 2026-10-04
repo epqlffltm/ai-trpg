@@ -70,9 +70,13 @@ async def handle_asset_in_use(request: Request, error: AssetInUseError) -> JSONR
     서비스가 "다른 자산이 쓰고 있다"고 하면 409 로 답한다.
 
     409 는 요청은 맞지만 지금 상태와 부딪힌다는 뜻이다. 가리키는 쪽에서 떼어 낸 뒤에 다시 지울 수 있다.
+    어디서 떼어 내야 하는지 알 수 있게, 쓰고 있는 시나리오의 ID 와 제목을 함께 준다.
+    자기 자산만 가리킬 수 있으므로, 여기 실리는 시나리오는 모두 요청한 사람의 것이다.
     """
+    used_by = [{'id': str(referrer.id), 'title': referrer.title} for referrer in error.referrers]
     return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT, content={'detail': '이 자산을 쓰는 시나리오가 있어 지울 수 없습니다.'}
+        status_code=status.HTTP_409_CONFLICT,
+        content={'detail': '이 자산을 쓰는 시나리오가 있어 지울 수 없습니다.', 'used_by': used_by},
     )
 
 
