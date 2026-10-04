@@ -4,6 +4,7 @@
 테이블을 DB 에서 읽고 쓴다. SQL 은 이 파일에만 있다. 커밋하지 않는다.
 
 누가 볼 수 있는가(참가자인가, 방장인가)는 서비스가 판단한다. 여기는 찾아 주기만 한다.
+로비만은 다르다. 누구나 보는 목록이라서 "보여도 되는 것"의 조건(open_to)을 조회 안에 넣는다.
 """
 
 import uuid
@@ -12,7 +13,8 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from app.tables.models import GameTable, TableMember
+from app.assets.models import Rating, ScenarioVersion
+from app.tables.models import GameTable, TableMember, TableStatus
 
 
 def add_table(session: AsyncSession, table: GameTable) -> None:
@@ -82,3 +84,44 @@ async def list_seated(session: AsyncSession, user_id: uuid.UUID, limit: int, off
 async def count_seated(session: AsyncSession, user_id: uuid.UUID) -> int:
     """이 사람이 앉아 있는 테이블이 몇 개인지 센다."""
     return await session.scalar(select(func.count()).select_from(seated(user_id).subquery())) or 0
+
+
+# --- 로비. 앉지 않은 사람이 보는 목록이다 ---
+
+
+def open_to(allowed_ratings: list[Rating], scenario_id: uuid.UUID | None) -> Select[tuple[GameTable]]:
+    """
+    로비에 보여도 되는 테이블을 고르는 조건. 로비를 읽는 함수들이 함께 쓴다.
+
+    로비에 보이기로 했고, 모집 중이고, 자리가 남았고, 보는 사람이 볼 수 있는 등급이어야 한다.
+    scenario_id 를 주면 그 시나리오의 판으로 만든 테이블만 고른다.
+    """
+    # 테이블마다 앉은 사람을 세는 작은 조회. 바깥 조회의 테이블과 이어진다
+    seats_taken = (
+        select(func.count()).select_from(TableMember).where(TableMember.table_id == GameTable.id).scalar_subquery()
+    )
+    query = select(GameTable).where(
+        GameTable.is_public,
+        GameTable.status == TableStatus.RECRUITING,
+        GameTable.rating.in_(allowed_ratings),
+        seats_taken < GameTable.capacity,
+    )
+    if scenario_id is not None:
+        query = query.join(ScenarioVersion, ScenarioVersion.id == GameTable.version_id).where(
+            ScenarioVersion.scenario_id == scenario_id
+        )
+    return query
+
+
+async def list_lobby(
+    session: AsyncSession, allowed_ratings: list[Rating], scenario_id: uuid.UUID | None, limit: int, offset: int
+) -> list[GameTable]:
+    """로비에 보이는 테이블을 최근에 만든 것부터 돌려준다. 판의 복사본(content)은 읽어 오지 않는다."""
+    query = open_to(allowed_ratings, scenario_id).options(defer(GameTable.content))
+    query = query.order_by(GameTable.created_at.desc(), GameTable.id).limit(limit).offset(offset)
+    return list(await session.scalars(query))
+
+
+async def count_lobby(session: AsyncSession, allowed_ratings: list[Rating], scenario_id: uuid.UUID | None) -> int:
+    """로비에 보이는 테이블이 몇 개인지 센다."""
+    return await session.scalar(select(func.count()).select_from(open_to(allowed_ratings, scenario_id).subquery())) or 0
