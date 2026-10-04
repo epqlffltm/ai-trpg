@@ -1,7 +1,7 @@
 # game-server/app/listings/service.py
 
 """
-시나리오의 공개 정보를 다룬다. 홍보 페이지를 고치고, 공개할 판을 정하고, 공개된 것을 보여 준다.
+시나리오의 공개 정보를 다룬다. 소개 페이지를 고치고, 공개할 판을 정하고, 공개된 것을 보여 준다.
 
 HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장할지(커밋)는 여기서 정한다.
 
@@ -38,7 +38,7 @@ class Problem(enum.StrEnum):
 
 class ListingNotReadyError(Exception):
     """
-    홍보 페이지가 공개할 조건을 갖추지 못했다.
+    소개 페이지가 공개할 조건을 갖추지 못했다.
 
     problems 는 갖추지 못한 조건 전부다.
     """
@@ -69,7 +69,7 @@ def find_problems(listing: Listing) -> list[Problem]:
 
 
 def apply_changes(listing: Listing, data: ListingUpdate) -> None:
-    """보낸 칸만 홍보 페이지에 반영한다."""
+    """보낸 칸만 소개 페이지에 반영한다."""
     changes = data.model_dump(exclude_unset=True, exclude_none=True)
     for field, value in changes.items():
         setattr(listing, field, value)
@@ -83,7 +83,7 @@ def publish_version(listing: Listing, version: ScenarioVersion) -> None:
 
 
 def unpublish(listing: Listing) -> None:
-    """공개를 내린다. 홍보 페이지의 글은 그대로 남는다."""
+    """공개를 내린다. 소개 페이지의 글은 그대로 남는다."""
     listing.version_id = None
     listing.published_at = None
 
@@ -123,7 +123,7 @@ async def update_listing(
     session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, data: ListingUpdate
 ) -> Listing:
     """
-    자기 시나리오의 홍보 페이지를 고친다. 시나리오가 없으면 AssetNotFoundError.
+    자기 시나리오의 소개 페이지를 고친다. 시나리오가 없으면 AssetNotFoundError.
 
     공개 중인 페이지를 고쳐서 조건을 못 갖추게 되면 ListingNotReadyError. 고치려면 공개를 먼저 내린다.
     시나리오를 잠그고 한다. 공개 정보가 없을 때 두 요청이 동시에 만들면 부딪힌다.
@@ -148,7 +148,7 @@ async def set_publication(
     """
     자기 시나리오의 공개할 판을 정한다. 번호를 비우면 공개를 내린다.
 
-    시나리오나 판이 없으면 AssetNotFoundError, 홍보 페이지가 조건을 못 갖췄으면 ListingNotReadyError.
+    시나리오나 판이 없으면 AssetNotFoundError, 소개 페이지가 조건을 못 갖췄으면 ListingNotReadyError.
     """
     await assets.lock_owned(session, Scenario, owner_id, scenario_id)
     listing = await get_or_create(session, scenario_id)

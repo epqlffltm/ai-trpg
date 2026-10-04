@@ -4,7 +4,7 @@
 공개 정보 API. 요청을 받아 서비스에 넘기고, 결과를 응답의 모양으로 바꾼다.
 
 주소가 두 갈래다.
-  - /scenarios/{id}/listing: 제작자가 자기 시나리오의 홍보 페이지를 고치고 공개할 판을 정한다.
+  - /scenarios/{id}/listing: 제작자가 자기 시나리오의 소개 페이지를 고치고 공개할 판을 정한다.
   - /listings: 누구나(로그인한 사람) 공개된 시나리오를 본다.
 """
 
@@ -87,7 +87,7 @@ async def read_listing(scenario_id: uuid.UUID, user: CurrentUser, session: Sessi
 async def update_listing(
     scenario_id: uuid.UUID, data: ListingUpdate, user: CurrentUser, session: Session
 ) -> ListingDetail:
-    """자기 시나리오의 홍보 페이지를 고친다. 보낸 칸만 바뀐다. 판을 새로 내지 않아도 된다."""
+    """자기 시나리오의 소개 페이지를 고친다. 보낸 칸만 바뀐다. 판을 새로 내지 않아도 된다."""
     listing = await service.update_listing(session, user.user_id, scenario_id, data)
     return await to_owner_response(session, listing)
 

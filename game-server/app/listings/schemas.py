@@ -50,7 +50,7 @@ Tags = Annotated[list[Tag], Field(max_length=LISTING_MAX_TAGS), AfterValidator(r
 
 class ListingUpdate(BaseModel):
     """
-    홍보 페이지를 고칠 때 받는 값. 보낸 칸만 바꾼다.
+    소개 페이지를 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
     None 은 "보내지 않았다"는 뜻이다. 장르나 태그를 전부 없애려면 빈 목록을 보낸다.
     어느 판을 공개할지는 여기서 받지 않는다. 공개는 따로 하는 일이다(PublicationUpdate).
