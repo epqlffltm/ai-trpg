@@ -30,7 +30,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         rulebook_id=data.rulebook_id,
         world_id=data.world_id,
         lorebook_ids=data.lorebook_ids,
-        opening=data.opening,
+        openings=data.openings,
     )
 
 

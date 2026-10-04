@@ -22,7 +22,7 @@ from httpx import AsyncClient
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import Asset, AssetType, Scenario
+from app.assets.models import Asset, AssetType, Scenario, ScenarioVersion
 from app.listings.models import LISTING_MAX_GENRES, LISTING_MAX_TAGS, TAG_MAX_LENGTH, TAGLINE_MAX_LENGTH, Listing
 from app.main import API_PREFIX
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -70,9 +70,9 @@ def listing_url(scenario: dict) -> str:
 
 
 async def create_scenario(client: AsyncClient, headers: dict[str, str], **fields) -> dict:
-    """게시할 조건을 갖춘 시나리오를 만든다. 룰북이 붙어 있고 도입부가 있다."""
+    """게시할 조건을 갖춘 시나리오를 만든다. 룰북이 붙어 있고 스타팅이 하나 있다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북', 'gm_guide': GM_GUIDE}, headers=headers)
-    body = {'title': TITLE, 'rulebook_id': rulebook.json()['id'], 'opening': OPENING}
+    body = {'title': TITLE, 'rulebook_id': rulebook.json()['id'], 'openings': [OPENING]}
     body.update(fields)
     response = await client.post(SCENARIOS_URL, json=body, headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
@@ -551,6 +551,24 @@ async def test_the_rating_comes_from_the_public_version_not_the_draft(
     number = await publish_version(client, my_headers, scenario)
     await client.put(f'{listing_url(scenario)}/publication', json={'version': number}, headers=my_headers)
 
+    assert (await client.get(LISTINGS_URL, headers=their_headers)).json()['total'] == 1
+
+
+async def test_a_version_in_the_old_format_can_be_made_public(
+    client: AsyncClient, my_headers: dict[str, str], their_headers: dict[str, str], session: AsyncSession
+):
+    scenario = await create_scenario(client, my_headers)
+    await write_page(client, my_headers, scenario)
+    # 스타팅이 하나뿐이던 때(형식 1)에 굳힌 판. 공개할 때 등급을 이 문서에서 읽는다
+    old = {'format': 1, 'title': TITLE, 'description': '', 'rating': 'all', 'opening': OPENING}
+    old.update(rulebook={'id': str(ME), 'title': '룰북', 'gm_guide': GM_GUIDE}, world=None, lorebooks=[])
+    session.add(ScenarioVersion(scenario_id=uuid.UUID(scenario['id']), number=1, snapshot=old))
+    await session.commit()
+
+    response = await client.put(f'{listing_url(scenario)}/publication', json={'version': 1}, headers=my_headers)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()['rating'] == 'all'
     assert (await client.get(LISTINGS_URL, headers=their_headers)).json()['total'] == 1
 
 

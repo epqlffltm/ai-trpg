@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets import service as assets
 from app.assets.models import Rating, Scenario, ScenarioVersion
 from app.assets.scenarios import repository as versions
+from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
 from app.listings import repository
@@ -78,7 +79,7 @@ def apply_changes(listing: Listing, data: ListingUpdate) -> None:
 def publish_version(listing: Listing, version: ScenarioVersion) -> None:
     """이 판을 공개 중인 판으로 삼는다. 등급은 판에 굳어 있는 것을 읽어 적는다."""
     listing.version_id = version.id
-    listing.rating = Rating(version.snapshot['rating'])
+    listing.rating = read_snapshot(version.snapshot).rating
     listing.published_at = func.now()
 
 
