@@ -24,6 +24,8 @@ from app.assets.worlds import router as worlds
 from app.auth.jwks import JwksCache
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
+from app.listings import router as listings
+from app.listings.service import ListingNotReadyError
 
 # 이 서버의 API 가 놓이는 주소. 인증 서버는 /api/v1/auth 를 쓴다
 API_PREFIX = '/api/v1/game'
@@ -85,6 +87,8 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.include_router(rulebooks.router, prefix=API_PREFIX)
     app.include_router(scenarios.router, prefix=API_PREFIX)
     app.include_router(lorebooks.router, prefix=API_PREFIX)
+    app.include_router(listings.owner_router, prefix=API_PREFIX)
+    app.include_router(listings.public_router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다
     app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)
@@ -92,6 +96,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.add_exception_handler(AssetReferenceError, handle_asset_reference)
     app.add_exception_handler(LorebookFullError, lorebooks.handle_lorebook_full)
     app.add_exception_handler(ScenarioNotReadyError, scenarios.handle_scenario_not_ready)
+    app.add_exception_handler(ListingNotReadyError, listings.handle_listing_not_ready)
 
     return app
 
