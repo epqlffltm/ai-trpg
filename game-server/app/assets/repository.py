@@ -16,10 +16,10 @@ model 은 내용 테이블의 모델이다(World 등). 어느 테이블에서 �
 
 import uuid
 
-from sqlalchemy import Select, exists, func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import Asset, AssetContent, Scenario
+from app.assets.models import Asset, AssetContent, Scenario, ScenarioLorebook
 
 
 def owned[Content: AssetContent](model: type[Content], owner_id: uuid.UUID) -> Select[tuple[Content]]:
@@ -66,17 +66,30 @@ async def lock_owned[Content: AssetContent](
     return await session.scalar(query)
 
 
-async def is_referenced(session: AsyncSession, asset_id: uuid.UUID) -> bool:
+# "어디에 쓰이는가"를 알려 줄 때 한 번에 돌려주는 최대 개수
+MAX_REFERRERS = 20
+
+
+async def find_referrers(session: AsyncSession, asset_id: uuid.UUID) -> list[Asset]:
     """
-    이 자산을 가리키는, 지우지 않은 자산이 있는지 본다.
+    이 자산을 가리키는, 지우지 않은 자산들을 돌려준다. 없으면 빈 목록이다.
 
     지금 다른 자산을 가리키는 것은 시나리오뿐이다. 가리키는 종류가 늘면 여기에 더한다.
+    자기 자산만 가리킬 수 있으므로, 돌려주는 것은 모두 이 자산의 주인의 것이다.
     """
-    points_here = or_(Scenario.rulebook_id == asset_id, Scenario.world_id == asset_id)
-    query = select(
-        exists(select(Scenario.asset_id).join(Scenario.asset).where(points_here, Asset.deleted_at.is_(None)))
+    attached_here = select(ScenarioLorebook.scenario_id).where(ScenarioLorebook.lorebook_id == asset_id)
+    points_here = or_(
+        Scenario.rulebook_id == asset_id, Scenario.world_id == asset_id, Scenario.asset_id.in_(attached_here)
     )
-    return bool(await session.scalar(query))
+    query = (
+        select(Asset)
+        .join(Scenario, Scenario.asset_id == Asset.id)
+        .where(points_here, Asset.deleted_at.is_(None))
+        .order_by(Asset.created_at, Asset.id)
+        .limit(MAX_REFERRERS)
+    )
+    result = await session.scalars(query)
+    return list(result)
 
 
 async def list_owned[Content: AssetContent](
