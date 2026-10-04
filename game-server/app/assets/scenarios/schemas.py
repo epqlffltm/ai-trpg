@@ -5,11 +5,13 @@
 """
 
 import uuid
+from datetime import datetime
 from typing import Annotated, ClassVar
 
-from pydantic import AfterValidator, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
-from app.assets.models import SCENARIO_MAX_LOREBOOKS, SCENARIO_OPENING_MAX_LENGTH
+from app.assets.models import SCENARIO_MAX_LOREBOOKS, SCENARIO_OPENING_MAX_LENGTH, VERSION_NOTE_MAX_LENGTH
+from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 
 Opening = Annotated[str, StringConstraints(max_length=SCENARIO_OPENING_MAX_LENGTH)]
@@ -61,3 +63,33 @@ class ScenarioDetail(AssetSummary):
     world_id: uuid.UUID | None
     lorebook_ids: list[uuid.UUID]
     opening: str
+
+
+VersionNote = Annotated[str, StringConstraints(max_length=VERSION_NOTE_MAX_LENGTH)]
+
+
+class VersionCreate(BaseModel):
+    """
+    게시할 때 받는 값. 변경 내용만 적는다. 비워도 된다.
+
+    판의 내용은 받지 않는다. 서버가 초안에서 직접 읽어 굳힌다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    note: VersionNote = ''
+
+
+class VersionSummary(BaseModel):
+    """판의 목록에 싣는 값. 굳힌 내용은 싣지 않는다."""
+
+    id: uuid.UUID
+    number: int
+    note: str
+    created_at: datetime
+
+
+class VersionDetail(VersionSummary):
+    """만든 사람이 자기 판을 볼 때의 값. 굳힌 내용까지 싣는다. GM 전용 글이 들어 있다."""
+
+    snapshot: Snapshot
