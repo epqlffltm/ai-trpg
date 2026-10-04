@@ -14,6 +14,7 @@ from typing import Annotated
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
 from app.assets.models import Rating
+from app.assets.scenarios.schemas import RecommendedPlayers
 from app.listings.models import (
     LISTING_DESCRIPTION_MAX_LENGTH,
     LISTING_MAX_GENRES,
@@ -108,6 +109,8 @@ class PublicListing(BaseModel):
     genres: list[Genre]
     tags: list[str]
     rating: Rating
+    # 제작자가 추천하는 인원. 강제하지 않는다
+    recommended_players: RecommendedPlayers
     # 공개 중인 판의 번호와 변경 내용
     version: int
     version_note: str

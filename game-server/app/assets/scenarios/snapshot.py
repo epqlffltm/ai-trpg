@@ -17,12 +17,13 @@ from collections.abc import Callable
 
 from pydantic import BaseModel
 
-from app.assets.models import Lorebook, LoreEntry, Rating, Rulebook, Scenario, World
+from app.assets.models import TABLE_MAX_PLAYERS, Lorebook, LoreEntry, Rating, Rulebook, Scenario, World
 
 # 문서의 모양이 바뀔 때 올리는 번호. 옛 판을 읽는 코드가 어느 모양인지 알 수 있다.
 #   1: 도입부가 하나다(opening)
 #   2: 스타팅이 여러 개다(openings)
-SNAPSHOT_FORMAT = 2
+#   3: 추천 인원(recommended_players)과 프리젠(pregens)이 있다
+SNAPSHOT_FORMAT = 3
 
 
 class EntrySnapshot(BaseModel):
@@ -59,6 +60,20 @@ class RulebookSnapshot(BaseModel):
     gm_guide: str
 
 
+class PlayersSnapshot(BaseModel):
+    """추천 인원."""
+
+    min: int
+    max: int
+
+
+class PregenSnapshot(BaseModel):
+    """프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다."""
+
+    name: str
+    description: str
+
+
 class Snapshot(BaseModel):
     """
     판 하나의 내용 전부. 플레이에 필요한 것이 이 안에 다 있다.
@@ -76,6 +91,10 @@ class Snapshot(BaseModel):
     # 스타팅들. 하나 이상이다. 테이블을 만들 때 이 중 하나를 순번으로 고른다.
     # 판은 바뀌지 않으므로 순번이 밀리지 않는다
     openings: list[str]
+    # 추천 인원. 강제하지 않는다
+    recommended_players: PlayersSnapshot
+    # 프리젠들. 플레이어가 테이블에 앉을 때 골라서 가져갈 수 있다
+    pregens: list[PregenSnapshot]
     rulebook: RulebookSnapshot
     world: WorldSnapshot | None
     lorebooks: list[LorebookSnapshot]
@@ -112,6 +131,8 @@ def build_snapshot(
         description=scenario.asset.description,
         rating=scenario.asset.rating,
         openings=list(scenario.openings),
+        recommended_players=PlayersSnapshot(**scenario.recommended_players),
+        pregens=[PregenSnapshot(**pregen) for pregen in scenario.pregens],
         rulebook=snapshot_rulebook(rulebook),
         world=snapshot_world(world) if world else None,
         lorebooks=[snapshot_lorebook(lorebook, entries) for lorebook, entries in lorebooks],
@@ -126,9 +147,22 @@ def upgrade_from_1(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_2(document: dict) -> dict:
+    """
+    형식 2 의 문서를 형식 3 으로 올린다.
+
+    그때는 추천 인원과 프리젠이 없었다. 추천 인원은 "몇 명이든 된다"로, 프리젠은 없는 것으로 읽는다.
+    """
+    upgraded = dict(document)
+    upgraded['recommended_players'] = {'min': 1, 'max': TABLE_MAX_PLAYERS}
+    upgraded['pregens'] = []
+    upgraded['format'] = 3
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
-UPGRADES: dict[int, Callable[[dict], dict]] = {1: upgrade_from_1}
+UPGRADES: dict[int, Callable[[dict], dict]] = {1: upgrade_from_1, 2: upgrade_from_2}
 
 
 def read_snapshot(document: dict) -> Snapshot:
