@@ -25,7 +25,18 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
@@ -42,6 +53,13 @@ RULEBOOK_GM_GUIDE_MAX_LENGTH = 4000
 SCENARIO_OPENING_MAX_LENGTH = 2000
 # 시나리오 하나에 둘 수 있는 스타팅(도입부)의 수. 테이블을 만드는 사람이 한 화면에서 보고 고른다
 SCENARIO_MAX_OPENINGS = 5
+# 테이블 하나에 앉는 플레이어의 수. AI GM 하나에 1~4명이다. 시나리오의 추천 인원도 이 범위 안이다
+TABLE_MAX_PLAYERS = 4
+# 시나리오 하나에 둘 수 있는 프리젠(제작자가 미리 만든 캐릭터)의 수. 자리마다 둘씩 고를 수 있는 만큼이다
+SCENARIO_MAX_PREGENS = 8
+# 캐릭터의 이름과 설명. 설명은 턴마다 AI 의 입력에 들어간다. 사람 수만큼 들어가므로 길이가 곧 비용이다
+CHARACTER_NAME_MAX_LENGTH = 50
+CHARACTER_DESCRIPTION_MAX_LENGTH = 1000
 # 시나리오 하나에 붙일 수 있는 로어북의 수. 플레이할 때 살펴볼 항목의 수가 이 값에 비례한다
 SCENARIO_MAX_LOREBOOKS = 10
 # 판을 낼 때 적는 변경 내용. 사람이 읽는다
@@ -204,6 +222,12 @@ class Scenario(AssetContent):
             f"char_length(array_to_string(openings, '')) <= {SCENARIO_MAX_OPENINGS * SCENARIO_OPENING_MAX_LENGTH}",
             name='openings_length',
         ),
+        CheckConstraint(
+            f'1 <= min_players AND min_players <= max_players AND max_players <= {TABLE_MAX_PLAYERS}',
+            name='players_range',
+        ),
+        # 문서 안의 모양(이름, 설명, 길이)은 입력을 받을 때 검사한다. DB 는 개수만 막는다
+        CheckConstraint(f'jsonb_array_length(pregens) <= {SCENARIO_MAX_PREGENS}', name='pregens_count'),
     )
 
     # 가리키는 대상이 assets 가 아니라 rulebooks 다. 룰북 자리에 세계관을 넣는 일을 DB 가 막는다.
@@ -221,12 +245,33 @@ class Scenario(AssetContent):
     # 시나리오 하나에 딸린 짧은 목록이라 테이블을 따로 두지 않고 배열로 둔다
     openings: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
 
+    # 추천 인원. 제작자가 몇 명을 생각하고 만들었는지 알려 준다. 강제하지 않는다.
+    # 테이블의 정원은 테이블을 만드는 사람이 정한다
+    min_players: Mapped[int] = mapped_column(SmallInteger, default=1)
+    max_players: Mapped[int] = mapped_column(SmallInteger, default=TABLE_MAX_PLAYERS)
+
+    # 프리젠들. 제작자가 미리 만들어 둔 캐릭터다. 하나하나가 {name, description} 이다.
+    # 플레이어가 테이블에 앉을 때 골라서 자기 캐릭터로 가져갈 수 있다. 직접 만들어도 된다.
+    # 시나리오 하나에 딸린 짧은 목록이고 통째로 바꾸므로, 테이블을 따로 두지 않고 문서로 둔다
+    pregens: Mapped[list[dict[str, str]]] = mapped_column(JSONB, default=list)
+
     # 붙인 로어북들. 여러 개라 칸 하나에 담지 못하고 연결 테이블(scenario_lorebooks)의 행으로 둔다.
     # selectin: 시나리오를 읽을 때 함께 읽는다. 비동기에서는 나중에 따로 읽어 오는 방식을 쓸 수 없다.
     # delete-orphan: 이 목록에서 빠진 행은 DB 에서도 지운다
     lorebook_links: Mapped[list['ScenarioLorebook']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='ScenarioLorebook.lorebook_id'
     )
+
+    @property
+    def recommended_players(self) -> dict[str, int]:
+        """추천 인원. 최소와 최대를 한 묶음으로 다룬다."""
+        return {'min': self.min_players, 'max': self.max_players}
+
+    @recommended_players.setter
+    def recommended_players(self, players: dict[str, int]) -> None:
+        """추천 인원을 바꾼다. 둘을 늘 함께 바꿔서, 최소가 최대보다 큰 상태가 생기지 않게 한다."""
+        self.min_players = players['min']
+        self.max_players = players['max']
 
     @property
     def lorebook_ids(self) -> list[uuid.UUID]:

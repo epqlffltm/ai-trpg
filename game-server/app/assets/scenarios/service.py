@@ -31,6 +31,8 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         world_id=data.world_id,
         lorebook_ids=data.lorebook_ids,
         openings=data.openings,
+        recommended_players=data.recommended_players.model_dump(),
+        pregens=[pregen.model_dump() for pregen in data.pregens],
     )
 
 

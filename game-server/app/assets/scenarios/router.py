@@ -47,6 +47,8 @@ def to_detail(scenario: Scenario) -> ScenarioDetail:
         world_id=scenario.world_id,
         lorebook_ids=scenario.lorebook_ids,
         openings=scenario.openings,
+        recommended_players=scenario.recommended_players,
+        pregens=scenario.pregens,
     )
 
 

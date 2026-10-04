@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Asset, Rating, ScenarioVersion
 from app.assets.routing import Paging, Session
+from app.assets.scenarios.schemas import RecommendedPlayers
 from app.auth.dependencies import CurrentUser
 from app.listings import service
 from app.listings.models import TAG_MAX_LENGTH, Genre, Listing
@@ -53,6 +54,7 @@ def to_public(listing: Listing, asset: Asset, version: ScenarioVersion) -> Publi
         genres=listing.genres,
         tags=listing.tags,
         rating=Rating(listing.rating),
+        recommended_players=RecommendedPlayers(min=listing.min_players, max=listing.max_players),
         version=version.number,
         version_note=version.note,
         published_at=listing.published_at,

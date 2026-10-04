@@ -20,9 +20,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import (
+    CHARACTER_DESCRIPTION_MAX_LENGTH,
+    CHARACTER_NAME_MAX_LENGTH,
     SCENARIO_MAX_LOREBOOKS,
     SCENARIO_MAX_OPENINGS,
+    SCENARIO_MAX_PREGENS,
     SCENARIO_OPENING_MAX_LENGTH,
+    TABLE_MAX_PLAYERS,
     Asset,
     AssetType,
     Scenario,
@@ -110,6 +114,9 @@ async def test_creates_a_draft_with_only_a_title(client: AsyncClient, my_headers
     assert body['world_id'] is None
     assert body['lorebook_ids'] == []
     assert body['openings'] == []
+    # 추천 인원을 적지 않으면 "몇 명이든 된다"는 뜻이다
+    assert body['recommended_players'] == {'min': 1, 'max': TABLE_MAX_PLAYERS}
+    assert body['pregens'] == []
     # 성인용으로 올리는 것은 제작자가 직접 골라야 한다
     assert body['rating'] == 'all'
 
@@ -142,6 +149,8 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'world_id',
         'lorebook_ids',
         'openings',
+        'recommended_players',
+        'pregens',
     }
 
 
@@ -411,6 +420,112 @@ async def test_a_rejected_update_changes_nothing(client: AsyncClient, my_headers
     body = (await client.get(url, headers=my_headers)).json()
     assert body['title'] == TITLE
     assert body['rulebook_id'] == rulebook['id']
+
+
+# --- 추천 인원과 프리젠 ---
+
+# 테스트에 쓰는 프리젠. 내용은 아무 뜻이 없다
+PREGENS = [
+    {'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.'},
+    {'name': '악역영애', 'description': '바이크는 처음이지만 웃음소리는 크다.'},
+]
+
+
+async def test_saves_the_recommended_players_and_the_pregens(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(
+        client, SCENARIOS_URL, my_headers, recommended_players={'min': 2, 'max': 3}, pregens=PREGENS
+    )
+
+    read = (await client.get(f'{SCENARIOS_URL}/{scenario["id"]}', headers=my_headers)).json()
+
+    assert read['recommended_players'] == {'min': 2, 'max': 3}
+    # 프리젠은 보낸 순서 그대로다
+    assert read['pregens'] == PREGENS
+
+
+async def test_a_pregen_needs_only_a_name(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(client, SCENARIOS_URL, my_headers, pregens=[{'name': '  이름뿐인 사람  '}])
+
+    # 이름의 앞뒤 공백은 뗀다. 설명은 비워도 된다
+    assert scenario['pregens'] == [{'name': '이름뿐인 사람', 'description': ''}]
+
+
+async def test_accepts_the_most_pregens_allowed(client: AsyncClient, my_headers: dict[str, str]):
+    pregens = [{'name': f'{number}번 캐릭터', 'description': ''} for number in range(SCENARIO_MAX_PREGENS)]
+
+    scenario = await create(client, SCENARIOS_URL, my_headers, pregens=pregens)
+
+    assert scenario['pregens'] == pregens
+
+
+@pytest.mark.parametrize(
+    'fields',
+    [
+        # 추천 인원은 1 명부터 테이블의 정원까지다
+        {'recommended_players': {'min': 0, 'max': 2}},
+        {'recommended_players': {'min': 1, 'max': TABLE_MAX_PLAYERS + 1}},
+        # 최소가 최대보다 클 수 없다
+        {'recommended_players': {'min': 3, 'max': 2}},
+        # 둘을 함께 보낸다
+        {'recommended_players': {'min': 2}},
+        {'recommended_players': {'min': 1, 'max': 2, 'ideal': 2}},
+        {'recommended_players': 2},
+        {'pregens': [{'name': '   '}]},
+        {'pregens': [{'description': '이름이 없다'}]},
+        {'pregens': [{'name': '가' * (CHARACTER_NAME_MAX_LENGTH + 1)}]},
+        {'pregens': [{'name': '엘프', 'description': '가' * (CHARACTER_DESCRIPTION_MAX_LENGTH + 1)}]},
+        # 프리젠에는 정해 둔 칸만 있다
+        {'pregens': [{'name': '엘프', 'hp': 10}]},
+        # 같은 이름은 고르는 화면에서 구별할 수 없다. 대소문자만 달라도 같은 것이다
+        {'pregens': [{'name': 'Elf'}, {'name': 'elf'}]},
+        {'pregens': [{'name': f'{number}번'} for number in range(SCENARIO_MAX_PREGENS + 1)]},
+        {'pregens': '엘프'},
+    ],
+)
+async def test_rejects_bad_players_and_pregens(client: AsyncClient, my_headers: dict[str, str], fields: dict):
+    scenario = await create(
+        client, SCENARIOS_URL, my_headers, recommended_players={'min': 2, 'max': 3}, pregens=PREGENS
+    )
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    created = await client.post(SCENARIOS_URL, json={'title': '시나리오', **fields}, headers=my_headers)
+    updated = await client.patch(url, json=fields, headers=my_headers)
+
+    assert created.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert updated.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    # 거부된 요청은 아무것도 바꾸지 않는다
+    read = (await client.get(url, headers=my_headers)).json()
+    assert read['recommended_players'] == {'min': 2, 'max': 3}
+    assert read['pregens'] == PREGENS
+
+
+async def test_replaces_the_pregens_as_a_whole(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(
+        client, SCENARIOS_URL, my_headers, recommended_players={'min': 2, 'max': 3}, pregens=PREGENS
+    )
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+    last_only = [PREGENS[1]]
+
+    replaced = await client.patch(url, json={'pregens': last_only}, headers=my_headers)
+    # null 은 "보내지 않았다"와 같다
+    not_sent = await client.patch(url, json={'pregens': None, 'recommended_players': None}, headers=my_headers)
+    cleared = await client.patch(url, json={'pregens': []}, headers=my_headers)
+
+    assert replaced.json()['pregens'] == last_only
+    assert not_sent.json()['pregens'] == last_only
+    assert not_sent.json()['recommended_players'] == {'min': 2, 'max': 3}
+    assert cleared.json()['pregens'] == []
+
+
+async def test_changes_the_recommended_players(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(client, SCENARIOS_URL, my_headers, recommended_players={'min': 3, 'max': 4})
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    # 최소와 최대를 함께 바꾼다. 하나씩 바꾸면 도중에 최소가 최대보다 큰 상태를 지나야 할 수 있다
+    solo = await client.patch(url, json={'recommended_players': {'min': 1, 'max': 1}}, headers=my_headers)
+
+    assert solo.status_code == status.HTTP_200_OK
+    assert solo.json()['recommended_players'] == {'min': 1, 'max': 1}
 
 
 # --- 시나리오가 가리키는 자산은 지울 수 없다 ---
@@ -690,6 +805,26 @@ async def test_the_database_rejects_a_world_as_an_attached_lorebook(session: Asy
 
     # 서비스를 거치지 않고 로어북 자리에 세계관의 ID 를 넣는다
     session.add(ScenarioLorebook(scenario_id=scenario.asset_id, lorebook_id=world.asset_id))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+
+
+@pytest.mark.parametrize(('min_players', 'max_players'), [(0, 2), (3, 2), (1, TABLE_MAX_PLAYERS + 1)])
+async def test_the_database_rejects_recommended_players_out_of_range(
+    session: AsyncSession, min_players: int, max_players: int
+):
+    asset = Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오')
+    session.add(Scenario(asset=asset, min_players=min_players, max_players=max_players))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+
+
+async def test_the_database_rejects_too_many_pregens(session: AsyncSession):
+    asset = Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오')
+    pregens = [{'name': f'{number}번', 'description': ''} for number in range(SCENARIO_MAX_PREGENS + 1)]
+    session.add(Scenario(asset=asset, pregens=pregens))
 
     with pytest.raises(IntegrityError):
         await session.commit()
