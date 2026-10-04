@@ -7,8 +7,9 @@
 """
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.assets.routing import Paging, Session
@@ -22,6 +23,7 @@ from app.tables.schemas import (
     CharacterUpdate,
     HostTransfer,
     JoinRequest,
+    LobbyJoinRequest,
     MemberOut,
     PregenChoice,
     TableCreate,
@@ -35,6 +37,7 @@ from app.tables.service import (
     TableConflictError,
     TableNotFoundError,
     TableOptionError,
+    WrongPasswordError,
 )
 
 router = APIRouter(prefix='/tables', tags=['tables'])
@@ -50,6 +53,8 @@ def to_summary(table: GameTable) -> TableSummary:
         capacity=table.capacity,
         member_count=len(table.members),
         host_id=table.host_id,
+        is_public=table.is_public,
+        has_password=table.password_hash is not None,
         created_at=table.created_at,
     )
 
@@ -122,6 +127,15 @@ async def handle_not_host(request: Request, error: NotHostError) -> JSONResponse
     return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={'detail': '방장만 할 수 있습니다.'})
 
 
+async def handle_wrong_password(request: Request, error: WrongPasswordError) -> JSONResponse:
+    """
+    "비밀번호가 틀렸다"는 403 이다.
+
+    404 가 아니다. 로비에 보이는 테이블이라 있다는 것은 누구나 안다.
+    """
+    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={'detail': '비밀번호가 맞지 않습니다.'})
+
+
 async def handle_table_conflict(request: Request, error: TableConflictError) -> JSONResponse:
     """ "테이블의 지금 상태와 부딪힌다"는 409 다. 이유를 reason 에 싣는다. 화면이 이 값으로 안내를 고른다."""
     return JSONResponse(
@@ -162,10 +176,33 @@ async def list_tables(user: CurrentUser, session: Session, paging: Paging) -> Ta
     return TablePage(items=[to_summary(table) for table in tables], total=total)
 
 
+# 로비를 시나리오로 거르는 값. 주소의 ?scenario_id=.. 에서 읽는다
+ScenarioFilter = Annotated[uuid.UUID | None, Query()]
+
+
+# /lobby 를 /{table_id} 보다 먼저 적는다. 먼저 적은 주소가 먼저 맞춰진다
+@router.get('/lobby', response_model=TablePage, status_code=status.HTTP_200_OK)
+async def list_lobby(
+    user: CurrentUser, session: Session, paging: Paging, scenario_id: ScenarioFilter = None
+) -> TablePage:
+    """로비. 들어갈 수 있는 테이블을 최근에 만든 것부터 돌려준다. 모집 중이고 자리가 남은 것만 나온다."""
+    tables, total = await service.list_lobby(session, user, scenario_id, paging.limit, paging.offset)
+    return TablePage(items=[to_summary(table) for table in tables], total=total)
+
+
 @router.get('/{table_id}', response_model=TableDetail, status_code=status.HTTP_200_OK)
 async def read_table(table_id: uuid.UUID, user: CurrentUser, session: Session) -> TableDetail:
     """내가 앉아 있는 테이블 하나를 돌려준다."""
     table = await service.get_table(session, user.user_id, table_id)
+    return to_detail(table, user.user_id)
+
+
+@router.post('/{table_id}/join', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def join_public_table(
+    table_id: uuid.UUID, data: LobbyJoinRequest, user: CurrentUser, session: Session
+) -> TableDetail:
+    """로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 비밀번호를 보낸다."""
+    table = await service.join_public_table(session, user, table_id, data)
     return to_detail(table, user.user_id)
 
 
