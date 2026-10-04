@@ -10,6 +10,7 @@
   - worlds 등: 그 종류만 갖는 내용. 종류마다 테이블이 하나씩 있고, 모두 AssetContent 를 물려받는다.
 
 자산이 다른 자산을 가리킬 수 있다. 시나리오가 룰북과 세계관을 가리킨다.
+자산에 딸린 행이 여럿일 수 있다. 로어북에 항목이 딸린다. 항목은 자산이 아니다.
 
 공통 부분을 한 테이블에 두면, 권한 검사 같은 규칙을 종류마다 다시 짜지 않아도 되고,
 "아무 자산이나 가리키는 것"(방이 쓴 자산, 구매한 자산)이 외래 키 하나로 된다.
@@ -22,6 +23,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, Uuid, func
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from app.core.database import Base
@@ -36,6 +38,13 @@ RULEBOOK_GM_GUIDE_MAX_LENGTH = 4000
 # 테이블이 시작될 때 한 번 읽어 주는 글이다. 턴마다 다시 들어가지 않는다
 SCENARIO_OPENING_MAX_LENGTH = 2000
 
+# 로어북의 항목. 항목은 통째로 AI 의 입력에 들어가는 단위다. 짧게 쪼개 둘수록 필요한 것만 넣을 수 있다
+LOREBOOK_MAX_ENTRIES = 100
+LORE_ENTRY_NAME_MAX_LENGTH = 100
+LORE_ENTRY_CONTENT_MAX_LENGTH = 500
+LORE_ENTRY_MAX_KEYWORDS = 5
+LORE_KEYWORD_MAX_LENGTH = 30
+
 
 class AssetType(enum.StrEnum):
     """자산의 종류. 종류마다 내용을 담는 테이블이 따로 있다."""
@@ -43,6 +52,7 @@ class AssetType(enum.StrEnum):
     WORLD = 'world'
     RULEBOOK = 'rulebook'
     SCENARIO = 'scenario'
+    LOREBOOK = 'lorebook'
 
 
 class Visibility(enum.StrEnum):
@@ -152,8 +162,8 @@ class Rulebook(AssetContent):
     룰북의 내용. 시나리오를 만들 때 중심이 되는 자산이다.
 
     룰북에는 두 가지가 들어간다.
-    - 진행 지침: 컨셉, 분위기, GM 의 진행 방식. AI 가 읽는 글이다.
-    - 게임 규칙: 능력치, 주사위, 판정. 엔진이 실행하는 데이터다.
+      - 진행 지침: 컨셉, 분위기, GM 의 진행 방식. AI 가 읽는 글이다.
+      - 게임 규칙: 능력치, 주사위, 판정. 엔진이 실행하는 데이터다.
     지금은 진행 지침만 있다. 게임 규칙의 칸은 엔진을 만들 때 더한다.
     규칙을 글로 적어 AI 에게 주지 않는다. 그러면 판정을 AI 가 하게 된다.
     """
@@ -190,3 +200,51 @@ class Scenario(AssetContent):
 
     # 도입부. 테이블이 시작될 때 AI 가 처음 읽어 주는 장면이다. 플레이어와 AI 가 함께 본다
     opening: Mapped[str] = mapped_column(Text, default='')
+
+
+class Lorebook(AssetContent):
+    """
+    로어북의 내용. 설정을 항목 단위로 쪼개 담은 사전이다.
+
+    세계관의 설정은 턴마다 통째로 AI 에게 간다. 로어북의 항목은 지금 장면에 관련된 것만 골라서 간다.
+    그래서 로어북 자신에게는 칸이 없다. 내용은 전부 항목(LoreEntry)에 있다.
+    """
+
+    __tablename__ = 'lorebooks'
+
+
+class LoreEntry(Base):
+    """
+    로어북의 항목 하나. 인물, 장소, 물건, 사건 같은 설정 한 토막이다.
+
+    항목은 자산이 아니다. 주인, 공개 범위, 지운 시각이 따로 없고 로어북의 것을 따른다.
+    지울 때는 행을 실제로 지운다.
+    """
+
+    __tablename__ = 'lore_entries'
+    __table_args__ = (
+        CheckConstraint(at_most('content', LORE_ENTRY_CONTENT_MAX_LENGTH), name='content_length'),
+        CheckConstraint(f'cardinality(keywords) <= {LORE_ENTRY_MAX_KEYWORDS}', name='keywords_count'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    # 어느 로어북의 항목인가. 로어북의 행이 지워지면 항목도 함께 지워진다.
+    # "이 로어북의 항목들"을 찾는 일이 대부분이라 색인을 건다
+    lorebook_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('lorebooks.asset_id', ondelete='CASCADE'), index=True)
+
+    # 항목의 이름. 사람이 목록에서 찾을 때 본다. AI 에게도 내용과 함께 간다
+    name: Mapped[str] = mapped_column(String(LORE_ENTRY_NAME_MAX_LENGTH))
+
+    # 이 낱말이 대화에 나오면 항목을 AI 의 입력에 넣는다. 고유 명사처럼 글자가 정확히 맞아야 하는 것에 강하다.
+    # 뜻이 비슷한 것을 찾는 검색(임베딩)은 나중에 더한다. 그때도 키워드는 함께 쓴다.
+    # 항목 하나에 딸린 짧은 목록이라 테이블을 따로 두지 않고 배열로 둔다
+    keywords: Mapped[list[str]] = mapped_column(ARRAY(String(LORE_KEYWORD_MAX_LENGTH)), default=list)
+
+    # 내용. AI 가 읽는다. 항목 하나가 검색의 한 토막이 되므로, 한 가지 이야기만 담는다
+    content: Mapped[str] = mapped_column(Text, default='')
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

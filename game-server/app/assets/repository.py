@@ -9,7 +9,7 @@
 지운 자산(deleted_at 이 채워진 것)은 어떤 조회에도 나오지 않는다.
 
 자산이 다른 자산을 가리키는 일과 자산을 지우는 일이 동시에 일어날 수 있다.
-둘 다 대상 자산의 행을 먼저 잠근다. 가리키는 쪽은 hold_owned, 지우는 쪽은 find_owned_for_delete 다.
+둘 다 대상 자산의 행을 먼저 잠근다. 가리키는 쪽은 hold_owned, 지우는 쪽은 lock_owned 다.
 
 model 은 내용 테이블의 모델이다(World 등). 어느 테이블에서 찾을지를 정한다.
 """
@@ -53,13 +53,14 @@ async def hold_owned[Content: AssetContent](
     return await session.scalar(query)
 
 
-async def find_owned_for_delete[Content: AssetContent](
+async def lock_owned[Content: AssetContent](
     session: AsyncSession, model: type[Content], owner_id: uuid.UUID, asset_id: uuid.UUID
 ) -> Content | None:
     """
-    지울 자산 하나를 찾고, 이 트랜잭션이 끝날 때까지 혼자 잠근다.
+    자산 하나를 찾고, 이 트랜잭션이 끝날 때까지 혼자 잠근다. "확인하고 나서 쓰는" 일을 할 때 쓴다.
 
-    FOR UPDATE: 이 자산을 붙잡으려는 쪽(hold_owned)은 지우기가 끝날 때까지 기다린다.
+    FOR UPDATE: 같은 자산을 잠그려는 다른 요청과 붙잡으려는 요청(hold_owned)은 이 트랜잭션이 끝날 때까지 기다린다.
+    쓰는 곳: 지우기(쓰이는지 확인하고 지운다), 로어북에 항목 더하기(개수를 세고 더한다).
     """
     query = owned(model, owner_id).where(model.asset_id == asset_id).with_for_update(of=Asset)
     return await session.scalar(query)
