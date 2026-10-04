@@ -110,7 +110,8 @@ class Asset(Base):
     type: Mapped[str] = mapped_column(String(20))
     title: Mapped[str] = mapped_column(String(TITLE_MAX_LENGTH))
 
-    # 소개글. 사람이 읽는다. AI 의 입력에는 넣지 않는다
+    # 메모. 만든 사람이 자기 목록에서 알아보려고 적는다. AI 의 입력에는 넣지 않는다.
+    # 남에게 보이는 소개글은 소개 페이지(app/listings)에 따로 있다
     description: Mapped[str] = mapped_column(Text, default='')
 
     visibility: Mapped[str] = mapped_column(String(20), default=Visibility.PRIVATE)

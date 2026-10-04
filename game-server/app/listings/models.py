@@ -60,9 +60,9 @@ class Genre(enum.StrEnum):
 
 class Listing(Base):
     """
-    시나리오 하나의 공개 정보. 홍보 페이지의 내용과, 지금 공개 중인 판을 담는다.
+    시나리오 하나의 공개 정보. 소개 페이지의 내용과, 지금 공개 중인 판을 담는다.
 
-    version_id 가 비어 있으면 공개하지 않은 것이다. 홍보 페이지는 공개하기 전에도 미리 써 둘 수 있다.
+    version_id 가 비어 있으면 공개하지 않은 것이다. 소개 페이지는 공개하기 전에도 미리 써 둘 수 있다.
     시나리오 하나에 공개 판은 하나다. 다른 판을 공개하면 앞의 것과 바뀐다.
     """
 
@@ -96,7 +96,7 @@ class Listing(Base):
     # 한줄소개. 목록에 보인다
     tagline: Mapped[str] = mapped_column(String(TAGLINE_MAX_LENGTH), default='')
 
-    # 설명. 상세 화면에 보인다. 지금은 꾸밈 없는 글이다
+    # 소개글. 소개 페이지의 본문이다. 지금은 꾸밈 없는 글이다
     description: Mapped[str] = mapped_column(Text, default='')
 
     # 장르. Genre 의 값들이다. 허용 값의 검사는 입력의 모양(schemas.py)이 한다.

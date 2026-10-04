@@ -242,7 +242,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         client,
         SCENARIOS_URL,
         my_headers,
-        description='소개글',
+        description='메모',
         rulebook_id=rulebook['id'],
         world_id=world['id'],
         lorebook_ids=[lorebook['id']],
@@ -254,7 +254,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
     assert version['snapshot'] == {
         'format': SNAPSHOT_FORMAT,
         'title': TITLE,
-        'description': '소개글',
+        'description': '메모',
         'rating': 'all',
         'opening': OPENING,
         'rulebook': {'id': rulebook['id'], 'title': '룰북', 'gm_guide': GM_GUIDE},
