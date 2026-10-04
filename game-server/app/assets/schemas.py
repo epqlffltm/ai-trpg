@@ -3,6 +3,9 @@
 """
 모든 자산이 함께 쓰는 입력과 응답의 모양. 종류별 모양은 이것을 물려받아 자기 칸만 더한다.
 
+이용 등급(rating)은 여기 없다. 등급은 시나리오를 조립할 때 정하는 것이라 시나리오의 모양에만 있다.
+재료(세계관, 룰북, 로어북)는 등급을 가리지 않는다.
+
 입력의 검증은 여기서 한다. 길이 제한은 모델의 상수를 그대로 쓴다. DB 의 CHECK 와 숫자가 어긋나지 않는다.
 DB 의 CHECK 는 마지막 방어선이고, 사용자에게 "어느 칸이 왜 틀렸는지" 알려 주는 것은 이쪽이다.
 """
@@ -13,7 +16,7 @@ from typing import Annotated, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from app.assets.models import DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, Rating, Visibility
+from app.assets.models import DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, Visibility
 
 # 제목은 앞뒤 공백을 떼고, 그러고도 한 글자 이상이어야 한다. 공백만 있는 제목을 막는다
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=TITLE_MAX_LENGTH)]
@@ -28,7 +31,6 @@ class AssetCreate(BaseModel):
 
     title: Title
     description: Description = ''
-    rating: Rating = Rating.ALL
 
 
 class AssetUpdate(BaseModel):
@@ -47,7 +49,6 @@ class AssetUpdate(BaseModel):
 
     title: Title | None = None
     description: Description | None = None
-    rating: Rating | None = None
 
 
 class AssetSummary(BaseModel):
@@ -56,7 +57,6 @@ class AssetSummary(BaseModel):
     id: uuid.UUID
     title: str
     description: str
-    rating: Rating
     visibility: Visibility
     created_at: datetime
     updated_at: datetime

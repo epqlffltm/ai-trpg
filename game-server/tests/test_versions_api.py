@@ -202,11 +202,11 @@ async def test_the_refusal_lists_every_problem(client: AsyncClient, my_headers: 
 
 
 async def test_the_rating_comes_from_the_scenario_alone(client: AsyncClient, my_headers: dict[str, str]):
-    adult_world = await create(client, WORLDS_URL, my_headers, rating='adult')
-    all_ages = await create_ready_scenario(client, my_headers, world_id=adult_world['id'])
-    adult = await create_ready_scenario(client, my_headers, rating='adult')
+    world = await create(client, WORLDS_URL, my_headers)
+    all_ages = await create_ready_scenario(client, my_headers, world_id=world['id'])
+    adult = await create_ready_scenario(client, my_headers, world_id=world['id'], rating='adult')
 
-    # 등급은 시나리오를 조립할 때 제작자가 정한다. 재료의 등급은 게시를 막지도, 판의 등급을 바꾸지도 않는다
+    # 등급은 시나리오를 조립할 때 제작자가 정한다. 같은 재료로 전체 이용가와 성인용을 둘 다 만들 수 있다
     assert (await publish(client, my_headers, all_ages))['snapshot']['rating'] == 'all'
     assert (await publish(client, my_headers, adult))['snapshot']['rating'] == 'adult'
 

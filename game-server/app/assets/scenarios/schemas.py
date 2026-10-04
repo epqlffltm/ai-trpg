@@ -10,7 +10,7 @@ from typing import Annotated, ClassVar
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
-from app.assets.models import SCENARIO_MAX_LOREBOOKS, SCENARIO_OPENING_MAX_LENGTH, VERSION_NOTE_MAX_LENGTH
+from app.assets.models import SCENARIO_MAX_LOREBOOKS, SCENARIO_OPENING_MAX_LENGTH, VERSION_NOTE_MAX_LENGTH, Rating
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 
@@ -34,6 +34,8 @@ class ScenarioCreate(AssetCreate):
     룰북 없이도 만들 수 있다(임시 저장). 게시할 때 룰북이 있는지 검사한다.
     """
 
+    # 이용 등급. 시나리오를 조립할 때 제작자가 고른다. 성인용으로 올리는 것은 직접 골라야 한다
+    rating: Rating = Rating.ALL
     rulebook_id: uuid.UUID | None = None
     world_id: uuid.UUID | None = None
     lorebook_ids: LorebookIds = []
@@ -50,13 +52,28 @@ class ScenarioUpdate(AssetUpdate):
 
     clearable: ClassVar[frozenset[str]] = frozenset({'rulebook_id', 'world_id'})
 
+    rating: Rating | None = None
     rulebook_id: uuid.UUID | None = None
     world_id: uuid.UUID | None = None
     lorebook_ids: LorebookIds | None = None
     opening: Opening | None = None
 
 
-class ScenarioDetail(AssetSummary):
+class ScenarioSummary(AssetSummary):
+    """시나리오의 목록에 싣는 값. 공통 값에 등급을 더한다. 목록에서 등급으로 가려 보여 줄 수 있어야 한다."""
+
+    rating: Rating
+
+
+class ScenarioPage(BaseModel):
+    """시나리오 목록의 한 쪽."""
+
+    items: list[ScenarioSummary]
+    # 조건에 맞는 전체 개수. 다음 쪽이 있는지 알 수 있다
+    total: int = Field(ge=0)
+
+
+class ScenarioDetail(ScenarioSummary):
     """만든 사람이 자기 시나리오를 볼 때의 값. 가리키는 자산은 ID 만 싣는다. 내용은 그 자산의 주소에서 읽는다."""
 
     rulebook_id: uuid.UUID | None

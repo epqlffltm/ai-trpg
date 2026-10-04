@@ -44,7 +44,6 @@ def to_summary(asset: Asset) -> AssetSummary:
         id=asset.id,
         title=asset.title,
         description=asset.description,
-        rating=asset.rating,
         visibility=asset.visibility,
         created_at=asset.created_at,
         updated_at=asset.updated_at,
