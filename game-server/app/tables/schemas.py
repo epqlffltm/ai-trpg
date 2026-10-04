@@ -15,7 +15,12 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from app.assets.models import TABLE_MAX_PLAYERS, Rating
 from app.assets.scenarios.schemas import CharacterDescription, CharacterName, RecommendedPlayers
-from app.tables.models import TableStatus
+from app.tables.models import TABLE_PASSWORD_MAX_LENGTH, TABLE_PASSWORD_MIN_LENGTH, TableStatus
+
+# 테이블의 비밀번호. 앞뒤 공백을 떼지 않는다. 적은 그대로가 비밀번호다
+TablePassword = Annotated[
+    str, StringConstraints(min_length=TABLE_PASSWORD_MIN_LENGTH, max_length=TABLE_PASSWORD_MAX_LENGTH)
+]
 
 
 class TableCreate(BaseModel):
@@ -23,6 +28,7 @@ class TableCreate(BaseModel):
     테이블을 만들 때 받는 값. 어느 시나리오의 어느 판으로, 어느 스타팅으로, 몇 명이서 할지 고른다.
 
     version 을 비우면 그 시나리오의 공개 중인 판을 쓴다. 번호를 적는 것은 자기 시나리오일 때만 된다.
+    is_public 을 켜면 로비에 보인다. 만든 뒤에는 바꿀 수 없다. 비밀번호는 로비에 보이는 테이블에만 건다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -33,6 +39,15 @@ class TableCreate(BaseModel):
     opening_index: int = Field(default=0, ge=0)
     # 정원. 방장을 포함한다
     capacity: int = Field(ge=1, le=TABLE_MAX_PLAYERS)
+    is_public: bool = False
+    password: TablePassword | None = None
+
+    @model_validator(mode='after')
+    def require_public_for_password(self) -> 'TableCreate':
+        """로비에 보이지 않는 테이블에는 비밀번호를 걸 수 없다. 초대 코드가 그 일을 한다."""
+        if self.password is not None and not self.is_public:
+            raise ValueError('비밀번호는 로비에 보이는 테이블에만 걸 수 있습니다.')
+        return self
 
 
 # 초대 코드. 길이는 넉넉히 받는다. 틀린 코드는 "없는 테이블"로 답한다
@@ -40,11 +55,23 @@ InviteCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=
 
 
 class JoinRequest(BaseModel):
-    """테이블에 들어갈 때 받는 값."""
+    """초대 코드로 테이블에 들어갈 때 받는 값."""
 
     model_config = ConfigDict(extra='forbid')
 
     invite_code: InviteCode
+
+
+class LobbyJoinRequest(BaseModel):
+    """
+    로비에서 테이블에 들어갈 때 받는 값. 비밀번호가 걸린 테이블이면 비밀번호를 적는다.
+
+    길이를 검사하지 않는다(위쪽 끝만 막는다). 틀린 비밀번호는 모양이 어떻든 "틀렸다"로 답한다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    password: str | None = Field(default=None, max_length=TABLE_PASSWORD_MAX_LENGTH)
 
 
 class CharacterUpdate(BaseModel):
@@ -116,6 +143,9 @@ class TableSummary(BaseModel):
     capacity: int
     member_count: int
     host_id: uuid.UUID
+    # 로비에 보이는가, 로비에서 들어올 때 비밀번호를 묻는가
+    is_public: bool
+    has_password: bool
     created_at: datetime
 
 

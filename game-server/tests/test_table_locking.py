@@ -30,7 +30,7 @@ from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
 from app.auth.tokens import AccessClaims
 from app.tables import repository, service
 from app.tables.models import GameTable, TableMember
-from app.tables.schemas import CharacterUpdate, JoinRequest, TableCreate
+from app.tables.schemas import CharacterUpdate, JoinRequest, LobbyJoinRequest, TableCreate
 from app.tables.service import Conflict, TableConflictError
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -56,7 +56,7 @@ async def is_waiting(task: asyncio.Task) -> bool:
     return not done
 
 
-async def open_table(session: AsyncSession, capacity: int) -> GameTable:
+async def open_table(session: AsyncSession, capacity: int, is_public: bool = False) -> GameTable:
     """내가 방장인 테이블을 연다. 프리젠이 하나 있는 시나리오로 만든다."""
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
     data = ScenarioCreate(
@@ -64,7 +64,7 @@ async def open_table(session: AsyncSession, capacity: int) -> GameTable:
     )
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
-    table = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=capacity)
+    table = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=capacity, is_public=is_public)
     return await service.create_table(session, AccessClaims(user_id=ME), table)
 
 
@@ -95,6 +95,28 @@ async def test_joining_waits_for_another_join(session: AsyncSession, other_sessi
     assert refused.value.reason == Conflict.TABLE_FULL
     await other_session.rollback()
     # 응답이 아니라 저장된 것을 본다. 정원을 넘겨 앉은 사람이 없어야 한다
+    assert await count_members(other_session, table.id) == 2
+
+
+async def test_joining_from_the_lobby_waits_for_another_join(session: AsyncSession, other_session: AsyncSession):
+    table = await open_table(session, capacity=2, is_public=True)
+
+    # A: 테이블을 잠그고 한 자리 남은 곳에 앉았지만 아직 커밋하지 않았다
+    locked = await repository.lock_table(session, table.id)
+    locked.members.append(TableMember(user_id=FRIEND))
+    await session.flush()
+
+    # B: 로비에서 같은 테이블에 들어오려 한다. 초대 코드로 들어올 때와 같은 잠금을 기다려야 한다
+    viewer = AccessClaims(user_id=THIRD)
+    joining = asyncio.create_task(service.join_public_table(other_session, viewer, table.id, LobbyJoinRequest()))
+    assert await is_waiting(joining)
+
+    await session.commit()
+
+    with pytest.raises(TableConflictError) as refused:
+        await joining
+    assert refused.value.reason == Conflict.TABLE_FULL
+    await other_session.rollback()
     assert await count_members(other_session, table.id) == 2
 
 
