@@ -109,6 +109,8 @@ async def test_creates_a_draft_with_only_a_title(client: AsyncClient, my_headers
     assert body['world_id'] is None
     assert body['lorebook_ids'] == []
     assert body['opening'] == ''
+    # 성인용으로 올리는 것은 제작자가 직접 골라야 한다
+    assert body['rating'] == 'all'
 
 
 async def test_creates_a_scenario_that_points_to_my_assets(client: AsyncClient, my_headers: dict[str, str]):
@@ -159,6 +161,7 @@ async def test_a_scenario_is_saved_as_the_scenario_type(
         {'title': '   '},
         {'title': '시나리오', 'opening': '가' * (SCENARIO_OPENING_MAX_LENGTH + 1)},
         {'title': '시나리오', 'rulebook_id': 'not-a-uuid'},
+        {'title': '시나리오', 'rating': 'teen'},
         {'title': '시나리오', 'lorebook_ids': ['not-a-uuid']},
         {'title': '시나리오', 'lorebook_ids': NO_SUCH_ID},
         {'title': '시나리오', 'lorebook_ids': None},
@@ -177,6 +180,52 @@ async def test_rejects_bad_input(client: AsyncClient, my_headers: dict[str, str]
     response = await client.post(SCENARIOS_URL, json=body, headers=my_headers)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+# --- 등급 ---
+
+
+async def test_the_rating_is_chosen_on_the_scenario(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(client, SCENARIOS_URL, my_headers, rating='adult')
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    lowered = await client.patch(url, json={'rating': 'all'}, headers=my_headers)
+    untouched = await client.patch(url, json={'opening': OPENING}, headers=my_headers)
+
+    assert scenario['rating'] == 'adult'
+    assert lowered.json()['rating'] == 'all'
+    # 보내지 않으면 그대로다
+    assert untouched.json()['rating'] == 'all'
+
+
+async def test_the_list_carries_the_rating(client: AsyncClient, my_headers: dict[str, str]):
+    await create(client, SCENARIOS_URL, my_headers, title='전체 이용가')
+    await create(client, SCENARIOS_URL, my_headers, title='성인용', rating='adult')
+
+    response = await client.get(SCENARIOS_URL, headers=my_headers)
+
+    # 목록에서 등급으로 가려 보여 줄 수 있어야 한다. 재료의 목록에는 등급이 없다
+    ratings = {item['title']: item['rating'] for item in response.json()['items']}
+    assert ratings == {'전체 이용가': 'all', '성인용': 'adult'}
+    assert response.json()['total'] == 2
+
+
+@pytest.mark.parametrize(
+    'target_url', [RULEBOOKS_URL, WORLDS_URL, LOREBOOKS_URL], ids=['rulebook', 'world', 'lorebook']
+)
+async def test_materials_have_no_rating(client: AsyncClient, my_headers: dict[str, str], target_url: str):
+    created = await create(client, target_url, my_headers)
+    url = f'{target_url}/{created["id"]}'
+
+    sent_on_create = await client.post(target_url, json={'title': TITLE, 'rating': 'adult'}, headers=my_headers)
+    sent_on_update = await client.patch(url, json={'rating': 'adult'}, headers=my_headers)
+    listed = await client.get(target_url, headers=my_headers)
+
+    # 재료는 등급을 가리지 않는다. 받지도 않고 내보내지도 않는다
+    assert 'rating' not in created
+    assert sent_on_create.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert sent_on_update.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert 'rating' not in listed.json()['items'][0]
 
 
 # --- 가리킬 수 있는 자산 ---

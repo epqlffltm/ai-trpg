@@ -98,7 +98,6 @@ async def test_creates_a_world(client: AsyncClient, my_headers: dict[str, str]):
     assert body['setting'] == SETTING
     assert body['gm_notes'] == GM_NOTES
     assert body['visibility'] == 'private'
-    assert body['rating'] == 'all'
     assert uuid.UUID(body['id'])
     assert body['created_at']
 
@@ -111,7 +110,6 @@ async def test_the_response_does_not_carry_internal_fields(client: AsyncClient, 
         'id',
         'title',
         'description',
-        'rating',
         'visibility',
         'created_at',
         'updated_at',
@@ -138,7 +136,8 @@ async def test_the_owner_comes_from_the_token_not_the_body(
         {'title': ''},
         {'title': '   '},
         {'title': 'x' * 101},
-        {'title': '세계', 'rating': 'teen'},
+        # 등급은 시나리오에서만 정한다. 맞는 값이어도 재료에는 받지 않는다
+        {'title': '세계', 'rating': 'adult'},
         {'title': '세계', 'setting': '가' * 8001},
         {'title': '세계', 'gm_notes': '가' * 4001},
         {'title': '세계', 'description': '가' * 1001},

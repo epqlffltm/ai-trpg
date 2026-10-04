@@ -15,27 +15,33 @@ from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
 from app.assets.models import Scenario, ScenarioVersion
-from app.assets.routing import Paging, Session, to_page, to_summary
+from app.assets.routing import Paging, Session, to_summary
 from app.assets.scenarios import publishing, service
 from app.assets.scenarios.publishing import ScenarioNotReadyError
 from app.assets.scenarios.schemas import (
     ScenarioCreate,
     ScenarioDetail,
+    ScenarioPage,
+    ScenarioSummary,
     ScenarioUpdate,
     VersionCreate,
     VersionDetail,
     VersionSummary,
 )
-from app.assets.schemas import AssetPage
 from app.auth.dependencies import CurrentUser
 
 router = APIRouter(prefix='/scenarios', tags=['scenarios'])
 
 
+def to_scenario_summary(scenario: Scenario) -> ScenarioSummary:
+    """시나리오를 목록용 응답으로 바꾼다. 공통 값에 등급을 더한다."""
+    return ScenarioSummary(**to_summary(scenario.asset).model_dump(), rating=scenario.asset.rating)
+
+
 def to_detail(scenario: Scenario) -> ScenarioDetail:
     """시나리오를 만든 사람에게 보여 주는 응답으로 바꾼다."""
     return ScenarioDetail(
-        **to_summary(scenario.asset).model_dump(),
+        **to_scenario_summary(scenario).model_dump(),
         rulebook_id=scenario.rulebook_id,
         world_id=scenario.world_id,
         lorebook_ids=scenario.lorebook_ids,
@@ -72,11 +78,11 @@ async def create_scenario(data: ScenarioCreate, user: CurrentUser, session: Sess
     return to_detail(scenario)
 
 
-@router.get('', response_model=AssetPage, status_code=status.HTTP_200_OK)
-async def list_scenarios(user: CurrentUser, session: Session, paging: Paging) -> AssetPage:
-    """자기 시나리오의 목록을 최근에 만든 것부터 돌려준다."""
+@router.get('', response_model=ScenarioPage, status_code=status.HTTP_200_OK)
+async def list_scenarios(user: CurrentUser, session: Session, paging: Paging) -> ScenarioPage:
+    """자기 시나리오의 목록을 최근에 만든 것부터 돌려준다. 등급을 함께 싣는다."""
     scenarios, total = await service.list_scenarios(session, user.user_id, paging.limit, paging.offset)
-    return to_page(scenarios, total)
+    return ScenarioPage(items=[to_scenario_summary(scenario) for scenario in scenarios], total=total)
 
 
 @router.get('/{scenario_id}', response_model=ScenarioDetail, status_code=status.HTTP_200_OK)
