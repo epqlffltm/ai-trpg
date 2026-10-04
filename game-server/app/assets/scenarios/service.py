@@ -24,7 +24,7 @@ REFERENCES: dict[str, type[AssetContent]] = {'rulebook_id': Rulebook, 'world_id'
 
 def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
     """입력에서 시나리오 객체를 만든다. 아직 저장하지 않는다."""
-    asset = assets.build_asset(owner_id, AssetType.SCENARIO, data)
+    asset = assets.build_asset(owner_id, AssetType.SCENARIO, data, rating=data.rating)
     return Scenario(
         asset=asset,
         rulebook_id=data.rulebook_id,

@@ -98,7 +98,6 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'id',
         'title',
         'description',
-        'rating',
         'visibility',
         'created_at',
         'updated_at',
@@ -124,6 +123,8 @@ async def test_a_rulebook_is_saved_as_the_rulebook_type(
         {'title': '룰', 'gm_guide': '가' * (RULEBOOK_GM_GUIDE_MAX_LENGTH + 1)},
         # 세계관의 칸이다. 룰북에는 없다
         {'title': '룰', 'setting': '설정'},
+        # 등급은 시나리오에서만 정한다
+        {'title': '룰', 'rating': 'adult'},
         {'title': '룰', 'owner_id': str(SOMEONE_ELSE)},
     ],
 )
