@@ -120,7 +120,7 @@ async def test_creates_a_lorebook_with_no_entries(client: AsyncClient, my_header
 
     assert lorebook['title'] == TITLE
     # 로어북 자신에게는 공통 칸만 있다
-    assert set(lorebook) == {'id', 'title', 'description', 'rating', 'visibility', 'created_at', 'updated_at'}
+    assert set(lorebook) == {'id', 'title', 'description', 'visibility', 'created_at', 'updated_at'}
     assert (await client.get(entries_url(lorebook), headers=my_headers)).json() == []
 
 
@@ -143,12 +143,19 @@ async def test_updates_the_title_of_a_lorebook(client: AsyncClient, my_headers: 
     assert response.json()['title'] == '새 제목'
 
 
-async def test_a_lorebook_cannot_carry_entries_in_its_body(client: AsyncClient, my_headers: dict[str, str]):
-    body = {'title': TITLE, 'entries': [{'name': NAME}]}
+@pytest.mark.parametrize(
+    'extra',
+    [
+        # 항목은 항목의 주소로만 더한다
+        {'entries': [{'name': NAME}]},
+        # 등급은 시나리오에서만 정한다
+        {'rating': 'adult'},
+    ],
+)
+async def test_a_lorebook_takes_only_the_common_fields(client: AsyncClient, my_headers: dict[str, str], extra: dict):
+    response = await client.post(LOREBOOKS_URL, json={'title': TITLE, **extra}, headers=my_headers)
 
-    response = await client.post(LOREBOOKS_URL, json=body, headers=my_headers)
-
-    # 항목은 항목의 주소로만 더한다. 로어북의 본문에 끼워 보내면 조용히 버리지 않고 거부한다
+    # 모르는 칸을 조용히 버리지 않고 거부한다
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 

@@ -56,11 +56,12 @@ async def test_creates_a_world(session: AsyncSession):
     assert world.gm_notes == GM_NOTES
 
 
-async def test_a_new_world_is_private_and_for_all_ages_by_default(session: AsyncSession):
+async def test_a_new_world_is_private_by_default(session: AsyncSession):
     world = await make_world(session)
 
-    # 공개하는 것도, 성인 등급으로 올리는 것도 만든 사람이 직접 골라야 한다
+    # 공개하는 것은 만든 사람이 직접 골라야 한다
     assert world.asset.visibility == Visibility.PRIVATE
+    # 재료는 등급을 가리지 않는다. 공통 테이블의 등급 칸은 기본값으로 남는다
     assert world.asset.rating == Rating.ALL
     assert world.asset.deleted_at is None
 
@@ -228,9 +229,10 @@ def test_accepts_a_setting_at_the_limit():
     assert len(data.setting) == WORLD_SETTING_MAX_LENGTH
 
 
-def test_rejects_an_unknown_rating():
+def test_a_world_does_not_take_a_rating():
+    # 등급은 시나리오에서만 정한다. 맞는 값이어도 재료에는 받지 않는다
     with pytest.raises(ValidationError):
-        WorldCreate(title='세계', rating='teen')
+        WorldCreate(title='세계', rating='adult')
 
 
 @pytest.mark.parametrize('field', ['owner_id', 'visibility', 'id', 'deleted_at'])

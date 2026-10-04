@@ -14,10 +14,11 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import repository
-from app.assets.models import Asset, AssetContent, AssetType
+from app.assets.models import Asset, AssetContent, AssetType, Rating
 from app.assets.schemas import AssetCreate, AssetUpdate
 
-# 자산의 공통 부분에 속하는 칸. 나머지 칸은 종류별 내용에 속한다
+# 공통 테이블(assets)에 저장되는 칸. 나머지 칸은 종류별 내용에 속한다.
+# rating 은 시나리오만 입력받지만, 저장되는 곳은 공통 테이블이다
 ASSET_FIELDS = {'title', 'description', 'rating'}
 
 
@@ -53,14 +54,18 @@ class AssetReferenceError(Exception):
         self.field = field
 
 
-def build_asset(owner_id: uuid.UUID, asset_type: AssetType, data: AssetCreate) -> Asset:
-    """입력에서 자산의 공통 부분을 만든다. 아직 저장하지 않는다."""
+def build_asset(owner_id: uuid.UUID, asset_type: AssetType, data: AssetCreate, rating: Rating = Rating.ALL) -> Asset:
+    """
+    입력에서 자산의 공통 부분을 만든다. 아직 저장하지 않는다.
+
+    등급은 시나리오만 넘긴다. 재료는 등급을 가리지 않아서 기본값으로 둔다.
+    """
     return Asset(
         owner_id=owner_id,
         type=asset_type,
         title=data.title,
         description=data.description,
-        rating=data.rating,
+        rating=rating,
     )
 
 
