@@ -8,12 +8,16 @@ import uuid
 from datetime import datetime
 from typing import Annotated, ClassVar
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.assets.models import (
+    CHARACTER_DESCRIPTION_MAX_LENGTH,
+    CHARACTER_NAME_MAX_LENGTH,
     SCENARIO_MAX_LOREBOOKS,
     SCENARIO_MAX_OPENINGS,
+    SCENARIO_MAX_PREGENS,
     SCENARIO_OPENING_MAX_LENGTH,
+    TABLE_MAX_PLAYERS,
     VERSION_NOTE_MAX_LENGTH,
     Rating,
 )
@@ -37,6 +41,56 @@ def reject_duplicates(lorebook_ids: list[uuid.UUID]) -> list[uuid.UUID]:
 LorebookIds = Annotated[list[uuid.UUID], Field(max_length=SCENARIO_MAX_LOREBOOKS), AfterValidator(reject_duplicates)]
 
 
+class RecommendedPlayers(BaseModel):
+    """
+    추천 인원. 최소와 최대를 함께 보낸다.
+
+    추천일 뿐이다. 테이블의 정원을 막지 않는다. 혼자서도, 넷이서도 할 수 있다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    min: int = Field(ge=1, le=TABLE_MAX_PLAYERS)
+    max: int = Field(ge=1, le=TABLE_MAX_PLAYERS)
+
+    @model_validator(mode='after')
+    def reject_reversed_range(self) -> 'RecommendedPlayers':
+        """최소가 최대보다 크면 거부한다."""
+        if self.min > self.max:
+            raise ValueError('최소 인원이 최대 인원보다 큽니다.')
+        return self
+
+
+CharacterName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHARACTER_NAME_MAX_LENGTH)
+]
+CharacterDescription = Annotated[str, StringConstraints(max_length=CHARACTER_DESCRIPTION_MAX_LENGTH)]
+
+
+class Pregen(BaseModel):
+    """
+    프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다.
+
+    플레이어가 만드는 캐릭터와 칸이 같다(이름과 설명). 그래서 골라서 그대로 자기 캐릭터로 가져갈 수 있다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    name: CharacterName
+    description: CharacterDescription = ''
+
+
+def reject_duplicate_names(pregens: list[Pregen]) -> list[Pregen]:
+    """같은 이름의 프리젠이 두 번 있으면 거부한다. 고르는 화면에서 구별할 수 없다. 대소문자만 다른 것도 같은 것이다."""
+    names = [pregen.name.casefold() for pregen in pregens]
+    if len(set(names)) != len(names):
+        raise ValueError('같은 이름의 프리젠이 두 번 있습니다.')
+    return pregens
+
+
+Pregens = Annotated[list[Pregen], Field(max_length=SCENARIO_MAX_PREGENS), AfterValidator(reject_duplicate_names)]
+
+
 class ScenarioCreate(AssetCreate):
     """
     시나리오를 만들 때 받는 값. 제목만 필수다.
@@ -50,6 +104,8 @@ class ScenarioCreate(AssetCreate):
     world_id: uuid.UUID | None = None
     lorebook_ids: LorebookIds = []
     openings: Openings = []
+    recommended_players: RecommendedPlayers = RecommendedPlayers(min=1, max=TABLE_MAX_PLAYERS)
+    pregens: Pregens = []
 
 
 class ScenarioUpdate(AssetUpdate):
@@ -57,7 +113,8 @@ class ScenarioUpdate(AssetUpdate):
     시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
     rulebook_id 와 world_id 는 null 을 보내면 떼어 낸다. 보내지 않으면 그대로 둔다.
-    lorebook_ids 와 openings 는 보낸 목록으로 통째로 바꾼다. 전부 없애려면 빈 목록을 보낸다.
+    lorebook_ids, openings, pregens 는 보낸 목록으로 통째로 바꾼다. 전부 없애려면 빈 목록을 보낸다.
+    recommended_players 는 최소와 최대를 함께 보낸다.
     """
 
     clearable: ClassVar[frozenset[str]] = frozenset({'rulebook_id', 'world_id'})
@@ -67,6 +124,8 @@ class ScenarioUpdate(AssetUpdate):
     world_id: uuid.UUID | None = None
     lorebook_ids: LorebookIds | None = None
     openings: Openings | None = None
+    recommended_players: RecommendedPlayers | None = None
+    pregens: Pregens | None = None
 
 
 class ScenarioSummary(AssetSummary):
@@ -90,6 +149,8 @@ class ScenarioDetail(ScenarioSummary):
     world_id: uuid.UUID | None
     lorebook_ids: list[uuid.UUID]
     openings: list[str]
+    recommended_players: RecommendedPlayers
+    pregens: list[Pregen]
 
 
 VersionNote = Annotated[str, StringConstraints(max_length=VERSION_NOTE_MAX_LENGTH)]

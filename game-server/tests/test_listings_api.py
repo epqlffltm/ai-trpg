@@ -420,6 +420,7 @@ async def test_others_see_a_public_scenario(
         'genres': GENRES,
         'tags': TAGS,
         'rating': 'all',
+        'recommended_players': {'min': 1, 'max': 4},
         'version': 1,
         'version_note': '',
     }
@@ -554,6 +555,25 @@ async def test_the_rating_comes_from_the_public_version_not_the_draft(
     assert (await client.get(LISTINGS_URL, headers=their_headers)).json()['total'] == 1
 
 
+async def test_the_recommended_players_come_from_the_public_version(
+    client: AsyncClient, my_headers: dict[str, str], their_headers: dict[str, str]
+):
+    scenario = await make_public(client, my_headers, recommended_players={'min': 2, 'max': 3})
+    url = f'{LISTINGS_URL}/{scenario["id"]}'
+
+    # 공개한 뒤에 초안의 추천 인원을 바꾼다. 공개 중인 판의 것은 그대로다
+    await client.patch(
+        f'{SCENARIOS_URL}/{scenario["id"]}', json={'recommended_players': {'min': 1, 'max': 1}}, headers=my_headers
+    )
+    assert (await client.get(url, headers=their_headers)).json()['recommended_players'] == {'min': 2, 'max': 3}
+
+    # 새 판을 내고 그 판을 공개하면 바뀐다
+    number = await publish_version(client, my_headers, scenario)
+    await client.put(f'{listing_url(scenario)}/publication', json={'version': number}, headers=my_headers)
+
+    assert (await client.get(url, headers=their_headers)).json()['recommended_players'] == {'min': 1, 'max': 1}
+
+
 async def test_a_version_in_the_old_format_can_be_made_public(
     client: AsyncClient, my_headers: dict[str, str], their_headers: dict[str, str], session: AsyncSession
 ):
@@ -569,7 +589,10 @@ async def test_a_version_in_the_old_format_can_be_made_public(
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()['rating'] == 'all'
-    assert (await client.get(LISTINGS_URL, headers=their_headers)).json()['total'] == 1
+    listed = (await client.get(LISTINGS_URL, headers=their_headers)).json()
+    assert listed['total'] == 1
+    # 추천 인원이 없던 때의 판이다. 몇 명이든 된다는 뜻으로 읽는다
+    assert listed['items'][0]['recommended_players'] == {'min': 1, 'max': 4}
 
 
 # --- DB 의 마지막 방어선 ---

@@ -20,8 +20,15 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import VERSION_NOTE_MAX_LENGTH, Asset, AssetType, Scenario, ScenarioVersion
-from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot, upgrade_from_1
+from app.assets.models import (
+    TABLE_MAX_PLAYERS,
+    VERSION_NOTE_MAX_LENGTH,
+    Asset,
+    AssetType,
+    Scenario,
+    ScenarioVersion,
+)
+from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot, upgrade_from_1, upgrade_from_2
 from app.main import API_PREFIX
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -42,6 +49,7 @@ OPENING = '사이렌이 울린다. 뒤를 돌아보니 마법소년 차림의 �
 GM_GUIDE = '진지한 장면은 금지다. 모든 추격은 바이크로 한다.'
 SETTING = '17개 행성이 고속도로 하나로 이어져 있다.'
 GM_NOTES = '고속도로의 끝에는 아무것도 없다.'
+PREGENS = [{'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.'}]
 
 
 @pytest.fixture
@@ -246,6 +254,8 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         world_id=world['id'],
         lorebook_ids=[lorebook['id']],
         openings=[OPENING],
+        recommended_players={'min': 2, 'max': 3},
+        pregens=PREGENS,
     )
 
     version = await publish(client, my_headers, scenario)
@@ -256,6 +266,8 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'description': '메모',
         'rating': 'all',
         'openings': [OPENING],
+        'recommended_players': {'min': 2, 'max': 3},
+        'pregens': PREGENS,
         'rulebook': {'id': rulebook['id'], 'title': '룰북', 'gm_guide': GM_GUIDE},
         'world': {'id': world['id'], 'title': '세계관', 'setting': SETTING, 'gm_notes': GM_NOTES},
         'lorebooks': [
@@ -276,6 +288,9 @@ async def test_the_snapshot_of_a_minimal_scenario(client: AsyncClient, my_header
     # 세계관과 로어북은 없어도 된다
     assert version['snapshot']['world'] is None
     assert version['snapshot']['lorebooks'] == []
+    # 추천 인원을 적지 않았으면 몇 명이든 된다는 뜻이다. 프리젠도 없어도 된다
+    assert version['snapshot']['recommended_players'] == {'min': 1, 'max': TABLE_MAX_PLAYERS}
+    assert version['snapshot']['pregens'] == []
 
 
 async def test_the_snapshot_carries_every_opening_in_order(client: AsyncClient, my_headers: dict[str, str]):
@@ -436,6 +451,21 @@ def test_upgrades_a_format_1_document():
     assert 'openings' not in FORMAT_1
 
 
+def test_upgrades_a_format_2_document():
+    format_2 = upgrade_from_1(FORMAT_1)
+
+    upgraded = upgrade_from_2(format_2)
+
+    # 추천 인원과 프리젠이 없던 때의 판이다. "몇 명이든 된다", "프리젠 없음"으로 읽는다
+    assert upgraded['format'] == 3
+    assert upgraded['recommended_players'] == {'min': 1, 'max': TABLE_MAX_PLAYERS}
+    assert upgraded['pregens'] == []
+    assert upgraded['openings'] == [OPENING]
+    # 받은 문서는 고치지 않는다
+    assert format_2['format'] == 2
+    assert 'pregens' not in format_2
+
+
 def test_reads_a_document_of_any_format():
     current = upgrade_from_1(FORMAT_1)
 
@@ -443,6 +473,8 @@ def test_reads_a_document_of_any_format():
     assert read_snapshot(FORMAT_1) == read_snapshot(current)
     assert read_snapshot(FORMAT_1).format == SNAPSHOT_FORMAT
     assert read_snapshot(FORMAT_1).openings == [OPENING]
+    # 형식 1 은 1 → 2 → 3 을 차례로 거친다
+    assert read_snapshot(FORMAT_1).pregens == []
 
 
 async def test_a_version_in_the_old_format_is_read_in_the_current_one(
