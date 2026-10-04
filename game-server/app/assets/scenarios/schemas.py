@@ -10,11 +10,21 @@ from typing import Annotated, ClassVar
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
-from app.assets.models import SCENARIO_MAX_LOREBOOKS, SCENARIO_OPENING_MAX_LENGTH, VERSION_NOTE_MAX_LENGTH, Rating
+from app.assets.models import (
+    SCENARIO_MAX_LOREBOOKS,
+    SCENARIO_MAX_OPENINGS,
+    SCENARIO_OPENING_MAX_LENGTH,
+    VERSION_NOTE_MAX_LENGTH,
+    Rating,
+)
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 
-Opening = Annotated[str, StringConstraints(max_length=SCENARIO_OPENING_MAX_LENGTH)]
+# 스타팅 하나. 공백이 아닌 글자가 하나는 있어야 한다. 빈 스타팅은 고를 수 없으니 받지 않는다.
+# 앞뒤 공백은 떼지 않는다. 줄바꿈으로 장면을 여는 것도 제작자의 글이다
+Opening = Annotated[str, StringConstraints(pattern=r'\S', max_length=SCENARIO_OPENING_MAX_LENGTH)]
+# 스타팅의 목록. 같은 글이 두 번 있어도 막지 않는다. 순서에 뜻이 있다
+Openings = Annotated[list[Opening], Field(max_length=SCENARIO_MAX_OPENINGS)]
 
 
 def reject_duplicates(lorebook_ids: list[uuid.UUID]) -> list[uuid.UUID]:
@@ -31,7 +41,7 @@ class ScenarioCreate(AssetCreate):
     """
     시나리오를 만들 때 받는 값. 제목만 필수다.
 
-    룰북 없이도 만들 수 있다(임시 저장). 게시할 때 룰북이 있는지 검사한다.
+    룰북과 스타팅 없이도 만들 수 있다(임시 저장). 게시할 때 둘 다 있는지 검사한다.
     """
 
     # 이용 등급. 시나리오를 조립할 때 제작자가 고른다. 성인용으로 올리는 것은 직접 골라야 한다
@@ -39,7 +49,7 @@ class ScenarioCreate(AssetCreate):
     rulebook_id: uuid.UUID | None = None
     world_id: uuid.UUID | None = None
     lorebook_ids: LorebookIds = []
-    opening: Opening = ''
+    openings: Openings = []
 
 
 class ScenarioUpdate(AssetUpdate):
@@ -47,7 +57,7 @@ class ScenarioUpdate(AssetUpdate):
     시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
     rulebook_id 와 world_id 는 null 을 보내면 떼어 낸다. 보내지 않으면 그대로 둔다.
-    lorebook_ids 는 보낸 목록으로 통째로 바꾼다. 전부 떼려면 빈 목록을 보낸다.
+    lorebook_ids 와 openings 는 보낸 목록으로 통째로 바꾼다. 전부 없애려면 빈 목록을 보낸다.
     """
 
     clearable: ClassVar[frozenset[str]] = frozenset({'rulebook_id', 'world_id'})
@@ -56,7 +66,7 @@ class ScenarioUpdate(AssetUpdate):
     rulebook_id: uuid.UUID | None = None
     world_id: uuid.UUID | None = None
     lorebook_ids: LorebookIds | None = None
-    opening: Opening | None = None
+    openings: Openings | None = None
 
 
 class ScenarioSummary(AssetSummary):
@@ -79,7 +89,7 @@ class ScenarioDetail(ScenarioSummary):
     rulebook_id: uuid.UUID | None
     world_id: uuid.UUID | None
     lorebook_ids: list[uuid.UUID]
-    opening: str
+    openings: list[str]
 
 
 VersionNote = Annotated[str, StringConstraints(max_length=VERSION_NOTE_MAX_LENGTH)]

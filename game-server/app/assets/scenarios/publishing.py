@@ -28,8 +28,8 @@ class Problem(enum.StrEnum):
 
     # 룰북이 없다. 진행 방식이 없으면 테이블이 성립하지 않는다
     RULEBOOK_MISSING = 'rulebook_missing'
-    # 도입부가 비어 있다. 첫 장면은 제작자가 정한다
-    OPENING_EMPTY = 'opening_empty'
+    # 스타팅이 하나도 없다. 첫 장면은 제작자가 정한다
+    OPENING_MISSING = 'opening_missing'
 
 
 class ScenarioNotReadyError(Exception):
@@ -77,8 +77,8 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems = []
     if parts.rulebook is None:
         problems.append(Problem.RULEBOOK_MISSING)
-    if not scenario.opening.strip():
-        problems.append(Problem.OPENING_EMPTY)
+    if not scenario.openings:
+        problems.append(Problem.OPENING_MISSING)
     return problems
 
 

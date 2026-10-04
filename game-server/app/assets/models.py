@@ -40,6 +40,8 @@ WORLD_GM_NOTES_MAX_LENGTH = 4000
 RULEBOOK_GM_GUIDE_MAX_LENGTH = 4000
 # 테이블이 시작될 때 한 번 읽어 주는 글이다. 턴마다 다시 들어가지 않는다
 SCENARIO_OPENING_MAX_LENGTH = 2000
+# 시나리오 하나에 둘 수 있는 스타팅(도입부)의 수. 테이블을 만드는 사람이 한 화면에서 보고 고른다
+SCENARIO_MAX_OPENINGS = 5
 # 시나리오 하나에 붙일 수 있는 로어북의 수. 플레이할 때 살펴볼 항목의 수가 이 값에 비례한다
 SCENARIO_MAX_LOREBOOKS = 10
 # 판을 낼 때 적는 변경 내용. 사람이 읽는다
@@ -190,11 +192,19 @@ class Scenario(AssetContent):
     시나리오는 다른 자산을 모아 만든 조립물이다. 룰북을 중심으로 세계관 등을 붙인다.
     룰북과 세계관은 하나씩, 로어북은 여러 개 가리킨다. NPC 같은 재료는 그 자산을 만들 때 더한다.
 
-    초안일 때는 룰북을 비워 둘 수 있다(임시 저장). 게시할 때 룰북이 있는지 검사한다.
+    초안일 때는 룰북과 스타팅을 비워 둘 수 있다(임시 저장). 게시할 때 둘 다 있는지 검사한다.
     """
 
     __tablename__ = 'scenarios'
-    __table_args__ = (CheckConstraint(at_most('opening', SCENARIO_OPENING_MAX_LENGTH), name='opening_length'),)
+    __table_args__ = (
+        CheckConstraint(f'cardinality(openings) <= {SCENARIO_MAX_OPENINGS}', name='openings_count'),
+        # 배열의 원소 하나하나의 길이는 CHECK 로 볼 수 없다. 전부 이은 길이로 위쪽만 막는다.
+        # 하나의 길이는 입력을 받을 때 검사한다(scenarios/schemas.py)
+        CheckConstraint(
+            f"char_length(array_to_string(openings, '')) <= {SCENARIO_MAX_OPENINGS * SCENARIO_OPENING_MAX_LENGTH}",
+            name='openings_length',
+        ),
+    )
 
     # 가리키는 대상이 assets 가 아니라 rulebooks 다. 룰북 자리에 세계관을 넣는 일을 DB 가 막는다.
     # 가리키는 쪽에서 찾는 일("이 룰북을 쓰는 시나리오가 있는가")이 있어서 색인을 건다.
@@ -206,8 +216,10 @@ class Scenario(AssetContent):
     # 세계관은 없어도 된다. 붙여도 하나만 붙인다
     world_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('worlds.asset_id', ondelete='RESTRICT'), index=True)
 
-    # 도입부. 테이블이 시작될 때 AI 가 처음 읽어 주는 장면이다. 플레이어와 AI 가 함께 본다
-    opening: Mapped[str] = mapped_column(Text, default='')
+    # 스타팅들. 하나하나가 도입부다. 테이블이 시작될 때 AI 가 처음 읽어 주는 장면이고, 플레이어와 AI 가 함께 본다.
+    # 테이블을 만드는 사람이 이 중 하나를 고른다. 목록의 순서가 고르는 화면의 순서다.
+    # 시나리오 하나에 딸린 짧은 목록이라 테이블을 따로 두지 않고 배열로 둔다
+    openings: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
 
     # 붙인 로어북들. 여러 개라 칸 하나에 담지 못하고 연결 테이블(scenario_lorebooks)의 행으로 둔다.
     # selectin: 시나리오를 읽을 때 함께 읽는다. 비동기에서는 나중에 따로 읽어 오는 방식을 쓸 수 없다.
