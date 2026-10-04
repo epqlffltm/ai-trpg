@@ -33,6 +33,7 @@ from app.tables.service import (
     TableConflictError,
     TableNotFoundError,
     TableOptionError,
+    WrongPasswordError,
 )
 
 # 이 서버의 API 가 놓이는 주소. 인증 서버는 /api/v1/auth 를 쓴다
@@ -109,6 +110,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.add_exception_handler(TableNotFoundError, tables.handle_table_not_found)
     app.add_exception_handler(MemberNotFoundError, tables.handle_member_not_found)
     app.add_exception_handler(NotHostError, tables.handle_not_host)
+    app.add_exception_handler(WrongPasswordError, tables.handle_wrong_password)
     app.add_exception_handler(TableConflictError, tables.handle_table_conflict)
     app.add_exception_handler(TableOptionError, tables.handle_table_option)
 

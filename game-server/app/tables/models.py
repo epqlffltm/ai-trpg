@@ -45,6 +45,9 @@ from app.core.database import Base
 
 # 초대 코드의 길이(글자 수). 코드를 아는 사람만 테이블에 들어온다
 INVITE_CODE_LENGTH = 12
+# 테이블의 비밀번호. 로비에 보이는 테이블을 아는 사람끼리만 쓰려고 건다
+TABLE_PASSWORD_MIN_LENGTH = 4
+TABLE_PASSWORD_MAX_LENGTH = 64
 
 
 class TableStatus(enum.StrEnum):
@@ -71,6 +74,8 @@ class GameTable(Base):
         CheckConstraint(one_of('rating', Rating), name='rating_allowed'),
         CheckConstraint(f'capacity BETWEEN 1 AND {TABLE_MAX_PLAYERS}', name='capacity_range'),
         CheckConstraint('opening_index >= 0', name='opening_index_not_negative'),
+        # 비밀번호는 로비에 보이는 테이블에만 건다. 보이지 않는 테이블은 초대 코드가 그 일을 한다
+        CheckConstraint('password_hash IS NULL OR is_public', name='password_needs_public'),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -105,8 +110,13 @@ class GameTable(Base):
     # 초대 코드. 이 코드를 아는 사람이 테이블에 들어온다. 방장이 참가자를 내보내면 새로 만든다
     invite_code: Mapped[str] = mapped_column(String(INVITE_CODE_LENGTH), unique=True)
 
-    # 로비의 목록에 보이는가. 지금은 늘 False 다. 로비를 만들 때 쓴다
+    # 로비의 목록에 보이는가. 방장이 테이블을 만들 때 정한다. 나중에 바꾸지 않는다.
+    # 보이는 테이블에는 초대 코드 없이도 들어올 수 있다
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # 비밀번호. 그대로 두지 않고 계산한 값을 둔다(passwords.py). 비어 있으면 비밀번호가 없는 것이다.
+    # 로비에서 들어올 때만 묻는다. 초대 코드로 들어올 때는 묻지 않는다. 방장이 직접 부른 사람이다
+    password_hash: Mapped[str | None] = mapped_column(String(200))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 방장이 시작한 시각과 테이블이 끝난 시각. 아직이면 비어 있다

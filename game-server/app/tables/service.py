@@ -1,16 +1,18 @@
 # game-server/app/tables/service.py
 
 """
-테이블을 만들고, 들어가고, 캐릭터를 정하고, 나가고, 시작하고, 끝낸다.
+테이블을 만들고, 로비에서 찾고, 들어가고, 캐릭터를 정하고, 나가고, 시작하고, 끝낸다.
 
 HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장할지(커밋)는 여기서 정한다.
 
 규칙 셋이 이 파일 전체에 걸쳐 있다.
   - 테이블은 앉은 사람만 본다. 앉지 않은 사람에게는 "없는 테이블"이다.
+    로비에 보이기로 한 테이블만은 누구나 목록에서 본다. 그래도 안은 앉아야 보인다.
   - 테이블을 바꾸는 일은 모두 테이블의 행을 잠그고 한다. 잠근 뒤에 확인하고, 그다음에 바꾼다.
   - 내보내기, 방장 넘기기, 시작, 끝내기는 방장만 한다.
 """
 
+import asyncio
 import enum
 import secrets
 import uuid
@@ -25,9 +27,9 @@ from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
 from app.listings import service as listings
-from app.tables import repository
+from app.tables import passwords, repository
 from app.tables.models import GameTable, TableMember, TableStatus
-from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, TableCreate
+from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
 
 
 class TableNotFoundError(Exception):
@@ -40,6 +42,10 @@ class MemberNotFoundError(Exception):
 
 class NotHostError(Exception):
     """방장만 할 수 있는 일을 방장이 아닌 참가자가 하려 했다."""
+
+
+class WrongPasswordError(Exception):
+    """테이블의 비밀번호가 틀렸다. 비밀번호가 걸린 테이블에 비밀번호 없이 들어오려 한 경우도 이 예외다."""
 
 
 class Conflict(enum.StrEnum):
@@ -158,6 +164,20 @@ def resolve_character(snapshot: Snapshot, data: CharacterUpdate) -> tuple[str, s
     return name, description
 
 
+def take_seat(table: GameTable, user_id: uuid.UUID) -> None:
+    """
+    테이블에 앉는다. 모집 중이 아니거나, 이미 앉아 있거나, 자리가 없으면 TableConflictError.
+
+    테이블을 잠근 뒤에 부른다. 초대 코드로 들어오든 로비에서 들어오든 앉는 규칙은 같다.
+    """
+    require_recruiting(table)
+    if find_member(table, user_id) is not None:
+        raise TableConflictError(Conflict.ALREADY_SEATED)
+    if len(table.members) >= table.capacity:
+        raise TableConflictError(Conflict.TABLE_FULL)
+    table.members.append(TableMember(user_id=user_id))
+
+
 def end(table: GameTable) -> None:
     """테이블을 끝낸다."""
     table.status = TableStatus.ENDED
@@ -176,12 +196,14 @@ def hand_over(table: GameTable) -> None:
         end(table)
 
 
-def build_table(host_id: uuid.UUID, version: ScenarioVersion, snapshot: Snapshot, data: TableCreate) -> GameTable:
+def build_table(
+    host_id: uuid.UUID, version: ScenarioVersion, snapshot: Snapshot, data: TableCreate, password_hash: str | None
+) -> GameTable:
     """
     판에서 테이블 객체를 만든다. 아직 저장하지 않는다.
 
     판의 내용을 통째로 복사해 온다. 옛 형식의 판이면 지금의 모양으로 올린 것을 복사한다.
-    만든 사람이 방장이자 첫 참가자다.
+    만든 사람이 방장이자 첫 참가자다. password_hash 는 비밀번호를 계산해 둔 값이다. 비밀번호가 없으면 None 이다.
     """
     return GameTable(
         host_id=host_id,
@@ -193,8 +215,36 @@ def build_table(host_id: uuid.UUID, version: ScenarioVersion, snapshot: Snapshot
         capacity=data.capacity,
         rating=snapshot.rating,
         invite_code=new_invite_code(),
+        is_public=data.is_public,
+        password_hash=password_hash,
         members=[TableMember(user_id=host_id)],
     )
+
+
+# --- 비밀번호. 계산이 느려서 다른 요청을 막지 않게 따로 돌린다 ---
+
+
+async def hash_table_password(password: str | None) -> str | None:
+    """
+    비밀번호를 저장할 모양으로 바꾼다. 비밀번호가 없으면 None.
+
+    to_thread: 계산을 다른 스레드에서 돌린다. 0.2 초 동안 서버가 다른 요청을 받지 못하는 일을 막는다.
+    """
+    if password is None:
+        return None
+    return await asyncio.to_thread(passwords.hash_password, password)
+
+
+async def check_table_password(table: GameTable, password: str | None) -> None:
+    """
+    테이블의 비밀번호가 맞는지 확인한다. 틀렸으면 WrongPasswordError.
+
+    비밀번호가 없는 테이블이면 무엇을 보내든 통과한다.
+    """
+    if table.password_hash is None:
+        return
+    if password is None or not await asyncio.to_thread(passwords.verify_password, password, table.password_hash):
+        raise WrongPasswordError
 
 
 # --- 만들기 ---
@@ -233,7 +283,8 @@ async def create_table(session: AsyncSession, viewer: AccessClaims, data: TableC
     if data.capacity > seat_limit(viewer, snapshot):
         raise TableConflictError(Conflict.SOLO_ONLY)
 
-    table = build_table(viewer.user_id, version, snapshot, data)
+    password_hash = await hash_table_password(data.password)
+    table = build_table(viewer.user_id, version, snapshot, data, password_hash)
     repository.add_table(session, table)
     await session.commit()
     return await repository.reload_table(session, table.id)
@@ -255,6 +306,20 @@ async def list_tables(
     """자기가 앉아 있는 테이블의 한 쪽과 전체 개수를 돌려준다."""
     tables = await repository.list_seated(session, user_id, limit, offset)
     total = await repository.count_seated(session, user_id)
+    return tables, total
+
+
+async def list_lobby(
+    session: AsyncSession, viewer: AccessClaims, scenario_id: uuid.UUID | None, limit: int, offset: int
+) -> tuple[list[GameTable], int]:
+    """
+    로비에 보이는 테이블의 한 쪽과 전체 개수를 돌려준다. 보는 사람이 볼 수 있는 등급만 나온다.
+
+    scenario_id 를 주면 그 시나리오로 열린 테이블만 돌려준다.
+    """
+    ratings = listings.allowed_ratings(viewer)
+    tables = await repository.list_lobby(session, ratings, scenario_id, limit, offset)
+    total = await repository.count_lobby(session, ratings, scenario_id)
     return tables, total
 
 
@@ -285,19 +350,36 @@ async def join_table(session: AsyncSession, viewer: AccessClaims, data: JoinRequ
     코드가 틀렸거나 볼 수 없는 등급의 테이블이면 TableNotFoundError.
     모집 중이 아니거나, 이미 앉아 있거나, 자리가 없으면 TableConflictError.
 
+    비밀번호를 묻지 않는다. 초대 코드를 가진 사람은 방장이 직접 부른 사람이다.
     테이블을 잠그고 한다. 한 자리가 남았을 때 두 사람이 동시에 "자리가 있네"를 보고 둘 다 앉는 일을 막는다.
     """
     table = await repository.lock_table_by_invite_code(session, data.invite_code)
     if table is None or table.rating not in listings.allowed_ratings(viewer):
         raise TableNotFoundError
 
-    require_recruiting(table)
-    if find_member(table, viewer.user_id) is not None:
-        raise TableConflictError(Conflict.ALREADY_SEATED)
-    if len(table.members) >= table.capacity:
-        raise TableConflictError(Conflict.TABLE_FULL)
+    take_seat(table, viewer.user_id)
+    return await save(session, table)
 
-    table.members.append(TableMember(user_id=viewer.user_id))
+
+async def join_public_table(
+    session: AsyncSession, viewer: AccessClaims, table_id: uuid.UUID, data: LobbyJoinRequest
+) -> GameTable:
+    """
+    로비에 보이는 테이블에 들어가 앉는다. 초대 코드가 필요 없다.
+
+    로비에 보이지 않는 테이블이거나 볼 수 없는 등급이면 TableNotFoundError, 비밀번호가 틀렸으면 WrongPasswordError,
+    모집 중이 아니거나, 이미 앉아 있거나, 자리가 없으면 TableConflictError.
+
+    비밀번호를 먼저 확인하고, 그다음에 잠근다. 확인하는 데 0.2 초가 걸려서, 잠근 채로 하면 그동안 테이블이 멈춘다.
+    비밀번호와 로비에 보이는지는 테이블을 만든 뒤로 바뀌지 않으므로, 잠그기 전에 봐도 낡은 값이 아니다.
+    """
+    table = await repository.find_table(session, table_id)
+    if table is None or not table.is_public or table.rating not in listings.allowed_ratings(viewer):
+        raise TableNotFoundError
+    await check_table_password(table, data.password)
+
+    table = await repository.lock_table(session, table_id)
+    take_seat(table, viewer.user_id)
     return await save(session, table)
 
 
