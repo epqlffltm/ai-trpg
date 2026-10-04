@@ -4,10 +4,10 @@
 시나리오 API 를 검증한다.
 
 모든 자산에 공통인 규칙은 세계관의 테스트가 이미 검증한다. 여기서는 시나리오만의 것을 본다.
-시나리오는 다른 자산(룰북, 세계관)을 가리킨다. 그래서 생기는 규칙이 셋이다.
+시나리오는 다른 자산을 가리킨다. 룰북과 세계관은 하나씩, 로어북은 여러 개다. 그래서 생기는 규칙이 셋이다.
   - 자기 것이고 지우지 않은 자산만 가리킬 수 있다.
   - 가리키는 것을 바꾸거나 떼어 낼 수 있다.
-  - 시나리오가 가리키는 자산은 지울 수 없다.
+  - 시나리오가 가리키는 자산은 지울 수 없다. 어느 시나리오가 쓰고 있는지 알려 준다.
 """
 
 import uuid
@@ -19,7 +19,15 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import SCENARIO_OPENING_MAX_LENGTH, Asset, AssetType, Scenario, World
+from app.assets.models import (
+    SCENARIO_MAX_LOREBOOKS,
+    SCENARIO_OPENING_MAX_LENGTH,
+    Asset,
+    AssetType,
+    Scenario,
+    ScenarioLorebook,
+    World,
+)
 from app.main import API_PREFIX
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -28,6 +36,7 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 SCENARIOS_URL = f'{API_PREFIX}/scenarios'
 RULEBOOKS_URL = f'{API_PREFIX}/rulebooks'
 WORLDS_URL = f'{API_PREFIX}/worlds'
+LOREBOOKS_URL = f'{API_PREFIX}/lorebooks'
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 SOMEONE_ELSE = uuid.UUID('99999999-2222-4333-8444-555555555555')
@@ -98,6 +107,7 @@ async def test_creates_a_draft_with_only_a_title(client: AsyncClient, my_headers
     assert body['title'] == TITLE
     assert body['rulebook_id'] is None
     assert body['world_id'] is None
+    assert body['lorebook_ids'] == []
     assert body['opening'] == ''
 
 
@@ -127,6 +137,7 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'updated_at',
         'rulebook_id',
         'world_id',
+        'lorebook_ids',
         'opening',
     }
 
@@ -148,6 +159,15 @@ async def test_a_scenario_is_saved_as_the_scenario_type(
         {'title': '   '},
         {'title': '시나리오', 'opening': '가' * (SCENARIO_OPENING_MAX_LENGTH + 1)},
         {'title': '시나리오', 'rulebook_id': 'not-a-uuid'},
+        {'title': '시나리오', 'lorebook_ids': ['not-a-uuid']},
+        {'title': '시나리오', 'lorebook_ids': NO_SUCH_ID},
+        {'title': '시나리오', 'lorebook_ids': None},
+        # 같은 로어북을 두 번 붙일 수 없다
+        {'title': '시나리오', 'lorebook_ids': [NO_SUCH_ID, NO_SUCH_ID]},
+        {
+            'title': '시나리오',
+            'lorebook_ids': [str(uuid.UUID(int=number)) for number in range(SCENARIO_MAX_LOREBOOKS + 1)],
+        },
         # 룰북의 칸이다. 시나리오에는 없다
         {'title': '시나리오', 'gm_guide': '지침'},
         {'title': '시나리오', 'owner_id': str(SOMEONE_ELSE)},
@@ -339,6 +359,160 @@ async def test_deleting_a_scenario_leaves_its_assets(client: AsyncClient, my_hea
     assert (await client.get(f'{RULEBOOKS_URL}/{rulebook["id"]}', headers=my_headers)).status_code == status.HTTP_200_OK
 
 
+# --- 로어북은 여러 개 붙인다 ---
+
+
+async def create_lorebooks(client: AsyncClient, headers: dict[str, str], count: int) -> list[str]:
+    """로어북을 여러 개 만들고 ID 를 정렬해서 돌려준다. 응답의 목록도 ID 순서다."""
+    lorebooks = [await create(client, LOREBOOKS_URL, headers, title=f'로어북 {number}') for number in range(count)]
+    return sorted(lorebook['id'] for lorebook in lorebooks)
+
+
+async def test_creates_a_scenario_with_lorebooks(client: AsyncClient, my_headers: dict[str, str]):
+    lorebook_ids = await create_lorebooks(client, my_headers, 3)
+
+    scenario = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=lorebook_ids)
+
+    assert scenario['lorebook_ids'] == lorebook_ids
+    read = await client.get(f'{SCENARIOS_URL}/{scenario["id"]}', headers=my_headers)
+    assert read.json()['lorebook_ids'] == lorebook_ids
+
+
+async def test_accepts_the_most_lorebooks_allowed(client: AsyncClient, my_headers: dict[str, str]):
+    lorebook_ids = await create_lorebooks(client, my_headers, SCENARIO_MAX_LOREBOOKS)
+
+    scenario = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=lorebook_ids)
+
+    assert scenario['lorebook_ids'] == lorebook_ids
+
+
+async def test_the_list_of_lorebooks_is_replaced_as_a_whole(client: AsyncClient, my_headers: dict[str, str]):
+    first, second, third = await create_lorebooks(client, my_headers, 3)
+    scenario = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=[first, second])
+
+    # 첫째는 떼고, 둘째는 그대로 두고, 셋째를 붙인다
+    response = await client.patch(
+        f'{SCENARIOS_URL}/{scenario["id"]}', json={'lorebook_ids': [second, third]}, headers=my_headers
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()['lorebook_ids'] == [second, third]
+    assert response.json()['updated_at'] > scenario['updated_at']
+
+
+async def test_an_empty_list_detaches_every_lorebook(client: AsyncClient, my_headers: dict[str, str]):
+    lorebook_ids = await create_lorebooks(client, my_headers, 2)
+    scenario = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=lorebook_ids)
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    response = await client.patch(url, json={'lorebook_ids': []}, headers=my_headers)
+
+    assert response.json()['lorebook_ids'] == []
+    assert (await client.get(url, headers=my_headers)).json()['lorebook_ids'] == []
+
+
+async def test_lorebooks_that_are_not_sent_stay(client: AsyncClient, my_headers: dict[str, str]):
+    lorebook_ids = await create_lorebooks(client, my_headers, 2)
+    scenario = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=lorebook_ids)
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    not_sent = await client.patch(url, json={'opening': OPENING}, headers=my_headers)
+    sent_null = await client.patch(url, json={'lorebook_ids': None}, headers=my_headers)
+
+    # 전부 떼는 것은 빈 목록이다. null 은 "보내지 않았다"와 같다
+    assert not_sent.json()['lorebook_ids'] == lorebook_ids
+    assert sent_null.json()['lorebook_ids'] == lorebook_ids
+
+
+async def test_one_lorebook_can_be_attached_to_many_scenarios(client: AsyncClient, my_headers: dict[str, str]):
+    lorebook_ids = await create_lorebooks(client, my_headers, 1)
+
+    first = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=lorebook_ids)
+    second = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=lorebook_ids)
+
+    assert first['lorebook_ids'] == second['lorebook_ids'] == lorebook_ids
+
+
+async def test_rejects_a_lorebook_that_cannot_be_attached(
+    client: AsyncClient, my_headers: dict[str, str], their_headers: dict[str, str]
+):
+    mine = await create(client, LOREBOOKS_URL, my_headers)
+    theirs = await create(client, LOREBOOKS_URL, their_headers)
+    deleted = await create(client, LOREBOOKS_URL, my_headers)
+    await client.delete(f'{LOREBOOKS_URL}/{deleted["id"]}', headers=my_headers)
+    world = await create(client, WORLDS_URL, my_headers)
+
+    for bad_id in (NO_SUCH_ID, theirs['id'], deleted['id'], world['id']):
+        # 맞는 것과 섞어 보내도, 하나가 틀리면 전부 거부한다
+        body = {'title': TITLE, 'lorebook_ids': [mine['id'], bad_id]}
+        response = await client.post(SCENARIOS_URL, json=body, headers=my_headers)
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert 'lorebook_ids' in response.json()['detail']
+
+    assert (await client.get(SCENARIOS_URL, headers=my_headers)).json()['total'] == 0
+
+
+async def test_a_rejected_list_of_lorebooks_changes_nothing(client: AsyncClient, my_headers: dict[str, str]):
+    lorebook_ids = await create_lorebooks(client, my_headers, 2)
+    scenario = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=lorebook_ids)
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    response = await client.patch(url, json={'lorebook_ids': [lorebook_ids[0], NO_SUCH_ID]}, headers=my_headers)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert (await client.get(url, headers=my_headers)).json()['lorebook_ids'] == lorebook_ids
+
+
+async def test_an_attached_lorebook_cannot_be_deleted(client: AsyncClient, my_headers: dict[str, str]):
+    lorebook_ids = await create_lorebooks(client, my_headers, 1)
+    scenario = await create(client, SCENARIOS_URL, my_headers, lorebook_ids=lorebook_ids)
+    lorebook_url = f'{LOREBOOKS_URL}/{lorebook_ids[0]}'
+
+    blocked = await client.delete(lorebook_url, headers=my_headers)
+    await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'lorebook_ids': []}, headers=my_headers)
+    allowed = await client.delete(lorebook_url, headers=my_headers)
+
+    assert blocked.status_code == status.HTTP_409_CONFLICT
+    assert allowed.status_code == status.HTTP_204_NO_CONTENT
+
+
+# --- 지울 수 없을 때 어디에 쓰이는지 알려 준다 ---
+
+
+@pytest.mark.parametrize(
+    ('field', 'target_url'), [*REFERENCES, ('lorebook_ids', LOREBOOKS_URL)], ids=['rulebook', 'world', 'lorebook']
+)
+async def test_the_refusal_names_the_scenarios_that_use_the_asset(
+    client: AsyncClient, my_headers: dict[str, str], field: str, target_url: str
+):
+    target = await create(client, target_url, my_headers)
+    value = [target['id']] if field == 'lorebook_ids' else target['id']
+    first = await create(client, SCENARIOS_URL, my_headers, title='첫 시나리오', **{field: value})
+    second = await create(client, SCENARIOS_URL, my_headers, title='둘째 시나리오', **{field: value})
+    await create(client, SCENARIOS_URL, my_headers, title='쓰지 않는 시나리오')
+
+    response = await client.delete(f'{target_url}/{target["id"]}', headers=my_headers)
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    # 만든 순서대로, 쓰고 있는 시나리오만 실린다
+    assert response.json()['used_by'] == [
+        {'id': first['id'], 'title': '첫 시나리오'},
+        {'id': second['id'], 'title': '둘째 시나리오'},
+    ]
+
+
+async def test_the_refusal_does_not_name_deleted_scenarios(client: AsyncClient, my_headers: dict[str, str]):
+    rulebook = await create(client, RULEBOOKS_URL, my_headers)
+    kept = await create(client, SCENARIOS_URL, my_headers, title='남은 시나리오', rulebook_id=rulebook['id'])
+    removed = await create(client, SCENARIOS_URL, my_headers, title='지운 시나리오', rulebook_id=rulebook['id'])
+    await client.delete(f'{SCENARIOS_URL}/{removed["id"]}', headers=my_headers)
+
+    response = await client.delete(f'{RULEBOOKS_URL}/{rulebook["id"]}', headers=my_headers)
+
+    assert response.json()['used_by'] == [{'id': kept['id'], 'title': '남은 시나리오'}]
+
+
 # --- 공통 규칙이 시나리오에도 이어져 있다 ---
 
 
@@ -387,6 +561,19 @@ async def test_the_database_rejects_a_world_in_the_rulebook_column(session: Asyn
     # 서비스를 거치지 않고 룰북 자리에 세계관의 ID 를 넣는다. 외래 키가 rulebooks 를 가리키므로 DB 가 막는다
     asset = Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오')
     session.add(Scenario(asset=asset, rulebook_id=world.asset_id))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+
+
+async def test_the_database_rejects_a_world_as_an_attached_lorebook(session: AsyncSession):
+    world = World(asset=Asset(owner_id=ME, type=AssetType.WORLD, title='세계'))
+    scenario = Scenario(asset=Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오'))
+    session.add_all([world, scenario])
+    await session.commit()
+
+    # 서비스를 거치지 않고 로어북 자리에 세계관의 ID 를 넣는다
+    session.add(ScenarioLorebook(scenario_id=scenario.asset_id, lorebook_id=world.asset_id))
 
     with pytest.raises(IntegrityError):
         await session.commit()

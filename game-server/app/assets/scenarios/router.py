@@ -27,13 +27,14 @@ def to_detail(scenario: Scenario) -> ScenarioDetail:
         **to_summary(scenario.asset).model_dump(),
         rulebook_id=scenario.rulebook_id,
         world_id=scenario.world_id,
+        lorebook_ids=scenario.lorebook_ids,
         opening=scenario.opening,
     )
 
 
 @router.post('', response_model=ScenarioDetail, status_code=status.HTTP_201_CREATED)
 async def create_scenario(data: ScenarioCreate, user: CurrentUser, session: Session) -> ScenarioDetail:
-    """시나리오를 만든다. 룰북과 세계관은 자기 것만 가리킬 수 있다."""
+    """시나리오를 만든다. 룰북, 세계관, 로어북은 자기 것만 가리킬 수 있다."""
     scenario = await service.create_scenario(session, user.user_id, data)
     return to_detail(scenario)
 
@@ -56,7 +57,7 @@ async def read_scenario(scenario_id: uuid.UUID, user: CurrentUser, session: Sess
 async def update_scenario(
     scenario_id: uuid.UUID, data: ScenarioUpdate, user: CurrentUser, session: Session
 ) -> ScenarioDetail:
-    """자기 시나리오를 고친다. 보낸 칸만 바뀐다. 룰북과 세계관은 null 을 보내면 떼어 낸다."""
+    """자기 시나리오를 고친다. 보낸 칸만 바뀐다. 룰북과 세계관은 null 로 떼고, 로어북은 목록을 통째로 바꾼다."""
     scenario = await service.update_scenario(session, user.user_id, scenario_id, data)
     return to_detail(scenario)
 
