@@ -13,11 +13,11 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, SmallInteger, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.assets.models import Rating, at_most, one_of
+from app.assets.models import TABLE_MAX_PLAYERS, Rating, at_most, one_of
 from app.core.database import Base
 
 # 글의 길이 제한(글자 수)
@@ -72,6 +72,10 @@ class Listing(Base):
         CheckConstraint(f'cardinality(genres) <= {LISTING_MAX_GENRES}', name='genres_count'),
         CheckConstraint(f'cardinality(tags) <= {LISTING_MAX_TAGS}', name='tags_count'),
         CheckConstraint(one_of('rating', Rating), name='rating_allowed'),
+        CheckConstraint(
+            f'1 <= min_players AND min_players <= max_players AND max_players <= {TABLE_MAX_PLAYERS}',
+            name='players_range',
+        ),
         # 공개 중이면 공개한 시각이 있고, 아니면 없다. 둘이 어긋난 행이 생기지 않는다
         CheckConstraint('(version_id IS NULL) = (published_at IS NULL)', name='published_together'),
     )
@@ -89,6 +93,10 @@ class Listing(Base):
     # 공개 중인 판의 등급. 판을 고를 때 서버가 판에서 읽어 적는다. 제작자가 직접 적지 않는다.
     # 초안의 등급을 쓰지 않는다. 초안을 전체 이용가로 바꿔도 공개 중인 성인용 판이 전체 이용가로 보이면 안 된다
     rating: Mapped[str] = mapped_column(String(20), default=Rating.ALL)
+
+    # 공개 중인 판의 추천 인원. 등급처럼 판에서 읽어 적는다. 목록에서 판의 문서를 열지 않고 보여 주기 위해 둔다
+    min_players: Mapped[int] = mapped_column(SmallInteger, default=1)
+    max_players: Mapped[int] = mapped_column(SmallInteger, default=TABLE_MAX_PLAYERS)
 
     # 공개한 시각. 목록을 최근에 공개한 순서로 보여 줄 때 쓴다
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)

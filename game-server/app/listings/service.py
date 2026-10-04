@@ -77,9 +77,12 @@ def apply_changes(listing: Listing, data: ListingUpdate) -> None:
 
 
 def publish_version(listing: Listing, version: ScenarioVersion) -> None:
-    """이 판을 공개 중인 판으로 삼는다. 등급은 판에 굳어 있는 것을 읽어 적는다."""
+    """이 판을 공개 중인 판으로 삼는다. 등급과 추천 인원은 판에 굳어 있는 것을 읽어 적는다."""
     listing.version_id = version.id
-    listing.rating = read_snapshot(version.snapshot).rating
+    snapshot = read_snapshot(version.snapshot)
+    listing.rating = snapshot.rating
+    listing.min_players = snapshot.recommended_players.min
+    listing.max_players = snapshot.recommended_players.max
     listing.published_at = func.now()
 
 
