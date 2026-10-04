@@ -12,6 +12,7 @@
 결과: 지운 룰북을 가리키는 시나리오가 남는다.
 
 2) 로어북에 항목을 더하는 일 둘. 둘 다 개수를 세고 "자리가 있다"고 보면 상한을 넘긴다.
+3) 시나리오의 로어북 목록을 바꾸는 일 둘. 둘 다 같은 옛 목록과 비교하면 둘의 것이 합쳐진다.
 
 두 연결(세션)을 따로 열어 이 순서를 직접 만든다. 한쪽이 잠근 채로 멈춰 있을 때 다른 쪽이 기다리는지 본다.
 """
@@ -21,7 +22,7 @@ import uuid
 
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import repository
@@ -29,11 +30,11 @@ from app.assets import service as assets
 from app.assets.lorebooks import service as lorebooks
 from app.assets.lorebooks.schemas import EntryCreate, LorebookCreate
 from app.assets.lorebooks.service import LorebookFullError
-from app.assets.models import Lorebook, Rulebook
+from app.assets.models import Lorebook, Rulebook, Scenario, ScenarioLorebook
 from app.assets.rulebooks import service as rulebooks
 from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import service as scenarios
-from app.assets.scenarios.schemas import ScenarioCreate
+from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate
 from app.assets.service import AssetInUseError, AssetReferenceError
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -125,3 +126,30 @@ async def test_adding_an_entry_waits_for_another_entry_being_added(
     # 기다린 뒤에는 A 의 항목이 세어진다. 자리가 없다
     with pytest.raises(LorebookFullError):
         await adding
+
+
+async def test_updating_a_scenario_waits_for_another_update(session: AsyncSession, other_session: AsyncSession):
+    first = (await lorebooks.create_lorebook(session, ME, LorebookCreate(title='첫째'))).asset_id
+    second = (await lorebooks.create_lorebook(session, ME, LorebookCreate(title='둘째'))).asset_id
+    scenario_id = (await scenarios.create_scenario(session, ME, ScenarioCreate(title='시나리오'))).asset_id
+
+    # A: 시나리오를 잠그고 첫째 로어북을 붙였지만 아직 커밋하지 않았다
+    scenario = await assets.lock_owned(session, Scenario, ME, scenario_id)
+    scenario.lorebook_ids = [first]
+    await session.flush()
+
+    # B: 같은 시나리오의 목록을 둘째 로어북으로 바꾸려 한다. A 가 끝날 때까지 기다려야 한다
+    data = ScenarioUpdate(lorebook_ids=[second])
+    updating = asyncio.create_task(scenarios.update_scenario(other_session, ME, scenario_id, data))
+    assert await is_waiting(updating)
+
+    await session.commit()
+
+    await updating
+
+    # 기다린 뒤에는 A 가 붙인 것이 보인다. 그것을 떼고 자기 목록으로 바꾼다.
+    # 잠그지 않으면 B 는 "아무것도 붙지 않은" 옛 목록과 비교해서, 둘째를 더하기만 하고 첫째를 떼지 않는다
+    stored = await session.scalars(
+        select(ScenarioLorebook.lorebook_id).where(ScenarioLorebook.scenario_id == scenario_id)
+    )
+    assert list(stored) == [second]

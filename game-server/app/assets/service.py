@@ -30,7 +30,15 @@ class AssetNotFoundError(Exception):
 
 
 class AssetInUseError(Exception):
-    """다른 자산이 이 자산을 가리키고 있어서 지울 수 없다."""
+    """
+    다른 자산이 이 자산을 가리키고 있어서 지울 수 없다.
+
+    referrers 는 가리키고 있는 자산들이다. 어디서 떼어 내야 하는지 알려 주는 데 쓴다.
+    """
+
+    def __init__(self, referrers: list[Asset]) -> None:
+        super().__init__()
+        self.referrers = referrers
 
 
 class AssetReferenceError(Exception):
@@ -125,16 +133,21 @@ async def list_owned[Content: AssetContent](
     return contents, total
 
 
-async def update_owned[Content: AssetContent](
-    session: AsyncSession, model: type[Content], owner_id: uuid.UUID, asset_id: uuid.UUID, data: AssetUpdate
-) -> Content:
-    """자기 자산을 고친다. 없으면 AssetNotFoundError."""
-    content = await get_owned(session, model, owner_id, asset_id)
+async def save_changes[Content: AssetContent](session: AsyncSession, content: Content, data: AssetUpdate) -> Content:
+    """이미 찾아 둔 자산에 보낸 칸을 반영하고 저장한다."""
     apply_changes(content, data)
     await session.commit()
     # 고친 시각은 DB 가 정했다. 그 값을 다시 읽어 온다
     await session.refresh(content.asset)
     return content
+
+
+async def update_owned[Content: AssetContent](
+    session: AsyncSession, model: type[Content], owner_id: uuid.UUID, asset_id: uuid.UUID, data: AssetUpdate
+) -> Content:
+    """자기 자산을 고친다. 없으면 AssetNotFoundError."""
+    content = await get_owned(session, model, owner_id, asset_id)
+    return await save_changes(session, content, data)
 
 
 async def delete_owned(
@@ -147,8 +160,9 @@ async def delete_owned(
     """
     # 먼저 잠그고, 그다음에 쓰이는지 본다. 순서가 반대면 보고 난 뒤에 누가 가리킬 수 있다
     content = await lock_owned(session, model, owner_id, asset_id)
-    if await repository.is_referenced(session, asset_id):
-        raise AssetInUseError
+    referrers = await repository.find_referrers(session, asset_id)
+    if referrers:
+        raise AssetInUseError(referrers)
 
     content.asset.deleted_at = func.now()
     await session.commit()

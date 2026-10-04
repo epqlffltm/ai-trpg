@@ -9,7 +9,7 @@
   - assets: 모든 자산이 똑같이 갖는 것. 누구 것인가, 무슨 종류인가, 누구에게 보이는가.
   - worlds 등: 그 종류만 갖는 내용. 종류마다 테이블이 하나씩 있고, 모두 AssetContent 를 물려받는다.
 
-자산이 다른 자산을 가리킬 수 있다. 시나리오가 룰북과 세계관을 가리킨다.
+자산이 다른 자산을 가리킬 수 있다. 시나리오가 룰북과 세계관을 하나씩, 로어북을 여러 개 가리킨다.
 자산에 딸린 행이 여럿일 수 있다. 로어북에 항목이 딸린다. 항목은 자산이 아니다.
 
 공통 부분을 한 테이블에 두면, 권한 검사 같은 규칙을 종류마다 다시 짜지 않아도 되고,
@@ -37,6 +37,8 @@ WORLD_GM_NOTES_MAX_LENGTH = 4000
 RULEBOOK_GM_GUIDE_MAX_LENGTH = 4000
 # 테이블이 시작될 때 한 번 읽어 주는 글이다. 턴마다 다시 들어가지 않는다
 SCENARIO_OPENING_MAX_LENGTH = 2000
+# 시나리오 하나에 붙일 수 있는 로어북의 수. 플레이할 때 살펴볼 항목의 수가 이 값에 비례한다
+SCENARIO_MAX_LOREBOOKS = 10
 
 # 로어북의 항목. 항목은 통째로 AI 의 입력에 들어가는 단위다. 짧게 쪼개 둘수록 필요한 것만 넣을 수 있다
 LOREBOOK_MAX_ENTRIES = 100
@@ -180,7 +182,7 @@ class Scenario(AssetContent):
     시나리오의 내용. 테이블이 고르는 것이다.
 
     시나리오는 다른 자산을 모아 만든 조립물이다. 룰북을 중심으로 세계관 등을 붙인다.
-    지금은 룰북과 세계관만 가리킨다. 로어북, NPC 같은 재료는 그 자산을 만들 때 더한다.
+    룰북과 세계관은 하나씩, 로어북은 여러 개 가리킨다. NPC 같은 재료는 그 자산을 만들 때 더한다.
 
     초안일 때는 룰북을 비워 둘 수 있다(임시 저장). 게시할 때 룰북이 있는지 검사한다.
     """
@@ -200,6 +202,32 @@ class Scenario(AssetContent):
 
     # 도입부. 테이블이 시작될 때 AI 가 처음 읽어 주는 장면이다. 플레이어와 AI 가 함께 본다
     opening: Mapped[str] = mapped_column(Text, default='')
+
+    # 붙인 로어북들. 여러 개라 칸 하나에 담지 못하고 연결 테이블(scenario_lorebooks)의 행으로 둔다.
+    # selectin: 시나리오를 읽을 때 함께 읽는다. 비동기에서는 나중에 따로 읽어 오는 방식을 쓸 수 없다.
+    # delete-orphan: 이 목록에서 빠진 행은 DB 에서도 지운다
+    lorebook_links: Mapped[list['ScenarioLorebook']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='ScenarioLorebook.lorebook_id'
+    )
+
+    @property
+    def lorebook_ids(self) -> list[uuid.UUID]:
+        """붙인 로어북의 ID 목록."""
+        return [link.lorebook_id for link in self.lorebook_links]
+
+    @lorebook_ids.setter
+    def lorebook_ids(self, lorebook_ids: list[uuid.UUID]) -> None:
+        """
+        붙인 로어북을 이 목록으로 바꾼다. 목록에 없는 것은 떼고, 새로 생긴 것은 붙인다.
+
+        계속 붙어 있는 것은 행을 그대로 둔다. 지우고 다시 만들면 같은 키의 행을 한 번에 지우고 넣게 되어 부딪힌다.
+        """
+        kept = [link for link in self.lorebook_links if link.lorebook_id in lorebook_ids]
+        attached = {link.lorebook_id for link in kept}
+        added = [
+            ScenarioLorebook(lorebook_id=lorebook_id) for lorebook_id in lorebook_ids if lorebook_id not in attached
+        ]
+        self.lorebook_links = kept + added
 
 
 class Lorebook(AssetContent):
@@ -247,4 +275,26 @@ class LoreEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ScenarioLorebook(Base):
+    """
+    시나리오와 로어북의 연결. 행 하나가 "이 시나리오에 이 로어북이 붙어 있다"는 뜻이다.
+
+    시나리오 하나에 로어북이 여럿, 로어북 하나가 여러 시나리오에 붙을 수 있다(다대다).
+    """
+
+    __tablename__ = 'scenario_lorebooks'
+
+    # 두 칸을 합쳐 기본 키로 삼는다. 같은 로어북을 한 시나리오에 두 번 붙일 수 없다.
+    # 시나리오의 행이 지워지면 연결도 함께 지워진다
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('scenarios.asset_id', ondelete='CASCADE'), primary_key=True
+    )
+
+    # 붙어 있는 동안에는 로어북의 행을 지울 수 없다.
+    # 기본 키의 색인은 시나리오가 앞이라 "이 로어북을 쓰는 시나리오"를 찾는 데 못 쓴다. 따로 색인을 건다
+    lorebook_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('lorebooks.asset_id', ondelete='RESTRICT'), primary_key=True, index=True
     )
