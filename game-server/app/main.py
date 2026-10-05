@@ -24,6 +24,7 @@ from app.assets.worlds import router as worlds
 from app.auth.jwks import JwksCache
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
+from app.events import router as events
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
 from app.rounds import router as rounds
@@ -106,6 +107,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.include_router(listings.public_router, prefix=API_PREFIX)
     app.include_router(tables.router, prefix=API_PREFIX)
     app.include_router(rounds.router, prefix=API_PREFIX)
+    app.include_router(events.router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다
     app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)

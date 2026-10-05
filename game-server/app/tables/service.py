@@ -10,6 +10,8 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
     로비에 보이기로 한 테이블만은 누구나 목록에서 본다. 그래도 안은 앉아야 보인다.
   - 테이블을 바꾸는 일은 모두 테이블의 행을 잠그고 한다. 잠근 뒤에 확인하고, 그다음에 바꾼다.
   - 내보내기, 방장 넘기기, 시작, 끝내기는 방장만 한다.
+  - 테이블을 바꾸면 무슨 일이 있었는지를 이벤트로 적는다(app/events/recorder.py). 바꾼 것과 함께 저장된다.
+    캐릭터를 정하는 것은 적지 않는다. 시작할 때 누가 어떤 캐릭터였는지를 한 번 적는다.
 """
 
 import asyncio
@@ -26,9 +28,10 @@ from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
+from app.events import recorder
+from app.events.models import EventType, TableEvent
 from app.listings import service as listings
-from app.rounds import repository as rounds
-from app.rounds.models import Round
+from app.rounds import opener
 from app.tables import passwords, repository
 from app.tables.models import GameTable, TableMember, TableStatus
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
@@ -186,16 +189,25 @@ def end(table: GameTable) -> None:
     table.ended_at = func.now()
 
 
-def hand_over(table: GameTable) -> None:
+def hand_over(table: GameTable) -> EventType | None:
     """
     방장이 떠난 테이블의 다음 방장을 정한다. 남은 사람 중 가장 먼저 들어온 사람이다.
 
     남은 사람이 없으면 테이블을 끝낸다.
+    무슨 일이 일어났는지를 이벤트의 종류로 돌려준다. 이미 끝난 테이블에서 마지막 사람이 나갔으면 아무 일도 없다(None).
     """
     if table.members:
         table.host_id = table.members[0].user_id
-    elif table.status != TableStatus.ENDED:
+        return EventType.HOST_CHANGED
+    if table.status != TableStatus.ENDED:
         end(table)
+        return EventType.TABLE_ENDED
+    return None
+
+
+def roster(table: GameTable) -> list[dict]:
+    """앉은 사람과 캐릭터 이름의 목록. 이벤트에 적을 모양이다."""
+    return [{'user_id': str(member.user_id), 'character_name': member.character_name} for member in table.members]
 
 
 def build_table(
@@ -288,6 +300,9 @@ async def create_table(session: AsyncSession, viewer: AccessClaims, data: TableC
     password_hash = await hash_table_password(data.password)
     table = build_table(viewer.user_id, version, snapshot, data, password_hash)
     repository.add_table(session, table)
+    # 테이블을 먼저 DB 에 보낸다. 테이블의 ID 는 그때 정해지고, 이벤트는 그 ID 를 가리킨다
+    await session.flush()
+    recorder.record(session, table, EventType.TABLE_CREATED, actor_id=viewer.user_id)
     await session.commit()
     return await repository.reload_table(session, table.id)
 
@@ -360,6 +375,7 @@ async def join_table(session: AsyncSession, viewer: AccessClaims, data: JoinRequ
         raise TableNotFoundError
 
     take_seat(table, viewer.user_id)
+    recorder.record(session, table, EventType.MEMBER_JOINED, actor_id=viewer.user_id, payload={'via': 'invite'})
     return await save(session, table)
 
 
@@ -382,6 +398,7 @@ async def join_public_table(
 
     table = await repository.lock_table(session, table_id)
     take_seat(table, viewer.user_id)
+    recorder.record(session, table, EventType.MEMBER_JOINED, actor_id=viewer.user_id, payload={'via': 'lobby'})
     return await save(session, table)
 
 
@@ -408,6 +425,18 @@ async def set_character(
     return await save(session, table)
 
 
+def record_hand_over(session: AsyncSession, table: GameTable, outcome: EventType | None, left: TableEvent) -> None:
+    """
+    방장이 나간 뒤에 일어난 일(hand_over 가 돌려준 것)을 이벤트로 적는다. 원인은 방장이 나간 이벤트다.
+
+    사람이 한 일이 아니므로 actor_id 가 없다.
+    """
+    if outcome == EventType.HOST_CHANGED:
+        recorder.record(session, table, outcome, payload={'user_id': str(table.host_id)}, cause=left)
+    elif outcome == EventType.TABLE_ENDED:
+        recorder.record(session, table, outcome, cause=left)
+
+
 async def leave_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> None:
     """
     테이블에서 나간다. 앉지 않았으면 TableNotFoundError.
@@ -416,8 +445,10 @@ async def leave_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.
     """
     table, member = await lock_seated(session, user_id, table_id)
     table.members.remove(member)
+    payload = {'character_name': member.character_name}
+    left = recorder.record(session, table, EventType.MEMBER_LEFT, actor_id=user_id, payload=payload)
     if table.host_id == user_id:
-        hand_over(table)
+        record_hand_over(session, table, hand_over(table), left)
     await session.commit()
 
 
@@ -440,6 +471,9 @@ async def kick_member(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
 
     table.members.remove(member)
     table.invite_code = new_invite_code()
+    # 새 초대 코드는 적지 않는다. 이벤트는 앉은 사람 모두가 읽는다
+    payload = {'user_id': str(user_id), 'character_name': member.character_name}
+    recorder.record(session, table, EventType.MEMBER_KICKED, actor_id=host_id, payload=payload)
     return await save(session, table)
 
 
@@ -458,6 +492,8 @@ async def transfer_host(
         raise MemberNotFoundError
 
     table.host_id = data.user_id
+    payload = {'user_id': str(data.user_id)}
+    recorder.record(session, table, EventType.HOST_CHANGED, actor_id=host_id, payload=payload)
     return await save(session, table)
 
 
@@ -476,8 +512,10 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
 
     table.status = TableStatus.PLAYING
     table.started_at = func.now()
+    payload = {'members': roster(table)}
+    started = recorder.record(session, table, EventType.TABLE_STARTED, actor_id=host_id, payload=payload)
     opening = read_snapshot(table.content).openings[table.opening_index]
-    rounds.add_round(session, Round(table_id=table.id, number=1, scene=opening))
+    opener.open_round(session, table, number=1, scene=opening, cause=started)
     return await save(session, table)
 
 
@@ -492,4 +530,5 @@ async def end_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UU
     require_not_ended(table)
 
     end(table)
+    recorder.record(session, table, EventType.TABLE_ENDED, actor_id=host_id)
     return await save(session, table)
