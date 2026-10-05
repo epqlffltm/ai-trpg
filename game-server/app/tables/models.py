@@ -125,6 +125,9 @@ class GameTable(Base):
     # server_default: DB 에도 기본값을 둔다. 이 칸이 생기기 전에 만든 테이블은 0 에서 시작한다
     last_sequence: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
 
+    # 이 테이블에 적힌 마지막 채팅의 번호(app/chat/models.py). 이벤트의 번호와 따로 센다. 방식은 같다
+    last_message_sequence: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 방장이 시작한 시각과 테이블이 끝난 시각. 아직이면 비어 있다
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
