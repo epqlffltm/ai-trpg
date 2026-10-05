@@ -30,7 +30,7 @@ from app.events import repository as event_repository
 from app.events.router import to_event
 from app.realtime.hub import Hub
 from app.realtime.listener import SignalSource
-from app.realtime.signals import Kind
+from app.realtime.signals import STORED_KINDS, Kind, Signal
 from app.realtime.sse import Comment, Frame
 from app.tables import repository as table_repository
 from app.tables import service as tables
@@ -47,6 +47,7 @@ READ_BATCH = 100
 # 메시지의 종류(SSE 의 event 줄)
 EVENT_FRAME = 'table_event'
 MESSAGE_FRAME = 'chat_message'
+TYPING_FRAME = 'typing'
 CLOSED_FRAME = 'closed'
 
 
@@ -83,6 +84,17 @@ def closed_frame(reason: Closed) -> Frame:
     return Frame(event=CLOSED_FRAME, data=json.dumps({'reason': reason}))
 
 
+def typing_frames(received: set[Signal], viewer_id: uuid.UUID) -> list[Frame]:
+    """
+    받은 신호 중 "입력 중"을 메시지로 바꾼다. id 를 붙이지 않는다. 저장된 것이 아니다.
+
+    자기 자신의 것은 뺀다. 자기가 입력 중이라는 것은 본인이 이미 안다.
+    """
+    typists = {signal.user_id for signal in received if signal.kind == Kind.TYPING and signal.user_id != viewer_id}
+    # 순서를 정해 둔다. 집합은 순서가 없어서 그대로 내보내면 실행할 때마다 달라진다
+    return [Frame(event=TYPING_FRAME, data=json.dumps({'user_id': str(user_id)})) for user_id in sorted(typists)]
+
+
 async def read_events(session: AsyncSession, table_id: uuid.UUID, cursor: Cursor) -> list[Frame]:
     """보낸 번호 뒤의 이벤트를 모두 읽어 메시지로 바꾼다. 읽은 만큼 cursor 를 옮긴다."""
     frames = []
@@ -115,6 +127,7 @@ async def read_new(
 
     읽을 때마다 아직 앉아 있는지부터 본다. 내보내진 사람에게 그 뒤의 채팅이 가면 안 된다.
     테이블이 끝났으면 남은 것을 다 보낸 뒤에 닫는다.
+    kinds 가 비어 있으면(입력 중 신호만 왔을 때) 앉아 있는지만 본다.
     """
     table = await table_repository.find_table(session, table_id)
     if table is None or tables.find_member(table, user_id) is None:
@@ -149,10 +162,15 @@ async def stream(
         await source.ensure_listening()
         yield Comment('connected')
 
-        kinds: set[Kind] = set(Kind)
+        kinds: set[Kind] = set(STORED_KINDS)
+        typing: list[Frame] = []
         while True:
             async with session_factory() as session:
                 frames, closed = await read_new(session, viewer.user_id, table_id, cursor, kinds)
+            # 앉아 있지 않게 된 사람에게는 입력 중도 보내지 않는다.
+            # 입력 중을 먼저, 채팅을 나중에 보낸다. 받는 쪽은 그 사람의 채팅이 오면 입력 중 표시를 지운다
+            if closed is not Closed.NOT_SEATED:
+                frames = typing + frames
             for frame in frames:
                 yield frame
 
@@ -163,11 +181,12 @@ async def stream(
                 return
 
             # 토큰이 만료되는 때에는 신호가 없어도 깨어나야 한다
-            woken = await subscription.wait(min(heartbeat, max(seconds_left(viewer), 0)))
-            if woken is None:
+            received = await subscription.wait(min(heartbeat, max(seconds_left(viewer), 0)))
+            if received is None:
                 yield Comment('ping')
                 # 듣는 연결이 끊겼으면 다시 맺는다
                 await source.ensure_listening()
-                kinds = set(Kind)
+                kinds, typing = set(STORED_KINDS), []
             else:
-                kinds = woken
+                kinds = {signal.kind for signal in received} & STORED_KINDS
+                typing = typing_frames(received, viewer.user_id)

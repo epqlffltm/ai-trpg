@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.chat import repository
 from app.chat.models import ChatMessage
 from app.chat.schemas import MessageCreate
+from app.chat.typing import TypingThrottle
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.tables import service as tables
@@ -73,6 +74,27 @@ async def post_message(
     # DB 가 정한 값(쓴 시각)을 읽어 온다
     await session.refresh(message)
     return message
+
+
+async def announce_typing(
+    session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID, throttle: TypingThrottle
+) -> None:
+    """
+    "입력 중"이라고 테이블의 다른 사람들에게 알린다. 아무것도 저장하지 않는다.
+
+    앉지 않았으면 TableNotFoundError, 끝난 테이블이면 TableConflictError. 채팅을 쓸 수 있는 때에만 알릴 수 있다.
+    너무 자주 보내면 조용히 버린다. 보낸 쪽에는 똑같이 성공으로 답한다. 화면이 따로 처리할 것이 없다.
+
+    테이블을 잠그지 않는다. 번호를 받지 않고, 바꾸는 것이 없다.
+    신호는 커밋될 때 나가므로 커밋한다. 저장할 것은 없다.
+    """
+    table = await tables.get_table(session, user_id, table_id)
+    tables.require_not_ended(table)
+    if not throttle.allow(table_id, user_id):
+        return
+
+    await signals.publish(session, Signal(table_id=table_id, kind=Kind.TYPING, user_id=user_id))
+    await session.commit()
 
 
 async def list_messages(

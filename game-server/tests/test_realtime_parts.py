@@ -24,6 +24,7 @@ from app.realtime.sse import Comment, Frame
 
 TABLE = uuid.UUID('aaaaaaaa-2222-4333-8444-555555555555')
 OTHER_TABLE = uuid.UUID('bbbbbbbb-2222-4333-8444-555555555555')
+SOMEONE = uuid.UUID('22222222-2222-4333-8444-555555555555')
 
 # 기다려도 오지 않는 것을 확인할 때 주는 시간(초)
 SHORT = 0.05
@@ -32,15 +33,32 @@ SHORT = 0.05
 # --- 신호 ---
 
 
-@pytest.mark.parametrize('kind', list(Kind))
-def test_a_signal_survives_the_channel(kind: Kind):
-    signal = Signal(table_id=TABLE, kind=kind)
-
+@pytest.mark.parametrize(
+    'signal',
+    [
+        Signal(table_id=TABLE, kind=Kind.EVENTS),
+        Signal(table_id=TABLE, kind=Kind.MESSAGES),
+        # 입력 중 신호에는 누구인지가 실린다
+        Signal(table_id=TABLE, kind=Kind.TYPING, user_id=SOMEONE),
+    ],
+)
+def test_a_signal_survives_the_channel(signal: Signal):
     assert signals.decode(signals.encode(signal)) == signal
 
 
 @pytest.mark.parametrize(
-    'payload', ['', 'hello', f'{TABLE}', f'{TABLE}:', f'{TABLE}:typing', f'not-a-uuid:{Kind.EVENTS}']
+    'payload',
+    [
+        '',
+        'hello',
+        f'{TABLE}',
+        f'{TABLE}:',
+        f'{TABLE}:dancing',
+        f'not-a-uuid:{Kind.EVENTS}',
+        # 입력 중인데 누구인지 없다
+        f'{TABLE}:{Kind.TYPING}',
+        f'{TABLE}:{Kind.TYPING}:not-a-uuid',
+    ],
 )
 def test_an_unknown_signal_is_dropped(payload: str):
     # 모르는 종류나 깨진 글자가 와도 듣는 쪽이 죽지 않는다
@@ -58,10 +76,11 @@ async def test_a_signal_wakes_everyone_waiting_for_that_table():
     hub = Hub()
 
     with hub.subscribe(TABLE) as first, hub.subscribe(TABLE) as second, hub.subscribe(OTHER_TABLE) as other:
-        hub.wake(Signal(table_id=TABLE, kind=Kind.MESSAGES))
+        signal = Signal(table_id=TABLE, kind=Kind.MESSAGES)
+        hub.wake(signal)
 
-        assert await first.wait(SHORT) == {Kind.MESSAGES}
-        assert await second.wait(SHORT) == {Kind.MESSAGES}
+        assert await first.wait(SHORT) == {signal}
+        assert await second.wait(SHORT) == {signal}
         # 다른 테이블을 기다리는 사람은 깨지 않는다
         assert await other.wait(SHORT) is None
 
@@ -78,11 +97,14 @@ async def test_a_signal_that_comes_while_not_waiting_is_kept():
 
     with hub.subscribe(TABLE) as subscription:
         # 기다리지 않는 동안(DB 를 읽는 중이라고 치자) 신호가 둘 온다
-        hub.wake(Signal(table_id=TABLE, kind=Kind.EVENTS))
-        hub.wake(Signal(table_id=TABLE, kind=Kind.MESSAGES))
+        events, messages = Signal(table_id=TABLE, kind=Kind.EVENTS), Signal(table_id=TABLE, kind=Kind.MESSAGES)
+        hub.wake(events)
+        hub.wake(messages)
+        # 같은 신호가 또 와도 하나로 친다
+        hub.wake(events)
 
         # 다음에 기다리면 바로 돌아오고, 둘 다 들어 있다
-        assert await subscription.wait(SHORT) == {Kind.EVENTS, Kind.MESSAGES}
+        assert await subscription.wait(SHORT) == {events, messages}
         # 꺼내 간 것은 비워진다
         assert await subscription.wait(SHORT) is None
 
@@ -93,9 +115,10 @@ async def test_a_waiting_subscriber_wakes_as_soon_as_the_signal_comes():
     with hub.subscribe(TABLE) as subscription:
         waiting = asyncio.create_task(subscription.wait(5))
         await asyncio.sleep(SHORT)
-        hub.wake(Signal(table_id=TABLE, kind=Kind.EVENTS))
+        signal = Signal(table_id=TABLE, kind=Kind.EVENTS)
+        hub.wake(signal)
 
-        assert await asyncio.wait_for(waiting, 1) == {Kind.EVENTS}
+        assert await asyncio.wait_for(waiting, 1) == {signal}
 
 
 def test_the_seat_is_removed_when_the_stream_ends():
