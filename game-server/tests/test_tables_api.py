@@ -56,7 +56,7 @@ PREGENS = [
     {'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.'},
     {'name': '악역영애', 'description': '바이크는 처음이지만 웃음소리는 크다.'},
 ]
-# 시나리오에 넣을 때는 프리젠마다 시트가 있어야 게시된다. 테이블의 응답에는 시트가 아직 실리지 않는다
+# 시나리오에 넣을 때는 프리젠마다 시트가 있어야 게시된다
 SCENARIO_PREGENS = [{**pregen, 'sheet': SHEET} for pregen in PREGENS]
 
 
@@ -198,7 +198,7 @@ async def test_opens_a_table_from_my_own_version(client: AsyncClient, me: dict[s
     assert table['recommended_players'] == {'min': 2, 'max': 3}
     # 고르지 않으면 첫 번째 스타팅이다
     assert table['opening'] == OPENINGS[0]
-    assert table['pregens'] == [{**pregen, 'taken_by': None} for pregen in PREGENS]
+    assert table['pregens'] == [{**pregen, 'sheet': SHEET, 'taken_by': None} for pregen in PREGENS]
     # 만든 사람이 방장이 되어 앉는다. 캐릭터는 아직 없다
     assert table['host_id'] == str(ME)
     assert table['member_count'] == 1
@@ -227,6 +227,9 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'created_at',
         'opening',
         'recommended_players',
+        'rules',
+        'character_modes',
+        'default_sheet',
         'pregens',
         'members',
         'invite_code',
