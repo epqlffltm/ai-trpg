@@ -27,6 +27,8 @@ from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
 from app.listings import service as listings
+from app.rounds import repository as rounds
+from app.rounds.models import Round
 from app.tables import passwords, repository
 from app.tables.models import GameTable, TableMember, TableStatus
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
@@ -462,6 +464,7 @@ async def transfer_host(
 async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID) -> GameTable:
     """
     방장이 테이블을 시작한다. 그 뒤로는 새로 들어올 수 없고 캐릭터를 바꿀 수 없다.
+    첫 라운드를 연다. 장면은 테이블을 만들 때 고른 스타팅이다.
 
     방장이 아니면 NotHostError, 모집 중이 아니거나 캐릭터를 만들지 않은 사람이 있으면 TableConflictError.
     """
@@ -473,6 +476,8 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
 
     table.status = TableStatus.PLAYING
     table.started_at = func.now()
+    opening = read_snapshot(table.content).openings[table.opening_index]
+    rounds.add_round(session, Round(table_id=table.id, number=1, scene=opening))
     return await save(session, table)
 
 
