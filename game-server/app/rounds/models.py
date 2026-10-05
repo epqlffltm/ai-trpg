@@ -26,6 +26,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.assets.models import CHARACTER_NAME_MAX_LENGTH, at_most
@@ -102,7 +103,8 @@ class Declaration(Base):
     """
     선언 하나. 한 사람이 한 라운드에 "나는 이것을 한다"고 적어 낸 글이다.
 
-    선언은 하려는 일이다. 결과가 아니다. 되는지 안 되는지는 GM(과 나중의 엔진)이 정한다.
+    선언은 하려는 일이다. 결과가 아니다. 되는지 안 되는지는 엔진이 정한다.
+    글(content)은 사람과 서술자가 읽고, 행동(action)은 엔진이 읽는다.
     """
 
     __tablename__ = 'round_declarations'
@@ -119,6 +121,10 @@ class Declaration(Base):
     character_name: Mapped[str] = mapped_column(String(CHARACTER_NAME_MAX_LENGTH))
 
     content: Mapped[str] = mapped_column(Text)
+
+    # 행동. 선언의 글을 엔진이 읽을 수 있는 모양으로 적은 것이다(app/engine/action.py). 문서 하나다.
+    # 비어 있으면 판정이 없는 선언이다(대화, 둘러보기). 그 테이블의 규칙에 맞는지는 받을 때 검사했다
+    action: Mapped[dict | None] = mapped_column(JSONB)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
