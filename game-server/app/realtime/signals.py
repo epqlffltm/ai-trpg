@@ -3,9 +3,10 @@
 """
 "이 테이블에 새 것이 생겼다"는 신호. 신호를 만들고 보내는 쪽이다.
 
-신호에는 내용을 싣지 않는다. 어느 테이블의 무엇(이벤트, 채팅)이 늘었는지만 알린다.
-받은 쪽은 DB 에서 "내가 보낸 마지막 번호 뒤"를 읽는다(app/realtime/service.py).
-그래서 신호를 놓치거나 두 번 받아도 틀린 것을 보내지 않는다. 늦어질 뿐이다.
+신호는 두 가지다.
+  - 저장된 것이 늘었다(이벤트, 채팅). 내용을 싣지 않는다. 받은 쪽은 DB 에서 "내가 보낸 마지막 번호 뒤"를 읽는다
+    (app/realtime/service.py). 그래서 신호를 놓치거나 두 번 받아도 틀린 것을 보내지 않는다. 늦어질 뿐이다.
+  - 누가 입력 중이다. 저장하지 않으므로 신호가 내용의 전부다. 누구인지를 신호에 싣는다. 놓치면 그만이다.
 
 지금은 PostgreSQL 의 NOTIFY 로 보낸다. NOTIFY 는 트랜잭션이 커밋될 때 나가고, 되돌려지면 나가지 않는다.
 저장은 안 됐는데 신호만 가는 일이 없다.
@@ -35,14 +36,25 @@ class Kind(enum.StrEnum):
     EVENTS = 'events'
     # 채팅(table_messages)
     MESSAGES = 'messages'
+    # 누가 채팅을 입력 중이다. 저장된 것이 아니다
+    TYPING = 'typing'
+
+
+# 저장된 것이 늘었다는 종류들. 이 신호를 받으면 DB 를 읽는다
+STORED_KINDS = frozenset({Kind.EVENTS, Kind.MESSAGES})
 
 
 @dataclass(frozen=True)
 class Signal:
-    """신호 하나. 어느 테이블의 무엇이 늘었는가."""
+    """
+    신호 하나. 어느 테이블의 무엇이 늘었는가.
+
+    user_id 는 입력 중 신호에만 있다. 누가 입력 중인가다.
+    """
 
     table_id: uuid.UUID
     kind: Kind
+    user_id: uuid.UUID | None = None
 
 
 def channel_name(schema: str) -> str:
@@ -51,8 +63,11 @@ def channel_name(schema: str) -> str:
 
 
 def encode(signal: Signal) -> str:
-    """신호를 채널에 실을 글자로 바꾼다."""
-    return f'{signal.table_id}:{signal.kind}'
+    """신호를 채널에 실을 글자로 바꾼다. '테이블:종류' 또는 '테이블:종류:사람'이다."""
+    parts = [str(signal.table_id), signal.kind]
+    if signal.user_id is not None:
+        parts.append(str(signal.user_id))
+    return ':'.join(parts)
 
 
 def decode(payload: str) -> Signal | None:
@@ -61,11 +76,16 @@ def decode(payload: str) -> Signal | None:
 
     채널에는 이 서버의 다른 판(새 종류의 신호를 보내는 판)이 보낸 글자도 올 수 있다. 모르는 것은 버린다.
     """
-    table_id, _, kind = payload.partition(':')
+    table_id, _, rest = payload.partition(':')
+    kind, _, user_id = rest.partition(':')
     try:
-        return Signal(table_id=uuid.UUID(table_id), kind=Kind(kind))
+        signal = Signal(table_id=uuid.UUID(table_id), kind=Kind(kind), user_id=uuid.UUID(user_id) if user_id else None)
     except ValueError:
         return None
+    # 입력 중인데 누구인지 없는 신호는 쓸 수 없다
+    if signal.kind == Kind.TYPING and signal.user_id is None:
+        return None
+    return signal
 
 
 async def publish(session: AsyncSession, signal: Signal) -> None:

@@ -9,18 +9,28 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.assets.routing import MAX_PAGE_SIZE, Session
 from app.auth.dependencies import CurrentUser
 from app.chat import service
 from app.chat.models import ChatMessage
 from app.chat.schemas import MessageCreate, MessageOut, MessagePage
+from app.chat.typing import TypingThrottle
 
 router = APIRouter(prefix='/tables/{table_id}/messages', tags=['chat'])
 
 # 한 번에 읽는 채팅의 개수
 DEFAULT_MESSAGE_LIMIT = 50
+
+
+def get_typing_throttle(request: Request) -> TypingThrottle:
+    """앱에 하나 둔 것을 꺼낸다(app/main.py). 모든 요청이 같은 기록을 본다."""
+    return request.app.state.typing_throttle
+
+
+# "입력 중"을 받는 API 가 인자의 형식으로 쓴다
+Throttling = Annotated[TypingThrottle, Depends(get_typing_throttle)]
 
 
 def to_message(message: ChatMessage) -> MessageOut:
@@ -39,6 +49,17 @@ async def post_message(table_id: uuid.UUID, data: MessageCreate, user: CurrentUs
     """채팅을 쓴다. 모집 중과 진행 중에 쓸 수 있다. 끝난 테이블에는 쓸 수 없다."""
     message = await service.post_message(session, user.user_id, table_id, data)
     return to_message(message)
+
+
+@router.post('/typing', status_code=status.HTTP_204_NO_CONTENT)
+async def announce_typing(table_id: uuid.UUID, user: CurrentUser, session: Session, throttle: Throttling) -> None:
+    """
+    "입력 중"이라고 알린다. 저장하지 않는다. 다른 사람들의 스트림에 typing 메시지가 간다.
+
+    화면은 사용자가 글자를 치는 동안 3초쯤에 한 번 부른다. 멈췄다는 것은 알리지 않는다.
+    받는 쪽이 5초쯤 뒤에 스스로 지운다.
+    """
+    await service.announce_typing(session, user.user_id, table_id, throttle)
 
 
 @router.get('', response_model=MessagePage, status_code=status.HTTP_200_OK)

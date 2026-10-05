@@ -9,6 +9,7 @@ pytest 는 이 파일의 fixture 를 모든 테스트 파일에서 이름만으�
 개발용 데이터는 game 스키마에, 테스트는 game_test 스키마에 있다.
 """
 
+import uuid
 from collections.abc import AsyncIterator
 
 import pytest
@@ -19,7 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.main import create_app
-from tests.signing import FakeAuthServer, SigningKey, make_signing_key
+from app.realtime import service as stream_service
+from app.realtime.service import Cursor
+from tests.signing import FakeAuthServer, SigningKey, make_signing_key, make_viewer
+from tests.streaming import LONG_HEARTBEAT, Reader
 
 TEST_SCHEMA = 'game_test'
 
@@ -109,3 +113,35 @@ async def clean_tables(app: FastAPI) -> None:
     async with app.state.engine.begin() as connection:
         # worlds 는 assets 를 가리키므로 CASCADE 로 함께 비워진다
         await connection.execute(text('TRUNCATE TABLE assets CASCADE'))
+
+
+@pytest.fixture
+async def readers() -> AsyncIterator[list[Reader]]:
+    """이 테스트가 연 스트림들. 테스트가 끝나면 모두 끊는다."""
+    opened: list[Reader] = []
+    yield opened
+    for reader in opened:
+        await reader.close()
+
+
+@pytest.fixture
+def connect(app: FastAPI, readers: list[Reader]):
+    """스트림을 여는 함수를 내준다. 앱의 방송실과 신호를 듣는 것을 그대로 쓴다."""
+
+    def open_stream(table: dict, user_id: uuid.UUID, cursor: Cursor | None = None, **options) -> Reader:
+        options.setdefault('heartbeat', LONG_HEARTBEAT)
+        options.setdefault('source', app.state.signal_source)
+        viewer = options.pop('viewer', None) or make_viewer(user_id)
+        items = stream_service.stream(
+            app.state.session_factory,
+            app.state.hub,
+            viewer=viewer,
+            table_id=uuid.UUID(table['id']),
+            cursor=cursor or Cursor(),
+            **options,
+        )
+        reader = Reader(items)
+        readers.append(reader)
+        return reader
+
+    return open_stream
