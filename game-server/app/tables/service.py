@@ -11,6 +11,7 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
   - 테이블을 바꾸는 일은 모두 테이블의 행을 잠그고 한다. 잠근 뒤에 확인하고, 그다음에 바꾼다.
   - 내보내기, 방장 넘기기, 시작, 끝내기는 방장만 한다.
   - 테이블을 바꾸면 무슨 일이 있었는지를 이벤트로 적는다(app/events/recorder.py). 바꾼 것과 함께 저장된다.
+  - 저장은 commit 하나로 한다. 저장하면서 "새 이벤트가 생겼다"는 신호를 보낸다(app/realtime/signals.py).
     캐릭터를 정하는 것은 적지 않는다. 시작할 때 누가 어떤 캐릭터였는지를 한 번 적는다.
 """
 
@@ -31,6 +32,8 @@ from app.auth.tokens import AccessClaims
 from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.listings import service as listings
+from app.realtime import signals
+from app.realtime.signals import Kind, Signal
 from app.rounds import opener
 from app.tables import passwords, repository
 from app.tables.models import GameTable, TableMember, TableStatus
@@ -303,7 +306,7 @@ async def create_table(session: AsyncSession, viewer: AccessClaims, data: TableC
     # 테이블을 먼저 DB 에 보낸다. 테이블의 ID 는 그때 정해지고, 이벤트는 그 ID 를 가리킨다
     await session.flush()
     recorder.record(session, table, EventType.TABLE_CREATED, actor_id=viewer.user_id)
-    await session.commit()
+    await commit(session, table)
     return await repository.reload_table(session, table.id)
 
 
@@ -354,9 +357,21 @@ async def lock_seated(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.
     return table, member
 
 
+async def commit(session: AsyncSession, table: GameTable) -> None:
+    """
+    테이블을 바꾼 것을 저장한다. 테이블을 바꾸는 일은 모두 이것으로 끝낸다(라운드도 이것을 쓴다).
+
+    저장하면서 "이 테이블에 새 이벤트가 생겼다"는 신호를 보낸다. 스트림을 열어 둔 사람들이 깨어나 새 것을 읽는다.
+    신호는 커밋될 때 함께 나간다. 저장에 실패하면 나가지 않는다.
+    이벤트가 없는 저장(캐릭터 정하기)에도 보낸다. 깨어난 쪽이 읽을 것이 없을 뿐이다.
+    """
+    await signals.publish(session, Signal(table_id=table.id, kind=Kind.EVENTS))
+    await session.commit()
+
+
 async def save(session: AsyncSession, table: GameTable) -> GameTable:
     """바꾼 테이블을 저장하고 다시 읽어 돌려준다."""
-    await session.commit()
+    await commit(session, table)
     return await repository.reload_table(session, table.id)
 
 
@@ -449,7 +464,7 @@ async def leave_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.
     left = recorder.record(session, table, EventType.MEMBER_LEFT, actor_id=user_id, payload=payload)
     if table.host_id == user_id:
         record_hand_over(session, table, hand_over(table), left)
-    await session.commit()
+    await commit(session, table)
 
 
 async def kick_member(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, user_id: uuid.UUID) -> GameTable:

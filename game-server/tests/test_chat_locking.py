@@ -25,7 +25,6 @@ from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
-from app.auth.tokens import AccessClaims
 from app.chat import repository, service
 from app.chat.models import ChatMessage
 from app.chat.schemas import MessageCreate
@@ -33,6 +32,7 @@ from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
+from tests.signing import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -63,8 +63,8 @@ async def open_duo(session: AsyncSession) -> GameTable:
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
     create = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=2)
-    table = await tables.create_table(session, AccessClaims(user_id=ME), create)
-    return await tables.join_table(session, AccessClaims(user_id=FRIEND), JoinRequest(invite_code=table.invite_code))
+    table = await tables.create_table(session, make_viewer(ME), create)
+    return await tables.join_table(session, make_viewer(FRIEND), JoinRequest(invite_code=table.invite_code))
 
 
 async def test_two_messages_at_once_get_different_sequences(session: AsyncSession, other_session: AsyncSession):

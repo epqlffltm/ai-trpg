@@ -18,6 +18,7 @@ access 토큰의 수명을 짧게(15분) 잡는 이유다.
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import jwt
 
@@ -54,6 +55,10 @@ class AccessClaims:
 
     # 인증 서버의 public_id. 게임 서버는 사용자를 이 값으로만 가리킨다
     user_id: uuid.UUID
+
+    # 토큰이 만료되는 시각(exp). 요청 하나는 검증한 순간에 끝나므로 볼 일이 없다.
+    # 스트림처럼 오래 열려 있는 응답이 본다. 만료된 뒤에도 계속 보내면 로그아웃한 사람의 연결이 살아 있게 된다
+    expires_at: datetime
 
 
 def read_key_id(token: str) -> str:
@@ -98,7 +103,8 @@ def build_access_claims(claims: dict) -> AccessClaims:
         user_id = uuid.UUID(claims['sub'])
     except (ValueError, TypeError, AttributeError) as error:
         raise InvalidTokenError from error
-    return AccessClaims(user_id=user_id)
+    # exp 가 숫자라는 것은 decode_claims 가 이미 확인했다
+    return AccessClaims(user_id=user_id, expires_at=datetime.fromtimestamp(claims['exp'], UTC))
 
 
 async def verify_access_token(token: str, jwks: JwksCache, settings: Settings) -> AccessClaims:
