@@ -12,7 +12,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from app.realtime.signals import Kind, Signal
+from app.realtime.signals import Signal
 
 
 class Subscription:
@@ -25,26 +25,26 @@ class Subscription:
 
     def __init__(self) -> None:
         self._woken = asyncio.Event()
-        self._pending: set[Kind] = set()
+        self._pending: set[Signal] = set()
 
-    def wake(self, kind: Kind) -> None:
-        """이 종류의 새 것이 생겼다고 알린다."""
-        self._pending.add(kind)
+    def wake(self, signal: Signal) -> None:
+        """신호가 왔다고 알린다. 같은 신호가 여러 번 와도 하나로 친다."""
+        self._pending.add(signal)
         self._woken.set()
 
-    async def wait(self, timeout: float) -> set[Kind] | None:
+    async def wait(self, timeout: float) -> set[Signal] | None:
         """
-        신호가 올 때까지 기다린다. 그동안 온 신호의 종류들을 돌려준다. timeout 초 안에 오지 않으면 None.
+        신호가 올 때까지 기다린다. 그동안 온 신호들을 돌려준다. timeout 초 안에 오지 않으면 None.
 
-        꺼내 간 종류는 비운다. 비우는 것과 꺼내는 것 사이에 await 가 없어서, 그 틈에 신호가 끼어들지 못한다.
+        꺼내 간 신호는 비운다. 비우는 것과 꺼내는 것 사이에 await 가 없어서, 그 틈에 신호가 끼어들지 못한다.
         """
         try:
             await asyncio.wait_for(self._woken.wait(), timeout)
         except TimeoutError:
             return None
         self._woken.clear()
-        kinds, self._pending = self._pending, set()
-        return kinds
+        received, self._pending = self._pending, set()
+        return received
 
 
 class Hub:
@@ -73,7 +73,7 @@ class Hub:
     def wake(self, signal: Signal) -> None:
         """신호의 테이블을 기다리는 자리를 모두 깨운다. 기다리는 사람이 없으면 아무 일도 없다."""
         for subscription in self._subscriptions.get(signal.table_id, ()):
-            subscription.wake(signal.kind)
+            subscription.wake(signal)
 
     def count(self, table_id: uuid.UUID) -> int:
         """이 테이블을 기다리는 자리가 몇인지 센다."""

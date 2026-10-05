@@ -23,6 +23,7 @@ from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferen
 from app.assets.worlds import router as worlds
 from app.auth.jwks import JwksCache
 from app.chat import router as chat
+from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
 from app.events import router as events
@@ -102,6 +103,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     # 신호를 다른 것으로 바꿀 때 여기의 PostgresListener 를 바꿔 끼운다(app/realtime/listener.py)
     app.state.hub = Hub()
     app.state.signal_source = PostgresListener(settings, app.state.hub)
+
+    # "입력 중" 신호를 너무 자주 보내지 못하게 막는 것. 기록을 메모리에 두므로 앱에 하나만 둔다
+    app.state.typing_throttle = TypingThrottle()
 
     # GM 의 서술을 만드는 것. 지금은 AI 를 부르지 않는 가짜다. AI 를 붙일 때 여기만 바꿔 끼운다
     app.state.narrator = FakeNarrator()
