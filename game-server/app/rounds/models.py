@@ -105,6 +105,7 @@ class Declaration(Base):
 
     선언은 하려는 일이다. 결과가 아니다. 되는지 안 되는지는 엔진이 정한다.
     글(content)은 사람과 서술자가 읽고, 행동(action)은 엔진이 읽는다.
+    엔진이 정한 결과(outcome)는 라운드가 선언을 마감할 때 적힌다.
     """
 
     __tablename__ = 'round_declarations'
@@ -125,6 +126,11 @@ class Declaration(Base):
     # 행동. 선언의 글을 엔진이 읽을 수 있는 모양으로 적은 것이다(app/engine/action.py). 문서 하나다.
     # 비어 있으면 판정이 없는 선언이다(대화, 둘러보기). 그 테이블의 규칙에 맞는지는 받을 때 검사했다
     action: Mapped[dict | None] = mapped_column(JSONB)
+
+    # 행동의 결과. 선언을 마감할 때 엔진이 주사위를 굴려 적는다(app/engine/check.py 의 Check). 문서 하나다.
+    # 한 번 적으면 고치지 않는다. 서술을 다시 맡겨도 다시 굴리지 않고 이것을 읽는다.
+    # 행동이 없는 선언과 아직 마감하지 않은 선언은 비어 있다
+    outcome: Mapped[dict | None] = mapped_column(JSONB)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

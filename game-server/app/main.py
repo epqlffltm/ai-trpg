@@ -27,6 +27,7 @@ from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
 from app.core.jobs import BackgroundJobs
+from app.engine.dice import RandomDice
 from app.events import router as events
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
@@ -112,6 +113,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
 
     # 요청과 따로 도는 작업을 들고 있는 것. GM 의 서술이 여기서 돈다(app/rounds/closing.py)
     app.state.jobs = BackgroundJobs()
+
+    # 판정에 쓰는 주사위. 서버만 굴린다. 테스트는 정해진 눈을 내는 주사위로 바꿔 꽂는다
+    app.state.dice = RandomDice()
 
     # GM 의 서술을 만드는 것. 지금은 AI 를 부르지 않는 가짜다. AI 를 붙일 때 여기만 바꿔 끼운다
     app.state.narrator = FakeNarrator()

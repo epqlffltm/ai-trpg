@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
+from app.engine.dice import Dice
 from app.rounds import service
 from app.rounds.closing import RoundCloser
 from app.rounds.models import Declaration, Round, RoundStatus
@@ -34,8 +35,18 @@ def get_closer(request: Request) -> RoundCloser:
     return RoundCloser(session_factory=state.session_factory, narrator=state.narrator, jobs=state.jobs)
 
 
+def get_dice(request: Request) -> Dice:
+    """
+    판정에 쓰는 주사위를 내준다. 앱에 꽂아 둔 것이다(app/main.py).
+
+    테스트는 정해진 눈을 내는 주사위를 꽂는다.
+    """
+    return request.app.state.dice
+
+
 # 라운드를 닫을 수 있는 API 가 인자의 형식으로 쓴다
 Closing = Annotated[RoundCloser, Depends(get_closer)]
+Rolling = Annotated[Dice, Depends(get_dice)]
 
 # 라운드의 번호. 1 부터다
 RoundNumber = Annotated[int, Path(ge=1)]
@@ -60,6 +71,8 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
             character_name=declaration.character_name,
             content=declaration.content if can_see(declaration) else None,
             action=declaration.action if can_see(declaration) else None,
+            # 결과는 가리지 않는다. 열려 있는 동안에는 어차피 없고, 마감한 뒤에는 모두에게 보인다
+            outcome=declaration.outcome,
         )
         for declaration in round_.declarations
     ]
@@ -131,25 +144,28 @@ async def read_round(table_id: uuid.UUID, number: RoundNumber, user: CurrentUser
 
 @router.put('/current/declaration', response_model=RoundOut, status_code=status.HTTP_200_OK)
 async def declare(
-    table_id: uuid.UUID, data: DeclarationUpdate, user: CurrentUser, session: Session, closer: Closing
+    table_id: uuid.UUID, data: DeclarationUpdate, user: CurrentUser, session: Session, closer: Closing, dice: Rolling
 ) -> RoundOut:
     """
     열려 있는 라운드에 선언을 낸다. 다시 내면 바뀐다.
 
     모두가 내면 라운드가 닫기 시작한다. 그때는 status 가 closing 인 라운드가 돌아온다.
+    행동을 붙인 선언은 그때 판정된다. 결과가 선언의 outcome 에 실려 돌아온다.
     GM 의 서술은 뒤에서 돈다. 끝나서 다음 라운드가 열린 것은 스트림으로 온다.
     """
-    table, round_ = await service.declare(session, user.user_id, table_id, data, closer)
+    table, round_ = await service.declare(session, user.user_id, table_id, data, closer, dice)
     return to_round(table, round_, user.user_id)
 
 
 # 202: 접수했다는 뜻이다. 일은 아직 끝나지 않았다. 서술이 뒤에서 돈다
 @router.post('/current/close', response_model=RoundOut, status_code=status.HTTP_202_ACCEPTED)
-async def close_round(table_id: uuid.UUID, user: CurrentUser, session: Session, closer: Closing) -> RoundOut:
+async def close_round(
+    table_id: uuid.UUID, user: CurrentUser, session: Session, closer: Closing, dice: Rolling
+) -> RoundOut:
     """
     방장이 라운드를 닫는다. 선언을 기다리지 않고 넘어간다. status 가 closing 인 라운드가 돌아온다.
 
-    닫는 중인 채로 오래 멈춰 있는 라운드에 다시 부르면 서술을 다시 맡긴다.
+    닫는 중인 채로 오래 멈춰 있는 라운드에 다시 부르면 서술을 다시 맡긴다. 판정은 다시 하지 않는다.
     """
-    table, round_ = await service.force_close(session, user.user_id, table_id, closer)
+    table, round_ = await service.force_close(session, user.user_id, table_id, closer, dice)
     return to_round(table, round_, user.user_id)
