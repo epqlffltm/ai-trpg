@@ -12,6 +12,8 @@
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
 지금은 종류가 하나다(판정). 종류를 나타내는 칸(kind)을 처음부터 둔다. 종류가 늘어도 모양이 바뀌지 않는다.
+
+행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
 """
 
 import enum
@@ -19,7 +21,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from app.engine.check import find_ability, find_difficulty
+from app.engine.check import Check, find_ability, find_difficulty, resolve
+from app.engine.dice import Dice
 from app.engine.ruleset import Key, Ruleset
 
 
@@ -65,3 +68,16 @@ def settle(ruleset: Ruleset, action: CheckAction) -> CheckAction:
     """
     difficulty = find_difficulty(ruleset, action.difficulty)
     return action.model_copy(update={'difficulty': difficulty.key})
+
+
+def attempt(ruleset: Ruleset, action: CheckAction, abilities: dict[str, int], dice: Dice) -> Check:
+    """
+    행동을 한다. 판정을 한 번 하고 그 결과를 돌려준다. 주사위를 한 번 굴린다.
+
+    abilities 는 행동하는 캐릭터의 시트에 적힌 능력치의 점수다({능력의 key: 점수}).
+
+    받을 때 규칙에 맞는지 본 행동(find_fault, settle)과, 같은 규칙으로 검사한 시트에만 쓴다.
+    그래서 여기서는 능력과 난이도가 있는지 다시 따지지 않는다.
+    """
+    difficulty = find_difficulty(ruleset, action.difficulty)
+    return resolve(ruleset, abilities[action.ability], difficulty, dice)

@@ -31,6 +31,20 @@ class DeclarationUpdate(BaseModel):
     action: CheckAction | None = None
 
 
+class CheckOutcome(BaseModel):
+    """판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다."""
+
+    # 주사위의 눈
+    roll: int
+    # 능력치의 점수에서 나온 보정
+    modifier: int
+    # 눈에 보정을 더한 값
+    total: int
+    # 난이도의 목표값. total 이 이 값 이상이면 성공이다
+    target: int
+    success: bool
+
+
 class DeclarationOut(BaseModel):
     """선언 하나."""
 
@@ -41,6 +55,9 @@ class DeclarationOut(BaseModel):
     content: str | None
     # 선언에 붙인 행동. 글과 같이 가린다. 행동이 없는 선언이면 보이는 사람에게도 None 이다
     action: CheckAction | None
+    # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
+    # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다
+    outcome: CheckOutcome | None
 
 
 class RoundOut(BaseModel):

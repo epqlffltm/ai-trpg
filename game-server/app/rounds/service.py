@@ -13,7 +13,8 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 라운드가 닫히는 길은 둘이다. 앉은 사람이 모두 선언을 냈을 때 저절로, 또는 방장이 닫을 때.
 
 닫는 일은 둘로 나뉜다. 사이에 GM 의 서술이 있고, 서술은 오래 걸린다(AI 를 부르면 몇 초에서 십몇 초).
-  1. 닫기 시작(begin_closing): 테이블을 잠그고, 선언을 마감하고, 저장한다. 라운드는 "닫는 중"이 된다.
+  1. 닫기 시작(begin_closing): 테이블을 잠그고, 선언을 마감하고, 행동을 판정하고, 저장한다.
+     라운드는 "닫는 중"이 된다.
   2. 서술: 잠금도 DB 연결도 없이, 요청과 따로 도는 작업이 서술자를 부른다(app/rounds/closing.py).
   3. 닫기 마무리(finish_closing): 다시 잠그고, 서술을 장면으로 하는 다음 라운드를 열고, 저장한다.
 잠금을 쥔 채로 서술을 기다리지 않는다. 기다리면 그동안 이 테이블의 채팅과 나가기가 전부 멈춘다.
@@ -23,10 +24,14 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 
 선언은 낼 때가 아니라 라운드가 닫힐 때 이벤트로 적는다. 마지막 글만 적는다.
 열려 있는 동안에는 남의 선언이 보이지 않아야 하는데, 이벤트는 앉은 사람 모두가 읽기 때문이다.
+
+판정은 닫기 시작할 때 한 번만 한다. 결과를 선언에 적어 두고, 그 뒤로는 읽기만 한다.
+서술이 실패해 다시 맡겨도 주사위를 다시 굴리지 않는다. 다시 굴리면 서술을 실패시켜 결과를 바꿀 수 있다.
 """
 
 import enum
 import uuid
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
@@ -35,13 +40,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import action as actions
 from app.engine.action import CheckAction
+from app.engine.check import find_ability, find_difficulty
+from app.engine.dice import Dice
 from app.engine.ruleset import Ruleset
 from app.events import recorder
 from app.events import repository as event_repository
-from app.events.models import EventType
+from app.events.models import EventType, TableEvent
 from app.rounds import opener, repository
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.rounds.narrator import Action, NarrationRequest
+from app.rounds.narrator import Move, NarrationRequest, Verdict
 from app.rounds.schemas import DeclarationUpdate
 from app.tables import repository as table_repository
 from app.tables import service as tables
@@ -185,18 +192,63 @@ def put_declaration(round_: Round, member: TableMember, content: str, action: di
         declaration.action = action
 
 
+def has_outcome(declaration: Declaration | None) -> bool:
+    """이 선언에 판정의 결과가 적혀 있는가."""
+    return declaration is not None and declaration.outcome is not None
+
+
+def roll_checks(table: GameTable, round_: Round, dice: Dice) -> None:
+    """
+    닫히는 라운드의 행동을 판정하고, 결과를 선언에 적는다. 들어온 순서로 굴린다.
+
+    지금 앉아 있고, 선언에 행동을 붙였고, 시트가 있는 사람만 굴린다.
+    진행 중인 테이블에서는 모두에게 시트가 있다(app/tables/sheets.py). 없는 사람이 있어도 라운드는 닫혀야 해서 건너뛴다.
+
+    규칙은 굴릴 사람이 있을 때만 읽는다. 판에 굳은 복사본을 통째로 읽는 일이라 싸지 않다.
+    """
+    rolling = [
+        (member, declaration)
+        for member in table.members
+        if (declaration := find_declaration(round_, member.user_id)) is not None
+        and declaration.action is not None
+        and member.sheet is not None
+    ]
+    if not rolling:
+        return
+
+    ruleset = rules_of(table)
+    for member, declaration in rolling:
+        action = CheckAction.model_validate(declaration.action)
+        declaration.outcome = asdict(actions.attempt(ruleset, action, member.sheet.abilities, dice))
+
+
+def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
+    """
+    선언에 적힌 행동과 결과를 서술자에게 줄 모양으로 바꾼다. key 를 규칙에 적힌 이름으로 바꾼다.
+
+    결과가 적힌 선언에만 쓴다(has_outcome).
+    """
+    ability = find_ability(ruleset, declaration.action['ability'])
+    difficulty = find_difficulty(ruleset, declaration.action['difficulty'])
+    return Verdict(ability=ability.name, difficulty=difficulty.name, **declaration.outcome)
+
+
 def build_request(table: GameTable, round_: Round) -> NarrationRequest:
     """
     닫히는 라운드를 서술자에게 줄 모양으로 바꾼다.
 
     지금 앉아 있는 사람 모두가 들어간다. 선언을 내지 않은 사람은 아무것도 하지 않은 것으로 들어간다.
+    판정의 결과는 선언에 적힌 것을 읽는다. 여기서 굴리지 않는다.
     """
-    actions = []
-    for member in table.members:
-        declaration = find_declaration(round_, member.user_id)
+    declarations = [find_declaration(round_, member.user_id) for member in table.members]
+    ruleset = rules_of(table) if any(has_outcome(declaration) for declaration in declarations) else None
+
+    moves = []
+    for member, declaration in zip(table.members, declarations, strict=True):
         content = declaration.content if declaration else None
-        actions.append(Action(character_name=member.character_name, content=content))
-    return NarrationRequest(round_number=round_.number, scene=round_.scene, actions=actions)
+        verdict = to_verdict(ruleset, declaration) if has_outcome(declaration) else None
+        moves.append(Move(character_name=member.character_name, content=content, verdict=verdict))
+    return NarrationRequest(round_number=round_.number, scene=round_.scene, moves=moves)
 
 
 # --- 읽기 ---
@@ -237,10 +289,28 @@ async def list_rounds(
 # --- 바꾸기. 모두 테이블을 잠그고 한다 ---
 
 
+def record_check(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    판정의 결과를 이벤트로 적는다. 그 판정을 부른 행동의 이벤트(cause)에 잇는다.
+
+    행한 사람(actor_id)을 적지 않는다. 주사위를 굴린 것은 플레이어가 아니라 엔진이다.
+    누구의 판정인지는 원인으로 이은 행동의 이벤트와 캐릭터 이름으로 안다.
+    """
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': declaration.character_name,
+        'ability': declaration.action['ability'],
+        'difficulty': declaration.action['difficulty'],
+        **declaration.outcome,
+    }
+    recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
+
+
 def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
     """
     닫히는 라운드의 선언을 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다. 서술자가 받는 것과 같다.
 
+    판정이 있었던 선언은 행동 바로 뒤에 그 결과를 적는다. 판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
     선언을 내지 않은 사람은 적지 않는다. 누가 안 냈는지는 라운드가 닫힌 이벤트에 적힌다.
     """
     for member in table.members:
@@ -253,19 +323,27 @@ def record_actions(session: AsyncSession, table: GameTable, round_: Round, group
             'content': declaration.content,
             'action': declaration.action,
         }
-        recorder.record(session, table, EventType.PLAYER_ACTION, actor_id=member.user_id, payload=payload, group=group)
+        acted = recorder.record(
+            session, table, EventType.PLAYER_ACTION, actor_id=member.user_id, payload=payload, group=group
+        )
+        if has_outcome(declaration):
+            record_check(session, table, declaration, cause=acted)
 
 
-def begin_closing(session: AsyncSession, table: GameTable, round_: Round, closer_id: uuid.UUID | None = None) -> None:
+def begin_closing(
+    session: AsyncSession, table: GameTable, round_: Round, dice: Dice, closer_id: uuid.UUID | None = None
+) -> None:
     """
-    열려 있는 라운드를 닫기 시작한다. 선언을 마감한다. 저장하지는 않는다.
+    열려 있는 라운드를 닫기 시작한다. 선언을 마감하고 행동을 판정한다. 저장하지는 않는다.
 
     closer_id 는 라운드를 닫은 방장이다. 모두가 내서 저절로 닫혔으면 주지 않는다.
-    이벤트는 행동들 → 닫힘 순서로 적는다. 한 묶음이다. 나중에 적히는 서술과 열림도 이 묶음에 들어간다.
+    이벤트는 행동(과 그 판정)들 → 닫힘 순서로 적는다. 한 묶음이다. 나중에 적히는 서술과 열림도 이 묶음에 들어간다.
 
+    주사위는 여기서만 굴린다. 열려 있는 라운드에 한 번만 부르므로 한 선언을 두 번 굴리지 않는다.
     서술자를 부르지 않는다. 저장한 뒤에 따로 맡긴다(NarrationScheduler).
     """
     group = uuid.uuid4()
+    roll_checks(table, round_, dice)
     record_actions(session, table, round_, group)
     payload = {'number': round_.number, 'idle': [str(user_id) for user_id in waiting_for(table, round_)]}
     recorder.record(session, table, EventType.ROUND_CLOSED, actor_id=closer_id, payload=payload, group=group)
@@ -299,6 +377,7 @@ async def declare(
     table_id: uuid.UUID,
     data: DeclarationUpdate,
     scheduler: NarrationScheduler,
+    dice: Dice,
 ) -> tuple[GameTable, Round]:
     """
     열려 있는 라운드에 선언을 낸다. 이미 냈으면 바꾼다. 앉은 사람이 모두 냈으면 라운드를 닫기 시작한다.
@@ -316,7 +395,7 @@ async def declare(
 
     everyone_declared = not waiting_for(table, round_)
     if everyone_declared:
-        begin_closing(session, table, round_)
+        begin_closing(session, table, round_, dice)
     saved = await save(session, table)
     # 저장한 뒤에 맡긴다. 먼저 맡기면 서술을 맡은 작업이 아직 저장되지 않은 것을 읽는다
     if everyone_declared:
@@ -325,7 +404,7 @@ async def declare(
 
 
 async def force_close(
-    session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, scheduler: NarrationScheduler
+    session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, scheduler: NarrationScheduler, dice: Dice
 ) -> tuple[GameTable, Round]:
     """
     방장이 라운드를 닫는다. 선언을 내지 않은 사람은 아무것도 하지 않은 것으로 넘어간다.
@@ -335,13 +414,14 @@ async def force_close(
     이미 닫는 중이면 두 가지다.
       - 맡긴 지 얼마 안 됐으면 RoundConflictError. 서술이 돌고 있다. 또 맡기면 같은 서술을 두 번 시킨다.
       - 한참 지났으면(is_stalled) 서술을 다시 맡긴다. 맡았던 작업이 사라진 것이다. 이벤트를 다시 적지는 않는다.
+        주사위도 다시 굴리지 않는다. 처음 닫을 때 선언에 적어 둔 결과를 그대로 쓴다.
         닫기 시작한 시각을 지금으로 고친다. 다시 맡긴 것 위에 또 맡기지 않게 한다.
     """
     table, _, round_ = await lock_current_round(session, host_id, table_id)
     tables.require_host(table, host_id)
 
     if round_.status == RoundStatus.OPEN:
-        begin_closing(session, table, round_, closer_id=host_id)
+        begin_closing(session, table, round_, dice, closer_id=host_id)
     elif is_stalled(round_, datetime.now(UTC)):
         round_.closing_at = datetime.now(UTC)
     else:
