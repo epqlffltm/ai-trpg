@@ -192,7 +192,6 @@ class Rulebook(AssetContent):
     룰북에는 두 가지가 들어간다.
       - 진행 지침: 컨셉, 분위기, GM 의 진행 방식. AI 가 읽는 글이다.
       - 게임 규칙: 능력치, 주사위, 판정. 엔진이 실행하는 데이터다.
-    지금은 진행 지침만 있다. 게임 규칙의 칸은 엔진을 만들 때 더한다.
     규칙을 글로 적어 AI 에게 주지 않는다. 그러면 판정을 AI 가 하게 된다.
     """
 
@@ -201,6 +200,11 @@ class Rulebook(AssetContent):
 
     # 진행 지침. AI 만 본다. 턴마다 AI 의 입력에 들어간다
     gm_guide: Mapped[str] = mapped_column(Text, default='')
+
+    # 게임 규칙. 문서 하나다. 모양은 app/engine/ruleset.py 의 Ruleset 이 정한다.
+    # DB 는 문서의 안을 검증하지 못한다. 쓸 때와 읽을 때 Ruleset 을 거친다.
+    # 만들 때 템플릿의 값을 복사해 넣는다. 그 뒤로는 템플릿을 다시 보지 않는다
+    rules: Mapped[dict] = mapped_column(JSONB)
 
 
 class Scenario(AssetContent):

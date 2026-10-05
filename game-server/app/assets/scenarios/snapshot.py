@@ -18,12 +18,15 @@ from collections.abc import Callable
 from pydantic import BaseModel
 
 from app.assets.models import TABLE_MAX_PLAYERS, Lorebook, LoreEntry, Rating, Rulebook, Scenario, World
+from app.engine.ruleset import Ruleset
+from app.engine.templates import SRD5
 
 # 문서의 모양이 바뀔 때 올리는 번호. 옛 판을 읽는 코드가 어느 모양인지 알 수 있다.
 #   1: 도입부가 하나다(opening)
 #   2: 스타팅이 여러 개다(openings)
 #   3: 추천 인원(recommended_players)과 프리젠(pregens)이 있다
-SNAPSHOT_FORMAT = 3
+#   4: 룰북에 규칙(rules)이 있다
+SNAPSHOT_FORMAT = 4
 
 
 class EntrySnapshot(BaseModel):
@@ -53,11 +56,12 @@ class WorldSnapshot(BaseModel):
 
 
 class RulebookSnapshot(BaseModel):
-    """룰북."""
+    """룰북. 진행 지침(AI 가 읽는 글)과 규칙(엔진이 실행하는 데이터)이다."""
 
     id: uuid.UUID
     title: str
     gm_guide: str
+    rules: Ruleset
 
 
 class PlayersSnapshot(BaseModel):
@@ -118,8 +122,13 @@ def snapshot_world(world: World) -> WorldSnapshot:
 
 
 def snapshot_rulebook(rulebook: Rulebook) -> RulebookSnapshot:
-    """룰북을 굳힌다."""
-    return RulebookSnapshot(id=rulebook.asset_id, title=rulebook.asset.title, gm_guide=rulebook.gm_guide)
+    """룰북을 굳힌다. 규칙은 문서에서 Ruleset 으로 읽어 모양을 확인하고 싣는다."""
+    return RulebookSnapshot(
+        id=rulebook.asset_id,
+        title=rulebook.asset.title,
+        gm_guide=rulebook.gm_guide,
+        rules=Ruleset.model_validate(rulebook.rules),
+    )
 
 
 def build_snapshot(
@@ -160,9 +169,22 @@ def upgrade_from_2(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_3(document: dict) -> dict:
+    """
+    형식 3 의 문서를 형식 4 로 올린다.
+
+    그때는 룰북에 규칙이 없었다. 그때 만든 룰북이 지금 받았을 규칙(SRD5 템플릿)으로 읽는다.
+    DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 내놓은 템플릿의 값은 고치지 않으므로 읽을 때마다 같다.
+    """
+    upgraded = dict(document)
+    upgraded['rulebook'] = {**document['rulebook'], 'rules': SRD5.model_dump(mode='json')}
+    upgraded['format'] = 4
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
-UPGRADES: dict[int, Callable[[dict], dict]] = {1: upgrade_from_1, 2: upgrade_from_2}
+UPGRADES: dict[int, Callable[[dict], dict]] = {1: upgrade_from_1, 2: upgrade_from_2, 3: upgrade_from_3}
 
 
 def read_snapshot(document: dict) -> Snapshot:

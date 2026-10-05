@@ -4,7 +4,8 @@
 룰북 API 를 검증한다.
 
 모든 자산에 공통인 규칙(소유자 검사, 지우기, 쪽 나누기)은 세계관의 테스트가 이미 검증한다. 같은 것을 다시 쓰지 않는다.
-여기서는 두 가지를 본다. 공통 규칙이 룰북에도 이어져 있는가, 그리고 룰북만의 것(진행 지침, 다른 종류와 섞이지 않는가).
+여기서는 두 가지를 본다. 공통 규칙이 룰북에도 이어져 있는가,
+그리고 룰북만의 것(진행 지침, 규칙, 다른 종류와 섞이지 않는가).
 """
 
 import uuid
@@ -17,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import RULEBOOK_GM_GUIDE_MAX_LENGTH, Asset, AssetType, Rulebook
+from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -102,7 +104,33 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'created_at',
         'updated_at',
         'gm_guide',
+        'rules',
     }
+
+
+async def test_a_new_rulebook_carries_the_rules_of_the_default_template(
+    client: AsyncClient, my_headers: dict[str, str]
+):
+    body = await create_rulebook(client, my_headers)
+
+    assert body['rules'] == SRD5.model_dump(mode='json')
+
+
+async def test_a_rulebook_can_name_its_template(client: AsyncClient, my_headers: dict[str, str]):
+    body = await create_rulebook(client, my_headers, template='srd5')
+
+    assert body['rules']['template'] == 'srd5'
+
+
+async def test_the_rules_are_stored_in_the_rulebook(
+    client: AsyncClient, my_headers: dict[str, str], session: AsyncSession
+):
+    created = await create_rulebook(client, my_headers)
+
+    # 템플릿의 이름이 아니라 값이 통째로 들어간다. 그 뒤로는 템플릿을 다시 보지 않는다
+    stored = await session.scalar(text('SELECT rules FROM rulebooks WHERE asset_id = :id'), {'id': created['id']})
+
+    assert stored == SRD5.model_dump(mode='json')
 
 
 async def test_a_rulebook_is_saved_as_the_rulebook_type(
@@ -126,6 +154,10 @@ async def test_a_rulebook_is_saved_as_the_rulebook_type(
         # 등급은 시나리오에서만 정한다
         {'title': '룰', 'rating': 'adult'},
         {'title': '룰', 'owner_id': str(SOMEONE_ELSE)},
+        # 없는 템플릿이다
+        {'title': '룰', 'template': 'homebrew'},
+        # 규칙을 직접 받지 않는다. 템플릿의 이름만 받는다
+        {'title': '룰', 'rules': SRD5.model_dump(mode='json')},
     ],
 )
 async def test_rejects_bad_input(client: AsyncClient, my_headers: dict[str, str], body: dict):
@@ -145,6 +177,17 @@ async def test_updates_the_gm_guide_only(client: AsyncClient, my_headers: dict[s
     assert body['title'] == TITLE
     assert body['description'] == '소개'
     assert body['updated_at'] > created['updated_at']
+    # 진행 지침을 고쳐도 규칙은 그대로다
+    assert body['rules'] == created['rules']
+
+
+@pytest.mark.parametrize('body', [{'template': 'srd5'}, {'rules': SRD5.model_dump(mode='json')}])
+async def test_the_rules_cannot_be_changed_yet(client: AsyncClient, my_headers: dict[str, str], body: dict):
+    created = await create_rulebook(client, my_headers)
+
+    response = await client.patch(f'{RULEBOOKS_URL}/{created["id"]}', json=body, headers=my_headers)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 async def test_the_list_does_not_carry_the_gm_guide(client: AsyncClient, my_headers: dict[str, str]):
@@ -155,6 +198,8 @@ async def test_the_list_does_not_carry_the_gm_guide(client: AsyncClient, my_head
     body = response.json()
     assert body['total'] == 1
     assert 'gm_guide' not in body['items'][0]
+    # 규칙도 목록에는 싣지 않는다. 하나를 열어 볼 때만 나간다
+    assert 'rules' not in body['items'][0]
 
 
 # --- 다른 종류와 섞이지 않는다 ---
@@ -225,7 +270,16 @@ async def test_deletes_my_rulebook(client: AsyncClient, my_headers: dict[str, st
 
 async def test_the_database_rejects_a_gm_guide_that_is_too_long(session: AsyncSession):
     asset = Asset(owner_id=ME, type=AssetType.RULEBOOK, title='룰')
-    session.add(Rulebook(asset=asset, gm_guide='가' * (RULEBOOK_GM_GUIDE_MAX_LENGTH + 1)))
+    rules = SRD5.model_dump(mode='json')
+    session.add(Rulebook(asset=asset, gm_guide='가' * (RULEBOOK_GM_GUIDE_MAX_LENGTH + 1), rules=rules))
 
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError, match='gm_guide_length'):
+        await session.commit()
+
+
+async def test_the_database_rejects_a_rulebook_without_rules(session: AsyncSession):
+    asset = Asset(owner_id=ME, type=AssetType.RULEBOOK, title='룰')
+    session.add(Rulebook(asset=asset))
+
+    with pytest.raises(IntegrityError, match='rules'):
         await session.commit()
