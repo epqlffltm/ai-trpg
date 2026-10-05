@@ -453,7 +453,7 @@ async def test_the_narrator_gets_the_closed_round_and_writes_the_next_scene(
     assert len(narrator.requests) == 1
     request = narrator.requests[0]
     assert (request.round_number, request.scene) == (1, OPENINGS[0])
-    assert [(action.character_name, action.content) for action in request.actions] == [
+    assert [(move.character_name, move.content) for move in request.moves] == [
         ('엘프', MY_ACTION),
         ('영애', None),
     ]

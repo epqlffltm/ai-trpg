@@ -9,7 +9,9 @@ DB 도 HTTP 도 쓰지 않는다.
 import pytest
 from pydantic import ValidationError
 
-from app.engine.action import ActionKind, CheckAction, find_fault, settle
+from app.engine.action import ActionKind, CheckAction, attempt, find_fault, settle
+from app.engine.check import Check
+from app.engine.dice import ScriptedDice
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
 
@@ -108,3 +110,40 @@ def test_settling_does_not_change_the_action_it_was_given():
 
     assert action.difficulty is None
     assert settled == check('str', 'medium')
+
+
+# --- 행동을 한다 ---
+
+# 근력 16(보정 +3), 매력 8(보정 -1)
+ABILITIES = {'str': 16, 'dex': 10, 'con': 10, 'int': 10, 'wis': 10, 'cha': 8}
+
+
+def test_attempting_uses_the_score_of_the_ability_named():
+    strong = attempt(SRD5, check('str', 'medium'), ABILITIES, ScriptedDice([12]))
+    rude = attempt(SRD5, check('cha', 'medium'), ABILITIES, ScriptedDice([12]))
+
+    # 같은 눈, 같은 난이도다. 어느 능력으로 하느냐가 성패를 가른다
+    assert strong == Check(roll=12, modifier=3, total=15, target=15, success=True)
+    assert rude == Check(roll=12, modifier=-1, total=11, target=15, success=False)
+
+
+def test_attempting_aims_at_the_difficulty_named():
+    easy = attempt(SRD5, check('dex', 'easy'), ABILITIES, ScriptedDice([12]))
+    hard = attempt(SRD5, check('dex', 'hard'), ABILITIES, ScriptedDice([12]))
+
+    assert (easy.target, easy.success) == (10, True)
+    assert (hard.target, hard.success) == (20, False)
+
+
+def test_attempting_rolls_once():
+    dice = ScriptedDice([12, 20])
+
+    attempt(SRD5, check('str', 'medium'), ABILITIES, dice)
+
+    assert dice.remaining == 1
+
+
+def test_attempting_works_under_other_rules():
+    result = attempt(SMALL_RULES, check('body', 'normal'), {'body': 14, 'mind': 10}, ScriptedDice([5]))
+
+    assert result == Check(roll=5, modifier=2, total=7, target=7, success=True)

@@ -56,6 +56,8 @@ class EventType(enum.StrEnum):
     ROUND_OPENED = 'round_opened'
     # 플레이어가 선언한 행동. 라운드가 닫힐 때 마지막 글만 적는다
     PLAYER_ACTION = 'player_action'
+    # 엔진이 행동을 판정했다. 주사위의 눈과 성패가 적힌다. 원인은 그 행동의 이벤트다
+    CHECK_ROLLED = 'check_rolled'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # 테이블이 끝났다
