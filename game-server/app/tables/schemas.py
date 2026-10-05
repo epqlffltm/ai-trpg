@@ -13,8 +13,10 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.assets.models import TABLE_MAX_PLAYERS, Rating
-from app.assets.scenarios.schemas import CharacterDescription, CharacterName, RecommendedPlayers
+from app.assets.models import TABLE_MAX_PLAYERS, CharacterMode, Rating
+from app.assets.scenarios.schemas import CharacterDescription, CharacterModes, CharacterName, RecommendedPlayers
+from app.engine.ruleset import Ruleset
+from app.engine.sheet import Sheet
 from app.tables.models import TABLE_PASSWORD_MAX_LENGTH, TABLE_PASSWORD_MIN_LENGTH, TableStatus
 
 # 테이블의 비밀번호. 앞뒤 공백을 떼지 않는다. 적은 그대로가 비밀번호다
@@ -29,6 +31,7 @@ class TableCreate(BaseModel):
 
     version 을 비우면 그 시나리오의 공개 중인 판을 쓴다. 번호를 적는 것은 자기 시나리오일 때만 된다.
     is_public 을 켜면 로비에 보인다. 만든 뒤에는 바꿀 수 없다. 비밀번호는 로비에 보이는 테이블에만 건다.
+    character_modes 로 캐릭터 방식을 좁힌다. 판이 허용한 것 중에서만 고른다. 비우면 판이 허용한 그대로다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -41,6 +44,8 @@ class TableCreate(BaseModel):
     capacity: int = Field(ge=1, le=TABLE_MAX_PLAYERS)
     is_public: bool = False
     password: TablePassword | None = None
+    # 이 테이블에서 허용할 캐릭터 방식. 만든 뒤에는 바꿀 수 없다
+    character_modes: CharacterModes | None = None
 
     @model_validator(mode='after')
     def require_public_for_password(self) -> 'TableCreate':
@@ -111,6 +116,16 @@ class CharacterOut(BaseModel):
     description: str
 
 
+class SheetOut(BaseModel):
+    """앉은 사람의 캐릭터 시트. 앉은 사람은 서로의 시트를 본다."""
+
+    # 능력치의 점수. 이름표가 무슨 능력치인지는 테이블의 rules 에 있다
+    abilities: dict[str, int]
+    max_hp: int
+    # 지금의 HP
+    hp: int
+
+
 class MemberOut(BaseModel):
     """테이블에 앉은 사람 하나."""
 
@@ -121,6 +136,8 @@ class MemberOut(BaseModel):
     character: CharacterOut | None
     # 프리젠에서 가져왔으면 몇 번째 프리젠인가
     pregen_index: int | None
+    # 게임을 시작하기 전에는 None 이다. 시작할 때 받는다
+    sheet: SheetOut | None
     joined_at: datetime
 
 
@@ -129,6 +146,8 @@ class PregenChoice(BaseModel):
 
     name: str
     description: str
+    # 이 프리젠을 고르면 받는 숫자
+    sheet: Sheet
     # 가져간 사람. 아무도 가져가지 않았으면 None 이다
     taken_by: uuid.UUID | None
 
@@ -167,6 +186,12 @@ class TableDetail(TableSummary):
     # 고른 스타팅의 글. 테이블이 시작될 때 AI 가 읽어 줄 장면이다
     opening: str
     recommended_players: RecommendedPlayers
+    # 이 테이블의 규칙. 능력치의 이름과 난이도의 단계가 있다. 시트를 읽고 행동을 고르는 데 필요하다
+    rules: Ruleset
+    # 이 테이블에서 허용하는 캐릭터 방식
+    character_modes: list[CharacterMode]
+    # 캐릭터를 직접 만들면 받는 숫자. 직접 만들기를 허용하지 않는 테이블이면 None 이다
+    default_sheet: Sheet | None
     pregens: list[PregenChoice]
     members: list[MemberOut]
     # 초대 코드. 방장에게만 보인다

@@ -295,11 +295,11 @@ async def test_starting_writes_the_roster_the_scene_and_the_round(
     started, narration, opened = (await read_events(client, friend, table))[-3:]
 
     assert (started['type'], started['actor_id']) == ('table_started', str(ME))
-    # 시작할 때 누가 어떤 캐릭터였는지를 적는다
+    # 시작할 때 누가 어떤 캐릭터였고 어떤 숫자로 시작했는지를 적는다. 지금의 HP 는 적지 않는다(가득 찬 채다)
     assert started['payload'] == {
         'members': [
-            {'user_id': str(ME), 'character_name': '엘프'},
-            {'user_id': str(FRIEND), 'character_name': '영애'},
+            {'user_id': str(ME), 'character_name': '엘프', 'sheet': SHEET},
+            {'user_id': str(FRIEND), 'character_name': '영애', 'sheet': SHEET},
         ]
     }
     # 첫 서술은 고른 스타팅이다. GM 이 한 일이라 actor_id 가 없다
