@@ -12,12 +12,13 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
+from app.assets.models import CharacterMode
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.tables import service
-from app.tables.models import GameTable, TableMember
+from app.tables.models import GameTable, TableMember, TableSheet
 from app.tables.schemas import (
     CharacterOut,
     CharacterUpdate,
@@ -26,6 +27,7 @@ from app.tables.schemas import (
     LobbyJoinRequest,
     MemberOut,
     PregenChoice,
+    SheetOut,
     TableCreate,
     TableDetail,
     TablePage,
@@ -59,6 +61,13 @@ def to_summary(table: GameTable) -> TableSummary:
     )
 
 
+def to_sheet(sheet: TableSheet | None) -> SheetOut | None:
+    """시트를 응답으로 바꾼다. 아직 받지 않았으면 None."""
+    if sheet is None:
+        return None
+    return SheetOut(abilities=sheet.abilities, max_hp=sheet.max_hp, hp=sheet.hp)
+
+
 def to_member(table: GameTable, member: TableMember) -> MemberOut:
     """앉은 사람 하나를 응답으로 바꾼다."""
     character = None
@@ -69,6 +78,7 @@ def to_member(table: GameTable, member: TableMember) -> MemberOut:
         is_host=member.user_id == table.host_id,
         character=character,
         pregen_index=member.pregen_index,
+        sheet=to_sheet(member.sheet),
         joined_at=member.joined_at,
     )
 
@@ -77,7 +87,7 @@ def to_pregen_choices(table: GameTable, snapshot: Snapshot) -> list[PregenChoice
     """프리젠마다 누가 가져갔는지를 붙여 응답으로 바꾼다."""
     taken_by = {member.pregen_index: member.user_id for member in table.members if member.pregen_index is not None}
     return [
-        PregenChoice(name=pregen.name, description=pregen.description, taken_by=taken_by.get(index))
+        PregenChoice(name=pregen.name, description=pregen.description, sheet=pregen.sheet, taken_by=taken_by.get(index))
         for index, pregen in enumerate(snapshot.pregens)
     ]
 
@@ -93,6 +103,9 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         **to_summary(table).model_dump(),
         opening=snapshot.openings[table.opening_index],
         recommended_players=RecommendedPlayers(**snapshot.recommended_players.model_dump()),
+        rules=snapshot.rulebook.rules,
+        character_modes=table.character_modes,
+        default_sheet=snapshot.default_sheet if CharacterMode.CUSTOM in table.character_modes else None,
         pregens=to_pregen_choices(table, snapshot),
         members=[to_member(table, member) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
@@ -148,7 +161,7 @@ async def handle_table_option(request: Request, error: TableOptionError) -> JSON
     """ "고른 번호가 판에 없다"는 422 다. 주소는 맞고, 본문에 적은 값이 틀렸다."""
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={'detail': f'{error.field} 가 가리키는 것이 없습니다.'},
+        content={'detail': f'{error.field} 에 고를 수 없는 값이 있습니다.'},
     )
 
 

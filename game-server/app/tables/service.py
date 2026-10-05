@@ -13,6 +13,7 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
   - 테이블을 바꾸면 무슨 일이 있었는지를 이벤트로 적는다(app/events/recorder.py). 바꾼 것과 함께 저장된다.
   - 저장은 commit 하나로 한다. 저장하면서 "새 이벤트가 생겼다"는 신호를 보낸다(app/realtime/signals.py).
     캐릭터를 정하는 것은 적지 않는다. 시작할 때 누가 어떤 캐릭터였는지를 한 번 적는다.
+  - 캐릭터의 숫자(시트)는 게임을 시작할 때 준다(app/tables/sheets.py). 모집 중에는 바뀔 숫자가 없다.
 """
 
 import asyncio
@@ -24,7 +25,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
-from app.assets.models import TABLE_MAX_PLAYERS, Scenario, ScenarioVersion
+from app.assets.models import TABLE_MAX_PLAYERS, CharacterMode, Scenario, ScenarioVersion
 from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.assets.service import AssetNotFoundError
@@ -35,7 +36,7 @@ from app.listings import service as listings
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
-from app.tables import passwords, repository
+from app.tables import passwords, repository, sheets
 from app.tables.models import GameTable, TableMember, TableStatus
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
 
@@ -69,8 +70,12 @@ class Conflict(enum.StrEnum):
     ALREADY_SEATED = 'already_seated'
     # 다른 사람이 그 프리젠을 가져갔다
     PREGEN_TAKEN = 'pregen_taken'
-    # 캐릭터를 만들지 않은 사람이 있다
+    # 이 테이블에서 허용하지 않는 방식으로 캐릭터를 정하려 했다
+    CHARACTER_MODE_NOT_ALLOWED = 'character_mode_not_allowed'
+    # 캐릭터를 만들지 않은 사람이 있다. 받을 시트가 없는 사람이 있는 경우도 이 이유다
     CHARACTERS_MISSING = 'characters_missing'
+    # 프리젠만 허용한 테이블인데 정원이 프리젠의 수보다 많다
+    PREGENS_TOO_FEW = 'pregens_too_few'
     # 방장은 자신을 내보낼 수 없다. 나가기를 쓴다
     CANNOT_KICK_SELF = 'cannot_kick_self'
     # 이 등급의 테이블은 혼자서만 할 수 있다(성인 인증이 생길 때까지)
@@ -87,9 +92,9 @@ class TableConflictError(Exception):
 
 class TableOptionError(Exception):
     """
-    고른 번호가 판에 없다. 없는 스타팅이나 없는 프리젠을 골랐다.
+    고른 것이 판에 없다. 없는 스타팅이나 없는 프리젠을 골랐거나, 판이 허용하지 않는 캐릭터 방식을 골랐다.
 
-    field 는 입력의 어느 칸이 틀렸는지다(opening_index, pregen_index).
+    field 는 입력의 어느 칸이 틀렸는지다(opening_index, pregen_index, character_modes).
     """
 
     def __init__(self, field: str) -> None:
@@ -208,19 +213,39 @@ def hand_over(table: GameTable) -> EventType | None:
     return None
 
 
+def describe_sheet(member: TableMember) -> dict | None:
+    """시작할 때의 시트를 이벤트에 적을 모양으로 바꾼다. 시트가 없으면 None."""
+    if member.sheet is None:
+        return None
+    return {'abilities': member.sheet.abilities, 'max_hp': member.sheet.max_hp}
+
+
 def roster(table: GameTable) -> list[dict]:
-    """앉은 사람과 캐릭터 이름의 목록. 이벤트에 적을 모양이다."""
-    return [{'user_id': str(member.user_id), 'character_name': member.character_name} for member in table.members]
+    """
+    앉은 사람과 캐릭터 이름, 시작할 때의 시트의 목록. 이벤트에 적을 모양이다.
+
+    시트를 함께 적어 둔다. 뒤에 HP 가 바뀐 일들이 이벤트로 쌓이므로, 처음의 값이 기록에 있어야 과정을 따라갈 수 있다.
+    """
+    return [
+        {'user_id': str(member.user_id), 'character_name': member.character_name, 'sheet': describe_sheet(member)}
+        for member in table.members
+    ]
 
 
 def build_table(
-    host_id: uuid.UUID, version: ScenarioVersion, snapshot: Snapshot, data: TableCreate, password_hash: str | None
+    host_id: uuid.UUID,
+    version: ScenarioVersion,
+    snapshot: Snapshot,
+    data: TableCreate,
+    modes: list[CharacterMode],
+    password_hash: str | None,
 ) -> GameTable:
     """
     판에서 테이블 객체를 만든다. 아직 저장하지 않는다.
 
     판의 내용을 통째로 복사해 온다. 옛 형식의 판이면 지금의 모양으로 올린 것을 복사한다.
-    만든 사람이 방장이자 첫 참가자다. password_hash 는 비밀번호를 계산해 둔 값이다. 비밀번호가 없으면 None 이다.
+    만든 사람이 방장이자 첫 참가자다. modes 는 이 테이블에서 허용할 캐릭터 방식이다.
+    password_hash 는 비밀번호를 계산해 둔 값이다. 비밀번호가 없으면 None 이다.
     """
     return GameTable(
         host_id=host_id,
@@ -230,6 +255,7 @@ def build_table(
         content=snapshot.model_dump(mode='json'),
         opening_index=data.opening_index,
         capacity=data.capacity,
+        character_modes=modes,
         rating=snapshot.rating,
         invite_code=new_invite_code(),
         is_public=data.is_public,
@@ -289,7 +315,7 @@ async def create_table(session: AsyncSession, viewer: AccessClaims, data: TableC
     """
     테이블을 만든다. 만든 사람이 방장이 되어 앉는다.
 
-    판이 없으면 AssetNotFoundError, 없는 스타팅을 골랐으면 TableOptionError,
+    판이 없으면 AssetNotFoundError, 없는 스타팅이나 판이 허용하지 않는 캐릭터 방식을 골랐으면 TableOptionError,
     그 판으로는 둘 수 없는 정원이면 TableConflictError.
     """
     version = await resolve_version(session, viewer, data)
@@ -297,11 +323,17 @@ async def create_table(session: AsyncSession, viewer: AccessClaims, data: TableC
 
     if data.opening_index >= len(snapshot.openings):
         raise TableOptionError('opening_index')
+    modes = sheets.narrow_modes(snapshot.character_modes, data.character_modes)
+    if modes is None:
+        raise TableOptionError('character_modes')
     if data.capacity > seat_limit(viewer, snapshot):
         raise TableConflictError(Conflict.SOLO_ONLY)
+    by_pregens = sheets.seats_by_pregens(snapshot, modes)
+    if by_pregens is not None and data.capacity > by_pregens:
+        raise TableConflictError(Conflict.PREGENS_TOO_FEW)
 
     password_hash = await hash_table_password(data.password)
-    table = build_table(viewer.user_id, version, snapshot, data, password_hash)
+    table = build_table(viewer.user_id, version, snapshot, data, modes, password_hash)
     repository.add_table(session, table)
     # 테이블을 먼저 DB 에 보낸다. 테이블의 ID 는 그때 정해지고, 이벤트는 그 ID 를 가리킨다
     await session.flush()
@@ -423,12 +455,16 @@ async def set_character(
     """
     자기 캐릭터를 정한다. 직접 만들거나 프리젠을 가져온다. 다시 부르면 통째로 바뀐다.
 
-    모집 중이 아니거나 다른 사람이 그 프리젠을 가져갔으면 TableConflictError, 없는 프리젠이면 TableOptionError.
+    모집 중이 아니거나, 이 테이블에서 허용하지 않는 방식이거나, 다른 사람이 그 프리젠을 가져갔으면 TableConflictError.
+    없는 프리젠이면 TableOptionError.
 
     프리젠을 가져갔다가 직접 만든 캐릭터로 바꾸면, 그 프리젠은 다시 고를 수 있게 된다.
+    숫자(시트)는 여기서 주지 않는다. 게임을 시작할 때 준다.
     """
     table, member = await lock_seated(session, user_id, table_id)
     require_recruiting(table)
+    if sheets.mode_of(data.pregen_index) not in table.character_modes:
+        raise TableConflictError(Conflict.CHARACTER_MODE_NOT_ALLOWED)
 
     name, description = resolve_character(read_snapshot(table.content), data)
     if data.pregen_index is not None:
@@ -515,21 +551,25 @@ async def transfer_host(
 async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID) -> GameTable:
     """
     방장이 테이블을 시작한다. 그 뒤로는 새로 들어올 수 없고 캐릭터를 바꿀 수 없다.
-    첫 라운드를 연다. 장면은 테이블을 만들 때 고른 스타팅이다.
+    앉은 사람 모두에게 캐릭터 시트를 주고, 첫 라운드를 연다. 장면은 테이블을 만들 때 고른 스타팅이다.
 
     방장이 아니면 NotHostError, 모집 중이 아니거나 캐릭터를 만들지 않은 사람이 있으면 TableConflictError.
+
+    상태를 바꾸고, 시트를 주고, 이벤트를 적고, 라운드를 여는 것이 한 묶음으로 저장된다. 일부만 되는 일이 없다.
     """
     table, _ = await lock_seated(session, host_id, table_id)
     require_host(table, host_id)
     require_recruiting(table)
-    if any(member.character_name is None for member in table.members):
+    snapshot = read_snapshot(table.content)
+    # 캐릭터를 정하지 않은 사람이 있으면 그 사람이 받을 시트도 없다. 아무에게도 주지 않고 거절한다
+    if not sheets.hand_out(table, snapshot):
         raise TableConflictError(Conflict.CHARACTERS_MISSING)
 
     table.status = TableStatus.PLAYING
     table.started_at = func.now()
     payload = {'members': roster(table)}
     started = recorder.record(session, table, EventType.TABLE_STARTED, actor_id=host_id, payload=payload)
-    opening = read_snapshot(table.content).openings[table.opening_index]
+    opening = snapshot.openings[table.opening_index]
     opener.open_round(session, table, number=1, scene=opening, cause=started)
     return await save(session, table)
 

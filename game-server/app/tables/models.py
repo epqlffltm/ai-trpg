@@ -3,9 +3,10 @@
 """
 테이블의 모델. 테이블은 시나리오의 판 하나를 가져와 AI GM 과 플레이하는 자리다.
 
-테이블 둘이 있다.
+테이블 셋이 있다.
   - game_tables: 테이블 자신. 방장, 어느 판에서 왔는지, 판의 복사본, 정원, 상태.
-  - table_members: 테이블에 앉은 사람과 그 사람의 캐릭터.
+  - table_members: 테이블에 앉은 사람과 그 사람의 캐릭터(이름과 설명: 글).
+  - table_sheets: 앉은 사람의 캐릭터 시트(능력치와 HP: 숫자). 게임을 시작할 때 생긴다.
 
 판은 고치지 않는다. 테이블은 만들 때 판의 내용을 통째로 복사해 온다(content).
 플레이하면서 바뀌는 것(죽은 NPC, 열린 문)은 이 복사본을 고친다. 같은 판으로 만든 다른 테이블에는 영향이 없다.
@@ -22,6 +23,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     SmallInteger,
     String,
@@ -31,7 +33,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.assets.models import (
@@ -39,7 +41,9 @@ from app.assets.models import (
     CHARACTER_NAME_MAX_LENGTH,
     TABLE_MAX_PLAYERS,
     TITLE_MAX_LENGTH,
+    CharacterMode,
     Rating,
+    all_of,
     at_most,
     one_of,
 )
@@ -78,6 +82,11 @@ class GameTable(Base):
         CheckConstraint('opening_index >= 0', name='opening_index_not_negative'),
         # 비밀번호는 로비에 보이는 테이블에만 건다. 보이지 않는 테이블은 초대 코드가 그 일을 한다
         CheckConstraint('password_hash IS NULL OR is_public', name='password_needs_public'),
+        # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 캐릭터를 정할 수 없다
+        CheckConstraint(
+            f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
+            name='character_modes_allowed',
+        ),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -115,6 +124,12 @@ class GameTable(Base):
     # 로비의 목록에 보이는가. 방장이 테이블을 만들 때 정한다. 나중에 바꾸지 않는다.
     # 보이는 테이블에는 초대 코드 없이도 들어올 수 있다
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # 이 테이블에서 허용하는 캐릭터 방식들. 판이 허용한 것 중에서 방장이 고른다. 만든 뒤에는 바꾸지 않는다.
+    # 이 칸이 생기기 전에 만든 테이블은 둘 다 허용한다. 그때는 프리젠을 고를 수도 직접 만들 수도 있었다
+    character_modes: Mapped[list[str]] = mapped_column(
+        ARRAY(String(20)), default=lambda: list(CharacterMode), server_default=text("'{pregen,custom}'")
+    )
 
     # 비밀번호. 그대로 두지 않고 계산한 값을 둔다(passwords.py). 비어 있으면 비밀번호가 없는 것이다.
     # 로비에서 들어올 때만 묻는다. 초대 코드로 들어올 때는 묻지 않는다. 방장이 직접 부른 사람이다
@@ -173,3 +188,47 @@ class TableMember(Base):
     pregen_index: Mapped[int | None] = mapped_column(SmallInteger)
 
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # 이 사람의 캐릭터 시트. 게임을 시작하기 전에는 없다.
+    # selectin: 앉은 사람을 읽을 때 함께 읽는다. delete-orphan: 사람이 테이블에서 빠지면 시트도 지운다
+    sheet: Mapped['TableSheet | None'] = relationship(lazy='selectin', cascade='all, delete-orphan')
+
+
+class TableSheet(Base):
+    """
+    테이블에 앉은 사람의 캐릭터 시트. 캐릭터의 숫자다.
+
+    시작할 때의 숫자는 판에서 온다(프리젠의 시트나 기본 시트). 가져온 뒤로는 이 테이블의 것이다.
+    플레이하면서 바뀌는 값(hp)이 여기 있다. 이 값은 엔진만 고친다.
+
+    기본 키를 (table_id, user_id) 로 하지 않고 따로 둔다. 지금은 한 사람에 시트가 하나지만,
+    캐릭터가 죽어 다른 캐릭터로 바꾸는 기능이 생기면 한 사람이 시트를 여럿 거쳐 간다.
+    """
+
+    __tablename__ = 'table_sheets'
+    __table_args__ = (
+        # 앉은 사람의 행이 지워지면(나가기, 내보내기, 테이블 삭제) 함께 지워진다
+        ForeignKeyConstraint(
+            ['table_id', 'user_id'], ['table_members.table_id', 'table_members.user_id'], ondelete='CASCADE'
+        ),
+        # 지금은 한 사람에 시트가 하나다
+        UniqueConstraint('table_id', 'user_id'),
+        CheckConstraint('max_hp >= 1', name='max_hp_positive'),
+        # HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. 엔진의 실수를 DB 가 한 번 더 막는다
+        CheckConstraint('hp BETWEEN 0 AND max_hp', name='hp_range'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    table_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+
+    # 능력치의 점수. 능력치의 이름표에서 점수로 간다. 어떤 능력치가 있는지는 규칙이 정하므로 칸으로 두지 못한다.
+    # 모양과 값은 판에 굳을 때 이미 검사했다(app/engine/sheet.py)
+    abilities: Mapped[dict] = mapped_column(JSONB)
+
+    # 최대 HP 와 지금의 HP. 정확해야 하고 자주 바뀌는 값이라 문서에 넣지 않고 칸으로 둔다
+    max_hp: Mapped[int] = mapped_column(SmallInteger)
+    hp: Mapped[int] = mapped_column(SmallInteger)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
