@@ -24,7 +24,7 @@ from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
-from app.rounds import repository, service
+from app.rounds import closing, repository, service
 from app.rounds.models import Round
 from app.rounds.narrator import FakeNarrator
 from app.rounds.schemas import DeclarationUpdate
@@ -70,8 +70,28 @@ async def start_duo(session: AsyncSession) -> GameTable:
     return await tables.start_table(session, ME, table.id)
 
 
-async def test_the_last_two_declarations_close_the_round_once(session: AsyncSession, other_session: AsyncSession):
+class RecordingScheduler:
+    """맡긴 것을 적어 두기만 하는 것. 서술을 돌리지 않는다. 몇 번 맡겼는지 본다."""
+
+    def __init__(self) -> None:
+        self.scheduled: list[tuple[uuid.UUID, int]] = []
+
+    def schedule(self, table_id: uuid.UUID, number: int) -> None:
+        self.scheduled.append((table_id, number))
+
+
+async def narrate(app: FastAPI, table: GameTable, number: int) -> Round:
+    """맡겨진 서술을 직접 돌리고, 그 뒤의 가장 최근 라운드를 돌려준다."""
+    await closing.narrate_round(app.state.session_factory, FakeNarrator(), table.id, number)
+    async with app.state.session_factory() as fresh:
+        return await repository.find_latest_round(fresh, table.id)
+
+
+async def test_the_last_two_declarations_close_the_round_once(
+    app: FastAPI, session: AsyncSession, other_session: AsyncSession
+):
     table = await start_duo(session)
+    scheduler = RecordingScheduler()
 
     # A: 테이블을 잠그고 내 선언을 적었지만 아직 커밋하지 않았다
     locked = await table_repository.lock_table(session, table.id)
@@ -81,16 +101,20 @@ async def test_the_last_two_declarations_close_the_round_once(session: AsyncSess
 
     # B: 친구가 선언을 낸다. A 가 끝날 때까지 기다려야 한다
     data = DeclarationUpdate(content='웃는다.')
-    declaring = asyncio.create_task(service.declare(other_session, FRIEND, table.id, data, FakeNarrator()))
+    declaring = asyncio.create_task(service.declare(other_session, FRIEND, table.id, data, scheduler))
     assert await is_waiting(declaring)
 
     await session.commit()
 
-    # 기다린 뒤에는 A 의 선언이 보인다. 모두 냈으므로 B 가 라운드를 닫는다
-    _, latest = await declaring
+    # 기다린 뒤에는 A 의 선언이 보인다. 모두 냈으므로 B 가 라운드를 닫기 시작하고 서술을 한 번 맡긴다
+    _, closing_round = await declaring
+    assert (closing_round.number, closing_round.status) == (1, 'closing')
+    assert scheduler.scheduled == [(table.id, 1)]
+
+    latest = await narrate(app, table, 1)
     assert latest.number == 2
     assert latest.scene == '[1 라운드의 결과]\n엘프: 달린다.\n영애: 웃는다.'
-    # 응답이 아니라 저장된 것을 본다. 라운드는 둘이고, 열린 것은 하나다
+    # 응답이 아니라 저장된 것을 본다. 라운드는 둘이고, 닫히지 않은 것은 하나다
     total = await other_session.scalar(select(func.count()).select_from(Round).where(Round.table_id == table.id))
     opened = await other_session.scalar(
         select(func.count()).select_from(Round).where(Round.table_id == table.id, Round.closed_at.is_(None))
@@ -98,7 +122,9 @@ async def test_the_last_two_declarations_close_the_round_once(session: AsyncSess
     assert (total, opened) == (2, 1)
 
 
-async def test_closing_waits_for_a_declaration_being_saved(session: AsyncSession, other_session: AsyncSession):
+async def test_closing_waits_for_a_declaration_being_saved(
+    app: FastAPI, session: AsyncSession, other_session: AsyncSession
+):
     table = await start_duo(session)
 
     # A: 테이블을 잠그고 친구의 선언을 적었지만 아직 커밋하지 않았다
@@ -108,10 +134,11 @@ async def test_closing_waits_for_a_declaration_being_saved(session: AsyncSession
     await session.flush()
 
     # B: 방장이 라운드를 닫으려 한다. 잠금이 없으면 친구의 선언을 못 보고 "아무것도 하지 않았다"로 닫는다
-    closing = asyncio.create_task(service.force_close(other_session, ME, table.id, FakeNarrator()))
-    assert await is_waiting(closing)
+    closing_task = asyncio.create_task(service.force_close(other_session, ME, table.id, RecordingScheduler()))
+    assert await is_waiting(closing_task)
 
     await session.commit()
+    await closing_task
 
-    _, latest = await closing
+    latest = await narrate(app, table, 1)
     assert latest.scene == '[1 라운드의 결과]\n엘프: 아무것도 하지 않았다.\n영애: 웃는다.'

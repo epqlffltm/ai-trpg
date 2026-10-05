@@ -5,8 +5,9 @@
 
 보는 것은 다섯이다.
   - 테이블을 시작하면 첫 라운드가 열린다. 장면은 고른 스타팅이다.
-  - 앉은 사람이 모두 선언을 내면 라운드가 닫히고 다음 라운드가 열린다. 방장은 기다리지 않고 닫을 수 있다.
-  - 열려 있는 라운드에서는 남의 선언의 글이 보이지 않는다. 누가 냈는지만 보인다. 닫히면 모두 보인다.
+  - 앉은 사람이 모두 선언을 내면 라운드가 닫기 시작하고, 서술이 끝나면 다음 라운드가 열린다.
+    방장은 기다리지 않고 닫을 수 있다.
+  - 선언을 받는 동안에는 남의 선언의 글이 보이지 않는다. 누가 냈는지만 보인다. 마감하면 모두 보인다.
   - 라운드는 테이블에 앉은 사람만 본다. 선언과 닫기는 진행 중인 테이블에서만 된다.
   - 서술자는 글만 쓴다. 바꿔 끼울 수 있다. 테스트는 가짜 서술자를 쓴다.
 """
@@ -146,10 +147,10 @@ async def test_starting_the_table_opens_the_first_round(client: AsyncClient, me:
     round_ = await current(client, me, table)
 
     # 첫 장면은 테이블을 만들 때 고른 스타팅이다
-    assert (round_['number'], round_['scene'], round_['is_open']) == (1, OPENINGS[1], True)
+    assert (round_['number'], round_['scene'], round_['status']) == (1, OPENINGS[1], 'open')
     assert round_['declarations'] == []
     assert round_['waiting_for'] == [str(ME)]
-    assert round_['closed_at'] is None
+    assert (round_['closing_at'], round_['closed_at']) == (None, None)
 
 
 async def test_a_table_that_has_not_started_has_no_round(client: AsyncClient, me: dict[str, str]):
@@ -180,7 +181,7 @@ async def test_declares_and_changes_the_declaration(client: AsyncClient, me: dic
     assert first['waiting_for'] == [str(FRIEND)]
     # 닫히기 전에는 고칠 수 있다. 통째로 바뀐다. 앞뒤 공백은 그대로 둔다
     assert contents(changed) == {'엘프': '  마음을 바꿔 뒤로 달린다.\n'}
-    assert (changed['number'], changed['is_open']) == (1, True)
+    assert (changed['number'], changed['status']) == (1, 'open')
 
 
 @pytest.mark.parametrize(
@@ -226,39 +227,52 @@ async def test_others_declarations_are_hidden_until_the_round_closes(
 # --- 모두 내면 닫히고 다음 라운드가 열린다 ---
 
 
-async def test_the_round_closes_when_everyone_has_declared(client: AsyncClient, me: dict[str, str], friend: dict):
+async def test_the_round_closes_when_everyone_has_declared(client: AsyncClient, me: dict, friend: dict, narrated):
     table = await start_duo(client, me, friend)
     await declare(client, me, table, MY_ACTION)
 
     after_last = await declare(client, friend, table, FRIENDS_ACTION)
 
-    # 마지막 사람의 선언에 대한 답으로 새로 열린 라운드가 온다
-    assert (after_last['number'], after_last['is_open']) == (2, True)
-    # 가짜 서술자의 글이 다음 장면이 된다. 앉은 순서대로 적힌다
-    assert after_last['scene'] == f'[1 라운드의 결과]\n엘프: {MY_ACTION}\n영애: {FRIENDS_ACTION}'
-    assert after_last['declarations'] == []
-    assert after_last['waiting_for'] == [str(ME), str(FRIEND)]
-    # 닫힌 라운드에서는 모두의 선언이 보인다
+    # 마지막 사람의 선언에 대한 답으로 닫는 중인 라운드가 온다. 서술은 뒤에서 돈다
+    assert (after_last['number'], after_last['status']) == (1, 'closing')
+    assert after_last['waiting_for'] == []
+    # 선언을 마감했으므로 모두의 선언이 보인다
+    assert contents(after_last) == {'엘프': MY_ACTION, '영애': FRIENDS_ACTION}
+
+    await narrated()
+
+    # 서술이 끝나면 다음 라운드가 열려 있다. 가짜 서술자의 글이 장면이 된다. 앉은 순서대로 적힌다
+    second = await current(client, me, table)
+    assert (second['number'], second['status']) == (2, 'open')
+    assert second['scene'] == f'[1 라운드의 결과]\n엘프: {MY_ACTION}\n영애: {FRIENDS_ACTION}'
+    assert second['declarations'] == []
+    assert second['waiting_for'] == [str(ME), str(FRIEND)]
+    # 앞의 라운드는 닫혔다
     closed = (await client.get(rounds_url(table, '/1'), headers=friend)).json()
-    assert (closed['is_open'], closed['waiting_for']) == (False, [])
+    assert (closed['status'], closed['waiting_for']) == ('closed', [])
+    assert closed['closing_at'] is not None
     assert closed['closed_at'] is not None
     assert contents(closed) == {'엘프': MY_ACTION, '영애': FRIENDS_ACTION}
 
 
-async def test_a_solo_round_closes_at_once(client: AsyncClient, me: dict[str, str]):
+async def test_a_solo_round_closes_at_once(client: AsyncClient, me: dict[str, str], narrated):
     table = await start_solo(client, me)
 
-    second = await declare(client, me, table, MY_ACTION)
-    third = await declare(client, me, table, '속도를 올린다.')
+    first = await declare(client, me, table, MY_ACTION)
+    await narrated()
+    second = await declare(client, me, table, '속도를 올린다.')
+    await narrated()
 
     # 혼자면 낼 때마다 한 바퀴가 돈다
-    assert (second['number'], third['number']) == (2, 3)
-    assert third['scene'] == '[2 라운드의 결과]\n엘프: 속도를 올린다.'
+    assert (first['number'], second['number']) == (1, 2)
+    third = await current(client, me, table)
+    assert (third['number'], third['scene']) == (3, '[2 라운드의 결과]\n엘프: 속도를 올린다.')
 
 
-async def test_a_closed_round_takes_no_more_declarations(client: AsyncClient, me: dict[str, str]):
+async def test_a_closed_round_takes_no_more_declarations(client: AsyncClient, me: dict[str, str], narrated):
     table = await start_solo(client, me)
     await declare(client, me, table, MY_ACTION)
+    await narrated()
 
     await declare(client, me, table, '속도를 올린다.')
 
@@ -270,7 +284,7 @@ async def test_a_closed_round_takes_no_more_declarations(client: AsyncClient, me
 # --- 방장은 기다리지 않고 닫을 수 있다 ---
 
 
-async def test_the_host_closes_the_round_without_waiting(client: AsyncClient, me: dict[str, str], friend: dict):
+async def test_the_host_closes_the_round_without_waiting(client: AsyncClient, me: dict, friend: dict, narrated):
     table = await start_duo(client, me, friend)
     await declare(client, me, table, MY_ACTION)
 
@@ -278,29 +292,36 @@ async def test_the_host_closes_the_round_without_waiting(client: AsyncClient, me
     by_host = await client.post(rounds_url(table, '/current/close'), headers=me)
 
     assert by_member.status_code == status.HTTP_403_FORBIDDEN
-    assert by_host.status_code == status.HTTP_200_OK
-    second = by_host.json()
+    # 202: 접수했다는 뜻이다. 서술은 뒤에서 돈다
+    assert by_host.status_code == status.HTTP_202_ACCEPTED
+    assert (by_host.json()['number'], by_host.json()['status']) == (1, 'closing')
+
+    await narrated()
+
     # 선언을 내지 않은 사람은 아무것도 하지 않은 것으로 넘어간다
+    second = await current(client, me, table)
     assert second['number'] == 2
     assert second['scene'] == f'[1 라운드의 결과]\n엘프: {MY_ACTION}\n영애: 아무것도 하지 않았다.'
     assert contents((await client.get(rounds_url(table, '/1'), headers=me)).json()) == {'엘프': MY_ACTION}
 
 
-async def test_the_host_can_close_a_round_nobody_declared_in(client: AsyncClient, me: dict[str, str]):
+async def test_the_host_can_close_a_round_nobody_declared_in(client: AsyncClient, me: dict[str, str], narrated):
     table = await start_solo(client, me)
 
     response = await client.post(rounds_url(table, '/current/close'), headers=me)
+    await narrated()
 
-    assert response.status_code == status.HTTP_200_OK
-    assert response.json()['scene'] == '[1 라운드의 결과]\n엘프: 아무것도 하지 않았다.'
+    assert response.status_code == status.HTTP_202_ACCEPTED
+    assert (await current(client, me, table))['scene'] == '[1 라운드의 결과]\n엘프: 아무것도 하지 않았다.'
 
 
 # --- 진행 중인 테이블에서만 ---
 
 
-async def test_an_ended_table_keeps_its_rounds_but_takes_nothing_new(client: AsyncClient, me: dict[str, str]):
+async def test_an_ended_table_keeps_its_rounds_but_takes_nothing_new(client: AsyncClient, me: dict, narrated):
     table = await start_solo(client, me)
     await declare(client, me, table, MY_ACTION)
+    await narrated()
     await client.post(f'{TABLES_URL}/{table["id"]}/end', headers=me)
 
     responses = [
@@ -316,18 +337,19 @@ async def test_an_ended_table_keeps_its_rounds_but_takes_nothing_new(client: Asy
     assert (await client.get(rounds_url(table), headers=me)).json()['total'] == 2
 
 
-async def test_a_member_who_left_stays_in_the_record(client: AsyncClient, me: dict[str, str], friend: dict[str, str]):
+async def test_a_member_who_left_stays_in_the_record(client: AsyncClient, me: dict, friend: dict, narrated):
     table = await start_duo(client, me, friend)
     await declare(client, friend, table, FRIENDS_ACTION)
 
     await client.delete(f'{TABLES_URL}/{table["id"]}/members/me', headers=friend)
     waiting = await current(client, me, table)
-    second = await declare(client, me, table, MY_ACTION)
+    await declare(client, me, table, MY_ACTION)
+    await narrated()
 
     # 떠난 사람을 기다리지 않는다
     assert waiting['waiting_for'] == [str(ME)]
     # 서술자에게는 지금 앉아 있는 사람의 행동만 간다
-    assert second['scene'] == f'[1 라운드의 결과]\n엘프: {MY_ACTION}'
+    assert (await current(client, me, table))['scene'] == f'[1 라운드의 결과]\n엘프: {MY_ACTION}'
     # 떠난 사람이 냈던 선언은 기록에 남는다. 누구의 것이었는지도 남는다
     first = (await client.get(rounds_url(table, '/1'), headers=me)).json()
     assert contents(first) == {'영애': FRIENDS_ACTION, '엘프': MY_ACTION}
@@ -336,16 +358,18 @@ async def test_a_member_who_left_stays_in_the_record(client: AsyncClient, me: di
 # --- 지나간 라운드를 읽는다 ---
 
 
-async def test_lists_the_rounds_from_the_first(client: AsyncClient, me: dict[str, str]):
+async def test_lists_the_rounds_from_the_first(client: AsyncClient, me: dict[str, str], narrated):
     table = await start_solo(client, me)
     await declare(client, me, table, MY_ACTION)
+    await narrated()
     await declare(client, me, table, '속도를 올린다.')
+    await narrated()
 
     page = (await client.get(rounds_url(table), headers=me)).json()
     last_only = (await client.get(rounds_url(table), params={'limit': 1, 'offset': 2}, headers=me)).json()
 
     assert [round_['number'] for round_ in page['items']] == [1, 2, 3]
-    assert [round_['is_open'] for round_ in page['items']] == [False, False, True]
+    assert [round_['status'] for round_ in page['items']] == ['closed', 'closed', 'open']
     assert page['total'] == 3
     assert ([round_['number'] for round_ in last_only['items']], last_only['total']) == ([3], 3)
 
@@ -412,17 +436,18 @@ class RecordingNarrator:
 
 
 async def test_the_narrator_gets_the_closed_round_and_writes_the_next_scene(
-    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str]
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
 ):
     narrator = RecordingNarrator()
     app.state.narrator = narrator
     table = await start_duo(client, me, friend)
     await declare(client, me, table, MY_ACTION)
 
-    second = (await client.post(rounds_url(table, '/current/close'), headers=me)).json()
+    await client.post(rounds_url(table, '/current/close'), headers=me)
+    await narrated()
 
     # 서술자가 쓴 글이 그대로 다음 장면이 된다
-    assert second['scene'] == '드워프가 넘어졌다.'
+    assert (await current(client, me, table))['scene'] == '드워프가 넘어졌다.'
     # 서술자는 라운드가 닫힐 때 한 번만 불린다. 선언을 낼 때는 불리지 않는다
     assert len(narrator.requests) == 1
     request = narrator.requests[0]

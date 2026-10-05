@@ -11,7 +11,15 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
     한 테이블의 일은 테이블 하나의 잠금으로 줄을 세운다. 잠금이 둘이면 서로를 기다리며 멈출 수 있다.
 
 라운드가 닫히는 길은 둘이다. 앉은 사람이 모두 선언을 냈을 때 저절로, 또는 방장이 닫을 때.
-닫히면 서술자가 결과를 쓰고, 그 글을 장면으로 하는 다음 라운드가 열린다. 이 셋은 한 묶음으로 저장된다.
+
+닫는 일은 둘로 나뉜다. 사이에 GM 의 서술이 있고, 서술은 오래 걸린다(AI 를 부르면 몇 초에서 십몇 초).
+  1. 닫기 시작(begin_closing): 테이블을 잠그고, 선언을 마감하고, 저장한다. 라운드는 "닫는 중"이 된다.
+  2. 서술: 잠금도 DB 연결도 없이, 요청과 따로 도는 작업이 서술자를 부른다(app/rounds/closing.py).
+  3. 닫기 마무리(finish_closing): 다시 잠그고, 서술을 장면으로 하는 다음 라운드를 열고, 저장한다.
+잠금을 쥔 채로 서술을 기다리지 않는다. 기다리면 그동안 이 테이블의 채팅과 나가기가 전부 멈춘다.
+
+서술을 맡은 작업은 사라질 수 있다(서버가 꺼짐, 서술자가 실패함). 그러면 라운드가 닫는 중에 머문다.
+맡긴 지 한참 지난 라운드는 방장이 닫기를 다시 눌러 서술을 다시 맡긴다(is_stalled).
 
 선언은 낼 때가 아니라 라운드가 닫힐 때 이벤트로 적는다. 마지막 글만 적는다.
 열려 있는 동안에는 남의 선언이 보이지 않아야 하는데, 이벤트는 앉은 사람 모두가 읽기 때문이다.
@@ -19,16 +27,19 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 
 import enum
 import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Protocol
 
-from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.events import recorder
+from app.events import repository as event_repository
 from app.events.models import EventType
 from app.rounds import opener, repository
-from app.rounds.models import Declaration, Round
-from app.rounds.narrator import Action, NarrationRequest, Narrator
+from app.rounds.models import Declaration, Round, RoundStatus
+from app.rounds.narrator import Action, NarrationRequest
 from app.rounds.schemas import DeclarationUpdate
+from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables.models import GameTable, TableMember, TableStatus
 
@@ -44,6 +55,8 @@ class Conflict(enum.StrEnum):
     NOT_STARTED = 'not_started'
     # 테이블이 진행 중이 아니다. 선언과 닫기는 진행 중에만 된다
     NOT_PLAYING = 'not_playing'
+    # 라운드가 닫는 중이다. 선언을 마감했고 GM 이 서술하고 있다. 끝나면 다음 라운드가 열린다
+    ROUND_CLOSING = 'round_closing'
 
 
 class RoundConflictError(Exception):
@@ -52,6 +65,23 @@ class RoundConflictError(Exception):
     def __init__(self, reason: Conflict) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+# 닫는 중인 채로 이 시간(초)이 지나면 서술을 맡은 작업이 사라진 것으로 본다. 그때부터 다시 맡길 수 있다.
+# 서술자가 답하는 데 걸릴 수 있는 가장 긴 시간보다 길어야 한다. 짧으면 아직 도는 서술 위에 또 서술을 맡긴다
+CLOSING_RETRY_SECONDS = 60.0
+
+
+class NarrationScheduler(Protocol):
+    """
+    서술을 뒤에서 돌게 맡기는 것의 모양. 구현은 app/rounds/closing.py 에 있다.
+
+    이 파일이 그 파일을 불러오지 않으려고 모양만 여기 둔다. 그 파일이 이 파일을 불러온다.
+    """
+
+    def schedule(self, table_id: uuid.UUID, number: int) -> None:
+        """이 테이블의 이 라운드의 서술을 맡긴다. 기다리지 않고 바로 돌아온다."""
+        ...
 
 
 # --- 판단하는 작은 함수들. DB 를 건드리지 않는다 ---
@@ -70,6 +100,23 @@ def require_started(round_: Round | None) -> Round:
     if round_ is None:
         raise RoundConflictError(Conflict.NOT_STARTED)
     return round_
+
+
+def require_open(round_: Round) -> None:
+    """라운드가 선언을 받는 중인지 확인한다. 닫는 중이면 RoundConflictError."""
+    if round_.status != RoundStatus.OPEN:
+        raise RoundConflictError(Conflict.ROUND_CLOSING)
+
+
+def is_stalled(round_: Round, now: datetime) -> bool:
+    """
+    닫는 중인 채로 너무 오래 머물렀는가. 서술을 맡은 작업이 사라졌다고 볼 만큼 지났는가.
+
+    now 는 지금 시각이다. 테스트가 시간을 마음대로 흘리려고 받는다.
+    """
+    if round_.status != RoundStatus.CLOSING:
+        return False
+    return now - round_.closing_at >= timedelta(seconds=CLOSING_RETRY_SECONDS)
 
 
 def find_declaration(round_: Round, user_id: uuid.UUID) -> Declaration | None:
@@ -163,38 +210,30 @@ def record_actions(session: AsyncSession, table: GameTable, round_: Round, group
         recorder.record(session, table, EventType.PLAYER_ACTION, actor_id=member.user_id, payload=payload, group=group)
 
 
-async def close_round(
-    session: AsyncSession, table: GameTable, round_: Round, narrator: Narrator, closer_id: uuid.UUID | None = None
-) -> None:
+def begin_closing(session: AsyncSession, table: GameTable, round_: Round, closer_id: uuid.UUID | None = None) -> None:
     """
-    열려 있는 라운드를 닫고 다음 라운드를 연다. 저장하지는 않는다.
+    열려 있는 라운드를 닫기 시작한다. 선언을 마감한다. 저장하지는 않는다.
 
-    서술자가 닫힌 라운드의 결과를 쓰고, 그 글이 다음 라운드의 장면이 된다.
     closer_id 는 라운드를 닫은 방장이다. 모두가 내서 저절로 닫혔으면 주지 않는다.
+    이벤트는 행동들 → 닫힘 순서로 적는다. 한 묶음이다. 나중에 적히는 서술과 열림도 이 묶음에 들어간다.
 
-    이벤트는 행동들 → 닫힘 → 서술 → 열림 순서로 적는다. 모두 한 묶음이다.
-
-    닫은 것을 먼저 DB 에 보낸다(flush). 한 테이블에 열린 라운드는 하나뿐이라는 유일 색인이 있어서,
-    앞의 것을 닫기 전에 새 것을 넣으면 DB 가 거부한다.
+    서술자를 부르지 않는다. 저장한 뒤에 따로 맡긴다(NarrationScheduler).
     """
     group = uuid.uuid4()
     record_actions(session, table, round_, group)
     payload = {'number': round_.number, 'idle': [str(user_id) for user_id in waiting_for(table, round_)]}
-    closed = recorder.record(session, table, EventType.ROUND_CLOSED, actor_id=closer_id, payload=payload, group=group)
-
-    scene = await narrator.narrate(build_request(table, round_))
-    round_.closed_at = func.now()
-    await session.flush()
-    opener.open_round(session, table, number=round_.number + 1, scene=scene, cause=closed)
+    recorder.record(session, table, EventType.ROUND_CLOSED, actor_id=closer_id, payload=payload, group=group)
+    round_.closing_at = datetime.now(UTC)
 
 
-async def lock_open_round(
+async def lock_current_round(
     session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID
 ) -> tuple[GameTable, TableMember, Round]:
     """
-    자기가 앉아 있는 테이블을 잠그고, 열려 있는 라운드를 찾는다. 테이블, 자기 자리, 라운드를 돌려준다.
+    자기가 앉아 있는 테이블을 잠그고, 가장 최근 라운드를 찾는다. 테이블, 자기 자리, 라운드를 돌려준다.
 
     앉지 않았으면 TableNotFoundError, 진행 중이 아니면 RoundConflictError.
+    진행 중인 테이블의 가장 최근 라운드는 선언을 받는 중이거나 닫는 중이다.
     """
     table, member = await tables.lock_seated(session, user_id, table_id)
     require_playing(table)
@@ -203,37 +242,106 @@ async def lock_open_round(
 
 
 async def save(session: AsyncSession, table: GameTable) -> tuple[GameTable, Round]:
-    """저장하고, 테이블과 가장 최근 라운드를 다시 읽어 돌려준다. 라운드가 닫혔으면 새로 열린 것이 나온다."""
+    """저장하고, 테이블과 가장 최근 라운드를 다시 읽어 돌려준다."""
     await tables.commit(session, table)
     return table, await repository.find_latest_round(session, table.id)
 
 
 async def declare(
-    session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID, data: DeclarationUpdate, narrator: Narrator
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    table_id: uuid.UUID,
+    data: DeclarationUpdate,
+    scheduler: NarrationScheduler,
 ) -> tuple[GameTable, Round]:
     """
-    열려 있는 라운드에 선언을 낸다. 이미 냈으면 바꾼다. 앉은 사람이 모두 냈으면 라운드를 닫고 다음 것을 연다.
+    열려 있는 라운드에 선언을 낸다. 이미 냈으면 바꾼다. 앉은 사람이 모두 냈으면 라운드를 닫기 시작한다.
 
-    돌려주는 것은 테이블과 가장 최근 라운드다. 이 선언으로 라운드가 닫혔으면 새로 열린 라운드다.
+    돌려주는 것은 테이블과 그 라운드다. 이 선언으로 닫기 시작했으면 "닫는 중"인 채로 돌아온다.
+    서술이 끝나 다음 라운드가 열린 것은 스트림으로 알게 된다.
 
+    닫는 중인 라운드에는 낼 수 없다(RoundConflictError).
     테이블을 잠그고 한다. 마지막 두 사람이 동시에 내도 라운드는 한 번만 닫힌다.
     """
-    table, member, round_ = await lock_open_round(session, user_id, table_id)
+    table, member, round_ = await lock_current_round(session, user_id, table_id)
+    require_open(round_)
     put_declaration(round_, member, data.content)
-    if not waiting_for(table, round_):
-        await close_round(session, table, round_, narrator)
-    return await save(session, table)
+
+    everyone_declared = not waiting_for(table, round_)
+    if everyone_declared:
+        begin_closing(session, table, round_)
+    saved = await save(session, table)
+    # 저장한 뒤에 맡긴다. 먼저 맡기면 서술을 맡은 작업이 아직 저장되지 않은 것을 읽는다
+    if everyone_declared:
+        scheduler.schedule(table.id, round_.number)
+    return saved
 
 
 async def force_close(
-    session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, narrator: Narrator
+    session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, scheduler: NarrationScheduler
 ) -> tuple[GameTable, Round]:
     """
-    방장이 열려 있는 라운드를 닫는다. 선언을 내지 않은 사람은 아무것도 하지 않은 것으로 넘어간다.
+    방장이 라운드를 닫는다. 선언을 내지 않은 사람은 아무것도 하지 않은 것으로 넘어간다.
 
     방장이 아니면 NotHostError. 자리를 비운 사람 때문에 테이블이 멈추지 않게 한다.
+
+    이미 닫는 중이면 두 가지다.
+      - 맡긴 지 얼마 안 됐으면 RoundConflictError. 서술이 돌고 있다. 또 맡기면 같은 서술을 두 번 시킨다.
+      - 한참 지났으면(is_stalled) 서술을 다시 맡긴다. 맡았던 작업이 사라진 것이다. 이벤트를 다시 적지는 않는다.
+        닫기 시작한 시각을 지금으로 고친다. 다시 맡긴 것 위에 또 맡기지 않게 한다.
     """
-    table, _, round_ = await lock_open_round(session, host_id, table_id)
+    table, _, round_ = await lock_current_round(session, host_id, table_id)
     tables.require_host(table, host_id)
-    await close_round(session, table, round_, narrator, closer_id=host_id)
-    return await save(session, table)
+
+    if round_.status == RoundStatus.OPEN:
+        begin_closing(session, table, round_, closer_id=host_id)
+    elif is_stalled(round_, datetime.now(UTC)):
+        round_.closing_at = datetime.now(UTC)
+    else:
+        raise RoundConflictError(Conflict.ROUND_CLOSING)
+
+    saved = await save(session, table)
+    scheduler.schedule(table.id, round_.number)
+    return saved
+
+
+# --- 서술을 맡은 작업이 부르는 것. 요청 밖에서 돈다(app/rounds/closing.py) ---
+
+
+async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, number: int) -> NarrationRequest | None:
+    """
+    닫는 중인 라운드를 서술자에게 줄 모양으로 읽는다. 닫는 중이 아니면 None.
+
+    None 이면 할 일이 없다. 다른 작업이 이미 마무리했거나 테이블이 지워졌다.
+    잠그지 않는다. 닫는 중인 라운드의 선언은 더 바뀌지 않는다.
+    """
+    table = await table_repository.find_table(session, table_id)
+    round_ = await repository.find_round(session, table_id, number)
+    if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
+        return None
+    return build_request(table, round_)
+
+
+async def finish_closing(session: AsyncSession, table_id: uuid.UUID, number: int, scene: str) -> None:
+    """
+    닫는 중인 라운드를 닫고, 서술(scene)을 장면으로 하는 다음 라운드를 연다. 저장한다.
+
+    테이블을 잠그고, 잠근 뒤에 라운드가 아직 닫는 중인지 본다. 아니면 아무것도 하지 않는다.
+    같은 라운드의 서술이 둘 돌았어도(다시 맡긴 경우) 먼저 온 것만 받아들여진다. 다음 라운드가 둘 열리지 않는다.
+
+    서술하는 사이에 테이블이 끝났으면 라운드만 닫고 다음 라운드를 열지 않는다.
+
+    닫은 것을 먼저 DB 에 보낸다(flush). 한 테이블에 닫히지 않은 라운드는 하나뿐이라는 유일 색인이 있어서,
+    앞의 것을 닫기 전에 새 것을 넣으면 DB 가 거부한다.
+    """
+    table = await table_repository.lock_table(session, table_id)
+    round_ = await repository.find_round(session, table_id, number)
+    if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
+        return
+
+    round_.closed_at = datetime.now(UTC)
+    if table.status == TableStatus.PLAYING:
+        await session.flush()
+        closed = await event_repository.find_latest(session, table_id, EventType.ROUND_CLOSED)
+        opener.open_round(session, table, number=number + 1, scene=scene, cause=closed)
+    await tables.commit(session, table)
