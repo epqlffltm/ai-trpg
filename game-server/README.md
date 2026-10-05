@@ -13,6 +13,7 @@
 시작한 테이블에서는 라운드가 돈다. 모두가 선언을 내면 GM 이 결과를 서술하고 다음 라운드가 열린다. GM 의 서술은 아직 가짜다.
 테이블에서 일어난 일은 순서대로 이벤트로 적히고, 앉은 사람이 읽는다.
 앉은 사람끼리는 채팅으로 이야기한다. AI 는 채팅을 보지 않는다.
+새 이벤트와 새 채팅은 스트림(SSE)으로 생기는 대로 받는다.
 
 ## 목차
 
@@ -27,6 +28,7 @@
 - [라운드](#라운드)
 - [이벤트 기록](#이벤트-기록)
 - [채팅](#채팅)
+- [실시간 스트림](#실시간-스트림)
 - [CI](#ci)
 - [설계 메모](#설계-메모)
 
@@ -161,6 +163,7 @@ uv run alembic check                               # 모델을 바꾸고 마이�
 | GET | `/api/v1/game/tables/{id}/events` | 테이블의 이벤트. 일어난 순서대로. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/messages` | 채팅 쓰기. 201. 끝난 테이블에는 쓸 수 없다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/messages` | 테이블의 채팅. 쓴 순서대로. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/stream` | 테이블의 스트림(SSE). 새 이벤트와 새 채팅이 생기는 대로 온다. 응답이 끝나지 않는다. `events_after`, `messages_after`, `Last-Event-ID` 머리말 | access 토큰 |
 | POST | `/api/v1/game/lorebooks` | 로어북 만들기. 201. 항목은 만든 뒤에 더한다 | access 토큰 |
 | GET | `/api/v1/game/lorebooks` | 내 로어북 목록. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/lorebooks/{id}` | 내 로어북 하나. 항목은 싣지 않는다 | access 토큰 |
@@ -572,7 +575,86 @@ AI 는 채팅을 보지 않는다. 서술자의 입력에 들어가지 않으므
 DB 가 알아서 매기는 번호(IDENTITY)를 쓰지 않은 이유: 그 번호는 먼저 받은 쪽이 나중에 저장될 수 있다.
 18 번이 17 번보다 먼저 저장되면, 그사이에 "16 번 뒤"를 읽은 사람은 18 번만 받고 `after=18` 로 넘어가 17 번을 영영 못 본다.
 
-**아직 없는 것.** 실시간으로 밀어 주지 않는다. 지금은 `after` 로 물어서 받는다. 도배를 막는 횟수 제한도 없다.
+**아직 없는 것.** 도배를 막는 횟수 제한이 없다. 실시간으로 받는 것은 [실시간 스트림](#실시간-스트림)에 있다.
+
+## 실시간 스트림
+
+`GET /tables/{id}/stream` 은 끝나지 않는 응답이다. 테이블에 새 이벤트나 새 채팅이 생기면 그 연결로 바로 흘러나온다.
+형식은 SSE(Server-Sent Events)다. 서버에서 화면으로만 흐른다. 화면에서 서버로 보내는 것(선언, 채팅)은 지금까지의 API 를 그대로 쓴다.
+
+```
+: connected
+
+id: 17-5
+event: table_event
+data: {"sequence": 17, "type": "round_opened", ...}
+
+id: 17-6
+event: chat_message
+data: {"sequence": 6, "user_id": "...", "content": "..."}
+
+: ping
+
+event: closed
+data: {"reason": "table_ended"}
+```
+
+| `event` | 내용 |
+| --- | --- |
+| `table_event` | 이벤트 하나. `GET /events` 의 한 줄과 모양이 같다 |
+| `chat_message` | 채팅 한 줄. `GET /messages` 의 한 줄과 모양이 같다 |
+| `closed` | 서버가 스트림을 닫는다. `reason`: `not_seated`(나갔거나 내보내졌다), `table_ended`, `token_expired`(새 토큰으로 다시 붙는다) |
+
+`:` 로 시작하는 줄은 주석이다. 15초마다 `: ping` 이 간다. 써 봐야 연결이 죽었는지 알고, 중간의 프록시가 조용한 연결을 끊지 않는다.
+
+**붙는 순서.** 화면은 먼저 REST 로 지금까지의 이벤트와 채팅을 읽고, 그 마지막 번호를 `events_after`, `messages_after` 에 적어 붙는다.
+`id` 는 "여기까지 받았다"는 표시다(`이벤트 번호-채팅 번호`). 끊겼다 다시 붙을 때 마지막으로 받은 `id` 를 `Last-Event-ID` 머리말로 보내면 그 뒤부터 온다.
+같은 것이 두 번 오지 않는다. `closed` 처럼 저장하지 않는 메시지에는 `id` 가 없다.
+
+**인증.** 다른 API 와 같다(`Authorization` 머리말). 토큰을 주소에 적는 방식은 받지 않는다. 주소는 로그에 남는다.
+브라우저의 `EventSource` 는 머리말을 붙이지 못하므로 화면은 `fetch` 로 읽는다.
+
+```js
+const response = await fetch(`/api/v1/game/tables/${id}/stream?events_after=${e}&messages_after=${m}`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+// 빈 줄("\n\n")까지가 메시지 하나다. id 를 기억해 두었다가, 끊기면 Last-Event-ID 로 보내며 다시 붙는다
+```
+
+토큰이 만료되는 시각에 서버가 스트림을 닫는다(`token_expired`). 닫지 않으면 로그아웃한 사람의 연결이 계속 받는다.
+나가거나 내보내진 사람의 스트림도 닫는다(`not_seated`). 그 뒤의 채팅이 가지 않는다.
+
+**어떻게 도는가.** 스트림은 한 가지 일을 되풀이한다.
+
+1. "내가 보낸 마지막 번호 뒤"를 DB 에서 읽어 보낸다(`GET /events`, `GET /messages` 와 같은 조회다).
+2. 신호가 오거나 15초가 지날 때까지 기다린다.
+
+처음 붙었을 때 밀린 것을 보내는 것과 실시간으로 새 것을 보내는 것이 같은 코드다.
+**신호에는 내용이 없다.** "이 테이블의 이벤트(또는 채팅)가 늘었다"뿐이다. 내용은 늘 DB 에서 번호 순서대로 읽는다.
+그래서 신호를 놓치거나 두 번 받아도 순서가 바뀌거나 빠지지 않는다. 늦어질 뿐이고, 늦어도 15초 안에 스스로 읽는다.
+
+**신호를 전하는 것.** 글을 쓴 요청과 스트림을 붙잡고 있는 요청은 서로 다른 요청이고, 서버가 여러 대면 다른 기계일 수 있다.
+PostgreSQL 의 `NOTIFY` 로 보내고 `LISTEN` 으로 받는다.
+
+- 보내기: 저장하는 트랜잭션 안에서 `pg_notify` 를 부른다(`app/realtime/signals.py` 의 `publish`).
+  `NOTIFY` 는 커밋될 때 나가고 되돌려지면 나가지 않는다. 저장은 안 됐는데 알림만 가는 일이 없다.
+  테이블을 바꾸는 일은 모두 `tables.commit` 으로 저장하고, 신호는 거기서 보낸다. 채팅은 `chat.post_message` 가 보낸다.
+- 받기: 서버 프로세스마다 듣는 전용 연결이 하나 있다(`app/realtime/listener.py`). 스트림이 몇 개든 하나다.
+  처음 스트림이 열릴 때 맺고, 끊기면 다음 차례에 다시 맺는다.
+- 깨우기: 받은 신호를 방송실(`app/realtime/hub.py`)에 넘기면, 그 테이블을 기다리는 스트림들이 깨어난다.
+
+채널 이름에 스키마 이름이 붙는다(`game_table_signals`). 개발용과 테스트용이 서로의 신호를 받지 않는다.
+
+**다른 것으로 바꾸기.** Redis Pub/Sub 같은 것으로 바꿀 때 고칠 곳은 둘이다. 방송실과 스트림은 그대로다.
+
+- `signals.publish`: 신호를 보낸다. "커밋된 뒤에 나간다"를 지켜야 한다. Redis 는 트랜잭션을 모르므로 커밋 뒤에 보내도록 걸어야 한다.
+- `listener.PostgresListener`: `SignalSource` 의 모양(`ensure_listening`, `stop`)을 지키는 클래스를 새로 쓰고 `app/main.py` 에서 바꿔 끼운다.
+
+**DB 연결.** 스트림은 DB 연결을 붙잡고 있지 않는다. 몇 분씩 열려 있는데 풀의 연결은 몇 개뿐이다. 읽을 때만 잠깐 빌린다.
+
+**아직 없는 것.** "입력 중" 표시(저장하지 않는 신호)가 없다. 서버를 끌 때 열려 있는 스트림을 먼저 닫아 주지 않는다.
+한 사람이 열 수 있는 스트림의 수에 제한이 없다.
 
 ## CI
 

@@ -28,6 +28,9 @@ from app.core.database import create_engine, create_session_factory
 from app.events import router as events
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
+from app.realtime import router as realtime
+from app.realtime.hub import Hub
+from app.realtime.listener import PostgresListener
 from app.rounds import router as rounds
 from app.rounds.narrator import FakeNarrator
 from app.rounds.service import RoundConflictError, RoundNotFoundError
@@ -50,9 +53,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     서버가 뜰 때와 꺼질 때 할 일. yield 앞이 뜰 때, 뒤가 꺼질 때다.
 
-    꺼질 때 DB 연결과 인증 서버로 가는 연결을 전부 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
+    꺼질 때 신호를 듣는 연결, DB 연결, 인증 서버로 가는 연결을 전부 닫는다.
+    닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     """
     yield
+    await app.state.signal_source.stop()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
 
@@ -92,6 +97,12 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.state.http_client = http_client or httpx.AsyncClient()
     app.state.jwks = JwksCache(app.state.http_client, settings.auth_jwks_url)
 
+    # 스트림을 열어 둔 연결들을 깨우는 방송실과, 다른 요청(다른 서버)이 보낸 신호를 듣는 것.
+    # 만드는 것만으로는 DB 에 연결하지 않는다. 처음 스트림이 열릴 때 연결한다.
+    # 신호를 다른 것으로 바꿀 때 여기의 PostgresListener 를 바꿔 끼운다(app/realtime/listener.py)
+    app.state.hub = Hub()
+    app.state.signal_source = PostgresListener(settings, app.state.hub)
+
     # GM 의 서술을 만드는 것. 지금은 AI 를 부르지 않는 가짜다. AI 를 붙일 때 여기만 바꿔 끼운다
     app.state.narrator = FakeNarrator()
 
@@ -110,6 +121,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.include_router(rounds.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)
     app.include_router(chat.router, prefix=API_PREFIX)
+    app.include_router(realtime.router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다
     app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)
