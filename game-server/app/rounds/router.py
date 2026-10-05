@@ -16,9 +16,9 @@ from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
 from app.rounds import service
 from app.rounds.closing import RoundCloser
-from app.rounds.models import Round, RoundStatus
+from app.rounds.models import Declaration, Round, RoundStatus
 from app.rounds.schemas import DeclarationOut, DeclarationUpdate, RoundOut, RoundPage
-from app.rounds.service import RoundConflictError, RoundNotFoundError
+from app.rounds.service import ActionNotInRulesError, RoundConflictError, RoundNotFoundError
 from app.tables.models import GameTable, TableStatus
 
 router = APIRouter(prefix='/tables/{table_id}/rounds', tags=['rounds'])
@@ -45,15 +45,21 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
     """
     라운드를 앉은 사람에게 보여 주는 응답으로 바꾼다.
 
-    선언을 받는 동안에는 남의 선언의 글을 가린다. 누가 냈는지만 보인다.
-    선언을 마감하면(닫는 중부터) 모두의 글이 보인다. 그때는 이벤트 기록에도 적혀 있다.
+    선언을 받는 동안에는 남의 선언의 글과 행동을 가린다. 누가 냈는지만 보인다.
+    선언을 마감하면(닫는 중부터) 모두의 것이 보인다. 그때는 이벤트 기록에도 적혀 있다.
     """
     is_open = round_.status == RoundStatus.OPEN
+
+    def can_see(declaration: Declaration) -> bool:
+        """보는 사람이 이 선언의 글과 행동을 볼 수 있는가."""
+        return not is_open or declaration.user_id == viewer_id
+
     declarations = [
         DeclarationOut(
             user_id=declaration.user_id,
             character_name=declaration.character_name,
-            content=declaration.content if not is_open or declaration.user_id == viewer_id else None,
+            content=declaration.content if can_see(declaration) else None,
+            action=declaration.action if can_see(declaration) else None,
         )
         for declaration in round_.declarations
     ]
@@ -84,6 +90,14 @@ async def handle_round_conflict(request: Request, error: RoundConflictError) -> 
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
         content={'detail': '테이블의 지금 상태에서는 할 수 없습니다.', 'reason': error.reason},
+    )
+
+
+async def handle_action_not_in_rules(request: Request, error: ActionNotInRulesError) -> JSONResponse:
+    """ "행동이 이 테이블의 규칙에 없는 것을 가리킨다"는 422 다. 모양은 맞고, 적은 값이 틀렸다."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': f'action.{error.field} 가 이 테이블의 규칙에 없습니다.'},
     )
 
 

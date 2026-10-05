@@ -35,7 +35,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
     EventType.ROUND_OPENED: ('number',),
-    EventType.PLAYER_ACTION: ('round', 'character_name', 'content'),
+    EventType.PLAYER_ACTION: ('round', 'character_name', 'content', 'action'),
     EventType.ROUND_CLOSED: ('number', 'idle'),
     EventType.TABLE_ENDED: (),
 }
