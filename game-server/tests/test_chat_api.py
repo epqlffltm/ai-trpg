@@ -22,6 +22,7 @@ from app.assets.models import Asset, AssetType, Scenario, ScenarioVersion
 from app.chat.models import MESSAGE_MAX_LENGTH, ChatMessage
 from app.main import API_PREFIX
 from app.tables.models import GameTable
+from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -72,7 +73,7 @@ def table_url(table: dict, path: str = '') -> str:
 async def open_duo(client: AsyncClient, me: dict[str, str], friend: dict[str, str]) -> dict:
     """나와 친구가 앉은 테이블을 연다. 아직 시작하지 않았고, 둘 다 캐릭터가 없다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북'}, headers=me)
-    body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS}
+    body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS, 'default_sheet': SHEET}
     scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 2}

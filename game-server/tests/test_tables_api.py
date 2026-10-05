@@ -31,6 +31,7 @@ from app.assets.models import (
 )
 from app.main import API_PREFIX
 from app.tables.models import INVITE_CODE_LENGTH, GameTable, TableMember
+from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -55,6 +56,8 @@ PREGENS = [
     {'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.'},
     {'name': '악역영애', 'description': '바이크는 처음이지만 웃음소리는 크다.'},
 ]
+# 시나리오에 넣을 때는 프리젠마다 시트가 있어야 게시된다. 테이블의 응답에는 시트가 아직 실리지 않는다
+SCENARIO_PREGENS = [{**pregen, 'sheet': SHEET} for pregen in PREGENS]
 
 
 def bearer(signing_key: SigningKey, user_id: uuid.UUID) -> dict[str, str]:
@@ -94,7 +97,13 @@ def table_url(table: dict, path: str = '') -> str:
 async def publish_scenario(client: AsyncClient, headers: dict[str, str], **fields) -> dict:
     """게시할 조건을 갖춘 시나리오를 만들고 판을 하나 낸다. 시나리오를 돌려준다. 판의 번호는 1 이다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북', 'gm_guide': GM_GUIDE}, headers=headers)
-    body = {'title': TITLE, 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS, 'pregens': PREGENS}
+    body = {
+        'title': TITLE,
+        'rulebook_id': rulebook.json()['id'],
+        'openings': OPENINGS,
+        'pregens': SCENARIO_PREGENS,
+        'default_sheet': SHEET,
+    }
     body.update(fields)
     scenario = await client.post(SCENARIOS_URL, json=body, headers=headers)
     assert scenario.status_code == status.HTTP_201_CREATED, scenario.text

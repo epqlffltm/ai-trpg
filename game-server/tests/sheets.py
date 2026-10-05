@@ -1,0 +1,16 @@
+# game-server/tests/sheets.py
+
+"""
+테스트에 쓰는 캐릭터 시트.
+
+게시하려면 시트가 있어야 한다(기본 시트, 프리젠의 시트). 시트가 주제가 아닌 테스트는 여기 것을 그대로 쓴다.
+SRD5 템플릿의 규칙에 맞는 시트다. 테스트의 룰북은 모두 그 템플릿으로 만든다.
+"""
+
+# 모든 능력치가 10(보정 0)이고 최대 HP 가 10 인 시트
+SHEET = {'abilities': {'str': 10, 'dex': 10, 'con': 10, 'int': 10, 'wis': 10, 'cha': 10}, 'max_hp': 10}
+
+
+def make_sheet(max_hp: int = 10, **scores: int) -> dict:
+    """SHEET 에서 몇 능력치의 점수와 최대 HP 만 바꾼 시트를 만든다. 예: make_sheet(str=16, max_hp=12)."""
+    return {'abilities': {**SHEET['abilities'], **scores}, 'max_hp': max_hp}

@@ -16,11 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
 from app.assets.lorebooks import repository as entries
-from app.assets.models import Lorebook, LoreEntry, Rulebook, Scenario, ScenarioVersion, World
+from app.assets.models import CharacterMode, Lorebook, LoreEntry, Rulebook, Scenario, ScenarioVersion, World
 from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import VersionCreate
 from app.assets.scenarios.snapshot import build_snapshot
 from app.assets.service import AssetNotFoundError
+from app.engine.ruleset import Ruleset
+from app.engine.sheet import Sheet, fits
 
 
 class Problem(enum.StrEnum):
@@ -30,6 +32,16 @@ class Problem(enum.StrEnum):
     RULEBOOK_MISSING = 'rulebook_missing'
     # 스타팅이 하나도 없다. 첫 장면은 제작자가 정한다
     OPENING_MISSING = 'opening_missing'
+    # 시트가 없는 프리젠이 있다. 판 안의 프리젠은 모두 숫자를 갖는다
+    PREGEN_SHEET_MISSING = 'pregen_sheet_missing'
+    # 룰북의 규칙에 맞지 않는 시트를 가진 프리젠이 있다. 능력치가 빠졌거나 남거나, 점수가 범위 밖이다
+    PREGEN_SHEET_INVALID = 'pregen_sheet_invalid'
+    # 캐릭터를 직접 만들 수 있게 했는데 기본 시트가 없다. 그 사람이 받을 숫자가 없다
+    DEFAULT_SHEET_MISSING = 'default_sheet_missing'
+    # 기본 시트가 룰북의 규칙에 맞지 않는다
+    DEFAULT_SHEET_INVALID = 'default_sheet_invalid'
+    # 프리젠만 허용했는데 프리젠이 추천 인원의 최소보다 적다. 그 인원이 앉을 수 없다
+    PREGENS_TOO_FEW = 'pregens_too_few'
 
 
 class ScenarioNotReadyError(Exception):
@@ -72,13 +84,74 @@ async def load_parts(session: AsyncSession, owner_id: uuid.UUID, scenario: Scena
     return Parts(rulebook=rulebook, world=world, lorebooks=lorebooks)
 
 
+def read_ruleset(rulebook: Rulebook | None) -> Ruleset | None:
+    """룰북의 규칙을 읽는다. 룰북이 없으면 None 이다."""
+    if rulebook is None:
+        return None
+    return Ruleset.model_validate(rulebook.rules)
+
+
+def read_pregen_sheets(scenario: Scenario) -> list[Sheet | None]:
+    """프리젠들의 시트를 읽는다. 시트가 없는 프리젠의 자리는 None 이다."""
+    documents = [pregen.get('sheet') for pregen in scenario.pregens]
+    return [Sheet.model_validate(document) if document else None for document in documents]
+
+
+def find_pregen_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    프리젠의 시트에서 문제를 찾는다. 프리젠이 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    룰북이 없으면 규칙에 맞는지는 볼 수 없다. 그때는 시트가 있는지만 본다.
+    프리젠을 허용하지 않아도 본다. 판 안의 프리젠은 어느 것이든 시트가 있어야 판을 읽는 쪽이 단순하다.
+    """
+    sheets = read_pregen_sheets(scenario)
+    problems = []
+    if any(sheet is None for sheet in sheets):
+        problems.append(Problem.PREGEN_SHEET_MISSING)
+    if ruleset and any(sheet and not fits(ruleset, sheet) for sheet in sheets):
+        problems.append(Problem.PREGEN_SHEET_INVALID)
+    return problems
+
+
+def find_default_sheet_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    기본 시트에서 문제를 찾는다.
+
+    직접 만들기를 허용했으면 기본 시트가 있어야 한다. 허용하지 않았으면 없어도 된다.
+    있으면 허용했든 안 했든 규칙에 맞아야 한다. 판에 들어가기 때문이다.
+    """
+    if scenario.default_sheet is None:
+        needed = CharacterMode.CUSTOM in scenario.character_modes
+        return [Problem.DEFAULT_SHEET_MISSING] if needed else []
+    if ruleset and not fits(ruleset, Sheet.model_validate(scenario.default_sheet)):
+        return [Problem.DEFAULT_SHEET_INVALID]
+    return []
+
+
+def find_seating_problems(scenario: Scenario) -> list[Problem]:
+    """
+    허용한 방식으로 사람이 앉을 수 있는지 본다.
+
+    프리젠 하나는 한 사람만 고른다. 프리젠만 허용했으면 프리젠의 수가 곧 앉을 수 있는 사람의 수다.
+    추천 인원의 최소만큼은 앉을 수 있어야 한다.
+    """
+    pregen_only = list(scenario.character_modes) == [CharacterMode.PREGEN]
+    if pregen_only and len(scenario.pregens) < scenario.min_players:
+        return [Problem.PREGENS_TOO_FEW]
+    return []
+
+
 def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     """게시할 수 없는 이유를 전부 찾는다. 없으면 빈 목록이다."""
+    ruleset = read_ruleset(parts.rulebook)
     problems = []
     if parts.rulebook is None:
         problems.append(Problem.RULEBOOK_MISSING)
     if not scenario.openings:
         problems.append(Problem.OPENING_MISSING)
+    problems.extend(find_pregen_problems(scenario, ruleset))
+    problems.extend(find_default_sheet_problems(scenario, ruleset))
+    problems.extend(find_seating_problems(scenario))
     return problems
 
 

@@ -36,6 +36,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
@@ -95,10 +96,29 @@ class Rating(enum.StrEnum):
     ADULT = 'adult'
 
 
+class CharacterMode(enum.StrEnum):
+    """
+    테이블에 앉는 사람이 캐릭터를 얻는 방식.
+
+    시나리오의 제작자가 허용할 방식을 고른다. 방장은 그 안에서 테이블의 설정으로 더 좁힐 수 있다.
+    """
+
+    # 제작자가 만들어 둔 프리젠을 고른다. 시트는 그 프리젠의 것이다
+    PREGEN = 'pregen'
+    # 이름과 설명을 직접 쓴다. 시트는 시나리오의 기본 시트다
+    CUSTOM = 'custom'
+
+
 def one_of(column: str, values: type[enum.StrEnum]) -> str:
     """컬럼의 값이 정해진 목록 안에 있어야 한다는 조건을 SQL 로 만든다."""
     allowed = ', '.join(f"'{value}'" for value in values)
     return f'{column} IN ({allowed})'
+
+
+def all_of(column: str, values: type[enum.StrEnum]) -> str:
+    """배열 컬럼의 원소가 모두 정해진 목록 안에 있어야 한다는 조건을 SQL 로 만든다."""
+    allowed = ', '.join(f"'{value}'" for value in values)
+    return f'{column} <@ ARRAY[{allowed}]::varchar[]'
 
 
 def at_most(column: str, max_length: int) -> str:
@@ -215,6 +235,7 @@ class Scenario(AssetContent):
     룰북과 세계관은 하나씩, 로어북은 여러 개 가리킨다. NPC 같은 재료는 그 자산을 만들 때 더한다.
 
     초안일 때는 룰북과 스타팅을 비워 둘 수 있다(임시 저장). 게시할 때 둘 다 있는지 검사한다.
+    시트(프리젠의 시트, 기본 시트)도 초안일 때는 비워 둘 수 있다. 룰북의 규칙에 맞는지는 게시할 때 본다.
     """
 
     __tablename__ = 'scenarios'
@@ -232,6 +253,11 @@ class Scenario(AssetContent):
         ),
         # 문서 안의 모양(이름, 설명, 길이)은 입력을 받을 때 검사한다. DB 는 개수만 막는다
         CheckConstraint(f'jsonb_array_length(pregens) <= {SCENARIO_MAX_PREGENS}', name='pregens_count'),
+        # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
+        CheckConstraint(
+            f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
+            name='character_modes_allowed',
+        ),
     )
 
     # 가리키는 대상이 assets 가 아니라 rulebooks 다. 룰북 자리에 세계관을 넣는 일을 DB 가 막는다.
@@ -254,10 +280,21 @@ class Scenario(AssetContent):
     min_players: Mapped[int] = mapped_column(SmallInteger, default=1)
     max_players: Mapped[int] = mapped_column(SmallInteger, default=TABLE_MAX_PLAYERS)
 
-    # 프리젠들. 제작자가 미리 만들어 둔 캐릭터다. 하나하나가 {name, description} 이다.
-    # 플레이어가 테이블에 앉을 때 골라서 자기 캐릭터로 가져갈 수 있다. 직접 만들어도 된다.
+    # 프리젠들. 제작자가 미리 만들어 둔 캐릭터다. 하나하나가 {name, description, sheet} 다.
+    # sheet 는 그 캐릭터의 숫자다(app/engine/sheet.py 의 Sheet). 초안일 때는 비워 둘 수 있다.
+    # 플레이어가 테이블에 앉을 때 골라서 자기 캐릭터로 가져갈 수 있다.
     # 시나리오 하나에 딸린 짧은 목록이고 통째로 바꾸므로, 테이블을 따로 두지 않고 문서로 둔다
-    pregens: Mapped[list[dict[str, str]]] = mapped_column(JSONB, default=list)
+    pregens: Mapped[list[dict]] = mapped_column(JSONB, default=list)
+
+    # 허용하는 캐릭터 방식들. 하나 이상이다.
+    # 있던 시나리오는 둘 다 허용하는 것으로 채운다. 지금까지 프리젠을 고를 수도, 직접 만들 수도 있었다
+    character_modes: Mapped[list[str]] = mapped_column(
+        ARRAY(String(20)), default=lambda: list(CharacterMode), server_default=text("'{pregen,custom}'")
+    )
+
+    # 기본 시트. 캐릭터를 직접 만든 사람이 받는 숫자다. 문서 하나이고 모양은 Sheet 다.
+    # 초안일 때는 비워 둘 수 있다. 직접 만들기를 허용했으면 게시할 때 있어야 한다
+    default_sheet: Mapped[dict | None] = mapped_column(JSONB)
 
     # 붙인 로어북들. 여러 개라 칸 하나에 담지 못하고 연결 테이블(scenario_lorebooks)의 행으로 둔다.
     # selectin: 시나리오를 읽을 때 함께 읽는다. 비동기에서는 나중에 따로 읽어 오는 방식을 쓸 수 없다.

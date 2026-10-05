@@ -31,6 +31,7 @@ from app.tables import repository, service
 from app.tables.models import GameTable, TableMember
 from app.tables.schemas import CharacterUpdate, JoinRequest, LobbyJoinRequest, TableCreate
 from app.tables.service import Conflict, TableConflictError
+from tests.sheets import SHEET
 from tests.signing import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -60,7 +61,11 @@ async def open_table(session: AsyncSession, capacity: int, is_public: bool = Fal
     """내가 방장인 테이블을 연다. 프리젠이 하나 있는 시나리오로 만든다."""
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
     data = ScenarioCreate(
-        title='시나리오', rulebook_id=rulebook.asset_id, openings=['도입부'], pregens=[{'name': '폭주족 엘프'}]
+        title='시나리오',
+        rulebook_id=rulebook.asset_id,
+        openings=['도입부'],
+        pregens=[{'name': '폭주족 엘프', 'sheet': SHEET}],
+        default_sheet=SHEET,
     )
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
