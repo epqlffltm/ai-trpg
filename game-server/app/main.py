@@ -26,6 +26,9 @@ from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
+from app.rounds import router as rounds
+from app.rounds.narrator import FakeNarrator
+from app.rounds.service import RoundConflictError, RoundNotFoundError
 from app.tables import router as tables
 from app.tables.service import (
     MemberNotFoundError,
@@ -87,6 +90,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.state.http_client = http_client or httpx.AsyncClient()
     app.state.jwks = JwksCache(app.state.http_client, settings.auth_jwks_url)
 
+    # GM 의 서술을 만드는 것. 지금은 AI 를 부르지 않는 가짜다. AI 를 붙일 때 여기만 바꿔 끼운다
+    app.state.narrator = FakeNarrator()
+
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
     app.include_router(readiness.router)
@@ -99,6 +105,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.include_router(listings.owner_router, prefix=API_PREFIX)
     app.include_router(listings.public_router, prefix=API_PREFIX)
     app.include_router(tables.router, prefix=API_PREFIX)
+    app.include_router(rounds.router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다
     app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)
@@ -113,6 +120,8 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.add_exception_handler(WrongPasswordError, tables.handle_wrong_password)
     app.add_exception_handler(TableConflictError, tables.handle_table_conflict)
     app.add_exception_handler(TableOptionError, tables.handle_table_option)
+    app.add_exception_handler(RoundNotFoundError, rounds.handle_round_not_found)
+    app.add_exception_handler(RoundConflictError, rounds.handle_round_conflict)
 
     return app
 
