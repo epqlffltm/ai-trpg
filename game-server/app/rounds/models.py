@@ -6,8 +6,11 @@
 한 바퀴는 이렇게 돈다.
   1. GM 이 장면을 서술한다(scene). 첫 라운드의 장면은 테이블을 만들 때 고른 스타팅이다.
   2. 앉은 사람들이 각자 "나는 이것을 한다"를 적어 낸다(선언).
-  3. 다 모이면 라운드가 닫힌다. 방장이 먼저 닫을 수도 있다.
-  4. GM 이 선언들을 한 번에 받아 결과를 서술한다. 그 서술이 다음 라운드의 장면이 된다.
+  3. 다 모이면 라운드가 닫히기 시작한다. 방장이 먼저 닫을 수도 있다. 더는 선언을 받지 않는다.
+  4. GM 이 선언들을 한 번에 받아 결과를 서술한다. 서술하는 데는 시간이 걸린다.
+  5. 서술이 끝나면 라운드가 닫히고, 그 서술이 다음 라운드의 장면이 된다.
+
+라운드의 상태는 셋이다(RoundStatus). 열림(2) → 닫는 중(3, 4) → 닫힘(5).
 
 테이블 둘이 있다.
   - table_rounds: 라운드. 테이블마다 번호가 1 부터 하나씩 올라간다.
@@ -18,6 +21,7 @@
 스키마 이름을 적지 않는다. 연결의 search_path 가 정한다(app/core/database.py).
 """
 
+import enum
 import uuid
 from datetime import datetime
 
@@ -31,11 +35,22 @@ from app.core.database import Base
 DECLARATION_MAX_LENGTH = 1000
 
 
+class RoundStatus(enum.StrEnum):
+    """라운드의 상태. 한 방향으로만 나아간다."""
+
+    # 선언을 받는 중
+    OPEN = 'open'
+    # 선언을 마감했고 GM 이 결과를 서술하는 중. 선언을 낼 수 없다
+    CLOSING = 'closing'
+    # 서술이 끝났다. 다음 라운드가 열렸다
+    CLOSED = 'closed'
+
+
 class Round(Base):
     """
     라운드 하나. 장면 하나와, 그 장면에 대한 선언들이다.
 
-    closed_at 이 비어 있으면 열려 있는 라운드다. 선언을 받는 중이다.
+    상태를 칸 하나에 적지 않고 시각 둘로 안다(status). 언제 그렇게 됐는지가 함께 남는다.
     """
 
     __tablename__ = 'table_rounds'
@@ -43,7 +58,7 @@ class Round(Base):
         CheckConstraint('number >= 1', name='number_positive'),
         # 한 테이블에 같은 번호의 라운드가 둘일 수 없다
         UniqueConstraint('table_id', 'number'),
-        # 한 테이블에 열려 있는 라운드는 하나뿐이다. 조건이 붙은 유일 색인이다.
+        # 한 테이블에 닫히지 않은 라운드(열림, 닫는 중)는 하나뿐이다. 조건이 붙은 유일 색인이다.
         # 닫힌 라운드(closed_at 이 있는 것)는 이 색인에 들어가지 않으므로 몇 개든 된다.
         # 코드가 틀려서 라운드를 닫지 않고 새로 열어도, DB 가 막는다
         Index('uq_table_rounds_open', 'table_id', unique=True, postgresql_where='closed_at IS NULL'),
@@ -62,13 +77,25 @@ class Round(Base):
     scene: Mapped[str] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    # 닫힌 시각. 비어 있으면 열려 있는 것이다
+    # 닫기 시작한 시각. 선언을 마감하고 서술을 맡긴 때다. 비어 있으면 아직 선언을 받는 중이다.
+    # 서술을 다시 맡기면 이 시각을 지금으로 고친다. "맡긴 지 얼마나 됐나"를 이것으로 안다(app/rounds/service.py)
+    closing_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 닫힌 시각. 서술이 끝나 다음 라운드가 열린 때다
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # 이 라운드의 선언들. 낸 순서다. 많아야 넷이라 라운드를 읽을 때 함께 읽는다
     declarations: Mapped[list['Declaration']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='Declaration.created_at, Declaration.user_id'
     )
+
+    @property
+    def status(self) -> RoundStatus:
+        """라운드의 상태. 시각 둘에서 읽는다."""
+        if self.closed_at is not None:
+            return RoundStatus.CLOSED
+        if self.closing_at is not None:
+            return RoundStatus.CLOSING
+        return RoundStatus.OPEN
 
 
 class Declaration(Base):

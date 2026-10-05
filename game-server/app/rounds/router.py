@@ -15,8 +15,8 @@ from fastapi.responses import JSONResponse
 from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
 from app.rounds import service
-from app.rounds.models import Round
-from app.rounds.narrator import Narrator
+from app.rounds.closing import RoundCloser
+from app.rounds.models import Round, RoundStatus
 from app.rounds.schemas import DeclarationOut, DeclarationUpdate, RoundOut, RoundPage
 from app.rounds.service import RoundConflictError, RoundNotFoundError
 from app.tables.models import GameTable, TableStatus
@@ -24,13 +24,18 @@ from app.tables.models import GameTable, TableStatus
 router = APIRouter(prefix='/tables/{table_id}/rounds', tags=['rounds'])
 
 
-def get_narrator(request: Request) -> Narrator:
-    """앱에 꽂아 둔 서술자를 꺼낸다(app/main.py). 테스트와 운영이 다른 서술자를 꽂을 수 있다."""
-    return request.app.state.narrator
+def get_closer(request: Request) -> RoundCloser:
+    """
+    서술을 뒤에서 돌게 맡기는 것을 만든다. 앱에 꽂아 둔 서술자와 작업 관리자를 쓴다(app/main.py).
+
+    요청마다 새로 만든다. 테스트가 서술자를 바꿔 꽂으면 그 뒤의 요청부터 바뀐 것을 쓴다.
+    """
+    state = request.app.state
+    return RoundCloser(session_factory=state.session_factory, narrator=state.narrator, jobs=state.jobs)
 
 
 # 라운드를 닫을 수 있는 API 가 인자의 형식으로 쓴다
-Narrating = Annotated[Narrator, Depends(get_narrator)]
+Closing = Annotated[RoundCloser, Depends(get_closer)]
 
 # 라운드의 번호. 1 부터다
 RoundNumber = Annotated[int, Path(ge=1)]
@@ -40,9 +45,10 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
     """
     라운드를 앉은 사람에게 보여 주는 응답으로 바꾼다.
 
-    열려 있는 라운드에서는 남의 선언의 글을 가린다. 누가 냈는지만 보인다. 닫히면 모두의 글이 보인다.
+    선언을 받는 동안에는 남의 선언의 글을 가린다. 누가 냈는지만 보인다.
+    선언을 마감하면(닫는 중부터) 모두의 글이 보인다. 그때는 이벤트 기록에도 적혀 있다.
     """
-    is_open = round_.closed_at is None
+    is_open = round_.status == RoundStatus.OPEN
     declarations = [
         DeclarationOut(
             user_id=declaration.user_id,
@@ -51,15 +57,16 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
         )
         for declaration in round_.declarations
     ]
-    # 진행 중인 테이블의 열린 라운드에서만 기다리는 사람이 있다
+    # 진행 중인 테이블에서 선언을 받는 중일 때만 기다리는 사람이 있다
     is_waiting = is_open and table.status == TableStatus.PLAYING
     return RoundOut(
         number=round_.number,
         scene=round_.scene,
-        is_open=is_open,
+        status=round_.status,
         declarations=declarations,
         waiting_for=service.waiting_for(table, round_) if is_waiting else [],
         created_at=round_.created_at,
+        closing_at=round_.closing_at,
         closed_at=round_.closed_at,
     )
 
@@ -110,19 +117,25 @@ async def read_round(table_id: uuid.UUID, number: RoundNumber, user: CurrentUser
 
 @router.put('/current/declaration', response_model=RoundOut, status_code=status.HTTP_200_OK)
 async def declare(
-    table_id: uuid.UUID, data: DeclarationUpdate, user: CurrentUser, session: Session, narrator: Narrating
+    table_id: uuid.UUID, data: DeclarationUpdate, user: CurrentUser, session: Session, closer: Closing
 ) -> RoundOut:
     """
     열려 있는 라운드에 선언을 낸다. 다시 내면 바뀐다.
 
-    돌려주는 것은 가장 최근 라운드다. 모두가 내서 라운드가 닫혔으면, 새로 열린 라운드가 온다.
+    모두가 내면 라운드가 닫기 시작한다. 그때는 status 가 closing 인 라운드가 돌아온다.
+    GM 의 서술은 뒤에서 돈다. 끝나서 다음 라운드가 열린 것은 스트림으로 온다.
     """
-    table, round_ = await service.declare(session, user.user_id, table_id, data, narrator)
+    table, round_ = await service.declare(session, user.user_id, table_id, data, closer)
     return to_round(table, round_, user.user_id)
 
 
-@router.post('/current/close', response_model=RoundOut, status_code=status.HTTP_200_OK)
-async def close_round(table_id: uuid.UUID, user: CurrentUser, session: Session, narrator: Narrating) -> RoundOut:
-    """방장이 열려 있는 라운드를 닫는다. 선언을 기다리지 않고 다음 라운드로 넘어간다."""
-    table, round_ = await service.force_close(session, user.user_id, table_id, narrator)
+# 202: 접수했다는 뜻이다. 일은 아직 끝나지 않았다. 서술이 뒤에서 돈다
+@router.post('/current/close', response_model=RoundOut, status_code=status.HTTP_202_ACCEPTED)
+async def close_round(table_id: uuid.UUID, user: CurrentUser, session: Session, closer: Closing) -> RoundOut:
+    """
+    방장이 라운드를 닫는다. 선언을 기다리지 않고 넘어간다. status 가 closing 인 라운드가 돌아온다.
+
+    닫는 중인 채로 오래 멈춰 있는 라운드에 다시 부르면 서술을 다시 맡긴다.
+    """
+    table, round_ = await service.force_close(session, user.user_id, table_id, closer)
     return to_round(table, round_, user.user_id)

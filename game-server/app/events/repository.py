@@ -12,12 +12,23 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.events.models import TableEvent
+from app.events.models import EventType, TableEvent
 
 
 def add_event(session: AsyncSession, event: TableEvent) -> None:
     """새 이벤트를 세션에 올린다."""
     session.add(event)
+
+
+async def find_latest(session: AsyncSession, table_id: uuid.UUID, type_: EventType) -> TableEvent | None:
+    """테이블의 이 종류의 이벤트 중 가장 최근 것을 찾는다. 없으면 None."""
+    query = (
+        select(TableEvent)
+        .where(TableEvent.table_id == table_id, TableEvent.type == type_)
+        .order_by(TableEvent.sequence.desc())
+        .limit(1)
+    )
+    return await session.scalar(query)
 
 
 async def list_after(session: AsyncSession, table_id: uuid.UUID, after: int, limit: int) -> list[TableEvent]:

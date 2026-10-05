@@ -82,6 +82,7 @@ async def app(settings: Settings, auth_server: FakeAuthServer) -> AsyncIterator[
     """
     app = create_app(settings, http_client=auth_server.make_client())
     yield app
+    await app.state.jobs.aclose()
     await app.state.signal_source.stop()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
@@ -113,6 +114,21 @@ async def clean_tables(app: FastAPI) -> None:
     async with app.state.engine.begin() as connection:
         # worlds 는 assets 를 가리키므로 CASCADE 로 함께 비워진다
         await connection.execute(text('TRUNCATE TABLE assets CASCADE'))
+
+
+@pytest.fixture
+def narrated(app: FastAPI):
+    """
+    뒤에서 도는 서술이 끝날 때까지 기다리는 함수를 내준다.
+
+    라운드가 닫기 시작하면 요청은 바로 돌아오고 서술은 따로 돈다.
+    테스트가 "서술이 끝난 뒤"를 보려면 이것을 부른 다음에 읽는다.
+    """
+
+    async def wait() -> None:
+        await app.state.jobs.drain()
+
+    return wait
 
 
 @pytest.fixture

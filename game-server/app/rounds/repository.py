@@ -34,7 +34,8 @@ async def find_latest_round(session: AsyncSession, table_id: uuid.UUID) -> Round
 async def find_round(session: AsyncSession, table_id: uuid.UUID, number: int) -> Round | None:
     """테이블의 라운드 하나를 번호로 찾는다. 없으면 None."""
     query = select(Round).where(Round.table_id == table_id, Round.number == number)
-    return await session.scalar(query)
+    # 테이블을 잠근 뒤에 부를 때, 잠그기 전에 읽어 둔 낡은 값으로 판단하지 않게 한다
+    return await session.scalar(query.execution_options(populate_existing=True))
 
 
 async def list_rounds(session: AsyncSession, table_id: uuid.UUID, limit: int, offset: int) -> list[Round]:
