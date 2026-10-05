@@ -331,13 +331,14 @@ async def test_a_declaration_is_not_recorded_while_the_round_is_open(
 
 
 async def test_closing_a_round_writes_the_actions_the_result_and_the_next_round(
-    client: AsyncClient, me: dict[str, str], friend: dict[str, str]
+    client: AsyncClient, me: dict[str, str], friend: dict[str, str], narrated
 ):
     table = await start_duo(client, me, friend)
     await declare(client, me, table, '처음 생각.')
     await declare(client, me, table, MY_ACTION)
 
     await declare(client, friend, table, FRIENDS_ACTION)
+    await narrated()
 
     mine, friends, closed, narration, opened = await read_events(client, me, table, after=5)
     # 행동은 마지막 글만 적힌다. 앉은 순서다
@@ -349,7 +350,7 @@ async def test_closing_a_round_writes_the_actions_the_result_and_the_next_round(
     expected = f'[1 라운드의 결과]\n엘프: {MY_ACTION}\n영애: {FRIENDS_ACTION}'
     assert (narration['type'], narration['payload']) == ('gm_narration', {'text': expected})
     assert (opened['type'], opened['payload']) == ('round_opened', {'number': 2})
-    # 닫힘 → 서술 → 열림. 다섯이 한 묶음이다
+    # 닫힘 → 서술 → 열림. 다섯이 한 묶음이다. 닫힘까지와 서술부터는 따로 저장되지만 묶음은 같다
     assert narration['caused_by_sequence'] == closed['sequence']
     assert opened['caused_by_sequence'] == narration['sequence']
     groups = {event['action_group_id'] for event in (mine, friends, closed, narration, opened)}
@@ -357,12 +358,13 @@ async def test_closing_a_round_writes_the_actions_the_result_and_the_next_round(
 
 
 async def test_the_host_closing_a_round_records_who_did_nothing(
-    client: AsyncClient, me: dict[str, str], friend: dict[str, str]
+    client: AsyncClient, me: dict[str, str], friend: dict[str, str], narrated
 ):
     table = await start_duo(client, me, friend)
     await declare(client, me, table, MY_ACTION)
 
     await client.post(table_url(table, '/rounds/current/close'), headers=me)
+    await narrated()
 
     events = await read_events(client, friend, table, after=5)
     assert types(events) == ['player_action', 'round_closed', 'gm_narration', 'round_opened']
@@ -372,13 +374,14 @@ async def test_the_host_closing_a_round_records_who_did_nothing(
 
 
 async def test_the_action_of_someone_who_left_is_not_recorded(
-    client: AsyncClient, me: dict[str, str], friend: dict[str, str]
+    client: AsyncClient, me: dict[str, str], friend: dict[str, str], narrated
 ):
     table = await start_duo(client, me, friend)
     await declare(client, friend, table, FRIENDS_ACTION)
     await client.delete(table_url(table, '/members/me'), headers=friend)
 
     await declare(client, me, table, MY_ACTION)
+    await narrated()
 
     events = await read_events(client, me, table, after=5)
     # 떠난 사람의 선언은 서술자에게 가지 않았다. 이벤트는 서술자가 받은 것과 같다
@@ -390,10 +393,13 @@ async def test_the_action_of_someone_who_left_is_not_recorded(
 # --- 번호와 읽기 ---
 
 
-async def test_sequences_go_up_from_one_without_gaps(client: AsyncClient, me: dict[str, str], friend: dict[str, str]):
+async def test_sequences_go_up_from_one_without_gaps(
+    client: AsyncClient, me: dict[str, str], friend: dict[str, str], narrated
+):
     table = await start_duo(client, me, friend)
     await declare(client, me, table, MY_ACTION)
     await declare(client, friend, table, FRIENDS_ACTION)
+    await narrated()
     await client.post(table_url(table, '/end'), headers=me)
 
     response = await client.get(table_url(table, '/events'), headers=me)
