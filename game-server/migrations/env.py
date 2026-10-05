@@ -19,6 +19,7 @@ from sqlalchemy.engine import Connection
 
 # 모델을 불러와야 Base.metadata 에 테이블이 등록된다. 이름을 직접 쓰지 않아도 불러오는 것 자체가 필요하다
 from app.assets import models as asset_models  # noqa: F401
+from app.chat import models as chat_models  # noqa: F401
 from app.core.config import get_settings
 from app.core.database import Base, create_engine
 from app.events import models as event_models  # noqa: F401
