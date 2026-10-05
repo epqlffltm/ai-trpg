@@ -24,6 +24,7 @@ from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
+from app.engine.dice import ScriptedDice
 from app.rounds import closing, repository, service
 from app.rounds.models import Round
 from app.rounds.narrator import FakeNarrator
@@ -39,6 +40,9 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 FRIEND = uuid.UUID('22222222-2222-4333-8444-555555555555')
+
+# 눈이 하나도 없는 주사위. 여기의 선언에는 행동이 없어 굴릴 일이 없다. 굴리면 오류가 난다
+NO_DICE = ScriptedDice([])
 
 # 기다리는지 확인할 때 주는 시간(초). 잠금에 걸리지 않았다면 이 안에 끝난다
 WAIT = 0.3
@@ -102,7 +106,7 @@ async def test_the_last_two_declarations_close_the_round_once(
 
     # B: 친구가 선언을 낸다. A 가 끝날 때까지 기다려야 한다
     data = DeclarationUpdate(content='웃는다.')
-    declaring = asyncio.create_task(service.declare(other_session, FRIEND, table.id, data, scheduler))
+    declaring = asyncio.create_task(service.declare(other_session, FRIEND, table.id, data, scheduler, NO_DICE))
     assert await is_waiting(declaring)
 
     await session.commit()
@@ -135,7 +139,7 @@ async def test_closing_waits_for_a_declaration_being_saved(
     await session.flush()
 
     # B: 방장이 라운드를 닫으려 한다. 잠금이 없으면 친구의 선언을 못 보고 "아무것도 하지 않았다"로 닫는다
-    closing_task = asyncio.create_task(service.force_close(other_session, ME, table.id, RecordingScheduler()))
+    closing_task = asyncio.create_task(service.force_close(other_session, ME, table.id, RecordingScheduler(), NO_DICE))
     assert await is_waiting(closing_task)
 
     await session.commit()
