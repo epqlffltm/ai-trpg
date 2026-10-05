@@ -32,6 +32,7 @@ from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
+from tests.sheets import SHEET
 from tests.signing import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -59,7 +60,7 @@ async def is_waiting(task: asyncio.Task) -> bool:
 async def open_duo(session: AsyncSession) -> GameTable:
     """나와 친구가 앉은 테이블을 연다."""
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
-    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook.asset_id, openings=['도입부'])
+    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook.asset_id, openings=['도입부'], default_sheet=SHEET)
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
     create = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=2)

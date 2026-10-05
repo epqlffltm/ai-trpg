@@ -34,9 +34,12 @@ from app.assets.scenarios.snapshot import (
     upgrade_from_1,
     upgrade_from_2,
     upgrade_from_3,
+    upgrade_from_4,
 )
+from app.engine.sheet import fits
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
+from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -56,7 +59,7 @@ OPENING = '사이렌이 울린다. 뒤를 돌아보니 마법소년 차림의 �
 GM_GUIDE = '진지한 장면은 금지다. 모든 추격은 바이크로 한다.'
 SETTING = '17개 행성이 고속도로 하나로 이어져 있다.'
 GM_NOTES = '고속도로의 끝에는 아무것도 없다.'
-PREGENS = [{'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.'}]
+PREGENS = [{'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.', 'sheet': make_sheet(dex=16, max_hp=8)}]
 
 
 @pytest.fixture
@@ -91,9 +94,9 @@ async def create(client: AsyncClient, url: str, headers: dict[str, str], **field
 
 
 async def create_ready_scenario(client: AsyncClient, headers: dict[str, str], **fields) -> dict:
-    """게시할 조건을 갖춘 시나리오를 만든다. 룰북이 붙어 있고 스타팅이 하나 있다."""
+    """게시할 조건을 갖춘 시나리오를 만든다. 룰북이 붙어 있고, 스타팅이 하나 있고, 기본 시트가 있다."""
     rulebook = await create(client, RULEBOOKS_URL, headers, title='룰북', gm_guide=GM_GUIDE)
-    values = {'rulebook_id': rulebook['id'], 'openings': [OPENING]}
+    values = {'rulebook_id': rulebook['id'], 'openings': [OPENING], 'default_sheet': SHEET}
     values.update(fields)
     return await create(client, SCENARIOS_URL, headers, **values)
 
@@ -187,7 +190,7 @@ async def test_rejects_bad_input(client: AsyncClient, my_headers: dict[str, str]
 
 
 async def test_a_scenario_without_a_rulebook_cannot_be_published(client: AsyncClient, my_headers: dict[str, str]):
-    scenario = await create(client, SCENARIOS_URL, my_headers, openings=[OPENING])
+    scenario = await create(client, SCENARIOS_URL, my_headers, openings=[OPENING], default_sheet=SHEET)
 
     response = await client.post(versions_url(scenario), json={}, headers=my_headers)
 
@@ -212,7 +215,7 @@ async def test_the_refusal_lists_every_problem(client: AsyncClient, my_headers: 
     response = await client.post(versions_url(scenario), json={}, headers=my_headers)
 
     # 하나씩 고치고 다시 시도하지 않게 한 번에 알려 준다
-    assert response.json()['problems'] == ['rulebook_missing', 'opening_missing']
+    assert response.json()['problems'] == ['rulebook_missing', 'opening_missing', 'default_sheet_missing']
 
 
 async def test_the_rating_comes_from_the_scenario_alone(client: AsyncClient, my_headers: dict[str, str]):
@@ -230,13 +233,124 @@ async def test_fixing_the_problems_lets_it_publish(client: AsyncClient, my_heade
     rulebook = await create(client, RULEBOOKS_URL, my_headers)
     await client.patch(
         f'{SCENARIOS_URL}/{scenario["id"]}',
-        json={'rulebook_id': rulebook['id'], 'openings': [OPENING]},
+        json={'rulebook_id': rulebook['id'], 'openings': [OPENING], 'default_sheet': SHEET},
         headers=my_headers,
     )
 
     version = await publish(client, my_headers, scenario)
 
     assert version['number'] == 1
+
+
+# --- 게시할 조건: 시트 ---
+
+
+async def refused(client: AsyncClient, headers: dict[str, str], scenario: dict) -> list[str]:
+    """게시를 시도해서 거절당하고, 그 이유들을 돌려준다."""
+    response = await client.post(versions_url(scenario), json={}, headers=headers)
+    assert response.status_code == status.HTTP_409_CONFLICT, response.text
+    return response.json()['problems']
+
+
+async def test_allowing_custom_characters_needs_a_default_sheet(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_ready_scenario(client, my_headers, default_sheet=None)
+
+    # 캐릭터를 직접 만든 사람이 받을 숫자가 없다
+    assert await refused(client, my_headers, scenario) == ['default_sheet_missing']
+
+
+async def test_pregens_alone_need_no_default_sheet(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_ready_scenario(
+        client, my_headers, default_sheet=None, character_modes=['pregen'], pregens=PREGENS
+    )
+
+    version = await publish(client, my_headers, scenario)
+
+    assert version['snapshot']['character_modes'] == ['pregen']
+    assert version['snapshot']['default_sheet'] is None
+
+
+@pytest.mark.parametrize(
+    'sheet',
+    [
+        # 능력치가 하나 빠졌다
+        {'abilities': {'str': 10, 'dex': 10, 'con': 10, 'int': 10, 'wis': 10}, 'max_hp': 10},
+        # 규칙에 없는 능력치가 있다
+        {'abilities': {**SHEET['abilities'], 'luck': 10}, 'max_hp': 10},
+        # 점수가 범위(1~20) 밖이다
+        make_sheet(str=21),
+        make_sheet(str=0),
+    ],
+)
+async def test_a_sheet_must_fit_the_rules_of_the_rulebook(client: AsyncClient, my_headers: dict[str, str], sheet: dict):
+    as_default = await create_ready_scenario(client, my_headers, default_sheet=sheet)
+    as_pregen = await create_ready_scenario(client, my_headers, pregens=[{'name': '엘프', 'sheet': sheet}])
+
+    # 모양은 맞아서 저장은 됐다. 규칙에 맞는지는 룰북이 정해진 지금 본다
+    assert await refused(client, my_headers, as_default) == ['default_sheet_invalid']
+    assert await refused(client, my_headers, as_pregen) == ['pregen_sheet_invalid']
+
+
+async def test_every_pregen_needs_a_sheet(client: AsyncClient, my_headers: dict[str, str]):
+    pregens = [{'name': '엘프', 'sheet': SHEET}, {'name': '드워프'}, {'name': '악역영애'}]
+    scenario = await create_ready_scenario(client, my_headers, pregens=pregens)
+
+    # 둘이 빠졌어도 같은 이유는 한 번만 적는다
+    assert await refused(client, my_headers, scenario) == ['pregen_sheet_missing']
+
+
+async def test_pregens_are_checked_even_when_they_cannot_be_picked(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_ready_scenario(client, my_headers, character_modes=['custom'], pregens=[{'name': '엘프'}])
+
+    # 판 안의 프리젠은 어느 것이든 시트가 있다. 쓰지 않을 프리젠은 지우고 게시한다
+    assert await refused(client, my_headers, scenario) == ['pregen_sheet_missing']
+
+
+async def test_a_default_sheet_is_checked_even_when_it_is_not_needed(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_ready_scenario(
+        client, my_headers, character_modes=['pregen'], pregens=PREGENS, default_sheet=make_sheet(str=21)
+    )
+
+    assert await refused(client, my_headers, scenario) == ['default_sheet_invalid']
+
+
+async def test_without_a_rulebook_sheets_are_only_checked_for_being_there(
+    client: AsyncClient, my_headers: dict[str, str]
+):
+    scenario = await create(
+        client,
+        SCENARIOS_URL,
+        my_headers,
+        openings=[OPENING],
+        default_sheet=make_sheet(str=21),
+        pregens=[{'name': '엘프'}],
+    )
+
+    # 규칙이 없으니 맞는지는 볼 수 없다. 룰북을 붙이고 다시 게시하면 그때 나온다
+    assert await refused(client, my_headers, scenario) == ['rulebook_missing', 'pregen_sheet_missing']
+
+
+@pytest.mark.parametrize(('count', 'problems'), [(1, ['pregens_too_few']), (2, None), (3, None)])
+async def test_pregens_alone_must_seat_the_fewest_recommended_players(
+    client: AsyncClient, my_headers: dict[str, str], count: int, problems: list[str] | None
+):
+    pregens = [{'name': f'{number}번', 'sheet': SHEET} for number in range(count)]
+    scenario = await create_ready_scenario(
+        client, my_headers, character_modes=['pregen'], pregens=pregens, recommended_players={'min': 2, 'max': 4}
+    )
+
+    response = await client.post(versions_url(scenario), json={}, headers=my_headers)
+
+    # 프리젠 하나는 한 사람만 고른다. 프리젠만 허용했으면 프리젠의 수가 앉을 수 있는 사람의 수다
+    assert response.json().get('problems') == problems
+
+
+async def test_few_pregens_are_fine_when_characters_can_also_be_made(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_ready_scenario(
+        client, my_headers, pregens=[{'name': '엘프', 'sheet': SHEET}], recommended_players={'min': 3, 'max': 4}
+    )
+
+    assert (await publish(client, my_headers, scenario))['number'] == 1
 
 
 # --- 판에 들어가는 것 ---
@@ -263,6 +377,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         openings=[OPENING],
         recommended_players={'min': 2, 'max': 3},
         pregens=PREGENS,
+        default_sheet=SHEET,
     )
 
     version = await publish(client, my_headers, scenario)
@@ -275,6 +390,8 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'openings': [OPENING],
         'recommended_players': {'min': 2, 'max': 3},
         'pregens': PREGENS,
+        'character_modes': ['pregen', 'custom'],
+        'default_sheet': SHEET,
         'rulebook': {'id': rulebook['id'], 'title': '룰북', 'gm_guide': GM_GUIDE, 'rules': rulebook['rules']},
         'world': {'id': world['id'], 'title': '세계관', 'setting': SETTING, 'gm_notes': GM_NOTES},
         'lorebooks': [
@@ -315,7 +432,9 @@ async def test_the_snapshot_carries_every_opening_in_order(client: AsyncClient, 
 
 async def test_editing_the_draft_does_not_change_a_version(client: AsyncClient, my_headers: dict[str, str]):
     rulebook = await create(client, RULEBOOKS_URL, my_headers, gm_guide=GM_GUIDE)
-    scenario = await create(client, SCENARIOS_URL, my_headers, rulebook_id=rulebook['id'], openings=[OPENING])
+    scenario = await create(
+        client, SCENARIOS_URL, my_headers, rulebook_id=rulebook['id'], openings=[OPENING], default_sheet=SHEET
+    )
     first = await publish(client, my_headers, scenario)
 
     # 게시한 뒤에 시나리오와 룰북을 둘 다 고친다
@@ -487,6 +606,31 @@ def test_upgrades_a_format_3_document():
     assert 'rules' not in format_3['rulebook']
 
 
+def test_upgrades_a_format_4_document():
+    format_3 = upgrade_from_2(upgrade_from_1(FORMAT_1))
+    format_4 = upgrade_from_3({**format_3, 'pregens': [{'name': '엘프', 'description': ''}]})
+
+    upgraded = upgrade_from_4(format_4)
+
+    # 캐릭터에 숫자가 없던 때의 판이다. 두 방식을 모두 허용한 것으로, 시트는 기준 시트(모두 10, HP 10)로 읽는다
+    assert upgraded['format'] == 5
+    assert upgraded['character_modes'] == ['pregen', 'custom']
+    assert upgraded['default_sheet'] == SHEET
+    assert upgraded['pregens'] == [{'name': '엘프', 'description': '', 'sheet': SHEET}]
+    # 받은 문서는 고치지 않는다. 안쪽의 프리젠도 그대로다
+    assert format_4['format'] == 4
+    assert 'sheet' not in format_4['pregens'][0]
+    assert 'default_sheet' not in format_4
+
+
+def test_the_sheets_of_an_old_version_fit_its_rules():
+    old = read_snapshot(FORMAT_1)
+
+    # 옛 판에 채워 넣은 시트도 그 판의 규칙에 맞는다. 판 안의 시트는 어느 것이든 규칙에 맞아야 한다
+    assert old.default_sheet is not None
+    assert fits(old.rulebook.rules, old.default_sheet)
+
+
 def test_reads_a_document_of_any_format():
     current = upgrade_from_1(FORMAT_1)
 
@@ -494,7 +638,7 @@ def test_reads_a_document_of_any_format():
     assert read_snapshot(FORMAT_1) == read_snapshot(current)
     assert read_snapshot(FORMAT_1).format == SNAPSHOT_FORMAT
     assert read_snapshot(FORMAT_1).openings == [OPENING]
-    # 형식 1 은 1 → 2 → 3 → 4 를 차례로 거친다
+    # 형식 1 은 1 → 2 → 3 → 4 → 5 를 차례로 거친다
     assert read_snapshot(FORMAT_1).pregens == []
     assert read_snapshot(FORMAT_1).rulebook.rules == SRD5
 

@@ -16,6 +16,7 @@ from fastapi import status
 from httpx import AsyncClient, Response
 
 from app.main import API_PREFIX
+from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -70,7 +71,7 @@ async def open_ended_table(client: AsyncClient, me: dict[str, str], friend: dict
     끝난 테이블의 스트림은 밀린 것을 보내고 닫힌다. 응답이 끝나므로 테스트용 클라이언트로 받을 수 있다.
     """
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북', 'gm_guide': GM_GUIDE}, headers=me)
-    body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS}
+    body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS, 'default_sheet': SHEET}
     scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 2}

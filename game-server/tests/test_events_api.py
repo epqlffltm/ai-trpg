@@ -25,6 +25,7 @@ from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.main import API_PREFIX
 from app.tables.models import GameTable
+from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -83,7 +84,7 @@ def table_url(table: dict, path: str = '') -> str:
 async def open_table(client: AsyncClient, headers: dict[str, str], **fields) -> dict:
     """내 시나리오를 만들어 그 판으로 테이블을 연다. 아직 시작하지 않은 테이블을 돌려준다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북', 'gm_guide': GM_GUIDE}, headers=headers)
-    body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS}
+    body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS, 'default_sheet': SHEET}
     scenario = (await client.post(SCENARIOS_URL, json=body, headers=headers)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=headers)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 3, **fields}

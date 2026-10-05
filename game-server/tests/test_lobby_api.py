@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.models import TABLE_MAX_PLAYERS, Asset, AssetType, Scenario, ScenarioVersion
 from app.main import API_PREFIX
 from app.tables.models import TABLE_PASSWORD_MAX_LENGTH, TABLE_PASSWORD_MIN_LENGTH, GameTable, TableMember
+from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -69,7 +70,7 @@ def third(signing_key: SigningKey) -> dict[str, str]:
 async def publish_scenario(client: AsyncClient, headers: dict[str, str], title: str = TITLE) -> dict:
     """게시할 조건을 갖춘 시나리오를 만들고 판을 하나 낸다. 시나리오를 돌려준다. 판의 번호는 1 이다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북', 'gm_guide': GM_GUIDE}, headers=headers)
-    body = {'title': title, 'rulebook_id': rulebook.json()['id'], 'openings': [OPENING]}
+    body = {'title': title, 'rulebook_id': rulebook.json()['id'], 'openings': [OPENING], 'default_sheet': SHEET}
     scenario = await client.post(SCENARIOS_URL, json=body, headers=headers)
     assert scenario.status_code == status.HTTP_201_CREATED, scenario.text
     published = await client.post(f'{SCENARIOS_URL}/{scenario.json()["id"]}/versions', json={}, headers=headers)
