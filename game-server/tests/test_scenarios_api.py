@@ -34,6 +34,7 @@ from app.assets.models import (
     World,
 )
 from app.main import API_PREFIX
+from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -151,6 +152,8 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'openings',
         'recommended_players',
         'pregens',
+        'character_modes',
+        'default_sheet',
     }
 
 
@@ -426,8 +429,9 @@ async def test_a_rejected_update_changes_nothing(client: AsyncClient, my_headers
 
 # 테스트에 쓰는 프리젠. 내용은 아무 뜻이 없다
 PREGENS = [
-    {'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.'},
-    {'name': '악역영애', 'description': '바이크는 처음이지만 웃음소리는 크다.'},
+    {'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.', 'sheet': make_sheet(dex=16, max_hp=8)},
+    # 시트는 초안일 때 비워 둘 수 있다
+    {'name': '악역영애', 'description': '바이크는 처음이지만 웃음소리는 크다.', 'sheet': None},
 ]
 
 
@@ -446,12 +450,14 @@ async def test_saves_the_recommended_players_and_the_pregens(client: AsyncClient
 async def test_a_pregen_needs_only_a_name(client: AsyncClient, my_headers: dict[str, str]):
     scenario = await create(client, SCENARIOS_URL, my_headers, pregens=[{'name': '  이름뿐인 사람  '}])
 
-    # 이름의 앞뒤 공백은 뗀다. 설명은 비워도 된다
-    assert scenario['pregens'] == [{'name': '이름뿐인 사람', 'description': ''}]
+    # 이름의 앞뒤 공백은 뗀다. 설명과 시트는 비워도 된다
+    assert scenario['pregens'] == [{'name': '이름뿐인 사람', 'description': '', 'sheet': None}]
 
 
 async def test_accepts_the_most_pregens_allowed(client: AsyncClient, my_headers: dict[str, str]):
-    pregens = [{'name': f'{number}번 캐릭터', 'description': ''} for number in range(SCENARIO_MAX_PREGENS)]
+    pregens = [
+        {'name': f'{number}번 캐릭터', 'description': '', 'sheet': SHEET} for number in range(SCENARIO_MAX_PREGENS)
+    ]
 
     scenario = await create(client, SCENARIOS_URL, my_headers, pregens=pregens)
 
@@ -818,6 +824,111 @@ async def test_the_database_rejects_recommended_players_out_of_range(
     session.add(Scenario(asset=asset, min_players=min_players, max_players=max_players))
 
     with pytest.raises(IntegrityError):
+        await session.commit()
+
+
+# --- 시트와 캐릭터 방식 ---
+
+
+async def test_a_new_scenario_allows_both_modes_and_has_no_default_sheet(
+    client: AsyncClient, my_headers: dict[str, str]
+):
+    scenario = await create(client, SCENARIOS_URL, my_headers)
+
+    # 프리젠을 고를 수도, 직접 만들 수도 있다. 기본 시트는 제작자가 채운다
+    assert scenario['character_modes'] == ['pregen', 'custom']
+    assert scenario['default_sheet'] is None
+
+
+async def test_saves_the_sheets_and_the_modes(client: AsyncClient, my_headers: dict[str, str]):
+    default_sheet = make_sheet(con=14, max_hp=12)
+    scenario = await create(
+        client, SCENARIOS_URL, my_headers, pregens=PREGENS, character_modes=['pregen'], default_sheet=default_sheet
+    )
+
+    read = (await client.get(f'{SCENARIOS_URL}/{scenario["id"]}', headers=my_headers)).json()
+
+    assert read['pregens'][0]['sheet'] == make_sheet(dex=16, max_hp=8)
+    assert read['pregens'][1]['sheet'] is None
+    assert read['character_modes'] == ['pregen']
+    assert read['default_sheet'] == default_sheet
+
+
+async def test_the_modes_come_back_in_a_fixed_order(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(client, SCENARIOS_URL, my_headers, character_modes=['custom', 'pregen'])
+
+    # 순서에 뜻이 없는 목록이다. 보낸 순서와 상관없이 늘 같은 순서다
+    assert scenario['character_modes'] == ['pregen', 'custom']
+
+
+async def test_a_sheet_is_checked_for_its_shape_only(client: AsyncClient, my_headers: dict[str, str]):
+    # 룰북이 없는 초안이다. 어떤 능력치가 맞는지 아직 알 수 없다. 모양이 맞으면 받는다
+    odd = {'abilities': {'luck': 3}, 'max_hp': 1}
+
+    scenario = await create(client, SCENARIOS_URL, my_headers, default_sheet=odd)
+
+    assert scenario['default_sheet'] == odd
+
+
+@pytest.mark.parametrize(
+    'fields',
+    [
+        # 방식이 하나는 있어야 한다
+        {'character_modes': []},
+        {'character_modes': ['point_buy']},
+        {'character_modes': ['pregen', 'pregen']},
+        {'character_modes': 'pregen'},
+        {'default_sheet': {'abilities': {'str': 10}}},
+        {'default_sheet': {'max_hp': 10}},
+        {'default_sheet': {'abilities': {'str': 10}, 'max_hp': 0}},
+        {'default_sheet': {'abilities': {'str': 10}, 'max_hp': 1000}},
+        {'default_sheet': {'abilities': {'str': -1}, 'max_hp': 10}},
+        {'default_sheet': {'abilities': {'str': 1001}, 'max_hp': 10}},
+        {'default_sheet': {'abilities': {'str': '강함'}, 'max_hp': 10}},
+        # 능력치의 이름표는 영어 소문자로 시작한다
+        {'default_sheet': {'abilities': {'근력': 10}, 'max_hp': 10}},
+        {'default_sheet': {'abilities': {f'a{number}': 10 for number in range(13)}, 'max_hp': 10}},
+        # 지금의 HP 는 받지 않는다. 테이블에서 엔진이 정한다
+        {'default_sheet': {**SHEET, 'hp': 3}},
+        {'pregens': [{'name': '엘프', 'sheet': {'abilities': {'str': 10}, 'max_hp': 0}}]},
+        {'pregens': [{'name': '엘프', 'sheet': '강함'}]},
+    ],
+)
+async def test_rejects_bad_sheets_and_modes(client: AsyncClient, my_headers: dict[str, str], fields: dict):
+    scenario = await create(client, SCENARIOS_URL, my_headers, default_sheet=SHEET)
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    created = await client.post(SCENARIOS_URL, json={'title': '시나리오', **fields}, headers=my_headers)
+    updated = await client.patch(url, json=fields, headers=my_headers)
+
+    assert created.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert updated.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    # 거절된 요청은 아무것도 바꾸지 않는다
+    read = (await client.get(url, headers=my_headers)).json()
+    assert (read['character_modes'], read['default_sheet']) == (['pregen', 'custom'], SHEET)
+
+
+async def test_the_default_sheet_is_cleared_with_null(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(client, SCENARIOS_URL, my_headers, default_sheet=SHEET, character_modes=['custom'])
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    not_sent = await client.patch(url, json={'title': '바꾼 제목'}, headers=my_headers)
+    replaced = await client.patch(url, json={'default_sheet': make_sheet(str=18)}, headers=my_headers)
+    cleared = await client.patch(url, json={'default_sheet': None, 'character_modes': None}, headers=my_headers)
+
+    assert not_sent.json()['default_sheet'] == SHEET
+    assert replaced.json()['default_sheet'] == make_sheet(str=18)
+    # 기본 시트는 null 로 비운다. 방식은 비울 수 없는 칸이라 null 은 "보내지 않았다"다
+    assert cleared.json()['default_sheet'] is None
+    assert cleared.json()['character_modes'] == ['custom']
+
+
+@pytest.mark.parametrize('modes', [[], ['point_buy'], ['pregen', 'point_buy']])
+async def test_the_database_rejects_modes_it_does_not_know(session: AsyncSession, modes: list[str]):
+    asset = Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오')
+    session.add(Scenario(asset=asset, character_modes=modes))
+
+    with pytest.raises(IntegrityError, match='character_modes_allowed'):
         await session.commit()
 
 

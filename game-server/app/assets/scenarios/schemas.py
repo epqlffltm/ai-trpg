@@ -19,10 +19,12 @@ from app.assets.models import (
     SCENARIO_OPENING_MAX_LENGTH,
     TABLE_MAX_PLAYERS,
     VERSION_NOTE_MAX_LENGTH,
+    CharacterMode,
     Rating,
 )
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
+from app.engine.sheet import Sheet
 
 # 스타팅 하나. 공백이 아닌 글자가 하나는 있어야 한다. 빈 스타팅은 고를 수 없으니 받지 않는다.
 # 앞뒤 공백은 떼지 않는다. 줄바꿈으로 장면을 여는 것도 제작자의 글이다
@@ -71,13 +73,16 @@ class Pregen(BaseModel):
     """
     프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다.
 
-    플레이어가 만드는 캐릭터와 칸이 같다(이름과 설명). 그래서 골라서 그대로 자기 캐릭터로 가져갈 수 있다.
+    이름과 설명은 플레이어가 만드는 캐릭터와 칸이 같다. 그래서 골라서 그대로 자기 캐릭터로 가져갈 수 있다.
+    시트는 그 캐릭터의 숫자다. 초안일 때는 비워 둘 수 있다. 게시할 때 있는지, 룰북의 규칙에 맞는지 검사한다.
+    여기서는 시트의 모양만 본다. 룰북은 나중에 붙이거나 바꿀 수 있어서, 규칙에 맞는지는 지금 정할 수 없다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
     name: CharacterName
     description: CharacterDescription = ''
+    sheet: Sheet | None = None
 
 
 def reject_duplicate_names(pregens: list[Pregen]) -> list[Pregen]:
@@ -91,11 +96,27 @@ def reject_duplicate_names(pregens: list[Pregen]) -> list[Pregen]:
 Pregens = Annotated[list[Pregen], Field(max_length=SCENARIO_MAX_PREGENS), AfterValidator(reject_duplicate_names)]
 
 
+def in_fixed_order(modes: list[CharacterMode]) -> list[CharacterMode]:
+    """
+    방식의 목록을 정해진 순서로 놓는다. 같은 것이 두 번 있으면 거부한다.
+
+    순서에 뜻이 없는 목록이다. 보낸 순서와 상관없이 늘 같은 순서로 저장하고 돌려준다.
+    """
+    if len(set(modes)) != len(modes):
+        raise ValueError('같은 방식이 두 번 있습니다.')
+    return [mode for mode in CharacterMode if mode in modes]
+
+
+# 허용하는 캐릭터 방식들. 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
+CharacterModes = Annotated[list[CharacterMode], Field(min_length=1), AfterValidator(in_fixed_order)]
+
+
 class ScenarioCreate(AssetCreate):
     """
     시나리오를 만들 때 받는 값. 제목만 필수다.
 
     룰북과 스타팅 없이도 만들 수 있다(임시 저장). 게시할 때 둘 다 있는지 검사한다.
+    시트도 비워 둘 수 있다. 게시할 때 룰북의 규칙과 견주어 검사한다.
     """
 
     # 이용 등급. 시나리오를 조립할 때 제작자가 고른다. 성인용으로 올리는 것은 직접 골라야 한다
@@ -106,18 +127,22 @@ class ScenarioCreate(AssetCreate):
     openings: Openings = []
     recommended_players: RecommendedPlayers = RecommendedPlayers(min=1, max=TABLE_MAX_PLAYERS)
     pregens: Pregens = []
+    # 안 보내면 둘 다 허용한다
+    character_modes: CharacterModes = list(CharacterMode)
+    default_sheet: Sheet | None = None
 
 
 class ScenarioUpdate(AssetUpdate):
     """
     시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
-    rulebook_id 와 world_id 는 null 을 보내면 떼어 낸다. 보내지 않으면 그대로 둔다.
-    lorebook_ids, openings, pregens 는 보낸 목록으로 통째로 바꾼다. 전부 없애려면 빈 목록을 보낸다.
+    rulebook_id, world_id, default_sheet 는 null 을 보내면 비운다. 보내지 않으면 그대로 둔다.
+    lorebook_ids, openings, pregens, character_modes 는 보낸 목록으로 통째로 바꾼다.
+    앞의 셋은 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다.
     """
 
-    clearable: ClassVar[frozenset[str]] = frozenset({'rulebook_id', 'world_id'})
+    clearable: ClassVar[frozenset[str]] = frozenset({'rulebook_id', 'world_id', 'default_sheet'})
 
     rating: Rating | None = None
     rulebook_id: uuid.UUID | None = None
@@ -126,6 +151,8 @@ class ScenarioUpdate(AssetUpdate):
     openings: Openings | None = None
     recommended_players: RecommendedPlayers | None = None
     pregens: Pregens | None = None
+    character_modes: CharacterModes | None = None
+    default_sheet: Sheet | None = None
 
 
 class ScenarioSummary(AssetSummary):
@@ -151,6 +178,8 @@ class ScenarioDetail(ScenarioSummary):
     openings: list[str]
     recommended_players: RecommendedPlayers
     pregens: list[Pregen]
+    character_modes: list[CharacterMode]
+    default_sheet: Sheet | None
 
 
 VersionNote = Annotated[str, StringConstraints(max_length=VERSION_NOTE_MAX_LENGTH)]
