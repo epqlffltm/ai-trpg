@@ -28,7 +28,14 @@ from app.assets.models import (
     Scenario,
     ScenarioVersion,
 )
-from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot, upgrade_from_1, upgrade_from_2
+from app.assets.scenarios.snapshot import (
+    SNAPSHOT_FORMAT,
+    read_snapshot,
+    upgrade_from_1,
+    upgrade_from_2,
+    upgrade_from_3,
+)
+from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -268,7 +275,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'openings': [OPENING],
         'recommended_players': {'min': 2, 'max': 3},
         'pregens': PREGENS,
-        'rulebook': {'id': rulebook['id'], 'title': '룰북', 'gm_guide': GM_GUIDE},
+        'rulebook': {'id': rulebook['id'], 'title': '룰북', 'gm_guide': GM_GUIDE, 'rules': rulebook['rules']},
         'world': {'id': world['id'], 'title': '세계관', 'setting': SETTING, 'gm_notes': GM_NOTES},
         'lorebooks': [
             {
@@ -466,6 +473,20 @@ def test_upgrades_a_format_2_document():
     assert 'pregens' not in format_2
 
 
+def test_upgrades_a_format_3_document():
+    format_3 = upgrade_from_2(upgrade_from_1(FORMAT_1))
+
+    upgraded = upgrade_from_3(format_3)
+
+    # 룰북에 규칙이 없던 때의 판이다. 그때 만든 룰북이 받았을 규칙(SRD5 템플릿)으로 읽는다
+    assert upgraded['format'] == 4
+    assert upgraded['rulebook']['rules'] == SRD5.model_dump(mode='json')
+    assert upgraded['rulebook']['gm_guide'] == GM_GUIDE
+    # 받은 문서는 고치지 않는다. 안쪽의 룰북도 그대로다
+    assert format_3['format'] == 3
+    assert 'rules' not in format_3['rulebook']
+
+
 def test_reads_a_document_of_any_format():
     current = upgrade_from_1(FORMAT_1)
 
@@ -473,8 +494,9 @@ def test_reads_a_document_of_any_format():
     assert read_snapshot(FORMAT_1) == read_snapshot(current)
     assert read_snapshot(FORMAT_1).format == SNAPSHOT_FORMAT
     assert read_snapshot(FORMAT_1).openings == [OPENING]
-    # 형식 1 은 1 → 2 → 3 을 차례로 거친다
+    # 형식 1 은 1 → 2 → 3 → 4 를 차례로 거친다
     assert read_snapshot(FORMAT_1).pregens == []
+    assert read_snapshot(FORMAT_1).rulebook.rules == SRD5
 
 
 async def test_a_version_in_the_old_format_is_read_in_the_current_one(
@@ -490,6 +512,7 @@ async def test_a_version_in_the_old_format_is_read_in_the_current_one(
     assert response.status_code == status.HTTP_200_OK
     assert response.json()['snapshot']['format'] == SNAPSHOT_FORMAT
     assert response.json()['snapshot']['openings'] == [OPENING]
+    assert response.json()['snapshot']['rulebook']['rules'] == SRD5.model_dump(mode='json')
     # 저장된 문서는 옛 모양 그대로다. 판은 고치지 않는다
     stored = await session.scalar(
         text('SELECT snapshot FROM scenario_versions WHERE scenario_id = :id'), {'id': scenario['id']}

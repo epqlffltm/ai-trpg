@@ -17,13 +17,22 @@ from app.assets.rulebooks import service
 from app.assets.rulebooks.schemas import RulebookCreate, RulebookDetail, RulebookUpdate
 from app.assets.schemas import AssetPage
 from app.auth.dependencies import CurrentUser
+from app.engine.ruleset import Ruleset
 
 router = APIRouter(prefix='/rulebooks', tags=['rulebooks'])
 
 
 def to_detail(rulebook: Rulebook) -> RulebookDetail:
-    """룰북을 만든 사람에게 보여 주는 응답으로 바꾼다. 진행 지침까지 싣는다."""
-    return RulebookDetail(**to_summary(rulebook.asset).model_dump(), gm_guide=rulebook.gm_guide)
+    """
+    룰북을 만든 사람에게 보여 주는 응답으로 바꾼다. 진행 지침과 규칙까지 싣는다.
+
+    규칙은 DB 에서 문서로 나온다. Ruleset 으로 읽어서 모양을 확인한 뒤에 내보낸다.
+    """
+    return RulebookDetail(
+        **to_summary(rulebook.asset).model_dump(),
+        gm_guide=rulebook.gm_guide,
+        rules=Ruleset.model_validate(rulebook.rules),
+    )
 
 
 @router.post('', response_model=RulebookDetail, status_code=status.HTTP_201_CREATED)
