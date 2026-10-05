@@ -24,7 +24,6 @@ from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
-from app.auth.tokens import AccessClaims
 from app.rounds import repository, service
 from app.rounds.models import Round
 from app.rounds.narrator import FakeNarrator
@@ -33,6 +32,7 @@ from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables.models import GameTable
 from app.tables.schemas import CharacterUpdate, JoinRequest, TableCreate
+from tests.signing import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -63,8 +63,8 @@ async def start_duo(session: AsyncSession) -> GameTable:
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
     create = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=2)
-    table = await tables.create_table(session, AccessClaims(user_id=ME), create)
-    await tables.join_table(session, AccessClaims(user_id=FRIEND), JoinRequest(invite_code=table.invite_code))
+    table = await tables.create_table(session, make_viewer(ME), create)
+    await tables.join_table(session, make_viewer(FRIEND), JoinRequest(invite_code=table.invite_code))
     await tables.set_character(session, ME, table.id, CharacterUpdate(name='엘프'))
     await tables.set_character(session, FRIEND, table.id, CharacterUpdate(name='영애'))
     return await tables.start_table(session, ME, table.id)

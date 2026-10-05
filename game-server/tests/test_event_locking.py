@@ -25,13 +25,13 @@ from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
-from app.auth.tokens import AccessClaims
 from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
+from tests.signing import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -63,7 +63,7 @@ async def open_table(session: AsyncSession) -> GameTable:
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
     create = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=3)
-    return await tables.create_table(session, AccessClaims(user_id=ME), create)
+    return await tables.create_table(session, make_viewer(ME), create)
 
 
 async def test_two_events_at_once_get_different_sequences(session: AsyncSession, other_session: AsyncSession):
@@ -78,7 +78,7 @@ async def test_two_events_at_once_get_different_sequences(session: AsyncSession,
 
     # B: 세 번째 사람이 들어온다. A 가 끝날 때까지 기다려야 한다
     joining = asyncio.create_task(
-        tables.join_table(other_session, AccessClaims(user_id=THIRD), JoinRequest(invite_code=invite_code))
+        tables.join_table(other_session, make_viewer(THIRD), JoinRequest(invite_code=invite_code))
     )
     assert await is_waiting(joining)
 

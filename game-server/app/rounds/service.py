@@ -204,7 +204,7 @@ async def lock_open_round(
 
 async def save(session: AsyncSession, table: GameTable) -> tuple[GameTable, Round]:
     """저장하고, 테이블과 가장 최근 라운드를 다시 읽어 돌려준다. 라운드가 닫혔으면 새로 열린 것이 나온다."""
-    await session.commit()
+    await tables.commit(session, table)
     return table, await repository.find_latest_round(session, table.id)
 
 

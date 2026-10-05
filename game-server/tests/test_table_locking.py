@@ -27,11 +27,11 @@ from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
-from app.auth.tokens import AccessClaims
 from app.tables import repository, service
 from app.tables.models import GameTable, TableMember
 from app.tables.schemas import CharacterUpdate, JoinRequest, LobbyJoinRequest, TableCreate
 from app.tables.service import Conflict, TableConflictError
+from tests.signing import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -65,7 +65,7 @@ async def open_table(session: AsyncSession, capacity: int, is_public: bool = Fal
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
     table = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=capacity, is_public=is_public)
-    return await service.create_table(session, AccessClaims(user_id=ME), table)
+    return await service.create_table(session, make_viewer(ME), table)
 
 
 async def count_members(session: AsyncSession, table_id: uuid.UUID) -> int:
@@ -84,7 +84,7 @@ async def test_joining_waits_for_another_join(session: AsyncSession, other_sessi
 
     # B: 같은 테이블에 들어오려 한다. A 가 끝날 때까지 기다려야 한다
     data = JoinRequest(invite_code=table.invite_code)
-    joining = asyncio.create_task(service.join_table(other_session, AccessClaims(user_id=THIRD), data))
+    joining = asyncio.create_task(service.join_table(other_session, make_viewer(THIRD), data))
     assert await is_waiting(joining)
 
     await session.commit()
@@ -107,7 +107,7 @@ async def test_joining_from_the_lobby_waits_for_another_join(session: AsyncSessi
     await session.flush()
 
     # B: 로비에서 같은 테이블에 들어오려 한다. 초대 코드로 들어올 때와 같은 잠금을 기다려야 한다
-    viewer = AccessClaims(user_id=THIRD)
+    viewer = make_viewer(THIRD)
     joining = asyncio.create_task(service.join_public_table(other_session, viewer, table.id, LobbyJoinRequest()))
     assert await is_waiting(joining)
 
@@ -122,7 +122,7 @@ async def test_joining_from_the_lobby_waits_for_another_join(session: AsyncSessi
 
 async def test_taking_a_pregen_waits_for_another_take(session: AsyncSession, other_session: AsyncSession):
     table = await open_table(session, capacity=2)
-    await service.join_table(session, AccessClaims(user_id=FRIEND), JoinRequest(invite_code=table.invite_code))
+    await service.join_table(session, make_viewer(FRIEND), JoinRequest(invite_code=table.invite_code))
 
     # A: 테이블을 잠그고 프리젠을 가져갔지만 아직 커밋하지 않았다
     locked = await repository.lock_table(session, table.id)
