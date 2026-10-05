@@ -10,6 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.engine.action import CheckAction
 from app.rounds.models import DECLARATION_MAX_LENGTH, RoundStatus
 
 # 선언의 글. 공백이 아닌 글자가 하나는 있어야 한다. 앞뒤 공백은 떼지 않는다
@@ -17,11 +18,17 @@ DeclarationContent = Annotated[str, StringConstraints(pattern=r'\S', max_length=
 
 
 class DeclarationUpdate(BaseModel):
-    """선언을 낼 때 받는 값. 다시 내면 앞의 것을 통째로 바꾼다."""
+    """
+    선언을 낼 때 받는 값. 다시 내면 앞의 것을 통째로 바꾼다. 행동을 빼고 다시 내면 행동도 없어진다.
+
+    행동은 하나만 붙인다. 한 사람이 한 라운드에 주사위를 한 번 굴린다.
+    행동이 없으면 판정이 없는 선언이다.
+    """
 
     model_config = ConfigDict(extra='forbid')
 
     content: DeclarationContent
+    action: CheckAction | None = None
 
 
 class DeclarationOut(BaseModel):
@@ -32,6 +39,8 @@ class DeclarationOut(BaseModel):
     # 선언의 글. 선언을 받는 동안에는 자기 것만 보인다. 남의 것은 None 이다.
     # 선언을 마감하면(닫는 중부터) 모두의 것이 보인다
     content: str | None
+    # 선언에 붙인 행동. 글과 같이 가린다. 행동이 없는 선언이면 보이는 사람에게도 None 이다
+    action: CheckAction | None
 
 
 class RoundOut(BaseModel):

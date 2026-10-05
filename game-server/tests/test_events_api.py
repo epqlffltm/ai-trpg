@@ -344,7 +344,8 @@ async def test_closing_a_round_writes_the_actions_the_result_and_the_next_round(
     mine, friends, closed, narration, opened = await read_events(client, me, table, after=5)
     # 행동은 마지막 글만 적힌다. 앉은 순서다
     assert (mine['type'], mine['actor_id']) == ('player_action', str(ME))
-    assert mine['payload'] == {'round': 1, 'character_name': '엘프', 'content': MY_ACTION}
+    # 행동을 붙이지 않은 선언이다. 판정이 없다는 것도 기록에 남는다
+    assert mine['payload'] == {'round': 1, 'character_name': '엘프', 'content': MY_ACTION, 'action': None}
     assert (friends['actor_id'], friends['payload']['content']) == (str(FRIEND), FRIENDS_ACTION)
     # 모두가 내서 저절로 닫혔다. 닫은 사람이 없다
     assert (closed['type'], closed['actor_id'], closed['payload']) == ('round_closed', None, {'number': 1, 'idle': []})
