@@ -10,11 +10,14 @@ import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
+
+from app.auth.tokens import AccessClaims
 
 # 테스트용 키의 길이. 짧을수록 빨리 만들어진다. 실제 서비스의 키는 인증 서버가 만든다
 TEST_KEY_BITS = 2048
@@ -64,6 +67,15 @@ def make_access_claims(**overrides) -> dict:
     }
     claims.update(overrides)
     return claims
+
+
+def make_viewer(user_id: uuid.UUID, seconds: float = ACCESS_TOKEN_SECONDS) -> AccessClaims:
+    """
+    검증을 마친 토큰의 값을 직접 만든다. 서비스를 API 없이 부르는 테스트가 쓴다.
+
+    seconds 는 지금부터 만료까지의 시간이다. 음수를 주면 이미 만료된 것이 된다.
+    """
+    return AccessClaims(user_id=user_id, expires_at=datetime.now(UTC) + timedelta(seconds=seconds))
 
 
 @dataclass

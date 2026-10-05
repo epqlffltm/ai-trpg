@@ -78,6 +78,7 @@ async def app(settings: Settings, auth_server: FakeAuthServer) -> AsyncIterator[
     """
     app = create_app(settings, http_client=auth_server.make_client())
     yield app
+    await app.state.signal_source.stop()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
 

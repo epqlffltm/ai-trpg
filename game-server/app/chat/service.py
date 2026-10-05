@@ -10,6 +10,7 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
   - 쓰는 일은 테이블의 행을 잠그고 한다. 번호를 테이블이 세기 때문이다.
 
 이벤트로 적지 않는다. 채팅은 게임에서 일어난 사실이 아니다.
+저장하면서 "새 채팅이 생겼다"는 신호를 보낸다(app/realtime/signals.py). 스트림을 열어 둔 사람들이 받는다.
 """
 
 import uuid
@@ -19,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.chat import repository
 from app.chat.models import ChatMessage
 from app.chat.schemas import MessageCreate
+from app.realtime import signals
+from app.realtime.signals import Kind, Signal
 from app.tables import service as tables
 from app.tables.models import GameTable, TableMember
 
@@ -64,6 +67,8 @@ async def post_message(
 
     message = build_message(table, member, data.content)
     repository.add_message(session, message)
+    # 신호는 커밋될 때 함께 나간다
+    await signals.publish(session, Signal(table_id=table.id, kind=Kind.MESSAGES))
     await session.commit()
     # DB 가 정한 값(쓴 시각)을 읽어 온다
     await session.refresh(message)
