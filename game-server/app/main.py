@@ -26,6 +26,7 @@ from app.chat import router as chat
 from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
+from app.core.jobs import BackgroundJobs
 from app.events import router as events
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
@@ -58,6 +59,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     """
     yield
+    # 뒤에서 돌던 작업을 먼저 마무리한다. 작업이 DB 를 쓰므로 DB 를 닫기 전에 한다
+    await app.state.jobs.aclose()
     await app.state.signal_source.stop()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
@@ -106,6 +109,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
 
     # "입력 중" 신호를 너무 자주 보내지 못하게 막는 것. 기록을 메모리에 두므로 앱에 하나만 둔다
     app.state.typing_throttle = TypingThrottle()
+
+    # 요청과 따로 도는 작업을 들고 있는 것. GM 의 서술이 여기서 돈다(app/rounds/closing.py)
+    app.state.jobs = BackgroundJobs()
 
     # GM 의 서술을 만드는 것. 지금은 AI 를 부르지 않는 가짜다. AI 를 붙일 때 여기만 바꿔 끼운다
     app.state.narrator = FakeNarrator()

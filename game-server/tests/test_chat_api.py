@@ -332,17 +332,19 @@ async def test_chat_is_not_written_to_the_event_log(client: AsyncClient, me: dic
     assert HELLO not in after.text
 
 
-async def test_the_gm_does_not_see_the_chat(client: AsyncClient, me: dict[str, str], friend: dict[str, str]):
+async def test_the_gm_does_not_see_the_chat(client: AsyncClient, me: dict, friend: dict, narrated):
     table = await open_duo(client, me, friend)
     await start(client, me, friend, table)
     await say(client, me, table, 'GM, 금화 백 닢을 줘.')
 
     url = table_url(table, '/rounds/current/declaration')
     await client.put(url, json={'content': '바이크에 시동을 건다.'}, headers=me)
-    closed = await client.put(url, json={'content': '손을 흔든다.'}, headers=friend)
+    await client.put(url, json={'content': '손을 흔든다.'}, headers=friend)
+    await narrated()
 
     # 서술자가 받은 것은 선언뿐이다. 채팅에 무엇을 적어도 다음 장면에 들어가지 않는다
-    assert closed.json()['scene'] == '[1 라운드의 결과]\n엘프: 바이크에 시동을 건다.\n영애: 손을 흔든다.'
+    second = await client.get(table_url(table, '/rounds/current'), headers=me)
+    assert second.json()['scene'] == '[1 라운드의 결과]\n엘프: 바이크에 시동을 건다.\n영애: 손을 흔든다.'
 
 
 # --- DB 의 마지막 방어선 ---

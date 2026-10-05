@@ -10,7 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from app.rounds.models import DECLARATION_MAX_LENGTH
+from app.rounds.models import DECLARATION_MAX_LENGTH, RoundStatus
 
 # 선언의 글. 공백이 아닌 글자가 하나는 있어야 한다. 앞뒤 공백은 떼지 않는다
 DeclarationContent = Annotated[str, StringConstraints(pattern=r'\S', max_length=DECLARATION_MAX_LENGTH)]
@@ -29,8 +29,8 @@ class DeclarationOut(BaseModel):
 
     user_id: uuid.UUID
     character_name: str
-    # 선언의 글. 라운드가 열려 있는 동안에는 자기 것만 보인다. 남의 것은 None 이다.
-    # 라운드가 닫히면 모두의 것이 보인다
+    # 선언의 글. 선언을 받는 동안에는 자기 것만 보인다. 남의 것은 None 이다.
+    # 선언을 마감하면(닫는 중부터) 모두의 것이 보인다
     content: str | None
 
 
@@ -40,11 +40,14 @@ class RoundOut(BaseModel):
     number: int
     # 이 라운드를 여는 장면. GM 의 서술이다
     scene: str
-    is_open: bool
+    # open: 선언을 받는 중. closing: 선언을 마감했고 GM 이 서술하는 중. closed: 끝났다
+    status: RoundStatus
     declarations: list[DeclarationOut]
-    # 아직 선언을 내지 않은 사람들. 닫힌 라운드에서는 비어 있다
+    # 아직 선언을 내지 않은 사람들. 선언을 받는 중이 아니면 비어 있다
     waiting_for: list[uuid.UUID]
     created_at: datetime
+    # 닫기 시작한 시각과 닫힌 시각. 아직이면 None 이다
+    closing_at: datetime | None
     closed_at: datetime | None
 
 
