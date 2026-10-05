@@ -32,6 +32,10 @@ from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets.scenarios.snapshot import read_snapshot
+from app.engine import action as actions
+from app.engine.action import CheckAction
+from app.engine.ruleset import Ruleset
 from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType
@@ -65,6 +69,18 @@ class RoundConflictError(Exception):
     def __init__(self, reason: Conflict) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+class ActionNotInRulesError(Exception):
+    """
+    선언에 붙은 행동이 이 테이블의 규칙에 없는 것을 가리킨다.
+
+    field 는 행동의 어느 칸이 틀렸는지다(ability, difficulty).
+    """
+
+    def __init__(self, field: str) -> None:
+        super().__init__(field)
+        self.field = field
 
 
 # 닫는 중인 채로 이 시간(초)이 지나면 서술을 맡은 작업이 사라진 것으로 본다. 그때부터 다시 맡길 수 있다.
@@ -129,19 +145,44 @@ def waiting_for(table: GameTable, round_: Round) -> list[uuid.UUID]:
     return [member.user_id for member in table.members if find_declaration(round_, member.user_id) is None]
 
 
-def put_declaration(round_: Round, member: TableMember, content: str) -> None:
+def rules_of(table: GameTable) -> Ruleset:
     """
-    이 사람의 선언을 적는다. 이미 냈으면 글을 바꾼다.
+    이 테이블의 규칙. 테이블이 들고 있는 판의 복사본에서 읽는다.
+
+    복사본을 통째로 읽는다. 규칙이 없던 때의 복사본이면 그때의 규칙으로 올려 읽어야 하기 때문이다.
+    """
+    return read_snapshot(table.content).rulebook.rules
+
+
+def accept_action(table: GameTable, action: CheckAction | None) -> dict | None:
+    """
+    선언에 붙은 행동을 이 테이블의 규칙과 견주어 보고, 저장할 모양으로 바꾼다. 행동이 없으면 None.
+
+    규칙에 없는 능력이나 난이도면 ActionNotInRulesError. 비워 둔 난이도는 규칙의 기본 난이도로 채운다.
+    """
+    if action is None:
+        return None
+    ruleset = rules_of(table)
+    fault = actions.find_fault(ruleset, action)
+    if fault is not None:
+        raise ActionNotInRulesError(fault)
+    return actions.settle(ruleset, action).model_dump(mode='json')
+
+
+def put_declaration(round_: Round, member: TableMember, content: str, action: dict | None) -> None:
+    """
+    이 사람의 선언을 적는다. 이미 냈으면 글과 행동을 통째로 바꾼다.
 
     캐릭터 이름을 함께 적어 둔다. 이 사람이 나중에 떠나도 누구의 선언이었는지 남는다.
     """
     declaration = find_declaration(round_, member.user_id)
     if declaration is None:
         round_.declarations.append(
-            Declaration(user_id=member.user_id, character_name=member.character_name, content=content)
+            Declaration(user_id=member.user_id, character_name=member.character_name, content=content, action=action)
         )
     else:
         declaration.content = content
+        declaration.action = action
 
 
 def build_request(table: GameTable, round_: Round) -> NarrationRequest:
@@ -206,7 +247,12 @@ def record_actions(session: AsyncSession, table: GameTable, round_: Round, group
         declaration = find_declaration(round_, member.user_id)
         if declaration is None:
             continue
-        payload = {'round': round_.number, 'character_name': member.character_name, 'content': declaration.content}
+        payload = {
+            'round': round_.number,
+            'character_name': member.character_name,
+            'content': declaration.content,
+            'action': declaration.action,
+        }
         recorder.record(session, table, EventType.PLAYER_ACTION, actor_id=member.user_id, payload=payload, group=group)
 
 
@@ -261,11 +307,12 @@ async def declare(
     서술이 끝나 다음 라운드가 열린 것은 스트림으로 알게 된다.
 
     닫는 중인 라운드에는 낼 수 없다(RoundConflictError).
+    행동이 이 테이블의 규칙에 없는 능력이나 난이도를 가리키면 ActionNotInRulesError.
     테이블을 잠그고 한다. 마지막 두 사람이 동시에 내도 라운드는 한 번만 닫힌다.
     """
     table, member, round_ = await lock_current_round(session, user_id, table_id)
     require_open(round_)
-    put_declaration(round_, member, data.content)
+    put_declaration(round_, member, data.content, accept_action(table, data.action))
 
     everyone_declared = not waiting_for(table, round_)
     if everyone_declared:
