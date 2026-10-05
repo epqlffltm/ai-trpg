@@ -12,6 +12,9 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 
 라운드가 닫히는 길은 둘이다. 앉은 사람이 모두 선언을 냈을 때 저절로, 또는 방장이 닫을 때.
 닫히면 서술자가 결과를 쓰고, 그 글을 장면으로 하는 다음 라운드가 열린다. 이 셋은 한 묶음으로 저장된다.
+
+선언은 낼 때가 아니라 라운드가 닫힐 때 이벤트로 적는다. 마지막 글만 적는다.
+열려 있는 동안에는 남의 선언이 보이지 않아야 하는데, 이벤트는 앉은 사람 모두가 읽기 때문이다.
 """
 
 import enum
@@ -20,7 +23,9 @@ import uuid
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.rounds import repository
+from app.events import recorder
+from app.events.models import EventType
+from app.rounds import opener, repository
 from app.rounds.models import Declaration, Round
 from app.rounds.narrator import Action, NarrationRequest, Narrator
 from app.rounds.schemas import DeclarationUpdate
@@ -144,19 +149,43 @@ async def list_rounds(
 # --- 바꾸기. 모두 테이블을 잠그고 한다 ---
 
 
-async def close_round(session: AsyncSession, table: GameTable, round_: Round, narrator: Narrator) -> None:
+def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
+    """
+    닫히는 라운드의 선언을 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다. 서술자가 받는 것과 같다.
+
+    선언을 내지 않은 사람은 적지 않는다. 누가 안 냈는지는 라운드가 닫힌 이벤트에 적힌다.
+    """
+    for member in table.members:
+        declaration = find_declaration(round_, member.user_id)
+        if declaration is None:
+            continue
+        payload = {'round': round_.number, 'character_name': member.character_name, 'content': declaration.content}
+        recorder.record(session, table, EventType.PLAYER_ACTION, actor_id=member.user_id, payload=payload, group=group)
+
+
+async def close_round(
+    session: AsyncSession, table: GameTable, round_: Round, narrator: Narrator, closer_id: uuid.UUID | None = None
+) -> None:
     """
     열려 있는 라운드를 닫고 다음 라운드를 연다. 저장하지는 않는다.
 
     서술자가 닫힌 라운드의 결과를 쓰고, 그 글이 다음 라운드의 장면이 된다.
+    closer_id 는 라운드를 닫은 방장이다. 모두가 내서 저절로 닫혔으면 주지 않는다.
+
+    이벤트는 행동들 → 닫힘 → 서술 → 열림 순서로 적는다. 모두 한 묶음이다.
 
     닫은 것을 먼저 DB 에 보낸다(flush). 한 테이블에 열린 라운드는 하나뿐이라는 유일 색인이 있어서,
     앞의 것을 닫기 전에 새 것을 넣으면 DB 가 거부한다.
     """
+    group = uuid.uuid4()
+    record_actions(session, table, round_, group)
+    payload = {'number': round_.number, 'idle': [str(user_id) for user_id in waiting_for(table, round_)]}
+    closed = recorder.record(session, table, EventType.ROUND_CLOSED, actor_id=closer_id, payload=payload, group=group)
+
     scene = await narrator.narrate(build_request(table, round_))
     round_.closed_at = func.now()
     await session.flush()
-    repository.add_round(session, Round(table_id=table.id, number=round_.number + 1, scene=scene))
+    opener.open_round(session, table, number=round_.number + 1, scene=scene, cause=closed)
 
 
 async def lock_open_round(
@@ -206,5 +235,5 @@ async def force_close(
     """
     table, _, round_ = await lock_open_round(session, host_id, table_id)
     tables.require_host(table, host_id)
-    await close_round(session, table, round_, narrator)
+    await close_round(session, table, round_, narrator, closer_id=host_id)
     return await save(session, table)

@@ -21,6 +21,7 @@ from sqlalchemy.engine import Connection
 from app.assets import models as asset_models  # noqa: F401
 from app.core.config import get_settings
 from app.core.database import Base, create_engine
+from app.events import models as event_models  # noqa: F401
 from app.listings import models as listing_models  # noqa: F401
 from app.rounds import models as round_models  # noqa: F401
 from app.tables import models as table_models  # noqa: F401

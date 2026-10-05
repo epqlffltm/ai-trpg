@@ -22,12 +22,14 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Integer,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -117,6 +119,11 @@ class GameTable(Base):
     # 비밀번호. 그대로 두지 않고 계산한 값을 둔다(passwords.py). 비어 있으면 비밀번호가 없는 것이다.
     # 로비에서 들어올 때만 묻는다. 초대 코드로 들어올 때는 묻지 않는다. 방장이 직접 부른 사람이다
     password_hash: Mapped[str | None] = mapped_column(String(200))
+
+    # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
+    # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.
+    # server_default: DB 에도 기본값을 둔다. 이 칸이 생기기 전에 만든 테이블은 0 에서 시작한다
+    last_sequence: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 방장이 시작한 시각과 테이블이 끝난 시각. 아직이면 비어 있다
