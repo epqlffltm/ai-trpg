@@ -37,7 +37,8 @@ from app.engine.templates import SRD5
 #   3: 추천 인원(recommended_players)과 프리젠(pregens)이 있다
 #   4: 룰북에 규칙(rules)이 있다
 #   5: 프리젠에 시트(sheet)가 있고, 허용하는 캐릭터 방식(character_modes)과 기본 시트(default_sheet)가 있다
-SNAPSHOT_FORMAT = 5
+#   6: 규칙에 피해와 회복의 양을 나타내는 등급(magnitudes)이 있다
+SNAPSHOT_FORMAT = 6
 
 # 시트가 없던 때의 판을 읽을 때 채우는 숫자. 모든 능력치가 이 점수이고, 최대 HP 가 이 값이다.
 # 그때의 규칙은 SRD5 템플릿뿐이었다. 10 은 그 규칙에서 보정이 0 인 점수다
@@ -198,6 +199,8 @@ def upgrade_from_3(document: dict) -> dict:
 
     그때는 룰북에 규칙이 없었다. 그때 만든 룰북이 지금 받았을 규칙(SRD5 템플릿)으로 읽는다.
     DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 내놓은 템플릿의 값은 고치지 않으므로 읽을 때마다 같다.
+
+    지금의 SRD5 에는 나중에 생긴 칸(magnitudes)도 들어 있다. 뒤의 단계가 같은 값으로 다시 채우므로 결과는 같다.
     """
     upgraded = dict(document)
     upgraded['rulebook'] = {**document['rulebook'], 'rules': SRD5.model_dump(mode='json')}
@@ -227,6 +230,21 @@ def upgrade_from_4(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_5(document: dict) -> dict:
+    """
+    형식 5 의 문서를 형식 6 으로 올린다.
+
+    그때는 규칙에 양의 등급이 없었다. 그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 등급으로 읽는다.
+    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    """
+    magnitudes = SRD5.model_dump(mode='json')['magnitudes']
+    rulebook = document['rulebook']
+    upgraded = dict(document)
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'magnitudes': magnitudes}}
+    upgraded['format'] = 6
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -234,6 +252,7 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     2: upgrade_from_2,
     3: upgrade_from_3,
     4: upgrade_from_4,
+    5: upgrade_from_5,
 }
 
 

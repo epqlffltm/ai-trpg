@@ -35,6 +35,7 @@ from app.assets.scenarios.snapshot import (
     upgrade_from_2,
     upgrade_from_3,
     upgrade_from_4,
+    upgrade_from_5,
 )
 from app.engine.sheet import fits
 from app.engine.templates import SRD5
@@ -623,6 +624,33 @@ def test_upgrades_a_format_4_document():
     assert 'default_sheet' not in format_4
 
 
+def make_format_5() -> dict:
+    """양의 등급이 없던 때의 판. 그때 DB 에 굳은 문서의 규칙에는 magnitudes 칸이 없다."""
+    document = upgrade_from_4(upgrade_from_3(upgrade_from_2(upgrade_from_1(FORMAT_1))))
+    rules = {key: value for key, value in document['rulebook']['rules'].items() if key != 'magnitudes'}
+    return {**document, 'rulebook': {**document['rulebook'], 'rules': rules}}
+
+
+def test_upgrades_a_format_5_document():
+    format_5 = make_format_5()
+
+    upgraded = upgrade_from_5(format_5)
+
+    # 규칙에 양의 등급이 없던 때의 판이다. 그때의 규칙(SRD5 템플릿)의 등급으로 읽는다
+    assert upgraded['format'] == 6
+    assert upgraded['rulebook']['rules'] == SRD5.model_dump(mode='json')
+    assert upgraded['rulebook']['gm_guide'] == GM_GUIDE
+    # 받은 문서는 고치지 않는다. 안쪽의 규칙도 그대로다
+    assert format_5['format'] == 5
+    assert 'magnitudes' not in format_5['rulebook']['rules']
+
+
+def test_reads_a_version_from_before_magnitudes():
+    old = read_snapshot(make_format_5())
+
+    assert [magnitude.key for magnitude in old.rulebook.rules.magnitudes] == ['light', 'moderate', 'heavy']
+
+
 def test_the_sheets_of_an_old_version_fit_its_rules():
     old = read_snapshot(FORMAT_1)
 
@@ -638,7 +666,7 @@ def test_reads_a_document_of_any_format():
     assert read_snapshot(FORMAT_1) == read_snapshot(current)
     assert read_snapshot(FORMAT_1).format == SNAPSHOT_FORMAT
     assert read_snapshot(FORMAT_1).openings == [OPENING]
-    # 형식 1 은 1 → 2 → 3 → 4 → 5 를 차례로 거친다
+    # 형식 1 은 1 → 2 → 3 → 4 → 5 → 6 을 차례로 거친다
     assert read_snapshot(FORMAT_1).pregens == []
     assert read_snapshot(FORMAT_1).rulebook.rules == SRD5
 

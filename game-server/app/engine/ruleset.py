@@ -3,7 +3,7 @@
 """
 규칙의 모양. 규칙은 코드가 아니라 데이터다.
 
-어떤 능력치가 있는지, 주사위가 몇 면인지, 난이도가 몇 단계인지를 한 묶음(Ruleset)에 담는다.
+어떤 능력치가 있는지, 주사위가 몇 면인지, 난이도가 몇 단계인지, 피해와 회복이 얼마인지를 한 묶음(Ruleset)에 담는다.
 엔진은 이 묶음을 인자로 받는다. 묶음의 값이 달라져도 엔진의 코드는 그대로다.
 
 규칙은 룰북에 담기고(app/assets/models.py 의 Rulebook.rules), 게시할 때 판에 굳는다.
@@ -17,14 +17,17 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-# 규칙 하나에 둘 수 있는 능력치와 난이도의 수. 시트와 화면이 감당할 수 있는 만큼이다
+# 규칙 하나에 둘 수 있는 능력치, 난이도, 양의 등급의 수. 시트와 화면이 감당할 수 있는 만큼이다
 RULESET_MAX_ABILITIES = 12
 RULESET_MAX_DIFFICULTIES = 10
+RULESET_MAX_MAGNITUDES = 10
 # 능력치의 점수와 난이도의 목표값이 가질 수 있는 가장 큰 값
 RULESET_MAX_NUMBER = 1000
 # 주사위의 면 수
 RULESET_MIN_DIE = 2
 RULESET_MAX_DIE = 100
+# 피해나 회복 한 번에 굴리는 주사위의 개수
+RULESET_MAX_DICE = 10
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -72,6 +75,20 @@ class Modifier(Part):
     step: Annotated[int, Field(ge=1, le=RULESET_MAX_NUMBER)]
 
 
+class Magnitude(Part):
+    """
+    피해와 회복의 양을 나타내는 등급 하나. 예: 가벼움(1d4).
+
+    양은 주사위로 정한다. count 개의 sides 면 주사위를 굴려 더한다. count 2, sides 8 이면 2d8 이다.
+    피해와 회복이 같은 등급을 쓴다. 가벼운 피해도 가벼운 회복도 1d4 다.
+    """
+
+    key: Key
+    name: Name
+    count: Annotated[int, Field(ge=1, le=RULESET_MAX_DICE)]
+    sides: Annotated[int, Field(ge=RULESET_MIN_DIE, le=RULESET_MAX_DIE)]
+
+
 def find_duplicates(keys: list[str]) -> list[str]:
     """두 번 이상 나온 이름을 처음 나온 순서대로 돌려준다."""
     seen: set[str] = set()
@@ -103,6 +120,8 @@ class Ruleset(Part):
     difficulties: Annotated[tuple[Difficulty, ...], Field(min_length=1, max_length=RULESET_MAX_DIFFICULTIES)]
     # 행동이 난이도를 고르지 않았을 때 쓰는 단계
     default_difficulty: Key
+    # 피해와 회복의 양을 나타내는 등급들. 행동은 숫자가 아니라 이 중 하나를 고른다
+    magnitudes: Annotated[tuple[Magnitude, ...], Field(min_length=1, max_length=RULESET_MAX_MAGNITUDES)]
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
@@ -118,6 +137,14 @@ class Ruleset(Part):
         duplicates = find_duplicates([difficulty.key for difficulty in self.difficulties])
         if duplicates:
             raise ValueError(f'같은 난이도가 두 번 있습니다: {", ".join(duplicates)}')
+        return self
+
+    @model_validator(mode='after')
+    def reject_duplicate_magnitudes(self) -> Self:
+        """같은 이름의 등급이 둘이면 행동이 어느 것을 고른 것인지 알 수 없다."""
+        duplicates = find_duplicates([magnitude.key for magnitude in self.magnitudes])
+        if duplicates:
+            raise ValueError(f'같은 양의 등급이 두 번 있습니다: {", ".join(duplicates)}')
         return self
 
     @model_validator(mode='after')

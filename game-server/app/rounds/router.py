@@ -19,7 +19,7 @@ from app.rounds import service
 from app.rounds.closing import RoundCloser
 from app.rounds.models import Declaration, Round, RoundStatus
 from app.rounds.schemas import DeclarationOut, DeclarationUpdate, RoundOut, RoundPage
-from app.rounds.service import ActionNotInRulesError, RoundConflictError, RoundNotFoundError
+from app.rounds.service import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.tables.models import GameTable, TableStatus
 
 router = APIRouter(prefix='/tables/{table_id}/rounds', tags=['rounds'])
@@ -111,6 +111,14 @@ async def handle_action_not_in_rules(request: Request, error: ActionNotInRulesEr
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={'detail': f'action.{error.field} 가 이 테이블의 규칙에 없습니다.'},
+    )
+
+
+async def handle_action_target(request: Request, error: ActionTargetError) -> JSONResponse:
+    """ "행동의 대상이 이 테이블에 앉은 사람이 아니다"는 422 다."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': 'action.target 이 이 테이블에 앉은 사람이 아닙니다.'},
     )
 
 

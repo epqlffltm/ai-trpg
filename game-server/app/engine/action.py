@@ -14,15 +14,22 @@
 지금은 종류가 하나다(판정). 종류를 나타내는 칸(kind)을 처음부터 둔다. 종류가 늘어도 모양이 바뀌지 않는다.
 
 행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
+
+행동에는 판정의 결과에 따라 일어날 일을 붙일 수 있다.
+  - 실패의 대가(risk): 실패하면 행동한 캐릭터가 피해를 입는다.
+  - 성공의 보상(recover): 성공하면 대상(target)이 회복한다.
+둘 다 양을 숫자로 받지 않고 규칙의 등급으로 받는다. 어느 쪽이 일어나는지는 consequence 가 정한다.
 """
 
 import enum
-from typing import Literal
+import uuid
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.engine.check import Check, find_ability, find_difficulty, resolve
 from app.engine.dice import Dice
+from app.engine.health import ChangeKind, find_magnitude
 from app.engine.ruleset import Key, Ruleset
 
 
@@ -45,17 +52,38 @@ class CheckAction(BaseModel):
     # 비우면 규칙의 기본 난이도다
     difficulty: Key | None = None
 
+    # 실패의 대가. 실패하면 행동한 캐릭터가 이 등급만큼 피해를 입는다. 규칙의 Magnitude.key 다.
+    # 비우면 실패해도 다치지 않는다
+    risk: Key | None = None
+    # 성공의 보상. 성공하면 대상이 이 등급만큼 회복한다. 규칙의 Magnitude.key 다
+    recover: Key | None = None
+    # 회복하는 대상. 테이블에 앉은 사람이다. 엔진은 이 값을 읽지 않는다. 누구인지는 부른 쪽이 안다.
+    # recover 가 있는데 비우면 자기 자신이다(app/rounds/service.py 가 채운다)
+    target: uuid.UUID | None = None
+
+    @model_validator(mode='after')
+    def require_recover_for_target(self) -> Self:
+        """대상은 회복에만 쓴다. 회복이 없는데 대상만 있으면 무엇을 하려는지 알 수 없다."""
+        if self.target is not None and self.recover is None:
+            raise ValueError('target 은 recover 와 함께 적습니다.')
+        return self
+
 
 def find_fault(ruleset: Ruleset, action: CheckAction) -> str | None:
     """
     행동이 이 규칙에 맞지 않으면 틀린 칸의 이름을 돌려준다. 맞으면 None.
 
-    능력과 난이도가 규칙에 있는 것이어야 한다. 난이도를 비웠으면 기본 난이도라 늘 있다.
+    능력, 난이도, 양의 등급이 규칙에 있는 것이어야 한다. 난이도를 비웠으면 기본 난이도라 늘 있다.
+    대상이 테이블에 앉은 사람인지는 여기서 보지 않는다. 규칙이 아니라 테이블을 봐야 알 수 있다.
     """
     if find_ability(ruleset, action.ability) is None:
         return 'ability'
     if find_difficulty(ruleset, action.difficulty) is None:
         return 'difficulty'
+    if action.risk is not None and find_magnitude(ruleset, action.risk) is None:
+        return 'risk'
+    if action.recover is not None and find_magnitude(ruleset, action.recover) is None:
+        return 'recover'
     return None
 
 
@@ -81,3 +109,17 @@ def attempt(ruleset: Ruleset, action: CheckAction, abilities: dict[str, int], di
     """
     difficulty = find_difficulty(ruleset, action.difficulty)
     return resolve(ruleset, abilities[action.ability], difficulty, dice)
+
+
+def consequence(action: CheckAction, check: Check) -> tuple[ChangeKind, str] | None:
+    """
+    판정의 결과에 따라 일어나는 일을 돌려준다. (방향, 양의 등급의 key) 다. 아무 일도 없으면 None.
+
+    실패했고 대가가 붙어 있으면 피해, 성공했고 보상이 붙어 있으면 회복이다.
+    한 판정에서 둘이 함께 일어나지 않는다. 성공과 실패는 함께 일어나지 않기 때문이다.
+    """
+    if not check.success and action.risk is not None:
+        return ChangeKind.DAMAGE, action.risk
+    if check.success and action.recover is not None:
+        return ChangeKind.RECOVERY, action.recover
+    return None
