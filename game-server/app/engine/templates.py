@@ -8,13 +8,15 @@
 
 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 옛 판을 읽을 때 "그때의 규칙"으로 이 값을 쓰기 때문이다(app/assets/scenarios/snapshot.py).
+규칙의 모양에 칸이 새로 생기면 템플릿에도 그 칸을 더한다. 있던 값은 그대로 둔다.
+그 칸이 없던 때의 룰북과 판에는 같은 값을 채운다(마이그레이션, 판의 올려 읽기).
 
 지금은 하나뿐이다. 제작자가 값을 고쳐 자기 규칙을 만드는 것은 나중에 더한다.
 """
 
 import enum
 
-from app.engine.ruleset import Ability, Difficulty, Modifier, Ruleset
+from app.engine.ruleset import Ability, Difficulty, Magnitude, Modifier, Ruleset
 
 
 class Template(enum.StrEnum):
@@ -27,7 +29,8 @@ class Template(enum.StrEnum):
 # 능력치 여섯, d20, 난이도 다섯 단계.
 # 능력치의 구성과 보정을 구하는 방법, 난이도의 숫자는 System Reference Document 5.1 을 따랐다.
 # SRD 5.1 은 Wizards of the Coast LLC 가 CC BY 4.0 으로 공개한 문서다. 출처 표시는 README 에 있다.
-# 직업, 레벨, 숙련은 가져오지 않았다. 최대 HP 는 제작자가 시트에 직접 적는다
+# 직업, 레벨, 숙련은 가져오지 않았다. 최대 HP 는 제작자가 시트에 직접 적는다.
+# 양의 등급(magnitudes)은 SRD 의 표를 옮긴 것이 아니다. 기준 시트의 최대 HP(10)에 맞춰 이 프로젝트가 정한 값이다
 SRD5 = Ruleset(
     template=Template.SRD5,
     abilities=(
@@ -50,6 +53,11 @@ SRD5 = Ruleset(
         Difficulty(key='very_hard', name='매우 어려움', target=25),
     ),
     default_difficulty='medium',
+    magnitudes=(
+        Magnitude(key='light', name='가벼움', count=1, sides=4),
+        Magnitude(key='moderate', name='보통', count=1, sides=8),
+        Magnitude(key='heavy', name='심함', count=2, sides=8),
+    ),
 )
 
 TEMPLATES: dict[Template, Ruleset] = {Template.SRD5: SRD5}

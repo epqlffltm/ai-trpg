@@ -36,7 +36,7 @@ from app.realtime.hub import Hub
 from app.realtime.listener import PostgresListener
 from app.rounds import router as rounds
 from app.rounds.narrator import FakeNarrator
-from app.rounds.service import ActionNotInRulesError, RoundConflictError, RoundNotFoundError
+from app.rounds.service import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.tables import router as tables
 from app.tables.service import (
     MemberNotFoundError,
@@ -153,6 +153,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.add_exception_handler(RoundNotFoundError, rounds.handle_round_not_found)
     app.add_exception_handler(RoundConflictError, rounds.handle_round_conflict)
     app.add_exception_handler(ActionNotInRulesError, rounds.handle_action_not_in_rules)
+    app.add_exception_handler(ActionTargetError, rounds.handle_action_target)
 
     return app
 
