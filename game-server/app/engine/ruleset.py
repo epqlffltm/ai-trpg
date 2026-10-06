@@ -3,7 +3,8 @@
 """
 규칙의 모양. 규칙은 코드가 아니라 데이터다.
 
-어떤 능력치가 있는지, 주사위가 몇 면인지, 난이도가 몇 단계인지, 피해와 회복이 얼마인지를 한 묶음(Ruleset)에 담는다.
+어떤 능력치가 있는지, 주사위가 몇 면인지, 난이도가 몇 단계인지, 피해와 회복이 얼마인지,
+캐릭터의 숫자를 어떻게 정하는지를 한 묶음(Ruleset)에 담는다.
 엔진은 이 묶음을 인자로 받는다. 묶음의 값이 달라져도 엔진의 코드는 그대로다.
 
 규칙은 룰북에 담기고(app/assets/models.py 의 Rulebook.rules), 게시할 때 판에 굳는다.
@@ -28,6 +29,8 @@ RULESET_MIN_DIE = 2
 RULESET_MAX_DIE = 100
 # 피해나 회복 한 번에 굴리는 주사위의 개수
 RULESET_MAX_DICE = 10
+# 점수제의 값표에 둘 수 있는 줄의 수
+RULESET_MAX_POINT_COSTS = 30
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -100,6 +103,34 @@ def find_duplicates(keys: list[str]) -> list[str]:
     return duplicates
 
 
+class PointCost(Part):
+    """점수제의 값표 한 줄. 이 점수를 고르는 데 드는 값이다. 예: 점수 14 는 7."""
+
+    score: Number
+    cost: Number
+
+
+class PointBuy(Part):
+    """
+    점수제. 정해진 총점 안에서 능력치의 점수를 사는 방식이다.
+
+    고를 수 있는 점수는 값표에 있는 것뿐이다. 값표에 없는 점수는 살 수 없다.
+    높은 점수일수록 비싸게 매길 수 있다. 값이 점수에 비례하지 않아도 된다.
+    """
+
+    # 쓸 수 있는 총점. 다 쓰지 않아도 된다
+    budget: Annotated[int, Field(ge=1, le=RULESET_MAX_NUMBER)]
+    costs: Annotated[tuple[PointCost, ...], Field(min_length=1, max_length=RULESET_MAX_POINT_COSTS)]
+
+    @model_validator(mode='after')
+    def reject_duplicate_scores(self) -> Self:
+        """같은 점수가 값표에 두 번 있으면 그 점수의 값이 무엇인지 알 수 없다."""
+        scores = [entry.score for entry in self.costs]
+        if len(set(scores)) != len(scores):
+            raise ValueError('값표에 같은 점수가 두 번 있습니다.')
+        return self
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
@@ -125,6 +156,8 @@ class Ruleset(Part):
     # 최대 HP 에 보정을 더하는 능력치. 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구할 때 쓴다.
     # None 이면 능력치가 최대 HP 에 닿지 않는다. 칸 자체는 늘 있어야 한다(기본값이 없다)
     hp_ability: Key | None
+    # 점수제. None 이면 이 규칙에는 점수제가 없다. 칸 자체는 늘 있어야 한다(기본값이 없다)
+    point_buy: PointBuy | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
@@ -155,6 +188,16 @@ class Ruleset(Part):
         """최대 HP 에 닿는 능력치는 능력치 중 하나여야 한다."""
         if self.hp_ability is not None and self.hp_ability not in [ability.key for ability in self.abilities]:
             raise ValueError(f'최대 HP 에 닿는 능력치가 능력치에 없습니다: {self.hp_ability}')
+        return self
+
+    @model_validator(mode='after')
+    def require_purchasable_scores_in_range(self) -> Self:
+        """점수제로 살 수 있는 점수는 규칙의 점수 범위 안이어야 한다. 범위 밖의 점수는 시트에 넣을 수 없다."""
+        if self.point_buy is None:
+            return self
+        outside = [entry.score for entry in self.point_buy.costs if not self.score_min <= entry.score <= self.score_max]
+        if outside:
+            raise ValueError(f'점수제의 값표에 점수의 범위를 벗어난 점수가 있습니다: {outside}')
         return self
 
     @model_validator(mode='after')

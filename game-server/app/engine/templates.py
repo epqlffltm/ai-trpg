@@ -16,7 +16,7 @@
 
 import enum
 
-from app.engine.ruleset import Ability, Difficulty, Magnitude, Modifier, Ruleset
+from app.engine.ruleset import Ability, Difficulty, Magnitude, Modifier, PointBuy, PointCost, Ruleset
 
 
 class Template(enum.StrEnum):
@@ -30,7 +30,9 @@ class Template(enum.StrEnum):
 # 능력치의 구성과 보정을 구하는 방법, 난이도의 숫자는 System Reference Document 5.1 을 따랐다.
 # SRD 5.1 은 Wizards of the Coast LLC 가 CC BY 4.0 으로 공개한 문서다. 출처 표시는 README 에 있다.
 # 직업, 레벨, 숙련은 가져오지 않았다. 최대 HP 는 제작자가 시트에 직접 적는다.
-# 양의 등급(magnitudes)은 SRD 의 표를 옮긴 것이 아니다. 기준 시트의 최대 HP(10)에 맞춰 이 프로젝트가 정한 값이다
+# 양의 등급(magnitudes)은 SRD 의 표를 옮긴 것이 아니다. 기준 시트의 최대 HP(10)에 맞춰 이 프로젝트가 정한 값이다.
+# 점수제(point_buy)의 총점과 값표는 System Reference Document 5.2.1 을 따랐다. SRD 5.1 에는 점수제가 실려 있지 않다.
+# SRD 5.2.1 도 Wizards of the Coast LLC 가 CC BY 4.0 으로 공개한 문서다. 출처 표시는 README 에 있다
 SRD5 = Ruleset(
     template=Template.SRD5,
     abilities=(
@@ -60,6 +62,20 @@ SRD5 = Ruleset(
     ),
     # 건강이 최대 HP 에 닿는다. SRD 에서도 건강의 보정이 HP 에 더해진다
     hp_ability='con',
+    # 27점으로 8~15 를 산다. 13 까지는 한 점에 1, 14 와 15 는 한 점에 2 다
+    point_buy=PointBuy(
+        budget=27,
+        costs=(
+            PointCost(score=8, cost=0),
+            PointCost(score=9, cost=1),
+            PointCost(score=10, cost=2),
+            PointCost(score=11, cost=3),
+            PointCost(score=12, cost=4),
+            PointCost(score=13, cost=5),
+            PointCost(score=14, cost=7),
+            PointCost(score=15, cost=9),
+        ),
+    ),
 )
 
 TEMPLATES: dict[Template, Ruleset] = {Template.SRD5: SRD5}

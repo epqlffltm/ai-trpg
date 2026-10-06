@@ -13,7 +13,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.assets.models import TABLE_MAX_PLAYERS, CharacterMode, Rating
+from app.assets.models import PLAYER_MADE_MODES, TABLE_MAX_PLAYERS, CharacterMode, Rating
 from app.assets.scenarios.schemas import (
     CharacterDescription,
     CharacterModes,
@@ -98,9 +98,10 @@ class CharacterUpdate(BaseModel):
       - pregen: pregen_index 를 적는다. 이름이나 설명을 함께 보내면 그 칸은 보낸 것으로 고쳐 쓴다.
       - custom: 이름을 적는다. 숫자는 시나리오의 기본 시트를 받는다.
       - manual: 이름과 능력치의 점수(abilities)를 적는다. 최대 HP 는 적지 않는다. 규칙으로 구한다.
+      - point_buy: manual 과 같은 칸을 적는다. 점수는 규칙의 총점 안에서 살 수 있는 것이어야 한다.
 
     mode 를 비우면 pregen_index 가 있으면 pregen, 없으면 custom 으로 본다.
-    능력치를 적는 방식은 여럿이 될 것이라, 능력치를 보낼 때는 mode 를 반드시 적는다.
+    능력치를 적는 방식은 여럿이라, 능력치를 보낼 때는 mode 를 반드시 적는다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -131,8 +132,8 @@ class CharacterUpdate(BaseModel):
         mode = self.chosen_mode
         if (mode == CharacterMode.PREGEN) != (self.pregen_index is not None):
             raise ValueError('pregen_index 는 pregen 방식에서만, 그리고 반드시 적습니다.')
-        if (mode == CharacterMode.MANUAL) != (self.abilities is not None):
-            raise ValueError('abilities 는 능력치를 직접 정하는 방식에서만, 그리고 반드시 적습니다.')
+        if (mode in PLAYER_MADE_MODES) != (self.abilities is not None):
+            raise ValueError('abilities 는 플레이어가 능력치를 정하는 방식에서만, 그리고 반드시 적습니다.')
         return self
 
 
@@ -169,9 +170,12 @@ class MemberOut(BaseModel):
     is_host: bool
     # 아직 만들지 않았으면 None 이다
     character: CharacterOut | None
+    # 캐릭터를 얻은 방식. 숫자가 어디서 왔는지 알려 준다. 아직 만들지 않았으면 None 이다
+    character_mode: CharacterMode | None
     # 프리젠에서 가져왔으면 몇 번째 프리젠인가
     pregen_index: int | None
-    # 직접 정한 능력치의 점수. 그런 방식으로 만들었을 때만 있다. 시작하면 이것으로 시트가 만들어진다
+    # 플레이어가 정한 능력치의 점수. 그런 방식(manual, point_buy)으로 만들었을 때만 있다.
+    # 시작하면 이것으로 시트가 만들어진다
     abilities: dict[str, int] | None
     # 게임을 시작하기 전에는 None 이다. 시작할 때 받는다
     sheet: SheetOut | None

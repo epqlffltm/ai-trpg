@@ -16,6 +16,7 @@ from app.engine.ruleset import (
     RULESET_MAX_ABILITIES,
     RULESET_MAX_DIFFICULTIES,
     RULESET_MAX_MAGNITUDES,
+    RULESET_MAX_POINT_COSTS,
     Ruleset,
     find_duplicates,
 )
@@ -53,7 +54,8 @@ def load_backfill_rules() -> dict:
     rules = load_migration('rulebook_rules').RULES
     magnitudes = load_migration('rulebook_magnitudes').MAGNITUDES
     hp_ability = load_migration('rulebook_hp_ability').HP_ABILITY
-    return {**rules, 'magnitudes': magnitudes, 'hp_ability': hp_ability}
+    point_buy = load_migration('rulebook_point_buy').POINT_BUY
+    return {**rules, 'magnitudes': magnitudes, 'hp_ability': hp_ability, 'point_buy': point_buy}
 
 
 # --- 내장 템플릿 ---
@@ -156,6 +158,23 @@ def test_a_ruleset_cannot_be_changed_after_it_is_made():
         # 최대 HP 에 닿는 능력치는 능력치 중 하나여야 한다
         {'hp_ability': 'luck'},
         {'hp_ability': 'CON'},
+        # 점수제: 총점은 1 이상이고, 값표는 비어 있지 않고, 같은 점수가 두 번 없고, 값은 음수가 아니다
+        {'point_buy': {'budget': 0, 'costs': [{'score': 10, 'cost': 0}]}},
+        {'point_buy': {'budget': 27, 'costs': []}},
+        {'point_buy': {'budget': 27, 'costs': [{'score': 10, 'cost': 0}, {'score': 10, 'cost': 1}]}},
+        {'point_buy': {'budget': 27, 'costs': [{'score': 10, 'cost': -1}]}},
+        {
+            'score_max': 100,
+            'point_buy': {
+                'budget': 27,
+                'costs': [{'score': number + 1, 'cost': 0} for number in range(RULESET_MAX_POINT_COSTS + 1)],
+            },
+        },
+        # 살 수 있는 점수는 규칙의 점수 범위(1~20) 안이어야 한다
+        {'point_buy': {'budget': 27, 'costs': [{'score': 21, 'cost': 0}]}},
+        {'point_buy': {'budget': 27, 'costs': [{'score': 0, 'cost': 0}]}},
+        # 값을 식으로 적지 못한다. 값은 표에 있는 숫자뿐이다
+        {'point_buy': {'budget': 27, 'costs': [{'score': 10, 'cost': 0}], 'formula': 'score - 8'}},
         {'unknown': 1},
     ],
 )
@@ -183,6 +202,8 @@ def test_the_limits_themselves_are_allowed():
             score_max=5,
             magnitudes=most_magnitudes,
             hp_ability='a0',
+            # 점수가 5 하나뿐인 규칙이다. SRD5 의 값표(8~15)는 맞지 않는다
+            point_buy=None,
         )
     )
 
@@ -205,6 +226,57 @@ def test_a_ruleset_must_say_whether_an_ability_touches_hp():
     # "닿지 않는다"(None)와 "적지 않았다"는 다르다. 적지 않은 문서는 규칙으로 읽히지 않는다
     with pytest.raises(ValidationError):
         Ruleset.model_validate(document)
+
+
+def test_the_built_in_template_buys_scores_with_27_points():
+    point_buy = SRD5.point_buy
+
+    assert point_buy.budget == 27
+    assert {entry.score: entry.cost for entry in point_buy.costs} == {
+        8: 0,
+        9: 1,
+        10: 2,
+        11: 3,
+        12: 4,
+        13: 5,
+        14: 7,
+        15: 9,
+    }
+
+
+def test_a_ruleset_may_have_no_point_buy():
+    ruleset = Ruleset.model_validate(rules(point_buy=None))
+
+    assert ruleset.point_buy is None
+
+
+def test_a_ruleset_must_say_whether_it_has_point_buy():
+    document = SRD5.model_dump(mode='json')
+    del document['point_buy']
+
+    # "점수제가 없다"(None)와 "적지 않았다"는 다르다. 적지 않은 문서는 규칙으로 읽히지 않는다
+    with pytest.raises(ValidationError):
+        Ruleset.model_validate(document)
+
+
+def test_the_costs_need_not_follow_the_scores():
+    # 값이 점수에 비례하지 않아도 되고, 살 수 있는 점수가 이어져 있지 않아도 된다. 제작자가 정하는 값이다
+    costs = [{'score': 6, 'cost': 0}, {'score': 12, 'cost': 1}, {'score': 18, 'cost': 10}]
+
+    ruleset = Ruleset.model_validate(rules(point_buy={'budget': 12, 'costs': costs}))
+
+    assert [entry.score for entry in ruleset.point_buy.costs] == [6, 12, 18]
+
+
+def test_the_most_costs_are_allowed():
+    costs = [{'score': 5, 'cost': 0}]
+    most = [{'score': number + 1, 'cost': number} for number in range(RULESET_MAX_POINT_COSTS)]
+
+    one = Ruleset.model_validate(rules(score_min=5, score_max=5, point_buy={'budget': 1, 'costs': costs}))
+    many = Ruleset.model_validate(rules(score_min=1, score_max=30, point_buy={'budget': 100, 'costs': most}))
+
+    assert len(one.point_buy.costs) == 1
+    assert len(many.point_buy.costs) == RULESET_MAX_POINT_COSTS
 
 
 def test_a_ruleset_without_magnitudes_is_not_a_ruleset():
