@@ -30,6 +30,7 @@ from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
+from app.engine.sheet import abilities_fit
 from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.listings import service as listings
@@ -94,7 +95,8 @@ class TableOptionError(Exception):
     """
     고른 것이 판에 없다. 없는 스타팅이나 없는 프리젠을 골랐거나, 판이 허용하지 않는 캐릭터 방식을 골랐다.
 
-    field 는 입력의 어느 칸이 틀렸는지다(opening_index, pregen_index, character_modes).
+    직접 정한 능력치가 이 테이블의 규칙에 맞지 않을 때도 이 오류다.
+    field 는 입력의 어느 칸이 틀렸는지다(opening_index, pregen_index, character_modes, abilities).
     """
 
     def __init__(self, field: str) -> None:
@@ -175,6 +177,20 @@ def resolve_character(snapshot: Snapshot, data: CharacterUpdate) -> tuple[str, s
     name = data.name if data.name is not None else pregen.name
     description = data.description if data.description is not None else pregen.description
     return name, description
+
+
+def accept_abilities(snapshot: Snapshot, data: CharacterUpdate) -> dict[str, int] | None:
+    """
+    직접 정한 능력치를 이 테이블의 규칙과 견주어 보고, 자리에 적을 값을 돌려준다. 능력치를 적지 않았으면 None.
+
+    규칙의 능력치가 빠짐없이 있어야 하고, 점수가 규칙의 범위 안이어야 한다. 아니면 TableOptionError.
+    그 밖의 제한은 없다. 직접 입력은 플레이어가 책임지는 방식이다.
+    """
+    if data.abilities is None:
+        return None
+    if not abilities_fit(snapshot.rulebook.rules, data.abilities):
+        raise TableOptionError('abilities')
+    return dict(data.abilities)
 
 
 def take_seat(table: GameTable, user_id: uuid.UUID) -> None:
@@ -456,23 +472,27 @@ async def set_character(
     자기 캐릭터를 정한다. 직접 만들거나 프리젠을 가져온다. 다시 부르면 통째로 바뀐다.
 
     모집 중이 아니거나, 이 테이블에서 허용하지 않는 방식이거나, 다른 사람이 그 프리젠을 가져갔으면 TableConflictError.
-    없는 프리젠이면 TableOptionError.
+    없는 프리젠이거나, 직접 정한 능력치가 이 테이블의 규칙에 맞지 않으면 TableOptionError.
 
     프리젠을 가져갔다가 직접 만든 캐릭터로 바꾸면, 그 프리젠은 다시 고를 수 있게 된다.
-    숫자(시트)는 여기서 주지 않는다. 게임을 시작할 때 준다.
+    능력치를 직접 정했다가 다른 방식으로 바꾸면, 적어 둔 능력치는 지워진다.
+    숫자(시트)는 여기서 주지 않는다. 게임을 시작할 때 준다. 직접 정한 능력치는 그때까지 자리에 적어 둔다.
     """
     table, member = await lock_seated(session, user_id, table_id)
     require_recruiting(table)
-    if sheets.mode_of(data.pregen_index) not in table.character_modes:
+    if data.chosen_mode not in table.character_modes:
         raise TableConflictError(Conflict.CHARACTER_MODE_NOT_ALLOWED)
 
-    name, description = resolve_character(read_snapshot(table.content), data)
+    snapshot = read_snapshot(table.content)
+    name, description = resolve_character(snapshot, data)
+    abilities = accept_abilities(snapshot, data)
     if data.pregen_index is not None:
         require_pregen_free(table, member, data.pregen_index)
 
     member.character_name = name
     member.character_description = description
     member.pregen_index = data.pregen_index
+    member.abilities = abilities
     return await save(session, table)
 
 
