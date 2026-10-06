@@ -26,6 +26,9 @@ dev = [
 testpaths = ["tests"]
 # async def 로 쓴 테스트를 표시 없이 그대로 실행한다
 asyncio_mode = "auto"
+# 실패한 테스트의 기록을 짧게 찍는다. 기본(long)은 실패한 함수가 받은 인자의 값까지 찍는다.
+# DB 에 연결하다 실패하면 그 인자가 비밀번호가 든 접속 주소다
+addopts = "--tb=short"
 
 [tool.ruff]
 line-length = 120
@@ -42,4 +45,3 @@ known-first-party = ["app"]
 [tool.ruff.format]
 # 인증 서버와 같은 모양을 쓴다
 quote-style = "single"
-

@@ -133,6 +133,7 @@ async def test_taking_a_pregen_waits_for_another_take(session: AsyncSession, oth
     locked = await repository.lock_table(session, table.id)
     mine = service.find_member(locked, ME)
     mine.character_name = '폭주족 엘프'
+    mine.character_mode = 'pregen'
     mine.pregen_index = 0
     await session.flush()
 

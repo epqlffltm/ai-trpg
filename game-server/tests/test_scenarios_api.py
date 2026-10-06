@@ -876,7 +876,7 @@ async def test_a_sheet_is_checked_for_its_shape_only(client: AsyncClient, my_hea
     [
         # 방식이 하나는 있어야 한다
         {'character_modes': []},
-        {'character_modes': ['point_buy']},
+        {'character_modes': ['cheat']},
         {'character_modes': ['pregen', 'pregen']},
         {'character_modes': 'pregen'},
         {'default_sheet': {'abilities': {'str': 10}}},
@@ -924,7 +924,7 @@ async def test_the_default_sheet_is_cleared_with_null(client: AsyncClient, my_he
     assert cleared.json()['character_modes'] == ['custom']
 
 
-@pytest.mark.parametrize('modes', [[], ['point_buy'], ['pregen', 'point_buy']])
+@pytest.mark.parametrize('modes', [[], ['cheat'], ['pregen', 'cheat']])
 async def test_the_database_rejects_modes_it_does_not_know(session: AsyncSession, modes: list[str]):
     asset = Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오')
     session.add(Scenario(asset=asset, character_modes=modes))

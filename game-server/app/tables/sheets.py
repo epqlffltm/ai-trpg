@@ -13,13 +13,16 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 판단하고, 객
 
 시트가 오는 곳은 셋이다.
   - 프리젠을 골랐으면 그 프리젠의 시트(제작자가 적은 숫자).
-  - 능력치를 직접 정했으면 그 점수로 만든 시트. 최대 HP 는 규칙으로 구한다(app/engine/creation.py).
+  - 플레이어가 능력치를 정했으면(직접 적기, 점수제) 그 점수로 만든 시트. 최대 HP 는 규칙으로 구한다
+    (app/engine/creation.py). 어느 방식으로 정했든 시트를 만드는 법은 같다. 다른 것은 받을 때의 제한이다(obeys_mode).
   - 둘 다 아니면 판의 기본 시트(제작자가 적은 숫자).
 """
 
 from app.assets.models import CharacterMode
 from app.assets.scenarios.snapshot import Snapshot
 from app.engine.creation import build_sheet
+from app.engine.point_buy import affordable
+from app.engine.ruleset import Ruleset
 from app.engine.sheet import Sheet
 from app.tables.models import GameTable, TableMember, TableSheet
 
@@ -46,6 +49,18 @@ def seats_by_pregens(snapshot: Snapshot, modes: list[CharacterMode]) -> int | No
     if modes == [CharacterMode.PREGEN]:
         return len(snapshot.pregens)
     return None
+
+
+def obeys_mode(ruleset: Ruleset, mode: CharacterMode, abilities: dict[str, int]) -> bool:
+    """
+    이 능력치가 그 방식이 거는 제한을 지켰는가.
+
+    점수제는 규칙의 총점 안에서 살 수 있는 점수여야 한다. 직접 적기는 거는 제한이 없다.
+    규칙의 능력치와 점수 범위에 맞는지는 방식과 상관없다. 여기서 보지 않는다(app/engine/sheet.py 의 abilities_fit).
+    """
+    if mode == CharacterMode.POINT_BUY:
+        return affordable(ruleset, abilities)
+    return True
 
 
 def build_player_made(snapshot: Snapshot, abilities: dict[str, int]) -> Sheet | None:

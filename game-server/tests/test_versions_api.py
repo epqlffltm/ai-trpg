@@ -37,6 +37,7 @@ from app.assets.scenarios.snapshot import (
     upgrade_from_4,
     upgrade_from_5,
     upgrade_from_6,
+    upgrade_from_7,
 )
 from app.engine.sheet import fits
 from app.engine.templates import SRD5
@@ -635,12 +636,17 @@ def without_rules(document: dict, *names: str) -> dict:
 def make_format_5() -> dict:
     """양의 등급이 없던 때의 판."""
     document = upgrade_from_4(upgrade_from_3(upgrade_from_2(upgrade_from_1(FORMAT_1))))
-    return without_rules(document, 'magnitudes', 'hp_ability')
+    return without_rules(document, 'magnitudes', 'hp_ability', 'point_buy')
 
 
 def make_format_6() -> dict:
     """최대 HP 에 닿는 능력치가 없던 때의 판."""
-    return without_rules(upgrade_from_5(make_format_5()), 'hp_ability')
+    return without_rules(upgrade_from_5(make_format_5()), 'hp_ability', 'point_buy')
+
+
+def make_format_7() -> dict:
+    """점수제가 없던 때의 판."""
+    return without_rules(upgrade_from_6(make_format_6()), 'point_buy')
 
 
 def test_upgrades_a_format_5_document():
@@ -664,12 +670,35 @@ def test_upgrades_a_format_6_document():
 
     # 규칙에 최대 HP 에 닿는 능력치가 없던 때의 판이다. 그때의 규칙(SRD5 템플릿)의 것으로 읽는다
     assert upgraded['format'] == 7
-    assert upgraded['rulebook']['rules'] == SRD5.model_dump(mode='json')
+    assert upgraded['rulebook']['rules']['hp_ability'] == 'con'
     # 플레이어가 능력치를 정하는 방식도 없던 때다. 그 방식에 쓰는 값은 없는 것으로 읽는다
     assert upgraded['player_made_hp'] is None
     # 받은 문서는 고치지 않는다
     assert format_6['format'] == 6
     assert 'hp_ability' not in format_6['rulebook']['rules']
+
+
+def test_upgrades_a_format_7_document():
+    format_7 = make_format_7()
+
+    upgraded = upgrade_from_7(format_7)
+
+    # 규칙에 점수제가 없던 때의 판이다. 그때의 규칙(SRD5 템플릿)의 것으로 읽는다
+    assert upgraded['format'] == 8
+    assert upgraded['rulebook']['rules'] == SRD5.model_dump(mode='json')
+    assert upgraded['rulebook']['gm_guide'] == GM_GUIDE
+    # 규칙에 점수제가 생겼다고 그 판에서 점수제를 쓸 수 있게 된 것은 아니다. 허용한 방식은 그대로다
+    assert upgraded['character_modes'] == format_7['character_modes'] == ['pregen', 'custom']
+    # 받은 문서는 고치지 않는다
+    assert format_7['format'] == 7
+    assert 'point_buy' not in format_7['rulebook']['rules']
+
+
+def test_reads_a_version_from_before_point_buy():
+    old = read_snapshot(make_format_7())
+
+    assert old.format == SNAPSHOT_FORMAT
+    assert old.rulebook.rules.point_buy == SRD5.point_buy
 
 
 def test_reads_a_version_from_before_magnitudes():
@@ -693,7 +722,7 @@ def test_reads_a_document_of_any_format():
     assert read_snapshot(FORMAT_1) == read_snapshot(current)
     assert read_snapshot(FORMAT_1).format == SNAPSHOT_FORMAT
     assert read_snapshot(FORMAT_1).openings == [OPENING]
-    # 형식 1 은 1 → 2 → 3 → 4 → 5 → 6 → 7 을 차례로 거친다
+    # 형식 1 은 1 → 2 → … → 8 을 차례로 거친다
     assert read_snapshot(FORMAT_1).pregens == []
     assert read_snapshot(FORMAT_1).rulebook.rules == SRD5
 
