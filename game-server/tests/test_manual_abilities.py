@@ -367,7 +367,7 @@ async def test_written_abilities_must_fit_the_rules_of_the_table(client: AsyncCl
         {'mode': 'custom', 'name': '엘프', 'abilities': scores()},
         {'mode': 'pregen', 'name': '엘프'},
         {'mode': 'custom', 'pregen_index': 0},
-        {'mode': 'rolled', 'name': '엘프'},
+        {'mode': 'cheat', 'name': '엘프'},
         # 최대 HP 와 지금의 HP 는 적지 못한다
         {'mode': 'manual', 'name': '엘프', 'abilities': scores(), 'max_hp': 99},
         {'mode': 'manual', 'name': '엘프', 'abilities': scores(), 'hp': 99},
@@ -436,7 +436,7 @@ def make_snapshot(player_made_hp: dict | None = HP) -> Snapshot:
     """직접 적기를 허용하는 판. 최대 HP 를 구하는 값은 바꿔 볼 수 있다."""
     return read_snapshot(
         {
-            'format': 7,
+            'format': 8,
             'title': '판',
             'description': '',
             'rating': 'all',
@@ -532,12 +532,12 @@ async def test_the_database_rejects_abilities_on_a_pregen(client: AsyncClient, m
     await set_character(client, me, table, pregen_index=0)
 
     # 프리젠의 숫자는 제작자가 적은 것이다. 그 위에 직접 적은 능력치가 얹힐 수 없다
-    with pytest.raises(IntegrityError, match='abilities_need_own_character'):
+    with pytest.raises(IntegrityError, match='abilities_need_player_made_mode'):
         await session.execute(text("""UPDATE table_members SET abilities = '{"str": 20}'"""))
 
 
 async def test_the_database_rejects_abilities_without_a_character(client: AsyncClient, me: dict[str, str], session):
     await open_table(client, me, capacity=1)
 
-    with pytest.raises(IntegrityError, match='abilities_need_own_character'):
+    with pytest.raises(IntegrityError, match='abilities_need_player_made_mode'):
         await session.execute(text("""UPDATE table_members SET abilities = '{"str": 20}'"""))

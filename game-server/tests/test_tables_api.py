@@ -836,17 +836,20 @@ async def test_the_database_rejects_a_bad_table(session: AsyncSession, fields: d
 async def test_the_database_rejects_two_members_with_the_same_pregen(session: AsyncSession):
     table = await make_table(session)
     table.members = [
-        TableMember(user_id=ME, character_name='엘프', pregen_index=0),
-        TableMember(user_id=FRIEND, character_name='엘프', pregen_index=0),
+        TableMember(user_id=ME, character_name='엘프', character_mode='pregen', pregen_index=0),
+        TableMember(user_id=FRIEND, character_name='엘프', character_mode='pregen', pregen_index=0),
     ]
 
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError, match='uq_table_members_table_id'):
         await session.commit()
 
 
 async def test_the_database_allows_many_characters_without_a_pregen(session: AsyncSession):
     table = await make_table(session)
-    table.members = [TableMember(user_id=ME, character_name='엘프'), TableMember(user_id=FRIEND, character_name='엘프')]
+    table.members = [
+        TableMember(user_id=ME, character_name='엘프', character_mode='custom'),
+        TableMember(user_id=FRIEND, character_name='엘프', character_mode='custom'),
+    ]
 
     # 프리젠을 쓰지 않은 캐릭터끼리는 겹치는 것으로 보지 않는다
     await session.commit()
