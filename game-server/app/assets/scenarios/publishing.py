@@ -16,7 +16,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
 from app.assets.lorebooks import repository as entries
-from app.assets.models import CharacterMode, Lorebook, LoreEntry, Rulebook, Scenario, ScenarioVersion, World
+from app.assets.models import (
+    PLAYER_MADE_MODES,
+    CharacterMode,
+    Lorebook,
+    LoreEntry,
+    Rulebook,
+    Scenario,
+    ScenarioVersion,
+    World,
+)
 from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import VersionCreate
 from app.assets.scenarios.snapshot import build_snapshot
@@ -42,6 +51,8 @@ class Problem(enum.StrEnum):
     DEFAULT_SHEET_INVALID = 'default_sheet_invalid'
     # 프리젠만 허용했는데 프리젠이 추천 인원의 최소보다 적다. 그 인원이 앉을 수 없다
     PREGENS_TOO_FEW = 'pregens_too_few'
+    # 플레이어가 능력치를 정하는 방식을 허용했는데 최대 HP 를 구하는 값(기준값과 상한)이 없다
+    PLAYER_MADE_HP_MISSING = 'player_made_hp_missing'
 
 
 class ScenarioNotReadyError(Exception):
@@ -128,6 +139,19 @@ def find_default_sheet_problems(scenario: Scenario, ruleset: Ruleset | None) -> 
     return []
 
 
+def find_player_made_problems(scenario: Scenario) -> list[Problem]:
+    """
+    플레이어가 능력치를 정하는 방식에서 문제를 찾는다.
+
+    그런 방식을 하나라도 허용했으면 최대 HP 를 구하는 값이 있어야 한다. 플레이어는 최대 HP 를 직접 적지 못한다.
+    허용하지 않았으면 없어도 된다.
+    """
+    allows_player_made = any(mode in PLAYER_MADE_MODES for mode in scenario.character_modes)
+    if allows_player_made and scenario.player_made_hp is None:
+        return [Problem.PLAYER_MADE_HP_MISSING]
+    return []
+
+
 def find_seating_problems(scenario: Scenario) -> list[Problem]:
     """
     허용한 방식으로 사람이 앉을 수 있는지 본다.
@@ -151,6 +175,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
         problems.append(Problem.OPENING_MISSING)
     problems.extend(find_pregen_problems(scenario, ruleset))
     problems.extend(find_default_sheet_problems(scenario, ruleset))
+    problems.extend(find_player_made_problems(scenario))
     problems.extend(find_seating_problems(scenario))
     return problems
 

@@ -38,7 +38,9 @@ from app.engine.templates import SRD5
 #   4: 룰북에 규칙(rules)이 있다
 #   5: 프리젠에 시트(sheet)가 있고, 허용하는 캐릭터 방식(character_modes)과 기본 시트(default_sheet)가 있다
 #   6: 규칙에 피해와 회복의 양을 나타내는 등급(magnitudes)이 있다
-SNAPSHOT_FORMAT = 6
+#   7: 규칙에 최대 HP 에 닿는 능력치(hp_ability)가 있고, 플레이어가 능력치를 정한 캐릭터의
+#      최대 HP 를 구하는 값(player_made_hp)이 있다
+SNAPSHOT_FORMAT = 7
 
 # 시트가 없던 때의 판을 읽을 때 채우는 숫자. 모든 능력치가 이 점수이고, 최대 HP 가 이 값이다.
 # 그때의 규칙은 SRD5 템플릿뿐이었다. 10 은 그 규칙에서 보정이 0 인 점수다
@@ -96,6 +98,13 @@ class PregenSnapshot(BaseModel):
     sheet: Sheet
 
 
+class PlayerMadeHpSnapshot(BaseModel):
+    """플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다."""
+
+    base: int
+    cap: int
+
+
 class Snapshot(BaseModel):
     """
     판 하나의 내용 전부. 플레이에 필요한 것이 이 안에 다 있다.
@@ -121,6 +130,8 @@ class Snapshot(BaseModel):
     character_modes: list[CharacterMode]
     # 기본 시트. 캐릭터를 직접 만든 사람이 받는 숫자다. 직접 만들기를 허용했으면 반드시 있다
     default_sheet: Sheet | None
+    # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용했으면 반드시 있다
+    player_made_hp: PlayerMadeHpSnapshot | None
     rulebook: RulebookSnapshot
     world: WorldSnapshot | None
     lorebooks: list[LorebookSnapshot]
@@ -166,6 +177,7 @@ def build_snapshot(
         pregens=[PregenSnapshot(**pregen) for pregen in scenario.pregens],
         character_modes=list(scenario.character_modes),
         default_sheet=scenario.default_sheet,
+        player_made_hp=scenario.player_made_hp,
         rulebook=snapshot_rulebook(rulebook),
         world=snapshot_world(world) if world else None,
         lorebooks=[snapshot_lorebook(lorebook, entries) for lorebook, entries in lorebooks],
@@ -200,7 +212,8 @@ def upgrade_from_3(document: dict) -> dict:
     그때는 룰북에 규칙이 없었다. 그때 만든 룰북이 지금 받았을 규칙(SRD5 템플릿)으로 읽는다.
     DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 내놓은 템플릿의 값은 고치지 않으므로 읽을 때마다 같다.
 
-    지금의 SRD5 에는 나중에 생긴 칸(magnitudes)도 들어 있다. 뒤의 단계가 같은 값으로 다시 채우므로 결과는 같다.
+    지금의 SRD5 에는 나중에 생긴 칸(magnitudes, hp_ability)도 들어 있다.
+    뒤의 단계가 같은 값으로 다시 채우므로 결과는 같다.
     """
     upgraded = dict(document)
     upgraded['rulebook'] = {**document['rulebook'], 'rules': SRD5.model_dump(mode='json')}
@@ -224,7 +237,8 @@ def upgrade_from_4(document: dict) -> dict:
     sheet = baseline_sheet(document['rulebook']['rules'])
     upgraded = dict(document)
     upgraded['pregens'] = [{**pregen, 'sheet': sheet} for pregen in document['pregens']]
-    upgraded['character_modes'] = list(CharacterMode)
+    # 그때 있던 방식은 이 둘이다. 글자 그대로 적는다. 방식이 나중에 늘어도 옛 판이 허용한 것은 늘지 않는다
+    upgraded['character_modes'] = ['pregen', 'custom']
     upgraded['default_sheet'] = sheet
     upgraded['format'] = 5
     return upgraded
@@ -245,6 +259,23 @@ def upgrade_from_5(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_6(document: dict) -> dict:
+    """
+    형식 6 의 문서를 형식 7 로 올린다.
+
+    그때는 규칙에 최대 HP 에 닿는 능력치가 없었다. 그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 것으로 읽는다.
+    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+
+    플레이어가 능력치를 정하는 방식도 없었다. 그 방식에 쓰는 값(player_made_hp)은 없는 것으로 읽는다.
+    """
+    rulebook = document['rulebook']
+    upgraded = dict(document)
+    upgraded['player_made_hp'] = None
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'hp_ability': SRD5.hp_ability}}
+    upgraded['format'] = 7
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -253,6 +284,7 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     3: upgrade_from_3,
     4: upgrade_from_4,
     5: upgrade_from_5,
+    6: upgrade_from_6,
 }
 
 

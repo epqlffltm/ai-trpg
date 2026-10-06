@@ -13,6 +13,8 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from app.assets.models import (
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
+    DEFAULT_CHARACTER_MODES,
+    PLAYER_MADE_HP_MAX,
     SCENARIO_MAX_LOREBOOKS,
     SCENARIO_MAX_OPENINGS,
     SCENARIO_MAX_PREGENS,
@@ -111,6 +113,27 @@ def in_fixed_order(modes: list[CharacterMode]) -> list[CharacterMode]:
 CharacterModes = Annotated[list[CharacterMode], Field(min_length=1), AfterValidator(in_fixed_order)]
 
 
+class PlayerMadeHp(BaseModel):
+    """
+    플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한을 함께 보낸다.
+
+    최대 HP = 기준값 + 능력치의 보정. 상한을 넘지 않는다. 어느 능력치의 보정인지는 룰북의 규칙이 정한다.
+    상한을 기준값과 같게 두면 보정은 깎기만 한다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    base: int = Field(ge=1, le=PLAYER_MADE_HP_MAX)
+    cap: int = Field(ge=1, le=PLAYER_MADE_HP_MAX)
+
+    @model_validator(mode='after')
+    def reject_base_over_cap(self) -> 'PlayerMadeHp':
+        """기준값이 상한보다 크면 거부한다."""
+        if self.base > self.cap:
+            raise ValueError('기준값이 상한보다 큽니다.')
+        return self
+
+
 class ScenarioCreate(AssetCreate):
     """
     시나리오를 만들 때 받는 값. 제목만 필수다.
@@ -127,22 +150,23 @@ class ScenarioCreate(AssetCreate):
     openings: Openings = []
     recommended_players: RecommendedPlayers = RecommendedPlayers(min=1, max=TABLE_MAX_PLAYERS)
     pregens: Pregens = []
-    # 안 보내면 둘 다 허용한다
-    character_modes: CharacterModes = list(CharacterMode)
+    # 안 보내면 프리젠과 기본 시트를 허용한다. 플레이어가 숫자를 정하는 방식은 직접 적어야 켜진다
+    character_modes: CharacterModes = list(DEFAULT_CHARACTER_MODES)
     default_sheet: Sheet | None = None
+    player_made_hp: PlayerMadeHp | None = None
 
 
 class ScenarioUpdate(AssetUpdate):
     """
     시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
-    rulebook_id, world_id, default_sheet 는 null 을 보내면 비운다. 보내지 않으면 그대로 둔다.
+    rulebook_id, world_id, default_sheet, player_made_hp 는 null 을 보내면 비운다. 보내지 않으면 그대로 둔다.
     lorebook_ids, openings, pregens, character_modes 는 보낸 목록으로 통째로 바꾼다.
     앞의 셋은 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다.
     """
 
-    clearable: ClassVar[frozenset[str]] = frozenset({'rulebook_id', 'world_id', 'default_sheet'})
+    clearable: ClassVar[frozenset[str]] = frozenset({'rulebook_id', 'world_id', 'default_sheet', 'player_made_hp'})
 
     rating: Rating | None = None
     rulebook_id: uuid.UUID | None = None
@@ -153,6 +177,7 @@ class ScenarioUpdate(AssetUpdate):
     pregens: Pregens | None = None
     character_modes: CharacterModes | None = None
     default_sheet: Sheet | None = None
+    player_made_hp: PlayerMadeHp | None = None
 
 
 class ScenarioSummary(AssetSummary):
@@ -180,6 +205,7 @@ class ScenarioDetail(ScenarioSummary):
     pregens: list[Pregen]
     character_modes: list[CharacterMode]
     default_sheet: Sheet | None
+    player_made_hp: PlayerMadeHp | None
 
 
 VersionNote = Annotated[str, StringConstraints(max_length=VERSION_NOTE_MAX_LENGTH)]

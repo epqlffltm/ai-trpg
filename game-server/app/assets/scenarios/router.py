@@ -51,6 +51,7 @@ def to_detail(scenario: Scenario) -> ScenarioDetail:
         pregens=scenario.pregens,
         character_modes=scenario.character_modes,
         default_sheet=scenario.default_sheet,
+        player_made_hp=scenario.player_made_hp,
     )
 
 

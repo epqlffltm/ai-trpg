@@ -58,6 +58,8 @@ SRD5 = Ruleset(
         Magnitude(key='moderate', name='보통', count=1, sides=8),
         Magnitude(key='heavy', name='심함', count=2, sides=8),
     ),
+    # 건강이 최대 HP 에 닿는다. SRD 에서도 건강의 보정이 HP 에 더해진다
+    hp_ability='con',
 )
 
 TEMPLATES: dict[Template, Ruleset] = {Template.SRD5: SRD5}

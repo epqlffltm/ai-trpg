@@ -14,9 +14,15 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.assets.models import TABLE_MAX_PLAYERS, CharacterMode, Rating
-from app.assets.scenarios.schemas import CharacterDescription, CharacterModes, CharacterName, RecommendedPlayers
-from app.engine.ruleset import Ruleset
-from app.engine.sheet import Sheet
+from app.assets.scenarios.schemas import (
+    CharacterDescription,
+    CharacterModes,
+    CharacterName,
+    PlayerMadeHp,
+    RecommendedPlayers,
+)
+from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
+from app.engine.sheet import Score, Sheet
 from app.tables.models import TABLE_PASSWORD_MAX_LENGTH, TABLE_PASSWORD_MIN_LENGTH, TableStatus
 
 # 테이블의 비밀번호. 앞뒤 공백을 떼지 않는다. 적은 그대로가 비밀번호다
@@ -79,25 +85,54 @@ class LobbyJoinRequest(BaseModel):
     password: str | None = Field(default=None, max_length=TABLE_PASSWORD_MAX_LENGTH)
 
 
+# 플레이어가 직접 정하는 능력치의 점수. 능력치의 이름표에서 점수로 간다. 여기서는 모양만 본다.
+# 이 테이블의 규칙에 맞는지(능력치가 빠짐없이 있는지, 점수가 범위 안인지)는 서비스가 본다
+ChosenAbilities = Annotated[dict[Key, Score], Field(max_length=RULESET_MAX_ABILITIES)]
+
+
 class CharacterUpdate(BaseModel):
     """
     캐릭터를 정할 때 받는 값. 보낸 것으로 캐릭터를 통째로 바꾼다.
 
-    직접 만들 때는 이름을 적는다. 프리젠을 가져올 때는 pregen_index 를 적는다.
-    프리젠을 가져오면서 이름이나 설명을 함께 보내면, 그 칸은 보낸 것으로 고쳐 쓴다.
+    방식(mode)에 따라 적는 칸이 다르다.
+      - pregen: pregen_index 를 적는다. 이름이나 설명을 함께 보내면 그 칸은 보낸 것으로 고쳐 쓴다.
+      - custom: 이름을 적는다. 숫자는 시나리오의 기본 시트를 받는다.
+      - manual: 이름과 능력치의 점수(abilities)를 적는다. 최대 HP 는 적지 않는다. 규칙으로 구한다.
+
+    mode 를 비우면 pregen_index 가 있으면 pregen, 없으면 custom 으로 본다.
+    능력치를 적는 방식은 여럿이 될 것이라, 능력치를 보낼 때는 mode 를 반드시 적는다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
+    mode: CharacterMode | None = None
     pregen_index: int | None = Field(default=None, ge=0)
     name: CharacterName | None = None
     description: CharacterDescription | None = None
+    abilities: ChosenAbilities | None = None
+
+    @property
+    def chosen_mode(self) -> CharacterMode:
+        """이 요청의 방식. 적지 않았으면 프리젠을 골랐는지로 정한다."""
+        if self.mode is not None:
+            return self.mode
+        return CharacterMode.PREGEN if self.pregen_index is not None else CharacterMode.CUSTOM
 
     @model_validator(mode='after')
     def require_a_name_without_pregen(self) -> 'CharacterUpdate':
         """프리젠을 고르지 않았으면 이름이 있어야 한다."""
         if self.pregen_index is None and self.name is None:
             raise ValueError('프리젠을 고르지 않았으면 이름을 적어야 합니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_fields_of_the_mode(self) -> 'CharacterUpdate':
+        """방식에 맞는 칸만 적었는지 본다. 프리젠은 프리젠 방식에만, 능력치는 능력치를 적는 방식에만 적는다."""
+        mode = self.chosen_mode
+        if (mode == CharacterMode.PREGEN) != (self.pregen_index is not None):
+            raise ValueError('pregen_index 는 pregen 방식에서만, 그리고 반드시 적습니다.')
+        if (mode == CharacterMode.MANUAL) != (self.abilities is not None):
+            raise ValueError('abilities 는 능력치를 직접 정하는 방식에서만, 그리고 반드시 적습니다.')
         return self
 
 
@@ -136,6 +171,8 @@ class MemberOut(BaseModel):
     character: CharacterOut | None
     # 프리젠에서 가져왔으면 몇 번째 프리젠인가
     pregen_index: int | None
+    # 직접 정한 능력치의 점수. 그런 방식으로 만들었을 때만 있다. 시작하면 이것으로 시트가 만들어진다
+    abilities: dict[str, int] | None
     # 게임을 시작하기 전에는 None 이다. 시작할 때 받는다
     sheet: SheetOut | None
     joined_at: datetime
@@ -192,6 +229,9 @@ class TableDetail(TableSummary):
     character_modes: list[CharacterMode]
     # 캐릭터를 직접 만들면 받는 숫자. 직접 만들기를 허용하지 않는 테이블이면 None 이다
     default_sheet: Sheet | None
+    # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용하지 않는 테이블이면 None 이다.
+    # 최대 HP = 기준값 + 능력치의 보정, 상한을 넘지 않는다. 어느 능력치인지는 rules 의 hp_ability 다
+    player_made_hp: PlayerMadeHp | None
     pregens: list[PregenChoice]
     members: list[MemberOut]
     # 초대 코드. 방장에게만 보인다
