@@ -19,6 +19,7 @@ SMALL_RULES = Ruleset.model_validate(
     {
         **SRD5.model_dump(mode='json'),
         'abilities': [{'key': 'body', 'name': '몸'}, {'key': 'mind', 'name': '마음'}],
+        'hp_ability': 'body',
         'score_min': 0,
         'score_max': 5,
     }

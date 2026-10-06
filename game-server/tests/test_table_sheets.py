@@ -481,11 +481,6 @@ def test_only_a_pregen_only_table_is_limited_by_its_pregens(modes: list, expecte
     assert sheets.seats_by_pregens(make_snapshot(), modes) == expected
 
 
-def test_tells_the_mode_of_a_request():
-    assert sheets.mode_of(0) == CharacterMode.PREGEN
-    assert sheets.mode_of(None) == CharacterMode.CUSTOM
-
-
 def test_finds_the_sheet_a_member_will_get():
     snapshot = make_snapshot()
 

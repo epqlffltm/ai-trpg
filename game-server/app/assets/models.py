@@ -107,6 +107,21 @@ class CharacterMode(enum.StrEnum):
     PREGEN = 'pregen'
     # 이름과 설명을 직접 쓴다. 시트는 시나리오의 기본 시트다
     CUSTOM = 'custom'
+    # 이름과 설명에 더해 능력치의 점수도 직접 적는다. 기본 시트를 쓰지 않는다.
+    # 규칙의 점수 범위만 지키면 무엇이든 적을 수 있다. 균형은 그 플레이어와 테이블의 몫이다
+    MANUAL = 'manual'
+
+
+# 방식을 고르지 않았을 때 허용하는 것. 처음부터 있던 둘이다.
+# 플레이어가 숫자를 정하는 방식은 제작자가 직접 켜야 한다. 방식이 늘어도 이 목록은 그대로다
+DEFAULT_CHARACTER_MODES = [CharacterMode.PREGEN, CharacterMode.CUSTOM]
+
+# 플레이어가 능력치를 정하는 방식들. 이 중 하나라도 허용하면 최대 HP 를 구하는 값(기준값과 상한)이 있어야 한다
+PLAYER_MADE_MODES = frozenset({CharacterMode.MANUAL})
+
+# 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구할 때 쓰는 기준값과 상한이 가질 수 있는 가장 큰 값.
+# 시트의 최대 HP 의 한도(app/engine/sheet.py 의 SHEET_MAX_HP)와 같다
+PLAYER_MADE_HP_MAX = 999
 
 
 def one_of(column: str, values: type[enum.StrEnum]) -> str:
@@ -258,6 +273,12 @@ class Scenario(AssetContent):
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
             name='character_modes_allowed',
         ),
+        # 기준값과 상한은 함께 있거나 함께 없다. 있으면 1 이상이고, 기준값이 상한을 넘지 않는다
+        CheckConstraint(
+            '(hp_base IS NULL) = (hp_cap IS NULL) AND '
+            f'(hp_base IS NULL OR (hp_base >= 1 AND hp_base <= hp_cap AND hp_cap <= {PLAYER_MADE_HP_MAX}))',
+            name='player_made_hp',
+        ),
     )
 
     # 가리키는 대상이 assets 가 아니라 rulebooks 다. 룰북 자리에 세계관을 넣는 일을 DB 가 막는다.
@@ -289,12 +310,18 @@ class Scenario(AssetContent):
     # 허용하는 캐릭터 방식들. 하나 이상이다.
     # 있던 시나리오는 둘 다 허용하는 것으로 채운다. 지금까지 프리젠을 고를 수도, 직접 만들 수도 있었다
     character_modes: Mapped[list[str]] = mapped_column(
-        ARRAY(String(20)), default=lambda: list(CharacterMode), server_default=text("'{pregen,custom}'")
+        ARRAY(String(20)), default=lambda: list(DEFAULT_CHARACTER_MODES), server_default=text("'{pregen,custom}'")
     )
 
     # 기본 시트. 캐릭터를 직접 만든 사람이 받는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 직접 만들기를 허용했으면 게시할 때 있어야 한다
     default_sheet: Mapped[dict | None] = mapped_column(JSONB)
+
+    # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다. 둘은 함께 있거나 함께 없다.
+    # 최대 HP = 기준값 + 능력치의 보정, 상한을 넘지 않는다(app/engine/creation.py).
+    # 초안일 때는 비워 둘 수 있다. 플레이어가 숫자를 정하는 방식을 허용했으면 게시할 때 있어야 한다
+    hp_base: Mapped[int | None] = mapped_column(SmallInteger)
+    hp_cap: Mapped[int | None] = mapped_column(SmallInteger)
 
     # 붙인 로어북들. 여러 개라 칸 하나에 담지 못하고 연결 테이블(scenario_lorebooks)의 행으로 둔다.
     # selectin: 시나리오를 읽을 때 함께 읽는다. 비동기에서는 나중에 따로 읽어 오는 방식을 쓸 수 없다.
@@ -313,6 +340,19 @@ class Scenario(AssetContent):
         """추천 인원을 바꾼다. 둘을 늘 함께 바꿔서, 최소가 최대보다 큰 상태가 생기지 않게 한다."""
         self.min_players = players['min']
         self.max_players = players['max']
+
+    @property
+    def player_made_hp(self) -> dict[str, int] | None:
+        """플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한을 한 묶음으로 다룬다. 없으면 None."""
+        if self.hp_base is None or self.hp_cap is None:
+            return None
+        return {'base': self.hp_base, 'cap': self.hp_cap}
+
+    @player_made_hp.setter
+    def player_made_hp(self, hp: dict[str, int] | None) -> None:
+        """기준값과 상한을 바꾼다. 둘을 늘 함께 바꾼다. None 이면 둘 다 비운다."""
+        self.hp_base = hp['base'] if hp else None
+        self.hp_cap = hp['cap'] if hp else None
 
     @property
     def lorebook_ids(self) -> list[uuid.UUID]:

@@ -122,6 +122,9 @@ class Ruleset(Part):
     default_difficulty: Key
     # 피해와 회복의 양을 나타내는 등급들. 행동은 숫자가 아니라 이 중 하나를 고른다
     magnitudes: Annotated[tuple[Magnitude, ...], Field(min_length=1, max_length=RULESET_MAX_MAGNITUDES)]
+    # 최대 HP 에 보정을 더하는 능력치. 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구할 때 쓴다.
+    # None 이면 능력치가 최대 HP 에 닿지 않는다. 칸 자체는 늘 있어야 한다(기본값이 없다)
+    hp_ability: Key | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
@@ -145,6 +148,13 @@ class Ruleset(Part):
         duplicates = find_duplicates([magnitude.key for magnitude in self.magnitudes])
         if duplicates:
             raise ValueError(f'같은 양의 등급이 두 번 있습니다: {", ".join(duplicates)}')
+        return self
+
+    @model_validator(mode='after')
+    def require_known_hp_ability(self) -> Self:
+        """최대 HP 에 닿는 능력치는 능력치 중 하나여야 한다."""
+        if self.hp_ability is not None and self.hp_ability not in [ability.key for ability in self.abilities]:
+            raise ValueError(f'최대 HP 에 닿는 능력치가 능력치에 없습니다: {self.hp_ability}')
         return self
 
     @model_validator(mode='after')

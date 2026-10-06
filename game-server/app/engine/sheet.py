@@ -34,16 +34,35 @@ class Sheet(BaseModel):
     max_hp: Annotated[int, Field(ge=1, le=SHEET_MAX_HP)]
 
 
+def covers_abilities(ruleset: Ruleset, abilities: dict[str, int]) -> bool:
+    """이 점수들이 규칙의 능력치를 빠짐없이, 그리고 그것만 갖고 있는가."""
+    return set(abilities) == {ability.key for ability in ruleset.abilities}
+
+
+def scores_in_range(ruleset: Ruleset, abilities: dict[str, int]) -> bool:
+    """이 점수들이 모두 규칙이 정한 범위 안인가."""
+    return all(ruleset.score_min <= score <= ruleset.score_max for score in abilities.values())
+
+
+def abilities_fit(ruleset: Ruleset, abilities: dict[str, int]) -> bool:
+    """
+    능력치의 점수들이 이 규칙에 맞는가. 최대 HP 는 보지 않는다.
+
+    플레이어가 능력치만 정하고 최대 HP 는 규칙으로 구할 때 쓴다(app/engine/creation.py).
+    """
+    return covers_abilities(ruleset, abilities) and scores_in_range(ruleset, abilities)
+
+
 def has_exact_abilities(ruleset: Ruleset, sheet: Sheet) -> bool:
     """시트가 규칙의 능력치를 빠짐없이, 그리고 그것만 갖고 있는가."""
-    return set(sheet.abilities) == {ability.key for ability in ruleset.abilities}
+    return covers_abilities(ruleset, sheet.abilities)
 
 
 def has_scores_in_range(ruleset: Ruleset, sheet: Sheet) -> bool:
     """시트의 점수가 모두 규칙이 정한 범위 안인가."""
-    return all(ruleset.score_min <= score <= ruleset.score_max for score in sheet.abilities.values())
+    return scores_in_range(ruleset, sheet.abilities)
 
 
 def fits(ruleset: Ruleset, sheet: Sheet) -> bool:
     """시트가 이 규칙에 맞는가."""
-    return has_exact_abilities(ruleset, sheet) and has_scores_in_range(ruleset, sheet)
+    return abilities_fit(ruleset, sheet.abilities)

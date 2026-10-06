@@ -8,12 +8,18 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 판단하고, 객
 
 흐름은 이렇다.
   1. 테이블을 만들 때: 방장이 고른 방식이 판이 허용한 것 안에 있는지 본다(narrow_modes).
-  2. 캐릭터를 정할 때: 그 방식이 이 테이블에서 허용되는지 본다(mode_of).
-  3. 게임을 시작할 때: 사람마다 판에서 시트를 찾아(find_source) 이 테이블의 시트로 만든다(hand_out).
+  2. 캐릭터를 정할 때: 그 방식이 이 테이블에서 허용되는지 본다. 방식은 요청에 적혀 있다(app/tables/schemas.py).
+  3. 게임을 시작할 때: 사람마다 받을 시트를 찾아(find_source) 이 테이블의 시트로 만든다(hand_out).
+
+시트가 오는 곳은 셋이다.
+  - 프리젠을 골랐으면 그 프리젠의 시트(제작자가 적은 숫자).
+  - 능력치를 직접 정했으면 그 점수로 만든 시트. 최대 HP 는 규칙으로 구한다(app/engine/creation.py).
+  - 둘 다 아니면 판의 기본 시트(제작자가 적은 숫자).
 """
 
 from app.assets.models import CharacterMode
 from app.assets.scenarios.snapshot import Snapshot
+from app.engine.creation import build_sheet
 from app.engine.sheet import Sheet
 from app.tables.models import GameTable, TableMember, TableSheet
 
@@ -42,22 +48,31 @@ def seats_by_pregens(snapshot: Snapshot, modes: list[CharacterMode]) -> int | No
     return None
 
 
-def mode_of(pregen_index: int | None) -> CharacterMode:
-    """캐릭터를 정하는 요청이 어느 방식인지 본다. 프리젠을 골랐으면 프리젠, 아니면 직접 만들기다."""
-    return CharacterMode.PREGEN if pregen_index is not None else CharacterMode.CUSTOM
+def build_player_made(snapshot: Snapshot, abilities: dict[str, int]) -> Sheet | None:
+    """
+    플레이어가 정한 능력치로 시트를 만든다. 판에 최대 HP 를 구하는 값이 없으면 None.
+
+    그런 방식을 허용한 판에는 그 값이 반드시 있다(게시 조건). 없는 것은 있을 수 없는 일이라 None 으로 알린다.
+    """
+    hp = snapshot.player_made_hp
+    if hp is None:
+        return None
+    return build_sheet(snapshot.rulebook.rules, abilities, hp.base, hp.cap)
 
 
 def find_source(snapshot: Snapshot, member: TableMember) -> Sheet | None:
     """
-    이 사람이 받을 시트를 판에서 찾는다. 받을 시트가 없으면 None.
+    이 사람이 받을 시트를 찾는다. 받을 시트가 없으면 None.
 
-    프리젠을 골랐으면 그 프리젠의 시트, 직접 만들었으면 판의 기본 시트다.
-    캐릭터를 아직 정하지 않았거나, 직접 만들었는데 판에 기본 시트가 없으면 None 이다.
+    프리젠을 골랐으면 그 프리젠의 시트, 능력치를 직접 정했으면 그 점수로 만든 시트, 둘 다 아니면 판의 기본 시트다.
+    캐릭터를 아직 정하지 않았거나, 기본 시트를 받을 사람인데 판에 기본 시트가 없으면 None 이다.
     """
     if member.character_name is None:
         return None
     if member.pregen_index is not None:
         return snapshot.pregens[member.pregen_index].sheet
+    if member.abilities is not None:
+        return build_player_made(snapshot, member.abilities)
     return snapshot.default_sheet
 
 

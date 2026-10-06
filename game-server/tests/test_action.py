@@ -23,6 +23,7 @@ SMALL_RULES = Ruleset.model_validate(
     {
         **SRD5.model_dump(mode='json'),
         'abilities': [{'key': 'body', 'name': '몸'}, {'key': 'mind', 'name': '마음'}],
+        'hp_ability': 'body',
         'difficulties': [{'key': 'normal', 'name': '보통', 'target': 7}],
         'default_difficulty': 'normal',
     }

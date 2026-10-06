@@ -39,6 +39,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.assets.models import (
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
+    DEFAULT_CHARACTER_MODES,
     TABLE_MAX_PLAYERS,
     TITLE_MAX_LENGTH,
     CharacterMode,
@@ -128,7 +129,7 @@ class GameTable(Base):
     # 이 테이블에서 허용하는 캐릭터 방식들. 판이 허용한 것 중에서 방장이 고른다. 만든 뒤에는 바꾸지 않는다.
     # 이 칸이 생기기 전에 만든 테이블은 둘 다 허용한다. 그때는 프리젠을 고를 수도 직접 만들 수도 있었다
     character_modes: Mapped[list[str]] = mapped_column(
-        ARRAY(String(20)), default=lambda: list(CharacterMode), server_default=text("'{pregen,custom}'")
+        ARRAY(String(20)), default=lambda: list(DEFAULT_CHARACTER_MODES), server_default=text("'{pregen,custom}'")
     )
 
     # 비밀번호. 그대로 두지 않고 계산한 값을 둔다(passwords.py). 비어 있으면 비밀번호가 없는 것이다.
@@ -171,6 +172,11 @@ class TableMember(Base):
         UniqueConstraint('table_id', 'pregen_index'),
         # 캐릭터가 없는데 프리젠만 차지하고 있을 수 없다
         CheckConstraint('character_name IS NOT NULL OR pregen_index IS NULL', name='pregen_needs_character'),
+        # 직접 정한 능력치는 직접 만든 캐릭터에만 있다. 캐릭터가 없거나 프리젠을 가져왔으면 없다
+        CheckConstraint(
+            'abilities IS NULL OR (character_name IS NOT NULL AND pregen_index IS NULL)',
+            name='abilities_need_own_character',
+        ),
     )
 
     # 두 칸을 합쳐 기본 키로 삼는다. 한 사람이 같은 테이블에 두 번 앉을 수 없다.
@@ -186,6 +192,10 @@ class TableMember(Base):
 
     # 가져온 프리젠. content 의 pregens 에서 몇 번째인가(0 부터). 직접 만들었으면 비어 있다
     pregen_index: Mapped[int | None] = mapped_column(SmallInteger)
+
+    # 플레이어가 직접 정한 능력치의 점수. 그런 방식으로 캐릭터를 만들었을 때만 있다.
+    # 받을 때 이 테이블의 규칙과 견주어 봤다. 게임을 시작할 때 이것으로 시트를 만든다(app/tables/sheets.py)
+    abilities: Mapped[dict | None] = mapped_column(JSONB)
 
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
