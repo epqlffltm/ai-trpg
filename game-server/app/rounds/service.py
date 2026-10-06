@@ -27,6 +27,9 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 
 판정은 닫기 시작할 때 한 번만 한다. 결과를 선언에 적어 두고, 그 뒤로는 읽기만 한다.
 서술이 실패해 다시 맡겨도 주사위를 다시 굴리지 않는다. 다시 굴리면 서술을 실패시켜 결과를 바꿀 수 있다.
+
+HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거나 회복한다(app/engine/health.py).
+HP 가 0 이면 쓰러진 것이다. 쓰러진 사람은 글만 낼 수 있고, 라운드는 그 사람의 선언을 기다리지 않는다.
 """
 
 import enum
@@ -39,16 +42,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import action as actions
+from app.engine import health
 from app.engine.action import CheckAction
-from app.engine.check import find_ability, find_difficulty
+from app.engine.check import Check, find_ability, find_difficulty
 from app.engine.dice import Dice
+from app.engine.health import ChangeKind
 from app.engine.ruleset import Ruleset
 from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
 from app.rounds import opener, repository
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.rounds.narrator import Move, NarrationRequest, Verdict
+from app.rounds.narrator import Impact, Move, NarrationRequest, Verdict
 from app.rounds.schemas import DeclarationUpdate
 from app.tables import repository as table_repository
 from app.tables import service as tables
@@ -68,6 +73,8 @@ class Conflict(enum.StrEnum):
     NOT_PLAYING = 'not_playing'
     # 라운드가 닫는 중이다. 선언을 마감했고 GM 이 서술하고 있다. 끝나면 다음 라운드가 열린다
     ROUND_CLOSING = 'round_closing'
+    # 캐릭터가 쓰러져 있다. 행동을 붙일 수 없다. 글만 낼 수 있다
+    CHARACTER_DOWNED = 'character_downed'
 
 
 class RoundConflictError(Exception):
@@ -82,12 +89,16 @@ class ActionNotInRulesError(Exception):
     """
     선언에 붙은 행동이 이 테이블의 규칙에 없는 것을 가리킨다.
 
-    field 는 행동의 어느 칸이 틀렸는지다(ability, difficulty).
+    field 는 행동의 어느 칸이 틀렸는지다(ability, difficulty, risk, recover).
     """
 
     def __init__(self, field: str) -> None:
         super().__init__(field)
         self.field = field
+
+
+class ActionTargetError(Exception):
+    """선언에 붙은 행동의 대상이 이 테이블에 앉은 사람이 아니다."""
 
 
 # 닫는 중인 채로 이 시간(초)이 지나면 서술을 맡은 작업이 사라진 것으로 본다. 그때부터 다시 맡길 수 있다.
@@ -147,9 +158,22 @@ def find_declaration(round_: Round, user_id: uuid.UUID) -> Declaration | None:
     return next((declaration for declaration in round_.declarations if declaration.user_id == user_id), None)
 
 
+def is_down(member: TableMember) -> bool:
+    """이 사람의 캐릭터가 쓰러져 있는가. 시트가 없으면(시작 전) 쓰러진 것이 아니다."""
+    return member.sheet is not None and health.is_downed(member.sheet.hp)
+
+
 def waiting_for(table: GameTable, round_: Round) -> list[uuid.UUID]:
-    """앉은 사람 중에서 이 라운드에 아직 선언을 내지 않은 사람들. 들어온 순서다."""
-    return [member.user_id for member in table.members if find_declaration(round_, member.user_id) is None]
+    """
+    앉은 사람 중에서 이 라운드에 선언을 내야 하는데 아직 내지 않은 사람들. 들어온 순서다.
+
+    쓰러진 사람은 기다리지 않는다. 한 사람이 쓰러졌다고 테이블이 멈추지 않게 한다.
+    """
+    return [
+        member.user_id
+        for member in table.members
+        if find_declaration(round_, member.user_id) is None and not is_down(member)
+    ]
 
 
 def rules_of(table: GameTable) -> Ruleset:
@@ -161,19 +185,38 @@ def rules_of(table: GameTable) -> Ruleset:
     return read_snapshot(table.content).rulebook.rules
 
 
-def accept_action(table: GameTable, action: CheckAction | None) -> dict | None:
+def aim(action: CheckAction, actor_id: uuid.UUID) -> CheckAction:
     """
-    선언에 붙은 행동을 이 테이블의 규칙과 견주어 보고, 저장할 모양으로 바꾼다. 행동이 없으면 None.
+    회복의 대상을 비워 뒀으면 행동한 사람 자신으로 채운 행동을 돌려준다. 받은 행동은 고치지 않는다.
 
-    규칙에 없는 능력이나 난이도면 ActionNotInRulesError. 비워 둔 난이도는 규칙의 기본 난이도로 채운다.
+    저장하는 행동에는 회복이 있으면 늘 대상이 적혀 있게 한다. 읽는 쪽이 "비어 있으면 자기"를 다시 따지지 않는다.
+    """
+    if action.recover is None or action.target is not None:
+        return action
+    return action.model_copy(update={'target': actor_id})
+
+
+def accept_action(table: GameTable, member: TableMember, action: CheckAction | None) -> dict | None:
+    """
+    선언에 붙은 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다. 행동이 없으면 None.
+
+    member 는 선언하는 사람이다.
+      - 쓰러져 있으면 RoundConflictError. 쓰러진 사람은 글만 낼 수 있다.
+      - 규칙에 없는 능력, 난이도, 양의 등급이면 ActionNotInRulesError.
+      - 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
+    비워 둔 난이도는 규칙의 기본 난이도로, 비워 둔 회복의 대상은 자기 자신으로 채운다.
     """
     if action is None:
         return None
+    if is_down(member):
+        raise RoundConflictError(Conflict.CHARACTER_DOWNED)
     ruleset = rules_of(table)
     fault = actions.find_fault(ruleset, action)
     if fault is not None:
         raise ActionNotInRulesError(fault)
-    return actions.settle(ruleset, action).model_dump(mode='json')
+    if action.target is not None and tables.find_member(table, action.target) is None:
+        raise ActionTargetError
+    return aim(actions.settle(ruleset, action), member.user_id).model_dump(mode='json')
 
 
 def put_declaration(round_: Round, member: TableMember, content: str, action: dict | None) -> None:
@@ -197,9 +240,57 @@ def has_outcome(declaration: Declaration | None) -> bool:
     return declaration is not None and declaration.outcome is not None
 
 
+def find_affected(table: GameTable, actor: TableMember, action: CheckAction, kind: ChangeKind) -> TableMember | None:
+    """
+    HP 가 바뀔 사람을 찾는다. 피해는 행동한 사람이 입고, 회복은 행동의 대상이 받는다.
+
+    대상이 그사이에 테이블을 떠났으면 None.
+    """
+    return actor if kind == ChangeKind.DAMAGE else tables.find_member(table, action.target)
+
+
+def apply_consequence(
+    table: GameTable, actor: TableMember, action: CheckAction, check: Check, ruleset: Ruleset, dice: Dice
+) -> dict | None:
+    """
+    판정의 결과에 따라 HP 를 바꾸고, 바뀐 내용을 문서로 돌려준다. 아무 일도 없으면 None.
+
+    시트의 hp 를 고친다. 저장하지는 않는다. 양을 정하는 주사위를 여기서 굴린다.
+    돌려준 문서는 선언의 outcome 안에 적힌다. 누구의 HP 가 얼마에서 얼마로 바뀌었는지가 다 담긴다.
+    """
+    found = actions.consequence(action, check)
+    if found is None:
+        return None
+    kind, magnitude_key = found
+    affected = find_affected(table, actor, action, kind)
+    # 대상이 떠났거나 시트가 없으면 바뀔 HP 가 없다. 양을 정하는 주사위도 굴리지 않는다
+    if affected is None or affected.sheet is None:
+        return None
+
+    sheet = affected.sheet
+    magnitude = health.find_magnitude(ruleset, magnitude_key)
+    change = health.change_hp(kind, magnitude, sheet.hp, sheet.max_hp, dice)
+    sheet.hp = change.after
+    return {
+        'kind': change.kind.value,
+        'magnitude': magnitude_key,
+        'user_id': str(affected.user_id),
+        'character_name': affected.character_name,
+        'rolls': list(change.rolls),
+        'amount': change.amount,
+        'before': change.before,
+        'after': change.after,
+        'max_hp': sheet.max_hp,
+        'downed': change.downed,
+    }
+
+
 def roll_checks(table: GameTable, round_: Round, dice: Dice) -> None:
     """
-    닫히는 라운드의 행동을 판정하고, 결과를 선언에 적는다. 들어온 순서로 굴린다.
+    닫히는 라운드의 행동을 판정하고, 결과에 따라 HP 를 바꾸고, 결과를 선언에 적는다. 들어온 순서로 굴린다.
+
+    한 사람의 판정과 그 결과(피해, 회복)를 끝낸 뒤에 다음 사람으로 넘어간다.
+    앞사람이 쓰러뜨린 것을 뒷사람이 일으킬 수 있다.
 
     지금 앉아 있고, 선언에 행동을 붙였고, 시트가 있는 사람만 굴린다.
     진행 중인 테이블에서는 모두에게 시트가 있다(app/tables/sheets.py). 없는 사람이 있어도 라운드는 닫혀야 해서 건너뛴다.
@@ -219,7 +310,23 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice) -> None:
     ruleset = rules_of(table)
     for member, declaration in rolling:
         action = CheckAction.model_validate(declaration.action)
-        declaration.outcome = asdict(actions.attempt(ruleset, action, member.sheet.abilities, dice))
+        check = actions.attempt(ruleset, action, member.sheet.abilities, dice)
+        effect = apply_consequence(table, member, action, check, ruleset, dice)
+        declaration.outcome = {**asdict(check), 'effect': effect}
+
+
+def to_impact(effect: dict | None) -> Impact | None:
+    """선언에 적힌 HP 의 변화를 서술자에게 줄 모양으로 바꾼다. 변화가 없었으면 None."""
+    if effect is None:
+        return None
+    return Impact(
+        kind=effect['kind'],
+        character_name=effect['character_name'],
+        amount=effect['amount'],
+        hp=effect['after'],
+        max_hp=effect['max_hp'],
+        downed=effect['downed'],
+    )
 
 
 def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
@@ -230,7 +337,17 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
     """
     ability = find_ability(ruleset, declaration.action['ability'])
     difficulty = find_difficulty(ruleset, declaration.action['difficulty'])
-    return Verdict(ability=ability.name, difficulty=difficulty.name, **declaration.outcome)
+    outcome = declaration.outcome
+    return Verdict(
+        ability=ability.name,
+        difficulty=difficulty.name,
+        roll=outcome['roll'],
+        modifier=outcome['modifier'],
+        total=outcome['total'],
+        target=outcome['target'],
+        success=outcome['success'],
+        impact=to_impact(outcome.get('effect')),
+    )
 
 
 def build_request(table: GameTable, round_: Round) -> NarrationRequest:
@@ -238,7 +355,8 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
     닫히는 라운드를 서술자에게 줄 모양으로 바꾼다.
 
     지금 앉아 있는 사람 모두가 들어간다. 선언을 내지 않은 사람은 아무것도 하지 않은 것으로 들어간다.
-    판정의 결과는 선언에 적힌 것을 읽는다. 여기서 굴리지 않는다.
+    판정의 결과와 HP 의 변화는 선언에 적힌 것을 읽는다. 여기서 굴리지 않는다.
+    쓰러져 있는지는 이번 라운드의 결과를 반영한 뒤의 것이다.
     """
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
     ruleset = rules_of(table) if any(has_outcome(declaration) for declaration in declarations) else None
@@ -247,7 +365,9 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
     for member, declaration in zip(table.members, declarations, strict=True):
         content = declaration.content if declaration else None
         verdict = to_verdict(ruleset, declaration) if has_outcome(declaration) else None
-        moves.append(Move(character_name=member.character_name, content=content, verdict=verdict))
+        moves.append(
+            Move(character_name=member.character_name, content=content, verdict=verdict, downed=is_down(member))
+        )
     return NarrationRequest(round_number=round_.number, scene=round_.scene, moves=moves)
 
 
@@ -292,18 +412,37 @@ async def list_rounds(
 def record_check(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
     """
     판정의 결과를 이벤트로 적는다. 그 판정을 부른 행동의 이벤트(cause)에 잇는다.
+    판정으로 HP 가 바뀌었으면 바로 뒤에 그것도 적는다.
 
     행한 사람(actor_id)을 적지 않는다. 주사위를 굴린 것은 플레이어가 아니라 엔진이다.
     누구의 판정인지는 원인으로 이은 행동의 이벤트와 캐릭터 이름으로 안다.
     """
+    outcome = declaration.outcome
     payload = {
         'round': cause.payload['round'],
         'character_name': declaration.character_name,
         'ability': declaration.action['ability'],
         'difficulty': declaration.action['difficulty'],
-        **declaration.outcome,
+        'roll': outcome['roll'],
+        'modifier': outcome['modifier'],
+        'total': outcome['total'],
+        'target': outcome['target'],
+        'success': outcome['success'],
     }
-    recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
+    rolled = recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
+    effect = outcome.get('effect')
+    if effect is not None:
+        record_hp_change(session, table, effect, cause=rolled)
+
+
+def record_hp_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> None:
+    """
+    HP 가 바뀐 것을 이벤트로 적는다. 그 변화를 부른 판정의 이벤트(cause)에 잇는다.
+
+    행한 사람(actor_id)을 적지 않는다. HP 를 바꾼 것은 엔진이다. 누구의 HP 인지는 payload 의 user_id 다.
+    """
+    payload = {'round': cause.payload['round'], **effect}
+    recorder.record(session, table, EventType.HP_CHANGED, payload=payload, cause=cause)
 
 
 def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
@@ -385,13 +524,14 @@ async def declare(
     돌려주는 것은 테이블과 그 라운드다. 이 선언으로 닫기 시작했으면 "닫는 중"인 채로 돌아온다.
     서술이 끝나 다음 라운드가 열린 것은 스트림으로 알게 된다.
 
-    닫는 중인 라운드에는 낼 수 없다(RoundConflictError).
-    행동이 이 테이블의 규칙에 없는 능력이나 난이도를 가리키면 ActionNotInRulesError.
+    닫는 중인 라운드에는 낼 수 없다(RoundConflictError). 쓰러진 사람은 행동을 붙일 수 없다(RoundConflictError).
+    행동이 이 테이블의 규칙에 없는 것을 가리키면 ActionNotInRulesError.
+    행동의 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
     테이블을 잠그고 한다. 마지막 두 사람이 동시에 내도 라운드는 한 번만 닫힌다.
     """
     table, member, round_ = await lock_current_round(session, user_id, table_id)
     require_open(round_)
-    put_declaration(round_, member, data.content, accept_action(table, data.action))
+    put_declaration(round_, member, data.content, accept_action(table, member, data.action))
 
     everyone_declared = not waiting_for(table, round_)
     if everyone_declared:

@@ -85,6 +85,11 @@ async def current(client: AsyncClient, headers: dict[str, str], table: dict) -> 
     return response.json()
 
 
+def stored(action: dict) -> dict:
+    """저장된 행동의 모양. 보낸 칸에 더해, 붙이지 않은 대가와 보상과 대상이 None 으로 들어 있다."""
+    return {'risk': None, 'recover': None, 'target': None, **action}
+
+
 def actions(round_: dict) -> dict[str, dict | None]:
     """라운드의 선언을 {캐릭터 이름: 행동} 으로 바꾼다."""
     return {declaration['character_name']: declaration['action'] for declaration in round_['declarations']}
@@ -99,7 +104,7 @@ async def test_declares_with_an_action(client: AsyncClient, me: dict[str, str], 
     response = await declare(client, me, table, KICK, KICK_ACTION)
 
     assert response.status_code == status.HTTP_200_OK
-    assert actions(response.json()) == {'엘프': KICK_ACTION}
+    assert actions(response.json()) == {'엘프': stored(KICK_ACTION)}
     assert response.json()['declarations'][0]['content'] == KICK
 
 
@@ -124,8 +129,8 @@ async def test_a_missing_difficulty_becomes_the_default_of_the_rules(
 
     # 저장할 때 채운다. 읽는 쪽이 "비어 있으면 기본"을 다시 따지지 않는다
     filled = {'kind': 'check', 'ability': 'str', 'difficulty': 'medium'}
-    assert actions(response.json()) == {'엘프': filled}
-    assert await session.scalar(text('SELECT action FROM round_declarations')) == filled
+    assert actions(response.json()) == {'엘프': stored(filled)}
+    assert await session.scalar(text('SELECT action FROM round_declarations')) == stored(filled)
 
 
 async def test_declaring_again_replaces_the_action_too(client: AsyncClient, me: dict[str, str], friend: dict[str, str]):
@@ -135,7 +140,7 @@ async def test_declaring_again_replaces_the_action_too(client: AsyncClient, me: 
     changed = await declare(client, me, table, KICK, {'kind': 'check', 'ability': 'dex', 'difficulty': 'easy'})
     dropped = await declare(client, me, table, LAUGH)
 
-    assert actions(changed.json()) == {'엘프': {'kind': 'check', 'ability': 'dex', 'difficulty': 'easy'}}
+    assert actions(changed.json()) == {'엘프': stored({'kind': 'check', 'ability': 'dex', 'difficulty': 'easy'})}
     # 선언은 통째로 바뀐다. 행동을 빼고 다시 내면 행동도 없어진다
     assert actions(dropped.json()) == {'엘프': None}
 
@@ -204,7 +209,7 @@ async def test_others_actions_are_hidden_until_the_round_closes(
     # 누가 냈는지는 보인다. 글도 행동도 보이지 않는다. 남의 행동을 보고 자기 행동을 정하지 못한다
     assert actions(seen_by_friend.json()) == {'엘프': None}
     assert 'hard' not in seen_by_friend.text
-    assert actions(await current(client, me, table)) == {'엘프': KICK_ACTION}
+    assert actions(await current(client, me, table)) == {'엘프': stored(KICK_ACTION)}
 
 
 async def test_everyone_sees_the_actions_once_the_round_is_closing(
@@ -218,8 +223,8 @@ async def test_everyone_sees_the_actions_once_the_round_is_closing(
     closed = (await client.get(rounds_url(table, '/1'), headers=friend)).json()
 
     assert closing['status'] == 'closing'
-    assert actions(closing) == {'엘프': KICK_ACTION, '영애': None}
-    assert actions(closed) == {'엘프': KICK_ACTION, '영애': None}
+    assert actions(closing) == {'엘프': stored(KICK_ACTION), '영애': None}
+    assert actions(closed) == {'엘프': stored(KICK_ACTION), '영애': None}
 
 
 async def test_the_action_is_recorded_when_the_round_closes(
@@ -237,6 +242,6 @@ async def test_the_action_is_recorded_when_the_round_closes(
     # 열려 있는 동안에는 적히지 않는다. 이벤트는 모두가 읽는다
     assert 'player_action' not in [event['type'] for event in before]
     assert recorded == [
-        {'round': 1, 'character_name': '엘프', 'content': KICK, 'action': KICK_ACTION},
+        {'round': 1, 'character_name': '엘프', 'content': KICK, 'action': stored(KICK_ACTION)},
         {'round': 1, 'character_name': '영애', 'content': LAUGH, 'action': None},
     ]

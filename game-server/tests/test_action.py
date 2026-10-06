@@ -6,12 +6,15 @@
 DB 도 HTTP 도 쓰지 않는다.
 """
 
+import uuid
+
 import pytest
 from pydantic import ValidationError
 
-from app.engine.action import ActionKind, CheckAction, attempt, find_fault, settle
+from app.engine.action import ActionKind, CheckAction, attempt, consequence, find_fault, settle
 from app.engine.check import Check
 from app.engine.dice import ScriptedDice
+from app.engine.health import ChangeKind
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
 
@@ -147,3 +150,97 @@ def test_attempting_works_under_other_rules():
     result = attempt(SMALL_RULES, check('body', 'normal'), {'body': 14, 'mind': 10}, ScriptedDice([5]))
 
     assert result == Check(roll=5, modifier=2, total=7, target=7, success=True)
+
+
+# --- 판정의 결과에 따라 일어나는 일 ---
+
+SOMEONE = uuid.UUID('22222222-2222-4333-8444-555555555555')
+
+SUCCESS = Check(roll=15, modifier=0, total=15, target=15, success=True)
+FAILURE = Check(roll=14, modifier=0, total=14, target=15, success=False)
+
+
+def risky(**fields) -> CheckAction:
+    return CheckAction(kind=ActionKind.CHECK, ability='str', difficulty='medium', **fields)
+
+
+def test_reads_what_follows_a_check():
+    action = CheckAction.model_validate(
+        {'kind': 'check', 'ability': 'wis', 'risk': 'light', 'recover': 'heavy', 'target': str(SOMEONE)}
+    )
+
+    assert (action.risk, action.recover, action.target) == ('light', 'heavy', SOMEONE)
+
+
+def test_nothing_follows_a_plain_check():
+    action = check('str')
+
+    assert (action.risk, action.recover, action.target) == (None, None, None)
+
+
+@pytest.mark.parametrize(
+    'document',
+    [
+        # 양은 등급의 이름으로 받는다. 숫자를 직접 받지 않는다
+        {'kind': 'check', 'ability': 'str', 'risk': 5},
+        {'kind': 'check', 'ability': 'str', 'recover': 5},
+        {'kind': 'check', 'ability': 'str', 'damage': 5},
+        {'kind': 'check', 'ability': 'str', 'risk': 'Heavy'},
+        # 대상은 회복에만 쓴다. 남에게 피해를 주는 행동은 없다
+        {'kind': 'check', 'ability': 'str', 'target': str(SOMEONE)},
+        {'kind': 'check', 'ability': 'str', 'risk': 'light', 'target': str(SOMEONE)},
+        {'kind': 'check', 'ability': 'str', 'recover': 'light', 'target': '영애'},
+        # 바뀐 결과를 적어 보낼 수 없다
+        {'kind': 'check', 'ability': 'str', 'risk': 'light', 'amount': 1},
+        {'kind': 'check', 'ability': 'str', 'recover': 'light', 'hp': 10},
+    ],
+)
+def test_rejects_a_bad_consequence(document: dict):
+    with pytest.raises(ValidationError):
+        CheckAction.model_validate(document)
+
+
+@pytest.mark.parametrize(
+    ('action', 'fault'),
+    [
+        (risky(risk='heavy'), None),
+        (risky(recover='light'), None),
+        (risky(risk='deadly'), 'risk'),
+        (risky(recover='miracle'), 'recover'),
+        # 둘 다 틀리면 대가를 먼저 알린다
+        (risky(risk='deadly', recover='miracle'), 'risk'),
+        # 능력과 난이도를 먼저 본다
+        (CheckAction(kind=ActionKind.CHECK, ability='luck', risk='deadly'), 'ability'),
+    ],
+)
+def test_finds_a_magnitude_the_rules_do_not_have(action: CheckAction, fault: str | None):
+    assert find_fault(SRD5, action) == fault
+
+
+@pytest.mark.parametrize(
+    ('action', 'result', 'expected'),
+    [
+        # 대가는 실패했을 때만
+        (risky(risk='heavy'), FAILURE, (ChangeKind.DAMAGE, 'heavy')),
+        (risky(risk='heavy'), SUCCESS, None),
+        # 보상은 성공했을 때만
+        (risky(recover='light'), SUCCESS, (ChangeKind.RECOVERY, 'light')),
+        (risky(recover='light'), FAILURE, None),
+        # 둘 다 붙어 있어도 하나만 일어난다
+        (risky(risk='heavy', recover='light'), FAILURE, (ChangeKind.DAMAGE, 'heavy')),
+        (risky(risk='heavy', recover='light'), SUCCESS, (ChangeKind.RECOVERY, 'light')),
+        # 아무것도 붙이지 않았으면 아무 일도 없다
+        (risky(), FAILURE, None),
+        (risky(), SUCCESS, None),
+    ],
+)
+def test_what_follows_depends_on_the_result(action: CheckAction, result: Check, expected: tuple | None):
+    assert consequence(action, result) == expected
+
+
+def test_settling_keeps_what_follows():
+    action = CheckAction(kind=ActionKind.CHECK, ability='str', risk='heavy', recover='light', target=SOMEONE)
+
+    settled = settle(SRD5, action)
+
+    assert (settled.difficulty, settled.risk, settled.recover, settled.target) == ('medium', 'heavy', 'light', SOMEONE)

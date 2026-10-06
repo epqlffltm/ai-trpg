@@ -140,9 +140,16 @@ async def read_round(client: AsyncClient, headers: dict[str, str], table: dict, 
     return response.json()
 
 
+def numbers(outcome: dict | None) -> dict | None:
+    """판정의 결과에서 판정의 숫자만 남긴다. HP 의 변화(effect)는 다른 테스트가 본다(test_round_health.py)."""
+    if outcome is None:
+        return None
+    return {key: value for key, value in outcome.items() if key != 'effect'}
+
+
 def outcomes(round_: dict) -> dict[str, dict | None]:
-    """라운드의 선언을 {캐릭터 이름: 판정의 결과} 로 바꾼다."""
-    return {declaration['character_name']: declaration['outcome'] for declaration in round_['declarations']}
+    """라운드의 선언을 {캐릭터 이름: 판정의 숫자} 로 바꾼다."""
+    return {declaration['character_name']: numbers(declaration['outcome']) for declaration in round_['declarations']}
 
 
 async def read_events(client: AsyncClient, headers: dict[str, str], table: dict) -> list[dict]:

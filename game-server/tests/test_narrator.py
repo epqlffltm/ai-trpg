@@ -6,7 +6,7 @@
 가짜 서술자는 AI 가 붙기 전에 라운드의 흐름을 돌려 보는 데 쓴다. 같은 입력에 늘 같은 글을 내야 테스트에 쓸 수 있다.
 """
 
-from app.rounds.narrator import FakeNarrator, Move, NarrationRequest, Verdict, describe_verdict
+from app.rounds.narrator import FakeNarrator, Impact, Move, NarrationRequest, Verdict, describe_impact, describe_verdict
 
 
 def make_request(moves: list[Move]) -> NarrationRequest:
@@ -78,3 +78,54 @@ def test_a_zero_modifier_is_written_as_plus_zero():
     verdict = make_verdict(modifier=0, total=13)
 
     assert describe_verdict(verdict) == '(근력 판정 실패: 13 + 0 = 13, 목표 20)'
+
+
+# --- HP 의 변화 ---
+
+
+def make_impact(**overrides) -> Impact:
+    """엘프가 피해 3 을 입어 HP 가 7 이 된 것."""
+    values = {'kind': 'damage', 'character_name': '폭주족 엘프', 'amount': 3, 'hp': 7, 'max_hp': 10, 'downed': False}
+    return Impact(**{**values, **overrides})
+
+
+def test_damage_is_written_with_the_hp_left():
+    assert describe_impact(make_impact()) == '→ 폭주족 엘프 피해 3 (HP 7/10)'
+
+
+def test_recovery_is_written_with_the_one_who_recovered():
+    impact = make_impact(kind='recovery', character_name='악역영애', amount=4, hp=4)
+
+    assert describe_impact(impact) == '→ 악역영애 회복 4 (HP 4/10)'
+
+
+def test_going_down_is_written():
+    assert describe_impact(make_impact(amount=16, hp=0, downed=True)) == '→ 폭주족 엘프 피해 16 (HP 0/10, 쓰러짐)'
+
+
+async def test_an_impact_follows_the_verdict_that_caused_it():
+    verdict = make_verdict(impact=make_impact())
+    request = make_request([Move('폭주족 엘프', '문을 걷어찬다.', verdict)])
+
+    narration = await FakeNarrator().narrate(request)
+
+    assert narration == (
+        '[3 라운드의 결과]\n'
+        '폭주족 엘프: 문을 걷어찬다. (근력 판정 실패: 13 + 2 = 15, 목표 20) → 폭주족 엘프 피해 3 (HP 7/10)'
+    )
+
+
+async def test_a_downed_character_without_a_declaration_lies_down():
+    request = make_request([Move('폭주족 엘프', None, downed=True), Move('악역영애', None)])
+
+    narration = await FakeNarrator().narrate(request)
+
+    assert narration == '[3 라운드의 결과]\n폭주족 엘프: 쓰러져 있다.\n악역영애: 아무것도 하지 않았다.'
+
+
+async def test_a_downed_character_can_still_say_something():
+    request = make_request([Move('폭주족 엘프', '신음한다.', downed=True)])
+
+    narration = await FakeNarrator().narrate(request)
+
+    assert narration == '[3 라운드의 결과]\n폭주족 엘프: 신음한다.'
