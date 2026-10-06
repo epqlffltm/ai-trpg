@@ -17,6 +17,23 @@ from typing import Protocol
 
 
 @dataclass(frozen=True)
+class Impact:
+    """판정의 결과로 HP 가 바뀐 것. 엔진이 정한 것이다."""
+
+    # damage(피해) 또는 recovery(회복)
+    kind: str
+    # HP 가 바뀐 캐릭터. 피해는 행동한 캐릭터, 회복은 행동의 대상이다
+    character_name: str
+    # 주사위가 정한 양
+    amount: int
+    # 바뀐 뒤의 HP 와 최대 HP
+    hp: int
+    max_hp: int
+    # 바뀐 뒤에 쓰러져 있는가
+    downed: bool
+
+
+@dataclass(frozen=True)
 class Verdict:
     """
     판정의 결과. 엔진이 정한 것이다. 서술자는 이것을 바꾸지 못하고 글로 옮기기만 한다.
@@ -32,6 +49,8 @@ class Verdict:
     total: int
     target: int
     success: bool
+    # 이 판정으로 HP 가 바뀌었으면 그 내용. 없으면 None 이다
+    impact: Impact | None = None
 
 
 @dataclass(frozen=True)
@@ -43,6 +62,8 @@ class Move:
     content: str | None
     # 판정의 결과. 판정이 없는 선언이면 None 이다
     verdict: Verdict | None = None
+    # 이 라운드의 결과까지 반영한 뒤에 이 캐릭터가 쓰러져 있는가
+    downed: bool = False
 
 
 @dataclass(frozen=True)
@@ -74,12 +95,26 @@ def describe_verdict(verdict: Verdict) -> str:
     return f'({verdict.ability} 판정 {result}: {sum_}, 목표 {verdict.target})'
 
 
+def describe_impact(impact: Impact) -> str:
+    """HP 가 바뀐 것을 한 줄로 적는다. 예: → 엘프 피해 3 (HP 7/10)"""
+    word = '피해' if impact.kind == 'damage' else '회복'
+    state = f'HP {impact.hp}/{impact.max_hp}' + (', 쓰러짐' if impact.downed else '')
+    return f'→ {impact.character_name} {word} {impact.amount} ({state})'
+
+
+def describe_idle(move: Move) -> str:
+    """선언을 내지 않은 캐릭터를 뭐라고 적을지 정한다."""
+    return '쓰러져 있다.' if move.downed else '아무것도 하지 않았다.'
+
+
 def describe_move(move: Move) -> str:
-    """한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙인다."""
-    line = f'{move.character_name}: {move.content or "아무것도 하지 않았다."}'
-    if move.verdict is None:
-        return line
-    return f'{line} {describe_verdict(move.verdict)}'
+    """한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, HP 가 바뀌었으면 그 뒤에 붙인다."""
+    parts = [f'{move.character_name}: {move.content or describe_idle(move)}']
+    if move.verdict is not None:
+        parts.append(describe_verdict(move.verdict))
+        if move.verdict.impact is not None:
+            parts.append(describe_impact(move.verdict.impact))
+    return ' '.join(parts)
 
 
 class FakeNarrator:

@@ -58,6 +58,8 @@ class EventType(enum.StrEnum):
     PLAYER_ACTION = 'player_action'
     # 엔진이 행동을 판정했다. 주사위의 눈과 성패가 적힌다. 원인은 그 행동의 이벤트다
     CHECK_ROLLED = 'check_rolled'
+    # 엔진이 캐릭터의 HP 를 바꿨다. 피해나 회복이다. 원인은 그 판정의 이벤트다
+    HP_CHANGED = 'hp_changed'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # 테이블이 끝났다

@@ -48,6 +48,20 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'target',
         'success',
     ),
+    # HP 도 공개다. 앉은 사람은 서로의 시트를 본다
+    EventType.HP_CHANGED: (
+        'round',
+        'user_id',
+        'character_name',
+        'kind',
+        'magnitude',
+        'rolls',
+        'amount',
+        'before',
+        'after',
+        'max_hp',
+        'downed',
+    ),
     EventType.ROUND_CLOSED: ('number', 'idle'),
     EventType.TABLE_ENDED: (),
 }
