@@ -48,11 +48,12 @@ def load_backfill_rules() -> dict:
     """
     마이그레이션들이 옛 룰북에 채워 넣은 규칙. 차례로 거친 결과다.
 
-    규칙 칸을 더할 때 채운 값(rulebook_rules)에, 양의 등급을 더할 때 채운 값(rulebook_magnitudes)을 합친다.
+    규칙 칸을 더할 때 채운 값(rulebook_rules)에, 뒤의 마이그레이션들이 채운 칸을 합친다.
     """
     rules = load_migration('rulebook_rules').RULES
     magnitudes = load_migration('rulebook_magnitudes').MAGNITUDES
-    return {**rules, 'magnitudes': magnitudes}
+    hp_ability = load_migration('rulebook_hp_ability').HP_ABILITY
+    return {**rules, 'magnitudes': magnitudes, 'hp_ability': hp_ability}
 
 
 # --- 내장 템플릿 ---
@@ -77,6 +78,10 @@ def test_the_built_in_template_has_three_magnitudes():
 
     # 가벼움 1d4, 보통 1d8, 심함 2d8
     assert dice == {'light': (1, 4), 'moderate': (1, 8), 'heavy': (2, 8)}
+
+
+def test_the_built_in_template_adds_constitution_to_hp():
+    assert SRD5.hp_ability == 'con'
 
 
 def test_every_template_can_be_picked():
@@ -148,6 +153,9 @@ def test_a_ruleset_cannot_be_changed_after_it_is_made():
         {'magnitudes': [{'key': 'light', 'name': '가벼움', 'count': 1, 'sides': 1}]},
         # 양을 숫자로 직접 적지 못한다
         {'magnitudes': [{'key': 'light', 'name': '가벼움', 'amount': 3}]},
+        # 최대 HP 에 닿는 능력치는 능력치 중 하나여야 한다
+        {'hp_ability': 'luck'},
+        {'hp_ability': 'CON'},
         {'unknown': 1},
     ],
 )
@@ -174,12 +182,29 @@ def test_the_limits_themselves_are_allowed():
             score_min=5,
             score_max=5,
             magnitudes=most_magnitudes,
+            hp_ability='a0',
         )
     )
 
     assert len(ruleset.abilities) == RULESET_MAX_ABILITIES
     assert len(ruleset.difficulties) == RULESET_MAX_DIFFICULTIES
     assert len(ruleset.magnitudes) == RULESET_MAX_MAGNITUDES
+
+
+def test_no_ability_has_to_touch_hp():
+    ruleset = Ruleset.model_validate(rules(hp_ability=None))
+
+    # 능력치가 HP 에 닿지 않는 규칙도 된다
+    assert ruleset.hp_ability is None
+
+
+def test_a_ruleset_must_say_whether_an_ability_touches_hp():
+    document = SRD5.model_dump(mode='json')
+    del document['hp_ability']
+
+    # "닿지 않는다"(None)와 "적지 않았다"는 다르다. 적지 않은 문서는 규칙으로 읽히지 않는다
+    with pytest.raises(ValidationError):
+        Ruleset.model_validate(document)
 
 
 def test_a_ruleset_without_magnitudes_is_not_a_ruleset():

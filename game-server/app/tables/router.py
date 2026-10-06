@@ -12,9 +12,9 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from app.assets.models import CharacterMode
+from app.assets.models import PLAYER_MADE_MODES, CharacterMode
 from app.assets.routing import Paging, Session
-from app.assets.scenarios.schemas import RecommendedPlayers
+from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.tables import service
@@ -78,6 +78,7 @@ def to_member(table: GameTable, member: TableMember) -> MemberOut:
         is_host=member.user_id == table.host_id,
         character=character,
         pregen_index=member.pregen_index,
+        abilities=member.abilities,
         sheet=to_sheet(member.sheet),
         joined_at=member.joined_at,
     )
@@ -90,6 +91,14 @@ def to_pregen_choices(table: GameTable, snapshot: Snapshot) -> list[PregenChoice
         PregenChoice(name=pregen.name, description=pregen.description, sheet=pregen.sheet, taken_by=taken_by.get(index))
         for index, pregen in enumerate(snapshot.pregens)
     ]
+
+
+def to_player_made_hp(table: GameTable, snapshot: Snapshot) -> PlayerMadeHp | None:
+    """최대 HP 를 구하는 값을 응답으로 바꾼다. 플레이어가 능력치를 정하는 방식을 허용하지 않는 테이블이면 None."""
+    allows_player_made = any(mode in PLAYER_MADE_MODES for mode in table.character_modes)
+    if not allows_player_made or snapshot.player_made_hp is None:
+        return None
+    return PlayerMadeHp(**snapshot.player_made_hp.model_dump())
 
 
 def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
@@ -106,6 +115,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         rules=snapshot.rulebook.rules,
         character_modes=table.character_modes,
         default_sheet=snapshot.default_sheet if CharacterMode.CUSTOM in table.character_modes else None,
+        player_made_hp=to_player_made_hp(table, snapshot),
         pregens=to_pregen_choices(table, snapshot),
         members=[to_member(table, member) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,

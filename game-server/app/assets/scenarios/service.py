@@ -35,6 +35,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         pregens=[pregen.model_dump() for pregen in data.pregens],
         character_modes=list(data.character_modes),
         default_sheet=data.default_sheet.model_dump() if data.default_sheet else None,
+        player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
     )
 
 

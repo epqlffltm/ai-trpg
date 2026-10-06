@@ -154,6 +154,7 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'pregens',
         'character_modes',
         'default_sheet',
+        'player_made_hp',
     }
 
 

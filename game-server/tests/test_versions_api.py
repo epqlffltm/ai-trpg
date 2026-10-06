@@ -36,6 +36,7 @@ from app.assets.scenarios.snapshot import (
     upgrade_from_3,
     upgrade_from_4,
     upgrade_from_5,
+    upgrade_from_6,
 )
 from app.engine.sheet import fits
 from app.engine.templates import SRD5
@@ -393,6 +394,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'pregens': PREGENS,
         'character_modes': ['pregen', 'custom'],
         'default_sheet': SHEET,
+        'player_made_hp': None,
         'rulebook': {'id': rulebook['id'], 'title': '룰북', 'gm_guide': GM_GUIDE, 'rules': rulebook['rules']},
         'world': {'id': world['id'], 'title': '세계관', 'setting': SETTING, 'gm_notes': GM_NOTES},
         'lorebooks': [
@@ -624,11 +626,21 @@ def test_upgrades_a_format_4_document():
     assert 'default_sheet' not in format_4
 
 
-def make_format_5() -> dict:
-    """양의 등급이 없던 때의 판. 그때 DB 에 굳은 문서의 규칙에는 magnitudes 칸이 없다."""
-    document = upgrade_from_4(upgrade_from_3(upgrade_from_2(upgrade_from_1(FORMAT_1))))
-    rules = {key: value for key, value in document['rulebook']['rules'].items() if key != 'magnitudes'}
+def without_rules(document: dict, *names: str) -> dict:
+    """판의 규칙에서 칸 몇 개를 뺀 문서. 그 칸이 생기기 전에 DB 에 굳은 문서의 모양이다."""
+    rules = {key: value for key, value in document['rulebook']['rules'].items() if key not in names}
     return {**document, 'rulebook': {**document['rulebook'], 'rules': rules}}
+
+
+def make_format_5() -> dict:
+    """양의 등급이 없던 때의 판."""
+    document = upgrade_from_4(upgrade_from_3(upgrade_from_2(upgrade_from_1(FORMAT_1))))
+    return without_rules(document, 'magnitudes', 'hp_ability')
+
+
+def make_format_6() -> dict:
+    """최대 HP 에 닿는 능력치가 없던 때의 판."""
+    return without_rules(upgrade_from_5(make_format_5()), 'hp_ability')
 
 
 def test_upgrades_a_format_5_document():
@@ -638,11 +650,26 @@ def test_upgrades_a_format_5_document():
 
     # 규칙에 양의 등급이 없던 때의 판이다. 그때의 규칙(SRD5 템플릿)의 등급으로 읽는다
     assert upgraded['format'] == 6
-    assert upgraded['rulebook']['rules'] == SRD5.model_dump(mode='json')
+    assert upgraded['rulebook']['rules']['magnitudes'] == SRD5.model_dump(mode='json')['magnitudes']
     assert upgraded['rulebook']['gm_guide'] == GM_GUIDE
     # 받은 문서는 고치지 않는다. 안쪽의 규칙도 그대로다
     assert format_5['format'] == 5
     assert 'magnitudes' not in format_5['rulebook']['rules']
+
+
+def test_upgrades_a_format_6_document():
+    format_6 = make_format_6()
+
+    upgraded = upgrade_from_6(format_6)
+
+    # 규칙에 최대 HP 에 닿는 능력치가 없던 때의 판이다. 그때의 규칙(SRD5 템플릿)의 것으로 읽는다
+    assert upgraded['format'] == 7
+    assert upgraded['rulebook']['rules'] == SRD5.model_dump(mode='json')
+    # 플레이어가 능력치를 정하는 방식도 없던 때다. 그 방식에 쓰는 값은 없는 것으로 읽는다
+    assert upgraded['player_made_hp'] is None
+    # 받은 문서는 고치지 않는다
+    assert format_6['format'] == 6
+    assert 'hp_ability' not in format_6['rulebook']['rules']
 
 
 def test_reads_a_version_from_before_magnitudes():
@@ -666,7 +693,7 @@ def test_reads_a_document_of_any_format():
     assert read_snapshot(FORMAT_1) == read_snapshot(current)
     assert read_snapshot(FORMAT_1).format == SNAPSHOT_FORMAT
     assert read_snapshot(FORMAT_1).openings == [OPENING]
-    # 형식 1 은 1 → 2 → 3 → 4 → 5 → 6 을 차례로 거친다
+    # 형식 1 은 1 → 2 → 3 → 4 → 5 → 6 → 7 을 차례로 거친다
     assert read_snapshot(FORMAT_1).pregens == []
     assert read_snapshot(FORMAT_1).rulebook.rules == SRD5
 
