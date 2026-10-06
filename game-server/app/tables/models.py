@@ -39,6 +39,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.assets.models import (
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
+    CREATOR_MADE_MODES,
     DEFAULT_CHARACTER_MODES,
     TABLE_MAX_PLAYERS,
     TITLE_MAX_LENGTH,
@@ -46,6 +47,7 @@ from app.assets.models import (
     Rating,
     all_of,
     at_most,
+    none_of,
     one_of,
 )
 from app.core.database import Base
@@ -162,6 +164,9 @@ class TableMember(Base):
 
     캐릭터는 이름과 설명이다. 들어온 직후에는 아직 없다(character_name 이 비어 있다).
     프리젠에서 가져왔으면 어느 프리젠인지 적어 둔다. 가져온 뒤에 이름과 설명을 고쳐도 그 자리는 이 사람의 것이다.
+
+    캐릭터를 어느 방식으로 얻었는지도 적어 둔다(character_mode). 숫자가 어디서 왔는지는 테이블의 모두가 본다.
+    능력치만 봐서는 직접 적은 것인지 다른 방식으로 정한 것인지 알 수 없다.
     """
 
     __tablename__ = 'table_members'
@@ -172,11 +177,23 @@ class TableMember(Base):
         UniqueConstraint('table_id', 'pregen_index'),
         # 캐릭터가 없는데 프리젠만 차지하고 있을 수 없다
         CheckConstraint('character_name IS NOT NULL OR pregen_index IS NULL', name='pregen_needs_character'),
-        # 직접 정한 능력치는 직접 만든 캐릭터에만 있다. 캐릭터가 없거나 프리젠을 가져왔으면 없다
+        CheckConstraint(one_of('character_mode', CharacterMode), name='character_mode_allowed'),
+        # 방식은 캐릭터가 있을 때만, 그리고 반드시 있다
+        CheckConstraint('(character_mode IS NULL) = (character_name IS NULL)', name='character_mode_needs_character'),
+        # 프리젠을 차지한 자리는 프리젠 방식이고, 프리젠 방식인 자리는 프리젠을 차지하고 있다.
+        # IS NOT DISTINCT FROM: 방식이 비어 있어도 참·거짓이 나온다. = 로 견주면 "모름"이 되어 조건을 그냥 지나간다
         CheckConstraint(
-            'abilities IS NULL OR (character_name IS NOT NULL AND pregen_index IS NULL)',
-            name='abilities_need_own_character',
+            f"(pregen_index IS NOT NULL) = (character_mode IS NOT DISTINCT FROM '{CharacterMode.PREGEN}')",
+            name='pregen_needs_pregen_mode',
         ),
+        # 플레이어가 정한 능력치는 그런 방식의 캐릭터에만, 그리고 반드시 있다.
+        # 제작자가 숫자를 적어 둔 방식(프리젠, 기본 시트)이 아니면 모두 그런 방식이다. 방식이 늘어도 이 조건은 그대로다
+        CheckConstraint(
+            f'(abilities IS NOT NULL) = {none_of("character_mode", CREATOR_MADE_MODES)}',
+            name='abilities_need_player_made_mode',
+        ),
+        # 능력치는 이름표에서 점수로 가는 묶음이다. JSON 의 null 이나 숫자 하나가 "있는 능력치"로 적히지 못한다
+        CheckConstraint("abilities IS NULL OR jsonb_typeof(abilities) = 'object'", name='abilities_is_object'),
     )
 
     # 두 칸을 합쳐 기본 키로 삼는다. 한 사람이 같은 테이블에 두 번 앉을 수 없다.
@@ -190,12 +207,17 @@ class TableMember(Base):
     # 캐릭터의 설명. 턴마다 AI 의 입력에 들어간다
     character_description: Mapped[str] = mapped_column(Text, default='')
 
+    # 캐릭터를 얻은 방식(CharacterMode). 캐릭터를 아직 만들지 않았으면 비어 있다
+    character_mode: Mapped[str | None] = mapped_column(String(20))
+
     # 가져온 프리젠. content 의 pregens 에서 몇 번째인가(0 부터). 직접 만들었으면 비어 있다
     pregen_index: Mapped[int | None] = mapped_column(SmallInteger)
 
     # 플레이어가 직접 정한 능력치의 점수. 그런 방식으로 캐릭터를 만들었을 때만 있다.
-    # 받을 때 이 테이블의 규칙과 견주어 봤다. 게임을 시작할 때 이것으로 시트를 만든다(app/tables/sheets.py)
-    abilities: Mapped[dict | None] = mapped_column(JSONB)
+    # 받을 때 이 테이블의 규칙과 견주어 봤다. 게임을 시작할 때 이것으로 시트를 만든다(app/tables/sheets.py).
+    # none_as_null: 파이썬의 None 을 DB 의 NULL 로 적는다. 이 설정이 없으면 JSON 의 null 이라는 "값"이 적힌다.
+    # 그 값은 IS NULL 이 아니어서, 능력치를 지웠는데도 DB 의 조건은 능력치가 있다고 본다
+    abilities: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
 
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

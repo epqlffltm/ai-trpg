@@ -181,14 +181,16 @@ def resolve_character(snapshot: Snapshot, data: CharacterUpdate) -> tuple[str, s
 
 def accept_abilities(snapshot: Snapshot, data: CharacterUpdate) -> dict[str, int] | None:
     """
-    직접 정한 능력치를 이 테이블의 규칙과 견주어 보고, 자리에 적을 값을 돌려준다. 능력치를 적지 않았으면 None.
+    플레이어가 정한 능력치를 이 테이블의 규칙과 견주어 보고, 자리에 적을 값을 돌려준다. 능력치를 적지 않았으면 None.
 
     규칙의 능력치가 빠짐없이 있어야 하고, 점수가 규칙의 범위 안이어야 한다. 아니면 TableOptionError.
-    그 밖의 제한은 없다. 직접 입력은 플레이어가 책임지는 방식이다.
+    거기에 방식이 거는 제한을 지켜야 한다. 점수제는 총점 안이어야 한다. 직접 적기는 제한이 없다.
+    무엇이 틀렸는지는 가르지 않는다. 총점과 값표는 응답의 rules 에 있어서 보내기 전에 계산해 볼 수 있다.
     """
     if data.abilities is None:
         return None
-    if not abilities_fit(snapshot.rulebook.rules, data.abilities):
+    ruleset = snapshot.rulebook.rules
+    if not abilities_fit(ruleset, data.abilities) or not sheets.obeys_mode(ruleset, data.chosen_mode, data.abilities):
         raise TableOptionError('abilities')
     return dict(data.abilities)
 
@@ -491,6 +493,7 @@ async def set_character(
 
     member.character_name = name
     member.character_description = description
+    member.character_mode = data.chosen_mode
     member.pregen_index = data.pregen_index
     member.abilities = abilities
     return await save(session, table)

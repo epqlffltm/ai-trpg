@@ -110,14 +110,22 @@ class CharacterMode(enum.StrEnum):
     # 이름과 설명에 더해 능력치의 점수도 직접 적는다. 기본 시트를 쓰지 않는다.
     # 규칙의 점수 범위만 지키면 무엇이든 적을 수 있다. 균형은 그 플레이어와 테이블의 몫이다
     MANUAL = 'manual'
+    # 정해진 총점 안에서 능력치의 점수를 산다. 기본 시트를 쓰지 않는다.
+    # 총점과 값표는 룰북의 규칙에 있다(Ruleset.point_buy). 같은 총점에서 시작하므로 캐릭터끼리 고르다
+    POINT_BUY = 'point_buy'
 
+
+# 제작자가 숫자를 적어 둔 방식들. 이 방식의 캐릭터는 판에 적힌 시트를 그대로 받는다.
+# 이 둘이 아닌 방식은 모두 플레이어가 능력치를 정하는 방식이다
+CREATOR_MADE_MODES = (CharacterMode.PREGEN, CharacterMode.CUSTOM)
 
 # 방식을 고르지 않았을 때 허용하는 것. 처음부터 있던 둘이다.
 # 플레이어가 숫자를 정하는 방식은 제작자가 직접 켜야 한다. 방식이 늘어도 이 목록은 그대로다
 DEFAULT_CHARACTER_MODES = [CharacterMode.PREGEN, CharacterMode.CUSTOM]
 
-# 플레이어가 능력치를 정하는 방식들. 이 중 하나라도 허용하면 최대 HP 를 구하는 값(기준값과 상한)이 있어야 한다
-PLAYER_MADE_MODES = frozenset({CharacterMode.MANUAL})
+# 플레이어가 능력치를 정하는 방식들. 제작자가 숫자를 적어 둔 방식이 아닌 것 모두다.
+# 이 중 하나라도 허용하면 최대 HP 를 구하는 값(기준값과 상한)이 있어야 한다
+PLAYER_MADE_MODES = frozenset(CharacterMode) - frozenset(CREATOR_MADE_MODES)
 
 # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구할 때 쓰는 기준값과 상한이 가질 수 있는 가장 큰 값.
 # 시트의 최대 HP 의 한도(app/engine/sheet.py 의 SHEET_MAX_HP)와 같다
@@ -128,6 +136,12 @@ def one_of(column: str, values: type[enum.StrEnum]) -> str:
     """컬럼의 값이 정해진 목록 안에 있어야 한다는 조건을 SQL 로 만든다."""
     allowed = ', '.join(f"'{value}'" for value in values)
     return f'{column} IN ({allowed})'
+
+
+def none_of(column: str, values: tuple[enum.StrEnum, ...]) -> str:
+    """컬럼의 값이 있고, 적은 목록의 어느 것도 아니어야 한다는 조건을 SQL 로 만든다."""
+    excluded = ', '.join(f"'{value}'" for value in values)
+    return f'({column} IS NOT NULL AND {column} NOT IN ({excluded}))'
 
 
 def all_of(column: str, values: type[enum.StrEnum]) -> str:

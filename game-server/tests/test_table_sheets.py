@@ -185,7 +185,7 @@ async def test_the_host_cannot_widen_the_modes(
     assert 'character_modes' in response.json()['detail']
 
 
-@pytest.mark.parametrize('chosen', [[], ['point_buy'], ['pregen', 'pregen'], 'pregen'])
+@pytest.mark.parametrize('chosen', [[], ['cheat'], ['pregen', 'pregen'], 'pregen'])
 async def test_rejects_modes_with_a_bad_shape(client: AsyncClient, me: dict[str, str], chosen):
     scenario = await publish_scenario(client, me)
 
@@ -417,7 +417,7 @@ async def test_the_database_gives_no_sheet_to_someone_who_is_not_seated(started_
         await session.commit()
 
 
-@pytest.mark.parametrize('modes', [[], ['point_buy'], ['pregen', 'point_buy']])
+@pytest.mark.parametrize('modes', [[], ['cheat'], ['pregen', 'cheat']])
 async def test_the_database_rejects_modes_it_does_not_know(
     started_table: dict, session: AsyncSession, modes: list[str]
 ):

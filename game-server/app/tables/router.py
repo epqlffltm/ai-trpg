@@ -77,6 +77,7 @@ def to_member(table: GameTable, member: TableMember) -> MemberOut:
         user_id=member.user_id,
         is_host=member.user_id == table.host_id,
         character=character,
+        character_mode=member.character_mode,
         pregen_index=member.pregen_index,
         abilities=member.abilities,
         sheet=to_sheet(member.sheet),
