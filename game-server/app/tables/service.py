@@ -38,7 +38,7 @@ from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
 from app.tables import passwords, repository, sheets
-from app.tables.models import GameTable, TableMember, TableStatus
+from app.tables.models import GameTable, TableMember, TableRoll, TableStatus
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
 
 
@@ -81,6 +81,14 @@ class Conflict(enum.StrEnum):
     CANNOT_KICK_SELF = 'cannot_kick_self'
     # 이 등급의 테이블은 혼자서만 할 수 있다(성인 인증이 생길 때까지)
     SOLO_ONLY = 'solo_only'
+    # 이 테이블에서 이미 굴렸다. 한 사람은 한 번 굴린다. 방장이 "한 번 더"를 줘야 다시 굴린다
+    ALREADY_ROLLED = 'already_rolled'
+    # 아직 굴리지 않았다. 굴린 점수가 있어야 능력치에 놓을 수 있고, "한 번 더"를 받을 수 있다
+    NOT_ROLLED = 'not_rolled'
+    # 이 테이블에서는 다시 굴리게 해 줄 수 없다. 시나리오의 제작자가 허락하지 않았다
+    REROLL_NOT_ALLOWED = 'reroll_not_allowed'
+    # 이미 "한 번 더"를 줬고, 그 사람이 아직 쓰지 않았다
+    REROLL_ALREADY_GRANTED = 'reroll_already_granted'
 
 
 class TableConflictError(Exception):
@@ -179,18 +187,25 @@ def resolve_character(snapshot: Snapshot, data: CharacterUpdate) -> tuple[str, s
     return name, description
 
 
-def accept_abilities(snapshot: Snapshot, data: CharacterUpdate) -> dict[str, int] | None:
+def accept_abilities(snapshot: Snapshot, data: CharacterUpdate, roll: TableRoll | None) -> dict[str, int] | None:
     """
     플레이어가 정한 능력치를 이 테이블의 규칙과 견주어 보고, 자리에 적을 값을 돌려준다. 능력치를 적지 않았으면 None.
+    roll 은 이 사람이 이 테이블에서 굴려 둔 것이다.
 
     규칙의 능력치가 빠짐없이 있어야 하고, 점수가 규칙의 범위 안이어야 한다. 아니면 TableOptionError.
-    거기에 방식이 거는 제한을 지켜야 한다. 점수제는 총점 안이어야 한다. 직접 적기는 제한이 없다.
-    무엇이 틀렸는지는 가르지 않는다. 총점과 값표는 응답의 rules 에 있어서 보내기 전에 계산해 볼 수 있다.
+    거기에 방식이 거는 제한을 지켜야 한다. 점수제는 총점 안이어야 하고, 주사위는 굴려 둔 점수를 그대로 써야 한다.
+    직접 적기는 제한이 없다.
+    무엇이 틀렸는지는 가르지 않는다. 총점과 값표, 굴린 점수는 응답에 있어서 보내기 전에 견주어 볼 수 있다.
+
+    주사위 방식인데 아직 굴리지 않았으면 TableConflictError 다. 보낸 값이 틀린 것이 아니라 순서가 틀린 것이다.
     """
     if data.abilities is None:
         return None
+    mode = data.chosen_mode
+    if mode == CharacterMode.ROLLED and roll is None:
+        raise TableConflictError(Conflict.NOT_ROLLED)
     ruleset = snapshot.rulebook.rules
-    if not abilities_fit(ruleset, data.abilities) or not sheets.obeys_mode(ruleset, data.chosen_mode, data.abilities):
+    if not abilities_fit(ruleset, data.abilities) or not sheets.obeys_mode(ruleset, mode, data.abilities, roll):
         raise TableOptionError('abilities')
     return dict(data.abilities)
 
@@ -473,7 +488,8 @@ async def set_character(
     """
     자기 캐릭터를 정한다. 직접 만들거나 프리젠을 가져온다. 다시 부르면 통째로 바뀐다.
 
-    모집 중이 아니거나, 이 테이블에서 허용하지 않는 방식이거나, 다른 사람이 그 프리젠을 가져갔으면 TableConflictError.
+    모집 중이 아니거나, 이 테이블에서 허용하지 않는 방식이거나, 다른 사람이 그 프리젠을 가져갔거나,
+    주사위 방식인데 아직 굴리지 않았으면 TableConflictError.
     없는 프리젠이거나, 직접 정한 능력치가 이 테이블의 규칙에 맞지 않으면 TableOptionError.
 
     프리젠을 가져갔다가 직접 만든 캐릭터로 바꾸면, 그 프리젠은 다시 고를 수 있게 된다.
@@ -487,7 +503,7 @@ async def set_character(
 
     snapshot = read_snapshot(table.content)
     name, description = resolve_character(snapshot, data)
-    abilities = accept_abilities(snapshot, data)
+    abilities = accept_abilities(snapshot, data, sheets.find_roll(table, user_id))
     if data.pregen_index is not None:
         require_pregen_free(table, member, data.pregen_index)
 

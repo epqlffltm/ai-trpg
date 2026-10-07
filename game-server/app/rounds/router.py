@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 
 from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
-from app.engine.dice import Dice
+from app.core.dice import Rolling
 from app.rounds import service
 from app.rounds.closing import RoundCloser
 from app.rounds.models import Declaration, Round, RoundStatus
@@ -35,18 +35,8 @@ def get_closer(request: Request) -> RoundCloser:
     return RoundCloser(session_factory=state.session_factory, narrator=state.narrator, jobs=state.jobs)
 
 
-def get_dice(request: Request) -> Dice:
-    """
-    판정에 쓰는 주사위를 내준다. 앱에 꽂아 둔 것이다(app/main.py).
-
-    테스트는 정해진 눈을 내는 주사위를 꽂는다.
-    """
-    return request.app.state.dice
-
-
 # 라운드를 닫을 수 있는 API 가 인자의 형식으로 쓴다
 Closing = Annotated[RoundCloser, Depends(get_closer)]
-Rolling = Annotated[Dice, Depends(get_dice)]
 
 # 라운드의 번호. 1 부터다
 RoundNumber = Annotated[int, Path(ge=1)]

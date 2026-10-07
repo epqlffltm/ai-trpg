@@ -436,7 +436,7 @@ def make_snapshot(player_made_hp: dict | None = HP) -> Snapshot:
     """직접 적기를 허용하는 판. 최대 HP 를 구하는 값은 바꿔 볼 수 있다."""
     return read_snapshot(
         {
-            'format': 8,
+            'format': 9,
             'title': '판',
             'description': '',
             'rating': 'all',
@@ -446,6 +446,7 @@ def make_snapshot(player_made_hp: dict | None = HP) -> Snapshot:
             'character_modes': ['pregen', 'custom', 'manual'],
             'default_sheet': DEFAULT_SHEET,
             'player_made_hp': player_made_hp,
+            'reroll_allowed': False,
             'rulebook': {'id': str(ME), 'title': '룰북', 'gm_guide': '', 'rules': SRD5.model_dump(mode='json')},
             'world': None,
             'lorebooks': [],
