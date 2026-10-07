@@ -55,7 +55,14 @@ def load_backfill_rules() -> dict:
     magnitudes = load_migration('rulebook_magnitudes').MAGNITUDES
     hp_ability = load_migration('rulebook_hp_ability').HP_ABILITY
     point_buy = load_migration('rulebook_point_buy').POINT_BUY
-    return {**rules, 'magnitudes': magnitudes, 'hp_ability': hp_ability, 'point_buy': point_buy}
+    score_roll = load_migration('rulebook_score_roll').SCORE_ROLL
+    return {
+        **rules,
+        'magnitudes': magnitudes,
+        'hp_ability': hp_ability,
+        'point_buy': point_buy,
+        'score_roll': score_roll,
+    }
 
 
 # --- 내장 템플릿 ---
@@ -175,6 +182,21 @@ def test_a_ruleset_cannot_be_changed_after_it_is_made():
         {'point_buy': {'budget': 27, 'costs': [{'score': 0, 'cost': 0}]}},
         # 값을 식으로 적지 못한다. 값은 표에 있는 숫자뿐이다
         {'point_buy': {'budget': 27, 'costs': [{'score': 10, 'cost': 0}], 'formula': 'score - 8'}},
+        # 주사위로 정하는 법: 하나 이상 굴리고, 면이 둘 이상이고, 굴린 것보다 많이 더할 수 없다
+        {'score_roll': {'count': 0, 'sides': 6, 'keep': 1}},
+        {'score_roll': {'count': 11, 'sides': 6, 'keep': 3}},
+        {'score_roll': {'count': 4, 'sides': 1, 'keep': 3}},
+        {'score_roll': {'count': 4, 'sides': 6, 'keep': 0}},
+        {'score_roll': {'count': 4, 'sides': 6, 'keep': 5}},
+        # 나올 점수(2~12)는 범위 안이지만, 하나를 굴려 둘을 더할 수는 없다
+        {'score_roll': {'count': 1, 'sides': 6, 'keep': 2}},
+        # 나올 수 있는 점수가 규칙의 점수 범위(1~20)를 벗어난다. 4d6 을 모두 더하면 24 까지 나온다
+        {'score_roll': {'count': 4, 'sides': 6, 'keep': 4}},
+        {'score_roll': {'count': 3, 'sides': 8, 'keep': 3}},
+        # 가장 작은 점수(3)가 범위의 아래(5)보다 작다
+        {'score_min': 5, 'score_roll': {'count': 4, 'sides': 6, 'keep': 3}},
+        # 몇 번 굴리는지는 적지 않는다. 능력치의 수만큼이다
+        {'score_roll': {'count': 4, 'sides': 6, 'keep': 3, 'times': 7}},
         {'unknown': 1},
     ],
 )
@@ -202,8 +224,9 @@ def test_the_limits_themselves_are_allowed():
             score_max=5,
             magnitudes=most_magnitudes,
             hp_ability='a0',
-            # 점수가 5 하나뿐인 규칙이다. SRD5 의 값표(8~15)는 맞지 않는다
+            # 점수가 5 하나뿐인 규칙이다. SRD5 의 값표(8~15)도, 주사위로 나오는 점수(3~18)도 맞지 않는다
             point_buy=None,
+            score_roll=None,
         )
     )
 
@@ -272,11 +295,52 @@ def test_the_most_costs_are_allowed():
     costs = [{'score': 5, 'cost': 0}]
     most = [{'score': number + 1, 'cost': number} for number in range(RULESET_MAX_POINT_COSTS)]
 
-    one = Ruleset.model_validate(rules(score_min=5, score_max=5, point_buy={'budget': 1, 'costs': costs}))
-    many = Ruleset.model_validate(rules(score_min=1, score_max=30, point_buy={'budget': 100, 'costs': most}))
+    # 점수의 범위를 바꿨으니 주사위로 정하는 법(3~18)은 뺀다. 여기서 보는 것은 값표의 줄 수다
+    narrow = rules(score_min=5, score_max=5, score_roll=None, point_buy={'budget': 1, 'costs': costs})
+    wide = rules(score_min=1, score_max=30, point_buy={'budget': 100, 'costs': most})
+
+    one = Ruleset.model_validate(narrow)
+    many = Ruleset.model_validate(wide)
 
     assert len(one.point_buy.costs) == 1
     assert len(many.point_buy.costs) == RULESET_MAX_POINT_COSTS
+
+
+def test_the_built_in_template_rolls_four_dice_and_keeps_three():
+    score_roll = SRD5.score_roll
+
+    assert (score_roll.count, score_roll.sides, score_roll.keep) == (4, 6, 3)
+
+
+def test_a_ruleset_may_have_no_score_roll():
+    ruleset = Ruleset.model_validate(rules(score_roll=None))
+
+    assert ruleset.score_roll is None
+
+
+def test_a_ruleset_must_say_whether_scores_can_be_rolled():
+    document = SRD5.model_dump(mode='json')
+    del document['score_roll']
+
+    # "그런 방식이 없다"(None)와 "적지 않았다"는 다르다. 적지 않은 문서는 규칙으로 읽히지 않는다
+    with pytest.raises(ValidationError):
+        Ruleset.model_validate(document)
+
+
+@pytest.mark.parametrize(
+    'score_roll',
+    [
+        # 범위의 양 끝에 꼭 맞는 것. 1d20 은 1~20, 2d10 은 2~20
+        {'count': 1, 'sides': 20, 'keep': 1},
+        {'count': 2, 'sides': 10, 'keep': 2},
+        # 많이 굴려 조금만 더한다
+        {'count': 10, 'sides': 6, 'keep': 3},
+    ],
+)
+def test_any_roll_that_stays_in_the_score_range_is_allowed(score_roll: dict):
+    ruleset = Ruleset.model_validate(rules(score_roll=score_roll))
+
+    assert ruleset.score_roll.keep == score_roll['keep']
 
 
 def test_a_ruleset_without_magnitudes_is_not_a_ruleset():

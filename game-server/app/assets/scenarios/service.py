@@ -36,6 +36,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         character_modes=list(data.character_modes),
         default_sheet=data.default_sheet.model_dump() if data.default_sheet else None,
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
+        reroll_allowed=data.reroll_allowed,
     )
 
 

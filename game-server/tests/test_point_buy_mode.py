@@ -144,7 +144,7 @@ async def seat_of(client: AsyncClient, headers: dict[str, str], table: dict) -> 
 
 def test_point_buy_is_a_way_where_the_player_sets_the_numbers():
     # 플레이어가 능력치를 정하는 방식이다. 최대 HP 를 구하는 값이 있어야 하고, 능력치를 적어야 한다
-    assert {CharacterMode.MANUAL, CharacterMode.POINT_BUY} == PLAYER_MADE_MODES
+    assert CharacterMode.POINT_BUY in PLAYER_MADE_MODES
     # 방식이 늘어도 고르지 않았을 때 허용하는 것은 처음의 둘이다
     assert DEFAULT_CHARACTER_MODES == [CharacterMode.PREGEN, CharacterMode.CUSTOM]
 
@@ -451,12 +451,12 @@ async def test_scores_cannot_be_bought_after_the_game_starts(client: AsyncClient
     ids=['bought within the budget', 'bought over the budget', 'written'],
 )
 def test_each_way_has_its_own_limit(mode: CharacterMode, abilities: dict, obeys: bool):
-    assert sheets.obeys_mode(SRD5, mode, abilities) is obeys
+    assert sheets.obeys_mode(SRD5, mode, abilities, None) is obeys
 
 
 def test_nothing_can_be_bought_where_the_rules_have_no_point_buy():
     # 게시 조건이 막는 일이다. 그래도 생기면 아무것도 살 수 없다
-    assert not sheets.obeys_mode(NO_POINT_BUY, CharacterMode.POINT_BUY, scores())
+    assert not sheets.obeys_mode(NO_POINT_BUY, CharacterMode.POINT_BUY, scores(), None)
 
 
 # --- DB 의 마지막 방어선 ---

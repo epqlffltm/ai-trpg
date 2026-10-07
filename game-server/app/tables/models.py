@@ -3,10 +3,11 @@
 """
 테이블의 모델. 테이블은 시나리오의 판 하나를 가져와 AI GM 과 플레이하는 자리다.
 
-테이블 셋이 있다.
+테이블 넷이 있다.
   - game_tables: 테이블 자신. 방장, 어느 판에서 왔는지, 판의 복사본, 정원, 상태.
   - table_members: 테이블에 앉은 사람과 그 사람의 캐릭터(이름과 설명: 글).
   - table_sheets: 앉은 사람의 캐릭터 시트(능력치와 HP: 숫자). 게임을 시작할 때 생긴다.
+  - table_rolls: 주사위로 굴린 능력치의 점수들. 사람이 나가도 남는다.
 
 판은 고치지 않는다. 테이블은 만들 때 판의 내용을 통째로 복사해 온다(content).
 플레이하면서 바뀌는 것(죽은 NPC, 열린 문)은 이 복사본을 고친다. 같은 판으로 만든 다른 테이블에는 영향이 없다.
@@ -157,6 +158,10 @@ class GameTable(Base):
         lazy='selectin', cascade='all, delete-orphan', order_by='TableMember.joined_at, TableMember.user_id'
     )
 
+    # 이 테이블에서 주사위로 굴린 능력치의 점수들. 한 사람에 하나다. 테이블을 읽을 때 함께 읽는다.
+    # 앉은 사람(members)이 아니라 테이블에 달려 있다. 나갔다가 다시 들어와도 굴린 것이 남아 있어야 한다
+    rolls: Mapped[list['TableRoll']] = relationship(lazy='selectin', cascade='all, delete-orphan')
+
 
 class TableMember(Base):
     """
@@ -264,3 +269,40 @@ class TableSheet(Base):
     hp: Mapped[int] = mapped_column(SmallInteger)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TableRoll(Base):
+    """
+    한 사람이 한 테이블에서 주사위로 굴린 능력치의 점수들.
+
+    자리(table_members)에 두지 않고 따로 둔다. 자리의 행은 나가면 지워진다.
+    거기에 두면 나갔다가 다시 들어와서 새로 굴릴 수 있다. "한 테이블에서 한 번"이 지켜지지 않는다.
+    그래서 테이블과 사람으로 찾는 행을 따로 두고, 사람이 나가도 지우지 않는다. 테이블이 지워질 때 함께 지워진다.
+
+    행은 처음 굴릴 때 생긴다. 다시 굴리면 같은 행의 값을 바꾼다. 지난 값은 이벤트에 남아 있다.
+    굴린 점수를 어느 능력치에 놓았는지는 여기에 없다. 그것은 자리의 abilities 다.
+    """
+
+    __tablename__ = 'table_rolls'
+    __table_args__ = (
+        CheckConstraint('times_rolled >= 1', name='times_rolled_positive'),
+        # 굴린 눈과 점수는 목록이다
+        CheckConstraint("jsonb_typeof(dice) = 'array' AND jsonb_typeof(scores) = 'array'", name='rolls_are_arrays'),
+    )
+
+    # 두 칸을 합쳐 기본 키로 삼는다. 한 사람이 한 테이블에서 갖는 굴림은 하나다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 인증 서버의 public_id. 자리(table_members)를 가리키지 않는다. 자리가 없어져도 남아야 한다
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+
+    # 굴린 눈. 점수 하나마다 눈의 목록이 하나다. 버린 눈도 들어 있다. 예: [[6, 5, 3, 1], [4, 4, 2, 2], ...]
+    dice: Mapped[list] = mapped_column(JSONB)
+    # 굴려서 나온 점수들. 굴린 순서다. 예: [14, 10, ...]. 플레이어가 이것을 능력치에 놓는다
+    scores: Mapped[list] = mapped_column(JSONB)
+
+    # 이 테이블에서 몇 번 굴렸는가. 처음 굴리면 1 이다
+    times_rolled: Mapped[int] = mapped_column(SmallInteger, default=1)
+    # 방장이 "한 번 더"를 줬는가. 다시 굴리면 꺼진다. 주어진 것은 한 번에 하나다
+    reroll_granted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+
+    rolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

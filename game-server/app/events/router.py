@@ -32,6 +32,9 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.MEMBER_LEFT: ('character_name',),
     EventType.MEMBER_KICKED: ('user_id', 'character_name'),
     EventType.HOST_CHANGED: ('user_id',),
+    # 능력치의 굴림도 공개다. 버린 눈까지 모두에게 보인다
+    EventType.ABILITIES_ROLLED: ('dice', 'scores', 'times_rolled'),
+    EventType.REROLL_GRANTED: ('user_id',),
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
     EventType.ROUND_OPENED: ('number',),
