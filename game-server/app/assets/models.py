@@ -26,6 +26,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -113,6 +114,9 @@ class CharacterMode(enum.StrEnum):
     # 정해진 총점 안에서 능력치의 점수를 산다. 기본 시트를 쓰지 않는다.
     # 총점과 값표는 룰북의 규칙에 있다(Ruleset.point_buy). 같은 총점에서 시작하므로 캐릭터끼리 고르다
     POINT_BUY = 'point_buy'
+    # 서버가 주사위를 굴려 점수들을 정하고, 플레이어가 그 점수를 원하는 능력치에 놓는다. 기본 시트를 쓰지 않는다.
+    # 굴리는 법은 룰북의 규칙에 있다(Ruleset.score_roll). 한 테이블에서 한 사람이 한 번 굴린다
+    ROLLED = 'rolled'
 
 
 # 제작자가 숫자를 적어 둔 방식들. 이 방식의 캐릭터는 판에 적힌 시트를 그대로 받는다.
@@ -326,6 +330,11 @@ class Scenario(AssetContent):
     character_modes: Mapped[list[str]] = mapped_column(
         ARRAY(String(20)), default=lambda: list(DEFAULT_CHARACTER_MODES), server_default=text("'{pregen,custom}'")
     )
+
+    # 주사위로 정한 점수를 다시 굴리게 해 줄 수 있는가. 제작자가 정한다. 기본은 안 된다.
+    # 켜면 방장이 테이블에서 특정한 사람에게 "한 번 더"를 줄 수 있다. 꺼져 있으면 방장도 주지 못한다.
+    # 나쁜 눈이 나와도 그대로 가는 것이 이 시나리오의 뜻일 수 있다. 그래서 방장이 아니라 제작자가 정한다
+    reroll_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 
     # 기본 시트. 캐릭터를 직접 만든 사람이 받는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 직접 만들기를 허용했으면 게시할 때 있어야 한다

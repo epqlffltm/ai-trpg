@@ -13,18 +13,21 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 판단하고, 객
 
 시트가 오는 곳은 셋이다.
   - 프리젠을 골랐으면 그 프리젠의 시트(제작자가 적은 숫자).
-  - 플레이어가 능력치를 정했으면(직접 적기, 점수제) 그 점수로 만든 시트. 최대 HP 는 규칙으로 구한다
+  - 플레이어가 능력치를 정했으면(직접 적기, 점수제, 주사위) 그 점수로 만든 시트. 최대 HP 는 규칙으로 구한다
     (app/engine/creation.py). 어느 방식으로 정했든 시트를 만드는 법은 같다. 다른 것은 받을 때의 제한이다(obeys_mode).
   - 둘 다 아니면 판의 기본 시트(제작자가 적은 숫자).
 """
+
+import uuid
 
 from app.assets.models import CharacterMode
 from app.assets.scenarios.snapshot import Snapshot
 from app.engine.creation import build_sheet
 from app.engine.point_buy import affordable
 from app.engine.ruleset import Ruleset
+from app.engine.score_roll import uses_exactly
 from app.engine.sheet import Sheet
-from app.tables.models import GameTable, TableMember, TableSheet
+from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 
 
 def narrow_modes(allowed: list[CharacterMode], chosen: list[CharacterMode] | None) -> list[CharacterMode] | None:
@@ -51,16 +54,43 @@ def seats_by_pregens(snapshot: Snapshot, modes: list[CharacterMode]) -> int | No
     return None
 
 
-def obeys_mode(ruleset: Ruleset, mode: CharacterMode, abilities: dict[str, int]) -> bool:
-    """
-    이 능력치가 그 방식이 거는 제한을 지켰는가.
+def find_roll(table: GameTable, user_id: uuid.UUID) -> TableRoll | None:
+    """이 사람이 이 테이블에서 굴린 것을 찾는다. 굴린 적이 없으면 None."""
+    return next((roll for roll in table.rolls if roll.user_id == user_id), None)
 
-    점수제는 규칙의 총점 안에서 살 수 있는 점수여야 한다. 직접 적기는 거는 제한이 없다.
+
+def may_roll(roll: TableRoll | None) -> bool:
+    """
+    지금 굴릴 수 있는가. 아직 굴리지 않았거나, 방장이 "한 번 더"를 줬을 때다.
+
+    한 테이블에서 한 사람은 한 번 굴린다. 좋은 눈이 나올 때까지 굴릴 수 있으면 주사위의 뜻이 없다.
+    """
+    return roll is None or roll.reroll_granted
+
+
+def obeys_mode(ruleset: Ruleset, mode: CharacterMode, abilities: dict[str, int], roll: TableRoll | None) -> bool:
+    """
+    이 능력치가 그 방식이 거는 제한을 지켰는가. roll 은 이 사람이 굴려 둔 것이다(없으면 None).
+
+    점수제는 규칙의 총점 안에서 살 수 있는 점수여야 한다.
+    주사위는 굴려 둔 점수를 남김없이 한 번씩 쓴 것이어야 한다. 굴린 적이 없으면 지킨 것이 아니다.
+    직접 적기는 거는 제한이 없다.
     규칙의 능력치와 점수 범위에 맞는지는 방식과 상관없다. 여기서 보지 않는다(app/engine/sheet.py 의 abilities_fit).
     """
     if mode == CharacterMode.POINT_BUY:
         return affordable(ruleset, abilities)
+    if mode == CharacterMode.ROLLED:
+        return roll is not None and uses_exactly(roll.scores, abilities)
     return True
+
+
+def clear_character(member: TableMember) -> None:
+    """자리의 캐릭터를 지운다. 캐릭터를 정하기 전으로 돌아간다."""
+    member.character_name = None
+    member.character_description = ''
+    member.character_mode = None
+    member.pregen_index = None
+    member.abilities = None
 
 
 def build_player_made(snapshot: Snapshot, abilities: dict[str, int]) -> Sheet | None:
