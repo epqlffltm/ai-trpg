@@ -99,6 +99,8 @@ class CharacterUpdate(BaseModel):
       - custom: 이름을 적는다. 숫자는 시나리오의 기본 시트를 받는다.
       - manual: 이름과 능력치의 점수(abilities)를 적는다. 최대 HP 는 적지 않는다. 규칙으로 구한다.
       - point_buy: manual 과 같은 칸을 적는다. 점수는 규칙의 총점 안에서 살 수 있는 것이어야 한다.
+      - rolled: manual 과 같은 칸을 적는다. 점수는 먼저 굴려 둔 것을 남김없이 한 번씩 쓴 것이어야 한다.
+        굴리는 것은 다른 주소다(POST .../character/roll). 굴린 점수를 여기에 적어 보내는 것이 아니다.
 
     mode 를 비우면 pregen_index 가 있으면 pregen, 없으면 custom 으로 본다.
     능력치를 적는 방식은 여럿이라, 능력치를 보낼 때는 mode 를 반드시 적는다.
@@ -162,6 +164,19 @@ class SheetOut(BaseModel):
     hp: int
 
 
+class RollOut(BaseModel):
+    """주사위로 굴린 능력치의 점수들. 앉은 사람은 서로의 굴림을 본다."""
+
+    # 굴린 눈. 점수 하나마다 눈의 목록이 하나다. 버린 눈도 들어 있다
+    dice: list[list[int]]
+    # 굴려서 나온 점수들. 이것을 능력치에 놓는다
+    scores: list[int]
+    # 이 테이블에서 몇 번 굴렸는가
+    times_rolled: int
+    # 방장이 "한 번 더"를 줬는가. 켜져 있으면 다시 굴릴 수 있다
+    reroll_granted: bool
+
+
 class MemberOut(BaseModel):
     """테이블에 앉은 사람 하나."""
 
@@ -174,7 +189,9 @@ class MemberOut(BaseModel):
     character_mode: CharacterMode | None
     # 프리젠에서 가져왔으면 몇 번째 프리젠인가
     pregen_index: int | None
-    # 플레이어가 정한 능력치의 점수. 그런 방식(manual, point_buy)으로 만들었을 때만 있다.
+    # 주사위로 굴린 점수들. 이 테이블에서 굴린 적이 있으면 있다. 다른 방식으로 캐릭터를 만들었어도 남아 있다
+    roll: RollOut | None
+    # 플레이어가 정한 능력치의 점수. 그런 방식(manual, point_buy, rolled)으로 만들었을 때만 있다.
     # 시작하면 이것으로 시트가 만들어진다
     abilities: dict[str, int] | None
     # 게임을 시작하기 전에는 None 이다. 시작할 때 받는다
@@ -236,6 +253,8 @@ class TableDetail(TableSummary):
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용하지 않는 테이블이면 None 이다.
     # 최대 HP = 기준값 + 능력치의 보정, 상한을 넘지 않는다. 어느 능력치인지는 rules 의 hp_ability 다
     player_made_hp: PlayerMadeHp | None
+    # 방장이 "한 번 더 굴리기"를 줄 수 있는 테이블인가. 제작자가 허락했고, 주사위로 정하는 방식을 쓰는 테이블일 때다
+    reroll_allowed: bool
     pregens: list[PregenChoice]
     members: list[MemberOut]
     # 초대 코드. 방장에게만 보인다

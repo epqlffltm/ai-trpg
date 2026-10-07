@@ -131,6 +131,27 @@ class PointBuy(Part):
         return self
 
 
+class ScoreRoll(Part):
+    """
+    능력치의 점수 하나를 주사위로 정하는 법. 예: 4d6 을 굴려 높은 셋을 더한다.
+
+    count 개의 sides 면 주사위를 굴려, 높은 것부터 keep 개를 더한 값이 점수 하나다.
+    이것을 능력치의 수만큼 되풀이한다. 능력치가 여섯이면 점수 여섯이 나온다.
+    """
+
+    count: Annotated[int, Field(ge=1, le=RULESET_MAX_DICE)]
+    sides: Annotated[int, Field(ge=RULESET_MIN_DIE, le=RULESET_MAX_DIE)]
+    # 더하는 주사위의 수. 굴린 것보다 많이 더할 수 없다
+    keep: Annotated[int, Field(ge=1, le=RULESET_MAX_DICE)]
+
+    @model_validator(mode='after')
+    def reject_keeping_more_than_rolled(self) -> Self:
+        """굴린 주사위보다 많이 더할 수는 없다."""
+        if self.keep > self.count:
+            raise ValueError('굴린 주사위보다 많이 더할 수 없습니다.')
+        return self
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
@@ -158,6 +179,8 @@ class Ruleset(Part):
     hp_ability: Key | None
     # 점수제. None 이면 이 규칙에는 점수제가 없다. 칸 자체는 늘 있어야 한다(기본값이 없다)
     point_buy: PointBuy | None
+    # 능력치의 점수를 주사위로 정하는 법. None 이면 이 규칙에는 그런 방식이 없다. 칸 자체는 늘 있어야 한다
+    score_roll: ScoreRoll | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
@@ -198,6 +221,21 @@ class Ruleset(Part):
         outside = [entry.score for entry in self.point_buy.costs if not self.score_min <= entry.score <= self.score_max]
         if outside:
             raise ValueError(f'점수제의 값표에 점수의 범위를 벗어난 점수가 있습니다: {outside}')
+        return self
+
+    @model_validator(mode='after')
+    def require_rolled_scores_in_range(self) -> Self:
+        """
+        주사위로 나올 수 있는 점수는 모두 규칙의 점수 범위 안이어야 한다.
+
+        가장 작은 것은 더하는 주사위가 모두 1 일 때, 가장 큰 것은 모두 가장 큰 눈일 때다.
+        범위 밖의 점수가 나올 수 있으면, 서버가 굴린 값을 시트에 넣지 못하는 일이 생긴다.
+        """
+        if self.score_roll is None:
+            return self
+        lowest, highest = self.score_roll.keep, self.score_roll.keep * self.score_roll.sides
+        if lowest < self.score_min or highest > self.score_max:
+            raise ValueError(f'주사위로 나올 수 있는 점수({lowest}~{highest})가 점수의 범위를 벗어납니다.')
         return self
 
     @model_validator(mode='after')

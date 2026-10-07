@@ -55,6 +55,8 @@ class Problem(enum.StrEnum):
     PLAYER_MADE_HP_MISSING = 'player_made_hp_missing'
     # 점수제를 허용했는데 룰북의 규칙에 점수제가 없다. 총점도 값표도 없어서 아무도 캐릭터를 만들 수 없다
     POINT_BUY_MISSING = 'point_buy_missing'
+    # 주사위로 정하는 방식을 허용했는데 룰북의 규칙에 굴리는 법이 없다
+    SCORE_ROLL_MISSING = 'score_roll_missing'
 
 
 class ScenarioNotReadyError(Exception):
@@ -167,6 +169,19 @@ def find_point_buy_problems(scenario: Scenario, ruleset: Ruleset | None) -> list
     return []
 
 
+def find_score_roll_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    주사위로 정하는 방식에서 문제를 찾는다.
+
+    그 방식을 허용했으면 룰북의 규칙에 굴리는 법이 있어야 한다. 허용하지 않았으면 없어도 된다.
+    룰북이 없으면 볼 수 없다. 그때는 룰북이 없다는 문제가 따로 적힌다.
+    """
+    allowed = CharacterMode.ROLLED in scenario.character_modes
+    if allowed and ruleset is not None and ruleset.score_roll is None:
+        return [Problem.SCORE_ROLL_MISSING]
+    return []
+
+
 def find_seating_problems(scenario: Scenario) -> list[Problem]:
     """
     허용한 방식으로 사람이 앉을 수 있는지 본다.
@@ -192,6 +207,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_default_sheet_problems(scenario, ruleset))
     problems.extend(find_player_made_problems(scenario))
     problems.extend(find_point_buy_problems(scenario, ruleset))
+    problems.extend(find_score_roll_problems(scenario, ruleset))
     problems.extend(find_seating_problems(scenario))
     return problems
 

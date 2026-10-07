@@ -46,6 +46,10 @@ class EventType(enum.StrEnum):
     MEMBER_KICKED = 'member_kicked'
     # 방장이 바뀌었다. 넘겼거나, 방장이 나가서 다음 사람이 됐다
     HOST_CHANGED = 'host_changed'
+    # 누가 능력치의 점수를 주사위로 굴렸다. 굴린 것은 서버다. 굴려 달라고 한 사람이 actor 다
+    ABILITIES_ROLLED = 'abilities_rolled'
+    # 방장이 누구에게 "한 번 더 굴리기"를 줬다
+    REROLL_GRANTED = 'reroll_granted'
 
     # --- 진행 ---
     # 방장이 테이블을 시작했다

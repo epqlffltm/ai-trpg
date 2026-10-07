@@ -17,8 +17,9 @@ from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
-from app.tables import service
-from app.tables.models import GameTable, TableMember, TableSheet
+from app.core.dice import Rolling
+from app.tables import rolls, service, sheets
+from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 from app.tables.schemas import (
     CharacterOut,
     CharacterUpdate,
@@ -27,6 +28,7 @@ from app.tables.schemas import (
     LobbyJoinRequest,
     MemberOut,
     PregenChoice,
+    RollOut,
     SheetOut,
     TableCreate,
     TableDetail,
@@ -68,6 +70,15 @@ def to_sheet(sheet: TableSheet | None) -> SheetOut | None:
     return SheetOut(abilities=sheet.abilities, max_hp=sheet.max_hp, hp=sheet.hp)
 
 
+def to_roll(roll: TableRoll | None) -> RollOut | None:
+    """굴린 것을 응답으로 바꾼다. 굴린 적이 없으면 None."""
+    if roll is None:
+        return None
+    return RollOut(
+        dice=roll.dice, scores=roll.scores, times_rolled=roll.times_rolled, reroll_granted=roll.reroll_granted
+    )
+
+
 def to_member(table: GameTable, member: TableMember) -> MemberOut:
     """앉은 사람 하나를 응답으로 바꾼다."""
     character = None
@@ -79,6 +90,7 @@ def to_member(table: GameTable, member: TableMember) -> MemberOut:
         character=character,
         character_mode=member.character_mode,
         pregen_index=member.pregen_index,
+        roll=to_roll(sheets.find_roll(table, member.user_id)),
         abilities=member.abilities,
         sheet=to_sheet(member.sheet),
         joined_at=member.joined_at,
@@ -102,6 +114,11 @@ def to_player_made_hp(table: GameTable, snapshot: Snapshot) -> PlayerMadeHp | No
     return PlayerMadeHp(**snapshot.player_made_hp.model_dump())
 
 
+def can_grant_rerolls(table: GameTable, snapshot: Snapshot) -> bool:
+    """방장이 "한 번 더 굴리기"를 줄 수 있는 테이블인가. 제작자가 허락했고, 그 방식을 쓰는 테이블이어야 한다."""
+    return snapshot.reroll_allowed and CharacterMode.ROLLED in table.character_modes
+
+
 def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
     """
     테이블을 참가자에게 보여 주는 응답으로 바꾼다. 여기 적은 칸만 나간다.
@@ -117,6 +134,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         character_modes=table.character_modes,
         default_sheet=snapshot.default_sheet if CharacterMode.CUSTOM in table.character_modes else None,
         player_made_hp=to_player_made_hp(table, snapshot),
+        reroll_allowed=can_grant_rerolls(table, snapshot),
         pregens=to_pregen_choices(table, snapshot),
         members=[to_member(table, member) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
@@ -240,6 +258,17 @@ async def set_character(table_id: uuid.UUID, data: CharacterUpdate, user: Curren
     return to_detail(table, user.user_id)
 
 
+@router.post('/{table_id}/character/roll', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def roll_abilities(table_id: uuid.UUID, user: CurrentUser, session: Session, dice: Rolling) -> TableDetail:
+    """
+    내 능력치의 점수를 주사위로 굴린다. 본문이 없다. 굴리는 것은 서버다.
+
+    한 테이블에서 한 번만 된다. 굴린 점수는 응답의 members[].roll 에 있다. 그것을 능력치에 놓아 캐릭터를 정한다.
+    """
+    table = await rolls.roll_abilities(session, user.user_id, table_id, dice)
+    return to_detail(table, user.user_id)
+
+
 # /members/me 를 /members/{user_id} 보다 먼저 적는다. 먼저 적은 주소가 먼저 맞춰진다
 @router.delete('/{table_id}/members/me', status_code=status.HTTP_204_NO_CONTENT)
 async def leave_table(table_id: uuid.UUID, user: CurrentUser, session: Session) -> None:
@@ -254,6 +283,13 @@ async def leave_table(table_id: uuid.UUID, user: CurrentUser, session: Session) 
 async def kick_member(table_id: uuid.UUID, user_id: uuid.UUID, user: CurrentUser, session: Session) -> TableDetail:
     """참가자를 내보낸다. 초대 코드가 새로 만들어진다. 응답에 새 코드가 실린다."""
     table = await service.kick_member(session, user.user_id, table_id, user_id)
+    return to_detail(table, user.user_id)
+
+
+@router.post('/{table_id}/members/{user_id}/reroll', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def grant_reroll(table_id: uuid.UUID, user_id: uuid.UUID, user: CurrentUser, session: Session) -> TableDetail:
+    """참가자 한 사람에게 "한 번 더 굴리기"를 준다. 시나리오의 제작자가 허락한 테이블에서만 된다."""
+    table = await rolls.grant_reroll(session, user.user_id, table_id, user_id)
     return to_detail(table, user.user_id)
 
 

@@ -154,6 +154,8 @@ class ScenarioCreate(AssetCreate):
     character_modes: CharacterModes = list(DEFAULT_CHARACTER_MODES)
     default_sheet: Sheet | None = None
     player_made_hp: PlayerMadeHp | None = None
+    # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
+    reroll_allowed: bool = False
 
 
 class ScenarioUpdate(AssetUpdate):
@@ -178,6 +180,7 @@ class ScenarioUpdate(AssetUpdate):
     character_modes: CharacterModes | None = None
     default_sheet: Sheet | None = None
     player_made_hp: PlayerMadeHp | None = None
+    reroll_allowed: bool | None = None
 
 
 class ScenarioSummary(AssetSummary):
@@ -206,6 +209,7 @@ class ScenarioDetail(ScenarioSummary):
     character_modes: list[CharacterMode]
     default_sheet: Sheet | None
     player_made_hp: PlayerMadeHp | None
+    reroll_allowed: bool
 
 
 VersionNote = Annotated[str, StringConstraints(max_length=VERSION_NOTE_MAX_LENGTH)]
