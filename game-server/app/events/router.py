@@ -33,7 +33,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.MEMBER_KICKED: ('user_id', 'character_name'),
     EventType.HOST_CHANGED: ('user_id',),
     # 능력치의 굴림도 공개다. 버린 눈까지 모두에게 보인다
-    EventType.ABILITIES_ROLLED: ('dice', 'scores', 'times_rolled'),
+    EventType.ABILITIES_ROLLED: ('dice', 'scores', 'times_rolled', 'character_number'),
     EventType.REROLL_GRANTED: ('user_id',),
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
@@ -78,6 +78,17 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'fate',
     ),
     EventType.CHARACTER_DIED: ('round', 'user_id', 'character_name', 'cause'),
+    # 새 캐릭터의 숫자도 공개다. 시작할 때의 시트를 적는 것과 같다
+    EventType.CHARACTER_JOINED: (
+        'round',
+        'user_id',
+        'character_name',
+        'replaces',
+        'mode',
+        'pregen_index',
+        'number',
+        'sheet',
+    ),
     EventType.ROUND_CLOSED: ('number', 'idle'),
     EventType.TABLE_ENDED: (),
 }

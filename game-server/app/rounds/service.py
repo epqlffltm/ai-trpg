@@ -35,6 +35,10 @@ HP 가 0 이면 쓰러진 것이다. 쓰러진 사람은 글만 낼 수 있고, 
 이번 라운드에 쓰러진 캐릭터는 굴리지 않는다. 동료가 일으킬 틈이 한 라운드는 있다.
 이번 라운드에 회복을 받아 일어난 캐릭터도 굴리지 않는다. 행동의 결과를 먼저 끝내고 나서 굴린다.
 죽은 캐릭터의 플레이어는 선언을 낼 수 없다. 새 캐릭터가 있어야 한다.
+
+새 캐릭터는 열려 있는 라운드에 들어온다(app/tables/replacements.py). 들어온 것은 라운드에 적힌다(arrivals).
+들어온 라운드에는 선언을 내지 않고, 라운드도 그 사람을 기다리지 않는다. 그 라운드의 장면에 아직 없는 인물이다.
+라운드가 닫힐 때 서술자가 새 캐릭터를 이야기에 들이고, 다음 라운드부터 행동한다.
 """
 
 import enum
@@ -83,6 +87,8 @@ class Conflict(enum.StrEnum):
     CHARACTER_DOWNED = 'character_downed'
     # 캐릭터가 죽었다. 선언을 낼 수 없다. 새 캐릭터가 있어야 한다
     CHARACTER_DEAD = 'character_dead'
+    # 이 라운드에 새로 들어온 캐릭터다. 다음 라운드부터 선언을 낸다
+    CHARACTER_ARRIVING = 'character_arriving'
 
 
 class RoundConflictError(Exception):
@@ -171,16 +177,24 @@ def is_down(member: TableMember) -> bool:
     return member.sheet is not None and health.is_downed(member.sheet.hp)
 
 
+def find_arrival(round_: Round, user_id: uuid.UUID) -> dict | None:
+    """이 라운드에 새로 들어온 캐릭터 중에서 이 사람의 것을 찾는다. 이 사람이 새 캐릭터를 들이지 않았으면 None."""
+    return next((arrival for arrival in round_.arrivals if arrival['user_id'] == str(user_id)), None)
+
+
 def waiting_for(table: GameTable, round_: Round) -> list[uuid.UUID]:
     """
     앉은 사람 중에서 이 라운드에 선언을 내야 하는데 아직 내지 않은 사람들. 들어온 순서다.
 
     쓰러진 사람은 기다리지 않는다. 한 사람이 쓰러졌다고 테이블이 멈추지 않게 한다.
+    이 라운드에 새 캐릭터를 들인 사람도 기다리지 않는다. 그 캐릭터는 다음 라운드부터 선언을 낸다.
     """
     return [
         member.user_id
         for member in table.members
-        if find_declaration(round_, member.user_id) is None and not is_down(member)
+        if find_declaration(round_, member.user_id) is None
+        and not is_down(member)
+        and find_arrival(round_, member.user_id) is None
     ]
 
 
@@ -420,6 +434,7 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
     지금 앉아 있는 사람 모두가 들어간다. 선언을 내지 않은 사람은 아무것도 하지 않은 것으로 들어간다.
     판정의 결과와 HP 의 변화는 선언에 적힌 것을, 죽음의 굴림은 라운드에 적힌 것을 읽는다. 여기서 굴리지 않는다.
     쓰러져 있는지, 죽었는지는 이번 라운드의 결과를 반영한 뒤의 것이다.
+    이 라운드에 새로 들어온 캐릭터는 라운드에 적힌 것(arrivals)으로 안다. 누구의 뒤를 잇는지를 함께 준다.
     """
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
     ruleset = rules_of(table) if any(has_outcome(declaration) for declaration in declarations) else None
@@ -428,6 +443,7 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
     for member, declaration in zip(table.members, declarations, strict=True):
         content = declaration.content if declaration else None
         verdict = to_verdict(ruleset, declaration) if has_outcome(declaration) else None
+        arrival = find_arrival(round_, member.user_id)
         moves.append(
             Move(
                 character_name=member.character_name,
@@ -436,6 +452,7 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
                 downed=is_down(member),
                 death_save=find_death_save(round_, member.user_id),
                 dead=sheets.is_dead(member),
+                replaces=arrival['replaces'] if arrival else None,
             )
         )
     return NarrationRequest(round_number=round_.number, scene=round_.scene, moves=moves)
@@ -637,6 +654,7 @@ async def declare(
 
     닫는 중인 라운드에는 낼 수 없다(RoundConflictError). 쓰러진 사람은 행동을 붙일 수 없다(RoundConflictError).
     캐릭터가 죽은 사람은 글도 낼 수 없다(RoundConflictError).
+    이 라운드에 새 캐릭터를 들인 사람도 낼 수 없다(RoundConflictError). 다음 라운드부터 낸다.
     행동이 이 테이블의 규칙에 없는 것을 가리키면 ActionNotInRulesError.
     행동의 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
     테이블을 잠그고 한다. 마지막 두 사람이 동시에 내도 라운드는 한 번만 닫힌다.
@@ -645,6 +663,8 @@ async def declare(
     require_open(round_)
     if sheets.is_dead(member):
         raise RoundConflictError(Conflict.CHARACTER_DEAD)
+    if find_arrival(round_, user_id) is not None:
+        raise RoundConflictError(Conflict.CHARACTER_ARRIVING)
     put_declaration(round_, member, data.content, accept_action(table, member, data.action))
 
     everyone_declared = not waiting_for(table, round_)

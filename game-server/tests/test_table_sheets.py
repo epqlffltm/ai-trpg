@@ -402,16 +402,74 @@ async def test_the_database_allows_hit_points_at_both_ends(started_table: dict, 
     await session.commit()
 
 
-async def test_the_database_gives_one_sheet_to_one_member(started_table: dict, session: AsyncSession):
-    member = await seat_someone(session)
-    session.add(TableSheet(table_id=member.table_id, user_id=member.user_id, abilities={}, max_hp=1, hp=1))
+def another_sheet(member: TableMember, number: int, pregen_index: int | None = None) -> TableSheet:
+    """그 사람에게 줄 시트 하나를 더 만든다. 앱을 거치지 않고 DB 에 바로 넣어 보려는 것이다."""
+    return TableSheet(
+        table_id=member.table_id,
+        user_id=member.user_id,
+        number=number,
+        character_name='드워프',
+        pregen_index=pregen_index,
+        abilities={},
+        max_hp=1,
+        hp=1,
+    )
 
-    with pytest.raises(IntegrityError, match='uq_table_sheets'):
+
+async def test_the_database_gives_one_living_sheet_to_one_member(started_table: dict, session: AsyncSession):
+    member = await seat_someone(session)
+    session.add(another_sheet(member, number=2))
+
+    # 캐릭터가 살아 있는데 새 시트를 줄 수 없다
+    with pytest.raises(IntegrityError, match='uq_table_sheets_living'):
         await session.commit()
 
 
+async def test_the_database_gives_another_sheet_once_the_character_is_dead(started_table: dict, session: AsyncSession):
+    member = await seat_someone(session)
+    await session.execute(text('UPDATE table_sheets SET hp = 0, died_at = now()'))
+    session.add(another_sheet(member, number=2))
+
+    await session.commit()
+
+    assert await session.scalar(text('SELECT count(*) FROM table_sheets')) == 2
+
+
+async def test_the_database_rejects_two_sheets_with_the_same_number(started_table: dict, session: AsyncSession):
+    member = await seat_someone(session)
+    await session.execute(text('UPDATE table_sheets SET hp = 0, died_at = now()'))
+    session.add(another_sheet(member, number=1))
+
+    with pytest.raises(IntegrityError, match='uq_table_sheets_number'):
+        await session.commit()
+
+
+async def test_the_database_gives_a_pregen_a_sheet_only_once(started_table: dict, session: AsyncSession):
+    member = await seat_someone(session)
+    # 시작한 테이블의 사람은 0 번 프리젠으로 시트를 받았다. 그 캐릭터가 죽어도 그 프리젠은 다시 시트를 받지 못한다
+    await session.execute(text('UPDATE table_sheets SET hp = 0, died_at = now()'))
+    session.add(another_sheet(member, number=2, pregen_index=0))
+
+    with pytest.raises(IntegrityError, match='uq_table_sheets_pregen'):
+        await session.commit()
+
+
+async def test_the_database_rejects_a_sheet_numbered_below_one(started_table: dict, session: AsyncSession):
+    with pytest.raises(IntegrityError, match='number_positive'):
+        await session.execute(text('UPDATE table_sheets SET number = 0'))
+
+
 async def test_the_database_gives_no_sheet_to_someone_who_is_not_seated(started_table: dict, session: AsyncSession):
-    session.add(TableSheet(table_id=uuid.UUID(started_table['id']), user_id=FRIEND, abilities={}, max_hp=1, hp=1))
+    session.add(
+        TableSheet(
+            table_id=uuid.UUID(started_table['id']),
+            user_id=FRIEND,
+            character_name='드워프',
+            abilities={},
+            max_hp=1,
+            hp=1,
+        )
+    )
 
     with pytest.raises(IntegrityError, match='fk_table_sheets'):
         await session.commit()
@@ -494,13 +552,56 @@ def test_finds_the_sheet_a_member_will_get():
 
 def test_a_new_sheet_starts_at_full_hit_points_and_is_its_own_copy():
     source = make_snapshot().pregens[0].sheet
+    member = make_member(name='폭주족 엘프', pregen_index=0)
 
-    sheet = sheets.new_sheet(source)
+    sheet = sheets.give_sheet(member, source)
     sheet.abilities['dex'] = 1
 
     assert (sheet.max_hp, sheet.hp) == (ELF_SHEET['max_hp'], ELF_SHEET['max_hp'])
     # 테이블의 시트를 고쳐도 판의 시트는 그대로다
     assert source.abilities['dex'] == ELF_SHEET['abilities']['dex']
+
+
+def test_a_sheet_remembers_whose_it_is():
+    source = make_snapshot().pregens[0].sheet
+    member = make_member(name='폭주족 엘프', pregen_index=0)
+
+    sheet = sheets.give_sheet(member, source)
+
+    # 자리의 칸들은 새 캐릭터를 들이면 바뀐다. 누구의 시트였는지는 시트에 남아 있어야 한다
+    assert (sheet.number, sheet.character_name, sheet.pregen_index) == (1, '폭주족 엘프', 0)
+    assert member.sheet is sheet
+    assert member.fallen == []
+
+
+def test_sheets_are_numbered_in_the_order_they_were_given():
+    source = make_snapshot().default_sheet
+    member = make_member(name='드워프')
+    first = sheets.give_sheet(member, source)
+    assert sheets.next_number(member) == 2
+
+    member.character_name = '엘프'
+    second = sheets.give_sheet(member, source)
+
+    # 지금 캐릭터의 시트는 가장 나중에 받은 것이고, 그 앞의 것들은 떠난 캐릭터의 것이다
+    assert (second.number, second.character_name) == (2, '엘프')
+    assert member.sheet is second
+    assert member.fallen == [first]
+    assert first.character_name == '드워프'
+
+
+def test_a_pregen_that_got_a_sheet_is_found_even_after_its_seat_moved_on():
+    snapshot = make_snapshot()
+    member = make_member(name='폭주족 엘프', pregen_index=0)
+    table = GameTable(members=[member, make_member()])
+    assert not sheets.pregen_has_sheet(table, 0)
+
+    sheets.give_sheet(member, snapshot.pregens[0].sheet)
+    # 그 사람이 다른 캐릭터로 넘어갔다. 자리에는 더는 그 프리젠이 적혀 있지 않다
+    member.pregen_index = None
+
+    assert sheets.pregen_has_sheet(table, 0)
+    assert not sheets.pregen_has_sheet(table, 1)
 
 
 def test_hands_out_sheets_to_everyone_or_to_no_one():

@@ -7,6 +7,7 @@
   - game_tables: 테이블 자신. 방장, 어느 판에서 왔는지, 판의 복사본, 정원, 상태.
   - table_members: 테이블에 앉은 사람과 그 사람의 캐릭터(이름과 설명: 글).
   - table_sheets: 앉은 사람의 캐릭터 시트(능력치와 HP: 숫자). 게임을 시작할 때 생긴다.
+    캐릭터가 죽어 새 캐릭터를 들이면 하나 더 생긴다. 죽은 캐릭터의 시트는 지우지 않는다.
   - table_rolls: 주사위로 굴린 능력치의 점수들. 사람이 나가도 남는다.
 
 판은 고치지 않는다. 테이블은 만들 때 판의 내용을 통째로 복사해 온다(content).
@@ -25,6 +26,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     SmallInteger,
     String,
@@ -74,7 +76,8 @@ class TableStatus(enum.StrEnum):
 
     # 모집 중. 사람이 들어오고 캐릭터를 만든다
     RECRUITING = 'recruiting'
-    # 진행 중. 방장이 시작했다. 새로 들어올 수 없고 캐릭터를 바꿀 수 없다
+    # 진행 중. 방장이 시작했다. 새로 들어올 수 없고 캐릭터를 바꿀 수 없다.
+    # 캐릭터가 죽은 사람만 새 캐릭터를 들인다(app/tables/replacements.py)
     PLAYING = 'playing'
     # 끝남. 방장이 끝냈거나 모두 나갔다
     ENDED = 'ended'
@@ -181,6 +184,9 @@ class TableMember(Base):
 
     캐릭터를 어느 방식으로 얻었는지도 적어 둔다(character_mode). 숫자가 어디서 왔는지는 테이블의 모두가 본다.
     능력치만 봐서는 직접 적은 것인지 다른 방식으로 정한 것인지 알 수 없다.
+
+    여기 적힌 캐릭터는 이 사람의 "지금 캐릭터"다. 캐릭터가 죽어 새 캐릭터를 들이면 이 칸들을 새 캐릭터의 것으로 바꾼다.
+    떠난 캐릭터의 이름과 프리젠은 그 캐릭터의 시트에 남는다(TableSheet).
     """
 
     __tablename__ = 'table_members'
@@ -235,9 +241,22 @@ class TableMember(Base):
 
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    # 이 사람의 캐릭터 시트. 게임을 시작하기 전에는 없다.
+    # 이 사람이 이 테이블에서 받은 캐릭터 시트들. 받은 순서다. 게임을 시작하기 전에는 비어 있다.
+    # 보통은 하나다. 캐릭터가 죽어 새 캐릭터를 들일 때마다 하나씩 는다.
     # selectin: 앉은 사람을 읽을 때 함께 읽는다. delete-orphan: 사람이 테이블에서 빠지면 시트도 지운다
-    sheet: Mapped['TableSheet | None'] = relationship(lazy='selectin', cascade='all, delete-orphan')
+    sheets: Mapped[list['TableSheet']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='TableSheet.number'
+    )
+
+    @property
+    def sheet(self) -> 'TableSheet | None':
+        """지금 캐릭터의 시트. 가장 나중에 받은 것이다. 게임을 시작하기 전에는 None 이다."""
+        return self.sheets[-1] if self.sheets else None
+
+    @property
+    def fallen(self) -> list['TableSheet']:
+        """떠난 캐릭터들의 시트. 지금 캐릭터의 앞에 받은 것들이다. 모두 죽은 캐릭터다."""
+        return self.sheets[:-1]
 
 
 class TableSheet(Base):
@@ -247,8 +266,13 @@ class TableSheet(Base):
     시작할 때의 숫자는 판에서 온다(프리젠의 시트나 기본 시트). 가져온 뒤로는 이 테이블의 것이다.
     플레이하면서 바뀌는 값(hp, 죽음의 굴림에서 센 것, 죽은 시각)이 여기 있다. 이 값은 엔진만 고친다.
 
-    기본 키를 (table_id, user_id) 로 하지 않고 따로 둔다. 지금은 한 사람에 시트가 하나지만,
-    캐릭터가 죽어 다른 캐릭터로 바꾸는 기능이 생기면 한 사람이 시트를 여럿 거쳐 간다.
+    한 사람이 시트를 여럿 거쳐 간다. 캐릭터가 죽으면 새 캐릭터를 들이고, 새 캐릭터는 새 시트를 받는다.
+    그래서 기본 키를 (table_id, user_id) 로 하지 않고 따로 두고, 몇 번째 캐릭터인지를 적는다(number).
+    죽은 캐릭터의 시트는 지우지 않는다. 누가 이 테이블에서 죽었는지의 기록이다.
+
+    누구의 시트인지도 적어 둔다(character_name, pregen_index). 받을 때 자리(table_members)에서 복사한다.
+    자리의 칸들은 새 캐릭터를 들이면 새 캐릭터의 것으로 바뀐다. 떠난 캐릭터가 누구였는지는 여기에만 남는다.
+    선언에 캐릭터 이름을 적어 두는 것과 같다(app/rounds/models.py).
     """
 
     __tablename__ = 'table_sheets'
@@ -257,8 +281,19 @@ class TableSheet(Base):
         ForeignKeyConstraint(
             ['table_id', 'user_id'], ['table_members.table_id', 'table_members.user_id'], ondelete='CASCADE'
         ),
-        # 지금은 한 사람에 시트가 하나다
-        UniqueConstraint('table_id', 'user_id'),
+        CheckConstraint('number >= 1', name='number_positive'),
+        # 한 사람의 캐릭터에 같은 번호가 둘일 수 없다
+        # 이름을 직접 적는다. 이름을 짓는 규칙은 첫 칸의 이름만 쓴다(app/core/database.py).
+        # 맡기면 아래의 프리젠 조건과 이름이 같아진다
+        UniqueConstraint('table_id', 'user_id', 'number', name='uq_table_sheets_number'),
+        # 한 사람의 살아 있는 캐릭터는 하나뿐이다. 조건이 붙은 유일 색인이다.
+        # 죽은 캐릭터의 시트(died_at 이 있는 것)는 이 색인에 들어가지 않으므로 몇 개든 된다.
+        # 코드가 틀려서 캐릭터가 살아 있는데 새 시트를 줘도, DB 가 막는다
+        Index('uq_table_sheets_living', 'table_id', 'user_id', unique=True, postgresql_where='died_at IS NULL'),
+        # 프리젠 하나는 한 테이블에서 한 번만 시트를 받는다. 그 캐릭터가 죽은 뒤에도 그렇다.
+        # 죽은 인물이 다른 사람의 캐릭터로 다시 걸어 들어오지 못한다.
+        # 비어 있는 값(NULL)끼리는 겹치는 것으로 보지 않는다. 프리젠이 아닌 캐릭터는 몇이든 된다
+        UniqueConstraint('table_id', 'pregen_index', name='uq_table_sheets_pregen'),
         CheckConstraint('max_hp >= 1', name='max_hp_positive'),
         # HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. 엔진의 실수를 DB 가 한 번 더 막는다
         CheckConstraint('hp BETWEEN 0 AND max_hp', name='hp_range'),
@@ -274,6 +309,15 @@ class TableSheet(Base):
 
     table_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+
+    # 이 사람의 몇 번째 캐릭터인가. 1 부터다. 시작할 때 받은 것이 1 이고, 새 캐릭터를 들일 때마다 하나씩 올라간다.
+    # 시각으로 순서를 정하지 않는다. 번호는 겹치지 않고, 어느 것이 지금 캐릭터인지가 분명하다
+    number: Mapped[int] = mapped_column(SmallInteger, default=1, server_default=text('1'))
+
+    # 이 시트를 받은 캐릭터의 이름. 받을 때 자리에서 복사해 둔다
+    character_name: Mapped[str] = mapped_column(String(CHARACTER_NAME_MAX_LENGTH))
+    # 프리젠에서 온 캐릭터면 몇 번째 프리젠인가. 아니면 비어 있다
+    pregen_index: Mapped[int | None] = mapped_column(SmallInteger)
 
     # 능력치의 점수. 능력치의 이름표에서 점수로 간다. 어떤 능력치가 있는지는 규칙이 정하므로 칸으로 두지 못한다.
     # 모양과 값은 판에 굳을 때 이미 검사했다(app/engine/sheet.py)
@@ -302,12 +346,14 @@ class TableRoll(Base):
     그래서 테이블과 사람으로 찾는 행을 따로 두고, 사람이 나가도 지우지 않는다. 테이블이 지워질 때 함께 지워진다.
 
     행은 처음 굴릴 때 생긴다. 다시 굴리면 같은 행의 값을 바꾼다. 지난 값은 이벤트에 남아 있다.
+    한 번 굴린 것은 캐릭터 하나에 쓴다. 캐릭터가 죽어 새 캐릭터를 들일 때는 새로 굴린다(character_number).
     굴린 점수를 어느 능력치에 놓았는지는 여기에 없다. 그것은 자리의 abilities 다.
     """
 
     __tablename__ = 'table_rolls'
     __table_args__ = (
         CheckConstraint('times_rolled >= 1', name='times_rolled_positive'),
+        CheckConstraint('character_number >= 1', name='character_number_positive'),
         # 굴린 눈과 점수는 목록이다
         CheckConstraint("jsonb_typeof(dice) = 'array' AND jsonb_typeof(scores) = 'array'", name='rolls_are_arrays'),
     )
@@ -322,8 +368,11 @@ class TableRoll(Base):
     # 굴려서 나온 점수들. 굴린 순서다. 예: [14, 10, ...]. 플레이어가 이것을 능력치에 놓는다
     scores: Mapped[list] = mapped_column(JSONB)
 
-    # 이 테이블에서 몇 번 굴렸는가. 처음 굴리면 1 이다
+    # 이 테이블에서 몇 번 굴렸는가. 처음 굴리면 1 이다. 캐릭터가 바뀌어도 이어서 센다
     times_rolled: Mapped[int] = mapped_column(SmallInteger, default=1)
+    # 이 사람의 몇 번째 캐릭터를 위해 굴렸는가(TableSheet.number 와 같은 번호다). 시작 전에 굴린 것은 1 이다.
+    # 지난 캐릭터를 위해 굴린 점수로 새 캐릭터를 만들지 못한다. 새 캐릭터는 새로 굴린다
+    character_number: Mapped[int] = mapped_column(SmallInteger, default=1, server_default=text('1'))
     # 방장이 "한 번 더"를 줬는가. 다시 굴리면 꺼진다. 주어진 것은 한 번에 하나다
     reroll_granted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 

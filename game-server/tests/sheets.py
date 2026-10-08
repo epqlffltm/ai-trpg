@@ -20,6 +20,6 @@ def handed_out(sheet: dict) -> dict:
     """
     테이블이 이 시트를 막 줬을 때 응답에 실리는 모양. 게임을 시작할 때의 시트다.
 
-    HP 는 가득 차 있고, 죽음의 굴림은 센 것이 없고, 살아 있다.
+    그 사람의 첫 캐릭터이고, HP 는 가득 차 있고, 죽음의 굴림은 센 것이 없고, 살아 있다.
     """
-    return {**sheet, 'hp': sheet['max_hp'], 'death_successes': 0, 'death_failures': 0, 'dead': False}
+    return {**sheet, 'number': 1, 'hp': sheet['max_hp'], 'death_successes': 0, 'death_failures': 0, 'dead': False}

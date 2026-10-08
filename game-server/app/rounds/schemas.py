@@ -101,6 +101,15 @@ class DeathSaveOut(BaseModel):
     fate: Fate
 
 
+class ArrivalOut(BaseModel):
+    """이 라운드에 새로 들어온 캐릭터 하나. 캐릭터가 죽은 플레이어가 들인 새 캐릭터다."""
+
+    user_id: uuid.UUID
+    character_name: str
+    # 같은 플레이어의 죽은 캐릭터의 이름
+    replaces: str
+
+
 class RoundOut(BaseModel):
     """앉은 사람이 라운드를 볼 때의 값."""
 
@@ -112,7 +121,10 @@ class RoundOut(BaseModel):
     declarations: list[DeclarationOut]
     # 이 라운드가 닫힐 때 굴린 죽음의 굴림들. 선언을 마감할 때(닫는 중부터) 생긴다. 굴린 것이 없으면 비어 있다
     death_saves: list[DeathSaveOut]
-    # 선언을 내야 하는데 아직 내지 않은 사람들. 쓰러진 사람은 들어가지 않는다. 선언을 받는 중이 아니면 비어 있다
+    # 이 라운드에 새로 들어온 캐릭터들. 들어온 순서다. 가리지 않는다. 누가 들어왔는지는 테이블에서도 보인다
+    arrivals: list[ArrivalOut]
+    # 선언을 내야 하는데 아직 내지 않은 사람들. 쓰러진 사람과 이 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다.
+    # 선언을 받는 중이 아니면 비어 있다
     waiting_for: list[uuid.UUID]
     created_at: datetime
     # 닫기 시작한 시각과 닫힌 시각. 아직이면 None 이다

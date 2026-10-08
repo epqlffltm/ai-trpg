@@ -83,6 +83,9 @@ class Move:
     death_save: DeathSaveNote | None = None
     # 이 캐릭터가 죽었는가. 이번 라운드에 죽었을 수도, 그 전에 죽었을 수도 있다
     dead: bool = False
+    # 이 캐릭터가 이번 라운드에 새로 들어왔으면, 같은 플레이어의 죽은 캐릭터의 이름. 아니면 None 이다.
+    # 새로 들어온 캐릭터는 이번 라운드에 아무것도 하지 않았다. 다음 라운드부터 행동한다
+    replaces: str | None = None
 
 
 @dataclass(frozen=True)
@@ -122,7 +125,14 @@ def describe_impact(impact: Impact) -> str:
 
 
 def describe_idle(move: Move) -> str:
-    """선언을 내지 않은 캐릭터를 뭐라고 적을지 정한다. 죽은 캐릭터는 쓰러져 있기도 하다. 죽음을 먼저 본다."""
+    """
+    선언을 내지 않은 캐릭터를 뭐라고 적을지 정한다.
+
+    새로 들어온 캐릭터를 가장 먼저 본다. 이 라운드에 한 일이 없는 것은 들어온 라운드이기 때문이다.
+    죽은 캐릭터는 쓰러져 있기도 하다. 죽음을 쓰러짐보다 먼저 본다.
+    """
+    if move.replaces is not None:
+        return f'죽은 {move.replaces}의 뒤를 이어 새로 이야기에 들어온다.'
     if move.dead:
         return '죽었다.'
     return '쓰러져 있다.' if move.downed else '아무것도 하지 않았다.'
