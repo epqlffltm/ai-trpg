@@ -4,7 +4,7 @@
 규칙의 모양. 규칙은 코드가 아니라 데이터다.
 
 어떤 능력치가 있는지, 주사위가 몇 면인지, 난이도가 몇 단계인지, 피해와 회복이 얼마인지,
-캐릭터의 숫자를 어떻게 정하는지를 한 묶음(Ruleset)에 담는다.
+캐릭터의 숫자를 어떻게 정하는지, 쓰러진 캐릭터가 어떻게 죽는지를 한 묶음(Ruleset)에 담는다.
 엔진은 이 묶음을 인자로 받는다. 묶음의 값이 달라져도 엔진의 코드는 그대로다.
 
 규칙은 룰북에 담기고(app/assets/models.py 의 Rulebook.rules), 게시할 때 판에 굳는다.
@@ -31,6 +31,8 @@ RULESET_MAX_DIE = 100
 RULESET_MAX_DICE = 10
 # 점수제의 값표에 둘 수 있는 줄의 수
 RULESET_MAX_POINT_COSTS = 30
+# 죽음의 굴림에서 모아야 하는 성공과 실패의 수
+RULESET_MAX_DEATH_SAVES = 10
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -152,6 +154,22 @@ class ScoreRoll(Part):
         return self
 
 
+class DeathSave(Part):
+    """
+    죽음의 굴림. 쓰러진 캐릭터가 죽는지를 주사위가 정하는 법이다.
+
+    쓰러진 채로 라운드가 닫힐 때마다 규칙의 주사위(Ruleset.die)를 한 번 굴린다. 능력치의 보정은 더하지 않는다.
+    눈이 target 이상이면 성공, 아니면 실패다. 성공과 실패를 따로 센다.
+      - 실패가 failures 번 모이면 죽는다.
+      - 성공이 successes 번 모이면 고비를 넘긴다. 더 굴리지 않는다. 쓰러진 채로 있고, 회복을 받으면 일어난다.
+    회복을 받아 일어나면 센 것은 처음으로 돌아간다.
+    """
+
+    target: Annotated[int, Field(ge=1, le=RULESET_MAX_NUMBER)]
+    successes: Annotated[int, Field(ge=1, le=RULESET_MAX_DEATH_SAVES)]
+    failures: Annotated[int, Field(ge=1, le=RULESET_MAX_DEATH_SAVES)]
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
@@ -181,6 +199,9 @@ class Ruleset(Part):
     point_buy: PointBuy | None
     # 능력치의 점수를 주사위로 정하는 법. None 이면 이 규칙에는 그런 방식이 없다. 칸 자체는 늘 있어야 한다
     score_roll: ScoreRoll | None
+    # 죽음의 굴림. None 이면 이 규칙에서는 주사위가 캐릭터를 죽이지 않는다. 쓰러진 채로 있다.
+    # 칸 자체는 늘 있어야 한다
+    death_save: DeathSave | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
@@ -236,6 +257,13 @@ class Ruleset(Part):
         lowest, highest = self.score_roll.keep, self.score_roll.keep * self.score_roll.sides
         if lowest < self.score_min or highest > self.score_max:
             raise ValueError(f'주사위로 나올 수 있는 점수({lowest}~{highest})가 점수의 범위를 벗어납니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_survivable_death_save(self) -> Self:
+        """죽음의 굴림은 성공할 수 있어야 한다. 목표값이 주사위의 가장 큰 눈보다 크면 쓰러진 캐릭터는 반드시 죽는다."""
+        if self.death_save is not None and self.death_save.target > self.die:
+            raise ValueError('죽음의 굴림의 목표값이 주사위의 가장 큰 눈보다 큽니다.')
         return self
 
     @model_validator(mode='after')

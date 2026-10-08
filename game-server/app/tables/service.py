@@ -89,6 +89,12 @@ class Conflict(enum.StrEnum):
     REROLL_NOT_ALLOWED = 'reroll_not_allowed'
     # 이미 "한 번 더"를 줬고, 그 사람이 아직 쓰지 않았다
     REROLL_ALREADY_GRANTED = 'reroll_already_granted'
+    # 진행 중인 테이블이 아니다. 캐릭터를 보내는 것은 진행 중에만 된다
+    NOT_PLAYING = 'not_playing'
+    # 캐릭터가 쓰러져 있지 않다. 멀쩡한 캐릭터는 보낼 수 없다
+    CHARACTER_NOT_DOWNED = 'character_not_downed'
+    # 캐릭터가 이미 죽었다
+    CHARACTER_DEAD = 'character_dead'
 
 
 class TableConflictError(Exception):

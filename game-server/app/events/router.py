@@ -65,6 +65,19 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'max_hp',
         'downed',
     ),
+    # 죽음의 굴림도 공개다
+    EventType.DEATH_SAVE_ROLLED: (
+        'round',
+        'user_id',
+        'character_name',
+        'roll',
+        'target',
+        'success',
+        'successes',
+        'failures',
+        'fate',
+    ),
+    EventType.CHARACTER_DIED: ('round', 'user_id', 'character_name', 'cause'),
     EventType.ROUND_CLOSED: ('number', 'idle'),
     EventType.TABLE_ENDED: (),
 }

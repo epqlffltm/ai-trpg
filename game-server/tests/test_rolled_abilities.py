@@ -35,7 +35,7 @@ from app.main import API_PREFIX
 from app.tables import sheets
 from app.tables.models import TableRoll
 from app.tables.schemas import CharacterUpdate
-from tests.sheets import make_sheet
+from tests.sheets import handed_out, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -657,7 +657,7 @@ async def test_starting_turns_placed_scores_into_a_sheet(
 
     # 최대 HP 를 구하는 법은 다른 방식과 같다. 방식이 다른 것은 받을 때의 제한뿐이다
     member = started['members'][0]
-    assert member['sheet'] == {'abilities': placed, 'max_hp': max_hp, 'hp': max_hp}
+    assert member['sheet'] == handed_out({'abilities': placed, 'max_hp': max_hp})
     assert member['character_mode'] == 'rolled'
 
 

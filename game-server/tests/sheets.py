@@ -14,3 +14,12 @@ SHEET = {'abilities': {'str': 10, 'dex': 10, 'con': 10, 'int': 10, 'wis': 10, 'c
 def make_sheet(max_hp: int = 10, **scores: int) -> dict:
     """SHEET 에서 몇 능력치의 점수와 최대 HP 만 바꾼 시트를 만든다. 예: make_sheet(str=16, max_hp=12)."""
     return {'abilities': {**SHEET['abilities'], **scores}, 'max_hp': max_hp}
+
+
+def handed_out(sheet: dict) -> dict:
+    """
+    테이블이 이 시트를 막 줬을 때 응답에 실리는 모양. 게임을 시작할 때의 시트다.
+
+    HP 는 가득 차 있고, 죽음의 굴림은 센 것이 없고, 살아 있다.
+    """
+    return {**sheet, 'hp': sheet['max_hp'], 'death_successes': 0, 'death_failures': 0, 'dead': False}

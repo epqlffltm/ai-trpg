@@ -19,10 +19,12 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 판단하고, 객
 """
 
 import uuid
+from datetime import UTC, datetime
 
 from app.assets.models import CharacterMode
 from app.assets.scenarios.snapshot import Snapshot
 from app.engine.creation import build_sheet
+from app.engine.health import is_downed
 from app.engine.point_buy import affordable
 from app.engine.ruleset import Ruleset
 from app.engine.score_roll import uses_exactly
@@ -138,3 +140,24 @@ def hand_out(table: GameTable, snapshot: Snapshot) -> bool:
     for member, source in zip(table.members, sources, strict=True):
         member.sheet = new_sheet(source)
     return True
+
+
+def is_dead(member: TableMember) -> bool:
+    """이 사람의 캐릭터가 죽었는가. 시트가 없으면(시작 전) 죽은 것이 아니다."""
+    return member.sheet is not None and member.sheet.died_at is not None
+
+
+def is_downed_alive(member: TableMember) -> bool:
+    """이 사람의 캐릭터가 쓰러져 있지만 아직 죽지 않았는가. 죽음의 굴림을 굴리고, 스스로 보낼 수 있는 때다."""
+    return member.sheet is not None and is_downed(member.sheet.hp) and member.sheet.died_at is None
+
+
+def mark_dead(sheet: TableSheet) -> None:
+    """캐릭터가 죽었다고 시트에 적는다. 되돌리는 함수는 없다."""
+    sheet.died_at = datetime.now(UTC)
+
+
+def clear_death_saves(sheet: TableSheet) -> None:
+    """죽음의 굴림에서 센 것을 처음으로 돌린다. 회복을 받아 일어났을 때 부른다."""
+    sheet.death_successes = 0
+    sheet.death_failures = 0
