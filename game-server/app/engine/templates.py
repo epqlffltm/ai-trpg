@@ -18,6 +18,7 @@ import enum
 
 from app.engine.ruleset import (
     Ability,
+    DeathSave,
     Difficulty,
     Magnitude,
     Modifier,
@@ -42,6 +43,7 @@ class Template(enum.StrEnum):
 # 양의 등급(magnitudes)은 SRD 의 표를 옮긴 것이 아니다. 기준 시트의 최대 HP(10)에 맞춰 이 프로젝트가 정한 값이다.
 # 점수제(point_buy)의 총점과 값표는 System Reference Document 5.2.1 을 따랐다. SRD 5.1 에는 점수제가 실려 있지 않다.
 # 점수를 주사위로 정하는 법(score_roll)도 같은 문서를 따랐다.
+# 죽음의 굴림(death_save)은 SRD 5.1 의 것이다. 눈 1 과 눈 20 의 특별한 결과는 옮기지 않았다(판정과 같다)
 # SRD 5.2.1 도 Wizards of the Coast LLC 가 CC BY 4.0 으로 공개한 문서다. 출처 표시는 README 에 있다
 SRD5 = Ruleset(
     template=Template.SRD5,
@@ -88,6 +90,8 @@ SRD5 = Ruleset(
     ),
     # 4d6 을 굴려 높은 셋을 더한다. 3~18 이 나온다. 능력치가 여섯이라 여섯 번 굴린다
     score_roll=ScoreRoll(count=4, sides=6, keep=3),
+    # 쓰러진 채로 라운드가 닫힐 때마다 d20 을 굴린다. 10 이상이면 성공이다. 실패 셋이면 죽고, 성공 셋이면 고비를 넘긴다
+    death_save=DeathSave(target=10, successes=3, failures=3),
 )
 
 TEMPLATES: dict[Template, Ruleset] = {Template.SRD5: SRD5}

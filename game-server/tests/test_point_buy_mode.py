@@ -31,7 +31,7 @@ from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.tables import sheets
 from app.tables.schemas import CharacterUpdate
-from tests.sheets import make_sheet
+from tests.sheets import handed_out, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -423,7 +423,7 @@ async def test_starting_turns_bought_scores_into_a_sheet(client: AsyncClient, me
 
     # 최대 HP 를 구하는 법은 직접 적기와 같다. 방식이 다른 것은 받을 때의 제한뿐이다
     member = started['members'][0]
-    assert member['sheet'] == {'abilities': chosen, 'max_hp': max_hp, 'hp': max_hp}
+    assert member['sheet'] == handed_out({'abilities': chosen, 'max_hp': max_hp})
     assert member['character_mode'] == 'point_buy'
 
 

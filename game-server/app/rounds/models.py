@@ -25,7 +25,19 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -83,6 +95,12 @@ class Round(Base):
     closing_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 닫힌 시각. 서술이 끝나 다음 라운드가 열린 때다
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # 이 라운드가 닫힐 때 굴린 죽음의 굴림들(app/engine/death.py). 굴린 순서다. 굴린 것이 없으면 빈 목록이다.
+    # 하나하나가 {user_id, character_name, roll, target, success, successes, failures, fate} 다.
+    # 선언에 적는 판정의 결과와 같다. 한 번 적으면 고치지 않고, 서술을 다시 맡겨도 다시 굴리지 않는다.
+    # 선언이 아니라 라운드에 적는다. 쓰러진 사람은 선언을 내지 않아도 되기 때문이다
+    death_saves: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'"))
 
     # 이 라운드의 선언들. 낸 순서다. 많아야 넷이라 라운드를 읽을 때 함께 읽는다
     declarations: Mapped[list['Declaration']] = relationship(

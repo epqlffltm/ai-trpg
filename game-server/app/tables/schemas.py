@@ -162,6 +162,12 @@ class SheetOut(BaseModel):
     max_hp: int
     # 지금의 HP
     hp: int
+    # 죽음의 굴림에서 지금까지 센 성공과 실패. 쓰러져 있는 동안만 센다. 일어나면 0 으로 돌아간다.
+    # 몇 번이 모이면 죽는지, 고비를 넘기는지는 테이블의 rules.death_save 에 있다
+    death_successes: int
+    death_failures: int
+    # 죽었는가. 죽은 캐릭터는 되살아나지 않는다
+    dead: bool
 
 
 class RollOut(BaseModel):

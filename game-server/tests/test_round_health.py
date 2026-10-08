@@ -51,6 +51,11 @@ PLAIN = make_sheet()
 FAIL = 1
 PASS = 20
 
+# 죽음의 굴림의 눈(목표 10)과, 그 눈으로 처음 성공했을 때 서술에 붙는 글.
+# 쓰러진 채로 라운드가 닫히면 한 번 굴린다. 죽음의 굴림 자체는 tests/test_round_death.py 가 본다
+SAVE = 15
+SAVED = '(죽음의 굴림 성공: 15, 목표 10. 성공 1, 실패 0, 죽어 가는 중)'
+
 
 def jump(risk: str = 'light') -> dict:
     """민첩으로 보통에 도전한다. 실패하면 다친다."""
@@ -490,13 +495,15 @@ async def test_a_downed_character_can_still_declare_in_words(
 ):
     table = await start_duo(client, me, friend)
     await knock_me_down(client, app, me, friend, table, narrated)
+    load_dice(app, [SAVE])
 
     await declare(client, me, table, GROAN)
     await declare(client, friend, table, LAUGH)
     await narrated()
 
-    # 쓰러진 사람의 글도 서술자에게 간다
-    assert (await read_round(client, me, table, 3))['scene'] == '[2 라운드의 결과]\n엘프: 신음한다.\n영애: 크게 웃는다.'
+    # 쓰러진 사람의 글도 서술자에게 간다. 쓰러진 채로 라운드가 닫혔으니 죽음의 굴림이 붙는다
+    scene = (await read_round(client, me, table, 3))['scene']
+    assert scene == f'[2 라운드의 결과]\n엘프: 신음한다. {SAVED}\n영애: 크게 웃는다.'
 
 
 async def test_the_round_does_not_wait_for_a_downed_character(
@@ -504,6 +511,7 @@ async def test_the_round_does_not_wait_for_a_downed_character(
 ):
     table = await start_duo(client, me, friend)
     await knock_me_down(client, app, me, friend, table, narrated)
+    load_dice(app, [SAVE])
 
     opened = await current(client, me, table)
     closing = await declare(client, friend, table, LAUGH)
@@ -513,9 +521,8 @@ async def test_the_round_does_not_wait_for_a_downed_character(
     assert (opened['number'], opened['waiting_for']) == (2, [str(FRIEND)])
     assert closing['status'] == 'closing'
     # 쓰러진 사람은 "아무것도 하지 않았다"가 아니다
-    assert (await read_round(client, me, table, 3))[
-        'scene'
-    ] == '[2 라운드의 결과]\n엘프: 쓰러져 있다.\n영애: 크게 웃는다.'
+    scene = (await read_round(client, me, table, 3))['scene']
+    assert scene == f'[2 라운드의 결과]\n엘프: 쓰러져 있다. {SAVED}\n영애: 크게 웃는다.'
     # 선언을 내지 않은 사람(idle)에도 들어가지 않는다
     closed = [event for event in await read_events(client, me, table) if event['type'] == 'round_closed']
     assert closed[-1]['payload'] == {'number': 2, 'idle': []}
@@ -550,6 +557,8 @@ async def test_when_everyone_is_down_the_host_moves_the_table_on(
     await declare(client, me, table, JUMP, jump('heavy'))
     await declare(client, friend, table, JUMP, jump('heavy'))
     await narrated()
+    # 다음 라운드가 닫힐 때 둘 다 죽음의 굴림을 굴린다
+    load_dice(app, [SAVE, SAVE])
 
     opened = await current(client, me, table)
     closing = await client.post(table_url(table, '/rounds/current/close'), headers=me)

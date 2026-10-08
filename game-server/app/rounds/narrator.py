@@ -54,6 +54,21 @@ class Verdict:
 
 
 @dataclass(frozen=True)
+class DeathSaveNote:
+    """죽음의 굴림 한 번. 엔진이 굴린 것이다. 쓰러진 캐릭터가 죽어 가는지, 고비를 넘겼는지, 죽었는지를 알려 준다."""
+
+    # 주사위의 눈과 넘어야 하는 값
+    roll: int
+    target: int
+    success: bool
+    # 지금까지 센 성공과 실패
+    successes: int
+    failures: int
+    # dying(죽어 가는 중), stable(고비를 넘김), dead(죽음)
+    fate: str
+
+
+@dataclass(frozen=True)
 class Move:
     """한 캐릭터가 이번 라운드에 하겠다고 한 일과, 판정이 있었으면 그 결과."""
 
@@ -64,6 +79,10 @@ class Move:
     verdict: Verdict | None = None
     # 이 라운드의 결과까지 반영한 뒤에 이 캐릭터가 쓰러져 있는가
     downed: bool = False
+    # 이 라운드가 닫힐 때 굴린 죽음의 굴림. 굴리지 않았으면 None 이다
+    death_save: DeathSaveNote | None = None
+    # 이 캐릭터가 죽었는가. 이번 라운드에 죽었을 수도, 그 전에 죽었을 수도 있다
+    dead: bool = False
 
 
 @dataclass(frozen=True)
@@ -103,17 +122,34 @@ def describe_impact(impact: Impact) -> str:
 
 
 def describe_idle(move: Move) -> str:
-    """선언을 내지 않은 캐릭터를 뭐라고 적을지 정한다."""
+    """선언을 내지 않은 캐릭터를 뭐라고 적을지 정한다. 죽은 캐릭터는 쓰러져 있기도 하다. 죽음을 먼저 본다."""
+    if move.dead:
+        return '죽었다.'
     return '쓰러져 있다.' if move.downed else '아무것도 하지 않았다.'
 
 
+FATES = {'dying': '죽어 가는 중', 'stable': '고비를 넘김', 'dead': '죽음'}
+
+
+def describe_death_save(note: DeathSaveNote) -> str:
+    """죽음의 굴림을 한 줄로 적는다. 예: (죽음의 굴림 실패: 7, 목표 10. 성공 1, 실패 2, 죽어 가는 중)"""
+    result = '성공' if note.success else '실패'
+    counts = f'성공 {note.successes}, 실패 {note.failures}'
+    return f'(죽음의 굴림 {result}: {note.roll}, 목표 {note.target}. {counts}, {FATES[note.fate]})'
+
+
 def describe_move(move: Move) -> str:
-    """한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, HP 가 바뀌었으면 그 뒤에 붙인다."""
+    """
+    한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, HP 가 바뀌었으면 그 뒤에 붙인다.
+    죽음의 굴림을 굴렸으면 맨 뒤에 붙인다.
+    """
     parts = [f'{move.character_name}: {move.content or describe_idle(move)}']
     if move.verdict is not None:
         parts.append(describe_verdict(move.verdict))
         if move.verdict.impact is not None:
             parts.append(describe_impact(move.verdict.impact))
+    if move.death_save is not None:
+        parts.append(describe_death_save(move.death_save))
     return ' '.join(parts)
 
 

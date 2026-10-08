@@ -19,6 +19,8 @@ PLAIN_RULES = Ruleset.model_validate(
         **SRD5.model_dump(mode='json'),
         'modifier': {'base': 0, 'step': 1},
         'die': 6,
+        # d6 으로는 SRD5 의 죽음의 굴림(목표 10)을 넘을 수 없다. 이 규칙에는 죽음의 굴림이 없다
+        'death_save': None,
         'difficulties': [{'key': 'normal', 'name': '보통', 'target': 7}],
         'default_difficulty': 'normal',
     }
