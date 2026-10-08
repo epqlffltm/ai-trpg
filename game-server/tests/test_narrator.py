@@ -186,3 +186,14 @@ async def test_a_dead_character_is_dead_and_not_just_lying_down():
     narration = await FakeNarrator().narrate(request)
 
     assert narration == '[3 라운드의 결과]\n폭주족 엘프: 죽었다.\n악역영애: 쓰러져 있다.'
+
+
+async def test_a_character_that_just_arrived_is_introduced():
+    request = make_request([Move('드워프', None, replaces='폭주족 엘프'), Move('악역영애', '크게 웃는다.')])
+
+    narration = await FakeNarrator().narrate(request)
+
+    # 선언이 없는 것은 아무것도 하지 않아서가 아니다. 들어온 라운드라서다. 누구의 뒤를 잇는지를 함께 적는다
+    assert narration == (
+        '[3 라운드의 결과]\n드워프: 죽은 폭주족 엘프의 뒤를 이어 새로 이야기에 들어온다.\n악역영애: 크게 웃는다.'
+    )

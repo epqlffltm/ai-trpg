@@ -18,11 +18,12 @@ from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.core.dice import Rolling
-from app.tables import deaths, rolls, service, sheets
+from app.tables import deaths, replacements, rolls, service, sheets
 from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 from app.tables.schemas import (
     CharacterOut,
     CharacterUpdate,
+    FallenOut,
     HostTransfer,
     JoinRequest,
     LobbyJoinRequest,
@@ -68,6 +69,7 @@ def to_sheet(sheet: TableSheet | None) -> SheetOut | None:
     if sheet is None:
         return None
     return SheetOut(
+        number=sheet.number,
         abilities=sheet.abilities,
         max_hp=sheet.max_hp,
         hp=sheet.hp,
@@ -82,7 +84,22 @@ def to_roll(roll: TableRoll | None) -> RollOut | None:
     if roll is None:
         return None
     return RollOut(
-        dice=roll.dice, scores=roll.scores, times_rolled=roll.times_rolled, reroll_granted=roll.reroll_granted
+        dice=roll.dice,
+        scores=roll.scores,
+        times_rolled=roll.times_rolled,
+        character_number=roll.character_number,
+        reroll_granted=roll.reroll_granted,
+    )
+
+
+def to_fallen(sheet: TableSheet) -> FallenOut:
+    """떠난 캐릭터의 시트를 응답으로 바꾼다."""
+    return FallenOut(
+        number=sheet.number,
+        character_name=sheet.character_name,
+        pregen_index=sheet.pregen_index,
+        abilities=sheet.abilities,
+        max_hp=sheet.max_hp,
     )
 
 
@@ -100,17 +117,39 @@ def to_member(table: GameTable, member: TableMember) -> MemberOut:
         roll=to_roll(sheets.find_roll(table, member.user_id)),
         abilities=member.abilities,
         sheet=to_sheet(member.sheet),
+        fallen=[to_fallen(sheet) for sheet in member.fallen],
         joined_at=member.joined_at,
     )
 
 
+def find_pregen_holders(table: GameTable) -> dict[int, tuple[uuid.UUID, bool]]:
+    """
+    프리젠마다 가져간 사람과 그 캐릭터가 죽었는지를 찾는다. 프리젠의 번호에서 (사람, 죽었는가) 로 간다.
+
+    시작 전에는 자리에 적힌 것을 본다. 시작한 뒤에는 시트에도 적혀 있다. 떠난 캐릭터의 프리젠은 시트에만 남아 있다.
+    """
+    holders = {
+        member.pregen_index: (member.user_id, False) for member in table.members if member.pregen_index is not None
+    }
+    for member in table.members:
+        for sheet in member.sheets:
+            if sheet.pregen_index is not None:
+                holders[sheet.pregen_index] = (member.user_id, sheet.died_at is not None)
+    return holders
+
+
 def to_pregen_choices(table: GameTable, snapshot: Snapshot) -> list[PregenChoice]:
-    """프리젠마다 누가 가져갔는지를 붙여 응답으로 바꾼다."""
-    taken_by = {member.pregen_index: member.user_id for member in table.members if member.pregen_index is not None}
-    return [
-        PregenChoice(name=pregen.name, description=pregen.description, sheet=pregen.sheet, taken_by=taken_by.get(index))
-        for index, pregen in enumerate(snapshot.pregens)
-    ]
+    """프리젠마다 누가 가져갔는지와 그 캐릭터가 죽었는지를 붙여 응답으로 바꾼다."""
+    holders = find_pregen_holders(table)
+    choices = []
+    for index, pregen in enumerate(snapshot.pregens):
+        taken_by, dead = holders.get(index, (None, False))
+        choices.append(
+            PregenChoice(
+                name=pregen.name, description=pregen.description, sheet=pregen.sheet, taken_by=taken_by, dead=dead
+            )
+        )
+    return choices
 
 
 def to_player_made_hp(table: GameTable, snapshot: Snapshot) -> PlayerMadeHp | None:
@@ -265,6 +304,22 @@ async def set_character(table_id: uuid.UUID, data: CharacterUpdate, user: Curren
     return to_detail(table, user.user_id)
 
 
+# 201: 새 캐릭터가 생겼다는 뜻이다. PUT 과 나눈 이유: PUT 은 같은 요청을 몇 번 보내도 결과가 같다.
+# 이것은 한 번만 된다. 새 캐릭터가 들어오면 그 캐릭터는 살아 있고, 살아 있는 동안에는 다시 들일 수 없다
+@router.post('/{table_id}/character', response_model=TableDetail, status_code=status.HTTP_201_CREATED)
+async def bring_in_character(
+    table_id: uuid.UUID, data: CharacterUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    죽은 내 캐릭터의 뒤를 이을 새 캐릭터를 들인다. 진행 중인 테이블에서, 내 캐릭터가 죽었을 때만 된다.
+
+    받는 값은 캐릭터를 정할 때와 같다. 새 캐릭터는 시트를 바로 받고, 다음 라운드부터 선언을 낸다.
+    주사위로 정하는 방식이면 먼저 새로 굴린다(POST .../character/roll).
+    """
+    table = await replacements.bring_in_character(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
 @router.delete('/{table_id}/character', response_model=TableDetail, status_code=status.HTTP_200_OK)
 async def give_up_character(table_id: uuid.UUID, user: CurrentUser, session: Session) -> TableDetail:
     """
@@ -281,7 +336,8 @@ async def roll_abilities(table_id: uuid.UUID, user: CurrentUser, session: Sessio
     """
     내 능력치의 점수를 주사위로 굴린다. 본문이 없다. 굴리는 것은 서버다.
 
-    한 테이블에서 한 번만 된다. 굴린 점수는 응답의 members[].roll 에 있다. 그것을 능력치에 놓아 캐릭터를 정한다.
+    캐릭터 하나에 한 번만 된다. 굴린 점수는 응답의 members[].roll 에 있다. 그것을 능력치에 놓아 캐릭터를 정한다.
+    진행 중에는 캐릭터가 죽은 사람이 새 캐릭터를 위해 굴린다.
     """
     table = await rolls.roll_abilities(session, user.user_id, table_id, dice)
     return to_detail(table, user.user_id)

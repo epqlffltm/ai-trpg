@@ -14,12 +14,14 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
   - 저장은 commit 하나로 한다. 저장하면서 "새 이벤트가 생겼다"는 신호를 보낸다(app/realtime/signals.py).
     캐릭터를 정하는 것은 적지 않는다. 시작할 때 누가 어떤 캐릭터였는지를 한 번 적는다.
   - 캐릭터의 숫자(시트)는 게임을 시작할 때 준다(app/tables/sheets.py). 모집 중에는 바뀔 숫자가 없다.
+  - 진행 중에는 캐릭터를 바꾸지 못한다. 캐릭터가 죽은 사람만 새 캐릭터를 들인다(app/tables/replacements.py).
 """
 
 import asyncio
 import enum
 import secrets
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,6 +97,8 @@ class Conflict(enum.StrEnum):
     CHARACTER_NOT_DOWNED = 'character_not_downed'
     # 캐릭터가 이미 죽었다
     CHARACTER_DEAD = 'character_dead'
+    # 캐릭터가 살아 있다. 진행 중에는 캐릭터가 죽은 사람만 새 캐릭터를 정한다
+    CHARACTER_ALIVE = 'character_alive'
 
 
 class TableConflictError(Exception):
@@ -163,6 +167,22 @@ def require_recruiting(table: GameTable) -> None:
         raise TableConflictError(Conflict.NOT_RECRUITING)
 
 
+def require_choosing(table: GameTable, member: TableMember) -> None:
+    """
+    이 사람이 캐릭터를 정할 수 있는 때인지 확인한다. 아니면 TableConflictError.
+
+    모집 중에는 누구나 정한다. 진행 중에는 자기 캐릭터가 죽은 사람만 새 캐릭터를 정한다.
+    끝난 테이블에서는 아무도 정하지 못한다.
+    주사위를 굴리는 것과 "한 번 더"를 받는 것이 이 조건을 쓴다. 둘 다 캐릭터를 정하는 일의 앞걸음이다.
+    """
+    if table.status == TableStatus.RECRUITING:
+        return
+    if table.status != TableStatus.PLAYING:
+        raise TableConflictError(Conflict.NOT_RECRUITING)
+    if not sheets.is_dead(member):
+        raise TableConflictError(Conflict.CHARACTER_ALIVE)
+
+
 def require_not_ended(table: GameTable) -> None:
     """테이블이 끝나지 않았는지 확인한다. 끝났으면 TableConflictError."""
     if table.status == TableStatus.ENDED:
@@ -170,9 +190,17 @@ def require_not_ended(table: GameTable) -> None:
 
 
 def require_pregen_free(table: GameTable, member: TableMember, pregen_index: int) -> None:
-    """다른 사람이 이 프리젠을 가져가지 않았는지 확인한다. 가져갔으면 TableConflictError."""
+    """
+    이 프리젠을 고를 수 있는지 확인한다. 못 고르면 TableConflictError.
+
+    다른 사람이 가져갔으면 못 고른다.
+    이 테이블에서 시트를 받은 적이 있는 프리젠도 못 고른다. 그 캐릭터가 죽었어도, 자기 캐릭터였어도 그렇다.
+    죽은 인물이 다시 걸어 들어오지 못한다. 시작 전에는 시트가 없으므로 앞의 조건만 남는다.
+    """
     others = [other for other in table.members if other is not member]
     if any(other.pregen_index == pregen_index for other in others):
+        raise TableConflictError(Conflict.PREGEN_TAKEN)
+    if sheets.pregen_has_sheet(table, pregen_index):
         raise TableConflictError(Conflict.PREGEN_TAKEN)
 
 
@@ -196,7 +224,7 @@ def resolve_character(snapshot: Snapshot, data: CharacterUpdate) -> tuple[str, s
 def accept_abilities(snapshot: Snapshot, data: CharacterUpdate, roll: TableRoll | None) -> dict[str, int] | None:
     """
     플레이어가 정한 능력치를 이 테이블의 규칙과 견주어 보고, 자리에 적을 값을 돌려준다. 능력치를 적지 않았으면 None.
-    roll 은 이 사람이 이 테이블에서 굴려 둔 것이다.
+    roll 은 이 사람이 지금 정하는 캐릭터를 위해 굴려 둔 것이다(app/tables/sheets.py 의 find_fresh_roll).
 
     규칙의 능력치가 빠짐없이 있어야 하고, 점수가 규칙의 범위 안이어야 한다. 아니면 TableOptionError.
     거기에 방식이 거는 제한을 지켜야 한다. 점수제는 총점 안이어야 하고, 주사위는 굴려 둔 점수를 그대로 써야 한다.
@@ -214,6 +242,54 @@ def accept_abilities(snapshot: Snapshot, data: CharacterUpdate, roll: TableRoll 
     if not abilities_fit(ruleset, data.abilities) or not sheets.obeys_mode(ruleset, mode, data.abilities, roll):
         raise TableOptionError('abilities')
     return dict(data.abilities)
+
+
+@dataclass(frozen=True)
+class ChosenCharacter:
+    """받아들인 캐릭터. 입력을 이 테이블과 견주어 본 뒤의 값이다. 자리에 그대로 적는다."""
+
+    name: str
+    description: str
+    mode: CharacterMode
+    pregen_index: int | None
+    abilities: dict[str, int] | None
+
+
+def accept_character(
+    table: GameTable, snapshot: Snapshot, member: TableMember, data: CharacterUpdate
+) -> ChosenCharacter:
+    """
+    캐릭터를 정하는 입력을 이 테이블과 견주어 보고, 자리에 적을 값을 돌려준다. 자리를 고치지는 않는다.
+
+    이 테이블에서 허용하지 않는 방식이거나, 고를 수 없는 프리젠이거나,
+    주사위 방식인데 이 캐릭터를 위해 아직 굴리지 않았으면 TableConflictError.
+    없는 프리젠이거나, 직접 정한 능력치가 이 테이블의 규칙에 맞지 않으면 TableOptionError.
+
+    모집 중에 캐릭터를 정할 때와 진행 중에 새 캐릭터를 들일 때(app/tables/replacements.py)가 함께 쓴다.
+    받아들이는 조건은 같다. 다른 것은 언제 되느냐와, 받아들인 뒤에 무슨 일이 일어나느냐다.
+    """
+    if data.chosen_mode not in table.character_modes:
+        raise TableConflictError(Conflict.CHARACTER_MODE_NOT_ALLOWED)
+    name, description = resolve_character(snapshot, data)
+    abilities = accept_abilities(snapshot, data, sheets.find_fresh_roll(table, member))
+    if data.pregen_index is not None:
+        require_pregen_free(table, member, data.pregen_index)
+    return ChosenCharacter(
+        name=name,
+        description=description,
+        mode=data.chosen_mode,
+        pregen_index=data.pregen_index,
+        abilities=abilities,
+    )
+
+
+def write_character(member: TableMember, chosen: ChosenCharacter) -> None:
+    """받아들인 캐릭터를 자리에 적는다. 앞의 캐릭터가 있었으면 통째로 바뀐다."""
+    member.character_name = chosen.name
+    member.character_description = chosen.description
+    member.character_mode = chosen.mode
+    member.pregen_index = chosen.pregen_index
+    member.abilities = chosen.abilities
 
 
 def take_seat(table: GameTable, user_id: uuid.UUID) -> None:
@@ -501,23 +577,14 @@ async def set_character(
     프리젠을 가져갔다가 직접 만든 캐릭터로 바꾸면, 그 프리젠은 다시 고를 수 있게 된다.
     능력치를 직접 정했다가 다른 방식으로 바꾸면, 적어 둔 능력치는 지워진다.
     숫자(시트)는 여기서 주지 않는다. 게임을 시작할 때 준다. 직접 정한 능력치는 그때까지 자리에 적어 둔다.
+
+    진행 중에는 이 길로 캐릭터를 바꾸지 못한다. 캐릭터가 죽은 사람이 새 캐릭터를 들이는 길은 따로 있다
+    (app/tables/replacements.py).
     """
     table, member = await lock_seated(session, user_id, table_id)
     require_recruiting(table)
-    if data.chosen_mode not in table.character_modes:
-        raise TableConflictError(Conflict.CHARACTER_MODE_NOT_ALLOWED)
-
-    snapshot = read_snapshot(table.content)
-    name, description = resolve_character(snapshot, data)
-    abilities = accept_abilities(snapshot, data, sheets.find_roll(table, user_id))
-    if data.pregen_index is not None:
-        require_pregen_free(table, member, data.pregen_index)
-
-    member.character_name = name
-    member.character_description = description
-    member.character_mode = data.chosen_mode
-    member.pregen_index = data.pregen_index
-    member.abilities = abilities
+    chosen = accept_character(table, read_snapshot(table.content), member, data)
+    write_character(member, chosen)
     return await save(session, table)
 
 

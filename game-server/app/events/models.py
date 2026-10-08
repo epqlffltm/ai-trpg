@@ -68,6 +68,8 @@ class EventType(enum.StrEnum):
     DEATH_SAVE_ROLLED = 'death_save_rolled'
     # 캐릭터가 죽었다. 죽음의 굴림으로(원인은 그 굴림의 이벤트다), 또는 플레이어가 스스로 보내서
     CHARACTER_DIED = 'character_died'
+    # 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다. 새 캐릭터가 받은 시트가 적힌다
+    CHARACTER_JOINED = 'character_joined'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # 테이블이 끝났다

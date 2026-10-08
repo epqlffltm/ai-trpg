@@ -198,7 +198,7 @@ async def test_opens_a_table_from_my_own_version(client: AsyncClient, me: dict[s
     assert table['recommended_players'] == {'min': 2, 'max': 3}
     # 고르지 않으면 첫 번째 스타팅이다
     assert table['opening'] == OPENINGS[0]
-    assert table['pregens'] == [{**pregen, 'sheet': SHEET, 'taken_by': None} for pregen in PREGENS]
+    assert table['pregens'] == [{**pregen, 'sheet': SHEET, 'taken_by': None, 'dead': False} for pregen in PREGENS]
     # 만든 사람이 방장이 되어 앉는다. 캐릭터는 아직 없다
     assert table['host_id'] == str(ME)
     assert table['member_count'] == 1

@@ -33,7 +33,7 @@ from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.tables import sheets
-from app.tables.models import TableRoll
+from app.tables.models import TableMember, TableRoll
 from app.tables.schemas import CharacterUpdate
 from tests.sheets import handed_out, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -458,8 +458,9 @@ async def test_scores_cannot_be_rolled_after_the_game_starts(
 
     response = await roll(client, me, table)
 
+    # 진행 중에는 캐릭터가 죽은 사람만 새 캐릭터를 위해 굴린다(tests/test_replacement.py)
     assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json()['reason'] == 'not_recruiting'
+    assert response.json()['reason'] == 'character_alive'
     assert dice.remaining == 2 * ONE_ROLL
 
 
@@ -486,6 +487,7 @@ async def test_the_roll_is_recorded_with_every_die(client: AsyncClient, me: dict
         'dice': [dice_for(score) for score in FIRST],
         'scores': FIRST,
         'times_rolled': 1,
+        'character_number': 1,
     }
 
 
@@ -702,6 +704,7 @@ async def test_the_host_grants_one_more_roll_to_one_player(
         'dice': [dice_for(score) for score in SECOND],
         'scores': SECOND,
         'times_rolled': 2,
+        'character_number': 1,
         'reroll_granted': False,
     }
     assert dice.remaining == 0
@@ -907,8 +910,9 @@ async def test_one_more_cannot_be_granted_after_the_game_starts(
 
     response = await grant(client, me, table, ME)
 
+    # 진행 중에는 캐릭터가 죽어 새 캐릭터를 굴린 사람에게만 준다
     assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json()['reason'] == 'not_recruiting'
+    assert response.json()['reason'] == 'character_alive'
 
 
 async def test_one_more_cannot_be_granted_where_rolling_is_not_used(client: AsyncClient, me: dict[str, str]):
@@ -924,14 +928,24 @@ async def test_one_more_cannot_be_granted_where_rolling_is_not_used(client: Asyn
 # --- 판단만 하는 작은 것. DB 를 쓰지 않는다 ---
 
 
-def make_roll(scores: list[int], reroll_granted: bool = False) -> TableRoll:
-    return TableRoll(user_id=ME, dice=[], scores=scores, times_rolled=1, reroll_granted=reroll_granted)
+def make_roll(scores: list[int], reroll_granted: bool = False, character_number: int = 1) -> TableRoll:
+    return TableRoll(
+        user_id=ME,
+        dice=[],
+        scores=scores,
+        times_rolled=1,
+        reroll_granted=reroll_granted,
+        character_number=character_number,
+    )
 
 
 def test_a_player_may_roll_when_they_have_not_or_were_granted_one_more():
-    assert sheets.may_roll(None)
-    assert not sheets.may_roll(make_roll(FIRST))
-    assert sheets.may_roll(make_roll(FIRST, reroll_granted=True))
+    # 아직 시트를 받지 않은 사람이다. 첫 캐릭터를 정하고 있다
+    seat = TableMember(user_id=ME)
+
+    assert sheets.may_roll(None, seat)
+    assert not sheets.may_roll(make_roll(FIRST), seat)
+    assert sheets.may_roll(make_roll(FIRST, reroll_granted=True), seat)
 
 
 def test_rolled_abilities_must_come_from_the_roll():

@@ -102,6 +102,12 @@ class Round(Base):
     # 선언이 아니라 라운드에 적는다. 쓰러진 사람은 선언을 내지 않아도 되기 때문이다
     death_saves: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'"))
 
+    # 이 라운드에 새로 들어온 캐릭터들(app/tables/replacements.py). 들어온 순서다. 없으면 빈 목록이다.
+    # 하나하나가 {user_id, character_name, replaces} 다. replaces 는 그 사람의 죽은 캐릭터의 이름이다.
+    # 새 캐릭터는 들어온 라운드에는 선언을 내지 않는다. 그 라운드의 장면에 아직 없는 인물이다.
+    # 라운드가 닫힐 때 서술자가 이것을 읽고 새 캐릭터를 이야기에 들인다. 다음 라운드부터 행동한다
+    arrivals: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'"))
+
     # 이 라운드의 선언들. 낸 순서다. 많아야 넷이라 라운드를 읽을 때 함께 읽는다
     declarations: Mapped[list['Declaration']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='Declaration.created_at, Declaration.user_id'
