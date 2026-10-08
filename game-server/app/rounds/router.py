@@ -75,6 +75,7 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
         declarations=declarations,
         # 죽음의 굴림은 가리지 않는다. 열려 있는 동안에는 어차피 없고, 마감한 뒤에는 모두에게 보인다
         death_saves=round_.death_saves,
+        arrivals=round_.arrivals,
         waiting_for=service.waiting_for(table, round_) if is_waiting else [],
         created_at=round_.created_at,
         closing_at=round_.closing_at,
