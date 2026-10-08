@@ -31,6 +31,8 @@ from app.engine.dice import RandomDice
 from app.events import router as events
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
+from app.personas import router as personas
+from app.personas.service import PersonaConflictError, PersonaNotFoundError
 from app.realtime import router as realtime
 from app.realtime.hub import Hub
 from app.realtime.listener import PostgresListener
@@ -131,6 +133,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.include_router(lorebooks.router, prefix=API_PREFIX)
     app.include_router(listings.owner_router, prefix=API_PREFIX)
     app.include_router(listings.public_router, prefix=API_PREFIX)
+    app.include_router(personas.router, prefix=API_PREFIX)
     app.include_router(tables.router, prefix=API_PREFIX)
     app.include_router(rounds.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)
@@ -144,6 +147,8 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.add_exception_handler(LorebookFullError, lorebooks.handle_lorebook_full)
     app.add_exception_handler(ScenarioNotReadyError, scenarios.handle_scenario_not_ready)
     app.add_exception_handler(ListingNotReadyError, listings.handle_listing_not_ready)
+    app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)
+    app.add_exception_handler(PersonaConflictError, personas.handle_persona_conflict)
     app.add_exception_handler(TableNotFoundError, tables.handle_table_not_found)
     app.add_exception_handler(MemberNotFoundError, tables.handle_member_not_found)
     app.add_exception_handler(NotHostError, tables.handle_not_host)
