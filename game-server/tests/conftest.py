@@ -15,13 +15,13 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.main import create_app
 from app.realtime import service as stream_service
 from app.realtime.service import Cursor
+from tests.cleaning import clear_tables
 from tests.signing import FakeAuthServer, SigningKey, make_signing_key, make_viewer
 from tests.streaming import LONG_HEARTBEAT, Reader
 
@@ -111,11 +111,7 @@ async def clean_tables(app: FastAPI) -> None:
     그러면 앱의 커밋이 진짜로 일어나지 않아, 저장의 경계가 맞는지 볼 수 없다.
     끝난 뒤가 아니라 시작할 때 비운다. 앞의 테스트가 도중에 죽어 찌꺼기를 남겨도 영향을 받지 않는다.
     """
-    async with app.state.engine.begin() as connection:
-        # worlds 는 assets 를 가리키므로 CASCADE 로 함께 비워진다
-        await connection.execute(text('TRUNCATE TABLE assets CASCADE'))
-        # 보관함은 자산을 가리키지 않아 위에서 함께 비워지지 않는다
-        await connection.execute(text('TRUNCATE TABLE personas'))
+    await clear_tables(app.state.engine)
 
 
 @pytest.fixture
