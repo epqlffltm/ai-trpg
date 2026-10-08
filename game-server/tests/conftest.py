@@ -114,6 +114,8 @@ async def clean_tables(app: FastAPI) -> None:
     async with app.state.engine.begin() as connection:
         # worlds 는 assets 를 가리키므로 CASCADE 로 함께 비워진다
         await connection.execute(text('TRUNCATE TABLE assets CASCADE'))
+        # 보관함은 자산을 가리키지 않아 위에서 함께 비워지지 않는다
+        await connection.execute(text('TRUNCATE TABLE personas'))
 
 
 @pytest.fixture
