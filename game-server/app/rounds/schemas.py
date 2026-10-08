@@ -11,6 +11,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.engine.action import CheckAction
+from app.engine.death import Fate
 from app.engine.health import ChangeKind
 from app.rounds.models import DECLARATION_MAX_LENGTH, RoundStatus
 
@@ -84,6 +85,22 @@ class DeclarationOut(BaseModel):
     outcome: CheckOutcome | None
 
 
+class DeathSaveOut(BaseModel):
+    """죽음의 굴림 한 번. 엔진이 굴린 것이다(app/engine/death.py 의 DeathSaveRoll)."""
+
+    user_id: uuid.UUID
+    character_name: str
+    # 주사위의 눈과 넘어야 하는 값. 눈이 이 값 이상이면 성공이다. 능력치의 보정은 없다
+    roll: int
+    target: int
+    success: bool
+    # 이 굴림까지 센 성공과 실패
+    successes: int
+    failures: int
+    # 이 굴림 뒤의 갈림길. dying(죽어 가는 중), stable(고비를 넘김), dead(죽음)
+    fate: Fate
+
+
 class RoundOut(BaseModel):
     """앉은 사람이 라운드를 볼 때의 값."""
 
@@ -93,6 +110,8 @@ class RoundOut(BaseModel):
     # open: 선언을 받는 중. closing: 선언을 마감했고 GM 이 서술하는 중. closed: 끝났다
     status: RoundStatus
     declarations: list[DeclarationOut]
+    # 이 라운드가 닫힐 때 굴린 죽음의 굴림들. 선언을 마감할 때(닫는 중부터) 생긴다. 굴린 것이 없으면 비어 있다
+    death_saves: list[DeathSaveOut]
     # 선언을 내야 하는데 아직 내지 않은 사람들. 쓰러진 사람은 들어가지 않는다. 선언을 받는 중이 아니면 비어 있다
     waiting_for: list[uuid.UUID]
     created_at: datetime

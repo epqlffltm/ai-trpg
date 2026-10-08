@@ -18,7 +18,7 @@ from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.core.dice import Rolling
-from app.tables import rolls, service, sheets
+from app.tables import deaths, rolls, service, sheets
 from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 from app.tables.schemas import (
     CharacterOut,
@@ -67,7 +67,14 @@ def to_sheet(sheet: TableSheet | None) -> SheetOut | None:
     """시트를 응답으로 바꾼다. 아직 받지 않았으면 None."""
     if sheet is None:
         return None
-    return SheetOut(abilities=sheet.abilities, max_hp=sheet.max_hp, hp=sheet.hp)
+    return SheetOut(
+        abilities=sheet.abilities,
+        max_hp=sheet.max_hp,
+        hp=sheet.hp,
+        death_successes=sheet.death_successes,
+        death_failures=sheet.death_failures,
+        dead=sheet.died_at is not None,
+    )
 
 
 def to_roll(roll: TableRoll | None) -> RollOut | None:
@@ -255,6 +262,17 @@ async def join_public_table(
 async def set_character(table_id: uuid.UUID, data: CharacterUpdate, user: CurrentUser, session: Session) -> TableDetail:
     """내 캐릭터를 정한다. 직접 만들거나 프리젠을 가져온다. 모집 중에만 된다."""
     table = await service.set_character(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
+@router.delete('/{table_id}/character', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def give_up_character(table_id: uuid.UUID, user: CurrentUser, session: Session) -> TableDetail:
+    """
+    쓰러진 내 캐릭터를 스스로 보낸다. 캐릭터가 죽는다. 되돌릴 수 없다.
+
+    진행 중인 테이블에서, 캐릭터가 쓰러져 있을 때만 된다. 죽음의 굴림을 기다리지 않고 새 캐릭터로 넘어가려는 때 쓴다.
+    """
+    table = await deaths.give_up_character(session, user.user_id, table_id)
     return to_detail(table, user.user_id)
 
 

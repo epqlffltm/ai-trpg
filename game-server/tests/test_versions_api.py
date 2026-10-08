@@ -39,6 +39,7 @@ from app.assets.scenarios.snapshot import (
     upgrade_from_6,
     upgrade_from_7,
     upgrade_from_8,
+    upgrade_from_9,
 )
 from app.engine.sheet import fits
 from app.engine.templates import SRD5
@@ -638,22 +639,27 @@ def without_rules(document: dict, *names: str) -> dict:
 def make_format_5() -> dict:
     """양의 등급이 없던 때의 판."""
     document = upgrade_from_4(upgrade_from_3(upgrade_from_2(upgrade_from_1(FORMAT_1))))
-    return without_rules(document, 'magnitudes', 'hp_ability', 'point_buy', 'score_roll')
+    return without_rules(document, 'magnitudes', 'hp_ability', 'point_buy', 'score_roll', 'death_save')
 
 
 def make_format_6() -> dict:
     """최대 HP 에 닿는 능력치가 없던 때의 판."""
-    return without_rules(upgrade_from_5(make_format_5()), 'hp_ability', 'point_buy', 'score_roll')
+    return without_rules(upgrade_from_5(make_format_5()), 'hp_ability', 'point_buy', 'score_roll', 'death_save')
 
 
 def make_format_7() -> dict:
     """점수제가 없던 때의 판."""
-    return without_rules(upgrade_from_6(make_format_6()), 'point_buy', 'score_roll')
+    return without_rules(upgrade_from_6(make_format_6()), 'point_buy', 'score_roll', 'death_save')
 
 
 def make_format_8() -> dict:
     """점수를 주사위로 정하는 법이 없던 때의 판."""
-    return without_rules(upgrade_from_7(make_format_7()), 'score_roll')
+    return without_rules(upgrade_from_7(make_format_7()), 'score_roll', 'death_save')
+
+
+def make_format_9() -> dict:
+    """죽음의 굴림이 없던 때의 판."""
+    return without_rules(upgrade_from_8(make_format_8()), 'death_save')
 
 
 def test_upgrades_a_format_5_document():
@@ -708,7 +714,7 @@ def test_upgrades_a_format_8_document():
 
     # 규칙에 점수를 주사위로 정하는 법이 없던 때의 판이다. 그때의 규칙(SRD5 템플릿)의 것으로 읽는다
     assert upgraded['format'] == 9
-    assert upgraded['rulebook']['rules'] == SRD5.model_dump(mode='json')
+    assert upgraded['rulebook']['rules']['score_roll'] == SRD5.model_dump(mode='json')['score_roll']
     assert upgraded['rulebook']['gm_guide'] == GM_GUIDE
     # 규칙에 그 법이 생겼다고 그 판에서 주사위로 정할 수 있게 된 것은 아니다. 허용한 방식은 그대로다
     assert upgraded['character_modes'] == format_8['character_modes'] == ['pregen', 'custom']
@@ -717,6 +723,27 @@ def test_upgrades_a_format_8_document():
     # 받은 문서는 고치지 않는다
     assert format_8['format'] == 8
     assert 'score_roll' not in format_8['rulebook']['rules']
+
+
+def test_upgrades_a_format_9_document():
+    format_9 = make_format_9()
+
+    upgraded = upgrade_from_9(format_9)
+
+    # 규칙에 죽음의 굴림이 없던 때의 판이다. 그때의 규칙(SRD5 템플릿)의 것으로 읽는다
+    assert upgraded['format'] == 10
+    assert upgraded['rulebook']['rules'] == SRD5.model_dump(mode='json')
+    assert upgraded['rulebook']['gm_guide'] == GM_GUIDE
+    # 받은 문서는 고치지 않는다
+    assert format_9['format'] == 9
+    assert 'death_save' not in format_9['rulebook']['rules']
+
+
+def test_reads_a_version_from_before_death_saves():
+    old = read_snapshot(make_format_9())
+
+    assert old.format == SNAPSHOT_FORMAT
+    assert old.rulebook.rules.death_save == SRD5.death_save
 
 
 def test_reads_a_version_from_before_score_rolls():
@@ -754,7 +781,7 @@ def test_reads_a_document_of_any_format():
     assert read_snapshot(FORMAT_1) == read_snapshot(current)
     assert read_snapshot(FORMAT_1).format == SNAPSHOT_FORMAT
     assert read_snapshot(FORMAT_1).openings == [OPENING]
-    # 형식 1 은 1 → 2 → … → 9 를 차례로 거친다
+    # 형식 1 은 1 → 2 → … → 10 을 차례로 거친다
     assert read_snapshot(FORMAT_1).pregens == []
     assert read_snapshot(FORMAT_1).rulebook.rules == SRD5
 

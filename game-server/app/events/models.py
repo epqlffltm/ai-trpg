@@ -64,6 +64,10 @@ class EventType(enum.StrEnum):
     CHECK_ROLLED = 'check_rolled'
     # 엔진이 캐릭터의 HP 를 바꿨다. 피해나 회복이다. 원인은 그 판정의 이벤트다
     HP_CHANGED = 'hp_changed'
+    # 엔진이 쓰러진 캐릭터의 죽음의 굴림을 굴렸다. 라운드가 닫힐 때다
+    DEATH_SAVE_ROLLED = 'death_save_rolled'
+    # 캐릭터가 죽었다. 죽음의 굴림으로(원인은 그 굴림의 이벤트다), 또는 플레이어가 스스로 보내서
+    CHARACTER_DIED = 'character_died'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # 테이블이 끝났다

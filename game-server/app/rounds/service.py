@@ -30,6 +30,11 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 
 HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거나 회복한다(app/engine/health.py).
 HP 가 0 이면 쓰러진 것이다. 쓰러진 사람은 글만 낼 수 있고, 라운드는 그 사람의 선언을 기다리지 않는다.
+
+쓰러진 캐릭터는 라운드가 닫힐 때마다 죽음의 굴림을 굴린다(app/engine/death.py). 이것도 닫기 시작할 때 한 번만이다.
+이번 라운드에 쓰러진 캐릭터는 굴리지 않는다. 동료가 일으킬 틈이 한 라운드는 있다.
+이번 라운드에 회복을 받아 일어난 캐릭터도 굴리지 않는다. 행동의 결과를 먼저 끝내고 나서 굴린다.
+죽은 캐릭터의 플레이어는 선언을 낼 수 없다. 새 캐릭터가 있어야 한다.
 """
 
 import enum
@@ -42,7 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import action as actions
-from app.engine import health
+from app.engine import death, health
 from app.engine.action import CheckAction
 from app.engine.check import Check, find_ability, find_difficulty
 from app.engine.dice import Dice
@@ -53,11 +58,12 @@ from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
 from app.rounds import opener, repository
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.rounds.narrator import Impact, Move, NarrationRequest, Verdict
+from app.rounds.narrator import DeathSaveNote, Impact, Move, NarrationRequest, Verdict
 from app.rounds.schemas import DeclarationUpdate
 from app.tables import repository as table_repository
 from app.tables import service as tables
-from app.tables.models import GameTable, TableMember, TableStatus
+from app.tables import sheets
+from app.tables.models import DeathCause, GameTable, TableMember, TableStatus
 
 
 class RoundNotFoundError(Exception):
@@ -75,6 +81,8 @@ class Conflict(enum.StrEnum):
     ROUND_CLOSING = 'round_closing'
     # 캐릭터가 쓰러져 있다. 행동을 붙일 수 없다. 글만 낼 수 있다
     CHARACTER_DOWNED = 'character_downed'
+    # 캐릭터가 죽었다. 선언을 낼 수 없다. 새 캐릭터가 있어야 한다
+    CHARACTER_DEAD = 'character_dead'
 
 
 class RoundConflictError(Exception):
@@ -263,14 +271,18 @@ def apply_consequence(
         return None
     kind, magnitude_key = found
     affected = find_affected(table, actor, action, kind)
-    # 대상이 떠났거나 시트가 없으면 바뀔 HP 가 없다. 양을 정하는 주사위도 굴리지 않는다
-    if affected is None or affected.sheet is None:
+    # 대상이 떠났거나 시트가 없으면 바뀔 HP 가 없다. 양을 정하는 주사위도 굴리지 않는다.
+    # 죽은 캐릭터도 그렇다. 회복으로 되살리지 못한다
+    if affected is None or affected.sheet is None or sheets.is_dead(affected):
         return None
 
     sheet = affected.sheet
     magnitude = health.find_magnitude(ruleset, magnitude_key)
     change = health.change_hp(kind, magnitude, sheet.hp, sheet.max_hp, dice)
     sheet.hp = change.after
+    # 일어났으면 죽음의 굴림에서 센 것은 처음으로 돌아간다. 다시 쓰러지면 처음부터 센다
+    if not change.downed:
+        sheets.clear_death_saves(sheet)
     return {
         'kind': change.kind.value,
         'magnitude': magnitude_key,
@@ -315,6 +327,57 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice) -> None:
         declaration.outcome = {**asdict(check), 'effect': effect}
 
 
+def find_dying(table: GameTable) -> list[TableMember]:
+    """앉은 사람 중에서 캐릭터가 쓰러져 있고 아직 죽지 않은 사람들. 들어온 순서다."""
+    return [member for member in table.members if sheets.is_downed_alive(member)]
+
+
+def roll_death_saves(table: GameTable, dying: list[TableMember], dice: Dice) -> list[dict]:
+    """
+    죽음의 굴림을 굴리고, 센 것을 시트에 적고, 굴린 것들을 문서의 목록으로 돌려준다. 들어온 순서로 굴린다.
+
+    dying 은 이 라운드의 행동을 판정하기 전에 쓰러져 있던 사람들이다. 그중 지금도 쓰러져 있는 사람만 굴린다.
+    그사이에 회복을 받아 일어난 사람은 굴리지 않는다.
+    고비를 넘긴 사람과, 죽음의 굴림이 없는 규칙의 테이블은 굴릴 것이 없다(app/engine/death.py).
+    실패가 다 모이면 그 자리에서 죽은 것으로 적는다.
+
+    돌려준 목록은 라운드에 적힌다. 서술자와 이벤트는 그것을 읽는다. 다시 굴리지 않는다.
+    규칙은 굴릴 사람이 있을 때만 읽는다.
+    """
+    still_down = [member for member in dying if sheets.is_downed_alive(member)]
+    if not still_down:
+        return []
+
+    ruleset = rules_of(table)
+    rolled = []
+    for member in still_down:
+        sheet = member.sheet
+        save = death.roll_death_save(ruleset, sheet.death_successes, sheet.death_failures, dice)
+        if save is None:
+            continue
+        sheet.death_successes = save.successes
+        sheet.death_failures = save.failures
+        if save.fate == death.Fate.DEAD:
+            sheets.mark_dead(sheet)
+        rolled.append({'user_id': str(member.user_id), 'character_name': member.character_name, **asdict(save)})
+    return rolled
+
+
+def find_death_save(round_: Round, user_id: uuid.UUID) -> DeathSaveNote | None:
+    """라운드에 적힌 죽음의 굴림 중에서 이 사람의 것을 서술자에게 줄 모양으로 찾는다. 없으면 None."""
+    found = next((save for save in round_.death_saves if save['user_id'] == str(user_id)), None)
+    if found is None:
+        return None
+    return DeathSaveNote(
+        roll=found['roll'],
+        target=found['target'],
+        success=found['success'],
+        successes=found['successes'],
+        failures=found['failures'],
+        fate=found['fate'],
+    )
+
+
 def to_impact(effect: dict | None) -> Impact | None:
     """선언에 적힌 HP 의 변화를 서술자에게 줄 모양으로 바꾼다. 변화가 없었으면 None."""
     if effect is None:
@@ -355,8 +418,8 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
     닫히는 라운드를 서술자에게 줄 모양으로 바꾼다.
 
     지금 앉아 있는 사람 모두가 들어간다. 선언을 내지 않은 사람은 아무것도 하지 않은 것으로 들어간다.
-    판정의 결과와 HP 의 변화는 선언에 적힌 것을 읽는다. 여기서 굴리지 않는다.
-    쓰러져 있는지는 이번 라운드의 결과를 반영한 뒤의 것이다.
+    판정의 결과와 HP 의 변화는 선언에 적힌 것을, 죽음의 굴림은 라운드에 적힌 것을 읽는다. 여기서 굴리지 않는다.
+    쓰러져 있는지, 죽었는지는 이번 라운드의 결과를 반영한 뒤의 것이다.
     """
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
     ruleset = rules_of(table) if any(has_outcome(declaration) for declaration in declarations) else None
@@ -366,7 +429,14 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
         content = declaration.content if declaration else None
         verdict = to_verdict(ruleset, declaration) if has_outcome(declaration) else None
         moves.append(
-            Move(character_name=member.character_name, content=content, verdict=verdict, downed=is_down(member))
+            Move(
+                character_name=member.character_name,
+                content=content,
+                verdict=verdict,
+                downed=is_down(member),
+                death_save=find_death_save(round_, member.user_id),
+                dead=sheets.is_dead(member),
+            )
         )
     return NarrationRequest(round_number=round_.number, scene=round_.scene, moves=moves)
 
@@ -469,6 +539,41 @@ def record_actions(session: AsyncSession, table: GameTable, round_: Round, group
             record_check(session, table, declaration, cause=acted)
 
 
+def record_death(
+    session: AsyncSession,
+    table: GameTable,
+    save: dict,
+    round_number: int,
+    cause: TableEvent,
+) -> None:
+    """
+    죽음의 굴림으로 캐릭터가 죽은 것을 이벤트로 적는다. 그 굴림의 이벤트(cause)에 잇는다.
+
+    행한 사람(actor_id)을 적지 않는다. 규칙이 정한 죽음이다.
+    """
+    payload = {
+        'round': round_number,
+        'user_id': save['user_id'],
+        'character_name': save['character_name'],
+        'cause': DeathCause.DEATH_SAVE,
+    }
+    recorder.record(session, table, EventType.CHARACTER_DIED, payload=payload, cause=cause)
+
+
+def record_death_saves(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
+    """
+    닫히는 라운드에 굴린 죽음의 굴림을 이벤트로 적는다. 굴림은 이미 끝나 있다(roll_death_saves). 여기서는 적기만 한다.
+    그 굴림으로 죽었으면 바로 뒤에 그것도 적는다.
+
+    행한 사람(actor_id)을 적지 않는다. 주사위를 굴린 것은 엔진이다. 누구의 굴림인지는 payload 의 user_id 다.
+    """
+    for save in round_.death_saves:
+        payload = {'round': round_.number, **save}
+        rolled = recorder.record(session, table, EventType.DEATH_SAVE_ROLLED, payload=payload, group=group)
+        if save['fate'] == death.Fate.DEAD:
+            record_death(session, table, save, round_.number, cause=rolled)
+
+
 def begin_closing(
     session: AsyncSession, table: GameTable, round_: Round, dice: Dice, closer_id: uuid.UUID | None = None
 ) -> None:
@@ -476,14 +581,20 @@ def begin_closing(
     열려 있는 라운드를 닫기 시작한다. 선언을 마감하고 행동을 판정한다. 저장하지는 않는다.
 
     closer_id 는 라운드를 닫은 방장이다. 모두가 내서 저절로 닫혔으면 주지 않는다.
-    이벤트는 행동(과 그 판정)들 → 닫힘 순서로 적는다. 한 묶음이다. 나중에 적히는 서술과 열림도 이 묶음에 들어간다.
+    이벤트는 행동(과 그 판정)들 → 죽음의 굴림들 → 닫힘 순서로 적는다. 한 묶음이다.
+    나중에 적히는 서술과 열림도 이 묶음에 들어간다.
 
     주사위는 여기서만 굴린다. 열려 있는 라운드에 한 번만 부르므로 한 선언을 두 번 굴리지 않는다.
+    죽음의 굴림은 행동의 판정을 끝낸 뒤에 굴린다. 이번 라운드에 회복을 받아 일어난 캐릭터는 굴리지 않는다.
+    누가 굴릴지는 판정 전에 본다. 이번 라운드에 쓰러진 캐릭터는 다음 라운드부터 굴린다.
     서술자를 부르지 않는다. 저장한 뒤에 따로 맡긴다(NarrationScheduler).
     """
     group = uuid.uuid4()
+    dying = find_dying(table)
     roll_checks(table, round_, dice)
+    round_.death_saves = roll_death_saves(table, dying, dice)
     record_actions(session, table, round_, group)
+    record_death_saves(session, table, round_, group)
     payload = {'number': round_.number, 'idle': [str(user_id) for user_id in waiting_for(table, round_)]}
     recorder.record(session, table, EventType.ROUND_CLOSED, actor_id=closer_id, payload=payload, group=group)
     round_.closing_at = datetime.now(UTC)
@@ -525,12 +636,15 @@ async def declare(
     서술이 끝나 다음 라운드가 열린 것은 스트림으로 알게 된다.
 
     닫는 중인 라운드에는 낼 수 없다(RoundConflictError). 쓰러진 사람은 행동을 붙일 수 없다(RoundConflictError).
+    캐릭터가 죽은 사람은 글도 낼 수 없다(RoundConflictError).
     행동이 이 테이블의 규칙에 없는 것을 가리키면 ActionNotInRulesError.
     행동의 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
     테이블을 잠그고 한다. 마지막 두 사람이 동시에 내도 라운드는 한 번만 닫힌다.
     """
     table, member, round_ = await lock_current_round(session, user_id, table_id)
     require_open(round_)
+    if sheets.is_dead(member):
+        raise RoundConflictError(Conflict.CHARACTER_DEAD)
     put_declaration(round_, member, data.content, accept_action(table, member, data.action))
 
     everyone_declared = not waiting_for(table, round_)
