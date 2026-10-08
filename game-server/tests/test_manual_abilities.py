@@ -30,7 +30,7 @@ from app.main import API_PREFIX
 from app.tables import sheets
 from app.tables.models import TableMember
 from app.tables.schemas import CharacterUpdate
-from tests.sheets import SHEET, make_sheet
+from tests.sheets import SHEET, handed_out, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -301,7 +301,7 @@ async def test_starting_turns_written_abilities_into_a_sheet(client: AsyncClient
     started = await start(client, me, table)
 
     # 능력치는 적은 그대로, 최대 HP 는 규칙으로 구한 값, HP 는 가득 찬 채로 시작한다. 기본 시트(최대 HP 7)가 아니다
-    assert started['members'][0]['sheet'] == {'abilities': chosen, 'max_hp': max_hp, 'hp': max_hp}
+    assert started['members'][0]['sheet'] == handed_out({'abilities': chosen, 'max_hp': max_hp})
 
 
 async def test_each_player_gets_the_sheet_of_the_way_they_chose(
@@ -317,7 +317,7 @@ async def test_each_player_gets_the_sheet_of_the_way_they_chose(
     mine, theirs = (member['sheet'] for member in started['members'])
     assert (mine['abilities']['con'], mine['max_hp']) == (14, 12)
     # 기본 시트를 받은 사람은 제작자가 적은 숫자 그대로다
-    assert theirs == {**DEFAULT_SHEET, 'hp': DEFAULT_SHEET['max_hp']}
+    assert theirs == handed_out(DEFAULT_SHEET)
 
 
 async def test_any_scores_within_the_range_of_the_rules_are_taken(client: AsyncClient, me: dict[str, str]):
@@ -436,7 +436,7 @@ def make_snapshot(player_made_hp: dict | None = HP) -> Snapshot:
     """직접 적기를 허용하는 판. 최대 HP 를 구하는 값은 바꿔 볼 수 있다."""
     return read_snapshot(
         {
-            'format': 9,
+            'format': 10,
             'title': '판',
             'description': '',
             'rating': 'all',

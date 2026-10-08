@@ -60,6 +60,15 @@ TABLE_PASSWORD_MIN_LENGTH = 4
 TABLE_PASSWORD_MAX_LENGTH = 64
 
 
+class DeathCause(enum.StrEnum):
+    """캐릭터가 죽은 까닭. 이벤트에 적는다."""
+
+    # 죽음의 굴림에서 실패가 다 모였다. 규칙이 정했다
+    DEATH_SAVE = 'death_save'
+    # 쓰러진 캐릭터를 플레이어가 스스로 보냈다
+    GAVE_UP = 'gave_up'
+
+
 class TableStatus(enum.StrEnum):
     """테이블의 상태. 한 방향으로만 나아간다."""
 
@@ -236,7 +245,7 @@ class TableSheet(Base):
     테이블에 앉은 사람의 캐릭터 시트. 캐릭터의 숫자다.
 
     시작할 때의 숫자는 판에서 온다(프리젠의 시트나 기본 시트). 가져온 뒤로는 이 테이블의 것이다.
-    플레이하면서 바뀌는 값(hp)이 여기 있다. 이 값은 엔진만 고친다.
+    플레이하면서 바뀌는 값(hp, 죽음의 굴림에서 센 것, 죽은 시각)이 여기 있다. 이 값은 엔진만 고친다.
 
     기본 키를 (table_id, user_id) 로 하지 않고 따로 둔다. 지금은 한 사람에 시트가 하나지만,
     캐릭터가 죽어 다른 캐릭터로 바꾸는 기능이 생기면 한 사람이 시트를 여럿 거쳐 간다.
@@ -253,6 +262,12 @@ class TableSheet(Base):
         CheckConstraint('max_hp >= 1', name='max_hp_positive'),
         # HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. 엔진의 실수를 DB 가 한 번 더 막는다
         CheckConstraint('hp BETWEEN 0 AND max_hp', name='hp_range'),
+        CheckConstraint('death_successes >= 0 AND death_failures >= 0', name='death_saves_not_negative'),
+        # 죽음의 굴림을 세는 것도, 죽는 것도 쓰러져 있을 때의 일이다. 일어나 있는 캐릭터에 그런 값이 남지 않는다
+        CheckConstraint(
+            'hp = 0 OR (death_successes = 0 AND death_failures = 0 AND died_at IS NULL)',
+            name='death_only_when_downed',
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -267,6 +282,13 @@ class TableSheet(Base):
     # 최대 HP 와 지금의 HP. 정확해야 하고 자주 바뀌는 값이라 문서에 넣지 않고 칸으로 둔다
     max_hp: Mapped[int] = mapped_column(SmallInteger)
     hp: Mapped[int] = mapped_column(SmallInteger)
+
+    # 죽음의 굴림에서 지금까지 센 성공과 실패(app/engine/death.py). 쓰러져 있는 동안만 센다.
+    # 회복을 받아 일어나면 둘 다 0 으로 돌아간다. 이 값도 엔진만 고친다
+    death_successes: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
+    death_failures: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
+    # 죽은 시각. 비어 있으면 살아 있다(쓰러져 있을 수는 있다). 한 번 적으면 지우지 않는다. 죽음은 되돌릴 수 없다
+    died_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

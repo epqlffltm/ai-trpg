@@ -42,7 +42,8 @@ from app.engine.templates import SRD5
 #      최대 HP 를 구하는 값(player_made_hp)이 있다
 #   8: 규칙에 점수제(point_buy)가 있다
 #   9: 규칙에 점수를 주사위로 정하는 법(score_roll)이 있고, 다시 굴리게 해 줄 수 있는지(reroll_allowed)가 있다
-SNAPSHOT_FORMAT = 9
+#  10: 규칙에 죽음의 굴림(death_save)이 있다
+SNAPSHOT_FORMAT = 10
 
 # 시트가 없던 때의 판을 읽을 때 채우는 숫자. 모든 능력치가 이 점수이고, 최대 HP 가 이 값이다.
 # 그때의 규칙은 SRD5 템플릿뿐이었다. 10 은 그 규칙에서 보정이 0 인 점수다
@@ -217,7 +218,7 @@ def upgrade_from_3(document: dict) -> dict:
     그때는 룰북에 규칙이 없었다. 그때 만든 룰북이 지금 받았을 규칙(SRD5 템플릿)으로 읽는다.
     DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 내놓은 템플릿의 값은 고치지 않으므로 읽을 때마다 같다.
 
-    지금의 SRD5 에는 나중에 생긴 칸(magnitudes, hp_ability, point_buy, score_roll)도 들어 있다.
+    지금의 SRD5 에는 나중에 생긴 칸(magnitudes, hp_ability, point_buy, score_roll, death_save)도 들어 있다.
     뒤의 단계가 같은 값으로 다시 채우므로 결과는 같다.
     """
     upgraded = dict(document)
@@ -316,6 +317,22 @@ def upgrade_from_8(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_9(document: dict) -> dict:
+    """
+    형식 9 의 문서를 형식 10 으로 올린다.
+
+    그때는 규칙에 죽음의 굴림이 없었다. 쓰러진 캐릭터는 죽지 않고 쓰러진 채로 있었다.
+    그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 것으로 읽는다. DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    이미 진행 중인 테이블도 이 형식으로 올려 읽는다. 그 테이블에서 쓰러져 있던 캐릭터는 다음 라운드부터 굴린다.
+    """
+    death_save = SRD5.model_dump(mode='json')['death_save']
+    rulebook = document['rulebook']
+    upgraded = dict(document)
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'death_save': death_save}}
+    upgraded['format'] = 10
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -327,6 +344,7 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     6: upgrade_from_6,
     7: upgrade_from_7,
     8: upgrade_from_8,
+    9: upgrade_from_9,
 }
 
 

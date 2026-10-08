@@ -26,7 +26,7 @@ from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.tables import sheets
 from app.tables.models import GameTable, TableMember, TableSheet
-from tests.sheets import SHEET, make_sheet
+from tests.sheets import SHEET, handed_out, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -129,8 +129,8 @@ def sheets_of(table: dict) -> list[dict | None]:
 
 
 def in_play(sheet: dict) -> dict:
-    """판의 시트가 테이블에서 시작할 때의 모양. HP 가 가득 차 있다."""
-    return {**sheet, 'hp': sheet['max_hp']}
+    """판의 시트가 테이블에서 시작할 때의 모양. HP 가 가득 차 있고, 죽음의 굴림은 센 것이 없고, 살아 있다."""
+    return handed_out(sheet)
 
 
 async def count_sheets(session: AsyncSession) -> int:

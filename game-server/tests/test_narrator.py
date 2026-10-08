@@ -6,7 +6,19 @@
 가짜 서술자는 AI 가 붙기 전에 라운드의 흐름을 돌려 보는 데 쓴다. 같은 입력에 늘 같은 글을 내야 테스트에 쓸 수 있다.
 """
 
-from app.rounds.narrator import FakeNarrator, Impact, Move, NarrationRequest, Verdict, describe_impact, describe_verdict
+import pytest
+
+from app.rounds.narrator import (
+    DeathSaveNote,
+    FakeNarrator,
+    Impact,
+    Move,
+    NarrationRequest,
+    Verdict,
+    describe_death_save,
+    describe_impact,
+    describe_verdict,
+)
 
 
 def make_request(moves: list[Move]) -> NarrationRequest:
@@ -129,3 +141,48 @@ async def test_a_downed_character_can_still_say_something():
     narration = await FakeNarrator().narrate(request)
 
     assert narration == '[3 라운드의 결과]\n폭주족 엘프: 신음한다.'
+
+
+# --- 죽음의 굴림 ---
+
+
+def make_death_save(**overrides) -> DeathSaveNote:
+    """눈 7 로 실패한 죽음의 굴림. 목표는 10 이다. 성공 1, 실패 2 가 됐고 아직 죽어 가는 중이다."""
+    values = {'roll': 7, 'target': 10, 'success': False, 'successes': 1, 'failures': 2, 'fate': 'dying'}
+    return DeathSaveNote(**{**values, **overrides})
+
+
+@pytest.mark.parametrize(
+    ('overrides', 'line'),
+    [
+        ({}, '(죽음의 굴림 실패: 7, 목표 10. 성공 1, 실패 2, 죽어 가는 중)'),
+        (
+            {'roll': 12, 'success': True, 'successes': 3, 'failures': 2, 'fate': 'stable'},
+            '(죽음의 굴림 성공: 12, 목표 10. 성공 3, 실패 2, 고비를 넘김)',
+        ),
+        ({'failures': 3, 'fate': 'dead'}, '(죽음의 굴림 실패: 7, 목표 10. 성공 1, 실패 3, 죽음)'),
+    ],
+    ids=['dying', 'stable', 'dead'],
+)
+def test_a_death_save_is_written_with_its_numbers(overrides: dict, line: str):
+    # 보정이 없다. 눈이 그대로 결과라서 더하기를 적지 않는다
+    assert describe_death_save(make_death_save(**overrides)) == line
+
+
+async def test_a_death_save_comes_last_on_the_line():
+    request = make_request([Move('폭주족 엘프', '신음한다.', downed=True, death_save=make_death_save())])
+
+    narration = await FakeNarrator().narrate(request)
+
+    assert narration == (
+        '[3 라운드의 결과]\n폭주족 엘프: 신음한다. (죽음의 굴림 실패: 7, 목표 10. 성공 1, 실패 2, 죽어 가는 중)'
+    )
+
+
+async def test_a_dead_character_is_dead_and_not_just_lying_down():
+    # 죽은 캐릭터는 쓰러져 있기도 하다(HP 0). 죽음을 먼저 적는다
+    request = make_request([Move('폭주족 엘프', None, downed=True, dead=True), Move('악역영애', None, downed=True)])
+
+    narration = await FakeNarrator().narrate(request)
+
+    assert narration == '[3 라운드의 결과]\n폭주족 엘프: 죽었다.\n악역영애: 쓰러져 있다.'

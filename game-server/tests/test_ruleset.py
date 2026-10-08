@@ -56,12 +56,14 @@ def load_backfill_rules() -> dict:
     hp_ability = load_migration('rulebook_hp_ability').HP_ABILITY
     point_buy = load_migration('rulebook_point_buy').POINT_BUY
     score_roll = load_migration('rulebook_score_roll').SCORE_ROLL
+    death_save = load_migration('rulebook_death_save').DEATH_SAVE
     return {
         **rules,
         'magnitudes': magnitudes,
         'hp_ability': hp_ability,
         'point_buy': point_buy,
         'score_roll': score_roll,
+        'death_save': death_save,
     }
 
 
@@ -197,6 +199,18 @@ def test_a_ruleset_cannot_be_changed_after_it_is_made():
         {'score_min': 5, 'score_roll': {'count': 4, 'sides': 6, 'keep': 3}},
         # 몇 번 굴리는지는 적지 않는다. 능력치의 수만큼이다
         {'score_roll': {'count': 4, 'sides': 6, 'keep': 3, 'times': 7}},
+        # 죽음의 굴림: 목표값과 모을 수는 1 이상이고, 모을 수는 10 을 넘지 않는다
+        {'death_save': {'target': 0, 'successes': 3, 'failures': 3}},
+        {'death_save': {'target': 10, 'successes': 0, 'failures': 3}},
+        {'death_save': {'target': 10, 'successes': 3, 'failures': 0}},
+        {'death_save': {'target': 10, 'successes': 11, 'failures': 3}},
+        {'death_save': {'target': 10, 'successes': 3, 'failures': 11}},
+        # 목표값이 주사위의 가장 큰 눈(20)보다 크면 성공할 수 없다
+        {'death_save': {'target': 21, 'successes': 3, 'failures': 3}},
+        {'die': 6, 'death_save': {'target': 10, 'successes': 3, 'failures': 3}},
+        # 능력치의 보정이나 다른 주사위를 적지 못한다. 규칙의 주사위를 그대로 굴린다
+        {'death_save': {'target': 10, 'successes': 3, 'failures': 3, 'ability': 'con'}},
+        {'death_save': {'target': 10, 'successes': 3, 'failures': 3, 'die': 6}},
         {'unknown': 1},
     ],
 )
@@ -341,6 +355,43 @@ def test_any_roll_that_stays_in_the_score_range_is_allowed(score_roll: dict):
     ruleset = Ruleset.model_validate(rules(score_roll=score_roll))
 
     assert ruleset.score_roll.keep == score_roll['keep']
+
+
+def test_the_built_in_template_dies_on_three_failed_death_saves():
+    death_save = SRD5.death_save
+
+    assert (death_save.target, death_save.successes, death_save.failures) == (10, 3, 3)
+
+
+def test_a_ruleset_may_have_no_death_save():
+    ruleset = Ruleset.model_validate(rules(death_save=None))
+
+    # 주사위가 캐릭터를 죽이지 않는 규칙도 된다. 쓰러진 캐릭터는 쓰러진 채로 있다
+    assert ruleset.death_save is None
+
+
+def test_a_ruleset_must_say_whether_it_has_a_death_save():
+    document = SRD5.model_dump(mode='json')
+    del document['death_save']
+
+    # "죽이지 않는다"(None)와 "적지 않았다"는 다르다. 적지 않은 문서는 규칙으로 읽히지 않는다
+    with pytest.raises(ValidationError):
+        Ruleset.model_validate(document)
+
+
+@pytest.mark.parametrize(
+    'death_save',
+    [
+        # 주사위의 가장 큰 눈이어야만 성공한다. 가혹하지만 성공할 수는 있다
+        {'target': 20, 'successes': 1, 'failures': 1},
+        # 늘 성공한다. 쓰러져도 죽지 않는 규칙을 이렇게도 적을 수 있다
+        {'target': 1, 'successes': 1, 'failures': 10},
+    ],
+)
+def test_any_death_save_that_can_succeed_is_allowed(death_save: dict):
+    ruleset = Ruleset.model_validate(rules(death_save=death_save))
+
+    assert ruleset.death_save.target == death_save['target']
 
 
 def test_a_ruleset_without_magnitudes_is_not_a_ruleset():
