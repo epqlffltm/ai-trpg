@@ -102,6 +102,8 @@ class CharacterUpdate(BaseModel):
       - rolled: manual 과 같은 칸을 적는다. 점수는 먼저 굴려 둔 것을 남김없이 한 번씩 쓴 것이어야 한다.
         굴리는 것은 다른 주소다(POST .../character/roll). 굴린 점수를 여기에 적어 보내는 것이 아니다.
 
+    진행 중에 새 캐릭터를 들일 때도 같은 값을 받는다(POST .../character). 방식마다 적는 칸은 같다.
+
     mode 를 비우면 pregen_index 가 있으면 pregen, 없으면 custom 으로 본다.
     능력치를 적는 방식은 여럿이라, 능력치를 보낼 때는 mode 를 반드시 적는다.
     """
@@ -157,6 +159,8 @@ class CharacterOut(BaseModel):
 class SheetOut(BaseModel):
     """앉은 사람의 캐릭터 시트. 앉은 사람은 서로의 시트를 본다."""
 
+    # 이 사람의 몇 번째 캐릭터인가. 시작할 때 받은 것이 1 이다. 새 캐릭터를 들일 때마다 하나씩 올라간다
+    number: int
     # 능력치의 점수. 이름표가 무슨 능력치인지는 테이블의 rules 에 있다
     abilities: dict[str, int]
     max_hp: int
@@ -166,8 +170,20 @@ class SheetOut(BaseModel):
     # 몇 번이 모이면 죽는지, 고비를 넘기는지는 테이블의 rules.death_save 에 있다
     death_successes: int
     death_failures: int
-    # 죽었는가. 죽은 캐릭터는 되살아나지 않는다
+    # 죽었는가. 죽은 캐릭터는 되살아나지 않는다. 그 플레이어는 새 캐릭터를 들일 수 있다
     dead: bool
+
+
+class FallenOut(BaseModel):
+    """떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다."""
+
+    # 그 사람의 몇 번째 캐릭터였는가
+    number: int
+    character_name: str
+    # 프리젠에서 온 캐릭터였으면 몇 번째 프리젠인가. 그 프리젠은 이 테이블에서 다시 고를 수 없다
+    pregen_index: int | None
+    abilities: dict[str, int]
+    max_hp: int
 
 
 class RollOut(BaseModel):
@@ -177,8 +193,11 @@ class RollOut(BaseModel):
     dice: list[list[int]]
     # 굴려서 나온 점수들. 이것을 능력치에 놓는다
     scores: list[int]
-    # 이 테이블에서 몇 번 굴렸는가
+    # 이 테이블에서 몇 번 굴렸는가. 캐릭터가 바뀌어도 이어서 센다
     times_rolled: int
+    # 이 사람의 몇 번째 캐릭터를 위해 굴렸는가. 지금 정하는 캐릭터의 번호와 같아야 그 캐릭터에 쓸 수 있다.
+    # 지금 정하는 캐릭터의 번호는 시트가 없으면 1, 있으면 sheet.number + 1 이다
+    character_number: int
     # 방장이 "한 번 더"를 줬는가. 켜져 있으면 다시 굴릴 수 있다
     reroll_granted: bool
 
@@ -200,8 +219,11 @@ class MemberOut(BaseModel):
     # 플레이어가 정한 능력치의 점수. 그런 방식(manual, point_buy, rolled)으로 만들었을 때만 있다.
     # 시작하면 이것으로 시트가 만들어진다
     abilities: dict[str, int] | None
-    # 게임을 시작하기 전에는 None 이다. 시작할 때 받는다
+    # 지금 캐릭터의 시트. 게임을 시작하기 전에는 None 이다. 시작할 때 받는다.
+    # 진행 중에 새 캐릭터를 들이면 새 캐릭터의 것으로 바뀐다
     sheet: SheetOut | None
+    # 떠난 캐릭터들. 죽은 순서다. 새 캐릭터를 들인 적이 없으면 비어 있다
+    fallen: list[FallenOut]
     joined_at: datetime
 
 
@@ -212,8 +234,10 @@ class PregenChoice(BaseModel):
     description: str
     # 이 프리젠을 고르면 받는 숫자
     sheet: Sheet
-    # 가져간 사람. 아무도 가져가지 않았으면 None 이다
+    # 가져간 사람. 아무도 가져가지 않았으면 None 이다. 가져간 사람이 테이블을 떠나면 다시 None 이 된다
     taken_by: uuid.UUID | None
+    # 이 프리젠의 캐릭터가 이 테이블에서 죽었는가. 죽은 캐릭터의 프리젠은 아무도 다시 고를 수 없다
+    dead: bool
 
 
 class TableSummary(BaseModel):

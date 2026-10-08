@@ -154,8 +154,9 @@ uv run alembic check                               # 모델을 바꾸고 마이�
 | POST | `/api/v1/game/tables/{id}/join` | 로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 `password` 를 보낸다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}` | 내가 앉아 있는 테이블 하나 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/character` | 내 캐릭터 정하기. 프리젠을 가져오거나, 직접 만들거나, 능력치까지 직접 적거나, 점수제로 사거나, 굴려 둔 점수를 놓는다(`mode`). 모집 중에만. 이 테이블이 허용한 방식이어야 한다 | access 토큰 |
+| POST | `/api/v1/game/tables/{id}/character` | 죽은 내 캐릭터의 뒤를 이을 새 캐릭터 들이기. 201. 받는 값은 캐릭터 정하기와 같다. 진행 중에, 내 캐릭터가 죽었고 라운드가 열려 있을 때만 | access 토큰 |
 | DELETE | `/api/v1/game/tables/{id}/character` | 쓰러진 내 캐릭터를 스스로 보내기. 캐릭터가 죽는다. 되돌릴 수 없다. 진행 중에, 쓰러져 있을 때만 | access 토큰 |
-| POST | `/api/v1/game/tables/{id}/character/roll` | 내 능력치의 점수를 주사위로 굴리기. 본문 없음. 서버가 굴린다. 한 테이블에서 한 번. 모집 중에만 | access 토큰 |
+| POST | `/api/v1/game/tables/{id}/character/roll` | 내 능력치의 점수를 주사위로 굴리기. 본문 없음. 서버가 굴린다. 캐릭터 하나에 한 번. 모집 중에, 또는 진행 중에 내 캐릭터가 죽었을 때 | access 토큰 |
 | DELETE | `/api/v1/game/tables/{id}/members/me` | 테이블에서 나가기. 204 | access 토큰 |
 | DELETE | `/api/v1/game/tables/{id}/members/{user_id}` | 참가자 내보내기. 방장만. 초대 코드가 새로 만들어진다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/members/{user_id}/reroll` | 그 사람에게 "한 번 더 굴리기"를 주기. 방장만. 시나리오의 제작자가 허락한 테이블에서만 | access 토큰 |
@@ -505,8 +506,8 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 | --- | --- |
 | `game_tables` | 테이블. 방장, 어느 판에서 왔는지, 판의 복사본(`content`), 고른 스타팅, 정원, 허용하는 캐릭터 방식, 상태, 등급, 초대 코드, 로비에 보이는지, 비밀번호(계산한 값) |
 | `table_members` | 앉은 사람과 그 사람의 캐릭터(이름, 설명). 캐릭터를 얻은 방식(`character_mode`). 프리젠에서 가져왔으면 몇 번째 프리젠인지. 플레이어가 능력치를 정했으면 그 점수(`abilities`, JSON) |
-| `table_sheets` | 앉은 사람의 캐릭터 시트. 능력치(`abilities`, JSON), 최대 HP, 지금의 HP, 죽음의 굴림에서 센 성공과 실패, 죽은 시각. 게임을 시작할 때 생긴다 |
-| `table_rolls` | 주사위로 굴린 능력치의 점수들. 테이블과 사람으로 찾는다. 굴린 눈(`dice`, JSON), 점수(`scores`, JSON), 몇 번 굴렸는지, "한 번 더"를 받았는지. 사람이 나가도 남는다 |
+| `table_sheets` | 앉은 사람의 캐릭터 시트. 그 사람의 몇 번째 캐릭터인지(`number`), 누구의 시트인지(캐릭터 이름, 프리젠), 능력치(`abilities`, JSON), 최대 HP, 지금의 HP, 죽음의 굴림에서 센 성공과 실패, 죽은 시각. 게임을 시작할 때 생긴다. 캐릭터가 죽어 새 캐릭터를 들이면 하나 더 생긴다 |
+| `table_rolls` | 주사위로 굴린 능력치의 점수들. 테이블과 사람으로 찾는다. 굴린 눈(`dice`, JSON), 점수(`scores`, JSON), 몇 번 굴렸는지, 몇 번째 캐릭터를 위해 굴렸는지(`character_number`), "한 번 더"를 받았는지. 사람이 나가도 남는다 |
 
 **판의 복사본.** 테이블은 만들 때 판의 내용을 통째로 복사해 온다. 플레이하면서 바뀌는 것은 이 복사본을 고친다.
 제작자가 새 판을 내도, 같은 판으로 만든 다른 테이블에서 무슨 일이 있어도 이 테이블은 영향을 받지 않는다.
@@ -569,10 +570,11 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 1. `POST /tables/{id}/character/roll`. 본문이 없다. 서버가 규칙대로 굴려서 점수들을 테이블에 적는다. 화면이 굴린 값을 받는 칸은 없다.
 2. `PUT /tables/{id}/character` 에 `mode: rolled` 와 `abilities`. 굴려 둔 점수를 원하는 능력치에 놓아 보낸다.
 
-- 굴린 것은 모두에게 보인다(`members[].roll`: 버린 눈까지 든 `dice`, 점수 `scores`, 몇 번 굴렸는지 `times_rolled`, `reroll_granted`). 이벤트(`abilities_rolled`)로도 남는다.
+- 굴린 것은 모두에게 보인다(`members[].roll`: 버린 눈까지 든 `dice`, 점수 `scores`, 몇 번 굴렸는지 `times_rolled`, 몇 번째 캐릭터를 위해 굴렸는지 `character_number`, `reroll_granted`). 이벤트(`abilities_rolled`)로도 남는다.
 - 어느 점수를 어느 능력치에 놓을지는 자유다. 서버는 순서를 보지 않고, 굴린 점수를 남김없이 한 번씩 썼는지만 본다(422). 굴리지 않고 놓으려 하면 409(`not_rolled`)다.
 - 놓는 것은 모집 중에는 몇 번이든 바꿀 수 있다. 바뀌지 않는 것은 굴린 점수다.
-- **한 테이블에서 한 사람은 한 번 굴린다**(409 `already_rolled`). 좋은 눈이 나올 때까지 굴릴 수 있으면 주사위의 뜻이 없다.
+- **캐릭터 하나에 한 번 굴린다**(409 `already_rolled`). 좋은 눈이 나올 때까지 굴릴 수 있으면 주사위의 뜻이 없다.
+  모집 중에는 한 테이블에서 한 번이라는 뜻이다. 캐릭터가 죽어 새 캐릭터를 들일 때는 새로 굴린다([새 캐릭터](#라운드)).
   굴린 것은 자리가 아니라 테이블에 적어 둔다(`table_rolls`). 나갔다가 다시 들어와도, 내보내졌다가 다시 들어와도 남아 있다.
 - 굴리기는 테이블을 잠그고 한다. 버튼을 빠르게 두 번 눌러도 한 번만 굴린다.
 
@@ -619,19 +621,20 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 | `not_recruiting` | 모집 중이 아니다 |
 | `already_ended` | 이미 끝난 테이블이다 |
 | `already_seated` | 이미 앉아 있다 |
-| `pregen_taken` | 다른 사람이 그 프리젠을 가져갔다 |
+| `pregen_taken` | 다른 사람이 그 프리젠을 가져갔다. 이 테이블에서 죽은 캐릭터의 프리젠도 이 이유다 |
 | `character_mode_not_allowed` | 이 테이블이 허용하지 않는 방식으로 캐릭터를 정하려 했다 |
 | `characters_missing` | 캐릭터를 만들지 않은 사람이 있어 시작할 수 없다 |
 | `pregens_too_few` | 프리젠만 허용한 테이블인데 정원이 프리젠의 수보다 많다 |
 | `cannot_kick_self` | 방장은 자신을 내보낼 수 없다. 나가기를 쓴다 |
 | `solo_only` | 이 등급의 테이블은 혼자서만 할 수 있다 |
-| `already_rolled` | 이 테이블에서 이미 굴렸다. 방장이 "한 번 더"를 줘야 다시 굴린다 |
-| `not_rolled` | 아직 굴리지 않았다. 굴린 점수가 있어야 능력치에 놓고, "한 번 더"를 받는다 |
+| `already_rolled` | 이 캐릭터를 위해 이미 굴렸다. 방장이 "한 번 더"를 줘야 다시 굴린다 |
+| `not_rolled` | 이 캐릭터를 위해 아직 굴리지 않았다. 굴린 점수가 있어야 능력치에 놓고, "한 번 더"를 받는다. 지난 캐릭터를 위해 굴린 것은 치지 않는다 |
 | `reroll_not_allowed` | 다시 굴리게 해 줄 수 없는 테이블이다. 시나리오의 제작자가 허락하지 않았다 |
 | `reroll_already_granted` | 이미 "한 번 더"를 줬고, 그 사람이 아직 쓰지 않았다 |
 | `not_playing` | 진행 중인 테이블이 아니다. 캐릭터를 보내는 것은 진행 중에만 된다 |
 | `character_not_downed` | 캐릭터가 쓰러져 있지 않다. 서 있는 캐릭터는 보낼 수 없다 |
 | `character_dead` | 캐릭터가 이미 죽었다 |
+| `character_alive` | 캐릭터가 살아 있다. 진행 중에는 캐릭터가 죽은 사람만 새 캐릭터를 굴리고 들인다 |
 
 ```json
 {"detail": "테이블의 지금 상태에서는 할 수 없습니다.", "reason": "table_full"}
@@ -651,7 +654,7 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 
 | 테이블 | 내용 |
 | --- | --- |
-| `table_rounds` | 라운드. 테이블 안에서의 번호, 장면(`scene`), 닫기 시작한 시각, 닫힌 시각, 닫힐 때 굴린 죽음의 굴림들(`death_saves`, JSON) |
+| `table_rounds` | 라운드. 테이블 안에서의 번호, 장면(`scene`), 닫기 시작한 시각, 닫힌 시각, 닫힐 때 굴린 죽음의 굴림들(`death_saves`, JSON), 이 라운드에 새로 들어온 캐릭터들(`arrivals`, JSON) |
 | `round_declarations` | 선언. 한 라운드에 한 사람이 하나. 글(`content`), 행동(`action`, JSON), 판정의 결과(`outcome`, JSON). 낼 때의 캐릭터 이름을 함께 적어 둔다 |
 
 **선언은 하려는 일이다.** 결과가 아니다. 낼 때 성공했는지나 주사위의 눈을 적어 보낼 수 없다. 보내면 422 다. 결과는 엔진이 적는다.
@@ -733,7 +736,22 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 - 죽은 캐릭터는 되살아나지 않는다(`members[].sheet.dead`). 회복의 대상이 돼도 HP 가 바뀌지 않고, 양을 정하는 주사위도 굴리지 않는다. 죽었다고 적는 함수만 있고 되살리는 함수는 없다.
 - 캐릭터가 죽은 사람은 글도 낼 수 없다(409 `character_dead`). 쓰러진 사람과 다르다. 라운드는 그 사람을 기다리지 않는다.
 - 죽음은 이벤트(`character_died`)로 남는다. 어떻게 죽었는지(`cause`: `death_save`, `gave_up`)가 함께 적힌다.
-- 죽은 뒤에 새 캐릭터로 이어 가는 것은 아직 없다(#68 의 다음 단계).
+
+**새 캐릭터.** 캐릭터가 죽은 플레이어는 새 캐릭터를 들여 이어 간다(`POST /tables/{id}/character`, 201).
+진행 중인 테이블에서 캐릭터를 바꾸는 길은 이것 하나다. 모집 중에 쓰는 `PUT` 은 진행 중에는 닫혀 있다(409 `not_recruiting`).
+
+- 자기 캐릭터가 죽었을 때만 된다(409 `character_alive`). 쓰러진 캐릭터는 살아 있다. 동료가 일으킬 수 있다. 넘어가려면 먼저 보낸다.
+- 방장의 승인은 받지 않는다. 방식과 숫자의 틀은 시나리오의 제작자와 방장이 이미 정해 뒀다. 죽은 사람이 구경만 하는 시간을 줄인다.
+- 받는 값과 조건은 모집 중에 캐릭터를 정할 때와 같다. 이 테이블이 허용한 방식이어야 하고, 능력치는 그 방식의 제한을 지켜야 한다.
+- 새 캐릭터는 새 시트를 바로 받는다(`members[].sheet.number` 가 하나 올라간다). 능력치도 HP 도 죽음의 굴림에서 센 것도 물려받지 않는다.
+- 죽은 캐릭터의 시트는 지우지 않는다. 떠난 캐릭터로 남아 모두에게 보인다(`members[].fallen`). 한 사람의 살아 있는 캐릭터는 하나뿐이라는 것은 DB 의 조건 붙은 유일 색인(`WHERE died_at IS NULL`)이 한 번 더 막는다.
+- 이 테이블에서 시트를 받은 적이 있는 프리젠은 다시 고르지 못한다(409 `pregen_taken`). 죽은 인물이 다른 사람의 캐릭터로도, 같은 사람의 새 캐릭터로도 다시 들어오지 못한다. 프리젠의 목록에 죽었다고 보인다(`pregens[].dead`). DB 의 유일 조건(`table_id`, `pregen_index`)이 시트에도 걸려 있다.
+- 주사위로 정하는 방식이면 새로 굴린다(`POST /tables/{id}/character/roll`). 지난 캐릭터를 위해 굴린 점수는 쓰지 못한다(409 `not_rolled`). 아껴 둔 점수도 그렇다. 굴림에는 몇 번째 캐릭터를 위한 것인지가 적힌다(`roll.character_number`). 제작자가 허락한 테이블이면 방장이 새 캐릭터의 굴림에도 "한 번 더"를 줄 수 있다.
+- 열려 있는 라운드에만 들인다(409 `round_closing`). 닫는 중인 라운드는 서술자가 읽고 있다. 그사이에 자리의 캐릭터가 바뀌면 서술이 어긋난다.
+- 들인 것은 그 라운드에 적힌다(`arrivals`: 누가, 새 캐릭터의 이름, 누구의 뒤를 잇는지). 이벤트(`character_joined`)로도 남는다. 받은 시트가 함께 적힌다.
+- **새 캐릭터는 들어온 라운드에 선언을 내지 않는다**(409 `character_arriving`). 그 라운드의 장면에 아직 없는 인물이다. 라운드도 기다리지 않는다(`waiting_for`, `idle` 에 들어가지 않는다). 라운드가 닫힐 때 서술자가 새 캐릭터를 이야기에 들이고, 다음 라운드부터 행동한다.
+- 죽은 캐릭터가 그 라운드에 남긴 글이 있으면 버린다. 쓰러진 캐릭터는 글을 낼 수 있어서, 글을 내고 같은 라운드에 보내고 새 캐릭터를 들이면 그 글이 새 캐릭터가 한 일로 읽힌다.
+- 들이는 것은 테이블을 잠그고 한다. 버튼을 빠르게 두 번 눌러도 새 캐릭터는 하나만 들어온다.
 
 **보이는 것.** 선언을 받는 동안에는 남의 선언의 글과 행동이 보이지 않는다. 누가 냈는지만 보인다(`content` 와 `action` 이 `null`).
 선언을 마감하면(`closing` 부터) 모두의 것이 보인다. 판정의 결과도 그때 생겨 모두에게 보인다. 미리 맞추고 싶으면 채팅으로 이야기한다.
@@ -777,7 +795,8 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 | `not_playing` | 테이블이 끝났다 |
 | `round_closing` | 라운드가 닫는 중이다. GM 이 서술하고 있다 |
 | `character_downed` | 캐릭터가 쓰러져 있다. 행동을 붙일 수 없다. 글만 낼 수 있다 |
-| `character_dead` | 캐릭터가 죽었다. 선언을 낼 수 없다 |
+| `character_dead` | 캐릭터가 죽었다. 선언을 낼 수 없다. 새 캐릭터를 들여야 한다 |
+| `character_arriving` | 이 라운드에 새로 들어온 캐릭터다. 다음 라운드부터 선언을 낸다 |
 
 ## 이벤트 기록
 
@@ -799,7 +818,7 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 | `member_left` | 누가 나갔다 | `character_name` |
 | `member_kicked` | 방장이 내보냈다 | `user_id`, `character_name` |
 | `host_changed` | 방장이 바뀌었다 | `user_id`: 새 방장 |
-| `abilities_rolled` | 누가 능력치의 점수를 주사위로 굴렸다 | `dice`: 굴린 눈(버린 것 포함), `scores`: 나온 점수, `times_rolled` |
+| `abilities_rolled` | 누가 능력치의 점수를 주사위로 굴렸다 | `dice`: 굴린 눈(버린 것 포함), `scores`: 나온 점수, `times_rolled`, `character_number`: 몇 번째 캐릭터를 위해 굴렸는지 |
 | `reroll_granted` | 방장이 누구에게 "한 번 더 굴리기"를 줬다 | `user_id`: 받은 사람 |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
@@ -809,10 +828,12 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 | `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed` |
 | `death_save_rolled` | 엔진이 쓰러진 캐릭터의 죽음의 굴림을 굴렸다. 그 라운드의 행동들 뒤, 닫힘 앞에 적힌다 | `round`, `user_id`, `character_name`, `roll`, `target`, `success`, `successes`, `failures`, `fate`(`dying`, `stable`, `dead`) |
 | `character_died` | 캐릭터가 죽었다. 죽음의 굴림으로 죽었으면 그 굴림 바로 뒤에 적힌다 | `user_id`, `character_name`, `cause`(`death_save`, `gave_up`). 죽음의 굴림으로 죽었으면 `round` 도 |
-| `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `idle`: 선언을 내지 않은 사람. 쓰러진 사람은 들어가지 않는다 |
+| `character_joined` | 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다 | `round`, `user_id`, `character_name`, `replaces`: 죽은 캐릭터의 이름, `mode`, `pregen_index`, `number`: 그 사람의 몇 번째 캐릭터인지, `sheet`: 받은 시트 |
+| `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `idle`: 선언을 내지 않은 사람. 쓰러진 사람과 그 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다 |
 | `table_ended` | 테이블이 끝났다 | |
 
-캐릭터를 정하는 것은 적지 않는다. 시작할 때의 명단(`table_started`)에 한 번 적힌다.
+모집 중에 캐릭터를 정하는 것은 적지 않는다. 시작할 때의 명단(`table_started`)에 한 번 적힌다.
+진행 중에 새 캐릭터를 들이는 것은 적는다(`character_joined`). 명단이 바뀌는 일이다.
 AI 호출은 AI 를 붙일 때 더한다.
 
 **번호(`sequence`).** 테이블마다 1 부터 빈 번호 없이 올라간다. 테이블이 센다(`game_tables.last_sequence`).
@@ -823,6 +844,7 @@ AI 호출은 AI 를 붙일 때 더한다.
 사람이 한 일이 아니면 비어 있다. 판정(`check_rolled`)과 HP 의 변화(`hp_changed`)도 비어 있다. 주사위를 굴리고 HP 를 바꾼 것은 플레이어가 아니라 엔진이다.
 능력치의 굴림(`abilities_rolled`)은 굴려 달라고 한 사람이 적힌다. 라운드의 판정과 달리, 그 사람이 직접 누른 일이다.
 죽음의 굴림(`death_save_rolled`)과 그 굴림으로 죽은 것(`character_died`)은 비어 있다. 스스로 보내서 죽은 것은 보낸 사람이 적힌다.
+새 캐릭터를 들인 것(`character_joined`)은 들인 사람이 적힌다.
 
 **묶음과 원인.** 요청 하나가 낳은 이벤트는 `action_group_id` 가 같다.
 마지막 선언으로 라운드가 닫히면 행동들과 그 판정과 HP 의 변화, 닫힘, 서술, 열림이 한 묶음이다. 나중에 "마지막 턴 되돌리기"의 단위가 된다.
