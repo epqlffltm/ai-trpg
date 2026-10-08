@@ -18,6 +18,9 @@ from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.core.dice import Rolling
+from app.personas import saving
+from app.personas.router import to_persona
+from app.personas.schemas import PersonaOut
 from app.tables import deaths, replacements, rolls, service, sheets
 from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 from app.tables.schemas import (
@@ -329,6 +332,17 @@ async def give_up_character(table_id: uuid.UUID, user: CurrentUser, session: Ses
     """
     table = await deaths.give_up_character(session, user.user_id, table_id)
     return to_detail(table, user.user_id)
+
+
+@router.post('/{table_id}/character/persona', response_model=PersonaOut, status_code=status.HTTP_201_CREATED)
+async def keep_character(table_id: uuid.UUID, user: CurrentUser, session: Session) -> PersonaOut:
+    """
+    이 테이블의 내 캐릭터를 내 보관함에 저장한다. 이름, 설명, 시작할 때의 능력치를 저장한다.
+
+    프리젠은 저장하지 못한다. 저장한 것은 사본이라, 그 뒤에 테이블에서 바뀐 것은 보관함으로 오지 않는다.
+    """
+    persona = await saving.save_character(session, user.user_id, table_id)
+    return to_persona(persona)
 
 
 @router.post('/{table_id}/character/roll', response_model=TableDetail, status_code=status.HTTP_200_OK)
