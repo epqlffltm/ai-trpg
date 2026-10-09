@@ -9,7 +9,7 @@
   3. 받은 글을 검사한다. 장면으로 쓸 수 있는 글만 돌려준다.
 
 모델의 글은 장면이 될 뿐이다. 상태를 바꾸지 않는다. 결과(판정, HP, 죽음)는 엔진이 이미 정해 DB 에 적었다.
-그래서 검사는 "장면으로 쓸 수 있는가"만 본다. 비어 있지 않고, 너무 길지 않은가.
+그래서 검사는 "장면으로 쓸 수 있는가"만 본다. 끊기지 않았고, 비어 있지 않고, 너무 길지 않은가.
 
 실패하면 예외를 그대로 올린다. 라운드는 닫는 중에 머물고, 방장이 닫기를 다시 눌러 맡긴다(app/rounds/closing.py).
 다시 시도하기와 다른 모델로 넘어가기는 다음 단계(⑤)에서 더한다.
@@ -17,7 +17,7 @@
 
 from dataclasses import dataclass
 
-from app.ai.provider import GenerationParams, LLMProvider
+from app.ai.provider import Completion, GenerationParams, LLMProvider
 from app.rounds.narrator import NarrationRequest
 from app.rounds.prompt import build_messages
 
@@ -29,7 +29,7 @@ SCENE_MAX_LENGTH = 4000
 
 
 class NarrationError(Exception):
-    """서술자가 장면으로 쓸 글을 만들지 못했다. 글이 비었거나, 너무 길거나, 요청에 이야기의 바탕이 없다."""
+    """서술자가 장면으로 쓸 글을 만들지 못했다. 글이 끊겼거나, 비었거나, 너무 길거나, 요청에 이야기의 바탕이 없다."""
 
 
 def accept_scene(text: str) -> str:
@@ -46,6 +46,17 @@ def accept_scene(text: str) -> str:
     return scene
 
 
+def accept_completion(completion: Completion) -> str:
+    """
+    provider 의 답을 장면으로 받는다. 안 되면 NarrationError.
+
+    길이 상한에 걸려 끊긴 답은 받지 않는다. 너무 긴 글을 잘라 받지 않는 것과 같은 이유다.
+    """
+    if completion.truncated:
+        raise NarrationError('cut_off')
+    return accept_scene(completion.text)
+
+
 @dataclass(frozen=True)
 class LLMNarrator:
     """언어 모델로 서술하는 서술자. provider 를 바꿔 끼우면 다른 모델이 쓴다."""
@@ -58,4 +69,4 @@ class LLMNarrator:
         if request.story is None:
             raise NarrationError('no_story')
         completion = await self.provider.complete(build_messages(request), self.params)
-        return accept_scene(completion.text)
+        return accept_completion(completion)
