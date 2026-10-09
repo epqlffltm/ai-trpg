@@ -43,13 +43,13 @@ HP 가 0 이면 쓰러진 것이다. 쓰러진 사람은 글만 낼 수 있고, 
 
 import enum
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import read_snapshot
+from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.engine import action as actions
 from app.engine import death, health
 from app.engine.action import CheckAction
@@ -62,7 +62,8 @@ from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
 from app.rounds import opener, repository
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.rounds.narrator import DeathSaveNote, Impact, Move, NarrationRequest, Verdict
+from app.rounds.narrator import DeathSaveNote, Impact, Move, NarrationRequest, PastRound, StoryContext, Verdict
+from app.rounds.prompt import HISTORY_ROUNDS
 from app.rounds.schemas import DeclarationUpdate
 from app.tables import repository as table_repository
 from app.tables import service as tables
@@ -458,6 +459,33 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
     return NarrationRequest(round_number=round_.number, scene=round_.scene, moves=moves)
 
 
+def to_story(snapshot: Snapshot) -> StoryContext:
+    """
+    판의 복사본에서 이야기의 바탕을 꺼낸다. 서술자에게만 준다.
+
+    룰북의 진행 지침과 세계관의 GM 메모가 들어간다. 이것들은 AI 가 읽으라고 쓴 글이다. 플레이어에게 내보내지 않는다.
+    세계관이 없는 시나리오면 설정과 GM 메모는 빈 글이다. 로어북은 넣지 않는다(검색 단계의 일).
+    """
+    world = snapshot.world
+    return StoryContext(
+        title=snapshot.title,
+        rating=snapshot.rating,
+        guide=snapshot.rulebook.gm_guide,
+        setting=world.setting if world else '',
+        gm_notes=world.gm_notes if world else '',
+    )
+
+
+def to_past(round_: Round) -> PastRound:
+    """
+    지난 라운드를 서술자에게 줄 모양으로 바꾼다. 그때의 장면과, 선언마다 "캐릭터 이름: 글" 한 줄.
+
+    선언에 적어 둔 캐릭터 이름을 쓴다. 그 사람이 떠났거나 새 캐릭터로 바뀌었어도 그때의 이름이 남는다.
+    """
+    lines = [f'{declaration.character_name}: {declaration.content}' for declaration in round_.declarations]
+    return PastRound(number=round_.number, scene=round_.scene, lines=lines)
+
+
 # --- 읽기 ---
 
 
@@ -714,13 +742,16 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
     닫는 중인 라운드를 서술자에게 줄 모양으로 읽는다. 닫는 중이 아니면 None.
 
     None 이면 할 일이 없다. 다른 작업이 이미 마무리했거나 테이블이 지워졌다.
-    잠그지 않는다. 닫는 중인 라운드의 선언은 더 바뀌지 않는다.
+    잠그지 않는다. 닫는 중인 라운드의 선언은 더 바뀌지 않는다. 지난 라운드는 닫혀서 바뀌지 않는다.
+    이야기의 바탕과 지난 라운드 몇 개를 함께 싣는다. 가짜 서술자는 읽지 않고, 언어 모델의 서술자가 읽는다.
     """
     table = await table_repository.find_table(session, table_id)
     round_ = await repository.find_round(session, table_id, number)
     if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
         return None
-    return build_request(table, round_)
+    history = await repository.list_rounds_before(session, table_id, number, HISTORY_ROUNDS)
+    story = to_story(read_snapshot(table.content))
+    return replace(build_request(table, round_), story=story, history=[to_past(past) for past in history])
 
 
 async def finish_closing(session: AsyncSession, table_id: uuid.UUID, number: int, scene: str) -> None:
