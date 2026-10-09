@@ -7,7 +7,7 @@
 
 보는 것은 여섯이다.
   - 서술하는 동안 테이블이 멈추지 않는다. 채팅, 읽기, 나가기가 된다.
-  - 서술자는 닫힐 때의 모습을 받는다. 그 뒤에 누가 나가도, 서술을 다시 맡겨도 같다.
+  - 서술자는 닫힐 때의 모습을 받는다. 그 뒤에 누가 나가도, 방장이 문체를 바꿔도, 서술을 다시 맡겨도 같다.
   - 닫는 중인 라운드에는 선언을 낼 수 없고, 또 닫을 수 없다. 서술자는 한 번만 불린다.
   - 서술이 실패하면 라운드가 닫는 중에 머문다. 한참 지난 뒤에 방장이 다시 맡길 수 있다.
   - 같은 라운드의 서술이 둘 돌아도 다음 라운드는 하나만 열린다.
@@ -303,7 +303,8 @@ async def test_a_round_that_began_closing_before_moves_were_kept_is_narrated_fro
     await declare(client, friend, table, FRIENDS_ACTION)
     await narrated()
     # 굳히기 전의 서버가 닫기 시작한 라운드인 것처럼 칸을 비운다
-    await session.execute(update(Round).where(Round.table_id == uuid.UUID(table['id'])).values(moves=None))
+    query = update(Round).where(Round.table_id == uuid.UUID(table['id'])).values(moves=None, narration_style=None)
+    await session.execute(query)
     await session.commit()
 
     monkeypatch.setattr(service, 'CLOSING_RETRY_SECONDS', 0)
@@ -313,7 +314,51 @@ async def test_a_round_that_began_closing_before_moves_were_kept_is_narrated_fro
     # 멈춘 채로 남지 않는다. 지금 앉은 사람들로 만들어 서술한다
     assert again.status_code == status.HTTP_202_ACCEPTED
     assert narrator.requests[1].moves == narrator.requests[0].moves
+    # 문체도 지금 테이블의 것이다
+    assert narrator.requests[1].style == narrator.requests[0].style == 'classic'
     assert (await current(client, me, table))['number'] == 2
+
+
+async def test_a_new_style_starts_from_the_next_narration(
+    client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, narrated
+):
+    table = await start_duo(client, me, friend)
+    await begin_closing(client, me, friend, table, narrator)
+
+    # 서술이 도는 사이에 방장이 문체를 바꾼다
+    changed = await client.put(table_url(table, '/narration-style'), json={'narration_style': 'dopamine'}, headers=me)
+    narrator.release()
+    await narrated()
+    narrator.hold()
+    await declare(client, me, table, MY_ACTION)
+    await declare(client, friend, table, FRIENDS_ACTION)
+    await narrator.wait_until_called(times=2)
+
+    assert changed.status_code == status.HTTP_200_OK
+    # 돌고 있던 서술은 닫기 시작할 때의 문체 그대로다. 바꾼 문체는 다음 라운드의 서술부터다
+    first, second = narrator.requests
+    assert (first.style, second.style) == ('classic', 'dopamine')
+
+
+async def test_handing_a_stalled_round_again_keeps_its_style(
+    client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, narrated, monkeypatch: pytest.MonkeyPatch
+):
+    table = await start_duo(client, me, friend)
+    narrator.fail_next = True
+    narrator.release()
+    await declare(client, me, table, MY_ACTION)
+    await declare(client, friend, table, FRIENDS_ACTION)
+    await narrated()
+
+    # 첫 서술은 실패했다. 다시 맡기기 전에 방장이 문체를 바꾼다
+    await client.put(table_url(table, '/narration-style'), json={'narration_style': 'literary'}, headers=me)
+    monkeypatch.setattr(service, 'CLOSING_RETRY_SECONDS', 0)
+    await client.post(table_url(table, '/rounds/current/close'), headers=me)
+    await narrated()
+
+    # 다시 맡겨도 이 라운드는 닫기 시작할 때의 문체다. 서술을 실패시켜 문체를 바꿀 수 없다
+    first, second = narrator.requests
+    assert first.style == second.style == 'classic'
 
 
 # --- 닫는 중인 라운드 ---

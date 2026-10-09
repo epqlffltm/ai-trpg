@@ -3,11 +3,12 @@
 """
 실제 언어 모델로 서술을 써 본다. 서버도 DB 도 쓰지 않고, 여기 적어 둔 예시 라운드 하나로.
 
-모델을 고르거나(비교), 추론을 켜고 끈 차이를 볼 때 쓴다. 자동 테스트가 아니라서 CI 에서 돌지 않는다.
+모델을 고르거나(비교), 추론을 켜고 끈 차이나 문체마다의 차이를 볼 때 쓴다. 자동 테스트가 아니라서 CI 에서 돌지 않는다.
 서버가 쓰는 것과 같은 조립(app/rounds/prompt.py), provider, 장면 검사를 그대로 거친다.
 
     uv run python -m scripts.try_narration --model gemma4:26b
     uv run python -m scripts.try_narration --model gemma4:26b qwen3.6:27b --reasoning none low --out report.md
+    uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style classic dopamine literary
 
 game-server 폴더에서 -m 으로 돌린다. 그래야 app 을 찾는다.
 
@@ -31,6 +32,7 @@ import httpx
 
 from app.ai.openai_compat import OpenAICompatProvider
 from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
+from app.assets.models import NarrationStyle
 from app.rounds.llm_narrator import NARRATION_PARAMS, NarrationError, accept_completion
 from app.rounds.narrator import Impact, Move, NarrationRequest, PastRound, StoryContext, Verdict
 from app.rounds.prompt import build_messages
@@ -96,10 +98,15 @@ WARMUP_PARAMS = GenerationParams(max_tokens=1, temperature=0.0)
 
 @dataclass(frozen=True)
 class Trial:
-    """모델 하나, 추론 수준 하나로 서술해 본 결과. problem 은 provider 의 실패나 장면으로 받지 않은 이유다."""
+    """
+    모델 하나, 추론 수준 하나, 문체 하나로 서술해 본 결과.
+
+    problem 은 provider 의 실패나 장면으로 받지 않은 이유다.
+    """
 
     model: str
     reasoning: Reasoning
+    style: NarrationStyle
     seconds: float
     completion: Completion | None = None
     scene: str | None = None
@@ -111,6 +118,7 @@ def read_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='실제 언어 모델로 서술을 써 본다.')
     parser.add_argument('--model', required=True, nargs='+', help='모델 이름. 여럿을 띄어 적는다')
     parser.add_argument('--reasoning', nargs='+', default=['none'], choices=[level.value for level in Reasoning])
+    parser.add_argument('--style', nargs='+', default=['classic'], choices=[style.value for style in NarrationStyle])
     parser.add_argument('--base-url', default='http://127.0.0.1:11434/v1', help='OpenAI 모양의 주소')
     parser.add_argument('--timeout', type=float, default=300.0, help='한 요청을 기다리는 시간(초)')
     parser.add_argument('--no-reasoning-field', action='store_true', help='추론 수준을 보내지 않는다')
@@ -138,20 +146,23 @@ async def warm_up(provider: OpenAICompatProvider) -> None:
         return
 
 
-async def run_trial(provider: OpenAICompatProvider, reasoning: Reasoning) -> Trial:
+async def run_trial(provider: OpenAICompatProvider, reasoning: Reasoning, style: NarrationStyle) -> Trial:
     """예시 라운드를 한 번 서술하게 한다. 실패해도 예외를 올리지 않고 결과에 적는다."""
     params = replace(NARRATION_PARAMS, reasoning=reasoning)
+    messages = build_messages(replace(REQUEST, style=style))
     started = time.perf_counter()
     try:
-        completion = await provider.complete(build_messages(REQUEST), params)
+        completion = await provider.complete(messages, params)
     except ProviderError as error:
-        return Trial(provider.model, reasoning, time.perf_counter() - started, problem=f'provider 실패: {error}')
+        seconds = time.perf_counter() - started
+        return Trial(provider.model, reasoning, style, seconds, problem=f'provider 실패: {error}')
     seconds = time.perf_counter() - started
     try:
         scene = accept_completion(completion)
     except NarrationError as error:
-        return Trial(provider.model, reasoning, seconds, completion=completion, problem=f'장면으로 받지 않음: {error}')
-    return Trial(provider.model, reasoning, seconds, completion=completion, scene=scene)
+        problem = f'장면으로 받지 않음: {error}'
+        return Trial(provider.model, reasoning, style, seconds, completion=completion, problem=problem)
+    return Trial(provider.model, reasoning, style, seconds, completion=completion, scene=scene)
 
 
 def numbers_sent() -> set[str]:
@@ -179,7 +190,7 @@ def find_hints(scene: str) -> list[str]:
 
 def describe(trial: Trial) -> str:
     """결과 하나를 읽기 좋은 글로."""
-    lines = [f'## {trial.model} / 추론 {trial.reasoning.value} / {trial.seconds:.1f}초']
+    lines = [f'## {trial.model} / 추론 {trial.reasoning.value} / 문체 {trial.style.value} / {trial.seconds:.1f}초']
     if trial.completion is not None:
         completion = trial.completion
         tokens = f'토큰: 입력 {completion.input_tokens}, 출력 {completion.output_tokens}'
@@ -196,17 +207,18 @@ def describe(trial: Trial) -> str:
 
 def summarize(trials: list[Trial]) -> str:
     """모든 결과를 한눈에 보는 표(마크다운)."""
-    rows = ['| 모델 | 추론 | 초 | 출력 토큰 | 장면 | 확인할 것 |', '| --- | --- | --- | --- | --- | --- |']
+    rows = ['| 모델 | 추론 | 문체 | 초 | 출력 토큰 | 장면 | 확인할 것 |', '| --- | --- | --- | --- | --- | --- | --- |']
     for trial in trials:
         output = trial.completion.output_tokens if trial.completion else '-'
         scene = f'{len(trial.scene)}자' if trial.scene is not None else trial.problem
         hints = ', '.join(find_hints(trial.scene)) if trial.scene is not None else '-'
-        rows.append(f'| {trial.model} | {trial.reasoning.value} | {trial.seconds:.1f} | {output} | {scene} | {hints} |')
+        head = f'| {trial.model} | {trial.reasoning.value} | {trial.style.value} | {trial.seconds:.1f} |'
+        rows.append(f'{head} {output} | {scene} | {hints} |')
     return '\n'.join(rows)
 
 
 async def run_all(arguments: argparse.Namespace) -> list[Trial]:
-    """모델마다, 추론 수준마다 한 번씩 서술하게 한다. 하나씩 끝나는 대로 찍는다."""
+    """모델마다, 추론 수준마다, 문체마다 한 번씩 서술하게 한다. 하나씩 끝나는 대로 찍는다."""
     trials = []
     async with httpx.AsyncClient() as client:
         for model in arguments.model:
@@ -214,9 +226,10 @@ async def run_all(arguments: argparse.Namespace) -> list[Trial]:
             if not arguments.no_warmup:
                 await warm_up(provider)
             for level in arguments.reasoning:
-                trial = await run_trial(provider, Reasoning(level))
-                print(describe(trial), flush=True)
-                trials.append(trial)
+                for style in arguments.style:
+                    trial = await run_trial(provider, Reasoning(level), NarrationStyle(style))
+                    print(describe(trial), flush=True)
+                    trials.append(trial)
     return trials
 
 

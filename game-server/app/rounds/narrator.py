@@ -15,6 +15,8 @@ GM 의 서술을 만드는 것(서술자)의 모양과, AI 가 붙기 전에 쓰
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from app.assets.models import NarrationStyle
+
 
 @dataclass(frozen=True)
 class Impact:
@@ -133,6 +135,8 @@ class NarrationRequest:
     story: StoryContext | None = None
     # 이 라운드 앞의 라운드들. 오래된 것부터다. 가짜 서술자는 읽지 않는다
     history: list[PastRound] = field(default_factory=list)
+    # 서술의 문체. 라운드가 닫기 시작할 때의 테이블의 문체다. 가짜 서술자는 읽지 않는다
+    style: NarrationStyle = NarrationStyle.NONE
 
 
 class Narrator(Protocol):

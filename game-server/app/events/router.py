@@ -35,6 +35,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     # 능력치의 굴림도 공개다. 버린 눈까지 모두에게 보인다
     EventType.ABILITIES_ROLLED: ('dice', 'scores', 'times_rolled', 'character_number'),
     EventType.REROLL_GRANTED: ('user_id',),
+    EventType.NARRATION_STYLE_CHANGED: ('narration_style',),
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
     EventType.ROUND_OPENED: ('number',),

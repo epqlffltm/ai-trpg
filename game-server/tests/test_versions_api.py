@@ -40,6 +40,7 @@ from app.assets.scenarios.snapshot import (
     upgrade_from_7,
     upgrade_from_8,
     upgrade_from_9,
+    upgrade_from_10,
 )
 from app.engine.sheet import fits
 from app.engine.templates import SRD5
@@ -399,6 +400,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'default_sheet': SHEET,
         'player_made_hp': None,
         'reroll_allowed': False,
+        'narration_style': 'classic',
         'rulebook': {'id': rulebook['id'], 'title': '룰북', 'gm_guide': GM_GUIDE, 'rules': rulebook['rules']},
         'world': {'id': world['id'], 'title': '세계관', 'setting': SETTING, 'gm_notes': GM_NOTES},
         'lorebooks': [
@@ -409,6 +411,20 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
             }
         ],
     }
+
+
+async def test_the_recommended_style_is_frozen_into_the_version(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_ready_scenario(client, my_headers, narration_style='literary')
+    first = await publish(client, my_headers, scenario)
+
+    await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'narration_style': 'dopamine'}, headers=my_headers)
+    second = await publish(client, my_headers, scenario)
+    reread = await client.get(f'{versions_url(scenario)}/1', headers=my_headers)
+
+    # 판에 굳는다. 제작자가 나중에 추천을 바꿔도 먼저 낸 판(과 그 판으로 도는 테이블)은 그대로다
+    assert first['snapshot']['narration_style'] == 'literary'
+    assert second['snapshot']['narration_style'] == 'dopamine'
+    assert reread.json()['snapshot']['narration_style'] == 'literary'
 
 
 async def test_the_snapshot_of_a_minimal_scenario(client: AsyncClient, my_headers: dict[str, str]):
@@ -662,6 +678,11 @@ def make_format_9() -> dict:
     return without_rules(upgrade_from_8(make_format_8()), 'death_save')
 
 
+def make_format_10() -> dict:
+    """추천 문체가 없던 때의 판."""
+    return {key: value for key, value in upgrade_from_9(make_format_9()).items() if key != 'narration_style'}
+
+
 def test_upgrades_a_format_5_document():
     format_5 = make_format_5()
 
@@ -739,6 +760,26 @@ def test_upgrades_a_format_9_document():
     assert 'death_save' not in format_9['rulebook']['rules']
 
 
+def test_upgrades_a_format_10_document():
+    format_10 = make_format_10()
+
+    upgraded = upgrade_from_10(format_10)
+
+    # 추천 문체가 없던 때의 판이다. 제작자가 고르지 않았을 때와 같은 정통으로 읽는다
+    assert upgraded['format'] == 11
+    assert upgraded['narration_style'] == 'classic'
+    # 받은 문서는 고치지 않는다
+    assert format_10['format'] == 10
+    assert 'narration_style' not in format_10
+
+
+def test_reads_a_version_from_before_narration_styles():
+    old = read_snapshot(make_format_10())
+
+    assert old.format == SNAPSHOT_FORMAT
+    assert old.narration_style == 'classic'
+
+
 def test_reads_a_version_from_before_death_saves():
     old = read_snapshot(make_format_9())
 
@@ -781,7 +822,7 @@ def test_reads_a_document_of_any_format():
     assert read_snapshot(FORMAT_1) == read_snapshot(current)
     assert read_snapshot(FORMAT_1).format == SNAPSHOT_FORMAT
     assert read_snapshot(FORMAT_1).openings == [OPENING]
-    # 형식 1 은 1 → 2 → … → 10 을 차례로 거친다
+    # 형식 1 은 1 → 2 → … → 11 을 차례로 거친다
     assert read_snapshot(FORMAT_1).pregens == []
     assert read_snapshot(FORMAT_1).rulebook.rules == SRD5
 

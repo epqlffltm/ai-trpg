@@ -18,10 +18,12 @@ from collections.abc import Callable
 from pydantic import BaseModel
 
 from app.assets.models import (
+    DEFAULT_NARRATION_STYLE,
     TABLE_MAX_PLAYERS,
     CharacterMode,
     Lorebook,
     LoreEntry,
+    NarrationStyle,
     Rating,
     Rulebook,
     Scenario,
@@ -43,7 +45,8 @@ from app.engine.templates import SRD5
 #   8: 규칙에 점수제(point_buy)가 있다
 #   9: 규칙에 점수를 주사위로 정하는 법(score_roll)이 있고, 다시 굴리게 해 줄 수 있는지(reroll_allowed)가 있다
 #  10: 규칙에 죽음의 굴림(death_save)이 있다
-SNAPSHOT_FORMAT = 10
+#  11: 추천 문체(narration_style)가 있다
+SNAPSHOT_FORMAT = 11
 
 # 시트가 없던 때의 판을 읽을 때 채우는 숫자. 모든 능력치가 이 점수이고, 최대 HP 가 이 값이다.
 # 그때의 규칙은 SRD5 템플릿뿐이었다. 10 은 그 규칙에서 보정이 0 인 점수다
@@ -137,6 +140,8 @@ class Snapshot(BaseModel):
     player_made_hp: PlayerMadeHpSnapshot | None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 제작자가 정한 것이다
     reroll_allowed: bool
+    # 추천 문체. 테이블의 방장이 문체를 고르지 않으면 이것으로 서술한다
+    narration_style: NarrationStyle
     rulebook: RulebookSnapshot
     world: WorldSnapshot | None
     lorebooks: list[LorebookSnapshot]
@@ -184,6 +189,7 @@ def build_snapshot(
         default_sheet=scenario.default_sheet,
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
+        narration_style=scenario.narration_style,
         rulebook=snapshot_rulebook(rulebook),
         world=snapshot_world(world) if world else None,
         lorebooks=[snapshot_lorebook(lorebook, entries) for lorebook, entries in lorebooks],
@@ -333,6 +339,19 @@ def upgrade_from_9(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_10(document: dict) -> dict:
+    """
+    형식 10 의 문서를 형식 11 로 올린다.
+
+    그때는 추천 문체가 없었다. 문체를 지시하지 않았지만, 지금 제작자가 고르지 않았을 때와 같은 정통으로 읽는다.
+    이미 진행 중인 테이블도 이 형식으로 올려 읽는다. 방장이 문체를 고르지 않았으면 다음 서술부터 정통이다.
+    """
+    upgraded = dict(document)
+    upgraded['narration_style'] = DEFAULT_NARRATION_STYLE.value
+    upgraded['format'] = 11
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -345,6 +364,7 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     7: upgrade_from_7,
     8: upgrade_from_8,
     9: upgrade_from_9,
+    10: upgrade_from_10,
 }
 
 

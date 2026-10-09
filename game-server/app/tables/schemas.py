@@ -13,7 +13,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.assets.models import PLAYER_MADE_MODES, TABLE_MAX_PLAYERS, CharacterMode, Rating
+from app.assets.models import PLAYER_MADE_MODES, TABLE_MAX_PLAYERS, CharacterMode, NarrationStyle, Rating
 from app.assets.scenarios.schemas import (
     CharacterDescription,
     CharacterModes,
@@ -52,6 +52,8 @@ class TableCreate(BaseModel):
     password: TablePassword | None = None
     # 이 테이블에서 허용할 캐릭터 방식. 만든 뒤에는 바꿀 수 없다
     character_modes: CharacterModes | None = None
+    # GM 의 서술 문체. 비우면 판의 추천 문체다. 만든 뒤에도 방장이 바꿀 수 있다
+    narration_style: NarrationStyle | None = None
 
     @model_validator(mode='after')
     def require_public_for_password(self) -> 'TableCreate':
@@ -139,6 +141,14 @@ class CharacterUpdate(BaseModel):
         if (mode in PLAYER_MADE_MODES) != (self.abilities is not None):
             raise ValueError('abilities 는 플레이어가 능력치를 정하는 방식에서만, 그리고 반드시 적습니다.')
         return self
+
+
+class NarrationStyleUpdate(BaseModel):
+    """서술 문체를 바꿀 때 받는 값. null 을 보내면 판의 추천 문체로 돌린다. 칸을 빼먹으면 거부한다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    narration_style: NarrationStyle | None
 
 
 class HostTransfer(BaseModel):
@@ -253,6 +263,8 @@ class TableSummary(BaseModel):
     # 로비에 보이는가, 로비에서 들어올 때 비밀번호를 묻는가
     is_public: bool
     has_password: bool
+    # 지금의 서술 문체. 로비에서 들어가기 전에 어떤 글로 진행되는지 안다
+    narration_style: NarrationStyle
     created_at: datetime
 
 
@@ -285,6 +297,8 @@ class TableDetail(TableSummary):
     player_made_hp: PlayerMadeHp | None
     # 방장이 "한 번 더 굴리기"를 줄 수 있는 테이블인가. 제작자가 허락했고, 주사위로 정하는 방식을 쓰는 테이블일 때다
     reroll_allowed: bool
+    # 시나리오의 제작자가 추천한 문체. 방장이 문체를 고르는 화면에서 "추천"을 표시한다
+    recommended_narration_style: NarrationStyle
     pregens: list[PregenChoice]
     members: list[MemberOut]
     # 초대 코드. 방장에게만 보인다
