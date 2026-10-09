@@ -27,7 +27,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
-from app.assets.models import TABLE_MAX_PLAYERS, CharacterMode, Scenario, ScenarioVersion
+from app.assets.models import TABLE_MAX_PLAYERS, CharacterMode, NarrationStyle, Scenario, ScenarioVersion
 from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.assets.service import AssetNotFoundError
@@ -187,6 +187,11 @@ def require_not_ended(table: GameTable) -> None:
     """테이블이 끝나지 않았는지 확인한다. 끝났으면 TableConflictError."""
     if table.status == TableStatus.ENDED:
         raise TableConflictError(Conflict.ALREADY_ENDED)
+
+
+def choose_narration_style(snapshot: Snapshot, chosen: NarrationStyle | None) -> NarrationStyle:
+    """방장이 고른 문체. 고르지 않았으면(None) 판의 추천 문체다."""
+    return chosen or snapshot.narration_style
 
 
 def require_pregen_free(table: GameTable, member: TableMember, pregen_index: int) -> None:
@@ -375,6 +380,7 @@ def build_table(
         invite_code=new_invite_code(),
         is_public=data.is_public,
         password_hash=password_hash,
+        narration_style=choose_narration_style(snapshot, data.narration_style),
         members=[TableMember(user_id=host_id)],
     )
 

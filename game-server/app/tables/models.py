@@ -47,6 +47,7 @@ from app.assets.models import (
     TABLE_MAX_PLAYERS,
     TITLE_MAX_LENGTH,
     CharacterMode,
+    NarrationStyle,
     Rating,
     all_of,
     at_most,
@@ -103,6 +104,7 @@ class GameTable(Base):
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
             name='character_modes_allowed',
         ),
+        CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -150,6 +152,12 @@ class GameTable(Base):
     # 비밀번호. 그대로 두지 않고 계산한 값을 둔다(passwords.py). 비어 있으면 비밀번호가 없는 것이다.
     # 로비에서 들어올 때만 묻는다. 초대 코드로 들어올 때는 묻지 않는다. 방장이 직접 부른 사람이다
     password_hash: Mapped[str | None] = mapped_column(String(200))
+
+    # GM 의 서술 문체. 만들 때 방장이 고르고, 고르지 않으면 판의 추천 문체다. 방장은 진행 중에도 바꿀 수 있다.
+    # 판은 바뀌지 않으므로 "추천을 따른다"와 "추천과 같은 것을 골랐다"는 같다. 그래서 비워 두지 않고 늘 적어 둔다.
+    # 로비의 목록이 판의 복사본을 열지 않고 문체를 보여 준다.
+    # 이 칸이 생기기 전에 만든 테이블은 정통이다. 그 테이블의 판도 정통을 추천하는 것으로 읽힌다
+    narration_style: Mapped[str] = mapped_column(String(20), server_default=text("'classic'"))
 
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.

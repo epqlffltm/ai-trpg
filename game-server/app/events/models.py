@@ -50,6 +50,8 @@ class EventType(enum.StrEnum):
     ABILITIES_ROLLED = 'abilities_rolled'
     # 방장이 누구에게 "한 번 더 굴리기"를 줬다
     REROLL_GRANTED = 'reroll_granted'
+    # 방장이 GM 의 서술 문체를 바꿨다. 다음 서술부터 그 문체다
+    NARRATION_STYLE_CHANGED = 'narration_style_changed'
 
     # --- 진행 ---
     # 방장이 테이블을 시작했다
