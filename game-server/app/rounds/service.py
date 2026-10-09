@@ -51,6 +51,7 @@ from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets.models import NarrationStyle
 from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import action as actions
 from app.engine import death, health
@@ -411,6 +412,15 @@ def build_moves(table: GameTable, round_: Round) -> list[Move]:
     return moves
 
 
+def frozen_style(table: GameTable, round_: Round) -> NarrationStyle:
+    """
+    닫는 중인 라운드에 굳혀 둔 문체를 읽는다.
+
+    굳혀 둔 것이 없으면 지금 테이블의 문체다. 굳히기 전에 닫기 시작한 라운드만 그렇다.
+    """
+    return NarrationStyle(round_.narration_style or table.narration_style)
+
+
 def frozen_moves(table: GameTable, round_: Round) -> list[Move]:
     """
     닫는 중인 라운드에 굳혀 둔 각자 한 일을 읽는다.
@@ -568,7 +578,7 @@ def begin_closing(
     주사위는 여기서만 굴린다. 열려 있는 라운드에 한 번만 부르므로 한 선언을 두 번 굴리지 않는다.
     죽음의 굴림은 행동의 판정을 끝낸 뒤에 굴린다. 이번 라운드에 회복을 받아 일어난 캐릭터는 굴리지 않는다.
     누가 굴릴지는 판정 전에 본다. 이번 라운드에 쓰러진 캐릭터는 다음 라운드부터 굴린다.
-    서술자에게 줄 각자 한 일을 여기서 만들어 라운드에 굳힌다. 서술은 지금 앉은 사람이 아니라 이것을 읽는다.
+    서술자에게 줄 각자 한 일과 그때의 문체를 여기서 라운드에 굳힌다. 서술은 지금의 테이블이 아니라 이것을 읽는다.
     서술자를 부르지 않는다. 저장한 뒤에 따로 맡긴다(NarrationScheduler).
     """
     group = uuid.uuid4()
@@ -576,6 +586,7 @@ def begin_closing(
     roll_checks(table, round_, dice)
     round_.death_saves = roll_death_saves(table, dying, dice)
     round_.moves = narration_request.dump_moves(build_moves(table, round_))
+    round_.narration_style = table.narration_style
     record_actions(session, table, round_, group)
     record_death_saves(session, table, round_, group)
     payload = {'number': round_.number, 'idle': [str(user_id) for user_id in waiting_for(table, round_)]}
@@ -681,7 +692,7 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
 
     None 이면 할 일이 없다. 다른 작업이 이미 마무리했거나 테이블이 지워졌다.
     잠그지 않는다. 읽는 것은 모두 더 바뀌지 않는다.
-      - 각자 한 일은 닫기 시작할 때 굳혀 둔 것이다. 그 뒤에 누가 나가도 닫힐 때의 모습 그대로다.
+      - 각자 한 일과 문체는 닫기 시작할 때 굳혀 둔 것이다. 그 뒤에 누가 나가도, 방장이 문체를 바꿔도 그대로다.
       - 이야기의 바탕은 판의 복사본에서 꺼낸다. 판은 고치지 않는다.
       - 지난 라운드는 닫혀서 바뀌지 않는다.
     그래서 서술을 몇 번 다시 맡겨도 서술자는 같은 것을 받는다.
@@ -698,6 +709,7 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
         moves=frozen_moves(table, round_),
         story=narration_request.to_story(read_snapshot(table.content)),
         history=[narration_request.to_past(past) for past in history],
+        style=frozen_style(table, round_),
     )
 
 

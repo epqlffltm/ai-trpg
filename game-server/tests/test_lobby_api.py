@@ -195,6 +195,7 @@ async def test_the_lobby_lists_the_newest_table_first(client: AsyncClient, me: d
         'host_id',
         'is_public',
         'has_password',
+        'narration_style',
         'created_at',
     }
 

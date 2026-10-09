@@ -41,7 +41,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.assets.models import CHARACTER_NAME_MAX_LENGTH, at_most
+from app.assets.models import CHARACTER_NAME_MAX_LENGTH, NarrationStyle, at_most, one_of
 from app.core.database import Base
 
 # 선언 하나의 길이(글자 수). 라운드마다 사람 수만큼 AI 의 입력에 들어간다. 길이가 곧 비용이다
@@ -75,6 +75,8 @@ class Round(Base):
         # 닫힌 라운드(closed_at 이 있는 것)는 이 색인에 들어가지 않으므로 몇 개든 된다.
         # 코드가 틀려서 라운드를 닫지 않고 새로 열어도, DB 가 막는다
         Index('uq_table_rounds_open', 'table_id', unique=True, postgresql_where='closed_at IS NULL'),
+        # 비어 있으면 조건이 참도 거짓도 아니라서 통과한다. 적혀 있을 때만 아는 문체인지 본다
+        CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -113,6 +115,11 @@ class Round(Base):
     # 서술은 저장한 뒤에 따로 돈다. 그사이에 누가 나가도, 서술을 다시 맡겨도 서술자는 닫힐 때의 모습을 받는다.
     # 선언을 받는 중인 라운드는 비어 있다(None). 이 칸이 생기기 전에 닫기 시작한 라운드도 비어 있다
     moves: Mapped[list | None] = mapped_column(JSONB)
+
+    # 서술의 문체. 닫기 시작할 때 테이블의 문체를 굳혀 둔다. 한 번 적으면 고치지 않는다.
+    # 방장이 서술하는 사이에 문체를 바꿔도 이 라운드의 서술은 이 문체다. 바꾼 문체는 다음 라운드부터다.
+    # 선언을 받는 중인 라운드는 비어 있다(None). 이 칸이 생기기 전에 닫기 시작한 라운드도 비어 있다
+    narration_style: Mapped[str | None] = mapped_column(String(20))
 
     # 이 라운드의 선언들. 낸 순서다. 많아야 넷이라 라운드를 읽을 때 함께 읽는다
     declarations: Mapped[list['Declaration']] = relationship(

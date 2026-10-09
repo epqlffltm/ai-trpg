@@ -3,16 +3,20 @@
 """
 GM 의 서술을 부탁하는 메시지의 조립(app/rounds/prompt.py)을 검증한다. 순수 함수라 DB 도 모델도 쓰지 않는다.
 
-보는 것은 넷이다.
+보는 것은 다섯이다.
   - 메시지의 순서와 역할. 시스템 → 사람 → (지난 라운드: 모델, 사람)… → 이번 장면(모델) → 이번 결과(사람).
-  - 시스템 지시에 무엇이 들어가나. 지시, 수위, 진행 지침, 세계관의 설정과 GM 메모. 빈 것은 빠진다.
+  - 시스템 지시에 무엇이 들어가나. 지시, 글쓰기의 공통 규칙, 수위, 진행 지침, 세계관의 설정과 GM 메모. 빈 것은 빠진다.
+  - 문체마다 글의 결과 끝맺음이 들어간다. 미사용이면 문체를 지시하지 않는다. 수위는 문체 뒤에 온다.
   - 이번 라운드의 결과는 엔진이 정한 그대로 들어간다.
   - 지난 기록은 정해 둔 라운드 수와 글자 수 안에서, 오래된 것부터 뺀다.
 """
 
+from dataclasses import replace
+
 import pytest
 
 from app.ai.provider import Role
+from app.assets.models import NarrationStyle
 from app.rounds import prompt
 from app.rounds.narrator import Move, NarrationRequest, PastRound, StoryContext, Verdict
 from app.rounds.prompt import build_messages, fit_history, system_text
@@ -86,7 +90,7 @@ def test_a_round_where_nobody_spoke_still_has_a_line_from_the_players():
 
 
 def test_the_system_instructions_carry_the_rules_and_the_story():
-    text = system_text(STORY)
+    text = system_text(STORY, NarrationStyle.NONE)
 
     assert text.startswith(prompt.GM_RULES)
     for part in [prompt.RATING_RULES['all'], STORY.title, STORY.guide, STORY.setting, STORY.gm_notes]:
@@ -96,13 +100,13 @@ def test_the_system_instructions_carry_the_rules_and_the_story():
 def test_the_rating_picks_the_line_about_how_dark_it_may_get():
     adult = StoryContext(title='추격전', rating='adult', guide='')
 
-    assert prompt.RATING_RULES['adult'] in system_text(adult)
-    assert prompt.RATING_RULES['all'] not in system_text(adult)
+    assert prompt.RATING_RULES['adult'] in system_text(adult, NarrationStyle.NONE)
+    assert prompt.RATING_RULES['all'] not in system_text(adult, NarrationStyle.NONE)
 
 
 def test_empty_parts_of_the_story_are_left_out():
     # 세계관이 없는 시나리오다. 진행 지침도 비어 있다
-    text = system_text(StoryContext(title='추격전', rating='all', guide='  '))
+    text = system_text(StoryContext(title='추격전', rating='all', guide='  '), NarrationStyle.NONE)
 
     assert '## 진행 지침' not in text
     assert '## 세계관' not in text
@@ -114,6 +118,68 @@ def test_the_instructions_tell_the_model_not_to_change_the_results():
     # 결과는 엔진이 정했다. 지시가 그것을 분명히 말해야 한다
     assert '결과를 바꾸지 마라' in prompt.GM_RULES
     assert '지어내지 마라' in prompt.GM_RULES
+
+
+# --- 문체 ---
+
+STYLED = [style for style in NarrationStyle if style != NarrationStyle.NONE]
+
+
+def test_every_style_but_none_has_its_rule():
+    # 문체를 하나 늘리면 지시도 써야 한다. 빠뜨리면 그 문체를 고른 테이블이 아무 지시도 받지 못한다
+    assert set(prompt.STYLE_RULES) == set(STYLED)
+
+
+@pytest.mark.parametrize('style', STYLED)
+def test_a_style_brings_its_voice_and_its_ending(style: NarrationStyle):
+    text = system_text(STORY, style)
+
+    rule = prompt.STYLE_RULES[style]
+    assert '## 문체' in text
+    assert rule.voice in text
+    assert rule.ending in text
+    # 장면 안에서 플레이어에게 묻지 않는다. 선언은 화면이 받는다
+    assert prompt.NO_DIRECT_QUESTION in text
+    # 문체가 진행 지침과 부딪히면 글은 문체를 따른다
+    assert prompt.STYLE_OVER_GUIDE in text
+
+
+def test_none_gives_no_style_and_no_ending():
+    text = system_text(STORY, NarrationStyle.NONE)
+
+    # 모델이 원래 쓰는 대로 둔다. 끝맺음도 묻는 말도 정하지 않는다
+    assert '## 문체' not in text
+    assert prompt.NO_DIRECT_QUESTION not in text
+
+
+@pytest.mark.parametrize('style', list(NarrationStyle))
+def test_every_style_keeps_the_rules_of_the_gm_and_of_writing(style: NarrationStyle):
+    text = system_text(STORY, style)
+
+    assert text.startswith(prompt.GM_RULES)
+    assert prompt.WRITING_RULES in text
+
+
+@pytest.mark.parametrize('style', STYLED)
+def test_the_rating_comes_after_the_style(style: NarrationStyle):
+    text = system_text(STORY, style)
+
+    # 등급은 문체보다 위다. 뒤에 두어 문체가 수위를 넘으라고 읽히지 않게 한다
+    assert text.index('## 문체') < text.index(prompt.RATING_RULES['all'])
+
+
+def test_the_style_of_the_request_reaches_the_system_message():
+    request = replace(make_request(), style=NarrationStyle.DOPAMINE)
+
+    system = build_messages(request)[0]
+
+    assert prompt.STYLE_RULES[NarrationStyle.DOPAMINE].voice in system.content
+    assert prompt.STYLE_RULES[NarrationStyle.CLASSIC].voice not in system.content
+
+
+def test_a_request_with_no_style_asks_for_none():
+    # 서술자 말고 다른 곳에서 만든 요청(가짜 서술자의 테스트 등)은 문체를 지시하지 않는다
+    assert make_request().style == NarrationStyle.NONE
 
 
 # --- 이번 라운드 ---

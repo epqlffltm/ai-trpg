@@ -120,6 +120,8 @@ async def test_creates_a_draft_with_only_a_title(client: AsyncClient, my_headers
     assert body['pregens'] == []
     # 성인용으로 올리는 것은 제작자가 직접 골라야 한다
     assert body['rating'] == 'all'
+    # 추천 문체를 고르지 않으면 정통이다
+    assert body['narration_style'] == 'classic'
 
 
 async def test_creates_a_scenario_that_points_to_my_assets(client: AsyncClient, my_headers: dict[str, str]):
@@ -156,6 +158,7 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'default_sheet',
         'player_made_hp',
         'reroll_allowed',
+        'narration_style',
     }
 
 
@@ -204,6 +207,45 @@ async def test_rejects_bad_input(client: AsyncClient, my_headers: dict[str, str]
     response = await client.post(SCENARIOS_URL, json=body, headers=my_headers)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+# --- 추천 문체 ---
+
+
+async def test_the_narration_style_is_recommended_on_the_scenario(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(client, SCENARIOS_URL, my_headers, narration_style='hardboiled')
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    changed = await client.patch(url, json={'narration_style': 'dopamine'}, headers=my_headers)
+    untouched = await client.patch(url, json={'title': '바꾼 제목'}, headers=my_headers)
+    nulled = await client.patch(url, json={'narration_style': None}, headers=my_headers)
+
+    assert scenario['narration_style'] == 'hardboiled'
+    assert changed.json()['narration_style'] == 'dopamine'
+    # 보내지 않으면 그대로다. 추천은 비울 수 없는 칸이라 null 도 "보내지 않았다"다
+    assert untouched.json()['narration_style'] == 'dopamine'
+    assert nulled.json()['narration_style'] == 'dopamine'
+
+
+@pytest.mark.parametrize('style', ['shakespeare', '', 'CLASSIC'])
+async def test_rejects_a_narration_style_it_does_not_know(client: AsyncClient, my_headers: dict[str, str], style: str):
+    scenario = await create(client, SCENARIOS_URL, my_headers)
+
+    created = await client.post(SCENARIOS_URL, json={'title': TITLE, 'narration_style': style}, headers=my_headers)
+    updated = await client.patch(
+        f'{SCENARIOS_URL}/{scenario["id"]}', json={'narration_style': style}, headers=my_headers
+    )
+
+    assert created.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert updated.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def test_the_database_rejects_a_narration_style_it_does_not_know(session: AsyncSession):
+    asset = Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오')
+    session.add(Scenario(asset=asset, narration_style='shakespeare'))
+
+    with pytest.raises(IntegrityError, match='narration_style_allowed'):
+        await session.commit()
 
 
 # --- 등급 ---
