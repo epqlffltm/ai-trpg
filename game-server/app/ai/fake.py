@@ -28,13 +28,14 @@ class FakeProvider:
     """
     정해 둔 글을 돌려주는 provider. 몇 번을 불러도 같은 글이다.
 
-    reply 가 돌려줄 글이다. calls 에 받은 요청이 쌓인다.
+    reply 가 돌려줄 글이다. truncated 를 켜면 길이 상한에 걸려 끊긴 답을 흉내 낸다. calls 에 받은 요청이 쌓인다.
     """
 
     reply: str = '바람이 분다.'
+    truncated: bool = False
     calls: list[Call] = field(default_factory=list)
 
     async def complete(self, messages: list[ChatMessage], params: GenerationParams) -> Completion:
         """받은 것을 적어 두고 정해 둔 글을 돌려준다."""
         self.calls.append(Call(messages=list(messages), params=params))
-        return Completion(text=self.reply, model=FAKE_MODEL)
+        return Completion(text=self.reply, model=FAKE_MODEL, truncated=self.truncated)

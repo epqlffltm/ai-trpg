@@ -5,7 +5,7 @@
 
 보는 것은 셋이다.
   - 서술자는 메시지를 조립해 provider 에 넘기고, 받은 글을 검사해 장면으로 돌려준다.
-  - 장면으로 쓸 수 없는 글(빈 글, 너무 긴 글)은 받지 않는다. 그러면 라운드는 닫는 중에 머문다.
+  - 장면으로 쓸 수 없는 글(끊긴 글, 빈 글, 너무 긴 글)은 받지 않는다. 그러면 라운드는 닫는 중에 머문다.
   - 테이블에서 라운드를 닫으면, 서술자는 이야기의 바탕(진행 지침, 세계관, GM 메모)과 지난 라운드를 받는다.
 """
 
@@ -16,10 +16,10 @@ from fastapi import FastAPI, status
 from httpx import AsyncClient
 
 from app.ai.fake import FAKE_MODEL, FakeProvider
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Role
+from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
 from app.main import API_PREFIX
 from app.rounds import llm_narrator, prompt
-from app.rounds.llm_narrator import NARRATION_PARAMS, LLMNarrator, NarrationError, accept_scene
+from app.rounds.llm_narrator import NARRATION_PARAMS, LLMNarrator, NarrationError, accept_completion, accept_scene
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -69,6 +69,23 @@ async def test_the_scene_is_trimmed():
 async def test_an_empty_reply_is_not_a_scene(text: str):
     with pytest.raises(NarrationError):
         await LLMNarrator(FakeProvider(reply=text)).narrate(make_request())
+
+
+async def test_a_reply_cut_by_the_length_limit_is_not_a_scene():
+    # 문장 중간에서 끊긴 글이 기록으로 굳는다. 너무 긴 글을 잘라 받지 않는 것과 같은 이유다
+    with pytest.raises(NarrationError) as caught:
+        await LLMNarrator(FakeProvider(reply=REPLY, truncated=True)).narrate(make_request())
+
+    assert str(caught.value) == 'cut_off'
+
+
+def test_a_complete_reply_is_accepted():
+    assert accept_completion(Completion(text=f' {REPLY} ', model=FAKE_MODEL)) == REPLY
+
+
+def test_reasoning_is_off_for_narration():
+    # 서술은 추론이 필요 없다. 켜면 토큰과 시간만 먹는다. 켜는 것은 테이블 옵션이 생길 때 정한다
+    assert NARRATION_PARAMS.reasoning == Reasoning.NONE
 
 
 def test_a_reply_too_long_is_not_cut_but_refused():
