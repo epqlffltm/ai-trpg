@@ -97,6 +97,36 @@ class Rating(enum.StrEnum):
     ADULT = 'adult'
 
 
+class NarrationStyle(enum.StrEnum):
+    """
+    GM 의 서술 문체. 시나리오의 제작자가 하나를 추천하고, 테이블의 방장이 고를 수 있다.
+
+    값마다 서술자에게 주는 지시가 다르다(app/rounds/prompt.py). 화면에 보이는 이름은 화면이 정한다.
+    값의 이름은 독자가 아니라 쓰는 기법을 가리킨다.
+    """
+
+    # 문체를 지시하지 않는다. 모델이 원래 쓰는 대로다. 결과를 바꾸지 않는 것 같은 GM 의 규칙은 그대로다
+    NONE = 'none'
+    # 정통. 3인칭 과거형, 묘사 중심, 고른 호흡
+    CLASSIC = 'classic'
+    # 웹소설. 짧은 문단, 빠른 리듬
+    WEB_NOVEL = 'web_novel'
+    # 하드보일드. 짧고 건조한 문장
+    HARDBOILED = 'hardboiled'
+    # 여성향. 인물 사이의 관계와 감정의 결
+    EMOTIONAL = 'emotional'
+    # 남성향. 빠른 전개, 힘과 액션
+    ACTION = 'action'
+    # 도파민. 자극적이고 호쾌한 전개
+    DOPAMINE = 'dopamine'
+    # 문학. 은유와 감각적인 이미지, 느린 호흡
+    LITERARY = 'literary'
+
+
+# 제작자가 고르지 않았을 때 추천하는 문체. 이 칸이 생기기 전의 시나리오와 판도 이것으로 읽는다
+DEFAULT_NARRATION_STYLE = NarrationStyle.CLASSIC
+
+
 class CharacterMode(enum.StrEnum):
     """
     테이블에 앉는 사람이 캐릭터를 얻는 방식.
@@ -297,6 +327,7 @@ class Scenario(AssetContent):
             f'(hp_base IS NULL OR (hp_base >= 1 AND hp_base <= hp_cap AND hp_cap <= {PLAYER_MADE_HP_MAX}))',
             name='player_made_hp',
         ),
+        CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
     )
 
     # 가리키는 대상이 assets 가 아니라 rulebooks 다. 룰북 자리에 세계관을 넣는 일을 DB 가 막는다.
@@ -335,6 +366,12 @@ class Scenario(AssetContent):
     # 켜면 방장이 테이블에서 특정한 사람에게 "한 번 더"를 줄 수 있다. 꺼져 있으면 방장도 주지 못한다.
     # 나쁜 눈이 나와도 그대로 가는 것이 이 시나리오의 뜻일 수 있다. 그래서 방장이 아니라 제작자가 정한다
     reroll_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+
+    # 추천 문체. 제작자가 이 시나리오에 어울린다고 고른 GM 의 문체다. 기본은 정통이다.
+    # 테이블의 방장이 문체를 고르지 않으면 이것을 쓴다. 판에 굳히므로 나중에 바꿔도 진행 중인 테이블은 그대로다
+    narration_style: Mapped[str] = mapped_column(
+        String(20), default=DEFAULT_NARRATION_STYLE, server_default=text("'classic'")
+    )
 
     # 기본 시트. 캐릭터를 직접 만든 사람이 받는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 직접 만들기를 허용했으면 게시할 때 있어야 한다

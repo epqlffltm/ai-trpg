@@ -14,6 +14,7 @@ from app.assets.models import (
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
     DEFAULT_CHARACTER_MODES,
+    DEFAULT_NARRATION_STYLE,
     PLAYER_MADE_HP_MAX,
     SCENARIO_MAX_LOREBOOKS,
     SCENARIO_MAX_OPENINGS,
@@ -22,6 +23,7 @@ from app.assets.models import (
     TABLE_MAX_PLAYERS,
     VERSION_NOTE_MAX_LENGTH,
     CharacterMode,
+    NarrationStyle,
     Rating,
 )
 from app.assets.scenarios.snapshot import Snapshot
@@ -156,6 +158,8 @@ class ScenarioCreate(AssetCreate):
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
+    # 추천 문체. 테이블의 방장이 고르지 않으면 이것으로 서술한다. 안 보내면 정통이다
+    narration_style: NarrationStyle = DEFAULT_NARRATION_STYLE
 
 
 class ScenarioUpdate(AssetUpdate):
@@ -181,6 +185,7 @@ class ScenarioUpdate(AssetUpdate):
     default_sheet: Sheet | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
+    narration_style: NarrationStyle | None = None
 
 
 class ScenarioSummary(AssetSummary):
@@ -210,6 +215,7 @@ class ScenarioDetail(ScenarioSummary):
     default_sheet: Sheet | None
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
+    narration_style: NarrationStyle
 
 
 VersionNote = Annotated[str, StringConstraints(max_length=VERSION_NOTE_MAX_LENGTH)]

@@ -21,7 +21,7 @@ from app.core.dice import Rolling
 from app.personas import saving
 from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
-from app.tables import deaths, replacements, rolls, service, sheets
+from app.tables import deaths, replacements, rolls, service, sheets, styles
 from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 from app.tables.schemas import (
     CharacterOut,
@@ -31,6 +31,7 @@ from app.tables.schemas import (
     JoinRequest,
     LobbyJoinRequest,
     MemberOut,
+    NarrationStyleUpdate,
     PregenChoice,
     RollOut,
     SheetOut,
@@ -63,6 +64,7 @@ def to_summary(table: GameTable) -> TableSummary:
         host_id=table.host_id,
         is_public=table.is_public,
         has_password=table.password_hash is not None,
+        narration_style=table.narration_style,
         created_at=table.created_at,
     )
 
@@ -184,6 +186,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         default_sheet=snapshot.default_sheet if CharacterMode.CUSTOM in table.character_modes else None,
         player_made_hp=to_player_made_hp(table, snapshot),
         reroll_allowed=can_grant_rerolls(table, snapshot),
+        recommended_narration_style=snapshot.narration_style,
         pregens=to_pregen_choices(table, snapshot),
         members=[to_member(table, member) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
@@ -385,6 +388,15 @@ async def grant_reroll(table_id: uuid.UUID, user_id: uuid.UUID, user: CurrentUse
 async def transfer_host(table_id: uuid.UUID, data: HostTransfer, user: CurrentUser, session: Session) -> TableDetail:
     """방장을 다른 참가자에게 넘긴다."""
     table = await service.transfer_host(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/narration-style', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_narration_style(
+    table_id: uuid.UUID, data: NarrationStyleUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """GM 의 서술 문체를 바꾼다. 방장만 한다. 진행 중에도 되고, 다음 서술부터 쓴다. null 이면 시나리오의 추천 문체로."""
+    table = await styles.change_narration_style(session, user.user_id, table_id, data)
     return to_detail(table, user.user_id)
 
 

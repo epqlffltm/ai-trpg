@@ -53,6 +53,7 @@ def to_detail(scenario: Scenario) -> ScenarioDetail:
         default_sheet=scenario.default_sheet,
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
+        narration_style=scenario.narration_style,
     )
 
 
