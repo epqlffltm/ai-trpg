@@ -108,6 +108,12 @@ class Round(Base):
     # 라운드가 닫힐 때 서술자가 이것을 읽고 새 캐릭터를 이야기에 들인다. 다음 라운드부터 행동한다
     arrivals: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'"))
 
+    # 서술자에게 줄 각자 한 일. 닫기 시작할 때 만들어 굳혀 둔다(app/rounds/narration_request.py).
+    # 그때 앉아 있던 사람 한 명에 하나, 들어온 순서다. 한 번 적으면 고치지 않는다.
+    # 서술은 저장한 뒤에 따로 돈다. 그사이에 누가 나가도, 서술을 다시 맡겨도 서술자는 닫힐 때의 모습을 받는다.
+    # 선언을 받는 중인 라운드는 비어 있다(None). 이 칸이 생기기 전에 닫기 시작한 라운드도 비어 있다
+    moves: Mapped[list | None] = mapped_column(JSONB)
+
     # 이 라운드의 선언들. 낸 순서다. 많아야 넷이라 라운드를 읽을 때 함께 읽는다
     declarations: Mapped[list['Declaration']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='Declaration.created_at, Declaration.user_id'

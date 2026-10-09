@@ -5,8 +5,9 @@
 
 서술자가 답하는 때를 테스트가 정한다(GatedNarrator). "서술하는 동안"을 붙잡아 두고 그사이를 본다.
 
-보는 것은 다섯이다.
+보는 것은 여섯이다.
   - 서술하는 동안 테이블이 멈추지 않는다. 채팅, 읽기, 나가기가 된다.
+  - 서술자는 닫힐 때의 모습을 받는다. 그 뒤에 누가 나가도, 서술을 다시 맡겨도 같다.
   - 닫는 중인 라운드에는 선언을 낼 수 없고, 또 닫을 수 없다. 서술자는 한 번만 불린다.
   - 서술이 실패하면 라운드가 닫는 중에 머문다. 한참 지난 뒤에 방장이 다시 맡길 수 있다.
   - 같은 라운드의 서술이 둘 돌아도 다음 라운드는 하나만 열린다.
@@ -22,11 +23,14 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import API_PREFIX
 from app.realtime.service import Cursor
 from app.rounds import service
 from app.rounds.models import Round
+from app.rounds.narration_request import dump_moves
 from app.rounds.narrator import NarrationRequest
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -240,6 +244,76 @@ async def test_someone_can_leave_while_the_gm_narrates(
     # 서술은 끝까지 가고 다음 라운드가 열린다. 남은 사람만 기다린다
     second = await current(client, me, table)
     assert (second['number'], second['waiting_for']) == (2, [str(ME)])
+
+
+async def test_the_gm_hears_the_round_as_it_closed_even_after_someone_leaves(
+    client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, narrated, monkeypatch: pytest.MonkeyPatch
+):
+    table = await start_duo(client, me, friend)
+    narrator.fail_next = True
+    narrator.release()
+    await declare(client, me, table, MY_ACTION)
+    await declare(client, friend, table, FRIENDS_ACTION)
+    await narrated()
+
+    # 첫 서술은 실패했다. 다시 맡기기 전에 친구가 나간다
+    left = await client.delete(table_url(table, '/members/me'), headers=friend)
+    monkeypatch.setattr(service, 'CLOSING_RETRY_SECONDS', 0)
+    again = await client.post(table_url(table, '/rounds/current/close'), headers=me)
+    await narrated()
+
+    assert left.status_code == status.HTTP_204_NO_CONTENT
+    assert again.status_code == status.HTTP_202_ACCEPTED
+    # 친구의 행동은 기록에 있다. 지금 앉은 사람으로 다시 만들면 장면에서만 빠진다.
+    # 서술자는 닫힐 때 굳혀 둔 것을 받는다. 처음 받은 것과 같다
+    first, second = narrator.requests
+    assert second == first
+    assert [(move.character_name, move.content) for move in second.moves] == [
+        ('엘프', MY_ACTION),
+        ('영애', FRIENDS_ACTION),
+    ]
+
+
+async def test_the_moves_are_kept_on_the_round_when_it_starts_closing(
+    client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, session: AsyncSession
+):
+    table = await start_duo(client, me, friend)
+    await begin_closing(client, me, friend, table, narrator)
+
+    kept = await session.scalar(select(Round.moves).where(Round.table_id == uuid.UUID(table['id'])))
+
+    # 서술자가 받은 것이 라운드에 굳혀 있는 그것이다
+    (request,) = narrator.requests
+    assert kept == dump_moves(request.moves)
+
+
+async def test_a_round_that_began_closing_before_moves_were_kept_is_narrated_from_the_seats(
+    client: AsyncClient,
+    me: dict,
+    friend: dict,
+    narrator: GatedNarrator,
+    narrated,
+    session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    table = await start_duo(client, me, friend)
+    narrator.fail_next = True
+    narrator.release()
+    await declare(client, me, table, MY_ACTION)
+    await declare(client, friend, table, FRIENDS_ACTION)
+    await narrated()
+    # 굳히기 전의 서버가 닫기 시작한 라운드인 것처럼 칸을 비운다
+    await session.execute(update(Round).where(Round.table_id == uuid.UUID(table['id'])).values(moves=None))
+    await session.commit()
+
+    monkeypatch.setattr(service, 'CLOSING_RETRY_SECONDS', 0)
+    again = await client.post(table_url(table, '/rounds/current/close'), headers=me)
+    await narrated()
+
+    # 멈춘 채로 남지 않는다. 지금 앉은 사람들로 만들어 서술한다
+    assert again.status_code == status.HTTP_202_ACCEPTED
+    assert narrator.requests[1].moves == narrator.requests[0].moves
+    assert (await current(client, me, table))['number'] == 2
 
 
 # --- 닫는 중인 라운드 ---
