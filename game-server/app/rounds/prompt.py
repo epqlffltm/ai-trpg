@@ -16,7 +16,8 @@ GM 의 서술을 부탁하는 메시지를 조립한다. 순수 함수다. DB �
 플레이어의 선언은 사람의 말로 들어간다. 선언에 "지시를 무시하라" 같은 글이 있어도 결과는 바뀌지 않는다.
 결과는 엔진이 이미 정했고, 모델의 글은 장면이 될 뿐 상태를 바꾸지 못한다.
 
-문체는 방장이 고른다(app/tables/styles.py). 문체마다 글의 결과 끝맺음이 다르다(STYLE_RULES).
+문체는 방장이 고른다(app/tables/styles.py). 문체마다 글의 결과 끝맺음, 짧은 예시가 다르다(STYLE_RULES).
+마지막 부탁에도 문체를 한 줄 다시 적는다. 시스템 지시는 멀리 있고, 모델은 가까운 지시를 더 잘 따른다.
 문체와 룰북의 진행 지침이 부딪히면 글의 문체는 방장의 것을 따르고, 진행 지침은 진행 방식에만 따른다.
 등급은 문체보다 위다. 도파민을 골라도 전체 이용가의 수위를 넘지 않는다. 그래서 수위를 문체 뒤에 둔다.
 "미사용"은 문체도 끝맺음도 지시하지 않는다. 결과를 지키는 GM 의 규칙과 글쓰기의 공통 규칙은 그대로다.
@@ -33,7 +34,8 @@ from app.rounds.narrator import NarrationRequest, PastRound, StoryContext, descr
 # 이 틀의 버전. 틀을 바꾸면 올린다.
 #   narration-1: 처음의 틀
 #   narration-2: 글쓰기의 공통 규칙과 문체가 생겼다. 끝맺음이 문체마다 다르다
-PROMPT_VERSION = 'narration-2'
+#   narration-3: 문체마다 예시 문단이 붙는다. 마지막 부탁에 문체를 다시 적고, 이번 라운드에 한 일만 서술하라고 한다
+PROMPT_VERSION = 'narration-3'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -61,60 +63,103 @@ WRITING_RULES = """글쓰기의 공통 규칙:
 
 @dataclass(frozen=True)
 class StyleRule:
-    """문체 하나의 지시. 글의 결(voice)과 장면을 어디서 멈출지(ending)."""
+    """
+    문체 하나의 지시.
 
+    name 은 문체의 이름, voice 는 글의 결, ending 은 장면을 어디서 멈출지, sample 은 짧은 예시 문단이다.
+    모델은 설명보다 예시를 잘 따른다. 예시는 모두 같은 장면(비 오는 밤의 식당)이라 문체의 차이만 드러난다.
+    예시도 글쓰기의 공통 규칙을 지킨다. 예시가 규칙을 어기면 모델이 그것까지 따라 한다.
+    """
+
+    name: str
     voice: str
     ending: str
+    sample: str
 
 
 STYLE_RULES: dict[NarrationStyle, StyleRule] = {
     NarrationStyle.CLASSIC: StyleRule(
+        name='정통',
         voice=(
             '정통 소설처럼 3인칭 과거형으로 쓴다. 장면과 인물을 묘사 중심으로 그리고, 문장의 길이와 호흡을 고르게 한다.'
         ),
         ending='장면 속의 한 순간에서 멈춘다. 플레이어들이 다음 행동을 고를 여지가 보이는 곳이다.',
+        sample=(
+            '문이 열리자 차가운 빗바람이 식당 안으로 밀려들었다. '
+            '낯선 손님은 젖은 외투를 벗지도 않은 채 문간에 서 있었고, 주인은 국자를 든 손을 멈췄다. '
+            '국자가 바닥에 떨어지며 둔한 소리를 냈다.'
+        ),
     ),
     NarrationStyle.WEB_NOVEL: StyleRule(
+        name='웹소설',
         voice=(
             '웹소설처럼 쓴다. 한두 문장짜리 짧은 문단으로 끊고 리듬을 빠르게 한다. '
-            '의성어와 의태어를 써도 된다. 대사는 NPC 의 것만 쓴다.'
+            '의성어와 의태어를 써도 된다. 따옴표 대사는 NPC 의 것만 쓴다.'
         ),
         ending='다음이 궁금해지는 한 줄에서 끊는다. 새 사실을 지어내지 말고, 이미 있는 긴장을 짚는다.',
+        sample=('쾅.\n문이 열렸다. 빗물이 뚝뚝 떨어졌다.\n"……장사, 합니까?"\n땡그랑. 주인의 국자가 바닥을 굴렀다.'),
     ),
     NarrationStyle.HARDBOILED: StyleRule(
+        name='하드보일드',
         voice=(
             '하드보일드로 쓴다. 짧고 건조한 문장으로, 감정에 이름을 붙이는 형용사를 빼고 행동과 사물로만 보여 준다. '
             '냉소적인 관찰은 괜찮다.'
         ),
         ending='짧은 문장 하나로 장면을 닫는다.',
+        sample='문이 열렸다. 비가 따라 들어왔다. 손님은 외투를 벗지 않았다. 주인은 국자를 떨어뜨렸고, 줍지 않았다.',
     ),
     NarrationStyle.EMOTIONAL: StyleRule(
+        name='여성향',
         voice=(
             '인물 사이의 관계와 감정의 결을 섬세하게 쓴다. '
             '시선, 거리, 손짓, 목소리의 떨림, 분위기로 감정을 드러낸다. 속마음은 쓰지 않는다.'
         ),
         ending='인물 사이에 남은 긴장이나 여운에서 멈춘다.',
+        sample=(
+            '손님이 들어섰을 때, 주인의 시선은 그 얼굴에서 한참 떨어지지 않았다. 국자가 손에서 미끄러졌다. '
+            '손님은 젖은 머리카락을 쓸어 넘기다 말고, 바닥의 국자와 주인의 얼굴을 번갈아 보았다. '
+            '둘 사이에 빗소리만 길게 남았다.'
+        ),
     ),
     NarrationStyle.ACTION: StyleRule(
+        name='남성향',
         voice=(
             '빠른 전개와 힘 있는 액션으로 쓴다. 움직임과 충돌을 동사 중심으로 구체적으로 그린다. '
             '실패한 판정은 실패로 쓴다. 멋지게 꾸며 성공처럼 보이게 하지 마라.'
         ),
         ending='다음 행동을 부르는 긴장의 한 줄에서 멈춘다.',
+        sample=(
+            '문이 벌컥 열렸다. 빗물을 털며 들어선 손님의 어깨가 문틀을 쳤다. '
+            '주인의 손에서 국자가 튕겨 나갔다. 국자는 바닥을 두 번 튀고 손님의 장화 앞에서 멈췄다.'
+        ),
     ),
     NarrationStyle.DOPAMINE: StyleRule(
+        name='도파민',
         voice=(
-            '자극적이고 호쾌하게 쓴다. 양산형 이세계물처럼 시원한 전개, 주변 인물들이 크게 놀라고 감탄하는 반응, '
-            '짧은 호흡을 쓴다. 상태창이나 수치를 만들지 마라. 엔진이 실패로 정한 판정은 실패다. '
+            '자극적이고 호쾌하게 쓴다. 양산형 이세계물처럼 시원한 전개, 장면에 있는 NPC 들이 크게 놀라고 '
+            '감탄하는 반응, 짧은 호흡을 쓴다. 상태창이나 수치를 만들지 마라. 엔진이 실패로 정한 판정은 실패다. '
             '통쾌함은 성공한 일에서만 만든다.'
         ),
         ending='반전이 올 것 같은 직전에서 끊는다. 반전 자체를 지어내지 마라.',
+        sample=(
+            '문이 열리는 순간 식당 안의 숟가락이 일제히 멈췄다. 단골들이 고개를 돌렸고, '
+            '누군가 "저, 저 사람……!" 하고 말을 잇지 못했다. 주인의 국자가 바닥에 떨어졌다. '
+            '아무도 그것을 줍지 않았다.'
+        ),
     ),
     NarrationStyle.LITERARY: StyleRule(
+        name='문학',
         voice='문학적으로 쓴다. 은유와 감각적인 이미지, 느린 호흡을 쓴다. 인물의 내면은 이미지와 풍경으로 대신한다.',
         ending='여운이 남는 이미지 하나로 멈춘다.',
+        sample=(
+            '문이 열리자 비의 냄새가 먼저 들어왔다. 젖은 외투 끝에서 떨어진 물방울이 바닥에 작은 별자리를 그렸다. '
+            '주인의 손을 떠난 국자는 오래된 질문처럼 바닥에 누웠다.'
+        ),
     ),
 }
+
+# 예시 앞에 붙는 줄. 예시의 장면(식당, 비, 국자)이 이야기에 새어 들지 않게 한다
+SAMPLE_NOTE = '아래는 이 문체의 예시다. 글의 결만 참고하고, 예시의 장면과 인물과 사물은 가져오지 마라.'
 
 # 문체를 지시할 때 함께 붙는 줄. 선언은 화면이 받는다. 장면 안에서 플레이어에게 묻지 않는다
 NO_DIRECT_QUESTION = "플레이어에게 직접 묻지 마라('어떻게 하시겠습니까?' 같은 말). 다음 행동은 플레이어가 고른다."
@@ -128,6 +173,9 @@ RATING_RULES = {
 
 CLOSING_REQUEST = '위의 결과를 바꾸지 말고, 이어지는 장면을 서술해 줘.'
 
+# 이번 라운드와 지난 라운드를 섞지 않게 한다. 지난 라운드의 선언도 대화에 들어 있어서, 모델이 그것을 다시 서술하곤 했다
+THIS_ROUND_ONLY = '이번 라운드에 한 일만 서술한다. 지난 라운드에 한 일은 이미 서술했다.'
+
 
 def section(title: str, body: str) -> str | None:
     """제목이 붙은 글 한 덩어리. 글이 비어 있으면 None."""
@@ -138,11 +186,24 @@ def section(title: str, body: str) -> str | None:
 
 
 def style_text(style: NarrationStyle) -> str | None:
-    """문체의 지시. 글의 결, 끝맺음, 직접 묻지 않기, 진행 지침과의 몫. 미사용이면 None."""
+    """문체의 지시. 글의 결, 끝맺음, 직접 묻지 않기, 진행 지침과의 몫, 예시. 미사용이면 None."""
     rule = STYLE_RULES.get(style)
     if rule is None:
         return None
-    return section('문체', '\n'.join([rule.voice, rule.ending, NO_DIRECT_QUESTION, STYLE_OVER_GUIDE]))
+    lines = [rule.voice, rule.ending, NO_DIRECT_QUESTION, STYLE_OVER_GUIDE, '', SAMPLE_NOTE, rule.sample]
+    return section(f'문체: {rule.name}', '\n'.join(lines))
+
+
+def style_reminder(style: NarrationStyle) -> str | None:
+    """
+    마지막 부탁에 다시 적는 문체 한 줄. 미사용이면 None.
+
+    시스템 지시는 길어서 멀리 있다. 모델은 가장 가까운 지시를 가장 잘 따른다.
+    """
+    rule = STYLE_RULES.get(style)
+    if rule is None:
+        return None
+    return f'문체는 {rule.name}이다. 시스템 지시의 문체와 예시를 따른다.'
 
 
 def system_text(story: StoryContext, style: NarrationStyle) -> str:
@@ -198,10 +259,18 @@ def past_messages(past: PastRound) -> list[ChatMessage]:
 
 
 def round_text(request: NarrationRequest) -> str:
-    """이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다."""
+    """
+    이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
+
+    부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
+    """
     lines = [f'[{request.round_number} 라운드에 한 일과 결과]']
     lines.extend(describe_move(move) for move in request.moves)
     lines.append('')
+    lines.append(THIS_ROUND_ONLY)
+    reminder = style_reminder(request.style)
+    if reminder is not None:
+        lines.append(reminder)
     lines.append(CLOSING_REQUEST)
     return '\n'.join(lines)
 
