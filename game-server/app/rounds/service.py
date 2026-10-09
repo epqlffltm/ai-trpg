@@ -27,6 +27,8 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 
 판정은 닫기 시작할 때 한 번만 한다. 결과를 선언에 적어 두고, 그 뒤로는 읽기만 한다.
 서술이 실패해 다시 맡겨도 주사위를 다시 굴리지 않는다. 다시 굴리면 서술을 실패시켜 결과를 바꿀 수 있다.
+서술자에게 줄 각자 한 일도 그때 만들어 라운드에 굳힌다(app/rounds/narration_request.py).
+서술은 지금 앉은 사람이 아니라 굳혀 둔 것을 읽는다. 그사이에 누가 나가도 장면에서 빠지지 않는다.
 
 HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거나 회복한다(app/engine/health.py).
 HP 가 0 이면 쓰러진 것이다. 쓰러진 사람은 글만 낼 수 있고, 라운드는 그 사람의 선언을 기다리지 않는다.
@@ -43,26 +45,26 @@ HP 가 0 이면 쓰러진 것이다. 쓰러진 사람은 글만 낼 수 있고, 
 
 import enum
 import uuid
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import action as actions
 from app.engine import death, health
 from app.engine.action import CheckAction
-from app.engine.check import Check, find_ability, find_difficulty
+from app.engine.check import Check
 from app.engine.dice import Dice
 from app.engine.health import ChangeKind
 from app.engine.ruleset import Ruleset
 from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
-from app.rounds import opener, repository
+from app.rounds import narration_request, opener, repository
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.rounds.narrator import DeathSaveNote, Impact, Move, NarrationRequest, PastRound, StoryContext, Verdict
+from app.rounds.narrator import Move, NarrationRequest
 from app.rounds.prompt import HISTORY_ROUNDS
 from app.rounds.schemas import DeclarationUpdate
 from app.tables import repository as table_repository
@@ -378,63 +380,13 @@ def roll_death_saves(table: GameTable, dying: list[TableMember], dice: Dice) -> 
     return rolled
 
 
-def find_death_save(round_: Round, user_id: uuid.UUID) -> DeathSaveNote | None:
-    """라운드에 적힌 죽음의 굴림 중에서 이 사람의 것을 서술자에게 줄 모양으로 찾는다. 없으면 None."""
-    found = next((save for save in round_.death_saves if save['user_id'] == str(user_id)), None)
-    if found is None:
-        return None
-    return DeathSaveNote(
-        roll=found['roll'],
-        target=found['target'],
-        success=found['success'],
-        successes=found['successes'],
-        failures=found['failures'],
-        fate=found['fate'],
-    )
-
-
-def to_impact(effect: dict | None) -> Impact | None:
-    """선언에 적힌 HP 의 변화를 서술자에게 줄 모양으로 바꾼다. 변화가 없었으면 None."""
-    if effect is None:
-        return None
-    return Impact(
-        kind=effect['kind'],
-        character_name=effect['character_name'],
-        amount=effect['amount'],
-        hp=effect['after'],
-        max_hp=effect['max_hp'],
-        downed=effect['downed'],
-    )
-
-
-def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
+def build_moves(table: GameTable, round_: Round) -> list[Move]:
     """
-    선언에 적힌 행동과 결과를 서술자에게 줄 모양으로 바꾼다. key 를 규칙에 적힌 이름으로 바꾼다.
-
-    결과가 적힌 선언에만 쓴다(has_outcome).
-    """
-    ability = find_ability(ruleset, declaration.action['ability'])
-    difficulty = find_difficulty(ruleset, declaration.action['difficulty'])
-    outcome = declaration.outcome
-    return Verdict(
-        ability=ability.name,
-        difficulty=difficulty.name,
-        roll=outcome['roll'],
-        modifier=outcome['modifier'],
-        total=outcome['total'],
-        target=outcome['target'],
-        success=outcome['success'],
-        impact=to_impact(outcome.get('effect')),
-    )
-
-
-def build_request(table: GameTable, round_: Round) -> NarrationRequest:
-    """
-    닫히는 라운드를 서술자에게 줄 모양으로 바꾼다.
+    닫히는 라운드에서 각자 한 일을 서술자에게 줄 모양으로 만든다. 닫기 시작할 때 한 번 만들어 라운드에 굳힌다.
 
     지금 앉아 있는 사람 모두가 들어간다. 선언을 내지 않은 사람은 아무것도 하지 않은 것으로 들어간다.
     판정의 결과와 HP 의 변화는 선언에 적힌 것을, 죽음의 굴림은 라운드에 적힌 것을 읽는다. 여기서 굴리지 않는다.
-    쓰러져 있는지, 죽었는지는 이번 라운드의 결과를 반영한 뒤의 것이다.
+    쓰러져 있는지, 죽었는지는 이번 라운드의 결과를 반영한 뒤의 것이다. 그래서 판정과 죽음의 굴림 뒤에 부른다.
     이 라운드에 새로 들어온 캐릭터는 라운드에 적힌 것(arrivals)으로 안다. 누구의 뒤를 잇는지를 함께 준다.
     """
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
@@ -443,7 +395,7 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
     moves = []
     for member, declaration in zip(table.members, declarations, strict=True):
         content = declaration.content if declaration else None
-        verdict = to_verdict(ruleset, declaration) if has_outcome(declaration) else None
+        verdict = narration_request.to_verdict(ruleset, declaration) if has_outcome(declaration) else None
         arrival = find_arrival(round_, member.user_id)
         moves.append(
             Move(
@@ -451,39 +403,23 @@ def build_request(table: GameTable, round_: Round) -> NarrationRequest:
                 content=content,
                 verdict=verdict,
                 downed=is_down(member),
-                death_save=find_death_save(round_, member.user_id),
+                death_save=narration_request.find_death_save(round_, member.user_id),
                 dead=sheets.is_dead(member),
                 replaces=arrival['replaces'] if arrival else None,
             )
         )
-    return NarrationRequest(round_number=round_.number, scene=round_.scene, moves=moves)
+    return moves
 
 
-def to_story(snapshot: Snapshot) -> StoryContext:
+def frozen_moves(table: GameTable, round_: Round) -> list[Move]:
     """
-    판의 복사본에서 이야기의 바탕을 꺼낸다. 서술자에게만 준다.
+    닫는 중인 라운드에 굳혀 둔 각자 한 일을 읽는다.
 
-    룰북의 진행 지침과 세계관의 GM 메모가 들어간다. 이것들은 AI 가 읽으라고 쓴 글이다. 플레이어에게 내보내지 않는다.
-    세계관이 없는 시나리오면 설정과 GM 메모는 빈 글이다. 로어북은 넣지 않는다(검색 단계의 일).
+    굳혀 둔 것이 없으면 지금 앉은 사람들로 만든다. 굳히기 전에 닫기 시작한 라운드만 그렇다(마이그레이션 c9e1f3a5b7d8).
     """
-    world = snapshot.world
-    return StoryContext(
-        title=snapshot.title,
-        rating=snapshot.rating,
-        guide=snapshot.rulebook.gm_guide,
-        setting=world.setting if world else '',
-        gm_notes=world.gm_notes if world else '',
-    )
-
-
-def to_past(round_: Round) -> PastRound:
-    """
-    지난 라운드를 서술자에게 줄 모양으로 바꾼다. 그때의 장면과, 선언마다 "캐릭터 이름: 글" 한 줄.
-
-    선언에 적어 둔 캐릭터 이름을 쓴다. 그 사람이 떠났거나 새 캐릭터로 바뀌었어도 그때의 이름이 남는다.
-    """
-    lines = [f'{declaration.character_name}: {declaration.content}' for declaration in round_.declarations]
-    return PastRound(number=round_.number, scene=round_.scene, lines=lines)
+    if round_.moves is None:
+        return build_moves(table, round_)
+    return narration_request.read_moves(round_.moves)
 
 
 # --- 읽기 ---
@@ -632,12 +568,14 @@ def begin_closing(
     주사위는 여기서만 굴린다. 열려 있는 라운드에 한 번만 부르므로 한 선언을 두 번 굴리지 않는다.
     죽음의 굴림은 행동의 판정을 끝낸 뒤에 굴린다. 이번 라운드에 회복을 받아 일어난 캐릭터는 굴리지 않는다.
     누가 굴릴지는 판정 전에 본다. 이번 라운드에 쓰러진 캐릭터는 다음 라운드부터 굴린다.
+    서술자에게 줄 각자 한 일을 여기서 만들어 라운드에 굳힌다. 서술은 지금 앉은 사람이 아니라 이것을 읽는다.
     서술자를 부르지 않는다. 저장한 뒤에 따로 맡긴다(NarrationScheduler).
     """
     group = uuid.uuid4()
     dying = find_dying(table)
     roll_checks(table, round_, dice)
     round_.death_saves = roll_death_saves(table, dying, dice)
+    round_.moves = narration_request.dump_moves(build_moves(table, round_))
     record_actions(session, table, round_, group)
     record_death_saves(session, table, round_, group)
     payload = {'number': round_.number, 'idle': [str(user_id) for user_id in waiting_for(table, round_)]}
@@ -742,16 +680,25 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
     닫는 중인 라운드를 서술자에게 줄 모양으로 읽는다. 닫는 중이 아니면 None.
 
     None 이면 할 일이 없다. 다른 작업이 이미 마무리했거나 테이블이 지워졌다.
-    잠그지 않는다. 닫는 중인 라운드의 선언은 더 바뀌지 않는다. 지난 라운드는 닫혀서 바뀌지 않는다.
-    이야기의 바탕과 지난 라운드 몇 개를 함께 싣는다. 가짜 서술자는 읽지 않고, 언어 모델의 서술자가 읽는다.
+    잠그지 않는다. 읽는 것은 모두 더 바뀌지 않는다.
+      - 각자 한 일은 닫기 시작할 때 굳혀 둔 것이다. 그 뒤에 누가 나가도 닫힐 때의 모습 그대로다.
+      - 이야기의 바탕은 판의 복사본에서 꺼낸다. 판은 고치지 않는다.
+      - 지난 라운드는 닫혀서 바뀌지 않는다.
+    그래서 서술을 몇 번 다시 맡겨도 서술자는 같은 것을 받는다.
+    이야기의 바탕과 지난 라운드 몇 개는 가짜 서술자는 읽지 않고, 언어 모델의 서술자가 읽는다.
     """
     table = await table_repository.find_table(session, table_id)
     round_ = await repository.find_round(session, table_id, number)
     if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
         return None
     history = await repository.list_rounds_before(session, table_id, number, HISTORY_ROUNDS)
-    story = to_story(read_snapshot(table.content))
-    return replace(build_request(table, round_), story=story, history=[to_past(past) for past in history])
+    return NarrationRequest(
+        round_number=round_.number,
+        scene=round_.scene,
+        moves=frozen_moves(table, round_),
+        story=narration_request.to_story(read_snapshot(table.content)),
+        history=[narration_request.to_past(past) for past in history],
+    )
 
 
 async def finish_closing(session: AsyncSession, table_id: uuid.UUID, number: int, scene: str) -> None:
