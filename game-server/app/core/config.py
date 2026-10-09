@@ -8,7 +8,9 @@
 """
 
 from functools import lru_cache
+from typing import Literal, Self
 
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,6 +54,32 @@ class Settings(BaseSettings):
     # 이 서버의 이름. 토큰의 대상 목록(aud)에 이 이름이 있어야 받는다.
     # 다른 서버용으로 발급된 토큰을 이 서버에 쓰는 것을 막는다
     jwt_audience: str = 'ai-trpg-game'
+
+    # GM 의 서술을 누가 쓰나. fake 는 AI 를 부르지 않는 가짜(기본), llm 은 언어 모델.
+    # 기본을 가짜로 둔다. 테스트와 CI 는 모델 없이 돈다. 실제 모델은 각자의 .env 에서 켠다
+    narrator: Literal['fake', 'llm'] = 'fake'
+
+    # 언어 모델을 부르는 주소. OpenAI 와 같은 모양이고 /chat/completions 앞까지 적는다.
+    # 기본은 같은 PC 의 Ollama 다. Ollama 는 인증이 없으므로 같은 PC(127.0.0.1) 밖으로 열지 않는다
+    llm_base_url: str = 'http://127.0.0.1:11434/v1'
+
+    # 모델의 이름. narrator=llm 이면 반드시 적는다(예: gemma4:26b)
+    llm_model: str = ''
+
+    # 모델의 답을 기다리는 시간(초). 처음 부를 때는 모델을 메모리에 올리느라 수십 초가 걸린다.
+    # 서술은 요청과 따로 도는 작업이라 플레이어의 요청이 이만큼 기다리지는 않는다
+    llm_timeout_seconds: float = Field(default=120.0, gt=0)
+
+    # 모델이 추론 수준(reasoning_effort)을 아는가. 알면 늘 보내서 기본으로 추론을 끈다.
+    # 모르는 모델에 보냈다가 오류가 나면 false 로 바꾼다
+    llm_supports_reasoning: bool = True
+
+    @model_validator(mode='after')
+    def require_a_model_for_llm(self) -> Self:
+        """언어 모델로 서술하겠다면서 모델 이름이 없으면 뜨지 않는다. 첫 라운드를 닫을 때 알게 되는 것보다 낫다."""
+        if self.narrator == 'llm' and not self.llm_model.strip():
+            raise ValueError('NARRATOR=llm 이면 LLM_MODEL 을 적어야 합니다')
+        return self
 
 
 @lru_cache

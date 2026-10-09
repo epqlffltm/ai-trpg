@@ -29,6 +29,20 @@ class Role(enum.StrEnum):
     ASSISTANT = 'assistant'
 
 
+class Reasoning(enum.StrEnum):
+    """
+    모델이 답하기 전에 속으로 따져 보는 정도(추론, 생각 모드).
+
+    추론은 토큰과 시간을 먹는다. 서술은 기본으로 끈다. 추리처럼 앞뒤를 맞춰야 하는 이야기에서는 켤 수 있다.
+    추론을 모르는 모델이면 provider 가 이 값을 보내지 않는다.
+    """
+
+    NONE = 'none'
+    LOW = 'low'
+    MEDIUM = 'medium'
+    HIGH = 'high'
+
+
 @dataclass(frozen=True)
 class ChatMessage:
     """메시지 하나."""
@@ -42,12 +56,14 @@ class GenerationParams:
     """
     글을 만들 때의 설정.
 
-    max_tokens: 만들 글의 길이의 상한(토큰). 비용과 시간의 상한이기도 하다.
+    max_tokens: 답의 길이의 상한(토큰). 비용과 시간의 상한이기도 하다. 추론에 쓰는 토큰은 provider 가 따로 더한다.
     temperature: 0 에 가까울수록 같은 입력에 비슷한 글이, 클수록 다양한 글이 나온다.
+    reasoning: 추론의 정도. 호출마다 정한다. 기본은 끔이다.
     """
 
     max_tokens: int
     temperature: float
+    reasoning: Reasoning = Reasoning.NONE
 
 
 @dataclass(frozen=True)
@@ -57,6 +73,8 @@ class Completion:
 
     토큰 수는 provider 가 알려 주면 채운다. 알려 주지 않는 provider 도 있어서 비어 있을 수 있다.
     finish_reason 은 왜 멈췄는가다(다 썼다, 길이 상한에 닿았다 등). 이름은 provider 마다 다르다.
+    truncated 는 길이 상한에 걸려 중간에 끊겼다는 뜻이다. provider 가 자기의 finish_reason 을 이 뜻으로 바꿔 둔다.
+    쓰는 쪽은 provider 마다 다른 이름을 몰라도 된다.
     """
 
     text: str
@@ -64,6 +82,7 @@ class Completion:
     input_tokens: int | None = None
     output_tokens: int | None = None
     finish_reason: str | None = None
+    truncated: bool = False
 
 
 class ProviderError(Exception):

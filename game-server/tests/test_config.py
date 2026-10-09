@@ -13,7 +13,17 @@ DATABASE_URL = 'postgresql+asyncpg://game:password@127.0.0.1:5432/trpg'
 AUTH_JWKS_URL = 'http://127.0.0.1:8000/api/v1/auth/jwks'
 
 # 기본값이 있는 설정. 개발자의 환경에 남아 있으면 기본값을 검증할 수 없으므로 지우고 시작한다
-OPTIONAL_VARIABLES = ('DEBUG', 'DB_SCHEMA', 'JWT_ISSUER', 'JWT_AUDIENCE')
+OPTIONAL_VARIABLES = (
+    'DEBUG',
+    'DB_SCHEMA',
+    'JWT_ISSUER',
+    'JWT_AUDIENCE',
+    'NARRATOR',
+    'LLM_BASE_URL',
+    'LLM_MODEL',
+    'LLM_TIMEOUT_SECONDS',
+    'LLM_SUPPORTS_REASONING',
+)
 
 
 @pytest.fixture(autouse=True)
@@ -102,3 +112,53 @@ def test_ignores_unknown_values_in_the_env_file(tmp_path):
     settings = Settings(_env_file=env_file)
 
     assert settings.debug is True
+
+
+# --- 서술자 ---
+
+
+def test_the_narrator_is_the_fake_one_by_default():
+    settings = Settings(_env_file=None)
+
+    # 모델이 없는 곳(CI, 처음 받은 사람의 PC)에서도 서버가 뜨고 테스트가 돈다
+    assert settings.narrator == 'fake'
+
+
+def test_the_model_is_looked_for_on_this_computer_by_default():
+    settings = Settings(_env_file=None)
+
+    assert settings.llm_base_url == 'http://127.0.0.1:11434/v1'
+    assert settings.llm_timeout_seconds == 120.0
+    assert settings.llm_supports_reasoning is True
+
+
+def test_the_language_model_narrator_needs_a_model_name(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('NARRATOR', 'llm')
+
+    # 모델 이름 없이 떴다가 첫 라운드를 닫을 때 실패하는 것보다 뜨지 않는 쪽이 낫다
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_the_language_model_narrator_reads_its_settings(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('NARRATOR', 'llm')
+    monkeypatch.setenv('LLM_MODEL', 'gemma4:26b')
+    monkeypatch.setenv('LLM_BASE_URL', 'http://127.0.0.1:1234/v1')
+    monkeypatch.setenv('LLM_TIMEOUT_SECONDS', '30')
+    monkeypatch.setenv('LLM_SUPPORTS_REASONING', 'false')
+
+    settings = Settings(_env_file=None)
+
+    assert settings.narrator == 'llm'
+    assert settings.llm_model == 'gemma4:26b'
+    assert settings.llm_base_url == 'http://127.0.0.1:1234/v1'
+    assert settings.llm_timeout_seconds == 30.0
+    assert settings.llm_supports_reasoning is False
+
+
+@pytest.mark.parametrize(('name', 'value'), [('NARRATOR', 'gpt'), ('LLM_TIMEOUT_SECONDS', '0')])
+def test_rejects_a_narrator_setting_it_does_not_know(monkeypatch: pytest.MonkeyPatch, name: str, value: str):
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
