@@ -44,6 +44,21 @@ async def list_rounds(session: AsyncSession, table_id: uuid.UUID, limit: int, of
     return list(await session.scalars(query))
 
 
+async def list_rounds_before(session: AsyncSession, table_id: uuid.UUID, number: int, limit: int) -> list[Round]:
+    """
+    이 번호 앞의 라운드를 최근 것부터 limit 개 골라, 오래된 것부터 돌려준다. 서술자에게 줄 지난 기록이다.
+
+    최근 것부터 골라야 limit 개가 "가장 가까운 과거"가 된다. 돌려줄 때는 이야기의 순서로 뒤집는다.
+    """
+    query = (
+        select(Round)
+        .where(Round.table_id == table_id, Round.number < number)
+        .order_by(Round.number.desc())
+        .limit(limit)
+    )
+    return list(reversed(list(await session.scalars(query))))
+
+
 async def count_rounds(session: AsyncSession, table_id: uuid.UUID) -> int:
     """테이블의 라운드가 몇 개인지 센다."""
     query = select(func.count()).select_from(Round).where(Round.table_id == table_id)

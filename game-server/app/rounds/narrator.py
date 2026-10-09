@@ -12,7 +12,7 @@ GM 의 서술을 만드는 것(서술자)의 모양과, AI 가 붙기 전에 쓰
 나중에 AI 를 붙일 때 구현만 바꿔 끼운다. 테스트는 가짜를 쓴다. 가짜는 같은 입력에 늘 같은 글을 낸다.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 
@@ -89,6 +89,37 @@ class Move:
 
 
 @dataclass(frozen=True)
+class StoryContext:
+    """
+    이 테이블의 이야기의 바탕. 판의 복사본에서 꺼낸다. 라운드마다 같다.
+
+    GM 이 읽는 글이 들어 있다(진행 지침, GM 메모). 서술자에게만 준다. 플레이어에게 내보내지 않는다.
+    """
+
+    title: str
+    # 이용 등급(all, adult). 서술의 수위를 정한다
+    rating: str
+    # 룰북의 진행 지침. AI 가 GM 으로서 따를 글이다
+    guide: str
+    # 세계관의 설정과 GM 메모. 세계관이 없는 시나리오면 빈 글이다
+    setting: str = ''
+    gm_notes: str = ''
+
+
+@dataclass(frozen=True)
+class PastRound:
+    """
+    지난 라운드 하나. 그때의 장면과 플레이어들이 한 말이다.
+
+    lines 는 "캐릭터 이름: 선언의 글" 한 줄씩이다. 판정의 결과는 싣지 않는다. 그다음 장면의 서술에 이미 녹아 있다.
+    """
+
+    number: int
+    scene: str
+    lines: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class NarrationRequest:
     """서술자에게 주는 것. 방금 닫힌 라운드의 내용이다."""
 
@@ -98,6 +129,10 @@ class NarrationRequest:
     scene: str
     # 앉은 사람 모두가 한 일. 들어온 순서다
     moves: list[Move]
+    # 이야기의 바탕. 가짜 서술자는 읽지 않는다
+    story: StoryContext | None = None
+    # 이 라운드 앞의 라운드들. 오래된 것부터다. 가짜 서술자는 읽지 않는다
+    history: list[PastRound] = field(default_factory=list)
 
 
 class Narrator(Protocol):
