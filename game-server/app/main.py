@@ -37,7 +37,7 @@ from app.realtime import router as realtime
 from app.realtime.hub import Hub
 from app.realtime.listener import PostgresListener
 from app.rounds import router as rounds
-from app.rounds.narrator import FakeNarrator
+from app.rounds.narrator_setup import build_narrator
 from app.rounds.service import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.tables import router as tables
 from app.tables.service import (
@@ -119,8 +119,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     # 판정에 쓰는 주사위. 서버만 굴린다. 테스트는 정해진 눈을 내는 주사위로 바꿔 꽂는다
     app.state.dice = RandomDice()
 
-    # GM 의 서술을 만드는 것. 지금은 AI 를 부르지 않는 가짜다. AI 를 붙일 때 여기만 바꿔 끼운다
-    app.state.narrator = FakeNarrator()
+    # GM 의 서술을 만드는 것. 설정(NARRATOR)이 정한다. 기본은 AI 를 부르지 않는 가짜다.
+    # 언어 모델이면 위의 httpx 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다
+    app.state.narrator = build_narrator(settings, app.state.http_client)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)

@@ -38,7 +38,8 @@ def make_test_settings(**overrides) -> Settings:
     DB 주소는 개발 환경의 것(.env 또는 환경 변수)을 그대로 읽는다. 비밀번호를 테스트 코드에 적지 않는다.
     동작을 바꾸는 값은 여기서 고정한다. 개발자의 .env 에 무엇이 적혀 있든 테스트 결과가 같아야 한다.
     """
-    values = {'debug': False, 'db_schema': TEST_SCHEMA, 'auth_jwks_url': TEST_JWKS_URL}
+    # narrator 는 가짜로 고정한다. 개발자의 .env 가 언어 모델을 켜 두었어도 테스트가 실제 모델을 부르지 않는다
+    values = {'debug': False, 'db_schema': TEST_SCHEMA, 'auth_jwks_url': TEST_JWKS_URL, 'narrator': 'fake'}
     values.update(overrides)
     return Settings(**values)
 
