@@ -9,13 +9,15 @@
     uv run python -m scripts.try_narration --model gemma4:26b
     uv run python -m scripts.try_narration --model gemma4:26b qwen3.6:27b --reasoning none low --out report.md
     uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style classic dopamine literary
+    uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style dopamine --repeat 3
 
 game-server 폴더에서 -m 으로 돌린다. 그래야 app 을 찾는다.
 
 모델마다 먼저 아주 짧은 요청을 보내 메모리에 올려 둔다(--no-warmup 으로 끈다).
 올리는 시간이 섞이면 속도를 견줄 수 없다.
 한 모델이 실패해도 나머지는 계속 돈다. 끝에 한눈에 보는 표를 찍고, --out 을 주면 표와 장면을 UTF-8 파일로도 남긴다.
-장면마다 기계로 잡을 수 있는 것(보낸 적 없는 숫자, GM 메모의 낱말, 섞여 든 한자와 영어)을 "확인할 것"으로 표시한다.
+장면마다 기계로 잡을 수 있는 것(보낸 적 없는 숫자, GM 메모의 낱말, 문체 예시의 낱말, 섞여 든 한자와 영어)을
+"확인할 것"으로 표시한다. --repeat 로 같은 것을 여러 번 돌린다. 한 번의 결과는 운일 수 있다.
 판단은 사람이 한다.
 
 예시는 공개 저장소에 올라가도 되는 개그 설정이다(악역영애, 엘프 폭주족, 열일곱 행성의 추격전).
@@ -86,6 +88,8 @@ REQUEST = NarrationRequest(
 # GM 메모에만 있는 낱말. 장면에 나오면 메모를 흘렸을 수 있다.
 # '경찰' 은 넣지 않는다. 장면에 사이렌이 있어 경찰차가 나오는 것은 자연스럽다(첫 비교에서 오탐이 났다)
 LEAK_WORDS = ('끄나풀', '정보원')
+# 문체 예시(app/rounds/prompt.py 의 STYLE_RULES)에만 있는 낱말. 장면에 나오면 예시의 내용이 새어 든 것일 수 있다
+SAMPLE_WORDS = ('국자', '식당', '단골', '외투', '숟가락', '빗')
 # 한국어 장면에 섞여 들면 안 되는 글자. 다국어 모델이 가끔 중국어나 영어를 섞는다
 HANZI = re.compile(r'[\u4e00-\u9fff]')
 LATIN_WORD = re.compile(r'[A-Za-z]{3,}')
@@ -119,6 +123,7 @@ def read_arguments() -> argparse.Namespace:
     parser.add_argument('--model', required=True, nargs='+', help='모델 이름. 여럿을 띄어 적는다')
     parser.add_argument('--reasoning', nargs='+', default=['none'], choices=[level.value for level in Reasoning])
     parser.add_argument('--style', nargs='+', default=['classic'], choices=[style.value for style in NarrationStyle])
+    parser.add_argument('--repeat', type=int, default=1, help='같은 모델, 추론, 문체로 몇 번 돌릴까')
     parser.add_argument('--base-url', default='http://127.0.0.1:11434/v1', help='OpenAI 모양의 주소')
     parser.add_argument('--timeout', type=float, default=300.0, help='한 요청을 기다리는 시간(초)')
     parser.add_argument('--no-reasoning-field', action='store_true', help='추론 수준을 보내지 않는다')
@@ -179,6 +184,9 @@ def find_hints(scene: str) -> list[str]:
     leaked = [word for word in LEAK_WORDS if word in scene]
     if leaked:
         hints.append(f'GM 메모의 낱말({", ".join(leaked)})')
+    borrowed = [word for word in SAMPLE_WORDS if word in scene]
+    if borrowed:
+        hints.append(f'문체 예시의 낱말({", ".join(borrowed)})')
     hanzi = HANZI.findall(scene)
     if hanzi:
         hints.append(f'한자 {len(hanzi)}자')
@@ -218,7 +226,7 @@ def summarize(trials: list[Trial]) -> str:
 
 
 async def run_all(arguments: argparse.Namespace) -> list[Trial]:
-    """모델마다, 추론 수준마다, 문체마다 한 번씩 서술하게 한다. 하나씩 끝나는 대로 찍는다."""
+    """모델마다, 추론 수준마다, 문체마다 --repeat 번씩 서술하게 한다. 하나씩 끝나는 대로 찍는다."""
     trials = []
     async with httpx.AsyncClient() as client:
         for model in arguments.model:
@@ -227,9 +235,10 @@ async def run_all(arguments: argparse.Namespace) -> list[Trial]:
                 await warm_up(provider)
             for level in arguments.reasoning:
                 for style in arguments.style:
-                    trial = await run_trial(provider, Reasoning(level), NarrationStyle(style))
-                    print(describe(trial), flush=True)
-                    trials.append(trial)
+                    for _ in range(arguments.repeat):
+                        trial = await run_trial(provider, Reasoning(level), NarrationStyle(style))
+                        print(describe(trial), flush=True)
+                        trials.append(trial)
     return trials
 
 

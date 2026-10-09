@@ -142,14 +142,55 @@ def test_a_style_brings_its_voice_and_its_ending(style: NarrationStyle):
     assert prompt.NO_DIRECT_QUESTION in text
     # 문체가 진행 지침과 부딪히면 글은 문체를 따른다
     assert prompt.STYLE_OVER_GUIDE in text
+    # 예시는 결만 참고하라는 줄 바로 뒤에 온다
+    assert f'{prompt.SAMPLE_NOTE}\n{rule.sample}' in text
+    assert f'## 문체: {rule.name}' in text
 
 
 def test_none_gives_no_style_and_no_ending():
     text = system_text(STORY, NarrationStyle.NONE)
 
-    # 모델이 원래 쓰는 대로 둔다. 끝맺음도 묻는 말도 정하지 않는다
+    # 모델이 원래 쓰는 대로 둔다. 끝맺음도 묻는 말도 예시도 없다
     assert '## 문체' not in text
     assert prompt.NO_DIRECT_QUESTION not in text
+    assert prompt.SAMPLE_NOTE not in text
+
+
+@pytest.mark.parametrize('style', STYLED)
+def test_the_samples_keep_the_common_rules(style: NarrationStyle):
+    sample = prompt.STYLE_RULES[style].sample
+
+    # 예시가 규칙을 어기면 모델이 그것까지 따라 한다. 읽는 사람을 부르지 않고, 묻지 않고, 마크다운이 없다
+    for word in ('너는', '당신', '여러분'):
+        assert word not in sample
+    assert not sample.rstrip().endswith('?')
+    assert '**' not in sample
+    assert '#' not in sample
+
+
+@pytest.mark.parametrize('style', STYLED)
+def test_the_last_request_repeats_the_style(style: NarrationStyle):
+    last = build_messages(replace(make_request(), style=style))[-1].content
+
+    # 시스템 지시는 멀리 있다. 가장 가까운 사람의 말에 문체를 다시 적는다
+    assert prompt.style_reminder(style) in last
+    assert prompt.STYLE_RULES[style].name in last
+    assert last.endswith(prompt.CLOSING_REQUEST)
+
+
+def test_the_last_request_names_no_style_for_none():
+    last = build_messages(make_request())[-1].content
+
+    assert prompt.style_reminder(NarrationStyle.NONE) is None
+    assert '문체는' not in last
+
+
+@pytest.mark.parametrize('style', list(NarrationStyle))
+def test_the_last_request_keeps_to_this_round(style: NarrationStyle):
+    last = build_messages(replace(make_request(), style=style))[-1].content
+
+    # 지난 라운드의 선언도 대화에 있다. 그것을 다시 서술하지 않게 한다
+    assert prompt.THIS_ROUND_ONLY in last
 
 
 @pytest.mark.parametrize('style', list(NarrationStyle))
