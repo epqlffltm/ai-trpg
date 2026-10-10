@@ -15,7 +15,7 @@ SDK 가 바뀌거나 회사를 옮겨도, 이 파일 밖의 코드는 바뀌지 
 
 import enum
 from dataclasses import dataclass
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 
 class Role(enum.StrEnum):
@@ -90,7 +90,15 @@ class ProviderError(Exception):
 
 
 class LLMProvider(Protocol):
-    """모델을 부르는 것의 모양. 이 메서드가 있으면 provider 다."""
+    """
+    모델을 부르는 것의 모양. 이 메서드와 두 이름이 있으면 provider 다.
+
+    kind 는 provider 의 종류(openai_compat, fake), model 은 부르는 모델의 이름이다. 호출을 기록할 때 쓴다.
+    실패하면 답이 없어서 모델의 이름을 답에서 읽을 수 없다. 그래서 provider 가 들고 있게 한다.
+    """
+
+    kind: ClassVar[str]
+    model: str
 
     async def complete(self, messages: list[ChatMessage], params: GenerationParams) -> Completion:
         """메시지들을 보내고 모델이 만든 글을 받는다. 실패하면 ProviderError."""

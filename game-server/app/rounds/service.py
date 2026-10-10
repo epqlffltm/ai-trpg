@@ -710,6 +710,8 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
         story=narration_request.to_story(read_snapshot(table.content)),
         history=[narration_request.to_past(past) for past in history],
         style=frozen_style(table, round_),
+        table_id=table.id,
+        host_id=table.host_id,
     )
 
 
