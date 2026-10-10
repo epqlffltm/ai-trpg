@@ -20,7 +20,7 @@ from app.ai.provider import Role
 from app.assets.models import NarrationStyle
 from app.rounds import prompt
 from app.rounds.narrator import LoreNote, Move, NarrationRequest, PastRound, StoryContext, Verdict
-from app.rounds.prompt import build_messages, fit_history, system_text
+from app.rounds.prompt import build_messages, fit_history, lore_lines, system_text
 
 STORY = StoryContext(
     title='추격전',
@@ -276,8 +276,8 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_the_template_is_narration_5():
-    assert prompt.PROMPT_VERSION == 'narration-5'
+def test_the_template_is_narration_6():
+    assert prompt.PROMPT_VERSION == 'narration-6'
 
 
 def test_the_last_message_asks_for_the_declared_actions():
@@ -290,7 +290,9 @@ def test_the_last_message_asks_for_the_declared_actions():
 
 
 def test_only_npcs_speak_in_quotes():
+    # PC 의 짧은 소리를 허용했더니 "으악! 이놈의 고철 덩어리가...!"처럼 말이 따라붙었다. 소리도 서술로 쓴다
     assert '따옴표 대사는 NPC 만' in prompt.WRITING_RULES
+    assert '서술로 쓴다' in prompt.WRITING_RULES
     assert prompt.WRITING_RULES in system_text(STORY, NarrationStyle.NONE)
 
 
@@ -357,3 +359,18 @@ def test_the_messages_use_the_limits_of_the_prompt(monkeypatch: pytest.MonkeyPat
     contents = [message.content for message in messages]
     assert '세 번째 장면' in contents
     assert '두 번째 장면' not in contents
+
+
+def test_a_note_about_someone_acting_this_round_is_marked_as_a_player_character():
+    elf = LoreNote(entry_id=uuid.uuid4(), name='폭주족 엘프', content='은하에서 가장 빠른 바이크를 탄다.')
+    request = replace(make_request(), lore=[elf, DWARF])
+
+    last = build_messages(request)[-1].content
+
+    # make_request 의 선언은 폭주족 엘프가 했다. 드워프는 이번 라운드에 행동하지 않았다
+    assert f'- 폭주족 엘프 {prompt.PLAYER_TAG}: {elf.content}' in last
+    assert f'- 드워프: {DWARF.content}' in last
+
+
+def test_without_actors_no_note_is_marked():
+    assert lore_lines([DWARF]) == [prompt.LORE_TITLE, prompt.LORE_NOTE, f'- 드워프: {DWARF.content}', '']
