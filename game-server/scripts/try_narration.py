@@ -12,15 +12,18 @@
     uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style classic dopamine literary
     uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style dopamine --repeat 3
     uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --live
-    uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --lore off on noise --repeat 3
+    uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --lore off on noise --repeat 5
 
 game-server 폴더에서 -m 으로 돌린다. 그래야 app 을 찾는다.
 
 모델마다 먼저 아주 짧은 요청을 보내 메모리에 올려 둔다(--no-warmup 으로 끈다).
 올리는 시간이 섞이면 속도를 견줄 수 없다.
 한 모델이 실패해도 나머지는 계속 돈다. 끝에 한눈에 보는 표를 찍고, --out 을 주면 표와 장면을 UTF-8 파일로도 남긴다.
-장면마다 기계로 잡을 수 있는 것(보낸 적 없는 숫자, GM 메모의 낱말, 문체 예시의 낱말, 섞여 든 한자와 영어)을
-"확인할 것"으로 표시한다. --repeat 로 같은 것을 여러 번 돌린다. 한 번의 결과는 운일 수 있다.
+장면마다 기계로 잡을 수 있는 것을 "확인할 것"으로 표시한다. 보낸 적 없는 숫자, 숨긴 설정의 낱말, 문체 예시의 낱말,
+섞여 든 한자와 영어, 지난 행동·버릇의 낱말(선언한 행동이 바뀌었나), 따옴표 대사(PC 가 말했나),
+설정에만 있는 이름(플레이어가 모르는 이름을 먼저 꺼냈나).
+--repeat 로 같은 것을 여러 번 돌린다. 한 번의 결과는 운일 수 있다.
+끝에 같은 설정으로 돌린 것끼리 묶어 몇 번 중 몇 번 나왔는지 세는 표를 찍는다.
 판단은 사람이 한다.
 답은 흘려 받는다. 첫 글이 오기까지의 시간(앉은 사람이 기다리는 시간)을 따로 잰다. --live 를 주면 오는 대로 찍는다.
 
@@ -111,6 +114,23 @@ REQUEST = NarrationRequest(
 LEAK_WORDS = ('끄나풀', '정보원')
 # 문체 예시(app/rounds/prompt.py 의 STYLE_RULES)에만 있는 낱말. 장면에 나오면 예시의 내용이 새어 든 것일 수 있다
 SAMPLE_WORDS = ('국자', '식당', '단골', '외투', '숟가락', '빗')
+# 지난 라운드의 행동과 로어북의 버릇에만 있는 낱말. 토르빈은 1 라운드에 망치로 차단기를 내려쳤고, 로어북에는
+# "무엇이든 망치로 두드려 해결하려 한다"가 있다. 이번 라운드의 선언은 "리무진을 들어 올린다"다.
+# 장면에 나오면 선언한 행동이 바뀌었을 수 있다(#100 의 측정). 행동을 꾸미는 데 쓴 것일 수도 있다. 사람이 본다
+PAST_ACTION_WORDS = ('망치', '내려치', '내리치', '두드')
+# 따옴표 대사. NPC 의 대사는 괜찮다. PC 의 대사인지는 사람이 본다
+QUOTE = re.compile(r'["“][^"”\n]*["”]')
+# "확인할 것"의 이름들. 묶어 세는 표가 이 이름으로 센다
+HINT_NUMBER = '보낸 적 없는 숫자'
+HINT_LEAK = '숨긴 설정의 낱말'
+HINT_SAMPLE = '문체 예시의 낱말'
+HINT_HANZI = '한자'
+HINT_LATIN = '영어 낱말'
+HINT_PAST = '지난 행동·버릇의 낱말'
+HINT_QUOTE = '따옴표 대사'
+HINT_NAME = '설정에만 있는 이름'
+# 묶어 세는 표에 세는 것들
+TALLIED_HINTS = (HINT_PAST, HINT_QUOTE, HINT_NAME, HINT_LEAK)
 # 한국어 장면에 섞여 들면 안 되는 글자. 다국어 모델이 가끔 중국어나 영어를 섞는다
 HANZI = re.compile(r'[\u4e00-\u9fff]')
 LATIN_WORD = re.compile(r'[A-Za-z]{3,}')
@@ -143,6 +163,7 @@ class Trial:
     notes: int = 0
     lore_used: tuple[str, ...] = ()
     noise_used: tuple[str, ...] = ()
+    hints: tuple[str, ...] = ()
 
 
 def read_arguments() -> argparse.Namespace:
@@ -235,6 +256,7 @@ async def run_trial(
             provider.model, reasoning, style, seconds, watch.first, completion=completion, problem=problem, **base
         )
     lore_used, noise_used = lore_hits(scene, style, sets)
+    hints = tuple(find_hints(scene, sets, style))
     return Trial(
         provider.model,
         reasoning,
@@ -245,6 +267,7 @@ async def run_trial(
         scene=scene,
         lore_used=lore_used,
         noise_used=noise_used,
+        hints=hints,
         **base,
     )
 
@@ -259,24 +282,45 @@ def numbers_sent() -> set[str]:
     return {number for message in build_messages(REQUEST) for number in NUMBER.findall(message.content)}
 
 
-def find_hints(scene: str) -> list[str]:
+def unseen_names(scene: str, style: NarrationStyle, sets: LoreSets | None) -> list[str]:
+    """
+    장면에 나온 로어북 항목의 이름 중 로어북을 뺀 프롬프트에는 없는 것. 플레이어가 아직 모르는 이름이다.
+
+    인물은 장면에 이미 나온 호칭으로 부르기로 했다(narration-5). 항목이 없으면 빈 목록이다.
+    """
+    if sets is None:
+        return []
+    base = prompt_text(build_messages(replace(REQUEST, style=style)))
+    return [entry.name for entry in [*sets.on, *sets.noise] if entry.name not in base and entry.name in scene]
+
+
+def find_hints(scene: str, sets: LoreSets | None = None, style: NarrationStyle = NarrationStyle.CLASSIC) -> list[str]:
     """장면에서 기계로 잡을 수 있는 의심거리. 있다고 틀린 것은 아니다. 사람이 읽고 판단한다."""
     hints = []
     made_up = sorted(set(NUMBER.findall(scene)) - numbers_sent(), key=int)
     if made_up:
-        hints.append(f'보낸 적 없는 숫자({", ".join(made_up)})')
+        hints.append(f'{HINT_NUMBER}({", ".join(made_up)})')
     leaked = [word for word in LEAK_WORDS if word in scene]
     if leaked:
-        hints.append(f'숨긴 설정의 낱말({", ".join(leaked)})')
+        hints.append(f'{HINT_LEAK}({", ".join(leaked)})')
     borrowed = [word for word in SAMPLE_WORDS if word in scene]
     if borrowed:
-        hints.append(f'문체 예시의 낱말({", ".join(borrowed)})')
+        hints.append(f'{HINT_SAMPLE}({", ".join(borrowed)})')
     hanzi = HANZI.findall(scene)
     if hanzi:
-        hints.append(f'한자 {len(hanzi)}자')
+        hints.append(f'{HINT_HANZI} {len(hanzi)}자')
     latin = LATIN_WORD.findall(scene)
     if latin:
-        hints.append(f'영어 낱말 {len(latin)}개')
+        hints.append(f'{HINT_LATIN} {len(latin)}개')
+    past = [word for word in PAST_ACTION_WORDS if word in scene]
+    if past:
+        hints.append(f'{HINT_PAST}({", ".join(past)})')
+    quotes = QUOTE.findall(scene)
+    if quotes:
+        hints.append(f'{HINT_QUOTE} {len(quotes)}개')
+    names = unseen_names(scene, style, sets)
+    if names:
+        hints.append(f'{HINT_NAME}({", ".join(names)})')
     return hints
 
 
@@ -291,7 +335,7 @@ def describe(trial: Trial) -> str:
     if trial.problem is not None:
         lines.append(trial.problem)
     if trial.scene is not None:
-        hints = find_hints(trial.scene)
+        hints = trial.hints
         lines.append(f'장면 {len(trial.scene)}자' + (f' / 확인할 것: {", ".join(hints)}' if hints else ''))
         if trial.lore != LoreMode.OFF or trial.lore_used or trial.noise_used:
             lines.append(f'넣은 항목 {trial.notes}개 / {words_line(trial)}')
@@ -315,11 +359,53 @@ def summarize(trials: list[Trial]) -> str:
     for trial in trials:
         tokens = (trial.completion.input_tokens, trial.completion.output_tokens) if trial.completion else ('-', '-')
         scene = f'{len(trial.scene)}자' if trial.scene is not None else trial.problem
-        hints = ', '.join(find_hints(trial.scene)) if trial.scene is not None else '-'
+        hints = ', '.join(trial.hints) if trial.scene is not None else '-'
         head = f'| {trial.model} | {trial.reasoning.value} | {trial.style.value} | {trial.lore.value} |'
         timing = f' {trial.seconds:.1f} | {seconds_or_dash(trial.first_text)} | {tokens[0]} | {tokens[1]} |'
         words = f' {len(trial.lore_used)} | {len(trial.noise_used)} |'
         rows.append(f'{head}{timing} {scene} |{words} {hints} |')
+    return '\n'.join(rows)
+
+
+def has_hint(trial: Trial, name: str) -> bool:
+    """이 결과에 그 이름의 "확인할 것"이 있는가."""
+    return any(hint.startswith(name) for hint in trial.hints)
+
+
+def average(values: list[int]) -> str:
+    """평균을 소수 한 자리로. 값이 없으면 '-'."""
+    return f'{sum(values) / len(values):.1f}' if values else '-'
+
+
+def tally_row(group: list[Trial]) -> str:
+    """같은 설정으로 돌린 결과들을 센 한 줄. 장면이 나온 것 중 몇 번에 그것이 있었나."""
+    first = group[0]
+    scenes = [trial for trial in group if trial.scene is not None]
+    counts = [f'{sum(has_hint(trial, name) for trial in scenes)}/{len(scenes)}' for name in TALLIED_HINTS]
+    tokens = [trial.completion.input_tokens for trial in scenes if trial.completion and trial.completion.input_tokens]
+    cells = [
+        first.model,
+        first.reasoning.value,
+        first.style.value,
+        first.lore.value,
+        str(len(group)),
+        str(len(group) - len(scenes)),
+        *counts,
+        average([len(trial.lore_used) for trial in scenes]),
+        average([len(trial.noise_used) for trial in scenes]),
+        average(tokens),
+    ]
+    return '| ' + ' | '.join(cells) + ' |'
+
+
+def tally(trials: list[Trial]) -> str:
+    """같은 모델, 추론, 문체, 로어북으로 돌린 것끼리 묶어 센 표(마크다운). 돌린 차례대로."""
+    groups: dict[tuple, list[Trial]] = {}
+    for trial in trials:
+        groups.setdefault((trial.model, trial.reasoning, trial.style, trial.lore), []).append(trial)
+    header = ['모델', '추론', '문체', '로어북', '횟수', '실패', *TALLIED_HINTS, 'on 낱말', 'noise 낱말', '입력 토큰']
+    rows = ['| ' + ' | '.join(header) + ' |', '| ' + ' | '.join('---' for _ in header) + ' |']
+    rows.extend(tally_row(group) for group in groups.values())
     return '\n'.join(rows)
 
 
@@ -361,7 +447,7 @@ async def run_all(arguments: argparse.Namespace) -> tuple[list[Trial], LoreSets 
 def write_report(path: Path, trials: list[Trial], sets: LoreSets | None = None) -> None:
     """표와 장면 전부를 UTF-8 파일로 남긴다. 콘솔의 인코딩과 상관없이 한글이 깨지지 않는다."""
     head = [describe_sets(sets), ''] if sets is not None else []
-    body = '\n'.join([*head, summarize(trials), '', *(describe(trial) for trial in trials)])
+    body = '\n'.join([*head, tally(trials), '', summarize(trials), '', *(describe(trial) for trial in trials)])
     path.write_text(body, encoding='utf-8')
 
 
@@ -370,6 +456,8 @@ def main() -> None:
     arguments = read_arguments()
     trials, sets = asyncio.run(run_all(arguments))
     print(summarize(trials))
+    print()
+    print(tally(trials))
     if arguments.out is not None:
         write_report(arguments.out, trials, sets)
         print(f'\n저장했다: {arguments.out}')
