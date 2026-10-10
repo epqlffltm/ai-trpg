@@ -12,7 +12,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from app.realtime.signals import Signal
+from app.realtime.signals import Notice
 
 
 class Subscription:
@@ -25,14 +25,18 @@ class Subscription:
 
     def __init__(self) -> None:
         self._woken = asyncio.Event()
-        self._pending: set[Signal] = set()
+        self._pending: set[Notice] = set()
 
-    def wake(self, signal: Signal) -> None:
-        """신호가 왔다고 알린다. 같은 신호가 여러 번 와도 하나로 친다."""
+    def wake(self, signal: Notice) -> None:
+        """
+        신호가 왔다고 알린다. 같은 신호가 여러 번 와도 하나로 친다.
+
+        들고 있는 신호는 순서가 없다(집합). 순서가 필요한 것(서술의 조각)은 번호를 싣고, 꺼낸 쪽이 줄 세운다.
+        """
         self._pending.add(signal)
         self._woken.set()
 
-    async def wait(self, timeout: float) -> set[Signal] | None:
+    async def wait(self, timeout: float) -> set[Notice] | None:
         """
         신호가 올 때까지 기다린다. 그동안 온 신호들을 돌려준다. timeout 초 안에 오지 않으면 None.
 
@@ -70,7 +74,7 @@ class Hub:
             if not waiting:
                 del self._subscriptions[table_id]
 
-    def wake(self, signal: Signal) -> None:
+    def wake(self, signal: Notice) -> None:
         """신호의 테이블을 기다리는 자리를 모두 깨운다. 기다리는 사람이 없으면 아무 일도 없다."""
         for subscription in self._subscriptions.get(signal.table_id, ()):
             subscription.wake(signal)

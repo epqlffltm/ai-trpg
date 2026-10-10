@@ -15,6 +15,7 @@
   - 서술 하나에 쓰는 시간에 상한이 있다(NARRATION_BUDGET_SECONDS). 남은 시간이 한 번 부르는 시간보다 짧으면
     새로 부르지 않는다. 부르는 도중에 끊지 않으므로 시작한 호출은 모두 끝나고 기록된다.
 끝내 실패하면 NarrationFailed 를 올린다. 이유는 마지막 실패의 것이다.
+미리 보기는 안의 서술자에게 그대로 넘긴다. 시도마다 안의 서술자가 새로 시작한다.
 
 서술자의 실패(ProviderError, NarrationError)만 다룬다. 그 밖의 예외는 버그다. 다시 시도하지 않고 그대로 올린다.
 """
@@ -28,7 +29,7 @@ from dataclasses import dataclass
 from app.ai.provider import ProviderError
 from app.core.config import NARRATION_BUDGET_SECONDS
 from app.rounds.llm_narrator import NarrationError
-from app.rounds.narrator import NarrationRequest, Narrator
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Narrator, Preview
 
 # 한 모델을 몇 번까지 부르나. 처음 한 번과 다시 한 번
 ATTEMPTS_PER_MODEL = 2
@@ -85,7 +86,7 @@ class RetryingNarrator:
         """started 부터 지금까지 쓴 시간에 한 번 더 부르는 시간을 더해도 상한 안인가."""
         return self.clock() - started + self.attempt_timeout <= self.budget
 
-    async def narrate(self, request: NarrationRequest) -> str:
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
         """차례대로 부른다. 처음 받은 장면을 돌려준다. 끝내 못 받으면 NarrationFailed."""
         started = self.clock()
         reason = 'no_model'
@@ -96,7 +97,7 @@ class RetryingNarrator:
                 if not self.has_time(started):
                     raise NarrationFailed(reason)
                 try:
-                    return await narrator.narrate(request)
+                    return await narrator.narrate(request, preview)
                 except (ProviderError, NarrationError) as error:
                     reason = str(error)
                 if not can_retry(reason):

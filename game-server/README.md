@@ -181,7 +181,7 @@ uv run alembic check                               # 모델을 바꾸고 마이�
 | POST | `/api/v1/game/tables/{id}/messages` | 채팅 쓰기. 201. 끝난 테이블에는 쓸 수 없다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/messages` | 테이블의 채팅. 쓴 순서대로. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/messages/typing` | "입력 중"이라고 알리기. 204. 저장하지 않는다. 다른 사람들의 스트림에 `typing` 이 간다 | access 토큰 |
-| GET | `/api/v1/game/tables/{id}/stream` | 테이블의 스트림(SSE). 새 이벤트와 새 채팅이 생기는 대로 온다. 응답이 끝나지 않는다. `events_after`, `messages_after`, `Last-Event-ID` 머리말 | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/stream` | 테이블의 스트림(SSE). 새 이벤트와 새 채팅, 쓰이는 중인 서술이 생기는 대로 온다. 응답이 끝나지 않는다. `events_after`, `messages_after`, `Last-Event-ID` 머리말 | access 토큰 |
 | POST | `/api/v1/game/lorebooks` | 로어북 만들기. 201. 항목은 만든 뒤에 더한다 | access 토큰 |
 | GET | `/api/v1/game/lorebooks` | 내 로어북 목록. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/lorebooks/{id}` | 내 로어북 하나. 항목은 싣지 않는다 | access 토큰 |
@@ -851,7 +851,10 @@ app/rounds/
 - 플레이어의 선언에 "지시를 무시하라" 같은 글이 있어도 결과는 바뀌지 않는다. 결과는 엔진이 이미 정해 DB 에 적었고, 모델의 글은 장면이 될 뿐이다.
 - **추론(생각 모드)은 기본으로 끈다.** 추론하는 모델은 답하기 전에 속으로 따져 보는 글을 쓴다. Ollama 0.40 에서 `gemma4:26b` 로 확인해 보니, 추론을 끄지 않으면 생각만 하다가 길이 상한에 닿아 답이 비어 왔다. 그래서 추론 수준(`reasoning_effort`)을 늘 보낸다. 끌 때는 `none` 이다. 추론 수준은 호출마다 정하는 값(`GenerationParams.reasoning`)이라 테이블마다 다르게 할 자리가 있다. 켜면 생각에 쓸 토큰을 상한에 따로 더한다.
 - 생각 글은 장면에 들어가지 않는다. Ollama 가 따로 담아 주는 `reasoning` 칸은 읽지 않고, `content` 에 `<think>…</think>` 가 섞여 오면 떼어 낸다. 생각 글에는 모델이 GM 메모를 따져 본 내용이 들어 있을 수 있다.
-- provider 의 실패(연결 거부, 시간 초과, 오류 상태 코드, 모양이 다른 답)는 모두 `ProviderError` 다. 오류에는 응답의 본문을 싣지 않는다. 본문에 보낸 프롬프트가 되돌아와 있을 수 있다.
+- **답은 흘려 받는다(스트리밍).** 모델이 쓰는 대로 조각을 받는다(`app/ai/streaming.py`). 흘려 받지 않는 길은 따로 두지 않는다(Ollama, LM Studio, vLLM, OpenAI 가 모두 흘려 보낸다). 토큰 수는 흘려 받을 때 따로 달라고 해야 와서 `stream_options.include_usage` 를 싣는다. 모르는 서버면 토큰 수가 비어 있다.
+- 흘려 받는 조각에서도 생각 글을 걸러 낸다. 조각이 `<thi` 처럼 태그의 중간에서 끊길 수 있어서, 끝에 걸친 태그의 앞부분은 다음 조각을 볼 때까지 붙잡아 둔다. 넘긴 조각을 모두 이어 붙이면 다 받은 뒤에 떼어 낸 글과 같다(테스트가 자를 수 있는 모든 자리에서 잘라 본다).
+- `LLM_TIMEOUT_SECONDS` 는 호출 전체의 상한이다. httpx 의 시간 제한은 "다음 바이트까지"라서 조각이 계속 오면 끝없이 길어질 수 있다. 그래서 호출 전체에 따로 상한을 건다.
+- provider 의 실패는 모두 `ProviderError` 다. 오류에는 응답의 본문을 싣지 않는다. 본문에 보낸 프롬프트가 되돌아와 있을 수 있다. 연결이 안 됨(`unreachable`)과 받는 도중에 끊김(`interrupted`)을 나눈다. 서버가 꺼진 것과 한 번 끊긴 것은 다르다. 그 밖에 `timeout`, `status_코드`, 도중에 온 오류 조각(`stream_error`), 모양이 다른 조각(`malformed`)이 있다.
 
 **언어 모델로 서술하게 하기(로컬).** 기본은 가짜 서술자다. 테스트는 `.env` 와 상관없이 늘 가짜를 쓴다(`tests/conftest.py`).
 같은 PC 에 [Ollama](https://ollama.com) 를 깔고 모델을 받은 뒤, `game-server/.env` 에 적고 서버를 다시 띄운다.
@@ -873,21 +876,24 @@ LM Studio 면 `LLM_BASE_URL=http://127.0.0.1:1234/v1` 이다. `NARRATOR=llm` 인
 
 **다시 시도하기와 넘어가기.** 서술이 실패하면 같은 모델로 한 번 더 부르고, 그래도 안 되면 `LLM_FALLBACK_MODELS` 의 모델로 차례로 넘어간다(`app/rounds/retrying_narrator.py`).
 - 모델마다 두 번까지 부른다. 다시 부르기 전에 1~2초를 무작위로 쉰다. 여러 테이블이 함께 실패해도 다시 부르는 때가 흩어진다.
-- 다시 부르는 실패: `timeout`, `unreachable`, `status_429`, `status_5xx`, `not_json`, `malformed`, 그리고 답은 왔지만 쓰지 않은 것(`cut_off`, `empty`, `too_long`. 모델의 글은 매번 다르다).
+- 다시 부르는 실패: `timeout`, `unreachable`, `interrupted`, `stream_error`, `status_429`, `status_5xx`, `malformed`, 그리고 답은 왔지만 쓰지 않은 것(`cut_off`, `empty`, `too_long`. 모델의 글은 매번 다르다).
 - 같은 모델로 다시 부르지 않는 실패: `status_400`, `401`, `403`, `404`, `422`. 요청이나 설정이 틀렸다. 같은 것을 보내면 또 실패한다.
 - 다음 모델로도 넘어가지 않는 실패: `unreachable`(모델들은 같은 서버에 있다), `401`, `403`. 그 자리에서 그만둔다.
 - 서술 하나에 쓰는 시간은 150초를 넘지 않는다. 남은 시간이 한 번 부르는 시간(`LLM_TIMEOUT_SECONDS`)보다 짧으면 새로 부르지 않는다. 부르는 도중에 끊지 않으므로, 시작한 호출은 모두 끝나고 기록된다.
 - 시도 하나하나가 `ai_invocations` 에 따로 남는다.
+- 쓰는 동안의 글은 앉은 사람들에게 미리 보기로 흘러간다. 시도가 바뀌면 미리 보기도 새로 시작한다([서술의 미리 보기](#서술의-미리-보기)).
 
 서버를 띄우지 않고 모델만 시험해 볼 수도 있다. 서버와 같은 조립, provider, 장면 검사를 거쳐 예시 라운드 하나를 서술하게 하고,
 걸린 시간과 토큰 수, 장면을 찍는다. 모델을 고르거나 추론을 켜고 끈 차이, 문체마다의 차이를 볼 때 쓴다.
 모델과 추론 수준과 문체(`--style`, 기본 `classic`)를 여럿 적으면 모두 돌린 뒤 표로 모아 보여 준다. `--repeat` 로 같은 것을 여러 번 돌린다(한 번의 결과는 운일 수 있다). 한 모델이 실패해도 나머지는 계속 돈다.
 모델마다 먼저 짧은 요청으로 메모리에 올려 두어, 올리는 시간이 걸린 시간에 섞이지 않게 한다.
 장면에 보낸 적 없는 숫자, GM 메모의 낱말, 문체 예시의 낱말, 한자나 영어가 섞이면 "확인할 것"으로 표시한다(판단은 사람이 한다).
+첫 글이 오기까지의 시간(앉은 사람이 미리 보기를 기다리는 시간)을 따로 잰다. `--live` 를 주면 흘려 받는 글을 오는 대로 찍는다.
 
 ```
 uv run python -m scripts.try_narration --model gemma4:26b
 uv run python -m scripts.try_narration --model gemma4:26b qwen3.6:27b --reasoning none low --out $HOME\narration-report.md
+uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --live
 uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style none classic web_novel hardboiled emotional action dopamine literary --repeat 3 --out $HOME\narration-styles.md
 ```
 
@@ -1073,6 +1079,7 @@ data: {"reason": "table_ended"}
 | `table_event` | 이벤트 하나. `GET /events` 의 한 줄과 모양이 같다 |
 | `chat_message` | 채팅 한 줄. `GET /messages` 의 한 줄과 모양이 같다 |
 | `typing` | 누가 채팅을 입력 중이다. `{"user_id": "..."}`. `id` 가 없다 |
+| `narration_preview` | 쓰이는 중인 서술의 조각. `{"round": 3, "attempt": 1, "seq": 0, "text": "..."}`. `id` 가 없다. 아래 [서술의 미리 보기](#서술의-미리-보기) |
 | `closed` | 서버가 스트림을 닫는다. `reason`: `not_seated`(나갔거나 내보내졌다), `table_ended`, `token_expired`(새 토큰으로 다시 붙는다) |
 
 `:` 로 시작하는 줄은 주석이다. 15초마다 `: ping` 이 간다. 써 봐야 연결이 죽었는지 알고, 중간의 프록시가 조용한 연결을 끊지 않는다.
@@ -1136,6 +1143,43 @@ PostgreSQL 의 `NOTIFY` 로 보내고 `LISTEN` 으로 받는다.
 
 다른 신호와 다른 점: 이벤트와 채팅의 신호에는 내용이 없고 DB 에서 읽는다. "입력 중"은 저장하지 않으므로
 누구인지를 신호에 싣는다(`테이블:typing:사람`). 놓치면 그만이다.
+
+### 서술의 미리 보기
+
+AI 의 서술은 수십 초가 걸린다. 그동안 모델이 쓰는 글을 `narration_preview` 로 흘려보낸다. 다 쓰이면 지금처럼 `gm_narration` 이벤트가 온다.
+
+```
+event: narration_preview
+data: {"round": 3, "attempt": 1, "seq": 0, "text": "엔진 소리가 "}
+
+event: narration_preview
+data: {"round": 3, "attempt": 1, "seq": 1, "text": "골목을 메운다."}
+
+id: 21-4
+event: table_event
+data: {"sequence": 21, "type": "gm_narration", "payload": {"text": "엔진 소리가 골목을 메운다."}, ...}
+```
+
+화면이 할 일.
+- 같은 라운드의 조각을 `seq` 차례로 이어 붙여 보여 준다. 서버는 한 번에 받은 조각들을 번호 순서로 줄 세워 보낸다.
+- `attempt` 가 커지면 보던 글을 지우고 새로 받는다. 다시 시도했거나 다음 모델로 넘어간 것이다. 더 작은 `attempt` 는 버린다.
+- `seq` 가 비면(신호를 놓쳤거나, 서술 도중에 붙었다) 그 시도는 더 잇지 않고 이벤트를 기다린다.
+- `gm_narration` 이 오면 미리 보기를 지우고 이벤트의 글을 띄운다. 이것만이 남는 장면이다(모델의 글을 검사하고 앞뒤 공백을 다듬은 것).
+  `narration_failed` 가 와도 미리 보기를 지운다. 서버는 마지막 조각을 보낸 뒤에 이벤트를 적는다.
+
+어떻게 도는가.
+- provider 는 답을 흘려 받는다(`app/ai/streaming.py`). 생각 글은 조각에서도 걸러진다(위의 서술 항목).
+- 서술자는 시도마다 미리 보기를 새로 시작하고(`begin`) 받은 조각을 넘긴다(`text`). 다시 시도하는 서술자는 미리 보기를 그대로 안으로 넘긴다.
+- 미리 보기(`app/rounds/preview.py`)는 조각을 모아 두었다가 0.3초마다 신호(`NOTIFY`)로 보낸다. 조각마다 보내면 서술 하나에 DB 를 수백 번 들른다.
+  모으는 쪽과 보내는 쪽을 나눠서, 보내기가 느려도 모델의 답을 읽는 일은 기다리지 않는다. 보내기가 실패해도 서술은 계속한다.
+- 저장하지 않는다. 글을 신호에 그대로 싣는다(`테이블:narration:라운드:시도:번호:글`). `NOTIFY` 에 실을 수 있는 것은 8000 바이트까지라, 조각 하나는 1,500 자까지다.
+  늦게 붙은 사람은 앞부분을 못 보고, 끊겼다 다시 붙어도 다시 오지 않는다. 끝나면 이벤트로 전부를 본다.
+- 방송실은 받은 신호를 순서 없이 들고 있다(집합). 그래서 조각에 번호를 싣고 스트림이 줄 세운다. 같은 글의 조각도 번호가 달라 합쳐지지 않는다.
+
+다른 방법과 견주어.
+- 조각을 DB 에 저장하기: 늦게 붙은 사람도 처음부터 볼 수 있지만, 0.3초마다 행을 쓴다. 버릴 글을 저장할 까닭이 없다.
+- 지금까지의 글 전부를 매번 싣기: 놓쳐도 다음 것으로 따라잡지만, 글이 길어지면 8000 바이트를 넘고 보내는 양이 제곱으로 는다.
+- Redis Pub/Sub: 서버가 여러 대가 되고 신호가 많아지면 옮긴다. 고칠 곳은 위의 두 곳(`publish`, 듣는 쪽)이다.
 
 **아직 없는 것.** 서버를 끌 때 열려 있는 스트림을 먼저 닫아 주지 않는다.
 한 사람이 열 수 있는 스트림의 수에 제한이 없다. "선언을 쓰는 중" 표시는 없다(채팅만).

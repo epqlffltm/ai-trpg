@@ -11,6 +11,9 @@
 이 작업은 끝까지 못 갈 수 있다. 서술자가 실패하거나, 도는 도중에 서버가 꺼진다.
 그러면 라운드가 닫는 중에 머문다. 방장이 닫기를 다시 눌러 맡긴다.
 다시 시도하기와 다른 모델로 넘어가기는 서술자가 한다(app/rounds/retrying_narrator.py). 여기서는 다시 시도하지 않는다.
+
+서술자가 쓰는 동안의 글은 미리 보기로 앉은 사람들에게 흘려보낸다(app/rounds/preview.py).
+미리 보기를 닫은 뒤에 마무리하거나 실패를 적는다. 그래야 이벤트가 미리 보기의 마지막 조각보다 늦게 간다.
 """
 
 import uuid
@@ -23,6 +26,7 @@ from app.core.jobs import BackgroundJobs
 from app.rounds import service
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import Narrator
+from app.rounds.preview import notifier, open_preview
 from app.rounds.retrying_narrator import NarrationFailed
 
 # 서술자의 실패가 아닌 예외(버그)로 실패했을 때 이벤트에 적는 이유. 자세한 것은 로그에 남는다
@@ -60,7 +64,8 @@ async def narrate_round(
         return
 
     try:
-        scene = await narrator.narrate(request)
+        async with open_preview(notifier(session_factory), table_id, number) as preview:
+            scene = await narrator.narrate(request, preview)
     except Exception as error:
         async with session_factory() as session:
             await service.fail_closing(session, table_id, number, failure_reason(error))

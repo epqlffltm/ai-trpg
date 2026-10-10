@@ -10,6 +10,7 @@
     uv run python -m scripts.try_narration --model gemma4:26b qwen3.6:27b --reasoning none low --out report.md
     uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style classic dopamine literary
     uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style dopamine --repeat 3
+    uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --live
 
 game-server 폴더에서 -m 으로 돌린다. 그래야 app 을 찾는다.
 
@@ -19,6 +20,7 @@ game-server 폴더에서 -m 으로 돌린다. 그래야 app 을 찾는다.
 장면마다 기계로 잡을 수 있는 것(보낸 적 없는 숫자, GM 메모의 낱말, 문체 예시의 낱말, 섞여 든 한자와 영어)을
 "확인할 것"으로 표시한다. --repeat 로 같은 것을 여러 번 돌린다. 한 번의 결과는 운일 수 있다.
 판단은 사람이 한다.
+답은 흘려 받는다. 첫 글이 오기까지의 시간(앉은 사람이 기다리는 시간)을 따로 잰다. --live 를 주면 오는 대로 찍는다.
 
 예시는 공개 저장소에 올라가도 되는 개그 설정이다(악역영애, 엘프 폭주족, 열일곱 행성의 추격전).
 """
@@ -105,13 +107,14 @@ class Trial:
     """
     모델 하나, 추론 수준 하나, 문체 하나로 서술해 본 결과.
 
-    problem 은 provider 의 실패나 장면으로 받지 않은 이유다.
+    problem 은 provider 의 실패나 장면으로 받지 않은 이유다. first_text 는 첫 글이 오기까지 걸린 시간(초)이다.
     """
 
     model: str
     reasoning: Reasoning
     style: NarrationStyle
     seconds: float
+    first_text: float | None = None
     completion: Completion | None = None
     scene: str | None = None
     problem: str | None = None
@@ -128,6 +131,7 @@ def read_arguments() -> argparse.Namespace:
     parser.add_argument('--timeout', type=float, default=300.0, help='한 요청을 기다리는 시간(초)')
     parser.add_argument('--no-reasoning-field', action='store_true', help='추론 수준을 보내지 않는다')
     parser.add_argument('--no-warmup', action='store_true', help='모델을 미리 올리지 않는다')
+    parser.add_argument('--live', action='store_true', help='흘려 받는 글을 오는 대로 찍는다')
     parser.add_argument('--out', type=Path, help='표와 장면을 남길 파일(UTF-8)')
     return parser.parse_args()
 
@@ -151,23 +155,45 @@ async def warm_up(provider: OpenAICompatProvider) -> None:
         return
 
 
-async def run_trial(provider: OpenAICompatProvider, reasoning: Reasoning, style: NarrationStyle) -> Trial:
+@dataclass
+class Watch:
+    """흘려 받는 글을 지켜본다. 첫 글이 온 때를 적고, live 면 오는 대로 찍는다. provider 의 on_text 에 꽂는다."""
+
+    started: float
+    live: bool
+    first: float | None = None
+
+    def __call__(self, text: str) -> None:
+        if self.first is None:
+            self.first = time.perf_counter() - self.started
+        if self.live:
+            print(text, end='', flush=True)
+
+
+async def run_trial(
+    provider: OpenAICompatProvider, reasoning: Reasoning, style: NarrationStyle, live: bool = False
+) -> Trial:
     """예시 라운드를 한 번 서술하게 한다. 실패해도 예외를 올리지 않고 결과에 적는다."""
     params = replace(NARRATION_PARAMS, reasoning=reasoning)
     messages = build_messages(replace(REQUEST, style=style))
-    started = time.perf_counter()
+    watch = Watch(started=time.perf_counter(), live=live)
     try:
-        completion = await provider.complete(messages, params)
+        completion = await provider.complete(messages, params, watch)
     except ProviderError as error:
-        seconds = time.perf_counter() - started
-        return Trial(provider.model, reasoning, style, seconds, problem=f'provider 실패: {error}')
-    seconds = time.perf_counter() - started
+        seconds = time.perf_counter() - watch.started
+        return Trial(provider.model, reasoning, style, seconds, watch.first, problem=f'provider 실패: {error}')
+    seconds = time.perf_counter() - watch.started
     try:
         scene = accept_completion(completion)
     except NarrationError as error:
         problem = f'장면으로 받지 않음: {error}'
-        return Trial(provider.model, reasoning, style, seconds, completion=completion, problem=problem)
-    return Trial(provider.model, reasoning, style, seconds, completion=completion, scene=scene)
+        return Trial(provider.model, reasoning, style, seconds, watch.first, completion=completion, problem=problem)
+    return Trial(provider.model, reasoning, style, seconds, watch.first, completion=completion, scene=scene)
+
+
+def seconds_or_dash(value: float | None) -> str:
+    """초를 소수 한 자리로. 없으면 '-'."""
+    return '-' if value is None else f'{value:.1f}'
 
 
 def numbers_sent() -> set[str]:
@@ -198,7 +224,8 @@ def find_hints(scene: str) -> list[str]:
 
 def describe(trial: Trial) -> str:
     """결과 하나를 읽기 좋은 글로."""
-    lines = [f'## {trial.model} / 추론 {trial.reasoning.value} / 문체 {trial.style.value} / {trial.seconds:.1f}초']
+    head = f'## {trial.model} / 추론 {trial.reasoning.value} / 문체 {trial.style.value}'
+    lines = [f'{head} / {trial.seconds:.1f}초 (첫 글 {seconds_or_dash(trial.first_text)}초)']
     if trial.completion is not None:
         completion = trial.completion
         tokens = f'토큰: 입력 {completion.input_tokens}, 출력 {completion.output_tokens}'
@@ -215,13 +242,16 @@ def describe(trial: Trial) -> str:
 
 def summarize(trials: list[Trial]) -> str:
     """모든 결과를 한눈에 보는 표(마크다운)."""
-    rows = ['| 모델 | 추론 | 문체 | 초 | 출력 토큰 | 장면 | 확인할 것 |', '| --- | --- | --- | --- | --- | --- | --- |']
+    rows = [
+        '| 모델 | 추론 | 문체 | 초 | 첫 글(초) | 출력 토큰 | 장면 | 확인할 것 |',
+        '| --- | --- | --- | --- | --- | --- | --- | --- |',
+    ]
     for trial in trials:
         output = trial.completion.output_tokens if trial.completion else '-'
         scene = f'{len(trial.scene)}자' if trial.scene is not None else trial.problem
         hints = ', '.join(find_hints(trial.scene)) if trial.scene is not None else '-'
         head = f'| {trial.model} | {trial.reasoning.value} | {trial.style.value} | {trial.seconds:.1f} |'
-        rows.append(f'{head} {output} | {scene} | {hints} |')
+        rows.append(f'{head} {seconds_or_dash(trial.first_text)} | {output} | {scene} | {hints} |')
     return '\n'.join(rows)
 
 
@@ -236,7 +266,9 @@ async def run_all(arguments: argparse.Namespace) -> list[Trial]:
             for level in arguments.reasoning:
                 for style in arguments.style:
                     for _ in range(arguments.repeat):
-                        trial = await run_trial(provider, Reasoning(level), NarrationStyle(style))
+                        trial = await run_trial(provider, Reasoning(level), NarrationStyle(style), arguments.live)
+                        if arguments.live:
+                            print('\n')
                         print(describe(trial), flush=True)
                         trials.append(trial)
     return trials
