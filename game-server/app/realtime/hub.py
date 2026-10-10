@@ -5,6 +5,9 @@
 
 DB 도 네트워크도 모른다. 신호를 어디서 받는지는 app/realtime/listener.py 의 일이다.
 서버가 여러 대면 방송실도 서버마다 하나씩 있다. 신호는 모든 서버에 가므로, 각자 자기 방송실의 사람을 깨운다.
+
+서버가 꺼질 때는 방송실을 닫는다(close_all). 기다리던 스트림이 모두 깨어나 닫힌 것을 보고 끝난다.
+스트림은 스스로 끝나지 않는다. 닫아 주지 않으면 서버는 스트림이 끝나기를 하염없이 기다린다(app/realtime/shutdown.py).
 """
 
 import asyncio
@@ -26,6 +29,7 @@ class Subscription:
     def __init__(self) -> None:
         self._woken = asyncio.Event()
         self._pending: set[Notice] = set()
+        self._closed = False
 
     def wake(self, signal: Notice) -> None:
         """
@@ -35,6 +39,15 @@ class Subscription:
         """
         self._pending.add(signal)
         self._woken.set()
+
+    def close(self) -> None:
+        """방송실이 닫혔다고 알린다. 기다리던 쪽이 바로 깨어나고, 그 뒤로는 기다리지 않고 바로 돌아온다."""
+        self._closed = True
+        self._woken.set()
+
+    def is_closed(self) -> bool:
+        """방송실이 닫혔는가. 깨어난 쪽은 이것을 보고 스트림을 끝낸다."""
+        return self._closed
 
     async def wait(self, timeout: float) -> set[Notice] | None:
         """
@@ -46,7 +59,9 @@ class Subscription:
             await asyncio.wait_for(self._woken.wait(), timeout)
         except TimeoutError:
             return None
-        self._woken.clear()
+        # 닫힌 뒤에는 깨운 표시를 지우지 않는다. 다시 기다려도 바로 돌아온다
+        if not self._closed:
+            self._woken.clear()
         received, self._pending = self._pending, set()
         return received
 
@@ -56,6 +71,7 @@ class Hub:
 
     def __init__(self) -> None:
         self._subscriptions: dict[uuid.UUID, set[Subscription]] = {}
+        self._closing = False
 
     @contextmanager
     def subscribe(self, table_id: uuid.UUID) -> Iterator[Subscription]:
@@ -63,8 +79,11 @@ class Hub:
         이 테이블을 기다리는 자리를 하나 만든다. with 를 나가면 자리를 치운다.
 
         연결이 끊기든 예외가 나든 치워진다. 치우지 않으면 떠난 연결의 자리가 쌓인다.
+        방송실이 닫힌 뒤에 만든 자리는 처음부터 닫혀 있다. 꺼지는 중에 붙은 스트림도 바로 끝난다.
         """
         subscription = Subscription()
+        if self._closing:
+            subscription.close()
         self._subscriptions.setdefault(table_id, set()).add(subscription)
         try:
             yield subscription
@@ -78,6 +97,13 @@ class Hub:
         """신호의 테이블을 기다리는 자리를 모두 깨운다. 기다리는 사람이 없으면 아무 일도 없다."""
         for subscription in self._subscriptions.get(signal.table_id, ()):
             subscription.wake(signal)
+
+    def close_all(self) -> None:
+        """방송실을 닫는다. 기다리는 자리를 모두 닫고, 앞으로 만들 자리도 닫힌 채로 만든다. 여러 번 불러도 된다."""
+        self._closing = True
+        for waiting in self._subscriptions.values():
+            for subscription in waiting:
+                subscription.close()
 
     def count(self, table_id: uuid.UUID) -> int:
         """이 테이블을 기다리는 자리가 몇인지 센다."""
