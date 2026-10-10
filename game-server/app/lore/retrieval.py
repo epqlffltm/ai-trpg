@@ -100,6 +100,15 @@ def pick(ordered: Sequence[EntrySnapshot], max_chars: int = LORE_MAX_CHARS) -> l
     return picked
 
 
+def choose(entries: list[EntrySnapshot], text: str, nearest: list[EntrySnapshot]) -> list[EntrySnapshot]:
+    """
+    넣을 항목을 고른다. 이름이나 키워드가 나온 것을 먼저, 그다음 nearest(가까운 순)를, 글자 수 안에서.
+
+    서버와 평가 도구(evals/lore)가 함께 쓴다. 평가한 규칙과 실제로 도는 규칙이 같아야 한다.
+    """
+    return pick([*keyword_hits(entries, text), *nearest])
+
+
 def to_note(entry: EntrySnapshot) -> LoreNote:
     """고른 항목을 서술자에게 줄 모양으로."""
     return LoreNote(entry_id=entry.id, name=entry.name, content=entry.content)
@@ -135,7 +144,7 @@ class LoreRetriever:
             return []
         text = query_text(request)
         nearest = await self.nearest(candidates, text)
-        return [to_note(entry) for entry in pick([*keyword_hits(candidates.entries, text), *nearest])]
+        return [to_note(entry) for entry in choose(candidates.entries, text, nearest)]
 
     async def nearest(self, candidates: Candidates, text: str) -> list[EntrySnapshot]:
         """
