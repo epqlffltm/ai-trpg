@@ -14,6 +14,7 @@
 거리 기준 자체는 거리를 손으로 적은 순수 함수의 테스트로 본다.
   - 임베딩 모델이 실패하면 키워드로만, 벡터가 모자라면 색인을 다시 맡긴다. 서술은 막지 않는다.
   - 라운드를 닫으면 고른 항목이 프롬프트에 들어가고, 어느 항목을 넣었는지 AI 호출의 기록에 남는다.
+  - 인물 항목만, 이름이 장면에 안 나왔으면 장면의 호칭으로 이름표를 바꾼다. 다른 항목의 내용 속 이름도 바꾼다(#105).
 """
 
 import logging
@@ -29,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.call_log import DbCallLog
 from app.ai.fake import FakeEmbedder, FakeProvider, word_vector
 from app.ai.models import AiInvocation
+from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.lore import indexing, repository
 from app.lore.models import LoreEmbedding
@@ -44,6 +46,10 @@ from app.lore.retrieval import (
     nearest_within,
     pick,
     query_text,
+    relabel,
+    scene_label,
+    scene_labels,
+    to_note,
 )
 from app.main import API_PREFIX
 from app.rounds import prompt
@@ -62,10 +68,20 @@ ELF = {'name': '엘프 폭주족', 'keywords': ['바이크'], 'content': '은하
 LADY = {'name': '악역영애', 'keywords': [], 'content': '금빛 리무진을 탄다 부채를 접으며 웃는다'}
 STAR = {'name': '열일곱째 행성', 'keywords': [], 'content': '고속도로의 끝에 있는 얼음 행성이다'}
 OPENING = '사이렌이 울린다.'
+# 진짜 이름은 설정에만 있고, 장면에서는 호칭으로 불리는 인물과, 그 인물이 내용에 나오는 물건
+VIOLETTA = {
+    'name': '비올레타',
+    'keywords': ['영애', '악역영애', '부채'],
+    'content': '금빛 리무진을 탄다.',
+    'kind': 'person',
+}
+LIMO = {'name': '금빛 리무진', 'keywords': ['리무진'], 'content': '비올레타의 차. 순금으로 덮여 있다.', 'kind': 'item'}
 
 
-def make_entry(name: str, keywords: list[str] | None = None, content: str = '') -> EntrySnapshot:
-    return EntrySnapshot(id=uuid.uuid4(), name=name, keywords=keywords or [], content=content)
+def make_entry(
+    name: str, keywords: list[str] | None = None, content: str = '', kind: LoreKind = LoreKind.OTHER
+) -> EntrySnapshot:
+    return EntrySnapshot(id=uuid.uuid4(), name=name, keywords=keywords or [], content=content, kind=kind)
 
 
 def make_request(table_id: uuid.UUID | None, scene: str = OPENING, *declarations: str) -> NarrationRequest:
@@ -235,6 +251,65 @@ def test_picking_takes_an_entry_once():
     assert pick([entry, entry]) == [entry]
 
 
+# --- 이름표 ---
+
+
+def test_a_person_named_in_the_scene_keeps_the_name():
+    lady = make_entry('비올레타', ['악역영애'], kind=LoreKind.PERSON)
+
+    assert scene_label(lady, '비올레타가 악역영애처럼 웃는다') == '비올레타'
+    # 대소문자는 가리지 않는다
+    assert scene_label(make_entry('Rien', ['Elf'], kind=LoreKind.PERSON), 'rien the elf') == 'Rien'
+
+
+def test_a_person_not_named_is_called_by_the_longest_keyword_in_the_scene():
+    lady = make_entry('비올레타', ['영애', '악역영애', '부채'], kind=LoreKind.PERSON)
+
+    # "영애"도 나왔지만 "악역영애"가 장면의 호칭에 더 가깝다. 장면에 없는 키워드(부채)는 쓰지 않는다
+    assert scene_label(lady, '악역영애가 웃는다') == '악역영애'
+    # 대소문자는 가리지 않는다
+    assert scene_label(make_entry('Rien', ['Elf'], kind=LoreKind.PERSON), 'an elf rides') == 'Elf'
+
+
+def test_a_person_not_in_the_scene_at_all_keeps_the_name():
+    lady = make_entry('비올레타', ['악역영애'], kind=LoreKind.PERSON)
+
+    assert scene_label(lady, '사이렌이 울린다') == '비올레타'
+
+
+def test_only_people_get_a_new_label():
+    lady = make_entry('비올레타', ['악역영애'], kind=LoreKind.PERSON)
+    named = make_entry('토르빈', ['드워프'], kind=LoreKind.PERSON)
+    limo = make_entry('금빛 리무진', ['리무진'], kind=LoreKind.ITEM)
+    other = make_entry('사이렌 대소동', ['사이렌'])
+
+    labels = scene_labels([lady, named, limo, other], '악역영애가 리무진에서 내리자 토르빈이 사이렌을 울린다')
+
+    # 장소나 물건의 이름은 세계의 고유명사라 그대로 둔다. 이름이 이미 나온 인물도 그대로다
+    assert labels == {'비올레타': '악역영애'}
+
+
+def test_relabel_replaces_longer_names_first():
+    labels = {'그레고르': '콧수염', '그레고르 경감': '경감'}
+
+    # 짧은 이름부터 바꾸면 "그레고르 경감"이 "콧수염 경감"이 된다
+    assert relabel('그레고르 경감은 그레고르를 닮았다', labels) == '경감은 콧수염를 닮았다'
+
+
+def test_a_note_carries_the_label_the_kind_and_the_same_id():
+    lady = make_entry('비올레타', ['악역영애'], '부채를 접는다', kind=LoreKind.PERSON)
+    limo = make_entry('금빛 리무진', ['리무진'], '비올레타의 차', kind=LoreKind.ITEM)
+    labels = {'비올레타': '악역영애'}
+
+    lady_note, limo_note = to_note(lady, labels), to_note(limo, labels)
+
+    assert (lady_note.name, lady_note.content, lady_note.kind) == ('악역영애', '부채를 접는다', LoreKind.PERSON)
+    # 다른 항목의 내용에 나오는 진짜 이름도 바꾼다. 항목의 id 는 그대로라 기록에는 어느 항목인지 남는다
+    assert (limo_note.name, limo_note.content, limo_note.kind) == ('금빛 리무진', '악역영애의 차', LoreKind.ITEM)
+    assert limo_note.entry_id == limo.id
+    assert to_note(limo).content == '비올레타의 차'
+
+
 # --- 고르기 ---
 
 
@@ -257,6 +332,22 @@ async def test_a_mentioned_entry_goes_before_a_closer_one(client: AsyncClient, m
     request = make_request(uuid.UUID(table['id']), LADY['content'], '드워프')
 
     assert names(await retriever.find(request)) == ['드워프', '악역영애']
+
+
+async def test_the_server_calls_a_person_by_the_name_in_the_scene(client: AsyncClient, me: dict, app: FastAPI):
+    table = await open_table(client, me, [VIOLETTA, LIMO])
+    await app.state.jobs.drain()
+    retriever, _ = make_retriever(app)
+
+    notes = await retriever.find(make_request(uuid.UUID(table['id']), '악역영애가 리무진에서 부채를 접는다.'))
+
+    by_id = {note.entry_id: note for note in notes}
+    lady, limo = by_id[await entry_id(app, table, '비올레타')], by_id[await entry_id(app, table, '금빛 리무진')]
+    # 플레이어가 아직 모르는 진짜 이름은 서술자에게 가지 않는다
+    assert (lady.name, lady.kind) == ('악역영애', LoreKind.PERSON)
+    assert all('비올레타' not in f'{note.name} {note.content}' for note in notes)
+    # 물건은 장면에 키워드만 나왔어도 이름 그대로다
+    assert (limo.name, limo.content, limo.kind) == ('금빛 리무진', '악역영애의 차. 순금으로 덮여 있다.', LoreKind.ITEM)
 
 
 async def test_an_entry_close_in_meaning_is_found_without_its_name(client: AsyncClient, me: dict, app: FastAPI):

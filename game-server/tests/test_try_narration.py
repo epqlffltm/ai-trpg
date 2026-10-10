@@ -102,6 +102,11 @@ def test_names_the_prompt_already_has_are_not_unseen():
     assert unseen_names('비올레타', CLASSIC, None) == []
 
 
+def test_only_people_count_as_unseen_names():
+    # 블랙홀 터널(장소)과 얼음 결정(물건)도 로어북에만 있지만 세계의 고유명사라 장면에 나와도 된다
+    assert unseen_names('비올레타가 블랙홀 터널에서 얼음 결정을 주웠다', CLASSIC, SETS) == ['비올레타']
+
+
 def test_the_secret_is_still_a_hint():
     assert HINT_LEAK in names_of(find_hints('사실 그녀는 정보원이었다.'))
 
