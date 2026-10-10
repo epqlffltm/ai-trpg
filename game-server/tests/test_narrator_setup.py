@@ -103,3 +103,17 @@ def test_every_model_call_is_recorded_in_the_database_of_the_app():
     for inner in app.state.narrator.narrators:
         assert isinstance(inner.log, DbCallLog)
         assert inner.log.session_factory is app.state.session_factory
+
+
+def test_every_model_signs_its_input_with_the_key_of_the_settings():
+    settings = make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat', ai_log_hmac_key='server-key')
+
+    narrator = build_narrator(settings, httpx.AsyncClient(), async_sessionmaker())
+
+    assert [inner.digest_key for inner in narrator.narrators] == [b'server-key', b'server-key']
+
+
+def test_without_a_key_no_model_signs():
+    narrator = build_narrator(make_test_settings(**LLM), httpx.AsyncClient(), async_sessionmaker())
+
+    assert [inner.digest_key for inner in narrator.narrators] == [None]

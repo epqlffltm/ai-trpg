@@ -11,14 +11,20 @@ provider 를 바꿔 끼우는 것과 같은 방식이다.
 
 생각 글(reasoning)은 기록에 넣지 않는다. GM 메모를 따져 본 내용이 들어 있을 수 있다.
 보낸 메시지도 넣지 않는다. 라운드에 굳혀 둔 것과 판의 복사본, 틀의 버전으로 다시 조립할 수 있다.
+대신 보낸 메시지의 지문(input_digest)을 남긴다. 두 호출이 같은 입력이었는지는 알 수 있고, 내용은 알 수 없다.
+  지문은 서버만 아는 키로 만든 HMAC 이다. 그냥 해시면, 나머지를 아는 사람이 "GM 메모에 이 문장이 있었나"를
+  하나씩 대입해 확인할 수 있다. 키가 설정에 없으면 지문을 남기지 않는다.
 """
 
 import enum
+import hashlib
+import hmac
+import json
 import uuid
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.ai.provider import Reasoning
+from app.ai.provider import ChatMessage, Reasoning
 
 
 class Outcome(enum.StrEnum):
@@ -54,6 +60,9 @@ class CallRecord:
     error 는 쓰지 않았거나 받지 못한 이유다(cut_off, timeout …). 잘 끝났으면 None.
     text 는 모델이 쓴 글이다. 쓰지 않은 글도 남긴다. 왜 쓰지 않았는지 나중에 볼 수 있다. 받지 못했으면 None.
     토큰 수와 멈춘 이유는 provider 가 알려 준 만큼이다. 모르면 None.
+    temperature, max_tokens 는 부를 때의 생성 설정이다. 코드의 상수라 틀의 버전과 따로 바뀔 수 있어 함께 남긴다.
+    lore_entry_ids 는 프롬프트에 넣은 로어북 항목들이다(app/lore/retrieval.py). 검색이 맞는 것을 골랐는지 볼 근거다.
+    input_digest 는 보낸 메시지의 지문이다(input_digest 함수). 키가 없으면 None.
     """
 
     scope: CallScope
@@ -69,6 +78,22 @@ class CallRecord:
     output_tokens: int | None = None
     finish_reason: str | None = None
     text: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    lore_entry_ids: tuple[uuid.UUID, ...] = ()
+    input_digest: str | None = None
+
+
+def input_digest(messages: list[ChatMessage], key: bytes | None) -> str | None:
+    """
+    보낸 메시지들의 지문. 역할과 글을 차례대로 JSON 으로 적고 키로 HMAC-SHA256 을 만든다. 키가 없으면 None.
+
+    같은 메시지들이면 같은 지문이다. 글자 하나만 달라도 다른 지문이다.
+    """
+    if not key:
+        return None
+    payload = json.dumps([[message.role.value, message.content] for message in messages], ensure_ascii=False)
+    return hmac.new(key, payload.encode(), hashlib.sha256).hexdigest()
 
 
 class CallLog(Protocol):

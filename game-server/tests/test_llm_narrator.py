@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.call_log import DbCallLog
-from app.ai.calls import CallScope, Outcome
+from app.ai.calls import CallScope, Outcome, input_digest
 from app.ai.fake import FAKE_MODEL, FakeCallLog, FakeProvider
 from app.ai.models import AiInvocation
 from app.ai.provider import (
@@ -37,7 +37,7 @@ from app.assets.models import NarrationStyle
 from app.main import API_PREFIX
 from app.rounds import llm_narrator, prompt
 from app.rounds.llm_narrator import NARRATION_PARAMS, LLMNarrator, NarrationError, accept_completion, accept_scene
-from app.rounds.narrator import Move, NarrationRequest, StoryContext
+from app.rounds.narrator import LoreNote, Move, NarrationRequest, StoryContext
 from tests.previews import RecordingPreview
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -214,6 +214,40 @@ async def test_a_good_call_is_recorded_once():
     assert (record.outcome, record.error, record.text) == (Outcome.OK, None, REPLY)
     assert isinstance(record.latency_ms, int)
     assert record.latency_ms >= 0
+
+
+async def test_the_record_carries_the_settings_and_the_lore_given():
+    log = FakeCallLog()
+    dwarf = LoreNote(entry_id=uuid.uuid4(), name='드워프', content='망치로 부순다.')
+
+    await LLMNarrator(FakeProvider(reply=REPLY), log).narrate(replace(scoped_request(), lore=[dwarf]))
+
+    (record,) = log.records
+    # 생성 설정은 코드의 상수라 틀의 버전과 따로 바뀔 수 있다. 함께 남긴다
+    assert (record.temperature, record.max_tokens) == (NARRATION_PARAMS.temperature, NARRATION_PARAMS.max_tokens)
+    assert record.lore_entry_ids == (dwarf.entry_id,)
+
+
+async def test_without_a_key_no_digest_is_kept():
+    log = FakeCallLog()
+
+    await LLMNarrator(FakeProvider(reply=REPLY), log).narrate(scoped_request())
+
+    assert log.records[0].input_digest is None
+
+
+async def test_the_digest_is_that_of_the_messages_sent():
+    log = FakeCallLog()
+    provider = FakeProvider(reply=REPLY)
+
+    await LLMNarrator(provider, log, digest_key=b'server-key').narrate(scoped_request())
+    with pytest.raises(ProviderError):
+        await LLMNarrator(BrokenProvider(), log, digest_key=b'server-key').narrate(scoped_request())
+
+    # 실패한 호출에도 같은 입력의 지문이 남는다. 같은 입력으로 성공과 실패를 견줄 수 있다
+    (call,) = provider.calls
+    expected = input_digest(call.messages, b'server-key')
+    assert [record.input_digest for record in log.records] == [expected, expected]
 
 
 async def test_the_record_carries_what_the_provider_reported():

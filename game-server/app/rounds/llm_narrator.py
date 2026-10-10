@@ -21,7 +21,7 @@
 import time
 from dataclasses import dataclass
 
-from app.ai.calls import CallLog, CallRecord, CallScope, Outcome
+from app.ai.calls import CallLog, CallRecord, CallScope, Outcome, input_digest
 from app.ai.provider import Completion, GenerationParams, LLMProvider, ProviderError
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.prompt import PROMPT_VERSION, build_messages
@@ -92,19 +92,27 @@ class LLMNarrator:
     언어 모델로 서술하는 서술자. provider 를 바꿔 끼우면 다른 모델이 쓴다.
 
     log 는 호출을 기록하는 곳이다. 비워 둘 수 없다. 기록 없이 모델을 부르는 길을 만들지 않는다.
+    digest_key 는 보낸 메시지의 지문(HMAC)을 만드는 키다. 없으면 지문을 남기지 않는다(app/ai/calls.py).
     """
 
     provider: LLMProvider
     log: CallLog
     params: GenerationParams = NARRATION_PARAMS
+    digest_key: bytes | None = None
 
     def describe(
-        self, request: NarrationRequest, latency_ms: int, completion: Completion | None = None, error: str | None = None
+        self,
+        request: NarrationRequest,
+        latency_ms: int,
+        completion: Completion | None = None,
+        error: str | None = None,
+        digest: str | None = None,
     ) -> CallRecord:
         """
         호출 한 번을 기록의 모양으로 만든다.
 
         답이 있으면 답에 적힌 모델의 이름을 쓴다. 없으면(받지 못했으면) provider 가 들고 있는 이름이다.
+        생성 설정, 넣은 로어북 항목, 보낸 메시지의 지문(digest)을 함께 적는다.
         """
         return CallRecord(
             scope=narration_scope(request),
@@ -120,6 +128,10 @@ class LLMNarrator:
             output_tokens=completion.output_tokens if completion else None,
             finish_reason=completion.finish_reason if completion else None,
             text=completion.text if completion else None,
+            temperature=self.params.temperature,
+            max_tokens=self.params.max_tokens,
+            lore_entry_ids=tuple(note.entry_id for note in request.lore),
+            input_digest=digest,
         )
 
     async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
@@ -133,18 +145,19 @@ class LLMNarrator:
         if request.story is None:
             raise NarrationError('no_story')
         messages = build_messages(request)
+        digest = input_digest(messages, self.digest_key)
         preview.begin()
         started = time.perf_counter()
         try:
             completion = await self.provider.complete(messages, self.params, preview.text)
         except ProviderError as error:
-            await self.log.write(self.describe(request, elapsed_ms(started), error=str(error)))
+            await self.log.write(self.describe(request, elapsed_ms(started), error=str(error), digest=digest))
             raise
         latency_ms = elapsed_ms(started)
         try:
             scene = accept_completion(completion)
         except NarrationError as error:
-            await self.log.write(self.describe(request, latency_ms, completion, error=str(error)))
+            await self.log.write(self.describe(request, latency_ms, completion, error=str(error), digest=digest))
             raise
-        await self.log.write(self.describe(request, latency_ms, completion))
+        await self.log.write(self.describe(request, latency_ms, completion, digest=digest))
         return scene

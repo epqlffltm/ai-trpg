@@ -10,7 +10,7 @@
 from functools import lru_cache
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 서술 하나에 쓰는 시간의 상한(초). 다시 시도하기와 다음 모델로 넘어가기를 모두 이 안에서 한다
@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     # 임베딩을 한 번 기다리는 시간(초). 항목 몇십 개를 한 번에 보낸다
     embedding_timeout_seconds: float = Field(default=30.0, gt=0)
 
+    # AI 호출의 기록에 남기는 입력 지문(HMAC)의 키. 비우면 지문을 남기지 않는다.
+    # 비밀값이다. 이 키를 아는 사람은 지문으로 입력의 내용을 대입해 맞춰 볼 수 있다.
+    # 만들기: uv run python -c "import secrets; print(secrets.token_hex(32))"
+    ai_log_hmac_key: SecretStr = SecretStr('')
+
     @model_validator(mode='after')
     def require_a_model_for_llm(self) -> Self:
         """언어 모델로 서술하겠다면서 모델 이름이 없으면 뜨지 않는다. 첫 라운드를 닫을 때 알게 되는 것보다 낫다."""
@@ -111,6 +116,11 @@ class Settings(BaseSettings):
         if self.embedder == 'llm' and not self.embedding_model.strip():
             raise ValueError('EMBEDDER=llm 이면 EMBEDDING_MODEL 을 적어야 합니다')
         return self
+
+    def digest_key(self) -> bytes | None:
+        """입력 지문의 키. 비어 있으면 None 이다(지문을 남기지 않는다)."""
+        key = self.ai_log_hmac_key.get_secret_value().strip()
+        return key.encode() if key else None
 
     def embedding_url(self) -> str:
         """임베딩 모델을 부르는 주소. 따로 적지 않았으면 언어 모델과 같은 주소다."""

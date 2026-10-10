@@ -41,5 +41,8 @@ def build_narrator(
     if settings.narrator != 'llm':
         return FakeNarrator()
     log = DbCallLog(session_factory)
-    narrators = [LLMNarrator(build_provider(settings, client, model), log) for model in settings.llm_models()]
+    key = settings.digest_key()
+    narrators = [
+        LLMNarrator(build_provider(settings, client, model), log, digest_key=key) for model in settings.llm_models()
+    ]
     return RetryingNarrator(narrators, attempt_timeout=settings.llm_timeout_seconds)
