@@ -9,8 +9,8 @@
   3. 닫기를 마무리한다.
 
 이 작업은 끝까지 못 갈 수 있다. 서술자가 실패하거나, 도는 도중에 서버가 꺼진다.
-그러면 라운드가 닫는 중에 머문다. 여기서 다시 시도하지 않는다. 방장이 닫기를 다시 눌러 맡긴다.
-(자동으로 다시 시도하는 것과 다른 서술자로 넘어가는 것은 실제 AI 를 붙일 때 더한다.)
+그러면 라운드가 닫는 중에 머문다. 방장이 닫기를 다시 눌러 맡긴다.
+다시 시도하기와 다른 모델로 넘어가기는 서술자가 한다(app/rounds/retrying_narrator.py). 여기서는 다시 시도하지 않는다.
 """
 
 import uuid
@@ -18,9 +18,29 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.ai.provider import ProviderError
 from app.core.jobs import BackgroundJobs
 from app.rounds import service
+from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import Narrator
+from app.rounds.retrying_narrator import NarrationFailed
+
+# 서술자의 실패가 아닌 예외(버그)로 실패했을 때 이벤트에 적는 이유. 자세한 것은 로그에 남는다
+UNEXPECTED = 'error'
+
+
+def failure_reason(error: Exception) -> str:
+    """
+    서술자가 낸 예외에서 앉은 사람에게 알릴 실패의 이유를 꺼낸다.
+
+    다시 시도하는 서술자는 마지막 이유를, 한 번 부르는 서술자는 그 이유를 준다.
+    그 밖의 예외는 내용을 내보내지 않는다. 예외의 글에 무엇이 들어 있을지 모른다.
+    """
+    if isinstance(error, NarrationFailed):
+        return error.reason
+    if isinstance(error, ProviderError | NarrationError):
+        return str(error)
+    return UNEXPECTED
 
 
 async def narrate_round(
@@ -29,15 +49,22 @@ async def narrate_round(
     """
     닫는 중인 라운드 하나를 서술하고 닫는다. 요청 밖에서 돈다.
 
-    세션을 둘 따로 연다. 서술자를 기다리는 동안에는 어느 것도 열려 있지 않다.
-    서술자가 예외를 내면 그대로 올린다. 작업을 돌리는 쪽(BackgroundJobs)이 로그에 남긴다.
+    세션을 따로 연다. 서술자를 기다리는 동안에는 어느 세션도 열려 있지 않다.
+    서술자가 끝내 실패하면 실패를 적고(앉은 사람 모두에게 알린다) 예외를 그대로 올린다.
+    작업을 돌리는 쪽(BackgroundJobs)이 로그에 남긴다.
+    서버가 꺼져 작업이 취소되면(CancelledError) 실패를 적지 않는다. 그때는 멈춘 라운드로 남는다.
     """
     async with session_factory() as session:
         request = await service.load_closing_request(session, table_id, number)
     if request is None:
         return
 
-    scene = await narrator.narrate(request)
+    try:
+        scene = await narrator.narrate(request)
+    except Exception as error:
+        async with session_factory() as session:
+            await service.fail_closing(session, table_id, number, failure_reason(error))
+        raise
 
     async with session_factory() as session:
         await service.finish_closing(session, table_id, number, scene)

@@ -74,6 +74,8 @@ class EventType(enum.StrEnum):
     CHARACTER_JOINED = 'character_joined'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
+    # GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고, 방장이 다시 맡길 수 있다
+    NARRATION_FAILED = 'narration_failed'
     # 테이블이 끝났다
     TABLE_ENDED = 'table_ended'
 

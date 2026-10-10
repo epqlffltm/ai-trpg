@@ -13,6 +13,11 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# 서술 하나에 쓰는 시간의 상한(초). 다시 시도하기와 다음 모델로 넘어가기를 모두 이 안에서 한다
+# (app/rounds/retrying_narrator.py).
+# 한 번 부르는 시간(LLM_TIMEOUT_SECONDS)은 이보다 길 수 없다. 길면 첫 시도만으로 상한을 넘는다
+NARRATION_BUDGET_SECONDS = 150.0
+
 
 class Settings(BaseSettings):
     """
@@ -66,9 +71,14 @@ class Settings(BaseSettings):
     # 모델의 이름. narrator=llm 이면 반드시 적는다(예: gemma4:26b)
     llm_model: str = ''
 
-    # 모델의 답을 기다리는 시간(초). 처음 부를 때는 모델을 메모리에 올리느라 수십 초가 걸린다.
-    # 서술은 요청과 따로 도는 작업이라 플레이어의 요청이 이만큼 기다리지는 않는다
-    llm_timeout_seconds: float = Field(default=120.0, gt=0)
+    # 첫 모델이 끝내 실패하면 차례로 넘어갈 모델들. 쉼표로 나눠 적는다(예: gemma4:31b-it-qat,qwen3.6:27b).
+    # 비우면 넘어가지 않는다(기본). 같은 주소(LLM_BASE_URL)의 모델들이다
+    llm_fallback_models: str = ''
+
+    # 모델의 답을 한 번 기다리는 시간(초). 처음 부를 때는 모델을 메모리에 올리느라 수십 초가 걸린다.
+    # 서술은 요청과 따로 도는 작업이라 플레이어의 요청이 이만큼 기다리지는 않는다.
+    # 서술 하나의 상한(NARRATION_BUDGET_SECONDS)보다 길 수 없다
+    llm_timeout_seconds: float = Field(default=60.0, gt=0, le=NARRATION_BUDGET_SECONDS)
 
     # 모델이 추론 수준(reasoning_effort)을 아는가. 알면 늘 보내서 기본으로 추론을 끈다.
     # 모르는 모델에 보냈다가 오류가 나면 false 로 바꾼다
@@ -80,6 +90,11 @@ class Settings(BaseSettings):
         if self.narrator == 'llm' and not self.llm_model.strip():
             raise ValueError('NARRATOR=llm 이면 LLM_MODEL 을 적어야 합니다')
         return self
+
+    def llm_models(self) -> list[str]:
+        """부를 모델들을 부를 차례대로. 첫 모델 다음에 넘어갈 모델들이다. 빈 이름과 앞뒤 공백은 뺀다."""
+        fallbacks = [name.strip() for name in self.llm_fallback_models.split(',')]
+        return [self.llm_model.strip(), *(name for name in fallbacks if name)]
 
 
 @lru_cache
