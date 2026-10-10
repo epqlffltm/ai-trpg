@@ -66,7 +66,11 @@ def test_the_messages_alternate_after_the_system_instructions():
     # 첫 메시지는 사람의 말이다. 대화가 모델의 말로 시작하면 받지 않는 API 가 있다
     assert messages[1].content == prompt.OPENING_LINE
     # 지난 장면은 모델이 했던 말로, 그때 플레이어들이 한 말은 사람의 말로 들어간다
-    assert [messages[2].content, messages[3].content] == ['두 번째 장면', '엘프: 달린다.']
+    # 플레이어들이 한 말에는 몇 라운드의 일인지, 이미 서술했다는 꼬리표가 붙는다
+    assert [messages[2].content, messages[3].content] == [
+        '두 번째 장면',
+        '[2 라운드에 한 일. 이미 서술했다]\n엘프: 달린다.',
+    ]
     assert messages[4].content == '세 번째 장면'
     # 이번 장면은 모델의 말, 이번 라운드의 결과와 부탁은 마지막 사람의 말이다
     assert messages[-2].content == '사이렌이 가까워진다.'
@@ -84,7 +88,7 @@ def test_a_round_where_nobody_spoke_still_has_a_line_from_the_players():
 
     # 모델의 말이 연달아 나오지 않게 사람의 말 자리를 채운다
     assert messages[3].role == Role.USER
-    assert messages[3].content == '(아무도 선언하지 않았다)'
+    assert messages[3].content == '[3 라운드에 한 일. 이미 서술했다]\n(아무도 선언하지 않았다)'
 
 
 # --- 시스템 지시 ---
@@ -272,8 +276,45 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_adding_lore_raised_the_version():
-    assert prompt.PROMPT_VERSION == 'narration-4'
+def test_the_template_is_narration_5():
+    assert prompt.PROMPT_VERSION == 'narration-5'
+
+
+def test_the_last_message_asks_for_the_declared_actions():
+    last = build_messages(make_request())[-1].content
+
+    # 선언한 행동을 그대로 하라는 말은 부탁 가까이에 있다. 모델은 가까운 지시를 더 잘 따른다
+    assert prompt.THIS_ROUND_ONLY in last
+    assert '선언한 그 행동' in prompt.THIS_ROUND_ONLY
+    assert last.index(prompt.THIS_ROUND_ONLY) < last.index(prompt.CLOSING_REQUEST)
+
+
+def test_only_npcs_speak_in_quotes():
+    assert '따옴표 대사는 NPC 만' in prompt.WRITING_RULES
+    assert prompt.WRITING_RULES in system_text(STORY, NarrationStyle.NONE)
+
+
+def test_the_lore_note_keeps_actions_secrets_and_names():
+    note = prompt.LORE_NOTE
+
+    assert '선언한 행동은 그대로' in note
+    assert '비밀은 장면에서 드러내지 않는다' in note
+    assert '장면에 이미 나온 호칭' in note
+
+
+def test_the_rules_ask_rather_than_forbid_named_things():
+    # 금지하는 낱말을 적으면 작은 모델은 그 낱말에 끌린다. 예시 라운드의 낱말을 규칙에 쓰지 않는다
+    for text in (prompt.THIS_ROUND_ONLY, prompt.LORE_NOTE, prompt.WRITING_RULES):
+        assert '망치' not in text
+        assert '비올레타' not in text
+
+
+def test_the_dopamine_sample_makes_a_success_big():
+    rule = prompt.STYLE_RULES[NarrationStyle.DOPAMINE]
+
+    assert '상대 NPC 가 경악' in rule.voice
+    assert '구경꾼은 만들지 않는다' in rule.voice
+    assert '낚아챘다' in rule.sample
 
 
 # --- 지난 기록 ---
