@@ -12,9 +12,9 @@ import pytest
 
 from app.ai.fake import FakeEmbedder, FakeProvider
 from app.ai.provider import ChatMessage, Reasoning, Role
-from app.assets.models import NarrationStyle
+from app.assets.models import LoreKind, NarrationStyle
 from app.assets.scenarios.snapshot import EntrySnapshot
-from app.lore.retrieval import Thresholds, choose, keyword_hits, query_text
+from app.lore.retrieval import Thresholds, choose, keyword_hits, query_text, scene_labels
 from app.rounds import prompt
 from evals.lore.dataset import entry_id, load_dataset
 from evals.lore.narration import (
@@ -35,12 +35,14 @@ from evals.lore.narration import (
 from scripts.try_narration import REQUEST, describe, run_trial, summarize
 
 
-def entry(name: str, content: str = '', keywords: list[str] | None = None) -> EntrySnapshot:
+def entry(
+    name: str, content: str = '', keywords: list[str] | None = None, kind: LoreKind = LoreKind.OTHER
+) -> EntrySnapshot:
     """이름에서 id 를 만든 항목."""
-    return EntrySnapshot(id=entry_id(name), name=name, keywords=keywords or [], content=content)
+    return EntrySnapshot(id=entry_id(name), name=name, keywords=keywords or [], content=content, kind=kind)
 
 
-LIEN = entry('리엔', '은빛 머리를 휘날리며 바이크를 몬다.', ['엘프'])
+LIEN = entry('리엔', '은빛 머리를 휘날리며 바이크를 몬다.', ['엘프'], LoreKind.PERSON)
 TUNNEL = entry('블랙홀 터널', '들어가면 시간이 거꾸로 흐른다.', ['블랙홀'])
 
 
@@ -141,6 +143,18 @@ async def test_without_distances_the_on_entries_are_keyword_hits():
     assert {'리엔', '토르빈', '비올레타'} <= {item.name for item in sets.on}
 
 
+async def test_people_are_called_as_the_server_calls_them():
+    entries = load_dataset().entries
+
+    sets = await lore_sets(FakeEmbedder(), entries, REQUEST)
+
+    # 예시 라운드에서 비올레타는 악역영애로만 불린다. 리엔과 토르빈은 이름이 나온다
+    assert sets.labels == scene_labels(entries, query_text(REQUEST))
+    assert sets.labels['비올레타'] == '악역영애'
+    assert '리엔' not in sets.labels
+    assert '토르빈' not in sets.labels
+
+
 def test_notes_follow_the_mode():
     sets = LoreSets(on=[LIEN], noise=[TUNNEL], distances={})
 
@@ -149,11 +163,23 @@ def test_notes_follow_the_mode():
     assert [note.name for note in notes_for(LoreMode.NOISE, sets)] == ['블랙홀 터널']
 
 
+def test_notes_use_the_labels():
+    sets = LoreSets(on=[LIEN], noise=[TUNNEL], distances={}, labels={'리엔': '엘프'})
+
+    (on,) = notes_for(LoreMode.ON, sets)
+    (noise,) = notes_for(LoreMode.NOISE, sets)
+
+    assert (on.name, on.kind) == ('엘프', LoreKind.PERSON)
+    assert noise.name == '블랙홀 터널'
+
+
 def test_the_sets_are_described_with_their_distances():
     sets = LoreSets(on=[LIEN], noise=[TUNNEL], distances={LIEN.id: 0.412})
 
     assert describe_sets(sets) == 'on: 리엔(0.41)\nnoise: 블랙홀 터널'
     assert '키워드로만' in describe_sets(LoreSets(on=[], noise=[TUNNEL], distances={}))
+    labeled = LoreSets(on=[LIEN], noise=[TUNNEL], distances={}, labels={'리엔': '엘프'})
+    assert describe_sets(labeled).splitlines()[-1] == '이름표: 리엔 → 엘프'
 
 
 # --- 서술해 보기 ---
@@ -171,7 +197,7 @@ async def test_the_on_mode_puts_the_entries_in_the_prompt_and_counts_their_words
     last = call.messages[-1].content
     assert last.startswith(prompt.LORE_TITLE)
     # 리엔은 예시 라운드에서 행동한 PC 다
-    assert f'- 리엔 {prompt.PLAYER_TAG}: {LIEN.content}' in last
+    assert f'- [인물] 리엔 {prompt.PLAYER_TAG}: {LIEN.content}' in last
     assert trial.lore == LoreMode.ON
     assert trial.notes == 1
     assert '휘날리며' in trial.lore_used

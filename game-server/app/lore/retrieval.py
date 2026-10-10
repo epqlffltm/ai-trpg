@@ -20,6 +20,13 @@
   - 판의 벡터가 모자라면(게시 직후의 색인이 실패했거나 예전 판) 있는 것으로 찾고, 색인을 다시 맡긴다.
     벡터가 없는 항목은 거리를 모르므로 키워드로 걸리면 그대로 넣는다.
 
+넣을 때 인물 항목의 이름표를 장면의 호칭으로 바꾼다. 이름은 안 나오고 키워드로만 걸린 인물(플레이어가 "악역영애"로
+아는 인물의 항목 이름이 "비올레타")은 장면에 나온 키워드를 이름표로 쓰고 진짜 이름은 뺀다. 다른 항목의 내용에 나오는
+그 이름도 호칭으로 바꾼다. 모델이 모르는 이름은 쓸 수 없다. "장면의 호칭으로 불러라"는 규칙만으로는 매번 진짜 이름을
+썼다(#101 의 측정). GM 이 NPC 의 이름을 언제 밝히는지도 연출이다.
+인물만 바꾼다. 장소나 세력까지 바꾸면 "은하 경찰"이 키워드 "사이렌"이 되는 것처럼 뜻이 엉망이 된다(#105).
+이름도 키워드도 안 나온 인물(뜻으로만 고른 것)은 이름을 그대로 둔다.
+
 항목의 글은 테이블의 복사본(content)에서 읽는다. AI 의 입력은 복사본에서만 읽기로 했다.
 벡터는 판(version_id)마다 있다. 복사본은 판에서 통째로 복사한 것이라 항목의 id 가 같다.
 """
@@ -35,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.ai.embedder import Embedder
 from app.ai.provider import ProviderError
+from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot, read_snapshot
 from app.lore import repository
 from app.lore.texts import version_entries
@@ -148,9 +156,45 @@ def choose(
     return pick([*hits, *nearest_within(entries, distances, thresholds.max_distance, thresholds.limit)])
 
 
-def to_note(entry: EntrySnapshot) -> LoreNote:
-    """고른 항목을 서술자에게 줄 모양으로."""
-    return LoreNote(entry_id=entry.id, name=entry.name, content=entry.content)
+def scene_label(entry: EntrySnapshot, text: str) -> str:
+    """
+    인물을 부를 이름표. 이름이 글에 나왔으면 이름, 아니면 글에 나온 키워드 중 가장 긴 것, 둘 다 없으면 이름.
+
+    가장 긴 키워드를 고르는 것은 "영애"보다 "악역영애"가 장면의 호칭에 가깝기 때문이다.
+    """
+    folded = text.casefold()
+    if entry.name.casefold() in folded:
+        return entry.name
+    found = [word for word in entry.keywords if word.strip() and word.casefold() in folded]
+    return max(found, key=len) if found else entry.name
+
+
+def scene_labels(entries: Sequence[EntrySnapshot], text: str) -> dict[str, str]:
+    """인물 항목 중 이름표가 이름과 다른 것들. 진짜 이름에서 장면의 호칭으로. 인물이 아닌 항목은 바꾸지 않는다."""
+    labels = {entry.name: scene_label(entry, text) for entry in entries if entry.kind == LoreKind.PERSON}
+    return {name: label for name, label in labels.items() if label != name}
+
+
+def relabel(text: str, labels: Mapping[str, str]) -> str:
+    """글에 나오는 진짜 이름들을 장면의 호칭으로 바꾼다. 긴 이름부터 바꾼다(이름이 다른 이름을 품을 때)."""
+    for name in sorted(labels, key=len, reverse=True):
+        text = text.replace(name, labels[name])
+    return text
+
+
+def to_note(entry: EntrySnapshot, labels: Mapping[str, str] | None = None) -> LoreNote:
+    """
+    고른 항목을 서술자에게 줄 모양으로. labels 가 있으면 이름표와 내용의 이름을 장면의 호칭으로 바꾼다.
+
+    entry_id 는 그대로다. AI 호출의 기록에는 어느 항목을 넣었는지가 남는다.
+    """
+    labels = labels or {}
+    return LoreNote(
+        entry_id=entry.id,
+        name=labels.get(entry.name, entry.name),
+        content=relabel(entry.content, labels),
+        kind=entry.kind,
+    )
 
 
 async def load_candidates(session_factory: async_sessionmaker[AsyncSession], table_id: uuid.UUID) -> Candidates | None:
@@ -184,7 +228,8 @@ class LoreRetriever:
             return []
         text = query_text(request)
         distances = await self.distances(candidates, text)
-        return [to_note(entry) for entry in choose(candidates.entries, text, distances, self.thresholds)]
+        labels = scene_labels(candidates.entries, text)
+        return [to_note(entry, labels) for entry in choose(candidates.entries, text, distances, self.thresholds)]
 
     async def distances(self, candidates: Candidates, text: str) -> dict[uuid.UUID, float]:
         """
