@@ -18,6 +18,7 @@ import pytest
 from app.ai.fake import FakeEmbedder
 from app.assets.models import LoreKind
 from app.lore.retrieval import query_text
+from app.memory import history
 from app.memory.retrieval import MemoryThresholds, choose_memories, eligible, people_in
 from evals.lore.dataset import DatasetError, Kind
 from evals.memory.dataset import DEFAULT_PATH, find_problems, load_dataset, parse_dataset
@@ -28,6 +29,8 @@ from evals.memory.runner import (
     Measurement,
     best,
     evaluate,
+    history_outcomes,
+    history_recall,
     measure,
     split_distances,
     sweep,
@@ -54,6 +57,8 @@ def small_document() -> dict:
             {'id': 'a2', 'kind': 'meaning', 'round': 7, 'scene': '부서진 차단기.', 'expected': [2]},
             {'id': 'a3', 'kind': 'none', 'round': 7, 'scene': '하품을 한다.', 'expected': []},
         ],
+        # 7 라운드에 모을 수 있는 서술은 2, 3 라운드의 장면이다. 차단기의 문장에는 악역영애의 이름이 없다
+        'histories': [{'id': 'h1', 'person': '비올레타', 'round': 7, 'expected': ['악역영애가 웃었다', '차단기가']}],
     }
 
 
@@ -72,6 +77,7 @@ def test_the_real_dataset_has_no_problems():
     assert len(dataset.memories) == 19
     assert len(dataset.queries) >= 18
     assert {query.kind for query in dataset.queries} == set(Kind)
+    assert len(dataset.histories) >= 4
 
 
 def test_the_real_dataset_keeps_private_settings_out():
@@ -115,6 +121,15 @@ def test_a_good_document_has_no_problems():
         (lambda d: d['people'].append({'name': '비올레타'}), '인물 이름이 겹친다'),
         (lambda d: d['people'].append({'keywords': []}), 'name 이 없다'),
         (lambda d: d['people'][0].update(keywords='악역영애'), 'keywords 는 글의 목록'),
+        (lambda d: d['histories'][0].update(person='토르빈'), 'person 은 people 의 이름'),
+        (lambda d: d['histories'][0].update(round=8), 'round 는 1 부터 7 까지'),
+        (lambda d: d['histories'][0].update(expected=[]), 'expected 는 빈 글이 아닌'),
+        (lambda d: d['histories'][0].update(expected=['']), 'expected 는 빈 글이 아닌'),
+        # 4 라운드의 장면은 7 라운드의 지난 기록(4~6 라운드)에 있다. 이력으로 모으지 않는다
+        (lambda d: d['histories'][0].update(expected=['비가 왔다']), '모을 수 있는 서술에 없는 문장(비가 왔다)'),
+        (lambda d: d['histories'][0].update(expected=['출발선']), '모을 수 있는 서술에 없는 문장(출발선)'),
+        (lambda d: d['histories'].append({**d['histories'][0]}), '이력 질의 id 가 겹친다: h1'),
+        (lambda d: d.update(histories='h1'), 'histories 는 목록'),
     ],
 )
 def test_mistakes_are_found(change, expected: str):
@@ -206,6 +221,35 @@ def test_distances_are_split_into_right_and_other_among_choosable_memories():
     assert sorted(other) == [0.2, 0.4, 0.4, 0.5, 0.6, 0.6]
 
 
+# --- 인물의 이력 ---
+
+
+def test_a_history_outcome_tells_found_from_missed_for_want_of_a_name():
+    dataset = parse_dataset(small_document())
+
+    (outcome,) = history_outcomes(dataset)
+
+    assert [line.text for line in outcome.chosen] == ['악역영애가 웃었다.']
+    assert (outcome.found, outcome.unnamed, outcome.cut) == (['악역영애가 웃었다'], ['차단기가'], [])
+    assert history_recall([outcome]) == 0.5
+
+
+def test_a_named_line_pushed_out_by_the_limit_is_cut(monkeypatch: pytest.MonkeyPatch):
+    document = small_document()
+    document['rounds'][2]['scene'] = '악역영애가 차단기를 부쉈다.'
+    document['histories'][0]['expected'] = ['악역영애가 웃었다', '악역영애가 차단기를']
+    monkeypatch.setattr(history, 'HISTORY_LINES', 1)
+
+    (outcome,) = history_outcomes(parse_dataset(document))
+
+    # 최근 것(3 라운드의 장면)만 남는다. 앞의 것은 이름이 있지만 상한에 밀렸다
+    assert (outcome.found, outcome.unnamed, outcome.cut) == (['악역영애가 차단기를'], [], ['악역영애가 웃었다'])
+
+
+def test_no_history_queries_count_nothing():
+    assert history_recall([]) is None
+
+
 # --- 보고서와 스크립트 ---
 
 
@@ -223,6 +267,8 @@ async def test_the_report_has_the_current_rule_the_distances_the_sweep_and_the_m
         '### 기준을 바꿔 가며',
         '가장 나은 기준:',
         '### 가장 나은 기준에서 틀린 질의',
+        '## 인물의 이력(모델 없음)',
+        '### 이름이나 키워드가 없어 놓친 문장',
     )
     for heading in headings:
         assert heading in report

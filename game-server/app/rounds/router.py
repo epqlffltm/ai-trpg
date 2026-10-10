@@ -38,6 +38,7 @@ def get_closer(request: Request) -> RoundCloser:
         jobs=state.jobs,
         lore=state.lore,
         memories=state.memories,
+        histories=state.histories,
     )
 
 

@@ -154,6 +154,28 @@ class MemoryNote:
 
 
 @dataclass(frozen=True)
+class HistoryLine:
+    """인물의 이력 한 줄. 지난 서술에서 그 인물이 나온 문장 하나와, 그 서술이 열었던 라운드의 번호."""
+
+    round_number: int
+    text: str
+
+
+@dataclass(frozen=True)
+class PersonHistory:
+    """
+    이번 장면에 나온 인물 하나의 이력. 지난 기록보다 앞의 서술에서 그 인물이 나온 문장들이다(app/memory/history.py).
+
+    AI 를 부르지 않고 문장을 골라냈다. 플레이어가 이미 본 글이다. 라운드 순서대로라 바뀐 태도가 보인다.
+    name 은 로어북 검색이 정한 이름표다(장면의 호칭). entry_id 는 판의 복사본 안의 인물 항목이다.
+    """
+
+    entry_id: uuid.UUID
+    name: str
+    lines: list[HistoryLine]
+
+
+@dataclass(frozen=True)
 class NarrationRequest:
     """서술자에게 주는 것. 방금 닫힌 라운드의 내용이다."""
 
@@ -177,6 +199,8 @@ class NarrationRequest:
     lore: list[LoreNote] = field(default_factory=list)
     # 이번 장면에 맞는 지난 일(지난 기록보다 앞의 라운드). 서술을 맡기기 직전에 검색이 채운다. 가짜 서술자는 읽지 않는다
     memories: list[MemoryNote] = field(default_factory=list)
+    # 이번 장면에 나온 인물(로어북이 고른 인물 항목)의 이력. 서술을 맡기기 직전에 채운다. 가짜 서술자는 읽지 않는다
+    histories: list[PersonHistory] = field(default_factory=list)
 
 
 class Preview(Protocol):
