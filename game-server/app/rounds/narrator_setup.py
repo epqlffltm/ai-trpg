@@ -15,14 +15,15 @@ from app.ai.openai_compat import OpenAICompatProvider
 from app.core.config import Settings
 from app.rounds.llm_narrator import LLMNarrator
 from app.rounds.narrator import FakeNarrator, Narrator
+from app.rounds.retrying_narrator import RetryingNarrator
 
 
-def build_provider(settings: Settings, client: httpx.AsyncClient) -> OpenAICompatProvider:
-    """설정의 주소와 모델로 provider 를 만든다. 만드는 것만으로는 모델을 부르지 않는다."""
+def build_provider(settings: Settings, client: httpx.AsyncClient, model: str) -> OpenAICompatProvider:
+    """설정의 주소로 그 모델을 부르는 provider 를 만든다. 만드는 것만으로는 모델을 부르지 않는다."""
     return OpenAICompatProvider(
         client=client,
         base_url=settings.llm_base_url,
-        model=settings.llm_model,
+        model=model,
         timeout=settings.llm_timeout_seconds,
         supports_reasoning=settings.llm_supports_reasoning,
     )
@@ -34,8 +35,11 @@ def build_narrator(
     """
     설정이 llm 이면 언어 모델로 서술하는 서술자, 아니면 가짜 서술자.
 
-    언어 모델의 서술자는 부를 때마다 DB 에 기록을 남긴다(ai_invocations). 가짜는 모델을 부르지 않으니 남길 것이 없다.
+    언어 모델이면 모델마다 서술자를 하나씩 만들어(첫 모델, 넘어갈 모델들 차례로) 다시 시도하는 서술자로 감싼다.
+    모두 같은 기록장에 쓴다(ai_invocations). 가짜는 모델을 부르지 않으니 남길 것이 없다.
     """
-    if settings.narrator == 'llm':
-        return LLMNarrator(build_provider(settings, client), DbCallLog(session_factory))
-    return FakeNarrator()
+    if settings.narrator != 'llm':
+        return FakeNarrator()
+    log = DbCallLog(session_factory)
+    narrators = [LLMNarrator(build_provider(settings, client, model), log) for model in settings.llm_models()]
+    return RetryingNarrator(narrators, attempt_timeout=settings.llm_timeout_seconds)

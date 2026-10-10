@@ -9,7 +9,7 @@
   - 서술하는 동안 테이블이 멈추지 않는다. 채팅, 읽기, 나가기가 된다.
   - 서술자는 닫힐 때의 모습을 받는다. 그 뒤에 누가 나가도, 방장이 문체를 바꿔도, 서술을 다시 맡겨도 같다.
   - 닫는 중인 라운드에는 선언을 낼 수 없고, 또 닫을 수 없다. 서술자는 한 번만 불린다.
-  - 서술이 실패하면 라운드가 닫는 중에 머문다. 한참 지난 뒤에 방장이 다시 맡길 수 있다.
+  - 서술이 끝내 실패하면 라운드가 닫는 중에 머물고, 모두에게 알린다. 방장은 기다리지 않고 다시 맡길 수 있다.
   - 같은 라운드의 서술이 둘 돌아도 다음 라운드는 하나만 열린다.
   - 서술하는 사이에 테이블이 끝나면 다음 라운드를 열지 않는다.
 """
@@ -26,12 +26,16 @@ from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.provider import ProviderError
 from app.main import API_PREFIX
 from app.realtime.service import Cursor
 from app.rounds import service
+from app.rounds.closing import failure_reason
+from app.rounds.llm_narrator import NarrationError
 from app.rounds.models import Round
 from app.rounds.narration_request import dump_moves
 from app.rounds.narrator import NarrationRequest
+from app.rounds.retrying_narrator import NarrationFailed
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -109,6 +113,16 @@ class GatedNarrator:
         self._gate.clear()
 
 
+class FailingNarrator:
+    """늘 정해 둔 예외를 내는 서술자."""
+
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    async def narrate(self, request: NarrationRequest) -> str:
+        raise self.error
+
+
 @pytest.fixture
 def narrator(app: FastAPI) -> GatedNarrator:
     """앱에 꽂은 문 앞의 서술자. 테스트가 끝날 때 문을 열어 둔다. 기다리던 작업이 남지 않게 한다."""
@@ -159,6 +173,12 @@ async def current(client: AsyncClient, headers: dict[str, str], table: dict) -> 
     response = await client.get(table_url(table, '/rounds/current'), headers=headers)
     assert response.status_code == status.HTTP_200_OK, response.text
     return response.json()
+
+
+async def last_event(client: AsyncClient, headers: dict[str, str], table: dict) -> dict:
+    """테이블의 마지막 이벤트."""
+    response = await client.get(table_url(table, '/events'), params={'after': 5}, headers=headers)
+    return response.json()['items'][-1]
 
 
 async def event_types(client: AsyncClient, headers: dict[str, str], table: dict, after: int = 5) -> list[str]:
@@ -401,7 +421,7 @@ async def test_closing_again_while_the_gm_narrates_is_refused(
 # --- 서술이 실패하면 ---
 
 
-async def test_a_failed_narration_leaves_the_round_closing(
+async def test_a_failed_narration_leaves_the_round_closing_and_tells_everyone(
     client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, narrated, caplog: pytest.LogCaptureFixture
 ):
     table = await start_duo(client, me, friend)
@@ -413,11 +433,19 @@ async def test_a_failed_narration_leaves_the_round_closing(
         await declare(client, friend, table, FRIENDS_ACTION)
         await narrated()
 
-    # 라운드는 닫는 중에 머문다. 다음 라운드가 열리지 않았다
+    # 라운드는 닫는 중에 머문다. 다음 라운드가 열리지 않았다. 실패한 시각이 적혀 있다
     round_ = await current(client, me, table)
     assert (round_['number'], round_['status']) == (1, 'closing')
-    assert await event_types(client, me, table) == ['player_action', 'player_action', 'round_closed']
-    # 실패는 로그에 남는다. 어느 테이블의 몇 번째 라운드인지 적힌다
+    assert round_['narration_failed_at'] is not None
+    # 앉은 사람 모두가 실패를 안다. "GM 이 서술하는 중"에 머물지 않는다
+    assert await event_types(client, friend, table) == [
+        'player_action',
+        'player_action',
+        'round_closed',
+        'narration_failed',
+    ]
+    # 버그로 실패하면 예외의 글을 내보내지 않는다. 자세한 것은 로그에 남는다
+    assert (await last_event(client, friend, table))['payload'] == {'round': 1, 'reason': 'error'}
     (record,) = caplog.records
     assert f'narrate:{table["id"]}:1' in record.getMessage()
     # 채팅은 여전히 된다. 테이블이 통째로 멈춘 것이 아니다
@@ -425,8 +453,23 @@ async def test_a_failed_narration_leaves_the_round_closing(
     assert chat.status_code == status.HTTP_201_CREATED
 
 
-async def test_the_host_can_hand_a_stalled_round_to_the_gm_again(
-    client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, narrated, monkeypatch: pytest.MonkeyPatch
+async def test_the_reason_of_the_failure_is_told(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, narrated, caplog: pytest.LogCaptureFixture
+):
+    app.state.narrator = FailingNarrator(NarrationFailed('timeout'))
+    table = await start_duo(client, me, friend)
+
+    with caplog.at_level(logging.ERROR, logger='app.core.jobs'):
+        await declare(client, me, table, MY_ACTION)
+        await declare(client, friend, table, FRIENDS_ACTION)
+        await narrated()
+
+    # 다시 시도하고 넘어가도 안 됐다. 마지막 실패의 이유가 보인다
+    assert (await last_event(client, friend, table))['payload'] == {'round': 1, 'reason': 'timeout'}
+
+
+async def test_the_host_can_hand_a_failed_round_to_the_gm_again_at_once(
+    client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, narrated
 ):
     table = await start_duo(client, me, friend)
     narrator.fail_next = True
@@ -435,30 +478,94 @@ async def test_the_host_can_hand_a_stalled_round_to_the_gm_again(
     await declare(client, friend, table, FRIENDS_ACTION)
     await narrated()
 
-    # 맡긴 지 얼마 안 됐으면 아직 도는 중일 수 있다. 다시 맡길 수 없다
-    too_soon = await client.post(table_url(table, '/rounds/current/close'), headers=me)
-    # 한참 지난 것으로 친다(기다리는 시간을 0 으로 둔다)
-    monkeypatch.setattr(service, 'CLOSING_RETRY_SECONDS', 0)
+    # 실패한 것을 안다. 멈춘 지 한참 지나기를 기다리지 않는다. 방장만 다시 맡긴다
     by_member = await client.post(table_url(table, '/rounds/current/close'), headers=friend)
     by_host = await client.post(table_url(table, '/rounds/current/close'), headers=me)
     await narrated()
 
-    assert too_soon.status_code == status.HTTP_409_CONFLICT
     assert by_member.status_code == status.HTTP_403_FORBIDDEN
     assert by_host.status_code == status.HTTP_202_ACCEPTED
     # 이번에는 서술이 끝나 다음 라운드가 열렸다
     second = await current(client, me, table)
     assert (second['number'], second['scene']) == (2, RESULT)
-    # 다시 맡겨도 행동과 닫힘을 또 적지 않는다. 처음 닫을 때 적은 것에 서술과 열림이 이어진다
+    # 다시 맡겨도 행동과 닫힘을 또 적지 않는다. 처음 닫을 때 적은 것에 실패, 서술, 열림이 이어진다
     assert await event_types(client, me, table) == [
         'player_action',
         'player_action',
         'round_closed',
+        'narration_failed',
         'gm_narration',
         'round_opened',
     ]
     # 서술자는 처음에 받은 것과 같은 것을 다시 받았다
     assert narrator.requests[0] == narrator.requests[1]
+
+
+async def test_handing_a_failed_round_again_clears_the_failure(
+    client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, narrated
+):
+    table = await start_duo(client, me, friend)
+    narrator.fail_next = True
+    narrator.release()
+    await declare(client, me, table, MY_ACTION)
+    await declare(client, friend, table, FRIENDS_ACTION)
+    await narrated()
+    narrator.hold()
+
+    await client.post(table_url(table, '/rounds/current/close'), headers=me)
+    await narrator.wait_until_called(times=2)
+    again = await client.post(table_url(table, '/rounds/current/close'), headers=me)
+
+    # 다시 맡긴 서술이 돌고 있다. 실패의 표시가 지워져서, 또 맡기려면 다시 기다려야 한다
+    assert (await current(client, me, table))['narration_failed_at'] is None
+    assert again.status_code == status.HTTP_409_CONFLICT
+
+
+async def test_a_failure_is_told_only_for_a_round_still_closing(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, narrator: GatedNarrator, narrated
+):
+    table = await start_duo(client, me, friend)
+    narrator.release()
+    await declare(client, me, table, MY_ACTION)
+    await declare(client, friend, table, FRIENDS_ACTION)
+    await narrated()
+
+    # 같은 라운드의 다른 서술이 먼저 마무리했다. 늦게 실패한 쪽은 아무것도 적지 않는다
+    async with app.state.session_factory() as session:
+        await service.fail_closing(session, uuid.UUID(table['id']), 1, 'timeout')
+
+    assert 'narration_failed' not in await event_types(client, me, table)
+
+
+async def test_a_failure_is_told_once(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, narrator: GatedNarrator, narrated
+):
+    table = await start_duo(client, me, friend)
+    narrator.fail_next = True
+    narrator.release()
+    await declare(client, me, table, MY_ACTION)
+    await declare(client, friend, table, FRIENDS_ACTION)
+    await narrated()
+
+    # 이미 실패가 적힌 라운드다. 또 적지 않는다
+    async with app.state.session_factory() as session:
+        await service.fail_closing(session, uuid.UUID(table['id']), 1, 'timeout')
+
+    assert (await event_types(client, me, table)).count('narration_failed') == 1
+
+
+@pytest.mark.parametrize(
+    ('error', 'reason'),
+    [
+        (NarrationFailed('cut_off'), 'cut_off'),
+        (ProviderError('unreachable'), 'unreachable'),
+        (NarrationError('empty'), 'empty'),
+        (RuntimeError('DB 비밀번호가 틀렸다'), 'error'),
+    ],
+)
+def test_the_reason_comes_from_the_narrator_failure(error: Exception, reason: str):
+    # 서술자의 실패는 그 이유를 쓴다. 그 밖의 예외는 글을 내보내지 않는다
+    assert failure_reason(error) == reason
 
 
 async def test_two_narrations_of_one_round_open_only_one_next_round(
@@ -519,10 +626,16 @@ async def test_a_table_that_ends_while_the_gm_narrates_opens_no_next_round(
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
 
-def make_round(closing_ago: float | None, closed: bool = False) -> Round:
-    """닫기 시작한 지 closing_ago 초 된 라운드. None 이면 아직 선언을 받는 중이다."""
+def make_round(closing_ago: float | None, closed: bool = False, failed: bool = False) -> Round:
+    """닫기 시작한 지 closing_ago 초 된 라운드. None 이면 아직 선언을 받는 중이다. failed 면 서술이 실패했다."""
     closing_at = None if closing_ago is None else NOW - timedelta(seconds=closing_ago)
-    return Round(number=1, scene='장면', closing_at=closing_at, closed_at=NOW if closed else None)
+    return Round(
+        number=1,
+        scene='장면',
+        closing_at=closing_at,
+        closed_at=NOW if closed else None,
+        narration_failed_at=NOW if failed else None,
+    )
 
 
 @pytest.mark.parametrize(
@@ -538,6 +651,10 @@ def make_round(closing_ago: float | None, closed: bool = False) -> Round:
         (make_round(service.CLOSING_RETRY_SECONDS + 1), True),
         # 닫힌 라운드는 아무리 오래돼도 멈춘 것이 아니다
         (make_round(service.CLOSING_RETRY_SECONDS + 1, closed=True), False),
+        # 서술이 끝내 실패했다. 방금이어도 다시 맡길 수 있다
+        (make_round(1, failed=True), True),
+        # 닫힌 라운드는 실패가 적혀 있어도 다시 맡길 것이 없다
+        (make_round(1, closed=True, failed=True), False),
     ],
 )
 def test_a_round_is_stalled_only_after_closing_for_a_long_time(round_: Round, expected: bool):
