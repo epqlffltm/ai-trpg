@@ -23,6 +23,7 @@ from scripts.try_narration import (
     TALLIED_HINTS,
     find_hints,
     has_hint,
+    is_sound,
     run_trial,
     tally,
     unseen_names,
@@ -64,12 +65,35 @@ def test_words_of_the_past_action_and_the_habit_are_found(scene: str):
 
 
 @pytest.mark.parametrize(
-    ('scene', 'count'), [('"가자!" 그리고 "멈춰!"', 2), ('“좋아.” 하고 웃었다', 1), ('따옴표 없음', 0)]
+    ('scene', 'count'),
+    [
+        ('"같이 가자!" 그리고 "여기서 멈춰!"', 2),
+        ('“이건 내 거야.” 하고 웃었다', 1),
+        ('"윽!" "끄악!" "……!" "어머?"', 0),
+        ('따옴표 없음', 0),
+    ],
 )
-def test_quotes_are_counted(scene: str, count: int):
+def test_words_in_quotes_are_counted_but_short_sounds_are_not(scene: str, count: int):
     hints = find_hints(scene)
 
     assert (f'{HINT_QUOTE} {count}개' in hints) == (count > 0)
+    assert any(hint.startswith(HINT_QUOTE) for hint in hints) == (count > 0)
+
+
+@pytest.mark.parametrize(
+    ('body', 'sound'),
+    [
+        ('윽!', True),
+        ('끄아악!', True),
+        ('...윽!', True),
+        ('어이쿠!', True),
+        ('이 정도쯤이야!', False),
+        ('안 돼!', False),
+        ('방, 방금 그걸……?', False),
+    ],
+)
+def test_short_sounds_are_told_from_words(body: str, sound: bool):
+    assert is_sound(body) == sound
 
 
 def test_names_the_prompt_already_has_are_not_unseen():
