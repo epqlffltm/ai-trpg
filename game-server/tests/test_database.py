@@ -34,3 +34,17 @@ async def test_cannot_read_the_auth_schema(session: AsyncSession):
 
     # 인증 서버의 테이블을 직접 읽지 않는다는 것을 약속이 아니라 DB 권한으로 지킨다
     assert can_use is False
+
+
+async def test_the_extension_schema_comes_after_the_test_schema(session: AsyncSession):
+    path = await session.scalar(text('SHOW search_path'))
+
+    # 테이블은 앞의 스키마에 놓이고, 벡터 타입은 뒤의 확장 스키마에서 찾는다
+    assert path == f'{TEST_SCHEMA}, extensions'
+
+
+async def test_the_vector_type_can_be_used(session: AsyncSession):
+    distance = await session.scalar(text("SELECT '[1, 0]'::vector <=> '[0, 1]'::vector"))
+
+    # pgvector 가 켜져 있고 게임 계정이 쓸 수 있다. 직각인 두 벡터의 코사인 거리는 1 이다
+    assert distance == 1.0

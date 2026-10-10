@@ -10,8 +10,9 @@
 """
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.assets.models import Scenario, ScenarioVersion
@@ -30,6 +31,7 @@ from app.assets.scenarios.schemas import (
 )
 from app.assets.scenarios.snapshot import read_snapshot
 from app.auth.dependencies import CurrentUser
+from app.lore.indexing import LoreIndexer
 
 router = APIRouter(prefix='/scenarios', tags=['scenarios'])
 
@@ -118,12 +120,25 @@ async def delete_scenario(scenario_id: uuid.UUID, user: CurrentUser, session: Se
 # --- 판 ---
 
 
+def get_indexer(request: Request) -> LoreIndexer:
+    """판의 로어북 색인을 맡길 곳. 요청마다 만든다. 앱에 꽂혀 있는 임베더와 작업 목록을 쓴다."""
+    state = request.app.state
+    return LoreIndexer(session_factory=state.session_factory, embedder=state.embedder, jobs=state.jobs)
+
+
+Indexer = Annotated[LoreIndexer, Depends(get_indexer)]
+
+
 @router.post('/{scenario_id}/versions', response_model=VersionDetail, status_code=status.HTTP_201_CREATED)
 async def publish_scenario(
-    scenario_id: uuid.UUID, data: VersionCreate, user: CurrentUser, session: Session
+    scenario_id: uuid.UUID, data: VersionCreate, user: CurrentUser, session: Session, indexer: Indexer
 ) -> VersionDetail:
-    """자기 시나리오를 게시한다. 지금의 내용이 새 판으로 굳는다."""
-    version = await publishing.publish(session, user.user_id, scenario_id, data)
+    """
+    자기 시나리오를 게시한다. 지금의 내용이 새 판으로 굳는다.
+
+    판의 로어북 항목은 뒤에서 벡터로 바뀐다. 응답은 그것을 기다리지 않는다.
+    """
+    version = await publishing.publish(session, user.user_id, scenario_id, data, indexer)
     return to_version_detail(version)
 
 

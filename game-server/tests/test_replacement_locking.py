@@ -31,6 +31,7 @@ from app.tables import replacements, repository, service, sheets
 from app.tables.models import GameTable
 from app.tables.schemas import CharacterUpdate, TableCreate
 from app.tables.service import Conflict, TableConflictError
+from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
 
@@ -60,7 +61,7 @@ async def start_with_a_dead_character(session: AsyncSession) -> GameTable:
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
     data = ScenarioCreate(title='시나리오', rulebook_id=rulebook.asset_id, openings=['도입부'], default_sheet=SHEET)
     scenario = await scenarios.create_scenario(session, ME, data)
-    await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
+    await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     created = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=1)
     table = await service.create_table(session, make_viewer(ME), created)
     await service.set_character(session, ME, table.id, CharacterUpdate(name='엘프'))
