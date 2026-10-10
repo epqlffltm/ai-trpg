@@ -3,9 +3,10 @@
 """
 게임 서버의 시작점. FastAPI 앱을 만들고 라우터를 붙인다.
 
-    uv run uvicorn app.main:app --port 8001 --reload
+    uv run uvicorn app.main:app --port 8001 --reload --timeout-graceful-shutdown 5
 """
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -36,6 +37,7 @@ from app.personas.service import PersonaConflictError, PersonaNotFoundError
 from app.realtime import router as realtime
 from app.realtime.hub import Hub
 from app.realtime.listener import PostgresListener
+from app.realtime.shutdown import closing_on_exit
 from app.rounds import router as rounds
 from app.rounds.narrator_setup import build_narrator
 from app.rounds.service import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
@@ -58,10 +60,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     서버가 뜰 때와 꺼질 때 할 일. yield 앞이 뜰 때, 뒤가 꺼질 때다.
 
+    떠 있는 동안 종료 신호가 오면 방송실부터 닫는다. 열린 스트림이 끝나야 서버가 yield 뒤로 넘어온다
+    (app/realtime/shutdown.py). 닫는 일은 신호 처리기가 아니라 이벤트 루프가 한다.
     꺼질 때 신호를 듣는 연결, DB 연결, 인증 서버로 가는 연결을 전부 닫는다.
     닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     """
-    yield
+    loop = asyncio.get_running_loop()
+    with closing_on_exit(lambda: loop.call_soon_threadsafe(app.state.hub.close_all)):
+        yield
     # 뒤에서 돌던 작업을 먼저 마무리한다. 작업이 DB 를 쓰므로 DB 를 닫기 전에 한다
     await app.state.jobs.aclose()
     await app.state.signal_source.stop()

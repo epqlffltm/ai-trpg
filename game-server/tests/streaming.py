@@ -79,10 +79,10 @@ class Reader:
 
 
 class DeafSource:
-    """신호를 듣지 않는 것. 신호가 끊긴 상황을 만든다."""
+    """신호를 듣지 못하는 것. 듣는 연결을 맺지 못한 상황을 만든다."""
 
-    async def ensure_listening(self) -> None:
-        return None
+    async def ensure_listening(self) -> bool:
+        return False
 
     async def stop(self) -> None:
         return None
