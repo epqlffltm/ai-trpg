@@ -126,6 +126,19 @@ class PastRound:
 
 
 @dataclass(frozen=True)
+class LoreNote:
+    """
+    서술에 참고로 넣는 로어북 항목 하나. 검색이 골랐다(app/lore/retrieval.py).
+
+    AI 가 읽는 글이다. 플레이어에게 내보내지 않는다. entry_id 는 판의 복사본 안의 id 로, 무엇을 넣었는지 기록할 때 쓴다.
+    """
+
+    entry_id: uuid.UUID
+    name: str
+    content: str
+
+
+@dataclass(frozen=True)
 class NarrationRequest:
     """서술자에게 주는 것. 방금 닫힌 라운드의 내용이다."""
 
@@ -145,6 +158,8 @@ class NarrationRequest:
     # 가짜 서술자는 읽지 않는다
     table_id: uuid.UUID | None = None
     host_id: uuid.UUID | None = None
+    # 이번 장면에 맞는 로어북 항목. 서술을 맡기기 직전에 검색이 채운다. 가짜 서술자는 읽지 않는다
+    lore: list[LoreNote] = field(default_factory=list)
 
 
 class Preview(Protocol):
