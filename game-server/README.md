@@ -905,9 +905,17 @@ uv run python -m scripts.try_narration --model gemma4:26b
 uv run python -m scripts.try_narration --model gemma4:26b qwen3.6:27b --reasoning none low --out $HOME\narration-report.md
 uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --live
 uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style none classic web_novel hardboiled emotional action dopamine literary --repeat 3 --out $HOME\narration-styles.md
+uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --lore off on noise --repeat 3 --out $HOME\narration-lore.md
 ```
 
 `--out` 의 파일은 UTF-8 이다. 저장소 밖에 두면 `git status` 에 섞이지 않는다.
+
+**로어북이 서술에 주는 효과.** `--lore` 로 로어북을 넣는 방식을 고른다(`evals/lore/narration.py`). 검색이 맞는 항목을 고르는지는 검색 평가가 보고, 이것은 고른 항목을 서술 모델이 실제로 쓰는지를 본다.
+- `off`: 넣지 않는다. `on`: 서버와 같은 규칙(`retrieval.choose`, 기본 거리 기준)과 같은 임베딩 모델(`--embedding-model`, 기본 `bge-m3`, `--base-url` 과 같은 주소)로 평가 데이터(`evals/lore/chase.yaml`)에서 고른 항목을 넣는다. 임베딩이 실패하면 서버처럼 키워드로만 고른다. `noise`: 예시 라운드와 상관없는 항목 셋(블랙홀 터널, 얼음 결정, 별빛 연료)을 넣는다.
+- 맨 앞에 on 이 고른 항목과 거리를 찍는다.
+- 장면마다 센다. on 낱말: on 의 항목에는 있고 로어북을 뺀 프롬프트에는 없는 낱말이 장면에 나온 수(로어북을 썼다는 어림). noise 낱말: 상관없는 항목의 낱말에 끌려간 수. off 에서도 세서, 우연히 같은 낱말을 쓴 만큼을 견줄 기준으로 삼는다.
+- 악역영애의 항목(비올레타)에는 비밀("사실은 은하 경찰의 정보원")이 있다. 장면에 나오면 "숨긴 설정의 낱말"로 표시한다.
+- 조사를 대충 떼는 낱말 어림이다. 판단은 사람이 한다.
 
 **AI 호출의 기록.** 언어 모델을 부를 때마다 `ai_invocations` 에 한 줄을 덧붙인다. 고치거나 지우지 않는다. 사용량과 비용, 실패를 볼 근거다.
 - 잘 끝났든(`ok`), 답은 왔지만 장면으로 쓰지 않았든(`rejected`: `cut_off`, `empty`, `too_long`), 답을 받지 못했든(`failed`: `timeout`, `unreachable`, `status_503` …) 한 번에 하나다. 실패한 호출도 시간과 토큰을 썼다.
