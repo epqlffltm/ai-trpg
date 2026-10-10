@@ -35,6 +35,8 @@ from app.listings.service import ListingNotReadyError
 from app.lore.indexing import LoreIndexer
 from app.lore.retrieval import LoreRetriever, Thresholds
 from app.lore.setup import build_embedder
+from app.memory.indexing import MemoryIndexer
+from app.memory.retrieval import MemoryRetriever, MemoryThresholds
 from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
 from app.realtime import router as realtime
@@ -143,6 +145,15 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     indexer = LoreIndexer(app.state.session_factory, app.state.embedder, app.state.jobs)
     thresholds = Thresholds(settings.lore_max_distance, settings.lore_keyword_max_distance)
     app.state.lore = LoreRetriever(app.state.session_factory, app.state.embedder, indexer, thresholds)
+
+    # 서술하기 직전에 지난 기록보다 앞의 라운드 중 이번 장면에 맞는 것을 고르는 것(app/memory/retrieval.py).
+    # 테이블의 라운드 벡터가 모자라면 위의 임베더로 색인을 맡긴다.
+    # 거리 기준은 설정(MEMORY_MAX_DISTANCE, MEMORY_KEYWORD_MAX_DISTANCE)이 정한다
+    memory_indexer = MemoryIndexer(app.state.session_factory, app.state.embedder, app.state.jobs)
+    memory_thresholds = MemoryThresholds(settings.memory_max_distance, settings.memory_keyword_max_distance)
+    app.state.memories = MemoryRetriever(
+        app.state.session_factory, app.state.embedder, memory_indexer, memory_thresholds
+    )
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
