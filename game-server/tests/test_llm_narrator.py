@@ -23,12 +23,22 @@ from app.ai.call_log import DbCallLog
 from app.ai.calls import CallScope, Outcome
 from app.ai.fake import FAKE_MODEL, FakeCallLog, FakeProvider
 from app.ai.models import AiInvocation
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
+from app.ai.provider import (
+    ChatMessage,
+    Completion,
+    GenerationParams,
+    ProviderError,
+    Reasoning,
+    Role,
+    TextSink,
+    ignore_text,
+)
 from app.assets.models import NarrationStyle
 from app.main import API_PREFIX
 from app.rounds import llm_narrator, prompt
 from app.rounds.llm_narrator import NARRATION_PARAMS, LLMNarrator, NarrationError, accept_completion, accept_scene
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
+from tests.previews import RecordingPreview
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -52,7 +62,9 @@ class BrokenProvider:
     kind = 'broken'
     model = 'unreachable-model'
 
-    async def complete(self, messages: list[ChatMessage], params: GenerationParams) -> Completion:
+    async def complete(
+        self, messages: list[ChatMessage], params: GenerationParams, on_text: TextSink = ignore_text
+    ) -> Completion:
         raise ProviderError('unreachable')
 
 
@@ -119,6 +131,47 @@ async def test_a_failing_provider_fails_the_narration():
         await LLMNarrator(BrokenProvider(), FakeCallLog()).narrate(make_request())
 
 
+async def test_what_the_model_writes_is_shown_as_it_comes():
+    preview = RecordingPreview()
+    provider = FakeProvider(reply=f'\n  {REPLY}  \n', piece_size=3)
+
+    scene = await LLMNarrator(provider, FakeCallLog()).narrate(make_request(), preview)
+
+    # 미리 보기는 검사하기 전의 글이다. 다듬어진 장면은 돌려준 글이다
+    assert len(preview.attempts) == 1
+    assert len(preview.attempts[0]) > 1
+    assert preview.shown() == [f'\n  {REPLY}  \n']
+    assert scene == REPLY
+
+
+async def test_a_refused_reply_was_still_shown_while_it_was_written():
+    preview = RecordingPreview()
+
+    with pytest.raises(NarrationError):
+        await LLMNarrator(FakeProvider(reply=REPLY, truncated=True), FakeCallLog()).narrate(make_request(), preview)
+
+    # 받지 않은 글은 버려진 글이 된다. 다음 시도가 새로 시작한다
+    assert preview.shown() == [REPLY]
+
+
+async def test_a_call_that_fails_still_starts_an_attempt():
+    preview = RecordingPreview()
+
+    with pytest.raises(ProviderError):
+        await LLMNarrator(BrokenProvider(), FakeCallLog()).narrate(make_request(), preview)
+
+    assert preview.shown() == ['']
+
+
+async def test_a_request_without_the_story_shows_nothing():
+    preview = RecordingPreview()
+
+    with pytest.raises(NarrationError):
+        await LLMNarrator(FakeProvider(), FakeCallLog()).narrate(make_request(story=None), preview)
+
+    assert preview.attempts == []
+
+
 async def test_the_fake_provider_says_it_is_fake():
     completion = await FakeProvider(reply=REPLY).complete([ChatMessage(Role.USER, '안녕')], NARRATION_PARAMS)
 
@@ -143,7 +196,9 @@ class CountingProvider:
     kind = 'counting'
     model = 'counting-model'
 
-    async def complete(self, messages: list[ChatMessage], params: GenerationParams) -> Completion:
+    async def complete(
+        self, messages: list[ChatMessage], params: GenerationParams, on_text: TextSink = ignore_text
+    ) -> Completion:
         return Completion(text=REPLY, model='reported-model', input_tokens=900, output_tokens=120, finish_reason='stop')
 
 

@@ -19,9 +19,9 @@ import pytest
 
 from app.ai.calls import Outcome
 from app.ai.fake import FakeCallLog
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError
+from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, TextSink, ignore_text
 from app.rounds.llm_narrator import LLMNarrator, NarrationError
-from app.rounds.narrator import Move, NarrationRequest, StoryContext
+from app.rounds.narrator import NO_PREVIEW, Move, NarrationRequest, Preview, StoryContext
 from app.rounds.retrying_narrator import (
     PAUSE_SECONDS,
     NarrationFailed,
@@ -30,6 +30,7 @@ from app.rounds.retrying_narrator import (
     can_retry,
     random_pause,
 )
+from tests.previews import RecordingPreview
 
 REQUEST = NarrationRequest(
     round_number=1,
@@ -67,7 +68,7 @@ class Script:
     calls: list[str]
     cost: float = 0.0
 
-    async def narrate(self, request: NarrationRequest) -> str:
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
         self.calls.append(self.name)
         self.clock.now += self.cost
         outcome = self.outcomes.pop(0)
@@ -107,7 +108,18 @@ class Setup:
 
 @pytest.mark.parametrize(
     'reason',
-    ['timeout', 'unreachable', 'not_json', 'malformed', 'status_429', 'status_500', 'status_503', 'cut_off', 'empty'],
+    [
+        'timeout',
+        'unreachable',
+        'interrupted',
+        'stream_error',
+        'malformed',
+        'status_429',
+        'status_500',
+        'status_503',
+        'cut_off',
+        'empty',
+    ],
 )
 def test_a_passing_failure_is_worth_another_try(reason: str):
     # 일시적인 실패이거나, 모델의 글이 매번 달라서 다시 부르면 나을 수 있다
@@ -270,10 +282,14 @@ class FlakyProvider:
     model = 'flaky-model'
     failed: bool = False
 
-    async def complete(self, messages: list[ChatMessage], params: GenerationParams) -> Completion:
+    async def complete(
+        self, messages: list[ChatMessage], params: GenerationParams, on_text: TextSink = ignore_text
+    ) -> Completion:
         if not self.failed:
             self.failed = True
+            on_text('엔진 소리가')
             raise ProviderError('timeout')
+        on_text(SCENE)
         return Completion(text=SCENE, model=self.model)
 
 
@@ -292,3 +308,46 @@ async def test_every_try_is_recorded_on_its_own():
         (Outcome.FAILED, 'timeout'),
         (Outcome.OK, None),
     ]
+
+
+# --- 미리 보기 ---
+
+
+@dataclass
+class Showing:
+    """미리 보기에 이름을 보내고 장면을 돌려주거나 실패하는 서술자."""
+
+    name: str
+    error: Exception | None = None
+
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
+        preview.begin()
+        preview.text(self.name)
+        if self.error is not None:
+            raise self.error
+        return self.name
+
+
+async def test_every_try_starts_its_own_preview():
+    preview = RecordingPreview()
+    setup = Setup()
+    narrators = [Showing('첫 시도', ProviderError('timeout')), Showing('다음 모델')]
+    narrator = RetryingNarrator(narrators, attempt_timeout=TIMEOUT, budget=BUDGET, sleep=setup.sleep)
+
+    scene = await narrator.narrate(REQUEST, preview)
+
+    # 같은 모델로 두 번, 다음 모델로 한 번. 앉은 사람은 시도가 바뀌면 보던 글을 지우고 새 글을 본다
+    assert preview.shown() == ['첫 시도', '첫 시도', '다음 모델']
+    assert scene == '다음 모델'
+
+
+async def test_a_retry_with_the_model_shows_the_new_text_from_the_start():
+    preview = RecordingPreview()
+    setup = Setup()
+    narrator = RetryingNarrator(
+        [LLMNarrator(FlakyProvider(), FakeCallLog())], attempt_timeout=TIMEOUT, budget=BUDGET, sleep=setup.sleep
+    )
+
+    await narrator.narrate(REQUEST, preview)
+
+    assert preview.shown() == ['엔진 소리가', SCENE]

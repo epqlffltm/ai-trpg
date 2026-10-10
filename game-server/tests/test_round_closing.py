@@ -34,7 +34,7 @@ from app.rounds.closing import failure_reason
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.models import Round
 from app.rounds.narration_request import dump_moves
-from app.rounds.narrator import NarrationRequest
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.retrying_narrator import NarrationFailed
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -88,7 +88,7 @@ class GatedNarrator:
         self._called = asyncio.Event()
         self._gate = asyncio.Event()
 
-    async def narrate(self, request: NarrationRequest) -> str:
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
         self.requests.append(request)
         self._called.set()
         await self._gate.wait()
@@ -119,7 +119,7 @@ class FailingNarrator:
     def __init__(self, error: Exception) -> None:
         self.error = error
 
-    async def narrate(self, request: NarrationRequest) -> str:
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
         raise self.error
 
 

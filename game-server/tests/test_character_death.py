@@ -31,7 +31,7 @@ from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.rounds import service
-from app.rounds.narrator import NarrationRequest
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from tests.sheets import make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -111,7 +111,7 @@ class FlakyNarrator:
     def __init__(self) -> None:
         self.requests: list[NarrationRequest] = []
 
-    async def narrate(self, request: NarrationRequest) -> str:
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
         self.requests.append(request)
         if len(self.requests) == 1:
             raise RuntimeError('서술자가 답하지 못했다')

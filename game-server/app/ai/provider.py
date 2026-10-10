@@ -14,6 +14,7 @@ SDK 가 바뀌거나 회사를 옮겨도, 이 파일 밖의 코드는 바뀌지 
 """
 
 import enum
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
@@ -89,6 +90,16 @@ class ProviderError(Exception):
     """모델을 부르는 데 실패했다. 연결이 안 되거나, 시간이 넘었거나, 이상한 답이 왔다."""
 
 
+# 흘려 받는 글을 받는 곳. 모델이 새로 쓴 글을 조각마다 받는다(생각 글은 빠져 있다).
+# 보통 함수다(async 가 아니다). 받는 쪽이 느려도 모델의 답을 읽는 일이 기다리지 않게 한다.
+# 빨리 돌아와야 하고, 예외를 내면 안 된다. 낸 예외는 버그로 보고 그대로 올라간다
+TextSink = Callable[[str], None]
+
+
+def ignore_text(text: str) -> None:
+    """흘려 받는 글을 버린다. 조각을 볼 필요가 없을 때의 기본값이다."""
+
+
 class LLMProvider(Protocol):
     """
     모델을 부르는 것의 모양. 이 메서드와 두 이름이 있으면 provider 다.
@@ -100,6 +111,13 @@ class LLMProvider(Protocol):
     kind: ClassVar[str]
     model: str
 
-    async def complete(self, messages: list[ChatMessage], params: GenerationParams) -> Completion:
-        """메시지들을 보내고 모델이 만든 글을 받는다. 실패하면 ProviderError."""
+    async def complete(
+        self, messages: list[ChatMessage], params: GenerationParams, on_text: TextSink = ignore_text
+    ) -> Completion:
+        """
+        메시지들을 보내고 모델이 만든 글을 받는다. 실패하면 ProviderError.
+
+        받는 동안 새로 온 글을 조각마다 on_text 에 넘긴다. 조각을 모두 이어 붙이면 돌려주는 Completion.text 와 같다.
+        흘려 보내지 못하는 provider 는 다 받은 뒤 한 번에 넘긴다. 실패하면 그때까지 넘긴 조각은 버려진 글이다.
+        """
         ...
