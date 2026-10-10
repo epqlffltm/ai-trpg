@@ -19,6 +19,7 @@ import pytest
 from app.ai.fake import FakeEmbedder
 from app.ai.openai_embedder import OpenAICompatEmbedder
 from app.ai.provider import ProviderError
+from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.lore.retrieval import KEYWORD_MAX_DISTANCE, MAX_DISTANCE, Thresholds, choose, query_text
 from app.rounds.narrator import NarrationRequest
@@ -76,7 +77,7 @@ def small_document() -> dict:
     return {
         'title': '작은 추격전',
         'entries': [
-            {'name': '리엔', 'keywords': ['엘프'], 'content': '엘프 폭주족의 우두머리.'},
+            {'name': '리엔', 'kind': 'person', 'keywords': ['엘프'], 'content': '엘프 폭주족의 우두머리.'},
             {'name': '토르빈', 'keywords': ['드워프', '망치'], 'content': '망치로 다 고치는 드워프 정비공.'},
             {'name': '홍차', 'keywords': [], 'content': '악역영애가 추격 중에도 마시는 차.'},
         ],
@@ -132,6 +133,17 @@ def test_the_real_dataset_labels_fit_their_kinds():
         assert (not query.expected) == (query.kind in EMPTY_KINDS), query.id
 
 
+def test_the_real_dataset_has_kinds():
+    kinds = {entry.name: entry.kind for entry in load_dataset(DEFAULT_PATH).entries}
+
+    # 이름표를 바꾸는 것은 인물뿐이다. 예시 라운드에 나오는 셋은 인물이다
+    assert kinds['리엔'] == kinds['토르빈'] == kinds['비올레타'] == LoreKind.PERSON
+    assert kinds['금빛 리무진'] == LoreKind.ITEM
+    assert kinds['은하 경찰'] == LoreKind.FACTION
+    assert kinds['블랙홀 터널'] == LoreKind.PLACE
+    assert kinds['결승선'] == LoreKind.LEGEND
+
+
 def test_the_real_dataset_keeps_private_settings_out():
     text = DEFAULT_PATH.read_text(encoding='utf-8')
 
@@ -150,6 +162,8 @@ def test_a_document_becomes_entries_and_requests():
 
     assert dataset.title == '작은 추격전'
     assert [item.name for item in dataset.entries] == ['리엔', '토르빈', '홍차']
+    # 종류를 적지 않은 항목은 기타다
+    assert [item.kind for item in dataset.entries] == [LoreKind.PERSON, LoreKind.OTHER, LoreKind.OTHER]
     first = dataset.queries[0]
     assert first.kind == Kind.NAME
     assert first.expected == frozenset({'리엔'})
@@ -189,6 +203,9 @@ def broken(change) -> list[str]:
         (lambda d: d['entries'][0].update(keywords=['  ']), '키워드는 빈 글이 아니고'),
         (lambda d: d['entries'][0].update(content='가' * 501), '내용은'),
         (lambda d: d['entries'].append('리엔'), '하나하나가 사전'),
+        # 질의의 kind(name, meaning …)와 다른 칸이다. 틀렸다는 말도 항목의 종류를 알려 준다
+        (lambda d: d['entries'][0].update(kind='monster'), 'kind 는 person'),
+        (lambda d: d['entries'][0].update(kind='name'), 'kind 는 person'),
     ],
 )
 def test_mistakes_are_found(change, expected: str):

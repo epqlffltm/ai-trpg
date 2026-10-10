@@ -19,12 +19,12 @@ import math
 import re
 import uuid
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.ai.embedder import Embedder
 from app.ai.provider import ChatMessage, ProviderError
 from app.assets.scenarios.snapshot import EntrySnapshot
-from app.lore.retrieval import Thresholds, choose, query_text, to_note
+from app.lore.retrieval import Thresholds, choose, query_text, scene_labels, to_note
 from app.lore.texts import batched, entry_text
 from app.rounds.narrator import LoreNote, NarrationRequest
 from evals.lore.metrics import cosine_distance
@@ -53,11 +53,13 @@ class LoreSets:
     넣을 항목들. on 은 검색이 고른 것, noise 는 상관없는 것.
 
     distances 는 항목마다 찾는 글과의 거리다. 임베딩이 실패했으면 비어 있다(on 은 키워드로만 고른 것이 된다).
+    labels 는 인물 항목의 이름을 장면의 호칭으로 바꾼 것이다(서버의 LoreRetriever.find 와 같다).
     """
 
     on: list[EntrySnapshot]
     noise: list[EntrySnapshot]
     distances: dict[uuid.UUID, float]
+    labels: dict[str, str] = field(default_factory=dict)
 
 
 def stem(word: str) -> str:
@@ -121,18 +123,19 @@ async def lore_sets(
     request: NarrationRequest,
     thresholds: Thresholds = SERVER_THRESHOLDS,
 ) -> LoreSets:
-    """on 과 noise 의 항목들. on 은 서버와 같은 찾는 글, 같은 규칙으로 고른다."""
+    """on 과 noise 의 항목들. on 은 서버와 같은 찾는 글, 같은 규칙으로 고르고 같은 이름표를 쓴다."""
     text = query_text(request)
     distances = await entry_distances(embedder, entries, text)
-    return LoreSets(choose(entries, text, distances, thresholds), select_noise(entries), distances)
+    labels = scene_labels(entries, text)
+    return LoreSets(choose(entries, text, distances, thresholds), select_noise(entries), distances, labels)
 
 
 def notes_for(mode: LoreMode, sets: LoreSets) -> list[LoreNote]:
     """이 방식으로 서술에 넣을 항목들."""
     if mode == LoreMode.ON:
-        return [to_note(entry) for entry in sets.on]
+        return [to_note(entry, sets.labels) for entry in sets.on]
     if mode == LoreMode.NOISE:
-        return [to_note(entry) for entry in sets.noise]
+        return [to_note(entry, sets.labels) for entry in sets.noise]
     return []
 
 
@@ -144,9 +147,10 @@ def describe_sets(sets: LoreSets) -> str:
         return entry.name if math.isnan(distance) else f'{entry.name}({distance:.2f})'
 
     known = '' if sets.distances else ' (임베딩 실패: 서버처럼 키워드로만 골랐다)'
-    return '\n'.join(
-        [
-            f'on: {", ".join(map(label, sets.on)) or "없음"}{known}',
-            f'noise: {", ".join(map(label, sets.noise))}',
-        ]
-    )
+    lines = [
+        f'on: {", ".join(map(label, sets.on)) or "없음"}{known}',
+        f'noise: {", ".join(map(label, sets.noise))}',
+    ]
+    if sets.labels:
+        lines.append(f'이름표: {", ".join(f"{name} → {shown}" for name, shown in sets.labels.items())}')
+    return '\n'.join(lines)

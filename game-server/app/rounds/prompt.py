@@ -29,7 +29,7 @@ GM 의 서술을 부탁하는 메시지를 조립한다. 순수 함수다. DB �
 from dataclasses import dataclass
 
 from app.ai.provider import ChatMessage, Role
-from app.assets.models import NarrationStyle
+from app.assets.models import LoreKind, NarrationStyle
 from app.rounds.narrator import LoreNote, NarrationRequest, PastRound, StoryContext, describe_move
 
 # 이 틀의 버전. 틀을 바꾸면 올린다.
@@ -42,7 +42,9 @@ from app.rounds.narrator import LoreNote, NarrationRequest, PastRound, StoryCont
 #                인물은 장면에 나온 호칭으로 부른다. 도파민의 예시가 "성공을 크게, 상대의 경악"으로 바뀌었다
 #   narration-6: 이번 라운드에 행동한 인물의 로어북 항목에 "플레이어 캐릭터" 표시가 붙는다.
 #                (PC 의 짧은 소리를 따옴표로 허용해 봤더니 소리에 말이 따라붙어 되돌렸다. #101 뒤의 측정)
-PROMPT_VERSION = 'narration-6'
+#   narration-7: 로어북 항목 앞에 종류([인물], [장소] …)가 붙는다. 전설과 사건에는 다루는 법이 한 줄씩 붙는다.
+#                인물 항목의 이름표는 검색이 장면의 호칭으로 바꿔 둔다
+PROMPT_VERSION = 'narration-7'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -193,6 +195,21 @@ PAST_TAG = '[{number} 라운드에 한 일. 이미 서술했다]'
 
 # 검색한 로어북 항목 앞에 붙이는 말. 다 쓰라는 것이 아니다. 검색은 관련 없는 것도 고를 수 있다
 LORE_TITLE = '[참고할 설정]'
+# 로어북 항목 앞에 붙는 종류의 이름. 기타는 붙이지 않는다(종류가 생기기 전과 같다)
+KIND_NAMES = {
+    LoreKind.PERSON: '인물',
+    LoreKind.PLACE: '장소',
+    LoreKind.ITEM: '물건',
+    LoreKind.FACTION: '세력',
+    LoreKind.SPECIES: '종족',
+    LoreKind.LEGEND: '전설',
+    LoreKind.EVENT: '사건',
+}
+# 종류마다 다루는 법. 그 종류의 항목이 들어갈 때만 붙는다(넣을 것이 없으면 토큰을 쓰지 않는다)
+KIND_RULES = {
+    LoreKind.LEGEND: '[전설]은 소문과 전설이다. 사실로 단정하지 말고, 인물의 말이나 낌새로 흘릴 수 있다.',
+    LoreKind.EVENT: '[사건]은 준비된 사건이다. 장면에서 먼저 일으키거나 결말을 정하지 않는다.',
+}
 # 이번 라운드에 행동한 인물의 항목에 붙는 표시. 설정 속의 버릇(무엇이든 망치로 두드린다)이 선언한 행동을 덮어썼다(#101)
 PLAYER_TAG = '(플레이어 캐릭터. 이번 행동은 선언한 그대로다)'
 LORE_NOTE = (
@@ -286,9 +303,13 @@ def past_messages(past: PastRound) -> list[ChatMessage]:
 
 
 def lore_line(note: LoreNote, actors: set[str]) -> str:
-    """항목 한 줄. 이번 라운드에 행동한 인물의 항목이면 이름표 뒤에 플레이어 캐릭터 표시를 붙인다."""
+    """
+    항목 한 줄. 앞에 종류를 붙인다(기타는 붙이지 않는다).
+    이번 라운드에 행동한 인물의 항목이면 이름표 뒤에 플레이어 캐릭터 표시를 붙인다.
+    """
+    kind = f'[{KIND_NAMES[note.kind]}] ' if note.kind in KIND_NAMES else ''
     tag = f' {PLAYER_TAG}' if note.name in actors else ''
-    return f'- {note.name}{tag}: {note.content}'
+    return f'- {kind}{note.name}{tag}: {note.content}'
 
 
 def lore_lines(notes: list[LoreNote], actors: set[str] | None = None) -> list[str]:
@@ -299,7 +320,9 @@ def lore_lines(notes: list[LoreNote], actors: set[str] | None = None) -> list[st
     """
     if not notes:
         return []
-    return [LORE_TITLE, LORE_NOTE, *(lore_line(note, actors or set()) for note in notes), '']
+    kinds = {note.kind for note in notes}
+    rules = [rule for kind, rule in KIND_RULES.items() if kind in kinds]
+    return [LORE_TITLE, LORE_NOTE, *rules, *(lore_line(note, actors or set()) for note in notes), '']
 
 
 def round_text(request: NarrationRequest) -> str:

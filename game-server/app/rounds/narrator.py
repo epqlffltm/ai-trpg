@@ -19,7 +19,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from app.assets.models import NarrationStyle
+from app.assets.models import LoreKind, NarrationStyle
 
 
 @dataclass(frozen=True)
@@ -131,11 +131,13 @@ class LoreNote:
     서술에 참고로 넣는 로어북 항목 하나. 검색이 골랐다(app/lore/retrieval.py).
 
     AI 가 읽는 글이다. 플레이어에게 내보내지 않는다. entry_id 는 판의 복사본 안의 id 로, 무엇을 넣었는지 기록할 때 쓴다.
+    kind 는 항목의 종류다. 종류마다 프롬프트가 다르게 다룬다(app/rounds/prompt.py).
     """
 
     entry_id: uuid.UUID
     name: str
     content: str
+    kind: LoreKind = LoreKind.OTHER
 
 
 @dataclass(frozen=True)

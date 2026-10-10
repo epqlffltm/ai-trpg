@@ -65,7 +65,9 @@ async def delete_lorebook(session: AsyncSession, owner_id: uuid.UUID, lorebook_i
 
 def build_entry(lorebook_id: uuid.UUID, data: EntryCreate) -> LoreEntry:
     """입력에서 항목 객체를 만든다. 아직 저장하지 않는다."""
-    return LoreEntry(lorebook_id=lorebook_id, name=data.name, keywords=data.keywords, content=data.content)
+    return LoreEntry(
+        lorebook_id=lorebook_id, name=data.name, keywords=data.keywords, content=data.content, kind=data.kind
+    )
 
 
 def apply_entry_changes(entry: LoreEntry, data: EntryUpdate) -> None:

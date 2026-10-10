@@ -127,6 +127,33 @@ class NarrationStyle(enum.StrEnum):
 DEFAULT_NARRATION_STYLE = NarrationStyle.CLASSIC
 
 
+class LoreKind(enum.StrEnum):
+    """
+    로어북 항목의 종류. 시스템이 다르게 다루는 것만 나눈다. 더 촘촘한 분류는 나중에 자유 태그로 받는다.
+
+    종류마다 하는 일(app/lore/retrieval.py, app/rounds/prompt.py):
+      - 인물: 이름이 장면에 아직 안 나왔으면 장면의 호칭으로 이름표를 바꾸고 진짜 이름을 뺀다
+      - 전설: 사실로 단정하지 않고 흘릴 수 있는 이야기로 다룬다
+      - 사건: 준비된 사건의 글이다. 장면에서 먼저 일으키거나 결말을 정하지 않는다.
+              진행과 보상(상태)은 나중에 퀘스트 시스템(엔진, DB)이 맡는다
+    장소, 물건, 세력, 종족은 지금은 표시만 한다. 지도, 아이템·몬스터 자산이 붙을 자리다.
+    """
+
+    # 이름 붙은 등장인물. 사람만이 아니라 이름이 있는 동물도 여기다
+    PERSON = 'person'
+    PLACE = 'place'
+    ITEM = 'item'
+    # 조직, 가문, 무리
+    FACTION = 'faction'
+    # 종족과 생물의 무리. 몬스터의 타입(인간형, 언데드 …)은 여기가 아니라 몬스터 자산의 규칙 데이터다
+    SPECIES = 'species'
+    # 세계관 속 떡밥. 사실인지 아닌지 애매한 이야기
+    LEGEND = 'legend'
+    # 미리 만들어 둔 사건(퀘스트)의 글
+    EVENT = 'event'
+    OTHER = 'other'
+
+
 class CharacterMode(enum.StrEnum):
     """
     테이블에 앉는 사람이 캐릭터를 얻는 방식.
@@ -457,6 +484,7 @@ class LoreEntry(Base):
     __table_args__ = (
         CheckConstraint(at_most('content', LORE_ENTRY_CONTENT_MAX_LENGTH), name='content_length'),
         CheckConstraint(f'cardinality(keywords) <= {LORE_ENTRY_MAX_KEYWORDS}', name='keywords_count'),
+        CheckConstraint(one_of('kind', LoreKind), name='kind_allowed'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -475,6 +503,9 @@ class LoreEntry(Base):
 
     # 내용. AI 가 읽는다. 항목 하나가 검색의 한 토막이 되므로, 한 가지 이야기만 담는다
     content: Mapped[str] = mapped_column(Text, default='')
+
+    # 종류(LoreKind). 종류가 생기기 전의 항목은 기타다
+    kind: Mapped[str] = mapped_column(String(20), default=LoreKind.OTHER, server_default=LoreKind.OTHER.value)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

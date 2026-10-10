@@ -46,7 +46,7 @@ import httpx
 from app.ai.openai_compat import OpenAICompatProvider
 from app.ai.openai_embedder import OpenAICompatEmbedder
 from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
-from app.assets.models import NarrationStyle
+from app.assets.models import LoreKind, NarrationStyle
 from app.rounds.llm_narrator import NARRATION_PARAMS, NarrationError, accept_completion
 from app.rounds.narrator import Impact, Move, NarrationRequest, PastRound, StoryContext, Verdict
 from app.rounds.prompt import build_messages
@@ -294,14 +294,16 @@ def is_sound(body: str) -> bool:
 
 def unseen_names(scene: str, style: NarrationStyle, sets: LoreSets | None) -> list[str]:
     """
-    장면에 나온 로어북 항목의 이름 중 로어북을 뺀 프롬프트에는 없는 것. 플레이어가 아직 모르는 이름이다.
+    장면에 나온 인물 항목의 이름 중 로어북을 뺀 프롬프트에는 없는 것. 플레이어가 아직 모르는 이름이다.
 
-    인물은 장면에 이미 나온 호칭으로 부르기로 했다(narration-5). 항목이 없으면 빈 목록이다.
+    인물은 장면에 이미 나온 호칭으로 부르기로 했다(narration-5, #105). 장소나 물건의 이름은 세계의 고유명사라
+    장면에 나와도 된다. 그래서 인물만 센다. 항목이 없으면 빈 목록이다.
     """
     if sets is None:
         return []
     base = prompt_text(build_messages(replace(REQUEST, style=style)))
-    return [entry.name for entry in [*sets.on, *sets.noise] if entry.name not in base and entry.name in scene]
+    people = [entry for entry in [*sets.on, *sets.noise] if entry.kind == LoreKind.PERSON]
+    return [entry.name for entry in people if entry.name not in base and entry.name in scene]
 
 
 def find_hints(scene: str, sets: LoreSets | None = None, style: NarrationStyle = NarrationStyle.CLASSIC) -> list[str]:
