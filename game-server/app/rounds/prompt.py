@@ -40,7 +40,9 @@ from app.rounds.narrator import LoreNote, NarrationRequest, PastRound, StoryCont
 #   narration-5: 선언한 행동을 그대로 하게 한다. 지난 라운드의 선언에 "이미 서술했다" 꼬리표가 붙는다.
 #                PC 의 말은 따옴표로 쓰지 않는다. 로어북은 장면의 사실을 맞추는 데만 쓰고, 비밀을 드러내지 않고,
 #                인물은 장면에 나온 호칭으로 부른다. 도파민의 예시가 "성공을 크게, 상대의 경악"으로 바뀌었다
-PROMPT_VERSION = 'narration-5'
+#   narration-6: 이번 라운드에 행동한 인물의 로어북 항목에 "플레이어 캐릭터" 표시가 붙는다.
+#                (PC 의 짧은 소리를 따옴표로 허용해 봤더니 소리에 말이 따라붙어 되돌렸다. #101 뒤의 측정)
+PROMPT_VERSION = 'narration-6'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -191,6 +193,8 @@ PAST_TAG = '[{number} 라운드에 한 일. 이미 서술했다]'
 
 # 검색한 로어북 항목 앞에 붙이는 말. 다 쓰라는 것이 아니다. 검색은 관련 없는 것도 고를 수 있다
 LORE_TITLE = '[참고할 설정]'
+# 이번 라운드에 행동한 인물의 항목에 붙는 표시. 설정 속의 버릇(무엇이든 망치로 두드린다)이 선언한 행동을 덮어썼다(#101)
+PLAYER_TAG = '(플레이어 캐릭터. 이번 행동은 선언한 그대로다)'
 LORE_NOTE = (
     '이번 장면과 관련 있을 수 있는 설정이다. 장면의 사실(생김새, 무게, 장소, 소문)을 맞추는 데 필요한 것만 쓴다. '
     '결과와 선언한 행동은 그대로 둔다. 설정 속의 비밀은 장면에서 드러내지 않는다. '
@@ -281,11 +285,21 @@ def past_messages(past: PastRound) -> list[ChatMessage]:
     return [ChatMessage(Role.ASSISTANT, past.scene), ChatMessage(Role.USER, tagged)]
 
 
-def lore_lines(notes: list[LoreNote]) -> list[str]:
-    """검색한 로어북 항목들을 적는 줄들. 끝에 빈 줄이 붙는다. 항목이 없으면 빈 목록이다."""
+def lore_line(note: LoreNote, actors: set[str]) -> str:
+    """항목 한 줄. 이번 라운드에 행동한 인물의 항목이면 이름표 뒤에 플레이어 캐릭터 표시를 붙인다."""
+    tag = f' {PLAYER_TAG}' if note.name in actors else ''
+    return f'- {note.name}{tag}: {note.content}'
+
+
+def lore_lines(notes: list[LoreNote], actors: set[str] | None = None) -> list[str]:
+    """
+    검색한 로어북 항목들을 적는 줄들. 끝에 빈 줄이 붙는다. 항목이 없으면 빈 목록이다.
+
+    actors 는 이번 라운드에 행동한 인물(플레이어 캐릭터)의 이름들이다.
+    """
     if not notes:
         return []
-    return [LORE_TITLE, LORE_NOTE, *(f'- {note.name}: {note.content}' for note in notes), '']
+    return [LORE_TITLE, LORE_NOTE, *(lore_line(note, actors or set()) for note in notes), '']
 
 
 def round_text(request: NarrationRequest) -> str:
@@ -295,7 +309,7 @@ def round_text(request: NarrationRequest) -> str:
     검색한 로어북 항목이 있으면 맨 앞에 둔다. 부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다.
     부탁이 늘 마지막 줄이다.
     """
-    lines = lore_lines(request.lore)
+    lines = lore_lines(request.lore, {move.character_name for move in request.moves})
     lines.append(f'[{request.round_number} 라운드에 한 일과 결과]')
     lines.extend(describe_move(move) for move in request.moves)
     lines.append('')

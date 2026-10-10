@@ -20,7 +20,7 @@ game-server 폴더에서 -m 으로 돌린다. 그래야 app 을 찾는다.
 올리는 시간이 섞이면 속도를 견줄 수 없다.
 한 모델이 실패해도 나머지는 계속 돈다. 끝에 한눈에 보는 표를 찍고, --out 을 주면 표와 장면을 UTF-8 파일로도 남긴다.
 장면마다 기계로 잡을 수 있는 것을 "확인할 것"으로 표시한다. 보낸 적 없는 숫자, 숨긴 설정의 낱말, 문체 예시의 낱말,
-섞여 든 한자와 영어, 지난 행동·버릇의 낱말(선언한 행동이 바뀌었나), 따옴표 대사(PC 가 말했나),
+섞여 든 한자와 영어, 지난 행동·버릇의 낱말(선언한 행동이 바뀌었나), 따옴표 속 말(PC 가 말했나. 짧은 소리는 세지 않는다),
 설정에만 있는 이름(플레이어가 모르는 이름을 먼저 꺼냈나).
 --repeat 로 같은 것을 여러 번 돌린다. 한 번의 결과는 운일 수 있다.
 끝에 같은 설정으로 돌린 것끼리 묶어 몇 번 중 몇 번 나왔는지 세는 표를 찍는다.
@@ -118,8 +118,12 @@ SAMPLE_WORDS = ('국자', '식당', '단골', '외투', '숟가락', '빗')
 # "무엇이든 망치로 두드려 해결하려 한다"가 있다. 이번 라운드의 선언은 "리무진을 들어 올린다"다.
 # 장면에 나오면 선언한 행동이 바뀌었을 수 있다(#100 의 측정). 행동을 꾸미는 데 쓴 것일 수도 있다. 사람이 본다
 PAST_ACTION_WORDS = ('망치', '내려치', '내리치', '두드')
-# 따옴표 대사. NPC 의 대사는 괜찮다. PC 의 대사인지는 사람이 본다
-QUOTE = re.compile(r'["“][^"”\n]*["”]')
+# 따옴표 안의 글. NPC 의 말은 괜찮다. PC 의 말인지는 사람이 본다
+QUOTE = re.compile(r'["“]([^"”\n]*)["”]')
+# 따옴표 안이 이 글자 수 이하이고 띄어쓰기가 없으면 짧은 소리(윽, 끄악, 어머)로 친다. 소리는 세지 않고 말만 센다.
+# 웹소설에서 PC 의 신음은 규칙과 상관없이 따옴표로 나온다. 고칠 것은 PC 의 말이다.
+# "가자!" 같은 짧은 말도 소리로 셀 수 있는 어림이다
+SOUND_MAX = 4
 # "확인할 것"의 이름들. 묶어 세는 표가 이 이름으로 센다
 HINT_NUMBER = '보낸 적 없는 숫자'
 HINT_LEAK = '숨긴 설정의 낱말'
@@ -127,7 +131,7 @@ HINT_SAMPLE = '문체 예시의 낱말'
 HINT_HANZI = '한자'
 HINT_LATIN = '영어 낱말'
 HINT_PAST = '지난 행동·버릇의 낱말'
-HINT_QUOTE = '따옴표 대사'
+HINT_QUOTE = '따옴표 속 말'
 HINT_NAME = '설정에만 있는 이름'
 # 묶어 세는 표에 세는 것들
 TALLIED_HINTS = (HINT_PAST, HINT_QUOTE, HINT_NAME, HINT_LEAK)
@@ -282,6 +286,12 @@ def numbers_sent() -> set[str]:
     return {number for message in build_messages(REQUEST) for number in NUMBER.findall(message.content)}
 
 
+def is_sound(body: str) -> bool:
+    """따옴표 안의 글이 말이 아니라 짧은 소리인가. 문장 부호를 뺀 글에 띄어쓰기가 없고 SOUND_MAX 글자 이하."""
+    letters = re.sub(r'[^\w\s]', '', body).strip()
+    return ' ' not in letters and len(letters) <= SOUND_MAX
+
+
 def unseen_names(scene: str, style: NarrationStyle, sets: LoreSets | None) -> list[str]:
     """
     장면에 나온 로어북 항목의 이름 중 로어북을 뺀 프롬프트에는 없는 것. 플레이어가 아직 모르는 이름이다.
@@ -315,9 +325,9 @@ def find_hints(scene: str, sets: LoreSets | None = None, style: NarrationStyle =
     past = [word for word in PAST_ACTION_WORDS if word in scene]
     if past:
         hints.append(f'{HINT_PAST}({", ".join(past)})')
-    quotes = QUOTE.findall(scene)
-    if quotes:
-        hints.append(f'{HINT_QUOTE} {len(quotes)}개')
+    speech = [body for body in QUOTE.findall(scene) if not is_sound(body)]
+    if speech:
+        hints.append(f'{HINT_QUOTE} {len(speech)}개')
     names = unseen_names(scene, style, sets)
     if names:
         hints.append(f'{HINT_NAME}({", ".join(names)})')
