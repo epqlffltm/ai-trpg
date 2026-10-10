@@ -5,16 +5,20 @@
 
 자동 테스트(CI 포함)는 이것만 쓴다. 실제 모델은 느리고, 돈이 들고, 같은 입력에 같은 글을 내지 않는다.
 받은 것을 적어 두어서, 테스트가 "모델에게 무엇을 보냈나"를 들여다볼 수 있다.
+진짜 provider 처럼 글을 몇 글자씩 조각내어 흘려 준다. 조각을 받는 쪽을 테스트할 수 있다.
 """
 
 from dataclasses import dataclass, field
 from typing import ClassVar
 
 from app.ai.calls import CallRecord
-from app.ai.provider import ChatMessage, Completion, GenerationParams
+from app.ai.provider import ChatMessage, Completion, GenerationParams, TextSink, ignore_text
 
 # 가짜 모델의 이름. 기록에 남을 때 진짜 모델과 섞이지 않게 한다
 FAKE_MODEL = 'fake'
+
+# 흘려 줄 때 한 조각의 글자 수
+PIECE_SIZE = 4
 
 
 @dataclass(frozen=True)
@@ -25,12 +29,18 @@ class Call:
     params: GenerationParams
 
 
+def split_text(text: str, size: int) -> list[str]:
+    """글을 size 글자씩 자른다. 이어 붙이면 원래 글이다. 빈 글이면 빈 목록이다."""
+    return [text[start : start + size] for start in range(0, len(text), size)]
+
+
 @dataclass
 class FakeProvider:
     """
     정해 둔 글을 돌려주는 provider. 몇 번을 불러도 같은 글이다.
 
     reply 가 돌려줄 글이다. truncated 를 켜면 길이 상한에 걸려 끊긴 답을 흉내 낸다. calls 에 받은 요청이 쌓인다.
+    piece_size 글자씩 조각내어 on_text 에 넘긴 뒤에 답을 돌려준다.
     """
 
     kind: ClassVar[str] = 'fake'
@@ -38,11 +48,16 @@ class FakeProvider:
     reply: str = '바람이 분다.'
     truncated: bool = False
     model: str = FAKE_MODEL
+    piece_size: int = PIECE_SIZE
     calls: list[Call] = field(default_factory=list)
 
-    async def complete(self, messages: list[ChatMessage], params: GenerationParams) -> Completion:
-        """받은 것을 적어 두고 정해 둔 글을 돌려준다."""
+    async def complete(
+        self, messages: list[ChatMessage], params: GenerationParams, on_text: TextSink = ignore_text
+    ) -> Completion:
+        """받은 것을 적어 두고, 정해 둔 글을 조각내어 흘려 준 뒤 돌려준다."""
         self.calls.append(Call(messages=list(messages), params=params))
+        for piece in split_text(self.reply, self.piece_size):
+            on_text(piece)
         return Completion(text=self.reply, model=self.model, truncated=self.truncated)
 
 
