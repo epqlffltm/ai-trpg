@@ -19,6 +19,7 @@ from typing import Any
 
 import yaml
 
+from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.rounds.narrator import Move, NarrationRequest
 
@@ -102,6 +103,8 @@ def entry_problems(raw: dict[str, Any], index: int) -> list[str]:
         problems.append(f'{where} {name}: 키워드는 빈 글이 아니고 {KEYWORD_MAX}자까지다')
     if not isinstance(content, str) or len(content) > CONTENT_MAX:
         problems.append(f'{where} {name}: 내용은 {CONTENT_MAX}자까지의 글이다')
+    if raw.get('kind', LoreKind.OTHER) not in list(LoreKind):
+        problems.append(f'{where} {name}: kind 는 {", ".join(LoreKind)} 중 하나다')
     return problems
 
 
@@ -167,7 +170,11 @@ def find_problems(document: Any) -> list[str]:
 def to_entry(raw: dict[str, Any]) -> EntrySnapshot:
     """항목 하나를 판의 항목 모양으로."""
     return EntrySnapshot(
-        id=entry_id(raw['name']), name=raw['name'], keywords=raw.get('keywords', []), content=raw.get('content', '')
+        id=entry_id(raw['name']),
+        name=raw['name'],
+        keywords=raw.get('keywords', []),
+        content=raw.get('content', ''),
+        kind=LoreKind(raw.get('kind', LoreKind.OTHER)),
     )
 
 

@@ -29,6 +29,7 @@ from app.assets.models import (
     AssetType,
     Lorebook,
     LoreEntry,
+    LoreKind,
 )
 from app.main import API_PREFIX
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -171,10 +172,21 @@ async def test_adds_an_entry(client: AsyncClient, my_headers: dict[str, str]):
 
     assert response.status_code == status.HTTP_201_CREATED
     entry = response.json()
-    assert set(entry) == {'id', 'name', 'keywords', 'content', 'created_at', 'updated_at'}
+    assert set(entry) == {'id', 'name', 'kind', 'keywords', 'content', 'created_at', 'updated_at'}
     assert entry['name'] == NAME
     assert entry['keywords'] == KEYWORDS
     assert entry['content'] == CONTENT
+
+
+@pytest.mark.parametrize('kind', list(LoreKind))
+async def test_an_entry_has_a_kind(client: AsyncClient, my_headers: dict[str, str], kind: LoreKind):
+    lorebook = await create_lorebook(client, my_headers)
+
+    response = await client.post(entries_url(lorebook), json={'name': NAME, 'kind': kind}, headers=my_headers)
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()['kind'] == kind
+    assert (await client.get(entries_url(lorebook), headers=my_headers)).json()[0]['kind'] == kind
 
 
 async def test_an_entry_needs_only_a_name(client: AsyncClient, my_headers: dict[str, str]):
@@ -184,6 +196,8 @@ async def test_an_entry_needs_only_a_name(client: AsyncClient, my_headers: dict[
 
     assert entry['keywords'] == []
     assert entry['content'] == ''
+    # 종류를 적지 않으면 기타다. 종류가 생기기 전의 항목과 같게 다뤄진다
+    assert entry['kind'] == LoreKind.OTHER
 
 
 async def test_keywords_are_trimmed(client: AsyncClient, my_headers: dict[str, str]):
@@ -211,6 +225,10 @@ async def test_keywords_are_trimmed(client: AsyncClient, my_headers: dict[str, s
         {'name': '항목', 'keywords': ['스미스', ' 스미스 ']},
         {'name': '항목', 'keywords': '스미스'},
         {'name': '항목', 'lorebook_id': NO_SUCH_ID},
+        {'name': '항목', 'kind': 'monster'},
+        # 화면에 보이는 이름이 아니라 값으로 보낸다
+        {'name': '항목', 'kind': '인물'},
+        {'name': '항목', 'kind': None},
     ],
 )
 async def test_rejects_a_bad_entry(client: AsyncClient, my_headers: dict[str, str], body: dict):
@@ -275,7 +293,23 @@ async def test_updates_only_the_fields_that_were_sent(client: AsyncClient, my_he
     assert body['content'] == CONTENT
     assert body['name'] == NAME
     assert body['keywords'] == KEYWORDS
+    assert body['kind'] == LoreKind.OTHER
     assert body['updated_at'] > entry['updated_at']
+
+
+async def test_updates_the_kind_of_an_entry(client: AsyncClient, my_headers: dict[str, str]):
+    lorebook = await create_lorebook(client, my_headers)
+    entry = await add_entry(client, my_headers, lorebook, keywords=KEYWORDS, content=CONTENT)
+    url = f'{entries_url(lorebook)}/{entry["id"]}'
+
+    response = await client.patch(url, json={'kind': LoreKind.PERSON}, headers=my_headers)
+    unchanged = await client.patch(url, json={'kind': None}, headers=my_headers)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()['kind'] == LoreKind.PERSON
+    assert response.json()['content'] == CONTENT
+    # null 은 "보내지 않았다"다. 종류를 지우지 않는다
+    assert unchanged.json()['kind'] == LoreKind.PERSON
 
 
 async def test_an_empty_list_clears_the_keywords(client: AsyncClient, my_headers: dict[str, str]):
@@ -310,10 +344,14 @@ async def test_rejects_a_bad_update(client: AsyncClient, my_headers: dict[str, s
 
     too_many = await client.patch(url, json={'keywords': ['가', '나', '다', '라', '마', '바']}, headers=my_headers)
     unknown = await client.patch(url, json={'title': '제목'}, headers=my_headers)
+    bad_kind = await client.patch(url, json={'kind': 'monster'}, headers=my_headers)
 
     assert too_many.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert unknown.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert (await client.get(entries_url(lorebook), headers=my_headers)).json()[0]['keywords'] == KEYWORDS
+    assert bad_kind.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    stored = (await client.get(entries_url(lorebook), headers=my_headers)).json()[0]
+    assert stored['keywords'] == KEYWORDS
+    assert stored['kind'] == LoreKind.OTHER
 
 
 # --- 항목 지우기 ---
@@ -477,6 +515,30 @@ async def test_the_database_rejects_too_many_keywords(session: AsyncSession):
 
     with pytest.raises(IntegrityError):
         await session.commit()
+
+
+async def test_the_database_rejects_an_unknown_kind(session: AsyncSession):
+    lorebook_id = await make_lorebook(session)
+    session.add(LoreEntry(lorebook_id=lorebook_id, name='항목', kind='monster'))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+
+
+async def test_the_database_fills_in_the_kind(session: AsyncSession):
+    lorebook_id = await make_lorebook(session)
+
+    # 종류 칸이 생기기 전처럼 종류 없이 넣은 줄은 기타가 된다(이미 있던 항목들이 이렇게 기타가 됐다)
+    await session.execute(
+        text(
+            'INSERT INTO lore_entries (id, lorebook_id, name, keywords, content) '
+            "VALUES (:id, :lorebook_id, :name, '{}', '')"
+        ),
+        {'id': uuid.uuid4(), 'lorebook_id': lorebook_id, 'name': '항목'},
+    )
+    kind = (await session.execute(text('SELECT kind FROM lore_entries'))).scalar_one()
+
+    assert kind == LoreKind.OTHER
 
 
 async def test_the_database_rejects_an_entry_without_a_lorebook(session: AsyncSession):

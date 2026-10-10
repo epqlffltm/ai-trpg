@@ -18,6 +18,7 @@ from app.assets.models import (
     LORE_ENTRY_MAX_KEYWORDS,
     LORE_ENTRY_NAME_MAX_LENGTH,
     LORE_KEYWORD_MAX_LENGTH,
+    LoreKind,
 )
 from app.assets.schemas import AssetCreate, AssetUpdate
 
@@ -49,13 +50,14 @@ Keywords = Annotated[list[Keyword], Field(max_length=LORE_ENTRY_MAX_KEYWORDS), A
 
 
 class EntryCreate(BaseModel):
-    """항목을 만들 때 받는 값. 이름만 필수다."""
+    """항목을 만들 때 받는 값. 이름만 필수다. 종류를 적지 않으면 기타다."""
 
     model_config = ConfigDict(extra='forbid')
 
     name: EntryName
     keywords: Keywords = []
     content: EntryContent = ''
+    kind: LoreKind = LoreKind.OTHER
 
 
 class EntryUpdate(BaseModel):
@@ -70,6 +72,7 @@ class EntryUpdate(BaseModel):
     name: EntryName | None = None
     keywords: Keywords | None = None
     content: EntryContent | None = None
+    kind: LoreKind | None = None
 
 
 class EntryDetail(BaseModel):
@@ -79,5 +82,6 @@ class EntryDetail(BaseModel):
     name: str
     keywords: list[str]
     content: str
+    kind: LoreKind
     created_at: datetime
     updated_at: datetime

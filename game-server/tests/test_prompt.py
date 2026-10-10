@@ -17,7 +17,7 @@ from dataclasses import replace
 import pytest
 
 from app.ai.provider import Role
-from app.assets.models import NarrationStyle
+from app.assets.models import LoreKind, NarrationStyle
 from app.rounds import prompt
 from app.rounds.narrator import LoreNote, Move, NarrationRequest, PastRound, StoryContext, Verdict
 from app.rounds.prompt import build_messages, fit_history, lore_lines, system_text
@@ -276,8 +276,8 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_the_template_is_narration_6():
-    assert prompt.PROMPT_VERSION == 'narration-6'
+def test_the_template_is_narration_7():
+    assert prompt.PROMPT_VERSION == 'narration-7'
 
 
 def test_the_last_message_asks_for_the_declared_actions():
@@ -374,3 +374,53 @@ def test_a_note_about_someone_acting_this_round_is_marked_as_a_player_character(
 
 def test_without_actors_no_note_is_marked():
     assert lore_lines([DWARF]) == [prompt.LORE_TITLE, prompt.LORE_NOTE, f'- 드워프: {DWARF.content}', '']
+
+
+# --- 항목의 종류(#105) ---
+
+
+def note(name: str, kind: LoreKind, content: str = '내용') -> LoreNote:
+    return LoreNote(entry_id=uuid.uuid4(), name=name, content=content, kind=kind)
+
+
+def test_a_note_starts_with_its_kind():
+    lady = note('악역영애', LoreKind.PERSON, '부채를 접는다.')
+    elf = note('폭주족 엘프', LoreKind.PERSON)
+
+    lines = lore_lines(
+        [lady, elf, note('톨게이트', LoreKind.PLACE), note('은하 경찰', LoreKind.FACTION)], {'폭주족 엘프'}
+    )
+
+    assert '- [인물] 악역영애: 부채를 접는다.' in lines
+    # 플레이어 캐릭터 표시는 이름표 뒤에 그대로 붙는다
+    assert f'- [인물] 폭주족 엘프 {prompt.PLAYER_TAG}: 내용' in lines
+    assert '- [장소] 톨게이트: 내용' in lines
+    assert '- [세력] 은하 경찰: 내용' in lines
+
+
+def test_every_kind_but_other_has_a_name():
+    # 기타는 종류가 생기기 전의 항목이다. 이름을 붙이지 않아 예전과 같은 줄이 된다
+    assert set(prompt.KIND_NAMES) == set(LoreKind) - {LoreKind.OTHER}
+    assert lore_lines([DWARF])[2] == f'- 드워프: {DWARF.content}'
+
+
+def test_rules_for_legends_and_events_come_only_with_them():
+    legend = note('결승선', LoreKind.LEGEND)
+    event = note('해적의 습격', LoreKind.EVENT)
+    rules = [prompt.KIND_RULES[LoreKind.LEGEND], prompt.KIND_RULES[LoreKind.EVENT]]
+
+    with_both = lore_lines([event, legend])
+    without = lore_lines([DWARF, note('악역영애', LoreKind.PERSON)])
+
+    # 다루는 법은 안내 다음, 항목들 앞에 온다. 순서는 항목의 순서와 상관없이 같다
+    assert with_both[:4] == [prompt.LORE_TITLE, prompt.LORE_NOTE, *rules]
+    assert lore_lines([legend])[2] == rules[0]
+    assert not any(rule in without for rule in rules)
+
+
+def test_the_kind_rules_say_how_to_treat_them():
+    # 전설은 사실이 아닐 수 있다. 사건은 엔진(퀘스트)이 정한다. 서술이 먼저 일으키거나 끝내지 않는다
+    assert '[전설]' in prompt.KIND_RULES[LoreKind.LEGEND]
+    assert '단정하지' in prompt.KIND_RULES[LoreKind.LEGEND]
+    assert '[사건]' in prompt.KIND_RULES[LoreKind.EVENT]
+    assert '먼저 일으키거나 결말을 정하지' in prompt.KIND_RULES[LoreKind.EVENT]

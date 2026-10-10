@@ -25,6 +25,7 @@ from app.assets.models import (
     VERSION_NOTE_MAX_LENGTH,
     Asset,
     AssetType,
+    LoreKind,
     Scenario,
     ScenarioVersion,
 )
@@ -41,6 +42,7 @@ from app.assets.scenarios.snapshot import (
     upgrade_from_8,
     upgrade_from_9,
     upgrade_from_10,
+    upgrade_from_11,
 )
 from app.engine.sheet import fits
 from app.engine.templates import SRD5
@@ -369,7 +371,9 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
     entries_url = f'{LOREBOOKS_URL}/{lorebook["id"]}/entries'
     entry = (
         await client.post(
-            entries_url, json={'name': '스미스', 'keywords': ['드워프'], 'content': '추격자'}, headers=my_headers
+            entries_url,
+            json={'name': '스미스', 'keywords': ['드워프'], 'content': '추격자', 'kind': 'person'},
+            headers=my_headers,
         )
     ).json()
     scenario = await create(
@@ -407,7 +411,9 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
             {
                 'id': lorebook['id'],
                 'title': '인명사전',
-                'entries': [{'id': entry['id'], 'name': '스미스', 'keywords': ['드워프'], 'content': '추격자'}],
+                'entries': [
+                    {'id': entry['id'], 'name': '스미스', 'keywords': ['드워프'], 'content': '추격자', 'kind': 'person'}
+                ],
             }
         ],
     }
@@ -683,6 +689,15 @@ def make_format_10() -> dict:
     return {key: value for key, value in upgrade_from_9(make_format_9()).items() if key != 'narration_style'}
 
 
+def make_format_11() -> dict:
+    """로어북 항목에 종류가 없던 때의 판. 항목 하나가 든 로어북이 붙어 있다."""
+    entry = {'id': NO_SUCH_ID, 'name': '스미스', 'keywords': ['드워프'], 'content': '추격자'}
+    return {
+        **upgrade_from_10(make_format_10()),
+        'lorebooks': [{'id': NO_SUCH_ID, 'title': '인명사전', 'entries': [entry]}],
+    }
+
+
 def test_upgrades_a_format_5_document():
     format_5 = make_format_5()
 
@@ -771,6 +786,28 @@ def test_upgrades_a_format_10_document():
     # 받은 문서는 고치지 않는다
     assert format_10['format'] == 10
     assert 'narration_style' not in format_10
+
+
+def test_upgrades_a_format_11_document():
+    format_11 = make_format_11()
+
+    upgraded = upgrade_from_11(format_11)
+
+    # 항목에 종류가 없던 때의 판이다. 지금까지와 똑같이 다뤄지는 기타로 읽는다
+    assert upgraded['format'] == 12
+    (entry,) = upgraded['lorebooks'][0]['entries']
+    assert entry == {**format_11['lorebooks'][0]['entries'][0], 'kind': 'other'}
+    assert upgraded['lorebooks'][0]['title'] == '인명사전'
+    # 받은 문서는 고치지 않는다. 안쪽의 항목도 그대로다
+    assert format_11['format'] == 11
+    assert 'kind' not in format_11['lorebooks'][0]['entries'][0]
+
+
+def test_reads_a_version_from_before_lore_kinds():
+    old = read_snapshot(make_format_11())
+
+    assert old.format == SNAPSHOT_FORMAT
+    assert [entry.kind for lorebook in old.lorebooks for entry in lorebook.entries] == [LoreKind.OTHER]
 
 
 def test_reads_a_version_from_before_narration_styles():

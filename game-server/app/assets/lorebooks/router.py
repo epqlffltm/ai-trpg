@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from app.assets.lorebooks import service
 from app.assets.lorebooks.schemas import EntryCreate, EntryDetail, EntryUpdate, LorebookCreate, LorebookUpdate
 from app.assets.lorebooks.service import LorebookFullError
-from app.assets.models import LOREBOOK_MAX_ENTRIES, LoreEntry
+from app.assets.models import LOREBOOK_MAX_ENTRIES, LoreEntry, LoreKind
 from app.assets.routing import Paging, Session, to_page, to_summary
 from app.assets.schemas import AssetPage, AssetSummary
 from app.auth.dependencies import CurrentUser
@@ -31,6 +31,7 @@ def to_entry_detail(entry: LoreEntry) -> EntryDetail:
         name=entry.name,
         keywords=entry.keywords,
         content=entry.content,
+        kind=LoreKind(entry.kind),
         created_at=entry.created_at,
         updated_at=entry.updated_at,
     )
