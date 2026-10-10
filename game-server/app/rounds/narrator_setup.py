@@ -8,7 +8,9 @@
 """
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.ai.call_log import DbCallLog
 from app.ai.openai_compat import OpenAICompatProvider
 from app.core.config import Settings
 from app.rounds.llm_narrator import LLMNarrator
@@ -26,8 +28,14 @@ def build_provider(settings: Settings, client: httpx.AsyncClient) -> OpenAICompa
     )
 
 
-def build_narrator(settings: Settings, client: httpx.AsyncClient) -> Narrator:
-    """설정이 llm 이면 언어 모델로 서술하는 서술자, 아니면 가짜 서술자."""
+def build_narrator(
+    settings: Settings, client: httpx.AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> Narrator:
+    """
+    설정이 llm 이면 언어 모델로 서술하는 서술자, 아니면 가짜 서술자.
+
+    언어 모델의 서술자는 부를 때마다 DB 에 기록을 남긴다(ai_invocations). 가짜는 모델을 부르지 않으니 남길 것이 없다.
+    """
     if settings.narrator == 'llm':
-        return LLMNarrator(build_provider(settings, client))
+        return LLMNarrator(build_provider(settings, client), DbCallLog(session_factory))
     return FakeNarrator()

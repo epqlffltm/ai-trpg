@@ -18,7 +18,7 @@ SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되�
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 
@@ -124,6 +124,8 @@ class OpenAICompatProvider:
     client 는 앱이 들고 있는 httpx 클라이언트다. 닫는 것은 앱이 한다.
     base_url 은 /chat/completions 앞까지다(Ollama 면 http://127.0.0.1:11434/v1).
     """
+
+    kind: ClassVar[str] = 'openai_compat'
 
     client: httpx.AsyncClient
     base_url: str

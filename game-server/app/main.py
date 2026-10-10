@@ -120,8 +120,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.state.dice = RandomDice()
 
     # GM 의 서술을 만드는 것. 설정(NARRATOR)이 정한다. 기본은 AI 를 부르지 않는 가짜다.
-    # 언어 모델이면 위의 httpx 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다
-    app.state.narrator = build_narrator(settings, app.state.http_client)
+    # 언어 모델이면 위의 httpx 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다.
+    # 부를 때마다 위의 세션 틀로 DB 에 기록을 남긴다(app/ai/call_log.py)
+    app.state.narrator = build_narrator(settings, app.state.http_client, app.state.session_factory)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
