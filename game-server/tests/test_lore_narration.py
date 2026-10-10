@@ -170,7 +170,8 @@ async def test_the_on_mode_puts_the_entries_in_the_prompt_and_counts_their_words
     (call,) = provider.calls
     last = call.messages[-1].content
     assert last.startswith(prompt.LORE_TITLE)
-    assert f'- 리엔: {LIEN.content}' in last
+    # 리엔은 예시 라운드에서 행동한 PC 다
+    assert f'- 리엔 {prompt.PLAYER_TAG}: {LIEN.content}' in last
     assert trial.lore == LoreMode.ON
     assert trial.notes == 1
     assert '휘날리며' in trial.lore_used
