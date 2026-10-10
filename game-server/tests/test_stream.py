@@ -14,12 +14,15 @@ HTTP 쪽(인증, 404, 머리말)은 tests/test_stream_api.py 가 본다.
   - 앉아 있지 않게 되면, 테이블이 끝나면, 토큰이 만료되면 서버가 닫는다.
   - 열려 있는 라운드의 남의 선언은 스트림으로도 오지 않는다.
   - 서술이 쓰이는 동안 미리 보기가 흘러오고, 다 쓰이면 서술의 이벤트가 그 뒤에 온다.
+  - 신호를 듣는 연결을 맺지 못해도 끝나지 않는다. 서버가 꺼지면 닫는다.
 """
 
 import asyncio
 import json
+import logging
 import uuid
 
+import asyncpg
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
@@ -28,12 +31,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.events import recorder
 from app.events.models import EventType
 from app.main import API_PREFIX
-from app.realtime import service, signals
+from app.realtime import listener, service, signals
 from app.realtime.service import Cursor
 from app.realtime.signals import Kind, Signal
 from app.realtime.sse import Frame
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.tables import repository as table_repository
+from tests.conftest import make_test_settings
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token, make_viewer
 from tests.streaming import DeafSource
@@ -290,6 +294,163 @@ async def test_the_stream_catches_up_by_itself_when_signals_are_lost(
     # 깨어날 때마다 주석을 보내고 DB 를 직접 읽는다. 신호 없이도 새 글이 온다
     assert await reader.next_comment() == 'ping'
     assert (await reader.next()).id == '2-1'
+
+
+async def test_a_stream_that_cannot_hear_signals_reads_more_often(client: AsyncClient, me: dict, friend: dict, connect):
+    table = await open_duo(client, me, friend)
+    # 스스로 깨어나는 간격은 60 초지만, 신호를 듣지 못하면 0.2 초마다 깨어난다
+    reader = connect(table, FRIEND, Cursor(events=2), source=DeafSource(), deaf_heartbeat=0.2)
+    assert await reader.next_comment() == 'connected'
+
+    await say(client, me, table, HELLO)
+
+    assert await reader.next_comment() == 'ping'
+    assert (await reader.next()).id == '2-1'
+
+
+# 닫혀 있는 포트. 듣는 연결이 거절된다. 주소의 비밀번호가 로그에 남지 않는지 본다
+UNREACHABLE_DB = 'postgresql+asyncpg://game:not-the-password@127.0.0.1:1/trpg'
+
+
+async def test_failing_to_listen_is_logged_without_the_address(caplog: pytest.LogCaptureFixture, app: FastAPI):
+    source = listener.PostgresListener(make_test_settings(database_url=UNREACHABLE_DB), app.state.hub)
+
+    with caplog.at_level(logging.WARNING):
+        assert await source.ensure_listening() is False
+
+    assert '듣는 연결을 맺지 못했다' in caplog.text
+    assert 'not-the-password' not in caplog.text
+    assert not source.is_listening()
+
+
+async def refuse_to_listen() -> None:
+    """
+    듣는 연결을 바로 거절한다. 닫힌 포트에 실제로 붙으면 OS 마다 거절까지의 시간이 다르다(윈도우는 2초쯤).
+
+    asyncpg.connect 를 바꾸지 않는다. 앱의 DB 연결(SQLAlchemy)도 그것을 쓴다. 듣는 쪽의 연결만 바꾼다.
+    """
+    raise OSError('연결 거부')
+
+
+async def test_a_stream_survives_failing_to_listen(
+    client: AsyncClient, me: dict, friend: dict, connect, app, monkeypatch: pytest.MonkeyPatch
+):
+    table = await open_duo(client, me, friend)
+    source = listener.PostgresListener(make_test_settings(), app.state.hub)
+    monkeypatch.setattr(source, '_listen', refuse_to_listen)
+    reader = connect(table, FRIEND, Cursor(events=2), source=source, deaf_heartbeat=0.2)
+
+    # 예전에는 여기서 예외가 올라가 500 으로 끝났다. 이제는 붙고, 주기적으로 읽어서 받는다
+    assert await reader.next_comment() == 'connected'
+    await say(client, me, table, HELLO)
+    assert await reader.next_comment() == 'ping'
+    assert (await reader.next()).id == '2-1'
+
+
+async def test_the_text_of_a_listening_failure_is_not_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, app: FastAPI
+):
+    async def connect_db(*args, **kwargs):
+        # 드라이버의 오류 글에 무엇이 실릴지 모른다(접속 주소 등). 종류만 남긴다
+        raise OSError('postgresql://game:not-the-password@db 에 연결할 수 없음')
+
+    monkeypatch.setattr(listener.asyncpg, 'connect', connect_db)
+    source = listener.PostgresListener(make_test_settings(), app.state.hub)
+
+    with caplog.at_level(logging.WARNING):
+        assert await source.ensure_listening() is False
+
+    assert 'OSError' in caplog.text
+    assert 'not-the-password' not in caplog.text
+
+
+class FlakySource:
+    """처음에는 듣지 못하다가 다시 맺으면 듣게 되는 것. 몇 번 맺으려 했는지 센다."""
+
+    def __init__(self) -> None:
+        self.tries = 0
+
+    async def ensure_listening(self) -> bool:
+        self.tries += 1
+        return self.tries > 1
+
+    async def stop(self) -> None:
+        return None
+
+
+async def test_a_stream_goes_back_to_the_slow_beat_once_it_hears_again(
+    client: AsyncClient, me: dict, friend: dict, connect
+):
+    table = await open_duo(client, me, friend)
+    source = FlakySource()
+    reader = connect(table, FRIEND, Cursor(events=2), source=source, deaf_heartbeat=0.2)
+    assert await reader.next_comment() == 'connected'
+
+    # 듣지 못하는 동안 0.2 초 만에 깨어나 다시 맺는다. 맺었으니 다음에는 60 초 동안 조용하다
+    assert await reader.next_comment() == 'ping'
+    assert await reader.is_quiet()
+    assert source.tries == 2
+
+
+class RefusingConnection:
+    """맺어지기는 하지만 듣기를 걸면 거절하는 연결. 닫혔는지 적어 둔다."""
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def add_listener(self, channel, callback) -> None:
+        raise asyncpg.PostgresError('듣기 거절')
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+async def test_a_connection_that_refuses_to_listen_is_closed(monkeypatch: pytest.MonkeyPatch, app: FastAPI):
+    connection = RefusingConnection()
+
+    async def connect_db(*args, **kwargs) -> RefusingConnection:
+        return connection
+
+    monkeypatch.setattr(listener.asyncpg, 'connect', connect_db)
+    source = listener.PostgresListener(make_test_settings(), app.state.hub)
+
+    assert await source.ensure_listening() is False
+    # 맺은 연결을 남겨 두면 듣지도 않는 연결이 DB 에 쌓인다
+    assert connection.closed
+
+
+# --- 서버가 꺼질 때 ---
+
+
+async def test_the_stream_closes_when_the_server_shuts_down(
+    client: AsyncClient, me: dict, friend: dict, connect, app: FastAPI
+):
+    table = await open_duo(client, me, friend)
+    reader = connect(table, FRIEND, Cursor(events=2))
+    await reader.settle()
+
+    app.state.hub.close_all()
+
+    # 스트림이 끝나야 서버가 꺼진다. 받는 쪽은 이유를 보고 잠깐 쉬었다가 다시 붙는다
+    frame = await reader.next()
+    assert (frame.event, json.loads(frame.data), frame.id) == ('closed', {'reason': 'server_shutdown'}, None)
+    assert await reader.next() is None
+    assert app.state.hub.count(uuid.UUID(table['id'])) == 0
+
+
+async def test_a_stream_opened_while_shutting_down_closes_at_once(
+    client: AsyncClient, me: dict, friend: dict, connect, app: FastAPI
+):
+    table = await open_duo(client, me, friend)
+    app.state.hub.close_all()
+
+    reader = connect(table, FRIEND)
+
+    # 밀린 것은 보내고 닫는다. 다시 붙을 때 그 뒤부터 받는다
+    frames = await reader.take(3)
+    assert kinds(frames) == ['table_created', 'member_joined', 'closed']
+    assert json.loads(frames[2].data) == {'reason': 'server_shutdown'}
+    assert await reader.next() is None
 
 
 # --- 이어 받기 ---
