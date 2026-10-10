@@ -7,8 +7,11 @@
 뜻은 모르지만 "가까운 것을 고르는지"는 볼 수 있다.
 
 보는 것은 넷이다.
-  - 찾는 글, 키워드 일치, 글자 수 안에서 고르기(순수한 함수).
-  - 키워드로 고른 것이 먼저, 그다음 벡터로 가까운 것. 먼 것은 고르지 않는다.
+  - 찾는 글, 키워드 일치, 글자 수 안에서 고르기, 거리 기준(순수한 함수).
+  - 키워드로 고른 것이 먼저, 그다음 벡터로 가까운 것. 먼 것은 고르지 않는다. 키워드로 걸려도 멀면 넣지 않는다.
+
+가짜 임베더의 거리는 bge-m3 와 크기가 달라서, 테스트 설정은 가짜에 맞춘 거리 기준을 쓴다(tests/conftest.py).
+거리 기준 자체는 거리를 손으로 적은 순수 함수의 테스트로 본다.
   - 임베딩 모델이 실패하면 키워드로만, 벡터가 모자라면 색인을 다시 맡긴다. 서술은 막지 않는다.
   - 라운드를 닫으면 고른 항목이 프롬프트에 들어가고, 어느 항목을 넣었는지 AI 호출의 기록에 남는다.
 """
@@ -20,7 +23,7 @@ from dataclasses import dataclass, field
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.call_log import DbCallLog
@@ -28,12 +31,17 @@ from app.ai.fake import FakeEmbedder, FakeProvider, word_vector
 from app.ai.models import AiInvocation
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.lore import indexing, repository
+from app.lore.models import LoreEmbedding
 from app.lore.retrieval import (
     LORE_MAX_CHARS,
     LoreRetriever,
+    Thresholds,
+    choose,
     keyword_hits,
     load_candidates,
     mentions,
+    near_enough,
+    nearest_within,
     pick,
     query_text,
 )
@@ -103,9 +111,16 @@ async def open_table(client: AsyncClient, me: dict[str, str], entries: list[dict
     return table.json()
 
 
-def make_retriever(app: FastAPI, embedder: FakeEmbedder | None = None) -> tuple[LoreRetriever, CountingIndexer]:
+def make_retriever(
+    app: FastAPI, embedder: FakeEmbedder | None = None, thresholds: Thresholds | None = None
+) -> tuple[LoreRetriever, CountingIndexer]:
+    """
+    검색하는 것과 색인을 맡긴 기록. 거리 기준을 주지 않으면 테스트 설정의 것(가짜 임베더에 맞춘 값)이다.
+    """
     indexer = CountingIndexer()
-    return LoreRetriever(app.state.session_factory, embedder or FakeEmbedder(), indexer), indexer
+    settings = app.state.settings
+    chosen = thresholds or Thresholds(settings.lore_max_distance, settings.lore_keyword_max_distance)
+    return LoreRetriever(app.state.session_factory, embedder or FakeEmbedder(), indexer, chosen), indexer
 
 
 def names(notes) -> list[str]:
@@ -113,6 +128,60 @@ def names(notes) -> list[str]:
 
 
 # --- 순수한 함수 ---
+
+
+def distances_of(*pairs: tuple[EntrySnapshot, float]) -> dict[uuid.UUID, float]:
+    """항목마다 거리를 손으로 적는다."""
+    return {entry.id: distance for entry, distance in pairs}
+
+
+def test_nearest_within_keeps_the_order_the_limit_and_the_distance():
+    a, b, c, unknown = make_entry('가'), make_entry('나'), make_entry('다'), make_entry('라')
+    distances = distances_of((a, 0.4), (b, 0.1), (c, 0.3))
+
+    assert nearest_within([a, b, c, unknown], distances, 0.35, 8) == [b, c]
+    assert nearest_within([a, b, c, unknown], distances, 0.45, 2) == [b, c]
+    assert nearest_within([a, b, c, unknown], distances, 0.4, 8) == [b, c, a]
+
+
+def test_a_keyword_hit_is_near_enough_within_the_limit_or_without_a_distance():
+    near, far, unknown = make_entry('가'), make_entry('나'), make_entry('다')
+    distances = distances_of((near, 0.5), (far, 0.51))
+
+    assert near_enough(near, distances, 0.5)
+    assert not near_enough(far, distances, 0.5)
+    # 벡터가 없으면 거리를 모른다. 키워드를 믿는다
+    assert near_enough(unknown, distances, 0.5)
+
+
+def test_a_far_keyword_hit_is_left_out():
+    # 계획을 망치고 → 키워드 망치. 글 전체의 뜻은 드워프와 멀다
+    dwarf = make_entry('드워프', ['망치'], '톨게이트 차단기를 내려친다.')
+    lady = make_entry('악역영애', [], '부채를 접으며 웃는다.')
+    text = '모모: 이번 계획을 망치고 싶지 않다.'
+
+    far = choose([dwarf, lady], text, distances_of((dwarf, 0.6), (lady, 0.9)), Thresholds(0.45, 0.5))
+    near = choose([dwarf, lady], text, distances_of((dwarf, 0.4), (lady, 0.9)), Thresholds(0.45, 0.5))
+
+    assert far == []
+    assert near == [dwarf]
+
+
+def test_without_distances_keyword_hits_are_all_kept():
+    dwarf = make_entry('드워프', ['망치'])
+    lady = make_entry('악역영애')
+
+    # 임베딩이 실패했다. 거리를 모르니 키워드로만, 상한 없이 고른다
+    assert choose([dwarf, lady], '망치를 든다', {}, Thresholds(0.45, 0.5)) == [dwarf]
+
+
+def test_keyword_hits_come_before_the_nearest():
+    dwarf = make_entry('드워프')
+    lady = make_entry('악역영애')
+    star = make_entry('열일곱째 행성')
+    distances = distances_of((dwarf, 0.45), (lady, 0.1), (star, 0.3))
+
+    assert choose([dwarf, lady, star], '드워프', distances, Thresholds(0.4, 0.5)) == [dwarf, lady, star]
 
 
 def test_the_query_is_the_scene_and_the_declarations():
@@ -199,6 +268,50 @@ async def test_an_entry_close_in_meaning_is_found_without_its_name(client: Async
     notes = await retriever.find(make_request(uuid.UUID(table['id']), '금빛 리무진을 탄다'))
 
     assert names(notes) == ['악역영애']
+
+
+async def test_the_server_leaves_out_a_keyword_hit_beyond_the_limit(client: AsyncClient, me: dict, app: FastAPI):
+    table = await open_table(client, me, [DWARF, ELF])
+    await app.state.jobs.drain()
+    strict = Thresholds(max_distance=0.0, keyword_max_distance=0.0)
+    retriever, _ = make_retriever(app, thresholds=strict)
+
+    # 드워프의 이름이 나왔지만 글 전체와의 거리가 상한(0)보다 멀다
+    assert await retriever.find(make_request(uuid.UUID(table['id']), OPENING, '드워프를 따돌린다')) == []
+
+
+async def test_a_keyword_hit_without_a_vector_is_kept(
+    client: AsyncClient, me: dict, app: FastAPI, session: AsyncSession
+):
+    table = await open_table(client, me, [DWARF, ELF])
+    await app.state.jobs.drain()
+    # 판의 벡터가 없다(게시 직후의 색인이 실패한 판)
+    await session.execute(delete(LoreEmbedding))
+    await session.commit()
+    strict = Thresholds(max_distance=0.0, keyword_max_distance=0.0)
+    retriever, indexer = make_retriever(app, thresholds=strict)
+
+    notes = await retriever.find(make_request(uuid.UUID(table['id']), OPENING, '드워프를 따돌린다'))
+
+    assert names(notes) == ['드워프']
+    assert indexer.scheduled
+
+
+async def test_when_the_embedder_fails_keyword_hits_skip_the_limit(client: AsyncClient, me: dict, app: FastAPI):
+    table = await open_table(client, me, [DWARF, ELF])
+    await app.state.jobs.drain()
+    strict = Thresholds(max_distance=0.0, keyword_max_distance=0.0)
+    retriever, _ = make_retriever(app, FakeEmbedder(error='unreachable'), strict)
+
+    notes = await retriever.find(make_request(uuid.UUID(table['id']), OPENING, '드워프를 따돌린다'))
+
+    assert names(notes) == ['드워프']
+
+
+async def test_the_app_uses_the_distances_in_the_settings(app: FastAPI):
+    settings = app.state.settings
+
+    assert app.state.lore.thresholds == Thresholds(settings.lore_max_distance, settings.lore_keyword_max_distance)
 
 
 async def test_a_far_entry_is_not_picked(client: AsyncClient, me: dict, app: FastAPI):

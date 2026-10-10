@@ -9,6 +9,7 @@ DB 도 모델도 쓰지 않는다. 벡터는 손으로 적거나 가짜 임베�
 
 import argparse
 import copy
+import math
 from dataclasses import replace
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from app.ai.fake import FakeEmbedder
 from app.ai.openai_embedder import OpenAICompatEmbedder
 from app.ai.provider import ProviderError
 from app.assets.scenarios.snapshot import EntrySnapshot
-from app.lore.retrieval import choose, query_text
+from app.lore.retrieval import KEYWORD_MAX_DISTANCE, MAX_DISTANCE, Thresholds, choose, query_text
 from app.rounds.narrator import NarrationRequest
 from evals.lore.dataset import (
     DEFAULT_PATH,
@@ -46,7 +47,7 @@ from evals.lore.metrics import (
     five_numbers,
     hit_distances,
     micro_precision,
-    nearest_within,
+    query_distances,
     rank,
     ranking_recall_at,
     recall,
@@ -56,7 +57,16 @@ from evals.lore.metrics import (
     within_gate,
 )
 from evals.lore.report import ModelResult, best, best_gate, full_report, miss_lines, name_recall
-from evals.lore.runner import GATE_SWEEP, SWEEP, evaluate, measure, sweep, sweep_gates, window_distances
+from evals.lore.runner import (
+    GATE_SWEEP,
+    SWEEP,
+    evaluate,
+    evaluate_current,
+    measure,
+    sweep,
+    sweep_gates,
+    window_distances,
+)
 from evals.lore.windows import sentences, windows_for
 from scripts.eval_lore import NoQueries, failure_message, make_embedders, read_dataset, run
 
@@ -248,14 +258,6 @@ def test_entries_are_ranked_nearest_first_and_those_without_vectors_are_left_out
     assert ranked[0].distance < ranked[1].distance
 
 
-def test_nearest_within_keeps_the_limit_and_the_distance():
-    ranked = [Ranked(entry('가'), 0.1), Ranked(entry('나'), 0.2), Ranked(entry('다'), 0.5)]
-
-    assert [item.name for item in nearest_within(ranked, 0.3, 8)] == ['가', '나']
-    assert [item.name for item in nearest_within(ranked, 0.3, 1)] == ['가']
-    assert [item.name for item in nearest_within(ranked, 0.5, 8)] == ['가', '나', '다']
-
-
 def test_the_methods_choose_as_the_server_does():
     dataset = parse_dataset(small_document())
     query = dataset.queries[0]
@@ -268,8 +270,23 @@ def test_the_methods_choose_as_the_server_does():
     assert chosen_by(Method.KEYWORD, entries, query, ranked, {}, rule) == ['리엔']
     assert chosen_by(Method.VECTOR, entries, query, ranked, {}, rule) == ['홍차', '토르빈']
     assert chosen_by(Method.HYBRID, entries, query, ranked, {}, rule) == ['리엔', '홍차', '토르빈']
-    server = choose(entries, query_text(query.request), [entries[2], entries[1]])
+    # 키워드의 상한을 끈 서버의 고르기와 같다
+    server = choose(entries, query_text(query.request), query_distances(ranked), Thresholds(0.5, math.inf))
     assert [item.name for item in server] == ['리엔', '홍차', '토르빈']
+
+
+def test_the_gated_method_is_the_server_rule():
+    dataset = parse_dataset(small_document())
+    entries = dataset.entries
+    query = dataset.queries[0]
+    ranked = [Ranked(entries[2], 0.1), Ranked(entries[1], 0.4), Ranked(entries[0], 0.6)]
+    distances = query_distances(ranked)
+
+    for gate in (0.5, 0.7):
+        server = choose(entries, query_text(query.request), distances, Thresholds(0.5, gate))
+        assert chosen_by(Method.GATED, entries, query, ranked, {}, Rule(0.5, gate)) == [item.name for item in server]
+    assert chosen_by(Method.GATED, entries, query, ranked, {}, Rule(0.5, 0.5)) == ['홍차', '토르빈']
+    assert chosen_by(Method.GATED, entries, query, ranked, {}, Rule(0.5, 0.7)) == ['리엔', '홍차', '토르빈']
 
 
 def test_the_length_cap_applies_to_every_method():
@@ -535,7 +552,7 @@ async def model_result(max_distance: float = 0.6) -> tuple:
     measurement = await measure(FakeEmbedder(), dataset)
     swept = sweep(dataset, measurement)
     gated = sweep_gates(dataset, measurement, max_distance)
-    return dataset, ModelResult(measurement, evaluate(dataset, measurement, max_distance), swept, gated)
+    return dataset, ModelResult(measurement, evaluate_current(dataset, measurement), swept, gated)
 
 
 async def test_the_report_has_a_summary_and_a_section_per_model():
@@ -545,7 +562,8 @@ async def test_the_report_has_a_summary_and_a_section_per_model():
 
     assert report.startswith('# 로어북 검색 평가: 작은 추격전 (항목 3개, 질의 4개)')
     assert report.count('## fake') == 2
-    assert '| hybrid |' in report
+    assert '| 질의 기준 상한(서버) |' in report
+    assert '### 틀린 질의 (서버, 거리 기준 0.45, 키워드 상한 0.50)' in report
     assert '←' in report
     assert '### 키워드에 상한을 두면' in report
     assert '| 없음(hybrid) |' in report
@@ -646,3 +664,13 @@ async def test_the_best_gate_prefers_finding_names_then_the_looser_gate():
     same = [replace(result.gated[0], rule=Rule(0.6, gate)) for gate in (0.5, 0.7)]
 
     assert best_gate(same, Method.WINDOWED).rule.gate == 0.7
+
+
+async def test_the_current_evaluation_uses_the_server_defaults_for_every_method():
+    dataset = parse_dataset(small_document())
+    measurement = await measure(FakeEmbedder(), dataset)
+
+    current = evaluate_current(dataset, measurement)
+
+    assert current.rule == Rule(MAX_DISTANCE, KEYWORD_MAX_DISTANCE)
+    assert set(current.overall) == set(Method)
