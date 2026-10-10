@@ -19,6 +19,7 @@ from app.rounds.narrator import (
     describe_impact,
     describe_verdict,
 )
+from tests.previews import RecordingPreview
 
 
 def make_request(moves: list[Move]) -> NarrationRequest:
@@ -45,6 +46,16 @@ async def test_lists_every_move_in_order():
     narration = await FakeNarrator().narrate(request)
 
     assert narration == '[3 라운드의 결과]\n폭주족 엘프: 바이크에 시동을 건다.\n악역영애: 크게 웃는다.'
+
+
+async def test_the_whole_narration_is_shown_at_once():
+    preview = RecordingPreview()
+    request = make_request([Move('폭주족 엘프', '바이크에 시동을 건다.')])
+
+    narration = await FakeNarrator().narrate(request, preview)
+
+    # AI 를 부르지 않으니 흘려보낼 조각이 없다. 한 번의 시도에 다 보낸다
+    assert preview.attempts == [[narration]]
 
 
 async def test_a_character_without_a_declaration_does_nothing():

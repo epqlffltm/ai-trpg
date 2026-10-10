@@ -3,13 +3,15 @@
 """
 스트림을 이루는 작은 부품들을 검증한다. DB 도 서버도 쓰지 않는다.
 
-  - 신호를 글자로 바꾸고 되돌리기(signals)
+  - 신호와 서술의 조각을 글자로 바꾸고 되돌리기(signals)
   - 방송실: 기다리는 자리를 깨우기(hub)
+  - 저장하지 않는 것(입력 중, 서술의 조각)을 메시지로 바꾸기(service)
   - SSE 의 글자 형식(sse)
   - 어디까지 받았는지를 요청에서 읽기(router.read_cursor)
 """
 
 import asyncio
+import json
 import uuid
 
 import pytest
@@ -18,8 +20,8 @@ from fastapi import HTTPException, status
 from app.realtime import signals, sse
 from app.realtime.hub import Hub
 from app.realtime.router import read_cursor
-from app.realtime.service import Cursor
-from app.realtime.signals import Kind, Signal
+from app.realtime.service import NARRATION_FRAME, Cursor, live_frames, narration_frames, typing_frames
+from app.realtime.signals import MAX_PIECE_CHARS, Kind, NarrationPiece, Signal, narration_pieces
 from app.realtime.sse import Comment, Frame
 
 TABLE = uuid.UUID('aaaaaaaa-2222-4333-8444-555555555555')
@@ -63,6 +65,61 @@ def test_a_signal_survives_the_channel(signal: Signal):
 def test_an_unknown_signal_is_dropped(payload: str):
     # 모르는 종류나 깨진 글자가 와도 듣는 쪽이 죽지 않는다
     assert signals.decode(payload) is None
+
+
+def piece(seq: int, text: str = '엔진 소리가', attempt: int = 1, round_number: int = 3) -> NarrationPiece:
+    """이 테이블의 서술의 조각 하나."""
+    return NarrationPiece(TABLE, round_number, attempt, seq, text)
+
+
+@pytest.mark.parametrize(
+    'text',
+    [
+        '엔진 소리가 골목을 메운다.',
+        # 글에 나누는 글자(:)가 있어도, 줄이 바뀌어도 그대로다
+        '사이렌: 멈춰라!\n\n드워프: 싫다.',
+        '',
+    ],
+)
+def test_a_narration_piece_survives_the_channel(text: str):
+    sent = piece(seq=7, text=text)
+
+    assert signals.decode(signals.encode(sent)) == sent
+
+
+@pytest.mark.parametrize(
+    'payload',
+    [
+        f'{TABLE}:{Kind.NARRATION}',
+        f'{TABLE}:{Kind.NARRATION}:3:1',
+        f'{TABLE}:{Kind.NARRATION}:3:1:0',
+        f'{TABLE}:{Kind.NARRATION}:three:1:0:글',
+        f'not-a-uuid:{Kind.NARRATION}:3:1:0:글',
+    ],
+)
+def test_a_broken_narration_piece_is_dropped(payload: str):
+    assert signals.decode(payload) is None
+
+
+def test_the_largest_piece_fits_in_a_notify():
+    # 한 글자에 4 바이트인 글자로 꽉 채운 조각. 번호들도 크게 잡는다
+    largest = NarrationPiece(TABLE, 99999, 99, 99999, '🏍' * MAX_PIECE_CHARS)
+
+    assert len(signals.encode(largest).encode()) < 8000
+
+
+def test_a_long_text_is_split_into_numbered_pieces():
+    text = '가' * (MAX_PIECE_CHARS * 2 + 1)
+
+    pieces = narration_pieces(TABLE, 3, 2, 5, text)
+
+    assert [(each.seq, len(each.text)) for each in pieces] == [(5, MAX_PIECE_CHARS), (6, MAX_PIECE_CHARS), (7, 1)]
+    assert {(each.round_number, each.attempt) for each in pieces} == {(3, 2)}
+    assert ''.join(each.text for each in pieces) == text
+
+
+def test_an_empty_text_makes_no_pieces():
+    assert narration_pieces(TABLE, 3, 1, 0, '') == []
 
 
 def test_each_schema_has_its_own_channel():
@@ -141,6 +198,49 @@ def test_the_seat_is_removed_even_when_the_stream_fails():
 
 def test_waking_a_table_nobody_waits_for_does_nothing():
     Hub().wake(Signal(table_id=TABLE, kind=Kind.EVENTS))
+
+
+async def test_pieces_with_the_same_text_are_all_kept():
+    hub = Hub()
+
+    with hub.subscribe(TABLE) as subscription:
+        # 같은 글이라도 번호가 다르면 다른 조각이다. 하나로 합쳐지면 글이 빠진다
+        hub.wake(piece(0, '하'))
+        hub.wake(piece(1, '하'))
+
+        assert await subscription.wait(SHORT) == {piece(0, '하'), piece(1, '하')}
+
+
+# --- 저장하지 않는 것 ---
+
+
+def test_pieces_received_out_of_order_are_sent_in_order():
+    received = {piece(2, '메운다.'), piece(0, '엔진 소리가 '), piece(1, '골목을 '), piece(0, '다시', attempt=2)}
+
+    frames = narration_frames(received)
+
+    assert {frame.event for frame in frames} == {NARRATION_FRAME}
+    assert [frame.id for frame in frames] == [None] * 4
+    assert [json.loads(frame.data) for frame in frames] == [
+        {'round': 3, 'attempt': 1, 'seq': 0, 'text': '엔진 소리가 '},
+        {'round': 3, 'attempt': 1, 'seq': 1, 'text': '골목을 '},
+        {'round': 3, 'attempt': 1, 'seq': 2, 'text': '메운다.'},
+        {'round': 3, 'attempt': 2, 'seq': 0, 'text': '다시'},
+    ]
+
+
+def test_typing_ignores_pieces_and_pieces_ignore_typing():
+    typing = Signal(table_id=TABLE, kind=Kind.TYPING, user_id=SOMEONE)
+    received = {typing, piece(0)}
+
+    assert len(typing_frames(received, viewer_id=TABLE)) == 1
+    assert len(narration_frames(received)) == 1
+
+
+def test_typing_comes_before_the_pieces():
+    received = {piece(0), Signal(table_id=TABLE, kind=Kind.TYPING, user_id=SOMEONE)}
+
+    assert [frame.event for frame in live_frames(received, viewer_id=TABLE)] == ['typing', NARRATION_FRAME]
 
 
 # --- SSE 의 글자 형식 ---

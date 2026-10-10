@@ -10,6 +10,9 @@ GM 의 서술을 만드는 것(서술자)의 모양과, AI 가 붙기 전에 쓰
 
 모양(Narrator)과 구현을 나눈다. 라운드의 코드는 모양만 안다.
 나중에 AI 를 붙일 때 구현만 바꿔 끼운다. 테스트는 가짜를 쓴다. 가짜는 같은 입력에 늘 같은 글을 낸다.
+
+서술은 수십 초가 걸린다. 쓰는 동안의 글을 미리 보기(Preview)로 흘려보낼 수 있다.
+미리 보기는 버려질 수 있는 글이다. 시도가 실패하면 다음 시도가 처음부터 다시 쓴다. 남는 장면은 서술자가 돌려준 글뿐이다.
 """
 
 import uuid
@@ -144,11 +147,45 @@ class NarrationRequest:
     host_id: uuid.UUID | None = None
 
 
+class Preview(Protocol):
+    """
+    서술이 쓰이는 동안의 글을 받는 곳. 앉은 사람에게 미리 보여 주는 데 쓴다.
+
+    시도마다 begin 으로 시작하고, 새로 쓴 글을 text 로 조각마다 받는다. 이어 붙이면 그 시도가 쓴 글이다.
+    둘 다 보통 함수다. 빨리 돌아와야 하고 예외를 내면 안 된다. 서술을 기다리게 만들지 않는다.
+    """
+
+    def begin(self) -> None:
+        """새 시도가 시작됐다. 앞의 시도에서 받은 글은 버려진 글이다."""
+        ...
+
+    def text(self, piece: str) -> None:
+        """이번 시도가 새로 쓴 글 조각."""
+        ...
+
+
+class NoPreview:
+    """아무것도 보여 주지 않는 미리 보기. 미리 볼 사람이 없을 때의 기본값이다."""
+
+    def begin(self) -> None:
+        return None
+
+    def text(self, piece: str) -> None:
+        return None
+
+
+NO_PREVIEW = NoPreview()
+
+
 class Narrator(Protocol):
     """서술자의 모양. 이 메서드가 있으면 서술자다."""
 
-    async def narrate(self, request: NarrationRequest) -> str:
-        """닫힌 라운드의 결과를 서술한다. 돌려준 글이 다음 라운드의 장면이 된다."""
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
+        """
+        닫힌 라운드의 결과를 서술한다. 돌려준 글이 다음 라운드의 장면이 된다.
+
+        쓰는 동안의 글을 preview 에 흘려보낸다. 시도마다 begin 을 먼저 부른다.
+        """
         ...
 
 
@@ -214,8 +251,11 @@ class FakeNarrator:
     AI 가 붙기 전에 라운드의 흐름을 돌려 보는 데 쓴다. 자동 테스트도 이것을 쓴다.
     """
 
-    async def narrate(self, request: NarrationRequest) -> str:
-        """한 일을 한 줄씩 늘어놓은 글을 돌려준다."""
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
+        """한 일을 한 줄씩 늘어놓은 글을 돌려준다. 미리 보기에는 그 글을 한 번에 보낸다."""
         lines = [f'[{request.round_number} 라운드의 결과]']
         lines.extend(describe_move(move) for move in request.moves)
-        return '\n'.join(lines)
+        scene = '\n'.join(lines)
+        preview.begin()
+        preview.text(scene)
+        return scene

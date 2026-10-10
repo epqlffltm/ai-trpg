@@ -10,6 +10,7 @@ HTTP 를 모른다. 메시지(Frame)를 하나씩 내놓을 뿐이고, 글자로
   2. 신호가 오거나 일정 시간이 지날 때까지 기다린다.
 처음 붙었을 때 밀린 것을 보내는 것과 실시간으로 새 것을 보내는 것이 같은 코드다.
 신호는 "지금 읽어 보라"는 뜻일 뿐이다. 신호를 놓쳐도 다음 차례에 읽는다.
+저장하지 않는 것(입력 중, 쓰이는 중인 서술의 조각)은 신호가 내용의 전부다. 받은 대로 바로 보내고, 놓치면 그만이다.
 
 DB 연결을 붙잡고 있지 않는다. 스트림은 몇 분씩 열려 있는데 풀의 연결은 몇 개뿐이다. 읽을 때만 잠깐 빌린다.
 """
@@ -30,7 +31,7 @@ from app.events import repository as event_repository
 from app.events.router import to_event
 from app.realtime.hub import Hub
 from app.realtime.listener import SignalSource
-from app.realtime.signals import STORED_KINDS, Kind, Signal
+from app.realtime.signals import STORED_KINDS, Kind, NarrationPiece, Notice, Signal
 from app.realtime.sse import Comment, Frame
 from app.tables import repository as table_repository
 from app.tables import service as tables
@@ -48,6 +49,7 @@ READ_BATCH = 100
 EVENT_FRAME = 'table_event'
 MESSAGE_FRAME = 'chat_message'
 TYPING_FRAME = 'typing'
+NARRATION_FRAME = 'narration_preview'
 CLOSED_FRAME = 'closed'
 
 
@@ -84,15 +86,46 @@ def closed_frame(reason: Closed) -> Frame:
     return Frame(event=CLOSED_FRAME, data=json.dumps({'reason': reason}))
 
 
-def typing_frames(received: set[Signal], viewer_id: uuid.UUID) -> list[Frame]:
+def typing_frames(received: set[Notice], viewer_id: uuid.UUID) -> list[Frame]:
     """
     받은 신호 중 "입력 중"을 메시지로 바꾼다. id 를 붙이지 않는다. 저장된 것이 아니다.
 
     자기 자신의 것은 뺀다. 자기가 입력 중이라는 것은 본인이 이미 안다.
     """
-    typists = {signal.user_id for signal in received if signal.kind == Kind.TYPING and signal.user_id != viewer_id}
+    typists = {
+        signal.user_id
+        for signal in received
+        if isinstance(signal, Signal) and signal.kind == Kind.TYPING and signal.user_id != viewer_id
+    }
     # 순서를 정해 둔다. 집합은 순서가 없어서 그대로 내보내면 실행할 때마다 달라진다
     return [Frame(event=TYPING_FRAME, data=json.dumps({'user_id': str(user_id)})) for user_id in sorted(typists)]
+
+
+def narration_frames(received: set[Notice]) -> list[Frame]:
+    """
+    받은 신호 중 서술의 조각을 메시지로 바꾼다. id 를 붙이지 않는다. 저장된 것이 아니다.
+
+    받은 신호는 순서가 없다(집합). 라운드, 시도, 번호의 순서로 줄 세운다.
+    """
+    pieces = sorted(
+        (signal for signal in received if isinstance(signal, NarrationPiece)),
+        key=lambda piece: (piece.round_number, piece.attempt, piece.seq),
+    )
+    return [
+        Frame(
+            event=NARRATION_FRAME,
+            data=json.dumps(
+                {'round': piece.round_number, 'attempt': piece.attempt, 'seq': piece.seq, 'text': piece.text},
+                ensure_ascii=False,
+            ),
+        )
+        for piece in pieces
+    ]
+
+
+def live_frames(received: set[Notice], viewer_id: uuid.UUID) -> list[Frame]:
+    """받은 신호 중 저장하지 않는 것들을 메시지로 바꾼다. 입력 중을 먼저, 서술의 조각을 나중에."""
+    return typing_frames(received, viewer_id) + narration_frames(received)
 
 
 async def read_events(session: AsyncSession, table_id: uuid.UUID, cursor: Cursor) -> list[Frame]:
@@ -163,14 +196,15 @@ async def stream(
         yield Comment('connected')
 
         kinds: set[Kind] = set(STORED_KINDS)
-        typing: list[Frame] = []
+        live: list[Frame] = []
         while True:
             async with session_factory() as session:
                 frames, closed = await read_new(session, viewer.user_id, table_id, cursor, kinds)
-            # 앉아 있지 않게 된 사람에게는 입력 중도 보내지 않는다.
-            # 입력 중을 먼저, 채팅을 나중에 보낸다. 받는 쪽은 그 사람의 채팅이 오면 입력 중 표시를 지운다
+            # 앉아 있지 않게 된 사람에게는 저장하지 않는 것(입력 중, 서술의 조각)도 보내지 않는다.
+            # 그것들을 먼저, 저장된 것을 나중에 보낸다. 받는 쪽은 그 사람의 채팅이 오면 입력 중 표시를 지우고,
+            # 서술의 이벤트(gm_narration)가 오면 미리 보기를 지운다
             if closed is not Closed.NOT_SEATED:
-                frames = typing + frames
+                frames = live + frames
             for frame in frames:
                 yield frame
 
@@ -186,7 +220,7 @@ async def stream(
                 yield Comment('ping')
                 # 듣는 연결이 끊겼으면 다시 맺는다
                 await source.ensure_listening()
-                kinds, typing = set(STORED_KINDS), []
+                kinds, live = set(STORED_KINDS), []
             else:
                 kinds = {signal.kind for signal in received} & STORED_KINDS
-                typing = typing_frames(received, viewer.user_id)
+                live = live_frames(received, viewer.user_id)

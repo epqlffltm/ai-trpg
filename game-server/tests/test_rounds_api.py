@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.models import Asset, AssetType, Scenario, ScenarioVersion
 from app.main import API_PREFIX
 from app.rounds.models import DECLARATION_MAX_LENGTH, Declaration, Round
-from app.rounds.narrator import NarrationRequest
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.tables.models import GameTable
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -431,7 +431,7 @@ class RecordingNarrator:
     def __init__(self) -> None:
         self.requests: list[NarrationRequest] = []
 
-    async def narrate(self, request: NarrationRequest) -> str:
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
         self.requests.append(request)
         return '드워프가 넘어졌다.'
 
