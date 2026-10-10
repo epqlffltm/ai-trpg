@@ -3,7 +3,8 @@
 """
 실제 언어 모델로 서술을 써 본다. 서버도 DB 도 쓰지 않고, 여기 적어 둔 예시 라운드 하나로.
 
-모델을 고르거나(비교), 추론을 켜고 끈 차이나 문체마다의 차이를 볼 때 쓴다. 자동 테스트가 아니라서 CI 에서 돌지 않는다.
+모델을 고르거나(비교), 추론을 켜고 끈 차이나 문체마다의 차이, 로어북을 넣고 뺀 차이를 볼 때 쓴다.
+자동 테스트가 아니라서 CI 에서 돌지 않는다.
 서버가 쓰는 것과 같은 조립(app/rounds/prompt.py), provider, 장면 검사를 그대로 거친다.
 
     uv run python -m scripts.try_narration --model gemma4:26b
@@ -11,6 +12,7 @@
     uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style classic dopamine literary
     uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style dopamine --repeat 3
     uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --live
+    uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --lore off on noise --repeat 3
 
 game-server 폴더에서 -m 으로 돌린다. 그래야 app 을 찾는다.
 
@@ -21,6 +23,10 @@ game-server 폴더에서 -m 으로 돌린다. 그래야 app 을 찾는다.
 "확인할 것"으로 표시한다. --repeat 로 같은 것을 여러 번 돌린다. 한 번의 결과는 운일 수 있다.
 판단은 사람이 한다.
 답은 흘려 받는다. 첫 글이 오기까지의 시간(앉은 사람이 기다리는 시간)을 따로 잰다. --live 를 주면 오는 대로 찍는다.
+
+--lore 는 로어북을 넣는 방식이다(evals/lore/narration.py). off 는 넣지 않고, on 은 서버와 같은 규칙과 임베딩 모델
+(--embedding-model, 같은 주소)로 평가 데이터(evals/lore/chase.yaml)에서 고른 항목을, noise 는 상관없는 항목을 넣는다.
+장면마다 로어북에서만 올 수 있는 낱말을 썼는지(on 낱말), 상관없는 항목의 낱말에 끌려갔는지(noise 낱말)를 적는다.
 
 예시는 공개 저장소에 올라가도 되는 개그 설정이다(악역영애, 엘프 폭주족, 열일곱 행성의 추격전).
 """
@@ -35,11 +41,23 @@ from pathlib import Path
 import httpx
 
 from app.ai.openai_compat import OpenAICompatProvider
+from app.ai.openai_embedder import OpenAICompatEmbedder
 from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
 from app.assets.models import NarrationStyle
 from app.rounds.llm_narrator import NARRATION_PARAMS, NarrationError, accept_completion
 from app.rounds.narrator import Impact, Move, NarrationRequest, PastRound, StoryContext, Verdict
 from app.rounds.prompt import build_messages
+from evals.lore.dataset import DEFAULT_PATH, load_dataset
+from evals.lore.narration import (
+    LoreMode,
+    LoreSets,
+    describe_sets,
+    lore_only_words,
+    lore_sets,
+    notes_for,
+    prompt_text,
+    used_words,
+)
 
 STORY = StoryContext(
     title='열일곱 행성 추격전',
@@ -87,7 +105,8 @@ REQUEST = NarrationRequest(
     history=HISTORY,
 )
 
-# GM 메모에만 있는 낱말. 장면에 나오면 메모를 흘렸을 수 있다.
+# 숨긴 설정의 낱말. GM 메모에 있고, 로어북을 넣으면 악역영애의 항목(비올레타)에도 있다.
+# 장면에 나오면 비밀을 흘렸을 수 있다.
 # '경찰' 은 넣지 않는다. 장면에 사이렌이 있어 경찰차가 나오는 것은 자연스럽다(첫 비교에서 오탐이 났다)
 LEAK_WORDS = ('끄나풀', '정보원')
 # 문체 예시(app/rounds/prompt.py 의 STYLE_RULES)에만 있는 낱말. 장면에 나오면 예시의 내용이 새어 든 것일 수 있다
@@ -108,6 +127,8 @@ class Trial:
     모델 하나, 추론 수준 하나, 문체 하나로 서술해 본 결과.
 
     problem 은 provider 의 실패나 장면으로 받지 않은 이유다. first_text 는 첫 글이 오기까지 걸린 시간(초)이다.
+    lore 는 로어북을 넣은 방식, notes 는 넣은 항목의 수다.
+    lore_used, noise_used 는 장면에 나온 낱말 중 로어북(on 의 항목, noise 의 항목)에서만 올 수 있는 것이다.
     """
 
     model: str
@@ -118,6 +139,10 @@ class Trial:
     completion: Completion | None = None
     scene: str | None = None
     problem: str | None = None
+    lore: LoreMode = LoreMode.OFF
+    notes: int = 0
+    lore_used: tuple[str, ...] = ()
+    noise_used: tuple[str, ...] = ()
 
 
 def read_arguments() -> argparse.Namespace:
@@ -126,7 +151,9 @@ def read_arguments() -> argparse.Namespace:
     parser.add_argument('--model', required=True, nargs='+', help='모델 이름. 여럿을 띄어 적는다')
     parser.add_argument('--reasoning', nargs='+', default=['none'], choices=[level.value for level in Reasoning])
     parser.add_argument('--style', nargs='+', default=['classic'], choices=[style.value for style in NarrationStyle])
-    parser.add_argument('--repeat', type=int, default=1, help='같은 모델, 추론, 문체로 몇 번 돌릴까')
+    parser.add_argument('--lore', nargs='+', default=['off'], choices=[mode.value for mode in LoreMode])
+    parser.add_argument('--embedding-model', default='bge-m3', help='--lore on 의 항목을 고를 임베딩 모델')
+    parser.add_argument('--repeat', type=int, default=1, help='같은 모델, 추론, 문체, 로어북으로 몇 번 돌릴까')
     parser.add_argument('--base-url', default='http://127.0.0.1:11434/v1', help='OpenAI 모양의 주소')
     parser.add_argument('--timeout', type=float, default=300.0, help='한 요청을 기다리는 시간(초)')
     parser.add_argument('--no-reasoning-field', action='store_true', help='추론 수준을 보내지 않는다')
@@ -170,25 +197,56 @@ class Watch:
             print(text, end='', flush=True)
 
 
+def lore_hits(scene: str, style: NarrationStyle, sets: LoreSets | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """장면에 나온 on 의 낱말과 noise 의 낱말. 로어북을 뺀 프롬프트에 없는 것만 센다. 항목이 없으면 비어 있다."""
+    if sets is None:
+        return (), ()
+    base = prompt_text(build_messages(replace(REQUEST, style=style)))
+    on = used_words(scene, lore_only_words(sets.on, base))
+    noise = used_words(scene, lore_only_words(sets.noise, base))
+    return tuple(on), tuple(noise)
+
+
 async def run_trial(
-    provider: OpenAICompatProvider, reasoning: Reasoning, style: NarrationStyle, live: bool = False
+    provider: OpenAICompatProvider,
+    reasoning: Reasoning,
+    style: NarrationStyle,
+    live: bool = False,
+    lore: LoreMode = LoreMode.OFF,
+    sets: LoreSets | None = None,
 ) -> Trial:
     """예시 라운드를 한 번 서술하게 한다. 실패해도 예외를 올리지 않고 결과에 적는다."""
     params = replace(NARRATION_PARAMS, reasoning=reasoning)
-    messages = build_messages(replace(REQUEST, style=style))
+    notes = notes_for(lore, sets) if sets is not None else []
+    messages = build_messages(replace(REQUEST, style=style, lore=notes))
     watch = Watch(started=time.perf_counter(), live=live)
+    base = {'lore': lore, 'notes': len(notes)}
     try:
         completion = await provider.complete(messages, params, watch)
     except ProviderError as error:
         seconds = time.perf_counter() - watch.started
-        return Trial(provider.model, reasoning, style, seconds, watch.first, problem=f'provider 실패: {error}')
+        return Trial(provider.model, reasoning, style, seconds, watch.first, problem=f'provider 실패: {error}', **base)
     seconds = time.perf_counter() - watch.started
     try:
         scene = accept_completion(completion)
     except NarrationError as error:
         problem = f'장면으로 받지 않음: {error}'
-        return Trial(provider.model, reasoning, style, seconds, watch.first, completion=completion, problem=problem)
-    return Trial(provider.model, reasoning, style, seconds, watch.first, completion=completion, scene=scene)
+        return Trial(
+            provider.model, reasoning, style, seconds, watch.first, completion=completion, problem=problem, **base
+        )
+    lore_used, noise_used = lore_hits(scene, style, sets)
+    return Trial(
+        provider.model,
+        reasoning,
+        style,
+        seconds,
+        watch.first,
+        completion=completion,
+        scene=scene,
+        lore_used=lore_used,
+        noise_used=noise_used,
+        **base,
+    )
 
 
 def seconds_or_dash(value: float | None) -> str:
@@ -209,7 +267,7 @@ def find_hints(scene: str) -> list[str]:
         hints.append(f'보낸 적 없는 숫자({", ".join(made_up)})')
     leaked = [word for word in LEAK_WORDS if word in scene]
     if leaked:
-        hints.append(f'GM 메모의 낱말({", ".join(leaked)})')
+        hints.append(f'숨긴 설정의 낱말({", ".join(leaked)})')
     borrowed = [word for word in SAMPLE_WORDS if word in scene]
     if borrowed:
         hints.append(f'문체 예시의 낱말({", ".join(borrowed)})')
@@ -224,7 +282,7 @@ def find_hints(scene: str) -> list[str]:
 
 def describe(trial: Trial) -> str:
     """결과 하나를 읽기 좋은 글로."""
-    head = f'## {trial.model} / 추론 {trial.reasoning.value} / 문체 {trial.style.value}'
+    head = f'## {trial.model} / 추론 {trial.reasoning.value} / 문체 {trial.style.value} / 로어북 {trial.lore.value}'
     lines = [f'{head} / {trial.seconds:.1f}초 (첫 글 {seconds_or_dash(trial.first_text)}초)']
     if trial.completion is not None:
         completion = trial.completion
@@ -235,58 +293,85 @@ def describe(trial: Trial) -> str:
     if trial.scene is not None:
         hints = find_hints(trial.scene)
         lines.append(f'장면 {len(trial.scene)}자' + (f' / 확인할 것: {", ".join(hints)}' if hints else ''))
+        if trial.lore != LoreMode.OFF or trial.lore_used or trial.noise_used:
+            lines.append(f'넣은 항목 {trial.notes}개 / {words_line(trial)}')
         lines.extend(['', trial.scene])
     lines.append('')
     return '\n'.join(lines)
 
 
+def words_line(trial: Trial) -> str:
+    """장면에 나온 로어북의 낱말들. on 의 것과 noise 의 것."""
+    return f'on 낱말 {list(trial.lore_used)} / noise 낱말 {list(trial.noise_used)}'
+
+
 def summarize(trials: list[Trial]) -> str:
     """모든 결과를 한눈에 보는 표(마크다운)."""
     rows = [
-        '| 모델 | 추론 | 문체 | 초 | 첫 글(초) | 출력 토큰 | 장면 | 확인할 것 |',
-        '| --- | --- | --- | --- | --- | --- | --- | --- |',
+        '| 모델 | 추론 | 문체 | 로어북 | 초 | 첫 글(초) | 입력 토큰 | 출력 토큰 | 장면 '
+        '| on 낱말 | noise 낱말 | 확인할 것 |',
+        '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ]
     for trial in trials:
-        output = trial.completion.output_tokens if trial.completion else '-'
+        tokens = (trial.completion.input_tokens, trial.completion.output_tokens) if trial.completion else ('-', '-')
         scene = f'{len(trial.scene)}자' if trial.scene is not None else trial.problem
         hints = ', '.join(find_hints(trial.scene)) if trial.scene is not None else '-'
-        head = f'| {trial.model} | {trial.reasoning.value} | {trial.style.value} | {trial.seconds:.1f} |'
-        rows.append(f'{head} {seconds_or_dash(trial.first_text)} | {output} | {scene} | {hints} |')
+        head = f'| {trial.model} | {trial.reasoning.value} | {trial.style.value} | {trial.lore.value} |'
+        timing = f' {trial.seconds:.1f} | {seconds_or_dash(trial.first_text)} | {tokens[0]} | {tokens[1]} |'
+        words = f' {len(trial.lore_used)} | {len(trial.noise_used)} |'
+        rows.append(f'{head}{timing} {scene} |{words} {hints} |')
     return '\n'.join(rows)
 
 
-async def run_all(arguments: argparse.Namespace) -> list[Trial]:
-    """모델마다, 추론 수준마다, 문체마다 --repeat 번씩 서술하게 한다. 하나씩 끝나는 대로 찍는다."""
+async def prepare_lore(client: httpx.AsyncClient, arguments: argparse.Namespace) -> LoreSets | None:
+    """로어북을 넣는 방식이 있으면 넣을 항목들을 한 번 고른다. off 뿐이면 None."""
+    if all(LoreMode(mode) == LoreMode.OFF for mode in arguments.lore):
+        return None
+    embedder = OpenAICompatEmbedder(
+        client=client, base_url=arguments.base_url, model=arguments.embedding_model, timeout=arguments.timeout
+    )
+    return await lore_sets(embedder, load_dataset(DEFAULT_PATH).entries, REQUEST)
+
+
+async def run_all(arguments: argparse.Namespace) -> tuple[list[Trial], LoreSets | None]:
+    """모델마다, 추론 수준마다, 문체마다, 로어북마다 --repeat 번씩 서술하게 한다. 하나씩 끝나는 대로 찍는다."""
     trials = []
     async with httpx.AsyncClient() as client:
+        sets = await prepare_lore(client, arguments)
+        if sets is not None:
+            print(describe_sets(sets), '\n', flush=True)
         for model in arguments.model:
             provider = make_provider(client, arguments, model)
             if not arguments.no_warmup:
                 await warm_up(provider)
             for level in arguments.reasoning:
                 for style in arguments.style:
-                    for _ in range(arguments.repeat):
-                        trial = await run_trial(provider, Reasoning(level), NarrationStyle(style), arguments.live)
-                        if arguments.live:
-                            print('\n')
-                        print(describe(trial), flush=True)
-                        trials.append(trial)
-    return trials
+                    for mode in arguments.lore:
+                        for _ in range(arguments.repeat):
+                            trial = await run_trial(
+                                provider, Reasoning(level), NarrationStyle(style), arguments.live, LoreMode(mode), sets
+                            )
+                            if arguments.live:
+                                print('\n')
+                            print(describe(trial), flush=True)
+                            trials.append(trial)
+    return trials, sets
 
 
-def write_report(path: Path, trials: list[Trial]) -> None:
+def write_report(path: Path, trials: list[Trial], sets: LoreSets | None = None) -> None:
     """표와 장면 전부를 UTF-8 파일로 남긴다. 콘솔의 인코딩과 상관없이 한글이 깨지지 않는다."""
-    body = '\n'.join([summarize(trials), '', *(describe(trial) for trial in trials)])
+    head = [describe_sets(sets), ''] if sets is not None else []
+    body = '\n'.join([*head, summarize(trials), '', *(describe(trial) for trial in trials)])
     path.write_text(body, encoding='utf-8')
 
 
 def main() -> None:
     """명령줄을 읽고, 돌리고, 표를 찍고, 원하면 파일로 남긴다."""
     arguments = read_arguments()
-    trials = asyncio.run(run_all(arguments))
+    trials, sets = asyncio.run(run_all(arguments))
     print(summarize(trials))
     if arguments.out is not None:
-        write_report(arguments.out, trials)
+        write_report(arguments.out, trials, sets)
         print(f'\n저장했다: {arguments.out}')
 
 
