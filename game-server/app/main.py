@@ -33,7 +33,7 @@ from app.events import router as events
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
 from app.lore.indexing import LoreIndexer
-from app.lore.retrieval import LoreRetriever
+from app.lore.retrieval import LoreRetriever, Thresholds
 from app.lore.setup import build_embedder
 from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
@@ -138,9 +138,11 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.state.embedder = build_embedder(settings, app.state.http_client)
 
     # 서술하기 직전에 이번 장면에 맞는 로어북 항목을 고르는 것(app/lore/retrieval.py).
-    # 판의 벡터가 모자라면 위의 임베더로 색인을 다시 맡긴다
+    # 판의 벡터가 모자라면 위의 임베더로 색인을 다시 맡긴다.
+    # 거리 기준은 설정(LORE_MAX_DISTANCE, LORE_KEYWORD_MAX_DISTANCE)이 정한다
     indexer = LoreIndexer(app.state.session_factory, app.state.embedder, app.state.jobs)
-    app.state.lore = LoreRetriever(app.state.session_factory, app.state.embedder, indexer)
+    thresholds = Thresholds(settings.lore_max_distance, settings.lore_keyword_max_distance)
+    app.state.lore = LoreRetriever(app.state.session_factory, app.state.embedder, indexer, thresholds)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)

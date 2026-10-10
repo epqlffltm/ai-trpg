@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.config import NARRATION_BUDGET_SECONDS, Settings
+from app.lore.retrieval import KEYWORD_MAX_DISTANCE, MAX_DISTANCE
 
 DATABASE_URL = 'postgresql+asyncpg://game:password@127.0.0.1:5432/trpg'
 AUTH_JWKS_URL = 'http://127.0.0.1:8000/api/v1/auth/jwks'
@@ -207,6 +208,34 @@ def test_the_embedding_address_can_be_its_own(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('EMBEDDING_BASE_URL', 'http://127.0.0.1:9000/v1')
 
     assert Settings(_env_file=None).embedding_url() == 'http://127.0.0.1:9000/v1'
+
+
+def test_the_lore_distances_default_to_the_measured_ones():
+    settings = Settings(_env_file=None)
+
+    # 평가 도구로 잰 값(app/lore/retrieval.py 의 상수)과 설정의 기본값이 어긋나지 않는다
+    assert settings.lore_max_distance == MAX_DISTANCE == 0.45
+    assert settings.lore_keyword_max_distance == KEYWORD_MAX_DISTANCE == 0.50
+
+
+def test_the_lore_distances_can_be_set(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('LORE_MAX_DISTANCE', '0.4')
+    monkeypatch.setenv('LORE_KEYWORD_MAX_DISTANCE', '0.55')
+
+    settings = Settings(_env_file=None)
+
+    assert (settings.lore_max_distance, settings.lore_keyword_max_distance) == (0.4, 0.55)
+
+
+@pytest.mark.parametrize('name', ['LORE_MAX_DISTANCE', 'LORE_KEYWORD_MAX_DISTANCE'])
+@pytest.mark.parametrize('value', ['0', '-0.1', '2.1'])
+def test_a_lore_distance_outside_the_cosine_range_does_not_start(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+):
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
 
 
 def test_an_embedder_without_a_model_does_not_start(monkeypatch: pytest.MonkeyPatch):
