@@ -4,14 +4,14 @@
 평가 결과를 마크다운 표로 만든다. 순수한 함수다. 표는 콘솔에 찍고, --out 이면 파일로도 남긴다(scripts/eval_lore.py).
 
 모델 하나의 보고서.
-  1. 방식마다의 점수(지금 서버의 거리 기준으로)
-  2. 서버가 쓰는 방식(hybrid)의 종류별 점수. 지금 기준과 가장 나은 기준에서
+  1. 방식마다의 점수(지금 서버의 기본 거리 기준으로)
+  2. 서버가 쓰는 방식(gated)의 종류별 점수(지금 기준), hybrid 의 종류별 점수(가장 나은 기준)
   3. 벡터의 순서 자체(거리 기준 없이 가까운 k 개)
   4. 맞는 항목과 그 밖의 항목의 거리 분포
   5. 거리 기준을 바꿔 가며 본 hybrid 의 점수와, 가장 나은 기준
   6. 키워드로 걸린 항목의 거리(질의 기준, 문장 기준). 맞는 것과 아닌 것
   7. 키워드에 상한을 두는 방식들(gated, windowed). 벡터의 거리 기준은 5 의 가장 나은 기준으로 두고 상한을 바꿔 간다
-  8. 틀린 질의(무엇을 놓쳤고 무엇을 잘못 넣었나). hybrid 와 가장 나은 상한 방식
+  8. 틀린 질의(무엇을 놓쳤고 무엇을 잘못 넣었나). 지금의 서버와 가장 나은 상한 방식
   9. 벡터로 바꾸는 시간
 """
 
@@ -37,8 +37,8 @@ RANK_KS = (1, 3, 5)
 METHOD_LABELS = {
     Method.KEYWORD: 'keyword',
     Method.VECTOR: 'vector',
-    Method.HYBRID: 'hybrid',
-    Method.GATED: '질의 기준 상한',
+    Method.HYBRID: 'hybrid(상한 없음)',
+    Method.GATED: '질의 기준 상한(서버)',
     Method.WINDOWED: '문장 기준 상한',
 }
 
@@ -218,16 +218,17 @@ def best_gated(result: ModelResult) -> tuple[Method, Evaluation]:
 def model_report(dataset: Dataset, result: ModelResult) -> str:
     """모델 하나의 보고서."""
     measurement = result.measurement
-    current = result.current.max_distance
+    current = result.current.rule
+    now = f'거리 기준 {current.max_distance:.2f}, 키워드 상한 {current.gate:.2f}'
     chosen = best(result.swept)
     gate_method, gate_best = best_gated(result)
     gate_label = METHOD_LABELS[gate_method]
     parts = [
         f'## {measurement.model}',
-        f'### 방식마다 (거리 기준 {current:.2f})',
+        f'### 방식마다 (지금 서버의 기준: {now})',
         method_table(result.current),
-        f'### hybrid 의 종류별 (거리 기준 {current:.2f})',
-        kind_table(result.current),
+        f'### 서버의 종류별 ({now})',
+        kind_table(result.current, Method.GATED),
         f'### hybrid 의 종류별 (나은 기준 {chosen.max_distance:.2f})',
         kind_table(chosen),
         '### 벡터의 순서 (거리 기준 없이)',
@@ -242,8 +243,8 @@ def model_report(dataset: Dataset, result: ModelResult) -> str:
         gate_table(result),
         f'### {gate_label}의 종류별 (상한 {gate_best.rule.gate:.2f})',
         kind_table(gate_best, gate_method),
-        f'### 틀린 질의 (hybrid, 나은 기준 {chosen.max_distance:.2f})',
-        '\n'.join(miss_lines(dataset, measurement, Method.HYBRID, chosen.rule)),
+        f'### 틀린 질의 (서버, {now})',
+        '\n'.join(miss_lines(dataset, measurement, Method.GATED, current)),
         f'### 틀린 질의 ({gate_label}, 상한 {gate_best.rule.gate:.2f})',
         '\n'.join(miss_lines(dataset, measurement, gate_method, gate_best.rule)),
         '### 벡터로 바꾸는 시간',
@@ -254,7 +255,7 @@ def model_report(dataset: Dataset, result: ModelResult) -> str:
 
 
 def summary_table(dataset: Dataset, results: list[ModelResult]) -> str:
-    """모델들을 한눈에. hybrid 의 F1(지금 기준, 나은 기준), 상한 방식의 F1, 벡터의 재현율@3, 질의 하나의 시간."""
+    """모델들을 한눈에. 서버의 F1(지금 기준), hybrid 의 나은 기준, 상한 방식의 F1, 벡터의 재현율@3, 질의 하나의 시간."""
     rows = []
     for result in results:
         chosen = best(result.swept)
@@ -262,7 +263,7 @@ def summary_table(dataset: Dataset, results: list[ModelResult]) -> str:
         rows.append(
             [
                 result.measurement.model,
-                ratio(f1(result.current.overall[Method.HYBRID])),
+                ratio(f1(result.current.overall[Method.GATED])),
                 f'{chosen.max_distance:.2f}',
                 ratio(f1(chosen.overall[Method.HYBRID])),
                 f'{METHOD_LABELS[gate_method]} {gate_best.rule.gate:.2f}',
@@ -271,7 +272,16 @@ def summary_table(dataset: Dataset, results: list[ModelResult]) -> str:
                 latency_line(result.measurement.query_ms),
             ]
         )
-    header = ['모델', 'F1(지금 기준)', '나은 기준', 'F1(나은 기준)', '나은 상한', 'F1(상한)', '벡터 재현율@3', '시간']
+    header = [
+        '모델',
+        'F1(서버, 지금 기준)',
+        '나은 기준',
+        'F1(나은 기준)',
+        '나은 상한',
+        'F1(상한)',
+        '벡터 재현율@3',
+        '시간',
+    ]
     return table(header, rows)
 
 

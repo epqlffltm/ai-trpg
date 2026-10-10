@@ -26,7 +26,7 @@ from app.ai.provider import ProviderError
 from app.assets.models import ScenarioVersion
 from app.assets.scenarios.router import get_indexer
 from app.assets.scenarios.snapshot import EntrySnapshot, LorebookSnapshot, read_snapshot
-from app.lore import indexing, texts
+from app.lore import indexing, repository, texts
 from app.lore.models import LoreEmbedding
 from app.lore.texts import batched, entry_text, missing_entries, version_entries
 from app.main import API_PREFIX
@@ -304,23 +304,25 @@ async def test_publishing_schedules_the_indexing(client: AsyncClient, me: dict, 
     assert len(await stored(session, version_id)) == len(ENTRIES)
 
 
-async def test_the_nearest_entry_can_be_found(client: AsyncClient, me: dict, app: FastAPI, session: AsyncSession):
+async def test_the_distance_to_every_entry_is_read(client: AsyncClient, me: dict, app: FastAPI, session: AsyncSession):
     version_id = await publish_with_lore(client, me)
     await app.state.jobs.drain()
-    names = {row.entry_id: row for row in await stored(session, version_id)}
     query = word_vector('드워프가 망치로 톨게이트 차단기를 내려친다')
 
-    distance = LoreEmbedding.embedding.cosine_distance(query)
-    nearest = await session.scalar(
-        select(LoreEmbedding.entry_id)
-        .where(LoreEmbedding.version_id == version_id, LoreEmbedding.model == 'fake')
-        .order_by(distance)
-        .limit(1)
-    )
+    distances = await repository.entry_distances(session, version_id, 'fake', query)
 
-    # 저장한 벡터로 pgvector 가 거리를 잰다. 낱말이 가장 많이 겹치는 항목이 가장 가깝다
-    assert nearest in names
-    assert (await entry_names(session, version_id))[nearest] == '드워프'
+    # 저장한 벡터로 pgvector 가 거리를 잰다. 판의 항목마다 하나씩, 낱말이 가장 많이 겹치는 항목이 가장 가깝다
+    names = await entry_names(session, version_id)
+    assert set(distances) == set(names)
+    assert names[min(distances, key=distances.get)] == '드워프'
+    assert all(0.0 <= distance <= 2.0 for distance in distances.values())
+
+
+async def test_distances_are_only_for_that_model(client: AsyncClient, me: dict, app: FastAPI, session: AsyncSession):
+    version_id = await publish_with_lore(client, me)
+    await app.state.jobs.drain()
+
+    assert await repository.entry_distances(session, version_id, 'bge-m3', word_vector('드워프')) == {}
 
 
 async def entry_names(session: AsyncSession, version_id: uuid.UUID) -> dict[uuid.UUID, str]:

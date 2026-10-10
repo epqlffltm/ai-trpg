@@ -6,12 +6,14 @@
 거리는 서버와 같은 코사인 거리다(pgvector 의 <=>, app/lore/repository.py). 고르는 규칙도 서버의 함수를 그대로 쓴다.
   - keyword: 이름이나 키워드가 나온 항목만
   - vector:  가까운 순으로 limit 개, 거리 max_distance 이하만
-  - hybrid:  키워드를 먼저, 그다음 가까운 순(서버가 실제로 쓰는 것, retrieval.choose)
-  - gated:   hybrid 와 같되, 키워드로 걸린 항목도 질의와의 거리가 gate 이하일 때만
-  - windowed: hybrid 와 같되, 키워드로 걸린 항목도 키워드가 나온 문장과의 거리가 gate 이하일 때만
+  - hybrid:  키워드를 먼저(거리를 보지 않음), 그다음 가까운 순. 키워드의 상한을 두기 전의 서버
+  - gated:   hybrid 와 같되, 키워드로 걸린 항목도 질의와의 거리가 gate 이하일 때만. 지금의 서버(retrieval.choose)
+  - windowed: hybrid 와 같되, 키워드로 걸린 항목도 키워드가 나온 문장과의 거리가 gate 이하일 때만. 서버에는 없다
 모두 마지막에 글자 수 상한(retrieval.pick)을 지킨다.
 
-뒤의 둘은 동음이의어("계획을 망치고" → 키워드 망치)를 막아 보려는 후보다. 서버에는 아직 없다.
+windowed 는 동음이의어("계획을 망치고" → 키워드 망치)를 막는 다른 후보다. 첫 평가에서 gated 와 점수가 같았고,
+라운드마다 임베딩 호출이 하나 늘고, 이름이 나온 문장과의 거리가 상한에 더 바짝 붙어 있어서 gated 를 골랐다.
+평가 데이터를 늘리면 다시 견줘 본다.
 
 지표.
   - recall(재현율): 맞는 항목 중 고른 것의 비율. 정답이 있는 질의만 평균한다. 놓치면 AI 가 설정을 모른다.
@@ -29,7 +31,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.assets.scenarios.snapshot import EntrySnapshot
-from app.lore.retrieval import NEAREST_LIMIT, choose, keyword_hits, pick, query_text
+from app.lore.retrieval import NEAREST_LIMIT, Thresholds, choose, keyword_hits, nearest_within, pick, query_text
 from evals.lore.dataset import Kind, Query
 
 
@@ -103,11 +105,6 @@ def rank(
     return sorted(ranked, key=lambda item: item.distance)
 
 
-def nearest_within(ranked: list[Ranked], max_distance: float, limit: int) -> list[EntrySnapshot]:
-    """가까운 순으로 limit 개까지, 거리가 max_distance 이하인 것만. 서버의 nearest_entry_ids 와 같은 규칙이다."""
-    return [item.entry for item in ranked if item.distance <= max_distance][:limit]
-
-
 def within_gate(hits: list[EntrySnapshot], distances: dict[uuid.UUID, float], gate: float) -> list[EntrySnapshot]:
     """키워드로 걸린 항목 중 거리가 gate 이하인 것. 거리를 모르는 항목은 뺀다."""
     return [entry for entry in hits if distances.get(entry.id, math.inf) <= gate]
@@ -127,18 +124,19 @@ def chosen_by(
     rule: Rule,
 ) -> list[str]:
     """이 방식으로 고른 항목의 이름들. 고른 차례대로다. windows 는 키워드로 걸린 항목과 그 문장의 거리."""
-    hits = keyword_hits(entries, query_text(query.request))
-    nearest = nearest_within(ranked, rule.max_distance, rule.limit)
+    text = query_text(query.request)
+    distances = query_distances(ranked)
+    nearest = nearest_within(entries, distances, rule.max_distance, rule.limit)
     if method == Method.KEYWORD:
-        picked = pick(hits)
+        picked = pick(keyword_hits(entries, text))
     elif method == Method.VECTOR:
         picked = pick(nearest)
+    elif method == Method.HYBRID:
+        picked = choose(entries, text, distances, Thresholds(rule.max_distance, math.inf, rule.limit))
     elif method == Method.GATED:
-        picked = pick([*within_gate(hits, query_distances(ranked), rule.gate), *nearest])
-    elif method == Method.WINDOWED:
-        picked = pick([*within_gate(hits, windows, rule.gate), *nearest])
+        picked = choose(entries, text, distances, Thresholds(rule.max_distance, rule.gate, rule.limit))
     else:
-        picked = choose(entries, query_text(query.request), nearest)
+        picked = pick([*within_gate(keyword_hits(entries, text), windows, rule.gate), *nearest])
     return [entry.name for entry in picked]
 
 
