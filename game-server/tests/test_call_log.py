@@ -21,14 +21,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.call_log import DbCallLog, to_row
-from app.ai.calls import CallRecord, CallScope, Outcome
+from app.ai.calls import CallRecord, CallScope, Outcome, input_digest
 from app.ai.models import AiInvocation
-from app.ai.provider import Reasoning
+from app.ai.provider import ChatMessage, Reasoning, Role
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
 TABLE = uuid.UUID('aaaaaaaa-2222-4333-8444-555555555555')
 HOST = uuid.UUID('11111111-2222-4333-8444-555555555555')
+ENTRY = uuid.UUID('eeeeeeee-2222-4333-8444-555555555555')
 
 # 잘 끝난 서술 한 번. 칸을 빠짐없이 채웠다. 내용은 아무 뜻이 없다
 RECORD = CallRecord(
@@ -44,6 +45,10 @@ RECORD = CallRecord(
     output_tokens=180,
     finish_reason='stop',
     text='엔진 소리가 톨게이트를 메운다.',
+    temperature=0.8,
+    max_tokens=800,
+    lore_entry_ids=(ENTRY,),
+    input_digest='ab' * 32,
 )
 
 # 받지 못한 호출. 글도 토큰도 없고 이유가 있다
@@ -72,6 +77,8 @@ def test_a_record_becomes_a_row_with_every_field():
     assert (row.outcome, row.error, row.latency_ms) == ('ok', None, 2400)
     assert (row.input_tokens, row.output_tokens, row.finish_reason) == (1050, 180, 'stop')
     assert row.text == RECORD.text
+    assert (row.temperature, row.max_tokens) == (0.8, 800)
+    assert (row.lore_entry_ids, row.input_digest) == ([ENTRY], 'ab' * 32)
 
 
 async def test_the_log_saves_each_record_at_once(app: FastAPI, session: AsyncSession):
@@ -85,6 +92,14 @@ async def test_the_log_saves_each_record_at_once(app: FastAPI, session: AsyncSes
     assert (ok.outcome, ok.text, ok.output_tokens) == ('ok', RECORD.text, 180)
     assert (failed.outcome, failed.error, failed.text) == ('failed', 'timeout', None)
     assert ok.id != failed.id
+    assert (ok.lore_entry_ids, ok.max_tokens) == ([ENTRY], 800)
+
+
+async def test_a_record_without_lore_stores_an_empty_list(app: FastAPI, session: AsyncSession):
+    await DbCallLog(app.state.session_factory).write(replace(RECORD, lore_entry_ids=()))
+
+    (row,) = await stored(session)
+    assert row.lore_entry_ids == []
 
 
 async def test_a_record_does_not_need_the_table_to_exist(app: FastAPI, session: AsyncSession):
@@ -108,6 +123,7 @@ async def test_a_record_does_not_need_the_table_to_exist(app: FastAPI, session: 
         (replace(FAILED, text='어디서 왔나'), 'no_text_when_failed'),
         (replace(RECORD, latency_ms=-1), 'latency_not_negative'),
         (replace(RECORD, output_tokens=-5), 'tokens_not_negative'),
+        (replace(RECORD, max_tokens=0), 'max_tokens_positive'),
         (replace(RECORD, outcome='lost', error='lost'), 'outcome_allowed'),
     ],
 )
@@ -118,3 +134,39 @@ async def test_the_database_refuses_a_record_that_does_not_add_up(
 
     with pytest.raises(IntegrityError, match=constraint):
         await session.commit()
+
+
+# --- 입력의 지문 ---
+
+MESSAGES = [
+    ChatMessage(Role.SYSTEM, '너는 GM 이다. 악역영애는 사실 경찰의 끄나풀이다.'),
+    ChatMessage(Role.USER, '달린다.'),
+]
+
+
+def test_the_digest_is_an_hmac_of_the_messages():
+    digest = input_digest(MESSAGES, b'server-key')
+
+    assert digest is not None
+    assert len(digest) == 64
+    # 같은 입력이면 같은 지문이다. 두 호출이 같은 입력이었는지 알 수 있다
+    assert digest == input_digest(list(MESSAGES), b'server-key')
+
+
+def test_a_different_message_or_key_gives_a_different_digest():
+    changed = [MESSAGES[0], ChatMessage(Role.USER, '멈춘다.')]
+
+    assert input_digest(changed, b'server-key') != input_digest(MESSAGES, b'server-key')
+    # 키를 모르면 같은 입력으로도 지문을 맞출 수 없다. 내용을 대입해 확인하지 못한다
+    assert input_digest(MESSAGES, b'other-key') != input_digest(MESSAGES, b'server-key')
+
+
+def test_the_role_is_part_of_the_digest():
+    as_assistant = [MESSAGES[0], ChatMessage(Role.ASSISTANT, '달린다.')]
+
+    assert input_digest(as_assistant, b'server-key') != input_digest(MESSAGES, b'server-key')
+
+
+@pytest.mark.parametrize('key', [None, b''])
+def test_without_a_key_there_is_no_digest(key: bytes | None):
+    assert input_digest(MESSAGES, key) is None

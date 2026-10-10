@@ -4,7 +4,7 @@
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,3 +45,27 @@ async def add_embeddings(
     ]
     statement = insert(LoreEmbedding).values(rows).on_conflict_do_nothing()
     await session.execute(statement)
+
+
+async def count_vectors(session: AsyncSession, version_id: uuid.UUID, model: str) -> int:
+    """이 판, 이 모델의 벡터가 몇 개인가."""
+    query = select(func.count()).where(LoreEmbedding.version_id == version_id, LoreEmbedding.model == model)
+    return await session.scalar(query) or 0
+
+
+async def nearest_entry_ids(
+    session: AsyncSession, version_id: uuid.UUID, model: str, vector: list[float], limit: int, max_distance: float
+) -> list[uuid.UUID]:
+    """
+    이 판, 이 모델의 벡터 중 vector 와 가까운 항목들의 id. 가까운 것부터 limit 개까지, 거리가 max_distance 이하인 것만.
+
+    거리는 코사인 거리다(0 이면 같은 방향, 1 이면 직각, 2 면 반대). 색인 없이 판의 벡터를 모두 견준다.
+    """
+    distance = LoreEmbedding.embedding.cosine_distance(vector)
+    query = (
+        select(LoreEmbedding.entry_id)
+        .where(LoreEmbedding.version_id == version_id, LoreEmbedding.model == model, distance <= max_distance)
+        .order_by(distance)
+        .limit(limit)
+    )
+    return list(await session.scalars(query))

@@ -28,6 +28,7 @@ OPTIONAL_VARIABLES = (
     'EMBEDDING_MODEL',
     'EMBEDDING_BASE_URL',
     'EMBEDDING_TIMEOUT_SECONDS',
+    'AI_LOG_HMAC_KEY',
 )
 
 
@@ -214,3 +215,20 @@ def test_an_embedder_without_a_model_does_not_start(monkeypatch: pytest.MonkeyPa
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+# --- 입력 지문의 키 ---
+
+
+def test_there_is_no_digest_key_by_default():
+    assert Settings(_env_file=None).digest_key() is None
+
+
+def test_the_digest_key_is_read_as_bytes_and_kept_secret(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('AI_LOG_HMAC_KEY', ' 0123abcd ')
+
+    settings = Settings(_env_file=None)
+
+    assert settings.digest_key() == b'0123abcd'
+    # 설정을 찍어도 키가 보이지 않는다
+    assert '0123abcd' not in repr(settings)

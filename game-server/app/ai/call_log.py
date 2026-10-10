@@ -37,6 +37,10 @@ def to_row(record: CallRecord) -> AiInvocation:
         output_tokens=record.output_tokens,
         finish_reason=record.finish_reason,
         text=record.text,
+        temperature=record.temperature,
+        max_tokens=record.max_tokens,
+        lore_entry_ids=list(record.lore_entry_ids),
+        input_digest=record.input_digest,
     )
 
 
