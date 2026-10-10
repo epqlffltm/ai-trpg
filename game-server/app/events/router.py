@@ -91,6 +91,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'sheet',
     ),
     EventType.ROUND_CLOSED: ('number', 'idle'),
+    # 실패의 이유도 보인다(timeout, cut_off …). 모델이 쓴 글이나 보낸 프롬프트는 싣지 않는다
+    EventType.NARRATION_FAILED: ('round', 'reason'),
     EventType.TABLE_ENDED: (),
 }
 

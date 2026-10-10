@@ -53,6 +53,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import NarrationStyle
 from app.assets.scenarios.snapshot import read_snapshot
+from app.core.config import NARRATION_BUDGET_SECONDS
 from app.engine import action as actions
 from app.engine import death, health
 from app.engine.action import CheckAction
@@ -120,8 +121,10 @@ class ActionTargetError(Exception):
 
 
 # 닫는 중인 채로 이 시간(초)이 지나면 서술을 맡은 작업이 사라진 것으로 본다. 그때부터 다시 맡길 수 있다.
-# 서술자가 답하는 데 걸릴 수 있는 가장 긴 시간보다 길어야 한다. 짧으면 아직 도는 서술 위에 또 서술을 맡긴다
-CLOSING_RETRY_SECONDS = 60.0
+# 서술자가 답하는 데 걸릴 수 있는 가장 긴 시간보다 길어야 한다. 짧으면 아직 도는 서술 위에 또 서술을 맡긴다.
+# 서술 하나는 다시 시도하기와 넘어가기를 합쳐도 NARRATION_BUDGET_SECONDS 안에 끝난다. 거기에 읽고 쓰는 여유를 더한다
+CLOSING_RETRY_MARGIN_SECONDS = 30.0
+CLOSING_RETRY_SECONDS = NARRATION_BUDGET_SECONDS + CLOSING_RETRY_MARGIN_SECONDS
 
 
 class NarrationScheduler(Protocol):
@@ -162,12 +165,15 @@ def require_open(round_: Round) -> None:
 
 def is_stalled(round_: Round, now: datetime) -> bool:
     """
-    닫는 중인 채로 너무 오래 머물렀는가. 서술을 맡은 작업이 사라졌다고 볼 만큼 지났는가.
+    닫는 중인 라운드의 서술이 멈췄는가. 다시 맡겨도 되는가.
 
+    서술이 끝내 실패한 것을 알면 바로 그렇다. 모르면 서술을 맡은 작업이 사라졌다고 볼 만큼 지났는지로 판단한다.
     now 는 지금 시각이다. 테스트가 시간을 마음대로 흘리려고 받는다.
     """
     if round_.status != RoundStatus.CLOSING:
         return False
+    if round_.narration_failed_at is not None:
+        return True
     return now - round_.closing_at >= timedelta(seconds=CLOSING_RETRY_SECONDS)
 
 
@@ -664,9 +670,9 @@ async def force_close(
 
     이미 닫는 중이면 두 가지다.
       - 맡긴 지 얼마 안 됐으면 RoundConflictError. 서술이 돌고 있다. 또 맡기면 같은 서술을 두 번 시킨다.
-      - 한참 지났으면(is_stalled) 서술을 다시 맡긴다. 맡았던 작업이 사라진 것이다. 이벤트를 다시 적지는 않는다.
+      - 서술이 끝내 실패했거나 한참 지났으면(is_stalled) 서술을 다시 맡긴다. 이벤트를 다시 적지는 않는다.
         주사위도 다시 굴리지 않는다. 처음 닫을 때 선언에 적어 둔 결과를 그대로 쓴다.
-        닫기 시작한 시각을 지금으로 고친다. 다시 맡긴 것 위에 또 맡기지 않게 한다.
+        닫기 시작한 시각을 지금으로 고치고 실패의 표시를 지운다. 다시 맡긴 것 위에 또 맡기지 않게 한다.
     """
     table, _, round_ = await lock_current_round(session, host_id, table_id)
     tables.require_host(table, host_id)
@@ -675,6 +681,7 @@ async def force_close(
         begin_closing(session, table, round_, dice, closer_id=host_id)
     elif is_stalled(round_, datetime.now(UTC)):
         round_.closing_at = datetime.now(UTC)
+        round_.narration_failed_at = None
     else:
         raise RoundConflictError(Conflict.ROUND_CLOSING)
 
@@ -713,6 +720,32 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
         table_id=table.id,
         host_id=table.host_id,
     )
+
+
+async def fail_closing(session: AsyncSession, table_id: uuid.UUID, number: int, reason: str) -> None:
+    """
+    닫는 중인 라운드의 서술이 끝내 실패한 것을 적는다. 저장한다.
+
+    라운드는 닫는 중에 머문다. 실패한 시각을 적어 방장이 기다리지 않고 다시 맡길 수 있게 하고,
+    앉은 사람 모두에게 이벤트로 알린다. reason 은 마지막 실패의 이유다(timeout, cut_off …).
+
+    테이블을 잠그고, 잠근 뒤에 라운드가 아직 닫는 중이고 실패가 적히지 않았는지 본다. 아니면 아무것도 하지 않는다.
+    같은 라운드의 다른 서술이 먼저 마무리했거나, 이미 실패를 적었다.
+
+    서술이 실패로 끝나는 곳은 여기 하나다. 포인트를 붙이면 맡을 때 잡아 둔 것을 여기서 돌려준다.
+    """
+    table = await table_repository.lock_table(session, table_id)
+    round_ = await repository.find_round(session, table_id, number)
+    if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
+        return
+    if round_.narration_failed_at is not None:
+        return
+
+    round_.narration_failed_at = datetime.now(UTC)
+    closed = await event_repository.find_latest(session, table_id, EventType.ROUND_CLOSED)
+    payload = {'round': number, 'reason': reason}
+    recorder.record(session, table, EventType.NARRATION_FAILED, payload=payload, cause=closed)
+    await tables.commit(session, table)
 
 
 async def finish_closing(session: AsyncSession, table_id: uuid.UUID, number: int, scene: str) -> None:

@@ -130,6 +130,8 @@ class RoundOut(BaseModel):
     # 닫기 시작한 시각과 닫힌 시각. 아직이면 None 이다
     closing_at: datetime | None
     closed_at: datetime | None
+    # 서술이 끝내 실패한 시각. 있으면 방장이 기다리지 않고 다시 맡길 수 있다. 다시 맡기면 비워진다
+    narration_failed_at: datetime | None
 
 
 class RoundPage(BaseModel):

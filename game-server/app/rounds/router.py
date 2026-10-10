@@ -80,6 +80,7 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
         created_at=round_.created_at,
         closing_at=round_.closing_at,
         closed_at=round_.closed_at,
+        narration_failed_at=round_.narration_failed_at,
     )
 
 

@@ -7,7 +7,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import Settings
+from app.core.config import NARRATION_BUDGET_SECONDS, Settings
 
 DATABASE_URL = 'postgresql+asyncpg://game:password@127.0.0.1:5432/trpg'
 AUTH_JWKS_URL = 'http://127.0.0.1:8000/api/v1/auth/jwks'
@@ -21,6 +21,7 @@ OPTIONAL_VARIABLES = (
     'NARRATOR',
     'LLM_BASE_URL',
     'LLM_MODEL',
+    'LLM_FALLBACK_MODELS',
     'LLM_TIMEOUT_SECONDS',
     'LLM_SUPPORTS_REASONING',
 )
@@ -128,8 +129,16 @@ def test_the_model_is_looked_for_on_this_computer_by_default():
     settings = Settings(_env_file=None)
 
     assert settings.llm_base_url == 'http://127.0.0.1:11434/v1'
-    assert settings.llm_timeout_seconds == 120.0
+    assert settings.llm_timeout_seconds == 60.0
     assert settings.llm_supports_reasoning is True
+    # 넘어갈 모델은 없다. 적은 모델 하나만 부른다
+    assert settings.llm_fallback_models == ''
+
+
+def test_the_models_are_the_first_then_the_fallbacks():
+    settings = Settings(_env_file=None, llm_model=' gemma4:26b ', llm_fallback_models='a, b ,,c')
+
+    assert settings.llm_models() == ['gemma4:26b', 'a', 'b', 'c']
 
 
 def test_the_language_model_narrator_needs_a_model_name(monkeypatch: pytest.MonkeyPatch):
@@ -156,7 +165,15 @@ def test_the_language_model_narrator_reads_its_settings(monkeypatch: pytest.Monk
     assert settings.llm_supports_reasoning is False
 
 
-@pytest.mark.parametrize(('name', 'value'), [('NARRATOR', 'gpt'), ('LLM_TIMEOUT_SECONDS', '0')])
+@pytest.mark.parametrize(
+    ('name', 'value'),
+    [
+        ('NARRATOR', 'gpt'),
+        ('LLM_TIMEOUT_SECONDS', '0'),
+        # 한 번 부르는 시간이 서술 하나의 상한보다 길면 멈춘 라운드의 판정과 어긋난다
+        ('LLM_TIMEOUT_SECONDS', str(NARRATION_BUDGET_SECONDS + 1)),
+    ],
+)
 def test_rejects_a_narrator_setting_it_does_not_know(monkeypatch: pytest.MonkeyPatch, name: str, value: str):
     monkeypatch.setenv(name, value)
 
