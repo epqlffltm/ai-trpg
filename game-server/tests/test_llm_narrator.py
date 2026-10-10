@@ -369,7 +369,7 @@ async def test_the_model_gets_the_story_and_the_rounds_before(
     assert GM_NOTES in system
     # 1 라운드가 지난 기록으로, 2 라운드가 이번 라운드로 들어간다
     contents = [message.content for message in messages]
-    assert contents[2:4] == [OPENING, '엘프: 달린다.']
+    assert contents[2:4] == [OPENING, '[1 라운드에 한 일. 이미 서술했다]\n엘프: 달린다.']
     assert contents[4] == REPLY
     assert '엘프: 골목으로 꺾는다.' in contents[5]
 
@@ -400,12 +400,9 @@ async def test_only_the_latest_rounds_go_to_the_model(client: AsyncClient, app: 
 
     contents = [message.content for message in provider.calls[-1].messages]
     # 5 라운드를 닫을 때 지난 기록은 2, 3, 4 라운드다. 1 라운드의 말은 들어가지 않는다
-    assert '엘프: 1 번째로 달린다.' not in contents
-    assert [content for content in contents if content.startswith('엘프:')] == [
-        '엘프: 2 번째로 달린다.',
-        '엘프: 3 번째로 달린다.',
-        '엘프: 4 번째로 달린다.',
-    ]
+    said = [content.split('\n', 1)[1] for content in contents if '이미 서술했다]' in content.split('\n', 1)[0]]
+    assert '엘프: 1 번째로 달린다.' not in said
+    assert said == ['엘프: 2 번째로 달린다.', '엘프: 3 번째로 달린다.', '엘프: 4 번째로 달린다.']
 
 
 @pytest.mark.usefixtures('clean_tables')
