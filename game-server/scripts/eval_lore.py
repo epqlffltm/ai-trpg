@@ -5,6 +5,7 @@
 
 서버도 DB 도 쓰지 않는다. 임베딩 모델만 부른다. 거리 계산과 고르는 규칙은 서버의 것과 같다(evals/lore/metrics.py).
 거리 기준을 바꿔 가며 점수를 매겨, 서버의 MAX_DISTANCE 를 정할 근거를 만든다.
+키워드로 걸린 항목에도 거리 상한을 두는 방식 둘(질의 기준, 문장 기준)을 함께 잰다. 동음이의어를 막을 후보다.
 
     uv run python -m scripts.eval_lore
     uv run python -m scripts.eval_lore --model bge-m3 qwen3-embedding:0.6b --out $HOME\\lore-eval.md
@@ -28,8 +29,8 @@ from app.ai.openai_embedder import OpenAICompatEmbedder
 from app.ai.provider import ProviderError
 from app.core.config import get_settings
 from evals.lore.dataset import DEFAULT_PATH, Dataset, DatasetError, load_dataset, only_set
-from evals.lore.report import ModelResult, full_report
-from evals.lore.runner import evaluate, measure, sweep
+from evals.lore.report import ModelResult, best, full_report
+from evals.lore.runner import evaluate, measure, sweep, sweep_gates
 
 
 def read_arguments() -> argparse.Namespace:
@@ -60,9 +61,14 @@ def make_embedders(arguments: argparse.Namespace, client: httpx.AsyncClient) -> 
 
 
 async def evaluate_model(embedder: Embedder, dataset: Dataset) -> ModelResult:
-    """모델 하나를 재고, 지금의 거리 기준과 여러 기준으로 점수를 매긴다."""
+    """
+    모델 하나를 재고 점수를 매긴다. 지금의 거리 기준, 여러 거리 기준,
+    그리고 가장 나은 거리 기준에서 키워드의 상한을 바꿔 가며.
+    """
     measurement = await measure(embedder, dataset)
-    return ModelResult(measurement, evaluate(dataset, measurement), sweep(dataset, measurement))
+    swept = sweep(dataset, measurement)
+    gated = sweep_gates(dataset, measurement, best(swept).max_distance)
+    return ModelResult(measurement, evaluate(dataset, measurement), swept, gated)
 
 
 class NoQueries(Exception):
