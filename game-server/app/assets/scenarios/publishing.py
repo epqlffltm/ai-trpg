@@ -11,6 +11,7 @@ SQL 을 모른다. 판을 읽고 쓰는 일은 repository.py 에 맡긴다.
 import enum
 import uuid
 from dataclasses import dataclass
+from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -224,14 +225,29 @@ def build_version(scenario: Scenario, rulebook: Rulebook, parts: Parts, number: 
     )
 
 
+def has_lore(parts: Parts) -> bool:
+    """판에 로어북 항목이 하나라도 있는가. 없으면 색인을 맡기지 않는다. 할 일이 없는 작업을 띄우지 않는다."""
+    return any(entries for _, entries in parts.lorebooks)
+
+
+class VersionIndexer(Protocol):
+    """판의 로어북 항목을 벡터로 바꾸는 일을 뒤에서 돌게 맡기는 것. 구현은 app/lore/indexing.py 의 LoreIndexer 다."""
+
+    def schedule(self, version_id: uuid.UUID) -> None:
+        """이 판의 색인을 맡긴다. 기다리지 않고 바로 돌아온다."""
+        ...
+
+
 async def publish(
-    session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, data: VersionCreate
+    session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, data: VersionCreate, indexer: VersionIndexer
 ) -> ScenarioVersion:
     """
     자기 시나리오를 게시한다. 시나리오가 없으면 AssetNotFoundError, 조건을 갖추지 못했으면 ScenarioNotReadyError.
 
     시나리오를 잠그고 한다. 번호는 "지금까지의 가장 큰 번호 + 1"이라, 두 요청이 동시에 세면 같은 번호를 얻는다.
     잠그면 나중 요청은 앞의 판이 저장된 뒤에 센다. DB 의 UNIQUE 는 잠금을 빠뜨렸을 때의 마지막 방어선이다.
+    저장한 뒤에 로어북 항목의 색인을 맡긴다(항목이 있을 때만). 색인은 뒤에서 돌고, 실패해도 게시는 그대로다.
+    커밋 전에 맡기면, 커밋이 실패했을 때 없는 판을 색인하려 한다.
     """
     scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
     parts = await load_parts(session, owner_id, scenario)
@@ -245,6 +261,8 @@ async def publish(
     version = build_version(scenario, parts.rulebook, parts, number, data.note)
     repository.add_version(session, version)
     await session.commit()
+    if has_lore(parts):
+        indexer.schedule(version.id)
     return version
 
 

@@ -24,6 +24,10 @@ OPTIONAL_VARIABLES = (
     'LLM_FALLBACK_MODELS',
     'LLM_TIMEOUT_SECONDS',
     'LLM_SUPPORTS_REASONING',
+    'EMBEDDER',
+    'EMBEDDING_MODEL',
+    'EMBEDDING_BASE_URL',
+    'EMBEDDING_TIMEOUT_SECONDS',
 )
 
 
@@ -176,6 +180,37 @@ def test_the_language_model_narrator_reads_its_settings(monkeypatch: pytest.Monk
 )
 def test_rejects_a_narrator_setting_it_does_not_know(monkeypatch: pytest.MonkeyPatch, name: str, value: str):
     monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+# --- 임베딩 ---
+
+
+def test_the_embedder_is_fake_by_default():
+    settings = Settings(_env_file=None)
+
+    # 테스트와 CI 는 모델 없이 돈다. 실제 모델은 각자의 .env 에서 켠다
+    assert settings.embedder == 'fake'
+    assert settings.embedding_model == 'bge-m3'
+
+
+def test_the_embedding_address_falls_back_to_the_llm_address(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('LLM_BASE_URL', 'http://127.0.0.1:1234/v1')
+
+    assert Settings(_env_file=None).embedding_url() == 'http://127.0.0.1:1234/v1'
+
+
+def test_the_embedding_address_can_be_its_own(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('EMBEDDING_BASE_URL', 'http://127.0.0.1:9000/v1')
+
+    assert Settings(_env_file=None).embedding_url() == 'http://127.0.0.1:9000/v1'
+
+
+def test_an_embedder_without_a_model_does_not_start(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('EMBEDDER', 'llm')
+    monkeypatch.setenv('EMBEDDING_MODEL', '  ')
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)

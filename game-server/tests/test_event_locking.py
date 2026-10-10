@@ -31,6 +31,7 @@ from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
+from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
 
@@ -62,7 +63,7 @@ async def open_table(session: AsyncSession) -> GameTable:
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
     data = ScenarioCreate(title='시나리오', rulebook_id=rulebook.asset_id, openings=['도입부'], default_sheet=SHEET)
     scenario = await scenarios.create_scenario(session, ME, data)
-    await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
+    await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     create = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=3)
     return await tables.create_table(session, make_viewer(ME), create)
 

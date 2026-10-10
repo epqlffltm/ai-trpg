@@ -30,6 +30,7 @@ from app.tables import repository, rolls, service
 from app.tables.models import GameTable, TableRoll
 from app.tables.schemas import TableCreate
 from app.tables.service import Conflict, TableConflictError
+from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
 
@@ -69,7 +70,7 @@ async def open_table(session: AsyncSession) -> GameTable:
         player_made_hp={'base': 10, 'cap': 12},
     )
     scenario = await scenarios.create_scenario(session, ME, data)
-    await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
+    await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     table = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=1)
     return await service.create_table(session, make_viewer(ME), table)
 

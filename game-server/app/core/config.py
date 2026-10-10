@@ -84,12 +84,37 @@ class Settings(BaseSettings):
     # 모르는 모델에 보냈다가 오류가 나면 false 로 바꾼다
     llm_supports_reasoning: bool = True
 
+    # 로어북 항목을 벡터로 바꾸는 것(임베딩)을 누가 하나. fake 는 모델을 부르지 않는 가짜(기본), llm 은 임베딩 모델.
+    # 서술(NARRATOR)과 따로 켠다. 테스트와 CI 는 늘 가짜다
+    embedder: Literal['fake', 'llm'] = 'fake'
+
+    # 임베딩 모델의 이름. 한국어를 포함한 여러 언어를 다루는 모델이다(Ollama 에서 ollama pull bge-m3).
+    # 바꾸면 벡터를 다시 만들어야 한다. 모델마다 벡터의 공간이 다르다(scripts/index_lore.py)
+    embedding_model: str = 'bge-m3'
+
+    # 임베딩 모델을 부르는 주소. OpenAI 와 같은 모양이고 /embeddings 앞까지 적는다. 비우면 LLM_BASE_URL 을 쓴다
+    embedding_base_url: str = ''
+
+    # 임베딩을 한 번 기다리는 시간(초). 항목 몇십 개를 한 번에 보낸다
+    embedding_timeout_seconds: float = Field(default=30.0, gt=0)
+
     @model_validator(mode='after')
     def require_a_model_for_llm(self) -> Self:
         """언어 모델로 서술하겠다면서 모델 이름이 없으면 뜨지 않는다. 첫 라운드를 닫을 때 알게 되는 것보다 낫다."""
         if self.narrator == 'llm' and not self.llm_model.strip():
             raise ValueError('NARRATOR=llm 이면 LLM_MODEL 을 적어야 합니다')
         return self
+
+    @model_validator(mode='after')
+    def require_an_embedding_model(self) -> Self:
+        """임베딩 모델로 벡터를 만들겠다면서 모델 이름이 없으면 뜨지 않는다."""
+        if self.embedder == 'llm' and not self.embedding_model.strip():
+            raise ValueError('EMBEDDER=llm 이면 EMBEDDING_MODEL 을 적어야 합니다')
+        return self
+
+    def embedding_url(self) -> str:
+        """임베딩 모델을 부르는 주소. 따로 적지 않았으면 언어 모델과 같은 주소다."""
+        return self.embedding_base_url.strip() or self.llm_base_url
 
     def llm_models(self) -> list[str]:
         """부를 모델들을 부를 차례대로. 첫 모델 다음에 넘어갈 모델들이다. 빈 이름과 앞뒤 공백은 뺀다."""
