@@ -9,6 +9,8 @@ from pydantic import ValidationError
 
 from app.core.config import NARRATION_BUDGET_SECONDS, Settings
 from app.lore.retrieval import KEYWORD_MAX_DISTANCE, MAX_DISTANCE
+from app.memory.retrieval import KEYWORD_MAX_DISTANCE as MEMORY_KEYWORD_MAX_DISTANCE
+from app.memory.retrieval import MAX_DISTANCE as MEMORY_MAX_DISTANCE
 
 DATABASE_URL = 'postgresql+asyncpg://game:password@127.0.0.1:5432/trpg'
 AUTH_JWKS_URL = 'http://127.0.0.1:8000/api/v1/auth/jwks'
@@ -227,7 +229,26 @@ def test_the_lore_distances_can_be_set(monkeypatch: pytest.MonkeyPatch):
     assert (settings.lore_max_distance, settings.lore_keyword_max_distance) == (0.4, 0.55)
 
 
-@pytest.mark.parametrize('name', ['LORE_MAX_DISTANCE', 'LORE_KEYWORD_MAX_DISTANCE'])
+def test_the_memory_distances_default_to_the_constants():
+    settings = Settings(_env_file=None)
+
+    # 지난 일의 기준은 로어북과 따로 둔다. 기억은 글이 길어 거리의 크기가 다르다(scripts/eval_memory.py 로 잰다)
+    assert settings.memory_max_distance == MEMORY_MAX_DISTANCE
+    assert settings.memory_keyword_max_distance == MEMORY_KEYWORD_MAX_DISTANCE
+
+
+def test_the_memory_distances_can_be_set(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('MEMORY_MAX_DISTANCE', '0.5')
+    monkeypatch.setenv('MEMORY_KEYWORD_MAX_DISTANCE', '0.6')
+
+    settings = Settings(_env_file=None)
+
+    assert (settings.memory_max_distance, settings.memory_keyword_max_distance) == (0.5, 0.6)
+
+
+@pytest.mark.parametrize(
+    'name', ['LORE_MAX_DISTANCE', 'LORE_KEYWORD_MAX_DISTANCE', 'MEMORY_MAX_DISTANCE', 'MEMORY_KEYWORD_MAX_DISTANCE']
+)
 @pytest.mark.parametrize('value', ['0', '-0.1', '2.1'])
 def test_a_lore_distance_outside_the_cosine_range_does_not_start(
     monkeypatch: pytest.MonkeyPatch, name: str, value: str

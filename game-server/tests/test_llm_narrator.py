@@ -37,7 +37,7 @@ from app.assets.models import NarrationStyle
 from app.main import API_PREFIX
 from app.rounds import llm_narrator, prompt
 from app.rounds.llm_narrator import NARRATION_PARAMS, LLMNarrator, NarrationError, accept_completion, accept_scene
-from app.rounds.narrator import LoreNote, Move, NarrationRequest, StoryContext
+from app.rounds.narrator import LoreNote, MemoryNote, Move, NarrationRequest, StoryContext
 from tests.previews import RecordingPreview
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -226,6 +226,21 @@ async def test_the_record_carries_the_settings_and_the_lore_given():
     # 생성 설정은 코드의 상수라 틀의 버전과 따로 바뀔 수 있다. 함께 남긴다
     assert (record.temperature, record.max_tokens) == (NARRATION_PARAMS.temperature, NARRATION_PARAMS.max_tokens)
     assert record.lore_entry_ids == (dwarf.entry_id,)
+    assert record.memory_rounds == ()
+
+
+async def test_the_record_carries_the_past_rounds_given():
+    log = FakeCallLog()
+    memories = [
+        MemoryNote(round_number=7, text='결과: 차단기가 부서졌다.'),
+        MemoryNote(round_number=2, text='결과: 비가 왔다.'),
+    ]
+
+    await LLMNarrator(FakeProvider(reply=REPLY), log).narrate(replace(scoped_request(), memories=memories))
+
+    (record,) = log.records
+    # 고른 차례 그대로 남긴다. 무엇을 넣었는지 볼 근거다
+    assert record.memory_rounds == (7, 2)
 
 
 async def test_without_a_key_no_digest_is_kept():
