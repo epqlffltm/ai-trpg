@@ -35,6 +35,7 @@ from app.listings.service import ListingNotReadyError
 from app.lore.indexing import LoreIndexer
 from app.lore.retrieval import LoreRetriever, Thresholds
 from app.lore.setup import build_embedder
+from app.memory.history import HistoryCollector
 from app.memory.indexing import MemoryIndexer
 from app.memory.retrieval import MemoryRetriever, MemoryThresholds
 from app.personas import router as personas
@@ -154,6 +155,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.state.memories = MemoryRetriever(
         app.state.session_factory, app.state.embedder, memory_indexer, memory_thresholds
     )
+
+    # 로어북이 고른 인물마다 지난 서술에서 그 인물이 나온 문장을 모으는 것(app/memory/history.py). 모델을 부르지 않는다
+    app.state.histories = HistoryCollector(app.state.session_factory)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)

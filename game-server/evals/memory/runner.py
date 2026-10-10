@@ -5,6 +5,8 @@
 
 모델을 부르는 일(measure)과 점수를 매기는 일(evaluate)을 나눈다. 한 번 잰 거리로 거리 기준을 바꿔 가며
 다시 매길 수 있다(sweep). 고르는 규칙은 서버의 함수 그대로다(app/memory/retrieval.choose_memories).
+
+인물의 이력은 모델을 부르지 않는다. 서버의 함수(app/memory/history.py)로 모은 문장이 정답을 얼마나 담았는지 센다.
 """
 
 import itertools
@@ -13,13 +15,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.ai.embedder import Embedder
-from app.lore.retrieval import query_text
+from app.lore.retrieval import mentions, query_text
 from app.lore.texts import batched
+from app.memory.history import history_of, scene_lines
 from app.memory.retrieval import MemoryThresholds, choose_memories, eligible, people_in
 from app.memory.texts import memory_text
+from app.rounds.narrator import HistoryLine
 from evals.lore.dataset import Kind, Query
 from evals.lore.metrics import Outcome, Score, cosine_distance, f1, score, score_by_kind
-from evals.memory.dataset import MemoryDataset
+from evals.memory.dataset import HistoryQuery, MemoryDataset
 
 # 바꿔 가며 볼 거리 기준. 뜻으로 고를 때의 것
 DISTANCE_SWEEP = (0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70)
@@ -120,3 +124,48 @@ def split_distances(dataset: MemoryDataset, measurement: Measurement) -> tuple[l
             distance = measurement.distances[query.id][memory.number]
             (right if str(memory.number) in query.expected else other).append(distance)
     return right, other
+
+
+@dataclass(frozen=True)
+class HistoryOutcome:
+    """
+    이력의 질의 하나의 결과. 서버의 함수로 모은 문장들과, 정답 중 찾은 것과 놓친 것.
+
+    놓친 것은 둘로 나눈다. unnamed 는 그 문장에 인물의 이름도 키워드도 없어서 놓친 것(문장 골라내기의 한계),
+    cut 은 이름이 있지만 문장 수나 글자 수의 상한에 밀려 놓친 것이다.
+    """
+
+    query: HistoryQuery
+    chosen: list[HistoryLine]
+    found: list[str]
+    unnamed: list[str]
+    cut: list[str]
+
+
+def sentence_with(lines: Sequence[HistoryLine], text: str) -> HistoryLine:
+    """text 가 든 문장. 데이터를 읽을 때 있는 것을 확인했다."""
+    return next(line for line in lines if text in line.text)
+
+
+def history_outcome(dataset: MemoryDataset, query: HistoryQuery) -> HistoryOutcome:
+    """이력의 질의 하나를 서버의 함수로 매긴다. 모델을 부르지 않는다."""
+    lines = scene_lines(dataset.rounds, query.round_number)
+    chosen = history_of(query.person, lines)
+    found = [text for text in query.expected if any(text in line.text for line in chosen)]
+    missed = [text for text in query.expected if text not in found]
+    unnamed = [text for text in missed if not mentions(query.person, sentence_with(lines, text).text)]
+    cut = [text for text in missed if text not in unnamed]
+    return HistoryOutcome(query, chosen, found, unnamed, cut)
+
+
+def history_outcomes(dataset: MemoryDataset) -> list[HistoryOutcome]:
+    """이력의 질의 모두."""
+    return [history_outcome(dataset, query) for query in dataset.histories]
+
+
+def history_recall(outcomes: Sequence[HistoryOutcome]) -> float | None:
+    """정답인 문장 중 이력에 든 것의 비율. 모든 질의를 합쳐 센다. 질의가 없으면 None."""
+    expected = sum(len(outcome.query.expected) for outcome in outcomes)
+    if expected == 0:
+        return None
+    return sum(len(outcome.found) for outcome in outcomes) / expected
