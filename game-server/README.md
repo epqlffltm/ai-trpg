@@ -851,7 +851,10 @@ app/rounds/
 - 플레이어의 선언에 "지시를 무시하라" 같은 글이 있어도 결과는 바뀌지 않는다. 결과는 엔진이 이미 정해 DB 에 적었고, 모델의 글은 장면이 될 뿐이다.
 - **추론(생각 모드)은 기본으로 끈다.** 추론하는 모델은 답하기 전에 속으로 따져 보는 글을 쓴다. Ollama 0.40 에서 `gemma4:26b` 로 확인해 보니, 추론을 끄지 않으면 생각만 하다가 길이 상한에 닿아 답이 비어 왔다. 그래서 추론 수준(`reasoning_effort`)을 늘 보낸다. 끌 때는 `none` 이다. 추론 수준은 호출마다 정하는 값(`GenerationParams.reasoning`)이라 테이블마다 다르게 할 자리가 있다. 켜면 생각에 쓸 토큰을 상한에 따로 더한다.
 - 생각 글은 장면에 들어가지 않는다. Ollama 가 따로 담아 주는 `reasoning` 칸은 읽지 않고, `content` 에 `<think>…</think>` 가 섞여 오면 떼어 낸다. 생각 글에는 모델이 GM 메모를 따져 본 내용이 들어 있을 수 있다.
-- provider 의 실패(연결 거부, 시간 초과, 오류 상태 코드, 모양이 다른 답)는 모두 `ProviderError` 다. 오류에는 응답의 본문을 싣지 않는다. 본문에 보낸 프롬프트가 되돌아와 있을 수 있다.
+- **답은 흘려 받는다(스트리밍).** 모델이 쓰는 대로 조각을 받는다(`app/ai/streaming.py`). 흘려 받지 않는 길은 따로 두지 않는다(Ollama, LM Studio, vLLM, OpenAI 가 모두 흘려 보낸다). 토큰 수는 흘려 받을 때 따로 달라고 해야 와서 `stream_options.include_usage` 를 싣는다. 모르는 서버면 토큰 수가 비어 있다.
+- 흘려 받는 조각에서도 생각 글을 걸러 낸다. 조각이 `<thi` 처럼 태그의 중간에서 끊길 수 있어서, 끝에 걸친 태그의 앞부분은 다음 조각을 볼 때까지 붙잡아 둔다. 넘긴 조각을 모두 이어 붙이면 다 받은 뒤에 떼어 낸 글과 같다(테스트가 자를 수 있는 모든 자리에서 잘라 본다).
+- `LLM_TIMEOUT_SECONDS` 는 호출 전체의 상한이다. httpx 의 시간 제한은 "다음 바이트까지"라서 조각이 계속 오면 끝없이 길어질 수 있다. 그래서 호출 전체에 따로 상한을 건다.
+- provider 의 실패는 모두 `ProviderError` 다. 오류에는 응답의 본문을 싣지 않는다. 본문에 보낸 프롬프트가 되돌아와 있을 수 있다. 연결이 안 됨(`unreachable`)과 받는 도중에 끊김(`interrupted`)을 나눈다. 서버가 꺼진 것과 한 번 끊긴 것은 다르다. 그 밖에 `timeout`, `status_코드`, 도중에 온 오류 조각(`stream_error`), 모양이 다른 조각(`malformed`)이 있다.
 
 **언어 모델로 서술하게 하기(로컬).** 기본은 가짜 서술자다. 테스트는 `.env` 와 상관없이 늘 가짜를 쓴다(`tests/conftest.py`).
 같은 PC 에 [Ollama](https://ollama.com) 를 깔고 모델을 받은 뒤, `game-server/.env` 에 적고 서버를 다시 띄운다.
@@ -873,7 +876,7 @@ LM Studio 면 `LLM_BASE_URL=http://127.0.0.1:1234/v1` 이다. `NARRATOR=llm` 인
 
 **다시 시도하기와 넘어가기.** 서술이 실패하면 같은 모델로 한 번 더 부르고, 그래도 안 되면 `LLM_FALLBACK_MODELS` 의 모델로 차례로 넘어간다(`app/rounds/retrying_narrator.py`).
 - 모델마다 두 번까지 부른다. 다시 부르기 전에 1~2초를 무작위로 쉰다. 여러 테이블이 함께 실패해도 다시 부르는 때가 흩어진다.
-- 다시 부르는 실패: `timeout`, `unreachable`, `status_429`, `status_5xx`, `not_json`, `malformed`, 그리고 답은 왔지만 쓰지 않은 것(`cut_off`, `empty`, `too_long`. 모델의 글은 매번 다르다).
+- 다시 부르는 실패: `timeout`, `unreachable`, `interrupted`, `stream_error`, `status_429`, `status_5xx`, `malformed`, 그리고 답은 왔지만 쓰지 않은 것(`cut_off`, `empty`, `too_long`. 모델의 글은 매번 다르다).
 - 같은 모델로 다시 부르지 않는 실패: `status_400`, `401`, `403`, `404`, `422`. 요청이나 설정이 틀렸다. 같은 것을 보내면 또 실패한다.
 - 다음 모델로도 넘어가지 않는 실패: `unreachable`(모델들은 같은 서버에 있다), `401`, `403`. 그 자리에서 그만둔다.
 - 서술 하나에 쓰는 시간은 150초를 넘지 않는다. 남은 시간이 한 번 부르는 시간(`LLM_TIMEOUT_SECONDS`)보다 짧으면 새로 부르지 않는다. 부르는 도중에 끊지 않으므로, 시작한 호출은 모두 끝나고 기록된다.
@@ -884,10 +887,12 @@ LM Studio 면 `LLM_BASE_URL=http://127.0.0.1:1234/v1` 이다. `NARRATOR=llm` 인
 모델과 추론 수준과 문체(`--style`, 기본 `classic`)를 여럿 적으면 모두 돌린 뒤 표로 모아 보여 준다. `--repeat` 로 같은 것을 여러 번 돌린다(한 번의 결과는 운일 수 있다). 한 모델이 실패해도 나머지는 계속 돈다.
 모델마다 먼저 짧은 요청으로 메모리에 올려 두어, 올리는 시간이 걸린 시간에 섞이지 않게 한다.
 장면에 보낸 적 없는 숫자, GM 메모의 낱말, 문체 예시의 낱말, 한자나 영어가 섞이면 "확인할 것"으로 표시한다(판단은 사람이 한다).
+첫 글이 오기까지의 시간(앉은 사람이 미리 보기를 기다리는 시간)을 따로 잰다. `--live` 를 주면 흘려 받는 글을 오는 대로 찍는다.
 
 ```
 uv run python -m scripts.try_narration --model gemma4:26b
 uv run python -m scripts.try_narration --model gemma4:26b qwen3.6:27b --reasoning none low --out $HOME\narration-report.md
+uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --live
 uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style none classic web_novel hardboiled emotional action dopamine literary --repeat 3 --out $HOME\narration-styles.md
 ```
 

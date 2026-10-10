@@ -107,7 +107,18 @@ class Setup:
 
 @pytest.mark.parametrize(
     'reason',
-    ['timeout', 'unreachable', 'not_json', 'malformed', 'status_429', 'status_500', 'status_503', 'cut_off', 'empty'],
+    [
+        'timeout',
+        'unreachable',
+        'interrupted',
+        'stream_error',
+        'malformed',
+        'status_429',
+        'status_500',
+        'status_503',
+        'cut_off',
+        'empty',
+    ],
 )
 def test_a_passing_failure_is_worth_another_try(reason: str):
     # 일시적인 실패이거나, 모델의 글이 매번 달라서 다시 부르면 나을 수 있다

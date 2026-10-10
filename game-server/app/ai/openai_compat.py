@@ -13,25 +13,38 @@ SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되�
   추론을 모르는 모델이면(supports_reasoning=False) 보내지 않는다.
   content 에 생각 글(<think>...</think>)이 섞여 오면 떼어 낸다. 실행기나 모델에 따라 그렇게 오는 경우가 있다.
 
+답은 늘 흘려 받는다(stream). 쓰는 대로 조각을 받아 앉은 사람에게 미리 보여 줄 수 있다(app/ai/streaming.py).
+흘려 받지 않는 길을 따로 두지 않는다. Ollama, LM Studio, vLLM, OpenAI 가 모두 흘려 보낸다. 길이 둘이면 검증도 둘이다.
+
+시간의 상한.
+  httpx 의 timeout 은 "다음 바이트가 올 때까지"의 상한이다. 흘려 받으면 조각이 계속 오는 한 끝없이 길어질 수 있다.
+  그래서 호출 전체에 따로 상한(timeout)을 건다. 다시 시도하는 쪽이 "한 번 부르는 데 이만큼"을 믿고 남은 시간을 센다.
+
 실패는 모두 ProviderError 다. 응답의 본문은 오류에 싣지 않는다. 본문에 프롬프트(GM 메모 포함)가 되돌아와 있을 수 있다.
+  - 연결이 안 됨: unreachable. 받는 도중에 끊김: interrupted. 둘을 나눈다. 서버가 꺼진 것과 한 번 끊긴 것은 다르다.
+  - 시간 초과: timeout. 상태 코드: status_코드. 도중의 오류 조각: stream_error. 모양이 다름: malformed.
 """
 
-import re
+import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
 import httpx
 
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning
+from app.ai.provider import (
+    ChatMessage,
+    Completion,
+    GenerationParams,
+    ProviderError,
+    Reasoning,
+    TextSink,
+    ignore_text,
+)
+from app.ai.streaming import read_stream
 
 # 추론을 켰을 때 생각에 더 주는 토큰. 답에 쓰는 상한(max_tokens)은 그대로 두고 이만큼을 더한다
 THINKING_TOKENS = {Reasoning.LOW: 1024, Reasoning.MEDIUM: 4096, Reasoning.HIGH: 8192}
-
-# OpenAI 모양에서 "길이 상한에 걸려 멈췄다"는 뜻의 멈춘 이유
-LENGTH_FINISH = 'length'
-
-# content 에 섞여 온 생각 글. 닫힌 것, 그리고 닫히지 않은 채 끝까지 간 것
-THINKING_PATTERN = re.compile(r'<think>.*?(?:</think>|$)', re.DOTALL)
 
 
 def chat_url(base_url: str) -> str:
@@ -54,66 +67,53 @@ def token_limit(params: GenerationParams, supports_reasoning: bool) -> int:
 def build_body(
     model: str, messages: list[ChatMessage], params: GenerationParams, supports_reasoning: bool
 ) -> dict[str, Any]:
-    """보낼 요청의 본문. 추론을 아는 모델에는 추론 수준을 늘 싣는다. 끌 때도 'none' 을 보내야 꺼진다."""
+    """
+    보낼 요청의 본문. 추론을 아는 모델에는 추론 수준을 늘 싣는다. 끌 때도 'none' 을 보내야 꺼진다.
+
+    흘려 받는다. 토큰 수는 흘려 받을 때 따로 달라고 해야 온다(include_usage).
+    """
     body: dict[str, Any] = {
         'model': model,
         'messages': [to_wire(message) for message in messages],
         'max_tokens': token_limit(params, supports_reasoning),
         'temperature': params.temperature,
-        'stream': False,
+        'stream': True,
+        'stream_options': {'include_usage': True},
     }
     if supports_reasoning:
         body['reasoning_effort'] = params.reasoning.value
     return body
 
 
-async def post_chat(client: httpx.AsyncClient, url: str, body: dict[str, Any], timeout: float) -> Any:
-    """요청을 보내고 받은 JSON 을 돌려준다. 연결, 시간 초과, 상태 코드, 형식의 실패는 ProviderError 다."""
+async def lines_of(response: httpx.Response) -> AsyncIterator[str]:
+    """받는 중인 응답의 줄들. 받는 도중의 시간 초과와 끊김을 ProviderError 로 바꾼다."""
     try:
-        response = await client.post(url, json=body, timeout=timeout)
+        async for line in response.aiter_lines():
+            yield line
+    except httpx.TimeoutException as exc:
+        raise ProviderError('timeout') from exc
+    except httpx.HTTPError as exc:
+        raise ProviderError('interrupted') from exc
+
+
+async def stream_chat(
+    client: httpx.AsyncClient, url: str, body: dict[str, Any], timeout: float, model: str, on_text: TextSink
+) -> Completion:
+    """
+    요청을 보내고 흘러오는 답을 끝까지 읽는다.
+
+    답이 오기 시작하기 전의 실패(연결, 시간 초과, 상태 코드)를 여기서 ProviderError 로 바꾼다.
+    받는 도중의 실패는 lines_of 가 바꾼다.
+    """
+    try:
+        async with client.stream('POST', url, json=body, timeout=timeout) as response:
+            if response.status_code != httpx.codes.OK:
+                raise ProviderError(f'status_{response.status_code}')
+            return await read_stream(lines_of(response), model, on_text)
     except httpx.TimeoutException as exc:
         raise ProviderError('timeout') from exc
     except httpx.HTTPError as exc:
         raise ProviderError('unreachable') from exc
-    if response.status_code != httpx.codes.OK:
-        raise ProviderError(f'status_{response.status_code}')
-    try:
-        return response.json()
-    except ValueError as exc:
-        raise ProviderError('not_json') from exc
-
-
-def drop_thinking(text: str) -> str:
-    """content 에 섞여 온 생각 글을 떼어 낸다. 닫히지 않은 생각 글은 끝까지가 생각이다."""
-    return THINKING_PATTERN.sub('', text)
-
-
-def read_completion(data: Any, model: str) -> Completion:
-    """
-    받은 JSON 에서 답을 꺼낸다. 모양이 다르면 ProviderError 다.
-
-    생각 글(reasoning 칸)은 읽지 않는다. 답이 비어 있으면 빈 글로 돌려준다. 받을지는 쓰는 쪽이 정한다.
-    """
-    try:
-        choice = data['choices'][0]
-        content = choice['message'].get('content') or ''
-        finish = choice.get('finish_reason')
-        usage = data.get('usage') or {}
-        input_tokens = usage.get('prompt_tokens')
-        output_tokens = usage.get('completion_tokens')
-        answered_by = data.get('model') or model
-    except (KeyError, IndexError, TypeError, AttributeError) as exc:
-        raise ProviderError('malformed') from exc
-    if not isinstance(content, str):
-        raise ProviderError('malformed')
-    return Completion(
-        text=drop_thinking(content),
-        model=answered_by,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        finish_reason=finish,
-        truncated=finish == LENGTH_FINISH,
-    )
 
 
 @dataclass(frozen=True)
@@ -133,8 +133,17 @@ class OpenAICompatProvider:
     timeout: float = 120.0
     supports_reasoning: bool = True
 
-    async def complete(self, messages: list[ChatMessage], params: GenerationParams) -> Completion:
-        """메시지들을 보내고 모델이 만든 글을 받는다. 실패하면 ProviderError."""
+    async def complete(
+        self, messages: list[ChatMessage], params: GenerationParams, on_text: TextSink = ignore_text
+    ) -> Completion:
+        """
+        메시지들을 보내고 모델이 만든 글을 흘려 받는다. 새 글은 오는 대로 on_text 에 넘긴다. 실패하면 ProviderError.
+
+        호출 전체가 timeout 초를 넘으면 끊는다. 조각이 계속 와도 끊는다.
+        """
         body = build_body(self.model, messages, params, self.supports_reasoning)
-        data = await post_chat(self.client, chat_url(self.base_url), body, self.timeout)
-        return read_completion(data, self.model)
+        try:
+            async with asyncio.timeout(self.timeout):
+                return await stream_chat(self.client, chat_url(self.base_url), body, self.timeout, self.model, on_text)
+        except TimeoutError as exc:
+            raise ProviderError('timeout') from exc
