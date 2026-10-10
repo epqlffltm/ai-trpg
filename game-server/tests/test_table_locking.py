@@ -31,6 +31,7 @@ from app.tables import repository, service
 from app.tables.models import GameTable, TableMember
 from app.tables.schemas import CharacterUpdate, JoinRequest, LobbyJoinRequest, TableCreate
 from app.tables.service import Conflict, TableConflictError
+from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
 
@@ -68,7 +69,7 @@ async def open_table(session: AsyncSession, capacity: int, is_public: bool = Fal
         default_sheet=SHEET,
     )
     scenario = await scenarios.create_scenario(session, ME, data)
-    await publishing.publish(session, ME, scenario.asset_id, VersionCreate())
+    await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     table = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=capacity, is_public=is_public)
     return await service.create_table(session, make_viewer(ME), table)
 

@@ -62,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # 로컬과 같은 초기화 스크립트로 계정과 스키마를 만든다.
+      # 로컬과 같은 초기화 스크립트로 계정과 스키마를 만들고 pgvector 를 켠다.
       # 슈퍼유저로 테스트하면 로컬에서 권한 때문에 실패할 코드가 CI 를 통과한다.
       # auth 스키마도 만든다. 게임 계정이 그 스키마를 읽지 못하는지 테스트가 확인한다
       - name: DB 계정과 스키마 만들기
@@ -72,6 +72,7 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/01-auth-role.sql
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/02-game-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/03-extensions.sql
 
       - name: uv 설치
         uses: astral-sh/setup-uv@v9.0.0
