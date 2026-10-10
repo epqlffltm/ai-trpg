@@ -7,7 +7,11 @@
   - keyword: 이름이나 키워드가 나온 항목만
   - vector:  가까운 순으로 limit 개, 거리 max_distance 이하만
   - hybrid:  키워드를 먼저, 그다음 가까운 순(서버가 실제로 쓰는 것, retrieval.choose)
-셋 다 마지막에 글자 수 상한(retrieval.pick)을 지킨다.
+  - gated:   hybrid 와 같되, 키워드로 걸린 항목도 질의와의 거리가 gate 이하일 때만
+  - windowed: hybrid 와 같되, 키워드로 걸린 항목도 키워드가 나온 문장과의 거리가 gate 이하일 때만
+모두 마지막에 글자 수 상한(retrieval.pick)을 지킨다.
+
+뒤의 둘은 동음이의어("계획을 망치고" → 키워드 망치)를 막아 보려는 후보다. 서버에는 아직 없다.
 
 지표.
   - recall(재현율): 맞는 항목 중 고른 것의 비율. 정답이 있는 질의만 평균한다. 놓치면 AI 가 설정을 모른다.
@@ -25,7 +29,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.assets.scenarios.snapshot import EntrySnapshot
-from app.lore.retrieval import choose, keyword_hits, pick, query_text
+from app.lore.retrieval import NEAREST_LIMIT, choose, keyword_hits, pick, query_text
 from evals.lore.dataset import Kind, Query
 
 
@@ -35,6 +39,14 @@ class Method(enum.StrEnum):
     KEYWORD = 'keyword'
     VECTOR = 'vector'
     HYBRID = 'hybrid'
+    GATED = 'gated'
+    WINDOWED = 'windowed'
+
+
+# 거리 기준 하나로 매기는 방식들(키워드에 상한을 두지 않는 것)
+PLAIN_METHODS = (Method.KEYWORD, Method.VECTOR, Method.HYBRID)
+# 키워드에 상한(gate)을 두는 방식들
+GATED_METHODS = (Method.GATED, Method.WINDOWED)
 
 
 @dataclass(frozen=True)
@@ -43,6 +55,15 @@ class Ranked:
 
     entry: EntrySnapshot
     distance: float
+
+
+@dataclass(frozen=True)
+class Rule:
+    """고르는 규칙의 숫자들. max_distance 는 벡터로 고를 때의 거리 기준, gate 는 키워드로 걸린 것의 거리 상한."""
+
+    max_distance: float
+    gate: float = math.inf
+    limit: int = NEAREST_LIMIT
 
 
 @dataclass(frozen=True)
@@ -87,17 +108,37 @@ def nearest_within(ranked: list[Ranked], max_distance: float, limit: int) -> lis
     return [item.entry for item in ranked if item.distance <= max_distance][:limit]
 
 
+def within_gate(hits: list[EntrySnapshot], distances: dict[uuid.UUID, float], gate: float) -> list[EntrySnapshot]:
+    """키워드로 걸린 항목 중 거리가 gate 이하인 것. 거리를 모르는 항목은 뺀다."""
+    return [entry for entry in hits if distances.get(entry.id, math.inf) <= gate]
+
+
+def query_distances(ranked: list[Ranked]) -> dict[uuid.UUID, float]:
+    """항목마다 질의와의 거리."""
+    return {item.entry.id: item.distance for item in ranked}
+
+
 def chosen_by(
-    method: Method, entries: list[EntrySnapshot], query: Query, ranked: list[Ranked], max_distance: float, limit: int
+    method: Method,
+    entries: list[EntrySnapshot],
+    query: Query,
+    ranked: list[Ranked],
+    windows: dict[uuid.UUID, float],
+    rule: Rule,
 ) -> list[str]:
-    """이 방식으로 고른 항목의 이름들. 고른 차례대로다."""
-    text = query_text(query.request)
+    """이 방식으로 고른 항목의 이름들. 고른 차례대로다. windows 는 키워드로 걸린 항목과 그 문장의 거리."""
+    hits = keyword_hits(entries, query_text(query.request))
+    nearest = nearest_within(ranked, rule.max_distance, rule.limit)
     if method == Method.KEYWORD:
-        picked = pick(keyword_hits(entries, text))
+        picked = pick(hits)
     elif method == Method.VECTOR:
-        picked = pick(nearest_within(ranked, max_distance, limit))
+        picked = pick(nearest)
+    elif method == Method.GATED:
+        picked = pick([*within_gate(hits, query_distances(ranked), rule.gate), *nearest])
+    elif method == Method.WINDOWED:
+        picked = pick([*within_gate(hits, windows, rule.gate), *nearest])
     else:
-        picked = choose(entries, text, nearest_within(ranked, max_distance, limit))
+        picked = choose(entries, query_text(query.request), nearest)
     return [entry.name for entry in picked]
 
 
@@ -204,3 +245,22 @@ def five_numbers(values: list[float]) -> tuple[float, float, float, float, float
         return (values[0],) * 5
     low, middle, high = statistics.quantiles(values, n=4, method='inclusive')
     return min(values), low, middle, high, max(values)
+
+
+def hit_distances(
+    ranked_by_query: dict[str, list[Ranked]],
+    distances_by_query: dict[str, dict[uuid.UUID, float]],
+    queries: list[Query],
+) -> tuple[list[float], list[float]]:
+    """
+    키워드로 걸린 항목의 거리를 둘로 나눈다. 맞는 항목인 것, 아닌 것(동음이의어 등).
+
+    distances_by_query 는 질의마다 걸린 항목의 거리다(질의 기준이든 문장 기준이든). 둘이 갈리는 곳에 상한을 둔다.
+    """
+    right: list[float] = []
+    wrong: list[float] = []
+    for query in queries:
+        names = {item.entry.id: item.entry.name for item in ranked_by_query[query.id]}
+        for entry_id, distance in distances_by_query[query.id].items():
+            (right if names.get(entry_id) in query.expected else wrong).append(distance)
+    return right, wrong
