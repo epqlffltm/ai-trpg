@@ -80,5 +80,8 @@ class AiInvocation(Base):
     # 프롬프트에 넣은 로어북 항목들(판의 복사본 안의 id). 넣은 것이 없으면 빈 목록이다
     lore_entry_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), server_default='{}')
 
+    # 프롬프트에 넣은 지난 일(같은 테이블의 라운드 번호). 넣은 것이 없으면 빈 목록이다
+    memory_rounds: Mapped[list[int]] = mapped_column(ARRAY(Integer), server_default='{}')
+
     # 보낸 메시지의 지문(HMAC-SHA256, 16진수 64자). 서버의 키가 없으면 비어 있다
     input_digest: Mapped[str | None] = mapped_column(String(64))

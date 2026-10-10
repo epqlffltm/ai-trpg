@@ -131,6 +131,7 @@ class LLMNarrator:
             temperature=self.params.temperature,
             max_tokens=self.params.max_tokens,
             lore_entry_ids=tuple(note.entry_id for note in request.lore),
+            memory_rounds=tuple(note.round_number for note in request.memories),
             input_digest=digest,
         )
 

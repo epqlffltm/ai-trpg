@@ -22,6 +22,7 @@ from app.ai.call_log import DbCallLog
 from app.ai.calls import CallRecord, CallScope, Outcome
 from app.ai.provider import Reasoning
 from app.main import API_PREFIX
+from app.memory.indexing import index_table
 from tests.cleaning import clear_tables, clearing_order
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -67,6 +68,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     이벤트가 생기고, 굴리고, 선언하고, 채팅한다), 보관함.
     AI 호출의 기록만은 API 로 생기지 않는다(테스트의 서술자는 모델을 부르지 않는다). 기록장으로 직접 쓴다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
+    지난 라운드의 벡터는 다음 서술을 맡길 때 생긴다. 혼자 앉은 테이블이라 선언하면 라운드가 닫히고 서술된다.
+    서술을 기다린 뒤 색인을 직접 돌린다.
     """
     url = API_PREFIX
     rulebook = (await client.post(f'{url}/rulebooks', json={'title': '룰북'}, headers=me)).json()
@@ -95,6 +98,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     await client.put(f'{table_url}/character', json={'name': '엘프'}, headers=me)
     await client.post(f'{table_url}/start', headers=me)
     await client.put(f'{table_url}/rounds/current/declaration', json={'content': '달린다.'}, headers=me)
+    await app.state.jobs.drain()
+    await index_table(app.state.session_factory, app.state.embedder, uuid.UUID(table['id']))
     await client.post(f'{table_url}/messages', json={'content': '안녕'}, headers=me)
     await client.post(f'{url}/personas', json={'name': '드워프'}, headers=me)
 

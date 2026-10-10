@@ -40,7 +40,8 @@ def make_test_settings(**overrides) -> Settings:
     """
     # narrator 와 embedder 는 가짜로 고정한다. 개발자의 .env 가 모델을 켜 두었어도 테스트가 실제 모델을 부르지 않는다.
     # 로어북 검색의 거리 기준은 가짜 임베더에 맞춘 값이다. 가짜는 낱말이 겹치는지만 보는 벡터라 거리의 크기가
-    # bge-m3 와 다르다(기본값 0.45, 0.50 이면 이름이 나온 항목도 걸러진다). 키워드의 상한은 끈다(코사인 거리는 2 까지)
+    # bge-m3 와 다르다(기본값 0.45, 0.50 이면 이름이 나온 항목도 걸러진다). 키워드의 상한은 끈다(코사인 거리는 2 까지).
+    # 지난 일(기억)의 거리 기준도 같은 까닭으로 가짜에 맞춘다
     values = {
         'debug': False,
         'db_schema': TEST_SCHEMA,
@@ -49,6 +50,8 @@ def make_test_settings(**overrides) -> Settings:
         'embedder': 'fake',
         'lore_max_distance': 0.6,
         'lore_keyword_max_distance': 2.0,
+        'memory_max_distance': 0.6,
+        'memory_keyword_max_distance': 2.0,
     }
     values.update(overrides)
     return Settings(**values)

@@ -48,6 +48,7 @@ RECORD = CallRecord(
     temperature=0.8,
     max_tokens=800,
     lore_entry_ids=(ENTRY,),
+    memory_rounds=(3, 7),
     input_digest='ab' * 32,
 )
 
@@ -79,6 +80,7 @@ def test_a_record_becomes_a_row_with_every_field():
     assert row.text == RECORD.text
     assert (row.temperature, row.max_tokens) == (0.8, 800)
     assert (row.lore_entry_ids, row.input_digest) == ([ENTRY], 'ab' * 32)
+    assert row.memory_rounds == [3, 7]
 
 
 async def test_the_log_saves_each_record_at_once(app: FastAPI, session: AsyncSession):
@@ -96,10 +98,11 @@ async def test_the_log_saves_each_record_at_once(app: FastAPI, session: AsyncSes
 
 
 async def test_a_record_without_lore_stores_an_empty_list(app: FastAPI, session: AsyncSession):
-    await DbCallLog(app.state.session_factory).write(replace(RECORD, lore_entry_ids=()))
+    await DbCallLog(app.state.session_factory).write(replace(RECORD, lore_entry_ids=(), memory_rounds=()))
 
     (row,) = await stored(session)
     assert row.lore_entry_ids == []
+    assert row.memory_rounds == []
 
 
 async def test_a_record_does_not_need_the_table_to_exist(app: FastAPI, session: AsyncSession):
