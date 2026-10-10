@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from app.ai.embedder import Embedder
 from app.assets.scenarios.snapshot import EntrySnapshot
-from app.lore.retrieval import MAX_DISTANCE, keyword_hits, query_text
+from app.lore.retrieval import KEYWORD_MAX_DISTANCE, MAX_DISTANCE, keyword_hits, query_text
 from app.lore.texts import batched, entry_text
 from evals.lore.dataset import Dataset, Kind, Query
 from evals.lore.metrics import (
@@ -160,6 +160,11 @@ def evaluate_methods(dataset: Dataset, measurement: Measurement, rule: Rule, met
 def evaluate(dataset: Dataset, measurement: Measurement, max_distance: float = MAX_DISTANCE) -> Evaluation:
     """한 거리 기준으로 키워드에 상한을 두지 않는 방식들의 점수를 매긴다."""
     return evaluate_methods(dataset, measurement, Rule(max_distance), PLAIN_METHODS)
+
+
+def evaluate_current(dataset: Dataset, measurement: Measurement) -> Evaluation:
+    """지금 서버의 기본 거리 기준(MAX_DISTANCE, KEYWORD_MAX_DISTANCE)으로 모든 방식의 점수를 매긴다."""
+    return evaluate_methods(dataset, measurement, Rule(MAX_DISTANCE, KEYWORD_MAX_DISTANCE), tuple(Method))
 
 
 def sweep(dataset: Dataset, measurement: Measurement, thresholds: Sequence[float] = SWEEP) -> list[Evaluation]:

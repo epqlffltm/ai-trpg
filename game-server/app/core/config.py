@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     # 임베딩을 한 번 기다리는 시간(초). 항목 몇십 개를 한 번에 보낸다
     embedding_timeout_seconds: float = Field(default=30.0, gt=0)
 
+    # 로어북 검색의 거리 기준(코사인 거리). 모델마다 거리의 크기가 달라서 임베딩 모델을 바꾸면 다시 잰다
+    # (uv run python -m scripts.eval_lore). 기본값은 bge-m3 로 잰 것이다(app/lore/retrieval.py 의 같은 이름의 상수).
+    # 뜻으로 고를 때: 이보다 먼 항목은 넣지 않는다
+    lore_max_distance: float = Field(default=0.45, gt=0, le=2)
+    # 키워드로 걸린 항목: 이보다 멀면 넣지 않는다(동음이의어 막기). 임베딩이 실패하면 보지 않는다
+    lore_keyword_max_distance: float = Field(default=0.50, gt=0, le=2)
+
     # AI 호출의 기록에 남기는 입력 지문(HMAC)의 키. 비우면 지문을 남기지 않는다.
     # 비밀값이다. 이 키를 아는 사람은 지문으로 입력의 내용을 대입해 맞춰 볼 수 있다.
     # 만들기: uv run python -c "import secrets; print(secrets.token_hex(32))"

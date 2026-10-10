@@ -53,19 +53,18 @@ async def count_vectors(session: AsyncSession, version_id: uuid.UUID, model: str
     return await session.scalar(query) or 0
 
 
-async def nearest_entry_ids(
-    session: AsyncSession, version_id: uuid.UUID, model: str, vector: list[float], limit: int, max_distance: float
-) -> list[uuid.UUID]:
+async def entry_distances(
+    session: AsyncSession, version_id: uuid.UUID, model: str, vector: list[float]
+) -> dict[uuid.UUID, float]:
     """
-    이 판, 이 모델의 벡터 중 vector 와 가까운 항목들의 id. 가까운 것부터 limit 개까지, 거리가 max_distance 이하인 것만.
+    이 판, 이 모델의 벡터마다 vector 와의 거리. 항목의 id 에서 거리로.
 
     거리는 코사인 거리다(0 이면 같은 방향, 1 이면 직각, 2 면 반대). 색인 없이 판의 벡터를 모두 견준다.
+    판 하나의 항목은 많아야 천 개(로어북 10개 × 항목 100개)라 모두 읽어 와도 된다.
+    고르는 규칙(가까운 순, 거리 기준, 키워드의 상한)은 app/lore/retrieval.py 의 순수 함수가 정한다.
     """
     distance = LoreEmbedding.embedding.cosine_distance(vector)
-    query = (
-        select(LoreEmbedding.entry_id)
-        .where(LoreEmbedding.version_id == version_id, LoreEmbedding.model == model, distance <= max_distance)
-        .order_by(distance)
-        .limit(limit)
+    query = select(LoreEmbedding.entry_id, distance).where(
+        LoreEmbedding.version_id == version_id, LoreEmbedding.model == model
     )
-    return list(await session.scalars(query))
+    return {entry_id: float(value) for entry_id, value in await session.execute(query)}
