@@ -32,6 +32,7 @@ from app.engine.dice import RandomDice
 from app.events import router as events
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
+from app.lore.setup import build_embedder
 from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
 from app.realtime import router as realtime
@@ -129,6 +130,10 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     # 언어 모델이면 위의 httpx 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다.
     # 부를 때마다 위의 세션 틀로 DB 에 기록을 남긴다(app/ai/call_log.py)
     app.state.narrator = build_narrator(settings, app.state.http_client, app.state.session_factory)
+
+    # 로어북 항목을 벡터로 바꾸는 것. 설정(EMBEDDER)이 정한다. 기본은 모델을 부르지 않는 가짜다.
+    # 시나리오를 게시하면 뒤에서 판의 항목을 벡터로 바꾼다(app/lore/indexing.py)
+    app.state.embedder = build_embedder(settings, app.state.http_client)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)

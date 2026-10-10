@@ -38,6 +38,7 @@ from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate, VersionCreate
 from app.assets.service import AssetInUseError, AssetReferenceError
+from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -169,7 +170,9 @@ async def test_publishing_waits_for_another_publish(session: AsyncSession, other
     await session.flush()
 
     # B: 같은 시나리오를 게시하려 한다. A 가 끝날 때까지 기다려야 한다
-    publishing_task = asyncio.create_task(publishing.publish(other_session, ME, scenario_id, VersionCreate()))
+    publishing_task = asyncio.create_task(
+        publishing.publish(other_session, ME, scenario_id, VersionCreate(), NO_INDEXER)
+    )
     assert await is_waiting(publishing_task)
 
     await session.commit()

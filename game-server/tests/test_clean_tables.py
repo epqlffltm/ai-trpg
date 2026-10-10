@@ -66,6 +66,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     룰북, 세계관, 로어북과 항목, 시나리오(로어북을 붙이고 판을 내고 소개 페이지까지), 테이블(시작해서 시트와 라운드와
     이벤트가 생기고, 굴리고, 선언하고, 채팅한다), 보관함.
     AI 호출의 기록만은 API 로 생기지 않는다(테스트의 서술자는 모델을 부르지 않는다). 기록장으로 직접 쓴다.
+    로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
     """
     url = API_PREFIX
     rulebook = (await client.post(f'{url}/rulebooks', json={'title': '룰북'}, headers=me)).json()
@@ -84,6 +85,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     }
     scenario = (await client.post(f'{url}/scenarios', json=body, headers=me)).json()
     await client.post(f'{url}/scenarios/{scenario["id"]}/versions', json={}, headers=me)
+    await app.state.jobs.drain()
     await client.patch(f'{url}/scenarios/{scenario["id"]}/listing', json={'tagline': '달린다'}, headers=me)
 
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 1}
