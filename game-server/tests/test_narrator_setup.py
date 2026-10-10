@@ -8,7 +8,9 @@
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.ai.call_log import DbCallLog
 from app.ai.openai_compat import OpenAICompatProvider
 from app.main import create_app
 from app.rounds.llm_narrator import LLMNarrator
@@ -20,16 +22,17 @@ LLM = {'narrator': 'llm', 'llm_model': 'gemma4:26b'}
 
 
 def test_the_fake_narrator_is_chosen_by_default():
-    narrator = build_narrator(make_test_settings(), httpx.AsyncClient())
+    narrator = build_narrator(make_test_settings(), httpx.AsyncClient(), async_sessionmaker())
 
     assert isinstance(narrator, FakeNarrator)
 
 
 def test_the_language_model_narrator_is_chosen_when_asked():
-    narrator = build_narrator(make_test_settings(**LLM), httpx.AsyncClient())
+    narrator = build_narrator(make_test_settings(**LLM), httpx.AsyncClient(), async_sessionmaker())
 
     assert isinstance(narrator, LLMNarrator)
     assert isinstance(narrator.provider, OpenAICompatProvider)
+    assert narrator.provider.kind == 'openai_compat'
 
 
 def test_the_provider_takes_its_values_from_the_settings():
@@ -68,3 +71,11 @@ def test_the_model_is_called_with_the_client_the_app_closes():
 
     # 앱이 꺼질 때 이 클라이언트를 닫는다(lifespan). 따로 만든 클라이언트면 닫히지 않고 남는다
     assert app.state.narrator.provider.client is app.state.http_client
+
+
+def test_the_model_calls_are_recorded_in_the_database_of_the_app():
+    app = create_app(make_test_settings(**LLM))
+
+    # 기록 없이 모델을 부르는 길이 없다. 앱의 세션 틀로 ai_invocations 에 쓴다
+    assert isinstance(app.state.narrator.log, DbCallLog)
+    assert app.state.narrator.log.session_factory is app.state.session_factory

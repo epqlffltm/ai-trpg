@@ -829,10 +829,13 @@ app/ai/
   provider.py         provider 의 모양(LLMProvider)과 메시지, 생성 설정, 결과의 타입. 어느 회사의 SDK 타입도 쓰지 않는다
   fake.py             가짜 provider. 정해 둔 글을 돌려주고 받은 것을 적어 둔다. 자동 테스트는 이것만 쓴다
   openai_compat.py    OpenAI 와 같은 모양의 주소를 부르는 provider. Ollama, LM Studio, vLLM 을 이것 하나로 부른다
+  calls.py            AI 호출 한 번의 기록(CallRecord)과 기록을 받는 곳의 모양(CallLog)
+  call_log.py         기록을 DB(ai_invocations)에 쓰는 기록장
+  models.py           ai_invocations 표
 app/rounds/
   narration_request.py  DB 의 라운드를 서술자에게 줄 모양으로 바꾼다. 각자 한 일을 라운드에 굳히고 다시 읽는다
   prompt.py           메시지를 조립하는 순수 함수. 틀의 버전(PROMPT_VERSION)
-  llm_narrator.py     조립 → provider 호출 → 받은 글 검사
+  llm_narrator.py     조립 → provider 호출 → 받은 글 검사 → 호출 기록
   narrator_setup.py   설정(NARRATOR)을 보고 앱에 꽂을 서술자를 고른다
 ```
 
@@ -878,6 +881,16 @@ uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style non
 ```
 
 `--out` 의 파일은 UTF-8 이다. 저장소 밖에 두면 `git status` 에 섞이지 않는다.
+
+**AI 호출의 기록.** 언어 모델을 부를 때마다 `ai_invocations` 에 한 줄을 덧붙인다. 고치거나 지우지 않는다. 사용량과 비용, 실패를 볼 근거다.
+- 잘 끝났든(`ok`), 답은 왔지만 장면으로 쓰지 않았든(`rejected`: `cut_off`, `empty`, `too_long`), 답을 받지 못했든(`failed`: `timeout`, `unreachable`, `status_503` …) 한 번에 하나다. 실패한 호출도 시간과 토큰을 썼다.
+- 적는 것: 쓰임새(`narration`), 테이블, 라운드 번호, 그때의 방장, provider 의 종류와 모델(답에 적힌 이름, 없으면 부른 이름), 틀의 버전, 추론, 문체, 걸린 시간, 토큰 수, 멈춘 이유, 모델이 쓴 글(쓰지 않은 글도).
+- 적지 않는 것: 보낸 메시지(라운드에 굳힌 것과 판의 복사본, 틀의 버전으로 다시 조립할 수 있다), 생각 글(GM 메모 등급이다).
+- 게임의 이벤트(`table_events`)와 따로 둔다. 이벤트는 앉은 사람 모두가 읽는 게임의 기록이고, 이것은 운영과 비용의 기록이다. 읽는 API 는 아직 없다. 관리자 기능을 열 때 따로 묶은 주소로 연다.
+- 테이블에 외래 키를 걸지 않는다. 기록은 테이블보다 오래 산다.
+- 게임의 트랜잭션과 따로, 부른 직후에 세션을 새로 열어 저장한다(`DbCallLog`). 서술이 다른 작업에 밀려 버려져도 그 호출은 남는다.
+- 서술자는 기록장 없이 만들 수 없다(`LLMNarrator(provider, log)`). 테스트는 목록에 쌓는 가짜(`FakeCallLog`)를 쓴다.
+- 모델을 부르는 도중에 서버가 꺼지면 그 호출은 남지 않는다. 부르기 전에 써 두고 나중에 고치면 잡을 수 있지만, 덧붙이기만 하는 기록이 아니게 된다.
 
 **닫는 일은 둘로 나뉜다.** GM 의 서술은 오래 걸린다(AI 를 부르면 몇 초에서 십몇 초). 그동안 테이블을 잠그고 있으면
 이 테이블의 채팅, 나가기, 읽기가 전부 멈춘다. 그래서 잠금 밖에서 서술한다.

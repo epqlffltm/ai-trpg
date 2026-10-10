@@ -12,6 +12,7 @@ GM 의 서술을 만드는 것(서술자)의 모양과, AI 가 붙기 전에 쓰
 나중에 AI 를 붙일 때 구현만 바꿔 끼운다. 테스트는 가짜를 쓴다. 가짜는 같은 입력에 늘 같은 글을 낸다.
 """
 
+import uuid
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -137,6 +138,10 @@ class NarrationRequest:
     history: list[PastRound] = field(default_factory=list)
     # 서술의 문체. 라운드가 닫기 시작할 때의 테이블의 문체다. 가짜 서술자는 읽지 않는다
     style: NarrationStyle = NarrationStyle.NONE
+    # 어느 테이블의 라운드인가, 서술을 맡길 때 방장이 누구인가. AI 호출을 기록할 때 쓴다(app/ai/calls.py).
+    # 가짜 서술자는 읽지 않는다
+    table_id: uuid.UUID | None = None
+    host_id: uuid.UUID | None = None
 
 
 class Narrator(Protocol):
