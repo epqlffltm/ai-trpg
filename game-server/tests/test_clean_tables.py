@@ -18,6 +18,9 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.call_log import DbCallLog
+from app.ai.calls import CallRecord, CallScope, Outcome
+from app.ai.provider import Reasoning
 from app.main import API_PREFIX
 from tests.cleaning import clear_tables, clearing_order
 from tests.sheets import SHEET
@@ -62,6 +65,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
 
     룰북, 세계관, 로어북과 항목, 시나리오(로어북을 붙이고 판을 내고 소개 페이지까지), 테이블(시작해서 시트와 라운드와
     이벤트가 생기고, 굴리고, 선언하고, 채팅한다), 보관함.
+    AI 호출의 기록만은 API 로 생기지 않는다(테스트의 서술자는 모델을 부르지 않는다). 기록장으로 직접 쓴다.
     """
     url = API_PREFIX
     rulebook = (await client.post(f'{url}/rulebooks', json={'title': '룰북'}, headers=me)).json()
@@ -91,6 +95,18 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     await client.put(f'{table_url}/rounds/current/declaration', json={'content': '달린다.'}, headers=me)
     await client.post(f'{table_url}/messages', json={'content': '안녕'}, headers=me)
     await client.post(f'{url}/personas', json={'name': '드워프'}, headers=me)
+
+    record = CallRecord(
+        scope=CallScope(purpose='narration', table_id=uuid.UUID(table['id']), round_number=1, host_id=ME),
+        provider='fake',
+        model='fake',
+        prompt_version='narration-3',
+        reasoning=Reasoning.NONE,
+        outcome=Outcome.OK,
+        latency_ms=0,
+        text='바람이 분다.',
+    )
+    await DbCallLog(app.state.session_factory).write(record)
 
 
 def test_tables_that_point_are_cleared_before_the_tables_they_point_to():

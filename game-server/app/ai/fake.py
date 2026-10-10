@@ -8,7 +8,9 @@
 """
 
 from dataclasses import dataclass, field
+from typing import ClassVar
 
+from app.ai.calls import CallRecord
 from app.ai.provider import ChatMessage, Completion, GenerationParams
 
 # 가짜 모델의 이름. 기록에 남을 때 진짜 모델과 섞이지 않게 한다
@@ -31,11 +33,25 @@ class FakeProvider:
     reply 가 돌려줄 글이다. truncated 를 켜면 길이 상한에 걸려 끊긴 답을 흉내 낸다. calls 에 받은 요청이 쌓인다.
     """
 
+    kind: ClassVar[str] = 'fake'
+
     reply: str = '바람이 분다.'
     truncated: bool = False
+    model: str = FAKE_MODEL
     calls: list[Call] = field(default_factory=list)
 
     async def complete(self, messages: list[ChatMessage], params: GenerationParams) -> Completion:
         """받은 것을 적어 두고 정해 둔 글을 돌려준다."""
         self.calls.append(Call(messages=list(messages), params=params))
-        return Completion(text=self.reply, model=FAKE_MODEL, truncated=self.truncated)
+        return Completion(text=self.reply, model=self.model, truncated=self.truncated)
+
+
+@dataclass
+class FakeCallLog:
+    """받은 호출 기록을 목록에 쌓아 두는 기록장. DB 에 쓰지 않는다. 테스트가 무엇이 기록됐는지 들여다본다."""
+
+    records: list[CallRecord] = field(default_factory=list)
+
+    async def write(self, record: CallRecord) -> None:
+        """기록 하나를 쌓는다."""
+        self.records.append(record)
