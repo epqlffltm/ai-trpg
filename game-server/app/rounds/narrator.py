@@ -141,6 +141,19 @@ class LoreNote:
 
 
 @dataclass(frozen=True)
+class MemoryNote:
+    """
+    서술에 넣는 지난 일 하나. 검색이 골랐다(app/memory/retrieval.py).
+
+    지난 기록(history)보다 앞의 라운드 하나다. 그 라운드에 플레이어들이 한 말과, 그 결과를 서술한 글이다.
+    플레이어가 이미 본 글이다. round_number 는 무엇을 넣었는지 기록할 때 쓴다.
+    """
+
+    round_number: int
+    text: str
+
+
+@dataclass(frozen=True)
 class NarrationRequest:
     """서술자에게 주는 것. 방금 닫힌 라운드의 내용이다."""
 
@@ -162,6 +175,8 @@ class NarrationRequest:
     host_id: uuid.UUID | None = None
     # 이번 장면에 맞는 로어북 항목. 서술을 맡기기 직전에 검색이 채운다. 가짜 서술자는 읽지 않는다
     lore: list[LoreNote] = field(default_factory=list)
+    # 이번 장면에 맞는 지난 일(지난 기록보다 앞의 라운드). 서술을 맡기기 직전에 검색이 채운다. 가짜 서술자는 읽지 않는다
+    memories: list[MemoryNote] = field(default_factory=list)
 
 
 class Preview(Protocol):

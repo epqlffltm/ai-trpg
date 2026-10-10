@@ -5,10 +5,11 @@
 
 라운드를 닫는 일은 둘로 나뉘어 있다(app/rounds/service.py). 닫기 시작과 닫기 마무리. 그 사이가 여기다.
   1. 닫는 중인 라운드를 읽는다.
-  2. 이번 장면에 맞는 로어북 항목을 고른다(app/lore/retrieval.py). 고르지 못해도 서술은 한다.
+  2. 이번 장면에 맞는 로어북 항목(app/lore/retrieval.py)과 지난 일(app/memory/retrieval.py)을 고른다.
+     고르지 못해도 서술은 한다.
   3. 서술자를 부른다. 이때는 잠금도 DB 연결도 쥐고 있지 않다.
   4. 닫기를 마무리한다.
-로어북은 한 번 고르고, 다시 시도하는 모든 시도가 같은 항목을 쓴다.
+로어북과 지난 일은 한 번 고르고, 다시 시도하는 모든 시도가 같은 것을 쓴다.
 
 이 작업은 끝까지 못 갈 수 있다. 서술자가 실패하거나, 도는 도중에 서버가 꺼진다.
 그러면 라운드가 닫는 중에 머문다. 방장이 닫기를 다시 눌러 맡긴다.
@@ -28,7 +29,7 @@ from app.ai.provider import ProviderError
 from app.core.jobs import BackgroundJobs
 from app.rounds import service
 from app.rounds.llm_narrator import NarrationError
-from app.rounds.narrator import LoreNote, NarrationRequest, Narrator
+from app.rounds.narrator import LoreNote, MemoryNote, NarrationRequest, Narrator
 from app.rounds.preview import notifier, open_preview
 from app.rounds.retrying_narrator import NarrationFailed
 
@@ -54,6 +55,24 @@ class NoLore:
 NO_LORE = NoLore()
 
 
+class MemoryFinder(Protocol):
+    """서술에 넣을 지난 일을 고르는 것. 구현은 app/memory/retrieval.py 의 MemoryRetriever 다."""
+
+    async def find(self, request: NarrationRequest) -> list[MemoryNote]:
+        """이번 장면에 맞는 지난 일들. 고를 것이 없으면 빈 목록이다."""
+        ...
+
+
+class NoMemories:
+    """아무것도 고르지 않는 것. 지난 일의 검색이 필요 없는 곳(테스트)에서 꽂는다."""
+
+    async def find(self, request: NarrationRequest) -> list[MemoryNote]:
+        return []
+
+
+NO_MEMORIES = NoMemories()
+
+
 def failure_reason(error: Exception) -> str:
     """
     서술자가 낸 예외에서 앉은 사람에게 알릴 실패의 이유를 꺼낸다.
@@ -74,11 +93,12 @@ async def narrate_round(
     table_id: uuid.UUID,
     number: int,
     lore: LoreFinder = NO_LORE,
+    memories: MemoryFinder = NO_MEMORIES,
 ) -> None:
     """
     닫는 중인 라운드 하나를 서술하고 닫는다. 요청 밖에서 돈다.
 
-    서술자를 부르기 전에 로어북 항목을 골라 요청에 싣는다(lore).
+    서술자를 부르기 전에 로어북 항목(lore)과 지난 일(memories)을 골라 요청에 싣는다.
 
     세션을 따로 연다. 서술자를 기다리는 동안에는 어느 세션도 열려 있지 않다.
     서술자가 끝내 실패하면 실패를 적고(앉은 사람 모두에게 알린다) 예외를 그대로 올린다.
@@ -89,7 +109,7 @@ async def narrate_round(
         request = await service.load_closing_request(session, table_id, number)
     if request is None:
         return
-    request = replace(request, lore=await lore.find(request))
+    request = replace(request, lore=await lore.find(request), memories=await memories.find(request))
 
     try:
         async with open_preview(notifier(session_factory), table_id, number) as preview:
@@ -115,8 +135,9 @@ class RoundCloser:
     narrator: Narrator
     jobs: BackgroundJobs
     lore: LoreFinder = NO_LORE
+    memories: MemoryFinder = NO_MEMORIES
 
     def schedule(self, table_id: uuid.UUID, number: int) -> None:
         """이 라운드의 서술을 맡긴다. 기다리지 않고 바로 돌아온다."""
-        job = narrate_round(self.session_factory, self.narrator, table_id, number, self.lore)
+        job = narrate_round(self.session_factory, self.narrator, table_id, number, self.lore, self.memories)
         self.jobs.spawn(job, name=f'narrate:{table_id}:{number}')

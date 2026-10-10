@@ -62,6 +62,7 @@ class CallRecord:
     토큰 수와 멈춘 이유는 provider 가 알려 준 만큼이다. 모르면 None.
     temperature, max_tokens 는 부를 때의 생성 설정이다. 코드의 상수라 틀의 버전과 따로 바뀔 수 있어 함께 남긴다.
     lore_entry_ids 는 프롬프트에 넣은 로어북 항목들이다(app/lore/retrieval.py). 검색이 맞는 것을 골랐는지 볼 근거다.
+    memory_rounds 는 프롬프트에 넣은 지난 일(라운드의 번호)들이다(app/memory/retrieval.py).
     input_digest 는 보낸 메시지의 지문이다(input_digest 함수). 키가 없으면 None.
     """
 
@@ -81,6 +82,7 @@ class CallRecord:
     temperature: float | None = None
     max_tokens: int | None = None
     lore_entry_ids: tuple[uuid.UUID, ...] = ()
+    memory_rounds: tuple[int, ...] = ()
     input_digest: str | None = None
 
 

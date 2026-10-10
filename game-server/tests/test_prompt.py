@@ -19,8 +19,8 @@ import pytest
 from app.ai.provider import Role
 from app.assets.models import LoreKind, NarrationStyle
 from app.rounds import prompt
-from app.rounds.narrator import LoreNote, Move, NarrationRequest, PastRound, StoryContext, Verdict
-from app.rounds.prompt import build_messages, fit_history, lore_lines, system_text
+from app.rounds.narrator import LoreNote, MemoryNote, Move, NarrationRequest, PastRound, StoryContext, Verdict
+from app.rounds.prompt import build_messages, fit_history, lore_lines, memory_lines, system_text
 
 STORY = StoryContext(
     title='추격전',
@@ -276,8 +276,8 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_the_template_is_narration_7():
-    assert prompt.PROMPT_VERSION == 'narration-7'
+def test_the_template_is_narration_8():
+    assert prompt.PROMPT_VERSION == 'narration-8'
 
 
 def test_the_last_message_asks_for_the_declared_actions():
@@ -424,3 +424,49 @@ def test_the_kind_rules_say_how_to_treat_them():
     assert '단정하지' in prompt.KIND_RULES[LoreKind.LEGEND]
     assert '[사건]' in prompt.KIND_RULES[LoreKind.EVENT]
     assert '먼저 일으키거나 결말을 정하지' in prompt.KIND_RULES[LoreKind.EVENT]
+
+
+# --- 지난 일(#107) ---
+
+OLD = MemoryNote(round_number=2, text='토르빈: 차단기를 부순다.\n결과: 차단기가 박살 났다.')
+NEWER = MemoryNote(round_number=9, text='리엔: 부채를 돌려준다.\n결과: 악역영애가 웃었다.')
+
+
+def test_no_memories_leave_no_lines():
+    assert memory_lines([]) == []
+
+
+def test_memories_are_put_in_the_order_of_the_story():
+    lines = memory_lines([NEWER, OLD])
+
+    # 검색은 인물이 나온 최근 것을 먼저 고른다. 넣을 때는 이야기의 순서로 놓아 바뀐 태도가 보이게 한다
+    assert lines == [
+        prompt.MEMORY_TITLE,
+        prompt.MEMORY_NOTE,
+        '(2 라운드)',
+        OLD.text,
+        '(9 라운드)',
+        NEWER.text,
+        '',
+    ]
+
+
+def test_memories_come_after_the_lore_and_before_this_round():
+    request = replace(make_request(), lore=[DWARF], memories=[OLD])
+
+    last = build_messages(request)[-1].content
+
+    assert last.index(prompt.LORE_TITLE) < last.index(prompt.MEMORY_TITLE) < last.index('라운드에 한 일과 결과]')
+    assert last.endswith(prompt.CLOSING_REQUEST)
+
+
+def test_memories_stay_out_of_the_system_message():
+    system = build_messages(replace(make_request(), memories=[OLD]))[0].content
+
+    # 라운드마다 바뀌는 글이다. 시스템 지시에 넣으면 provider 의 캐싱이 깨진다
+    assert OLD.text not in system
+
+
+def test_the_memory_note_says_it_is_already_over():
+    # 지난 행동에 끌려 이번 행동이 바뀌지 않게 한다(#101 의 망치)
+    assert '이미 서술했고 이번 라운드의 일이 아니다' in prompt.MEMORY_NOTE
