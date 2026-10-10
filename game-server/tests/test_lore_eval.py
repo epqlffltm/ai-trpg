@@ -9,6 +9,7 @@ DB 도 모델도 쓰지 않는다. 벡터는 손으로 적거나 가짜 임베�
 
 import argparse
 import copy
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -36,12 +37,14 @@ from evals.lore.metrics import (
     Method,
     Outcome,
     Ranked,
+    Rule,
     Score,
     chosen_by,
     cosine_distance,
     empty_rate,
     f1,
     five_numbers,
+    hit_distances,
     micro_precision,
     nearest_within,
     rank,
@@ -50,9 +53,11 @@ from evals.lore.metrics import (
     reciprocal_rank,
     score,
     split_distances,
+    within_gate,
 )
-from evals.lore.report import ModelResult, best, full_report, miss_lines
-from evals.lore.runner import SWEEP, evaluate, measure, sweep
+from evals.lore.report import ModelResult, best, best_gate, full_report, miss_lines, name_recall
+from evals.lore.runner import GATE_SWEEP, SWEEP, evaluate, measure, sweep, sweep_gates, window_distances
+from evals.lore.windows import sentences, windows_for
 from scripts.eval_lore import NoQueries, failure_message, make_embedders, read_dataset, run
 
 
@@ -258,9 +263,11 @@ def test_the_methods_choose_as_the_server_does():
     # 리엔은 이름이 나왔지만 가장 멀고, 홍차는 가깝다
     ranked = [Ranked(entries[2], 0.1), Ranked(entries[1], 0.4), Ranked(entries[0], 0.9)]
 
-    assert chosen_by(Method.KEYWORD, entries, query, ranked, 0.5, 8) == ['리엔']
-    assert chosen_by(Method.VECTOR, entries, query, ranked, 0.5, 8) == ['홍차', '토르빈']
-    assert chosen_by(Method.HYBRID, entries, query, ranked, 0.5, 8) == ['리엔', '홍차', '토르빈']
+    rule = Rule(0.5)
+
+    assert chosen_by(Method.KEYWORD, entries, query, ranked, {}, rule) == ['리엔']
+    assert chosen_by(Method.VECTOR, entries, query, ranked, {}, rule) == ['홍차', '토르빈']
+    assert chosen_by(Method.HYBRID, entries, query, ranked, {}, rule) == ['리엔', '홍차', '토르빈']
     server = choose(entries, query_text(query.request), [entries[2], entries[1]])
     assert [item.name for item in server] == ['리엔', '홍차', '토르빈']
 
@@ -271,7 +278,77 @@ def test_the_length_cap_applies_to_every_method():
     query = parse_dataset(document).queries[3]
     ranked = [Ranked(item, 0.1) for item in long_ones]
 
-    assert len(chosen_by(Method.VECTOR, long_ones, query, ranked, 0.5, 8)) == 2
+    assert len(chosen_by(Method.VECTOR, long_ones, query, ranked, {}, Rule(0.5))) == 2
+
+
+def test_a_gate_on_the_query_distance_drops_far_keyword_hits():
+    dataset = parse_dataset(small_document())
+    entries = dataset.entries
+    # 리엔은 이름이 나왔지만 질의와 0.9 만큼 멀다
+    ranked = [Ranked(entries[2], 0.1), Ranked(entries[0], 0.9)]
+    query = dataset.queries[0]
+
+    assert chosen_by(Method.GATED, entries, query, ranked, {}, Rule(0.5, gate=0.95)) == ['리엔', '홍차']
+    assert chosen_by(Method.GATED, entries, query, ranked, {}, Rule(0.5, gate=0.5)) == ['홍차']
+
+
+def test_a_gate_on_the_sentence_distance_looks_only_at_the_sentence():
+    dataset = parse_dataset(small_document())
+    entries = dataset.entries
+    ranked = [Ranked(entries[2], 0.1), Ranked(entries[0], 0.9)]
+    query = dataset.queries[0]
+    # 질의 전체와는 멀어도 이름이 나온 문장과는 가깝다
+    windows = {entries[0].id: 0.3}
+
+    assert chosen_by(Method.WINDOWED, entries, query, ranked, windows, Rule(0.5, gate=0.4)) == ['리엔', '홍차']
+    assert chosen_by(Method.WINDOWED, entries, query, ranked, windows, Rule(0.5, gate=0.2)) == ['홍차']
+    # 문장의 거리를 모르면 넣지 않는다
+    assert chosen_by(Method.WINDOWED, entries, query, ranked, {}, Rule(0.5, gate=0.9)) == ['홍차']
+
+
+def test_without_a_gate_the_gated_methods_choose_as_hybrid_does():
+    dataset = parse_dataset(small_document())
+    entries = dataset.entries
+    ranked = [Ranked(entries[2], 0.1), Ranked(entries[0], 0.9)]
+    query = dataset.queries[0]
+    windows = {entries[0].id: 0.99}
+
+    hybrid = chosen_by(Method.HYBRID, entries, query, ranked, windows, Rule(0.5))
+
+    assert chosen_by(Method.GATED, entries, query, ranked, windows, Rule(0.5)) == hybrid
+    assert chosen_by(Method.WINDOWED, entries, query, ranked, windows, Rule(0.5)) == hybrid
+
+
+def test_within_gate_keeps_only_known_near_hits():
+    near, far, unknown = entry('가'), entry('나'), entry('다')
+    distances = {near.id: 0.2, far.id: 0.8}
+
+    assert within_gate([near, far, unknown], distances, 0.5) == [near]
+    assert within_gate([near, far, unknown], distances, 0.8) == [near, far]
+
+
+# --- 문장 ---
+
+
+def test_text_is_split_into_sentences():
+    text = '비가 온다. 리엔이 웃는다!\n카이: 엔진을 켠다… 모모: 정말?'
+
+    assert sentences(text) == ['비가 온다.', '리엔이 웃는다!', '카이: 엔진을 켠다…', '모모: 정말?']
+    assert sentences('  ') == []
+
+
+def test_windows_are_the_sentences_that_mention_the_entry():
+    lien = EntrySnapshot(id=entry_id('리엔'), name='리엔', keywords=['엘프'], content='')
+    text = '비가 온다. 리엔이 웃는다.\n카이: 엘프에게 손을 흔든다.'
+
+    assert windows_for(lien, text) == ['리엔이 웃는다.', '카이: 엘프에게 손을 흔든다.']
+
+
+def test_a_keyword_cut_by_a_sentence_end_falls_back_to_the_whole_text():
+    odd = EntrySnapshot(id=entry_id('끝. 시작'), name='끝. 시작', keywords=[], content='')
+    text = '이야기의 끝. 시작이다.'
+
+    assert windows_for(odd, text) == [text]
 
 
 # --- 지표 ---
@@ -371,7 +448,48 @@ async def test_queries_are_embedded_one_at_a_time_with_the_server_text():
 
     await measure(embedder, dataset)
 
-    assert embedder.calls[1:] == [[query_text(query.request)] for query in dataset.queries]
+    calls = iter(embedder.calls[1:])
+    # 질의마다 그 글 하나만 든 호출이 차례대로 있다(사이사이에 문장들의 호출이 낀다)
+    for query in dataset.queries:
+        assert [query_text(query.request)] in calls
+
+
+async def test_sentences_with_keyword_hits_are_measured_for_those_entries_only():
+    dataset = parse_dataset(small_document())
+    embedder = FakeEmbedder()
+
+    measurement = await measure(embedder, dataset)
+
+    lien, torvin = dataset.entries[0].id, dataset.entries[1].id
+    assert set(measurement.windows['a1']) == {lien}
+    # 계획을 망치고 → 토르빈의 키워드 망치
+    assert set(measurement.windows['a3']) == {torvin}
+    assert measurement.windows['a4'] == {}
+    assert ['계획을 망치고 말았다.'] in embedder.calls
+    # 걸린 항목이 있는 질의만 문장을 보낸다
+    assert len(measurement.window_ms) == 2
+
+
+async def test_a_sentence_is_sent_once_and_the_nearest_counts():
+    near, far = entry('가'), entry('나')
+    vectors = {near.id: [1.0, 0.0], far.id: [0.0, 1.0]}
+
+    class Recording:
+        model = 'recording'
+        calls: list[list[str]] = []
+
+        async def embed(self, texts: list[str]) -> list[list[float]]:
+            self.calls.append(texts)
+            return [[1.0, 0.0] if text == '가깝다' else [0.0, 1.0] for text in texts]
+
+    embedder = Recording()
+    pairs = [(near, '가깝다'), (near, '멀다'), (far, '멀다')]
+
+    distances = await window_distances(embedder, pairs, vectors)
+
+    assert embedder.calls == [['가깝다', '멀다']]
+    assert distances[near.id] == pytest.approx(0.0)
+    assert distances[far.id] == pytest.approx(0.0)
 
 
 async def test_sweeping_does_not_call_the_model_again():
@@ -415,7 +533,9 @@ async def model_result(max_distance: float = 0.6) -> tuple:
     """작은 문서를 가짜 임베더로 잰 결과."""
     dataset = parse_dataset(small_document())
     measurement = await measure(FakeEmbedder(), dataset)
-    return dataset, ModelResult(measurement, evaluate(dataset, measurement, max_distance), sweep(dataset, measurement))
+    swept = sweep(dataset, measurement)
+    gated = sweep_gates(dataset, measurement, max_distance)
+    return dataset, ModelResult(measurement, evaluate(dataset, measurement, max_distance), swept, gated)
 
 
 async def test_the_report_has_a_summary_and_a_section_per_model():
@@ -427,12 +547,15 @@ async def test_the_report_has_a_summary_and_a_section_per_model():
     assert report.count('## fake') == 2
     assert '| hybrid |' in report
     assert '←' in report
+    assert '### 키워드에 상한을 두면' in report
+    assert '| 없음(hybrid) |' in report
+    assert '문장 기준, 아닌 항목' in report
 
 
 async def test_misses_name_what_was_missed_and_what_was_wrong():
     dataset, result = await model_result(0.0)
 
-    lines = miss_lines(dataset, result)
+    lines = miss_lines(dataset, result.measurement, Method.HYBRID, Rule(0.0))
 
     assert "- a2 (meaning): 놓침 ['토르빈']" in lines
     assert "- a3 (distractor): 잘못 넣음 ['토르빈']" in lines
@@ -480,3 +603,46 @@ def test_failures_are_one_line_without_the_answer():
     assert failure_message(ProviderError('unreachable')).startswith('임베딩 모델을 부르지 못했다: unreachable.')
     assert failure_message(NoQueries('v9')) == '그 묶음의 질의가 없다: v9'
     assert '리엔' in failure_message(DatasetError(['entries[0] 리엔: 이름이']))
+
+
+async def test_sweeping_gates_does_not_call_the_model_again():
+    dataset = parse_dataset(small_document())
+    embedder = FakeEmbedder()
+    measurement = await measure(embedder, dataset)
+    calls = len(embedder.calls)
+
+    gated = sweep_gates(dataset, measurement, 0.6)
+
+    assert len(embedder.calls) == calls
+    assert [item.rule.gate for item in gated] == list(GATE_SWEEP)
+    assert all(item.max_distance == 0.6 for item in gated)
+    assert set(gated[0].overall) == {Method.GATED, Method.WINDOWED}
+
+
+async def test_a_tight_gate_drops_the_homonym_and_the_name():
+    dataset = parse_dataset(small_document())
+    measurement = await measure(FakeEmbedder(), dataset)
+
+    (tight,) = sweep_gates(dataset, measurement, 0.0, [0.0])
+    (loose,) = sweep_gates(dataset, measurement, 0.0, [2.0])
+
+    assert tight.by_kind[Method.WINDOWED][Kind.DISTRACTOR].empty == 1.0
+    assert name_recall(tight, Method.WINDOWED) == 0.0
+    assert loose.by_kind[Method.WINDOWED][Kind.DISTRACTOR].empty == 0.0
+    assert name_recall(loose, Method.WINDOWED) == 1.0
+
+
+def test_hit_distances_are_split_into_right_and_wrong():
+    dataset = parse_dataset(small_document())
+    entries = dataset.entries
+    ranked = {query.id: [Ranked(item, 0.5) for item in entries] for query in dataset.queries}
+    distances = {'a1': {entries[0].id: 0.3}, 'a2': {}, 'a3': {entries[1].id: 0.7}, 'a4': {}}
+
+    assert hit_distances(ranked, distances, dataset.queries) == ([0.3], [0.7])
+
+
+async def test_the_best_gate_prefers_finding_names_then_the_looser_gate():
+    dataset, result = await model_result()
+    same = [replace(result.gated[0], rule=Rule(0.6, gate)) for gate in (0.5, 0.7)]
+
+    assert best_gate(same, Method.WINDOWED).rule.gate == 0.7
