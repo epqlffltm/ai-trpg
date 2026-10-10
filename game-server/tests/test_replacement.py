@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.engine.dice import ScriptedDice
 from app.engine.sheet import Sheet
 from app.main import API_PREFIX
-from app.rounds.narrator import NarrationRequest
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.tables import service, sheets
 from app.tables.models import GameTable, TableMember, TableRoll, TableStatus
 from app.tables.router import find_pregen_holders
@@ -135,7 +135,7 @@ def load_migration(name: str):
 class StuckNarrator:
     """답하지 못하는 서술자. 라운드를 닫는 중에 머물게 한다."""
 
-    async def narrate(self, request: NarrationRequest) -> str:
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
         raise RuntimeError('서술자가 답하지 못했다')
 
 

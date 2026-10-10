@@ -9,6 +9,7 @@
   3. 받은 글을 검사한다. 장면으로 쓸 수 있는 글만 돌려준다.
   4. 부른 것을 기록한다(app/ai/calls.py). 잘 끝났든, 글을 쓰지 않았든, 부르지 못했든 한 번에 하나.
      어디에 쓰는지는 모른다. 앱이 DB 에 쓰는 기록장을 꽂는다.
+모델이 쓰는 대로 받은 조각은 미리 보기에 그대로 넘긴다. 검사하기 전의 글이다. 받지 않으면 버려지는 글이 된다.
 
 모델의 글은 장면이 될 뿐이다. 상태를 바꾸지 않는다. 결과(판정, HP, 죽음)는 엔진이 이미 정해 DB 에 적었다.
 그래서 검사는 "장면으로 쓸 수 있는가"만 본다. 끊기지 않았고, 비어 있지 않고, 너무 길지 않은가.
@@ -22,7 +23,7 @@ from dataclasses import dataclass
 
 from app.ai.calls import CallLog, CallRecord, CallScope, Outcome
 from app.ai.provider import Completion, GenerationParams, LLMProvider, ProviderError
-from app.rounds.narrator import NarrationRequest
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.prompt import PROMPT_VERSION, build_messages
 
 # 서술을 만들 때의 설정. 몇 문단의 장면이면 충분하다. 너무 딱딱하지 않게 조금 다양하게 쓴다
@@ -121,19 +122,21 @@ class LLMNarrator:
             text=completion.text if completion else None,
         )
 
-    async def narrate(self, request: NarrationRequest) -> str:
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
         """
         닫힌 라운드의 결과를 서술한다. 돌려준 글이 다음 라운드의 장면이 된다.
 
+        부르는 것이 시도 하나다. 부르기 전에 미리 보기를 새로 시작하고, 받는 조각을 넘긴다.
         부르고 나면 어떻게 끝났든 기록을 하나 남기고, 실패면 그 예외를 그대로 올린다.
-        이야기의 바탕이 없는 요청은 부르지 않는다. 부르지 않았으니 기록도 없다.
+        이야기의 바탕이 없는 요청은 부르지 않는다. 부르지 않았으니 기록도, 미리 보기도 없다.
         """
         if request.story is None:
             raise NarrationError('no_story')
         messages = build_messages(request)
+        preview.begin()
         started = time.perf_counter()
         try:
-            completion = await self.provider.complete(messages, self.params)
+            completion = await self.provider.complete(messages, self.params, preview.text)
         except ProviderError as error:
             await self.log.write(self.describe(request, elapsed_ms(started), error=str(error)))
             raise

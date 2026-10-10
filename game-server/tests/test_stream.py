@@ -13,8 +13,10 @@ HTTP 쪽(인증, 404, 머리말)은 tests/test_stream_api.py 가 본다.
   - 끊겼다 돌아오면 못 본 것부터 이어 받는다. 같은 것을 두 번 받지 않는다.
   - 앉아 있지 않게 되면, 테이블이 끝나면, 토큰이 만료되면 서버가 닫는다.
   - 열려 있는 라운드의 남의 선언은 스트림으로도 오지 않는다.
+  - 서술이 쓰이는 동안 미리 보기가 흘러오고, 다 쓰이면 서술의 이벤트가 그 뒤에 온다.
 """
 
+import asyncio
 import json
 import uuid
 
@@ -30,6 +32,7 @@ from app.realtime import service, signals
 from app.realtime.service import Cursor
 from app.realtime.signals import Kind, Signal
 from app.realtime.sse import Frame
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.tables import repository as table_repository
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token, make_viewer
@@ -190,8 +193,67 @@ async def test_another_persons_declaration_does_not_come_while_the_round_is_open
 
     await client.put(url, json={'content': '손을 흔든다.'}, headers=friend)
 
-    frames = await reader.take(5)
-    assert kinds(frames) == ['player_action', 'player_action', 'round_closed', 'gm_narration', 'round_opened']
+    # 서술이 쓰이는 동안 미리 보기도 온다(저장되지 않는 것이라 번호가 없다). 그것을 빼면 이벤트의 차례 그대로다
+    frames = await reader.take(6)
+    stored = [frame for frame in frames if frame.event != 'narration_preview']
+    assert kinds(stored) == ['player_action', 'player_action', 'round_closed', 'gm_narration', 'round_opened']
+
+
+# --- 서술의 미리 보기 ---
+
+
+class WritingNarrator:
+    """쓰다가 멈춰 서는 서술자. 앞부분을 흘려보내고, 테스트가 문을 열어 주면 마저 쓴다."""
+
+    def __init__(self) -> None:
+        self.gate = asyncio.Event()
+
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
+        preview.begin()
+        preview.text('엔진 소리가 ')
+        await self.gate.wait()
+        preview.text('골목을 메운다.')
+        return '엔진 소리가 골목을 메운다.'
+
+
+@pytest.fixture
+def writing(app: FastAPI) -> WritingNarrator:
+    """앱에 꽂은 쓰다가 멈춰 서는 서술자. 테스트가 끝날 때 문을 열어 둔다. 기다리던 작업이 남지 않게 한다."""
+    narrator = WritingNarrator()
+    app.state.narrator = narrator
+    yield narrator
+    narrator.gate.set()
+
+
+def previews(frames: list[Frame]) -> list[dict]:
+    """메시지들 중 미리 보기의 내용."""
+    return [json.loads(frame.data) for frame in frames if frame.event == service.NARRATION_FRAME]
+
+
+async def test_the_narration_flows_in_while_it_is_being_written(
+    client: AsyncClient, me: dict, friend: dict, connect, writing: WritingNarrator
+):
+    table = await open_duo(client, me, friend)
+    await start(client, me, friend, table)
+    reader = connect(table, FRIEND, Cursor(events=5))
+    await reader.settle()
+    url = table_url(table, '/rounds/current/declaration')
+    await client.put(url, json={'content': '바이크에 시동을 건다.'}, headers=me)
+    await client.put(url, json={'content': '손을 흔든다.'}, headers=friend)
+
+    # 서술자가 아직 쓰는 중인데 앞부분이 온다. 미리 보기에는 번호(id)가 없다. 저장된 것이 아니다
+    frames = await reader.take(4)
+    assert kinds([frame for frame in frames if frame.id]) == ['player_action', 'player_action', 'round_closed']
+    assert previews(frames) == [{'round': 1, 'attempt': 1, 'seq': 0, 'text': '엔진 소리가 '}]
+    assert await reader.is_quiet()
+
+    writing.gate.set()
+
+    # 마지막 조각이 서술의 이벤트보다 먼저 온다. 받는 쪽은 이벤트를 받으면 미리 보기를 지우고 이벤트의 글을 띄운다
+    frames = await reader.take(3)
+    assert previews(frames[:1]) == [{'round': 1, 'attempt': 1, 'seq': 1, 'text': '골목을 메운다.'}]
+    assert kinds(frames[1:]) == ['gm_narration', 'round_opened']
+    assert json.loads(frames[1].data)['payload'] == {'text': '엔진 소리가 골목을 메운다.'}
 
 
 # --- 신호 ---
