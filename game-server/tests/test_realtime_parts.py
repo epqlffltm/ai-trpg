@@ -20,7 +20,14 @@ from fastapi import HTTPException, status
 from app.realtime import signals, sse
 from app.realtime.hub import Hub
 from app.realtime.router import read_cursor
-from app.realtime.service import NARRATION_FRAME, Cursor, live_frames, narration_frames, typing_frames
+from app.realtime.service import (
+    NARRATION_FRAME,
+    Cursor,
+    live_frames,
+    narration_frames,
+    typing_frames,
+    wake_interval,
+)
 from app.realtime.signals import MAX_PIECE_CHARS, Kind, NarrationPiece, Signal, narration_pieces
 from app.realtime.sse import Comment, Frame
 
@@ -209,6 +216,64 @@ async def test_pieces_with_the_same_text_are_all_kept():
         hub.wake(piece(1, '하'))
 
         assert await subscription.wait(SHORT) == {piece(0, '하'), piece(1, '하')}
+
+
+async def test_closing_wakes_the_waiting_at_once():
+    hub = Hub()
+
+    with hub.subscribe(TABLE) as subscription:
+        waiting = asyncio.create_task(subscription.wait(5))
+        await asyncio.sleep(SHORT)
+        hub.close_all()
+
+        # 신호가 없어도 바로 깨어나고, 닫혔다는 것을 안다
+        assert await asyncio.wait_for(waiting, 1) == set()
+        assert subscription.is_closed()
+
+
+async def test_a_closed_seat_never_waits_again():
+    hub = Hub()
+
+    with hub.subscribe(TABLE) as subscription:
+        hub.close_all()
+
+        assert await asyncio.wait_for(subscription.wait(5), 1) == set()
+        assert await asyncio.wait_for(subscription.wait(5), 1) == set()
+
+
+async def test_closing_reaches_every_table():
+    hub = Hub()
+
+    with hub.subscribe(TABLE) as first, hub.subscribe(OTHER_TABLE) as second:
+        hub.close_all()
+
+        assert first.is_closed() and second.is_closed()
+
+
+async def test_a_seat_taken_after_closing_is_closed_from_the_start():
+    hub = Hub()
+    hub.close_all()
+
+    # 서버가 꺼지는 중에 붙은 스트림도 바로 끝난다
+    with hub.subscribe(TABLE) as subscription:
+        assert subscription.is_closed()
+
+
+def test_an_open_hub_does_not_close_anyone():
+    hub = Hub()
+
+    with hub.subscribe(TABLE) as subscription:
+        hub.wake(Signal(table_id=TABLE, kind=Kind.EVENTS))
+
+        assert not subscription.is_closed()
+
+
+@pytest.mark.parametrize(
+    ('listening', 'heartbeat', 'expected'),
+    [(True, 15.0, 15.0), (False, 15.0, 5.0), (False, 0.2, 0.2)],
+)
+def test_a_stream_that_cannot_hear_signals_wakes_more_often(listening: bool, heartbeat: float, expected: float):
+    assert wake_interval(heartbeat, 5.0, listening) == expected
 
 
 # --- 저장하지 않는 것 ---

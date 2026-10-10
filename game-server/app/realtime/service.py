@@ -41,6 +41,8 @@ from app.tables.models import TableStatus
 # 주석을 보내는 이유: 써 봐야 연결이 죽었는지 안다. 그리고 중간의 프록시가 조용한 연결을 끊지 않게 한다.
 # DB 를 읽는 이유: 신호가 끊겼어도 이 시간 안에는 새 것이 간다
 HEARTBEAT_SECONDS = 15.0
+# 신호를 듣지 못하는 동안(듣는 연결을 맺지 못함) 깨어나는 간격(초). 신호 대신 자주 읽어 늦음을 줄인다
+DEAF_HEARTBEAT_SECONDS = 5.0
 
 # 한 번에 읽는 개수. 밀린 것이 이보다 많으면 여러 번에 나눠 읽는다
 READ_BATCH = 100
@@ -62,6 +64,8 @@ class Closed(enum.StrEnum):
     TABLE_ENDED = 'table_ended'
     # 토큰이 만료됐다. 새 토큰으로 다시 붙으면 된다
     TOKEN_EXPIRED = 'token_expired'
+    # 서버가 꺼진다(배포, 재시작). 잠깐 쉬었다가 다시 붙으면 된다
+    SERVER_SHUTDOWN = 'server_shutdown'
 
 
 @dataclass
@@ -79,6 +83,11 @@ class Cursor:
 def seconds_left(viewer: AccessClaims) -> float:
     """토큰이 만료될 때까지 남은 시간(초). 이미 만료됐으면 0 이하다."""
     return (viewer.expires_at - datetime.now(UTC)).total_seconds()
+
+
+def wake_interval(heartbeat: float, deaf_heartbeat: float, listening: bool) -> float:
+    """신호가 없을 때 몇 초 뒤에 깨어날까. 신호를 듣지 못하는 동안에는 더 자주 깨어난다."""
+    return heartbeat if listening else min(heartbeat, deaf_heartbeat)
 
 
 def closed_frame(reason: Closed) -> Frame:
@@ -182,6 +191,7 @@ async def stream(
     table_id: uuid.UUID,
     cursor: Cursor,
     heartbeat: float = HEARTBEAT_SECONDS,
+    deaf_heartbeat: float = DEAF_HEARTBEAT_SECONDS,
 ) -> AsyncIterator[Frame | Comment]:
     """
     테이블의 새 이벤트와 새 채팅을 생기는 대로 내놓는다. 닫아야 할 때까지 끝나지 않는다.
@@ -190,9 +200,11 @@ async def stream(
     받는 쪽이 끊으면 이 함수는 기다리던 자리에서 취소되고, with 를 나가며 방송실의 자리를 치운다.
 
     자리를 먼저 잡고 그다음에 읽는다. 반대로 하면 읽은 뒤 자리를 잡기 전에 생긴 것의 신호를 놓친다.
+    신호를 듣지 못해도(listening 이 False) 끝내지 않는다. 더 자주 깨어나 DB 를 직접 읽는다.
+    방송실이 닫히면(서버가 꺼짐) 닫는다는 메시지를 보내고 끝낸다. 스트림이 끝나야 서버가 꺼진다.
     """
     with hub.subscribe(table_id) as subscription:
-        await source.ensure_listening()
+        listening = await source.ensure_listening()
         yield Comment('connected')
 
         kinds: set[Kind] = set(STORED_KINDS)
@@ -215,11 +227,15 @@ async def stream(
                 return
 
             # 토큰이 만료되는 때에는 신호가 없어도 깨어나야 한다
-            received = await subscription.wait(min(heartbeat, max(seconds_left(viewer), 0)))
+            interval = wake_interval(heartbeat, deaf_heartbeat, listening)
+            received = await subscription.wait(min(interval, max(seconds_left(viewer), 0)))
+            if subscription.is_closed():
+                yield closed_frame(Closed.SERVER_SHUTDOWN)
+                return
             if received is None:
                 yield Comment('ping')
                 # 듣는 연결이 끊겼으면 다시 맺는다
-                await source.ensure_listening()
+                listening = await source.ensure_listening()
                 kinds, live = set(STORED_KINDS), []
             else:
                 kinds = {signal.kind for signal in received} & STORED_KINDS
