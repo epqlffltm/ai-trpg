@@ -5,8 +5,8 @@
 
 라운드를 닫는 일은 둘로 나뉘어 있다(app/rounds/service.py). 닫기 시작과 닫기 마무리. 그 사이가 여기다.
   1. 닫는 중인 라운드를 읽는다.
-  2. 이번 장면에 맞는 로어북 항목(app/lore/retrieval.py)과 지난 일(app/memory/retrieval.py)을 고른다.
-     고르지 못해도 서술은 한다.
+  2. 이번 장면에 맞는 로어북 항목(app/lore/retrieval.py)과 지난 일(app/memory/retrieval.py)을 고르고,
+     로어북이 고른 인물의 이력을 모은다(app/memory/history.py). 고르지 못해도 서술은 한다.
   3. 서술자를 부른다. 이때는 잠금도 DB 연결도 쥐고 있지 않다.
   4. 닫기를 마무리한다.
 로어북과 지난 일은 한 번 고르고, 다시 시도하는 모든 시도가 같은 것을 쓴다.
@@ -29,7 +29,7 @@ from app.ai.provider import ProviderError
 from app.core.jobs import BackgroundJobs
 from app.rounds import service
 from app.rounds.llm_narrator import NarrationError
-from app.rounds.narrator import LoreNote, MemoryNote, NarrationRequest, Narrator
+from app.rounds.narrator import LoreNote, MemoryNote, NarrationRequest, Narrator, PersonHistory
 from app.rounds.preview import notifier, open_preview
 from app.rounds.retrying_narrator import NarrationFailed
 
@@ -73,6 +73,24 @@ class NoMemories:
 NO_MEMORIES = NoMemories()
 
 
+class HistoryFinder(Protocol):
+    """장면에 나온 인물의 이력을 모으는 것. 구현은 app/memory/history.py 의 HistoryCollector 다."""
+
+    async def find(self, request: NarrationRequest) -> list[PersonHistory]:
+        """로어북이 고른 인물들(request.lore)의 이력. 없으면 빈 목록이다."""
+        ...
+
+
+class NoHistories:
+    """아무것도 모으지 않는 것. 이력이 필요 없는 곳(테스트)에서 꽂는다."""
+
+    async def find(self, request: NarrationRequest) -> list[PersonHistory]:
+        return []
+
+
+NO_HISTORIES = NoHistories()
+
+
 def failure_reason(error: Exception) -> str:
     """
     서술자가 낸 예외에서 앉은 사람에게 알릴 실패의 이유를 꺼낸다.
@@ -94,11 +112,13 @@ async def narrate_round(
     number: int,
     lore: LoreFinder = NO_LORE,
     memories: MemoryFinder = NO_MEMORIES,
+    histories: HistoryFinder = NO_HISTORIES,
 ) -> None:
     """
     닫는 중인 라운드 하나를 서술하고 닫는다. 요청 밖에서 돈다.
 
-    서술자를 부르기 전에 로어북 항목(lore)과 지난 일(memories)을 골라 요청에 싣는다.
+    서술자를 부르기 전에 로어북 항목(lore)과 지난 일(memories)을 고르고, 인물의 이력(histories)을 모아 요청에 싣는다.
+    이력은 로어북이 고른 인물의 것이라 로어북을 먼저 고른다.
 
     세션을 따로 연다. 서술자를 기다리는 동안에는 어느 세션도 열려 있지 않다.
     서술자가 끝내 실패하면 실패를 적고(앉은 사람 모두에게 알린다) 예외를 그대로 올린다.
@@ -109,7 +129,8 @@ async def narrate_round(
         request = await service.load_closing_request(session, table_id, number)
     if request is None:
         return
-    request = replace(request, lore=await lore.find(request), memories=await memories.find(request))
+    request = replace(request, lore=await lore.find(request))
+    request = replace(request, memories=await memories.find(request), histories=await histories.find(request))
 
     try:
         async with open_preview(notifier(session_factory), table_id, number) as preview:
@@ -136,8 +157,11 @@ class RoundCloser:
     jobs: BackgroundJobs
     lore: LoreFinder = NO_LORE
     memories: MemoryFinder = NO_MEMORIES
+    histories: HistoryFinder = NO_HISTORIES
 
     def schedule(self, table_id: uuid.UUID, number: int) -> None:
         """이 라운드의 서술을 맡긴다. 기다리지 않고 바로 돌아온다."""
-        job = narrate_round(self.session_factory, self.narrator, table_id, number, self.lore, self.memories)
+        job = narrate_round(
+            self.session_factory, self.narrator, table_id, number, self.lore, self.memories, self.histories
+        )
         self.jobs.spawn(job, name=f'narrate:{table_id}:{number}')

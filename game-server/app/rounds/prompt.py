@@ -30,7 +30,15 @@ from dataclasses import dataclass
 
 from app.ai.provider import ChatMessage, Role
 from app.assets.models import LoreKind, NarrationStyle
-from app.rounds.narrator import LoreNote, MemoryNote, NarrationRequest, PastRound, StoryContext, describe_move
+from app.rounds.narrator import (
+    LoreNote,
+    MemoryNote,
+    NarrationRequest,
+    PastRound,
+    PersonHistory,
+    StoryContext,
+    describe_move,
+)
 
 # 이 틀의 버전. 틀을 바꾸면 올린다.
 #   narration-1: 처음의 틀
@@ -45,7 +53,8 @@ from app.rounds.narrator import LoreNote, MemoryNote, NarrationRequest, PastRoun
 #   narration-7: 로어북 항목 앞에 종류([인물], [장소] …)가 붙는다. 전설과 사건에는 다루는 법이 한 줄씩 붙는다.
 #                인물 항목의 이름표는 검색이 장면의 호칭으로 바꿔 둔다
 #   narration-8: 지난 기록보다 앞의 라운드 중 검색이 고른 것이 "지난 일"로 들어간다(#107)
-PROMPT_VERSION = 'narration-8'
+#   narration-9: 로어북이 고른 인물마다 지난 서술에서 그 인물이 나온 문장이 "인물의 이력"으로 들어간다(#107 ②)
+PROMPT_VERSION = 'narration-9'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -226,6 +235,12 @@ MEMORY_NOTE = (
     '지난 기록보다 앞에 있었던 일이다. 이미 서술했고 이번 라운드의 일이 아니다. '
     '장면의 사실(무엇이 부서졌나, 누가 누구에게 무엇을 했나)과 인물의 태도를 맞추는 데 쓴다.'
 )
+# 인물의 이력 앞에 붙이는 말. 순서대로 놓인 것과, 최근 일이 지금의 태도에 가깝다는 것을 적는다
+HISTORY_TITLE = '[인물의 이력]'
+HISTORY_NOTE = (
+    '지난 기록보다 앞의 서술에서 이 인물이 나온 문장이다. 라운드 순서대로다. 이미 서술한 일이다. '
+    '최근 일이 지금의 태도와 관계에 가깝다.'
+)
 
 
 def section(title: str, body: str) -> str | None:
@@ -348,15 +363,31 @@ def memory_lines(notes: list[MemoryNote]) -> list[str]:
     return [*lines, '']
 
 
+def history_lines(histories: list[PersonHistory]) -> list[str]:
+    """
+    인물의 이력을 적는 줄들. 인물마다 이름 한 줄과 "- (N 라운드) 문장" 줄들.
+
+    끝에 빈 줄이 붙는다. 없으면 빈 목록이다.
+    """
+    if not histories:
+        return []
+    lines = [HISTORY_TITLE, HISTORY_NOTE]
+    for history in histories:
+        lines.append(history.name)
+        lines.extend(f'- ({line.round_number} 라운드) {line.text}' for line in history.lines)
+    return [*lines, '']
+
+
 def round_text(request: NarrationRequest) -> str:
     """
     이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
 
-    검색한 로어북 항목과 지난 일이 있으면 맨 앞에 둔다(설정, 지난 일, 이번 라운드의 차례).
+    검색한 로어북 항목, 지난 일, 인물의 이력이 있으면 맨 앞에 둔다(설정, 지난 일, 이력, 이번 라운드의 차례).
     부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
     """
     lines = lore_lines(request.lore, {move.character_name for move in request.moves})
     lines.extend(memory_lines(request.memories))
+    lines.extend(history_lines(request.histories))
     lines.append(f'[{request.round_number} 라운드에 한 일과 결과]')
     lines.extend(describe_move(move) for move in request.moves)
     lines.append('')
