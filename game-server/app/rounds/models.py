@@ -97,6 +97,9 @@ class Round(Base):
     closing_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 닫힌 시각. 서술이 끝나 다음 라운드가 열린 때다
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 서술이 끝내 실패한 시각. 다시 시도하고 넘어가도 안 됐다. 비어 있으면 실패하지 않았거나 아직 도는 중이다.
+    # 실패한 것을 아니까 방장은 기다리지 않고 바로 다시 맡길 수 있다. 다시 맡기면 비운다(app/rounds/service.py)
+    narration_failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # 이 라운드가 닫힐 때 굴린 죽음의 굴림들(app/engine/death.py). 굴린 순서다. 굴린 것이 없으면 빈 목록이다.
     # 하나하나가 {user_id, character_name, roll, target, success, successes, failures, fate} 다.
