@@ -7,10 +7,11 @@ GM 의 서술을 부탁하는 메시지의 조립(app/rounds/prompt.py)을 검�
   - 메시지의 순서와 역할. 시스템 → 사람 → (지난 라운드: 모델, 사람)… → 이번 장면(모델) → 이번 결과(사람).
   - 시스템 지시에 무엇이 들어가나. 지시, 글쓰기의 공통 규칙, 수위, 진행 지침, 세계관의 설정과 GM 메모. 빈 것은 빠진다.
   - 문체마다 글의 결과 끝맺음이 들어간다. 미사용이면 문체를 지시하지 않는다. 수위는 문체 뒤에 온다.
-  - 이번 라운드의 결과는 엔진이 정한 그대로 들어간다.
+  - 이번 라운드의 결과는 엔진이 정한 그대로 들어간다. 검색한 로어북 항목은 그 앞에 붙는다.
   - 지난 기록은 정해 둔 라운드 수와 글자 수 안에서, 오래된 것부터 뺀다.
 """
 
+import uuid
 from dataclasses import replace
 
 import pytest
@@ -18,7 +19,7 @@ import pytest
 from app.ai.provider import Role
 from app.assets.models import NarrationStyle
 from app.rounds import prompt
-from app.rounds.narrator import Move, NarrationRequest, PastRound, StoryContext, Verdict
+from app.rounds.narrator import LoreNote, Move, NarrationRequest, PastRound, StoryContext, Verdict
 from app.rounds.prompt import build_messages, fit_history, system_text
 
 STORY = StoryContext(
@@ -234,6 +235,45 @@ def test_the_round_carries_what_the_engine_decided():
     assert '폭주족 엘프: 바이크에서 뛰어내린다. (민첩 판정 성공: 12 + 3 = 15, 목표 15)' in last
     assert '악역영애: 아무것도 하지 않았다.' in last
     assert last.endswith(prompt.CLOSING_REQUEST)
+
+
+# --- 로어북 ---
+
+DWARF = LoreNote(entry_id=uuid.uuid4(), name='드워프', content='톨게이트 차단기를 망치로 부순다.')
+ELF = LoreNote(entry_id=uuid.uuid4(), name='엘프 폭주족', content='은하에서 가장 빠른 바이크를 탄다.')
+
+
+def test_the_lore_comes_before_this_round_and_the_request_stays_last():
+    last = build_messages(replace(make_request(), lore=[DWARF, ELF]))[-1].content
+
+    lines = last.split('\n')
+    assert lines[:4] == [
+        prompt.LORE_TITLE,
+        prompt.LORE_NOTE,
+        '- 드워프: 톨게이트 차단기를 망치로 부순다.',
+        '- 엘프 폭주족: 은하에서 가장 빠른 바이크를 탄다.',
+    ]
+    assert lines[4:6] == ['', '[4 라운드에 한 일과 결과]']
+    assert last.endswith(prompt.CLOSING_REQUEST)
+
+
+def test_no_lore_leaves_no_lore_lines():
+    last = build_messages(make_request())[-1].content
+
+    assert prompt.LORE_TITLE not in last
+    assert prompt.LORE_NOTE not in last
+
+
+def test_the_lore_stays_out_of_the_system_message():
+    system = build_messages(replace(make_request(), lore=[DWARF]))[0].content
+
+    # 라운드마다 바뀌는 글을 시스템 지시에 넣으면 provider 의 캐싱이 깨진다
+    assert DWARF.content not in system
+    assert system == build_messages(make_request())[0].content
+
+
+def test_adding_lore_raised_the_version():
+    assert prompt.PROMPT_VERSION == 'narration-4'
 
 
 # --- 지난 기록 ---

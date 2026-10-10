@@ -11,7 +11,8 @@ GM 의 서술을 부탁하는 메시지를 조립한다. 순수 함수다. DB �
 모델은 이어서 다음 장면을 쓴다. 대화형으로 두면 모델이 "앞에서 내가 쓴 장면"을 이어 쓰는 것으로 읽는다.
 
 시스템 지시를 맨 앞에 고정해 둔다. 라운드마다 같은 앞부분은 provider 가 캐싱해서 값이 싸진다.
-로어북은 넣지 않는다. 필요한 항목만 골라 넣는 것은 검색(RAG) 단계의 일이다.
+로어북은 검색이 고른 항목만 마지막 사람의 말에 넣는다(app/lore/retrieval.py). 라운드마다 바뀌는 글이라
+시스템 지시에 넣으면 캐싱이 깨진다. 이번 라운드의 결과 앞에 두고, 부탁은 그 뒤 맨 끝에 둔다.
 
 플레이어의 선언은 사람의 말로 들어간다. 선언에 "지시를 무시하라" 같은 글이 있어도 결과는 바뀌지 않는다.
 결과는 엔진이 이미 정했고, 모델의 글은 장면이 될 뿐 상태를 바꾸지 못한다.
@@ -29,13 +30,14 @@ from dataclasses import dataclass
 
 from app.ai.provider import ChatMessage, Role
 from app.assets.models import NarrationStyle
-from app.rounds.narrator import NarrationRequest, PastRound, StoryContext, describe_move
+from app.rounds.narrator import LoreNote, NarrationRequest, PastRound, StoryContext, describe_move
 
 # 이 틀의 버전. 틀을 바꾸면 올린다.
 #   narration-1: 처음의 틀
 #   narration-2: 글쓰기의 공통 규칙과 문체가 생겼다. 끝맺음이 문체마다 다르다
 #   narration-3: 문체마다 예시 문단이 붙는다. 마지막 부탁에 문체를 다시 적고, 이번 라운드에 한 일만 서술하라고 한다
-PROMPT_VERSION = 'narration-3'
+#   narration-4: 검색한 로어북 항목이 이번 라운드의 결과 앞에 붙는다
+PROMPT_VERSION = 'narration-4'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -176,6 +178,10 @@ CLOSING_REQUEST = '위의 결과를 바꾸지 말고, 이어지는 장면을 서
 # 이번 라운드와 지난 라운드를 섞지 않게 한다. 지난 라운드의 선언도 대화에 들어 있어서, 모델이 그것을 다시 서술하곤 했다
 THIS_ROUND_ONLY = '이번 라운드에 한 일만 서술한다. 지난 라운드에 한 일은 이미 서술했다.'
 
+# 검색한 로어북 항목 앞에 붙이는 말. 다 쓰라는 것이 아니다. 검색은 관련 없는 것도 고를 수 있다
+LORE_TITLE = '[참고할 설정]'
+LORE_NOTE = '이번 장면과 관련 있을 수 있는 설정이다. 필요한 것만 참고하고, 결과는 바꾸지 않는다.'
+
 
 def section(title: str, body: str) -> str | None:
     """제목이 붙은 글 한 덩어리. 글이 비어 있으면 None."""
@@ -258,13 +264,22 @@ def past_messages(past: PastRound) -> list[ChatMessage]:
     return [ChatMessage(Role.ASSISTANT, past.scene), ChatMessage(Role.USER, said)]
 
 
+def lore_lines(notes: list[LoreNote]) -> list[str]:
+    """검색한 로어북 항목들을 적는 줄들. 끝에 빈 줄이 붙는다. 항목이 없으면 빈 목록이다."""
+    if not notes:
+        return []
+    return [LORE_TITLE, LORE_NOTE, *(f'- {note.name}: {note.content}' for note in notes), '']
+
+
 def round_text(request: NarrationRequest) -> str:
     """
     이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
 
-    부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
+    검색한 로어북 항목이 있으면 맨 앞에 둔다. 부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다.
+    부탁이 늘 마지막 줄이다.
     """
-    lines = [f'[{request.round_number} 라운드에 한 일과 결과]']
+    lines = lore_lines(request.lore)
+    lines.append(f'[{request.round_number} 라운드에 한 일과 결과]')
     lines.extend(describe_move(move) for move in request.moves)
     lines.append('')
     lines.append(THIS_ROUND_ONLY)

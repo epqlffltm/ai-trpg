@@ -32,7 +32,7 @@ def get_closer(request: Request) -> RoundCloser:
     요청마다 새로 만든다. 테스트가 서술자를 바꿔 꽂으면 그 뒤의 요청부터 바뀐 것을 쓴다.
     """
     state = request.app.state
-    return RoundCloser(session_factory=state.session_factory, narrator=state.narrator, jobs=state.jobs)
+    return RoundCloser(session_factory=state.session_factory, narrator=state.narrator, jobs=state.jobs, lore=state.lore)
 
 
 # 라운드를 닫을 수 있는 API 가 인자의 형식으로 쓴다

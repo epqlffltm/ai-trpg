@@ -5,8 +5,10 @@
 
 라운드를 닫는 일은 둘로 나뉘어 있다(app/rounds/service.py). 닫기 시작과 닫기 마무리. 그 사이가 여기다.
   1. 닫는 중인 라운드를 읽는다.
-  2. 서술자를 부른다. 이때는 잠금도 DB 연결도 쥐고 있지 않다.
-  3. 닫기를 마무리한다.
+  2. 이번 장면에 맞는 로어북 항목을 고른다(app/lore/retrieval.py). 고르지 못해도 서술은 한다.
+  3. 서술자를 부른다. 이때는 잠금도 DB 연결도 쥐고 있지 않다.
+  4. 닫기를 마무리한다.
+로어북은 한 번 고르고, 다시 시도하는 모든 시도가 같은 항목을 쓴다.
 
 이 작업은 끝까지 못 갈 수 있다. 서술자가 실패하거나, 도는 도중에 서버가 꺼진다.
 그러면 라운드가 닫는 중에 머문다. 방장이 닫기를 다시 눌러 맡긴다.
@@ -17,7 +19,8 @@
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -25,12 +28,30 @@ from app.ai.provider import ProviderError
 from app.core.jobs import BackgroundJobs
 from app.rounds import service
 from app.rounds.llm_narrator import NarrationError
-from app.rounds.narrator import Narrator
+from app.rounds.narrator import LoreNote, NarrationRequest, Narrator
 from app.rounds.preview import notifier, open_preview
 from app.rounds.retrying_narrator import NarrationFailed
 
 # 서술자의 실패가 아닌 예외(버그)로 실패했을 때 이벤트에 적는 이유. 자세한 것은 로그에 남는다
 UNEXPECTED = 'error'
+
+
+class LoreFinder(Protocol):
+    """서술에 넣을 로어북 항목을 고르는 것. 구현은 app/lore/retrieval.py 의 LoreRetriever 다."""
+
+    async def find(self, request: NarrationRequest) -> list[LoreNote]:
+        """이번 장면에 맞는 항목들. 고를 것이 없으면 빈 목록이다."""
+        ...
+
+
+class NoLore:
+    """아무것도 고르지 않는 것. 로어북 검색이 필요 없는 곳(테스트)에서 꽂는다."""
+
+    async def find(self, request: NarrationRequest) -> list[LoreNote]:
+        return []
+
+
+NO_LORE = NoLore()
 
 
 def failure_reason(error: Exception) -> str:
@@ -48,10 +69,16 @@ def failure_reason(error: Exception) -> str:
 
 
 async def narrate_round(
-    session_factory: async_sessionmaker[AsyncSession], narrator: Narrator, table_id: uuid.UUID, number: int
+    session_factory: async_sessionmaker[AsyncSession],
+    narrator: Narrator,
+    table_id: uuid.UUID,
+    number: int,
+    lore: LoreFinder = NO_LORE,
 ) -> None:
     """
     닫는 중인 라운드 하나를 서술하고 닫는다. 요청 밖에서 돈다.
+
+    서술자를 부르기 전에 로어북 항목을 골라 요청에 싣는다(lore).
 
     세션을 따로 연다. 서술자를 기다리는 동안에는 어느 세션도 열려 있지 않다.
     서술자가 끝내 실패하면 실패를 적고(앉은 사람 모두에게 알린다) 예외를 그대로 올린다.
@@ -62,6 +89,7 @@ async def narrate_round(
         request = await service.load_closing_request(session, table_id, number)
     if request is None:
         return
+    request = replace(request, lore=await lore.find(request))
 
     try:
         async with open_preview(notifier(session_factory), table_id, number) as preview:
@@ -86,8 +114,9 @@ class RoundCloser:
     session_factory: async_sessionmaker[AsyncSession]
     narrator: Narrator
     jobs: BackgroundJobs
+    lore: LoreFinder = NO_LORE
 
     def schedule(self, table_id: uuid.UUID, number: int) -> None:
         """이 라운드의 서술을 맡긴다. 기다리지 않고 바로 돌아온다."""
-        job = narrate_round(self.session_factory, self.narrator, table_id, number)
+        job = narrate_round(self.session_factory, self.narrator, table_id, number, self.lore)
         self.jobs.spawn(job, name=f'narrate:{table_id}:{number}')
