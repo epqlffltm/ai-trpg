@@ -52,6 +52,8 @@ class EventType(enum.StrEnum):
     REROLL_GRANTED = 'reroll_granted'
     # 방장이 GM 의 서술 문체를 바꿨다. 다음 서술부터 그 문체다
     NARRATION_STYLE_CHANGED = 'narration_style_changed'
+    # 방장이 라운드의 시간 제한을 바꿨다. 다음 라운드부터 쓴다
+    ROUND_TIME_LIMIT_CHANGED = 'round_time_limit_changed'
 
     # --- 진행 ---
     # 방장이 테이블을 시작했다

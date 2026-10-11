@@ -151,6 +151,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | 서버 | 작업 | `operation` |
 | --- | --- | --- |
 | game-server | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
+| game-server | 마감이 지난 라운드 닫기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `round.close_overdue` |
 | game-server | 로어북 항목의 벡터 만들기 | `lore.index` |
 | game-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
@@ -276,6 +277,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `http.request` | 전부 | HTTP 요청 하나를 처리했다. 어느 주소인지는 `method` 와 `route` 에 있다 |
 | `job.run` | game | 이름을 따로 주지 않은 작업 |
 | `round.narrate` | game | 라운드의 AI 서술 |
+| `round.close_overdue` | game | 마감이 지난 라운드 닫기 |
 | `lore.index` | game | 로어북 색인 |
 | `memory.index` | game | 기억 색인 |
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
@@ -483,6 +485,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `round_narrations_total` | counter | `result`(`success`, `failure`) | 끝난 서술의 수 |
 | `round_narration_retries_total` | counter | 없음 | 서술을 다시 시도한 수 |
 | `round_narration_duration_seconds` | histogram | 없음 | 라운드를 닫은 뒤 서술이 끝날 때까지 |
+| `rounds_closed_total` | counter | `reason`(`all_declared`, `host`, `timeout`) | 닫기 시작한 라운드의 수. 마감으로 닫힌 비율이 높으면 시간 제한이 짧다 |
 
 **메일과 인증 (auth)**
 

@@ -476,9 +476,9 @@ async def test_a_target_who_left_recovers_nothing(
     # 낼 때는 친구가 앉아 있었다
     await declare(client, me, table, TEND, tend(FRIEND))
 
-    # 친구가 떠난다. 남은 사람이 모두 냈으므로 방장이 닫는다
+    # 친구가 떠난다. 남은 사람이 모두 냈으므로 라운드가 저절로 닫히기 시작한다(#57)
     left = await client.delete(table_url(table, '/members/me'), headers=friend)
-    closing = (await client.post(table_url(table, '/rounds/current/close'), headers=me)).json()
+    closing = (await client.get(table_url(table, '/rounds/1'), headers=me)).json()
 
     assert left.status_code == status.HTTP_204_NO_CONTENT
     # 판정은 했지만 회복할 사람이 없다. 양을 정하는 주사위는 굴리지 않는다
@@ -538,7 +538,7 @@ async def test_the_round_does_not_wait_for_a_downed_character(
     assert scene == f'[2 라운드의 결과]\n엘프: 쓰러져 있다. {SAVED}\n영애: 크게 웃는다.'
     # 선언을 내지 않은 사람(idle)에도 들어가지 않는다
     closed = [event for event in await read_events(client, me, table) if event['type'] == 'round_closed']
-    assert closed[-1]['payload'] == {'number': 2, 'idle': []}
+    assert closed[-1]['payload'] == {'number': 2, 'idle': [], 'reason': 'all_declared'}
 
 
 async def test_a_character_helped_up_acts_again(

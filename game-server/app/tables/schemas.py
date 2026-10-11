@@ -23,12 +23,23 @@ from app.assets.scenarios.schemas import (
 )
 from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
 from app.engine.sheet import Score, Sheet
-from app.tables.models import TABLE_PASSWORD_MAX_LENGTH, TABLE_PASSWORD_MIN_LENGTH, TableStatus
+from app.tables.models import (
+    DEFAULT_ROUND_TIME_LIMIT,
+    ROUND_TIME_LIMIT_MAX,
+    ROUND_TIME_LIMIT_MIN,
+    TABLE_PASSWORD_MAX_LENGTH,
+    TABLE_PASSWORD_MIN_LENGTH,
+    TableStatus,
+)
 
 # 테이블의 비밀번호. 앞뒤 공백을 떼지 않는다. 적은 그대로가 비밀번호다
 TablePassword = Annotated[
     str, StringConstraints(min_length=TABLE_PASSWORD_MIN_LENGTH, max_length=TABLE_PASSWORD_MAX_LENGTH)
 ]
+
+
+# 라운드의 시간 제한(초). 라운드가 열린 때부터 센다
+RoundTimeLimit = Annotated[int, Field(ge=ROUND_TIME_LIMIT_MIN, le=ROUND_TIME_LIMIT_MAX)]
 
 
 class TableCreate(BaseModel):
@@ -54,6 +65,8 @@ class TableCreate(BaseModel):
     character_modes: CharacterModes | None = None
     # GM 의 서술 문체. 비우면 판의 추천 문체다. 만든 뒤에도 방장이 바꿀 수 있다
     narration_style: NarrationStyle | None = None
+    # 라운드의 시간 제한(초). 적지 않으면 5 분이다. null 이면 시간 제한이 없다. 만든 뒤에도 방장이 바꿀 수 있다
+    round_time_limit: RoundTimeLimit | None = DEFAULT_ROUND_TIME_LIMIT
 
     @model_validator(mode='after')
     def require_public_for_password(self) -> 'TableCreate':
@@ -149,6 +162,14 @@ class NarrationStyleUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     narration_style: NarrationStyle | None
+
+
+class RoundTimeLimitUpdate(BaseModel):
+    """라운드의 시간 제한을 바꿀 때 받는 값. null 이면 시간 제한을 없앤다. 칸을 빼먹으면 거부한다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    round_time_limit: RoundTimeLimit | None
 
 
 class HostTransfer(BaseModel):
@@ -278,6 +299,8 @@ class TableSummary(BaseModel):
     has_password: bool
     # 지금의 서술 문체. 로비에서 들어가기 전에 어떤 글로 진행되는지 안다
     narration_style: NarrationStyle
+    # 라운드의 시간 제한(초). 없으면 null 이다. 로비에서 들어가기 전에 얼마나 빨리 진행되는지 안다
+    round_time_limit: int | None
     created_at: datetime
 
 
