@@ -774,6 +774,23 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 
 라운드의 상태(`status`)는 셋이다. `open`(선언을 받는 중) → `closing`(선언을 마감했고 GM 이 서술하는 중) → `closed`.
 
+코드는 하는 일마다 파일이 나뉘어 있다(`app/rounds/`). `service.py` 는 그것들을 차례로 부르고 저장하는 쪽이다.
+
+```
+service.py      라운드의 일(읽기, 선언, 닫기 시작과 마무리). 어디까지를 한 번에 저장할지 정한다. 서술을 맡기는 시간
+errors.py       거절되는 까닭들(Conflict, 예외 넷)
+state.py        지금 상태를 보는 판단(진행 중인가, 누구를 기다리나, 테이블의 규칙)
+acceptance.py   선언을 받기. 행동을 규칙과 테이블에 견주어 보고 저장할 모양으로 바꾼다
+judging.py      닫을 때의 판정. 행동들, 죽음의 굴림, 때가 된 부상
+checks.py       판정하는 행동의 결과(HP, NPC, 부상)
+treatments.py   치료하는 행동의 결과(나을 라운드, 치료 실패 표)
+effects.py      판정과 치료가 함께 쓰는 것(Judging, 바뀐 HP 의 문서)
+moves.py        서술자에게 줄 각자 한 일. 닫을 때 굳히고 다시 읽는다
+records.py      일어난 일을 이벤트로 적기
+```
+
+가져오는 방향은 한쪽이다. `errors` ← `state` ← `acceptance`, `effects` ← `checks`·`treatments` ← `judging`, `state` ← `moves`·`records`, 그리고 모두 ← `service`. DB 를 읽고 저장하는(await) 것은 `service.py` 하나다. `records.py` 는 세션에 이벤트를 더하기만 하고 커밋하지 않는다.
+
 | 테이블 | 내용 |
 | --- | --- |
 | `table_rounds` | 라운드. 테이블 안에서의 번호, 장면(`scene`), 닫기 시작한 시각, 닫힌 시각, 닫힐 때 굴린 죽음의 굴림들(`death_saves`, JSON), 이 라운드에 새로 들어온 캐릭터들(`arrivals`, JSON) |

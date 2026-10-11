@@ -68,7 +68,7 @@ class CheckAction(BaseModel):
     # 성공의 보상. 성공하면 대상이 이 등급만큼 회복한다. 규칙의 Magnitude.key 다
     recover: Key | None = None
     # 회복하는 대상. 테이블에 앉은 사람이다. 엔진은 이 값을 읽지 않는다. 누구인지는 부른 쪽이 안다.
-    # recover 가 있는데 target 도 npc 도 비우면 자기 자신이다(app/rounds/service.py 가 채운다)
+    # recover 가 있는데 target 도 npc 도 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다)
     target: uuid.UUID | None = None
 
     # 성공의 타격. 성공하면 대상 NPC 가 이 등급만큼 피해를 입는다. 규칙의 Magnitude.key 다
@@ -123,7 +123,7 @@ class TreatAction(BaseModel):
 
     능력과 난이도는 받지 않는다. 규칙의 치료 능력과 그 부상의 치료 난이도로 판정한다.
     대상은 앉은 사람(target)이나 이번 장면의 NPC(npc) 중 하나다.
-    둘 다 비우면 자기 자신이다(app/rounds/service.py 가 채운다).
+    둘 다 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).
     """
 
     model_config = ConfigDict(extra='forbid')

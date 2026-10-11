@@ -45,8 +45,8 @@ from app.realtime.hub import Hub
 from app.realtime.listener import PostgresListener
 from app.realtime.shutdown import closing_on_exit
 from app.rounds import router as rounds
+from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.narrator_setup import build_narrator
-from app.rounds.service import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.tables import router as tables
 from app.tables.service import (
     MemberNotFoundError,

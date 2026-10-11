@@ -3,7 +3,7 @@
 """
 이벤트를 적는다. 이벤트가 생기는 길은 이 파일의 record 하나뿐이다.
 
-테이블을 바꾸는 서비스들(app/tables/service.py, app/rounds/service.py)이 부른다.
+테이블을 바꾸는 서비스들(app/tables/service.py, app/rounds/service.py 와 app/rounds/records.py)이 부른다.
 커밋하지 않는다. 부른 쪽이 상태를 바꾼 것과 함께 커밋한다. 그래서 상태만 바뀌거나 기록만 남는 일이 없다.
 
 읽는 쪽(app/events/service.py)과 파일을 나눈 이유: 읽는 쪽은 "앉은 사람인가"를 테이블 서비스에 묻는다.
