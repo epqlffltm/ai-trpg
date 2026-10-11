@@ -22,6 +22,7 @@ from pydantic import TypeAdapter
 
 from app.assets.scenarios.snapshot import Snapshot
 from app.engine.check import find_ability, find_difficulty
+from app.engine.injury import known_injuries
 from app.engine.ruleset import Ruleset
 from app.rounds.models import Declaration, Round
 from app.rounds.narrator import DeathSaveNote, Impact, Move, NpcImpact, PastRound, StoryContext, Verdict
@@ -45,6 +46,12 @@ def find_death_save(round_: Round, user_id: uuid.UUID) -> DeathSaveNote | None:
     )
 
 
+def new_injury_name(effect: dict) -> str | None:
+    """HP 의 변화를 적은 문서에서 새로 입은 부상의 이름. 표를 굴리지 않았거나 부상이 없었으면 None."""
+    injury_roll = effect.get('injury_roll')
+    return injury_roll['name'] if injury_roll else None
+
+
 def to_impact(effect: dict | None) -> Impact | None:
     """선언에 적힌 HP 의 변화를 서술자에게 줄 모양으로 바꾼다. 변화가 없었으면 None."""
     if effect is None:
@@ -56,6 +63,7 @@ def to_impact(effect: dict | None) -> Impact | None:
         hp=effect['after'],
         max_hp=effect['max_hp'],
         downed=effect['downed'],
+        injury=new_injury_name(effect),
     )
 
 
@@ -67,7 +75,13 @@ def to_npc_impact(effect: dict | None) -> NpcImpact | None:
     """
     if effect is None:
         return None
-    return NpcImpact(kind=effect['kind'], name=effect['name'], amount=effect['amount'], condition=effect['condition'])
+    return NpcImpact(
+        kind=effect['kind'],
+        name=effect['name'],
+        amount=effect['amount'],
+        condition=effect['condition'],
+        injury=new_injury_name(effect),
+    )
 
 
 def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
@@ -89,7 +103,15 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
         success=outcome['success'],
         impact=to_impact(outcome.get('effect')),
         npc_impact=to_npc_impact(outcome.get('npc_effect')),
+        hindrances=hindrance_names(ruleset, outcome.get('hindrance')),
     )
+
+
+def hindrance_names(ruleset: Ruleset, hindrance: dict | None) -> list[str]:
+    """판정에 영향을 준 부상들의 이름. 규칙에 적힌 이름이다. 영향이 없었으면 비어 있다."""
+    if hindrance is None:
+        return []
+    return [injury.name for injury in known_injuries(ruleset, hindrance['injuries'])]
 
 
 def to_story(snapshot: Snapshot) -> StoryContext:

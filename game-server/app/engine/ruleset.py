@@ -4,7 +4,7 @@
 규칙의 모양. 규칙은 코드가 아니라 데이터다.
 
 어떤 능력치가 있는지, 주사위가 몇 면인지, 난이도가 몇 단계인지, 피해와 회복이 얼마인지,
-캐릭터의 숫자를 어떻게 정하는지, 쓰러진 캐릭터가 어떻게 죽는지를 한 묶음(Ruleset)에 담는다.
+캐릭터의 숫자를 어떻게 정하는지, 쓰러진 캐릭터가 어떻게 죽는지, 어떤 부상이 언제 생기는지를 한 묶음(Ruleset)에 담는다.
 엔진은 이 묶음을 인자로 받는다. 묶음의 값이 달라져도 엔진의 코드는 그대로다.
 
 규칙은 룰북에 담기고(app/assets/models.py 의 Rulebook.rules), 게시할 때 판에 굳는다.
@@ -14,6 +14,7 @@ DB 에는 문서(JSON)로 들어간다. DB 는 문서의 안을 검증하지 못
 바꿀 수 있는 것은 값이다. 계산하는 방식(주사위 + 보정이 난이도 이상이면 성공)은 엔진의 코드에 있다.
 """
 
+import enum
 from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -33,6 +34,14 @@ RULESET_MAX_DICE = 10
 RULESET_MAX_POINT_COSTS = 30
 # 죽음의 굴림에서 모아야 하는 성공과 실패의 수
 RULESET_MAX_DEATH_SAVES = 10
+# 규칙 하나에 둘 수 있는 부상의 수, 부상 하나의 효과의 수, 부상 표의 줄의 수
+RULESET_MAX_INJURIES = 30
+RULESET_MAX_EFFECTS = 5
+RULESET_MAX_TABLE_ROWS = 20
+# 부상이 서술에 주는 사실의 길이. 라운드마다 AI 의 입력에 들어간다
+INJURY_FACT_MAX_LENGTH = 200
+# 부상이 풀리거나 나을 때까지의 라운드 수
+RULESET_MAX_INJURY_ROUNDS = 1000
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -170,6 +179,169 @@ class DeathSave(Part):
     failures: Annotated[int, Field(ge=1, le=RULESET_MAX_DEATH_SAVES)]
 
 
+class EffectKind(enum.StrEnum):
+    """
+    부상이 엔진에 주는 효과의 종류. 엔진이 실제로 집행하는 것은 이것뿐이다.
+
+    "그 손을 못 쓴다" 같은 것은 엔진이 알 수 없다. 행동에는 능력만 있고 몸의 부위는 없다.
+    그런 것은 부상의 사실(Injury.fact)로 서술자에게 준다.
+    """
+
+    # 정한 능력의 판정에 보정 -amount
+    PENALTY = 'penalty'
+    # 정한 능력의 판정에서 주사위를 두 번 굴려 낮은 눈을 쓴다
+    DISADVANTAGE = 'disadvantage'
+    # 행동을 붙일 수 없다. 글만 낼 수 있다(쓰러진 것과 같다)
+    NO_ACTIONS = 'no_actions'
+
+
+class Effect(Part):
+    """
+    부상의 효과 하나.
+
+    abilities 는 영향을 받는 능력이다. 비우면 모든 능력이다. 행동 불가에는 능력이 없다.
+    amount 는 보정을 깎는 크기다. 보정 깎기에만 있다.
+    """
+
+    kind: EffectKind
+    abilities: Annotated[tuple[Key, ...], Field(max_length=RULESET_MAX_ABILITIES)] = ()
+    amount: Annotated[int, Field(ge=0, le=RULESET_MAX_NUMBER)] = 0
+
+    @model_validator(mode='after')
+    def require_amount_for_penalty(self) -> Self:
+        """보정 깎기에는 크기가 있어야 하고, 다른 효과에는 크기가 없다."""
+        if (self.kind == EffectKind.PENALTY) != (self.amount > 0):
+            raise ValueError('amount 는 penalty 에만, 1 이상으로 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def reject_abilities_for_no_actions(self) -> Self:
+        """행동 불가는 능력을 가리지 않는다."""
+        if self.kind == EffectKind.NO_ACTIONS and self.abilities:
+            raise ValueError('no_actions 에는 abilities 를 적지 않습니다.')
+        return self
+
+
+class Healing(enum.StrEnum):
+    """부상이 낫는 방식."""
+
+    # 짧은 것. 정한 라운드가 지나면 저절로 풀린다(기절, 중독)
+    ROUNDS = 'rounds'
+    # 오래 가는 것. 정한 라운드가 지나거나 치료를 받으면 낫는다. 나을 때 후유증 표를 굴린다(골절)
+    HEALS = 'heals'
+    # 결손. 낫지 않는다(손을 잃음)
+    PERMANENT = 'permanent'
+
+
+class TableRow(Part):
+    """부상 표의 한 줄. 눈이 low 이상 high 이하면 이 줄이다. injury 가 None 이면 부상이 없다."""
+
+    low: Annotated[int, Field(ge=1, le=RULESET_MAX_DIE)]
+    high: Annotated[int, Field(ge=1, le=RULESET_MAX_DIE)]
+    injury: Key | None
+
+
+class InjuryTable(Part):
+    """
+    부상 표. sides 면 주사위를 한 번 굴려, 그 눈이 든 줄의 부상이 생긴다.
+
+    모든 눈이 정확히 한 줄에 든다. 줄은 낮은 눈부터 빈틈없이 이어진다. "부상 없음" 줄을 넉넉히 두면 자주 다치지 않는다.
+    """
+
+    sides: Annotated[int, Field(ge=RULESET_MIN_DIE, le=RULESET_MAX_DIE)]
+    rows: Annotated[tuple[TableRow, ...], Field(min_length=1, max_length=RULESET_MAX_TABLE_ROWS)]
+
+    @model_validator(mode='after')
+    def require_every_face_once(self) -> Self:
+        """줄이 1 부터 sides 까지를 빈틈도 겹침도 없이 차례로 덮어야 한다. 어느 눈이 나와도 줄이 하나로 정해진다."""
+        expected = 1
+        for row in self.rows:
+            if row.low != expected or row.high < row.low:
+                raise ValueError(f'부상 표의 줄이 {expected} 부터 이어지지 않습니다.')
+            expected = row.high + 1
+        if expected != self.sides + 1:
+            raise ValueError(f'부상 표가 1 부터 {self.sides} 까지를 덮지 않습니다.')
+        return self
+
+    def injury_keys(self) -> set[str]:
+        """표에 나오는 부상들."""
+        return {row.injury for row in self.rows if row.injury is not None}
+
+
+class Injury(Part):
+    """
+    부상 하나. 예: 팔 골절.
+
+    효과(effects)는 엔진이 판정에 적용하고, 사실(fact)은 서술자가 지킨다. 둘을 함께 적는다.
+    rounds 는 짧은 것이 풀리기까지, 오래 가는 것이 저절로 낫기까지의 라운드 수다. 결손에는 없다.
+    aftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.
+    aimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.
+    시간은 지금 라운드로 센다. 게임 속 달력과 시계가 생기면 그것으로 옮긴다.
+    오래 가는 것의 낫기, 후유증, 노려 치기는 다음 단계에서 쓴다(#114 나, 다). 규칙의 모양은 한 번에 정해 둔다.
+    """
+
+    key: Key
+    name: Name
+    fact: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=INJURY_FACT_MAX_LENGTH)]
+    effects: Annotated[tuple[Effect, ...], Field(max_length=RULESET_MAX_EFFECTS)] = ()
+    healing: Healing
+    rounds: Annotated[int, Field(ge=1, le=RULESET_MAX_INJURY_ROUNDS)] | None = None
+    aftermath: InjuryTable | None = None
+    aimable: bool = False
+
+    @model_validator(mode='after')
+    def require_rounds_unless_permanent(self) -> Self:
+        """결손이 아니면 라운드 수가 있어야 하고, 결손에는 없다."""
+        if (self.healing == Healing.PERMANENT) != (self.rounds is None):
+            raise ValueError('rounds 는 결손(permanent)이 아닌 부상에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def allow_aftermath_only_when_healing(self) -> Self:
+        """후유증 표는 오래 가는 부상에만 있다. 짧은 것은 흔적 없이 풀리고, 결손은 낫지 않는다."""
+        if self.aftermath is not None and self.healing != Healing.HEALS:
+            raise ValueError('aftermath 는 오래 가는 부상(heals)에만 적습니다.')
+        return self
+
+
+class InjuryTriggers(Part):
+    """
+    부상 표를 언제 굴리는가. 룰북이 골라 켜고 끈다.
+
+    big_hit_percent: 한 번의 피해(주사위가 정한 양)가 최대 HP 의 이 비율(%) 이상이면 굴린다. None 이면 끈다.
+    downed: HP 가 0 이 되어 쓰러질 때 굴린다.
+    called_shot: 노려 치기를 허용한다(#114 나).
+    한 번의 피해에 여럿이 맞아도 한 번만 굴린다. 죽은 대상에게는 굴리지 않는다.
+    """
+
+    big_hit_percent: Annotated[int, Field(ge=1, le=100)] | None
+    downed: bool
+    called_shot: bool
+
+
+class CalledShotMode(enum.StrEnum):
+    """노려 치기가 판정을 어렵게 하는 방식."""
+
+    # 난이도의 목표값에 amount 를 더한다. 보정이 큰 캐릭터가 유리하다
+    TARGET_PLUS = 'target_plus'
+    # 주사위를 두 번 굴려 낮은 눈을 쓴다. 능력치와 상관없이 일정하게 어렵다
+    DISADVANTAGE = 'disadvantage'
+
+
+class CalledShot(Part):
+    """노려 치기의 어려움. 목표값을 올리는 크기(amount)는 그 방식에만 있다."""
+
+    mode: CalledShotMode
+    amount: Annotated[int, Field(ge=0, le=RULESET_MAX_NUMBER)] = 0
+
+    @model_validator(mode='after')
+    def require_amount_for_target_plus(self) -> Self:
+        """목표값을 올리는 방식에는 크기가 있어야 하고, 불리함에는 없다."""
+        if (self.mode == CalledShotMode.TARGET_PLUS) != (self.amount > 0):
+            raise ValueError('amount 는 target_plus 에만, 1 이상으로 적습니다.')
+        return self
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
@@ -202,6 +374,14 @@ class Ruleset(Part):
     # 죽음의 굴림. None 이면 이 규칙에서는 주사위가 캐릭터를 죽이지 않는다. 쓰러진 채로 있다.
     # 칸 자체는 늘 있어야 한다
     death_save: DeathSave | None
+    # 부상들. 비어 있으면 이 규칙에는 부상이 없다
+    injuries: Annotated[tuple[Injury, ...], Field(max_length=RULESET_MAX_INJURIES)]
+    # 큰 타격이나 쓰러짐에 굴리는 부상 표. None 이면 표가 없다
+    injury_table: InjuryTable | None
+    # 부상 표를 언제 굴리는가
+    injury_triggers: InjuryTriggers
+    # 노려 치기의 어려움. None 이면 노려 치기가 없다
+    called_shot: CalledShot | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
@@ -271,6 +451,52 @@ class Ruleset(Part):
         """점수의 범위가 뒤집혀 있으면 어떤 점수도 들어갈 수 없다."""
         if self.score_min > self.score_max:
             raise ValueError('점수의 가장 작은 값이 가장 큰 값보다 큽니다.')
+        return self
+
+    @model_validator(mode='after')
+    def reject_duplicate_injuries(self) -> Self:
+        """같은 이름의 부상이 둘이면 표와 기록이 어느 것을 가리키는지 알 수 없다."""
+        duplicates = find_duplicates([injury.key for injury in self.injuries])
+        if duplicates:
+            raise ValueError(f'같은 부상이 두 번 있습니다: {", ".join(duplicates)}')
+        return self
+
+    @model_validator(mode='after')
+    def require_known_effect_abilities(self) -> Self:
+        """부상의 효과가 가리키는 능력은 능력치 중 하나여야 한다."""
+        known = {ability.key for ability in self.abilities}
+        unknown = sorted(
+            {key for injury in self.injuries for effect in injury.effects for key in effect.abilities} - known
+        )
+        if unknown:
+            raise ValueError(f'부상의 효과가 가리키는 능력이 능력치에 없습니다: {", ".join(unknown)}')
+        return self
+
+    @model_validator(mode='after')
+    def require_known_table_injuries(self) -> Self:
+        """부상 표와 후유증 표에 나오는 부상은 부상 중 하나여야 한다."""
+        known = {injury.key for injury in self.injuries}
+        tables = [self.injury_table, *(injury.aftermath for injury in self.injuries)]
+        unknown = sorted({key for table in tables if table is not None for key in table.injury_keys()} - known)
+        if unknown:
+            raise ValueError(f'표에 나오는 부상이 부상에 없습니다: {", ".join(unknown)}')
+        return self
+
+    @model_validator(mode='after')
+    def require_table_for_triggers(self) -> Self:
+        """큰 타격이나 쓰러짐에 굴리게 켰으면 굴릴 표가 있어야 한다."""
+        triggers = self.injury_triggers
+        if (triggers.big_hit_percent is not None or triggers.downed) and self.injury_table is None:
+            raise ValueError('부상 표를 굴리게 켰는데 부상 표가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_called_shot_setup(self) -> Self:
+        """노려 치기를 켰으면 어려움을 정하는 법과 노릴 수 있는 부상이 하나는 있어야 한다."""
+        if not self.injury_triggers.called_shot:
+            return self
+        if self.called_shot is None or not any(injury.aimable for injury in self.injuries):
+            raise ValueError('노려 치기를 켰는데 어려움을 정하는 법이나 노릴 수 있는 부상이 없습니다.')
         return self
 
     @model_validator(mode='after')

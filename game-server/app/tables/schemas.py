@@ -166,6 +166,17 @@ class CharacterOut(BaseModel):
     description: str
 
 
+class InjuryOut(BaseModel):
+    """캐릭터가 입고 있는 부상 하나. 이름과 사실, 효과는 테이블의 rules.injuries 에서 이름표(injury)로 찾는다."""
+
+    # 규칙의 Injury.key
+    injury: str
+    # 생긴 라운드
+    round: int
+    # 짧은 부상이면 이 라운드가 닫힐 때 풀린다. 오래 가는 것과 결손은 None 이다
+    ends_after_round: int | None
+
+
 class SheetOut(BaseModel):
     """앉은 사람의 캐릭터 시트. 앉은 사람은 서로의 시트를 본다."""
 
@@ -182,6 +193,8 @@ class SheetOut(BaseModel):
     death_failures: int
     # 죽었는가. 죽은 캐릭터는 되살아나지 않는다. 그 플레이어는 새 캐릭터를 들일 수 있다
     dead: bool
+    # 입고 있는 부상들. 생긴 순서다. 풀리거나 나은 것은 들어가지 않는다
+    injuries: list[InjuryOut] = []
 
 
 class FallenOut(BaseModel):

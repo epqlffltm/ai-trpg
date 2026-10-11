@@ -23,6 +23,18 @@ from app.assets.models import LoreKind, NarrationStyle
 
 
 @dataclass(frozen=True)
+class InjuryNote:
+    """
+    입은 부상 하나. 규칙에 적힌 이름과, 서술자가 지켜야 할 사실이다(예: "오른손이 없다. 오른손을 쓸 수 없다.").
+
+    엔진이 정한 것이다. 서술자는 이 부상으로 못 하는 일을 하게 쓰지 않는다.
+    """
+
+    name: str
+    fact: str
+
+
+@dataclass(frozen=True)
 class Impact:
     """판정의 결과로 HP 가 바뀐 것. 엔진이 정한 것이다."""
 
@@ -37,6 +49,8 @@ class Impact:
     max_hp: int
     # 바뀐 뒤에 쓰러져 있는가
     downed: bool
+    # 이 피해로 새로 입은 부상의 이름. 없으면 None 이다
+    injury: str | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +70,8 @@ class NpcImpact:
     amount: int
     # 바뀐 뒤의 몸 상태. 멀쩡함, 다침, 크게 다침, 쓰러짐(의식 없음), 죽음
     condition: str
+    # 이 피해로 새로 입은 부상의 이름. 없으면 None 이다
+    injury: str | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +94,8 @@ class Verdict:
     impact: Impact | None = None
     # 이 판정으로 NPC 의 HP 가 바뀌었으면 그 내용. 없으면 None 이다. impact 와 함께 있지 않다
     npc_impact: NpcImpact | None = None
+    # 이 판정에 영향을 준 부상들의 이름(보정이 깎였거나 불리했다). 없으면 비어 있다
+    hindrances: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -113,6 +131,9 @@ class Move:
     # 이 캐릭터가 이번 라운드에 새로 들어왔으면, 같은 플레이어의 죽은 캐릭터의 이름. 아니면 None 이다.
     # 새로 들어온 캐릭터는 이번 라운드에 아무것도 하지 않았다. 다음 라운드부터 행동한다
     replaces: str | None = None
+    # 이 라운드의 결과까지 반영한 뒤에 이 캐릭터가 입고 있는 부상들. 생긴 순서다.
+    # 목록으로 둔다. 라운드에 굳힐 때 JSON 으로 적고 다시 읽어도 같은 값이어야 한다
+    injuries: list[InjuryNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -206,6 +227,8 @@ class PersonState:
 
     name: str
     condition: str
+    # 입고 있는 부상들. 생긴 순서다
+    injuries: list[InjuryNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -281,25 +304,40 @@ class Narrator(Protocol):
 
 
 def describe_verdict(verdict: Verdict) -> str:
-    """판정의 결과를 한 줄로 적는다. 예: (근력 판정 성공: 13 + 2 = 15, 목표 15)"""
+    """
+    판정의 결과를 한 줄로 적는다. 예: (근력 판정 성공: 13 + 2 = 15, 목표 15)
+
+    부상이 영향을 줬으면 그 이름을 붙인다. 예: (근력 판정 실패: 5 - 1 = 4, 목표 15. 부상의 영향: 팔 골절)
+    """
     result = '성공' if verdict.success else '실패'
     # 보정이 음수면 "13 - 1" 로 적는다
     sign = '-' if verdict.modifier < 0 else '+'
     sum_ = f'{verdict.roll} {sign} {abs(verdict.modifier)} = {verdict.total}'
-    return f'({verdict.ability} 판정 {result}: {sum_}, 목표 {verdict.target})'
+    hindered = f'. 부상의 영향: {", ".join(verdict.hindrances)}' if verdict.hindrances else ''
+    return f'({verdict.ability} 판정 {result}: {sum_}, 목표 {verdict.target}{hindered})'
 
 
 def describe_impact(impact: Impact) -> str:
     """HP 가 바뀐 것을 한 줄로 적는다. 예: → 엘프 피해 3 (HP 7/10)"""
     word = '피해' if impact.kind == 'damage' else '회복'
     state = f'HP {impact.hp}/{impact.max_hp}' + (', 쓰러짐' if impact.downed else '')
-    return f'→ {impact.character_name} {word} {impact.amount} ({state})'
+    return f'→ {impact.character_name} {word} {impact.amount} ({state})' + new_injury(impact.injury)
+
+
+def new_injury(name: str | None) -> str:
+    """새로 입은 부상을 결과 줄 뒤에 붙일 글. 없으면 빈 글이다. 예: ". 새 부상: 팔 골절"."""
+    return f'. 새 부상: {name}' if name else ''
+
+
+def describe_injuries(injuries: list[InjuryNote]) -> str:
+    """입고 있는 부상들을 한 덩어리로 적는다. 예: 팔 골절(한쪽 팔이 부러져 제대로 쓰지 못한다)"""
+    return ', '.join(f'{injury.name}({injury.fact})' for injury in injuries)
 
 
 def describe_npc_impact(impact: NpcImpact) -> str:
     """NPC 의 HP 가 바뀐 것을 한 줄로 적는다. 숫자는 양만 적는다. 예: → 악역영애 피해 5 (크게 다침)"""
     word = '피해' if impact.kind == 'damage' else '회복'
-    return f'→ {impact.name} {word} {impact.amount} ({impact.condition})'
+    return f'→ {impact.name} {word} {impact.amount} ({impact.condition})' + new_injury(impact.injury)
 
 
 def describe_idle(move: Move) -> str:
@@ -329,7 +367,7 @@ def describe_death_save(note: DeathSaveNote) -> str:
 def describe_move(move: Move) -> str:
     """
     한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, HP 가 바뀌었으면 그 뒤에 붙인다.
-    죽음의 굴림을 굴렸으면 맨 뒤에 붙인다.
+    죽음의 굴림을 굴렸으면 그 뒤에, 입고 있는 부상이 있으면 맨 뒤에 붙인다.
     """
     parts = [f'{move.character_name}: {move.content or describe_idle(move)}']
     if move.verdict is not None:
@@ -340,6 +378,8 @@ def describe_move(move: Move) -> str:
             parts.append(describe_npc_impact(move.verdict.npc_impact))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
+    if move.injuries:
+        parts.append(f'[입은 부상: {describe_injuries(move.injuries)}]')
     return ' '.join(parts)
 
 

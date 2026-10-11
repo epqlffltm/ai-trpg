@@ -21,6 +21,7 @@ from app.engine.ruleset import (
     find_duplicates,
 )
 from app.engine.templates import DEFAULT_TEMPLATE, SRD5, TEMPLATES, Template, from_template
+from tests.rules import NO_INJURIES
 
 MIGRATIONS = Path(__file__).parent.parent / 'migrations' / 'versions'
 
@@ -57,6 +58,7 @@ def load_backfill_rules() -> dict:
     point_buy = load_migration('rulebook_point_buy').POINT_BUY
     score_roll = load_migration('rulebook_score_roll').SCORE_ROLL
     death_save = load_migration('rulebook_death_save').DEATH_SAVE
+    injuries = load_migration('injuries').INJURY_RULES
     return {
         **rules,
         'magnitudes': magnitudes,
@@ -64,6 +66,7 @@ def load_backfill_rules() -> dict:
         'point_buy': point_buy,
         'score_roll': score_roll,
         'death_save': death_save,
+        **injuries,
     }
 
 
@@ -241,6 +244,8 @@ def test_the_limits_themselves_are_allowed():
             # 점수가 5 하나뿐인 규칙이다. SRD5 의 값표(8~15)도, 주사위로 나오는 점수(3~18)도 맞지 않는다
             point_buy=None,
             score_roll=None,
+            # 부상의 효과는 SRD5 의 능력(근력 …)을 가리킨다. 능력이 다른 규칙이라 부상을 뺀다
+            **NO_INJURIES,
         )
     )
 

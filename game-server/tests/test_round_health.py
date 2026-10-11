@@ -50,6 +50,8 @@ PLAIN = make_sheet()
 # 판정의 눈. 보통(목표 15)에 도전한다
 FAIL = 1
 PASS = 20
+# 부상 표(d20)의 눈. 1~10 은 부상이 없다. 큰 타격이나 쓰러짐에 표를 굴린다(#114). 부상은 tests/test_injuries.py 가 본다
+NO_INJURY = 1
 
 # 죽음의 굴림의 눈(목표 10)과, 그 눈으로 처음 성공했을 때 서술에 붙는 글.
 # 쓰러진 채로 라운드가 닫히면 한 번 굴린다. 죽음의 굴림 자체는 tests/test_round_death.py 가 본다
@@ -165,12 +167,23 @@ async def hp_of(client: AsyncClient, headers: dict[str, str], table: dict) -> di
 
 
 def effects(round_: dict) -> dict[str, dict | None]:
-    """라운드의 선언을 {선언한 캐릭터의 이름: HP 의 변화} 로 바꾼다. 판정이 없던 선언은 빠진다."""
+    """
+    라운드의 선언을 {선언한 캐릭터의 이름: HP 의 변화} 로 바꾼다. 판정이 없던 선언은 빠진다.
+
+    HP 의 변화에서 부상 표를 굴린 것(injury_roll)은 뺀다. 부상은 tests/test_injuries.py 가 본다.
+    """
     return {
-        declaration['character_name']: declaration['outcome']['effect']
+        declaration['character_name']: without_injury_roll(declaration['outcome']['effect'])
         for declaration in round_['declarations']
         if declaration['outcome'] is not None
     }
+
+
+def without_injury_roll(effect: dict | None) -> dict | None:
+    """HP 의 변화에서 부상 표를 굴린 것을 뺀다."""
+    if effect is None:
+        return None
+    return {key: value for key, value in effect.items() if key != 'injury_roll'}
 
 
 async def read_events(client: AsyncClient, headers: dict[str, str], table: dict) -> list[dict]:
@@ -186,7 +199,7 @@ def types(events: list[dict]) -> list[str]:
 
 async def knock_me_down(client: AsyncClient, app: FastAPI, me: dict, friend: dict, table: dict, narrated) -> None:
     """한 라운드를 써서 나(엘프)를 쓰러뜨린다. 심한 대가가 붙은 행동에 실패해 16 의 피해를 입는다."""
-    load_dice(app, [FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY])
     await declare(client, me, table, JUMP, jump('heavy'))
     await declare(client, friend, table, LAUGH)
     await narrated()
@@ -258,7 +271,7 @@ async def test_a_heavy_risk_rolls_two_dice(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str]
 ):
     table = await start_duo(client, me, friend)
-    load_dice(app, [FAIL, 2, 5])
+    load_dice(app, [FAIL, 2, 5, NO_INJURY])
 
     await declare(client, me, table, JUMP, jump('heavy'))
     closing = await declare(client, friend, table, LAUGH)
@@ -271,7 +284,7 @@ async def test_damage_stops_at_zero_and_downs_the_character(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str]
 ):
     table = await start_duo(client, me, friend)
-    load_dice(app, [FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY])
 
     await declare(client, me, table, JUMP, jump('heavy'))
     closing = await declare(client, friend, table, LAUGH)
@@ -290,7 +303,7 @@ async def test_succeeding_heals_the_target(
 ):
     table = await start_duo(client, me, friend)
     # 1 라운드: 내가 다친다(10 → 3)
-    load_dice(app, [FAIL, 3, 4])
+    load_dice(app, [FAIL, 3, 4, NO_INJURY])
     await declare(client, me, table, JUMP, jump('heavy'))
     await declare(client, friend, table, LAUGH)
     await narrated()
@@ -322,7 +335,7 @@ async def test_recovery_without_a_target_is_for_oneself(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
 ):
     table = await start_duo(client, me, friend)
-    load_dice(app, [FAIL, 3, 4])
+    load_dice(app, [FAIL, 3, 4, NO_INJURY])
     await declare(client, me, table, JUMP, jump('heavy'))
     await declare(client, friend, table, LAUGH)
     await narrated()
@@ -341,7 +354,7 @@ async def test_failing_to_heal_heals_nothing(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
 ):
     table = await start_duo(client, me, friend)
-    load_dice(app, [FAIL, 3, 4])
+    load_dice(app, [FAIL, 3, 4, NO_INJURY])
     await declare(client, me, table, JUMP, jump('heavy'))
     await declare(client, friend, table, LAUGH)
     await narrated()
@@ -390,7 +403,7 @@ async def test_what_the_one_before_broke_the_next_one_can_mend(
 ):
     table = await start_duo(client, me, friend)
     # 앉은 순서로 한 사람씩 끝낸다. 나: 판정 1, 피해 8 + 8. 친구: 판정 20, 회복 2
-    load_dice(app, [FAIL, 8, 8, PASS, 2])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY, PASS, 2])
 
     # 나중에 앉은 친구가 먼저 선언한다. 그래도 내 것이 먼저 처리된다
     await declare(client, friend, table, TEND, tend(ME))
@@ -553,7 +566,7 @@ async def test_when_everyone_is_down_the_host_moves_the_table_on(
 ):
     table = await start_duo(client, me, friend)
     # 한 라운드에 둘 다 쓰러진다
-    load_dice(app, [FAIL, 8, 8, FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY, FAIL, 8, 8, NO_INJURY])
     await declare(client, me, table, JUMP, jump('heavy'))
     await declare(client, friend, table, JUMP, jump('heavy'))
     await narrated()
@@ -598,6 +611,8 @@ async def test_a_change_of_hp_is_recorded_after_the_check_that_caused_it(
         'after': 7,
         'max_hp': 10,
         'downed': False,
+        # 3 은 최대 HP 의 절반에 못 미친다. 부상 표를 굴리지 않았다
+        'injury_roll': None,
     }
     # 행동 → 판정 → HP 의 변화로 이어지고, 같은 묶음이다
     assert rolled['caused_by_sequence'] == acted['sequence']
@@ -626,7 +641,7 @@ async def test_the_narrator_is_told_what_changed(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
 ):
     table = await start_duo(client, me, friend)
-    load_dice(app, [FAIL, 8, 8, PASS, 2])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY, PASS, 2])
     await declare(client, me, table, JUMP, jump('heavy'))
     await declare(client, friend, table, TEND, tend(ME))
     await narrated()

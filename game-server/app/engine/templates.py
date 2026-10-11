@@ -18,14 +18,23 @@ import enum
 
 from app.engine.ruleset import (
     Ability,
+    CalledShot,
+    CalledShotMode,
     DeathSave,
     Difficulty,
+    Effect,
+    EffectKind,
+    Healing,
+    Injury,
+    InjuryTable,
+    InjuryTriggers,
     Magnitude,
     Modifier,
     PointBuy,
     PointCost,
     Ruleset,
     ScoreRoll,
+    TableRow,
 )
 
 
@@ -45,6 +54,133 @@ class Template(enum.StrEnum):
 # 점수를 주사위로 정하는 법(score_roll)도 같은 문서를 따랐다.
 # 죽음의 굴림(death_save)은 SRD 5.1 의 것이다. 눈 1 과 눈 20 의 특별한 결과는 옮기지 않았다(판정과 같다)
 # SRD 5.2.1 도 Wizards of the Coast LLC 가 CC BY 4.0 으로 공개한 문서다. 출처 표시는 README 에 있다
+# 부상 중 짧은 것(기절, 중독, 실명, 귀먹음)은 SRD 5.1 의 상태 이상(conditions)을 본떴다.
+# 효과는 이 엔진의 세 종류로 옮겼고, 풀리기까지의 라운드 수는 이 프로젝트가 정했다.
+# 오래 가는 부상, 결손, 후유증, 부상 표, 노려 치기는 SRD 5.1 에 없다. 이 프로젝트가 정한 값이다
+
+
+def disadvantage(*abilities: str) -> Effect:
+    """그 능력들(비우면 모든 능력)의 판정에서 주사위를 두 번 굴려 낮은 눈을 쓴다."""
+    return Effect(kind=EffectKind.DISADVANTAGE, abilities=abilities)
+
+
+def penalty(amount: int, *abilities: str) -> Effect:
+    """그 능력들의 판정에 보정 -amount."""
+    return Effect(kind=EffectKind.PENALTY, abilities=abilities, amount=amount)
+
+
+def rows(*entries: tuple[int, int, str | None]) -> tuple[TableRow, ...]:
+    """(낮은 눈, 높은 눈, 부상) 들을 표의 줄로."""
+    return tuple(TableRow(low=low, high=high, injury=injury) for low, high, injury in entries)
+
+
+SRD5_INJURIES = (
+    # --- 짧은 것. SRD 5.1 의 상태 이상을 본떴다 ---
+    Injury(
+        key='stunned',
+        name='기절',
+        fact='정신이 아득해 몸을 가누지 못한다. 아무것도 하지 못한다.',
+        effects=(Effect(kind=EffectKind.NO_ACTIONS),),
+        healing=Healing.ROUNDS,
+        rounds=1,
+    ),
+    Injury(
+        key='poisoned',
+        name='중독',
+        fact='독이 돌아 몸이 무겁고 속이 뒤집힌다.',
+        effects=(disadvantage(),),
+        healing=Healing.ROUNDS,
+        rounds=3,
+    ),
+    Injury(
+        key='blinded',
+        name='실명',
+        fact='눈에 피가 들어가 앞을 보지 못한다.',
+        effects=(disadvantage('dex', 'wis'),),
+        healing=Healing.ROUNDS,
+        rounds=3,
+    ),
+    Injury(
+        key='deafened',
+        name='귀먹음',
+        fact='귀가 멍해 소리를 듣지 못한다.',
+        healing=Healing.ROUNDS,
+        rounds=3,
+    ),
+    # --- 오래 가는 것. 나을 때 후유증 표를 굴린다 ---
+    Injury(
+        key='broken_arm',
+        name='팔 골절',
+        fact='한쪽 팔이 부러져 제대로 쓰지 못한다.',
+        effects=(disadvantage('str'),),
+        healing=Healing.HEALS,
+        rounds=30,
+        aftermath=InjuryTable(sides=20, rows=rows((1, 5, 'crooked_arm'), (6, 20, None))),
+        aimable=True,
+    ),
+    Injury(
+        key='leg_wound',
+        name='다리 부상',
+        fact='다리를 깊이 다쳐 절뚝거린다.',
+        effects=(disadvantage('dex'),),
+        healing=Healing.HEALS,
+        rounds=20,
+        aftermath=InjuryTable(sides=20, rows=rows((1, 3, 'limp'), (4, 20, None))),
+        aimable=True,
+    ),
+    # --- 결손과 후유증. 낫지 않는다 ---
+    Injury(
+        key='lost_left_hand',
+        name='왼손 잃음',
+        fact='왼손이 없다. 왼손을 쓸 수 없다.',
+        effects=(disadvantage('dex'),),
+        healing=Healing.PERMANENT,
+        aimable=True,
+    ),
+    Injury(
+        key='lost_right_hand',
+        name='오른손 잃음',
+        fact='오른손이 없다. 오른손을 쓸 수 없다.',
+        effects=(disadvantage('dex'),),
+        healing=Healing.PERMANENT,
+        aimable=True,
+    ),
+    Injury(
+        key='lost_eye',
+        name='한쪽 눈 잃음',
+        fact='한쪽 눈을 잃어 거리를 잘 가늠하지 못한다.',
+        effects=(penalty(2, 'wis'),),
+        healing=Healing.PERMANENT,
+        aimable=True,
+    ),
+    Injury(key='deep_scar', name='깊은 흉터', fact='얼굴에 깊은 흉터가 남았다.', healing=Healing.PERMANENT),
+    Injury(
+        key='crooked_arm',
+        name='굽은 팔',
+        fact='부러졌던 팔이 굽은 채로 붙었다.',
+        effects=(penalty(1, 'str'),),
+        healing=Healing.PERMANENT,
+    ),
+    Injury(
+        key='limp', name='절뚝거림', fact='다친 다리를 전다.', effects=(penalty(1, 'dex'),), healing=Healing.PERMANENT
+    ),
+)
+
+# 큰 타격이나 쓰러짐에 굴리는 표. 절반은 부상이 없다. 손을 잃는 것은 표에 없다. 노려 쳐야만 생긴다
+SRD5_INJURY_TABLE = InjuryTable(
+    sides=20,
+    rows=rows(
+        (1, 10, None),
+        (11, 12, 'stunned'),
+        (13, 13, 'blinded'),
+        (14, 14, 'deafened'),
+        (15, 16, 'leg_wound'),
+        (17, 18, 'broken_arm'),
+        (19, 19, 'deep_scar'),
+        (20, 20, 'lost_eye'),
+    ),
+)
+
 SRD5 = Ruleset(
     template=Template.SRD5,
     abilities=(
@@ -92,6 +228,12 @@ SRD5 = Ruleset(
     score_roll=ScoreRoll(count=4, sides=6, keep=3),
     # 쓰러진 채로 라운드가 닫힐 때마다 d20 을 굴린다. 10 이상이면 성공이다. 실패 셋이면 죽고, 성공 셋이면 고비를 넘긴다
     death_save=DeathSave(target=10, successes=3, failures=3),
+    injuries=SRD5_INJURIES,
+    injury_table=SRD5_INJURY_TABLE,
+    # 한 번에 최대 HP 의 절반 이상을 잃을 피해와, 쓰러질 때 표를 굴린다. 노려 치기도 된다
+    injury_triggers=InjuryTriggers(big_hit_percent=50, downed=True, called_shot=True),
+    # 노려 치면 목표값이 5 오른다
+    called_shot=CalledShot(mode=CalledShotMode.TARGET_PLUS, amount=5),
 )
 
 TEMPLATES: dict[Template, Ruleset] = {Template.SRD5: SRD5}

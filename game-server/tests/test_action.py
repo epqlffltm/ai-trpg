@@ -26,6 +26,7 @@ from app.engine.dice import ScriptedDice
 from app.engine.health import ChangeKind
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
+from tests.rules import NO_INJURIES
 
 # 능력치가 둘뿐이고 난이도가 하나뿐인 규칙. SRD5 와 다른 규칙에서도 같은 함수가 도는지 본다
 SMALL_RULES = Ruleset.model_validate(
@@ -35,6 +36,8 @@ SMALL_RULES = Ruleset.model_validate(
         'hp_ability': 'body',
         'difficulties': [{'key': 'normal', 'name': '보통', 'target': 7}],
         'default_difficulty': 'normal',
+        # SRD5 의 부상은 SRD5 의 능력을 가리킨다. 능력이 다른 규칙이라 뺀다
+        **NO_INJURIES,
     }
 )
 
