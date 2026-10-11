@@ -10,6 +10,7 @@ NPC 는 로어북의 인물 항목이다. 로어북은 AI 만 읽는 글이라 �
 나왔는지는 로어북 검색과 같은 법으로 본다(app/lore/retrieval.py 의 mentions).
 이름이나 키워드가 글에 그대로 있으면 나온 것이다.
 부르는 이름도 검색과 같다(scene_label). 장면에 나온 낱말이다. 진짜 이름이 아직 나오지 않았으면 진짜 이름을 쓰지 않는다.
+플레이어가 진짜 이름을 맞힌(지목한) 인물은 그 뒤로 진짜 이름으로 부른다(app/rounds/naming.py).
 그래서 인물 항목의 키워드는 장면에서 그 인물을 부르는 호칭이어야 한다. 이 목록으로 플레이어에게 보일 수 있다.
 
 상태(table_npcs)가 없는 인물은 들어가지 않는다. 이 기능이 생기기 전에 시작한 테이블이 그렇다.
@@ -21,7 +22,7 @@ import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from app.assets.scenarios.snapshot import Snapshot, person_entries
+from app.assets.scenarios.snapshot import EntrySnapshot, Snapshot, person_entries
 from app.lore.retrieval import mentions, scene_label
 from app.tables.models import NpcStatus, TableNpc
 
@@ -54,11 +55,21 @@ class Scene:
     cast: list[CastMember]
 
 
+def is_named(npc: TableNpc) -> bool:
+    """플레이어가 이 인물의 진짜 이름을 맞혔는가."""
+    return npc.named_round is not None
+
+
+def label_of(entry: EntrySnapshot, scene: str, npc: TableNpc) -> str:
+    """이 인물을 부를 이름. 진짜 이름을 맞혔으면 진짜 이름, 아니면 장면의 호칭이다."""
+    return entry.name if is_named(npc) else scene_label(entry, scene)
+
+
 def cast_of(snapshot: Snapshot, scene: str, npcs: Iterable[TableNpc]) -> list[CastMember]:
     """이 장면에 나온 인물들. 판의 인물 항목 순서다. 상태가 없는 인물은 뺀다."""
     states = {npc.entry_id: npc for npc in npcs}
     return [
-        CastMember(entry.id, scene_label(entry, scene), states[entry.id])
+        CastMember(entry.id, label_of(entry, scene, states[entry.id]), states[entry.id])
         for entry in person_entries(snapshot)
         if entry.id in states and mentions(entry, scene)
     ]

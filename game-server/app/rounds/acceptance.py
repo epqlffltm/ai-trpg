@@ -6,9 +6,10 @@
 DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면의 인물을 받는다.
 저장은 부른 쪽(app/rounds/service.py)이 한다.
 
-행동은 둘이다(app/engine/action.py).
+행동은 셋이다(app/engine/action.py).
   - 판정(CheckAction). 이번 장면에 나온 NPC 를 겨눌 수 있다(app/rounds/cast.py). 노려 칠 수도 있다.
   - 치료(TreatAction). 능력과 난이도는 규칙이 정한다. 대상이 그 부상을 입고 있어야 한다.
+  - 지목(NameAction). 인물의 진짜 이름을 짚는다. 맞는지는 여기서 보지 않는다(app/rounds/judging.py).
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
 비워 둔 칸(난이도, 회복과 치료의 대상)은 여기서 채워 저장한다. 읽는 쪽이 "비어 있으면"을 다시 따지지 않는다.
 """
@@ -16,10 +17,10 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
 import uuid
 
 from app.engine import action as actions
-from app.engine.action import CheckAction, TreatAction
+from app.engine.action import CheckAction, NameAction, TreatAction
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
-from app.rounds.cast import CastMember, find_cast_member
+from app.rounds.cast import CastMember, find_cast_member, is_named
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.models import Declaration, Round
 from app.rounds.state import find_declaration, is_down, rules_of
@@ -140,21 +141,43 @@ def accept_treatment(
     return aimed.model_dump(mode='json')
 
 
+def accept_naming(action: NameAction, cast: list[CastMember]) -> dict:
+    """
+    지목하는 행동을 이번 장면과 견주어 보고, 저장할 모양으로 바꾼다.
+
+      - 겨눈 인물이 이번 장면의 인물이 아니면 ActionTargetError. 죽은 인물도 이름은 짚을 수 있다.
+      - 겨눈 인물의 진짜 이름이 이미 드러났으면 RoundConflictError.
+    짚은 이름이 맞는지는 보지 않는다. 받을 때 맞고 틀림을 알려 주면 라운드를 닫기 전에 정답을 캘 수 있다.
+    """
+    if action.npc is not None:
+        member = find_cast_member(cast, action.npc)
+        if member is None:
+            raise ActionTargetError('npc')
+        if is_named(member.npc):
+            raise RoundConflictError(Conflict.ALREADY_NAMED)
+    return action.model_dump(mode='json')
+
+
 def accept_action(
-    table: GameTable, member: TableMember, action: CheckAction | TreatAction | None, cast: list[CastMember]
+    table: GameTable,
+    member: TableMember,
+    action: CheckAction | TreatAction | NameAction | None,
+    cast: list[CastMember],
 ) -> dict | None:
     """
     선언에 붙은 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다. 행동이 없으면 None.
 
     member 는 선언하는 사람이고, cast 는 이번 장면의 인물들이다.
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
-    나머지는 행동의 종류마다 본다(accept_check, accept_treatment).
+    나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming).
     """
     if action is None:
         return None
     ruleset = require_able(table, member)
     if isinstance(action, TreatAction):
         return accept_treatment(table, member, action, cast, ruleset)
+    if isinstance(action, NameAction):
+        return accept_naming(action, cast)
     return accept_check(table, member, action, cast, ruleset)
 
 

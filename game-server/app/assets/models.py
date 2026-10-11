@@ -75,6 +75,9 @@ LORE_ENTRY_NAME_MAX_LENGTH = 100
 LORE_ENTRY_CONTENT_MAX_LENGTH = 500
 LORE_ENTRY_MAX_KEYWORDS = 5
 LORE_KEYWORD_MAX_LENGTH = 30
+# 인물을 지목할 때 맞다고 받는 이름의 수와 길이(LoreEntry.true_names)
+LORE_ENTRY_MAX_TRUE_NAMES = 5
+LORE_TRUE_NAME_MAX_LENGTH = 50
 
 
 class AssetType(enum.StrEnum):
@@ -499,6 +502,7 @@ class LoreEntry(Base):
         CheckConstraint(at_most('content', LORE_ENTRY_CONTENT_MAX_LENGTH), name='content_length'),
         CheckConstraint(f'cardinality(keywords) <= {LORE_ENTRY_MAX_KEYWORDS}', name='keywords_count'),
         CheckConstraint(one_of('kind', LoreKind), name='kind_allowed'),
+        CheckConstraint(f'cardinality(true_names) <= {LORE_ENTRY_MAX_TRUE_NAMES}', name='true_names_count'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -520,6 +524,13 @@ class LoreEntry(Base):
 
     # 종류(LoreKind). 종류가 생기기 전의 항목은 기타다
     kind: Mapped[str] = mapped_column(String(20), default=LoreKind.OTHER, server_default=LoreKind.OTHER.value)
+
+    # 인물을 지목할 때 맞다고 받는 이름들(app/rounds/naming.py). 비우면 항목의 이름 하나다.
+    # 플레이어가 장면의 호칭만 아는 인물의 진짜 이름을 맞히는 데 쓴다. 인물 항목에만 뜻이 있다.
+    # AI 의 입력에도, 벡터에도 들어가지 않는다. 정답이 새면 안 된다
+    true_names: Mapped[list[str]] = mapped_column(
+        ARRAY(String(LORE_TRUE_NAME_MAX_LENGTH)), default=list, server_default='{}'
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -64,7 +64,9 @@ from app.rounds.narrator import (
 #   narration-13: 치료의 결과 줄(앞당겨짐, 다 나음과 후유증, 치료 실패 표의 결과)과,
 #                 시간이 지나 나은 부상(나은 부상: 팔 골절(후유증: 굽은 팔))이 붙는다.
 #                 시스템 지시의 "엔진이 이미 정했다"에 치료가 들어간다(#114 다)
-PROMPT_VERSION = 'narration-13'
+#   narration-14: 지목의 결과 줄(지목 맞음: 악역영애의 진짜 이름은 비올레타)이 붙는다.
+#                 지목이 있는 라운드에는 다루는 법 한 줄이 이번 라운드의 결과 뒤에 붙는다
+PROMPT_VERSION = 'narration-14'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -263,6 +265,13 @@ PEOPLE_NOTE = (
 )
 
 
+# 지목이 있는 라운드에만 붙는 다루는 법. 맞은 것은 이름뿐이다. 틀린 지목에서 정답이 새지 않게 한다
+NAMING_NOTE = (
+    '지목의 결과는 엔진이 정했다. 맞은 지목은 그 인물의 이름만 밝혀진 것이다. '
+    '그 인물의 비밀이나 플레이어의 다른 주장까지 맞다고 쓰지 마라. 틀린 지목에서는 진짜 이름을 드러내지 마라.'
+)
+
+
 def section(title: str, body: str) -> str | None:
     """제목이 붙은 글 한 덩어리. 글이 비어 있으면 None."""
     body = body.strip()
@@ -422,6 +431,7 @@ def round_text(request: NarrationRequest) -> str:
     검색한 로어북 항목, 지난 일, 인물의 이력, 인물의 상태가 있으면 맨 앞에 둔다
     (설정, 지난 일, 이력, 상태, 이번 라운드의 차례).
     상태는 이번 라운드의 결과 바로 앞이다. 엔진이 정한 사실이라 결과와 가까이 둔다.
+    지목이 있으면 결과 뒤에 다루는 법을 한 줄 붙인다.
     부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
     """
     lines = lore_lines(request.lore, {move.character_name for move in request.moves})
@@ -431,6 +441,8 @@ def round_text(request: NarrationRequest) -> str:
     lines.append(f'[{request.round_number} 라운드에 한 일과 결과]')
     lines.extend(describe_move(move) for move in request.moves)
     lines.append('')
+    if any(move.naming is not None for move in request.moves):
+        lines.append(NAMING_NOTE)
     lines.append(THIS_ROUND_ONLY)
     reminder = style_reminder(request.style)
     if reminder is not None:

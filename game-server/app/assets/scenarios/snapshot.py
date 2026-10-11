@@ -49,17 +49,24 @@ from app.engine.sheet import Sheet
 #  13: 인물 항목의 숫자(npc_sheets)와 기본 NPC 시트(default_npc_sheet)가 있다
 #  14: 규칙에 부상(injuries), 부상 표(injury_table), 부상 표를 굴리는 때(injury_triggers), 노려 치기(called_shot)가 있다
 #  15: 규칙에 치료(treatment)가 있고, 부상에 치료의 난이도(treat_difficulty)와 줄이는 라운드(treat_rounds)가 있다
-SNAPSHOT_FORMAT = 15
+#  16: 로어북 항목에 지목할 때 맞다고 받는 이름들(true_names)이 있다
+SNAPSHOT_FORMAT = 16
 
 
 class EntrySnapshot(BaseModel):
-    """로어북의 항목 하나. 종류를 적지 않은 것(평가 데이터, 테스트)은 기타다."""
+    """
+    로어북의 항목 하나. 종류를 적지 않은 것(평가 데이터, 테스트)은 기타다.
+
+    true_names 는 인물을 지목할 때 맞다고 받는 이름들이다(app/rounds/naming.py). 비어 있으면 항목의 이름 하나다.
+    적지 않은 것(평가 데이터, 테스트)은 비어 있다.
+    """
 
     id: uuid.UUID
     name: str
     keywords: list[str]
     content: str
     kind: LoreKind = LoreKind.OTHER
+    true_names: list[str] = []
 
 
 class LorebookSnapshot(BaseModel):
@@ -189,7 +196,12 @@ def npc_sheet_of(snapshot: Snapshot, entry_id: uuid.UUID) -> Sheet:
 def snapshot_entry(entry: LoreEntry) -> EntrySnapshot:
     """항목을 굳힌다."""
     return EntrySnapshot(
-        id=entry.id, name=entry.name, keywords=entry.keywords, content=entry.content, kind=LoreKind(entry.kind)
+        id=entry.id,
+        name=entry.name,
+        keywords=entry.keywords,
+        content=entry.content,
+        kind=LoreKind(entry.kind),
+        true_names=list(entry.true_names),
     )
 
 

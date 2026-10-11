@@ -5,7 +5,7 @@
 
 닫기 시작할 때 한 번 만들어 라운드에 굳힌다(build_moves). 서술은 지금 앉은 사람이 아니라 굳혀 둔 것을 읽는다
 (frozen_moves). 그사이에 누가 나가도 장면에서 빠지지 않는다. 문체도 그때 굳힌다(frozen_style).
-판정의 결과와 HP 의 변화는 선언에 적힌 것을, 죽음의 굴림은 라운드에 적힌 것을 읽는다. 여기서 굴리지 않는다.
+판정의 결과와 HP 의 변화, 지목의 결과는 선언에 적힌 것을, 죽음의 굴림은 라운드에 적힌 것을 읽는다. 여기서 굴리지 않는다.
 DB 를 모른다.
 """
 
@@ -19,7 +19,7 @@ from app.rounds import narration_request
 from app.rounds.cast import CastMember, condition_of
 from app.rounds.models import Round
 from app.rounds.narrator import HealNote, InjuryNote, Move, PersonState
-from app.rounds.state import find_arrival, find_declaration, has_outcome, is_down, rules_of
+from app.rounds.state import find_arrival, find_declaration, has_outcome, is_down, naming_of, rules_of
 from app.tables import injuries, sheets
 from app.tables.models import GameTable, TableMember
 
@@ -76,6 +76,7 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
                 replaces=arrival['replaces'] if arrival else None,
                 injuries=worn_notes(ruleset, member),
                 healed=healed_notes(ruleset, ended, member.user_id),
+                naming=narration_request.to_naming(naming_of(declaration)),
             )
         )
     return moves

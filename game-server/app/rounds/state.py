@@ -83,5 +83,12 @@ def rules_of(table: GameTable) -> Ruleset:
 
 
 def has_outcome(declaration: Declaration | None) -> bool:
-    """이 선언에 판정의 결과가 적혀 있는가."""
-    return declaration is not None and declaration.outcome is not None
+    """이 선언에 판정의 결과가 적혀 있는가. 주사위를 굴린 판정(치료도)만이다. 지목은 naming_of 로 읽는다."""
+    return declaration is not None and declaration.outcome is not None and 'roll' in declaration.outcome
+
+
+def naming_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 지목의 결과(app/rounds/naming.py 의 judge_naming). 지목이 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('naming')

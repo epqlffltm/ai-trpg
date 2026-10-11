@@ -205,7 +205,7 @@ def begin_closing(
     """
     group = uuid.uuid4()
     dying = find_dying(table)
-    roll_checks(table, round_, dice, scene.cast)
+    roll_checks(table, round_, dice, scene)
     round_.death_saves = roll_death_saves(table, dying, dice)
     ended = expire_injuries(table, scene, round_.number, dice)
     round_.moves = narration_request.dump_moves(build_moves(table, round_, ended))

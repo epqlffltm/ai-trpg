@@ -442,6 +442,7 @@ class TableNpc(Base):
         # 살아 있는 것과 HP 가 있는 것은 같다. 쓰러짐과 죽음은 HP 가 0 일 때만이다
         CheckConstraint(f"(status = '{NpcStatus.ALIVE}') = (hp > 0)", name='alive_when_hp'),
         CheckConstraint("jsonb_typeof(abilities) = 'object'", name='abilities_is_object'),
+        CheckConstraint('named_round IS NULL OR named_round >= 1', name='named_round_positive'),
     )
 
     # 두 칸을 합쳐 기본 키로 삼는다. 한 테이블에서 인물 하나의 상태는 하나다.
@@ -455,6 +456,9 @@ class TableNpc(Base):
     max_hp: Mapped[int] = mapped_column(SmallInteger)
     hp: Mapped[int] = mapped_column(SmallInteger)
     status: Mapped[str] = mapped_column(String(20), default=NpcStatus.ALIVE, server_default=text("'alive'"))
+    # 플레이어가 이 인물의 진짜 이름을 맞힌(지목한) 라운드. 비어 있으면 아직 모른다.
+    # 맞힌 뒤로는 이 테이블에서 장면의 호칭 대신 진짜 이름으로 부른다(app/rounds/cast.py). 되돌리지 않는다
+    named_round: Mapped[int | None] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

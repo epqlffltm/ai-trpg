@@ -9,18 +9,20 @@ DB 를 모른다. 저장하지 않는다.
 
 from dataclasses import dataclass
 
+from app.assets.scenarios.snapshot import EntrySnapshot
 from app.engine.dice import Dice
 from app.engine.health import Change
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, condition_of
-from app.tables.models import GameTable, TableMember
+from app.tables.models import GameTable, TableMember, TableNpc
 
 
 @dataclass(frozen=True)
 class Judging:
     """
-    닫히는 라운드의 판정에 함께 쓰는 것들. 테이블, 규칙, 주사위, 이번 장면의 인물, 라운드의 번호.
+    닫히는 라운드의 판정에 함께 쓰는 것들. 테이블, 규칙, 주사위, 이번 장면의 인물, 라운드의 번호,
+    테이블의 NPC 상태 전부와 판의 인물 항목.
 
     판정 하나와 그 결과(HP, NPC 의 상태, 부상)를 정하는 함수들이 이것을 함께 받는다.
     """
@@ -30,6 +32,9 @@ class Judging:
     dice: Dice
     cast: list[CastMember]
     round_number: int
+    # 테이블의 NPC 상태 전부와 판의 인물 항목. 지목은 장면에 없는 인물도 짚을 수 있다(app/rounds/naming.py)
+    npcs: list[TableNpc]
+    people: list[EntrySnapshot]
 
 
 def injury_after(judging: Judging, change: Change, max_hp: int, dead: bool, rows: list) -> dict | None:

@@ -416,7 +416,14 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
                 'id': lorebook['id'],
                 'title': '인명사전',
                 'entries': [
-                    {'id': entry['id'], 'name': '스미스', 'keywords': ['드워프'], 'content': '추격자', 'kind': 'person'}
+                    {
+                        'id': entry['id'],
+                        'name': '스미스',
+                        'keywords': ['드워프'],
+                        'content': '추격자',
+                        'kind': 'person',
+                        'true_names': [],
+                    }
                 ],
             }
         ],
