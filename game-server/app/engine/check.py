@@ -4,6 +4,7 @@
 판정. 능력치의 점수와 난이도, 주사위 한 번으로 성공과 실패를 정한다.
 
 계산은 하나다. 주사위의 눈에 보정을 더한 값이 난이도의 목표값 이상이면 성공이다.
+부상이 있으면 보정이 깎이거나, 주사위를 두 번 굴려 낮은 눈을 쓴다(불리함, app/engine/injury.py).
 숫자(주사위의 면 수, 보정을 구하는 값, 목표값)는 모두 규칙에서 온다. 규칙이 달라져도 이 코드는 그대로다.
 
 여기의 함수는 DB 도 HTTP 도 모른다. 주사위만 밖에서 받는다. 같은 눈을 주면 같은 결과가 나온다.
@@ -12,6 +13,7 @@
 from dataclasses import dataclass
 
 from app.engine.dice import Dice
+from app.engine.injury import NO_HINDRANCE, Hindrance
 from app.engine.ruleset import Ability, Difficulty, Ruleset
 
 
@@ -58,15 +60,47 @@ def modifier_of(ruleset: Ruleset, score: int) -> int:
     return (score - ruleset.modifier.base) // ruleset.modifier.step
 
 
+@dataclass(frozen=True)
+class HinderedCheck:
+    """
+    부상의 영향을 받은 판정 한 번. 판정의 결과와, 굴린 눈들(불리함이면 둘), 영향을 준 것.
+
+    판정의 눈(check.roll)은 굴린 눈 중 쓴 것이고, 보정(check.modifier)은 부상이 깎은 뒤의 것이다.
+    """
+
+    check: Check
+    rolls: tuple[int, ...]
+    hindrance: Hindrance
+
+
+def roll_for_check(ruleset: Ruleset, dice: Dice, disadvantage: bool) -> tuple[int, ...]:
+    """판정의 주사위를 굴린다. 불리하면 두 번 굴린다. 굴린 순서대로 돌려준다."""
+    return tuple(dice.roll(ruleset.die) for _ in range(2 if disadvantage else 1))
+
+
 def resolve(ruleset: Ruleset, score: int, difficulty: Difficulty, dice: Dice) -> Check:
     """
-    판정 한 번을 한다. 주사위를 한 번 굴린다.
+    판정 한 번을 한다. 주사위를 한 번 굴린다. 부상의 영향이 없는 판정이다.
 
     score 는 판정에 쓰는 능력치의 점수, difficulty 는 규칙에서 찾은 난이도의 단계다.
     """
-    roll = dice.roll(ruleset.die)
-    modifier = modifier_of(ruleset, score)
+    return resolve_hindered(ruleset, score, difficulty, dice, NO_HINDRANCE).check
+
+
+def resolve_hindered(
+    ruleset: Ruleset, score: int, difficulty: Difficulty, dice: Dice, hindrance: Hindrance
+) -> HinderedCheck:
+    """
+    부상의 영향을 받는 판정 한 번을 한다. 주사위를 한 번(불리하면 두 번) 굴린다.
+
+    score 는 판정에 쓰는 능력치의 점수, difficulty 는 규칙에서 찾은 난이도의 단계다.
+    hindrance 는 입은 부상이 이 판정에 주는 것이다. 보정을 깎고, 불리하면 낮은 눈을 쓴다.
+    """
+    rolls = roll_for_check(ruleset, dice, hindrance.disadvantage)
+    roll = min(rolls)
+    modifier = modifier_of(ruleset, score) - hindrance.penalty
     total = roll + modifier
-    return Check(
+    check = Check(
         roll=roll, modifier=modifier, total=total, target=difficulty.target, success=total >= difficulty.target
     )
+    return HinderedCheck(check=check, rolls=rolls, hindrance=hindrance)

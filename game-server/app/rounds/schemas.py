@@ -34,6 +34,35 @@ class DeclarationUpdate(BaseModel):
     action: CheckAction | None = None
 
 
+class InjuryRollOut(BaseModel):
+    """
+    피해 뒤에 부상 표를 굴린 것. 엔진이 굴렸다. 큰 타격이나 쓰러짐이었을 때만 있다.
+
+    injury 는 나온 부상의 이름표(규칙의 Injury.key)다. 부상이 없는 줄이면 None 이다.
+    이름과 사실은 테이블의 rules 에 있다.
+    """
+
+    # big_hit(큰 타격) 또는 downed(쓰러짐)
+    trigger: str
+    roll: int
+    injury: str | None
+    # 짧은 부상이면 이 라운드가 닫힐 때 풀린다. 오래 가는 것과 결손은 None 이다
+    ends_after_round: int | None
+
+
+class HindranceOut(BaseModel):
+    """입은 부상이 판정에 준 것. 보정을 깎았거나 불리하게 했다. 엔진이 정했다."""
+
+    # 영향을 준 부상들의 이름표
+    injuries: list[str]
+    # 보정에서 깎은 양. 판정의 modifier 는 이미 깎인 값이다
+    penalty: int
+    # 불리했는가. 불리하면 주사위를 두 번 굴려 낮은 눈을 썼다
+    disadvantage: bool
+    # 굴린 눈들. 불리하면 둘이다. 판정의 roll 은 그중 쓴 것이다
+    rolls: list[int]
+
+
 class EffectOut(BaseModel):
     """판정의 결과로 HP 가 바뀐 것. 엔진이 정한 것이다."""
 
@@ -53,6 +82,8 @@ class EffectOut(BaseModel):
     max_hp: int
     # 바뀐 뒤에 쓰러져 있는가(HP 0)
     downed: bool
+    # 이 피해로 부상 표를 굴렸으면 그 결과. 굴리지 않았으면 None 이다
+    injury_roll: InjuryRollOut | None = None
 
 
 class NpcEffectOut(BaseModel):
@@ -76,6 +107,8 @@ class NpcEffectOut(BaseModel):
     lethal: bool
     # 바뀐 뒤의 생사
     status: NpcStatus
+    # 이 피해로 부상 표를 굴렸으면 그 결과. 굴리지 않았으면 None 이다
+    injury_roll: InjuryRollOut | None = None
 
 
 class CheckOutcome(BaseModel):
@@ -90,6 +123,8 @@ class CheckOutcome(BaseModel):
     # 난이도의 목표값. total 이 이 값 이상이면 성공이다
     target: int
     success: bool
+    # 입은 부상이 이 판정에 준 것. 아무 영향도 없었으면 None 이다
+    hindrance: HindranceOut | None = None
     # 이 판정으로 HP 가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다
     effect: EffectOut | None = None
     # 이 판정으로 NPC 의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. effect 와 함께 있지 않다
@@ -169,6 +204,8 @@ class PersonOut(BaseModel):
     name: str
     # 살아 있음, 쓰러짐, 죽음. HP 의 숫자는 싣지 않는다
     status: NpcStatus
+    # 입고 있는 부상들의 이름표. 생긴 순서다. 이름과 사실은 테이블의 rules.injuries 에 있다
+    injuries: list[str]
 
 
 class SceneCastOut(BaseModel):

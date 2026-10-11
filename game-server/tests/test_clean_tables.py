@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.call_log import DbCallLog
 from app.ai.calls import CallRecord, CallScope, Outcome
 from app.ai.provider import Reasoning
+from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
 from app.memory.indexing import index_table
 from tests.cleaning import clear_tables, clearing_order
@@ -65,7 +66,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     API 로 모든 테이블에 행을 넣는다. 외래 키로 이어진 사슬이 끝까지 생긴다.
 
     룰북, 세계관, 로어북과 항목, 시나리오(로어북을 붙이고 판을 내고 소개 페이지까지),
-    테이블(시작해서 시트와 NPC 의 상태와 라운드와 이벤트가 생기고, 굴리고, 선언하고, 채팅한다), 보관함.
+    테이블(시작해서 시트와 NPC 의 상태와 라운드와 이벤트가 생기고, 굴리고, 선언해서 다치고, 채팅한다), 보관함.
     AI 호출의 기록만은 API 로 생기지 않는다(테스트의 서술자는 모델을 부르지 않는다). 기록장으로 직접 쓴다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
     지난 라운드의 벡터는 다음 서술을 맡길 때 생긴다. 혼자 앉은 테이블이라 선언하면 라운드가 닫히고 서술된다.
@@ -100,7 +101,11 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     await client.post(f'{table_url}/character/roll', headers=me)
     await client.put(f'{table_url}/character', json={'name': '엘프'}, headers=me)
     await client.post(f'{table_url}/start', headers=me)
-    await client.put(f'{table_url}/rounds/current/declaration', json={'content': '달린다.'}, headers=me)
+    # 심한 대가에 실패해 쓰러지고, 부상 표에서 20(한쪽 눈 잃음)이 나온다. 부상의 행이 생긴다
+    app.state.dice = ScriptedDice([1, 8, 8, 20])
+    action = {'kind': 'check', 'ability': 'dex', 'risk': 'heavy'}
+    declaration = {'content': '달린다.', 'action': action}
+    await client.put(f'{table_url}/rounds/current/declaration', json=declaration, headers=me)
     await app.state.jobs.drain()
     await index_table(app.state.session_factory, app.state.embedder, uuid.UUID(table['id']))
     await client.post(f'{table_url}/messages', json={'content': '안녕'}, headers=me)

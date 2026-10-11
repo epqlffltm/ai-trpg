@@ -51,6 +51,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'total',
         'target',
         'success',
+        'hindrance',
     ),
     # HP 도 공개다. 앉은 사람은 서로의 시트를 본다
     EventType.HP_CHANGED: (
@@ -65,6 +66,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'after',
         'max_hp',
         'downed',
+        'injury_roll',
     ),
     # NPC 의 변화는 주사위의 눈, 양, 바뀐 생사만 보인다. HP 의 숫자(before, after, max_hp)는 GM 만 안다.
     # 몸 상태(condition)도 서술자에게 주는 말이라 내보내지 않는다. 이름은 장면에서 부르는 이름이다
@@ -78,7 +80,20 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'amount',
         'lethal',
         'status',
+        'injury_roll',
     ),
+    # 부상은 공개다. 누가 무엇을 입었고 언제 풀리는지. 캐릭터면 user_id 와 이름, NPC 면 항목의 id 와 장면의 호칭이다
+    EventType.INJURY_GAINED: (
+        'round',
+        'user_id',
+        'character_name',
+        'entry_id',
+        'name',
+        'injury',
+        'source',
+        'ends_after_round',
+    ),
+    EventType.INJURY_ENDED: ('round', 'user_id', 'character_name', 'entry_id', 'name', 'injury', 'reason'),
     # 죽음의 굴림도 공개다
     EventType.DEATH_SAVE_ROLLED: (
         'round',
