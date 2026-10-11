@@ -8,9 +8,12 @@
 -- 컨테이너 환경 변수에서 비밀번호를 읽어 psql 변수에 담는다
 \getenv billing_password BILLING_DB_PASSWORD
 
--- CREATEDB 를 주지 않는다. 결제 서버는 DB 를 새로 만들 일이 없다
+-- CREATEDB 를 주지 않는다. 테스트용 DB 를 새로 만들지 않고, 같은 DB 의 다른 스키마를 쓴다
 CREATE ROLE billing LOGIN PASSWORD :'billing_password';
 
--- 결제 서버의 테이블이 놓일 스키마. 주문, 원장, 잔액이 여기에 놓인다.
+-- 개발용 스키마. 결제 서버의 테이블(지갑, 원장, 주문)이 여기에 놓인다.
 -- 다른 서버의 계정에는 이 스키마의 권한을 주지 않는다. 잔액은 결제 서버의 API 로만 읽고 바꾼다
 CREATE SCHEMA billing AUTHORIZATION billing;
+
+-- 테스트용 스키마. 테스트가 개발용 데이터를 건드리지 않게 따로 둔다
+CREATE SCHEMA billing_test AUTHORIZATION billing;

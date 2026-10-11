@@ -1,5 +1,5 @@
 # .github/workflows/billing-server.yml
-# 결제 서버의 CI. PR 과 main 푸시마다 의존성, 모양, 정적 검사, 빌드, 테스트를 검사한다.
+# 결제 서버의 CI. PR 과 main 푸시마다 의존성, 모양, 정적 검사, 만들어진 코드, 빌드, 마이그레이션, 테스트를 검사한다.
 #
 # 서버마다 워크플로 파일을 따로 둔다. 서버별로 의존성과 검사 항목이 다르고,
 # 한 서버만 고친 PR 에서 다른 서버의 검사까지 돌릴 이유가 없다.
@@ -65,7 +65,8 @@ jobs:
 
       # 로컬과 같은 초기화 스크립트로 계정과 스키마를 만든다.
       # 슈퍼유저로 테스트하면 로컬에서 권한 때문에 실패할 코드가 CI 를 통과한다.
-      # auth 와 game 스키마도 만든다. 결제 계정이 그 스키마에 들어가지 못하는지 테스트가 확인한다
+      # auth 와 game 스키마도 만든다. 결제 계정이 그 스키마에 들어가지 못하는지 테스트가 확인한다.
+      # 04 가 개발용(billing)과 테스트용(billing_test) 스키마를 함께 만든다
       - name: DB 계정과 스키마 만들기
         working-directory: .
         env:
@@ -94,11 +95,32 @@ jobs:
       - name: 정적 검사
         run: go vet ./...
 
+      # SQL 에서 Go 코드를 만드는 도구. 로컬에서 쓰는 것과 같은 버전을 받는다
+      - name: sqlc 설치
+        uses: sqlc-dev/setup-sqlc@v5
+        with:
+          sqlc-version: "1.31.1"
+
+      # 커밋된 코드(internal/wallet/walletdb)가 SQL 과 어긋나면 실패한다. 고치지 않고 차이만 본다.
+      # SQL 만 고치고 코드를 다시 만들지 않은 채 올리는 일을 막는다
+      - name: 만들어진 코드 검사
+        run: sqlc diff
+
       - name: 빌드
         run: go build ./...
 
+      # 개발용 스키마(billing)에 적용하고, 마지막 것을 되돌리고, 다시 적용한다.
+      # 되돌리는 SQL 이 틀렸으면 여기서 드러난다. 테스트는 테스트용 스키마를 쓰므로 서로 부딪치지 않는다
+      - name: 마이그레이션 적용과 되돌리기
+        run: |
+          go run ./cmd/migrate up
+          go run ./cmd/migrate down
+          go run ./cmd/migrate up
+          go run ./cmd/migrate status
+
       # -count=1 은 캐시된 결과를 쓰지 않고 매번 실제로 돌린다. DB 를 쓰는 테스트가 있다.
       # -race 는 두 흐름이 같은 값을 동시에 건드리면 실패하게 한다. 공개키 캐시를 여러 요청이 함께 쓴다.
+      # 테이블을 쓰는 테스트는 테스트용 스키마(billing_test)에 마이그레이션을 스스로 적용하고 돈다.
       # -timeout 은 멈춘 테스트를 기본값(10분)까지 기다리지 않고 끊는다
       - name: 테스트
         run: go test -count=1 -race -timeout 120s ./...

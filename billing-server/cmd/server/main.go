@@ -1,8 +1,10 @@
 // billing-server/cmd/server/main.go
 
-// 결제 서버의 시작점. 설정을 읽고, DB 연결 풀과 토큰 검증기를 만들고, HTTP 서버를 띄운다.
+// 결제 서버의 시작점. 설정을 읽고, DB 연결 풀과 토큰 검증기와 지갑을 만들고, HTTP 서버를 띄운다.
 //
 //	go run ./cmd/server
+//
+// 테이블은 만들지 않는다. 서버를 처음 띄우기 전에 마이그레이션을 적용한다(go run ./cmd/migrate up).
 //
 // 종료 신호(Ctrl+C, SIGTERM)를 받으면 새 요청을 받지 않고, 처리 중인 요청이 끝나기를 기다린 뒤 끈다.
 package main
@@ -17,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
@@ -24,6 +27,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
 const (
@@ -59,8 +63,18 @@ func run() error {
 	defer pool.Close()
 
 	httpapi.SetMode(settings.Debug)
-	router := httpapi.NewRouter(httpapi.Dependencies{DB: pool, Verifier: newVerifier(settings)})
+	router := httpapi.NewRouter(httpapi.Dependencies{
+		DB:       pool,
+		Verifier: newVerifier(settings),
+		Wallet:   newWallet(pool, settings),
+	})
 	return serve(ctx, newServer(settings, router))
+}
+
+// newWallet 은 크레딧을 다루는 것을 만든다. 설정에서 읽은 규칙(쓰는 순서, 무료 크레딧의 기한)을 넘긴다.
+func newWallet(pool *pgxpool.Pool, settings config.Settings) *wallet.Service {
+	policy := wallet.Policy{FreeFirst: settings.SpendFreeFirst, FreeTTL: settings.FreeCreditTTL}
+	return wallet.NewService(pool, time.Now, policy)
 }
 
 // newVerifier 는 access 토큰을 검증하는 것을 만든다. 만드는 것만으로는 인증 서버를 부르지 않는다.

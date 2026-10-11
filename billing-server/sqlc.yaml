@@ -1,0 +1,34 @@
+# billing-server/sqlc.yaml
+# sqlc 의 설정. SQL 파일을 읽어 Go 코드를 만든다. 만들어진 코드는 커밋한다.
+#
+#   sqlc generate   SQL 을 고친 뒤 코드를 다시 만든다
+#   sqlc diff       만들어진 코드가 SQL 과 어긋나는지만 본다(CI 가 돌린다)
+#
+# 테이블의 모양은 마이그레이션 파일에서 읽는다. DB 에 접속하지 않는다.
+
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: internal/wallet/queries.sql
+    gen:
+      go:
+        package: walletdb
+        out: internal/wallet/walletdb
+        sql_package: pgx/v5
+        overrides:
+          # 사용자 번호와 작업 번호는 다른 패키지들이 쓰는 uuid 타입으로 받는다
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          # NULL 이 아닌 시각은 time.Time 으로 받는다
+          - db_type: timestamptz
+            go_type: time.Time
+          # 크레딧의 양은 int64 가 아니라 credit.Amount 로 받는다. 양과 다른 숫자를 섞어 쓰면 컴파일이 막는다
+          - column: wallets.paid_balance
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+          - column: free_grants.amount
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+          - column: free_grants.remaining
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+          - column: ledger_entries.amount
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount

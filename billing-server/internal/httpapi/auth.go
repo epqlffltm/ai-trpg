@@ -31,11 +31,6 @@ type TokenVerifier interface {
 	Verify(ctx context.Context, token string) (auth.Claims, error)
 }
 
-// errorBody 는 오류 응답의 모양이다. 다른 서버들과 같은 칸 이름(detail)을 쓴다.
-type errorBody struct {
-	Detail string `json:"detail"`
-}
-
 // requireUser 는 요청의 토큰을 검증하는 미들웨어를 만든다. 로그인이 필요한 주소 앞에 붙인다.
 // 통과하면 토큰의 주인을 요청에 실어 다음으로 넘기고, 아니면 여기서 응답하고 끝낸다.
 func requireUser(verifier TokenVerifier) gin.HandlerFunc {

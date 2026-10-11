@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 // 적지 않았을 때의 값들.
@@ -30,6 +31,14 @@ const (
 	// DefaultJWTAudience 는 이 서버의 이름이다. 토큰의 대상(aud)에 이 이름이 있어야 받는다.
 	// 인증 서버의 JWT_AUDIENCE 목록에 이 이름이 들어 있어야 한다.
 	DefaultJWTAudience = "ai-trpg-billing"
+	// DefaultSpendFreeFirst 는 크레딧을 쓸 때 무료 크레딧부터 쓰는지다.
+	// 무료 크레딧은 기한이 지나면 사라지므로, 먼저 써야 사용자가 잃는 것이 적다.
+	DefaultSpendFreeFirst = true
+	// DefaultFreeCreditTTL 은 무료 크레딧이 지급된 뒤 사라질 때까지의 시간이다. 1주일이다.
+	DefaultFreeCreditTTL = 7 * 24 * time.Hour
+	// MinFreeCreditTTL 은 FREE_CREDIT_TTL 로 받는 가장 짧은 시간이다.
+	// DB 는 시각을 백만분의 1초까지만 적는다. 그보다 짧으면 지급한 순간과 사라지는 순간이 같아진다.
+	MinFreeCreditTTL = time.Second
 )
 
 // schemaPattern 은 스키마 이름으로 받는 모양이다. 소문자, 숫자, 밑줄만 받는다.
@@ -55,6 +64,19 @@ type Settings struct {
 	// JWTIssuer 는 받아들이는 토큰의 발급자(iss), JWTAudience 는 이 서버의 이름(aud)이다.
 	JWTIssuer   string
 	JWTAudience string
+	// SpendFreeFirst 가 true 면 크레딧을 쓸 때 무료 크레딧부터 쓰고, false 면 산 크레딧부터 쓴다.
+	SpendFreeFirst bool
+	// FreeCreditTTL 은 무료 크레딧이 지급된 뒤 사라질 때까지의 시간이다.
+	// 바꿔도 이미 지급한 것의 기한은 그대로다. 사라지는 시각은 지급할 때 정해 DB 에 적는다.
+	FreeCreditTTL time.Duration
+}
+
+// Database 는 DB 에 접속하는 데 필요한 설정이다. 마이그레이션 명령(cmd/migrate)은 이것만 읽는다.
+type Database struct {
+	// URL 은 PostgreSQL 접속 주소다. 비밀번호가 들어 있다. 로그와 오류에 싣지 않는다.
+	URL string
+	// Schema 는 테이블이 놓이는 스키마다.
+	Schema string
 }
 
 // Addr 는 서버가 요청을 받는 주소를 "host:port" 로 돌려준다.
@@ -66,23 +88,37 @@ func (s Settings) Addr() string {
 func Load(lookup Lookup) (Settings, error) {
 	debug, debugErr := readBool(lookup, "DEBUG", false)
 	port, portErr := readPort(lookup, "PORT", DefaultPort)
-	databaseURL, urlErr := readRequired(lookup, "DATABASE_URL")
-	schema, schemaErr := readSchema(lookup, "DB_SCHEMA", DefaultSchema)
+	db, dbErr := LoadDatabase(lookup)
 	jwksURL, jwksErr := readHTTPURL(lookup, "AUTH_JWKS_URL")
+	freeFirst, freeFirstErr := readBool(lookup, "SPEND_FREE_FIRST", DefaultSpendFreeFirst)
+	freeTTL, freeTTLErr := readDuration(lookup, "FREE_CREDIT_TTL", DefaultFreeCreditTTL, MinFreeCreditTTL)
 
-	if err := errors.Join(debugErr, portErr, urlErr, schemaErr, jwksErr); err != nil {
+	if err := errors.Join(debugErr, portErr, dbErr, jwksErr, freeFirstErr, freeTTLErr); err != nil {
 		return Settings{}, err
 	}
 	return Settings{
-		Debug:       debug,
-		Host:        readString(lookup, "HOST", DefaultHost),
-		Port:        port,
-		DatabaseURL: databaseURL,
-		DBSchema:    schema,
-		AuthJWKSURL: jwksURL,
-		JWTIssuer:   readString(lookup, "JWT_ISSUER", DefaultJWTIssuer),
-		JWTAudience: readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
+		Debug:          debug,
+		Host:           readString(lookup, "HOST", DefaultHost),
+		Port:           port,
+		DatabaseURL:    db.URL,
+		DBSchema:       db.Schema,
+		AuthJWKSURL:    jwksURL,
+		JWTIssuer:      readString(lookup, "JWT_ISSUER", DefaultJWTIssuer),
+		JWTAudience:    readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
+		SpendFreeFirst: freeFirst,
+		FreeCreditTTL:  freeTTL,
 	}, nil
+}
+
+// LoadDatabase 는 DB 접속에 필요한 설정만 읽어 검사한다.
+// 마이그레이션 명령은 인증 서버의 주소 같은 다른 설정이 없어도 돈다.
+func LoadDatabase(lookup Lookup) (Database, error) {
+	databaseURL, urlErr := readRequired(lookup, "DATABASE_URL")
+	schema, schemaErr := readSchema(lookup, "DB_SCHEMA", DefaultSchema)
+	if err := errors.Join(urlErr, schemaErr); err != nil {
+		return Database{}, err
+	}
+	return Database{URL: databaseURL, Schema: schema}, nil
 }
 
 // readString 은 값을 그대로 읽는다. 없거나 비어 있으면 fallback 이다.
@@ -128,6 +164,19 @@ func readBool(lookup Lookup, name string, fallback bool) (bool, error) {
 		return false, fmt.Errorf("%s 는 true 나 false 여야 합니다", name)
 	}
 	return parsed, nil
+}
+
+// readDuration 은 시간의 길이를 읽는다. 168h, 30m, 90s 처럼 단위를 붙여 적는다. minimum 보다 짧으면 오류다.
+func readDuration(lookup Lookup, name string, fallback time.Duration, minimum time.Duration) (time.Duration, error) {
+	value, ok := lookup(name)
+	if !ok || value == "" {
+		return fallback, nil
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil || duration < minimum {
+		return 0, fmt.Errorf("%s 는 168h, 30m 처럼 단위를 붙인 시간이어야 하고 %s 보다 짧을 수 없습니다", name, minimum)
+	}
+	return duration, nil
 }
 
 // readPort 는 포트 번호를 읽는다. 1 부터 65535 까지만 받는다.

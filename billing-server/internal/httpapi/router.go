@@ -2,7 +2,7 @@
 
 // Package httpapi 는 결제 서버의 HTTP 주소들을 만든다. 요청을 받아 응답의 모양으로 바꾸는 일만 한다.
 //
-// 라우터는 전역 변수로 두지 않고 함수(NewRouter)로 만든다. 필요한 것(DB)을 밖에서 받으므로,
+// 라우터는 전역 변수로 두지 않고 함수(NewRouter)로 만든다. 필요한 것(DB, 검증기, 지갑)을 밖에서 받으므로,
 // 테스트가 가짜를 넣어 라우터를 여러 개 만들 수 있다.
 package httpapi
 
@@ -21,6 +21,8 @@ type Dependencies struct {
 	DB database.Pinger
 	// Verifier 는 요청의 access 토큰을 검증한다.
 	Verifier TokenVerifier
+	// Wallet 은 지갑을 읽는다.
+	Wallet WalletReader
 }
 
 // SetMode 는 gin 의 동작 방식을 정한다. debug 가 아니면 등록한 주소 목록 같은 개발용 출력을 끈다.
@@ -50,6 +52,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	// 새 주소를 더하면서 검증을 빠뜨리는 일이 없다
 	api := router.Group(APIPrefix, requireUser(deps.Verifier))
 	api.GET("/me", me)
+	api.GET("/wallet", getWallet(deps.Wallet))
+	api.GET("/wallet/entries", listEntries(deps.Wallet))
 
 	return router
 }
