@@ -50,6 +50,8 @@ ME_URL = reverse('accounts:me')
 
 PASSWORD = 'correct-horse-battery'
 GAME_SERVER_AUDIENCE = 'ai-trpg-game'
+# 토큰을 받아 쓰는 서버들의 이름. 서버마다 토큰의 aud 에 자기 이름이 있는지 확인한다
+SERVER_AUDIENCES = ('ai-trpg-game', 'ai-trpg-board', 'ai-trpg-billing')
 
 
 def create_user(**overrides) -> User:
@@ -411,6 +413,15 @@ class GameServerVerificationTests(APITestCase):
         claims = self.verify(self.token)
 
         self.assertEqual(claims['sub'], str(self.user.public_id))
+
+    def test_every_server_can_verify_the_same_token(self):
+        # 토큰 하나에 모든 서버의 이름이 실린다. 어느 서버가 검증해도 통과한다.
+        # 실패하면 .env 의 JWT_AUDIENCE 가 옛 목록인지 본다(.env.example 과 같아야 한다)
+        for audience in SERVER_AUDIENCES:
+            with self.subTest(audience=audience):
+                claims = self.verify(self.token, audience=audience)
+
+                self.assertEqual(claims['sub'], str(self.user.public_id))
 
     def test_rejects_other_audience(self):
         with self.assertRaises(jwt.InvalidAudienceError):
