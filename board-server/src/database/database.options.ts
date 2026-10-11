@@ -8,7 +8,7 @@
  */
 
 import { DataSourceOptions } from 'typeorm';
-import { Environment } from '../config/environment.js';
+import { DatabaseSettings } from '../config/environment.js';
 
 /**
  * DB 에 연결을 맺을 때 기다리는 최대 시간(밀리초).
@@ -18,9 +18,6 @@ export const CONNECT_TIMEOUT_MS = 5000;
 
 /** PostgreSQL 에 붙는 연결 옵션. TypeORM 의 옵션은 DB 종류마다 모양이 달라서 그중 하나를 고른다 */
 export type PostgresOptions = Extract<DataSourceOptions, { type: 'postgres' }>;
-
-/** 연결 옵션을 만드는 데 필요한 설정. */
-export type DatabaseSettings = Pick<Environment, 'DATABASE_URL' | 'DB_SCHEMA'>;
 
 /**
  * 연결이 맺어질 때 PostgreSQL 에 넘기는 설정 글자. search_path 를 설정의 스키마로 맞춘다.
