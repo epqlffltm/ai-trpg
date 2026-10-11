@@ -96,6 +96,8 @@ class Verdict:
     npc_impact: NpcImpact | None = None
     # 이 판정에 영향을 준 부상들의 이름(보정이 깎였거나 불리했다). 없으면 비어 있다
     hindrances: list[str] = field(default_factory=list)
+    # 노려 쳤으면 노린 부상의 이름. 판정이 그만큼 어려웠다. 성공했으면 그 부상이 생겼다(impact 에 적힌다)
+    aimed: str | None = None
 
 
 @dataclass(frozen=True)
@@ -308,13 +310,15 @@ def describe_verdict(verdict: Verdict) -> str:
     판정의 결과를 한 줄로 적는다. 예: (근력 판정 성공: 13 + 2 = 15, 목표 15)
 
     부상이 영향을 줬으면 그 이름을 붙인다. 예: (근력 판정 실패: 5 - 1 = 4, 목표 15. 부상의 영향: 팔 골절)
+    노려 쳤으면 노린 것을 붙인다. 예: (민첩 판정 성공: 18 + 2 = 20, 목표 20. 노려 치기: 한쪽 눈 잃음)
     """
     result = '성공' if verdict.success else '실패'
     # 보정이 음수면 "13 - 1" 로 적는다
     sign = '-' if verdict.modifier < 0 else '+'
     sum_ = f'{verdict.roll} {sign} {abs(verdict.modifier)} = {verdict.total}'
     hindered = f'. 부상의 영향: {", ".join(verdict.hindrances)}' if verdict.hindrances else ''
-    return f'({verdict.ability} 판정 {result}: {sum_}, 목표 {verdict.target}{hindered})'
+    aimed = f'. 노려 치기: {verdict.aimed}' if verdict.aimed else ''
+    return f'({verdict.ability} 판정 {result}: {sum_}, 목표 {verdict.target}{hindered}{aimed})'
 
 
 def describe_impact(impact: Impact) -> str:

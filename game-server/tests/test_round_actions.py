@@ -87,11 +87,11 @@ async def current(client: AsyncClient, headers: dict[str, str], table: dict) -> 
 
 def stored(action: dict) -> dict:
     """
-    저장된 행동의 모양. 보낸 칸에 더해, 붙이지 않은 대가와 보상과 대상과 타격이 None 으로 들어 있다.
+    저장된 행동의 모양. 보낸 칸에 더해, 붙이지 않은 대가와 보상과 대상과 타격과 노린 부상이 None 으로 들어 있다.
 
     죽이려는지(lethal)는 붙이지 않으면 false 다.
     """
-    defaults = {'risk': None, 'recover': None, 'target': None, 'harm': None, 'npc': None, 'lethal': False}
+    defaults = {'risk': None, 'recover': None, 'target': None, 'harm': None, 'npc': None, 'lethal': False, 'aim': None}
     return {**defaults, **action}
 
 
