@@ -33,6 +33,10 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거나 회복한다(app/engine/health.py).
 HP 가 0 이면 쓰러진 것이다. 쓰러진 사람은 글만 낼 수 있고, 라운드는 그 사람의 선언을 기다리지 않는다.
 
+행동은 이번 장면에 나온 NPC 를 겨눌 수 있다(app/rounds/cast.py). 성공하면 그 NPC 가 피해를 입거나 회복한다.
+NPC 의 상태도 그때 한 번만 바뀐다(app/tables/npcs.py 의 change_npc). 바뀐 것은 판정 뒤에 이벤트로 적는다.
+누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
+
 쓰러진 캐릭터는 라운드가 닫힐 때마다 죽음의 굴림을 굴린다(app/engine/death.py). 이것도 닫기 시작할 때 한 번만이다.
 이번 라운드에 쓰러진 캐릭터는 굴리지 않는다. 동료가 일으킬 틈이 한 라운드는 있다.
 이번 라운드에 회복을 받아 일어난 캐릭터도 굴리지 않는다. 행동의 결과를 먼저 끝내고 나서 굴린다.
@@ -56,22 +60,22 @@ from app.assets.scenarios.snapshot import read_snapshot
 from app.core.config import NARRATION_BUDGET_SECONDS
 from app.engine import action as actions
 from app.engine import death, health
-from app.engine.action import CheckAction
+from app.engine.action import CheckAction, Consequence, Recipient
 from app.engine.check import Check
 from app.engine.dice import Dice
-from app.engine.health import ChangeKind
 from app.engine.ruleset import Ruleset
 from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
 from app.rounds import narration_request, opener, repository
+from app.rounds.cast import CastMember, cast_of, condition_of, find_cast_member
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.rounds.narrator import Move, NarrationRequest
+from app.rounds.narrator import Move, NarrationRequest, PersonState
 from app.rounds.prompt import HISTORY_ROUNDS
 from app.rounds.schemas import DeclarationUpdate
+from app.tables import npcs, sheets
 from app.tables import repository as table_repository
 from app.tables import service as tables
-from app.tables import sheets
 from app.tables.models import DeathCause, GameTable, TableMember, TableStatus
 
 
@@ -94,6 +98,8 @@ class Conflict(enum.StrEnum):
     CHARACTER_DEAD = 'character_dead'
     # 이 라운드에 새로 들어온 캐릭터다. 다음 라운드부터 선언을 낸다
     CHARACTER_ARRIVING = 'character_arriving'
+    # 행동이 겨눈 NPC 가 이미 죽었다
+    NPC_DEAD = 'npc_dead'
 
 
 class RoundConflictError(Exception):
@@ -117,7 +123,15 @@ class ActionNotInRulesError(Exception):
 
 
 class ActionTargetError(Exception):
-    """선언에 붙은 행동의 대상이 이 테이블에 앉은 사람이 아니다."""
+    """
+    선언에 붙은 행동의 대상이 겨눌 수 없는 것이다.
+
+    field 는 행동의 어느 칸인지다. target 이면 이 테이블에 앉은 사람이 아니고, npc 면 이번 장면에 나온 인물이 아니다.
+    """
+
+    def __init__(self, field: str) -> None:
+        super().__init__(field)
+        self.field = field
 
 
 # 닫는 중인 채로 이 시간(초)이 지나면 서술을 맡은 작업이 사라진 것으로 본다. 그때부터 다시 맡길 수 있다.
@@ -222,20 +236,37 @@ def aim(action: CheckAction, actor_id: uuid.UUID) -> CheckAction:
     회복의 대상을 비워 뒀으면 행동한 사람 자신으로 채운 행동을 돌려준다. 받은 행동은 고치지 않는다.
 
     저장하는 행동에는 회복이 있으면 늘 대상이 적혀 있게 한다. 읽는 쪽이 "비어 있으면 자기"를 다시 따지지 않는다.
+    NPC 를 회복시키는 행동은 대상이 NPC 다. 채우지 않는다.
     """
-    if action.recover is None or action.target is not None:
+    if action.recover is None or action.target is not None or action.npc is not None:
         return action
     return action.model_copy(update={'target': actor_id})
 
 
-def accept_action(table: GameTable, member: TableMember, action: CheckAction | None) -> dict | None:
+def require_npc_target(cast: list[CastMember], npc_id: uuid.UUID) -> None:
+    """
+    겨눈 NPC 가 이번 장면의 살아 있는(쓰러졌어도 된다) 인물인지 본다.
+
+    장면에 나오지 않았으면 ActionTargetError, 이미 죽었으면 RoundConflictError.
+    """
+    member = find_cast_member(cast, npc_id)
+    if member is None:
+        raise ActionTargetError('npc')
+    if npcs.is_dead(member.npc):
+        raise RoundConflictError(Conflict.NPC_DEAD)
+
+
+def accept_action(
+    table: GameTable, member: TableMember, action: CheckAction | None, cast: list[CastMember]
+) -> dict | None:
     """
     선언에 붙은 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다. 행동이 없으면 None.
 
-    member 는 선언하는 사람이다.
+    member 는 선언하는 사람이고, cast 는 이번 장면의 인물들이다.
       - 쓰러져 있으면 RoundConflictError. 쓰러진 사람은 글만 낼 수 있다.
       - 규칙에 없는 능력, 난이도, 양의 등급이면 ActionNotInRulesError.
       - 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
+      - 겨눈 NPC 가 이번 장면의 인물이 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
     비워 둔 난이도는 규칙의 기본 난이도로, 비워 둔 회복의 대상은 자기 자신으로 채운다.
     """
     if action is None:
@@ -247,7 +278,9 @@ def accept_action(table: GameTable, member: TableMember, action: CheckAction | N
     if fault is not None:
         raise ActionNotInRulesError(fault)
     if action.target is not None and tables.find_member(table, action.target) is None:
-        raise ActionTargetError
+        raise ActionTargetError('target')
+    if action.npc is not None:
+        require_npc_target(cast, action.npc)
     return aim(actions.settle(ruleset, action), member.user_id).model_dump(mode='json')
 
 
@@ -272,44 +305,42 @@ def has_outcome(declaration: Declaration | None) -> bool:
     return declaration is not None and declaration.outcome is not None
 
 
-def find_affected(table: GameTable, actor: TableMember, action: CheckAction, kind: ChangeKind) -> TableMember | None:
+def find_affected(
+    table: GameTable, actor: TableMember, action: CheckAction, recipient: Recipient
+) -> TableMember | None:
     """
-    HP 가 바뀔 사람을 찾는다. 피해는 행동한 사람이 입고, 회복은 행동의 대상이 받는다.
+    HP 가 바뀔 사람을 찾는다. 실패의 대가는 행동한 사람이 입고, 회복은 행동의 대상이 받는다.
 
     대상이 그사이에 테이블을 떠났으면 None.
     """
-    return actor if kind == ChangeKind.DAMAGE else tables.find_member(table, action.target)
+    return actor if recipient == Recipient.ACTOR else tables.find_member(table, action.target)
 
 
-def apply_consequence(
-    table: GameTable, actor: TableMember, action: CheckAction, check: Check, ruleset: Ruleset, dice: Dice
+def change_member(
+    table: GameTable, actor: TableMember, action: CheckAction, found: Consequence, ruleset: Ruleset, dice: Dice
 ) -> dict | None:
     """
-    판정의 결과에 따라 HP 를 바꾸고, 바뀐 내용을 문서로 돌려준다. 아무 일도 없으면 None.
+    앉은 사람의 HP 를 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 HP 가 없으면 None.
 
     시트의 hp 를 고친다. 저장하지는 않는다. 양을 정하는 주사위를 여기서 굴린다.
     돌려준 문서는 선언의 outcome 안에 적힌다. 누구의 HP 가 얼마에서 얼마로 바뀌었는지가 다 담긴다.
     """
-    found = actions.consequence(action, check)
-    if found is None:
-        return None
-    kind, magnitude_key = found
-    affected = find_affected(table, actor, action, kind)
+    affected = find_affected(table, actor, action, found.recipient)
     # 대상이 떠났거나 시트가 없으면 바뀔 HP 가 없다. 양을 정하는 주사위도 굴리지 않는다.
     # 죽은 캐릭터도 그렇다. 회복으로 되살리지 못한다
     if affected is None or affected.sheet is None or sheets.is_dead(affected):
         return None
 
     sheet = affected.sheet
-    magnitude = health.find_magnitude(ruleset, magnitude_key)
-    change = health.change_hp(kind, magnitude, sheet.hp, sheet.max_hp, dice)
+    magnitude = health.find_magnitude(ruleset, found.magnitude)
+    change = health.change_hp(found.kind, magnitude, sheet.hp, sheet.max_hp, dice)
     sheet.hp = change.after
     # 일어났으면 죽음의 굴림에서 센 것은 처음으로 돌아간다. 다시 쓰러지면 처음부터 센다
     if not change.downed:
         sheets.clear_death_saves(sheet)
     return {
         'kind': change.kind.value,
-        'magnitude': magnitude_key,
+        'magnitude': found.magnitude,
         'user_id': str(affected.user_id),
         'character_name': affected.character_name,
         'rolls': list(change.rolls),
@@ -321,12 +352,72 @@ def apply_consequence(
     }
 
 
-def roll_checks(table: GameTable, round_: Round, dice: Dice) -> None:
+def change_cast_member(
+    action: CheckAction, found: Consequence, cast: list[CastMember], ruleset: Ruleset, dice: Dice
+) -> dict | None:
+    """
+    겨눈 NPC 의 HP 와 생사를 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 것이 없으면 None.
+
+    상태를 고치는 것은 change_npc 다. 저장하지는 않는다.
+    같은 라운드에 앞사람이 그 NPC 를 죽였으면 아무 일도 없다. 양을 정하는 주사위도 굴리지 않는다.
+    문서에는 HP 의 숫자까지 다 적는다. 앉은 사람에게 내보낼 때 숫자를 뺀다(app/rounds/schemas.py, 이벤트의 VISIBLE).
+    """
+    member = find_cast_member(cast, action.npc)
+    # 선언을 받을 때 장면의 인물인지 봤다. 장면은 바뀌지 않으므로 없을 수 없지만, 없으면 아무 일도 없는 것으로 둔다
+    if member is None or npcs.is_dead(member.npc):
+        return None
+
+    npc = member.npc
+    status_before = npc.status
+    magnitude = health.find_magnitude(ruleset, found.magnitude)
+    change = npcs.change_npc(npc, found.kind, magnitude, action.lethal, dice)
+    return {
+        'kind': change.kind.value,
+        'magnitude': found.magnitude,
+        'entry_id': str(member.entry_id),
+        'name': member.name,
+        'rolls': list(change.rolls),
+        'amount': change.amount,
+        'before': change.before,
+        'after': change.after,
+        'max_hp': npc.max_hp,
+        'lethal': action.lethal,
+        'status_before': status_before,
+        'status': npc.status,
+        'condition': condition_of(npc),
+    }
+
+
+def apply_consequence(
+    table: GameTable,
+    actor: TableMember,
+    action: CheckAction,
+    check: Check,
+    ruleset: Ruleset,
+    dice: Dice,
+    cast: list[CastMember],
+) -> dict:
+    """
+    판정의 결과에 따라 HP 를 바꾸고, 바뀐 내용을 선언의 outcome 에 넣을 칸들로 돌려준다.
+
+    effect 는 앉은 사람의 변화, npc_effect 는 NPC 의 변화다. 한 판정에서 둘 중 하나만 일어난다. 없으면 둘 다 None.
+    대가는 늘 행동한 사람이 입는다. 대상의 일(타격, 회복)은 행동이 NPC 를 겨눴으면 NPC 가, 아니면 앉은 사람이 받는다.
+    """
+    found = actions.consequence(action, check)
+    if found is None:
+        return {'effect': None, 'npc_effect': None}
+    if found.recipient == Recipient.TARGET and action.npc is not None:
+        return {'effect': None, 'npc_effect': change_cast_member(action, found, cast, ruleset, dice)}
+    return {'effect': change_member(table, actor, action, found, ruleset, dice), 'npc_effect': None}
+
+
+def roll_checks(table: GameTable, round_: Round, dice: Dice, cast: list[CastMember]) -> None:
     """
     닫히는 라운드의 행동을 판정하고, 결과에 따라 HP 를 바꾸고, 결과를 선언에 적는다. 들어온 순서로 굴린다.
 
     한 사람의 판정과 그 결과(피해, 회복)를 끝낸 뒤에 다음 사람으로 넘어간다.
-    앞사람이 쓰러뜨린 것을 뒷사람이 일으킬 수 있다.
+    앞사람이 쓰러뜨린 것을 뒷사람이 일으킬 수 있다. NPC 도 그렇다. 앞사람이 죽인 NPC 는 뒷사람이 바꾸지 못한다.
+    cast 는 이번 장면의 인물들이다. NPC 의 상태는 그 안에 들어 있고, 여기서 고친다.
 
     지금 앉아 있고, 선언에 행동을 붙였고, 시트가 있는 사람만 굴린다.
     진행 중인 테이블에서는 모두에게 시트가 있다(app/tables/sheets.py). 없는 사람이 있어도 라운드는 닫혀야 해서 건너뛴다.
@@ -347,8 +438,7 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice) -> None:
     for member, declaration in rolling:
         action = CheckAction.model_validate(declaration.action)
         check = actions.attempt(ruleset, action, member.sheet.abilities, dice)
-        effect = apply_consequence(table, member, action, check, ruleset, dice)
-        declaration.outcome = {**asdict(check), 'effect': effect}
+        declaration.outcome = {**asdict(check), **apply_consequence(table, member, action, check, ruleset, dice, cast)}
 
 
 def find_dying(table: GameTable) -> list[TableMember]:
@@ -438,6 +528,11 @@ def frozen_moves(table: GameTable, round_: Round) -> list[Move]:
     return narration_request.read_moves(round_.moves)
 
 
+def to_people(cast: list[CastMember]) -> list[PersonState]:
+    """이번 장면의 인물들을 서술자에게 줄 모양으로. 몸 상태를 말로 적는다. 숫자는 주지 않는다."""
+    return [PersonState(name=member.name, condition=condition_of(member.npc)) for member in cast]
+
+
 # --- 읽기 ---
 
 
@@ -450,6 +545,18 @@ async def get_current_round(session: AsyncSession, user_id: uuid.UUID, table_id:
     table = await tables.get_table(session, user_id, table_id)
     round_ = require_started(await repository.find_latest_round(session, table_id))
     return table, round_
+
+
+async def get_scene_cast(
+    session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID
+) -> tuple[Round, list[CastMember]]:
+    """
+    자기가 앉아 있는 테이블의 가장 최근 라운드와, 그 장면의 인물들을 돌려준다. 행동으로 겨눌 수 있는 NPC 들이다.
+
+    앉지 않았으면 TableNotFoundError, 아직 시작하지 않았으면 RoundConflictError.
+    """
+    table, round_ = await get_current_round(session, user_id, table_id)
+    return round_, await load_cast(session, table, round_)
 
 
 async def get_round(
@@ -479,7 +586,7 @@ async def list_rounds(
 def record_check(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
     """
     판정의 결과를 이벤트로 적는다. 그 판정을 부른 행동의 이벤트(cause)에 잇는다.
-    판정으로 HP 가 바뀌었으면 바로 뒤에 그것도 적는다.
+    판정으로 HP 가 바뀌었으면(앉은 사람이든 NPC 든) 바로 뒤에 그것도 적는다.
 
     행한 사람(actor_id)을 적지 않는다. 주사위를 굴린 것은 플레이어가 아니라 엔진이다.
     누구의 판정인지는 원인으로 이은 행동의 이벤트와 캐릭터 이름으로 안다.
@@ -500,6 +607,20 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
     effect = outcome.get('effect')
     if effect is not None:
         record_hp_change(session, table, effect, cause=rolled)
+    npc_effect = outcome.get('npc_effect')
+    if npc_effect is not None:
+        record_npc_change(session, table, npc_effect, cause=rolled)
+
+
+def record_npc_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> None:
+    """
+    NPC 의 상태가 바뀐 것을 이벤트로 적는다. 그 변화를 부른 판정의 이벤트(cause)에 잇는다.
+
+    HP 의 숫자까지 다 적는다. 앉은 사람에게 내보낼 칸은 이벤트 API 가 고른다(app/events/router.py 의 VISIBLE).
+    행한 사람(actor_id)을 적지 않는다. 상태를 바꾼 것은 엔진이다.
+    """
+    payload = {'round': cause.payload['round'], **effect}
+    recorder.record(session, table, EventType.NPC_CHANGED, payload=payload, cause=cause)
 
 
 def record_hp_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> None:
@@ -572,12 +693,18 @@ def record_death_saves(session: AsyncSession, table: GameTable, round_: Round, g
 
 
 def begin_closing(
-    session: AsyncSession, table: GameTable, round_: Round, dice: Dice, closer_id: uuid.UUID | None = None
+    session: AsyncSession,
+    table: GameTable,
+    round_: Round,
+    dice: Dice,
+    cast: list[CastMember],
+    closer_id: uuid.UUID | None = None,
 ) -> None:
     """
     열려 있는 라운드를 닫기 시작한다. 선언을 마감하고 행동을 판정한다. 저장하지는 않는다.
 
     closer_id 는 라운드를 닫은 방장이다. 모두가 내서 저절로 닫혔으면 주지 않는다.
+    cast 는 이번 장면의 인물들이다(load_cast). 행동이 겨눈 NPC 의 상태를 여기서 바꾼다.
     이벤트는 행동(과 그 판정)들 → 죽음의 굴림들 → 닫힘 순서로 적는다. 한 묶음이다.
     나중에 적히는 서술과 열림도 이 묶음에 들어간다.
 
@@ -589,7 +716,7 @@ def begin_closing(
     """
     group = uuid.uuid4()
     dying = find_dying(table)
-    roll_checks(table, round_, dice)
+    roll_checks(table, round_, dice, cast)
     round_.death_saves = roll_death_saves(table, dying, dice)
     round_.moves = narration_request.dump_moves(build_moves(table, round_))
     round_.narration_style = table.narration_style
@@ -613,6 +740,16 @@ async def lock_current_round(
     require_playing(table)
     round_ = require_started(await repository.find_latest_round(session, table_id))
     return table, member, round_
+
+
+async def load_cast(session: AsyncSession, table: GameTable, round_: Round) -> list[CastMember]:
+    """
+    이번 장면의 인물들을 읽는다. 테이블의 NPC 상태를 읽어 라운드의 장면과 견준다.
+
+    테이블을 잠근 요청 안에서 부르면 돌려준 인물의 상태를 그대로 고칠 수 있다.
+    """
+    states = await table_repository.list_npcs(session, table.id)
+    return cast_of(read_snapshot(table.content), round_.scene, states)
 
 
 async def save(session: AsyncSession, table: GameTable) -> tuple[GameTable, Round]:
@@ -639,7 +776,8 @@ async def declare(
     캐릭터가 죽은 사람은 글도 낼 수 없다(RoundConflictError).
     이 라운드에 새 캐릭터를 들인 사람도 낼 수 없다(RoundConflictError). 다음 라운드부터 낸다.
     행동이 이 테이블의 규칙에 없는 것을 가리키면 ActionNotInRulesError.
-    행동의 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
+    행동의 대상이 이 테이블에 앉은 사람이나 이번 장면의 인물이 아니면 ActionTargetError.
+    겨눈 NPC 가 이미 죽었으면 RoundConflictError.
     테이블을 잠그고 한다. 마지막 두 사람이 동시에 내도 라운드는 한 번만 닫힌다.
     """
     table, member, round_ = await lock_current_round(session, user_id, table_id)
@@ -648,11 +786,12 @@ async def declare(
         raise RoundConflictError(Conflict.CHARACTER_DEAD)
     if find_arrival(round_, user_id) is not None:
         raise RoundConflictError(Conflict.CHARACTER_ARRIVING)
-    put_declaration(round_, member, data.content, accept_action(table, member, data.action))
+    cast = await load_cast(session, table, round_)
+    put_declaration(round_, member, data.content, accept_action(table, member, data.action, cast))
 
     everyone_declared = not waiting_for(table, round_)
     if everyone_declared:
-        begin_closing(session, table, round_, dice)
+        begin_closing(session, table, round_, dice, cast)
     saved = await save(session, table)
     # 저장한 뒤에 맡긴다. 먼저 맡기면 서술을 맡은 작업이 아직 저장되지 않은 것을 읽는다
     if everyone_declared:
@@ -678,7 +817,7 @@ async def force_close(
     tables.require_host(table, host_id)
 
     if round_.status == RoundStatus.OPEN:
-        begin_closing(session, table, round_, dice, closer_id=host_id)
+        begin_closing(session, table, round_, dice, await load_cast(session, table, round_), closer_id=host_id)
     elif is_stalled(round_, datetime.now(UTC)):
         round_.closing_at = datetime.now(UTC)
         round_.narration_failed_at = None
@@ -702,6 +841,7 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
       - 각자 한 일과 문체는 닫기 시작할 때 굳혀 둔 것이다. 그 뒤에 누가 나가도, 방장이 문체를 바꿔도 그대로다.
       - 이야기의 바탕은 판의 복사본에서 꺼낸다. 판은 고치지 않는다.
       - 지난 라운드는 닫혀서 바뀌지 않는다.
+      - NPC 의 상태는 닫기 시작할 때 바뀐 뒤로 다음 라운드가 열릴 때까지 바뀌지 않는다.
     그래서 서술을 몇 번 다시 맡겨도 서술자는 같은 것을 받는다.
     이야기의 바탕과 지난 라운드 몇 개는 가짜 서술자는 읽지 않고, 언어 모델의 서술자가 읽는다.
     """
@@ -710,6 +850,7 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
     if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
         return None
     history = await repository.list_rounds_before(session, table_id, number, HISTORY_ROUNDS)
+    cast = await load_cast(session, table, round_)
     return NarrationRequest(
         round_number=round_.number,
         scene=round_.scene,
@@ -719,6 +860,7 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
         style=frozen_style(table, round_),
         table_id=table.id,
         host_id=table.host_id,
+        people=to_people(cast),
     )
 
 
