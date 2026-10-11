@@ -31,6 +31,32 @@ export async function makeOperator(
     .query('INSERT INTO "operators" ("user_id") VALUES ($1)', [userId]);
 }
 
+/** 사용자를 운영자에서 내린다. */
+export async function removeOperator(
+  app: NestExpressApplication,
+  userId: string,
+): Promise<void> {
+  await app
+    .get(DataSource)
+    .query('DELETE FROM "operators" WHERE "user_id" = $1', [userId]);
+}
+
+/**
+ * 고정한 글의 끝나는 시각을 지난 시각으로 바꾼다. 시간이 흘러 고정이 끝난 것처럼 만든다.
+ * 고정한 시각도 그만큼 앞으로 옮긴다. 끝나는 시각이 고정한 시각보다 앞서는 행은 있을 수 없다.
+ */
+export async function expirePin(
+  app: NestExpressApplication,
+  id: string,
+): Promise<void> {
+  await app.get(DataSource).query(
+    `UPDATE "posts"
+        SET "pinned_at" = now() - interval '8 days', "pinned_until" = now() - interval '1 second'
+      WHERE "id" = $1`,
+    [id],
+  );
+}
+
 /** 글 하나의 행을 DB 에서 그대로 읽는다. 지운 글도 읽는다. 없으면 undefined 다. */
 export async function readPostRow(
   app: NestExpressApplication,

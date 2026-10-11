@@ -12,7 +12,12 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { API_PREFIX } from '../src/app.setup.js';
 import { createTestApp, useKeys } from './app.js';
-import { clearData, makeOperator, readPostRow } from './data.js';
+import {
+  clearData,
+  makeOperator,
+  readPostRow,
+  removeOperator,
+} from './data.js';
 import { makeSigningKey, publicKeys, SigningKey, signToken } from './tokens.js';
 
 const API = `/${API_PREFIX}`;
@@ -89,6 +94,8 @@ describe('글 쓰기', () => {
       author_id: WRITER,
       title: '첫 글',
       comment_count: 0,
+      pinned: false,
+      pinned_until: null,
       content: '본문입니다.',
       created_at: expect.any(String),
       updated_at: expect.any(String),
@@ -223,6 +230,8 @@ describe('글 목록', () => {
           author_id: STRANGER,
           title: '나중에 쓴 글',
           comment_count: 0,
+          pinned: false,
+          pinned_until: null,
           created_at: expect.any(String),
           updated_at: expect.any(String),
         },
@@ -232,6 +241,8 @@ describe('글 목록', () => {
           author_id: WRITER,
           title: '먼저 쓴 글',
           comment_count: 0,
+          pinned: false,
+          pinned_until: null,
           created_at: expect.any(String),
           updated_at: expect.any(String),
         },
@@ -239,13 +250,20 @@ describe('글 목록', () => {
       page: 1,
       size: 20,
       total: 2,
+      pinned: [],
     });
   });
 
   it('글이 없으면 빈 목록이다', async () => {
     const response = await list();
 
-    expect(response.body).toEqual({ items: [], page: 1, size: 20, total: 0 });
+    expect(response.body).toEqual({
+      pinned: [],
+      items: [],
+      page: 1,
+      size: 20,
+      total: 0,
+    });
   });
 
   it('그 게시판의 글만 돌려준다', async () => {
@@ -274,7 +292,13 @@ describe('글 목록', () => {
     expect(titles(second)).toEqual(['글 3', '글 2']);
     expect(titles(third)).toEqual(['글 1']);
     // 끝을 넘은 쪽은 오류가 아니라 빈 목록이다. 전체 개수는 그대로 알려 준다
-    expect(beyond.body).toEqual({ items: [], page: 4, size: 2, total: 5 });
+    expect(beyond.body).toEqual({
+      pinned: [],
+      items: [],
+      page: 4,
+      size: 2,
+      total: 5,
+    });
     expect(second.body).toMatchObject({ page: 2, size: 2, total: 5 });
   });
 
@@ -476,6 +500,30 @@ describe('글 지우기', () => {
 
     expect(response.status).toBe(204);
     expect((await read(id)).status).toBe(404);
+  });
+
+  it('운영자만 쓰는 게시판의 글은 운영자가 지운다', async () => {
+    await makeOperator(app, OPERATOR);
+    const id = await writtenId(OPERATOR, 'notice');
+
+    const response = await remove(OPERATOR, id);
+
+    expect(response.status).toBe(204);
+    expect((await read(id)).status).toBe(404);
+  });
+
+  it('운영자만 쓰는 게시판의 글은 글쓴이여도 운영자에서 내려왔으면 지우지 못한다', async () => {
+    await makeOperator(app, OPERATOR);
+    const id = await writtenId(OPERATOR, 'notice');
+    await removeOperator(app, OPERATOR);
+
+    const response = await remove(OPERATOR, id);
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      detail: '이 게시판의 글은 운영자만 지울 수 있습니다.',
+    });
+    expect((await read(id)).status).toBe(200);
   });
 
   it('로그인하지 않으면 401 이다', async () => {
