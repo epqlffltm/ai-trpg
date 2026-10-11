@@ -38,7 +38,7 @@ from app.realtime.listener import SignalSource
 from app.realtime.signals import STORED_KINDS, Kind, NarrationPiece, Notice, Signal
 from app.realtime.sse import Comment, Frame
 from app.tables import repository as table_repository
-from app.tables import service as tables
+from app.tables import state as table_state
 from app.tables.models import TableStatus
 
 # 박자. 이 시간(초)마다 주석을 보내고 DB 에서 이벤트와 채팅을 모두 읽는다. 신호가 오고 있어도 그렇게 한다.
@@ -185,7 +185,7 @@ async def read_new(
     kinds 가 비어 있으면(입력 중 신호만 왔을 때) 앉아 있는지만 본다.
     """
     table = await table_repository.find_table(session, table_id)
-    if table is None or tables.find_member(table, user_id) is None:
+    if table is None or table_state.find_member(table, user_id) is None:
         return [], Closed.NOT_SEATED
 
     frames = []

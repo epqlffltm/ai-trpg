@@ -21,7 +21,7 @@ from app.rounds import injuries as round_injuries
 from app.rounds.cast import find_cast_member
 from app.rounds.effects import Judging, injury_after, member_effect, npc_effect
 from app.tables import npcs, sheets
-from app.tables import service as tables
+from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember, TableNpc
 
 
@@ -33,7 +33,7 @@ def find_affected(
 
     대상이 그사이에 테이블을 떠났으면 None.
     """
-    return actor if recipient == Recipient.ACTOR else tables.find_member(table, action.target)
+    return actor if recipient == Recipient.ACTOR else table_state.find_member(table, action.target)
 
 
 def change_member(judging: Judging, actor: TableMember, action: CheckAction, found: Consequence) -> dict | None:

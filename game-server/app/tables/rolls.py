@@ -28,17 +28,10 @@ from app.engine.score_roll import RolledScore, roll_scores
 from app.events import recorder
 from app.events.models import EventType
 from app.tables import sheets
+from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError
 from app.tables.models import GameTable, TableMember, TableRoll
-from app.tables.service import (
-    Conflict,
-    MemberNotFoundError,
-    TableConflictError,
-    find_member,
-    lock_seated,
-    require_choosing,
-    require_host,
-    save,
-)
+from app.tables.service import lock_seated, save
+from app.tables.state import find_member, require_choosing, require_host
 
 
 def require_rolled_mode(table: GameTable) -> None:

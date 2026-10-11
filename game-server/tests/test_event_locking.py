@@ -28,6 +28,7 @@ from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
 from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.tables import repository as table_repository
+from app.tables import seating
 from app.tables import service as tables
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
@@ -74,7 +75,7 @@ async def test_two_events_at_once_get_different_sequences(session: AsyncSession,
 
     # A: 테이블을 잠그고 친구를 앉히고 이벤트를 적었지만 아직 커밋하지 않았다
     locked = await table_repository.lock_table(session, table.id)
-    tables.take_seat(locked, FRIEND)
+    seating.take_seat(locked, FRIEND)
     recorder.record(session, locked, EventType.MEMBER_JOINED, actor_id=FRIEND, payload={'via': 'invite'})
     await session.flush()
 

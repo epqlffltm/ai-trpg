@@ -28,9 +28,10 @@ from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
 from app.tables import repository, service
+from app.tables import state as table_state
+from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember
 from app.tables.schemas import CharacterUpdate, JoinRequest, LobbyJoinRequest, TableCreate
-from app.tables.service import Conflict, TableConflictError
 from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
@@ -132,7 +133,7 @@ async def test_taking_a_pregen_waits_for_another_take(session: AsyncSession, oth
 
     # A: 테이블을 잠그고 프리젠을 가져갔지만 아직 커밋하지 않았다
     locked = await repository.lock_table(session, table.id)
-    mine = service.find_member(locked, ME)
+    mine = table_state.find_member(locked, ME)
     mine.character_name = '폭주족 엘프'
     mine.character_mode = 'pregen'
     mine.pregen_index = 0

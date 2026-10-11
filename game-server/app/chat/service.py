@@ -24,6 +24,7 @@ from app.chat.typing import TypingThrottle
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.tables import service as tables
+from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember
 
 
@@ -64,7 +65,7 @@ async def post_message(
     테이블을 잠그고 한다. 두 사람이 동시에 써도 번호가 겹치지 않는다.
     """
     table, member = await tables.lock_seated(session, user_id, table_id)
-    tables.require_not_ended(table)
+    table_state.require_not_ended(table)
 
     message = build_message(table, member, data.content)
     repository.add_message(session, message)
@@ -89,7 +90,7 @@ async def announce_typing(
     신호는 커밋될 때 나가므로 커밋한다. 저장할 것은 없다.
     """
     table = await tables.get_table(session, user_id, table_id)
-    tables.require_not_ended(table)
+    table_state.require_not_ended(table)
     if not throttle.allow(table_id, user_id):
         return
 
