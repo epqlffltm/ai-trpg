@@ -5,9 +5,13 @@
  * 주소와 상태 코드는 test/health.e2e-spec.ts 가 본다.
  */
 
-import { Logger, ServiceUnavailableException } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import { DatabaseHealth } from '../database/database.health.js';
-import { errorName, ReadinessController } from './readiness.controller.js';
+import {
+  errorName,
+  ReadinessController,
+  StatusSetter,
+} from './readiness.controller.js';
 
 /** 드라이버가 내는 오류의 흉내. 글에 계정 이름이 들어 있다 */
 class ConnectionRefused extends Error {}
@@ -17,31 +21,43 @@ function makeDatabase(ping: () => Promise<void>): DatabaseHealth {
   return { ping } as DatabaseHealth;
 }
 
+/** 정해진 상태 코드를 기억하는 가짜 응답. */
+function makeResponse(): StatusSetter & { code?: number } {
+  const response: StatusSetter & { code?: number } = {
+    status: (code: number) => (response.code = code),
+  };
+  return response;
+}
+
 describe('ReadinessController', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('DB 에 닿으면 준비됐다고 답한다', async () => {
+  it('DB 에 닿으면 200 으로 준비됐다고 답한다', async () => {
     const controller = new ReadinessController(
       makeDatabase(() => Promise.resolve()),
     );
+    const response = makeResponse();
 
-    await expect(controller.check()).resolves.toEqual({ status: 'ok' });
+    await expect(controller.check(response)).resolves.toEqual({
+      status: 'ok',
+    });
+    expect(response.code).toBe(HttpStatus.OK);
   });
 
-  it('DB 에 닿지 않으면 503 으로 답한다', async () => {
+  it('DB 에 닿지 않으면 503 으로 준비되지 않았다고 답한다', async () => {
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const controller = new ReadinessController(
       makeDatabase(() => Promise.reject(new ConnectionRefused('끊겼다'))),
     );
+    const response = makeResponse();
 
-    const failure = await controller.check().catch((error: unknown) => error);
-
-    expect(failure).toBeInstanceOf(ServiceUnavailableException);
-    expect((failure as ServiceUnavailableException).getResponse()).toEqual({
+    // 예외를 던지지 않는다. 준비되지 않았다는 것은 이 API 의 답이다
+    await expect(controller.check(response)).resolves.toEqual({
       status: 'unavailable',
     });
+    expect(response.code).toBe(HttpStatus.SERVICE_UNAVAILABLE);
   });
 
   it('로그에는 오류의 종류만 남긴다', async () => {
@@ -53,7 +69,7 @@ describe('ReadinessController', () => {
       makeDatabase(() => Promise.reject(new ConnectionRefused(secret))),
     );
 
-    await controller.check().catch(() => undefined);
+    await controller.check(makeResponse());
 
     // 오류의 글에는 DB 주소와 계정 이름이 들어 있다. 로그에 싣지 않는다
     expect(warn).toHaveBeenCalledWith('DB 에 닿지 않는다: ConnectionRefused');
