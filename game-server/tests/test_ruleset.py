@@ -59,6 +59,10 @@ def load_backfill_rules() -> dict:
     score_roll = load_migration('rulebook_score_roll').SCORE_ROLL
     death_save = load_migration('rulebook_death_save').DEATH_SAVE
     injuries = load_migration('injuries').INJURY_RULES
+    treatment = load_migration('treatment')
+    treated = [
+        {**injury, **treatment.TREATABLE.get(injury['key'], treatment.UNTREATABLE)} for injury in injuries['injuries']
+    ]
     return {
         **rules,
         'magnitudes': magnitudes,
@@ -67,6 +71,8 @@ def load_backfill_rules() -> dict:
         'score_roll': score_roll,
         'death_save': death_save,
         **injuries,
+        'injuries': treated,
+        'treatment': treatment.TREATMENT,
     }
 
 

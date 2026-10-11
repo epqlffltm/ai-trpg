@@ -68,13 +68,17 @@ class EventType(enum.StrEnum):
     HP_CHANGED = 'hp_changed'
     # 엔진이 NPC 의 HP 와 생사를 바꿨다. 피해나 회복이다. 원인은 그 판정의 이벤트다
     NPC_CHANGED = 'npc_changed'
-    # 캐릭터나 NPC 가 부상을 입었다. 큰 타격이나 쓰러짐에 부상 표를 굴려서다. 원인은 그 HP 의 변화의 이벤트다
+    # 캐릭터나 NPC 가 부상을 입었다. 큰 타격이나 쓰러짐에 부상 표를 굴렸거나(원인은 그 HP 의 변화의 이벤트다),
+    # 노려 쳤거나, 오래 가는 부상이 나을 때 후유증 표를 굴렸다(원인은 그 부상이 끝난 이벤트다)
     INJURY_GAINED = 'injury_gained'
-    # 짧은 부상이 정한 라운드가 지나 풀렸다. 라운드가 닫힐 때다
+    # 부상이 끝났다. 정한 라운드가 지나 풀렸거나 나았다(라운드가 닫힐 때), 또는 치료로 나았다(원인은 그 치료의 이벤트다)
     INJURY_ENDED = 'injury_ended'
+    # 엔진이 치료의 결과를 정했다. 나을 라운드의 변화, 치료 실패 표의 결과가 적힌다. 원인은 그 판정의 이벤트다
+    INJURY_TREATED = 'injury_treated'
     # 엔진이 쓰러진 캐릭터의 죽음의 굴림을 굴렸다. 라운드가 닫힐 때다
     DEATH_SAVE_ROLLED = 'death_save_rolled'
-    # 캐릭터가 죽었다. 죽음의 굴림으로(원인은 그 굴림의 이벤트다), 또는 플레이어가 스스로 보내서
+    # 캐릭터가 죽었다. 죽음의 굴림으로(원인은 그 굴림의 이벤트다), 치료 실패의 즉사로(원인은 그 치료의 이벤트다),
+    # 또는 플레이어가 스스로 보내서
     CHARACTER_DIED = 'character_died'
     # 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다. 새 캐릭터가 받은 시트가 적힌다
     CHARACTER_JOINED = 'character_joined'

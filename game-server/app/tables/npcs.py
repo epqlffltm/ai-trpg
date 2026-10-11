@@ -9,7 +9,8 @@ DB 를 모른다. 이미 읽어 온 판과 상태를 받아 객체를 만들거�
 그 인물의 NPC 시트가 있으면 그것, 없으면 기본 NPC 시트다(app/assets/scenarios/snapshot.py 의 npc_sheet_of).
 HP 는 가득 찬 채로, 살아 있는 채로 시작한다.
 
-바꾸기. NPC 의 HP 와 생사를 바꾸는 함수는 change_npc 하나다. 판정의 결과로 라운드가 부른다(app/rounds/service.py).
+바꾸기. NPC 의 HP 와 생사를 바꾸는 함수는 change_npc 와 kill 둘이다.
+판정의 결과로 라운드가 부른다(app/rounds/service.py).
 방장이 손으로 고치거나 되돌리는 길은 없다. 바뀐 것은 부른 쪽이 이벤트로 남긴다.
   - 피해와 회복의 양은 규칙의 등급으로 주사위를 굴려 정한다(app/engine/health.py). PC 와 같다.
   - HP 가 0 이 되면 제압은 쓰러뜨리고, 죽이려는 타격은 죽인다. 쓰러진 NPC 를 죽이려고 치면 죽는다.
@@ -72,3 +73,13 @@ def change_npc(npc: TableNpc, kind: ChangeKind, magnitude: Magnitude, lethal: bo
     npc.hp = change.after
     npc.status = status_after(change.after, lethal)
     return change
+
+
+def kill(npc: TableNpc) -> None:
+    """
+    NPC 를 그 자리에서 죽인다. 치료에 실패해 치료 실패 표에서 즉사가 나왔을 때다(app/engine/treatment.py).
+
+    HP 를 0 으로, 생사를 죽음으로 둔다. 상태를 고친다. 저장하지는 않는다. 죽은 NPC 에는 부르지 않는다.
+    """
+    npc.hp = 0
+    npc.status = NpcStatus.DEAD

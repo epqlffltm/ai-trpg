@@ -50,7 +50,8 @@ from app.engine.templates import SRD5
 #  12: 로어북 항목에 종류(kind)가 있다
 #  13: 인물 항목의 숫자(npc_sheets)와 기본 NPC 시트(default_npc_sheet)가 있다
 #  14: 규칙에 부상(injuries), 부상 표(injury_table), 부상 표를 굴리는 때(injury_triggers), 노려 치기(called_shot)가 있다
-SNAPSHOT_FORMAT = 14
+#  15: 규칙에 치료(treatment)가 있고, 부상에 치료의 난이도(treat_difficulty)와 줄이는 라운드(treat_rounds)가 있다
+SNAPSHOT_FORMAT = 15
 
 # 시트가 없던 때의 판을 읽을 때 채우는 숫자. 모든 능력치가 이 점수이고, 최대 HP 가 이 값이다.
 # 그때의 규칙은 SRD5 템플릿뿐이었다. 10 은 그 규칙에서 보정이 0 인 점수다
@@ -452,6 +453,37 @@ def upgrade_from_13(document: dict) -> dict:
     return upgraded
 
 
+# 치료가 없던 때의 부상에 채우는 칸들
+TREATMENT_FIELDS = ('treat_difficulty', 'treat_rounds')
+
+
+def with_treatment_fields(injury: dict, template_injuries: dict[str, dict]) -> dict:
+    """
+    부상 하나에 치료의 칸들을 채운다. 이미 있으면 그대로 둔다. 템플릿에 같은 이름의 부상이 있으면 그 값, 없으면 비운다.
+    """
+    source = template_injuries.get(injury['key'], {})
+    return {**{field: source.get(field) for field in TREATMENT_FIELDS}, **injury}
+
+
+def upgrade_from_14(document: dict) -> dict:
+    """
+    형식 14 의 문서를 형식 15 로 올린다.
+
+    그때는 규칙에 치료가 없었다. 그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 치료와 부상의 치료 칸으로 읽는다.
+    DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 이미 진행 중인 테이블도 다음 라운드부터 치료할 수 있다.
+    """
+    template = SRD5.model_dump(mode='json')
+    template_injuries = {injury['key']: injury for injury in template['injuries']}
+    rulebook = document['rulebook']
+    rules = dict(rulebook['rules'])
+    rules['injuries'] = [with_treatment_fields(injury, template_injuries) for injury in rules['injuries']]
+    rules['treatment'] = template['treatment']
+    upgraded = dict(document)
+    upgraded['rulebook'] = {**rulebook, 'rules': rules}
+    upgraded['format'] = 15
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -468,6 +500,7 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     11: upgrade_from_11,
     12: upgrade_from_12,
     13: upgrade_from_13,
+    14: upgrade_from_14,
 }
 
 
