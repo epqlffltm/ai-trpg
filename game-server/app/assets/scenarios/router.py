@@ -53,6 +53,8 @@ def to_detail(scenario: Scenario) -> ScenarioDetail:
         pregens=scenario.pregens,
         character_modes=scenario.character_modes,
         default_sheet=scenario.default_sheet,
+        npc_sheets=scenario.npc_sheets,
+        default_npc_sheet=scenario.default_npc_sheet,
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,

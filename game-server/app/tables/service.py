@@ -39,7 +39,7 @@ from app.listings import service as listings
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
-from app.tables import passwords, repository, sheets
+from app.tables import npcs, passwords, repository, sheets
 from app.tables.models import GameTable, TableMember, TableRoll, TableStatus
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
 
@@ -669,11 +669,13 @@ async def transfer_host(
 async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID) -> GameTable:
     """
     방장이 테이블을 시작한다. 그 뒤로는 새로 들어올 수 없고 캐릭터를 바꿀 수 없다.
-    앉은 사람 모두에게 캐릭터 시트를 주고, 첫 라운드를 연다. 장면은 테이블을 만들 때 고른 스타팅이다.
+    앉은 사람 모두에게 캐릭터 시트를 주고, 판의 인물마다 NPC 의 상태를 만들고, 첫 라운드를 연다.
+    장면은 테이블을 만들 때 고른 스타팅이다.
 
     방장이 아니면 NotHostError, 모집 중이 아니거나 캐릭터를 만들지 않은 사람이 있으면 TableConflictError.
 
     상태를 바꾸고, 시트를 주고, 이벤트를 적고, 라운드를 여는 것이 한 묶음으로 저장된다. 일부만 되는 일이 없다.
+    NPC 의 상태는 이벤트에 적지 않는다. 누가 NPC 인지는 로어북의 내용이고, 로어북은 AI 만 읽는다.
     """
     table, _ = await lock_seated(session, host_id, table_id)
     require_host(table, host_id)
@@ -682,6 +684,7 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
     # 캐릭터를 정하지 않은 사람이 있으면 그 사람이 받을 시트도 없다. 아무에게도 주지 않고 거절한다
     if not sheets.hand_out(table, snapshot):
         raise TableConflictError(Conflict.CHARACTERS_MISSING)
+    repository.add_npcs(session, npcs.make_npcs(table.id, snapshot))
 
     table.status = TableStatus.PLAYING
     table.started_at = func.now()
