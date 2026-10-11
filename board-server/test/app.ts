@@ -48,6 +48,9 @@ export async function createTestApp(
   );
   const module = await customize(builder).compile();
   const app = module.createNestApplication<NestExpressApplication>();
+  // 테스트가 도는 동안에는 경고와 오류만 화면에 찍는다. 요청마다 한 줄씩 남는 로그가 테스트의 결과를 가린다.
+  // 로그를 보는 테스트는 줄을 모으는 로거를 따로 꽂는다(app.useLogger)
+  app.useLogger(['warn', 'error', 'fatal']);
   setupApp(app);
   await app.init();
 
