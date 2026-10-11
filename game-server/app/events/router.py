@@ -66,6 +66,19 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'max_hp',
         'downed',
     ),
+    # NPC 의 변화는 주사위의 눈, 양, 바뀐 생사만 보인다. HP 의 숫자(before, after, max_hp)는 GM 만 안다.
+    # 몸 상태(condition)도 서술자에게 주는 말이라 내보내지 않는다. 이름은 장면에서 부르는 이름이다
+    EventType.NPC_CHANGED: (
+        'round',
+        'entry_id',
+        'name',
+        'kind',
+        'magnitude',
+        'rolls',
+        'amount',
+        'lethal',
+        'status',
+    ),
     # 죽음의 굴림도 공개다
     EventType.DEATH_SAVE_ROLLED: (
         'round',

@@ -17,12 +17,15 @@
 
 행동에는 판정의 결과에 따라 일어날 일을 붙일 수 있다.
   - 실패의 대가(risk): 실패하면 행동한 캐릭터가 피해를 입는다.
-  - 성공의 보상(recover): 성공하면 대상(target)이 회복한다.
-둘 다 양을 숫자로 받지 않고 규칙의 등급으로 받는다. 어느 쪽이 일어나는지는 consequence 가 정한다.
+  - 성공의 보상(recover): 성공하면 대상이 회복한다. 대상은 앉은 사람(target)이나 NPC(npc)다.
+  - 성공의 타격(harm): 성공하면 대상 NPC(npc)가 피해를 입는다. 앉은 사람끼리는 해치지 않는다.
+양은 모두 숫자로 받지 않고 규칙의 등급으로 받는다. 어느 것이 일어나는지는 consequence 가 정한다.
+타격에는 죽이려는지(lethal)를 적는다. HP 가 0 이 됐을 때 쓰러질지 죽을지를 가른다(app/tables/npcs.py).
 """
 
 import enum
 import uuid
+from dataclasses import dataclass
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -58,15 +61,66 @@ class CheckAction(BaseModel):
     # 성공의 보상. 성공하면 대상이 이 등급만큼 회복한다. 규칙의 Magnitude.key 다
     recover: Key | None = None
     # 회복하는 대상. 테이블에 앉은 사람이다. 엔진은 이 값을 읽지 않는다. 누구인지는 부른 쪽이 안다.
-    # recover 가 있는데 비우면 자기 자신이다(app/rounds/service.py 가 채운다)
+    # recover 가 있는데 target 도 npc 도 비우면 자기 자신이다(app/rounds/service.py 가 채운다)
     target: uuid.UUID | None = None
+
+    # 성공의 타격. 성공하면 대상 NPC 가 이 등급만큼 피해를 입는다. 규칙의 Magnitude.key 다
+    harm: Key | None = None
+    # 대상 NPC. 판의 로어북 인물 항목의 id 다. 이번 장면에 나온 인물만 고를 수 있다(app/rounds/cast.py).
+    # 엔진은 이 값을 읽지 않는다
+    npc: uuid.UUID | None = None
+    # 타격이 죽이려는 것인가. 아니면 제압이다. HP 가 0 이 되면 제압은 쓰러뜨리고, 죽이려는 것은 죽인다
+    lethal: bool = False
 
     @model_validator(mode='after')
     def require_recover_for_target(self) -> Self:
-        """대상은 회복에만 쓴다. 회복이 없는데 대상만 있으면 무엇을 하려는지 알 수 없다."""
+        """대상(앉은 사람)은 회복에만 쓴다. 회복이 없는데 대상만 있으면 무엇을 하려는지 알 수 없다."""
         if self.target is not None and self.recover is None:
             raise ValueError('target 은 recover 와 함께 적습니다.')
         return self
+
+    @model_validator(mode='after')
+    def require_one_target(self) -> Self:
+        """대상은 하나다. 앉은 사람과 NPC 를 함께 적지 않는다."""
+        if self.target is not None and self.npc is not None:
+            raise ValueError('target 과 npc 는 함께 적지 않습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_npc_for_harm(self) -> Self:
+        """
+        타격과 NPC 는 함께 있다. 타격에는 맞을 NPC 가 있어야 하고, NPC 에게는 무엇을 할지가 있어야 한다.
+
+        NPC 에게 하는 일은 타격이나 회복이다. 둘을 함께 붙이지 않는다. 성공하면 둘 중 하나만 일어날 수 있다.
+        죽이려는지는 타격에만 뜻이 있다.
+        """
+        if self.harm is not None and self.npc is None:
+            raise ValueError('harm 은 npc 와 함께 적습니다.')
+        if self.npc is not None and self.harm is None and self.recover is None:
+            raise ValueError('npc 는 harm 이나 recover 와 함께 적습니다.')
+        if self.harm is not None and self.recover is not None:
+            raise ValueError('harm 과 recover 는 함께 적지 않습니다.')
+        if self.lethal and self.harm is None:
+            raise ValueError('lethal 은 harm 과 함께 적습니다.')
+        return self
+
+
+class Recipient(enum.StrEnum):
+    """판정의 결과를 받는 쪽."""
+
+    # 행동한 캐릭터. 실패의 대가를 입는다
+    ACTOR = 'actor'
+    # 행동의 대상(앉은 사람이나 NPC). 성공의 보상과 타격을 받는다
+    TARGET = 'target'
+
+
+@dataclass(frozen=True)
+class Consequence:
+    """판정의 결과로 일어나는 일. 방향, 양의 등급, 받는 쪽이다."""
+
+    kind: ChangeKind
+    magnitude: Key
+    recipient: Recipient
 
 
 def find_fault(ruleset: Ruleset, action: CheckAction) -> str | None:
@@ -74,7 +128,7 @@ def find_fault(ruleset: Ruleset, action: CheckAction) -> str | None:
     행동이 이 규칙에 맞지 않으면 틀린 칸의 이름을 돌려준다. 맞으면 None.
 
     능력, 난이도, 양의 등급이 규칙에 있는 것이어야 한다. 난이도를 비웠으면 기본 난이도라 늘 있다.
-    대상이 테이블에 앉은 사람인지는 여기서 보지 않는다. 규칙이 아니라 테이블을 봐야 알 수 있다.
+    대상이 테이블에 앉은 사람인지, 이번 장면의 인물인지는 여기서 보지 않는다. 규칙이 아니라 테이블을 봐야 알 수 있다.
     """
     if find_ability(ruleset, action.ability) is None:
         return 'ability'
@@ -84,6 +138,8 @@ def find_fault(ruleset: Ruleset, action: CheckAction) -> str | None:
         return 'risk'
     if action.recover is not None and find_magnitude(ruleset, action.recover) is None:
         return 'recover'
+    if action.harm is not None and find_magnitude(ruleset, action.harm) is None:
+        return 'harm'
     return None
 
 
@@ -111,15 +167,19 @@ def attempt(ruleset: Ruleset, action: CheckAction, abilities: dict[str, int], di
     return resolve(ruleset, abilities[action.ability], difficulty, dice)
 
 
-def consequence(action: CheckAction, check: Check) -> tuple[ChangeKind, str] | None:
+def consequence(action: CheckAction, check: Check) -> Consequence | None:
     """
-    판정의 결과에 따라 일어나는 일을 돌려준다. (방향, 양의 등급의 key) 다. 아무 일도 없으면 None.
+    판정의 결과에 따라 일어나는 일을 돌려준다. 아무 일도 없으면 None.
 
-    실패했고 대가가 붙어 있으면 피해, 성공했고 보상이 붙어 있으면 회복이다.
+    실패했고 대가가 붙어 있으면 행동한 캐릭터의 피해, 성공했고 타격이 붙어 있으면 대상의 피해,
+    성공했고 보상이 붙어 있으면 대상의 회복이다. 타격과 보상은 함께 붙지 않는다(CheckAction).
     한 판정에서 둘이 함께 일어나지 않는다. 성공과 실패는 함께 일어나지 않기 때문이다.
+    대상이 앉은 사람인지 NPC 인지는 행동에 적혀 있다. 엔진은 그것을 가리지 않는다.
     """
     if not check.success and action.risk is not None:
-        return ChangeKind.DAMAGE, action.risk
+        return Consequence(ChangeKind.DAMAGE, action.risk, Recipient.ACTOR)
+    if check.success and action.harm is not None:
+        return Consequence(ChangeKind.DAMAGE, action.harm, Recipient.TARGET)
     if check.success and action.recover is not None:
-        return ChangeKind.RECOVERY, action.recover
+        return Consequence(ChangeKind.RECOVERY, action.recover, Recipient.TARGET)
     return None

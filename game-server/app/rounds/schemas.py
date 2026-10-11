@@ -14,6 +14,7 @@ from app.engine.action import CheckAction
 from app.engine.death import Fate
 from app.engine.health import ChangeKind
 from app.rounds.models import DECLARATION_MAX_LENGTH, RoundStatus
+from app.tables.models import NpcStatus
 
 # 선언의 글. 공백이 아닌 글자가 하나는 있어야 한다. 앞뒤 공백은 떼지 않는다
 DeclarationContent = Annotated[str, StringConstraints(pattern=r'\S', max_length=DECLARATION_MAX_LENGTH)]
@@ -54,6 +55,29 @@ class EffectOut(BaseModel):
     downed: bool
 
 
+class NpcEffectOut(BaseModel):
+    """
+    판정의 결과로 NPC 의 상태가 바뀐 것. 엔진이 정한 것이다.
+
+    HP 의 숫자(바뀌기 전과 뒤, 최대)는 싣지 않는다. GM 만 안다. 주사위의 눈과 양, 바뀐 생사는 보인다.
+    """
+
+    # damage(피해) 또는 recovery(회복)
+    kind: ChangeKind
+    # 양의 등급. 규칙의 Magnitude.key 다
+    magnitude: str
+    # 바뀐 NPC. 이번 장면의 인물 목록의 id 와, 장면에서 부르는 이름
+    entry_id: uuid.UUID
+    name: str
+    # 주사위의 눈들과 그 합
+    rolls: list[int]
+    amount: int
+    # 죽이려는 타격이었는가
+    lethal: bool
+    # 바뀐 뒤의 생사
+    status: NpcStatus
+
+
 class CheckOutcome(BaseModel):
     """판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다."""
 
@@ -68,6 +92,8 @@ class CheckOutcome(BaseModel):
     success: bool
     # 이 판정으로 HP 가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다
     effect: EffectOut | None = None
+    # 이 판정으로 NPC 의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. effect 와 함께 있지 않다
+    npc_effect: NpcEffectOut | None = None
 
 
 class DeclarationOut(BaseModel):
@@ -132,6 +158,29 @@ class RoundOut(BaseModel):
     closed_at: datetime | None
     # 서술이 끝내 실패한 시각. 있으면 방장이 기다리지 않고 다시 맡길 수 있다. 다시 맡기면 비워진다
     narration_failed_at: datetime | None
+
+
+class PersonOut(BaseModel):
+    """이번 장면의 인물 하나. 행동으로 겨눌 수 있는 NPC 다(죽은 인물은 겨누지 못한다)."""
+
+    # 행동의 npc 칸에 적는 값. 판의 로어북 인물 항목의 id 다
+    id: uuid.UUID
+    # 장면에서 부르는 이름. 장면에 나온 낱말이다
+    name: str
+    # 살아 있음, 쓰러짐, 죽음. HP 의 숫자는 싣지 않는다
+    status: NpcStatus
+
+
+class SceneCastOut(BaseModel):
+    """
+    가장 최근 라운드의 장면에 나온 인물들. 판의 인물 순서다.
+
+    장면에 이름이나 호칭이 나온 인물만 들어간다. 로어북의 내용은 싣지 않는다.
+    """
+
+    # 어느 라운드의 장면인가
+    round: int
+    people: list[PersonOut]
 
 
 class RoundPage(BaseModel):

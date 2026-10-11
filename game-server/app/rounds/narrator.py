@@ -40,6 +40,25 @@ class Impact:
 
 
 @dataclass(frozen=True)
+class NpcImpact:
+    """
+    판정의 결과로 NPC 의 HP 가 바뀐 것. 엔진이 정한 것이다.
+
+    HP 의 숫자는 주지 않는다. 몸 상태를 말로 준다(app/rounds/cast.py 의 condition_of).
+    숫자를 주면 모델이 "HP 3 남은" 같은 것을 장면에 쓴다. 플레이어에게도 NPC 의 HP 는 보이지 않는다.
+    """
+
+    # damage(피해) 또는 recovery(회복)
+    kind: str
+    # 장면에서 부르는 이름
+    name: str
+    # 주사위가 정한 양
+    amount: int
+    # 바뀐 뒤의 몸 상태. 멀쩡함, 다침, 크게 다침, 쓰러짐(의식 없음), 죽음
+    condition: str
+
+
+@dataclass(frozen=True)
 class Verdict:
     """
     판정의 결과. 엔진이 정한 것이다. 서술자는 이것을 바꾸지 못하고 글로 옮기기만 한다.
@@ -57,6 +76,8 @@ class Verdict:
     success: bool
     # 이 판정으로 HP 가 바뀌었으면 그 내용. 없으면 None 이다
     impact: Impact | None = None
+    # 이 판정으로 NPC 의 HP 가 바뀌었으면 그 내용. 없으면 None 이다. impact 와 함께 있지 않다
+    npc_impact: NpcImpact | None = None
 
 
 @dataclass(frozen=True)
@@ -176,6 +197,18 @@ class PersonHistory:
 
 
 @dataclass(frozen=True)
+class PersonState:
+    """
+    이번 장면에 나온 인물(NPC) 하나의 지금 상태. 엔진과 DB 가 가진 것이다(table_npcs).
+
+    이번 라운드의 판정까지 반영한 뒤의 것이다. name 은 장면에서 부르는 이름, condition 은 몸 상태를 말로 적은 것이다.
+    """
+
+    name: str
+    condition: str
+
+
+@dataclass(frozen=True)
 class NarrationRequest:
     """서술자에게 주는 것. 방금 닫힌 라운드의 내용이다."""
 
@@ -201,6 +234,8 @@ class NarrationRequest:
     memories: list[MemoryNote] = field(default_factory=list)
     # 이번 장면에 나온 인물(로어북이 고른 인물 항목)의 이력. 서술을 맡기기 직전에 채운다. 가짜 서술자는 읽지 않는다
     histories: list[PersonHistory] = field(default_factory=list)
+    # 이번 장면에 나온 NPC 들의 지금 상태. 라운드를 읽을 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
+    people: list[PersonState] = field(default_factory=list)
 
 
 class Preview(Protocol):
@@ -261,6 +296,12 @@ def describe_impact(impact: Impact) -> str:
     return f'→ {impact.character_name} {word} {impact.amount} ({state})'
 
 
+def describe_npc_impact(impact: NpcImpact) -> str:
+    """NPC 의 HP 가 바뀐 것을 한 줄로 적는다. 숫자는 양만 적는다. 예: → 악역영애 피해 5 (크게 다침)"""
+    word = '피해' if impact.kind == 'damage' else '회복'
+    return f'→ {impact.name} {word} {impact.amount} ({impact.condition})'
+
+
 def describe_idle(move: Move) -> str:
     """
     선언을 내지 않은 캐릭터를 뭐라고 적을지 정한다.
@@ -295,6 +336,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_verdict(move.verdict))
         if move.verdict.impact is not None:
             parts.append(describe_impact(move.verdict.impact))
+        if move.verdict.npc_impact is not None:
+            parts.append(describe_npc_impact(move.verdict.npc_impact))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
     return ' '.join(parts)

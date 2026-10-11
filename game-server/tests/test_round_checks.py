@@ -141,10 +141,14 @@ async def read_round(client: AsyncClient, headers: dict[str, str], table: dict, 
 
 
 def numbers(outcome: dict | None) -> dict | None:
-    """판정의 결과에서 판정의 숫자만 남긴다. HP 의 변화(effect)는 다른 테스트가 본다(test_round_health.py)."""
+    """
+    판정의 결과에서 판정의 숫자만 남긴다.
+
+    HP 의 변화(effect)는 다른 테스트가 본다(test_round_health.py). NPC 의 변화(npc_effect)도(test_npc_actions.py).
+    """
     if outcome is None:
         return None
-    return {key: value for key, value in outcome.items() if key != 'effect'}
+    return {key: value for key, value in outcome.items() if key not in ('effect', 'npc_effect')}
 
 
 def outcomes(round_: dict) -> dict[str, dict | None]:
