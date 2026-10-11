@@ -21,14 +21,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import ScenarioVersion
-from app.assets.scenarios.snapshot import (
-    SNAPSHOT_FORMAT,
-    Snapshot,
-    npc_sheet_of,
-    person_entries,
-    read_snapshot,
-    upgrade_from_12,
-)
+from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot, npc_sheet_of, person_entries, read_snapshot
+from app.assets.scenarios.upgrades import upgrade_from_12
 from app.engine.sheet import Sheet
 from app.main import API_PREFIX
 from app.tables.models import NpcStatus, TableNpc
