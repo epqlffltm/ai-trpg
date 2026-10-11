@@ -1,6 +1,6 @@
 // billing-server/cmd/server/main.go
 
-// 결제 서버의 시작점. 설정을 읽고, DB 연결 풀과 토큰 검증기와 지갑을 만들고, HTTP 서버를 띄운다.
+// 결제 서버의 시작점. 설정을 읽고, DB 연결 풀과 토큰 검증기, 지갑, 주문을 만들고, HTTP 서버를 띄운다.
 //
 //	go run ./cmd/server
 //
@@ -27,6 +27,8 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
@@ -63,12 +65,24 @@ func run() error {
 	defer pool.Close()
 
 	httpapi.SetMode(settings.Debug)
+	wallets := newWallet(pool, settings)
+	orders := newOrders(pool, wallets)
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		DB:       pool,
-		Verifier: newVerifier(settings),
-		Wallet:   newWallet(pool, settings),
+		DB:            pool,
+		Verifier:      newVerifier(settings),
+		Wallet:        wallets,
+		Orders:        orders,
+		Notifier:      orders,
+		WebhookSecret: settings.WebhookSecret,
+		Now:           time.Now,
 	})
 	return serve(ctx, newServer(settings, router))
+}
+
+// newOrders 는 주문을 만들고 치르는 것을 만든다. 결제 대행사의 자리에는 가짜를 꽂는다.
+// 이 서버는 연습용이라 실제 돈을 받지 않는다. 실제 결제 대행사를 붙일 때 여기에서 바꿔 꽂는다.
+func newOrders(pool *pgxpool.Pool, wallets *wallet.Service) *order.Service {
+	return order.NewService(pool, time.Now, payment.Fake{}, wallets)
 }
 
 // newWallet 은 크레딧을 다루는 것을 만든다. 설정에서 읽은 규칙(쓰는 순서, 무료 크레딧의 기한)을 넘긴다.

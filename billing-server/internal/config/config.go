@@ -39,6 +39,8 @@ const (
 	// MinFreeCreditTTL 은 FREE_CREDIT_TTL 로 받는 가장 짧은 시간이다.
 	// DB 는 시각을 백만분의 1초까지만 적는다. 그보다 짧으면 지급한 순간과 사라지는 순간이 같아진다.
 	MinFreeCreditTTL = time.Second
+	// MinWebhookSecretLength 는 PG_WEBHOOK_SECRET 의 가장 짧은 길이다. 짧은 비밀은 서명을 꾸며 내기 쉽다.
+	MinWebhookSecretLength = 32
 )
 
 // schemaPattern 은 스키마 이름으로 받는 모양이다. 소문자, 숫자, 밑줄만 받는다.
@@ -69,6 +71,8 @@ type Settings struct {
 	// FreeCreditTTL 은 무료 크레딧이 지급된 뒤 사라질 때까지의 시간이다.
 	// 바꿔도 이미 지급한 것의 기한은 그대로다. 사라지는 시각은 지급할 때 정해 DB 에 적는다.
 	FreeCreditTTL time.Duration
+	// WebhookSecret 은 결제 대행사의 알림에 붙은 서명을 확인하는 비밀이다. 로그와 오류에 싣지 않는다.
+	WebhookSecret string
 }
 
 // Database 는 DB 에 접속하는 데 필요한 설정이다. 마이그레이션 명령(cmd/migrate)은 이것만 읽는다.
@@ -92,8 +96,9 @@ func Load(lookup Lookup) (Settings, error) {
 	jwksURL, jwksErr := readHTTPURL(lookup, "AUTH_JWKS_URL")
 	freeFirst, freeFirstErr := readBool(lookup, "SPEND_FREE_FIRST", DefaultSpendFreeFirst)
 	freeTTL, freeTTLErr := readDuration(lookup, "FREE_CREDIT_TTL", DefaultFreeCreditTTL, MinFreeCreditTTL)
+	webhookSecret, webhookErr := readSecret(lookup, "PG_WEBHOOK_SECRET", MinWebhookSecretLength)
 
-	if err := errors.Join(debugErr, portErr, dbErr, jwksErr, freeFirstErr, freeTTLErr); err != nil {
+	if err := errors.Join(debugErr, portErr, dbErr, jwksErr, freeFirstErr, freeTTLErr, webhookErr); err != nil {
 		return Settings{}, err
 	}
 	return Settings{
@@ -107,6 +112,7 @@ func Load(lookup Lookup) (Settings, error) {
 		JWTAudience:    readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
 		SpendFreeFirst: freeFirst,
 		FreeCreditTTL:  freeTTL,
+		WebhookSecret:  webhookSecret,
 	}, nil
 }
 
@@ -135,6 +141,18 @@ func readRequired(lookup Lookup, name string) (string, error) {
 	value, ok := lookup(name)
 	if !ok || value == "" {
 		return "", fmt.Errorf("%s 가 없습니다. .env 나 환경 변수에 적어 주세요", name)
+	}
+	return value, nil
+}
+
+// readSecret 은 반드시 있어야 하는 비밀을 읽는다. minimum 글자보다 짧으면 오류다.
+func readSecret(lookup Lookup, name string, minimum int) (string, error) {
+	value, err := readRequired(lookup, name)
+	if err != nil {
+		return "", err
+	}
+	if len(value) < minimum {
+		return "", fmt.Errorf("%s 는 %d자 이상이어야 합니다", name, minimum)
 	}
 	return value, nil
 }

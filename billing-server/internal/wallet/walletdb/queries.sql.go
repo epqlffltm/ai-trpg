@@ -109,10 +109,10 @@ func (q *Queries) GetBalance(ctx context.Context, arg GetBalanceParams) (GetBala
 }
 
 const insertEntry = `-- name: InsertEntry :exec
-INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, created_at)
+INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, order_id, created_at)
 VALUES (
     $1, $2, $3, $4,
-    $5, $6, $7
+    $5, $6, $7, $8
 )
 `
 
@@ -123,6 +123,7 @@ type InsertEntryParams struct {
 	Reason      string
 	Amount      credit.Amount
 	GrantID     pgtype.Int8
+	OrderID     *uuid.UUID
 	Now         time.Time
 }
 
@@ -135,6 +136,7 @@ func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) error 
 		arg.Reason,
 		arg.Amount,
 		arg.GrantID,
+		arg.OrderID,
 		arg.Now,
 	)
 	return err
@@ -179,7 +181,7 @@ func (q *Queries) ListDueFreeGrants(ctx context.Context, arg ListDueFreeGrantsPa
 }
 
 const listEntries = `-- name: ListEntries :many
-SELECT id, operation_id, kind, reason, amount, created_at
+SELECT id, operation_id, kind, reason, amount, order_id, created_at
 FROM ledger_entries
 WHERE user_id = $1 AND id < $2
 ORDER BY id DESC
@@ -198,6 +200,7 @@ type ListEntriesRow struct {
 	Kind        string
 	Reason      string
 	Amount      credit.Amount
+	OrderID     *uuid.UUID
 	CreatedAt   time.Time
 }
 
@@ -217,6 +220,7 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Lis
 			&i.Kind,
 			&i.Reason,
 			&i.Amount,
+			&i.OrderID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

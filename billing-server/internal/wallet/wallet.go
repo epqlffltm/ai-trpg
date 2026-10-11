@@ -93,7 +93,9 @@ type Entry struct {
 	Kind        Kind
 	Reason      Reason
 	// Amount 는 늘었으면 양수, 줄었으면 음수다.
-	Amount    credit.Amount
+	Amount credit.Amount
+	// OrderID 는 이 크레딧이 들어온 주문이다. 주문으로 들어온 줄이 아니면 nil 이다.
+	OrderID   *uuid.UUID
 	CreatedAt time.Time
 }
 

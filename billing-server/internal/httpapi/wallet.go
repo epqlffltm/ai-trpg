@@ -44,7 +44,9 @@ type entryBody struct {
 	Kind        wallet.Kind   `json:"kind"`
 	Reason      wallet.Reason `json:"reason"`
 	Amount      credit.Amount `json:"amount"`
-	CreatedAt   time.Time     `json:"created_at"`
+	// OrderID 는 이 크레딧이 들어온 주문이다. 주문으로 들어온 줄이 아니면 null 이다.
+	OrderID   *uuid.UUID `json:"order_id"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // entriesBody 는 원장 응답의 모양이다.
@@ -114,6 +116,7 @@ func toEntriesBody(page wallet.Page) entriesBody {
 			Kind:        entry.Kind,
 			Reason:      entry.Reason,
 			Amount:      entry.Amount,
+			OrderID:     entry.OrderID,
 			CreatedAt:   entry.CreatedAt,
 		})
 	}
