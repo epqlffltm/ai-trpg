@@ -30,6 +30,7 @@ from app.rounds.narrator import (
     DeathSaveNote,
     Impact,
     Move,
+    NamingNote,
     NpcImpact,
     PastRound,
     StoryContext,
@@ -128,6 +129,13 @@ def to_treatment(treatment: dict | None) -> TreatmentNote | None:
         worsened_by=mishap['rounds'] if mishap else None,
         died=treatment['died'],
     )
+
+
+def to_naming(naming: dict | None) -> NamingNote | None:
+    """선언에 적힌 지목의 결과를 서술자에게 줄 모양으로 바꾼다. 지목이 아니면 None."""
+    if naming is None:
+        return None
+    return NamingNote(guess=naming['guess'], correct=naming['correct'], name=naming['name'], label=naming['label'])
 
 
 def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:

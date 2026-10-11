@@ -42,6 +42,8 @@ class Conflict(enum.StrEnum):
     NOT_INJURED = 'not_injured'
     # 치료하려는 캐릭터가 이미 죽었다
     PATIENT_DEAD = 'patient_dead'
+    # 지목한 인물의 진짜 이름이 이미 드러났다
+    ALREADY_NAMED = 'already_named'
 
 
 class RoundConflictError(Exception):

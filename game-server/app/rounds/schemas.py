@@ -190,6 +190,28 @@ class CheckOutcome(BaseModel):
     treatment: TreatmentOut | None = None
 
 
+class NamingOut(BaseModel):
+    """지목의 결과. 엔진이 정한 것이다(app/rounds/naming.py). 주사위를 굴리지 않았다."""
+
+    # 짚은 이름
+    guess: str
+    correct: bool
+    # 겨눈 인물이나 맞힌 인물의 id. 겨누지 않고 틀렸으면 None 이다
+    entry_id: uuid.UUID | None
+    # 맞힌 인물의 진짜 이름. 틀렸으면 None 이다
+    name: str | None
+    # 이번 장면에서 그 인물을 부르던 이름. 겨눴거나 맞힌 인물이 장면에 나왔을 때만 있다
+    label: str | None
+    # 이 지목으로 진짜 이름이 처음 드러났는가. 같은 라운드에 앞사람이 먼저 맞혔으면 False 다
+    newly: bool
+
+
+class NamingOutcome(BaseModel):
+    """지목하는 행동의 결과. 판정의 결과(CheckOutcome)와 달리 굴림이 없다."""
+
+    naming: NamingOut
+
+
 class DeclarationOut(BaseModel):
     """선언 하나."""
 
@@ -201,8 +223,8 @@ class DeclarationOut(BaseModel):
     # 선언에 붙인 행동. 글과 같이 가린다. 행동이 없는 선언이면 보이는 사람에게도 None 이다
     action: Action | None
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
-    # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다
-    outcome: CheckOutcome | None
+    # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome 이다
+    outcome: CheckOutcome | NamingOutcome | None
 
 
 class DeathSaveOut(BaseModel):
@@ -259,8 +281,10 @@ class PersonOut(BaseModel):
 
     # 행동의 npc 칸에 적는 값. 판의 로어북 인물 항목의 id 다
     id: uuid.UUID
-    # 장면에서 부르는 이름. 장면에 나온 낱말이다
+    # 장면에서 부르는 이름. 장면에 나온 낱말이다. 지목으로 진짜 이름이 드러났으면 진짜 이름이다
     name: str
+    # 지목으로 진짜 이름이 드러났는가. 드러난 인물은 다시 지목하지 못한다
+    named: bool
     # 살아 있음, 쓰러짐, 죽음. HP 의 숫자는 싣지 않는다
     status: NpcStatus
     # 입고 있는 부상들의 이름표. 생긴 순서다. 이름과 사실은 테이블의 rules.injuries 에 있다

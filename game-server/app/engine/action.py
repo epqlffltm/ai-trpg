@@ -11,8 +11,9 @@
   - 모양(CheckAction): 규칙을 몰라도 볼 수 있는 것. 입력을 받을 때 검사한다.
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
-종류는 둘이다. 판정(check)과 치료(treat). 종류를 나타내는 칸(kind)으로 가른다(Action).
+종류는 셋이다. 판정(check), 치료(treat), 지목(name). 종류를 나타내는 칸(kind)으로 가른다(Action).
 치료는 능력과 난이도를 받지 않는다. 규칙이 정한다(app/engine/treatment.py).
+지목은 주사위를 굴리지 않는다. 짚은 이름이 정답인지만 본다(app/rounds/naming.py).
 
 행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
 
@@ -31,7 +32,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
 
 from app.engine.check import Check, HinderedCheck, find_ability, find_difficulty, resolve_hindered
 from app.engine.dice import Dice
@@ -48,6 +49,8 @@ class ActionKind(enum.StrEnum):
     CHECK = 'check'
     # 오래 가는 부상 하나를 치료한다. 규칙이 정한 능력과 난이도로 주사위를 한 번 굴린다
     TREAT = 'treat'
+    # 인물의 진짜 이름을 짚는다. 주사위를 굴리지 않는다
+    NAME = 'name'
 
 
 class CheckAction(BaseModel):
@@ -144,14 +147,35 @@ class TreatAction(BaseModel):
         return self
 
 
+# 지목할 때 짚는 이름의 길이
+NAME_GUESS_MAX_LENGTH = 50
+
+
+class NameAction(BaseModel):
+    """
+    지목하는 행동. 인물의 진짜 이름을 짚는다.
+
+    npc 를 적으면 "이번 장면의 이 인물의 이름은 이것이다"다. 비우면 "이런 이름의 인물이 있다"다.
+    장면에 없는 인물도 이름으로 짚을 수 있다. 맞으면 그 인물이 진짜 이름으로 불리기 시작한다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.NAME]
+    # 짚은 이름. 앞뒤 공백을 뗀다
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=NAME_GUESS_MAX_LENGTH)]
+    # 이름을 짚는 대상. 이번 장면에 나온 인물의 id 다. 엔진은 이 값을 읽지 않는다
+    npc: uuid.UUID | None = None
+
+
 # 선언에 붙는 행동. kind 로 종류를 가른다
-Action = Annotated[CheckAction | TreatAction, Field(discriminator='kind')]
+Action = Annotated[CheckAction | TreatAction | NameAction, Field(discriminator='kind')]
 
 # 저장된 행동(JSON)을 읽는 법. 우리가 쓴 문서다. 모양이 틀렸으면 버그다
 ACTION = TypeAdapter(Action)
 
 
-def read_action(data: dict) -> CheckAction | TreatAction:
+def read_action(data: dict) -> CheckAction | TreatAction | NameAction:
     """선언에 저장된 행동을 읽는다. 모양이 틀리면 ValidationError."""
     return ACTION.validate_python(data)
 

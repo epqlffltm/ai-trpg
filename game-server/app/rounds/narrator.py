@@ -138,6 +138,21 @@ class Verdict:
 
 
 @dataclass(frozen=True)
+class NamingNote:
+    """
+    지목의 결과. 엔진이 정한 것이다. 주사위를 굴리지 않았다.
+
+    맞았으면 진짜 이름(name)이 있다. 틀렸으면 None 이다. 틀린 결과로 정답을 흘리지 않는다.
+    label 은 이번 장면에서 그 인물을 부르던 이름이다. 겨눴거나, 맞힌 인물이 장면에 나왔을 때만 있다.
+    """
+
+    guess: str
+    correct: bool
+    name: str | None = None
+    label: str | None = None
+
+
+@dataclass(frozen=True)
 class DeathSaveNote:
     """죽음의 굴림 한 번. 엔진이 굴린 것이다. 쓰러진 캐릭터가 죽어 가는지, 고비를 넘겼는지, 죽었는지를 알려 준다."""
 
@@ -175,6 +190,8 @@ class Move:
     injuries: list[InjuryNote] = field(default_factory=list)
     # 이 라운드가 닫힐 때 시간이 지나 나은 오래 가는 부상들. 치료로 나은 것은 verdict 의 treatment 에 있다
     healed: list[HealNote] = field(default_factory=list)
+    # 지목하는 행동이면 그 결과. 지목은 판정이 아니라 verdict 와 함께 있지 않다
+    naming: NamingNote | None = None
 
 
 @dataclass(frozen=True)
@@ -395,6 +412,30 @@ def describe_treatment(note: TreatmentNote) -> str:
     return f'{head} 실패: {", ".join(parts)}'
 
 
+# 이름만 맞힌 지목에 붙는 말. 플레이어가 함께 한 주장("범인은")까지 맞은 것이 아니다
+UNSETTLED_CLAIMS = '이름 밖의 주장이 맞는지는 정해지지 않았다'
+
+
+def describe_naming(note: NamingNote) -> str:
+    """
+    지목의 결과를 한 줄로 적는다.
+
+    예: → 지목 맞음: 악역영애의 진짜 이름은 비올레타
+        → 지목 맞음: 비올레타(이)라는 인물이 이 이야기에 있다. 이름 밖의 주장이 맞는지는 정해지지 않았다
+        → 지목 틀림: 악역영애의 진짜 이름은 '로즈'(이)가 아니다
+        → 지목 틀림: '로즈'(은)는 맞는 이름이 아니다
+    """
+    if note.correct:
+        if note.label is None:
+            return f'→ 지목 맞음: {note.name}(이)라는 인물이 이 이야기에 있다. {UNSETTLED_CLAIMS}'
+        if note.label == note.name:
+            return f'→ 지목 맞음: {note.name}'
+        return f'→ 지목 맞음: {note.label}의 진짜 이름은 {note.name}'
+    if note.label is not None:
+        return f"→ 지목 틀림: {note.label}의 진짜 이름은 '{note.guess}'(이)가 아니다"
+    return f"→ 지목 틀림: '{note.guess}'(은)는 맞는 이름이 아니다"
+
+
 def describe_healed(healed: list[HealNote]) -> str:
     """시간이 지나 나은 부상들. 예: [나은 부상: 팔 골절(후유증: 굽은 팔), 다리 부상]"""
     names = [note.name + (f'(후유증: {note.aftermath})' if note.aftermath else '') for note in healed]
@@ -451,12 +492,12 @@ def describe_death_save(note: DeathSaveNote) -> str:
 def describe_move(move: Move) -> str:
     """
     한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, 치료였으면 그 결과를,
-    HP 가 바뀌었으면 그 뒤에 붙인다.
+    HP 가 바뀌었으면 그 뒤에 붙인다. 지목이었으면 그 결과를 붙인다.
     죽음의 굴림을 굴렸으면 그 뒤에, 시간이 지나 나은 부상이 있으면 그 뒤에, 입고 있는 부상이 있으면 맨 뒤에 붙인다.
     """
     parts = [f'{move.character_name}: {move.content or describe_idle(move)}']
     # 선언을 냈지만 앞사람의 치료가 실패해 그 자리에서 죽었다. 선언한 일을 하지 못했다
-    if move.content and move.dead and move.verdict is None:
+    if move.content and move.dead and move.verdict is None and move.naming is None:
         parts.append('(하려던 일을 하기 전에 죽었다)')
     if move.verdict is not None:
         parts.append(describe_verdict(move.verdict))
@@ -466,6 +507,8 @@ def describe_move(move: Move) -> str:
             parts.append(describe_impact(move.verdict.impact))
         if move.verdict.npc_impact is not None:
             parts.append(describe_npc_impact(move.verdict.npc_impact))
+    if move.naming is not None:
+        parts.append(describe_naming(move.naming))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
     if move.healed:
