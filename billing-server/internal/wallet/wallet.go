@@ -18,6 +18,7 @@ package wallet
 
 import (
 	"errors"
+	"regexp"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,9 +34,24 @@ const MaxAmount credit.Amount = 1_000_000_000_000
 var (
 	// ErrInvalidAmount 는 양이 0 이하이거나 MaxAmount 보다 크다는 오류다.
 	ErrInvalidAmount = errors.New("크레딧의 양은 1 이상이어야 하고 한 번에 다룰 수 있는 양을 넘을 수 없습니다")
+	// ErrInvalidGrantKey 는 한 번만 주는 지급의 이름이 받는 모양이 아니라는 오류다.
+	ErrInvalidGrantKey = errors.New("지급의 이름은 영문 소문자, 숫자, 밑줄, 붙임표로 된 1자에서 64자여야 합니다")
+	// ErrAlreadyGranted 는 이 사용자가 그 이름의 지급을 이미 받았다는 오류다. 이 오류가 나면 아무것도 바뀌지 않는다.
+	ErrAlreadyGranted = errors.New("이미 받은 크레딧입니다")
 	// ErrInsufficient 는 쓰려는 양이 가진 것보다 많다는 오류다. 이 오류가 나면 아무것도 바뀌지 않는다.
 	ErrInsufficient = errors.New("크레딧이 모자랍니다")
 )
+
+// grantKeyPattern 은 한 번만 주는 지급의 이름으로 받는 모양이다. DB 에 그대로 적히므로 글자를 좁게 받는다.
+var grantKeyPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
+
+// Grant 는 방금 준 무료 크레딧이다.
+type Grant struct {
+	// Amount 는 준 양이다.
+	Amount credit.Amount
+	// ExpiresAt 은 이 크레딧이 사라지는 시각이다.
+	ExpiresAt time.Time
+}
 
 // Kind 는 크레딧의 종류다. DB 의 ledger_entries.kind 에 이 글자가 그대로 적힌다.
 type Kind string

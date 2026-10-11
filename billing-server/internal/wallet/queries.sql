@@ -25,9 +25,21 @@ WHERE user_id = sqlc.arg(user_id);
 
 -- name: CreateFreeGrant :one
 -- 무료 크레딧의 지급 묶음을 만든다. 처음에는 준 만큼 남아 있다.
-INSERT INTO free_grants (user_id, amount, remaining, expires_at, created_at)
-VALUES (sqlc.arg(user_id), sqlc.arg(amount), sqlc.arg(amount), sqlc.arg(expires_at), sqlc.arg(now))
+-- grant_key 는 한 번만 주는 지급의 이름이다. 몇 번이고 줄 수 있는 지급이면 NULL 이다.
+INSERT INTO free_grants (user_id, amount, remaining, expires_at, grant_key, created_at)
+VALUES (
+    sqlc.arg(user_id), sqlc.arg(amount), sqlc.arg(amount), sqlc.arg(expires_at),
+    sqlc.narg(grant_key), sqlc.arg(now)
+)
 RETURNING id;
+
+-- name: HasFreeGrantWithKey :one
+-- 이 사용자가 그 이름의 지급을 받은 적이 있는지 본다. 다 썼거나 사라진 것도 받은 것이다.
+-- 지갑의 줄을 잠근 뒤에 부른다.
+SELECT EXISTS (
+    SELECT 1 FROM free_grants
+    WHERE user_id = sqlc.arg(user_id) AND grant_key = sqlc.arg(grant_key)::TEXT
+);
 
 -- name: ListLiveFreeGrants :many
 -- 아직 사라지지 않았고 남은 것이 있는 지급 묶음을, 먼저 사라지는 것부터 읽는다.

@@ -68,13 +68,15 @@ func run() error {
 	wallets := newWallet(pool, settings)
 	orders := newOrders(pool, wallets)
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		DB:            pool,
-		Verifier:      newVerifier(settings),
-		Wallet:        wallets,
-		Orders:        orders,
-		Notifier:      orders,
-		WebhookSecret: settings.WebhookSecret,
-		Now:           time.Now,
+		DB:             pool,
+		Verifier:       newVerifier(settings),
+		Wallet:         wallets,
+		Welcome:        wallets,
+		WelcomeCredits: settings.WelcomeCredits,
+		Orders:         orders,
+		Notifier:       orders,
+		WebhookSecret:  settings.WebhookSecret,
+		Now:            time.Now,
 	})
 	return serve(ctx, newServer(settings, router))
 }
