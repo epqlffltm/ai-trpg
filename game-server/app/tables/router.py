@@ -22,6 +22,14 @@ from app.personas import saving
 from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
 from app.tables import deaths, injuries, replacements, rolls, service, sheets, styles
+from app.tables.errors import (
+    MemberNotFoundError,
+    NotHostError,
+    TableConflictError,
+    TableNotFoundError,
+    TableOptionError,
+    WrongPasswordError,
+)
 from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 from app.tables.schemas import (
     CharacterOut,
@@ -40,14 +48,6 @@ from app.tables.schemas import (
     TableDetail,
     TablePage,
     TableSummary,
-)
-from app.tables.service import (
-    MemberNotFoundError,
-    NotHostError,
-    TableConflictError,
-    TableNotFoundError,
-    TableOptionError,
-    WrongPasswordError,
 )
 
 router = APIRouter(prefix='/tables', tags=['tables'])

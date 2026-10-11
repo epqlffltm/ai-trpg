@@ -48,7 +48,7 @@ from app.rounds import router as rounds
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.narrator_setup import build_narrator
 from app.tables import router as tables
-from app.tables.service import (
+from app.tables.errors import (
     MemberNotFoundError,
     NotHostError,
     TableConflictError,

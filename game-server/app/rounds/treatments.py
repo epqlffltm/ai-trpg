@@ -20,7 +20,7 @@ from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.effects import Judging, member_effect, npc_effect
 from app.tables import injuries, npcs, sheets
-from app.tables import service as tables
+from app.tables import state as table_state
 from app.tables.models import TableMember
 
 
@@ -52,7 +52,7 @@ def find_patient(judging: Judging, action: TreatAction) -> Patient:
             return Patient(holder={'entry_id': str(action.npc), 'name': ''}, rows=[], alive=False)
         holder = {'entry_id': str(found.entry_id), 'name': found.name}
         return Patient(holder=holder, rows=found.npc.injuries, npc=found, alive=not npcs.is_dead(found.npc))
-    member = tables.find_member(judging.table, action.target)
+    member = table_state.find_member(judging.table, action.target)
     if member is None or member.sheet is None:
         return Patient(holder={'user_id': str(action.target), 'character_name': ''}, rows=[], alive=False)
     holder = {'user_id': str(member.user_id), 'character_name': member.character_name}

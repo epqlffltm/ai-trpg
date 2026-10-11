@@ -24,7 +24,7 @@ from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict
 from app.rounds.models import Declaration, Round
 from app.rounds.state import find_declaration, is_down, rules_of
 from app.tables import npcs, sheets
-from app.tables import service as tables
+from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember
 
 
@@ -91,7 +91,7 @@ def accept_check(
     fault = actions.find_fault(ruleset, action)
     if fault is not None:
         raise ActionNotInRulesError(fault)
-    if action.target is not None and tables.find_member(table, action.target) is None:
+    if action.target is not None and table_state.find_member(table, action.target) is None:
         raise ActionTargetError('target')
     if action.npc is not None:
         require_npc_target(cast, action.npc, action.aim)
@@ -112,7 +112,7 @@ def patient_rows(table: GameTable, action: TreatAction, cast: list[CastMember]) 
         if npcs.is_dead(member.npc):
             raise RoundConflictError(Conflict.NPC_DEAD)
         return member.npc.injuries
-    patient = tables.find_member(table, action.target)
+    patient = table_state.find_member(table, action.target)
     if patient is None:
         raise ActionTargetError('target')
     if sheets.is_dead(patient):

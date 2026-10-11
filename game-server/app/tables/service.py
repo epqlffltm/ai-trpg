@@ -4,8 +4,14 @@
 테이블을 만들고, 로비에서 찾고, 들어가고, 캐릭터를 정하고, 나가고, 시작하고, 끝낸다.
 
 HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장할지(커밋)는 여기서 정한다.
+판단과 계산은 작은 모듈에 있고, 여기는 그것들을 차례로 부르고 저장한다.
+  - app/tables/errors.py: 거절되는 까닭들
+  - app/tables/state.py: 자리와 방장, 테이블의 상태를 보는 판단
+  - app/tables/building.py: 테이블 만들기(초대 코드, 정원의 상한, 문체, 비밀번호)
+  - app/tables/seating.py: 앉기, 끝내기, 다음 방장 정하기
+  - app/tables/characters.py: 캐릭터 정하기와 시작할 때의 명단
 
-규칙 셋이 이 파일 전체에 걸쳐 있다.
+규칙 몇 가지가 테이블의 일 전체에 걸쳐 있다.
   - 테이블은 앉은 사람만 본다. 앉지 않은 사람에게는 "없는 테이블"이다.
     로비에 보이기로 한 테이블만은 누구나 목록에서 본다. 그래도 안은 앉아야 보인다.
   - 테이블을 바꾸는 일은 모두 테이블의 행을 잠그고 한다. 잠근 뒤에 확인하고, 그다음에 바꾼다.
@@ -17,399 +23,31 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
   - 진행 중에는 캐릭터를 바꾸지 못한다. 캐릭터가 죽은 사람만 새 캐릭터를 들인다(app/tables/replacements.py).
 """
 
-import asyncio
-import enum
-import secrets
 import uuid
-from dataclasses import dataclass
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
-from app.assets.models import TABLE_MAX_PLAYERS, CharacterMode, NarrationStyle, Scenario, ScenarioVersion
+from app.assets.models import Scenario, ScenarioVersion
 from app.assets.scenarios import repository as versions
-from app.assets.scenarios.snapshot import Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
-from app.engine.sheet import abilities_fit
 from app.events import recorder
-from app.events.models import EventType, TableEvent
+from app.events.models import EventType
 from app.listings import service as listings
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
-from app.tables import npcs, passwords, repository, sheets
-from app.tables.models import GameTable, TableMember, TableRoll, TableStatus
+from app.tables import npcs, repository, sheets
+from app.tables.building import build_table, check_table_password, hash_table_password, new_invite_code, seat_limit
+from app.tables.characters import accept_character, roster, write_character
+from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
+from app.tables.models import GameTable, TableMember, TableStatus
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
-
-
-class TableNotFoundError(Exception):
-    """그런 테이블이 없다. 앉지 않은 사람이 찾은 경우, 초대 코드가 틀린 경우도 이 예외다."""
-
-
-class MemberNotFoundError(Exception):
-    """그 사람은 이 테이블에 앉아 있지 않다."""
-
-
-class NotHostError(Exception):
-    """방장만 할 수 있는 일을 방장이 아닌 참가자가 하려 했다."""
-
-
-class WrongPasswordError(Exception):
-    """테이블의 비밀번호가 틀렸다. 비밀번호가 걸린 테이블에 비밀번호 없이 들어오려 한 경우도 이 예외다."""
-
-
-class Conflict(enum.StrEnum):
-    """요청은 맞지만 테이블의 지금 상태와 부딪히는 이유."""
-
-    # 자리가 다 찼다
-    TABLE_FULL = 'table_full'
-    # 모집 중이 아니다. 들어오기, 캐릭터 정하기, 시작은 모집 중에만 된다
-    NOT_RECRUITING = 'not_recruiting'
-    # 테이블이 이미 끝났다
-    ALREADY_ENDED = 'already_ended'
-    # 이미 앉아 있다
-    ALREADY_SEATED = 'already_seated'
-    # 다른 사람이 그 프리젠을 가져갔다
-    PREGEN_TAKEN = 'pregen_taken'
-    # 이 테이블에서 허용하지 않는 방식으로 캐릭터를 정하려 했다
-    CHARACTER_MODE_NOT_ALLOWED = 'character_mode_not_allowed'
-    # 캐릭터를 만들지 않은 사람이 있다. 받을 시트가 없는 사람이 있는 경우도 이 이유다
-    CHARACTERS_MISSING = 'characters_missing'
-    # 프리젠만 허용한 테이블인데 정원이 프리젠의 수보다 많다
-    PREGENS_TOO_FEW = 'pregens_too_few'
-    # 방장은 자신을 내보낼 수 없다. 나가기를 쓴다
-    CANNOT_KICK_SELF = 'cannot_kick_self'
-    # 이 등급의 테이블은 혼자서만 할 수 있다(성인 인증이 생길 때까지)
-    SOLO_ONLY = 'solo_only'
-    # 이 테이블에서 이미 굴렸다. 한 사람은 한 번 굴린다. 방장이 "한 번 더"를 줘야 다시 굴린다
-    ALREADY_ROLLED = 'already_rolled'
-    # 아직 굴리지 않았다. 굴린 점수가 있어야 능력치에 놓을 수 있고, "한 번 더"를 받을 수 있다
-    NOT_ROLLED = 'not_rolled'
-    # 이 테이블에서는 다시 굴리게 해 줄 수 없다. 시나리오의 제작자가 허락하지 않았다
-    REROLL_NOT_ALLOWED = 'reroll_not_allowed'
-    # 이미 "한 번 더"를 줬고, 그 사람이 아직 쓰지 않았다
-    REROLL_ALREADY_GRANTED = 'reroll_already_granted'
-    # 진행 중인 테이블이 아니다. 캐릭터를 보내는 것은 진행 중에만 된다
-    NOT_PLAYING = 'not_playing'
-    # 캐릭터가 쓰러져 있지 않다. 멀쩡한 캐릭터는 보낼 수 없다
-    CHARACTER_NOT_DOWNED = 'character_not_downed'
-    # 캐릭터가 이미 죽었다
-    CHARACTER_DEAD = 'character_dead'
-    # 캐릭터가 살아 있다. 진행 중에는 캐릭터가 죽은 사람만 새 캐릭터를 정한다
-    CHARACTER_ALIVE = 'character_alive'
-
-
-class TableConflictError(Exception):
-    """테이블의 지금 상태와 부딪힌다. reason 이 이유다."""
-
-    def __init__(self, reason: Conflict) -> None:
-        super().__init__(reason)
-        self.reason = reason
-
-
-class TableOptionError(Exception):
-    """
-    고른 것이 판에 없다. 없는 스타팅이나 없는 프리젠을 골랐거나, 판이 허용하지 않는 캐릭터 방식을 골랐다.
-
-    직접 정한 능력치가 이 테이블의 규칙에 맞지 않을 때도 이 오류다.
-    field 는 입력의 어느 칸이 틀렸는지다(opening_index, pregen_index, character_modes, abilities).
-    """
-
-    def __init__(self, field: str) -> None:
-        super().__init__(field)
-        self.field = field
-
-
-# --- 판단하는 작은 함수들. DB 를 건드리지 않는다 ---
-
-
-def new_invite_code() -> str:
-    """추측할 수 없는 초대 코드를 만든다. 9 바이트를 글자로 바꾸면 12 글자다."""
-    return secrets.token_urlsafe(9)
-
-
-def seat_limit(viewer: AccessClaims, snapshot: Snapshot) -> int:
-    """
-    이 사람이 이 판으로 테이블을 만들 때 둘 수 있는 가장 큰 정원.
-
-    볼 수 없는 등급의 판이면(지금은 성인용 전부) 혼자서만 한다. 제작자가 자기 것을 시험해 보는 용도다.
-    성인 인증이 생기면 allowed_ratings 가 성인용을 돌려주고, 이 제한은 저절로 풀린다.
-    """
-    if snapshot.rating in listings.allowed_ratings(viewer):
-        return TABLE_MAX_PLAYERS
-    return 1
-
-
-def find_member(table: GameTable, user_id: uuid.UUID) -> TableMember | None:
-    """테이블에 앉은 사람 중에서 이 사람을 찾는다."""
-    return next((member for member in table.members if member.user_id == user_id), None)
-
-
-def require_member(table: GameTable | None, user_id: uuid.UUID) -> TableMember:
-    """이 사람이 이 테이블에 앉아 있는지 확인한다. 테이블이 없거나 앉지 않았으면 TableNotFoundError."""
-    member = find_member(table, user_id) if table else None
-    if member is None:
-        raise TableNotFoundError
-    return member
-
-
-def require_host(table: GameTable, user_id: uuid.UUID) -> None:
-    """이 사람이 방장인지 확인한다. 아니면 NotHostError."""
-    if table.host_id != user_id:
-        raise NotHostError
-
-
-def require_recruiting(table: GameTable) -> None:
-    """테이블이 모집 중인지 확인한다. 아니면 TableConflictError."""
-    if table.status != TableStatus.RECRUITING:
-        raise TableConflictError(Conflict.NOT_RECRUITING)
-
-
-def require_choosing(table: GameTable, member: TableMember) -> None:
-    """
-    이 사람이 캐릭터를 정할 수 있는 때인지 확인한다. 아니면 TableConflictError.
-
-    모집 중에는 누구나 정한다. 진행 중에는 자기 캐릭터가 죽은 사람만 새 캐릭터를 정한다.
-    끝난 테이블에서는 아무도 정하지 못한다.
-    주사위를 굴리는 것과 "한 번 더"를 받는 것이 이 조건을 쓴다. 둘 다 캐릭터를 정하는 일의 앞걸음이다.
-    """
-    if table.status == TableStatus.RECRUITING:
-        return
-    if table.status != TableStatus.PLAYING:
-        raise TableConflictError(Conflict.NOT_RECRUITING)
-    if not sheets.is_dead(member):
-        raise TableConflictError(Conflict.CHARACTER_ALIVE)
-
-
-def require_not_ended(table: GameTable) -> None:
-    """테이블이 끝나지 않았는지 확인한다. 끝났으면 TableConflictError."""
-    if table.status == TableStatus.ENDED:
-        raise TableConflictError(Conflict.ALREADY_ENDED)
-
-
-def choose_narration_style(snapshot: Snapshot, chosen: NarrationStyle | None) -> NarrationStyle:
-    """방장이 고른 문체. 고르지 않았으면(None) 판의 추천 문체다."""
-    return chosen or snapshot.narration_style
-
-
-def require_pregen_free(table: GameTable, member: TableMember, pregen_index: int) -> None:
-    """
-    이 프리젠을 고를 수 있는지 확인한다. 못 고르면 TableConflictError.
-
-    다른 사람이 가져갔으면 못 고른다.
-    이 테이블에서 시트를 받은 적이 있는 프리젠도 못 고른다. 그 캐릭터가 죽었어도, 자기 캐릭터였어도 그렇다.
-    죽은 인물이 다시 걸어 들어오지 못한다. 시작 전에는 시트가 없으므로 앞의 조건만 남는다.
-    """
-    others = [other for other in table.members if other is not member]
-    if any(other.pregen_index == pregen_index for other in others):
-        raise TableConflictError(Conflict.PREGEN_TAKEN)
-    if sheets.pregen_has_sheet(table, pregen_index):
-        raise TableConflictError(Conflict.PREGEN_TAKEN)
-
-
-def resolve_character(snapshot: Snapshot, data: CharacterUpdate) -> tuple[str, str]:
-    """
-    입력에서 캐릭터의 이름과 설명을 정한다. 없는 프리젠을 골랐으면 TableOptionError.
-
-    프리젠을 골랐으면 프리젠의 것이 바탕이고, 함께 보낸 칸은 보낸 것으로 고쳐 쓴다.
-    """
-    if data.pregen_index is None:
-        return data.name, data.description or ''
-
-    if data.pregen_index >= len(snapshot.pregens):
-        raise TableOptionError('pregen_index')
-    pregen = snapshot.pregens[data.pregen_index]
-    name = data.name if data.name is not None else pregen.name
-    description = data.description if data.description is not None else pregen.description
-    return name, description
-
-
-def accept_abilities(snapshot: Snapshot, data: CharacterUpdate, roll: TableRoll | None) -> dict[str, int] | None:
-    """
-    플레이어가 정한 능력치를 이 테이블의 규칙과 견주어 보고, 자리에 적을 값을 돌려준다. 능력치를 적지 않았으면 None.
-    roll 은 이 사람이 지금 정하는 캐릭터를 위해 굴려 둔 것이다(app/tables/sheets.py 의 find_fresh_roll).
-
-    규칙의 능력치가 빠짐없이 있어야 하고, 점수가 규칙의 범위 안이어야 한다. 아니면 TableOptionError.
-    거기에 방식이 거는 제한을 지켜야 한다. 점수제는 총점 안이어야 하고, 주사위는 굴려 둔 점수를 그대로 써야 한다.
-    직접 적기는 제한이 없다.
-    무엇이 틀렸는지는 가르지 않는다. 총점과 값표, 굴린 점수는 응답에 있어서 보내기 전에 견주어 볼 수 있다.
-
-    주사위 방식인데 아직 굴리지 않았으면 TableConflictError 다. 보낸 값이 틀린 것이 아니라 순서가 틀린 것이다.
-    """
-    if data.abilities is None:
-        return None
-    mode = data.chosen_mode
-    if mode == CharacterMode.ROLLED and roll is None:
-        raise TableConflictError(Conflict.NOT_ROLLED)
-    ruleset = snapshot.rulebook.rules
-    if not abilities_fit(ruleset, data.abilities) or not sheets.obeys_mode(ruleset, mode, data.abilities, roll):
-        raise TableOptionError('abilities')
-    return dict(data.abilities)
-
-
-@dataclass(frozen=True)
-class ChosenCharacter:
-    """받아들인 캐릭터. 입력을 이 테이블과 견주어 본 뒤의 값이다. 자리에 그대로 적는다."""
-
-    name: str
-    description: str
-    mode: CharacterMode
-    pregen_index: int | None
-    abilities: dict[str, int] | None
-
-
-def accept_character(
-    table: GameTable, snapshot: Snapshot, member: TableMember, data: CharacterUpdate
-) -> ChosenCharacter:
-    """
-    캐릭터를 정하는 입력을 이 테이블과 견주어 보고, 자리에 적을 값을 돌려준다. 자리를 고치지는 않는다.
-
-    이 테이블에서 허용하지 않는 방식이거나, 고를 수 없는 프리젠이거나,
-    주사위 방식인데 이 캐릭터를 위해 아직 굴리지 않았으면 TableConflictError.
-    없는 프리젠이거나, 직접 정한 능력치가 이 테이블의 규칙에 맞지 않으면 TableOptionError.
-
-    모집 중에 캐릭터를 정할 때와 진행 중에 새 캐릭터를 들일 때(app/tables/replacements.py)가 함께 쓴다.
-    받아들이는 조건은 같다. 다른 것은 언제 되느냐와, 받아들인 뒤에 무슨 일이 일어나느냐다.
-    """
-    if data.chosen_mode not in table.character_modes:
-        raise TableConflictError(Conflict.CHARACTER_MODE_NOT_ALLOWED)
-    name, description = resolve_character(snapshot, data)
-    abilities = accept_abilities(snapshot, data, sheets.find_fresh_roll(table, member))
-    if data.pregen_index is not None:
-        require_pregen_free(table, member, data.pregen_index)
-    return ChosenCharacter(
-        name=name,
-        description=description,
-        mode=data.chosen_mode,
-        pregen_index=data.pregen_index,
-        abilities=abilities,
-    )
-
-
-def write_character(member: TableMember, chosen: ChosenCharacter) -> None:
-    """받아들인 캐릭터를 자리에 적는다. 앞의 캐릭터가 있었으면 통째로 바뀐다."""
-    member.character_name = chosen.name
-    member.character_description = chosen.description
-    member.character_mode = chosen.mode
-    member.pregen_index = chosen.pregen_index
-    member.abilities = chosen.abilities
-
-
-def take_seat(table: GameTable, user_id: uuid.UUID) -> None:
-    """
-    테이블에 앉는다. 모집 중이 아니거나, 이미 앉아 있거나, 자리가 없으면 TableConflictError.
-
-    테이블을 잠근 뒤에 부른다. 초대 코드로 들어오든 로비에서 들어오든 앉는 규칙은 같다.
-    """
-    require_recruiting(table)
-    if find_member(table, user_id) is not None:
-        raise TableConflictError(Conflict.ALREADY_SEATED)
-    if len(table.members) >= table.capacity:
-        raise TableConflictError(Conflict.TABLE_FULL)
-    table.members.append(TableMember(user_id=user_id))
-
-
-def end(table: GameTable) -> None:
-    """테이블을 끝낸다."""
-    table.status = TableStatus.ENDED
-    table.ended_at = func.now()
-
-
-def hand_over(table: GameTable) -> EventType | None:
-    """
-    방장이 떠난 테이블의 다음 방장을 정한다. 남은 사람 중 가장 먼저 들어온 사람이다.
-
-    남은 사람이 없으면 테이블을 끝낸다.
-    무슨 일이 일어났는지를 이벤트의 종류로 돌려준다. 이미 끝난 테이블에서 마지막 사람이 나갔으면 아무 일도 없다(None).
-    """
-    if table.members:
-        table.host_id = table.members[0].user_id
-        return EventType.HOST_CHANGED
-    if table.status != TableStatus.ENDED:
-        end(table)
-        return EventType.TABLE_ENDED
-    return None
-
-
-def describe_sheet(member: TableMember) -> dict | None:
-    """시작할 때의 시트를 이벤트에 적을 모양으로 바꾼다. 시트가 없으면 None."""
-    if member.sheet is None:
-        return None
-    return {'abilities': member.sheet.abilities, 'max_hp': member.sheet.max_hp}
-
-
-def roster(table: GameTable) -> list[dict]:
-    """
-    앉은 사람과 캐릭터 이름, 시작할 때의 시트의 목록. 이벤트에 적을 모양이다.
-
-    시트를 함께 적어 둔다. 뒤에 HP 가 바뀐 일들이 이벤트로 쌓이므로, 처음의 값이 기록에 있어야 과정을 따라갈 수 있다.
-    """
-    return [
-        {'user_id': str(member.user_id), 'character_name': member.character_name, 'sheet': describe_sheet(member)}
-        for member in table.members
-    ]
-
-
-def build_table(
-    host_id: uuid.UUID,
-    version: ScenarioVersion,
-    snapshot: Snapshot,
-    data: TableCreate,
-    modes: list[CharacterMode],
-    password_hash: str | None,
-) -> GameTable:
-    """
-    판에서 테이블 객체를 만든다. 아직 저장하지 않는다.
-
-    판의 내용을 통째로 복사해 온다. 옛 형식의 판이면 지금의 모양으로 올린 것을 복사한다.
-    만든 사람이 방장이자 첫 참가자다. modes 는 이 테이블에서 허용할 캐릭터 방식이다.
-    password_hash 는 비밀번호를 계산해 둔 값이다. 비밀번호가 없으면 None 이다.
-    """
-    return GameTable(
-        host_id=host_id,
-        version_id=version.id,
-        title=snapshot.title,
-        # mode='json': UUID 같은 값을 JSON 에 넣을 수 있는 글자로 바꾼다
-        content=snapshot.model_dump(mode='json'),
-        opening_index=data.opening_index,
-        capacity=data.capacity,
-        character_modes=modes,
-        rating=snapshot.rating,
-        invite_code=new_invite_code(),
-        is_public=data.is_public,
-        password_hash=password_hash,
-        narration_style=choose_narration_style(snapshot, data.narration_style),
-        members=[TableMember(user_id=host_id)],
-    )
-
-
-# --- 비밀번호. 계산이 느려서 다른 요청을 막지 않게 따로 돌린다 ---
-
-
-async def hash_table_password(password: str | None) -> str | None:
-    """
-    비밀번호를 저장할 모양으로 바꾼다. 비밀번호가 없으면 None.
-
-    to_thread: 계산을 다른 스레드에서 돌린다. 0.2 초 동안 서버가 다른 요청을 받지 못하는 일을 막는다.
-    """
-    if password is None:
-        return None
-    return await asyncio.to_thread(passwords.hash_password, password)
-
-
-async def check_table_password(table: GameTable, password: str | None) -> None:
-    """
-    테이블의 비밀번호가 맞는지 확인한다. 틀렸으면 WrongPasswordError.
-
-    비밀번호가 없는 테이블이면 무엇을 보내든 통과한다.
-    """
-    if table.password_hash is None:
-        return
-    if password is None or not await asyncio.to_thread(passwords.verify_password, password, table.password_hash):
-        raise WrongPasswordError
-
+from app.tables.seating import end, hand_over, record_hand_over, take_seat
+from app.tables.state import find_member, require_host, require_member, require_not_ended, require_recruiting
 
 # --- 만들기 ---
 
@@ -592,18 +230,6 @@ async def set_character(
     chosen = accept_character(table, read_snapshot(table.content), member, data)
     write_character(member, chosen)
     return await save(session, table)
-
-
-def record_hand_over(session: AsyncSession, table: GameTable, outcome: EventType | None, left: TableEvent) -> None:
-    """
-    방장이 나간 뒤에 일어난 일(hand_over 가 돌려준 것)을 이벤트로 적는다. 원인은 방장이 나간 이벤트다.
-
-    사람이 한 일이 아니므로 actor_id 가 없다.
-    """
-    if outcome == EventType.HOST_CHANGED:
-        recorder.record(session, table, outcome, payload={'user_id': str(table.host_id)}, cause=left)
-    elif outcome == EventType.TABLE_ENDED:
-        recorder.record(session, table, outcome, cause=left)
 
 
 async def leave_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> None:
