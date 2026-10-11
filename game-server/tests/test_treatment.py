@@ -26,7 +26,8 @@ from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import UPGRADES, read_snapshot, upgrade_from_14
+from app.assets.scenarios.snapshot import read_snapshot
+from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_14
 from app.engine.action import ActionKind, CheckAction, TreatAction, find_treat_fault, read_action
 from app.engine.dice import ScriptedDice
 from app.engine.injury import NO_HINDRANCE, Hindrance, ends_after, find_injury, roll_aftermath

@@ -8,18 +8,16 @@
 
 판은 고치지 않는다. 모양이 바뀌어도 이미 굳힌 문서는 옛 모양 그대로 DB 에 남는다.
 그래서 읽을 때 지금의 모양으로 올려 읽는다(read_snapshot). 저장된 문서는 건드리지 않는다.
+옛 형식을 한 단계씩 올리는 함수들은 app/assets/scenarios/upgrades.py 에 있다. 형식을 올릴 때는 그 파일의 설명을 따른다.
 
 여기의 함수는 DB 를 모른다. 이미 읽어 온 객체를 받아 모양만 바꾼다.
 """
 
 import uuid
-from collections.abc import Callable
 
 from pydantic import BaseModel, model_validator
 
 from app.assets.models import (
-    DEFAULT_NARRATION_STYLE,
-    TABLE_MAX_PLAYERS,
     CharacterMode,
     Lorebook,
     LoreEntry,
@@ -30,9 +28,9 @@ from app.assets.models import (
     Scenario,
     World,
 )
+from app.assets.scenarios.upgrades import UPGRADES
 from app.engine.ruleset import Ruleset
 from app.engine.sheet import Sheet
-from app.engine.templates import SRD5
 
 # 문서의 모양이 바뀔 때 올리는 번호. 옛 판을 읽는 코드가 어느 모양인지 알 수 있다.
 #   1: 도입부가 하나다(opening)
@@ -52,11 +50,6 @@ from app.engine.templates import SRD5
 #  14: 규칙에 부상(injuries), 부상 표(injury_table), 부상 표를 굴리는 때(injury_triggers), 노려 치기(called_shot)가 있다
 #  15: 규칙에 치료(treatment)가 있고, 부상에 치료의 난이도(treat_difficulty)와 줄이는 라운드(treat_rounds)가 있다
 SNAPSHOT_FORMAT = 15
-
-# 시트가 없던 때의 판을 읽을 때 채우는 숫자. 모든 능력치가 이 점수이고, 최대 HP 가 이 값이다.
-# 그때의 규칙은 SRD5 템플릿뿐이었다. 10 은 그 규칙에서 보정이 0 인 점수다
-BASELINE_SCORE = 10
-BASELINE_MAX_HP = 10
 
 
 class EntrySnapshot(BaseModel):
@@ -244,264 +237,6 @@ def build_snapshot(
         world=snapshot_world(world) if world else None,
         lorebooks=[snapshot_lorebook(lorebook, entries) for lorebook, entries in lorebooks],
     )
-
-
-def upgrade_from_1(document: dict) -> dict:
-    """형식 1 의 문서를 형식 2 로 올린다. 하나뿐이던 도입부가 첫 번째 스타팅이 된다."""
-    upgraded = {key: value for key, value in document.items() if key != 'opening'}
-    upgraded['openings'] = [document['opening']]
-    upgraded['format'] = 2
-    return upgraded
-
-
-def upgrade_from_2(document: dict) -> dict:
-    """
-    형식 2 의 문서를 형식 3 으로 올린다.
-
-    그때는 추천 인원과 프리젠이 없었다. 추천 인원은 "몇 명이든 된다"로, 프리젠은 없는 것으로 읽는다.
-    """
-    upgraded = dict(document)
-    upgraded['recommended_players'] = {'min': 1, 'max': TABLE_MAX_PLAYERS}
-    upgraded['pregens'] = []
-    upgraded['format'] = 3
-    return upgraded
-
-
-def upgrade_from_3(document: dict) -> dict:
-    """
-    형식 3 의 문서를 형식 4 로 올린다.
-
-    그때는 룰북에 규칙이 없었다. 그때 만든 룰북이 지금 받았을 규칙(SRD5 템플릿)으로 읽는다.
-    DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 내놓은 템플릿의 값은 고치지 않으므로 읽을 때마다 같다.
-
-    지금의 SRD5 에는 나중에 생긴 칸(magnitudes, hp_ability, point_buy, score_roll, death_save, 부상의 칸들)도 들어 있다.
-    뒤의 단계가 같은 값으로 다시 채우므로 결과는 같다.
-    """
-    upgraded = dict(document)
-    upgraded['rulebook'] = {**document['rulebook'], 'rules': SRD5.model_dump(mode='json')}
-    upgraded['format'] = 4
-    return upgraded
-
-
-def baseline_sheet(rules: dict) -> dict:
-    """규칙의 능력치를 모두 기준 점수로 채운 시트를 문서로 만든다. 시트가 없던 판을 읽을 때 쓴다."""
-    abilities = {ability['key']: BASELINE_SCORE for ability in rules['abilities']}
-    return {'abilities': abilities, 'max_hp': BASELINE_MAX_HP}
-
-
-def upgrade_from_4(document: dict) -> dict:
-    """
-    형식 4 의 문서를 형식 5 로 올린다.
-
-    그때는 캐릭터에 숫자가 없었고, 프리젠을 고를 수도 직접 만들 수도 있었다.
-    두 방식을 모두 허용한 것으로 읽고, 프리젠의 시트와 기본 시트는 기준 시트로 읽는다.
-    """
-    sheet = baseline_sheet(document['rulebook']['rules'])
-    upgraded = dict(document)
-    upgraded['pregens'] = [{**pregen, 'sheet': sheet} for pregen in document['pregens']]
-    # 그때 있던 방식은 이 둘이다. 글자 그대로 적는다. 방식이 나중에 늘어도 옛 판이 허용한 것은 늘지 않는다
-    upgraded['character_modes'] = ['pregen', 'custom']
-    upgraded['default_sheet'] = sheet
-    upgraded['format'] = 5
-    return upgraded
-
-
-def upgrade_from_5(document: dict) -> dict:
-    """
-    형식 5 의 문서를 형식 6 으로 올린다.
-
-    그때는 규칙에 양의 등급이 없었다. 그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 등급으로 읽는다.
-    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
-    """
-    magnitudes = SRD5.model_dump(mode='json')['magnitudes']
-    rulebook = document['rulebook']
-    upgraded = dict(document)
-    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'magnitudes': magnitudes}}
-    upgraded['format'] = 6
-    return upgraded
-
-
-def upgrade_from_6(document: dict) -> dict:
-    """
-    형식 6 의 문서를 형식 7 로 올린다.
-
-    그때는 규칙에 최대 HP 에 닿는 능력치가 없었다. 그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 것으로 읽는다.
-    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
-
-    플레이어가 능력치를 정하는 방식도 없었다. 그 방식에 쓰는 값(player_made_hp)은 없는 것으로 읽는다.
-    """
-    rulebook = document['rulebook']
-    upgraded = dict(document)
-    upgraded['player_made_hp'] = None
-    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'hp_ability': SRD5.hp_ability}}
-    upgraded['format'] = 7
-    return upgraded
-
-
-def upgrade_from_7(document: dict) -> dict:
-    """
-    형식 7 의 문서를 형식 8 로 올린다.
-
-    그때는 규칙에 점수제가 없었다. 그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 것으로 읽는다.
-    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
-    규칙에 점수제가 있다고 그 판에서 점수제를 쓸 수 있는 것은 아니다. 판이 허용한 방식(character_modes)은 그대로다.
-    """
-    point_buy = SRD5.model_dump(mode='json')['point_buy']
-    rulebook = document['rulebook']
-    upgraded = dict(document)
-    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'point_buy': point_buy}}
-    upgraded['format'] = 8
-    return upgraded
-
-
-def upgrade_from_8(document: dict) -> dict:
-    """
-    형식 8 의 문서를 형식 9 로 올린다.
-
-    그때는 규칙에 점수를 주사위로 정하는 법이 없었다. 그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 것으로 읽는다.
-    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
-    규칙에 그 법이 있다고 그 판에서 주사위로 정할 수 있는 것은 아니다. 판이 허용한 방식(character_modes)은 그대로다.
-
-    주사위로 정하는 방식이 없었으니 다시 굴리기도 없었다. 다시 굴리게 해 줄 수 없는 것으로 읽는다.
-    """
-    score_roll = SRD5.model_dump(mode='json')['score_roll']
-    rulebook = document['rulebook']
-    upgraded = dict(document)
-    upgraded['reroll_allowed'] = False
-    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'score_roll': score_roll}}
-    upgraded['format'] = 9
-    return upgraded
-
-
-def upgrade_from_9(document: dict) -> dict:
-    """
-    형식 9 의 문서를 형식 10 으로 올린다.
-
-    그때는 규칙에 죽음의 굴림이 없었다. 쓰러진 캐릭터는 죽지 않고 쓰러진 채로 있었다.
-    그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 것으로 읽는다. DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
-    이미 진행 중인 테이블도 이 형식으로 올려 읽는다. 그 테이블에서 쓰러져 있던 캐릭터는 다음 라운드부터 굴린다.
-    """
-    death_save = SRD5.model_dump(mode='json')['death_save']
-    rulebook = document['rulebook']
-    upgraded = dict(document)
-    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'death_save': death_save}}
-    upgraded['format'] = 10
-    return upgraded
-
-
-def upgrade_from_10(document: dict) -> dict:
-    """
-    형식 10 의 문서를 형식 11 로 올린다.
-
-    그때는 추천 문체가 없었다. 문체를 지시하지 않았지만, 지금 제작자가 고르지 않았을 때와 같은 정통으로 읽는다.
-    이미 진행 중인 테이블도 이 형식으로 올려 읽는다. 방장이 문체를 고르지 않았으면 다음 서술부터 정통이다.
-    """
-    upgraded = dict(document)
-    upgraded['narration_style'] = DEFAULT_NARRATION_STYLE.value
-    upgraded['format'] = 11
-    return upgraded
-
-
-def upgrade_from_11(document: dict) -> dict:
-    """
-    형식 11 의 문서를 형식 12 로 올린다.
-
-    그때는 로어북 항목에 종류가 없었다. 모두 기타로 읽는다. DB 의 항목에도 같은 값을 채웠다(마이그레이션).
-    기타는 지금까지와 똑같이 다룬다. 이미 진행 중인 테이블의 서술도 바뀌지 않는다.
-    """
-    upgraded = dict(document)
-    upgraded['lorebooks'] = [
-        {**lorebook, 'entries': [{**entry, 'kind': LoreKind.OTHER.value} for entry in lorebook['entries']]}
-        for lorebook in document['lorebooks']
-    ]
-    upgraded['format'] = 12
-    return upgraded
-
-
-def upgrade_from_12(document: dict) -> dict:
-    """
-    형식 12 의 문서를 형식 13 으로 올린다.
-
-    그때는 NPC 에 숫자가 없었다. NPC 시트는 없는 것으로, 기본 NPC 시트는 기준 시트로 읽는다.
-    인물 항목은 모두 기본 NPC 시트를 쓴다. 이미 진행 중인 테이블은 시작할 때 NPC 의 상태를 만들지 않았으므로
-    읽는 모양만 바뀐다.
-    """
-    upgraded = dict(document)
-    upgraded['npc_sheets'] = []
-    upgraded['default_npc_sheet'] = baseline_sheet(document['rulebook']['rules'])
-    upgraded['format'] = 13
-    return upgraded
-
-
-# 부상이 생길 때 규칙에 더해진 칸들
-INJURY_FIELDS = ('injuries', 'injury_table', 'injury_triggers', 'called_shot')
-
-
-def upgrade_from_13(document: dict) -> dict:
-    """
-    형식 13 의 문서를 형식 14 로 올린다.
-
-    그때는 규칙에 부상이 없었다. 그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 부상으로 읽는다.
-    DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 이미 진행 중인 테이블도 다음 라운드부터 부상이 생길 수 있다.
-    """
-    template = SRD5.model_dump(mode='json')
-    rulebook = document['rulebook']
-    rules = {**rulebook['rules'], **{field: template[field] for field in INJURY_FIELDS}}
-    upgraded = dict(document)
-    upgraded['rulebook'] = {**rulebook, 'rules': rules}
-    upgraded['format'] = 14
-    return upgraded
-
-
-# 치료가 없던 때의 부상에 채우는 칸들
-TREATMENT_FIELDS = ('treat_difficulty', 'treat_rounds')
-
-
-def with_treatment_fields(injury: dict, template_injuries: dict[str, dict]) -> dict:
-    """
-    부상 하나에 치료의 칸들을 채운다. 이미 있으면 그대로 둔다. 템플릿에 같은 이름의 부상이 있으면 그 값, 없으면 비운다.
-    """
-    source = template_injuries.get(injury['key'], {})
-    return {**{field: source.get(field) for field in TREATMENT_FIELDS}, **injury}
-
-
-def upgrade_from_14(document: dict) -> dict:
-    """
-    형식 14 의 문서를 형식 15 로 올린다.
-
-    그때는 규칙에 치료가 없었다. 그때의 규칙은 SRD5 템플릿뿐이었으므로 그 템플릿의 치료와 부상의 치료 칸으로 읽는다.
-    DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 이미 진행 중인 테이블도 다음 라운드부터 치료할 수 있다.
-    """
-    template = SRD5.model_dump(mode='json')
-    template_injuries = {injury['key']: injury for injury in template['injuries']}
-    rulebook = document['rulebook']
-    rules = dict(rulebook['rules'])
-    rules['injuries'] = [with_treatment_fields(injury, template_injuries) for injury in rules['injuries']]
-    rules['treatment'] = template['treatment']
-    upgraded = dict(document)
-    upgraded['rulebook'] = {**rulebook, 'rules': rules}
-    upgraded['format'] = 15
-    return upgraded
-
-
-# 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
-# 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
-UPGRADES: dict[int, Callable[[dict], dict]] = {
-    1: upgrade_from_1,
-    2: upgrade_from_2,
-    3: upgrade_from_3,
-    4: upgrade_from_4,
-    5: upgrade_from_5,
-    6: upgrade_from_6,
-    7: upgrade_from_7,
-    8: upgrade_from_8,
-    9: upgrade_from_9,
-    10: upgrade_from_10,
-    11: upgrade_from_11,
-    12: upgrade_from_12,
-    13: upgrade_from_13,
-    14: upgrade_from_14,
-}
 
 
 def read_snapshot(document: dict) -> Snapshot:

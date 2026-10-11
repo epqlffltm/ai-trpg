@@ -265,7 +265,7 @@ app/assets/
   worlds/      schemas.py  service.py  router.py                   세계관만의 것
   rulebooks/   schemas.py  service.py  router.py                   룰북만의 것
   scenarios/   schemas.py  service.py  router.py                   시나리오만의 것
-               snapshot.py  publishing.py  repository.py           게시와 판
+               snapshot.py  upgrades.py  publishing.py  repository.py   게시와 판(옛 판을 올려 읽는 것은 upgrades.py)
   lorebooks/   schemas.py  repository.py  service.py  router.py    로어북과 항목
 app/engine/
   ruleset.py  templates.py                                         규칙의 모양과 내장 템플릿. DB 도 HTTP 도 모른다
@@ -517,7 +517,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 - 판의 번호는 시나리오마다 1 부터 하나씩 올라간다.
 - 게시할 때 변경 내용(`note`, 500자)을 적을 수 있다. 비워도 된다.
 - 판을 고치거나 지우는 주소는 없다.
-- 굳힌 내용의 모양이 바뀌어도 이미 굳힌 판은 고쳐 쓰지 않는다. 문서에 형식 번호(`format`)가 있고, 옛 형식은 읽을 때 지금의 모양으로 올려 읽는다. 형식 1 은 도입부가 하나(`opening`), 형식 2 는 스타팅이 여러 개(`openings`), 형식 3 은 추천 인원과 프리젠이 더해진 것, 형식 4 는 룰북에 규칙(`rules`)이 더해진 것, 형식 5 는 시트와 캐릭터 방식이 더해진 것, 형식 6 은 규칙에 양의 등급(`magnitudes`)이 더해진 것, 형식 7 은 규칙에 최대 HP 에 닿는 능력치(`hp_ability`)와 판에 `player_made_hp` 가 더해진 것, 형식 8 은 규칙에 점수제(`point_buy`)가 더해진 것, 형식 9 는 규칙에 주사위로 정하는 법(`score_roll`)과 판에 `reroll_allowed` 가 더해진 것, 형식 10 은 규칙에 죽음의 굴림(`death_save`)이 더해진 것, 형식 11 은 추천 문체(`narration_style`)가 더해진 것, 형식 12 는 로어북 항목에 종류(`kind`)가 더해진 것, 형식 13 은 NPC 시트(`npc_sheets`)와 기본 NPC 시트(`default_npc_sheet`)가 더해진 것, 형식 14 는 규칙에 부상(`injuries`, `injury_table`, `injury_triggers`, `called_shot`)이 더해진 것, 형식 15 는 규칙에 치료(`treatment`)와 부상의 치료 칸(`treat_difficulty`, `treat_rounds`)이 더해진 것이다. 옛 형식은 한 단계씩 차례로 올린다(1 → 2 → … → 15). 규칙이 없던 판은 `srd5` 템플릿의 규칙으로, 양의 등급이나 `hp_ability`, 점수제, 주사위로 정하는 법, 죽음의 굴림, 부상, 치료가 없던 판은 그 템플릿의 것으로 읽는다. 옛 판은 다시 굴리게 해 줄 수 없는 것으로, 추천 문체는 정통으로, 로어북 항목은 기타로 읽는다. 옛 판의 규칙에 점수제가 채워져도 그 판에서 점수제를 쓸 수 있게 되는 것은 아니다. 옛 판이 허용한 방식은 그때 있던 것 그대로다. 방식이 나중에 늘어도 옛 판에 저절로 켜지지 않는다. 시트가 없던 판은 두 방식을 모두 허용한 것으로 읽고, 시트는 기준 시트(모든 능력치 10, 최대 HP 10)로 읽는다. NPC 시트가 없던 판도 인물은 모두 기준 시트를 받는다(기본 NPC 시트가 기준 시트다).
+- 굳힌 내용의 모양이 바뀌어도 이미 굳힌 판은 고쳐 쓰지 않는다. 문서에 형식 번호(`format`)가 있고, 옛 형식은 읽을 때 지금의 모양으로 올려 읽는다. 형식 1 은 도입부가 하나(`opening`), 형식 2 는 스타팅이 여러 개(`openings`), 형식 3 은 추천 인원과 프리젠이 더해진 것, 형식 4 는 룰북에 규칙(`rules`)이 더해진 것, 형식 5 는 시트와 캐릭터 방식이 더해진 것, 형식 6 은 규칙에 양의 등급(`magnitudes`)이 더해진 것, 형식 7 은 규칙에 최대 HP 에 닿는 능력치(`hp_ability`)와 판에 `player_made_hp` 가 더해진 것, 형식 8 은 규칙에 점수제(`point_buy`)가 더해진 것, 형식 9 는 규칙에 주사위로 정하는 법(`score_roll`)과 판에 `reroll_allowed` 가 더해진 것, 형식 10 은 규칙에 죽음의 굴림(`death_save`)이 더해진 것, 형식 11 은 추천 문체(`narration_style`)가 더해진 것, 형식 12 는 로어북 항목에 종류(`kind`)가 더해진 것, 형식 13 은 NPC 시트(`npc_sheets`)와 기본 NPC 시트(`default_npc_sheet`)가 더해진 것, 형식 14 는 규칙에 부상(`injuries`, `injury_table`, `injury_triggers`, `called_shot`)이 더해진 것, 형식 15 는 규칙에 치료(`treatment`)와 부상의 치료 칸(`treat_difficulty`, `treat_rounds`)이 더해진 것이다. 옛 형식은 한 단계씩 차례로 올린다(1 → 2 → … → 15, `app/assets/scenarios/upgrades.py`). 규칙이 없던 판은 `srd5` 템플릿의 규칙으로, 양의 등급이나 `hp_ability`, 점수제, 주사위로 정하는 법, 죽음의 굴림, 부상, 치료가 없던 판은 그 템플릿의 것으로 읽는다. 옛 판은 다시 굴리게 해 줄 수 없는 것으로, 추천 문체는 정통으로, 로어북 항목은 기타로 읽는다. 옛 판의 규칙에 점수제가 채워져도 그 판에서 점수제를 쓸 수 있게 되는 것은 아니다. 옛 판이 허용한 방식은 그때 있던 것 그대로다. 방식이 나중에 늘어도 옛 판에 저절로 켜지지 않는다. 시트가 없던 판은 두 방식을 모두 허용한 것으로 읽고, 시트는 기준 시트(모든 능력치 10, 최대 HP 10)로 읽는다. NPC 시트가 없던 판도 인물은 모두 기준 시트를 받는다(기본 NPC 시트가 기준 시트다).
 - 게시는 "굳히기"다. 남에게 보이게 하는 것은 따로다([공개와 소개 페이지](#공개와-소개-페이지)). 굳힌 내용(`snapshot`)은 공개해도 만든 사람만 본다.
 - 등급은 시나리오의 것만 굳힌다. 등급은 시나리오를 조립할 때 제작자가 고르고, 재료는 등급을 가리지 않는다.
 
@@ -1758,6 +1758,7 @@ Windows 의 Docker 처럼 디스크 확정이 느린 곳에서는 전체 테스�
 
 **문서의 모양은 코드가 지킨다(`snapshot.py`).** DB 는 JSON 의 안을 검증하지 못한다. 쓰는 쪽과 읽는 쪽이 모두 pydantic 모델을 거친다.
 문서마다 모양의 번호(`format`)를 적는다. 판은 고치지 않으므로 옛 모양의 문서가 계속 남는다. 번호가 있어야 읽는 코드가 어느 모양인지 안다.
+지금의 모양은 `snapshot.py` 에, 옛 형식을 한 단계씩 올리는 함수(`upgrade_from_N`, `UPGRADES`)는 `upgrades.py` 에 있다. 형식이 오를 때마다 자라는 쪽만 따로 둔다.
 
 **게시할 때 읽기와 판단을 나눈다.** 자산을 읽는 함수(`load_parts`)와, 조건을 검사하고 판을 만드는 함수(`find_problems`, `build_version`)가 따로다.
 뒤의 둘은 DB 를 쓰지 않는다. 조건이 늘어도 고칠 곳이 한 함수다.
