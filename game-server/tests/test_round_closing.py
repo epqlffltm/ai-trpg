@@ -12,6 +12,12 @@
   - 서술이 끝내 실패하면 라운드가 닫는 중에 머물고, 모두에게 알린다. 방장은 기다리지 않고 다시 맡길 수 있다.
   - 같은 라운드의 서술이 둘 돌아도 다음 라운드는 하나만 열린다.
   - 서술하는 사이에 테이블이 끝나면 다음 라운드를 열지 않는다.
+
+서술을 맡은 작업(app/rounds/closing.py)이 어디서 실패하든 끝나는지도 본다. 이때는 맡긴 작업을 돌리지 않고
+버린 뒤(held) 테스트가 작업을 직접 돌린다. 실패를 끼워 넣고, 짧은 시간을 꽂고, 옛 작업을 흉내 낸다.
+  - 고르기가 실패하거나 멈춰도 서술은 한다. 읽기, 서술, 마무리가 실패하면 실패를 적는다.
+  - 시간이 다 되면 끊고 실패를 적는다. 실패를 적는 것이 멈춰도 작업은 끝난다.
+  - 다시 맡긴 뒤의 옛 작업은 라운드를 읽지도, 닫지도, 실패를 적지도 못한다.
 """
 
 import asyncio
@@ -29,12 +35,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.provider import ProviderError
 from app.main import API_PREFIX
 from app.realtime.service import Cursor
-from app.rounds import service
-from app.rounds.closing import failure_reason
+from app.rounds import closing, service
+from app.rounds.closing import Budgets, failure_reason, seconds_left
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.models import Round
 from app.rounds.narration_request import dump_moves
-from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
+from app.rounds.narrator import NO_PREVIEW, FakeNarrator, NarrationRequest, Preview
 from app.rounds.retrying_narrator import NarrationFailed
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -570,7 +576,7 @@ async def test_a_failure_is_told_only_for_a_round_still_closing(
 
     # 같은 라운드의 다른 서술이 먼저 마무리했다. 늦게 실패한 쪽은 아무것도 적지 않는다
     async with app.state.session_factory() as session:
-        await service.fail_closing(session, uuid.UUID(table['id']), 1, 'timeout')
+        await service.fail_closing(session, uuid.UUID(table['id']), 1, await started_at(app, table), 'timeout')
 
     assert 'narration_failed' not in await event_types(client, me, table)
 
@@ -587,7 +593,7 @@ async def test_a_failure_is_told_once(
 
     # 이미 실패가 적힌 라운드다. 또 적지 않는다
     async with app.state.session_factory() as session:
-        await service.fail_closing(session, uuid.UUID(table['id']), 1, 'timeout')
+        await service.fail_closing(session, uuid.UUID(table['id']), 1, await started_at(app, table), 'timeout')
 
     assert (await event_types(client, me, table)).count('narration_failed') == 1
 
@@ -599,6 +605,8 @@ async def test_a_failure_is_told_once(
         (ProviderError('unreachable'), 'unreachable'),
         (NarrationError('empty'), 'empty'),
         (RuntimeError('DB 비밀번호가 틀렸다'), 'error'),
+        # 작업 전체의 시간이 다 됐다
+        (TimeoutError(), 'timeout'),
     ],
 )
 def test_the_reason_comes_from_the_narrator_failure(error: Exception, reason: str):
@@ -628,12 +636,313 @@ async def test_two_narrations_of_one_round_open_only_one_next_round(
 
     assert again.status_code == status.HTTP_202_ACCEPTED
     assert len(narrator.requests) == 2
-    # 먼저 마무리한 쪽만 받아들여진다. 다음 라운드는 하나다
+    # 다시 맡긴 쪽만 받아들여진다. 다음 라운드는 하나다
     rounds = (await client.get(table_url(table, '/rounds'), headers=me)).json()
     assert [(round_['number'], round_['status']) for round_ in rounds['items']] == [(1, 'closed'), (2, 'open')]
     assert (await event_types(client, me, table)).count('gm_narration') == 1
-    # 늦게 온 쪽은 "이미 닫혔네" 하고 조용히 물러난다. DB 의 유일 조건에 부딪혀 실패하는 것이 아니다
+    # 앞서 맡은 쪽은 "내 차례가 아니네" 하고 조용히 물러난다. DB 의 유일 조건에 부딪혀 실패하는 것이 아니다
     assert caplog.records == []
+
+
+# --- 서술을 맡은 작업이 어디서 실패하든 끝난다 ---
+
+
+class HeldJobs:
+    """맡은 작업을 돌리지 않고 버리는 것. 라운드를 닫는 중에 세워 두고 테스트가 작업을 직접 돌린다."""
+
+    def __init__(self) -> None:
+        self.names: list[str] = []
+
+    def spawn(self, job, name: str) -> None:
+        job.close()
+        self.names.append(name)
+
+    def count(self) -> int:
+        return 0
+
+    async def drain(self) -> None:
+        return None
+
+    async def aclose(self) -> None:
+        return None
+
+
+@pytest.fixture
+def held(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> HeldJobs:
+    """앱이 맡기는 작업을 돌리지 않게 한다."""
+    jobs = HeldJobs()
+    monkeypatch.setattr(app.state, 'jobs', jobs)
+    return jobs
+
+
+async def started_at(app: FastAPI, table: dict, number: int = 1) -> datetime:
+    """라운드에 적힌 닫기 시작한 시각. 서술을 맡은 작업이 들고 다니는 값이다."""
+    async with app.state.session_factory() as session:
+        query = select(Round.closing_at).where(Round.table_id == uuid.UUID(table['id']), Round.number == number)
+        return await session.scalar(query)
+
+
+async def hold_closing(client: AsyncClient, app: FastAPI, me: dict, friend: dict) -> tuple[dict, datetime]:
+    """둘 다 선언을 내서 닫는 중인 라운드를 만든다(held 와 함께 쓴다). 테이블과 닫기 시작한 시각을 돌려준다."""
+    table = await start_duo(client, me, friend)
+    await declare(client, me, table, MY_ACTION)
+    await declare(client, friend, table, FRIENDS_ACTION)
+    return table, await started_at(app, table)
+
+
+async def run_job(app: FastAPI, table: dict, started: datetime, narrator=None, **options) -> None:
+    """맡겨진 서술을 직접 돌린다. options 는 고르는 것들(lore, memories, histories)과 시간(budgets)이다."""
+    await closing.narrate_round(
+        app.state.session_factory, narrator or FakeNarrator(), uuid.UUID(table['id']), 1, started, **options
+    )
+
+
+class BrokenFinder:
+    """고르다가 예외를 내는 것. 임베딩 모델의 실패가 아닌 예외다(DB 의 오류, 버그)."""
+
+    async def find(self, request: NarrationRequest) -> list:
+        raise RuntimeError('고르다가 DB 가 끊겼다')
+
+
+class StuckFinder:
+    """고르다가 돌아오지 않는 것."""
+
+    async def find(self, request: NarrationRequest) -> list:
+        await asyncio.Event().wait()
+        return []
+
+
+class StuckNarrator:
+    """답하지 않는 서술자."""
+
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
+        await asyncio.Event().wait()
+        return RESULT
+
+
+class CountingNarrator:
+    """몇 번 불렸는지 세는 서술자."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
+        self.calls += 1
+        return RESULT
+
+
+async def rounds_of(client: AsyncClient, headers: dict, table: dict) -> list[tuple[int, str]]:
+    rounds = (await client.get(table_url(table, '/rounds'), headers=headers)).json()
+    return [(round_['number'], round_['status']) for round_ in rounds['items']]
+
+
+@pytest.mark.parametrize('broken', ['lore', 'memories', 'histories'])
+async def test_a_search_that_breaks_does_not_stop_the_narration(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, caplog, broken: str
+):
+    table, started = await hold_closing(client, app, me, friend)
+
+    with caplog.at_level(logging.ERROR, logger='app.rounds.closing'):
+        await run_job(app, table, started, **{broken: BrokenFinder()})
+
+    # 고르지 못한 것 없이 서술하고 라운드를 닫는다. 실패를 알리지 않는다
+    assert await rounds_of(client, me, table) == [(1, 'closed'), (2, 'open')]
+    assert 'narration_failed' not in await event_types(client, me, table)
+    # 버그일 수 있으므로 로그에는 남는다
+    assert '고르지 못했다' in caplog.text
+
+
+async def test_a_search_that_never_returns_is_given_up(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, caplog
+):
+    table, started = await hold_closing(client, app, me, friend)
+    narrator = GatedNarrator()
+    narrator.release()
+
+    with caplog.at_level(logging.WARNING, logger='app.rounds.closing'):
+        async with asyncio.timeout(SOON):
+            await run_job(app, table, started, narrator, lore=StuckFinder(), budgets=Budgets(retrieval=0.05))
+
+    assert await rounds_of(client, me, table) == [(1, 'closed'), (2, 'open')]
+    # 고르는 시간은 셋이 함께 쓴다. 로어북이 다 쓰면 지난 일과 이력도 고르지 않는다
+    assert narrator.requests[0].lore == []
+    assert '시간이 다 됐다' in caplog.text
+
+
+async def test_a_narration_that_never_ends_is_cut_off_and_told(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs
+):
+    table, started = await hold_closing(client, app, me, friend)
+
+    async with asyncio.timeout(SOON):
+        with pytest.raises(TimeoutError):
+            await run_job(app, table, started, StuckNarrator(), budgets=Budgets(job=0.2))
+
+    # 실패가 적혀서 방장이 기다리지 않고 다시 맡길 수 있다
+    assert (await last_event(client, me, table))['payload'] == {'round': 1, 'reason': 'timeout'}
+    again = await client.post(table_url(table, '/rounds/current/close'), headers=me)
+    assert again.status_code == status.HTTP_202_ACCEPTED
+
+
+async def test_a_job_whose_time_ran_out_before_it_started_does_not_narrate(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs
+):
+    table, started = await hold_closing(client, app, me, friend)
+    narrator = CountingNarrator()
+
+    # 닫기 시작한 때부터 센다. 맡긴 뒤에 오래 기다렸다가 돌면 남은 시간이 없다
+    with pytest.raises(TimeoutError):
+        await run_job(app, table, started, narrator, budgets=Budgets(job=0))
+
+    assert narrator.calls == 0
+    assert (await last_event(client, me, table))['payload'] == {'round': 1, 'reason': 'timeout'}
+
+
+@pytest.mark.parametrize('step', ['load_closing_request', 'finish_closing'])
+async def test_failing_to_read_or_to_save_the_round_is_told(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, monkeypatch, step: str
+):
+    table, started = await hold_closing(client, app, me, friend)
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError('DB 가 끊겼다')
+
+    monkeypatch.setattr(service, step, broken)
+    with pytest.raises(RuntimeError):
+        await run_job(app, table, started)
+
+    # 서술자의 실패가 아니어도 실패를 적는다. 라운드는 닫는 중에 머물고 바로 다시 맡길 수 있다
+    assert (await last_event(client, me, table))['payload'] == {'round': 1, 'reason': 'error'}
+    latest = await current(client, me, table)
+    assert (latest['status'], latest['narration_failed_at'] is not None) == ('closing', True)
+
+
+async def test_an_error_after_the_round_was_saved_is_not_told_as_a_failure(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, monkeypatch
+):
+    table, started = await hold_closing(client, app, me, friend)
+    finish = service.finish_closing
+
+    async def finish_then_break(*args, **kwargs):
+        # 저장은 끝났는데 그 뒤에 끊겼다(저장하는 도중에 작업이 끊긴 경우와 같다)
+        await finish(*args, **kwargs)
+        raise RuntimeError('저장한 뒤에 끊겼다')
+
+    monkeypatch.setattr(service, 'finish_closing', finish_then_break)
+    with pytest.raises(RuntimeError):
+        await run_job(app, table, started)
+
+    # 새 세션으로 실제 상태를 본다. 이미 닫힌 라운드에는 실패를 적지 않는다
+    assert await rounds_of(client, me, table) == [(1, 'closed'), (2, 'open')]
+    assert 'narration_failed' not in await event_types(client, me, table)
+
+
+async def test_a_job_ends_even_when_the_failure_cannot_be_written(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, monkeypatch, caplog
+):
+    table, started = await hold_closing(client, app, me, friend)
+
+    async def stuck(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(service, 'fail_closing', stuck)
+    with caplog.at_level(logging.ERROR, logger='app.rounds.closing'):
+        async with asyncio.timeout(SOON):
+            # 처음의 예외가 그대로 올라온다. 실패를 적지 못한 것이 그것을 가리지 않는다
+            with pytest.raises(RuntimeError):
+                await run_job(app, table, started, FailingNarrator(RuntimeError('버그')), budgets=Budgets(failure=0.05))
+
+    assert '실패를 적지 못했다' in caplog.text
+    # 적지 못했으므로 라운드는 닫는 중에 머문다. 한참 뒤에 다시 맡길 수 있다
+    assert (await current(client, me, table))['narration_failed_at'] is None
+
+
+async def hand_again(client: AsyncClient, app: FastAPI, me: dict, table: dict, monkeypatch) -> datetime:
+    """닫는 중인 라운드를 다시 맡긴다. 새로 적힌 닫기 시작한 시각을 돌려준다."""
+    monkeypatch.setattr(service, 'CLOSING_RETRY_SECONDS', 0)
+    again = await client.post(table_url(table, '/rounds/current/close'), headers=me)
+    assert again.status_code == status.HTTP_202_ACCEPTED, again.text
+    return await started_at(app, table)
+
+
+async def test_handing_a_round_again_starts_a_new_run(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, monkeypatch
+):
+    table, first = await hold_closing(client, app, me, friend)
+
+    second = await hand_again(client, app, me, table, monkeypatch)
+
+    assert second > first
+    assert held.names == [f'narrate:{table["id"]}:1'] * 2
+
+
+async def test_an_old_run_cannot_mark_the_new_one_as_failed(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, monkeypatch
+):
+    table, first = await hold_closing(client, app, me, friend)
+    second = await hand_again(client, app, me, table, monkeypatch)
+
+    # 앞서 맡은 작업이 서술자를 기다리다가 늦게 실패했다. 지금 도는 서술의 라운드에 실패를 적지 못한다
+    async with app.state.session_factory() as session:
+        await service.fail_closing(session, uuid.UUID(table['id']), 1, first, 'timeout')
+
+    assert 'narration_failed' not in await event_types(client, me, table)
+    assert (await current(client, me, table))['narration_failed_at'] is None
+    # 지금 맡은 작업의 실패는 적힌다
+    async with app.state.session_factory() as session:
+        await service.fail_closing(session, uuid.UUID(table['id']), 1, second, 'timeout')
+    assert (await event_types(client, me, table)).count('narration_failed') == 1
+
+
+async def test_an_old_run_cannot_close_the_round(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, monkeypatch
+):
+    table, first = await hold_closing(client, app, me, friend)
+    second = await hand_again(client, app, me, table, monkeypatch)
+    narrator = CountingNarrator()
+
+    # 이제 도는 옛 작업은 읽을 때 물러난다. 서술자를 부르지도 않는다
+    await run_job(app, table, first, narrator)
+    # 다시 맡기기 전에 이미 서술을 받아 둔 옛 작업도 닫지 못한다
+    async with app.state.session_factory() as session:
+        await service.finish_closing(session, uuid.UUID(table['id']), 1, first, '늦게 온 서술')
+
+    assert narrator.calls == 0
+    assert await rounds_of(client, me, table) == [(1, 'closing')]
+    # 지금 맡은 작업이 닫는다
+    await run_job(app, table, second, narrator)
+    assert await rounds_of(client, me, table) == [(1, 'closed'), (2, 'open')]
+    assert (await current(client, me, table))['scene'] == RESULT
+
+
+NOON = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ('elapsed', 'left'),
+    [
+        (0, 195.0),
+        (60, 135.0),
+        # 다 썼으면 0 이다. 음수가 되지 않는다
+        (195, 0.0),
+        (500, 0.0),
+    ],
+)
+def test_the_time_left_is_counted_from_when_the_round_began_closing(elapsed: float, left: float):
+    assert seconds_left(NOON, NOON + timedelta(seconds=elapsed), 195.0) == left
+
+
+def test_a_job_ends_before_the_round_can_be_handed_again():
+    # 작업이 살아 있을 수 있는 시간(끊기기까지 + 실패를 적기까지)이 다시 맡길 수 있는 때보다 짧다
+    assert service.CLOSING_JOB_SECONDS + service.FAILURE_RECORD_SECONDS < service.CLOSING_RETRY_SECONDS
+    # 고르기와 서술이 제 시간을 다 써도 마무리할 시간이 남는다
+    longest = service.RETRIEVAL_BUDGET_SECONDS + service.NARRATION_BUDGET_SECONDS
+    assert longest < service.CLOSING_JOB_SECONDS
+    assert Budgets() == Budgets(
+        job=service.CLOSING_JOB_SECONDS,
+        retrieval=service.RETRIEVAL_BUDGET_SECONDS,
+        failure=service.FAILURE_RECORD_SECONDS,
+    )
 
 
 # --- 서술하는 사이에 테이블이 끝나면 ---

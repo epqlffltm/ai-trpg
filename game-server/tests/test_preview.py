@@ -191,3 +191,19 @@ async def test_what_was_written_while_sending_is_not_lost_on_closing():
         asyncio.get_running_loop().call_later(A_WHILE, outbox.gate.set)
 
     assert outbox.numbered() == [(1, 0, '엔진 소리가 '), (1, 1, '골목을 메운다.')]
+
+
+async def test_a_send_that_never_returns_does_not_hold_the_closing(caplog: pytest.LogCaptureFixture):
+    # gate 를 열지 않는다. 보내기가 끝나지 않는다(응답 없는 DB)
+    outbox = SlowOutbox()
+
+    with caplog.at_level(logging.WARNING):
+        async with asyncio.timeout(1):
+            async with open_preview(outbox, TABLE, ROUND, interval=60, close_timeout=0.05) as preview:
+                preview.begin()
+                preview.text('엔진 소리가')
+
+    # 잠깐만 기다리고 그만둔다. 미리 보기가 서술의 마무리를 붙잡지 않는다. 그 조각은 잃는다
+    assert outbox.started.is_set()
+    assert outbox.sent == []
+    assert '닫지 못했다' in caplog.text
