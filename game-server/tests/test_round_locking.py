@@ -26,7 +26,7 @@ from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
 from app.engine.dice import ScriptedDice
-from app.rounds import closing, repository, service
+from app.rounds import acceptance, closing, repository, service
 from app.rounds.models import Round
 from app.rounds.narrator import FakeNarrator
 from app.rounds.schemas import DeclarationUpdate
@@ -108,7 +108,7 @@ async def test_the_last_two_declarations_close_the_round_once(
     # A: 테이블을 잠그고 내 선언을 적었지만 아직 커밋하지 않았다
     locked = await table_repository.lock_table(session, table.id)
     round_ = await repository.find_latest_round(session, table.id)
-    service.put_declaration(round_, tables.find_member(locked, ME), '달린다.', None)
+    acceptance.put_declaration(round_, tables.find_member(locked, ME), '달린다.', None)
     await session.flush()
 
     # B: 친구가 선언을 낸다. A 가 끝날 때까지 기다려야 한다
@@ -145,7 +145,7 @@ async def test_closing_waits_for_a_declaration_being_saved(
     # A: 테이블을 잠그고 친구의 선언을 적었지만 아직 커밋하지 않았다
     locked = await table_repository.lock_table(session, table.id)
     round_ = await repository.find_latest_round(session, table.id)
-    service.put_declaration(round_, tables.find_member(locked, FRIEND), '웃는다.', None)
+    acceptance.put_declaration(round_, tables.find_member(locked, FRIEND), '웃는다.', None)
     await session.flush()
 
     # B: 방장이 라운드를 닫으려 한다. 잠금이 없으면 친구의 선언을 못 보고 "아무것도 하지 않았다"로 닫는다
