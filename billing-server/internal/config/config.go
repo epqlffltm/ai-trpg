@@ -12,6 +12,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 )
@@ -24,6 +25,11 @@ const (
 	DefaultPort = 8003
 	// DefaultSchema 는 결제 서버의 테이블이 놓이는 스키마다.
 	DefaultSchema = "billing"
+	// DefaultJWTIssuer 는 토큰을 발급한 서버의 이름(iss)이다. 인증 서버의 JWT_ISSUER 와 같아야 한다.
+	DefaultJWTIssuer = "ai-trpg-auth"
+	// DefaultJWTAudience 는 이 서버의 이름이다. 토큰의 대상(aud)에 이 이름이 있어야 받는다.
+	// 인증 서버의 JWT_AUDIENCE 목록에 이 이름이 들어 있어야 한다.
+	DefaultJWTAudience = "ai-trpg-billing"
 )
 
 // schemaPattern 은 스키마 이름으로 받는 모양이다. 소문자, 숫자, 밑줄만 받는다.
@@ -44,6 +50,11 @@ type Settings struct {
 	DatabaseURL string
 	// DBSchema 는 테이블이 놓이는 스키마다.
 	DBSchema string
+	// AuthJWKSURL 은 인증 서버가 공개키를 내주는 주소다. 이 주소에서 받은 키로 서명된 토큰을 믿는다.
+	AuthJWKSURL string
+	// JWTIssuer 는 받아들이는 토큰의 발급자(iss), JWTAudience 는 이 서버의 이름(aud)이다.
+	JWTIssuer   string
+	JWTAudience string
 }
 
 // Addr 는 서버가 요청을 받는 주소를 "host:port" 로 돌려준다.
@@ -57,8 +68,9 @@ func Load(lookup Lookup) (Settings, error) {
 	port, portErr := readPort(lookup, "PORT", DefaultPort)
 	databaseURL, urlErr := readRequired(lookup, "DATABASE_URL")
 	schema, schemaErr := readSchema(lookup, "DB_SCHEMA", DefaultSchema)
+	jwksURL, jwksErr := readHTTPURL(lookup, "AUTH_JWKS_URL")
 
-	if err := errors.Join(debugErr, portErr, urlErr, schemaErr); err != nil {
+	if err := errors.Join(debugErr, portErr, urlErr, schemaErr, jwksErr); err != nil {
 		return Settings{}, err
 	}
 	return Settings{
@@ -67,6 +79,9 @@ func Load(lookup Lookup) (Settings, error) {
 		Port:        port,
 		DatabaseURL: databaseURL,
 		DBSchema:    schema,
+		AuthJWKSURL: jwksURL,
+		JWTIssuer:   readString(lookup, "JWT_ISSUER", DefaultJWTIssuer),
+		JWTAudience: readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
 	}, nil
 }
 
@@ -84,6 +99,20 @@ func readRequired(lookup Lookup, name string) (string, error) {
 	value, ok := lookup(name)
 	if !ok || value == "" {
 		return "", fmt.Errorf("%s 가 없습니다. .env 나 환경 변수에 적어 주세요", name)
+	}
+	return value, nil
+}
+
+// readHTTPURL 은 반드시 있어야 하는 http(s) 주소를 읽는다. 없거나 주소의 모양이 아니면 오류다.
+// 서버가 뜬 뒤 첫 요청에서야 틀린 주소를 알게 되는 일을 막는다.
+func readHTTPURL(lookup Lookup, name string) (string, error) {
+	value, err := readRequired(lookup, name)
+	if err != nil {
+		return "", err
+	}
+	parsed, parseErr := url.Parse(value)
+	if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", fmt.Errorf("%s 는 http:// 나 https:// 로 시작하는 주소여야 합니다", name)
 	}
 	return value, nil
 }

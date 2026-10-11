@@ -52,6 +52,9 @@ jobs:
       GAME_DB_PASSWORD: ci-game-password
       BILLING_DB_PASSWORD: ci-billing-password
       DATABASE_URL: postgres://billing:ci-billing-password@127.0.0.1:5432/trpg
+      # 필수 설정이라 적는다. CI 에는 인증 서버가 없고, 테스트는 가짜 인증 서버를 쓴다.
+      # 이 주소로는 요청이 가지 않는다
+      AUTH_JWKS_URL: http://127.0.0.1:8000/api/v1/auth/jwks
 
     defaults:
       run:
@@ -94,6 +97,8 @@ jobs:
       - name: 빌드
         run: go build ./...
 
-      # -count=1 은 캐시된 결과를 쓰지 않고 매번 실제로 돌린다. DB 를 쓰는 테스트가 있다
+      # -count=1 은 캐시된 결과를 쓰지 않고 매번 실제로 돌린다. DB 를 쓰는 테스트가 있다.
+      # -race 는 두 흐름이 같은 값을 동시에 건드리면 실패하게 한다. 공개키 캐시를 여러 요청이 함께 쓴다.
+      # -timeout 은 멈춘 테스트를 기본값(10분)까지 기다리지 않고 끊는다
       - name: 테스트
-        run: go test -count=1 ./...
+        run: go test -count=1 -race -timeout 120s ./...
