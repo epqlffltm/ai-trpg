@@ -34,7 +34,7 @@
 import logging
 import math
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -78,6 +78,8 @@ class Candidates:
 
     version_id: uuid.UUID
     entries: list[EntrySnapshot]
+    # 이 테이블에서 플레이어가 진짜 이름을 맞힌 인물들. 그 인물은 장면의 호칭으로 바꾸지 않는다
+    named: frozenset[uuid.UUID] = frozenset()
 
 
 class Indexer(Protocol):
@@ -169,9 +171,17 @@ def scene_label(entry: EntrySnapshot, text: str) -> str:
     return max(found, key=len) if found else entry.name
 
 
-def scene_labels(entries: Sequence[EntrySnapshot], text: str) -> dict[str, str]:
-    """인물 항목 중 이름표가 이름과 다른 것들. 진짜 이름에서 장면의 호칭으로. 인물이 아닌 항목은 바꾸지 않는다."""
-    labels = {entry.name: scene_label(entry, text) for entry in entries if entry.kind == LoreKind.PERSON}
+def scene_labels(entries: Sequence[EntrySnapshot], text: str, named: Set[uuid.UUID] = frozenset()) -> dict[str, str]:
+    """
+    인물 항목 중 이름표가 이름과 다른 것들. 진짜 이름에서 장면의 호칭으로. 인물이 아닌 항목은 바꾸지 않는다.
+
+    named 는 플레이어가 진짜 이름을 맞힌 인물들이다(app/rounds/naming.py). 그 인물은 진짜 이름 그대로 둔다.
+    """
+    labels = {
+        entry.name: scene_label(entry, text)
+        for entry in entries
+        if entry.kind == LoreKind.PERSON and entry.id not in named
+    }
     return {name: label for name, label in labels.items() if label != name}
 
 
@@ -203,7 +213,11 @@ async def load_candidates(session_factory: async_sessionmaker[AsyncSession], tab
         table = await table_repository.find_table(session, table_id)
         if table is None:
             return None
-        return Candidates(version_id=table.version_id, entries=version_entries(read_snapshot(table.content)))
+        npcs = await table_repository.list_npcs(session, table_id)
+        named = frozenset(npc.entry_id for npc in npcs if npc.named_round is not None)
+        return Candidates(
+            version_id=table.version_id, entries=version_entries(read_snapshot(table.content)), named=named
+        )
 
 
 @dataclass(frozen=True)
@@ -228,7 +242,7 @@ class LoreRetriever:
             return []
         text = query_text(request)
         distances = await self.distances(candidates, text)
-        labels = scene_labels(candidates.entries, text)
+        labels = scene_labels(candidates.entries, text, candidates.named)
         return [to_note(entry, labels) for entry in choose(candidates.entries, text, distances, self.thresholds)]
 
     async def distances(self, candidates: Candidates, text: str) -> dict[uuid.UUID, float]:

@@ -271,6 +271,22 @@ def upgrade_from_14(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_15(document: dict) -> dict:
+    """
+    형식 15 의 문서를 형식 16 으로 올린다.
+
+    그때는 로어북 항목에 지목할 이름이 따로 없었다. 모두 비운다. 비어 있으면 항목의 이름 하나가 정답이다.
+    DB 의 항목에도 같은 값을 채웠다(마이그레이션의 기본값).
+    """
+    upgraded = dict(document)
+    upgraded['lorebooks'] = [
+        {**lorebook, 'entries': [{'true_names': [], **entry} for entry in lorebook['entries']]}
+        for lorebook in document['lorebooks']
+    ]
+    upgraded['format'] = 16
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -288,4 +304,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     12: upgrade_from_12,
     13: upgrade_from_13,
     14: upgrade_from_14,
+    15: upgrade_from_15,
 }

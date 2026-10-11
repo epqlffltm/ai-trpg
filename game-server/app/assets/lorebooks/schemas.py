@@ -16,8 +16,10 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from app.assets.models import (
     LORE_ENTRY_CONTENT_MAX_LENGTH,
     LORE_ENTRY_MAX_KEYWORDS,
+    LORE_ENTRY_MAX_TRUE_NAMES,
     LORE_ENTRY_NAME_MAX_LENGTH,
     LORE_KEYWORD_MAX_LENGTH,
+    LORE_TRUE_NAME_MAX_LENGTH,
     LoreKind,
 )
 from app.assets.schemas import AssetCreate, AssetUpdate
@@ -32,10 +34,10 @@ class LorebookUpdate(AssetUpdate):
 
 
 def reject_duplicates(keywords: list[str]) -> list[str]:
-    """같은 키워드가 두 번 있으면 거부한다. 대소문자만 다른 것도 같은 것으로 본다."""
+    """같은 낱말(키워드, 지목할 이름)이 두 번 있으면 거부한다. 대소문자만 다른 것도 같은 것으로 본다."""
     folded = [keyword.casefold() for keyword in keywords]
     if len(set(folded)) != len(folded):
-        raise ValueError('같은 키워드가 두 번 있습니다.')
+        raise ValueError('같은 낱말이 두 번 있습니다.')
     return keywords
 
 
@@ -48,9 +50,17 @@ EntryContent = Annotated[str, StringConstraints(max_length=LORE_ENTRY_CONTENT_MA
 Keyword = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=LORE_KEYWORD_MAX_LENGTH)]
 Keywords = Annotated[list[Keyword], Field(max_length=LORE_ENTRY_MAX_KEYWORDS), AfterValidator(reject_duplicates)]
 
+# 지목할 때 맞다고 받는 이름 하나와 그 목록. 같은 이름이 두 번 있으면 거부한다
+TrueName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=LORE_TRUE_NAME_MAX_LENGTH)]
+TrueNames = Annotated[list[TrueName], Field(max_length=LORE_ENTRY_MAX_TRUE_NAMES), AfterValidator(reject_duplicates)]
+
 
 class EntryCreate(BaseModel):
-    """항목을 만들 때 받는 값. 이름만 필수다. 종류를 적지 않으면 기타다."""
+    """
+    항목을 만들 때 받는 값. 이름만 필수다. 종류를 적지 않으면 기타다.
+
+    true_names 는 인물을 지목할 때 맞다고 받는 이름들이다. 비우면 항목의 이름 하나다. 인물 항목에만 뜻이 있다.
+    """
 
     model_config = ConfigDict(extra='forbid')
 
@@ -58,6 +68,7 @@ class EntryCreate(BaseModel):
     keywords: Keywords = []
     content: EntryContent = ''
     kind: LoreKind = LoreKind.OTHER
+    true_names: TrueNames = []
 
 
 class EntryUpdate(BaseModel):
@@ -73,6 +84,7 @@ class EntryUpdate(BaseModel):
     keywords: Keywords | None = None
     content: EntryContent | None = None
     kind: LoreKind | None = None
+    true_names: TrueNames | None = None
 
 
 class EntryDetail(BaseModel):
@@ -83,5 +95,7 @@ class EntryDetail(BaseModel):
     keywords: list[str]
     content: str
     kind: LoreKind
+    # 지목할 때 맞다고 받는 이름들. 만든 사람만 본다(로어북은 만든 사람의 것이다)
+    true_names: list[str]
     created_at: datetime
     updated_at: datetime

@@ -5,8 +5,8 @@
 
 선언은 낼 때가 아니라 라운드가 닫힐 때 이벤트로 적는다. 마지막 글만 적는다.
 열려 있는 동안에는 남의 선언이 보이지 않아야 하는데, 이벤트는 앉은 사람 모두가 읽기 때문이다.
-판정, HP 의 변화, 부상, 치료, 죽음의 굴림은 이미 끝나 있다(app/rounds/judging.py). 여기서는 적기만 한다.
-일은 원인으로 잇는다(cause). 행동 → 판정 → 치료 → HP 의 변화 → 부상의 차례다.
+판정, HP 의 변화, 부상, 치료, 지목, 죽음의 굴림은 이미 끝나 있다(app/rounds/judging.py). 여기서는 적기만 한다.
+일은 원인으로 잇는다(cause). 행동 → 판정 → 치료 → HP 의 변화 → 부상의 차례다. 지목은 행동 → 지목의 결과다.
 엔진이 한 일은 행한 사람(actor_id)을 적지 않는다. 주사위를 굴리고 상태를 바꾼 것은 플레이어가 아니라 엔진이다.
 """
 
@@ -21,7 +21,7 @@ from app.events.models import EventType, TableEvent
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.models import Declaration, Round
-from app.rounds.state import find_declaration, has_outcome
+from app.rounds.state import find_declaration, has_outcome, naming_of
 from app.tables.models import DeathCause, GameTable, InjurySource
 
 
@@ -147,11 +147,23 @@ def record_hp_change(session: AsyncSession, table: GameTable, effect: dict, caus
     return recorder.record(session, table, EventType.HP_CHANGED, payload=payload, cause=cause)
 
 
+def record_naming(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    지목의 결과를 이벤트로 적는다. 그 지목을 부른 행동의 이벤트(cause)에 잇는다.
+
+    행한 사람(actor_id)을 적지 않는다. 맞았는지를 정한 것은 엔진이다.
+    """
+    naming = naming_of(declaration)
+    payload = {'round': cause.payload['round'], 'character_name': declaration.character_name, **naming}
+    recorder.record(session, table, EventType.NAMING_RESOLVED, payload=payload, cause=cause)
+
+
 def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
     """
     닫히는 라운드의 선언을 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다. 서술자가 받는 것과 같다.
 
-    판정이 있었던 선언은 행동 바로 뒤에 그 결과를 적는다. 판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
+    판정이나 지목이 있었던 선언은 행동 바로 뒤에 그 결과를 적는다. 판정은 이미 끝나 있다(roll_checks).
+    여기서는 적기만 한다.
     선언을 내지 않은 사람은 적지 않는다. 누가 안 냈는지는 라운드가 닫힌 이벤트에 적힌다.
     """
     for member in table.members:
@@ -169,6 +181,8 @@ def record_actions(session: AsyncSession, table: GameTable, round_: Round, group
         )
         if has_outcome(declaration):
             record_check(session, table, declaration, cause=acted)
+        elif naming_of(declaration) is not None:
+            record_naming(session, table, declaration, cause=acted)
 
 
 def record_death(
