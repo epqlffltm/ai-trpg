@@ -13,6 +13,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from accounts.security_digest import delete_old_security_events, report_new_security_events
+from observability.jobs import run_as_job
 
 
 class Command(BaseCommand):
@@ -22,7 +23,9 @@ class Command(BaseCommand):
         if not settings.SECURITY_DIGEST_TO:
             self.stdout.write('SECURITY_DIGEST_TO 가 비어 있어 요약 메일을 보내지 않습니다.')
 
-        reported = report_new_security_events()
-        deleted = delete_old_security_events()
+        # 작업의 식별자(job_id)를 건다. 이 일이 남긴 로그가 그 식별자로 묶인다(docs/observability.md)
+        with run_as_job('security.send_digest'):
+            reported = report_new_security_events()
+            deleted = delete_old_security_events()
 
         self.stdout.write(f'알린 보안 이벤트 {reported}건, 지운 오래된 기록 {deleted}건')
