@@ -94,7 +94,10 @@ describe('오류 응답', () => {
     expect(response.text).not.toContain('board_test');
     // 응답에는 싣지 않지만 로그에는 남긴다
     expect(error).toHaveBeenCalledWith(
-      'relation "board_test.posts" does not exist',
+      expect.objectContaining({
+        message: 'relation "board_test.posts" does not exist',
+        error_code: 'http.unhandled_exception',
+      }),
       expect.any(String),
     );
   });

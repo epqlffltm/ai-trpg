@@ -75,15 +75,23 @@ describe('AllExceptionsFilter', () => {
     });
   });
 
-  it('뜻밖의 예외는 어디서 났는지까지 로그에 남긴다', () => {
+  it('뜻밖의 예외는 어디서 났는지까지 공통 규격의 칸으로 로그에 남긴다', () => {
     const error = vi
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
-    const failure = new Error('버그');
+    const failure = new RangeError('버그');
 
     new AllExceptionsFilter().catch(failure, makeHost().host);
 
-    expect(error).toHaveBeenCalledWith('버그', failure.stack);
+    expect(error).toHaveBeenCalledWith(
+      {
+        message: '버그',
+        operation: 'http.request',
+        error_code: 'http.unhandled_exception',
+        error_type: 'RangeError',
+      },
+      failure.stack,
+    );
   });
 
   it('예외가 아닌 값이 던져져도 500 으로 답한다', () => {

@@ -46,3 +46,6 @@ delete process.env.HOST;
 delete process.env.PORT;
 delete process.env.JWT_ISSUER;
 delete process.env.JWT_AUDIENCE;
+delete process.env.APP_ENVIRONMENT;
+delete process.env.APP_VERSION;
+delete process.env.LOG_LEVEL;

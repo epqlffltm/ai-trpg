@@ -14,6 +14,7 @@
 - [DB와 마이그레이션](#db와-마이그레이션)
 - [API](#api)
 - [구조](#구조)
+- [로그와 요청 식별자](#로그와-요청-식별자)
 - [CI](#ci)
 - [설계 메모](#설계-메모)
 
@@ -322,6 +323,13 @@ src/
     comment-id.pipe.ts           주소의 댓글 번호를 검사한다
     comments.errors.ts           댓글을 다루다 거절할 때의 응답들
   ids/record-id.ts               순번으로 매긴 번호의 모양
+  observability/
+    identifiers.ts               요청과 추적의 식별자를 받아들이고 만드는 규칙
+    request-context.ts           요청이 처리되는 동안 식별자를 들고 있는 곳
+    redaction.ts                 로그에 적히기 직전에 민감한 값을 가린다
+    json-logger.ts               Nest 의 로그를 공통 규격의 JSON 한 줄로 내보낸다
+    logger.factory.ts            설정으로 로거를 만든다
+    request-logging.middleware.ts  요청마다 식별자를 걸고, 끝나면 한 줄을 남긴다
   database/
     database.options.ts          설정을 연결 옵션으로 바꾼다. 서버와 마이그레이션 도구가 함께 쓴다
     database.module.ts           서버의 DB 연결
@@ -351,6 +359,41 @@ Nest 의 말을 다른 서버의 말로 옮기면 이렇다.
 | 필터(`*.filter.ts`) | 예외를 응답으로 바꾼다 | `add_exception_handler` |
 | 가드(`*.guard.ts`) | 요청이 컨트롤러에 닿기 전에 들여보낼지 정한다 | `Depends(get_current_user)` |
 | 데코레이터(`@Public()`, `@CurrentUser()`) | 컨트롤러와 인자에 붙이는 표시 | `CurrentUser` 타입 |
+
+## 로그와 요청 식별자
+
+네 서버가 같은 규격으로 로그를 남긴다. 규격의 전부는 [docs/observability.md](../docs/observability.md)에 있다. 여기는 이 서버에서 알아 둘 것만 적는다.
+
+- 로그는 표준 오류(stderr)에 **한 줄에 JSON 하나**로 나간다. 모든 줄에 `timestamp`, `level`, `service`(`board-server`), `environment`, `version`, `message` 가 있다.
+- 요청마다 식별자가 붙는다. 요청의 `X-Request-ID` 머리말이 영문자, 숫자, `.`, `_`, `-` 로 된 8~64자면 그대로 쓰고, 아니면 새 UUID 로 바꾼다.
+  정한 값은 **모든 응답의 `X-Request-ID` 머리말**로 돌려준다. 오류가 났을 때 이 값으로 로그를 찾는다.
+- 요청이 끝나면 한 줄이 남는다. 주소는 실제 값이 아니라 틀로 적는다(`/api/v1/board/posts/:id`). 머리말, 주소 뒤에 붙은 값, 본문은 적지 않는다.
+- 4xx 는 `info`, 5xx 는 `error` 다. 처리하지 못한 예외는 호출 기록과 함께 로그에만 남고, 응답에는 정해진 말과 `X-Request-ID` 만 간다.
+- 비밀번호, 토큰, 이메일 주소 같은 값은 로그에 넘기지 않는다. 실수로 넘겨도 나가기 직전에 한 번 더 가린다(이름이 `password`, `token` 같은 칸, 글 속의 JWT 와 이메일의 모양).
+- 식별자는 로그를 찾는 데만 쓴다. 누구의 요청인지는 토큰만이 말한다.
+
+| 환경 변수 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
+| `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
+| `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
+
+세 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+
+개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
+
+```bash
+npm run start:dev 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .route // "", .status_code // ""] | @tsv'
+```
+
+**이 서버에서 다른 것.**
+
+- Nest 의 로거(`new Logger('이름')`)로 남긴 줄이 그대로 이 모양으로 나간다. `log` 는 `info`, `warn` 은 `warning`, `fatal` 은 `critical`, `verbose` 는 `debug` 다.
+  칸을 더 실으려면 글 대신 객체를 넘긴다: `logger.warn({ message: '…', operation: 'post.create', post_id: id })`.
+- 인증 서버에서 공개키를 받을 때 `traceparent` 머리말로 추적을 이어 준다. 두 서버의 로그가 같은 `trace_id` 로 묶인다.
+- 설정이 틀려 서버가 뜨지 못할 때의 줄은 Nest 의 기본 모양(글)으로 나온다. 로거는 설정을 읽은 뒤에 만들어진다.
+- 테스트는 `warn` 이상만 Nest 의 기본 모양으로 찍는다(`test/app.ts`). 로그의 모양을 보는 테스트(`test/observability.e2e-spec.ts`)는 서버와 같은 로거를 꽂아 나간 줄을 모은다.
+
 
 ## CI
 
