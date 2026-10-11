@@ -1,28 +1,21 @@
 // board-server/test/health.e2e-spec.ts
 
 /**
- * 앱을 통째로 만들어 주소로 불러 본다. 네트워크의 포트를 열지 않고 앱에 요청을 바로 넘긴다(supertest).
- * 빠르고, 포트가 겹칠 일이 없다.
- *
- * 서버를 띄울 때와 같은 규칙을 건다(setupApp). 주소의 앞부분과 머리말을 여기서 본다.
+ * 살아 있는지, 준비됐는지 확인하는 주소를 앱을 통째로 만들어 불러 본다.
+ * 주소의 앞부분과 머리말, 상태 코드를 여기서 본다.
  */
 
-import { Test } from '@nestjs/testing';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
-import { AppModule } from '../src/app.module.js';
-import { API_PREFIX, setupApp } from '../src/app.setup.js';
+import { API_PREFIX } from '../src/app.setup.js';
+import { DatabaseHealth } from '../src/database/database.health.js';
+import { createTestApp } from './app.js';
 
 describe('살아 있는지 확인하는 주소', () => {
   let app: NestExpressApplication;
 
   beforeAll(async () => {
-    const module = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = module.createNestApplication<NestExpressApplication>();
-    setupApp(app);
-    await app.init();
+    app = await createTestApp();
   });
 
   afterAll(async () => {
@@ -49,5 +42,57 @@ describe('살아 있는지 확인하는 주소', () => {
     const response = await request(app.getHttpServer()).get('/health');
 
     expect(response.headers['x-powered-by']).toBeUndefined();
+  });
+});
+
+describe('준비됐는지 확인하는 주소', () => {
+  it('DB 에 닿으면 200 과 ok 를 돌려준다', async () => {
+    const app = await createTestApp();
+
+    const response = await request(app.getHttpServer()).get('/health/ready');
+    await app.close();
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ status: 'ok' });
+  });
+
+  it('API 주소 밖에 있다', async () => {
+    const app = await createTestApp();
+
+    const response = await request(app.getHttpServer()).get(
+      `/${API_PREFIX}/health/ready`,
+    );
+    await app.close();
+
+    expect(response.status).toBe(404);
+  });
+
+  it('DB 에 닿지 않으면 503 을 돌려주고, 까닭은 알리지 않는다', async () => {
+    // DB 주소와 계정 이름이 든 오류. 드라이버가 내는 오류가 이렇게 생겼다
+    const secret = 'password authentication failed for user "board"';
+    const broken = { ping: () => Promise.reject(new Error(secret)) };
+    const app = await createTestApp((builder) =>
+      builder.overrideProvider(DatabaseHealth).useValue(broken),
+    );
+
+    const response = await request(app.getHttpServer()).get('/health/ready');
+    await app.close();
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({ status: 'unavailable' });
+    expect(response.text).not.toContain('board');
+  });
+
+  it('DB 에 닿지 않아도 살아 있다고는 답한다', async () => {
+    const broken = { ping: () => Promise.reject(new Error('끊겼다')) };
+    const app = await createTestApp((builder) =>
+      builder.overrideProvider(DatabaseHealth).useValue(broken),
+    );
+
+    const response = await request(app.getHttpServer()).get('/health');
+    await app.close();
+
+    // 살아 있는지는 DB 를 보지 않는다. DB 가 느려졌다고 관리 도구가 서버를 재시작하면 안 된다
+    expect(response.status).toBe(200);
   });
 });

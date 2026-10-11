@@ -13,12 +13,12 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 export const API_PREFIX = 'api/v1/board';
 
 /** API 주소 밖에 두는 주소들. 프록시와 컨테이너 관리 도구가 부른다 */
-const OUTSIDE_THE_API = ['health'];
+const OUTSIDE_THE_API = ['health', 'health/ready'];
 
 /**
  * 앱에 규칙을 건다.
  *
- *   - 컨트롤러의 주소를 모두 API_PREFIX 아래에 놓는다. /health 는 밖에 둔다.
+ *   - 컨트롤러의 주소를 모두 API_PREFIX 아래에 놓는다. /health 와 /health/ready 는 밖에 둔다.
  *   - 응답에서 X-Powered-By 머리말을 뺀다. 어떤 프레임워크로 만들었는지 알려 줄 이유가 없다.
  */
 export function setupApp(app: NestExpressApplication): void {
