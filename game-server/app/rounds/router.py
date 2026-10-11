@@ -17,7 +17,7 @@ from app.auth.dependencies import CurrentUser
 from app.core.dice import Rolling
 from app.rounds import service, state
 from app.rounds.cast import CastMember, is_named
-from app.rounds.closing import RoundCloser
+from app.rounds.closing import RoundCloser, closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.models import Declaration, Round, RoundStatus
 from app.rounds.schemas import DeclarationOut, DeclarationUpdate, PersonOut, RoundOut, RoundPage, SceneCastOut
@@ -33,15 +33,7 @@ def get_closer(request: Request) -> RoundCloser:
 
     요청마다 새로 만든다. 테스트가 서술자를 바꿔 꽂으면 그 뒤의 요청부터 바뀐 것을 쓴다.
     """
-    state = request.app.state
-    return RoundCloser(
-        session_factory=state.session_factory,
-        narrator=state.narrator,
-        jobs=state.jobs,
-        lore=state.lore,
-        memories=state.memories,
-        histories=state.histories,
-    )
+    return closer_of(request.app.state)
 
 
 # 라운드를 닫을 수 있는 API 가 인자의 형식으로 쓴다
@@ -87,6 +79,7 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
         arrivals=round_.arrivals,
         waiting_for=state.waiting_for(table, round_) if is_waiting else [],
         created_at=round_.created_at,
+        deadline_at=round_.deadline_at,
         closing_at=round_.closing_at,
         closed_at=round_.closed_at,
         narration_failed_at=round_.narration_failed_at,

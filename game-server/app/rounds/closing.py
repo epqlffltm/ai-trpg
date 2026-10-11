@@ -43,7 +43,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -300,3 +300,19 @@ class RoundCloser:
             self.session_factory, self.narrator, table_id, number, started, self.lore, self.memories, self.histories
         )
         self.jobs.spawn(job, name=f'narrate:{table_id}:{number}', operation='round.narrate')
+
+
+def closer_of(state: Any) -> RoundCloser:
+    """
+    앱에 꽂혀 있는 것들로 서술을 맡기는 것을 만든다(app/main.py). 요청과 서버의 시계가 함께 쓴다.
+
+    부를 때마다 새로 만든다. 테스트가 서술자를 바꿔 꽂으면 그 뒤에 만든 것부터 바뀐 것을 쓴다.
+    """
+    return RoundCloser(
+        session_factory=state.session_factory,
+        narrator=state.narrator,
+        jobs=state.jobs,
+        lore=state.lore,
+        memories=state.memories,
+        histories=state.histories,
+    )

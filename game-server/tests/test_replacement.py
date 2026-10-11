@@ -862,7 +862,7 @@ async def test_the_round_closes_without_the_new_character(
     assert scene == '[2 라운드의 결과]\n드워프: 죽은 엘프의 뒤를 이어 새로 이야기에 들어온다.\n영애: 크게 웃는다.'
     # 닫힌 라운드에서 "선언을 내지 않은 사람"으로 적히지 않는다
     closed = (await read_events(client, me, table, 'round_closed'))[-1]
-    assert closed['payload'] == {'number': 2, 'idle': []}
+    assert closed['payload'] == {'number': 2, 'idle': [], 'reason': 'all_declared'}
 
 
 async def test_the_new_character_acts_from_the_next_round(

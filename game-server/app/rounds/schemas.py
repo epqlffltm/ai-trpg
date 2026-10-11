@@ -269,6 +269,9 @@ class RoundOut(BaseModel):
     # 선언을 받는 중이 아니면 비어 있다
     waiting_for: list[uuid.UUID]
     created_at: datetime
+    # 선언의 마감. 지나면 서버가 닫기 시작한다. 시간 제한이 없는 테이블이면 None 이다.
+    # 화면은 이것과 지금 시각으로 남은 시간을 보여 준다
+    deadline_at: datetime | None
     # 닫기 시작한 시각과 닫힌 시각. 아직이면 None 이다
     closing_at: datetime | None
     closed_at: datetime | None

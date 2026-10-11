@@ -607,9 +607,10 @@ async def test_a_patient_who_left_is_not_treated(
     await wound(session, world['table'], user_id=FRIEND)
     dice = load_dice(app, [1])
     await declare(client, me, world['table'], TREAT, treating(target=str(FRIEND)))
+    # 친구가 떠나서 남은 사람이 모두 냈다. 라운드가 저절로 닫히기 시작한다(#57)
     await client.delete(table_url(world['table'], '/members/me'), headers=friend)
 
-    closed = await client.post(table_url(world['table'], '/rounds/current/close'), headers=me)
+    closed = await client.get(table_url(world['table'], '/rounds/1'), headers=me)
 
     result = closed.json()['declarations'][0]['outcome']['treatment']
     assert (result['treated'], result['patient']['user_id']) == (False, str(FRIEND))
