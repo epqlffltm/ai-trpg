@@ -1,7 +1,7 @@
 # auth-server/config/test_runner.py
 
 """
-테스트 실행기. 테스트에서만 달라야 하는 설정 세 가지를 바꾼다.
+테스트 실행기. 테스트에서만 달라야 하는 설정 세 가지를 바꾸고, 로그를 화면에 찍지 않게 한다.
 
 비밀번호 해셔를 가벼운 것으로 바꾼다. 기본 해셔는 일부러 느리게 만든 계산이라,
 가입과 로그인을 수백 번 하는 테스트에서는 실행 시간의 대부분을 차지한다.
@@ -17,6 +17,8 @@
 settings.py 에 조건문으로 넣지 않는다. 설정 파일에 약한 해셔가 적혀 있으면
 조건이 잘못됐을 때 운영 서버가 그것을 쓰게 된다. 이 파일은 manage.py test 로만 실행된다.
 """
+
+import logging
 
 from django.test.runner import DiscoverRunner
 from django.test.utils import override_settings
@@ -37,7 +39,12 @@ class FastHasherTestRunner(DiscoverRunner):
             ATTEMPT_LIMIT_KEY_PREFIX='auth-test:attempts',
         )
         self._settings_override.enable()
+        # 테스트가 도는 동안 로그를 화면에 찍지 않는다. 요청마다 한 줄씩 남는 로그가 테스트의 결과를 가린다.
+        # 로그를 보는 테스트는 assertLogs 로 잡는다. assertLogs 는 그 로거의 수준을 잠깐 내려서 잡는다
+        self._root_log_level = logging.getLogger().level
+        logging.getLogger().setLevel(logging.CRITICAL + 1)
 
     def teardown_test_environment(self, **kwargs) -> None:
+        logging.getLogger().setLevel(self._root_log_level)
         self._settings_override.disable()
         super().teardown_test_environment(**kwargs)
