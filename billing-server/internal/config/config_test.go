@@ -17,14 +17,25 @@ const (
 	jwksURL     = "http://127.0.0.1:8000/api/v1/auth/jwks"
 	// 알림의 서명에 쓰는 비밀. 이것도 오류에 새면 안 된다
 	webhookSecret = "do-not-print-this-webhook-secret-either"
+	// 게임 서버가 보낸 요청의 서명에 쓰는 비밀. 이것도 새면 안 된다
+	gameSecret = "do-not-print-this-game-server-secret"
 )
 
 // required 는 반드시 있어야 하는 값만 채운 맵에 더할 것을 얹어 돌려준다.
 func required(extra map[string]string) map[string]string {
-	values := map[string]string{"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": jwksURL, "PG_WEBHOOK_SECRET": webhookSecret}
+	values := map[string]string{
+		"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": jwksURL, "PG_WEBHOOK_SECRET": webhookSecret, "GAME_SERVER_SECRET": gameSecret,
+	}
 	for name, value := range extra {
 		values[name] = value
 	}
+	return values
+}
+
+// without 은 반드시 있어야 하는 값 가운데 name 하나만 뺀 맵을 돌려준다.
+func without(name string) map[string]string {
+	values := required(nil)
+	delete(values, name)
 	return values
 }
 
@@ -59,8 +70,9 @@ func TestLoadFillsDefaults(t *testing.T) {
 		SpendFreeFirst: true,
 		FreeCreditTTL:  7 * 24 * time.Hour,
 		// 적지 않으면 환영 크레딧은 1,000 이다
-		WelcomeCredits: 1_000,
-		WebhookSecret:  webhookSecret,
+		WelcomeCredits:   1_000,
+		WebhookSecret:    webhookSecret,
+		GameServerSecret: gameSecret,
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -69,21 +81,22 @@ func TestLoadFillsDefaults(t *testing.T) {
 
 func TestLoadReadsEveryValue(t *testing.T) {
 	settings, err := config.Load(from(map[string]string{
-		"DEBUG":             "true",
-		"HOST":              "0.0.0.0",
-		"PORT":              "9000",
-		"DATABASE_URL":      databaseURL,
-		"DB_SCHEMA":         "billing_test",
-		"AUTH_JWKS_URL":     "https://auth.example.com/jwks",
-		"JWT_ISSUER":        "some-issuer",
-		"JWT_AUDIENCE":      "some-audience",
-		"SPEND_FREE_FIRST":  "false",
-		"FREE_CREDIT_TTL":   "36h30m",
-		"PG_WEBHOOK_SECRET": "0123456789abcdef0123456789abcdef",
-		"WELCOME_CREDITS":   "250",
-		"APP_ENVIRONMENT":   "production",
-		"APP_VERSION":       "3f2a9c1",
-		"LOG_LEVEL":         "warning",
+		"DEBUG":              "true",
+		"HOST":               "0.0.0.0",
+		"PORT":               "9000",
+		"DATABASE_URL":       databaseURL,
+		"DB_SCHEMA":          "billing_test",
+		"AUTH_JWKS_URL":      "https://auth.example.com/jwks",
+		"JWT_ISSUER":         "some-issuer",
+		"JWT_AUDIENCE":       "some-audience",
+		"SPEND_FREE_FIRST":   "false",
+		"FREE_CREDIT_TTL":    "36h30m",
+		"PG_WEBHOOK_SECRET":  "0123456789abcdef0123456789abcdef",
+		"GAME_SERVER_SECRET": "fedcba9876543210fedcba9876543210",
+		"WELCOME_CREDITS":    "250",
+		"APP_ENVIRONMENT":    "production",
+		"APP_VERSION":        "3f2a9c1",
+		"LOG_LEVEL":          "warning",
 	}))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
@@ -105,7 +118,8 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		FreeCreditTTL:  36*time.Hour + 30*time.Minute,
 		WelcomeCredits: 250,
 		// 꼭 32자다. 받는 가장 짧은 길이다
-		WebhookSecret: "0123456789abcdef0123456789abcdef",
+		WebhookSecret:    "0123456789abcdef0123456789abcdef",
+		GameServerSecret: "fedcba9876543210fedcba9876543210",
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -144,7 +158,7 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		values map[string]string
 		want   string
 	}{
-		{"접속 주소가 없다", map[string]string{"AUTH_JWKS_URL": jwksURL, "PG_WEBHOOK_SECRET": webhookSecret}, "DATABASE_URL"},
+		{"접속 주소가 없다", without("DATABASE_URL"), "DATABASE_URL"},
 		{"접속 주소가 비었다", required(map[string]string{"DATABASE_URL": ""}), "DATABASE_URL"},
 		{"참거짓이 아니다", required(map[string]string{"DEBUG": "yes please"}), "DEBUG"},
 		{"포트가 숫자가 아니다", required(map[string]string{"PORT": "http"}), "PORT"},
@@ -154,8 +168,12 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"스키마에 쉼표", required(map[string]string{"DB_SCHEMA": "billing,auth"}), "DB_SCHEMA"},
 		{"스키마에 따옴표", required(map[string]string{"DB_SCHEMA": `billing"; --`}), "DB_SCHEMA"},
 		{"스키마가 숫자로 시작", required(map[string]string{"DB_SCHEMA": "1billing"}), "DB_SCHEMA"},
-		{"공개키 주소가 없다", map[string]string{"DATABASE_URL": databaseURL, "PG_WEBHOOK_SECRET": webhookSecret}, "AUTH_JWKS_URL"},
-		{"알림의 비밀이 없다", map[string]string{"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": jwksURL}, "PG_WEBHOOK_SECRET"},
+		{"공개키 주소가 없다", without("AUTH_JWKS_URL"), "AUTH_JWKS_URL"},
+		{"알림의 비밀이 없다", without("PG_WEBHOOK_SECRET"), "PG_WEBHOOK_SECRET"},
+		{"게임 서버의 비밀이 없다", without("GAME_SERVER_SECRET"), "GAME_SERVER_SECRET"},
+		{"게임 서버의 비밀이 비었다", required(map[string]string{"GAME_SERVER_SECRET": ""}), "GAME_SERVER_SECRET"},
+		{"게임 서버의 비밀이 짧다", required(map[string]string{"GAME_SERVER_SECRET": "0123456789abcdef0123456789abcde"}), "GAME_SERVER_SECRET"},
+		{"두 비밀이 같은 값이다", required(map[string]string{"GAME_SERVER_SECRET": webhookSecret}), "서로 다른 값"},
 		{"알림의 비밀이 비었다", required(map[string]string{"PG_WEBHOOK_SECRET": ""}), "PG_WEBHOOK_SECRET"},
 		{"환영 크레딧이 숫자가 아니다", required(map[string]string{"WELCOME_CREDITS": "many"}), "WELCOME_CREDITS"},
 		{"환영 크레딧이 음수다", required(map[string]string{"WELCOME_CREDITS": "-1"}), "WELCOME_CREDITS"},
@@ -238,6 +256,7 @@ func TestLoadReportsEveryProblemAtOnce(t *testing.T) {
 	// 하나를 고치고 다시 띄워 다음 것을 만나는 일을 줄인다
 	names := []string{
 		"DATABASE_URL", "AUTH_JWKS_URL", "PORT", "DEBUG", "DB_SCHEMA", "SPEND_FREE_FIRST", "FREE_CREDIT_TTL", "PG_WEBHOOK_SECRET",
+		"GAME_SERVER_SECRET",
 	}
 	for _, name := range names {
 		if !strings.Contains(err.Error(), name) {
@@ -252,7 +271,8 @@ func TestLoadNeverPrintsValues(t *testing.T) {
 	if err == nil {
 		t.Fatal("오류가 나야 하는데 나지 않았다")
 	}
-	if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "nope") || strings.Contains(err.Error(), webhookSecret) {
+	if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "nope") || strings.Contains(err.Error(), webhookSecret) ||
+		strings.Contains(err.Error(), gameSecret) {
 		t.Errorf("오류에 설정의 값이 실렸다: %v", err)
 	}
 }
@@ -275,6 +295,21 @@ func TestLoadAcceptsDeployedVersions(t *testing.T) {
 		if err != nil || settings.AppVersion != version {
 			t.Errorf("APP_VERSION=%q 를 받지 않았다: %v", version, err)
 		}
+	}
+}
+
+func TestTheSameSecretInBothPlacesIsRejectedWithoutPrintingIt(t *testing.T) {
+	_, err := config.Load(from(required(map[string]string{"GAME_SERVER_SECRET": webhookSecret})))
+
+	if err == nil || strings.Contains(err.Error(), webhookSecret) {
+		t.Errorf("오류 = %v. 거절하되 값은 싣지 않아야 한다", err)
+	}
+	// 둘 다 빠졌을 때는 "같다"가 아니라 "없다"만 말한다. 빈 값 둘이 같다고 하면 무엇을 고칠지 헷갈린다
+	neither := without("GAME_SERVER_SECRET")
+	delete(neither, "PG_WEBHOOK_SECRET")
+	_, err = config.Load(from(neither))
+	if err == nil || strings.Contains(err.Error(), "서로 다른 값") {
+		t.Errorf("오류 = %v", err)
 	}
 }
 

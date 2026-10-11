@@ -41,6 +41,13 @@ sql:
               type: UUID
               pointer: true
             nullable: true
+          # 홀드 번호도 같다. nil 이면 홀드의 줄이 아니다
+          - column: ledger_entries.hold_id
+            go_type:
+              import: github.com/google/uuid
+              type: UUID
+              pointer: true
+            nullable: true
   - engine: postgresql
     schema: migrations
     queries: internal/order/queries.sql
@@ -57,4 +64,21 @@ sql:
           - db_type: timestamptz
             go_type: time.Time
           - column: orders.credits
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+  - engine: postgresql
+    schema: migrations
+    queries: internal/hold/queries.sql
+    gen:
+      go:
+        package: holddb
+        out: internal/hold/holddb
+        sql_package: pgx/v5
+        # 이 패키지의 쿼리가 쓰지 않는 테이블의 구조체는 만들지 않는다
+        omit_unused_structs: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: timestamptz
+            go_type: time.Time
+          - column: holds.amount
             go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount

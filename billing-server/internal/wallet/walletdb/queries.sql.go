@@ -136,10 +136,10 @@ func (q *Queries) HasFreeGrantWithKey(ctx context.Context, arg HasFreeGrantWithK
 }
 
 const insertEntry = `-- name: InsertEntry :exec
-INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, order_id, created_at)
+INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, order_id, hold_id, created_at)
 VALUES (
     $1, $2, $3, $4,
-    $5, $6, $7, $8
+    $5, $6, $7, $8, $9
 )
 `
 
@@ -151,6 +151,7 @@ type InsertEntryParams struct {
 	Amount      credit.Amount
 	GrantID     pgtype.Int8
 	OrderID     *uuid.UUID
+	HoldID      *uuid.UUID
 	Now         time.Time
 }
 
@@ -164,6 +165,7 @@ func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) error 
 		arg.Amount,
 		arg.GrantID,
 		arg.OrderID,
+		arg.HoldID,
 		arg.Now,
 	)
 	return err
@@ -208,7 +210,7 @@ func (q *Queries) ListDueFreeGrants(ctx context.Context, arg ListDueFreeGrantsPa
 }
 
 const listEntries = `-- name: ListEntries :many
-SELECT id, operation_id, kind, reason, amount, order_id, created_at
+SELECT id, operation_id, kind, reason, amount, order_id, hold_id, created_at
 FROM ledger_entries
 WHERE user_id = $1 AND id < $2
 ORDER BY id DESC
@@ -228,6 +230,7 @@ type ListEntriesRow struct {
 	Reason      string
 	Amount      credit.Amount
 	OrderID     *uuid.UUID
+	HoldID      *uuid.UUID
 	CreatedAt   time.Time
 }
 
@@ -248,8 +251,49 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Lis
 			&i.Reason,
 			&i.Amount,
 			&i.OrderID,
+			&i.HoldID,
 			&i.CreatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHoldLines = `-- name: ListHoldLines :many
+SELECT kind, grant_id, amount
+FROM ledger_entries
+WHERE user_id = $1 AND hold_id = $2::UUID AND reason = 'hold'
+ORDER BY id
+`
+
+type ListHoldLinesParams struct {
+	UserID uuid.UUID
+	HoldID uuid.UUID
+}
+
+type ListHoldLinesRow struct {
+	Kind    string
+	GrantID pgtype.Int8
+	Amount  credit.Amount
+}
+
+// 홀드로 뺀 줄들을 읽는다. 어디서 얼마를 뺐는지가 여기에 있다. 돌려줄 때 이 줄들을 거꾸로 한다.
+// 지갑의 줄을 잠근 뒤에 부른다.
+func (q *Queries) ListHoldLines(ctx context.Context, arg ListHoldLinesParams) ([]ListHoldLinesRow, error) {
+	rows, err := q.db.Query(ctx, listHoldLines, arg.UserID, arg.HoldID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListHoldLinesRow
+	for rows.Next() {
+		var i ListHoldLinesRow
+		if err := rows.Scan(&i.Kind, &i.GrantID, &i.Amount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -312,6 +356,24 @@ func (q *Queries) LockWallet(ctx context.Context, userID uuid.UUID) (credit.Amou
 	var paid_balance credit.Amount
 	err := row.Scan(&paid_balance)
 	return paid_balance, err
+}
+
+const returnToFreeGrant = `-- name: ReturnToFreeGrant :exec
+UPDATE free_grants
+SET remaining = remaining + $1
+WHERE id = $2
+`
+
+type ReturnToFreeGrantParams struct {
+	Amount credit.Amount
+	ID     int64
+}
+
+// 지급 묶음에 amount 만큼 돌려놓는다. 준 양보다 많아지면 CHECK 가 막는다.
+// 사라지는 시각은 고치지 않는다. 그사이에 기한이 지났으면 돌아온 것도 함께 사라진다.
+func (q *Queries) ReturnToFreeGrant(ctx context.Context, arg ReturnToFreeGrantParams) error {
+	_, err := q.db.Exec(ctx, returnToFreeGrant, arg.Amount, arg.ID)
+	return err
 }
 
 const takeFromFreeGrant = `-- name: TakeFromFreeGrant :exec
