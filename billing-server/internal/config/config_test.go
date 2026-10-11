@@ -15,11 +15,13 @@ const (
 	secret      = "do-not-print-me"
 	databaseURL = "postgres://billing:" + secret + "@127.0.0.1:5432/trpg"
 	jwksURL     = "http://127.0.0.1:8000/api/v1/auth/jwks"
+	// 알림의 서명에 쓰는 비밀. 이것도 오류에 새면 안 된다
+	webhookSecret = "do-not-print-this-webhook-secret-either"
 )
 
 // required 는 반드시 있어야 하는 값만 채운 맵에 더할 것을 얹어 돌려준다.
 func required(extra map[string]string) map[string]string {
-	values := map[string]string{"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": jwksURL}
+	values := map[string]string{"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": jwksURL, "PG_WEBHOOK_SECRET": webhookSecret}
 	for name, value := range extra {
 		values[name] = value
 	}
@@ -52,6 +54,7 @@ func TestLoadFillsDefaults(t *testing.T) {
 		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 1주일 뒤에 사라진다
 		SpendFreeFirst: true,
 		FreeCreditTTL:  7 * 24 * time.Hour,
+		WebhookSecret:  webhookSecret,
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -60,16 +63,17 @@ func TestLoadFillsDefaults(t *testing.T) {
 
 func TestLoadReadsEveryValue(t *testing.T) {
 	settings, err := config.Load(from(map[string]string{
-		"DEBUG":            "true",
-		"HOST":             "0.0.0.0",
-		"PORT":             "9000",
-		"DATABASE_URL":     databaseURL,
-		"DB_SCHEMA":        "billing_test",
-		"AUTH_JWKS_URL":    "https://auth.example.com/jwks",
-		"JWT_ISSUER":       "some-issuer",
-		"JWT_AUDIENCE":     "some-audience",
-		"SPEND_FREE_FIRST": "false",
-		"FREE_CREDIT_TTL":  "36h30m",
+		"DEBUG":             "true",
+		"HOST":              "0.0.0.0",
+		"PORT":              "9000",
+		"DATABASE_URL":      databaseURL,
+		"DB_SCHEMA":         "billing_test",
+		"AUTH_JWKS_URL":     "https://auth.example.com/jwks",
+		"JWT_ISSUER":        "some-issuer",
+		"JWT_AUDIENCE":      "some-audience",
+		"SPEND_FREE_FIRST":  "false",
+		"FREE_CREDIT_TTL":   "36h30m",
+		"PG_WEBHOOK_SECRET": "0123456789abcdef0123456789abcdef",
 	}))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
@@ -86,6 +90,8 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		JWTAudience:    "some-audience",
 		SpendFreeFirst: false,
 		FreeCreditTTL:  36*time.Hour + 30*time.Minute,
+		// 꼭 32자다. 받는 가장 짧은 길이다
+		WebhookSecret: "0123456789abcdef0123456789abcdef",
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -121,8 +127,8 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		values map[string]string
 		want   string
 	}{
-		{"접속 주소가 없다", map[string]string{"AUTH_JWKS_URL": jwksURL}, "DATABASE_URL"},
-		{"접속 주소가 비었다", map[string]string{"AUTH_JWKS_URL": jwksURL, "DATABASE_URL": ""}, "DATABASE_URL"},
+		{"접속 주소가 없다", map[string]string{"AUTH_JWKS_URL": jwksURL, "PG_WEBHOOK_SECRET": webhookSecret}, "DATABASE_URL"},
+		{"접속 주소가 비었다", required(map[string]string{"DATABASE_URL": ""}), "DATABASE_URL"},
 		{"참거짓이 아니다", required(map[string]string{"DEBUG": "yes please"}), "DEBUG"},
 		{"포트가 숫자가 아니다", required(map[string]string{"PORT": "http"}), "PORT"},
 		{"포트가 0 이다", required(map[string]string{"PORT": "0"}), "PORT"},
@@ -131,7 +137,10 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"스키마에 쉼표", required(map[string]string{"DB_SCHEMA": "billing,auth"}), "DB_SCHEMA"},
 		{"스키마에 따옴표", required(map[string]string{"DB_SCHEMA": `billing"; --`}), "DB_SCHEMA"},
 		{"스키마가 숫자로 시작", required(map[string]string{"DB_SCHEMA": "1billing"}), "DB_SCHEMA"},
-		{"공개키 주소가 없다", map[string]string{"DATABASE_URL": databaseURL}, "AUTH_JWKS_URL"},
+		{"공개키 주소가 없다", map[string]string{"DATABASE_URL": databaseURL, "PG_WEBHOOK_SECRET": webhookSecret}, "AUTH_JWKS_URL"},
+		{"알림의 비밀이 없다", map[string]string{"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": jwksURL}, "PG_WEBHOOK_SECRET"},
+		{"알림의 비밀이 비었다", required(map[string]string{"PG_WEBHOOK_SECRET": ""}), "PG_WEBHOOK_SECRET"},
+		{"알림의 비밀이 짧다", required(map[string]string{"PG_WEBHOOK_SECRET": "0123456789abcdef0123456789abcde"}), "PG_WEBHOOK_SECRET"},
 		{"공개키 주소가 비었다", required(map[string]string{"AUTH_JWKS_URL": ""}), "AUTH_JWKS_URL"},
 		{"공개키 주소에 http 가 없다", required(map[string]string{"AUTH_JWKS_URL": "127.0.0.1:8000/jwks"}), "AUTH_JWKS_URL"},
 		{"공개키 주소가 http 가 아니다", required(map[string]string{"AUTH_JWKS_URL": "ftp://auth.example.com/jwks"}), "AUTH_JWKS_URL"},
@@ -196,7 +205,9 @@ func TestLoadReportsEveryProblemAtOnce(t *testing.T) {
 	}
 
 	// 하나를 고치고 다시 띄워 다음 것을 만나는 일을 줄인다
-	names := []string{"DATABASE_URL", "AUTH_JWKS_URL", "PORT", "DEBUG", "DB_SCHEMA", "SPEND_FREE_FIRST", "FREE_CREDIT_TTL"}
+	names := []string{
+		"DATABASE_URL", "AUTH_JWKS_URL", "PORT", "DEBUG", "DB_SCHEMA", "SPEND_FREE_FIRST", "FREE_CREDIT_TTL", "PG_WEBHOOK_SECRET",
+	}
 	for _, name := range names {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("오류에 %s 가 없다: %v", name, err)
@@ -210,7 +221,18 @@ func TestLoadNeverPrintsValues(t *testing.T) {
 	if err == nil {
 		t.Fatal("오류가 나야 하는데 나지 않았다")
 	}
-	if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "nope") {
+	if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "nope") || strings.Contains(err.Error(), webhookSecret) {
 		t.Errorf("오류에 설정의 값이 실렸다: %v", err)
+	}
+}
+
+func TestLoadNeverPrintsAShortSecret(t *testing.T) {
+	// 짧아서 거절한 비밀도 오류에 싣지 않는다. 길이만 알려 준다
+	_, err := config.Load(from(required(map[string]string{"PG_WEBHOOK_SECRET": "too-short-secret"})))
+	if err == nil {
+		t.Fatal("오류가 나야 하는데 나지 않았다")
+	}
+	if strings.Contains(err.Error(), "too-short-secret") {
+		t.Errorf("오류에 비밀이 실렸다: %v", err)
 	}
 }
