@@ -2,6 +2,7 @@
 
 /**
  * 글을 맡는 모듈. 게시판을 찾는 데 BoardsModule 을, 운영자인지 묻는 데 OperatorsModule 을 쓴다.
+ * 댓글 모듈이 글이 있는지 확인할 때 PostsService 를 쓴다.
  */
 
 import { Module } from '@nestjs/common';
@@ -16,5 +17,6 @@ import { PostsService } from './posts.service.js';
   imports: [TypeOrmModule.forFeature([Post]), BoardsModule, OperatorsModule],
   controllers: [PostsController],
   providers: [PostsService],
+  exports: [PostsService],
 })
 export class PostsModule {}
