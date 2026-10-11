@@ -181,6 +181,7 @@ uv run alembic check                               # 모델을 바꾸고 마이�
 | POST | `/api/v1/game/tables/{id}/members/{user_id}/reroll` | 그 사람에게 "한 번 더 굴리기"를 주기. 방장만. 시나리오의 제작자가 허락한 테이블에서만 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/host` | 방장 넘기기. 방장만 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/narration-style` | 서술 문체 바꾸기. 방장만. 진행 중에도 된다. `null` 이면 판의 추천 문체로 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/round-time-limit` | 라운드의 시간 제한(초) 바꾸기. 방장만. 진행 중에도 되고 다음 라운드부터 쓴다. `null` 이면 시간 제한 없음 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/start` | 테이블 시작하기. 방장만. 모두 캐릭터가 있어야 한다. 모두가 시트를 받는다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/end` | 테이블 끝내기. 방장만 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds` | 라운드 목록. 처음 것부터. `limit`, `offset` | access 토큰 |
@@ -622,7 +623,7 @@ characters.py   캐릭터 정하기(진행 중에 새 캐릭터를 들일 때도
 
 | 테이블 | 내용 |
 | --- | --- |
-| `game_tables` | 테이블. 방장, 어느 판에서 왔는지, 판의 복사본(`content`), 고른 스타팅, 정원, 허용하는 캐릭터 방식, 상태, 등급, 초대 코드, 로비에 보이는지, 비밀번호(계산한 값) |
+| `game_tables` | 테이블. 방장, 어느 판에서 왔는지, 판의 복사본(`content`), 고른 스타팅, 정원, 허용하는 캐릭터 방식, 상태, 등급, 초대 코드, 로비에 보이는지, 비밀번호(계산한 값), 라운드의 시간 제한(`round_time_limit`, 초, 없으면 비어 있다) |
 | `table_members` | 앉은 사람과 그 사람의 캐릭터(이름, 설명). 캐릭터를 얻은 방식(`character_mode`). 프리젠에서 가져왔으면 몇 번째 프리젠인지. 플레이어가 능력치를 정했으면 그 점수(`abilities`, JSON) |
 | `table_sheets` | 앉은 사람의 캐릭터 시트. 그 사람의 몇 번째 캐릭터인지(`number`), 누구의 시트인지(캐릭터 이름, 프리젠), 능력치(`abilities`, JSON), 최대 HP, 지금의 HP, 죽음의 굴림에서 센 성공과 실패, 죽은 시각. 게임을 시작할 때 생긴다. 캐릭터가 죽어 새 캐릭터를 들이면 하나 더 생긴다 |
 | `table_rolls` | 주사위로 굴린 능력치의 점수들. 테이블과 사람으로 찾는다. 굴린 눈(`dice`, JSON), 점수(`scores`, JSON), 몇 번 굴렸는지, 몇 번째 캐릭터를 위해 굴렸는지(`character_number`), "한 번 더"를 받았는지. 사람이 나가도 남는다 |
@@ -662,6 +663,13 @@ characters.py   캐릭터 정하기(진행 중에 새 캐릭터를 들일 때도
 - `null` 을 보내면 판의 추천 문체로 돌아간다. 칸을 빼먹으면 422 다. 빼먹은 것을 "추천으로 돌려라"로 읽지 않는다.
 - 판은 바뀌지 않으므로 "추천을 따른다"와 "추천과 같은 것을 골랐다"는 같다. 그래서 테이블에는 늘 문체가 적혀 있다.
 - 바꾼 것은 이벤트(`narration_style_changed`)로 모두에게 보인다. 지금과 같은 문체를 고르면 아무것도 적지 않는다.
+
+**라운드의 시간 제한.** 라운드가 열린 때부터 선언을 받는 시간(`round_time_limit`, 초)이다. 지나면 서버가 라운드를 닫는다(아래 "라운드").
+- 방장이 만들 때 고른다. 30초부터 1시간까지다. 칸을 적지 않으면 5분(300초), `null` 을 보내면 시간 제한이 없다(모두 내거나 방장이 닫을 때만 닫힌다). 범위 밖이면 422 다. DB 도 범위를 지킨다.
+- 방장은 진행 중에도 바꿀 수 있다(`PUT .../round-time-limit`). 바꾼 값은 다음 라운드부터 쓴다. 지금 열린 라운드의 마감은 그대로다. 앉은 사람들이 보고 있는 마감이 갑자기 바뀌지 않는다. 끝난 테이블은 409, 칸을 빼먹으면 422 다.
+- 바꾼 것은 이벤트(`round_time_limit_changed`)로 모두에게 보인다. 지금과 같은 값이면 아무것도 적지 않는다.
+- 목록과 로비에도 보인다. 들어가기 전에 얼마나 빨리 진행되는 테이블인지 안다.
+- 이 칸이 생기기 전에 만든 테이블은 시간 제한이 없다.
 
 **비밀번호.** 로비에 보이는 테이블에 걸 수 있다(4~64자). 로비에서 들어올 때만 묻는다.
 그대로 저장하지 않는다. scrypt 로 계산한 값을 소금, 비용과 함께 둔다. 응답에는 걸려 있는지(`has_password`)만 싣는다.
@@ -783,11 +791,22 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 
 1. GM 이 장면을 서술한다. 첫 라운드의 장면은 테이블을 만들 때 고른 스타팅이다.
 2. 앉은 사람들이 각자 선언을 낸다("나는 이것을 한다"). 닫히기 전에는 고칠 수 있다.
-3. 모두 내면 라운드가 닫기 시작한다. 방장은 기다리지 않고 닫을 수 있다. 내지 않은 사람은 아무것도 하지 않은 것으로 넘어간다. 쓰러진 사람은 기다리지 않는다.
+3. 모두 내면 라운드가 닫기 시작한다. 방장은 기다리지 않고 닫을 수 있다. 마감(`deadline_at`)이 지나면 서버가 닫는다. 내지 않은 사람은 아무것도 하지 않은 것으로 넘어간다. 쓰러진 사람은 기다리지 않는다.
 4. GM 이 선언들을 한 번에 받아 결과를 서술한다. 서술하는 데는 시간이 걸린다.
 5. 서술이 끝나면 라운드가 닫히고, 그 서술이 다음 라운드의 장면이 된다.
 
 라운드의 상태(`status`)는 셋이다. `open`(선언을 받는 중) → `closing`(선언을 마감했고 GM 이 서술하는 중) → `closed`.
+
+**닫기 시작하는 길은 셋이다.** 닫힘의 이벤트(`round_closed`)에 까닭(`reason`)이 적힌다.
+- `all_declared`: 기다리던 사람이 모두 냈다. 마지막 선언이 들어왔을 때, 또는 안 낸 사람이 떠나거나 내보내져서 남은 사람이 모두 낸 상태가 됐을 때다. 떠난 뒤의 것은 떠나는 일과 따로 트랜잭션을 연다. 그 사이에 서버가 죽으면 라운드는 열린 채로 남고 방장이나 마감이 닫는다. 기다릴 사람이 없어도 아무도 내지 않았으면(모두 쓰러짐) 닫지 않는다.
+- `host`: 방장이 닫았다(`POST .../rounds/current/close`). 닫은 방장이 이벤트의 `actor_id` 에 적힌다.
+- `timeout`: 마감이 지났다. 라운드를 열 때 테이블의 시간 제한만큼 뒤로 마감을 정한다(`deadline_at`, 라운드와 `round_opened` 에 실린다). 서술을 기다린 시간은 세지 않는다. 시간 제한이 없으면 마감도 없다.
+
+**서버의 시계.** 마감이 지난 라운드는 아무도 요청하지 않아도 닫혀야 한다. 서버 안의 작업 하나가 5초마다 마감이 지난 열린 라운드를 찾아 닫는다(`app/rounds/clock.py`). 따로 띄우는 워커가 없다.
+- 찾을 때는 잠그지 않고, 닫기 전에 테이블을 잠그고 다시 본다. 서버가 여럿이라 같은 라운드를 동시에 찾아도 먼저 잠근 쪽만 닫는다. 그 사이에 모두 냈거나 방장이 닫았으면 그냥 지나간다.
+- 한 바퀴에 50개까지 닫는다. 밀리면 다음 바퀴에 마저 닫는다. 한 테이블에서 실패해도 다른 테이블은 닫고, 실패는 로그에 남긴다.
+- 서버가 뜰 때 돌기 시작하고, 꺼질 때 가장 먼저 멈춘다. 시계가 맡긴 서술은 뒤의 작업 마무리에 들어간다.
+- 열린 라운드의 마감만 담는 색인(`ix_table_rounds_open_deadline`)이 찾는 일을 가볍게 한다.
 
 코드는 하는 일마다 파일이 나뉘어 있다(`app/rounds/`). `service.py` 는 그것들을 차례로 부르고 저장하는 쪽이다.
 
@@ -808,7 +827,7 @@ records.py      일어난 일을 이벤트로 적기
 
 | 테이블 | 내용 |
 | --- | --- |
-| `table_rounds` | 라운드. 테이블 안에서의 번호, 장면(`scene`), 닫기 시작한 시각, 닫힌 시각, 닫힐 때 굴린 죽음의 굴림들(`death_saves`, JSON), 이 라운드에 새로 들어온 캐릭터들(`arrivals`, JSON) |
+| `table_rounds` | 라운드. 테이블 안에서의 번호, 장면(`scene`), 선언의 마감(`deadline_at`, 없으면 비어 있다), 닫기 시작한 시각, 닫힌 시각, 닫힐 때 굴린 죽음의 굴림들(`death_saves`, JSON), 이 라운드에 새로 들어온 캐릭터들(`arrivals`, JSON) |
 | `round_declarations` | 선언. 한 라운드에 한 사람이 하나. 글(`content`), 행동(`action`, JSON), 판정의 결과(`outcome`, JSON). 낼 때의 캐릭터 이름을 함께 적어 둔다 |
 
 **선언은 하려는 일이다.** 결과가 아니다. 낼 때 성공했는지나 주사위의 눈을 적어 보낼 수 없다. 보내면 422 다. 결과는 엔진이 적는다.
@@ -920,7 +939,7 @@ records.py      일어난 일을 이벤트로 적기
 
 - 쓰러진 사람은 글만 낼 수 있다. 행동을 붙이면 409 `character_downed` 다. 주사위를 굴리지 못한다.
 - 라운드는 쓰러진 사람을 기다리지 않는다. 서 있는 사람이 모두 내면 닫기 시작한다. `waiting_for` 와 `idle` 에도 들어가지 않는다.
-- 모두 쓰러지면 기다릴 사람이 없다. 저절로 닫히지 않으므로 방장이 닫아 넘기거나 테이블을 끝낸다.
+- 모두 쓰러지면 기다릴 사람이 없다. 아무도 내지 않았으면 저절로 닫히지 않으므로 방장이 닫아 넘기거나, 마감이 닫거나, 방장이 테이블을 끝낸다.
 
 **죽음.** 쓰러진 캐릭터가 죽는 길은 둘이다. 규칙이 정하거나, 플레이어가 스스로 보낸다.
 
@@ -1203,9 +1222,10 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `abilities_rolled` | 누가 능력치의 점수를 주사위로 굴렸다 | `dice`: 굴린 눈(버린 것 포함), `scores`: 나온 점수, `times_rolled`, `character_number`: 몇 번째 캐릭터를 위해 굴렸는지 |
 | `reroll_granted` | 방장이 누구에게 "한 번 더 굴리기"를 줬다 | `user_id`: 받은 사람 |
 | `narration_style_changed` | 방장이 서술 문체를 바꿨다. 다음 서술부터 그 문체다 | `narration_style`: 바꾼 문체 |
+| `round_time_limit_changed` | 방장이 라운드의 시간 제한을 바꿨다. 다음 라운드부터 쓴다 | `round_time_limit`: 바꾼 값(초, 없으면 `null`) |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
-| `round_opened` | 라운드가 열렸다 | `number` |
+| `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`) |
 | `player_action` | 플레이어가 선언한 행동 | `round`, `character_name`, `content`, `action`(행동. 없으면 `null`) |
 | `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면) |
 | `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed`, `injury_roll`(부상 표를 굴렸으면) |
@@ -1217,7 +1237,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `death_save_rolled` | 엔진이 쓰러진 캐릭터의 죽음의 굴림을 굴렸다. 그 라운드의 행동들 뒤, 닫힘 앞에 적힌다 | `round`, `user_id`, `character_name`, `roll`, `target`, `success`, `successes`, `failures`, `fate`(`dying`, `stable`, `dead`) |
 | `character_died` | 캐릭터가 죽었다. 죽음의 굴림으로 죽었으면 그 굴림 바로 뒤에, 치료 실패의 즉사면 그 치료 바로 뒤에 적힌다 | `user_id`, `character_name`, `cause`(`death_save`, `gave_up`, `treatment`). 죽음의 굴림이나 치료로 죽었으면 `round` 도 |
 | `character_joined` | 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다 | `round`, `user_id`, `character_name`, `replaces`: 죽은 캐릭터의 이름, `mode`, `pregen_index`, `number`: 그 사람의 몇 번째 캐릭터인지, `sheet`: 받은 시트 |
-| `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `idle`: 선언을 내지 않은 사람. 쓰러진 사람과 그 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다 |
+| `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `reason`(`all_declared`, `host`, `timeout`), `idle`: 선언을 내지 않은 사람. 쓰러진 사람과 그 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다 |
 | `narration_failed` | GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고 방장이 바로 다시 맡길 수 있다 | `round`, `reason`: 마지막 실패의 이유 |
 | `table_ended` | 테이블이 끝났다 | |
 
@@ -1709,12 +1729,14 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
   | 작업 | `operation` |
   | --- | --- |
   | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
+  | 마감이 지난 라운드 닫기(서버의 시계, 한 바퀴가 작업 하나) | `round.close_overdue` |
   | 로어북 항목의 벡터 만들기 | `lore.index` |
   | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
 
   작업을 띄우는 요청은 "작업을 뒤에 맡겼습니다"라는 줄을 남긴다. 그 줄의 `spawned_job_id` 가 새 작업의 번호다.
   "라운드를 닫은 이 요청이 띄운 서술이 어떻게 끝났나"는 `request_id` → `spawned_job_id` → `job_id` 로 따라간다.
 - 작업이 끝나면 한 줄이 남는다. 끝까지 돌면 `info`(`result: success`), 서버를 끄느라 취소되면 `warning`(`cancelled`), 예외로 끝나면 `error`(`server_error`, `error_code: job.failed`)다.
+- 서버의 시계(`app/rounds/clock.py`)는 바퀴마다 `job_id` 를 새로 걸고 한 줄을 남긴다. 닫은 것이 없으면 `debug`, 닫았으면 `info`(`closed`: 닫은 수)다. 한 테이블을 닫다 실패하면 `error`(`table_id`, `error_code: job.failed`)를 남기고 다른 테이블을 계속 닫는다. 요청 밖에서 혼자 시작하므로 추적도 바퀴마다 새로 시작한다.
 - 인증 서버에서 공개키를 받을 때 `traceparent` 머리말로 추적을 이어 준다. 두 서버의 로그가 같은 `trace_id` 로 묶인다. AI provider 에는 아무 식별자도 보내지 않는다.
 - 스트림(SSE)의 요청은 연결이 끊길 때 한 줄이 남는다. `duration_ms` 는 연결이 이어진 시간이다.
 - 처리하지 못한 예외의 응답은 `500 {"detail": "서버에서 오류가 났습니다. 잠시 후 다시 시도해 주세요."}` 다.

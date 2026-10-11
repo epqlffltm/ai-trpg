@@ -21,7 +21,9 @@ from app.core.dice import Rolling
 from app.personas import saving
 from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
-from app.tables import deaths, injuries, replacements, rolls, service, sheets, styles
+from app.rounds import service as round_service
+from app.rounds.router import Closing
+from app.tables import deaths, injuries, replacements, rolls, service, sheets, styles, time_limits
 from app.tables.errors import (
     MemberNotFoundError,
     NotHostError,
@@ -43,6 +45,7 @@ from app.tables.schemas import (
     NarrationStyleUpdate,
     PregenChoice,
     RollOut,
+    RoundTimeLimitUpdate,
     SheetOut,
     TableCreate,
     TableDetail,
@@ -66,6 +69,7 @@ def to_summary(table: GameTable) -> TableSummary:
         is_public=table.is_public,
         has_password=table.password_hash is not None,
         narration_style=table.narration_style,
+        round_time_limit=table.round_time_limit,
         created_at=table.created_at,
     )
 
@@ -337,6 +341,7 @@ async def give_up_character(table_id: uuid.UUID, user: CurrentUser, session: Ses
     쓰러진 내 캐릭터를 스스로 보낸다. 캐릭터가 죽는다. 되돌릴 수 없다.
 
     진행 중인 테이블에서, 캐릭터가 쓰러져 있을 때만 된다. 죽음의 굴림을 기다리지 않고 새 캐릭터로 넘어가려는 때 쓴다.
+    라운드를 닫으러 보지 않는다. 쓰러진 사람은 원래 라운드가 기다리지 않으므로, 보내도 기다릴 사람이 줄지 않는다.
     """
     table = await deaths.give_up_character(session, user.user_id, table_id)
     return to_detail(table, user.user_id)
@@ -367,18 +372,30 @@ async def roll_abilities(table_id: uuid.UUID, user: CurrentUser, session: Sessio
 
 # /members/me 를 /members/{user_id} 보다 먼저 적는다. 먼저 적은 주소가 먼저 맞춰진다
 @router.delete('/{table_id}/members/me', status_code=status.HTTP_204_NO_CONTENT)
-async def leave_table(table_id: uuid.UUID, user: CurrentUser, session: Session) -> None:
-    """테이블에서 나간다. 방장이 나가면 가장 먼저 들어온 사람이 방장이 된다."""
+async def leave_table(table_id: uuid.UUID, user: CurrentUser, session: Session, closer: Closing, dice: Rolling) -> None:
+    """
+    테이블에서 나간다. 방장이 나가면 가장 먼저 들어온 사람이 방장이 된다.
+
+    진행 중이면, 나간 사람만 내지 않았던 라운드를 닫기 시작한다. 남은 사람이 기다리지 않게 한다.
+    """
     await service.leave_table(session, user.user_id, table_id)
+    await round_service.close_when_ready(session, table_id, closer, dice)
 
 
 # --- 방장이 하는 일 ---
 
 
 @router.delete('/{table_id}/members/{user_id}', response_model=TableDetail, status_code=status.HTTP_200_OK)
-async def kick_member(table_id: uuid.UUID, user_id: uuid.UUID, user: CurrentUser, session: Session) -> TableDetail:
-    """참가자를 내보낸다. 초대 코드가 새로 만들어진다. 응답에 새 코드가 실린다."""
+async def kick_member(
+    table_id: uuid.UUID, user_id: uuid.UUID, user: CurrentUser, session: Session, closer: Closing, dice: Rolling
+) -> TableDetail:
+    """
+    참가자를 내보낸다. 초대 코드가 새로 만들어진다. 응답에 새 코드가 실린다.
+
+    진행 중이면, 내보낸 사람만 내지 않았던 라운드를 닫기 시작한다.
+    """
     table = await service.kick_member(session, user.user_id, table_id, user_id)
+    await round_service.close_when_ready(session, table_id, closer, dice)
     return to_detail(table, user.user_id)
 
 
@@ -402,6 +419,19 @@ async def change_narration_style(
 ) -> TableDetail:
     """GM 의 서술 문체를 바꾼다. 방장만 한다. 진행 중에도 되고, 다음 서술부터 쓴다. null 이면 시나리오의 추천 문체로."""
     table = await styles.change_narration_style(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/round-time-limit', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_round_time_limit(
+    table_id: uuid.UUID, data: RoundTimeLimitUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    라운드의 시간 제한(초)을 바꾼다. 방장만 한다. null 이면 시간 제한을 없앤다.
+
+    진행 중에도 된다. 바꾼 값은 다음 라운드부터 쓴다. 지금 열린 라운드의 마감은 그대로다.
+    """
+    table = await time_limits.change_round_time_limit(session, user.user_id, table_id, data)
     return to_detail(table, user.user_id)
 
 

@@ -59,6 +59,17 @@ class RoundStatus(enum.StrEnum):
     CLOSED = 'closed'
 
 
+class CloseReason(enum.StrEnum):
+    """라운드를 닫기 시작한 까닭. 닫힘의 이벤트에 적는다."""
+
+    # 기다리던 사람이 모두 냈다. 마지막 선언이 들어왔거나, 안 낸 사람이 떠났다
+    ALL_DECLARED = 'all_declared'
+    # 방장이 닫았다
+    HOST = 'host'
+    # 마감이 지났다. 서버가 닫았다
+    TIMEOUT = 'timeout'
+
+
 class Round(Base):
     """
     라운드 하나. 장면 하나와, 그 장면에 대한 선언들이다.
@@ -77,6 +88,10 @@ class Round(Base):
         Index('uq_table_rounds_open', 'table_id', unique=True, postgresql_where='closed_at IS NULL'),
         # 비어 있으면 조건이 참도 거짓도 아니라서 통과한다. 적혀 있을 때만 아는 문체인지 본다
         CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
+        # 마감이 지난 열린 라운드를 서버가 몇 초마다 찾는다(app/rounds/clock.py). 열린 라운드만 색인에 든다
+        Index(
+            'ix_table_rounds_open_deadline', 'deadline_at', postgresql_where='closed_at IS NULL AND closing_at IS NULL'
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -92,6 +107,9 @@ class Round(Base):
     scene: Mapped[str] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # 선언의 마감. 열 때 테이블의 시간 제한으로 정한다. 지나면 서버가 닫기 시작한다(app/rounds/clock.py).
+    # 비어 있으면 마감이 없다. 시간 제한이 없는 테이블이거나, 이 칸이 생기기 전에 연 라운드다
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 닫기 시작한 시각. 선언을 마감하고 서술을 맡긴 때다. 비어 있으면 아직 선언을 받는 중이다.
     # 서술을 다시 맡기면 이 시각을 지금으로 고친다. "맡긴 지 얼마나 됐나"를 이것으로 안다(app/rounds/service.py)
     closing_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -12,6 +12,7 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드를 받아 보�
 """
 
 import uuid
+from datetime import datetime
 
 from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import health
@@ -71,6 +72,23 @@ def waiting_for(table: GameTable, round_: Round) -> list[uuid.UUID]:
         and not is_down(member)
         and find_arrival(round_, member.user_id) is None
     ]
+
+
+def is_ready(table: GameTable, round_: Round) -> bool:
+    """
+    기다리던 사람이 모두 냈는가. 그리고 앉은 사람 중 누군가는 냈는가.
+
+    기다릴 사람이 아무도 없어도 낸 사람이 없으면 닫지 않는다. 모두 쓰러진 테이블이 저절로 넘어가지 않게 한다.
+    그때는 방장이 닫거나 마감이 닫는다.
+    """
+    if waiting_for(table, round_):
+        return False
+    return any(find_declaration(round_, member.user_id) is not None for member in table.members)
+
+
+def is_overdue(round_: Round, now: datetime) -> bool:
+    """선언을 받는 중인 라운드의 마감이 지났는가. 마감이 없으면 지나지 않는다."""
+    return round_.status == RoundStatus.OPEN and round_.deadline_at is not None and round_.deadline_at <= now
 
 
 def rules_of(table: GameTable) -> Ruleset:

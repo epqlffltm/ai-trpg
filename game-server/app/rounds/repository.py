@@ -8,6 +8,7 @@
 """
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +58,22 @@ async def list_rounds_before(session: AsyncSession, table_id: uuid.UUID, number:
         .limit(limit)
     )
     return list(reversed(list(await session.scalars(query))))
+
+
+async def find_overdue_table_ids(session: AsyncSession, now: datetime, limit: int) -> list[uuid.UUID]:
+    """
+    마감이 지났는데 아직 선언을 받는 라운드의 테이블들. 마감이 이른 것부터 limit 개.
+
+    잠그지 않는다. 고른 뒤 테이블을 잠그고 다시 본다(app/rounds/service.py 의 close_on_time).
+    색인(ix_table_rounds_open_deadline)이 열린 라운드만 담는다.
+    """
+    query = (
+        select(Round.table_id)
+        .where(Round.closed_at.is_(None), Round.closing_at.is_(None), Round.deadline_at <= now)
+        .order_by(Round.deadline_at)
+        .limit(limit)
+    )
+    return list(await session.scalars(query))
 
 
 async def count_rounds(session: AsyncSession, table_id: uuid.UUID) -> int:

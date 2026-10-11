@@ -56,13 +56,21 @@ from app.rounds.acceptance import accept_action, put_declaration
 from app.rounds.cast import CastMember, Scene, cast_of
 from app.rounds.errors import Conflict, RoundConflictError, RoundNotFoundError
 from app.rounds.judging import expire_injuries, find_dying, roll_checks, roll_death_saves
-from app.rounds.models import Round, RoundStatus
+from app.rounds.models import CloseReason, Round, RoundStatus
 from app.rounds.moves import build_moves, frozen_moves, frozen_style, to_people
 from app.rounds.narrator import NarrationRequest
 from app.rounds.prompt import HISTORY_ROUNDS
 from app.rounds.records import record_actions, record_death_saves, record_injury_endings
 from app.rounds.schemas import DeclarationUpdate
-from app.rounds.state import find_arrival, require_open, require_playing, require_started, waiting_for
+from app.rounds.state import (
+    find_arrival,
+    is_overdue,
+    is_ready,
+    require_open,
+    require_playing,
+    require_started,
+    waiting_for,
+)
 from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables import sheets
@@ -185,12 +193,14 @@ def begin_closing(
     round_: Round,
     dice: Dice,
     scene: Scene,
+    reason: CloseReason,
     closer_id: uuid.UUID | None = None,
 ) -> None:
     """
     열려 있는 라운드를 닫기 시작한다. 선언을 마감하고 행동을 판정한다. 저장하지는 않는다.
 
-    closer_id 는 라운드를 닫은 방장이다. 모두가 내서 저절로 닫혔으면 주지 않는다.
+    reason 은 닫는 까닭이다(모두 냄, 방장, 마감). 닫힘의 이벤트에 적는다.
+    closer_id 는 라운드를 닫은 방장이다. 저절로 닫혔으면(모두 냄, 마감) 주지 않는다.
     scene 은 이번 장면의 NPC 들이다(load_scene). 행동이 겨눈 NPC 의 상태를 여기서 바꾼다.
     판정과 죽음의 굴림을 끝낸 뒤에 때가 된 부상을 끝낸다. 이번 라운드의 판정에는 아직 효과가 있었다.
     오래 가는 것이 나으면 후유증 표를 굴린다(expire_injuries).
@@ -213,7 +223,8 @@ def begin_closing(
     record_actions(session, table, round_, group)
     record_death_saves(session, table, round_, group)
     record_injury_endings(session, table, ended, round_.number, group)
-    payload = {'number': round_.number, 'idle': [str(user_id) for user_id in waiting_for(table, round_)]}
+    idle = [str(user_id) for user_id in waiting_for(table, round_)]
+    payload = {'number': round_.number, 'idle': idle, 'reason': reason}
     recorder.record(session, table, EventType.ROUND_CLOSED, actor_id=closer_id, payload=payload, group=group)
     round_.closing_at = datetime.now(UTC)
 
@@ -292,7 +303,7 @@ async def declare(
 
     everyone_declared = not waiting_for(table, round_)
     if everyone_declared:
-        begin_closing(session, table, round_, dice, scene)
+        begin_closing(session, table, round_, dice, scene, CloseReason.ALL_DECLARED)
     saved = await save(session, table)
     # 저장한 뒤에 맡긴다. 먼저 맡기면 서술을 맡은 작업이 아직 저장되지 않은 것을 읽는다
     if everyone_declared:
@@ -319,7 +330,8 @@ async def force_close(
     table_state.require_host(table, host_id)
 
     if round_.status == RoundStatus.OPEN:
-        begin_closing(session, table, round_, dice, await load_scene(session, table, round_), closer_id=host_id)
+        scene = await load_scene(session, table, round_)
+        begin_closing(session, table, round_, dice, scene, CloseReason.HOST, closer_id=host_id)
     elif is_stalled(round_, datetime.now(UTC)):
         round_.closing_at = datetime.now(UTC)
         round_.narration_failed_at = None
@@ -329,6 +341,65 @@ async def force_close(
     saved = await save(session, table)
     hand_over(scheduler, saved)
     return saved
+
+
+# --- 요청이 아닌 일로 닫기 시작하기. 마감이 지났거나, 안 낸 사람이 떠났다 ---
+
+
+async def lock_open_round(session: AsyncSession, table_id: uuid.UUID) -> tuple[GameTable, Round] | None:
+    """
+    테이블을 잠그고, 선언을 받는 중인 라운드를 찾는다. 앉아 있는지는 보지 않는다(부르는 쪽이 사람이 아니다).
+
+    테이블이 없거나, 진행 중이 아니거나, 가장 최근 라운드가 선언을 받는 중이 아니면 None.
+    """
+    table = await table_repository.lock_table(session, table_id)
+    if table is None or table.status != TableStatus.PLAYING:
+        return None
+    round_ = await repository.find_latest_round(session, table_id)
+    if round_ is None or round_.status != RoundStatus.OPEN:
+        return None
+    return table, round_
+
+
+async def close_on_time(
+    session: AsyncSession, table_id: uuid.UUID, now: datetime, scheduler: NarrationScheduler, dice: Dice
+) -> bool:
+    """
+    마감이 지난 라운드를 닫기 시작한다. 닫았으면 True. 서버의 시계가 부른다(app/rounds/clock.py).
+
+    잠근 뒤에 다시 본다. 그사이에 모두 냈거나 방장이 닫았으면, 다른 서버가 먼저 닫았으면 할 일이 없다.
+    선언을 내지 않은 사람은 아무것도 하지 않은 것으로 넘어간다. 방장이 닫을 때와 같다.
+    """
+    found = await lock_open_round(session, table_id)
+    if found is None or not is_overdue(found[1], now):
+        # 잠금을 푼다. 바꾼 것이 없다. 되돌리기(rollback)는 세션이 들고 있던 객체를 낡은 것으로 만든다
+        await session.commit()
+        return False
+    table, round_ = found
+    begin_closing(session, table, round_, dice, await load_scene(session, table, round_), CloseReason.TIMEOUT)
+    hand_over(scheduler, await save(session, table))
+    return True
+
+
+async def close_when_ready(
+    session: AsyncSession, table_id: uuid.UUID, scheduler: NarrationScheduler, dice: Dice
+) -> bool:
+    """
+    기다리던 사람이 모두 냈으면 닫기 시작한다. 닫았으면 True.
+
+    누가 떠났거나 내보내진 뒤에 부른다. 기다리던 사람이 빠지면
+    남은 사람이 모두 낸 상태가 될 수 있다. 선언이 들어올 때만 보면 그 라운드는 방장이 닫을 때까지 멈춘다.
+    떠나는 일과 따로 트랜잭션을 연다. 둘 사이에 서버가 죽으면 라운드는 열린 채로 남고, 방장이나 마감이 닫는다.
+    """
+    found = await lock_open_round(session, table_id)
+    if found is None or not is_ready(*found):
+        # 잠금을 푼다. 바꾼 것이 없다. 되돌리기(rollback)는 세션이 들고 있던 객체를 낡은 것으로 만든다
+        await session.commit()
+        return False
+    table, round_ = found
+    begin_closing(session, table, round_, dice, await load_scene(session, table, round_), CloseReason.ALL_DECLARED)
+    hand_over(scheduler, await save(session, table))
+    return True
 
 
 # --- 서술을 맡은 작업이 부르는 것. 요청 밖에서 돈다(app/rounds/closing.py) ---
