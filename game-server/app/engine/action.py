@@ -11,7 +11,8 @@
   - 모양(CheckAction): 규칙을 몰라도 볼 수 있는 것. 입력을 받을 때 검사한다.
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
-지금은 종류가 하나다(판정). 종류를 나타내는 칸(kind)을 처음부터 둔다. 종류가 늘어도 모양이 바뀌지 않는다.
+종류는 둘이다. 판정(check)과 치료(treat). 종류를 나타내는 칸(kind)으로 가른다(Action).
+치료는 능력과 난이도를 받지 않는다. 규칙이 정한다(app/engine/treatment.py).
 
 행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
 
@@ -28,15 +29,16 @@
 import enum
 import uuid
 from dataclasses import dataclass
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from app.engine.check import Check, HinderedCheck, find_ability, find_difficulty, resolve_hindered
 from app.engine.dice import Dice
 from app.engine.health import ChangeKind, find_magnitude
 from app.engine.injury import NO_HINDRANCE, Hindrance, find_injury
 from app.engine.ruleset import CalledShotMode, Key, Ruleset
+from app.engine.treatment import treatable
 
 
 class ActionKind(enum.StrEnum):
@@ -44,6 +46,8 @@ class ActionKind(enum.StrEnum):
 
     # 능력 하나로 난이도 하나에 도전한다. 주사위를 한 번 굴린다
     CHECK = 'check'
+    # 오래 가는 부상 하나를 치료한다. 규칙이 정한 능력과 난이도로 주사위를 한 번 굴린다
+    TREAT = 'treat'
 
 
 class CheckAction(BaseModel):
@@ -111,6 +115,52 @@ class CheckAction(BaseModel):
         if self.aim is not None and self.harm is None:
             raise ValueError('aim 은 harm 과 함께 적습니다.')
         return self
+
+
+class TreatAction(BaseModel):
+    """
+    치료하는 행동. 대상이 입은 오래 가는 부상 하나를 치료한다.
+
+    능력과 난이도는 받지 않는다. 규칙의 치료 능력과 그 부상의 치료 난이도로 판정한다.
+    대상은 앉은 사람(target)이나 이번 장면의 NPC(npc) 중 하나다.
+    둘 다 비우면 자기 자신이다(app/rounds/service.py 가 채운다).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.TREAT]
+    # 치료할 부상의 이름표. 규칙의 Injury.key 다
+    injury: Key
+    # 치료받는 사람. 테이블에 앉은 사람이다. 엔진은 이 값을 읽지 않는다
+    target: uuid.UUID | None = None
+    # 치료받는 NPC. 판의 로어북 인물 항목의 id 다. 엔진은 이 값을 읽지 않는다
+    npc: uuid.UUID | None = None
+
+    @model_validator(mode='after')
+    def require_one_patient(self) -> Self:
+        """치료받는 쪽은 하나다. 앉은 사람과 NPC 를 함께 적지 않는다."""
+        if self.target is not None and self.npc is not None:
+            raise ValueError('target 과 npc 는 함께 적지 않습니다.')
+        return self
+
+
+# 선언에 붙는 행동. kind 로 종류를 가른다
+Action = Annotated[CheckAction | TreatAction, Field(discriminator='kind')]
+
+# 저장된 행동(JSON)을 읽는 법. 우리가 쓴 문서다. 모양이 틀렸으면 버그다
+ACTION = TypeAdapter(Action)
+
+
+def read_action(data: dict) -> CheckAction | TreatAction:
+    """선언에 저장된 행동을 읽는다. 모양이 틀리면 ValidationError."""
+    return ACTION.validate_python(data)
+
+
+def find_treat_fault(ruleset: Ruleset, action: TreatAction) -> str | None:
+    """치료가 이 규칙에 맞지 않으면 틀린 칸의 이름(injury)을 돌려준다. 맞으면 None. 치료할 수 있는 부상이어야 한다."""
+    if treatable(ruleset, action.injury) is None:
+        return 'injury'
+    return None
 
 
 class Recipient(enum.StrEnum):

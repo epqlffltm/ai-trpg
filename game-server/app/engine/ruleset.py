@@ -4,7 +4,8 @@
 규칙의 모양. 규칙은 코드가 아니라 데이터다.
 
 어떤 능력치가 있는지, 주사위가 몇 면인지, 난이도가 몇 단계인지, 피해와 회복이 얼마인지,
-캐릭터의 숫자를 어떻게 정하는지, 쓰러진 캐릭터가 어떻게 죽는지, 어떤 부상이 언제 생기는지를 한 묶음(Ruleset)에 담는다.
+캐릭터의 숫자를 어떻게 정하는지, 쓰러진 캐릭터가 어떻게 죽는지, 어떤 부상이 언제 생기고 어떻게 치료하는지를
+한 묶음(Ruleset)에 담는다.
 엔진은 이 묶음을 인자로 받는다. 묶음의 값이 달라져도 엔진의 코드는 그대로다.
 
 규칙은 룰북에 담기고(app/assets/models.py 의 Rulebook.rules), 게시할 때 판에 굳는다.
@@ -227,10 +228,25 @@ class Healing(enum.StrEnum):
 
     # 짧은 것. 정한 라운드가 지나면 저절로 풀린다(기절, 중독)
     ROUNDS = 'rounds'
-    # 오래 가는 것. 정한 라운드가 지나거나 치료를 받으면 낫는다. 나을 때 후유증 표를 굴린다(골절)
+    # 오래 가는 것. 정한 라운드가 지나면 낫는다. 치료에 성공하면 그 라운드가 줄어든다. 나을 때 후유증 표를 굴린다(골절)
     HEALS = 'heals'
     # 결손. 낫지 않는다(손을 잃음)
     PERMANENT = 'permanent'
+
+
+def require_every_face(rows: tuple, sides: int, label: str) -> None:
+    """
+    표의 줄(low, high)이 1 부터 sides 까지를 빈틈도 겹침도 없이 차례로 덮는지 본다. 아니면 ValueError.
+
+    부상 표와 치료 실패 표가 함께 쓴다. 어느 눈이 나와도 줄이 하나로 정해져야 한다.
+    """
+    expected = 1
+    for row in rows:
+        if row.low != expected or row.high < row.low:
+            raise ValueError(f'{label}의 줄이 {expected} 부터 이어지지 않습니다.')
+        expected = row.high + 1
+    if expected != sides + 1:
+        raise ValueError(f'{label}가 1 부터 {sides} 까지를 덮지 않습니다.')
 
 
 class TableRow(Part):
@@ -254,13 +270,7 @@ class InjuryTable(Part):
     @model_validator(mode='after')
     def require_every_face_once(self) -> Self:
         """줄이 1 부터 sides 까지를 빈틈도 겹침도 없이 차례로 덮어야 한다. 어느 눈이 나와도 줄이 하나로 정해진다."""
-        expected = 1
-        for row in self.rows:
-            if row.low != expected or row.high < row.low:
-                raise ValueError(f'부상 표의 줄이 {expected} 부터 이어지지 않습니다.')
-            expected = row.high + 1
-        if expected != self.sides + 1:
-            raise ValueError(f'부상 표가 1 부터 {self.sides} 까지를 덮지 않습니다.')
+        require_every_face(self.rows, self.sides, '부상 표')
         return self
 
     def injury_keys(self) -> set[str]:
@@ -277,7 +287,7 @@ class Injury(Part):
     aftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.
     aimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.
     시간은 지금 라운드로 센다. 게임 속 달력과 시계가 생기면 그것으로 옮긴다.
-    오래 가는 것의 낫기, 후유증, 노려 치기는 다음 단계에서 쓴다(#114 나, 다). 규칙의 모양은 한 번에 정해 둔다.
+    treat_difficulty 와 treat_rounds 는 치료다. 치료에 성공하면 나을 때까지 남은 라운드가 줄어든다(#114 다).
     """
 
     key: Key
@@ -288,6 +298,23 @@ class Injury(Part):
     rounds: Annotated[int, Field(ge=1, le=RULESET_MAX_INJURY_ROUNDS)] | None = None
     aftermath: InjuryTable | None = None
     aimable: bool = False
+    # 치료의 난이도. 규칙의 Difficulty.key 다. 비우면 치료할 수 없는 부상이다(시간이 지나야 낫는다)
+    treat_difficulty: Key | None = None
+    # 치료에 한 번 성공할 때마다 나을 때까지 남은 라운드에서 빼는 수
+    treat_rounds: Annotated[int, Field(ge=1, le=RULESET_MAX_INJURY_ROUNDS)] | None = None
+
+    @model_validator(mode='after')
+    def require_treatment_pair_on_healing(self) -> Self:
+        """
+        치료의 난이도와 줄이는 라운드는 함께 적는다. 오래 가는 부상(heals)에만 있다.
+
+        짧은 것은 금방 풀리고, 결손은 치료해도 낫지 않는다.
+        """
+        if (self.treat_difficulty is None) != (self.treat_rounds is None):
+            raise ValueError('treat_difficulty 와 treat_rounds 는 함께 적습니다.')
+        if self.treat_difficulty is not None and self.healing != Healing.HEALS:
+            raise ValueError('treat_difficulty 는 오래 가는 부상(heals)에만 적습니다.')
+        return self
 
     @model_validator(mode='after')
     def require_rounds_unless_permanent(self) -> Self:
@@ -342,6 +369,68 @@ class CalledShot(Part):
         return self
 
 
+class Mishap(enum.StrEnum):
+    """치료에 실패했을 때 일어나는 일의 종류. 치료 실패 표의 한 줄이 이 중 하나다."""
+
+    # 아무 일도 없다
+    NOTHING = 'nothing'
+    # 좀 아프다. 치료받는 쪽이 magnitude 만큼 피해를 입는다
+    PAIN = 'pain'
+    # 덧난다. 나을 때까지 남은 라운드가 rounds 만큼 늘어난다. magnitude 가 있으면 그만큼 피해도 입는다
+    WORSEN = 'worsen'
+    # 치료받는 쪽이 그 자리에서 죽는다
+    FATAL = 'fatal'
+
+
+class MishapRow(Part):
+    """치료 실패 표의 한 줄. 눈이 low 이상 high 이하면 이 줄이다."""
+
+    low: Annotated[int, Field(ge=1, le=RULESET_MAX_DIE)]
+    high: Annotated[int, Field(ge=1, le=RULESET_MAX_DIE)]
+    kind: Mishap
+    # 덧날 때 늘어나는 라운드. 덧남에만 있다
+    rounds: Annotated[int, Field(ge=1, le=RULESET_MAX_INJURY_ROUNDS)] | None = None
+    # 피해의 등급. 규칙의 Magnitude.key 다. 좀 아픔에는 있어야 하고, 덧남에는 있어도 된다
+    magnitude: Key | None = None
+
+    @model_validator(mode='after')
+    def require_fields_for_kind(self) -> Self:
+        """종류마다 필요한 칸만 적는다."""
+        if (self.kind == Mishap.WORSEN) != (self.rounds is not None):
+            raise ValueError('rounds 는 worsen 에만 적습니다.')
+        if self.kind == Mishap.PAIN and self.magnitude is None:
+            raise ValueError('pain 에는 magnitude 를 적습니다.')
+        if self.kind in (Mishap.NOTHING, Mishap.FATAL) and self.magnitude is not None:
+            raise ValueError('nothing 과 fatal 에는 magnitude 를 적지 않습니다.')
+        return self
+
+
+class MishapTable(Part):
+    """치료 실패 표. 치료 판정에 실패하면 sides 면 주사위를 한 번 굴려, 그 눈이 든 줄의 일이 일어난다."""
+
+    sides: Annotated[int, Field(ge=RULESET_MIN_DIE, le=RULESET_MAX_DIE)]
+    rows: Annotated[tuple[MishapRow, ...], Field(min_length=1, max_length=RULESET_MAX_TABLE_ROWS)]
+
+    @model_validator(mode='after')
+    def require_every_face_once(self) -> Self:
+        """줄이 1 부터 sides 까지를 빈틈도 겹침도 없이 차례로 덮어야 한다."""
+        require_every_face(self.rows, self.sides, '치료 실패 표')
+        return self
+
+
+class Treatment(Part):
+    """
+    치료의 규칙. 어느 능력으로 판정하고, 실패하면 무엇이 일어나는지.
+
+    난이도와 줄어드는 라운드는 부상마다 다르다(Injury.treat_difficulty, treat_rounds).
+    """
+
+    # 치료 판정에 쓰는 능력. 규칙의 Ability.key 다
+    ability: Key
+    # 실패하면 굴리는 표
+    mishaps: MishapTable
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
@@ -382,6 +471,8 @@ class Ruleset(Part):
     injury_triggers: InjuryTriggers
     # 노려 치기의 어려움. None 이면 노려 치기가 없다
     called_shot: CalledShot | None
+    # 치료. None 이면 이 규칙에는 치료가 없다(오래 가는 부상은 시간이 지나야 낫는다). 칸 자체는 늘 있어야 한다
+    treatment: Treatment | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
@@ -497,6 +588,30 @@ class Ruleset(Part):
             return self
         if self.called_shot is None or not any(injury.aimable for injury in self.injuries):
             raise ValueError('노려 치기를 켰는데 어려움을 정하는 법이나 노릴 수 있는 부상이 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_treatment_setup(self) -> Self:
+        """
+        치료의 능력, 부상의 치료 난이도, 실패 표의 피해 등급은 규칙에 있는 것이어야 한다.
+
+        치료할 수 있는 부상이 있으면 치료의 규칙도 있어야 한다. 없으면 무엇으로 판정할지 알 수 없다.
+        """
+        treatable = [injury for injury in self.injuries if injury.treat_difficulty is not None]
+        if self.treatment is None:
+            if treatable:
+                raise ValueError('치료할 수 있는 부상이 있는데 치료의 규칙(treatment)이 없습니다.')
+            return self
+        if self.treatment.ability not in [ability.key for ability in self.abilities]:
+            raise ValueError(f'치료의 능력이 능력치에 없습니다: {self.treatment.ability}')
+        difficulties = {difficulty.key for difficulty in self.difficulties}
+        unknown = sorted({injury.treat_difficulty for injury in treatable} - difficulties)
+        if unknown:
+            raise ValueError(f'부상의 치료 난이도가 난이도에 없습니다: {", ".join(unknown)}')
+        magnitudes = {magnitude.key for magnitude in self.magnitudes}
+        used = {row.magnitude for row in self.treatment.mishaps.rows if row.magnitude is not None}
+        if used - magnitudes:
+            raise ValueError(f'치료 실패 표의 피해 등급이 등급에 없습니다: {", ".join(sorted(used - magnitudes))}')
         return self
 
     @model_validator(mode='after')
