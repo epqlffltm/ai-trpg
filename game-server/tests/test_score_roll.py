@@ -12,6 +12,7 @@ from app.engine.dice import ScriptedDice
 from app.engine.ruleset import Ruleset
 from app.engine.score_roll import RolledScore, keep_highest, roll_score, roll_scores, uses_exactly
 from app.engine.templates import SRD5
+from tests.rules import NO_INJURIES
 
 SCORE_ROLL = SRD5.score_roll
 
@@ -26,6 +27,7 @@ TWO_ABILITIES = rules(
     abilities=[{'key': 'body', 'name': '몸'}, {'key': 'mind', 'name': '마음'}],
     hp_ability='body',
     score_roll={'count': 2, 'sides': 10, 'keep': 2},
+    **NO_INJURIES,
 )
 
 

@@ -21,13 +21,14 @@ from app.core.dice import Rolling
 from app.personas import saving
 from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
-from app.tables import deaths, replacements, rolls, service, sheets, styles
+from app.tables import deaths, injuries, replacements, rolls, service, sheets, styles
 from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 from app.tables.schemas import (
     CharacterOut,
     CharacterUpdate,
     FallenOut,
     HostTransfer,
+    InjuryOut,
     JoinRequest,
     LobbyJoinRequest,
     MemberOut,
@@ -81,6 +82,10 @@ def to_sheet(sheet: TableSheet | None) -> SheetOut | None:
         death_successes=sheet.death_successes,
         death_failures=sheet.death_failures,
         dead=sheet.died_at is not None,
+        injuries=[
+            InjuryOut(injury=row.injury, round=row.round_number, ends_after_round=row.ends_after_round)
+            for row in injuries.active(sheet.injuries)
+        ],
     )
 
 

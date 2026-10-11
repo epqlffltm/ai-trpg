@@ -145,10 +145,11 @@ def numbers(outcome: dict | None) -> dict | None:
     판정의 결과에서 판정의 숫자만 남긴다.
 
     HP 의 변화(effect)는 다른 테스트가 본다(test_round_health.py). NPC 의 변화(npc_effect)도(test_npc_actions.py).
+    부상의 영향(hindrance)도(test_injuries.py).
     """
     if outcome is None:
         return None
-    return {key: value for key, value in outcome.items() if key not in ('effect', 'npc_effect')}
+    return {key: value for key, value in outcome.items() if key not in ('effect', 'npc_effect', 'hindrance')}
 
 
 def outcomes(round_: dict) -> dict[str, dict | None]:
@@ -393,6 +394,8 @@ async def test_a_check_is_recorded_right_after_the_action_that_called_for_it(
         'total': 15,
         'target': 15,
         'success': True,
+        # 부상이 없어 판정에 준 영향이 없다
+        'hindrance': None,
     }
     # 판정은 그 행동에서 나왔고, 같은 묶음이다
     assert rolled['caused_by_sequence'] == acted['sequence']

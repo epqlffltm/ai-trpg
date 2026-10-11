@@ -30,9 +30,10 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.engine.check import Check, find_ability, find_difficulty, resolve
+from app.engine.check import Check, HinderedCheck, find_ability, find_difficulty, resolve_hindered
 from app.engine.dice import Dice
 from app.engine.health import ChangeKind, find_magnitude
+from app.engine.injury import NO_HINDRANCE, Hindrance
 from app.engine.ruleset import Key, Ruleset
 
 
@@ -156,15 +157,26 @@ def settle(ruleset: Ruleset, action: CheckAction) -> CheckAction:
 
 def attempt(ruleset: Ruleset, action: CheckAction, abilities: dict[str, int], dice: Dice) -> Check:
     """
-    행동을 한다. 판정을 한 번 하고 그 결과를 돌려준다. 주사위를 한 번 굴린다.
+    행동을 한다. 판정을 한 번 하고 그 결과를 돌려준다. 주사위를 한 번 굴린다. 부상의 영향이 없는 판정이다.
 
     abilities 는 행동하는 캐릭터의 시트에 적힌 능력치의 점수다({능력의 key: 점수}).
+    """
+    return attempt_hindered(ruleset, action, abilities, dice, NO_HINDRANCE).check
+
+
+def attempt_hindered(
+    ruleset: Ruleset, action: CheckAction, abilities: dict[str, int], dice: Dice, hindrance: Hindrance
+) -> HinderedCheck:
+    """
+    부상을 입은 캐릭터가 행동을 한다. 판정을 한 번 하고 그 결과를 돌려준다.
+
+    hindrance 는 그 캐릭터의 부상이 이 행동의 능력에 주는 것이다(app/engine/injury.py 의 hindrance_of).
 
     받을 때 규칙에 맞는지 본 행동(find_fault, settle)과, 같은 규칙으로 검사한 시트에만 쓴다.
     그래서 여기서는 능력과 난이도가 있는지 다시 따지지 않는다.
     """
     difficulty = find_difficulty(ruleset, action.difficulty)
-    return resolve(ruleset, abilities[action.ability], difficulty, dice)
+    return resolve_hindered(ruleset, abilities[action.ability], difficulty, dice, hindrance)
 
 
 def consequence(action: CheckAction, check: Check) -> Consequence | None:

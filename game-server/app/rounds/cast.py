@@ -42,6 +42,18 @@ BADLY_HURT = '크게 다침'
 CONDITIONS = {NpcStatus.DOWNED: '쓰러짐(의식 없음)', NpcStatus.DEAD: '죽음'}
 
 
+@dataclass(frozen=True)
+class Scene:
+    """
+    이번 장면을 다루는 데 필요한 NPC 들. 테이블의 NPC 상태 전부와, 그중 장면에 나온 인물들.
+
+    장면에 나오지 않은 인물도 상태가 바뀔 수 있다(짧은 부상이 풀린다). 그래서 둘을 함께 든다.
+    """
+
+    npcs: list[TableNpc]
+    cast: list[CastMember]
+
+
 def cast_of(snapshot: Snapshot, scene: str, npcs: Iterable[TableNpc]) -> list[CastMember]:
     """이 장면에 나온 인물들. 판의 인물 항목 순서다. 상태가 없는 인물은 뺀다."""
     states = {npc.entry_id: npc for npc in npcs}
