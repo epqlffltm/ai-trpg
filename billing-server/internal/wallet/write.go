@@ -42,8 +42,37 @@ func (s *Service) GrantFree(ctx context.Context, userID uuid.UUID, amount credit
 		return err
 	}
 	return s.withLockedWallet(ctx, userID, func(ctx context.Context, c change) error {
-		return c.openGrant(ctx, uuid.New(), amount, c.now.Add(s.policy.FreeTTL))
+		return c.openGrant(ctx, uuid.New(), amount, c.now.Add(s.policy.FreeTTL), pgtype.Text{})
 	})
+}
+
+// GrantFreeOnce 는 한 사용자에게 한 번만 주는 무료 크레딧을 준다. key 는 그 지급의 이름이다(환영 크레딧은 "welcome").
+// 이 사용자가 같은 이름으로 이미 받았으면 ErrAlreadyGranted 를 돌려주고 아무것도 바꾸지 않는다.
+// 받은 것을 다 썼거나 기한이 지나 사라졌어도 다시 받지 못한다.
+func (s *Service) GrantFreeOnce(ctx context.Context, userID uuid.UUID, amount credit.Amount, key string) (Grant, error) {
+	if err := checkAmount(amount); err != nil {
+		return Grant{}, err
+	}
+	if !grantKeyPattern.MatchString(key) {
+		return Grant{}, ErrInvalidGrantKey
+	}
+	var grant Grant
+	err := s.withLockedWallet(ctx, userID, func(ctx context.Context, c change) error {
+		// 지갑의 줄을 잠근 채로 본다. 같은 사용자의 두 요청이 함께 와도 뒤의 것은 앞의 것이 준 것을 본다
+		taken, err := c.queries.HasFreeGrantWithKey(ctx, walletdb.HasFreeGrantWithKeyParams{UserID: userID, GrantKey: key})
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrAlreadyGranted
+		}
+		grant = Grant{Amount: amount, ExpiresAt: c.now.Add(s.policy.FreeTTL)}
+		return c.openGrant(ctx, uuid.New(), amount, grant.ExpiresAt, pgtype.Text{String: key, Valid: true})
+	})
+	if err != nil {
+		return Grant{}, err
+	}
+	return grant, nil
 }
 
 // Spend 는 크레딧을 쓴다. 가진 것이 모자라면 ErrInsufficient 를 돌려주고 아무것도 바꾸지 않는다.
@@ -165,9 +194,10 @@ func (c change) movePaid(ctx context.Context, operationID uuid.UUID, reason Reas
 }
 
 // openGrant 는 무료 크레딧의 지급 묶음을 만들고 원장에 적는다. 둘은 늘 함께 일어난다.
-func (c change) openGrant(ctx context.Context, operationID uuid.UUID, amount credit.Amount, expiresAt time.Time) error {
+// key 는 한 번만 주는 지급의 이름이다. 몇 번이고 줄 수 있는 지급이면 비워 둔다.
+func (c change) openGrant(ctx context.Context, operationID uuid.UUID, amount credit.Amount, expiresAt time.Time, key pgtype.Text) error {
 	grantID, err := c.queries.CreateFreeGrant(ctx, walletdb.CreateFreeGrantParams{
-		UserID: c.userID, Amount: amount, ExpiresAt: expiresAt, Now: c.now,
+		UserID: c.userID, Amount: amount, ExpiresAt: expiresAt, GrantKey: key, Now: c.now,
 	})
 	if err != nil {
 		return err

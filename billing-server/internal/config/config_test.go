@@ -54,6 +54,8 @@ func TestLoadFillsDefaults(t *testing.T) {
 		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 1주일 뒤에 사라진다
 		SpendFreeFirst: true,
 		FreeCreditTTL:  7 * 24 * time.Hour,
+		// 적지 않으면 환영 크레딧은 1,000 이다
+		WelcomeCredits: 1_000,
 		WebhookSecret:  webhookSecret,
 	}
 	if settings != want {
@@ -74,6 +76,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		"SPEND_FREE_FIRST":  "false",
 		"FREE_CREDIT_TTL":   "36h30m",
 		"PG_WEBHOOK_SECRET": "0123456789abcdef0123456789abcdef",
+		"WELCOME_CREDITS":   "250",
 	}))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
@@ -90,6 +93,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		JWTAudience:    "some-audience",
 		SpendFreeFirst: false,
 		FreeCreditTTL:  36*time.Hour + 30*time.Minute,
+		WelcomeCredits: 250,
 		// 꼭 32자다. 받는 가장 짧은 길이다
 		WebhookSecret: "0123456789abcdef0123456789abcdef",
 	}
@@ -105,7 +109,7 @@ func TestLoadTreatsEmptyAsMissing(t *testing.T) {
 	// .env 에 이름만 적고 값을 비워 둔 줄은 적지 않은 것과 같다
 	settings, err := config.Load(from(required(map[string]string{
 		"DEBUG": "", "HOST": "", "PORT": "", "DB_SCHEMA": "", "JWT_ISSUER": "", "JWT_AUDIENCE": "",
-		"SPEND_FREE_FIRST": "", "FREE_CREDIT_TTL": "",
+		"SPEND_FREE_FIRST": "", "FREE_CREDIT_TTL": "", "WELCOME_CREDITS": "",
 	})))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
@@ -114,6 +118,9 @@ func TestLoadTreatsEmptyAsMissing(t *testing.T) {
 		t.Errorf("빈 값이 기본값으로 채워지지 않았다: %+v", settings)
 	}
 	if settings.JWTIssuer != config.DefaultJWTIssuer || settings.JWTAudience != config.DefaultJWTAudience {
+		t.Errorf("빈 값이 기본값으로 채워지지 않았다: %+v", settings)
+	}
+	if settings.WelcomeCredits != config.DefaultWelcomeCredits {
 		t.Errorf("빈 값이 기본값으로 채워지지 않았다: %+v", settings)
 	}
 	if settings.SpendFreeFirst != config.DefaultSpendFreeFirst || settings.FreeCreditTTL != config.DefaultFreeCreditTTL {
@@ -140,6 +147,10 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"공개키 주소가 없다", map[string]string{"DATABASE_URL": databaseURL, "PG_WEBHOOK_SECRET": webhookSecret}, "AUTH_JWKS_URL"},
 		{"알림의 비밀이 없다", map[string]string{"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": jwksURL}, "PG_WEBHOOK_SECRET"},
 		{"알림의 비밀이 비었다", required(map[string]string{"PG_WEBHOOK_SECRET": ""}), "PG_WEBHOOK_SECRET"},
+		{"환영 크레딧이 숫자가 아니다", required(map[string]string{"WELCOME_CREDITS": "many"}), "WELCOME_CREDITS"},
+		{"환영 크레딧이 음수다", required(map[string]string{"WELCOME_CREDITS": "-1"}), "WELCOME_CREDITS"},
+		{"환영 크레딧이 소수다", required(map[string]string{"WELCOME_CREDITS": "10.5"}), "WELCOME_CREDITS"},
+		{"환영 크레딧이 너무 많다", required(map[string]string{"WELCOME_CREDITS": "1000001"}), "WELCOME_CREDITS"},
 		{"알림의 비밀이 짧다", required(map[string]string{"PG_WEBHOOK_SECRET": "0123456789abcdef0123456789abcde"}), "PG_WEBHOOK_SECRET"},
 		{"공개키 주소가 비었다", required(map[string]string{"AUTH_JWKS_URL": ""}), "AUTH_JWKS_URL"},
 		{"공개키 주소에 http 가 없다", required(map[string]string{"AUTH_JWKS_URL": "127.0.0.1:8000/jwks"}), "AUTH_JWKS_URL"},
@@ -170,6 +181,16 @@ func TestLoadAcceptsTheShortestTTL(t *testing.T) {
 	settings, err := config.Load(from(required(map[string]string{"FREE_CREDIT_TTL": "1s"})))
 	if err != nil || settings.FreeCreditTTL != time.Second {
 		t.Errorf("FreeCreditTTL = %v, %v, 기대 = 1s", settings.FreeCreditTTL, err)
+	}
+}
+
+func TestLoadAcceptsTheEdgesOfWelcomeCredits(t *testing.T) {
+	// 0 은 "주지 않는다"는 뜻이라 받는다
+	for text, want := range map[string]int64{"0": 0, "1": 1, "1000000": 1_000_000} {
+		settings, err := config.Load(from(required(map[string]string{"WELCOME_CREDITS": text})))
+		if err != nil || int64(settings.WelcomeCredits) != want {
+			t.Errorf("WELCOME_CREDITS=%s: %d, %v", text, settings.WelcomeCredits, err)
+		}
 	}
 }
 

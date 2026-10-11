@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
 )
 
@@ -25,6 +26,9 @@ type Dependencies struct {
 	Verifier TokenVerifier
 	// Wallet 은 지갑을 읽는다.
 	Wallet WalletReader
+	// Welcome 은 환영 크레딧을 준다. WelcomeCredits 는 그 양이다. 0 이면 주지 않는다.
+	Welcome        WelcomeGranter
+	WelcomeCredits credit.Amount
 	// Orders 는 주문을 만들고 치른다.
 	Orders OrderService
 	// Notifier 는 결제 대행사의 알림을 처리한다.
@@ -64,6 +68,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	api.GET("/me", me)
 	api.GET("/wallet", getWallet(deps.Wallet))
 	api.GET("/wallet/entries", listEntries(deps.Wallet))
+	api.POST("/wallet/welcome", claimWelcome(deps.Welcome, deps.WelcomeCredits))
 	api.GET("/products", listProducts)
 	api.POST("/orders", createOrder(deps.Orders))
 	api.GET("/orders/:id", getOrder(deps.Orders))
