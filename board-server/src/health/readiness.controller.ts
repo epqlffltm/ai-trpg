@@ -8,16 +8,14 @@
  * 실패해도 관리 도구는 서버를 재시작하지 않는다. 요청을 잠시 보내지 않을 뿐이다.
  */
 
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Logger,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Controller, Get, HttpStatus, Logger, Res } from '@nestjs/common';
 import { Public } from '../auth/public.decorator.js';
 import { DatabaseHealth } from '../database/database.health.js';
+
+/** 이 API 가 쓰는 응답의 부분. 상태 코드를 정한다. */
+export interface StatusSetter {
+  status(code: number): unknown;
+}
 
 /** 준비됐는지의 답의 모양. */
 export interface ReadinessResponse {
@@ -36,17 +34,22 @@ export class ReadinessController {
    *
    * 왜 닿지 않는지는 응답에 싣지 않는다. 오류의 글에는 DB 주소와 계정 이름이 들어 있다.
    * 로그에도 오류의 종류만 남긴다.
+   *
+   * 준비되지 않았다는 것은 오류가 아니라 이 API 의 답이다. 그래서 예외를 던지지 않고 상태 코드만 바꾼다.
+   * 예외로 던지면 오류 응답의 모양({ detail })으로 바뀐다. 이 주소는 관리 도구가 읽는 것이라 답의 모양을 지킨다.
    */
   @Get()
-  @HttpCode(HttpStatus.OK)
-  async check(): Promise<ReadinessResponse> {
+  async check(
+    @Res({ passthrough: true }) response: StatusSetter,
+  ): Promise<ReadinessResponse> {
     try {
       await this.database.ping();
     } catch (error) {
       this.logger.warn(`DB 에 닿지 않는다: ${errorName(error)}`);
-      const body: ReadinessResponse = { status: 'unavailable' };
-      throw new ServiceUnavailableException(body);
+      response.status(HttpStatus.SERVICE_UNAVAILABLE);
+      return { status: 'unavailable' };
     }
+    response.status(HttpStatus.OK);
     return { status: 'ok' };
   }
 }
