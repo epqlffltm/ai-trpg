@@ -1,0 +1,8 @@
+# board-server/.gitignore
+# 내려받은 패키지. package-lock.json 으로 다시 받는다(npm ci)
+node_modules/
+# 빌드 결과(nest build)
+dist/
+*.tsbuildinfo
+# 테스트가 잰 범위의 보고서(npm run test:cov)
+coverage/
