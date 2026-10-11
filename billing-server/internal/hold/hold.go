@@ -1,0 +1,120 @@
+// billing-server/internal/hold/hold.go
+
+// Package hold 는 값을 치르기 전에 크레딧을 먼저 빼 두고(홀드), 나중에 확정하거나 돌려준다.
+//
+// 게임 서버가 라운드의 AI 서술을 시작하기 전에 홀드를 건다. 서술이 끝나면 확정하고, 끝내 실패하면 돌려준다.
+// 먼저 빼 두는 까닭은 서술이 몇 초에서 몇십 초가 걸리기 때문이다. 끝난 뒤에 빼면 그사이에 크레딧을 다른 데 쓸 수 있고,
+// 서술을 이미 만들었는데 받을 크레딧이 없는 일이 생긴다.
+//
+// 홀드의 상태는 한 방향으로만 흐른다.
+//
+//	held -> captured (확정했다. 크레딧은 돌아오지 않는다)
+//	     -> released (돌려줬다)
+//
+// 지키는 것 셋.
+//
+//  1. 홀드를 만드는 일과 크레딧을 빼는 일은 한 트랜잭션이다. 돌려줄 때도 같다. 하나만 되는 일이 없다.
+//  2. 상태는 "지금 held 일 때만" 바꾼다(조건이 붙은 UPDATE). 확정과 반환이 함께 와도 하나만 된다.
+//  3. 같은 이름표(reference)로 다시 요청하면 새로 빼지 않고 먼저 건 홀드를 돌려준다.
+//     부르는 서버가 응답을 받지 못해 같은 요청을 다시 보내도 크레딧이 두 번 빠지지 않는다.
+//
+// 값은 부르는 서버가 정하지 않는다. 가격표의 이름(price code)만 받고 값은 internal/pricing 에서 찾는다.
+package hold
+
+import (
+	"context"
+	"errors"
+	"regexp"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold/holddb"
+)
+
+var (
+	// ErrInvalidReference 는 이름표의 모양이 틀렸다는 오류다.
+	ErrInvalidReference = errors.New("이름표는 영문자, 숫자, 점, 밑줄, 쌍점, 붙임표로 된 8자에서 200자여야 합니다")
+	// ErrUnknownPrice 는 가격표에 그런 이름이 없다는 오류다.
+	ErrUnknownPrice = errors.New("가격표에 그런 이름이 없습니다")
+	// ErrReferenceReused 는 같은 이름표로 다른 내용의 홀드를 걸려 했다는 오류다.
+	ErrReferenceReused = errors.New("같은 이름표로 다른 홀드를 걸 수 없습니다")
+	// ErrNotFound 는 그런 홀드가 없다는 오류다.
+	ErrNotFound = errors.New("그런 홀드가 없습니다")
+	// ErrAlreadyCaptured 는 이미 확정한 홀드를 돌려주려 했다는 오류다.
+	ErrAlreadyCaptured = errors.New("이미 확정한 홀드입니다")
+	// ErrAlreadyReleased 는 이미 돌려준 홀드를 확정하려 했다는 오류다.
+	ErrAlreadyReleased = errors.New("이미 돌려준 홀드입니다")
+)
+
+// referencePattern 은 이름표로 받는 모양이다. DB 와 로그에 그대로 적히므로 글자를 좁게 받는다.
+// 쌍점을 받는다. 부르는 서버가 "table:<번호>:round:<번호>:user:<번호>" 처럼 지을 수 있다.
+var referencePattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{8,200}$`)
+
+// Status 는 홀드의 상태다. DB 의 holds.status 에 이 글자가 그대로 적힌다.
+type Status string
+
+const (
+	StatusHeld     Status = "held"
+	StatusCaptured Status = "captured"
+	StatusReleased Status = "released"
+)
+
+// Hold 는 홀드 하나다.
+type Hold struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+	// Reference 는 부르는 서버가 붙인 이름표다.
+	Reference string
+	// PriceCode 와 Amount 는 걸 때의 가격표 이름과 값이다.
+	PriceCode string
+	Amount    credit.Amount
+	Status    Status
+	CreatedAt time.Time
+	// SettledAt 은 확정하거나 돌려준 시각이다. held 일 때는 nil 이다.
+	SettledAt *time.Time
+}
+
+// Wallet 은 홀드로 크레딧을 빼고 돌려놓는 것의 모양이다. *wallet.Service 가 이 모양이다.
+// 홀드가 연 트랜잭션을 넘겨받아 그 안에서 한다.
+type Wallet interface {
+	TakeForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, holdID uuid.UUID) error
+	ReturnForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, holdID uuid.UUID) error
+}
+
+// Service 는 홀드를 걸고, 확정하고, 돌려준다. 서버가 뜰 때 하나 만들어 쓴다.
+type Service struct {
+	pool   *pgxpool.Pool
+	now    func() time.Time
+	wallet Wallet
+}
+
+// NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수다.
+func NewService(pool *pgxpool.Pool, now func() time.Time, wallet Wallet) *Service {
+	return &Service{pool: pool, now: now, wallet: wallet}
+}
+
+// clock 은 지금 시각을 DB 가 적는 모양(UTC, 백만분의 1초)으로 맞춰 돌려준다.
+func (s *Service) clock() time.Time {
+	return s.now().UTC().Truncate(time.Microsecond)
+}
+
+// toHold 는 DB 의 줄을 이 패키지의 모양으로 바꾼다.
+func toHold(row holddb.Hold) Hold {
+	held := Hold{
+		ID:        row.ID,
+		UserID:    row.UserID,
+		Reference: row.Reference,
+		PriceCode: row.PriceCode,
+		Amount:    row.Amount,
+		Status:    Status(row.Status),
+		CreatedAt: row.CreatedAt,
+	}
+	if row.SettledAt.Valid {
+		held.SettledAt = &row.SettledAt.Time
+	}
+	return held
+}

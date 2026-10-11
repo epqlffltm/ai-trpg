@@ -25,6 +25,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
@@ -78,15 +79,17 @@ func run() error {
 	wallets := newWallet(pool, settings)
 	orders := newOrders(pool, wallets)
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		DB:             pool,
-		Verifier:       newVerifier(settings),
-		Wallet:         wallets,
-		Welcome:        wallets,
-		WelcomeCredits: settings.WelcomeCredits,
-		Orders:         orders,
-		Notifier:       orders,
-		WebhookSecret:  settings.WebhookSecret,
-		Now:            time.Now,
+		DB:               pool,
+		Verifier:         newVerifier(settings),
+		Wallet:           wallets,
+		Welcome:          wallets,
+		WelcomeCredits:   settings.WelcomeCredits,
+		Orders:           orders,
+		Notifier:         orders,
+		WebhookSecret:    settings.WebhookSecret,
+		Holds:            hold.NewService(pool, time.Now, wallets),
+		GameServerSecret: settings.GameServerSecret,
+		Now:              time.Now,
 	})
 	return serve(ctx, newServer(settings, router))
 }

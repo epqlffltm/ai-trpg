@@ -53,6 +53,8 @@ const (
 	DefaultWelcomeCredits credit.Amount = 1_000
 	// MaxWelcomeCredits 는 WELCOME_CREDITS 로 받는 가장 큰 양이다. 0 을 몇 개 더 붙인 실수를 막는다.
 	MaxWelcomeCredits credit.Amount = 1_000_000
+	// MinServiceSecretLength 는 GAME_SERVER_SECRET 의 가장 짧은 길이다.
+	MinServiceSecretLength = 32
 	// MinWebhookSecretLength 는 PG_WEBHOOK_SECRET 의 가장 짧은 길이다. 짧은 비밀은 서명을 꾸며 내기 쉽다.
 	MinWebhookSecretLength = 32
 )
@@ -104,6 +106,9 @@ type Settings struct {
 	WelcomeCredits credit.Amount
 	// WebhookSecret 은 결제 대행사의 알림에 붙은 서명을 확인하는 비밀이다. 로그와 오류에 싣지 않는다.
 	WebhookSecret string
+	// GameServerSecret 은 게임 서버가 보낸 요청의 서명을 확인하는 비밀이다. 게임 서버도 같은 값을 갖는다.
+	// 로그와 오류에 싣지 않는다.
+	GameServerSecret string
 }
 
 // Database 는 DB 에 접속하는 데 필요한 설정이다. 마이그레이션 명령(cmd/migrate)은 이것만 읽는다.
@@ -128,6 +133,7 @@ func Load(lookup Lookup) (Settings, error) {
 	freeFirst, freeFirstErr := readBool(lookup, "SPEND_FREE_FIRST", DefaultSpendFreeFirst)
 	freeTTL, freeTTLErr := readDuration(lookup, "FREE_CREDIT_TTL", DefaultFreeCreditTTL, MinFreeCreditTTL)
 	webhookSecret, webhookErr := readSecret(lookup, "PG_WEBHOOK_SECRET", MinWebhookSecretLength)
+	gameSecret, gameSecretErr := readSecret(lookup, "GAME_SERVER_SECRET", MinServiceSecretLength)
 	welcome, welcomeErr := readCredits(lookup, "WELCOME_CREDITS", DefaultWelcomeCredits, MaxWelcomeCredits)
 	environment, environmentErr := readPattern(lookup, "APP_ENVIRONMENT", DefaultAppEnvironment, environmentPattern,
 		"소문자로 시작하고 소문자, 숫자, 밑줄, 붙임표로 된 32자 이하의 이름이어야 합니다")
@@ -137,26 +143,27 @@ func Load(lookup Lookup) (Settings, error) {
 
 	if err := errors.Join(
 		debugErr, portErr, dbErr, jwksErr, freeFirstErr, freeTTLErr, webhookErr, welcomeErr,
-		environmentErr, versionErr, logLevelErr,
+		environmentErr, versionErr, logLevelErr, gameSecretErr, distinctSecrets(webhookSecret, gameSecret),
 	); err != nil {
 		return Settings{}, err
 	}
 	return Settings{
-		Debug:          debug,
-		AppEnvironment: environment,
-		AppVersion:     version,
-		LogLevel:       logLevel,
-		Host:           readString(lookup, "HOST", DefaultHost),
-		Port:           port,
-		DatabaseURL:    db.URL,
-		DBSchema:       db.Schema,
-		AuthJWKSURL:    jwksURL,
-		JWTIssuer:      readString(lookup, "JWT_ISSUER", DefaultJWTIssuer),
-		JWTAudience:    readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
-		SpendFreeFirst: freeFirst,
-		FreeCreditTTL:  freeTTL,
-		WelcomeCredits: welcome,
-		WebhookSecret:  webhookSecret,
+		Debug:            debug,
+		AppEnvironment:   environment,
+		AppVersion:       version,
+		LogLevel:         logLevel,
+		Host:             readString(lookup, "HOST", DefaultHost),
+		Port:             port,
+		DatabaseURL:      db.URL,
+		DBSchema:         db.Schema,
+		AuthJWKSURL:      jwksURL,
+		JWTIssuer:        readString(lookup, "JWT_ISSUER", DefaultJWTIssuer),
+		JWTAudience:      readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
+		SpendFreeFirst:   freeFirst,
+		FreeCreditTTL:    freeTTL,
+		WelcomeCredits:   welcome,
+		WebhookSecret:    webhookSecret,
+		GameServerSecret: gameSecret,
 	}, nil
 }
 
@@ -231,6 +238,15 @@ func readSecret(lookup Lookup, name string, minimum int) (string, error) {
 		return "", fmt.Errorf("%s 는 %d자 이상이어야 합니다", name, minimum)
 	}
 	return value, nil
+}
+
+// distinctSecrets 는 두 비밀이 서로 다른 값인지 본다. 둘 중 하나라도 읽지 못했으면(빈 글자) 보지 않는다. 그 오류는 따로 난다.
+// 같은 값을 쓰면 결제 대행사가 아는 비밀로 게임 서버인 척할 수 있고, 하나가 새면 둘 다 샌 것이 된다.
+func distinctSecrets(webhookSecret string, gameSecret string) error {
+	if webhookSecret != "" && webhookSecret == gameSecret {
+		return errors.New("GAME_SERVER_SECRET 과 PG_WEBHOOK_SECRET 은 서로 다른 값이어야 합니다")
+	}
+	return nil
 }
 
 // readHTTPURL 은 반드시 있어야 하는 http(s) 주소를 읽는다. 없거나 주소의 모양이 아니면 오류다.
