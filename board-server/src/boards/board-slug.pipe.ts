@@ -12,7 +12,7 @@ import { Injectable, PipeTransform } from '@nestjs/common';
 import { boardNotFound } from './boards.service.js';
 
 /** 게시판 이름의 모양. boards 테이블의 slug 칸에 들어가는 길이다 */
-const BOARD_SLUG = /^[a-z0-9-]{1,30}$/;
+export const BOARD_SLUG = /^[a-z0-9-]{1,30}$/;
 
 /** 글자가 게시판 이름의 모양인가. */
 export function isBoardSlug(value: unknown): value is string {
