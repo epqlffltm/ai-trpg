@@ -13,13 +13,14 @@ import (
 )
 
 // APIPrefix 는 이 서버의 API 가 놓이는 주소다. 인증 서버는 /api/v1/auth, 게임 서버는 /api/v1/game 을 쓴다.
-// 아직 이 아래에 주소가 없다. 토큰 검증을 넣을 때부터 쓴다.
 const APIPrefix = "/api/v1/billing"
 
 // Dependencies 는 라우터가 요청을 처리하는 데 쓰는 것들이다. 서버가 뜰 때 한 번 만들어 넘긴다.
 type Dependencies struct {
 	// DB 는 준비 상태를 확인할 때 살아 있는지 물어볼 대상이다.
 	DB database.Pinger
+	// Verifier 는 요청의 access 토큰을 검증한다.
+	Verifier TokenVerifier
 }
 
 // SetMode 는 gin 의 동작 방식을 정한다. debug 가 아니면 등록한 주소 목록 같은 개발용 출력을 끈다.
@@ -44,6 +45,11 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	// 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
 	router.GET("/health", health)
 	router.GET("/health/ready", readiness(deps.DB))
+
+	// 이 아래의 주소는 모두 로그인이 필요하다. 주소마다 붙이지 않고 묶음에 한 번 붙인다.
+	// 새 주소를 더하면서 검증을 빠뜨리는 일이 없다
+	api := router.Group(APIPrefix, requireUser(deps.Verifier))
+	api.GET("/me", me)
 
 	return router
 }
