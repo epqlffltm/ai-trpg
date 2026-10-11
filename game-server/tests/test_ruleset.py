@@ -119,7 +119,7 @@ def test_a_ruleset_survives_the_trip_through_a_document():
 
 
 def test_the_migration_filled_old_rulebooks_with_the_same_rules():
-    # 옛 판을 읽을 때 SRD5 를 "그때의 규칙"으로 쓴다(snapshot.upgrade_from_3, upgrade_from_5).
+    # 옛 판을 읽을 때 SRD5 를 "그때의 규칙"으로 쓴다(upgrades.upgrade_from_3, upgrade_from_5).
     # 그러니 SRD5 의 값은 마이그레이션들이 채운 값과 늘 같아야 한다. 템플릿을 고치면 이 테스트가 깨진다
     assert load_backfill_rules() == SRD5.model_dump(mode='json')
 
