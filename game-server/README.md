@@ -1380,6 +1380,13 @@ uvicorn 은 종료 신호(Ctrl+C, SIGTERM)를 받으면 새 연결을 받지 않
 서술의 provider 처럼 모양(`app/ai/embedder.py`)과 구현을 나눈다. OpenAI 모양의 `/embeddings` 를 부르므로 LM Studio, vLLM, 클라우드 API 로 바꿀 수 있다.
 테스트는 가짜 임베더를 쓴다. 낱말이 겹치는 글끼리 가까운 벡터를 낸다(`app/ai/fake.py`).
 
+받은 답은 검사하고 받는다(`app/ai/openai_embedder.py` 의 `read_vectors`). 벡터는 저장되어 오래 남고, 어느 글의 벡터인지는 차례로만 안다.
+- 답의 `index` 가 0 부터 보낸 글의 수 - 1 까지를 한 번씩 가리켜야 한다. 차례만 섞인 답은 맞춰서 받는다. 겹치거나, 빠지거나, 범위 밖이거나, 정수가 아니면 받지 않는다. 전에는 개수만 맞으면 받아서 글과 벡터의 짝이 어긋난 채로 저장될 수 있었다.
+- 숫자는 모두 유한해야 한다(NaN, Infinity 가 아님). 모두 0 인 벡터도 받지 않는다. 코사인 거리를 잴 수 없다.
+- 벡터마다 길이가 같아야 하고, `EMBEDDING_DIMENSIONS` 를 적었으면 그 길이여야 한다. 벡터의 칸은 차원을 정해 두지 않아서 길이가 다른 벡터도 저장은 되고, 거리를 잴 때에야 DB 가 오류를 낸다. 그 오류는 검색에서 나고, 서술을 맡은 작업은 로그에 남긴 뒤 고른 것 없이 서술한다("서술이 끝나지 못하면").
+- 틀린 답은 고쳐 쓰지 않는다. 임베딩 모델의 실패(`malformed`)로 다룬다. 색인은 멈췄다가 다음에 다시 하고, 검색은 키워드로만 한다.
+- 모델의 판(revision)은 따로 관리하지 않는다. 벡터는 모델의 이름으로 나눠 저장한다. 같은 이름으로 다른 모델을 띄우면 `scripts.index_lore` 로 다시 만들어야 한다.
+
 ```
 ollama pull bge-m3
 ```
@@ -1393,6 +1400,8 @@ EMBEDDING_MODEL=bge-m3
 # 비우면 LLM_BASE_URL 과 같은 주소다
 EMBEDDING_BASE_URL=
 EMBEDDING_TIMEOUT_SECONDS=30
+# 벡터의 길이(차원). 적으면 길이가 다른 답을 받지 않는다. 적지 않으면 보지 않는다(기본)
+EMBEDDING_DIMENSIONS=1024
 # 검색의 거리 기준. bge-m3 로 잰 값이다. 임베딩 모델을 바꾸면 아래의 평가 도구로 다시 재서 고친다
 LORE_MAX_DISTANCE=0.45
 LORE_KEYWORD_MAX_DISTANCE=0.50

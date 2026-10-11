@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     # 임베딩을 한 번 기다리는 시간(초). 항목 몇십 개를 한 번에 보낸다
     embedding_timeout_seconds: float = Field(default=30.0, gt=0)
 
+    # 임베딩 모델이 내는 벡터의 길이(차원). 적으면 길이가 다른 답을 받지 않는다(bge-m3 는 1024).
+    # 적지 않으면(기본) 보지 않는다. 벡터의 칸은 차원을 정해 두지 않아서 길이가 다른 벡터도 저장은 되고,
+    # 거리를 잴 때에야 DB 가 오류를 낸다. 같은 이름의 모델이 다른 길이를 내기 시작하는 것을 여기서 막는다
+    embedding_dimensions: int | None = Field(default=None, gt=0)
+
     # 로어북 검색의 거리 기준(코사인 거리). 모델마다 거리의 크기가 달라서 임베딩 모델을 바꾸면 다시 잰다
     # (uv run python -m scripts.eval_lore). 기본값은 bge-m3 로 잰 것이다(app/lore/retrieval.py 의 같은 이름의 상수).
     # 뜻으로 고를 때: 이보다 먼 항목은 넣지 않는다
