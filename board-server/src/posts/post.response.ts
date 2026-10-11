@@ -7,8 +7,11 @@
  * 글쓴이는 ID 만 내보낸다. 이 서버는 아직 글쓴이의 이름을 모른다.
  * 목록에는 본문을 싣지 않는다. 한 쪽에 본문 스무 개를 실으면 응답이 쓸데없이 커진다.
  * 댓글 수는 글의 칸이 아니다. 따로 세어서 넘겨받는다(comment-counts/).
+ * 고정되어 있는지는 지금 시각에 달려 있다. 끝나는 시각이 지난 글은 고정하지 않은 글로 내보낸다.
  */
 
+import { Page } from './page.js';
+import { isPinned, pinnedUntilOf } from './pins.policy.js';
 import { Post } from './post.entity.js';
 
 /** 글 목록의 한 줄. */
@@ -20,6 +23,10 @@ export interface PostSummaryResponse {
   title: string;
   /** 살아 있는 댓글과 답글의 수. 지운 것은 세지 않는다 */
   comment_count: number;
+  /** 지금 고정되어 있는가 */
+  pinned: boolean;
+  /** 고정이 끝나는 시각. 고정되어 있지 않으면 null 이다 */
+  pinned_until: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,23 +36,40 @@ export interface PostResponse extends PostSummaryResponse {
   content: string;
 }
 
+/** 글 목록의 한 쪽. 고정한 글을 따로 싣는다. */
+export interface PostListResponse extends Page<PostSummaryResponse> {
+  /** 지금 고정되어 있는 글들. 나중에 고정한 것부터다. 첫 쪽에만 싣는다. items 와 total 에는 들지 않는다 */
+  pinned: PostSummaryResponse[];
+}
+
 /** 목록에 싣는 데 필요한 글의 칸들. */
 export type PostSummary = Pick<
   Post,
-  'id' | 'authorId' | 'title' | 'createdAt' | 'updatedAt'
+  'id' | 'authorId' | 'title' | 'pinnedUntil' | 'createdAt' | 'updatedAt'
 >;
+
+/** 글의 칸이 아니어서 따로 넘겨받는 것들. */
+export interface PostContext {
+  /** 글이 있는 게시판의 주소 이름 */
+  boardSlug: string;
+  /** 따로 센 댓글 수(comment-counts/) */
+  commentCount: number;
+  /** 지금 시각. 고정이 끝났는지를 이것으로 본다 */
+  now: Date;
+}
 
 export function toPostSummaryResponse(
   post: PostSummary,
-  boardSlug: string,
-  commentCount: number,
+  context: PostContext,
 ): PostSummaryResponse {
   return {
     id: post.id,
-    board: boardSlug,
+    board: context.boardSlug,
     author_id: post.authorId,
     title: post.title,
-    comment_count: commentCount,
+    comment_count: context.commentCount,
+    pinned: isPinned(post, context.now),
+    pinned_until: pinnedUntilOf(post, context.now)?.toISOString() ?? null,
     created_at: post.createdAt.toISOString(),
     updated_at: post.updatedAt.toISOString(),
   };
@@ -53,11 +77,7 @@ export function toPostSummaryResponse(
 
 export function toPostResponse(
   post: PostSummary & Pick<Post, 'content'>,
-  boardSlug: string,
-  commentCount: number,
+  context: PostContext,
 ): PostResponse {
-  return {
-    ...toPostSummaryResponse(post, boardSlug, commentCount),
-    content: post.content,
-  };
+  return { ...toPostSummaryResponse(post, context), content: post.content };
 }
