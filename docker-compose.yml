@@ -1,7 +1,7 @@
 # docker-compose.yml
 # 로컬 개발용 공용 인프라(PostgreSQL, Redis).
-# 인증 서버, 게임 서버, 결제 서버가 같은 인스턴스를 쓰므로 어느 서버 폴더에도 두지 않고 루트에 둔다.
-# 서버 자체(Django, FastAPI, Go)는 아직 여기 없다. 개발 중에는 호스트에서 직접 실행한다.
+# 인증 서버, 게임 서버, 결제 서버, 게시판 서버가 같은 인스턴스를 쓰므로 어느 서버 폴더에도 두지 않고 루트에 둔다.
+# 서버 자체(Django, FastAPI, Go, NestJS)는 아직 여기 없다. 개발 중에는 호스트에서 직접 실행한다.
 #
 #   docker compose up -d          # 시작
 #   docker compose ps             # healthy 가 될 때까지 확인
@@ -24,6 +24,8 @@ services:
       GAME_DB_PASSWORD: ${GAME_DB_PASSWORD:?.env 에 GAME_DB_PASSWORD 를 설정하세요}
       # 결제 서버 전용 계정의 비밀번호. 초기화 스크립트가 읽는다
       BILLING_DB_PASSWORD: ${BILLING_DB_PASSWORD:?.env 에 BILLING_DB_PASSWORD 를 설정하세요}
+      # 게시판 서버 전용 계정의 비밀번호. 초기화 스크립트가 읽는다
+      BOARD_DB_PASSWORD: ${BOARD_DB_PASSWORD:?.env 에 BOARD_DB_PASSWORD 를 설정하세요}
     volumes:
       - pgdata:/var/lib/postgresql/data
       # 서버별 계정과 스키마를 만드는 초기화 스크립트.

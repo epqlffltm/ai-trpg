@@ -5,12 +5,18 @@
  */
 
 import {
+  DEFAULT_DB_SCHEMA,
   DEFAULT_HOST,
   DEFAULT_PORT,
+  readDatabaseUrl,
+  readDbSchema,
   readEnvironment,
   readHost,
   readPort,
 } from './environment.js';
+
+/** 테스트에 쓰는 DB 주소. 실제로 접속하지 않는다 */
+const DATABASE_URL = 'postgresql://board:secret-password@127.0.0.1:5432/trpg';
 
 describe('readPort', () => {
   it.each([undefined, '', '   '])('적지 않으면(%j) 기본 포트다', (value) => {
@@ -55,11 +61,74 @@ describe('readHost', () => {
   });
 });
 
+describe('readDatabaseUrl', () => {
+  it.each([undefined, '', '   '])(
+    '적지 않으면(%j) 거부한다. 기본값이 없다',
+    (value) => {
+      expect(() => readDatabaseUrl(value)).toThrow('DATABASE_URL');
+    },
+  );
+
+  it.each([DATABASE_URL, 'postgres://board:pw@db:5432/trpg'])(
+    'PostgreSQL 의 주소(%j)를 그대로 읽는다',
+    (value) => {
+      expect(readDatabaseUrl(` ${value} `)).toBe(value);
+    },
+  );
+
+  it.each([
+    'mysql://board:pw@127.0.0.1:3306/trpg',
+    // 게임 서버(SQLAlchemy)의 주소 모양. 이 서버의 드라이버는 읽지 못한다
+    'postgresql+asyncpg://board:pw@127.0.0.1:5432/trpg',
+    '127.0.0.1:5432/trpg',
+  ])('PostgreSQL 의 주소가 아니면(%j) 거부한다', (value) => {
+    expect(() => readDatabaseUrl(value)).toThrow('DATABASE_URL');
+  });
+
+  it('거부할 때 받은 값을 예외에 싣지 않는다', () => {
+    // 주소에는 비밀번호가 들어 있다. 예외의 글은 화면과 로그에 찍힌다
+    expect(() => readDatabaseUrl('mysql://board:secret-password@db')).toThrow(
+      expect.not.objectContaining({
+        message: expect.stringContaining('secret-password'),
+      }),
+    );
+  });
+});
+
+describe('readDbSchema', () => {
+  it.each([undefined, '', '  '])('적지 않으면(%j) 개발용 스키마다', (value) => {
+    expect(readDbSchema(value)).toBe(DEFAULT_DB_SCHEMA);
+  });
+
+  it.each(['board', 'board_test', 'b2'])(
+    '스키마 이름(%j)을 읽는다',
+    (value) => {
+      expect(readDbSchema(` ${value} `)).toBe(value);
+    },
+  );
+
+  it.each([
+    'Board',
+    '1board',
+    'board-test',
+    'board test',
+    'board,public',
+    // 연결의 설정 글자에 그대로 들어간다. 딴 설정이 끼어들면 안 된다
+    'board -c statement_timeout=0',
+    'board; DROP SCHEMA board',
+    '"board"',
+  ])('이름의 모양이 아니면(%j) 거부한다', (value) => {
+    expect(() => readDbSchema(value)).toThrow('DB_SCHEMA');
+  });
+});
+
 describe('readEnvironment', () => {
-  it('아무것도 적지 않아도 기본값으로 뜬다', () => {
-    expect(readEnvironment({})).toEqual({
+  it('DB 주소만 적어도 나머지는 기본값으로 뜬다', () => {
+    expect(readEnvironment({ DATABASE_URL })).toEqual({
       HOST: DEFAULT_HOST,
       PORT: DEFAULT_PORT,
+      DATABASE_URL,
+      DB_SCHEMA: DEFAULT_DB_SCHEMA,
     });
   });
 
@@ -67,13 +136,26 @@ describe('readEnvironment', () => {
     const environment = readEnvironment({
       HOST: '0.0.0.0',
       PORT: '9000',
+      DATABASE_URL,
+      DB_SCHEMA: 'board_test',
       PATH: '/usr/bin',
     });
 
-    expect(environment).toEqual({ HOST: '0.0.0.0', PORT: 9000 });
+    expect(environment).toEqual({
+      HOST: '0.0.0.0',
+      PORT: 9000,
+      DATABASE_URL,
+      DB_SCHEMA: 'board_test',
+    });
+  });
+
+  it('DB 주소가 없으면 예외를 낸다', () => {
+    expect(() => readEnvironment({})).toThrow('DATABASE_URL');
   });
 
   it('틀린 값이 하나라도 있으면 예외를 낸다', () => {
-    expect(() => readEnvironment({ PORT: 'abc' })).toThrow('PORT');
+    expect(() => readEnvironment({ DATABASE_URL, PORT: 'abc' })).toThrow(
+      'PORT',
+    );
   });
 });

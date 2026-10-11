@@ -6,11 +6,12 @@
 회원가입과 로그인은 하지 않는다. [인증 서버](../auth-server/README.md)가 발급한 토큰을 공개키로 검증만 한다.
 시나리오의 소개 페이지에 붙는 댓글(플레이한 사람들의 평)은 여기가 아니라 시나리오 쪽의 일이다.
 
-지금은 뼈대만 있다. 서버가 뜨고, 살아 있는지 확인하는 주소가 응답한다.
+지금은 뼈대만 있다. 서버가 뜨고, DB 에 붙고, 살아 있는지와 준비됐는지 확인하는 주소가 응답한다. 테이블은 아직 없다.
 
 ## 목차
 
 - [실행](#실행)
+- [DB와 마이그레이션](#db와-마이그레이션)
 - [API](#api)
 - [구조](#구조)
 - [CI](#ci)
@@ -18,25 +19,45 @@
 
 ## 실행
 
-명령은 저장소 루트에서 시작한다고 보고 적었다. Node.js 24 가 필요하다.
+명령은 모두 `board-server` 폴더 안에서 실행한다. Node.js 24 가 필요하다.
+
+### 준비
+
+루트의 [공용 인프라](../README.md)가 떠 있어야 한다. `board` 계정과 스키마는 초기화 스크립트
+(`docker/postgres/init/05-board-role.sql`)가 만든다. 이 스크립트는 데이터 볼륨이 비어 있는 첫 기동 때만 실행된다.
+스크립트를 추가하기 전에 만든 볼륨이라면 한 번 직접 실행한다. 루트의 `.env`에 `BOARD_DB_PASSWORD`를 적고
+컨테이너를 다시 만든 뒤(`docker compose up -d`), 저장소 루트에서 실행한다.
+`trpg`는 루트 `.env`의 `POSTGRES_USER`와 `POSTGRES_DB` 값이다.
+
+```
+docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -f /docker-entrypoint-initdb.d/05-board-role.sql
+```
 
 ### 설치와 실행
 
 ```
-cd board-server
 cp .env.example .env
 npm install
+npm run migration:run
 npm run start:dev
 ```
 
-인증 서버가 8000번, 게임 서버가 8001번을 쓰므로 8002번으로 띄운다. `http://127.0.0.1:8002/health`가 `{"status":"ok"}`를 돌려주면 정상이다.
+`.env`의 `DATABASE_URL`에 `board` 계정의 비밀번호(루트 `.env`의 `BOARD_DB_PASSWORD`)와 포트(`POSTGRES_PORT`)를 적는다.
+인증 서버가 8000번, 게임 서버가 8001번을 쓰므로 8002번으로 띄운다. `http://127.0.0.1:8002/health/ready`가 `{"status":"ok"}`를 돌려주면 DB 까지 정상이다.
 
 `npm run start:dev`는 파일을 고치면 서버를 다시 띄운다. 고치지 않고 한 번만 띄우려면 `npm run start`다.
+서버는 뜰 때 DB 에 연결해 본다. 닿지 않으면 1초 간격으로 세 번 다시 해 보고 뜨지 않는다.
+
+| 환경 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `DATABASE_URL` | 없음(필수) | `postgresql://board:<비밀번호>@127.0.0.1:5432/trpg` 형식. 게임 서버와 달리 `+asyncpg`가 붙지 않는다 |
+| `DB_SCHEMA` | `board` | 테이블이 놓이는 스키마. 테스트는 `board_test`로 고정한다 |
+| `HOST` | `127.0.0.1` | 서버가 듣는 주소. 컨테이너에서는 `0.0.0.0` |
+| `PORT` | `8002` | 서버가 듣는 포트 |
 
 ### 테스트와 검사
 
 ```
-cd board-server
 npm run lint
 npm run format
 npm run build
@@ -47,10 +68,25 @@ npm run test:e2e
 - `npm run lint`(oxlint): 쓰지 않는 이름이나 기다리지 않은 Promise 같은 문제를 실행하지 않고 찾는다.
 - `npm run format`(prettier): 코드의 모양을 정해진 규칙으로 맞춘다. 고치지 않고 검사만 하려면 `npm run format:check`다.
 - `npm run build`: TypeScript 를 JavaScript 로 바꿔 `dist/`에 놓는다. 타입이 맞지 않으면 여기서 실패한다. 파이썬에는 없는 단계다.
-- `npm test`(vitest): `src/` 안의 `*.spec.ts`. 함수와 클래스를 하나씩 본다. 서버를 띄우지 않는다.
-- `npm run test:e2e`: `test/` 안의 `*.e2e-spec.ts`. 앱을 통째로 만들어 주소로 불러 본다.
+- `npm test`(vitest): `src/` 안의 `*.spec.ts`. 함수와 클래스를 하나씩 본다. 서버도 DB 도 쓰지 않는다.
+- `npm run test:e2e`: `test/` 안의 `*.e2e-spec.ts`. 앱을 통째로 만들어 주소로 불러 본다. 실제 PostgreSQL 에서 돈다.
 
 커밋하기 전에 다섯을 모두 돌린다.
+
+앱 테스트는 개발용과 같은 DB의 `board_test` 스키마를 쓰므로 개발용 데이터(`board` 스키마)를 건드리지 않는다.
+DB 주소는 환경 변수나 `.env`의 것을 그대로 읽고, 스키마는 테스트가 고정한다(`test/setup.ts`).
+테스트용 스키마에도 테이블이 있어야 한다. 마이그레이션을 새로 만들거나 받으면 한 번 적용한다.
+
+```
+# PowerShell
+$env:DB_SCHEMA='board_test'; npm run migration:run; Remove-Item Env:DB_SCHEMA
+
+# bash
+DB_SCHEMA=board_test npm run migration:run
+```
+
+DB가 꺼져 있으면 앱 테스트가 실패한다. 인증 서버는 띄우지 않아도 된다.
+다른 서버들의 계정과 스키마(`auth`, `game`, `billing`)도 DB 에 만들어져 있어야 한다. 게시판 계정이 거기에 들어가지 못하는지 테스트가 확인한다.
 
 ### 패키지를 더하고 뺄 때
 
@@ -64,6 +100,27 @@ npm uninstall 패키지이름
 설치할 때 취약점 경고가 나와도 `npm audit fix --force`는 쓰지 않는다. 버전의 범위를 무시하고 올리거나 내려서 프로젝트가 깨질 수 있다.
 서버에 실제로 들어가는 패키지의 취약점만 보려면 `npm audit --omit=dev`다.
 
+## DB와 마이그레이션
+
+테이블 구조의 변경은 TypeORM 의 마이그레이션으로 관리한다. DB 주소와 스키마는 서버와 같은 설정에서 읽는다(`src/database/data-source.ts`).
+명령은 먼저 빌드하고, 빌드된 파일(`dist/`)로 돈다.
+
+```
+npm run migration:run                                        # 마이그레이션 적용
+npm run migration:generate -- src/migrations/CreatePosts     # 엔티티와 DB를 비교해 새 마이그레이션 만들기
+npm run migration:check                                      # 엔티티를 바꾸고 마이그레이션을 안 만들었는지 검사
+npm run migration:show                                       # 적용된 것과 안 된 것 보기
+npm run migration:revert                                     # 마지막 하나 되돌리기
+```
+
+파이썬 쪽의 Alembic 과 짝을 지으면 `upgrade head`가 `migration:run`, `revision --autogenerate`가 `migration:generate`, `check`가 `migration:check`다.
+
+**자동으로 만든 마이그레이션은 읽어 보고 커밋한다.** TypeORM 은 색인을 지우는 줄에 만들 때의 스키마 이름을 붙인다(`DROP INDEX "board"."IDX_..."`).
+같은 파일을 `board`와 `board_test`에 함께 쓰므로 그 이름을 지운다. 지우지 않으면 `npm test`가 실패한다(`src/migrations/migrations.spec.ts`).
+만든 뒤에는 `npm run format`으로 모양을 맞춘다.
+
+적용한 기록은 스키마마다 `migrations` 테이블에 남는다.
+
 ## API
 
 게시판 서버의 API는 `/api/v1/board/` 아래에 놓는다. 아직 없다.
@@ -71,19 +128,29 @@ npm uninstall 패키지이름
 | 메서드 | 경로 | 설명 | 인증 |
 | --- | --- | --- | --- |
 | GET | `/health` | 서버가 살아 있는지 확인 | 불필요 |
+| GET | `/health/ready` | 요청을 처리할 준비가 됐는지 확인(DB 에 닿는가). 닿지 않으면 503 | 불필요 |
 
-`/health`는 API 주소 밖에 둔다. 프록시와 컨테이너 관리 도구가 부르는 주소라 버전이 없다.
+두 주소는 API 주소 밖에 둔다. 프록시와 컨테이너 관리 도구가 부르는 주소라 버전이 없다.
 
 ## 구조
 
 ```
 src/
-  main.ts                    서버를 띄우는 시작점
-  app.module.ts              이 서버를 이루는 모듈들을 모은다
-  app.setup.ts               주소의 앞부분 같은, 앱에 거는 규칙
-  config/environment.ts      환경 변수를 검사해 설정으로 바꾼다
-  health/                    살아 있는지 확인하는 API
-test/                        앱을 통째로 만들어 부르는 테스트
+  main.ts                        서버를 띄우는 시작점
+  app.module.ts                  이 서버를 이루는 모듈들을 모은다
+  app.setup.ts                   주소의 앞부분 같은, 앱에 거는 규칙
+  config/environment.ts          환경 변수를 검사해 설정으로 바꾼다
+  database/
+    database.options.ts          설정을 연결 옵션으로 바꾼다. 서버와 마이그레이션 도구가 함께 쓴다
+    database.module.ts           서버의 DB 연결
+    database.health.ts           DB 에 닿는지 확인한다
+    data-source.ts               마이그레이션 도구가 읽는 연결
+  health/                        살아 있는지, 준비됐는지 확인하는 API
+  migrations/                    마이그레이션 파일
+test/
+  setup.ts                       테스트의 환경 변수를 맞춘다(DB 주소, 테스트용 스키마)
+  app.ts                         테스트용 앱을 만든다
+  *.e2e-spec.ts                  앱을 통째로 만들어 부르는 테스트
 ```
 
 Nest 의 말을 다른 서버의 말로 옮기면 이렇다.
@@ -93,17 +160,22 @@ Nest 의 말을 다른 서버의 말로 옮기면 이렇다.
 | 모듈(`*.module.ts`) | 기능 하나에 어떤 컨트롤러와 서비스가 있는지 적은 목록 | 기능별 폴더와, 라우터를 앱에 붙이는 줄 |
 | 컨트롤러(`*.controller.ts`) | 주소를 받아 서비스를 부른다 | `router.py` |
 | 서비스(`*.service.ts`) | 실제 일을 한다 | `service.py` |
+| 엔티티(`*.entity.ts`) | 테이블 하나의 모양 | SQLAlchemy 의 모델 |
 | 의존성 주입 | 생성자에 적은 타입을 보고 Nest 가 넣어 준다 | `Depends(...)` |
 
 ## CI
 
-PR과 `main` 푸시마다 GitHub Actions가 게시판 서버를 검사한다. `board-server/`나 워크플로 파일이 바뀐 경우에만 돈다.
+PR과 `main` 푸시마다 GitHub Actions가 게시판 서버를 검사한다. `board-server/`, DB 초기화 스크립트, 워크플로 파일이 바뀐 경우에만 돈다.
+실제 PostgreSQL을 띄우고, 로컬과 같은 초기화 스크립트로 계정과 스키마를 만든다.
 
 1. 의존성 설치 (`npm ci`): `package-lock.json`과 `package.json`이 어긋나면 실패한다
 2. 린트 (`npm run lint`)
 3. 모양 검사 (`npm run format:check`): 고치지 않고 검사만 한다
 4. 빌드 (`npm run build`): 타입 검사를 겸한다
-5. 테스트 (`npm test`, `npm run test:e2e`)
+5. 마이그레이션 적용 (`npm run migration:run`): 빈 DB 에 처음부터 끝까지 적용되는지 본다
+6. 마이그레이션 누락 검사 (`npm run migration:check`): 엔티티를 바꾸고 마이그레이션을 만들지 않았으면 실패한다
+7. 테스트용 스키마에 마이그레이션 적용
+8. 테스트 (`npm test`, `npm run test:e2e`)
 
 ## 설계 메모
 
@@ -111,14 +183,46 @@ PR과 `main` 푸시마다 GitHub Actions가 게시판 서버를 검사한다. `b
 값이 틀리면 앱을 만드는 데서 예외가 나고 프로세스가 끝난다. 틀린 설정으로 떠서 요청을 받다가 실패하지 않는다.
 검사 함수는 Nest 를 모르는 순수한 함수라 따로 테스트한다. 꺼내 쓰는 쪽은 `ConfigService<Environment, true>`로 받아서, 없는 이름을 꺼내면 컴파일러가 잡는다.
 `.env`는 다른 서버와 따로 둔다. 한 서버가 다른 서버의 비밀값을 읽을 수 없게 하기 위해서다.
-테스트는 `.env`를 읽지 않는다. 개발자의 `.env`에 무엇이 적혀 있든 결과가 같아야 한다.
+예외의 글에 받은 값을 싣지 않는다. DB 주소에는 비밀번호가 들어 있다.
+
+**DB 계정과 스키마는 이 서버의 것만 쓴다.** `board` 계정으로 `board` 스키마만 쓴다. 다른 서버(`auth`, `game`, `billing`)의 스키마에는 들어갈 수 없다.
+약속이 아니라 DB 권한으로 지키고, 테스트가 확인한다(`test/database.e2e-spec.ts`): 읽을 권한이 없고, 테이블을 만들 권한이 없고, 스키마 이름을 직접 붙여 불러도 권한 없음이 난다.
+권한을 잘못 넓히면(`GRANT USAGE ON SCHEMA game TO board`) 이 테스트가 실패한다.
+
+**ORM 은 TypeORM 이다.** Nest 의 공식 문서가 기본으로 다루고, 엔티티와 리포지토리의 구조가 게임 서버의 SQLAlchemy 와 닮았다.
+Prisma 를 먼저 골랐다가 바꿨다. Prisma 의 명령(클라이언트 만들기, 스키마 검사, 마이그레이션)은 실행할 때 Prisma 의 서버에서 실행 파일을 내려받는다.
+패키지 저장소만 열린 환경(코드를 미리 돌려 보는 샌드박스)에서는 그 명령이 하나도 돌지 않았다. TypeORM 은 npm 패키지만으로 돈다.
+대신 Prisma 만큼 타입을 촘촘히 잡아 주지 않고, 자동으로 만든 마이그레이션을 읽어 봐야 한다(위의 "DB와 마이그레이션").
+
+**테이블은 마이그레이션으로만 바꾼다.** TypeORM 의 `synchronize`는 늘 끈다. 켜면 서버가 뜰 때 엔티티에 맞춰 테이블을 고친다. 칸을 지우면 데이터도 지워진다.
+서버가 뜨면서 마이그레이션을 돌리지도 않는다(`migrationsRun`). 서버가 여러 대면 동시에 돌린다.
+
+**스키마는 연결의 `search_path`로 정한다.** 코드와 마이그레이션에 스키마 이름을 적지 않는다. 연결할 때마다 설정의 스키마로 맞춘다.
+그래서 같은 마이그레이션이 `board`에도 `board_test`에도 적용되고, 테스트는 설정만 바꿔 테스트용 스키마를 쓴다.
+TypeORM 의 `schema` 옵션은 쓰지 않는다. 쓰면 만드는 SQL 에 스키마 이름이 박힌다.
+스키마 이름은 연결의 설정 글자에 그대로 들어가므로 모양을 검사한다(영문 소문자, 숫자, 밑줄).
+
+**서버와 마이그레이션 도구가 같은 함수로 연결 옵션을 만든다(`databaseOptions`).** 따로 적으면 서버는 한 스키마를 보는데 마이그레이션은 다른 스키마에 테이블을 만드는 일이 생긴다.
+
+**마이그레이션 도구는 빌드된 파일로 돈다.** TypeScript 파일을 바로 읽게 하려면 도구가 하나 더 필요하고, 데코레이터와 ESM 을 함께 다루는 설정이 까다롭다.
+명령마다 빌드가 먼저 돈다(`npm run build && ...`).
+
+**테스트는 같은 DB의 다른 스키마(`board_test`)에서 돈다.** 게임 서버와 같은 방식이다. 테스트용 DB를 새로 만들려면 계정에 DB를 만드는 권한을 줘야 한다.
+테스트용 스키마가 아니면 테스트용 앱이 만들어지지 않는다(`test/app.ts`). 설정을 잘못 건드려 개발용 데이터에서 테스트가 도는 일을 막는다.
+테스트는 `.env`를 통째로 읽지 않고 DB 주소만 골라 읽는다. 개발자의 `.env`에 무엇이 적혀 있든 결과가 같아야 한다.
+
+**서버는 뜰 때 DB 에 연결해 보고, 닿지 않으면 뜨지 않는다.** 게임 서버와 다른 점이다. 게임 서버는 처음 쓸 때 연결하므로 DB 없이도 뜬다.
+Nest 의 TypeORM 연결이 그렇게 동작하고, 그대로 뒀다. DB 를 안 켰다는 것을 3초 안에 알 수 있다(기본은 30초를 기다린다).
+떠 있는 동안 DB 가 끊기면 죽지 않는다. `/health/ready`가 503 을 돌려주고, DB 가 돌아오면 다시 200 이다.
+
+**`/health`는 프로세스가 살아 있는지만, `/health/ready`는 DB 에 닿는지를 본다.** 살아 있는지에 DB 까지 넣으면, DB가 잠깐 느려졌을 때 관리 도구가 멀쩡한 서버를 죽은 것으로 보고 재시작한다.
+준비됐는지가 실패하면 관리 도구는 재시작하지 않고 요청만 잠시 보내지 않는다.
+왜 닿지 않는지는 응답에 싣지 않는다. 오류의 글에는 DB 주소와 계정 이름이 들어 있다. 로그에도 오류의 종류만 남긴다.
 
 **기본으로 듣는 주소는 `127.0.0.1`이다.** Nest 는 주소를 주지 않으면 모든 주소에서 듣는다. 개발하는 컴퓨터에서 띄운 서버가 같은 공유기의 다른 기기에 열린다. 컨테이너에서는 `HOST=0.0.0.0`으로 바꾼다.
 
 **앱에 거는 규칙을 한 함수에 둔다(`setupApp`).** 주소의 앞부분과 머리말의 규칙이다. 서버를 띄울 때와 테스트가 같은 함수를 부른다.
 `main.ts`에만 적으면 테스트가 만든 앱에는 걸리지 않아서, 테스트는 통과하는데 실제 서버의 주소는 다른 일이 생긴다.
-
-**`/health`는 프로세스가 살아 있는지만 본다.** DB까지 확인하면, DB가 잠깐 느려졌을 때 관리 도구가 멀쩡한 서버를 죽은 것으로 보고 재시작한다.
 
 **응답에서 `X-Powered-By`를 뺀다.** 어떤 프레임워크로 만들었는지 알려 줄 이유가 없다.
 
