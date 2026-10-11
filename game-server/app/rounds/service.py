@@ -63,7 +63,8 @@ from app.engine import death, health
 from app.engine.action import CheckAction, Consequence, Recipient
 from app.engine.check import Check
 from app.engine.dice import Dice
-from app.engine.health import Change
+from app.engine.health import Change, ChangeKind
+from app.engine.injury import Trigger
 from app.engine.ruleset import Ruleset
 from app.events import recorder
 from app.events import repository as event_repository
@@ -78,7 +79,7 @@ from app.rounds.schemas import DeclarationUpdate
 from app.tables import injuries, npcs, sheets
 from app.tables import repository as table_repository
 from app.tables import service as tables
-from app.tables.models import DeathCause, GameTable, InjurySource, TableMember, TableStatus
+from app.tables.models import DeathCause, GameTable, InjurySource, TableMember, TableNpc, TableStatus
 
 
 class RoundNotFoundError(Exception):
@@ -104,6 +105,8 @@ class Conflict(enum.StrEnum):
     NPC_DEAD = 'npc_dead'
     # 캐릭터가 입은 부상 때문에 행동하지 못한다(기절 같은 것). 글만 낼 수 있다
     CHARACTER_INCAPACITATED = 'character_incapacitated'
+    # 노려 친 부상을 대상이 이미 입고 있다(이미 잃은 눈)
+    ALREADY_INJURED = 'already_injured'
 
 
 class RoundConflictError(Exception):
@@ -247,17 +250,19 @@ def aim(action: CheckAction, actor_id: uuid.UUID) -> CheckAction:
     return action.model_copy(update={'target': actor_id})
 
 
-def require_npc_target(cast: list[CastMember], npc_id: uuid.UUID) -> None:
+def require_npc_target(cast: list[CastMember], npc_id: uuid.UUID, aim: str | None) -> None:
     """
-    겨눈 NPC 가 이번 장면의 살아 있는(쓰러졌어도 된다) 인물인지 본다.
+    겨눈 NPC 가 이번 장면의 살아 있는(쓰러졌어도 된다) 인물인지 본다. 노려 쳤으면 그 부상을 아직 입지 않았는지도 본다.
 
-    장면에 나오지 않았으면 ActionTargetError, 이미 죽었으면 RoundConflictError.
+    장면에 나오지 않았으면 ActionTargetError, 이미 죽었거나 노린 부상을 이미 입었으면 RoundConflictError.
     """
     member = find_cast_member(cast, npc_id)
     if member is None:
         raise ActionTargetError('npc')
     if npcs.is_dead(member.npc):
         raise RoundConflictError(Conflict.NPC_DEAD)
+    if aim is not None and round_injuries.wears(member.npc.injuries, aim):
+        raise RoundConflictError(Conflict.ALREADY_INJURED)
 
 
 def accept_action(
@@ -272,6 +277,7 @@ def accept_action(
       - 규칙에 없는 능력, 난이도, 양의 등급이면 ActionNotInRulesError.
       - 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
       - 겨눈 NPC 가 이번 장면의 인물이 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
+      - 노린 부상이 규칙에서 노릴 수 없는 것이면 ActionNotInRulesError, 대상이 이미 입었으면 RoundConflictError.
     비워 둔 난이도는 규칙의 기본 난이도로, 비워 둔 회복의 대상은 자기 자신으로 채운다.
     """
     if action is None:
@@ -287,7 +293,7 @@ def accept_action(
     if action.target is not None and tables.find_member(table, action.target) is None:
         raise ActionTargetError('target')
     if action.npc is not None:
-        require_npc_target(cast, action.npc)
+        require_npc_target(cast, action.npc, action.aim)
     return aim(actions.settle(ruleset, action), member.user_id).model_dump(mode='json')
 
 
@@ -388,6 +394,20 @@ def change_member(judging: Judging, actor: TableMember, action: CheckAction, fou
     }
 
 
+def npc_injury(judging: Judging, action: CheckAction, change: Change, npc: TableNpc) -> dict | None:
+    """
+    HP 가 바뀐 NPC 가 입는 부상. 노려 친 타격이면 그 부상이 확정으로 생기고 표를 굴리지 않는다.
+    아니면 큰 타격이나 쓰러짐에 표를 굴린다. 죽었으면 어느 쪽도 없다. 회복이면 아무것도 없다.
+    """
+    if npcs.is_dead(npc):
+        return None
+    if action.aim is not None and change.kind == ChangeKind.DAMAGE:
+        return round_injuries.take_aimed(
+            judging.ruleset, action.aim, npc.injuries, judging.table.id, judging.round_number
+        )
+    return injury_after(judging, change, npc.max_hp, False, npc.injuries)
+
+
 def change_cast_member(judging: Judging, action: CheckAction, found: Consequence) -> dict | None:
     """
     겨눈 NPC 의 HP 와 생사를 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 것이 없으면 None.
@@ -407,7 +427,7 @@ def change_cast_member(judging: Judging, action: CheckAction, found: Consequence
     status_before = npc.status
     magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
     change = npcs.change_npc(npc, found.kind, magnitude, action.lethal, judging.dice)
-    injury_roll = injury_after(judging, change, npc.max_hp, npcs.is_dead(npc), npc.injuries)
+    injury_roll = npc_injury(judging, action, change, npc)
     return {
         'kind': change.kind.value,
         'magnitude': found.magnitude,
@@ -453,6 +473,7 @@ def judge(judging: Judging, member: TableMember, action: CheckAction) -> dict:
     return {
         **asdict(hindered.check),
         'hindrance': round_injuries.hindrance_document(hindered),
+        'called_shot': round_injuries.called_shot_document(judging.ruleset, action.aim),
         **apply_consequence(judging, member, action, hindered.check),
     }
 
@@ -664,6 +685,7 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
         'target': outcome['target'],
         'success': outcome['success'],
         'hindrance': outcome.get('hindrance'),
+        'called_shot': outcome.get('called_shot'),
     }
     rolled = recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
     effect = outcome.get('effect')
@@ -682,8 +704,9 @@ def record_injury(
     session: AsyncSession, table: GameTable, injury_roll: dict | None, holder: dict, cause: TableEvent
 ) -> None:
     """
-    부상 표로 새 부상이 생겼으면 이벤트로 적는다. 그 부상을 부른 HP 의 변화의 이벤트(cause)에 잇는다.
+    새 부상이 생겼으면 이벤트로 적는다. 그 부상을 부른 HP 의 변화의 이벤트(cause)에 잇는다.
 
+    부상 표로 생겼거나(큰 타격, 쓰러짐), 노려 쳐서 생겼다. 어느 쪽인지는 source 로 적는다.
     표를 굴리지 않았거나 부상이 없는 줄이 나왔으면 적지 않는다. 굴린 것은 HP 의 변화의 이벤트에 이미 있다.
     holder 는 누가 입었는지다. 캐릭터면 user_id 와 캐릭터 이름, NPC 면 항목의 id 와 장면의 호칭이다.
     """
@@ -693,10 +716,17 @@ def record_injury(
         'round': cause.payload['round'],
         **holder,
         'injury': injury_roll['injury'],
-        'source': InjurySource.INJURY_TABLE,
+        'source': source_of(injury_roll),
         'ends_after_round': injury_roll['ends_after_round'],
     }
     recorder.record(session, table, EventType.INJURY_GAINED, payload=payload, cause=cause)
+
+
+def source_of(injury_roll: dict) -> InjurySource:
+    """부상이 생긴 일의 문서에서 그 부상이 어떻게 생겼는지."""
+    if injury_roll['trigger'] == Trigger.CALLED_SHOT:
+        return InjurySource.CALLED_SHOT
+    return InjurySource.INJURY_TABLE
 
 
 def record_npc_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> TableEvent:

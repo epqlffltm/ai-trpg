@@ -20,12 +20,14 @@ from app.engine.ruleset import EffectKind, Healing, Injury, InjuryTable, Ruleset
 
 
 class Trigger(enum.StrEnum):
-    """부상 표를 굴린 까닭."""
+    """부상이 생긴 까닭. 앞의 둘은 부상 표를 굴린 까닭이다."""
 
     # 한 번의 피해가 최대 HP 의 정한 비율 이상이었다
     BIG_HIT = 'big_hit'
     # 이 피해로 쓰러졌다
     DOWNED = 'downed'
+    # 노려 쳐서 그 부상이 확정으로 생겼다. 표를 굴리지 않는다
+    CALLED_SHOT = 'called_shot'
 
 
 @dataclass(frozen=True)

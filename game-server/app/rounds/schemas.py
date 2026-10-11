@@ -36,18 +36,29 @@ class DeclarationUpdate(BaseModel):
 
 class InjuryRollOut(BaseModel):
     """
-    피해 뒤에 부상 표를 굴린 것. 엔진이 굴렸다. 큰 타격이나 쓰러짐이었을 때만 있다.
+    피해 뒤에 부상이 생긴 일. 큰 타격이나 쓰러짐에 엔진이 부상 표를 굴렸거나, 노려 친 타격이 성공했다.
 
     injury 는 나온 부상의 이름표(규칙의 Injury.key)다. 부상이 없는 줄이면 None 이다.
     이름과 사실은 테이블의 rules 에 있다.
     """
 
-    # big_hit(큰 타격) 또는 downed(쓰러짐)
+    # big_hit(큰 타격), downed(쓰러짐), called_shot(노려 치기)
     trigger: str
-    roll: int
+    # 부상 표의 눈. 노려 쳤으면 굴리지 않아서 None 이다
+    roll: int | None
     injury: str | None
     # 짧은 부상이면 이 라운드가 닫힐 때 풀린다. 오래 가는 것과 결손은 None 이다
     ends_after_round: int | None
+
+
+class CalledShotOut(BaseModel):
+    """노려 친 것. 무엇을 노렸는지와 판정이 얼마나 어려워졌는지다. 성공했으면 그 부상이 생긴다."""
+
+    # 노린 부상의 이름표
+    aim: str
+    # target_plus(목표값을 amount 만큼 올림) 또는 disadvantage(두 번 굴려 낮은 눈)
+    mode: str
+    amount: int
 
 
 class HindranceOut(BaseModel):
@@ -125,6 +136,8 @@ class CheckOutcome(BaseModel):
     success: bool
     # 입은 부상이 이 판정에 준 것. 아무 영향도 없었으면 None 이다
     hindrance: HindranceOut | None = None
+    # 노려 쳤으면 그 내용. target 은 이미 오른 값이다. 노려 치지 않았으면 None 이다
+    called_shot: CalledShotOut | None = None
     # 이 판정으로 HP 가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다
     effect: EffectOut | None = None
     # 이 판정으로 NPC 의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. effect 와 함께 있지 않다
