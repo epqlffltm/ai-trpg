@@ -12,6 +12,8 @@
   - 늦게 붙은 사람은 앞부분을 못 본다. 서술이 끝나면 이벤트로 전부를 본다.
   - 신호를 놓쳐도(듣는 연결을 다시 맺는 사이) 그만이다. 조각의 번호(seq)가 비면 받는 쪽이 안다.
   - 보내기가 실패해도(DB 가 잠깐 안 됨) 서술은 계속한다. 미리 보기 때문에 서술이 실패하면 안 된다.
+  - 보내기가 멈춰도(DB 가 응답하지 않음) 서술의 마무리를 붙잡지 않는다. 닫을 때 남은 글을 보낼 시간을 잠깐만 주고
+    (PREVIEW_CLOSE_SECONDS), 넘으면 보내던 것을 그만둔다. 그 조각들은 잃는다.
 
 조각에는 시도의 번호(attempt)와 시도 안의 번호(seq)를 붙인다.
   - 시도가 바뀌면(다시 시도, 다음 모델) 받는 쪽은 보던 글을 지우고 새로 받는다.
@@ -34,6 +36,8 @@ logger = logging.getLogger(__name__)
 
 # 모아 둔 조각을 보내는 간격(초)
 PREVIEW_INTERVAL_SECONDS = 0.3
+# 미리 보기를 닫을 때 남은 글을 보내도록 기다려 주는 시간(초). 넘으면 보내기를 그만둔다
+PREVIEW_CLOSE_SECONDS = 2.0
 
 # 조각들을 보내는 함수. 테스트가 DB 대신 목록에 쌓는 것을 꽂는다
 Send = Callable[[list[NarrationPiece]], Awaitable[None]]
@@ -107,15 +111,33 @@ class SignalPreview:
         await self.flush()
 
 
+async def finish_flushing(flusher: asyncio.Task[None], timeout: float) -> None:
+    """
+    보내는 작업이 남은 글을 보내고 끝나기를 timeout 초까지 기다린다. 넘으면 그 작업을 취소하고 돌아온다.
+
+    보내기가 멈춰 있으면(응답 없는 DB) 끝나지 않는다. 미리 보기는 잃어도 되는 글이라 기다리지 않고 버린다.
+    기다리는 쪽이 취소되면 보내는 작업도 함께 취소된다.
+    """
+    try:
+        await asyncio.wait_for(flusher, timeout)
+    except TimeoutError:
+        logger.warning('서술의 미리 보기를 닫지 못했다. 남은 조각은 버린다')
+
+
 @asynccontextmanager
 async def open_preview(
-    send: Send, table_id: uuid.UUID, round_number: int, interval: float = PREVIEW_INTERVAL_SECONDS
+    send: Send,
+    table_id: uuid.UUID,
+    round_number: int,
+    interval: float = PREVIEW_INTERVAL_SECONDS,
+    close_timeout: float = PREVIEW_CLOSE_SECONDS,
 ) -> AsyncIterator[SignalPreview]:
     """
     한 라운드의 미리 보기를 연다. with 안에서 서술하고, 나가면 남은 글을 보내고 닫는다.
 
     서술이 성공했든 실패했든 남은 글을 보낸 뒤에 나간다. 그 뒤에 적는 이벤트(gm_narration, narration_failed)가
     미리 보기의 마지막 조각보다 늦게 나간다. 받는 쪽은 이벤트를 보고 미리 보기를 지운다.
+    남은 글을 보내는 데 close_timeout 초까지만 쓴다. 미리 보기가 서술의 마무리를 붙잡지 않는다.
     """
     preview = SignalPreview(send, table_id, round_number)
     stop = asyncio.Event()
@@ -124,4 +146,4 @@ async def open_preview(
         yield preview
     finally:
         stop.set()
-        await flusher
+        await finish_flushing(flusher, close_timeout)
