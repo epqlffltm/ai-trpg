@@ -52,10 +52,10 @@ WHERE id = sqlc.arg(id);
 
 -- name: InsertEntry :exec
 -- 원장에 한 줄을 덧붙인다.
-INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, created_at)
+INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, order_id, created_at)
 VALUES (
     sqlc.arg(user_id), sqlc.arg(operation_id), sqlc.arg(kind), sqlc.arg(reason),
-    sqlc.arg(amount), sqlc.narg(grant_id), sqlc.arg(now)
+    sqlc.arg(amount), sqlc.narg(grant_id), sqlc.narg(order_id), sqlc.arg(now)
 );
 
 -- name: GetBalance :one
@@ -69,7 +69,7 @@ WHERE g.user_id = sqlc.arg(user_id) AND g.remaining > 0 AND g.expires_at > sqlc.
 
 -- name: ListEntries :many
 -- 한 사용자의 원장을 최근 것부터 읽는다. before 보다 앞선(번호가 작은) 줄만 읽는다.
-SELECT id, operation_id, kind, reason, amount, created_at
+SELECT id, operation_id, kind, reason, amount, order_id, created_at
 FROM ledger_entries
 WHERE user_id = sqlc.arg(user_id) AND id < sqlc.arg(before)
 ORDER BY id DESC

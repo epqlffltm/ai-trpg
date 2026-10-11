@@ -20,7 +20,19 @@ func (s *Service) Deposit(ctx context.Context, userID uuid.UUID, amount credit.A
 		return err
 	}
 	return s.withLockedWallet(ctx, userID, func(ctx context.Context, c change) error {
-		return c.movePaid(ctx, uuid.New(), ReasonDeposit, amount)
+		return c.movePaid(ctx, uuid.New(), ReasonDeposit, amount, nil)
+	})
+}
+
+// DepositForOrder 는 주문으로 산 크레딧을 넣는다. 부르는 쪽이 연 트랜잭션(tx) 안에서 한다.
+// 주문을 "치렀다"로 바꾸는 일과 크레딧을 넣는 일이 함께 되거나 함께 안 되게 하려는 것이다.
+// 같은 주문으로 두 번 부르면 둘째는 DB 가 거절한다(ledger_entries_order_once).
+func (s *Service) DepositForOrder(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, orderID uuid.UUID) error {
+	if err := checkAmount(amount); err != nil {
+		return err
+	}
+	return lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
+		return c.movePaid(ctx, uuid.New(), ReasonDeposit, amount, &orderID)
 	})
 }
 
@@ -68,15 +80,21 @@ type change struct {
 func (s *Service) withLockedWallet(ctx context.Context, userID uuid.UUID, run func(context.Context, change) error) error {
 	now := s.clock()
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		c, err := lockWallet(ctx, walletdb.New(tx), userID, now)
-		if err != nil {
-			return err
-		}
-		if err := c.expireDue(ctx); err != nil {
-			return err
-		}
-		return run(ctx, c)
+		return lockAndRun(ctx, tx, userID, now, run)
 	})
+}
+
+// lockAndRun 은 주어진 트랜잭션 안에서 지갑의 줄을 잠그고, 기한이 지난 무료 크레딧을 정리한 뒤 run 을 부른다.
+// 트랜잭션을 열고 닫는 것은 부르는 쪽의 일이다.
+func lockAndRun(ctx context.Context, tx pgx.Tx, userID uuid.UUID, now time.Time, run func(context.Context, change) error) error {
+	c, err := lockWallet(ctx, walletdb.New(tx), userID, now)
+	if err != nil {
+		return err
+	}
+	if err := c.expireDue(ctx); err != nil {
+		return err
+	}
+	return run(ctx, c)
 }
 
 // lockWallet 은 지갑이 없으면 만들고, 그 줄을 잠근다. 같은 사용자의 다른 변경은 여기서 기다린다.
@@ -133,16 +151,17 @@ func (c change) apply(ctx context.Context, operationID uuid.UUID, plan spendPlan
 	if plan.Paid == 0 {
 		return nil
 	}
-	return c.movePaid(ctx, operationID, ReasonSpend, -plan.Paid)
+	return c.movePaid(ctx, operationID, ReasonSpend, -plan.Paid, nil)
 }
 
 // movePaid 는 산 크레딧의 잔액을 delta 만큼 바꾸고(줄이려면 음수) 원장에 적는다. 둘은 늘 함께 일어난다.
-func (c change) movePaid(ctx context.Context, operationID uuid.UUID, reason Reason, delta credit.Amount) error {
+// orderID 는 주문으로 들어온 크레딧일 때만 넣는다. 아니면 nil 이다.
+func (c change) movePaid(ctx context.Context, operationID uuid.UUID, reason Reason, delta credit.Amount, orderID *uuid.UUID) error {
 	err := c.queries.AddPaidBalance(ctx, walletdb.AddPaidBalanceParams{UserID: c.userID, Delta: delta, Now: c.now})
 	if err != nil {
 		return err
 	}
-	return c.record(ctx, operationID, KindPaid, reason, delta, pgtype.Int8{})
+	return c.record(ctx, operationID, KindPaid, reason, delta, pgtype.Int8{}, orderID)
 }
 
 // openGrant 는 무료 크레딧의 지급 묶음을 만들고 원장에 적는다. 둘은 늘 함께 일어난다.
@@ -153,7 +172,7 @@ func (c change) openGrant(ctx context.Context, operationID uuid.UUID, amount cre
 	if err != nil {
 		return err
 	}
-	return c.record(ctx, operationID, KindFree, ReasonGrant, amount, pgtype.Int8{Int64: grantID, Valid: true})
+	return c.record(ctx, operationID, KindFree, ReasonGrant, amount, pgtype.Int8{Int64: grantID, Valid: true}, nil)
 }
 
 // takeFromGrant 는 지급 묶음에서 amount 만큼 빼고 원장에 적는다. 둘은 늘 함께 일어난다.
@@ -162,11 +181,11 @@ func (c change) takeFromGrant(ctx context.Context, operationID uuid.UUID, reason
 	if err != nil {
 		return err
 	}
-	return c.record(ctx, operationID, KindFree, reason, -amount, pgtype.Int8{Int64: grantID, Valid: true})
+	return c.record(ctx, operationID, KindFree, reason, -amount, pgtype.Int8{Int64: grantID, Valid: true}, nil)
 }
 
 // record 는 원장에 한 줄을 덧붙인다.
-func (c change) record(ctx context.Context, operationID uuid.UUID, kind Kind, reason Reason, amount credit.Amount, grantID pgtype.Int8) error {
+func (c change) record(ctx context.Context, operationID uuid.UUID, kind Kind, reason Reason, amount credit.Amount, grantID pgtype.Int8, orderID *uuid.UUID) error {
 	return c.queries.InsertEntry(ctx, walletdb.InsertEntryParams{
 		UserID:      c.userID,
 		OperationID: operationID,
@@ -174,6 +193,7 @@ func (c change) record(ctx context.Context, operationID uuid.UUID, kind Kind, re
 		Reason:      string(reason),
 		Amount:      amount,
 		GrantID:     grantID,
+		OrderID:     orderID,
 		Now:         c.now,
 	})
 }

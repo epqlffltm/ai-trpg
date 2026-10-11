@@ -16,6 +16,8 @@ sql:
         package: walletdb
         out: internal/wallet/walletdb
         sql_package: pgx/v5
+        # 이 패키지의 쿼리가 쓰지 않는 테이블의 구조체는 만들지 않는다
+        omit_unused_structs: true
         overrides:
           # 사용자 번호와 작업 번호는 다른 패키지들이 쓰는 uuid 타입으로 받는다
           - db_type: uuid
@@ -31,4 +33,28 @@ sql:
           - column: free_grants.remaining
             go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
           - column: ledger_entries.amount
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+          # NULL 일 수 있는 주문 번호는 포인터로 받는다. nil 이면 주문에서 온 줄이 아니다
+          - column: ledger_entries.order_id
+            go_type:
+              import: github.com/google/uuid
+              type: UUID
+              pointer: true
+            nullable: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/order/queries.sql
+    gen:
+      go:
+        package: orderdb
+        out: internal/order/orderdb
+        sql_package: pgx/v5
+        # 이 패키지의 쿼리가 쓰지 않는 테이블의 구조체는 만들지 않는다
+        omit_unused_structs: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: timestamptz
+            go_type: time.Time
+          - column: orders.credits
             go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
