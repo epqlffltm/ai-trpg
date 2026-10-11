@@ -15,7 +15,7 @@ from app.engine import injury as injury_rules
 from app.engine.check import HinderedCheck
 from app.engine.dice import Dice
 from app.engine.health import Change
-from app.engine.injury import Hindrance, TableRoll
+from app.engine.injury import Hindrance, TableRoll, Trigger
 from app.engine.ruleset import Injury, Ruleset
 from app.rounds.cast import Scene, find_cast_member
 from app.rounds.narrator import InjuryNote
@@ -63,6 +63,38 @@ def roll_after(ruleset: Ruleset, dice: Dice, change: Change, max_hp: int, dead: 
     return injury_rules.roll_table(ruleset.injury_table, trigger, dice)
 
 
+def wears(rows: list[TableInjury], key: str) -> bool:
+    """이 부상을 지금 입고 있는가."""
+    return key in injuries.active_keys(rows)
+
+
+def injury_document(trigger: Trigger, roll: int | None) -> dict:
+    """
+    부상이 생긴 일을 HP 의 변화를 적은 문서 안에 넣을 모양. 아직 부상은 비어 있다.
+
+    trigger 는 까닭(큰 타격, 쓰러짐, 노려 치기)이고, roll 은 부상 표의 눈이다. 노려 쳤으면 굴리지 않아서 None 이다.
+    """
+    return {'trigger': trigger.value, 'roll': roll, 'injury': None, 'name': None, 'ends_after_round': None}
+
+
+def wound(
+    ruleset: Ruleset,
+    key: str,
+    source: InjurySource,
+    document: dict,
+    rows: list[TableInjury],
+    table_id: uuid.UUID,
+    round_number: int,
+) -> dict:
+    """부상 하나를 입히고, 문서에 무엇이 생겼는지 채워 돌려준다. 규칙에 없는 부상이면 문서를 그대로 돌려준다."""
+    definition = injury_rules.find_injury(ruleset, key)
+    if definition is None:
+        return document
+    ends = injury_rules.ends_after(definition, round_number)
+    injuries.inflict(rows, table_id, definition.key, source, round_number, ends)
+    return {**document, 'injury': definition.key, 'name': definition.name, 'ends_after_round': ends}
+
+
 def take(ruleset: Ruleset, rolled: TableRoll, rows: list[TableInjury], table_id: uuid.UUID, round_number: int) -> dict:
     """
     부상 표의 결과를 받아들인다. 부상이 나왔으면 입히고, 굴린 것을 문서로 돌려준다.
@@ -70,19 +102,33 @@ def take(ruleset: Ruleset, rolled: TableRoll, rows: list[TableInjury], table_id:
     rows 는 입는 쪽(시트나 NPC 상태)의 부상 목록이다. 문서는 HP 의 변화를 적은 문서 안에 들어간다.
     부상이 없는 줄이 나왔어도 굴린 것은 적는다. 큰 타격을 받고도 운 좋게 멀쩡했다는 기록이다.
     """
-    document = {
-        'trigger': rolled.trigger.value,
-        'roll': rolled.roll,
-        'injury': rolled.injury,
-        'name': None,
-        'ends_after_round': None,
-    }
-    definition = injury_rules.find_injury(ruleset, rolled.injury) if rolled.injury else None
-    if definition is None:
+    document = injury_document(rolled.trigger, rolled.roll)
+    if rolled.injury is None:
         return document
-    ends = injury_rules.ends_after(definition, round_number)
-    injuries.inflict(rows, table_id, definition.key, InjurySource.INJURY_TABLE, round_number, ends)
-    return {**document, 'name': definition.name, 'ends_after_round': ends}
+    return wound(ruleset, rolled.injury, InjurySource.INJURY_TABLE, document, rows, table_id, round_number)
+
+
+def take_aimed(ruleset: Ruleset, key: str, rows: list[TableInjury], table_id: uuid.UUID, round_number: int) -> dict:
+    """
+    노려 친 부상을 입힌다. 문서로 돌려준다. 표를 굴리지 않는다.
+
+    이미 그 부상을 입고 있으면 또 입히지 않는다(같은 라운드에 둘이 같은 눈을 노렸다). 문서의 부상이 비어 있다.
+    """
+    document = injury_document(Trigger.CALLED_SHOT, None)
+    if wears(rows, key):
+        return document
+    return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, round_number)
+
+
+def called_shot_document(ruleset: Ruleset, aim: str | None) -> dict | None:
+    """
+    노려 치기를 선언의 outcome 에 넣을 문서로. 노려 치지 않았으면 None.
+
+    무엇을 노렸는지와 판정이 얼마나 어려워졌는지(규칙의 방식과 양)다. 판정의 target 은 이미 오른 값이다.
+    """
+    if aim is None or ruleset.called_shot is None:
+        return None
+    return {'aim': aim, 'mode': ruleset.called_shot.mode.value, 'amount': ruleset.called_shot.amount}
 
 
 def notes(ruleset: Ruleset, rows: list[TableInjury]) -> list[InjuryNote]:
