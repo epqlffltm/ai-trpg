@@ -31,6 +31,7 @@ OPTIONAL_VARIABLES = (
     'EMBEDDING_MODEL',
     'EMBEDDING_BASE_URL',
     'EMBEDDING_TIMEOUT_SECONDS',
+    'EMBEDDING_DIMENSIONS',
     'AI_LOG_HMAC_KEY',
 )
 
@@ -282,3 +283,20 @@ def test_the_digest_key_is_read_as_bytes_and_kept_secret(monkeypatch: pytest.Mon
     assert settings.digest_key() == b'0123abcd'
     # 설정을 찍어도 키가 보이지 않는다
     assert '0123abcd' not in repr(settings)
+
+
+def test_the_vector_length_is_not_checked_by_default():
+    assert Settings(_env_file=None).embedding_dimensions is None
+
+
+def test_the_vector_length_can_be_set(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('EMBEDDING_DIMENSIONS', '1024')
+
+    assert Settings(_env_file=None).embedding_dimensions == 1024
+
+
+def test_a_vector_length_of_zero_is_refused(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('EMBEDDING_DIMENSIONS', '0')
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

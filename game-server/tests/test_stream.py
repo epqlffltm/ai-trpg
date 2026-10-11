@@ -40,7 +40,7 @@ from app.tables import repository as table_repository
 from tests.conftest import make_test_settings
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token, make_viewer
-from tests.streaming import DeafSource
+from tests.streaming import LONG_HEARTBEAT, DeafSource, FakeClock, QuietSource
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -294,6 +294,63 @@ async def test_the_stream_catches_up_by_itself_when_signals_are_lost(
     # 깨어날 때마다 주석을 보내고 DB 를 직접 읽는다. 신호 없이도 새 글이 온다
     assert await reader.next_comment() == 'ping'
     assert (await reader.next()).id == '2-1'
+
+
+async def test_what_a_lost_signal_missed_arrives_on_the_beat_even_while_other_signals_keep_coming(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, connect
+):
+    table = await open_duo(client, me, friend)
+    clock = FakeClock()
+    # 듣고는 있는데 DB 의 신호가 닿지 않는다. 스스로 깨어나는 간격은 길다(60 초)
+    reader = connect(table, FRIEND, Cursor(events=2), source=QuietSource(), clock=clock)
+    assert await reader.next_comment() == 'connected'
+    await reader.settle()
+    typing = Signal(uuid.UUID(table['id']), Kind.TYPING, ME)
+
+    # 채팅의 신호는 놓쳤고, 입력 중 신호는 온다. 신호는 제 종류만 읽게 하므로 채팅은 아직 가지 않는다
+    await say(client, me, table, HELLO)
+    app.state.hub.wake(typing)
+    assert (await reader.next()).event == service.TYPING_FRAME
+    assert await reader.is_quiet()
+
+    # 박자가 지났다. 입력 중 신호가 이어져 조용히 깨어날 틈이 없어도 그 신호에 깨어난 김에 모두 읽는다
+    clock.advance(LONG_HEARTBEAT)
+    app.state.hub.wake(typing)
+    assert await reader.next_comment() == 'ping'
+    arrived = await reader.take(2)
+    assert [frame.event for frame in arrived] == [service.TYPING_FRAME, service.MESSAGE_FRAME]
+    assert arrived[1].id == '2-1'
+
+
+async def test_signals_before_the_beat_do_not_read_everything(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, connect
+):
+    table = await open_duo(client, me, friend)
+    clock = FakeClock()
+    reader = connect(table, FRIEND, Cursor(events=2), source=QuietSource(), clock=clock)
+    assert await reader.next_comment() == 'connected'
+    await reader.settle()
+    typing = Signal(uuid.UUID(table['id']), Kind.TYPING, ME)
+
+    await say(client, me, table, HELLO)
+    # 박자 직전이다. 입력 중 신호마다 DB 를 통째로 읽지 않는다
+    clock.advance(LONG_HEARTBEAT - 1)
+    app.state.hub.wake(typing)
+
+    assert (await reader.next()).event == service.TYPING_FRAME
+    assert await reader.is_quiet()
+
+
+def test_the_wait_ends_at_the_beat_or_when_the_token_expires():
+    viewer = make_viewer(FRIEND)
+    long_left = service.seconds_left(viewer)
+
+    # 박자가 먼저다
+    assert service.wait_seconds(beat_at=1015.0, now=1000.0, viewer=viewer) == 15.0
+    # 박자가 이미 지났으면 기다리지 않는다
+    assert service.wait_seconds(beat_at=990.0, now=1000.0, viewer=viewer) == 0
+    # 토큰이 먼저 만료되면 그때까지만 기다린다
+    assert service.wait_seconds(beat_at=1000.0 + long_left * 2, now=1000.0, viewer=viewer) <= long_left
 
 
 async def test_a_stream_that_cannot_hear_signals_reads_more_often(client: AsyncClient, me: dict, friend: dict, connect):

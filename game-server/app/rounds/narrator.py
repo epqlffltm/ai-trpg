@@ -161,12 +161,18 @@ class PastRound:
     """
     지난 라운드 하나. 그때의 장면과 플레이어들이 한 말이다.
 
-    lines 는 "캐릭터 이름: 선언의 글" 한 줄씩이다. 판정의 결과는 싣지 않는다. 그다음 장면의 서술에 이미 녹아 있다.
+    lines 는 "캐릭터 이름: 선언의 글" 한 줄씩이다. 그 라운드를 닫을 때 서술자가 받은 사람들의 것이다
+    (app/rounds/narration_request.py 의 to_past).
+    successes 는 줄마다 판정이 성공했는가다. lines 와 같은 차례다. 판정이 없던 줄은 None 이다.
+    비어 있으면 판정을 모르는 것이다(평가 도구의 데이터처럼 글만 있는 라운드).
+    지난 기록(대화)에는 lines 만 쓴다. 판정의 결과는 그다음 장면의 서술에 이미 녹아 있다.
+    검색한 지난 일은 서술을 잘라 넣으므로 성공과 실패를 줄에 붙인다(app/memory/texts.py).
     """
 
     number: int
     scene: str
     lines: list[str] = field(default_factory=list)
+    successes: list[bool | None] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

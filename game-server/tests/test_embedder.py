@@ -174,6 +174,116 @@ def test_an_answer_of_the_wrong_shape_is_malformed(data):
     assert str(caught.value) == 'malformed'
 
 
+def indexed(*indices) -> dict:
+    """index 를 마음대로 적은 답. 벡터는 index 마다 멀쩡한 것이다."""
+    data = [{'index': index, 'embedding': [0.1, 0.2]} for index in indices]
+    return {'object': 'list', 'model': MODEL, 'data': data}
+
+
+@pytest.mark.parametrize(
+    'indices',
+    [
+        # 같은 차례가 둘이다. 개수는 맞지만 한 글의 벡터가 없다
+        (0, 0),
+        (1, 1),
+        # 범위 밖이다
+        (0, 9),
+        (-1, 0),
+        (1, 2),
+        # 정수가 아니다. True 는 파이썬에서 1 과 같지만 차례가 아니다
+        (0, True),
+        (0, 1.0),
+        (0, '1'),
+        (0, None),
+    ],
+)
+def test_an_answer_whose_order_cannot_be_trusted_is_malformed(indices: tuple):
+    with pytest.raises(ProviderError) as caught:
+        read_vectors(indexed(*indices), len(TEXTS))
+
+    assert str(caught.value) == 'malformed'
+
+
+def test_an_answer_with_too_many_vectors_is_malformed():
+    with pytest.raises(ProviderError) as caught:
+        read_vectors(indexed(0, 1, 2), len(TEXTS))
+
+    assert str(caught.value) == 'malformed'
+
+
+def test_an_answer_out_of_order_is_put_back_in_order():
+    answer = {'data': [{'index': 1, 'embedding': [0.3, 0.4]}, {'index': 0, 'embedding': [0.1, 0.2]}]}
+
+    assert read_vectors(answer, len(TEXTS)) == [[0.1, 0.2], [0.3, 0.4]]
+
+
+@pytest.mark.parametrize(
+    'broken',
+    [
+        # 유한하지 않은 숫자. JSON 에는 없지만 파이썬은 NaN, Infinity 를 읽어 준다
+        [math.nan, 0.2],
+        [0.1, math.inf],
+        [-math.inf, 0.2],
+        # 실수로 바꿀 수 없을 만큼 큰 정수
+        [10**400, 0.2],
+        # 모두 0 이다. 방향이 없어 거리를 잴 수 없다
+        [0.0, 0.0],
+        [0, 0],
+    ],
+)
+def test_a_vector_that_cannot_be_compared_is_malformed(broken: list):
+    with pytest.raises(ProviderError) as caught:
+        read_vectors(make_answer([0.1, 0.2], broken), len(TEXTS))
+
+    assert str(caught.value) == 'malformed'
+
+
+def test_a_vector_with_some_zeros_is_fine():
+    assert read_vectors(make_answer([0.0, 0.2], [0.3, 0.0]), len(TEXTS)) == [[0.0, 0.2], [0.3, 0.0]]
+
+
+async def test_nan_in_the_body_is_refused_end_to_end():
+    # 서버가 JSON 이 아닌 NaN 을 그대로 적어 보냈다. 본문을 읽는 데서 걸리지 않으므로 벡터를 검사해서 막는다
+    body = '{"data": [{"index": 0, "embedding": [NaN, 0.2]}, {"index": 1, "embedding": [0.3, 0.4]}]}'
+    recorder = Recorder(lambda request: httpx.Response(200, content=body, headers={'content-type': 'application/json'}))
+
+    with pytest.raises(ProviderError) as caught:
+        await make_embedder(recorder).embed(TEXTS)
+
+    assert str(caught.value) == 'malformed'
+
+
+def test_the_length_is_not_checked_unless_it_is_set():
+    assert read_vectors(make_answer([0.1, 0.2], [0.3, 0.4]), len(TEXTS)) == [[0.1, 0.2], [0.3, 0.4]]
+    assert read_vectors(make_answer([0.1, 0.2], [0.3, 0.4]), len(TEXTS), dimensions=2) == [[0.1, 0.2], [0.3, 0.4]]
+
+
+def test_vectors_of_another_length_than_the_set_one_are_malformed():
+    # 벡터끼리는 길이가 같다. 그래도 정해 둔 길이가 아니면, 이미 저장한 벡터와 견줄 수 없다
+    with pytest.raises(ProviderError) as caught:
+        read_vectors(make_answer([0.1, 0.2], [0.3, 0.4]), len(TEXTS), dimensions=3)
+
+    assert str(caught.value) == 'malformed'
+
+
+async def test_the_embedder_refuses_another_length_than_the_one_it_was_given():
+    embedder = make_embedder(answering(make_answer([0.1, 0.2], [0.3, 0.4])), dimensions=1024)
+
+    with pytest.raises(ProviderError) as caught:
+        await embedder.embed(TEXTS)
+
+    assert str(caught.value) == 'malformed'
+
+
+async def test_the_set_length_reaches_the_embedder():
+    settings = make_test_settings(embedder='llm', embedding_dimensions=1024)
+
+    async with httpx.AsyncClient() as client:
+        embedder = build_embedder(settings, client)
+
+    assert embedder.dimensions == 1024
+
+
 # --- 가짜 임베더 ---
 
 

@@ -23,4 +23,5 @@ def build_embedder(settings: Settings, client: httpx.AsyncClient) -> Embedder:
         base_url=settings.embedding_url(),
         model=settings.embedding_model.strip(),
         timeout=settings.embedding_timeout_seconds,
+        dimensions=settings.embedding_dimensions,
     )

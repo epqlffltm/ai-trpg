@@ -22,6 +22,12 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 서술을 맡은 작업은 사라질 수 있다(서버가 꺼짐, 서술자가 실패함). 그러면 라운드가 닫는 중에 머문다.
 맡긴 지 한참 지난 라운드는 방장이 닫기를 다시 눌러 서술을 다시 맡긴다(is_stalled).
 
+서술을 맡길 때마다 닫기 시작한 시각(closing_at)을 새로 적는다. 이 시각이 "몇 번째로 맡긴 서술인가"의 표다.
+서술을 맡은 작업은 맡을 때의 시각을 들고 다니고, 라운드를 바꾸기 전에 잠금 안에서 그 시각이 아직 같은지 본다.
+다시 맡긴 뒤에 늦게 끝난 옛 작업은 시각이 달라 아무것도 바꾸지 못한다. 실패를 적지도, 라운드를 닫지도 못한다.
+칸을 따로 두지 않는다. 시각은 테이블을 잠근 채로만 고치고, 다시 맡기려면 실패가 적혔거나 한참 지나야 해서
+같은 시각이 두 번 적히지 않는다.
+
 선언은 낼 때가 아니라 라운드가 닫힐 때 이벤트로 적는다. 마지막 글만 적는다.
 열려 있는 동안에는 남의 선언이 보이지 않아야 하는데, 이벤트는 앉은 사람 모두가 읽기 때문이다.
 
@@ -141,11 +147,22 @@ class ActionTargetError(Exception):
         self.field = field
 
 
+# 서술을 맡은 작업 하나가 쓰는 시간(초). 모두 닫기 시작한 시각(closing_at)부터 센다(app/rounds/closing.py).
+# 로어북, 지난 일, 인물의 이력을 고르는 시간. 넘으면 고르지 못한 것 없이 서술한다
+RETRIEVAL_BUDGET_SECONDS = 30.0
+# 미리 보기를 닫고 닫기를 마무리(저장)하는 시간
+SAVING_BUDGET_SECONDS = 15.0
+# 작업 전체의 상한. 고르기 + 서술(다시 시도하기와 넘어가기를 합친 NARRATION_BUDGET_SECONDS) + 마무리.
+# 이 시간이 지나면 작업을 끊고 실패를 적는다. 멈춘 DB 연결이나 잠금을 하염없이 기다리지 않는다
+CLOSING_JOB_SECONDS = RETRIEVAL_BUDGET_SECONDS + NARRATION_BUDGET_SECONDS + SAVING_BUDGET_SECONDS
+# 끊긴 뒤에 실패를 적는 시간. 이것도 넘으면 적지 못한 채로 끝나고, 아래의 시간이 지난 뒤에 다시 맡길 수 있다
+FAILURE_RECORD_SECONDS = 10.0
+# 끊긴 작업이 정리(미리 보기 닫기)를 마칠 여유
+CLOSING_RETRY_MARGIN_SECONDS = 5.0
 # 닫는 중인 채로 이 시간(초)이 지나면 서술을 맡은 작업이 사라진 것으로 본다. 그때부터 다시 맡길 수 있다.
-# 서술자가 답하는 데 걸릴 수 있는 가장 긴 시간보다 길어야 한다. 짧으면 아직 도는 서술 위에 또 서술을 맡긴다.
-# 서술 하나는 다시 시도하기와 넘어가기를 합쳐도 NARRATION_BUDGET_SECONDS 안에 끝난다. 거기에 읽고 쓰는 여유를 더한다
-CLOSING_RETRY_MARGIN_SECONDS = 30.0
-CLOSING_RETRY_SECONDS = NARRATION_BUDGET_SECONDS + CLOSING_RETRY_MARGIN_SECONDS
+# 작업이 살아 있을 수 있는 가장 긴 시간보다 길어야 한다. 짧으면 아직 도는 서술 위에 또 서술을 맡긴다.
+# 그래서 따로 적지 않고 위의 시간들을 더해서 만든다. 하나를 늘리면 이것도 늘어난다
+CLOSING_RETRY_SECONDS = CLOSING_JOB_SECONDS + FAILURE_RECORD_SECONDS + CLOSING_RETRY_MARGIN_SECONDS
 
 
 class NarrationScheduler(Protocol):
@@ -155,8 +172,12 @@ class NarrationScheduler(Protocol):
     이 파일이 그 파일을 불러오지 않으려고 모양만 여기 둔다. 그 파일이 이 파일을 불러온다.
     """
 
-    def schedule(self, table_id: uuid.UUID, number: int) -> None:
-        """이 테이블의 이 라운드의 서술을 맡긴다. 기다리지 않고 바로 돌아온다."""
+    def schedule(self, table_id: uuid.UUID, number: int, started: datetime) -> None:
+        """
+        이 테이블의 이 라운드의 서술을 맡긴다. 기다리지 않고 바로 돌아온다.
+
+        started 는 이번에 맡기며 적은 닫기 시작한 시각(closing_at)이다. 작업이 이것으로 자기 차례인지 안다.
+        """
         ...
 
 
@@ -182,6 +203,15 @@ def require_open(round_: Round) -> None:
     """라운드가 선언을 받는 중인지 확인한다. 닫는 중이면 RoundConflictError."""
     if round_.status != RoundStatus.OPEN:
         raise RoundConflictError(Conflict.ROUND_CLOSING)
+
+
+def is_run(round_: Round | None, started: datetime) -> bool:
+    """
+    이 라운드가 started 에 맡긴 서술을 아직 기다리고 있는가. 서술을 맡은 작업이 라운드를 읽거나 바꾸기 전에 본다.
+
+    닫는 중이 아니면(이미 닫혔거나 없다) 아니다. 닫기 시작한 시각이 다르면 그 뒤에 다시 맡긴 것이다. 그것도 아니다.
+    """
+    return round_ is not None and round_.status == RoundStatus.CLOSING and round_.closing_at == started
 
 
 def is_stalled(round_: Round, now: datetime) -> bool:
@@ -885,6 +915,16 @@ async def load_scene(session: AsyncSession, table: GameTable, round_: Round) -> 
     return Scene(npcs=states, cast=cast_of(read_snapshot(table.content), round_.scene, states))
 
 
+def hand_over(scheduler: NarrationScheduler, saved: tuple[GameTable, Round]) -> None:
+    """
+    방금 저장한 닫는 중인 라운드의 서술을 맡긴다. 저장한 닫기 시작한 시각을 함께 넘긴다.
+
+    저장한 뒤에 다시 읽은 라운드(save 가 돌려준 것)를 받는다. 작업이 견주는 값이 DB 에 적힌 값과 같아야 한다.
+    """
+    table, round_ = saved
+    scheduler.schedule(table.id, round_.number, round_.closing_at)
+
+
 async def save(session: AsyncSession, table: GameTable) -> tuple[GameTable, Round]:
     """저장하고, 테이블과 가장 최근 라운드를 다시 읽어 돌려준다."""
     await tables.commit(session, table)
@@ -928,7 +968,7 @@ async def declare(
     saved = await save(session, table)
     # 저장한 뒤에 맡긴다. 먼저 맡기면 서술을 맡은 작업이 아직 저장되지 않은 것을 읽는다
     if everyone_declared:
-        scheduler.schedule(table.id, round_.number)
+        hand_over(scheduler, saved)
     return saved
 
 
@@ -945,6 +985,7 @@ async def force_close(
       - 서술이 끝내 실패했거나 한참 지났으면(is_stalled) 서술을 다시 맡긴다. 이벤트를 다시 적지는 않는다.
         주사위도 다시 굴리지 않는다. 처음 닫을 때 선언에 적어 둔 결과를 그대로 쓴다.
         닫기 시작한 시각을 지금으로 고치고 실패의 표시를 지운다. 다시 맡긴 것 위에 또 맡기지 않게 한다.
+        시각이 바뀌므로 앞서 맡은 작업이 아직 살아 있어도 이 라운드를 더는 바꾸지 못한다(is_run).
     """
     table, _, round_ = await lock_current_round(session, host_id, table_id)
     tables.require_host(table, host_id)
@@ -958,18 +999,20 @@ async def force_close(
         raise RoundConflictError(Conflict.ROUND_CLOSING)
 
     saved = await save(session, table)
-    scheduler.schedule(table.id, round_.number)
+    hand_over(scheduler, saved)
     return saved
 
 
 # --- 서술을 맡은 작업이 부르는 것. 요청 밖에서 돈다(app/rounds/closing.py) ---
 
 
-async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, number: int) -> NarrationRequest | None:
+async def load_closing_request(
+    session: AsyncSession, table_id: uuid.UUID, number: int, started: datetime
+) -> NarrationRequest | None:
     """
-    닫는 중인 라운드를 서술자에게 줄 모양으로 읽는다. 닫는 중이 아니면 None.
+    닫는 중인 라운드를 서술자에게 줄 모양으로 읽는다. started 에 맡긴 서술을 기다리는 라운드가 아니면 None.
 
-    None 이면 할 일이 없다. 다른 작업이 이미 마무리했거나 테이블이 지워졌다.
+    None 이면 할 일이 없다. 다른 작업이 이미 마무리했거나, 그 뒤에 다시 맡겼거나, 테이블이 지워졌다.
     잠그지 않는다. 읽는 것은 모두 더 바뀌지 않는다.
       - 각자 한 일과 문체는 닫기 시작할 때 굳혀 둔 것이다. 그 뒤에 누가 나가도, 방장이 문체를 바꿔도 그대로다.
       - 이야기의 바탕은 판의 복사본에서 꺼낸다. 판은 고치지 않는다.
@@ -980,7 +1023,7 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
     """
     table = await table_repository.find_table(session, table_id)
     round_ = await repository.find_round(session, table_id, number)
-    if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
+    if table is None or not is_run(round_, started):
         return None
     history = await repository.list_rounds_before(session, table_id, number, HISTORY_ROUNDS)
     snapshot = read_snapshot(table.content)
@@ -998,21 +1041,25 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
     )
 
 
-async def fail_closing(session: AsyncSession, table_id: uuid.UUID, number: int, reason: str) -> None:
+async def fail_closing(session: AsyncSession, table_id: uuid.UUID, number: int, started: datetime, reason: str) -> None:
     """
     닫는 중인 라운드의 서술이 끝내 실패한 것을 적는다. 저장한다.
 
     라운드는 닫는 중에 머문다. 실패한 시각을 적어 방장이 기다리지 않고 다시 맡길 수 있게 하고,
     앉은 사람 모두에게 이벤트로 알린다. reason 은 마지막 실패의 이유다(timeout, cut_off …).
 
-    테이블을 잠그고, 잠근 뒤에 라운드가 아직 닫는 중이고 실패가 적히지 않았는지 본다. 아니면 아무것도 하지 않는다.
-    같은 라운드의 다른 서술이 먼저 마무리했거나, 이미 실패를 적었다.
+    테이블을 잠그고, 잠근 뒤에 이 라운드가 started 에 맡긴 서술을 아직 기다리는지, 실패가 적히지 않았는지 본다.
+    아니면 아무것도 하지 않는다.
+      - 이미 닫혔다. 마무리의 저장이 끝난 뒤에 예외가 났거나(저장 도중에 끊긴 경우를 포함한다) 다른 작업이 닫았다.
+        잠금을 기다리는 동안 그 저장이 끝나므로, 잠근 뒤에 읽은 것이 실제의 상태다.
+      - 그 뒤에 다시 맡겼다(닫기 시작한 시각이 다르다). 옛 작업의 실패가 지금 도는 서술에 실패를 적지 못한다.
+      - 이미 실패를 적었다.
 
     서술이 실패로 끝나는 곳은 여기 하나다. 포인트를 붙이면 맡을 때 잡아 둔 것을 여기서 돌려준다.
     """
     table = await table_repository.lock_table(session, table_id)
     round_ = await repository.find_round(session, table_id, number)
-    if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
+    if table is None or not is_run(round_, started):
         return
     if round_.narration_failed_at is not None:
         return
@@ -1024,12 +1071,15 @@ async def fail_closing(session: AsyncSession, table_id: uuid.UUID, number: int, 
     await tables.commit(session, table)
 
 
-async def finish_closing(session: AsyncSession, table_id: uuid.UUID, number: int, scene: str) -> None:
+async def finish_closing(
+    session: AsyncSession, table_id: uuid.UUID, number: int, started: datetime, scene: str
+) -> None:
     """
     닫는 중인 라운드를 닫고, 서술(scene)을 장면으로 하는 다음 라운드를 연다. 저장한다.
 
-    테이블을 잠그고, 잠근 뒤에 라운드가 아직 닫는 중인지 본다. 아니면 아무것도 하지 않는다.
-    같은 라운드의 서술이 둘 돌았어도(다시 맡긴 경우) 먼저 온 것만 받아들여진다. 다음 라운드가 둘 열리지 않는다.
+    테이블을 잠그고, 잠근 뒤에 이 라운드가 started 에 맡긴 서술을 아직 기다리는지 본다. 아니면 아무것도 하지 않는다.
+    같은 라운드의 서술이 둘 돌았어도(다시 맡긴 경우) 지금 맡긴 것만 받아들여진다. 다음 라운드가 둘 열리지 않는다.
+    다시 맡긴 뒤에 늦게 온 옛 서술은 버린다. 라운드를 바꾸는 것은 지금 맡긴 작업 하나뿐이다.
 
     서술하는 사이에 테이블이 끝났으면 라운드만 닫고 다음 라운드를 열지 않는다.
 
@@ -1038,7 +1088,7 @@ async def finish_closing(session: AsyncSession, table_id: uuid.UUID, number: int
     """
     table = await table_repository.lock_table(session, table_id)
     round_ = await repository.find_round(session, table_id, number)
-    if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
+    if table is None or not is_run(round_, started):
         return
 
     round_.closed_at = datetime.now(UTC)
