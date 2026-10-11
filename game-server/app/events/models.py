@@ -75,6 +75,8 @@ class EventType(enum.StrEnum):
     INJURY_ENDED = 'injury_ended'
     # 엔진이 치료의 결과를 정했다. 나을 라운드의 변화, 치료 실패 표의 결과가 적힌다. 원인은 그 판정의 이벤트다
     INJURY_TREATED = 'injury_treated'
+    # 엔진이 지목의 결과를 정했다. 짚은 이름이 맞았는지와, 맞았으면 진짜 이름이 적힌다. 원인은 그 행동의 이벤트다
+    NAMING_RESOLVED = 'naming_resolved'
     # 엔진이 쓰러진 캐릭터의 죽음의 굴림을 굴렸다. 라운드가 닫힐 때다
     DEATH_SAVE_ROLLED = 'death_save_rolled'
     # 캐릭터가 죽었다. 죽음의 굴림으로(원인은 그 굴림의 이벤트다), 치료 실패의 즉사로(원인은 그 치료의 이벤트다),

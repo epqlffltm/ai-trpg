@@ -4,7 +4,8 @@
 닫히는 라운드의 판정. 닫기 시작할 때 한 번만 한다(app/rounds/service.py 의 begin_closing).
 
 서술이 실패해 다시 맡겨도 주사위를 다시 굴리지 않는다. 다시 굴리면 서술을 실패시켜 결과를 바꿀 수 있다.
-  1. 행동들을 들어온 순서로 판정한다(roll_checks). 판정이면 app/rounds/checks.py, 치료면 app/rounds/treatments.py.
+  1. 행동들을 들어온 순서로 판정한다(roll_checks). 판정이면 app/rounds/checks.py, 치료면 app/rounds/treatments.py,
+     지목이면 app/rounds/naming.py(주사위를 굴리지 않는다).
   2. 쓰러진 캐릭터는 죽음의 굴림을 굴린다(roll_death_saves, app/engine/death.py).
      이번 라운드에 쓰러진 캐릭터는 굴리지 않는다. 동료가 일으킬 틈이 한 라운드는 있다.
      이번 라운드에 회복을 받아 일어난 캐릭터도 굴리지 않는다. 행동의 결과를 먼저 끝내고 나서 굴린다.
@@ -14,29 +15,36 @@ DB 를 모른다. 이미 읽어 온 테이블과 이번 장면을 고친다. 저
 
 from dataclasses import asdict
 
+from app.assets.scenarios.snapshot import person_entries, read_snapshot
 from app.engine import action as actions
 from app.engine import death
-from app.engine.action import CheckAction, TreatAction
+from app.engine.action import CheckAction, NameAction, TreatAction
 from app.engine.dice import Dice
 from app.rounds import injuries as round_injuries
-from app.rounds.cast import CastMember, Scene
+from app.rounds.cast import Scene
 from app.rounds.checks import judge_check
 from app.rounds.effects import Judging
 from app.rounds.models import Round
+from app.rounds.naming import judge_naming
 from app.rounds.state import find_declaration, rules_of
 from app.rounds.treatments import judge_treatment
 from app.tables import sheets
 from app.tables.models import GameTable, TableMember
 
 
-def judge(judging: Judging, member: TableMember, action: CheckAction | TreatAction) -> dict:
-    """한 사람의 행동을 판정하고 그 결과를 정한다. 행동의 종류에 따라 판정(judge_check)이나 치료(judge_treatment)다."""
+def judge(judging: Judging, member: TableMember, action: CheckAction | TreatAction | NameAction) -> dict:
+    """
+    한 사람의 행동을 판정하고 그 결과를 정한다.
+    행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming)이다.
+    """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
+    if isinstance(action, NameAction):
+        return judge_naming(judging, action)
     return judge_check(judging, member, action)
 
 
-def roll_checks(table: GameTable, round_: Round, dice: Dice, cast: list[CastMember]) -> None:
+def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> None:
     """
     닫히는 라운드의 행동을 판정하고, 결과에 따라 HP 를 바꾸고, 결과를 선언에 적는다. 들어온 순서로 굴린다.
 
@@ -44,12 +52,13 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, cast: list[CastMemb
     앞사람이 쓰러뜨린 것을 뒷사람이 일으킬 수 있다. NPC 도 그렇다. 앞사람이 죽인 NPC 는 뒷사람이 바꾸지 못한다.
     같은 부상을 여럿이 치료하면 앞사람부터 차례로 적용한다. 앞사람이 다 낫게 했으면 뒷사람은 치료할 것이 없다.
     앞사람의 치료가 실패해 즉사한 캐릭터는 자기 차례에 행동하지 못한다. 판정도 결과도 없다.
-    cast 는 이번 장면의 인물들이다. NPC 의 상태는 그 안에 들어 있고, 여기서 고친다.
+    scene 은 이번 장면의 NPC 들이다(app/rounds/cast.py). NPC 의 상태는 그 안에 들어 있고, 여기서 고친다.
+    지목은 장면에 나오지 않은 인물도 짚을 수 있어서 상태 전부(scene.npcs)를 함께 넘긴다.
 
     지금 앉아 있고, 선언에 행동을 붙였고, 시트가 있는 사람만 굴린다.
     진행 중인 테이블에서는 모두에게 시트가 있다(app/tables/sheets.py). 없는 사람이 있어도 라운드는 닫혀야 해서 건너뛴다.
 
-    규칙은 굴릴 사람이 있을 때만 읽는다. 판에 굳은 복사본을 통째로 읽는 일이라 싸지 않다.
+    판의 복사본(규칙과 인물 항목)은 굴릴 사람이 있을 때만 한 번 읽는다. 통째로 읽는 일이라 싸지 않다.
     """
     rolling = [
         (member, declaration)
@@ -61,7 +70,16 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, cast: list[CastMemb
     if not rolling:
         return
 
-    judging = Judging(table=table, ruleset=rules_of(table), dice=dice, cast=cast, round_number=round_.number)
+    snapshot = read_snapshot(table.content)
+    judging = Judging(
+        table=table,
+        ruleset=snapshot.rulebook.rules,
+        dice=dice,
+        cast=scene.cast,
+        round_number=round_.number,
+        npcs=scene.npcs,
+        people=person_entries(snapshot),
+    )
     for member, declaration in rolling:
         # 앞사람의 치료가 실패해 즉사했으면 그 캐릭터는 행동하지 못한다. 쓰러진 것과 다르다
         if sheets.is_dead(member):

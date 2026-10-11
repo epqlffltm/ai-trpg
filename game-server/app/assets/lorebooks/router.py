@@ -32,6 +32,7 @@ def to_entry_detail(entry: LoreEntry) -> EntryDetail:
         keywords=entry.keywords,
         content=entry.content,
         kind=LoreKind(entry.kind),
+        true_names=entry.true_names,
         created_at=entry.created_at,
         updated_at=entry.updated_at,
     )

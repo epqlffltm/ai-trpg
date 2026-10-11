@@ -16,7 +16,7 @@ from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
 from app.core.dice import Rolling
 from app.rounds import service, state
-from app.rounds.cast import CastMember
+from app.rounds.cast import CastMember, is_named
 from app.rounds.closing import RoundCloser
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.models import Declaration, Round, RoundStatus
@@ -101,6 +101,7 @@ def to_cast(round_: Round, cast: list[CastMember]) -> SceneCastOut:
             name=member.name,
             status=member.npc.status,
             injuries=injuries.active_keys(member.npc.injuries),
+            named=is_named(member.npc),
         )
         for member in cast
     ]
