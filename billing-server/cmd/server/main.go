@@ -12,7 +12,7 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,6 +27,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
@@ -40,19 +41,28 @@ const (
 )
 
 func main() {
+	// 설정을 읽기 전의 로그(.env 를 읽지 못했다, 설정이 틀렸다)도 같은 모양으로 나가게 한다.
+	// 환경과 버전은 아직 모른다. 설정을 읽은 뒤에 그 값을 실은 로거로 바꾼다
+	slog.SetDefault(obs.NewLogger(os.Stderr, obs.ServiceInfo{Service: obs.ServiceName}, slog.LevelInfo))
 	if err := run(); err != nil {
-		log.Fatalf("결제 서버를 띄우지 못했습니다: %v", err)
+		slog.Error("결제 서버를 띄우지 못했습니다",
+			slog.String(obs.FieldOperation, "server.start"),
+			slog.String(obs.FieldErrorCode, "server.start_failed"),
+			slog.String(obs.FieldErrorMessage, err.Error()),
+		)
+		os.Exit(1)
 	}
 }
 
 // run 은 서버를 띄우고, 종료 신호가 올 때까지 돈다. main 과 나눈 이유는 defer 다.
-// log.Fatal 은 프로세스를 바로 끝내서 defer 가 돌지 않는다. 오류를 돌려주면 풀을 닫고 나서 끝난다.
+// os.Exit 은 프로세스를 바로 끝내서 defer 가 돌지 않는다. 오류를 돌려주면 풀을 닫고 나서 끝난다.
 func run() error {
 	loadDotEnv()
 	settings, err := config.Load(os.LookupEnv)
 	if err != nil {
 		return err
 	}
+	slog.SetDefault(newLogger(settings))
 
 	// 종료 신호가 오면 이 context 가 끝난다
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -81,6 +91,19 @@ func run() error {
 	return serve(ctx, newServer(settings, router))
 }
 
+// newLogger 는 공통 규격(docs/observability.md)의 JSON 으로 표준 오류에 적는 로거를 만든다.
+// 표준 log 패키지로 남긴 것도 이 로거를 거쳐 같은 모양으로 나간다(slog.SetDefault 가 그렇게 잇는다).
+func newLogger(settings config.Settings) *slog.Logger {
+	info := obs.ServiceInfo{
+		Service:     obs.ServiceName,
+		Environment: settings.AppEnvironment,
+		Version:     settings.AppVersion,
+	}
+	// 설정이 이미 값을 검사했다. 모르는 값이면 info 다
+	level, _ := obs.ParseLevel(settings.LogLevel)
+	return obs.NewLogger(os.Stderr, info, level)
+}
+
 // newOrders 는 주문을 만들고 치르는 것을 만든다. 결제 대행사의 자리에는 가짜를 꽂는다.
 // 이 서버는 연습용이라 실제 돈을 받지 않는다. 실제 결제 대행사를 붙일 때 여기에서 바꿔 꽂는다.
 func newOrders(pool *pgxpool.Pool, wallets *wallet.Service) *order.Service {
@@ -107,7 +130,7 @@ func newVerifier(settings config.Settings) *auth.Verifier {
 func loadDotEnv() {
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		// 내용은 찍지 않는다. .env 에는 비밀번호가 들어 있다
-		log.Printf(".env 를 읽지 못했습니다. 환경 변수만으로 진행합니다")
+		slog.Warn(".env 를 읽지 못했습니다. 환경 변수만으로 진행합니다")
 	}
 }
 
@@ -125,7 +148,7 @@ func newServer(settings config.Settings, handler http.Handler) *http.Server {
 func serve(ctx context.Context, server *http.Server) error {
 	failed := make(chan error, 1)
 	go func() {
-		log.Printf("결제 서버가 %s 에서 요청을 받습니다", server.Addr)
+		slog.Info("결제 서버가 요청을 받습니다", slog.String("addr", server.Addr))
 		failed <- server.ListenAndServe()
 	}()
 
@@ -133,7 +156,7 @@ func serve(ctx context.Context, server *http.Server) error {
 	case err := <-failed:
 		return err
 	case <-ctx.Done():
-		log.Printf("종료 신호를 받았습니다. 처리 중인 요청을 기다립니다")
+		slog.Info("종료 신호를 받았습니다. 처리 중인 요청을 기다립니다")
 		return shutDown(server)
 	}
 }

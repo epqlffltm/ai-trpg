@@ -5,7 +5,7 @@ package order
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -121,7 +121,12 @@ func (s *Service) askProvider(ctx context.Context, ask func(context.Context) (pa
 func (s *Service) settle(ctx context.Context, current Order, result payment.Result, askErr error) (Order, error) {
 	if askErr != nil {
 		// 결제 번호는 적지 않는다. 주문 번호로 찾을 수 있다
-		log.Printf("주문 %s: 결제 대행사의 답을 받지 못했다. 결과를 모르는 채로 둔다: %v", current.ID, askErr)
+		slog.WarnContext(ctx, "결제 대행사의 답을 받지 못했다. 결과를 모르는 채로 둔다",
+			slog.String("operation", "order.confirm"),
+			slog.String("error_code", "payment.provider_unavailable"),
+			slog.String("order_id", current.ID.String()),
+			slog.String("error_message", askErr.Error()),
+		)
 		return current, nil
 	}
 	switch result.Status {

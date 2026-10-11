@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
 )
 
@@ -160,5 +161,46 @@ func TestFetchDoesNotLogTheAddress(t *testing.T) {
 	// 내부 주소가 로그에 남지 않게 한다
 	if strings.Contains(logged(), "127.0.0.1") || strings.Contains(logged(), "/api/v1/auth/jwks") {
 		t.Errorf("로그에 주소가 실렸다: %s", logged())
+	}
+}
+
+func TestFetchContinuesTheTraceOfTheRequest(t *testing.T) {
+	key := testenv.NewSigningKey(t, 0, "key-1")
+	var headers http.Header
+	fetcher := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		headers = r.Header.Clone()
+		_, _ = w.Write(testenv.JWKS(t, key))
+	})
+	trace := obs.NewTrace()
+	ctx := obs.WithRequest(context.Background(), "request-12345", trace)
+
+	if _, err := fetcher.Fetch(ctx); err != nil {
+		t.Fatalf("가져오지 못했다: %v", err)
+	}
+
+	// 인증 서버의 로그와 이 요청의 로그가 같은 trace_id 로 이어진다
+	if got, ok := obs.ParseTraceparent(headers.Get(obs.TraceparentHeader)); !ok || got != trace {
+		t.Errorf("traceparent = %q", headers.Get(obs.TraceparentHeader))
+	}
+	// 요청의 식별자는 넘기지 않는다. 인증 서버가 제 것을 따로 만든다
+	if headers.Get(obs.RequestIDHeader) != "" {
+		t.Error("요청의 식별자를 인증 서버에 넘겼다")
+	}
+}
+
+func TestFetchOutsideARequestSendsNoTrace(t *testing.T) {
+	key := testenv.NewSigningKey(t, 0, "key-1")
+	var headers http.Header
+	fetcher := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		headers = r.Header.Clone()
+		_, _ = w.Write(testenv.JWKS(t, key))
+	})
+
+	if _, err := fetcher.Fetch(context.Background()); err != nil {
+		t.Fatalf("가져오지 못했다: %v", err)
+	}
+
+	if headers.Get(obs.TraceparentHeader) != "" {
+		t.Error("추적이 없는데 traceparent 를 보냈다")
 	}
 }
