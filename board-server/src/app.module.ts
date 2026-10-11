@@ -22,6 +22,7 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module.js';
 import { BoardsModule } from './boards/boards.module.js';
+import { CommentsModule } from './comments/comments.module.js';
 import { readEnvironment } from './config/environment.js';
 import { DatabaseModule } from './database/database.module.js';
 import { AllExceptionsFilter } from './errors/all-exceptions.filter.js';
@@ -43,6 +44,7 @@ import { PostsModule } from './posts/posts.module.js';
     MeModule,
     BoardsModule,
     PostsModule,
+    CommentsModule,
   ],
   providers: [
     { provide: APP_PIPE, useFactory: validationPipe },
