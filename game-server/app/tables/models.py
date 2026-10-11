@@ -64,6 +64,11 @@ INVITE_CODE_LENGTH = 12
 # 테이블의 비밀번호. 로비에 보이는 테이블을 아는 사람끼리만 쓰려고 건다
 TABLE_PASSWORD_MIN_LENGTH = 4
 TABLE_PASSWORD_MAX_LENGTH = 64
+# 라운드의 시간 제한(초). 방장이 고른다. 비우면 시간 제한이 없다(app/rounds/clock.py)
+ROUND_TIME_LIMIT_MIN = 30
+ROUND_TIME_LIMIT_MAX = 3600
+# 테이블을 만들 때 고르지 않으면 이것이다. '없음'은 null 을 보내 고른다
+DEFAULT_ROUND_TIME_LIMIT = 300
 
 
 class DeathCause(enum.StrEnum):
@@ -134,6 +139,10 @@ class GameTable(Base):
             name='character_modes_allowed',
         ),
         CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
+        CheckConstraint(
+            f'round_time_limit IS NULL OR round_time_limit BETWEEN {ROUND_TIME_LIMIT_MIN} AND {ROUND_TIME_LIMIT_MAX}',
+            name='round_time_limit_range',
+        ),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -187,6 +196,12 @@ class GameTable(Base):
     # 로비의 목록이 판의 복사본을 열지 않고 문체를 보여 준다.
     # 이 칸이 생기기 전에 만든 테이블은 정통이다. 그 테이블의 판도 정통을 추천하는 것으로 읽힌다
     narration_style: Mapped[str] = mapped_column(String(20), server_default=text("'classic'"))
+
+    # 라운드의 시간 제한(초). 라운드가 열린 때부터 센다. 지나면 서버가 라운드를 닫는다(app/rounds/clock.py).
+    # 비어 있으면 시간 제한이 없다. 모두 내거나 방장이 닫을 때만 닫힌다.
+    # 만들 때 방장이 고르고, 진행 중에도 바꿀 수 있다. 바꾼 값은 다음 라운드부터 쓴다.
+    # 이 칸이 생기기 전에 만든 테이블은 비어 있다. 그때처럼 시간 제한 없이 간다
+    round_time_limit: Mapped[int | None] = mapped_column(Integer)
 
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.

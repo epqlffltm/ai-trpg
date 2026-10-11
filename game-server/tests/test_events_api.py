@@ -308,7 +308,9 @@ async def test_starting_writes_the_roster_the_scene_and_the_round(
         None,
         {'text': OPENINGS[1]},
     )
-    assert (opened['type'], opened['actor_id'], opened['payload']) == ('round_opened', None, {'number': 1})
+    assert (opened['type'], opened['actor_id'], opened['payload']['number']) == ('round_opened', None, 1)
+    # 마감이 함께 실린다. 테이블의 시간 제한(기본 5 분)만큼 뒤다(test_round_time_limit.py)
+    assert set(opened['payload']) == {'number', 'deadline_at'}
     # 시작 → 서술 → 열림. 원인으로 이어지고 한 묶음이다
     assert narration['caused_by_sequence'] == started['sequence']
     assert opened['caused_by_sequence'] == narration['sequence']
@@ -348,10 +350,11 @@ async def test_closing_a_round_writes_the_actions_the_result_and_the_next_round(
     assert mine['payload'] == {'round': 1, 'character_name': '엘프', 'content': MY_ACTION, 'action': None}
     assert (friends['actor_id'], friends['payload']['content']) == (str(FRIEND), FRIENDS_ACTION)
     # 모두가 내서 저절로 닫혔다. 닫은 사람이 없다
-    assert (closed['type'], closed['actor_id'], closed['payload']) == ('round_closed', None, {'number': 1, 'idle': []})
+    closing = {'number': 1, 'idle': [], 'reason': 'all_declared'}
+    assert (closed['type'], closed['actor_id'], closed['payload']) == ('round_closed', None, closing)
     expected = f'[1 라운드의 결과]\n엘프: {MY_ACTION}\n영애: {FRIENDS_ACTION}'
     assert (narration['type'], narration['payload']) == ('gm_narration', {'text': expected})
-    assert (opened['type'], opened['payload']) == ('round_opened', {'number': 2})
+    assert (opened['type'], opened['payload']['number']) == ('round_opened', 2)
     # 닫힘 → 서술 → 열림. 다섯이 한 묶음이다. 닫힘까지와 서술부터는 따로 저장되지만 묶음은 같다
     assert narration['caused_by_sequence'] == closed['sequence']
     assert opened['caused_by_sequence'] == narration['sequence']
@@ -372,7 +375,7 @@ async def test_the_host_closing_a_round_records_who_did_nothing(
     assert types(events) == ['player_action', 'round_closed', 'gm_narration', 'round_opened']
     closed = events[1]
     # 방장이 닫았다. 선언을 내지 않은 사람이 적힌다
-    assert (closed['actor_id'], closed['payload']) == (str(ME), {'number': 1, 'idle': [str(FRIEND)]})
+    assert (closed['actor_id'], closed['payload']) == (str(ME), {'number': 1, 'idle': [str(FRIEND)], 'reason': 'host'})
 
 
 async def test_the_action_of_someone_who_left_is_not_recorded(

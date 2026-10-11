@@ -36,9 +36,10 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.ABILITIES_ROLLED: ('dice', 'scores', 'times_rolled', 'character_number'),
     EventType.REROLL_GRANTED: ('user_id',),
     EventType.NARRATION_STYLE_CHANGED: ('narration_style',),
+    EventType.ROUND_TIME_LIMIT_CHANGED: ('round_time_limit',),
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
-    EventType.ROUND_OPENED: ('number',),
+    EventType.ROUND_OPENED: ('number', 'deadline_at'),
     EventType.PLAYER_ACTION: ('round', 'character_name', 'content', 'action'),
     # 굴림은 공개다. 숫자까지 모두에게 보인다
     EventType.CHECK_ROLLED: (
@@ -135,7 +136,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'number',
         'sheet',
     ),
-    EventType.ROUND_CLOSED: ('number', 'idle'),
+    EventType.ROUND_CLOSED: ('number', 'idle', 'reason'),
     # 실패의 이유도 보인다(timeout, cut_off …). 모델이 쓴 글이나 보낸 프롬프트는 싣지 않는다
     EventType.NARRATION_FAILED: ('round', 'reason'),
     EventType.TABLE_ENDED: (),

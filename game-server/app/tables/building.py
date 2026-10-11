@@ -74,6 +74,7 @@ def build_table(
         is_public=data.is_public,
         password_hash=password_hash,
         narration_style=choose_narration_style(snapshot, data.narration_style),
+        round_time_limit=data.round_time_limit,
         members=[TableMember(user_id=host_id)],
     )
 

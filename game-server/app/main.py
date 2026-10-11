@@ -47,7 +47,9 @@ from app.realtime import router as realtime
 from app.realtime.hub import Hub
 from app.realtime.listener import PostgresListener
 from app.realtime.shutdown import closing_on_exit
+from app.rounds import clock
 from app.rounds import router as rounds
+from app.rounds.closing import closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.narrator_setup import build_narrator
 from app.tables import router as tables
@@ -73,10 +75,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     (app/realtime/shutdown.py). 닫는 일은 신호 처리기가 아니라 이벤트 루프가 한다.
     꺼질 때 신호를 듣는 연결, DB 연결, 인증 서버로 가는 연결을 전부 닫는다.
     닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
+    라운드의 시계(마감이 지난 라운드를 닫는 것)는 뜰 때 돌기 시작하고, 꺼질 때 가장 먼저 멈춘다.
+    시계가 맡긴 서술이 뒤의 작업 마무리에 들어가도록 순서를 지킨다.
     """
     loop = asyncio.get_running_loop()
+    running = clock.start(app.state.round_clock)
     with closing_on_exit(lambda: loop.call_soon_threadsafe(app.state.hub.close_all)):
         yield
+    await running.halt()
     # 뒤에서 돌던 작업을 먼저 마무리한다. 작업이 DB 를 쓰므로 DB 를 닫기 전에 한다
     await app.state.jobs.aclose()
     await app.state.signal_source.stop()
@@ -167,6 +173,14 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
 
     # 로어북이 고른 인물마다 지난 서술에서 그 인물이 나온 문장을 모으는 것(app/memory/history.py). 모델을 부르지 않는다
     app.state.histories = HistoryCollector(app.state.session_factory)
+
+    # 마감이 지난 라운드를 몇 초마다 찾아 닫는 시계(app/rounds/clock.py). lifespan 이 돌리고 멈춘다.
+    # 서술자와 주사위는 닫을 때마다 앱에서 꺼낸다. 테스트가 바꿔 꽂은 것을 쓴다
+    app.state.round_clock = clock.RoundClock(
+        session_factory=app.state.session_factory,
+        scheduler=lambda: closer_of(app.state),
+        dice=lambda: app.state.dice,
+    )
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
