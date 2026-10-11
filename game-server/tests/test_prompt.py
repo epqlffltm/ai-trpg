@@ -276,8 +276,8 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_the_template_is_narration_11():
-    assert prompt.PROMPT_VERSION == 'narration-11'
+def test_the_template_is_narration_12():
+    assert prompt.PROMPT_VERSION == 'narration-12'
 
 
 def test_the_last_message_asks_for_the_declared_actions():

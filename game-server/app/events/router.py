@@ -52,6 +52,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'target',
         'success',
         'hindrance',
+        'called_shot',
     ),
     # HP 도 공개다. 앉은 사람은 서로의 시트를 본다
     EventType.HP_CHANGED: (

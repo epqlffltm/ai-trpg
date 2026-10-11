@@ -104,7 +104,16 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
         impact=to_impact(outcome.get('effect')),
         npc_impact=to_npc_impact(outcome.get('npc_effect')),
         hindrances=hindrance_names(ruleset, outcome.get('hindrance')),
+        aimed=aimed_name(ruleset, outcome.get('called_shot')),
     )
+
+
+def aimed_name(ruleset: Ruleset, called_shot: dict | None) -> str | None:
+    """노린 부상의 이름. 규칙에 적힌 이름이다. 노려 치지 않았으면 None."""
+    if called_shot is None:
+        return None
+    found = known_injuries(ruleset, [called_shot['aim']])
+    return found[0].name if found else None
 
 
 def hindrance_names(ruleset: Ruleset, hindrance: dict | None) -> list[str]:

@@ -88,15 +88,22 @@ def resolve(ruleset: Ruleset, score: int, difficulty: Difficulty, dice: Dice) ->
 
 
 def resolve_hindered(
-    ruleset: Ruleset, score: int, difficulty: Difficulty, dice: Dice, hindrance: Hindrance
+    ruleset: Ruleset,
+    score: int,
+    difficulty: Difficulty,
+    dice: Dice,
+    hindrance: Hindrance,
+    forced_disadvantage: bool = False,
 ) -> HinderedCheck:
     """
     부상의 영향을 받는 판정 한 번을 한다. 주사위를 한 번(불리하면 두 번) 굴린다.
 
     score 는 판정에 쓰는 능력치의 점수, difficulty 는 규칙에서 찾은 난이도의 단계다.
     hindrance 는 입은 부상이 이 판정에 주는 것이다. 보정을 깎고, 불리하면 낮은 눈을 쓴다.
+    forced_disadvantage 는 부상 말고 다른 까닭(노려 치기)으로 불리한가다. 불리함은 겹쳐도 두 번만 굴린다.
+    돌려준 것의 hindrance 는 받은 부상의 것 그대로다. 다른 까닭의 불리함은 거기에 섞지 않는다.
     """
-    rolls = roll_for_check(ruleset, dice, hindrance.disadvantage)
+    rolls = roll_for_check(ruleset, dice, hindrance.disadvantage or forced_disadvantage)
     roll = min(rolls)
     modifier = modifier_of(ruleset, score) - hindrance.penalty
     total = roll + modifier
