@@ -284,6 +284,8 @@ async def open_table(client: AsyncClient, me: dict[str, str], entries: list[dict
         'lorebook_ids': [lorebook['id']],
         'openings': [OPENING],
         'default_sheet': SHEET,
+        # 인물 항목이 있다. 시트가 없는 인물이 받을 숫자가 있어야 게시된다
+        'default_npc_sheet': SHEET,
     }
     scenario = (await client.post(f'{API_PREFIX}/scenarios', json=body, headers=me)).json()
     await client.post(f'{API_PREFIX}/scenarios/{scenario["id"]}/versions', json={}, headers=me)

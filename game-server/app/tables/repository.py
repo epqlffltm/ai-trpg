@@ -14,12 +14,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from app.assets.models import Rating, ScenarioVersion
-from app.tables.models import GameTable, TableMember, TableStatus
+from app.tables.models import GameTable, TableMember, TableNpc, TableStatus
 
 
 def add_table(session: AsyncSession, table: GameTable) -> None:
     """새 테이블을 세션에 올린다. 앉은 사람(members)도 함께 올라간다."""
     session.add(table)
+
+
+def add_npcs(session: AsyncSession, npcs: list[TableNpc]) -> None:
+    """테이블의 NPC 상태들을 세션에 올린다. 테이블이 먼저 저장돼 있어야 한다."""
+    session.add_all(npcs)
 
 
 async def find_table(session: AsyncSession, table_id: uuid.UUID) -> GameTable | None:

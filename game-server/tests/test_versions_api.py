@@ -67,6 +67,7 @@ OPENING = '사이렌이 울린다. 뒤를 돌아보니 마법소년 차림의 �
 GM_GUIDE = '진지한 장면은 금지다. 모든 추격은 바이크로 한다.'
 SETTING = '17개 행성이 고속도로 하나로 이어져 있다.'
 GM_NOTES = '고속도로의 끝에는 아무것도 없다.'
+NPC_SHEET = make_sheet(str=16, max_hp=22)
 PREGENS = [{'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.', 'sheet': make_sheet(dex=16, max_hp=8)}]
 
 
@@ -388,6 +389,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         recommended_players={'min': 2, 'max': 3},
         pregens=PREGENS,
         default_sheet=SHEET,
+        npc_sheets=[{'entry_id': entry['id'], 'sheet': NPC_SHEET}],
     )
 
     version = await publish(client, my_headers, scenario)
@@ -402,6 +404,9 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'pregens': PREGENS,
         'character_modes': ['pregen', 'custom'],
         'default_sheet': SHEET,
+        # 인물 항목이 모두 시트를 가졌다. 기본 NPC 시트는 없어도 된다
+        'npc_sheets': [{'entry_id': entry['id'], 'sheet': NPC_SHEET}],
+        'default_npc_sheet': None,
         'player_made_hp': None,
         'reroll_allowed': False,
         'narration_style': 'classic',
