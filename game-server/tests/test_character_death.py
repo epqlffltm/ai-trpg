@@ -56,6 +56,8 @@ PLAIN = make_sheet()
 # 판정의 눈. 보통(목표 15)에 도전한다
 FAIL = 1
 PASS = 20
+# 부상 표(d20)의 눈. 1~10 은 부상이 없다. 큰 타격이나 쓰러짐에 표를 굴린다(#114). 부상은 tests/test_injuries.py 가 본다
+NO_INJURY = 1
 
 # 죽음의 굴림의 눈. 목표는 10 이다. 능력치의 보정은 없다
 LIVE = 15
@@ -201,7 +203,7 @@ async def read_events(
 
 async def knock_me_down(client: AsyncClient, app: FastAPI, me: dict, friend: dict, table: dict, narrated) -> None:
     """한 라운드를 써서 나(엘프)를 쓰러뜨린다. 심한 대가가 붙은 행동에 실패해 16 의 피해를 입는다."""
-    load_dice(app, [FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY])
     await declare(client, me, table, JUMP, jump())
     await declare(client, friend, table, LAUGH)
     await narrated()
@@ -307,7 +309,7 @@ async def test_the_dying_roll_in_the_order_they_sat_down(
 ):
     table = await start_duo(client, me, friend)
     # 한 라운드에 둘 다 쓰러진다
-    load_dice(app, [FAIL, 8, 8, FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY, FAIL, 8, 8, NO_INJURY])
     await declare(client, me, table, JUMP, jump())
     await declare(client, friend, table, JUMP, jump())
     await narrated()
@@ -387,7 +389,7 @@ async def test_being_helped_up_starts_the_count_over(
     risen = await saves_of(client, me, table, '엘프')
 
     # 다시 쓰러진다
-    load_dice(app, [FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY])
     await declare(client, me, table, JUMP, jump())
     await declare(client, friend, table, LAUGH)
     await narrated()

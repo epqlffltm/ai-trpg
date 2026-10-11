@@ -21,6 +21,7 @@ from app.rounds.closing import RoundCloser
 from app.rounds.models import Declaration, Round, RoundStatus
 from app.rounds.schemas import DeclarationOut, DeclarationUpdate, PersonOut, RoundOut, RoundPage, SceneCastOut
 from app.rounds.service import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
+from app.tables import injuries
 from app.tables.models import GameTable, TableStatus
 
 router = APIRouter(prefix='/tables/{table_id}/rounds', tags=['rounds'])
@@ -94,7 +95,15 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
 
 def to_cast(round_: Round, cast: list[CastMember]) -> SceneCastOut:
     """이번 장면의 인물들을 앉은 사람에게 보여 주는 응답으로 바꾼다. 이름과 생사만 싣는다."""
-    people = [PersonOut(id=member.entry_id, name=member.name, status=member.npc.status) for member in cast]
+    people = [
+        PersonOut(
+            id=member.entry_id,
+            name=member.name,
+            status=member.npc.status,
+            injuries=injuries.active_keys(member.npc.injuries),
+        )
+        for member in cast
+    ]
     return SceneCastOut(round=round_.number, people=people)
 
 

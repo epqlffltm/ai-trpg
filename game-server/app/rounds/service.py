@@ -49,7 +49,7 @@ NPC 의 상태도 그때 한 번만 바뀐다(app/tables/npcs.py 의 change_npc)
 
 import enum
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
@@ -63,20 +63,22 @@ from app.engine import death, health
 from app.engine.action import CheckAction, Consequence, Recipient
 from app.engine.check import Check
 from app.engine.dice import Dice
+from app.engine.health import Change
 from app.engine.ruleset import Ruleset
 from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
+from app.rounds import injuries as round_injuries
 from app.rounds import narration_request, opener, repository
-from app.rounds.cast import CastMember, cast_of, condition_of, find_cast_member
+from app.rounds.cast import CastMember, Scene, cast_of, condition_of, find_cast_member
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.rounds.narrator import Move, NarrationRequest, PersonState
+from app.rounds.narrator import InjuryNote, Move, NarrationRequest, PersonState
 from app.rounds.prompt import HISTORY_ROUNDS
 from app.rounds.schemas import DeclarationUpdate
-from app.tables import npcs, sheets
+from app.tables import injuries, npcs, sheets
 from app.tables import repository as table_repository
 from app.tables import service as tables
-from app.tables.models import DeathCause, GameTable, TableMember, TableStatus
+from app.tables.models import DeathCause, GameTable, InjurySource, TableMember, TableStatus
 
 
 class RoundNotFoundError(Exception):
@@ -100,6 +102,8 @@ class Conflict(enum.StrEnum):
     CHARACTER_ARRIVING = 'character_arriving'
     # 행동이 겨눈 NPC 가 이미 죽었다
     NPC_DEAD = 'npc_dead'
+    # 캐릭터가 입은 부상 때문에 행동하지 못한다(기절 같은 것). 글만 낼 수 있다
+    CHARACTER_INCAPACITATED = 'character_incapacitated'
 
 
 class RoundConflictError(Exception):
@@ -264,6 +268,7 @@ def accept_action(
 
     member 는 선언하는 사람이고, cast 는 이번 장면의 인물들이다.
       - 쓰러져 있으면 RoundConflictError. 쓰러진 사람은 글만 낼 수 있다.
+      - 행동을 막는 부상(기절 같은 것)을 입었으면 RoundConflictError. 그 사람도 글만 낼 수 있다.
       - 규칙에 없는 능력, 난이도, 양의 등급이면 ActionNotInRulesError.
       - 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
       - 겨눈 NPC 가 이번 장면의 인물이 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
@@ -274,6 +279,8 @@ def accept_action(
     if is_down(member):
         raise RoundConflictError(Conflict.CHARACTER_DOWNED)
     ruleset = rules_of(table)
+    if member.sheet is not None and round_injuries.is_incapacitated(ruleset, member.sheet.injuries):
+        raise RoundConflictError(Conflict.CHARACTER_INCAPACITATED)
     fault = actions.find_fault(ruleset, action)
     if fault is not None:
         raise ActionNotInRulesError(fault)
@@ -316,28 +323,56 @@ def find_affected(
     return actor if recipient == Recipient.ACTOR else tables.find_member(table, action.target)
 
 
-def change_member(
-    table: GameTable, actor: TableMember, action: CheckAction, found: Consequence, ruleset: Ruleset, dice: Dice
-) -> dict | None:
+@dataclass(frozen=True)
+class Judging:
+    """
+    닫히는 라운드의 판정에 함께 쓰는 것들. 테이블, 규칙, 주사위, 이번 장면의 인물, 라운드의 번호.
+
+    판정 하나와 그 결과(HP, NPC 의 상태, 부상)를 정하는 함수들이 이것을 함께 받는다.
+    """
+
+    table: GameTable
+    ruleset: Ruleset
+    dice: Dice
+    cast: list[CastMember]
+    round_number: int
+
+
+def injury_after(judging: Judging, change: Change, max_hp: int, dead: bool, rows: list) -> dict | None:
+    """
+    피해 뒤에 부상 표를 굴릴 일이면 굴리고, 나온 부상을 입힌다. 굴린 것을 문서로 돌려준다. 굴리지 않았으면 None.
+
+    rows 는 입는 쪽(시트나 NPC 상태)의 부상 목록이다.
+    """
+    rolled = round_injuries.roll_after(judging.ruleset, judging.dice, change, max_hp, dead)
+    if rolled is None:
+        return None
+    return round_injuries.take(judging.ruleset, rolled, rows, judging.table.id, judging.round_number)
+
+
+def change_member(judging: Judging, actor: TableMember, action: CheckAction, found: Consequence) -> dict | None:
     """
     앉은 사람의 HP 를 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 HP 가 없으면 None.
 
     시트의 hp 를 고친다. 저장하지는 않는다. 양을 정하는 주사위를 여기서 굴린다.
+    큰 타격이나 쓰러짐이면 부상 표도 굴린다(injury_roll). 양의 주사위 다음에 굴린다.
     돌려준 문서는 선언의 outcome 안에 적힌다. 누구의 HP 가 얼마에서 얼마로 바뀌었는지가 다 담긴다.
     """
-    affected = find_affected(table, actor, action, found.recipient)
+    affected = find_affected(judging.table, actor, action, found.recipient)
     # 대상이 떠났거나 시트가 없으면 바뀔 HP 가 없다. 양을 정하는 주사위도 굴리지 않는다.
     # 죽은 캐릭터도 그렇다. 회복으로 되살리지 못한다
     if affected is None or affected.sheet is None or sheets.is_dead(affected):
         return None
 
     sheet = affected.sheet
-    magnitude = health.find_magnitude(ruleset, found.magnitude)
-    change = health.change_hp(found.kind, magnitude, sheet.hp, sheet.max_hp, dice)
+    magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
+    change = health.change_hp(found.kind, magnitude, sheet.hp, sheet.max_hp, judging.dice)
     sheet.hp = change.after
     # 일어났으면 죽음의 굴림에서 센 것은 처음으로 돌아간다. 다시 쓰러지면 처음부터 센다
     if not change.downed:
         sheets.clear_death_saves(sheet)
+    # 캐릭터는 피해로 바로 죽지 않는다(죽음의 굴림으로 죽는다)
+    injury_roll = injury_after(judging, change, sheet.max_hp, False, sheet.injuries)
     return {
         'kind': change.kind.value,
         'magnitude': found.magnitude,
@@ -349,28 +384,30 @@ def change_member(
         'after': change.after,
         'max_hp': sheet.max_hp,
         'downed': change.downed,
+        'injury_roll': injury_roll,
     }
 
 
-def change_cast_member(
-    action: CheckAction, found: Consequence, cast: list[CastMember], ruleset: Ruleset, dice: Dice
-) -> dict | None:
+def change_cast_member(judging: Judging, action: CheckAction, found: Consequence) -> dict | None:
     """
     겨눈 NPC 의 HP 와 생사를 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 것이 없으면 None.
 
     상태를 고치는 것은 change_npc 다. 저장하지는 않는다.
+    큰 타격이나 쓰러짐이면 부상 표도 굴린다. 죽었으면 굴리지 않는다.
     같은 라운드에 앞사람이 그 NPC 를 죽였으면 아무 일도 없다. 양을 정하는 주사위도 굴리지 않는다.
     문서에는 HP 의 숫자까지 다 적는다. 앉은 사람에게 내보낼 때 숫자를 뺀다(app/rounds/schemas.py, 이벤트의 VISIBLE).
+    몸 상태(condition)는 부상까지 정한 뒤의 것이다.
     """
-    member = find_cast_member(cast, action.npc)
+    member = find_cast_member(judging.cast, action.npc)
     # 선언을 받을 때 장면의 인물인지 봤다. 장면은 바뀌지 않으므로 없을 수 없지만, 없으면 아무 일도 없는 것으로 둔다
     if member is None or npcs.is_dead(member.npc):
         return None
 
     npc = member.npc
     status_before = npc.status
-    magnitude = health.find_magnitude(ruleset, found.magnitude)
-    change = npcs.change_npc(npc, found.kind, magnitude, action.lethal, dice)
+    magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
+    change = npcs.change_npc(npc, found.kind, magnitude, action.lethal, judging.dice)
+    injury_roll = injury_after(judging, change, npc.max_hp, npcs.is_dead(npc), npc.injuries)
     return {
         'kind': change.kind.value,
         'magnitude': found.magnitude,
@@ -385,18 +422,11 @@ def change_cast_member(
         'status_before': status_before,
         'status': npc.status,
         'condition': condition_of(npc),
+        'injury_roll': injury_roll,
     }
 
 
-def apply_consequence(
-    table: GameTable,
-    actor: TableMember,
-    action: CheckAction,
-    check: Check,
-    ruleset: Ruleset,
-    dice: Dice,
-    cast: list[CastMember],
-) -> dict:
+def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction, check: Check) -> dict:
     """
     판정의 결과에 따라 HP 를 바꾸고, 바뀐 내용을 선언의 outcome 에 넣을 칸들로 돌려준다.
 
@@ -407,15 +437,31 @@ def apply_consequence(
     if found is None:
         return {'effect': None, 'npc_effect': None}
     if found.recipient == Recipient.TARGET and action.npc is not None:
-        return {'effect': None, 'npc_effect': change_cast_member(action, found, cast, ruleset, dice)}
-    return {'effect': change_member(table, actor, action, found, ruleset, dice), 'npc_effect': None}
+        return {'effect': None, 'npc_effect': change_cast_member(judging, action, found)}
+    return {'effect': change_member(judging, actor, action, found), 'npc_effect': None}
+
+
+def judge(judging: Judging, member: TableMember, action: CheckAction) -> dict:
+    """
+    한 사람의 행동을 판정하고 그 결과를 정한다. 선언의 outcome 에 적을 문서를 돌려준다.
+
+    그 캐릭터가 입은 부상이 이 행동의 능력에 주는 것(보정 깎기, 불리함)을 판정에 적용한다(hindrance).
+    """
+    sheet = member.sheet
+    hindrance = round_injuries.hindrance_for(judging.ruleset, sheet.injuries, action.ability)
+    hindered = actions.attempt_hindered(judging.ruleset, action, sheet.abilities, judging.dice, hindrance)
+    return {
+        **asdict(hindered.check),
+        'hindrance': round_injuries.hindrance_document(hindered),
+        **apply_consequence(judging, member, action, hindered.check),
+    }
 
 
 def roll_checks(table: GameTable, round_: Round, dice: Dice, cast: list[CastMember]) -> None:
     """
     닫히는 라운드의 행동을 판정하고, 결과에 따라 HP 를 바꾸고, 결과를 선언에 적는다. 들어온 순서로 굴린다.
 
-    한 사람의 판정과 그 결과(피해, 회복)를 끝낸 뒤에 다음 사람으로 넘어간다.
+    한 사람의 판정과 그 결과(피해, 회복, 부상)를 끝낸 뒤에 다음 사람으로 넘어간다.
     앞사람이 쓰러뜨린 것을 뒷사람이 일으킬 수 있다. NPC 도 그렇다. 앞사람이 죽인 NPC 는 뒷사람이 바꾸지 못한다.
     cast 는 이번 장면의 인물들이다. NPC 의 상태는 그 안에 들어 있고, 여기서 고친다.
 
@@ -434,11 +480,9 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, cast: list[CastMemb
     if not rolling:
         return
 
-    ruleset = rules_of(table)
+    judging = Judging(table=table, ruleset=rules_of(table), dice=dice, cast=cast, round_number=round_.number)
     for member, declaration in rolling:
-        action = CheckAction.model_validate(declaration.action)
-        check = actions.attempt(ruleset, action, member.sheet.abilities, dice)
-        declaration.outcome = {**asdict(check), **apply_consequence(table, member, action, check, ruleset, dice, cast)}
+        declaration.outcome = judge(judging, member, CheckAction.model_validate(declaration.action))
 
 
 def find_dying(table: GameTable) -> list[TableMember]:
@@ -487,7 +531,9 @@ def build_moves(table: GameTable, round_: Round) -> list[Move]:
     이 라운드에 새로 들어온 캐릭터는 라운드에 적힌 것(arrivals)으로 안다. 누구의 뒤를 잇는지를 함께 준다.
     """
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
-    ruleset = rules_of(table) if any(has_outcome(declaration) for declaration in declarations) else None
+    wounded = any(member.sheet is not None and injuries.active(member.sheet.injuries) for member in table.members)
+    needs_rules = wounded or any(has_outcome(declaration) for declaration in declarations)
+    ruleset = rules_of(table) if needs_rules else None
 
     moves = []
     for member, declaration in zip(table.members, declarations, strict=True):
@@ -503,9 +549,17 @@ def build_moves(table: GameTable, round_: Round) -> list[Move]:
                 death_save=narration_request.find_death_save(round_, member.user_id),
                 dead=sheets.is_dead(member),
                 replaces=arrival['replaces'] if arrival else None,
+                injuries=worn_notes(ruleset, member),
             )
         )
     return moves
+
+
+def worn_notes(ruleset: Ruleset | None, member: TableMember) -> list[InjuryNote]:
+    """이 사람의 지금 캐릭터가 입고 있는 부상들을 서술자에게 줄 모양으로. 규칙을 읽지 않았으면 입은 것이 없다."""
+    if ruleset is None or member.sheet is None:
+        return []
+    return round_injuries.notes(ruleset, member.sheet.injuries)
 
 
 def frozen_style(table: GameTable, round_: Round) -> NarrationStyle:
@@ -528,9 +582,16 @@ def frozen_moves(table: GameTable, round_: Round) -> list[Move]:
     return narration_request.read_moves(round_.moves)
 
 
-def to_people(cast: list[CastMember]) -> list[PersonState]:
-    """이번 장면의 인물들을 서술자에게 줄 모양으로. 몸 상태를 말로 적는다. 숫자는 주지 않는다."""
-    return [PersonState(name=member.name, condition=condition_of(member.npc)) for member in cast]
+def to_people(cast: list[CastMember], ruleset: Ruleset) -> list[PersonState]:
+    """이번 장면의 인물들을 서술자에게 줄 모양으로. 몸 상태를 말로 적는다. 숫자는 주지 않는다. 입은 부상을 함께 준다."""
+    return [
+        PersonState(
+            name=member.name,
+            condition=condition_of(member.npc),
+            injuries=round_injuries.notes(ruleset, member.npc.injuries),
+        )
+        for member in cast
+    ]
 
 
 # --- 읽기 ---
@@ -556,7 +617,7 @@ async def get_scene_cast(
     앉지 않았으면 TableNotFoundError, 아직 시작하지 않았으면 RoundConflictError.
     """
     table, round_ = await get_current_round(session, user_id, table_id)
-    return round_, await load_cast(session, table, round_)
+    return round_, (await load_scene(session, table, round_)).cast
 
 
 async def get_round(
@@ -602,17 +663,43 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
         'total': outcome['total'],
         'target': outcome['target'],
         'success': outcome['success'],
+        'hindrance': outcome.get('hindrance'),
     }
     rolled = recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
     effect = outcome.get('effect')
     if effect is not None:
-        record_hp_change(session, table, effect, cause=rolled)
+        changed = record_hp_change(session, table, effect, cause=rolled)
+        holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
+        record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
     npc_effect = outcome.get('npc_effect')
     if npc_effect is not None:
-        record_npc_change(session, table, npc_effect, cause=rolled)
+        changed = record_npc_change(session, table, npc_effect, cause=rolled)
+        holder = {'entry_id': npc_effect['entry_id'], 'name': npc_effect['name']}
+        record_injury(session, table, npc_effect.get('injury_roll'), holder, cause=changed)
 
 
-def record_npc_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> None:
+def record_injury(
+    session: AsyncSession, table: GameTable, injury_roll: dict | None, holder: dict, cause: TableEvent
+) -> None:
+    """
+    부상 표로 새 부상이 생겼으면 이벤트로 적는다. 그 부상을 부른 HP 의 변화의 이벤트(cause)에 잇는다.
+
+    표를 굴리지 않았거나 부상이 없는 줄이 나왔으면 적지 않는다. 굴린 것은 HP 의 변화의 이벤트에 이미 있다.
+    holder 는 누가 입었는지다. 캐릭터면 user_id 와 캐릭터 이름, NPC 면 항목의 id 와 장면의 호칭이다.
+    """
+    if injury_roll is None or injury_roll['injury'] is None:
+        return
+    payload = {
+        'round': cause.payload['round'],
+        **holder,
+        'injury': injury_roll['injury'],
+        'source': InjurySource.INJURY_TABLE,
+        'ends_after_round': injury_roll['ends_after_round'],
+    }
+    recorder.record(session, table, EventType.INJURY_GAINED, payload=payload, cause=cause)
+
+
+def record_npc_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> TableEvent:
     """
     NPC 의 상태가 바뀐 것을 이벤트로 적는다. 그 변화를 부른 판정의 이벤트(cause)에 잇는다.
 
@@ -620,17 +707,17 @@ def record_npc_change(session: AsyncSession, table: GameTable, effect: dict, cau
     행한 사람(actor_id)을 적지 않는다. 상태를 바꾼 것은 엔진이다.
     """
     payload = {'round': cause.payload['round'], **effect}
-    recorder.record(session, table, EventType.NPC_CHANGED, payload=payload, cause=cause)
+    return recorder.record(session, table, EventType.NPC_CHANGED, payload=payload, cause=cause)
 
 
-def record_hp_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> None:
+def record_hp_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> TableEvent:
     """
     HP 가 바뀐 것을 이벤트로 적는다. 그 변화를 부른 판정의 이벤트(cause)에 잇는다.
 
     행한 사람(actor_id)을 적지 않는다. HP 를 바꾼 것은 엔진이다. 누구의 HP 인지는 payload 의 user_id 다.
     """
     payload = {'round': cause.payload['round'], **effect}
-    recorder.record(session, table, EventType.HP_CHANGED, payload=payload, cause=cause)
+    return recorder.record(session, table, EventType.HP_CHANGED, payload=payload, cause=cause)
 
 
 def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
@@ -692,20 +779,34 @@ def record_death_saves(session: AsyncSession, table: GameTable, round_: Round, g
             record_death(session, table, save, round_.number, cause=rolled)
 
 
+def record_injury_endings(
+    session: AsyncSession, table: GameTable, ended: list[round_injuries.Ended], round_number: int, group: uuid.UUID
+) -> None:
+    """
+    이 라운드가 닫힐 때 풀린 짧은 부상들을 이벤트로 적는다. 푸는 일은 이미 끝나 있다(expire_all). 여기서는 적기만 한다.
+
+    행한 사람(actor_id)을 적지 않는다. 정한 라운드가 지나 엔진이 푼 것이다.
+    """
+    for one in ended:
+        payload = {'round': round_number, **one.holder, 'injury': one.injury.injury, 'reason': 'expired'}
+        recorder.record(session, table, EventType.INJURY_ENDED, payload=payload, group=group)
+
+
 def begin_closing(
     session: AsyncSession,
     table: GameTable,
     round_: Round,
     dice: Dice,
-    cast: list[CastMember],
+    scene: Scene,
     closer_id: uuid.UUID | None = None,
 ) -> None:
     """
     열려 있는 라운드를 닫기 시작한다. 선언을 마감하고 행동을 판정한다. 저장하지는 않는다.
 
     closer_id 는 라운드를 닫은 방장이다. 모두가 내서 저절로 닫혔으면 주지 않는다.
-    cast 는 이번 장면의 인물들이다(load_cast). 행동이 겨눈 NPC 의 상태를 여기서 바꾼다.
-    이벤트는 행동(과 그 판정)들 → 죽음의 굴림들 → 닫힘 순서로 적는다. 한 묶음이다.
+    scene 은 이번 장면의 NPC 들이다(load_scene). 행동이 겨눈 NPC 의 상태를 여기서 바꾼다.
+    판정과 죽음의 굴림을 끝낸 뒤에 짧은 부상을 푼다. 이번 라운드의 판정에는 아직 효과가 있었다.
+    이벤트는 행동(과 그 판정, 변화, 부상)들 → 죽음의 굴림들 → 풀린 부상들 → 닫힘 순서로 적는다. 한 묶음이다.
     나중에 적히는 서술과 열림도 이 묶음에 들어간다.
 
     주사위는 여기서만 굴린다. 열려 있는 라운드에 한 번만 부르므로 한 선언을 두 번 굴리지 않는다.
@@ -716,12 +817,14 @@ def begin_closing(
     """
     group = uuid.uuid4()
     dying = find_dying(table)
-    roll_checks(table, round_, dice, cast)
+    roll_checks(table, round_, dice, scene.cast)
     round_.death_saves = roll_death_saves(table, dying, dice)
+    ended = round_injuries.expire_all(table.members, scene, round_.number)
     round_.moves = narration_request.dump_moves(build_moves(table, round_))
     round_.narration_style = table.narration_style
     record_actions(session, table, round_, group)
     record_death_saves(session, table, round_, group)
+    record_injury_endings(session, table, ended, round_.number, group)
     payload = {'number': round_.number, 'idle': [str(user_id) for user_id in waiting_for(table, round_)]}
     recorder.record(session, table, EventType.ROUND_CLOSED, actor_id=closer_id, payload=payload, group=group)
     round_.closing_at = datetime.now(UTC)
@@ -742,14 +845,14 @@ async def lock_current_round(
     return table, member, round_
 
 
-async def load_cast(session: AsyncSession, table: GameTable, round_: Round) -> list[CastMember]:
+async def load_scene(session: AsyncSession, table: GameTable, round_: Round) -> Scene:
     """
-    이번 장면의 인물들을 읽는다. 테이블의 NPC 상태를 읽어 라운드의 장면과 견준다.
+    이번 장면의 NPC 들을 읽는다. 테이블의 NPC 상태 전부와, 그중 라운드의 장면에 나온 인물들이다.
 
     테이블을 잠근 요청 안에서 부르면 돌려준 인물의 상태를 그대로 고칠 수 있다.
     """
     states = await table_repository.list_npcs(session, table.id)
-    return cast_of(read_snapshot(table.content), round_.scene, states)
+    return Scene(npcs=states, cast=cast_of(read_snapshot(table.content), round_.scene, states))
 
 
 async def save(session: AsyncSession, table: GameTable) -> tuple[GameTable, Round]:
@@ -786,12 +889,12 @@ async def declare(
         raise RoundConflictError(Conflict.CHARACTER_DEAD)
     if find_arrival(round_, user_id) is not None:
         raise RoundConflictError(Conflict.CHARACTER_ARRIVING)
-    cast = await load_cast(session, table, round_)
-    put_declaration(round_, member, data.content, accept_action(table, member, data.action, cast))
+    scene = await load_scene(session, table, round_)
+    put_declaration(round_, member, data.content, accept_action(table, member, data.action, scene.cast))
 
     everyone_declared = not waiting_for(table, round_)
     if everyone_declared:
-        begin_closing(session, table, round_, dice, cast)
+        begin_closing(session, table, round_, dice, scene)
     saved = await save(session, table)
     # 저장한 뒤에 맡긴다. 먼저 맡기면 서술을 맡은 작업이 아직 저장되지 않은 것을 읽는다
     if everyone_declared:
@@ -817,7 +920,7 @@ async def force_close(
     tables.require_host(table, host_id)
 
     if round_.status == RoundStatus.OPEN:
-        begin_closing(session, table, round_, dice, await load_cast(session, table, round_), closer_id=host_id)
+        begin_closing(session, table, round_, dice, await load_scene(session, table, round_), closer_id=host_id)
     elif is_stalled(round_, datetime.now(UTC)):
         round_.closing_at = datetime.now(UTC)
         round_.narration_failed_at = None
@@ -850,17 +953,18 @@ async def load_closing_request(session: AsyncSession, table_id: uuid.UUID, numbe
     if table is None or round_ is None or round_.status != RoundStatus.CLOSING:
         return None
     history = await repository.list_rounds_before(session, table_id, number, HISTORY_ROUNDS)
-    cast = await load_cast(session, table, round_)
+    snapshot = read_snapshot(table.content)
+    scene = await load_scene(session, table, round_)
     return NarrationRequest(
         round_number=round_.number,
         scene=round_.scene,
         moves=frozen_moves(table, round_),
-        story=narration_request.to_story(read_snapshot(table.content)),
+        story=narration_request.to_story(snapshot),
         history=[narration_request.to_past(past) for past in history],
         style=frozen_style(table, round_),
         table_id=table.id,
         host_id=table.host_id,
-        people=to_people(cast),
+        people=to_people(scene.cast, snapshot.rulebook.rules),
     )
 
 

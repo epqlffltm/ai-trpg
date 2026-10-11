@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from app.engine.ruleset import Ruleset
 from app.engine.sheet import SHEET_MAX_HP, Sheet, fits, has_exact_abilities, has_scores_in_range
 from app.engine.templates import SRD5
+from tests.rules import NO_INJURIES
 from tests.sheets import SHEET, make_sheet
 
 # 능력치가 둘뿐이고 점수가 0~5 인 규칙. SRD5 와 다른 규칙에서도 같은 함수가 도는지 본다
@@ -26,6 +27,8 @@ SMALL_RULES = Ruleset.model_validate(
         'score_roll': None,
         'score_min': 0,
         'score_max': 5,
+        # SRD5 의 부상은 SRD5 의 능력을 가리킨다. 능력이 다른 규칙이라 뺀다
+        **NO_INJURIES,
     }
 )
 

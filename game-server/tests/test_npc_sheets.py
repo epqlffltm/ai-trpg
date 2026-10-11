@@ -204,7 +204,7 @@ async def test_the_snapshot_carries_npc_sheets(client: AsyncClient, me: dict[str
 
     snapshot = await published(client, me, scenario)
 
-    assert snapshot['format'] == SNAPSHOT_FORMAT == 13
+    assert snapshot['format'] == SNAPSHOT_FORMAT
     assert snapshot['npc_sheets'] == [npc(lore['lady'], LADY_SHEET)]
     assert snapshot['default_npc_sheet'] == NPC_DEFAULT
 

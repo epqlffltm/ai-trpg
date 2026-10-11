@@ -55,6 +55,9 @@ NPC_DEFAULT = make_sheet(max_hp=6)
 # 판정의 눈. 보통(목표 15)에 도전한다. 시트의 보정은 0 이다
 FAIL = 1
 PASS = 20
+# 부상 표(d20)의 눈. 1~10 은 부상이 없다. 큰 타격(최대 HP 의 절반 이상)이나 쓰러짐에 굴린다.
+# 죽은 인물에게는 굴리지 않는다
+NO_INJURY = 1
 
 PUNCH = '악역영애에게 주먹을 날린다.'
 TEND = '악역영애의 상처를 싸맨다.'
@@ -205,7 +208,8 @@ async def test_only_the_people_in_the_scene_are_listed(client: AsyncClient, me: 
     cast = await people(client, me, world['table'])
 
     # 드워프는 장면에 나오지 않았고, 고속도로는 인물이 아니다. 이름은 장면의 호칭이다. 진짜 이름은 아직 드러나지 않았다
-    assert cast == {'round': 1, 'people': [{'id': world['lady']['id'], 'name': '악역영애', 'status': 'alive'}]}
+    lady = {'id': world['lady']['id'], 'name': '악역영애', 'status': 'alive', 'injuries': []}
+    assert cast == {'round': 1, 'people': [lady]}
 
 
 async def test_only_the_seated_see_the_people(client: AsyncClient, me: dict[str, str], signing_key: SigningKey):
@@ -238,7 +242,8 @@ async def test_a_successful_hit_hurts_the_npc(
     client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession
 ):
     world = await start_table(client, me)
-    load_dice(app, [PASS, 5])
+    # 4 는 최대 HP(10)의 절반에 못 미친다. 부상 표를 굴리지 않는다
+    load_dice(app, [PASS, 4])
 
     closing = await declare(client, me, world['table'], PUNCH, punch(world['lady']['id']))
 
@@ -248,13 +253,14 @@ async def test_a_successful_hit_hurts_the_npc(
         'magnitude': 'moderate',
         'entry_id': world['lady']['id'],
         'name': '악역영애',
-        'rolls': [5],
-        'amount': 5,
+        'rolls': [4],
+        'amount': 4,
         'lethal': False,
         'status': 'alive',
+        'injury_roll': None,
     }
     assert closing['declarations'][0]['outcome']['effect'] is None
-    assert await state_of(session, world['table'], world['lady']) == (5, NpcStatus.ALIVE)
+    assert await state_of(session, world['table'], world['lady']) == (6, NpcStatus.ALIVE)
 
 
 async def test_a_missed_hit_changes_nothing(
@@ -285,7 +291,7 @@ async def test_subduing_to_zero_knocks_the_npc_down(
     client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession
 ):
     world = await start_table(client, me)
-    load_dice(app, [PASS, 8, 8])
+    load_dice(app, [PASS, 8, 8, NO_INJURY])
 
     closing = await declare(client, me, world['table'], PUNCH, punch(world['lady']['id'], 'heavy'))
 
@@ -321,7 +327,7 @@ async def test_a_downed_npc_dies_to_a_lethal_hit_and_rises_with_healing(
 ):
     world = await start_table(client, me)
     table, lady = world['table'], world['lady']
-    load_dice(app, [PASS, 8, 8])
+    load_dice(app, [PASS, 8, 8, NO_INJURY])
     await declare(client, me, table, PUNCH, punch(lady['id'], 'heavy'))
     await narrated()
 
@@ -332,7 +338,7 @@ async def test_a_downed_npc_dies_to_a_lethal_hit_and_rises_with_healing(
     await narrated()
     assert await state_of(session, table, lady) == (2, NpcStatus.ALIVE)
 
-    load_dice(app, [PASS, 8, 8])
+    load_dice(app, [PASS, 8, 8, NO_INJURY])
     await declare(client, me, table, PUNCH, punch(lady['id'], 'heavy'))
     await narrated()
     load_dice(app, [PASS, 1])
@@ -407,7 +413,7 @@ async def test_an_npc_downed_earlier_in_the_round_can_be_helped_up(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], session: AsyncSession
 ):
     world = await start_table(client, me, friend)
-    load_dice(app, [PASS, 8, 8, PASS, 4])
+    load_dice(app, [PASS, 8, 8, NO_INJURY, PASS, 4])
 
     await declare(client, me, world['table'], PUNCH, punch(world['lady']['id'], 'heavy'))
     await declare(client, friend, world['table'], TEND, tend(world['lady']['id']))
@@ -431,7 +437,7 @@ async def test_the_change_is_recorded_without_hp_numbers(
     client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession
 ):
     world = await start_table(client, me)
-    load_dice(app, [PASS, 5])
+    load_dice(app, [PASS, 4])
 
     await declare(client, me, world['table'], PUNCH, punch(world['lady']['id']))
 
@@ -443,16 +449,17 @@ async def test_the_change_is_recorded_without_hp_numbers(
         'name': '악역영애',
         'kind': 'damage',
         'magnitude': 'moderate',
-        'rolls': [5],
-        'amount': 5,
+        'rolls': [4],
+        'amount': 4,
         'lethal': False,
         'status': 'alive',
+        'injury_roll': None,
     }
     assert changed['caused_by_sequence'] == rolled['sequence']
     assert changed['actor_id'] is None
     # 장부에는 숫자까지 다 있다. 내보낼 때만 뺀다
     stored = await session.scalar(text("SELECT payload FROM table_events WHERE type = 'npc_changed'"))
-    assert (stored['before'], stored['after'], stored['max_hp'], stored['status_before']) == (10, 5, 10, 'alive')
+    assert (stored['before'], stored['after'], stored['max_hp'], stored['status_before']) == (10, 6, 10, 'alive')
 
 
 # --- 서술 ---
@@ -489,18 +496,18 @@ async def test_narrating_again_does_not_change_the_npc_again(
     world = await start_table(client, me)
     narrator = RecordingNarrator(fail_first=True)
     app.state.narrator = narrator
-    load_dice(app, [PASS, 5])
+    load_dice(app, [PASS, 4])
     await declare(client, me, world['table'], PUNCH, punch(world['lady']['id']))
     await narrated()
 
-    dice = load_dice(app, [PASS, 5])
+    dice = load_dice(app, [PASS, 4])
     monkeypatch.setattr(service, 'CLOSING_RETRY_SECONDS', 0)
     again = await client.post(table_url(world['table'], '/rounds/current/close'), headers=me)
     await narrated()
 
     assert again.status_code == status.HTTP_202_ACCEPTED
     assert dice.remaining == 2
-    assert await state_of(session, world['table'], world['lady']) == (5, NpcStatus.ALIVE)
+    assert await state_of(session, world['table'], world['lady']) == (6, NpcStatus.ALIVE)
     assert narrator.requests[0] == narrator.requests[1]
     assert len(await events_of(client, me, world['table'], 'npc_changed')) == 1
 

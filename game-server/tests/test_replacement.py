@@ -71,6 +71,8 @@ STURDY = {'str': 12, 'dex': 12, 'con': 14, 'int': 12, 'wis': 12, 'cha': 12}
 
 # 판정의 눈. 보통(목표 15)에 도전한다
 FAIL = 1
+# 부상 표(d20)의 눈. 1~10 은 부상이 없다. 큰 타격이나 쓰러짐에 표를 굴린다(#114). 부상은 tests/test_injuries.py 가 본다
+NO_INJURY = 1
 # 죽음의 굴림의 눈. 목표는 10 이다
 DIE = 5
 
@@ -243,7 +245,7 @@ async def read_events(
 
 async def knock_me_down(client: AsyncClient, app: FastAPI, me: dict, friend: dict, table: dict, narrated) -> None:
     """한 라운드를 써서 내 캐릭터를 쓰러뜨린다. 심한 대가가 붙은 행동에 실패해 16 의 피해를 입는다."""
-    load_dice(app, [FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY])
     await declare(client, me, table, JUMP, jump())
     await declare(client, friend, table, LAUGH)
     await narrated()
@@ -303,7 +305,8 @@ async def test_a_player_whose_character_died_brings_in_a_new_one(
     # 자리의 캐릭터가 새 캐릭터로 바뀌었다. 시트를 바로 받았다. HP 는 가득 차 있고 죽음의 굴림은 센 것이 없다
     assert seat['character'] == {'name': '드워프', 'description': '수염에 기름때가 묻었다.'}
     assert seat['character_mode'] == 'custom'
-    assert seat['sheet'] == {**PLAIN, 'number': 2, 'hp': 10, 'death_successes': 0, 'death_failures': 0, 'dead': False}
+    fresh = {'number': 2, 'hp': 10, 'death_successes': 0, 'death_failures': 0, 'dead': False, 'injuries': []}
+    assert seat['sheet'] == {**PLAIN, **fresh}
     # 죽은 캐릭터는 지워지지 않고 떠난 캐릭터로 남는다
     assert seat['fallen'] == [{'number': 1, 'character_name': '엘프', 'pregen_index': None, **PLAIN}]
 
@@ -313,7 +316,7 @@ async def test_the_host_is_not_asked(
 ):
     table = await start_duo(client, me, friend)
     # 죽는 것이 방장이 아닌 사람이어도 된다. 방장의 승인은 받지 않는다
-    load_dice(app, [FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY])
     await declare(client, friend, table, JUMP, jump())
     await declare(client, me, table, LAUGH)
     await narrated()
@@ -622,7 +625,7 @@ async def test_a_dead_pregen_stays_taken_after_its_player_moved_on(
     # 친구의 캐릭터도 죽는다
     await declare(client, friend, table, LAUGH)
     await narrated()
-    load_dice(app, [FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY])
     await declare(client, friend, table, JUMP, jump())
     await declare(client, me, table, REV)
     await narrated()
@@ -770,7 +773,7 @@ async def test_the_host_grants_one_more_roll_for_the_new_character(
 ):
     table = await start_duo(client, me, friend)
     # 죽는 것은 친구다. 방장인 내가 준다
-    load_dice(app, [FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY])
     await declare(client, friend, table, JUMP, jump())
     await declare(client, me, table, LAUGH)
     await narrated()
@@ -944,7 +947,7 @@ async def test_a_lone_player_carries_on_with_a_new_character(
     ).json()
     await client.put(table_url(table, '/character'), json={'name': '엘프'}, headers=me)
     await client.post(table_url(table, '/start'), headers=me)
-    load_dice(app, [FAIL, 8, 8])
+    load_dice(app, [FAIL, 8, 8, NO_INJURY])
     await declare(client, me, table, JUMP, jump())
     await narrated()
     await give_up(client, me, table)

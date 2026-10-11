@@ -175,8 +175,8 @@ async def test_keeps_the_starting_numbers_and_not_the_wounds(client: AsyncClient
     table = await open_table(client, me)
     await set_character(client, me, table, mode='manual', name='드워프', abilities=STRONG)
     await client.post(table_url(table, '/start'), headers=me)
-    # 심하게 다친다(2d8 = 6)
-    load_dice(app, [1, 3, 3])
+    # 심하게 다친다(2d8 = 6). 큰 타격이라 부상 표(d20)도 굴린다. 1 은 부상이 없다
+    load_dice(app, [1, 3, 3, 1])
     action = {'kind': 'check', 'ability': 'dex', 'difficulty': 'medium', 'risk': 'heavy'}
     await client.put(
         table_url(table, '/rounds/current/declaration'), json={'content': JUMP, 'action': action}, headers=me
@@ -196,7 +196,8 @@ async def test_a_dead_character_can_be_kept(client: AsyncClient, app: FastAPI, m
     table = await open_table(client, me)
     await set_character(client, me, table, name='드워프')
     await client.post(table_url(table, '/start'), headers=me)
-    load_dice(app, [1, 8, 8])
+    # 16 의 피해로 쓰러지고, 부상 표(d20)를 굴린다. 1 은 부상이 없다
+    load_dice(app, [1, 8, 8, 1])
     action = {'kind': 'check', 'ability': 'dex', 'difficulty': 'medium', 'risk': 'heavy'}
     await client.put(
         table_url(table, '/rounds/current/declaration'), json={'content': JUMP, 'action': action}, headers=me

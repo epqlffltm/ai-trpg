@@ -3,13 +3,14 @@
 """
 테이블의 모델. 테이블은 시나리오의 판 하나를 가져와 AI GM 과 플레이하는 자리다.
 
-테이블 다섯이 있다.
+테이블 여섯이 있다.
   - game_tables: 테이블 자신. 방장, 어느 판에서 왔는지, 판의 복사본, 정원, 상태.
   - table_members: 테이블에 앉은 사람과 그 사람의 캐릭터(이름과 설명: 글).
   - table_sheets: 앉은 사람의 캐릭터 시트(능력치와 HP: 숫자). 게임을 시작할 때 생긴다.
     캐릭터가 죽어 새 캐릭터를 들이면 하나 더 생긴다. 죽은 캐릭터의 시트는 지우지 않는다.
   - table_rolls: 주사위로 굴린 능력치의 점수들. 사람이 나가도 남는다.
   - table_npcs: 로어북의 인물 항목마다의 숫자와 생사. 게임을 시작할 때 생긴다.
+  - table_injuries: 캐릭터와 NPC 가 입은 부상. 나은 것도 지우지 않는다.
 
 판은 고치지 않는다. 테이블은 만들 때 판의 내용을 통째로 복사해 온다(content). 이 복사본도 고치지 않는다.
 플레이하면서 바뀌는 것(캐릭터의 HP, NPC 의 생사)은 따로 칸을 둔다(table_sheets, table_npcs).
@@ -84,6 +85,17 @@ class TableStatus(enum.StrEnum):
     PLAYING = 'playing'
     # 끝남. 방장이 끝냈거나 모두 나갔다
     ENDED = 'ended'
+
+
+class InjurySource(enum.StrEnum):
+    """부상이 어떻게 생겼나."""
+
+    # 큰 타격이나 쓰러짐에 부상 표를 굴려서
+    INJURY_TABLE = 'injury_table'
+    # 노려 쳐서(#114 나)
+    CALLED_SHOT = 'called_shot'
+    # 오래 가는 부상이 나을 때 후유증 표를 굴려서(#114 다)
+    AFTERMATH = 'aftermath'
 
 
 class NpcStatus(enum.StrEnum):
@@ -359,6 +371,11 @@ class TableSheet(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    # 이 캐릭터가 입은 부상들. 생긴 순서다. 나은 것도 들어 있다. 시트를 읽을 때 함께 읽는다(몇 개뿐이다)
+    injuries: Mapped[list['TableInjury']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='TableInjury.created_at, TableInjury.id'
+    )
+
 
 class TableRoll(Base):
     """
@@ -436,5 +453,58 @@ class TableNpc(Base):
     max_hp: Mapped[int] = mapped_column(SmallInteger)
     hp: Mapped[int] = mapped_column(SmallInteger)
     status: Mapped[str] = mapped_column(String(20), default=NpcStatus.ALIVE, server_default=text("'alive'"))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # 이 인물이 입은 부상들. 생긴 순서다. 나은 것도 들어 있다. 상태를 읽을 때 함께 읽는다
+    injuries: Mapped[list['TableInjury']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='TableInjury.created_at, TableInjury.id'
+    )
+
+
+class TableInjury(Base):
+    """
+    부상 하나. 캐릭터의 시트 하나나 NPC 하나가 입었다.
+
+    어떤 부상인지는 이름(injury)으로만 적는다. 효과와 사실은 테이블의 판에 굳은 규칙에 있다(app/engine/ruleset.py).
+    짧은 것은 풀릴 라운드(ends_after_round)가 적힌다. 그 라운드가 닫힐 때 풀린다.
+    풀리거나 나으면 그 시각(ended_at)을 적고 지우지 않는다. 누가 언제 무엇을 입었는지의 기록이다.
+    부상을 만들고 푸는 것은 엔진뿐이다(app/tables/injuries.py). 방장도 손으로 고치지 못한다.
+    """
+
+    __tablename__ = 'table_injuries'
+    __table_args__ = (
+        # 시트가 지워지면(사람이 나감) 함께 지워진다
+        ForeignKeyConstraint(['sheet_id'], ['table_sheets.id'], ondelete='CASCADE'),
+        ForeignKeyConstraint(
+            ['table_id', 'npc_entry_id'], ['table_npcs.table_id', 'table_npcs.entry_id'], ondelete='CASCADE'
+        ),
+        # 입은 것은 캐릭터나 NPC 중 정확히 하나다
+        CheckConstraint('(sheet_id IS NULL) <> (npc_entry_id IS NULL)', name='one_holder'),
+        CheckConstraint(one_of('source', InjurySource), name='source_allowed'),
+        CheckConstraint('round_number >= 1', name='round_number_positive'),
+        # 풀리는 라운드는 생긴 라운드의 뒤다
+        CheckConstraint('ends_after_round IS NULL OR ends_after_round > round_number', name='ends_after_start'),
+        # 아직 낫지 않은 부상을 찾는 일이 라운드마다 있다
+        Index('ix_table_injuries_active', 'table_id', postgresql_where='ended_at IS NULL'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    # 어느 테이블의 부상인가. 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'))
+    # 입은 캐릭터의 시트. NPC 의 부상이면 비어 있다
+    sheet_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # 입은 NPC(판의 로어북 인물 항목의 id). 캐릭터의 부상이면 비어 있다
+    npc_entry_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+    # 규칙의 Injury.key
+    injury: Mapped[str] = mapped_column(String(20))
+    source: Mapped[str] = mapped_column(String(20))
+    # 생긴 라운드. 그 라운드가 닫힐 때 생겼다
+    round_number: Mapped[int] = mapped_column(Integer)
+    # 이 라운드가 닫힐 때 풀린다. 짧은 부상에만 있다. 오래 가는 것과 결손은 비어 있다
+    ends_after_round: Mapped[int | None] = mapped_column(Integer)
+    # 풀리거나 나은 시각. 비어 있으면 아직 입고 있다
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
