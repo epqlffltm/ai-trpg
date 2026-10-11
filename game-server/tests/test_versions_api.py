@@ -29,9 +29,8 @@ from app.assets.models import (
     Scenario,
     ScenarioVersion,
 )
-from app.assets.scenarios.snapshot import (
-    SNAPSHOT_FORMAT,
-    read_snapshot,
+from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot
+from app.assets.scenarios.upgrades import (
     upgrade_from_1,
     upgrade_from_2,
     upgrade_from_3,
