@@ -24,7 +24,7 @@ from app.assets.scenarios.snapshot import Snapshot
 from app.engine.check import find_ability, find_difficulty
 from app.engine.ruleset import Ruleset
 from app.rounds.models import Declaration, Round
-from app.rounds.narrator import DeathSaveNote, Impact, Move, PastRound, StoryContext, Verdict
+from app.rounds.narrator import DeathSaveNote, Impact, Move, NpcImpact, PastRound, StoryContext, Verdict
 
 # 굳혀 둔 행동들을 읽는 법. 모양이 틀리면 ValidationError 를 낸다. 우리가 쓴 문서이니 틀렸으면 버그다
 MOVES = TypeAdapter(list[Move])
@@ -59,6 +59,17 @@ def to_impact(effect: dict | None) -> Impact | None:
     )
 
 
+def to_npc_impact(effect: dict | None) -> NpcImpact | None:
+    """
+    선언에 적힌 NPC 의 HP 의 변화를 서술자에게 줄 모양으로 바꾼다. 변화가 없었으면 None.
+
+    몸 상태는 바뀐 뒤의 것이다. 바꿀 때 적어 둔 것을 읽는다(app/rounds/service.py 의 change_cast_member).
+    """
+    if effect is None:
+        return None
+    return NpcImpact(kind=effect['kind'], name=effect['name'], amount=effect['amount'], condition=effect['condition'])
+
+
 def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
     """
     선언에 적힌 행동과 결과를 서술자에게 줄 모양으로 바꾼다. key 를 규칙에 적힌 이름으로 바꾼다.
@@ -77,6 +88,7 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
         target=outcome['target'],
         success=outcome['success'],
         impact=to_impact(outcome.get('effect')),
+        npc_impact=to_npc_impact(outcome.get('npc_effect')),
     )
 
 

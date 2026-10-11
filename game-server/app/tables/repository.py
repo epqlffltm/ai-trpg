@@ -27,6 +27,15 @@ def add_npcs(session: AsyncSession, npcs: list[TableNpc]) -> None:
     session.add_all(npcs)
 
 
+async def list_npcs(session: AsyncSession, table_id: uuid.UUID) -> list[TableNpc]:
+    """
+    테이블의 NPC 상태들. 순서는 정하지 않는다. 쓰는 쪽이 판의 인물 순서로 놓는다(app/rounds/cast.py).
+
+    테이블을 잠근 요청 안에서 읽으면 그대로 고칠 수 있다. 상태는 테이블의 잠금 아래에서만 바뀐다.
+    """
+    return list(await session.scalars(select(TableNpc).where(TableNpc.table_id == table_id)))
+
+
 async def find_table(session: AsyncSession, table_id: uuid.UUID) -> GameTable | None:
     """테이블 하나를 찾는다. 읽기만 할 때 쓴다."""
     return await session.scalar(select(GameTable).where(GameTable.id == table_id))

@@ -36,6 +36,7 @@ from app.rounds.narrator import (
     NarrationRequest,
     PastRound,
     PersonHistory,
+    PersonState,
     StoryContext,
     describe_move,
 )
@@ -54,7 +55,9 @@ from app.rounds.narrator import (
 #                인물 항목의 이름표는 검색이 장면의 호칭으로 바꿔 둔다
 #   narration-8: 지난 기록보다 앞의 라운드 중 검색이 고른 것이 "지난 일"로 들어간다(#107)
 #   narration-9: 로어북이 고른 인물마다 지난 서술에서 그 인물이 나온 문장이 "인물의 이력"으로 들어간다(#107 ②)
-PROMPT_VERSION = 'narration-9'
+#   narration-10: 이번 장면에 나온 NPC 의 지금 상태가 "인물의 상태"로 들어간다. NPC 의 피해와 회복이
+#                 이번 라운드의 결과에 몸 상태의 말로 붙는다(숫자 없이). 쓰러짐과 죽음을 다루는 법이 붙는다(#111 ②)
+PROMPT_VERSION = 'narration-10'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -243,6 +246,15 @@ HISTORY_NOTE = (
 )
 
 
+# NPC 의 지금 상태 앞에 붙이는 말. 엔진이 정한 사실이고, 숫자 없이 말로 준다.
+# 쓰러진 인물이 말을 하거나, 죽은 인물이 다음 장면에 멀쩡히 돌아오는 것을 막는다
+PEOPLE_TITLE = '[인물의 상태]'
+PEOPLE_NOTE = (
+    '게임 엔진이 정한 이번 장면 인물들의 지금 상태다. 이번 라운드의 결과까지 반영했다. 바꾸지 마라. '
+    '쓰러진 인물은 의식이 없다. 말하거나 움직이지 않는다. 죽은 인물은 되살아나지 않는다.'
+)
+
+
 def section(title: str, body: str) -> str | None:
     """제목이 붙은 글 한 덩어리. 글이 비어 있으면 None."""
     body = body.strip()
@@ -378,16 +390,30 @@ def history_lines(histories: list[PersonHistory]) -> list[str]:
     return [*lines, '']
 
 
+def people_lines(people: list[PersonState]) -> list[str]:
+    """
+    NPC 의 지금 상태를 적는 줄들. 인물마다 "- 이름: 몸 상태" 한 줄.
+
+    끝에 빈 줄이 붙는다. 없으면 빈 목록이다.
+    """
+    if not people:
+        return []
+    return [PEOPLE_TITLE, PEOPLE_NOTE, *(f'- {person.name}: {person.condition}' for person in people), '']
+
+
 def round_text(request: NarrationRequest) -> str:
     """
     이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
 
-    검색한 로어북 항목, 지난 일, 인물의 이력이 있으면 맨 앞에 둔다(설정, 지난 일, 이력, 이번 라운드의 차례).
+    검색한 로어북 항목, 지난 일, 인물의 이력, 인물의 상태가 있으면 맨 앞에 둔다
+    (설정, 지난 일, 이력, 상태, 이번 라운드의 차례).
+    상태는 이번 라운드의 결과 바로 앞이다. 엔진이 정한 사실이라 결과와 가까이 둔다.
     부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
     """
     lines = lore_lines(request.lore, {move.character_name for move in request.moves})
     lines.extend(memory_lines(request.memories))
     lines.extend(history_lines(request.histories))
+    lines.extend(people_lines(request.people))
     lines.append(f'[{request.round_number} 라운드에 한 일과 결과]')
     lines.extend(describe_move(move) for move in request.moves)
     lines.append('')

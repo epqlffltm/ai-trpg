@@ -11,7 +11,16 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.engine.action import ActionKind, CheckAction, attempt, consequence, find_fault, settle
+from app.engine.action import (
+    ActionKind,
+    CheckAction,
+    Consequence,
+    Recipient,
+    attempt,
+    consequence,
+    find_fault,
+    settle,
+)
 from app.engine.check import Check
 from app.engine.dice import ScriptedDice
 from app.engine.health import ChangeKind
@@ -218,18 +227,23 @@ def test_finds_a_magnitude_the_rules_do_not_have(action: CheckAction, fault: str
     assert find_fault(SRD5, action) == fault
 
 
+# 판정의 결과로 일어나는 일. 행동한 캐릭터가 받는 것과 대상이 받는 것
+HURT_SELF = Consequence(ChangeKind.DAMAGE, 'heavy', Recipient.ACTOR)
+HEAL_TARGET = Consequence(ChangeKind.RECOVERY, 'light', Recipient.TARGET)
+
+
 @pytest.mark.parametrize(
     ('action', 'result', 'expected'),
     [
         # 대가는 실패했을 때만
-        (risky(risk='heavy'), FAILURE, (ChangeKind.DAMAGE, 'heavy')),
+        (risky(risk='heavy'), FAILURE, HURT_SELF),
         (risky(risk='heavy'), SUCCESS, None),
         # 보상은 성공했을 때만
-        (risky(recover='light'), SUCCESS, (ChangeKind.RECOVERY, 'light')),
+        (risky(recover='light'), SUCCESS, HEAL_TARGET),
         (risky(recover='light'), FAILURE, None),
         # 둘 다 붙어 있어도 하나만 일어난다
-        (risky(risk='heavy', recover='light'), FAILURE, (ChangeKind.DAMAGE, 'heavy')),
-        (risky(risk='heavy', recover='light'), SUCCESS, (ChangeKind.RECOVERY, 'light')),
+        (risky(risk='heavy', recover='light'), FAILURE, HURT_SELF),
+        (risky(risk='heavy', recover='light'), SUCCESS, HEAL_TARGET),
         # 아무것도 붙이지 않았으면 아무 일도 없다
         (risky(), FAILURE, None),
         (risky(), SUCCESS, None),
@@ -245,3 +259,82 @@ def test_settling_keeps_what_follows():
     settled = settle(SRD5, action)
 
     assert (settled.difficulty, settled.risk, settled.recover, settled.target) == ('medium', 'heavy', 'light', SOMEONE)
+
+
+# --- NPC 를 겨누는 행동(#111 ②) ---
+
+NPC = uuid.UUID('33333333-2222-4333-8444-555555555555')
+
+
+def test_reads_an_attack_on_an_npc():
+    action = CheckAction.model_validate(
+        {'kind': 'check', 'ability': 'str', 'harm': 'heavy', 'npc': str(NPC), 'lethal': True}
+    )
+
+    assert (action.harm, action.npc, action.lethal) == ('heavy', NPC, True)
+
+
+def test_an_attack_subdues_unless_it_says_otherwise():
+    assert risky(harm='light', npc=NPC).lethal is False
+
+
+def test_an_npc_can_be_healed():
+    action = risky(recover='light', npc=NPC)
+
+    assert (action.recover, action.npc, action.target) == ('light', NPC, None)
+
+
+@pytest.mark.parametrize(
+    'document',
+    [
+        # 타격에는 맞을 NPC 가 있어야 한다. 앉은 사람끼리는 해치지 않는다
+        {'kind': 'check', 'ability': 'str', 'harm': 'light'},
+        {'kind': 'check', 'ability': 'str', 'harm': 'light', 'recover': 'light', 'target': str(SOMEONE)},
+        # NPC 에게는 무엇을 할지가 있어야 한다
+        {'kind': 'check', 'ability': 'str', 'npc': str(NPC)},
+        {'kind': 'check', 'ability': 'str', 'risk': 'light', 'npc': str(NPC)},
+        # 타격과 회복을 함께 붙이지 않는다
+        {'kind': 'check', 'ability': 'str', 'harm': 'light', 'recover': 'light', 'npc': str(NPC)},
+        # 대상은 하나다
+        {'kind': 'check', 'ability': 'str', 'recover': 'light', 'target': str(SOMEONE), 'npc': str(NPC)},
+        # 죽이려는지는 타격에만 뜻이 있다
+        {'kind': 'check', 'ability': 'str', 'lethal': True},
+        {'kind': 'check', 'ability': 'str', 'recover': 'light', 'npc': str(NPC), 'lethal': True},
+        # 양은 등급의 이름으로, NPC 는 id 로 받는다
+        {'kind': 'check', 'ability': 'str', 'harm': 5, 'npc': str(NPC)},
+        {'kind': 'check', 'ability': 'str', 'harm': 'light', 'npc': '악역영애'},
+    ],
+)
+def test_rejects_a_bad_npc_action(document: dict):
+    with pytest.raises(ValidationError):
+        CheckAction.model_validate(document)
+
+
+def test_finds_a_harm_the_rules_do_not_have():
+    assert find_fault(SRD5, risky(harm='deadly', npc=NPC)) == 'harm'
+    assert find_fault(SRD5, risky(harm='heavy', npc=NPC)) is None
+
+
+@pytest.mark.parametrize(
+    ('action', 'result', 'expected'),
+    [
+        # 타격은 성공했을 때 대상이 받는다
+        (risky(harm='heavy', npc=NPC), SUCCESS, Consequence(ChangeKind.DAMAGE, 'heavy', Recipient.TARGET)),
+        (risky(harm='heavy', npc=NPC), FAILURE, None),
+        # 실패하면 대가만 남는다
+        (risky(risk='light', harm='heavy', npc=NPC), FAILURE, Consequence(ChangeKind.DAMAGE, 'light', Recipient.ACTOR)),
+        (
+            risky(risk='light', harm='heavy', npc=NPC),
+            SUCCESS,
+            Consequence(ChangeKind.DAMAGE, 'heavy', Recipient.TARGET),
+        ),
+    ],
+)
+def test_a_hit_follows_a_success(action: CheckAction, result: Check, expected: Consequence | None):
+    assert consequence(action, result) == expected
+
+
+def test_settling_keeps_the_target_npc():
+    settled = settle(SRD5, risky(harm='heavy', npc=NPC, lethal=True).model_copy(update={'difficulty': None}))
+
+    assert (settled.difficulty, settled.harm, settled.npc, settled.lethal) == ('medium', 'heavy', NPC, True)
