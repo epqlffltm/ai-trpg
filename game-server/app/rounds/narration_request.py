@@ -7,6 +7,7 @@ DB 에 적힌 라운드를 서술자에게 줄 모양(app/rounds/narrator.py)으
   - 이번 라운드에 각자 한 일(moves). 닫기 시작할 때 만들어 라운드에 굳혀 둔다(dump_moves, read_moves).
   - 이야기의 바탕(story). 판의 복사본에서 꺼낸다. 판은 고치지 않으므로 굳힐 필요가 없다.
   - 지난 라운드들(history). 닫힌 라운드는 바뀌지 않으므로 굳힐 필요가 없다.
+    한 말은 그 라운드에 굳혀 둔 각자 한 일에서 읽는다(to_past). 서술자가 그때 받은 것과 같은 사람들이다.
 
 각자 한 일을 굳히는 이유. 서술은 저장한 뒤에 따로 돈다(app/rounds/closing.py).
 그 사이에 누가 나가거나, 서술이 실패해서 다시 맡기면, 지금의 테이블로 다시 만든 것은 닫힐 때와 다르다.
@@ -140,14 +141,51 @@ def to_story(snapshot: Snapshot) -> StoryContext:
     )
 
 
+def said_in_moves(moves: list[dict]) -> list[tuple[str, bool | None]]:
+    """
+    굳혀 둔 각자 한 일에서 한 말들을 꺼낸다. 하나하나가 ("캐릭터 이름: 글", 판정이 성공했는가)다.
+
+    선언을 내지 않은 사람(글이 없음)은 뺀다. 판정이 없던 선언은 성공 여부가 None 이다.
+    문서를 통째로 검사하지 않고(read_moves) 필요한 칸만 읽는다. 오래된 라운드는 나중에 생긴 칸이 없을 수 있다.
+    지난 라운드를 읽다가 서술이 멈추면 안 된다.
+    """
+    return [
+        (f'{move["character_name"]}: {move["content"]}', (move.get('verdict') or {}).get('success'))
+        for move in moves
+        if move.get('content') is not None
+    ]
+
+
+def said_in_declarations(declarations: list[Declaration]) -> list[tuple[str, bool | None]]:
+    """
+    선언들에서 한 말들을 꺼낸다. 굳혀 둔 것이 없는 옛 라운드에만 쓴다.
+
+    선언에 적어 둔 캐릭터 이름을 쓴다. 판정의 결과가 적혀 있으면 성공 여부를 읽는다.
+    """
+    return [
+        (f'{declaration.character_name}: {declaration.content}', (declaration.outcome or {}).get('success'))
+        for declaration in declarations
+    ]
+
+
 def to_past(round_: Round) -> PastRound:
     """
-    지난 라운드를 서술자에게 줄 모양으로 바꾼다. 그때의 장면과, 선언마다 "캐릭터 이름: 글" 한 줄.
+    지난 라운드를 서술자에게 줄 모양으로 바꾼다. 그때의 장면과, 한 말마다 "캐릭터 이름: 글" 한 줄.
 
-    선언에 적어 둔 캐릭터 이름을 쓴다. 그 사람이 떠났거나 새 캐릭터로 바뀌었어도 그때의 이름이 남는다.
+    한 말은 닫기 시작할 때 굳혀 둔 각자 한 일(round_.moves)에서 읽는다. 그 라운드의 서술자가 받은 것과 같다.
+      - 마감 전에 나간 사람의 선언은 판정도 서술도 받지 않았다. 굳혀 둔 것에 없으므로 여기에도 없다.
+        선언 자체는 라운드의 기록에 남는다(GET /rounds/{number}). 서술자에게 주는 지난 일에서만 빠진다.
+      - 마감 뒤에 나간 사람의 것은 굳혀 둔 것에 있다. 지금 앉은 사람으로 거르지 않으므로 그대로 남는다.
+    굳혀 둔 것이 없는 라운드(그 칸이 생기기 전에 닫힌 옛 라운드, 아직 선언을 받는 라운드)는 선언을 읽는다.
+    옛 라운드는 누가 마감 전에 나갔는지 알 수 없어 낸 선언이 모두 들어간다.
     """
-    lines = [f'{declaration.character_name}: {declaration.content}' for declaration in round_.declarations]
-    return PastRound(number=round_.number, scene=round_.scene, lines=lines)
+    said = said_in_declarations(round_.declarations) if round_.moves is None else said_in_moves(round_.moves)
+    return PastRound(
+        number=round_.number,
+        scene=round_.scene,
+        lines=[line for line, _ in said],
+        successes=[success for _, success in said],
+    )
 
 
 def dump_moves(moves: list[Move]) -> list[dict]:

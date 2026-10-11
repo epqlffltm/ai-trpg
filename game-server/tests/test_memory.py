@@ -27,9 +27,11 @@ from app.ai.models import AiInvocation
 from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.main import API_PREFIX
-from app.memory import indexing, repository
+from app.memory import indexing, repository, texts
 from app.memory.models import RoundMemory
 from app.memory.retrieval import (
+    NOTE_LINES_MAX_CHARS,
+    NOTE_MAX_CHARS,
     MemoryRetriever,
     MemoryThresholds,
     about_people,
@@ -42,7 +44,7 @@ from app.memory.retrieval import (
     pick,
     to_note,
 )
-from app.memory.texts import NOBODY_DECLARED, Memory, clip, memories_of, memory_text, missing_memories
+from app.memory.texts import NOBODY_DECLARED, Memory, clip, fair_limits, memories_of, memory_text, missing_memories
 from app.rounds import prompt
 from app.rounds.llm_narrator import LLMNarrator
 from app.rounds.narrator import NO_PREVIEW, Move, NarrationRequest, PastRound, Preview
@@ -239,6 +241,116 @@ def test_a_note_carries_the_round_and_the_clipped_text():
     assert note.text == note_text(item)
     assert note.text.startswith('엘프: 넘는다.\n결과: 차단기가 부서졌다.')
     assert len(note.text) <= 1000
+
+
+# --- 프롬프트에 넣는 글: 결과를 지킨다 ---
+
+# 결과의 서술. 상한을 혼자 넘길 만큼 길다
+LONG_RESULT = '차단기가 박살 났다. ' * 200
+
+
+def said(name: str, length: int) -> str:
+    """이름과 length 자의 선언 한 줄. 선언 하나는 1,000자까지다."""
+    return f'{name}: ' + '가' * length
+
+
+@pytest.mark.parametrize(
+    'lines',
+    [
+        # 한 사람이 선언을 가득 채웠다
+        [said('엘프', 1000)],
+        # 네 사람이 보통 길이로 냈다. 합치면 상한을 넘는다
+        [said(name, 250) for name in ('엘프', '드워프', '영애', '경감')],
+        # 네 사람이 모두 가득 채웠다
+        [said(name, 1000) for name in ('엘프', '드워프', '영애', '경감')],
+    ],
+)
+def test_long_declarations_do_not_push_the_result_out(lines: list[str]):
+    item = memory(4, LONG_RESULT, *lines)
+
+    text = note_text(item)
+
+    assert len(text) <= NOTE_MAX_CHARS
+    # 결과는 한 말 다음에 온다. 상한에서 한 말의 몫을 뺀 만큼은 들어간다
+    head, _, result = text.partition('\n결과: ')
+    assert len(head) <= NOTE_LINES_MAX_CHARS
+    assert result.startswith('차단기가 박살 났다.')
+    assert len(result) >= NOTE_MAX_CHARS - NOTE_LINES_MAX_CHARS - 50
+    # 모두의 말이 조금씩이라도 남는다. 한 사람의 긴 선언이 다른 사람을 밀어내지 않는다
+    assert [line.partition(':')[0] for line in head.split('\n')] == [line.partition(':')[0] for line in lines]
+
+
+def test_a_short_result_leaves_its_room_to_what_was_said():
+    item = memory(4, '차단기가 부서졌다.', said('엘프', 700))
+
+    # 결과가 짧으면 한 말을 자를 까닭이 없다
+    assert note_text(item) == f'{said("엘프", 700)}\n결과: 차단기가 부서졌다.'
+
+
+def test_a_long_line_does_not_take_the_room_of_a_short_one():
+    item = memory(4, LONG_RESULT, said('엘프', 1000), '드워프: 망치를 든다.')
+
+    head = note_text(item).partition('\n결과: ')[0]
+
+    assert head.endswith('\n드워프: 망치를 든다.')
+
+
+def test_the_room_is_shared_out_evenly_and_short_texts_give_theirs_away():
+    assert fair_limits([1000, 10], 400) == [390, 10]
+    assert fair_limits([300, 300, 300, 300], 400) == [100, 100, 100, 100]
+    assert fair_limits([50, 60], 400) == [50, 60]
+    assert fair_limits([], 400) == []
+
+
+def test_a_checked_line_says_whether_it_succeeded():
+    item = Memory(
+        number=4,
+        lines=('엘프: 차단기를 넘는다.', '드워프: 망치로 친다.', '영애: 구경한다.'),
+        result='엘프가 걸려 넘어졌다.',
+        successes=(False, True, None),
+    )
+
+    assert note_text(item) == (
+        '엘프: 차단기를 넘는다. (판정 실패)\n드워프: 망치로 친다. (판정 성공)\n'
+        '영애: 구경한다.\n결과: 엘프가 걸려 넘어졌다.'
+    )
+
+
+def test_the_verdict_survives_clipping_the_line():
+    item = Memory(number=4, lines=(said('엘프', 1000),), result=LONG_RESULT, successes=(False,))
+
+    head = note_text(item).partition('\n결과: ')[0]
+
+    # 글을 덜 남기고 표시를 지킨다. "하려던 일"이 "된 일"로 읽히지 않는다
+    assert head.endswith(f'{texts.CLIPPED}{texts.FAILED}')
+    assert len(head) <= NOTE_LINES_MAX_CHARS
+
+
+def test_lines_without_known_verdicts_carry_no_mark():
+    # 평가 도구의 데이터처럼 글만 있는 기억이다
+    item = memory(4, '비가 온다.', '엘프: 달린다.')
+
+    assert note_text(item) == '엘프: 달린다.\n결과: 비가 온다.'
+
+
+def test_a_round_nobody_declared_in_still_has_its_result():
+    assert note_text(memory(4, '비가 온다.')) == f'{NOBODY_DECLARED}\n결과: 비가 온다.'
+
+
+def test_the_text_for_the_vector_carries_no_verdict():
+    # 벡터로 바꾸는 글의 모양은 그대로다. 바꾸면 이미 만든 벡터와 어긋난다
+    item = Memory(number=4, lines=('엘프: 넘는다.',), result='넘어졌다.', successes=(False,))
+
+    assert memory_text(item) == '엘프: 넘는다.\n결과: 넘어졌다.'
+
+
+def test_a_memory_carries_the_verdicts_of_its_round():
+    rounds = [
+        PastRound(number=1, scene='도입부', lines=['엘프: 넘는다.'], successes=[False]),
+        PastRound(number=2, scene='넘어졌다.'),
+    ]
+
+    assert memories_of(rounds) == [Memory(1, ('엘프: 넘는다.',), '넘어졌다.', (False,))]
 
 
 # --- 테이블에서 ---
