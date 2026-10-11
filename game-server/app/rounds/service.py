@@ -66,6 +66,7 @@ from app.rounds.state import find_arrival, require_open, require_playing, requir
 from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables import sheets
+from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember, TableStatus
 
 # 서술을 맡은 작업 하나가 쓰는 시간(초). 모두 닫기 시작한 시각(closing_at)부터 센다(app/rounds/closing.py).
@@ -315,7 +316,7 @@ async def force_close(
         시각이 바뀌므로 앞서 맡은 작업이 아직 살아 있어도 이 라운드를 더는 바꾸지 못한다(is_run).
     """
     table, _, round_ = await lock_current_round(session, host_id, table_id)
-    tables.require_host(table, host_id)
+    table_state.require_host(table, host_id)
 
     if round_.status == RoundStatus.OPEN:
         begin_closing(session, table, round_, dice, await load_scene(session, table, round_), closer_id=host_id)

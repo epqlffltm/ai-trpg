@@ -30,6 +30,7 @@ from app.chat.models import ChatMessage
 from app.chat.schemas import MessageCreate
 from app.tables import repository as table_repository
 from app.tables import service as tables
+from app.tables import state as table_state
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
 from tests.indexers import NO_INDEXER
@@ -74,7 +75,7 @@ async def test_two_messages_at_once_get_different_sequences(session: AsyncSessio
 
     # A: 테이블을 잠그고 내 글을 올렸지만 아직 커밋하지 않았다
     locked = await table_repository.lock_table(session, table.id)
-    mine = service.build_message(locked, tables.find_member(locked, ME), '먼저 쓴 글')
+    mine = service.build_message(locked, table_state.find_member(locked, ME), '먼저 쓴 글')
     repository.add_message(session, mine)
     await session.flush()
 

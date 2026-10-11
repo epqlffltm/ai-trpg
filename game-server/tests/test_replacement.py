@@ -29,10 +29,11 @@ from app.engine.dice import ScriptedDice
 from app.engine.sheet import Sheet
 from app.main import API_PREFIX
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
-from app.tables import service, sheets
+from app.tables import sheets
+from app.tables import state as table_state
+from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember, TableRoll, TableStatus
 from app.tables.router import find_pregen_holders
-from app.tables.service import Conflict, TableConflictError
 from tests.sheets import make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -1125,10 +1126,10 @@ def test_who_may_choose_a_character(status_: TableStatus, dead: tuple[bool, ...]
     table = make_table(status_, seat)
 
     if reason is None:
-        service.require_choosing(table, seat)
+        table_state.require_choosing(table, seat)
         return
     with pytest.raises(TableConflictError) as refused:
-        service.require_choosing(table, seat)
+        table_state.require_choosing(table, seat)
     assert refused.value.reason == reason
 
 

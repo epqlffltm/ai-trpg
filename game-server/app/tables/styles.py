@@ -19,9 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.scenarios.snapshot import read_snapshot
 from app.events import recorder
 from app.events.models import EventType
+from app.tables.building import choose_narration_style
 from app.tables.models import GameTable
 from app.tables.schemas import NarrationStyleUpdate
-from app.tables.service import choose_narration_style, lock_seated, require_host, require_not_ended, save
+from app.tables.service import lock_seated, save
+from app.tables.state import require_host, require_not_ended
 
 
 async def change_narration_style(

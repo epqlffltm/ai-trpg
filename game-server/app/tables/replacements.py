@@ -6,7 +6,7 @@
 진행 중인 테이블에서는 캐릭터를 바꾸지 못한다. 길은 하나다. 자기 캐릭터가 죽었을 때 새 캐릭터를 들이는 것이다.
 죽은 캐릭터는 이야기에서 퇴장하고, 새 캐릭터는 새 시트로 시작한다. 능력치와 HP 를 물려받지 않는다.
 
-새 캐릭터를 정하는 조건은 모집 중에 캐릭터를 정할 때와 같다(app/tables/service.py 의 accept_character).
+새 캐릭터를 정하는 조건은 모집 중에 캐릭터를 정할 때와 같다(app/tables/characters.py 의 accept_character).
 이 테이블이 허용한 방식이어야 하고, 능력치는 그 방식의 제한을 지켜야 한다. 방장의 승인은 받지 않는다.
 방식과 숫자의 틀은 시나리오의 제작자와 방장이 이미 정해 뒀다. 그 안에서 만든 캐릭터는 바로 들어온다.
 다른 것은 둘이다.
@@ -31,16 +31,11 @@ from app.rounds import service as rounds
 from app.rounds import state as round_state
 from app.rounds.models import Round
 from app.tables import sheets
+from app.tables.characters import accept_character, describe_sheet, write_character
+from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember
 from app.tables.schemas import CharacterUpdate
-from app.tables.service import (
-    Conflict,
-    TableConflictError,
-    accept_character,
-    describe_sheet,
-    save,
-    write_character,
-)
+from app.tables.service import save
 
 
 def require_dead(member: TableMember) -> None:

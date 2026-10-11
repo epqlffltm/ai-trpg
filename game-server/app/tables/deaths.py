@@ -22,8 +22,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.events import recorder
 from app.events.models import EventType
 from app.tables import sheets
+from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import DeathCause, GameTable, TableMember, TableStatus
-from app.tables.service import Conflict, TableConflictError, lock_seated, save
+from app.tables.service import lock_seated, save
 
 
 def require_playing(table: GameTable) -> None:
