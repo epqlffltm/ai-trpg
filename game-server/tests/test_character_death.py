@@ -30,7 +30,7 @@ from app.engine.dice import ScriptedDice
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
-from app.rounds import service
+from app.rounds import judging, service
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from tests.sheets import make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -426,7 +426,7 @@ async def test_a_table_whose_rules_have_no_death_save_never_rolls(
     table = await start_duo(client, me, friend)
     await knock_me_down(client, app, me, friend, table, narrated)
     # 지금의 템플릿(srd5)에는 죽음의 굴림이 있다. 없는 규칙의 테이블을 만들 길이 없어서 읽는 곳을 바꿔 끼운다
-    monkeypatch.setattr(service, 'rules_of', lambda table: NO_DEATH_SAVE)
+    monkeypatch.setattr(judging, 'rules_of', lambda table: NO_DEATH_SAVE)
 
     closing = await pass_round(client, app, friend, table, narrated, [])
 

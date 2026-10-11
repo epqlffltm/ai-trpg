@@ -7,7 +7,7 @@ HP 를 바꾸는 계산. 피해와 회복, 쓰러짐.
 HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이면 쓰러진 것이다.
 
 여기의 함수는 DB 도 HTTP 도 모른다. 지금의 HP 를 받아 바뀐 HP 를 돌려준다.
-시트를 고치는 것은 부른 쪽의 일이다(app/rounds/service.py).
+시트를 고치는 것은 부른 쪽의 일이다(app/rounds/checks.py).
 """
 
 import enum
