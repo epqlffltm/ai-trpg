@@ -33,8 +33,11 @@ func (q *Queries) AddPaidBalance(ctx context.Context, arg AddPaidBalanceParams) 
 }
 
 const createFreeGrant = `-- name: CreateFreeGrant :one
-INSERT INTO free_grants (user_id, amount, remaining, expires_at, created_at)
-VALUES ($1, $2, $2, $3, $4)
+INSERT INTO free_grants (user_id, amount, remaining, expires_at, grant_key, created_at)
+VALUES (
+    $1, $2, $2, $3,
+    $4, $5
+)
 RETURNING id
 `
 
@@ -42,15 +45,18 @@ type CreateFreeGrantParams struct {
 	UserID    uuid.UUID
 	Amount    credit.Amount
 	ExpiresAt time.Time
+	GrantKey  pgtype.Text
 	Now       time.Time
 }
 
 // 무료 크레딧의 지급 묶음을 만든다. 처음에는 준 만큼 남아 있다.
+// grant_key 는 한 번만 주는 지급의 이름이다. 몇 번이고 줄 수 있는 지급이면 NULL 이다.
 func (q *Queries) CreateFreeGrant(ctx context.Context, arg CreateFreeGrantParams) (int64, error) {
 	row := q.db.QueryRow(ctx, createFreeGrant,
 		arg.UserID,
 		arg.Amount,
 		arg.ExpiresAt,
+		arg.GrantKey,
 		arg.Now,
 	)
 	var id int64
@@ -106,6 +112,27 @@ func (q *Queries) GetBalance(ctx context.Context, arg GetBalanceParams) (GetBala
 	var i GetBalanceRow
 	err := row.Scan(&i.Paid, &i.Free)
 	return i, err
+}
+
+const hasFreeGrantWithKey = `-- name: HasFreeGrantWithKey :one
+SELECT EXISTS (
+    SELECT 1 FROM free_grants
+    WHERE user_id = $1 AND grant_key = $2::TEXT
+)
+`
+
+type HasFreeGrantWithKeyParams struct {
+	UserID   uuid.UUID
+	GrantKey string
+}
+
+// 이 사용자가 그 이름의 지급을 받은 적이 있는지 본다. 다 썼거나 사라진 것도 받은 것이다.
+// 지갑의 줄을 잠근 뒤에 부른다.
+func (q *Queries) HasFreeGrantWithKey(ctx context.Context, arg HasFreeGrantWithKeyParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasFreeGrantWithKey, arg.UserID, arg.GrantKey)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const insertEntry = `-- name: InsertEntry :exec
