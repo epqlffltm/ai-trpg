@@ -30,6 +30,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | [game-server/README.md](game-server/README.md) | 게임 서버의 실행, DB와 마이그레이션, API, 토큰 검증, 자산, 게시와 공개, 테이블, 라운드, 이벤트 기록, 채팅, 실시간 스트림, 설계 메모 |
 | [board-server/README.md](board-server/README.md) | 게시판 서버의 실행, DB와 마이그레이션, API, 구조, 설계 메모 |
 | [billing-server/README.md](billing-server/README.md) | 결제 서버의 실행, 설정, API, 주문과 결제, 크레딧, 마이그레이션, 토큰 검증, 테스트, CI, 구조, 설계 메모 |
+| [docs/observability.md](docs/observability.md) | 네 서버가 함께 지키는 관측 규격. 로그의 모양, 요청·추적·작업 식별자, 민감정보, health 와 readiness, 메트릭의 이름, 관리 서버의 경계 |
 
 ## 요구 사항
 
@@ -119,6 +120,7 @@ game-server/              FastAPI 게임 서버 (독립된 uv 프로젝트)
 board-server/             NestJS 게시판 서버 (독립된 npm 프로젝트)
 billing-server/           Go 결제 서버 (독립된 Go 모듈). 연습용이고 실제 결제가 아니다
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
+docs/                     서버들이 함께 지키는 규격 (관측)
 docker-compose.yml        PostgreSQL, Redis
 .env.example              인프라 환경 변수 목록
 ```

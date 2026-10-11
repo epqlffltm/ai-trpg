@@ -5,9 +5,11 @@ package jwks
 import (
 	"context"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 )
 
 const (
@@ -16,6 +18,9 @@ const (
 	// maxDocumentBytes 는 읽는 문서의 가장 큰 크기다. 키 몇 개가 든 문서는 수 KB 다.
 	// 제한이 없으면 잘못된(또는 악의적인) 응답이 메모리를 끝없이 채운다.
 	maxDocumentBytes = 1 << 20
+	// 로그에 적는 이 일의 이름과, 실패했을 때의 오류 코드(docs/observability.md)
+	fetchOperation = "auth.jwks_fetch"
+	fetchErrorCode = "auth.jwks_unavailable"
 )
 
 // Fetcher 는 키 목록을 가져오는 것의 모양이다. 캐시가 이것을 받는다.
@@ -41,15 +46,24 @@ func (f HTTPFetcher) Fetch(ctx context.Context) (KeySet, error) {
 
 	body, reason := f.get(ctx)
 	if reason != "" {
-		log.Printf("JWKS 를 가져오지 못했다: %s", reason)
+		slog.WarnContext(ctx, "JWKS 를 가져오지 못했다", fetchAttrs(reason)...)
 		return nil, ErrFetch
 	}
 	keys, err := ParseKeySet(body)
 	if err != nil {
-		log.Printf("JWKS 를 가져오지 못했다: 쓸 수 있는 키가 없다")
+		slog.WarnContext(ctx, "JWKS 를 가져오지 못했다", fetchAttrs("쓸 수 있는 키가 없다")...)
 		return nil, ErrFetch
 	}
 	return keys, nil
+}
+
+// fetchAttrs 는 가져오지 못했다는 로그에 싣는 칸들이다.
+func fetchAttrs(reason string) []any {
+	return []any{
+		slog.String(obs.FieldOperation, fetchOperation),
+		slog.String(obs.FieldErrorCode, fetchErrorCode),
+		slog.String("reason", reason),
+	}
 }
 
 // get 은 주소를 불러 본문을 돌려준다. 실패하면 그 종류를 짧은 글로 돌려준다(성공이면 빈 글).
@@ -58,6 +72,8 @@ func (f HTTPFetcher) get(ctx context.Context) ([]byte, string) {
 	if err != nil {
 		return nil, "주소를 읽을 수 없다"
 	}
+	// 인증 서버의 로그와 이 요청의 로그가 같은 trace_id 로 이어진다
+	obs.SetOutgoingHeaders(request)
 	response, err := f.Client.Do(request)
 	if err != nil {
 		return nil, "연결하지 못했다"

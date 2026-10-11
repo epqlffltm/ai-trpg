@@ -43,14 +43,18 @@ func TestLoadFillsDefaults(t *testing.T) {
 	}
 
 	want := config.Settings{
-		Debug:       false,
-		Host:        "127.0.0.1",
-		Port:        8003,
-		DatabaseURL: databaseURL,
-		DBSchema:    "billing",
-		AuthJWKSURL: jwksURL,
-		JWTIssuer:   "ai-trpg-auth",
-		JWTAudience: "ai-trpg-billing",
+		Debug: false,
+		// 적지 않으면 개발 환경이고, 버전은 dev 이고, info 부터 남긴다
+		AppEnvironment: "development",
+		AppVersion:     "dev",
+		LogLevel:       "info",
+		Host:           "127.0.0.1",
+		Port:           8003,
+		DatabaseURL:    databaseURL,
+		DBSchema:       "billing",
+		AuthJWKSURL:    jwksURL,
+		JWTIssuer:      "ai-trpg-auth",
+		JWTAudience:    "ai-trpg-billing",
 		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 1주일 뒤에 사라진다
 		SpendFreeFirst: true,
 		FreeCreditTTL:  7 * 24 * time.Hour,
@@ -77,6 +81,9 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		"FREE_CREDIT_TTL":   "36h30m",
 		"PG_WEBHOOK_SECRET": "0123456789abcdef0123456789abcdef",
 		"WELCOME_CREDITS":   "250",
+		"APP_ENVIRONMENT":   "production",
+		"APP_VERSION":       "3f2a9c1",
+		"LOG_LEVEL":         "warning",
 	}))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
@@ -84,6 +91,9 @@ func TestLoadReadsEveryValue(t *testing.T) {
 
 	want := config.Settings{
 		Debug:          true,
+		AppEnvironment: "production",
+		AppVersion:     "3f2a9c1",
+		LogLevel:       "warning",
 		Host:           "0.0.0.0",
 		Port:           9000,
 		DatabaseURL:    databaseURL,
@@ -255,5 +265,37 @@ func TestLoadNeverPrintsAShortSecret(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "too-short-secret") {
 		t.Errorf("오류에 비밀이 실렸다: %v", err)
+	}
+}
+
+func TestLoadAcceptsDeployedVersions(t *testing.T) {
+	// git SHA, 태그, 이미지 태그의 모양이다
+	for _, version := range []string{"3f2a9c1", "v1.2.3", "1.2.3-rc.1+build.5", "2026-10-11_main"} {
+		settings, err := config.Load(from(required(map[string]string{"APP_VERSION": version})))
+		if err != nil || settings.AppVersion != version {
+			t.Errorf("APP_VERSION=%q 를 받지 않았다: %v", version, err)
+		}
+	}
+}
+
+func TestLoadRejectsValuesThatWouldBreakALogLine(t *testing.T) {
+	// 이 값들은 모든 로그 줄에 실린다. 줄바꿈이나 따옴표가 든 값은 서버가 뜨기 전에 막는다
+	cases := map[string][]string{
+		"APP_ENVIRONMENT": {"Production", "prod env", "prod\n{\"level\":\"error\"}", "1prod", strings.Repeat("a", 33)},
+		"APP_VERSION":     {"v1 beta", "v1\nforged", "v1/2", "\"quoted\"", strings.Repeat("a", 65)},
+		"LOG_LEVEL":       {"INFO", "verbose", "trace", "info\n"},
+	}
+	for name, values := range cases {
+		for _, value := range values {
+			_, err := config.Load(from(required(map[string]string{name: value})))
+			if err == nil || !strings.Contains(err.Error(), name) {
+				t.Errorf("%s=%q 를 받았다: %v", name, value, err)
+				continue
+			}
+			// 오류는 시작할 때 로그에 찍힌다. 받은 값을 싣지 않는다
+			if strings.Contains(err.Error(), value) {
+				t.Errorf("오류에 받은 값이 실렸다: %v", err)
+			}
+		}
 	}
 }

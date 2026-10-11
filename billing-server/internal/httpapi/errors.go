@@ -31,7 +31,7 @@ func conflict(c *gin.Context, detail string) {
 // internalError 는 서버 쪽의 문제로 처리하지 못했을 때의 응답이다.
 // 원인은 서버의 기록에만 남기고 응답에는 싣지 않는다. DB 의 오류에는 테이블 이름과 쿼리가 들어 있다.
 func internalError(c *gin.Context, cause error) {
-	// gin 의 요청 기록(Logger)이 이 오류를 그 요청의 줄에 함께 찍는다
+	// 요청을 기록하는 미들웨어(requestLogging)가 이 오류를 요청의 식별자와 함께 적는다
 	_ = c.Error(cause)
 	c.AbortWithStatusJSON(http.StatusInternalServerError, errorBody{
 		Detail: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",

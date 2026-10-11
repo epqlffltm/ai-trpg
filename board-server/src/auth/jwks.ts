@@ -20,6 +20,7 @@
 
 import { Logger } from '@nestjs/common';
 import { importJWK } from 'jose';
+import { outgoingHeaders } from '../observability/request-context.js';
 
 /** 가져온 키를 기억하는 시간(초) */
 export const JWKS_CACHE_SECONDS = 60 * 60;
@@ -128,6 +129,8 @@ export async function fetchJwksDocument(
     const response = await fetcher(url, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       redirect: 'error',
+      // 우리 서버끼리의 호출이다. 추적을 이어 준다(저장소 루트의 docs/observability.md)
+      headers: outgoingHeaders(),
     });
     if (!response.ok) {
       throw new JwksFetchError(`HTTP ${response.status}`);

@@ -7,6 +7,7 @@
 package httpapi
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -37,6 +38,8 @@ type Dependencies struct {
 	WebhookSecret string
 	// Now 는 지금 시각을 돌려준다. 알림의 서명이 방금 것인지 볼 때 쓴다.
 	Now func() time.Time
+	// Logger 는 요청의 기록을 남기는 곳이다. 넣지 않으면 프로세스의 기본 로거(slog.Default)다.
+	Logger *slog.Logger
 }
 
 // SetMode 는 gin 의 동작 방식을 정한다. debug 가 아니면 등록한 주소 목록 같은 개발용 출력을 끈다.
@@ -49,14 +52,24 @@ func SetMode(debug bool) {
 	gin.SetMode(gin.ReleaseMode)
 }
 
+// loggerOf 는 라우터가 쓸 로거를 고른다. 넣어 준 것이 없으면 프로세스의 기본 로거다.
+func loggerOf(deps Dependencies) *slog.Logger {
+	if deps.Logger != nil {
+		return deps.Logger
+	}
+	return slog.Default()
+}
+
 // NewRouter 는 주소들이 붙은 라우터를 만들어 돌려준다.
 func NewRouter(deps Dependencies) *gin.Engine {
 	// gin.Default 를 쓰지 않고 미들웨어를 직접 고른다. 무엇이 붙었는지 여기서 보인다
 	router := gin.New()
+	logger := loggerOf(deps)
+	// 요청마다 식별자를 걸고, 끝나면 공통 규격의 한 줄을 남긴다. 요청의 본문과 머리말은 적지 않는다.
+	// 가장 먼저 붙인다. 뒤에 오는 것들의 로그에 식별자가 붙는다
+	router.Use(requestLogging(logger))
 	// 처리 중에 패닉이 나도 서버가 죽지 않고 500 으로 답한다
-	router.Use(gin.Recovery())
-	// 요청마다 한 줄씩 기록한다(시각, 상태 코드, 걸린 시간, 주소). 요청의 본문과 머리말은 적지 않는다
-	router.Use(gin.Logger())
+	router.Use(recoverPanics(logger))
 
 	// 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
 	router.GET("/health", health)

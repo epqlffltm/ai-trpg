@@ -22,6 +22,7 @@
 - [마이그레이션](#마이그레이션)
 - [토큰 검증](#토큰-검증)
 - [테스트](#테스트)
+- [로그와 요청 식별자](#로그와-요청-식별자)
 - [CI](#ci)
 - [구조](#구조)
 - [설계 메모](#설계-메모)
@@ -136,6 +137,9 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `FREE_CREDIT_TTL` | `168h` | 무료 크레딧이 지급된 뒤 사라질 때까지의 시간. `168h`, `30m`, `90s` 처럼 단위를 붙인다. 1초보다 짧을 수 없다 |
 | `WELCOME_CREDITS` | `1000` | 사용자가 한 번 받는 환영 크레딧(무료)의 양. 0 이면 주지 않는다. 100만까지 |
 | `PG_WEBHOOK_SECRET` | 없음(필수) | 결제 대행사의 알림에 붙은 서명을 확인하는 비밀. 32자 이상. 로그와 오류에 싣지 않는다 |
+| `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸에 적힌다. 운영에서는 `production` |
+| `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸에 적힌다. 운영에서는 git SHA 나 이미지 태그 |
+| `LOG_LEVEL` | `info` | 이 수준부터 로그를 남긴다. `debug`, `info`, `warning`, `error` |
 
 `FREE_CREDIT_TTL` 은 날 단위(`7d`)를 받지 않는다. Go 의 시간 표기에 날이 없다. 1주일은 `168h` 다.
 두 값은 서버를 다시 띄워야 바뀐다. 바꾸면 그 뒤의 일에만 적용된다([크레딧](#크레딧)).
@@ -631,6 +635,44 @@ Windows 에서는 C 컴파일러(gcc)를 따로 깔아야 `-race` 가 돈다. �
     결제 대행사에 묻지 못하면 오류인 것
   - DB 가 스스로 막는 것을 SQL 을 직접 보내 확인
 
+## 로그와 요청 식별자
+
+네 서버가 같은 규격으로 로그를 남긴다. 규격의 전부는 [docs/observability.md](../docs/observability.md)에 있다. 여기는 이 서버에서 알아 둘 것만 적는다.
+
+- 로그는 표준 오류(stderr)에 **한 줄에 JSON 하나**로 나간다. 모든 줄에 `timestamp`, `level`, `service`(`billing-server`), `environment`, `version`, `message` 가 있다.
+- 요청마다 식별자가 붙는다. 요청의 `X-Request-ID` 머리말이 영문자, 숫자, `.`, `_`, `-` 로 된 8~64자면 그대로 쓰고, 아니면 새 UUID 로 바꾼다.
+  정한 값은 **모든 응답의 `X-Request-ID` 머리말**로 돌려준다. 오류가 났을 때 이 값으로 로그를 찾는다.
+- 요청이 끝나면 한 줄이 남는다. 주소는 실제 값이 아니라 틀로 적는다(`/api/v1/billing/orders/:id`). 머리말, 주소 뒤에 붙은 값, 본문은 적지 않는다.
+- 4xx 는 `info`, 5xx 는 `error` 다. 처리하지 못한 예외는 호출 기록과 함께 로그에만 남고, 응답에는 정해진 말과 `X-Request-ID` 만 간다.
+- 비밀번호, 토큰, 이메일 주소 같은 값은 로그에 넘기지 않는다. 실수로 넘겨도 나가기 직전에 한 번 더 가린다(이름이 `password`, `token` 같은 칸, 글 속의 JWT 와 이메일의 모양).
+- 식별자는 로그를 찾는 데만 쓴다. 누구의 요청인지는 토큰만이 말한다.
+
+| 환경 변수 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
+| `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
+| `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
+
+세 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+
+개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
+
+```bash
+go run ./cmd/server 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .route // "", .status_code // ""] | @tsv'
+```
+
+**이 서버에서 다른 것.**
+
+- 로그는 표준 `log/slog` 로 남긴다. 식별자는 `context.Context` 에 실려 다닌다. 그래서 요청 안에서는 `slog.WarnContext(ctx, …)` 처럼 **context 를 받는 함수**로 남겨야 `request_id` 와 `trace_id` 가 붙는다.
+  표준 `log` 패키지로 남긴 줄(`net/http` 서버가 남기는 것 포함)도 같은 JSON 으로 나간다. 다만 식별자는 붙지 않는다.
+- 처리 중에 패닉이 나면 호출 기록과 함께 로그에 남기고(`error_code: http.unhandled_exception`) `500 {"detail": "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."}` 로 답한다.
+  핸들러가 스스로 500 으로 답한 오류(`internalError`)의 원인은 `error_code: internal.error` 로 남는다.
+- 인증 서버에서 공개키를 받을 때 `traceparent` 머리말로 추적을 이어 준다. 결제 대행사에는 아무 식별자도 보내지 않는다.
+- 결제 대행사의 결제 번호(`payment_key`)와 알림의 서명은 로그에 남기지 않는다. 주문은 주문 번호(`order_id`)로 찾는다.
+- `DEBUG=true` 면 gin 이 뜰 때 등록한 주소의 목록을 글로 찍는다. JSON 이 아니다. 개발할 때만 켠다.
+- 사람이 치는 명령(`cmd/migrate`, `cmd/fakepg`)의 출력은 JSON 이 아니다. 화면으로 읽는 것이다.
+
+
 ## CI
 
 `.github/workflows/billing-server.yml`. `billing-server/`나 DB 초기화 스크립트가 바뀐 PR 과 main 푸시에서 돈다.
@@ -678,7 +720,8 @@ billing-server/
       orderdb/              sqlc 가 queries.sql 에서 만든 코드. 손으로 고치지 않는다
     jwks/                 인증 서버의 공개키. 읽기(keys.go), 가져오기(fetch.go), 기억하기(cache.go)
     auth/                 access 토큰 검증. 무엇을 받아들일지 정한다
-    httpapi/              HTTP 주소. 라우터, 핸들러, 토큰을 확인하는 미들웨어(auth.go)
+    httpapi/              HTTP 주소. 라우터, 핸들러, 토큰을 확인하는 미들웨어(auth.go), 요청을 기록하는 미들웨어(observability.go)
+    obs/                  로그의 공통 규격. 식별자(ids.go, context.go), 가리는 규칙(redact.go), JSON 한 줄(handler.go)
     testenv/              테스트가 쓰는 것. 접속 주소, 테스트용 스키마의 풀, 가짜 인증 서버의 키와 토큰
 ```
 
