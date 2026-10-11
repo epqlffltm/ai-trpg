@@ -3,15 +3,17 @@
 """
 테이블의 모델. 테이블은 시나리오의 판 하나를 가져와 AI GM 과 플레이하는 자리다.
 
-테이블 넷이 있다.
+테이블 다섯이 있다.
   - game_tables: 테이블 자신. 방장, 어느 판에서 왔는지, 판의 복사본, 정원, 상태.
   - table_members: 테이블에 앉은 사람과 그 사람의 캐릭터(이름과 설명: 글).
   - table_sheets: 앉은 사람의 캐릭터 시트(능력치와 HP: 숫자). 게임을 시작할 때 생긴다.
     캐릭터가 죽어 새 캐릭터를 들이면 하나 더 생긴다. 죽은 캐릭터의 시트는 지우지 않는다.
   - table_rolls: 주사위로 굴린 능력치의 점수들. 사람이 나가도 남는다.
+  - table_npcs: 로어북의 인물 항목마다의 숫자와 생사. 게임을 시작할 때 생긴다.
 
-판은 고치지 않는다. 테이블은 만들 때 판의 내용을 통째로 복사해 온다(content).
-플레이하면서 바뀌는 것(죽은 NPC, 열린 문)은 이 복사본을 고친다. 같은 판으로 만든 다른 테이블에는 영향이 없다.
+판은 고치지 않는다. 테이블은 만들 때 판의 내용을 통째로 복사해 온다(content). 이 복사본도 고치지 않는다.
+플레이하면서 바뀌는 것(캐릭터의 HP, NPC 의 생사)은 따로 칸을 둔다(table_sheets, table_npcs).
+문서 안의 값은 DB 가 검사하지 못하고, 하나를 바꾸려고 문서를 통째로 다시 쓰게 된다.
 
 스키마 이름을 적지 않는다. 연결의 search_path 가 정한다(app/core/database.py).
 """
@@ -82,6 +84,19 @@ class TableStatus(enum.StrEnum):
     PLAYING = 'playing'
     # 끝남. 방장이 끝냈거나 모두 나갔다
     ENDED = 'ended'
+
+
+class NpcStatus(enum.StrEnum):
+    """
+    NPC 의 생사. HP 와 따로 적는다. HP 가 0 인 NPC 는 쓰러졌거나 죽었는데, HP 만으로는 둘을 가를 수 없다.
+
+    쓰러진 NPC 는 혼자서 깨어나지 못한다(의식이 없다). 죽음의 굴림은 없다. 회복을 받으면 일어난다.
+    죽은 NPC 는 되돌리지 못한다.
+    """
+
+    ALIVE = 'alive'
+    DOWNED = 'downed'
+    DEAD = 'dead'
 
 
 class GameTable(Base):
@@ -385,3 +400,41 @@ class TableRoll(Base):
     reroll_granted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 
     rolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TableNpc(Base):
+    """
+    테이블 하나에서 로어북의 인물 항목 하나의 숫자와 생사. NPC 의 시트다.
+
+    시작할 때 판의 인물 항목마다 하나씩 만든다. 숫자는 판의 NPC 시트나 기본 NPC 시트에서 온다(app/tables/npcs.py).
+    가져온 뒤로는 이 테이블의 것이다. 같은 판으로 만든 다른 테이블의 같은 인물과 상관없다.
+    지금 HP 와 생사는 엔진만 고친다. 방장도 손으로 고치지 못한다.
+
+    누구인지는 항목의 ID(entry_id)로만 적는다. 이름과 내용은 판에 있다.
+    로어북의 내용은 AI 만 읽는 글이라, 이 행을 앉은 사람에게 그대로 내주지 않는다.
+    """
+
+    __tablename__ = 'table_npcs'
+    __table_args__ = (
+        CheckConstraint('max_hp >= 1', name='max_hp_positive'),
+        # HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. 엔진의 실수를 DB 가 한 번 더 막는다
+        CheckConstraint('hp BETWEEN 0 AND max_hp', name='hp_range'),
+        CheckConstraint(one_of('status', NpcStatus), name='status_allowed'),
+        # 살아 있는 것과 HP 가 있는 것은 같다. 쓰러짐과 죽음은 HP 가 0 일 때만이다
+        CheckConstraint(f"(status = '{NpcStatus.ALIVE}') = (hp > 0)", name='alive_when_hp'),
+        CheckConstraint("jsonb_typeof(abilities) = 'object'", name='abilities_is_object'),
+    )
+
+    # 두 칸을 합쳐 기본 키로 삼는다. 한 테이블에서 인물 하나의 상태는 하나다.
+    # 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 판(content)의 로어북 항목의 ID. 판은 문서라 외래 키를 걸지 못한다. 판을 고치지 않으므로 가리키는 항목은 늘 있다
+    entry_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+
+    # 능력치의 점수. 모양은 캐릭터 시트와 같다(TableSheet.abilities)
+    abilities: Mapped[dict] = mapped_column(JSONB)
+    max_hp: Mapped[int] = mapped_column(SmallInteger)
+    hp: Mapped[int] = mapped_column(SmallInteger)
+    status: Mapped[str] = mapped_column(String(20), default=NpcStatus.ALIVE, server_default=text("'alive'"))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -59,6 +59,8 @@ SCENARIO_MAX_OPENINGS = 5
 TABLE_MAX_PLAYERS = 4
 # 시나리오 하나에 둘 수 있는 프리젠(제작자가 미리 만든 캐릭터)의 수. 자리마다 둘씩 고를 수 있는 만큼이다
 SCENARIO_MAX_PREGENS = 8
+# 시나리오 하나에 둘 수 있는 NPC 시트의 수. 로어북 하나의 항목이 모두 인물이어도 모자라지 않는 만큼이다
+SCENARIO_MAX_NPC_SHEETS = 100
 # 캐릭터의 이름과 설명. 설명은 턴마다 AI 의 입력에 들어간다. 사람 수만큼 들어가므로 길이가 곧 비용이다
 CHARACTER_NAME_MAX_LENGTH = 50
 CHARACTER_DESCRIPTION_MAX_LENGTH = 1000
@@ -322,10 +324,11 @@ class Scenario(AssetContent):
     시나리오의 내용. 테이블이 고르는 것이다.
 
     시나리오는 다른 자산을 모아 만든 조립물이다. 룰북을 중심으로 세계관 등을 붙인다.
-    룰북과 세계관은 하나씩, 로어북은 여러 개 가리킨다. NPC 같은 재료는 그 자산을 만들 때 더한다.
+    룰북과 세계관은 하나씩, 로어북은 여러 개 가리킨다. NPC 는 로어북의 인물 항목이다.
 
     초안일 때는 룰북과 스타팅을 비워 둘 수 있다(임시 저장). 게시할 때 둘 다 있는지 검사한다.
     시트(프리젠의 시트, 기본 시트)도 초안일 때는 비워 둘 수 있다. 룰북의 규칙에 맞는지는 게시할 때 본다.
+    NPC 의 시트(인물 항목의 숫자)도 여기 있다. 게시할 때 항목과 규칙에 맞는지 본다.
     """
 
     __tablename__ = 'scenarios'
@@ -343,6 +346,7 @@ class Scenario(AssetContent):
         ),
         # 문서 안의 모양(이름, 설명, 길이)은 입력을 받을 때 검사한다. DB 는 개수만 막는다
         CheckConstraint(f'jsonb_array_length(pregens) <= {SCENARIO_MAX_PREGENS}', name='pregens_count'),
+        CheckConstraint(f'jsonb_array_length(npc_sheets) <= {SCENARIO_MAX_NPC_SHEETS}', name='npc_sheets_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
@@ -403,6 +407,16 @@ class Scenario(AssetContent):
     # 기본 시트. 캐릭터를 직접 만든 사람이 받는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 직접 만들기를 허용했으면 게시할 때 있어야 한다
     default_sheet: Mapped[dict | None] = mapped_column(JSONB)
+
+    # NPC 시트들. 하나하나가 {entry_id, sheet} 다. 붙인 로어북의 인물 항목 하나에 숫자를 준다.
+    # 시트를 로어북 항목에 두지 않고 여기 둔다. 로어북은 여러 시나리오가 함께 쓰고, 시나리오마다 룰북이 달라
+    # 능력치의 이름표와 범위가 다르다. 숫자는 룰북을 정하는 쪽(시나리오)의 것이다.
+    # 가리키는 항목이 있는지, 인물인지, 규칙에 맞는지는 게시할 때 본다(scenarios/publishing.py)
+    npc_sheets: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
+    # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다
+    default_npc_sheet: Mapped[dict | None] = mapped_column(JSONB)
 
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다. 둘은 함께 있거나 함께 없다.
     # 최대 HP = 기준값 + 능력치의 보정, 상한을 넘지 않는다(app/engine/creation.py).
