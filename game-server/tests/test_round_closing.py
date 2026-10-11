@@ -294,6 +294,44 @@ async def test_the_gm_hears_the_round_as_it_closed_even_after_someone_leaves(
     ]
 
 
+async def test_the_gm_is_not_told_later_what_someone_who_left_before_closing_declared(
+    client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, narrated
+):
+    table = await start_duo(client, me, friend)
+    narrator.release()
+    # 친구는 선언을 내고 마감 전에 나간다. 그 선언은 판정도 서술도 받지 않는다
+    await declare(client, friend, table, FRIENDS_ACTION)
+    await client.delete(table_url(table, '/members/me'), headers=friend)
+    await declare(client, me, table, MY_ACTION)
+    await narrated()
+    await declare(client, me, table, MY_ACTION)
+    await narrated()
+
+    first, second = narrator.requests
+    assert [move.character_name for move in first.moves] == ['엘프']
+    # 2 라운드의 서술자가 받는 지난 기록에도 없다. 1 라운드의 서술자가 받은 것과 같다
+    assert [past.lines for past in second.history] == [[f'엘프: {MY_ACTION}']]
+    # 선언 자체는 라운드의 기록에 남는다
+    kept = (await client.get(table_url(table, '/rounds/1'), headers=me)).json()
+    assert {item['character_name'] for item in kept['declarations']} == {'엘프', '영애'}
+
+
+async def test_the_gm_is_still_told_later_what_someone_who_left_after_closing_declared(
+    client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, narrated
+):
+    table = await start_duo(client, me, friend)
+    await begin_closing(client, me, friend, table, narrator)
+    # 마감한 뒤에 나간다. 친구의 행동은 1 라운드의 서술에 들어갔다
+    await client.delete(table_url(table, '/members/me'), headers=friend)
+    narrator.release()
+    await narrated()
+    await declare(client, me, table, MY_ACTION)
+    await narrated()
+
+    # 지금 앉은 사람으로 지난 일을 거르지 않는다
+    assert narrator.requests[-1].history[0].lines == [f'엘프: {MY_ACTION}', f'영애: {FRIENDS_ACTION}']
+
+
 async def test_the_moves_are_kept_on_the_round_when_it_starts_closing(
     client: AsyncClient, me: dict, friend: dict, narrator: GatedNarrator, session: AsyncSession
 ):
