@@ -42,8 +42,11 @@ def make_test_settings(**overrides) -> Settings:
     # 로어북 검색의 거리 기준은 가짜 임베더에 맞춘 값이다. 가짜는 낱말이 겹치는지만 보는 벡터라 거리의 크기가
     # bge-m3 와 다르다(기본값 0.45, 0.50 이면 이름이 나온 항목도 걸러진다). 키워드의 상한은 끈다(코사인 거리는 2 까지).
     # 지난 일(기억)의 거리 기준도 같은 까닭으로 가짜에 맞춘다
+    # 로그는 경고부터 남긴다. 요청마다 한 줄씩 남는 것(info)까지 남기면, 로그를 잡아 "이 줄 하나만 남았다"를 보는
+    # 테스트에 요청의 줄이 섞인다. 요청의 줄을 보는 테스트는 그 로거의 수준을 내려서 잡는다
     values = {
         'debug': False,
+        'log_level': 'warning',
         'db_schema': TEST_SCHEMA,
         'auth_jwks_url': TEST_JWKS_URL,
         'narrator': 'fake',

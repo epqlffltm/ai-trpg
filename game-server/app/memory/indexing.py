@@ -89,4 +89,4 @@ class MemoryIndexer:
     def schedule(self, table_id: uuid.UUID) -> None:
         """이 테이블의 색인을 맡긴다. 기다리지 않고 바로 돌아온다."""
         job = index_table(self.session_factory, self.embedder, table_id)
-        self.jobs.spawn(job, name=f'index-memories:{table_id}')
+        self.jobs.spawn(job, name=f'index-memories:{table_id}', operation='memory.index')

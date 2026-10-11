@@ -37,6 +37,17 @@ class Settings(BaseSettings):
         hide_input_in_errors=True,
     )
 
+    # 이 서버가 도는 환경의 이름. 로그의 environment 칸에 들어간다(docs/observability.md).
+    # development, test, staging, production 처럼 적는다. 동작을 바꾸지 않는다. 기록을 가를 때만 쓴다
+    app_environment: str = Field(default='development', pattern=r'^[a-z][a-z0-9_-]{0,31}$')
+
+    # 이 서버의 버전. 로그의 version 칸에 들어간다. 배포할 때 git SHA 나 이미지의 버전을 넣는다.
+    # 적지 않으면 dev 다. 어느 코드가 남긴 기록인지 가를 때 쓴다
+    app_version: str = Field(default='dev', pattern=r'^[A-Za-z0-9._+-]{1,64}$')
+
+    # 이 수준부터 로그를 남긴다. debug, info, warning, error 중 하나다
+    log_level: Literal['debug', 'info', 'warning', 'error'] = 'info'
+
     # 개발용 기능(API 문서 화면)을 켠다. 기본은 꺼짐이다.
     # 켜는 것을 잊으면 불편할 뿐이지만, 끄는 것을 잊으면 운영 서버의 API 구조가 드러난다
     debug: bool = False
