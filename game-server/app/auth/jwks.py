@@ -22,6 +22,8 @@ from collections.abc import Callable
 import httpx
 import jwt
 
+from app.observability.context import outgoing_headers
+
 logger = logging.getLogger(__name__)
 
 # 가져온 키를 기억하는 시간
@@ -76,7 +78,8 @@ def parse_jwks(document: object) -> dict[str, jwt.PyJWK]:
 async def fetch_jwks(client: httpx.AsyncClient, url: str) -> dict[str, jwt.PyJWK]:
     """인증 서버에서 JWKS 를 가져온다. 어떤 이유로든 받지 못하면 JwksFetchError."""
     try:
-        response = await client.get(url, timeout=FETCH_TIMEOUT_SECONDS)
+        # 우리 서버끼리의 호출이다. 추적을 이어 준다(docs/observability.md)
+        response = await client.get(url, timeout=FETCH_TIMEOUT_SECONDS, headers=outgoing_headers())
         response.raise_for_status()
         document = response.json()
     except (httpx.HTTPError, ValueError) as error:

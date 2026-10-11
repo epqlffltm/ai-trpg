@@ -653,7 +653,7 @@ class HeldJobs:
     def __init__(self) -> None:
         self.names: list[str] = []
 
-    def spawn(self, job, name: str) -> None:
+    def spawn(self, job, name: str, operation: str = '') -> None:
         job.close()
         self.names.append(name)
 

@@ -38,6 +38,9 @@ from app.lore.setup import build_embedder
 from app.memory.history import HistoryCollector
 from app.memory.indexing import MemoryIndexer
 from app.memory.retrieval import MemoryRetriever, MemoryThresholds
+from app.observability.middleware import RequestLoggingMiddleware
+from app.observability.responses import handle_unexpected_error
+from app.observability.setup import configure_logging
 from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
 from app.realtime import router as realtime
@@ -93,6 +96,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     """
     settings = settings or get_settings()
 
+    # 로그를 공통 규격의 JSON 으로 건다(docs/observability.md). 여러 번 불러도 처리기는 하나다
+    configure_logging(settings)
+
     app = FastAPI(
         title='AI TRPG 게임 서버',
         # API 문서 화면은 개발할 때만 연다. 운영 서버에서는 API 의 구조를 내보이지 않는다
@@ -101,6 +107,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
         openapi_url=f'{API_PREFIX}/openapi.json' if settings.debug else None,
         lifespan=lifespan,
     )
+
+    # 요청마다 식별자(request_id, trace_id)를 걸고, 끝나면 한 줄을 남긴다. 응답에 X-Request-ID 를 돌려준다
+    app.add_middleware(RequestLoggingMiddleware)
 
     # 요청을 처리하는 코드가 설정을 꺼내 쓸 수 있게 앱에 붙여 둔다
     app.state.settings = settings
@@ -196,6 +205,9 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.add_exception_handler(RoundConflictError, rounds.handle_round_conflict)
     app.add_exception_handler(ActionNotInRulesError, rounds.handle_action_not_in_rules)
     app.add_exception_handler(ActionTargetError, rounds.handle_action_target)
+
+    # 위의 어느 것에도 걸리지 않은 예외. 내용은 응답에 싣지 않고 요청의 식별자만 돌려준다
+    app.add_exception_handler(Exception, handle_unexpected_error)
 
     return app
 
