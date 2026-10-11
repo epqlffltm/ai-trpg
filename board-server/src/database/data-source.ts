@@ -4,6 +4,7 @@
  * 마이그레이션 도구(TypeORM CLI)가 읽는 연결. 서버는 이 파일을 쓰지 않는다.
  *
  * 도구는 Nest 밖에서 돈다. 그래서 설정을 여기서 직접 읽는다. 읽는 함수와 옵션을 만드는 함수는 서버와 같은 것이다.
+ *   - DB 에 관한 값만 읽는다(readDatabaseSettings). 인증 서버의 주소 같은 값은 없어도 마이그레이션이 돈다.
  *   - .env 가 있으면 읽는다. 이미 정해진 환경 변수는 덮어쓰지 않는다.
  *     그래서 DB_SCHEMA=board_test 를 앞에 붙여 부르면 테스트용 스키마에 적용된다.
  *   - 도구는 빌드된 파일(dist/)을 읽는다. 엔티티와 마이그레이션도 빌드된 것을 이 파일의 위치에서 찾는다.
@@ -15,7 +16,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DataSource } from 'typeorm';
-import { readEnvironment } from '../config/environment.js';
+import { readDatabaseSettings } from '../config/environment.js';
 import { databaseOptions } from './database.options.js';
 
 /** 개발자의 설정 파일. 이 명령을 부르는 폴더(board-server)에서 찾는다 */
@@ -29,7 +30,7 @@ if (existsSync(ENV_FILE)) {
 const BUILD_ROOT = join(import.meta.dirname, '..');
 
 export default new DataSource({
-  ...databaseOptions(readEnvironment(process.env)),
+  ...databaseOptions(readDatabaseSettings(process.env)),
   entities: [join(BUILD_ROOT, '**', '*.entity.js')],
   migrations: [join(BUILD_ROOT, 'migrations', '*.js')],
 });

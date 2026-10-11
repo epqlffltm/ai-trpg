@@ -7,16 +7,24 @@
 import {
   DEFAULT_DB_SCHEMA,
   DEFAULT_HOST,
+  DEFAULT_JWT_AUDIENCE,
+  DEFAULT_JWT_ISSUER,
   DEFAULT_PORT,
+  readAuthJwksUrl,
+  readDatabaseSettings,
   readDatabaseUrl,
   readDbSchema,
   readEnvironment,
   readHost,
+  readJwtAudience,
+  readJwtIssuer,
   readPort,
 } from './environment.js';
 
 /** 테스트에 쓰는 DB 주소. 실제로 접속하지 않는다 */
 const DATABASE_URL = 'postgresql://board:secret-password@127.0.0.1:5432/trpg';
+/** 테스트에 쓰는 공개키 주소. 실제로 부르지 않는다 */
+const AUTH_JWKS_URL = 'http://127.0.0.1:8000/api/v1/auth/jwks';
 
 describe('readPort', () => {
   it.each([undefined, '', '   '])('적지 않으면(%j) 기본 포트다', (value) => {
@@ -122,13 +130,114 @@ describe('readDbSchema', () => {
   });
 });
 
+describe('readAuthJwksUrl', () => {
+  it.each([undefined, '', '   '])('적지 않으면(%j) 예외를 낸다', (value) => {
+    expect(() => readAuthJwksUrl(value)).toThrow('AUTH_JWKS_URL');
+  });
+
+  it.each([
+    'http://127.0.0.1:8000/api/v1/auth/jwks',
+    'https://auth.example.com/api/v1/auth/jwks',
+    'HTTP://auth:8000/jwks',
+  ])('http 나 https 주소(%j)를 받는다', (value) => {
+    expect(readAuthJwksUrl(value)).toBe(value);
+  });
+
+  it('앞뒤 빈칸 없이 읽는다', () => {
+    expect(readAuthJwksUrl(` ${AUTH_JWKS_URL} `)).toBe(AUTH_JWKS_URL);
+  });
+
+  it.each([
+    '127.0.0.1:8000/api/v1/auth/jwks',
+    '/api/v1/auth/jwks',
+    'file:///etc/passwd',
+    'ftp://auth/jwks',
+    'http://',
+    'jwks',
+  ])('http 나 https 주소가 아니면(%j) 거부한다', (value) => {
+    expect(() => readAuthJwksUrl(value)).toThrow('AUTH_JWKS_URL');
+  });
+
+  it('거부할 때 받은 값을 예외에 싣지 않는다', () => {
+    const value = 'ftp://internal-auth.example.com/jwks';
+
+    expect(() => readAuthJwksUrl(value)).toThrow(
+      expect.not.objectContaining({
+        message: expect.stringContaining('internal-auth'),
+      }),
+    );
+  });
+});
+
+describe('readJwtIssuer', () => {
+  it.each([undefined, '', '   '])('적지 않으면(%j) 기본값이다', (value) => {
+    expect(readJwtIssuer(value)).toBe(DEFAULT_JWT_ISSUER);
+  });
+
+  it('적은 이름을 앞뒤 빈칸 없이 읽는다', () => {
+    expect(readJwtIssuer(' other-auth ')).toBe('other-auth');
+  });
+
+  it('기본값은 인증 서버의 이름이다', () => {
+    expect(DEFAULT_JWT_ISSUER).toBe('ai-trpg-auth');
+  });
+});
+
+describe('readJwtAudience', () => {
+  it.each([undefined, '', '   '])('적지 않으면(%j) 기본값이다', (value) => {
+    expect(readJwtAudience(value)).toBe(DEFAULT_JWT_AUDIENCE);
+  });
+
+  it('적은 이름을 앞뒤 빈칸 없이 읽는다', () => {
+    expect(readJwtAudience(' board-staging ')).toBe('board-staging');
+  });
+
+  it('기본값은 게시판 서버의 이름이다', () => {
+    expect(DEFAULT_JWT_AUDIENCE).toBe('ai-trpg-board');
+  });
+
+  it('여럿을 쉼표로 적으면 거부한다', () => {
+    // 인증 서버의 JWT_AUDIENCE(목록)를 그대로 옮겨 적은 실수
+    expect(() => readJwtAudience('ai-trpg-auth,ai-trpg-board')).toThrow(
+      'JWT_AUDIENCE',
+    );
+  });
+});
+
+describe('readDatabaseSettings', () => {
+  it('DB 에 관한 값만 돌려준다', () => {
+    const settings = readDatabaseSettings({
+      DATABASE_URL,
+      DB_SCHEMA: 'board_test',
+      PORT: '9000',
+    });
+
+    expect(settings).toEqual({ DATABASE_URL, DB_SCHEMA: 'board_test' });
+  });
+
+  it('공개키 주소가 없어도 읽는다', () => {
+    // 마이그레이션 도구가 쓴다. 인증 서버의 주소 없이도 마이그레이션이 돌아야 한다
+    expect(readDatabaseSettings({ DATABASE_URL })).toEqual({
+      DATABASE_URL,
+      DB_SCHEMA: DEFAULT_DB_SCHEMA,
+    });
+  });
+
+  it('DB 주소가 없으면 예외를 낸다', () => {
+    expect(() => readDatabaseSettings({})).toThrow('DATABASE_URL');
+  });
+});
+
 describe('readEnvironment', () => {
-  it('DB 주소만 적어도 나머지는 기본값으로 뜬다', () => {
-    expect(readEnvironment({ DATABASE_URL })).toEqual({
+  it('DB 주소와 공개키 주소만 적어도 나머지는 기본값으로 뜬다', () => {
+    expect(readEnvironment({ DATABASE_URL, AUTH_JWKS_URL })).toEqual({
       HOST: DEFAULT_HOST,
       PORT: DEFAULT_PORT,
       DATABASE_URL,
       DB_SCHEMA: DEFAULT_DB_SCHEMA,
+      AUTH_JWKS_URL,
+      JWT_ISSUER: DEFAULT_JWT_ISSUER,
+      JWT_AUDIENCE: DEFAULT_JWT_AUDIENCE,
     });
   });
 
@@ -138,6 +247,9 @@ describe('readEnvironment', () => {
       PORT: '9000',
       DATABASE_URL,
       DB_SCHEMA: 'board_test',
+      AUTH_JWKS_URL,
+      JWT_ISSUER: 'other-auth',
+      JWT_AUDIENCE: 'board-staging',
       PATH: '/usr/bin',
     });
 
@@ -146,16 +258,23 @@ describe('readEnvironment', () => {
       PORT: 9000,
       DATABASE_URL,
       DB_SCHEMA: 'board_test',
+      AUTH_JWKS_URL,
+      JWT_ISSUER: 'other-auth',
+      JWT_AUDIENCE: 'board-staging',
     });
   });
 
   it('DB 주소가 없으면 예외를 낸다', () => {
-    expect(() => readEnvironment({})).toThrow('DATABASE_URL');
+    expect(() => readEnvironment({ AUTH_JWKS_URL })).toThrow('DATABASE_URL');
+  });
+
+  it('공개키 주소가 없으면 예외를 낸다', () => {
+    expect(() => readEnvironment({ DATABASE_URL })).toThrow('AUTH_JWKS_URL');
   });
 
   it('틀린 값이 하나라도 있으면 예외를 낸다', () => {
-    expect(() => readEnvironment({ DATABASE_URL, PORT: 'abc' })).toThrow(
-      'PORT',
-    );
+    expect(() =>
+      readEnvironment({ DATABASE_URL, AUTH_JWKS_URL, PORT: 'abc' }),
+    ).toThrow('PORT');
   });
 });
