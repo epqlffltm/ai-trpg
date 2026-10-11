@@ -125,6 +125,12 @@ def test_the_instructions_tell_the_model_not_to_change_the_results():
     assert '지어내지 마라' in prompt.GM_RULES
 
 
+def test_the_instructions_tell_new_injuries_from_old_ones():
+    # 전부터 입은 부상을 이번 라운드에 새로 다친 것처럼 쓰는 일이 있었다(상태 지키기 평가, narration-15)
+    assert "이번 라운드에 생긴 부상은 결과 줄에 '새 부상'으로 적힌 것뿐이다" in prompt.GM_RULES
+    assert '전부터 입고 있던 부상이다' in prompt.GM_RULES
+
+
 # --- 문체 ---
 
 STYLED = [style for style in NarrationStyle if style != NarrationStyle.NONE]
@@ -276,8 +282,8 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_the_template_is_narration_14():
-    assert prompt.PROMPT_VERSION == 'narration-14'
+def test_the_template_is_narration_15():
+    assert prompt.PROMPT_VERSION == 'narration-15'
 
 
 def test_the_last_message_asks_for_the_declared_actions():
