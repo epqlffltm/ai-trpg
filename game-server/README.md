@@ -1089,6 +1089,24 @@ uv run python -m scripts.try_narration --model gemma4:26b-a4b-it-qat --style web
 - 악역영애의 항목(비올레타)에는 비밀("사실은 은하 경찰의 정보원")이 있다. 장면에 나오면 "숨긴 설정의 낱말"로 표시한다.
 - 조사를 대충 떼는 낱말 어림이다. 판단은 사람이 한다.
 
+**서술이 상태를 지키는지.** 엔진이 정한 상태를 실제 모델이 뒤집지 않는지 잰다(`evals/state/`, `scripts/eval_state.py`). 서버도 DB 도 쓰지 않는다.
+- 장면은 여덟이다(`evals/state/cases.py`). 쓰러진 NPC(`downed_npc`), 죽은 NPC(`dead_npc`), 부상을 입은 PC(`injured_pc`)와 NPC(`injured_npc`), 다 나은 치료(`treatment_healed`)와 덧난 치료(`treatment_worse`), 틀린 지목(`naming_wrong`)과 맞은 지목(`naming_right`).
+- 장면마다 서버와 같은 모양의 서술 요청을 채우고 서버의 조립을 그대로 거친다. 틀이 바뀌면 장면도 새 틀로 간다. 부상의 이름과 사실은 내장 템플릿의 것이다.
+- 지켜야 할 것을 낱말로 검사한다. 나오면 안 되는 낱말(되살아남, 실패를 뒤집음, 전부터 있던 부상이 새로 생김, 진짜 이름, 숨긴 설정), 꼭 나와야 할 낱말(부상, 다 나음과 후유증, 덧남), 따옴표 속 글(말할 수 있는 NPC 가 없는 장면에서. 쓰러지거나 죽은 NPC 만 있거나 NPC 가 없는 장면이다. PC 는 따옴표를 쓰지 않으므로 짧은 소리까지 센다).
+- GM 메모에 진짜 이름과 비밀을 적어 둔다. 모델이 알고 있어도 플레이어가 맞히기 전에는 쓰지 않는지 본다. 맞은 지목은 이름만 드러나고 "범인이다" 같은 주장은 인정하지 않는지 본다.
+- 장면마다 `--repeat` 번(기본 3) 돌리고, 모델과 장면마다 검사가 몇 번 걸렸는지 센 표를 찍는다. 다시 시도나 다음 모델로 넘어가기는 하지 않는다. 한 번 부른 결과를 그대로 센다.
+- 낱말 어림이라 걸렸다고 틀린 것도, 안 걸렸다고 맞은 것도 아니다. 걸린 장면은 `--out` 의 파일에서 읽는다.
+- 검사의 낱말을 고친 뒤에는 `--rescore` 로 남겨 둔 보고서를 모델 없이 다시 센다.
+- 첫 측정(gemma4:26b-a4b-it-qat, 3 번씩): 쓰러짐·죽음·지목·치료 실패·판정 실패는 모두 지켰다. 전부터 입은 팔 골절을 이번 라운드에 새로 부러진 것처럼 쓴 것이 3 번 중 3 번이었다(`부상이 새로 생김`).
+
+```
+uv run python -m scripts.eval_state
+uv run python -m scripts.eval_state --repeat 5 --out $HOME\state-eval.md
+uv run python -m scripts.eval_state --case naming_wrong naming_right --repeat 10
+uv run python -m scripts.eval_state --fake
+uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
+```
+
 **AI 호출의 기록.** 언어 모델을 부를 때마다 `ai_invocations` 에 한 줄을 덧붙인다. 고치거나 지우지 않는다. 사용량과 비용, 실패를 볼 근거다.
 - 잘 끝났든(`ok`), 답은 왔지만 장면으로 쓰지 않았든(`rejected`: `cut_off`, `empty`, `too_long`), 답을 받지 못했든(`failed`: `timeout`, `unreachable`, `status_503` …) 한 번에 하나다. 실패한 호출도 시간과 토큰을 썼다.
 - 적는 것: 쓰임새(`narration`), 테이블, 라운드 번호, 그때의 방장, provider 의 종류와 모델(답에 적힌 이름, 없으면 부른 이름), 틀의 버전, 추론, 문체, 생성 설정(`temperature`, `max_tokens`), 넣은 로어북 항목(`lore_entry_ids`), 넣은 지난 일(`memory_rounds`), 걸린 시간, 토큰 수, 멈춘 이유, 모델이 쓴 글(쓰지 않은 글도).
