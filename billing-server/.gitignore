@@ -1,0 +1,5 @@
+# billing-server/.gitignore
+# go build 가 현재 폴더에 남기는 실행 파일. go run 은 남기지 않는다
+/server
+/server.exe
+/bin/
