@@ -80,6 +80,7 @@ func toEntry(row walletdb.ListEntriesRow) Entry {
 		Reason:      Reason(row.Reason),
 		Amount:      row.Amount,
 		OrderID:     row.OrderID,
+		HoldID:      row.HoldID,
 		CreatedAt:   row.CreatedAt,
 	}
 }

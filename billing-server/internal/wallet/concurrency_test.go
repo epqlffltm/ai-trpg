@@ -132,3 +132,11 @@ func TestConcurrentDepositsGrantsAndSpendsKeepTheBooksStraight(t *testing.T) {
 	}
 	f.wantBooksToMatch()
 }
+
+// atomicCounter 는 여러 흐름이 0 부터 차례로 번호를 하나씩 가져가게 한다.
+type atomicCounter struct{ next atomic.Int64 }
+
+// take 는 다음 번호를 돌려준다. 처음은 0 이다.
+func (c *atomicCounter) take() int {
+	return int(c.next.Add(1) - 1)
+}

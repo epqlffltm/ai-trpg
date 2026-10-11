@@ -76,6 +76,10 @@ const (
 	ReasonSpend Reason = "spend"
 	// ReasonExpire 는 무료 크레딧이 기한이 지나 사라졌다는 뜻이다.
 	ReasonExpire Reason = "expire"
+	// ReasonHold 는 값을 치르기 전에 크레딧을 먼저 빼 뒀다는 뜻이다(홀드).
+	ReasonHold Reason = "hold"
+	// ReasonRelease 는 홀드로 빼 둔 크레딧이 돌아왔다는 뜻이다.
+	ReasonRelease Reason = "release"
 )
 
 // Policy 는 크레딧을 다루는 규칙 가운데 설정으로 바꿀 수 있는 것들이다.
@@ -111,7 +115,9 @@ type Entry struct {
 	// Amount 는 늘었으면 양수, 줄었으면 음수다.
 	Amount credit.Amount
 	// OrderID 는 이 크레딧이 들어온 주문이다. 주문으로 들어온 줄이 아니면 nil 이다.
-	OrderID   *uuid.UUID
+	OrderID *uuid.UUID
+	// HoldID 는 이 줄을 남긴 홀드다. 홀드로 빠지거나(hold) 돌아온(release) 줄이 아니면 nil 이다.
+	HoldID    *uuid.UUID
 	CreatedAt time.Time
 }
 

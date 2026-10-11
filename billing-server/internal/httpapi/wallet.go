@@ -45,7 +45,9 @@ type entryBody struct {
 	Reason      wallet.Reason `json:"reason"`
 	Amount      credit.Amount `json:"amount"`
 	// OrderID 는 이 크레딧이 들어온 주문이다. 주문으로 들어온 줄이 아니면 null 이다.
-	OrderID   *uuid.UUID `json:"order_id"`
+	OrderID *uuid.UUID `json:"order_id"`
+	// HoldID 는 이 줄을 남긴 홀드다. 빠진 줄(hold)과 돌아온 줄(release)이 같은 번호를 갖는다. 아니면 null 이다.
+	HoldID    *uuid.UUID `json:"hold_id"`
 	CreatedAt time.Time  `json:"created_at"`
 }
 
@@ -117,6 +119,7 @@ func toEntriesBody(page wallet.Page) entriesBody {
 			Reason:      entry.Reason,
 			Amount:      entry.Amount,
 			OrderID:     entry.OrderID,
+			HoldID:      entry.HoldID,
 			CreatedAt:   entry.CreatedAt,
 		})
 	}
