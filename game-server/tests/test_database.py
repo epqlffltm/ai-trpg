@@ -2,6 +2,7 @@
 
 """
 DB 연결을 검증한다. 테스트가 정말로 테스트용 스키마에서 도는가.
+다른 서비스의 스키마에 닿지 못하는지는 test_schema_isolation.py 가 본다.
 """
 
 from sqlalchemy import text
@@ -27,13 +28,6 @@ async def test_connects_as_the_game_account(session: AsyncSession):
 
     # 관리용 슈퍼유저로 접속하면, 권한 때문에 실패해야 할 코드가 통과한다
     assert user == 'game'
-
-
-async def test_cannot_read_the_auth_schema(session: AsyncSession):
-    can_use = await session.scalar(text("SELECT has_schema_privilege(current_user, 'auth', 'USAGE')"))
-
-    # 인증 서버의 테이블을 직접 읽지 않는다는 것을 약속이 아니라 DB 권한으로 지킨다
-    assert can_use is False
 
 
 async def test_the_extension_schema_comes_after_the_test_schema(session: AsyncSession):
