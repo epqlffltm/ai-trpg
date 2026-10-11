@@ -27,9 +27,9 @@ from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
 from app.engine.dice import ScriptedDice
 from app.tables import repository, rolls, service
+from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableRoll
 from app.tables.schemas import TableCreate
-from app.tables.service import Conflict, TableConflictError
 from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer

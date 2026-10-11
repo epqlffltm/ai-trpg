@@ -28,9 +28,9 @@ from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
 from app.engine.sheet import Sheet
 from app.tables import replacements, repository, service, sheets
+from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable
 from app.tables.schemas import CharacterUpdate, TableCreate
-from app.tables.service import Conflict, TableConflictError
 from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer

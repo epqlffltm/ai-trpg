@@ -28,6 +28,7 @@ from app.personas.models import Persona
 from app.personas.service import Conflict, PersonaConflictError
 from app.tables import service as tables
 from app.tables import sheets
+from app.tables import state as table_state
 from app.tables.models import TableMember
 
 
@@ -74,7 +75,7 @@ async def save_character(session: AsyncSession, user_id: uuid.UUID, table_id: uu
     같은 캐릭터를 여러 번 저장하면 여러 개가 생긴다. 보관함의 캐릭터는 저장한 때의 사본이다.
     """
     table = await tables.get_table(session, user_id, table_id)
-    member = tables.require_member(table, user_id)
+    member = table_state.require_member(table, user_id)
     require_keepable(member)
     snapshot = read_snapshot(table.content)
     persona = from_member(user_id, member, starting_abilities(snapshot, member), snapshot.rulebook.title)
