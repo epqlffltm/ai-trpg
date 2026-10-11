@@ -1,6 +1,6 @@
 // billing-server/cmd/server/main.go
 
-// 결제 서버의 시작점. 설정을 읽고, DB 연결 풀을 만들고, HTTP 서버를 띄운다.
+// 결제 서버의 시작점. 설정을 읽고, DB 연결 풀과 토큰 검증기를 만들고, HTTP 서버를 띄운다.
 //
 //	go run ./cmd/server
 //
@@ -19,9 +19,11 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
 )
 
 const (
@@ -57,8 +59,17 @@ func run() error {
 	defer pool.Close()
 
 	httpapi.SetMode(settings.Debug)
-	server := newServer(settings, httpapi.NewRouter(httpapi.Dependencies{DB: pool}))
-	return serve(ctx, server)
+	router := httpapi.NewRouter(httpapi.Dependencies{DB: pool, Verifier: newVerifier(settings)})
+	return serve(ctx, newServer(settings, router))
+}
+
+// newVerifier 는 access 토큰을 검증하는 것을 만든다. 만드는 것만으로는 인증 서버를 부르지 않는다.
+// 처음 토큰을 검증할 때 공개키를 가져온다. 그래서 인증 서버가 죽어 있어도 이 서버는 뜬다.
+func newVerifier(settings config.Settings) *auth.Verifier {
+	// 다른 서버에 요청을 보내는 클라이언트. 시간 제한은 요청마다 부르는 쪽이 건다(jwks.FetchTimeout)
+	fetcher := jwks.HTTPFetcher{Client: &http.Client{}, URL: settings.AuthJWKSURL}
+	keys := jwks.NewCache(fetcher, time.Now)
+	return auth.NewVerifier(keys, settings.JWTIssuer, settings.JWTAudience, time.Now)
 }
 
 // loadDotEnv 는 현재 폴더의 .env 를 환경 변수로 올린다. 파일이 없으면 아무것도 하지 않는다.
