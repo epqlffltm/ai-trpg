@@ -14,6 +14,9 @@
  *
  * 글을 돌려줄 때마다 댓글 수(comment_count)를 함께 싣는다. 수는 따로 센다(comment-counts/).
  * 목록은 그 쪽의 글을 모아 한 번에 센다. 방금 쓴 글은 세지 않는다. 댓글이 있을 수 없다.
+ *
+ * 목록의 첫 쪽에는 고정한 글(pinned)을 따로 싣는다. 고정한 글은 items 와 total 에 들지 않는다.
+ * 고정하고 풀어도 다른 글의 쪽이 밀리지 않는다. 고정하고 푸는 주소는 pins.controller.ts 에 있다.
  */
 
 import {
@@ -38,11 +41,13 @@ import { CommentCountsService } from '../comment-counts/comment-counts.service.j
 import { countOf } from '../comment-counts/counts.js';
 import { CreatePostDto } from './create-post.dto.js';
 import { ListPostsQuery } from './list-posts.query.js';
-import { Page, pageOf } from './page.js';
+import { DEFAULT_PAGE } from './page.js';
+import { PinsService } from './pins.service.js';
 import { PostIdPipe } from './post-id.pipe.js';
 import {
+  PostListResponse,
   PostResponse,
-  PostSummaryResponse,
+  PostSummary,
   toPostResponse,
   toPostSummaryResponse,
 } from './post.response.js';
@@ -54,30 +59,39 @@ export class PostsController {
   constructor(
     private readonly boards: BoardsService,
     private readonly posts: PostsService,
+    private readonly pins: PinsService,
     private readonly commentCounts: CommentCountsService,
   ) {}
 
-  /** 한 게시판의 글 목록을 한 쪽 돌려준다. 새 글부터다. 본문은 싣지 않는다. */
+  /** 한 게시판의 글 목록을 한 쪽 돌려준다. 새 글부터다. 본문은 싣지 않는다. 첫 쪽에는 고정한 글을 따로 싣는다. */
   @Public()
   @Get('boards/:slug/posts')
   @HttpCode(HttpStatus.OK)
   async list(
     @Param('slug', BoardSlugPipe) slug: string,
     @Query() query: ListPostsQuery,
-  ): Promise<Page<PostSummaryResponse>> {
+  ): Promise<PostListResponse> {
+    const now = new Date();
     const board = await this.boards.getBySlug(slug);
-    const page = await this.posts.listIn(board, query.page, query.size);
+    const page = await this.posts.listIn(board, query.page, query.size, now);
+    const pinned =
+      query.page === DEFAULT_PAGE ? await this.pins.listIn(board, now) : [];
     const counts = await this.commentCounts.countForMany(
-      page.items.map((post) => post.id),
+      [...pinned, ...page.items].map((post) => post.id),
     );
-    return pageOf(
-      page.items.map((post) =>
-        toPostSummaryResponse(post, board.slug, countOf(counts, post.id)),
-      ),
-      page.page,
-      page.size,
-      page.total,
-    );
+    const toSummary = (post: PostSummary) =>
+      toPostSummaryResponse(post, {
+        boardSlug: board.slug,
+        commentCount: countOf(counts, post.id),
+        now,
+      });
+    return {
+      pinned: pinned.map(toSummary),
+      items: page.items.map(toSummary),
+      page: page.page,
+      size: page.size,
+      total: page.total,
+    };
   }
 
   /** 게시판에 글을 쓴다. 쓴 글을 돌려준다. */
@@ -90,7 +104,11 @@ export class PostsController {
   ): Promise<PostResponse> {
     const board = await this.boards.getBySlug(slug);
     const post = await this.posts.create(board, user.userId, input);
-    return toPostResponse(post, board.slug, 0);
+    return toPostResponse(post, {
+      boardSlug: board.slug,
+      commentCount: 0,
+      now: new Date(),
+    });
   }
 
   /** 글 하나를 본문까지 돌려준다. */
@@ -99,8 +117,11 @@ export class PostsController {
   @HttpCode(HttpStatus.OK)
   async read(@Param('id', PostIdPipe) id: string): Promise<PostResponse> {
     const post = await this.posts.get(id);
-    const commentCount = await this.commentCounts.countFor(post.id);
-    return toPostResponse(post, post.board.slug, commentCount);
+    return toPostResponse(post, {
+      boardSlug: post.board.slug,
+      commentCount: await this.commentCounts.countFor(post.id),
+      now: new Date(),
+    });
   }
 
   /** 글을 고친다. 보낸 칸만 고친다. 고친 글을 돌려준다. */
@@ -112,8 +133,11 @@ export class PostsController {
     @CurrentUser() user: AccessClaims,
   ): Promise<PostResponse> {
     const post = await this.posts.update(id, user.userId, changes);
-    const commentCount = await this.commentCounts.countFor(post.id);
-    return toPostResponse(post, post.board.slug, commentCount);
+    return toPostResponse(post, {
+      boardSlug: post.board.slug,
+      commentCount: await this.commentCounts.countFor(post.id),
+      now: new Date(),
+    });
   }
 
   /** 글을 지운다. 돌려줄 내용이 없다. */
