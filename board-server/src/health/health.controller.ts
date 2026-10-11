@@ -8,12 +8,14 @@
  */
 
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import { Public } from '../auth/public.decorator.js';
 
 /** 살아 있다는 답의 모양. */
 export interface HealthResponse {
   status: 'ok';
 }
 
+@Public()
 @Controller('health')
 export class HealthController {
   /**

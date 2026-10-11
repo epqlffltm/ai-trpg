@@ -16,6 +16,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { Public } from '../auth/public.decorator.js';
 import { DatabaseHealth } from '../database/database.health.js';
 
 /** 준비됐는지의 답의 모양. */
@@ -23,6 +24,7 @@ export interface ReadinessResponse {
   status: 'ok' | 'unavailable';
 }
 
+@Public()
 @Controller('health/ready')
 export class ReadinessController {
   private readonly logger = new Logger(ReadinessController.name);

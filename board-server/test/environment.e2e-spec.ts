@@ -42,6 +42,18 @@ describe('설정이 틀린 서버', () => {
     await expect(compileApp()).rejects.toThrow('DATABASE_URL');
   });
 
+  it('공개키 주소를 적지 않으면 앱이 만들어지지 않는다', async () => {
+    vi.stubEnv('AUTH_JWKS_URL', '');
+
+    await expect(compileApp()).rejects.toThrow('AUTH_JWKS_URL');
+  });
+
+  it('토큰의 대상에 이름을 여럿 적으면 앱이 만들어지지 않는다', async () => {
+    vi.stubEnv('JWT_AUDIENCE', 'ai-trpg-auth,ai-trpg-board');
+
+    await expect(compileApp()).rejects.toThrow('JWT_AUDIENCE');
+  });
+
   it('스키마 이름의 모양이 틀리면 앱이 만들어지지 않는다', async () => {
     vi.stubEnv('DB_SCHEMA', 'board; DROP SCHEMA board');
 
