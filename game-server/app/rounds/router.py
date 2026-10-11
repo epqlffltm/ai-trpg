@@ -16,9 +16,10 @@ from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
 from app.core.dice import Rolling
 from app.rounds import service
+from app.rounds.cast import CastMember
 from app.rounds.closing import RoundCloser
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.rounds.schemas import DeclarationOut, DeclarationUpdate, RoundOut, RoundPage
+from app.rounds.schemas import DeclarationOut, DeclarationUpdate, PersonOut, RoundOut, RoundPage, SceneCastOut
 from app.rounds.service import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.tables.models import GameTable, TableStatus
 
@@ -91,6 +92,12 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
     )
 
 
+def to_cast(round_: Round, cast: list[CastMember]) -> SceneCastOut:
+    """이번 장면의 인물들을 앉은 사람에게 보여 주는 응답으로 바꾼다. 이름과 생사만 싣는다."""
+    people = [PersonOut(id=member.entry_id, name=member.name, status=member.npc.status) for member in cast]
+    return SceneCastOut(round=round_.number, people=people)
+
+
 # --- 서비스의 예외를 응답으로 바꾼다. 앱에 한 번 등록한다(app/main.py) ---
 
 
@@ -115,11 +122,17 @@ async def handle_action_not_in_rules(request: Request, error: ActionNotInRulesEr
     )
 
 
+# 겨눌 수 없는 대상의 칸마다 알리는 말
+TARGET_ERRORS = {
+    'target': 'action.target 이 이 테이블에 앉은 사람이 아닙니다.',
+    'npc': 'action.npc 가 이번 장면의 인물이 아닙니다.',
+}
+
+
 async def handle_action_target(request: Request, error: ActionTargetError) -> JSONResponse:
-    """ "행동의 대상이 이 테이블에 앉은 사람이 아니다"는 422 다."""
+    """ "행동의 대상을 겨눌 수 없다"는 422 다. 앉은 사람이 아니거나, 이번 장면의 인물이 아니다."""
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={'detail': 'action.target 이 이 테이블에 앉은 사람이 아닙니다.'},
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={'detail': TARGET_ERRORS[error.field]}
     )
 
 
@@ -139,6 +152,17 @@ async def read_current_round(table_id: uuid.UUID, user: CurrentUser, session: Se
     """가장 최근 라운드를 돌려준다. 진행 중인 테이블에서는 지금 선언을 받고 있는 라운드다."""
     table, round_ = await service.get_current_round(session, user.user_id, table_id)
     return to_round(table, round_, user.user_id)
+
+
+@router.get('/current/people', response_model=SceneCastOut, status_code=status.HTTP_200_OK)
+async def read_scene_cast(table_id: uuid.UUID, user: CurrentUser, session: Session) -> SceneCastOut:
+    """
+    가장 최근 라운드의 장면에 나온 인물들을 돌려준다. 행동의 npc 칸에 이 목록의 id 를 적는다.
+
+    장면에 이름이나 호칭이 나온 인물만 들어간다. 테이블의 인물 전부가 아니다.
+    """
+    round_, cast = await service.get_scene_cast(session, user.user_id, table_id)
+    return to_cast(round_, cast)
 
 
 @router.get('/{number}', response_model=RoundOut, status_code=status.HTTP_200_OK)
