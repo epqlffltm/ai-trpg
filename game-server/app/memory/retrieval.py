@@ -12,7 +12,8 @@
      거리가 keyword_max_distance 보다 멀면 넣지 않는다. 임베딩이 실패해 거리를 모르면 넣는다.
   2. 벡터: 찾는 글(이번 장면 + 선언)과의 거리가 max_distance 이하인 것, 가까운 순.
 인물로 고른 것을 먼저, 그다음 가까운 순으로, count 개와 글자 수 max_chars 안에서 넣는다.
-기억 하나의 글은 note_max_chars 자에서 문장 끝으로 자른다(결과의 서술이 길 수 있다).
+기억 하나의 글은 NOTE_MAX_CHARS 자 안에 넣는다. 한 말이 길어도 결과의 자리를 먼저 남기고,
+판정이 있던 줄에는 성공과 실패를 붙인다(app/memory/texts.py 의 note_text).
 
 지난 기록에 이미 들어 있는 라운드(최근 3 라운드)는 고르지 않는다. 같은 일을 두 번 넣지 않는다.
 
@@ -39,8 +40,8 @@ from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot, read_snapshot
 from app.lore.retrieval import mentions, query_text
 from app.lore.texts import version_entries
-from app.memory import repository
-from app.memory.texts import Memory, clip, memories_of, memory_text
+from app.memory import repository, texts
+from app.memory.texts import Memory, memories_of, memory_text
 from app.rounds.narration_request import to_past
 from app.rounds.narrator import MemoryNote, NarrationRequest
 from app.rounds.prompt import HISTORY_ROUNDS
@@ -53,6 +54,10 @@ MEMORY_COUNT = 2
 MEMORY_MAX_CHARS = 2000
 # 기억 하나의 글자 수의 상한. 넘으면 문장 끝에서 자른다
 NOTE_MAX_CHARS = 1000
+# 그중 한 말(선언들)이 쓰는 글자 수의 상한. 결과가 길 때 한 말은 여기까지만 쓰고, 나머지는 결과의 자리다.
+# 선언 하나가 1,000자까지라(DECLARATION_MAX_LENGTH) 나누지 않으면 한 말만으로 상한이 차서 결과가 통째로 잘린다.
+# 결과가 짧으면 남는 자리는 한 말이 쓴다. 숫자는 시작값이다. 실제 모델의 서술로 재서 고친다(scripts/try_memory.py)
+NOTE_LINES_MAX_CHARS = 400
 # 이보다 먼 기억은 뜻으로 고르지 않는다. bge-m3 로 잰 값이다(평가: 정답인 기억은 중앙 0.40·75% 0.44,
 # 그 밖의 기억은 25% 0.49·중앙 0.54. 0.45 면 관련 없는 장면에도 지난 일을 채웠다). 설정 MEMORY_MAX_DISTANCE 의 기본값
 MAX_DISTANCE = 0.40
@@ -118,8 +123,8 @@ def nearest_within(memories: Sequence[Memory], distances: Mapping[int, float], m
 
 
 def note_text(memory: Memory) -> str:
-    """기억을 프롬프트에 넣을 글. NOTE_MAX_CHARS 에서 문장 끝으로 자른다."""
-    return clip(memory_text(memory), NOTE_MAX_CHARS)
+    """기억을 프롬프트에 넣을 글. NOTE_MAX_CHARS 자 안에서 결과를 지키며 자른다(app/memory/texts.py)."""
+    return texts.note_text(memory, NOTE_MAX_CHARS, NOTE_LINES_MAX_CHARS)
 
 
 def pick(ordered: Sequence[Memory], count: int, max_chars: int) -> list[Memory]:

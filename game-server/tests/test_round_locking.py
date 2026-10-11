@@ -13,6 +13,7 @@
 
 import asyncio
 import uuid
+from datetime import datetime
 
 import pytest
 from fastapi import FastAPI
@@ -81,14 +82,19 @@ class RecordingScheduler:
 
     def __init__(self) -> None:
         self.scheduled: list[tuple[uuid.UUID, int]] = []
+        # 맡길 때마다 함께 받은 닫기 시작한 시각
+        self.started: list[datetime] = []
 
-    def schedule(self, table_id: uuid.UUID, number: int) -> None:
+    def schedule(self, table_id: uuid.UUID, number: int, started: datetime) -> None:
         self.scheduled.append((table_id, number))
+        self.started.append(started)
 
 
 async def narrate(app: FastAPI, table: GameTable, number: int) -> Round:
     """맡겨진 서술을 직접 돌리고, 그 뒤의 가장 최근 라운드를 돌려준다."""
-    await closing.narrate_round(app.state.session_factory, FakeNarrator(), table.id, number)
+    async with app.state.session_factory() as fresh:
+        started = (await repository.find_round(fresh, table.id, number)).closing_at
+    await closing.narrate_round(app.state.session_factory, FakeNarrator(), table.id, number, started)
     async with app.state.session_factory() as fresh:
         return await repository.find_latest_round(fresh, table.id)
 
@@ -116,6 +122,9 @@ async def test_the_last_two_declarations_close_the_round_once(
     _, closing_round = await declaring
     assert (closing_round.number, closing_round.status) == (1, 'closing')
     assert scheduler.scheduled == [(table.id, 1)]
+    # 저장한 닫기 시작한 시각을 함께 넘긴다. 작업이 이것으로 자기 차례인지 안다
+    async with app.state.session_factory() as fresh:
+        assert scheduler.started == [(await repository.find_round(fresh, table.id, 1)).closing_at]
 
     latest = await narrate(app, table, 1)
     assert latest.number == 2
