@@ -12,7 +12,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import { Board } from '../boards/board.entity.js';
 import { OperatorsService } from '../operators/operators.service.js';
 import { offsetOf, Page, pageOf } from './page.js';
@@ -22,14 +22,15 @@ import {
   notYourPostToDelete,
   notYourPostToEdit,
   operatorOnlyBoard,
+  operatorOnlyDelete,
   postNotFound,
 } from './posts.errors.js';
 import {
   canDelete,
   canEdit,
   canWrite,
-  isAuthor,
   isOperatorOnly,
+  needsOperatorCheckToDelete,
 } from './posts.policy.js';
 
 /** 새 글에 적는 값. */
@@ -42,6 +43,20 @@ export interface NewPost {
 export interface PostChanges {
   title?: string;
   content?: string;
+}
+
+/**
+ * 한 게시판의, 지금 고정되어 있지 않은 글을 고르는 조건. 고정한 적이 없거나 고정이 끝난 글이다.
+ * 둘 중 하나면 되므로 조건이 둘이다(TypeORM 은 배열을 OR 로 읽는다).
+ */
+export function notPinnedIn(
+  boardId: number,
+  now: Date,
+): FindOptionsWhere<Post>[] {
+  return [
+    { boardId, pinnedUntil: IsNull() },
+    { boardId, pinnedUntil: LessThanOrEqual(now) },
+  ];
 }
 
 /** 고칠 칸이 하나라도 있는가. */
@@ -60,17 +75,25 @@ export class PostsService {
    * 한 게시판의 글을 한 쪽 돌려준다. 번호가 큰 것(새 글)부터다. 본문은 읽지 않는다.
    *
    * 지운 글은 목록에도 전체 개수에도 들지 않는다.
+   * 지금 고정되어 있는 글도 들지 않는다. 그 글들은 따로 읽어 목록의 위에 싣는다(pins.service.ts).
+   * 고정이 끝난 글은 제 번호의 자리로 돌아온다.
    */
-  async listIn(board: Board, page: number, size: number): Promise<Page<Post>> {
+  async listIn(
+    board: Board,
+    page: number,
+    size: number,
+    now: Date,
+  ): Promise<Page<Post>> {
     const [items, total] = await this.posts.findAndCount({
       select: {
         id: true,
         authorId: true,
         title: true,
+        pinnedUntil: true,
         createdAt: true,
         updatedAt: true,
       },
-      where: { boardId: board.id },
+      where: notPinnedIn(board.id, now),
       order: { id: 'DESC' },
       skip: offsetOf(page, size),
       take: size,
@@ -99,6 +122,8 @@ export class PostsService {
         authorId,
         title: input.title,
         content: input.content,
+        pinnedAt: null,
+        pinnedUntil: null,
       }),
     );
     post.board = board;
@@ -123,11 +148,17 @@ export class PostsService {
     return this.posts.save(post);
   }
 
-  /** 글을 지운다. 없는 글이면 404, 글쓴이도 운영자도 아니면 403 이다. 행은 남기고 지운 시각을 적는다. */
+  /**
+   * 글을 지운다. 없는 글이면 404, 지울 수 없는 사람이면 403 이다. 행은 남기고 지운 시각을 적는다.
+   * 고정한 글을 지우면 고정한 글의 목록에서도 빠진다. 지운 글은 어느 목록에도 들지 않는다.
+   */
   async remove(id: string, userId: string): Promise<void> {
     const post = await this.get(id);
-    if (!canDelete(post, userId, await this.isOperatorIfNeeded(post, userId))) {
-      throw notYourPostToDelete();
+    const isOperator = await this.isOperatorIfNeeded(post, userId);
+    if (!canDelete(post, post.board, userId, isOperator)) {
+      throw isOperatorOnly(post.board)
+        ? operatorOnlyDelete()
+        : notYourPostToDelete();
     }
     await this.posts.softDelete({ id: post.id });
   }
@@ -141,12 +172,12 @@ export class PostsService {
     }
   }
 
-  /** 운영자인지 답한다. 글쓴이 자신이면 묻지 않는다. 글쓴이는 운영자가 아니어도 지울 수 있다. */
+  /** 운영자인지 답한다. 지워도 되는지 아는 데 필요 없으면 DB 에 묻지 않고 아니라고 답한다. */
   private async isOperatorIfNeeded(
     post: Post,
     userId: string,
   ): Promise<boolean> {
-    if (isAuthor(post, userId)) {
+    if (!needsOperatorCheckToDelete(post, post.board, userId)) {
       return false;
     }
     return this.operators.isOperator(userId);

@@ -8,10 +8,13 @@
  *   - 글쓴이는 인증 서버의 public_id 로만 가리킨다. 이름은 이 테이블에 없다.
  *   - 지운 글은 행을 없애지 않고 지운 시각을 적는다(deleted_at). 읽는 쿼리는 지운 글을 알아서 뺀다.
  *     행을 없애면 나중에 붙을 댓글과 신고의 기록이 가리킬 곳을 잃는다.
+ *   - 고정한 글은 고정한 시각(pinned_at)과 고정이 끝나는 시각(pinned_until)을 적는다. 둘은 함께 있거나 함께 없다.
+ *     끝나는 시각이 지나면 고정이 풀린 것으로 읽는다. 열을 비우는 작업을 따로 돌리지 않는다(pins.policy.ts).
  *   - 제목과 본문은 받은 글자를 그대로 저장한다. 서버는 HTML 로 해석하지 않는다. 화면에 그릴 때 글자로 그린다.
  */
 
 import {
+  Check,
   Column,
   CreateDateColumn,
   DeleteDateColumn,
@@ -30,8 +33,15 @@ export const TITLE_MAX_LENGTH = 100;
 export const CONTENT_MAX_LENGTH = 20000;
 
 @Entity('posts')
+// 고정한 시각과 끝나는 시각은 함께 있거나 함께 없다. 하나만 있는 행은 고정인지 아닌지 알 수 없다
+@Check('ck_posts_pin_pair', '("pinned_at" IS NULL) = ("pinned_until" IS NULL)')
 // 한 게시판의 글을 번호가 큰 것부터 읽는다. 글 목록이 이 색인을 탄다
 @Index('ix_posts_board_id_id', ['boardId', 'id'])
+// 한 게시판의 지금 고정되어 있는 글을 읽고 센다(pinned_until > 지금).
+// 고정한 적이 있는 글만 담는 색인이라 작다. 글의 대부분은 고정하지 않은 글이다
+@Index('ix_posts_board_id_pinned_until', ['boardId', 'pinnedUntil'], {
+  where: '"pinned_until" IS NOT NULL',
+})
 export class Post {
   @PrimaryGeneratedColumn('identity', {
     type: 'bigint',
@@ -57,6 +67,14 @@ export class Post {
 
   @Column({ type: 'text' })
   content: string;
+
+  /** 고정한 시각. 고정한 적이 없거나 풀었으면 null 이다. 고정한 글끼리는 나중에 고정한 것이 위에 온다 */
+  @Column({ name: 'pinned_at', type: 'timestamptz', nullable: true })
+  pinnedAt: Date | null;
+
+  /** 고정이 끝나는 시각. 이 시각이 지나면 고정이 풀린 것으로 읽는다 */
+  @Column({ name: 'pinned_until', type: 'timestamptz', nullable: true })
+  pinnedUntil: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
