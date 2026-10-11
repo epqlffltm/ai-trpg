@@ -151,8 +151,8 @@ func TestEntriesReturnsLinesAndTheNextCursor(t *testing.T) {
 		t.Fatalf("상태 코드 = %d, 기대 = %d", response.Code, http.StatusOK)
 	}
 	want := `{"entries":[` +
-		`{"id":"42","operation_id":"99999999-8888-4777-8666-555555555555","kind":"paid","reason":"spend","amount":"-20","order_id":null,"created_at":"2026-03-02T09:00:00Z"},` +
-		`{"id":"41","operation_id":"99999999-8888-4777-8666-555555555555","kind":"free","reason":"spend","amount":"-30","order_id":null,"created_at":"2026-03-02T09:00:00Z"}` +
+		`{"id":"42","operation_id":"99999999-8888-4777-8666-555555555555","kind":"paid","reason":"spend","amount":"-20","order_id":null,"hold_id":null,"created_at":"2026-03-02T09:00:00Z"},` +
+		`{"id":"41","operation_id":"99999999-8888-4777-8666-555555555555","kind":"free","reason":"spend","amount":"-30","order_id":null,"hold_id":null,"created_at":"2026-03-02T09:00:00Z"}` +
 		`],"next_before":"41"}`
 	if got := body(response); got != want {
 		t.Errorf("본문 = %s\n기대 = %s", got, want)

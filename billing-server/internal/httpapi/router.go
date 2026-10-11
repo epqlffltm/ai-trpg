@@ -36,7 +36,11 @@ type Dependencies struct {
 	Notifier PaymentNotifier
 	// WebhookSecret 은 결제 대행사의 알림에 붙은 서명을 확인하는 비밀이다.
 	WebhookSecret string
-	// Now 는 지금 시각을 돌려준다. 알림의 서명이 방금 것인지 볼 때 쓴다.
+	// Holds 는 홀드를 걸고, 확정하고, 돌려준다. 게임 서버가 부른다.
+	Holds HoldService
+	// GameServerSecret 은 게임 서버가 보낸 요청의 서명을 확인하는 비밀이다.
+	GameServerSecret string
+	// Now 는 지금 시각을 돌려준다. 서명이 방금 것인지 볼 때 쓴다.
 	Now func() time.Time
 	// Logger 는 요청의 기록을 남기는 곳이다. 넣지 않으면 프로세스의 기본 로거(slog.Default)다.
 	Logger *slog.Logger
@@ -89,6 +93,13 @@ func NewRouter(deps Dependencies) *gin.Engine {
 
 	// 결제 대행사가 부르는 주소다. 로그인 묶음 밖에 둔다. 토큰 대신 본문의 서명을 확인한다
 	router.POST(APIPrefix+"/webhooks/payment", paymentWebhook(deps.Notifier, deps.WebhookSecret, deps.Now))
+
+	// 우리 서버(게임 서버)가 부르는 주소들이다. 로그인 묶음 밖에 둔다. 사용자의 토큰이 아니라 요청의 서명을 확인한다.
+	// 사용자의 토큰으로는 들어오지 못한다. "이 사용자의 크레딧을 빼라"를 사용자가 직접 부를 수 없다
+	service := router.Group(APIPrefix+"/service", requireService(GameServer, deps.GameServerSecret, deps.Now))
+	service.POST("/holds", placeHold(deps.Holds))
+	service.POST("/holds/capture", captureHold(deps.Holds))
+	service.POST("/holds/release", releaseHold(deps.Holds))
 
 	return router
 }

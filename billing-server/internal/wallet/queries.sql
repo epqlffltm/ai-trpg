@@ -64,11 +64,26 @@ WHERE id = sqlc.arg(id);
 
 -- name: InsertEntry :exec
 -- 원장에 한 줄을 덧붙인다.
-INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, order_id, created_at)
+INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, order_id, hold_id, created_at)
 VALUES (
     sqlc.arg(user_id), sqlc.arg(operation_id), sqlc.arg(kind), sqlc.arg(reason),
-    sqlc.arg(amount), sqlc.narg(grant_id), sqlc.narg(order_id), sqlc.arg(now)
+    sqlc.arg(amount), sqlc.narg(grant_id), sqlc.narg(order_id), sqlc.narg(hold_id), sqlc.arg(now)
 );
+
+-- name: ListHoldLines :many
+-- 홀드로 뺀 줄들을 읽는다. 어디서 얼마를 뺐는지가 여기에 있다. 돌려줄 때 이 줄들을 거꾸로 한다.
+-- 지갑의 줄을 잠근 뒤에 부른다.
+SELECT kind, grant_id, amount
+FROM ledger_entries
+WHERE user_id = sqlc.arg(user_id) AND hold_id = sqlc.arg(hold_id)::UUID AND reason = 'hold'
+ORDER BY id;
+
+-- name: ReturnToFreeGrant :exec
+-- 지급 묶음에 amount 만큼 돌려놓는다. 준 양보다 많아지면 CHECK 가 막는다.
+-- 사라지는 시각은 고치지 않는다. 그사이에 기한이 지났으면 돌아온 것도 함께 사라진다.
+UPDATE free_grants
+SET remaining = remaining + sqlc.arg(amount)
+WHERE id = sqlc.arg(id);
 
 -- name: GetBalance :one
 -- 산 크레딧과, 아직 사라지지 않은 무료 크레딧을 한 번에 읽는다.
@@ -81,7 +96,7 @@ WHERE g.user_id = sqlc.arg(user_id) AND g.remaining > 0 AND g.expires_at > sqlc.
 
 -- name: ListEntries :many
 -- 한 사용자의 원장을 최근 것부터 읽는다. before 보다 앞선(번호가 작은) 줄만 읽는다.
-SELECT id, operation_id, kind, reason, amount, order_id, created_at
+SELECT id, operation_id, kind, reason, amount, order_id, hold_id, created_at
 FROM ledger_entries
 WHERE user_id = sqlc.arg(user_id) AND id < sqlc.arg(before)
 ORDER BY id DESC
