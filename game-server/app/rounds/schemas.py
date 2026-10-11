@@ -10,7 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from app.engine.action import CheckAction
+from app.engine.action import Action
 from app.engine.death import Fate
 from app.engine.health import ChangeKind
 from app.rounds.models import DECLARATION_MAX_LENGTH, RoundStatus
@@ -25,29 +25,30 @@ class DeclarationUpdate(BaseModel):
     선언을 낼 때 받는 값. 다시 내면 앞의 것을 통째로 바꾼다. 행동을 빼고 다시 내면 행동도 없어진다.
 
     행동은 하나만 붙인다. 한 사람이 한 라운드에 주사위를 한 번 굴린다.
-    행동이 없으면 판정이 없는 선언이다.
+    행동은 판정(kind: check)이나 치료(kind: treat)다. 행동이 없으면 판정이 없는 선언이다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
     content: DeclarationContent
-    action: CheckAction | None = None
+    action: Action | None = None
 
 
 class InjuryRollOut(BaseModel):
     """
-    피해 뒤에 부상이 생긴 일. 큰 타격이나 쓰러짐에 엔진이 부상 표를 굴렸거나, 노려 친 타격이 성공했다.
+    부상이 생긴 일. 큰 타격이나 쓰러짐에 엔진이 부상 표를 굴렸거나, 노려 친 타격이 성공했거나,
+    오래 가는 부상이 나을 때 후유증 표를 굴렸다.
 
     injury 는 나온 부상의 이름표(규칙의 Injury.key)다. 부상이 없는 줄이면 None 이다.
     이름과 사실은 테이블의 rules 에 있다.
     """
 
-    # big_hit(큰 타격), downed(쓰러짐), called_shot(노려 치기)
+    # big_hit(큰 타격), downed(쓰러짐), called_shot(노려 치기), aftermath(후유증)
     trigger: str
     # 부상 표의 눈. 노려 쳤으면 굴리지 않아서 None 이다
     roll: int | None
     injury: str | None
-    # 짧은 부상이면 이 라운드가 닫힐 때 풀린다. 오래 가는 것과 결손은 None 이다
+    # 이 라운드가 닫힐 때 풀리거나 낫는다. 결손은 None 이다
     ends_after_round: int | None
 
 
@@ -122,6 +123,49 @@ class NpcEffectOut(BaseModel):
     injury_roll: InjuryRollOut | None = None
 
 
+class MishapOut(BaseModel):
+    """치료에 실패해 치료 실패 표를 굴린 것. 엔진이 굴렸다."""
+
+    roll: int
+    # nothing(아무 일 없음), pain(좀 아픔), worsen(덧남), fatal(즉사)
+    kind: str
+    # 덧나서 늘어난 라운드. 덧남이 아니면 None 이다
+    rounds: int | None
+    # 피해의 등급. 피해가 없으면 None 이다. 피해는 effect 나 npc_effect 에 있다
+    magnitude: str | None
+
+
+class PatientOut(BaseModel):
+    """치료받은 쪽. 캐릭터면 user_id 와 character_name, NPC 면 entry_id 와 장면의 호칭(name)이 채워진다."""
+
+    user_id: uuid.UUID | None = None
+    character_name: str | None = None
+    entry_id: uuid.UUID | None = None
+    name: str | None = None
+
+
+class TreatmentOut(BaseModel):
+    """치료의 결과. 엔진이 정한 것이다. 판정의 능력과 난이도는 규칙이 정한 치료의 것이다."""
+
+    # 치료한 부상의 이름표와 이름
+    injury: str
+    name: str
+    ability: str
+    difficulty: str
+    patient: PatientOut
+    # 치료할 부상이 아직 있었는가. 없었으면(앞사람이 먼저 고쳤다) 아무 일도 없었다
+    treated: bool
+    # 치료 뒤에 나을 라운드. 그 라운드가 닫힐 때 낫는다. 다 나았거나 치료하지 못했으면 None 이다
+    heals_after: int | None
+    healed: bool
+    # 다 나으면서 굴린 후유증 표. 후유증 표가 없는 부상이면 None 이다
+    aftermath: InjuryRollOut | None
+    # 실패해서 굴린 치료 실패 표. 성공했으면 None 이다
+    mishap: MishapOut | None
+    # 치료받던 쪽이 즉사했는가
+    died: bool
+
+
 class CheckOutcome(BaseModel):
     """판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다."""
 
@@ -142,6 +186,8 @@ class CheckOutcome(BaseModel):
     effect: EffectOut | None = None
     # 이 판정으로 NPC 의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. effect 와 함께 있지 않다
     npc_effect: NpcEffectOut | None = None
+    # 치료하는 행동이었으면 그 결과. 아니면 None 이다
+    treatment: TreatmentOut | None = None
 
 
 class DeclarationOut(BaseModel):
@@ -153,7 +199,7 @@ class DeclarationOut(BaseModel):
     # 선언을 마감하면(닫는 중부터) 모두의 것이 보인다
     content: str | None
     # 선언에 붙인 행동. 글과 같이 가린다. 행동이 없는 선언이면 보이는 사람에게도 None 이다
-    action: CheckAction | None
+    action: Action | None
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다
     outcome: CheckOutcome | None

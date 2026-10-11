@@ -12,6 +12,7 @@ from app.engine.check import Check, find_ability, find_difficulty, modifier_of, 
 from app.engine.dice import RandomDice, ScriptedDice
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
+from tests.rules import NO_TREATMENT
 
 # 점수가 곧 보정이고 6면 주사위를 쓰는 규칙. SRD5 와 다른 규칙에서도 같은 함수가 도는지 본다
 PLAIN_RULES = Ruleset.model_validate(
@@ -23,6 +24,8 @@ PLAIN_RULES = Ruleset.model_validate(
         'death_save': None,
         'difficulties': [{'key': 'normal', 'name': '보통', 'target': 7}],
         'default_difficulty': 'normal',
+        # SRD5 의 치료는 SRD5 의 난이도(어려움, 보통)를 가리킨다. 난이도가 다른 규칙이라 뺀다
+        **NO_TREATMENT,
     }
 )
 
