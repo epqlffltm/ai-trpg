@@ -1,0 +1,221 @@
+# game-server/app/rounds/records.py
+
+"""
+닫히는 라운드에서 일어난 일을 이벤트로 적는다(app/events/recorder.py).
+
+선언은 낼 때가 아니라 라운드가 닫힐 때 이벤트로 적는다. 마지막 글만 적는다.
+열려 있는 동안에는 남의 선언이 보이지 않아야 하는데, 이벤트는 앉은 사람 모두가 읽기 때문이다.
+판정, HP 의 변화, 부상, 치료, 죽음의 굴림은 이미 끝나 있다(app/rounds/judging.py). 여기서는 적기만 한다.
+일은 원인으로 잇는다(cause). 행동 → 판정 → 치료 → HP 의 변화 → 부상의 차례다.
+엔진이 한 일은 행한 사람(actor_id)을 적지 않는다. 주사위를 굴리고 상태를 바꾼 것은 플레이어가 아니라 엔진이다.
+"""
+
+import uuid
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.engine import death
+from app.engine.injury import Trigger
+from app.events import recorder
+from app.events.models import EventType, TableEvent
+from app.rounds import injuries as round_injuries
+from app.rounds import narration_request
+from app.rounds.models import Declaration, Round
+from app.rounds.state import find_declaration, has_outcome
+from app.tables.models import DeathCause, GameTable, InjurySource
+
+
+def record_check(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    판정의 결과를 이벤트로 적는다. 그 판정을 부른 행동의 이벤트(cause)에 잇는다.
+    판정으로 HP 가 바뀌었으면(앉은 사람이든 NPC 든) 바로 뒤에 그것도 적는다.
+
+    행한 사람(actor_id)을 적지 않는다. 주사위를 굴린 것은 플레이어가 아니라 엔진이다.
+    누구의 판정인지는 원인으로 이은 행동의 이벤트와 캐릭터 이름으로 안다.
+    """
+    outcome = declaration.outcome
+    ability, difficulty = narration_request.check_terms(declaration)
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': declaration.character_name,
+        'ability': ability,
+        'difficulty': difficulty,
+        'roll': outcome['roll'],
+        'modifier': outcome['modifier'],
+        'total': outcome['total'],
+        'target': outcome['target'],
+        'success': outcome['success'],
+        'hindrance': outcome.get('hindrance'),
+        'called_shot': outcome.get('called_shot'),
+    }
+    rolled = recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
+    # 치료였으면 치료의 결과를 판정 바로 뒤에 적는다. HP 의 변화(덧남, 좀 아픔)는 치료의 결과에 잇는다
+    treated = outcome.get('treatment')
+    after = rolled if treated is None else record_treatment(session, table, treated, cause=rolled)
+    effect = outcome.get('effect')
+    if effect is not None:
+        changed = record_hp_change(session, table, effect, cause=after)
+        holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
+        record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
+    npc_effect_ = outcome.get('npc_effect')
+    if npc_effect_ is not None:
+        changed = record_npc_change(session, table, npc_effect_, cause=after)
+        holder = {'entry_id': npc_effect_['entry_id'], 'name': npc_effect_['name']}
+        record_injury(session, table, npc_effect_.get('injury_roll'), holder, cause=changed)
+
+
+def record_treatment(session: AsyncSession, table: GameTable, treated: dict, cause: TableEvent) -> TableEvent:
+    """
+    치료의 결과를 이벤트로 적는다. 그 치료의 판정의 이벤트(cause)에 잇는다. 적은 이벤트를 돌려준다.
+
+    다 나았으면 부상이 끝난 것(치료로)과 후유증을, 즉사였으면 캐릭터의 죽음을 바로 뒤에 적는다.
+    행한 사람(actor_id)을 적지 않는다. 결과를 정한 것은 엔진이다.
+    """
+    round_number = cause.payload['round']
+    patient = treated['patient']
+    payload = {
+        'round': round_number,
+        **patient,
+        'injury': treated['injury'],
+        'treated': treated['treated'],
+        'heals_after': treated['heals_after'],
+        'healed': treated['healed'],
+        'mishap': treated['mishap'],
+        'died': treated['died'],
+    }
+    event = recorder.record(session, table, EventType.INJURY_TREATED, payload=payload, cause=cause)
+    if treated['healed']:
+        ended_payload = {'round': round_number, **patient, 'injury': treated['injury'], 'reason': 'treated'}
+        ended = recorder.record(session, table, EventType.INJURY_ENDED, payload=ended_payload, cause=event)
+        record_injury(session, table, treated['aftermath'], patient, cause=ended)
+    if treated['died'] and 'user_id' in patient:
+        died = {**patient, 'round': round_number, 'cause': DeathCause.TREATMENT}
+        recorder.record(session, table, EventType.CHARACTER_DIED, payload=died, cause=event)
+    return event
+
+
+def record_injury(
+    session: AsyncSession, table: GameTable, injury_roll: dict | None, holder: dict, cause: TableEvent
+) -> None:
+    """
+    새 부상이 생겼으면 이벤트로 적는다. 그 부상을 부른 HP 의 변화의 이벤트(cause)에 잇는다.
+
+    부상 표로 생겼거나(큰 타격, 쓰러짐), 노려 쳐서 생겼거나, 오래 가는 부상이 나을 때 후유증으로 생겼다.
+    어느 쪽인지는 source 로 적는다.
+    표를 굴리지 않았거나 부상이 없는 줄이 나왔으면 적지 않는다. 굴린 것은 HP 의 변화의 이벤트에 이미 있다.
+    holder 는 누가 입었는지다. 캐릭터면 user_id 와 캐릭터 이름, NPC 면 항목의 id 와 장면의 호칭이다.
+    """
+    if injury_roll is None or injury_roll['injury'] is None:
+        return
+    payload = {
+        'round': cause.payload['round'],
+        **holder,
+        'injury': injury_roll['injury'],
+        'source': source_of(injury_roll),
+        'ends_after_round': injury_roll['ends_after_round'],
+    }
+    recorder.record(session, table, EventType.INJURY_GAINED, payload=payload, cause=cause)
+
+
+def source_of(injury_roll: dict) -> InjurySource:
+    """부상이 생긴 일의 문서에서 그 부상이 어떻게 생겼는지."""
+    if injury_roll['trigger'] == Trigger.CALLED_SHOT:
+        return InjurySource.CALLED_SHOT
+    if injury_roll['trigger'] == Trigger.AFTERMATH:
+        return InjurySource.AFTERMATH
+    return InjurySource.INJURY_TABLE
+
+
+def record_npc_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> TableEvent:
+    """
+    NPC 의 상태가 바뀐 것을 이벤트로 적는다. 그 변화를 부른 판정의 이벤트(cause)에 잇는다.
+
+    HP 의 숫자까지 다 적는다. 앉은 사람에게 내보낼 칸은 이벤트 API 가 고른다(app/events/router.py 의 VISIBLE).
+    행한 사람(actor_id)을 적지 않는다. 상태를 바꾼 것은 엔진이다.
+    """
+    payload = {'round': cause.payload['round'], **effect}
+    return recorder.record(session, table, EventType.NPC_CHANGED, payload=payload, cause=cause)
+
+
+def record_hp_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> TableEvent:
+    """
+    HP 가 바뀐 것을 이벤트로 적는다. 그 변화를 부른 판정의 이벤트(cause)에 잇는다.
+
+    행한 사람(actor_id)을 적지 않는다. HP 를 바꾼 것은 엔진이다. 누구의 HP 인지는 payload 의 user_id 다.
+    """
+    payload = {'round': cause.payload['round'], **effect}
+    return recorder.record(session, table, EventType.HP_CHANGED, payload=payload, cause=cause)
+
+
+def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
+    """
+    닫히는 라운드의 선언을 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다. 서술자가 받는 것과 같다.
+
+    판정이 있었던 선언은 행동 바로 뒤에 그 결과를 적는다. 판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
+    선언을 내지 않은 사람은 적지 않는다. 누가 안 냈는지는 라운드가 닫힌 이벤트에 적힌다.
+    """
+    for member in table.members:
+        declaration = find_declaration(round_, member.user_id)
+        if declaration is None:
+            continue
+        payload = {
+            'round': round_.number,
+            'character_name': member.character_name,
+            'content': declaration.content,
+            'action': declaration.action,
+        }
+        acted = recorder.record(
+            session, table, EventType.PLAYER_ACTION, actor_id=member.user_id, payload=payload, group=group
+        )
+        if has_outcome(declaration):
+            record_check(session, table, declaration, cause=acted)
+
+
+def record_death(
+    session: AsyncSession,
+    table: GameTable,
+    save: dict,
+    round_number: int,
+    cause: TableEvent,
+) -> None:
+    """
+    죽음의 굴림으로 캐릭터가 죽은 것을 이벤트로 적는다. 그 굴림의 이벤트(cause)에 잇는다.
+
+    행한 사람(actor_id)을 적지 않는다. 규칙이 정한 죽음이다.
+    """
+    payload = {
+        'round': round_number,
+        'user_id': save['user_id'],
+        'character_name': save['character_name'],
+        'cause': DeathCause.DEATH_SAVE,
+    }
+    recorder.record(session, table, EventType.CHARACTER_DIED, payload=payload, cause=cause)
+
+
+def record_death_saves(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
+    """
+    닫히는 라운드에 굴린 죽음의 굴림을 이벤트로 적는다. 굴림은 이미 끝나 있다(roll_death_saves). 여기서는 적기만 한다.
+    그 굴림으로 죽었으면 바로 뒤에 그것도 적는다.
+
+    행한 사람(actor_id)을 적지 않는다. 주사위를 굴린 것은 엔진이다. 누구의 굴림인지는 payload 의 user_id 다.
+    """
+    for save in round_.death_saves:
+        payload = {'round': round_.number, **save}
+        rolled = recorder.record(session, table, EventType.DEATH_SAVE_ROLLED, payload=payload, group=group)
+        if save['fate'] == death.Fate.DEAD:
+            record_death(session, table, save, round_.number, cause=rolled)
+
+
+def record_injury_endings(
+    session: AsyncSession, table: GameTable, ended: list[round_injuries.Ended], round_number: int, group: uuid.UUID
+) -> None:
+    """
+    이 라운드가 닫힐 때 풀리거나 나은 부상들을 이벤트로 적는다. 끝내는 일은 이미 끝나 있다(expire_all).
+    여기서는 적기만 한다. 나으면서 후유증이 생겼으면 바로 뒤에 그것도 적는다.
+
+    행한 사람(actor_id)을 적지 않는다. 정한 라운드가 지나 엔진이 끝낸 것이다.
+    """
+    for one in ended:
+        payload = {'round': round_number, **one.holder, 'injury': one.injury.injury, 'reason': one.reason.value}
+        event = recorder.record(session, table, EventType.INJURY_ENDED, payload=payload, group=group)
+        record_injury(session, table, one.aftermath, one.holder, cause=event)

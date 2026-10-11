@@ -28,6 +28,7 @@ from app.assets.scenarios.snapshot import read_snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds import service as rounds
+from app.rounds import state as round_state
 from app.rounds.models import Round
 from app.tables import sheets
 from app.tables.models import GameTable, TableMember
@@ -55,7 +56,7 @@ def drop_declaration(round_: Round, user_id: uuid.UUID) -> None:
     쓰러진 캐릭터는 글을 낼 수 있다. 글을 내고, 캐릭터를 보내고, 같은 라운드에 새 캐릭터를 들이면 그 글이 남아 있다.
     남겨 두면 라운드가 닫힐 때 그 글이 새 캐릭터가 한 일로 읽힌다.
     """
-    declaration = rounds.find_declaration(round_, user_id)
+    declaration = round_state.find_declaration(round_, user_id)
     if declaration is not None:
         round_.declarations.remove(declaration)
 
@@ -105,7 +106,7 @@ async def bring_in_character(
     """
     table, member, round_ = await rounds.lock_current_round(session, user_id, table_id)
     require_dead(member)
-    rounds.require_open(round_)
+    round_state.require_open(round_)
     snapshot = read_snapshot(table.content)
     chosen = accept_character(table, snapshot, member, data)
     # 그 방식을 허용한 판에는 받을 시트가 반드시 있다(게시 조건). 없으면 들일 수 없는 캐릭터다

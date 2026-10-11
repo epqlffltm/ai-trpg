@@ -81,7 +81,7 @@ def to_npc_impact(effect: dict | None) -> NpcImpact | None:
     """
     선언에 적힌 NPC 의 HP 의 변화를 서술자에게 줄 모양으로 바꾼다. 변화가 없었으면 None.
 
-    몸 상태는 바뀐 뒤의 것이다. 바꿀 때 적어 둔 것을 읽는다(app/rounds/service.py 의 change_cast_member).
+    몸 상태는 바뀐 뒤의 것이다. 바꿀 때 적어 둔 것을 읽는다(app/rounds/checks.py 의 change_cast_member).
     """
     if effect is None:
         return None

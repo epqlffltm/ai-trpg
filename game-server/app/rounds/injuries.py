@@ -5,7 +5,8 @@
 
 부상의 계산은 엔진(app/engine/injury.py)이, 부상의 기록을 고치는 것은 app/tables/injuries.py 가 한다.
 여기는 그 둘을 라운드의 모양(선언의 outcome 에 넣을 문서, 서술자에게 줄 모양)으로 잇는다.
-DB 를 모른다. 이미 읽어 온 시트, NPC 상태, 규칙을 받는다. 저장과 이벤트는 부른 쪽(app/rounds/service.py)이 한다.
+DB 를 모른다. 이미 읽어 온 시트, NPC 상태, 규칙을 받는다.
+저장과 이벤트는 부른 쪽(app/rounds/service.py, records.py)이 한다.
 """
 
 import enum

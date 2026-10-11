@@ -15,12 +15,12 @@ from fastapi.responses import JSONResponse
 from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
 from app.core.dice import Rolling
-from app.rounds import service
+from app.rounds import service, state
 from app.rounds.cast import CastMember
 from app.rounds.closing import RoundCloser
+from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.models import Declaration, Round, RoundStatus
 from app.rounds.schemas import DeclarationOut, DeclarationUpdate, PersonOut, RoundOut, RoundPage, SceneCastOut
-from app.rounds.service import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.tables import injuries
 from app.tables.models import GameTable, TableStatus
 
@@ -85,7 +85,7 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
         # 죽음의 굴림은 가리지 않는다. 열려 있는 동안에는 어차피 없고, 마감한 뒤에는 모두에게 보인다
         death_saves=round_.death_saves,
         arrivals=round_.arrivals,
-        waiting_for=service.waiting_for(table, round_) if is_waiting else [],
+        waiting_for=state.waiting_for(table, round_) if is_waiting else [],
         created_at=round_.created_at,
         closing_at=round_.closing_at,
         closed_at=round_.closed_at,
