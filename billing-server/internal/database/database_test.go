@@ -112,18 +112,19 @@ func TestSearchPathIsTheBillingSchemaOnly(t *testing.T) {
 	}
 }
 
-func TestOwnsItsSchema(t *testing.T) {
+func TestOwnsItsSchemas(t *testing.T) {
 	pool := openPool(t)
 
-	var canCreate bool
-	query := "SELECT has_schema_privilege(current_user, 'billing', 'CREATE')"
-	if err := pool.QueryRow(within(t, 10*time.Second), query).Scan(&canCreate); err != nil {
-		t.Fatalf("조회하지 못했다: %v", err)
-	}
-
-	// 마이그레이션이 이 계정으로 테이블을 만든다
-	if !canCreate {
-		t.Error("billing 계정이 자기 스키마에 테이블을 만들 수 없다")
+	// 개발용과 테스트용 둘 다다. 마이그레이션이 이 계정으로 테이블을 만든다
+	for _, schema := range []string{config.DefaultSchema, testenv.Schema} {
+		var canCreate bool
+		query := "SELECT has_schema_privilege(current_user, $1, 'CREATE')"
+		if err := pool.QueryRow(within(t, 10*time.Second), query, schema).Scan(&canCreate); err != nil {
+			t.Fatalf("%s 스키마를 조회하지 못했다: %v", schema, err)
+		}
+		if !canCreate {
+			t.Errorf("billing 계정이 %s 스키마에 테이블을 만들 수 없다", schema)
+		}
 	}
 }
 

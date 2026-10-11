@@ -5,6 +5,7 @@ package config_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 )
@@ -48,6 +49,9 @@ func TestLoadFillsDefaults(t *testing.T) {
 		AuthJWKSURL: jwksURL,
 		JWTIssuer:   "ai-trpg-auth",
 		JWTAudience: "ai-trpg-billing",
+		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 1주일 뒤에 사라진다
+		SpendFreeFirst: true,
+		FreeCreditTTL:  7 * 24 * time.Hour,
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -56,28 +60,32 @@ func TestLoadFillsDefaults(t *testing.T) {
 
 func TestLoadReadsEveryValue(t *testing.T) {
 	settings, err := config.Load(from(map[string]string{
-		"DEBUG":         "true",
-		"HOST":          "0.0.0.0",
-		"PORT":          "9000",
-		"DATABASE_URL":  databaseURL,
-		"DB_SCHEMA":     "billing_test",
-		"AUTH_JWKS_URL": "https://auth.example.com/jwks",
-		"JWT_ISSUER":    "some-issuer",
-		"JWT_AUDIENCE":  "some-audience",
+		"DEBUG":            "true",
+		"HOST":             "0.0.0.0",
+		"PORT":             "9000",
+		"DATABASE_URL":     databaseURL,
+		"DB_SCHEMA":        "billing_test",
+		"AUTH_JWKS_URL":    "https://auth.example.com/jwks",
+		"JWT_ISSUER":       "some-issuer",
+		"JWT_AUDIENCE":     "some-audience",
+		"SPEND_FREE_FIRST": "false",
+		"FREE_CREDIT_TTL":  "36h30m",
 	}))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
 	}
 
 	want := config.Settings{
-		Debug:       true,
-		Host:        "0.0.0.0",
-		Port:        9000,
-		DatabaseURL: databaseURL,
-		DBSchema:    "billing_test",
-		AuthJWKSURL: "https://auth.example.com/jwks",
-		JWTIssuer:   "some-issuer",
-		JWTAudience: "some-audience",
+		Debug:          true,
+		Host:           "0.0.0.0",
+		Port:           9000,
+		DatabaseURL:    databaseURL,
+		DBSchema:       "billing_test",
+		AuthJWKSURL:    "https://auth.example.com/jwks",
+		JWTIssuer:      "some-issuer",
+		JWTAudience:    "some-audience",
+		SpendFreeFirst: false,
+		FreeCreditTTL:  36*time.Hour + 30*time.Minute,
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -91,6 +99,7 @@ func TestLoadTreatsEmptyAsMissing(t *testing.T) {
 	// .env 에 이름만 적고 값을 비워 둔 줄은 적지 않은 것과 같다
 	settings, err := config.Load(from(required(map[string]string{
 		"DEBUG": "", "HOST": "", "PORT": "", "DB_SCHEMA": "", "JWT_ISSUER": "", "JWT_AUDIENCE": "",
+		"SPEND_FREE_FIRST": "", "FREE_CREDIT_TTL": "",
 	})))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
@@ -99,6 +108,9 @@ func TestLoadTreatsEmptyAsMissing(t *testing.T) {
 		t.Errorf("빈 값이 기본값으로 채워지지 않았다: %+v", settings)
 	}
 	if settings.JWTIssuer != config.DefaultJWTIssuer || settings.JWTAudience != config.DefaultJWTAudience {
+		t.Errorf("빈 값이 기본값으로 채워지지 않았다: %+v", settings)
+	}
+	if settings.SpendFreeFirst != config.DefaultSpendFreeFirst || settings.FreeCreditTTL != config.DefaultFreeCreditTTL {
 		t.Errorf("빈 값이 기본값으로 채워지지 않았다: %+v", settings)
 	}
 }
@@ -125,6 +137,12 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"공개키 주소가 http 가 아니다", required(map[string]string{"AUTH_JWKS_URL": "ftp://auth.example.com/jwks"}), "AUTH_JWKS_URL"},
 		{"공개키 주소가 파일이다", required(map[string]string{"AUTH_JWKS_URL": "file:///etc/passwd"}), "AUTH_JWKS_URL"},
 		{"공개키 주소에 호스트가 없다", required(map[string]string{"AUTH_JWKS_URL": "http:///jwks"}), "AUTH_JWKS_URL"},
+		{"쓰는 순서가 참거짓이 아니다", required(map[string]string{"SPEND_FREE_FIRST": "free"}), "SPEND_FREE_FIRST"},
+		{"기한에 단위가 없다", required(map[string]string{"FREE_CREDIT_TTL": "168"}), "FREE_CREDIT_TTL"},
+		{"기한이 날 단위다", required(map[string]string{"FREE_CREDIT_TTL": "7d"}), "FREE_CREDIT_TTL"},
+		{"기한이 0 이다", required(map[string]string{"FREE_CREDIT_TTL": "0s"}), "FREE_CREDIT_TTL"},
+		{"기한이 음수다", required(map[string]string{"FREE_CREDIT_TTL": "-1h"}), "FREE_CREDIT_TTL"},
+		{"기한이 너무 짧다", required(map[string]string{"FREE_CREDIT_TTL": "999ms"}), "FREE_CREDIT_TTL"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -139,14 +157,47 @@ func TestLoadRejectsBadValues(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsTheShortestTTL(t *testing.T) {
+	settings, err := config.Load(from(required(map[string]string{"FREE_CREDIT_TTL": "1s"})))
+	if err != nil || settings.FreeCreditTTL != time.Second {
+		t.Errorf("FreeCreditTTL = %v, %v, 기대 = 1s", settings.FreeCreditTTL, err)
+	}
+}
+
+func TestLoadDatabaseNeedsOnlyTheDatabaseSettings(t *testing.T) {
+	// 마이그레이션 명령은 인증 서버의 주소가 없어도 돈다
+	db, err := config.LoadDatabase(from(map[string]string{"DATABASE_URL": databaseURL, "DB_SCHEMA": "billing_test"}))
+	if err != nil {
+		t.Fatalf("설정을 읽지 못했다: %v", err)
+	}
+	if want := (config.Database{URL: databaseURL, Schema: "billing_test"}); db != want {
+		t.Errorf("설정 = %+v, 기대 = %+v", db, want)
+	}
+}
+
+func TestLoadDatabaseRejectsBadValues(t *testing.T) {
+	_, err := config.LoadDatabase(from(map[string]string{"DB_SCHEMA": "Billing"}))
+	if err == nil {
+		t.Fatal("오류가 나야 하는데 나지 않았다")
+	}
+	for _, name := range []string{"DATABASE_URL", "DB_SCHEMA"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("오류에 %s 가 없다: %v", name, err)
+		}
+	}
+}
+
 func TestLoadReportsEveryProblemAtOnce(t *testing.T) {
-	_, err := config.Load(from(map[string]string{"PORT": "nope", "DEBUG": "nope", "DB_SCHEMA": "NOPE"}))
+	_, err := config.Load(from(map[string]string{
+		"PORT": "nope", "DEBUG": "nope", "DB_SCHEMA": "NOPE", "SPEND_FREE_FIRST": "nope", "FREE_CREDIT_TTL": "nope",
+	}))
 	if err == nil {
 		t.Fatal("오류가 나야 하는데 나지 않았다")
 	}
 
 	// 하나를 고치고 다시 띄워 다음 것을 만나는 일을 줄인다
-	for _, name := range []string{"DATABASE_URL", "AUTH_JWKS_URL", "PORT", "DEBUG", "DB_SCHEMA"} {
+	names := []string{"DATABASE_URL", "AUTH_JWKS_URL", "PORT", "DEBUG", "DB_SCHEMA", "SPEND_FREE_FIRST", "FREE_CREDIT_TTL"}
+	for _, name := range names {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("오류에 %s 가 없다: %v", name, err)
 		}
