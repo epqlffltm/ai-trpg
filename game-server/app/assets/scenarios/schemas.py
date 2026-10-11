@@ -8,7 +8,15 @@ import uuid
 from datetime import datetime
 from typing import Annotated, ClassVar
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_serializer,
+    model_validator,
+)
 
 from app.assets.models import (
     CHARACTER_DESCRIPTION_MAX_LENGTH,
@@ -17,6 +25,7 @@ from app.assets.models import (
     DEFAULT_NARRATION_STYLE,
     PLAYER_MADE_HP_MAX,
     SCENARIO_MAX_LOREBOOKS,
+    SCENARIO_MAX_NPC_SHEETS,
     SCENARIO_MAX_OPENINGS,
     SCENARIO_MAX_PREGENS,
     SCENARIO_OPENING_MAX_LENGTH,
@@ -100,6 +109,39 @@ def reject_duplicate_names(pregens: list[Pregen]) -> list[Pregen]:
 Pregens = Annotated[list[Pregen], Field(max_length=SCENARIO_MAX_PREGENS), AfterValidator(reject_duplicate_names)]
 
 
+class NpcSheet(BaseModel):
+    """
+    NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자를 준다.
+
+    프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
+    가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
+    로어북도 룰북도 나중에 바꿀 수 있어서 지금 정할 수 없다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    sheet: Sheet
+
+    @field_serializer('entry_id')
+    def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
+        """항목의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(entry_id)
+
+
+def reject_duplicate_entries(npc_sheets: list[NpcSheet]) -> list[NpcSheet]:
+    """같은 항목의 시트가 두 번 있으면 거부한다. 어느 숫자를 쓸지 정할 수 없다."""
+    entry_ids = [npc_sheet.entry_id for npc_sheet in npc_sheets]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 인물의 시트가 두 번 있습니다.')
+    return npc_sheets
+
+
+NpcSheets = Annotated[
+    list[NpcSheet], Field(max_length=SCENARIO_MAX_NPC_SHEETS), AfterValidator(reject_duplicate_entries)
+]
+
+
 def in_fixed_order(modes: list[CharacterMode]) -> list[CharacterMode]:
     """
     방식의 목록을 정해진 순서로 놓는다. 같은 것이 두 번 있으면 거부한다.
@@ -155,6 +197,8 @@ class ScenarioCreate(AssetCreate):
     # 안 보내면 프리젠과 기본 시트를 허용한다. 플레이어가 숫자를 정하는 방식은 직접 적어야 켜진다
     character_modes: CharacterModes = list(DEFAULT_CHARACTER_MODES)
     default_sheet: Sheet | None = None
+    npc_sheets: NpcSheets = []
+    default_npc_sheet: Sheet | None = None
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
@@ -166,13 +210,16 @@ class ScenarioUpdate(AssetUpdate):
     """
     시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
-    rulebook_id, world_id, default_sheet, player_made_hp 는 null 을 보내면 비운다. 보내지 않으면 그대로 둔다.
-    lorebook_ids, openings, pregens, character_modes 는 보낸 목록으로 통째로 바꾼다.
-    앞의 셋은 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
+    rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp 는 null 을 보내면 비운다.
+    보내지 않으면 그대로 둔다.
+    lorebook_ids, openings, pregens, npc_sheets, character_modes 는 보낸 목록으로 통째로 바꾼다.
+    character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다.
     """
 
-    clearable: ClassVar[frozenset[str]] = frozenset({'rulebook_id', 'world_id', 'default_sheet', 'player_made_hp'})
+    clearable: ClassVar[frozenset[str]] = frozenset(
+        {'rulebook_id', 'world_id', 'default_sheet', 'default_npc_sheet', 'player_made_hp'}
+    )
 
     rating: Rating | None = None
     rulebook_id: uuid.UUID | None = None
@@ -183,6 +230,8 @@ class ScenarioUpdate(AssetUpdate):
     pregens: Pregens | None = None
     character_modes: CharacterModes | None = None
     default_sheet: Sheet | None = None
+    npc_sheets: NpcSheets | None = None
+    default_npc_sheet: Sheet | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
@@ -213,6 +262,8 @@ class ScenarioDetail(ScenarioSummary):
     pregens: list[Pregen]
     character_modes: list[CharacterMode]
     default_sheet: Sheet | None
+    npc_sheets: list[NpcSheet]
+    default_npc_sheet: Sheet | None
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle

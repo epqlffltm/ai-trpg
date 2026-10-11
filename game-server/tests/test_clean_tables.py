@@ -64,8 +64,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     """
     API 로 모든 테이블에 행을 넣는다. 외래 키로 이어진 사슬이 끝까지 생긴다.
 
-    룰북, 세계관, 로어북과 항목, 시나리오(로어북을 붙이고 판을 내고 소개 페이지까지), 테이블(시작해서 시트와 라운드와
-    이벤트가 생기고, 굴리고, 선언하고, 채팅한다), 보관함.
+    룰북, 세계관, 로어북과 항목, 시나리오(로어북을 붙이고 판을 내고 소개 페이지까지),
+    테이블(시작해서 시트와 NPC 의 상태와 라운드와 이벤트가 생기고, 굴리고, 선언하고, 채팅한다), 보관함.
     AI 호출의 기록만은 API 로 생기지 않는다(테스트의 서술자는 모델을 부르지 않는다). 기록장으로 직접 쓴다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
     지난 라운드의 벡터는 다음 서술을 맡길 때 생긴다. 혼자 앉은 테이블이라 선언하면 라운드가 닫히고 서술된다.
@@ -75,7 +75,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     rulebook = (await client.post(f'{url}/rulebooks', json={'title': '룰북'}, headers=me)).json()
     world = (await client.post(f'{url}/worlds', json={'title': '세계'}, headers=me)).json()
     lorebook = (await client.post(f'{url}/lorebooks', json={'title': '로어북'}, headers=me)).json()
-    await client.post(f'{url}/lorebooks/{lorebook["id"]}/entries', json={'name': '항목'}, headers=me)
+    # 인물 항목이라야 테이블을 시작할 때 NPC 의 상태가 생긴다
+    entry = {'name': '항목', 'kind': 'person'}
+    await client.post(f'{url}/lorebooks/{lorebook["id"]}/entries', json=entry, headers=me)
     body = {
         'title': '추격전',
         'rulebook_id': rulebook['id'],
@@ -83,6 +85,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         'lorebook_ids': [lorebook['id']],
         'openings': ['사이렌이 울린다.'],
         'default_sheet': SHEET,
+        'default_npc_sheet': SHEET,
         'character_modes': ['custom', 'rolled'],
         'player_made_hp': {'base': 10, 'cap': 12},
     }

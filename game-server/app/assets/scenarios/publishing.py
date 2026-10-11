@@ -22,13 +22,14 @@ from app.assets.models import (
     CharacterMode,
     Lorebook,
     LoreEntry,
+    LoreKind,
     Rulebook,
     Scenario,
     ScenarioVersion,
     World,
 )
 from app.assets.scenarios import repository
-from app.assets.scenarios.schemas import VersionCreate
+from app.assets.scenarios.schemas import NpcSheet, VersionCreate
 from app.assets.scenarios.snapshot import build_snapshot
 from app.assets.service import AssetNotFoundError
 from app.engine.ruleset import Ruleset
@@ -58,6 +59,16 @@ class Problem(enum.StrEnum):
     POINT_BUY_MISSING = 'point_buy_missing'
     # 주사위로 정하는 방식을 허용했는데 룰북의 규칙에 굴리는 법이 없다
     SCORE_ROLL_MISSING = 'score_roll_missing'
+    # 붙인 로어북에 없는 항목을 가리키는 NPC 시트가 있다. 항목을 지웠거나 로어북을 뗐다
+    NPC_SHEET_ENTRY_MISSING = 'npc_sheet_entry_missing'
+    # 인물이 아닌 항목(장소, 물건 …)을 가리키는 NPC 시트가 있다
+    NPC_SHEET_NOT_PERSON = 'npc_sheet_not_person'
+    # 룰북의 규칙에 맞지 않는 NPC 시트가 있다
+    NPC_SHEET_INVALID = 'npc_sheet_invalid'
+    # 시트가 없는 인물 항목이 있는데 기본 NPC 시트가 없다. 그 인물이 받을 숫자가 없다
+    DEFAULT_NPC_SHEET_MISSING = 'default_npc_sheet_missing'
+    # 기본 NPC 시트가 룰북의 규칙에 맞지 않는다
+    DEFAULT_NPC_SHEET_INVALID = 'default_npc_sheet_invalid'
 
 
 class ScenarioNotReadyError(Exception):
@@ -183,6 +194,57 @@ def find_score_roll_problems(scenario: Scenario, ruleset: Ruleset | None) -> lis
     return []
 
 
+def lore_entries(parts: Parts) -> dict[uuid.UUID, LoreEntry]:
+    """붙인 로어북의 항목 전부. 항목의 ID 로 찾는다."""
+    return {entry.id: entry for _, entries in parts.lorebooks for entry in entries}
+
+
+def person_ids(parts: Parts) -> set[uuid.UUID]:
+    """붙인 로어북의 인물 항목들의 ID."""
+    return {entry_id for entry_id, entry in lore_entries(parts).items() if entry.kind == LoreKind.PERSON}
+
+
+def read_npc_sheets(scenario: Scenario) -> list[NpcSheet]:
+    """NPC 시트들을 읽는다."""
+    return [NpcSheet.model_validate(document) for document in scenario.npc_sheets]
+
+
+def find_npc_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    NPC 시트에서 문제를 찾는다. 시트가 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    시트는 붙인 로어북의 인물 항목을 가리켜야 한다. 로어북의 항목은 시나리오와 따로 고칠 수 있어서,
+    고치는 동안 지운 항목이나 종류를 바꾼 항목을 가리키게 될 수 있다. 굳히기 전에 여기서 막는다.
+    룰북이 없으면 규칙에 맞는지는 볼 수 없다.
+    """
+    npc_sheets = read_npc_sheets(scenario)
+    entries = lore_entries(parts)
+    people = person_ids(parts)
+    problems = []
+    if any(npc_sheet.entry_id not in entries for npc_sheet in npc_sheets):
+        problems.append(Problem.NPC_SHEET_ENTRY_MISSING)
+    if any(npc_sheet.entry_id in entries and npc_sheet.entry_id not in people for npc_sheet in npc_sheets):
+        problems.append(Problem.NPC_SHEET_NOT_PERSON)
+    if ruleset and any(not fits(ruleset, npc_sheet.sheet) for npc_sheet in npc_sheets):
+        problems.append(Problem.NPC_SHEET_INVALID)
+    return problems
+
+
+def find_default_npc_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    기본 NPC 시트에서 문제를 찾는다.
+
+    시트가 없는 인물 항목이 있으면 기본 NPC 시트가 있어야 한다. 모든 인물에게 시트가 있으면 없어도 된다.
+    있으면 쓰든 안 쓰든 규칙에 맞아야 한다. 판에 들어가기 때문이다.
+    """
+    if scenario.default_npc_sheet is None:
+        covered = {npc_sheet.entry_id for npc_sheet in read_npc_sheets(scenario)}
+        return [Problem.DEFAULT_NPC_SHEET_MISSING] if person_ids(parts) - covered else []
+    if ruleset and not fits(ruleset, Sheet.model_validate(scenario.default_npc_sheet)):
+        return [Problem.DEFAULT_NPC_SHEET_INVALID]
+    return []
+
+
 def find_seating_problems(scenario: Scenario) -> list[Problem]:
     """
     허용한 방식으로 사람이 앉을 수 있는지 본다.
@@ -209,6 +271,8 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_player_made_problems(scenario))
     problems.extend(find_point_buy_problems(scenario, ruleset))
     problems.extend(find_score_roll_problems(scenario, ruleset))
+    problems.extend(find_npc_sheet_problems(scenario, parts, ruleset))
+    problems.extend(find_default_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_seating_problems(scenario))
     return problems
 
