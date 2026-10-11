@@ -155,9 +155,14 @@ SIMPLE_JWT = {
     'VERIFYING_KEY': JWT_PUBLIC_KEY_PEM,
 
     # 누가 발급했고(iss) 누구에게 쓰라고 발급했는지(aud).
-    # 검증하는 서버는 aud 에 자기 이름이 있는지 확인한다
+    # 검증하는 서버는 aud 에 자기 이름이 있는지 확인한다.
+    # 토큰 하나에 모든 서버의 이름을 싣는다. 프론트는 토큰 하나로 모든 서버를 부른다.
+    # 서버가 늘면 여기에 이름을 더한다. .env 에 JWT_AUDIENCE 를 적어 둔 곳은 그 줄도 함께 고쳐야 한다
     'ISSUER': env('JWT_ISSUER', default='ai-trpg-auth'),
-    'AUDIENCE': env.list('JWT_AUDIENCE', default=['ai-trpg-auth', 'ai-trpg-game']),
+    'AUDIENCE': env.list(
+        'JWT_AUDIENCE',
+        default=['ai-trpg-auth', 'ai-trpg-game', 'ai-trpg-board', 'ai-trpg-billing'],
+    ),
 
     # 다른 서버는 블랙리스트를 보지 않고 서명과 만료만 확인한다.
     # 그래서 탈취됐을 때 쓸 수 있는 시간을 짧게 잡는다
