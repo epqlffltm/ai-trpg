@@ -278,10 +278,11 @@ def test_only_some_injuries_stop_actions():
     assert not hindrance_of(injuries('stunned'), 'str').any
 
 
-def test_only_short_injuries_have_an_end():
+def test_every_injury_but_a_permanent_one_has_an_end():
     assert ends_after(find_injury(SRD5, 'stunned'), 3) == 4
     assert ends_after(find_injury(SRD5, 'poisoned'), 3) == 6
-    assert ends_after(find_injury(SRD5, 'broken_arm'), 3) is None
+    # 오래 가는 것도 나을 라운드가 있다(#114 다). 치료로 앞당겨진다
+    assert ends_after(find_injury(SRD5, 'broken_arm'), 3) == 33
     assert ends_after(find_injury(SRD5, 'lost_eye'), 3) is None
 
 
@@ -336,9 +337,10 @@ async def test_a_big_hit_can_break_an_arm(client: AsyncClient, app: FastAPI, me:
     closing = await declare(client, me, world['table'], JUMP, jump())
 
     effect = closing['declarations'][0]['outcome']['effect']
-    assert effect['injury_roll'] == {'trigger': 'big_hit', 'roll': 17, 'injury': 'broken_arm', 'ends_after_round': None}
+    # 팔 골절은 30 라운드 뒤에 낫는다
+    assert effect['injury_roll'] == {'trigger': 'big_hit', 'roll': 17, 'injury': 'broken_arm', 'ends_after_round': 31}
     assert (await my_sheet(client, me, world['table']))['injuries'] == [
-        {'injury': 'broken_arm', 'round': 1, 'ends_after_round': None}
+        {'injury': 'broken_arm', 'round': 1, 'ends_after_round': 31}
     ]
     (row,) = await injury_rows(session)
     assert (row.injury, row.source, row.round_number, row.npc_entry_id) == ('broken_arm', 'injury_table', 1, None)
@@ -442,7 +444,7 @@ async def test_the_injury_is_recorded_after_the_hit_that_caused_it(
         'character_name': '엘프',
         'injury': 'broken_arm',
         'source': 'injury_table',
-        'ends_after_round': None,
+        'ends_after_round': 31,
     }
     assert gained['caused_by_sequence'] == changed['sequence']
     assert gained['actor_id'] is None

@@ -75,6 +75,41 @@ class NpcImpact:
 
 
 @dataclass(frozen=True)
+class TreatmentNote:
+    """
+    치료의 결과. 엔진이 정한 것이다. 서술자는 이것을 바꾸지 못하고 글로 옮기기만 한다.
+
+    부상과 치료받는 쪽은 규칙의 이름과 장면의 호칭이다. 숫자는 남은 라운드만 준다(HP 는 Impact 에 있다).
+    """
+
+    # 치료한 부상의 이름과 치료받은 쪽
+    injury: str
+    patient: str
+    # 치료할 부상이 아직 있었는가. 앞사람이 먼저 고쳤거나 그사이에 나았으면 False 다. 그러면 아무 일도 없었다
+    treated: bool = True
+    # 치료로 다 나았는가
+    healed: bool = False
+    # 낫기까지 남은 라운드. 다 나았거나 치료하지 못했으면 None 이다
+    rounds_left: int | None = None
+    # 나으면서 남은 후유증의 이름. 없으면 None 이다
+    aftermath: str | None = None
+    # 실패했을 때 치료 실패 표에서 나온 일. nothing, pain, worsen, fatal. 성공했거나 치료하지 못했으면 None 이다
+    mishap: str | None = None
+    # 덧나서 늘어난 라운드. 덧나지 않았으면 None 이다
+    worsened_by: int | None = None
+    # 치료받던 쪽이 죽었는가(즉사)
+    died: bool = False
+
+
+@dataclass(frozen=True)
+class HealNote:
+    """이번 라운드에 시간이 지나 나은 오래 가는 부상 하나. 나으면서 남은 후유증이 있으면 그 이름이다."""
+
+    name: str
+    aftermath: str | None = None
+
+
+@dataclass(frozen=True)
 class Verdict:
     """
     판정의 결과. 엔진이 정한 것이다. 서술자는 이것을 바꾸지 못하고 글로 옮기기만 한다.
@@ -98,6 +133,8 @@ class Verdict:
     hindrances: list[str] = field(default_factory=list)
     # 노려 쳤으면 노린 부상의 이름. 판정이 그만큼 어려웠다. 성공했으면 그 부상이 생겼다(impact 에 적힌다)
     aimed: str | None = None
+    # 치료하는 행동이면 그 결과. 판정의 능력과 난이도는 규칙이 정한 치료의 것이다. 치료가 아니면 None 이다
+    treatment: TreatmentNote | None = None
 
 
 @dataclass(frozen=True)
@@ -136,6 +173,8 @@ class Move:
     # 이 라운드의 결과까지 반영한 뒤에 이 캐릭터가 입고 있는 부상들. 생긴 순서다.
     # 목록으로 둔다. 라운드에 굳힐 때 JSON 으로 적고 다시 읽어도 같은 값이어야 한다
     injuries: list[InjuryNote] = field(default_factory=list)
+    # 이 라운드가 닫힐 때 시간이 지나 나은 오래 가는 부상들. 치료로 나은 것은 verdict 의 treatment 에 있다
+    healed: list[HealNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -327,6 +366,41 @@ def describe_verdict(verdict: Verdict) -> str:
     return f'({verdict.ability} 판정 {result}: {sum_}, 목표 {verdict.target}{hindered}{aimed})'
 
 
+MISHAPS = {'nothing': '별일 없음', 'pain': '덧나서 아픔', 'worsen': '상처가 덧남', 'fatal': '즉사'}
+
+
+def describe_treatment(note: TreatmentNote) -> str:
+    """
+    치료의 결과를 한 줄로 적는다.
+
+    예: → 토르빈의 팔 골절 치료: 앞당겨짐, 낫기까지 15 라운드
+        → 토르빈의 팔 골절 치료: 다 나음. 후유증: 굽은 팔
+        → 토르빈의 팔 골절 치료 실패: 상처가 덧남, 5 라운드 늦어짐, 낫기까지 25 라운드
+    """
+    # 치료받던 사람이 떠났으면 이름을 모른다. 부상만 적는다
+    head = f'→ {note.patient}의 {note.injury} 치료' if note.patient else f'→ {note.injury} 치료'
+    if not note.treated:
+        return f'{head}: 치료할 부상이 이미 없었다'
+    if note.mishap is None:
+        if note.healed:
+            return f'{head}: 다 나음' + (f'. 후유증: {note.aftermath}' if note.aftermath else '')
+        return f'{head}: 앞당겨짐, 낫기까지 {note.rounds_left} 라운드'
+    if note.died:
+        return f'{head} 실패: {MISHAPS[note.mishap]}, {note.patient} 죽음'
+    parts = [MISHAPS[note.mishap]]
+    if note.worsened_by:
+        parts.append(f'{note.worsened_by} 라운드 늦어짐')
+    if note.rounds_left is not None:
+        parts.append(f'낫기까지 {note.rounds_left} 라운드')
+    return f'{head} 실패: {", ".join(parts)}'
+
+
+def describe_healed(healed: list[HealNote]) -> str:
+    """시간이 지나 나은 부상들. 예: [나은 부상: 팔 골절(후유증: 굽은 팔), 다리 부상]"""
+    names = [note.name + (f'(후유증: {note.aftermath})' if note.aftermath else '') for note in healed]
+    return f'[나은 부상: {", ".join(names)}]'
+
+
 def describe_impact(impact: Impact) -> str:
     """HP 가 바뀐 것을 한 줄로 적는다. 예: → 엘프 피해 3 (HP 7/10)"""
     word = '피해' if impact.kind == 'damage' else '회복'
@@ -376,18 +450,26 @@ def describe_death_save(note: DeathSaveNote) -> str:
 
 def describe_move(move: Move) -> str:
     """
-    한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, HP 가 바뀌었으면 그 뒤에 붙인다.
-    죽음의 굴림을 굴렸으면 그 뒤에, 입고 있는 부상이 있으면 맨 뒤에 붙인다.
+    한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, 치료였으면 그 결과를,
+    HP 가 바뀌었으면 그 뒤에 붙인다.
+    죽음의 굴림을 굴렸으면 그 뒤에, 시간이 지나 나은 부상이 있으면 그 뒤에, 입고 있는 부상이 있으면 맨 뒤에 붙인다.
     """
     parts = [f'{move.character_name}: {move.content or describe_idle(move)}']
+    # 선언을 냈지만 앞사람의 치료가 실패해 그 자리에서 죽었다. 선언한 일을 하지 못했다
+    if move.content and move.dead and move.verdict is None:
+        parts.append('(하려던 일을 하기 전에 죽었다)')
     if move.verdict is not None:
         parts.append(describe_verdict(move.verdict))
+        if move.verdict.treatment is not None:
+            parts.append(describe_treatment(move.verdict.treatment))
         if move.verdict.impact is not None:
             parts.append(describe_impact(move.verdict.impact))
         if move.verdict.npc_impact is not None:
             parts.append(describe_npc_impact(move.verdict.npc_impact))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
+    if move.healed:
+        parts.append(describe_healed(move.healed))
     if move.injuries:
         parts.append(f'[입은 부상: {describe_injuries(move.injuries)}]')
     return ' '.join(parts)

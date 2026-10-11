@@ -20,7 +20,7 @@ from app.engine.ruleset import EffectKind, Healing, Injury, InjuryTable, Ruleset
 
 
 class Trigger(enum.StrEnum):
-    """부상이 생긴 까닭. 앞의 둘은 부상 표를 굴린 까닭이다."""
+    """부상이 생긴 까닭. 앞의 둘은 부상 표를 굴린 까닭이고, 마지막은 후유증 표를 굴린 까닭이다."""
 
     # 한 번의 피해가 최대 HP 의 정한 비율 이상이었다
     BIG_HIT = 'big_hit'
@@ -28,6 +28,8 @@ class Trigger(enum.StrEnum):
     DOWNED = 'downed'
     # 노려 쳐서 그 부상이 확정으로 생겼다. 표를 굴리지 않는다
     CALLED_SHOT = 'called_shot'
+    # 오래 가는 부상이 나을 때 후유증 표를 굴렸다
+    AFTERMATH = 'aftermath'
 
 
 @dataclass(frozen=True)
@@ -128,10 +130,23 @@ def blocks_actions(injuries: Iterable[Injury]) -> bool:
 
 def ends_after(injury: Injury, round_number: int) -> int | None:
     """
-    이 라운드에 생긴 부상이 풀리는 라운드. 그 라운드가 닫힐 때 풀린다. 짧은 것에만 있고, 나머지는 None.
+    이 라운드에 생긴 부상이 풀리거나 낫는 라운드. 그 라운드가 닫힐 때 풀린다. 결손은 낫지 않아서 None.
 
     1 라운드짜리는 다음 라운드 동안 효과가 있고, 그 라운드가 닫힐 때 풀린다.
+    오래 가는 것은 치료로 이 라운드가 앞당겨지거나, 치료에 실패해 늦춰질 수 있다(app/engine/treatment.py).
     """
-    if injury.healing != Healing.ROUNDS:
+    if injury.healing == Healing.PERMANENT:
         return None
     return round_number + injury.rounds
+
+
+def leaves_aftermath(injury: Injury) -> bool:
+    """나을 때 후유증 표를 굴리는 부상인가. 오래 가는 것 중 후유증 표가 있는 것이다."""
+    return injury.healing == Healing.HEALS and injury.aftermath is not None
+
+
+def roll_aftermath(injury: Injury, dice: Dice) -> TableRoll | None:
+    """오래 가는 부상이 나을 때 후유증 표를 굴린다. 표가 없는 부상(깨끗이 낫는다)이면 굴리지 않고 None."""
+    if not leaves_aftermath(injury):
+        return None
+    return roll_table(injury.aftermath, Trigger.AFTERMATH, dice)

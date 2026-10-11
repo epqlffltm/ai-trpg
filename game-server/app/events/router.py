@@ -95,6 +95,20 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'ends_after_round',
     ),
     EventType.INJURY_ENDED: ('round', 'user_id', 'character_name', 'entry_id', 'name', 'injury', 'reason'),
+    # 치료의 결과도 공개다. 나을 라운드와 치료 실패 표의 눈까지 보인다. HP 의 변화는 따로 적힌다
+    EventType.INJURY_TREATED: (
+        'round',
+        'user_id',
+        'character_name',
+        'entry_id',
+        'name',
+        'injury',
+        'treated',
+        'heals_after',
+        'healed',
+        'mishap',
+        'died',
+    ),
     # 죽음의 굴림도 공개다
     EventType.DEATH_SAVE_ROLLED: (
         'round',

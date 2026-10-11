@@ -215,6 +215,16 @@ def mark_dead(sheet: TableSheet) -> None:
     sheet.died_at = datetime.now(UTC)
 
 
+def kill(sheet: TableSheet) -> None:
+    """
+    캐릭터를 그 자리에서 죽인다. 치료에 실패해 치료 실패 표에서 즉사가 나왔을 때다(app/engine/treatment.py).
+
+    죽음은 쓰러져 있을 때의 일이다(DB 의 CHECK). HP 를 0 으로 내리고 죽었다고 적는다.
+    """
+    sheet.hp = 0
+    mark_dead(sheet)
+
+
 def clear_death_saves(sheet: TableSheet) -> None:
     """죽음의 굴림에서 센 것을 처음으로 돌린다. 회복을 받아 일어났을 때 부른다."""
     sheet.death_successes = 0

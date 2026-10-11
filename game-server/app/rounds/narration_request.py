@@ -26,7 +26,16 @@ from app.engine.check import find_ability, find_difficulty
 from app.engine.injury import known_injuries
 from app.engine.ruleset import Ruleset
 from app.rounds.models import Declaration, Round
-from app.rounds.narrator import DeathSaveNote, Impact, Move, NpcImpact, PastRound, StoryContext, Verdict
+from app.rounds.narrator import (
+    DeathSaveNote,
+    Impact,
+    Move,
+    NpcImpact,
+    PastRound,
+    StoryContext,
+    TreatmentNote,
+    Verdict,
+)
 
 # 굳혀 둔 행동들을 읽는 법. 모양이 틀리면 ValidationError 를 낸다. 우리가 쓴 문서이니 틀렸으면 버그다
 MOVES = TypeAdapter(list[Move])
@@ -85,14 +94,51 @@ def to_npc_impact(effect: dict | None) -> NpcImpact | None:
     )
 
 
+def check_terms(declaration: Declaration) -> tuple[str, str]:
+    """
+    판정에 쓴 능력과 난이도의 key. 판정하는 행동은 행동에 적혀 있고, 치료는 규칙이 정해 결과에 적혀 있다.
+
+    결과가 적힌 선언에만 쓴다.
+    """
+    treatment = declaration.outcome.get('treatment')
+    if treatment is not None:
+        return treatment['ability'], treatment['difficulty']
+    return declaration.action['ability'], declaration.action['difficulty']
+
+
+def patient_name(holder: dict) -> str:
+    """치료받은 쪽을 부르는 이름. 캐릭터면 캐릭터 이름, NPC 면 장면의 호칭이다."""
+    return holder.get('character_name') or holder.get('name') or ''
+
+
+def to_treatment(treatment: dict | None) -> TreatmentNote | None:
+    """선언에 적힌 치료의 결과를 서술자에게 줄 모양으로 바꾼다. 치료가 아니면 None."""
+    if treatment is None:
+        return None
+    mishap = treatment['mishap']
+    aftermath = treatment['aftermath']
+    return TreatmentNote(
+        injury=treatment['name'],
+        patient=patient_name(treatment['patient']),
+        treated=treatment['treated'],
+        healed=treatment['healed'],
+        rounds_left=treatment['rounds_left'],
+        aftermath=aftermath['name'] if aftermath else None,
+        mishap=mishap['kind'] if mishap else None,
+        worsened_by=mishap['rounds'] if mishap else None,
+        died=treatment['died'],
+    )
+
+
 def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
     """
     선언에 적힌 행동과 결과를 서술자에게 줄 모양으로 바꾼다. key 를 규칙에 적힌 이름으로 바꾼다.
 
     결과가 적힌 선언에만 쓴다.
     """
-    ability = find_ability(ruleset, declaration.action['ability'])
-    difficulty = find_difficulty(ruleset, declaration.action['difficulty'])
+    ability_key, difficulty_key = check_terms(declaration)
+    ability = find_ability(ruleset, ability_key)
+    difficulty = find_difficulty(ruleset, difficulty_key)
     outcome = declaration.outcome
     return Verdict(
         ability=ability.name,
@@ -106,6 +152,7 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
         npc_impact=to_npc_impact(outcome.get('npc_effect')),
         hindrances=hindrance_names(ruleset, outcome.get('hindrance')),
         aimed=aimed_name(ruleset, outcome.get('called_shot')),
+        treatment=to_treatment(outcome.get('treatment')),
     )
 
 

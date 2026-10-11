@@ -29,12 +29,16 @@ from app.engine.ruleset import (
     InjuryTable,
     InjuryTriggers,
     Magnitude,
+    Mishap,
+    MishapRow,
+    MishapTable,
     Modifier,
     PointBuy,
     PointCost,
     Ruleset,
     ScoreRoll,
     TableRow,
+    Treatment,
 )
 
 
@@ -56,7 +60,8 @@ class Template(enum.StrEnum):
 # SRD 5.2.1 도 Wizards of the Coast LLC 가 CC BY 4.0 으로 공개한 문서다. 출처 표시는 README 에 있다
 # 부상 중 짧은 것(기절, 중독, 실명, 귀먹음)은 SRD 5.1 의 상태 이상(conditions)을 본떴다.
 # 효과는 이 엔진의 세 종류로 옮겼고, 풀리기까지의 라운드 수는 이 프로젝트가 정했다.
-# 오래 가는 부상, 결손, 후유증, 부상 표, 노려 치기는 SRD 5.1 에 없다. 이 프로젝트가 정한 값이다
+# 오래 가는 부상, 결손, 후유증, 부상 표, 노려 치기, 치료와 치료 실패 표는 SRD 5.1 에 없다. 이 프로젝트가 정한 값이다.
+# 치료의 능력을 지혜로 한 것은 SRD 5.1 의 의학(Medicine)이 지혜의 기술이기 때문이다
 
 
 def disadvantage(*abilities: str) -> Effect:
@@ -107,7 +112,7 @@ SRD5_INJURIES = (
         healing=Healing.ROUNDS,
         rounds=3,
     ),
-    # --- 오래 가는 것. 나을 때 후유증 표를 굴린다 ---
+    # --- 오래 가는 것. 나을 때 후유증 표를 굴린다. 치료에 성공하면 10 라운드씩 빨리 낫는다 ---
     Injury(
         key='broken_arm',
         name='팔 골절',
@@ -117,6 +122,8 @@ SRD5_INJURIES = (
         rounds=30,
         aftermath=InjuryTable(sides=20, rows=rows((1, 5, 'crooked_arm'), (6, 20, None))),
         aimable=True,
+        treat_difficulty='hard',
+        treat_rounds=10,
     ),
     Injury(
         key='leg_wound',
@@ -127,6 +134,8 @@ SRD5_INJURIES = (
         rounds=20,
         aftermath=InjuryTable(sides=20, rows=rows((1, 3, 'limp'), (4, 20, None))),
         aimable=True,
+        treat_difficulty='medium',
+        treat_rounds=10,
     ),
     # --- 결손과 후유증. 낫지 않는다 ---
     Injury(
@@ -178,6 +187,22 @@ SRD5_INJURY_TABLE = InjuryTable(
         (17, 18, 'broken_arm'),
         (19, 19, 'deep_scar'),
         (20, 20, 'lost_eye'),
+    ),
+)
+
+
+# 치료. 지혜로 판정한다. 실패하면 d100 을 굴린다. 실패의 절반은 아무 일도 없고, 1 이 나오면 죽는다
+SRD5_TREATMENT = Treatment(
+    ability='wis',
+    mishaps=MishapTable(
+        sides=100,
+        rows=(
+            MishapRow(low=1, high=1, kind=Mishap.FATAL),
+            MishapRow(low=2, high=10, kind=Mishap.WORSEN, rounds=10, magnitude='moderate'),
+            MishapRow(low=11, high=30, kind=Mishap.WORSEN, rounds=5),
+            MishapRow(low=31, high=50, kind=Mishap.PAIN, magnitude='light'),
+            MishapRow(low=51, high=100, kind=Mishap.NOTHING),
+        ),
     ),
 )
 
@@ -234,6 +259,7 @@ SRD5 = Ruleset(
     injury_triggers=InjuryTriggers(big_hit_percent=50, downed=True, called_shot=True),
     # 노려 치면 목표값이 5 오른다
     called_shot=CalledShot(mode=CalledShotMode.TARGET_PLUS, amount=5),
+    treatment=SRD5_TREATMENT,
 )
 
 TEMPLATES: dict[Template, Ruleset] = {Template.SRD5: SRD5}

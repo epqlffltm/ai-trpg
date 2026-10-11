@@ -73,6 +73,8 @@ class DeathCause(enum.StrEnum):
     DEATH_SAVE = 'death_save'
     # 쓰러진 캐릭터를 플레이어가 스스로 보냈다
     GAVE_UP = 'gave_up'
+    # 치료에 실패해 치료 실패 표에서 즉사가 나왔다(#114 다)
+    TREATMENT = 'treatment'
 
 
 class TableStatus(enum.StrEnum):
@@ -467,7 +469,7 @@ class TableInjury(Base):
     부상 하나. 캐릭터의 시트 하나나 NPC 하나가 입었다.
 
     어떤 부상인지는 이름(injury)으로만 적는다. 효과와 사실은 테이블의 판에 굳은 규칙에 있다(app/engine/ruleset.py).
-    짧은 것은 풀릴 라운드(ends_after_round)가 적힌다. 그 라운드가 닫힐 때 풀린다.
+    짧은 것과 오래 가는 것은 풀리거나 나을 라운드(ends_after_round)가 적힌다. 그 라운드가 닫힐 때 끝난다.
     풀리거나 나으면 그 시각(ended_at)을 적고 지우지 않는다. 누가 언제 무엇을 입었는지의 기록이다.
     부상을 만들고 푸는 것은 엔진뿐이다(app/tables/injuries.py). 방장도 손으로 고치지 못한다.
     """
@@ -502,7 +504,8 @@ class TableInjury(Base):
     source: Mapped[str] = mapped_column(String(20))
     # 생긴 라운드. 그 라운드가 닫힐 때 생겼다
     round_number: Mapped[int] = mapped_column(Integer)
-    # 이 라운드가 닫힐 때 풀린다. 짧은 부상에만 있다. 오래 가는 것과 결손은 비어 있다
+    # 이 라운드가 닫힐 때 풀리거나 낫는다. 짧은 것과 오래 가는 것에 있고, 결손은 비어 있다.
+    # 오래 가는 것은 치료로 앞당겨지거나 덧나서 늦춰진다(app/tables/injuries.py 의 reschedule)
     ends_after_round: Mapped[int | None] = mapped_column(Integer)
     # 풀리거나 나은 시각. 비어 있으면 아직 입고 있다
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
