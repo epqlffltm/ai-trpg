@@ -86,3 +86,26 @@ class DeafSource:
 
     async def stop(self) -> None:
         return None
+
+
+class QuietSource:
+    """신호를 듣고 있다고 하지만 아무 신호도 전하지 않는 것. DB 의 신호를 놓친 상황을 만든다."""
+
+    async def ensure_listening(self) -> bool:
+        return True
+
+    async def stop(self) -> None:
+        return None
+
+
+class FakeClock:
+    """테스트가 손으로 흘리는 시계. 스트림의 박자를 실제로 기다리지 않고 재게 한다."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds

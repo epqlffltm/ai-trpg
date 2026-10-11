@@ -10,6 +10,9 @@ HTTP 를 모른다. 메시지(Frame)를 하나씩 내놓을 뿐이고, 글자로
   2. 신호가 오거나 일정 시간이 지날 때까지 기다린다.
 처음 붙었을 때 밀린 것을 보내는 것과 실시간으로 새 것을 보내는 것이 같은 코드다.
 신호는 "지금 읽어 보라"는 뜻일 뿐이다. 신호를 놓쳐도 다음 차례에 읽는다.
+신호가 오면 그 종류만 읽는다. 대신 일정 시간마다 신호와 상관없이 이벤트와 채팅을 모두 읽는다(박자).
+박자는 마지막 신호가 아니라 마지막 박자부터 센다. 다른 종류의 신호(입력 중, 서술의 조각)가 쉬지 않고 와도 밀리지 않는다.
+조용할 때만 모두 읽으면, 채팅의 신호 하나를 놓친 채로 입력 중 신호가 이어질 때 그 채팅이 한없이 늦어진다.
 저장하지 않는 것(입력 중, 쓰이는 중인 서술의 조각)은 신호가 내용의 전부다. 받은 대로 바로 보내고, 놓치면 그만이다.
 
 DB 연결을 붙잡고 있지 않는다. 스트림은 몇 분씩 열려 있는데 풀의 연결은 몇 개뿐이다. 읽을 때만 잠깐 빌린다.
@@ -17,8 +20,9 @@ DB 연결을 붙잡고 있지 않는다. 스트림은 몇 분씩 열려 있는�
 
 import enum
 import json
+import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -37,9 +41,9 @@ from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables.models import TableStatus
 
-# 신호가 없을 때 이 시간(초)마다 깨어난다. 깨어나면 주석을 보내고 DB 를 직접 읽는다.
+# 박자. 이 시간(초)마다 주석을 보내고 DB 에서 이벤트와 채팅을 모두 읽는다. 신호가 오고 있어도 그렇게 한다.
 # 주석을 보내는 이유: 써 봐야 연결이 죽었는지 안다. 그리고 중간의 프록시가 조용한 연결을 끊지 않게 한다.
-# DB 를 읽는 이유: 신호가 끊겼어도 이 시간 안에는 새 것이 간다
+# DB 를 읽는 이유: 신호가 끊겼거나 하나를 놓쳤어도 이 시간 안에는 새 것이 간다
 HEARTBEAT_SECONDS = 15.0
 # 신호를 듣지 못하는 동안(듣는 연결을 맺지 못함) 깨어나는 간격(초). 신호 대신 자주 읽어 늦음을 줄인다
 DEAF_HEARTBEAT_SECONDS = 5.0
@@ -88,6 +92,15 @@ def seconds_left(viewer: AccessClaims) -> float:
 def wake_interval(heartbeat: float, deaf_heartbeat: float, listening: bool) -> float:
     """신호가 없을 때 몇 초 뒤에 깨어날까. 신호를 듣지 못하는 동안에는 더 자주 깨어난다."""
     return heartbeat if listening else min(heartbeat, deaf_heartbeat)
+
+
+def wait_seconds(beat_at: float, now: float, viewer: AccessClaims) -> float:
+    """
+    신호를 얼마나(초) 기다릴까. 다음 박자(beat_at)와 토큰이 만료되는 때 중 먼저 오는 쪽까지다.
+
+    beat_at 과 now 는 같은 시계의 시각이다. 이미 지났으면 0 이다. 기다리지 않고 바로 돌아온다.
+    """
+    return max(min(beat_at - now, seconds_left(viewer)), 0)
 
 
 def closed_frame(reason: Closed) -> Frame:
@@ -192,6 +205,7 @@ async def stream(
     cursor: Cursor,
     heartbeat: float = HEARTBEAT_SECONDS,
     deaf_heartbeat: float = DEAF_HEARTBEAT_SECONDS,
+    clock: Callable[[], float] = time.monotonic,
 ) -> AsyncIterator[Frame | Comment]:
     """
     테이블의 새 이벤트와 새 채팅을 생기는 대로 내놓는다. 닫아야 할 때까지 끝나지 않는다.
@@ -201,6 +215,8 @@ async def stream(
 
     자리를 먼저 잡고 그다음에 읽는다. 반대로 하면 읽은 뒤 자리를 잡기 전에 생긴 것의 신호를 놓친다.
     신호를 듣지 못해도(listening 이 False) 끝내지 않는다. 더 자주 깨어나 DB 를 직접 읽는다.
+    신호가 오면 그 종류만 읽고, 박자마다 모두 읽는다. 박자는 신호가 이어져도 제때 온다.
+    clock 은 박자를 재는 시계다. 테스트가 시간을 마음대로 흘리려고 꽂는다.
     방송실이 닫히면(서버가 꺼짐) 닫는다는 메시지를 보내고 끝낸다. 스트림이 끝나야 서버가 꺼진다.
     """
     with hub.subscribe(table_id) as subscription:
@@ -209,6 +225,8 @@ async def stream(
 
         kinds: set[Kind] = set(STORED_KINDS)
         live: list[Frame] = []
+        # 다음 박자의 시각. 처음 읽기가 모두 읽으므로 거기서부터 센다
+        beat_at = clock() + wake_interval(heartbeat, deaf_heartbeat, listening)
         while True:
             async with session_factory() as session:
                 frames, closed = await read_new(session, viewer.user_id, table_id, cursor, kinds)
@@ -226,17 +244,17 @@ async def stream(
                 yield closed_frame(closed)
                 return
 
-            # 토큰이 만료되는 때에는 신호가 없어도 깨어나야 한다
-            interval = wake_interval(heartbeat, deaf_heartbeat, listening)
-            received = await subscription.wait(min(interval, max(seconds_left(viewer), 0)))
+            # 다음 박자까지 기다린다. 토큰이 만료되는 때에는 신호가 없어도 깨어나야 한다
+            received = await subscription.wait(wait_seconds(beat_at, clock(), viewer))
             if subscription.is_closed():
                 yield closed_frame(Closed.SERVER_SHUTDOWN)
                 return
-            if received is None:
+            kinds = {signal.kind for signal in received or ()} & STORED_KINDS
+            live = live_frames(received or set(), viewer.user_id)
+            # 신호 없이 깨어났거나(박자가 됐다, 토큰이 만료된다), 신호가 이어져 조용할 틈이 없었어도 박자가 지났다
+            if received is None or clock() >= beat_at:
                 yield Comment('ping')
                 # 듣는 연결이 끊겼으면 다시 맺는다
                 listening = await source.ensure_listening()
-                kinds, live = set(STORED_KINDS), []
-            else:
-                kinds = {signal.kind for signal in received} & STORED_KINDS
-                live = live_frames(received, viewer.user_id)
+                kinds = set(STORED_KINDS)
+                beat_at = clock() + wake_interval(heartbeat, deaf_heartbeat, listening)
