@@ -14,7 +14,9 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
@@ -38,6 +40,12 @@ const (
 	DefaultSpendFreeFirst = true
 	// DefaultFreeCreditTTL 은 무료 크레딧이 지급된 뒤 사라질 때까지의 시간이다. 1주일이다.
 	DefaultFreeCreditTTL = 7 * 24 * time.Hour
+	// DefaultAppEnvironment 는 배포 환경의 이름이다. 로그의 environment 칸에 적힌다.
+	DefaultAppEnvironment = "development"
+	// DefaultAppVersion 은 배포한 코드의 버전이다. 로그의 version 칸에 적힌다. 운영에서는 git SHA 를 넣는다.
+	DefaultAppVersion = "dev"
+	// DefaultLogLevel 은 남기는 로그의 가장 낮은 수준이다.
+	DefaultLogLevel = "info"
 	// MinFreeCreditTTL 은 FREE_CREDIT_TTL 로 받는 가장 짧은 시간이다.
 	// DB 는 시각을 백만분의 1초까지만 적는다. 그보다 짧으면 지급한 순간과 사라지는 순간이 같아진다.
 	MinFreeCreditTTL = time.Second
@@ -53,6 +61,16 @@ const (
 // 이름이 접속 설정(search_path)에 그대로 들어가므로 다른 글자를 받지 않는다.
 var schemaPattern = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
+var (
+	// environmentPattern 은 APP_ENVIRONMENT 로 받는 모양이다. 소문자로 시작하는 짧은 이름이다.
+	environmentPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
+	// versionPattern 은 APP_VERSION 으로 받는 모양이다. git SHA, 태그(v1.2.3), 이미지 태그가 들어간다.
+	// 이 값들은 모든 로그 줄에 실린다. 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+	versionPattern = regexp.MustCompile(`^[A-Za-z0-9._+-]{1,64}$`)
+	// logLevels 는 LOG_LEVEL 로 받는 값들이다.
+	logLevels = []string{"debug", "info", "warning", "error"}
+)
+
 // Lookup 은 이름으로 설정값을 찾는다. 없으면 두 번째 값이 false 다. os.LookupEnv 와 같은 모양이다.
 type Lookup func(name string) (string, bool)
 
@@ -60,6 +78,11 @@ type Lookup func(name string) (string, bool)
 type Settings struct {
 	// Debug 가 켜지면 개발용 동작(자세한 로그)을 쓴다. 운영에서는 끈다.
 	Debug bool
+	// AppEnvironment 와 AppVersion 은 이 프로세스가 어디에 배포된 어느 버전인지다. 모든 로그 줄에 실린다.
+	AppEnvironment string
+	AppVersion     string
+	// LogLevel 은 남기는 로그의 가장 낮은 수준이다. debug, info, warning, error 가운데 하나다.
+	LogLevel string
 	// Host 와 Port 는 서버가 요청을 받는 주소다.
 	Host string
 	Port int
@@ -106,12 +129,23 @@ func Load(lookup Lookup) (Settings, error) {
 	freeTTL, freeTTLErr := readDuration(lookup, "FREE_CREDIT_TTL", DefaultFreeCreditTTL, MinFreeCreditTTL)
 	webhookSecret, webhookErr := readSecret(lookup, "PG_WEBHOOK_SECRET", MinWebhookSecretLength)
 	welcome, welcomeErr := readCredits(lookup, "WELCOME_CREDITS", DefaultWelcomeCredits, MaxWelcomeCredits)
+	environment, environmentErr := readPattern(lookup, "APP_ENVIRONMENT", DefaultAppEnvironment, environmentPattern,
+		"소문자로 시작하고 소문자, 숫자, 밑줄, 붙임표로 된 32자 이하의 이름이어야 합니다")
+	version, versionErr := readPattern(lookup, "APP_VERSION", DefaultAppVersion, versionPattern,
+		"영문자, 숫자, 점, 밑줄, 더하기, 붙임표로 된 64자 이하의 값이어야 합니다")
+	logLevel, logLevelErr := readChoice(lookup, "LOG_LEVEL", DefaultLogLevel, logLevels)
 
-	if err := errors.Join(debugErr, portErr, dbErr, jwksErr, freeFirstErr, freeTTLErr, webhookErr, welcomeErr); err != nil {
+	if err := errors.Join(
+		debugErr, portErr, dbErr, jwksErr, freeFirstErr, freeTTLErr, webhookErr, welcomeErr,
+		environmentErr, versionErr, logLevelErr,
+	); err != nil {
 		return Settings{}, err
 	}
 	return Settings{
 		Debug:          debug,
+		AppEnvironment: environment,
+		AppVersion:     version,
+		LogLevel:       logLevel,
 		Host:           readString(lookup, "HOST", DefaultHost),
 		Port:           port,
 		DatabaseURL:    db.URL,
@@ -144,6 +178,25 @@ func readString(lookup Lookup, name string, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// readPattern 은 정해 둔 모양의 값을 읽는다. 없으면 fallback 이고, 모양이 다르면 오류다.
+// 오류에는 받은 값을 싣지 않는다. rule 은 어떤 모양이어야 하는지 알려 주는 말이다.
+func readPattern(lookup Lookup, name string, fallback string, pattern *regexp.Regexp, rule string) (string, error) {
+	value := readString(lookup, name, fallback)
+	if !pattern.MatchString(value) {
+		return "", fmt.Errorf("%s 는 %s", name, rule)
+	}
+	return value, nil
+}
+
+// readChoice 는 정해 둔 값들 가운데 하나를 읽는다. 없으면 fallback 이고, 그 밖의 값이면 오류다.
+func readChoice(lookup Lookup, name string, fallback string, choices []string) (string, error) {
+	value := readString(lookup, name, fallback)
+	if !slices.Contains(choices, value) {
+		return "", fmt.Errorf("%s 는 %s 가운데 하나여야 합니다", name, strings.Join(choices, ", "))
+	}
+	return value, nil
 }
 
 // readRequired 는 반드시 있어야 하는 값을 읽는다. 없거나 비어 있으면 오류다.

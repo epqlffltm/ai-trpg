@@ -34,6 +34,7 @@
 - [채팅](#채팅)
 - [실시간 스트림](#실시간-스트림)
 - [로어북 검색](#로어북-검색)
+- [로그와 요청 식별자](#로그와-요청-식별자)
 - [CI](#ci)
 - [설계 메모](#설계-메모)
 - [출처 표시](#출처-표시)
@@ -1673,6 +1674,56 @@ uv run python -m scripts.eval_memory --fake
 - 인물의 상한 0.45 가 F1 은 가장 높았지만 이름이 나온 장면(14 라운드의 경감)의 기억을 놓쳤다. 0.50 은 관련 없는 장면에 넣는 수가 같으면서 재현율이 높다. 0.60 부터는 관련 없는 장면에 넣는 수가 늘었다(비우기 0.80 → 0.60).
 - 잘못 넣은 것으로 센 것 중에는 GM 의 감각으로 넣어도 되는 것이 섞여 있다(배신을 따지는 다음 라운드, 경감이 처음 나온 라운드). 정답은 측정 전에 붙였고 고치지 않았다.
 - 한계: 게임 하나, 질의 18개라 질의 하나가 점수를 크게 흔든다. 질의를 늘리면 다시 잰다.
+
+## 로그와 요청 식별자
+
+네 서버가 같은 규격으로 로그를 남긴다. 규격의 전부는 [docs/observability.md](../docs/observability.md)에 있다. 여기는 이 서버에서 알아 둘 것만 적는다.
+
+- 로그는 표준 오류(stderr)에 **한 줄에 JSON 하나**로 나간다. 모든 줄에 `timestamp`, `level`, `service`(`game-server`), `environment`, `version`, `message` 가 있다.
+- 요청마다 식별자가 붙는다. 요청의 `X-Request-ID` 머리말이 영문자, 숫자, `.`, `_`, `-` 로 된 8~64자면 그대로 쓰고, 아니면 새 UUID 로 바꾼다.
+  정한 값은 **모든 응답의 `X-Request-ID` 머리말**로 돌려준다. 오류가 났을 때 이 값으로 로그를 찾는다.
+- 요청이 끝나면 한 줄이 남는다. 주소는 실제 값이 아니라 틀로 적는다(`/api/v1/game/tables/{table_id}`). 머리말, 주소 뒤에 붙은 값, 본문은 적지 않는다.
+- 4xx 는 `info`, 5xx 는 `error` 다. 처리하지 못한 예외는 호출 기록과 함께 로그에만 남고, 응답에는 정해진 말과 `X-Request-ID` 만 간다.
+- 비밀번호, 토큰, 이메일 주소 같은 값은 로그에 넘기지 않는다. 실수로 넘겨도 나가기 직전에 한 번 더 가린다(이름이 `password`, `token` 같은 칸, 글 속의 JWT 와 이메일의 모양).
+- 식별자는 로그를 찾는 데만 쓴다. 누구의 요청인지는 토큰만이 말한다.
+
+| 환경 변수 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
+| `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
+| `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
+
+세 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+
+개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
+
+```bash
+uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .route // "", .status_code // ""] | @tsv'
+```
+
+**이 서버에서 다른 것.**
+
+- 뒤에서 도는 작업(`app/core/jobs.py`)은 작업마다 `job_id` 를 가진다. 작업 안의 로그에는 `job_id` 와 `trace_id` 가 붙고 `request_id` 는 붙지 않는다.
+  작업은 그것을 띄운 요청이 끝난 뒤에도 돈다.
+
+  | 작업 | `operation` |
+  | --- | --- |
+  | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
+  | 로어북 항목의 벡터 만들기 | `lore.index` |
+  | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
+
+  작업을 띄우는 요청은 "작업을 뒤에 맡겼습니다"라는 줄을 남긴다. 그 줄의 `spawned_job_id` 가 새 작업의 번호다.
+  "라운드를 닫은 이 요청이 띄운 서술이 어떻게 끝났나"는 `request_id` → `spawned_job_id` → `job_id` 로 따라간다.
+- 작업이 끝나면 한 줄이 남는다. 끝까지 돌면 `info`(`result: success`), 서버를 끄느라 취소되면 `warning`(`cancelled`), 예외로 끝나면 `error`(`server_error`, `error_code: job.failed`)다.
+- 인증 서버에서 공개키를 받을 때 `traceparent` 머리말로 추적을 이어 준다. 두 서버의 로그가 같은 `trace_id` 로 묶인다. AI provider 에는 아무 식별자도 보내지 않는다.
+- 스트림(SSE)의 요청은 연결이 끊길 때 한 줄이 남는다. `duration_ms` 는 연결이 이어진 시간이다.
+- 처리하지 못한 예외의 응답은 `500 {"detail": "서버에서 오류가 났습니다. 잠시 후 다시 시도해 주세요."}` 다.
+- uvicorn 이 스스로 찍던 요청 줄(access log)은 껐다. 주소 뒤에 붙은 값까지 찍었고, 요청이 끝난 줄과 겹친다. uvicorn 의 나머지 줄(뜨고 꺼지는 것)은 같은 JSON 으로 나간다.
+- AI 에 보낸 글과 받은 글은 로그에 남기지 않는다. AI 호출의 기록은 따로 DB 에 남는다(`app/ai/calls.py`). 거기에도 보낸 글은 없고 지문만 있다.
+
+코드는 `app/observability/` 에 있다. `identifiers.py`(식별자의 규칙), `context.py`(요청과 작업 동안 식별자를 들고 있는 곳),
+`redaction.py`(가리는 규칙), `formatter.py`(JSON 한 줄), `setup.py`(로그를 거는 일), `middleware.py`(요청), `responses.py`(처리하지 못한 예외의 응답).
+
 
 ## CI
 

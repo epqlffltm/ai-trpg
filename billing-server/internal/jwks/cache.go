@@ -6,7 +6,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"errors"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -123,7 +123,7 @@ func (c *Cache) refetch(ctx context.Context) {
 	}
 	keys, err := c.fetcher.Fetch(ctx)
 	if err != nil {
-		log.Printf("기억한 키 %d개를 계속 쓴다", c.count())
+		slog.WarnContext(ctx, "기억한 키를 계속 쓴다", slog.Int("key_count", c.count()))
 		return
 	}
 	c.store(keys)

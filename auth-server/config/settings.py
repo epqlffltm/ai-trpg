@@ -14,6 +14,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -21,6 +22,9 @@ import environ
 from django.core.exceptions import ImproperlyConfigured
 
 from config.jwt_keys import compute_key_id, derive_public_key_pem, read_private_key_pem
+from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
+from observability.formatter import ServiceInfo
+from observability.setup import SERVICE_NAME, logging_settings
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,6 +53,39 @@ DEBUG = env.bool('DEBUG', default=False)
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
 
+# 관측(로그)
+# 규격은 저장소 루트의 docs/observability.md 에 있다
+
+# 이 서버가 도는 환경의 이름. 로그의 environment 칸에 들어간다.
+# development, test, staging, production 처럼 적는다. 기록을 가를 때 쓴다.
+# production 이면 DEBUG 와, 터미널에 메일을 출력하는 개발용 방식을 막는다(아래의 Email)
+APP_ENVIRONMENT = env('APP_ENVIRONMENT', default='development')
+
+# 이 서버의 버전. 로그의 version 칸에 들어간다. 배포할 때 git SHA 나 이미지의 버전을 넣는다
+APP_VERSION = env('APP_VERSION', default='dev')
+
+# 이 수준부터 로그를 남긴다. debug, info, warning, error 중 하나다
+LOG_LEVEL = env('LOG_LEVEL', default='info')
+
+# 이 값들은 로그의 모든 줄에 실린다. 줄바꿈이나 빈칸이 든 값을 받지 않는다
+if not re.fullmatch(r'[a-z][a-z0-9_-]{0,31}', APP_ENVIRONMENT):
+    raise ImproperlyConfigured('APP_ENVIRONMENT 는 영문 소문자로 시작하고 영문 소문자, 숫자, 밑줄, 붙임표만 씁니다.')
+if not re.fullmatch(r'[A-Za-z0-9._+-]{1,64}', APP_VERSION):
+    raise ImproperlyConfigured('APP_VERSION 은 영문, 숫자, 점, 밑줄, 더하기, 붙임표로 64자까지 씁니다.')
+if LOG_LEVEL not in ('debug', 'info', 'warning', 'error'):
+    raise ImproperlyConfigured("LOG_LEVEL 은 'debug', 'info', 'warning', 'error' 중 하나여야 합니다.")
+
+# DEBUG 가 켜져 있으면 예외의 응답에 호출 기록과 설정값이 실린다. 운영에서는 뜨지 않게 한다
+forbid_debug_in_production(DEBUG, APP_ENVIRONMENT)
+
+# 로그를 공통 규격의 JSON 으로 건다. Django 의 기본 함수 대신 식별자를 붙이는 일까지 하는 함수를 쓴다
+LOGGING_CONFIG = 'observability.setup.configure'
+LOGGING = logging_settings(
+    ServiceInfo(service=SERVICE_NAME, environment=APP_ENVIRONMENT, version=APP_VERSION),
+    LOG_LEVEL,
+)
+
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -67,6 +104,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # 요청마다 식별자(request_id, trace_id)를 걸고, 끝나면 한 줄을 남긴다. 응답에 X-Request-ID 를 돌려준다.
+    # 맨 앞에 둔다. 다른 미들웨어가 남기는 로그에도 식별자가 붙는다
+    'observability.middleware.RequestLoggingMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -266,6 +306,9 @@ ATTEMPT_LIMIT_KEY_PREFIX = 'auth:attempts'
 # Django 기본 console 백엔드는 한글 본문을 base64 로 출력해 읽을 수 없어서
 # 읽을 수 있게 출력하는 백엔드를 쓴다
 smtp_host = env('SMTP_HOST', default='')
+
+# 운영에서는 터미널에 출력하는 방식을 쓸 수 없다. 그 출력에는 받는 사람의 주소와 인증 코드가 그대로 찍힌다
+require_real_mailer_in_production(smtp_host, APP_ENVIRONMENT)
 
 if smtp_host:
     MAILERS = {

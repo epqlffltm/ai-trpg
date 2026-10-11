@@ -17,7 +17,10 @@ from django.core.management.base import BaseCommand
 from django.db import OperationalError, close_old_connections
 
 from accounts.outbox import DeliveryReport, deliver_due_mail
+from observability.jobs import run_as_job
 
+# 한 묶음을 처리하는 일의 이름. 로그의 operation 칸에 들어간다(docs/observability.md)
+DELIVER_OPERATION = 'mail.deliver_outgoing'
 # 보낼 메일이 없을 때 다시 확인하기까지 쉬는 시간(초)
 DEFAULT_INTERVAL_SECONDS = 1.0
 
@@ -36,7 +39,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options) -> None:
         if options['once']:
-            self._report(deliver_due_mail())
+            with run_as_job(DELIVER_OPERATION):
+                report = deliver_due_mail()
+            self._report(report)
             return
 
         self.stdout.write('메일 워커를 시작합니다. Ctrl+C 로 멈춥니다.')
@@ -62,9 +67,12 @@ class Command(BaseCommand):
         """
         close_old_connections()
         try:
-            return deliver_due_mail()
+            # 묶음마다 작업의 식별자(job_id)를 건다. 이 묶음이 남긴 로그가 그 식별자로 묶인다
+            with run_as_job(DELIVER_OPERATION):
+                return deliver_due_mail()
         except OperationalError as exc:
-            self.stderr.write(f'DB 에 접속하지 못했습니다. 잠시 뒤 다시 시도합니다: {exc}')
+            # 오류의 종류만 적는다. 오류의 글에는 DB 의 주소와 계정 이름이 들어 있다. 자세한 것은 로그에 남았다
+            self.stderr.write(f'DB 에 접속하지 못했습니다. 잠시 뒤 다시 시도합니다: {type(exc).__name__}')
             return DeliveryReport()
 
     def _report(self, report: DeliveryReport) -> None:

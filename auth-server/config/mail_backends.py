@@ -6,9 +6,39 @@
 Django 의 console 백엔드는 메일을 실제 전송 형식 그대로 출력한다.
 한글 본문은 base64 로 인코딩되어 나와, 터미널에서 인증 코드를 읽을 수 없다.
 같은 일을 하되 사람이 읽을 수 있는 형태로 출력한다.
+
+개발할 때만 쓴다. 출력에 받는 사람의 주소와 인증 코드가 그대로 찍힌다. 운영 환경에서는 쓸 수 없게 막는다
+(require_real_mailer_in_production).
 """
 
+from django.core.exceptions import ImproperlyConfigured
 from django.core.mail.backends.console import EmailBackend as ConsoleEmailBackend
+
+# 운영 환경의 이름. 설정의 APP_ENVIRONMENT 가 이 값이면 운영이다
+PRODUCTION = 'production'
+
+
+def require_real_mailer_in_production(smtp_host: str, environment: str) -> None:
+    """
+    운영 환경인데 메일 서버가 정해져 있지 않으면 서버가 뜨지 않게 한다. 설정을 읽을 때 부른다(config/settings.py).
+
+    메일 서버가 없으면 메일을 보내지 않고 터미널에 출력한다(아래의 ReadableConsoleEmailBackend).
+    그 출력에는 받는 사람의 주소와 인증 코드, 비밀번호 재설정 링크가 그대로 찍힌다. 운영에서는 표준 출력이
+    로그와 함께 모인다. 그대로 두면 인증 코드가 로그에 남는다(저장소 루트의 docs/observability.md).
+    """
+    if not smtp_host and environment == PRODUCTION:
+        raise ImproperlyConfigured('운영 환경(APP_ENVIRONMENT=production)에서는 SMTP_HOST 를 적어야 합니다.')
+
+
+def forbid_debug_in_production(debug: bool, environment: str) -> None:
+    """
+    운영 환경인데 DEBUG 가 켜져 있으면 서버가 뜨지 않게 한다. 설정을 읽을 때 부른다(config/settings.py).
+
+    DEBUG 가 켜져 있으면 Django 는 처리하지 못한 예외의 응답에 호출 기록과 설정값을 실어 보낸다.
+    개발할 때는 편하지만, 운영에서는 내부의 구조가 밖으로 나간다(저장소 루트의 docs/observability.md).
+    """
+    if debug and environment == PRODUCTION:
+        raise ImproperlyConfigured('운영 환경(APP_ENVIRONMENT=production)에서는 DEBUG 를 켤 수 없습니다.')
 
 
 class ReadableConsoleEmailBackend(ConsoleEmailBackend):

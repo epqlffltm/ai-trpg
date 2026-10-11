@@ -299,4 +299,4 @@ class RoundCloser:
         job = narrate_round(
             self.session_factory, self.narrator, table_id, number, started, self.lore, self.memories, self.histories
         )
-        self.jobs.spawn(job, name=f'narrate:{table_id}:{number}')
+        self.jobs.spawn(job, name=f'narrate:{table_id}:{number}', operation='round.narrate')

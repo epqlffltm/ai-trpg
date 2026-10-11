@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -28,6 +29,8 @@ func TestMain(m *testing.M) {
 	httpapi.SetMode(false)
 	gin.DefaultWriter = io.Discard
 	gin.DefaultErrorWriter = io.Discard
+	// 요청마다 남는 로그도 찍지 않는다. 로그를 보는 테스트는 제 로거를 따로 넣는다(observability_test.go)
+	slog.SetDefault(slog.New(slog.DiscardHandler))
 	os.Exit(m.Run())
 }
 

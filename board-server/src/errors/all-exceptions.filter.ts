@@ -18,6 +18,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { HTTP_OPERATION } from '../observability/request-logging.middleware.js';
 import { ErrorBody, errorBodyOf, SERVER_ERROR_DETAIL } from './error-body.js';
 
 /** 이 필터가 쓰는 응답의 부분. */
@@ -41,12 +42,33 @@ export class AllExceptionsFilter implements ExceptionFilter {
       .json({ detail: SERVER_ERROR_DETAIL });
   }
 
-  /** 뜻밖의 예외를 로그에 남긴다. 어디서 났는지(stack)까지 남긴다. 로그는 서버 안에서만 본다. */
+  /**
+   * 뜻밖의 예외를 로그에 남긴다. 어디서 났는지(stack)까지 남긴다. 로그는 서버 안에서만 본다.
+   *
+   * 공통 규격의 칸으로 남긴다(저장소 루트의 docs/observability.md). 요청의 식별자는 로거가 붙인다.
+   */
   private logUnexpected(exception: unknown): void {
     if (exception instanceof Error) {
-      this.logger.error(exception.message, exception.stack);
+      this.logger.error(unhandledFields(exception), exception.stack);
       return;
     }
-    this.logger.error(`예외가 아닌 값이 올라왔다: ${typeof exception}`);
+    this.logger.error({
+      message: `예외가 아닌 값이 올라왔다: ${typeof exception}`,
+      operation: HTTP_OPERATION,
+      error_code: UNHANDLED_ERROR_CODE,
+    });
   }
+}
+
+/** 처리하지 못한 예외의 오류 코드 */
+export const UNHANDLED_ERROR_CODE = 'http.unhandled_exception';
+
+/** 처리하지 못한 예외를 남기는 줄에 싣는 칸들. 예외의 기록은 따로 넘긴다. */
+export function unhandledFields(exception: Error): Record<string, string> {
+  return {
+    message: exception.message,
+    operation: HTTP_OPERATION,
+    error_code: UNHANDLED_ERROR_CODE,
+    error_type: exception.constructor.name,
+  };
 }

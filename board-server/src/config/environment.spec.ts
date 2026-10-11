@@ -5,11 +5,16 @@
  */
 
 import {
+  DEFAULT_APP_ENVIRONMENT,
+  DEFAULT_APP_VERSION,
   DEFAULT_DB_SCHEMA,
   DEFAULT_HOST,
   DEFAULT_JWT_AUDIENCE,
   DEFAULT_JWT_ISSUER,
+  DEFAULT_LOG_LEVEL,
   DEFAULT_PORT,
+  readAppEnvironment,
+  readAppVersion,
   readAuthJwksUrl,
   readDatabaseSettings,
   readDatabaseUrl,
@@ -18,6 +23,7 @@ import {
   readHost,
   readJwtAudience,
   readJwtIssuer,
+  readLogLevel,
   readPort,
 } from './environment.js';
 
@@ -204,6 +210,76 @@ describe('readJwtAudience', () => {
   });
 });
 
+describe('readAppEnvironment', () => {
+  it.each([undefined, '', '   '])('적지 않으면(%j) development 다', (value) => {
+    expect(readAppEnvironment(value)).toBe(DEFAULT_APP_ENVIRONMENT);
+    expect(DEFAULT_APP_ENVIRONMENT).toBe('development');
+  });
+
+  it.each(['production', 'staging', 'test', 'dev-2', 'qa_1'])(
+    '환경의 이름(%j)을 읽는다',
+    (value) => {
+      expect(readAppEnvironment(` ${value} `)).toBe(value);
+    },
+  );
+
+  it.each([
+    'Production',
+    '1st',
+    'prod uction',
+    'prod\n{"level":"error"}',
+    'a'.repeat(33),
+  ])('이름의 모양이 아니면(%j) 거부한다', (value) => {
+    // 이 값은 로그의 모든 줄에 실린다. 줄바꿈이 든 값을 받지 않는다
+    expect(() => readAppEnvironment(value)).toThrow('APP_ENVIRONMENT');
+  });
+});
+
+describe('readAppVersion', () => {
+  it.each([undefined, '', '   '])('적지 않으면(%j) dev 다', (value) => {
+    expect(readAppVersion(value)).toBe(DEFAULT_APP_VERSION);
+    expect(DEFAULT_APP_VERSION).toBe('dev');
+  });
+
+  it.each(['3f2a1b9', 'v1.2.3', '1.0.0+build.5', '2026-10-11_1'])(
+    '버전(%j)을 읽는다',
+    (value) => {
+      expect(readAppVersion(value)).toBe(value);
+    },
+  );
+
+  it.each(['v1 beta', 'v1\nforged', 'a'.repeat(65), 'v1/2', '"quoted"'])(
+    '버전의 모양이 아니면(%j) 거부한다',
+    (value) => {
+      expect(() => readAppVersion(value)).toThrow('APP_VERSION');
+    },
+  );
+});
+
+describe('readLogLevel', () => {
+  it.each([undefined, '', '   '])('적지 않으면(%j) info 다', (value) => {
+    expect(readLogLevel(value)).toBe(DEFAULT_LOG_LEVEL);
+    expect(DEFAULT_LOG_LEVEL).toBe('info');
+  });
+
+  it.each([
+    ['debug', 'debug'],
+    ['info', 'info'],
+    ['warning', 'warning'],
+    ['error', 'error'],
+    [' WARNING ', 'warning'],
+  ])('수준(%j)을 읽는다', (value, level) => {
+    expect(readLogLevel(value)).toBe(level);
+  });
+
+  it.each(['warn', 'verbose', 'trace', '3', 'critical'])(
+    '정해 둔 수준이 아니면(%j) 거부한다',
+    (value) => {
+      expect(() => readLogLevel(value)).toThrow('LOG_LEVEL');
+    },
+  );
+});
+
 describe('readDatabaseSettings', () => {
   it('DB 에 관한 값만 돌려준다', () => {
     const settings = readDatabaseSettings({
@@ -238,6 +314,9 @@ describe('readEnvironment', () => {
       AUTH_JWKS_URL,
       JWT_ISSUER: DEFAULT_JWT_ISSUER,
       JWT_AUDIENCE: DEFAULT_JWT_AUDIENCE,
+      APP_ENVIRONMENT: DEFAULT_APP_ENVIRONMENT,
+      APP_VERSION: DEFAULT_APP_VERSION,
+      LOG_LEVEL: DEFAULT_LOG_LEVEL,
     });
   });
 
@@ -250,6 +329,9 @@ describe('readEnvironment', () => {
       AUTH_JWKS_URL,
       JWT_ISSUER: 'other-auth',
       JWT_AUDIENCE: 'board-staging',
+      APP_ENVIRONMENT: 'production',
+      APP_VERSION: '3f2a1b9',
+      LOG_LEVEL: 'warning',
       PATH: '/usr/bin',
     });
 
@@ -261,6 +343,9 @@ describe('readEnvironment', () => {
       AUTH_JWKS_URL,
       JWT_ISSUER: 'other-auth',
       JWT_AUDIENCE: 'board-staging',
+      APP_ENVIRONMENT: 'production',
+      APP_VERSION: '3f2a1b9',
+      LOG_LEVEL: 'warning',
     });
   });
 

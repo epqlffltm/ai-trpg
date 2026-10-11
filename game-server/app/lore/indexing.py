@@ -93,4 +93,4 @@ class LoreIndexer:
     def schedule(self, version_id: uuid.UUID) -> None:
         """이 판의 색인을 맡긴다. 기다리지 않고 바로 돌아온다."""
         job = index_version(self.session_factory, self.embedder, version_id)
-        self.jobs.spawn(job, name=f'index-lore:{version_id}')
+        self.jobs.spawn(job, name=f'index-lore:{version_id}', operation='lore.index')

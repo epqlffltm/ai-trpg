@@ -9,6 +9,7 @@
 
 - [실행](#실행)
 - [API](#api)
+- [로그와 요청 식별자](#로그와-요청-식별자)
 - [CI](#ci)
 - [설계 메모](#설계-메모)
 - [운영 메모](#운영-메모)
@@ -207,6 +208,47 @@ access 토큰이 만료되면 프론트는 `/refresh`를 호출해 새 access �
 한 서버에서 샌 토큰이 다른 서버에도 통한다는 대가가 있다. access 토큰의 짧은 수명이 그 창을 줄인다.
 
 토큰의 `sub`는 회원의 `public_id`다.
+
+## 로그와 요청 식별자
+
+네 서버가 같은 규격으로 로그를 남긴다. 규격의 전부는 [docs/observability.md](../docs/observability.md)에 있다. 여기는 이 서버에서 알아 둘 것만 적는다.
+
+- 로그는 표준 오류(stderr)에 **한 줄에 JSON 하나**로 나간다. 모든 줄에 `timestamp`, `level`, `service`(`auth-server`), `environment`, `version`, `message` 가 있다.
+- 요청마다 식별자가 붙는다. 요청의 `X-Request-ID` 머리말이 영문자, 숫자, `.`, `_`, `-` 로 된 8~64자면 그대로 쓰고, 아니면 새 UUID 로 바꾼다.
+  정한 값은 **모든 응답의 `X-Request-ID` 머리말**로 돌려준다. 오류가 났을 때 이 값으로 로그를 찾는다.
+- 요청이 끝나면 한 줄이 남는다. 주소는 실제 값이 아니라 틀로 적는다(`/api/v1/auth/login`). 머리말, 주소 뒤에 붙은 값, 본문은 적지 않는다.
+- 4xx 는 `info`, 5xx 는 `error` 다. 처리하지 못한 예외는 호출 기록과 함께 로그에만 남고, 응답에는 정해진 말과 `X-Request-ID` 만 간다.
+- 비밀번호, 토큰, 이메일 주소 같은 값은 로그에 넘기지 않는다. 실수로 넘겨도 나가기 직전에 한 번 더 가린다(이름이 `password`, `token` 같은 칸, 글 속의 JWT 와 이메일의 모양).
+- 식별자는 로그를 찾는 데만 쓴다. 누구의 요청인지는 토큰만이 말한다.
+
+| 환경 변수 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
+| `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
+| `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
+
+세 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+
+개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
+
+```bash
+uv run python manage.py runserver 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .route // "", .status_code // ""] | @tsv'
+```
+
+**이 서버에서 다른 것.**
+
+- 워커와 예약 명령(`send_outgoing_mail`, `delete_unverified_users`, `send_security_digest`)은 요청이 아니라 작업이다. 로그에 `request_id` 대신 `job_id` 가 붙는다.
+  메일 워커는 1초마다 돌아서, 잘 끝난 것은 `debug` 로 남긴다. 실패만 `error`(`error_code: job.failed`)로 남는다.
+- **`APP_ENVIRONMENT=production` 이면 `SMTP_HOST` 를 꼭 적어야 한다.** 적지 않으면 서버가 뜨지 않는다.
+  `SMTP_HOST` 가 없으면 메일을 보내지 않고 터미널에 찍는데, 거기에는 받는 사람의 주소와 인증 코드가 그대로 나온다. 운영에서는 그것이 로그에 남는다.
+- **`APP_ENVIRONMENT=production` 이면 `DEBUG=true` 를 쓸 수 없다.** Django 는 `DEBUG` 가 켜져 있으면 예외의 응답에 호출 기록과 설정값을 실어 보낸다.
+- Django 가 스스로 찍던 요청 줄(`runserver` 의 `"GET /api/... 200"`)은 껐다. 주소 뒤에 붙은 값까지 찍었고, 요청이 끝난 줄과 겹친다.
+- 테스트를 돌릴 때는 로그를 찍지 않는다(`config/test_runner.py`). 로그를 보는 테스트는 `assertLogs` 로 직접 잡는다.
+- 이 서버에는 아직 `/health`, `/health/ready` 가 없다.
+
+코드는 `observability/` 에 있다. `identifiers.py`(식별자의 규칙), `context.py`(요청과 작업 동안 식별자를 들고 있는 곳),
+`redaction.py`(가리는 규칙), `formatter.py`(JSON 한 줄), `setup.py`(Django 의 `LOGGING`), `middleware.py`(요청), `jobs.py`(작업).
+
 
 ## CI
 
