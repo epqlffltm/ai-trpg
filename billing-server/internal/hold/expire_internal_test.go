@@ -23,7 +23,7 @@ func TestExpireOneSkipsAHoldExtendedAfterItWasListed(t *testing.T) {
 	at := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 	now := func() time.Time { return at }
 	wallets := wallet.NewService(pool, now, wallet.Policy{FreeFirst: true, FreeTTL: 7 * 24 * time.Hour})
-	service, err := NewService(pool, now, wallets, 24*time.Hour)
+	service, err := NewService(pool, now, wallets, pricing.NewService(pool, now), 24*time.Hour)
 	if err != nil {
 		t.Fatalf("홀드 서비스를 만들지 못했다: %v", err)
 	}

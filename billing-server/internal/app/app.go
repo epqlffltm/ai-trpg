@@ -18,14 +18,16 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
-// Services 는 크레딧을 다루는 서비스들이다.
+// Services 는 크레딧을 다루는 서비스들이다. 가격표(Prices)는 홀드가 쓰고, 값을 바꾸는 명령(cmd/prices)도 쓴다.
 type Services struct {
 	Wallet *wallet.Service
 	Orders *order.Service
 	Holds  *hold.Service
+	Prices *pricing.Service
 }
 
 // NewServices 는 규칙에 따라 서비스들을 만든다. now 는 지금 시각을 돌려주는 함수다.
@@ -37,11 +39,12 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, now func() time.Time) (
 	if err != nil {
 		return Services{}, err
 	}
-	holds, err := hold.NewService(pool, now, wallets, rules.HoldTTL)
+	prices := pricing.NewService(pool, now)
+	holds, err := hold.NewService(pool, now, wallets, prices, rules.HoldTTL)
 	if err != nil {
 		return Services{}, err
 	}
-	return Services{Wallet: wallets, Orders: orders, Holds: holds}, nil
+	return Services{Wallet: wallets, Orders: orders, Holds: holds, Prices: prices}, nil
 }
 
 // NewLogger 는 공통 규격(docs/observability.md)의 JSON 으로 out 에 적는 로거를 만든다.
