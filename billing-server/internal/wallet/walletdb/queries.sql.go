@@ -64,6 +64,33 @@ func (q *Queries) CreateFreeGrant(ctx context.Context, arg CreateFreeGrantParams
 	return id, err
 }
 
+const createPaidLot = `-- name: CreatePaidLot :one
+INSERT INTO paid_lots (user_id, order_id, amount, remaining, created_at)
+VALUES ($1, $2, $3, $3, $4)
+RETURNING id
+`
+
+type CreatePaidLotParams struct {
+	UserID  uuid.UUID
+	OrderID *uuid.UUID
+	Amount  credit.Amount
+	Now     time.Time
+}
+
+// 산 크레딧의 묶음을 만든다. 처음에는 넣은 만큼 남아 있다.
+// order_id 는 이 크레딧을 산 주문이다. 주문 없이 들어온 것이면 NULL 이다. 주문 하나에 묶음 하나다(paid_lots_order_once).
+func (q *Queries) CreatePaidLot(ctx context.Context, arg CreatePaidLotParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createPaidLot,
+		arg.UserID,
+		arg.OrderID,
+		arg.Amount,
+		arg.Now,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const ensureWallet = `-- name: EnsureWallet :exec
 
 INSERT INTO wallets (user_id, created_at, updated_at)
@@ -77,7 +104,7 @@ type EnsureWalletParams struct {
 }
 
 // billing-server/internal/wallet/queries.sql
-// 지갑, 무료 크레딧의 지급 묶음, 원장을 읽고 쓰는 SQL. sqlc 가 이 파일을 읽어 Go 코드(walletdb)를 만든다.
+// 지갑, 산 크레딧의 묶음, 무료 크레딧의 지급 묶음, 원장을 읽고 쓰는 SQL. sqlc 가 이 파일을 읽어 Go 코드(walletdb)를 만든다.
 // 이 파일을 고치면 billing-server 폴더에서 sqlc generate 를 다시 돌린다.
 //
 // 테이블 이름에 스키마를 붙이지 않는다. 어느 스키마인지는 연결의 search_path 가 정한다.
@@ -136,10 +163,10 @@ func (q *Queries) HasFreeGrantWithKey(ctx context.Context, arg HasFreeGrantWithK
 }
 
 const insertEntry = `-- name: InsertEntry :exec
-INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, order_id, hold_id, created_at)
+INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, lot_id, order_id, hold_id, created_at)
 VALUES (
     $1, $2, $3, $4,
-    $5, $6, $7, $8, $9
+    $5, $6, $7, $8, $9, $10
 )
 `
 
@@ -150,12 +177,13 @@ type InsertEntryParams struct {
 	Reason      string
 	Amount      credit.Amount
 	GrantID     pgtype.Int8
+	LotID       pgtype.Int8
 	OrderID     *uuid.UUID
 	HoldID      *uuid.UUID
 	Now         time.Time
 }
 
-// 원장에 한 줄을 덧붙인다.
+// 원장에 한 줄을 덧붙인다. 무료 크레딧의 줄은 지급 묶음(grant_id)을, 산 크레딧의 줄은 묶음(lot_id)을 적는다.
 func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) error {
 	_, err := q.db.Exec(ctx, insertEntry,
 		arg.UserID,
@@ -164,6 +192,7 @@ func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) error 
 		arg.Reason,
 		arg.Amount,
 		arg.GrantID,
+		arg.LotID,
 		arg.OrderID,
 		arg.HoldID,
 		arg.Now,
@@ -265,7 +294,7 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Lis
 }
 
 const listHoldLines = `-- name: ListHoldLines :many
-SELECT kind, grant_id, amount
+SELECT kind, grant_id, lot_id, amount
 FROM ledger_entries
 WHERE user_id = $1 AND hold_id = $2::UUID AND reason = 'hold'
 ORDER BY id
@@ -279,10 +308,12 @@ type ListHoldLinesParams struct {
 type ListHoldLinesRow struct {
 	Kind    string
 	GrantID pgtype.Int8
+	LotID   pgtype.Int8
 	Amount  credit.Amount
 }
 
 // 홀드로 뺀 줄들을 읽는다. 어디서 얼마를 뺐는지가 여기에 있다. 돌려줄 때 이 줄들을 거꾸로 한다.
+// 산 크레딧의 줄인데 묶음(lot_id)이 없으면 묶음을 두기 전(00007)에 건 홀드다.
 // 지갑의 줄을 잠근 뒤에 부른다.
 func (q *Queries) ListHoldLines(ctx context.Context, arg ListHoldLinesParams) ([]ListHoldLinesRow, error) {
 	rows, err := q.db.Query(ctx, listHoldLines, arg.UserID, arg.HoldID)
@@ -293,7 +324,12 @@ func (q *Queries) ListHoldLines(ctx context.Context, arg ListHoldLinesParams) ([
 	var items []ListHoldLinesRow
 	for rows.Next() {
 		var i ListHoldLinesRow
-		if err := rows.Scan(&i.Kind, &i.GrantID, &i.Amount); err != nil {
+		if err := rows.Scan(
+			&i.Kind,
+			&i.GrantID,
+			&i.LotID,
+			&i.Amount,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -332,6 +368,39 @@ func (q *Queries) ListLiveFreeGrants(ctx context.Context, arg ListLiveFreeGrants
 	var items []ListLiveFreeGrantsRow
 	for rows.Next() {
 		var i ListLiveFreeGrantsRow
+		if err := rows.Scan(&i.ID, &i.Remaining); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenPaidLots = `-- name: ListOpenPaidLots :many
+SELECT id, remaining
+FROM paid_lots
+WHERE user_id = $1 AND remaining > 0
+ORDER BY created_at, id
+`
+
+type ListOpenPaidLotsRow struct {
+	ID        int64
+	Remaining credit.Amount
+}
+
+// 남은 것이 있는 산 크레딧의 묶음을, 먼저 들어온 것부터 읽는다. 지갑의 줄을 잠근 뒤에 부른다.
+func (q *Queries) ListOpenPaidLots(ctx context.Context, userID uuid.UUID) ([]ListOpenPaidLotsRow, error) {
+	rows, err := q.db.Query(ctx, listOpenPaidLots, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpenPaidLotsRow
+	for rows.Next() {
+		var i ListOpenPaidLotsRow
 		if err := rows.Scan(&i.ID, &i.Remaining); err != nil {
 			return nil, err
 		}
@@ -409,6 +478,23 @@ func (q *Queries) ReturnToFreeGrant(ctx context.Context, arg ReturnToFreeGrantPa
 	return err
 }
 
+const returnToPaidLot = `-- name: ReturnToPaidLot :exec
+UPDATE paid_lots
+SET remaining = remaining + $1
+WHERE id = $2
+`
+
+type ReturnToPaidLotParams struct {
+	Amount credit.Amount
+	ID     int64
+}
+
+// 산 크레딧의 묶음에 amount 만큼 돌려놓는다. 넣은 양보다 많아지면 CHECK 가 막는다.
+func (q *Queries) ReturnToPaidLot(ctx context.Context, arg ReturnToPaidLotParams) error {
+	_, err := q.db.Exec(ctx, returnToPaidLot, arg.Amount, arg.ID)
+	return err
+}
+
 const takeFromFreeGrant = `-- name: TakeFromFreeGrant :exec
 UPDATE free_grants
 SET remaining = remaining - $1
@@ -423,5 +509,22 @@ type TakeFromFreeGrantParams struct {
 // 지급 묶음에서 amount 만큼 뺀다. 남은 것보다 많이 빼면 CHECK 가 막는다.
 func (q *Queries) TakeFromFreeGrant(ctx context.Context, arg TakeFromFreeGrantParams) error {
 	_, err := q.db.Exec(ctx, takeFromFreeGrant, arg.Amount, arg.ID)
+	return err
+}
+
+const takeFromPaidLot = `-- name: TakeFromPaidLot :exec
+UPDATE paid_lots
+SET remaining = remaining - $1
+WHERE id = $2
+`
+
+type TakeFromPaidLotParams struct {
+	Amount credit.Amount
+	ID     int64
+}
+
+// 산 크레딧의 묶음에서 amount 만큼 뺀다. 남은 것보다 많이 빼면 CHECK 가 막는다.
+func (q *Queries) TakeFromPaidLot(ctx context.Context, arg TakeFromPaidLotParams) error {
+	_, err := q.db.Exec(ctx, takeFromPaidLot, arg.Amount, arg.ID)
 	return err
 }

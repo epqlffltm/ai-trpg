@@ -151,11 +151,75 @@ LIMIT $1
 // 대사가 쓰는 SQL. sqlc 가 이 파일을 읽어 Go 코드(reconciledb)를 만든다.
 // 이 파일을 고치면 billing-server 폴더에서 sqlc generate 를 다시 돌린다.
 //
-// 모두 읽기만 한다. "지금의 값"(지갑, 지급 묶음, 주문, 홀드)과 "왜 그렇게 되었는가"(원장)가 맞는지 본다.
+// 모두 읽기만 한다. "지금의 값"(지갑, 산 크레딧의 묶음, 지급 묶음, 주문, 홀드)과 "왜 그렇게 되었는가"(원장)가 맞는지 본다.
 // 맞지 않는 줄의 번호를 돌려준다. 고치지 않는다. 원장은 지울 수 없고, 무엇이 맞는지는 사람이 정한다.
 // 산 크레딧의 잔액이 원장의 paid 줄의 합과 다른 지갑.
 func (q *Queries) PaidBalanceMismatches(ctx context.Context, rowLimit int32) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, paidBalanceMismatches, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var user_id uuid.UUID
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const paidLotRemainingMismatches = `-- name: PaidLotRemainingMismatches :many
+SELECT p.id
+FROM paid_lots p
+LEFT JOIN (
+    SELECT lot_id, SUM(amount)::BIGINT AS total FROM ledger_entries WHERE lot_id IS NOT NULL GROUP BY lot_id
+) l ON l.lot_id = p.id
+WHERE p.remaining <> COALESCE(l.total, 0)
+ORDER BY p.id
+LIMIT $1
+`
+
+// 남은 양이 그 묶음을 가리키는 원장 줄의 합과 다른 산 크레딧의 묶음.
+func (q *Queries) PaidLotRemainingMismatches(ctx context.Context, rowLimit int32) ([]int64, error) {
+	rows, err := q.db.Query(ctx, paidLotRemainingMismatches, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const paidLotTotalMismatches = `-- name: PaidLotTotalMismatches :many
+SELECT w.user_id
+FROM wallets w
+LEFT JOIN (
+    SELECT user_id, SUM(remaining)::BIGINT AS total FROM paid_lots GROUP BY user_id
+) p ON p.user_id = w.user_id
+WHERE w.paid_balance <> COALESCE(p.total, 0)
+ORDER BY w.user_id
+LIMIT $1
+`
+
+// 산 크레딧의 잔액이 그 사용자의 묶음들의 남은 양의 합과 다른 지갑.
+func (q *Queries) PaidLotTotalMismatches(ctx context.Context, rowLimit int32) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, paidLotTotalMismatches, rowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +250,36 @@ LIMIT $1
 // 치렀는데(paid) 크레딧이 들어온 줄이 없거나, 들어온 양이 주문의 크레딧과 다른 주문.
 func (q *Queries) PaidOrdersWithoutDeposit(ctx context.Context, rowLimit int32) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, paidOrdersWithoutDeposit, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const paidOrdersWithoutLot = `-- name: PaidOrdersWithoutLot :many
+SELECT o.id
+FROM orders o
+LEFT JOIN paid_lots p ON p.order_id = o.id
+WHERE o.status = 'paid' AND (p.id IS NULL OR p.amount <> o.credits OR p.user_id <> o.user_id)
+ORDER BY o.id
+LIMIT $1
+`
+
+// 치렀는데(paid) 그 주문의 묶음이 없거나, 묶음의 양이나 주인이 주문과 다른 주문. 청약철회가 이 묶음을 본다.
+func (q *Queries) PaidOrdersWithoutLot(ctx context.Context, rowLimit int32) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, paidOrdersWithoutLot, rowLimit)
 	if err != nil {
 		return nil, err
 	}

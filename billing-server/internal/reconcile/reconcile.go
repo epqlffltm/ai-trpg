@@ -3,7 +3,7 @@
 // Package reconcile 은 하루 한 번 도는 대사(對査)다. 장부가 맞는지 보고, 결과를 모르는 채로 남은 주문을 끝낸다.
 //
 //  1. 오래 confirming 에 머문 주문을 결제 대행사에 물어 끝낸다(order.ResolveStale). 이것만 상태를 바꾼다.
-//  2. "지금의 값"과 원장이 맞는지 본다. 읽기만 한다. 맞지 않는 줄의 번호를 돌려줄 뿐 고치지 않는다.
+//  2. "지금의 값"(지갑, 산 크레딧의 묶음, 지급 묶음, 주문, 홀드)과 원장이 맞는지 본다. 읽기만 한다. 맞지 않는 줄의 번호를 돌려줄 뿐 고치지 않는다.
 //     원장은 지울 수 없고, 무엇이 맞는지는 사람이 정한다.
 //  3. 정리 작업이 밀려 있지 않은지 센다(만료 시각이 한참 지났는데 아직 끝나지 않은 것).
 //
@@ -30,6 +30,12 @@ const (
 	CheckPaidBalance = "paid_balance"
 	// CheckGrantRemaining 은 무료 크레딧 묶음의 남은 양이 그 묶음을 가리키는 원장 줄의 합과 같은지다. 번호는 지급 묶음이다.
 	CheckGrantRemaining = "grant_remaining"
+	// CheckPaidLotRemaining 은 산 크레딧 묶음의 남은 양이 그 묶음을 가리키는 원장 줄의 합과 같은지다. 번호는 산 크레딧의 묶음이다.
+	CheckPaidLotRemaining = "paid_lot_remaining"
+	// CheckPaidLotTotal 은 지갑의 산 크레딧이 그 사용자의 묶음들의 남은 양의 합과 같은지다. 번호는 사용자다.
+	CheckPaidLotTotal = "paid_lot_total"
+	// CheckPaidOrderLot 은 치른 주문마다 그 주문의 묶음이 같은 양, 같은 주인으로 있는지다. 번호는 주문이다.
+	CheckPaidOrderLot = "paid_order_lot"
 	// CheckPaidOrderDeposit 은 치른 주문마다 크레딧이 그만큼 들어왔는지다. 번호는 주문이다.
 	CheckPaidOrderDeposit = "paid_order_deposit"
 	// CheckDepositOrder 는 주문으로 들어온 크레딧마다 그 주문이 치른 상태인지다. 번호는 원장의 줄이다.
@@ -140,6 +146,15 @@ var checks = []check{
 	}},
 	{CheckGrantRemaining, func(ctx context.Context, q *reconciledb.Queries, limit int32) ([]string, error) {
 		return intStrings(q.GrantRemainingMismatches(ctx, limit))
+	}},
+	{CheckPaidLotRemaining, func(ctx context.Context, q *reconciledb.Queries, limit int32) ([]string, error) {
+		return intStrings(q.PaidLotRemainingMismatches(ctx, limit))
+	}},
+	{CheckPaidLotTotal, func(ctx context.Context, q *reconciledb.Queries, limit int32) ([]string, error) {
+		return uuidStrings(q.PaidLotTotalMismatches(ctx, limit))
+	}},
+	{CheckPaidOrderLot, func(ctx context.Context, q *reconciledb.Queries, limit int32) ([]string, error) {
+		return uuidStrings(q.PaidOrdersWithoutLot(ctx, limit))
 	}},
 	{CheckPaidOrderDeposit, func(ctx context.Context, q *reconciledb.Queries, limit int32) ([]string, error) {
 		return uuidStrings(q.PaidOrdersWithoutDeposit(ctx, limit))

@@ -131,6 +131,25 @@ func (f fixture) grantIDs() []string {
 	return ids
 }
 
+// lotIDs 는 이 사용자의 산 크레딧 묶음 번호들이다.
+func (f fixture) lotIDs() []string {
+	f.t.Helper()
+	rows, err := f.pool.Query(ctx(f.t), "SELECT id FROM paid_lots WHERE user_id = $1 ORDER BY id", f.user)
+	if err != nil {
+		f.t.Fatalf("묶음을 읽지 못했다: %v", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			f.t.Fatalf("묶음을 읽지 못했다: %v", err)
+		}
+		ids = append(ids, strconv.FormatInt(id, 10))
+	}
+	return ids
+}
+
 // flagged 는 그 검사에서 걸린 번호들이다.
 func flagged(report reconcile.Report, check string) []string {
 	var ids []string
@@ -188,7 +207,25 @@ func TestBooksKeptByTheServicesAreClean(t *testing.T) {
 	report := f.run()
 
 	ids := append([]string{f.user.String(), paid.ID.String(), captured.ID.String(), released.ID.String(), expired.ID.String()}, f.grantIDs()...)
-	wantNotFlagged(t, report, ids...)
+	wantNotFlagged(t, report, append(ids, f.lotIDs()...)...)
+}
+
+func TestAPaidLotThatDisagreesIsFound(t *testing.T) {
+	f := setUp(t)
+	paid := f.buy()
+	// 원장에 적지 않고 묶음의 남은 양만 바꾼다. 묶음의 원장도, 지갑의 합도 맞지 않는다
+	f.exec("UPDATE paid_lots SET remaining = remaining - 1 WHERE order_id = $1", paid.ID)
+
+	report := f.run()
+
+	for _, id := range f.lotIDs() {
+		wantFlagged(t, report, reconcile.CheckPaidLotRemaining, id)
+	}
+	wantFlagged(t, report, reconcile.CheckPaidLotTotal, f.user.String())
+	// 원장과 지갑은 서로 맞는다. 어긋난 것은 묶음뿐이다
+	if slices.Contains(flagged(report, reconcile.CheckPaidBalance), f.user.String()) {
+		t.Error("원장과 지갑이 맞는데 paid_balance 검사에 걸렸다")
+	}
 }
 
 func TestAWalletThatDisagreesWithTheLedgerIsFound(t *testing.T) {
@@ -232,7 +269,20 @@ func TestOrdersAndDepositsThatDoNotMatchAreFound(t *testing.T) {
 	report := f.run()
 
 	wantFlagged(t, report, reconcile.CheckPaidOrderDeposit, unpaid.String())
+	// 그 주문의 묶음도 없다. 청약철회가 볼 것이 없다
+	wantFlagged(t, report, reconcile.CheckPaidOrderLot, unpaid.String())
 	wantFlagged(t, report, reconcile.CheckDepositOrder, strconv.FormatInt(depositLine, 10))
+}
+
+func TestAnOrderLotThatDoesNotMatchTheOrderIsFound(t *testing.T) {
+	f := setUp(t)
+	paid := f.buy()
+	// 묶음의 양이 주문의 크레딧과 다르다. 남은 양은 그대로라 다른 검사에는 걸리지 않는다
+	f.exec("UPDATE paid_lots SET amount = amount + 1 WHERE order_id = $1", paid.ID)
+
+	report := f.run()
+
+	wantFlagged(t, report, reconcile.CheckPaidOrderLot, paid.ID.String())
 }
 
 func TestAHoldWhoseLinesDoNotMatchItsStatusIsFound(t *testing.T) {
