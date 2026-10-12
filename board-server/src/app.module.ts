@@ -30,6 +30,7 @@ import { validationPipe } from './errors/validation.js';
 import { HealthModule } from './health/health.module.js';
 import { MeModule } from './me/me.module.js';
 import { PostsModule } from './posts/posts.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { PostsModule } from './posts/posts.module.js';
     BoardsModule,
     PostsModule,
     CommentsModule,
+    ReportsModule,
   ],
   providers: [
     { provide: APP_PIPE, useFactory: validationPipe },
