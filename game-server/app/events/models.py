@@ -56,6 +56,8 @@ class EventType(enum.StrEnum):
     ROUND_TIME_LIMIT_CHANGED = 'round_time_limit_changed'
     # 방장이 서술 등급을 바꿨다. 다음 라운드부터 그 등급이다
     NARRATION_TIER_CHANGED = 'narration_tier_changed'
+    # 방장이 크레딧이 모자란 사람을 기다리는 규칙(시간, 자동으로 빼기)을 바꿨다
+    CREDIT_WAIT_CHANGED = 'credit_wait_changed'
 
     # --- 진행 ---
     # 방장이 테이블을 시작했다
@@ -95,6 +97,10 @@ class EventType(enum.StrEnum):
     # 이 라운드의 서술 값을 내는 사람 하나(user_id)의 크레딧이 모자란다. 걸어 보고 알았다(app/billing/).
     # 그 사람이 충전하지 않거나 방장이 내보내지 않으면 라운드를 닫을 때 서술이 실패한다(insufficient_credits)
     NARRATION_CREDITS_SHORT = 'narration_credits_short'
+    # 크레딧이 모자란 사람을 기다리는 시간이 지나 서버가 그 사람을 자리에서 뺐다. 나머지로 다시 서술한다
+    MEMBER_DROPPED = 'member_dropped'
+    # 크레딧이 모자란 사람을 기다리는 시간이 지나 낼 수 있는 사람의 값을 돌려줬다. 라운드는 멈춘 채로 있다
+    NARRATION_CREDITS_RELEASED = 'narration_credits_released'
     # 테이블이 끝났다
     TABLE_ENDED = 'table_ended'
 

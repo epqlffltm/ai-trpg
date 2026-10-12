@@ -182,7 +182,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/personas/{id}` | 보관한 캐릭터 하나 | access 토큰 |
 | PUT | `/api/v1/game/personas/{id}` | 보관한 캐릭터 고치기. 보낸 것으로 통째로 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/personas/{id}` | 보관한 캐릭터 지우기. 204 | access 토큰 |
-| POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_tier` 로 서술 등급을 고른다(비우면 `standard`). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
+| POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_tier` 로 서술 등급을 고른다(비우면 `standard`). `credit_wait_seconds`, `remove_short_payers` 로 크레딧이 모자란 사람을 기다리는 규칙을 고른다(비우면 5분, 켬). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables` | 내가 앉아 있는 테이블 목록. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/join` | 초대 코드로 테이블에 들어가 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables/narration-tiers` | 이 서버가 내주는 서술 등급들(`{"tiers": ["standard", "premium"]}`). 테이블을 만들거나 등급을 바꿀 때 이 중에서 고른다 | access 토큰 |
@@ -201,6 +201,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/narration-style` | 서술 문체 바꾸기. 방장만. 진행 중에도 된다. `null` 이면 판의 추천 문체로 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/round-time-limit` | 라운드의 시간 제한(초) 바꾸기. 방장만. 진행 중에도 되고 다음 라운드부터 쓴다. `null` 이면 시간 제한 없음 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/narration-tier` | 서술 등급 바꾸기. 방장만. 이 서버가 내주는 등급만. 진행 중에도 되고 다음 라운드부터 쓴다 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/credit-wait` | 크레딧이 모자란 사람을 기다리는 시간(`credit_wait_seconds`, 30~3600초)과 지나면 빼는지(`remove_short_payers`) 바꾸기. 방장만. 둘 다 적는다. 진행 중에도 되고 지금 기다리는 라운드에도 바로 쓴다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/start` | 테이블 시작하기. 방장만. 모두 캐릭터가 있어야 한다. 모두가 시트를 받는다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/end` | 테이블 끝내기. 방장만 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds` | 라운드 목록. 처음 것부터. `limit`, `offset` | access 토큰 |
@@ -1269,6 +1270,21 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
   그래서 **방장이 모자란 사람을 내보내면 바로 다시 맡겨 서술할 수 있다.** 서술해도 되는지 볼 때 돌려줄 것·돌려준 청구는 보지 않는다.
 - 다음 라운드부터는 남은 사람만 낸다.
 
+**모자란 사람을 기다리는 기한**([#181](https://github.com/epqlffltm/ai-trpg/issues/181), `app/rounds/credit_waits.py`). 한 사람이 모자라 서술이 멈추면 낼 수 있는 사람의 값도 묶인다. 그래서 정해 둔 시간만 기다린다.
+- 기다리는 시간(`credit_wait_seconds`)은 서술이 크레딧 부족으로 실패한 때부터 센다. 기본 5분, 30초~1시간. 방장이 만들 때 고르고 진행 중에도 바꾼다(`PUT .../credit-wait`). 바꾸면 지금 기다리는 라운드에도 바로 쓴다.
+- 그 안에 모자란 사람이 충전하거나 방장이 내보내면 방장이 다시 맡겨 서술한다.
+- 지나면 서버의 시계(5초마다)가 테이블의 규칙(`remove_short_payers`)대로 한다.
+
+  | 규칙 | 하는 일 |
+  | --- | --- |
+  | 켬(기본) | 모자란 사람을 자리에서 빼고(`member_dropped`) 나머지로 바로 다시 서술한다. 뺀 사람의 청구는 돌려준다. 방장이면 방장을 넘긴다 |
+  | 끔 | 낼 수 있는 사람의 값을 돌려준다(`narration_credits_released`). 라운드는 멈춘 채로 둔다. 방장이 다시 맡기면 그때 앉은 사람 모두에게 새 이름표(`...:rN`)로 다시 건다(`settling.restore`). 한 번만 빠진다 |
+
+- 앉은 사람 모두가 모자라면 아무것도 하지 않는다. 묶인 값이 없고, 모두 빼면 앉은 사람이 없어진다.
+- 한 번 한 뒤에는 다시 하지 않는다. 뺐으면 모자란 청구가 없고, 돌려줬으면 낼 수 있는 청구가 없다. 끈 테이블에서 다시 맡겼는데 또 모자라면 그때부터 다시 기다린다.
+- 뺀 사람의 선언은 닫기 시작할 때 굳어 장면에 들어간다. 값을 걸지 못했으니 받지 않는다.
+- 찾을 때는 잠그지 않고(서술이 실패한 채 닫히지 않은 라운드만 담는 색인 `ix_table_rounds_failed`), 하기 전에 테이블을 잠그고 다시 본다. 서버가 여럿이어도 한 번만 한다.
+
 **라운드를 열 때 미리 건다.** 닫을 때 걸면 그 순간 결제 서버가 죽어 있을 때 서술이 멈춘다. 열 때 걸어 두면 라운드가 열려 있는 동안 결제 서버가 죽었다 살아나도 그 라운드는 서술한다.
 크레딧이 모자란 것도 선언하기 전에 안다. 대가는 라운드가 열려 있는 동안 서술 한 번의 값이 묶이는 것이다.
 - 열 때와 닫을 때 모두 결제 서버가 죽어 있으면 서술하지 않는다(`billing_unavailable`). 결제 서버를 기다리지 않고 외상으로 서술하면 받을 길이 없다. 홀드를 두는 이유가 그것이다.
@@ -1328,7 +1344,6 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 
 **알려진 한계**
 - 방장이 테이블을 끝내지 않고 버려 두면 열린 라운드의 값(앉은 사람마다 서술 한 번)이 계속 묶여 있다. 게임 서버가 연장하므로 결제 서버의 만료로도 풀리지 않는다. 방장이 끝내거나 그 사람이 나가야 돌아온다.
-- 모자란 사람이 충전하지도 나가지도 않고 방장도 내보내지 않으면, 낼 수 있는 사람의 값도 함께 묶인다. 기다리는 기한과 자동으로 빼는 옵션은 [#181](https://github.com/epqlffltm/ai-trpg/issues/181) 에서 한다.
 - 크레딧이 모자란 것을 알린 뒤에 충전해도 정리 작업은 다시 걸지 않는다. 라운드를 닫을 때 다시 걸어 본다. 모자란 사람의 테이블마다 결제 서버를 두드리지 않으려는 것이다.
 - 등급을 넘는 넘어가기는 없다. `premium` 의 모델들이 모두 실패하면 `standard` 로 서술하지 않고 실패로 적는다. 방장이 다시 맡기거나 다음 라운드부터 등급을 낮춘다.
 - 이 기능 전에 연 라운드는 마이그레이션이 그때의 방장에게 청구를 만들어 둔다(진행 중인 테이블의 열린 라운드와 닫는 중인 라운드). 결제 서버를 켜지 않았으면 받지 않고 지나간다.
@@ -1358,6 +1373,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `narration_style_changed` | 방장이 서술 문체를 바꿨다. 다음 서술부터 그 문체다 | `narration_style`: 바꾼 문체 |
 | `round_time_limit_changed` | 방장이 라운드의 시간 제한을 바꿨다. 다음 라운드부터 쓴다 | `round_time_limit`: 바꾼 값(초, 없으면 `null`) |
 | `narration_tier_changed` | 방장이 서술 등급을 바꿨다. 다음 라운드부터 그 등급이다 | `narration_tier`: 바꾼 등급 |
+| `credit_wait_changed` | 방장이 크레딧이 모자란 사람을 기다리는 규칙을 바꿨다 | `credit_wait_seconds`, `remove_short_payers` |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
 | `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_tier`(이 라운드의 서술 등급) |
@@ -1375,6 +1391,8 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `reason`(`all_declared`, `host`, `timeout`), `idle`: 선언을 내지 않은 사람. 쓰러진 사람과 그 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다 |
 | `narration_failed` | GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고 방장이 바로 다시 맡길 수 있다 | `round`, `reason`: 마지막 실패의 이유. 서술 값을 잡지 못했으면 `insufficient_credits` 또는 `billing_unavailable`([서술 값](#서술-값)). 라운드의 등급의 모델이 서버에 없으면 `tier_unavailable`([서술 등급](#테이블)) |
 | `narration_credits_short` | 이 라운드의 서술 값을 내는 사람 하나의 크레딧이 모자란다. 서버가 값을 걸어 보고 알았다. 한 라운드에 사람마다 한 번 | `round`, `user_id`: 모자란 사람. 그 사람이 충전하지 않거나 방장이 내보내지 않으면 라운드를 닫을 때 서술이 실패한다(`insufficient_credits`) |
+| `member_dropped` | 크레딧이 모자란 사람을 기다리는 시간이 지나 서버가 그 사람을 자리에서 뺐다. 나머지로 다시 서술한다. 방장이었으면 바로 뒤에 `host_changed` | `round`, `user_id`, `character_name` |
+| `narration_credits_released` | 크레딧이 모자란 사람을 기다리는 시간이 지나 낼 수 있는 사람의 값을 돌려줬다(자동으로 빼기를 끈 테이블). 라운드는 멈춘 채로 있다. 방장이 다시 맡기면 모두에게 다시 건다 | `round` |
 | `table_ended` | 테이블이 끝났다 | |
 
 모집 중에 캐릭터를 정하는 것은 적지 않는다. 시작할 때의 명단(`table_started`)에 한 번 적힌다.

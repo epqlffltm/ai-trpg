@@ -11,13 +11,13 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
 from app.billing.models import DUE_STATUSES, OPEN_STATUSES, ChargeStatus, NarrationCharge
 from app.rounds.models import Round
-from app.tables.models import GameTable, TableStatus
+from app.tables.models import GameTable, TableMember, TableStatus
 
 
 def add_charges(session: AsyncSession, charges: list[NarrationCharge]) -> None:
@@ -32,6 +32,60 @@ async def find_round_charges(session: AsyncSession, table_id: uuid.UUID, number:
         .join(Round, Round.id == NarrationCharge.round_id)
         .where(Round.table_id == table_id, Round.number == number)
         .order_by(NarrationCharge.created_at, NarrationCharge.id)
+    )
+    return list(await session.scalars(query))
+
+
+async def find_round_payers(
+    session: AsyncSession, round_id: uuid.UUID, statuses: tuple[ChargeStatus, ...]
+) -> list[uuid.UUID]:
+    """라운드의 청구 중 statuses 의 상태인 것의 내는 사람들. 청구를 만든 차례다."""
+    query = (
+        select(NarrationCharge.payer_id)
+        .where(NarrationCharge.round_id == round_id, NarrationCharge.status.in_(statuses))
+        .order_by(NarrationCharge.created_at, NarrationCharge.id)
+    )
+    return list(await session.scalars(query))
+
+
+async def find_seated(session: AsyncSession, table_id: uuid.UUID) -> set[uuid.UUID]:
+    """테이블에 지금 앉아 있는 사람들."""
+    return set(await session.scalars(select(TableMember.user_id).where(TableMember.table_id == table_id)))
+
+
+def has_charge(statuses: tuple[ChargeStatus, ...]) -> ColumnElement[bool]:
+    """라운드에 statuses 의 상태인 청구가 있다는 조건."""
+    return exists().where(NarrationCharge.round_id == Round.id, NarrationCharge.status.in_(statuses))
+
+
+async def find_waiting_table_ids(
+    session: AsyncSession,
+    now: datetime,
+    waited_for: tuple[ChargeStatus, ...],
+    payable: tuple[ChargeStatus, ...],
+    limit: int,
+) -> list[uuid.UUID]:
+    """
+    크레딧이 모자란 사람을 기다리는 시간이 지난 라운드의 테이블들. 오래 기다린 것부터 limit 개.
+
+    서술이 실패한 채 닫히지 않은 진행 중인 테이블의 라운드 중에서, 모자란 청구(waited_for)와 낼 수 있는 청구(payable)가
+    함께 있고, 실패한 때부터 테이블의 기다리는 시간이 지난 것이다. 잠그지 않는다. 고른 뒤 테이블을 잠그고 다시 본다.
+    색인(ix_table_rounds_failed)이 서술이 실패한 채 닫히지 않은 라운드만 담는다.
+    """
+    deadline = Round.narration_failed_at + func.make_interval(0, 0, 0, 0, 0, 0, GameTable.credit_wait_seconds)
+    query = (
+        select(Round.table_id)
+        .join(GameTable, GameTable.id == Round.table_id)
+        .where(
+            Round.narration_failed_at.is_not(None),
+            Round.closed_at.is_(None),
+            GameTable.status == TableStatus.PLAYING,
+            deadline <= now,
+            has_charge(waited_for),
+            has_charge(payable),
+        )
+        .order_by(Round.narration_failed_at)
+        .limit(limit)
     )
     return list(await session.scalars(query))
 

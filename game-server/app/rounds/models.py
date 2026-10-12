@@ -71,6 +71,10 @@ class CloseReason(enum.StrEnum):
     TIMEOUT = 'timeout'
 
 
+# 서술이 실패한 채 닫히지 않은 라운드라는 조건. 마이그레이션도 같은 글자를 쓴다
+FAILED_CONDITION = 'narration_failed_at IS NOT NULL AND closed_at IS NULL'
+
+
 class Round(Base):
     """
     라운드 하나. 장면 하나와, 그 장면에 대한 선언들이다.
@@ -87,6 +91,9 @@ class Round(Base):
         # 닫힌 라운드(closed_at 이 있는 것)는 이 색인에 들어가지 않으므로 몇 개든 된다.
         # 코드가 틀려서 라운드를 닫지 않고 새로 열어도, DB 가 막는다
         Index('uq_table_rounds_open', 'table_id', unique=True, postgresql_where='closed_at IS NULL'),
+        # 서술이 실패한 채 닫히지 않은 라운드를 서버가 몇 초마다 찾는다(크레딧을 기다리는 기한, app/rounds/clock.py).
+        # 그런 라운드만 색인에 든다. 없으면 바퀴마다 지금까지의 라운드를 모두 훑는다
+        Index('ix_table_rounds_failed', 'narration_failed_at', postgresql_where=FAILED_CONDITION),
         # 비어 있으면 조건이 참도 거짓도 아니라서 통과한다. 적혀 있을 때만 아는 문체인지 본다
         CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
         CheckConstraint(one_of('narration_tier', NarrationTier), name='narration_tier_allowed'),

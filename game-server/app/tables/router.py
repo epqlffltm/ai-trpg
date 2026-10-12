@@ -24,7 +24,7 @@ from app.personas.schemas import PersonaOut
 from app.rounds import service as round_service
 from app.rounds.router import Closing
 from app.rounds.tiers import NarrationTier
-from app.tables import deaths, injuries, replacements, rolls, service, sheets, styles, tiers, time_limits
+from app.tables import credit_waits, deaths, injuries, replacements, rolls, service, sheets, styles, tiers, time_limits
 from app.tables.errors import (
     MemberNotFoundError,
     NotHostError,
@@ -37,6 +37,7 @@ from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 from app.tables.schemas import (
     CharacterOut,
     CharacterUpdate,
+    CreditWaitUpdate,
     FallenOut,
     HostTransfer,
     InjuryOut,
@@ -83,6 +84,8 @@ def to_summary(table: GameTable) -> TableSummary:
         narration_style=table.narration_style,
         round_time_limit=table.round_time_limit,
         narration_tier=table.narration_tier,
+        credit_wait_seconds=table.credit_wait_seconds,
+        remove_short_payers=table.remove_short_payers,
         created_at=table.created_at,
     )
 
@@ -465,6 +468,19 @@ async def change_narration_tier(
     지금 열린 라운드는 연 때의 등급으로 값을 걸었고 그 등급으로 서술한다.
     """
     table = await tiers.change_narration_tier(session, user.user_id, table_id, data, offered)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/credit-wait', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_credit_wait(
+    table_id: uuid.UUID, data: CreditWaitUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 자리에서 빼는지를 바꾼다. 방장만 한다.
+
+    진행 중에도 된다. 지금 기다리는 라운드에도 바로 쓴다.
+    """
+    table = await credit_waits.change_credit_wait(session, user.user_id, table_id, data)
     return to_detail(table, user.user_id)
 
 
