@@ -33,7 +33,7 @@ from app.tables import service as tables
 from app.tables import state as table_state
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
-from tests.conftest import EVERY_TIER
+from tests.conftest import EVERY_TIER, no_limits
 from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
@@ -82,7 +82,7 @@ async def test_two_messages_at_once_get_different_sequences(session: AsyncSessio
 
     # B: 친구가 글을 쓴다. A 가 끝날 때까지 기다려야 한다
     data = MessageCreate(content='나중에 쓴 글')
-    posting = asyncio.create_task(service.post_message(other_session, FRIEND, table.id, data))
+    posting = asyncio.create_task(service.post_message(other_session, FRIEND, table.id, data, no_limits()))
     assert await is_waiting(posting)
 
     await session.commit()

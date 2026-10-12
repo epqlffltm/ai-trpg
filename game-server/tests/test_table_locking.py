@@ -32,7 +32,7 @@ from app.tables import state as table_state
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember
 from app.tables.schemas import CharacterUpdate, JoinRequest, LobbyJoinRequest, TableCreate
-from tests.conftest import EVERY_TIER
+from tests.conftest import EVERY_TIER, no_limits
 from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
@@ -116,7 +116,9 @@ async def test_joining_from_the_lobby_waits_for_another_join(session: AsyncSessi
 
     # B: 로비에서 같은 테이블에 들어오려 한다. 초대 코드로 들어올 때와 같은 잠금을 기다려야 한다
     viewer = make_viewer(THIRD)
-    joining = asyncio.create_task(service.join_public_table(other_session, viewer, table.id, LobbyJoinRequest()))
+    joining = asyncio.create_task(
+        service.join_public_table(other_session, viewer, table.id, LobbyJoinRequest(), no_limits())
+    )
     assert await is_waiting(joining)
 
     await session.commit()

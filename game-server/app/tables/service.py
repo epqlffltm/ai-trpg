@@ -38,16 +38,18 @@ from app.auth.tokens import AccessClaims
 from app.billing import charges
 from app.events import recorder
 from app.events.models import EventType
+from app.limits.setup import Limiting
 from app.listings import service as listings
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
 from app.rounds.tiers import NarrationTier
 from app.tables import npcs, repository, sheets
-from app.tables.building import build_table, check_table_password, hash_table_password, new_invite_code, seat_limit
+from app.tables.building import build_table, hash_table_password, new_invite_code, seat_limit
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
 from app.tables.models import GameTable, TableMember, TableStatus
+from app.tables.password_attempts import guarded_password_check
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
 from app.tables.seating import end, hand_over, record_hand_over, take_seat
 from app.tables.state import (
@@ -199,13 +201,14 @@ async def join_table(session: AsyncSession, viewer: AccessClaims, data: JoinRequ
 
 
 async def join_public_table(
-    session: AsyncSession, viewer: AccessClaims, table_id: uuid.UUID, data: LobbyJoinRequest
+    session: AsyncSession, viewer: AccessClaims, table_id: uuid.UUID, data: LobbyJoinRequest, limiting: Limiting
 ) -> GameTable:
     """
     로비에 보이는 테이블에 들어가 앉는다. 초대 코드가 필요 없다.
 
     로비에 보이지 않는 테이블이거나 볼 수 없는 등급이면 TableNotFoundError, 비밀번호가 틀렸으면 WrongPasswordError,
-    모집 중이 아니거나, 이미 앉아 있거나, 자리가 없으면 TableConflictError.
+    너무 많이 틀렸으면 TooManyAttempts(passwords.guard_password), 모집 중이 아니거나, 이미 앉아 있거나,
+    자리가 없으면 TableConflictError.
 
     비밀번호를 먼저 확인하고, 그다음에 잠근다. 확인하는 데 0.2 초가 걸려서, 잠근 채로 하면 그동안 테이블이 멈춘다.
     비밀번호와 로비에 보이는지는 테이블을 만든 뒤로 바뀌지 않으므로, 잠그기 전에 봐도 낡은 값이 아니다.
@@ -213,7 +216,7 @@ async def join_public_table(
     table = await repository.find_table(session, table_id)
     if table is None or not table.is_public or table.rating not in listings.allowed_ratings(viewer):
         raise TableNotFoundError
-    await check_table_password(table, data.password)
+    await guarded_password_check(table, viewer.user_id, data.password, limiting)
 
     table = await repository.lock_table(session, table_id)
     take_seat(table, viewer.user_id)

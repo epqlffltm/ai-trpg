@@ -18,6 +18,7 @@ from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.core.dice import Rolling
+from app.limits.routing import Limited
 from app.personas import saving
 from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
@@ -324,10 +325,14 @@ async def read_table(table_id: uuid.UUID, user: CurrentUser, session: Session) -
 
 @router.post('/{table_id}/join', response_model=TableDetail, status_code=status.HTTP_200_OK)
 async def join_public_table(
-    table_id: uuid.UUID, data: LobbyJoinRequest, user: CurrentUser, session: Session
+    table_id: uuid.UUID, data: LobbyJoinRequest, user: CurrentUser, session: Session, limiting: Limited
 ) -> TableDetail:
-    """로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 비밀번호를 보낸다."""
-    table = await service.join_public_table(session, user, table_id, data)
+    """
+    로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 비밀번호를 보낸다.
+
+    비밀번호를 너무 많이 틀리면 한동안 429 다(app/tables/password_attempts.py).
+    """
+    table = await service.join_public_table(session, user, table_id, data, limiting)
     return to_detail(table, user.user_id)
 
 
