@@ -40,6 +40,19 @@ func TestTheSignedTextIsMethodPathAndBodyOnSeparateLines(t *testing.T) {
 	}
 }
 
+func TestTheSignatureIsTheValueOtherServersCompute(t *testing.T) {
+	// 인증 서버(파이썬)의 테스트에 같은 값이 적혀 있다(auth-server/accounts/tests/test_service_signature.py).
+	// 한쪽의 계산이 바뀌면 그쪽의 테스트가 깨진다. 두 서버가 서로를 띄우지 않고도 약속을 지키는지 본다
+	const want = "t=1772442000,v1=9270f18fd4635b8f4489bf06d6c6f42275f2b08ea19876090cb7c2ea02a62aec"
+	welcome := []byte(`{"user_id":"11111111-2222-4333-8444-555555555555"}`)
+
+	got := serviceauth.Sign(secret, sentAt, http.MethodPost, "/api/v1/billing/service/grants/welcome", welcome)
+
+	if got != want {
+		t.Errorf("서명 = %q, 기대 = %q", got, want)
+	}
+}
+
 func TestTheSignatureCoversTheMethodThePathAndTheBody(t *testing.T) {
 	header := serviceauth.Sign(secret, sentAt, http.MethodPost, path, body)
 	cases := map[string]struct {

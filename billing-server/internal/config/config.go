@@ -109,6 +109,9 @@ type Settings struct {
 	// GameServerSecret 은 게임 서버가 보낸 요청의 서명을 확인하는 비밀이다. 게임 서버도 같은 값을 갖는다.
 	// 로그와 오류에 싣지 않는다.
 	GameServerSecret string
+	// AuthServerSecret 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다. 인증 서버도 같은 값을 갖는다(BILLING_SERVICE_SECRET).
+	// 로그와 오류에 싣지 않는다.
+	AuthServerSecret string
 }
 
 // Database 는 DB 에 접속하는 데 필요한 설정이다. 마이그레이션 명령(cmd/migrate)은 이것만 읽는다.
@@ -134,6 +137,7 @@ func Load(lookup Lookup) (Settings, error) {
 	freeTTL, freeTTLErr := readDuration(lookup, "FREE_CREDIT_TTL", DefaultFreeCreditTTL, MinFreeCreditTTL)
 	webhookSecret, webhookErr := readSecret(lookup, "PG_WEBHOOK_SECRET", MinWebhookSecretLength)
 	gameSecret, gameSecretErr := readSecret(lookup, "GAME_SERVER_SECRET", MinServiceSecretLength)
+	authSecret, authSecretErr := readSecret(lookup, "AUTH_SERVER_SECRET", MinServiceSecretLength)
 	welcome, welcomeErr := readCredits(lookup, "WELCOME_CREDITS", DefaultWelcomeCredits, MaxWelcomeCredits)
 	environment, environmentErr := readPattern(lookup, "APP_ENVIRONMENT", DefaultAppEnvironment, environmentPattern,
 		"소문자로 시작하고 소문자, 숫자, 밑줄, 붙임표로 된 32자 이하의 이름이어야 합니다")
@@ -143,7 +147,7 @@ func Load(lookup Lookup) (Settings, error) {
 
 	if err := errors.Join(
 		debugErr, portErr, dbErr, jwksErr, freeFirstErr, freeTTLErr, webhookErr, welcomeErr,
-		environmentErr, versionErr, logLevelErr, gameSecretErr, distinctSecrets(webhookSecret, gameSecret),
+		environmentErr, versionErr, logLevelErr, gameSecretErr, authSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret),
 	); err != nil {
 		return Settings{}, err
 	}
@@ -164,6 +168,7 @@ func Load(lookup Lookup) (Settings, error) {
 		WelcomeCredits:   welcome,
 		WebhookSecret:    webhookSecret,
 		GameServerSecret: gameSecret,
+		AuthServerSecret: authSecret,
 	}, nil
 }
 
@@ -240,11 +245,18 @@ func readSecret(lookup Lookup, name string, minimum int) (string, error) {
 	return value, nil
 }
 
-// distinctSecrets 는 두 비밀이 서로 다른 값인지 본다. 둘 중 하나라도 읽지 못했으면(빈 글자) 보지 않는다. 그 오류는 따로 난다.
-// 같은 값을 쓰면 결제 대행사가 아는 비밀로 게임 서버인 척할 수 있고, 하나가 새면 둘 다 샌 것이 된다.
-func distinctSecrets(webhookSecret string, gameSecret string) error {
-	if webhookSecret != "" && webhookSecret == gameSecret {
-		return errors.New("GAME_SERVER_SECRET 과 PG_WEBHOOK_SECRET 은 서로 다른 값이어야 합니다")
+// distinctSecrets 는 서명에 쓰는 비밀들이 서로 다른 값인지 본다. 읽지 못한 것(빈 글자)은 보지 않는다. 그 오류는 따로 난다.
+// 같은 값을 두 자리에 쓰면 한쪽이 아는 비밀로 다른 쪽인 척할 수 있고, 하나가 새면 둘 다 샌 것이 된다.
+func distinctSecrets(secrets ...string) error {
+	seen := map[string]bool{}
+	for _, secret := range secrets {
+		if secret == "" {
+			continue
+		}
+		if seen[secret] {
+			return errors.New("PG_WEBHOOK_SECRET, GAME_SERVER_SECRET, AUTH_SERVER_SECRET 은 서로 다른 값이어야 합니다")
+		}
+		seen[secret] = true
 	}
 	return nil
 }

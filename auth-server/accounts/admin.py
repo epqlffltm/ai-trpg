@@ -5,13 +5,13 @@
 
 User 는 Django 의 UserAdmin 을 상속해 비밀번호 해싱과 변경 화면을 그대로 쓰고,
 화면에 보이는 필드 구성만 이 프로젝트의 User 모델에 맞춘다.
-인증 코드, 보낼 메일, 보안 이벤트는 조회만 한다.
+인증 코드, 보낼 메일, 보안 이벤트, 환영 크레딧은 조회만 한다.
 """
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from accounts.models import EmailCode, OutgoingMail, SecurityEvent, User
+from accounts.models import EmailCode, OutgoingMail, SecurityEvent, User, WelcomeCredit
 
 
 @admin.register(User)
@@ -114,6 +114,32 @@ class SecurityEventAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     # 목록을 그릴 때 행마다 계정을 따로 조회하지 않게 한다
     list_select_related = ('user',)
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(WelcomeCredit)
+class WelcomeCreditAdmin(admin.ModelAdmin):
+    """
+    환영 크레딧을 조회만 한다. 운영자가 결제 서버에 맡기지 못하고 밀려 있는 줄을 확인하는 곳이다.
+
+    상태를 "맡기기 전" 으로 걸러 보면 아직 나가지 못한 줄과 마지막 오류가 나온다.
+    줄을 지우면 그 메일함이 환영 크레딧을 다시 받을 수 있게 된다. 그래서 지우는 것도 막는다.
+    """
+
+    list_display = ('user_public_id', 'status', 'attempts', 'last_error', 'created_at', 'next_attempt_at', 'finished_at')
+    list_filter = ('status',)
+    search_fields = ('user_public_id',)
+    ordering = ('-created_at',)
+    # 메일함의 열쇠는 화면에 보여 주지 않는다. 볼 일이 없는 값이다
+    exclude = ('mailbox_key',)
 
     def has_add_permission(self, request) -> bool:
         return False

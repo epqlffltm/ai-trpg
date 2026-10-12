@@ -287,3 +287,58 @@ class OutgoingMail(models.Model):
 
     def __str__(self) -> str:
         return f'{self.to_email} / {self.subject}'
+
+
+class WelcomeCreditStatus(models.TextChoices):
+    PENDING = 'pending', '맡기기 전'
+    GRANTED = 'granted', '지급됨'
+    ALREADY_GRANTED = 'already_granted', '이미 받은 사용자'
+    DISABLED = 'disabled', '결제 서버가 꺼 둠'
+
+
+class WelcomeCredit(models.Model):
+    """
+    환영 크레딧을 받을 메일함 하나. 두 가지 일을 한다.
+
+    하나는 "이 메일함은 이미 받았다"는 기록이다. 메일함마다 한 줄만 있을 수 있다.
+    계정을 지우고 같은 주소로 다시 가입해도, a+1@x.com 과 a+2@x.com 으로 계정을 둘 만들어도 줄은 하나다.
+
+    다른 하나는 결제 서버에 맡길 일의 목록(outbox)이다. 가입 인증과 같은 트랜잭션에서 적고,
+    따로 도는 워커(manage.py send_welcome_credits)가 꺼내 결제 서버에 맡긴다.
+    그래서 결제 서버가 느리거나 죽어도 가입은 영향을 받지 않고, 살아나면 지급된다.
+
+    끝난 줄도 지우지 않는다. 지우면 "이미 받았다"는 기록이 사라진다.
+    """
+
+    # 메일 주소를 정리한 뒤 서버의 비밀키로 서명한 값이다(welcome_credit.py). 주소 자체는 적지 않는다.
+    # 계정을 지운 뒤에도 이 줄은 남는다. 주소를 그대로 적어 두면 지운 계정의 주소가 남게 된다
+    mailbox_key = models.CharField('메일함의 열쇠', max_length=64, unique=True)
+    # 받을 사용자의 공개 ID. 결제 서버가 아는 사용자 번호다.
+    # 외래 키로 두지 않는다. 계정이 지워져도 이 줄은 남아야 한다
+    user_public_id = models.UUIDField('받는 사용자의 공개 ID')
+
+    status = models.CharField(
+        '상태',
+        max_length=20,
+        choices=WelcomeCreditStatus.choices,
+        default=WelcomeCreditStatus.PENDING,
+    )
+    attempts = models.PositiveIntegerField('시도 횟수', default=0)
+    # 마지막 실패의 이유. 상태 코드나 오류의 종류다
+    last_error = models.CharField('마지막 오류', max_length=200, blank=True)
+
+    created_at = models.DateTimeField('만든 시각', auto_now_add=True)
+    # 이 시각부터 맡길 수 있다. 실패하면 뒤로 미룬다
+    next_attempt_at = models.DateTimeField('다음 시도 시각')
+    finished_at = models.DateTimeField('끝난 시각', null=True, blank=True)
+
+    class Meta:
+        verbose_name = '환영 크레딧'
+        verbose_name_plural = '환영 크레딧'
+        indexes = [
+            # 워커가 "지금 맡길 수 있는 줄" 을 찾을 때 쓴다
+            models.Index(fields=['status', 'next_attempt_at'], name='accounts_welcome_due_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user_public_id} / {self.get_status_display()}'

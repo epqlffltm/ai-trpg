@@ -69,7 +69,7 @@ def outgoing_headers() -> dict[str, str]:
 
     request_id 는 넘기지 않는다. 받는 서버가 제 요청의 식별자를 따로 만든다. 둘은 trace_id 로 이어진다.
     밖의 서비스(메일 서버)를 부를 때는 붙이지 않는다. 우리 안의 식별자를 밖에 내보낼 까닭이 없다.
-    지금 인증 서버는 다른 서버를 부르지 않는다. 부르게 되면 이 함수를 쓴다.
+    결제 서버를 부를 때 쓴다(accounts/billing_client.py).
     """
     trace = _trace.get()
     return {TRACEPARENT_HEADER: format_traceparent(trace)} if trace else {}
