@@ -621,6 +621,9 @@ IP로 보여 한 사람의 시도가 모두를 막는다.
 이미지를 만들 때 `collectstatic` 으로 모아 둔다. 개발 중에는 `STATIC_ROOT` 를 적지 않는다.
 네 서버를 함께 컨테이너로 띄우는 법은 [저장소 README](../README.md#4-서버-넷을-컨테이너로-선택)에 있다.
 
+**저장소의 compose 로 띄우면** 아래의 워커와 주기 명령이 저절로 돈다. 워커는 `auth-mail`, `auth-welcome-credits`, 주기 명령은 `auth-cron`(시각은 `docker/cron/auth.crontab`)이다.
+PC 에서 직접 띄울 때는 아래의 명령을 손으로 돌린다.
+
 **만료된 토큰 기록 정리.** 발급 기록과 폐기 기록은 토큰이 만료된 뒤에도 테이블에 남는다.
 배포 환경에서는 아래 명령을 하루에 한 번 실행한다.
 
@@ -677,7 +680,7 @@ IP 차단이 꺼져 있는 상태다. 로그인은 계속 된다. 그동안에�
 
 | 묶음 | 이슈 |
 | --- | --- |
-| 배포 전에 해야 하는 것 | [#19](https://github.com/epqlffltm/ai-trpg/issues/19) 운영용 Django 보안 설정, [#20](https://github.com/epqlffltm/ai-trpg/issues/20) 운영 DB 계정의 `CREATEDB`, [#21](https://github.com/epqlffltm/ai-trpg/issues/21) JWT 키 교체, [#23](https://github.com/epqlffltm/ai-trpg/issues/23) 주기 명령과 워커의 자동 실행 |
+| 배포 전에 해야 하는 것 | [#19](https://github.com/epqlffltm/ai-trpg/issues/19) 운영용 Django 보안 설정, [#20](https://github.com/epqlffltm/ai-trpg/issues/20) 운영 DB 계정의 `CREATEDB`, [#21](https://github.com/epqlffltm/ai-trpg/issues/21) JWT 키 교체 |
 | 규모가 커지면 할 것 | [#24](https://github.com/epqlffltm/ai-trpg/issues/24) 메일 워커의 트랜잭션, [#25](https://github.com/epqlffltm/ai-trpg/issues/25) 로그 수집과 대시보드, [#26](https://github.com/epqlffltm/ai-trpg/issues/26) Redis 차단기 |
 | 프론트에서 할 것 | [#30](https://github.com/epqlffltm/ai-trpg/issues/30) refresh를 한 번에 하나만, [#31](https://github.com/epqlffltm/ai-trpg/issues/31) 비밀번호 재설정 화면 |
 
