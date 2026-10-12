@@ -1260,6 +1260,22 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `BILLING_SECRET` | 없음 | 요청에 서명하는 비밀. 결제 서버의 `GAME_SERVER_SECRET` 과 같은 값, 32자 이상. `BILLING_URL` 을 적었으면 없을 때 서버가 뜨지 않는다. 비밀값이다 |
 | `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초). 10초(서술 값을 잡는 데 쓰는 시간)를 넘을 수 없다 |
 
+**결제 서버와 붙여 보기.** 결제 서버가 떠 있어야 한다(`billing-server/README.md`).
+1. 서명 비밀을 맞춘다. 결제 서버의 `.env` 에 이미 있는 `GAME_SERVER_SECRET` 을 게임 서버의 `.env` 에 옮겨 적는다.
+   **저장소 루트에서** 실행한다. 값은 화면에 찍히지 않는다.
+
+   ```
+   $s = (Select-String -Path billing-server/.env -Pattern '^GAME_SERVER_SECRET=(.+)$').Matches[0].Groups[1].Value; Add-Content game-server/.env "`nBILLING_URL=http://127.0.0.1:8003`nBILLING_SECRET=$s"; Remove-Variable s
+   ```
+
+   ```
+   s=$(sed -n 's/^GAME_SERVER_SECRET=//p' billing-server/.env); printf '\nBILLING_URL=http://127.0.0.1:8003\nBILLING_SECRET=%s\n' "$s" >> game-server/.env; unset s
+   ```
+2. 방장이 될 사용자에게 크레딧이 있어야 한다. 가입하면 인증 서버가 환영 크레딧을 결제 서버에 맡긴다(`auth-server/README.md` 의 `send_welcome_credits`).
+   그 기능 전에 가입한 계정은 인증 서버의 `request_welcome_credits` 를 한 번 돌린다. 잔액은 결제 서버의 `GET /api/v1/billing/wallet` 으로 본다.
+3. 게임 서버를 다시 띄우고 테이블을 시작한다. 몇 초 뒤 잔액이 서술 한 번의 값만큼 줄고(홀드), 원장에 `hold` 줄이 생긴다.
+   라운드가 서술되면 확정되고, 테이블을 끝내면 돌아온다(`release` 줄).
+
 **알려진 한계**
 - 방장이 테이블을 끝내지 않고 버려 두면 열린 라운드의 값(서술 한 번)이 계속 묶여 있다. 정리는 방장의 끝내기나 결제 서버의 대사([#149](https://github.com/epqlffltm/ai-trpg/issues/149))가 맡는다.
 - 크레딧이 모자란 것을 알린 뒤에 충전해도 정리 작업은 다시 걸지 않는다. 라운드를 닫을 때 다시 걸어 본다. 모자란 사람의 테이블마다 결제 서버를 두드리지 않으려는 것이다.
