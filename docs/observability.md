@@ -155,6 +155,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | game-server | 로어북 항목의 벡터 만들기 | `lore.index` |
 | game-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
+| auth-server | 환영 크레딧을 결제 서버에 맡기기(워커가 한 번 훑는 것) | `welcome_credit.deliver` |
+| auth-server | 이미 가입한 계정들에 환영 크레딧을 주라고 적어 두기(한 번 돌리는 명령) | `welcome_credit.request_existing` |
 | auth-server | 인증하지 않은 계정 지우기 | `account.delete_unverified` |
 | auth-server | 보안 이벤트 요약 메일 | `security.send_digest` |
 
@@ -285,6 +287,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
 | `billing.release` | game | 결제 서버에 홀드의 반환을 맡기기 |
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
+| `welcome_credit.deliver` | auth | 환영 크레딧을 결제 서버에 맡기기 |
+| `welcome_credit.request_existing` | auth | 이미 가입한 계정들에 환영 크레딧을 주라고 적어 두기 |
 | `account.delete_unverified` | auth | 인증하지 않은 계정 지우기 |
 | `security.send_digest` | auth | 보안 이벤트 요약 메일 |
 | `auth.jwks_fetch` | billing | 인증 서버에서 공개키 받기 |
@@ -303,7 +307,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `job.failed` | 작업이 예외로 끝났다 |
 | `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다 |
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했다 |
-| `billing.unavailable` | 게임 서버가 결제 서버의 답을 받지 못했다. 다시 부른다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning` |
+| `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
 | `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다 |
 | `server.start_failed` | 서버가 뜨지 못했다 |
 
@@ -571,7 +575,7 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 
 | | 받는 곳(미들웨어) | 들고 있는 곳 | 보내는 곳 |
 | --- | --- | --- | --- |
-| auth-server | `observability/middleware.py` | `observability/context.py` | 다른 서버를 부르지 않는다 |
+| auth-server | `observability/middleware.py` | `observability/context.py` | `accounts/billing_client.py` 의 `outgoing_headers()` |
 | game-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py` 의 `outgoing_headers()` |
 | board-server | `src/observability/request-logging.middleware.ts` | `src/observability/request-context.ts` | `src/auth/jwks.ts` 의 `outgoingHeaders()` |
 | billing-server | `internal/httpapi/observability.go` | `internal/obs/context.go` | `internal/jwks/fetch.go` 의 `obs.SetOutgoingHeaders()` |
