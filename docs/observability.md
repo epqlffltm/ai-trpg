@@ -157,7 +157,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | 서버 | 작업 | `operation` |
 | --- | --- | --- |
 | game-server | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
-| game-server | 마감이 지난 라운드 닫기와 크레딧을 기다리는 시간이 지난 라운드 마무리(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `closed`, `credit_waits`) | `round.close_overdue` |
+| game-server | 마감이 지난 라운드 닫기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `round.close_overdue` |
 | game-server | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `charge.settle` |
 | game-server | 로어북 항목의 벡터 만들기 | `lore.index` |
 | game-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
@@ -298,7 +298,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `http.request` | 전부 | HTTP 요청 하나를 처리했다. 어느 주소인지는 `method` 와 `route` 에 있다 |
 | `job.run` | game | 이름을 따로 주지 않은 작업 |
 | `round.narrate` | game | 라운드의 AI 서술 |
-| `round.close_overdue` | game | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리(#181) |
+| `round.close_overdue` | game | 마감이 지난 라운드 닫기 |
 | `lore.index` | game | 로어북 색인 |
 | `memory.index` | game | 기억 색인 |
 | `charge.settle` | game | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴) |
@@ -328,7 +328,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `internal.error` | 그 밖의 서버 쪽 오류. 핸들러가 스스로 5xx 로 답한 것, 코드를 따로 주지 않고 예외를 남긴 것 |
 | `job.failed` | 작업이 예외로 끝났다 |
 | `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다 |
-| `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했다 |
+| `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했거나, 결과를 알 수 없는 답이 왔다(토스페이먼츠의 5xx, 401, "처리 중" 같은 것). 주문은 `confirming` 에 남고 다시 부르거나 대사가 조회해 끝낸다. `warning` |
 | `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 서술 뒤의 확정을 정해 둔 시간 안에 끝내지 못해 정리 작업에 넘긴 것도 이 코드다(`warning`). 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
 | `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다. 연장이면 홀드를 그대로 두고 한 시간 뒤에 다시 부른다. 서술 뒤의 확정이 409(만료되어 돌려준 홀드)면 그 값은 받지 못한다. 홀드가 400 이면 가격표에 그 서술 등급의 이름(`narration.premium` 등)이 없는지 먼저 본다 |
 | `server.start_failed` | 서버가 뜨지 못했다 |
