@@ -12,7 +12,7 @@
 # 인증 서버만 관리자 화면 때문에 127.0.0.1:8000 을 함께 연다. PC 에서 직접 띄운 인증 서버와 포트가 겹치므로 그것을 먼저 끈다.
 #
 #   docker compose --profile app up -d --build
-#   docker compose --profile app ps -a      # 마이그레이션은 Exited (0), 서버는 healthy 면 된다
+#   docker compose --profile app ps -a      # 마이그레이션은 Exited (0), 서버와 프록시는 healthy, 워커와 cron 은 Up 이면 된다
 #   docker compose --profile app down
 #
 # 서버의 설정은 각 서버 폴더의 .env 를 그대로 넘긴다(env_file). 그 안의 주소는 PC 에서 직접 띄울 때의 것(127.0.0.1)이라
@@ -49,6 +49,8 @@ x-auth-keys: &auth-keys
 
 services:
   db:
+    # 죽으면 다시 띄운다. docker compose down 으로 끈 것은 다시 뜨지 않는다
+    restart: unless-stopped
     # pgvector 가 포함된 이미지. 인증 서버는 벡터를 쓰지 않지만
     # 게임 서버가 같은 인스턴스를 쓰므로 처음부터 맞춰 둔다
     image: pgvector/pgvector:pg17
@@ -85,6 +87,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    # 죽으면 다시 띄운다. docker compose down 으로 끈 것은 다시 뜨지 않는다
+    restart: unless-stopped
     # AOF 를 켠다. 로그인 시도 횟수와 IP 차단 기록이 들어갈 자리다.
     # 재시작으로 데이터가 사라지면 차단이 풀리고 시도 횟수가 처음부터 다시 세어진다.
     # (폐기한 refresh 토큰은 Redis 가 아니라 PostgreSQL 에 기록한다)
@@ -139,6 +143,7 @@ services:
   auth-server:
     <<: *auth-image
     profiles: [app]
+    restart: unless-stopped
     env_file: ./auth-server/.env
     environment: *auth-environment
     volumes:
@@ -153,6 +158,52 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+    depends_on:
+      auth-migrate:
+        condition: service_completed_successfully
+
+  # 인증 서버의 워커. 발송함(DB)에 쌓인 메일을 보낸다. 계속 돈다.
+  # 메일 서버 설정(SMTP_HOST)이 없으면 메일을 요청 자리에서 바로 출력하므로(inline) 이 워커는 할 일 없이 돈다
+  auth-mail:
+    <<: *auth-image
+    profiles: [app]
+    restart: unless-stopped
+    command: ["python", "manage.py", "send_outgoing_mail"]
+    env_file: ./auth-server/.env
+    environment: *auth-environment
+    volumes:
+      - *auth-keys
+    depends_on:
+      auth-migrate:
+        condition: service_completed_successfully
+
+  # 인증 서버의 워커. 가입을 마친 사용자의 환영 크레딧을 결제 서버에 맡긴다. 계속 돈다.
+  # auth-server/.env 에 BILLING_SECRET 이 없으면 바로 오류로 끝난다(다시 뜨기를 되풀이한다)
+  auth-welcome-credits:
+    <<: *auth-image
+    profiles: [app]
+    restart: unless-stopped
+    command: ["python", "manage.py", "send_welcome_credits"]
+    env_file: ./auth-server/.env
+    environment: *auth-environment
+    volumes:
+      - *auth-keys
+    depends_on:
+      auth-migrate:
+        condition: service_completed_successfully
+
+  # 인증 서버의 주기 명령(보안 이벤트 요약, 미인증 계정 정리, 만료된 토큰 정리). 시각은 docker/cron/auth.crontab 에 있다.
+  # supercronic 은 명령이 남기는 줄(JSON)을 그대로 내보낸다(-passthrough-logs). 제 줄은 실패만 남긴다(-quiet, -json)
+  auth-cron:
+    <<: *auth-image
+    profiles: [app]
+    restart: unless-stopped
+    command: ["supercronic", "-quiet", "-json", "-passthrough-logs", "/etc/supercronic/crontab"]
+    env_file: ./auth-server/.env
+    environment: *auth-environment
+    volumes:
+      - *auth-keys
+      - ./docker/cron/auth.crontab:/etc/supercronic/crontab:ro
     depends_on:
       auth-migrate:
         condition: service_completed_successfully
@@ -180,6 +231,7 @@ services:
   game-server:
     <<: *game-image
     profiles: [app]
+    restart: unless-stopped
     env_file: ./game-server/.env
     environment: *game-environment
     extra_hosts: *host-gateway
@@ -210,6 +262,7 @@ services:
   board-server:
     <<: *board-image
     profiles: [app]
+    restart: unless-stopped
     env_file: ./board-server/.env
     environment: *board-environment
     healthcheck:
@@ -239,6 +292,7 @@ services:
   billing-server:
     <<: *billing-image
     profiles: [app]
+    restart: unless-stopped
     env_file: ./billing-server/.env
     environment: *billing-environment
     healthcheck:
@@ -251,9 +305,36 @@ services:
       billing-migrate:
         condition: service_completed_successfully
 
+  # 결제 서버의 정리 작업. 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 적고, 만료된 주문을 끝낸다. 30초마다 돈다
+  billing-sweeper:
+    <<: *billing-image
+    profiles: [app]
+    restart: unless-stopped
+    command: ["/app/sweeper"]
+    env_file: ./billing-server/.env
+    environment: *billing-environment
+    depends_on:
+      billing-migrate:
+        condition: service_completed_successfully
+
+  # 결제 서버의 주기 명령(대사). 시각은 docker/cron/billing.crontab 에 있다
+  billing-cron:
+    <<: *billing-image
+    profiles: [app]
+    restart: unless-stopped
+    command: ["supercronic", "-quiet", "-json", "-passthrough-logs", "/etc/supercronic/crontab"]
+    env_file: ./billing-server/.env
+    environment: *billing-environment
+    volumes:
+      - ./docker/cron/billing.crontab:/etc/supercronic/crontab:ro
+    depends_on:
+      billing-migrate:
+        condition: service_completed_successfully
+
   proxy:
     image: nginxinc/nginx-unprivileged:1.30-alpine3.24
     profiles: [app]
+    restart: unless-stopped
     # 설정의 틀. 이미지가 뜰 때 ${APP_ENVIRONMENT} 같은 자리를 아래의 environment 로 채워 conf.d 에 쓴다
     volumes:
       - ./docker/nginx/templates:/etc/nginx/templates:ro

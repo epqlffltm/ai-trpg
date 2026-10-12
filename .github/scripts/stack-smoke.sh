@@ -6,7 +6,8 @@
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
 #     prepare      설정 파일(.env 다섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
 #     up           이미지를 만들고 띄운 뒤, 서버 넷과 프록시가 healthy 가 될 때까지 기다린다
-#     check        마이그레이션이 성공했는지, 서버끼리 닿는지, root 가 아닌지, 이미지에 .env 가 없는지 본다
+#     check        마이그레이션이 성공했는지, 서버끼리 닿는지, root 가 아닌지, 이미지에 .env 가 없는지 본다.
+#                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
 #     logs         모든 컨테이너의 로그를 찍는다. 실패했을 때 부른다
@@ -20,6 +21,10 @@
 set -euo pipefail
 
 SERVERS=(auth game board billing)
+# 계속 도는 워커와 주기 명령의 컨테이너
+WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron)
+# 주기 명령의 컨테이너와 그 crontab
+CRONTABS=(auth-cron:docker/cron/auth.crontab billing-cron:docker/cron/billing.crontab)
 # 프록시의 주소와, 관리자 화면 때문에 따로 연 인증 서버의 주소
 PROXY="${PROXY:-http://127.0.0.1:8080}"
 ADMIN="${ADMIN:-http://127.0.0.1:8000}"
@@ -197,6 +202,26 @@ reachable_from() {
   esac
 }
 
+# 돌고 있고, 한 번도 다시 뜨지 않았는가. 바로 죽는 워커는 restart 때문에 돌고 있는 것처럼 보인다
+stays_up() {
+  running "$1" && [[ "$(docker inspect -f '{{.RestartCount}}' "$(container_of "$1")")" == "0" ]]
+}
+
+# 컨테이너에 붙인 crontab 의 문법이 맞는가
+crontab_valid() {
+  compose exec -T "$1" supercronic -test /etc/supercronic/crontab
+}
+
+# crontab 의 명령들. 주석과 빈 줄을 빼고, 앞의 시각 다섯 칸을 뗀다
+crontab_commands() {
+  grep -vE '^[[:space:]]*(#|$)' "$1" | awk '{ $1 = $2 = $3 = $4 = $5 = ""; sub(/^ +/, ""); print }'
+}
+
+# 명령 하나를 그 컨테이너에서 지금 한 번 돌려 성공하는가. cron 이 부를 때와 같이 /bin/sh 로 돈다
+runs_once() {
+  compose exec -T "$1" sh -c "$2"
+}
+
 not_root() {
   [[ "$(compose exec -T "$1" id -u)" != "0" ]]
 }
@@ -219,7 +244,24 @@ check() {
   report "결제 서버가 인증 서버의 공개키를 받는다" reachable_from billing-server "$jwks"
   report "인증 서버가 결제 서버에 닿는다" reachable_from auth-server http://billing-server:8003/health
   report "게임 서버가 결제 서버에 닿는다" reachable_from game-server http://billing-server:8003/health
+  check_workers
   finish
+}
+
+# 워커와 주기 명령을 본다
+check_workers() {
+  local worker entry service crontab command
+  for worker in "${WORKERS[@]}"; do
+    report "$worker 가 다시 뜨지 않고 돈다" stays_up "$worker"
+  done
+  for entry in "${CRONTABS[@]}"; do
+    service="${entry%%:*}"
+    crontab="${entry#*:}"
+    report "$service 의 crontab 문법이 맞다" crontab_valid "$service"
+    while IFS= read -r command; do
+      report "$service 에서 [$command] 이 한 번 성공한다" runs_once "$service" "$command"
+    done < <(crontab_commands "$crontab")
+  done
 }
 
 # 프록시를 거쳐 본다. 요청 수 제한을 채우므로 맨 마지막에 부른다
