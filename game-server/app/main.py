@@ -23,6 +23,8 @@ from app.assets.scenarios.publishing import ScenarioNotReadyError
 from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
 from app.assets.worlds import router as worlds
 from app.auth.jwks import JwksCache
+from app.billing import settler
+from app.billing.setup import build_billing
 from app.chat import router as chat
 from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
@@ -75,14 +77,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     (app/realtime/shutdown.py). 닫는 일은 신호 처리기가 아니라 이벤트 루프가 한다.
     꺼질 때 신호를 듣는 연결, DB 연결, 인증 서버로 가는 연결을 전부 닫는다.
     닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
-    라운드의 시계(마감이 지난 라운드를 닫는 것)는 뜰 때 돌기 시작하고, 꺼질 때 가장 먼저 멈춘다.
-    시계가 맡긴 서술이 뒤의 작업 마무리에 들어가도록 순서를 지킨다.
+    라운드의 시계(마감이 지난 라운드를 닫는 것)와 청구 정리(서술 값을 결제 서버에 맡기는 것)는 뜰 때 돌기 시작하고,
+    꺼질 때 가장 먼저 멈춘다. 시계가 맡긴 서술이 뒤의 작업 마무리에 들어가도록 순서를 지킨다.
     """
     loop = asyncio.get_running_loop()
     running = clock.start(app.state.round_clock)
+    settling = settler.start(app.state.charge_settler)
     with closing_on_exit(lambda: loop.call_soon_threadsafe(app.state.hub.close_all)):
         yield
     await running.halt()
+    await settling.halt()
     # 뒤에서 돌던 작업을 먼저 마무리한다. 작업이 DB 를 쓰므로 DB 를 닫기 전에 한다
     await app.state.jobs.aclose()
     await app.state.signal_source.stop()
@@ -173,6 +177,17 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
 
     # 로어북이 고른 인물마다 지난 서술에서 그 인물이 나온 문장을 모으는 것(app/memory/history.py). 모델을 부르지 않는다
     app.state.histories = HistoryCollector(app.state.session_factory)
+
+    # 라운드의 서술 값을 받는 결제 서버(app/billing/). 설정(BILLING_URL)이 정한다. 비우면 받지 않는다.
+    # 위의 httpx 클라이언트로 부른다. 요청마다 두 서버만 아는 비밀(BILLING_SECRET)로 서명한다
+    app.state.billing = build_billing(settings, app.state.http_client)
+
+    # 끝나지 않은 청구를 몇 초마다 결제 서버에 마저 맡기는 정리 작업(app/billing/settler.py). lifespan 이 돌리고 멈춘다.
+    # 결제 서버는 부를 때마다 앱에서 꺼낸다. 테스트가 바꿔 꽂은 것을 쓴다
+    app.state.charge_settler = settler.ChargeSettler(
+        session_factory=app.state.session_factory,
+        billing=lambda: app.state.billing,
+    )
 
     # 마감이 지난 라운드를 몇 초마다 찾아 닫는 시계(app/rounds/clock.py). lifespan 이 돌리고 멈춘다.
     # 서술자와 주사위는 닫을 때마다 앱에서 꺼낸다. 테스트가 바꿔 꽂은 것을 쓴다
