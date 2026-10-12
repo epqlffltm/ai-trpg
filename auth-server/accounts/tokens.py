@@ -7,6 +7,7 @@ JWT 발급, 갱신, 폐기.
 여기서는 그 위에 이 프로젝트의 규칙을 얹는다.
     - 토큰 머리말에 키 ID(kid)를 넣는다.
     - 토큰에 세션 버전(ver)을 넣어, 사용자의 모든 세션을 한 번에 끊을 수 있게 한다.
+    - access 토큰에 닉네임(nickname)을 넣어, 다른 서버가 인증 서버를 부르지 않고 글쓴이의 이름을 알게 한다.
     - refresh 토큰은 쓸 때마다 새것으로 바꾸고, 이미 폐기된 토큰이 다시 쓰이면 탈취로 본다.
 """
 
@@ -28,6 +29,8 @@ from accounts.models import User
 
 # 세션 버전을 담는 클레임 이름
 VERSION_CLAIM = 'ver'
+# 닉네임을 담는 클레임 이름. OpenID Connect 의 표준 클레임 이름을 따른다
+NICKNAME_CLAIM = 'nickname'
 
 
 class InvalidRefreshTokenError(Exception):
@@ -122,9 +125,21 @@ def issue_token_pair(user: User) -> TokenPair:
     refresh[api_settings.USER_ID_CLAIM] = str(user.public_id)
     refresh[VERSION_CLAIM] = user.token_version
     _record_issued_refresh_token(refresh, user)
+    return TokenPair(access=str(_access_token_for(refresh, user)), refresh=str(refresh))
 
-    # access 토큰은 refresh 토큰의 sub 와 ver 를 그대로 물려받는다
-    return TokenPair(access=str(refresh.access_token), refresh=str(refresh))
+
+def _access_token_for(refresh: RefreshToken, user: User) -> AccessToken:
+    """
+    refresh 토큰에서 access 토큰을 만들고 닉네임을 싣는다.
+
+    access 토큰은 refresh 토큰의 sub 와 ver 를 그대로 물려받는다.
+    닉네임은 access 토큰에만 싣는다. refresh 토큰은 인증 서버만 읽으므로 이름이 필요 없다.
+    갱신할 때마다 이 함수가 DB 의 닉네임을 다시 읽어 싣는다. 이름이 바뀌면 늦어도 access 토큰의 수명(15분) 뒤에는 새 이름이 실린다.
+    토큰은 서명만 되고 암호화되지 않아 누구나 읽는다. 닉네임은 남에게 보이라고 만든 이름이라 실어도 된다(이메일은 싣지 않는다).
+    """
+    access = refresh.access_token
+    access[NICKNAME_CLAIM] = user.nickname
+    return access
 
 
 def _record_issued_refresh_token(refresh: RefreshToken, user: User) -> None:
