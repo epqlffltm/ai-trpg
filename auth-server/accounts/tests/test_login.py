@@ -358,6 +358,20 @@ class AccessTokenContentTests(APITestCase):
         self.assertEqual(claims['token_type'], 'access')
         self.assertEqual(claims['exp'] - claims['iat'], 15 * 60)
 
+    def test_access_token_carries_the_nickname(self):
+        claims = jwt.decode(self.token, options={'verify_signature': False})
+
+        # 다른 서버가 인증 서버를 부르지 않고 글쓴이의 이름을 안다
+        self.assertEqual(claims['nickname'], self.user.nickname)
+
+    def test_refresh_token_does_not_carry_the_nickname(self):
+        pair = issue_token_pair(self.user)
+
+        refresh = jwt.decode(pair.refresh, options={'verify_signature': False})
+
+        # refresh 토큰은 인증 서버만 읽는다. 이름이 필요 없다
+        self.assertNotIn('nickname', refresh)
+
     def test_access_token_shares_the_refresh_tokens_issue_time(self):
         # refresh 토큰과 access 토큰을 만드는 사이에 초가 바뀌어도(x.999 초 → 다음 초) 두 토큰의 시각이 같다.
         # 다르면 access 토큰의 수명이 899 초로 보인다(CI 에서 가끔 깨지던 것)
