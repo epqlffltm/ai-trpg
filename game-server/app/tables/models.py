@@ -70,6 +70,10 @@ ROUND_TIME_LIMIT_MIN = 30
 ROUND_TIME_LIMIT_MAX = 3600
 # 테이블을 만들 때 고르지 않으면 이것이다. '없음'은 null 을 보내 고른다
 DEFAULT_ROUND_TIME_LIMIT = 300
+# 크레딧이 모자란 사람을 기다리는 시간(초). 서술이 크레딧 부족으로 멈춘 때부터 센다(app/rounds/credit_waits.py, #181)
+CREDIT_WAIT_MIN = 30
+CREDIT_WAIT_MAX = 3600
+DEFAULT_CREDIT_WAIT = 300
 
 
 class DeathCause(enum.StrEnum):
@@ -145,6 +149,9 @@ class GameTable(Base):
             f'round_time_limit IS NULL OR round_time_limit BETWEEN {ROUND_TIME_LIMIT_MIN} AND {ROUND_TIME_LIMIT_MAX}',
             name='round_time_limit_range',
         ),
+        CheckConstraint(
+            f'credit_wait_seconds BETWEEN {CREDIT_WAIT_MIN} AND {CREDIT_WAIT_MAX}', name='credit_wait_seconds_range'
+        ),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -212,6 +219,16 @@ class GameTable(Base):
     # 만들 때 방장이 고르고, 진행 중에도 바꿀 수 있다. 바꾼 값은 다음 라운드부터 쓴다.
     # 이 칸이 생기기 전에 만든 테이블은 비어 있다. 그때처럼 시간 제한 없이 간다
     round_time_limit: Mapped[int | None] = mapped_column(Integer)
+
+    # 크레딧이 모자란 사람을 기다리는 시간(초). 누가 모자라 서술이 멈춘 때부터 센다(app/rounds/credit_waits.py).
+    # 그 안에 충전하거나 방장이 내보내면 된다. 만들 때 방장이 고르고 진행 중에도 바꿀 수 있다.
+    # 지금 기다리는 라운드에도 바로 쓴다
+    credit_wait_seconds: Mapped[int] = mapped_column(
+        Integer, default=DEFAULT_CREDIT_WAIT, server_default=text(str(DEFAULT_CREDIT_WAIT))
+    )
+    # 기다리는 시간이 지나면 모자란 사람을 자리에서 빼고 나머지로 서술하는가(켬, 기본).
+    # 끄면 낼 수 있는 사람의 값을 돌려주고 라운드는 멈춘 채로 둔다. 방장이 다시 맡기면 모두에게 새로 건다
+    remove_short_payers: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text('true'))
 
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.

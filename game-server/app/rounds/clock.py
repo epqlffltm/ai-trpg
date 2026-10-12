@@ -2,6 +2,7 @@
 
 """
 서버의 시계. 마감이 지난 라운드를 몇 초마다 찾아 닫기 시작한다(#57).
+크레딧이 모자란 사람을 기다리는 시간이 지난 라운드도 함께 마무리한다(#181, app/rounds/credit_waits.py).
 
 라운드는 세 길로 닫힌다. 기다리던 사람이 모두 냈을 때, 방장이 닫을 때, 그리고 마감이 지났을 때.
 앞의 둘은 요청이 있어서 그 자리에서 닫는다. 마감은 아무도 요청하지 않아도 지나가므로 서버가 스스로 본다.
@@ -16,7 +17,8 @@
 
 로그는 공통 관측 규격을 따른다(docs/observability.md). 한 바퀴가 작업 하나다. 바퀴마다 job_id 를 새로 걸고,
 operation 은 round.close_overdue 다. 요청 밖에서 혼자 시작한 작업이라 추적(trace_id)도 바퀴마다 새로 시작한다.
-닫은 것이 없으면 debug, 닫았으면 info 로 한 줄을 남긴다(주기적으로 도는 워커의 규칙). 실패는 error 와 job.failed 다.
+닫거나 마무리한 것이 없으면 debug, 있으면 info 로 한 줄을 남긴다(주기적으로 도는 워커의 규칙).
+줄에 닫은 수(closed)와 크레딧 기다리기를 마무리한 수(credit_waits)를 싣는다. 실패는 error 와 job.failed 다.
 닫은 라운드의 서술은 따로 맡긴 작업(round.narrate)이 하고, 그 맡긴 줄의 spawned_job_id 로 이어진다.
 """
 
@@ -31,13 +33,14 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.billing import repository as billing_repository
 from app.core import loops
 from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
 from app.core.loops import Running
 from app.engine.dice import Dice
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
-from app.rounds import repository, service
+from app.rounds import credit_waits, repository, service
 from app.rounds.service import NarrationScheduler
 
 logger = logging.getLogger(__name__)
@@ -99,22 +102,57 @@ class RoundClock:
             closed += await self.close_one(table_id, now)
         return closed
 
+    async def waiting(self, now: datetime) -> list[uuid.UUID]:
+        """크레딧이 모자란 사람을 기다리는 시간이 지난 라운드의 테이블들. 잠그지 않고 고른다."""
+        async with self.session_factory() as session:
+            return await billing_repository.find_waiting_table_ids(
+                session, now, credit_waits.WAITED_FOR, credit_waits.PAYABLE, OVERDUE_BATCH
+            )
+
+    async def settle_wait(self, table_id: uuid.UUID, now: datetime) -> bool:
+        """한 테이블의 크레딧 기다리기를 마무리한다. 했으면 True. 실패하면 로그에 남기고 False."""
+        try:
+            async with self.session_factory() as session:
+                return await credit_waits.settle_credit_wait(session, table_id, now, self.scheduler())
+        except Exception:
+            logger.exception(
+                '크레딧을 기다리는 라운드를 마무리하지 못했습니다',
+                extra={
+                    'operation': CLOCK_OPERATION,
+                    'table_id': str(table_id),
+                    'result': 'server_error',
+                    'error_code': JOB_FAILED_ERROR_CODE,
+                },
+            )
+            return False
+
+    async def sweep_waits(self) -> int:
+        """크레딧을 기다리는 시간이 지난 라운드를 찾아 하나씩 마무리한다. 마무리한 수를 돌려준다."""
+        now = self.clock()
+        settled = 0
+        for table_id in await self.waiting(now):
+            settled += await self.settle_wait(table_id, now)
+        return settled
+
     async def tick(self) -> int:
         """
         한 바퀴. 제 job_id 를 걸고 쓸어 담은 뒤, 어떻게 끝났는지 한 줄을 남긴다. 닫은 수를 돌려준다.
+        마감이 지난 라운드를 닫은 뒤 크레딧을 기다리는 라운드를 마무리한다.
 
         찾는 일이 통째로 실패하면(DB 가 없다) 예외를 그대로 올린다. 그 줄은 도는 쪽(run)이 남긴다.
         """
         with job_scope(new_job_id()):
             started = time.perf_counter()
             closed = await self.sweep()
-            level = logging.INFO if closed else logging.DEBUG
+            settled = await self.sweep_waits()
+            level = logging.INFO if closed or settled else logging.DEBUG
             logger.log(
                 level,
                 '시계가 한 바퀴를 돌았습니다',
                 extra={
                     'operation': CLOCK_OPERATION,
                     'closed': closed,
+                    'credit_waits': settled,
                     'duration_ms': elapsed_ms(started),
                     'result': 'success',
                 },
