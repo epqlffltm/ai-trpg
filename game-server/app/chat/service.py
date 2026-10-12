@@ -21,6 +21,7 @@ from app.chat import repository
 from app.chat.models import ChatMessage
 from app.chat.schemas import MessageCreate
 from app.chat.typing import TypingThrottle
+from app.limits.setup import Limiting
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.tables import service as tables
@@ -54,7 +55,7 @@ def build_message(table: GameTable, member: TableMember, content: str) -> ChatMe
 
 
 async def post_message(
-    session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID, data: MessageCreate
+    session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID, data: MessageCreate, limiting: Limiting
 ) -> ChatMessage:
     """
     채팅을 쓴다. 쓴 글을 돌려준다.
@@ -62,8 +63,13 @@ async def post_message(
     앉지 않았으면 TableNotFoundError, 끝난 테이블이면 TableConflictError.
     모집 중에도 쓸 수 있다. 캐릭터를 맞추는 이야기를 그때 한다.
 
+    한 사람이 한 테이블에 짧은 시간 안에 쓸 수 있는 수가 정해져 있다(limiting.limits.chat). 넘으면 TooManyAttempts.
+    잠그기 전에 센다. 도배가 테이블의 잠금을 붙잡지 못한다.
+    세는 곳에 닿지 못하면 막지 않는다(채팅이 멈추는 것이 더 크다).
+
     테이블을 잠그고 한다. 두 사람이 동시에 써도 번호가 겹치지 않는다.
     """
+    await limiting.limiter.count_attempt(limiting.limits.chat, f'{table_id}:{user_id}')
     table, member = await tables.lock_seated(session, user_id, table_id)
     table_state.require_not_ended(table)
 

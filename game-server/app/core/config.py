@@ -163,6 +163,25 @@ class Settings(BaseSettings):
     # 결제 서버를 한 번 부르는 시간의 상한(초)
     billing_timeout_seconds: float = Field(default=5.0, gt=0, le=BILLING_BUDGET_SECONDS)
 
+    # 시도 횟수 제한(app/limits/, #56)을 세는 Redis 의 주소(redis://...). 비우면 서버 안의 메모리로 센다(기본).
+    # 메모리는 서버가 하나일 때만 맞고 다시 띄우면 지워진다. 서버를 여럿 띄우거나 운영에서는 적는다.
+    # 인증 서버와 같은 Redis 를 써도 된다. 키의 앞부분(LIMIT_KEY_PREFIX)이 달라 섞이지 않는다
+    redis_url: str = ''
+    # Redis 에 연결하고 한 명령을 기다리는 시간(초). 요청이 그만큼 기다리므로 짧게 둔다
+    redis_timeout_seconds: float = Field(default=0.5, gt=0, le=5)
+    # 시도 횟수 제한을 켜는가. 끄면 세지도 막지도 않는다. 테스트가 끈다(제한을 보는 테스트만 켠다)
+    limits_enabled: bool = True
+    # Redis 의 키의 앞부분. 다른 서버, 테스트와 섞이지 않게 한다
+    limit_key_prefix: str = 'game:limit'
+    # 로비에서 비밀번호로 들어올 때 틀릴 수 있는 횟수. 한 사람이 한 테이블에, 그리고 테이블 하나에 모든 사람을 합쳐.
+    # 구간(PASSWORD_ATTEMPT_WINDOW_SECONDS) 안에 이만큼 틀리면 맞는 비밀번호도 받지 않는다. 맞히면 그 사람의 수는 지운다
+    password_attempts_per_user: int = Field(default=5, ge=1)
+    password_attempts_per_table: int = Field(default=30, ge=1)
+    password_attempt_window_seconds: int = Field(default=600, ge=1)
+    # 한 사람이 한 테이블에 구간(CHAT_WINDOW_SECONDS) 안에 쓸 수 있는 채팅의 수
+    chat_messages_per_window: int = Field(default=5, ge=1)
+    chat_window_seconds: int = Field(default=10, ge=1)
+
     @model_validator(mode='after')
     def require_a_model_for_llm(self) -> Self:
         """언어 모델로 서술하겠다면서 모델 이름이 없으면 뜨지 않는다. 첫 라운드를 닫을 때 알게 되는 것보다 낫다."""
