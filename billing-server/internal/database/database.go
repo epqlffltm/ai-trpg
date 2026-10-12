@@ -7,6 +7,9 @@
 // 연결할 때마다 search_path 를 결제 서버의 스키마 하나로 맞춘다. 다른 스키마는 넣지 않는다.
 // 다만 다른 서비스의 테이블을 막는 것은 search_path 가 아니라 DB 권한이다(docker/postgres/init/04-billing-role.sql).
 // search_path 는 이름을 줄여 쓰게 해 줄 뿐이고, 스키마 이름을 붙여 쓰면 어디든 가리킬 수 있다.
+//
+// DB 에서 읽은 시각(timestamptz)은 UTC 로 받는다. 드라이버는 기본으로 그 PC 의 시간대로 바꿔 준다.
+// 그러면 같은 시각이 서버를 띄운 PC 에 따라 응답에 "+09:00" 이나 "Z" 로 다르게 나간다.
 package database
 
 import (
@@ -14,6 +17,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -34,7 +39,19 @@ func NewPoolConfig(databaseURL string, schema string) (*pgxpool.Config, error) {
 	poolConfig.ConnConfig.ConnectTimeout = ConnectTimeout
 	// 연결이 맺어질 때 서버에 함께 보내는 설정이다. 연결마다 SET 을 따로 실행하지 않아도 된다
 	poolConfig.ConnConfig.RuntimeParams["search_path"] = schema
+	poolConfig.AfterConnect = readTimesInUTC
 	return poolConfig, nil
+}
+
+// readTimesInUTC 는 연결 하나가 timestamptz 를 UTC 로 읽게 한다. 연결을 맺을 때마다 한 번 부른다.
+// 가리키는 순간은 그대로다. 표기(시간대)만 정한다.
+func readTimesInUTC(_ context.Context, conn *pgx.Conn) error {
+	conn.TypeMap().RegisterType(&pgtype.Type{
+		Name:  "timestamptz",
+		OID:   pgtype.TimestamptzOID,
+		Codec: &pgtype.TimestamptzCodec{ScanLocation: time.UTC},
+	})
+	return nil
 }
 
 // NewPool 은 연결 풀을 만든다. 만드는 것만으로는 DB 에 연결하지 않는다. 처음 쓸 때 연결한다.
