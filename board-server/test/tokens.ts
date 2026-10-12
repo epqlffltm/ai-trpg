@@ -38,6 +38,8 @@ export interface TokenOptions {
   expiresInSeconds?: number;
   /** 머리말에 적는 kid. 적지 않으면 서명하는 키의 kid 다 */
   kid?: string;
+  /** 토큰에 싣는 닉네임. 적지 않으면 싣지 않는다(이 클레임이 생기기 전의 토큰과 같다) */
+  nickname?: string;
 }
 
 /** 새 RSA 키 한 벌을 만든다. */
@@ -72,7 +74,11 @@ export function signToken(
   key: SigningKey,
   options: TokenOptions = {},
 ): Promise<string> {
-  return new SignJWT({ token_type: options.tokenType ?? 'access', ver: 1 })
+  return new SignJWT({
+    token_type: options.tokenType ?? 'access',
+    ver: 1,
+    ...(options.nickname === undefined ? {} : { nickname: options.nickname }),
+  })
     .setProtectedHeader({
       alg: ALGORITHM,
       typ: 'JWT',
