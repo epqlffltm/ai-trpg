@@ -1,7 +1,7 @@
 // board-server/test/write-limits.e2e-spec.ts
 
 /**
- * 쓰기 횟수 제한을 앱을 통째로 만들어 불러 본다. 실제 PostgreSQL 의 테스트용 스키마에서 돈다.
+ * 쓰기와 신고의 횟수 제한을 앱을 통째로 만들어 불러 본다. 실제 PostgreSQL 의 테스트용 스키마에서 돈다.
  *
  * 다른 테스트의 앱은 걸리지 않을 만큼 큰 한도를 쓴다(test/app.ts). 여기서는 서버가 쓰는 한도를 그대로 쓴다.
  * 시간이 흘러 창이 지나가는 것은 기다리지 않는다. 쓴 시각을 DB 에서 과거로 옮겨 놓고 본다(test/data.ts).
@@ -12,17 +12,19 @@ import request from 'supertest';
 import { API_PREFIX } from '../src/app.setup.js';
 import { WRITE_LIMITS } from '../src/write-limits/write-limits.policy.js';
 import { both, createTestApp, useKeys, useRealWriteLimits } from './app.js';
-import { ageWrites, clearData, makeOperator } from './data.js';
+import { ageWrites, clearData, insertManyPosts, makeOperator } from './data.js';
 import { makeSigningKey, publicKeys, SigningKey, signToken } from './tokens.js';
 
 const API = `/${API_PREFIX}`;
 const POSTS = WRITE_LIMITS.post;
 const COMMENTS = WRITE_LIMITS.comment;
+const REPORTS = WRITE_LIMITS.report;
 
 /** 테스트에 나오는 사람들. 인증 서버의 public_id 다 */
 const WRITER = '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b';
 const STRANGER = '7d0e3a52-1f4b-4c8e-8a21-9b6c5d4e3f2a';
 const OPERATOR = 'c4a1b2d3-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+const READER = '5e8f2c1a-9b3d-4e7f-a6c5-1d2e3f4a5b6c';
 
 let app: NestExpressApplication;
 let key: SigningKey;
@@ -296,5 +298,76 @@ describe('댓글 쓰기의 한도', () => {
     await writePosts(WRITER, POSTS.max);
 
     expect((await writeComment(WRITER, postId)).status).toBe(201);
+  });
+});
+
+describe('신고의 한도', () => {
+  beforeEach(async () => {
+    // 신고할 글을 넉넉히 넣는다. API 를 거치면 글 쓰기의 한도에 걸린다
+    await insertManyPosts(app, REPORTS.max + 2, STRANGER);
+  });
+
+  /** n 번 글을 신고한다. */
+  async function report(userId: string, postId: number) {
+    return request(app.getHttpServer())
+      .post(`${API}/posts/${postId}/reports`)
+      .set(await as(userId))
+      .send({ reason: 'spam' });
+  }
+
+  /** 1 번 글부터 n 개를 신고한다. 모두 접수돼야 한다. */
+  async function reportMany(userId: string, n: number): Promise<void> {
+    for (let id = 1; id <= n; id += 1) {
+      expect((await report(userId, id)).status).toBe(201);
+    }
+  }
+
+  it('정해 둔 수까지는 신고하고, 넘기면 429 다', async () => {
+    await reportMany(WRITER, REPORTS.max);
+
+    const response = await report(WRITER, REPORTS.max + 1);
+
+    expect(response.status).toBe(429);
+    expect(response.body).toEqual({
+      detail: '신고를 너무 자주 하고 있습니다. 잠시 후 다시 시도해 주세요.',
+      retry_after: expect.any(Number),
+    });
+    const retryAfter = (response.body as { retry_after: number }).retry_after;
+    expect(retryAfter).toBeGreaterThan(REPORTS.windowSeconds - 30);
+    expect(retryAfter).toBeLessThanOrEqual(REPORTS.windowSeconds);
+    expect(response.headers['retry-after']).toBe(String(retryAfter));
+  });
+
+  it('시간이 지나 창을 벗어나면 다시 신고한다', async () => {
+    await reportMany(WRITER, REPORTS.max);
+
+    await ageWrites(app, WRITER, REPORTS.windowSeconds + 1);
+
+    expect((await report(WRITER, REPORTS.max + 1)).status).toBe(201);
+  });
+
+  it('사람마다 따로 센다', async () => {
+    await reportMany(WRITER, REPORTS.max);
+
+    expect((await report(READER, 1)).status).toBe(201);
+  });
+
+  it('운영자는 걸리지 않는다', async () => {
+    await reportMany(OPERATOR, REPORTS.max);
+
+    expect((await report(OPERATOR, REPORTS.max + 1)).status).toBe(201);
+  });
+
+  it('이미 신고한 것이면 한도를 넘겼어도 409 가 먼저다', async () => {
+    await reportMany(WRITER, REPORTS.max);
+
+    expect((await report(WRITER, 1)).status).toBe(409);
+  });
+
+  it('글과 댓글을 많이 써도 신고의 한도에는 세지 않는다', async () => {
+    const postId = await writePosts(WRITER, POSTS.max);
+    await writeComments(WRITER, postId, COMMENTS.max);
+
+    expect((await report(WRITER, 1)).status).toBe(201);
   });
 });

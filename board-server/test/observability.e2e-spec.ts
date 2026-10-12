@@ -222,6 +222,40 @@ describe('요청이 끝난 줄', () => {
     expect(everything).not.toContain('cookie-secret-value');
     expect(everything).not.toContain('남기면 안 되는');
   });
+
+  it('신고의 설명은 접수, 다시 신고(409), 입력 오류(400) 어디서도 로그와 응답에 남지 않는다', async () => {
+    const writer = `Bearer ${await signToken(key)}`;
+    const reporter = `Bearer ${await signToken(key, { subject: '7d0e3a52-1f4b-4c8e-8a21-9b6c5d4e3f2a' })}`;
+    const posted = await request(app.getHttpServer())
+      .post(`${API}/boards/free/posts`)
+      .set('Authorization', writer)
+      .send({ title: '제목', content: '본문' });
+    const reportUrl = `${API}/posts/${(posted.body as { id: string }).id}/reports`;
+    const secret = '남기면 안 되는 신고의 설명';
+
+    const responses = [
+      await request(app.getHttpServer())
+        .post(reportUrl)
+        .set('Authorization', reporter)
+        .send({ reason: 'abuse', description: secret }),
+      await request(app.getHttpServer())
+        .post(reportUrl)
+        .set('Authorization', reporter)
+        .send({ reason: 'abuse', description: secret }),
+      await request(app.getHttpServer())
+        .post(reportUrl)
+        .set('Authorization', reporter)
+        .send({ reason: 'abuse', description: `${secret}${'a'.repeat(600)}` }),
+    ];
+
+    expect(responses.map((response) => response.status)).toEqual([
+      201, 409, 400,
+    ]);
+    for (const response of responses) {
+      expect(JSON.stringify(response.body)).not.toContain(secret);
+    }
+    expect(lines.join('\n')).not.toContain(secret);
+  });
 });
 
 describe('처리하지 못한 예외', () => {

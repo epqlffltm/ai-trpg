@@ -10,15 +10,17 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { DataSource } from 'typeorm';
 
 /**
- * 글, 댓글, 운영자를 모두 비우고, 번호를 1 부터 다시 센다. 테스트마다 먼저 부른다.
+ * 신고, 글, 댓글, 운영자를 모두 비우고, 번호를 1 부터 다시 센다. 테스트마다 먼저 부른다.
  *
  * 앞의 테스트가 남긴 글이 다음 테스트의 목록에 섞이지 않게 한다.
- * 댓글은 글을 가리키므로 둘을 한 번에 비운다. 따로 비우면 DB 가 막는다.
+ * 신고는 글과 댓글을, 댓글은 글을 가리키므로 한 번에 비운다. 따로 비우면 DB 가 막는다.
  */
 export async function clearData(app: NestExpressApplication): Promise<void> {
   await app
     .get(DataSource)
-    .query('TRUNCATE "comments", "posts", "operators" RESTART IDENTITY');
+    .query(
+      'TRUNCATE "reports", "comments", "posts", "operators" RESTART IDENTITY',
+    );
 }
 
 /** 사용자를 운영자로 만든다. userId 는 인증 서버의 public_id 다. */
@@ -58,7 +60,7 @@ export async function expirePin(
 }
 
 /**
- * 이 사람이 쓴 글과 댓글의 쓴 시각을 seconds 초만큼 과거로 옮긴다. 그만큼 시간이 흐른 것처럼 만든다.
+ * 이 사람이 쓴 글과 댓글, 한 신고의 시각을 seconds 초만큼 과거로 옮긴다. 그만큼 시간이 흐른 것처럼 만든다.
  * 쓰기 횟수 제한의 창이 지나가는 것을 기다리지 않고 본다.
  */
 export async function ageWrites(
@@ -67,9 +69,14 @@ export async function ageWrites(
   seconds: number,
 ): Promise<void> {
   const dataSource = app.get(DataSource);
-  for (const table of ['posts', 'comments']) {
+  const owners = [
+    ['posts', 'author_id'],
+    ['comments', 'author_id'],
+    ['reports', 'reporter_id'],
+  ];
+  for (const [table, owner] of owners) {
     await dataSource.query(
-      `UPDATE "${table}" SET "created_at" = "created_at" - make_interval(secs => $2) WHERE "author_id" = $1`,
+      `UPDATE "${table}" SET "created_at" = "created_at" - make_interval(secs => $2) WHERE "${owner}" = $1`,
       [userId, seconds],
     );
   }
@@ -108,5 +115,16 @@ export async function readCommentRow(
   const rows: Record<string, unknown>[] = await app
     .get(DataSource)
     .query('SELECT * FROM "comments" WHERE "id" = $1', [id]);
+  return rows[0];
+}
+
+/** 신고 하나의 행을 DB 에서 그대로 읽는다. 없으면 undefined 다. */
+export async function readReportRow(
+  app: NestExpressApplication,
+  id: string,
+): Promise<Record<string, unknown> | undefined> {
+  const rows: Record<string, unknown>[] = await app
+    .get(DataSource)
+    .query('SELECT * FROM "reports" WHERE "id" = $1', [id]);
   return rows[0];
 }

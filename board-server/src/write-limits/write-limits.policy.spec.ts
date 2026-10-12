@@ -7,10 +7,11 @@
 import { retryAfterSeconds, WRITE_LIMITS } from './write-limits.policy.js';
 
 describe('한도', () => {
-  it('글은 10분에 5개, 댓글은 1분에 10개다', () => {
+  it('글은 10분에 5개, 댓글은 1분에 10개, 신고는 1시간에 20건이다', () => {
     expect(WRITE_LIMITS).toEqual({
       post: { windowSeconds: 600, max: 5 },
       comment: { windowSeconds: 60, max: 10 },
+      report: { windowSeconds: 3600, max: 20 },
     });
   });
 });

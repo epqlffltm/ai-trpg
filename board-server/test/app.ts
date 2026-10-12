@@ -40,11 +40,12 @@ export function useKeys(load: LoadKeys): Customize {
 
 /**
  * 테스트용 앱이 기본으로 쓰는 쓰기 한도. 걸리지 않을 만큼 크다.
- * 글과 댓글을 수십 개 써 보는 테스트가 도배를 막는 한도에 걸리면 안 된다.
+ * 글과 댓글을 수십 개 써 보거나 신고를 여러 번 해 보는 테스트가 도배를 막는 한도에 걸리면 안 된다.
  */
 const NO_WRITE_LIMITS: WriteLimits = {
   post: { windowSeconds: 1, max: 1_000_000 },
   comment: { windowSeconds: 1, max: 1_000_000 },
+  report: { windowSeconds: 1, max: 1_000_000 },
 };
 
 /** 쓰기 한도를 바꿔 꽂는다. createTestApp 에 넘긴다. */
