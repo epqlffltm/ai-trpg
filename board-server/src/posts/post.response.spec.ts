@@ -16,7 +16,12 @@ const POST = {
   createdAt: new Date('2026-10-11T09:00:00.000Z'),
   updatedAt: new Date('2026-10-11T09:30:00.000Z'),
 };
-const CONTEXT = { boardSlug: 'free', commentCount: 3, now: NOW };
+const CONTEXT = {
+  boardSlug: 'free',
+  commentCount: 3,
+  authorNickname: '모험가',
+  now: NOW,
+};
 
 describe('toPostSummaryResponse', () => {
   it('목록의 한 줄에는 본문이 없다', () => {
@@ -24,6 +29,7 @@ describe('toPostSummaryResponse', () => {
       id: '1234',
       board: 'free',
       author_id: '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b',
+      author_nickname: '모험가',
       title: '첫 글',
       comment_count: 3,
       pinned: false,
@@ -53,12 +59,22 @@ describe('toPostSummaryResponse', () => {
   });
 });
 
+describe('글쓴이의 닉네임', () => {
+  it('이름을 모르는 사람이면 null 이다', () => {
+    expect(
+      toPostSummaryResponse(POST, { ...CONTEXT, authorNickname: null })
+        .author_nickname,
+    ).toBeNull();
+  });
+});
+
 describe('toPostResponse', () => {
   it('글 하나에는 본문이 있다', () => {
     expect(toPostResponse(POST, CONTEXT)).toEqual({
       id: '1234',
       board: 'free',
       author_id: '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b',
+      author_nickname: '모험가',
       title: '첫 글',
       comment_count: 3,
       pinned: false,

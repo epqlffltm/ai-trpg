@@ -4,7 +4,7 @@
  * 글을 응답의 모양으로 바꾼다. 순수한 함수들이다.
  *
  * 칸 이름은 다른 서버들처럼 밑줄로 잇는다(author_id). 글 번호는 글자로 내보낸다.
- * 글쓴이는 ID 만 내보낸다. 이 서버는 아직 글쓴이의 이름을 모른다.
+ * 글쓴이는 ID 와 닉네임을 내보낸다. 닉네임은 글의 칸이 아니다. 따로 읽어서 넘겨받는다(authors/).
  * 목록에는 본문을 싣지 않는다. 한 쪽에 본문 스무 개를 실으면 응답이 쓸데없이 커진다.
  * 댓글 수는 글의 칸이 아니다. 따로 세어서 넘겨받는다(comment-counts/).
  * 고정되어 있는지는 지금 시각에 달려 있다. 끝나는 시각이 지난 글은 고정하지 않은 글로 내보낸다.
@@ -20,6 +20,8 @@ export interface PostSummaryResponse {
   /** 글이 있는 게시판의 주소 이름(slug) */
   board: string;
   author_id: string;
+  /** 글쓴이의 닉네임. 이 서버가 이름을 모르는 사람이면 null 이다 */
+  author_nickname: string | null;
   title: string;
   /** 살아 있는 댓글과 답글의 수. 지운 것은 세지 않는다 */
   comment_count: number;
@@ -54,6 +56,8 @@ export interface PostContext {
   boardSlug: string;
   /** 따로 센 댓글 수(comment-counts/) */
   commentCount: number;
+  /** 따로 읽은 글쓴이의 닉네임(authors/). 모르면 null */
+  authorNickname: string | null;
   /** 지금 시각. 고정이 끝났는지를 이것으로 본다 */
   now: Date;
 }
@@ -66,6 +70,7 @@ export function toPostSummaryResponse(
     id: post.id,
     board: context.boardSlug,
     author_id: post.authorId,
+    author_nickname: context.authorNickname,
     title: post.title,
     comment_count: context.commentCount,
     pinned: isPinned(post, context.now),

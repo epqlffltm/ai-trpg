@@ -94,6 +94,32 @@ describe('buildAccessClaims', () => {
     });
   });
 
+  it('닉네임이 있으면 함께 꺼낸다', () => {
+    const claims = buildAccessClaims({
+      token_type: 'access',
+      sub: USER_ID,
+      exp: 1_800_000_000,
+      nickname: '모험가_01',
+    });
+
+    expect(claims.nickname).toBe('모험가_01');
+  });
+
+  it.each([undefined, '', 'a\u0000b', 3, 'x'.repeat(51)])(
+    '닉네임을 받아들일 수 없어도(%j) 토큰은 받고 닉네임만 뺀다',
+    (nickname) => {
+      const claims = buildAccessClaims({
+        token_type: 'access',
+        sub: USER_ID,
+        exp: 1_800_000_000,
+        nickname,
+      });
+
+      expect(claims.userId).toBe(USER_ID);
+      expect('nickname' in claims).toBe(false);
+    },
+  );
+
   it('ID 는 소문자로 맞춘다', () => {
     const claims = buildAccessClaims({
       token_type: 'access',

@@ -17,6 +17,7 @@
  */
 
 import { decodeProtectedHeader, errors, JWTPayload, jwtVerify } from 'jose';
+import { readNickname } from '../authors/nickname.js';
 import { Environment } from '../config/environment.js';
 import { ALGORITHM, JwksCache, UnknownKeyError } from './jwks.js';
 
@@ -48,6 +49,11 @@ export interface AccessClaims {
   readonly userId: string;
   /** 토큰이 만료되는 시각(exp) */
   readonly expiresAt: Date;
+  /**
+   * 인증 서버가 실어 보낸 닉네임(nickname). 없거나 받아들일 수 없는 값이면 undefined 다(authors/nickname.ts).
+   * 없어도 토큰은 받는다. 이 클레임이 생기기 전에 발급한 토큰이 있다
+   */
+  readonly nickname?: string;
 }
 
 /**
@@ -93,7 +99,10 @@ export async function decodeClaims(
   }
 }
 
-/** 토큰 안의 값에서 이 서버가 쓰는 것만 꺼낸다. access 토큰이 아니거나 주인의 ID 가 UUID 가 아니면 거부한다. */
+/**
+ * 토큰 안의 값에서 이 서버가 쓰는 것만 꺼낸다. access 토큰이 아니거나 주인의 ID 가 UUID 가 아니면 거부한다.
+ * 닉네임은 받아들일 수 있을 때만 싣는다. 이상한 닉네임 때문에 토큰을 거부하지 않는다.
+ */
 export function buildAccessClaims(claims: JWTPayload): AccessClaims {
   if (claims.token_type !== ACCESS_TOKEN_TYPE) {
     throw new InvalidTokenError();
@@ -104,9 +113,11 @@ export function buildAccessClaims(claims: JWTPayload): AccessClaims {
   if (typeof claims.exp !== 'number') {
     throw new InvalidTokenError();
   }
+  const nickname = readNickname(claims.nickname);
   return {
     userId: claims.sub.toLowerCase(),
     expiresAt: new Date(claims.exp * 1000),
+    ...(nickname === undefined ? {} : { nickname }),
   };
 }
 
