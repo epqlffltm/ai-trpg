@@ -358,6 +358,21 @@ class AccessTokenContentTests(APITestCase):
         self.assertEqual(claims['token_type'], 'access')
         self.assertEqual(claims['exp'] - claims['iat'], 15 * 60)
 
+    def test_access_token_shares_the_refresh_tokens_issue_time(self):
+        # refresh 토큰과 access 토큰을 만드는 사이에 초가 바뀌어도(x.999 초 → 다음 초) 두 토큰의 시각이 같다.
+        # 다르면 access 토큰의 수명이 899 초로 보인다(CI 에서 가끔 깨지던 것)
+        before = timezone.now().replace(microsecond=999_000)
+        after = before + timedelta(milliseconds=2)
+        clock = iter([before, after])
+
+        with patch('rest_framework_simplejwt.tokens.aware_utcnow', side_effect=lambda: next(clock, after)):
+            pair = issue_token_pair(self.user)
+
+        access = jwt.decode(pair.access, options={'verify_signature': False})
+        refresh = jwt.decode(pair.refresh, options={'verify_signature': False})
+        self.assertEqual(access['iat'], refresh['iat'])
+        self.assertEqual(access['exp'] - access['iat'], 15 * 60)
+
     def test_token_does_not_carry_private_data(self):
         claims = jwt.decode(self.token, options={'verify_signature': False})
 
