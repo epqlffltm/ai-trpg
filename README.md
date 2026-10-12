@@ -87,6 +87,12 @@ docker compose ps
 **로그인은 인증 서버만 한다.** 다른 서버는 인증 서버의 공개키로 토큰을 검증만 한다.
 인증 서버의 DB를 보지 않고, 요청마다 인증 서버를 부르지도 않는다. 사용자는 토큰의 `sub`(`public_id`)로만 가리킨다.
 
+**`main` 은 보호 규칙으로 지킨다.** 지우기와 강제 푸시를 막고, PR 로만 넣는다(승인은 0). 소유자도 예외가 아니다.
+머지하려면 필수 검사 `ci-ok` 가 통과해야 한다. `ci-ok` 는 PR 의 관문(`.github/workflows/ci.yml`)이 마지막에 내는 결과다.
+관문은 바뀐 파일을 보고 그 서버의 CI 만 부른다(`.github/scripts/changed-servers.sh`). 부르지 않은 서버는 건너뛴 것이고 통과로 친다.
+서버의 CI 넷을 따로 필수로 걸지 않은 이유: 서버마다 자기 폴더가 바뀔 때만 돈다. 돌지 않은 필수 검사를 GitHub 은 "기다리는 중"으로 두고 머지를 막는다.
+DB 초기화 스크립트나 관문 자신이 바뀌면 넷 다 돈다. `main` 에 들어간 뒤에는 서버의 CI 가 예전처럼 제 폴더가 바뀔 때만 스스로 돈다. 위의 배지가 그 결과다.
+
 ## 자주 겪는 문제
 
 인프라에 관한 것만 적는다. 서버별 문제는 각 서버의 설명서에 있다.
@@ -115,7 +121,8 @@ docker compose up -d
 ## 구조
 
 ```
-.github/workflows/        서버별 CI
+.github/workflows/        서버별 CI 와 PR 의 관문(ci.yml)
+.github/scripts/          관문이 검사할 서버를 고르는 스크립트와 그 테스트
 auth-server/              Django 인증 서버 (독립된 uv 프로젝트)
 game-server/              FastAPI 게임 서버 (독립된 uv 프로젝트)
 board-server/             NestJS 게시판 서버 (독립된 npm 프로젝트)

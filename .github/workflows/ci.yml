@@ -1,0 +1,91 @@
+# .github/workflows/ci.yml
+# PR 의 관문. 바뀐 파일을 보고 그 서버의 CI 만 부른 뒤, 결과를 ci-ok 하나로 모은다.
+#
+# main 의 보호 규칙은 필수 검사로 ci-ok 하나만 건다.
+# 서버의 CI 넷을 따로 필수로 걸 수 없다. 서버마다 자기 폴더가 바뀔 때만 도는데, 돌지 않은 검사를
+# GitHub 은 "기다리는 중"으로 두고 머지를 막는다. 게시판만 고친 PR 이 게임 CI 를 영영 기다리게 된다.
+# 관문은 PR 마다 늘 돌고, 부르지 않은 서버는 "건너뜀"이다. ci-ok 는 건너뜀을 통과로 친다.
+#
+# 서버의 CI 는 각자의 파일(auth-server.yml 등)에 그대로 있다. 관문은 고르고 모을 뿐이다.
+# 서버를 더하면 이 파일에 작업 하나와 ci-ok 의 needs 하나, 고르는 스크립트에 이름 하나를 더한다.
+
+name: ci
+
+on:
+  pull_request:
+
+# 이 워크플로는 저장소를 읽기만 한다. 필요한 권한만 준다
+permissions:
+  contents: read
+
+# 같은 PR 에 새로 푸시하면 앞의 검사는 멈춘다. 결과를 볼 일이 없다
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      auth: ${{ steps.pick.outputs.auth }}
+      game: ${{ steps.pick.outputs.game }}
+      board: ${{ steps.pick.outputs.board }}
+      billing: ${{ steps.pick.outputs.billing }}
+    steps:
+      # PR 이 갈라져 나온 곳을 찾으려면 기록이 있어야 한다
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # 고르는 규칙이 틀리면 깨진 서버를 건너뛰고 초록이 된다. 고르기 전에 규칙부터 검사한다
+      - name: 고르는 규칙 검사
+        run: bash .github/scripts/changed-servers.test.sh
+
+      - name: 바뀐 서버 고르기
+        id: pick
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bash .github/scripts/changed-servers.sh "$BASE" "$HEAD" | tee -a "$GITHUB_OUTPUT"
+
+  auth-server:
+    needs: changes
+    if: needs.changes.outputs.auth == 'true'
+    uses: ./.github/workflows/auth-server.yml
+
+  game-server:
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    uses: ./.github/workflows/game-server.yml
+
+  board-server:
+    needs: changes
+    if: needs.changes.outputs.board == 'true'
+    uses: ./.github/workflows/board-server.yml
+
+  billing-server:
+    needs: changes
+    if: needs.changes.outputs.billing == 'true'
+    uses: ./.github/workflows/billing-server.yml
+
+  # 필수 검사는 이것 하나다. 앞의 작업이 하나라도 실패하거나 멈췄으면 실패한다. 건너뛴 것은 통과다.
+  # always(): 앞의 작업이 실패해도 이 작업은 돈다. 돌지 않으면 GitHub 이 "기다리는 중"으로 둔다
+  ci-ok:
+    if: always()
+    needs: [changes, auth-server, game-server, board-server, billing-server]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: 결과 모으기
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "결과: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) echo "통과하지 못한 검사가 있다: $result"; exit 1 ;;
+            esac
+          done
