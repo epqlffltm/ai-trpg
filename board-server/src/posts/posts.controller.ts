@@ -15,6 +15,8 @@
  * 글을 돌려줄 때마다 댓글 수(comment_count)를 함께 싣는다. 수는 따로 센다(comment-counts/).
  * 목록은 그 쪽의 글을 모아 한 번에 센다. 방금 쓴 글은 세지 않는다. 댓글이 있을 수 없다.
  *
+ * 글쓴이의 닉네임(author_nickname)도 함께 싣는다. 이름도 따로 읽는다(authors/). 목록은 그 쪽의 글쓴이를 모아 한 번에 읽는다.
+ *
  * 목록의 첫 쪽에는 고정한 글(pinned)을 따로 싣는다. 고정한 글은 items 와 total 에 들지 않는다.
  * 고정하고 풀어도 다른 글의 쪽이 밀리지 않는다. 고정하고 푸는 주소는 pins.controller.ts 에 있다.
  */
@@ -35,6 +37,8 @@ import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Public } from '../auth/public.decorator.js';
 // 타입만 가져온다(import type). 데코레이터가 붙은 인자의 타입이 인터페이스면 이렇게 적어야 빌드된다
 import type { AccessClaims } from '../auth/tokens.js';
+import { AuthorsService } from '../authors/authors.service.js';
+import { nicknameOf } from '../authors/nicknames.js';
 import { BoardSlugPipe } from '../boards/board-slug.pipe.js';
 import { BoardsService } from '../boards/boards.service.js';
 import { CommentCountsService } from '../comment-counts/comment-counts.service.js';
@@ -51,6 +55,7 @@ import {
   toPostResponse,
   toPostSummaryResponse,
 } from './post.response.js';
+import { Post as PostEntity } from './post.entity.js';
 import { PostsService } from './posts.service.js';
 import { UpdatePostDto } from './update-post.dto.js';
 
@@ -61,6 +66,7 @@ export class PostsController {
     private readonly posts: PostsService,
     private readonly pins: PinsService,
     private readonly commentCounts: CommentCountsService,
+    private readonly authors: AuthorsService,
   ) {}
 
   /** 한 게시판의 글 목록을 한 쪽 돌려준다. 새 글부터다. 본문은 싣지 않는다. 첫 쪽에는 고정한 글을 따로 싣는다. */
@@ -76,13 +82,16 @@ export class PostsController {
     const page = await this.posts.listIn(board, query.page, query.size, now);
     const pinned =
       query.page === DEFAULT_PAGE ? await this.pins.listIn(board, now) : [];
-    const counts = await this.commentCounts.countForMany(
-      [...pinned, ...page.items].map((post) => post.id),
-    );
+    const shown = [...pinned, ...page.items];
+    const [counts, nicknames] = await Promise.all([
+      this.commentCounts.countForMany(shown.map((post) => post.id)),
+      this.authors.nicknamesOf(shown.map((post) => post.authorId)),
+    ]);
     const toSummary = (post: PostSummary) =>
       toPostSummaryResponse(post, {
         boardSlug: board.slug,
         commentCount: countOf(counts, post.id),
+        authorNickname: nicknameOf(nicknames, post.authorId),
         now,
       });
     return {
@@ -107,6 +116,7 @@ export class PostsController {
     return toPostResponse(post, {
       boardSlug: board.slug,
       commentCount: 0,
+      authorNickname: await this.authors.nicknameOf(post.authorId),
       now: new Date(),
     });
   }
@@ -117,11 +127,7 @@ export class PostsController {
   @HttpCode(HttpStatus.OK)
   async read(@Param('id', PostIdPipe) id: string): Promise<PostResponse> {
     const post = await this.posts.get(id);
-    return toPostResponse(post, {
-      boardSlug: post.board.slug,
-      commentCount: await this.commentCounts.countFor(post.id),
-      now: new Date(),
-    });
+    return this.toFullResponse(post);
   }
 
   /** 글을 고친다. 보낸 칸만 고친다. 고친 글을 돌려준다. */
@@ -133,11 +139,7 @@ export class PostsController {
     @CurrentUser() user: AccessClaims,
   ): Promise<PostResponse> {
     const post = await this.posts.update(id, user.userId, changes);
-    return toPostResponse(post, {
-      boardSlug: post.board.slug,
-      commentCount: await this.commentCounts.countFor(post.id),
-      now: new Date(),
-    });
+    return this.toFullResponse(post);
   }
 
   /** 글을 지운다. 돌려줄 내용이 없다. */
@@ -148,5 +150,19 @@ export class PostsController {
     @CurrentUser() user: AccessClaims,
   ): Promise<void> {
     await this.posts.remove(id, user.userId);
+  }
+
+  /** 게시판과 함께 읽은 글 하나를 본문까지 응답의 모양으로 바꾼다. 댓글 수와 글쓴이의 이름을 따로 읽는다. */
+  private async toFullResponse(post: PostEntity): Promise<PostResponse> {
+    const [commentCount, authorNickname] = await Promise.all([
+      this.commentCounts.countFor(post.id),
+      this.authors.nicknameOf(post.authorId),
+    ]);
+    return toPostResponse(post, {
+      boardSlug: post.board.slug,
+      commentCount,
+      authorNickname,
+      now: new Date(),
+    });
   }
 }

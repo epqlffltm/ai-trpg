@@ -21,6 +21,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module.js';
+import { AuthorsModule } from './authors/authors.module.js';
 import { BoardsModule } from './boards/boards.module.js';
 import { CommentsModule } from './comments/comments.module.js';
 import { readEnvironment } from './config/environment.js';
@@ -41,6 +42,7 @@ import { ReportsModule } from './reports/reports.module.js';
     }),
     DatabaseModule,
     AuthModule,
+    AuthorsModule,
     HealthModule,
     MeModule,
     BoardsModule,

@@ -92,6 +92,7 @@ describe('글 쓰기', () => {
       id: '1',
       board: 'free',
       author_id: WRITER,
+      author_nickname: null,
       title: '첫 글',
       comment_count: 0,
       pinned: false,
@@ -115,6 +116,7 @@ describe('글 쓰기', () => {
     const response = await write(WRITER, 'free', {
       ...POST,
       author_id: STRANGER,
+      author_nickname: null,
     });
 
     expect(response.status).toBe(400);
@@ -176,6 +178,7 @@ describe('글 쓰기', () => {
     expect(response.body).toMatchObject({
       board: 'notice',
       author_id: OPERATOR,
+      author_nickname: null,
     });
   });
 });
@@ -191,6 +194,7 @@ describe('글 읽기', () => {
       id,
       board: 'free',
       author_id: WRITER,
+      author_nickname: null,
       title: '첫 글',
       content: '본문입니다.',
     });
@@ -228,6 +232,7 @@ describe('글 목록', () => {
           id: '2',
           board: 'free',
           author_id: STRANGER,
+          author_nickname: null,
           title: '나중에 쓴 글',
           comment_count: 0,
           pinned: false,
@@ -239,6 +244,7 @@ describe('글 목록', () => {
           id: '1',
           board: 'free',
           author_id: WRITER,
+          author_nickname: null,
           title: '먼저 쓴 글',
           comment_count: 0,
           pinned: false,
