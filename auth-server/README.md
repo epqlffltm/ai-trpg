@@ -137,6 +137,9 @@ uv run python manage.py test
 시도 횟수 제한도 테스트에서는 꺼 둔다. 켜 두면 로그인을 반복하는 테스트가 서로를 막는다.
 제한을 검증하는 테스트만 켜고 돌며, 개발용 횟수와 섞이지 않게 Redis 키의 앞머리를 따로 쓴다.
 
+테스트 실행기는 테스트용 DB(`test_trpg`)를 만들고 지운다. 그래서 `auth` 계정에 `CREATEDB` 가 있어야 한다.
+이 권한은 개발과 CI 에서만 준다. 루트 `.env` 의 `AUTH_DB_ALLOW_TEST_DB=true` 로 DB 볼륨을 처음 만들 때 붙는다(#20).
+
 ## API
 
 인증 서버의 API는 `/api/v1/auth/` 아래에 있다. 요청과 응답은 JSON이다.
@@ -156,6 +159,9 @@ uv run python manage.py test
 | POST | `/api/v1/auth/logout` | 이 기기의 refresh 토큰 폐기 | refresh 쿠키 |
 | POST | `/api/v1/auth/logout-all` | 모든 기기의 세션 종료 | 필요 |
 | GET | `/api/v1/auth/jwks` | 토큰 검증용 공개키 목록 | 불필요 |
+
+API 밖에 상태 확인 주소가 둘 있다. 다른 세 서버와 같은 뜻이다(`config/health.py`).
+`GET /health` 는 늘 200, `GET /health/ready` 는 DB 에 닿으면 200, 닿지 않으면 503 이다. 바깥에서는 프록시가 막는다.
 | GET | `/api/v1/auth/me` | 내 계정 정보 | 필요 |
 
 인증이 필요한 API에는 `Authorization: Bearer <access_token>` 헤더를 붙인다.
@@ -621,6 +627,22 @@ IP로 보여 한 사람의 시도가 모두를 막는다.
 이미지를 만들 때 `collectstatic` 으로 모아 둔다. 개발 중에는 `STATIC_ROOT` 를 적지 않는다.
 네 서버를 함께 컨테이너로 띄우는 법은 [저장소 README](../README.md#4-서버-넷을-컨테이너로-선택)에 있다.
 
+**운영 환경의 보안 설정(#19).** `APP_ENVIRONMENT=production` 이면 따로 켜지 않아도 아래가 켜진다(`config/security.py`).
+- 세션 쿠키와 CSRF 쿠키(관리자 화면)에 Secure 를 붙인다.
+- refresh 쿠키의 Secure(`REFRESH_COOKIE_SECURE`)를 끄면 서버가 뜨지 않는다. `DEBUG` 를 켜도, 메일 서버(`SMTP_HOST`)가 없어도 뜨지 않는다.
+- `ALLOWED_HOSTS` 에 실제 도메인을 적는다. 비어 있으면 모든 요청이 400 이다.
+
+`TRUSTED_PROXY_COUNT` 가 1 이상이면 프록시가 넘기는 `X-Forwarded-Proto` 로 "원래 HTTPS 였다"를 안다(`SECURE_PROXY_SSL_HEADER`).
+HTTPS 로 넘기기와 HSTS 는 인증 서버가 하지 않는다. 서버 넷 앞의 nginx 가 TLS 와 함께 맡는다(배포 단계에서 켠다).
+인증 서버가 넘기면 컨테이너끼리의 HTTP 호출(공개키 받기, 상태 확인)이 301 로 튕긴다. 그래서 `check --deploy` 의 두 경고(W004, W008)는 이유를 적어 꺼 두었다.
+CI 가 운영 설정으로 `check --deploy --fail-level WARNING` 을 돌린다. 경고가 하나라도 새로 생기면 실패한다.
+
+관리자 화면은 SSH 터널로 `http://localhost:8000/admin/` 에서 연다. 쿠키가 Secure 여도 브라우저가 `localhost` 와 `127.0.0.1` 은
+HTTP 로도 주고받는다(Chromium 으로 로그인까지 확인했다). 다른 주소(서버의 IP 등)로 HTTP 로 열면 쿠키가 버려져 로그인이 되지 않는다.
+
+**DB 계정의 권한(#20).** 운영에서는 루트 `.env` 에 `AUTH_DB_ALLOW_TEST_DB` 를 적지 않는다. 그러면 `auth` 계정에 `CREATEDB` 가 붙지 않는다.
+이 값은 볼륨을 처음 만들 때만 읽힌다. 이미 만든 볼륨에서 빼려면 관리 계정으로 `ALTER ROLE auth NOCREATEDB;` 를 한 번 돌린다.
+
 **저장소의 compose 로 띄우면** 아래의 워커와 주기 명령이 저절로 돈다. 워커는 `auth-mail`, `auth-welcome-credits`, 주기 명령은 `auth-cron`(시각은 `docker/cron/auth.crontab`)이다.
 PC 에서 직접 띄울 때는 아래의 명령을 손으로 돌린다.
 
@@ -680,7 +702,7 @@ IP 차단이 꺼져 있는 상태다. 로그인은 계속 된다. 그동안에�
 
 | 묶음 | 이슈 |
 | --- | --- |
-| 배포 전에 해야 하는 것 | [#19](https://github.com/epqlffltm/ai-trpg/issues/19) 운영용 Django 보안 설정, [#20](https://github.com/epqlffltm/ai-trpg/issues/20) 운영 DB 계정의 `CREATEDB`, [#21](https://github.com/epqlffltm/ai-trpg/issues/21) JWT 키 교체 |
+| 배포 전에 해야 하는 것 | [#21](https://github.com/epqlffltm/ai-trpg/issues/21) JWT 키 교체 |
 | 규모가 커지면 할 것 | [#24](https://github.com/epqlffltm/ai-trpg/issues/24) 메일 워커의 트랜잭션, [#25](https://github.com/epqlffltm/ai-trpg/issues/25) 로그 수집과 대시보드, [#26](https://github.com/epqlffltm/ai-trpg/issues/26) Redis 차단기 |
 | 프론트에서 할 것 | [#30](https://github.com/epqlffltm/ai-trpg/issues/30) refresh를 한 번에 하나만, [#31](https://github.com/epqlffltm/ai-trpg/issues/31) 비밀번호 재설정 화면 |
 

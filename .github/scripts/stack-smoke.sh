@@ -222,6 +222,14 @@ runs_once() {
   compose exec -T "$1" sh -c "$2"
 }
 
+# 인증 서버의 DB 계정에 테스트용 DB 를 만들 권한(CREATEDB)이 없는가. compose 의 기본은 주지 않는 것이다(#20)
+auth_cannot_create_databases() {
+  local sql="SELECT rolcreatedb FROM pg_roles WHERE rolname = 'auth'"
+  # 관리 계정과 DB 의 이름은 db 컨테이너 안의 환경 변수로 읽는다. 그래서 작은따옴표로 넘겨 그 안에서 펼친다
+  # shellcheck disable=SC2016
+  [[ "$(compose exec -T -e SQL="$sql" db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "$SQL"')" == "f" ]]
+}
+
 not_root() {
   [[ "$(compose exec -T "$1" id -u)" != "0" ]]
 }
@@ -237,6 +245,9 @@ check() {
     report "${server}-server 가 root 가 아니다" not_root "${server}-server"
     report "${server}-server 의 이미지에 .env 가 없다" no_env_file_in_image "${server}-server"
   done
+  report "인증 서버의 /health 가 200 이다" status_is 200 "$ADMIN/health"
+  report "인증 서버의 /health/ready 가 200 이다(DB 에 닿는다)" status_is 200 "$ADMIN/health/ready"
+  report "인증 서버의 DB 계정에 CREATEDB 가 없다" auth_cannot_create_databases
   report "관리자 화면을 인증 서버의 포트에서 연다" status_is 200 "$ADMIN/admin/login/"
   report "관리자 화면의 CSS 를 내준다" reachable_from_host "$ADMIN/static/admin/css/base.css"
   report "게임 서버가 인증 서버의 공개키를 받는다" reachable_from game-server "$jwks"
