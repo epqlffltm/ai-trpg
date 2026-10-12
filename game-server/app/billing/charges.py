@@ -19,8 +19,8 @@ from app.billing.models import ChargeStatus, NarrationCharge
 from app.rounds.models import Round
 from app.tables.models import GameTable
 
-# 결제 서버의 가격표 이름. 라운드의 AI 서술 한 번이다. 모델마다 다르게 받는 것은 #151 에서 한다
-PRICE_CODE = 'narration.standard'
+# 결제 서버의 가격표 이름의 앞부분. 라운드의 AI 서술 한 번이다. 뒤에 서술 등급이 붙는다(price_code_for)
+PRICE_CODE_PREFIX = 'narration'
 
 # 결제 서버의 답을 받지 못했을 때 다시 부르기까지 기다리는 시간(초). 부를 때마다 두 배가 되고, 상한에서 멈춘다
 RETRY_BASE_SECONDS = 5.0
@@ -41,6 +41,15 @@ def payers_of(table: GameTable) -> list[uuid.UUID]:
     결제 서버의 가격표에 한 사람 몫을 더한다. 청구 기록은 라운드 × 내는 사람 한 줄씩이라 그대로 쓴다.
     """
     return [table.host_id]
+
+
+def price_code_for(tier: str) -> str:
+    """
+    서술 등급의 가격표 이름(narration.standard, narration.premium). 값은 결제 서버의 가격표가 정한다.
+
+    결제 서버에 없는 이름이면 홀드를 받지 않는다(400, billing.rejected). 등급을 더하면 결제 서버에도 가격을 먼저 적는다.
+    """
+    return f'{PRICE_CODE_PREFIX}.{tier}'
 
 
 def reference_for(table_id: uuid.UUID, number: int, payer_id: uuid.UUID, renewals: int = 0) -> str:
@@ -77,14 +86,14 @@ def charge_round(session: AsyncSession, table: GameTable, round_: Round) -> None
 
     라운드는 아직 저장하지 않았어도 된다. 저장할 때 라운드를 먼저 넣는다(NarrationCharge.round).
     결제 서버는 부르지 않는다. 정리 작업이 곧 걸고(크레딧이 모자란 것을 일찍 알린다),
-    라운드를 닫을 때 걸렸는지 다시 본다.
+    라운드를 닫을 때 걸렸는지 다시 본다. 값은 라운드의 서술 등급의 것이다(price_code_for).
     """
     charges = [
         NarrationCharge(
             round=round_,
             payer_id=payer,
             reference=reference_for(table.id, round_.number, payer),
-            price_code=PRICE_CODE,
+            price_code=price_code_for(round_.narration_tier),
             status=ChargeStatus.PENDING,
         )
         for payer in payers_of(table)

@@ -30,6 +30,7 @@ from app.tables import repository, rolls, service
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableRoll
 from app.tables.schemas import TableCreate
+from tests.conftest import EVERY_TIER
 from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
@@ -72,7 +73,7 @@ async def open_table(session: AsyncSession) -> GameTable:
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     table = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=1)
-    return await service.create_table(session, make_viewer(ME), table)
+    return await service.create_table(session, make_viewer(ME), table, EVERY_TIER)
 
 
 async def test_rolling_waits_for_another_roll(session: AsyncSession, other_session: AsyncSession):

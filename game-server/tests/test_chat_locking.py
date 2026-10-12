@@ -33,6 +33,7 @@ from app.tables import service as tables
 from app.tables import state as table_state
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
+from tests.conftest import EVERY_TIER
 from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
@@ -66,7 +67,7 @@ async def open_duo(session: AsyncSession) -> GameTable:
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     create = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=2)
-    table = await tables.create_table(session, make_viewer(ME), create)
+    table = await tables.create_table(session, make_viewer(ME), create, EVERY_TIER)
     return await tables.join_table(session, make_viewer(FRIEND), JoinRequest(invite_code=table.invite_code))
 
 

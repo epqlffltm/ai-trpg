@@ -23,6 +23,7 @@ from app.assets.scenarios.schemas import (
 )
 from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
 from app.engine.sheet import Score, Sheet
+from app.rounds.tiers import NarrationTier
 from app.tables.models import (
     DEFAULT_ROUND_TIME_LIMIT,
     ROUND_TIME_LIMIT_MAX,
@@ -67,6 +68,9 @@ class TableCreate(BaseModel):
     narration_style: NarrationStyle | None = None
     # 라운드의 시간 제한(초). 적지 않으면 5 분이다. null 이면 시간 제한이 없다. 만든 뒤에도 방장이 바꿀 수 있다
     round_time_limit: RoundTimeLimit | None = DEFAULT_ROUND_TIME_LIMIT
+    # 서술 등급. 적지 않으면 standard 다. 이 서버가 내주는 등급만 된다(GET /tables/narration-tiers).
+    # 만든 뒤에도 방장이 바꿀 수 있다
+    narration_tier: NarrationTier = NarrationTier.STANDARD
 
     @model_validator(mode='after')
     def require_public_for_password(self) -> 'TableCreate':
@@ -170,6 +174,21 @@ class RoundTimeLimitUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     round_time_limit: RoundTimeLimit | None
+
+
+class NarrationTierUpdate(BaseModel):
+    """서술 등급을 바꿀 때 받는 값. 칸을 빼먹으면 거부한다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    narration_tier: NarrationTier
+
+
+class NarrationTiersOut(BaseModel):
+    """이 서버가 내주는 서술 등급들. 테이블을 만들거나 등급을 바꾸는 화면이 고를 것을 보여 준다."""
+
+    # 값은 결제 서버의 가격표(narration.<등급>)가 정한다. 여기에는 싣지 않는다
+    tiers: list[NarrationTier]
 
 
 class HostTransfer(BaseModel):
@@ -301,6 +320,8 @@ class TableSummary(BaseModel):
     narration_style: NarrationStyle
     # 라운드의 시간 제한(초). 없으면 null 이다. 로비에서 들어가기 전에 얼마나 빨리 진행되는지 안다
     round_time_limit: int | None
+    # 지금의 서술 등급. 로비에서 들어가기 전에 어느 모델로 서술하는지 안다. 바꾸면 다음 라운드부터다
+    narration_tier: NarrationTier
     created_at: datetime
 
 

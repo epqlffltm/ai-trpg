@@ -32,6 +32,7 @@ from app.tables import state as table_state
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember
 from app.tables.schemas import CharacterUpdate, JoinRequest, LobbyJoinRequest, TableCreate
+from tests.conftest import EVERY_TIER
 from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
@@ -72,7 +73,7 @@ async def open_table(session: AsyncSession, capacity: int, is_public: bool = Fal
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     table = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=capacity, is_public=is_public)
-    return await service.create_table(session, make_viewer(ME), table)
+    return await service.create_table(session, make_viewer(ME), table, EVERY_TIER)
 
 
 async def count_members(session: AsyncSession, table_id: uuid.UUID) -> int:
