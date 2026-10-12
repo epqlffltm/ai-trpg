@@ -19,19 +19,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/app"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
-	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
-	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
-	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
-	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
 const (
@@ -63,7 +59,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	slog.SetDefault(newLogger(settings))
+	slog.SetDefault(app.NewLogger(os.Stderr, settings.Logging()))
 
 	// 종료 신호가 오면 이 context 가 끝난다
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -76,48 +72,25 @@ func run() error {
 	defer pool.Close()
 
 	httpapi.SetMode(settings.Debug)
-	wallets := newWallet(pool, settings)
-	orders := newOrders(pool, wallets)
+	services, err := app.NewServices(pool, settings.Rules(), time.Now)
+	if err != nil {
+		return err
+	}
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		DB:               pool,
 		Verifier:         newVerifier(settings),
-		Wallet:           wallets,
-		Welcome:          wallets,
+		Wallet:           services.Wallet,
+		Welcome:          services.Wallet,
 		WelcomeCredits:   settings.WelcomeCredits,
-		Orders:           orders,
-		Notifier:         orders,
+		Orders:           services.Orders,
+		Notifier:         services.Orders,
 		WebhookSecret:    settings.WebhookSecret,
-		Holds:            hold.NewService(pool, time.Now, wallets),
+		Holds:            services.Holds,
 		GameServerSecret: settings.GameServerSecret,
 		AuthServerSecret: settings.AuthServerSecret,
 		Now:              time.Now,
 	})
 	return serve(ctx, newServer(settings, router))
-}
-
-// newLogger 는 공통 규격(docs/observability.md)의 JSON 으로 표준 오류에 적는 로거를 만든다.
-// 표준 log 패키지로 남긴 것도 이 로거를 거쳐 같은 모양으로 나간다(slog.SetDefault 가 그렇게 잇는다).
-func newLogger(settings config.Settings) *slog.Logger {
-	info := obs.ServiceInfo{
-		Service:     obs.ServiceName,
-		Environment: settings.AppEnvironment,
-		Version:     settings.AppVersion,
-	}
-	// 설정이 이미 값을 검사했다. 모르는 값이면 info 다
-	level, _ := obs.ParseLevel(settings.LogLevel)
-	return obs.NewLogger(os.Stderr, info, level)
-}
-
-// newOrders 는 주문을 만들고 치르는 것을 만든다. 결제 대행사의 자리에는 가짜를 꽂는다.
-// 이 서버는 연습용이라 실제 돈을 받지 않는다. 실제 결제 대행사를 붙일 때 여기에서 바꿔 꽂는다.
-func newOrders(pool *pgxpool.Pool, wallets *wallet.Service) *order.Service {
-	return order.NewService(pool, time.Now, payment.Fake{}, wallets)
-}
-
-// newWallet 은 크레딧을 다루는 것을 만든다. 설정에서 읽은 규칙(쓰는 순서, 무료 크레딧의 기한)을 넘긴다.
-func newWallet(pool *pgxpool.Pool, settings config.Settings) *wallet.Service {
-	policy := wallet.Policy{FreeFirst: settings.SpendFreeFirst, FreeTTL: settings.FreeCreditTTL}
-	return wallet.NewService(pool, time.Now, policy)
 }
 
 // newVerifier 는 access 토큰을 검증하는 것을 만든다. 만드는 것만으로는 인증 서버를 부르지 않는다.

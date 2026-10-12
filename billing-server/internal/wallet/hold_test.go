@@ -20,8 +20,8 @@ import (
 func (f fixture) newHold() uuid.UUID {
 	f.t.Helper()
 	id := uuid.New()
-	const insert = `INSERT INTO holds (id, user_id, source, reference, price_code, amount, status, created_at, updated_at)
-		VALUES ($1, $2, 'test', $3, 'narration.standard', 50, 'held', $4, $4)`
+	const insert = `INSERT INTO holds (id, user_id, source, reference, price_code, amount, status, created_at, updated_at, expires_at)
+		VALUES ($1, $2, 'test', $3, 'narration.standard', 50, 'held', $4, $4, $4::TIMESTAMPTZ + interval '1 day')`
 	if _, err := f.pool.Exec(ctx(f.t), insert, id, f.user, "ref-"+id.String(), f.clock.Now()); err != nil {
 		f.t.Fatalf("홀드를 넣지 못했다: %v", err)
 	}

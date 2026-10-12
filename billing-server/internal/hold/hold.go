@@ -9,7 +9,11 @@
 // 홀드의 상태는 한 방향으로만 흐른다.
 //
 //	held -> captured (확정했다. 크레딧은 돌아오지 않는다)
-//	     -> released (돌려줬다)
+//	     -> released (돌려줬다. 부르는 쪽이 돌려 달라고 했거나(requested), 만료되어 정리 작업이 돌려줬다(expired))
+//
+// 홀드에는 만료 시각이 있다(TTL). 그 안에 확정하지 않으면 정리 작업이 돌려준다. 오래 걸리는 쪽은 만료 전에 연장한다.
+// 카드의 승인(authorization)이 며칠 뒤 저절로 풀리는 것과 같은 생각이다. 끝이 열린 홀드를 남기지 않는다.
+// 만료 시각이 지나도 정리 작업이 돌려주기 전까지는 확정하거나 연장할 수 있다. 시각 하나로 두 쪽이 다투지 않게 한다.
 //
 // 지키는 것 셋.
 //
@@ -46,8 +50,10 @@ var (
 	ErrNotFound = errors.New("그런 홀드가 없습니다")
 	// ErrAlreadyCaptured 는 이미 확정한 홀드를 돌려주려 했다는 오류다.
 	ErrAlreadyCaptured = errors.New("이미 확정한 홀드입니다")
-	// ErrAlreadyReleased 는 이미 돌려준 홀드를 확정하려 했다는 오류다.
+	// ErrAlreadyReleased 는 이미 돌려준 홀드를 확정하거나 연장하려 했다는 오류다. 만료되어 돌려준 것도 같다.
 	ErrAlreadyReleased = errors.New("이미 돌려준 홀드입니다")
+	// ErrInvalidTTL 은 홀드의 만료까지의 시간이 0 이하라는 오류다. 서버를 만들 때만 난다.
+	ErrInvalidTTL = errors.New("홀드의 만료까지의 시간은 0 보다 커야 합니다")
 )
 
 // referencePattern 은 이름표로 받는 모양이다. DB 와 로그에 그대로 적히므로 글자를 좁게 받는다.
@@ -63,6 +69,16 @@ const (
 	StatusReleased Status = "released"
 )
 
+// ReleaseReason 은 홀드를 돌려준 이유다. DB 의 holds.release_reason 에 이 글자가 그대로 적힌다.
+type ReleaseReason string
+
+const (
+	// ReleaseRequested 는 부르는 쪽이 돌려 달라고 한 것이다.
+	ReleaseRequested ReleaseReason = "requested"
+	// ReleaseExpired 는 만료 시각이 지나 정리 작업이 돌려준 것이다.
+	ReleaseExpired ReleaseReason = "expired"
+)
+
 // Hold 는 홀드 하나다.
 type Hold struct {
 	ID     uuid.UUID
@@ -74,8 +90,12 @@ type Hold struct {
 	Amount    credit.Amount
 	Status    Status
 	CreatedAt time.Time
+	// ExpiresAt 은 만료 시각이다. 이때까지 확정하거나 연장하지 않으면 정리 작업이 돌려준다.
+	ExpiresAt time.Time
 	// SettledAt 은 확정하거나 돌려준 시각이다. held 일 때는 nil 이다.
 	SettledAt *time.Time
+	// ReleaseReason 은 돌려준 이유다. released 일 때만 있다.
+	ReleaseReason ReleaseReason
 }
 
 // Wallet 은 홀드로 크레딧을 빼고 돌려놓는 것의 모양이다. *wallet.Service 가 이 모양이다.
@@ -85,16 +105,21 @@ type Wallet interface {
 	ReturnForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, holdID uuid.UUID) error
 }
 
-// Service 는 홀드를 걸고, 확정하고, 돌려준다. 서버가 뜰 때 하나 만들어 쓴다.
+// Service 는 홀드를 걸고, 확정하고, 돌려주고, 연장한다. 서버가 뜰 때 하나 만들어 쓴다.
 type Service struct {
 	pool   *pgxpool.Pool
 	now    func() time.Time
 	wallet Wallet
+	// ttl 은 홀드를 걸거나 연장한 때부터 만료까지의 시간이다.
+	ttl time.Duration
 }
 
-// NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수다.
-func NewService(pool *pgxpool.Pool, now func() time.Time, wallet Wallet) *Service {
-	return &Service{pool: pool, now: now, wallet: wallet}
+// NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, ttl 은 만료까지의 시간이다.
+func NewService(pool *pgxpool.Pool, now func() time.Time, wallet Wallet, ttl time.Duration) (*Service, error) {
+	if ttl <= 0 {
+		return nil, ErrInvalidTTL
+	}
+	return &Service{pool: pool, now: now, wallet: wallet, ttl: ttl}, nil
 }
 
 // clock 은 지금 시각을 DB 가 적는 모양(UTC, 백만분의 1초)으로 맞춰 돌려준다.
@@ -112,9 +137,13 @@ func toHold(row holddb.Hold) Hold {
 		Amount:    row.Amount,
 		Status:    Status(row.Status),
 		CreatedAt: row.CreatedAt,
+		ExpiresAt: row.ExpiresAt,
 	}
 	if row.SettledAt.Valid {
 		held.SettledAt = &row.SettledAt.Time
+	}
+	if row.ReleaseReason.Valid {
+		held.ReleaseReason = ReleaseReason(row.ReleaseReason.String)
 	}
 	return held
 }

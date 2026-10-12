@@ -69,6 +69,7 @@ func sampleOrder(t *testing.T, status order.Status) order.Order {
 		Credits:   1000,
 		Status:    status,
 		CreatedAt: time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC),
+		ExpiresAt: time.Date(2026, 3, 3, 9, 0, 0, 0, time.UTC),
 	}
 }
 
@@ -132,7 +133,7 @@ func TestCreateOrderAnswersCreatedForANewOrder(t *testing.T) {
 		t.Fatalf("상태 코드 = %d, 본문 = %s", response.Code, body(response))
 	}
 	want := `{"id":"` + orderID + `","product_id":"credits-1000","price":1000,"credits":"1000","status":"pending",` +
-		`"failure_code":null,"created_at":"2026-03-02T09:00:00Z","paid_at":null}`
+		`"failure_code":null,"created_at":"2026-03-02T09:00:00Z","expires_at":"2026-03-03T09:00:00Z","paid_at":null}`
 	if got := body(response); got != want {
 		t.Errorf("본문 = %s\n기대 = %s", got, want)
 	}
@@ -185,6 +186,7 @@ func TestOrderErrorsBecomeStatusCodes(t *testing.T) {
 		{"같은 키로 다른 주문", order.ErrKeyReused, http.StatusConflict},
 		{"다른 결제 번호", order.ErrPaymentKeyMismatch, http.StatusConflict},
 		{"이미 쓰인 결제 번호", order.ErrPaymentKeyUsed, http.StatusConflict},
+		{"만료된 주문", order.ErrExpired, http.StatusConflict},
 		{"DB 오류", errors.New(`relation "orders" does not exist`), http.StatusInternalServerError},
 	}
 	requests := []request{

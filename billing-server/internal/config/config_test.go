@@ -72,6 +72,9 @@ func TestLoadFillsDefaults(t *testing.T) {
 		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 1주일 뒤에 사라진다
 		SpendFreeFirst: true,
 		FreeCreditTTL:  7 * 24 * time.Hour,
+		// 적지 않으면 홀드와 주문은 하루 뒤에 만료된다
+		HoldTTL:  24 * time.Hour,
+		OrderTTL: 24 * time.Hour,
 		// 적지 않으면 환영 크레딧은 1,000 이다
 		WelcomeCredits:   1_000,
 		WebhookSecret:    webhookSecret,
@@ -95,6 +98,8 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		"JWT_AUDIENCE":       "some-audience",
 		"SPEND_FREE_FIRST":   "false",
 		"FREE_CREDIT_TTL":    "36h30m",
+		"HOLD_TTL":           "2h",
+		"ORDER_TTL":          "30m",
 		"PG_WEBHOOK_SECRET":  "0123456789abcdef0123456789abcdef",
 		"GAME_SERVER_SECRET": "fedcba9876543210fedcba9876543210",
 		"AUTH_SERVER_SECRET": "00112233445566778899aabbccddeeff",
@@ -121,6 +126,8 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		JWTAudience:    "some-audience",
 		SpendFreeFirst: false,
 		FreeCreditTTL:  36*time.Hour + 30*time.Minute,
+		HoldTTL:        2 * time.Hour,
+		OrderTTL:       30 * time.Minute,
 		WelcomeCredits: 250,
 		// 꼭 32자다. 받는 가장 짧은 길이다
 		WebhookSecret:    "0123456789abcdef0123456789abcdef",
@@ -139,7 +146,7 @@ func TestLoadTreatsEmptyAsMissing(t *testing.T) {
 	// .env 에 이름만 적고 값을 비워 둔 줄은 적지 않은 것과 같다
 	settings, err := config.Load(from(required(map[string]string{
 		"DEBUG": "", "HOST": "", "PORT": "", "DB_SCHEMA": "", "JWT_ISSUER": "", "JWT_AUDIENCE": "",
-		"SPEND_FREE_FIRST": "", "FREE_CREDIT_TTL": "", "WELCOME_CREDITS": "",
+		"SPEND_FREE_FIRST": "", "FREE_CREDIT_TTL": "", "WELCOME_CREDITS": "", "HOLD_TTL": "", "ORDER_TTL": "",
 	})))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
@@ -154,6 +161,9 @@ func TestLoadTreatsEmptyAsMissing(t *testing.T) {
 		t.Errorf("빈 값이 기본값으로 채워지지 않았다: %+v", settings)
 	}
 	if settings.SpendFreeFirst != config.DefaultSpendFreeFirst || settings.FreeCreditTTL != config.DefaultFreeCreditTTL {
+		t.Errorf("빈 값이 기본값으로 채워지지 않았다: %+v", settings)
+	}
+	if settings.HoldTTL != config.DefaultHoldTTL || settings.OrderTTL != config.DefaultOrderTTL {
 		t.Errorf("빈 값이 기본값으로 채워지지 않았다: %+v", settings)
 	}
 }
@@ -201,6 +211,10 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"기한이 0 이다", required(map[string]string{"FREE_CREDIT_TTL": "0s"}), "FREE_CREDIT_TTL"},
 		{"기한이 음수다", required(map[string]string{"FREE_CREDIT_TTL": "-1h"}), "FREE_CREDIT_TTL"},
 		{"기한이 너무 짧다", required(map[string]string{"FREE_CREDIT_TTL": "999ms"}), "FREE_CREDIT_TTL"},
+		{"홀드의 기한에 단위가 없다", required(map[string]string{"HOLD_TTL": "24"}), "HOLD_TTL"},
+		{"홀드의 기한이 너무 짧다", required(map[string]string{"HOLD_TTL": "59s"}), "HOLD_TTL"},
+		{"주문의 기한이 날 단위다", required(map[string]string{"ORDER_TTL": "1d"}), "ORDER_TTL"},
+		{"주문의 기한이 너무 짧다", required(map[string]string{"ORDER_TTL": "59s"}), "ORDER_TTL"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -219,6 +233,65 @@ func TestLoadAcceptsTheShortestTTL(t *testing.T) {
 	settings, err := config.Load(from(required(map[string]string{"FREE_CREDIT_TTL": "1s"})))
 	if err != nil || settings.FreeCreditTTL != time.Second {
 		t.Errorf("FreeCreditTTL = %v, %v, 기대 = 1s", settings.FreeCreditTTL, err)
+	}
+}
+
+func TestLoadAcceptsTheShortestExpiry(t *testing.T) {
+	settings, err := config.Load(from(required(map[string]string{"HOLD_TTL": "1m", "ORDER_TTL": "1m"})))
+	if err != nil || settings.HoldTTL != time.Minute || settings.OrderTTL != time.Minute {
+		t.Errorf("HoldTTL = %v, OrderTTL = %v, %v, 기대 = 1m", settings.HoldTTL, settings.OrderTTL, err)
+	}
+}
+
+func TestLoadJobsNeedsNoServerSettings(t *testing.T) {
+	// 작업 명령은 포트, 공개키 주소, 서명의 비밀이 없어도 돈다
+	jobs, err := config.LoadJobs(from(map[string]string{
+		"DATABASE_URL": databaseURL, "DB_SCHEMA": "billing_test", "HOLD_TTL": "2h", "SPEND_FREE_FIRST": "false",
+		"APP_ENVIRONMENT": "production", "LOG_LEVEL": "debug",
+	}))
+	if err != nil {
+		t.Fatalf("설정을 읽지 못했다: %v", err)
+	}
+	want := config.Jobs{
+		Database: config.Database{URL: databaseURL, Schema: "billing_test"},
+		Logging:  config.Logging{AppEnvironment: "production", AppVersion: "dev", LogLevel: "debug"},
+		Rules: config.Rules{
+			SpendFreeFirst: false, FreeCreditTTL: 7 * 24 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 24 * time.Hour,
+		},
+	}
+	if jobs != want {
+		t.Errorf("설정 = %+v, 기대 = %+v", jobs, want)
+	}
+}
+
+func TestLoadJobsReadsTheSameRulesAsTheServer(t *testing.T) {
+	// 서버와 정리 작업의 규칙이 어긋나면 무료 크레딧과 홀드가 다르게 다뤄진다
+	values := required(map[string]string{
+		"SPEND_FREE_FIRST": "false", "FREE_CREDIT_TTL": "3h", "HOLD_TTL": "2h", "ORDER_TTL": "90m",
+		"APP_ENVIRONMENT": "staging", "APP_VERSION": "v1.2.3", "LOG_LEVEL": "error",
+	})
+	settings, serverErr := config.Load(from(values))
+	jobs, jobsErr := config.LoadJobs(from(values))
+	if serverErr != nil || jobsErr != nil {
+		t.Fatalf("설정을 읽지 못했다: %v, %v", serverErr, jobsErr)
+	}
+	if settings.Rules() != jobs.Rules || settings.Logging() != jobs.Logging {
+		t.Errorf("서버 = %+v %+v, 작업 = %+v %+v", settings.Rules(), settings.Logging(), jobs.Rules, jobs.Logging)
+	}
+}
+
+func TestLoadJobsReportsEveryProblemAtOnce(t *testing.T) {
+	_, err := config.LoadJobs(from(map[string]string{
+		"DB_SCHEMA": "NOPE", "HOLD_TTL": "nope", "ORDER_TTL": "1s", "SPEND_FREE_FIRST": "nope", "LOG_LEVEL": "loud",
+		"DATABASE_URL_X": databaseURL,
+	}))
+	if err == nil {
+		t.Fatal("오류가 나야 하는데 나지 않았다")
+	}
+	for _, name := range []string{"DATABASE_URL", "DB_SCHEMA", "HOLD_TTL", "ORDER_TTL", "SPEND_FREE_FIRST", "LOG_LEVEL"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("오류에 %s 가 없다: %v", name, err)
+		}
 	}
 }
 

@@ -28,7 +28,7 @@
 | 요청 식별자(`X-Request-ID`)와 추적 식별자(`traceparent`) | 네 서버에 구현 |
 | 공통 모양의 JSON 로그 | 네 서버에 구현 |
 | 민감정보를 가리는 마지막 방어선 | 네 서버에 구현 |
-| 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server 에 구현. 나머지 둘은 아직 그런 작업이 없다 |
+| 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server 에 구현. board-server 는 아직 그런 작업이 없다 |
 | 메트릭 | 이름과 규칙만 정했다. 내보내는 코드는 없다 |
 | 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
 | OpenTelemetry Collector, Prometheus, Loki, Tempo, Grafana | 없다 |
@@ -158,6 +158,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
 | auth-server | 환영 크레딧을 결제 서버에 맡기기(워커가 한 번 훑는 것) | `welcome_credit.deliver` |
 | auth-server | 이미 가입한 계정들에 환영 크레딧을 주라고 적어 두기(한 번 돌리는 명령) | `welcome_credit.request_existing` |
+| billing-server | 만료된 홀드·주문, 사라진 무료 크레딧 닫기(정리 작업이 30초마다 한 바퀴. 바퀴마다 새 `job_id`) | `sweep.run` |
+| billing-server | 장부 맞춰 보기와 오래된 결제 끝내기(하루 한 번 돌리는 명령) | `reconcile.run` |
 | auth-server | 인증하지 않은 계정 지우기 | `account.delete_unverified` |
 | auth-server | 보안 이벤트 요약 메일 | `security.send_digest` |
 
@@ -295,6 +297,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `auth.jwks_fetch` | billing | 인증 서버에서 공개키 받기 |
 | `order.confirm` | billing | 주문의 결제 승인 |
 | `server.start` | billing | 서버를 띄우기 |
+| `sweep.run` | billing | 정리 작업의 한 바퀴. 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 원장에 적고, 만료된 주문을 끝낸다 |
+| `reconcile.run` | billing | 대사 한 번. 오래된 `confirming` 주문을 결제 대행사에 물어 끝내고, 장부를 맞춰 본다 |
 
 ### 오류 코드
 
@@ -311,6 +315,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 서술 뒤의 확정을 정해 둔 시간 안에 끝내지 못해 정리 작업에 넘긴 것도 이 코드다(`warning`). 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
 | `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다 |
 | `server.start_failed` | 서버가 뜨지 못했다 |
+| `ledger.mismatch` | 결제 서버가 남긴다. 대사에서 지금의 값(지갑, 지급 묶음, 주문, 홀드)이 원장과 맞지 않는 줄을 찾았다. 줄마다 `error` 한 줄. `check` 에 검사의 이름, `record_id` 에 그 줄의 번호. 사람이 봐야 한다 |
+| `sweep.behind` | 결제 서버가 남긴다. 대사가 셀 때, 만료된 지 한참(기본 10분) 지났는데 정리되지 않은 것이 있다. 정리 작업이 멈췄거나 밀렸다. `warning` |
 
 `error` 이상의 줄에는 `error_code` 를 붙인다. 새 코드를 만들면 이 표에 더한다.
 Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로 주지 않으면 `internal.error` 를 붙인다. Nest 와 Go 는 남기는 쪽이 직접 붙인다.
@@ -631,7 +637,7 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 | 식별자를 들고 있는 곳 | `contextvars` | `contextvars` | `AsyncLocalStorage` | `context.Context` |
 | 요청 미들웨어 | Django 미들웨어(맨 앞) | 순수 ASGI 미들웨어 | express 미들웨어 | gin 미들웨어(맨 앞) |
 | 처리하지 못한 예외 | 미들웨어의 `process_exception` | `Exception` 처리기 | 전역 예외 필터 | `recover` 미들웨어 |
-| 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | 없다 | 없다(`obs.WithJob` 만 있다) |
+| 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | 없다 | `jobs.Run()` |
 | 코드의 자리 | `observability/` | `app/observability/` | `src/observability/` | `internal/obs/`, `internal/httpapi/observability.go` |
 
 기존 로그는 고쳐 쓰지 않았다. `logging.getLogger(__name__)`, Nest 의 `new Logger(...)`, Go 의 표준 `log` 로 남기던 줄이 그대로 같은 JSON 으로 나간다.

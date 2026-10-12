@@ -90,12 +90,15 @@ func (s *Service) startConfirming(ctx context.Context, userID uuid.UUID, orderID
 	return toOrder(row), nil
 }
 
-// resume 은 이미 진행된 주문에 같은 승인 요청이 다시 왔을 때의 처리다.
-// 끝난 주문이면 그대로 돌려주고, 결과를 모르는 주문이면 결제 대행사에 물어 마저 끝낸다.
+// resume 은 pending 에서 confirming 으로 바꾸지 못한 주문에 승인 요청이 왔을 때의 처리다.
+// 만료된 주문이면 ErrExpired 다. 이미 진행된 주문이면, 끝났으면 그대로 돌려주고 결과를 모르면 결제 대행사에 물어 마저 끝낸다.
 func (s *Service) resume(ctx context.Context, userID uuid.UUID, orderID uuid.UUID, paymentKey string) (Order, error) {
 	current, err := s.Get(ctx, userID, orderID)
 	if err != nil {
 		return Order{}, err
+	}
+	if current.Status == StatusPending || current.Status == StatusExpired {
+		return current, s.refuseExpired(ctx, current)
 	}
 	if current.PaymentKey != paymentKey {
 		return Order{}, ErrPaymentKeyMismatch
@@ -107,6 +110,23 @@ func (s *Service) resume(ctx context.Context, userID uuid.UUID, orderID uuid.UUI
 		return s.provider.Lookup(ctx, paymentKey)
 	})
 	return s.settle(ctx, current, result, err)
+}
+
+// refuseExpired 는 승인을 요청받았지만 confirming 으로 바꾸지 못한 pending·expired 주문을 다룬다.
+// 만료 시각이 지났으면 expired 로 적고(정리 작업보다 먼저 왔을 때) ErrExpired 를 돌려준다.
+// 만료되지 않은 pending 이면 다른 요청과 엇갈린 것이다. 아주 드물다. 오류 없이 돌려주고, 부르는 쪽이 다시 보내면 된다.
+func (s *Service) refuseExpired(ctx context.Context, current Order) error {
+	if current.Status == StatusExpired {
+		return ErrExpired
+	}
+	_, err := orderdb.New(s.pool).ExpireOrder(ctx, orderdb.ExpireOrderParams{ID: current.ID, Now: s.clock()})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return ErrExpired
 }
 
 // askProvider 는 결제 대행사를 부르되 ProviderTimeout 까지만 기다린다.

@@ -26,6 +26,7 @@ const (
 	holdsURL   = httpapi.APIPrefix + "/service/holds"
 	captureURL = holdsURL + "/capture"
 	releaseURL = holdsURL + "/release"
+	extendURL  = holdsURL + "/extend"
 	// gameSecret 은 테스트의 게임 서버와 결제 서버가 함께 아는 비밀이다.
 	gameSecret = "game-server-test-secret-of-32-chars"
 	holdRef    = "table:7f3c:round:3"
@@ -65,6 +66,12 @@ func (f *fakeHolds) Release(_ context.Context, source string, reference string) 
 	return f.hold, f.err
 }
 
+func (f *fakeHolds) Extend(_ context.Context, source string, reference string) (hold.Hold, error) {
+	f.calls++
+	f.action, f.source, f.reference = "extend", source, reference
+	return f.hold, f.err
+}
+
 // aHold 는 응답의 모양을 볼 때 쓰는 홀드다.
 func aHold(t *testing.T) hold.Hold {
 	t.Helper()
@@ -76,6 +83,7 @@ func aHold(t *testing.T) hold.Hold {
 		Amount:    50,
 		Status:    hold.StatusHeld,
 		CreatedAt: webhookNow,
+		ExpiresAt: webhookNow.Add(24 * time.Hour),
 	}
 }
 
@@ -106,9 +114,10 @@ func TestPlacingAHoldAnswersCreated(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("상태 코드 = %d, 본문 = %s", response.Code, body(response))
 	}
-	// 크레딧은 글자다. 아직 끝나지 않은 홀드의 settled_at 은 null 이다
+	// 크레딧은 글자다. 아직 끝나지 않은 홀드의 settled_at 과 release_reason 은 null 이다
 	want := `{"id":"0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b","user_id":"` + testenv.UserID + `","reference":"` + holdRef +
-		`","price_code":"narration.standard","amount":"50","status":"held","created_at":"2026-03-02T09:00:00Z","settled_at":null}`
+		`","price_code":"narration.standard","amount":"50","status":"held","created_at":"2026-03-02T09:00:00Z",` +
+		`"expires_at":"2026-03-03T09:00:00Z","settled_at":null,"release_reason":null}`
 	if body(response) != want {
 		t.Errorf("본문 = %s\n기대 = %s", body(response), want)
 	}
@@ -147,14 +156,16 @@ func TestCapturingAndReleasingAnswerWithTheSettledHold(t *testing.T) {
 	cases := map[string]struct {
 		url    string
 		status hold.Status
+		reason hold.ReleaseReason
+		tail   string
 	}{
-		"capture": {captureURL, hold.StatusCaptured},
-		"release": {releaseURL, hold.StatusReleased},
+		"capture": {captureURL, hold.StatusCaptured, "", `"release_reason":null}`},
+		"release": {releaseURL, hold.StatusReleased, hold.ReleaseRequested, `"release_reason":"requested"}`},
 	}
 	for action, tc := range cases {
 		t.Run(action, func(t *testing.T) {
 			done := aHold(t)
-			done.Status, done.SettledAt = tc.status, &settled
+			done.Status, done.SettledAt, done.ReleaseReason = tc.status, &settled, tc.reason
 			holds := &fakeHolds{hold: done}
 
 			response := asGame(t, holdDeps(holds), tc.url, settleText)
@@ -162,11 +173,40 @@ func TestCapturingAndReleasingAnswerWithTheSettledHold(t *testing.T) {
 			if response.Code != http.StatusOK || holds.action != action || holds.source != httpapi.GameServer || holds.reference != holdRef {
 				t.Fatalf("상태 코드 = %d, 서비스에 넘긴 값 = %+v", response.Code, holds)
 			}
-			want := `"status":"` + string(tc.status) + `","created_at":"2026-03-02T09:00:00Z","settled_at":"2026-03-02T09:00:40Z"}`
+			want := `"status":"` + string(tc.status) + `","created_at":"2026-03-02T09:00:00Z","expires_at":"2026-03-03T09:00:00Z",` +
+				`"settled_at":"2026-03-02T09:00:40Z",` + tc.tail
 			if !strings.HasSuffix(body(response), want) {
 				t.Errorf("본문 = %s", body(response))
 			}
 		})
+	}
+}
+
+func TestReleasedByExpiryShowsWhy(t *testing.T) {
+	// 게임 서버가 늦게 돌려 달라고 했는데 이미 만료로 돌려줬다. 그래도 200 이고, 왜 돌려줬는지 본문에 있다
+	settled := webhookNow.Add(25 * time.Hour)
+	done := aHold(t)
+	done.Status, done.SettledAt, done.ReleaseReason = hold.StatusReleased, &settled, hold.ReleaseExpired
+
+	response := asGame(t, holdDeps(&fakeHolds{hold: done}), releaseURL, settleText)
+
+	if response.Code != http.StatusOK || !strings.HasSuffix(body(response), `"release_reason":"expired"}`) {
+		t.Errorf("상태 코드 = %d, 본문 = %s", response.Code, body(response))
+	}
+}
+
+func TestExtendingAHoldAnswersWithTheNewExpiry(t *testing.T) {
+	extended := aHold(t)
+	extended.ExpiresAt = webhookNow.Add(30 * time.Hour)
+	holds := &fakeHolds{hold: extended}
+
+	response := asGame(t, holdDeps(holds), extendURL, settleText)
+
+	if response.Code != http.StatusOK || holds.action != "extend" || holds.source != httpapi.GameServer || holds.reference != holdRef {
+		t.Fatalf("상태 코드 = %d, 서비스에 넘긴 값 = %+v", response.Code, holds)
+	}
+	if !strings.Contains(body(response), `"status":"held"`) || !strings.Contains(body(response), `"expires_at":"2026-03-03T15:00:00Z"`) {
+		t.Errorf("본문 = %s", body(response))
 	}
 }
 
@@ -185,6 +225,9 @@ func TestHoldErrorsBecomeStatusCodes(t *testing.T) {
 		"돌려줄 홀드가 없다":       {releaseURL, settleText, hold.ErrNotFound, http.StatusNotFound},
 		"돌려준 것을 확정한다":      {captureURL, settleText, hold.ErrAlreadyReleased, http.StatusConflict},
 		"확정한 것을 돌려 달라고 한다": {releaseURL, settleText, hold.ErrAlreadyCaptured, http.StatusConflict},
+		"연장할 홀드가 없다":       {extendURL, settleText, hold.ErrNotFound, http.StatusNotFound},
+		"확정한 것을 연장한다":      {extendURL, settleText, hold.ErrAlreadyCaptured, http.StatusConflict},
+		"돌려준 것을 연장한다":      {extendURL, settleText, hold.ErrAlreadyReleased, http.StatusConflict},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -198,7 +241,7 @@ func TestHoldErrorsBecomeStatusCodes(t *testing.T) {
 }
 
 func TestAnUnexpectedHoldErrorHidesItsCause(t *testing.T) {
-	for _, url := range []string{holdsURL, captureURL, releaseURL} {
+	for _, url := range []string{holdsURL, captureURL, releaseURL, extendURL} {
 		holds := &fakeHolds{err: errors.New("pq: connection refused at 10.0.0.7")}
 		text := settleText
 		if url == holdsURL {
@@ -225,6 +268,7 @@ func TestSignedButUnusableHoldRequestsAreBadRequests(t *testing.T) {
 		"사용자가 UUID 가 아니다":  {holdsURL, `{"user_id":"42","reference":"` + holdRef + `","price_code":"narration.standard"}`},
 		"확정: JSON 이 아니다":   {captureURL, "reference=1"},
 		"반환: 이름표가 글자가 아니다": {releaseURL, `{"reference":3}`},
+		"연장: JSON 이 아니다":   {extendURL, "reference=1"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -256,6 +300,8 @@ func TestRequestsWithoutAValidServiceSignatureAreUnauthorized(t *testing.T) {
 		"다른 사용자로 본문을 고쳤다":   {holdsURL, other, sign(gameSecret, webhookNow, http.MethodPost, holdsURL, holdText)},
 		"본문 끝에 빈칸을 붙였다":     {holdsURL, holdText + " ", sign(gameSecret, webhookNow, http.MethodPost, holdsURL, holdText)},
 		"확정의 서명을 반환에 붙였다":   {releaseURL, settleText, sign(gameSecret, webhookNow, http.MethodPost, captureURL, settleText)},
+		"반환의 서명을 연장에 붙였다":   {extendURL, settleText, sign(gameSecret, webhookNow, http.MethodPost, releaseURL, settleText)},
+		"연장의 서명이 없다":        {extendURL, settleText, ""},
 		"GET 의 서명을 붙였다":     {holdsURL, holdText, sign(gameSecret, webhookNow, http.MethodGet, holdsURL, holdText)},
 		"주소 뒤에 값을 붙였다":      {holdsURL + "?retry=1", holdText, sign(gameSecret, webhookNow, http.MethodPost, holdsURL, holdText)},
 		"본문만 서명했다":          {holdsURL, holdText, payment.Sign(gameSecret, webhookNow, []byte(holdText))},
@@ -301,7 +347,9 @@ func TestASignatureThatCoversTheQueryIsAccepted(t *testing.T) {
 
 func TestAUserTokenCannotReachTheServiceRoutes(t *testing.T) {
 	// 로그인한 사용자가 자기 홀드를 돌려받으려고, 또는 남의 크레딧을 빼려고 직접 부른다. 토큰은 서명이 아니다
-	for _, tc := range []struct{ url, text string }{{holdsURL, holdText}, {captureURL, settleText}, {releaseURL, settleText}} {
+	for _, tc := range []struct{ url, text string }{
+		{holdsURL, holdText}, {captureURL, settleText}, {releaseURL, settleText}, {extendURL, settleText},
+	} {
 		holds := &fakeHolds{hold: aHold(t), isNew: true}
 
 		response := send(t, holdDeps(holds), request{method: http.MethodPost, path: tc.url, body: tc.text})
@@ -365,8 +413,9 @@ func TestHoldingCreditsEndToEndWithTheRealDatabase(t *testing.T) {
 	// 가짜를 끼우지 않는다. 실제 홀드 서비스, 지갑, DB 로 주소들을 끝까지 지난다
 	pool := testenv.Pool(t)
 	now := func() time.Time { return webhookNow }
-	wallets := wallet.NewService(pool, now, wallet.Policy{FreeFirst: true, FreeTTL: time.Hour})
-	deps := httpapi.Dependencies{Wallet: wallets, Holds: hold.NewService(pool, now, wallets), GameServerSecret: gameSecret, Now: now}
+	services := realServices(t, pool, now)
+	wallets := services.Wallet
+	deps := httpapi.Dependencies{Wallet: wallets, Holds: services.Holds, GameServerSecret: gameSecret, Now: now}
 	user := uuid.New()
 	ctx := context.Background()
 	if err := wallets.Deposit(ctx, user, 100); err != nil {
@@ -449,5 +498,58 @@ func TestHoldingCreditsEndToEndWithTheRealDatabase(t *testing.T) {
 	// 첫 홀드는 무료와 산 것에서 한 줄씩 뺐다. 두 줄 다 그 홀드의 번호를 갖는다
 	if strings.Count(history, `"hold_id":"`+placed.ID+`"`) != 2 {
 		t.Errorf("첫 홀드를 가리키는 줄이 둘이 아니다: %s", history)
+	}
+}
+
+func TestHoldsExpireUnlessExtendedEndToEnd(t *testing.T) {
+	// 실제 홀드 서비스와 DB 로, 연장한 홀드는 남고 연장하지 않은 홀드는 정리 작업이 돌려주는 것을 본다.
+	// 서명의 시각을 보는 시계는 그대로 두고, 서비스의 시계만 돌린다. 서비스의 시계는 정리 작업의 시대다(testenv.SweepEra)
+	pool := testenv.Pool(t)
+	testenv.ExclusiveSweep(t, pool)
+	elapsed := time.Duration(0)
+	services := realServices(t, pool, func() time.Time { return testenv.SweepEra.Add(elapsed) })
+	deps := httpapi.Dependencies{Wallet: services.Wallet, Holds: services.Holds, GameServerSecret: gameSecret, Now: func() time.Time { return webhookNow }}
+	user := uuid.New()
+	if err := services.Wallet.Deposit(context.Background(), user, 100); err != nil {
+		t.Fatalf("산 크레딧을 넣지 못했다: %v", err)
+	}
+	refText := func(reference string) string { return `{"reference":"` + reference + `"}` }
+	kept, dropped := "table:"+uuid.NewString()+":round:1", "table:"+uuid.NewString()+":round:2"
+	for _, reference := range []string{kept, dropped} {
+		text := `{"user_id":"` + user.String() + `","reference":"` + reference + `","price_code":"narration.standard"}`
+		if response := asGame(t, deps, holdsURL, text); response.Code != http.StatusCreated {
+			t.Fatalf("홀드 = %d %s", response.Code, body(response))
+		}
+	}
+
+	// 23시간 뒤 하나만 연장한다. 만료 시각은 그때부터 하루 뒤다
+	elapsed = 23 * time.Hour
+	extended := asGame(t, deps, extendURL, refText(kept))
+	if extended.Code != http.StatusOK || !strings.Contains(body(extended), `"expires_at":"2001-01-03T08:00:00Z"`) {
+		t.Fatalf("연장 = %d %s", extended.Code, body(extended))
+	}
+
+	// 25시간 뒤 정리 작업이 돈다. 연장하지 않은 것만 돌려준다
+	elapsed = 25 * time.Hour
+	expired, err := services.Holds.ExpireDue(context.Background(), 100)
+	if err != nil || expired < 1 {
+		t.Fatalf("돌려준 홀드 = %d, %v", expired, err)
+	}
+	if response := asGame(t, deps, captureURL, refText(dropped)); response.Code != http.StatusConflict {
+		t.Errorf("만료로 돌려준 홀드의 확정 = %d %s. 409 이어야 한다", response.Code, body(response))
+	}
+	if response := asGame(t, deps, extendURL, refText(dropped)); response.Code != http.StatusConflict {
+		t.Errorf("만료로 돌려준 홀드의 연장 = %d %s. 409 이어야 한다", response.Code, body(response))
+	}
+	released := asGame(t, deps, releaseURL, refText(dropped))
+	if released.Code != http.StatusOK || !strings.Contains(body(released), `"release_reason":"expired"`) {
+		t.Errorf("만료로 돌려준 홀드의 반환 = %d %s", released.Code, body(released))
+	}
+	captured := asGame(t, deps, captureURL, refText(kept))
+	if captured.Code != http.StatusOK || !strings.Contains(body(captured), `"status":"captured"`) {
+		t.Errorf("연장한 홀드의 확정 = %d %s", captured.Code, body(captured))
+	}
+	if got := body(sendAs(t, deps, user.String(), request{method: http.MethodGet, path: httpapi.APIPrefix + "/wallet"})); !strings.Contains(got, `"paid":"50"`) {
+		t.Errorf("잔액 = %s. 만료로 돌아온 50 이 있어야 한다", got)
 	}
 }

@@ -27,6 +27,9 @@ const (
 	credits   credit.Amount = 1_000
 )
 
+// ttl 은 테스트의 주문이 만료될 때까지의 시간이다.
+const ttl = 24 * time.Hour
+
 // startedAt 은 테스트의 시계가 가리키는 시각이다. 실제 시각과 상관없이 테스트가 늘 같게 돈다.
 var startedAt = time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 
@@ -89,10 +92,29 @@ func silent(lookup payment.Result) *scripted {
 	return &scripted{confirmErr: payment.ErrUnknownOutcome, lookup: lookup}
 }
 
+// clock 은 테스트가 마음대로 돌리는 시계다.
+type clock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func (c *clock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *clock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+}
+
 // fixture 는 테스트 하나가 쓰는 것들이다.
 type fixture struct {
 	t        *testing.T
 	pool     *pgxpool.Pool
+	clock    *clock
 	provider *scripted
 	wallet   *wallet.Service
 	service  *order.Service
@@ -103,17 +125,50 @@ type fixture struct {
 // setUp 은 테스트용 스키마에 붙는 주문 서비스와 새 사용자를 만든다.
 func setUp(t *testing.T, provider *scripted) fixture {
 	t.Helper()
+	return setUpAt(t, testenv.Pool(t), startedAt, provider)
+}
+
+// setUpSweep 은 정리 작업(ExpireDue, ResolveStale)을 돌리는 테스트의 setUp 이다.
+// 시계를 정리 작업의 시대에 두고, 정리 작업의 테스트끼리 한 번에 하나만 돌게 잠근다(testenv.ExclusiveSweep).
+// 앞서 돈 테스트가 남긴, 그 시대의 pending 과 confirming 주문을 먼저 끝내 둔다.
+func setUpSweep(t *testing.T, provider *scripted) fixture {
+	t.Helper()
 	pool := testenv.Pool(t)
-	now := func() time.Time { return startedAt }
-	wallets := wallet.NewService(pool, now, wallet.Policy{FreeFirst: true, FreeTTL: time.Hour})
+	testenv.ExclusiveSweep(t, pool)
+	sweeper := setUpAt(t, pool, testenv.SweepEnd, declining())
+	if _, err := sweeper.service.ExpireDue(ctx(t), 100_000); err != nil {
+		t.Fatalf("남은 주문을 치우지 못했다: %v", err)
+	}
+	if _, err := sweeper.service.ResolveStale(ctx(t), time.Minute, 100_000); err != nil {
+		t.Fatalf("남은 주문을 끝내지 못했다: %v", err)
+	}
+	return setUpAt(t, pool, testenv.SweepEra, provider)
+}
+
+// setUpAt 은 시계를 start 에 둔 setUp 이다.
+func setUpAt(t *testing.T, pool *pgxpool.Pool, start time.Time, provider *scripted) fixture {
+	t.Helper()
+	clock := &clock{now: start}
+	wallets := wallet.NewService(pool, clock.Now, wallet.Policy{FreeFirst: true, FreeTTL: time.Hour})
 	return fixture{
 		t:        t,
 		pool:     pool,
+		clock:    clock,
 		provider: provider,
 		wallet:   wallets,
-		service:  order.NewService(pool, now, provider, wallets),
+		service:  newService(t, pool, clock.Now, provider, wallets),
 		user:     uuid.New(),
 	}
+}
+
+// newService 는 주문 서비스를 만든다. 만들지 못하면 테스트를 멈춘다.
+func newService(t *testing.T, pool *pgxpool.Pool, now func() time.Time, provider payment.Provider, wallets order.Depositor) *order.Service {
+	t.Helper()
+	service, err := order.NewService(pool, now, provider, wallets, ttl)
+	if err != nil {
+		t.Fatalf("주문 서비스를 만들지 못했다: %v", err)
+	}
+	return service
 }
 
 // ctx 는 시간 제한이 걸린 context 를 만든다.

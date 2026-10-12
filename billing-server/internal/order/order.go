@@ -5,9 +5,11 @@
 // 주문의 상태는 한 방향으로만 흐른다.
 //
 //		pending -> confirming -> paid
-//		                      -> failed
+//		   |                  -> failed
+//		   -> expired
 //
 //	  - pending: 주문을 만들었다. 아직 결제 대행사를 부르지 않았다.
+//	  - expired: 만료 시각(TTL)까지 치르지 않았다. 돈이 오간 적이 없다. 더는 치를 수 없다.
 //	  - confirming: 결제 대행사에 승인을 요청했다. 답을 받기 전이거나, 답을 받지 못했다.
 //	  - paid: 승인되었다. 크레딧이 들어갔다.
 //	  - failed: 거절되었다. 돈이 나가지 않았다.
@@ -59,6 +61,10 @@ var (
 	ErrPaymentKeyMismatch = errors.New("이 주문은 다른 결제로 이미 진행되었습니다")
 	// ErrPaymentKeyUsed 는 그 결제 번호가 이미 다른 주문에 쓰였다는 오류다.
 	ErrPaymentKeyUsed = errors.New("이 결제는 이미 다른 주문에 쓰였습니다")
+	// ErrExpired 는 치르지 않은 채 만료된 주문을 치르려 했다는 오류다.
+	ErrExpired = errors.New("주문이 만료되었습니다. 새 주문을 만들어 주세요")
+	// ErrInvalidTTL 은 주문의 만료까지의 시간이 0 이하라는 오류다. 서버를 만들 때만 난다.
+	ErrInvalidTTL = errors.New("주문의 만료까지의 시간은 0 보다 커야 합니다")
 )
 
 // 받는 글자의 모양. 키와 결제 번호는 DB 와 로그에 그대로 적히므로 글자를 좁게 받는다.
@@ -75,6 +81,7 @@ const (
 	StatusConfirming Status = "confirming"
 	StatusPaid       Status = "paid"
 	StatusFailed     Status = "failed"
+	StatusExpired    Status = "expired"
 )
 
 // Order 는 주문 하나다.
@@ -92,6 +99,8 @@ type Order struct {
 	// FailureCode 는 거절된 이유다. failed 일 때만 있다.
 	FailureCode string
 	CreatedAt   time.Time
+	// ExpiresAt 은 만료 시각이다. 이때까지 승인을 요청하지 않으면 치를 수 없다.
+	ExpiresAt time.Time
 	// PaidAt 은 치른 시각이다. paid 일 때만 있다.
 	PaidAt *time.Time
 }
@@ -108,11 +117,16 @@ type Service struct {
 	now      func() time.Time
 	provider payment.Provider
 	wallet   Depositor
+	// ttl 은 주문을 만든 때부터 만료까지의 시간이다.
+	ttl time.Duration
 }
 
-// NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수다.
-func NewService(pool *pgxpool.Pool, now func() time.Time, provider payment.Provider, wallet Depositor) *Service {
-	return &Service{pool: pool, now: now, provider: provider, wallet: wallet}
+// NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, ttl 은 주문의 만료까지의 시간이다.
+func NewService(pool *pgxpool.Pool, now func() time.Time, provider payment.Provider, wallet Depositor, ttl time.Duration) (*Service, error) {
+	if ttl <= 0 {
+		return nil, ErrInvalidTTL
+	}
+	return &Service{pool: pool, now: now, provider: provider, wallet: wallet, ttl: ttl}, nil
 }
 
 // clock 은 지금 시각을 DB 가 적는 모양(UTC, 백만분의 1초)으로 맞춰 돌려준다.
