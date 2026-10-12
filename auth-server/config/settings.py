@@ -364,4 +364,4 @@ BILLING_URL = validate_billing_url(env('BILLING_URL', default='http://127.0.0.1:
 
 # 결제 서버와 함께 아는 비밀. 요청에 서명할 때 쓴다. 결제 서버의 AUTH_SERVER_SECRET 과 같은 값이다.
 # 비어 있으면 워커가 돌지 못한다. 서버는 이 값 없이도 뜬다. 가입과 로그인에는 쓰이지 않는다
-BILLING_SERVICE_SECRET = validate_service_secret(env('BILLING_SERVICE_SECRET', default=''))
+BILLING_SECRET = validate_service_secret(env('BILLING_SECRET', default=''))
