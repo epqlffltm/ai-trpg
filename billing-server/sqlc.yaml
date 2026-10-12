@@ -97,3 +97,23 @@ sql:
             go_type: github.com/google/uuid.UUID
           - db_type: timestamptz
             go_type: time.Time
+  - engine: postgresql
+    schema: migrations
+    queries: internal/pricing/queries.sql
+    gen:
+      go:
+        package: pricingdb
+        out: internal/pricing/pricingdb
+        sql_package: pgx/v5
+        # 이 패키지의 쿼리가 쓰지 않는 테이블의 구조체는 만들지 않는다
+        omit_unused_structs: true
+        overrides:
+          - db_type: timestamptz
+            go_type: time.Time
+          # 값은 credit.Amount 로 받는다. NULL(판매를 멈춤)이면 nil 이다
+          - column: price_versions.amount
+            go_type:
+              import: github.com/epqlffltm/ai-trpg/billing-server/internal/credit
+              type: Amount
+              pointer: true
+            nullable: true

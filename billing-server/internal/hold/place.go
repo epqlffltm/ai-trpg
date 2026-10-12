@@ -5,6 +5,7 @@ package hold
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -23,15 +24,15 @@ func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, re
 	if !referencePattern.MatchString(reference) {
 		return Hold{}, false, ErrInvalidReference
 	}
-	price, ok := pricing.Find(priceCode)
-	if !ok {
-		return Hold{}, false, ErrUnknownPrice
+	now := s.clock()
+	price, err := s.priceAt(ctx, priceCode, now)
+	if err != nil {
+		return Hold{}, false, err
 	}
 
 	var placed Hold
 	var created bool
-	now := s.clock()
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		queries := holddb.New(tx)
 		row, err := queries.InsertHold(ctx, holddb.InsertHoldParams{
 			ID:        uuid.New(),
@@ -59,6 +60,16 @@ func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, re
 		return Hold{}, false, err
 	}
 	return placed, created, nil
+}
+
+// priceAt 은 가격표에서 그 이름의 at 시각의 값을 찾는다. 없거나 판매를 멈췄으면 ErrUnknownPrice 다.
+// 가격표를 읽지 못한 것(DB 오류)은 그대로 올린다. 부르는 쪽의 잘못(400)이 아니다.
+func (s *Service) priceAt(ctx context.Context, code string, at time.Time) (pricing.Price, error) {
+	price, err := s.prices.At(ctx, code, at)
+	if errors.Is(err, pricing.ErrUnknownCode) || errors.Is(err, pricing.ErrNotForSale) {
+		return pricing.Price{}, ErrUnknownPrice
+	}
+	return price, err
 }
 
 // existingHold 는 같은 이름표로 먼저 건 홀드를 돌려준다. 그 홀드의 사용자나 가격표 이름이 이번 요청과 다르면 ErrReferenceReused 다.
