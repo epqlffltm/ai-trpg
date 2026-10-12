@@ -8,7 +8,8 @@
   2. 서술 값을 잡아 두었는지 본다(app/billing/settling.py).
      라운드를 열 때 걸어 둔 홀드가 있으면 결제 서버를 부르지 않는다.
      아직 못 걸었거나 크레딧이 모자랐으면 지금 걸어 본다. 못 잡으면 서술하지 않고 실패로 적는다
-     (insufficient_credits, billing_unavailable). 방장이 충전하거나 결제 서버가 살아난 뒤 다시 맡긴다.
+     (insufficient_credits, billing_unavailable). 모자란 사람이 충전하거나(방장이 내보내거나) 결제 서버가 살아난 뒤
+     방장이 다시 맡긴다.
   3. 이번 장면에 맞는 로어북 항목(app/lore/retrieval.py)과 지난 일(app/memory/retrieval.py)을 고르고,
      로어북이 고른 인물의 이력을 모은다(app/memory/history.py). 고르지 못해도 서술은 한다.
   4. 서술자를 부른다. 이때는 잠금도 DB 연결도 쥐고 있지 않다.

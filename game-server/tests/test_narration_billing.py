@@ -64,6 +64,8 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 PRICE = 50
 # 가짜 결제 서버의 standard 가격표 이름. 등급을 고르지 않은 테이블의 라운드가 건다
 PRICE_CODE = 'narration.standard'
+# 함께 앉는 사람의 크레딧. 이 파일의 테스트가 그 사람 때문에 막히지 않을 만큼
+FRIEND_CREDITS = 100_000
 
 
 @pytest.fixture
@@ -80,8 +82,14 @@ def friend(signing_key: SigningKey) -> dict[str, str]:
 
 @pytest.fixture
 async def billing(app: FastAPI) -> FakeBillingServer:
-    """앱에 꽂은 가짜 결제 서버. 방장(ME)에게 1000 크레딧이 있다."""
-    server = FakeBillingServer(balances={ME: 1000})
+    """
+    앱에 꽂은 가짜 결제 서버. 방장(ME)에게 1000 크레딧이 있다.
+
+    함께 앉는 사람(FRIEND)도 각자 낸다(#180). 크레딧이 넉넉해서 이 파일의 테스트를 막지 않는다.
+    이 파일은 청구 하나의 흐름을 방장의 청구로 본다(charges_of).
+    여럿이 내는 것은 tests/test_per_head_charges.py 가 본다.
+    """
+    server = FakeBillingServer(balances={ME: 1000, FRIEND: FRIEND_CREDITS})
     client = server.make_client()
     app.state.billing = server.billing(client)
     yield server
@@ -108,16 +116,26 @@ async def tick(app: FastAPI, moment: datetime | None = None) -> None:
     await settler_at(app, moment or datetime.now(UTC)).tick()
 
 
-async def charges_of(session: AsyncSession, table: dict) -> list[NarrationCharge]:
-    """테이블의 청구들. 라운드 순서다."""
+async def charges_of(session: AsyncSession, table: dict, payer: uuid.UUID = ME) -> list[NarrationCharge]:
+    """테이블의 청구들 중 payer(기본은 방장)가 내는 것. 라운드 순서다."""
     query = (
         select(NarrationCharge)
         .join(Round, Round.id == NarrationCharge.round_id)
-        .where(Round.table_id == uuid.UUID(table['id']))
+        .where(Round.table_id == uuid.UUID(table['id']), NarrationCharge.payer_id == payer)
         .order_by(Round.number)
         .execution_options(populate_existing=True)
     )
     return list(await session.scalars(query))
+
+
+def host_statuses(billing: FakeBillingServer) -> dict[str, str]:
+    """가짜 결제 서버의 홀드 중 방장의 것의 상태. 이름표 끝(또는 :rN 앞)에 내는 사람이 있다."""
+    return {reference: status for reference, status in billing.statuses().items() if str(ME) in reference}
+
+
+def host_calls(billing: FakeBillingServer) -> list[tuple[str, str]]:
+    """가짜 결제 서버가 받은 요청 중 방장의 청구의 것."""
+    return [(action, reference) for action, reference in billing.calls if str(ME) in reference]
 
 
 async def statuses_of(session: AsyncSession, table: dict) -> list[str]:
@@ -145,7 +163,7 @@ async def test_opening_a_round_charges_the_host(
     # 라운드를 연 것과 함께 적었다. 결제 서버는 아직 부르지 않았다
     assert (charge.status, charge.payer_id, charge.price_code) == ('pending', ME, PRICE_CODE)
     assert charge.reference == f'narration:{table["id"]}:1:{ME}'
-    assert billing.calls == []
+    assert host_calls(billing) == []
 
 
 async def test_the_settler_holds_the_charge_of_an_open_round(
@@ -177,7 +195,7 @@ async def test_a_narrated_round_is_captured_and_the_next_one_charged(
     # 서술이 다음 장면이 됐다. 그 값을 확정했다. 새 라운드의 청구가 생겼다
     assert (await current(client, me, table))['scene'] == RESULT
     assert await statuses_of(session, table) == ['captured', 'pending']
-    assert billing.statuses() == {f'narration:{table["id"]}:1:{ME}': 'captured'}
+    assert host_statuses(billing) == {f'narration:{table["id"]}:1:{ME}': 'captured'}
     assert billing.balance(ME) == 1000 - PRICE
 
 
@@ -195,11 +213,11 @@ async def test_closing_holds_the_charge_if_the_settler_has_not_yet(
     await close_round(client, me, friend, table, narrated)
 
     # 정리 작업이 돌기 전에 닫았다. 서술 작업이 걸고, 서술하고, 확정했다
-    assert [action for action, _ in billing.calls] == ['holds', 'capture']
+    assert [action for action, _ in host_calls(billing)] == ['holds', 'capture']
     assert await statuses_of(session, table) == ['captured', 'pending']
 
 
-async def test_the_host_who_opened_the_round_pays_for_it(
+async def test_everyone_seated_pays_whoever_is_the_host(
     client: AsyncClient,
     app: FastAPI,
     session: AsyncSession,
@@ -218,9 +236,10 @@ async def test_the_host_who_opened_the_round_pays_for_it(
     await close_round(client, me, friend, table, narrated)
     await tick(app)
 
-    # 라운드를 열 때의 방장이 그 라운드를 낸다. 다음 라운드는 새 방장이 낸다
-    assert [charge.payer_id for charge in await charges_of(session, table)] == [ME, FRIEND]
-    assert (billing.balance(ME), billing.balance(FRIEND)) == (1000 - PRICE, 1000 - PRICE)
+    # 방장이 누구든 앉은 사람 모두가 라운드마다 각자 낸다(#180)
+    assert [charge.status for charge in await charges_of(session, table)] == ['captured', 'held']
+    assert [charge.status for charge in await charges_of(session, table, FRIEND)] == ['captured', 'held']
+    assert (billing.balance(ME), billing.balance(FRIEND)) == (1000 - 2 * PRICE, 1000 - 2 * PRICE)
 
 
 # --- 크레딧이 모자랄 때 ---
@@ -237,9 +256,9 @@ async def test_short_credits_are_told_before_anyone_declares(
 
     # 앉은 사람 모두에게 한 번 알린다. 모자란 청구는 정리 작업이 다시 걸지 않는다(충전했는지는 닫을 때 본다)
     assert await event_types(client, friend, table) == ['narration_credits_short']
-    assert (await last_event(client, friend, table))['payload'] == {'round': 1}
+    assert (await last_event(client, friend, table))['payload'] == {'round': 1, 'user_id': str(ME)}
     assert await statuses_of(session, table) == ['short']
-    assert len(billing.calls) == 1
+    assert len(host_calls(billing)) == 1
 
 
 async def test_a_round_without_credits_is_not_narrated(
@@ -463,7 +482,7 @@ async def test_a_capture_that_never_answers_is_left_to_the_settler(
                 uuid.UUID(table['id']),
                 1,
                 started,
-                budgets=closing.Budgets(billing=0.05),
+                budgets=closing.Budgets(billing=0.5),
                 billing=StuckCaptureBilling(),
             )
 
@@ -555,7 +574,7 @@ async def test_a_failed_narration_keeps_the_hold_for_the_next_try(
     assert failed == ['held']
     assert await statuses_of(session, table) == ['captured', 'pending']
     assert billing.balance(ME) == 1000 - PRICE
-    assert len(billing.holds) == 1
+    assert len(host_statuses(billing)) == 1
 
 
 async def test_a_hold_that_lands_after_the_release_is_released_again(
@@ -614,7 +633,7 @@ async def test_a_held_charge_is_extended_when_half_of_its_time_is_left(
     first = charge.next_attempt_at
 
     await tick(app, start + timedelta(hours=1))
-    early = list(billing.extended)
+    early = [reference for reference in billing.extended if str(ME) in reference]
     later = start + timedelta(hours=12, seconds=1)
     billing.clock = lambda: later
     await tick(app, later)
@@ -624,7 +643,7 @@ async def test_a_held_charge_is_extended_when_half_of_its_time_is_left(
     # 연장한 뒤에는 새 만료 시각까지 남은 시간의 절반 뒤다
     assert first == start + timedelta(hours=12)
     assert early == []
-    assert billing.extended == [charge.reference]
+    assert [reference for reference in billing.extended if str(ME) in reference] == [charge.reference]
     assert charge.next_attempt_at == later + timedelta(hours=12)
     assert billing.balance(ME) == 1000 - PRICE
 
@@ -677,7 +696,7 @@ async def test_an_expired_hold_of_an_open_round_is_held_again_under_a_new_name(
     # 만료되어 돌려준 홀드는 같은 이름표로 다시 걸 수 없다. 아직 서술 전이라 새 이름표로 다시 건다
     assert renewed_state == ('pending', 1, 'expired', f'{first_reference}:r1')
     assert charge.status == 'held'
-    assert billing.statuses() == {first_reference: 'released', f'{first_reference}:r1': 'held'}
+    assert host_statuses(billing) == {first_reference: 'released', f'{first_reference}:r1': 'held'}
     assert billing.balance(ME) == 1000 - PRICE
 
 
@@ -747,7 +766,7 @@ async def test_closing_after_a_missed_extension_holds_again_before_narrating(
     # 서술하기 전에 연장해 보고, 만료된 것을 알고 새 이름표로 다시 걸었다. 그 값으로 서술하고 확정했다
     assert (await current(client, me, table))['scene'] == RESULT
     assert await statuses_of(session, table) == ['captured', 'pending']
-    assert billing.statuses() == {first_reference: 'released', f'{first_reference}:r1': 'captured'}
+    assert host_statuses(billing) == {first_reference: 'released', f'{first_reference}:r1': 'captured'}
     assert billing.balance(ME) == 1000 - PRICE
 
 
@@ -829,8 +848,9 @@ async def test_an_extension_the_billing_server_refuses_keeps_the_hold(
     [charge] = await charges_of(session, table)
     assert (charge.status, charge.last_error) == ('held', 'rejected_400')
     assert charge.next_attempt_at == later + EXTEND_REJECTED_RETRY
-    [line] = rendered(caplog.records, 'app.billing.settling')
-    assert (line['operation'], line['error_code']) == ('billing.extend', 'billing.rejected')
+    # 내는 사람마다 한 줄씩이다(방장과 함께 앉은 사람)
+    lines = rendered(caplog.records, 'app.billing.settling')
+    assert [(line['operation'], line['error_code']) for line in lines] == [('billing.extend', 'billing.rejected')] * 2
 
 
 # --- 받아들여지지 않을 때 ---
@@ -878,8 +898,10 @@ async def test_a_refused_signature_is_logged_as_an_error(
     # 다시 부를 일이지만 설정이 틀린 것이라 사람이 봐야 한다
     [charge] = await charges_of(session, table)
     assert (charge.status, charge.last_error) == ('pending', 'unauthorized')
-    [line] = rendered(caplog.records, 'app.billing.settling')
-    assert (line['level'], line['error_code'], line['reason']) == ('error', 'billing.unavailable', 'unauthorized')
+    # 내는 사람마다 한 줄씩이다(방장과 함께 앉은 사람)
+    lines = rendered(caplog.records, 'app.billing.settling')
+    expected = ('error', 'billing.unavailable', 'unauthorized')
+    assert [(line['level'], line['error_code'], line['reason']) for line in lines] == [expected] * 2
     assert billing.secret not in caplog.text
 
 
@@ -922,8 +944,8 @@ async def test_each_round_of_the_settler_is_a_job_with_one_line(
         await tick(app)
 
     idle, busy = rendered(caplog.records, 'app.billing.settler')
-    # 할 일이 없던 바퀴는 debug, 한 일이 있던 바퀴는 info. 바퀴마다 다른 작업이다
-    assert (idle['level'], idle['settled'], busy['level'], busy['settled']) == ('debug', 0, 'info', 1)
+    # 할 일이 없던 바퀴는 debug, 한 일이 있던 바퀴는 info. 바퀴마다 다른 작업이다. 둘이 앉아 청구가 둘이다
+    assert (idle['level'], idle['settled'], busy['level'], busy['settled']) == ('debug', 0, 'info', 2)
     assert {idle['operation'], busy['operation']} == {'charge.settle'}
     assert idle['job_id'] != busy['job_id']
 

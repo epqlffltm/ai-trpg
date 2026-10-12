@@ -11,7 +11,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
@@ -71,6 +71,44 @@ async def release_abandoned(session: AsyncSession, now: datetime) -> int:
     statement = (
         update(NarrationCharge)
         .where(NarrationCharge.status.in_(OPEN_STATUSES), ended_rounds())
+        .values(status=ChargeStatus.RELEASE_DUE, next_attempt_at=now, attempts=0, last_error=None)
+        .execution_options(synchronize_session=False)
+    )
+    return (await session.execute(statement)).rowcount
+
+
+def unfinished_rounds(table_id: uuid.UUID, still_open: bool) -> ColumnElement[bool]:
+    """
+    이 테이블의 닫히지 않은 라운드라는 조건. still_open 이면 그중 선언을 받는 중인 것(닫기 시작하기 전)만.
+    """
+    rounds = select(Round.id).where(Round.table_id == table_id, Round.closed_at.is_(None))
+    if still_open:
+        rounds = rounds.where(Round.closing_at.is_(None))
+    return NarrationCharge.round_id.in_(rounds)
+
+
+async def release_departed(
+    session: AsyncSession,
+    table_id: uuid.UUID,
+    payer_id: uuid.UUID,
+    always: tuple[ChargeStatus, ...],
+    while_open: tuple[ChargeStatus, ...],
+    now: datetime,
+) -> int:
+    """
+    떠난 사람의 닫히지 않은 라운드의 청구를 "돌려줄 것"으로 바꾼다. 바꾼 수를 돌려준다.
+
+    always 의 상태는 라운드가 닫는 중이어도 바꾸고, while_open 의 상태는 라운드가 선언을 받는 중일 때만 바꾼다.
+    """
+    statement = (
+        update(NarrationCharge)
+        .where(
+            NarrationCharge.payer_id == payer_id,
+            or_(
+                and_(NarrationCharge.status.in_(always), unfinished_rounds(table_id, still_open=False)),
+                and_(NarrationCharge.status.in_(while_open), unfinished_rounds(table_id, still_open=True)),
+            ),
+        )
         .values(status=ChargeStatus.RELEASE_DUE, next_attempt_at=now, attempts=0, last_error=None)
         .execution_options(synchronize_session=False)
     )
