@@ -98,7 +98,7 @@ func setUpAt(t *testing.T, pool *pgxpool.Pool, start time.Time) fixture {
 // newService 는 홀드 서비스를 만든다. 만들지 못하면 테스트를 멈춘다.
 func newService(t *testing.T, pool *pgxpool.Pool, now func() time.Time, wallets hold.Wallet) *hold.Service {
 	t.Helper()
-	service, err := hold.NewService(pool, now, wallets, ttl)
+	service, err := hold.NewService(pool, now, wallets, pricing.NewService(pool, now), ttl)
 	if err != nil {
 		t.Fatalf("홀드 서비스를 만들지 못했다: %v", err)
 	}
