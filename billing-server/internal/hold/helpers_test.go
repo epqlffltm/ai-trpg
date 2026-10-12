@@ -26,6 +26,8 @@ const (
 	priceCode               = pricing.NarrationStandard
 	price     credit.Amount = 50
 	week                    = 7 * 24 * time.Hour
+	// ttl 은 테스트의 홀드가 만료될 때까지의 시간이다.
+	ttl = 24 * time.Hour
 )
 
 // clock 은 테스트가 마음대로 돌리는 시계다.
@@ -60,17 +62,47 @@ type fixture struct {
 // setUp 은 테스트용 스키마에 붙는 홀드 서비스와 새 사용자를 만든다.
 func setUp(t *testing.T) fixture {
 	t.Helper()
+	return setUpAt(t, testenv.Pool(t), time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC))
+}
+
+// setUpSweep 은 정리 작업(ExpireDue)을 돌리는 테스트의 setUp 이다.
+// 시계를 정리 작업의 시대에 두고, 정리 작업의 테스트끼리 한 번에 하나만 돌게 잠근다(testenv.ExclusiveSweep).
+func setUpSweep(t *testing.T) fixture {
+	t.Helper()
 	pool := testenv.Pool(t)
-	clock := &clock{now: time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)}
+	testenv.ExclusiveSweep(t, pool)
+	f := setUpAt(t, pool, testenv.SweepEnd)
+	// 앞서 돈 정리 작업의 테스트가 남긴, 그 시대의 held 홀드를 치운다. 그다음 시계를 시대의 처음으로 돌린다
+	if _, err := f.service.ExpireDue(ctx(t), 100_000); err != nil {
+		t.Fatalf("남은 홀드를 치우지 못했다: %v", err)
+	}
+	f.clock.now = testenv.SweepEra
+	return f
+}
+
+// setUpAt 은 시계를 start 에 둔 setUp 이다.
+func setUpAt(t *testing.T, pool *pgxpool.Pool, start time.Time) fixture {
+	t.Helper()
+	clock := &clock{now: start}
 	wallets := wallet.NewService(pool, clock.Now, wallet.Policy{FreeFirst: true, FreeTTL: week})
 	return fixture{
 		t:       t,
 		pool:    pool,
 		clock:   clock,
 		wallet:  wallets,
-		service: hold.NewService(pool, clock.Now, wallets),
+		service: newService(t, pool, clock.Now, wallets),
 		user:    uuid.New(),
 	}
+}
+
+// newService 는 홀드 서비스를 만든다. 만들지 못하면 테스트를 멈춘다.
+func newService(t *testing.T, pool *pgxpool.Pool, now func() time.Time, wallets hold.Wallet) *hold.Service {
+	t.Helper()
+	service, err := hold.NewService(pool, now, wallets, ttl)
+	if err != nil {
+		t.Fatalf("홀드 서비스를 만들지 못했다: %v", err)
+	}
+	return service
 }
 
 // ctx 는 시간 제한이 걸린 context 를 만든다.

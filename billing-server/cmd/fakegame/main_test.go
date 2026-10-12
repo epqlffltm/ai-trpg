@@ -33,7 +33,7 @@ func settingsFor(t *testing.T, server *httptest.Server) config.Settings {
 	return config.Settings{Host: host, Port: port, GameServerSecret: secret}
 }
 
-func TestParseBuildsTheThreeRequests(t *testing.T) {
+func TestParseBuildsEachRequest(t *testing.T) {
 	cases := map[string]struct {
 		args []string
 		path string
@@ -43,6 +43,7 @@ func TestParseBuildsTheThreeRequests(t *testing.T) {
 		"hold 에 가격표 이름을 준다": {[]string{"hold", user, "table:1:round:3", "narration.premium"}, "/api/v1/billing/service/holds", map[string]string{"user_id": user, "reference": "table:1:round:3", "price_code": "narration.premium"}},
 		"capture":           {[]string{"capture", "table:1:round:3"}, "/api/v1/billing/service/holds/capture", map[string]string{"reference": "table:1:round:3"}},
 		"release":           {[]string{"release", "table:1:round:3"}, "/api/v1/billing/service/holds/release", map[string]string{"reference": "table:1:round:3"}},
+		"extend":            {[]string{"extend", "table:1:round:3"}, "/api/v1/billing/service/holds/extend", map[string]string{"reference": "table:1:round:3"}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -69,6 +70,8 @@ func TestParseRejectsWrongCommands(t *testing.T) {
 		{"capture"},
 		{"capture", "table:1:round:3", "extra"},
 		{"release"},
+		{"extend"},
+		{"extend", "table:1:round:3", "extra"},
 		{"refund", "table:1:round:3"},
 	}
 	for _, args := range cases {

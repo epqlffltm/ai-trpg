@@ -49,6 +49,14 @@ const (
 	// MinFreeCreditTTL 은 FREE_CREDIT_TTL 로 받는 가장 짧은 시간이다.
 	// DB 는 시각을 백만분의 1초까지만 적는다. 그보다 짧으면 지급한 순간과 사라지는 순간이 같아진다.
 	MinFreeCreditTTL = time.Second
+	// DefaultHoldTTL 은 홀드를 걸거나 연장한 뒤 만료될 때까지의 시간이다. 하루다.
+	// 부르는 쪽(게임 서버)이 그 안에 확정하거나 연장하지 않으면 정리 작업이 돌려준다.
+	DefaultHoldTTL = 24 * time.Hour
+	// DefaultOrderTTL 은 주문을 만든 뒤 만료될 때까지의 시간이다. 하루다. Stripe 의 결제창(Checkout)과 같은 기본값이다.
+	DefaultOrderTTL = 24 * time.Hour
+	// MinExpiryTTL 은 HOLD_TTL 과 ORDER_TTL 로 받는 가장 짧은 시간이다.
+	// 정리 작업은 몇십 초마다 돈다. 그보다 짧으면 만료가 정리 작업의 간격에 묻힌다.
+	MinExpiryTTL = time.Minute
 	// DefaultWelcomeCredits 는 사용자가 한 번 받는 환영 크레딧(무료 크레딧)의 양이다. 가장 싼 상품과 같은 양이다.
 	DefaultWelcomeCredits credit.Amount = 1_000
 	// MaxWelcomeCredits 는 WELCOME_CREDITS 로 받는 가장 큰 양이다. 0 을 몇 개 더 붙인 실수를 막는다.
@@ -102,6 +110,10 @@ type Settings struct {
 	// FreeCreditTTL 은 무료 크레딧이 지급된 뒤 사라질 때까지의 시간이다.
 	// 바꿔도 이미 지급한 것의 기한은 그대로다. 사라지는 시각은 지급할 때 정해 DB 에 적는다.
 	FreeCreditTTL time.Duration
+	// HoldTTL 은 홀드를 걸거나 연장한 뒤 만료될 때까지의 시간이다. 바꾸면 그 뒤에 걸거나 연장한 홀드부터 적용된다.
+	HoldTTL time.Duration
+	// OrderTTL 은 주문을 만든 뒤 만료될 때까지의 시간이다. 바꾸면 그 뒤에 만든 주문부터 적용된다.
+	OrderTTL time.Duration
 	// WelcomeCredits 는 사용자가 한 번 받는 환영 크레딧의 양이다. 0 이면 주지 않는다.
 	WelcomeCredits credit.Amount
 	// WebhookSecret 은 결제 대행사의 알림에 붙은 서명을 확인하는 비밀이다. 로그와 오류에 싣지 않는다.
@@ -122,6 +134,32 @@ type Database struct {
 	Schema string
 }
 
+// Logging 은 로그에 싣는 것과 남기는 수준이다. 서버와 작업 명령(cmd/sweeper, cmd/reconcile)이 함께 읽는다.
+type Logging struct {
+	// AppEnvironment 와 AppVersion 은 이 프로세스가 어디에 배포된 어느 버전인지다. 모든 로그 줄에 실린다.
+	AppEnvironment string
+	AppVersion     string
+	// LogLevel 은 남기는 로그의 가장 낮은 수준이다.
+	LogLevel string
+}
+
+// Rules 는 크레딧을 다루는 규칙이다. 서버와 작업 명령이 같은 값을 써야 한다.
+// 정리 작업도 사라질 무료 크레딧을 지우고 홀드를 돌려주므로, 서버와 규칙이 다르면 결과가 어긋난다.
+type Rules struct {
+	SpendFreeFirst bool
+	FreeCreditTTL  time.Duration
+	HoldTTL        time.Duration
+	OrderTTL       time.Duration
+}
+
+// Jobs 는 작업 명령(cmd/sweeper, cmd/reconcile)이 읽는 설정이다.
+// 요청을 받지 않으므로 포트, 공개키 주소, 서명의 비밀이 없어도 돈다.
+type Jobs struct {
+	Database Database
+	Logging  Logging
+	Rules    Rules
+}
+
 // Addr 는 서버가 요청을 받는 주소를 "host:port" 로 돌려준다.
 func (s Settings) Addr() string {
 	return fmt.Sprintf("%s:%d", s.Host, s.Port)
@@ -133,29 +171,24 @@ func Load(lookup Lookup) (Settings, error) {
 	port, portErr := readPort(lookup, "PORT", DefaultPort)
 	db, dbErr := LoadDatabase(lookup)
 	jwksURL, jwksErr := readHTTPURL(lookup, "AUTH_JWKS_URL")
-	freeFirst, freeFirstErr := readBool(lookup, "SPEND_FREE_FIRST", DefaultSpendFreeFirst)
-	freeTTL, freeTTLErr := readDuration(lookup, "FREE_CREDIT_TTL", DefaultFreeCreditTTL, MinFreeCreditTTL)
+	rules, rulesErr := loadRules(lookup)
+	logging, loggingErr := loadLogging(lookup)
 	webhookSecret, webhookErr := readSecret(lookup, "PG_WEBHOOK_SECRET", MinWebhookSecretLength)
 	gameSecret, gameSecretErr := readSecret(lookup, "GAME_SERVER_SECRET", MinServiceSecretLength)
 	authSecret, authSecretErr := readSecret(lookup, "AUTH_SERVER_SECRET", MinServiceSecretLength)
 	welcome, welcomeErr := readCredits(lookup, "WELCOME_CREDITS", DefaultWelcomeCredits, MaxWelcomeCredits)
-	environment, environmentErr := readPattern(lookup, "APP_ENVIRONMENT", DefaultAppEnvironment, environmentPattern,
-		"소문자로 시작하고 소문자, 숫자, 밑줄, 붙임표로 된 32자 이하의 이름이어야 합니다")
-	version, versionErr := readPattern(lookup, "APP_VERSION", DefaultAppVersion, versionPattern,
-		"영문자, 숫자, 점, 밑줄, 더하기, 붙임표로 된 64자 이하의 값이어야 합니다")
-	logLevel, logLevelErr := readChoice(lookup, "LOG_LEVEL", DefaultLogLevel, logLevels)
 
 	if err := errors.Join(
-		debugErr, portErr, dbErr, jwksErr, freeFirstErr, freeTTLErr, webhookErr, welcomeErr,
-		environmentErr, versionErr, logLevelErr, gameSecretErr, authSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret),
+		debugErr, portErr, dbErr, jwksErr, rulesErr, loggingErr, webhookErr, welcomeErr,
+		gameSecretErr, authSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret),
 	); err != nil {
 		return Settings{}, err
 	}
 	return Settings{
 		Debug:            debug,
-		AppEnvironment:   environment,
-		AppVersion:       version,
-		LogLevel:         logLevel,
+		AppEnvironment:   logging.AppEnvironment,
+		AppVersion:       logging.AppVersion,
+		LogLevel:         logging.LogLevel,
 		Host:             readString(lookup, "HOST", DefaultHost),
 		Port:             port,
 		DatabaseURL:      db.URL,
@@ -163,13 +196,61 @@ func Load(lookup Lookup) (Settings, error) {
 		AuthJWKSURL:      jwksURL,
 		JWTIssuer:        readString(lookup, "JWT_ISSUER", DefaultJWTIssuer),
 		JWTAudience:      readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
-		SpendFreeFirst:   freeFirst,
-		FreeCreditTTL:    freeTTL,
+		SpendFreeFirst:   rules.SpendFreeFirst,
+		FreeCreditTTL:    rules.FreeCreditTTL,
+		HoldTTL:          rules.HoldTTL,
+		OrderTTL:         rules.OrderTTL,
 		WelcomeCredits:   welcome,
 		WebhookSecret:    webhookSecret,
 		GameServerSecret: gameSecret,
 		AuthServerSecret: authSecret,
 	}, nil
+}
+
+// LoadJobs 는 작업 명령이 쓰는 설정만 읽어 검사한다. 틀린 것이 여럿이면 한 번에 모두 알려 준다.
+func LoadJobs(lookup Lookup) (Jobs, error) {
+	db, dbErr := LoadDatabase(lookup)
+	logging, loggingErr := loadLogging(lookup)
+	rules, rulesErr := loadRules(lookup)
+	if err := errors.Join(dbErr, loggingErr, rulesErr); err != nil {
+		return Jobs{}, err
+	}
+	return Jobs{Database: db, Logging: logging, Rules: rules}, nil
+}
+
+// loadLogging 은 로그에 관한 설정을 읽는다.
+func loadLogging(lookup Lookup) (Logging, error) {
+	environment, environmentErr := readPattern(lookup, "APP_ENVIRONMENT", DefaultAppEnvironment, environmentPattern,
+		"소문자로 시작하고 소문자, 숫자, 밑줄, 붙임표로 된 32자 이하의 이름이어야 합니다")
+	version, versionErr := readPattern(lookup, "APP_VERSION", DefaultAppVersion, versionPattern,
+		"영문자, 숫자, 점, 밑줄, 더하기, 붙임표로 된 64자 이하의 값이어야 합니다")
+	logLevel, logLevelErr := readChoice(lookup, "LOG_LEVEL", DefaultLogLevel, logLevels)
+	if err := errors.Join(environmentErr, versionErr, logLevelErr); err != nil {
+		return Logging{}, err
+	}
+	return Logging{AppEnvironment: environment, AppVersion: version, LogLevel: logLevel}, nil
+}
+
+// loadRules 는 크레딧을 다루는 규칙을 읽는다.
+func loadRules(lookup Lookup) (Rules, error) {
+	freeFirst, freeFirstErr := readBool(lookup, "SPEND_FREE_FIRST", DefaultSpendFreeFirst)
+	freeTTL, freeTTLErr := readDuration(lookup, "FREE_CREDIT_TTL", DefaultFreeCreditTTL, MinFreeCreditTTL)
+	holdTTL, holdTTLErr := readDuration(lookup, "HOLD_TTL", DefaultHoldTTL, MinExpiryTTL)
+	orderTTL, orderTTLErr := readDuration(lookup, "ORDER_TTL", DefaultOrderTTL, MinExpiryTTL)
+	if err := errors.Join(freeFirstErr, freeTTLErr, holdTTLErr, orderTTLErr); err != nil {
+		return Rules{}, err
+	}
+	return Rules{SpendFreeFirst: freeFirst, FreeCreditTTL: freeTTL, HoldTTL: holdTTL, OrderTTL: orderTTL}, nil
+}
+
+// Rules 는 서버의 설정에서 크레딧을 다루는 규칙만 꺼낸다. 서버와 작업 명령이 같은 방법으로 서비스를 만든다.
+func (s Settings) Rules() Rules {
+	return Rules{SpendFreeFirst: s.SpendFreeFirst, FreeCreditTTL: s.FreeCreditTTL, HoldTTL: s.HoldTTL, OrderTTL: s.OrderTTL}
+}
+
+// Logging 은 서버의 설정에서 로그에 관한 것만 꺼낸다.
+func (s Settings) Logging() Logging {
+	return Logging{AppEnvironment: s.AppEnvironment, AppVersion: s.AppVersion, LogLevel: s.LogLevel}
 }
 
 // LoadDatabase 는 DB 접속에 필요한 설정만 읽어 검사한다.

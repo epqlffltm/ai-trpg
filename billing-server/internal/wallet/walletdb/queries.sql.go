@@ -343,6 +343,39 @@ func (q *Queries) ListLiveFreeGrants(ctx context.Context, arg ListLiveFreeGrants
 	return items, nil
 }
 
+const listUsersWithDueFreeGrants = `-- name: ListUsersWithDueFreeGrants :many
+SELECT DISTINCT user_id FROM free_grants
+WHERE remaining > 0 AND expires_at <= $1::TIMESTAMPTZ
+LIMIT $2
+`
+
+type ListUsersWithDueFreeGrantsParams struct {
+	Now      time.Time
+	RowLimit int32
+}
+
+// 사라질 시각이 지났는데 남은 것이 있는 지급 묶음을 가진 사용자를 limit 명까지 읽는다(정리 작업).
+// 그 사용자의 지갑에 변경이 없어서 "사라졌다"는 원장의 줄이 아직 적히지 않은 것이다.
+func (q *Queries) ListUsersWithDueFreeGrants(ctx context.Context, arg ListUsersWithDueFreeGrantsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listUsersWithDueFreeGrants, arg.Now, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var user_id uuid.UUID
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockWallet = `-- name: LockWallet :one
 SELECT paid_balance
 FROM wallets

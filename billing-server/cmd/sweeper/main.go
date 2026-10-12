@@ -1,0 +1,178 @@
+// billing-server/cmd/sweeper/main.go
+
+// 정리 작업. 끝이 열린 것을 닫는다. 서버와 따로 띄우는 프로세스다.
+//
+//	go run ./cmd/sweeper              30초마다 한 바퀴 돈다. Ctrl+C(또는 SIGTERM)로 끈다
+//	go run ./cmd/sweeper -once        한 바퀴만 돌고, 정리한 수를 화면에 찍고 끝난다
+//	go run ./cmd/sweeper -interval 1m -limit 200
+//
+// 한 바퀴에 하는 일: 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 원장에 적고, 만료된 주문을 끝낸다(internal/sweep).
+// 서버와 같은 설정(.env)을 읽는다. 다만 포트, 공개키 주소, 서명의 비밀은 없어도 돈다(config.LoadJobs).
+//
+// 바퀴 하나가 작업 하나다(job_id). 바퀴가 실패해도 끄지 않는다. 그 바퀴를 error 로 남기고 다음 바퀴에 다시 한다.
+// 둘을 띄워도 같은 것을 두 번 정리하지 않는다. 그래도 하나면 충분하다.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/joho/godotenv"
+
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/app"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/jobs"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
+)
+
+const (
+	// operation 은 바퀴 하나의 이름이다. 로그의 operation 칸에 적힌다.
+	operation = "sweep.run"
+	// defaultInterval 은 바퀴 사이의 시간이다. 홀드와 주문의 기한(하루)에 견주면 짧아서 늦어도 30초다.
+	defaultInterval = 30 * time.Second
+	// minInterval 은 받는 가장 짧은 간격이다. 더 짧으면 할 일이 없을 때도 DB 를 쉬지 않고 두드린다.
+	minInterval = time.Second
+)
+
+// options 는 명령 줄에서 받는 것이다.
+type options struct {
+	interval time.Duration
+	once     bool
+	limit    int
+}
+
+// rounder 는 한 바퀴를 도는 것이다. *sweep.Sweeper 가 이 모양이다.
+type rounder interface {
+	Round(ctx context.Context) (sweep.Result, error)
+}
+
+func main() {
+	slog.SetDefault(obs.NewLogger(os.Stderr, obs.ServiceInfo{Service: obs.ServiceName}, slog.LevelInfo))
+	if err := run(os.Args[1:], os.Stdout); err != nil {
+		slog.Error("정리 작업을 끝내지 못했습니다",
+			slog.String(obs.FieldOperation, operation),
+			slog.String(obs.FieldErrorCode, jobs.ErrorCodeFailed),
+			slog.String(obs.FieldErrorMessage, err.Error()),
+		)
+		os.Exit(1)
+	}
+}
+
+// run 은 명령 줄과 설정을 읽고, 정리 작업을 한 바퀴 또는 끌 때까지 돈다.
+func run(args []string, out io.Writer) error {
+	opts, err := parseOptions(args)
+	if err != nil {
+		return err
+	}
+	loadDotEnv()
+	settings, err := config.LoadJobs(os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	slog.SetDefault(app.NewLogger(os.Stderr, settings.Logging))
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	pool, err := database.NewPool(ctx, settings.Database.URL, settings.Database.Schema)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	services, err := app.NewServices(pool, settings.Rules, time.Now)
+	if err != nil {
+		return err
+	}
+	sweeper := sweep.New(services.Holds, services.Wallet, services.Orders, opts.limit)
+
+	if opts.once {
+		result, err := round(ctx, sweeper)
+		printResult(out, result)
+		return err
+	}
+	slog.InfoContext(ctx, "정리 작업을 시작합니다",
+		slog.String(obs.FieldOperation, operation),
+		slog.Int64("interval_ms", opts.interval.Milliseconds()),
+	)
+	loop(ctx, sweeper, opts.interval)
+	return nil
+}
+
+// parseOptions 는 명령 줄을 읽는다.
+func parseOptions(args []string) (options, error) {
+	flags := flag.NewFlagSet("sweeper", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	var opts options
+	flags.DurationVar(&opts.interval, "interval", defaultInterval, "바퀴 사이의 시간")
+	flags.BoolVar(&opts.once, "once", false, "한 바퀴만 돈다")
+	flags.IntVar(&opts.limit, "limit", sweep.DefaultLimit, "한 바퀴에 종류마다 다루는 가장 많은 수")
+	if err := flags.Parse(args); err != nil {
+		return options{}, fmt.Errorf("%w\n쓰는 법: go run ./cmd/sweeper [-once] [-interval 30s] [-limit 500]", err)
+	}
+	if flags.NArg() > 0 {
+		return options{}, errors.New("모르는 글자가 있습니다: " + flags.Arg(0))
+	}
+	if opts.interval < minInterval {
+		return options{}, fmt.Errorf("-interval 은 %s 이상이어야 합니다", minInterval)
+	}
+	if opts.limit <= 0 {
+		return options{}, errors.New("-limit 은 1 이상이어야 합니다")
+	}
+	return opts, nil
+}
+
+// loop 는 ctx 가 끝날 때까지 interval 마다 한 바퀴씩 돈다. 바퀴가 실패해도 멈추지 않는다.
+// 바퀴 도중에 끄라는 신호가 오면 그 바퀴의 남은 일을 하지 않는다. 바뀐 것은 줄 하나씩 끝난 것이라 반쯤 된 것은 없다.
+func loop(ctx context.Context, sweeper rounder, interval time.Duration) {
+	for {
+		// 실패는 바퀴가 이미 남겼다. 다음 바퀴에 다시 한다
+		_, _ = round(ctx, sweeper)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(interval):
+		}
+	}
+}
+
+// round 는 한 바퀴를 작업 하나로 돈다. 정리한 것이 있으면 그 수를 info 로 남긴다.
+func round(ctx context.Context, sweeper rounder) (sweep.Result, error) {
+	var result sweep.Result
+	err := jobs.Run(ctx, operation, func(ctx context.Context) error {
+		var err error
+		result, err = sweeper.Round(ctx)
+		if result.Any() {
+			slog.InfoContext(ctx, "만료된 것을 정리했습니다",
+				slog.String(obs.FieldOperation, operation),
+				slog.Int("expired_holds", result.Holds),
+				slog.Int("expired_free_credit_users", result.FreeCreditUsers),
+				slog.Int("expired_orders", result.Orders),
+			)
+		}
+		return err
+	})
+	return result, err
+}
+
+// printResult 는 -once 로 돌았을 때 정리한 수를 사람이 읽게 찍는다.
+func printResult(out io.Writer, result sweep.Result) {
+	fmt.Fprintf(out, "돌려준 홀드: %d\n무료 크레딧을 정리한 사용자: %d\n끝낸 주문: %d\n",
+		result.Holds, result.FreeCreditUsers, result.Orders)
+}
+
+// loadDotEnv 는 현재 폴더의 .env 를 환경 변수로 올린다. 파일이 없으면 아무것도 하지 않는다.
+func loadDotEnv() {
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		// 내용은 찍지 않는다. .env 에는 비밀번호가 들어 있다
+		slog.Warn(".env 를 읽지 못했습니다. 환경 변수만으로 진행합니다")
+	}
+}
