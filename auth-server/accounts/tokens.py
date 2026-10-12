@@ -98,6 +98,18 @@ class RefreshToken(SimpleJWTRefreshToken):
     def token_backend(self) -> TokenBackend:
         return token_backend
 
+    @property
+    def access_token(self) -> AccessToken:
+        """
+        이 refresh 토큰에서 access 토큰을 만든다. 발급 시각(iat)을 refresh 토큰의 것으로 맞춘다.
+
+        simplejwt 는 만료(exp)만 refresh 토큰의 시각에서 세고, iat 는 access 토큰을 만든 때로 둔다.
+        그 사이에 초가 바뀌면 access 토큰의 수명이 899 초로 보이고 두 토큰의 발급 시각이 어긋난다.
+        """
+        access = super().access_token
+        access.set_iat(at_time=self.current_time)
+        return access
+
 
 def issue_token_pair(user: User) -> TokenPair:
     """
