@@ -5,13 +5,14 @@
 
 주소와 답의 뜻은 결제 서버가 정했다(billing-server/README.md 의 "홀드").
 
-| 답 | 홀드 | 확정 | 반환 |
-| --- | --- | --- | --- |
-| 200, 201 | 잡혔다(HELD) | 됐다 | 됐다 |
-| 402 | 모자란다(SHORT) | - | - |
-| 404 | 버그(BillingRejected) | 버그 | 걸린 적이 없다. 돌려줄 것도 없으니 됐다 |
-| 401, 408, 429, 5xx, 연결 실패, 시간 초과 | 다시 부를 일(BillingUnavailable) | 같다 | 같다 |
-| 그 밖의 4xx | 버그 | 버그 | 버그 |
+| 답 | 홀드 | 확정 | 반환 | 연장 |
+| --- | --- | --- | --- | --- |
+| 200, 201 | 잡혔다(HELD) | 됐다 | 됐다 | 됐다(EXTENDED) |
+| 402 | 모자란다(SHORT) | - | - | - |
+| 404 | 버그(BillingRejected) | 버그 | 걸린 적이 없다. 돌려줄 것도 없으니 됐다 | 홀드가 없다(MISSING) |
+| 409 | 버그 | 이미 반대로 끝났다(만료되어 돌려준 것도). 버그로 본다 | 버그 | 이미 끝났다(ENDED) |
+| 401, 408, 429, 5xx, 연결 실패, 시간 초과 | 다시 부를 일(BillingUnavailable) | 같다 | 같다 | 같다 |
+| 그 밖의 4xx | 버그 | 버그 | 버그 | 버그 |
 
 401 은 서명이 거절된 것이다. 설정을 고치면 낫는 일이라 다시 부를 일로 둔다(사람이 보도록 오류로 남는다).
 200 인데 홀드의 상태가 기대와 다르면(같은 이름표의 홀드가 이미 반대로 끝났다) 버그다.
@@ -24,18 +25,27 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 from pydantic import SecretStr
 
-from app.billing.client import BillingRejected, BillingUnavailable, HoldResult
+from app.billing.client import (
+    BillingRejected,
+    BillingUnavailable,
+    ExtendOutcome,
+    ExtendResult,
+    HoldOutcome,
+    HoldResult,
+)
 from app.billing.signing import SIGNATURE_HEADER, sign
 from app.observability.context import outgoing_headers
 
 HOLDS_PATH = '/api/v1/billing/service/holds'
 CAPTURE_PATH = f'{HOLDS_PATH}/capture'
 RELEASE_PATH = f'{HOLDS_PATH}/release'
+EXTEND_PATH = f'{HOLDS_PATH}/extend'
 
 # 다시 부르면 될 수 있는 답. 서명 거절(401), 시간 초과(408), 너무 많음(429)
 RETRYABLE_CLIENT_ERRORS = frozenset({401, 408, 429})
@@ -64,6 +74,20 @@ def hold_status(response: httpx.Response) -> str:
         raise BillingUnavailable('bad_response') from error
 
 
+def expires_at_of(response: httpx.Response) -> datetime | None:
+    """
+    홀드를 담은 답의 만료 시각(expires_at). 없거나 읽을 수 없으면 None.
+
+    만료 시각이 없다고 실패로 보지 않는다. 시각을 모르면 부르는 쪽이 정해 둔 간격으로 연장한다.
+    결제 서버는 UTC 로 준다(...Z). 시간대가 없으면 UTC 로 본다.
+    """
+    try:
+        moment = datetime.fromisoformat(str(response.json()['expires_at']))
+    except (ValueError, KeyError, TypeError):
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+
+
 def require_success(response: httpx.Response) -> None:
     """2xx 가 아니면 예외로 바꾼다. 다시 부를 일이면 BillingUnavailable, 아니면 BillingRejected."""
     if response.is_success:
@@ -80,13 +104,13 @@ def require_status(response: httpx.Response, expected: str) -> None:
         raise BillingRejected(response.status_code)
 
 
-def hold_result(response: httpx.Response) -> HoldResult:
-    """홀드를 거는 요청의 답을 결과로 바꾼다."""
+def hold_result(response: httpx.Response) -> HoldOutcome:
+    """홀드를 거는 요청의 답을 결과로 바꾼다. 잡혔으면 만료 시각을 함께 준다."""
     if response.status_code == httpx.codes.PAYMENT_REQUIRED:
-        return HoldResult.SHORT
+        return HoldOutcome(HoldResult.SHORT)
     require_success(response)
     require_status(response, 'held')
-    return HoldResult.HELD
+    return HoldOutcome(HoldResult.HELD, expires_at_of(response))
 
 
 def capture_result(response: httpx.Response) -> None:
@@ -101,6 +125,17 @@ def release_result(response: httpx.Response) -> None:
         return
     require_success(response)
     require_status(response, 'released')
+
+
+def extend_result(response: httpx.Response) -> ExtendOutcome:
+    """연장하는 요청의 답을 결과로 바꾼다. 연장했으면 새 만료 시각을 함께 준다."""
+    if response.status_code == httpx.codes.NOT_FOUND:
+        return ExtendOutcome(ExtendResult.MISSING)
+    if response.status_code == httpx.codes.CONFLICT:
+        return ExtendOutcome(ExtendResult.ENDED)
+    require_success(response)
+    require_status(response, 'held')
+    return ExtendOutcome(ExtendResult.EXTENDED, expires_at_of(response))
 
 
 @dataclass(frozen=True)
@@ -133,7 +168,7 @@ class HttpBilling:
         except httpx.HTTPError as error:
             raise BillingUnavailable('unreachable') from error
 
-    async def hold(self, reference: str, user_id: uuid.UUID, price_code: str) -> HoldResult:
+    async def hold(self, reference: str, user_id: uuid.UUID, price_code: str) -> HoldOutcome:
         payload = {'user_id': str(user_id), 'reference': reference, 'price_code': price_code}
         return hold_result(await self.post(HOLDS_PATH, payload))
 
@@ -142,3 +177,6 @@ class HttpBilling:
 
     async def release(self, reference: str) -> None:
         release_result(await self.post(RELEASE_PATH, {'reference': reference}))
+
+    async def extend(self, reference: str) -> ExtendOutcome:
+        return extend_result(await self.post(EXTEND_PATH, {'reference': reference}))
