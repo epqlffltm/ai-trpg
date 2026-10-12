@@ -38,7 +38,7 @@ func TestFakeAnswersByThePaymentKeyPrefix(t *testing.T) {
 			request := payment.Request{PaymentKey: tc.key, OrderID: uuid.New(), Amount: 1000}
 
 			confirmed, confirmErr := fake.Confirm(context.Background(), request)
-			looked, lookupErr := fake.Lookup(context.Background(), tc.key)
+			looked, lookupErr := fake.Lookup(context.Background(), request)
 
 			if tc.answers && (confirmErr != nil || confirmed != tc.truth) {
 				t.Errorf("승인 요청 = %+v, %v. 기대 = %+v", confirmed, confirmErr, tc.truth)

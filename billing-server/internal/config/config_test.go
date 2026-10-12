@@ -21,6 +21,9 @@ const (
 	gameSecret = "do-not-print-this-game-server-secret"
 	// 인증 서버가 보낸 요청의 서명에 쓰는 비밀. 이것도 새면 안 된다
 	authSecret = "do-not-print-this-auth-server-secret"
+	// 토스페이먼츠의 테스트 키 모양. 실제 키가 아니다. 시크릿 키는 오류에 새면 안 된다
+	tossSecretKey = "test_gsk_doNotPrintThisSecretKey01"
+	tossClientKey = "test_gck_publicClientKey01"
 )
 
 // required 는 반드시 있어야 하는 값만 채운 맵에 더할 것을 얹어 돌려준다.
@@ -80,6 +83,8 @@ func TestLoadFillsDefaults(t *testing.T) {
 		WebhookSecret:    webhookSecret,
 		GameServerSecret: gameSecret,
 		AuthServerSecret: authSecret,
+		// 적지 않으면 가짜 결제 대행사다
+		Payment: config.Payment{Provider: "fake"},
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -107,6 +112,9 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		"APP_ENVIRONMENT":    "production",
 		"APP_VERSION":        "3f2a9c1",
 		"LOG_LEVEL":          "warning",
+		"PAYMENT_PROVIDER":   "toss",
+		"TOSS_SECRET_KEY":    tossSecretKey,
+		"TOSS_CLIENT_KEY":    tossClientKey,
 	}))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
@@ -133,6 +141,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		WebhookSecret:    "0123456789abcdef0123456789abcdef",
 		GameServerSecret: "fedcba9876543210fedcba9876543210",
 		AuthServerSecret: "00112233445566778899aabbccddeeff",
+		Payment:          config.Payment{Provider: "toss", TossSecretKey: tossSecretKey, TossClientKey: tossClientKey},
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -258,6 +267,7 @@ func TestLoadJobsNeedsNoServerSettings(t *testing.T) {
 		Rules: config.Rules{
 			SpendFreeFirst: false, FreeCreditTTL: 7 * 24 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 24 * time.Hour,
 		},
+		Payment: config.Payment{Provider: "fake"},
 	}
 	if jobs != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", jobs, want)
@@ -269,14 +279,17 @@ func TestLoadJobsReadsTheSameRulesAsTheServer(t *testing.T) {
 	values := required(map[string]string{
 		"SPEND_FREE_FIRST": "false", "FREE_CREDIT_TTL": "3h", "HOLD_TTL": "2h", "ORDER_TTL": "90m",
 		"APP_ENVIRONMENT": "staging", "APP_VERSION": "v1.2.3", "LOG_LEVEL": "error",
+		"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": tossSecretKey, "TOSS_CLIENT_KEY": tossClientKey,
 	})
 	settings, serverErr := config.Load(from(values))
 	jobs, jobsErr := config.LoadJobs(from(values))
 	if serverErr != nil || jobsErr != nil {
 		t.Fatalf("설정을 읽지 못했다: %v, %v", serverErr, jobsErr)
 	}
-	if settings.Rules() != jobs.Rules || settings.Logging() != jobs.Logging {
-		t.Errorf("서버 = %+v %+v, 작업 = %+v %+v", settings.Rules(), settings.Logging(), jobs.Rules, jobs.Logging)
+	// 대사가 서버와 다른 결제 대행사에 물으면 결과가 어긋난다
+	if settings.Rules() != jobs.Rules || settings.Logging() != jobs.Logging || settings.Payment != jobs.Payment {
+		t.Errorf("서버 = %+v %+v %+v, 작업 = %+v %+v %+v",
+			settings.Rules(), settings.Logging(), settings.Payment, jobs.Rules, jobs.Logging, jobs.Payment)
 	}
 }
 
@@ -417,4 +430,118 @@ func TestLoadRejectsValuesThatWouldBreakALogLine(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestLoadPaymentAcceptsBothKindsOfTestKeys(t *testing.T) {
+	// 결제위젯 키(gsk, gck)와 API 개별 연동 키(sk, ck)를 받는다. 문서에 공개된 키도 같은 모양이다
+	pairs := map[string]string{
+		"test_gsk_docs_abc123": "test_gck_docs_abc123",
+		"test_sk_abc123":       "test_ck_abc123",
+	}
+	for secretKey, clientKey := range pairs {
+		settings, err := config.Load(from(required(map[string]string{
+			"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": secretKey, "TOSS_CLIENT_KEY": clientKey,
+		})))
+		want := config.Payment{Provider: "toss", TossSecretKey: secretKey, TossClientKey: clientKey}
+		if err != nil || settings.Payment != want {
+			t.Errorf("%s, %s: 설정 = %+v, %v", secretKey, clientKey, settings.Payment, err)
+		}
+	}
+}
+
+func TestLoadPaymentFakeIgnoresTossKeys(t *testing.T) {
+	// 가짜를 꽂으면 토스페이먼츠의 키는 읽지 않는다. 틀린 값이 있어도 서버는 뜬다
+	settings, err := config.Load(from(required(map[string]string{
+		"PAYMENT_PROVIDER": "fake", "TOSS_SECRET_KEY": "live_gsk_nope", "TOSS_CLIENT_KEY": "nope",
+	})))
+	if err != nil || settings.Payment != (config.Payment{Provider: "fake"}) {
+		t.Errorf("설정 = %+v, %v", settings.Payment, err)
+	}
+}
+
+func TestLoadPaymentRejectsBadTossSettings(t *testing.T) {
+	cases := []struct {
+		name   string
+		values map[string]string
+		// wantName 은 오류에 있어야 하는 설정의 이름이다
+		wantName string
+	}{
+		{"모르는 결제 대행사", map[string]string{"PAYMENT_PROVIDER": "stripe"}, "PAYMENT_PROVIDER"},
+		{"시크릿 키가 없다", map[string]string{"PAYMENT_PROVIDER": "toss", "TOSS_CLIENT_KEY": tossClientKey}, "TOSS_SECRET_KEY"},
+		{"클라이언트 키가 없다", map[string]string{"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": tossSecretKey}, "TOSS_CLIENT_KEY"},
+		{"라이브 시크릿 키", map[string]string{
+			"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": "live_gsk_doNotPrintThisSecretKey01", "TOSS_CLIENT_KEY": tossClientKey,
+		}, "TOSS_SECRET_KEY"},
+		{"라이브 클라이언트 키", map[string]string{
+			"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": tossSecretKey, "TOSS_CLIENT_KEY": "live_gck_publicClientKey01",
+		}, "TOSS_CLIENT_KEY"},
+		{"자리가 바뀐 키", map[string]string{
+			"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": tossClientKey, "TOSS_CLIENT_KEY": tossSecretKey,
+		}, "TOSS_SECRET_KEY"},
+		{"종류가 다른 키", map[string]string{
+			"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": tossSecretKey, "TOSS_CLIENT_KEY": "test_ck_publicClientKey01",
+		}, "같은 종류"},
+		{"빈칸이 든 키", map[string]string{
+			"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": tossSecretKey + " ", "TOSS_CLIENT_KEY": tossClientKey,
+		}, "TOSS_SECRET_KEY"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, serverErr := config.Load(from(required(tc.values)))
+			_, jobsErr := config.LoadJobs(from(required(tc.values)))
+
+			for _, err := range []error{serverErr, jobsErr} {
+				if err == nil || !strings.Contains(err.Error(), tc.wantName) {
+					t.Fatalf("오류 = %v. %s 가 들어 있어야 한다", err, tc.wantName)
+				}
+				// 시크릿 키는 오류에 싣지 않는다. 잘못 넣은 라이브 키도 진짜 비밀이다
+				if strings.Contains(err.Error(), "doNotPrintThisSecretKey") {
+					t.Errorf("오류에 시크릿 키가 실렸다: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestCheckoutClientKeyOnlyInDebugWithToss(t *testing.T) {
+	toss := map[string]string{"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": tossSecretKey, "TOSS_CLIENT_KEY": tossClientKey}
+	cases := []struct {
+		name   string
+		values map[string]string
+		want   string
+	}{
+		{"개발 모드의 토스페이먼츠", merge(toss, map[string]string{"DEBUG": "true"}), tossClientKey},
+		{"운영 모드의 토스페이먼츠", merge(toss, map[string]string{"DEBUG": "false"}), ""},
+		{"개발 모드의 가짜", map[string]string{"DEBUG": "true"}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			settings, err := config.Load(from(required(tc.values)))
+			if err != nil {
+				t.Fatalf("설정을 읽지 못했다: %v", err)
+			}
+			if got := settings.CheckoutClientKey(); got != tc.want {
+				t.Errorf("CheckoutClientKey = %q, 기대 = %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCheckoutClientKeyNeedsTossEvenIfAKeyIsThere(t *testing.T) {
+	// 가짜를 꽂았으면 키가 남아 있어도 화면을 열지 않는다
+	settings := config.Settings{Debug: true, Payment: config.Payment{Provider: "fake", TossClientKey: tossClientKey}}
+	if got := settings.CheckoutClientKey(); got != "" {
+		t.Errorf("CheckoutClientKey = %q, 기대 = 빈 글자", got)
+	}
+}
+
+// merge 는 두 맵을 합친 새 맵을 돌려준다. 같은 이름이면 뒤의 것이 이긴다.
+func merge(first map[string]string, second map[string]string) map[string]string {
+	merged := map[string]string{}
+	for _, values := range []map[string]string{first, second} {
+		for name, value := range values {
+			merged[name] = value
+		}
+	}
+	return merged
 }

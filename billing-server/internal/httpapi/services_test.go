@@ -11,6 +11,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/app"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 )
 
 // realRules 는 그 테스트들이 쓰는 규칙이다. 무료 크레딧은 1시간, 홀드와 주문은 하루 뒤에 만료된다.
@@ -19,7 +20,7 @@ var realRules = config.Rules{SpendFreeFirst: true, FreeCreditTTL: time.Hour, Hol
 // realServices 는 서버와 같은 방법으로 서비스들을 만든다. 만들지 못하면 테스트를 멈춘다.
 func realServices(t *testing.T, pool *pgxpool.Pool, now func() time.Time) app.Services {
 	t.Helper()
-	services, err := app.NewServices(pool, realRules, now)
+	services, err := app.NewServices(pool, realRules, payment.Fake{}, now)
 	if err != nil {
 		t.Fatalf("서비스를 만들지 못했다: %v", err)
 	}

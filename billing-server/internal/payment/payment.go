@@ -2,9 +2,11 @@
 
 // Package payment 는 결제 대행사(PG)와 이야기하는 부분이다.
 //
-// 이 서버는 실제 결제 대행사에 붙지 않는다. 그 자리에 정해 둔 대로 답하는 가짜(Fake)를 꽂는다.
-// 주문을 다루는 코드는 Provider 라는 모양만 안다. 나중에 실제 결제 대행사의 테스트 모드를 꽂을 때
-// 이 모양을 채우는 것을 하나 더 만들면 되고, 주문의 코드는 고치지 않는다.
+// 주문을 다루는 코드는 Provider 라는 모양만 안다. 그 자리에 둘 가운데 하나를 꽂는다(설정 PAYMENT_PROVIDER).
+//   - Fake: 정해 둔 대로 답하는 가짜. 결제 번호의 앞머리가 결과를 정한다. 기본값이다
+//   - Toss: 토스페이먼츠의 테스트 모드. 실제 결제창과 승인 API 를 쓰지만 돈은 나가지 않는다(테스트 키만 받는다)
+//
+// 주문의 코드는 어느 쪽이 꽂혔는지 모른다.
 //
 // 결제의 흐름은 실제 결제 대행사와 같다.
 //  1. 사용자가 결제창에서 인증한다. 결제 대행사가 그 결제에 번호(payment key)를 붙여 클라이언트에 준다.
@@ -58,5 +60,8 @@ type Provider interface {
 	// 같은 요청을 다시 보내도 돈이 두 번 나가지 않아야 한다.
 	Confirm(ctx context.Context, request Request) (Result, error)
 	// Lookup 은 결제 번호로 지금의 결과를 묻는다. 승인을 요청하고 답을 못 받았을 때 쓴다.
-	Lookup(ctx context.Context, paymentKey string) (Result, error)
+	// request 에는 그 결제가 치러야 할 주문과 금액을 함께 넘긴다. 결제 대행사가 아는 결제가
+	// 다른 주문의 것이거나 금액이 다르면 이 주문의 결제가 아니다. 그때는 거절(StatusDeclined)이다.
+	// 결과를 받지 못했으면 ErrUnknownOutcome 이다.
+	Lookup(ctx context.Context, request Request) (Result, error)
 }

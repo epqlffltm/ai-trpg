@@ -51,7 +51,7 @@ func setUp(t *testing.T) fixture {
 	pool := testenv.Pool(t)
 	testenv.ExclusiveSweep(t, pool)
 	elapsed := new(time.Duration)
-	services, err := app.NewServices(pool, rules, func() time.Time { return testenv.SweepEra.Add(*elapsed) })
+	services, err := app.NewServices(pool, rules, payment.Fake{}, func() time.Time { return testenv.SweepEra.Add(*elapsed) })
 	if err != nil {
 		t.Fatalf("서비스를 만들지 못했다: %v", err)
 	}

@@ -1,0 +1,297 @@
+<!doctype html>
+<!-- billing-server/internal/httpapi/checkout.html -->
+<!-- 토스페이먼츠의 결제위젯으로 크레딧을 사 보는 개발용 화면. checkout.go 가 클라이언트 키를 채워 내준다. -->
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>크레딧 사기 (개발용)</title>
+    <script src="https://js.tosspayments.com/v2/standard"></script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #1b1d21;
+        --muted: #5d6470;
+        --line: #d9dce1;
+        --paper: #ffffff;
+        --accent: #3065f5;
+        --bad: #c4352c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #e9ebef;
+          --muted: #a2a8b3;
+          --line: #3a3f47;
+          --paper: #17191d;
+          --accent: #7b9cff;
+          --bad: #ff7a70;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 15px/1.6 system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      }
+      main {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 24px 16px 64px;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 16px;
+        margin: 0 0 8px;
+      }
+      section {
+        border-top: 1px solid var(--line);
+        padding: 16px 0;
+      }
+      .note,
+      .hint {
+        color: var(--muted);
+      }
+      textarea,
+      select,
+      button {
+        font: inherit;
+      }
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 12px;
+      }
+      button {
+        margin-top: 8px;
+        padding: 6px 14px;
+        border: 1px solid var(--accent);
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-all;
+        background: color-mix(in srgb, var(--line) 35%, transparent);
+        padding: 10px;
+        border-radius: 6px;
+      }
+      .error {
+        color: var(--bad);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>크레딧 사기</h1>
+      <p class="note">
+        개발용 화면입니다. 토스페이먼츠의 테스트 키라 돈이 나가지 않습니다.
+        카드나 간편결제로 해 보세요. 가상계좌는 입금이 오지 않아 결과가 나지 않습니다.
+      </p>
+
+      <section id="token-step">
+        <h2>1. access 토큰</h2>
+        <p class="hint">인증 서버에서 받은 access 토큰을 붙여 넣습니다. 15분 뒤에 만료됩니다. 이 탭에만 기억합니다.</p>
+        <textarea id="token" rows="3" spellcheck="false" autocomplete="off"></textarea>
+        <button id="save-token" type="button">기억하고 상품 보기</button>
+      </section>
+
+      <section id="order-step">
+        <h2>2. 상품과 주문</h2>
+        <select id="product"></select>
+        <button id="create-order" type="button">주문 만들기</button>
+        <pre id="order-info" hidden></pre>
+      </section>
+
+      <section id="pay-step" hidden>
+        <h2>3. 결제</h2>
+        <div id="payment-method"></div>
+        <div id="agreement"></div>
+        <button id="pay" type="button">결제하기</button>
+      </section>
+
+      <section id="result-step" hidden>
+        <h2>결과</h2>
+        <pre id="result"></pre>
+        <a id="again" href="#">처음으로</a>
+      </section>
+
+      <pre id="error" class="error" hidden></pre>
+    </main>
+
+    <script>
+      "use strict";
+
+      // 서버가 채운다. 클라이언트 키는 브라우저에 싣도록 만든 공개된 값이다
+      const clientKey = {{.ClientKey}};
+      const api = {{.APIPrefix}};
+      const tokenKey = "billing.checkout.token";
+
+      // readToken 은 이 탭에 기억한 토큰이다. 저장소를 쓸 수 없으면 빈 글자다
+      function readToken() {
+        try {
+          return sessionStorage.getItem(tokenKey) || "";
+        } catch (error) {
+          return "";
+        }
+      }
+
+      // rememberToken 은 토큰을 이 탭에만 기억한다. 결제창에서 돌아온 뒤 승인을 요청할 때 쓴다
+      function rememberToken(value) {
+        try {
+          sessionStorage.setItem(tokenKey, value);
+        } catch (error) {
+          // 기억하지 못해도 이 화면 안에서는 쓴다
+        }
+      }
+
+      // call 은 결제 서버의 API 를 토큰으로 부른다. 2xx 가 아니면 상태 코드와 detail 로 오류를 낸다
+      async function call(method, path, body, extraHeaders) {
+        const headers = Object.assign({ Authorization: "Bearer " + readToken() }, extraHeaders || {});
+        if (body !== undefined) {
+          headers["Content-Type"] = "application/json";
+        }
+        const response = await fetch(api + path, {
+          method: method,
+          headers: headers,
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        const text = await response.text();
+        let data = text;
+        try {
+          data = JSON.parse(text);
+        } catch (error) {
+          // JSON 이 아니면 글자 그대로 둔다
+        }
+        if (!response.ok) {
+          const detail = data && data.detail ? data.detail : text;
+          throw new Error(response.status + " " + detail);
+        }
+        return { status: response.status, data: data };
+      }
+
+      // show 는 칸을 보이고 글자를 넣는다. 받은 값은 글자로만 넣는다(HTML 로 넣지 않는다)
+      function show(id, text) {
+        const element = document.getElementById(id);
+        element.hidden = false;
+        element.textContent = text;
+      }
+
+      function reportError(error) {
+        show("error", String((error && error.message) || error));
+      }
+
+      function hideSteps() {
+        for (const id of ["token-step", "order-step", "pay-step"]) {
+          document.getElementById(id).hidden = true;
+        }
+      }
+
+      // loadProducts 는 파는 상품을 고르는 칸에 채운다
+      async function loadProducts() {
+        const { data } = await call("GET", "/products");
+        const select = document.getElementById("product");
+        select.replaceChildren();
+        for (const product of data.products) {
+          const option = document.createElement("option");
+          option.value = product.id;
+          option.textContent = product.name + " · " + product.price.toLocaleString("ko-KR") + "원";
+          option.dataset.name = product.name;
+          select.append(option);
+        }
+      }
+
+      // createOrder 는 고른 상품으로 주문을 만들고 결제위젯을 띄운다. 금액은 서버가 정한 주문의 값이다
+      async function createOrder() {
+        const select = document.getElementById("product");
+        const chosen = select.options[select.selectedIndex];
+        if (!chosen) {
+          throw new Error("상품을 먼저 불러오세요");
+        }
+        const { data: order } = await call("POST", "/orders", { product_id: chosen.value }, { "Idempotency-Key": crypto.randomUUID() });
+        show("order-info", "주문 " + order.id + "\n" + order.price.toLocaleString("ko-KR") + "원, 크레딧 " + order.credits + ", " + order.status);
+        await openWidget(order, chosen.dataset.name);
+      }
+
+      // openWidget 은 결제위젯(결제 수단과 약관)을 그리고, 결제하기를 누르면 결제창을 띄운다.
+      // 결제창의 주문 번호는 이 서버의 주문 번호다. 승인할 때 토스페이먼츠가 주문 번호와 금액이 맞는지 본다
+      async function openWidget(order, orderName) {
+        const widgets = TossPayments(clientKey).widgets({ customerKey: TossPayments.ANONYMOUS });
+        await widgets.setAmount({ currency: "KRW", value: order.price });
+        await Promise.all([
+          widgets.renderPaymentMethods({ selector: "#payment-method", variantKey: "DEFAULT" }),
+          widgets.renderAgreement({ selector: "#agreement", variantKey: "AGREEMENT" }),
+        ]);
+        document.getElementById("pay-step").hidden = false;
+        document.getElementById("pay").onclick = function () {
+          const here = location.origin + location.pathname;
+          widgets
+            .requestPayment({
+              orderId: order.id,
+              orderName: orderName,
+              successUrl: here + "?result=success",
+              failUrl: here + "?result=fail",
+            })
+            .catch(reportError);
+        };
+      }
+
+      // finish 는 결제창이 돌려보낸 결제 번호로 승인을 요청한다.
+      // 주소의 amount 는 쓰지 않는다. 서버가 주문에 적힌 값으로 승인을 요청한다
+      async function finish(params) {
+        const orderId = params.get("orderId") || "";
+        const paymentKey = params.get("paymentKey") || "";
+        const { status, data: order } = await call("POST", "/orders/" + encodeURIComponent(orderId) + "/confirm", { payment_key: paymentKey });
+        const { data: wallet } = await call("GET", "/wallet");
+        const lines = ["주문 " + order.id, "상태 " + order.status + (status === 202 ? " (결과를 아직 모릅니다. 잠시 뒤 다시 확인하세요)" : "")];
+        if (order.failure_code) {
+          lines.push("거절 이유 " + order.failure_code);
+        }
+        lines.push("잔액 산 크레딧 " + wallet.paid + ", 무료 " + wallet.free + ", 합 " + wallet.total);
+        show("result", lines.join("\n"));
+      }
+
+      // failed 는 결제창에서 끝나지 않은 결제(사용자가 닫았거나, 인증이 실패했다)를 보여 준다. 서버는 부르지 않는다
+      function failed(params) {
+        show("result", ["결제창에서 끝나지 않았습니다", "code " + (params.get("code") || ""), "message " + (params.get("message") || "")].join("\n"));
+      }
+
+      async function main() {
+        document.getElementById("token").value = readToken();
+        document.getElementById("save-token").onclick = function () {
+          rememberToken(document.getElementById("token").value.trim());
+          loadProducts().catch(reportError);
+        };
+        document.getElementById("create-order").onclick = function () {
+          createOrder().catch(reportError);
+        };
+        document.getElementById("again").href = location.pathname;
+
+        const params = new URLSearchParams(location.search);
+        const result = params.get("result");
+        if (result === "success" || result === "fail") {
+          // 결제 번호가 든 주소를 주소창과 방문 기록에 남기지 않는다
+          history.replaceState(null, "", location.pathname);
+          hideSteps();
+          document.getElementById("result-step").hidden = false;
+          if (result === "success") {
+            await finish(params);
+          } else {
+            failed(params);
+          }
+          return;
+        }
+        if (readToken()) {
+          await loadProducts();
+        }
+      }
+
+      main().catch(reportError);
+    </script>
+  </body>
+</html>

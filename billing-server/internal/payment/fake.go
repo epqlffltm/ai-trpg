@@ -44,8 +44,9 @@ func (Fake) Confirm(_ context.Context, request Request) (Result, error) {
 }
 
 // Lookup 은 결제 번호의 앞머리에 따라 지금의 결과를 돌려준다. 승인 요청과 달리 늘 답한다.
-func (Fake) Lookup(_ context.Context, paymentKey string) (Result, error) {
-	return outcome(paymentKey), nil
+// 가짜는 기억하는 것이 없어서 주문과 금액은 보지 않는다.
+func (Fake) Lookup(_ context.Context, request Request) (Result, error) {
+	return outcome(request.PaymentKey), nil
 }
 
 // answersLate 는 그 결제 번호의 승인 요청에 답이 오지 않는지 본다.

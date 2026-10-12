@@ -97,7 +97,7 @@ func run(args []string, out io.Writer) int {
 		return exitFailed
 	}
 	defer pool.Close()
-	services, err := app.NewServices(pool, settings.Rules, time.Now)
+	services, err := app.NewServices(pool, settings.Rules, app.NewProvider(settings.Payment), time.Now)
 	if err != nil {
 		logStartFailed(err)
 		return exitFailed
