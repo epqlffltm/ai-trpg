@@ -280,6 +280,10 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `round.close_overdue` | game | 마감이 지난 라운드 닫기 |
 | `lore.index` | game | 로어북 색인 |
 | `memory.index` | game | 기억 색인 |
+| `charge.settle` | game | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴) |
+| `billing.hold` | game | 결제 서버에 서술 값의 홀드를 걸기 |
+| `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
+| `billing.release` | game | 결제 서버에 홀드의 반환을 맡기기 |
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
 | `account.delete_unverified` | auth | 인증하지 않은 계정 지우기 |
 | `security.send_digest` | auth | 보안 이벤트 요약 메일 |
@@ -299,6 +303,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `job.failed` | 작업이 예외로 끝났다 |
 | `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다 |
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했다 |
+| `billing.unavailable` | 게임 서버가 결제 서버의 답을 받지 못했다. 다시 부른다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning` |
+| `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다 |
 | `server.start_failed` | 서버가 뜨지 못했다 |
 
 `error` 이상의 줄에는 `error_code` 를 붙인다. 새 코드를 만들면 이 표에 더한다.
@@ -486,6 +492,13 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `round_narration_retries_total` | counter | 없음 | 서술을 다시 시도한 수 |
 | `round_narration_duration_seconds` | histogram | 없음 | 라운드를 닫은 뒤 서술이 끝날 때까지 |
 | `rounds_closed_total` | counter | `reason`(`all_declared`, `host`, `timeout`) | 닫기 시작한 라운드의 수. 마감으로 닫힌 비율이 높으면 시간 제한이 짧다 |
+
+**서술 값 (game)**
+
+| 이름 | 종류 | label | 뜻 |
+| --- | --- | --- | --- |
+| `billing_calls_total` | counter | `operation`(`hold`, `capture`, `release`), `outcome`(`held`, `short`, `done`, `unavailable`, `rejected`) | 게임 서버가 결제 서버를 부른 수 |
+| `narration_charges` | gauge | `status`(`pending`, `held`, `short`, `capture_due`, `release_due`, `failed`) | 끝나지 않은 청구의 수. `capture_due` 가 쌓이면 결제 서버가 죽어 있다. `failed` 는 사람이 봐야 한다 |
 
 **메일과 인증 (auth)**
 

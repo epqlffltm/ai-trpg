@@ -5,10 +5,16 @@
 
 라운드를 닫는 일은 둘로 나뉘어 있다(app/rounds/service.py). 닫기 시작과 닫기 마무리. 그 사이가 여기다.
   1. 닫는 중인 라운드를 읽는다.
-  2. 이번 장면에 맞는 로어북 항목(app/lore/retrieval.py)과 지난 일(app/memory/retrieval.py)을 고르고,
+  2. 서술 값을 잡아 두었는지 본다(app/billing/settling.py).
+     라운드를 열 때 걸어 둔 홀드가 있으면 결제 서버를 부르지 않는다.
+     아직 못 걸었거나 크레딧이 모자랐으면 지금 걸어 본다. 못 잡으면 서술하지 않고 실패로 적는다
+     (insufficient_credits, billing_unavailable). 방장이 충전하거나 결제 서버가 살아난 뒤 다시 맡긴다.
+  3. 이번 장면에 맞는 로어북 항목(app/lore/retrieval.py)과 지난 일(app/memory/retrieval.py)을 고르고,
      로어북이 고른 인물의 이력을 모은다(app/memory/history.py). 고르지 못해도 서술은 한다.
-  3. 서술자를 부른다. 이때는 잠금도 DB 연결도 쥐고 있지 않다.
-  4. 닫기를 마무리한다.
+  4. 서술자를 부른다. 이때는 잠금도 DB 연결도 쥐고 있지 않다.
+  5. 닫기를 마무리한다. 같은 트랜잭션에서 서술 값을 "확정할 것"으로 적는다.
+  6. 저장한 뒤에 결제 서버에 확정을 부른다. 못 하면 청구 정리(app/billing/settler.py)가 마저 한다.
+     라운드는 이미 닫혔으므로 여기서의 실패는 서술의 실패가 아니다. 로그만 남는다.
 로어북과 지난 일은 한 번 고르고, 다시 시도하는 모든 시도가 같은 것을 쓴다.
 
 이 작업은 끝까지 못 갈 수 있다. 서술자가 실패하거나, 도는 도중에 서버가 꺼진다.
@@ -48,6 +54,9 @@ from typing import Any, Protocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.ai.provider import ProviderError
+from app.billing import settling
+from app.billing.client import Billing
+from app.billing.free_billing import FreeBilling
 from app.core.jobs import BackgroundJobs
 from app.rounds import service
 from app.rounds.llm_narrator import NarrationError
@@ -61,6 +70,17 @@ logger = logging.getLogger(__name__)
 UNEXPECTED = 'error'
 # 작업 전체의 시간이 다 됐을 때 이벤트에 적는 이유. 모델의 시간 초과와 같은 말을 쓴다
 TIMED_OUT = 'timeout'
+
+# 결제 서버를 두지 않을 때. 받지 않는다
+FREE = FreeBilling()
+
+
+class ChargeNotSecured(Exception):
+    """서술 값을 잡지 못했다. reason 은 이벤트에 적는 이유다(insufficient_credits, billing_unavailable)."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 class LoreFinder(Protocol):
@@ -140,11 +160,12 @@ class Budgets:
     """
     작업이 쓰는 시간(초). 값은 service 에 있다. 방장이 다시 맡길 수 있는 때와 함께 정해야 하는 숫자들이다.
 
-    job 은 닫기 시작한 시각부터 작업이 끝날 때까지, retrieval 은 그중 고르기에, failure 는 끊긴 뒤 실패를 적는 데 쓴다.
-    테스트가 짧은 시간을 꽂는다.
+    job 은 닫기 시작한 시각부터 작업이 끝날 때까지, billing 은 그중 서술 값을 잡는 데(닫은 뒤의 확정에도 같은 만큼),
+    retrieval 은 고르기에, failure 는 끊긴 뒤 실패를 적는 데 쓴다. 테스트가 짧은 시간을 꽂는다.
     """
 
     job: float = service.CLOSING_JOB_SECONDS
+    billing: float = service.BILLING_BUDGET_SECONDS
     retrieval: float = service.RETRIEVAL_BUDGET_SECONDS
     failure: float = service.FAILURE_RECORD_SECONDS
 
@@ -159,7 +180,7 @@ def failure_reason(error: Exception) -> str:
     다시 시도하는 서술자는 마지막 이유를, 한 번 부르는 서술자는 그 이유를 준다. 작업의 시간이 다 됐으면 timeout 이다.
     그 밖의 예외는 내용을 내보내지 않는다. 예외의 글에 무엇이 들어 있을지 모른다.
     """
-    if isinstance(error, NarrationFailed):
+    if isinstance(error, NarrationFailed | ChargeNotSecured):
         return error.reason
     if isinstance(error, ProviderError | NarrationError):
         return str(error)
@@ -211,23 +232,63 @@ async def write_scene(
         return await narrator.narrate(request, preview)
 
 
-async def close_run(
-    session_factory: async_sessionmaker[AsyncSession], narrator: Narrator, run: Run, finders: Finders, retrieval: float
+async def secure_payment(
+    session_factory: async_sessionmaker[AsyncSession], billing: Billing, run: Run, budget: float
 ) -> None:
     """
-    맡은 서술 하나를 처음부터 끝까지 한다. 읽고, 고르고, 서술하고, 닫기를 마무리한다.
+    이 라운드의 서술 값을 잡아 둔다. budget 초까지만 해 본다. 못 잡으면 ChargeNotSecured.
 
-    세션을 그때그때 따로 연다. 서술자를 기다리는 동안에는 어느 세션도 열려 있지 않다.
+    시간이 다 된 것은 결제 서버의 답을 받지 못한 것과 같다(billing_unavailable).
+    """
+    try:
+        async with asyncio.timeout(budget):
+            readiness = await settling.secure_round(session_factory, billing, run.table_id, run.number)
+    except TimeoutError:
+        readiness = settling.Readiness.UNAVAILABLE
+    if readiness != settling.Readiness.READY:
+        raise ChargeNotSecured(readiness.value)
+
+
+async def close_run(
+    session_factory: async_sessionmaker[AsyncSession],
+    narrator: Narrator,
+    run: Run,
+    finders: Finders,
+    billing: Billing,
+    budgets: Budgets,
+) -> None:
+    """
+    맡은 서술 하나를 처음부터 끝까지 한다. 읽고, 값을 잡고, 고르고, 서술하고, 닫기를 마무리한다.
+
+    세션을 그때그때 따로 연다. 서술자와 결제 서버를 기다리는 동안에는 어느 세션도 열려 있지 않다.
     읽었을 때 이 라운드가 이미 다른 서술을 기다리거나 닫혔으면 아무것도 하지 않는다.
     """
     async with session_factory() as session:
         request = await service.load_closing_request(session, run.table_id, run.number, run.started)
     if request is None:
         return
-    request = await gather_context(request, finders, retrieval)
+    await secure_payment(session_factory, billing, run, budgets.billing)
+    request = await gather_context(request, finders, budgets.retrieval)
     scene = await write_scene(session_factory, narrator, request, run)
     async with session_factory() as session:
         await service.finish_closing(session, run.table_id, run.number, run.started, scene)
+
+
+async def settle_payment(
+    session_factory: async_sessionmaker[AsyncSession], billing: Billing, run: Run, budget: float
+) -> None:
+    """
+    닫은 라운드의 서술 값을 바로 확정한다. budget 초까지만 해 본다. 예외를 올리지 않는다.
+
+    라운드는 이미 닫혔고 "확정할 것"은 DB 에 적혀 있다. 여기서 못 하면 청구 정리가 마저 한다. 로그만 남긴다.
+    """
+    try:
+        async with asyncio.timeout(budget):
+            await settling.settle_round(session_factory, billing, run.table_id, run.number)
+    except Exception:
+        logger.exception(
+            '서술 값을 바로 확정하지 못했다. 청구 정리가 마저 한다(테이블 %s, %s 라운드)', run.table_id, run.number
+        )
 
 
 async def record_failure(
@@ -258,6 +319,7 @@ async def narrate_round(
     memories: MemoryFinder = NO_MEMORIES,
     histories: HistoryFinder = NO_HISTORIES,
     budgets: Budgets = BUDGETS,
+    billing: Billing = FREE,
 ) -> None:
     """
     닫는 중인 라운드 하나를 서술하고 닫는다. 요청 밖에서 돈다.
@@ -268,15 +330,19 @@ async def narrate_round(
     어디서든 예외가 나면 실패를 적고 예외를 그대로 올린다. 작업을 돌리는 쪽(BackgroundJobs)이 로그에 남긴다.
     마무리의 저장이 끝난 뒤에 난 예외는 실패로 적히지 않는다. 이미 닫힌 라운드에는 실패를 적지 않는다.
     서버가 꺼져 작업이 취소되면(CancelledError) 실패를 적지 않는다. 그때는 멈춘 라운드로 남는다.
+
+    billing 은 서술 값을 받는 결제 서버다. 서술 값을 잡지 못하면 서술하지 않고 실패로 적는다(ChargeNotSecured).
+    다 끝난 뒤에 서술 값을 확정한다. 작업의 시간 밖이다. 라운드는 이미 닫혔다.
     """
     run = Run(table_id, number, started)
     finders = Finders(lore, memories, histories)
     try:
         async with asyncio.timeout(seconds_left(started, datetime.now(UTC), budgets.job)):
-            await close_run(session_factory, narrator, run, finders, budgets.retrieval)
+            await close_run(session_factory, narrator, run, finders, billing, budgets)
     except Exception as error:
         await record_failure(session_factory, run, failure_reason(error), budgets.failure)
         raise
+    await settle_payment(session_factory, billing, run, budgets.billing)
 
 
 @dataclass(frozen=True)
@@ -293,11 +359,20 @@ class RoundCloser:
     lore: LoreFinder = NO_LORE
     memories: MemoryFinder = NO_MEMORIES
     histories: HistoryFinder = NO_HISTORIES
+    billing: Billing = FREE
 
     def schedule(self, table_id: uuid.UUID, number: int, started: datetime) -> None:
         """이 라운드의 서술을 맡긴다. 기다리지 않고 바로 돌아온다. started 는 저장한 닫기 시작한 시각이다."""
         job = narrate_round(
-            self.session_factory, self.narrator, table_id, number, started, self.lore, self.memories, self.histories
+            self.session_factory,
+            self.narrator,
+            table_id,
+            number,
+            started,
+            self.lore,
+            self.memories,
+            self.histories,
+            billing=self.billing,
         )
         self.jobs.spawn(job, name=f'narrate:{table_id}:{number}', operation='round.narrate')
 
@@ -315,4 +390,5 @@ def closer_of(state: Any) -> RoundCloser:
         lore=state.lore,
         memories=state.memories,
         histories=state.histories,
+        billing=state.billing,
     )
