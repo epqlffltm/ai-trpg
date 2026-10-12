@@ -152,6 +152,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | --- | --- | --- |
 | game-server | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
 | game-server | 마감이 지난 라운드 닫기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `round.close_overdue` |
+| game-server | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `charge.settle` |
 | game-server | 로어북 항목의 벡터 만들기 | `lore.index` |
 | game-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
@@ -307,7 +308,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `job.failed` | 작업이 예외로 끝났다 |
 | `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다 |
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했다 |
-| `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
+| `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 서술 뒤의 확정을 정해 둔 시간 안에 끝내지 못해 정리 작업에 넘긴 것도 이 코드다(`warning`). 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
 | `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다 |
 | `server.start_failed` | 서버가 뜨지 못했다 |
 
@@ -516,7 +517,9 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
-| `board_writes_total` | counter | `resource`(`post`, `comment`), `action`(`create`, `update`, `delete`), `result`(`success`, `rejected`) | 글과 댓글을 쓴 수 |
+| `board_writes_total` | counter | `resource`(`post`, `comment`), `action`(`create`, `update`, `delete`), `result`(`success`, `rejected`, `rate_limited`) | 글과 댓글을 쓴 수. `rate_limited` 는 쓰기 횟수 제한에 걸린 것(429)이다 |
+| `board_searches_total` | counter | `result`(`success`, `timeout`) | 글을 검색한 수. `timeout` 은 정해 둔 시간(3초)을 넘겨 멈춘 것(503)이다. 늘면 색인이나 검색 엔진이 필요하다 |
+| `board_search_duration_seconds` | histogram | 없음 | 검색 하나가 걸린 시간 |
 
 **결제 (billing)**
 
@@ -576,7 +579,7 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 | | 받는 곳(미들웨어) | 들고 있는 곳 | 보내는 곳 |
 | --- | --- | --- | --- |
 | auth-server | `observability/middleware.py` | `observability/context.py` | `accounts/billing_client.py` 의 `outgoing_headers()` |
-| game-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py` 의 `outgoing_headers()` |
+| game-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
 | board-server | `src/observability/request-logging.middleware.ts` | `src/observability/request-context.ts` | `src/auth/jwks.ts` 의 `outgoingHeaders()` |
 | billing-server | `internal/httpapi/observability.go` | `internal/obs/context.go` | `internal/jwks/fetch.go` 의 `obs.SetOutgoingHeaders()` |
 
