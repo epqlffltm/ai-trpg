@@ -615,6 +615,12 @@ IP로 보여 한 사람의 시도가 모두를 막는다.
 
 ## 운영 메모
 
+**운영에서 띄우는 법.** `runserver` 는 개발용이다. 컨테이너(`Dockerfile`)는 gunicorn 으로 띄우고, 설정은 `gunicorn.conf.py` 에 있다.
+프로세스 수는 `WEB_CONCURRENCY` 로 정한다(적지 않으면 1). gunicorn 이 스스로 남기는 줄도 공통 규격의 JSON 으로 나간다.
+`DEBUG` 를 끄면 Django 가 정적 파일을 내주지 않는다. 관리자 화면의 CSS 와 JS 는 whitenoise 가 `STATIC_ROOT` 에서 내준다.
+이미지를 만들 때 `collectstatic` 으로 모아 둔다. 개발 중에는 `STATIC_ROOT` 를 적지 않는다.
+네 서버를 함께 컨테이너로 띄우는 법은 [저장소 README](../README.md#4-서버-넷을-컨테이너로-선택)에 있다.
+
 **만료된 토큰 기록 정리.** 발급 기록과 폐기 기록은 토큰이 만료된 뒤에도 테이블에 남는다.
 배포 환경에서는 아래 명령을 하루에 한 번 실행한다.
 
