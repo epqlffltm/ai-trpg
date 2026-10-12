@@ -8,7 +8,8 @@
 #   docker compose down           # 정지 (-v 를 붙이면 볼륨까지 지워져 데이터가 날아간다)
 #
 # 서버 넷까지 컨테이너로 띄울 때는 프로필을 붙인다. 이미지를 만들고, 마이그레이션을 한 번씩 돌린 뒤 서버를 띄운다.
-# PC 에서 직접 띄운 서버와 같은 포트를 쓰므로, 그것들을 먼저 끈다.
+# 바깥에서는 프록시(nginx) 하나로 들어온다: http://127.0.0.1:8080/api/v1/<서버>/...
+# 인증 서버만 관리자 화면 때문에 127.0.0.1:8000 을 함께 연다. PC 에서 직접 띄운 인증 서버와 포트가 겹치므로 그것을 먼저 끈다.
 #
 #   docker compose --profile app up -d --build
 #   docker compose --profile app ps -a      # 마이그레이션은 Exited (0), 서버는 healthy 면 된다
@@ -104,8 +105,9 @@ services:
   # 마이그레이션은 서버마다 한 번 돌고 끝나는 컨테이너(*-migrate)가 한다. 서버는 그것이 성공해야(Exited 0) 뜬다.
   # 서버를 여럿 띄워도 마이그레이션은 한 번만 돈다. 실패하면 서버가 뜨지 않아서 바로 드러난다.
   #
-  # 서버의 포트는 127.0.0.1 에만 연다. 프록시(nginx)가 들어오면 프록시만 열고 이 포트들은 닫는다.
-  # 다른 프로그램이 그 포트를 쓰면 루트 .env 의 AUTH_PORT, GAME_PORT, BOARD_PORT, BILLING_PORT 로 바꾼다.
+  # 바깥에서 들어오는 길은 프록시(proxy) 하나다. 서버의 포트는 열지 않는다.
+  # 인증 서버만 127.0.0.1:8000 을 연다. 관리자 화면(/admin/)은 프록시가 막으므로 이 포트로 직접 붙는다.
+  # 서버(VM)에서는 SSH 터널로 붙는다: ssh -L 8000:127.0.0.1:8000 <서버>  그다음 http://127.0.0.1:8000/admin/
   #
   # 서버끼리는 컨테이너의 이름으로 부른다. 게임, 게시판, 결제 서버는 인증 서버의 공개키(JWKS)를 필요할 때 받아 온다.
   # 인증 서버가 늦게 떠도 뜨는 데는 지장이 없어서 서로 기다리게 하지 않는다.
@@ -124,6 +126,9 @@ services:
       # 다른 서버가 공개키를 받으러 올 때 Host 머리말이 auth-server 다. 목록에 없으면 Django 가 400 으로 막는다
       ALLOWED_HOSTS: localhost,127.0.0.1,auth-server
       BILLING_URL: http://billing-server:8003
+      # 앞에 프록시가 하나 있다. X-Forwarded-For 의 맨 뒤(프록시가 붙인 주소)를 클라이언트의 IP 로 믿는다.
+      # 프록시를 거치지 않고 8000 으로 직접 오는 요청(관리자 화면)은 헤더가 없어 연결한 상대의 주소를 쓴다
+      TRUSTED_PROXY_COUNT: "1"
     # 설정 파일이 읽힐 때 개인키를 읽는다. 마이그레이션에도 키가 있어야 한다
     volumes:
       - *auth-keys
@@ -138,6 +143,7 @@ services:
     environment: *auth-environment
     volumes:
       - *auth-keys
+    # 관리자 화면용. 위의 설명을 본다
     ports:
       - "127.0.0.1:${AUTH_PORT:-8000}:8000"
     # 인증 서버에는 /health 가 없다. 공개키(jwks)가 응답하면 앱이 떴고 키도 읽은 것이다
@@ -177,8 +183,6 @@ services:
     env_file: ./game-server/.env
     environment: *game-environment
     extra_hosts: *host-gateway
-    ports:
-      - "127.0.0.1:${GAME_PORT:-8001}:8001"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
       interval: 10s
@@ -208,8 +212,6 @@ services:
     profiles: [app]
     env_file: ./board-server/.env
     environment: *board-environment
-    ports:
-      - "127.0.0.1:${BOARD_PORT:-8002}:8002"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8002/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 10s
@@ -239,8 +241,6 @@ services:
     profiles: [app]
     env_file: ./billing-server/.env
     environment: *billing-environment
-    ports:
-      - "127.0.0.1:${BILLING_PORT:-8003}:8003"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8003/health"]
       interval: 10s
@@ -250,6 +250,29 @@ services:
     depends_on:
       billing-migrate:
         condition: service_completed_successfully
+
+  proxy:
+    image: nginxinc/nginx-unprivileged:1.30-alpine3.24
+    profiles: [app]
+    # 설정의 틀. 이미지가 뜰 때 ${APP_ENVIRONMENT} 같은 자리를 아래의 environment 로 채워 conf.d 에 쓴다
+    volumes:
+      - ./docker/nginx/templates:/etc/nginx/templates:ro
+    environment:
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
+      APP_VERSION: ${APP_VERSION:-dev}
+      # 이미지의 시작 스크립트가 찍는 안내 글을 끈다. 로그는 JSON 줄만 남긴다
+      NGINX_ENTRYPOINT_QUIET_LOGS: "1"
+    ports:
+      - "127.0.0.1:${PROXY_PORT:-8080}:8080"
+    # 컨테이너 안에서만 열리는 상태 확인 포트(8081)를 부른다
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    # 서버를 기다리지 않는다. 서버의 주소는 요청마다 찾으므로 늦게 뜬 서버도 따라간다.
+    # 아직 없는 서버로 가는 요청은 502 다
 
 volumes:
   pgdata:
