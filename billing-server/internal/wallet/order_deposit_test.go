@@ -19,8 +19,8 @@ import (
 func (f fixture) newOrder() uuid.UUID {
 	f.t.Helper()
 	id := uuid.New()
-	const insert = `INSERT INTO orders (id, user_id, product_id, price, credits, status, idempotency_key, created_at, updated_at)
-		VALUES ($1, $2, 'credits-1000', 1000, 1000, 'pending', $3, $4, $4)`
+	const insert = `INSERT INTO orders (id, user_id, product_id, price, credits, status, idempotency_key, created_at, updated_at, expires_at)
+		VALUES ($1, $2, 'credits-1000', 1000, 1000, 'pending', $3, $4, $4, $4::TIMESTAMPTZ + interval '1 day')`
 	if _, err := f.pool.Exec(ctx(f.t), insert, id, f.user, "key-"+id.String(), f.clock.Now()); err != nil {
 		f.t.Fatalf("주문을 넣지 못했다: %v", err)
 	}

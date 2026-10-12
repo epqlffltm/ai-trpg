@@ -15,10 +15,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
-	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
-	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
 const (
@@ -165,8 +163,8 @@ func TestBuyingCreditsEndToEndWithTheRealDatabase(t *testing.T) {
 	// 가짜를 끼우지 않는다. 실제 주문 서비스, 지갑, DB, 가짜 결제 대행사로 주소들을 끝까지 지난다
 	pool := testenv.Pool(t)
 	now := func() time.Time { return webhookNow }
-	wallets := wallet.NewService(pool, now, wallet.Policy{FreeFirst: true, FreeTTL: time.Hour})
-	orders := order.NewService(pool, now, payment.Fake{}, wallets)
+	services := realServices(t, pool, now)
+	wallets, orders := services.Wallet, services.Orders
 	deps := httpapi.Dependencies{Wallet: wallets, Orders: orders, Notifier: orders, WebhookSecret: webhookSecret, Now: now}
 	user := uuid.NewString()
 	// 토큰의 주인을 테스트마다 새 사용자로 바꾼다

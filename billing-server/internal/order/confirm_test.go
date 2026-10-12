@@ -316,7 +316,7 @@ func TestAnOrderIsNotPaidUnlessTheCreditsGoIn(t *testing.T) {
 	created := f.create()
 	paymentKey := newPaymentKey()
 	broken := &brokenWallet{}
-	failing := order.NewService(f.pool, func() time.Time { return startedAt }, f.provider, broken)
+	failing := newService(t, f.pool, func() time.Time { return startedAt }, f.provider, broken)
 
 	_, err := failing.Confirm(ctx(t), f.user, created.ID, paymentKey)
 

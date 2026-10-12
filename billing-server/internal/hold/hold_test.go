@@ -103,8 +103,8 @@ func TestPlaceRefusesAReferenceReusedForAnotherPrice(t *testing.T) {
 	f := setUp(t)
 	f.fund(100, 0)
 	reference := newReference()
-	_, err := f.pool.Exec(ctx(t), `INSERT INTO holds (id, user_id, source, reference, price_code, amount, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 'narration.premium', 200, 'held', $5, $5)`, uuid.New(), f.user, source, reference, f.clock.Now())
+	_, err := f.pool.Exec(ctx(t), `INSERT INTO holds (id, user_id, source, reference, price_code, amount, status, created_at, updated_at, expires_at)
+		VALUES ($1, $2, $3, $4, 'narration.premium', 200, 'held', $5, $5, $5::TIMESTAMPTZ + interval '1 day')`, uuid.New(), f.user, source, reference, f.clock.Now())
 	if err != nil {
 		t.Fatalf("홀드를 넣지 못했다: %v", err)
 	}
@@ -434,6 +434,11 @@ func TestTheDatabaseKeepsHoldStatusAndColumnsInStep(t *testing.T) {
 		"끝난 시각이 있는 held":     "UPDATE holds SET settled_at = created_at WHERE id = $1",
 		"끝난 시각이 없는 captured": "UPDATE holds SET status = 'captured' WHERE id = $1",
 		"값이 0":               "UPDATE holds SET amount = 0 WHERE id = $1",
+		"이유가 없는 released":    "UPDATE holds SET status = 'released', settled_at = created_at WHERE id = $1",
+		"이유가 있는 held":        "UPDATE holds SET release_reason = 'requested' WHERE id = $1",
+		"이유가 있는 captured":    "UPDATE holds SET status = 'captured', settled_at = created_at, release_reason = 'expired' WHERE id = $1",
+		"모르는 이유":             "UPDATE holds SET status = 'released', settled_at = created_at, release_reason = 'forgot' WHERE id = $1",
+		"만든 때에 만료":           "UPDATE holds SET expires_at = created_at WHERE id = $1",
 	}
 	for name, sql := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -444,8 +449,8 @@ func TestTheDatabaseKeepsHoldStatusAndColumnsInStep(t *testing.T) {
 		})
 	}
 	// 같은 서버의 같은 이름표로 줄을 하나 더 넣을 수 없다
-	_, err := f.pool.Exec(ctx(t), `INSERT INTO holds (id, user_id, source, reference, price_code, amount, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 'narration.standard', 50, 'held', $5, $5)`, uuid.New(), f.user, source, reference, f.clock.Now())
+	_, err := f.pool.Exec(ctx(t), `INSERT INTO holds (id, user_id, source, reference, price_code, amount, status, created_at, updated_at, expires_at)
+		VALUES ($1, $2, $3, $4, 'narration.standard', 50, 'held', $5, $5, $5::TIMESTAMPTZ + interval '1 day')`, uuid.New(), f.user, source, reference, f.clock.Now())
 	if err == nil || !strings.Contains(err.Error(), "23505") {
 		t.Errorf("오류 = %v. 중복(23505)으로 거절해야 한다", err)
 	}

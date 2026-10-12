@@ -13,14 +13,16 @@ import (
 )
 
 type Hold struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	Source    string
-	Reference string
-	PriceCode string
-	Amount    credit.Amount
-	Status    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	SettledAt pgtype.Timestamptz
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	Source        string
+	Reference     string
+	PriceCode     string
+	Amount        credit.Amount
+	Status        string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	SettledAt     pgtype.Timestamptz
+	ExpiresAt     time.Time
+	ReleaseReason pgtype.Text
 }

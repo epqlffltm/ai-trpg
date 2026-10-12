@@ -195,18 +195,20 @@ func TestAUserCannotClaimWelcomeCreditsDirectly(t *testing.T) {
 }
 
 func TestTheAuthServersSignatureDoesNotOpenTheHoldRoutes(t *testing.T) {
-	// 서버마다 부를 수 있는 주소가 다르다. 인증 서버의 비밀이 새도 남의 크레딧을 뺄 수는 없다
-	holds := &fakeHolds{hold: aHold(t), isNew: true}
-	deps := welcomeDeps(&fakeGranter{}, 1000)
-	deps.Holds = holds
+	// 서버마다 부를 수 있는 주소가 다르다. 인증 서버의 비밀이 새도 남의 크레딧을 빼거나 홀드를 붙잡아 둘 수 없다
+	for _, tc := range []struct{ url, text string }{{holdsURL, holdText}, {extendURL, settleText}} {
+		holds := &fakeHolds{hold: aHold(t), isNew: true}
+		deps := welcomeDeps(&fakeGranter{}, 1000)
+		deps.Holds = holds
 
-	response := send(t, deps, request{
-		method: http.MethodPost, path: holdsURL, body: holdText, anonymous: true,
-		headers: signedBy(authSecret, holdsURL, holdText),
-	})
+		response := send(t, deps, request{
+			method: http.MethodPost, path: tc.url, body: tc.text, anonymous: true,
+			headers: signedBy(authSecret, tc.url, tc.text),
+		})
 
-	if response.Code != http.StatusUnauthorized || holds.calls != 0 {
-		t.Errorf("상태 코드 = %d, 홀드 서비스를 부른 횟수 = %d", response.Code, holds.calls)
+		if response.Code != http.StatusUnauthorized || holds.calls != 0 {
+			t.Errorf("%s: 상태 코드 = %d, 홀드 서비스를 부른 횟수 = %d", tc.url, response.Code, holds.calls)
+		}
 	}
 }
 

@@ -1,0 +1,58 @@
+// billing-server/internal/jobs/jobs.go
+
+// Package jobs 는 요청과 따로 도는 일(정리 작업, 대사)에 식별자(job_id)를 걸고, 끝난 모양을 한 줄로 남긴다.
+// 규격은 docs/observability.md 의 "작업 식별자 job_id"와 "작업이 끝난 줄"이다. 게임 서버와 인증 서버의 것과 같은 모양이다.
+package jobs
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
+)
+
+// 작업이 끝난 모양(result)과 실패한 작업의 오류 코드.
+const (
+	ResultSuccess     = "success"
+	ResultCancelled   = "cancelled"
+	ResultServerError = "server_error"
+	ErrorCodeFailed   = "job.failed"
+)
+
+// Run 은 do 를 작업 하나로 돌린다. 새 job_id 를 건 context 를 넘기므로, do 가 남기는 로그에 그 번호가 붙는다.
+// 요청에서 띄운 것이 아니므로 새 추적(trace_id)을 시작한다.
+//
+// 끝나면 한 줄을 남기고 do 의 오류를 그대로 돌려준다.
+// 잘 끝난 것은 debug 다. 정리 작업은 몇십 초마다 돈다. info 로 적으면 로그를 메운다. 한 일이 있으면 do 가 따로 info 로 적는다.
+// 끄느라 취소된 것은 warning, 오류로 끝난 것은 error 다.
+func Run(ctx context.Context, operation string, do func(context.Context) error) error {
+	ctx = obs.WithJob(ctx, uuid.NewString())
+	started := time.Now()
+	err := do(ctx)
+	finish(ctx, operation, time.Since(started), err)
+	return err
+}
+
+// finish 는 작업이 끝난 줄을 남긴다.
+func finish(ctx context.Context, operation string, took time.Duration, err error) {
+	attrs := []slog.Attr{
+		slog.String(obs.FieldOperation, operation),
+		slog.Int64(obs.FieldDurationMS, took.Milliseconds()),
+	}
+	switch {
+	case err == nil:
+		slog.LogAttrs(ctx, slog.LevelDebug, "작업이 끝났다", append(attrs, slog.String(obs.FieldResult, ResultSuccess))...)
+	case errors.Is(err, context.Canceled) && ctx.Err() != nil:
+		slog.LogAttrs(ctx, slog.LevelWarn, "작업이 취소되었다", append(attrs, slog.String(obs.FieldResult, ResultCancelled))...)
+	default:
+		slog.LogAttrs(ctx, slog.LevelError, "작업이 실패했다", append(attrs,
+			slog.String(obs.FieldResult, ResultServerError),
+			slog.String(obs.FieldErrorCode, ErrorCodeFailed),
+			slog.String(obs.FieldErrorMessage, err.Error()),
+		)...)
+	}
+}

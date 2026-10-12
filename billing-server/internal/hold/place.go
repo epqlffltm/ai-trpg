@@ -16,7 +16,8 @@ import (
 // Place 는 사용자의 크레딧을 가격표의 값만큼 먼저 빼 둔다.
 // source 는 부르는 서버의 이름이고, reference 는 그 서버가 이 홀드에 붙인 이름표다.
 //
-// 같은 서버가 같은 이름표로 다시 부르면 새로 빼지 않고 먼저 건 홀드를 돌려준다(지금의 상태 그대로).
+// 같은 서버가 같은 이름표로 다시 부르면 새로 빼지 않고 먼저 건 홀드를 돌려준다(지금의 상태 그대로. 연장하지 않는다).
+// 새 홀드의 만료 시각은 지금부터 ttl 뒤다.
 // 두 번째 값은 이번에 새로 걸었으면 true 다. 크레딧이 모자라면 wallet.ErrInsufficient 이고 홀드도 남지 않는다.
 func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, reference string, priceCode string) (Hold, bool, error) {
 	if !referencePattern.MatchString(reference) {
@@ -29,6 +30,7 @@ func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, re
 
 	var placed Hold
 	var created bool
+	now := s.clock()
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		queries := holddb.New(tx)
 		row, err := queries.InsertHold(ctx, holddb.InsertHoldParams{
@@ -38,7 +40,8 @@ func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, re
 			Reference: reference,
 			PriceCode: price.Code,
 			Amount:    price.Credits,
-			Now:       s.clock(),
+			Now:       now,
+			ExpiresAt: now.Add(s.ttl),
 		})
 		// 줄을 돌려받지 못했으면 같은 이름표의 홀드가 이미 있다는 뜻이다
 		if errors.Is(err, pgx.ErrNoRows) {

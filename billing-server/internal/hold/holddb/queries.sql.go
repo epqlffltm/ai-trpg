@@ -13,8 +13,116 @@ import (
 	"github.com/google/uuid"
 )
 
+const captureHold = `-- name: CaptureHold :one
+UPDATE holds
+SET status = 'captured', settled_at = $1::TIMESTAMPTZ, updated_at = $1::TIMESTAMPTZ
+WHERE source = $2 AND reference = $3 AND status = 'held'
+RETURNING id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at, expires_at, release_reason
+`
+
+type CaptureHoldParams struct {
+	Now       time.Time
+	Source    string
+	Reference string
+}
+
+// held 인 홀드를 captured 로 바꾼다. 만료 시각이 지났어도 정리 작업이 아직 돌려주지 않았으면 확정할 수 있다.
+func (q *Queries) CaptureHold(ctx context.Context, arg CaptureHoldParams) (Hold, error) {
+	row := q.db.QueryRow(ctx, captureHold, arg.Now, arg.Source, arg.Reference)
+	var i Hold
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Source,
+		&i.Reference,
+		&i.PriceCode,
+		&i.Amount,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SettledAt,
+		&i.ExpiresAt,
+		&i.ReleaseReason,
+	)
+	return i, err
+}
+
+const expireHold = `-- name: ExpireHold :one
+UPDATE holds
+SET status = 'released', release_reason = 'expired',
+    settled_at = $1::TIMESTAMPTZ, updated_at = $1::TIMESTAMPTZ
+WHERE id = $2 AND status = 'held' AND expires_at <= $1::TIMESTAMPTZ
+RETURNING id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at, expires_at, release_reason
+`
+
+type ExpireHoldParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+// 만료 시각이 지난 held 홀드를 released 로 바꾼다(정리 작업). 그사이에 연장되었으면 바꾸지 않는다.
+func (q *Queries) ExpireHold(ctx context.Context, arg ExpireHoldParams) (Hold, error) {
+	row := q.db.QueryRow(ctx, expireHold, arg.Now, arg.ID)
+	var i Hold
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Source,
+		&i.Reference,
+		&i.PriceCode,
+		&i.Amount,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SettledAt,
+		&i.ExpiresAt,
+		&i.ReleaseReason,
+	)
+	return i, err
+}
+
+const extendHold = `-- name: ExtendHold :one
+UPDATE holds
+SET expires_at = GREATEST(expires_at, $1::TIMESTAMPTZ), updated_at = $2::TIMESTAMPTZ
+WHERE source = $3 AND reference = $4 AND status = 'held'
+RETURNING id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at, expires_at, release_reason
+`
+
+type ExtendHoldParams struct {
+	ExpiresAt time.Time
+	Now       time.Time
+	Source    string
+	Reference string
+}
+
+// held 인 홀드의 만료 시각을 뒤로 민다. 앞으로 당기지는 않는다(GREATEST).
+func (q *Queries) ExtendHold(ctx context.Context, arg ExtendHoldParams) (Hold, error) {
+	row := q.db.QueryRow(ctx, extendHold,
+		arg.ExpiresAt,
+		arg.Now,
+		arg.Source,
+		arg.Reference,
+	)
+	var i Hold
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Source,
+		&i.Reference,
+		&i.PriceCode,
+		&i.Amount,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SettledAt,
+		&i.ExpiresAt,
+		&i.ReleaseReason,
+	)
+	return i, err
+}
+
 const getHoldByReference = `-- name: GetHoldByReference :one
-SELECT id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at FROM holds
+SELECT id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at, expires_at, release_reason FROM holds
 WHERE source = $1 AND reference = $2
 `
 
@@ -38,19 +146,21 @@ func (q *Queries) GetHoldByReference(ctx context.Context, arg GetHoldByReference
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SettledAt,
+		&i.ExpiresAt,
+		&i.ReleaseReason,
 	)
 	return i, err
 }
 
 const insertHold = `-- name: InsertHold :one
 
-INSERT INTO holds (id, user_id, source, reference, price_code, amount, status, created_at, updated_at)
+INSERT INTO holds (id, user_id, source, reference, price_code, amount, status, created_at, updated_at, expires_at)
 VALUES (
     $1, $2, $3, $4, $5,
-    $6, 'held', $7, $7
+    $6, 'held', $7, $7, $8
 )
 ON CONFLICT (source, reference) DO NOTHING
-RETURNING id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at
+RETURNING id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at, expires_at, release_reason
 `
 
 type InsertHoldParams struct {
@@ -61,6 +171,7 @@ type InsertHoldParams struct {
 	PriceCode string
 	Amount    credit.Amount
 	Now       time.Time
+	ExpiresAt time.Time
 }
 
 // billing-server/internal/hold/queries.sql
@@ -78,6 +189,7 @@ func (q *Queries) InsertHold(ctx context.Context, arg InsertHoldParams) (Hold, e
 		arg.PriceCode,
 		arg.Amount,
 		arg.Now,
+		arg.ExpiresAt,
 	)
 	var i Hold
 	err := row.Scan(
@@ -91,32 +203,62 @@ func (q *Queries) InsertHold(ctx context.Context, arg InsertHoldParams) (Hold, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SettledAt,
+		&i.ExpiresAt,
+		&i.ReleaseReason,
 	)
 	return i, err
 }
 
-const settleHold = `-- name: SettleHold :one
-UPDATE holds
-SET status = $1, settled_at = $2::TIMESTAMPTZ, updated_at = $2::TIMESTAMPTZ
-WHERE source = $3 AND reference = $4 AND status = 'held'
-RETURNING id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at
+const listExpiredHolds = `-- name: ListExpiredHolds :many
+SELECT id FROM holds
+WHERE status = 'held' AND expires_at <= $1::TIMESTAMPTZ
+ORDER BY expires_at, id
+LIMIT $2
 `
 
-type SettleHoldParams struct {
-	Status    string
+type ListExpiredHoldsParams struct {
+	Now      time.Time
+	RowLimit int32
+}
+
+// 만료 시각이 지났는데 아직 held 인 홀드를 오래된 것부터 읽는다(정리 작업).
+func (q *Queries) ListExpiredHolds(ctx context.Context, arg ListExpiredHoldsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listExpiredHolds, arg.Now, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const releaseHold = `-- name: ReleaseHold :one
+UPDATE holds
+SET status = 'released', release_reason = 'requested',
+    settled_at = $1::TIMESTAMPTZ, updated_at = $1::TIMESTAMPTZ
+WHERE source = $2 AND reference = $3 AND status = 'held'
+RETURNING id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at, expires_at, release_reason
+`
+
+type ReleaseHoldParams struct {
 	Now       time.Time
 	Source    string
 	Reference string
 }
 
-// held 인 홀드를 captured 나 released 로 바꾼다.
-func (q *Queries) SettleHold(ctx context.Context, arg SettleHoldParams) (Hold, error) {
-	row := q.db.QueryRow(ctx, settleHold,
-		arg.Status,
-		arg.Now,
-		arg.Source,
-		arg.Reference,
-	)
+// 부르는 쪽이 돌려 달라고 한 held 홀드를 released 로 바꾼다.
+func (q *Queries) ReleaseHold(ctx context.Context, arg ReleaseHoldParams) (Hold, error) {
+	row := q.db.QueryRow(ctx, releaseHold, arg.Now, arg.Source, arg.Reference)
 	var i Hold
 	err := row.Scan(
 		&i.ID,
@@ -129,6 +271,8 @@ func (q *Queries) SettleHold(ctx context.Context, arg SettleHoldParams) (Hold, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SettledAt,
+		&i.ExpiresAt,
+		&i.ReleaseReason,
 	)
 	return i, err
 }
