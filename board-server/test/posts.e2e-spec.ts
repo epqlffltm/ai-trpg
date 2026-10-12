@@ -404,6 +404,44 @@ describe('글 고치기', () => {
     expect(response.status).toBe(403);
   });
 
+  it('운영자만 쓰는 게시판의 글은 지금 운영자인 글쓴이가 고친다', async () => {
+    await makeOperator(app, OPERATOR);
+    const id = await writtenId(OPERATOR, 'notice');
+
+    const response = await edit(OPERATOR, id, { title: '고친 공지' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ title: '고친 공지' });
+  });
+
+  it('운영자만 쓰는 게시판의 글은 글쓴이여도 운영자에서 내려왔으면 고치지 못한다', async () => {
+    await makeOperator(app, OPERATOR);
+    const id = await writtenId(OPERATOR, 'notice');
+    await removeOperator(app, OPERATOR);
+
+    const response = await edit(OPERATOR, id, {
+      title: '내려온 뒤에 고친 공지',
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      detail: '이 게시판의 글은 지금 운영자인 글쓴이만 고칠 수 있습니다.',
+    });
+    expect(((await read(id)).body as { title: string }).title).toBe(POST.title);
+  });
+
+  it('다른 운영자도 남의 공지는 고치지 못한다', async () => {
+    const another = 'e5f6a7b8-9c0d-4e1f-8a2b-3c4d5e6f7a8b';
+    await makeOperator(app, OPERATOR);
+    await makeOperator(app, another);
+    const id = await writtenId(OPERATOR, 'notice');
+
+    const response = await edit(another, id, { title: '남이 고친 공지' });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ detail: '자신의 글만 고칠 수 있습니다.' });
+  });
+
   it('로그인하지 않으면 401 이다', async () => {
     const id = await writtenId(WRITER);
 

@@ -10,6 +10,7 @@ import request from 'supertest';
 import { API_PREFIX } from '../src/app.setup.js';
 import { DatabaseHealth } from '../src/database/database.health.js';
 import { createTestApp } from './app.js';
+import { captureLogs } from './logs.js';
 
 describe('살아 있는지 확인하는 주소', () => {
   let app: NestExpressApplication;
@@ -74,6 +75,7 @@ describe('준비됐는지 확인하는 주소', () => {
     const app = await createTestApp((builder) =>
       builder.overrideProvider(DatabaseHealth).useValue(broken),
     );
+    const logs = captureLogs(app);
 
     const response = await request(app.getHttpServer()).get('/health/ready');
     await app.close();
@@ -81,6 +83,9 @@ describe('준비됐는지 확인하는 주소', () => {
     expect(response.status).toBe(503);
     expect(response.body).toEqual({ status: 'unavailable' });
     expect(response.text).not.toContain('board');
+    // 서버의 잘못으로 로그에 남는다. 오류의 글(DB 주소와 계정)은 로그에도 싣지 않는다
+    expect(logs.finishedWith(503)).toMatchObject([{ level: 'error' }]);
+    expect(logs.lines.join('\n')).not.toContain(secret);
   });
 
   it('DB 에 닿지 않아도 살아 있다고는 답한다', async () => {
