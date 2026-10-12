@@ -24,6 +24,12 @@ from django.core.exceptions import ImproperlyConfigured
 from config.billing import validate_billing_url, validate_service_secret
 from config.jwt_keys import compute_key_id, derive_public_key_pem, read_private_key_pem
 from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
+from config.security import (
+    SILENCED_DEPLOY_CHECKS,
+    proxy_ssl_header,
+    require_secure_refresh_cookie,
+    secure_cookies,
+)
 from observability.formatter import ServiceInfo
 from observability.setup import SERVICE_NAME, logging_settings
 
@@ -227,6 +233,16 @@ SIMPLE_JWT = {
 # refresh 토큰 쿠키를 HTTPS 에서만 보낼지.
 # 적지 않으면 True. 로컬 개발은 HTTP 라서 .env 에서 false 로 둔다
 REFRESH_COOKIE_SECURE = env.bool('REFRESH_COOKIE_SECURE', default=True)
+# 운영에서는 끌 수 없다. 끄면 서버가 뜨지 않는다
+require_secure_refresh_cookie(REFRESH_COOKIE_SECURE, APP_ENVIRONMENT)
+
+
+# 운영 환경의 보안(config/security.py)
+# 세션 쿠키와 CSRF 쿠키(관리자 화면)에 Secure 를 붙인다. 운영이면 저절로 켜진다
+SESSION_COOKIE_SECURE = secure_cookies(APP_ENVIRONMENT)
+CSRF_COOKIE_SECURE = secure_cookies(APP_ENVIRONMENT)
+# HTTPS 로 넘기기와 HSTS 는 서버 넷 앞의 nginx 가 맡는다. check --deploy 의 그 두 경고를 끈다
+SILENCED_SYSTEM_CHECKS = SILENCED_DEPLOY_CHECKS
 
 
 # Database
@@ -238,6 +254,10 @@ REFRESH_COOKIE_SECURE = env.bool('REFRESH_COOKIE_SECURE', default=True)
 DATABASES = {
     'default': env.db('DATABASE_URL'),
 }
+# DB 에 닿지 않을 때 기다리는 시간(초). 적지 않으면 OS 가 정한 만큼(수십 초) 매달린다.
+# DB 가 응답 없이 멈추면 요청과 상태 확인(/health/ready)이 빨리 실패하는 편이 낫다
+DATABASE_CONNECT_TIMEOUT_SECONDS = 5
+DATABASES['default'].setdefault('OPTIONS', {})['connect_timeout'] = DATABASE_CONNECT_TIMEOUT_SECONDS
 
 # 테스트에서만 가벼운 비밀번호 해셔를 쓰는 실행기. manage.py test 에만 적용된다
 TEST_RUNNER = 'config.test_runner.FastHasherTestRunner'
@@ -293,6 +313,8 @@ STATIC_ROOT = env('STATIC_ROOT', default=None)
 # 0 이면 헤더를 보지 않는다. 프록시가 없는데 1 이상으로 두면 누구나 IP 를 지어낼 수 있고,
 # 프록시가 있는데 0 으로 두면 모든 요청이 프록시의 IP 로 보여 한 사람의 시도가 모두를 막는다
 TRUSTED_PROXY_COUNT = env.int('TRUSTED_PROXY_COUNT', default=0)
+# 앞에 프록시가 있을 때만, 프록시가 넘기는 X-Forwarded-Proto 로 "원래 HTTPS 였다"를 안다(config/security.py)
+SECURE_PROXY_SSL_HEADER = proxy_ssl_header(TRUSTED_PROXY_COUNT)
 
 
 # Redis
