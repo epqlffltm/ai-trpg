@@ -72,6 +72,8 @@ type orderBody struct {
 	// FailureCode 는 거절된 이유다. 거절되지 않았으면 null 이다.
 	FailureCode *string   `json:"failure_code"`
 	CreatedAt   time.Time `json:"created_at"`
+	// ExpiresAt 은 주문의 만료 시각이다. 이때까지 승인을 요청하지 않으면 주문은 expired 로 끝난다.
+	ExpiresAt time.Time `json:"expires_at"`
 	// PaidAt 은 치른 시각이다. 치르지 않았으면 null 이다.
 	PaidAt *time.Time `json:"paid_at"`
 }
@@ -178,7 +180,8 @@ func orderError(c *gin.Context, err error) {
 		badRequest(c, err.Error()+".")
 	case errors.Is(err, order.ErrNotFound):
 		notFound(c, err.Error()+".")
-	case errors.Is(err, order.ErrKeyReused), errors.Is(err, order.ErrPaymentKeyMismatch), errors.Is(err, order.ErrPaymentKeyUsed):
+	case errors.Is(err, order.ErrKeyReused), errors.Is(err, order.ErrPaymentKeyMismatch), errors.Is(err, order.ErrPaymentKeyUsed),
+		errors.Is(err, order.ErrExpired):
 		conflict(c, err.Error()+".")
 	default:
 		internalError(c, err)
@@ -194,6 +197,7 @@ func toOrderBody(o order.Order) orderBody {
 		Credits:   o.Credits,
 		Status:    o.Status,
 		CreatedAt: o.CreatedAt,
+		ExpiresAt: o.ExpiresAt,
 		PaidAt:    o.PaidAt,
 	}
 	if o.FailureCode != "" {

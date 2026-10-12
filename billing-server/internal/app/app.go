@@ -1,0 +1,57 @@
+// billing-server/internal/app/app.go
+
+// Package app 은 서버와 작업 명령(cmd/sweeper, cmd/reconcile)이 같은 방법으로 서비스와 로거를 만들게 한다.
+//
+// 지갑, 주문, 홀드를 만드는 방법이 명령마다 다르면 규칙(무료 크레딧의 기한, 홀드의 기한, 결제 대행사)이 어긋난다.
+// 그래서 만드는 곳을 하나로 둔다. 이 패키지는 만들기만 하고 일은 하지 않는다.
+package app
+
+import (
+	"io"
+	"log/slog"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
+)
+
+// Services 는 크레딧을 다루는 서비스들이다.
+type Services struct {
+	Wallet *wallet.Service
+	Orders *order.Service
+	Holds  *hold.Service
+}
+
+// NewServices 는 규칙에 따라 서비스들을 만든다. now 는 지금 시각을 돌려주는 함수다.
+// 결제 대행사의 자리에는 가짜를 꽂는다. 이 서버는 연습용이라 실제 돈을 받지 않는다.
+// 실제 결제 대행사를 붙일 때 여기에서 바꿔 꽂는다. 그러면 서버와 대사가 같은 결제 대행사에 묻는다.
+func NewServices(pool *pgxpool.Pool, rules config.Rules, now func() time.Time) (Services, error) {
+	wallets := wallet.NewService(pool, now, wallet.Policy{FreeFirst: rules.SpendFreeFirst, FreeTTL: rules.FreeCreditTTL})
+	orders, err := order.NewService(pool, now, payment.Fake{}, wallets, rules.OrderTTL)
+	if err != nil {
+		return Services{}, err
+	}
+	holds, err := hold.NewService(pool, now, wallets, rules.HoldTTL)
+	if err != nil {
+		return Services{}, err
+	}
+	return Services{Wallet: wallets, Orders: orders, Holds: holds}, nil
+}
+
+// NewLogger 는 공통 규격(docs/observability.md)의 JSON 으로 out 에 적는 로거를 만든다.
+func NewLogger(out io.Writer, logging config.Logging) *slog.Logger {
+	info := obs.ServiceInfo{
+		Service:     obs.ServiceName,
+		Environment: logging.AppEnvironment,
+		Version:     logging.AppVersion,
+	}
+	// 설정이 이미 값을 검사했다. 모르는 값이면 info 다
+	level, _ := obs.ParseLevel(logging.LogLevel)
+	return obs.NewLogger(out, info, level)
+}

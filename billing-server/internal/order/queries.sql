@@ -9,10 +9,10 @@
 
 -- name: InsertOrder :one
 -- 주문을 만든다. 같은 사용자가 같은 키로 이미 만들었으면 아무것도 하지 않고 줄도 돌려주지 않는다.
-INSERT INTO orders (id, user_id, product_id, price, credits, status, idempotency_key, created_at, updated_at)
+INSERT INTO orders (id, user_id, product_id, price, credits, status, idempotency_key, created_at, updated_at, expires_at)
 VALUES (
     sqlc.arg(id), sqlc.arg(user_id), sqlc.arg(product_id), sqlc.arg(price), sqlc.arg(credits),
-    'pending', sqlc.arg(idempotency_key), sqlc.arg(now), sqlc.arg(now)
+    'pending', sqlc.arg(idempotency_key), sqlc.arg(now), sqlc.arg(now), sqlc.arg(expires_at)
 )
 ON CONFLICT (user_id, idempotency_key) DO NOTHING
 RETURNING *;
@@ -34,9 +34,11 @@ WHERE id = sqlc.arg(id);
 
 -- name: StartConfirming :one
 -- pending 인 주문에 결제 번호를 적고 confirming 으로 바꾼다. 결제 대행사를 부르기 전에 한다.
+-- 만료 시각이 지난 주문은 바꾸지 않는다. 정리 작업이 아직 expired 로 바꾸지 않았어도 치를 수 없다.
 UPDATE orders
-SET status = 'confirming', payment_key = sqlc.arg(payment_key)::TEXT, updated_at = sqlc.arg(now)
+SET status = 'confirming', payment_key = sqlc.arg(payment_key)::TEXT, updated_at = sqlc.arg(now)::TIMESTAMPTZ
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND status = 'pending'
+    AND expires_at > sqlc.arg(now)::TIMESTAMPTZ
 RETURNING *;
 
 -- name: MarkPaid :one
@@ -52,3 +54,31 @@ UPDATE orders
 SET status = 'failed', failure_code = sqlc.arg(failure_code)::TEXT, updated_at = sqlc.arg(now)
 WHERE id = sqlc.arg(id) AND status = 'confirming'
 RETURNING *;
+
+-- name: ExpireOrder :one
+-- 만료 시각이 지난 pending 주문 하나를 expired 로 바꾼다. 승인을 요청한 쪽이 늦었을 때 쓴다.
+UPDATE orders
+SET status = 'expired', updated_at = sqlc.arg(now)::TIMESTAMPTZ
+WHERE id = sqlc.arg(id) AND status = 'pending' AND expires_at <= sqlc.arg(now)::TIMESTAMPTZ
+RETURNING *;
+
+-- name: ExpireDueOrders :execrows
+-- 만료 시각이 지난 pending 주문을 오래된 것부터 row_limit 개까지 expired 로 바꾼다(정리 작업).
+-- 다른 정리 작업이나 승인 요청이 잠근 줄은 기다리지 않고 건너뛴다. 크레딧과 상관없는 주문이라 한 문장으로 한꺼번에 바꾼다.
+-- 고른 줄은 이 문장이 잠그므로 그사이에 바뀌지 않는다. 그래도 pending 조건을 한 번 더 단다.
+UPDATE orders
+SET status = 'expired', updated_at = sqlc.arg(now)::TIMESTAMPTZ
+WHERE status = 'pending' AND id IN (
+    SELECT id FROM orders
+    WHERE status = 'pending' AND expires_at <= sqlc.arg(now)::TIMESTAMPTZ
+    ORDER BY expires_at, id
+    LIMIT sqlc.arg(row_limit)
+    FOR UPDATE SKIP LOCKED
+);
+
+-- name: ListStaleConfirming :many
+-- before 보다 먼저 confirming 이 된 주문을 오래된 것부터 읽는다(대사). 결제 대행사에 결과를 물어 끝낸다.
+SELECT * FROM orders
+WHERE status = 'confirming' AND updated_at <= sqlc.arg(before)::TIMESTAMPTZ
+ORDER BY updated_at, id
+LIMIT sqlc.arg(row_limit);

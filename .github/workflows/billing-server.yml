@@ -101,7 +101,7 @@ jobs:
         with:
           sqlc-version: "1.31.1"
 
-      # 커밋된 코드(walletdb, orderdb)가 SQL 과 어긋나면 실패한다. 고치지 않고 차이만 본다.
+      # 커밋된 코드(walletdb, orderdb, holddb, reconciledb)가 SQL 과 어긋나면 실패한다. 고치지 않고 차이만 본다.
       # SQL 만 고치고 코드를 다시 만들지 않은 채 올리는 일을 막는다
       - name: 만들어진 코드 검사
         run: sqlc diff
@@ -117,6 +117,13 @@ jobs:
           go run ./cmd/migrate down
           go run ./cmd/migrate up
           go run ./cmd/migrate status
+
+      # 정리 작업과 대사가 실제 DB 에서 뜨고 끝까지 도는지 본다. 서버의 비밀이 없어도 돌아야 한다.
+      # 막 만든 스키마라 대사는 맞지 않는 줄이 없어야 한다(끝 코드 0)
+      - name: 정리 작업과 대사
+        run: |
+          go run ./cmd/sweeper -once
+          go run ./cmd/reconcile
 
       # -count=1 은 캐시된 결과를 쓰지 않고 매번 실제로 돌린다. DB 를 쓰는 테스트가 있다.
       # -race 는 두 흐름이 같은 값을 동시에 건드리면 실패하게 한다. 공개키 캐시를 여러 요청이 함께 쓴다.

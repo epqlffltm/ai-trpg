@@ -64,8 +64,27 @@ type fixture struct {
 // setUp 은 테스트용 스키마에 붙는 서비스와 새 사용자를 만든다.
 func setUp(t *testing.T, policy wallet.Policy) fixture {
 	t.Helper()
+	return setUpAt(t, testenv.Pool(t), newClock(), policy)
+}
+
+// setUpSweep 은 정리 작업(ExpireIdle)을 돌리는 테스트의 setUp 이다.
+// 시계를 정리 작업의 시대에 두고, 정리 작업의 테스트끼리 한 번에 하나만 돌게 잠근다(testenv.ExclusiveSweep).
+// 앞서 돈 테스트가 남긴, 그 시대의 사라질 묶음을 먼저 정리해 둔다.
+func setUpSweep(t *testing.T, policy wallet.Policy) fixture {
+	t.Helper()
 	pool := testenv.Pool(t)
-	clock := newClock()
+	testenv.ExclusiveSweep(t, pool)
+	f := setUpAt(t, pool, &clock{now: testenv.SweepEnd}, policy)
+	if _, err := f.service.ExpireIdle(ctx(t), 100_000); err != nil {
+		t.Fatalf("남은 묶음을 정리하지 못했다: %v", err)
+	}
+	f.clock.now = testenv.SweepEra
+	return f
+}
+
+// setUpAt 은 시계를 넘겨받는 setUp 이다.
+func setUpAt(t *testing.T, pool *pgxpool.Pool, clock *clock, policy wallet.Policy) fixture {
+	t.Helper()
 	return fixture{
 		t:       t,
 		pool:    pool,

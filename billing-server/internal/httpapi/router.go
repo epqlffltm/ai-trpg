@@ -36,7 +36,7 @@ type Dependencies struct {
 	Notifier PaymentNotifier
 	// WebhookSecret 은 결제 대행사의 알림에 붙은 서명을 확인하는 비밀이다.
 	WebhookSecret string
-	// Holds 는 홀드를 걸고, 확정하고, 돌려준다. 게임 서버가 부른다.
+	// Holds 는 홀드를 걸고, 확정하고, 돌려주고, 연장한다. 게임 서버가 부른다.
 	Holds HoldService
 	// GameServerSecret 은 게임 서버가 보낸 요청의 서명을 확인하는 비밀이다.
 	GameServerSecret string
@@ -104,6 +104,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	game.POST("/holds", placeHold(deps.Holds))
 	game.POST("/holds/capture", captureHold(deps.Holds))
 	game.POST("/holds/release", releaseHold(deps.Holds))
+	game.POST("/holds/extend", extendHold(deps.Holds))
 
 	authServer := service.Group("", requireService(AuthServer, deps.AuthServerSecret, deps.Now))
 	authServer.POST("/grants/welcome", grantWelcome(deps.Welcome, deps.WelcomeCredits))

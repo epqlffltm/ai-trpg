@@ -5,6 +5,7 @@
 //	go run ./cmd/fakegame hold <사용자 번호> <이름표> [가격표 이름]
 //	go run ./cmd/fakegame capture <이름표>
 //	go run ./cmd/fakegame release <이름표>
+//	go run ./cmd/fakegame extend <이름표>
 //
 // 홀드 주소들은 사용자의 토큰이 아니라 게임 서버의 서명을 본다. 게임 서버를 띄우지 않고 해 볼 때,
 // 그 호출을 이 명령이 대신한다. 서버와 같은 설정(.env)에서 비밀과 주소를 읽어 서명해 보낸다.
@@ -34,7 +35,8 @@ import (
 const usage = `쓰는 법:
   go run ./cmd/fakegame hold <사용자 번호> <이름표> [가격표 이름]
   go run ./cmd/fakegame capture <이름표>
-  go run ./cmd/fakegame release <이름표>`
+  go run ./cmd/fakegame release <이름표>
+  go run ./cmd/fakegame extend <이름표>`
 
 // sendTimeout 은 서버의 답을 기다리는 가장 긴 시간이다.
 const sendTimeout = 15 * time.Second
@@ -82,6 +84,8 @@ func parse(args []string) (call, error) {
 		return call{path: holds + "/capture", body: map[string]string{"reference": args[1]}}, nil
 	case len(args) == 2 && args[0] == "release":
 		return call{path: holds + "/release", body: map[string]string{"reference": args[1]}}, nil
+	case len(args) == 2 && args[0] == "extend":
+		return call{path: holds + "/extend", body: map[string]string{"reference": args[1]}}, nil
 	default:
 		return call{}, errors.New(usage)
 	}
