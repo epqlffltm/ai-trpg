@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
@@ -158,5 +159,28 @@ func TestCannotCreateDatabases(t *testing.T) {
 
 	if canCreateDB {
 		t.Error("billing 계정이 DB 를 새로 만들 수 있다. 필요 없는 권한이다")
+	}
+}
+
+func TestTimesAreReadInUTCWhateverTheMachineZone(t *testing.T) {
+	// 서버를 띄운 PC 가 한국 시간이다. 그래도 DB 에서 읽은 시각은 UTC 다. 응답의 표기가 PC 에 따라 바뀌지 않는다
+	previous := time.Local
+	time.Local = time.FixedZone("KST", 9*60*60)
+	t.Cleanup(func() { time.Local = previous })
+	pool := openPool(t)
+	const query = "SELECT TIMESTAMPTZ '2026-03-02 09:00:00+00', TIMESTAMPTZ '2026-03-02 18:00:00+09'"
+
+	var plain time.Time
+	var nullable pgtype.Timestamptz
+	if err := pool.QueryRow(within(t, 10*time.Second), query).Scan(&plain, &nullable); err != nil {
+		t.Fatalf("조회하지 못했다: %v", err)
+	}
+
+	want := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
+	if plain.Location() != time.UTC || !plain.Equal(want) {
+		t.Errorf("시각 = %v (%v), 기대 = %v (UTC)", plain, plain.Location(), want)
+	}
+	if !nullable.Valid || nullable.Time.Location() != time.UTC || !nullable.Time.Equal(want) {
+		t.Errorf("NULL 일 수 있는 칸의 시각 = %v (%v)", nullable.Time, nullable.Time.Location())
 	}
 }
