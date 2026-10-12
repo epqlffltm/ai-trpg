@@ -24,14 +24,17 @@ import {
   notYourPostToEdit,
   operatorOnlyBoard,
   operatorOnlyDelete,
+  operatorOnlyEdit,
   postNotFound,
 } from './posts.errors.js';
 import {
   canDelete,
   canEdit,
   canWrite,
+  isAuthor,
   isOperatorOnly,
   needsOperatorCheckToDelete,
+  needsOperatorCheckToEdit,
 } from './posts.policy.js';
 
 /** 새 글에 적는 값. */
@@ -133,7 +136,10 @@ export class PostsService {
     return post;
   }
 
-  /** 글을 고친다. 고칠 칸이 없으면 400, 없는 글이면 404, 글쓴이가 아니면 403 이다. */
+  /**
+   * 글을 고친다. 고칠 칸이 없으면 400, 없는 글이면 404, 글쓴이가 아니면 403 이다.
+   * 운영자만 쓰는 게시판의 글은 글쓴이가 지금 운영자가 아니어도 403 이다.
+   */
   async update(
     id: string,
     userId: string,
@@ -143,8 +149,9 @@ export class PostsService {
       throw nothingToUpdate();
     }
     const post = await this.get(id);
-    if (!canEdit(post, userId)) {
-      throw notYourPostToEdit();
+    const isOperator = await this.isOperatorToEdit(post, userId);
+    if (!canEdit(post, post.board, userId, isOperator)) {
+      throw isAuthor(post, userId) ? operatorOnlyEdit() : notYourPostToEdit();
     }
     post.title = changes.title ?? post.title;
     post.content = changes.content ?? post.content;
@@ -173,6 +180,14 @@ export class PostsService {
     if (!canWrite(board, isOperator)) {
       throw operatorOnlyBoard();
     }
+  }
+
+  /** 운영자인지 답한다. 고쳐도 되는지 아는 데 필요 없으면 DB 에 묻지 않고 아니라고 답한다. */
+  private async isOperatorToEdit(post: Post, userId: string): Promise<boolean> {
+    if (!needsOperatorCheckToEdit(post, post.board, userId)) {
+      return false;
+    }
+    return this.operators.isOperator(userId);
   }
 
   /** 운영자인지 답한다. 지워도 되는지 아는 데 필요 없으면 DB 에 묻지 않고 아니라고 답한다. */
