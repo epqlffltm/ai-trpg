@@ -19,12 +19,15 @@ const (
 	webhookSecret = "do-not-print-this-webhook-secret-either"
 	// 게임 서버가 보낸 요청의 서명에 쓰는 비밀. 이것도 새면 안 된다
 	gameSecret = "do-not-print-this-game-server-secret"
+	// 인증 서버가 보낸 요청의 서명에 쓰는 비밀. 이것도 새면 안 된다
+	authSecret = "do-not-print-this-auth-server-secret"
 )
 
 // required 는 반드시 있어야 하는 값만 채운 맵에 더할 것을 얹어 돌려준다.
 func required(extra map[string]string) map[string]string {
 	values := map[string]string{
 		"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": jwksURL, "PG_WEBHOOK_SECRET": webhookSecret, "GAME_SERVER_SECRET": gameSecret,
+		"AUTH_SERVER_SECRET": authSecret,
 	}
 	for name, value := range extra {
 		values[name] = value
@@ -73,6 +76,7 @@ func TestLoadFillsDefaults(t *testing.T) {
 		WelcomeCredits:   1_000,
 		WebhookSecret:    webhookSecret,
 		GameServerSecret: gameSecret,
+		AuthServerSecret: authSecret,
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -93,6 +97,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		"FREE_CREDIT_TTL":    "36h30m",
 		"PG_WEBHOOK_SECRET":  "0123456789abcdef0123456789abcdef",
 		"GAME_SERVER_SECRET": "fedcba9876543210fedcba9876543210",
+		"AUTH_SERVER_SECRET": "00112233445566778899aabbccddeeff",
 		"WELCOME_CREDITS":    "250",
 		"APP_ENVIRONMENT":    "production",
 		"APP_VERSION":        "3f2a9c1",
@@ -120,6 +125,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		// 꼭 32자다. 받는 가장 짧은 길이다
 		WebhookSecret:    "0123456789abcdef0123456789abcdef",
 		GameServerSecret: "fedcba9876543210fedcba9876543210",
+		AuthServerSecret: "00112233445566778899aabbccddeeff",
 	}
 	if settings != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
@@ -174,6 +180,10 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"게임 서버의 비밀이 비었다", required(map[string]string{"GAME_SERVER_SECRET": ""}), "GAME_SERVER_SECRET"},
 		{"게임 서버의 비밀이 짧다", required(map[string]string{"GAME_SERVER_SECRET": "0123456789abcdef0123456789abcde"}), "GAME_SERVER_SECRET"},
 		{"두 비밀이 같은 값이다", required(map[string]string{"GAME_SERVER_SECRET": webhookSecret}), "서로 다른 값"},
+		{"인증 서버의 비밀이 없다", without("AUTH_SERVER_SECRET"), "AUTH_SERVER_SECRET"},
+		{"인증 서버의 비밀이 짧다", required(map[string]string{"AUTH_SERVER_SECRET": "0123456789abcdef0123456789abcde"}), "AUTH_SERVER_SECRET"},
+		{"인증 서버의 비밀이 알림의 것과 같다", required(map[string]string{"AUTH_SERVER_SECRET": webhookSecret}), "서로 다른 값"},
+		{"인증 서버의 비밀이 게임 서버의 것과 같다", required(map[string]string{"AUTH_SERVER_SECRET": gameSecret}), "서로 다른 값"},
 		{"알림의 비밀이 비었다", required(map[string]string{"PG_WEBHOOK_SECRET": ""}), "PG_WEBHOOK_SECRET"},
 		{"환영 크레딧이 숫자가 아니다", required(map[string]string{"WELCOME_CREDITS": "many"}), "WELCOME_CREDITS"},
 		{"환영 크레딧이 음수다", required(map[string]string{"WELCOME_CREDITS": "-1"}), "WELCOME_CREDITS"},
@@ -256,7 +266,7 @@ func TestLoadReportsEveryProblemAtOnce(t *testing.T) {
 	// 하나를 고치고 다시 띄워 다음 것을 만나는 일을 줄인다
 	names := []string{
 		"DATABASE_URL", "AUTH_JWKS_URL", "PORT", "DEBUG", "DB_SCHEMA", "SPEND_FREE_FIRST", "FREE_CREDIT_TTL", "PG_WEBHOOK_SECRET",
-		"GAME_SERVER_SECRET",
+		"GAME_SERVER_SECRET", "AUTH_SERVER_SECRET",
 	}
 	for _, name := range names {
 		if !strings.Contains(err.Error(), name) {
@@ -272,7 +282,7 @@ func TestLoadNeverPrintsValues(t *testing.T) {
 		t.Fatal("오류가 나야 하는데 나지 않았다")
 	}
 	if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "nope") || strings.Contains(err.Error(), webhookSecret) ||
-		strings.Contains(err.Error(), gameSecret) {
+		strings.Contains(err.Error(), gameSecret) || strings.Contains(err.Error(), authSecret) {
 		t.Errorf("오류에 설정의 값이 실렸다: %v", err)
 	}
 }
@@ -307,6 +317,7 @@ func TestTheSameSecretInBothPlacesIsRejectedWithoutPrintingIt(t *testing.T) {
 	// 둘 다 빠졌을 때는 "같다"가 아니라 "없다"만 말한다. 빈 값 둘이 같다고 하면 무엇을 고칠지 헷갈린다
 	neither := without("GAME_SERVER_SECRET")
 	delete(neither, "PG_WEBHOOK_SECRET")
+	delete(neither, "AUTH_SERVER_SECRET")
 	_, err = config.Load(from(neither))
 	if err == nil || strings.Contains(err.Error(), "서로 다른 값") {
 		t.Errorf("오류 = %v", err)

@@ -89,6 +89,7 @@ func run() error {
 		WebhookSecret:    settings.WebhookSecret,
 		Holds:            hold.NewService(pool, time.Now, wallets),
 		GameServerSecret: settings.GameServerSecret,
+		AuthServerSecret: settings.AuthServerSecret,
 		Now:              time.Now,
 	})
 	return serve(ctx, newServer(settings, router))

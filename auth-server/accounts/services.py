@@ -38,6 +38,7 @@ from accounts.mail import (
 )
 from accounts.models import EmailCodePurpose, User
 from accounts.tokens import revoke_all_sessions
+from accounts.welcome_credit import request_welcome_credit
 
 # 인증을 끝내지 않은 계정을 보관하는 시간.
 # 인증 코드의 발급 구간(1시간에 5회)과 같게 잡았다.
@@ -171,7 +172,7 @@ def verify_signup(*, email: str, code: str) -> None:
         purpose=EmailCodePurpose.SIGNUP,
         code=code,
         # 코드 소비와 같은 트랜잭션에서 실행된다
-        on_success=lambda: _mark_email_verified(user),
+        on_success=lambda: _complete_signup(user),
     )
 
 
@@ -386,6 +387,17 @@ def _set_new_password(user: User, new_password: str) -> None:
     user.save(update_fields=['password'])
     revoke_all_sessions(user)
     send_password_changed_notice(user=user)
+
+
+def _complete_signup(user: User) -> None:
+    """
+    가입을 마친다. 이메일을 인증된 것으로 바꾸고, 환영 크레딧을 주라고 적어 둔다.
+
+    둘은 같은 트랜잭션이다. 인증은 됐는데 크레딧을 줄 일은 적히지 않은 경우가 생기지 않는다.
+    결제 서버를 여기서 부르지 않는다. 적기만 하고, 워커가 맡긴다(welcome_credit.py).
+    """
+    _mark_email_verified(user)
+    request_welcome_credit(user)
 
 
 def _mark_email_verified(user: User) -> None:

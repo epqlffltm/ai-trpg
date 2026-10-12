@@ -21,6 +21,7 @@ from pathlib import Path
 import environ
 from django.core.exceptions import ImproperlyConfigured
 
+from config.billing import validate_billing_url, validate_service_secret
 from config.jwt_keys import compute_key_id, derive_public_key_pem, read_private_key_pem
 from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
 from observability.formatter import ServiceInfo
@@ -352,3 +353,15 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='AI TRPG <no-reply@localh
 # 비밀번호 재설정 메일의 링크가 가리키는 프론트 화면.
 # 인증 서버의 주소가 아니다. 링크는 화면을 열기만 하고, 변경은 그 화면이 API 에 POST 로 요청한다
 PASSWORD_RESET_URL = env('PASSWORD_RESET_URL', default='http://localhost:5173/reset-password')
+
+
+# 결제 서버
+# 가입을 마친 사용자에게 환영 크레딧을 주라고 결제 서버에 맡긴다(accounts/welcome_credit.py).
+# 맡기는 일은 워커(manage.py send_welcome_credits)가 한다. 요청을 처리하는 쪽은 결제 서버를 부르지 않는다
+
+# 결제 서버의 주소. 끝에 빗금을 붙이지 않는다
+BILLING_URL = validate_billing_url(env('BILLING_URL', default='http://127.0.0.1:8003'))
+
+# 결제 서버와 함께 아는 비밀. 요청에 서명할 때 쓴다. 결제 서버의 AUTH_SERVER_SECRET 과 같은 값이다.
+# 비어 있으면 워커가 돌지 못한다. 서버는 이 값 없이도 뜬다. 가입과 로그인에는 쓰이지 않는다
+BILLING_SERVICE_SECRET = validate_service_secret(env('BILLING_SERVICE_SECRET', default=''))
