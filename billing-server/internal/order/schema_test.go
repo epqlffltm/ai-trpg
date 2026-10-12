@@ -64,15 +64,24 @@ func TestTheLedgerTakesOneDepositPerOrder(t *testing.T) {
 	paid := f.create()
 	f.confirm(paid.ID, newPaymentKey())
 
-	const insert = `INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, order_id, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	var lotID int64
+	if err := f.pool.QueryRow(ctx(t), "SELECT id FROM paid_lots WHERE order_id = $1", paid.ID).Scan(&lotID); err != nil {
+		t.Fatalf("주문의 묶음을 읽지 못했다: %v", err)
+	}
+	const insert = `INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, order_id, lot_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 	// 같은 주문으로 한 줄을 더 넣을 수 없다. 코드가 같은 주문을 두 번 처리해도 여기서 멈춘다
-	f.wantRefused(uniqueViolation, insert, f.user, uuid.New(), "paid", "deposit", 1000, paid.ID, startedAt)
+	f.wantRefused(uniqueViolation, insert, f.user, uuid.New(), "paid", "deposit", 1000, paid.ID, lotID, startedAt)
 	// 없는 주문을 가리킬 수 없다
-	f.wantRefused(foreignKeyViolation, insert, f.user, uuid.New(), "paid", "deposit", 1000, uuid.New(), startedAt)
+	f.wantRefused(foreignKeyViolation, insert, f.user, uuid.New(), "paid", "deposit", 1000, uuid.New(), lotID, startedAt)
 	// 주문은 산 크레딧이 들어온 줄에만 적힌다
 	other := f.create()
-	f.wantRefused(checkViolation, insert, f.user, uuid.New(), "paid", "spend", -10, other.ID, startedAt)
+	f.wantRefused(checkViolation, insert, f.user, uuid.New(), "paid", "spend", -10, other.ID, lotID, startedAt)
+
+	// 주문 하나에 산 크레딧의 묶음도 하나다. 없는 주문의 묶음은 만들 수 없다
+	const lot = `INSERT INTO paid_lots (user_id, order_id, amount, remaining, created_at) VALUES ($1, $2, 1000, 1000, $3)`
+	f.wantRefused(uniqueViolation, lot, f.user, paid.ID, startedAt)
+	f.wantRefused(foreignKeyViolation, lot, f.user, uuid.New(), startedAt)
 
 	f.wantPaidCredits(credits, 1)
 }

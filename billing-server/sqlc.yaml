@@ -32,6 +32,17 @@ sql:
             go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
           - column: free_grants.remaining
             go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+          - column: paid_lots.amount
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+          - column: paid_lots.remaining
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+          # 묶음을 산 주문. 주문 없이 들어온 묶음이면 nil 이다
+          - column: paid_lots.order_id
+            go_type:
+              import: github.com/google/uuid
+              type: UUID
+              pointer: true
+            nullable: true
           - column: ledger_entries.amount
             go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
           # NULL 일 수 있는 주문 번호는 포인터로 받는다. nil 이면 주문에서 온 줄이 아니다

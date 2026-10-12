@@ -2,7 +2,7 @@
 -- 대사가 쓰는 SQL. sqlc 가 이 파일을 읽어 Go 코드(reconciledb)를 만든다.
 -- 이 파일을 고치면 billing-server 폴더에서 sqlc generate 를 다시 돌린다.
 --
--- 모두 읽기만 한다. "지금의 값"(지갑, 지급 묶음, 주문, 홀드)과 "왜 그렇게 되었는가"(원장)가 맞는지 본다.
+-- 모두 읽기만 한다. "지금의 값"(지갑, 산 크레딧의 묶음, 지급 묶음, 주문, 홀드)과 "왜 그렇게 되었는가"(원장)가 맞는지 본다.
 -- 맞지 않는 줄의 번호를 돌려준다. 고치지 않는다. 원장은 지울 수 없고, 무엇이 맞는지는 사람이 정한다.
 
 -- name: PaidBalanceMismatches :many
@@ -25,6 +25,37 @@ LEFT JOIN (
 ) l ON l.grant_id = g.id
 WHERE g.remaining <> COALESCE(l.total, 0)
 ORDER BY g.id
+LIMIT sqlc.arg(row_limit);
+
+-- name: PaidLotRemainingMismatches :many
+-- 남은 양이 그 묶음을 가리키는 원장 줄의 합과 다른 산 크레딧의 묶음.
+SELECT p.id
+FROM paid_lots p
+LEFT JOIN (
+    SELECT lot_id, SUM(amount)::BIGINT AS total FROM ledger_entries WHERE lot_id IS NOT NULL GROUP BY lot_id
+) l ON l.lot_id = p.id
+WHERE p.remaining <> COALESCE(l.total, 0)
+ORDER BY p.id
+LIMIT sqlc.arg(row_limit);
+
+-- name: PaidLotTotalMismatches :many
+-- 산 크레딧의 잔액이 그 사용자의 묶음들의 남은 양의 합과 다른 지갑.
+SELECT w.user_id
+FROM wallets w
+LEFT JOIN (
+    SELECT user_id, SUM(remaining)::BIGINT AS total FROM paid_lots GROUP BY user_id
+) p ON p.user_id = w.user_id
+WHERE w.paid_balance <> COALESCE(p.total, 0)
+ORDER BY w.user_id
+LIMIT sqlc.arg(row_limit);
+
+-- name: PaidOrdersWithoutLot :many
+-- 치렀는데(paid) 그 주문의 묶음이 없거나, 묶음의 양이나 주인이 주문과 다른 주문. 청약철회가 이 묶음을 본다.
+SELECT o.id
+FROM orders o
+LEFT JOIN paid_lots p ON p.order_id = o.id
+WHERE o.status = 'paid' AND (p.id IS NULL OR p.amount <> o.credits OR p.user_id <> o.user_id)
+ORDER BY o.id
 LIMIT sqlc.arg(row_limit);
 
 -- name: PaidOrdersWithoutDeposit :many
