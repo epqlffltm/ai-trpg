@@ -16,6 +16,11 @@ import { setupApp } from '../src/app.setup.js';
 import { JWKS_LOADER } from '../src/auth/auth.module.js';
 import { JwksFetchError, LoadKeys } from '../src/auth/jwks.js';
 import { Environment } from '../src/config/environment.js';
+import {
+  WRITE_LIMITS,
+  WriteLimits,
+} from '../src/write-limits/write-limits.policy.js';
+import { WRITE_LIMITS_TOKEN } from '../src/write-limits/write-limits.service.js';
 import { TEST_SCHEMA } from './setup.js';
 
 /** 앱을 만들기 전에 부품을 바꿔 꽂는 함수. 가짜 DB 확인기 같은 것을 꽂는다 */
@@ -34,6 +39,30 @@ export function useKeys(load: LoadKeys): Customize {
 }
 
 /**
+ * 테스트용 앱이 기본으로 쓰는 쓰기 한도. 걸리지 않을 만큼 크다.
+ * 글과 댓글을 수십 개 써 보는 테스트가 도배를 막는 한도에 걸리면 안 된다.
+ */
+const NO_WRITE_LIMITS: WriteLimits = {
+  post: { windowSeconds: 1, max: 1_000_000 },
+  comment: { windowSeconds: 1, max: 1_000_000 },
+};
+
+/** 쓰기 한도를 바꿔 꽂는다. createTestApp 에 넘긴다. */
+export function useWriteLimits(limits: WriteLimits): Customize {
+  return (builder) =>
+    builder.overrideProvider(WRITE_LIMITS_TOKEN).useValue(limits);
+}
+
+/** 서버가 쓰는 쓰기 한도를 그대로 쓴다. 한도를 보는 테스트가 createTestApp 에 넘긴다. */
+export const useRealWriteLimits: Customize = useWriteLimits(WRITE_LIMITS);
+
+/** 여러 가지를 차례로 바꿔 꽂는다. */
+export function both(...customizations: Customize[]): Customize {
+  return (builder) =>
+    customizations.reduce((built, customize) => customize(built), builder);
+}
+
+/**
  * 테스트용 앱을 만든다. 다 쓴 뒤에 app.close() 로 닫는다. 닫지 않으면 DB 연결이 남는다.
  *
  * 설정을 잘못 건드려 개발용 스키마에서 테스트가 도는 일을 막는다. 테스트용 스키마가 아니면 만들지 않는다.
@@ -43,9 +72,10 @@ export async function createTestApp(
   customize: Customize = (builder) => builder,
   probes: Type[] = [],
 ): Promise<NestExpressApplication> {
-  const builder = useKeys(noAuthServer)(
-    Test.createTestingModule({ imports: [AppModule, ...probes] }),
-  );
+  const builder = both(
+    useKeys(noAuthServer),
+    useWriteLimits(NO_WRITE_LIMITS),
+  )(Test.createTestingModule({ imports: [AppModule, ...probes] }));
   const module = await customize(builder).compile();
   const app = module.createNestApplication<NestExpressApplication>();
   // 테스트가 도는 동안에는 경고와 오류만 화면에 찍는다. 요청마다 한 줄씩 남는 로그가 테스트의 결과를 가린다.
