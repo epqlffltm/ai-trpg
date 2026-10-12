@@ -46,7 +46,8 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import read_snapshot
-from app.core.config import NARRATION_BUDGET_SECONDS
+from app.billing import charges
+from app.core.config import BILLING_BUDGET_SECONDS, NARRATION_BUDGET_SECONDS
 from app.engine.dice import Dice
 from app.events import recorder
 from app.events import repository as event_repository
@@ -82,9 +83,12 @@ from app.tables.models import GameTable, TableMember, TableStatus
 RETRIEVAL_BUDGET_SECONDS = 30.0
 # 미리 보기를 닫고 닫기를 마무리(저장)하는 시간
 SAVING_BUDGET_SECONDS = 15.0
-# 작업 전체의 상한. 고르기 + 서술(다시 시도하기와 넘어가기를 합친 NARRATION_BUDGET_SECONDS) + 마무리.
+# 작업 전체의 상한. 서술 값 잡기(BILLING_BUDGET_SECONDS) + 고르기 + 서술(다시 시도하기와 넘어가기를 합친
+# NARRATION_BUDGET_SECONDS) + 마무리.
 # 이 시간이 지나면 작업을 끊고 실패를 적는다. 멈춘 DB 연결이나 잠금을 하염없이 기다리지 않는다
-CLOSING_JOB_SECONDS = RETRIEVAL_BUDGET_SECONDS + NARRATION_BUDGET_SECONDS + SAVING_BUDGET_SECONDS
+CLOSING_JOB_SECONDS = (
+    BILLING_BUDGET_SECONDS + RETRIEVAL_BUDGET_SECONDS + NARRATION_BUDGET_SECONDS + SAVING_BUDGET_SECONDS
+)
 # 끊긴 뒤에 실패를 적는 시간. 이것도 넘으면 적지 못한 채로 끝나고, 아래의 시간이 지난 뒤에 다시 맡길 수 있다
 FAILURE_RECORD_SECONDS = 10.0
 # 끊긴 작업이 정리(미리 보기 닫기)를 마칠 여유
@@ -454,7 +458,8 @@ async def fail_closing(session: AsyncSession, table_id: uuid.UUID, number: int, 
       - 그 뒤에 다시 맡겼다(닫기 시작한 시각이 다르다). 옛 작업의 실패가 지금 도는 서술에 실패를 적지 못한다.
       - 이미 실패를 적었다.
 
-    서술이 실패로 끝나는 곳은 여기 하나다. 포인트를 붙이면 맡을 때 잡아 둔 것을 여기서 돌려준다.
+    서술이 실패로 끝나는 곳은 여기 하나다. 잡아 둔 서술 값(app/billing/)은 돌려주지 않는다.
+    라운드는 닫는 중에 머물고, 방장이 다시 맡기면 같은 값으로 다시 서술한다. 테이블이 끝나면 그때 돌려준다.
     """
     table = await table_repository.lock_table(session, table_id)
     round_ = await repository.find_round(session, table_id, number)
@@ -482,6 +487,9 @@ async def finish_closing(
 
     서술하는 사이에 테이블이 끝났으면 라운드만 닫고 다음 라운드를 열지 않는다.
 
+    서술 값의 청구를 같은 트랜잭션에서 정한다(app/billing/charges.py). 서술이 다음 장면이 됐으면 확정할 것,
+    테이블이 끝나 버려지면 돌려줄 것이다. 결제 서버는 저장한 뒤에 부른다. 그 사이에 서버가 꺼져도 할 일이 DB 에 남는다.
+
     닫은 것을 먼저 DB 에 보낸다(flush). 한 테이블에 닫히지 않은 라운드는 하나뿐이라는 유일 색인이 있어서,
     앞의 것을 닫기 전에 새 것을 넣으면 DB 가 거부한다.
     """
@@ -490,9 +498,12 @@ async def finish_closing(
     if table is None or not is_run(round_, started):
         return
 
-    round_.closed_at = datetime.now(UTC)
-    if table.status == TableStatus.PLAYING:
+    now = datetime.now(UTC)
+    round_.closed_at = now
+    delivered = table.status == TableStatus.PLAYING
+    if delivered:
         await session.flush()
         closed = await event_repository.find_latest(session, table_id, EventType.ROUND_CLOSED)
         opener.open_round(session, table, number=number + 1, scene=scene, cause=closed)
+    await charges.settle_round(session, round_.id, delivered, now)
     await tables.commit(session, table)
