@@ -23,6 +23,11 @@
 
 이름표(reference)는 결제 서버가 이 홀드를 가리키는 이름이다. 라운드와 내는 사람으로 지어 한 번만 쓴다.
 서술이 실패해 다시 맡겨도 같은 홀드를 그대로 쓴다.
+
+결제 서버의 홀드에는 만료가 있다(HOLD_TTL, 기본 24시간). 걸린(held) 청구는 정리 작업이 만료까지 남은 시간의 절반이
+지날 때마다 연장한다(답의 expires_at 으로 정한다).
+연장하려니 만료되어 이미 돌려준 홀드면, 아직 서술 전이므로 새 이름표로 다시 건다(held → pending, renewals 가 하나 는다).
+같은 이름표는 결제 서버에서 끝난 홀드라 다시 쓸 수 없다. 서술 뒤의 확정이 만료로 409 를 받으면 failed 다(받지 못한다).
 """
 
 import enum
@@ -50,8 +55,9 @@ class ChargeStatus(enum.StrEnum):
     FAILED = 'failed'
 
 
-# 정리 작업이 결제 서버를 부를 상태들. short 는 넣지 않는다. 충전했는지는 라운드를 닫을 때 다시 걸어 보며 안다
-DUE_STATUSES = (ChargeStatus.PENDING, ChargeStatus.CAPTURE_DUE, ChargeStatus.RELEASE_DUE)
+# 정리 작업이 결제 서버를 부를 상태들. 걸림(held)은 연장할 때가 됐을 때다.
+# short 는 넣지 않는다. 충전했는지는 라운드를 닫을 때 다시 걸어 보며 안다
+DUE_STATUSES = (ChargeStatus.PENDING, ChargeStatus.HELD, ChargeStatus.CAPTURE_DUE, ChargeStatus.RELEASE_DUE)
 # 결제 서버에 홀드가 있거나 있을 수 있는, 아직 끝나지 않은 상태들. 테이블이 끝나면 돌려준다
 OPEN_STATUSES = (ChargeStatus.PENDING, ChargeStatus.HELD, ChargeStatus.SHORT)
 # 서술해도 되는 상태들. 값을 잡아 두었다
@@ -99,6 +105,9 @@ class NarrationCharge(Base):
     # 결제 서버가 이 홀드를 가리키는 이름표. 결제 서버의 규칙(영문자, 숫자, . _ : -, 8~200자)을 따른다
     reference: Mapped[str] = mapped_column(String(200), unique=True)
 
+    # 만료되어 돌려받은 홀드를 새 이름표로 다시 건 횟수. 이름표의 끝에 붙는다(charges.reference_for)
+    renewals: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
+
     # 결제 서버의 가격표 이름. 값은 결제 서버가 정한다. 게임 서버는 금액을 모른다
     price_code: Mapped[str] = mapped_column(String(40))
 
@@ -106,7 +115,7 @@ class NarrationCharge(Base):
 
     # 결제 서버의 답을 받지 못해 다시 부른 횟수. 다음에 부를 때까지의 간격이 이것으로 늘어난다
     attempts: Mapped[int] = mapped_column(Integer, default=0)
-    # 정리 작업이 이 시각 뒤에 부른다
+    # 정리 작업이 이 시각 뒤에 부른다. 걸린 청구면 연장할 때다
     next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 마지막으로 부르지 못한 까닭(unreachable, timeout, server_error, unauthorized, rejected_409 …). 본문은 적지 않는다
     last_error: Mapped[str | None] = mapped_column(String(40))

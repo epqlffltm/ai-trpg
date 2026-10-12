@@ -289,6 +289,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `billing.hold` | game | 결제 서버에 서술 값의 홀드를 걸기 |
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
 | `billing.release` | game | 결제 서버에 홀드의 반환을 맡기기 |
+| `billing.extend` | game | 결제 서버에 홀드의 연장을 맡기기(만료 전에) |
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
 | `welcome_credit.deliver` | auth | 환영 크레딧을 결제 서버에 맡기기 |
 | `welcome_credit.request_existing` | auth | 이미 가입한 계정들에 환영 크레딧을 주라고 적어 두기 |
@@ -313,7 +314,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다 |
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했다 |
 | `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 서술 뒤의 확정을 정해 둔 시간 안에 끝내지 못해 정리 작업에 넘긴 것도 이 코드다(`warning`). 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
-| `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다 |
+| `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다. 연장이면 홀드를 그대로 두고 한 시간 뒤에 다시 부른다. 서술 뒤의 확정이 409(만료되어 돌려준 홀드)면 그 값은 받지 못한다 |
 | `server.start_failed` | 서버가 뜨지 못했다 |
 | `ledger.mismatch` | 결제 서버가 남긴다. 대사에서 지금의 값(지갑, 지급 묶음, 주문, 홀드)이 원장과 맞지 않는 줄을 찾았다. 줄마다 `error` 한 줄. `check` 에 검사의 이름, `record_id` 에 그 줄의 번호. 사람이 봐야 한다 |
 | `sweep.behind` | 결제 서버가 남긴다. 대사가 셀 때, 만료된 지 한참(기본 10분) 지났는데 정리되지 않은 것이 있다. 정리 작업이 멈췄거나 밀렸다. `warning` |
@@ -508,7 +509,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
-| `billing_calls_total` | counter | `operation`(`hold`, `capture`, `release`), `outcome`(`held`, `short`, `done`, `unavailable`, `rejected`) | 게임 서버가 결제 서버를 부른 수 |
+| `billing_calls_total` | counter | `operation`(`hold`, `capture`, `release`, `extend`), `outcome`(`held`, `short`, `done`, `missing`, `ended`, `unavailable`, `rejected`) | 게임 서버가 결제 서버를 부른 수. 연장의 `missing`·`ended` 는 다시 건 것이다 |
 | `narration_charges` | gauge | `status`(`pending`, `held`, `short`, `capture_due`, `release_due`, `failed`) | 끝나지 않은 청구의 수. `capture_due` 가 쌓이면 결제 서버가 죽어 있다. `failed` 는 사람이 봐야 한다 |
 
 **메일과 인증 (auth)**

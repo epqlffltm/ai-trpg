@@ -6,7 +6,8 @@
 구현은 둘이다. 실제로 부르는 것(http_billing.py)과 받지 않는 것(free_billing.py). 설정(BILLING_URL)이 고른다(setup.py).
 서술자(Narrator)처럼 모양만 여기 두고 구현을 갈아 끼운다. 테스트는 가짜 결제 서버로 가는 실제 구현을 쓴다.
 
-세 일 모두 이름표(reference)로 홀드를 가리킨다. 결제 서버는 같은 이름표면 같은 일로 보고 한 번만 한다.
+네 일(걸기, 확정, 반환, 연장) 모두 이름표(reference)로 홀드를 가리킨다.
+결제 서버는 같은 이름표면 같은 일로 보고 한 번만 한다.
 그래서 응답을 받지 못했으면 같은 것을 그대로 다시 부르면 된다.
 
 실패는 둘로 나눈다. 다시 부르면 될 수 있는 것(BillingUnavailable)과 다시 불러도 같은 것(BillingRejected).
@@ -15,6 +16,8 @@
 
 import enum
 import uuid
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 
@@ -25,6 +28,33 @@ class HoldResult(enum.StrEnum):
     HELD = 'held'
     # 크레딧이 모자란다. 하나도 빼지 않았고 홀드도 남지 않았다. 충전한 뒤 같은 이름표로 다시 걸 수 있다
     SHORT = 'short'
+
+
+class ExtendResult(enum.StrEnum):
+    """홀드를 연장해 본 결과. 결제 서버의 홀드는 걸거나 연장한 때부터 HOLD_TTL(기본 24시간) 뒤에 만료된다."""
+
+    # 만료 시각을 지금부터 HOLD_TTL 뒤로 밀었다
+    EXTENDED = 'extended'
+    # 그 이름표의 홀드가 없다. 같은 이름표로 다시 걸 수 있다
+    MISSING = 'missing'
+    # 이미 끝난 홀드다. 만료되어 결제 서버가 돌려준 것이다. 같은 이름표로는 다시 걸 수 없다
+    ENDED = 'ended'
+
+
+@dataclass(frozen=True)
+class HoldOutcome:
+    """홀드를 걸어 본 결과와, 잡혔으면 결제 서버가 정한 만료 시각(UTC). 결제 서버가 시각을 주지 않으면 None."""
+
+    result: HoldResult
+    expires_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class ExtendOutcome:
+    """홀드를 연장해 본 결과와, 연장했으면 새 만료 시각(UTC). 결제 서버가 시각을 주지 않으면 None."""
+
+    result: ExtendResult
+    expires_at: datetime | None = None
 
 
 class BillingUnavailable(Exception):
@@ -56,7 +86,7 @@ class BillingRejected(Exception):
 class Billing(Protocol):
     """결제 서버를 부르는 것."""
 
-    async def hold(self, reference: str, user_id: uuid.UUID, price_code: str) -> HoldResult:
+    async def hold(self, reference: str, user_id: uuid.UUID, price_code: str) -> HoldOutcome:
         """user_id 의 크레딧을 가격표 price_code 의 값만큼 빼 둔다. 모자라면 SHORT."""
         ...
 
@@ -66,4 +96,8 @@ class Billing(Protocol):
 
     async def release(self, reference: str) -> None:
         """홀드를 돌려준다. 이미 돌려줬거나 걸린 적이 없으면 아무것도 하지 않는다."""
+        ...
+
+    async def extend(self, reference: str) -> ExtendOutcome:
+        """홀드의 만료 시각을 지금부터 HOLD_TTL 뒤로 민다. 크레딧은 건드리지 않는다."""
         ...
