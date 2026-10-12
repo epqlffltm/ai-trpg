@@ -1,5 +1,5 @@
 -- billing-server/internal/wallet/queries.sql
--- 지갑, 무료 크레딧의 지급 묶음, 원장을 읽고 쓰는 SQL. sqlc 가 이 파일을 읽어 Go 코드(walletdb)를 만든다.
+-- 지갑, 산 크레딧의 묶음, 무료 크레딧의 지급 묶음, 원장을 읽고 쓰는 SQL. sqlc 가 이 파일을 읽어 Go 코드(walletdb)를 만든다.
 -- 이 파일을 고치면 billing-server 폴더에서 sqlc generate 를 다시 돌린다.
 --
 -- 테이블 이름에 스키마를 붙이지 않는다. 어느 스키마인지는 연결의 search_path 가 정한다.
@@ -22,6 +22,32 @@ FOR UPDATE;
 UPDATE wallets
 SET paid_balance = paid_balance + sqlc.arg(delta), updated_at = sqlc.arg(now)
 WHERE user_id = sqlc.arg(user_id);
+
+-- name: CreatePaidLot :one
+-- 산 크레딧의 묶음을 만든다. 처음에는 넣은 만큼 남아 있다.
+-- order_id 는 이 크레딧을 산 주문이다. 주문 없이 들어온 것이면 NULL 이다. 주문 하나에 묶음 하나다(paid_lots_order_once).
+INSERT INTO paid_lots (user_id, order_id, amount, remaining, created_at)
+VALUES (sqlc.arg(user_id), sqlc.narg(order_id), sqlc.arg(amount), sqlc.arg(amount), sqlc.arg(now))
+RETURNING id;
+
+-- name: ListOpenPaidLots :many
+-- 남은 것이 있는 산 크레딧의 묶음을, 먼저 들어온 것부터 읽는다. 지갑의 줄을 잠근 뒤에 부른다.
+SELECT id, remaining
+FROM paid_lots
+WHERE user_id = sqlc.arg(user_id) AND remaining > 0
+ORDER BY created_at, id;
+
+-- name: TakeFromPaidLot :exec
+-- 산 크레딧의 묶음에서 amount 만큼 뺀다. 남은 것보다 많이 빼면 CHECK 가 막는다.
+UPDATE paid_lots
+SET remaining = remaining - sqlc.arg(amount)
+WHERE id = sqlc.arg(id);
+
+-- name: ReturnToPaidLot :exec
+-- 산 크레딧의 묶음에 amount 만큼 돌려놓는다. 넣은 양보다 많아지면 CHECK 가 막는다.
+UPDATE paid_lots
+SET remaining = remaining + sqlc.arg(amount)
+WHERE id = sqlc.arg(id);
 
 -- name: CreateFreeGrant :one
 -- 무료 크레딧의 지급 묶음을 만든다. 처음에는 준 만큼 남아 있다.
@@ -63,17 +89,18 @@ SET remaining = remaining - sqlc.arg(amount)
 WHERE id = sqlc.arg(id);
 
 -- name: InsertEntry :exec
--- 원장에 한 줄을 덧붙인다.
-INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, order_id, hold_id, created_at)
+-- 원장에 한 줄을 덧붙인다. 무료 크레딧의 줄은 지급 묶음(grant_id)을, 산 크레딧의 줄은 묶음(lot_id)을 적는다.
+INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, lot_id, order_id, hold_id, created_at)
 VALUES (
     sqlc.arg(user_id), sqlc.arg(operation_id), sqlc.arg(kind), sqlc.arg(reason),
-    sqlc.arg(amount), sqlc.narg(grant_id), sqlc.narg(order_id), sqlc.narg(hold_id), sqlc.arg(now)
+    sqlc.arg(amount), sqlc.narg(grant_id), sqlc.narg(lot_id), sqlc.narg(order_id), sqlc.narg(hold_id), sqlc.arg(now)
 );
 
 -- name: ListHoldLines :many
 -- 홀드로 뺀 줄들을 읽는다. 어디서 얼마를 뺐는지가 여기에 있다. 돌려줄 때 이 줄들을 거꾸로 한다.
+-- 산 크레딧의 줄인데 묶음(lot_id)이 없으면 묶음을 두기 전(00007)에 건 홀드다.
 -- 지갑의 줄을 잠근 뒤에 부른다.
-SELECT kind, grant_id, amount
+SELECT kind, grant_id, lot_id, amount
 FROM ledger_entries
 WHERE user_id = sqlc.arg(user_id) AND hold_id = sqlc.arg(hold_id)::UUID AND reason = 'hold'
 ORDER BY id;

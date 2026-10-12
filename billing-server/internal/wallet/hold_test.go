@@ -234,9 +234,9 @@ func TestReturnForHoldRefusesTheSameHoldTwice(t *testing.T) {
 		// code 는 둘째를 거절하는 DB 의 오류다
 		code string
 	}{
-		// 산 크레딧은 잔액에 위쪽 끝이 없다. 같은 홀드의 줄을 두 번 적지 못하게 하는 색인이 막는다
-		{"산 크레딧만 뺀 홀드", 0, "23505"},
-		// 무료 크레딧은 그보다 먼저, 준 양보다 많이 남을 수 없다는 조건에 걸린다
+		// 산 크레딧의 묶음도 넣은 양보다 많이 남을 수 없다. 묶음이 가득 차 있으면 그 조건에 먼저 걸린다
+		{"산 크레딧만 뺀 홀드", 0, checkViolation},
+		// 무료 크레딧도 준 양보다 많이 남을 수 없다는 조건에 걸린다
 		{"무료 크레딧도 뺀 홀드", 30, checkViolation},
 	}
 	for _, tc := range cases {
@@ -317,15 +317,36 @@ func TestConcurrentHoldsNeverTakeMoreThanHeld(t *testing.T) {
 	f.wantBalance(0, 0)
 }
 
+func TestReturnForHoldRefusesTheSameHoldTwiceEvenWithRoomInTheLot(t *testing.T) {
+	f := setUp(t, freeFirst)
+	f.deposit(100)
+	f.spend(60)
+	// 묶음에 40 이 남았다. 홀드가 30 을 빼고 돌려주면 다시 40 이다. 한 번 더 돌려줘도 넣은 양(100)을 넘지 않는다
+	holdID := f.mustHold(30)
+	if err := f.returnForHold(holdID); err != nil {
+		t.Fatalf("돌려놓지 못했다: %v", err)
+	}
+
+	err := f.returnForHold(holdID)
+
+	// 묶음의 조건에 걸리지 않아도, 같은 홀드의 줄을 두 번 적지 못하게 하는 색인이 막는다
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+		t.Fatalf("오류 = %v. SQLSTATE 23505 로 거절해야 한다", err)
+	}
+	f.wantBalance(40, 0)
+}
+
 func TestTheDatabaseKeepsHoldLinesInStep(t *testing.T) {
 	f := setUp(t, freeFirst)
 	f.deposit(100)
 	f.grant(30)
 	holdID := f.mustHold(50)
 	grantID := *f.ledger()[1].GrantID
+	lotID := f.lots()[0].ID
 
-	const insert = `INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, hold_id, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	const insert = `INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, grant_id, lot_id, hold_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 	now := f.clock.Now()
 	cases := []struct {
 		name    string
@@ -334,22 +355,23 @@ func TestTheDatabaseKeepsHoldLinesInStep(t *testing.T) {
 		reason  string
 		amount  int64
 		grantID *int64
+		lotID   *int64
 		holdID  *uuid.UUID
 	}{
-		{"홀드인데 늘었다", checkViolation, "paid", "hold", 10, nil, &holdID},
-		{"돌아왔는데 줄었다", checkViolation, "paid", "release", -10, nil, &holdID},
-		{"홀드의 줄인데 홀드가 없다", checkViolation, "paid", "hold", -10, nil, nil},
-		{"홀드의 줄이 아닌데 홀드가 있다", checkViolation, "paid", "spend", -10, nil, &holdID},
-		{"산 크레딧에서 두 번 뺐다", "23505", "paid", "hold", -10, nil, &holdID},
-		{"같은 지급 묶음에서 두 번 뺐다", "23505", "free", "hold", -1, &grantID, &holdID},
+		{"홀드인데 늘었다", checkViolation, "paid", "hold", 10, nil, &lotID, &holdID},
+		{"돌아왔는데 줄었다", checkViolation, "paid", "release", -10, nil, &lotID, &holdID},
+		{"홀드의 줄인데 홀드가 없다", checkViolation, "paid", "hold", -10, nil, &lotID, nil},
+		{"홀드의 줄이 아닌데 홀드가 있다", checkViolation, "paid", "spend", -10, nil, &lotID, &holdID},
+		{"같은 묶음에서 두 번 뺐다", "23505", "paid", "hold", -10, nil, &lotID, &holdID},
+		{"같은 지급 묶음에서 두 번 뺐다", "23505", "free", "hold", -1, &grantID, nil, &holdID},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f.wantRefused(tc.code, insert, f.user, uuid.New(), tc.kind, tc.reason, tc.amount, tc.grantID, tc.holdID, now)
+			f.wantRefused(tc.code, insert, f.user, uuid.New(), tc.kind, tc.reason, tc.amount, tc.grantID, tc.lotID, tc.holdID, now)
 		})
 	}
 	// 없는 홀드를 가리킬 수 없다
 	missing := uuid.New()
-	f.wantRefused(foreignKeyViolation, insert, f.user, uuid.New(), "paid", "hold", -10, nil, &missing, now)
+	f.wantRefused(foreignKeyViolation, insert, f.user, uuid.New(), "paid", "hold", -10, nil, &lotID, &missing, now)
 	f.wantBalance(80, 0)
 }

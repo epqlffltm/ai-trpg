@@ -6,6 +6,7 @@ package wallet_test
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -148,13 +149,15 @@ type row struct {
 	line
 	OperationID uuid.UUID
 	GrantID     *int64
-	CreatedAt   time.Time
+	// LotID 는 산 크레딧의 묶음이다. 산 크레딧의 줄이 아니면 nil 이다.
+	LotID     *int64
+	CreatedAt time.Time
 }
 
 // ledger 는 이 사용자의 원장을 적힌 순서대로 DB 에서 직접 읽는다. 서비스를 거치지 않는다.
 func (f fixture) ledger() []row {
 	f.t.Helper()
-	const query = `SELECT kind, reason, amount, operation_id, grant_id, created_at
+	const query = `SELECT kind, reason, amount, operation_id, grant_id, lot_id, created_at
 		FROM ledger_entries WHERE user_id = $1 ORDER BY id`
 	rows, err := f.pool.Query(ctx(f.t), query, f.user)
 	if err != nil {
@@ -165,7 +168,7 @@ func (f fixture) ledger() []row {
 	var list []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.Kind, &r.Reason, &r.Amount, &r.OperationID, &r.GrantID, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.Kind, &r.Reason, &r.Amount, &r.OperationID, &r.GrantID, &r.LotID, &r.CreatedAt); err != nil {
 			f.t.Fatalf("원장의 줄을 읽지 못했다: %v", err)
 		}
 		list = append(list, r)
@@ -204,6 +207,7 @@ func lines(rows []row) []line {
 //   - 산 크레딧의 잔액 = 원장의 paid 줄의 합
 //   - 지급 묶음마다, 남은 양 = 그 묶음의 원장 줄의 합
 //   - 무료 크레딧의 줄에만 지급 묶음이 적혀 있다
+//   - 산 크레딧의 묶음마다, 남은 양 = 그 묶음의 원장 줄의 합. 묶음들의 합 = 산 크레딧의 잔액
 func (f fixture) wantBooksToMatch() {
 	f.t.Helper()
 	const paidQuery = `SELECT
@@ -226,6 +230,66 @@ func (f fixture) wantBooksToMatch() {
 	}
 	if mismatched != 0 {
 		f.t.Errorf("남은 양이 원장의 합과 다른 지급 묶음이 %d 개다", mismatched)
+	}
+
+	// 산 크레딧의 묶음도 같다. 그리고 묶음들의 남은 양을 더하면 잔액이다
+	const lotQuery = `SELECT
+		(SELECT COUNT(*) FROM paid_lots l WHERE l.user_id = $1 AND l.remaining <> COALESCE(
+			(SELECT SUM(e.amount) FROM ledger_entries e WHERE e.lot_id = l.id), 0)),
+		COALESCE((SELECT SUM(remaining) FROM paid_lots WHERE user_id = $1), 0)::BIGINT`
+	var lotTotal int64
+	if err := f.pool.QueryRow(ctx(f.t), lotQuery, f.user).Scan(&mismatched, &lotTotal); err != nil {
+		f.t.Fatalf("산 크레딧의 묶음을 맞춰 보지 못했다: %v", err)
+	}
+	if mismatched != 0 {
+		f.t.Errorf("남은 양이 원장의 합과 다른 산 크레딧 묶음이 %d 개다", mismatched)
+	}
+	if lotTotal != balance {
+		f.t.Errorf("산 크레딧의 잔액은 %d 인데 묶음들의 합은 %d 다", balance, lotTotal)
+	}
+}
+
+// lot 은 산 크레딧의 묶음 하나를 DB 에서 그대로 읽은 것이다.
+type lot struct {
+	ID        int64
+	OrderID   *uuid.UUID
+	Amount    credit.Amount
+	Remaining credit.Amount
+}
+
+// lots 는 이 사용자의 산 크레딧 묶음을 만든 순서대로 DB 에서 직접 읽는다.
+func (f fixture) lots() []lot {
+	f.t.Helper()
+	rows, err := f.pool.Query(ctx(f.t),
+		"SELECT id, order_id, amount, remaining FROM paid_lots WHERE user_id = $1 ORDER BY created_at, id", f.user)
+	if err != nil {
+		f.t.Fatalf("묶음을 읽지 못했다: %v", err)
+	}
+	defer rows.Close()
+	var list []lot
+	for rows.Next() {
+		var l lot
+		if err := rows.Scan(&l.ID, &l.OrderID, &l.Amount, &l.Remaining); err != nil {
+			f.t.Fatalf("묶음을 읽지 못했다: %v", err)
+		}
+		list = append(list, l)
+	}
+	if err := rows.Err(); err != nil {
+		f.t.Fatalf("묶음을 읽다가 끊겼다: %v", err)
+	}
+	return list
+}
+
+// wantRemaining 은 산 크레딧 묶음들의 남은 양이 만든 순서대로 기대와 같은지 본다.
+func (f fixture) wantRemaining(want ...credit.Amount) {
+	f.t.Helper()
+	got := f.lots()
+	remaining := make([]credit.Amount, 0, len(got))
+	for _, l := range got {
+		remaining = append(remaining, l.Remaining)
+	}
+	if !slices.Equal(remaining, want) {
+		f.t.Errorf("묶음들의 남은 양 = %v, 기대 = %v", remaining, want)
 	}
 }
 
