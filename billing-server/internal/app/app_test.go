@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
@@ -26,7 +28,7 @@ var now = time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 func TestNewServicesFollowsTheRules(t *testing.T) {
 	// 규칙마다 다른 값을 줘서, 값이 엉뚱한 서비스로 가면 드러나게 한다
 	rules := config.Rules{SpendFreeFirst: false, FreeCreditTTL: 5 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 3 * time.Hour}
-	services, err := app.NewServices(testenv.Pool(t), rules, func() time.Time { return now })
+	services, err := app.NewServices(testenv.Pool(t), rules, payment.Fake{}, func() time.Time { return now })
 	if err != nil {
 		t.Fatalf("서비스를 만들지 못했다: %v", err)
 	}
@@ -71,10 +73,10 @@ func TestNewServicesFollowsTheRules(t *testing.T) {
 func TestNewServicesRefusesAZeroTTL(t *testing.T) {
 	pool := testenv.Pool(t)
 	clock := func() time.Time { return now }
-	if _, err := app.NewServices(pool, config.Rules{FreeCreditTTL: time.Hour, HoldTTL: 0, OrderTTL: time.Hour}, clock); !errors.Is(err, hold.ErrInvalidTTL) {
+	if _, err := app.NewServices(pool, config.Rules{FreeCreditTTL: time.Hour, HoldTTL: 0, OrderTTL: time.Hour}, payment.Fake{}, clock); !errors.Is(err, hold.ErrInvalidTTL) {
 		t.Errorf("홀드의 기한이 0: %v", err)
 	}
-	if _, err := app.NewServices(pool, config.Rules{FreeCreditTTL: time.Hour, HoldTTL: time.Hour, OrderTTL: 0}, clock); !errors.Is(err, order.ErrInvalidTTL) {
+	if _, err := app.NewServices(pool, config.Rules{FreeCreditTTL: time.Hour, HoldTTL: time.Hour, OrderTTL: 0}, payment.Fake{}, clock); !errors.Is(err, order.ErrInvalidTTL) {
 		t.Errorf("주문의 기한이 0: %v", err)
 	}
 }
@@ -92,5 +94,52 @@ func TestNewLoggerCarriesTheDeployment(t *testing.T) {
 	}
 	if line["environment"] != "staging" || line["version"] != "v1.2.3" || line["service"] != "billing-server" || line["message"] != "남는다" {
 		t.Errorf("줄 = %v", line)
+	}
+}
+
+// approveAll 은 어떤 결제 번호든 승인하는 결제 대행사다. 가짜(Fake)는 모르는 앞머리를 거절하므로 둘이 구별된다.
+type approveAll struct{}
+
+func (approveAll) Confirm(context.Context, payment.Request) (payment.Result, error) {
+	return payment.Result{Status: payment.StatusApproved}, nil
+}
+
+func (approveAll) Lookup(context.Context, payment.Request) (payment.Result, error) {
+	return payment.Result{Status: payment.StatusApproved}, nil
+}
+
+func TestNewServicesUsesTheGivenProvider(t *testing.T) {
+	rules := config.Rules{FreeCreditTTL: time.Hour, HoldTTL: time.Hour, OrderTTL: time.Hour}
+	services, err := app.NewServices(testenv.Pool(t), rules, approveAll{}, func() time.Time { return now })
+	if err != nil {
+		t.Fatalf("서비스를 만들지 못했다: %v", err)
+	}
+	ctx := context.Background()
+	user := uuid.New()
+	created, _, err := services.Orders.Create(ctx, user, "credits-1000", "key-"+uuid.NewString())
+	if err != nil {
+		t.Fatalf("주문을 만들지 못했다: %v", err)
+	}
+
+	// 가짜라면 거절했을 번호다. 넘겨준 결제 대행사가 승인했다
+	confirmed, err := services.Orders.Confirm(ctx, user, created.ID, "any_key_"+strings.ReplaceAll(uuid.NewString(), "-", ""))
+
+	if err != nil || confirmed.Status != order.StatusPaid {
+		t.Errorf("주문 = %s, %v. 넘겨준 결제 대행사가 쓰이지 않았다", confirmed.Status, err)
+	}
+}
+
+func TestNewProviderPicksTheConfiguredOne(t *testing.T) {
+	if got := app.NewProvider(config.Payment{Provider: config.ProviderFake}); got != (payment.Fake{}) {
+		t.Errorf("fake: %T", got)
+	}
+	got := app.NewProvider(config.Payment{Provider: config.ProviderToss, TossSecretKey: "test_gsk_x", TossClientKey: "test_gck_x"})
+	toss, ok := got.(*payment.Toss)
+	if !ok {
+		t.Fatalf("toss: %T", got)
+	}
+	// 토스페이먼츠의 실제 주소를 부른다(테스트 키라 테스트 모드다)
+	if !strings.Contains(toss.String(), payment.TossAPIURL) {
+		t.Errorf("toss: %s", toss)
 	}
 }

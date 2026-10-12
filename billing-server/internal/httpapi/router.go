@@ -42,6 +42,9 @@ type Dependencies struct {
 	GameServerSecret string
 	// AuthServerSecret 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다.
 	AuthServerSecret string
+	// CheckoutClientKey 는 개발용 결제 화면(CheckoutPath)에 실을 토스페이먼츠의 클라이언트 키다.
+	// 비어 있으면 그 화면을 열지 않는다.
+	CheckoutClientKey string
 	// Now 는 지금 시각을 돌려준다. 서명이 방금 것인지 볼 때 쓴다.
 	Now func() time.Time
 	// Logger 는 요청의 기록을 남기는 곳이다. 넣지 않으면 프로세스의 기본 로거(slog.Default)다.
@@ -80,6 +83,11 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	// 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
 	router.GET("/health", health)
 	router.GET("/health/ready", readiness(deps.DB))
+
+	// 개발용 결제 화면. 로그인 묶음 밖에 둔다. 화면 자체는 누구나 받지만, 화면이 부르는 API 는 토큰이 있어야 한다
+	if deps.CheckoutClientKey != "" {
+		router.GET(CheckoutPath, checkout(deps.CheckoutClientKey))
+	}
 
 	// 이 아래의 주소는 모두 로그인이 필요하다. 주소마다 붙이지 않고 묶음에 한 번 붙인다.
 	// 새 주소를 더하면서 검증을 빠뜨리는 일이 없다

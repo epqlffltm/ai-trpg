@@ -39,7 +39,7 @@ func (s *Service) Confirm(ctx context.Context, userID uuid.UUID, orderID uuid.UU
 		return Order{}, err
 	}
 	result, err := s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
-		return s.provider.Confirm(ctx, payment.Request{PaymentKey: paymentKey, OrderID: started.ID, Amount: started.Price})
+		return s.provider.Confirm(ctx, paymentRequest(started))
 	})
 	return s.settle(ctx, started, result, err)
 }
@@ -61,9 +61,7 @@ func (s *Service) Notify(ctx context.Context, orderID uuid.UUID, paymentKey stri
 	if current.Status != StatusConfirming || current.PaymentKey != paymentKey {
 		return nil
 	}
-	result, err := s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
-		return s.provider.Lookup(ctx, paymentKey)
-	})
+	result, err := s.lookUp(ctx, current)
 	if err != nil {
 		return err
 	}
@@ -106,9 +104,7 @@ func (s *Service) resume(ctx context.Context, userID uuid.UUID, orderID uuid.UUI
 	if current.Status != StatusConfirming {
 		return current, nil
 	}
-	result, err := s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
-		return s.provider.Lookup(ctx, paymentKey)
-	})
+	result, err := s.lookUp(ctx, current)
 	return s.settle(ctx, current, result, err)
 }
 
@@ -127,6 +123,19 @@ func (s *Service) refuseExpired(ctx context.Context, current Order) error {
 		return err
 	}
 	return ErrExpired
+}
+
+// lookUp 은 결과를 모르는 주문의 결제를 결제 대행사에 묻는다. 승인을 다시 요청하지 않는다.
+func (s *Service) lookUp(ctx context.Context, current Order) (payment.Result, error) {
+	return s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
+		return s.provider.Lookup(ctx, paymentRequest(current))
+	})
+}
+
+// paymentRequest 는 주문을 결제 대행사에 보내는 모양으로 바꾼다. 금액은 주문에 적힌 값이다. 클라이언트가 보낸 값이 아니다.
+// 결제 번호가 적힌 주문(confirming 이후)에만 쓴다.
+func paymentRequest(current Order) payment.Request {
+	return payment.Request{PaymentKey: current.PaymentKey, OrderID: current.ID, Amount: current.Price}
 }
 
 // askProvider 는 결제 대행사를 부르되 ProviderTimeout 까지만 기다린다.
