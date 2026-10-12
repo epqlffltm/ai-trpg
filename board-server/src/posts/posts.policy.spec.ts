@@ -11,6 +11,7 @@ import {
   isAuthor,
   isOperatorOnly,
   needsOperatorCheckToDelete,
+  needsOperatorCheckToEdit,
 } from './posts.policy.js';
 
 const AUTHOR = '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b';
@@ -46,9 +47,32 @@ describe('isAuthor', () => {
 });
 
 describe('canEdit', () => {
-  it('글쓴이만 고친다', () => {
-    expect(canEdit(POST, AUTHOR)).toBe(true);
-    expect(canEdit(POST, SOMEONE)).toBe(false);
+  it('누구나 쓰는 게시판에서는 글쓴이만 고친다', () => {
+    expect(canEdit(POST, MEMBER_BOARD, AUTHOR, false)).toBe(true);
+    expect(canEdit(POST, MEMBER_BOARD, SOMEONE, false)).toBe(false);
+  });
+
+  it('운영자도 남의 글은 고치지 못한다', () => {
+    expect(canEdit(POST, MEMBER_BOARD, SOMEONE, true)).toBe(false);
+    expect(canEdit(POST, OPERATOR_BOARD, SOMEONE, true)).toBe(false);
+  });
+
+  it('운영자만 쓰는 게시판의 글은 지금 운영자인 글쓴이만 고친다', () => {
+    expect(canEdit(POST, OPERATOR_BOARD, AUTHOR, true)).toBe(true);
+    // 공지를 쓴 사람이 운영자에서 내려온 뒤다
+    expect(canEdit(POST, OPERATOR_BOARD, AUTHOR, false)).toBe(false);
+  });
+});
+
+describe('needsOperatorCheckToEdit', () => {
+  it('운영자만 쓰는 게시판의 제 글일 때만 묻는다', () => {
+    expect(needsOperatorCheckToEdit(POST, OPERATOR_BOARD, AUTHOR)).toBe(true);
+  });
+
+  it('누구나 쓰는 게시판이거나 남의 글이면 묻지 않는다', () => {
+    expect(needsOperatorCheckToEdit(POST, MEMBER_BOARD, AUTHOR)).toBe(false);
+    expect(needsOperatorCheckToEdit(POST, MEMBER_BOARD, SOMEONE)).toBe(false);
+    expect(needsOperatorCheckToEdit(POST, OPERATOR_BOARD, SOMEONE)).toBe(false);
   });
 });
 

@@ -15,6 +15,7 @@ import { API_PREFIX } from '../src/app.setup.js';
 import { JwksFetchError, LoadKeys } from '../src/auth/jwks.js';
 import { Public } from '../src/auth/public.decorator.js';
 import { createTestApp, useKeys } from './app.js';
+import { captureLogs } from './logs.js';
 import {
   forgeToken,
   makeSigningKey,
@@ -211,6 +212,7 @@ describe('인증 서버에 닿지 않을 때', () => {
     const down: LoadKeys = () =>
       Promise.reject(new JwksFetchError('TypeError'));
     const app = await createTestApp(useKeys(down));
+    const logs = captureLogs(app);
 
     const response = await request(app.getHttpServer())
       .get(ME)
@@ -219,6 +221,8 @@ describe('인증 서버에 닿지 않을 때', () => {
 
     // 401 이 아니다. 401 을 주면 클라이언트가 멀쩡한 사용자를 로그아웃시킨다
     expect(response.status).toBe(503);
+    // 클라이언트의 잘못이 아니다. 서버의 잘못으로 로그에 남는다
+    expect(logs.finishedWith(503)).toMatchObject([{ level: 'error' }]);
     expect(response.headers['retry-after']).toBe('60');
     expect(response.body).toEqual({
       detail: '지금은 인증을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.',

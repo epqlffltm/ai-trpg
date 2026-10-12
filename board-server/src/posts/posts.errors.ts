@@ -28,6 +28,13 @@ export function notYourPostToEdit(): ForbiddenException {
   return new ForbiddenException({ detail: '자신의 글만 고칠 수 있습니다.' });
 }
 
+/** 운영자만 쓰는 게시판의 제 글을, 운영자에서 내려온 뒤에 고치려 했다. */
+export function operatorOnlyEdit(): ForbiddenException {
+  return new ForbiddenException({
+    detail: '이 게시판의 글은 지금 운영자인 글쓴이만 고칠 수 있습니다.',
+  });
+}
+
 /** 남의 글을 지우려 했다. */
 export function notYourPostToDelete(): ForbiddenException {
   return new ForbiddenException({ detail: '자신의 글만 지울 수 있습니다.' });
