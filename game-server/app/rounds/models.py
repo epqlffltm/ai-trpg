@@ -43,6 +43,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.assets.models import CHARACTER_NAME_MAX_LENGTH, NarrationStyle, at_most, one_of
 from app.core.database import Base
+from app.rounds.tiers import NarrationTier
 
 # 선언 하나의 길이(글자 수). 라운드마다 사람 수만큼 AI 의 입력에 들어간다. 길이가 곧 비용이다
 DECLARATION_MAX_LENGTH = 1000
@@ -88,6 +89,7 @@ class Round(Base):
         Index('uq_table_rounds_open', 'table_id', unique=True, postgresql_where='closed_at IS NULL'),
         # 비어 있으면 조건이 참도 거짓도 아니라서 통과한다. 적혀 있을 때만 아는 문체인지 본다
         CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
+        CheckConstraint(one_of('narration_tier', NarrationTier), name='narration_tier_allowed'),
         # 마감이 지난 열린 라운드를 서버가 몇 초마다 찾는다(app/rounds/clock.py). 열린 라운드만 색인에 든다
         Index(
             'ix_table_rounds_open_deadline', 'deadline_at', postgresql_where='closed_at IS NULL AND closing_at IS NULL'
@@ -110,6 +112,13 @@ class Round(Base):
     # 선언의 마감. 열 때 테이블의 시간 제한으로 정한다. 지나면 서버가 닫기 시작한다(app/rounds/clock.py).
     # 비어 있으면 마감이 없다. 시간 제한이 없는 테이블이거나, 이 칸이 생기기 전에 연 라운드다
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 서술 등급(app/rounds/tiers.py). 열 때 테이블의 등급으로 정하고 고치지 않는다.
+    # 그 등급의 값을 걸고(청구), 그 등급의 모델로 서술한다.
+    # 방장이 라운드가 열려 있는 동안 등급을 바꿔도 이 라운드는 그대로다. 건 값과 서술이 어긋나지 않는다.
+    # 이 칸이 생기기 전에 연 라운드는 standard 다. 그때는 등급이 하나였고 그 값을 걸었다
+    narration_tier: Mapped[str] = mapped_column(
+        String(20), default=NarrationTier.STANDARD, server_default=text(f"'{NarrationTier.STANDARD}'")
+    )
     # 닫기 시작한 시각. 선언을 마감하고 서술을 맡긴 때다. 비어 있으면 아직 선언을 받는 중이다.
     # 서술을 다시 맡기면 이 시각을 지금으로 고친다. "맡긴 지 얼마나 됐나"를 이것으로 안다(app/rounds/service.py)
     closing_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

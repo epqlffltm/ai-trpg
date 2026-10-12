@@ -2,6 +2,7 @@
 
 """
 설정을 보고 서술자를 고르는 규칙(app/rounds/narrator_setup.py)과, 앱에 꽂히는 서술자를 검증한다.
+서술 등급마다의 모델들과 방장에게 내주는 등급도 본다.
 
 모델을 부르지 않는다. 고르고 만드는 것만 본다.
 """
@@ -15,11 +16,19 @@ from app.ai.openai_compat import OpenAICompatProvider
 from app.main import create_app
 from app.rounds.llm_narrator import LLMNarrator
 from app.rounds.narrator import FakeNarrator
-from app.rounds.narrator_setup import build_narrator, build_provider
+from app.rounds.narrator_setup import build_narrator, build_provider, offered_tiers, tier_models
 from app.rounds.retrying_narrator import RetryingNarrator
+from app.rounds.tiered_narrator import TieredNarrator
+from app.rounds.tiers import NarrationTier
 from tests.conftest import make_test_settings
 
 LLM = {'narrator': 'llm', 'llm_model': 'gemma4:26b'}
+PREMIUM = {'llm_premium_model': 'qwen3.6:27b'}
+
+
+def standard(narrator) -> RetryingNarrator:
+    """언어 모델의 서술자에서 standard 등급의 서술자."""
+    return narrator.narrators[NarrationTier.STANDARD]
 
 
 def test_the_fake_narrator_is_chosen_by_default():
@@ -31,9 +40,12 @@ def test_the_fake_narrator_is_chosen_by_default():
 def test_the_language_model_narrator_retries_one_model_by_default():
     narrator = build_narrator(make_test_settings(**LLM), httpx.AsyncClient(), async_sessionmaker())
 
+    # 등급으로 고르는 서술자다. premium 의 모델을 적지 않으면 standard 하나뿐이다
+    assert isinstance(narrator, TieredNarrator)
+    assert set(narrator.narrators) == {NarrationTier.STANDARD}
     # 넘어갈 모델을 적지 않으면 첫 모델 하나를 다시 시도하는 서술자다
-    assert isinstance(narrator, RetryingNarrator)
-    (inner,) = narrator.narrators
+    assert isinstance(standard(narrator), RetryingNarrator)
+    (inner,) = standard(narrator).narrators
     assert isinstance(inner, LLMNarrator)
     assert isinstance(inner.provider, OpenAICompatProvider)
     assert (inner.provider.kind, inner.provider.model) == ('openai_compat', 'gemma4:26b')
@@ -45,7 +57,11 @@ def test_the_fallback_models_follow_the_first_in_order():
     narrator = build_narrator(settings, httpx.AsyncClient(), async_sessionmaker())
 
     # 빈 이름과 앞뒤 공백은 뺀다. 적은 차례대로 넘어간다
-    assert [inner.provider.model for inner in narrator.narrators] == ['gemma4:26b', 'gemma4:31b-it-qat', 'qwen3.6:27b']
+    assert [inner.provider.model for inner in standard(narrator).narrators] == [
+        'gemma4:26b',
+        'gemma4:31b-it-qat',
+        'qwen3.6:27b',
+    ]
 
 
 def test_one_call_may_take_as_long_as_the_timeout():
@@ -54,7 +70,7 @@ def test_one_call_may_take_as_long_as_the_timeout():
     )
 
     # 남은 시간을 셀 때 쓴다. 남은 시간이 이보다 짧으면 새로 부르지 않는다
-    assert narrator.attempt_timeout == 45
+    assert standard(narrator).attempt_timeout == 45
 
 
 def test_the_provider_takes_its_values_from_the_settings():
@@ -85,14 +101,14 @@ def test_the_app_plugs_in_the_chosen_narrator():
     llm = create_app(make_test_settings(**LLM))
 
     assert isinstance(fake.state.narrator, FakeNarrator)
-    assert isinstance(llm.state.narrator, RetryingNarrator)
+    assert isinstance(llm.state.narrator, TieredNarrator)
 
 
 def test_every_model_is_called_with_the_client_the_app_closes():
     app = create_app(make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat'))
 
     # 앱이 꺼질 때 이 클라이언트를 닫는다(lifespan). 따로 만든 클라이언트면 닫히지 않고 남는다
-    for inner in app.state.narrator.narrators:
+    for inner in standard(app.state.narrator).narrators:
         assert inner.provider.client is app.state.http_client
 
 
@@ -100,7 +116,7 @@ def test_every_model_call_is_recorded_in_the_database_of_the_app():
     app = create_app(make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat'))
 
     # 기록 없이 모델을 부르는 길이 없다. 넘어간 모델의 호출도 앱의 세션 틀로 ai_invocations 에 쓴다
-    for inner in app.state.narrator.narrators:
+    for inner in standard(app.state.narrator).narrators:
         assert isinstance(inner.log, DbCallLog)
         assert inner.log.session_factory is app.state.session_factory
 
@@ -110,10 +126,54 @@ def test_every_model_signs_its_input_with_the_key_of_the_settings():
 
     narrator = build_narrator(settings, httpx.AsyncClient(), async_sessionmaker())
 
-    assert [inner.digest_key for inner in narrator.narrators] == [b'server-key', b'server-key']
+    assert [inner.digest_key for inner in standard(narrator).narrators] == [b'server-key', b'server-key']
 
 
 def test_without_a_key_no_model_signs():
     narrator = build_narrator(make_test_settings(**LLM), httpx.AsyncClient(), async_sessionmaker())
 
-    assert [inner.digest_key for inner in narrator.narrators] == [None]
+    assert [inner.digest_key for inner in standard(narrator).narrators] == [None]
+
+
+# --- 서술 등급 ---
+
+
+def test_premium_has_its_own_models_in_order():
+    settings = make_test_settings(**LLM, **PREMIUM, llm_premium_fallback_models=' gemma4:31b-it-qat, ')
+
+    narrator = build_narrator(settings, httpx.AsyncClient(), async_sessionmaker())
+
+    # 등급마다 따로 다시 시도하고 넘어간다. premium 이 실패해도 standard 의 모델로 넘어가지 않는다(값이 다르다)
+    premium = narrator.narrators[NarrationTier.PREMIUM]
+    assert [inner.provider.model for inner in premium.narrators] == ['qwen3.6:27b', 'gemma4:31b-it-qat']
+    assert [inner.provider.model for inner in standard(narrator).narrators] == ['gemma4:26b']
+
+
+def test_premium_fallbacks_without_a_first_model_offer_nothing():
+    settings = make_test_settings(**LLM, llm_premium_model='  ', llm_premium_fallback_models='qwen3.6:27b')
+
+    # 넘어갈 모델만 적은 것은 적지 않은 것이다. 첫 모델이 없으면 내주지 않는다
+    assert tier_models(settings) == {NarrationTier.STANDARD: ['gemma4:26b']}
+
+
+def test_the_language_model_offers_only_the_tiers_with_models():
+    assert offered_tiers(make_test_settings(**LLM)) == {NarrationTier.STANDARD}
+    assert offered_tiers(make_test_settings(**LLM, **PREMIUM)) == {NarrationTier.STANDARD, NarrationTier.PREMIUM}
+
+
+def test_the_fake_narrator_offers_every_tier():
+    # 가짜는 모델을 부르지 않는다. 등급을 고르는 흐름을 모델 없이 해 볼 수 있다
+    assert offered_tiers(make_test_settings()) == set(NarrationTier)
+
+
+def test_the_app_plugs_in_the_offered_tiers():
+    assert create_app(make_test_settings(**LLM)).state.narration_tiers == {NarrationTier.STANDARD}
+    assert create_app(make_test_settings()).state.narration_tiers == set(NarrationTier)
+
+
+def test_premium_models_are_called_with_the_client_and_log_of_the_app():
+    app = create_app(make_test_settings(**LLM, **PREMIUM))
+
+    for inner in app.state.narrator.narrators[NarrationTier.PREMIUM].narrators:
+        assert inner.provider.client is app.state.http_client
+        assert inner.log.session_factory is app.state.session_factory

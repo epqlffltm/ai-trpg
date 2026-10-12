@@ -9,7 +9,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.assets.models import PLAYER_MADE_MODES, CharacterMode
@@ -23,7 +23,8 @@ from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
 from app.rounds import service as round_service
 from app.rounds.router import Closing
-from app.tables import deaths, injuries, replacements, rolls, service, sheets, styles, time_limits
+from app.rounds.tiers import NarrationTier
+from app.tables import deaths, injuries, replacements, rolls, service, sheets, styles, tiers, time_limits
 from app.tables.errors import (
     MemberNotFoundError,
     NotHostError,
@@ -43,6 +44,8 @@ from app.tables.schemas import (
     LobbyJoinRequest,
     MemberOut,
     NarrationStyleUpdate,
+    NarrationTiersOut,
+    NarrationTierUpdate,
     PregenChoice,
     RollOut,
     RoundTimeLimitUpdate,
@@ -54,6 +57,15 @@ from app.tables.schemas import (
 )
 
 router = APIRouter(prefix='/tables', tags=['tables'])
+
+
+def get_offered_tiers(request: Request) -> frozenset[NarrationTier]:
+    """이 서버가 내주는 서술 등급들. 앱을 만들 때 설정으로 정해 꽂아 둔 것이다(app/main.py)."""
+    return request.app.state.narration_tiers
+
+
+# 서술 등급을 고르는 API 가 인자의 형식으로 쓴다
+OfferedTiers = Annotated[frozenset[NarrationTier], Depends(get_offered_tiers)]
 
 
 def to_summary(table: GameTable) -> TableSummary:
@@ -70,6 +82,7 @@ def to_summary(table: GameTable) -> TableSummary:
         has_password=table.password_hash is not None,
         narration_style=table.narration_style,
         round_time_limit=table.round_time_limit,
+        narration_tier=table.narration_tier,
         created_at=table.created_at,
     )
 
@@ -259,9 +272,9 @@ async def handle_table_option(request: Request, error: TableOptionError) -> JSON
 
 
 @router.post('', response_model=TableDetail, status_code=status.HTTP_201_CREATED)
-async def create_table(data: TableCreate, user: CurrentUser, session: Session) -> TableDetail:
+async def create_table(data: TableCreate, user: CurrentUser, session: Session, offered: OfferedTiers) -> TableDetail:
     """테이블을 만든다. 만든 사람이 방장이 되어 앉는다."""
-    table = await service.create_table(session, user, data)
+    table = await service.create_table(session, user, data, offered)
     return to_detail(table, user.user_id)
 
 
@@ -283,7 +296,13 @@ async def list_tables(user: CurrentUser, session: Session, paging: Paging) -> Ta
 ScenarioFilter = Annotated[uuid.UUID | None, Query()]
 
 
-# /lobby 를 /{table_id} 보다 먼저 적는다. 먼저 적은 주소가 먼저 맞춰진다
+# /narration-tiers 와 /lobby 를 /{table_id} 보다 먼저 적는다. 먼저 적은 주소가 먼저 맞춰진다
+@router.get('/narration-tiers', response_model=NarrationTiersOut, status_code=status.HTTP_200_OK)
+async def list_narration_tiers(user: CurrentUser, offered: OfferedTiers) -> NarrationTiersOut:
+    """이 서버가 내주는 서술 등급들. 테이블을 만들거나 등급을 바꿀 때 이 중에서 고른다. 값은 결제 서버의 가격표다."""
+    return NarrationTiersOut(tiers=[tier for tier in NarrationTier if tier in offered])
+
+
 @router.get('/lobby', response_model=TablePage, status_code=status.HTTP_200_OK)
 async def list_lobby(
     user: CurrentUser, session: Session, paging: Paging, scenario_id: ScenarioFilter = None
@@ -432,6 +451,20 @@ async def change_round_time_limit(
     진행 중에도 된다. 바꾼 값은 다음 라운드부터 쓴다. 지금 열린 라운드의 마감은 그대로다.
     """
     table = await time_limits.change_round_time_limit(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/narration-tier', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_narration_tier(
+    table_id: uuid.UUID, data: NarrationTierUpdate, user: CurrentUser, session: Session, offered: OfferedTiers
+) -> TableDetail:
+    """
+    서술 등급을 바꾼다. 방장만 한다. 이 서버가 내주는 등급만 된다(GET /tables/narration-tiers).
+
+    진행 중에도 된다. 바꾼 값은 다음 라운드부터 쓴다.
+    지금 열린 라운드는 연 때의 등급으로 값을 걸었고 그 등급으로 서술한다.
+    """
+    table = await tiers.change_narration_tier(session, user.user_id, table_id, data, offered)
     return to_detail(table, user.user_id)
 
 

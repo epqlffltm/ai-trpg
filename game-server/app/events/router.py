@@ -37,9 +37,10 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.REROLL_GRANTED: ('user_id',),
     EventType.NARRATION_STYLE_CHANGED: ('narration_style',),
     EventType.ROUND_TIME_LIMIT_CHANGED: ('round_time_limit',),
+    EventType.NARRATION_TIER_CHANGED: ('narration_tier',),
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
-    EventType.ROUND_OPENED: ('number', 'deadline_at'),
+    EventType.ROUND_OPENED: ('number', 'deadline_at', 'narration_tier'),
     EventType.PLAYER_ACTION: ('round', 'character_name', 'content', 'action'),
     # 굴림은 공개다. 숫자까지 모두에게 보인다
     EventType.CHECK_ROLLED: (

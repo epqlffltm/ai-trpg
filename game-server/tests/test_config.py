@@ -150,6 +150,19 @@ def test_the_models_are_the_first_then_the_fallbacks():
     assert settings.llm_models() == ['gemma4:26b', 'a', 'b', 'c']
 
 
+def test_premium_is_not_offered_by_default():
+    settings = Settings(_env_file=None, llm_model='gemma4:26b')
+
+    # premium 의 모델을 적지 않으면 그 등급의 모델이 없다(내주지 않는다)
+    assert settings.llm_premium_models() == []
+
+
+def test_the_premium_models_are_the_first_then_the_fallbacks():
+    settings = Settings(_env_file=None, llm_premium_model=' qwen3.6:27b ', llm_premium_fallback_models='a, ,b')
+
+    assert settings.llm_premium_models() == ['qwen3.6:27b', 'a', 'b']
+
+
 def test_the_language_model_narrator_needs_a_model_name(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('NARRATOR', 'llm')
 

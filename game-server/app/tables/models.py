@@ -58,6 +58,7 @@ from app.assets.models import (
     one_of,
 )
 from app.core.database import Base
+from app.rounds.tiers import NarrationTier
 
 # 초대 코드의 길이(글자 수). 코드를 아는 사람만 테이블에 들어온다
 INVITE_CODE_LENGTH = 12
@@ -139,6 +140,7 @@ class GameTable(Base):
             name='character_modes_allowed',
         ),
         CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
+        CheckConstraint(one_of('narration_tier', NarrationTier), name='narration_tier_allowed'),
         CheckConstraint(
             f'round_time_limit IS NULL OR round_time_limit BETWEEN {ROUND_TIME_LIMIT_MIN} AND {ROUND_TIME_LIMIT_MAX}',
             name='round_time_limit_range',
@@ -196,6 +198,14 @@ class GameTable(Base):
     # 로비의 목록이 판의 복사본을 열지 않고 문체를 보여 준다.
     # 이 칸이 생기기 전에 만든 테이블은 정통이다. 그 테이블의 판도 정통을 추천하는 것으로 읽힌다
     narration_style: Mapped[str] = mapped_column(String(20), server_default=text("'classic'"))
+
+    # 서술 등급(app/rounds/tiers.py). 어느 모델들로 서술하고 한 번에 얼마를 받는가.
+    # 만들 때 방장이 고르고 진행 중에도 바꿀 수 있다.
+    # 라운드를 열 때 그 라운드의 등급으로 굳는다. 그래서 바꾼 값은 다음 라운드부터 쓴다.
+    # 이 서버가 내주는 등급만 고를 수 있다(설정이 정한다). 이 칸이 생기기 전에 만든 테이블은 standard 다
+    narration_tier: Mapped[str] = mapped_column(
+        String(20), default=NarrationTier.STANDARD, server_default=text(f"'{NarrationTier.STANDARD}'")
+    )
 
     # 라운드의 시간 제한(초). 라운드가 열린 때부터 센다. 지나면 서버가 라운드를 닫는다(app/rounds/clock.py).
     # 비어 있으면 시간 제한이 없다. 모두 내거나 방장이 닫을 때만 닫힌다.

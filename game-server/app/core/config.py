@@ -26,6 +26,12 @@ BILLING_BUDGET_SECONDS = 10.0
 BILLING_SECRET_MIN_LENGTH = 32
 
 
+def model_chain(first: str, fallbacks: str) -> list[str]:
+    """첫 모델과 쉼표로 나눈 넘어갈 모델들을 부를 차례대로 늘어놓는다. 빈 이름과 앞뒤 공백은 뺀다."""
+    names = [name.strip() for name in fallbacks.split(',')]
+    return [first.strip(), *(name for name in names if name)]
+
+
 class Settings(BaseSettings):
     """
     설정 값의 목록과 형식.
@@ -92,6 +98,12 @@ class Settings(BaseSettings):
     # 첫 모델이 끝내 실패하면 차례로 넘어갈 모델들. 쉼표로 나눠 적는다(예: gemma4:31b-it-qat,qwen3.6:27b).
     # 비우면 넘어가지 않는다(기본). 같은 주소(LLM_BASE_URL)의 모델들이다
     llm_fallback_models: str = ''
+
+    # premium 등급(app/rounds/tiers.py)으로 서술하는 첫 모델과 넘어갈 모델들. 적는 법은 위의 둘과 같다.
+    # 비우면 premium 을 내주지 않는다(기본). 방장은 standard 만 고를 수 있다. 같은 주소(LLM_BASE_URL)의 모델들이다.
+    # 적기 전에 결제 서버의 가격표에 narration.premium 을 먼저 적는다. 없으면 결제 서버가 홀드를 받지 않는다
+    llm_premium_model: str = ''
+    llm_premium_fallback_models: str = ''
 
     # 모델의 답을 한 번 기다리는 시간(초). 처음 부를 때는 모델을 메모리에 올리느라 수십 초가 걸린다.
     # 서술은 요청과 따로 도는 작업이라 플레이어의 요청이 이만큼 기다리지는 않는다.
@@ -184,9 +196,14 @@ class Settings(BaseSettings):
         return self.embedding_base_url.strip() or self.llm_base_url
 
     def llm_models(self) -> list[str]:
-        """부를 모델들을 부를 차례대로. 첫 모델 다음에 넘어갈 모델들이다. 빈 이름과 앞뒤 공백은 뺀다."""
-        fallbacks = [name.strip() for name in self.llm_fallback_models.split(',')]
-        return [self.llm_model.strip(), *(name for name in fallbacks if name)]
+        """standard 등급으로 부를 모델들을 부를 차례대로. 첫 모델 다음에 넘어갈 모델들이다."""
+        return model_chain(self.llm_model, self.llm_fallback_models)
+
+    def llm_premium_models(self) -> list[str]:
+        """premium 등급으로 부를 모델들을 부를 차례대로. 첫 모델을 적지 않았으면 빈 목록이다(내주지 않는다)."""
+        if not self.llm_premium_model.strip():
+            return []
+        return model_chain(self.llm_premium_model, self.llm_premium_fallback_models)
 
 
 @lru_cache
