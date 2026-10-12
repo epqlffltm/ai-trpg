@@ -18,6 +18,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # 한 번 부르는 시간(LLM_TIMEOUT_SECONDS)은 이보다 길 수 없다. 길면 첫 시도만으로 상한을 넘는다
 NARRATION_BUDGET_SECONDS = 150.0
 
+# 서술하기 전에 결제 서버에서 크레딧을 확보하는 데 쓰는 시간의 상한(초). 서술을 맡은 작업의 시간에 들어간다.
+# 한 번 부르는 시간(BILLING_TIMEOUT_SECONDS)은 이보다 길 수 없다
+BILLING_BUDGET_SECONDS = 10.0
+
+# 결제 서버의 비밀의 가장 짧은 길이. 결제 서버(GAME_SERVER_SECRET)와 같은 기준이다
+BILLING_SECRET_MIN_LENGTH = 32
+
 
 class Settings(BaseSettings):
     """
@@ -133,6 +140,17 @@ class Settings(BaseSettings):
     # 만들기: uv run python -c "import secrets; print(secrets.token_hex(32))"
     ai_log_hmac_key: SecretStr = SecretStr('')
 
+    # 결제 서버의 주소. 라운드의 서술 값을 여기서 받는다(app/billing/). 비우면 받지 않는다(기본).
+    # 테스트와 결제 서버 없는 개발은 비운 채로 돈다. 예: http://127.0.0.1:8003
+    billing_url: str = ''
+
+    # 결제 서버에 보내는 요청에 서명하는 비밀. 결제 서버의 GAME_SERVER_SECRET 과 같은 값이어야 한다. 32자 이상.
+    # 비밀값이다. 로그와 오류에 싣지 않는다
+    billing_secret: SecretStr = SecretStr('')
+
+    # 결제 서버를 한 번 부르는 시간의 상한(초)
+    billing_timeout_seconds: float = Field(default=5.0, gt=0, le=BILLING_BUDGET_SECONDS)
+
     @model_validator(mode='after')
     def require_a_model_for_llm(self) -> Self:
         """언어 모델로 서술하겠다면서 모델 이름이 없으면 뜨지 않는다. 첫 라운드를 닫을 때 알게 되는 것보다 낫다."""
@@ -145,6 +163,15 @@ class Settings(BaseSettings):
         """임베딩 모델로 벡터를 만들겠다면서 모델 이름이 없으면 뜨지 않는다."""
         if self.embedder == 'llm' and not self.embedding_model.strip():
             raise ValueError('EMBEDDER=llm 이면 EMBEDDING_MODEL 을 적어야 합니다')
+        return self
+
+    @model_validator(mode='after')
+    def require_a_billing_secret(self) -> Self:
+        """결제 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. 결제 서버가 모든 요청을 401 로 거절한다."""
+        if self.billing_url.strip() and len(self.billing_secret.get_secret_value()) < BILLING_SECRET_MIN_LENGTH:
+            raise ValueError(
+                f'BILLING_URL 을 적었으면 BILLING_SECRET 을 {BILLING_SECRET_MIN_LENGTH}자 이상 적어야 합니다'
+            )
         return self
 
     def digest_key(self) -> bytes | None:

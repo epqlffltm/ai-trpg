@@ -31,7 +31,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core import loops
 from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
+from app.core.loops import Running
 from app.engine.dice import Dice
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
@@ -133,20 +135,6 @@ class RoundClock:
                 await asyncio.wait_for(stop.wait(), timeout=self.interval)
 
 
-@dataclass(frozen=True)
-class Running:
-    """돌고 있는 시계. 멈추라고 알리는 것과 도는 작업이다."""
-
-    stop: asyncio.Event
-    task: asyncio.Task
-
-    async def halt(self) -> None:
-        """멈추라고 알리고, 지금 도는 바퀴가 끝나기를 기다린다."""
-        self.stop.set()
-        await self.task
-
-
 def start(clock: RoundClock) -> Running:
     """시계를 돌리기 시작한다. 서버가 뜰 때 부른다."""
-    stop = asyncio.Event()
-    return Running(stop, asyncio.create_task(clock.run(stop), name='round-clock'))
+    return loops.start(clock, 'round-clock')

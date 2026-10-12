@@ -1,0 +1,144 @@
+# game-server/app/billing/http_billing.py
+
+"""
+결제 서버를 실제로 부르는 것. 요청마다 서명하고(signing.py), 답을 결과나 예외로 바꾼다.
+
+주소와 답의 뜻은 결제 서버가 정했다(billing-server/README.md 의 "홀드").
+
+| 답 | 홀드 | 확정 | 반환 |
+| --- | --- | --- | --- |
+| 200, 201 | 잡혔다(HELD) | 됐다 | 됐다 |
+| 402 | 모자란다(SHORT) | - | - |
+| 404 | 버그(BillingRejected) | 버그 | 걸린 적이 없다. 돌려줄 것도 없으니 됐다 |
+| 401, 408, 429, 5xx, 연결 실패, 시간 초과 | 다시 부를 일(BillingUnavailable) | 같다 | 같다 |
+| 그 밖의 4xx | 버그 | 버그 | 버그 |
+
+401 은 서명이 거절된 것이다. 설정을 고치면 낫는 일이라 다시 부를 일로 둔다(사람이 보도록 오류로 남는다).
+200 인데 홀드의 상태가 기대와 다르면(같은 이름표의 홀드가 이미 반대로 끝났다) 버그다.
+
+밖의 서비스가 아니라 우리 서버라서 추적의 머리말(traceparent)을 싣는다. 결제 서버의 로그와 trace_id 로 이어진다.
+"""
+
+import json
+import time
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+import httpx
+from pydantic import SecretStr
+
+from app.billing.client import BillingRejected, BillingUnavailable, HoldResult
+from app.billing.signing import SIGNATURE_HEADER, sign
+from app.observability.context import outgoing_headers
+
+HOLDS_PATH = '/api/v1/billing/service/holds'
+CAPTURE_PATH = f'{HOLDS_PATH}/capture'
+RELEASE_PATH = f'{HOLDS_PATH}/release'
+
+# 다시 부르면 될 수 있는 답. 서명 거절(401), 시간 초과(408), 너무 많음(429)
+RETRYABLE_CLIENT_ERRORS = frozenset({401, 408, 429})
+
+
+def encode(payload: dict[str, str]) -> bytes:
+    """보낼 본문. 이 바이트에 서명하고 이 바이트를 보낸다."""
+    return json.dumps(payload, separators=(',', ':'), ensure_ascii=False).encode()
+
+
+def unavailable_reason(status_code: int) -> str | None:
+    """다시 부르면 될 수 있는 답이면 그 까닭의 이름. 아니면 None."""
+    if status_code == 401:
+        return 'unauthorized'
+    if status_code >= 500 or status_code in RETRYABLE_CLIENT_ERRORS:
+        return 'server_error'
+    return None
+
+
+def hold_status(response: httpx.Response) -> str:
+    """홀드를 담은 답에서 홀드의 상태(held, captured, released). 본문을 읽을 수 없으면 BillingUnavailable."""
+    try:
+        body: Any = response.json()
+        return str(body['status'])
+    except (ValueError, KeyError, TypeError) as error:
+        raise BillingUnavailable('bad_response') from error
+
+
+def require_success(response: httpx.Response) -> None:
+    """2xx 가 아니면 예외로 바꾼다. 다시 부를 일이면 BillingUnavailable, 아니면 BillingRejected."""
+    if response.is_success:
+        return
+    reason = unavailable_reason(response.status_code)
+    if reason is not None:
+        raise BillingUnavailable(reason)
+    raise BillingRejected(response.status_code)
+
+
+def require_status(response: httpx.Response, expected: str) -> None:
+    """성공한 답의 홀드가 expected 상태인지 본다. 아니면 BillingRejected(그 답의 상태 코드)."""
+    if hold_status(response) != expected:
+        raise BillingRejected(response.status_code)
+
+
+def hold_result(response: httpx.Response) -> HoldResult:
+    """홀드를 거는 요청의 답을 결과로 바꾼다."""
+    if response.status_code == httpx.codes.PAYMENT_REQUIRED:
+        return HoldResult.SHORT
+    require_success(response)
+    require_status(response, 'held')
+    return HoldResult.HELD
+
+
+def capture_result(response: httpx.Response) -> None:
+    """확정하는 요청의 답을 본다."""
+    require_success(response)
+    require_status(response, 'captured')
+
+
+def release_result(response: httpx.Response) -> None:
+    """돌려주는 요청의 답을 본다. 걸린 적이 없는 홀드(404)도 돌려줄 것이 없으니 된 것이다."""
+    if response.status_code == httpx.codes.NOT_FOUND:
+        return
+    require_success(response)
+    require_status(response, 'released')
+
+
+@dataclass(frozen=True)
+class HttpBilling:
+    """
+    결제 서버를 부르는 것. client 는 앱이 함께 쓰는 httpx 클라이언트다. 닫는 것은 앱이 한다.
+
+    clock 은 서명에 적는 지금 시각(초)이다. 테스트가 시각을 정해 꽂는다.
+    """
+
+    client: httpx.AsyncClient
+    base_url: str
+    secret: SecretStr
+    timeout: float
+    clock: Callable[[], float] = time.time
+
+    def headers_for(self, path: str, body: bytes) -> dict[str, str]:
+        """보낼 머리말. 서명과 추적이다."""
+        signature = sign(self.secret.get_secret_value(), int(self.clock()), 'POST', path, body)
+        return {'Content-Type': 'application/json', SIGNATURE_HEADER: signature, **outgoing_headers()}
+
+    async def post(self, path: str, payload: dict[str, str]) -> httpx.Response:
+        """서명한 요청을 보내고 답을 돌려준다. 답을 받지 못하면 BillingUnavailable."""
+        body = encode(payload)
+        url = self.base_url.rstrip('/') + path
+        try:
+            return await self.client.post(url, content=body, headers=self.headers_for(path, body), timeout=self.timeout)
+        except httpx.TimeoutException as error:
+            raise BillingUnavailable('timeout') from error
+        except httpx.HTTPError as error:
+            raise BillingUnavailable('unreachable') from error
+
+    async def hold(self, reference: str, user_id: uuid.UUID, price_code: str) -> HoldResult:
+        payload = {'user_id': str(user_id), 'reference': reference, 'price_code': price_code}
+        return hold_result(await self.post(HOLDS_PATH, payload))
+
+    async def capture(self, reference: str) -> None:
+        capture_result(await self.post(CAPTURE_PATH, {'reference': reference}))
+
+    async def release(self, reference: str) -> None:
+        release_result(await self.post(RELEASE_PATH, {'reference': reference}))
