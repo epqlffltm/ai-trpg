@@ -111,18 +111,20 @@ $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create
 printf '\nGAME_SERVER_SECRET=%s\n' "$(openssl rand -hex 32)" >> .env
 ```
 
-게임 서버도 같은 값을 알아야 한다. `game-server/.env` 의 `BILLING_SECRET` 에 같은 값을 적는다.
+게임 서버도 같은 값을 알아야 한다(`game-server/.env` 의 `BILLING_SECRET`). 값은 여기서 한 번 만들고 게임 서버로 **옮겨 적는다.**
+화면에 찍지 않고 옮기는 한 줄이 [게임 서버의 설명서](../game-server/README.md)의 "결제 서버와 붙여 보기"에 있다. 그 한 줄이 `BILLING_URL` 도 함께 적는다.
+만드는 명령을 두 설명서에 따로 두지 않는다. 두 곳에서 따로 만들면 값이 달라져 401 이 된다.
 
 `AUTH_SERVER_SECRET` 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다([크레딧](#크레딧)의 "환영 크레딧"). 이것도 32자 이상이고 위의 둘과 다른 값이어야 한다.
-이 값은 **인증 서버도 같은 값을 알아야 한다**(`auth-server/.env` 의 `BILLING_SERVICE_SECRET`). 그래서 두 파일에 함께 넣는다.
+이 값은 **인증 서버도 같은 값을 알아야 한다**(`auth-server/.env` 의 `BILLING_SECRET`). 그래서 두 파일에 함께 넣는다.
 예시 파일의 줄을 지우고, **저장소 루트에서** 아래를 실행한다. 값은 화면에 찍히지 않는다.
 
 ```
-$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); $s = [BitConverter]::ToString($b).Replace('-','').ToLower(); Add-Content auth-server/.env "`nBILLING_SERVICE_SECRET=$s"; Add-Content billing-server/.env "`nAUTH_SERVER_SECRET=$s"; Remove-Variable s, b
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); $s = [BitConverter]::ToString($b).Replace('-','').ToLower(); Add-Content auth-server/.env "`nBILLING_SECRET=$s"; Add-Content billing-server/.env "`nAUTH_SERVER_SECRET=$s"; Remove-Variable s, b
 ```
 
 ```
-s=$(openssl rand -hex 32); printf '\nBILLING_SERVICE_SECRET=%s\n' "$s" >> auth-server/.env; printf '\nAUTH_SERVER_SECRET=%s\n' "$s" >> billing-server/.env; unset s
+s=$(openssl rand -hex 32); printf '\nBILLING_SECRET=%s\n' "$s" >> auth-server/.env; printf '\nAUTH_SERVER_SECRET=%s\n' "$s" >> billing-server/.env; unset s
 ```
 
 `go run ./cmd/migrate up` 은 테이블을 만든다. 서버는 테이블을 스스로 만들지 않는다. 새 마이그레이션 파일을 받을 때마다 다시 돌린다.
@@ -166,7 +168,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `WELCOME_CREDITS` | `1000` | 가입을 마친 사용자가 한 번 받는 환영 크레딧(무료)의 양. 0 이면 주지 않는다. 100만까지 |
 | `PG_WEBHOOK_SECRET` | 없음(필수) | 결제 대행사의 알림에 붙은 서명을 확인하는 비밀. 32자 이상. 로그와 오류에 싣지 않는다 |
 | `GAME_SERVER_SECRET` | 없음(필수) | 게임 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. `PG_WEBHOOK_SECRET` 과 달라야 한다. 로그와 오류에 싣지 않는다 |
-| `AUTH_SERVER_SECRET` | 없음(필수) | 인증 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. 위의 두 비밀과 달라야 한다. 인증 서버의 `BILLING_SERVICE_SECRET` 과 같은 값이다. 로그와 오류에 싣지 않는다 |
+| `AUTH_SERVER_SECRET` | 없음(필수) | 인증 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. 위의 두 비밀과 달라야 한다. 인증 서버의 `BILLING_SECRET` 과 같은 값이다. 로그와 오류에 싣지 않는다 |
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸에 적힌다. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸에 적힌다. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 로그를 남긴다. `debug`, `info`, `warning`, `error` |
@@ -518,6 +520,11 @@ go run ./cmd/fakepg notify $o.id fake_timeout_ok_0002
 
 상태는 한 방향으로만 간다. 끝난 홀드는 바뀌지 않는다.
 
+**부르는 쪽이 이 답들에 기대고 있다.** 게임 서버의 `app/billing/http_billing.py` 가 위의 표를 그대로 옮겨 적었다.
+홀드의 201·200(`status` 가 `held`)과 402, 확정의 200(`captured`), 반환의 200(`released`)과 걸린 적 없는 이름표의 404.
+게임 서버는 걸리지 않은 홀드(402)를 나중에 돌려 달라고 부르고, 그때의 404 를 "돌려줄 것이 없다"로 읽는다.
+이 답들을 바꾸면 게임 서버의 그 파일을 함께 바꾼다.
+
 | 상태 | 뜻 |
 | --- | --- |
 | `held` | 크레딧을 빼 두었다. 아직 확정도 반환도 하지 않았다 |
@@ -590,8 +597,11 @@ go run ./cmd/fakegame release table:test:round:1
 
 **알려진 한계**
 
-- **끝내지 않은 홀드는 그대로 남는다.** 게임 서버가 홀드를 걸고 죽으면 크레딧이 빠진 채로 `held` 에 머문다. 저절로 돌아오지 않는다.
-  오래된 `held` 를 찾아 정리하는 일은 대사([#149](https://github.com/epqlffltm/ai-trpg/issues/149))에서 한다. 그때까지는 `cmd/fakegame release` 로 손으로 돌려준다
+- **끝내지 않은 홀드는 그대로 남는다.** 홀드에는 기한이 없다. 이 서버는 `held` 를 스스로 돌려주지 않는다.
+  게임 서버는 끝난 테이블의 홀드를 제 정리 작업으로 돌려준다. 그 작업도 못 돌려준 것(게임 서버의 기록이 사라진 것)만 이 서버에 남는다.
+- **오래된 `held` 가 버려진 것이라고 볼 수 없다.** 게임 서버는 라운드를 **열 때** 홀드를 걸고, 라운드가 열려 있는 동안 `held` 로 둔다.
+  시간 제한이 없는 테이블은 며칠을 열려 있을 수 있다. 이 서버가 나이만 보고 돌려주면, 게임 서버는 모른 채 서술하고 확정을 부르다 409 를 받는다.
+  서술은 나갔는데 값을 못 받는다. 그래서 대사([#149](https://github.com/epqlffltm/ai-trpg/issues/149))에서 오래된 `held` 를 어떻게 다룰지는 게임 서버와 함께 정한다(아래 "앞으로")
 - 가로챈 요청을 5분 안에 그대로 다시 보내면 서명은 통한다. 그래도 해가 없다. 세 주소 모두 같은 이름표로는 한 번만 되기 때문이다
 - 비밀이 하나다. 바꾸려면 두 서버의 설정을 함께 바꾸고 다시 띄워야 하고, 그사이의 요청은 401 이다. 옛 비밀과 새 비밀을 함께 받는 기간은 없다
 - 홀드를 부르는 서버는 게임 서버 하나다. 다른 서버가 홀드를 걸게 되면 그 서버의 비밀을 따로 두고, 홀드의 `source` 에 그 서버의 이름이 적힌다
@@ -1164,7 +1174,7 @@ goose 가 지원하는 다른 DB 의 드라이버는 실행 파일에 들어가�
    - ~~환영 크레딧: 사용자가 한 번 받는 무료 크레딧~~
 5. ~~홀드, 확정, 반환: 게임 서버가 부를 API 와 서비스 간 인증~~ ([#147](https://github.com/epqlffltm/ai-trpg/issues/147), 여기까지 됐다)
 6. ~~게임 서버 연결: 라운드의 서술 값을 홀드로 받는다~~ ([#148](https://github.com/epqlffltm/ai-trpg/issues/148). 게임 서버 쪽의 일이다. 언제 걸고 누가 내는지는 [게임 서버의 설명서](../game-server/README.md)에 있다)
-7. 대사와 정리: 하루 한 번 원장과 주문을 맞춰 본다. 오래된 `held` 홀드와 `confirming` 주문을 정리하고,
+7. 대사와 정리: 하루 한 번 원장과 주문을 맞춰 본다. 오래된 `confirming` 주문을 정리하고, 오래된 `held` 홀드를 찾아내고,
    변경이 없는 사용자의 사라진 무료 크레딧을 원장에 적는다 ([#149](https://github.com/epqlffltm/ai-trpg/issues/149))
 
 그 뒤의 것.
@@ -1176,7 +1186,9 @@ goose 가 지원하는 다른 DB 의 드라이버는 실행 파일에 들어가�
 
 아직 정하지 않은 것. 해당 단계에서 정한다.
 
-- `held` 로 얼마나 오래 남으면 정리하는가, 정리할 때 확정으로 보는가 반환으로 보는가(#149)
+- 오래된 `held` 홀드를 어떻게 하는가(#149). 게임 서버의 홀드는 라운드가 열려 있는 동안 `held` 인 것이 정상이라, 나이만으로 돌려줄 수 없다. 길은 둘이다.
+  - 이 서버는 **찾아서 알리기만** 하고 돌려주지 않는다. 돌려줄지는 사람이나 게임 서버가 정한다. 값을 못 받는 일이 없다. 그 대신 버려진 홀드가 저절로 풀리지 않는다
+  - 나이의 기준을 정해 이 서버가 **돌려준다.** 게임 서버는 그 기준보다 오래 열린 라운드를 닫을 때 홀드를 다시 건다. 저절로 풀리지만 두 서버가 같은 숫자를 알아야 하고, 게임 서버의 코드가 바뀐다
 - 환영 크레딧 말고 무료 크레딧을 누가 언제 주는가(이벤트, 보상). 주는 주소와 권한
 - 환불의 규칙. 그 주문의 크레딧을 하나도 안 썼을 때만 전액인가, 쓰고 남은 만큼인가. 어느 쪽이든 산 크레딧을 주문별로 따라가야 한다(#150)
 - 실제 결제 대행사의 테스트 모드를 어느 것으로 꽂는가(#153)

@@ -109,7 +109,7 @@ type Settings struct {
 	// GameServerSecret 은 게임 서버가 보낸 요청의 서명을 확인하는 비밀이다. 게임 서버도 같은 값을 갖는다.
 	// 로그와 오류에 싣지 않는다.
 	GameServerSecret string
-	// AuthServerSecret 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다. 인증 서버도 같은 값을 갖는다(BILLING_SERVICE_SECRET).
+	// AuthServerSecret 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다. 인증 서버도 같은 값을 갖는다(BILLING_SECRET).
 	// 로그와 오류에 싣지 않는다.
 	AuthServerSecret string
 }

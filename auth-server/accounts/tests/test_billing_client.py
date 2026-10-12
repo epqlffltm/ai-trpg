@@ -34,7 +34,7 @@ USER_ID = uuid.UUID('11111111-2222-4333-8444-555555555555')
 
 def grant(stub: BillingStub, **settings_overrides) -> str:
     """가짜 결제 서버를 가리키게 설정을 바꾸고 환영 크레딧을 맡긴다."""
-    fields = {'BILLING_URL': stub.url, 'BILLING_SERVICE_SECRET': SECRET}
+    fields = {'BILLING_URL': stub.url, 'BILLING_SECRET': SECRET}
     fields.update(settings_overrides)
     with override_settings(**fields):
         return grant_welcome_credit(user_public_id=USER_ID)
@@ -136,7 +136,7 @@ class UnreachableTests(SimpleTestCase):
     def test_connection_refused_is_reported_without_the_address(self):
         url = closed_port_url()
 
-        with override_settings(BILLING_URL=url, BILLING_SERVICE_SECRET=SECRET):
+        with override_settings(BILLING_URL=url, BILLING_SECRET=SECRET):
             with self.assertRaises(BillingUnavailableError) as raised:
                 grant_welcome_credit(user_public_id=USER_ID)
 
@@ -164,8 +164,8 @@ class UnreachableTests(SimpleTestCase):
 
     def test_without_a_secret_nothing_is_sent(self):
         with BillingStub() as stub:
-            with self.assertRaisesMessage(BillingUnavailableError, 'BILLING_SERVICE_SECRET'):
-                grant(stub, BILLING_SERVICE_SECRET='')
+            with self.assertRaisesMessage(BillingUnavailableError, 'BILLING_SECRET'):
+                grant(stub, BILLING_SECRET='')
 
         self.assertEqual(stub.requests, [])
 

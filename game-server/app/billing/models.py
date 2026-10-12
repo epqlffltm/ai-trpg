@@ -65,6 +65,7 @@ def status_in(statuses: tuple[ChargeStatus, ...]) -> str:
 
 # 조건이 붙은 색인의 조건. 마이그레이션도 같은 글자를 쓴다
 DUE_CONDITION = status_in(DUE_STATUSES)
+OPEN_CONDITION = status_in(OPEN_STATUSES)
 
 
 class NarrationCharge(Base):
@@ -78,6 +79,9 @@ class NarrationCharge(Base):
         UniqueConstraint('round_id', 'payer_id'),
         # 정리 작업이 몇 초마다 부를 차례가 된 것을 찾는다. 끝난 청구는 색인에 들지 않는다
         Index('ix_narration_charges_due', 'next_attempt_at', postgresql_where=DUE_CONDITION),
+        # 정리 작업이 몇 초마다 끝난 테이블의 끝나지 않은 청구를 찾는다(repository.release_abandoned).
+        # 끝나지 않은 청구는 열린 테이블마다 하나쯤이라 색인이 작다. 없으면 바퀴마다 지금까지의 청구를 모두 훑는다
+        Index('ix_narration_charges_open', 'round_id', postgresql_where=OPEN_CONDITION),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
