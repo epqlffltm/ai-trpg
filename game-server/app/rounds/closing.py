@@ -286,8 +286,18 @@ async def settle_payment(
         async with asyncio.timeout(budget):
             await settling.settle_round(session_factory, billing, run.table_id, run.number)
     except Exception:
-        logger.exception(
-            '서술 값을 바로 확정하지 못했다. 청구 정리가 마저 한다(테이블 %s, %s 라운드)', run.table_id, run.number
+        # 결제 서버의 답이 없는 것은 settling 이 받아 적는다. 여기 오는 것은 시간이 다 됐거나 DB 의 오류다.
+        # 정리 작업이 다시 하므로 사람이 새벽에 볼 일은 아니다(warning)
+        logger.warning(
+            '서술 값을 바로 확정하지 못했다. 청구 정리가 마저 한다',
+            exc_info=True,
+            extra={
+                'operation': settling.CAPTURE_OPERATION,
+                'table_id': str(run.table_id),
+                'round': run.number,
+                'result': 'server_error',
+                'error_code': settling.UNAVAILABLE_ERROR_CODE,
+            },
         )
 
 
