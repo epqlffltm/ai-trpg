@@ -24,6 +24,7 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 """
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,7 @@ from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
+from app.billing import charges
 from app.events import recorder
 from app.events.models import EventType
 from app.listings import service as listings
@@ -248,9 +250,11 @@ async def leave_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.
     테이블에서 나간다. 앉지 않았으면 TableNotFoundError.
 
     방장이 나가면 남은 사람 중 가장 먼저 들어온 사람이 방장이 된다. 마지막 사람이 나가면 테이블이 끝난다.
+    나간 사람의 닫히지 않은 라운드의 서술 값은 돌려준다(charges.release_departed).
     """
     table, member = await lock_seated(session, user_id, table_id)
     table.members.remove(member)
+    await charges.release_departed(session, table.id, user_id, datetime.now(UTC))
     payload = {'character_name': member.character_name}
     left = recorder.record(session, table, EventType.MEMBER_LEFT, actor_id=user_id, payload=payload)
     if table.host_id == user_id:
@@ -261,6 +265,8 @@ async def leave_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.
 async def kick_member(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, user_id: uuid.UUID) -> GameTable:
     """
     방장이 참가자를 내보낸다. 초대 코드를 새로 만든다. 내보낸 사람이 옛 코드로 다시 들어오지 못한다.
+    내보낸 사람의 닫히지 않은 라운드의 서술 값은 돌려준다(charges.release_departed).
+    크레딧이 모자란 사람을 내보내면 그 라운드를 바로 다시 맡겨 서술할 수 있다.
 
     방장이 아니면 NotHostError, 그 사람이 앉아 있지 않으면 MemberNotFoundError,
     끝난 테이블이거나 자신을 내보내려 하면 TableConflictError.
@@ -276,6 +282,7 @@ async def kick_member(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
         raise MemberNotFoundError
 
     table.members.remove(member)
+    await charges.release_departed(session, table.id, user_id, datetime.now(UTC))
     table.invite_code = new_invite_code()
     # 새 초대 코드는 적지 않는다. 이벤트는 앉은 사람 모두가 읽는다
     payload = {'user_id': str(user_id), 'character_name': member.character_name}
