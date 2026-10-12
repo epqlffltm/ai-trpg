@@ -1,0 +1,11 @@
+# docker/cron/billing.crontab
+# 결제 서버의 주기 명령. docker-compose.yml 의 billing-cron 이 supercronic 으로 돌린다(#23).
+#
+# 시각은 UTC 다(컨테이너의 시간대). 한국 시각은 9시간을 더한다.
+# 명령은 결제 서버의 이미지 안에서 /bin/sh 로 돈다. 실행 파일은 /app 에 있다.
+# 앞의 실행이 끝나지 않았으면 다음 실행을 건너뛴다(supercronic 의 기본).
+# 명령을 더하면 CI(stack)가 문법을 검사하고, 명령을 한 번씩 돌려 끝 코드가 0 인지 본다.
+
+# 대사. 매일 19:30(한국 04:30). 장부가 맞지 않으면 줄마다 error(ledger.mismatch)를 남기고 끝 코드 1 로 끝난다.
+# supercronic 이 실패한 실행을 error 로 한 줄 더 남긴다
+30 19 * * * /app/reconcile
