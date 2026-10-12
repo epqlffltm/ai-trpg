@@ -7,6 +7,7 @@ package order_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -44,10 +45,11 @@ func (f fixture) unsure() order.Order {
 		f.provider.confirmErr = nil
 		f.provider.mu.Unlock()
 	}()
-	if got := f.confirm(created.ID, newPaymentKey()); got.Status != order.StatusConfirming {
+	got := f.confirm(created.ID, newPaymentKey())
+	if got.Status != order.StatusConfirming {
 		f.t.Fatalf("주문의 상태 = %s, 기대 = confirming", got.Status)
 	}
-	return created
+	return got
 }
 
 // answer 는 결제 대행사가 조회에 줄 답을 바꾼다.
@@ -196,6 +198,14 @@ func TestResolveStaleFinishesOldConfirmingOrders(t *testing.T) {
 	// 승인을 다시 요청하지 않고 결과만 물었다
 	if confirms, lookups := f.provider.calls(); confirms != 3 || lookups != 2 {
 		t.Errorf("승인 %d 번, 조회 %d 번. 기대 = 승인 3 번(처음 요청), 조회 2 번", confirms, lookups)
+	}
+	// 조회에는 그 주문의 번호와 값이 실린다. 결제 대행사가 "이 주문의 결제인가"를 확인한다
+	wantLookups := []payment.Request{
+		{PaymentKey: paid.PaymentKey, OrderID: paid.ID, Amount: price},
+		{PaymentKey: declined.PaymentKey, OrderID: declined.ID, Amount: price},
+	}
+	if !slices.Equal(f.provider.lookups, wantLookups) {
+		t.Errorf("조회 = %+v, 기대 = %+v", f.provider.lookups, wantLookups)
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/batch"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order/orderdb"
-	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 )
 
 // ExpireDue 는 만료 시각이 지난 pending 주문을 오래된 것부터 limit 개까지 expired 로 바꾼다(정리 작업).
@@ -58,9 +57,7 @@ func (s *Service) ResolveStale(ctx context.Context, olderThan time.Duration, lim
 
 // resolveOne 은 confirming 주문 하나를 결제 대행사에 물어 끝낸다. 끝난 뒤의 주문을 돌려준다.
 func (s *Service) resolveOne(ctx context.Context, current Order) (Order, error) {
-	result, err := s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
-		return s.provider.Lookup(ctx, current.PaymentKey)
-	})
+	result, err := s.lookUp(ctx, current)
 	return s.settle(ctx, current, result, err)
 }
 

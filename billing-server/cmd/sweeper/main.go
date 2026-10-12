@@ -88,7 +88,7 @@ func run(args []string, out io.Writer) error {
 		return err
 	}
 	defer pool.Close()
-	services, err := app.NewServices(pool, settings.Rules, time.Now)
+	services, err := app.NewServices(pool, settings.Rules, app.NewProvider(settings.Payment), time.Now)
 	if err != nil {
 		return err
 	}

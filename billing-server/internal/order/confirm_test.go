@@ -267,9 +267,10 @@ func TestConfirmingAgainFinishesAnUnansweredPayment(t *testing.T) {
 			f.wantStatus(created.ID, tc.wantStatus)
 			f.wantPaidCredits(tc.wantCredits, tc.wantLines)
 			// 두 번째에는 승인을 다시 요청하지 않고 결과를 묻는다. 승인을 두 번 요청하면 돈이 두 번 나갈 수 있다
-			if confirms, lookups := f.provider.calls(); confirms != 1 || lookups != 1 || f.provider.lookups[0] != paymentKey {
-				t.Errorf("승인 요청 %d 번, 조회 %d 번(%v). 기대 = 1 번, 1 번", confirms, lookups, f.provider.lookups)
+			if confirms, lookups := f.provider.calls(); confirms != 1 || lookups != 1 {
+				t.Errorf("승인 요청 %d 번, 조회 %d 번. 기대 = 1 번, 1 번", confirms, lookups)
 			}
+			f.provider.lookedUp(t, created.ID, paymentKey)
 		})
 	}
 }
