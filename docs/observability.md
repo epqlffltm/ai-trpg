@@ -669,6 +669,8 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 - **사람이 치는 명령은 JSON 이 아니다.** billing-server 의 `cmd/migrate`, `cmd/fakepg`, auth-server 의 관리 명령이 화면에 찍는 안내(`self.stdout`)는 그대로 글이다.
   auth-server 의 워커와 예약 명령이 남기는 **로그**는 JSON 이다.
 - **로거가 생기기 전의 줄.** board-server 는 설정이 틀려 뜨지 못할 때 Nest 의 기본 모양으로 찍는다. billing-server 는 `DEBUG=true` 면 gin 이 주소 목록을 글로 찍는다.
+- **주기 명령을 부르는 supercronic 의 줄.** 실패한 실행만 한 줄 남긴다(`-quiet`). JSON 이지만 칸이 공통 규격과 다르다(`level`, `msg`, `time`, `job.command`).
+  명령 자신이 남기는 로그는 규격의 JSON 이다. 명령이 끝에 화면에 찍는 요약(`self.stdout`, 결제의 `cmd/reconcile`)은 위의 "사람이 치는 명령"처럼 글이다.
 - **nginx 가 뜨고 꺼지는 줄.** 프록시의 요청 줄은 JSON 이지만, nginx 가 뜰 때와 설정을 다시 읽을 때 남기는 줄은 nginx 의 글 모양이다.
 - **마지막 방어선은 어림이다.** [민감정보](#마지막-방어선)의 끝에 적은 대로다.
 - **`warning` 줄의 `error_code`.** `error` 이상에는 붙였지만, 기존의 `warning` 줄 가운데에는 코드가 없는 것이 있다(게임 서버의 JWKS, 임베딩 실패).

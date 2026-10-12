@@ -82,14 +82,16 @@ docker compose --profile app up -d --build
 docker compose --profile app ps -a
 ```
 
-`*-migrate` 넷이 `Exited (0)`, `*-server` 넷과 `proxy` 가 `healthy` 면 된다. 끌 때는 `docker compose --profile app down` 이다.
+`*-migrate` 넷이 `Exited (0)`, `*-server` 넷과 `proxy` 가 `healthy`, 워커와 cron 다섯(`auth-mail`, `auth-welcome-credits`, `auth-cron`, `billing-sweeper`, `billing-cron`)이 `Up` 이면 된다.
+끌 때는 `docker compose --profile app down` 이다. 켜 둔 채 Docker Desktop 을 껐다 켜면 다시 뜬다(`restart: unless-stopped`).
 
 - 바깥에서는 프록시 하나로 들어온다. `http://127.0.0.1:8080/api/v1/<auth|game|board|billing>/...` 이다. 서버들의 포트는 열지 않는다.
 - 관리자 화면은 프록시가 막는다(404). 인증 서버만 `127.0.0.1:8000` 을 따로 열어 두었으니 `http://127.0.0.1:8000/admin/` 으로 연다.
   서버(VM)에 올린 뒤에는 SSH 터널로 붙는다. `ssh -L 8000:127.0.0.1:8000 <서버>` 를 띄워 두고 같은 주소를 연다.
 - 서버의 설정은 3번에서 만든 각 서버의 `.env` 를 그대로 쓴다. 그 안의 주소(`127.0.0.1`)만 compose 가
   컨테이너의 이름(`db`, `redis`, `auth-server` 등)으로 바꿔 넘긴다. DB 주소는 루트 `.env` 의 비밀번호로 만든다.
-- 모든 서버를 함께 띄우므로 게임 서버는 결제 서버에 붙는다. `game-server/.env` 에 `BILLING_SECRET` 이 있어야 뜬다.
+- 모든 서버를 함께 띄우므로 게임 서버와 인증 서버는 결제 서버에 붙는다. `game-server/.env` 와 `auth-server/.env` 에 `BILLING_SECRET` 이 있어야 한다.
+  없으면 게임 서버가 뜨지 않고, 인증 서버의 환영 크레딧 워커가 오류로 끝나 다시 뜨기를 되풀이한다.
 - 게임 서버의 언어 모델은 컨테이너 밖, 이 PC 의 Ollama(`host.docker.internal:11434`)로 간다.
   다른 곳의 모델을 쓰면 루트 `.env` 의 `GAME_LLM_BASE_URL` 에 적는다. `game-server/.env` 의 `LLM_BASE_URL` 은 덮인다.
 - 인증 서버의 JWT 개인키는 `auth-server/keys/` 를 읽기 전용으로 붙인다. 이미지에는 넣지 않는다.
@@ -116,8 +118,8 @@ docker compose --profile app ps -a
 머지하려면 필수 검사 `ci-ok` 가 통과해야 한다. `ci-ok` 는 PR 의 관문(`.github/workflows/ci.yml`)이 마지막에 내는 결과다.
 관문은 바뀐 파일을 보고 그 서버의 CI 만 부른다(`.github/scripts/changed-servers.sh`). 부르지 않은 서버는 건너뛴 것이고 통과로 친다.
 서버의 CI 넷을 따로 필수로 걸지 않은 이유: 서버마다 자기 폴더가 바뀔 때만 돈다. 돌지 않은 필수 검사를 GitHub 은 "기다리는 중"으로 두고 머지를 막는다.
-DB 초기화 스크립트, compose 파일, 관문 자신이 바뀌면 넷 다 돈다. `main` 에 들어간 뒤에는 서버의 CI 가 예전처럼 제 폴더가 바뀔 때만 스스로 돈다. 위의 배지가 그 결과다.
-서버가 하나라도 바뀌면 관문의 `stack` 이 네 서버의 이미지를 만들어 compose 로 함께 띄우고, 마이그레이션이 성공했는지, 서버끼리 닿는지, 프록시가 주소를 나누고 막는지를 본다(`.github/scripts/stack-smoke.sh`).
+`docker/` 아래(DB 초기화 스크립트, 프록시의 설정, crontab), compose 파일, 관문 자신이 바뀌면 넷 다 돈다. `main` 에 들어간 뒤에는 서버의 CI 가 예전처럼 제 폴더가 바뀔 때만 스스로 돈다. 위의 배지가 그 결과다.
+서버가 하나라도 바뀌면 관문의 `stack` 이 네 서버의 이미지를 만들어 compose 로 함께 띄우고, 마이그레이션이 성공했는지, 서버끼리 닿는지, 워커가 다시 뜨기를 되풀이하지 않는지, crontab 의 명령이 한 번씩 성공하는지, 프록시가 주소를 나누고 막는지를 본다(`.github/scripts/stack-smoke.sh`).
 
 **이미지는 서버마다 같은 규칙으로 만든다.** 여러 단계로 빌드해 실행에 필요한 것만 담고, root 가 아닌 사용자(번호로 적는다)로 돌린다.
 기본 이미지는 버전을 고정한다. 비밀(`.env`, JWT 키)은 `.dockerignore` 로 막아 이미지에 넣지 않고, 띄울 때 compose 가 넘긴다.
@@ -132,6 +134,13 @@ IP 마다 요청 수를 센다: 인증의 민감한 요청(로그인, 인증 코
 요청 식별자(`X-Request-ID`)는 프록시가 정해 서버에 넘긴다. 프록시의 로그도 공통 규격의 JSON 이다([관측 규격](docs/observability.md#프록시의-줄)).
 서버의 주소는 요청마다 Docker 의 DNS 에서 찾는다. 서버가 다시 떠서 주소가 바뀌어도 프록시를 다시 띄울 필요가 없다.
 이미지는 `nginxinc/nginx-unprivileged` 다. root 가 아닌 사용자로 돈다.
+
+**워커와 주기 명령은 서버와 같은 이미지의 컨테이너로 따로 돈다.** 컨테이너 하나에 프로세스 하나다. 워커가 죽어도 서버는 살아 있고, 따로 다시 뜬다.
+계속 도는 것: 인증 서버의 메일 워커(`auth-mail`)와 환영 크레딧 워커(`auth-welcome-credits`), 결제 서버의 정리 작업(`billing-sweeper`).
+정한 시각에 도는 것은 [supercronic](https://github.com/aptible/supercronic)(컨테이너용 cron)이 `docker/cron/` 의 crontab 대로 부른다(`auth-cron`, `billing-cron`).
+시각은 UTC 다. 보안 이벤트 요약은 매시 5분, 미인증 계정 정리와 만료된 토큰 정리, 결제의 대사는 매일 한국 시각 새벽 4시대에 10분씩 띄워 돈다.
+앞의 실행이 끝나지 않았으면 다음 실행을 건너뛴다. supercronic 은 명령이 남기는 줄을 그대로 내보내고, 제 줄은 실패만 남긴다.
+서버(VM)의 cron 에 맡기지 않은 이유: PC 와 CI 에서 돌려 볼 수 없고, 설정이 저장소 밖에 생긴다. Docker 소켓으로 다른 컨테이너를 부르는 도구(Ofelia 등)는 그 컨테이너가 호스트의 root 와 같은 권한을 갖게 되어 쓰지 않았다.
 
 **마이그레이션은 서버가 뜰 때 돌리지 않는다.** 서버마다 한 번 돌고 끝나는 컨테이너(`*-migrate`)가 하고, 서버는 그것이 성공해야 뜬다.
 서버를 여럿 띄워도 마이그레이션은 한 번만 돈다. 실패하면 서버가 뜨지 않아서 바로 드러난다.
@@ -172,7 +181,8 @@ board-server/             NestJS 게시판 서버 (독립된 npm 프로젝트)
 billing-server/           Go 결제 서버 (독립된 Go 모듈). 연습용이고 실제 결제가 아니다
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
 docker/nginx/templates/   프록시(nginx)의 설정
+docker/cron/              주기 명령의 crontab (인증, 결제)
 docs/                     서버들이 함께 지키는 규격 (관측)
-docker-compose.yml        PostgreSQL, Redis, 서버 넷과 프록시(프로필 app)
+docker-compose.yml        PostgreSQL, Redis, 서버 넷과 워커, cron, 프록시(프로필 app)
 .env.example              인프라 환경 변수 목록
 ```
