@@ -4,7 +4,9 @@
 청구 기록의 규칙. 누가 내는가, 이름표를 어떻게 짓는가, 언제 어느 상태로 옮기는가. 결제 서버를 부르지 않는다.
 
 DB 를 쓰는 함수는 부른 쪽의 트랜잭션 안에서 돈다. 라운드를 연 것, 닫은 것과 한 묶음으로 저장되게 하려는 것이다.
-  - 라운드를 열 때(app/rounds/opener.py): charge_round 가 "걸어야 한다"를 적는다
+  - 라운드를 열 때(app/rounds/opener.py): charge_round 가 앉은 사람마다 "걸어야 한다"를 적는다
+  - 누가 떠날 때(app/tables/service.py 의 leave_table, kick_member): release_departed 가 그 사람의 것을
+    "돌려줄 것"으로 적는다
   - 라운드를 닫을 때(app/rounds/service.py 의 finish_closing): settle_round 가 "확정할 것" 또는 "돌려줄 것"을 적는다
 결제 서버를 부르는 것은 그 트랜잭션이 끝난 뒤다(app/billing/settling.py).
 """
@@ -33,14 +35,20 @@ EXTEND_AFTER = timedelta(hours=12)
 EXTEND_REJECTED_RETRY = timedelta(hours=1)
 
 
+# 떠난 사람의 청구 중 라운드가 닫는 중이어도 돌려주는 것. 아직 걸지 못했거나 모자랐다. 서술을 막지 않게 한다
+DEPARTED_ALWAYS = (ChargeStatus.PENDING, ChargeStatus.SHORT)
+# 떠난 사람의 청구 중 라운드가 선언을 받는 중일 때만 돌려주는 것.
+# 닫기 시작한 뒤면 그 사람의 선언도 서술에 들어가므로 받는다
+DEPARTED_WHILE_OPEN = (ChargeStatus.HELD,)
+
+
 def payers_of(table: GameTable) -> list[uuid.UUID]:
     """
-    이 테이블의 라운드 서술 값을 내는 사람들. 지금은 방장 한 명이다.
+    이 테이블의 라운드 서술 값을 내는 사람들. 라운드를 열 때 앉아 있는 사람 모두다(쓰러진 사람도). 앉은 차례다.
 
-    테이블을 연 사람이 GM 을 부른 셈이라 방장이 낸다. 나눠 내기로 바꾸려면 여기서 여러 명을 돌려주고,
-    결제 서버의 가격표에 한 사람 몫을 더한다. 청구 기록은 라운드 × 내는 사람 한 줄씩이라 그대로 쓴다.
+    각자 등급의 값을 낸다. 나눠 내지 않는다(#180). 사람마다 이름표가 달라 결제 서버는 홀드를 따로 받는다.
     """
-    return [table.host_id]
+    return [member.user_id for member in table.members]
 
 
 def price_code_for(tier: str) -> str:
@@ -99,6 +107,20 @@ def charge_round(session: AsyncSession, table: GameTable, round_: Round) -> None
         for payer in payers_of(table)
     ]
     repository.add_charges(session, charges)
+
+
+async def release_departed(session: AsyncSession, table_id: uuid.UUID, user_id: uuid.UUID, now: datetime) -> int:
+    """
+    테이블을 떠난(나갔거나 내보내진) 사람의 닫히지 않은 라운드의 청구를 돌려줄 것으로 적는다.
+    떠나는 트랜잭션 안에서 부른다.
+
+      - 아직 걸지 못했거나 모자란 청구: 늘 돌려준다. 떠난 사람 때문에 남은 사람의 서술이 막히지 않는다.
+        방장이 모자란 사람을 내보내면 바로 다시 맡겨 서술할 수 있다
+      - 걸린 청구: 라운드가 선언을 받는 중이면 돌려준다. 닫기 시작한 뒤면 그대로 두고 서술되면 확정한다.
+        그 사람의 선언이 이미 굳어 장면에 들어간다
+    결제 서버는 부르지 않는다. 정리 작업이 곧 돌려준다. 바꾼 수를 돌려준다.
+    """
+    return await repository.release_departed(session, table_id, user_id, DEPARTED_ALWAYS, DEPARTED_WHILE_OPEN, now)
 
 
 def settled_status(delivered: bool) -> ChargeStatus:
