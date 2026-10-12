@@ -30,6 +30,7 @@ expect "서버의 워크플로가 바뀌면 그 서버" "game" ".github/workflow
 expect "DB 초기화 스크립트는 넷 다" "auth game board billing" "docker/postgres/init/06-x.sql"
 expect "compose 파일은 넷 다" "auth game board billing" "docker-compose.yml"
 expect "프록시의 설정은 넷 다" "auth game board billing" "docker/nginx/templates/default.conf.template"
+expect "crontab 은 넷 다" "auth game board billing" "docker/cron/auth.crontab"
 expect "서버의 Dockerfile 은 그 서버" "billing" "billing-server/Dockerfile"
 expect "관문 워크플로는 넷 다" "auth game board billing" ".github/workflows/ci.yml"
 expect "관문의 스크립트는 넷 다" "auth game board billing" ".github/scripts/changed-servers.sh"
