@@ -10,14 +10,22 @@
 
 import json
 import uuid
+from datetime import UTC, datetime
 
 import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from app.billing.client import BillingRejected, BillingUnavailable, HoldResult
+from app.billing.client import (
+    BillingRejected,
+    BillingUnavailable,
+    ExtendOutcome,
+    ExtendResult,
+    HoldOutcome,
+    HoldResult,
+)
 from app.billing.free_billing import FreeBilling
-from app.billing.http_billing import CAPTURE_PATH, HOLDS_PATH, RELEASE_PATH, HttpBilling
+from app.billing.http_billing import CAPTURE_PATH, EXTEND_PATH, HOLDS_PATH, RELEASE_PATH, HttpBilling
 from app.billing.setup import build_billing
 from app.billing.signing import SIGNATURE_HEADER, sign
 from app.observability.context import job_scope
@@ -90,7 +98,7 @@ async def test_a_fake_billing_server_accepts_the_signature():
         result = await server.billing(client).hold(REFERENCE, USER, 'narration.standard')
 
     # 서명을 따로 계산하는 가짜 결제 서버가 받아들였다
-    assert result == HoldResult.HELD
+    assert result.result == HoldResult.HELD
     assert server.balance(USER) == 50
 
 
@@ -126,7 +134,7 @@ async def test_the_trace_is_passed_on_inside_a_job():
 async def test_what_a_hold_answer_means(answer: httpx.Response, result: HoldResult):
     billing, _ = billing_answering(answer)
 
-    assert await billing.hold(REFERENCE, USER, 'narration.standard') == result
+    assert (await billing.hold(REFERENCE, USER, 'narration.standard')).result == result
 
 
 @pytest.mark.parametrize(
@@ -172,6 +180,37 @@ async def test_a_hold_the_billing_server_will_never_take(answer: httpx.Response)
     assert raised.value.status_code == answer.status_code
 
 
+@pytest.mark.parametrize(
+    ('expires_at', 'expected'),
+    [
+        # 결제 서버(Go)의 모양. 나노초까지 오고 끝이 Z 다
+        ('2026-10-12T10:00:00.123456789Z', datetime(2026, 10, 12, 10, 0, 0, 123456, tzinfo=UTC)),
+        ('2026-10-12T10:00:00Z', datetime(2026, 10, 12, 10, 0, tzinfo=UTC)),
+        # 시간대가 없으면 UTC 로 본다
+        ('2026-10-12T10:00:00', datetime(2026, 10, 12, 10, 0, tzinfo=UTC)),
+        # 없거나 읽을 수 없으면 모른다. 실패로 보지 않는다
+        (None, None),
+        ('어제', None),
+    ],
+)
+async def test_the_expiry_of_a_hold_is_read_from_the_answer(expires_at: str | None, expected: datetime | None):
+    body = {**hold_body('held'), **({'expires_at': expires_at} if expires_at else {})}
+    billing, _ = billing_answering(httpx.Response(201, json=body))
+
+    outcome = await billing.hold(REFERENCE, USER, 'narration.standard')
+
+    assert outcome == HoldOutcome(HoldResult.HELD, expected)
+
+
+async def test_the_new_expiry_comes_back_from_an_extension():
+    body = {**hold_body('held'), 'expires_at': '2026-10-13T10:00:00Z'}
+    billing, _ = billing_answering(httpx.Response(200, json=body))
+
+    outcome = await billing.extend(REFERENCE)
+
+    assert outcome == ExtendOutcome(ExtendResult.EXTENDED, datetime(2026, 10, 13, 10, 0, tzinfo=UTC))
+
+
 async def test_a_capture_goes_to_its_address():
     billing, recorder = billing_answering(httpx.Response(200, json=hold_body('captured')))
 
@@ -209,12 +248,47 @@ async def test_releasing_a_captured_hold_is_rejected():
         await billing.release(REFERENCE)
 
 
+@pytest.mark.parametrize(
+    ('answer', 'result'),
+    [
+        (httpx.Response(200, json=hold_body('held')), ExtendResult.EXTENDED),
+        (httpx.Response(404, json={'detail': '없다'}), ExtendResult.MISSING),
+        # 이미 끝난 홀드. 만료되어 결제 서버가 돌려준 것도 여기다
+        (httpx.Response(409, json={'detail': '끝났다'}), ExtendResult.ENDED),
+    ],
+)
+async def test_what_an_extend_answer_means(answer: httpx.Response, result: ExtendResult):
+    billing, recorder = billing_answering(answer)
+
+    assert (await billing.extend(REFERENCE)).result == result
+    assert recorder.requests[0].url.path == EXTEND_PATH
+    assert json.loads(recorder.requests[0].content) == {'reference': REFERENCE}
+
+
+@pytest.mark.parametrize(
+    ('answer', 'error'),
+    [
+        (httpx.Response(503), BillingUnavailable),
+        (httpx.Response(401), BillingUnavailable),
+        (httpx.Response(400), BillingRejected),
+        (httpx.Response(200, json=hold_body('captured')), BillingRejected),
+    ],
+)
+async def test_an_extend_that_did_not_happen(answer: httpx.Response, error: type[Exception]):
+    billing, _ = billing_answering(answer)
+
+    with pytest.raises(error):
+        await billing.extend(REFERENCE)
+
+
 async def test_free_billing_always_holds():
     free = FreeBilling()
 
-    assert await free.hold(REFERENCE, USER, 'narration.standard') == HoldResult.HELD
+    assert await free.hold(REFERENCE, USER, 'narration.standard') == HoldOutcome(HoldResult.HELD)
     await free.capture(REFERENCE)
     await free.release(REFERENCE)
+    # 만료 시각을 주지 않는다. 게임 서버가 정해 둔 간격으로 연장한다
+    assert await free.extend(REFERENCE) == ExtendOutcome(ExtendResult.EXTENDED)
 
 
 def test_without_an_address_nothing_is_charged():

@@ -28,8 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import settler as charge_settler
 from app.billing import settling
-from app.billing.charges import PRICE_CODE, retry_delay
-from app.billing.client import HoldResult
+from app.billing.charges import EXTEND_AFTER, EXTEND_REJECTED_RETRY, PRICE_CODE, retry_delay
+from app.billing.client import HoldOutcome, HoldResult
 from app.billing.models import NarrationCharge
 from app.billing.settler import ChargeSettler
 from app.main import create_app
@@ -436,7 +436,7 @@ class StuckCaptureBilling:
     """홀드는 바로 잡고, 확정에는 답하지 않는 결제 서버."""
 
     async def hold(self, reference, user_id, price_code):
-        return HoldResult.HELD
+        return HoldOutcome(HoldResult.HELD)
 
     async def capture(self, reference):
         await asyncio.Event().wait()
@@ -589,6 +589,246 @@ async def test_a_hold_already_written_by_the_other_side_is_ready(
     # 정리 작업이 먼저 걸었다. 같은 이름표라 한 번만 빠졌고, 서술해도 된다
     assert readiness == settling.Readiness.READY
     assert billing.balance(ME) == 1000 - PRICE
+
+
+# --- 연장 ---
+
+
+async def overdue_extension(session: AsyncSession, table: dict) -> None:
+    """걸린 청구의 연장할 때를 하루 전으로 돌린다. 정리 작업이 오래 멈춰 연장하지 못한 것이다."""
+    for charge in await charges_of(session, table):
+        charge.next_attempt_at = datetime.now(UTC) - timedelta(hours=12)
+    await session.commit()
+
+
+async def test_a_held_charge_is_extended_when_half_of_its_time_is_left(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, me: dict, friend: dict, billing: FakeBillingServer
+):
+    table = await start_duo(client, me, friend)
+    start = datetime.now(UTC)
+    billing.clock = lambda: start
+    await tick(app, start)
+    [charge] = await charges_of(session, table)
+    first = charge.next_attempt_at
+
+    await tick(app, start + timedelta(hours=1))
+    early = list(billing.extended)
+    later = start + timedelta(hours=12, seconds=1)
+    billing.clock = lambda: later
+    await tick(app, later)
+    [charge] = await charges_of(session, table)
+
+    # 결제 서버가 준 만료 시각(24시간 뒤)까지 남은 시간의 절반이 지나면 연장한다. 그 전에는 부르지 않는다.
+    # 연장한 뒤에는 새 만료 시각까지 남은 시간의 절반 뒤다
+    assert first == start + timedelta(hours=12)
+    assert early == []
+    assert billing.extended == [charge.reference]
+    assert charge.next_attempt_at == later + timedelta(hours=12)
+    assert billing.balance(ME) == 1000 - PRICE
+
+
+async def test_a_short_hold_ttl_is_extended_sooner(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, me: dict, friend: dict, billing: FakeBillingServer
+):
+    # 결제 서버의 HOLD_TTL 은 설정이다. 1시간으로 둔 환경이면 30분 뒤에 연장한다
+    billing.ttl = timedelta(hours=1)
+    table = await start_duo(client, me, friend)
+    start = datetime.now(UTC)
+    billing.clock = lambda: start
+
+    await tick(app, start)
+
+    [charge] = await charges_of(session, table)
+    assert charge.next_attempt_at == start + timedelta(minutes=30)
+
+
+async def test_without_an_expiry_the_hold_is_extended_after_twelve_hours(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, me: dict, friend: dict
+):
+    # 결제 서버를 두지 않았다(받지 않는 것). 만료 시각을 모르므로 정해 둔 간격이다
+    table = await start_duo(client, me, friend)
+    start = datetime.now(UTC)
+
+    await tick(app, start)
+
+    [charge] = await charges_of(session, table)
+    assert (charge.status, charge.next_attempt_at) == ('held', start + EXTEND_AFTER)
+
+
+async def test_an_expired_hold_of_an_open_round_is_held_again_under_a_new_name(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, me: dict, friend: dict, billing: FakeBillingServer
+):
+    table = await start_duo(client, me, friend)
+    start = datetime.now(UTC)
+    await tick(app, start)
+    [first] = await charges_of(session, table)
+    billing.expire(first.reference)
+    later = start + EXTEND_AFTER + timedelta(hours=1)
+
+    first_reference = first.reference
+    await tick(app, later)
+    [renewed] = await charges_of(session, table)
+    renewed_state = (renewed.status, renewed.renewals, renewed.last_error, renewed.reference)
+    await tick(app, later)
+    [charge] = await charges_of(session, table)
+
+    # 만료되어 돌려준 홀드는 같은 이름표로 다시 걸 수 없다. 아직 서술 전이라 새 이름표로 다시 건다
+    assert renewed_state == ('pending', 1, 'expired', f'{first_reference}:r1')
+    assert charge.status == 'held'
+    assert billing.statuses() == {first_reference: 'released', f'{first_reference}:r1': 'held'}
+    assert billing.balance(ME) == 1000 - PRICE
+
+
+async def test_a_missing_hold_is_held_again_under_the_same_name(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, me: dict, friend: dict, billing: FakeBillingServer
+):
+    table = await start_duo(client, me, friend)
+    start = datetime.now(UTC)
+    await tick(app, start)
+    [first] = await charges_of(session, table)
+    first_reference = first.reference
+    # 결제 서버에 그 홀드가 없다(결제 서버의 DB 를 비웠다)
+    billing.holds.clear()
+    billing.balances[ME] = 1000
+    later = start + EXTEND_AFTER + timedelta(hours=1)
+
+    await tick(app, later)
+    [missing] = await charges_of(session, table)
+    missing_state = (missing.status, missing.renewals, missing.last_error)
+    await tick(app, later)
+    [charge] = await charges_of(session, table)
+
+    assert missing_state == ('pending', 0, 'missing')
+    assert (charge.status, charge.reference) == ('held', first_reference)
+    assert billing.balance(ME) == 1000 - PRICE
+
+
+async def test_a_renewed_hold_short_of_credits_is_told(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, me: dict, friend: dict, billing: FakeBillingServer
+):
+    table = await start_duo(client, me, friend)
+    start = datetime.now(UTC)
+    await tick(app, start)
+    [first] = await charges_of(session, table)
+    billing.expire(first.reference)
+    # 돌려받은 크레딧을 그사이 다른 데 썼다
+    billing.balances[ME] = 0
+    later = start + EXTEND_AFTER + timedelta(hours=1)
+
+    await tick(app, later)
+    await tick(app, later)
+
+    assert await statuses_of(session, table) == ['short']
+    assert await event_types(client, friend, table) == ['narration_credits_short']
+
+
+async def test_closing_after_a_missed_extension_holds_again_before_narrating(
+    client: AsyncClient,
+    app: FastAPI,
+    session: AsyncSession,
+    me: dict,
+    friend: dict,
+    billing: FakeBillingServer,
+    narrator: GatedNarrator,
+    narrated,
+):
+    table = await start_duo(client, me, friend)
+    # 하루 전에 걸었고, 그 뒤로 정리 작업이 멈춰 연장하지 못했다. 그사이 결제 서버가 만료된 홀드를 돌려줬다
+    await tick(app)
+    await overdue_extension(session, table)
+    [first] = await charges_of(session, table)
+    first_reference = first.reference
+    billing.expire(first_reference)
+
+    await close_round(client, me, friend, table, narrated)
+
+    # 서술하기 전에 연장해 보고, 만료된 것을 알고 새 이름표로 다시 걸었다. 그 값으로 서술하고 확정했다
+    assert (await current(client, me, table))['scene'] == RESULT
+    assert await statuses_of(session, table) == ['captured', 'pending']
+    assert billing.statuses() == {first_reference: 'released', f'{first_reference}:r1': 'captured'}
+    assert billing.balance(ME) == 1000 - PRICE
+
+
+async def test_closing_with_an_extension_due_while_billing_is_down_still_narrates(
+    client: AsyncClient,
+    app: FastAPI,
+    session: AsyncSession,
+    me: dict,
+    friend: dict,
+    billing: FakeBillingServer,
+    narrator: GatedNarrator,
+    narrated,
+):
+    table = await start_duo(client, me, friend)
+    await tick(app)
+    await overdue_extension(session, table)
+    billing.down = True
+
+    await close_round(client, me, friend, table, narrated)
+
+    # 연장할 때가 지났지만 만료까지는 여유가 있다. 걸린 것으로 보고 서술한다. 확정은 정리 작업이 마저 한다
+    assert (await current(client, me, table))['scene'] == RESULT
+    assert (await statuses_of(session, table))[0] == 'capture_due'
+
+
+async def test_a_capture_of_an_expired_hold_is_not_paid(
+    client: AsyncClient,
+    app: FastAPI,
+    session: AsyncSession,
+    me: dict,
+    friend: dict,
+    billing: FakeBillingServer,
+    narrator: GatedNarrator,
+    narrated,
+    caplog: pytest.LogCaptureFixture,
+):
+    table = await start_duo(client, me, friend)
+    await tick(app)
+    billing.down = True
+    await close_round(client, me, friend, table, narrated)
+    [first, _] = await charges_of(session, table)
+    billing.down = False
+    # 확정하지 못한 사이 결제 서버가 만료된 홀드를 돌려줬다
+    billing.expire(first.reference)
+
+    with caplog.at_level(logging.ERROR, logger='app.billing.settling'):
+        await tick(app, datetime.now(UTC) + timedelta(minutes=10))
+
+    # 서술은 이미 나갔다. 다시 걸지 않고 받지 못한 것으로 남긴다. 사람이 봐야 한다
+    [charge, _] = await charges_of(session, table)
+    assert (charge.status, charge.last_error) == ('failed', 'rejected_409')
+    # 앞서 확정하지 못한 것(warning)도 같은 로거에 남아 있다. 오류는 이 한 줄이다
+    [line] = [line for line in rendered(caplog.records, 'app.billing.settling') if line['level'] == 'error']
+    assert (line['operation'], line['error_code']) == ('billing.capture', 'billing.rejected')
+    # 1 라운드의 값은 돌아왔고(만료), 남은 것은 2 라운드의 홀드다
+    assert billing.balance(ME) == 1000 - PRICE
+
+
+async def test_an_extension_the_billing_server_refuses_keeps_the_hold(
+    client: AsyncClient,
+    app: FastAPI,
+    session: AsyncSession,
+    me: dict,
+    friend: dict,
+    billing: FakeBillingServer,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    table = await start_duo(client, me, friend)
+    start = datetime.now(UTC)
+    await tick(app, start)
+    monkeypatch.setattr(billing, 'extend', lambda reference: billing.answer(400))
+    later = start + EXTEND_AFTER + timedelta(seconds=1)
+
+    with caplog.at_level(logging.ERROR, logger='app.billing.settling'):
+        await tick(app, later)
+
+    # 실패로 적지 않는다. 홀드는 살아 있을 수 있고, 실패로 적으면 그 라운드를 서술할 수 없다. 한 시간 뒤에 다시 부른다
+    [charge] = await charges_of(session, table)
+    assert (charge.status, charge.last_error) == ('held', 'rejected_400')
+    assert charge.next_attempt_at == later + EXTEND_REJECTED_RETRY
+    [line] = rendered(caplog.records, 'app.billing.settling')
+    assert (line['operation'], line['error_code']) == ('billing.extend', 'billing.rejected')
 
 
 # --- 받아들여지지 않을 때 ---
