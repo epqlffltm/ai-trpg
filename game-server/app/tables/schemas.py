@@ -25,6 +25,9 @@ from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
 from app.engine.sheet import Score, Sheet
 from app.rounds.tiers import NarrationTier
 from app.tables.models import (
+    CREDIT_WAIT_MAX,
+    CREDIT_WAIT_MIN,
+    DEFAULT_CREDIT_WAIT,
     DEFAULT_ROUND_TIME_LIMIT,
     ROUND_TIME_LIMIT_MAX,
     ROUND_TIME_LIMIT_MIN,
@@ -41,6 +44,8 @@ TablePassword = Annotated[
 
 # 라운드의 시간 제한(초). 라운드가 열린 때부터 센다
 RoundTimeLimit = Annotated[int, Field(ge=ROUND_TIME_LIMIT_MIN, le=ROUND_TIME_LIMIT_MAX)]
+# 크레딧이 모자란 사람을 기다리는 시간(초). 누가 모자라 서술이 멈춘 때부터 센다
+CreditWait = Annotated[int, Field(ge=CREDIT_WAIT_MIN, le=CREDIT_WAIT_MAX)]
 
 
 class TableCreate(BaseModel):
@@ -71,6 +76,9 @@ class TableCreate(BaseModel):
     # 서술 등급. 적지 않으면 standard 다. 이 서버가 내주는 등급만 된다(GET /tables/narration-tiers).
     # 만든 뒤에도 방장이 바꿀 수 있다
     narration_tier: NarrationTier = NarrationTier.STANDARD
+    # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 빼고 서술하는가. 만든 뒤에도 방장이 바꿀 수 있다
+    credit_wait_seconds: CreditWait = DEFAULT_CREDIT_WAIT
+    remove_short_payers: bool = True
 
     @model_validator(mode='after')
     def require_public_for_password(self) -> 'TableCreate':
@@ -174,6 +182,15 @@ class RoundTimeLimitUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     round_time_limit: RoundTimeLimit | None
+
+
+class CreditWaitUpdate(BaseModel):
+    """크레딧이 모자란 사람을 기다리는 규칙을 바꿀 때 받는 값. 둘 다 적는다. 칸을 빼먹으면 거부한다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    credit_wait_seconds: CreditWait
+    remove_short_payers: bool
 
 
 class NarrationTierUpdate(BaseModel):
@@ -322,6 +339,9 @@ class TableSummary(BaseModel):
     round_time_limit: int | None
     # 지금의 서술 등급. 로비에서 들어가기 전에 어느 모델로 서술하는지 안다. 바꾸면 다음 라운드부터다
     narration_tier: NarrationTier
+    # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 자리에서 빼는가. 들어가기 전에 안다
+    credit_wait_seconds: int
+    remove_short_payers: bool
     created_at: datetime
 
 
