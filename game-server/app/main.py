@@ -32,6 +32,9 @@ from app.core.database import create_engine, create_session_factory
 from app.core.jobs import BackgroundJobs
 from app.engine.dice import RandomDice
 from app.events import router as events
+from app.limits.attempts import LimitsUnavailable, TooManyAttempts
+from app.limits.responses import handle_limits_unavailable, handle_too_many_attempts
+from app.limits.setup import build_limiting, build_redis
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
 from app.lore.indexing import LoreIndexer
@@ -75,7 +78,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     떠 있는 동안 종료 신호가 오면 방송실부터 닫는다. 열린 스트림이 끝나야 서버가 yield 뒤로 넘어온다
     (app/realtime/shutdown.py). 닫는 일은 신호 처리기가 아니라 이벤트 루프가 한다.
-    꺼질 때 신호를 듣는 연결, DB 연결, 인증 서버로 가는 연결을 전부 닫는다.
+    꺼질 때 신호를 듣는 연결, DB 연결, 인증 서버로 가는 연결, Redis 연결을 전부 닫는다.
     닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     라운드의 시계(마감이 지난 라운드를 닫는 것)와 청구 정리(서술 값을 결제 서버에 맡기는 것)는 뜰 때 돌기 시작하고,
     꺼질 때 가장 먼저 멈춘다. 시계가 맡긴 서술이 뒤의 작업 마무리에 들어가도록 순서를 지킨다.
@@ -92,6 +95,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await app.state.signal_source.stop()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
+    if app.state.redis is not None:
+        await app.state.redis.aclose()
 
 
 def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient | None = None) -> FastAPI:
@@ -143,6 +148,12 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
 
     # "입력 중" 신호를 너무 자주 보내지 못하게 막는 것. 기록을 메모리에 두므로 앱에 하나만 둔다
     app.state.typing_throttle = TypingThrottle()
+
+    # 시도 횟수 제한(app/limits/, #56). 로비의 비밀번호와 채팅을 사람·테이블마다 센다.
+    # REDIS_URL 이 있으면 Redis 로(서버가 여럿이어도 같은 수), 없으면 서버 안의 메모리로 센다.
+    # 앱이 꺼질 때 Redis 를 닫는다
+    app.state.redis = build_redis(settings)
+    app.state.limiting = build_limiting(settings, app.state.redis)
 
     # 요청과 따로 도는 작업을 들고 있는 것. GM 의 서술이 여기서 돈다(app/rounds/closing.py)
     app.state.jobs = BackgroundJobs()
@@ -236,6 +247,8 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.add_exception_handler(RoundConflictError, rounds.handle_round_conflict)
     app.add_exception_handler(ActionNotInRulesError, rounds.handle_action_not_in_rules)
     app.add_exception_handler(ActionTargetError, rounds.handle_action_target)
+    app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
+    app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)
 
     # 위의 어느 것에도 걸리지 않은 예외. 내용은 응답에 싣지 않고 요청의 식별자만 돌려준다
     app.add_exception_handler(Exception, handle_unexpected_error)

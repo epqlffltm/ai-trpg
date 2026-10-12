@@ -17,6 +17,7 @@ from app.chat import service
 from app.chat.models import ChatMessage
 from app.chat.schemas import MessageCreate, MessageOut, MessagePage
 from app.chat.typing import TypingThrottle
+from app.limits.routing import Limited
 
 router = APIRouter(prefix='/tables/{table_id}/messages', tags=['chat'])
 
@@ -45,9 +46,11 @@ def to_message(message: ChatMessage) -> MessageOut:
 
 
 @router.post('', response_model=MessageOut, status_code=status.HTTP_201_CREATED)
-async def post_message(table_id: uuid.UUID, data: MessageCreate, user: CurrentUser, session: Session) -> MessageOut:
+async def post_message(
+    table_id: uuid.UUID, data: MessageCreate, user: CurrentUser, session: Session, limiting: Limited
+) -> MessageOut:
     """채팅을 쓴다. 모집 중과 진행 중에 쓸 수 있다. 끝난 테이블에는 쓸 수 없다."""
-    message = await service.post_message(session, user.user_id, table_id, data)
+    message = await service.post_message(session, user.user_id, table_id, data, limiting)
     return to_message(message)
 
 

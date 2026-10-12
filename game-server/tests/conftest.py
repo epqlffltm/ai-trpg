@@ -18,6 +18,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.limits.setup import Limiting, build_limiting
 from app.main import create_app
 from app.realtime import service as stream_service
 from app.realtime.service import Cursor
@@ -47,6 +48,9 @@ def make_test_settings(**overrides) -> Settings:
     # bge-m3 와 다르다(기본값 0.45, 0.50 이면 이름이 나온 항목도 걸러진다). 키워드의 상한은 끈다(코사인 거리는 2 까지).
     # 지난 일(기억)의 거리 기준도 같은 까닭으로 가짜에 맞춘다
     # 결제 서버는 부르지 않는다(받지 않는 것). 결제 서버를 쓰는 테스트는 가짜를 꽂는다(tests/billing.py)
+    # 시도 횟수 제한은 끈다. 채팅을 여러 번 쓰는 테스트가 막히지 않게 한다.
+    # 제한을 보는 테스트만 켠다(tests/test_attempt_limits.py).
+    # Redis 는 쓰지 않는다(메모리). Redis 로 세는 것은 그 파일이 따로 본다
     # premium 등급의 모델은 비워 둔다. 언어 모델을 켠 테스트에서 개발자의 .env 가 고를 수 있는 등급을 바꾸지 않는다
     # 로그는 경고부터 남긴다. 요청마다 한 줄씩 남는 것(info)까지 남기면, 로그를 잡아 "이 줄 하나만 남았다"를 보는
     # 테스트에 요청의 줄이 섞인다. 요청의 줄을 보는 테스트는 그 로거의 수준을 내려서 잡는다
@@ -65,9 +69,16 @@ def make_test_settings(**overrides) -> Settings:
         'billing_secret': '',
         'llm_premium_model': '',
         'llm_premium_fallback_models': '',
+        'redis_url': '',
+        'limits_enabled': False,
     }
     values.update(overrides)
     return Settings(**values)
+
+
+def no_limits() -> Limiting:
+    """세지도 막지도 않는 시도 횟수 제한. 서비스를 바로 부르는 테스트가 넘긴다."""
+    return build_limiting(make_test_settings(), None)
 
 
 def make_client(app: FastAPI) -> AsyncClient:
