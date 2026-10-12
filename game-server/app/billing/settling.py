@@ -21,6 +21,7 @@ billing.extend 다.
 답을 받지 못한 것은 warning(billing.unavailable), 서명이 거절된 것과 결제 서버가 받아들이지 않은 것은 error 다.
 """
 
+import asyncio
 import enum
 import logging
 import uuid
@@ -49,12 +50,16 @@ UNAVAILABLE_ERROR_CODE = 'billing.unavailable'
 REJECTED_ERROR_CODE = 'billing.rejected'
 
 
+# 돌려줄 것이거나 돌려준 청구. 떠난 사람의 것이다(테이블이 끝났으면 서술은 어차피 버려진다). 서술해도 되는지 볼 때 뺀다
+RETURNED_STATUSES = (ChargeStatus.RELEASE_DUE, ChargeStatus.RELEASED)
+
+
 class Readiness(enum.StrEnum):
     """서술해도 되는가. 서술을 맡은 작업이 서술자를 부르기 전에 본다."""
 
     # 값을 잡아 두었다
     READY = 'ready'
-    # 크레딧이 모자란다. 충전한 뒤 방장이 다시 맡기면 된다
+    # 내는 사람 중 누가 크레딧이 모자란다. 그 사람이 충전하거나 방장이 그 사람을 내보낸 뒤 다시 맡기면 된다
     SHORT = 'insufficient_credits'
     # 결제 서버의 답을 받지 못했거나, 이 청구는 더 걸 수 없다(돌려줬다, 거절됐다)
     UNAVAILABLE = 'billing_unavailable'
@@ -141,6 +146,7 @@ async def note_rejected(
 async def note_short(session_factory: async_sessionmaker[AsyncSession], charge: NarrationCharge) -> None:
     """
     크레딧이 모자란 것을 적는다. 처음 모자란 것을 알았을 때(걸어야 함 → 모자람)만 앉은 사람 모두에게 이벤트로 알린다.
+    누가 모자란지(user_id)를 싣는다. 모자란 사람이 충전하거나 방장이 그 사람을 내보내면 서술할 수 있다.
 
     테이블을 잠그고 적는다. 이벤트의 번호를 매기는 일이 테이블의 잠금 아래에서만 일어난다.
     """
@@ -151,7 +157,8 @@ async def note_short(session_factory: async_sessionmaker[AsyncSession], charge: 
         if table is None or not moved:
             await session.commit()
             return
-        recorder.record(session, table, EventType.NARRATION_CREDITS_SHORT, payload={'round': number})
+        payload = {'round': number, 'user_id': str(charge.payer_id)}
+        recorder.record(session, table, EventType.NARRATION_CREDITS_SHORT, payload=payload)
         await tables.commit(session, table)
 
 
@@ -394,21 +401,35 @@ async def secure(
     return Readiness.UNAVAILABLE
 
 
+def worst(results: list[Readiness]) -> Readiness:
+    """
+    여럿의 결과를 하나로. 모자란 사람이 있으면 모자람, 아니면 답을 못 받은 것이 있으면 그것, 모두 잡았으면 READY.
+
+    모자람을 앞에 둔다. 답을 못 받은 것은 정리 작업이 저절로 다시 하지만, 모자람은 사람이 움직여야 풀린다.
+    """
+    for readiness in (Readiness.SHORT, Readiness.UNAVAILABLE):
+        if readiness in results:
+            return readiness
+    return Readiness.READY
+
+
 async def secure_round(
     session_factory: async_sessionmaker[AsyncSession], billing: Billing, table_id: uuid.UUID, number: int
 ) -> Readiness:
     """
-    라운드의 서술 값을 모두 잡아 둔다. 하나라도 못 잡았으면 그 까닭을 돌려준다.
+    라운드의 서술 값을 모두 잡아 둔다. 하나라도 못 잡았으면 그 까닭을 돌려준다(worst).
 
+    내는 사람마다 함께 해 본다. 한 사람씩 하면 결제 서버가 느릴 때 서술 값을 잡는 시간의 상한을 넘는다.
+    모자란 사람이 여럿이면 모두에게 걸어 봐야 누가 모자란지 모두 알린다.
+    떠난 사람의 것(돌려줄 것, 돌려줌)은 보지 않는다(charges.release_departed). 그 사람 때문에 서술이 막히지 않는다.
     청구가 없는 라운드(이 기록이 생기기 전에 연 라운드)는 받지 않고 서술한다.
     """
     async with session_factory() as session:
         charges = await repository.find_round_charges(session, table_id, number)
-    for charge in charges:
-        readiness = await secure(session_factory, billing, charge, now_utc())
-        if readiness != Readiness.READY:
-            return readiness
-    return Readiness.READY
+    live = [charge for charge in charges if ChargeStatus(charge.status) not in RETURNED_STATUSES]
+    now = now_utc()
+    results = await asyncio.gather(*(secure(session_factory, billing, charge, now) for charge in live))
+    return worst(list(results))
 
 
 async def settle_round(
