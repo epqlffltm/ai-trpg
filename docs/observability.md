@@ -427,7 +427,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 | game-server | 있다 | 있다(DB) |
 | board-server | 있다 | 있다(DB) |
 | billing-server | 있다 | 있다(DB) |
-| auth-server | **없다** | **없다** |
+| auth-server | 있다 | 있다(DB) |
 
 **응답에 서비스 이름과 버전을 더하지 않았다.** 세 서버의 테스트가 본문이 정확히 `{"status":"ok"}` 인 것을 확인하고 있고,
 프록시의 상태 확인이 본문을 글자 그대로 비교하도록 설정될 수 있다. 버전은 로그의 `version` 칸으로 안다.
@@ -663,7 +663,6 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 
 ## 알려진 빈틈
 
-- **auth-server 에 `/health`, `/health/ready` 가 없다.** 다른 세 서버와 같은 뜻으로 더해야 한다.
 - **span 이 없다.** `trace_id` 로 서버 사이의 로그를 이을 수는 있지만 "어디서 얼마나 걸렸나"를 그림으로 볼 수는 없다.
 - **게임 서버의 AI 호출 기록(DB)에 `job_id` 와 `trace_id` 가 없다.** 로그의 서술 작업과 DB 의 호출 기록을 번호로 잇지 못한다. 열을 더하는 마이그레이션이 필요하다.
 - **사람이 치는 명령은 JSON 이 아니다.** billing-server 의 `cmd/migrate`, `cmd/fakepg`, auth-server 의 관리 명령이 화면에 찍는 안내(`self.stdout`)는 그대로 글이다.

@@ -48,6 +48,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 
 `.env.example`을 복사해 `.env`를 만들고 `POSTGRES_PASSWORD`, `AUTH_DB_PASSWORD`,
 `GAME_DB_PASSWORD`, `BILLING_DB_PASSWORD`, `BOARD_DB_PASSWORD`를 채운다. 이 파일은 커밋하지 않는다.
+개발 PC 에서는 `AUTH_DB_ALLOW_TEST_DB=true` 를 그대로 둔다. 인증 서버의 테스트가 테스트용 DB 를 만든다. 운영에서는 이 줄을 지운다.
 
 ```
 cp .env.example .env
@@ -86,8 +87,9 @@ docker compose --profile app ps -a
 끌 때는 `docker compose --profile app down` 이다. 켜 둔 채 Docker Desktop 을 껐다 켜면 다시 뜬다(`restart: unless-stopped`).
 
 - 바깥에서는 프록시 하나로 들어온다. `http://127.0.0.1:8080/api/v1/<auth|game|board|billing>/...` 이다. 서버들의 포트는 열지 않는다.
-- 관리자 화면은 프록시가 막는다(404). 인증 서버만 `127.0.0.1:8000` 을 따로 열어 두었으니 `http://127.0.0.1:8000/admin/` 으로 연다.
+- 관리자 화면은 프록시가 막는다(404). 인증 서버만 `127.0.0.1:8000` 을 따로 열어 두었으니 `http://localhost:8000/admin/` 으로 연다.
   서버(VM)에 올린 뒤에는 SSH 터널로 붙는다. `ssh -L 8000:127.0.0.1:8000 <서버>` 를 띄워 두고 같은 주소를 연다.
+  운영에서는 관리자 화면의 쿠키가 Secure 다. 브라우저는 `localhost` 에서만 HTTP 로도 그 쿠키를 주고받으므로 이 주소로 연다.
 - 서버의 설정은 3번에서 만든 각 서버의 `.env` 를 그대로 쓴다. 그 안의 주소(`127.0.0.1`)만 compose 가
   컨테이너의 이름(`db`, `redis`, `auth-server` 등)으로 바꿔 넘긴다. DB 주소는 루트 `.env` 의 비밀번호로 만든다.
 - 모든 서버를 함께 띄우므로 게임 서버와 인증 서버는 결제 서버에 붙는다. `game-server/.env` 와 `auth-server/.env` 에 `BILLING_SECRET` 이 있어야 한다.
@@ -157,6 +159,15 @@ Windows에서 Hyper-V가 해당 포트를 예약한 경우다. 예약 구간을 
 
 ```
 netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+**인증 서버의 테스트가 `permission denied to create database` 로 실패한다**
+
+`auth` 계정에 테스트용 DB 를 만들 권한이 없다. 루트 `.env` 에 `AUTH_DB_ALLOW_TEST_DB=true` 가 없는 채로 볼륨을 만든 경우다.
+볼륨을 지워도 되면 그 줄을 넣고 다시 만든다. 데이터를 남겨야 하면 관리 계정으로 권한만 준다.
+
+```
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "ALTER ROLE auth CREATEDB"'
 ```
 
 **`password authentication failed for user "auth"`**
