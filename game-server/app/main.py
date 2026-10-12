@@ -53,7 +53,7 @@ from app.rounds import clock
 from app.rounds import router as rounds
 from app.rounds.closing import closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
-from app.rounds.narrator_setup import build_narrator
+from app.rounds.narrator_setup import build_narrator, offered_tiers
 from app.tables import router as tables
 from app.tables.errors import (
     MemberNotFoundError,
@@ -154,6 +154,8 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     # 언어 모델이면 위의 httpx 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다.
     # 부를 때마다 위의 세션 틀로 DB 에 기록을 남긴다(app/ai/call_log.py)
     app.state.narrator = build_narrator(settings, app.state.http_client, app.state.session_factory)
+    # 방장이 테이블에 고를 수 있는 서술 등급들. 위의 서술자와 같은 설정으로 정한다. 모델이 없는 등급은 고를 수 없다
+    app.state.narration_tiers = offered_tiers(settings)
 
     # 로어북 항목을 벡터로 바꾸는 것. 설정(EMBEDDER)이 정한다. 기본은 모델을 부르지 않는 가짜다.
     # 시나리오를 게시하면 뒤에서 판의 항목을 벡터로 바꾼다(app/lore/indexing.py)

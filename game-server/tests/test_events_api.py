@@ -310,7 +310,7 @@ async def test_starting_writes_the_roster_the_scene_and_the_round(
     )
     assert (opened['type'], opened['actor_id'], opened['payload']['number']) == ('round_opened', None, 1)
     # 마감이 함께 실린다. 테이블의 시간 제한(기본 5 분)만큼 뒤다(test_round_time_limit.py)
-    assert set(opened['payload']) == {'number', 'deadline_at'}
+    assert set(opened['payload']) == {'number', 'deadline_at', 'narration_tier'}
     # 시작 → 서술 → 열림. 원인으로 이어지고 한 묶음이다
     assert narration['caused_by_sequence'] == started['sequence']
     assert opened['caused_by_sequence'] == narration['sequence']

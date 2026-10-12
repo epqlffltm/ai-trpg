@@ -182,9 +182,10 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/personas/{id}` | 보관한 캐릭터 하나 | access 토큰 |
 | PUT | `/api/v1/game/personas/{id}` | 보관한 캐릭터 고치기. 보낸 것으로 통째로 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/personas/{id}` | 보관한 캐릭터 지우기. 204 | access 토큰 |
-| POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
+| POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_tier` 로 서술 등급을 고른다(비우면 `standard`). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables` | 내가 앉아 있는 테이블 목록. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/join` | 초대 코드로 테이블에 들어가 앉는다 | access 토큰 |
+| GET | `/api/v1/game/tables/narration-tiers` | 이 서버가 내주는 서술 등급들(`{"tiers": ["standard", "premium"]}`). 테이블을 만들거나 등급을 바꿀 때 이 중에서 고른다 | access 토큰 |
 | GET | `/api/v1/game/tables/lobby` | 로비. 들어갈 수 있는 테이블 목록. 최근에 만든 것부터. `scenario_id`, `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/join` | 로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 `password` 를 보낸다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}` | 내가 앉아 있는 테이블 하나 | access 토큰 |
@@ -199,6 +200,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/host` | 방장 넘기기. 방장만 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/narration-style` | 서술 문체 바꾸기. 방장만. 진행 중에도 된다. `null` 이면 판의 추천 문체로 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/round-time-limit` | 라운드의 시간 제한(초) 바꾸기. 방장만. 진행 중에도 되고 다음 라운드부터 쓴다. `null` 이면 시간 제한 없음 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/narration-tier` | 서술 등급 바꾸기. 방장만. 이 서버가 내주는 등급만. 진행 중에도 되고 다음 라운드부터 쓴다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/start` | 테이블 시작하기. 방장만. 모두 캐릭터가 있어야 한다. 모두가 시트를 받는다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/end` | 테이블 끝내기. 방장만 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds` | 라운드 목록. 처음 것부터. `limit`, `offset` | access 토큰 |
@@ -688,6 +690,14 @@ characters.py   캐릭터 정하기(진행 중에 새 캐릭터를 들일 때도
 - 목록과 로비에도 보인다. 들어가기 전에 얼마나 빨리 진행되는 테이블인지 안다.
 - 이 칸이 생기기 전에 만든 테이블은 시간 제한이 없다.
 
+**서술 등급.** 어느 모델들로 서술하고 서술 한 번에 얼마를 받는가다(`narration_tier`: `standard`, `premium`). 값은 결제 서버의 가격표(`narration.<등급>`)가 정한다([서술 값](#서술-값)).
+- 방장이 만들 때 고른다. 칸을 적지 않으면 `standard` 다. 이 서버가 내주는 등급만 된다(`GET /tables/narration-tiers`). 내주지 않는 등급이면 422 다. DB 도 값을 지킨다.
+- 어느 등급을 내줄지는 서버의 설정이 정한다. `premium` 은 그 모델(`LLM_PREMIUM_MODEL`)을 적었을 때만 내준다([라운드](#라운드)의 "등급마다의 모델"). 가짜 서술자면 모두 내준다.
+- 방장은 진행 중에도 바꿀 수 있다(`PUT .../narration-tier`). **바꾼 값은 다음 라운드부터 쓴다.** 라운드는 열 때 그 등급의 값을 걸어 두었다. 열려 있는 라운드를 바꾼 등급으로 서술하면 낸 값과 받은 서술이 어긋난다. 끝난 테이블은 409, 칸을 빼먹으면 422 다.
+- 라운드마다 연 때의 등급이 남는다(라운드의 `narration_tier`, `round_opened` 에도 실린다). 화면은 테이블의 등급과 지금 라운드의 등급이 다를 때 "다음 라운드부터"를 보여 줄 수 있다.
+- 바꾼 것은 이벤트(`narration_tier_changed`)로 모두에게 보인다. 지금과 같은 값이면 아무것도 적지 않는다. 목록과 로비에도 보인다.
+- 이 칸이 생기기 전에 만든 테이블과 라운드는 `standard` 다. 그때는 등급이 하나였고 그 값을 걸었다.
+
 **비밀번호.** 로비에 보이는 테이블에 걸 수 있다(4~64자). 로비에서 들어올 때만 묻는다.
 그대로 저장하지 않는다. scrypt 로 계산한 값을 소금, 비용과 함께 둔다. 응답에는 걸려 있는지(`has_password`)만 싣는다.
 틀리면 403 이다. 비밀번호의 모양이 어떻든 답이 같다. 길이를 짐작할 실마리를 주지 않는다.
@@ -1086,10 +1096,19 @@ LLM_TIMEOUT_SECONDS=60
 LLM_SUPPORTS_REASONING=true
 # 첫 모델이 끝내 실패하면 차례로 넘어갈 모델들. 쉼표로 나눈다. 비우면 넘어가지 않는다
 LLM_FALLBACK_MODELS=
+# premium 등급의 첫 모델과 넘어갈 모델들. 비우면 premium 을 내주지 않는다
+LLM_PREMIUM_MODEL=
+LLM_PREMIUM_FALLBACK_MODELS=
 ```
 
 LM Studio 면 `LLM_BASE_URL=http://127.0.0.1:1234/v1` 이다. `NARRATOR=llm` 인데 `LLM_MODEL` 이 없으면 서버가 뜨지 않는다.
 `LLM_TIMEOUT_SECONDS` 는 서술 하나의 상한(150초)보다 길 수 없다(길면 뜨지 않는다).
+
+**등급마다의 모델.** 서술 등급(`standard`, `premium`)마다 모델들을 따로 적는다. `standard` 는 `LLM_MODEL` 과 `LLM_FALLBACK_MODELS`, `premium` 은 `LLM_PREMIUM_MODEL` 과 `LLM_PREMIUM_FALLBACK_MODELS` 다(`app/rounds/narrator_setup.py` 의 `tier_models`).
+- 라운드는 연 때의 등급의 모델들로 서술한다(`app/rounds/tiered_narrator.py`). 다시 시도하기와 넘어가기는 그 등급 안에서만 한다. 등급 안에서 다음 모델로 넘어가도 값은 그대로다(라운드를 열 때 건 값). 다른 등급의 모델로는 넘어가지 않는다. 값이 다르다.
+- **`premium` 을 켜기 전에 결제 서버의 가격표에 `narration.premium` 을 먼저 적는다**(`billing-server` 의 `go run ./cmd/prices set narration.premium <크레딧> -reason "..."`). 없으면 결제 서버가 홀드를 받지 않는다(400). 그 라운드의 청구는 `failed` 가 되고(`billing.rejected`) 서술하지 않는다(`billing_unavailable`).
+- `premium` 의 모델을 지운 뒤에도 그 등급으로 이미 연 라운드는 서술하지 않는다(`tier_unavailable`). 더 싼 등급으로 서술하면 낸 값과 받은 서술이 어긋난다. 설정을 되돌리고 방장이 다시 맡기면 서술한다. 등급을 거두려면 먼저 그 등급의 테이블이 다음 라운드부터 `standard` 가 되게 한다.
+- 모델은 모두 같은 주소(`LLM_BASE_URL`)에 있다. 클라우드 모델처럼 주소와 키가 다른 provider 를 등급에 붙이는 것은 그 provider 를 더할 때 한다.
 
 **다시 시도하기와 넘어가기.** 서술이 실패하면 같은 모델로 한 번 더 부르고, 그래도 안 되면 `LLM_FALLBACK_MODELS` 의 모델로 차례로 넘어간다(`app/rounds/retrying_narrator.py`).
 - 모델마다 두 번까지 부른다. 다시 부르기 전에 1~2초를 무작위로 쉰다. 여러 테이블이 함께 실패해도 다시 부르는 때가 흩어진다.
@@ -1219,7 +1238,8 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 ## 서술 값
 
 라운드의 AI 서술 한 번마다 크레딧을 받는다([#148](https://github.com/epqlffltm/ai-trpg/issues/148)). 크레딧의 잔액과 원장은 결제 서버만 안다(`billing-server/`).
-게임 서버는 결제 서버에 "이 사용자에게서 이 가격표의 값을 잡아 둬라(홀드), 확정해라, 돌려줘라"를 맡길 뿐이다. 금액도 모른다. 가격표의 이름(`narration.standard`)만 보낸다.
+게임 서버는 결제 서버에 "이 사용자에게서 이 가격표의 값을 잡아 둬라(홀드), 확정해라, 돌려줘라"를 맡길 뿐이다. 금액도 모른다. 가격표의 이름만 보낸다.
+가격표의 이름은 라운드의 서술 등급이다(`narration.standard`, `narration.premium`, `charges.price_code_for`). 등급은 라운드를 열 때 굳으므로 건 값과 서술한 모델의 등급이 늘 같다([서술 등급](#테이블)).
 
 ```
 라운드를 연다 ──(같은 트랜잭션)──▶ 청구: pending
@@ -1297,7 +1317,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 **알려진 한계**
 - 방장이 테이블을 끝내지 않고 버려 두면 열린 라운드의 값(서술 한 번)이 계속 묶여 있다. 게임 서버가 연장하므로 결제 서버의 만료로도 풀리지 않는다. 방장이 끝내야 돌아온다.
 - 크레딧이 모자란 것을 알린 뒤에 충전해도 정리 작업은 다시 걸지 않는다. 라운드를 닫을 때 다시 걸어 본다. 모자란 사람의 테이블마다 결제 서버를 두드리지 않으려는 것이다.
-- 모델마다 다른 값은 아직 없다. 가격표의 이름이 하나다([#151](https://github.com/epqlffltm/ai-trpg/issues/151)).
+- 등급을 넘는 넘어가기는 없다. `premium` 의 모델들이 모두 실패하면 `standard` 로 서술하지 않고 실패로 적는다. 방장이 다시 맡기거나 다음 라운드부터 등급을 낮춘다.
 - 이 기능 전에 연 라운드는 마이그레이션이 그때의 방장에게 청구를 만들어 둔다(진행 중인 테이블의 열린 라운드와 닫는 중인 라운드). 결제 서버를 켜지 않았으면 받지 않고 지나간다.
 
 ## 이벤트 기록
@@ -1324,9 +1344,10 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `reroll_granted` | 방장이 누구에게 "한 번 더 굴리기"를 줬다 | `user_id`: 받은 사람 |
 | `narration_style_changed` | 방장이 서술 문체를 바꿨다. 다음 서술부터 그 문체다 | `narration_style`: 바꾼 문체 |
 | `round_time_limit_changed` | 방장이 라운드의 시간 제한을 바꿨다. 다음 라운드부터 쓴다 | `round_time_limit`: 바꾼 값(초, 없으면 `null`) |
+| `narration_tier_changed` | 방장이 서술 등급을 바꿨다. 다음 라운드부터 그 등급이다 | `narration_tier`: 바꾼 등급 |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
-| `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`) |
+| `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_tier`(이 라운드의 서술 등급) |
 | `player_action` | 플레이어가 선언한 행동 | `round`, `character_name`, `content`, `action`(행동. 없으면 `null`) |
 | `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면) |
 | `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed`, `injury_roll`(부상 표를 굴렸으면) |
@@ -1339,7 +1360,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `character_died` | 캐릭터가 죽었다. 죽음의 굴림으로 죽었으면 그 굴림 바로 뒤에, 치료 실패의 즉사면 그 치료 바로 뒤에 적힌다 | `user_id`, `character_name`, `cause`(`death_save`, `gave_up`, `treatment`). 죽음의 굴림이나 치료로 죽었으면 `round` 도 |
 | `character_joined` | 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다 | `round`, `user_id`, `character_name`, `replaces`: 죽은 캐릭터의 이름, `mode`, `pregen_index`, `number`: 그 사람의 몇 번째 캐릭터인지, `sheet`: 받은 시트 |
 | `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `reason`(`all_declared`, `host`, `timeout`), `idle`: 선언을 내지 않은 사람. 쓰러진 사람과 그 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다 |
-| `narration_failed` | GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고 방장이 바로 다시 맡길 수 있다 | `round`, `reason`: 마지막 실패의 이유. 서술 값을 잡지 못했으면 `insufficient_credits` 또는 `billing_unavailable`([서술 값](#서술-값)) |
+| `narration_failed` | GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고 방장이 바로 다시 맡길 수 있다 | `round`, `reason`: 마지막 실패의 이유. 서술 값을 잡지 못했으면 `insufficient_credits` 또는 `billing_unavailable`([서술 값](#서술-값)). 라운드의 등급의 모델이 서버에 없으면 `tier_unavailable`([서술 등급](#테이블)) |
 | `narration_credits_short` | 이 라운드의 서술 값을 내는 방장의 크레딧이 모자란다. 라운드를 연 뒤 서버가 값을 걸어 보고 알았다. 한 라운드에 한 번 | `round`. 충전하지 않으면 라운드를 닫을 때 서술이 실패한다(`insufficient_credits`) |
 | `table_ended` | 테이블이 끝났다 | |
 

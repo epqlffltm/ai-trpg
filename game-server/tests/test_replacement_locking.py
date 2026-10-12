@@ -31,6 +31,7 @@ from app.tables import replacements, repository, service, sheets
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable
 from app.tables.schemas import CharacterUpdate, TableCreate
+from tests.conftest import EVERY_TIER
 from tests.indexers import NO_INDEXER
 from tests.sheets import SHEET
 from tests.signing import make_viewer
@@ -63,7 +64,7 @@ async def start_with_a_dead_character(session: AsyncSession) -> GameTable:
     scenario = await scenarios.create_scenario(session, ME, data)
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     created = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=1)
-    table = await service.create_table(session, make_viewer(ME), created)
+    table = await service.create_table(session, make_viewer(ME), created, EVERY_TIER)
     await service.set_character(session, ME, table.id, CharacterUpdate(name='엘프'))
     await service.start_table(session, ME, table.id)
     # 죽이는 길(쓰러뜨리고 보내기)은 다른 테스트가 본다. 여기서는 죽어 있는 상태만 필요하다

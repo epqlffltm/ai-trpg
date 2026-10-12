@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import settler as charge_settler
 from app.billing import settling
-from app.billing.charges import EXTEND_AFTER, EXTEND_REJECTED_RETRY, PRICE_CODE, retry_delay
+from app.billing.charges import EXTEND_AFTER, EXTEND_REJECTED_RETRY, retry_delay
 from app.billing.client import HoldOutcome, HoldResult
 from app.billing.models import NarrationCharge
 from app.billing.settler import ChargeSettler
@@ -62,6 +62,8 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 
 # 서술 한 번의 값. 가짜 결제 서버의 가격표다
 PRICE = 50
+# 가짜 결제 서버의 standard 가격표 이름. 등급을 고르지 않은 테이블의 라운드가 건다
+PRICE_CODE = 'narration.standard'
 
 
 @pytest.fixture

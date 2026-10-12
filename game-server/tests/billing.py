@@ -30,7 +30,7 @@ from app.billing.http_billing import HttpBilling
 
 BILLING_URL = 'http://billing.test'
 SECRET = 'test-billing-secret-0123456789abcdef'
-PRICES = {'narration.standard': 50}
+PRICES = {'narration.standard': 50, 'narration.premium': 120}
 # 결제 서버가 받아 주는 시각의 차이(초)
 TOLERANCE = 300
 # 홀드가 걸리거나 연장된 뒤 만료될 때까지(결제 서버의 HOLD_TTL 기본값)
@@ -95,12 +95,14 @@ class FakeBillingServer:
         return httpx.Response(status_code, json=body)
 
     def place(self, body: dict) -> httpx.Response:
-        """홀드를 건다. 같은 이름표면 걸어 둔 것을 돌려준다."""
+        """홀드를 건다. 같은 이름표면 걸어 둔 것을 돌려준다. 가격표에 없는 이름이면 400 이다."""
         reference, user_id, price_code = body['reference'], body['user_id'], body['price_code']
         existing = self.holds.get(reference)
         if existing is not None:
             same = (existing.user_id, existing.price_code) == (user_id, price_code)
             return self.answer(200, reference) if same else self.answer(409)
+        if price_code not in PRICES:
+            return self.answer(400)
         amount = PRICES[price_code]
         balance = self.balances.get(uuid.UUID(user_id), 0)
         if balance < amount:
