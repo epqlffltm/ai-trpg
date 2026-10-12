@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.billing import settler as charge_settler
 from app.billing import settling
 from app.billing.charges import PRICE_CODE, retry_delay
+from app.billing.client import HoldResult
 from app.billing.models import NarrationCharge
 from app.billing.settler import ChargeSettler
 from app.main import create_app
@@ -429,6 +430,51 @@ async def test_a_billing_server_that_never_answers_is_given_up(
     assert narrator.calls == 0
     assert (await last_event(client, friend, table))['payload'] == {'round': 1, 'reason': 'billing_unavailable'}
     assert await statuses_of(session, table) == ['pending']
+
+
+class StuckCaptureBilling:
+    """홀드는 바로 잡고, 확정에는 답하지 않는 결제 서버."""
+
+    async def hold(self, reference, user_id, price_code):
+        return HoldResult.HELD
+
+    async def capture(self, reference):
+        await asyncio.Event().wait()
+
+
+async def test_a_capture_that_never_answers_is_left_to_the_settler(
+    client: AsyncClient,
+    app: FastAPI,
+    session: AsyncSession,
+    me: dict,
+    friend: dict,
+    held,
+    caplog: pytest.LogCaptureFixture,
+):
+    table, started = await hold_closing(client, app, me, friend)
+
+    with caplog.at_level(logging.WARNING, logger='app.rounds.closing'):
+        async with asyncio.timeout(2):
+            await closing.narrate_round(
+                app.state.session_factory,
+                CountingNarrator(),
+                uuid.UUID(table['id']),
+                1,
+                started,
+                budgets=closing.Budgets(billing=0.05),
+                billing=StuckCaptureBilling(),
+            )
+
+    # 라운드는 닫혔고 확정할 것은 DB 에 남았다. 기다리지 않고 정리 작업에 넘긴다
+    assert (await current(client, me, table))['number'] == 2
+    assert (await statuses_of(session, table))[0] == 'capture_due'
+    [line] = rendered(caplog.records, 'app.rounds.closing')
+    assert (line['level'], line['operation'], line['error_code']) == (
+        'warning',
+        'billing.capture',
+        'billing.unavailable',
+    )
+    assert (line['table_id'], line['round']) == (table['id'], 1)
 
 
 # --- 돌려주기 ---

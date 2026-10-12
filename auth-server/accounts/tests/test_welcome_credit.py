@@ -506,7 +506,7 @@ class TwoWorkersTests(TransactionTestCase):
         self.assertEqual(claim.attempts, 0)
 
 
-@override_settings(BILLING_SERVICE_SECRET=SECRET)
+@override_settings(BILLING_SECRET=SECRET)
 class WorkerCommandTests(TestCase):
     def run_once(self) -> str:
         output = StringIO()
@@ -527,11 +527,11 @@ class WorkerCommandTests(TestCase):
     def test_once_prints_nothing_when_there_is_nothing_to_do(self):
         self.assertEqual(self.run_once(), '')
 
-    @override_settings(BILLING_SERVICE_SECRET='')
+    @override_settings(BILLING_SECRET='')
     def test_refuses_to_run_without_the_secret(self):
         claim = pending()
 
-        with billing_answers() as client, self.assertRaisesMessage(CommandError, 'BILLING_SERVICE_SECRET'):
+        with billing_answers() as client, self.assertRaisesMessage(CommandError, 'BILLING_SECRET'):
             self.run_once()
 
         # 줄마다 실패를 쌓지 않는다. 설정을 고친 뒤 바로 나갈 수 있게 그대로 둔다
@@ -588,7 +588,7 @@ class EndToEndTests(APITestCase):
         self.client.post(VERIFY_URL, {'email': EMAIL, 'code': code_from(mail.outbox[-1])}, format='json')
         user = User.objects.get(username='player_01')
 
-        with BillingStub() as stub, override_settings(BILLING_URL=stub.url, BILLING_SERVICE_SECRET=SECRET):
+        with BillingStub() as stub, override_settings(BILLING_URL=stub.url, BILLING_SECRET=SECRET):
             output = StringIO()
             call_command('send_welcome_credits', '--once', stdout=output)
             # 다시 돌려도 또 부르지 않는다
@@ -607,7 +607,7 @@ class EndToEndTests(APITestCase):
         claim = pending()
 
         with BillingStub(status_code=503, body=b'') as stub:
-            with override_settings(BILLING_URL=stub.url, BILLING_SERVICE_SECRET=SECRET):
+            with override_settings(BILLING_URL=stub.url, BILLING_SECRET=SECRET):
                 with self.assertLogs('accounts.welcome_credit', level='WARNING'):
                     first = deliver_due_welcome_credits()
                 stub.status_code = 201

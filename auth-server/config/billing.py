@@ -34,5 +34,5 @@ def validate_service_secret(secret: str) -> str:
     오류에는 값을 싣지 않는다.
     """
     if secret and len(secret) < MIN_SERVICE_SECRET_LENGTH:
-        raise ImproperlyConfigured(f'BILLING_SERVICE_SECRET 은 {MIN_SERVICE_SECRET_LENGTH}자 이상이어야 합니다.')
+        raise ImproperlyConfigured(f'BILLING_SECRET 은 {MIN_SERVICE_SECRET_LENGTH}자 이상이어야 합니다.')
     return secret
