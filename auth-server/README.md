@@ -79,21 +79,34 @@ uv run python manage.py send_outgoing_mail
 
 ```
 BILLING_URL=http://127.0.0.1:8003
-BILLING_SERVICE_SECRET=결제 서버의 AUTH_SERVER_SECRET 과 같은 값
+BILLING_SECRET=결제 서버의 AUTH_SERVER_SECRET 과 같은 값
 ```
 
-`BILLING_SERVICE_SECRET`은 두 서버만 아는 비밀이다. 32자 이상이다. 요청에 서명할 때 쓴다.
+`BILLING_SECRET`은 두 서버만 아는 비밀이다. 32자 이상이다. 요청에 서명할 때 쓴다.
+설정의 이름은 게임 서버와 같다(`BILLING_URL`, `BILLING_SECRET`). 결제 서버를 부르는 서버는 같은 이름을 쓴다. **값은 서버마다 다르다.**
+게임 서버의 값은 결제 서버의 `GAME_SERVER_SECRET`, 이 서버의 값은 `AUTH_SERVER_SECRET` 과 짝이다.
 결제 서버의 `.env`에 `AUTH_SERVER_SECRET`으로 같은 값이 있어야 한다. 값을 화면에 찍지 않고 두 파일에 함께 넣으려면
 저장소 루트에서 아래를 실행한다(PowerShell).
 
 ```
-$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); $s = [BitConverter]::ToString($b).Replace('-','').ToLower(); Add-Content auth-server/.env "`nBILLING_SERVICE_SECRET=$s"; Add-Content billing-server/.env "`nAUTH_SERVER_SECRET=$s"; Remove-Variable s, b
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); $s = [BitConverter]::ToString($b).Replace('-','').ToLower(); Add-Content auth-server/.env "`nBILLING_SECRET=$s"; Add-Content billing-server/.env "`nAUTH_SERVER_SECRET=$s"; Remove-Variable s, b
 ```
 
 macOS, Linux 에서는 이렇게 한다.
 
 ```
-s=$(openssl rand -hex 32); printf '\nBILLING_SERVICE_SECRET=%s\n' "$s" >> auth-server/.env; printf '\nAUTH_SERVER_SECRET=%s\n' "$s" >> billing-server/.env; unset s
+s=$(openssl rand -hex 32); printf '\nBILLING_SECRET=%s\n' "$s" >> auth-server/.env; printf '\nAUTH_SERVER_SECRET=%s\n' "$s" >> billing-server/.env; unset s
+```
+
+이 설정의 이름은 처음에 `BILLING_SERVICE_SECRET` 이었다. 그 이름으로 적어 둔 `.env` 는 아래 한 줄로 새 이름의 줄을 더한다(값은 찍히지 않는다).
+옛 줄은 쓰이지 않으니 지워도 된다.
+
+```
+$s = (Select-String -Path auth-server/.env -Pattern '^BILLING_SERVICE_SECRET=(.+)$').Matches[0].Groups[1].Value; Add-Content auth-server/.env "`nBILLING_SECRET=$s"; Remove-Variable s
+```
+
+```
+s=$(sed -n 's/^BILLING_SERVICE_SECRET=//p' auth-server/.env); printf '\nBILLING_SECRET=%s\n' "$s" >> auth-server/.env; unset s
 ```
 
 맡기는 것은 워커다. 서버와 따로 띄운다. 결제 서버도 떠 있어야 한다.
@@ -614,7 +627,7 @@ uv run python manage.py send_outgoing_mail
 ```
 
 **환영 크레딧 워커.** 결제 서버를 함께 띄운다면 서버와 함께 떠 있어야 한다. 멈춰 있어도 잃는 것은 없다. 맡길 일이 쌓였다가 다시 뜨면 나간다.
-여러 개 띄워도 된다. `BILLING_SERVICE_SECRET`이 없으면 시작하지 않고 오류로 끝난다.
+여러 개 띄워도 된다. `BILLING_SECRET`이 없으면 시작하지 않고 오류로 끝난다.
 
 ```
 uv run python manage.py send_welcome_credits

@@ -85,9 +85,9 @@ def _post(path: str, body: bytes) -> tuple[int, bytes]:
 
 def _headers(path: str, body: bytes) -> dict[str, str]:
     """요청에 붙일 머리말. 서명과, 추적을 이어 주는 값이다."""
-    secret = settings.BILLING_SERVICE_SECRET
+    secret = settings.BILLING_SECRET
     if not secret:
-        raise BillingUnavailableError('BILLING_SERVICE_SECRET 이 없다')
+        raise BillingUnavailableError('BILLING_SECRET 이 없다')
     signature = sign_request(secret=secret, method='POST', request_uri=path, body=body, sent_at=int(time.time()))
     return {'Content-Type': 'application/json', SIGNATURE_HEADER: signature, **outgoing_headers()}
 
