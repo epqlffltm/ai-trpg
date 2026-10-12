@@ -9,17 +9,20 @@
 
 import uuid
 
-from app.billing.client import HoldResult
+from app.billing.client import ExtendOutcome, ExtendResult, HoldOutcome, HoldResult
 
 
 class FreeBilling:
-    """언제나 잡히고, 확정과 반환은 아무것도 하지 않는다."""
+    """언제나 잡히고, 확정과 반환은 아무것도 하지 않는다. 만료 시각을 주지 않는다."""
 
-    async def hold(self, reference: str, user_id: uuid.UUID, price_code: str) -> HoldResult:
-        return HoldResult.HELD
+    async def hold(self, reference: str, user_id: uuid.UUID, price_code: str) -> HoldOutcome:
+        return HoldOutcome(HoldResult.HELD)
 
     async def capture(self, reference: str) -> None:
         return None
 
     async def release(self, reference: str) -> None:
         return None
+
+    async def extend(self, reference: str) -> ExtendOutcome:
+        return ExtendOutcome(ExtendResult.EXTENDED)

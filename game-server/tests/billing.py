@@ -1,7 +1,7 @@
 # game-server/tests/billing.py
 
 """
-가짜 결제 서버. 홀드를 걸고, 확정하고, 돌려주는 세 주소를 결제 서버의 규칙대로 흉내 낸다
+가짜 결제 서버. 홀드를 걸고, 확정하고, 돌려주고, 연장하는 네 주소를 결제 서버의 규칙대로 흉내 낸다
 (billing-server/README.md 의 "홀드").
 
 서명을 확인한다. 앱의 서명 코드(app/billing/signing.py)를 쓰지 않고 여기서 따로 계산한다.
@@ -10,6 +10,7 @@
 
 사용자마다 크레딧(balances)을 두고, 홀드를 걸면 빼고, 돌려주면 되돌린다. 테스트가 크레딧을 바꿔 충전을 흉내 낸다.
 down 을 켜면 죽은 것이다. 연결하지 못한다.
+expire 는 결제 서버의 정리 작업이 만료된 홀드를 돌려준 것을 흉내 낸다. extended 는 연장을 부른 이름표들이다.
 """
 
 import asyncio
@@ -18,7 +19,9 @@ import hmac
 import json
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from pydantic import SecretStr
@@ -30,6 +33,13 @@ SECRET = 'test-billing-secret-0123456789abcdef'
 PRICES = {'narration.standard': 50}
 # 결제 서버가 받아 주는 시각의 차이(초)
 TOLERANCE = 300
+# 홀드가 걸리거나 연장된 뒤 만료될 때까지(결제 서버의 HOLD_TTL 기본값)
+HOLD_TTL = timedelta(hours=24)
+
+
+def utc_now() -> datetime:
+    """지금 시각(UTC)."""
+    return datetime.now(UTC)
 
 
 @dataclass
@@ -39,6 +49,7 @@ class FakeHold:
     user_id: str
     price_code: str
     amount: int
+    expires_at: datetime
     status: str = 'held'
 
 
@@ -53,7 +64,11 @@ class FakeBillingServer:
     holds: dict[str, FakeHold] = field(default_factory=dict)
     down: bool = False
     calls: list[tuple[str, str]] = field(default_factory=list)
+    extended: list[str] = field(default_factory=list)
     headers: list[httpx.Headers] = field(default_factory=list)
+    # 만료 시각을 정하는 시계와 HOLD_TTL. 테스트가 바꿔 꽂는다
+    clock: Callable[[], datetime] = utc_now
+    ttl: timedelta = HOLD_TTL
 
     def signed(self, request: httpx.Request) -> bool:
         """머리말의 서명이 이 요청의 것이고 방금 만든 것인가."""
@@ -70,7 +85,13 @@ class FakeBillingServer:
         hold = self.holds.get(reference)
         if hold is None or status_code >= 300:
             return httpx.Response(status_code, json={'detail': '...'})
-        body = {'reference': reference, 'user_id': hold.user_id, 'amount': str(hold.amount), 'status': hold.status}
+        body = {
+            'reference': reference,
+            'user_id': hold.user_id,
+            'amount': str(hold.amount),
+            'status': hold.status,
+            'expires_at': hold.expires_at.isoformat().replace('+00:00', 'Z'),
+        }
         return httpx.Response(status_code, json=body)
 
     def place(self, body: dict) -> httpx.Response:
@@ -85,7 +106,7 @@ class FakeBillingServer:
         if balance < amount:
             return self.answer(402)
         self.balances[uuid.UUID(user_id)] = balance - amount
-        self.holds[reference] = FakeHold(user_id, price_code, amount)
+        self.holds[reference] = FakeHold(user_id, price_code, amount, self.clock() + self.ttl)
         return self.answer(201, reference)
 
     def capture(self, reference: str) -> httpx.Response:
@@ -111,6 +132,21 @@ class FakeBillingServer:
             self.balances[user] = self.balances.get(user, 0) + hold.amount
         return self.answer(200, reference)
 
+    def extend(self, reference: str) -> httpx.Response:
+        """홀드의 만료를 민다. 없으면 404, 이미 끝났으면 409."""
+        hold = self.holds.get(reference)
+        if hold is None:
+            return self.answer(404)
+        if hold.status != 'held':
+            return self.answer(409)
+        self.extended.append(reference)
+        hold.expires_at = self.clock() + self.ttl
+        return self.answer(200, reference)
+
+    def expire(self, reference: str) -> None:
+        """정리 작업이 만료된 홀드를 돌려준 것. 크레딧이 돌아간다."""
+        self.release(reference)
+
     async def handle(self, request: httpx.Request) -> httpx.Response:
         """요청 하나에 답한다. httpx 가 네트워크 대신 이 함수를 부른다."""
         await asyncio.sleep(0)
@@ -126,6 +162,8 @@ class FakeBillingServer:
             return self.place(body)
         if action == 'capture':
             return self.capture(body['reference'])
+        if action == 'extend':
+            return self.extend(body['reference'])
         return self.release(body['reference'])
 
     def make_client(self) -> httpx.AsyncClient:

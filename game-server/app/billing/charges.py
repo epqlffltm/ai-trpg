@@ -26,6 +26,12 @@ PRICE_CODE = 'narration.standard'
 RETRY_BASE_SECONDS = 5.0
 RETRY_MAX_SECONDS = 300.0
 
+# 결제 서버가 만료 시각을 알려 주지 않을 때(받지 않는 것, 시각이 빠진 답) 연장하는 간격.
+# 결제 서버의 HOLD_TTL 기본값(24시간)의 절반이다. 시각을 알면 그것으로 정한다(next_extension)
+EXTEND_AFTER = timedelta(hours=12)
+# 결제 서버가 연장을 받아들이지 않을 때(버그) 다시 부르기까지 기다리는 시간. 그때마다 오류가 남는다
+EXTEND_REJECTED_RETRY = timedelta(hours=1)
+
 
 def payers_of(table: GameTable) -> list[uuid.UUID]:
     """
@@ -37,15 +43,32 @@ def payers_of(table: GameTable) -> list[uuid.UUID]:
     return [table.host_id]
 
 
-def reference_for(table_id: uuid.UUID, number: int, payer_id: uuid.UUID) -> str:
-    """결제 서버의 이름표. 테이블, 라운드, 내는 사람으로 짓는다. 같은 라운드의 같은 사람이면 언제 지어도 같다."""
-    return f'narration:{table_id}:{number}:{payer_id}'
+def reference_for(table_id: uuid.UUID, number: int, payer_id: uuid.UUID, renewals: int = 0) -> str:
+    """
+    결제 서버의 이름표. 테이블, 라운드, 내는 사람으로 짓는다. 같은 라운드의 같은 사람이면 언제 지어도 같다.
+
+    만료되어 다시 건 홀드는 그 횟수를 끝에 붙인다(:r1, :r2 …). 처음 건 홀드는 붙이지 않는다(그 전에 지은 이름표와 같다).
+    """
+    base = f'narration:{table_id}:{number}:{payer_id}'
+    return f'{base}:r{renewals}' if renewals else base
 
 
 def retry_delay(attempts: int) -> timedelta:
     """attempts 번째로 부르지 못한 뒤에 다시 부르기까지 기다리는 시간."""
     seconds = RETRY_BASE_SECONDS * 2 ** max(attempts - 1, 0)
     return timedelta(seconds=min(seconds, RETRY_MAX_SECONDS))
+
+
+def next_extension(now: datetime, expires_at: datetime | None) -> datetime:
+    """
+    걸린 홀드를 다음에 연장할 시각. 만료까지 남은 시간의 절반이 지났을 때다. 한 번 놓쳐도 만료 전에 한 번 더 부른다.
+
+    결제 서버의 HOLD_TTL 은 설정이라 환경마다 다르다(최소 1분). 그래서 고정 간격이 아니라 답의 만료 시각으로 정한다.
+    이미 지났으면 바로 다시 연장한다. 만료 시각을 모르면 정해 둔 간격(EXTEND_AFTER)이다.
+    """
+    if expires_at is None:
+        return now + EXTEND_AFTER
+    return now + max((expires_at - now) / 2, timedelta(0))
 
 
 def charge_round(session: AsyncSession, table: GameTable, round_: Round) -> None:
