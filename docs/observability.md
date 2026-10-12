@@ -526,6 +526,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `board_writes_total` | counter | `resource`(`post`, `comment`), `action`(`create`, `update`, `delete`), `result`(`success`, `rejected`, `rate_limited`) | 글과 댓글을 쓴 수. `rate_limited` 는 쓰기 횟수 제한에 걸린 것(429)이다 |
 | `board_searches_total` | counter | `result`(`success`, `timeout`) | 글을 검색한 수. `timeout` 은 정해 둔 시간(3초)을 넘겨 멈춘 것(503)이다. 늘면 색인이나 검색 엔진이 필요하다 |
 | `board_search_duration_seconds` | histogram | 없음 | 검색 하나가 걸린 시간 |
+| `board_reports_total` | counter | `target`(`post`, `comment`), `result`(`success`, `rejected`, `rate_limited`) | 글과 댓글을 신고한 수. `rejected` 는 받지 않은 것(이미 신고함, 자기 것, 없는 것), `rate_limited` 는 신고 횟수 제한에 걸린 것(429)이다 |
 
 **결제 (billing)**
 
