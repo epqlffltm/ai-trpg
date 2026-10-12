@@ -28,6 +28,8 @@ import { Post } from '../posts/post.entity.js';
 export const COMMENT_MAX_LENGTH = 2000;
 
 @Entity('comments')
+// 한 사람이 최근에 쓴 댓글을 센다. 쓰기 횟수 제한이 이 색인을 탄다(write-limits/)
+@Index('ix_comments_author_id_created_at', ['authorId', 'createdAt'])
 // 한 글의 댓글을 번호 순으로 읽고(parent_id 가 비어 있는 것), 댓글마다의 답글을 번호 순으로 읽는다.
 // 댓글 목록의 쿼리 셋(댓글, 답글, 답글이 있는가)이 모두 이 색인을 탄다
 @Index('ix_comments_post_id_parent_id_id', ['postId', 'parentId', 'id'])

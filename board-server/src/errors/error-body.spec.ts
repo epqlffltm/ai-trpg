@@ -104,7 +104,31 @@ describe('errorBodyOf', () => {
     expect(errorBodyOf(exception)).toEqual({ detail: '문장' });
   });
 
-  it('detail 과 errors 밖의 칸은 내보내지 않는다', () => {
+  it('기다릴 시간(retry_after)을 싣는다', () => {
+    const exception = new HttpException(
+      { detail: '너무 자주 씁니다.', retry_after: 142 },
+      429,
+    );
+
+    expect(errorBodyOf(exception)).toEqual({
+      detail: '너무 자주 씁니다.',
+      retry_after: 142,
+    });
+  });
+
+  it.each([0, -1, 1.5, '142', null, Number.NaN])(
+    'retry_after 가 1 이상의 정수가 아니면(%j) 싣지 않는다',
+    (retryAfter) => {
+      const exception = new HttpException(
+        { detail: '문장', retry_after: retryAfter },
+        429,
+      );
+
+      expect(errorBodyOf(exception)).toEqual({ detail: '문장' });
+    },
+  );
+
+  it('정해 둔 칸 밖의 것은 내보내지 않는다', () => {
     const exception = new BadRequestException({
       detail: '문장',
       query: 'SELECT * FROM posts',

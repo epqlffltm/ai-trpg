@@ -13,11 +13,16 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BoardsModule } from '../boards/boards.module.js';
 import { CommentCountsModule } from '../comment-counts/comment-counts.module.js';
 import { OperatorsModule } from '../operators/operators.module.js';
+import { WriteLimitsModule } from '../write-limits/write-limits.module.js';
 import { PinsController } from './pins.controller.js';
 import { PinsService } from './pins.service.js';
 import { Post } from './post.entity.js';
 import { PostsSearchController } from './posts-search.controller.js';
-import { PostsSearchService } from './posts-search.service.js';
+import {
+  PostsSearchService,
+  SEARCH_TIMEOUT,
+  SEARCH_TIMEOUT_MS,
+} from './posts-search.service.js';
 import { PostsController } from './posts.controller.js';
 import { PostsService } from './posts.service.js';
 
@@ -27,9 +32,15 @@ import { PostsService } from './posts.service.js';
     BoardsModule,
     OperatorsModule,
     CommentCountsModule,
+    WriteLimitsModule,
   ],
   controllers: [PostsController, PinsController, PostsSearchController],
-  providers: [PostsService, PinsService, PostsSearchService],
+  providers: [
+    PostsService,
+    PinsService,
+    PostsSearchService,
+    { provide: SEARCH_TIMEOUT, useValue: SEARCH_TIMEOUT_MS },
+  ],
   exports: [PostsService],
 })
 export class PostsModule {}

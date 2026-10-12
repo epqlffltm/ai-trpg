@@ -14,6 +14,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { OperatorsService } from '../operators/operators.service.js';
+import { WriteLimitsService } from '../write-limits/write-limits.service.js';
 import { PostsService } from '../posts/posts.service.js';
 import { Comment } from './comment.entity.js';
 import { CommentThread } from './comment.response.js';
@@ -58,6 +59,7 @@ export class CommentsService {
     @InjectRepository(Comment) private readonly comments: Repository<Comment>,
     private readonly posts: PostsService,
     private readonly operators: OperatorsService,
+    private readonly writeLimits: WriteLimitsService,
   ) {}
 
   /**
@@ -94,6 +96,7 @@ export class CommentsService {
    * 글에 댓글을 단다. parentId 가 있으면 그 댓글에 답글을 단다.
    *
    * 없는 글이면 404 다. 답글을 달 수 없는 댓글이면 400(없는 댓글, 답글에 다는 답글)이나 409(답글이 다 참)다.
+   * 너무 자주 쓰면 429 다.
    */
   async create(
     postId: string,
@@ -104,6 +107,7 @@ export class CommentsService {
     if (input.parentId !== undefined) {
       await this.ensureCanReplyTo(postId, input.parentId);
     }
+    await this.writeLimits.ensureCanWriteComment(authorId);
     return this.comments.save(
       this.comments.create({
         postId,

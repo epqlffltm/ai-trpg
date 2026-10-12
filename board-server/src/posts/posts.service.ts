@@ -15,6 +15,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import { Board } from '../boards/board.entity.js';
 import { OperatorsService } from '../operators/operators.service.js';
+import { WriteLimitsService } from '../write-limits/write-limits.service.js';
 import { offsetOf, Page, pageOf } from './page.js';
 import { Post } from './post.entity.js';
 import {
@@ -69,6 +70,7 @@ export class PostsService {
   constructor(
     @InjectRepository(Post) private readonly posts: Repository<Post>,
     private readonly operators: OperatorsService,
+    private readonly writeLimits: WriteLimitsService,
   ) {}
 
   /**
@@ -113,9 +115,10 @@ export class PostsService {
     return post;
   }
 
-  /** 게시판에 글을 쓴다. 운영자만 쓰는 게시판인데 운영자가 아니면 403 이다. */
+  /** 게시판에 글을 쓴다. 운영자만 쓰는 게시판인데 운영자가 아니면 403, 너무 자주 쓰면 429 다. */
   async create(board: Board, authorId: string, input: NewPost): Promise<Post> {
     await this.ensureCanWrite(board, authorId);
+    await this.writeLimits.ensureCanWritePost(authorId);
     const post = await this.posts.save(
       this.posts.create({
         boardId: board.id,
