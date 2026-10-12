@@ -22,7 +22,8 @@
 //  3. 같은 이름표(reference)로 다시 요청하면 새로 빼지 않고 먼저 건 홀드를 돌려준다.
 //     부르는 서버가 응답을 받지 못해 같은 요청을 다시 보내도 크레딧이 두 번 빠지지 않는다.
 //
-// 값은 부르는 서버가 정하지 않는다. 가격표의 이름(price code)만 받고 값은 internal/pricing 에서 찾는다.
+// 값은 부르는 서버가 정하지 않는다. 가격표의 이름(price code)만 받고 값은 가격표(internal/pricing)에서 찾는다.
+// 값은 홀드를 거는 순간의 것을 홀드에 적어 둔다. 그 뒤에 가격표가 바뀌어도 이 홀드의 값은 그대로다.
 package hold
 
 import (
@@ -37,13 +38,14 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold/holddb"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 )
 
 var (
 	// ErrInvalidReference 는 이름표의 모양이 틀렸다는 오류다.
 	ErrInvalidReference = errors.New("이름표는 영문자, 숫자, 점, 밑줄, 쌍점, 붙임표로 된 8자에서 200자여야 합니다")
-	// ErrUnknownPrice 는 가격표에 그런 이름이 없다는 오류다.
-	ErrUnknownPrice = errors.New("가격표에 그런 이름이 없습니다")
+	// ErrUnknownPrice 는 가격표에 그런 이름이 없거나 판매를 멈춘 이름이라는 오류다.
+	ErrUnknownPrice = errors.New("가격표에 그런 이름이 없거나 판매를 멈췄습니다")
 	// ErrReferenceReused 는 같은 이름표로 다른 내용의 홀드를 걸려 했다는 오류다.
 	ErrReferenceReused = errors.New("같은 이름표로 다른 홀드를 걸 수 없습니다")
 	// ErrNotFound 는 그런 홀드가 없다는 오류다.
@@ -105,21 +107,28 @@ type Wallet interface {
 	ReturnForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, holdID uuid.UUID) error
 }
 
+// Prices 는 가격표에서 값을 찾는 것의 모양이다. *pricing.Service 가 이 모양이다.
+// 그런 이름이 없거나 판매를 멈췄으면 pricing.ErrUnknownCode 나 pricing.ErrNotForSale 을 돌려준다.
+type Prices interface {
+	At(ctx context.Context, code string, at time.Time) (pricing.Price, error)
+}
+
 // Service 는 홀드를 걸고, 확정하고, 돌려주고, 연장한다. 서버가 뜰 때 하나 만들어 쓴다.
 type Service struct {
 	pool   *pgxpool.Pool
 	now    func() time.Time
 	wallet Wallet
+	prices Prices
 	// ttl 은 홀드를 걸거나 연장한 때부터 만료까지의 시간이다.
 	ttl time.Duration
 }
 
-// NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, ttl 은 만료까지의 시간이다.
-func NewService(pool *pgxpool.Pool, now func() time.Time, wallet Wallet, ttl time.Duration) (*Service, error) {
+// NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, prices 는 가격표, ttl 은 만료까지의 시간이다.
+func NewService(pool *pgxpool.Pool, now func() time.Time, wallet Wallet, prices Prices, ttl time.Duration) (*Service, error) {
 	if ttl <= 0 {
 		return nil, ErrInvalidTTL
 	}
-	return &Service{pool: pool, now: now, wallet: wallet, ttl: ttl}, nil
+	return &Service{pool: pool, now: now, wallet: wallet, prices: prices, ttl: ttl}, nil
 }
 
 // clock 은 지금 시각을 DB 가 적는 모양(UTC, 백만분의 1초)으로 맞춰 돌려준다.

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 )
 
 // expiry 는 DB 에 적힌 홀드의 만료 시각과 돌려준 이유를 읽는다. 돌려주지 않았으면 이유는 빈 글자다.
@@ -95,7 +96,7 @@ func TestExtendNeverShortensTheExpiry(t *testing.T) {
 	f.fund(100, 0)
 	reference := newReference()
 	placed := f.place(reference)
-	shorter, err := hold.NewService(f.pool, f.clock.Now, f.wallet, time.Hour)
+	shorter, err := hold.NewService(f.pool, f.clock.Now, f.wallet, pricing.NewService(f.pool, f.clock.Now), time.Hour)
 	if err != nil {
 		t.Fatalf("홀드 서비스를 만들지 못했다: %v", err)
 	}
@@ -306,7 +307,7 @@ func TestConcurrentSweepsAndCaptureSettleOnce(t *testing.T) {
 func TestNewServiceRejectsANonPositiveTTL(t *testing.T) {
 	f := setUp(t)
 	for _, bad := range []time.Duration{0, -time.Hour} {
-		if _, err := hold.NewService(f.pool, f.clock.Now, f.wallet, bad); !errors.Is(err, hold.ErrInvalidTTL) {
+		if _, err := hold.NewService(f.pool, f.clock.Now, f.wallet, pricing.NewService(f.pool, f.clock.Now), bad); !errors.Is(err, hold.ErrInvalidTTL) {
 			t.Errorf("ttl %v: %v. ErrInvalidTTL 이어야 한다", bad, err)
 		}
 	}
