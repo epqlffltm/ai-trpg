@@ -13,12 +13,14 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/serviceauth"
 )
 
-// 우리 서버가 부르는 주소들(/api/v1/billing/service/...) 앞에 붙는 확인.
+// 우리 서버들이 부르는 주소들(/api/v1/billing/service/...) 앞에 붙는 확인.
 // 사용자의 토큰을 보지 않는다. 요청의 서명을 본다. 사용자는 이 주소들을 부를 수 없다.
 
 const (
 	// GameServer 는 게임 서버의 이름이다. 홀드에 "누가 걸었는가"로 적힌다. 관측 규격의 서비스 이름과 같다.
 	GameServer = "game-server"
+	// AuthServer 는 인증 서버의 이름이다.
+	AuthServer = "auth-server"
 	// callerKey 는 서명을 확인한 서버의 이름을 요청에 실어 두는 이름이다.
 	callerKey = "service.caller"
 )
