@@ -72,6 +72,28 @@ docker compose ps
 - 게시판 서버: [board-server/README.md](board-server/README.md#실행)
 - 결제 서버: [billing-server/README.md](billing-server/README.md#실행)
 
+### 4. 서버 넷을 컨테이너로 (선택)
+
+개발은 3번처럼 PC 에서 직접 띄운다. 네 서버를 한꺼번에 컨테이너로 띄워 보려면 프로필 `app` 을 붙인다.
+PC 에서 직접 띄운 서버와 같은 포트(8000~8003)를 쓰므로 그것들을 먼저 끈다.
+
+```
+docker compose --profile app up -d --build
+docker compose --profile app ps -a
+```
+
+`*-migrate` 넷이 `Exited (0)`, `*-server` 넷이 `healthy` 면 된다. 끌 때는 `docker compose --profile app down` 이다.
+
+- 서버의 설정은 3번에서 만든 각 서버의 `.env` 를 그대로 쓴다. 그 안의 주소(`127.0.0.1`)만 compose 가
+  컨테이너의 이름(`db`, `redis`, `auth-server` 등)으로 바꿔 넘긴다. DB 주소는 루트 `.env` 의 비밀번호로 만든다.
+- 모든 서버를 함께 띄우므로 게임 서버는 결제 서버에 붙는다. `game-server/.env` 에 `BILLING_SECRET` 이 있어야 뜬다.
+- 게임 서버의 언어 모델은 컨테이너 밖, 이 PC 의 Ollama(`host.docker.internal:11434`)로 간다.
+  다른 곳의 모델을 쓰면 루트 `.env` 의 `GAME_LLM_BASE_URL` 에 적는다. `game-server/.env` 의 `LLM_BASE_URL` 은 덮인다.
+- 인증 서버의 JWT 개인키는 `auth-server/keys/` 를 읽기 전용으로 붙인다. 이미지에는 넣지 않는다.
+  **리눅스에서는** 키 파일의 주인이 PC 의 사용자라 컨테이너의 사용자(번호 10001)가 읽지 못한다.
+  `sudo chown 10001 auth-server/keys/jwt-private.pem` 으로 주인을 바꾼다(권한은 600 그대로). Docker Desktop(Windows, macOS)에서는 그대로 읽힌다.
+- 포트가 다른 프로그램과 겹치면 루트 `.env` 의 `AUTH_PORT`, `GAME_PORT`, `BOARD_PORT`, `BILLING_PORT` 로 바꾼다.
+
 ## 설계 메모
 
 서버 하나에 속하지 않는 결정만 적는다. 서버별 결정은 각 서버의 설명서에 있다.
@@ -91,7 +113,16 @@ docker compose ps
 머지하려면 필수 검사 `ci-ok` 가 통과해야 한다. `ci-ok` 는 PR 의 관문(`.github/workflows/ci.yml`)이 마지막에 내는 결과다.
 관문은 바뀐 파일을 보고 그 서버의 CI 만 부른다(`.github/scripts/changed-servers.sh`). 부르지 않은 서버는 건너뛴 것이고 통과로 친다.
 서버의 CI 넷을 따로 필수로 걸지 않은 이유: 서버마다 자기 폴더가 바뀔 때만 돈다. 돌지 않은 필수 검사를 GitHub 은 "기다리는 중"으로 두고 머지를 막는다.
-DB 초기화 스크립트나 관문 자신이 바뀌면 넷 다 돈다. `main` 에 들어간 뒤에는 서버의 CI 가 예전처럼 제 폴더가 바뀔 때만 스스로 돈다. 위의 배지가 그 결과다.
+DB 초기화 스크립트, compose 파일, 관문 자신이 바뀌면 넷 다 돈다. `main` 에 들어간 뒤에는 서버의 CI 가 예전처럼 제 폴더가 바뀔 때만 스스로 돈다. 위의 배지가 그 결과다.
+서버가 하나라도 바뀌면 관문의 `stack` 이 네 서버의 이미지를 만들어 compose 로 함께 띄우고, 마이그레이션이 성공했는지와 서버끼리 닿는지를 본다(`.github/scripts/stack-smoke.sh`).
+
+**이미지는 서버마다 같은 규칙으로 만든다.** 여러 단계로 빌드해 실행에 필요한 것만 담고, root 가 아닌 사용자(번호로 적는다)로 돌린다.
+기본 이미지는 버전을 고정한다. 비밀(`.env`, JWT 키)은 `.dockerignore` 로 막아 이미지에 넣지 않고, 띄울 때 compose 가 넘긴다.
+파이썬과 노드는 Debian slim 을 쓴다. 미리 빌드된 패키지(휠)가 대부분 glibc 용이라 alpine 에서는 소스에서 빌드하느라 느리고 잘 깨진다.
+결제 서버는 C 라이브러리에 기대지 않는 실행 파일 하나라 alpine 을 쓴다. 상태 확인에 쓰는 `wget` 이 들어 있다.
+
+**마이그레이션은 서버가 뜰 때 돌리지 않는다.** 서버마다 한 번 돌고 끝나는 컨테이너(`*-migrate`)가 하고, 서버는 그것이 성공해야 뜬다.
+서버를 여럿 띄워도 마이그레이션은 한 번만 돈다. 실패하면 서버가 뜨지 않아서 바로 드러난다.
 
 ## 자주 겪는 문제
 
@@ -122,13 +153,13 @@ docker compose up -d
 
 ```
 .github/workflows/        서버별 CI 와 PR 의 관문(ci.yml)
-.github/scripts/          관문이 검사할 서버를 고르는 스크립트와 그 테스트
+.github/scripts/          관문이 검사할 서버를 고르는 스크립트와 그 테스트, 컨테이너로 띄워 보는 스크립트
 auth-server/              Django 인증 서버 (독립된 uv 프로젝트)
 game-server/              FastAPI 게임 서버 (독립된 uv 프로젝트)
 board-server/             NestJS 게시판 서버 (독립된 npm 프로젝트)
 billing-server/           Go 결제 서버 (독립된 Go 모듈). 연습용이고 실제 결제가 아니다
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
 docs/                     서버들이 함께 지키는 규격 (관측)
-docker-compose.yml        PostgreSQL, Redis
+docker-compose.yml        PostgreSQL, Redis, 서버 넷(프로필 app)
 .env.example              인프라 환경 변수 목록
 ```
