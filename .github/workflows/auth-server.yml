@@ -78,6 +78,8 @@ jobs:
         working-directory: .
         env:
           PGPASSWORD: ci-root-password
+          # 테스트 실행기가 테스트용 DB 를 만든다. 개발과 CI 에서만 주는 권한이다(#20)
+          AUTH_DB_ALLOW_TEST_DB: "true"
         run: >-
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg
           -f docker/postgres/init/01-auth-role.sql
@@ -98,6 +100,19 @@ jobs:
 
       - name: 설정 검사
         run: uv run python manage.py check
+
+      # 운영 환경의 설정으로 배포 검사를 돌린다. 경고가 하나라도 있으면 실패한다(#19).
+      # 값은 이 단계에서만 쓴다. 비밀키는 check --deploy 가 요구하는 길이(50자 이상)를 넘긴다
+      - name: 운영 설정의 배포 검사
+        env:
+          APP_ENVIRONMENT: production
+          DEBUG: "false"
+          SECRET_KEY: ci-only-production-check-secret-key-0123456789-abcdefghijklmnop
+          SMTP_HOST: smtp.example.com
+          SMTP_USER: ci-only@example.com
+          SMTP_PASSWORD: ci-only-password
+          ALLOWED_HOSTS: api.example.com
+        run: uv run python manage.py check --deploy --fail-level WARNING
 
       # 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
       - name: 마이그레이션 누락 검사
