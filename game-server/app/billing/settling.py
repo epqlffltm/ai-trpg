@@ -50,7 +50,7 @@ UNAVAILABLE_ERROR_CODE = 'billing.unavailable'
 REJECTED_ERROR_CODE = 'billing.rejected'
 
 
-# 돌려줄 것이거나 돌려준 청구. 떠난 사람의 것이다(테이블이 끝났으면 서술은 어차피 버려진다). 서술해도 되는지 볼 때 뺀다
+# 돌려줄 것이거나 돌려준 청구. 떠난 사람의 것이거나, 크레딧을 기다리다 돌려준 앉은 사람의 것이다(secure_charge)
 RETURNED_STATUSES = (ChargeStatus.RELEASE_DUE, ChargeStatus.RELEASED)
 
 
@@ -248,27 +248,38 @@ async def rehold_missing(
     )
 
 
-async def renew(session_factory: async_sessionmaker[AsyncSession], charge: NarrationCharge, now: datetime) -> None:
+async def rename(
+    session_factory: async_sessionmaker[AsyncSession],
+    charge: NarrationCharge,
+    allowed: tuple[ChargeStatus, ...],
+    reason: str | None,
+    now: datetime,
+) -> bool:
     """
-    만료되어 결제 서버가 돌려준 홀드다. 새 이름표로 다시 걸게 걸어야 함으로 되돌린다.
+    끝난 홀드의 청구를 새 이름표로 다시 걸게 걸어야 함으로 되돌린다. 옮겼으면 True.
 
     같은 이름표는 결제 서버에서 끝난 홀드라 다시 걸면 끝난 것을 돌려받는다. 다시 건 횟수를 이름표 끝에 붙인다.
     """
-    log_rehold(charge, 'expired')
     async with session_factory() as session:
         table_id, number = await repository.find_round_of(session, charge)
     renewals = charge.renewals + 1
-    await write_move(
+    return await write_move(
         session_factory,
         charge,
-        (ChargeStatus.HELD,),
+        allowed,
         ChargeStatus.PENDING,
         reference=reference_for(table_id, number, charge.payer_id, renewals),
         renewals=renewals,
         attempts=0,
-        last_error='expired',
+        last_error=reason,
         next_attempt_at=now,
     )
+
+
+async def renew(session_factory: async_sessionmaker[AsyncSession], charge: NarrationCharge, now: datetime) -> None:
+    """만료되어 결제 서버가 돌려준 홀드다. 새 이름표로 다시 걸게 한다."""
+    log_rehold(charge, 'expired')
+    await rename(session_factory, charge, (ChargeStatus.HELD,), 'expired', now)
 
 
 async def note_extend_rejected(
@@ -401,6 +412,45 @@ async def secure(
     return Readiness.UNAVAILABLE
 
 
+async def restore(
+    session_factory: async_sessionmaker[AsyncSession], billing: Billing, charge: NarrationCharge, now: datetime
+) -> Readiness:
+    """
+    돌려줬던 청구를 다시 건다. 크레딧을 기다리다 시간이 지나 낼 수 있는 사람의 값을 돌려준 라운드다(#181).
+    방장이 그 라운드를 다시 맡기면 아직 앉아 있는 사람의 것을 이것으로 다시 건다.
+
+    아직 돌려주지 않았으면(release_due) 먼저 돌려준다. 같은 청구에 홀드 둘이 살아 있지 않게 한다.
+    그 뒤 새 이름표로 걸어야 함으로 되돌려 건다. 돌려주지 못했으면(결제 서버의 답이 없다) 서술하지 않는다.
+    """
+    if ChargeStatus(charge.status) == ChargeStatus.RELEASE_DUE:
+        await try_finish(session_factory, charge, billing.release, RELEASE_OPERATION, ChargeStatus.RELEASED, now)
+        charge = await reload(session_factory, charge.id)
+    if ChargeStatus(charge.status) != ChargeStatus.RELEASED:
+        return Readiness.UNAVAILABLE
+    await rename(session_factory, charge, (ChargeStatus.RELEASED,), None, now)
+    return await try_hold(session_factory, billing, await reload(session_factory, charge.id), now)
+
+
+async def secure_charge(
+    session_factory: async_sessionmaker[AsyncSession],
+    billing: Billing,
+    charge: NarrationCharge,
+    seated: set[uuid.UUID],
+    now: datetime,
+) -> Readiness:
+    """
+    라운드의 청구 하나를 서술 전에 잡아 둔다.
+
+    돌려줄 것·돌려준 청구는 두 가지다. 떠난 사람의 것이면 보지 않는다(그 사람 때문에 서술이 막히지 않는다).
+    아직 앉아 있는 사람의 것이면 크레딧을 기다리다 돌려준 것이라 다시 건다(restore).
+    """
+    if ChargeStatus(charge.status) in RETURNED_STATUSES:
+        if charge.payer_id in seated:
+            return await restore(session_factory, billing, charge, now)
+        return Readiness.READY
+    return await secure(session_factory, billing, charge, now)
+
+
 def worst(results: list[Readiness]) -> Readiness:
     """
     여럿의 결과를 하나로. 모자란 사람이 있으면 모자람, 아니면 답을 못 받은 것이 있으면 그것, 모두 잡았으면 READY.
@@ -421,14 +471,16 @@ async def secure_round(
 
     내는 사람마다 함께 해 본다. 한 사람씩 하면 결제 서버가 느릴 때 서술 값을 잡는 시간의 상한을 넘는다.
     모자란 사람이 여럿이면 모두에게 걸어 봐야 누가 모자란지 모두 알린다.
-    떠난 사람의 것(돌려줄 것, 돌려줌)은 보지 않는다(charges.release_departed). 그 사람 때문에 서술이 막히지 않는다.
+    떠난 사람의 것은 보지 않고, 돌려줬던 앉은 사람의 것은 다시 건다(secure_charge).
     청구가 없는 라운드(이 기록이 생기기 전에 연 라운드)는 받지 않고 서술한다.
     """
     async with session_factory() as session:
         charges = await repository.find_round_charges(session, table_id, number)
-    live = [charge for charge in charges if ChargeStatus(charge.status) not in RETURNED_STATUSES]
+        seated = await repository.find_seated(session, table_id)
     now = now_utc()
-    results = await asyncio.gather(*(secure(session_factory, billing, charge, now) for charge in live))
+    results = await asyncio.gather(
+        *(secure_charge(session_factory, billing, charge, seated, now) for charge in charges)
+    )
     return worst(list(results))
 
 
