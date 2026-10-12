@@ -72,23 +72,24 @@ func run() error {
 	defer pool.Close()
 
 	httpapi.SetMode(settings.Debug)
-	services, err := app.NewServices(pool, settings.Rules(), time.Now)
+	services, err := app.NewServices(pool, settings.Rules(), app.NewProvider(settings.Payment), time.Now)
 	if err != nil {
 		return err
 	}
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		DB:               pool,
-		Verifier:         newVerifier(settings),
-		Wallet:           services.Wallet,
-		Welcome:          services.Wallet,
-		WelcomeCredits:   settings.WelcomeCredits,
-		Orders:           services.Orders,
-		Notifier:         services.Orders,
-		WebhookSecret:    settings.WebhookSecret,
-		Holds:            services.Holds,
-		GameServerSecret: settings.GameServerSecret,
-		AuthServerSecret: settings.AuthServerSecret,
-		Now:              time.Now,
+		DB:                pool,
+		Verifier:          newVerifier(settings),
+		Wallet:            services.Wallet,
+		Welcome:           services.Wallet,
+		WelcomeCredits:    settings.WelcomeCredits,
+		Orders:            services.Orders,
+		Notifier:          services.Orders,
+		WebhookSecret:     settings.WebhookSecret,
+		Holds:             services.Holds,
+		GameServerSecret:  settings.GameServerSecret,
+		AuthServerSecret:  settings.AuthServerSecret,
+		CheckoutClientKey: settings.CheckoutClientKey(),
+		Now:               time.Now,
 	})
 	return serve(ctx, newServer(settings, router))
 }

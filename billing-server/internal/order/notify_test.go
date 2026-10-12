@@ -35,9 +35,10 @@ func TestANotificationFinishesAnUnansweredPayment(t *testing.T) {
 	f.wantStatus(created.ID, order.StatusPaid)
 	f.wantPaidCredits(credits, 1)
 	// 알림을 믿지 않고 결제 대행사에 다시 물었다
-	if _, lookups := f.provider.calls(); lookups != 1 || f.provider.lookups[0] != paymentKey {
-		t.Errorf("조회 = %v", f.provider.lookups)
+	if _, lookups := f.provider.calls(); lookups != 1 {
+		t.Errorf("조회 %d 번, 기대 = 1 번", lookups)
 	}
+	f.provider.lookedUp(t, created.ID, paymentKey)
 }
 
 func TestANotificationOfADeclineFailsTheOrder(t *testing.T) {

@@ -30,12 +30,11 @@ type Services struct {
 	Prices *pricing.Service
 }
 
-// NewServices 는 규칙에 따라 서비스들을 만든다. now 는 지금 시각을 돌려주는 함수다.
-// 결제 대행사의 자리에는 가짜를 꽂는다. 이 서버는 연습용이라 실제 돈을 받지 않는다.
-// 실제 결제 대행사를 붙일 때 여기에서 바꿔 꽂는다. 그러면 서버와 대사가 같은 결제 대행사에 묻는다.
-func NewServices(pool *pgxpool.Pool, rules config.Rules, now func() time.Time) (Services, error) {
+// NewServices 는 규칙에 따라 서비스들을 만든다. provider 는 주문이 부를 결제 대행사(NewProvider),
+// now 는 지금 시각을 돌려주는 함수다.
+func NewServices(pool *pgxpool.Pool, rules config.Rules, provider payment.Provider, now func() time.Time) (Services, error) {
 	wallets := wallet.NewService(pool, now, wallet.Policy{FreeFirst: rules.SpendFreeFirst, FreeTTL: rules.FreeCreditTTL})
-	orders, err := order.NewService(pool, now, payment.Fake{}, wallets, rules.OrderTTL)
+	orders, err := order.NewService(pool, now, provider, wallets, rules.OrderTTL)
 	if err != nil {
 		return Services{}, err
 	}
@@ -45,6 +44,15 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, now func() time.Time) (
 		return Services{}, err
 	}
 	return Services{Wallet: wallets, Orders: orders, Holds: holds, Prices: prices}, nil
+}
+
+// NewProvider 는 설정이 고른 결제 대행사를 만든다. 서버와 대사가 이것으로 만들어 같은 결제 대행사에 묻는다.
+// 설정이 값을 이미 검사했다. toss 가 아니면 가짜다.
+func NewProvider(settings config.Payment) payment.Provider {
+	if settings.Provider == config.ProviderToss {
+		return payment.NewToss(settings.TossSecretKey, payment.TossAPIURL, nil)
+	}
+	return payment.Fake{}
 }
 
 // NewLogger 는 공통 규격(docs/observability.md)의 JSON 으로 out 에 적는 로거를 만든다.

@@ -65,6 +65,10 @@ const (
 	MinServiceSecretLength = 32
 	// MinWebhookSecretLength 는 PG_WEBHOOK_SECRET 의 가장 짧은 길이다. 짧은 비밀은 서명을 꾸며 내기 쉽다.
 	MinWebhookSecretLength = 32
+	// ProviderFake 는 정해 둔 대로 답하는 가짜 결제 대행사다. PAYMENT_PROVIDER 의 기본값이다.
+	ProviderFake = "fake"
+	// ProviderToss 는 토스페이먼츠의 테스트 모드다. TOSS_SECRET_KEY 와 TOSS_CLIENT_KEY 가 있어야 한다.
+	ProviderToss = "toss"
 )
 
 // schemaPattern 은 스키마 이름으로 받는 모양이다. 소문자, 숫자, 밑줄만 받는다.
@@ -79,6 +83,13 @@ var (
 	versionPattern = regexp.MustCompile(`^[A-Za-z0-9._+-]{1,64}$`)
 	// logLevels 는 LOG_LEVEL 로 받는 값들이다.
 	logLevels = []string{"debug", "info", "warning", "error"}
+	// providers 는 PAYMENT_PROVIDER 로 받는 값들이다.
+	providers = []string{ProviderFake, ProviderToss}
+	// tossSecretKeyPattern 과 tossClientKeyPattern 은 토스페이먼츠의 테스트 키 모양이다.
+	// 결제위젯 키(test_gsk_, test_gck_)와 API 개별 연동 키(test_sk_, test_ck_)를 받는다. 라이브 키(live_)는 받지 않는다.
+	// 이 서버는 연습용이라 실제 돈을 받지 않는다(테스트 키로 부르면 돈이 나가지 않는다).
+	tossSecretKeyPattern = regexp.MustCompile(`^test_(g?)sk_[A-Za-z0-9_]{1,200}$`)
+	tossClientKeyPattern = regexp.MustCompile(`^test_(g?)ck_[A-Za-z0-9_]{1,200}$`)
 )
 
 // Lookup 은 이름으로 설정값을 찾는다. 없으면 두 번째 값이 false 다. os.LookupEnv 와 같은 모양이다.
@@ -124,6 +135,20 @@ type Settings struct {
 	// AuthServerSecret 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다. 인증 서버도 같은 값을 갖는다(BILLING_SECRET).
 	// 로그와 오류에 싣지 않는다.
 	AuthServerSecret string
+	// Payment 는 꽂을 결제 대행사와 그 키다.
+	Payment Payment
+}
+
+// Payment 는 결제 대행사의 설정이다. 서버와 대사(cmd/reconcile, 결제 대행사에 결과를 묻는다)가 같은 것을 읽는다.
+type Payment struct {
+	// Provider 는 꽂을 결제 대행사다. ProviderFake 나 ProviderToss 다.
+	Provider string
+	// TossSecretKey 는 토스페이먼츠의 시크릿 키다. 승인과 조회에 쓴다. 로그와 오류에 싣지 않는다.
+	// Provider 가 toss 일 때만 있다.
+	TossSecretKey string
+	// TossClientKey 는 토스페이먼츠의 클라이언트 키다. 결제창(브라우저)에 실리는 공개된 값이다.
+	// Provider 가 toss 일 때만 있다.
+	TossClientKey string
 }
 
 // Database 는 DB 에 접속하는 데 필요한 설정이다. 마이그레이션 명령(cmd/migrate)은 이것만 읽는다.
@@ -154,10 +179,12 @@ type Rules struct {
 
 // Jobs 는 작업 명령(cmd/sweeper, cmd/reconcile)이 읽는 설정이다.
 // 요청을 받지 않으므로 포트, 공개키 주소, 서명의 비밀이 없어도 돈다.
+// 결제 대행사의 설정은 읽는다. 대사가 서버와 같은 결제 대행사에 결과를 묻는다.
 type Jobs struct {
 	Database Database
 	Logging  Logging
 	Rules    Rules
+	Payment  Payment
 }
 
 // Addr 는 서버가 요청을 받는 주소를 "host:port" 로 돌려준다.
@@ -177,9 +204,10 @@ func Load(lookup Lookup) (Settings, error) {
 	gameSecret, gameSecretErr := readSecret(lookup, "GAME_SERVER_SECRET", MinServiceSecretLength)
 	authSecret, authSecretErr := readSecret(lookup, "AUTH_SERVER_SECRET", MinServiceSecretLength)
 	welcome, welcomeErr := readCredits(lookup, "WELCOME_CREDITS", DefaultWelcomeCredits, MaxWelcomeCredits)
+	payment, paymentErr := loadPayment(lookup)
 
 	if err := errors.Join(
-		debugErr, portErr, dbErr, jwksErr, rulesErr, loggingErr, webhookErr, welcomeErr,
+		debugErr, portErr, dbErr, jwksErr, rulesErr, loggingErr, webhookErr, welcomeErr, paymentErr,
 		gameSecretErr, authSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret),
 	); err != nil {
 		return Settings{}, err
@@ -204,6 +232,7 @@ func Load(lookup Lookup) (Settings, error) {
 		WebhookSecret:    webhookSecret,
 		GameServerSecret: gameSecret,
 		AuthServerSecret: authSecret,
+		Payment:          payment,
 	}, nil
 }
 
@@ -212,10 +241,47 @@ func LoadJobs(lookup Lookup) (Jobs, error) {
 	db, dbErr := LoadDatabase(lookup)
 	logging, loggingErr := loadLogging(lookup)
 	rules, rulesErr := loadRules(lookup)
-	if err := errors.Join(dbErr, loggingErr, rulesErr); err != nil {
+	payment, paymentErr := loadPayment(lookup)
+	if err := errors.Join(dbErr, loggingErr, rulesErr, paymentErr); err != nil {
 		return Jobs{}, err
 	}
-	return Jobs{Database: db, Logging: logging, Rules: rules}, nil
+	return Jobs{Database: db, Logging: logging, Rules: rules, Payment: payment}, nil
+}
+
+// loadPayment 는 결제 대행사의 설정을 읽는다. 토스페이먼츠면 테스트 키 둘이 있어야 하고, 둘의 종류가 같아야 한다.
+// 가짜면 토스페이먼츠의 키는 읽지 않는다.
+func loadPayment(lookup Lookup) (Payment, error) {
+	provider, err := readChoice(lookup, "PAYMENT_PROVIDER", ProviderFake, providers)
+	if err != nil || provider != ProviderToss {
+		return Payment{Provider: provider}, err
+	}
+	secretKey, secretErr := readTossKey(lookup, "TOSS_SECRET_KEY", tossSecretKeyPattern, "test_gsk_ 나 test_sk_")
+	clientKey, clientErr := readTossKey(lookup, "TOSS_CLIENT_KEY", tossClientKeyPattern, "test_gck_ 나 test_ck_")
+	if err := errors.Join(secretErr, clientErr); err != nil {
+		return Payment{}, err
+	}
+	if !sameTossFamily(secretKey, clientKey) {
+		return Payment{}, errors.New("TOSS_SECRET_KEY 와 TOSS_CLIENT_KEY 는 같은 종류의 키여야 합니다(결제위젯 키 test_gsk_·test_gck_ 끼리, API 개별 연동 키 test_sk_·test_ck_ 끼리)")
+	}
+	return Payment{Provider: provider, TossSecretKey: secretKey, TossClientKey: clientKey}, nil
+}
+
+// readTossKey 는 토스페이먼츠의 테스트 키를 읽는다. 없거나 모양이 다르면(라이브 키도) 오류다. 오류에는 받은 값을 싣지 않는다.
+func readTossKey(lookup Lookup, name string, pattern *regexp.Regexp, prefixes string) (string, error) {
+	value, err := readRequired(lookup, name)
+	if err != nil {
+		return "", err
+	}
+	if !pattern.MatchString(value) {
+		return "", fmt.Errorf("%s 는 %s 로 시작하는 테스트 키여야 합니다. 이 서버는 연습용이라 라이브 키를 받지 않습니다", name, prefixes)
+	}
+	return value, nil
+}
+
+// sameTossFamily 는 두 키가 같은 종류(결제위젯 또는 API 개별 연동)인지 본다. 앞머리의 g 가 같은지 본다.
+// 종류가 다르면 결제창이 뜨지 않거나 승인이 거절된다. 서버가 뜨기 전에 알린다.
+func sameTossFamily(secretKey string, clientKey string) bool {
+	return tossSecretKeyPattern.FindStringSubmatch(secretKey)[1] == tossClientKeyPattern.FindStringSubmatch(clientKey)[1]
 }
 
 // loadLogging 은 로그에 관한 설정을 읽는다.
@@ -246,6 +312,15 @@ func loadRules(lookup Lookup) (Rules, error) {
 // Rules 는 서버의 설정에서 크레딧을 다루는 규칙만 꺼낸다. 서버와 작업 명령이 같은 방법으로 서비스를 만든다.
 func (s Settings) Rules() Rules {
 	return Rules{SpendFreeFirst: s.SpendFreeFirst, FreeCreditTTL: s.FreeCreditTTL, HoldTTL: s.HoldTTL, OrderTTL: s.OrderTTL}
+}
+
+// CheckoutClientKey 는 개발용 결제 화면에 실을 토스페이먼츠의 클라이언트 키다.
+// 개발 모드(DEBUG)에서 토스페이먼츠를 꽂았을 때만 있다. 빈 글자면 그 화면을 열지 않는다.
+func (s Settings) CheckoutClientKey() string {
+	if s.Debug && s.Payment.Provider == ProviderToss {
+		return s.Payment.TossClientKey
+	}
+	return ""
 }
 
 // Logging 은 서버의 설정에서 로그에 관한 것만 꺼낸다.

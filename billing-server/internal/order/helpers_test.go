@@ -41,7 +41,7 @@ type scripted struct {
 	confirmErr, lookupErr error
 
 	confirms []payment.Request
-	lookups  []string
+	lookups  []payment.Request
 	// deadline 은 마지막 요청이 받은 시간 제한이다.
 	deadline time.Duration
 }
@@ -54,10 +54,10 @@ func (s *scripted) Confirm(ctx context.Context, request payment.Request) (paymen
 	return s.confirm, s.confirmErr
 }
 
-func (s *scripted) Lookup(ctx context.Context, paymentKey string) (payment.Result, error) {
+func (s *scripted) Lookup(ctx context.Context, request payment.Request) (payment.Result, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.lookups = append(s.lookups, paymentKey)
+	s.lookups = append(s.lookups, request)
 	s.deadline = remaining(ctx)
 	return s.lookup, s.lookupErr
 }
@@ -67,6 +67,20 @@ func (s *scripted) calls() (confirms int, lookups int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.confirms), len(s.lookups)
+}
+
+// lookedUp 은 받은 조회들이 모두 그 주문의 것(결제 번호, 주문 번호, 주문의 값)인지 본다.
+// 조회에 주문과 금액이 실려야 결제 대행사가 "이 주문의 결제인가"를 확인할 수 있다.
+func (s *scripted) lookedUp(t *testing.T, orderID uuid.UUID, paymentKey string) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	want := payment.Request{PaymentKey: paymentKey, OrderID: orderID, Amount: price}
+	for _, got := range s.lookups {
+		if got != want {
+			t.Errorf("조회 = %+v, 기대 = %+v", got, want)
+		}
+	}
 }
 
 // remaining 은 context 에 남은 시간이다. 제한이 없으면 0 이다.
