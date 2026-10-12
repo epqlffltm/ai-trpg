@@ -6,6 +6,7 @@ refresh 토큰의 발급, 회전, 폐기, 세션 버전을 검증한다.
 
 from datetime import timedelta
 
+import jwt
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -102,6 +103,15 @@ class RefreshRotationTests(RefreshTestCase):
         response = self.client.post(REFRESH_URL)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_new_access_token_carries_the_current_nickname(self):
+        # 로그인한 뒤에 이름이 바뀌었다. 갱신하면 DB 의 지금 이름이 실린다
+        User.objects.filter(pk=self.user.pk).update(nickname='새이름')
+
+        response = self.client.post(REFRESH_URL)
+
+        claims = jwt.decode(response.data['access_token'], options={'verify_signature': False})
+        self.assertEqual(claims['nickname'], '새이름')
 
     def test_old_refresh_token_is_revoked(self):
         self.client.post(REFRESH_URL)
