@@ -8,12 +8,18 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OperatorsModule } from '../operators/operators.module.js';
 import { PostsModule } from '../posts/posts.module.js';
+import { WriteLimitsModule } from '../write-limits/write-limits.module.js';
 import { Comment } from './comment.entity.js';
 import { CommentsController } from './comments.controller.js';
 import { CommentsService } from './comments.service.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Comment]), PostsModule, OperatorsModule],
+  imports: [
+    TypeOrmModule.forFeature([Comment]),
+    PostsModule,
+    OperatorsModule,
+    WriteLimitsModule,
+  ],
   controllers: [CommentsController],
   providers: [CommentsService],
 })

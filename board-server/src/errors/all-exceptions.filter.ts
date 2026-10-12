@@ -8,6 +8,7 @@
  *     예외의 글은 응답에 싣지 않는다. 쿼리와 DB 주소가 들어 있을 수 있다.
  *
  * 응답에 이미 붙은 머리말은 그대로 나간다. 문지기가 붙인 WWW-Authenticate 와 Retry-After 가 그렇다.
+ * 본문에 retry_after 가 있으면 같은 값을 Retry-After 머리말로도 붙인다. 본문을 읽지 않는 클라이언트와 프록시가 머리말을 본다.
  */
 
 import {
@@ -23,6 +24,7 @@ import { ErrorBody, errorBodyOf, SERVER_ERROR_DETAIL } from './error-body.js';
 
 /** 이 필터가 쓰는 응답의 부분. */
 interface OutgoingResponse {
+  setHeader(name: string, value: string): unknown;
   status(code: number): { json(body: ErrorBody): unknown };
 }
 
@@ -33,7 +35,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<OutgoingResponse>();
     if (exception instanceof HttpException) {
-      response.status(exception.getStatus()).json(errorBodyOf(exception));
+      const body = errorBodyOf(exception);
+      if (body.retry_after !== undefined) {
+        response.setHeader('Retry-After', String(body.retry_after));
+      }
+      response.status(exception.getStatus()).json(body);
       return;
     }
     this.logUnexpected(exception);

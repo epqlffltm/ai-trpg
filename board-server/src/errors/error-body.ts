@@ -8,6 +8,10 @@
  *
  *     { "detail": "입력이 올바르지 않습니다.", "errors": { "title": ["제목을 적어야 합니다."] } }
  *
+ * 너무 자주 불러서 거절할 때는 몇 초 뒤에 다시 부르면 되는지를 retry_after 에 더한다. 인증 서버와 같은 칸이다.
+ *
+ *     { "detail": "글을 너무 자주 쓰고 있습니다. 잠시 후 다시 시도해 주세요.", "retry_after": 142 }
+ *
  * detail 은 이 서버가 적은 문장만 내보낸다. 예외를 던질 때 { detail } 을 넣은 것만 그대로 쓰고,
  * 나머지(Nest 나 라이브러리가 만든 예외)는 상태 코드에 맞는 문장으로 바꾼다.
  * 라이브러리의 글에는 내부 사정(주소, 파서의 오류)이 들어 있을 수 있다.
@@ -22,6 +26,8 @@ export type FieldErrors = Record<string, string[]>;
 export interface ErrorBody {
   detail: string;
   errors?: FieldErrors;
+  /** 몇 초 뒤에 다시 부르면 되는가. 1 이상의 정수다 */
+  retry_after?: number;
 }
 
 /** 상태 코드마다의 기본 문장. 예외가 문장을 정해 주지 않았을 때 쓴다 */
@@ -59,6 +65,11 @@ function isFieldErrors(value: unknown): value is FieldErrors {
   );
 }
 
+/** 값이 기다릴 시간(초)으로 쓸 수 있는 수인가. 1 이상의 정수다. */
+function isRetryAfter(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1;
+}
+
 /** 상태 코드에 맞는 기본 문장. */
 export function defaultDetail(status: number): string {
   const known = DEFAULT_DETAILS[status];
@@ -74,15 +85,18 @@ export function defaultDetail(status: number): string {
  * 예외에서 오류 응답의 본문을 만든다.
  *
  * 예외가 { detail } 을 담고 있으면 그 문장을 쓴다. 이 서버가 적은 문장이다.
- * 아니면 상태 코드의 기본 문장이다. errors 는 모양이 맞을 때만 싣는다.
+ * 아니면 상태 코드의 기본 문장이다. errors 와 retry_after 는 모양이 맞을 때만 싣는다.
  */
 export function errorBodyOf(exception: HttpException): ErrorBody {
   const response = exception.getResponse();
   if (!isRecord(response) || typeof response.detail !== 'string') {
     return { detail: defaultDetail(exception.getStatus()) };
   }
-  if (!isFieldErrors(response.errors)) {
-    return { detail: response.detail };
-  }
-  return { detail: response.detail, errors: response.errors };
+  return {
+    detail: response.detail,
+    ...(isFieldErrors(response.errors) && { errors: response.errors }),
+    ...(isRetryAfter(response.retry_after) && {
+      retry_after: response.retry_after,
+    }),
+  };
 }

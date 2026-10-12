@@ -57,6 +57,38 @@ export async function expirePin(
   );
 }
 
+/**
+ * 이 사람이 쓴 글과 댓글의 쓴 시각을 seconds 초만큼 과거로 옮긴다. 그만큼 시간이 흐른 것처럼 만든다.
+ * 쓰기 횟수 제한의 창이 지나가는 것을 기다리지 않고 본다.
+ */
+export async function ageWrites(
+  app: NestExpressApplication,
+  userId: string,
+  seconds: number,
+): Promise<void> {
+  const dataSource = app.get(DataSource);
+  for (const table of ['posts', 'comments']) {
+    await dataSource.query(
+      `UPDATE "${table}" SET "created_at" = "created_at" - make_interval(secs => $2) WHERE "author_id" = $1`,
+      [userId, seconds],
+    );
+  }
+}
+
+/** 글을 한꺼번에 많이 넣는다. API 를 거치지 않는다. 본문이 긴 글이 많을 때를 볼 때 쓴다. */
+export async function insertManyPosts(
+  app: NestExpressApplication,
+  count: number,
+  authorId: string,
+): Promise<void> {
+  await app.get(DataSource).query(
+    `INSERT INTO "posts" ("board_id", "author_id", "title", "content")
+     SELECT (SELECT "id" FROM "boards" WHERE "slug" = 'free'), $2, '글 ' || n, repeat('본문 글자 ', 400) || n
+       FROM generate_series(1, $1) AS n`,
+    [count, authorId],
+  );
+}
+
 /** 글 하나의 행을 DB 에서 그대로 읽는다. 지운 글도 읽는다. 없으면 undefined 다. */
 export async function readPostRow(
   app: NestExpressApplication,
