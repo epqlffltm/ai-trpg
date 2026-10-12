@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.assets.models import LoreKind, NarrationStyle
+from app.rounds.tiers import NarrationTier
 
 
 @dataclass(frozen=True)
@@ -311,6 +312,9 @@ class NarrationRequest:
     history: list[PastRound] = field(default_factory=list)
     # 서술의 문체. 라운드가 닫기 시작할 때의 테이블의 문체다. 가짜 서술자는 읽지 않는다
     style: NarrationStyle = NarrationStyle.NONE
+    # 서술 등급. 라운드를 열 때 굳힌 것이다. 등급마다 서술자가 다르다(app/rounds/tiered_narrator.py).
+    # 언어 모델의 서술자 하나하나는 읽지 않는다. 가짜 서술자도 읽지 않는다
+    tier: NarrationTier = NarrationTier.STANDARD
     # 어느 테이블의 라운드인가, 서술을 맡길 때 방장이 누구인가. AI 호출을 기록할 때 쓴다(app/ai/calls.py).
     # 가짜 서술자는 읽지 않는다
     table_id: uuid.UUID | None = None

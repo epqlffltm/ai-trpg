@@ -80,6 +80,7 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
         waiting_for=state.waiting_for(table, round_) if is_waiting else [],
         created_at=round_.created_at,
         deadline_at=round_.deadline_at,
+        narration_tier=round_.narration_tier,
         closing_at=round_.closing_at,
         closed_at=round_.closed_at,
         narration_failed_at=round_.narration_failed_at,

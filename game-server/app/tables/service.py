@@ -40,6 +40,7 @@ from app.listings import service as listings
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
+from app.rounds.tiers import NarrationTier
 from app.tables import npcs, repository, sheets
 from app.tables.building import build_table, check_table_password, hash_table_password, new_invite_code, seat_limit
 from app.tables.characters import accept_character, roster, write_character
@@ -47,7 +48,14 @@ from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError,
 from app.tables.models import GameTable, TableMember, TableStatus
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
 from app.tables.seating import end, hand_over, record_hand_over, take_seat
-from app.tables.state import find_member, require_host, require_member, require_not_ended, require_recruiting
+from app.tables.state import (
+    find_member,
+    require_host,
+    require_member,
+    require_not_ended,
+    require_offered,
+    require_recruiting,
+)
 
 # --- 만들기 ---
 
@@ -70,13 +78,16 @@ async def resolve_version(session: AsyncSession, viewer: AccessClaims, data: Tab
     return version
 
 
-async def create_table(session: AsyncSession, viewer: AccessClaims, data: TableCreate) -> GameTable:
+async def create_table(
+    session: AsyncSession, viewer: AccessClaims, data: TableCreate, offered: frozenset[NarrationTier]
+) -> GameTable:
     """
-    테이블을 만든다. 만든 사람이 방장이 되어 앉는다.
+    테이블을 만든다. 만든 사람이 방장이 되어 앉는다. offered 는 이 서버가 내주는 서술 등급들이다.
 
-    판이 없으면 AssetNotFoundError, 없는 스타팅이나 판이 허용하지 않는 캐릭터 방식을 골랐으면 TableOptionError,
-    그 판으로는 둘 수 없는 정원이면 TableConflictError.
+    판이 없으면 AssetNotFoundError, 없는 스타팅이나 판이 허용하지 않는 캐릭터 방식이나 내주지 않는 서술 등급을
+    골랐으면 TableOptionError, 그 판으로는 둘 수 없는 정원이면 TableConflictError.
     """
+    require_offered(data.narration_tier, offered)
     version = await resolve_version(session, viewer, data)
     snapshot = read_snapshot(version.snapshot)
 
