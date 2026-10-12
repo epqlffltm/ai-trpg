@@ -157,7 +157,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | 서버 | 작업 | `operation` |
 | --- | --- | --- |
 | game-server | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
-| game-server | 마감이 지난 라운드 닫기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `round.close_overdue` |
+| game-server | 마감이 지난 라운드 닫기와 크레딧을 기다리는 시간이 지난 라운드 마무리(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `closed`, `credit_waits`) | `round.close_overdue` |
 | game-server | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `charge.settle` |
 | game-server | 로어북 항목의 벡터 만들기 | `lore.index` |
 | game-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
@@ -298,7 +298,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `http.request` | 전부 | HTTP 요청 하나를 처리했다. 어느 주소인지는 `method` 와 `route` 에 있다 |
 | `job.run` | game | 이름을 따로 주지 않은 작업 |
 | `round.narrate` | game | 라운드의 AI 서술 |
-| `round.close_overdue` | game | 마감이 지난 라운드 닫기 |
+| `round.close_overdue` | game | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리(#181) |
 | `lore.index` | game | 로어북 색인 |
 | `memory.index` | game | 기억 색인 |
 | `charge.settle` | game | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴) |
