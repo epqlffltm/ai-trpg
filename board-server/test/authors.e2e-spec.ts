@@ -239,10 +239,9 @@ describe('닉네임이 바뀌면', () => {
 
     await visit(WRITER, '모험가');
 
-    const row = await readAuthorRow(app, WRITER);
-    expect((row?.updated_at as Date).toISOString()).toBe(
-      '2026-01-01T00:00:00.000Z',
-    );
+    const updatedAt = (await readAuthorRow(app, WRITER))?.updated_at as
+      Date | undefined;
+    expect(updatedAt?.toISOString()).toBe('2026-01-01T00:00:00.000Z');
   });
 
   it('이름이 다르면 고치고 고친 시각을 적는다', async () => {
@@ -256,8 +255,9 @@ describe('닉네임이 바뀌면', () => {
     await visit(WRITER, '용사');
 
     const row = await readAuthorRow(app, WRITER);
+    const updatedAt = row?.updated_at as Date | undefined;
     expect(row?.nickname).toBe('용사');
-    expect((row?.updated_at as Date).getTime()).toBeGreaterThan(
+    expect(updatedAt?.getTime()).toBeGreaterThan(
       Date.parse('2026-01-01T00:00:00Z'),
     );
   });
