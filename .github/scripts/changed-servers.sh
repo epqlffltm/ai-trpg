@@ -9,7 +9,7 @@
 # 고르는 규칙:
 #   - 서버의 폴더(auth-server/ 등)나 그 서버의 워크플로(.github/workflows/auth-server.yml)가 바뀌면 그 서버
 #   - DB 초기화 스크립트(docker/postgres/init/)가 바뀌면 넷 다. 네 서버의 DB 계정이 거기서 만들어진다
-#   - compose 파일(docker-compose.yml)이 바뀌면 넷 다. 네 서버를 컨테이너로 띄우는 법이 거기 있다
+#   - compose 파일(docker-compose.yml)이나 프록시의 설정(docker/nginx/)이 바뀌면 넷 다. 네 서버를 컨테이너로 띄우고 잇는 법이 거기 있다
 #   - 관문 자신(.github/workflows/ci.yml, .github/scripts/)이 바뀌면 넷 다. 관문이 맞는지 넷으로 확인한다
 #   - 그 밖(문서, 루트 README 등)은 아무것도 고르지 않는다
 #   - 바뀐 파일을 알 수 없으면(커밋을 찾지 못함) 넷 다. 모르면 검사하는 쪽으로 기운다
@@ -30,7 +30,7 @@ belongs_to() {
 # 넷 다 고르는 경로인가.
 affects_all() {
   local path="$1"
-  [[ "$path" == docker/postgres/init/* || "$path" == "docker-compose.yml" ||
+  [[ "$path" == docker/postgres/init/* || "$path" == "docker-compose.yml" || "$path" == docker/nginx/* ||
     "$path" == ".github/workflows/ci.yml" || "$path" == .github/scripts/* ]]
 }
 

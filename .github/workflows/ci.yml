@@ -73,7 +73,7 @@ jobs:
     uses: ./.github/workflows/billing-server.yml
 
   # 네 서버의 이미지를 만들어 compose 로 함께 띄워 본다. 서버의 기능은 위의 작업들이 보고, 이것은
-  # "이미지가 만들어지고, 마이그레이션이 돌고, 서버가 뜨고, 서로 닿는가"만 본다.
+  # "이미지가 만들어지고, 마이그레이션이 돌고, 서버가 뜨고, 서로 닿고, 프록시가 주소를 나누고 막는가"만 본다.
   # 한 서버만 바뀌어도 넷 다 띄운다. 한 서버만 띄워서는 서로 닿는지 볼 수 없다.
   # 설정과 키는 이 실행에서만 쓰고 버리는 값으로 만든다(.github/scripts/stack-smoke.sh)
   stack:
@@ -94,6 +94,10 @@ jobs:
 
       - name: 확인
         run: bash .github/scripts/stack-smoke.sh check
+
+      # 요청 수 제한을 채우므로 확인의 맨 마지막에 둔다
+      - name: 프록시를 거쳐 확인
+        run: bash .github/scripts/stack-smoke.sh check-proxy
 
       - name: 실패했을 때 로그
         if: failure()
