@@ -109,6 +109,9 @@ MIDDLEWARE = [
     # 맨 앞에 둔다. 다른 미들웨어가 남기는 로그에도 식별자가 붙는다
     'observability.middleware.RequestLoggingMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    # 관리자 화면의 CSS 와 JS 를 이 서버가 직접 내준다(whitenoise). DEBUG 를 끈 운영에서는 Django 가 내주지 않는다.
+    # 보안 헤더를 붙인 뒤, 세션과 인증을 거치기 전에 둔다. 정적 파일은 그것들이 필요 없다
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -279,6 +282,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# collectstatic 이 정적 파일을 모으는 폴더. 이미지를 만들 때 모은다(Dockerfile).
+# 적지 않으면 모으지 않는다. 개발 중에는 runserver 와 whitenoise 가 앱 폴더에서 바로 찾아 내준다(DEBUG)
+STATIC_ROOT = env('STATIC_ROOT', default=None)
 
 
 # 서버 앞에 선, 우리가 운영하는 프록시(nginx, 로드밸런서)의 수.
