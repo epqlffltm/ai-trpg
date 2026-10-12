@@ -9,14 +9,22 @@ import {
   ArgumentsHost,
   ForbiddenException,
   Logger,
+  HttpException,
   NotFoundException,
 } from '@nestjs/common';
 import { AllExceptionsFilter } from './all-exceptions.filter.js';
 
-/** 필터에 넘길 가짜 응답. 정해진 상태 코드와 본문을 기억한다. */
+/** 필터에 넘길 가짜 응답. 정해진 상태 코드와 본문, 붙은 머리말을 기억한다. */
 function makeHost() {
-  const sent: { status?: number; body?: unknown } = {};
+  const sent: {
+    status?: number;
+    body?: unknown;
+    headers?: Record<string, string>;
+  } = {};
   const response = {
+    setHeader: (name: string, value: string) => {
+      sent.headers = { ...sent.headers, [name]: value };
+    },
     status: (code: number) => {
       sent.status = code;
       return { json: (body: unknown) => (sent.body = body) };
@@ -45,6 +53,32 @@ describe('AllExceptionsFilter', () => {
       status: 403,
       body: { detail: '자신의 글만 고칠 수 있습니다.' },
     });
+  });
+
+  it('기다릴 시간이 있으면 본문과 Retry-After 머리말에 함께 싣는다', () => {
+    const { sent, host } = makeHost();
+
+    new AllExceptionsFilter().catch(
+      new HttpException({ detail: '너무 자주 씁니다.', retry_after: 142 }, 429),
+      host,
+    );
+
+    expect(sent).toEqual({
+      status: 429,
+      body: { detail: '너무 자주 씁니다.', retry_after: 142 },
+      headers: { 'Retry-After': '142' },
+    });
+  });
+
+  it('기다릴 시간이 없으면 Retry-After 를 붙이지 않는다', () => {
+    const { sent, host } = makeHost();
+
+    new AllExceptionsFilter().catch(
+      new ForbiddenException({ detail: '권한이 없습니다.' }),
+      host,
+    );
+
+    expect(sent.headers).toBeUndefined();
   });
 
   it('Nest 가 만든 예외의 글은 내보내지 않는다', () => {

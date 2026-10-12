@@ -33,6 +33,8 @@ export const TITLE_MAX_LENGTH = 100;
 export const CONTENT_MAX_LENGTH = 20000;
 
 @Entity('posts')
+// 한 사람이 최근에 쓴 글을 센다. 쓰기 횟수 제한이 이 색인을 탄다(write-limits/)
+@Index('ix_posts_author_id_created_at', ['authorId', 'createdAt'])
 // 고정한 시각과 끝나는 시각은 함께 있거나 함께 없다. 하나만 있는 행은 고정인지 아닌지 알 수 없다
 @Check('ck_posts_pin_pair', '("pinned_at" IS NULL) = ("pinned_until" IS NULL)')
 // 한 게시판의 글을 번호가 큰 것부터 읽는다. 글 목록이 이 색인을 탄다
