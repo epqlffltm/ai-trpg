@@ -12,6 +12,8 @@
 
 import { Controller, Get, HttpCode, HttpStatus, Query } from '@nestjs/common';
 import { Public } from '../auth/public.decorator.js';
+import { AuthorsService } from '../authors/authors.service.js';
+import { nicknameOf } from '../authors/nicknames.js';
 import { Board } from '../boards/board.entity.js';
 import { BoardsService } from '../boards/boards.service.js';
 import { CommentCountsService } from '../comment-counts/comment-counts.service.js';
@@ -33,6 +35,7 @@ export class PostsSearchController {
     private readonly boards: BoardsService,
     private readonly search: PostsSearchService,
     private readonly commentCounts: CommentCountsService,
+    private readonly authors: AuthorsService,
   ) {}
 
   /** 낱말이 모두 들어 있는 글을 한 쪽 돌려준다. 새 글부터다. 본문은 싣지 않는다. 없는 게시판이면 404 다. */
@@ -53,15 +56,17 @@ export class PostsSearchController {
       query.size,
     );
     const slugs = slugsById(board ? [board] : await this.boards.list());
-    const counts = await this.commentCounts.countForMany(
-      page.items.map((post) => post.id),
-    );
+    const [counts, nicknames] = await Promise.all([
+      this.commentCounts.countForMany(page.items.map((post) => post.id)),
+      this.authors.nicknamesOf(page.items.map((post) => post.authorId)),
+    ]);
     return pageOf(
       page.items.map((post) =>
         toPostSummaryResponse(post, {
           // 글이 있는 게시판은 지울 수 없다(posts 의 외래 키). 표에 없을 수 없다
           boardSlug: slugs.get(post.boardId) ?? '',
           commentCount: countOf(counts, post.id),
+          authorNickname: nicknameOf(nicknames, post.authorId),
           now,
         }),
       ),

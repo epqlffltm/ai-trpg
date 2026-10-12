@@ -28,9 +28,12 @@ import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Public } from '../auth/public.decorator.js';
 // 타입만 가져온다(import type). 데코레이터가 붙은 인자의 타입이 인터페이스면 이렇게 적어야 빌드된다
 import type { AccessClaims } from '../auth/tokens.js';
+import { AuthorsService } from '../authors/authors.service.js';
 import { PostIdPipe } from '../posts/post-id.pipe.js';
 import { CommentIdPipe } from './comment-id.pipe.js';
+import { Comment } from './comment.entity.js';
 import {
+  authorsOf,
   CommentResponse,
   CommentThreadResponse,
   toCommentResponse,
@@ -44,7 +47,10 @@ import { UpdateCommentDto } from './update-comment.dto.js';
 
 @Controller()
 export class CommentsController {
-  constructor(private readonly comments: CommentsService) {}
+  constructor(
+    private readonly comments: CommentsService,
+    private readonly authors: AuthorsService,
+  ) {}
 
   /** 한 글의 댓글을 한 토막 돌려준다. 먼저 쓴 것부터고, 댓글마다 답글이 모두 붙어 있다. */
   @Public()
@@ -55,8 +61,11 @@ export class CommentsController {
     @Query() query: ListCommentsQuery,
   ): Promise<Slice<CommentThreadResponse>> {
     const slice = await this.comments.listIn(postId, query.after, query.size);
+    const nicknames = await this.authors.nicknamesOf(authorsOf(slice.items));
     return {
-      items: slice.items.map(toCommentThreadResponse),
+      items: slice.items.map((thread) =>
+        toCommentThreadResponse(thread, nicknames),
+      ),
       next: slice.next,
     };
   }
@@ -73,7 +82,7 @@ export class CommentsController {
       content: input.content,
       parentId: input.parent_id ?? undefined,
     });
-    return toCommentResponse(comment);
+    return this.toResponse(comment);
   }
 
   /** 댓글의 내용을 고친다. 고친 댓글을 돌려준다. */
@@ -85,7 +94,7 @@ export class CommentsController {
     @CurrentUser() user: AccessClaims,
   ): Promise<CommentResponse> {
     const comment = await this.comments.update(id, user.userId, input.content);
-    return toCommentResponse(comment);
+    return this.toResponse(comment);
   }
 
   /** 댓글을 지운다. 돌려줄 내용이 없다. */
@@ -96,5 +105,11 @@ export class CommentsController {
     @CurrentUser() user: AccessClaims,
   ): Promise<void> {
     await this.comments.remove(id, user.userId);
+  }
+
+  /** 댓글 하나를 응답의 모양으로 바꾼다. 글쓴이의 이름을 따로 읽는다. */
+  private async toResponse(comment: Comment): Promise<CommentResponse> {
+    const nicknames = await this.authors.nicknamesOf([comment.authorId]);
+    return toCommentResponse(comment, nicknames);
   }
 }

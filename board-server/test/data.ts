@@ -8,9 +8,10 @@
 
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DataSource } from 'typeorm';
+import { AuthorsService } from '../src/authors/authors.service.js';
 
 /**
- * 신고, 글, 댓글, 운영자를 모두 비우고, 번호를 1 부터 다시 센다. 테스트마다 먼저 부른다.
+ * 신고, 글, 댓글, 운영자, 글쓴이의 닉네임을 모두 비우고, 번호를 1 부터 다시 센다. 테스트마다 먼저 부른다.
  *
  * 앞의 테스트가 남긴 글이 다음 테스트의 목록에 섞이지 않게 한다.
  * 신고는 글과 댓글을, 댓글은 글을 가리키므로 한 번에 비운다. 따로 비우면 DB 가 막는다.
@@ -19,8 +20,10 @@ export async function clearData(app: NestExpressApplication): Promise<void> {
   await app
     .get(DataSource)
     .query(
-      'TRUNCATE "reports", "comments", "posts", "operators" RESTART IDENTITY',
+      'TRUNCATE "reports", "comments", "posts", "operators", "authors" RESTART IDENTITY',
     );
+  // 서버는 최근에 적은 닉네임을 기억해 두고 다시 적지 않는다. 테이블을 비웠으니 그 기억도 비운다
+  app.get(AuthorsService).forgetRecent();
 }
 
 /** 사용자를 운영자로 만든다. userId 는 인증 서버의 public_id 다. */
@@ -126,5 +129,16 @@ export async function readReportRow(
   const rows: Record<string, unknown>[] = await app
     .get(DataSource)
     .query('SELECT * FROM "reports" WHERE "id" = $1', [id]);
+  return rows[0];
+}
+
+/** 글쓴이의 닉네임을 DB 에서 그대로 읽는다. 모르는 사람이면 undefined 다. */
+export async function readAuthorRow(
+  app: NestExpressApplication,
+  userId: string,
+): Promise<Record<string, unknown> | undefined> {
+  const rows: Record<string, unknown>[] = await app
+    .get(DataSource)
+    .query('SELECT * FROM "authors" WHERE "user_id" = $1', [userId]);
   return rows[0];
 }
