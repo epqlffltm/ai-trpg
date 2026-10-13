@@ -47,6 +47,7 @@ from app.assets.models import (
     CHARACTER_NAME_MAX_LENGTH,
     CREATOR_MADE_MODES,
     DEFAULT_CHARACTER_MODES,
+    ITEM_STACK_MAX,
     TABLE_MAX_PLAYERS,
     TITLE_MAX_LENGTH,
     CharacterMode,
@@ -425,6 +426,46 @@ class TableSheet(Base):
     injuries: Mapped[list['TableInjury']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='TableInjury.created_at, TableInjury.id'
     )
+
+    # 이 캐릭터의 소지품. 시트를 읽을 때 함께 읽는다(몇 가지뿐이다). 보여 줄 때는 판의 물건 순서로 놓는다.
+    # 개수가 0 이 되면 행을 지운다(delete-orphan)
+    items: Mapped[list['TableItem']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='TableItem.created_at, TableItem.id'
+    )
+
+
+class TableItem(Base):
+    """
+    캐릭터 하나가 가진 물건 한 가지와 그 개수(#202).
+
+    어떤 물건인지는 판의 로어북 물건 항목(entry_id)으로만 적는다. 이름과 규칙(장비, 소모품)은 판에 있다.
+    소지품은 캐릭터의 것이다. 새 캐릭터는 앞 캐릭터의 것을 물려받지 않고 시작 소지품을 새로 받는다.
+    죽은 캐릭터의 소지품은 시트와 함께 남는다. 누가 무엇을 가진 채 죽었는지의 기록이다.
+
+    소지품을 바꾸는 것은 서버뿐이다. 시작할 때 나눠 주고(app/tables/items.py), 방장이 주거나 뺏는다
+    (app/tables/item_grants.py). AI 는 바꾸지 못한다.
+    """
+
+    __tablename__ = 'table_items'
+    __table_args__ = (
+        # 시트가 지워지면(사람이 나감) 함께 지워진다
+        ForeignKeyConstraint(['sheet_id'], ['table_sheets.id'], ondelete='CASCADE'),
+        # 한 캐릭터는 같은 물건을 한 줄에 개수로 갖는다
+        UniqueConstraint('sheet_id', 'entry_id', name='uq_table_items_entry'),
+        # 0 개인 줄은 남기지 않는다. 다 쓰거나 빼앗기면 행을 지운다
+        CheckConstraint(f'count BETWEEN 1 AND {ITEM_STACK_MAX}', name='count_range'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    # 어느 테이블의 것인가. 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), index=True)
+    # 가진 캐릭터의 시트
+    sheet_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    # 판의 로어북 물건 항목의 id
+    entry_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    count: Mapped[int] = mapped_column(SmallInteger)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class TableRoll(Base):

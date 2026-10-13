@@ -94,6 +94,10 @@ class EventType(enum.StrEnum):
     CHARACTER_DIED = 'character_died'
     # 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다. 새 캐릭터가 받은 시트가 적힌다
     CHARACTER_JOINED = 'character_joined'
+    # 방장이 캐릭터에게 물건을 줬다(app/tables/item_grants.py). 무엇을 몇 개, 그 뒤에 몇 개가 됐는가
+    ITEMS_GAINED = 'items_gained'
+    # 방장이 캐릭터에게서 물건을 빼앗았다
+    ITEMS_LOST = 'items_lost'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고, 방장이 다시 맡길 수 있다

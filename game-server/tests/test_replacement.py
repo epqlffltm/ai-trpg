@@ -306,7 +306,15 @@ async def test_a_player_whose_character_died_brings_in_a_new_one(
     # 자리의 캐릭터가 새 캐릭터로 바뀌었다. 시트를 바로 받았다. HP 는 가득 차 있고 죽음의 굴림은 센 것이 없다
     assert seat['character'] == {'name': '드워프', 'description': '수염에 기름때가 묻었다.'}
     assert seat['character_mode'] == 'custom'
-    fresh = {'number': 2, 'hp': 10, 'death_successes': 0, 'death_failures': 0, 'dead': False, 'injuries': []}
+    fresh = {
+        'number': 2,
+        'hp': 10,
+        'death_successes': 0,
+        'death_failures': 0,
+        'dead': False,
+        'injuries': [],
+        'items': [],
+    }
     assert seat['sheet'] == {**PLAIN, **fresh}
     # 죽은 캐릭터는 지워지지 않고 떠난 캐릭터로 남는다
     assert seat['fallen'] == [{'number': 1, 'character_name': '엘프', 'pregen_index': None, **PLAIN}]

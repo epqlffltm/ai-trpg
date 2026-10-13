@@ -15,7 +15,7 @@ import uuid
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.call_log import DbCallLog
@@ -24,6 +24,7 @@ from app.ai.provider import Reasoning
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
 from app.memory.indexing import index_table
+from app.tables.models import TableItem, TableSheet
 from app.whispers.models import Whisper
 from tests.cleaning import clear_tables, clearing_order
 from tests.sheets import SHEET
@@ -72,6 +73,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     테이블(시작해서 시트와 NPC 의 상태와 라운드와 이벤트가 생기고, 굴리고, 선언해서 다치고, 채팅한다), 보관함.
     AI 호출의 기록만은 API 로 생기지 않는다(테스트의 서술자는 모델을 부르지 않는다). 기록장으로 직접 쓴다.
     쪽지도 직접 넣는다. 받을 사람이 있어야 하는데 혼자 앉은 테이블이다.
+    소지품도 직접 넣는다. 판에 물건이 있어야 하는데, 물건 항목을 더하면 위의 판과 서술이 달라진다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
     지난 라운드의 벡터는 다음 서술을 맡길 때 생긴다. 혼자 앉은 테이블이라 선언하면 라운드가 닫히고 서술된다.
     서술을 기다린 뒤 색인을 직접 돌린다.
@@ -130,6 +132,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     async with app.state.session_factory() as session:
         values = {'sender_id': ME, 'recipient_id': OTHER, 'content': '쉿', 'round_number': 1, 'sequence': 1}
         session.add(Whisper(table_id=uuid.UUID(table['id']), owner_id=ME, **values))
+        sheet_id = await session.scalar(select(TableSheet.id).where(TableSheet.table_id == uuid.UUID(table['id'])))
+        session.add(TableItem(table_id=uuid.UUID(table['id']), sheet_id=sheet_id, entry_id=uuid.uuid4(), count=1))
         await session.commit()
 
 
