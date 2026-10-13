@@ -105,6 +105,20 @@ def has_outcome(declaration: Declaration | None) -> bool:
     return declaration is not None and declaration.outcome is not None and 'roll' in declaration.outcome
 
 
+def item_use_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 물건 쓰기의 결과(app/rounds/item_actions.py 의 judge_use). 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('item_use')
+
+
+def item_give_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 물건 건네기의 결과(app/rounds/item_actions.py 의 judge_give). 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('item_give')
+
+
 def naming_of(declaration: Declaration | None) -> dict | None:
     """이 선언에 적힌 지목의 결과(app/rounds/naming.py 의 judge_naming). 지목이 아니었거나 결과가 없으면 None."""
     if declaration is None or declaration.outcome is None:

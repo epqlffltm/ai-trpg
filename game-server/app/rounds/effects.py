@@ -3,11 +3,13 @@
 """
 닫히는 라운드의 판정이 함께 쓰는 것과, 바뀐 HP 를 선언의 outcome 에 적을 문서로 만드는 함수들.
 
-판정(app/rounds/checks.py)과 치료(app/rounds/treatments.py)가 함께 쓴다. 둘이 서로를 가져오지 않게 여기 둔다.
+판정(app/rounds/checks.py), 치료(app/rounds/treatments.py), 물건 쓰기(app/rounds/item_actions.py)가 함께 쓴다.
+서로를 가져오지 않게 여기 둔다.
 DB 를 모른다. 저장하지 않는다.
 """
 
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.engine.dice import Dice
@@ -15,6 +17,7 @@ from app.engine.health import Change
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, condition_of
+from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember, TableNpc
 
 
@@ -35,6 +38,8 @@ class Judging:
     # 테이블의 NPC 상태 전부와 판의 인물 항목. 지목은 장면에 없는 인물도 짚을 수 있다(app/rounds/naming.py)
     npcs: list[TableNpc]
     people: list[EntrySnapshot]
+    # 판의 물건들(app/tables/items.py 의 catalog). 물건을 쓰거나 건넬 때 이름과 규칙을 찾는다
+    items: dict[uuid.UUID, CatalogItem] = field(default_factory=dict)
 
 
 def injury_after(judging: Judging, change: Change, max_hp: int, dead: bool, rows: list) -> dict | None:

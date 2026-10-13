@@ -45,21 +45,30 @@ def change_member(judging: Judging, actor: TableMember, action: CheckAction, fou
     돌려준 문서는 선언의 outcome 안에 적힌다.
     """
     affected = find_affected(judging.table, actor, action, found.recipient)
+    return change_sheet(judging, affected, found.kind, found.magnitude)
+
+
+def change_sheet(judging: Judging, affected: TableMember | None, kind: ChangeKind, magnitude_key: str) -> dict | None:
+    """
+    앉은 사람 하나의 HP 를 그 등급만큼 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 HP 가 없으면 None.
+
+    판정의 결과와 소모품의 회복(app/rounds/item_actions.py)이 함께 쓴다.
+    """
     # 대상이 떠났거나 시트가 없으면 바뀔 HP 가 없다. 양을 정하는 주사위도 굴리지 않는다.
     # 죽은 캐릭터도 그렇다. 회복으로 되살리지 못한다
     if affected is None or affected.sheet is None or sheets.is_dead(affected):
         return None
 
     sheet = affected.sheet
-    magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
-    change = health.change_hp(found.kind, magnitude, sheet.hp, sheet.max_hp, judging.dice)
+    magnitude = health.find_magnitude(judging.ruleset, magnitude_key)
+    change = health.change_hp(kind, magnitude, sheet.hp, sheet.max_hp, judging.dice)
     sheet.hp = change.after
     # 일어났으면 죽음의 굴림에서 센 것은 처음으로 돌아간다. 다시 쓰러지면 처음부터 센다
     if not change.downed:
         sheets.clear_death_saves(sheet)
     # 캐릭터는 피해로 바로 죽지 않는다(죽음의 굴림으로 죽는다)
     injury_roll = injury_after(judging, change, sheet.max_hp, False, sheet.injuries)
-    return member_effect(affected, found.magnitude, change, injury_roll)
+    return member_effect(affected, magnitude_key, change, injury_roll)
 
 
 def npc_injury(judging: Judging, action: CheckAction, change: Change, npc: TableNpc) -> dict | None:
