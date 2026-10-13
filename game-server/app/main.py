@@ -52,6 +52,8 @@ from app.realtime import router as realtime
 from app.realtime.hub import Hub
 from app.realtime.listener import PostgresListener
 from app.realtime.shutdown import closing_on_exit
+from app.realtime.signals import session_info
+from app.realtime.signing import signer_from
 from app.rounds import clock
 from app.rounds import router as rounds
 from app.rounds.closing import closer_of
@@ -132,8 +134,11 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     # 엔진과 세션 틀을 앱에 붙여 둔다. 전역 변수로 두지 않는다.
     # 앱마다 자기 엔진을 가지므로, 테스트가 다른 설정의 앱을 만들어도 서로 섞이지 않는다.
     # 엔진을 만드는 것만으로는 DB 에 연결하지 않는다
+    # 세션은 신호의 서명자를 들고 다닌다. 테이블을 바꾸고 신호를 보낼 때 이것으로 서명한다(app/realtime/signals.py).
+    # 신호를 듣는 쪽도 같은 것으로 맞춰 본다(아래의 PostgresListener)
     app.state.engine = create_engine(settings)
-    app.state.session_factory = create_session_factory(app.state.engine)
+    app.state.signal_signer = signer_from(settings)
+    app.state.session_factory = create_session_factory(app.state.engine, session_info(app.state.signal_signer))
 
     # 인증 서버의 공개키를 기억하는 곳. 앱에 하나만 두고 모든 요청이 함께 쓴다.
     # 만드는 것만으로는 인증 서버에 요청을 보내지 않는다. 처음 토큰을 검증할 때 가져온다
@@ -144,7 +149,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     # 만드는 것만으로는 DB 에 연결하지 않는다. 처음 스트림이 열릴 때 연결한다.
     # 신호를 다른 것으로 바꿀 때 여기의 PostgresListener 를 바꿔 끼운다(app/realtime/listener.py)
     app.state.hub = Hub()
-    app.state.signal_source = PostgresListener(settings, app.state.hub)
+    app.state.signal_source = PostgresListener(settings, app.state.hub, app.state.signal_signer)
 
     # "입력 중" 신호를 너무 자주 보내지 못하게 막는 것. 기록을 메모리에 두므로 앱에 하나만 둔다
     app.state.typing_throttle = TypingThrottle()
