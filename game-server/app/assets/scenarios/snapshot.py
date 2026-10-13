@@ -24,6 +24,7 @@ from app.assets.models import (
     LoreEntry,
     LoreKind,
     NarrationStyle,
+    QuestStart,
     Rating,
     Rulebook,
     Scenario,
@@ -52,7 +53,8 @@ from app.engine.sheet import Sheet
 #  15: 규칙에 치료(treatment)가 있고, 부상에 치료의 난이도(treat_difficulty)와 줄이는 라운드(treat_rounds)가 있다
 #  16: 로어북 항목에 지목할 때 맞다고 받는 이름들(true_names)이 있다
 #  17: 물건 항목의 규칙(items), 시작 소지품(starting_items), 프리젠의 소지품(pregens[].items)이 있다
-SNAPSHOT_FORMAT = 17
+#  18: 사건 항목의 퀘스트 규칙(quests)이 있다
+SNAPSHOT_FORMAT = 18
 
 
 class EntrySnapshot(BaseModel):
@@ -123,6 +125,18 @@ class ItemRuleSnapshot(BaseModel):
     heals: str | None = None
 
 
+class QuestRuleSnapshot(BaseModel):
+    """
+    퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.
+
+    start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건이다.
+    """
+
+    entry_id: uuid.UUID
+    start: QuestStart = QuestStart.HIDDEN
+    reward: list[ItemStackSnapshot] = []
+
+
 class PregenSnapshot(BaseModel):
     """
     프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다.
@@ -183,6 +197,8 @@ class Snapshot(BaseModel):
     items: list[ItemRuleSnapshot] = []
     # 시작 소지품. 캐릭터 모두가 테이블이 시작할 때 받는다
     starting_items: list[ItemStackSnapshot] = []
+    # 퀘스트 규칙들. 판 안의 로어북 사건 항목마다 많아야 하나다. 규칙이 없는 사건은 숨긴 채로 시작한다(quest_rule_of)
+    quests: list[QuestRuleSnapshot] = []
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용했으면 반드시 있다
     player_made_hp: PlayerMadeHpSnapshot | None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 제작자가 정한 것이다
@@ -210,15 +226,31 @@ class Snapshot(BaseModel):
     @model_validator(mode='after')
     def require_item_entries(self) -> 'Snapshot':
         """
-        아이템 규칙과 소지품이 모두 판 안의 물건 항목을 가리키는지 본다. 아니면 거부한다.
+        아이템 규칙과 소지품(퀘스트의 보상 포함)이 모두 판 안의 물건 항목을 가리키는지 본다. 아니면 거부한다.
 
         게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽(테이블)은 소지품마다 물건 항목이 있다고 믿고 쓴다.
         """
         items = {entry.id for entry in item_entries(self)}
-        stacks = [*self.starting_items, *(stack for pregen in self.pregens for stack in pregen.items)]
+        stacks = [
+            *self.starting_items,
+            *(stack for pregen in self.pregens for stack in pregen.items),
+            *(stack for quest in self.quests for stack in quest.reward),
+        ]
         pointed = [rule.entry_id for rule in self.items] + [stack.entry_id for stack in stacks]
         if any(entry_id not in items for entry_id in pointed):
             raise ValueError('물건 항목이 아닌 것을 가리키는 아이템 규칙이나 소지품이 있습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_quest_entries(self) -> 'Snapshot':
+        """
+        퀘스트 규칙이 모두 판 안의 사건 항목을 가리키는지 본다. 아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽(테이블)은 퀘스트마다 사건 항목이 있다고 믿고 쓴다.
+        """
+        events = {entry.id for entry in quest_entries(self)}
+        if any(rule.entry_id not in events for rule in self.quests):
+            raise ValueError('사건 항목이 아닌 것을 가리키는 퀘스트 규칙이 있습니다.')
         return self
 
 
@@ -230,6 +262,17 @@ def person_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
 def item_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
     """판의 로어북에서 물건 항목만. 로어북의 순서, 그 안의 항목 순서다."""
     return [entry for lorebook in snapshot.lorebooks for entry in lorebook.entries if entry.kind == LoreKind.ITEM]
+
+
+def quest_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
+    """판의 로어북에서 사건 항목만. 사건 하나가 퀘스트 하나다. 로어북의 순서, 그 안의 항목 순서다."""
+    return [entry for lorebook in snapshot.lorebooks for entry in lorebook.entries if entry.kind == LoreKind.EVENT]
+
+
+def quest_rule_of(snapshot: Snapshot, entry_id: uuid.UUID) -> QuestRuleSnapshot:
+    """사건 항목 하나의 퀘스트 규칙. 적어 둔 규칙이 있으면 그것, 없으면 숨긴 채로 시작하고 보상이 없다."""
+    own = next((rule for rule in snapshot.quests if rule.entry_id == entry_id), None)
+    return own or QuestRuleSnapshot(entry_id=entry_id)
 
 
 def item_rule_of(snapshot: Snapshot, entry_id: uuid.UUID) -> ItemRuleSnapshot:
@@ -299,6 +342,7 @@ def build_snapshot(
         default_npc_sheet=scenario.default_npc_sheet,
         items=[ItemRuleSnapshot(**rule) for rule in scenario.items],
         starting_items=[ItemStackSnapshot(**stack) for stack in scenario.starting_items],
+        quests=[QuestRuleSnapshot(**quest) for quest in scenario.quests],
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,

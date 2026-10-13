@@ -301,6 +301,18 @@ def upgrade_from_16(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_17(document: dict) -> dict:
+    """
+    형식 17 의 문서를 형식 18 로 올린다.
+
+    그때는 퀘스트 규칙이 없었다. 없는 것으로 읽는다. 사건 항목은 모두 숨긴 채로 시작하는 퀘스트다.
+    """
+    upgraded = dict(document)
+    upgraded['quests'] = []
+    upgraded['format'] = 18
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -320,4 +332,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     14: upgrade_from_14,
     15: upgrade_from_15,
     16: upgrade_from_16,
+    17: upgrade_from_17,
 }
