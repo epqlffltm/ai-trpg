@@ -177,6 +177,26 @@ class ItemNote:
 
 
 @dataclass(frozen=True)
+class ItemActionNote:
+    """
+    물건을 쓰거나 건넨 결과. 엔진이 정한 것이다. 판정이 없다.
+
+    kind 는 use(쓰기)나 give(건네기)다. done 이 거짓이면 하지 못했다. 까닭은 reason 이다
+    (not_held 가지고 있지 않았다, target_gone 받을 사람이 없었다, too_many 받는 쪽이 더 가질 수 없었다).
+    target 은 회복받거나 받은 사람의 캐릭터 이름이다. 자기 자신에게 썼거나 대상이 없는 물건이면 None 이다.
+    """
+
+    kind: str
+    name: str
+    count: int
+    done: bool
+    reason: str | None = None
+    target: str | None = None
+    # 회복하는 소모품을 썼으면 HP 의 변화
+    impact: Impact | None = None
+
+
+@dataclass(frozen=True)
 class Move:
     """한 캐릭터가 이번 라운드에 하겠다고 한 일과, 판정이 있었으면 그 결과."""
 
@@ -201,7 +221,9 @@ class Move:
     healed: list[HealNote] = field(default_factory=list)
     # 지목하는 행동이면 그 결과. 지목은 판정이 아니라 verdict 와 함께 있지 않다
     naming: NamingNote | None = None
-    # 이 라운드가 닫기 시작할 때 이 캐릭터가 가진 물건들. 판의 물건 순서다.
+    # 물건을 쓰거나 건네는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
+    item_action: ItemActionNote | None = None
+    # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 가진 물건들. 판의 물건 순서다.
     # 서술자는 없는 물건을 쓰는 장면을 쓰지 않는다. 소지품을 바꾸는 것은 서버뿐이다
     items: list[ItemNote] = field(default_factory=list)
 
@@ -520,6 +542,32 @@ def describe_death_save(note: DeathSaveNote) -> str:
     return f'(죽음의 굴림 {result}: {note.roll}, 목표 {note.target}. {counts}, {FATES[note.fate]})'
 
 
+# 물건을 쓰거나 건네지 못한 까닭을 서술자에게 주는 말
+ITEM_FAILURES = {
+    'not_held': '가지고 있지 않았다',
+    'target_gone': '받을 사람이 없었다',
+    'too_many': '받는 쪽이 더 가질 수 없었다',
+}
+
+
+def describe_item_action(note: ItemActionNote) -> str:
+    """
+    물건을 쓰거나 건넨 결과를 한 줄로 적는다. 회복했으면 HP 의 변화를 붙인다.
+
+    예: (쓴 물건: 치유 물약) → 엘프 회복 3 (HP 8/10)
+        (건넨 물건: 밧줄 1개 → 영애)
+        (쓰려던 물건: 치유 물약. 가지고 있지 않았다)
+    """
+    what = note.name if note.kind == 'use' else f'{note.name} {note.count}개'
+    to = f' → {note.target}' if note.target else ''
+    if not note.done:
+        verb = '쓰려던' if note.kind == 'use' else '건네려던'
+        return f'({verb} 물건: {what}{to}. {ITEM_FAILURES.get(note.reason, "하지 못했다")})'
+    verb = '쓴' if note.kind == 'use' else '건넨'
+    line = f'({verb} 물건: {what}{to})'
+    return f'{line} {describe_impact(note.impact)}' if note.impact else line
+
+
 def describe_items(items: list[ItemNote]) -> str:
     """가진 물건들을 한 줄로 적는다. 하나뿐이면 개수를 적지 않는다. 예: 치유 물약 2개, 밧줄"""
     return ', '.join(item.name if item.count == 1 else f'{item.name} {item.count}개' for item in items)
@@ -528,7 +576,7 @@ def describe_items(items: list[ItemNote]) -> str:
 def describe_move(move: Move) -> str:
     """
     한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, 치료였으면 그 결과를,
-    HP 가 바뀌었으면 그 뒤에 붙인다. 지목이었으면 그 결과를 붙인다.
+    HP 가 바뀌었으면 그 뒤에 붙인다. 지목이었으면 그 결과를, 물건을 쓰거나 건넸으면 그 결과를 붙인다.
     죽음의 굴림을 굴렸으면 그 뒤에, 시간이 지나 나은 부상이 있으면 그 뒤에, 입고 있는 부상이 있으면 그 뒤에,
     가진 물건이 있으면 맨 뒤에 붙인다.
     """
@@ -546,6 +594,8 @@ def describe_move(move: Move) -> str:
             parts.append(describe_npc_impact(move.verdict.npc_impact))
     if move.naming is not None:
         parts.append(describe_naming(move.naming))
+    if move.item_action is not None:
+        parts.append(describe_item_action(move.item_action))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
     if move.healed:
