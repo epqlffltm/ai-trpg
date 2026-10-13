@@ -230,6 +230,12 @@ class GameTable(Base):
     # 끄면 낼 수 있는 사람의 값을 돌려주고 라운드는 멈춘 채로 둔다. 방장이 다시 맡기면 모두에게 새로 건다
     remove_short_payers: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text('true'))
 
+    # 쪽지(app/whispers/)를 보낸 사실을 모두에게 알리는가.
+    # 켜면 "누가 누구에게 보냈다"를 이벤트로 남긴다. 글은 싣지 않는다.
+    # 끄면(기본) 보낸 사람과 받은 사람 말고는 아무도 모른다. 만들 때 방장이 고르고 진행 중에도 바꿀 수 있다.
+    # 바꾼 뒤에 보내는 쪽지부터 따른다
+    whisper_notice: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.
     # server_default: DB 에도 기본값을 둔다. 이 칸이 생기기 전에 만든 테이블은 0 에서 시작한다

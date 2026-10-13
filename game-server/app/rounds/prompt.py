@@ -38,6 +38,7 @@ from app.rounds.narrator import (
     PersonHistory,
     PersonState,
     StoryContext,
+    WhisperNote,
     describe_injuries,
     describe_move,
 )
@@ -69,7 +70,7 @@ from app.rounds.narrator import (
 #   narration-15: 전부터 입은 부상을 이번 라운드에 새로 다친 것처럼 쓰는 일을 막는다(상태 지키기 평가에서 3 번 중 3 번).
 #                 시스템 지시에 "이번 라운드에 생긴 부상은 '새 부상'뿐이다"가 붙고, 판정 줄의 "부상의 영향"이
 #                 "전부터 입은 부상의 영향"으로 바뀐다
-PROMPT_VERSION = 'narration-15'
+PROMPT_VERSION = 'narration-16'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -270,6 +271,17 @@ PEOPLE_NOTE = (
 )
 
 
+# 플레이어끼리 몰래 주고받은 쪽지 중 GM 에게도 보여 준 것(#196). 다른 플레이어는 모르는 일이다.
+# 서술은 모두에게 나가므로 내용을 장면에 옮기면 쪽지가 새어 나간다. 속내와 행동의 까닭을 맞추는 데만 쓰게 한다
+WHISPER_TITLE = '[비밀 쪽지]'
+WHISPER_NOTE = (
+    '이번 라운드에 플레이어끼리 몰래 주고받은 쪽지다. 다른 플레이어는 이 쪽지를 모른다. '
+    '쪽지의 내용이나 쪽지가 오갔다는 사실을 장면에 드러내지 마라. 인물의 속내와 행동의 까닭을 이해하는 데만 쓴다.'
+)
+# 캐릭터를 정하기 전에 보낸 쪽지의 이름 자리
+UNNAMED_PLAYER = '(이름을 정하지 않은 플레이어)'
+
+
 # 지목이 있는 라운드에만 붙는 다루는 법. 맞은 것은 이름뿐이다. 틀린 지목에서 정답이 새지 않게 한다
 NAMING_NOTE = (
     '지목의 결과는 엔진이 정했다. 맞은 지목은 그 인물의 이름만 밝혀진 것이다. '
@@ -429,12 +441,30 @@ def person_line(person: PersonState) -> str:
     return f'- {person.name}: {person.condition}{injured}'
 
 
+def whisper_line(whisper: WhisperNote) -> str:
+    """쪽지 한 줄. 예: - 엘프 → 영애: 오늘 밤 성문을 열어 둬."""
+    sender = whisper.sender or UNNAMED_PLAYER
+    recipient = whisper.recipient or UNNAMED_PLAYER
+    return f'- {sender} → {recipient}: {whisper.content}'
+
+
+def whisper_lines(whispers: list[WhisperNote]) -> list[str]:
+    """
+    GM 에게도 보인 쪽지를 적는 줄들. 다루는 법 한 줄과 쪽지마다 한 줄.
+
+    끝에 빈 줄이 붙는다. 없으면 빈 목록이다.
+    """
+    if not whispers:
+        return []
+    return [WHISPER_TITLE, WHISPER_NOTE, *(whisper_line(whisper) for whisper in whispers), '']
+
+
 def round_text(request: NarrationRequest) -> str:
     """
     이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
 
-    검색한 로어북 항목, 지난 일, 인물의 이력, 인물의 상태가 있으면 맨 앞에 둔다
-    (설정, 지난 일, 이력, 상태, 이번 라운드의 차례).
+    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 인물의 상태가 있으면 맨 앞에 둔다
+    (설정, 지난 일, 이력, 쪽지, 상태, 이번 라운드의 차례).
     상태는 이번 라운드의 결과 바로 앞이다. 엔진이 정한 사실이라 결과와 가까이 둔다.
     지목이 있으면 결과 뒤에 다루는 법을 한 줄 붙인다.
     부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
@@ -442,6 +472,7 @@ def round_text(request: NarrationRequest) -> str:
     lines = lore_lines(request.lore, {move.character_name for move in request.moves})
     lines.extend(memory_lines(request.memories))
     lines.extend(history_lines(request.histories))
+    lines.extend(whisper_lines(request.whispers))
     lines.extend(people_lines(request.people))
     lines.append(f'[{request.round_number} 라운드에 한 일과 결과]')
     lines.extend(describe_move(move) for move in request.moves)
