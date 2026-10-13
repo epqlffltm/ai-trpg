@@ -26,7 +26,7 @@ class DeclarationUpdate(BaseModel):
     선언을 낼 때 받는 값. 다시 내면 앞의 것을 통째로 바꾼다. 행동을 빼고 다시 내면 행동도 없어진다.
 
     행동은 하나만 붙인다. 한 사람이 한 라운드에 주사위를 한 번 굴린다.
-    행동은 판정(kind: check)이나 치료(kind: treat)다. 행동이 없으면 판정이 없는 선언이다.
+    행동은 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 건네기(give)다. 행동이 없으면 판정이 없는 선언이다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -213,6 +213,57 @@ class NamingOutcome(BaseModel):
     naming: NamingOut
 
 
+class ItemPersonOut(BaseModel):
+    """물건을 받거나 회복받은 사람. 떠난 사람이면 캐릭터 이름이 없다."""
+
+    user_id: uuid.UUID
+    character_name: str | None
+
+
+class ItemUseOut(BaseModel):
+    """물건을 쓴 결과. 엔진이 정했다(app/rounds/item_actions.py). 판정이 없다."""
+
+    # 쓴 물건(판의 로어북 물건 항목)과 그 이름
+    entry_id: uuid.UUID
+    name: str
+    # 썼는가. 못 했으면 reason 이 있다: not_held(가지고 있지 않았다), target_gone(회복받을 사람이 떠났거나 죽었다)
+    used: bool
+    reason: str | None
+    # 회복받은 사람. 회복하지 않는 물건이면 None 이다
+    target: ItemPersonOut | None
+    # 쓴 뒤에 남은 개수
+    remaining: int
+
+
+class ItemUseOutcome(BaseModel):
+    """물건을 쓰는 행동의 결과. 회복했으면 HP 의 변화(effect)가 함께 있다."""
+
+    item_use: ItemUseOut
+    effect: EffectOut | None = None
+
+
+class ItemGiveOut(BaseModel):
+    """물건을 건넨 결과. 엔진이 정했다(app/rounds/item_actions.py)."""
+
+    entry_id: uuid.UUID
+    name: str
+    count: int
+    # 건넸는가. 못 했으면 reason 이 있다:
+    # not_held, target_gone(받을 사람이 떠났거나 죽었다), too_many(더 가질 수 없었다)
+    given: bool
+    reason: str | None
+    target: ItemPersonOut
+    # 건넨 뒤에 준 사람에게 남은 개수와 받은 사람의 개수. 받은 사람이 떠났으면 None 이다
+    remaining: int
+    target_total: int | None
+
+
+class ItemGiveOutcome(BaseModel):
+    """물건을 건네는 행동의 결과."""
+
+    item_give: ItemGiveOut
+
+
 class DeclarationOut(BaseModel):
     """선언 하나."""
 
@@ -224,8 +275,9 @@ class DeclarationOut(BaseModel):
     # 선언에 붙인 행동. 글과 같이 가린다. 행동이 없는 선언이면 보이는 사람에게도 None 이다
     action: Action | None
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
-    # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome 이다
-    outcome: CheckOutcome | NamingOutcome | None
+    # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
+    # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome 이다
+    outcome: CheckOutcome | NamingOutcome | ItemUseOutcome | ItemGiveOutcome | None
 
 
 class DeathSaveOut(BaseModel):

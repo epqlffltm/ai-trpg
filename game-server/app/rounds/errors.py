@@ -44,6 +44,12 @@ class Conflict(enum.StrEnum):
     PATIENT_DEAD = 'patient_dead'
     # 지목한 인물의 진짜 이름이 이미 드러났다
     ALREADY_NAMED = 'already_named'
+    # 쓰거나 건네려는 물건을 그만큼 가지고 있지 않다
+    ITEM_NOT_HELD = 'item_not_held'
+    # 물건을 받을 캐릭터가 이미 죽었다
+    RECIPIENT_DEAD = 'recipient_dead'
+    # 물건을 받을 캐릭터가 그 물건을 더 가질 수 없다(한 가지 99 개)
+    RECIPIENT_FULL = 'recipient_full'
 
 
 class RoundConflictError(Exception):
@@ -58,7 +64,7 @@ class ActionNotInRulesError(Exception):
     """
     선언에 붙은 행동이 이 테이블의 규칙에 없는 것을 가리킨다.
 
-    field 는 행동의 어느 칸이 틀렸는지다(ability, difficulty, risk, recover, harm, aim, injury).
+    field 는 행동의 어느 칸이 틀렸는지다(ability, difficulty, risk, recover, harm, aim, injury, item, target).
     """
 
     def __init__(self, field: str) -> None:
