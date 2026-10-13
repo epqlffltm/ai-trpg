@@ -43,7 +43,7 @@ const TossAPIURL = "https://api.tosspayments.com"
 // 주문에 적는 거절 이유다. 다른 결제의 번호를 들고 와 이 주문을 치르려 한 것이다.
 const CodePaymentMismatch = "PAYMENT_MISMATCH"
 
-// tossCancelReason 은 취소 요청에 싣는 이유다. 토스페이먼츠의 상점관리자와 취소 내역에 보인다.
+// tossCancelReason 은 취소 요청에 이유(Request.CancelReason)가 없을 때 싣는 이유다. 토스페이먼츠의 상점관리자와 취소 내역에 보인다.
 const tossCancelReason = "청약철회"
 
 // tossAlreadyCanceledCodes 는 이미 취소(환불)된 결제라는 오류 코드다. 취소된 것으로 본다.
@@ -57,7 +57,8 @@ var tossAlreadyCanceledCodes = map[string]bool{
 const tossMaxResponseBytes = 64 << 10
 
 // 토스페이먼츠의 결제 상태(Payment 의 status) 가운데 이 서버가 결과를 아는 것들.
-// 이 밖의 상태(READY, IN_PROGRESS, WAITING_FOR_DEPOSIT, PARTIAL_CANCELED, 모르는 값)는 아직 모르는 것(StatusPending)이다.
+// WAITING_FOR_DEPOSIT 은 가상계좌의 입금을 기다리는 것(StatusAwaitingDeposit)이다.
+// 이 밖의 상태(READY, IN_PROGRESS, PARTIAL_CANCELED, 모르는 값)는 아직 모르는 것(StatusPending)이다.
 // PARTIAL_CANCELED 는 일부만 돌려준 결제다. 돈의 일부가 나갔으므로 거절로 적지 않는다. 사람이 본다.
 const (
 	// tossDone 은 승인되었다는 뜻이다.
@@ -68,6 +69,8 @@ const (
 	tossExpired = "EXPIRED"
 	// tossCanceled 는 승인한 뒤 모두 취소했다는 뜻이다. 돈이 돌아갔다.
 	tossCanceled = "CANCELED"
+	// tossWaitingForDeposit 은 가상계좌를 발급했고 입금을 기다린다는 뜻이다. 돈은 아직 나가지 않았다.
+	tossWaitingForDeposit = "WAITING_FOR_DEPOSIT"
 )
 
 // tossRetryCodes 는 4xx 로 오지만 결과가 확실하지 않은 오류 코드들이다. 거절로 적지 않는다.
@@ -141,7 +144,7 @@ func (t *Toss) Lookup(ctx context.Context, request Request) (Result, error) {
 
 // Cancel 은 결제의 전액 취소를 요청한다. 멱등키로 "refund-주문 번호"를 보낸다. 같은 주문의 취소를 다시 보내도 처음의 답이 온다.
 func (t *Toss) Cancel(ctx context.Context, request Request) (Result, error) {
-	body, err := json.Marshal(tossCancelBody{CancelReason: tossCancelReason})
+	body, err := json.Marshal(tossCancelBody{CancelReason: cancelReason(request)})
 	if err != nil {
 		return Result{}, err
 	}
@@ -310,9 +313,19 @@ func resultOf(status string) Result {
 		return Result{Status: StatusApproved}
 	case tossAborted, tossExpired, tossCanceled:
 		return Result{Status: StatusDeclined, Code: status}
+	case tossWaitingForDeposit:
+		return Result{Status: StatusAwaitingDeposit}
 	default:
 		return Result{Status: StatusPending}
 	}
+}
+
+// cancelReason 은 취소 요청에 실을 이유다. 부르는 쪽이 적지 않았으면 청약철회다.
+func cancelReason(request Request) string {
+	if request.CancelReason == "" {
+		return tossCancelReason
+	}
+	return request.CancelReason
 }
 
 // succeeded 는 답이 2xx 인지 본다.
