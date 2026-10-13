@@ -27,6 +27,9 @@ type tossDouble struct {
 	rejectCode string
 	// loseAnswer 가 true 면 승인은 하되 답으로 500 을 준다. 답을 잃은 것과 같다
 	loseAnswer bool
+	// loseCancels 는 취소를 하되 답으로 500 을 줄 횟수다. 0 이 되면 제대로 답한다
+	loseCancels int
+	cancels     int
 }
 
 func (d *tossDouble) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +38,10 @@ func (d *tossDouble) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method == http.MethodPost && r.URL.Path == "/v1/payments/confirm" {
 		d.confirm(w, r)
+		return
+	}
+	if paymentKey, ok := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/v1/payments/"), "/cancel"); ok && r.Method == http.MethodPost {
+		d.cancel(w, paymentKey)
 		return
 	}
 	found, ok := d.payments[strings.TrimPrefix(r.URL.Path, "/v1/payments/")]
@@ -68,6 +75,35 @@ func (d *tossDouble) confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(approved)
+}
+
+// cancel 은 취소 요청을 받는다. 승인한 결제면 취소해 기억한다. 몇 번을 받아도 한 번만 취소된다(멱등키와 같다).
+func (d *tossDouble) cancel(w http.ResponseWriter, paymentKey string) {
+	d.cancels++
+	found, ok := d.payments[paymentKey]
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"code":"NOT_FOUND_PAYMENT","message":"없음"}`))
+		return
+	}
+	found["status"] = "CANCELED"
+	if d.loseCancels > 0 {
+		d.loseCancels--
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"code":"FAILED_INTERNAL_SYSTEM_PROCESSING","message":"오류"}`))
+		return
+	}
+	_ = json.NewEncoder(w).Encode(found)
+}
+
+// notification 은 그 결제의 상태가 바뀌었다는 알림의 본문이다. 토스페이먼츠가 보내는 모양이다.
+func (d *tossDouble) notification(paymentKey string) []byte {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	raw, _ := json.Marshal(map[string]any{
+		"eventType": payment.TossPaymentStatusChanged, "createdAt": "2026-03-02T09:00:00.000000", "data": d.payments[paymentKey],
+	})
+	return raw
 }
 
 // approvedPayment 는 그 결제 번호로 승인한 결제다. 없으면 nil 이다.
@@ -142,5 +178,55 @@ func TestTossLostAnswerIsFinishedByLookup(t *testing.T) {
 	defer double.mu.Unlock()
 	if double.confirms != 1 {
 		t.Errorf("승인 요청을 %d 번 보냈다. 기대 = 1 번", double.confirms)
+	}
+}
+
+// notify 는 알림의 본문을 읽어 주문 서비스에 넘긴다. 서버의 알림 주소가 하는 일과 같다.
+func (f fixture) notify(raw []byte) error {
+	f.t.Helper()
+	notification, relevant, err := payment.ReadTossNotification(raw)
+	if err != nil || !relevant {
+		f.t.Fatalf("알림을 읽지 못했다: %v, %v", relevant, err)
+	}
+	return f.service.Notify(ctx(f.t), notification.OrderID, notification.PaymentKey)
+}
+
+func TestTossNotificationFinishesALostApproval(t *testing.T) {
+	double := &tossDouble{loseAnswer: true}
+	f := setUpToss(t, double)
+	created := f.create()
+	paymentKey := newPaymentKey()
+	if first := f.confirm(created.ID, paymentKey); first.Status != order.StatusConfirming {
+		t.Fatalf("첫 승인 요청의 상태 = %s, 기대 = confirming", first.Status)
+	}
+
+	// 사용자는 돌아오지 않았다. 토스페이먼츠가 결제의 상태가 바뀌었다고 알려 온다
+	if err := f.notify(double.notification(paymentKey)); err != nil {
+		t.Fatalf("알림을 처리하지 못했다: %v", err)
+	}
+
+	f.wantStatus(created.ID, order.StatusPaid)
+	f.wantPaidCredits(credits, 1)
+}
+
+func TestTossNotificationFinishesALostCancel(t *testing.T) {
+	double := &tossDouble{loseCancels: 1}
+	f := setUpToss(t, double)
+	paid := f.paid()
+	if refunding, err := f.refund(paid.ID); err != nil || refunding.Status != order.StatusRefunding {
+		t.Fatalf("주문 = %+v, %v. refunding 이어야 한다", refunding, err)
+	}
+
+	// 토스페이먼츠는 취소했지만 답을 잃었다. 취소되었다는 알림이 온다. 같은 취소를 다시 보내 끝낸다
+	if err := f.notify(double.notification(paid.PaymentKey)); err != nil {
+		t.Fatalf("알림을 처리하지 못했다: %v", err)
+	}
+
+	f.wantStatus(paid.ID, order.StatusRefunded)
+	f.wantPaidCredits(0, 1)
+	double.mu.Lock()
+	defer double.mu.Unlock()
+	if double.cancels != 2 {
+		t.Errorf("취소 요청을 %d 번 받았다. 기대 = 2 번", double.cancels)
 	}
 }

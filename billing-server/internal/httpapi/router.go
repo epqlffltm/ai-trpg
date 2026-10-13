@@ -36,6 +36,8 @@ type Dependencies struct {
 	Notifier PaymentNotifier
 	// WebhookSecret 은 결제 대행사의 알림에 붙은 서명을 확인하는 비밀이다.
 	WebhookSecret string
+	// TossWebhook 이 true 면 토스페이먼츠의 알림 주소(TossWebhookPath)를 연다. 알림은 Notifier 가 처리한다.
+	TossWebhook bool
 	// Holds 는 홀드를 걸고, 확정하고, 돌려주고, 연장한다. 게임 서버가 부른다.
 	Holds HoldService
 	// GameServerSecret 은 게임 서버가 보낸 요청의 서명을 확인하는 비밀이다.
@@ -103,6 +105,10 @@ func NewRouter(deps Dependencies) *gin.Engine {
 
 	// 결제 대행사가 부르는 주소다. 로그인 묶음 밖에 둔다. 토큰 대신 본문의 서명을 확인한다
 	router.POST(APIPrefix+"/webhooks/payment", paymentWebhook(deps.Notifier, deps.WebhookSecret, deps.Now))
+	// 토스페이먼츠의 알림. 서명이 없다. 주문 번호와 결제 번호만 읽고 결과는 토스페이먼츠에 다시 묻는다
+	if deps.TossWebhook {
+		router.POST(TossWebhookPath, tossWebhook(deps.Notifier))
+	}
 
 	// 우리 서버들이 부르는 주소들이다. 로그인 묶음 밖에 둔다. 사용자의 토큰이 아니라 요청의 서명을 확인한다.
 	// 사용자의 토큰으로는 들어오지 못한다. "이 사용자의 크레딧을 빼라"를 사용자가 직접 부를 수 없다.

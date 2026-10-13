@@ -545,3 +545,28 @@ func merge(first map[string]string, second map[string]string) map[string]string 
 	}
 	return merged
 }
+
+func TestTossNotificationsOnlyWithToss(t *testing.T) {
+	toss := map[string]string{"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": tossSecretKey, "TOSS_CLIENT_KEY": tossClientKey}
+	cases := []struct {
+		name   string
+		values map[string]string
+		want   bool
+	}{
+		// 개발 모드가 아니어도 받는다. 알림은 개발용 화면이 아니다
+		{"운영 모드의 토스페이먼츠", merge(toss, map[string]string{"DEBUG": "false"}), true},
+		{"개발 모드의 토스페이먼츠", merge(toss, map[string]string{"DEBUG": "true"}), true},
+		{"가짜", map[string]string{"DEBUG": "true"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			settings, err := config.Load(from(required(tc.values)))
+			if err != nil {
+				t.Fatalf("설정을 읽지 못했다: %v", err)
+			}
+			if got := settings.ReceivesTossNotifications(); got != tc.want {
+				t.Errorf("ReceivesTossNotifications = %v, 기대 = %v", got, tc.want)
+			}
+		})
+	}
+}
