@@ -6,6 +6,7 @@
 //  2. "지금의 값"(지갑, 산 크레딧의 묶음, 지급 묶음, 주문, 홀드)과 원장이 맞는지 본다. 읽기만 한다. 맞지 않는 줄의 번호를 돌려줄 뿐 고치지 않는다.
 //     원장은 지울 수 없고, 무엇이 맞는지는 사람이 정한다.
 //  3. 정리 작업이 밀려 있지 않은지 센다(만료 시각이 한참 지났는데 아직 끝나지 않은 것).
+//  4. 1 을 하고도 하루(order.StuckAfter) 넘게 결과를 모르는 주문을 찾는다. 사람이 결제 대행사의 상점관리자에서 확인할 주문이다.
 //
 // 2 의 검사는 한 트랜잭션(REPEATABLE READ, READ ONLY)에서 한다. 검사들이 같은 순간의 장부를 보고, DB 가 쓰기를 막는다.
 package reconcile
@@ -49,9 +50,10 @@ const (
 // DefaultLimit 은 검사마다 돌려주는 맞지 않는 줄의 가장 많은 수다. 그보다 많으면 무언가 크게 잘못된 것이다. 다 볼 필요가 없다.
 const DefaultLimit = 1000
 
-// StaleResolver 는 오래된 confirming·refunding 주문을 끝내는 것이다. *order.Service 가 이 모양이다.
-type StaleResolver interface {
+// OrderResolver 는 오래된 confirming·refunding 주문을 끝내고, 그래도 남은 것을 찾는 것이다. *order.Service 가 이 모양이다.
+type OrderResolver interface {
 	ResolveStale(ctx context.Context, olderThan time.Duration, limit int) (order.StaleReport, error)
+	ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]order.Order, error)
 }
 
 // Mismatch 는 맞지 않는 줄 하나다.
@@ -79,6 +81,13 @@ type Report struct {
 	Stale      order.StaleReport
 	Mismatches []Mismatch
 	Overdue    Overdue
+	// Stuck 은 결과를 끝내 모르는 주문들이다. 사람이 확인해 결과를 정한다(cmd/orders).
+	Stuck []order.Order
+}
+
+// NeedsPerson 은 사람이 결과를 정할 주문이 있는지다.
+func (r Report) NeedsPerson() bool {
+	return len(r.Stuck) > 0
 }
 
 // Clean 은 장부에 맞지 않는 줄이 없는지다.
@@ -92,17 +101,19 @@ type Options struct {
 	StaleAfter time.Duration
 	// Limit 은 검사마다, 그리고 결제 대행사에 물을 주문의 가장 많은 수다. 0 이하면 DefaultLimit 이다.
 	Limit int
+	// StuckAfter 는 결과를 모르는 채로 이만큼 지난 주문을 사람이 볼 주문으로 센다. 0 이하면 order.StuckAfter 다.
+	StuckAfter time.Duration
 }
 
 // Reconciler 는 대사를 한다.
 type Reconciler struct {
 	pool   *pgxpool.Pool
-	orders StaleResolver
+	orders OrderResolver
 	now    func() time.Time
 }
 
 // New 는 Reconciler 를 만든다. now 는 지금 시각을 돌려주는 함수다.
-func New(pool *pgxpool.Pool, orders StaleResolver, now func() time.Time) *Reconciler {
+func New(pool *pgxpool.Pool, orders OrderResolver, now func() time.Time) *Reconciler {
 	return &Reconciler{pool: pool, orders: orders, now: now}
 }
 
@@ -113,9 +124,15 @@ func (r *Reconciler) Run(ctx context.Context, options Options) (Report, error) {
 	if limit <= 0 {
 		limit = DefaultLimit
 	}
+	stuckAfter := options.StuckAfter
+	if stuckAfter <= 0 {
+		stuckAfter = order.StuckAfter
+	}
 	var report Report
-	var staleErr, checkErr error
+	var staleErr, stuckErr, checkErr error
 	report.Stale, staleErr = r.orders.ResolveStale(ctx, options.StaleAfter, limit)
+	// 끝내 보려고 한 뒤에 센다. 방금 끝낸 것은 목록에 없다
+	report.Stuck, stuckErr = r.orders.ListStuck(ctx, stuckAfter, limit)
 	checkErr = r.readOnly(ctx, func(queries *reconciledb.Queries) error {
 		var err error
 		if report.Mismatches, err = runChecks(ctx, queries, int32(limit)); err != nil {
@@ -124,7 +141,7 @@ func (r *Reconciler) Run(ctx context.Context, options Options) (Report, error) {
 		report.Overdue, err = countOverdue(ctx, queries, r.now().Add(-options.StaleAfter))
 		return err
 	})
-	return report, errors.Join(staleErr, checkErr)
+	return report, errors.Join(staleErr, stuckErr, checkErr)
 }
 
 // readOnly 는 읽기만 하는 트랜잭션 하나에서 read 를 한다.
