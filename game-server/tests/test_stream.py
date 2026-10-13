@@ -370,7 +370,9 @@ UNREACHABLE_DB = 'postgresql+asyncpg://game:not-the-password@127.0.0.1:1/trpg'
 
 
 async def test_failing_to_listen_is_logged_without_the_address(caplog: pytest.LogCaptureFixture, app: FastAPI):
-    source = listener.PostgresListener(make_test_settings(database_url=UNREACHABLE_DB), app.state.hub)
+    source = listener.PostgresListener(
+        make_test_settings(database_url=UNREACHABLE_DB), app.state.hub, app.state.signal_signer
+    )
 
     with caplog.at_level(logging.WARNING):
         assert await source.ensure_listening() is False
@@ -393,7 +395,7 @@ async def test_a_stream_survives_failing_to_listen(
     client: AsyncClient, me: dict, friend: dict, connect, app, monkeypatch: pytest.MonkeyPatch
 ):
     table = await open_duo(client, me, friend)
-    source = listener.PostgresListener(make_test_settings(), app.state.hub)
+    source = listener.PostgresListener(make_test_settings(), app.state.hub, app.state.signal_signer)
     monkeypatch.setattr(source, '_listen', refuse_to_listen)
     reader = connect(table, FRIEND, Cursor(events=2), source=source, deaf_heartbeat=0.2)
 
@@ -412,7 +414,7 @@ async def test_the_text_of_a_listening_failure_is_not_logged(
         raise OSError('postgresql://game:not-the-password@db 에 연결할 수 없음')
 
     monkeypatch.setattr(listener.asyncpg, 'connect', connect_db)
-    source = listener.PostgresListener(make_test_settings(), app.state.hub)
+    source = listener.PostgresListener(make_test_settings(), app.state.hub, app.state.signal_signer)
 
     with caplog.at_level(logging.WARNING):
         assert await source.ensure_listening() is False
@@ -469,7 +471,7 @@ async def test_a_connection_that_refuses_to_listen_is_closed(monkeypatch: pytest
         return connection
 
     monkeypatch.setattr(listener.asyncpg, 'connect', connect_db)
-    source = listener.PostgresListener(make_test_settings(), app.state.hub)
+    source = listener.PostgresListener(make_test_settings(), app.state.hub, app.state.signal_signer)
 
     assert await source.ensure_listening() is False
     # 맺은 연결을 남겨 두면 듣지도 않는 연결이 DB 에 쌓인다

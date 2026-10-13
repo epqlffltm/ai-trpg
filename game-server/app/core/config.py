@@ -25,6 +25,9 @@ BILLING_BUDGET_SECONDS = 10.0
 # 결제 서버의 비밀의 가장 짧은 길이. 결제 서버(GAME_SERVER_SECRET)와 같은 기준이다
 BILLING_SECRET_MIN_LENGTH = 32
 
+# 실시간 신호에 서명하는 비밀의 가장 짧은 길이
+SIGNAL_SECRET_MIN_LENGTH = 32
+
 
 def model_chain(first: str, fallbacks: str) -> list[str]:
     """첫 모델과 쉼표로 나눈 넘어갈 모델들을 부를 차례대로 늘어놓는다. 빈 이름과 앞뒤 공백은 뺀다."""
@@ -152,6 +155,13 @@ class Settings(BaseSettings):
     # 만들기: uv run python -c "import secrets; print(secrets.token_hex(32))"
     ai_log_hmac_key: SecretStr = SecretStr('')
 
+    # 실시간 신호(NOTIFY)에 서명하는 비밀(app/realtime/signing.py, #75). 32자 이상.
+    # 같은 DB 에 붙은 다른 계정이 신호를 꾸며 보내도 서명이 맞지 않아 버린다.
+    # 비우면 서버가 뜰 때마다 무작위로 만든다. 서버가 하나면 그대로 된다.
+    # 여럿이면 같은 값을 적는다. 다르면 서로의 신호를 버려서, 스트림이 15초마다 스스로 읽을 때에야 따라잡는다.
+    # 비밀값이다. 만들기: uv run python -c "import secrets; print(secrets.token_hex(32))"
+    signal_secret: SecretStr = SecretStr('')
+
     # 결제 서버의 주소. 라운드의 서술 값을 여기서 받는다(app/billing/). 비우면 받지 않는다(기본).
     # 테스트와 결제 서버 없는 개발은 비운 채로 돈다. 예: http://127.0.0.1:8003
     billing_url: str = ''
@@ -205,10 +215,23 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode='after')
+    def require_a_long_signal_secret(self) -> Self:
+        """신호의 비밀을 적었는데 짧으면 뜨지 않는다. 비운 것은 괜찮다(무작위로 만든다)."""
+        secret = self.signal_secret.get_secret_value().strip()
+        if secret and len(secret) < SIGNAL_SECRET_MIN_LENGTH:
+            raise ValueError(f'SIGNAL_SECRET 은 {SIGNAL_SECRET_MIN_LENGTH}자 이상이어야 합니다')
+        return self
+
     def digest_key(self) -> bytes | None:
         """입력 지문의 키. 비어 있으면 None 이다(지문을 남기지 않는다)."""
         key = self.ai_log_hmac_key.get_secret_value().strip()
         return key.encode() if key else None
+
+    def signal_key(self) -> bytes | None:
+        """신호에 서명하는 키. 비어 있으면 None 이다(서버가 뜰 때 무작위로 만든다)."""
+        secret = self.signal_secret.get_secret_value().strip()
+        return secret.encode() if secret else None
 
     def embedding_url(self) -> str:
         """임베딩 모델을 부르는 주소. 따로 적지 않았으면 언어 모델과 같은 주소다."""
