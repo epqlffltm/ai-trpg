@@ -66,19 +66,55 @@ RETURNING *;
 -- 만료 시각이 지난 pending 주문을 오래된 것부터 row_limit 개까지 expired 로 바꾼다(정리 작업).
 -- 다른 정리 작업이나 승인 요청이 잠근 줄은 기다리지 않고 건너뛴다. 크레딧과 상관없는 주문이라 한 문장으로 한꺼번에 바꾼다.
 -- 고른 줄은 이 문장이 잠그므로 그사이에 바뀌지 않는다. 그래도 pending 조건을 한 번 더 단다.
-UPDATE orders
-SET status = 'expired', updated_at = sqlc.arg(now)::TIMESTAMPTZ
-WHERE status = 'pending' AND id IN (
+--
+-- 고르는 일을 MATERIALIZED 로 한 번만 한다. "id IN (SELECT ... LIMIT ... FOR UPDATE SKIP LOCKED)" 로 쓰면, DB 가 바깥 줄마다
+-- 안의 SELECT 를 다시 돌리는 계획(Nested Loop)을 고를 수 있다. 다시 돌 때는 방금 바꾼 줄을 건너뛰고 그다음 줄을 골라서
+-- row_limit 보다 많이 바꾼다. 표가 작을 때 실제로 그랬다
+WITH due AS MATERIALIZED (
     SELECT id FROM orders
     WHERE status = 'pending' AND expires_at <= sqlc.arg(now)::TIMESTAMPTZ
     ORDER BY expires_at, id
     LIMIT sqlc.arg(row_limit)
     FOR UPDATE SKIP LOCKED
-);
+)
+UPDATE orders
+SET status = 'expired', updated_at = sqlc.arg(now)::TIMESTAMPTZ
+FROM due
+WHERE orders.id = due.id AND orders.status = 'pending';
 
 -- name: ListStaleConfirming :many
 -- before 보다 먼저 confirming 이 된 주문을 오래된 것부터 읽는다(대사). 결제 대행사에 결과를 물어 끝낸다.
 SELECT * FROM orders
 WHERE status = 'confirming' AND updated_at <= sqlc.arg(before)::TIMESTAMPTZ
+ORDER BY updated_at, id
+LIMIT sqlc.arg(row_limit);
+
+-- name: StartRefunding :one
+-- paid 인 주문을 refunding 으로 바꾼다. 치른 시각이 paid_after 보다 늦은 것(청약철회 기한 안)만 바꾼다.
+-- 그 주문의 묶음을 비우는 일과 같은 트랜잭션에서 한다. 결제 대행사를 부르기 전에 한다.
+UPDATE orders
+SET status = 'refunding', updated_at = sqlc.arg(now)::TIMESTAMPTZ
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND status = 'paid'
+    AND paid_at > sqlc.arg(paid_after)::TIMESTAMPTZ
+RETURNING *;
+
+-- name: MarkRefunded :one
+-- refunding 인 주문을 refunded 로 바꾼다. 결제 대행사가 취소했을 때 한다.
+UPDATE orders
+SET status = 'refunded', refunded_at = sqlc.arg(now)::TIMESTAMPTZ, updated_at = sqlc.arg(now)::TIMESTAMPTZ
+WHERE id = sqlc.arg(id) AND status = 'refunding'
+RETURNING *;
+
+-- name: RestorePaid :one
+-- refunding 인 주문을 paid 로 되돌린다. 결제 대행사가 취소를 확실히 거절했을 때, 묶음을 다시 채우는 일과 같은 트랜잭션에서 한다.
+UPDATE orders
+SET status = 'paid', updated_at = sqlc.arg(now)::TIMESTAMPTZ
+WHERE id = sqlc.arg(id) AND status = 'refunding'
+RETURNING *;
+
+-- name: ListStaleRefunding :many
+-- before 보다 먼저 refunding 이 된 주문을 오래된 것부터 읽는다(대사). 같은 취소를 다시 보내 끝낸다.
+SELECT * FROM orders
+WHERE status = 'refunding' AND updated_at <= sqlc.arg(before)::TIMESTAMPTZ
 ORDER BY updated_at, id
 LIMIT sqlc.arg(row_limit);

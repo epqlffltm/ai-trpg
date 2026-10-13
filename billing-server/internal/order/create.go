@@ -71,7 +71,7 @@ func (s *Service) Get(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) 
 	if err != nil {
 		return Order{}, err
 	}
-	return toOrder(row), nil
+	return s.withRefundability(ctx, toOrder(row))
 }
 
 // toOrder 는 DB 의 줄을 이 패키지의 모양으로 바꾼다.
@@ -89,7 +89,12 @@ func toOrder(row orderdb.Order) Order {
 		ExpiresAt:   row.ExpiresAt,
 	}
 	if row.PaidAt.Valid {
-		order.PaidAt = &row.PaidAt.Time
+		paidAt := row.PaidAt.Time
+		until := paidAt.Add(RefundWindow)
+		order.PaidAt, order.RefundableUntil = &paidAt, &until
+	}
+	if row.RefundedAt.Valid {
+		order.RefundedAt = &row.RefundedAt.Time
 	}
 	return order
 }

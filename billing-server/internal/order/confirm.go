@@ -25,6 +25,15 @@ const uniqueViolation = "23505"
 //
 // 요청을 보낸 쪽이 중간에 연결을 끊어도 멈추지 않는다. 결제 대행사의 답을 받고도 적지 못하는 일을 줄인다.
 func (s *Service) Confirm(ctx context.Context, userID uuid.UUID, orderID uuid.UUID, paymentKey string) (Order, error) {
+	confirmed, err := s.confirm(ctx, userID, orderID, paymentKey)
+	if err != nil {
+		return confirmed, err
+	}
+	return s.withRefundability(context.WithoutCancel(ctx), confirmed)
+}
+
+// confirm 은 Confirm 의 본문이다. 돌려주는 주문에 청약철회할 수 있는지는 아직 적지 않았다.
+func (s *Service) confirm(ctx context.Context, userID uuid.UUID, orderID uuid.UUID, paymentKey string) (Order, error) {
 	if !paymentKeyPattern.MatchString(paymentKey) {
 		return Order{}, ErrInvalidPaymentKey
 	}

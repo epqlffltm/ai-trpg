@@ -65,3 +65,30 @@ func TestFakeGivesTheSameAnswerEveryTime(t *testing.T) {
 		t.Errorf("첫 답 = %+v, 둘째 답 = %+v", first, second)
 	}
 }
+
+func TestFakeCancelsUnlessTheKeySaysOtherwise(t *testing.T) {
+	cases := []struct {
+		name    string
+		key     string
+		want    payment.Result
+		answers bool
+	}{
+		{"취소됨", payment.FakeApproved + "1", payment.Result{Status: payment.StatusCanceled}, true},
+		{"거절", payment.FakeApproved + payment.FakeCancelRefused + "_1", payment.Result{Status: payment.StatusDeclined, Code: payment.FakeCodeCancelRefused}, true},
+		{"답이 없음", payment.FakeApproved + payment.FakeCancelLost + "_1", payment.Result{}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := payment.Fake{}.Cancel(context.Background(), payment.Request{PaymentKey: tc.key, OrderID: uuid.New(), Amount: 1000})
+			if !tc.answers {
+				if !errors.Is(err, payment.ErrUnknownOutcome) {
+					t.Errorf("결과 = %+v, %v. ErrUnknownOutcome 이어야 한다", got, err)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Errorf("결과 = %+v, %v. 기대 = %+v", got, err, tc.want)
+			}
+		})
+	}
+}

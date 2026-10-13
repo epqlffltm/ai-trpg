@@ -12,6 +12,9 @@
 //  1. 사용자가 결제창에서 인증한다. 결제 대행사가 그 결제에 번호(payment key)를 붙여 클라이언트에 준다.
 //  2. 클라이언트가 그 번호를 서버에 넘긴다. 서버가 결제 대행사에 승인을 요청한다(Confirm). 이때 돈이 나간다.
 //  3. 응답을 받지 못했으면 서버는 결과를 모른다. 나중에 조회(Lookup)하거나 결제 대행사의 알림(웹훅)으로 안다.
+//
+// 청약철회는 승인한 결제를 전액 취소한다(Cancel). 취소 요청은 같은 것을 다시 보내도 한 번만 취소된다.
+// 그래서 답을 받지 못한 취소는 조회하지 않고 같은 취소를 다시 보낸다.
 package payment
 
 import (
@@ -33,8 +36,10 @@ const (
 	StatusApproved Status = "approved"
 	// StatusDeclined 는 거절되었다는 뜻이다. 돈이 나가지 않았다.
 	StatusDeclined Status = "declined"
-	// StatusPending 은 결제 대행사도 아직 결과를 모른다는 뜻이다. 조회에서만 나온다.
+	// StatusPending 은 결제 대행사도 아직 결과를 모른다는 뜻이다. 조회와 취소에서 나온다.
 	StatusPending Status = "pending"
+	// StatusCanceled 는 승인한 결제를 취소했다는 뜻이다. 돈이 돌아갔다. 취소에서만 나온다.
+	StatusCanceled Status = "canceled"
 )
 
 // Request 는 승인 요청 하나다.
@@ -59,6 +64,10 @@ type Provider interface {
 	// Confirm 은 결제의 승인을 요청한다. 결과를 받지 못했으면 ErrUnknownOutcome 이다.
 	// 같은 요청을 다시 보내도 돈이 두 번 나가지 않아야 한다.
 	Confirm(ctx context.Context, request Request) (Result, error)
+	// Cancel 은 승인한 결제의 전액 취소를 요청한다. 취소되었으면 StatusCanceled, 결제 대행사가 취소를 확실히 거절했으면
+	// StatusDeclined(Code 에 이유)다. 결과를 받지 못했으면 ErrUnknownOutcome 이다.
+	// 같은 요청을 다시 보내도 두 번 취소되지 않아야 하고, 이미 취소된 결제면 StatusCanceled 다.
+	Cancel(ctx context.Context, request Request) (Result, error)
 	// Lookup 은 결제 번호로 지금의 결과를 묻는다. 승인을 요청하고 답을 못 받았을 때 쓴다.
 	// request 에는 그 결제가 치러야 할 주문과 금액을 함께 넘긴다. 결제 대행사가 아는 결제가
 	// 다른 주문의 것이거나 금액이 다르면 이 주문의 결제가 아니다. 그때는 거절(StatusDeclined)이다.

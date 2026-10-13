@@ -91,11 +91,17 @@ func (f fixture) exec(sql string, args ...any) {
 // buy 는 주문을 만들고 치른다. 치른 주문을 돌려준다.
 func (f fixture) buy() order.Order {
 	f.t.Helper()
+	return f.buyWith("")
+}
+
+// buyWith 는 결제 번호에 marker 를 넣어 주문을 만들고 치른다. 가짜 결제 대행사가 취소에 어떻게 답할지 정한다.
+func (f fixture) buyWith(marker string) order.Order {
+	f.t.Helper()
 	created, _, err := f.services.Orders.Create(ctx(f.t), f.user, "credits-1000", "key-"+uuid.NewString())
 	if err != nil {
 		f.t.Fatalf("주문을 만들지 못했다: %v", err)
 	}
-	paid, err := f.services.Orders.Confirm(ctx(f.t), f.user, created.ID, payment.FakeApproved+uuid.NewString())
+	paid, err := f.services.Orders.Confirm(ctx(f.t), f.user, created.ID, payment.FakeApproved+marker+uuid.NewString())
 	if err != nil || paid.Status != order.StatusPaid {
 		f.t.Fatalf("주문을 치르지 못했다: %+v, %v", paid, err)
 	}
@@ -208,6 +214,60 @@ func TestBooksKeptByTheServicesAreClean(t *testing.T) {
 
 	ids := append([]string{f.user.String(), paid.ID.String(), captured.ID.String(), released.ID.String(), expired.ID.String()}, f.grantIDs()...)
 	wantNotFlagged(t, report, append(ids, f.lotIDs()...)...)
+}
+
+func TestRefundsKeptByTheServicesAreClean(t *testing.T) {
+	f := setUp(t)
+	ctx := ctx(t)
+	// 환불됨, 거절되어 되돌림, 결과를 모름(환불 중), 손대지 않음
+	refunded, refused, unsure, kept := f.buy(), f.buyWith(payment.FakeCancelRefused), f.buyWith(payment.FakeCancelLost), f.buy()
+	if got, err := f.services.Orders.Refund(ctx, f.user, refunded.ID); err != nil || got.Status != order.StatusRefunded {
+		t.Fatalf("주문 = %+v, %v", got, err)
+	}
+	if _, err := f.services.Orders.Refund(ctx, f.user, refused.ID); !errors.Is(err, order.ErrRefundRefused) {
+		t.Fatalf("오류 = %v. ErrRefundRefused 여야 한다", err)
+	}
+	if got, err := f.services.Orders.Refund(ctx, f.user, unsure.ID); err != nil || got.Status != order.StatusRefunding {
+		t.Fatalf("주문 = %+v, %v", got, err)
+	}
+
+	report := f.run()
+
+	ids := []string{f.user.String(), refunded.ID.String(), refused.ID.String(), unsure.ID.String(), kept.ID.String()}
+	wantNotFlagged(t, report, append(ids, f.lotIDs()...)...)
+}
+
+func TestRefundLinesThatDoNotMatchTheOrderAreFound(t *testing.T) {
+	f := setUp(t)
+	ctx := ctx(t)
+	refunded, paid := f.buy(), f.buy()
+	if got, err := f.services.Orders.Refund(ctx, f.user, refunded.ID); err != nil || got.Status != order.StatusRefunded {
+		t.Fatalf("주문 = %+v, %v", got, err)
+	}
+	// 환불했는데 주문은 치른 채로 적혔다. 돈은 돌아갔는데 화면에는 산 것으로 보인다
+	f.exec("UPDATE orders SET status = 'paid', refunded_at = NULL WHERE id = $1", refunded.ID)
+	// 환불되었다고 적혔는데 크레딧을 빼지 않았다. refunding 으로 만들지 않는다. 다른 테스트의 대사가 그 주문에 취소를 보낸다
+	f.exec("UPDATE orders SET status = 'refunded', refunded_at = $2 WHERE id = $1", paid.ID, f.now())
+	var refundedLot, paidLot string
+	if err := f.pool.QueryRow(ctx, "SELECT id::TEXT FROM paid_lots WHERE order_id = $1", refunded.ID).Scan(&refundedLot); err != nil {
+		t.Fatalf("묶음을 읽지 못했다: %v", err)
+	}
+	if err := f.pool.QueryRow(ctx, "SELECT id::TEXT FROM paid_lots WHERE order_id = $1", paid.ID).Scan(&paidLot); err != nil {
+		t.Fatalf("묶음을 읽지 못했다: %v", err)
+	}
+
+	report := f.run()
+
+	wantFlagged(t, report, reconcile.CheckLotRefund, refundedLot)
+	wantFlagged(t, report, reconcile.CheckLotRefund, paidLot)
+	// 원장과 묶음과 지갑은 서로 맞는다. 어긋난 것은 주문의 상태뿐이다
+	for _, check := range []string{reconcile.CheckPaidBalance, reconcile.CheckPaidLotRemaining, reconcile.CheckPaidLotTotal} {
+		for _, id := range []string{f.user.String(), refundedLot, paidLot} {
+			if slices.Contains(flagged(report, check), id) {
+				t.Errorf("%s 가 %s 검사에 걸렸다", id, check)
+			}
+		}
+	}
 }
 
 func TestAPaidLotThatDisagreesIsFound(t *testing.T) {
@@ -328,6 +388,65 @@ func TestStaleConfirmingOrdersAreResolved(t *testing.T) {
 		t.Errorf("주문 = %+v, %v. paid 여야 한다", got, err)
 	}
 	wantNotFlagged(t, report, created.ID.String(), f.user.String())
+}
+
+func TestCreditsBackInARefundedLotAreFound(t *testing.T) {
+	f := setUp(t)
+	ctx := ctx(t)
+	refunded := f.buy()
+	if got, err := f.services.Orders.Refund(ctx, f.user, refunded.ID); err != nil || got.Status != order.StatusRefunded {
+		t.Fatalf("주문 = %+v, %v", got, err)
+	}
+	var lot int64
+	if err := f.pool.QueryRow(ctx, "SELECT id FROM paid_lots WHERE order_id = $1", refunded.ID).Scan(&lot); err != nil {
+		t.Fatalf("묶음을 읽지 못했다: %v", err)
+	}
+	// 환불된 주문의 묶음에 크레딧이 다시 들어왔다. 원장과 묶음과 지갑은 서로 맞게 적었다. 맞지 않는 것은 "환불된 묶음은 비어 있다"뿐이다
+	f.exec(`INSERT INTO ledger_entries (user_id, operation_id, kind, reason, amount, lot_id, created_at)
+		VALUES ($1, gen_random_uuid(), 'paid', 'regroup', 5, $2, $3)`, f.user, lot, f.now())
+	f.exec("UPDATE paid_lots SET remaining = 5 WHERE id = $1", lot)
+	f.exec("UPDATE wallets SET paid_balance = paid_balance + 5 WHERE user_id = $1", f.user)
+
+	report := f.run()
+
+	wantFlagged(t, report, reconcile.CheckLotRefund, strconv.FormatInt(lot, 10))
+	wantNotFlagged(t, report, f.user.String())
+}
+
+func TestAMismatchedLotOfARefundedOrderIsFound(t *testing.T) {
+	f := setUp(t)
+	refunded := f.buy()
+	if got, err := f.services.Orders.Refund(ctx(t), f.user, refunded.ID); err != nil || got.Status != order.StatusRefunded {
+		t.Fatalf("주문 = %+v, %v", got, err)
+	}
+	// 환불된 주문도 그 주문의 묶음이 같은 양으로 있어야 한다
+	f.exec("UPDATE paid_lots SET amount = amount + 1 WHERE order_id = $1", refunded.ID)
+
+	report := f.run()
+
+	wantFlagged(t, report, reconcile.CheckPaidOrderLot, refunded.ID.String())
+}
+
+func TestStaleRefundsAreResolved(t *testing.T) {
+	f := setUp(t)
+	// 취소는 되지만 첫 요청의 답을 받지 못한 주문을 흉내 낸다. 가짜는 기억이 없어서, 환불 중으로 두고 결제 번호를 바꾼다
+	paid := f.buyWith(payment.FakeCancelLost)
+	if got, err := f.services.Orders.Refund(ctx(t), f.user, paid.ID); err != nil || got.Status != order.StatusRefunding {
+		t.Fatalf("주문 = %+v, %v", got, err)
+	}
+	f.exec("UPDATE orders SET payment_key = $2 WHERE id = $1", paid.ID, payment.FakeApproved+uuid.NewString())
+	*f.elapsed = staleAfter
+
+	report := f.run()
+
+	if report.Stale.Found < 1 || report.Stale.Refunded < 1 {
+		t.Errorf("대사 = %+v", report.Stale)
+	}
+	got, err := f.services.Orders.Get(ctx(t), f.user, paid.ID)
+	if err != nil || got.Status != order.StatusRefunded {
+		t.Errorf("주문 = %+v, %v. refunded 여야 한다", got, err)
+	}
+	wantNotFlagged(t, report, append([]string{paid.ID.String(), f.user.String()}, f.lotIDs()...)...)
 }
 
 func TestOverdueWorkIsCountedOnlyAfterTheGrace(t *testing.T) {
