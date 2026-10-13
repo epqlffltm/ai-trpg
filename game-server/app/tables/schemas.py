@@ -9,7 +9,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -41,6 +41,7 @@ from app.tables.models import (
     ROUND_TIME_LIMIT_MIN,
     TABLE_PASSWORD_MAX_LENGTH,
     TABLE_PASSWORD_MIN_LENGTH,
+    QuestStatus,
     TableStatus,
 )
 
@@ -287,6 +288,30 @@ class ItemChange(BaseModel):
     count: int = Field(default=1, ge=1, le=ITEM_STACK_MAX)
 
 
+class QuestOut(BaseModel):
+    """
+    퀘스트 하나. 이름은 판의 로어북 사건 항목의 이름이다. 판의 순서로 싣는다.
+
+    사건의 글은 싣지 않는다. 로어북은 AI 가 읽는 설정이다. 숨긴(hidden) 것은 방장에게만 싣는다.
+    """
+
+    entry_id: uuid.UUID
+    name: str
+    status: QuestStatus
+
+
+class QuestChange(BaseModel):
+    """
+    방장이 퀘스트의 상태를 바꿀 때 받는 값.
+
+    숨김으로는 바꾸지 않는다. 한 번 드러낸 것을 다시 숨기면 앉은 사람의 기억과 화면이 어긋난다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    status: Literal[QuestStatus.ACTIVE, QuestStatus.SUCCEEDED, QuestStatus.FAILED]
+
+
 class SheetOut(BaseModel):
     """앉은 사람의 캐릭터 시트. 앉은 사람은 서로의 시트를 본다."""
 
@@ -436,6 +461,8 @@ class TableDetail(TableSummary):
     pregens: list[PregenChoice]
     # 이 테이블의 판에 있는 물건들. 방장이 줄 수 있는 것이고, 소지품의 이름과 종류를 여기서 찾는다
     items: list[CatalogItemOut]
+    # 이 테이블의 퀘스트들. 숨긴 것은 방장에게만 보인다. 시작 전에는 비어 있다
+    quests: list[QuestOut]
     members: list[MemberOut]
     # 초대 코드. 방장에게만 보인다
     invite_code: str | None

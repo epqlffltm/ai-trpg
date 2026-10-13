@@ -124,6 +124,21 @@ class NpcStatus(enum.StrEnum):
     DEAD = 'dead'
 
 
+class QuestStatus(enum.StrEnum):
+    """
+    퀘스트의 상태. 테이블 전체가 함께 갖는다.
+
+    숨김 → 진행 중 → 성공 또는 실패. 숨긴 것을 바로 끝낼 수도 있다(몰래 이룬 일).
+    끝난 것(성공, 실패)은 되돌리지 않는다. 진행 중인 것을 다시 숨기지 않는다. 바꾸는 규칙은 app/tables/quests.py 다.
+    """
+
+    # 플레이어에게 보이지 않는다. 방장과 GM 만 안다
+    HIDDEN = 'hidden'
+    ACTIVE = 'active'
+    SUCCEEDED = 'succeeded'
+    FAILED = 'failed'
+
+
 class GameTable(Base):
     """
     테이블 하나.
@@ -259,6 +274,10 @@ class GameTable(Base):
     # 이 테이블에서 주사위로 굴린 능력치의 점수들. 한 사람에 하나다. 테이블을 읽을 때 함께 읽는다.
     # 앉은 사람(members)이 아니라 테이블에 달려 있다. 나갔다가 다시 들어와도 굴린 것이 남아 있어야 한다
     rolls: Mapped[list['TableRoll']] = relationship(lazy='selectin', cascade='all, delete-orphan')
+
+    # 이 테이블의 퀘스트들. 판의 사건 항목마다 하나다. 많아야 50 개쯤이라 테이블을 읽을 때 함께 읽는다.
+    # 보여 줄 때는 판의 순서로 놓는다(app/tables/quests.py). 만든 시각은 시작할 때 모두 같다
+    quests: Mapped[list['TableQuest']] = relationship(lazy='selectin', cascade='all, delete-orphan')
 
 
 class TableMember(Base):
@@ -555,6 +574,31 @@ class TableNpc(Base):
     injuries: Mapped[list['TableInjury']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='TableInjury.created_at, TableInjury.id'
     )
+
+
+class TableQuest(Base):
+    """
+    테이블 하나에서 로어북의 사건 항목 하나의 퀘스트 상태.
+
+    시작할 때 판의 사건 항목마다 하나씩 만든다. 처음 상태는 판의 퀘스트 규칙에서 온다(app/tables/quests.py).
+    상태를 바꾸는 것은 서버뿐이다. 방장이 API 로 바꾼다(app/tables/quest_changes.py). AI 는 바꾸지 못한다.
+
+    누구의 것인지는 항목의 ID(entry_id)로만 적는다. 이름과 글은 판에 있다. 글은 AI 만 읽는다.
+    """
+
+    __tablename__ = 'table_quests'
+    __table_args__ = (CheckConstraint(one_of('status', QuestStatus), name='status_allowed'),)
+
+    # 두 칸을 합쳐 기본 키로 삼는다. 한 테이블에서 사건 하나의 상태는 하나다(NPC 와 같다).
+    # 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 판(content)의 로어북 사건 항목의 ID. 판을 고치지 않으므로 가리키는 항목은 늘 있다
+    entry_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    status: Mapped[str] = mapped_column(String(20))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # 마지막으로 상태를 바꾼 때. 처음 만든 뒤로 바꾸지 않았으면 비어 있다
+    changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TableInjury(Base):
