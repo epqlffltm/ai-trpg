@@ -314,6 +314,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `auth.jwks_fetch` | billing | 인증 서버에서 공개키 받기 |
 | `order.confirm` | billing | 주문의 결제 승인 |
 | `order.refund` | billing | 주문의 청약철회(결제 취소) |
+| `order.decide` | billing | 운영자가 결과를 모르던 주문의 결과를 정하기(`cmd/orders decide`). `from_status`, `outcome`, `decided_by`, `reason` 을 남긴다 |
 | `server.start` | billing | 서버를 띄우기 |
 | `sweep.run` | billing | 정리 작업의 한 바퀴. 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 원장에 적고, 만료된 주문을 끝낸다 |
 | `reconcile.run` | billing | 대사 한 번. 오래된 `confirming`·`refunding` 주문을 결제 대행사에 물어 끝내고, 장부를 맞춰 본다 |
@@ -336,6 +337,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `limits.unavailable` | 게임 서버가 시도 횟수를 세는 곳(Redis)에 닿지 못했다. `limit` 에 어느 제한인지, `blocked` 에 막았는지(로비의 비밀번호) 통과시켰는지(채팅) 싣는다. `warning` |
 | `server.start_failed` | 서버가 뜨지 못했다 |
 | `ledger.mismatch` | 결제 서버가 남긴다. 대사에서 지금의 값(지갑, 지급 묶음, 주문, 홀드)이 원장과 맞지 않는 줄을 찾았다. 줄마다 `error` 한 줄. `check` 에 검사의 이름, `record_id` 에 그 줄의 번호. 사람이 봐야 한다 |
+| `order.stuck` | 결제 서버가 남긴다. 대사가 결제 대행사에 다시 묻고도, 결과를 모르는 채(`confirming`, `refunding`)로 하루가 지난 주문이 있다. 주문마다 `warning` 한 줄. `order_id`, `status`, `since`. 사람이 상점관리자에서 확인하고 `cmd/orders decide` 로 정한다 |
 | `sweep.behind` | 결제 서버가 남긴다. 대사가 셀 때, 만료된 지 한참(기본 10분) 지났는데 정리되지 않은 것이 있다. 정리 작업이 멈췄거나 밀렸다. `warning` |
 
 `error` 이상의 줄에는 `error_code` 를 붙인다. 새 코드를 만들면 이 표에 더한다.
