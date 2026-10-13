@@ -1,0 +1,67 @@
+# game-server/app/tables/quest_changes.py
+
+"""
+방장이 퀘스트의 상태를 바꾼다. 드러내고(진행 중), 끝낸다(성공, 실패).
+
+AI GM 은 퀘스트를 바꾸지 못한다. 서술에서 "왕녀를 구했다"고 해도 퀘스트는 그대로다.
+그 장면을 퀘스트로 옮기는 것은 방장이다. 소지품(app/tables/item_grants.py)과 같다.
+
+  - 진행 중인 테이블에서만 한다. 퀘스트는 시작할 때 만든다.
+  - 판의 퀘스트(로어북의 사건 항목)만 다룬다.
+  - 성공하면 보상을 준다(app/tables/quests.py). 상태를 바꾸는 것과 한 묶음으로 저장한다.
+  - 바꾼 것은 이벤트로 남긴다. 앉은 사람 모두가 스트림으로 본다. 숨김에서 나온 것만 적으므로 숨긴 것은 새지 않는다.
+
+HTTP 를 모른다. 테이블을 잠그고 한다. 두 요청이 같은 퀘스트를 동시에 끝내도 보상은 한 번만 준다.
+"""
+
+import uuid
+
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.assets.scenarios.snapshot import read_snapshot
+from app.events import recorder
+from app.events.models import EventType
+from app.tables import items, quests
+from app.tables.item_grants import require_playing
+from app.tables.models import GameTable, QuestStatus
+from app.tables.quests import CatalogQuest
+from app.tables.service import lock_seated, save
+from app.tables.state import require_host
+
+
+def describe(quest: CatalogQuest, previous: str, status: QuestStatus, rewards: list[dict]) -> dict:
+    """바꾼 것을 이벤트에 적을 모양. 무엇이, 무엇에서 무엇으로, 누가 무엇을 받았는가."""
+    return {
+        'entry_id': str(quest.entry_id),
+        'name': quest.name,
+        'previous': previous,
+        'status': status,
+        'rewards': rewards,
+    }
+
+
+async def change_quest(
+    session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, entry_id: uuid.UUID, status: QuestStatus
+) -> GameTable:
+    """
+    방장이 퀘스트의 상태를 바꾼다. 성공이면 살아 있는 캐릭터마다 보상을 준다.
+
+    방장이 아니면 NotHostError, 진행 중이 아니면 TableConflictError, 이 테이블의 퀘스트가 아니면 TableOptionError,
+    바꿀 수 없는 상태면 TableConflictError(quest_finished, quest_already_active).
+    """
+    table, _ = await lock_seated(session, host_id, table_id)
+    require_host(table, host_id)
+    require_playing(table)
+    snapshot = read_snapshot(table.content)
+    row, quest = quests.require_quest(table, quests.catalog(snapshot), entry_id)
+    previous = row.status
+    quests.require_changeable(QuestStatus(previous), status)
+    row.status = status
+    row.changed_at = func.now()
+    rewards = []
+    if status == QuestStatus.SUCCEEDED:
+        rewards = quests.give_rewards(table, quest, items.catalog(snapshot))
+    payload = describe(quest, previous, status, rewards)
+    recorder.record(session, table, EventType.QUEST_CHANGED, actor_id=host_id, payload=payload)
+    return await save(session, table)
