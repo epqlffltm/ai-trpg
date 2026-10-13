@@ -2,9 +2,10 @@
 
 // Package order 는 크레딧을 사는 주문을 만들고, 결제 대행사의 승인을 받아 크레딧을 넣는다.
 //
-// 주문의 상태는 한 방향으로만 흐른다.
+// 주문의 상태는 한 방향으로만 흐른다. 환불이 거절되면 paid 로 돌아가는 것 하나만 예외다.
 //
-//		pending -> confirming -> paid
+//		pending -> confirming -> paid -> refunding -> refunded
+//		   |                  |              -> paid(결제 대행사가 취소를 거절)
 //		   |                  -> failed
 //		   -> expired
 //
@@ -13,6 +14,8 @@
 //	  - confirming: 결제 대행사에 승인을 요청했다. 답을 받기 전이거나, 답을 받지 못했다.
 //	  - paid: 승인되었다. 크레딧이 들어갔다.
 //	  - failed: 거절되었다. 돈이 나가지 않았다.
+//	  - refunding: 청약철회. 그 주문의 크레딧을 비웠고 결제 대행사에 취소를 요청했다. 답을 받기 전이거나 받지 못했다.
+//	  - refunded: 결제 대행사가 취소했다. 돈이 돌아갔다.
 //
 // 지키는 것 셋.
 //
@@ -46,6 +49,9 @@ const ProviderTimeout = 10 * time.Second
 // FailureCodeUnspecified 는 결제 대행사가 거절하면서 이유를 주지 않았을 때 적는 글자다.
 const FailureCodeUnspecified = "declined"
 
+// RefundWindow 는 청약철회를 받는 기간이다. 치른 시각부터 센다(7×24시간).
+const RefundWindow = 7 * 24 * time.Hour
+
 var (
 	// ErrUnknownProduct 는 그런 상품이 없다는 오류다.
 	ErrUnknownProduct = errors.New("그런 상품이 없습니다")
@@ -65,6 +71,17 @@ var (
 	ErrExpired = errors.New("주문이 만료되었습니다. 새 주문을 만들어 주세요")
 	// ErrInvalidTTL 은 주문의 만료까지의 시간이 0 이하라는 오류다. 서버를 만들 때만 난다.
 	ErrInvalidTTL = errors.New("주문의 만료까지의 시간은 0 보다 커야 합니다")
+	// ErrNotRefundable 은 청약철회할 수 있는 상태(paid)가 아니라는 오류다.
+	ErrNotRefundable = errors.New("치른 주문만 청약철회할 수 있습니다")
+	// ErrRefundWindowClosed 는 치른 지 7일이 지났다는 오류다.
+	ErrRefundWindowClosed = errors.New("치른 지 7일이 지나 청약철회할 수 없습니다")
+	// ErrCreditsUsed 는 그 주문으로 산 크레딧이 일부라도 줄었다는 오류다(쓴 것, 홀드로 묶인 것).
+	ErrCreditsUsed = errors.New("이 주문으로 산 크레딧을 이미 써서 청약철회할 수 없습니다")
+	// ErrRefundBusy 는 같은 주문의 다른 요청과 엇갈렸다는 오류다. 아주 드물다. 다시 보내면 된다.
+	ErrRefundBusy = errors.New("이 주문의 다른 요청을 처리하고 있습니다. 잠시 뒤 다시 보내 주세요")
+	// ErrRefundRefused 는 결제 대행사가 취소를 거절했다는 오류다. 크레딧은 돌려놓았고 주문은 paid 다.
+	// 결제 대행사가 준 이유를 덧붙여 감싼다(errors.Is 로 알아본다).
+	ErrRefundRefused = errors.New("결제 대행사가 취소를 거절했습니다")
 )
 
 // 받는 글자의 모양. 키와 결제 번호는 DB 와 로그에 그대로 적히므로 글자를 좁게 받는다.
@@ -82,6 +99,8 @@ const (
 	StatusPaid       Status = "paid"
 	StatusFailed     Status = "failed"
 	StatusExpired    Status = "expired"
+	StatusRefunding  Status = "refunding"
+	StatusRefunded   Status = "refunded"
 )
 
 // Order 는 주문 하나다.
@@ -101,14 +120,38 @@ type Order struct {
 	CreatedAt   time.Time
 	// ExpiresAt 은 만료 시각이다. 이때까지 승인을 요청하지 않으면 치를 수 없다.
 	ExpiresAt time.Time
-	// PaidAt 은 치른 시각이다. paid 일 때만 있다.
+	// PaidAt 은 치른 시각이다. paid, refunding, refunded 일 때 있다.
 	PaidAt *time.Time
+	// RefundableUntil 은 청약철회를 받는 마지막 시각(치른 시각 + RefundWindow)이다. 치르지 않았으면 nil 이다.
+	RefundableUntil *time.Time
+	// Refundable 은 지금 청약철회할 수 있는지다. paid 이고, 기한 안이고, 그 주문의 크레딧이 하나도 줄지 않았어야 한다.
+	// 읽은 순간의 값이다. 실제로 할 수 있는지는 청약철회를 요청할 때 다시 본다.
+	Refundable bool
+	// RefundedAt 은 환불된 시각이다. refunded 일 때만 있다.
+	RefundedAt *time.Time
 }
 
-// Depositor 는 주문으로 산 크레딧을 넣는 것의 모양이다. *wallet.Service 가 이 모양이다.
+// Depositor 는 주문으로 산 크레딧을 넣는 것의 모양이다.
 // 주문이 연 트랜잭션을 넘겨받아 그 안에서 넣는다.
 type Depositor interface {
 	DepositForOrder(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, orderID uuid.UUID) error
+}
+
+// Refunder 는 청약철회로 그 주문의 크레딧을 비우고 되돌리는 것의 모양이다.
+// 비우기와 되돌리기는 주문이 연 트랜잭션 안에서 한다.
+type Refunder interface {
+	// OrderLotFull 은 그 주문의 크레딧이 하나도 줄지 않았는지 본다. 읽기만 한다.
+	OrderLotFull(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (bool, error)
+	// TakeForRefund 는 그 주문의 크레딧을 비운다. 줄었으면 wallet.ErrLotUsed 다.
+	TakeForRefund(ctx context.Context, tx pgx.Tx, userID uuid.UUID, orderID uuid.UUID) error
+	// ReturnRefund 는 비운 크레딧을 되돌린다.
+	ReturnRefund(ctx context.Context, tx pgx.Tx, userID uuid.UUID, orderID uuid.UUID) error
+}
+
+// Wallet 은 주문이 쓰는 지갑의 모양이다. *wallet.Service 가 이 모양이다.
+type Wallet interface {
+	Depositor
+	Refunder
 }
 
 // Service 는 주문을 만들고 치른다. 서버가 뜰 때 하나 만들어 쓴다.
@@ -116,13 +159,13 @@ type Service struct {
 	pool     *pgxpool.Pool
 	now      func() time.Time
 	provider payment.Provider
-	wallet   Depositor
+	wallet   Wallet
 	// ttl 은 주문을 만든 때부터 만료까지의 시간이다.
 	ttl time.Duration
 }
 
 // NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, ttl 은 주문의 만료까지의 시간이다.
-func NewService(pool *pgxpool.Pool, now func() time.Time, provider payment.Provider, wallet Depositor, ttl time.Duration) (*Service, error) {
+func NewService(pool *pgxpool.Pool, now func() time.Time, provider payment.Provider, wallet Wallet, ttl time.Duration) (*Service, error) {
 	if ttl <= 0 {
 		return nil, ErrInvalidTTL
 	}

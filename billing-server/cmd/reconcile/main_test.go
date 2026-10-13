@@ -143,7 +143,7 @@ func TestPrintReportShowsCountsButNoIDs(t *testing.T) {
 	printReport(&out, report, errors.New("x"))
 
 	text := out.String()
-	for _, want := range []string{"오래된 주문: 1", "맞지 않는 줄: 1", "홀드 2", "끝내지 못했습니다"} {
+	for _, want := range []string{"오래된 주문: 1", "환불 0", "맞지 않는 줄: 1", "홀드 2", "끝내지 못했습니다"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("화면에 %q 가 없다: %s", want, text)
 		}

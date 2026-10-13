@@ -6,7 +6,7 @@
 //	go run ./cmd/reconcile -stale-after 30m -limit 500
 //
 // 하는 일(internal/reconcile):
-//  1. 오래 confirming 에 머문 주문을 결제 대행사에 물어 끝낸다. 이것만 상태를 바꾼다.
+//  1. 오래 confirming·refunding 에 머문 주문을 결제 대행사에 물어 끝낸다. 이것만 상태를 바꾼다.
 //  2. 지갑, 지급 묶음, 주문, 홀드가 원장과 맞는지 본다. 읽기만 한다. 고치지 않는다.
 //  3. 정리 작업(cmd/sweeper)이 밀려 있지 않은지 센다.
 //
@@ -45,8 +45,8 @@ const (
 	// 대사가 남기는 오류 코드. docs/observability.md 의 표에 있다.
 	errorCodeMismatch = "ledger.mismatch"
 	errorCodeBehind   = "sweep.behind"
-	// defaultStaleAfter 는 confirming 에 이만큼 머문 주문을 결제 대행사에 묻는다.
-	// 승인 요청 하나는 길어야 몇십 초다(order.ProviderTimeout). 그보다 넉넉히 둬서 진행 중인 요청과 엇갈리지 않게 한다.
+	// defaultStaleAfter 는 confirming·refunding 에 이만큼 머문 주문을 결제 대행사에 묻는다.
+	// 승인·취소 요청 하나는 길어야 몇십 초다(order.ProviderTimeout). 그보다 넉넉히 둬서 진행 중인 요청과 엇갈리지 않게 한다.
 	defaultStaleAfter = 10 * time.Minute
 	minStaleAfter     = time.Minute
 )
@@ -113,7 +113,7 @@ func parseOptions(args []string) (options, error) {
 	flags := flag.NewFlagSet("reconcile", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	var opts options
-	flags.DurationVar(&opts.staleAfter, "stale-after", defaultStaleAfter, "confirming 에 이만큼 머문 주문을 결제 대행사에 묻는다")
+	flags.DurationVar(&opts.staleAfter, "stale-after", defaultStaleAfter, "confirming·refunding 에 이만큼 머문 주문을 결제 대행사에 묻는다")
 	flags.IntVar(&opts.limit, "limit", reconcile.DefaultLimit, "검사마다 돌려주는 가장 많은 수")
 	if err := flags.Parse(args); err != nil {
 		return options{}, fmt.Errorf("%w\n쓰는 법: go run ./cmd/reconcile [-stale-after 10m] [-limit 1000]", err)
@@ -150,6 +150,8 @@ func logReport(ctx context.Context, report reconcile.Report) {
 			slog.Int("stale_found", report.Stale.Found),
 			slog.Int("stale_paid", report.Stale.Paid),
 			slog.Int("stale_failed", report.Stale.Failed),
+			slog.Int("stale_refunded", report.Stale.Refunded),
+			slog.Int("stale_refund_refused", report.Stale.RefundRefused),
 			slog.Int("stale_unknown", report.Stale.Unknown),
 			slog.Int("stale_errored", report.Stale.Errored),
 		)
@@ -175,8 +177,9 @@ func logReport(ctx context.Context, report reconcile.Report) {
 
 // printReport 는 결과를 사람이 읽게 찍는다. 번호는 찍지 않는다. 번호는 로그에 있다.
 func printReport(out io.Writer, report reconcile.Report, err error) {
-	fmt.Fprintf(out, "오래된 주문: %d (치름 %d, 실패 %d, 아직 모름 %d, 오류 %d)\n",
-		report.Stale.Found, report.Stale.Paid, report.Stale.Failed, report.Stale.Unknown, report.Stale.Errored)
+	fmt.Fprintf(out, "오래된 주문: %d (치름 %d, 실패 %d, 환불 %d, 환불 거절 %d, 아직 모름 %d, 오류 %d)\n",
+		report.Stale.Found, report.Stale.Paid, report.Stale.Failed, report.Stale.Refunded, report.Stale.RefundRefused,
+		report.Stale.Unknown, report.Stale.Errored)
 	fmt.Fprintf(out, "맞지 않는 줄: %d\n", len(report.Mismatches))
 	fmt.Fprintf(out, "밀린 정리: 홀드 %d, 주문 %d, 무료 크레딧 묶음 %d\n",
 		report.Overdue.Holds, report.Overdue.Orders, report.Overdue.FreeGrants)

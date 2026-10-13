@@ -26,4 +26,5 @@ type Order struct {
 	UpdatedAt      time.Time
 	PaidAt         pgtype.Timestamptz
 	ExpiresAt      time.Time
+	RefundedAt     pgtype.Timestamptz
 }
