@@ -68,6 +68,7 @@ from app.tables.errors import (
     TableOptionError,
     WrongPasswordError,
 )
+from app.whispers import router as whispers
 
 # 이 서버의 API 가 놓이는 주소. 인증 서버는 /api/v1/auth 를 쓴다
 API_PREFIX = '/api/v1/game'
@@ -231,6 +232,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.include_router(rounds.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)
     app.include_router(chat.router, prefix=API_PREFIX)
+    app.include_router(whispers.router, prefix=API_PREFIX)
     app.include_router(realtime.router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다

@@ -172,10 +172,10 @@ async def test_the_stream_of_an_ended_table_sends_everything_and_closes(client: 
 
     messages = parse(response)
     assert [(message['event'], message['id']) for message in messages] == [
-        ('table_event', '1-0'),
-        ('table_event', '2-0'),
-        ('table_event', '3-0'),
-        ('chat_message', '3-1'),
+        ('table_event', '1-0-0'),
+        ('table_event', '2-0-0'),
+        ('table_event', '3-0-0'),
+        ('chat_message', '3-1-0'),
         ('closed', None),
     ]
     assert [message['data']['type'] for message in messages[:3]] == ['table_created', 'member_joined', 'table_ended']
@@ -202,7 +202,7 @@ async def test_starts_after_the_numbers_in_the_address(client: AsyncClient, me: 
 
     # REST 로 읽은 마지막 번호를 적고 붙으면 그 뒤의 것만 온다
     assert [(message['event'], message['id']) for message in parse(response)] == [
-        ('table_event', '3-1'),
+        ('table_event', '3-1-0'),
         ('closed', None),
     ]
 
@@ -216,7 +216,7 @@ async def test_resumes_after_the_last_event_id(client: AsyncClient, me: dict, fr
     )
 
     assert [(message['event'], message['id']) for message in parse(response)] == [
-        ('chat_message', '3-1'),
+        ('chat_message', '3-1-0'),
         ('closed', None),
     ]
 

@@ -4,7 +4,7 @@
 "이 테이블에 새 것이 생겼다"는 신호. 신호를 만들고 보내는 쪽이다.
 
 신호는 세 가지다.
-  - 저장된 것이 늘었다(이벤트, 채팅). 내용을 싣지 않는다. 받은 쪽은 DB 에서 "내가 보낸 마지막 번호 뒤"를 읽는다
+  - 저장된 것이 늘었다(이벤트, 채팅, 쪽지). 내용을 싣지 않는다. 받은 쪽은 DB 에서 "내가 보낸 마지막 번호 뒤"를 읽는다
     (app/realtime/service.py). 그래서 신호를 놓치거나 두 번 받아도 틀린 것을 보내지 않는다. 늦어질 뿐이다.
   - 누가 입력 중이다. 저장하지 않으므로 신호가 내용의 전부다. 누구인지를 신호에 싣는다. 놓치면 그만이다.
   - 쓰이는 중인 서술의 조각(미리 보기). 이것도 저장하지 않는다. 글을 신호에 싣는다(NarrationPiece).
@@ -50,6 +50,8 @@ class Kind(enum.StrEnum):
     EVENTS = 'events'
     # 채팅(table_messages)
     MESSAGES = 'messages'
+    # 쪽지(table_whispers). 누구의 쪽지인지는 싣지 않는다. 깨어난 스트림이 각자 자기 쪽지함을 읽는다
+    WHISPERS = 'whispers'
     # 누가 채팅을 입력 중이다. 저장된 것이 아니다
     TYPING = 'typing'
     # 쓰이는 중인 서술의 조각이다. 저장된 것이 아니다
@@ -57,7 +59,7 @@ class Kind(enum.StrEnum):
 
 
 # 저장된 것이 늘었다는 종류들. 이 신호를 받으면 DB 를 읽는다
-STORED_KINDS = frozenset({Kind.EVENTS, Kind.MESSAGES})
+STORED_KINDS = frozenset({Kind.EVENTS, Kind.MESSAGES, Kind.WHISPERS})
 
 
 @dataclass(frozen=True)

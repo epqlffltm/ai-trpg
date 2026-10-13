@@ -78,6 +78,7 @@ def build_table(
         narration_tier=data.narration_tier,
         credit_wait_seconds=data.credit_wait_seconds,
         remove_short_payers=data.remove_short_payers,
+        whisper_notice=data.whisper_notice,
         members=[TableMember(user_id=host_id)],
     )
 

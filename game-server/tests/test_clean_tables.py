@@ -24,6 +24,7 @@ from app.ai.provider import Reasoning
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
 from app.memory.indexing import index_table
+from app.whispers.models import Whisper
 from tests.cleaning import clear_tables, clearing_order
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -31,6 +32,8 @@ from tests.signing import SigningKey, make_access_claims, make_token
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
+# 쪽지를 받는 사람. 테이블에 앉지 않는다(DB 는 자리를 묻지 않는다)
+OTHER = uuid.UUID('22222222-2222-4333-8444-555555555555')
 
 # 마이그레이션의 기록. 모델이 아니고, 지우면 안 된다
 ALEMBIC_TABLE = 'alembic_version'
@@ -68,6 +71,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     룰북, 세계관, 로어북과 항목, 시나리오(로어북을 붙이고 판을 내고 소개 페이지까지),
     테이블(시작해서 시트와 NPC 의 상태와 라운드와 이벤트가 생기고, 굴리고, 선언해서 다치고, 채팅한다), 보관함.
     AI 호출의 기록만은 API 로 생기지 않는다(테스트의 서술자는 모델을 부르지 않는다). 기록장으로 직접 쓴다.
+    쪽지도 직접 넣는다. 받을 사람이 있어야 하는데 혼자 앉은 테이블이다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
     지난 라운드의 벡터는 다음 서술을 맡길 때 생긴다. 혼자 앉은 테이블이라 선언하면 라운드가 닫히고 서술된다.
     서술을 기다린 뒤 색인을 직접 돌린다.
@@ -122,6 +126,11 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         text='바람이 분다.',
     )
     await DbCallLog(app.state.session_factory).write(record)
+
+    async with app.state.session_factory() as session:
+        values = {'sender_id': ME, 'recipient_id': OTHER, 'content': '쉿', 'round_number': 1, 'sequence': 1}
+        session.add(Whisper(table_id=uuid.UUID(table['id']), owner_id=ME, **values))
+        await session.commit()
 
 
 def test_tables_that_point_are_cleared_before_the_tables_they_point_to():
