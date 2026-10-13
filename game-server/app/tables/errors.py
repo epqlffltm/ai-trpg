@@ -74,6 +74,10 @@ class Conflict(enum.StrEnum):
     TOO_MANY_ITEMS = 'too_many_items'
     # 가진 것보다 많이 빼려 했다. 없는 물건을 빼려 한 것도 이 이유다
     NOT_ENOUGH_ITEMS = 'not_enough_items'
+    # 이미 끝난(성공, 실패) 퀘스트다. 끝난 것은 되돌리지 않는다
+    QUEST_FINISHED = 'quest_finished'
+    # 이미 진행 중인 퀘스트를 진행 중으로 바꾸려 했다
+    QUEST_ALREADY_ACTIVE = 'quest_already_active'
 
 
 class TableConflictError(Exception):
