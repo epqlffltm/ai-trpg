@@ -554,11 +554,11 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
-| `billing_ledger_operations_total` | counter | `kind`(`grant`, `deposit`, `spend`, `expire`), `result`(`success`, `failure`) | 원장에 줄을 적은 수 |
+| `billing_ledger_operations_total` | counter | `kind`(원장의 이유: `grant`, `deposit`, `spend`, `expire`, `hold`, `release`, `regroup`, `refund`, `unrefund`), `result`(`success`, `failure`) | 원장에 줄을 적은 수 |
 | `billing_idempotency_total` | counter | `kind`, `outcome`(`first`, `replayed`) | 중복 방지 키의 결과. `replayed` 는 같은 키로 다시 온 것이다. 원장에 다시 적지 않았다 |
-| `billing_orders_total` | counter | `status`(`paid`, `failed`, `confirming`) | 주문이 그 상태가 된 수 |
-| `payment_provider_calls_total` | counter | `operation`(`confirm`, `lookup`), `outcome`(`approved`, `declined`, `unknown`, `unavailable`) | 결제 대행사를 부른 수 |
-| `payment_webhooks_total` | counter | `result`(`accepted`, `bad_signature`, `bad_request`, `unavailable`) | 받은 알림의 수 |
+| `billing_orders_total` | counter | `status`(`paid`, `failed`, `confirming`, `expired`, `refunding`, `refunded`) | 주문이 그 상태가 된 수. 운영자가 정한 것(`cmd/orders decide`)도 센다 |
+| `payment_provider_calls_total` | counter | `provider`(`fake`, `toss`), `operation`(`confirm`, `lookup`, `cancel`), `outcome`(`approved`, `declined`, `canceled`, `unknown`, `unavailable`) | 결제 대행사를 부른 수. `cancel` 은 청약철회의 취소다 |
+| `payment_webhooks_total` | counter | `provider`(`fake`, `toss`), `result`(`accepted`, `ignored`, `bad_signature`, `bad_request`, `unavailable`) | 받은 알림의 수. `ignored` 는 다루지 않는 종류의 알림(토스의 입금 알림 등)이다. 토스의 알림에는 서명이 없어서 `bad_signature` 가 없다 |
 
 ## 개발 환경과 운영 환경
 
@@ -670,7 +670,8 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 
 - **span 이 없다.** `trace_id` 로 서버 사이의 로그를 이을 수는 있지만 "어디서 얼마나 걸렸나"를 그림으로 볼 수는 없다.
 - **게임 서버의 AI 호출 기록(DB)에 `job_id` 와 `trace_id` 가 없다.** 로그의 서술 작업과 DB 의 호출 기록을 번호로 잇지 못한다. 열을 더하는 마이그레이션이 필요하다.
-- **사람이 치는 명령은 JSON 이 아니다.** billing-server 의 `cmd/migrate`, `cmd/fakepg`, auth-server 의 관리 명령이 화면에 찍는 안내(`self.stdout`)는 그대로 글이다.
+- **사람이 치는 명령은 JSON 이 아니다.** billing-server 의 `cmd/migrate`, `cmd/fakepg`, `cmd/prices`, `cmd/orders`, auth-server 의 관리 명령이 화면에 찍는 안내(`self.stdout`)는 그대로 글이다.
+  `cmd/orders decide` 가 남기는 결정의 기록(`order.decide`)은 로그라서 JSON 이다.
   auth-server 의 워커와 예약 명령이 남기는 **로그**는 JSON 이다.
 - **로거가 생기기 전의 줄.** board-server 는 설정이 틀려 뜨지 못할 때 Nest 의 기본 모양으로 찍는다. billing-server 는 `DEBUG=true` 면 gin 이 주소 목록을 글로 찍는다.
 - **주기 명령을 부르는 supercronic 의 줄.** 실패한 실행만 한 줄 남긴다(`-quiet`). JSON 이지만 칸이 공통 규격과 다르다(`level`, `msg`, `time`, `job.command`).
