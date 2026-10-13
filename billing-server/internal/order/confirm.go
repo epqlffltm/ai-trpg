@@ -53,31 +53,6 @@ func (s *Service) confirm(ctx context.Context, userID uuid.UUID, orderID uuid.UU
 	return s.settle(ctx, started, result, err)
 }
 
-// Notify 는 결제 대행사의 알림을 받아, 결과를 모르던 주문을 마저 끝낸다.
-// 알림에 적힌 결과를 믿지 않고 결제 대행사에 다시 묻는다. 끝낼 것이 없는 알림(모르는 주문, 이미 끝난 주문,
-// 결제 번호가 다른 알림)은 아무것도 하지 않고 nil 을 돌려준다. 결제 대행사가 같은 알림을 여러 번 보내도 된다.
-// 결제 대행사에 묻지 못했으면 오류를 돌려준다. 결제 대행사가 알림을 다시 보내게 하려는 것이다.
-func (s *Service) Notify(ctx context.Context, orderID uuid.UUID, paymentKey string) error {
-	ctx = context.WithoutCancel(ctx)
-	row, err := orderdb.New(s.pool).GetOrder(ctx, orderID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	current := toOrder(row)
-	if current.Status != StatusConfirming || current.PaymentKey != paymentKey {
-		return nil
-	}
-	result, err := s.lookUp(ctx, current)
-	if err != nil {
-		return err
-	}
-	_, err = s.settle(ctx, current, result, nil)
-	return err
-}
-
 // startConfirming 은 pending 인 주문에 결제 번호를 적고 confirming 으로 바꾼다. 결제 대행사를 부르기 전에 한다.
 // 바꿀 주문이 없으면 pgx.ErrNoRows, 그 결제 번호가 다른 주문에 쓰였으면 ErrPaymentKeyUsed 다.
 func (s *Service) startConfirming(ctx context.Context, userID uuid.UUID, orderID uuid.UUID, paymentKey string) (Order, error) {
