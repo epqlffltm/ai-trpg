@@ -12,6 +12,7 @@
 
 지금은 PostgreSQL 의 NOTIFY 로 보낸다. NOTIFY 는 트랜잭션이 커밋될 때 나가고, 되돌려지면 나가지 않는다.
 저장은 안 됐는데 신호만 가는 일이 없다.
+NOTIFY 는 같은 DB 의 누구나 보낼 수 있으므로 신호마다 서명한다(app/realtime/signing.py). 받는 쪽이 맞춰 본다.
 
 다른 것(Redis Pub/Sub 등)으로 바꿀 때 고칠 곳은 둘이다.
   - 이 파일의 publish: 신호를 보낸다.
@@ -27,13 +28,18 @@ from typing import ClassVar
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.realtime.signing import SignalSigner
+
 # NOTIFY 의 채널 이름 뒤에 붙는 말. 앞에는 스키마 이름이 붙는다(game_table_signals).
 # 개발용과 테스트용이 같은 DB 를 쓰므로, 스키마마다 채널을 나눠 서로의 신호를 받지 않게 한다
 CHANNEL_SUFFIX = '_table_signals'
 
+# 세션이 서명자를 들고 다니는 이름(session.info 의 키)
+SIGNER_INFO_KEY = 'signal_signer'
+
 # 서술의 조각 하나에 싣는 글자 수의 상한. NOTIFY 에 싣는 글자는 8000 바이트보다 짧아야 한다.
 # UTF-8 은 한 글자가 4 바이트까지라 1500 자는 6000 바이트까지다.
-# 앞에 붙는 테이블과 번호들(80 바이트 안쪽)을 더해도 남는다
+# 앞에 붙는 테이블과 번호들(80 바이트 안쪽)과 서명(65 바이트)을 더해도 남는다
 MAX_PIECE_CHARS = 1500
 
 
@@ -167,13 +173,32 @@ def decode(payload: str) -> Notice | None:
     return decode_signal(table, found, tail)
 
 
+def session_info(signer: SignalSigner) -> dict[str, SignalSigner]:
+    """세션이 들고 다닐 것. 세션을 찍어 내는 틀(create_session_factory)에 넘긴다. publish 가 꺼내 쓴다."""
+    return {SIGNER_INFO_KEY: signer}
+
+
+def signer_of(session: AsyncSession) -> SignalSigner:
+    """
+    세션이 들고 있는 서명자. 없으면 예외다.
+
+    서명 없이 보내면 받는 쪽이 모두 버린다. 조용히 신호가 사라지는 것보다 바로 드러나는 것이 낫다.
+    """
+    signer = session.info.get(SIGNER_INFO_KEY)
+    if not isinstance(signer, SignalSigner):
+        raise RuntimeError('세션에 신호의 서명자가 없다. create_session_factory 에 session_info 를 넘겨야 한다')
+    return signer
+
+
 async def publish(session: AsyncSession, notice: Notice) -> None:
     """
-    신호나 서술의 조각을 보낸다. 이 세션의 트랜잭션이 커밋될 때 나간다. 되돌려지면 나가지 않는다.
+    신호나 서술의 조각을 서명해서 보낸다. 이 세션의 트랜잭션이 커밋될 때 나간다. 되돌려지면 나가지 않는다.
 
-    커밋하기 전에, 저장하는 것과 같은 세션으로 부른다.
+    커밋하기 전에, 저장하는 것과 같은 세션으로 부른다. 서명자는 세션이 들고 있다(session_info).
     current_schema(): 이 연결이 쓰는 스키마의 이름이다. 받는 쪽의 채널 이름(channel_name)과 같아진다.
     한 트랜잭션에서 같은 신호를 여러 번 보내면 PostgreSQL 이 하나로 합쳐 보낸다. 조각은 번호가 달라서 합쳐지지 않는다.
+    서명이 같은 신호에는 같으므로 합쳐지는 것은 그대로다.
     """
+    payload = signer_of(session).sign(encode(notice))
     query = text('SELECT pg_notify(current_schema() || :suffix, :payload)')
-    await session.execute(query, {'suffix': CHANNEL_SUFFIX, 'payload': encode(notice)})
+    await session.execute(query, {'suffix': CHANNEL_SUFFIX, 'payload': payload})
