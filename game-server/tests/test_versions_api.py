@@ -408,6 +408,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'default_npc_sheet': None,
         'items': [],
         'starting_items': [],
+        'quests': [],
         'player_made_hp': None,
         'reroll_allowed': False,
         'narration_style': 'classic',

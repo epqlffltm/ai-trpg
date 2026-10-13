@@ -71,6 +71,8 @@ SCENARIO_MAX_ITEM_RULES = 100
 # 시작 소지품의 가짓수(시나리오의 것, 프리젠 하나의 것)와 한 가지의 개수
 SCENARIO_MAX_STARTING_ITEMS = 20
 ITEM_STACK_MAX = 99
+# 시나리오 하나에 둘 수 있는 퀘스트 규칙의 수. 사건 항목마다 하나다. 한 판에 쫓는 퀘스트가 이보다 많지는 않다
+SCENARIO_MAX_QUEST_RULES = 50
 # 판을 낼 때 적는 변경 내용. 사람이 읽는다
 VERSION_NOTE_MAX_LENGTH = 500
 
@@ -105,6 +107,19 @@ class ItemKind(enum.StrEnum):
     GEAR = 'gear'
     # 쓰면 하나 줄어드는 물건. 회복의 양(heals)을 적었으면 쓸 때 엔진이 HP 를 그만큼 되돌린다
     CONSUMABLE = 'consumable'
+
+
+class QuestStart(enum.StrEnum):
+    """
+    퀘스트가 테이블이 시작할 때 어떤 상태인가.
+
+    규칙을 적지 않은 사건 항목은 숨긴 채로 시작한다. 이야기가 거기 닿으면 방장이 드러낸다.
+    """
+
+    # 플레이어에게 보이지 않는다. GM 만 안다. 이야기가 닿으면 방장이 드러낸다
+    HIDDEN = 'hidden'
+    # 처음부터 진행 중이다. 플레이어가 처음부터 쫓는 목표다
+    ACTIVE = 'active'
 
 
 class Visibility(enum.StrEnum):
@@ -158,7 +173,8 @@ class LoreKind(enum.StrEnum):
       - 인물: 이름이 장면에 아직 안 나왔으면 장면의 호칭으로 이름표를 바꾸고 진짜 이름을 뺀다
       - 전설: 사실로 단정하지 않고 흘릴 수 있는 이야기로 다룬다
       - 사건: 준비된 사건의 글이다. 장면에서 먼저 일으키거나 결말을 정하지 않는다.
-              진행과 보상(상태)은 나중에 퀘스트 시스템(엔진, DB)이 맡는다
+              사건 하나가 퀘스트 하나다. 시작 상태와 보상은 시나리오의 퀘스트 규칙(Scenario.quests),
+              진행(상태)은 테이블(엔진, DB)이 맡는다
     장소, 물건, 세력, 종족은 지금은 표시만 한다. 지도, 아이템·몬스터 자산이 붙을 자리다.
     """
 
@@ -372,6 +388,7 @@ class Scenario(AssetContent):
         CheckConstraint(
             f'jsonb_array_length(starting_items) <= {SCENARIO_MAX_STARTING_ITEMS}', name='starting_items_count'
         ),
+        CheckConstraint(f'jsonb_array_length(quests) <= {SCENARIO_MAX_QUEST_RULES}', name='quests_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
@@ -447,6 +464,11 @@ class Scenario(AssetContent):
     # 시작 소지품. 하나하나가 {entry_id, count} 다. 캐릭터 모두가 테이블이 시작할 때 받는다.
     # 프리젠을 고른 사람은 그 프리젠의 소지품(pregens[].items)도 더 받는다
     starting_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 퀘스트 규칙들. 하나하나가 {entry_id, start, reward} 다. 붙인 로어북의 사건 항목 하나가 퀘스트로서 어떤지 정한다.
+    # 아이템 규칙과 같은 까닭으로 여기 둔다. 사건의 글은 로어북에, 시작 상태와 보상은 시나리오에 있다.
+    # 규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상이 없다. 가리키는 항목이 있는지는 게시할 때 본다
+    quests: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다
