@@ -8,6 +8,7 @@ DB 연결. 엔진과 세션을 만들고, 요청마다 세션 하나를 내준�
 """
 
 from collections.abc import AsyncGenerator
+from typing import Any
 
 from fastapi import Request
 from sqlalchemy import MetaData, text
@@ -78,15 +79,17 @@ def create_engine(settings: Settings) -> AsyncEngine:
     )
 
 
-def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+def create_session_factory(engine: AsyncEngine, info: dict[str, Any] | None = None) -> async_sessionmaker[AsyncSession]:
     """
     세션을 찍어 내는 틀을 만든다.
 
     expire_on_commit=False: 커밋한 뒤에도 객체의 값을 그대로 읽을 수 있게 한다.
     기본값(True)은 커밋 뒤에 값을 다시 읽으려고 DB 에 묻는데, async 에서는 그 조회가
     await 없이 일어나 오류가 난다.
+    info: 세션마다 곁에 들고 다니는 것(session.info). 세션마다 이것의 복사본을 받는다.
+    신호의 서명자가 여기 실린다(app/realtime/signals.py 의 session_info).
     """
-    return async_sessionmaker(engine, expire_on_commit=False)
+    return async_sessionmaker(engine, expire_on_commit=False, info=info)
 
 
 async def get_session(request: Request) -> AsyncGenerator[AsyncSession]:

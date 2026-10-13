@@ -3,6 +3,8 @@
 """
 신호를 받는 쪽. PostgreSQL 의 LISTEN 으로 신호를 듣고 방송실(hub)에 넘긴다.
 
+받은 신호의 서명을 먼저 맞춰 본다(app/realtime/signing.py). 맞지 않으면 버리고 경고를 남긴다.
+
 듣는 데는 연결 하나를 계속 붙잡고 있어야 한다. 요청마다 빌려 쓰는 풀의 연결과 따로, 전용 연결을 하나 연다.
 서버 프로세스마다 하나다. 스트림이 몇 개든 늘지 않는다.
 
@@ -22,6 +24,7 @@ from sqlalchemy.engine import make_url
 from app.core.config import Settings
 from app.realtime import signals
 from app.realtime.hub import Hub
+from app.realtime.signing import BAD_SIGNATURE_ERROR_CODE, SignalSigner
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,20 @@ def listen_dsn(settings: Settings) -> str:
     return make_url(settings.database_url).set(drivername='postgresql').render_as_string(hide_password=False)
 
 
+def log_bad_signature(pid: int) -> None:
+    """
+    서명이 맞지 않는 신호를 버렸다고 남긴다. 보낸 연결의 프로세스 번호만 싣는다.
+
+    받은 글자는 싣지 않는다. 서술의 글이 들어 있을 수 있다.
+    pid 로 pg_stat_activity 에서 어느 계정이 보냈는지 찾는다. 그 연결이 아직 살아 있을 때다.
+    서버들의 SIGNAL_SECRET 이 서로 다를 때도 남는다.
+    """
+    logger.warning(
+        '서명이 맞지 않는 신호를 버렸다',
+        extra={'sender_pid': pid, 'error_code': BAD_SIGNATURE_ERROR_CODE},
+    )
+
+
 class PostgresListener:
     """
     PostgreSQL 의 LISTEN 으로 신호를 듣는다.
@@ -66,10 +83,12 @@ class PostgresListener:
     끊긴 사이의 신호는 잃지만, 스트림이 주기적으로 DB 를 직접 읽으므로 내용은 잃지 않는다.
     """
 
-    def __init__(self, settings: Settings, hub: Hub) -> None:
+    def __init__(self, settings: Settings, hub: Hub, signer: SignalSigner) -> None:
         self._dsn = listen_dsn(settings)
         self._channel = signals.channel_name(settings.db_schema)
         self._hub = hub
+        # 보내는 쪽(세션)과 같은 서명자다. 다른 비밀로 서명한 신호는 버린다
+        self._signer = signer
         self._connection: asyncpg.Connection | None = None
         # 여러 스트림이 동시에 처음 열려도 연결은 하나만 맺는다
         self._connecting = asyncio.Lock()
@@ -108,8 +127,12 @@ class PostgresListener:
         return connection
 
     def _on_notify(self, connection: asyncpg.Connection, pid: int, channel: str, payload: str) -> None:
-        """신호가 왔을 때 asyncpg 가 부른다. 알아볼 수 있는 신호면 방송실에 넘긴다."""
-        signal = signals.decode(payload)
+        """신호가 왔을 때 asyncpg 가 부른다. 서명이 맞고 알아볼 수 있는 신호면 방송실에 넘긴다."""
+        verified = self._signer.verify(payload)
+        if verified is None:
+            log_bad_signature(pid)
+            return
+        signal = signals.decode(verified)
         if signal is not None:
             self._hub.wake(signal)
 
