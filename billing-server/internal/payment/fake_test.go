@@ -28,6 +28,7 @@ func TestFakeAnswersByThePaymentKeyPrefix(t *testing.T) {
 		{"답이 없지만 승인됨", payment.FakeTimeoutApproved + "1", false, approved},
 		{"답이 없고 거절됨", payment.FakeTimeoutDeclined + "1", false, declined},
 		{"답이 없고 결제 대행사도 모름", payment.FakeLost + "1", false, payment.Result{Status: payment.StatusPending}},
+		{"가상계좌가 입금을 기다림", payment.FakeDeposit + "1", true, payment.Result{Status: payment.StatusAwaitingDeposit}},
 		{"모르는 앞머리", "pay_123", true, payment.Result{Status: payment.StatusDeclined, Code: payment.FakeCodeUnknownKey}},
 		{"빈 번호", "", true, payment.Result{Status: payment.StatusDeclined, Code: payment.FakeCodeUnknownKey}},
 		{"대문자는 다른 번호", "FAKE_OK_1", true, payment.Result{Status: payment.StatusDeclined, Code: payment.FakeCodeUnknownKey}},

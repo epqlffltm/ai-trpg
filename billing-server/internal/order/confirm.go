@@ -147,6 +147,8 @@ func (s *Service) settle(ctx context.Context, current Order, result payment.Resu
 		return s.pay(ctx, current)
 	case payment.StatusDeclined:
 		return s.fail(ctx, current, result.Code)
+	case payment.StatusAwaitingDeposit:
+		return s.refuseDeposit(ctx, current)
 	default:
 		return current, nil
 	}

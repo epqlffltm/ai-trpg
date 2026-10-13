@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- billing-server/internal/httpapi/checkout.html -->
-<!-- 토스페이먼츠의 결제위젯으로 크레딧을 사 보고 청약철회해 보는 개발용 화면. checkout.go 가 클라이언트 키를 채워 내준다. -->
+<!-- 토스페이먼츠로 크레딧을 사 보고 청약철회해 보는 개발용 화면. checkout.go 가 클라이언트 키와 결제를 띄우는 방법을 채워 내준다. -->
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
@@ -106,7 +106,7 @@
       <h1>크레딧 사기</h1>
       <p class="note">
         개발용 화면입니다. 토스페이먼츠의 테스트 키라 돈이 나가지 않습니다.
-        카드나 간편결제로 해 보세요. 가상계좌는 입금이 오지 않아 결과가 나지 않습니다.
+        카드나 간편결제로 해 보세요. 가상계좌는 받지 않습니다(고르면 서버가 그 결제를 취소합니다).
       </p>
 
       <section id="token-step">
@@ -156,6 +156,8 @@
       // 서버가 채운다. 클라이언트 키는 브라우저에 싣도록 만든 공개된 값이다
       const clientKey = {{.ClientKey}};
       const api = {{.APIPrefix}};
+      // true 면 결제위젯(결제위젯 키), false 면 결제창(API 개별 연동 키)이다
+      const useWidget = {{.Widget}};
       const tokenKey = "billing.checkout.token";
 
       // readToken 은 이 탭에 기억한 토큰이다. 저장소를 쓸 수 없으면 빈 글자다
@@ -241,7 +243,34 @@
         }
         const { data: order } = await call("POST", "/orders", { product_id: chosen.value }, { "Idempotency-Key": crypto.randomUUID() });
         show("order-info", "주문 " + order.id + "\n" + order.price.toLocaleString("ko-KR") + "원, 크레딧 " + order.credits + ", " + order.status);
-        await openWidget(order, chosen.dataset.name);
+        if (useWidget) {
+          await openWidget(order, chosen.dataset.name);
+        } else {
+          await openPaymentWindow(order, chosen.dataset.name);
+        }
+      }
+
+      // openPaymentWindow 는 결제하기를 누르면 결제창을 띄운다(API 개별 연동 키).
+      // 결제 수단은 카드(간편결제 포함)로 정한다. 가상계좌는 고를 수 없다.
+      // customerKey 는 이 사용자의 번호다(GET /me). 결제창은 익명 구매자를 받지 않는다
+      async function openPaymentWindow(order, orderName) {
+        const { data: me } = await call("GET", "/me");
+        const payment = TossPayments(clientKey).payment({ customerKey: me.user_id });
+        document.getElementById("pay-step").hidden = false;
+        document.getElementById("payment-method").textContent = "카드·간편결제 결제창이 열립니다";
+        document.getElementById("pay").onclick = function () {
+          const here = location.origin + location.pathname;
+          payment
+            .requestPayment({
+              method: "CARD",
+              amount: { currency: "KRW", value: order.price },
+              orderId: order.id,
+              orderName: orderName,
+              successUrl: here + "?result=success",
+              failUrl: here + "?result=fail",
+            })
+            .catch(reportError);
+        };
       }
 
       // openWidget 은 결제위젯(결제 수단과 약관)을 그리고, 결제하기를 누르면 결제창을 띄운다.

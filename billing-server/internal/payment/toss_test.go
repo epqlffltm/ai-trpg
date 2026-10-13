@@ -159,7 +159,8 @@ func TestTossConfirmJudgesTheAnswer(t *testing.T) {
 		unknown bool
 	}{
 		{"승인", 200, func(r payment.Request) string { return matching(r, "DONE") }, approved, false},
-		{"가상계좌는 입금 전이라 아직 모른다", 200, func(r payment.Request) string { return matching(r, "WAITING_FOR_DEPOSIT") }, pending, false},
+		{"200 인데 아직 처리 중", 200, func(r payment.Request) string { return matching(r, "IN_PROGRESS") }, pending, false},
+		{"가상계좌는 입금을 기다린다", 200, func(r payment.Request) string { return matching(r, "WAITING_FOR_DEPOSIT") }, payment.Result{Status: payment.StatusAwaitingDeposit}, false},
 		{"다른 주문의 결제", 200, func(r payment.Request) string {
 			return paymentJSON(r.PaymentKey, other.OrderID.String(), "DONE", r.Amount)
 		}, declined(payment.CodePaymentMismatch), false},
@@ -262,7 +263,7 @@ func TestTossLookupJudgesTheStatus(t *testing.T) {
 		// 결과가 아직 없거나, 일부만 돌려줘 돈의 일부가 나간 것. 거절로 적지 않는다
 		{"READY", payment.Result{Status: payment.StatusPending}},
 		{"IN_PROGRESS", payment.Result{Status: payment.StatusPending}},
-		{"WAITING_FOR_DEPOSIT", payment.Result{Status: payment.StatusPending}},
+		{"WAITING_FOR_DEPOSIT", payment.Result{Status: payment.StatusAwaitingDeposit}},
 		{"PARTIAL_CANCELED", payment.Result{Status: payment.StatusPending}},
 		{"SOMETHING_NEW", payment.Result{Status: payment.StatusPending}},
 	}
@@ -381,6 +382,21 @@ func TestTossCancelSendsTheDocumentedRequest(t *testing.T) {
 	}
 	// 금액을 적지 않는다. 전액 취소다
 	if string(got.body) != `{"cancelReason":"청약철회"}` {
+		t.Errorf("본문 = %s", got.body)
+	}
+}
+
+func TestTossCancelCarriesTheGivenReason(t *testing.T) {
+	toss, fake, _ := startToss(t, http.StatusOK, "")
+	request := newRequest()
+	request.CancelReason = "가상계좌 미지원"
+	fake.body = matching(request, "CANCELED")
+
+	if _, err := toss.Cancel(context.Background(), request); err != nil {
+		t.Fatalf("취소 요청이 실패했다: %v", err)
+	}
+
+	if got := fake.last(t); string(got.body) != `{"cancelReason":"가상계좌 미지원"}` {
 		t.Errorf("본문 = %s", got.body)
 	}
 }

@@ -40,6 +40,9 @@ const (
 	StatusPending Status = "pending"
 	// StatusCanceled 는 승인한 결제를 취소했다는 뜻이다. 돈이 돌아갔다. 취소에서만 나온다.
 	StatusCanceled Status = "canceled"
+	// StatusAwaitingDeposit 은 가상계좌가 발급되어 입금을 기다린다는 뜻이다. 돈은 아직 나가지 않았다. 승인과 조회에서 나온다.
+	// 이 서버는 가상계좌를 받지 않는다. 주문이 이 결제를 취소하고 끝낸다.
+	StatusAwaitingDeposit Status = "awaiting_deposit"
 )
 
 // Request 는 승인 요청 하나다.
@@ -50,6 +53,8 @@ type Request struct {
 	OrderID uuid.UUID
 	// Amount 는 받을 돈이다. 원(KRW)이다. 주문에 적힌 값을 보낸다. 클라이언트가 보낸 값이 아니다.
 	Amount int64
+	// CancelReason 은 취소(Cancel)에만 싣는 이유다. 결제 대행사의 상점관리자에 보인다. 비면 결제 대행사마다 정한 기본값이다.
+	CancelReason string
 }
 
 // Result 는 결제 한 건의 결과다.
