@@ -21,7 +21,7 @@ from app.events.models import EventType, TableEvent
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.models import Declaration, Round
-from app.rounds.state import find_declaration, has_outcome, naming_of
+from app.rounds.state import find_declaration, has_outcome, item_give_of, item_use_of, naming_of
 from app.tables.models import DeathCause, GameTable, InjurySource
 
 
@@ -158,12 +158,39 @@ def record_naming(session: AsyncSession, table: GameTable, declaration: Declarat
     recorder.record(session, table, EventType.NAMING_RESOLVED, payload=payload, cause=cause)
 
 
+def record_item_use(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    물건을 쓴 결과를 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. 회복했으면 바로 뒤에 HP 의 변화를 적는다.
+
+    행한 사람(actor_id)을 적지 않는다. 소지품과 HP 를 바꾼 것은 엔진이다.
+    """
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': declaration.character_name,
+        **item_use_of(declaration),
+    }
+    used = recorder.record(session, table, EventType.ITEM_USED, payload=payload, cause=cause)
+    effect = declaration.outcome.get('effect')
+    if effect is not None:
+        record_hp_change(session, table, effect, cause=used)
+
+
+def record_item_give(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """물건을 건넨 결과를 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. 행한 사람을 적지 않는다."""
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': declaration.character_name,
+        **item_give_of(declaration),
+    }
+    recorder.record(session, table, EventType.ITEM_GIVEN, payload=payload, cause=cause)
+
+
 def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
     """
     닫히는 라운드의 선언을 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다. 서술자가 받는 것과 같다.
 
-    판정이나 지목이 있었던 선언은 행동 바로 뒤에 그 결과를 적는다. 판정은 이미 끝나 있다(roll_checks).
-    여기서는 적기만 한다.
+    판정, 지목, 물건 쓰기와 건네기가 있었던 선언은 행동 바로 뒤에 그 결과를 적는다.
+    판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
     선언을 내지 않은 사람은 적지 않는다. 누가 안 냈는지는 라운드가 닫힌 이벤트에 적힌다.
     """
     for member in table.members:
@@ -183,6 +210,10 @@ def record_actions(session: AsyncSession, table: GameTable, round_: Round, group
             record_check(session, table, declaration, cause=acted)
         elif naming_of(declaration) is not None:
             record_naming(session, table, declaration, cause=acted)
+        elif item_use_of(declaration) is not None:
+            record_item_use(session, table, declaration, cause=acted)
+        elif item_give_of(declaration) is not None:
+            record_item_give(session, table, declaration, cause=acted)
 
 
 def record_death(

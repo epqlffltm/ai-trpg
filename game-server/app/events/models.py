@@ -98,6 +98,10 @@ class EventType(enum.StrEnum):
     ITEMS_GAINED = 'items_gained'
     # 방장이 캐릭터에게서 물건을 빼앗았다
     ITEMS_LOST = 'items_lost'
+    # 캐릭터가 소모품을 썼다(또는 쓰려 했지만 못 했다). 원인은 그 행동의 이벤트다. 회복했으면 바로 뒤에 HP 의 변화
+    ITEM_USED = 'item_used'
+    # 캐릭터가 다른 캐릭터에게 물건을 건넸다(또는 건네려 했지만 못 했다). 원인은 그 행동의 이벤트다
+    ITEM_GIVEN = 'item_given'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고, 방장이 다시 맡길 수 있다

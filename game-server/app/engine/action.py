@@ -11,9 +11,11 @@
   - 모양(CheckAction): 규칙을 몰라도 볼 수 있는 것. 입력을 받을 때 검사한다.
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
-종류는 셋이다. 판정(check), 치료(treat), 지목(name). 종류를 나타내는 칸(kind)으로 가른다(Action).
+종류는 다섯이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give).
+종류를 나타내는 칸(kind)으로 가른다(Action).
 치료는 능력과 난이도를 받지 않는다. 규칙이 정한다(app/engine/treatment.py).
 지목은 주사위를 굴리지 않는다. 짚은 이름이 정답인지만 본다(app/rounds/naming.py).
+쓰기와 건네기도 판정이 없다. 소지품을 바꾸고, 회복하는 소모품이면 회복의 주사위만 굴린다(app/rounds/item_actions.py).
 
 행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
 
@@ -51,6 +53,10 @@ class ActionKind(enum.StrEnum):
     TREAT = 'treat'
     # 인물의 진짜 이름을 짚는다. 주사위를 굴리지 않는다
     NAME = 'name'
+    # 가진 소모품 하나를 쓴다. 회복하는 것이면 대상이 그만큼 회복한다
+    USE = 'use'
+    # 가진 물건을 앉은 다른 사람에게 건넨다
+    GIVE = 'give'
 
 
 class CheckAction(BaseModel):
@@ -168,14 +174,47 @@ class NameAction(BaseModel):
     npc: uuid.UUID | None = None
 
 
+# 한 번에 건넬 수 있는 개수. 한 가지를 가질 수 있는 개수와 같다(app/assets/models.py 의 ITEM_STACK_MAX)
+GIVE_MAX_COUNT = 99
+
+
+class UseAction(BaseModel):
+    """
+    물건을 쓰는 행동. 가진 소모품 하나를 쓴다(app/rounds/item_actions.py).
+
+    item 은 판의 로어북 물건 항목의 id 다. 소모품이어야 한다. 엔진은 이 값을 읽지 않는다. 어떤 물건인지는 판이 안다.
+    회복하는 소모품이면 대상(target)이 회복한다. 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).
+    회복하지 않는 소모품(연막탄 같은 것)은 대상이 없다. 쓰고 없어진다. 무엇이 일어나는지는 서술이 맡는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.USE]
+    item: uuid.UUID
+    # 회복받는 사람. 테이블에 앉은 사람이다
+    target: uuid.UUID | None = None
+
+
+class GiveAction(BaseModel):
+    """물건을 건네는 행동. 가진 물건 count 개를 앉은 다른 사람(target)에게 건넨다(app/rounds/item_actions.py)."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.GIVE]
+    item: uuid.UUID
+    count: int = Field(default=1, ge=1, le=GIVE_MAX_COUNT)
+    # 받는 사람. 테이블에 앉은 다른 사람이다
+    target: uuid.UUID
+
+
 # 선언에 붙는 행동. kind 로 종류를 가른다
-Action = Annotated[CheckAction | TreatAction | NameAction, Field(discriminator='kind')]
+Action = Annotated[CheckAction | TreatAction | NameAction | UseAction | GiveAction, Field(discriminator='kind')]
 
 # 저장된 행동(JSON)을 읽는 법. 우리가 쓴 문서다. 모양이 틀렸으면 버그다
 ACTION = TypeAdapter(Action)
 
 
-def read_action(data: dict) -> CheckAction | TreatAction | NameAction:
+def read_action(data: dict) -> CheckAction | TreatAction | NameAction | UseAction | GiveAction:
     """선언에 저장된 행동을 읽는다. 모양이 틀리면 ValidationError."""
     return ACTION.validate_python(data)
 

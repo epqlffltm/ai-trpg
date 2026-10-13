@@ -6,26 +6,31 @@
 DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면의 인물을 받는다.
 저장은 부른 쪽(app/rounds/service.py)이 한다.
 
-행동은 셋이다(app/engine/action.py).
+행동은 다섯이다(app/engine/action.py).
   - 판정(CheckAction). 이번 장면에 나온 NPC 를 겨눌 수 있다(app/rounds/cast.py). 노려 칠 수도 있다.
   - 치료(TreatAction). 능력과 난이도는 규칙이 정한다. 대상이 그 부상을 입고 있어야 한다.
   - 지목(NameAction). 인물의 진짜 이름을 짚는다. 맞는지는 여기서 보지 않는다(app/rounds/judging.py).
+  - 쓰기(UseAction), 건네기(GiveAction). 판의 물건을 지금 가지고 있어야 한다.
+    닫힐 때 차례가 오면 다시 본다(app/rounds/item_actions.py). 그사이에 건넸거나 빼앗겼을 수 있다.
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
 비워 둔 칸(난이도, 회복과 치료의 대상)은 여기서 채워 저장한다. 읽는 쪽이 "비어 있으면"을 다시 따지지 않는다.
 """
 
 import uuid
 
+from app.assets.models import ITEM_STACK_MAX, ItemKind
+from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import action as actions
-from app.engine.action import CheckAction, NameAction, TreatAction
+from app.engine.action import CheckAction, GiveAction, NameAction, TreatAction, UseAction
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, find_cast_member, is_named
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.models import Declaration, Round
 from app.rounds.state import find_declaration, is_down, rules_of
-from app.tables import npcs, sheets
+from app.tables import items, npcs, sheets
 from app.tables import state as table_state
+from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 
 
@@ -158,10 +163,78 @@ def accept_naming(action: NameAction, cast: list[CastMember]) -> dict:
     return action.model_dump(mode='json')
 
 
+def find_item(table: GameTable, entry_id: uuid.UUID) -> CatalogItem:
+    """판의 물건을 찾는다. 판에 없으면(인물, 장소, 없는 항목) ActionNotInRulesError(item)."""
+    item = items.catalog(read_snapshot(table.content)).get(entry_id)
+    if item is None:
+        raise ActionNotInRulesError('item')
+    return item
+
+
+def require_held(member: TableMember, entry_id: uuid.UUID, count: int) -> None:
+    """그 물건을 count 개 이상 가지고 있는지 본다. 아니면 RoundConflictError(item_not_held)."""
+    if member.sheet is None or items.count_of(member.sheet, entry_id) < count:
+        raise RoundConflictError(Conflict.ITEM_NOT_HELD)
+
+
+def living_target(table: GameTable, target_id: uuid.UUID, dead_reason: Conflict) -> TableMember:
+    """
+    물건을 받거나 회복받을 사람. 앉아 있지 않으면 ActionTargetError(target), 캐릭터가 죽었으면 RoundConflictError.
+    """
+    target = table_state.find_member(table, target_id)
+    # 진행 중인 테이블에서는 앉은 사람 모두에게 시트가 있다(app/tables/sheets.py)
+    if target is None:
+        raise ActionTargetError('target')
+    if sheets.is_dead(target):
+        raise RoundConflictError(dead_reason)
+    return target
+
+
+def accept_use(table: GameTable, member: TableMember, action: UseAction) -> dict:
+    """
+    물건을 쓰는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
+
+      - 판의 물건이 아니거나 소모품이 아니면 ActionNotInRulesError(item). 장비는 쓰지 않는다.
+      - 하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
+      - 회복하는 소모품: 대상이 앉은 사람이 아니면 ActionTargetError, 죽었으면 RoundConflictError(patient_dead).
+        비워 둔 대상은 자기 자신으로 채운다.
+      - 회복하지 않는 소모품에 대상을 적었으면 ActionNotInRulesError(target). 무엇을 하려는지 알 수 없다.
+    """
+    item = find_item(table, action.item)
+    if item.kind != ItemKind.CONSUMABLE:
+        raise ActionNotInRulesError('item')
+    require_held(member, action.item, 1)
+    if item.heals is None:
+        if action.target is not None:
+            raise ActionNotInRulesError('target')
+        return action.model_dump(mode='json')
+    target = living_target(table, action.target or member.user_id, Conflict.PATIENT_DEAD)
+    return action.model_copy(update={'target': target.user_id}).model_dump(mode='json')
+
+
+def accept_give(table: GameTable, member: TableMember, action: GiveAction) -> dict:
+    """
+    물건을 건네는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
+
+      - 판의 물건이 아니면 ActionNotInRulesError(item).
+      - 그만큼 가지고 있지 않으면 RoundConflictError(item_not_held).
+      - 받는 사람이 자기 자신이거나 앉은 사람이 아니면 ActionTargetError(target), 죽었으면 RoundConflictError.
+      - 받는 쪽이 그 물건을 더 가질 수 없으면 RoundConflictError(recipient_full).
+    """
+    find_item(table, action.item)
+    require_held(member, action.item, action.count)
+    if action.target == member.user_id:
+        raise ActionTargetError('target')
+    recipient = living_target(table, action.target, Conflict.RECIPIENT_DEAD)
+    if items.count_of(recipient.sheet, action.item) + action.count > ITEM_STACK_MAX:
+        raise RoundConflictError(Conflict.RECIPIENT_FULL)
+    return action.model_dump(mode='json')
+
+
 def accept_action(
     table: GameTable,
     member: TableMember,
-    action: CheckAction | TreatAction | NameAction | None,
+    action: CheckAction | TreatAction | NameAction | UseAction | GiveAction | None,
     cast: list[CastMember],
 ) -> dict | None:
     """
@@ -169,7 +242,7 @@ def accept_action(
 
     member 는 선언하는 사람이고, cast 는 이번 장면의 인물들이다.
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
-    나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming).
+    나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give).
     """
     if action is None:
         return None
@@ -178,6 +251,10 @@ def accept_action(
         return accept_treatment(table, member, action, cast, ruleset)
     if isinstance(action, NameAction):
         return accept_naming(action, cast)
+    if isinstance(action, UseAction):
+        return accept_use(table, member, action)
+    if isinstance(action, GiveAction):
+        return accept_give(table, member, action)
     return accept_check(table, member, action, cast, ruleset)
 
 

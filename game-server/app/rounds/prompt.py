@@ -70,7 +70,7 @@ from app.rounds.narrator import (
 #   narration-15: 전부터 입은 부상을 이번 라운드에 새로 다친 것처럼 쓰는 일을 막는다(상태 지키기 평가에서 3 번 중 3 번).
 #                 시스템 지시에 "이번 라운드에 생긴 부상은 '새 부상'뿐이다"가 붙고, 판정 줄의 "부상의 영향"이
 #                 "전부터 입은 부상의 영향"으로 바뀐다
-PROMPT_VERSION = 'narration-17'
+PROMPT_VERSION = 'narration-18'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3

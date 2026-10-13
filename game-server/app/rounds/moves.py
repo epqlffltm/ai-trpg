@@ -81,6 +81,7 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
                 injuries=worn_notes(ruleset, member),
                 healed=healed_notes(ruleset, ended, member.user_id),
                 naming=narration_request.to_naming(naming_of(declaration)),
+                item_action=narration_request.to_item_action(declaration),
                 items=held_notes(catalog, member),
             )
         )

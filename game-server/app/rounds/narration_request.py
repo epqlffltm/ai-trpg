@@ -29,6 +29,7 @@ from app.rounds.models import Declaration, Round
 from app.rounds.narrator import (
     DeathSaveNote,
     Impact,
+    ItemActionNote,
     Move,
     NamingNote,
     NpcImpact,
@@ -78,6 +79,41 @@ def to_impact(effect: dict | None) -> Impact | None:
         downed=effect['downed'],
         injury=new_injury_name(effect),
     )
+
+
+def other_name(declaration: Declaration, target: dict | None) -> str | None:
+    """물건을 받거나 회복받은 사람의 캐릭터 이름. 없거나 선언한 사람 자신이면 None 이다."""
+    if target is None or target['user_id'] == str(declaration.user_id):
+        return None
+    return target['character_name']
+
+
+def to_item_action(declaration: Declaration | None) -> ItemActionNote | None:
+    """선언에 적힌 물건 쓰기나 건네기의 결과를 서술자에게 줄 모양으로 바꾼다. 그런 행동이 아니면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    used = declaration.outcome.get('item_use')
+    if used is not None:
+        return ItemActionNote(
+            kind='use',
+            name=used['name'],
+            count=1,
+            done=used['used'],
+            reason=used['reason'],
+            target=other_name(declaration, used['target']),
+            impact=to_impact(declaration.outcome.get('effect')),
+        )
+    given = declaration.outcome.get('item_give')
+    if given is not None:
+        return ItemActionNote(
+            kind='give',
+            name=given['name'],
+            count=given['count'],
+            done=given['given'],
+            reason=given['reason'],
+            target=given['target']['character_name'],
+        )
+    return None
 
 
 def to_npc_impact(effect: dict | None) -> NpcImpact | None:
