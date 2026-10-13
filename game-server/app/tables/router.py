@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from app.assets.models import PLAYER_MADE_MODES, CharacterMode
+from app.assets.models import ITEM_STACK_MAX, PLAYER_MADE_MODES, CharacterMode
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
@@ -29,6 +29,8 @@ from app.tables import (
     credit_waits,
     deaths,
     injuries,
+    item_grants,
+    items,
     replacements,
     rolls,
     service,
@@ -46,14 +48,18 @@ from app.tables.errors import (
     TableOptionError,
     WrongPasswordError,
 )
-from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
+from app.tables.items import CatalogItem
+from app.tables.models import GameTable, TableItem, TableMember, TableRoll, TableSheet
 from app.tables.schemas import (
+    CatalogItemOut,
     CharacterOut,
     CharacterUpdate,
     CreditWaitUpdate,
     FallenOut,
     HostTransfer,
     InjuryOut,
+    ItemChange,
+    ItemOut,
     JoinRequest,
     LobbyJoinRequest,
     MemberOut,
@@ -105,8 +111,26 @@ def to_summary(table: GameTable) -> TableSummary:
     )
 
 
-def to_sheet(sheet: TableSheet | None) -> SheetOut | None:
-    """시트를 응답으로 바꾼다. 아직 받지 않았으면 None."""
+def to_item(item: TableItem, catalog: dict[uuid.UUID, CatalogItem]) -> ItemOut:
+    """
+    가진 물건 한 가지를 응답으로 바꾼다. 이름과 종류는 판에서 찾는다.
+
+    소지품은 판의 물건만 가리킨다(판에 없는 물건은 줄 수 없다). 판은 바뀌지 않으므로 늘 찾는다.
+    """
+    found = catalog[item.entry_id]
+    return ItemOut(entry_id=item.entry_id, name=found.name, kind=found.kind, count=item.count)
+
+
+def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
+    """판의 물건들을 응답으로 바꾼다."""
+    return [
+        CatalogItemOut(entry_id=item.entry_id, name=item.name, kind=item.kind, heals=item.heals)
+        for item in catalog.values()
+    ]
+
+
+def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem]) -> SheetOut | None:
+    """시트를 응답으로 바꾼다. 아직 받지 않았으면 None. 소지품의 이름은 판의 물건(catalog)에서 찾는다."""
     if sheet is None:
         return None
     return SheetOut(
@@ -121,6 +145,7 @@ def to_sheet(sheet: TableSheet | None) -> SheetOut | None:
             InjuryOut(injury=row.injury, round=row.round_number, ends_after_round=row.ends_after_round)
             for row in injuries.active(sheet.injuries)
         ],
+        items=[to_item(item, catalog) for item in items.in_catalog_order(sheet.items, catalog)],
     )
 
 
@@ -148,7 +173,7 @@ def to_fallen(sheet: TableSheet) -> FallenOut:
     )
 
 
-def to_member(table: GameTable, member: TableMember) -> MemberOut:
+def to_member(table: GameTable, member: TableMember, catalog: dict[uuid.UUID, CatalogItem]) -> MemberOut:
     """앉은 사람 하나를 응답으로 바꾼다."""
     character = None
     if member.character_name is not None:
@@ -161,7 +186,7 @@ def to_member(table: GameTable, member: TableMember) -> MemberOut:
         pregen_index=member.pregen_index,
         roll=to_roll(sheets.find_roll(table, member.user_id)),
         abilities=member.abilities,
-        sheet=to_sheet(member.sheet),
+        sheet=to_sheet(member.sheet, catalog),
         fallen=[to_fallen(sheet) for sheet in member.fallen],
         joined_at=member.joined_at,
     )
@@ -217,6 +242,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
     viewer_id 는 보는 사람이다. 초대 코드는 방장에게만 싣는다.
     """
     snapshot = read_snapshot(table.content)
+    catalog = items.catalog(snapshot)
     return TableDetail(
         **to_summary(table).model_dump(),
         opening=snapshot.openings[table.opening_index],
@@ -228,7 +254,8 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         reroll_allowed=can_grant_rerolls(table, snapshot),
         recommended_narration_style=snapshot.narration_style,
         pregens=to_pregen_choices(table, snapshot),
-        members=[to_member(table, member) for member in table.members],
+        items=to_catalog(catalog),
+        members=[to_member(table, member, catalog) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
         started_at=table.started_at,
         ended_at=table.ended_at,
@@ -437,6 +464,40 @@ async def kick_member(
     """
     table = await service.kick_member(session, user.user_id, table_id, user_id)
     await round_service.close_when_ready(session, table_id, closer, dice)
+    return to_detail(table, user.user_id)
+
+
+@router.post('/{table_id}/members/{user_id}/items', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def grant_items(
+    table_id: uuid.UUID, user_id: uuid.UUID, data: ItemChange, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    방장이 그 사람의 지금 캐릭터에게 물건을 준다. 진행 중에만 된다. 판에 있는 물건(로어북의 물건 항목)만 된다.
+
+    AI 는 소지품을 바꾸지 못한다. 서술에서 무엇을 얻었으면 방장이 이것으로 옮긴다.
+    한 가지를 99 개까지 갖는다. 넘으면 409(too_many_items). 모두에게 이벤트(items_gained)가 간다.
+    """
+    table = await item_grants.grant_items(session, user.user_id, table_id, user_id, data.entry_id, data.count)
+    return to_detail(table, user.user_id)
+
+
+@router.delete(
+    '/{table_id}/members/{user_id}/items/{entry_id}', response_model=TableDetail, status_code=status.HTTP_200_OK
+)
+async def take_items(
+    table_id: uuid.UUID,
+    user_id: uuid.UUID,
+    entry_id: uuid.UUID,
+    user: CurrentUser,
+    session: Session,
+    count: Annotated[int, Query(ge=1, le=ITEM_STACK_MAX)] = 1,
+) -> TableDetail:
+    """
+    방장이 그 사람의 지금 캐릭터에게서 물건을 count 개(기본 하나) 빼앗는다. 진행 중에만 된다.
+
+    가진 것보다 많으면 409(not_enough_items). 모두에게 이벤트(items_lost)가 간다.
+    """
+    table = await item_grants.take_items(session, user.user_id, table_id, user_id, entry_id, count)
     return to_detail(table, user.user_id)
 
 

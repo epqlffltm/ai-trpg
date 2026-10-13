@@ -12,15 +12,17 @@ DB 를 모른다.
 import uuid
 
 from app.assets.models import NarrationStyle
+from app.assets.scenarios.snapshot import read_snapshot
 from app.engine.injury import find_injury
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.cast import CastMember, condition_of
 from app.rounds.models import Round
-from app.rounds.narrator import HealNote, InjuryNote, Move, PersonState
+from app.rounds.narrator import HealNote, InjuryNote, ItemNote, Move, PersonState
 from app.rounds.state import find_arrival, find_declaration, has_outcome, is_down, naming_of, rules_of
-from app.tables import injuries, sheets
+from app.tables import injuries, items, sheets
+from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 
 
@@ -59,6 +61,8 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
     wounded = any(member.sheet is not None and injuries.active(member.sheet.injuries) for member in table.members)
     needs_rules = wounded or bool(ended) or any(has_outcome(declaration) for declaration in declarations)
     ruleset = rules_of(table) if needs_rules else None
+    holding = any(member.sheet is not None and member.sheet.items for member in table.members)
+    catalog = items.catalog(read_snapshot(table.content)) if holding else {}
 
     moves = []
     for member, declaration in zip(table.members, declarations, strict=True):
@@ -77,9 +81,18 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
                 injuries=worn_notes(ruleset, member),
                 healed=healed_notes(ruleset, ended, member.user_id),
                 naming=narration_request.to_naming(naming_of(declaration)),
+                items=held_notes(catalog, member),
             )
         )
     return moves
+
+
+def held_notes(catalog: dict[uuid.UUID, CatalogItem], member: TableMember) -> list[ItemNote]:
+    """이 사람의 지금 캐릭터가 가진 물건들을 서술자에게 줄 모양으로. 판의 물건 순서다."""
+    if member.sheet is None:
+        return []
+    rows = items.in_catalog_order(member.sheet.items, catalog)
+    return [ItemNote(name=catalog[item.entry_id].name, count=item.count) for item in rows]
 
 
 def worn_notes(ruleset: Ruleset | None, member: TableMember) -> list[InjuryNote]:
