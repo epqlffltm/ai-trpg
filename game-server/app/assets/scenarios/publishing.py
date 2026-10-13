@@ -29,9 +29,10 @@ from app.assets.models import (
     World,
 )
 from app.assets.scenarios import repository
-from app.assets.scenarios.schemas import NpcSheet, VersionCreate
+from app.assets.scenarios.schemas import ItemRule, ItemStack, NpcSheet, Pregen, VersionCreate
 from app.assets.scenarios.snapshot import build_snapshot
 from app.assets.service import AssetNotFoundError
+from app.engine.health import find_magnitude
 from app.engine.ruleset import Ruleset
 from app.engine.sheet import Sheet, fits
 
@@ -69,6 +70,12 @@ class Problem(enum.StrEnum):
     DEFAULT_NPC_SHEET_MISSING = 'default_npc_sheet_missing'
     # 기본 NPC 시트가 룰북의 규칙에 맞지 않는다
     DEFAULT_NPC_SHEET_INVALID = 'default_npc_sheet_invalid'
+    # 붙인 로어북에 없는 항목을 가리키는 아이템 규칙이나 소지품(시작 소지품, 프리젠의 소지품)이 있다
+    ITEM_ENTRY_MISSING = 'item_entry_missing'
+    # 물건이 아닌 항목(인물, 장소 …)을 가리키는 아이템 규칙이나 소지품이 있다
+    ITEM_NOT_ITEM = 'item_not_item'
+    # 룰북의 규칙에 없는 등급을 회복의 양(heals)으로 적은 소모품이 있다
+    ITEM_MAGNITUDE_MISSING = 'item_magnitude_missing'
 
 
 class ScenarioNotReadyError(Exception):
@@ -245,6 +252,39 @@ def find_default_npc_sheet_problems(scenario: Scenario, parts: Parts, ruleset: R
     return []
 
 
+def read_item_rules(scenario: Scenario) -> list[ItemRule]:
+    """아이템 규칙들을 읽는다."""
+    return [ItemRule.model_validate(document) for document in scenario.items]
+
+
+def item_references(scenario: Scenario) -> list[uuid.UUID]:
+    """물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품."""
+    stacks = [ItemStack.model_validate(document) for document in scenario.starting_items]
+    for document in scenario.pregens:
+        stacks.extend(Pregen.model_validate(document).items)
+    return [rule.entry_id for rule in read_item_rules(scenario)] + [stack.entry_id for stack in stacks]
+
+
+def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    아이템 규칙과 소지품에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    가리키는 것은 붙인 로어북의 물건 항목이어야 한다. NPC 시트와 같은 까닭으로 굳히기 전에 여기서 막는다.
+    소모품의 회복의 양은 룰북의 등급이어야 한다. 룰북이 없으면 볼 수 없다(그때는 RULEBOOK_MISSING 이다).
+    """
+    entries = lore_entries(parts)
+    pointed = item_references(scenario)
+    problems = []
+    if any(entry_id not in entries for entry_id in pointed):
+        problems.append(Problem.ITEM_ENTRY_MISSING)
+    if any(entry_id in entries and entries[entry_id].kind != LoreKind.ITEM for entry_id in pointed):
+        problems.append(Problem.ITEM_NOT_ITEM)
+    heals = [rule.heals for rule in read_item_rules(scenario) if rule.heals is not None]
+    if ruleset and any(find_magnitude(ruleset, key) is None for key in heals):
+        problems.append(Problem.ITEM_MAGNITUDE_MISSING)
+    return problems
+
+
 def find_seating_problems(scenario: Scenario) -> list[Problem]:
     """
     허용한 방식으로 사람이 앉을 수 있는지 본다.
@@ -273,6 +313,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_score_roll_problems(scenario, ruleset))
     problems.extend(find_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_default_npc_sheet_problems(scenario, parts, ruleset))
+    problems.extend(find_item_problems(scenario, parts, ruleset))
     problems.extend(find_seating_problems(scenario))
     return problems
 

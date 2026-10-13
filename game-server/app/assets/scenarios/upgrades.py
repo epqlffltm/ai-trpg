@@ -287,6 +287,20 @@ def upgrade_from_15(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_16(document: dict) -> dict:
+    """
+    형식 16 의 문서를 형식 17 로 올린다.
+
+    그때는 아이템 규칙도 시작 소지품도 없었다. 모두 없는 것으로 읽는다. 물건 항목은 모두 장비다.
+    """
+    upgraded = dict(document)
+    upgraded['items'] = []
+    upgraded['starting_items'] = []
+    upgraded['pregens'] = [{**pregen, 'items': []} for pregen in document['pregens']]
+    upgraded['format'] = 17
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -305,4 +319,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     13: upgrade_from_13,
     14: upgrade_from_14,
     15: upgrade_from_15,
+    16: upgrade_from_16,
 }

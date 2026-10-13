@@ -23,20 +23,25 @@ from app.assets.models import (
     CHARACTER_NAME_MAX_LENGTH,
     DEFAULT_CHARACTER_MODES,
     DEFAULT_NARRATION_STYLE,
+    ITEM_STACK_MAX,
     PLAYER_MADE_HP_MAX,
+    SCENARIO_MAX_ITEM_RULES,
     SCENARIO_MAX_LOREBOOKS,
     SCENARIO_MAX_NPC_SHEETS,
     SCENARIO_MAX_OPENINGS,
     SCENARIO_MAX_PREGENS,
+    SCENARIO_MAX_STARTING_ITEMS,
     SCENARIO_OPENING_MAX_LENGTH,
     TABLE_MAX_PLAYERS,
     VERSION_NOTE_MAX_LENGTH,
     CharacterMode,
+    ItemKind,
     NarrationStyle,
     Rating,
 )
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
+from app.engine.ruleset import Key
 from app.engine.sheet import Sheet
 
 # 스타팅 하나. 공백이 아닌 글자가 하나는 있어야 한다. 빈 스타팅은 고를 수 없으니 받지 않는다.
@@ -76,6 +81,38 @@ class RecommendedPlayers(BaseModel):
         return self
 
 
+class ItemStack(BaseModel):
+    """
+    물건 몇 개. 붙인 로어북의 물건 항목 하나(entry_id)를 count 개다. 시작 소지품에 쓴다.
+
+    가리키는 항목이 붙인 로어북에 있는지, 물건인지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    count: int = Field(ge=1, le=ITEM_STACK_MAX)
+
+    @field_serializer('entry_id')
+    def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
+        """항목의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(entry_id)
+
+
+def reject_duplicate_stacks(stacks: list[ItemStack]) -> list[ItemStack]:
+    """같은 물건이 두 줄에 나뉘어 있으면 거부한다. 한 줄에 개수를 적는다."""
+    entry_ids = [stack.entry_id for stack in stacks]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 물건이 두 번 있습니다. 한 줄에 개수를 적습니다.')
+    return stacks
+
+
+# 시작 소지품. 시나리오의 것(모두가 받는다)과 프리젠 하나의 것이 같은 모양이다
+StartingItems = Annotated[
+    list[ItemStack], Field(max_length=SCENARIO_MAX_STARTING_ITEMS), AfterValidator(reject_duplicate_stacks)
+]
+
+
 CharacterName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHARACTER_NAME_MAX_LENGTH)
 ]
@@ -96,6 +133,8 @@ class Pregen(BaseModel):
     name: CharacterName
     description: CharacterDescription = ''
     sheet: Sheet | None = None
+    # 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품. 시나리오의 시작 소지품은 따로 받는다
+    items: StartingItems = []
 
 
 def reject_duplicate_names(pregens: list[Pregen]) -> list[Pregen]:
@@ -140,6 +179,44 @@ def reject_duplicate_entries(npc_sheets: list[NpcSheet]) -> list[NpcSheet]:
 NpcSheets = Annotated[
     list[NpcSheet], Field(max_length=SCENARIO_MAX_NPC_SHEETS), AfterValidator(reject_duplicate_entries)
 ]
+
+
+class ItemRule(BaseModel):
+    """
+    아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.
+
+    규칙이 없는 물건 항목은 장비(gear)다. 소모품만 회복의 양(heals)을 적을 수 있다.
+    heals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    kind: ItemKind
+    heals: Key | None = None
+
+    @model_validator(mode='after')
+    def heal_only_with_consumables(self) -> 'ItemRule':
+        """장비에는 회복의 양을 적지 않는다. 쓰지 않는 물건이다."""
+        if self.heals is not None and self.kind != ItemKind.CONSUMABLE:
+            raise ValueError('회복의 양(heals)은 소모품(consumable)에만 적습니다.')
+        return self
+
+    @field_serializer('entry_id')
+    def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
+        """항목의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(entry_id)
+
+
+def reject_duplicate_rules(rules: list[ItemRule]) -> list[ItemRule]:
+    """같은 물건의 규칙이 두 번 있으면 거부한다. 어느 규칙을 쓸지 정할 수 없다."""
+    entry_ids = [rule.entry_id for rule in rules]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 물건의 규칙이 두 번 있습니다.')
+    return rules
+
+
+ItemRules = Annotated[list[ItemRule], Field(max_length=SCENARIO_MAX_ITEM_RULES), AfterValidator(reject_duplicate_rules)]
 
 
 def in_fixed_order(modes: list[CharacterMode]) -> list[CharacterMode]:
@@ -199,6 +276,8 @@ class ScenarioCreate(AssetCreate):
     default_sheet: Sheet | None = None
     npc_sheets: NpcSheets = []
     default_npc_sheet: Sheet | None = None
+    items: ItemRules = []
+    starting_items: StartingItems = []
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
@@ -212,7 +291,8 @@ class ScenarioUpdate(AssetUpdate):
 
     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp 는 null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
-    lorebook_ids, openings, pregens, npc_sheets, character_modes 는 보낸 목록으로 통째로 바꾼다.
+    lorebook_ids, openings, pregens, npc_sheets, items, starting_items, character_modes 는
+    보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다.
     """
@@ -232,6 +312,8 @@ class ScenarioUpdate(AssetUpdate):
     default_sheet: Sheet | None = None
     npc_sheets: NpcSheets | None = None
     default_npc_sheet: Sheet | None = None
+    items: ItemRules | None = None
+    starting_items: StartingItems | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
@@ -264,6 +346,8 @@ class ScenarioDetail(ScenarioSummary):
     default_sheet: Sheet | None
     npc_sheets: list[NpcSheet]
     default_npc_sheet: Sheet | None
+    items: list[ItemRule]
+    starting_items: list[ItemStack]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle
