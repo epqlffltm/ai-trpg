@@ -29,7 +29,7 @@ from app.assets.models import (
     World,
 )
 from app.assets.scenarios import repository
-from app.assets.scenarios.schemas import ItemRule, ItemStack, NpcSheet, Pregen, VersionCreate
+from app.assets.scenarios.schemas import ItemRule, ItemStack, NpcSheet, Pregen, QuestRule, VersionCreate
 from app.assets.scenarios.snapshot import build_snapshot
 from app.assets.service import AssetNotFoundError
 from app.engine.health import find_magnitude
@@ -70,12 +70,16 @@ class Problem(enum.StrEnum):
     DEFAULT_NPC_SHEET_MISSING = 'default_npc_sheet_missing'
     # 기본 NPC 시트가 룰북의 규칙에 맞지 않는다
     DEFAULT_NPC_SHEET_INVALID = 'default_npc_sheet_invalid'
-    # 붙인 로어북에 없는 항목을 가리키는 아이템 규칙이나 소지품(시작 소지품, 프리젠의 소지품)이 있다
+    # 붙인 로어북에 없는 항목을 가리키는 아이템 규칙이나 소지품(시작 소지품, 프리젠의 소지품, 퀘스트의 보상)이 있다
     ITEM_ENTRY_MISSING = 'item_entry_missing'
     # 물건이 아닌 항목(인물, 장소 …)을 가리키는 아이템 규칙이나 소지품이 있다
     ITEM_NOT_ITEM = 'item_not_item'
     # 룰북의 규칙에 없는 등급을 회복의 양(heals)으로 적은 소모품이 있다
     ITEM_MAGNITUDE_MISSING = 'item_magnitude_missing'
+    # 붙인 로어북에 없는 항목을 가리키는 퀘스트 규칙이 있다
+    QUEST_ENTRY_MISSING = 'quest_entry_missing'
+    # 사건이 아닌 항목(인물, 물건 …)을 가리키는 퀘스트 규칙이 있다
+    QUEST_NOT_EVENT = 'quest_not_event'
 
 
 class ScenarioNotReadyError(Exception):
@@ -257,11 +261,18 @@ def read_item_rules(scenario: Scenario) -> list[ItemRule]:
     return [ItemRule.model_validate(document) for document in scenario.items]
 
 
+def read_quest_rules(scenario: Scenario) -> list[QuestRule]:
+    """퀘스트 규칙들을 읽는다."""
+    return [QuestRule.model_validate(document) for document in scenario.quests]
+
+
 def item_references(scenario: Scenario) -> list[uuid.UUID]:
-    """물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품."""
+    """물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품, 퀘스트마다의 보상."""
     stacks = [ItemStack.model_validate(document) for document in scenario.starting_items]
     for document in scenario.pregens:
         stacks.extend(Pregen.model_validate(document).items)
+    for quest in read_quest_rules(scenario):
+        stacks.extend(quest.reward)
     return [rule.entry_id for rule in read_item_rules(scenario)] + [stack.entry_id for stack in stacks]
 
 
@@ -282,6 +293,23 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
     heals = [rule.heals for rule in read_item_rules(scenario) if rule.heals is not None]
     if ruleset and any(find_magnitude(ruleset, key) is None for key in heals):
         problems.append(Problem.ITEM_MAGNITUDE_MISSING)
+    return problems
+
+
+def find_quest_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """
+    퀘스트 규칙에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    가리키는 것은 붙인 로어북의 사건 항목이어야 한다. 아이템 규칙과 같은 까닭으로 굳히기 전에 여기서 막는다.
+    보상의 물건은 아이템과 함께 본다(find_item_problems).
+    """
+    entries = lore_entries(parts)
+    pointed = [rule.entry_id for rule in read_quest_rules(scenario)]
+    problems = []
+    if any(entry_id not in entries for entry_id in pointed):
+        problems.append(Problem.QUEST_ENTRY_MISSING)
+    if any(entry_id in entries and entries[entry_id].kind != LoreKind.EVENT for entry_id in pointed):
+        problems.append(Problem.QUEST_NOT_EVENT)
     return problems
 
 
@@ -314,6 +342,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_default_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_item_problems(scenario, parts, ruleset))
+    problems.extend(find_quest_problems(scenario, parts))
     problems.extend(find_seating_problems(scenario))
     return problems
 

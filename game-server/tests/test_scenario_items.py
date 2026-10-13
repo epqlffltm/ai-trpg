@@ -165,7 +165,7 @@ async def test_items_are_frozen_into_the_version(client: AsyncClient, me: dict[s
 
     snapshot = await published(client, me, scenario)
 
-    assert snapshot['format'] == SNAPSHOT_FORMAT == 17
+    assert snapshot['format'] == SNAPSHOT_FORMAT
     assert snapshot['items'] == [{'entry_id': lore['potion']['id'], 'kind': 'consumable', 'heals': 'light'}]
     assert snapshot['starting_items'] == [stack(lore['rope'], 3)]
     assert snapshot['pregens'][0]['items'] == [stack(lore['potion'], 2)]

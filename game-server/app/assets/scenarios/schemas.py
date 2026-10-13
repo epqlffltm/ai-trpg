@@ -30,6 +30,7 @@ from app.assets.models import (
     SCENARIO_MAX_NPC_SHEETS,
     SCENARIO_MAX_OPENINGS,
     SCENARIO_MAX_PREGENS,
+    SCENARIO_MAX_QUEST_RULES,
     SCENARIO_MAX_STARTING_ITEMS,
     SCENARIO_OPENING_MAX_LENGTH,
     TABLE_MAX_PLAYERS,
@@ -37,6 +38,7 @@ from app.assets.models import (
     CharacterMode,
     ItemKind,
     NarrationStyle,
+    QuestStart,
     Rating,
 )
 from app.assets.scenarios.snapshot import Snapshot
@@ -219,6 +221,41 @@ def reject_duplicate_rules(rules: list[ItemRule]) -> list[ItemRule]:
 ItemRules = Annotated[list[ItemRule], Field(max_length=SCENARIO_MAX_ITEM_RULES), AfterValidator(reject_duplicate_rules)]
 
 
+class QuestRule(BaseModel):
+    """
+    퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.
+
+    start 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.
+    규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상이 없다.
+    가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    start: QuestStart = QuestStart.HIDDEN
+    # 시작 소지품과 모양이 같다. 같은 물건은 한 줄에 개수로 적는다
+    reward: StartingItems = []
+
+    @field_serializer('entry_id')
+    def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
+        """항목의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(entry_id)
+
+
+def reject_duplicate_quests(rules: list[QuestRule]) -> list[QuestRule]:
+    """같은 사건의 규칙이 두 번 있으면 거부한다. 어느 규칙을 쓸지 정할 수 없다."""
+    entry_ids = [rule.entry_id for rule in rules]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 사건의 퀘스트 규칙이 두 번 있습니다.')
+    return rules
+
+
+QuestRules = Annotated[
+    list[QuestRule], Field(max_length=SCENARIO_MAX_QUEST_RULES), AfterValidator(reject_duplicate_quests)
+]
+
+
 def in_fixed_order(modes: list[CharacterMode]) -> list[CharacterMode]:
     """
     방식의 목록을 정해진 순서로 놓는다. 같은 것이 두 번 있으면 거부한다.
@@ -278,6 +315,7 @@ class ScenarioCreate(AssetCreate):
     default_npc_sheet: Sheet | None = None
     items: ItemRules = []
     starting_items: StartingItems = []
+    quests: QuestRules = []
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
@@ -291,7 +329,7 @@ class ScenarioUpdate(AssetUpdate):
 
     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp 는 null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
-    lorebook_ids, openings, pregens, npc_sheets, items, starting_items, character_modes 는
+    lorebook_ids, openings, pregens, npc_sheets, items, starting_items, quests, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다.
@@ -314,6 +352,7 @@ class ScenarioUpdate(AssetUpdate):
     default_npc_sheet: Sheet | None = None
     items: ItemRules | None = None
     starting_items: StartingItems | None = None
+    quests: QuestRules | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
@@ -348,6 +387,7 @@ class ScenarioDetail(ScenarioSummary):
     default_npc_sheet: Sheet | None
     items: list[ItemRule]
     starting_items: list[ItemStack]
+    quests: list[QuestRule]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle
