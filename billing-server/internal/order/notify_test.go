@@ -147,3 +147,80 @@ func TestANotificationWhileTheProviderStillDoesNotKnowChangesNothing(t *testing.
 	f.wantStatus(created.ID, order.StatusConfirming)
 	f.wantPaidCredits(0, 0)
 }
+
+// unansweredRefund 는 청약철회를 요청했지만 취소의 답을 받지 못한 주문을 만든다. 결제 번호도 함께 돌려준다.
+func (f fixture) unansweredRefund() (order.Order, string) {
+	f.t.Helper()
+	paid := f.paid()
+	f.provider.answerCancel(payment.Result{}, payment.ErrUnknownOutcome)
+	if refunding, err := f.refund(paid.ID); err != nil || refunding.Status != order.StatusRefunding {
+		f.t.Fatalf("주문이 refunding 에 남지 않았다: %+v, %v", refunding, err)
+	}
+	return paid, paid.PaymentKey
+}
+
+func TestANotificationFinishesAnUnansweredRefund(t *testing.T) {
+	f := setUp(t, approving())
+	paid, paymentKey := f.unansweredRefund()
+	f.provider.answerCancel(payment.Result{Status: payment.StatusCanceled}, nil)
+
+	err := f.service.Notify(ctx(t), paid.ID, paymentKey)
+
+	if err != nil {
+		t.Fatalf("알림을 처리하지 못했다: %v", err)
+	}
+	f.wantStatus(paid.ID, order.StatusRefunded)
+	f.wantPaidCredits(0, 1)
+	// 결과를 묻지 않고 같은 취소를 다시 보냈다
+	if f.provider.cancelCalls() != 2 {
+		t.Errorf("취소를 %d 번 요청했다. 기대 = 2 번", f.provider.cancelCalls())
+	}
+	if _, lookups := f.provider.calls(); lookups != 0 {
+		t.Errorf("조회가 %d 번 갔다", lookups)
+	}
+}
+
+func TestANotificationOfARefusedRefundRestoresTheOrder(t *testing.T) {
+	f := setUp(t, approving())
+	paid, paymentKey := f.unansweredRefund()
+	f.provider.answerCancel(payment.Result{Status: payment.StatusDeclined, Code: "NOT_CANCELABLE_PAYMENT"}, nil)
+
+	// 거절되어 되돌린 것도 알림을 잘 처리한 것이다. 결제 대행사가 다시 보낼 까닭이 없다
+	if err := f.service.Notify(ctx(t), paid.ID, paymentKey); err != nil {
+		t.Fatalf("오류 = %v", err)
+	}
+
+	f.wantStatus(paid.ID, order.StatusPaid)
+	f.wantPaidCredits(credits, 1)
+	f.wantReasons("deposit", "refund", "unrefund")
+}
+
+func TestAStillUnansweredRefundAsksForTheNotificationAgain(t *testing.T) {
+	f := setUp(t, approving())
+	paid, paymentKey := f.unansweredRefund()
+
+	err := f.service.Notify(ctx(t), paid.ID, paymentKey)
+
+	// 결제 대행사가 알림을 다시 보내게 오류로 알린다. 주문은 그대로 refunding 이다
+	if !errors.Is(err, payment.ErrUnknownOutcome) {
+		t.Errorf("오류 = %v. 결제 대행사의 답을 받지 못했다는 오류여야 한다", err)
+	}
+	f.wantStatus(paid.ID, order.StatusRefunding)
+	f.wantPaidCredits(0, 1)
+}
+
+func TestARefundNotificationForAnotherPaymentIsIgnored(t *testing.T) {
+	f := setUp(t, approving())
+	paid, _ := f.unansweredRefund()
+	f.provider.answerCancel(payment.Result{Status: payment.StatusCanceled}, nil)
+
+	err := f.service.Notify(ctx(t), paid.ID, newPaymentKey())
+
+	if err != nil {
+		t.Errorf("오류 = %v", err)
+	}
+	f.wantStatus(paid.ID, order.StatusRefunding)
+	if f.provider.cancelCalls() != 1 {
+		t.Errorf("취소를 %d 번 요청했다. 결제 번호가 다른 알림으로 다시 보내면 안 된다", f.provider.cancelCalls())
+	}
+}

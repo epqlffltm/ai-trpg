@@ -314,6 +314,12 @@ func (s Settings) Rules() Rules {
 	return Rules{SpendFreeFirst: s.SpendFreeFirst, FreeCreditTTL: s.FreeCreditTTL, HoldTTL: s.HoldTTL, OrderTTL: s.OrderTTL}
 }
 
+// ReceivesTossNotifications 는 토스페이먼츠의 알림(웹훅)을 받는지다. 토스페이먼츠를 꽂았을 때만 받는다.
+// 가짜를 꽂은 서버에 서명 없는 알림 주소를 열 까닭이 없다.
+func (s Settings) ReceivesTossNotifications() bool {
+	return s.Payment.Provider == ProviderToss
+}
+
 // CheckoutClientKey 는 개발용 결제 화면에 실을 토스페이먼츠의 클라이언트 키다.
 // 개발 모드(DEBUG)에서 토스페이먼츠를 꽂았을 때만 있다. 빈 글자면 그 화면을 열지 않는다.
 func (s Settings) CheckoutClientKey() string {
