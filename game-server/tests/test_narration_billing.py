@@ -33,7 +33,7 @@ from app.billing.client import HoldOutcome, HoldResult
 from app.billing.models import NarrationCharge
 from app.billing.settler import ChargeSettler
 from app.main import create_app
-from app.rounds import closing
+from app.rounds import closing, opener
 from app.rounds.closing import ChargeNotSecured, failure_reason
 from app.rounds.models import Round
 from tests.billing import FakeBillingServer
@@ -925,6 +925,26 @@ async def test_without_a_billing_server_the_charges_still_move(
 
     # 받지 않는 것(FreeBilling)이 꽂혀 있다. 길은 같고 받는 일만 하지 않는다
     assert await statuses_of(session, table) == ['captured', 'pending']
+
+
+async def test_a_new_charge_is_due_by_the_app_clock_even_when_the_database_clock_is_ahead(
+    client: AsyncClient,
+    app: FastAPI,
+    session: AsyncSession,
+    me: dict,
+    friend: dict,
+    billing: FakeBillingServer,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # 앱의 시계가 DB 의 시계보다 한 시간 늦은 환경이다(WSL2 의 Docker 처럼 시계가 어긋난 곳).
+    # 정리 작업은 앱의 시계로 고르므로 처음 부를 시각도 앱의 시계여야 곧바로 건다
+    behind = datetime.now(UTC) - timedelta(hours=1)
+    monkeypatch.setattr(opener, 'now_utc', lambda: behind)
+    table = await start_duo(client, me, friend)
+
+    await tick(app, behind)
+
+    assert await statuses_of(session, table) == ['held']
 
 
 # --- 정리 작업 ---
