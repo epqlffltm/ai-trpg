@@ -175,7 +175,24 @@ func wantFlagged(t *testing.T, report reconcile.Report, check string, id string)
 	}
 }
 
-// wantNotFlagged 는 이 테스트의 줄들이 어느 검사에도 걸리지 않았는지 본다.
+// lotChecks 와 grantChecks 는 번호가 산 크레딧의 묶음, 지급 묶음의 번호인 검사들이다.
+// 숫자 번호는 표마다 따로 매겨져서, 다른 검사(원장의 줄 번호)의 번호와 같을 수 있다. 그래서 그 검사들에서만 찾는다.
+var (
+	lotChecks   = []string{reconcile.CheckPaidLotRemaining, reconcile.CheckLotRefund}
+	grantChecks = []string{reconcile.CheckGrantRemaining}
+)
+
+// wantNotFlaggedIn 은 그 검사들이 ids 를 찾지 않았는지 본다. 숫자 번호(묶음)를 볼 때 쓴다.
+func wantNotFlaggedIn(t *testing.T, report reconcile.Report, checks []string, ids ...string) {
+	t.Helper()
+	for _, m := range report.Mismatches {
+		if slices.Contains(checks, m.Check) && slices.Contains(ids, m.ID) {
+			t.Errorf("맞는 줄이 %s 검사에 걸렸다: %s", m.Check, m.ID)
+		}
+	}
+}
+
+// wantNotFlagged 는 이 테스트의 줄들이 어느 검사에도 걸리지 않았는지 본다. UUID 번호(사용자, 주문, 홀드)를 볼 때 쓴다.
 func wantNotFlagged(t *testing.T, report reconcile.Report, ids ...string) {
 	t.Helper()
 	for _, m := range report.Mismatches {
@@ -212,8 +229,9 @@ func TestBooksKeptByTheServicesAreClean(t *testing.T) {
 
 	report := f.run()
 
-	ids := append([]string{f.user.String(), paid.ID.String(), captured.ID.String(), released.ID.String(), expired.ID.String()}, f.grantIDs()...)
-	wantNotFlagged(t, report, append(ids, f.lotIDs()...)...)
+	wantNotFlagged(t, report, f.user.String(), paid.ID.String(), captured.ID.String(), released.ID.String(), expired.ID.String())
+	wantNotFlaggedIn(t, report, grantChecks, f.grantIDs()...)
+	wantNotFlaggedIn(t, report, lotChecks, f.lotIDs()...)
 }
 
 func TestRefundsKeptByTheServicesAreClean(t *testing.T) {
@@ -234,7 +252,8 @@ func TestRefundsKeptByTheServicesAreClean(t *testing.T) {
 	report := f.run()
 
 	ids := []string{f.user.String(), refunded.ID.String(), refused.ID.String(), unsure.ID.String(), kept.ID.String()}
-	wantNotFlagged(t, report, append(ids, f.lotIDs()...)...)
+	wantNotFlagged(t, report, ids...)
+	wantNotFlaggedIn(t, report, lotChecks, f.lotIDs()...)
 }
 
 func TestRefundLinesThatDoNotMatchTheOrderAreFound(t *testing.T) {
@@ -446,7 +465,74 @@ func TestStaleRefundsAreResolved(t *testing.T) {
 	if err != nil || got.Status != order.StatusRefunded {
 		t.Errorf("주문 = %+v, %v. refunded 여야 한다", got, err)
 	}
-	wantNotFlagged(t, report, append([]string{paid.ID.String(), f.user.String()}, f.lotIDs()...)...)
+	wantNotFlagged(t, report, paid.ID.String(), f.user.String())
+	wantNotFlaggedIn(t, report, lotChecks, f.lotIDs()...)
+}
+
+func TestOrdersStillUnknownAfterADayAreForAPerson(t *testing.T) {
+	f := setUp(t)
+	// 결제 대행사도 결과를 모르는 승인, 답이 오지 않는 취소
+	created, _, err := f.services.Orders.Create(ctx(t), f.user, "credits-1000", "key-"+uuid.NewString())
+	if err != nil {
+		t.Fatalf("주문을 만들지 못했다: %v", err)
+	}
+	confirming, err := f.services.Orders.Confirm(ctx(t), f.user, created.ID, payment.FakeLost+uuid.NewString())
+	if err != nil || confirming.Status != order.StatusConfirming {
+		t.Fatalf("주문 = %+v, %v", confirming, err)
+	}
+	paid := f.buyWith(payment.FakeCancelLost)
+	if refunding, err := f.services.Orders.Refund(ctx(t), f.user, paid.ID); err != nil || refunding.Status != order.StatusRefunding {
+		t.Fatalf("주문 = %+v, %v", refunding, err)
+	}
+
+	*f.elapsed = order.StuckAfter - time.Minute
+	early := f.run()
+	*f.elapsed = order.StuckAfter
+	late := f.run()
+
+	if stuckIn(early, created.ID) || stuckIn(early, paid.ID) {
+		t.Error("하루가 되기 전인데 사람이 볼 주문으로 셌다")
+	}
+	if !stuckIn(late, created.ID) || !stuckIn(late, paid.ID) || !late.NeedsPerson() {
+		t.Errorf("하루가 지났는데 사람이 볼 주문으로 세지 않았다: %d 개", len(late.Stuck))
+	}
+	// 장부는 맞다. 결과를 모르는 것은 장부가 틀린 것이 아니다
+	wantNotFlagged(t, late, f.user.String(), created.ID.String(), paid.ID.String())
+	wantNotFlaggedIn(t, late, lotChecks, f.lotIDs()...)
+}
+
+func TestAnOrderTheReconcileFinishesIsNotForAPerson(t *testing.T) {
+	f := setUp(t)
+	// 하루 동안 아무도 묻지 않았다. 결제 대행사는 승인했다. 대사가 먼저 조회해 끝내므로 사람이 볼 주문이 아니다
+	created, _, err := f.services.Orders.Create(ctx(t), f.user, "credits-1000", "key-"+uuid.NewString())
+	if err != nil {
+		t.Fatalf("주문을 만들지 못했다: %v", err)
+	}
+	unsure, err := f.services.Orders.Confirm(ctx(t), f.user, created.ID, payment.FakeTimeoutApproved+uuid.NewString())
+	if err != nil || unsure.Status != order.StatusConfirming {
+		t.Fatalf("주문 = %+v, %v", unsure, err)
+	}
+	*f.elapsed = order.StuckAfter
+
+	report := f.run()
+
+	if stuckIn(report, created.ID) {
+		t.Error("대사가 끝낸 주문을 사람이 볼 주문으로 셌다")
+	}
+	got, err := f.services.Orders.Get(ctx(t), f.user, created.ID)
+	if err != nil || got.Status != order.StatusPaid {
+		t.Errorf("주문 = %+v, %v. paid 여야 한다", got, err)
+	}
+}
+
+// stuckIn 은 대사가 그 주문을 사람이 볼 주문으로 셌는지 본다.
+func stuckIn(report reconcile.Report, id uuid.UUID) bool {
+	for _, o := range report.Stuck {
+		if o.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func TestOverdueWorkIsCountedOnlyAfterTheGrace(t *testing.T) {
@@ -473,8 +559,33 @@ func TestOverdueWorkIsCountedOnlyAfterTheGrace(t *testing.T) {
 // failingResolver 는 늘 실패하는 주문 대사다.
 type failingResolver struct{}
 
+func (failingResolver) ListStuck(context.Context, time.Duration, int) ([]order.Order, error) {
+	return nil, nil
+}
+
 func (failingResolver) ResolveStale(context.Context, time.Duration, int) (order.StaleReport, error) {
 	return order.StaleReport{}, errors.New("provider unreachable")
+}
+
+// stuckFailing 은 주문을 끝내는 것은 진짜로 하고, 사람이 볼 주문을 찾을 때만 실패한다.
+type stuckFailing struct {
+	reconcile.OrderResolver
+}
+
+func (stuckFailing) ListStuck(context.Context, time.Duration, int) ([]order.Order, error) {
+	return nil, errors.New("결과를 모르는 주문을 읽지 못했다")
+}
+
+func TestChecksRunEvenWhenListingStuckOrdersFails(t *testing.T) {
+	f := setUp(t)
+	f.exec(`INSERT INTO wallets (user_id, paid_balance, created_at, updated_at) VALUES ($1, 5, $2, $2)`, f.user, f.now())
+
+	report, err := reconcile.New(f.pool, stuckFailing{f.services.Orders}, f.now).Run(ctx(t), reconcile.Options{StaleAfter: staleAfter, Limit: everything})
+
+	if err == nil {
+		t.Error("사람이 볼 주문을 찾지 못한 것을 알려야 한다")
+	}
+	wantFlagged(t, report, reconcile.CheckPaidBalance, f.user.String())
 }
 
 func TestChecksRunEvenWhenResolvingFails(t *testing.T) {

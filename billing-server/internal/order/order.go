@@ -118,6 +118,8 @@ type Order struct {
 	// FailureCode 는 거절된 이유다. failed 일 때만 있다.
 	FailureCode string
 	CreatedAt   time.Time
+	// UpdatedAt 은 상태가 마지막으로 바뀐 시각이다. confirming·refunding 이면 그 상태가 된 시각이다.
+	UpdatedAt time.Time
 	// ExpiresAt 은 만료 시각이다. 이때까지 승인을 요청하지 않으면 치를 수 없다.
 	ExpiresAt time.Time
 	// PaidAt 은 치른 시각이다. paid, refunding, refunded 일 때 있다.

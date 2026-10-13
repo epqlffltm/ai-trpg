@@ -86,6 +86,7 @@ func toOrder(row orderdb.Order) Order {
 		PaymentKey:  row.PaymentKey.String,
 		FailureCode: row.FailureCode.String,
 		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
 		ExpiresAt:   row.ExpiresAt,
 	}
 	if row.PaidAt.Valid {
