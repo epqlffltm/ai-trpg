@@ -125,7 +125,7 @@ async def test_a_new_stream_gets_what_is_already_there(client: AsyncClient, me: 
     frames = await reader.take(3)
     assert kinds(frames) == ['table_created', 'member_joined', 'chat_message']
     # id 는 "여기까지 받았다"다. 이벤트 번호와 채팅 번호를 함께 적는다
-    assert [frame.id for frame in frames] == ['1-0', '2-0', '2-1']
+    assert [frame.id for frame in frames] == ['1-0-0', '2-0-0', '2-1-0']
     assert json.loads(frames[2].data)['content'] == HELLO
     assert await reader.is_quiet()
 
@@ -139,7 +139,7 @@ async def test_a_new_chat_message_arrives_at_once(client: AsyncClient, me: dict,
 
     # 스트림이 스스로 깨어나는 것은 60 초 뒤다. 그 전에 왔으니 신호를 받아서 온 것이다
     frame = await reader.next()
-    assert (frame.event, frame.id) == ('chat_message', '2-1')
+    assert (frame.event, frame.id) == ('chat_message', '2-1-0')
     message = json.loads(frame.data)
     assert (message['sequence'], message['user_id'], message['content']) == (1, str(ME), HELLO)
 
@@ -153,7 +153,7 @@ async def test_new_events_arrive_at_once_in_order(client: AsyncClient, me: dict,
 
     frames = await reader.take(3)
     assert kinds(frames) == ['table_started', 'gm_narration', 'round_opened']
-    assert [frame.id for frame in frames] == ['3-0', '4-0', '5-0']
+    assert [frame.id for frame in frames] == ['3-0-0', '4-0-0', '5-0-0']
     assert json.loads(frames[1].data)['payload'] == {'text': OPENINGS[0]}
 
 
@@ -166,8 +166,8 @@ async def test_everyone_at_the_table_gets_it(client: AsyncClient, me: dict, frie
     await say(client, me, table, HELLO)
 
     # 쓴 사람에게도 온다. 화면은 번호를 보고 이미 띄운 글인지 안다
-    assert (await mine.next()).id == '2-1'
-    assert (await friends.next()).id == '2-1'
+    assert (await mine.next()).id == '2-1-0'
+    assert (await friends.next()).id == '2-1-0'
 
 
 async def test_another_table_does_not_wake_this_one(client: AsyncClient, me: dict, friend: dict, connect):
@@ -293,7 +293,7 @@ async def test_the_stream_catches_up_by_itself_when_signals_are_lost(
 
     # 깨어날 때마다 주석을 보내고 DB 를 직접 읽는다. 신호 없이도 새 글이 온다
     assert await reader.next_comment() == 'ping'
-    assert (await reader.next()).id == '2-1'
+    assert (await reader.next()).id == '2-1-0'
 
 
 async def test_what_a_lost_signal_missed_arrives_on_the_beat_even_while_other_signals_keep_coming(
@@ -319,7 +319,7 @@ async def test_what_a_lost_signal_missed_arrives_on_the_beat_even_while_other_si
     assert await reader.next_comment() == 'ping'
     arrived = await reader.take(2)
     assert [frame.event for frame in arrived] == [service.TYPING_FRAME, service.MESSAGE_FRAME]
-    assert arrived[1].id == '2-1'
+    assert arrived[1].id == '2-1-0'
 
 
 async def test_signals_before_the_beat_do_not_read_everything(
@@ -362,7 +362,7 @@ async def test_a_stream_that_cannot_hear_signals_reads_more_often(client: AsyncC
     await say(client, me, table, HELLO)
 
     assert await reader.next_comment() == 'ping'
-    assert (await reader.next()).id == '2-1'
+    assert (await reader.next()).id == '2-1-0'
 
 
 # 닫혀 있는 포트. 듣는 연결이 거절된다. 주소의 비밀번호가 로그에 남지 않는지 본다
@@ -403,7 +403,7 @@ async def test_a_stream_survives_failing_to_listen(
     assert await reader.next_comment() == 'connected'
     await say(client, me, table, HELLO)
     assert await reader.next_comment() == 'ping'
-    assert (await reader.next()).id == '2-1'
+    assert (await reader.next()).id == '2-1-0'
 
 
 async def test_the_text_of_a_listening_failure_is_not_logged(
@@ -520,7 +520,7 @@ async def test_coming_back_picks_up_where_it_left_off(client: AsyncClient, me: d
     await say(client, me, table, '첫 글')
     first = connect(table, FRIEND)
     last = (await first.take(3))[-1]
-    assert last.id == '2-1'
+    assert last.id == '2-1-0'
 
     # 끊긴 사이에 채팅 하나와 이벤트 셋이 생긴다
     await first.close()
@@ -528,13 +528,13 @@ async def test_coming_back_picks_up_where_it_left_off(client: AsyncClient, me: d
     await start(client, me, friend, table)
 
     # 마지막으로 받은 id 를 들고 다시 붙는다
-    events, messages = (int(number) for number in last.id.split('-'))
-    again = connect(table, FRIEND, Cursor(events=events, messages=messages))
+    events, messages, whispers = (int(number) for number in last.id.split('-'))
+    again = connect(table, FRIEND, Cursor(events=events, messages=messages, whispers=whispers))
 
     frames = await again.take(4)
     # 못 본 것만 온다. 이미 받은 것이 다시 오지 않는다
     assert kinds(frames) == ['table_started', 'gm_narration', 'round_opened', 'chat_message']
-    assert frames[-1].id == '5-2'
+    assert frames[-1].id == '5-2-0'
     assert await again.is_quiet()
 
 
@@ -550,7 +550,7 @@ async def test_a_long_backlog_is_read_in_batches(
     reader = connect(table, FRIEND, Cursor(events=2))
 
     frames = await reader.take(5)
-    assert [frame.id for frame in frames] == ['2-1', '2-2', '2-3', '2-4', '2-5']
+    assert [frame.id for frame in frames] == ['2-1-0', '2-2-0', '2-3-0', '2-4-0', '2-5-0']
 
 
 # --- 서버가 닫는다 ---

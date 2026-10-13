@@ -58,6 +58,10 @@ class EventType(enum.StrEnum):
     NARRATION_TIER_CHANGED = 'narration_tier_changed'
     # 방장이 크레딧이 모자란 사람을 기다리는 규칙(시간, 자동으로 빼기)을 바꿨다
     CREDIT_WAIT_CHANGED = 'credit_wait_changed'
+    # 방장이 쪽지를 보낸 사실을 알릴지(whisper_notice)를 바꿨다. 바꾼 뒤에 보내는 쪽지부터 따른다
+    WHISPER_NOTICE_CHANGED = 'whisper_notice_changed'
+    # 누가 누구에게 쪽지를 보냈다. 테이블이 알리기로 했을 때만 적는다. 쪽지의 글은 싣지 않는다(app/whispers/)
+    WHISPER_SENT = 'whisper_sent'
 
     # --- 진행 ---
     # 방장이 테이블을 시작했다

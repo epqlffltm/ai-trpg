@@ -158,7 +158,7 @@ async def test_typing_comes_before_the_message_that_follows(client: AsyncClient,
     # 받는 쪽은 그 사람의 채팅이 오면 입력 중 표시를 지운다. 순서가 뒤집히면 지운 표시가 다시 뜬다
     typing, message = await reader.take(2)
     assert (typing.event, message.event) == ('typing', 'chat_message')
-    assert message.id == '2-1'
+    assert message.id == '2-1-0'
 
 
 # --- 저장하지 않는다 ---

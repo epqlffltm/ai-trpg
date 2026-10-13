@@ -333,22 +333,35 @@ def test_a_comment_starts_with_a_colon():
 # --- 어디까지 받았는가 ---
 
 
-def test_the_cursor_marks_both_numbers():
-    assert Cursor(events=17, messages=5).mark() == '17-5'
+def test_the_cursor_marks_all_three_numbers():
+    assert Cursor(events=17, messages=5, whispers=3).mark() == '17-5-3'
 
 
 def test_reads_the_cursor_from_the_address_when_there_is_no_header():
-    assert read_cursor(None, events_after=17, messages_after=5) == Cursor(events=17, messages=5)
+    cursor = read_cursor(None, events_after=17, messages_after=5, whispers_after=3)
+
+    assert cursor == Cursor(events=17, messages=5, whispers=3)
 
 
 def test_the_header_wins_over_the_address():
     # 다시 붙는 쪽은 처음 붙을 때의 주소를 그대로 쓴다. 머리말이 더 새로운 값이다
-    assert read_cursor('20-9', events_after=17, messages_after=5) == Cursor(events=20, messages=9)
+    cursor = read_cursor('20-9-4', events_after=17, messages_after=5, whispers_after=3)
+
+    assert cursor == Cursor(events=20, messages=9, whispers=4)
 
 
-@pytest.mark.parametrize('mark', ['', '17', '17-', '-5', '17-5-1', 'a-b', '17 - 5', '-1-5', '99999999999-1'])
+def test_a_mark_from_before_whispers_starts_whispers_from_the_beginning():
+    # 쪽지가 생기기 전에 받은 id 로 다시 붙는 쪽이다. 쪽지함은 처음부터 보낸다
+    cursor = read_cursor('20-9', events_after=17, messages_after=5, whispers_after=3)
+
+    assert cursor == Cursor(events=20, messages=9, whispers=0)
+
+
+@pytest.mark.parametrize(
+    'mark', ['', '17', '17-', '-5', '17-5-', '17-5-1-2', 'a-b', '17-5-c', '17 - 5', '-1-5', '99999999999-1']
+)
 def test_rejects_a_header_that_is_not_a_mark(mark: str):
     with pytest.raises(HTTPException) as raised:
-        read_cursor(mark, events_after=0, messages_after=0)
+        read_cursor(mark, events_after=0, messages_after=0, whispers_after=0)
 
     assert raised.value.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

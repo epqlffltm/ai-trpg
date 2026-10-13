@@ -79,6 +79,8 @@ class TableCreate(BaseModel):
     # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 빼고 서술하는가. 만든 뒤에도 방장이 바꿀 수 있다
     credit_wait_seconds: CreditWait = DEFAULT_CREDIT_WAIT
     remove_short_payers: bool = True
+    # 쪽지를 보낸 사실을 모두에게 알리는가. 적지 않으면 알리지 않는다. 만든 뒤에도 방장이 바꿀 수 있다
+    whisper_notice: bool = False
 
     @model_validator(mode='after')
     def require_public_for_password(self) -> 'TableCreate':
@@ -191,6 +193,14 @@ class CreditWaitUpdate(BaseModel):
 
     credit_wait_seconds: CreditWait
     remove_short_payers: bool
+
+
+class WhisperNoticeUpdate(BaseModel):
+    """쪽지를 보낸 사실을 알릴지 바꿀 때 받는 값. 칸을 빼먹으면 거부한다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    whisper_notice: bool
 
 
 class NarrationTierUpdate(BaseModel):
@@ -342,6 +352,8 @@ class TableSummary(BaseModel):
     # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 자리에서 빼는가. 들어가기 전에 안다
     credit_wait_seconds: int
     remove_short_payers: bool
+    # 쪽지를 보낸 사실을 모두에게 알리는가. 들어가기 전에 안다
+    whisper_notice: bool
     created_at: datetime
 
 
