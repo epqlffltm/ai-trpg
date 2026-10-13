@@ -20,6 +20,8 @@ const (
 	FakeTimeoutDeclined = "fake_timeout_declined_"
 	// FakeLost 로 시작하면 승인 요청의 답이 오지 않고, 조회해도 결제 대행사가 아직 결과를 모른다.
 	FakeLost = "fake_lost_"
+	// FakeDeposit 으로 시작하면 가상계좌가 발급되어 입금을 기다린다(승인과 조회 모두). 취소는 된다.
+	FakeDeposit = "fake_deposit_"
 )
 
 // 가짜 결제 대행사가 알아듣는 취소의 표시. 결제 번호의 어디에 들어 있어도 된다(fake_ok_cancel_refused_1 처럼).
@@ -92,6 +94,8 @@ func outcome(paymentKey string) Result {
 		return Result{Status: StatusDeclined, Code: FakeCodeDeclined}
 	case strings.HasPrefix(paymentKey, FakeLost):
 		return Result{Status: StatusPending}
+	case strings.HasPrefix(paymentKey, FakeDeposit):
+		return Result{Status: StatusAwaitingDeposit}
 	default:
 		return Result{Status: StatusDeclined, Code: FakeCodeUnknownKey}
 	}

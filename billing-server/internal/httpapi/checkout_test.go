@@ -80,3 +80,29 @@ func TestCheckoutPageOffersRefundsThroughTheAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckoutPagePicksHowToPayFromTheKey(t *testing.T) {
+	// 결제위젯은 결제위젯 키로만, 결제창은 API 개별 연동 키로만 열린다
+	cases := map[string]string{
+		// html/template 은 스크립트 안의 참거짓 앞뒤에 빈칸을 둔다
+		"test_gck_sandbox_0123456789": `const useWidget =  true ;`,
+		"test_ck_sandbox_0123456789":  `const useWidget =  false ;`,
+	}
+	for key, want := range cases {
+		response := send(t, httpapi.Dependencies{CheckoutClientKey: key}, request{
+			method: http.MethodGet, path: httpapi.CheckoutPath, anonymous: true,
+		})
+
+		page := body(response)
+		if !strings.Contains(page, want) {
+			t.Errorf("%s: 화면에 %q 가 없다", key, want)
+		}
+	}
+	// 결제창은 카드(간편결제 포함)로만 연다. 가상계좌를 고를 수 없다
+	page := body(send(t, httpapi.Dependencies{CheckoutClientKey: "test_ck_sandbox_0123456789"}, request{
+		method: http.MethodGet, path: httpapi.CheckoutPath, anonymous: true,
+	}))
+	if !strings.Contains(page, `method: "CARD"`) {
+		t.Error("결제창의 결제 수단이 카드가 아니다")
+	}
+}
