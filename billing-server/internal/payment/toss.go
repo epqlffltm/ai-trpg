@@ -30,6 +30,11 @@ import (
 //   - 모름: 5xx, 연결 실패, 시간 초과, 우리 키의 문제(401), "처리 중"이나 "이미 처리된 결제", 읽지 못한 답
 //
 // 조회의 오류는 모두 "모름"이다. 조회가 못 찾았다(404)는 것도 모름이다. 키를 바꿔 다른 상점에 물었을 수 있다.
+//
+// 취소(청약철회)도 같은 기준이다. 이번에는 거절로 잘못 적으면 돈을 돌려주고 크레딧도 돌려준다.
+//   - 취소됨: 200 에 status CANCELED. 또는 "이미 취소된 결제"(ALREADY_CANCELED_PAYMENT, ALREADY_REFUND_PAYMENT)
+//   - 거절: 4xx 오류 가운데 다시 해 보라는 뜻의 오류가 아닌 것(취소할 수 없는 결제, 기한이 지남 같은 것)
+//   - 모름: 그 밖의 모든 것. 200 인데 다른 주문의 결제이거나 CANCELED 가 아닌 것도 모름이다
 
 // TossAPIURL 은 토스페이먼츠 API 의 주소다. 테스트 키로 부르면 테스트 모드다. 테스트와 라이브의 주소가 같다.
 const TossAPIURL = "https://api.tosspayments.com"
@@ -37,6 +42,16 @@ const TossAPIURL = "https://api.tosspayments.com"
 // CodePaymentMismatch 는 결제 대행사가 아는 결제가 이 주문의 것이 아닐 때(주문 번호, 금액, 결제 번호가 다를 때)
 // 주문에 적는 거절 이유다. 다른 결제의 번호를 들고 와 이 주문을 치르려 한 것이다.
 const CodePaymentMismatch = "PAYMENT_MISMATCH"
+
+// tossCancelReason 은 취소 요청에 싣는 이유다. 토스페이먼츠의 상점관리자와 취소 내역에 보인다.
+const tossCancelReason = "청약철회"
+
+// tossAlreadyCanceledCodes 는 이미 취소(환불)된 결제라는 오류 코드다. 취소된 것으로 본다.
+// 취소를 다시 보낸 것이 멱등키의 기한(15일)을 넘겼을 때 이 답이 온다.
+var tossAlreadyCanceledCodes = map[string]bool{
+	"ALREADY_CANCELED_PAYMENT": true,
+	"ALREADY_REFUND_PAYMENT":   true,
+}
 
 // tossMaxResponseBytes 는 읽는 응답의 가장 큰 크기다. 결제 한 건(Payment 객체)은 몇 KB 다.
 const tossMaxResponseBytes = 64 << 10
@@ -124,6 +139,25 @@ func (t *Toss) Lookup(ctx context.Context, request Request) (Result, error) {
 	return judgeLookup(request, answer)
 }
 
+// Cancel 은 결제의 전액 취소를 요청한다. 멱등키로 "refund-주문 번호"를 보낸다. 같은 주문의 취소를 다시 보내도 처음의 답이 온다.
+func (t *Toss) Cancel(ctx context.Context, request Request) (Result, error) {
+	body, err := json.Marshal(tossCancelBody{CancelReason: tossCancelReason})
+	if err != nil {
+		return Result{}, err
+	}
+	path := "/v1/payments/" + url.PathEscape(request.PaymentKey) + "/cancel"
+	answer, err := t.call(ctx, http.MethodPost, path, body, "refund-"+request.OrderID.String())
+	if err != nil {
+		return Result{}, err
+	}
+	return judgeCancel(request, answer)
+}
+
+// tossCancelBody 는 취소 요청의 본문이다. 금액을 적지 않으면 전액 취소다.
+type tossCancelBody struct {
+	CancelReason string `json:"cancelReason"`
+}
+
 // tossConfirmBody 는 승인 요청의 본문이다.
 type tossConfirmBody struct {
 	PaymentKey string `json:"paymentKey"`
@@ -208,7 +242,38 @@ func judgeLookup(request Request, answer tossAnswer) (Result, error) {
 	return Result{}, unknownAnswer(answer.status, answer.errorCode())
 }
 
-// refusedForSure 는 승인 요청의 오류가 "승인하지 않았다"는 확실한 답인지 본다.
+// judgeCancel 은 취소 요청의 답을 결과로 바꾼다. 거절은 확실한 4xx 만이다.
+func judgeCancel(request Request, answer tossAnswer) (Result, error) {
+	if answer.succeeded() {
+		return readCanceled(request, answer.body)
+	}
+	code := answer.errorCode()
+	if tossAlreadyCanceledCodes[code] {
+		return Result{Status: StatusCanceled}, nil
+	}
+	if refusedForSure(answer.status, code) {
+		return Result{Status: StatusDeclined, Code: code}, nil
+	}
+	return Result{}, unknownAnswer(answer.status, code)
+}
+
+// readCanceled 는 취소의 답으로 온 결제 한 건을 읽는다. CANCELED 면 취소된 것이고 그 밖에는 아직 모르는 것이다.
+// 다른 주문의 결제가 오면 모름이다. 거절로 적으면 이미 돌려준 돈 위에 크레딧까지 돌려줄 수 있다.
+func readCanceled(request Request, raw []byte) (Result, error) {
+	var found tossPayment
+	if err := json.Unmarshal(raw, &found); err != nil || found.Status == "" {
+		return Result{}, unknownOutcome(errors.New("토스페이먼츠의 답을 읽지 못했습니다"))
+	}
+	if !found.belongsTo(request) {
+		return Result{}, unknownOutcome(errors.New("취소의 답이 이 주문의 결제가 아닙니다"))
+	}
+	if found.Status == tossCanceled {
+		return Result{Status: StatusCanceled}, nil
+	}
+	return Result{Status: StatusPending}, nil
+}
+
+// refusedForSure 는 승인이나 취소 요청의 오류가 "하지 않았다"는 확실한 답인지 본다.
 // 4xx 이고, 우리 키의 문제(401)나 처리 중(409)이나 너무 잦은 요청(429)이 아니고, 다시 해 보라는 코드가 아니어야 한다.
 // 코드를 읽지 못한 4xx(중간의 프록시가 만든 답일 수 있다)도 거절이 아니다.
 func refusedForSure(status int, code string) bool {

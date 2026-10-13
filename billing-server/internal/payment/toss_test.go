@@ -333,6 +333,7 @@ func TestTossUnansweredCallsAreUnknownAndLeakNothing(t *testing.T) {
 	calls := map[string]func(*payment.Toss, context.Context, payment.Request) (payment.Result, error){
 		"승인": (*payment.Toss).Confirm,
 		"조회": (*payment.Toss).Lookup,
+		"취소": (*payment.Toss).Cancel,
 	}
 	situations := map[string]func(*testing.T) (*payment.Toss, payment.Request){"시간 초과": slow, "닫힌 서버": closed}
 	for situation, prepare := range situations {
@@ -355,6 +356,98 @@ func TestTossUnansweredCallsAreUnknownAndLeakNothing(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestTossCancelSendsTheDocumentedRequest(t *testing.T) {
+	toss, fake, _ := startToss(t, http.StatusOK, "")
+	request := newRequest()
+	fake.body = matching(request, "CANCELED")
+
+	if _, err := toss.Cancel(context.Background(), request); err != nil {
+		t.Fatalf("취소 요청이 실패했다: %v", err)
+	}
+
+	got := fake.last(t)
+	if got.method != http.MethodPost || got.path != "/v1/payments/"+request.PaymentKey+"/cancel" {
+		t.Errorf("요청 = %s %s", got.method, got.path)
+	}
+	if auth := got.header.Get("Authorization"); auth != "Basic "+base64.StdEncoding.EncodeToString([]byte(tossSecret+":")) {
+		t.Errorf("Authorization = %q", auth)
+	}
+	// 멱등키는 승인의 것과 다르다. 같은 주문의 취소를 다시 보내면 처음의 답이 온다
+	if key := got.header.Get("Idempotency-Key"); key != "refund-"+request.OrderID.String() {
+		t.Errorf("Idempotency-Key = %q", key)
+	}
+	// 금액을 적지 않는다. 전액 취소다
+	if string(got.body) != `{"cancelReason":"청약철회"}` {
+		t.Errorf("본문 = %s", got.body)
+	}
+}
+
+func TestTossCancelEscapesThePaymentKey(t *testing.T) {
+	toss, fake, _ := startToss(t, http.StatusOK, "")
+	request := newRequest()
+	request.PaymentKey = "../x?y"
+	fake.body = matching(request, "CANCELED")
+
+	if _, err := toss.Cancel(context.Background(), request); err != nil {
+		t.Fatalf("취소 요청이 실패했다: %v", err)
+	}
+
+	if got := fake.last(t); got.rawPath != "/v1/payments/..%2Fx%3Fy/cancel" {
+		t.Errorf("주소 = %q", got.rawPath)
+	}
+}
+
+func TestTossCancelJudgesTheAnswer(t *testing.T) {
+	canceled := payment.Result{Status: payment.StatusCanceled}
+	pending := payment.Result{Status: payment.StatusPending}
+	declined := func(code string) payment.Result { return payment.Result{Status: payment.StatusDeclined, Code: code} }
+	cases := []struct {
+		name    string
+		status  int
+		body    func(payment.Request) string
+		want    payment.Result
+		unknown bool
+	}{
+		{"취소됨", 200, func(r payment.Request) string { return matching(r, "CANCELED") }, canceled, false},
+		{"200 인데 아직 승인된 채", 200, func(r payment.Request) string { return matching(r, "DONE") }, pending, false},
+		{"200 인데 일부만 취소됨", 200, func(r payment.Request) string { return matching(r, "PARTIAL_CANCELED") }, pending, false},
+		// 다른 주문의 결제는 모름이다. 거절로 적으면 돌려준 돈 위에 크레딧까지 돌려줄 수 있다
+		{"다른 주문의 결제", 200, func(r payment.Request) string {
+			return paymentJSON(r.PaymentKey, "other-order", "CANCELED", r.Amount)
+		}, payment.Result{}, true},
+		{"읽지 못하는 200", 200, func(payment.Request) string { return `not json` }, payment.Result{}, true},
+		{"이미 취소됨", 400, func(payment.Request) string { return errorJSON("ALREADY_CANCELED_PAYMENT") }, canceled, false},
+		{"이미 환불됨", 400, func(payment.Request) string { return errorJSON("ALREADY_REFUND_PAYMENT") }, canceled, false},
+		{"취소할 수 없는 결제", 403, func(payment.Request) string { return errorJSON("NOT_CANCELABLE_PAYMENT") }, declined("NOT_CANCELABLE_PAYMENT"), false},
+		{"환불 기한이 지남", 403, func(payment.Request) string { return errorJSON("EXCEED_MAX_REFUND_DUE") }, declined("EXCEED_MAX_REFUND_DUE"), false},
+		{"일시적인 오류", 400, func(payment.Request) string { return errorJSON("PROVIDER_ERROR") }, payment.Result{}, true},
+		{"너무 잦은 요청", 403, func(payment.Request) string { return errorJSON("FORBIDDEN_CONSECUTIVE_REQUEST") }, payment.Result{}, true},
+		{"우리 키가 틀림", 401, func(payment.Request) string { return errorJSON("UNAUTHORIZED_KEY") }, payment.Result{}, true},
+		{"멱등 요청을 처리 중", 409, func(payment.Request) string { return errorJSON("IDEMPOTENT_REQUEST_PROCESSING") }, payment.Result{}, true},
+		{"환불 처리 실패", 500, func(payment.Request) string { return errorJSON("FAILED_REFUND_PROCESS") }, payment.Result{}, true},
+		{"코드가 없는 4xx", 400, func(payment.Request) string { return `<html></html>` }, payment.Result{}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			toss, fake, _ := startToss(t, tc.status, "")
+			request := newRequest()
+			fake.body = tc.body(request)
+
+			got, err := toss.Cancel(context.Background(), request)
+
+			if tc.unknown {
+				if !errors.Is(err, payment.ErrUnknownOutcome) {
+					t.Errorf("결과 = %+v, %v. ErrUnknownOutcome 이어야 한다", got, err)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Errorf("결과 = %+v, %v. 기대 = %+v", got, err, tc.want)
+			}
+		})
 	}
 }
 

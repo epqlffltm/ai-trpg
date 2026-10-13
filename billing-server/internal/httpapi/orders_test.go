@@ -5,6 +5,7 @@ package httpapi_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -55,6 +56,12 @@ func (f *fakeOrders) Get(_ context.Context, userID uuid.UUID, id uuid.UUID) (ord
 func (f *fakeOrders) Confirm(_ context.Context, userID uuid.UUID, id uuid.UUID, paymentKey string) (order.Order, error) {
 	f.calls++
 	f.user, f.orderID, f.paymentKey = userID, id, paymentKey
+	return f.order, f.err
+}
+
+func (f *fakeOrders) Refund(_ context.Context, userID uuid.UUID, id uuid.UUID) (order.Order, error) {
+	f.calls++
+	f.user, f.orderID = userID, id
 	return f.order, f.err
 }
 
@@ -133,7 +140,8 @@ func TestCreateOrderAnswersCreatedForANewOrder(t *testing.T) {
 		t.Fatalf("상태 코드 = %d, 본문 = %s", response.Code, body(response))
 	}
 	want := `{"id":"` + orderID + `","product_id":"credits-1000","price":1000,"credits":"1000","status":"pending",` +
-		`"failure_code":null,"created_at":"2026-03-02T09:00:00Z","expires_at":"2026-03-03T09:00:00Z","paid_at":null}`
+		`"failure_code":null,"created_at":"2026-03-02T09:00:00Z","expires_at":"2026-03-03T09:00:00Z","paid_at":null,` +
+		`"refundable":false,"refundable_until":null,"refunded_at":null}`
 	if got := body(response); got != want {
 		t.Errorf("본문 = %s\n기대 = %s", got, want)
 	}
@@ -187,12 +195,18 @@ func TestOrderErrorsBecomeStatusCodes(t *testing.T) {
 		{"다른 결제 번호", order.ErrPaymentKeyMismatch, http.StatusConflict},
 		{"이미 쓰인 결제 번호", order.ErrPaymentKeyUsed, http.StatusConflict},
 		{"만료된 주문", order.ErrExpired, http.StatusConflict},
+		{"치른 주문이 아니다", order.ErrNotRefundable, http.StatusConflict},
+		{"7일이 지났다", order.ErrRefundWindowClosed, http.StatusConflict},
+		{"크레딧을 썼다", order.ErrCreditsUsed, http.StatusConflict},
+		{"다른 요청과 엇갈렸다", order.ErrRefundBusy, http.StatusConflict},
+		{"결제 대행사가 취소를 거절했다", fmt.Errorf("%w(REJECT_CARD_PAYMENT)", order.ErrRefundRefused), http.StatusConflict},
 		{"DB 오류", errors.New(`relation "orders" does not exist`), http.StatusInternalServerError},
 	}
 	requests := []request{
 		{method: http.MethodPost, path: ordersURL, body: `{"product_id":"x"}`},
 		{method: http.MethodGet, path: ordersURL + "/" + orderID},
 		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/confirm", body: `{"payment_key":"x"}`},
+		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/refund"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,6 +231,7 @@ func TestOrderAddressesNeedAToken(t *testing.T) {
 		{method: http.MethodPost, path: ordersURL, body: `{"product_id":"credits-1000"}`},
 		{method: http.MethodGet, path: ordersURL + "/" + orderID},
 		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/confirm", body: `{"payment_key":"fake_ok_1"}`},
+		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/refund"},
 	}
 	for _, r := range requests {
 		orders := &fakeOrders{}
@@ -278,10 +293,10 @@ func TestGetOrderReturnsTheOrder(t *testing.T) {
 }
 
 func TestAMalformedOrderIDIsNotFound(t *testing.T) {
-	for _, suffix := range []string{"/not-a-uuid", "/123", "/not-a-uuid/confirm"} {
+	for _, suffix := range []string{"/not-a-uuid", "/123", "/not-a-uuid/confirm", "/not-a-uuid/refund"} {
 		orders := &fakeOrders{}
 		method := http.MethodGet
-		if strings.HasSuffix(suffix, "/confirm") {
+		if strings.HasSuffix(suffix, "/confirm") || strings.HasSuffix(suffix, "/refund") {
 			method = http.MethodPost
 		}
 
@@ -321,6 +336,72 @@ func TestConfirmAnswersByTheOrdersStatus(t *testing.T) {
 			}
 			if orders.user.String() != testenv.UserID || orders.orderID.String() != orderID || orders.paymentKey != "fake_ok_1" {
 				t.Errorf("서비스가 받은 것 = %v, %v, %q", orders.user, orders.orderID, orders.paymentKey)
+			}
+		})
+	}
+}
+
+func TestRefundAnswersByTheOrdersStatus(t *testing.T) {
+	refundedAt := time.Date(2026, 3, 3, 10, 0, 0, 0, time.UTC)
+	refunded := sampleOrder(t, order.StatusRefunded)
+	refunded.RefundedAt = &refundedAt
+	cases := []struct {
+		name     string
+		order    order.Order
+		want     int
+		contains string
+	}{
+		{"환불되었다", refunded, http.StatusOK, `"status":"refunded"`},
+		// 크레딧은 뺐고 결제 대행사의 답을 아직 모른다. 받기는 했으니 202 다
+		{"결과를 모른다", sampleOrder(t, order.StatusRefunding), http.StatusAccepted, `"status":"refunding"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			orders := &fakeOrders{order: tc.order}
+
+			// 본문이 있어도 읽지 않는다. 금액이나 이유를 받지 않는다
+			response := send(t, httpapi.Dependencies{Orders: orders}, request{
+				method: http.MethodPost, path: ordersURL + "/" + orderID + "/refund", body: `{"amount":1}`,
+			})
+
+			if response.Code != tc.want || !strings.Contains(body(response), tc.contains) {
+				t.Errorf("상태 코드 = %d, 본문 = %s. 기대 = %d, %s", response.Code, body(response), tc.want, tc.contains)
+			}
+			if orders.user.String() != testenv.UserID || orders.orderID.String() != orderID {
+				t.Errorf("서비스가 받은 것 = %v, %v", orders.user, orders.orderID)
+			}
+		})
+	}
+}
+
+func TestTheOrderShowsWhetherItCanBeRefunded(t *testing.T) {
+	paidAt := time.Date(2026, 3, 2, 9, 5, 0, 0, time.UTC)
+	until := paidAt.Add(order.RefundWindow)
+	refundedAt := time.Date(2026, 3, 3, 10, 0, 0, 0, time.UTC)
+	refundable := sampleOrder(t, order.StatusPaid)
+	refundable.PaidAt, refundable.RefundableUntil, refundable.Refundable = &paidAt, &until, true
+	used := refundable
+	used.Refundable = false
+	refunded := sampleOrder(t, order.StatusRefunded)
+	refunded.PaidAt, refunded.RefundableUntil, refunded.RefundedAt = &paidAt, &until, &refundedAt
+	cases := []struct {
+		name  string
+		order order.Order
+		want  string
+	}{
+		{"청약철회할 수 있다", refundable, `"refundable":true,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":null`},
+		{"크레딧을 썼다", used, `"refundable":false,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":null`},
+		{"치르지 않았다", sampleOrder(t, order.StatusPending), `"refundable":false,"refundable_until":null,"refunded_at":null`},
+		{"환불되었다", refunded, `"refundable":false,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":"2026-03-03T10:00:00Z"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			response := send(t, httpapi.Dependencies{Orders: &fakeOrders{order: tc.order}}, request{
+				method: http.MethodGet, path: ordersURL + "/" + orderID,
+			})
+
+			if response.Code != http.StatusOK || !strings.Contains(body(response), tc.want) {
+				t.Errorf("상태 코드 = %d, 본문 = %s. 기대 = %s", response.Code, body(response), tc.want)
 			}
 		})
 	}

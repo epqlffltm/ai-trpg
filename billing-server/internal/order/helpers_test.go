@@ -36,12 +36,13 @@ var startedAt = time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 // scripted 는 정해 둔 대로 답하는 결제 대행사다. 무엇을 몇 번 물어봤는지 적어 둔다.
 type scripted struct {
 	mu sync.Mutex
-	// confirm 과 lookup 은 그 요청에 돌려줄 답이다.
-	confirm, lookup       payment.Result
-	confirmErr, lookupErr error
+	// confirm, lookup, cancel 은 그 요청에 돌려줄 답이다.
+	confirm, lookup, cancel          payment.Result
+	confirmErr, lookupErr, cancelErr error
 
 	confirms []payment.Request
 	lookups  []payment.Request
+	cancels  []payment.Request
 	// deadline 은 마지막 요청이 받은 시간 제한이다.
 	deadline time.Duration
 }
@@ -60,6 +61,28 @@ func (s *scripted) Lookup(ctx context.Context, request payment.Request) (payment
 	s.lookups = append(s.lookups, request)
 	s.deadline = remaining(ctx)
 	return s.lookup, s.lookupErr
+}
+
+func (s *scripted) Cancel(ctx context.Context, request payment.Request) (payment.Result, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cancels = append(s.cancels, request)
+	s.deadline = remaining(ctx)
+	return s.cancel, s.cancelErr
+}
+
+// cancelCalls 는 취소 요청을 몇 번 받았는지 돌려준다.
+func (s *scripted) cancelCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.cancels)
+}
+
+// answerCancel 은 취소 요청에 줄 답을 바꾼다.
+func (s *scripted) answerCancel(result payment.Result, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cancel, s.cancelErr = result, err
 }
 
 // calls 는 승인 요청과 조회를 각각 몇 번 받았는지 돌려준다.
@@ -93,12 +116,16 @@ func remaining(ctx context.Context) time.Duration {
 
 // approving, declining, silent 는 자주 쓰는 결제 대행사들이다.
 func approving() *scripted {
-	return &scripted{confirm: payment.Result{Status: payment.StatusApproved}, lookup: payment.Result{Status: payment.StatusApproved}}
+	return &scripted{
+		confirm: payment.Result{Status: payment.StatusApproved},
+		lookup:  payment.Result{Status: payment.StatusApproved},
+		cancel:  payment.Result{Status: payment.StatusCanceled},
+	}
 }
 
 func declining() *scripted {
 	declined := payment.Result{Status: payment.StatusDeclined, Code: "card_declined"}
-	return &scripted{confirm: declined, lookup: declined}
+	return &scripted{confirm: declined, lookup: declined, cancel: declined}
 }
 
 // silent 는 승인 요청에 답하지 않는다. 조회에는 lookup 으로 답한다.
@@ -176,7 +203,7 @@ func setUpAt(t *testing.T, pool *pgxpool.Pool, start time.Time, provider *script
 }
 
 // newService 는 주문 서비스를 만든다. 만들지 못하면 테스트를 멈춘다.
-func newService(t *testing.T, pool *pgxpool.Pool, now func() time.Time, provider payment.Provider, wallets order.Depositor) *order.Service {
+func newService(t *testing.T, pool *pgxpool.Pool, now func() time.Time, provider payment.Provider, wallets order.Wallet) *order.Service {
 	t.Helper()
 	service, err := order.NewService(pool, now, provider, wallets, ttl)
 	if err != nil {

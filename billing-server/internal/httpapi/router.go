@@ -99,6 +99,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	api.POST("/orders", createOrder(deps.Orders))
 	api.GET("/orders/:id", getOrder(deps.Orders))
 	api.POST("/orders/:id/confirm", confirmOrder(deps.Orders))
+	api.POST("/orders/:id/refund", refundOrder(deps.Orders))
 
 	// 결제 대행사가 부르는 주소다. 로그인 묶음 밖에 둔다. 토큰 대신 본문의 서명을 확인한다
 	router.POST(APIPrefix+"/webhooks/payment", paymentWebhook(deps.Notifier, deps.WebhookSecret, deps.Now))
