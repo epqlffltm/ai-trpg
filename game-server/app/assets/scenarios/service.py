@@ -39,6 +39,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         default_npc_sheet=data.default_npc_sheet.model_dump() if data.default_npc_sheet else None,
         items=[rule.model_dump() for rule in data.items],
         starting_items=[stack.model_dump() for stack in data.starting_items],
+        quests=[quest.model_dump() for quest in data.quests],
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
         reroll_allowed=data.reroll_allowed,
         narration_style=data.narration_style,

@@ -57,6 +57,7 @@ def to_detail(scenario: Scenario) -> ScenarioDetail:
         default_npc_sheet=scenario.default_npc_sheet,
         items=scenario.items,
         starting_items=scenario.starting_items,
+        quests=scenario.quests,
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,
