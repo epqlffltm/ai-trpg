@@ -62,3 +62,21 @@ func TestCheckoutPageEscapesWhatItFillsIn(t *testing.T) {
 		t.Errorf("값이 바꿔지지 않고 들어갔다")
 	}
 }
+
+func TestCheckoutPageOffersRefundsThroughTheAPI(t *testing.T) {
+	// 청약철회도 다른 클라이언트와 같은 주소를 부른다. 할 수 있는지는 서버가 준 refundable 을 따른다
+	response := send(t, httpapi.Dependencies{CheckoutClientKey: checkoutKey}, request{
+		method: http.MethodGet, path: httpapi.CheckoutPath, anonymous: true,
+	})
+
+	page := body(response)
+	for _, want := range []string{
+		`id="refund"`, `id="lookup-id"`,
+		`"/orders/" + encodeURIComponent(order.id) + "/refund"`,
+		`order.refundable || order.status === "refunding"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("화면에 %q 가 없다", want)
+		}
+	}
+}
