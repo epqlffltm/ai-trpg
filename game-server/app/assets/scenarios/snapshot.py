@@ -19,6 +19,7 @@ from pydantic import BaseModel, model_validator
 
 from app.assets.models import (
     CharacterMode,
+    ItemKind,
     Lorebook,
     LoreEntry,
     LoreKind,
@@ -50,7 +51,8 @@ from app.engine.sheet import Sheet
 #  14: 규칙에 부상(injuries), 부상 표(injury_table), 부상 표를 굴리는 때(injury_triggers), 노려 치기(called_shot)가 있다
 #  15: 규칙에 치료(treatment)가 있고, 부상에 치료의 난이도(treat_difficulty)와 줄이는 라운드(treat_rounds)가 있다
 #  16: 로어북 항목에 지목할 때 맞다고 받는 이름들(true_names)이 있다
-SNAPSHOT_FORMAT = 16
+#  17: 물건 항목의 규칙(items), 시작 소지품(starting_items), 프리젠의 소지품(pregens[].items)이 있다
+SNAPSHOT_FORMAT = 17
 
 
 class EntrySnapshot(BaseModel):
@@ -102,12 +104,36 @@ class PlayersSnapshot(BaseModel):
     max: int
 
 
+class ItemStackSnapshot(BaseModel):
+    """물건 몇 개. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개다."""
+
+    entry_id: uuid.UUID
+    count: int
+
+
+class ItemRuleSnapshot(BaseModel):
+    """
+    아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.
+
+    heals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다.
+    """
+
+    entry_id: uuid.UUID
+    kind: ItemKind
+    heals: str | None = None
+
+
 class PregenSnapshot(BaseModel):
-    """프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다."""
+    """
+    프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다.
+
+    items 는 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품이다.
+    """
 
     name: str
     description: str
     sheet: Sheet
+    items: list[ItemStackSnapshot] = []
 
 
 class NpcSheetSnapshot(BaseModel):
@@ -153,6 +179,10 @@ class Snapshot(BaseModel):
     npc_sheets: list[NpcSheetSnapshot]
     # 기본 NPC 시트. 시트가 없는 인물이 쓴다. 그런 인물이 있으면 반드시 있다
     default_npc_sheet: Sheet | None
+    # 아이템 규칙들. 판 안의 로어북 물건 항목마다 많아야 하나다. 규칙이 없는 물건은 장비다(item_rule_of)
+    items: list[ItemRuleSnapshot] = []
+    # 시작 소지품. 캐릭터 모두가 테이블이 시작할 때 받는다
+    starting_items: list[ItemStackSnapshot] = []
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용했으면 반드시 있다
     player_made_hp: PlayerMadeHpSnapshot | None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 제작자가 정한 것이다
@@ -177,10 +207,35 @@ class Snapshot(BaseModel):
             raise ValueError('시트가 없는 인물이 있는데 기본 NPC 시트가 없습니다.')
         return self
 
+    @model_validator(mode='after')
+    def require_item_entries(self) -> 'Snapshot':
+        """
+        아이템 규칙과 소지품이 모두 판 안의 물건 항목을 가리키는지 본다. 아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽(테이블)은 소지품마다 물건 항목이 있다고 믿고 쓴다.
+        """
+        items = {entry.id for entry in item_entries(self)}
+        stacks = [*self.starting_items, *(stack for pregen in self.pregens for stack in pregen.items)]
+        pointed = [rule.entry_id for rule in self.items] + [stack.entry_id for stack in stacks]
+        if any(entry_id not in items for entry_id in pointed):
+            raise ValueError('물건 항목이 아닌 것을 가리키는 아이템 규칙이나 소지품이 있습니다.')
+        return self
+
 
 def person_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
     """판의 로어북에서 인물 항목만. 로어북의 순서, 그 안의 항목 순서다."""
     return [entry for lorebook in snapshot.lorebooks for entry in lorebook.entries if entry.kind == LoreKind.PERSON]
+
+
+def item_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
+    """판의 로어북에서 물건 항목만. 로어북의 순서, 그 안의 항목 순서다."""
+    return [entry for lorebook in snapshot.lorebooks for entry in lorebook.entries if entry.kind == LoreKind.ITEM]
+
+
+def item_rule_of(snapshot: Snapshot, entry_id: uuid.UUID) -> ItemRuleSnapshot:
+    """물건 항목 하나의 규칙. 적어 둔 규칙이 있으면 그것, 없으면 장비다(쓰지 않는 물건)."""
+    own = next((rule for rule in snapshot.items if rule.entry_id == entry_id), None)
+    return own or ItemRuleSnapshot(entry_id=entry_id, kind=ItemKind.GEAR)
 
 
 def npc_sheet_of(snapshot: Snapshot, entry_id: uuid.UUID) -> Sheet:
@@ -242,6 +297,8 @@ def build_snapshot(
         default_sheet=scenario.default_sheet,
         npc_sheets=[NpcSheetSnapshot(**npc_sheet) for npc_sheet in scenario.npc_sheets],
         default_npc_sheet=scenario.default_npc_sheet,
+        items=[ItemRuleSnapshot(**rule) for rule in scenario.items],
+        starting_items=[ItemStackSnapshot(**stack) for stack in scenario.starting_items],
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,
