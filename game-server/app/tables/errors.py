@@ -70,6 +70,10 @@ class Conflict(enum.StrEnum):
     CHARACTER_DEAD = 'character_dead'
     # 캐릭터가 살아 있다. 진행 중에는 캐릭터가 죽은 사람만 새 캐릭터를 정한다
     CHARACTER_ALIVE = 'character_alive'
+    # 한 가지 물건을 가질 수 있는 개수(99)를 넘는다
+    TOO_MANY_ITEMS = 'too_many_items'
+    # 가진 것보다 많이 빼려 했다. 없는 물건을 빼려 한 것도 이 이유다
+    NOT_ENOUGH_ITEMS = 'not_enough_items'
 
 
 class TableConflictError(Exception):

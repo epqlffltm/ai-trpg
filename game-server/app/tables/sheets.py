@@ -31,6 +31,7 @@ from app.engine.point_buy import affordable
 from app.engine.ruleset import Ruleset
 from app.engine.score_roll import uses_exactly
 from app.engine.sheet import Sheet
+from app.tables import items
 from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 
 
@@ -179,7 +180,7 @@ def give_sheet(member: TableMember, source: Sheet) -> TableSheet:
 
 def hand_out(table: GameTable, snapshot: Snapshot) -> bool:
     """
-    앉은 사람 모두에게 시트를 준다. 받을 시트가 없는 사람이 하나라도 있으면 아무에게도 주지 않고 False.
+    앉은 사람 모두에게 시트와 시작 소지품을 준다. 받을 시트가 없는 사람이 하나라도 있으면 아무에게도 주지 않고 False.
 
     먼저 모두의 것을 찾고, 다 있을 때만 준다. 몇 사람만 받은 상태를 만들지 않는다.
     """
@@ -187,7 +188,7 @@ def hand_out(table: GameTable, snapshot: Snapshot) -> bool:
     if any(source is None for source in sources):
         return False
     for member, source in zip(table.members, sources, strict=True):
-        give_sheet(member, source)
+        items.equip(table.id, give_sheet(member, source), snapshot, member.pregen_index)
     return True
 
 
