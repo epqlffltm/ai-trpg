@@ -102,6 +102,9 @@ class EventType(enum.StrEnum):
     ITEM_USED = 'item_used'
     # 캐릭터가 다른 캐릭터에게 물건을 건넸다(또는 건네려 했지만 못 했다). 원인은 그 행동의 이벤트다
     ITEM_GIVEN = 'item_given'
+    # 방장이 퀘스트의 상태를 바꿨다(app/tables/quest_changes.py). 무엇에서 무엇으로, 성공이면 누가 무엇을 받았는가.
+    # 숨김으로 바꾸는 일은 없으므로 숨긴 퀘스트는 이 이벤트로 새지 않는다
+    QUEST_CHANGED = 'quest_changed'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고, 방장이 다시 맡길 수 있다
