@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- billing-server/internal/httpapi/checkout.html -->
-<!-- 토스페이먼츠의 결제위젯으로 크레딧을 사 보는 개발용 화면. checkout.go 가 클라이언트 키를 채워 내준다. -->
+<!-- 토스페이먼츠의 결제위젯으로 크레딧을 사 보고 청약철회해 보는 개발용 화면. checkout.go 가 클라이언트 키를 채워 내준다. -->
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
@@ -56,8 +56,15 @@
       }
       textarea,
       select,
+      input,
       button {
         font: inherit;
+      }
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 13px;
       }
       textarea {
         box-sizing: border-box;
@@ -84,6 +91,14 @@
       .error {
         color: var(--bad);
       }
+      #again {
+        display: inline-block;
+        margin-top: 12px;
+      }
+      button.danger {
+        border-color: var(--bad);
+        background: var(--bad);
+      }
     </style>
   </head>
   <body>
@@ -108,6 +123,13 @@
         <pre id="order-info" hidden></pre>
       </section>
 
+      <section id="lookup-step">
+        <h2>주문 보기</h2>
+        <p class="hint">전에 산 주문을 번호로 봅니다. 치른 지 7일 안이고 그 주문의 크레딧을 하나도 쓰지 않았으면 청약철회할 수 있습니다.</p>
+        <input id="lookup-id" type="text" spellcheck="false" autocomplete="off" placeholder="주문 번호(UUID)" />
+        <button id="lookup" type="button">보기</button>
+      </section>
+
       <section id="pay-step" hidden>
         <h2>3. 결제</h2>
         <div id="payment-method"></div>
@@ -118,6 +140,10 @@
       <section id="result-step" hidden>
         <h2>결과</h2>
         <pre id="result"></pre>
+        <div id="refund-area" hidden>
+          <p id="refund-note" class="hint"></p>
+          <button id="refund" class="danger" type="button">청약철회(전액 취소)</button>
+        </div>
         <a id="again" href="#">처음으로</a>
       </section>
 
@@ -187,7 +213,7 @@
       }
 
       function hideSteps() {
-        for (const id of ["token-step", "order-step", "pay-step"]) {
+        for (const id of ["token-step", "order-step", "lookup-step", "pay-step"]) {
           document.getElementById(id).hidden = true;
         }
       }
@@ -241,19 +267,104 @@
         };
       }
 
+      // formatTime 은 서버의 시각(RFC 3339)을 이 PC 의 시간대로 보인다
+      function formatTime(value) {
+        return new Date(value).toLocaleString("ko-KR");
+      }
+
+      // statusNote 는 결과를 아직 모르는 답(202)에 덧붙이는 말이다
+      function statusNote(order, status) {
+        if (status !== 202) {
+          return "";
+        }
+        if (order.status === "refunding") {
+          return " (취소의 결과를 아직 모릅니다. 크레딧은 빠져 있습니다. 잠시 뒤 다시 확인하세요)";
+        }
+        return " (결과를 아직 모릅니다. 잠시 뒤 다시 확인하세요)";
+      }
+
+      // orderLines 는 주문 하나를 보이는 줄들이다
+      function orderLines(order, status) {
+        const lines = ["주문 " + order.id, "상태 " + order.status + statusNote(order, status)];
+        if (order.failure_code) {
+          lines.push("거절 이유 " + order.failure_code);
+        }
+        if (order.paid_at) {
+          lines.push("치른 시각 " + formatTime(order.paid_at));
+        }
+        if (order.refunded_at) {
+          lines.push("환불된 시각 " + formatTime(order.refunded_at));
+        }
+        return lines;
+      }
+
+      // walletLine 은 지금의 잔액이다
+      async function walletLine() {
+        const { data: wallet } = await call("GET", "/wallet");
+        return "잔액 산 크레딧 " + wallet.paid + ", 무료 " + wallet.free + ", 합 " + wallet.total;
+      }
+
+      // showOrder 는 주문과 잔액을 결과 칸에 보이고, 청약철회 단추를 알맞게 둔다
+      async function showOrder(order, status) {
+        hideSteps();
+        document.getElementById("error").hidden = true;
+        document.getElementById("result-step").hidden = false;
+        show("result", orderLines(order, status).concat([await walletLine()]).join("\n"));
+        showRefund(order);
+      }
+
+      // showRefund 는 청약철회할 수 있는 주문에 단추를 보인다. 결과를 모르는 환불(refunding)은 다시 보낼 수 있게 둔다.
+      // 할 수 있는지는 서버가 정한 refundable 을 따른다. 누르면 서버가 지갑을 잠그고 다시 본다
+      function showRefund(order) {
+        const area = document.getElementById("refund-area");
+        const button = document.getElementById("refund");
+        area.hidden = !(order.refundable || order.status === "refunding");
+        if (area.hidden) {
+          return;
+        }
+        if (order.status === "refunding") {
+          document.getElementById("refund-note").textContent = "환불을 요청했지만 결과를 아직 모릅니다. 같은 취소를 다시 보내 확인합니다.";
+          button.textContent = "환불 다시 확인";
+        } else {
+          document.getElementById("refund-note").textContent = formatTime(order.refundable_until) + " 까지 청약철회할 수 있습니다. 이 주문의 크레딧 " + order.credits + "이 빠지고 결제가 취소됩니다.";
+          button.textContent = "청약철회(전액 취소)";
+        }
+        button.onclick = function () {
+          refund(order).catch(reportError);
+        };
+      }
+
+      // refund 는 청약철회를 요청하고 결과를 보인다. 처음 요청이면 한 번 더 묻는다
+      async function refund(order) {
+        if (order.status === "paid" && !confirm("이 주문을 청약철회합니다. 결제가 취소되고 크레딧 " + order.credits + "이 빠집니다.")) {
+          return;
+        }
+        document.getElementById("refund").disabled = true;
+        try {
+          const { status, data: refunded } = await call("POST", "/orders/" + encodeURIComponent(order.id) + "/refund");
+          await showOrder(refunded, status);
+        } finally {
+          document.getElementById("refund").disabled = false;
+        }
+      }
+
+      // lookup 은 주문 번호로 주문을 읽어 보인다
+      async function lookup() {
+        const orderId = document.getElementById("lookup-id").value.trim();
+        if (!orderId) {
+          throw new Error("주문 번호를 넣어 주세요");
+        }
+        const { data: order } = await call("GET", "/orders/" + encodeURIComponent(orderId));
+        await showOrder(order, 200);
+      }
+
       // finish 는 결제창이 돌려보낸 결제 번호로 승인을 요청한다.
       // 주소의 amount 는 쓰지 않는다. 서버가 주문에 적힌 값으로 승인을 요청한다
       async function finish(params) {
         const orderId = params.get("orderId") || "";
         const paymentKey = params.get("paymentKey") || "";
         const { status, data: order } = await call("POST", "/orders/" + encodeURIComponent(orderId) + "/confirm", { payment_key: paymentKey });
-        const { data: wallet } = await call("GET", "/wallet");
-        const lines = ["주문 " + order.id, "상태 " + order.status + (status === 202 ? " (결과를 아직 모릅니다. 잠시 뒤 다시 확인하세요)" : "")];
-        if (order.failure_code) {
-          lines.push("거절 이유 " + order.failure_code);
-        }
-        lines.push("잔액 산 크레딧 " + wallet.paid + ", 무료 " + wallet.free + ", 합 " + wallet.total);
-        show("result", lines.join("\n"));
+        await showOrder(order, status);
       }
 
       // failed 는 결제창에서 끝나지 않은 결제(사용자가 닫았거나, 인증이 실패했다)를 보여 준다. 서버는 부르지 않는다
@@ -269,6 +380,9 @@
         };
         document.getElementById("create-order").onclick = function () {
           createOrder().catch(reportError);
+        };
+        document.getElementById("lookup").onclick = function () {
+          lookup().catch(reportError);
         };
         document.getElementById("again").href = location.pathname;
 
