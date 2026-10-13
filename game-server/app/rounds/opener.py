@@ -29,6 +29,15 @@ from app.rounds.models import Round
 from app.tables.models import GameTable
 
 
+def now_utc() -> datetime:
+    """
+    라운드를 연 시각(UTC). 앱의 시계다.
+
+    마감과 청구의 처음 부를 시각이 이것을 함께 쓴다. 테스트가 바꿔 끼워 앱과 DB 의 시계가 어긋난 환경을 만든다.
+    """
+    return datetime.now(UTC)
+
+
 def deadline_for(table: GameTable, opened: datetime) -> datetime | None:
     """연 시각과 테이블의 시간 제한으로 정한 선언의 마감. 시간 제한이 없으면 None."""
     if table.round_time_limit is None:
@@ -48,12 +57,13 @@ def open_round(session: AsyncSession, table: GameTable, number: int, scene: str,
 
     앞 라운드가 있으면 닫은 것을 먼저 DB 에 보낸 뒤에 부른다(유일 색인 uq_table_rounds_open).
     """
-    deadline = deadline_for(table, datetime.now(UTC))
+    opened = now_utc()
+    deadline = deadline_for(table, opened)
     round_ = Round(
         table_id=table.id, number=number, scene=scene, deadline_at=deadline, narration_tier=table.narration_tier
     )
     repository.add_round(session, round_)
-    charges.charge_round(session, table, round_)
+    charges.charge_round(session, table, round_, opened)
     narration = recorder.record(session, table, EventType.GM_NARRATION, payload={'text': scene}, cause=cause)
     opened = {
         'number': number,

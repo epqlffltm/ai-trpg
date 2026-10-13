@@ -88,13 +88,16 @@ def next_extension(now: datetime, expires_at: datetime | None) -> datetime:
     return now + max((expires_at - now) / 2, timedelta(0))
 
 
-def charge_round(session: AsyncSession, table: GameTable, round_: Round) -> None:
+def charge_round(session: AsyncSession, table: GameTable, round_: Round, now: datetime) -> None:
     """
     연 라운드의 서술 값을 걸어야 한다고 적는다. 라운드를 여는 트랜잭션 안에서 부른다. 저장하지는 않는다.
 
     라운드는 아직 저장하지 않았어도 된다. 저장할 때 라운드를 먼저 넣는다(NarrationCharge.round).
     결제 서버는 부르지 않는다. 정리 작업이 곧 걸고(크레딧이 모자란 것을 일찍 알린다),
     라운드를 닫을 때 걸렸는지 다시 본다. 값은 라운드의 서술 등급의 것이다(price_code_for).
+
+    처음 부를 시각은 now(라운드를 연 시각, 앱의 시계)다. DB 의 now() 에 맡기지 않는다.
+    정리 작업은 앱의 시계로 부를 차례를 고른다(repository.find_due). DB 의 시계가 앞서면 그만큼 늦게 건다.
     """
     charges = [
         NarrationCharge(
@@ -103,6 +106,7 @@ def charge_round(session: AsyncSession, table: GameTable, round_: Round) -> None
             reference=reference_for(table.id, round_.number, payer),
             price_code=price_code_for(round_.narration_tier),
             status=ChargeStatus.PENDING,
+            next_attempt_at=now,
         )
         for payer in payers_of(table)
     ]

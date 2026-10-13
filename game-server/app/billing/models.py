@@ -116,7 +116,9 @@ class NarrationCharge(Base):
 
     # 결제 서버의 답을 받지 못해 다시 부른 횟수. 다음에 부를 때까지의 간격이 이것으로 늘어난다
     attempts: Mapped[int] = mapped_column(Integer, default=0)
-    # 정리 작업이 이 시각 뒤에 부른다. 걸린 청구면 연장할 때다
+    # 정리 작업이 이 시각 뒤에 부른다. 걸린 청구면 연장할 때다.
+    # 늘 앱의 시계로 채운다(처음은 charges.charge_round). 정리 작업이 앱의 시계와 비교한다.
+    # 기본값(server_default)은 DB 의 시계라 기대지 않는다
     next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 마지막으로 부르지 못한 까닭(unreachable, timeout, server_error, unauthorized, rejected_409 …). 본문은 적지 않는다
     last_error: Mapped[str | None] = mapped_column(String(40))
