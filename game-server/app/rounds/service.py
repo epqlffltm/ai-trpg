@@ -78,6 +78,7 @@ from app.tables import service as tables
 from app.tables import sheets
 from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember, TableStatus
+from app.whispers import repository as whisper_repository
 
 # 서술을 맡은 작업 하나가 쓰는 시간(초). 모두 닫기 시작한 시각(closing_at)부터 센다(app/rounds/closing.py).
 # 로어북, 지난 일, 인물의 이력을 고르는 시간. 넘으면 고르지 못한 것 없이 서술한다
@@ -98,6 +99,10 @@ CLOSING_RETRY_MARGIN_SECONDS = 5.0
 # 작업이 살아 있을 수 있는 가장 긴 시간보다 길어야 한다. 짧으면 아직 도는 서술 위에 또 서술을 맡긴다.
 # 그래서 따로 적지 않고 위의 시간들을 더해서 만든다. 하나를 늘리면 이것도 늘어난다
 CLOSING_RETRY_SECONDS = CLOSING_JOB_SECONDS + FAILURE_RECORD_SECONDS + CLOSING_RETRY_MARGIN_SECONDS
+
+# 서술자에게 주는 쪽지(GM 에게도 보인 것)의 수. 보낸 사람마다 그 라운드의 최근 것만 이만큼(app/whispers/, #196).
+# 서술 값은 앉은 사람 모두가 낸다. 한 사람이 쪽지를 쏟아 내 프롬프트를 키우면 모두가 그 값을 치른다
+GM_WHISPERS_PER_SENDER = 3
 
 
 class NarrationScheduler(Protocol):
@@ -423,6 +428,7 @@ async def load_closing_request(
       - 이야기의 바탕은 판의 복사본에서 꺼낸다. 판은 고치지 않는다.
       - 지난 라운드는 닫혀서 바뀌지 않는다.
       - NPC 의 상태는 닫기 시작할 때 바뀐 뒤로 다음 라운드가 열릴 때까지 바뀌지 않는다.
+      - GM 에게 보인 쪽지는 라운드가 열려 있는 동안 보낸 것이다. 닫기 시작한 뒤에 보낸 것은 다음 라운드로 간다.
     그래서 서술을 몇 번 다시 맡겨도 서술자는 같은 것을 받는다.
     이야기의 바탕과 지난 라운드 몇 개는 가짜 서술자는 읽지 않고, 언어 모델의 서술자가 읽는다.
     """
@@ -431,6 +437,7 @@ async def load_closing_request(
     if table is None or not is_run(round_, started):
         return None
     history = await repository.list_rounds_before(session, table_id, number, HISTORY_ROUNDS)
+    whispers = await whisper_repository.list_for_gm(session, table_id, number, GM_WHISPERS_PER_SENDER)
     snapshot = read_snapshot(table.content)
     scene = await load_scene(session, table, round_)
     return NarrationRequest(
@@ -444,6 +451,7 @@ async def load_closing_request(
         table_id=table.id,
         host_id=table.host_id,
         people=to_people(scene.cast, snapshot.rulebook.rules),
+        whispers=[narration_request.to_whisper_note(whisper) for whisper in whispers],
     )
 
 

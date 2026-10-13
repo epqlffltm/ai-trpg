@@ -39,6 +39,9 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.ROUND_TIME_LIMIT_CHANGED: ('round_time_limit',),
     EventType.NARRATION_TIER_CHANGED: ('narration_tier',),
     EventType.CREDIT_WAIT_CHANGED: ('credit_wait_seconds', 'remove_short_payers'),
+    EventType.WHISPER_NOTICE_CHANGED: ('whisper_notice',),
+    # 누가 누구에게 보냈는지만 보인다. 쪽지의 글은 처음부터 적지 않는다
+    EventType.WHISPER_SENT: ('user_id', 'character_name', 'recipient_id', 'recipient_character_name'),
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
     EventType.ROUND_OPENED: ('number', 'deadline_at', 'narration_tier'),

@@ -25,7 +25,19 @@ from app.personas.schemas import PersonaOut
 from app.rounds import service as round_service
 from app.rounds.router import Closing
 from app.rounds.tiers import NarrationTier
-from app.tables import credit_waits, deaths, injuries, replacements, rolls, service, sheets, styles, tiers, time_limits
+from app.tables import (
+    credit_waits,
+    deaths,
+    injuries,
+    replacements,
+    rolls,
+    service,
+    sheets,
+    styles,
+    tiers,
+    time_limits,
+    whisper_notices,
+)
 from app.tables.errors import (
     MemberNotFoundError,
     NotHostError,
@@ -56,6 +68,7 @@ from app.tables.schemas import (
     TableDetail,
     TablePage,
     TableSummary,
+    WhisperNoticeUpdate,
 )
 
 router = APIRouter(prefix='/tables', tags=['tables'])
@@ -87,6 +100,7 @@ def to_summary(table: GameTable) -> TableSummary:
         narration_tier=table.narration_tier,
         credit_wait_seconds=table.credit_wait_seconds,
         remove_short_payers=table.remove_short_payers,
+        whisper_notice=table.whisper_notice,
         created_at=table.created_at,
     )
 
@@ -486,6 +500,20 @@ async def change_credit_wait(
     진행 중에도 된다. 지금 기다리는 라운드에도 바로 쓴다.
     """
     table = await credit_waits.change_credit_wait(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/whisper-notice', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_whisper_notice(
+    table_id: uuid.UUID, data: WhisperNoticeUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    쪽지를 보낸 사실을 모두에게 알릴지 바꾼다. 방장만 한다.
+
+    켜면 쪽지를 보낼 때마다 "누가 누구에게 보냈다"가 이벤트(whisper_sent)로 간다. 글은 가지 않는다.
+    진행 중에도 된다. 바꾼 뒤에 보내는 쪽지부터 따른다.
+    """
+    table = await whisper_notices.change_whisper_notice(session, user.user_id, table_id, data)
     return to_detail(table, user.user_id)
 
 

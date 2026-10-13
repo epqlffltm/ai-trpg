@@ -1,7 +1,7 @@
 # game-server/app/realtime/service.py
 
 """
-테이블의 스트림. 앉은 사람 하나에게 새 이벤트와 새 채팅을 생기는 대로 흘려보낸다.
+테이블의 스트림. 앉은 사람 하나에게 새 이벤트와 새 채팅, 자기 쪽지함의 새 쪽지를 생기는 대로 흘려보낸다.
 
 HTTP 를 모른다. 메시지(Frame)를 하나씩 내놓을 뿐이고, 글자로 바꿔 응답에 싣는 것은 라우터가 한다.
 
@@ -40,6 +40,8 @@ from app.realtime.sse import Comment, Frame
 from app.tables import repository as table_repository
 from app.tables import state as table_state
 from app.tables.models import TableStatus
+from app.whispers import repository as whisper_repository
+from app.whispers.router import to_whisper
 
 # 박자. 이 시간(초)마다 주석을 보내고 DB 에서 이벤트와 채팅을 모두 읽는다. 신호가 오고 있어도 그렇게 한다.
 # 주석을 보내는 이유: 써 봐야 연결이 죽었는지 안다. 그리고 중간의 프록시가 조용한 연결을 끊지 않게 한다.
@@ -54,6 +56,7 @@ READ_BATCH = 100
 # 메시지의 종류(SSE 의 event 줄)
 EVENT_FRAME = 'table_event'
 MESSAGE_FRAME = 'chat_message'
+WHISPER_FRAME = 'whisper'
 TYPING_FRAME = 'typing'
 NARRATION_FRAME = 'narration_preview'
 CLOSED_FRAME = 'closed'
@@ -74,14 +77,19 @@ class Closed(enum.StrEnum):
 
 @dataclass
 class Cursor:
-    """어디까지 보냈는가. 이벤트와 채팅의 번호를 따로 센다."""
+    """
+    어디까지 보냈는가. 이벤트, 채팅, 쪽지의 번호를 따로 센다.
+
+    쪽지의 번호는 이 사람의 쪽지함의 번호다(app/whispers/models.py). 사람마다 다르다.
+    """
 
     events: int = 0
     messages: int = 0
+    whispers: int = 0
 
     def mark(self) -> str:
         """메시지의 id 에 적을 글자. 받는 쪽이 이 값을 그대로 돌려보내면 그 뒤부터 이어 받는다."""
-        return f'{self.events}-{self.messages}'
+        return f'{self.events}-{self.messages}-{self.whispers}'
 
 
 def seconds_left(viewer: AccessClaims) -> float:
@@ -174,6 +182,22 @@ async def read_messages(session: AsyncSession, table_id: uuid.UUID, cursor: Curs
             return frames
 
 
+async def read_whispers(session: AsyncSession, table_id: uuid.UUID, user_id: uuid.UUID, cursor: Cursor) -> list[Frame]:
+    """
+    이 사람의 쪽지함에서 보낸 번호 뒤의 쪽지를 모두 읽어 메시지로 바꾼다. 읽은 만큼 cursor 를 옮긴다.
+
+    자기 쪽지함만 읽는다. 다른 사람이 주고받은 쪽지는 이 스트림에 오지 않는다.
+    """
+    frames = []
+    while True:
+        whispers = await whisper_repository.list_after(session, table_id, user_id, cursor.whispers, READ_BATCH)
+        for whisper in whispers:
+            cursor.whispers = whisper.sequence
+            frames.append(Frame(event=WHISPER_FRAME, data=to_whisper(whisper).model_dump_json(), id=cursor.mark()))
+        if len(whispers) < READ_BATCH:
+            return frames
+
+
 async def read_new(
     session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID, cursor: Cursor, kinds: set[Kind]
 ) -> tuple[list[Frame], Closed | None]:
@@ -193,6 +217,8 @@ async def read_new(
         frames += await read_events(session, table_id, cursor)
     if Kind.MESSAGES in kinds:
         frames += await read_messages(session, table_id, cursor)
+    if Kind.WHISPERS in kinds:
+        frames += await read_whispers(session, table_id, user_id, cursor)
     return frames, Closed.TABLE_ENDED if table.status == TableStatus.ENDED else None
 
 
@@ -208,7 +234,7 @@ async def stream(
     clock: Callable[[], float] = time.monotonic,
 ) -> AsyncIterator[Frame | Comment]:
     """
-    테이블의 새 이벤트와 새 채팅을 생기는 대로 내놓는다. 닫아야 할 때까지 끝나지 않는다.
+    테이블의 새 이벤트와 새 채팅, 자기 쪽지함의 새 쪽지를 생기는 대로 내놓는다. 닫아야 할 때까지 끝나지 않는다.
 
     cursor 는 어디까지 받았는지다. 그 뒤의 것부터 보낸다.
     받는 쪽이 끊으면 이 함수는 기다리던 자리에서 취소되고, with 를 나가며 방송실의 자리를 치운다.

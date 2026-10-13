@@ -26,8 +26,10 @@ from app.tables import service as tables
 
 router = APIRouter(prefix='/tables/{table_id}/stream', tags=['realtime'])
 
-# Last-Event-ID 의 모양. "이벤트 번호-채팅 번호"다(service.Cursor.mark)
-MARK_PATTERN = re.compile(r'(\d{1,10})-(\d{1,10})')
+# Last-Event-ID 의 모양. "이벤트 번호-채팅 번호-쪽지 번호"다(service.Cursor.mark).
+# 쪽지의 번호가 없는 옛 모양("이벤트-채팅")도 받는다. 쪽지가 생기기 전에 받은 id 로 다시 붙는 쪽이다.
+# 그때 쪽지는 처음부터 온다
+MARK_PATTERN = re.compile(r'(\d{1,10})-(\d{1,10})(?:-(\d{1,10}))?')
 
 # 스트림 응답의 머리말.
 # no-cache: 중간에서 이 응답을 저장해 두었다가 다른 사람에게 주지 않게 한다.
@@ -35,22 +37,23 @@ MARK_PATTERN = re.compile(r'(\d{1,10})-(\d{1,10})')
 STREAM_HEADERS = {'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'}
 
 
-def read_cursor(last_event_id: str | None, events_after: int, messages_after: int) -> Cursor:
+def read_cursor(last_event_id: str | None, events_after: int, messages_after: int, whispers_after: int) -> Cursor:
     """
     어디까지 받았는지를 요청에서 읽는다. 모양이 틀리면 422.
 
     Last-Event-ID 머리말이 있으면 그것을 쓴다. 끊겼다 다시 붙는 쪽이 보내는 값이다.
-    없으면 주소의 events_after, messages_after 를 쓴다. 처음 붙는 쪽이 REST 로 읽은 마지막 번호를 적는다.
+    없으면 주소의 events_after, messages_after, whispers_after 를 쓴다.
+    처음 붙는 쪽이 REST 로 읽은 마지막 번호를 적는다.
     """
     if last_event_id is None:
-        return Cursor(events=events_after, messages=messages_after)
+        return Cursor(events=events_after, messages=messages_after, whispers=whispers_after)
 
     matched = MARK_PATTERN.fullmatch(last_event_id)
     if matched is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail='Last-Event-ID 의 모양이 틀렸습니다.'
         )
-    return Cursor(events=int(matched[1]), messages=int(matched[2]))
+    return Cursor(events=int(matched[1]), messages=int(matched[2]), whispers=int(matched[3] or 0))
 
 
 async def encode_all(items: AsyncIterator[Frame | Comment]) -> AsyncIterator[str]:
@@ -67,16 +70,18 @@ async def open_stream(
     last_event_id: Annotated[str | None, Header()] = None,
     events_after: Annotated[int, Query(ge=0)] = 0,
     messages_after: Annotated[int, Query(ge=0)] = 0,
+    whispers_after: Annotated[int, Query(ge=0)] = 0,
 ) -> StreamingResponse:
     """
-    테이블의 스트림을 연다. 새 이벤트(table_event)와 새 채팅(chat_message)이 생기는 대로 온다.
+    테이블의 스트림을 연다. 새 이벤트(table_event)와 새 채팅(chat_message), 자기 쪽지함의 새 쪽지(whisper)가
+    생기는 대로 온다.
 
-    처음에는 REST 로 지금까지의 것을 읽고, 그 마지막 번호를 events_after, messages_after 에 적어 붙는다.
+    처음에는 REST 로 지금까지의 것을 읽고, 그 마지막 번호를 events_after, messages_after, whispers_after 에 적어 붙는다.
     끊겼다 다시 붙을 때는 마지막으로 받은 메시지의 id 를 Last-Event-ID 머리말로 보낸다.
 
     서버가 닫을 때는 이유를 담은 closed 메시지를 보내고 끝낸다(not_seated, table_ended, token_expired).
     """
-    cursor = read_cursor(last_event_id, events_after, messages_after)
+    cursor = read_cursor(last_event_id, events_after, messages_after, whispers_after)
     state = request.app.state
 
     # 응답을 시작하기 전에 앉은 사람인지 본다. 시작한 뒤에는 404 를 줄 수 없다.

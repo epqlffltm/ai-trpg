@@ -36,7 +36,9 @@ from app.rounds.narrator import (
     StoryContext,
     TreatmentNote,
     Verdict,
+    WhisperNote,
 )
+from app.whispers.models import Whisper
 
 # 굳혀 둔 행동들을 읽는 법. 모양이 틀리면 ValidationError 를 낸다. 우리가 쓴 문서이니 틀렸으면 버그다
 MOVES = TypeAdapter(list[Move])
@@ -240,6 +242,13 @@ def to_past(round_: Round) -> PastRound:
         scene=round_.scene,
         lines=[line for line, _ in said],
         successes=[success for _, success in said],
+    )
+
+
+def to_whisper_note(whisper: Whisper) -> WhisperNote:
+    """GM 에게도 보인 쪽지를 서술자에게 줄 모양으로 바꾼다. 보낼 때의 캐릭터 이름과 글이다."""
+    return WhisperNote(
+        sender=whisper.sender_character_name, recipient=whisper.recipient_character_name, content=whisper.content
     )
 
 

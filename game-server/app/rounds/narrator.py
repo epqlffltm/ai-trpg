@@ -297,6 +297,20 @@ class PersonState:
 
 
 @dataclass(frozen=True)
+class WhisperNote:
+    """
+    플레이어끼리 몰래 주고받은 쪽지 하나. 보낸 쪽이 GM 에게도 보여 주기로 한 것만 온다(app/whispers/).
+
+    이름은 보낼 때의 캐릭터 이름이다. 캐릭터를 정하기 전에 보냈으면 None 이다.
+    다른 플레이어는 이 쪽지를 모른다. 서술자는 장면에서 내용을 드러내지 않고, 인물의 속내를 이해하는 데만 쓴다.
+    """
+
+    sender: str | None
+    recipient: str | None
+    content: str
+
+
+@dataclass(frozen=True)
 class NarrationRequest:
     """서술자에게 주는 것. 방금 닫힌 라운드의 내용이다."""
 
@@ -327,6 +341,8 @@ class NarrationRequest:
     histories: list[PersonHistory] = field(default_factory=list)
     # 이번 장면에 나온 NPC 들의 지금 상태. 라운드를 읽을 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
     people: list[PersonState] = field(default_factory=list)
+    # 이 라운드에 GM 에게도 보인 쪽지. 보낸 순서다. 라운드를 읽을 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
+    whispers: list[WhisperNote] = field(default_factory=list)
 
 
 class Preview(Protocol):
