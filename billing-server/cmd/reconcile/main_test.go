@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/reconcile"
@@ -51,14 +53,19 @@ func captureLogs(t *testing.T) func() []map[string]any {
 
 func TestParseOptions(t *testing.T) {
 	opts, err := parseOptions(nil)
-	if err != nil || opts != (options{staleAfter: 10 * time.Minute, limit: reconcile.DefaultLimit}) {
+	if err != nil || opts != (options{staleAfter: 10 * time.Minute, stuckAfter: 24 * time.Hour, limit: reconcile.DefaultLimit}) {
 		t.Errorf("기본 옵션 = %+v, %v", opts, err)
 	}
-	opts, err = parseOptions([]string{"-stale-after", "1h", "-limit", "5"})
-	if err != nil || opts != (options{staleAfter: time.Hour, limit: 5}) {
+	opts, err = parseOptions([]string{"-stale-after", "1h", "-stuck-after", "72h", "-limit", "5"})
+	if err != nil || opts != (options{staleAfter: time.Hour, stuckAfter: 72 * time.Hour, limit: 5}) {
 		t.Errorf("옵션 = %+v, %v", opts, err)
 	}
-	for _, bad := range [][]string{{"-stale-after", "30s"}, {"-limit", "0"}, {"-what"}, {"now"}} {
+	bads := [][]string{
+		{"-stale-after", "30s"}, {"-limit", "0"}, {"-what"}, {"now"},
+		// 결제 대행사에 한 번도 묻지 않은 주문을 사람에게 넘기지 않는다
+		{"-stale-after", "2h", "-stuck-after", "2h"}, {"-stuck-after", "5m"},
+	}
+	for _, bad := range bads {
 		if _, err := parseOptions(bad); err == nil {
 			t.Errorf("%v: 오류가 나야 한다", bad)
 		}
@@ -67,6 +74,8 @@ func TestParseOptions(t *testing.T) {
 
 func TestExitCodes(t *testing.T) {
 	dirty := reconcile.Report{Mismatches: []reconcile.Mismatch{{Check: reconcile.CheckPaidBalance, ID: "x"}}}
+	stuck := reconcile.Report{Stuck: []order.Order{{Status: order.StatusConfirming}}}
+	dirtyAndStuck := reconcile.Report{Mismatches: dirty.Mismatches, Stuck: stuck.Stuck}
 	cases := map[string]struct {
 		report reconcile.Report
 		err    error
@@ -76,7 +85,10 @@ func TestExitCodes(t *testing.T) {
 		"밀린 것만 있다":    {reconcile.Report{Overdue: reconcile.Overdue{Holds: 3}}, nil, 0},
 		"맞지 않는 줄이 있다": {dirty, nil, 1},
 		"끝내지 못했다":     {reconcile.Report{}, errors.New("db"), 2},
-		"끝내지 못했지만 어긋난 것은 찾았다": {dirty, errors.New("provider"), 1},
+		"끝내지 못했지만 어긋난 것은 찾았다":  {dirty, errors.New("provider"), 1},
+		"사람이 볼 주문이 있다":         {stuck, nil, 3},
+		"어긋난 줄도 사람이 볼 주문도 있다":  {dirtyAndStuck, nil, 1},
+		"끝내지 못했고 사람이 볼 주문이 있다": {stuck, errors.New("db"), 2},
 	}
 	for name, tc := range cases {
 		if got := exitCode(tc.report, tc.err); got != tc.want {
@@ -150,5 +162,61 @@ func TestPrintReportShowsCountsButNoIDs(t *testing.T) {
 	}
 	if strings.Contains(text, "424242") {
 		t.Errorf("화면에 번호가 찍혔다: %s", text)
+	}
+}
+
+func TestOnceLogsEachStuckOrder(t *testing.T) {
+	lines := captureLogs(t)
+	since := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	stuckID := uuid.MustParse("8c1f0000-0000-4000-8000-0000000000aa")
+	fake := &fakeRunner{report: reconcile.Report{Stuck: []order.Order{
+		{ID: stuckID, Status: order.StatusRefunding, UpdatedAt: since, PaymentKey: "tgen_secret_key"},
+	}}}
+
+	if _, err := once(context.Background(), fake, options{staleAfter: time.Minute, stuckAfter: time.Hour, limit: 1}); err != nil {
+		t.Fatalf("오류 = %v", err)
+	}
+
+	if fake.got.StuckAfter != time.Hour {
+		t.Errorf("넘긴 옵션 = %+v", fake.got)
+	}
+	got := lines()
+	// 사람이 볼 주문(warning), 작업이 끝났다(debug)
+	if len(got) != 2 || got[0]["level"] != "warning" || got[0]["error_code"] != "order.stuck" ||
+		got[0]["order_id"] != stuckID.String() || got[0]["status"] != "refunding" || got[0]["since"] != "2026-03-01T09:00:00.000Z" {
+		t.Fatalf("줄 = %v", got)
+	}
+	// 결제 번호는 남기지 않는다
+	for _, line := range got {
+		for _, value := range line {
+			if text, ok := value.(string); ok && strings.Contains(text, "tgen_secret_key") {
+				t.Errorf("로그에 결제 번호가 실렸다: %v", line)
+			}
+		}
+	}
+}
+
+func TestPrintReportCountsStuckOrdersByKind(t *testing.T) {
+	var out bytes.Buffer
+	report := reconcile.Report{Stuck: []order.Order{
+		{ID: uuid.New(), Status: order.StatusConfirming},
+		{ID: uuid.New(), Status: order.StatusConfirming},
+		{ID: uuid.New(), Status: order.StatusRefunding},
+	}}
+
+	printReport(&out, report, nil)
+
+	text := out.String()
+	if !strings.Contains(text, "사람이 볼 주문: 3 (승인 확인 2, 환불 확인 1)") || !strings.Contains(text, "cmd/orders") {
+		t.Errorf("화면 = %s", text)
+	}
+	if strings.Contains(text, report.Stuck[0].ID.String()) {
+		t.Errorf("화면에 번호가 찍혔다: %s", text)
+	}
+
+	out.Reset()
+	printReport(&out, reconcile.Report{}, nil)
+	if !strings.Contains(out.String(), "사람이 볼 주문: 0") || strings.Contains(out.String(), "cmd/orders") {
+		t.Errorf("없을 때의 화면 = %s", out.String())
 	}
 }
