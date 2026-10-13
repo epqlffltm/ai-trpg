@@ -21,6 +21,7 @@ def handed_out(sheet: dict) -> dict:
     테이블이 이 시트를 막 줬을 때 응답에 실리는 모양. 게임을 시작할 때의 시트다.
 
     그 사람의 첫 캐릭터이고, HP 는 가득 차 있고, 죽음의 굴림은 센 것이 없고, 살아 있고, 입은 부상이 없다.
+    판에 시작 소지품이 없으면 가진 것도 없다.
     """
     fresh = {'number': 1, 'hp': sheet['max_hp'], 'death_successes': 0, 'death_failures': 0, 'dead': False}
-    return {**sheet, **fresh, 'injuries': []}
+    return {**sheet, **fresh, 'injuries': [], 'items': []}

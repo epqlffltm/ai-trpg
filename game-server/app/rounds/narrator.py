@@ -169,6 +169,14 @@ class DeathSaveNote:
 
 
 @dataclass(frozen=True)
+class ItemNote:
+    """캐릭터가 가진 물건 한 가지. 판의 로어북 물건 항목의 이름과 개수다."""
+
+    name: str
+    count: int
+
+
+@dataclass(frozen=True)
 class Move:
     """한 캐릭터가 이번 라운드에 하겠다고 한 일과, 판정이 있었으면 그 결과."""
 
@@ -193,6 +201,9 @@ class Move:
     healed: list[HealNote] = field(default_factory=list)
     # 지목하는 행동이면 그 결과. 지목은 판정이 아니라 verdict 와 함께 있지 않다
     naming: NamingNote | None = None
+    # 이 라운드가 닫기 시작할 때 이 캐릭터가 가진 물건들. 판의 물건 순서다.
+    # 서술자는 없는 물건을 쓰는 장면을 쓰지 않는다. 소지품을 바꾸는 것은 서버뿐이다
+    items: list[ItemNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -509,11 +520,17 @@ def describe_death_save(note: DeathSaveNote) -> str:
     return f'(죽음의 굴림 {result}: {note.roll}, 목표 {note.target}. {counts}, {FATES[note.fate]})'
 
 
+def describe_items(items: list[ItemNote]) -> str:
+    """가진 물건들을 한 줄로 적는다. 하나뿐이면 개수를 적지 않는다. 예: 치유 물약 2개, 밧줄"""
+    return ', '.join(item.name if item.count == 1 else f'{item.name} {item.count}개' for item in items)
+
+
 def describe_move(move: Move) -> str:
     """
     한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, 치료였으면 그 결과를,
     HP 가 바뀌었으면 그 뒤에 붙인다. 지목이었으면 그 결과를 붙인다.
-    죽음의 굴림을 굴렸으면 그 뒤에, 시간이 지나 나은 부상이 있으면 그 뒤에, 입고 있는 부상이 있으면 맨 뒤에 붙인다.
+    죽음의 굴림을 굴렸으면 그 뒤에, 시간이 지나 나은 부상이 있으면 그 뒤에, 입고 있는 부상이 있으면 그 뒤에,
+    가진 물건이 있으면 맨 뒤에 붙인다.
     """
     parts = [f'{move.character_name}: {move.content or describe_idle(move)}']
     # 선언을 냈지만 앞사람의 치료가 실패해 그 자리에서 죽었다. 선언한 일을 하지 못했다
@@ -535,6 +552,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_healed(move.healed))
     if move.injuries:
         parts.append(f'[입은 부상: {describe_injuries(move.injuries)}]')
+    if move.items:
+        parts.append(f'[소지품: {describe_items(move.items)}]')
     return ' '.join(parts)
 
 

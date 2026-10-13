@@ -13,7 +13,15 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.assets.models import PLAYER_MADE_MODES, TABLE_MAX_PLAYERS, CharacterMode, NarrationStyle, Rating
+from app.assets.models import (
+    ITEM_STACK_MAX,
+    PLAYER_MADE_MODES,
+    TABLE_MAX_PLAYERS,
+    CharacterMode,
+    ItemKind,
+    NarrationStyle,
+    Rating,
+)
 from app.assets.scenarios.schemas import (
     CharacterDescription,
     CharacterModes,
@@ -244,6 +252,41 @@ class InjuryOut(BaseModel):
     ends_after_round: int | None
 
 
+class ItemOut(BaseModel):
+    """
+    캐릭터가 가진 물건 한 가지. 이름은 판의 로어북 물건 항목의 이름이다.
+
+    설명(항목의 글)은 싣지 않는다. 로어북은 AI 가 읽는 설정이라 비밀이 들어 있을 수 있다.
+    """
+
+    entry_id: uuid.UUID
+    name: str
+    kind: ItemKind
+    count: int
+
+
+class CatalogItemOut(BaseModel):
+    """
+    판에 있는 물건 하나. 로어북의 물건 항목이다.
+
+    kind 가 consumable 이면 쓰면 하나 줄어든다. heals 가 있으면 쓸 때 HP 를 그 등급(rules 의 magnitudes)만큼 되돌린다.
+    """
+
+    entry_id: uuid.UUID
+    name: str
+    kind: ItemKind
+    heals: str | None
+
+
+class ItemChange(BaseModel):
+    """방장이 물건을 주거나 빼앗을 때 받는 값. 어느 물건을 몇 개."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    count: int = Field(default=1, ge=1, le=ITEM_STACK_MAX)
+
+
 class SheetOut(BaseModel):
     """앉은 사람의 캐릭터 시트. 앉은 사람은 서로의 시트를 본다."""
 
@@ -262,6 +305,8 @@ class SheetOut(BaseModel):
     dead: bool
     # 입고 있는 부상들. 생긴 순서다. 풀리거나 나은 것은 들어가지 않는다
     injuries: list[InjuryOut] = []
+    # 가진 물건들. 판의 물건 순서다(TableDetail.items). 앉은 사람은 서로의 소지품을 본다
+    items: list[ItemOut] = []
 
 
 class FallenOut(BaseModel):
@@ -389,6 +434,8 @@ class TableDetail(TableSummary):
     # 시나리오의 제작자가 추천한 문체. 방장이 문체를 고르는 화면에서 "추천"을 표시한다
     recommended_narration_style: NarrationStyle
     pregens: list[PregenChoice]
+    # 이 테이블의 판에 있는 물건들. 방장이 줄 수 있는 것이고, 소지품의 이름과 종류를 여기서 찾는다
+    items: list[CatalogItemOut]
     members: list[MemberOut]
     # 초대 코드. 방장에게만 보인다
     invite_code: str | None
