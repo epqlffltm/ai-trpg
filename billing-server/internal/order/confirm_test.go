@@ -304,8 +304,11 @@ func TestConfirmFinishesEvenIfTheCallerLeaves(t *testing.T) {
 	f.wantPaidCredits(credits, 1)
 }
 
-// brokenWallet 은 크레딧을 넣다가 실패하는 지갑이다.
-type brokenWallet struct{ calls int }
+// brokenWallet 은 크레딧을 넣다가 실패하는 지갑이다. 청약철회의 일은 진짜 지갑의 것을 쓰지 않는다(부르지 않는다).
+type brokenWallet struct {
+	order.Refunder
+	calls int
+}
 
 func (b *brokenWallet) DepositForOrder(context.Context, pgx.Tx, uuid.UUID, credit.Amount, uuid.UUID) error {
 	b.calls++

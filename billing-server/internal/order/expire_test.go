@@ -238,7 +238,7 @@ func TestResolveStaleKeepsGoingPastAFailingOrder(t *testing.T) {
 	finished := f.unsure()
 	f.clock.Advance(staleAfter)
 	f.answer(payment.Result{Status: payment.StatusApproved}, nil)
-	broken := &flakyWallet{real: f.wallet, failFor: stuck.ID}
+	broken := &flakyWallet{real: f.wallet, failFor: stuck.ID, Refunder: f.wallet}
 	resolver := newService(t, f.pool, f.clock.Now, f.provider, broken)
 
 	report, err := resolver.ResolveStale(ctx(t), staleAfter, 100)
@@ -284,8 +284,9 @@ func TestNewServiceRejectsANonPositiveTTL(t *testing.T) {
 
 // flakyWallet 은 한 주문에만 크레딧을 넣지 못하는 지갑이다. 나머지는 진짜 지갑에 넘긴다.
 type flakyWallet struct {
-	real    order.Depositor
+	real    order.Wallet
 	failFor uuid.UUID
+	order.Refunder
 }
 
 func (w *flakyWallet) DepositForOrder(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, orderID uuid.UUID) error {

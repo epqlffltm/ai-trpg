@@ -141,6 +141,32 @@ func (q *Queries) GetBalance(ctx context.Context, arg GetBalanceParams) (GetBala
 	return i, err
 }
 
+const getOrderLot = `-- name: GetOrderLot :one
+SELECT id, amount, remaining
+FROM paid_lots
+WHERE user_id = $1 AND order_id = $2::UUID
+`
+
+type GetOrderLotParams struct {
+	UserID  uuid.UUID
+	OrderID uuid.UUID
+}
+
+type GetOrderLotRow struct {
+	ID        int64
+	Amount    credit.Amount
+	Remaining credit.Amount
+}
+
+// 그 사용자의 그 주문의 묶음을 읽는다. 청약철회가 "하나도 줄지 않았나"를 본다.
+// 바꾸기 전에 부를 때는 지갑의 줄을 잠근 뒤에 부른다.
+func (q *Queries) GetOrderLot(ctx context.Context, arg GetOrderLotParams) (GetOrderLotRow, error) {
+	row := q.db.QueryRow(ctx, getOrderLot, arg.UserID, arg.OrderID)
+	var i GetOrderLotRow
+	err := row.Scan(&i.ID, &i.Amount, &i.Remaining)
+	return i, err
+}
+
 const hasFreeGrantWithKey = `-- name: HasFreeGrantWithKey :one
 SELECT EXISTS (
     SELECT 1 FROM free_grants

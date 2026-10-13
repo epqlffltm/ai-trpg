@@ -108,6 +108,10 @@ func (approveAll) Lookup(context.Context, payment.Request) (payment.Result, erro
 	return payment.Result{Status: payment.StatusApproved}, nil
 }
 
+func (approveAll) Cancel(context.Context, payment.Request) (payment.Result, error) {
+	return payment.Result{Status: payment.StatusCanceled}, nil
+}
+
 func TestNewServicesUsesTheGivenProvider(t *testing.T) {
 	rules := config.Rules{FreeCreditTTL: time.Hour, HoldTTL: time.Hour, OrderTTL: time.Hour}
 	services, err := app.NewServices(testenv.Pool(t), rules, approveAll{}, func() time.Time { return now })

@@ -41,6 +41,10 @@ var (
 	ErrAlreadyGranted = errors.New("이미 받은 크레딧입니다")
 	// ErrInsufficient 는 쓰려는 양이 가진 것보다 많다는 오류다. 이 오류가 나면 아무것도 바뀌지 않는다.
 	ErrInsufficient = errors.New("크레딧이 모자랍니다")
+	// ErrNoOrderLot 은 그 사용자에게 그 주문의 묶음이 없다는 오류다.
+	ErrNoOrderLot = errors.New("그 주문으로 들어온 크레딧이 없습니다")
+	// ErrLotUsed 는 그 주문의 크레딧이 일부라도 줄었다는 오류다(쓴 것, 홀드로 묶인 것). 이 오류가 나면 아무것도 바뀌지 않는다.
+	ErrLotUsed = errors.New("그 주문으로 산 크레딧을 이미 썼습니다")
 )
 
 // grantKeyPattern 은 한 번만 주는 지급의 이름으로 받는 모양이다. DB 에 그대로 적히므로 글자를 좁게 받는다.
@@ -81,6 +85,10 @@ const (
 	ReasonHold Reason = "hold"
 	// ReasonRelease 는 홀드로 빼 둔 크레딧이 돌아왔다는 뜻이다.
 	ReasonRelease Reason = "release"
+	// ReasonRefund 는 청약철회로 그 주문의 묶음을 비웠다는 뜻이다.
+	ReasonRefund Reason = "refund"
+	// ReasonUnrefund 는 결제 대행사가 취소를 거절해 비웠던 묶음으로 크레딧을 돌려놓았다는 뜻이다.
+	ReasonUnrefund Reason = "unrefund"
 	// ReasonRegroup 은 묶음 없이 있던 산 크레딧을 묶음으로 옮겼다는 뜻이다. 잔액은 그대로다.
 	// 묶음을 두기 전(00007)의 잔액과, 그 전에 건 홀드가 돌아온 크레딧에만 생긴다.
 	ReasonRegroup Reason = "regroup"

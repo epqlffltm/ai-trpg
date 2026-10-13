@@ -37,6 +37,13 @@ FROM paid_lots
 WHERE user_id = sqlc.arg(user_id) AND remaining > 0
 ORDER BY created_at, id;
 
+-- name: GetOrderLot :one
+-- 그 사용자의 그 주문의 묶음을 읽는다. 청약철회가 "하나도 줄지 않았나"를 본다.
+-- 바꾸기 전에 부를 때는 지갑의 줄을 잠근 뒤에 부른다.
+SELECT id, amount, remaining
+FROM paid_lots
+WHERE user_id = sqlc.arg(user_id) AND order_id = sqlc.arg(order_id)::UUID;
+
 -- name: TakeFromPaidLot :exec
 -- 산 크레딧의 묶음에서 amount 만큼 뺀다. 남은 것보다 많이 빼면 CHECK 가 막는다.
 UPDATE paid_lots

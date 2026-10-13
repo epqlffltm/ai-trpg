@@ -2,7 +2,7 @@
 
 // Package reconcile 은 하루 한 번 도는 대사(對査)다. 장부가 맞는지 보고, 결과를 모르는 채로 남은 주문을 끝낸다.
 //
-//  1. 오래 confirming 에 머문 주문을 결제 대행사에 물어 끝낸다(order.ResolveStale). 이것만 상태를 바꾼다.
+//  1. 오래 confirming·refunding 에 머문 주문을 결제 대행사에 물어 끝낸다(order.ResolveStale). 이것만 상태를 바꾼다.
 //  2. "지금의 값"(지갑, 산 크레딧의 묶음, 지급 묶음, 주문, 홀드)과 원장이 맞는지 본다. 읽기만 한다. 맞지 않는 줄의 번호를 돌려줄 뿐 고치지 않는다.
 //     원장은 지울 수 없고, 무엇이 맞는지는 사람이 정한다.
 //  3. 정리 작업이 밀려 있지 않은지 센다(만료 시각이 한참 지났는데 아직 끝나지 않은 것).
@@ -40,6 +40,8 @@ const (
 	CheckPaidOrderDeposit = "paid_order_deposit"
 	// CheckDepositOrder 는 주문으로 들어온 크레딧마다 그 주문이 치른 상태인지다. 번호는 원장의 줄이다.
 	CheckDepositOrder = "deposit_order"
+	// CheckLotRefund 는 청약철회의 줄(refund, unrefund)이 주문의 상태와 맞는지다. 번호는 산 크레딧의 묶음이다.
+	CheckLotRefund = "lot_refund"
 	// CheckHoldLines 는 홀드의 상태와 원장의 줄(빠진 것, 돌아온 것)이 맞는지다. 번호는 홀드다.
 	CheckHoldLines = "hold_lines"
 )
@@ -47,7 +49,7 @@ const (
 // DefaultLimit 은 검사마다 돌려주는 맞지 않는 줄의 가장 많은 수다. 그보다 많으면 무언가 크게 잘못된 것이다. 다 볼 필요가 없다.
 const DefaultLimit = 1000
 
-// StaleResolver 는 오래된 confirming 주문을 끝내는 것이다. *order.Service 가 이 모양이다.
+// StaleResolver 는 오래된 confirming·refunding 주문을 끝내는 것이다. *order.Service 가 이 모양이다.
 type StaleResolver interface {
 	ResolveStale(ctx context.Context, olderThan time.Duration, limit int) (order.StaleReport, error)
 }
@@ -86,7 +88,7 @@ func (r Report) Clean() bool {
 
 // Options 는 대사 한 번을 어떻게 할지다.
 type Options struct {
-	// StaleAfter 는 confirming 에 이만큼 머문 주문을 결제 대행사에 묻는다. 정리 작업이 밀렸다고 볼 때도 이만큼 지난 것만 센다.
+	// StaleAfter 는 confirming·refunding 에 이만큼 머문 주문을 결제 대행사에 묻는다. 정리 작업이 밀렸다고 볼 때도 이만큼 지난 것만 센다.
 	StaleAfter time.Duration
 	// Limit 은 검사마다, 그리고 결제 대행사에 물을 주문의 가장 많은 수다. 0 이하면 DefaultLimit 이다.
 	Limit int
@@ -161,6 +163,9 @@ var checks = []check{
 	}},
 	{CheckDepositOrder, func(ctx context.Context, q *reconciledb.Queries, limit int32) ([]string, error) {
 		return intStrings(q.DepositsWithoutPaidOrder(ctx, limit))
+	}},
+	{CheckLotRefund, func(ctx context.Context, q *reconciledb.Queries, limit int32) ([]string, error) {
+		return intStrings(q.LotRefundMismatches(ctx, limit))
 	}},
 	{CheckHoldLines, func(ctx context.Context, q *reconciledb.Queries, limit int32) ([]string, error) {
 		return uuidStrings(q.HoldLineMismatches(ctx, limit))
