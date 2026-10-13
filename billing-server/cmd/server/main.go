@@ -85,6 +85,7 @@ func run() error {
 		Orders:            services.Orders,
 		Notifier:          services.Orders,
 		WebhookSecret:     settings.WebhookSecret,
+		TossWebhook:       settings.ReceivesTossNotifications(),
 		Holds:             services.Holds,
 		GameServerSecret:  settings.GameServerSecret,
 		AuthServerSecret:  settings.AuthServerSecret,
