@@ -50,6 +50,8 @@ class Conflict(enum.StrEnum):
     RECIPIENT_DEAD = 'recipient_dead'
     # 물건을 받을 캐릭터가 그 물건을 더 가질 수 없다(한 가지 99 개)
     RECIPIENT_FULL = 'recipient_full'
+    # 맵에서 가거나 찾으려는데 캐릭터가 맵에 서 있지 않다. 맵이 없는 판이거나, 맵이 생기기 전에 시작한 테이블이다
+    NOT_ON_MAP = 'not_on_map'
 
 
 class RoundConflictError(Exception):
@@ -77,6 +79,7 @@ class ActionTargetError(Exception):
     선언에 붙은 행동의 대상이 겨눌 수 없는 것이다.
 
     field 는 행동의 어느 칸인지다. target 이면 이 테이블에 앉은 사람이 아니고, npc 면 이번 장면에 나온 인물이 아니다.
+    place 면 지금 장소에서 아는 길로 이어진 장소가 아니다.
     """
 
     def __init__(self, field: str) -> None:

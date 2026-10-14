@@ -288,6 +288,10 @@ class GameTable(Base):
     # 많아야 장소의 수(수십)라 테이블을 읽을 때 함께 읽는다. 맵이 없는 판이면 비어 있다
     visits: Mapped[list['TableVisit']] = relationship(lazy='selectin', cascade='all, delete-orphan')
 
+    # 이 테이블의 캐릭터가 찾아낸 숨긴 길들. 서 본 곳과 함께 맵의 무엇을 아는지 계산하는 재료다.
+    # 많아야 길의 수라 테이블을 읽을 때 함께 읽는다
+    found_routes: Mapped[list['TableFoundRoute']] = relationship(lazy='selectin', cascade='all, delete-orphan')
+
 
 class TableMember(Base):
     """
@@ -633,6 +637,26 @@ class TableVisit(Base):
 
     # 처음 선 때
     visited_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TableFoundRoute(Base):
+    """
+    테이블 하나에서 캐릭터가 찾아낸 숨긴 길 하나(app/rounds/map_actions.py 의 찾기).
+
+    길은 판의 길의 두 끝(from_place, to_place)으로 가리킨다. 판은 같은 두 장소를 잇는 길을 둘 두지 않는다.
+    찾은 것은 테이블의 모두가 함께 안다. 한 번 찾은 길은 잊지 않는다.
+    """
+
+    __tablename__ = 'table_found_routes'
+
+    # 세 칸을 합쳐 기본 키로 삼는다. 한 길은 한 번만 적는다. 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 판(content)의 길의 두 끝. 판에 적힌 방향 그대로다
+    from_place: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    to_place: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+
+    # 찾은 때
+    found_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class TableInjury(Base):

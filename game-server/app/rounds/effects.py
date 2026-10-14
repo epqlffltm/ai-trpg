@@ -11,7 +11,7 @@ DB 를 모른다. 저장하지 않는다.
 import uuid
 from dataclasses import dataclass, field
 
-from app.assets.scenarios.snapshot import EntrySnapshot
+from app.assets.scenarios.snapshot import EntrySnapshot, Snapshot
 from app.engine.dice import Dice
 from app.engine.health import Change
 from app.engine.ruleset import Ruleset
@@ -40,6 +40,8 @@ class Judging:
     people: list[EntrySnapshot]
     # 판의 물건들(app/tables/items.py 의 catalog). 물건을 쓰거나 건넬 때 이름과 규칙을 찾는다
     items: dict[uuid.UUID, CatalogItem] = field(default_factory=dict)
+    # 판의 복사본. 맵에서 가고 찾을 때 길과 장소를 찾는다(app/rounds/map_actions.py)
+    snapshot: Snapshot | None = None
 
 
 def injury_after(judging: Judging, change: Change, max_hp: int, dead: bool, rows: list) -> dict | None:

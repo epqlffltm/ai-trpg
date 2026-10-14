@@ -5,7 +5,8 @@
 
 서술이 실패해 다시 맡겨도 주사위를 다시 굴리지 않는다. 다시 굴리면 서술을 실패시켜 결과를 바꿀 수 있다.
   1. 행동들을 들어온 순서로 판정한다(roll_checks). 판정이면 app/rounds/checks.py, 치료면 app/rounds/treatments.py,
-     지목이면 app/rounds/naming.py(주사위를 굴리지 않는다), 물건을 쓰거나 건네면 app/rounds/item_actions.py.
+     지목이면 app/rounds/naming.py(주사위를 굴리지 않는다), 물건을 쓰거나 건네면 app/rounds/item_actions.py,
+     맵에서 가거나 찾으면 app/rounds/map_actions.py.
   2. 쓰러진 캐릭터는 죽음의 굴림을 굴린다(roll_death_saves, app/engine/death.py).
      이번 라운드에 쓰러진 캐릭터는 굴리지 않는다. 동료가 일으킬 틈이 한 라운드는 있다.
      이번 라운드에 회복을 받아 일어난 캐릭터도 굴리지 않는다. 행동의 결과를 먼저 끝내고 나서 굴린다.
@@ -18,13 +19,14 @@ from dataclasses import asdict
 from app.assets.scenarios.snapshot import person_entries, read_snapshot
 from app.engine import action as actions
 from app.engine import death
-from app.engine.action import CheckAction, GiveAction, NameAction, TreatAction, UseAction
+from app.engine.action import AnyAction, GiveAction, MoveAction, NameAction, SearchAction, TreatAction, UseAction
 from app.engine.dice import Dice
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import Scene
 from app.rounds.checks import judge_check
 from app.rounds.effects import Judging
 from app.rounds.item_actions import judge_give, judge_use
+from app.rounds.map_actions import judge_move, judge_search
 from app.rounds.models import Round
 from app.rounds.naming import judge_naming
 from app.rounds.state import find_declaration, rules_of
@@ -33,13 +35,11 @@ from app.tables import items, sheets
 from app.tables.models import GameTable, TableMember
 
 
-def judge(
-    judging: Judging, member: TableMember, action: CheckAction | TreatAction | NameAction | UseAction | GiveAction
-) -> dict:
+def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     """
     한 사람의 행동을 판정하고 그 결과를 정한다.
     행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming),
-    물건 쓰기(judge_use), 건네기(judge_give)다.
+    물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(judge_search)다.
     """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
@@ -49,6 +49,10 @@ def judge(
         return judge_use(judging, member, action)
     if isinstance(action, GiveAction):
         return judge_give(judging, member, action)
+    if isinstance(action, MoveAction):
+        return judge_move(judging, member, action)
+    if isinstance(action, SearchAction):
+        return judge_search(judging, member)
     return judge_check(judging, member, action)
 
 
@@ -88,6 +92,7 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> No
         npcs=scene.npcs,
         people=person_entries(snapshot),
         items=items.catalog(snapshot),
+        snapshot=snapshot,
     )
     for member, declaration in rolling:
         # 앞사람의 치료가 실패해 즉사했으면 그 캐릭터는 행동하지 못한다. 쓰러진 것과 다르다
