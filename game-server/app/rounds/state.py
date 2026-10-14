@@ -119,6 +119,20 @@ def item_give_of(declaration: Declaration | None) -> dict | None:
     return declaration.outcome.get('item_give')
 
 
+def move_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 가기의 결과(app/rounds/map_actions.py 의 judge_move). 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('move')
+
+
+def search_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 찾기의 결과(app/rounds/map_actions.py 의 judge_search). 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('search')
+
+
 def naming_of(declaration: Declaration | None) -> dict | None:
     """이 선언에 적힌 지목의 결과(app/rounds/naming.py 의 judge_naming). 지목이 아니었거나 결과가 없으면 None."""
     if declaration is None or declaration.outcome is None:
