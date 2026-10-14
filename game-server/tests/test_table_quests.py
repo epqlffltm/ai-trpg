@@ -195,6 +195,7 @@ async def test_revealing_a_quest_shows_it_to_everyone(client: AsyncClient, me: d
     assert response.status_code == status.HTTP_200_OK, response.text
     assert quests_in(await read_table(client, friend, table)) == [('왕녀 구출', 'active'), ('광산의 비밀', 'active')]
     [event] = await events_of(client, friend, table, 'quest_changed')
+    assert event['actor_id'] == str(ME)
     assert event['payload'] == {
         'entry_id': lore['mine']['id'],
         'name': '광산의 비밀',

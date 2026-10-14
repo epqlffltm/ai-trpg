@@ -78,6 +78,10 @@ class Conflict(enum.StrEnum):
     QUEST_FINISHED = 'quest_finished'
     # 이미 진행 중인 퀘스트를 진행 중으로 바꾸려 했다
     QUEST_ALREADY_ACTIVE = 'quest_already_active'
+    # 장부 초안의 그 줄은 이미 결정했거나(받아들임, 버림) 만료됐다
+    DRAFT_DECIDED = 'draft_decided'
+    # 장부 초안을 쓴 뒤에 그 캐릭터가 바뀌었다(죽고 새 캐릭터가 들어왔다). 초안의 캐릭터에게 줄 수 없다
+    DRAFT_STALE = 'draft_stale'
 
 
 class TableConflictError(Exception):
