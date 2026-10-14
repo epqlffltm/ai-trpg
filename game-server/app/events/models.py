@@ -107,6 +107,9 @@ class EventType(enum.StrEnum):
     # 방장이 퀘스트의 상태를 바꿨다(app/tables/quest_changes.py). 무엇에서 무엇으로, 성공이면 누가 무엇을 받았는가.
     # 숨김으로 바꾸는 일은 없으므로 숨긴 퀘스트는 이 이벤트로 새지 않는다
     QUEST_CHANGED = 'quest_changed'
+    # 방장이 캐릭터를 맵의 다른 장소로 옮겼다(app/tables/place_changes.py). 누가, 어디에서, 어디로.
+    # 아는 장소로만 옮기므로 숨긴 장소는 이 이벤트로 새지 않는다
+    CHARACTER_MOVED = 'character_moved'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고, 방장이 다시 맡길 수 있다
