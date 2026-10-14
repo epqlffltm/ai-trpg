@@ -31,6 +31,7 @@ from app.assets.models import (
     SCENARIO_MAX_OPENINGS,
     SCENARIO_MAX_PREGENS,
     SCENARIO_MAX_QUEST_RULES,
+    SCENARIO_MAX_ROUTES,
     SCENARIO_MAX_STARTING_ITEMS,
     SCENARIO_OPENING_MAX_LENGTH,
     TABLE_MAX_PLAYERS,
@@ -251,6 +252,69 @@ def reject_duplicate_quests(rules: list[QuestRule]) -> list[QuestRule]:
     return rules
 
 
+class FindCheck(BaseModel):
+    """
+    숨긴 길을 찾는 판정. 어느 능력치(ability)로, 어느 난이도(difficulty)로 굴리는가.
+
+    둘 다 룰북의 규칙에 있는 이름이다. 난이도를 적지 않으면 규칙의 기본 난이도다. 규칙에 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    ability: Key
+    difficulty: Key | None = None
+
+
+class RouteRule(BaseModel):
+    """
+    길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.
+
+    two_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).
+    hidden 이면 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 숨기지 않은 길에는 없다.
+    가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    from_place: uuid.UUID
+    to_place: uuid.UUID
+    two_way: bool = True
+    hidden: bool = False
+    find: FindCheck | None = None
+
+    @model_validator(mode='after')
+    def leads_somewhere_else(self) -> 'RouteRule':
+        """제자리로 돌아오는 길은 받지 않는다."""
+        if self.from_place == self.to_place:
+            raise ValueError('길의 두 끝이 같은 장소입니다.')
+        return self
+
+    @model_validator(mode='after')
+    def find_only_when_hidden(self) -> 'RouteRule':
+        """숨긴 길만 찾는 판정이 있다. 숨기고 판정이 없으면 영영 드러나지 않는다."""
+        if self.hidden and self.find is None:
+            raise ValueError('숨긴 길에는 찾는 판정(find)이 있어야 합니다.')
+        if not self.hidden and self.find is not None:
+            raise ValueError('찾는 판정(find)은 숨긴 길에만 적습니다.')
+        return self
+
+    @field_serializer('from_place', 'to_place')
+    def place_as_text(self, place: uuid.UUID) -> str:
+        """장소의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(place)
+
+
+def reject_duplicate_routes(routes: list[RouteRule]) -> list[RouteRule]:
+    """같은 두 장소를 잇는 길이 둘이면 거부한다. 방향이 달라도 같은 두 장소다. 어느 길로 가는지 가를 수 없다."""
+    pairs = [frozenset((route.from_place, route.to_place)) for route in routes]
+    if len(set(pairs)) != len(pairs):
+        raise ValueError('같은 두 장소를 잇는 길이 두 번 있습니다.')
+    return routes
+
+
+Routes = Annotated[list[RouteRule], Field(max_length=SCENARIO_MAX_ROUTES), AfterValidator(reject_duplicate_routes)]
+
+
 QuestRules = Annotated[
     list[QuestRule], Field(max_length=SCENARIO_MAX_QUEST_RULES), AfterValidator(reject_duplicate_quests)
 ]
@@ -316,6 +380,8 @@ class ScenarioCreate(AssetCreate):
     items: ItemRules = []
     starting_items: StartingItems = []
     quests: QuestRules = []
+    start_place: uuid.UUID | None = None
+    routes: Routes = []
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
@@ -327,16 +393,16 @@ class ScenarioUpdate(AssetUpdate):
     """
     시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
-    rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp 는 null 을 보내면 비운다.
+    rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
-    lorebook_ids, openings, pregens, npc_sheets, items, starting_items, quests, character_modes 는
+    lorebook_ids, openings, pregens, npc_sheets, items, starting_items, quests, routes, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다.
     """
 
     clearable: ClassVar[frozenset[str]] = frozenset(
-        {'rulebook_id', 'world_id', 'default_sheet', 'default_npc_sheet', 'player_made_hp'}
+        {'rulebook_id', 'world_id', 'default_sheet', 'default_npc_sheet', 'player_made_hp', 'start_place'}
     )
 
     rating: Rating | None = None
@@ -353,6 +419,8 @@ class ScenarioUpdate(AssetUpdate):
     items: ItemRules | None = None
     starting_items: StartingItems | None = None
     quests: QuestRules | None = None
+    start_place: uuid.UUID | None = None
+    routes: Routes | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
@@ -388,6 +456,8 @@ class ScenarioDetail(ScenarioSummary):
     items: list[ItemRule]
     starting_items: list[ItemStack]
     quests: list[QuestRule]
+    start_place: uuid.UUID | None
+    routes: list[RouteRule]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle

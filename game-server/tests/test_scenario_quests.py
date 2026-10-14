@@ -149,7 +149,7 @@ async def test_quests_are_frozen_into_the_version(client: AsyncClient, me: dict[
 
     snapshot = await published(client, me, scenario)
 
-    assert snapshot['format'] == SNAPSHOT_FORMAT == 18
+    assert snapshot['format'] == SNAPSHOT_FORMAT
     assert snapshot['quests'] == [
         {'entry_id': lore['rescue']['id'], 'start': 'active', 'reward': [stack(lore['potion'], 2)]}
     ]
