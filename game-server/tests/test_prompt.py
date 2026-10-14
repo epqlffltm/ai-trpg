@@ -283,7 +283,7 @@ def test_the_lore_stays_out_of_the_system_message():
 
 
 def test_the_template_is_narration_18():
-    assert prompt.PROMPT_VERSION == 'narration-18'
+    assert prompt.PROMPT_VERSION == 'narration-19'
 
 
 def test_the_last_message_asks_for_the_declared_actions():

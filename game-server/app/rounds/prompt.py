@@ -37,6 +37,7 @@ from app.rounds.narrator import (
     PastRound,
     PersonHistory,
     PersonState,
+    QuestNote,
     StoryContext,
     WhisperNote,
     describe_injuries,
@@ -70,7 +71,7 @@ from app.rounds.narrator import (
 #   narration-15: 전부터 입은 부상을 이번 라운드에 새로 다친 것처럼 쓰는 일을 막는다(상태 지키기 평가에서 3 번 중 3 번).
 #                 시스템 지시에 "이번 라운드에 생긴 부상은 '새 부상'뿐이다"가 붙고, 판정 줄의 "부상의 영향"이
 #                 "전부터 입은 부상의 영향"으로 바뀐다
-PROMPT_VERSION = 'narration-18'
+PROMPT_VERSION = 'narration-19'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -284,6 +285,21 @@ ITEMS_NOTE = (
     '[소지품]은 게임 엔진이 관리하는 사실이다. 캐릭터가 가지지 않은 물건을 쓰는 장면을 쓰지 마라. '
     '선언한 행동이 가지지 않은 물건을 쓰려 하면, 찾았지만 없다는 식으로 서술한다.'
 )
+# 테이블의 퀘스트와 지금 상태. 방장이 정한 사실이다. AI 는 퀘스트를 바꾸지 못한다.
+# 서술이 결말을 먼저 정하거나("왕녀를 구했다") 숨긴 퀘스트를 드러내면 장면과 장부가 어긋난다
+QUEST_TITLE = '[퀘스트]'
+QUEST_NOTE = (
+    '방장이 정한 퀘스트의 지금 상태다. 성공과 실패는 정해진 결말이니 그대로 따른다. '
+    '진행 중인 퀘스트의 결말(이루었다, 놓쳤다)을 서술이 먼저 정하지 마라. '
+    '숨긴 퀘스트는 플레이어가 아직 모르는 일이다. 그 이름이나 내용을 드러내지 말고, 장면에 실마리로만 흘려라.'
+)
+# 퀘스트의 상태를 서술자에게 보일 말
+QUEST_STATUS_WORDS = {
+    'hidden': '숨김(플레이어는 모름)',
+    'active': '진행 중',
+    'succeeded': '성공',
+    'failed': '실패',
+}
 # 캐릭터를 정하기 전에 보낸 쪽지의 이름 자리
 UNNAMED_PLAYER = '(이름을 정하지 않은 플레이어)'
 
@@ -465,12 +481,28 @@ def whisper_lines(whispers: list[WhisperNote]) -> list[str]:
     return [WHISPER_TITLE, WHISPER_NOTE, *(whisper_line(whisper) for whisper in whispers), '']
 
 
+def quest_line(quest: QuestNote) -> str:
+    """퀘스트 한 줄. 예: - 왕녀 구출: 진행 중"""
+    return f'- {quest.name}: {QUEST_STATUS_WORDS[quest.status]}'
+
+
+def quest_lines(quests: list[QuestNote]) -> list[str]:
+    """
+    퀘스트를 적는 줄들. 다루는 법 한 줄과 퀘스트마다 한 줄.
+
+    끝에 빈 줄이 붙는다. 없으면 빈 목록이다.
+    """
+    if not quests:
+        return []
+    return [QUEST_TITLE, QUEST_NOTE, *(quest_line(quest) for quest in quests), '']
+
+
 def round_text(request: NarrationRequest) -> str:
     """
     이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
 
-    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 인물의 상태가 있으면 맨 앞에 둔다
-    (설정, 지난 일, 이력, 쪽지, 상태, 이번 라운드의 차례).
+    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 퀘스트, 인물의 상태가 있으면 맨 앞에 둔다
+    (설정, 지난 일, 이력, 쪽지, 퀘스트, 상태, 이번 라운드의 차례).
     상태는 이번 라운드의 결과 바로 앞이다. 엔진이 정한 사실이라 결과와 가까이 둔다.
     지목이 있으면 결과 뒤에 다루는 법을 한 줄 붙인다. 소지품이 있으면 그것을 다루는 법도 한 줄 붙인다.
     부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
@@ -479,6 +511,7 @@ def round_text(request: NarrationRequest) -> str:
     lines.extend(memory_lines(request.memories))
     lines.extend(history_lines(request.histories))
     lines.extend(whisper_lines(request.whispers))
+    lines.extend(quest_lines(request.quests))
     lines.extend(people_lines(request.people))
     lines.append(f'[{request.round_number} 라운드에 한 일과 결과]')
     lines.extend(describe_move(move) for move in request.moves)
