@@ -26,6 +26,7 @@ from app.assets.models import (
     ITEM_STACK_MAX,
     PLAYER_MADE_HP_MAX,
     SCENARIO_MAX_ITEM_RULES,
+    SCENARIO_MAX_LANDMARKS,
     SCENARIO_MAX_LOREBOOKS,
     SCENARIO_MAX_NPC_SHEETS,
     SCENARIO_MAX_OPENINGS,
@@ -41,6 +42,7 @@ from app.assets.models import (
     NarrationStyle,
     QuestStart,
     Rating,
+    RouteVisibility,
 )
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
@@ -270,7 +272,8 @@ class RouteRule(BaseModel):
     길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.
 
     two_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).
-    hidden 이면 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 숨기지 않은 길에는 없다.
+    visibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).
+    숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.
     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
     """
 
@@ -279,7 +282,7 @@ class RouteRule(BaseModel):
     from_place: uuid.UUID
     to_place: uuid.UUID
     two_way: bool = True
-    hidden: bool = False
+    visibility: RouteVisibility = RouteVisibility.OPEN
     find: FindCheck | None = None
 
     @model_validator(mode='after')
@@ -292,9 +295,10 @@ class RouteRule(BaseModel):
     @model_validator(mode='after')
     def find_only_when_hidden(self) -> 'RouteRule':
         """숨긴 길만 찾는 판정이 있다. 숨기고 판정이 없으면 영영 드러나지 않는다."""
-        if self.hidden and self.find is None:
+        hidden = self.visibility == RouteVisibility.HIDDEN
+        if hidden and self.find is None:
             raise ValueError('숨긴 길에는 찾는 판정(find)이 있어야 합니다.')
-        if not self.hidden and self.find is not None:
+        if not hidden and self.find is not None:
             raise ValueError('찾는 판정(find)은 숨긴 길에만 적습니다.')
         return self
 
@@ -313,6 +317,18 @@ def reject_duplicate_routes(routes: list[RouteRule]) -> list[RouteRule]:
 
 
 Routes = Annotated[list[RouteRule], Field(max_length=SCENARIO_MAX_ROUTES), AfterValidator(reject_duplicate_routes)]
+
+
+def reject_duplicate_landmarks(landmarks: list[uuid.UUID]) -> list[uuid.UUID]:
+    """같은 장소가 명소에 두 번 있으면 거부한다."""
+    if len(set(landmarks)) != len(landmarks):
+        raise ValueError('같은 장소가 명소에 두 번 있습니다.')
+    return landmarks
+
+
+Landmarks = Annotated[
+    list[uuid.UUID], Field(max_length=SCENARIO_MAX_LANDMARKS), AfterValidator(reject_duplicate_landmarks)
+]
 
 
 QuestRules = Annotated[
@@ -382,6 +398,7 @@ class ScenarioCreate(AssetCreate):
     quests: QuestRules = []
     start_place: uuid.UUID | None = None
     routes: Routes = []
+    landmarks: Landmarks = []
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
@@ -395,7 +412,7 @@ class ScenarioUpdate(AssetUpdate):
 
     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
-    lorebook_ids, openings, pregens, npc_sheets, items, starting_items, quests, routes, character_modes 는
+    lorebook_ids, openings, pregens, npc_sheets, items, starting_items, quests, routes, landmarks, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다.
@@ -421,6 +438,7 @@ class ScenarioUpdate(AssetUpdate):
     quests: QuestRules | None = None
     start_place: uuid.UUID | None = None
     routes: Routes | None = None
+    landmarks: Landmarks | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
@@ -458,6 +476,7 @@ class ScenarioDetail(ScenarioSummary):
     quests: list[QuestRule]
     start_place: uuid.UUID | None
     routes: list[RouteRule]
+    landmarks: list[uuid.UUID]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle

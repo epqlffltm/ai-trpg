@@ -81,11 +81,11 @@ class Problem(enum.StrEnum):
     QUEST_ENTRY_MISSING = 'quest_entry_missing'
     # 사건이 아닌 항목(인물, 물건 …)을 가리키는 퀘스트 규칙이 있다
     QUEST_NOT_EVENT = 'quest_not_event'
-    # 붙인 로어북에 없는 항목을 가리키는 시작 장소나 길이 있다
+    # 붙인 로어북에 없는 항목을 가리키는 시작 장소, 길, 명소가 있다
     MAP_PLACE_MISSING = 'map_place_missing'
-    # 장소가 아닌 항목(인물, 물건 …)을 가리키는 시작 장소나 길이 있다
+    # 장소가 아닌 항목(인물, 물건 …)을 가리키는 시작 장소, 길, 명소가 있다
     MAP_NOT_PLACE = 'map_not_place'
-    # 길이 있는데 시작 장소가 없다. 캐릭터가 설 곳이 없다
+    # 길이나 명소가 있는데 시작 장소가 없다. 캐릭터가 설 곳이 없다
     MAP_START_MISSING = 'map_start_missing'
     # 숨긴 길을 찾는 판정의 능력치나 난이도가 룰북의 규칙에 없다
     ROUTE_FIND_INVALID = 'route_find_invalid'
@@ -328,8 +328,9 @@ def read_routes(scenario: Scenario) -> list[RouteRule]:
 
 
 def map_places(scenario: Scenario, routes: list[RouteRule]) -> list[uuid.UUID]:
-    """맵이 가리키는 장소 전부. 시작 장소와 길마다의 두 끝."""
+    """맵이 가리키는 장소 전부. 시작 장소, 길마다의 두 끝, 명소."""
     places = [place for route in routes for place in (route.from_place, route.to_place)]
+    places.extend(scenario.landmarks)
     if scenario.start_place is not None:
         places.append(scenario.start_place)
     return places
@@ -344,10 +345,11 @@ def find_check_problem(route: RouteRule, ruleset: Ruleset) -> bool:
 
 def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
     """
-    맵(시작 장소와 길)에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
+    맵(시작 장소, 길, 명소)에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
 
     가리키는 것은 붙인 로어북의 장소 항목이어야 한다. 아이템 규칙과 같은 까닭으로 굳히기 전에 여기서 막는다.
-    길이 있으면 시작 장소가 있어야 한다. 숨긴 길을 찾는 판정은 룰북의 능력치와 난이도여야 한다(룰북이 없으면 못 본다).
+    길이나 명소가 있으면 시작 장소가 있어야 한다.
+    숨긴 길을 찾는 판정은 룰북의 능력치와 난이도여야 한다(룰북이 없으면 못 본다).
     """
     entries = lore_entries(parts)
     routes = read_routes(scenario)
@@ -357,7 +359,7 @@ def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None)
         problems.append(Problem.MAP_PLACE_MISSING)
     if any(place in entries and entries[place].kind != LoreKind.PLACE for place in pointed):
         problems.append(Problem.MAP_NOT_PLACE)
-    if routes and scenario.start_place is None:
+    if (routes or scenario.landmarks) and scenario.start_place is None:
         problems.append(Problem.MAP_START_MISSING)
     if ruleset and any(find_check_problem(route, ruleset) for route in routes):
         problems.append(Problem.ROUTE_FIND_INVALID)

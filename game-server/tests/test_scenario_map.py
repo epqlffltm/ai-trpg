@@ -1,12 +1,13 @@
 # game-server/tests/test_scenario_map.py
 
 """
-시나리오의 맵: 시작 장소와 길을 검증한다.
+시나리오의 맵: 시작 장소, 길, 명소를 검증한다.
 
 셋을 본다.
-  - 시나리오: 적고 읽고 고친다. 모양만 본다(제자리 길 없음, 숨긴 길에만 찾는 판정, 같은 두 장소의 길 하나).
-  - 게시: 붙인 로어북의 장소 항목을 가리키는지, 길이 있으면 시작 장소가 있는지, 찾는 판정이 룰북에 맞는지.
-  - 판: 형식 19 에 실린다. 옛 판은 맵 없이 읽는다.
+  - 시나리오: 적고 읽고 고친다. 모양만 본다(제자리 길 없음, 숨긴 길에만 찾는 판정, 같은 두 장소의 길 하나,
+    같은 명소 하나).
+  - 게시: 붙인 로어북의 장소 항목을 가리키는지, 길이나 명소가 있으면 시작 장소가 있는지, 찾는 판정이 룰북에 맞는지.
+  - 판: 형식 20 에 실린다. 형식 18 의 판은 맵 없이, 형식 19 의 판은 숨긴 길을 그대로 두고 명소 없이 읽는다.
 """
 
 import uuid
@@ -16,9 +17,9 @@ from fastapi import status
 from httpx import AsyncClient
 from pydantic import ValidationError
 
-from app.assets.models import SCENARIO_MAX_ROUTES
+from app.assets.models import SCENARIO_MAX_LANDMARKS, SCENARIO_MAX_ROUTES
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot, has_map, place_entries, read_snapshot
-from app.assets.scenarios.upgrades import upgrade_from_18
+from app.assets.scenarios.upgrades import upgrade_from_18, upgrade_from_19
 from app.main import API_PREFIX
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -61,7 +62,7 @@ def route(start: dict, end: dict, **fields) -> dict:
 
 def secret(start: dict, end: dict, ability: str = 'wis', difficulty: str | None = 'hard') -> dict:
     """숨긴 길. 찾는 판정이 있다."""
-    return route(start, end, hidden=True, find={'ability': ability, 'difficulty': difficulty})
+    return route(start, end, visibility='hidden', find={'ability': ability, 'difficulty': difficulty})
 
 
 async def scenario_with(client: AsyncClient, me: dict, lore: dict, **fields) -> dict:
@@ -70,10 +71,18 @@ async def scenario_with(client: AsyncClient, me: dict, lore: dict, **fields) -> 
 
 
 def the_map(lore: dict) -> dict:
-    """성문에서 광장으로 가는 길과, 광장에서 지하실로 내려가는 숨긴 한쪽 길. 시작은 성문."""
+    """
+    성문에서 광장으로 가는 길, 광장에서 지하실로 내려가는 숨긴 한쪽 길, 성문에서 지하실로 가는 안개 길.
+    시작은 성문, 명소는 광장.
+    """
     return {
         'start_place': lore['gate']['id'],
-        'routes': [route(lore['gate'], lore['square']), {**secret(lore['square'], lore['cellar']), 'two_way': False}],
+        'routes': [
+            route(lore['gate'], lore['square']),
+            {**secret(lore['square'], lore['cellar']), 'two_way': False},
+            route(lore['gate'], lore['cellar'], visibility='fog'),
+        ],
+        'landmarks': [lore['square']['id']],
     }
 
 
@@ -85,30 +94,38 @@ async def test_the_map_is_saved_and_read_back(client: AsyncClient, me: dict[str,
 
     read = (await client.get(f'{SCENARIOS_URL}/{scenario["id"]}', headers=me)).json()
 
-    # 양쪽으로 다니고, 숨기지 않은 것이 기본이다
+    # 양쪽으로 다니고, 처음부터 아는 것이 기본이다
     assert read['start_place'] == lore['gate']['id']
     assert read['routes'] == [
         {
             'from_place': lore['gate']['id'],
             'to_place': lore['square']['id'],
             'two_way': True,
-            'hidden': False,
+            'visibility': 'open',
             'find': None,
         },
         {
             'from_place': lore['square']['id'],
             'to_place': lore['cellar']['id'],
             'two_way': False,
-            'hidden': True,
+            'visibility': 'hidden',
             'find': {'ability': 'wis', 'difficulty': 'hard'},
         },
+        {
+            'from_place': lore['gate']['id'],
+            'to_place': lore['cellar']['id'],
+            'two_way': True,
+            'visibility': 'fog',
+            'find': None,
+        },
     ]
+    assert read['landmarks'] == [lore['square']['id']]
 
 
 async def test_a_scenario_starts_without_a_map(client: AsyncClient, me: dict[str, str]):
     scenario = await create_scenario(client, me, None)
 
-    assert (scenario['start_place'], scenario['routes']) == (None, [])
+    assert (scenario['start_place'], scenario['routes'], scenario['landmarks']) == (None, [], [])
 
 
 async def test_routes_are_replaced_as_a_whole_and_the_start_can_be_cleared(
@@ -118,6 +135,7 @@ async def test_routes_are_replaced_as_a_whole_and_the_start_can_be_cleared(
     url = f'{SCENARIOS_URL}/{scenario["id"]}'
 
     replaced = await client.patch(url, json={'routes': [route(lore['square'], lore['cellar'])]}, headers=me)
+    landmarks = await client.patch(url, json={'landmarks': [lore['cellar']['id'], lore['gate']['id']]}, headers=me)
     cleared = await client.patch(url, json={'start_place': None}, headers=me)
 
     assert replaced.status_code == status.HTTP_200_OK, replaced.text
@@ -125,7 +143,11 @@ async def test_routes_are_replaced_as_a_whole_and_the_start_can_be_cleared(
         (lore['square']['id'], lore['cellar']['id'])
     ]
     # 보내지 않은 칸은 그대로고, null 을 보내면 비운다
-    assert replaced.json()['start_place'] == lore['gate']['id']
+    assert (replaced.json()['start_place'], replaced.json()['landmarks']) == (
+        lore['gate']['id'],
+        [lore['square']['id']],
+    )
+    assert landmarks.json()['landmarks'] == [lore['cellar']['id'], lore['gate']['id']]
     assert (cleared.json()['start_place'], len(cleared.json()['routes'])) == (None, 1)
 
 
@@ -137,19 +159,25 @@ B = '00000000-0000-4000-8000-00000000000b'
     'routes',
     [
         [{'from_place': A, 'to_place': A}],
-        [{'from_place': A, 'to_place': B, 'hidden': True}],
+        [{'from_place': A, 'to_place': B, 'visibility': 'hidden'}],
         [{'from_place': A, 'to_place': B, 'find': {'ability': 'wis'}}],
+        [{'from_place': A, 'to_place': B, 'visibility': 'fog', 'find': {'ability': 'wis'}}],
+        [{'from_place': A, 'to_place': B, 'visibility': 'secret'}],
+        [{'from_place': A, 'to_place': B, 'hidden': True}],
         [{'from_place': A, 'to_place': B}, {'from_place': A, 'to_place': B, 'two_way': False}],
         [{'from_place': A, 'to_place': B}, {'from_place': B, 'to_place': A}],
         [{'from_place': A, 'to_place': B, 'extra': 1}],
-        [{'from_place': A, 'to_place': B, 'hidden': True, 'find': {'ability': 'Wisdom!'}}],
-        [{'from_place': A, 'to_place': B, 'hidden': True, 'find': {'ability': 'wis', 'roll': 20}}],
+        [{'from_place': A, 'to_place': B, 'visibility': 'hidden', 'find': {'ability': 'Wisdom!'}}],
+        [{'from_place': A, 'to_place': B, 'visibility': 'hidden', 'find': {'ability': 'wis', 'roll': 20}}],
         [{'from_place': str(uuid.uuid4()), 'to_place': str(uuid.uuid4())} for _ in range(SCENARIO_MAX_ROUTES + 1)],
     ],
     ids=[
         'to-itself',
         'hidden-without-find',
         'find-without-hidden',
+        'find-on-fog',
+        'unknown-visibility',
+        'old-hidden-field',
         'same-pair-twice',
         'same-pair-reversed',
         'extra-field',
@@ -162,6 +190,25 @@ async def test_rejects_badly_shaped_routes(client: AsyncClient, me: dict[str, st
     response = await client.post(SCENARIOS_URL, json={'title': '성', 'routes': routes}, headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+@pytest.mark.parametrize(
+    'landmarks',
+    [[A, A], ['광장'], [str(uuid.uuid4()) for _ in range(SCENARIO_MAX_LANDMARKS + 1)]],
+    ids=['same-place-twice', 'not-an-id', 'too-many-landmarks'],
+)
+async def test_rejects_badly_shaped_landmarks(client: AsyncClient, me: dict[str, str], landmarks: list):
+    response = await client.post(SCENARIOS_URL, json={'title': '성', 'landmarks': landmarks}, headers=me)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def test_accepts_the_most_landmarks_allowed(client: AsyncClient, me: dict[str, str]):
+    landmarks = [str(uuid.uuid4()) for _ in range(SCENARIO_MAX_LANDMARKS)]
+
+    scenario = await create_scenario(client, me, None, landmarks=landmarks)
+
+    assert scenario['landmarks'] == landmarks
 
 
 async def test_accepts_the_most_routes_allowed(client: AsyncClient, me: dict[str, str]):
@@ -180,15 +227,17 @@ async def test_the_map_is_frozen_into_the_version(client: AsyncClient, me: dict[
 
     snapshot = await published(client, me, scenario)
 
-    assert snapshot['format'] == SNAPSHOT_FORMAT == 19
+    assert snapshot['format'] == SNAPSHOT_FORMAT == 20
     assert snapshot['start_place'] == lore['gate']['id']
     assert snapshot['routes'][1] == {
         'from_place': lore['square']['id'],
         'to_place': lore['cellar']['id'],
         'two_way': False,
-        'hidden': True,
+        'visibility': 'hidden',
         'find': {'ability': 'wis', 'difficulty': 'hard'},
     }
+    assert snapshot['routes'][2]['visibility'] == 'fog'
+    assert snapshot['landmarks'] == [lore['square']['id']]
 
 
 async def test_a_start_alone_is_a_map(client: AsyncClient, me: dict[str, str], lore: dict):
@@ -200,31 +249,38 @@ async def test_a_start_alone_is_a_map(client: AsyncClient, me: dict[str, str], l
     assert (snapshot['start_place'], snapshot['routes']) == (lore['square']['id'], [])
 
 
-@pytest.mark.parametrize('where', ['start', 'route'])
+@pytest.mark.parametrize('where', ['start', 'route', 'landmark'])
 async def test_the_map_must_be_in_an_attached_lorebook(client: AsyncClient, me: dict[str, str], lore: dict, where: str):
     gone = {'id': NO_SUCH_ID}
     fields = {
         'start': {'start_place': NO_SUCH_ID},
         'route': {'start_place': lore['gate']['id'], 'routes': [route(lore['gate'], gone)]},
+        'landmark': {'start_place': lore['gate']['id'], 'landmarks': [NO_SUCH_ID]},
     }[where]
     scenario = await scenario_with(client, me, lore, **fields)
 
     assert await refused(client, me, scenario) == ['map_place_missing']
 
 
-@pytest.mark.parametrize(('where', 'kind'), [('start', 'potion'), ('route', 'lady')])
+@pytest.mark.parametrize(('where', 'kind'), [('start', 'potion'), ('route', 'lady'), ('landmark', 'potion')])
 async def test_the_map_must_be_places(client: AsyncClient, me: dict[str, str], lore: dict, where: str, kind: str):
     fields = {
         'start': {'start_place': lore[kind]['id']},
         'route': {'start_place': lore['gate']['id'], 'routes': [route(lore['gate'], lore[kind])]},
+        'landmark': {'start_place': lore['gate']['id'], 'landmarks': [lore[kind]['id']]},
     }[where]
     scenario = await scenario_with(client, me, lore, **fields)
 
     assert await refused(client, me, scenario) == ['map_not_place']
 
 
-async def test_routes_need_a_start(client: AsyncClient, me: dict[str, str], lore: dict):
-    scenario = await scenario_with(client, me, lore, routes=[route(lore['gate'], lore['square'])])
+@pytest.mark.parametrize('field', ['routes', 'landmarks'])
+async def test_routes_and_landmarks_need_a_start(client: AsyncClient, me: dict[str, str], lore: dict, field: str):
+    fields = {
+        'routes': {'routes': [route(lore['gate'], lore['square'])]},
+        'landmarks': {'landmarks': [lore['square']['id']]},
+    }[field]
+    scenario = await scenario_with(client, me, lore, **fields)
 
     assert await refused(client, me, scenario) == ['map_start_missing']
 
@@ -267,13 +323,21 @@ INN_KEEPER = uuid.UUID('dddddddd-0000-4000-8000-000000000004')
 
 
 def map_document(**fields) -> dict:
-    """판 하나의 문서. 장소 둘, 물건 하나, 인물 하나가 든 로어북이 붙어 있다. 형식 19."""
+    """판 하나의 문서. 장소 둘, 물건 하나, 인물 하나가 든 로어북이 붙어 있다. 형식 20."""
     lorebook = {
         'id': str(uuid.uuid4()),
         'title': '로어북',
         'entries': [entry(GATE, 'place'), entry(POTION, 'item'), entry(INN_KEEPER, 'person'), entry(SQUARE, 'place')],
     }
-    document = {'format': 19, 'lorebooks': [lorebook], 'quests': [], 'start_place': None, 'routes': [], **fields}
+    document = {
+        'format': 20,
+        'lorebooks': [lorebook],
+        'quests': [],
+        'start_place': None,
+        'routes': [],
+        'landmarks': [],
+        **fields,
+    }
     return snapshot_document(**document)
 
 
@@ -285,6 +349,14 @@ def test_places_are_the_place_entries_and_a_start_makes_a_map():
     assert (has_map(without), has_map(with_start)) == (False, True)
 
 
+def test_a_route_without_visibility_is_open():
+    route = {'from_place': str(GATE), 'to_place': str(SQUARE)}
+    snapshot = Snapshot.model_validate(map_document(start_place=str(GATE), routes=[route]))
+
+    [read] = snapshot.routes
+    assert (read.two_way, read.visibility, read.find) == (True, 'open', None)
+
+
 @pytest.mark.parametrize(
     'fields',
     [
@@ -292,8 +364,17 @@ def test_places_are_the_place_entries_and_a_start_makes_a_map():
         {'start_place': str(uuid.uuid4())},
         {'start_place': str(GATE), 'routes': [{'from_place': str(GATE), 'to_place': str(POTION)}]},
         {'routes': [{'from_place': str(GATE), 'to_place': str(SQUARE)}]},
+        {'start_place': str(GATE), 'landmarks': [str(INN_KEEPER)]},
+        {'landmarks': [str(SQUARE)]},
     ],
-    ids=['start-on-a-thing', 'unknown-start', 'route-to-a-thing', 'routes-without-start'],
+    ids=[
+        'start-on-a-thing',
+        'unknown-start',
+        'route-to-a-thing',
+        'routes-without-start',
+        'landmark-on-a-person',
+        'landmarks-without-start',
+    ],
 )
 def test_a_version_cannot_point_the_map_at_anything_but_places(fields: dict):
     # 게시가 막는 것을 판의 계약으로도 굳혀 둔다. 테이블은 위치마다 장소 항목이 있다고 믿고 쓴다
@@ -303,12 +384,42 @@ def test_a_version_cannot_point_the_map_at_anything_but_places(fields: dict):
 
 def test_an_old_version_is_read_without_a_map():
     document = map_document(format=18)
-    del document['start_place'], document['routes']
+    del document['start_place'], document['routes'], document['landmarks']
 
     upgraded = upgrade_from_18(document)
     snapshot = read_snapshot(document)
 
+    # 형식 19 로 올린다. 명소는 그다음 단계(upgrade_from_19)가 더한다
     assert (upgraded['format'], upgraded['start_place'], upgraded['routes']) == (19, None, [])
+    assert 'landmarks' not in upgraded
     # 받은 문서는 고치지 않는다
     assert 'routes' not in document
-    assert (snapshot.start_place, snapshot.routes, has_map(snapshot)) == (None, [], False)
+    assert (snapshot.start_place, snapshot.routes, snapshot.landmarks, has_map(snapshot)) == (None, [], [], False)
+
+
+def test_a_format_19_version_keeps_its_hidden_routes():
+    plain = {'from_place': str(GATE), 'to_place': str(SQUARE), 'two_way': True, 'hidden': False, 'find': None}
+    secret_way = {
+        'from_place': str(SQUARE),
+        'to_place': str(GATE),
+        'two_way': False,
+        'hidden': True,
+        'find': {'ability': 'wis', 'difficulty': None},
+    }
+    document = map_document(format=19, start_place=str(GATE), routes=[plain, secret_way])
+    del document['landmarks']
+
+    upgraded = upgrade_from_19(document)
+    snapshot = read_snapshot(document)
+
+    # 그때는 안개가 없었다. 숨긴 길은 숨긴 길, 나머지는 처음부터 아는 길이다. 명소도 없었다
+    assert upgraded['format'] == 20
+    assert [(route['visibility'], 'hidden' in route) for route in upgraded['routes']] == [
+        ('open', False),
+        ('hidden', False),
+    ]
+    assert upgraded['landmarks'] == []
+    # 받은 문서는 고치지 않는다
+    assert document['routes'][1]['hidden'] is True
+    assert [route.visibility for route in snapshot.routes] == ['open', 'hidden']
+    assert snapshot.routes[1].find.ability == 'wis'
