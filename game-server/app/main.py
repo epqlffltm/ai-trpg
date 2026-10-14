@@ -31,6 +31,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
 from app.core.jobs import BackgroundJobs
 from app.drafts import router as ledger_drafts
+from app.drafts.decisions import DraftNotFoundError
 from app.drafts.setup import build_drafter
 from app.engine.dice import RandomDice
 from app.events import router as events
@@ -254,6 +255,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.add_exception_handler(NotHostError, tables.handle_not_host)
     app.add_exception_handler(WrongPasswordError, tables.handle_wrong_password)
     app.add_exception_handler(TableConflictError, tables.handle_table_conflict)
+    app.add_exception_handler(DraftNotFoundError, ledger_drafts.handle_draft_not_found)
     app.add_exception_handler(TableOptionError, tables.handle_table_option)
     app.add_exception_handler(RoundNotFoundError, rounds.handle_round_not_found)
     app.add_exception_handler(RoundConflictError, rounds.handle_round_conflict)
