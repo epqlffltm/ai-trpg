@@ -314,6 +314,7 @@ async def test_a_player_whose_character_died_brings_in_a_new_one(
         'dead': False,
         'injuries': [],
         'items': [],
+        'place_id': None,
     }
     assert seat['sheet'] == {**PLAIN, **fresh}
     # 죽은 캐릭터는 지워지지 않고 떠난 캐릭터로 남는다
@@ -995,6 +996,8 @@ async def test_the_arrival_is_recorded_with_the_sheet_it_got(
         'pregen_index': 1,
         'number': 2,
         'sheet': LADY_SHEET,
+        # 맵이 없는 판이라 어디에서 들어왔는지가 없다
+        'place': None,
     }
 
 

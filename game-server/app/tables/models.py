@@ -284,6 +284,10 @@ class GameTable(Base):
     # 보여 줄 때는 판의 순서로 놓는다(app/tables/quests.py). 만든 시각은 시작할 때 모두 같다
     quests: Mapped[list['TableQuest']] = relationship(lazy='selectin', cascade='all, delete-orphan')
 
+    # 이 테이블의 캐릭터가 서 본 장소들. 맵의 무엇을 아는지 이것과 판의 규칙으로 계산한다(app/tables/places.py).
+    # 많아야 장소의 수(수십)라 테이블을 읽을 때 함께 읽는다. 맵이 없는 판이면 비어 있다
+    visits: Mapped[list['TableVisit']] = relationship(lazy='selectin', cascade='all, delete-orphan')
+
 
 class TableMember(Base):
     """
@@ -443,6 +447,11 @@ class TableSheet(Base):
     death_failures: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
     # 죽은 시각. 비어 있으면 살아 있다(쓰러져 있을 수는 있다). 한 번 적으면 지우지 않는다. 죽음은 되돌릴 수 없다
     died_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # 캐릭터가 서 있는 맵의 장소. 판의 로어북 장소 항목의 ID 다. 맵이 없는 판이면 비어 있다.
+    # 시작할 때 판의 시작 장소에 서고, 방장이 옮긴다(app/tables/place_changes.py). 죽은 캐릭터는 쓰러진 곳에 남는다.
+    # 서 본 장소는 늘 아는 장소다. 그래서 이 값이 숨긴 장소를 드러내는 일은 없다
+    place_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -604,6 +613,26 @@ class TableQuest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 마지막으로 상태를 바꾼 때. 처음 만든 뒤로 바꾸지 않았으면 비어 있다
     changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TableVisit(Base):
+    """
+    테이블 하나에서 캐릭터가 서 본 맵의 장소 하나.
+
+    맵의 무엇을 아는지는 저장하지 않고 계산한다(app/tables/places.py). 판의 규칙(길을 아는 때, 명소)과
+    이 행들(서 본 곳)이 재료다. 아는 것은 테이블의 모두가 함께 안다. 캐릭터마다 따로 기억하지 않는다.
+    누가 먼저 섰는지는 적지 않는다. 그것은 이벤트에 있다.
+    """
+
+    __tablename__ = 'table_visits'
+
+    # 두 칸을 합쳐 기본 키로 삼는다. 한 장소는 한 번만 적는다. 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 판(content)의 로어북 장소 항목의 ID
+    entry_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+
+    # 처음 선 때
+    visited_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class TableInjury(Base):

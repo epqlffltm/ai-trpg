@@ -44,7 +44,7 @@ from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
 from app.rounds.tiers import NarrationTier
-from app.tables import npcs, quests, repository, sheets
+from app.tables import npcs, places, quests, repository, sheets
 from app.tables.building import build_table, hash_table_password, new_invite_code, seat_limit
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
@@ -317,6 +317,7 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
     """
     방장이 테이블을 시작한다. 그 뒤로는 새로 들어올 수 없고 캐릭터를 바꿀 수 없다.
     앉은 사람 모두에게 캐릭터 시트를 주고, 판의 인물마다 NPC 의 상태를, 사건마다 퀘스트를 만들고, 첫 라운드를 연다.
+    맵이 있는 판이면 캐릭터 모두를 시작 장소에 세운다.
     장면은 테이블을 만들 때 고른 스타팅이다.
 
     방장이 아니면 NotHostError, 모집 중이 아니거나 캐릭터를 만들지 않은 사람이 있으면 TableConflictError.
@@ -331,6 +332,7 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
     # 캐릭터를 정하지 않은 사람이 있으면 그 사람이 받을 시트도 없다. 아무에게도 주지 않고 거절한다
     if not sheets.hand_out(table, snapshot):
         raise TableConflictError(Conflict.CHARACTERS_MISSING)
+    places.place_at_start(table, snapshot)
     repository.add_npcs(session, npcs.make_npcs(table.id, snapshot))
     table.quests.extend(quests.make_quests(table.id, snapshot))
 

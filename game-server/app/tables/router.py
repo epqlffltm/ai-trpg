@@ -32,6 +32,8 @@ from app.tables import (
     item_grants,
     items,
     ledger_draft_options,
+    place_changes,
+    places,
     quest_changes,
     quests,
     replacements,
@@ -66,15 +68,19 @@ from app.tables.schemas import (
     JoinRequest,
     LedgerDraftsUpdate,
     LobbyJoinRequest,
+    MapOut,
     MemberOut,
     NarrationStyleUpdate,
     NarrationTiersOut,
     NarrationTierUpdate,
+    PlaceChange,
+    PlaceOut,
     PregenChoice,
     QuestChange,
     QuestOut,
     RollOut,
     RoundTimeLimitUpdate,
+    RouteOut,
     SheetOut,
     TableCreate,
     TableDetail,
@@ -158,6 +164,21 @@ def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem]) ->
             for row in injuries.active(sheet.injuries)
         ],
         items=[to_item(item, catalog) for item in items.in_catalog_order(sheet.items, catalog)],
+        place_id=sheet.place_id,
+    )
+
+
+def to_map(table: GameTable, snapshot: Snapshot) -> MapOut | None:
+    """테이블이 아는 맵을 응답으로 바꾼다. 맵이 없는 판이면 None. 아는 것만 싣는다(app/tables/places.py)."""
+    known = places.known_map(snapshot, places.visited(table))
+    if known is None:
+        return None
+    return MapOut(
+        places=[PlaceOut(entry_id=place.id, name=place.name) for place in known.places],
+        routes=[
+            RouteOut(from_place=route.from_place, to_place=route.to_place, two_way=route.two_way)
+            for route in known.routes
+        ],
     )
 
 
@@ -269,6 +290,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         pregens=to_pregen_choices(table, snapshot),
         items=to_catalog(catalog),
         quests=[to_quest(quest, quest_catalog) for quest in quests.visible_quests(table, quest_catalog, viewer_id)],
+        map=to_map(table, snapshot),
         members=[to_member(table, member, catalog) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
         started_at=table.started_at,
@@ -528,6 +550,21 @@ async def change_quest(
     AI 는 퀘스트를 바꾸지 못한다. 모두에게 이벤트(quest_changed)가 간다.
     """
     table = await quest_changes.change_quest(session, user.user_id, table_id, entry_id, data.status)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/members/{user_id}/place', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def move_character(
+    table_id: uuid.UUID, user_id: uuid.UUID, data: PlaceChange, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    방장이 그 사람의 지금 캐릭터를 맵의 아는 장소로 옮긴다. 진행 중에만 된다. 길로 이어져 있지 않아도 된다.
+
+    아는 장소(TableDetail.map.places)가 아니면 422 다. 방장도 숨긴 장소는 모른다.
+    죽은 캐릭터는 409(character_dead). 이미 그 장소에 있으면 아무것도 바뀌지 않는다.
+    AI 는 캐릭터를 옮기지 못한다. 모두에게 이벤트(character_moved)가 간다.
+    """
+    table = await place_changes.move_character(session, user.user_id, table_id, user_id, data.place_id)
     return to_detail(table, user.user_id)
 
 
