@@ -699,6 +699,7 @@ characters.py   캐릭터 정하기(진행 중에 새 캐릭터를 들일 때도
 | `table_injuries` | 캐릭터와 NPC 가 입은 부상. 누가(시트 또는 NPC), 어떤 부상(`injury`), 어떻게 생겼는지(`source`), 생긴 라운드, 풀리거나 낫는 라운드(결손에는 없다. 치료로 바뀐다), 풀리거나 나은 시각. 지우지 않는다 |
 | `table_items` | 캐릭터의 소지품. 시트마다 물건(판의 로어북 물건 항목) 한 가지가 한 줄이고 개수(1~99)를 적는다. 0 개가 되면 지운다 |
 | `table_quests` | 테이블의 퀘스트. 판의 사건 항목 하나가 한 줄이고 상태(`hidden`, `active`, `succeeded`, `failed`)를 적는다. 시작할 때 만든다 |
+| `table_found_routes` | 테이블의 캐릭터가 찾아낸 숨긴 길. 판의 길의 두 끝(`from_place`, `to_place`)으로 가리킨다. 찾은 때를 적는다 |
 | `table_visits` | 테이블의 캐릭터가 서 본 맵의 장소. 판의 장소 항목 하나가 한 줄이다. 처음 선 때를 적는다. 테이블이 맵의 무엇을 아는지 계산하는 재료다 |
 | `ledger_drafts` | 장부 초안의 줄. 서술 뒤에 모델이 쓰고 서버가 검증한 장부의 변경 하나가 한 줄이다(`found_item`, `quest_change`). 처지(`pending`, `accepted`, `rejected`, `expired`)를 옮긴다 |
 | `table_npcs` | 로어북의 인물 항목마다의 숫자와 생사. 테이블과 항목의 ID(`entry_id`)로 찾는다. 능력치(`abilities`, JSON), 최대 HP, 지금의 HP, 생사(`status`: `alive`, `downed`, `dead`), 지목으로 진짜 이름이 드러난 라운드(`named_round`, 아직이면 비어 있다). 게임을 시작할 때 생긴다 |
@@ -913,12 +914,12 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 
 ### 맵
 
-맵은 판에 있다([시나리오의 맵](#시나리오)). 테이블은 캐릭터가 어디에 서 있는지(`table_sheets.place_id`)와 어디에 서 봤는지(`table_visits`)만 적는다.
+맵은 판에 있다([시나리오의 맵](#시나리오)). 테이블은 캐릭터가 어디에 서 있는지(`table_sheets.place_id`), 어디에 서 봤는지(`table_visits`), 어떤 숨긴 길을 찾았는지(`table_found_routes`)만 적는다.
 
-- **아는 것은 계산한다.** 판의 규칙과 서 본 곳으로 정한다. 아는 것은 테이블의 모두가 함께 안다(캐릭터마다 따로 기억하지 않는다).
-  - 길: 열린 길은 처음부터, 안개 길은 누가 그 길의 한쪽 끝에 서 본 뒤부터 안다. 숨긴 길은 모른다(찾기는 선언 행동이 맡는다, 만드는 중).
+- **아는 것은 계산한다.** 판의 규칙, 서 본 곳, 찾은 길로 정한다. 아는 것은 테이블의 모두가 함께 안다(캐릭터마다 따로 기억하지 않는다).
+  - 길: 열린 길은 처음부터, 안개 길은 누가 그 길의 한쪽 끝에 서 본 뒤부터 안다. 숨긴 길은 찾은 뒤부터 안다(`table_found_routes`, 찾기는 [선언 행동](#라운드)이다).
   - 장소: 시작 장소, 명소, 서 본 곳, 아는 길의 두 끝.
-- **숨긴 것은 방장도 모른다.** 숨긴 길과 숨긴 길로만 닿는 장소는 시나리오를 만든 사람과 AI GM 만 안다. 응답에도 이벤트에도 싣지 않는다.
+- **숨긴 것은 방장도 모른다.** 아직 찾지 않은 숨긴 길과 그런 길로만 닿는 장소는 시나리오를 만든 사람과 AI GM 만 안다. 응답에도 이벤트에도 싣지 않는다.
   테이블의 응답에 아는 맵(`map`: `places`(`entry_id`, `name`), `routes`(`from_place`, `to_place`, `two_way`))이 있다. 모두가 같은 것을 본다. 맵이 없는 판이면 `null` 이다. 장소의 글(로어북)은 내보내지 않는다.
   시트마다 서 있는 곳(`sheet.place_id`)이 있다. 서 본 곳은 늘 아는 곳이라 위치가 숨긴 장소를 드러내는 일은 없다.
 - **시작할 때 모두 시작 장소에 선다.** 시작 장소는 서 본 곳이 되고, 거기서 나가는 안개 길이 보인다. 시작 전에는 서 본 곳이 없어 열린 것만 보인다.
@@ -926,7 +927,7 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
   `PUT /tables/{id}/members/{user_id}/place` 에 `{"place_id": ...}`. 방장만(403), 진행 중에만(409 `not_playing`), 살아 있는 캐릭터만(409 `character_dead`, 쓰러진 캐릭터는 된다).
   아는 장소로만 옮긴다. 길로 이어져 있지 않아도 된다. 모르는 곳, 숨긴 곳, 장소가 아닌 것, 없는 것은 모두 같은 422(`place_id`)다. 답이 다르면 숨긴 장소가 있다는 것이 드러난다.
   이미 그 장소에 있으면 아무것도 바뀌지 않는다. 옮긴 것은 이벤트(`character_moved`)로 모두에게 간다. 새로 선 곳에서 나가는 안개 길은 테이블을 다시 읽으면 보인다.
-  AI GM 은 캐릭터를 옮기지 못한다. 서술에서 "성으로 돌아왔다"고 해도 위치는 그대로다. 길을 따라 한 칸씩 가는 것은 선언 행동이다(만드는 중).
+  AI GM 은 캐릭터를 옮기지 못한다. 서술에서 "성으로 돌아왔다"고 해도 위치는 그대로다. 길을 따라 한 칸씩 가는 것은 [선언 행동](#라운드)이다(`move`).
 - **새 캐릭터는 앞 캐릭터가 쓰러진 곳에서 들어온다.** 들인 이벤트(`character_joined`)에 그 장소(`place`)가 적힌다. 죽은 캐릭터의 시트는 쓰러진 곳을 그대로 갖는다.
 - 맵이 생기기 전에 시작한 테이블은 서 본 곳도 위치도 없다. 판에 맵이 있으면 방장이 옮겨 세울 수 있다.
 
@@ -986,7 +987,7 @@ records.py      일어난 일을 이벤트로 적기
 
 | 칸 | 뜻 |
 | --- | --- |
-| `kind` | 행동의 종류. `check`(판정), `treat`(치료, 아래 "치료"), `name`(지목), `use`(물건 쓰기), `give`(물건 건네기)가 있다. 이 표의 칸들은 `check` 의 것이다 |
+| `kind` | 행동의 종류. `check`(판정), `treat`(치료, 아래 "치료"), `name`(지목), `use`(물건 쓰기), `give`(물건 건네기), `move`(맵에서 한 칸 가기), `search`(숨긴 길 찾기)가 있다. 이 표의 칸들은 `check` 의 것이다 |
 | `ability` | 판정에 쓰는 능력. 그 테이블의 규칙에 있는 능력의 `key` |
 | `difficulty` | 난이도의 단계. 규칙에 있는 단계의 `key`. 숫자를 직접 받지 않는다. 비우면 규칙의 기본 난이도로 채워 저장한다 |
 | `risk` | 실패의 대가. 실패하면 행동한 캐릭터가 이 등급만큼 피해를 입는다. 규칙에 있는 양의 등급의 `key`. 없어도 된다 |
@@ -1053,6 +1054,22 @@ records.py      일어난 일을 이벤트로 적기
 - 마감할 때 들어온 순서로 다시 본다. 그사이에 방장이 빼앗았거나, 대상이 죽었거나, 받는 쪽이 가득 찼으면 아무것도 바뀌지 않고 까닭을 적는다(`not_held`, `target_gone`, `too_many`). 물건은 줄지 않는다.
 - 결과는 선언의 `outcome.item_use`(`entry_id`, `name`, `used`, `reason`, `target`, `remaining`)와 회복의 `outcome.effect`, 또는 `outcome.item_give`(`entry_id`, `name`, `count`, `given`, `reason`, `target`, `remaining`, `target_total`)에 적힌다. 이벤트(`item_used` 뒤에 회복이면 `hp_changed`, `item_given`)로도 남는다.
 - 서술자는 결과를 한 줄로 받는다(`(쓴 물건: 치유 물약 → 기사) → 기사 회복 2 (HP 6/10)`, `(건넨 물건: 밧줄 1개 → 영애)`, `narration-18`).
+
+**맵에서 가기와 찾기.** 캐릭터가 서 있는 맵의 장소([테이블의 맵](#맵))에서 한다. 맵에 서 있지 않으면(맵이 없는 판, 맵이 생기기 전에 시작한 테이블) 409 `not_on_map`.
+
+```json
+{"content": "숲으로 들어간다.", "action": {"kind": "move", "place": "…"}}
+{"content": "벽을 두드려 본다.", "action": {"kind": "search"}}
+```
+
+- **가기**는 판정이 없다. 지금 장소에서 아는 길로 이어진 장소로 한 칸 간다. 한 라운드에 한 칸이다. 한쪽 길은 `from_place` 에서 `to_place` 로만 간다.
+  이어지지 않은 곳, 모르는 곳, 숨긴 곳, 장소가 아닌 것, 지금 서 있는 곳은 모두 같은 422(`action.place`)다. 답이 다르면 숨긴 장소가 드러난다.
+  마감할 때 다시 본다. 그사이 방장이 다른 곳으로 옮겼으면 가지 않고 까닭을 적는다(`not_adjacent`). 간 곳은 서 본 곳이 되어 거기서 나가는 안개 길이 보인다.
+  결과는 선언의 `outcome.move`(`user_id`, `character_name`, `from`, `to`, `moved`, `reason`)다. 갔으면 이벤트(`character_moved`, 행동에 이어지고 `round` 가 있다)가 남는다.
+- **찾기**는 받는 값이 없다. 서 있는 곳에 닿은, 아직 찾지 않은 숨긴 길마다 판에 적힌 판정(능력과 난이도)을 굴린다. 부상의 영향은 판정과 같다.
+  성공한 길은 찾은 것이 된다. 테이블의 모두가 알고(방장도 이때 안다), 응답의 맵에 나온다. 같은 라운드에 앞사람이 찾은 길은 다시 굴리지 않는다.
+  **굴린 판정은 어디에도 적지 않는다.** 결과는 찾은 길뿐이다(`outcome.search`: `place`, `found`: 길마다 `from_place`, `to_place`, `two_way`). 이벤트(`place_searched`)도 같다.
+  숨긴 길이 없는 곳과 있는데 못 찾은 곳의 결과가 같다. 굴림을 보이면 숨긴 길이 있다는 것이 드러난다. 사람 GM 이 가림막 뒤에서 굴리는 것과 같다. 다른 판정의 굴림은 공개다.
 
 **판정.** 선언을 마감하는 순간, 행동을 붙인 선언마다 엔진이 주사위를 굴려 결과를 정한다. 결과는 선언의 `outcome` 에 적힌다.
 
@@ -1529,7 +1546,8 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `item_used` | 캐릭터가 소모품을 썼다(또는 못 했다). 그 행동 바로 뒤에 적힌다. 회복했으면 바로 뒤에 `hp_changed` | `round`, `character_name`, `entry_id`, `name`, `used`, `reason`, `target`(회복받은 사람), `remaining` |
 | `item_given` | 캐릭터가 물건을 건넸다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `entry_id`, `name`, `count`, `given`, `reason`, `target`(받은 사람), `remaining`, `target_total` |
 | `quest_changed` | 방장이 퀘스트의 상태를 바꿨다 | `entry_id`, `name`(사건의 이름), `previous`, `status`, `rewards`: 성공이면 받은 사람마다 `user_id`, `character_name`, `items`(물건마다 `entry_id`, `name`, `count`(받은 개수), `total`, `capped`). 실패나 드러내기면 빈 목록 |
-| `character_moved` | 방장이 캐릭터를 맵의 다른 장소로 옮겼다 | `user_id`, `character_name`, `from`, `to`: 장소마다 `entry_id`, `name`. 맵이 생기기 전에 시작한 테이블의 캐릭터면 `from` 이 `null` |
+| `character_moved` | 캐릭터가 맵의 다른 장소로 옮겨 갔다. 방장이 옮겼으면 행한 사람이 방장이다. 선언 행동으로 갔으면 행한 사람이 없고 그 행동 바로 뒤에 적힌다 | `user_id`, `character_name`, `from`, `to`: 장소마다 `entry_id`, `name`. 맵이 생기기 전에 시작한 테이블의 캐릭터면 `from` 이 `null`. 선언 행동이면 `round` 도 |
+| `place_searched` | 캐릭터가 서 있는 곳에서 숨긴 길을 찾았다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`, `found`: 찾은 길마다 `from_place`, `to_place`, `two_way`. 못 찾았으면 빈 목록. 굴린 판정은 없다 |
 | `character_joined` | 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다 | `round`, `user_id`, `character_name`, `replaces`: 죽은 캐릭터의 이름, `mode`, `pregen_index`, `number`: 그 사람의 몇 번째 캐릭터인지, `sheet`: 받은 시트, `place`: 들어온 장소(`entry_id`, `name`, 맵이 없으면 `null`) |
 | `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `reason`(`all_declared`, `host`, `timeout`), `idle`: 선언을 내지 않은 사람. 쓰러진 사람과 그 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다 |
 | `narration_failed` | GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고 방장이 바로 다시 맡길 수 있다 | `round`, `reason`: 마지막 실패의 이유. 서술 값을 잡지 못했으면 `insufficient_credits` 또는 `billing_unavailable`([서술 값](#서술-값)). 라운드의 등급의 모델이 서버에 없으면 `tier_unavailable`([서술 등급](#테이블)) |

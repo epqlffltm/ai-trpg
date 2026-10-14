@@ -130,6 +130,7 @@ async def handle_action_not_in_rules(request: Request, error: ActionNotInRulesEr
 TARGET_ERRORS = {
     'target': 'action.target 이 이 테이블에 앉은 사람이 아닙니다.',
     'npc': 'action.npc 가 이번 장면의 인물이 아닙니다.',
+    'place': 'action.place 가 지금 장소에서 아는 길로 이어진 장소가 아닙니다.',
 }
 
 

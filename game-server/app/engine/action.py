@@ -11,11 +11,13 @@
   - 모양(CheckAction): 규칙을 몰라도 볼 수 있는 것. 입력을 받을 때 검사한다.
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
-종류는 다섯이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give).
+종류는 일곱이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search).
 종류를 나타내는 칸(kind)으로 가른다(Action).
 치료는 능력과 난이도를 받지 않는다. 규칙이 정한다(app/engine/treatment.py).
 지목은 주사위를 굴리지 않는다. 짚은 이름이 정답인지만 본다(app/rounds/naming.py).
 쓰기와 건네기도 판정이 없다. 소지품을 바꾸고, 회복하는 소모품이면 회복의 주사위만 굴린다(app/rounds/item_actions.py).
+가기는 판정이 없다. 이웃한 장소로 한 칸 간다. 찾기는 그 장소의 숨긴 길마다 판의 판정을 굴린다
+(app/rounds/map_actions.py).
 
 행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
 
@@ -57,6 +59,10 @@ class ActionKind(enum.StrEnum):
     USE = 'use'
     # 가진 물건을 앉은 다른 사람에게 건넨다
     GIVE = 'give'
+    # 맵에서 지금 장소와 아는 길로 이어진 장소로 한 칸 간다
+    MOVE = 'move'
+    # 지금 장소에서 숨긴 길을 찾는다. 길마다 판에 적힌 판정을 굴린다
+    SEARCH = 'search'
 
 
 class CheckAction(BaseModel):
@@ -207,14 +213,43 @@ class GiveAction(BaseModel):
     target: uuid.UUID
 
 
+class MoveAction(BaseModel):
+    """
+    맵에서 한 칸 가는 행동. 지금 서 있는 장소에서 아는 길로 이어진 장소(place)로 간다(app/rounds/map_actions.py).
+
+    place 는 판의 로어북 장소 항목의 id 다. 엔진은 이 값을 읽지 않는다. 어디와 이어져 있는지는 판이 안다.
+    한 라운드에 한 칸이다. 한 사람의 선언에는 행동이 하나다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.MOVE]
+    place: uuid.UUID
+
+
+class SearchAction(BaseModel):
+    """
+    지금 서 있는 장소에서 숨긴 길을 찾는 행동(app/rounds/map_actions.py). 받는 값이 없다.
+
+    무엇으로 굴리는지(능력과 난이도)는 길마다 판에 적혀 있다. 플레이어는 숨긴 길이 있는지조차 모른다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.SEARCH]
+
+
+# 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
+AnyAction = CheckAction | TreatAction | NameAction | UseAction | GiveAction | MoveAction | SearchAction
+
 # 선언에 붙는 행동. kind 로 종류를 가른다
-Action = Annotated[CheckAction | TreatAction | NameAction | UseAction | GiveAction, Field(discriminator='kind')]
+Action = Annotated[AnyAction, Field(discriminator='kind')]
 
 # 저장된 행동(JSON)을 읽는 법. 우리가 쓴 문서다. 모양이 틀렸으면 버그다
 ACTION = TypeAdapter(Action)
 
 
-def read_action(data: dict) -> CheckAction | TreatAction | NameAction | UseAction | GiveAction:
+def read_action(data: dict) -> AnyAction:
     """선언에 저장된 행동을 읽는다. 모양이 틀리면 ValidationError."""
     return ACTION.validate_python(data)
 
