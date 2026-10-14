@@ -74,17 +74,26 @@ def require_quest(
     return row, quest
 
 
-def require_changeable(current: QuestStatus, to: QuestStatus) -> None:
+def change_problem(current: QuestStatus, to: QuestStatus) -> Conflict | None:
     """
-    지금 상태에서 그 상태로 바꿀 수 있는지 확인한다. 아니면 TableConflictError.
+    지금 상태에서 그 상태로 바꿀 수 없는 까닭. 바꿀 수 있으면 None.
 
     끝난 것은 quest_finished, 이미 진행 중인 것을 진행 중으로 바꾸면 quest_already_active.
     숨김으로 바꾸는 것은 입력에서 받지 않는다(app/tables/schemas.py 의 QuestChange).
+    방장의 요청(require_changeable)과 AI 의 장부 초안(app/drafts/validation.py)이 같은 길을 쓴다.
     """
     if current in FINISHED:
-        raise TableConflictError(Conflict.QUEST_FINISHED)
+        return Conflict.QUEST_FINISHED
     if current == QuestStatus.ACTIVE and to == QuestStatus.ACTIVE:
-        raise TableConflictError(Conflict.QUEST_ALREADY_ACTIVE)
+        return Conflict.QUEST_ALREADY_ACTIVE
+    return None
+
+
+def require_changeable(current: QuestStatus, to: QuestStatus) -> None:
+    """지금 상태에서 그 상태로 바꿀 수 있는지 확인한다. 아니면 TableConflictError(그 까닭)."""
+    problem = change_problem(current, to)
+    if problem is not None:
+        raise TableConflictError(problem)
 
 
 def rewarded_members(table: GameTable) -> list[TableMember]:
