@@ -224,6 +224,8 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/tables/{id}/whispers` | 같은 테이블의 한 사람에게 쪽지 보내기. 201. 보낸 사람과 받은 사람만 본다. `gm_visible` 이면 GM 도 본다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/whispers` | 자기 쪽지함. 보낸 것과 받은 것. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/ledger-drafts` | 방장의 결정을 기다리는 장부 초안의 줄들. 방장만 | access 토큰 |
+| POST | `/api/v1/game/tables/{id}/ledger-drafts/{draft_id}/accept` | 장부 초안의 줄 하나를 받아들여 장부를 바꾸기. 방장만. 진행 중에만 | access 토큰 |
+| POST | `/api/v1/game/tables/{id}/ledger-drafts/{draft_id}/reject` | 장부 초안의 줄 하나를 버리기. 204. 방장만 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/stream` | 테이블의 스트림(SSE). 새 이벤트와 새 채팅, 자기 쪽지함의 새 쪽지, 쓰이는 중인 서술이 생기는 대로 온다. 응답이 끝나지 않는다. `events_after`, `messages_after`, `whispers_after`, `Last-Event-ID` 머리말 | access 토큰 |
 | POST | `/api/v1/game/lorebooks` | 로어북 만들기. 201. 항목은 만든 뒤에 더한다 | access 토큰 |
 | GET | `/api/v1/game/lorebooks` | 내 로어북 목록. `limit`, `offset` | access 토큰 |
@@ -847,6 +849,8 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 | `not_enough_items` | 가진 것보다 많이 빼앗으려 했다. 가지지 않은 물건이면 이 이유다 |
 | `quest_finished` | 이미 끝난(성공, 실패) 퀘스트다. 끝난 것은 되돌리지 않는다 |
 | `quest_already_active` | 이미 진행 중인 퀘스트를 진행 중으로 바꾸려 했다 |
+| `draft_decided` | 장부 초안의 그 줄은 이미 결정했거나(받아들임, 버림) 만료됐다 |
+| `draft_stale` | 장부 초안을 쓴 뒤에 그 사람의 캐릭터가 바뀌었다. 초안의 캐릭터에게 줄 수 없다 |
 
 ```json
 {"detail": "테이블의 지금 상태에서는 할 수 없습니다.", "reason": "table_full"}
@@ -2054,7 +2058,7 @@ uv run python -m scripts.eval_memory --fake
 ## 장부 초안
 
 AI 가 서술한 장면을 읽고, 장부(소지품, 퀘스트)에 적을 것의 초안을 구조화한 데이터(JSON)로 쓴다(`app/drafts/`). "캐릭터가 물건을 손에 넣었다", "퀘스트가 드러났다, 이루어졌다, 놓쳤다"다.
-지금은 방장이 장면을 읽고 손으로 물건을 주고 퀘스트를 바꾼다. 그 일을 덜려는 것이다. **만드는 중이다. 받아들이고 버리는 길은 다음 단계다.**
+지금은 방장이 장면을 읽고 손으로 물건을 주고 퀘스트를 바꾼다. 그 일을 덜려는 것이다. 방장이 줄마다 받아들이거나 버린다.
 
 **테이블에서.**
 - **테이블의 옵션이다(`ledger_drafts`, 기본 끔).** 켜면 라운드마다 모델을 한 번 더 부른다. 그만큼 호출과 시간이 늘어서 방장이 고른다(만들 때, 또는 `PUT .../ledger-drafts`). 로비에도 보인다.
@@ -2067,6 +2071,14 @@ AI 가 서술한 장면을 읽고, 장부(소지품, 퀘스트)에 적을 것의
   적을 때 테이블을 잠근다. 방장이 앞의 줄을 받아들이는 일과 겹치지 않는다.
 - **방장만 본다(`GET .../ledger-drafts`).** 숨긴 퀘스트가 드러났다는 줄이 있을 수 있다. 다른 사람에게는 403 이다. 다른 사람은 받아들인 뒤의 장부 이벤트(`items_gained`, `quest_changed`)로 안다.
 - **실패해도 플레이를 막지 않는다.** 읽기, 부르기, 적기 중 무엇이 실패하든 라운드는 이미 닫혔고 다음 라운드가 열려 있다. 로그(`ledger_draft.write`, `ledger_draft.failed`, `warning`)만 남는다. 시간의 상한은 90 초다.
+
+**받아들이기와 버리기(`POST .../ledger-drafts/{draft_id}/accept`, `.../reject`).** 방장만(403). 다른 테이블의 줄이나 없는 줄은 404.
+- **받아들일 때 지금의 장부로 다시 본다.** 초안을 쓴 뒤에 바뀌었을 수 있다.
+  - 물건: 그 사람이 아직 앉아 있고(404), 지금 캐릭터가 살아 있고(409 `character_dead`), 초안을 쓸 때의 그 캐릭터여야 한다(409 `draft_stale`. 죽고 새 캐릭터가 들어왔으면 새 캐릭터에게 주지 않는다). 한 가지를 99 개까지 갖고 넘는 만큼은 받지 않는다(퀘스트의 보상과 같다). 이미 99 개면 409(`too_many_items`).
+  - 퀘스트: 방장이 손으로 바꿀 때와 같은 길이다(같은 규칙, 같은 보상). 그사이 끝났거나 이미 드러났으면 그 충돌(`quest_finished`, `quest_already_active`)이다.
+- **받아들이면 방장이 손으로 할 때와 같은 이벤트가 모두에게 간다**(`items_gained`, `quest_changed`). 바꾼 사람(`actor_id`)은 방장이다. 진행 중에만 된다(409 `not_playing`).
+- **버리면 장부는 그대로다.** 끝난 테이블에서도 버릴 수 있다(정리).
+- 이미 결정했거나 만료된 줄은 다시 결정하지 못한다(409 `draft_decided`). 테이블을 잠그고 하므로 같은 줄을 동시에 두 번 받아들여도 한 번만 바뀐다.
 
 **초안 쓰기.**
 

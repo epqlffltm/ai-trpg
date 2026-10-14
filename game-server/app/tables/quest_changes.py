@@ -41,6 +41,28 @@ def describe(quest: CatalogQuest, previous: str, status: QuestStatus, rewards: l
     }
 
 
+def apply_change(
+    session: AsyncSession, table: GameTable, entry_id: uuid.UUID, status: QuestStatus, actor_id: uuid.UUID
+) -> None:
+    """
+    잠근 테이블의 퀘스트 하나를 바꾸고 이벤트를 적는다. 성공이면 보상을 준다. 저장하지 않는다.
+
+    방장이 바꿀 때(change_quest)와 방장이 장부 초안을 받아들일 때(app/drafts/decisions.py)가 같이 쓴다.
+    이 테이블의 퀘스트가 아니면 TableOptionError, 바꿀 수 없는 상태면 TableConflictError.
+    """
+    snapshot = read_snapshot(table.content)
+    row, quest = quests.require_quest(table, quests.catalog(snapshot), entry_id)
+    previous = row.status
+    quests.require_changeable(QuestStatus(previous), status)
+    row.status = status
+    row.changed_at = func.now()
+    rewards = []
+    if status == QuestStatus.SUCCEEDED:
+        rewards = quests.give_rewards(table, quest, items.catalog(snapshot))
+    payload = describe(quest, previous, status, rewards)
+    recorder.record(session, table, EventType.QUEST_CHANGED, actor_id=actor_id, payload=payload)
+
+
 async def change_quest(
     session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, entry_id: uuid.UUID, status: QuestStatus
 ) -> GameTable:
@@ -53,15 +75,5 @@ async def change_quest(
     table, _ = await lock_seated(session, host_id, table_id)
     require_host(table, host_id)
     require_playing(table)
-    snapshot = read_snapshot(table.content)
-    row, quest = quests.require_quest(table, quests.catalog(snapshot), entry_id)
-    previous = row.status
-    quests.require_changeable(QuestStatus(previous), status)
-    row.status = status
-    row.changed_at = func.now()
-    rewards = []
-    if status == QuestStatus.SUCCEEDED:
-        rewards = quests.give_rewards(table, quest, items.catalog(snapshot))
-    payload = describe(quest, previous, status, rewards)
-    recorder.record(session, table, EventType.QUEST_CHANGED, actor_id=host_id, payload=payload)
+    apply_change(session, table, entry_id, status, host_id)
     return await save(session, table)

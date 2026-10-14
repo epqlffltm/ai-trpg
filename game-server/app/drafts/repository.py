@@ -36,3 +36,9 @@ async def list_pending(session: AsyncSession, table_id: uuid.UUID) -> list[Ledge
         .order_by(LedgerDraft.round_number, LedgerDraft.position)
     )
     return list(await session.scalars(query))
+
+
+async def find_draft(session: AsyncSession, table_id: uuid.UUID, draft_id: uuid.UUID) -> LedgerDraft | None:
+    """이 테이블의 그 줄. 없거나 다른 테이블의 줄이면 None."""
+    query = select(LedgerDraft).where(LedgerDraft.id == draft_id, LedgerDraft.table_id == table_id)
+    return await session.scalar(query)
