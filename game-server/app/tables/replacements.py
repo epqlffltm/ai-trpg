@@ -24,13 +24,13 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import read_snapshot
+from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds import service as rounds
 from app.rounds import state as round_state
 from app.rounds.models import Round
-from app.tables import items, sheets
+from app.tables import items, places, sheets
 from app.tables.characters import accept_character, describe_sheet, write_character
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember
@@ -66,11 +66,12 @@ def note_arrival(round_: Round, member: TableMember, replaces: str) -> None:
     round_.arrivals = [*round_.arrivals, arrival]
 
 
-def describe_arrival(round_: Round, member: TableMember, replaces: str) -> dict:
+def describe_arrival(round_: Round, member: TableMember, replaces: str, snapshot: Snapshot) -> dict:
     """
-    새 캐릭터가 들어온 것을 이벤트에 적을 모양으로 바꾼다. 시트를 준 뒤에 부른다.
+    새 캐릭터가 들어온 것을 이벤트에 적을 모양으로 바꾼다. 시트를 주고 세운 뒤에 부른다.
 
     받은 시트를 함께 적는다. 시작할 때의 시트를 적는 것과 같다. 처음의 값이 기록에 있어야 뒤의 변화를 따라갈 수 있다.
+    어디에서 들어왔는지(place)도 적는다. 맵이 없는 테이블이면 None 이다.
     """
     return {
         'round': round_.number,
@@ -81,6 +82,7 @@ def describe_arrival(round_: Round, member: TableMember, replaces: str) -> dict:
         'pregen_index': member.pregen_index,
         'number': member.sheet.number,
         'sheet': describe_sheet(member),
+        'place': places.describe(snapshot, member.sheet.place_id),
     }
 
 
@@ -113,8 +115,10 @@ async def bring_in_character(
     write_character(member, chosen)
     # 새 캐릭터는 앞 캐릭터의 소지품을 물려받지 않는다. 시작 소지품을 새로 받는다
     items.equip(table.id, sheets.give_sheet(member, source), snapshot, member.pregen_index)
+    # 새 캐릭터는 앞 캐릭터가 쓰러진 곳에서 일행에 들어온다
+    places.take_over_place(member)
     drop_declaration(round_, user_id)
     note_arrival(round_, member, replaces)
-    payload = describe_arrival(round_, member, replaces)
+    payload = describe_arrival(round_, member, replaces, snapshot)
     recorder.record(session, table, EventType.CHARACTER_JOINED, actor_id=user_id, payload=payload)
     return await save(session, table)

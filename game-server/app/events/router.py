@@ -60,6 +60,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     ),
     # 퀘스트의 이름과 상태, 보상은 공개다. 사건의 글(로어북)은 적지 않는다
     EventType.QUEST_CHANGED: ('entry_id', 'name', 'previous', 'status', 'rewards'),
+    # 캐릭터의 위치는 공개다. 아는 장소만 적히므로 숨긴 장소는 새지 않는다
+    EventType.CHARACTER_MOVED: ('user_id', 'character_name', 'from', 'to'),
     # 누가 누구에게 보냈는지만 보인다. 쪽지의 글은 처음부터 적지 않는다
     EventType.WHISPER_SENT: ('user_id', 'character_name', 'recipient_id', 'recipient_character_name'),
     EventType.TABLE_STARTED: ('members',),
@@ -160,6 +162,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'pregen_index',
         'number',
         'sheet',
+        'place',
     ),
     EventType.ROUND_CLOSED: ('number', 'idle', 'reason'),
     # 실패의 이유도 보인다(timeout, cut_off …). 모델이 쓴 글이나 보낸 프롬프트는 싣지 않는다
