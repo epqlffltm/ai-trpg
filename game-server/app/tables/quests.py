@@ -122,12 +122,17 @@ def give_rewards(table: GameTable, quest: CatalogQuest, things: dict[uuid.UUID, 
     return [give_reward(table, member, quest, things) for member in rewarded_members(table)]
 
 
+def in_catalog_order(rows: list[TableQuest], quests: dict[uuid.UUID, CatalogQuest]) -> list[TableQuest]:
+    """퀘스트들을 판의 순서로 놓는다. 시작할 때 한 트랜잭션에서 만들어 만든 시각이 같다."""
+    order = {entry_id: index for index, entry_id in enumerate(quests)}
+    return sorted(rows, key=lambda quest: order[quest.entry_id])
+
+
 def visible_quests(table: GameTable, quests: dict[uuid.UUID, CatalogQuest], viewer_id: uuid.UUID) -> list[TableQuest]:
     """
     보는 사람에게 보일 퀘스트들. 판의 순서로 놓는다.
 
     숨긴 것은 방장에게만 보인다. 방장이 아닌 사람에게는 있는지조차 알리지 않는다.
     """
-    order = {entry_id: index for index, entry_id in enumerate(quests)}
     shown = [quest for quest in table.quests if quest.status != QuestStatus.HIDDEN or viewer_id == table.host_id]
-    return sorted(shown, key=lambda quest: order[quest.entry_id])
+    return in_catalog_order(shown, quests)

@@ -344,6 +344,19 @@ class WhisperNote:
 
 
 @dataclass(frozen=True)
+class QuestNote:
+    """
+    테이블의 퀘스트 하나와 그 지금 상태. 상태는 방장이 정한 사실이다(app/tables/quest_changes.py).
+
+    status 는 hidden, active, succeeded, failed 다. 숨긴(hidden) 것은 플레이어가 아직 모르는 일이다.
+    서술자는 숨긴 것을 드러내지 않고, 진행 중인 것의 결말을 먼저 정하지 않는다.
+    """
+
+    name: str
+    status: str
+
+
+@dataclass(frozen=True)
 class NarrationRequest:
     """서술자에게 주는 것. 방금 닫힌 라운드의 내용이다."""
 
@@ -376,6 +389,8 @@ class NarrationRequest:
     people: list[PersonState] = field(default_factory=list)
     # 이 라운드에 GM 에게도 보인 쪽지. 보낸 순서다. 라운드를 읽을 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
     whispers: list[WhisperNote] = field(default_factory=list)
+    # 테이블의 퀘스트들과 그 지금 상태. 판의 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
+    quests: list[QuestNote] = field(default_factory=list)
 
 
 class Preview(Protocol):
