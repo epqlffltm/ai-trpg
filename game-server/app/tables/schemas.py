@@ -90,6 +90,8 @@ class TableCreate(BaseModel):
     remove_short_payers: bool = True
     # 쪽지를 보낸 사실을 모두에게 알리는가. 적지 않으면 알리지 않는다. 만든 뒤에도 방장이 바꿀 수 있다
     whisper_notice: bool = False
+    # 서술한 장면에서 장부 초안을 쓰는가. 적지 않으면 쓰지 않는다. 만든 뒤에도 방장이 바꿀 수 있다
+    ledger_drafts: bool = False
 
     @model_validator(mode='after')
     def require_public_for_password(self) -> 'TableCreate':
@@ -210,6 +212,14 @@ class WhisperNoticeUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     whisper_notice: bool
+
+
+class LedgerDraftsUpdate(BaseModel):
+    """장부 초안을 쓸지 바꿀 때 받는 값. 칸을 빼먹으면 거부한다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    ledger_drafts: bool
 
 
 class NarrationTierUpdate(BaseModel):
@@ -424,6 +434,8 @@ class TableSummary(BaseModel):
     remove_short_payers: bool
     # 쪽지를 보낸 사실을 모두에게 알리는가. 들어가기 전에 안다
     whisper_notice: bool
+    # 서술한 장면에서 장부 초안을 쓰는가. 들어가기 전에 안다
+    ledger_drafts: bool
     created_at: datetime
 
 
