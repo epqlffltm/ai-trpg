@@ -326,6 +326,30 @@ def upgrade_from_18(document: dict) -> dict:
     return upgraded
 
 
+def route_visibility(route: dict) -> dict:
+    """
+    형식 19 의 길 하나를 형식 20 의 모양으로.
+
+    숨긴 길은 숨긴 길, 나머지는 처음부터 아는 길이다(그때는 안개가 없었다).
+    """
+    upgraded = {key: value for key, value in route.items() if key != 'hidden'}
+    upgraded['visibility'] = 'hidden' if route.get('hidden') else 'open'
+    return upgraded
+
+
+def upgrade_from_19(document: dict) -> dict:
+    """
+    형식 19 의 문서를 형식 20 으로 올린다.
+
+    길의 hidden(참, 거짓)이 visibility 로 바뀌었다. 그때는 명소가 없었다.
+    """
+    upgraded = dict(document)
+    upgraded['routes'] = [route_visibility(route) for route in document.get('routes', [])]
+    upgraded['landmarks'] = []
+    upgraded['format'] = 20
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -347,4 +371,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     16: upgrade_from_16,
     17: upgrade_from_17,
     18: upgrade_from_18,
+    19: upgrade_from_19,
 }
