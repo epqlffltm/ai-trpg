@@ -75,6 +75,8 @@ ITEM_STACK_MAX = 99
 SCENARIO_MAX_QUEST_RULES = 50
 # 시나리오 하나에 둘 수 있는 길의 수. 장소 100 개를 이어도 모자라지 않는 만큼이다
 SCENARIO_MAX_ROUTES = 200
+# 시나리오 하나에 둘 수 있는 명소(처음부터 아는 장소)의 수
+SCENARIO_MAX_LANDMARKS = 100
 # 판을 낼 때 적는 변경 내용. 사람이 읽는다
 VERSION_NOTE_MAX_LENGTH = 500
 
@@ -109,6 +111,22 @@ class ItemKind(enum.StrEnum):
     GEAR = 'gear'
     # 쓰면 하나 줄어드는 물건. 회복의 양(heals)을 적었으면 쓸 때 엔진이 HP 를 그만큼 되돌린다
     CONSUMABLE = 'consumable'
+
+
+class RouteVisibility(enum.StrEnum):
+    """
+    맵의 길을 플레이어가 언제 아는가. 제작자가 길마다 정한다.
+
+    아는 길의 두 끝은 아는 장소다. 길을 알면 어디로 가는지도 안다.
+    숨긴 길은 방장도 모른다. 시나리오를 만든 사람과 AI GM 만 안다.
+    """
+
+    # 처음부터 안다. 큰길, 이름난 뱃길
+    OPEN = 'open'
+    # 캐릭터가 길의 한쪽 끝에 서 보면 안다. 잘 알려지지 않은 오솔길
+    FOG = 'fog'
+    # 찾아야 안다. 찾는 판정(능력치와 난이도)을 길마다 적는다. 비밀 통로
+    HIDDEN = 'hidden'
 
 
 class QuestStart(enum.StrEnum):
@@ -393,6 +411,7 @@ class Scenario(AssetContent):
         ),
         CheckConstraint(f'jsonb_array_length(quests) <= {SCENARIO_MAX_QUEST_RULES}', name='quests_count'),
         CheckConstraint(f'jsonb_array_length(routes) <= {SCENARIO_MAX_ROUTES}', name='routes_count'),
+        CheckConstraint(f'cardinality(landmarks) <= {SCENARIO_MAX_LANDMARKS}', name='landmarks_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
@@ -478,10 +497,15 @@ class Scenario(AssetContent):
     # 비우면 맵이 없는 시나리오다(위치도 이동도 없다). 길을 적었으면 게시할 때 있어야 한다
     start_place: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
-    # 맵의 길들. 하나하나가 {from_place, to_place, two_way, hidden, find} 다. 장소는 붙인 로어북의 장소 항목이다.
+    # 맵의 길들. 하나하나가 {from_place, to_place, two_way, visibility, find} 다. 장소는 붙인 로어북의 장소 항목이다.
     # 장소의 묘사는 로어북에, 어디와 어디가 이어지는지는 여기에 둔다. 아이템 규칙과 같은 까닭이다.
-    # 숨긴 길(hidden)은 플레이어도 방장도 모른다. 찾는 판정(find: 능력치와 난이도)으로 드러난다
+    # 플레이어가 길을 언제 아는지는 visibility 가 정한다(RouteVisibility).
+    # 숨긴 길은 플레이어도 방장도 모른다. 찾는 판정(find: 능력치와 난이도)으로 드러난다
     routes: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 명소. 처음부터 아는 장소들이다(이름난 도시와 마을). 가는 길을 몰라도 이름은 안다.
+    # 명소가 아닌 장소는 가 보거나, 그리로 가는 길을 알게 되면 안다. 붙인 로어북의 장소 항목이다
+    landmarks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default=text("'{}'"))
 
     # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다
