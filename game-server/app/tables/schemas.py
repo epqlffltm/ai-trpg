@@ -322,6 +322,44 @@ class QuestChange(BaseModel):
     status: Literal[QuestStatus.ACTIVE, QuestStatus.SUCCEEDED, QuestStatus.FAILED]
 
 
+class PlaceChange(BaseModel):
+    """방장이 캐릭터를 옮길 때 받는 값. 테이블이 아는 장소(TableDetail.map.places)의 ID 다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    place_id: uuid.UUID
+
+
+class PlaceOut(BaseModel):
+    """
+    아는 장소 하나. 이름은 판의 로어북 장소 항목의 이름이다.
+
+    장소의 글은 싣지 않는다. 로어북은 AI 가 읽는 설정이다.
+    """
+
+    entry_id: uuid.UUID
+    name: str
+
+
+class RouteOut(BaseModel):
+    """아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다."""
+
+    from_place: uuid.UUID
+    to_place: uuid.UUID
+    two_way: bool
+
+
+class MapOut(BaseModel):
+    """
+    테이블이 아는 맵. 앉은 사람 모두가 같은 것을 본다. 방장도 마찬가지다.
+
+    숨긴 길과 숨긴 길로만 닿는 장소, 아직 서 보지 않은 안개 길은 싣지 않는다(app/tables/places.py).
+    """
+
+    places: list[PlaceOut]
+    routes: list[RouteOut]
+
+
 class SheetOut(BaseModel):
     """앉은 사람의 캐릭터 시트. 앉은 사람은 서로의 시트를 본다."""
 
@@ -342,6 +380,8 @@ class SheetOut(BaseModel):
     injuries: list[InjuryOut] = []
     # 가진 물건들. 판의 물건 순서다(TableDetail.items). 앉은 사람은 서로의 소지품을 본다
     items: list[ItemOut] = []
+    # 서 있는 맵의 장소. 이름은 TableDetail.map.places 에서 찾는다. 맵이 없는 테이블이면 None 이다
+    place_id: uuid.UUID | None = None
 
 
 class FallenOut(BaseModel):
@@ -475,6 +515,8 @@ class TableDetail(TableSummary):
     items: list[CatalogItemOut]
     # 이 테이블의 퀘스트들. 숨긴 것은 방장에게만 보인다. 시작 전에는 비어 있다
     quests: list[QuestOut]
+    # 이 테이블이 아는 맵. 맵이 없는 판이면 None 이다. 시작 전에도 처음부터 아는 것(열린 길, 명소)이 보인다
+    map: MapOut | None
     members: list[MemberOut]
     # 초대 코드. 방장에게만 보인다
     invite_code: str | None
