@@ -54,7 +54,8 @@ from app.engine.sheet import Sheet
 #  16: 로어북 항목에 지목할 때 맞다고 받는 이름들(true_names)이 있다
 #  17: 물건 항목의 규칙(items), 시작 소지품(starting_items), 프리젠의 소지품(pregens[].items)이 있다
 #  18: 사건 항목의 퀘스트 규칙(quests)이 있다
-SNAPSHOT_FORMAT = 18
+#  19: 맵의 시작 장소(start_place)와 길(routes)이 있다
+SNAPSHOT_FORMAT = 19
 
 
 class EntrySnapshot(BaseModel):
@@ -137,6 +138,27 @@ class QuestRuleSnapshot(BaseModel):
     reward: list[ItemStackSnapshot] = []
 
 
+class FindSnapshot(BaseModel):
+    """숨긴 길을 찾는 판정. 판 안의 룰북의 능력치와 난이도의 이름이다. 난이도가 없으면 규칙의 기본 난이도다."""
+
+    ability: str
+    difficulty: str | None = None
+
+
+class RouteSnapshot(BaseModel):
+    """
+    길 하나. 판 안의 로어북 장소 항목 둘을 잇는다.
+
+    two_way 가 아니면 from_place 에서 to_place 로만 간다. hidden 이면 찾는 판정(find)으로 드러난다.
+    """
+
+    from_place: uuid.UUID
+    to_place: uuid.UUID
+    two_way: bool = True
+    hidden: bool = False
+    find: FindSnapshot | None = None
+
+
 class PregenSnapshot(BaseModel):
     """
     프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다.
@@ -199,6 +221,10 @@ class Snapshot(BaseModel):
     starting_items: list[ItemStackSnapshot] = []
     # 퀘스트 규칙들. 판 안의 로어북 사건 항목마다 많아야 하나다. 규칙이 없는 사건은 숨긴 채로 시작한다(quest_rule_of)
     quests: list[QuestRuleSnapshot] = []
+    # 맵의 시작 장소. 판 안의 로어북 장소 항목이다. 없으면 맵이 없는 판이다(위치도 이동도 없다)
+    start_place: uuid.UUID | None = None
+    # 맵의 길들. 두 끝이 판 안의 로어북 장소 항목이다. 길이 있으면 시작 장소도 있다
+    routes: list[RouteSnapshot] = []
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용했으면 반드시 있다
     player_made_hp: PlayerMadeHpSnapshot | None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 제작자가 정한 것이다
@@ -242,6 +268,23 @@ class Snapshot(BaseModel):
         return self
 
     @model_validator(mode='after')
+    def require_place_entries(self) -> 'Snapshot':
+        """
+        시작 장소와 길의 두 끝이 모두 판 안의 장소 항목인지, 길이 있으면 시작 장소가 있는지 본다. 아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽(테이블)은 위치마다 장소 항목이 있다고 믿고 쓴다.
+        """
+        places = {entry.id for entry in place_entries(self)}
+        pointed = [route_end for route in self.routes for route_end in (route.from_place, route.to_place)]
+        if self.start_place is not None:
+            pointed.append(self.start_place)
+        if any(place not in places for place in pointed):
+            raise ValueError('장소 항목이 아닌 것을 가리키는 시작 장소나 길이 있습니다.')
+        if self.routes and self.start_place is None:
+            raise ValueError('길이 있는데 시작 장소가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
     def require_quest_entries(self) -> 'Snapshot':
         """
         퀘스트 규칙이 모두 판 안의 사건 항목을 가리키는지 본다. 아니면 거부한다.
@@ -262,6 +305,16 @@ def person_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
 def item_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
     """판의 로어북에서 물건 항목만. 로어북의 순서, 그 안의 항목 순서다."""
     return [entry for lorebook in snapshot.lorebooks for entry in lorebook.entries if entry.kind == LoreKind.ITEM]
+
+
+def place_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
+    """판의 로어북에서 장소 항목만. 맵의 장소다. 로어북의 순서, 그 안의 항목 순서다."""
+    return [entry for lorebook in snapshot.lorebooks for entry in lorebook.entries if entry.kind == LoreKind.PLACE]
+
+
+def has_map(snapshot: Snapshot) -> bool:
+    """맵이 있는 판인가. 시작 장소가 있어야 캐릭터가 설 곳이 있다."""
+    return snapshot.start_place is not None
 
 
 def quest_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
@@ -343,6 +396,8 @@ def build_snapshot(
         items=[ItemRuleSnapshot(**rule) for rule in scenario.items],
         starting_items=[ItemStackSnapshot(**stack) for stack in scenario.starting_items],
         quests=[QuestRuleSnapshot(**quest) for quest in scenario.quests],
+        start_place=scenario.start_place,
+        routes=[RouteSnapshot(**route) for route in scenario.routes],
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,

@@ -40,6 +40,8 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         items=[rule.model_dump() for rule in data.items],
         starting_items=[stack.model_dump() for stack in data.starting_items],
         quests=[quest.model_dump() for quest in data.quests],
+        start_place=data.start_place,
+        routes=[route.model_dump() for route in data.routes],
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
         reroll_allowed=data.reroll_allowed,
         narration_style=data.narration_style,

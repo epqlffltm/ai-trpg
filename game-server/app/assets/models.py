@@ -73,6 +73,8 @@ SCENARIO_MAX_STARTING_ITEMS = 20
 ITEM_STACK_MAX = 99
 # 시나리오 하나에 둘 수 있는 퀘스트 규칙의 수. 사건 항목마다 하나다. 한 판에 쫓는 퀘스트가 이보다 많지는 않다
 SCENARIO_MAX_QUEST_RULES = 50
+# 시나리오 하나에 둘 수 있는 길의 수. 장소 100 개를 이어도 모자라지 않는 만큼이다
+SCENARIO_MAX_ROUTES = 200
 # 판을 낼 때 적는 변경 내용. 사람이 읽는다
 VERSION_NOTE_MAX_LENGTH = 500
 
@@ -175,7 +177,8 @@ class LoreKind(enum.StrEnum):
       - 사건: 준비된 사건의 글이다. 장면에서 먼저 일으키거나 결말을 정하지 않는다.
               사건 하나가 퀘스트 하나다. 시작 상태와 보상은 시나리오의 퀘스트 규칙(Scenario.quests),
               진행(상태)은 테이블(엔진, DB)이 맡는다
-    장소, 물건, 세력, 종족은 지금은 표시만 한다. 지도, 아이템·몬스터 자산이 붙을 자리다.
+    장소는 맵의 장소다. 어디와 어디가 이어지는지는 시나리오의 길(Scenario.routes)이 정한다.
+    물건, 세력, 종족은 지금은 표시만 한다(물건은 시나리오의 아이템 규칙이 엔진에 잇는다).
     """
 
     # 이름 붙은 등장인물. 사람만이 아니라 이름이 있는 동물도 여기다
@@ -389,6 +392,7 @@ class Scenario(AssetContent):
             f'jsonb_array_length(starting_items) <= {SCENARIO_MAX_STARTING_ITEMS}', name='starting_items_count'
         ),
         CheckConstraint(f'jsonb_array_length(quests) <= {SCENARIO_MAX_QUEST_RULES}', name='quests_count'),
+        CheckConstraint(f'jsonb_array_length(routes) <= {SCENARIO_MAX_ROUTES}', name='routes_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
@@ -469,6 +473,15 @@ class Scenario(AssetContent):
     # 아이템 규칙과 같은 까닭으로 여기 둔다. 사건의 글은 로어북에, 시작 상태와 보상은 시나리오에 있다.
     # 규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상이 없다. 가리키는 항목이 있는지는 게시할 때 본다
     quests: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 맵의 시작 장소. 붙인 로어북의 장소 항목 하나다. 캐릭터 모두가 테이블이 시작할 때 여기에 선다.
+    # 비우면 맵이 없는 시나리오다(위치도 이동도 없다). 길을 적었으면 게시할 때 있어야 한다
+    start_place: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+    # 맵의 길들. 하나하나가 {from_place, to_place, two_way, hidden, find} 다. 장소는 붙인 로어북의 장소 항목이다.
+    # 장소의 묘사는 로어북에, 어디와 어디가 이어지는지는 여기에 둔다. 아이템 규칙과 같은 까닭이다.
+    # 숨긴 길(hidden)은 플레이어도 방장도 모른다. 찾는 판정(find: 능력치와 난이도)으로 드러난다
+    routes: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다
