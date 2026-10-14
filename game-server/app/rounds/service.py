@@ -430,6 +430,8 @@ async def load_closing_request(
       - NPC 의 상태는 닫기 시작할 때 바뀐 뒤로 다음 라운드가 열릴 때까지 바뀌지 않는다.
       - GM 에게 보인 쪽지는 라운드가 열려 있는 동안 보낸 것이다. 닫기 시작한 뒤에 보낸 것은 다음 라운드로 간다.
     그래서 서술을 몇 번 다시 맡겨도 서술자는 같은 것을 받는다.
+    퀘스트의 상태만은 예외다. 방장이 언제든 바꾸고, 서술을 맡길 때의 것을 읽는다. 굳히지 않는 까닭:
+    결정적인 라운드가 닫힌 뒤 방장이 성공을 적으면, 그 라운드의 서술이 성공을 그릴 수 있어야 한다. 지금의 사실이 맞다.
     이야기의 바탕과 지난 라운드 몇 개는 가짜 서술자는 읽지 않고, 언어 모델의 서술자가 읽는다.
     """
     table = await table_repository.find_table(session, table_id)
@@ -452,6 +454,7 @@ async def load_closing_request(
         host_id=table.host_id,
         people=to_people(scene.cast, snapshot.rulebook.rules),
         whispers=[narration_request.to_whisper_note(whisper) for whisper in whispers],
+        quests=narration_request.to_quest_notes(table, snapshot),
     )
 
 

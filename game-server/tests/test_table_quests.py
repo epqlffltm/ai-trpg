@@ -3,28 +3,33 @@
 """
 테이블의 퀘스트.
 
-넷을 본다.
+다섯을 본다.
   - 시작: 판의 사건마다 퀘스트가 생긴다. 처음 상태는 판의 퀘스트 규칙의 것이고, 규칙이 없으면 숨김이다.
   - 보이기: 숨긴 것은 방장만 본다. 사건의 글(로어북)은 아무에게도 나가지 않는다.
   - 방장이 바꾸기: 진행 중에, 판의 퀘스트만, 정한 길로만. 끝난 것은 되돌리지 않는다. 이벤트로 남는다.
   - 보상: 성공하면 살아 있는 캐릭터마다 받는다. 한 가지 99 개에 닿으면 거기까지만 받는다. 두 번 주지 않는다.
+  - 서술: 서술을 맡길 때 퀘스트 전부가 이름과 상태로 서술자에게 간다. 닫기 시작할 때 굳히지 않는다.
 """
 
 import asyncio
 import uuid
+from dataclasses import replace
 
 import pytest
-from fastapi import status
+from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.rounds import prompt, service
+from app.rounds.narrator import NarrationRequest, QuestNote, WhisperNote
 from app.tables import items
 from app.tables.errors import TableConflictError
 from app.tables.models import QuestStatus, TableItem, TableSheet
 from app.tables.quests import require_changeable
 from tests.sheets import SHEET
+from tests.test_round_closing import HeldJobs, started_at
 from tests.test_table_items import (
     FRIEND,
     LOREBOOKS_URL,
@@ -42,6 +47,7 @@ from tests.test_table_items import (
     read_table,
     table_url,
 )
+from tests.test_whispers import RecordingNarrator
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -422,3 +428,92 @@ async def test_the_database_refuses_a_made_up_status(
         await session.execute(
             text("UPDATE table_quests SET status = 'done' WHERE table_id = :table_id"), {'table_id': table['id']}
         )
+
+
+# --- 서술 ---
+
+
+@pytest.fixture
+def recording(app: FastAPI) -> RecordingNarrator:
+    """앱의 서술자를 받은 요청을 적어 두는 것으로 바꾼다."""
+    narrator = RecordingNarrator()
+    app.state.narrator = narrator
+    return narrator
+
+
+@pytest.fixture
+def held_jobs(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> HeldJobs:
+    """앱이 맡기는 작업(서술)을 돌리지 않게 한다. 닫는 중인 라운드를 세워 둔다."""
+    jobs = HeldJobs()
+    monkeypatch.setattr(app.state, 'jobs', jobs)
+    return jobs
+
+
+async def declare_both(client: AsyncClient, me: dict, friend: dict, table: dict) -> None:
+    """둘 다 선언한다. 다 내면 라운드가 닫기 시작한다."""
+    for headers in (me, friend):
+        url = table_url(table, '/rounds/current/declaration')
+        declared = await client.put(url, json={'content': '주위를 살핀다.'}, headers=headers)
+        assert declared.status_code == status.HTTP_200_OK, declared.text
+
+
+async def test_the_narrator_gets_every_quest_with_its_status(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, recording: RecordingNarrator, narrated
+):
+    table = await start_duo(client, me, friend, lore)
+    await change(client, me, table, lore['rescue'], 'succeeded')
+
+    await declare_both(client, me, friend, table)
+    await narrated()
+
+    # 판의 순서다. 끝난 것도, 숨긴 것도 간다. 숨긴 것을 드러내지 않는 것은 다루는 법이 맡는다
+    (request,) = recording.requests
+    assert request.quests == [
+        QuestNote(name='왕녀 구출', status='succeeded'),
+        QuestNote(name='광산의 비밀', status='hidden'),
+        QuestNote(name='배신자', status='hidden'),
+    ]
+
+
+async def test_a_quest_changed_after_closing_reaches_the_narration(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, session: AsyncSession, held_jobs: HeldJobs
+):
+    table = await start_duo(client, me, friend, lore)
+    await declare_both(client, me, friend, table)
+    started = await started_at(app, table)
+
+    # 결정적인 라운드가 닫힌 뒤 방장이 성공을 적었다. 그 라운드의 서술이 성공을 그릴 수 있어야 한다
+    await change(client, me, table, lore['rescue'], 'succeeded')
+    request = await service.load_closing_request(session, uuid.UUID(table['id']), 1, started)
+
+    assert request.quests[0] == QuestNote(name='왕녀 구출', status='succeeded')
+
+
+def make_request(quests: list[QuestNote], whispers: list[WhisperNote] | None = None) -> NarrationRequest:
+    """퀘스트(와 쪽지)만 정한 서술 요청."""
+    request = NarrationRequest(round_number=2, scene='성문 앞.', moves=[])
+    return replace(request, quests=quests, whispers=whispers or [])
+
+
+def test_the_prompt_lists_the_quests_with_how_to_treat_them():
+    quests = [
+        QuestNote('왕녀 구출', 'active'),
+        QuestNote('광산의 비밀', 'hidden'),
+        QuestNote('배신자', 'succeeded'),
+        QuestNote('용의 둥지', 'failed'),
+    ]
+
+    text = prompt.round_text(make_request(quests, [WhisperNote('엘프', '영애', '쉿')]))
+
+    assert prompt.QUEST_TITLE in text
+    assert prompt.QUEST_NOTE in text
+    assert '- 왕녀 구출: 진행 중' in text
+    assert '- 광산의 비밀: 숨김(플레이어는 모름)' in text
+    assert '- 배신자: 성공' in text
+    assert '- 용의 둥지: 실패' in text
+    # 쪽지 뒤, 이번 라운드의 차례 앞이다
+    assert text.index(prompt.WHISPER_TITLE) < text.index(prompt.QUEST_TITLE) < text.index('[2 라운드에 한 일과 결과]')
+
+
+def test_no_quests_no_section():
+    assert prompt.QUEST_TITLE not in prompt.round_text(make_request([]))
