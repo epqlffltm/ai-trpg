@@ -40,6 +40,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.NARRATION_TIER_CHANGED: ('narration_tier',),
     EventType.CREDIT_WAIT_CHANGED: ('credit_wait_seconds', 'remove_short_payers'),
     EventType.WHISPER_NOTICE_CHANGED: ('whisper_notice',),
+    EventType.LEDGER_DRAFTS_CHANGED: ('ledger_drafts',),
     # 소지품은 공개다. 누가 무엇을 몇 개 받거나 잃었고, 그 뒤에 몇 개인가
     EventType.ITEMS_GAINED: ('user_id', 'character_name', 'entry_id', 'name', 'count', 'total'),
     EventType.ITEMS_LOST: ('user_id', 'character_name', 'entry_id', 'name', 'count', 'total'),
