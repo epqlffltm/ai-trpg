@@ -22,24 +22,14 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import read_snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.tables import places
 from app.tables.item_grants import living_sheet, require_playing
-from app.tables.models import GameTable, TableMember
+from app.tables.models import GameTable
 from app.tables.service import lock_seated, save
 from app.tables.state import require_host
-
-
-def describe_move(snapshot: Snapshot, member: TableMember, previous: uuid.UUID | None, place_id: uuid.UUID) -> dict:
-    """옮긴 것을 이벤트에 적을 모양. 누가, 어디에서, 어디로. 맵이 생기기 전에 시작한 테이블이면 어디에서가 없다."""
-    return {
-        'user_id': str(member.user_id),
-        'character_name': member.character_name,
-        'from': places.describe(snapshot, previous),
-        'to': places.describe(snapshot, place_id),
-    }
 
 
 async def move_character(
@@ -56,12 +46,12 @@ async def move_character(
     require_playing(table)
     member, sheet = living_sheet(table, user_id)
     snapshot = read_snapshot(table.content)
-    places.require_known(places.known_map(snapshot, places.visited(table)), place_id)
+    places.require_known(places.known_map(snapshot, places.knowledge(table)), place_id)
     if sheet.place_id == place_id:
         return await save(session, table)
 
     previous = sheet.place_id
     places.stand(table, sheet, place_id)
-    payload = describe_move(snapshot, member, previous, place_id)
+    payload = places.describe_move(snapshot, member, previous, place_id)
     recorder.record(session, table, EventType.CHARACTER_MOVED, actor_id=host_id, payload=payload)
     return await save(session, table)

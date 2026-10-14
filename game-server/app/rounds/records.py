@@ -21,7 +21,7 @@ from app.events.models import EventType, TableEvent
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.models import Declaration, Round
-from app.rounds.state import find_declaration, has_outcome, item_give_of, item_use_of, naming_of
+from app.rounds.state import find_declaration, has_outcome, item_give_of, item_use_of, move_of, naming_of, search_of
 from app.tables.models import DeathCause, GameTable, InjurySource
 
 
@@ -185,11 +185,38 @@ def record_item_give(session: AsyncSession, table: GameTable, declaration: Decla
     recorder.record(session, table, EventType.ITEM_GIVEN, payload=payload, cause=cause)
 
 
+def record_move(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    한 칸 간 것을 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. 방장이 옮길 때와 같은 종류(character_moved)다.
+
+    가지 못했으면 적지 않는다. 위치가 바뀌지 않았다. 못 간 까닭은 라운드의 선언 결과에 있다.
+    행한 사람(actor_id)을 적지 않는다. 위치를 바꾼 것은 엔진이다.
+    """
+    move = move_of(declaration)
+    if not move['moved']:
+        return
+    payload = {
+        'round': cause.payload['round'],
+        **{key: move[key] for key in ('user_id', 'character_name', 'from', 'to')},
+    }
+    recorder.record(session, table, EventType.CHARACTER_MOVED, payload=payload, cause=cause)
+
+
+def record_search(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    찾기의 결과를 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. 행한 사람을 적지 않는다.
+
+    찾은 길만 있다. 굴린 판정은 결과에도 없다(app/rounds/map_actions.py). 숨긴 길이 있었는지 드러나지 않는다.
+    """
+    payload = {'round': cause.payload['round'], 'character_name': declaration.character_name, **search_of(declaration)}
+    recorder.record(session, table, EventType.PLACE_SEARCHED, payload=payload, cause=cause)
+
+
 def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
     """
     닫히는 라운드의 선언을 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다. 서술자가 받는 것과 같다.
 
-    판정, 지목, 물건 쓰기와 건네기가 있었던 선언은 행동 바로 뒤에 그 결과를 적는다.
+    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기가 있었던 선언은 행동 바로 뒤에 그 결과를 적는다.
     판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
     선언을 내지 않은 사람은 적지 않는다. 누가 안 냈는지는 라운드가 닫힌 이벤트에 적힌다.
     """
@@ -214,6 +241,10 @@ def record_actions(session: AsyncSession, table: GameTable, round_: Round, group
             record_item_use(session, table, declaration, cause=acted)
         elif item_give_of(declaration) is not None:
             record_item_give(session, table, declaration, cause=acted)
+        elif move_of(declaration) is not None:
+            record_move(session, table, declaration, cause=acted)
+        elif search_of(declaration) is not None:
+            record_search(session, table, declaration, cause=acted)
 
 
 def record_death(

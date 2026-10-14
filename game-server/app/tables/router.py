@@ -170,7 +170,7 @@ def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem]) ->
 
 def to_map(table: GameTable, snapshot: Snapshot) -> MapOut | None:
     """테이블이 아는 맵을 응답으로 바꾼다. 맵이 없는 판이면 None. 아는 것만 싣는다(app/tables/places.py)."""
-    known = places.known_map(snapshot, places.visited(table))
+    known = places.known_map(snapshot, places.knowledge(table))
     if known is None:
         return None
     return MapOut(

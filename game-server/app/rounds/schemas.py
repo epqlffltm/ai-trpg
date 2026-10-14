@@ -264,6 +264,60 @@ class ItemGiveOutcome(BaseModel):
     item_give: ItemGiveOut
 
 
+class PlaceRefOut(BaseModel):
+    """맵의 장소 하나. 판의 로어북 장소 항목과 그 이름이다. 아는 장소만 실린다."""
+
+    entry_id: uuid.UUID
+    name: str
+
+
+class MoveOut(BaseModel):
+    """한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 판정이 없다."""
+
+    user_id: uuid.UUID
+    character_name: str
+    # 차례가 왔을 때 서 있던 곳과 가려던 곳. 서 있던 곳이 없으면(맵 밖) None 이다
+    from_: PlaceRefOut | None = Field(alias='from')
+    to: PlaceRefOut
+    # 갔는가. 못 갔으면 reason 이 있다: not_adjacent(그사이 다른 곳으로 옮겨져 이어진 길이 없었다)
+    moved: bool
+    reason: str | None
+
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+
+class MoveOutcome(BaseModel):
+    """가는 행동의 결과."""
+
+    move: MoveOut
+
+
+class FoundRouteOut(BaseModel):
+    """찾아낸 숨긴 길 하나. 두 끝과 양쪽으로 다니는지다."""
+
+    from_place: PlaceRefOut
+    to_place: PlaceRefOut
+    two_way: bool
+
+
+class SearchOut(BaseModel):
+    """
+    찾은 결과. 엔진이 정했다(app/rounds/map_actions.py).
+
+    찾은 길만 있다. 굴린 판정과 못 찾은 길은 없다. 숨긴 길이 없는 곳과, 있는데 못 찾은 곳의 결과가 같다.
+    """
+
+    # 찾은 곳
+    place: PlaceRefOut | None
+    found: list[FoundRouteOut]
+
+
+class SearchOutcome(BaseModel):
+    """찾는 행동의 결과."""
+
+    search: SearchOut
+
+
 class DeclarationOut(BaseModel):
     """선언 하나."""
 
@@ -276,8 +330,8 @@ class DeclarationOut(BaseModel):
     action: Action | None
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
-    # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome 이다
-    outcome: CheckOutcome | NamingOutcome | ItemUseOutcome | ItemGiveOutcome | None
+    # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome 이다
+    outcome: CheckOutcome | NamingOutcome | ItemUseOutcome | ItemGiveOutcome | MoveOutcome | SearchOutcome | None
 
 
 class DeathSaveOut(BaseModel):
