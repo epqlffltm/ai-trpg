@@ -30,6 +30,8 @@ from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
 from app.core.jobs import BackgroundJobs
+from app.drafts import router as ledger_drafts
+from app.drafts.setup import build_drafter
 from app.engine.dice import RandomDice
 from app.events import router as events
 from app.limits.attempts import LimitsUnavailable, TooManyAttempts
@@ -173,6 +175,8 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.state.narrator = build_narrator(settings, app.state.http_client, app.state.session_factory)
     # 방장이 테이블에 고를 수 있는 서술 등급들. 위의 서술자와 같은 설정으로 정한다. 모델이 없는 등급은 고를 수 없다
     app.state.narration_tiers = offered_tiers(settings)
+    # 서술한 장면에서 장부 초안을 쓰는 것(app/drafts/). 서술자가 언어 모델일 때만 쓴다. 장부 초안을 켠 테이블만 부른다
+    app.state.drafter = build_drafter(settings, app.state.http_client, app.state.session_factory)
 
     # 로어북 항목을 벡터로 바꾸는 것. 설정(EMBEDDER)이 정한다. 기본은 모델을 부르지 않는 가짜다.
     # 시나리오를 게시하면 뒤에서 판의 항목을 벡터로 바꾼다(app/lore/indexing.py)
@@ -233,6 +237,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     app.include_router(events.router, prefix=API_PREFIX)
     app.include_router(chat.router, prefix=API_PREFIX)
     app.include_router(whispers.router, prefix=API_PREFIX)
+    app.include_router(ledger_drafts.router, prefix=API_PREFIX)
     app.include_router(realtime.router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다

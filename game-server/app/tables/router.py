@@ -31,6 +31,7 @@ from app.tables import (
     injuries,
     item_grants,
     items,
+    ledger_draft_options,
     quest_changes,
     quests,
     replacements,
@@ -63,6 +64,7 @@ from app.tables.schemas import (
     ItemChange,
     ItemOut,
     JoinRequest,
+    LedgerDraftsUpdate,
     LobbyJoinRequest,
     MemberOut,
     NarrationStyleUpdate,
@@ -111,6 +113,7 @@ def to_summary(table: GameTable) -> TableSummary:
         credit_wait_seconds=table.credit_wait_seconds,
         remove_short_payers=table.remove_short_payers,
         whisper_notice=table.whisper_notice,
+        ledger_drafts=table.ledger_drafts,
         created_at=table.created_at,
     )
 
@@ -602,6 +605,20 @@ async def change_whisper_notice(
     진행 중에도 된다. 바꾼 뒤에 보내는 쪽지부터 따른다.
     """
     table = await whisper_notices.change_whisper_notice(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/ledger-drafts', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_ledger_drafts(
+    table_id: uuid.UUID, data: LedgerDraftsUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    서술한 장면에서 장부 초안을 쓸지 바꾼다. 방장만 한다.
+
+    켜면 라운드의 서술이 끝날 때마다 모델을 한 번 더 불러 초안을 쓴다(GET /tables/{id}/ledger-drafts 로 본다).
+    진행 중에도 된다. 바꾼 뒤에 서술하는 라운드부터 따른다. 모두에게 이벤트(ledger_drafts_changed)가 간다.
+    """
+    table = await ledger_draft_options.change_ledger_drafts(session, user.user_id, table_id, data)
     return to_detail(table, user.user_id)
 
 

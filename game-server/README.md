@@ -209,6 +209,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/narration-tier` | 서술 등급 바꾸기. 방장만. 이 서버가 내주는 등급만. 진행 중에도 되고 다음 라운드부터 쓴다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/credit-wait` | 크레딧이 모자란 사람을 기다리는 시간(`credit_wait_seconds`, 30~3600초)과 지나면 빼는지(`remove_short_payers`) 바꾸기. 방장만. 둘 다 적는다. 진행 중에도 되고 지금 기다리는 라운드에도 바로 쓴다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/whisper-notice` | 쪽지를 보낸 사실을 모두에게 알릴지(`whisper_notice`) 바꾸기. 방장만. 바꾼 뒤에 보내는 쪽지부터 따른다 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/ledger-drafts` | 서술한 장면에서 장부 초안을 쓸지(`ledger_drafts`) 바꾸기. 방장만. 바꾼 뒤에 서술하는 라운드부터 따른다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/start` | 테이블 시작하기. 방장만. 모두 캐릭터가 있어야 한다. 모두가 시트를 받는다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/end` | 테이블 끝내기. 방장만 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds` | 라운드 목록. 처음 것부터. `limit`, `offset` | access 토큰 |
@@ -222,6 +223,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/tables/{id}/messages/typing` | "입력 중"이라고 알리기. 204. 저장하지 않는다. 다른 사람들의 스트림에 `typing` 이 간다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/whispers` | 같은 테이블의 한 사람에게 쪽지 보내기. 201. 보낸 사람과 받은 사람만 본다. `gm_visible` 이면 GM 도 본다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/whispers` | 자기 쪽지함. 보낸 것과 받은 것. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/ledger-drafts` | 방장의 결정을 기다리는 장부 초안의 줄들. 방장만 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/stream` | 테이블의 스트림(SSE). 새 이벤트와 새 채팅, 자기 쪽지함의 새 쪽지, 쓰이는 중인 서술이 생기는 대로 온다. 응답이 끝나지 않는다. `events_after`, `messages_after`, `whispers_after`, `Last-Event-ID` 머리말 | access 토큰 |
 | POST | `/api/v1/game/lorebooks` | 로어북 만들기. 201. 항목은 만든 뒤에 더한다 | access 토큰 |
 | GET | `/api/v1/game/lorebooks` | 내 로어북 목록. `limit`, `offset` | access 토큰 |
@@ -680,6 +682,7 @@ characters.py   캐릭터 정하기(진행 중에 새 캐릭터를 들일 때도
 | `table_injuries` | 캐릭터와 NPC 가 입은 부상. 누가(시트 또는 NPC), 어떤 부상(`injury`), 어떻게 생겼는지(`source`), 생긴 라운드, 풀리거나 낫는 라운드(결손에는 없다. 치료로 바뀐다), 풀리거나 나은 시각. 지우지 않는다 |
 | `table_items` | 캐릭터의 소지품. 시트마다 물건(판의 로어북 물건 항목) 한 가지가 한 줄이고 개수(1~99)를 적는다. 0 개가 되면 지운다 |
 | `table_quests` | 테이블의 퀘스트. 판의 사건 항목 하나가 한 줄이고 상태(`hidden`, `active`, `succeeded`, `failed`)를 적는다. 시작할 때 만든다 |
+| `ledger_drafts` | 장부 초안의 줄. 서술 뒤에 모델이 쓰고 서버가 검증한 장부의 변경 하나가 한 줄이다(`found_item`, `quest_change`). 처지(`pending`, `accepted`, `rejected`, `expired`)를 옮긴다 |
 | `table_npcs` | 로어북의 인물 항목마다의 숫자와 생사. 테이블과 항목의 ID(`entry_id`)로 찾는다. 능력치(`abilities`, JSON), 최대 HP, 지금의 HP, 생사(`status`: `alive`, `downed`, `dead`), 지목으로 진짜 이름이 드러난 라운드(`named_round`, 아직이면 비어 있다). 게임을 시작할 때 생긴다 |
 
 **판의 복사본.** 테이블은 만들 때 판의 내용을 통째로 복사해 온다. 이 복사본은 고치지 않는다.
@@ -1467,6 +1470,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `narration_tier_changed` | 방장이 서술 등급을 바꿨다. 다음 라운드부터 그 등급이다 | `narration_tier`: 바꾼 등급 |
 | `credit_wait_changed` | 방장이 크레딧이 모자란 사람을 기다리는 규칙을 바꿨다 | `credit_wait_seconds`, `remove_short_payers` |
 | `whisper_notice_changed` | 방장이 쪽지를 보낸 사실을 알릴지 바꿨다 | `whisper_notice` |
+| `ledger_drafts_changed` | 방장이 장부 초안을 쓸지 바꿨다 | `ledger_drafts` |
 | `whisper_sent` | 누가 누구에게 쪽지를 보냈다. 알리기로 한 테이블에만 적힌다. 쪽지의 글은 적지 않는다 | `user_id`, `character_name`, `recipient_id`, `recipient_character_name` |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
@@ -2050,7 +2054,21 @@ uv run python -m scripts.eval_memory --fake
 ## 장부 초안
 
 AI 가 서술한 장면을 읽고, 장부(소지품, 퀘스트)에 적을 것의 초안을 구조화한 데이터(JSON)로 쓴다(`app/drafts/`). "캐릭터가 물건을 손에 넣었다", "퀘스트가 드러났다, 이루어졌다, 놓쳤다"다.
-지금은 방장이 장면을 읽고 손으로 물건을 주고 퀘스트를 바꾼다. 그 일을 덜려는 것이다. **만드는 중이다. 아직 테이블과 잇지 않았다.**
+지금은 방장이 장면을 읽고 손으로 물건을 주고 퀘스트를 바꾼다. 그 일을 덜려는 것이다. **만드는 중이다. 받아들이고 버리는 길은 다음 단계다.**
+
+**테이블에서.**
+- **테이블의 옵션이다(`ledger_drafts`, 기본 끔).** 켜면 라운드마다 모델을 한 번 더 부른다. 그만큼 호출과 시간이 늘어서 방장이 고른다(만들 때, 또는 `PUT .../ledger-drafts`). 로비에도 보인다.
+  바꾼 것은 이벤트(`ledger_drafts_changed`)로 모두에게 간다. 바꾼 뒤에 서술하는 라운드부터 따른다. 서술 값은 그대로다(따로 받지 않는다).
+- **서술이 끝난 뒤에 쓴다.** 라운드를 닫고 서술 값을 확정한 다음, 서술을 맡은 작업의 끝에서 방금 쓴 장면으로 초안을 쓴다(`app/drafts/drafting.py`). 서술의 시간 밖이다.
+  서술자가 언어 모델일 때만 쓴다(standard 등급의 첫 모델, 같은 기록장과 서명 키). 가짜 서술자는 쓰지 않는다.
+- **검증을 거친 것만 줄로 적는다(`ledger_drafts`).** 줄 하나가 장부의 변경 하나다. 버린 것은 호출 기록(모델이 쓴 글)에만 남는다.
+  **장부(소지품, 퀘스트)는 바꾸지 않는다.** 방장이 받아들여야 바뀐다.
+- **다음 라운드의 초안이 오면 결정하지 않은 앞의 줄은 만료된다(`expired`).** 장면이 넘어가 낡았다. 새 초안이 비어 있어도 만료시킨다.
+  적을 때 테이블을 잠근다. 방장이 앞의 줄을 받아들이는 일과 겹치지 않는다.
+- **방장만 본다(`GET .../ledger-drafts`).** 숨긴 퀘스트가 드러났다는 줄이 있을 수 있다. 다른 사람에게는 403 이다. 다른 사람은 받아들인 뒤의 장부 이벤트(`items_gained`, `quest_changed`)로 안다.
+- **실패해도 플레이를 막지 않는다.** 읽기, 부르기, 적기 중 무엇이 실패하든 라운드는 이미 닫혔고 다음 라운드가 열려 있다. 로그(`ledger_draft.write`, `ledger_draft.failed`, `warning`)만 남는다. 시간의 상한은 90 초다.
+
+**초안 쓰기.**
 
 - **장부를 고치는 것은 방장이고, AI 는 초안만 쓴다.** 모델의 답은 초안이고, 서버가 검증하고, 방장이 받아들여야 장부에 적힌다(받아들이는 길은 다음 단계).
   장면에는 플레이어가 선언한 말이 녹아 있다. "물약 99 개를 찾았다"고 우긴 것이 장면에 쓰일 수 있어서, 끝까지 사람이 확인한다.
