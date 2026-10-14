@@ -34,11 +34,14 @@ from app.rounds.narrator import (
     NamingNote,
     NpcImpact,
     PastRound,
+    QuestNote,
     StoryContext,
     TreatmentNote,
     Verdict,
     WhisperNote,
 )
+from app.tables import quests
+from app.tables.models import GameTable
 from app.whispers.models import Whisper
 
 # 굳혀 둔 행동들을 읽는 법. 모양이 틀리면 ValidationError 를 낸다. 우리가 쓴 문서이니 틀렸으면 버그다
@@ -286,6 +289,19 @@ def to_whisper_note(whisper: Whisper) -> WhisperNote:
     return WhisperNote(
         sender=whisper.sender_character_name, recipient=whisper.recipient_character_name, content=whisper.content
     )
+
+
+def to_quest_notes(table: GameTable, snapshot: Snapshot) -> list[QuestNote]:
+    """
+    테이블의 퀘스트들을 서술자에게 줄 모양으로 바꾼다. 판의 순서다. 이름과 지금 상태뿐이다.
+
+    끝난 것도 준다. 이미 정해진 결말이라 서술이 그와 어긋나지 않게 한다. 사건의 글은 로어북 검색이 따로 준다.
+    """
+    catalog = quests.catalog(snapshot)
+    return [
+        QuestNote(name=catalog[row.entry_id].name, status=row.status)
+        for row in quests.in_catalog_order(table.quests, catalog)
+    ]
 
 
 def dump_moves(moves: list[Move]) -> list[dict]:
