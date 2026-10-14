@@ -27,7 +27,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 테스트가 3400 개를 넘어 PC 에서 10~11 분 걸린다. 10 분이면 끝나기 전에 멈춘다(cancelled).
+    # 멈춘 테스트를 하염없이 기다리지 않게 하려는 상한이라, 지금 걸리는 시간의 두 배쯤으로 둔다
+    timeout-minutes: 25
 
     services:
       # docker-compose.yml 과 같은 이미지를 쓴다
