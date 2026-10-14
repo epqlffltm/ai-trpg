@@ -26,6 +26,7 @@ from app.assets.models import (
     NarrationStyle,
     QuestStart,
     Rating,
+    RouteVisibility,
     Rulebook,
     Scenario,
     World,
@@ -55,7 +56,8 @@ from app.engine.sheet import Sheet
 #  17: 물건 항목의 규칙(items), 시작 소지품(starting_items), 프리젠의 소지품(pregens[].items)이 있다
 #  18: 사건 항목의 퀘스트 규칙(quests)이 있다
 #  19: 맵의 시작 장소(start_place)와 길(routes)이 있다
-SNAPSHOT_FORMAT = 19
+#  20: 길을 아는 때(routes[].visibility: open, fog, hidden)와 명소(landmarks)가 있다. 길의 hidden 은 없어졌다
+SNAPSHOT_FORMAT = 20
 
 
 class EntrySnapshot(BaseModel):
@@ -149,13 +151,14 @@ class RouteSnapshot(BaseModel):
     """
     길 하나. 판 안의 로어북 장소 항목 둘을 잇는다.
 
-    two_way 가 아니면 from_place 에서 to_place 로만 간다. hidden 이면 찾는 판정(find)으로 드러난다.
+    two_way 가 아니면 from_place 에서 to_place 로만 간다. visibility 는 플레이어가 길을 언제 아는가다.
+    숨긴 길은 찾는 판정(find)으로 드러난다.
     """
 
     from_place: uuid.UUID
     to_place: uuid.UUID
     two_way: bool = True
-    hidden: bool = False
+    visibility: RouteVisibility = RouteVisibility.OPEN
     find: FindSnapshot | None = None
 
 
@@ -225,6 +228,8 @@ class Snapshot(BaseModel):
     start_place: uuid.UUID | None = None
     # 맵의 길들. 두 끝이 판 안의 로어북 장소 항목이다. 길이 있으면 시작 장소도 있다
     routes: list[RouteSnapshot] = []
+    # 명소. 처음부터 아는 장소들이다. 판 안의 로어북 장소 항목이다. 명소가 있으면 시작 장소도 있다
+    landmarks: list[uuid.UUID] = []
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용했으면 반드시 있다
     player_made_hp: PlayerMadeHpSnapshot | None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 제작자가 정한 것이다
@@ -270,18 +275,20 @@ class Snapshot(BaseModel):
     @model_validator(mode='after')
     def require_place_entries(self) -> 'Snapshot':
         """
-        시작 장소와 길의 두 끝이 모두 판 안의 장소 항목인지, 길이 있으면 시작 장소가 있는지 본다. 아니면 거부한다.
+        시작 장소, 길의 두 끝, 명소가 모두 판 안의 장소 항목인지, 길이나 명소가 있으면 시작 장소가 있는지 본다.
+        아니면 거부한다.
 
         게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽(테이블)은 위치마다 장소 항목이 있다고 믿고 쓴다.
         """
         places = {entry.id for entry in place_entries(self)}
         pointed = [route_end for route in self.routes for route_end in (route.from_place, route.to_place)]
+        pointed.extend(self.landmarks)
         if self.start_place is not None:
             pointed.append(self.start_place)
         if any(place not in places for place in pointed):
-            raise ValueError('장소 항목이 아닌 것을 가리키는 시작 장소나 길이 있습니다.')
-        if self.routes and self.start_place is None:
-            raise ValueError('길이 있는데 시작 장소가 없습니다.')
+            raise ValueError('장소 항목이 아닌 것을 가리키는 시작 장소, 길, 명소가 있습니다.')
+        if (self.routes or self.landmarks) and self.start_place is None:
+            raise ValueError('길이나 명소가 있는데 시작 장소가 없습니다.')
         return self
 
     @model_validator(mode='after')
@@ -398,6 +405,7 @@ def build_snapshot(
         quests=[QuestRuleSnapshot(**quest) for quest in scenario.quests],
         start_place=scenario.start_place,
         routes=[RouteSnapshot(**route) for route in scenario.routes],
+        landmarks=list(scenario.landmarks),
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,
