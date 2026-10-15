@@ -146,7 +146,7 @@ jobs:
       - name: 테스트
         run: uv run pytest --cov --cov-report=
 
-      # 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 아직 기준을 걸지 않는다(재기만 한다).
+      # 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 기준은 다음 단계에서 본다.
       # 표에는 다 지나간 파일을 빼고, 덜 지나간 파일부터 적는다
       - name: 커버리지 요약
         run: |
@@ -161,3 +161,10 @@ jobs:
             echo
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # 합계가 기준 아래로 떨어지면 실패한다. 요약을 먼저 적은 뒤에 보므로, 실패해도 어느 파일이 덜 지나갔는지 요약에 남는다.
+      # 기준은 #27 에서 처음 잰 값(95%)보다 조금 낮다. 커버리지가 오르면 기준도 올린다. 내릴 때는 PR 에 까닭을 적는다
+      - name: 커버리지 기준
+        env:
+          COVERAGE_MIN: "93"
+        run: uv run coverage report --format=total --fail-under="$COVERAGE_MIN"
