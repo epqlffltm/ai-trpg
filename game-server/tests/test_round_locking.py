@@ -27,8 +27,8 @@ from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
 from app.engine.dice import ScriptedDice
 from app.rounds import acceptance, closing, repository, service
+from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.models import Round
-from app.rounds.narrator import FakeNarrator
 from app.rounds.schemas import DeclarationUpdate
 from app.tables import repository as table_repository
 from app.tables import service as tables

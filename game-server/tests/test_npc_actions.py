@@ -30,7 +30,8 @@ from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.rounds import prompt, service
 from app.rounds.cast import cast_of, condition_of
-from app.rounds.narrator import NO_PREVIEW, NarrationRequest, NpcImpact, PersonState, Preview, describe_npc_impact
+from app.rounds.move_lines import describe_npc_impact
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, NpcImpact, PersonState, Preview
 from app.tables.models import NpcStatus, TableNpc
 from app.tables.npcs import change_npc, status_after
 from tests.sheets import SHEET, make_sheet

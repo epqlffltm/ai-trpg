@@ -1,7 +1,7 @@
 # game-server/tests/test_narrator.py
 
 """
-가짜 서술자를 검증한다. DB 를 쓰지 않는다.
+가짜 서술자(app/rounds/fake_narrator.py)와 한 일의 줄(app/rounds/move_lines.py)을 검증한다. DB 를 쓰지 않는다.
 
 가짜 서술자는 AI 가 붙기 전에 라운드의 흐름을 돌려 보는 데 쓴다. 같은 입력에 늘 같은 글을 내야 테스트에 쓸 수 있다.
 """
@@ -10,17 +10,9 @@ from dataclasses import replace
 
 import pytest
 
-from app.rounds.narrator import (
-    DeathSaveNote,
-    FakeNarrator,
-    Impact,
-    Move,
-    NarrationRequest,
-    Verdict,
-    describe_death_save,
-    describe_impact,
-    describe_verdict,
-)
+from app.rounds.fake_narrator import FakeNarrator
+from app.rounds.move_lines import describe_death_save, describe_impact, describe_verdict
+from app.rounds.narrator import DeathSaveNote, Impact, Move, NarrationRequest, Verdict
 from tests.previews import RecordingPreview
 
 

@@ -30,6 +30,7 @@ from dataclasses import dataclass
 
 from app.ai.provider import ChatMessage, Role
 from app.assets.models import LoreKind, NarrationStyle
+from app.rounds.move_lines import describe_injuries, describe_move
 from app.rounds.narrator import (
     LoreNote,
     MemoryNote,
@@ -41,8 +42,6 @@ from app.rounds.narrator import (
     QuestNote,
     StoryContext,
     WhisperNote,
-    describe_injuries,
-    describe_move,
 )
 
 # 이 틀의 버전. 틀을 바꾸면 올린다.
