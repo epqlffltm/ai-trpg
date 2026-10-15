@@ -141,6 +141,15 @@ class Round(Base):
     # 선언이 아니라 라운드에 적는다. 쓰러진 사람은 선언을 내지 않아도 되기 때문이다
     death_saves: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'"))
 
+    # 이 라운드의 차례(app/rounds/initiative.py). 판정한 순서다. 장면에 맞붙은 몬스터가 없었으면 빈 목록이다.
+    # 그때는 앉은 순서로 판정했다. 이 칸이 생기기 전에 닫은 라운드도 빈 목록이다.
+    # 하나하나가 {kind, first, score, tiebreak} 에 앉은 사람이면 {user_id, character_name},
+    # 몬스터면 {monster_id, name, outcome} 이다. 앉은 사람이 한 일은 지금처럼 그 사람의 선언에 적힌다.
+    # 몬스터의 outcome 은 {skipped} 이거나 {attack, user_id, character_name, 판정의 값들, effect} 다
+    # (app/rounds/monster_attacks.py). 한 번 적으면 고치지 않고, 서술을 다시 맡겨도 다시 굴리지 않는다.
+    # 몬스터의 점수와 HP 의 숫자가 들어 있다. 앉은 사람에게 그대로 내주지 않는다
+    turns: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'"))
+
     # 이 라운드에 새로 들어온 캐릭터들(app/tables/replacements.py). 들어온 순서다. 없으면 빈 목록이다.
     # 하나하나가 {user_id, character_name, replaces} 다. replaces 는 그 사람의 죽은 캐릭터의 이름이다.
     # 새 캐릭터는 들어온 라운드에는 선언을 내지 않는다. 그 라운드의 장면에 아직 없는 인물이다.
