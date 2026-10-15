@@ -89,14 +89,6 @@ def test_nothing_happened_is_a_fine_reply():
     assert read_output('{}') == DraftOutput()
 
 
-def test_items_not_on_the_list_have_their_own_place_and_draft_nothing():
-    # ledger-draft-3: 적을 자리가 없을 때 모델은 목록에 없는 장검을 목록의 물약으로 바꿔 적었다
-    output = read_output('{"found_items": [], "unlisted_items": [" 녹슨 장검 "]}')
-
-    assert output.unlisted_items == ['녹슨 장검']
-    assert check_output(output, CONTEXT) == check_output(DraftOutput(), CONTEXT)
-
-
 @pytest.mark.parametrize('text', ['물약을 찾았습니다.', '', '{"found_items": ['])
 def test_a_reply_that_is_not_json_is_refused(text: str):
     with pytest.raises(OutputError) as raised:
@@ -118,10 +110,6 @@ def test_a_reply_that_is_not_json_is_refused(text: str):
         '{"quest_changes": [{"quest": "q1", "status": "done"}]}',
         '{"notes": "없음"}',
         '{"found_items": [' + ', '.join(['{"character": "p1", "item": "i1", "count": 1}'] * 9) + ']}',
-        '{"unlisted_items": ["  "]}',
-        '{"unlisted_items": ["' + '검' * 61 + '"]}',
-        '{"unlisted_items": [' + ', '.join(['"장검"'] * 9) + ']}',
-        '{"unlisted_items": [{"name": "장검"}]}',
     ],
     ids=[
         'not-an-object',
@@ -134,10 +122,6 @@ def test_a_reply_that_is_not_json_is_refused(text: str):
         'made-up-status',
         'unknown-key',
         'too-long-a-list',
-        'blank-unlisted',
-        'too-long-a-name',
-        'too-many-unlisted',
-        'unlisted-not-a-name',
     ],
 )
 def test_a_badly_shaped_reply_is_refused_as_a_whole(text: str):
@@ -286,15 +270,19 @@ def test_there_is_something_to_draft(characters: bool, things: bool, quests: boo
 # --- 메시지 ---
 
 
-def test_the_rules_keep_passed_and_unlisted_items_out():
-    assert DRAFT_PROMPT_VERSION == 'ledger-draft-3'
+def test_the_rules_keep_items_passed_between_characters_out():
     # ledger-draft-2: 캐릭터끼리 건넨 것을 손에 넣은 일로 적으면 장부에 물건이 하나 더 생긴다(#229)
     assert '캐릭터끼리 물건을 건넨 것은 넣지 않는다' in SYSTEM_TEXT
     assert '마지막에 가진 캐릭터 하나만 넣는다' in SYSTEM_TEXT
-    # ledger-draft-3: 목록에 없는 물건을 비슷한 목록의 물건으로 바꿔 적었다. 적을 자리를 준다
-    assert '목록에 없는 물건을 목록의 다른 물건으로 바꿔 적지 않는다' in SYSTEM_TEXT
-    assert '- unlisted_items: 캐릭터가 손에 넣었지만 목록에 없는 물건의 이름' in SYSTEM_TEXT
-    assert '"unlisted_items": []' in SYSTEM_TEXT
+
+
+def test_the_place_for_unlisted_items_is_gone_again():
+    # ledger-draft-4: -3 의 자리(unlisted_items)는 드러난 퀘스트를 놓치게 해서 뺐다. 그 칸이 오면 모양이 틀린 답이다
+    assert DRAFT_PROMPT_VERSION == 'ledger-draft-4'
+    assert 'unlisted_items' not in SYSTEM_TEXT
+    with pytest.raises(OutputError) as raised:
+        read_output('{"found_items": [], "unlisted_items": ["녹슨 장검"]}')
+    assert raised.value.reason == 'bad_shape'
 
 
 def test_the_message_lists_the_choices_and_the_scene():
