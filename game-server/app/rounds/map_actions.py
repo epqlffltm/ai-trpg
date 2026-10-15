@@ -18,6 +18,7 @@ DB 를 모른다. 시트의 위치와 테이블의 서 본 곳, 찾은 길을 �
 import uuid
 
 from app.assets.scenarios.snapshot import RouteSnapshot, read_snapshot
+from app.calendar import state as calendar
 from app.engine.action import MoveAction, SearchAction
 from app.engine.check import find_difficulty, resolve_hindered
 from app.rounds import injuries as round_injuries
@@ -68,15 +69,31 @@ def judge_move(judging: Judging, member: TableMember, action: MoveAction) -> dic
     한 칸 간다. 결과를 선언의 outcome 에 넣을 문서로 돌려준다.
 
     차례가 왔을 때의 장소에서 아는 길로 이어져 있어야 간다. 가면 그곳이 서 본 곳이 된다.
+    시간이 걸리는 길이면 다음 라운드가 열릴 때 적어도 그만큼 흐르게 한다(travel_time).
     """
     snapshot = judging.snapshot
     here = member.sheet.place_id
     known = places.known_map(snapshot, places.knowledge(judging.table))
-    moved = here is not None and action.place in places.exits(known, here)
+    route = places.route_between(known, here, action.place)
+    moved = route is not None
+    travel = travel_time(judging, route) if moved else None
     if moved:
         places.stand(judging.table, member.sheet, action.place)
     move = places.describe_move(snapshot, member, here, action.place)
-    return {'move': {**move, 'moved': moved, 'reason': None if moved else Reason.NOT_ADJACENT}}
+    reason = None if moved else Reason.NOT_ADJACENT
+    return {'move': {**move, 'moved': moved, 'reason': reason, 'travel_minutes': travel}}
+
+
+def travel_time(judging: Judging, route: RouteSnapshot) -> int | None:
+    """
+    지나간 길에 걸리는 시간(분). 걸리는 길이면 다음 라운드가 열릴 때 적어도 그만큼 흐르게 한다. 안 걸리면 None.
+
+    같은 라운드에 여럿이 갔으면 가장 긴 길이 남는다(calendar.stretch_next_step 이 긴 쪽만 받는다).
+    """
+    if route.travel_minutes is None:
+        return None
+    calendar.stretch_next_step(judging.table, route.travel_minutes)
+    return route.travel_minutes
 
 
 def finds(judging: Judging, member: TableMember, route: RouteSnapshot) -> bool:

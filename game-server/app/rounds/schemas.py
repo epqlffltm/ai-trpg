@@ -309,6 +309,8 @@ class MoveOut(BaseModel):
     # 갔는가. 못 갔으면 reason 이 있다: not_adjacent(그사이 다른 곳으로 옮겨져 이어진 길이 없었다)
     moved: bool
     reason: str | None
+    # 지나간 길에 걸린 게임 안의 시간(분). 다음 라운드가 열릴 때 적어도 그만큼 흐른다. 안 걸렸거나 못 갔으면 None 이다
+    travel_minutes: int | None = None
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 

@@ -201,12 +201,14 @@ def describe_travel(note: TravelNote) -> str:
     맵에서 한 칸 간 결과를 한 줄로 적는다.
 
     예: (간 곳: 성문 → 숲)
+        (간 곳: 성문 → 숲, 3시간 걸림)
         (가려던 곳: 광장. 그쪽으로 이어진 길이 없었다)
     """
     if not note.moved:
         return f'(가려던 곳: {note.to_place}. {TRAVEL_FAILURES.get(note.reason, "가지 못했다")})'
     start = f'{note.from_place} → ' if note.from_place else ''
-    return f'(간 곳: {start}{note.to_place})'
+    took = f', {duration_text(note.travel_minutes)} 걸림' if note.travel_minutes else ''
+    return f'(간 곳: {start}{note.to_place}{took})'
 
 
 def describe_search(note: SearchNote) -> str:
