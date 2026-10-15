@@ -246,7 +246,8 @@ def test_a_lost_turn_adds_the_rule_line():
 
 
 def test_the_version_is_bumped():
-    assert prompt.PROMPT_VERSION == 'narration-22'
+    # 몬스터는 narration-22 에서 붙었다. 뒤의 틀(narration-23 의 시각 …)도 몬스터를 그대로 싣는다
+    assert int(prompt.PROMPT_VERSION.removeprefix('narration-')) >= 22
 
 
 # --- 몬스터를 서술자에게 줄 모양으로 ---
