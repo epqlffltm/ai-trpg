@@ -142,9 +142,7 @@ class ReportTests(TestCase):
 
         with patch('accounts.security_digest.MAX_EVENTS_PER_DIGEST', 3):
             first_run = report_new_security_events()
-            reported_after_first_run = list(
-                SecurityEvent.objects.filter(reported_at__isnull=False).order_by('id')
-            )
+            reported_after_first_run = list(SecurityEvent.objects.filter(reported_at__isnull=False).order_by('id'))
             second_run = report_new_security_events()
 
         # 한 번에 읽는 양에 한도가 있다. 남은 사건은 다음 실행에서 알린다

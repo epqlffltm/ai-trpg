@@ -54,7 +54,7 @@ class LoginIpBlockTests(AttemptPolicyTestCase):
         self.assertEqual(self.login().status_code, status.HTTP_202_ACCEPTED)
 
     def test_different_reserved_names_are_counted_together(self):
-        for username in ['admin', 'root', 'administrator'][:LOGIN_IP_BLOCK.max_attempts]:
+        for username in ['admin', 'root', 'administrator'][: LOGIN_IP_BLOCK.max_attempts]:
             self.try_reserved_username(username=username)
 
         # 이름을 바꿔 가며 찔러 보는 것이 탐색의 전형이다
@@ -125,10 +125,12 @@ class LoginIpBlockTests(AttemptPolicyTestCase):
         self.assertEqual(self.login().status_code, status.HTTP_202_ACCEPTED)
 
     def test_redis_down_does_not_block(self):
-        with patch('accounts.attempt_limits.get_redis', side_effect=redis.ConnectionError('down')):
-            with self.assertLogs('accounts.attempt_limits', level='WARNING'):
-                self.get_blocked()
-                response = self.login()
+        with (
+            patch('accounts.attempt_limits.get_redis', side_effect=redis.ConnectionError('down')),
+            self.assertLogs('accounts.attempt_limits', level='WARNING'),
+        ):
+            self.get_blocked()
+            response = self.login()
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
 

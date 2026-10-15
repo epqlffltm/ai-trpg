@@ -157,8 +157,7 @@ def _lock_next_due(now) -> WelcomeCredit | None:
     워커를 여러 개 띄워도 같은 줄을 함께 맡기지 않고, 서로를 기다리지도 않는다.
     """
     return (
-        WelcomeCredit.objects
-        .select_for_update(skip_locked=True)
+        WelcomeCredit.objects.select_for_update(skip_locked=True)
         .filter(status=WelcomeCreditStatus.PENDING, next_attempt_at__lte=now)
         .order_by('next_attempt_at', 'id')
         .first()
@@ -181,7 +180,7 @@ def _schedule_retry(claim: WelcomeCredit, error: Exception, now) -> None:
     """
     claim.attempts += 1
     claim.next_attempt_at = now + _retry_delay(claim.attempts)
-    claim.last_error = str(error)[:WelcomeCredit._meta.get_field('last_error').max_length]
+    claim.last_error = str(error)[: WelcomeCredit._meta.get_field('last_error').max_length]
     claim.save(update_fields=['attempts', 'next_attempt_at', 'last_error'])
     # 받는 사람은 적지 않는다. 관리자 화면에서 번호로 찾는다
     logger.warning(
@@ -199,4 +198,4 @@ def _schedule_retry(claim: WelcomeCredit, error: Exception, now) -> None:
 def _retry_delay(attempts: int) -> timedelta:
     """attempts 번 실패한 뒤에 기다릴 시간."""
     doublings = min(attempts - 1, _DOUBLINGS_UNTIL_MAX)
-    return min(FIRST_RETRY_DELAY * (2 ** doublings), MAX_RETRY_DELAY)
+    return min(FIRST_RETRY_DELAY * (2**doublings), MAX_RETRY_DELAY)

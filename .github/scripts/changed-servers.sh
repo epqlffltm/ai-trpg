@@ -11,6 +11,7 @@
 #   - docker/ 아래(DB 초기화 스크립트, 프록시의 설정, crontab)나 compose 파일(docker-compose.yml)이 바뀌면 넷 다.
 #     네 서버의 DB 계정, 컨테이너로 띄우고 잇는 법, 주기 명령이 거기 있다
 #   - 관문 자신(.github/workflows/ci.yml, .github/scripts/)이 바뀌면 넷 다. 관문이 맞는지 넷으로 확인한다
+#   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증과 게임
 #   - 그 밖(문서, 루트 README 등)은 아무것도 고르지 않는다
 #   - 바뀐 파일을 알 수 없으면(커밋을 찾지 못함) 넷 다. 모르면 검사하는 쪽으로 기운다
 #
@@ -25,6 +26,11 @@ SERVERS=(auth game board billing)
 belongs_to() {
   local server="$1" path="$2"
   [[ "$path" == "${server}-server/"* || "$path" == ".github/workflows/${server}-server.yml" ]]
+}
+
+# 파이썬 서버들(인증, 게임)이 함께 쓰는 설정인가. 바뀌면 둘의 린트와 모양 검사를 다시 돌려야 한다.
+python_shared() {
+  [[ "$1" == "ruff.toml" ]]
 }
 
 # 넷 다 고르는 경로인가.
@@ -43,6 +49,10 @@ select_servers() {
     if affects_all "$path"; then
       for server in "${SERVERS[@]}"; do picked[$server]=1; done
       continue
+    fi
+    if python_shared "$path"; then
+      picked[auth]=1
+      picked[game]=1
     fi
     for server in "${SERVERS[@]}"; do
       if belongs_to "$server" "$path"; then picked[$server]=1; fi

@@ -8,27 +8,29 @@
 목록을 여러 곳에 따로 적으면 한쪽만 고쳤을 때 서로 어긋난다.
 """
 
-RESERVED_NAMES = frozenset({
-    # 영문. 아이디와 닉네임 양쪽에 해당한다
-    'admin',
-    'administrator',
-    'root',
-    'superuser',
-    'system',
-    'staff',
-    'support',
-    'operator',
-    'moderator',
-    'manager',
-    'master',
-    'official',
-    'gamemaster',
-    'gm',
-    # 한글. 아이디는 영문만 허용하므로 닉네임에만 해당한다
-    '운영자',
-    '관리자',
-    '게임마스터',
-})
+RESERVED_NAMES = frozenset(
+    {
+        # 영문. 아이디와 닉네임 양쪽에 해당한다
+        'admin',
+        'administrator',
+        'root',
+        'superuser',
+        'system',
+        'staff',
+        'support',
+        'operator',
+        'moderator',
+        'manager',
+        'master',
+        'official',
+        'gamemaster',
+        'gm',
+        # 한글. 아이디는 영문만 허용하므로 닉네임에만 해당한다
+        '운영자',
+        '관리자',
+        '게임마스터',
+    }
+)
 
 
 def is_reserved_name(name: str) -> bool:

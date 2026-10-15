@@ -77,7 +77,7 @@ def generate_code() -> str:
     random 이 아니라 secrets 를 쓴다. random 은 앞의 값들을 알면
     다음 값을 예측할 수 있는 의사난수라서 인증에 쓰면 안 된다.
     """
-    return f'{secrets.randbelow(10 ** CODE_LENGTH):0{CODE_LENGTH}d}'
+    return f'{secrets.randbelow(10**CODE_LENGTH):0{CODE_LENGTH}d}'
 
 
 def generate_token() -> str:
@@ -257,12 +257,7 @@ def _lock_record(*, user: User, purpose: str, now) -> EmailCode:
 
 
 def _lock_existing_record(*, user: User, purpose: str) -> EmailCode | None:
-    return (
-        EmailCode.objects
-        .select_for_update()
-        .filter(user=user, purpose=purpose)
-        .first()
-    )
+    return EmailCode.objects.select_for_update().filter(user=user, purpose=purpose).first()
 
 
 def _ensure_issue_allowed(record: EmailCode, now) -> None:

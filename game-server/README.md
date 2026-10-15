@@ -115,6 +115,7 @@ DB가 꺼져 있으면 DB를 쓰는 테스트가 실패한다.
 
 `ruff check`는 쓰지 않는 import나 정의되지 않은 이름 같은 문제를 실행하지 않고 찾는다.
 `ruff format`은 코드의 모양을 정해진 규칙으로 맞춘다. 커밋하기 전에 둘 다 돌린다.
+규칙은 저장소 루트의 `ruff.toml` 이다. 인증 서버와 같다. `pyproject.toml` 에는 이 서버의 패키지 이름(`app`)만 적는다.
 
 ## DB와 마이그레이션
 
@@ -2416,16 +2417,20 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 
 ## CI
 
-PR과 `main` 푸시마다 GitHub Actions가 게임 서버를 검사한다. `game-server/`, DB 초기화 스크립트, 워크플로 파일이 바뀐 경우에만 돈다.
+PR과 `main` 푸시마다 GitHub Actions가 게임 서버를 검사한다. `game-server/`, DB 초기화 스크립트, 워크플로 파일, 함께 쓰는 ruff 규칙(루트의 `ruff.toml`)이 바뀐 경우에만 돈다.
 PostgreSQL(pgvector 가 든 이미지)과 Redis 를 띄우고, 로컬과 같은 초기화 스크립트로 계정과 스키마를 만들고 pgvector 를 켠 뒤 검사한다.
 
 1. 의존성 설치 (`uv sync --locked`): `uv.lock`과 `pyproject.toml`이 어긋나면 실패한다
 2. 린트 (`ruff check`)
 3. 모양 검사 (`ruff format --check`): 고치지 않고 검사만 한다
-4. 마이그레이션 적용 (`alembic upgrade head`): 빈 DB에 처음부터 끝까지 적용되는지 본다
-5. 마이그레이션 누락 검사 (`alembic check`): 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
-6. 테스트용 스키마에 마이그레이션 적용
-7. 테스트 (`pytest`)
+4. 의존성 취약점 검사 (`pip-audit`): 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
+   고칠 수 없어 받아들이기로 한 것은 워크플로의 `--ignore-vuln` 에 까닭과 함께 적는다
+5. 마이그레이션 끝 검사 (`alembic heads`): 끝이 둘 이상이면 실패한다. 두 PR 이 같은 부모 위에 따로 마이그레이션을 얹은 것이다.
+   PR 하나하나는 끝이 하나라 통과하고, 둘이 머지된 main 에서야 갈라진다. 머지하기 전에 PR 을 최신 main 위로 올려 다시 돌리면 PR 에서 잡힌다
+6. 마이그레이션 적용 (`alembic upgrade head`): 빈 DB에 처음부터 끝까지 적용되는지 본다
+7. 마이그레이션 누락 검사 (`alembic check`): 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
+8. 테스트용 스키마에 마이그레이션 적용
+9. 테스트 (`pytest`)
 
 ## 설계 메모
 

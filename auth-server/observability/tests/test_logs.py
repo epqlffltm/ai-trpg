@@ -14,7 +14,6 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
 from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
-
 from observability.context import job_scope, request_scope
 from observability.formatter import JsonFormatter
 from observability.identifiers import new_trace

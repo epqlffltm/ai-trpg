@@ -14,3 +14,17 @@ dependencies = [
     "redis>=8.1.0",
     "whitenoise>=6.12.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.10",
+]
+
+[tool.ruff]
+# 규칙과 모양은 저장소 루트의 ruff.toml 을 따른다. 게임 서버와 같다
+extend = "../ruff.toml"
+# Django 가 만든 마이그레이션은 손으로 쓴 코드가 아니다. 만든 그대로 둔다
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["accounts", "config", "observability"]

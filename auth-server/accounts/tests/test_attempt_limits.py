@@ -191,9 +191,11 @@ class RedisDownTests(AttemptLimitTestCase):
         self.assertIn('ConnectionError', logs.output[0])
 
     def test_timeout_is_treated_like_any_other_failure(self):
-        with patch('accounts.attempt_limits.get_redis', side_effect=redis.TimeoutError('timed out')):
-            with self.assertLogs('accounts.attempt_limits', level='WARNING'):
-                count_attempt(LIMIT, 'someone')
+        with (
+            patch('accounts.attempt_limits.get_redis', side_effect=redis.TimeoutError('timed out')),
+            self.assertLogs('accounts.attempt_limits', level='WARNING'),
+        ):
+            count_attempt(LIMIT, 'someone')
 
 
 class DisabledTests(SimpleTestCase):

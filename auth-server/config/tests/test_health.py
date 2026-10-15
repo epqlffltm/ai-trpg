@@ -14,7 +14,9 @@ from django.db import OperationalError
 from django.test import TestCase
 
 # DB 에 닿지 않을 때의 오류. 실제 오류의 글처럼 접속 주소와 계정이 들어 있다
-UNREACHABLE = OperationalError('connection to server at "10.0.0.9", port 5432 failed: password authentication failed for user "auth"')
+UNREACHABLE = OperationalError(
+    'connection to server at "10.0.0.9", port 5432 failed: password authentication failed for user "auth"'
+)
 
 
 class HealthTests(TestCase):

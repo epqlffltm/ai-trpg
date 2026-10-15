@@ -7,6 +7,7 @@ accounts 앱의 API 뷰.
 결과를 응답으로 바꾼다. 규칙과 DB 작업은 여기에 두지 않는다.
 """
 
+import contextlib
 import math
 from datetime import timedelta
 
@@ -27,8 +28,8 @@ from accounts.attempt_policies import (
 )
 from accounts.client_ip import get_attempt_subject
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
-from accounts.jwks import build_jwks
 from accounts.email_codes import InvalidEmailCodeError
+from accounts.jwks import build_jwks
 from accounts.login_tickets import InvalidLoginTicketError
 from accounts.serializers import (
     EmailSerializer,
@@ -89,11 +90,13 @@ def build_token_response(token_pair: TokenPair) -> Response:
     access 토큰은 본문에 싣는다. 다른 서버에도 보내야 하므로 프론트가 직접 다룬다.
     refresh 토큰은 쿠키에 싣는다. 프론트의 스크립트가 읽을 일이 없다.
     """
-    body = LoginResponseSerializer({
-        'access_token': token_pair.access,
-        'token_type': 'Bearer',
-        'expires_in': int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),
-    })
+    body = LoginResponseSerializer(
+        {
+            'access_token': token_pair.access,
+            'token_type': 'Bearer',
+            'expires_in': int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),
+        }
+    )
     response = Response(body.data, status=status.HTTP_200_OK)
     set_refresh_cookie(response, token_pair.refresh)
     return response
@@ -444,11 +447,9 @@ class LogoutView(APIView):
     def post(self, request: Request) -> Response:
         refresh_token = read_refresh_cookie(request)
         if refresh_token is not None:
-            try:
+            # 이미 쓸 수 없는 토큰이면 로그아웃의 목적은 이미 달성되어 있다
+            with contextlib.suppress(InvalidRefreshTokenError):
                 revoke_refresh_token(refresh_token)
-            except InvalidRefreshTokenError:
-                # 이미 쓸 수 없는 토큰이다. 로그아웃의 목적은 이미 달성되어 있다
-                pass
 
         # 토큰이 없었든 쓸 수 없었든 결과는 같다. 쿠키를 지우고 성공으로 응답한다
         response = Response(status=status.HTTP_204_NO_CONTENT)
