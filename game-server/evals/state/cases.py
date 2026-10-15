@@ -26,6 +26,7 @@ GM 메모에 진짜 이름을 적어 둔다. 제작자가 그렇게 쓸 수 있�
 예시는 공개 저장소에 올라가도 되는 개그 설정이다(악역영애, 엘프 폭주족, 드워프, 열일곱 행성의 추격전).
 """
 
+import re
 import uuid
 from dataclasses import dataclass, replace
 
@@ -56,7 +57,7 @@ from app.rounds.narrator import (
     Verdict,
 )
 from app.tables.models import NpcStatus
-from evals.state.checks import Check, Forbid, NoSpeech, Require
+from evals.state.checks import Check, Forbid, NoSpeech, Pattern, Require
 
 # 악역영애의 진짜 이름과 로어북 항목의 id. 플레이어는 장면의 호칭(악역영애)만 안다
 TRUE_NAME = '비올레타'
@@ -615,6 +616,11 @@ def clock_note(day: int, hour: int, passes_minutes: int) -> ClockNote:
     return ClockNote(now=read_time(now), ends=read_time(now + passes_minutes), passes_minutes=passes_minutes)
 
 
+# [시각]의 숫자를 장면에 옮긴 것(3일째, 22시 20분, 10분의 시간).
+# 낱말로 적으면 프롬프트에 이미 있는 글이라 모양으로 본다.
+# '17번째 행성', '두 대' 같은 다른 숫자는 걸리지 않는다
+CLOCK_DIGITS = Pattern('시각의 숫자', re.compile(r'\d+\s*(?:일째|시|분)'))
+
 NIGHT_REST_STOP = '우주 고속도로의 휴게소. 깜빡이는 네온 간판 아래 자판기들이 웅웅거린다.'
 # 밤 장면에 쓰면 어긋나는 낮의 빛. '빛' 하나는 넣지 않는다. 네온 빛, 헤드라이트 빛은 밤에도 있다
 DAYLIGHT = Forbid('밤에 햇빛', ('햇빛', '햇살', '햇볕', '한낮', '대낮', '정오', '아침 해', '해가 떴', '날이 밝'))
@@ -634,7 +640,7 @@ CLOCK_NIGHT = StateCase(
         ),
         clock=clock_note(3, 22, 20),
     ),
-    checks=(DAYLIGHT, HIDDEN_NAME, SECRET),
+    checks=(DAYLIGHT, CLOCK_DIGITS, HIDDEN_NAME, SECRET),
 )
 
 # 한낮의 사막. 2일째 13시에 시작해 10분이 흐른다
@@ -654,6 +660,7 @@ CLOCK_DAY = StateCase(
     ),
     checks=(
         Forbid('낮에 밤', ('달빛', '한밤', '자정', '밤하늘', '깊은 밤', '어둠이 내려')),
+        CLOCK_DIGITS,
         HIDDEN_NAME,
         SECRET,
     ),
@@ -677,6 +684,7 @@ CLOCK_SKIP = StateCase(
     checks=(
         Require('새벽에 맺음', ('새벽', '동이 트', '동틀', '여명', '해가 뜨', '날이 밝', '아침')),
         Forbid('끝나는 때를 넘김', ('한낮', '정오', '대낮', '오후')),
+        CLOCK_DIGITS,
         HIDDEN_NAME,
         SECRET,
     ),

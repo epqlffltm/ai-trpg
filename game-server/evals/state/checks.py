@@ -3,9 +3,10 @@
 """
 서술 하나를 기계로 검사하는 것들. 순수 함수다. 모델도 DB 도 모른다.
 
-검사는 셋이다.
+검사는 넷이다.
   - Forbid:   이 낱말이 나오면 걸린다. 엔진이 정한 것을 뒤집거나(실패를 성공으로), 숨긴 것을 흘렸을 수 있다
   - Require:  이 낱말 중 하나도 안 나오면 걸린다. 엔진이 정한 것(부상, 치료의 결과)을 빠뜨렸을 수 있다
+  - Pattern:  이 모양(정규식)의 글이 나오면 걸린다. 낱말로 적을 수 없는 것(시각의 숫자)에 쓴다
   - NoSpeech: 따옴표 속 글이 있으면 걸린다. 장면의 NPC 가 모두 말할 수 없는(쓰러진, 죽은) 장면에 쓴다.
               PC 는 말도 소리도 따옴표로 쓰지 않는다(narration-5). 의식이 없는 NPC 는 신음도 못 낸다.
               그래서 그런 장면의 따옴표 속 글은 짧은 소리까지 모두 어긴 것이다(try_narration 은 짧은 소리를 뺀다)
@@ -59,6 +60,17 @@ class Require:
         if any(word in scene for word in self.words):
             return []
         return [f'{"/".join(self.words)} 없음']
+
+
+@dataclass(frozen=True)
+class Pattern:
+    """이 모양의 글이 하나라도 나오면 걸린다. 근거는 나온 글들이다(나온 순서, 같은 것은 한 번)."""
+
+    label: str
+    pattern: re.Pattern[str]
+
+    def violations(self, scene: str) -> list[str]:
+        return list(dict.fromkeys(match.group() for match in self.pattern.finditer(scene)))
 
 
 @dataclass(frozen=True)
