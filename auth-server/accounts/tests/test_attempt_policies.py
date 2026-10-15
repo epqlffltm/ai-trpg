@@ -66,7 +66,10 @@ class AttemptPolicyTestCase(APITestCase):
 
     def login(self, username: str = USERNAME, password: str = PASSWORD, ip: str = IP):
         return self.client.post(
-            LOGIN_URL, {'username': username, 'password': password}, format='json', REMOTE_ADDR=ip,
+            LOGIN_URL,
+            {'username': username, 'password': password},
+            format='json',
+            REMOTE_ADDR=ip,
         )
 
     def fail_login(self, times: int, **kwargs) -> None:
@@ -144,7 +147,6 @@ class LoginFailureLimitTests(AttemptPolicyTestCase):
         self.fail_login(LOGIN_FAILURES_PER_ACCOUNT_AND_IP.max_attempts - 1)
 
         self.assertEqual(self.login().status_code, status.HTTP_202_ACCEPTED)
-
 
     def test_counts_before_checking_the_password(self):
         counts_seen = []
@@ -249,12 +251,18 @@ class SignupLimitTests(AttemptPolicyTestCase):
     def test_blocks_an_ip_that_asks_to_resend_too_often(self):
         for number in range(SIGNUP_RESEND_PER_IP.max_attempts):
             response = self.client.post(
-                SIGNUP_RESEND_URL, {'email': f'anyone{number}@example.com'}, format='json', REMOTE_ADDR=IP,
+                SIGNUP_RESEND_URL,
+                {'email': f'anyone{number}@example.com'},
+                format='json',
+                REMOTE_ADDR=IP,
             )
             self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         response = self.client.post(
-            SIGNUP_RESEND_URL, {'email': 'anyone@example.com'}, format='json', REMOTE_ADDR=IP,
+            SIGNUP_RESEND_URL,
+            {'email': 'anyone@example.com'},
+            format='json',
+            REMOTE_ADDR=IP,
         )
 
         self.assert_too_many_attempts(response)
@@ -325,12 +333,13 @@ class PasswordChangeLimitTests(AttemptPolicyTestCase):
         # 지워지지 않았다면 여기서 한 번만 틀려도 막힌다
         self.fail_change(PASSWORD_CHANGE_FAILURES_PER_USER.max_attempts - 1)
 
-
     def test_rejected_new_password_is_not_a_failure(self):
         for _ in range(PASSWORD_CHANGE_FAILURES_PER_USER.max_attempts + 1):
             # 현재 비밀번호는 맞다. 새 비밀번호가 현재와 같아서 거절된다
             response = self.client.post(
-                CHANGE_URL, {'current_password': PASSWORD, 'new_password': PASSWORD}, format='json',
+                CHANGE_URL,
+                {'current_password': PASSWORD, 'new_password': PASSWORD},
+                format='json',
             )
 
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -343,10 +352,12 @@ class RedisDownTests(AttemptPolicyTestCase):
     def test_login_still_works(self):
         create_user()
 
-        with patch('accounts.attempt_limits.get_redis', side_effect=redis.ConnectionError('down')):
-            with self.assertLogs('accounts.attempt_limits', level='WARNING'):
-                wrong = self.login(password=WRONG_PASSWORD)
-                right = self.login()
+        with (
+            patch('accounts.attempt_limits.get_redis', side_effect=redis.ConnectionError('down')),
+            self.assertLogs('accounts.attempt_limits', level='WARNING'),
+        ):
+            wrong = self.login(password=WRONG_PASSWORD)
+            right = self.login()
 
         self.assertEqual(wrong.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(right.status_code, status.HTTP_202_ACCEPTED)

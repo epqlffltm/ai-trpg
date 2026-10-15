@@ -39,10 +39,13 @@ class UserAdmin(DjangoUserAdmin):
     # 추가 화면. 기본 구성은 아이디와 비밀번호만 묻는다.
     # email 과 nickname 이 필수라서 여기에 넣지 않으면 빈 값으로 저장된다
     add_fieldsets = (
-        (None, {
-            'classes': ('wide',),
-            'fields': ('username', 'email', 'nickname', 'usable_password', 'password1', 'password2'),
-        }),
+        (
+            None,
+            {
+                'classes': ('wide',),
+                'fields': ('username', 'email', 'nickname', 'usable_password', 'password1', 'password2'),
+            },
+        ),
     )
 
 
@@ -134,7 +137,15 @@ class WelcomeCreditAdmin(admin.ModelAdmin):
     줄을 지우면 그 메일함이 환영 크레딧을 다시 받을 수 있게 된다. 그래서 지우는 것도 막는다.
     """
 
-    list_display = ('user_public_id', 'status', 'attempts', 'last_error', 'created_at', 'next_attempt_at', 'finished_at')
+    list_display = (
+        'user_public_id',
+        'status',
+        'attempts',
+        'last_error',
+        'created_at',
+        'next_attempt_at',
+        'finished_at',
+    )
     list_filter = ('status',)
     search_fields = ('user_public_id',)
     ordering = ('-created_at',)

@@ -135,17 +135,19 @@ def build_security_digest_message(*, events: list[SecurityEvent]) -> tuple[str, 
     if len(events) > len(listed):
         event_lines.insert(0, f'  (앞선 {len(events) - len(listed)}건은 관리자 화면에서 확인해 주세요)')
 
-    body = '\n'.join([
-        f'새 보안 이벤트가 {len(events)}건 있습니다.',
-        '',
-        '종류별',
-        *count_lines,
-        '',
-        f'자세히 (시각은 {timezone.get_current_timezone_name()} 기준)',
-        *event_lines,
-        '',
-        '전체 기록은 관리자 화면의 "보안 이벤트" 에 있습니다.',
-    ])
+    body = '\n'.join(
+        [
+            f'새 보안 이벤트가 {len(events)}건 있습니다.',
+            '',
+            '종류별',
+            *count_lines,
+            '',
+            f'자세히 (시각은 {timezone.get_current_timezone_name()} 기준)',
+            *event_lines,
+            '',
+            '전체 기록은 관리자 화면의 "보안 이벤트" 에 있습니다.',
+        ]
+    )
     return f'[AI TRPG] 보안 이벤트 {len(events)}건', body
 
 

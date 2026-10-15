@@ -49,10 +49,13 @@ class RunAsJobTests(SimpleTestCase):
     def test_a_failed_job_can_be_traced_by_its_id(self):
         seen: list[str] = []
 
-        with self.assertLogs(JOBS_LOGGER, logging.ERROR) as captured, self.assertRaises(RuntimeError):
-            with run_as_job('security.send_digest') as job_id:
-                seen.append(job_id)
-                raise RuntimeError('메일 서버가 죽었다')
+        with (
+            self.assertLogs(JOBS_LOGGER, logging.ERROR) as captured,
+            self.assertRaises(RuntimeError),
+            run_as_job('security.send_digest') as job_id,
+        ):
+            seen.append(job_id)
+            raise RuntimeError('메일 서버가 죽었다')
 
         (line,) = rendered(captured.records)
         self.assertEqual(line['job_id'], seen[0])

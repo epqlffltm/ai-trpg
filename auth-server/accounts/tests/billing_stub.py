@@ -8,6 +8,7 @@
 정해 둔 대로 답하고, 받은 요청을 적어 둔다.
 """
 
+import contextlib
 import threading
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -34,7 +35,11 @@ class ReceivedRequest:
         if not sent_at.isdigit():
             return False
         expected = sign_request(
-            secret=secret, method=self.method, request_uri=self.path, body=self.body, sent_at=int(sent_at),
+            secret=secret,
+            method=self.method,
+            request_uri=self.path,
+            body=self.body,
+            sent_at=int(sent_at),
         )
         return header == expected
 
@@ -86,17 +91,20 @@ class BillingStub:
 
             def _answer(self) -> None:
                 length = int(self.headers.get('Content-Length') or 0)
-                stub.requests.append(ReceivedRequest(
-                    method=self.command, path=self.path, headers=dict(self.headers.items()),
-                    body=self.rfile.read(length),
-                ))
+                stub.requests.append(
+                    ReceivedRequest(
+                        method=self.command,
+                        path=self.path,
+                        headers=dict(self.headers.items()),
+                        body=self.rfile.read(length),
+                    )
+                )
                 if stub.delay_seconds:
                     stub._release.wait(stub.delay_seconds)
-                try:
+                # 쓰다가 OSError 가 나면 기다리다 지친 쪽이 먼저 연결을 끊은 것이다.
+                # 시간 초과를 보는 테스트에서 일부러 만드는 상황이다
+                with contextlib.suppress(OSError):
                     self._write_answer()
-                except OSError:
-                    # 기다리다 지친 쪽이 먼저 연결을 끊었다. 시간 초과를 보는 테스트에서 일부러 만드는 상황이다
-                    pass
 
             def _write_answer(self) -> None:
                 self.send_response(stub.status_code)

@@ -23,8 +23,7 @@ def read_private_key_pem(path: Path) -> str:
         return path.read_text(encoding='ascii')
     except FileNotFoundError as exc:
         raise ImproperlyConfigured(
-            f'JWT 개인키 파일이 없습니다: {path}\n'
-            '다음 명령으로 만드세요: uv run python scripts/generate_jwt_key.py'
+            f'JWT 개인키 파일이 없습니다: {path}\n다음 명령으로 만드세요: uv run python scripts/generate_jwt_key.py'
         ) from exc
 
 

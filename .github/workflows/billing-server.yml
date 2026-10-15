@@ -96,6 +96,11 @@ jobs:
       - name: 정적 검사
         run: go vet ./...
 
+      # 코드가 실제로 부르는 함수에 알려진 취약점이 있으면 실패한다(표준 라이브러리 포함).
+      # 도구는 Go 의 새 버전을 따라가야 해서 버전을 묶지 않는다. 취약점 목록도 어차피 그날의 것이다
+      - name: 의존성 취약점 검사
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
       # SQL 에서 Go 코드를 만드는 도구. 로컬에서 쓰는 것과 같은 버전을 받는다
       - name: sqlc 설치
         uses: sqlc-dev/setup-sqlc@v5

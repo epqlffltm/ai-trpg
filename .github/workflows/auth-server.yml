@@ -93,6 +93,22 @@ jobs:
       - name: 의존성 설치
         run: uv sync --locked
 
+      # 쓰지 않는 import, 정의되지 않은 이름 같은 문제를 실행하지 않고 찾는다.
+      # 규칙은 저장소 루트의 ruff.toml 이다. 게임 서버와 같다
+      - name: 린트
+        run: uv run ruff check .
+
+      # 모양을 고치지 않고 검사만 한다. 어긋나면 실패한다
+      - name: 모양 검사
+        run: uv run ruff format --check .
+
+      # 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
+      # uv.lock 에 잠긴 그대로를 해시와 함께 넘긴다. 받아들이기로 한 것은 --ignore-vuln 에 까닭과 함께 적는다
+      - name: 의존성 취약점 검사
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt -q > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip --progress-spinner off
+
       # 설정이 개인키 파일을 읽으므로 그 전에 만든다.
       # 이 실행에서만 쓰고 버리는 키다
       - name: JWT 키 만들기

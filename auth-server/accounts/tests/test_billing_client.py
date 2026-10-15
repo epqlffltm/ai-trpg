@@ -114,9 +114,12 @@ class OutcomeTests(SimpleTestCase):
     def test_any_other_status_code_means_try_again_later(self):
         # 401 은 비밀이 어긋났거나 시계가 벌어진 것이다. 설정을 고치면 되므로 버리지 않고 다시 시도한다
         for status_code in (400, 401, 404, 409, 500, 503):
-            with self.subTest(status_code), BillingStub(status_code=status_code, body=b'{"detail":"..."}') as stub:
-                with self.assertRaisesMessage(BillingUnavailableError, str(status_code)):
-                    grant(stub)
+            with (
+                self.subTest(status_code),
+                BillingStub(status_code=status_code, body=b'{"detail":"..."}') as stub,
+                self.assertRaisesMessage(BillingUnavailableError, str(status_code)),
+            ):
+                grant(stub)
 
     def test_success_code_with_an_unreadable_answer_is_not_trusted(self):
         bodies = {
@@ -127,18 +130,23 @@ class OutcomeTests(SimpleTestCase):
             '모르는 결과다': b'{"status":"maybe"}',
         }
         for name, body in bodies.items():
-            with self.subTest(name), BillingStub(status_code=200, body=body) as stub:
-                with self.assertRaises(BillingUnavailableError):
-                    grant(stub)
+            with (
+                self.subTest(name),
+                BillingStub(status_code=200, body=body) as stub,
+                self.assertRaises(BillingUnavailableError),
+            ):
+                grant(stub)
 
 
 class UnreachableTests(SimpleTestCase):
     def test_connection_refused_is_reported_without_the_address(self):
         url = closed_port_url()
 
-        with override_settings(BILLING_URL=url, BILLING_SECRET=SECRET):
-            with self.assertRaises(BillingUnavailableError) as raised:
-                grant_welcome_credit(user_public_id=USER_ID)
+        with (
+            override_settings(BILLING_URL=url, BILLING_SECRET=SECRET),
+            self.assertRaises(BillingUnavailableError) as raised,
+        ):
+            grant_welcome_credit(user_public_id=USER_ID)
 
         self.assertNotIn(url.rpartition(':')[2], str(raised.exception))
         self.assertNotIn(SECRET, str(raised.exception))
@@ -156,16 +164,18 @@ class UnreachableTests(SimpleTestCase):
         with BillingStub() as elsewhere:
             redirect = {'Location': elsewhere.url + '/api/v1/billing/service/grants/welcome'}
             for status_code in (301, 302, 307, 308):
-                with self.subTest(status_code), BillingStub(status_code=status_code, headers=redirect) as stub:
-                    with self.assertRaises(BillingUnavailableError):
-                        grant(stub)
+                with (
+                    self.subTest(status_code),
+                    BillingStub(status_code=status_code, headers=redirect) as stub,
+                    self.assertRaises(BillingUnavailableError),
+                ):
+                    grant(stub)
 
         self.assertEqual(elsewhere.requests, [])
 
     def test_without_a_secret_nothing_is_sent(self):
-        with BillingStub() as stub:
-            with self.assertRaisesMessage(BillingUnavailableError, 'BILLING_SECRET'):
-                grant(stub, BILLING_SECRET='')
+        with BillingStub() as stub, self.assertRaisesMessage(BillingUnavailableError, 'BILLING_SECRET'):
+            grant(stub, BILLING_SECRET='')
 
         self.assertEqual(stub.requests, [])
 

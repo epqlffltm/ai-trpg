@@ -203,7 +203,6 @@ SIMPLE_JWT = {
     'ALGORITHM': 'RS256',
     'SIGNING_KEY': _jwt_private_key_pem,
     'VERIFYING_KEY': JWT_PUBLIC_KEY_PEM,
-
     # 누가 발급했고(iss) 누구에게 쓰라고 발급했는지(aud).
     # 검증하는 서버는 aud 에 자기 이름이 있는지 확인한다.
     # 토큰 하나에 모든 서버의 이름을 싣는다. 프론트는 토큰 하나로 모든 서버를 부른다.
@@ -213,19 +212,15 @@ SIMPLE_JWT = {
         'JWT_AUDIENCE',
         default=['ai-trpg-auth', 'ai-trpg-game', 'ai-trpg-board', 'ai-trpg-billing'],
     ),
-
     # 다른 서버는 블랙리스트를 보지 않고 서명과 만료만 확인한다.
     # 그래서 탈취됐을 때 쓸 수 있는 시간을 짧게 잡는다
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-
     # 이 기간 안에 한 번이라도 접속하면 로그인이 유지된다.
     # refresh 토큰은 쓸 때마다 새것으로 바뀌고 기간도 다시 시작한다
     'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
-
     # 토큰의 주체는 정수 PK 가 아니라 public_id 다
     'USER_ID_FIELD': 'public_id',
     'USER_ID_CLAIM': 'sub',
-
     # 머리말에 kid 를 넣는 토큰 클래스. 검증할 때도 같은 클래스를 쓴다
     'AUTH_TOKEN_CLASSES': ('accounts.tokens.AccessToken',),
 }

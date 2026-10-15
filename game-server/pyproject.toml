@@ -38,17 +38,8 @@ asyncio_default_test_loop_scope = "session"
 addopts = "--tb=short"
 
 [tool.ruff]
-line-length = 120
-target-version = "py313"
-
-[tool.ruff.lint]
-# E, W: 모양 / F: 쓰지 않는 이름, 정의되지 않은 이름 / I: import 순서
-# B: 흔한 실수 / UP: 옛 문법 / SIM: 더 단순하게 쓸 수 있는 코드
-select = ["E", "W", "F", "I", "B", "UP", "SIM"]
+# 규칙과 모양은 저장소 루트의 ruff.toml 을 따른다. 인증 서버와 같다
+extend = "../ruff.toml"
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
-
-[tool.ruff.format]
-# 인증 서버와 같은 모양을 쓴다
-quote-style = "single"
