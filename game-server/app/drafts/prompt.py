@@ -25,7 +25,8 @@ from app.tables.models import QuestStatus
 #   ledger-draft-3: -2 로 재니 건넨 것은 고쳐졌지만(10/10) 목록에 없는 물건(해골에게서 빼앗은 장검)을
 #                   목록의 다른 물건(치유 물약)으로 바꿔 적고, 그 뒤에 설명과 두 번째 JSON 을 붙였다
 #                   (10 번 중 10 번, not_json). 서버가 통째로 버려 장부는 지켰지만, 초안 하나를 잃는다.
-#                   바꿔 적지 말라는 말을 이름표 규칙에 붙인다
+#                   "바꿔 적지 마라" 한 문장만 더해서는 그대로였다(10/10). 그래서 목록에 없는 물건을 적을 자리
+#                   (unlisted_items, 이름)를 준다. 서버는 그것으로 장부를 바꾸지 않는다
 DRAFT_PROMPT_VERSION = 'ledger-draft-3'
 
 SYSTEM_TEXT = '\n'.join(
@@ -39,11 +40,13 @@ SYSTEM_TEXT = '\n'.join(
         '- quest_changes: 숨긴 퀘스트가 드러난 일(active), 퀘스트를 이룬 일(succeeded), 놓친 일(failed).',
         '- 아래 목록의 이름표(p1, i1, q1)만 쓴다. 목록에 없는 캐릭터, 물건, 퀘스트는 넣지 않는다. '
         '목록에 없는 물건을 목록의 다른 물건으로 바꿔 적지 않는다.',
-        '- 확실하지 않으면 넣지 않는다. 일어난 일이 없으면 두 목록을 비운다.',
+        '- unlisted_items: 캐릭터가 손에 넣었지만 목록에 없는 물건의 이름. 이런 물건은 여기에만 적는다. '
+        '이것으로 기록이 바뀌지는 않는다.',
+        '- 확실하지 않으면 넣지 않는다. 일어난 일이 없으면 목록을 모두 비운다.',
         '- 이것은 초안이다. 방장이 확인한 뒤에야 기록이 된다.',
         '- JSON 객체 하나만 답한다. 설명을 붙이지 않는다.',
         '형식: {"found_items": [{"character": "p1", "item": "i1", "count": 1}], '
-        '"quest_changes": [{"quest": "q1", "status": "succeeded"}]}',
+        '"quest_changes": [{"quest": "q1", "status": "succeeded"}], "unlisted_items": []}',
     ]
 )
 
