@@ -9,10 +9,6 @@
 이름표가 무엇을 가리키는지는 서버가 안다(app/drafts/context.py). 목록에 없는 이름표는 버린다.
 
 모양이 틀린 답은 통째로 버린다. 고쳐 읽지 않는다. 고쳐 읽으면 모델이 뜻하지 않은 것을 받아들이게 된다.
-
-목록에 없는 물건을 적을 자리(unlisted_items)가 따로 있다. 이름(글)이고 이름표가 아니다.
-서버는 이것으로 장부를 바꾸지 않는다. 이 자리가 없을 때 모델은 목록에 없는 물건을 목록의 다른 물건으로 바꿔 적고,
-설명과 두 번째 JSON 을 붙였다(ledger-draft-3). 적을 데가 있으면 억지로 끼워 넣지 않는다.
 """
 
 import json
@@ -27,9 +23,6 @@ from app.assets.models import ITEM_STACK_MAX
 # 넘으면 답을 통째로 버린다. 모델이 목록을 늘어놓기 시작한 것이다
 MAX_FOUND_ITEMS = 8
 MAX_QUEST_CHANGES = 5
-MAX_UNLISTED_ITEMS = 8
-# 목록에 없는 물건의 이름 하나의 길이
-UNLISTED_NAME_MAX_LENGTH = 60
 
 # 이름표. 글자 하나와 숫자. 예: p1, i12, q3
 Label = Annotated[str, StringConstraints(pattern=r'^[a-z][0-9]{1,3}$')]
@@ -57,25 +50,13 @@ class QuestChange(BaseModel):
     status: Literal['active', 'succeeded', 'failed']
 
 
-# 목록에 없는 물건의 이름. 앞뒤 공백을 떼고 비지 않아야 한다
-UnlistedName = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=UNLISTED_NAME_MAX_LENGTH)
-]
-
-
 class DraftOutput(BaseModel):
-    """
-    모델의 답 전체. 모두 비어 있을 수 있다. 일어난 일이 없으면 빈 목록이 맞는 답이다.
-
-    unlisted_items 는 장면에서 손에 넣었지만 목록에 없는 물건의 이름이다.
-    초안이 되지 않는다(app/drafts/validation.py 가 보지 않는다).
-    """
+    """모델의 답 전체. 둘 다 비어 있을 수 있다. 일어난 일이 없으면 빈 목록이 맞는 답이다."""
 
     model_config = ConfigDict(extra='forbid')
 
     found_items: list[FoundItem] = Field(default_factory=list, max_length=MAX_FOUND_ITEMS)
     quest_changes: list[QuestChange] = Field(default_factory=list, max_length=MAX_QUEST_CHANGES)
-    unlisted_items: list[UnlistedName] = Field(default_factory=list, max_length=MAX_UNLISTED_ITEMS)
 
 
 class OutputError(Exception):
