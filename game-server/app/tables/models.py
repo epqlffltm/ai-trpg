@@ -594,6 +594,54 @@ class TableNpc(Base):
     )
 
 
+class TableMonster(Base):
+    """
+    테이블 하나에서 몬스터 한 마리의 숫자와 생사와 자리.
+
+    게임을 시작할 때 판의 조우마다 마리 수만큼 만들어 그 장소에 둔다(app/tables/monsters.py).
+    숫자는 판의 몬스터(시나리오의 몬스터 시트)에서 온다. 가져온 뒤로는 이 테이블의 것이다.
+    지금 HP 와 생사는 엔진만 고친다. 생사의 값과 규칙은 NPC 와 같다(NpcStatus).
+
+    NPC(table_npcs)와 테이블을 나눈다. NPC 는 항목 하나에 하나라서 항목의 ID 가 키다.
+    몬스터는 같은 것이 여러 마리라 마리마다 자기 ID 가 있다. 판정이 겨누는 값이 이 ID 다.
+
+    무엇인지는 판의 몬스터의 ID(monster_id)로만 적는다. 이름과 내용은 판에 있다.
+    아직 가 보지 않은 장소의 몬스터가 드러나면 안 되므로, 이 행을 앉은 사람에게 그대로 내주지 않는다.
+    """
+
+    __tablename__ = 'table_monsters'
+    __table_args__ = (
+        CheckConstraint('max_hp >= 1', name='max_hp_positive'),
+        CheckConstraint('hp BETWEEN 0 AND max_hp', name='hp_range'),
+        CheckConstraint(one_of('status', NpcStatus), name='status_allowed'),
+        # 살아 있는 것과 HP 가 있는 것은 같다. 쓰러짐과 죽음은 HP 가 0 일 때만이다
+        CheckConstraint(f"(status = '{NpcStatus.ALIVE}') = (hp > 0)", name='alive_when_hp'),
+        CheckConstraint("jsonb_typeof(abilities) = 'object'", name='abilities_is_object'),
+        CheckConstraint('number >= 1', name='number_positive'),
+        # 한 테이블에서 같은 몬스터의 번호는 겹치지 않는다. "수로 쥐 2"가 둘일 수 없다
+        UniqueConstraint('table_id', 'monster_id', 'number'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    # 테이블의 행이 지워지면 함께 지워진다. "이 테이블의 몬스터들"을 찾는 색인은 위의 UNIQUE 가 겸한다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'))
+    # 판(content)의 몬스터의 ID. 판은 문서라 외래 키를 걸지 못한다. 판을 고치지 않으므로 가리키는 몬스터는 늘 있다
+    monster_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    # 같은 몬스터 사이의 번호. 1 부터다. 부를 때 쓴다(수로 쥐 1, 수로 쥐 2)
+    number: Mapped[int] = mapped_column(SmallInteger)
+    # 있는 곳. 판의 로어북 장소 항목의 ID 다. 지금은 움직이지 않는다
+    place_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+
+    # 능력치의 점수. 모양은 캐릭터 시트와 같다(TableSheet.abilities)
+    abilities: Mapped[dict] = mapped_column(JSONB)
+    max_hp: Mapped[int] = mapped_column(SmallInteger)
+    hp: Mapped[int] = mapped_column(SmallInteger)
+    status: Mapped[str] = mapped_column(String(20), default=NpcStatus.ALIVE, server_default=text("'alive'"))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class TableQuest(Base):
     """
     테이블 하나에서 로어북의 사건 항목 하나의 퀘스트 상태.

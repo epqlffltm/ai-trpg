@@ -41,6 +41,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         npc_sheets=[npc_sheet.model_dump() for npc_sheet in data.npc_sheets],
         default_npc_sheet=data.default_npc_sheet.model_dump() if data.default_npc_sheet else None,
         monster_sheets=[monster_sheet.model_dump() for monster_sheet in data.monster_sheets],
+        encounters=[encounter.model_dump() for encounter in data.encounters],
         items=[rule.model_dump() for rule in data.items],
         starting_items=[stack.model_dump() for stack in data.starting_items],
         quests=[quest.model_dump() for quest in data.quests],

@@ -59,7 +59,8 @@ from app.engine.sheet import Sheet
 #  19: 맵의 시작 장소(start_place)와 길(routes)이 있다
 #  20: 길을 아는 때(routes[].visibility: open, fog, hidden)와 명소(landmarks)가 있다. 길의 hidden 은 없어졌다
 #  21: 몬스터(monsters)가 있다. 시트를 적은 몬스터만 들어간다
-SNAPSHOT_FORMAT = 21
+#  22: 조우(encounters)가 있다. 맵의 장소에 판의 몬스터가 몇 마리 있는지다
+SNAPSHOT_FORMAT = 22
 
 
 class EntrySnapshot(BaseModel):
@@ -198,6 +199,14 @@ class MonsterSnapshot(BaseModel):
     sheet: Sheet
 
 
+class EncounterSnapshot(BaseModel):
+    """조우 하나. 판 안의 로어북 장소 항목 하나(place_id)에 판의 몬스터 하나(monster_id)가 count 마리 있다."""
+
+    place_id: uuid.UUID
+    monster_id: uuid.UUID
+    count: int
+
+
 class PlayerMadeHpSnapshot(BaseModel):
     """플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다."""
 
@@ -236,6 +245,8 @@ class Snapshot(BaseModel):
     default_npc_sheet: Sheet | None
     # 몬스터들. 시나리오가 시트를 적은 몬스터만이다. 하나하나가 숫자를 갖는다
     monsters: list[MonsterSnapshot] = []
+    # 조우들. 장소는 판 안의 로어북 장소 항목, 몬스터는 위의 몬스터다. 조우가 있으면 시작 장소도 있다
+    encounters: list[EncounterSnapshot] = []
     # 아이템 규칙들. 판 안의 로어북 물건 항목마다 많아야 하나다. 규칙이 없는 물건은 장비다(item_rule_of)
     items: list[ItemRuleSnapshot] = []
     # 시작 소지품. 캐릭터 모두가 테이블이 시작할 때 받는다
@@ -282,6 +293,25 @@ class Snapshot(BaseModel):
         monster_ids = [monster.id for monster in self.monsters]
         if len(set(monster_ids)) != len(monster_ids):
             raise ValueError('같은 몬스터가 두 번 있습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_encounter_targets(self) -> 'Snapshot':
+        """
+        조우가 모두 판 안의 장소 항목과 판의 몬스터를 가리키는지, 조우가 있으면 시작 장소가 있는지 본다.
+        아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py).
+        판을 읽는 쪽(테이블의 시작)은 마리마다 숫자와 자리가 있다고 믿고 쓴다.
+        """
+        places = {entry.id for entry in place_entries(self)}
+        monsters = {monster.id for monster in self.monsters}
+        if any(encounter.place_id not in places for encounter in self.encounters):
+            raise ValueError('장소 항목이 아닌 것을 가리키는 조우가 있습니다.')
+        if any(encounter.monster_id not in monsters for encounter in self.encounters):
+            raise ValueError('판에 없는 몬스터를 가리키는 조우가 있습니다.')
+        if self.encounters and self.start_place is None:
+            raise ValueError('조우가 있는데 시작 장소가 없습니다.')
         return self
 
     @model_validator(mode='after')
@@ -371,6 +401,15 @@ def item_rule_of(snapshot: Snapshot, entry_id: uuid.UUID) -> ItemRuleSnapshot:
     return own or ItemRuleSnapshot(entry_id=entry_id, kind=ItemKind.GEAR)
 
 
+def monster_of(snapshot: Snapshot, monster_id: uuid.UUID) -> MonsterSnapshot:
+    """
+    판의 몬스터 하나. 조우가 가리키는 몬스터를 찾을 때 쓴다.
+
+    조우가 판에 없는 몬스터를 가리키는 판은 읽을 때 이미 거부됐다(Snapshot.require_encounter_targets).
+    """
+    return next(monster for monster in snapshot.monsters if monster.id == monster_id)
+
+
 def npc_sheet_of(snapshot: Snapshot, entry_id: uuid.UUID) -> Sheet:
     """
     인물 항목 하나가 받을 숫자. 그 인물의 NPC 시트가 있으면 그것, 없으면 기본 NPC 시트다.
@@ -446,6 +485,7 @@ def build_snapshot(
         npc_sheets=[NpcSheetSnapshot(**npc_sheet) for npc_sheet in scenario.npc_sheets],
         default_npc_sheet=scenario.default_npc_sheet,
         monsters=monsters,
+        encounters=[EncounterSnapshot(**encounter) for encounter in scenario.encounters],
         items=[ItemRuleSnapshot(**rule) for rule in scenario.items],
         starting_items=[ItemStackSnapshot(**stack) for stack in scenario.starting_items],
         quests=[QuestRuleSnapshot(**quest) for quest in scenario.quests],
