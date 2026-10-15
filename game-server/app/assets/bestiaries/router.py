@@ -31,6 +31,7 @@ def to_monster_detail(monster: Monster) -> MonsterDetail:
         name=monster.name,
         content=monster.content,
         kind=MonsterKind(monster.kind),
+        unique=monster.unique,
         created_at=monster.created_at,
         updated_at=monster.updated_at,
     )

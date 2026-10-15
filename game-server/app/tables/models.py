@@ -618,6 +618,7 @@ class TableMonster(Base):
         CheckConstraint(f"(status = '{NpcStatus.ALIVE}') = (hp > 0)", name='alive_when_hp'),
         CheckConstraint("jsonb_typeof(abilities) = 'object'", name='abilities_is_object'),
         CheckConstraint('number >= 1', name='number_positive'),
+        CheckConstraint('engaged_round IS NULL OR engaged_round >= 1', name='engaged_round_positive'),
         # 한 테이블에서 같은 몬스터의 번호는 겹치지 않는다. "수로 쥐 2"가 둘일 수 없다
         UniqueConstraint('table_id', 'monster_id', 'number'),
     )
@@ -638,6 +639,9 @@ class TableMonster(Base):
     max_hp: Mapped[int] = mapped_column(SmallInteger)
     hp: Mapped[int] = mapped_column(SmallInteger)
     status: Mapped[str] = mapped_column(String(20), default=NpcStatus.ALIVE, server_default=text("'alive'"))
+    # 만난 첫 라운드. 살아 있는 캐릭터와 같은 장소에서 처음 차례를 받는 라운드다. 아직 안 만났으면 비어 있다.
+    # 조우의 기습(surprise)은 이 라운드에만 쓴다. 적는 것은 라운드 닫기다(app/rounds, 3c)
+    engaged_round: Mapped[int | None] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

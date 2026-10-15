@@ -35,6 +35,7 @@ from app.assets.scenarios.schemas import (
     Encounter,
     ItemRule,
     ItemStack,
+    MonsterAttack,
     MonsterSheet,
     NpcSheet,
     Pregen,
@@ -42,7 +43,7 @@ from app.assets.scenarios.schemas import (
     RouteRule,
     VersionCreate,
 )
-from app.assets.scenarios.snapshot import MonsterSnapshot, build_snapshot, snapshot_monster
+from app.assets.scenarios.snapshot import AttackSnapshot, MonsterSnapshot, build_snapshot, snapshot_monster
 from app.assets.service import AssetNotFoundError
 from app.engine.check import find_ability, find_difficulty
 from app.engine.health import find_magnitude
@@ -113,6 +114,10 @@ class Problem(enum.StrEnum):
     ENCOUNTER_MONSTER_MISSING = 'encounter_monster_missing'
     # 조우가 있는데 시작 장소가 없다. 맵이 없는 시나리오에는 몬스터를 둘 곳이 없다
     ENCOUNTER_MAP_MISSING = 'encounter_map_missing'
+    # 몬스터의 공격의 능력치, 난이도, 양의 등급이 룰북의 규칙에 없다
+    MONSTER_ATTACK_INVALID = 'monster_attack_invalid'
+    # 네임드 몹이 두 마리 이상 놓인다. 조우 한 줄에 둘 이상이거나, 두 줄 이상에 나온다
+    UNIQUE_MONSTER_REPEATED = 'unique_monster_repeated'
 
 
 class ScenarioNotReadyError(Exception):
@@ -321,7 +326,32 @@ def find_monster_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Rules
         problems.append(Problem.MONSTER_SHEET_MISSING)
     if ruleset and any(not fits(ruleset, monster_sheet.sheet) for monster_sheet in monster_sheets):
         problems.append(Problem.MONSTER_SHEET_INVALID)
+    if ruleset and any(attack_fault(ruleset, attack) for sheet in monster_sheets for attack in sheet.attacks):
+        problems.append(Problem.MONSTER_ATTACK_INVALID)
     return problems
+
+
+def attack_fault(ruleset: Ruleset, attack: MonsterAttack) -> bool:
+    """이 공격의 능력치, 난이도, 양의 등급 중 룰북의 규칙에 없는 것이 있는가."""
+    return (
+        find_ability(ruleset, attack.ability) is None
+        or find_difficulty(ruleset, attack.difficulty) is None
+        or find_magnitude(ruleset, attack.harm) is None
+    )
+
+
+def find_unique_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """
+    네임드 몹이 판 전체에서 한 마리인지 본다. 조우 한 줄에 한 마리, 그런 줄이 하나뿐이어야 한다.
+
+    네임드 몹은 이름과 글이 그 한 마리의 것이라 둘이 있으면 누구인지 가를 수 없다.
+    """
+    unique = {monster.id for monster in bestiary_monsters(parts).values() if monster.unique}
+    lines = [encounter for encounter in read_encounters(scenario) if encounter.monster_id in unique]
+    ids = [encounter.monster_id for encounter in lines]
+    if any(encounter.count > 1 for encounter in lines) or len(ids) != len(set(ids)):
+        return [Problem.UNIQUE_MONSTER_REPEATED]
+    return []
 
 
 def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]:
@@ -332,7 +362,11 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
     """
     known = bestiary_monsters(parts)
     return [
-        snapshot_monster(known[monster_sheet.monster_id], monster_sheet.sheet)
+        snapshot_monster(
+            known[monster_sheet.monster_id],
+            monster_sheet.sheet,
+            [AttackSnapshot(**attack.model_dump()) for attack in monster_sheet.attacks],
+        )
         for monster_sheet in read_monster_sheets(scenario)
     ]
 
@@ -497,6 +531,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_default_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_monster_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_encounter_problems(scenario, parts))
+    problems.extend(find_unique_problems(scenario, parts))
     problems.extend(find_item_problems(scenario, parts, ruleset))
     problems.extend(find_quest_problems(scenario, parts))
     problems.extend(find_map_problems(scenario, parts, ruleset))

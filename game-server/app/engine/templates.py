@@ -235,6 +235,8 @@ SRD5 = Ruleset(
     ),
     # 건강이 최대 HP 에 닿는다. SRD 에서도 건강의 보정이 HP 에 더해진다
     hp_ability='con',
+    # 민첩이 차례를 정한다. SRD 의 선제(initiative)도 민첩의 판정이다
+    initiative_ability='dex',
     # 27점으로 8~15 를 산다. 13 까지는 한 점에 1, 14 와 15 는 한 점에 2 다
     point_buy=PointBuy(
         budget=27,

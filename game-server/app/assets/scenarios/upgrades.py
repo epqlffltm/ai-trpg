@@ -366,6 +366,30 @@ def upgrade_from_21(document: dict) -> dict:
     return upgraded
 
 
+def initiative_of(rules: dict) -> str | None:
+    """차례를 정하는 능력치가 없던 규칙에 채울 값. 그 규칙에 SRD5 의 것(민첩)이 있으면 그것, 없으면 None 이다."""
+    keys = [ability['key'] for ability in rules['abilities']]
+    return SRD5.initiative_ability if SRD5.initiative_ability in keys else None
+
+
+def upgrade_from_22(document: dict) -> dict:
+    """
+    형식 22 의 문서를 형식 23 으로 올린다.
+
+    그때는 몬스터에 공격과 네임드 표시가 없었고, 조우에 기습이 없었고, 규칙에 차례를 정하는 능력치가 없었다.
+    몬스터는 공격하지 않는 일반 몹으로, 조우는 기습 없음으로, 규칙은 SRD5 의 것(민첩)으로 읽는다.
+    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    """
+    rulebook = document['rulebook']
+    upgraded = dict(document)
+    upgraded['monsters'] = [{**monster, 'attacks': [], 'unique': False} for monster in document.get('monsters', [])]
+    upgraded['encounters'] = [{**encounter, 'surprise': 'none'} for encounter in document.get('encounters', [])]
+    rules = rulebook['rules']
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rules, 'initiative_ability': initiative_of(rules)}}
+    upgraded['format'] = 23
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -390,4 +414,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     19: upgrade_from_19,
     20: upgrade_from_20,
     21: upgrade_from_21,
+    22: upgrade_from_22,
 }
