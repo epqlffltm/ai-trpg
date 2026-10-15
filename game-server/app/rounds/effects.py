@@ -18,6 +18,7 @@ from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, condition_of
 from app.rounds.monster_scene import SceneMonster
+from app.tables.injuries import Moment
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember, TableNpc
 
@@ -36,6 +37,8 @@ class Judging:
     dice: Dice
     cast: list[CastMember]
     round_number: int
+    # 이 라운드가 닫히는 게임 안의 때. 부상이 생기고 낫는 때를 정한다(app/rounds/injuries.py 의 moment_of)
+    moment: Moment
     # 테이블의 NPC 상태 전부와 판의 인물 항목. 지목은 장면에 없는 인물도 짚을 수 있다(app/rounds/naming.py)
     npcs: list[TableNpc]
     people: list[EntrySnapshot]
@@ -56,7 +59,7 @@ def injury_after(judging: Judging, change: Change, max_hp: int, dead: bool, rows
     rolled = round_injuries.roll_after(judging.ruleset, judging.dice, change, max_hp, dead)
     if rolled is None:
         return None
-    return round_injuries.take(judging.ruleset, rolled, rows, judging.table.id, judging.round_number)
+    return round_injuries.take(judging.ruleset, rolled, rows, judging.table.id, judging.moment)
 
 
 def member_effect(affected: TableMember, magnitude: str, change: Change, injury_roll: dict | None) -> dict:

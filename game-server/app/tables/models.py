@@ -716,7 +716,9 @@ class TableInjury(Base):
     부상 하나. 캐릭터의 시트 하나나 NPC 하나가 입었다.
 
     어떤 부상인지는 이름(injury)으로만 적는다. 효과와 사실은 테이블의 판에 굳은 규칙에 있다(app/engine/ruleset.py).
-    짧은 것과 오래 가는 것은 풀리거나 나을 라운드(ends_after_round)가 적힌다. 그 라운드가 닫힐 때 끝난다.
+    짧은 것은 풀릴 라운드(ends_after_round)가 적힌다. 그 라운드가 닫힐 때 풀린다.
+    오래 가는 것은 나을 게임 안의 시각(heals_at, 1일째 0시부터 흐른 분)이 적힌다(app/calendar/).
+    라운드가 닫힐 때, 그 장면이 끝나는 때가 그 시각에 닿았으면 낫는다.
     풀리거나 나으면 그 시각(ended_at)을 적고 지우지 않는다. 누가 언제 무엇을 입었는지의 기록이다.
     부상을 만들고 푸는 것은 엔진뿐이다(app/tables/injuries.py). 방장도 손으로 고치지 못한다.
     """
@@ -734,6 +736,9 @@ class TableInjury(Base):
         CheckConstraint('round_number >= 1', name='round_number_positive'),
         # 풀리는 라운드는 생긴 라운드의 뒤다
         CheckConstraint('ends_after_round IS NULL OR ends_after_round > round_number', name='ends_after_start'),
+        # 풀릴 라운드와 나을 시각은 함께 적히지 않는다. 짧은 것은 앞의 것, 오래 가는 것은 뒤의 것이다
+        CheckConstraint('ends_after_round IS NULL OR heals_at IS NULL', name='one_end'),
+        CheckConstraint('heals_at IS NULL OR heals_at >= 0', name='heals_at_not_negative'),
         # 아직 낫지 않은 부상을 찾는 일이 라운드마다 있다
         Index('ix_table_injuries_active', 'table_id', postgresql_where='ended_at IS NULL'),
     )
@@ -751,9 +756,11 @@ class TableInjury(Base):
     source: Mapped[str] = mapped_column(String(20))
     # 생긴 라운드. 그 라운드가 닫힐 때 생겼다
     round_number: Mapped[int] = mapped_column(Integer)
-    # 이 라운드가 닫힐 때 풀리거나 낫는다. 짧은 것과 오래 가는 것에 있고, 결손은 비어 있다.
-    # 오래 가는 것은 치료로 앞당겨지거나 덧나서 늦춰진다(app/tables/injuries.py 의 reschedule)
+    # 이 라운드가 닫힐 때 풀린다. 짧은 것에만 있다
     ends_after_round: Mapped[int | None] = mapped_column(Integer)
+    # 이 게임 안의 시각(분)이 지나면 낫는다. 오래 가는 것에만 있다.
+    # 치료로 앞당겨지거나 덧나서 늦춰진다(app/tables/injuries.py 의 reschedule)
+    heals_at: Mapped[int | None] = mapped_column(Integer)
     # 풀리거나 나은 시각. 비어 있으면 아직 입고 있다
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

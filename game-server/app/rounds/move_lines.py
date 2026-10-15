@@ -34,6 +34,7 @@ from app.rounds.narrator import (
     TurnNote,
     Verdict,
 )
+from app.rounds.time_words import duration_text
 
 
 def describe_verdict(verdict: Verdict) -> str:
@@ -59,9 +60,10 @@ def describe_treatment(note: TreatmentNote) -> str:
     """
     치료의 결과를 한 줄로 적는다.
 
-    예: → 토르빈의 팔 골절 치료: 앞당겨짐, 낫기까지 15 라운드
+    예: → 토르빈의 팔 골절 치료: 앞당겨짐, 낫기까지 2시간 30분
         → 토르빈의 팔 골절 치료: 다 나음. 후유증: 굽은 팔
-        → 토르빈의 팔 골절 치료 실패: 상처가 덧남, 5 라운드 늦어짐, 낫기까지 25 라운드
+        → 토르빈의 팔 골절 치료 실패: 상처가 덧남, 50분 늦어짐, 낫기까지 4시간 10분
+    남은 시간은 이 장면이 끝난 뒤부터다(게임 안의 시간, app/rounds/time_words.py).
     """
     # 치료받던 사람이 떠났으면 이름을 모른다. 부상만 적는다
     head = f'→ {note.patient}의 {note.injury} 치료' if note.patient else f'→ {note.injury} 치료'
@@ -70,14 +72,15 @@ def describe_treatment(note: TreatmentNote) -> str:
     if note.mishap is None:
         if note.healed:
             return f'{head}: 다 나음' + (f'. 후유증: {note.aftermath}' if note.aftermath else '')
-        return f'{head}: 앞당겨짐, 낫기까지 {note.rounds_left} 라운드'
+        return f'{head}: 앞당겨짐' + (f', 낫기까지 {duration_text(note.minutes_left)}' if note.minutes_left else '')
     if note.died:
         return f'{head} 실패: {MISHAPS[note.mishap]}, {note.patient} 죽음'
     parts = [MISHAPS[note.mishap]]
-    if note.worsened_by:
-        parts.append(f'{note.worsened_by} 라운드 늦어짐')
-    if note.rounds_left is not None:
-        parts.append(f'낫기까지 {note.rounds_left} 라운드')
+    if note.worsened_minutes:
+        parts.append(f'{duration_text(note.worsened_minutes)} 늦어짐')
+    # 이 장면 안에 나을 것이면(남은 시간이 없다) 적지 않는다. 라운드가 닫힐 때 시간이 지나 낫는다
+    if note.minutes_left is not None and note.minutes_left > 0:
+        parts.append(f'낫기까지 {duration_text(note.minutes_left)}')
     return f'{head} 실패: {", ".join(parts)}'
 
 

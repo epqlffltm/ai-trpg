@@ -3,15 +3,18 @@
 """
 치료와 오래 가는 부상의 회복(#114 다)을 검증한다.
 
-오래 가는 부상(팔 골절, 다리 부상)은 입을 때 나을 라운드가 적히고, 그 라운드가 닫힐 때 낫는다.
+오래 가는 부상(팔 골절, 다리 부상)은 입을 때 나을 게임 안의 시각(heals_at, 분)이 적히고(달력 2단계),
+라운드가 닫힐 때 그 장면이 끝나는 때가 그 시각에 닿았으면 낫는다.
 치료하는 행동(kind: treat)은 규칙의 치료 능력(srd5 는 지혜)과 그 부상의 치료 난이도로 판정한다.
-  - 성공하면 나을 라운드가 treat_rounds 만큼 앞당겨진다. 지금 라운드에 닿으면 그 자리에서 낫는다.
+  - 성공하면 나을 시각이 treat_rounds 만큼 앞당겨진다. 이 장면이 끝나는 때에 닿으면 그 자리에서 낫는다.
   - 실패하면 치료 실패 표(d100)를 굴린다. 아무 일 없음, 좀 아픔, 덧남, 즉사.
 나을 때는 어느 길이든 후유증 표를 굴린다.
 
 srd5 템플릿: 팔 골절은 어려움(20), 다리 부상은 보통(15), 성공마다 10 라운드. 엘프의 지혜는 10(보정 0)이다.
 치료 실패 표: 1 즉사, 2~10 크게 덧남(+10 라운드, 보통 피해), 11~30 덧남(+5), 31~50 좀 아픔(가벼운 피해),
 51~100 아무 일 없음.
+규칙의 라운드 수는 판의 기본 걸음(10분)을 곱해 시간으로 센다. 테이블은 1일째 8시(480분)에 시작하고
+첫 라운드의 장면은 8시 10분(490분)에 끝난다. 팔 골절(30 라운드)은 300분 뒤인 13시(780분)에 낫는다.
 
 부상은 싸워서 입히지 않고 DB 에 바로 적어 둔다(wound). 치료와 회복만 보려는 것이다.
 """
@@ -24,13 +27,15 @@ from fastapi import FastAPI, status
 from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_14
+from app.calendar.clock import read_time
 from app.engine.action import ActionKind, CheckAction, TreatAction, find_treat_fault, read_action
 from app.engine.dice import ScriptedDice
-from app.engine.injury import NO_HINDRANCE, Hindrance, ends_after, find_injury, roll_aftermath
+from app.engine.injury import NO_HINDRANCE, Hindrance, ends_after, find_injury, heals_at, roll_aftermath
 from app.engine.ruleset import Mishap, Ruleset
 from app.engine.templates import SRD5
 from app.engine.treatment import is_healed, lengthened, roll_mishap, shortened, treat, treatable
@@ -73,6 +78,15 @@ NOTHING = 77
 CROOKED = 3
 CLEAN = 10
 
+# 게임 안의 시각(분). 첫 라운드가 열린 때와 그 장면이 끝나는 때, 기본 걸음
+OPENED = 8 * 60
+SCENE_END = OPENED + 10
+STEP = 10
+# 1 라운드에 입은 팔 골절이 저절로 낫는 시각. 30 라운드 × 10분 뒤(13시)
+ARM_HEALS = OPENED + 30 * STEP
+# 치료에 한 번 성공하면 앞당겨지는 시간. 10 라운드 × 10분
+TREATED = 10 * STEP
+
 
 @pytest.fixture
 def me(signing_key: SigningKey) -> dict[str, str]:
@@ -95,11 +109,16 @@ async def wound(
     session: AsyncSession,
     table: dict,
     key: str = 'broken_arm',
-    ends_after_round: int | None = 31,
+    heals_at: int | None = ARM_HEALS,
     user_id: uuid.UUID = ME,
     npc: dict | None = None,
+    ends_after_round: int | None = None,
 ) -> None:
-    """부상 하나를 DB 에 바로 적는다. 1 라운드에 입은 것으로 한다. npc 를 주면 그 NPC 가, 아니면 그 사람이 입는다."""
+    """
+    부상 하나를 DB 에 바로 적는다. 1 라운드에 입은 것으로 한다. npc 를 주면 그 NPC 가, 아니면 그 사람이 입는다.
+
+    오래 가는 것은 나을 시각(heals_at), 짧은 것은 풀릴 라운드(ends_after_round)를 준다. 결손은 둘 다 None 이다.
+    """
     table_id = uuid.UUID(table['id'])
     row = TableInjury(
         table_id=table_id,
@@ -107,6 +126,7 @@ async def wound(
         source='injury_table',
         round_number=1,
         ends_after_round=ends_after_round,
+        heals_at=heals_at,
     )
     if npc is not None:
         row.npc_entry_id = uuid.UUID(npc['id'])
@@ -133,6 +153,12 @@ async def injury_rows(session: AsyncSession) -> list[TableInjury]:
 def treated(round_: dict, index: int = 0) -> dict:
     """라운드의 선언 하나에 적힌 치료의 결과."""
     return round_['declarations'][index]['outcome']['treatment']
+
+
+def at(minutes: int) -> dict:
+    """게임 안의 시각을 응답의 모양으로(1일째 0시부터 흐른 분)."""
+    time = read_time(minutes)
+    return {'day': time.day, 'hour': time.hour, 'minute': time.minute, 'time_of_day': time.time_of_day.value}
 
 
 # --- 규칙의 모양 ---
@@ -260,22 +286,35 @@ def test_the_mishap_table_gives_the_row_of_the_roll(roll: int, kind: Mishap, rou
     assert (rolled.roll, rolled.kind, rolled.rounds, rolled.magnitude) == (roll, kind, rounds, magnitude)
 
 
-def test_treatment_moves_the_day_of_healing():
+def test_treatment_moves_the_time_of_healing():
     arm = find_injury(SRD5, 'broken_arm')
 
-    assert shortened(31, arm) == 21
-    assert not is_healed(21, 1)
-    assert is_healed(1, 1)
-    assert is_healed(-4, 1)
-    assert lengthened(31, roll_mishap(SRD5, ScriptedDice([WORSEN]))) == 36
-    assert lengthened(31, roll_mishap(SRD5, ScriptedDice([PAIN]))) == 31
+    # 10 라운드 × 기본 걸음 10분
+    assert shortened(ARM_HEALS, arm, STEP) == ARM_HEALS - 100
+    # 기본 걸음이 한 시간인 판이면 열 시간
+    assert shortened(ARM_HEALS, arm, 60) == ARM_HEALS - 600
+    assert not is_healed(ARM_HEALS - 100, SCENE_END)
+    assert is_healed(SCENE_END, SCENE_END)
+    assert is_healed(SCENE_END - 40, SCENE_END)
+    assert lengthened(ARM_HEALS, roll_mishap(SRD5, ScriptedDice([WORSEN])), STEP) == ARM_HEALS + 50
+    assert lengthened(ARM_HEALS, roll_mishap(SRD5, ScriptedDice([PAIN])), STEP) == ARM_HEALS
 
 
 def test_only_lasting_injuries_with_a_table_leave_aftermath():
     assert roll_aftermath(find_injury(SRD5, 'broken_arm'), ScriptedDice([CROOKED])).injury == 'crooked_arm'
     assert roll_aftermath(find_injury(SRD5, 'stunned'), ScriptedDice([])) is None
     assert roll_aftermath(find_injury(SRD5, 'lost_eye'), ScriptedDice([])) is None
-    assert ends_after(find_injury(SRD5, 'leg_wound'), 4) == 24
+
+
+def test_a_lasting_injury_heals_by_game_time_and_not_by_rounds():
+    leg = find_injury(SRD5, 'leg_wound')
+
+    # 20 라운드 × 10분 뒤
+    assert heals_at(leg, OPENED, STEP) == OPENED + 200
+    assert ends_after(leg, 4) is None
+    # 짧은 것과 결손은 나을 시각이 없다
+    assert heals_at(find_injury(SRD5, 'stunned'), OPENED, STEP) is None
+    assert heals_at(find_injury(SRD5, 'lost_eye'), OPENED, STEP) is None
 
 
 def test_a_treatment_names_one_patient_and_no_ability():
@@ -437,14 +476,16 @@ async def test_a_successful_treatment_brings_healing_closer(
         'difficulty': 'hard',
         'patient': {'user_id': str(ME), 'character_name': '엘프', 'entry_id': None, 'name': None},
         'treated': True,
-        'heals_after': 21,
+        'heals_at': at(ARM_HEALS - TREATED),
+        # 이 장면이 끝난 뒤(8시 10분)부터 11시 20분까지
+        'minutes_left': ARM_HEALS - TREATED - SCENE_END,
         'healed': False,
         'aftermath': None,
         'mishap': None,
         'died': False,
     }
     assert (await sheet_of(client, me, world['table']))['injuries'] == [
-        {'injury': 'broken_arm', 'round': 1, 'ends_after_round': 21}
+        {'injury': 'broken_arm', 'round': 1, 'ends_after_round': None, 'heals_at': at(ARM_HEALS - TREATED)}
     ]
     assert dice.remaining == 0
     (rolled,) = await events_of(client, me, world['table'], 'check_rolled')
@@ -471,21 +512,23 @@ async def test_a_treatment_that_reaches_today_heals_and_rolls_aftermath(
     client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession
 ):
     world = await start_table(client, me)
-    await wound(session, world['table'], ends_after_round=5)
+    # 9시에 낫는다. 100분 앞당기면 7시 20분이라 이 장면(8시 10분까지) 안에 닿는다
+    await wound(session, world['table'], heals_at=OPENED + 60)
     dice = load_dice(app, [20, CROOKED])
 
     closing = await declare(client, me, world['table'], TREAT, treating())
 
     result = treated(closing)
-    assert (result['healed'], result['heals_after']) == (True, None)
+    assert (result['healed'], result['heals_at']) == (True, None)
     assert result['aftermath'] == {
         'trigger': 'aftermath',
         'roll': CROOKED,
         'injury': 'crooked_arm',
         'ends_after_round': None,
+        'heals_at': None,
     }
     assert (await sheet_of(client, me, world['table']))['injuries'] == [
-        {'injury': 'crooked_arm', 'round': 1, 'ends_after_round': None}
+        {'injury': 'crooked_arm', 'round': 1, 'ends_after_round': None, 'heals_at': None}
     ]
     arm, crooked = await injury_rows(session)
     assert arm.ended_at is not None
@@ -497,7 +540,7 @@ async def test_healing_by_treatment_is_recorded_in_order(
     client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession
 ):
     world = await start_table(client, me)
-    await wound(session, world['table'], ends_after_round=5)
+    await wound(session, world['table'], heals_at=OPENED + 60)
     load_dice(app, [20, CROOKED])
 
     await declare(client, me, world['table'], TREAT, treating())
@@ -512,7 +555,7 @@ async def test_healing_by_treatment_is_recorded_in_order(
         'character_name': '엘프',
         'injury': 'broken_arm',
         'treated': True,
-        'heals_after': None,
+        'heals_at': None,
         'healed': True,
         'mishap': None,
         'died': False,
@@ -527,7 +570,7 @@ async def test_a_clean_aftermath_leaves_nothing(
     client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession
 ):
     world = await start_table(client, me)
-    await wound(session, world['table'], ends_after_round=5)
+    await wound(session, world['table'], heals_at=OPENED + 60)
     load_dice(app, [20, CLEAN])
 
     closing = await declare(client, me, world['table'], TREAT, treating())
@@ -539,7 +582,7 @@ async def test_a_clean_aftermath_leaves_nothing(
 
 async def test_an_npc_can_be_treated(client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession):
     world = await start_table(client, me)
-    await wound(session, world['table'], 'leg_wound', 21, npc=world['lady'])
+    await wound(session, world['table'], 'leg_wound', OPENED + 200, npc=world['lady'])
     load_dice(app, [15])
 
     closing = await declare(client, me, world['table'], TREAT, treating('leg_wound', npc=world['lady']['id']))
@@ -551,9 +594,9 @@ async def test_an_npc_can_be_treated(client: AsyncClient, app: FastAPI, me: dict
         'entry_id': world['lady']['id'],
         'name': '악역영애',
     }
-    assert (result['difficulty'], result['heals_after']) == ('medium', 11)
+    assert (result['difficulty'], result['heals_at']) == ('medium', at(OPENED + 100))
     (row,) = await injury_rows(session)
-    assert row.ends_after_round == 11
+    assert row.heals_at == OPENED + 100
     assert (await people(client, me, world['table']))['people'][0]['injuries'] == ['leg_wound']
 
 
@@ -561,21 +604,21 @@ async def test_a_friend_can_be_treated(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], session: AsyncSession
 ):
     world = await start_table(client, me, friend)
-    await wound(session, world['table'], 'leg_wound', 21, user_id=FRIEND)
+    await wound(session, world['table'], 'leg_wound', OPENED + 200, user_id=FRIEND)
     load_dice(app, [15])
 
     await declare(client, me, world['table'], TREAT, treating('leg_wound', target=str(FRIEND)))
     closing = await declare(client, friend, world['table'], REST)
 
     assert treated(closing)['patient']['character_name'] == '드워프 기사'
-    assert (await sheet_of(client, me, world['table'], 1))['injuries'][0]['ends_after_round'] == 11
+    assert (await sheet_of(client, me, world['table'], 1))['injuries'][0]['heals_at'] == at(OPENED + 100)
 
 
 async def test_the_second_healer_finds_nothing_left_to_treat(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], session: AsyncSession
 ):
     world = await start_table(client, me, friend)
-    await wound(session, world['table'], ends_after_round=5)
+    await wound(session, world['table'], heals_at=OPENED + 60)
     # 내가 먼저 고친다(들어온 순서). 친구는 실패했지만 치료할 것이 없어 실패 표를 굴리지 않는다
     dice = load_dice(app, [20, CLEAN, 1])
 
@@ -598,7 +641,10 @@ async def test_both_healers_can_bring_healing_closer(
     await declare(client, me, world['table'], TREAT, treating())
     closing = await declare(client, friend, world['table'], TREAT, treating(target=str(ME)))
 
-    assert [treated(closing, index)['heals_after'] for index in (0, 1)] == [21, 11]
+    assert [treated(closing, index)['heals_at'] for index in (0, 1)] == [
+        at(ARM_HEALS - TREATED),
+        at(ARM_HEALS - 2 * TREATED),
+    ]
 
 
 async def test_a_patient_who_left_is_not_treated(
@@ -631,8 +677,14 @@ async def test_a_failure_can_change_nothing(
     closing = await declare(client, me, world['table'], TREAT, treating())
 
     result = treated(closing)
-    assert result['mishap'] == {'roll': NOTHING, 'kind': 'nothing', 'rounds': None, 'magnitude': None}
-    assert (result['heals_after'], result['healed']) == (31, False)
+    assert result['mishap'] == {
+        'roll': NOTHING,
+        'kind': 'nothing',
+        'rounds': None,
+        'delay_minutes': None,
+        'magnitude': None,
+    }
+    assert (result['heals_at'], result['healed']) == (at(ARM_HEALS), False)
     assert closing['declarations'][0]['outcome']['effect'] is None
 
 
@@ -641,18 +693,18 @@ async def test_a_failure_can_make_it_worse_and_hurt_without_a_new_injury(
 ):
     world = await start_table(client, me)
     await wound(session, world['table'])
-    # 크게 덧남: 10 라운드 늦어지고 보통(1d8) 피해. 6 은 최대 HP 의 절반이 넘지만 부상 표를 굴리지 않는다
+    # 크게 덧남: 10 라운드(100분) 늦어지고 보통(1d8) 피해. 6 은 최대 HP 의 절반이 넘지만 부상 표를 굴리지 않는다
     dice = load_dice(app, [1, WORSEN_BADLY, 6])
 
     closing = await declare(client, me, world['table'], TREAT, treating())
 
-    assert treated(closing)['heals_after'] == 41
+    assert treated(closing)['heals_at'] == at(ARM_HEALS + 100)
     effect = closing['declarations'][0]['outcome']['effect']
     assert (effect['kind'], effect['magnitude'], effect['amount'], effect['after']) == ('damage', 'moderate', 6, 4)
     assert effect['injury_roll'] is None
     assert dice.remaining == 0
     (row,) = await injury_rows(session)
-    assert row.ends_after_round == 41
+    assert row.heals_at == ARM_HEALS + 100
 
 
 async def test_a_failure_can_make_it_worse_without_hurting(
@@ -664,8 +716,9 @@ async def test_a_failure_can_make_it_worse_without_hurting(
 
     closing = await declare(client, me, world['table'], TREAT, treating())
 
-    assert treated(closing)['heals_after'] == 36
-    assert treated(closing)['mishap']['rounds'] == 5
+    assert treated(closing)['heals_at'] == at(ARM_HEALS + 50)
+    assert (treated(closing)['mishap']['rounds'], treated(closing)['mishap']['delay_minutes']) == (5, 50)
+    assert treated(closing)['minutes_left'] == ARM_HEALS + 50 - SCENE_END
     assert closing['declarations'][0]['outcome']['effect'] is None
 
 
@@ -676,7 +729,7 @@ async def test_a_failure_can_just_hurt(client: AsyncClient, app: FastAPI, me: di
 
     closing = await declare(client, me, world['table'], TREAT, treating())
 
-    assert treated(closing)['heals_after'] == 31
+    assert treated(closing)['heals_at'] == at(ARM_HEALS)
     effect = closing['declarations'][0]['outcome']['effect']
     assert (effect['magnitude'], effect['amount'], effect['after']) == ('light', 3, 7)
     (changed,) = await events_of(client, me, world['table'], 'hp_changed')
@@ -692,7 +745,7 @@ async def test_a_failure_can_kill(client: AsyncClient, app: FastAPI, me: dict[st
     closing = await declare(client, me, world['table'], TREAT, treating())
 
     result = treated(closing)
-    assert (result['died'], result['heals_after']) == (True, None)
+    assert (result['died'], result['heals_at']) == (True, None)
     sheet = await sheet_of(client, me, world['table'])
     assert (sheet['hp'], sheet['dead']) == (0, True)
     (died,) = await events_of(client, me, world['table'], 'character_died')
@@ -732,7 +785,7 @@ async def test_a_patient_who_died_earlier_in_the_round_is_not_treated(
     closing = await declare(client, friend, world['table'], TREAT, treating(npc=world['lady']['id']))
 
     second = treated(closing, 1)
-    assert (second['treated'], second['heals_after']) == (False, None)
+    assert (second['treated'], second['heals_at']) == (False, None)
     assert dice.remaining == 0
 
 
@@ -771,7 +824,8 @@ async def test_a_lasting_injury_heals_on_its_day_with_aftermath(
     world = await start_table(client, me)
     narrator = RecordingNarrator()
     app.state.narrator = narrator
-    await wound(session, world['table'], ends_after_round=2)
+    # 2 라운드의 장면이 끝나는 8시 20분에 낫는다. 1 라운드의 장면은 8시 10분에 끝나 아직이다
+    await wound(session, world['table'], heals_at=SCENE_END + STEP)
     load_dice(app, [])
     await declare(client, me, world['table'], REST)
     await narrated()
@@ -782,7 +836,7 @@ async def test_a_lasting_injury_heals_on_its_day_with_aftermath(
 
     assert dice.remaining == 0
     assert (await sheet_of(client, me, world['table']))['injuries'] == [
-        {'injury': 'crooked_arm', 'round': 2, 'ends_after_round': None}
+        {'injury': 'crooked_arm', 'round': 2, 'ends_after_round': None, 'heals_at': None}
     ]
     (ended,) = await events_of(client, me, world['table'], 'injury_ended')
     (gained,) = await events_of(client, me, world['table'], 'injury_gained')
@@ -800,7 +854,7 @@ async def test_an_npc_out_of_the_scene_heals_without_an_event(
     world = await start_table(client, me)
     app.state.narrator = RecordingNarrator()
     # 드워프는 장면에 나오지 않는다. 부를 이름이 없어 이벤트는 적지 않지만 낫기는 한다
-    await wound(session, world['table'], 'leg_wound', 2, npc=world['dwarf'])
+    await wound(session, world['table'], 'leg_wound', SCENE_END + STEP, npc=world['dwarf'])
     load_dice(app, [])
     await declare(client, me, world['table'], REST)
     await narrated()
@@ -822,9 +876,9 @@ async def test_the_injuries_of_the_dead_stay_as_they_were(
 ):
     world = await start_table(client, me, friend)
     app.state.narrator = RecordingNarrator()
-    await wound(session, world['table'], ends_after_round=2, user_id=FRIEND)
+    await wound(session, world['table'], heals_at=SCENE_END + STEP, user_id=FRIEND)
     # 내 기절도 같은 때 풀린다. 풀 것이 있어 부상을 정리하는 길을 탄다
-    await wound(session, world['table'], 'stunned', 2)
+    await wound(session, world['table'], 'stunned', None, ends_after_round=2)
     await session.execute(
         text('UPDATE table_sheets SET hp = 0, died_at = :now WHERE user_id = :user_id'),
         {'now': datetime.now(UTC), 'user_id': FRIEND},
@@ -840,6 +894,48 @@ async def test_the_injuries_of_the_dead_stay_as_they_were(
     arm, stunned = await injury_rows(session)
     assert (arm.ended_at, stunned.ended_at is not None) == (None, True)
     assert dice.remaining == 0
+
+
+async def test_a_night_of_rest_heals_what_ten_minute_rounds_would_not(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession, narrated
+):
+    world = await start_table(client, me)
+    app.state.narrator = RecordingNarrator()
+    await wound(session, world['table'])
+    load_dice(app, [])
+    await declare(client, me, world['table'], REST)
+    await narrated()
+
+    # 방장이 "하룻밤 쉰다"를 정했다. 2 라운드의 장면은 8시 10분에 시작해 16시 10분에 끝난다. 13시에 낫는 팔이 낫는다
+    stepped = await client.put(table_url(world['table'], '/clock/step'), json={'minutes': 8 * 60}, headers=me)
+    dice = load_dice(app, [CLEAN])
+    await declare(client, me, world['table'], REST)
+    await narrated()
+
+    assert stepped.status_code == status.HTTP_200_OK, stepped.text
+    assert dice.remaining == 0
+    (row,) = await injury_rows(session)
+    assert row.ended_at is not None
+    (ended,) = await events_of(client, me, world['table'], 'injury_ended')
+    assert (ended['payload']['round'], ended['payload']['reason']) == (2, 'healed')
+
+
+async def test_ten_minute_rounds_do_not_heal_a_broken_arm_soon(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession, narrated
+):
+    world = await start_table(client, me)
+    app.state.narrator = RecordingNarrator()
+    await wound(session, world['table'])
+    load_dice(app, [])
+
+    for _ in range(3):
+        await declare(client, me, world['table'], REST)
+        await narrated()
+
+    # 세 라운드가 지나도 8시 40분이다. 팔은 13시에 낫는다
+    (row,) = await injury_rows(session)
+    assert (row.ended_at, row.heals_at) == (None, ARM_HEALS)
+    assert (await sheet_of(client, me, world['table']))['injuries'][0]['heals_at'] == at(ARM_HEALS)
 
 
 # --- 서술 ---
@@ -860,9 +956,10 @@ async def test_the_narrator_hears_of_the_treatment(
     (request,) = narrator.requests
     verdict = request.moves[0].verdict
     assert (verdict.ability, verdict.difficulty) == ('지혜', '어려움')
-    assert verdict.treatment == TreatmentNote(injury='팔 골절', patient='엘프', rounds_left=20)
+    # 11시 20분에 낫는다. 이 장면이 끝나는 8시 10분부터 3시간 10분
+    assert verdict.treatment == TreatmentNote(injury='팔 골절', patient='엘프', minutes_left=190)
     text_ = '\n'.join(message.content for message in prompt.build_messages(request))
-    assert '→ 엘프의 팔 골절 치료: 앞당겨짐, 낫기까지 20 라운드' in text_
+    assert '→ 엘프의 팔 골절 치료: 앞당겨짐, 낫기까지 3시간 10분' in text_
 
 
 @pytest.mark.parametrize(
@@ -874,8 +971,13 @@ async def test_the_narrator_hears_of_the_treatment(
             '→ 엘프의 팔 골절 치료: 다 나음. 후유증: 굽은 팔',
         ),
         (
-            TreatmentNote(injury='팔 골절', patient='엘프', mishap='worsen', worsened_by=5, rounds_left=35),
-            '→ 엘프의 팔 골절 치료 실패: 상처가 덧남, 5 라운드 늦어짐, 낫기까지 35 라운드',
+            TreatmentNote(injury='팔 골절', patient='엘프', mishap='worsen', worsened_minutes=50, minutes_left=350),
+            '→ 엘프의 팔 골절 치료 실패: 상처가 덧남, 50분 늦어짐, 낫기까지 5시간 50분',
+        ),
+        # 이 장면 안에 나을 것이면 남은 시간을 적지 않는다
+        (
+            TreatmentNote(injury='팔 골절', patient='엘프', mishap='nothing', minutes_left=0),
+            '→ 엘프의 팔 골절 치료 실패: 별일 없음',
         ),
         (
             TreatmentNote(injury='팔 골절', patient='엘프', mishap='fatal', died=True),
@@ -916,7 +1018,7 @@ async def test_narrating_again_does_not_treat_again(
     assert again.status_code == status.HTTP_202_ACCEPTED
     assert dice.remaining == 1
     (row,) = await injury_rows(session)
-    assert row.ends_after_round == 21
+    assert row.heals_at == ARM_HEALS - TREATED
     assert narrator.requests[0] == narrator.requests[1]
 
 
@@ -975,3 +1077,39 @@ async def test_the_migration_fills_old_rulebooks_with_the_template_treatment(
 
     rules = await session.scalar(text('SELECT rules FROM rulebooks'))
     assert rules == SRD5.model_dump(mode='json')
+
+
+async def test_the_clock_migration_moves_lasting_injuries_to_a_time_of_healing(
+    client: AsyncClient, me: dict[str, str], session: AsyncSession
+):
+    migration = load_migration('injury_heals_at')
+    world = await start_table(client, me)
+    # 시간으로 낫기 전에 입은 것들. 팔은 31 라운드가 닫힐 때 나을 것이었다. 기절은 짧은 것이라 그대로다
+    await wound(session, world['table'], heals_at=None, ends_after_round=31)
+    await wound(session, world['table'], 'stunned', None, ends_after_round=3)
+    await wound(session, world['table'], 'lost_eye', None)
+
+    await session.execute(text(migration.TO_MINUTES))
+    await session.commit()
+
+    arm, stunned, eye = await injury_rows(session)
+    # 지금 1 라운드(8시). 31 라운드가 닫힐 때의 장면 끝은 8시 + 31 × 10분
+    assert (arm.ends_after_round, arm.heals_at) == (None, OPENED + 31 * STEP)
+    assert (stunned.ends_after_round, stunned.heals_at) == (3, None)
+    assert (eye.ends_after_round, eye.heals_at) == (None, None)
+
+    await session.execute(text(migration.TO_ROUNDS))
+    await session.commit()
+
+    arm, stunned, eye = await injury_rows(session)
+    # 되돌리면 같은 라운드로 돌아온다
+    assert (arm.ends_after_round, arm.heals_at) == (31, None)
+
+
+async def test_the_database_refuses_both_a_round_and_a_time(
+    client: AsyncClient, me: dict[str, str], session: AsyncSession
+):
+    world = await start_table(client, me)
+
+    with pytest.raises(IntegrityError):
+        await wound(session, world['table'], heals_at=ARM_HEALS, ends_after_round=31)
