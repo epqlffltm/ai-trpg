@@ -215,6 +215,22 @@ def describe_search(note: SearchNote) -> str:
     return f'(찾기: 길을 찾아냈다. {", ".join(note.found)}(으)로 이어진다)'
 
 
+def lost_before_acting(move: Move) -> str | None:
+    """
+    선언을 냈지만 차례가 오기 전에 죽거나 쓰러져 하지 못했으면 그 말. 아니면 None.
+
+    앞사람의 치료가 실패해 그 자리에서 죽었거나, 앞 차례의 몬스터에게 쓰러졌다(app/rounds/judging.py 의 lost_turn).
+    죽은 것은 그 칸(lost_turn)이 생기기 전에 굳힌 것도 알아본다. 판정과 지목의 결과가 없고 죽어 있으면 그렇다.
+    """
+    if not move.content:
+        return None
+    if move.dead and move.verdict is None and move.naming is None:
+        return '(하려던 일을 하기 전에 죽었다)'
+    if move.lost_turn == 'downed':
+        return '(하려던 일을 하기 전에 쓰러졌다)'
+    return None
+
+
 def describe_move(move: Move) -> str:
     """
     한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, 치료였으면 그 결과를,
@@ -225,9 +241,9 @@ def describe_move(move: Move) -> str:
     서 있는 곳의 출구와 숨긴 길은 붙이지 않는다. 이 줄은 가짜 서술자가 장면으로 그대로 내보낸다(PlaceNote).
     """
     parts = [f'{move.character_name}: {move.content or describe_idle(move)}']
-    # 선언을 냈지만 앞사람의 치료가 실패해 그 자리에서 죽었다. 선언한 일을 하지 못했다
-    if move.content and move.dead and move.verdict is None and move.naming is None:
-        parts.append('(하려던 일을 하기 전에 죽었다)')
+    lost = lost_before_acting(move)
+    if lost is not None:
+        parts.append(lost)
     if move.verdict is not None:
         parts.append(describe_verdict(move.verdict))
         if move.verdict.treatment is not None:

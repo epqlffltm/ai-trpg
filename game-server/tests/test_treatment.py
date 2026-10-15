@@ -714,7 +714,7 @@ async def test_a_character_killed_by_a_failed_treatment_does_not_act(
     )
 
     assert treated(closing)['died'] is True
-    assert closing['declarations'][1]['outcome'] is None
+    assert closing['declarations'][1]['outcome'] == {'turn_lost': 'dead'}
     assert dice.remaining == 0
     move = Move(character_name='드워프 기사', content=REST, dead=True)
     assert describe_move(move) == '드워프 기사: 숨을 고른다. (하려던 일을 하기 전에 죽었다)'

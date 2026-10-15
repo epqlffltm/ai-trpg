@@ -7,6 +7,7 @@
 열려 있는 동안에는 남의 선언이 보이지 않아야 하는데, 이벤트는 앉은 사람 모두가 읽기 때문이다.
 판정, HP 의 변화, 부상, 치료, 지목, 죽음의 굴림은 이미 끝나 있다(app/rounds/judging.py). 여기서는 적기만 한다.
 일은 원인으로 잇는다(cause). 행동 → 판정 → 치료 → HP 의 변화 → 부상의 차례다. 지목은 행동 → 지목의 결과다.
+몬스터의 차례는 몬스터의 공격 → HP 의 변화 → 부상이다. 맞붙은 몬스터가 있던 라운드는 차례 순서로 적는다.
 엔진이 한 일은 행한 사람(actor_id)을 적지 않는다. 주사위를 굴리고 상태를 바꾼 것은 플레이어가 아니라 엔진이다.
 """
 
@@ -22,7 +23,7 @@ from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.models import Declaration, Round
 from app.rounds.state import find_declaration, has_outcome, item_give_of, item_use_of, move_of, naming_of, search_of
-from app.tables.models import DeathCause, GameTable, InjurySource
+from app.tables.models import DeathCause, GameTable, InjurySource, TableMember
 
 
 def record_check(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
@@ -225,39 +226,90 @@ def record_search(session: AsyncSession, table: GameTable, declaration: Declarat
     recorder.record(session, table, EventType.PLACE_SEARCHED, payload=payload, cause=cause)
 
 
+def record_declaration(
+    session: AsyncSession, table: GameTable, round_: Round, member: TableMember, group: uuid.UUID
+) -> None:
+    """
+    한 사람의 선언을 이벤트로 적는다.
+    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기가 있었으면 행동 바로 뒤에 그 결과를 적는다.
+
+    선언을 내지 않았으면 적지 않는다. 판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
+    차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면(turn_lost) 행동만 적는다. 굴린 것이 없다.
+    """
+    declaration = find_declaration(round_, member.user_id)
+    if declaration is None:
+        return
+    payload = {
+        'round': round_.number,
+        'character_name': member.character_name,
+        'content': declaration.content,
+        'action': declaration.action,
+    }
+    acted = recorder.record(
+        session, table, EventType.PLAYER_ACTION, actor_id=member.user_id, payload=payload, group=group
+    )
+    if has_outcome(declaration):
+        record_check(session, table, declaration, cause=acted)
+    elif naming_of(declaration) is not None:
+        record_naming(session, table, declaration, cause=acted)
+    elif item_use_of(declaration) is not None:
+        record_item_use(session, table, declaration, cause=acted)
+    elif item_give_of(declaration) is not None:
+        record_item_give(session, table, declaration, cause=acted)
+    elif move_of(declaration) is not None:
+        record_move(session, table, declaration, cause=acted)
+    elif search_of(declaration) is not None:
+        record_search(session, table, declaration, cause=acted)
+
+
+def record_monster_turn(
+    session: AsyncSession, table: GameTable, round_number: int, turn: dict, group: uuid.UUID
+) -> None:
+    """
+    몬스터 한 마리의 차례를 이벤트로 적는다. 공격했으면 monster_attacked, 맞혔으면 그 뒤에 HP 의 변화와 부상이다.
+
+    움직이지 못한 차례(skipped)는 적지 않는다. 굴린 것도 바뀐 것도 없다. 까닭은 라운드의 turns 에 있다.
+    행한 사람(actor_id)을 적지 않는다. 몬스터를 움직인 것은 엔진이다.
+    """
+    outcome = turn['outcome']
+    if 'skipped' in outcome:
+        return
+    payload = {
+        'round': round_number,
+        'monster_id': turn['monster_id'],
+        'name': turn['name'],
+        **{key: value for key, value in outcome.items() if key != 'effect'},
+    }
+    attacked = recorder.record(session, table, EventType.MONSTER_ATTACKED, payload=payload, group=group)
+    effect = outcome['effect']
+    if effect is not None:
+        changed = record_hp_change(session, table, effect, cause=attacked)
+        holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
+        record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
+
+
 def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
     """
-    닫히는 라운드의 선언을 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다. 서술자가 받는 것과 같다.
+    닫히는 라운드의 선언과 몬스터의 차례를 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다.
 
-    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기가 있었던 선언은 행동 바로 뒤에 그 결과를 적는다.
-    판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
+    차례가 있었으면(round_.turns) 차례 순서로 적는다. 다시 볼 때 일어난 순서대로 읽혀야 한다.
+    행동이 없는 선언은 차례가 없다. 차례들 뒤에 앉은 순서로 적는다.
+    차례가 없었으면(맞붙은 몬스터가 없었으면) 앉은 순서로 적는다.
     선언을 내지 않은 사람은 적지 않는다. 누가 안 냈는지는 라운드가 닫힌 이벤트에 적힌다.
     """
-    for member in table.members:
-        declaration = find_declaration(round_, member.user_id)
-        if declaration is None:
+    members = {str(member.user_id): member for member in table.members}
+    done: set[str] = set()
+    for turn in round_.turns:
+        if turn['kind'] == 'monster':
+            record_monster_turn(session, table, round_.number, turn, group)
             continue
-        payload = {
-            'round': round_.number,
-            'character_name': member.character_name,
-            'content': declaration.content,
-            'action': declaration.action,
-        }
-        acted = recorder.record(
-            session, table, EventType.PLAYER_ACTION, actor_id=member.user_id, payload=payload, group=group
-        )
-        if has_outcome(declaration):
-            record_check(session, table, declaration, cause=acted)
-        elif naming_of(declaration) is not None:
-            record_naming(session, table, declaration, cause=acted)
-        elif item_use_of(declaration) is not None:
-            record_item_use(session, table, declaration, cause=acted)
-        elif item_give_of(declaration) is not None:
-            record_item_give(session, table, declaration, cause=acted)
-        elif move_of(declaration) is not None:
-            record_move(session, table, declaration, cause=acted)
-        elif search_of(declaration) is not None:
-            record_search(session, table, declaration, cause=acted)
+        member = members.get(turn['user_id'])
+        if member is not None:
+            record_declaration(session, table, round_, member, group)
+            done.add(turn['user_id'])
+    for member in table.members:
+        if str(member.user_id) not in done:
+            record_declaration(session, table, round_, member, group)
 
 
 def record_death(
