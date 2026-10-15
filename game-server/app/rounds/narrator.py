@@ -197,6 +197,49 @@ class ItemActionNote:
 
 
 @dataclass(frozen=True)
+class PlaceNote:
+    """
+    캐릭터가 서 있는 맵의 장소. 이 라운드의 행동까지 반영한 뒤의 것이다(app/tables/places.py).
+
+    exits 는 아는 길로 한 칸에 갈 수 있는 장소들의 이름이다. 판의 길 순서다.
+    hidden 은 그 장소에 닿은, 아직 찾지 않은 숨긴 길의 다른 끝의 이름이다. GM 만 안다. 플레이어도 방장도 모른다.
+    hidden 은 언어 모델의 맵 절(app/rounds/prompt.py)에만 싣는다. 한 일의 줄(describe_move)에는 싣지 않는다.
+    가짜 서술자는 그 줄을 장면으로 내보내므로, 거기 실으면 숨긴 길이 모두에게 새어 나간다.
+    """
+
+    name: str
+    exits: list[str] = field(default_factory=list)
+    hidden: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class TravelNote:
+    """
+    맵에서 한 칸 간 결과(app/rounds/map_actions.py). 엔진이 정한 것이다. 판정이 없다.
+
+    moved 가 거짓이면 가지 못했다. 까닭은 reason 이다(not_adjacent: 차례가 왔을 때 이어진 길이 없었다).
+    from_place 는 차례가 왔을 때 서 있던 곳이다. 맵 밖에 있었으면 None 이다.
+    """
+
+    from_place: str | None
+    to_place: str
+    moved: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class SearchNote:
+    """
+    숨긴 길을 찾은 결과(app/rounds/map_actions.py). 찾은 길이 이어지는 장소들의 이름이다. 못 찾았으면 비어 있다.
+
+    숨긴 길이 없는 곳과, 있는데 못 찾은 곳의 결과가 같다. 굴린 판정은 적혀 있지 않다.
+    """
+
+    place: str | None
+    found: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class Move:
     """한 캐릭터가 이번 라운드에 하겠다고 한 일과, 판정이 있었으면 그 결과."""
 
@@ -226,6 +269,12 @@ class Move:
     # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 가진 물건들. 판의 물건 순서다.
     # 서술자는 없는 물건을 쓰는 장면을 쓰지 않는다. 소지품을 바꾸는 것은 서버뿐이다
     items: list[ItemNote] = field(default_factory=list)
+    # 맵에서 가는 행동이면 그 결과, 찾는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
+    travel: TravelNote | None = None
+    search: SearchNote | None = None
+    # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 서 있는 맵의 장소. 맵이 없는 테이블이면 None 이다.
+    # 위치를 바꾸는 것은 서버뿐이다. 서술자는 다른 곳으로 옮기지 않는다
+    place: PlaceNote | None = None
 
 
 @dataclass(frozen=True)
@@ -588,12 +637,43 @@ def describe_items(items: list[ItemNote]) -> str:
     return ', '.join(item.name if item.count == 1 else f'{item.name} {item.count}개' for item in items)
 
 
+# 가지 못한 까닭을 서술자에게 주는 말
+TRAVEL_FAILURES = {'not_adjacent': '그쪽으로 이어진 길이 없었다'}
+
+
+def describe_travel(note: TravelNote) -> str:
+    """
+    맵에서 한 칸 간 결과를 한 줄로 적는다.
+
+    예: (간 곳: 성문 → 숲)
+        (가려던 곳: 광장. 그쪽으로 이어진 길이 없었다)
+    """
+    if not note.moved:
+        return f'(가려던 곳: {note.to_place}. {TRAVEL_FAILURES.get(note.reason, "가지 못했다")})'
+    start = f'{note.from_place} → ' if note.from_place else ''
+    return f'(간 곳: {start}{note.to_place})'
+
+
+def describe_search(note: SearchNote) -> str:
+    """
+    숨긴 길을 찾은 결과를 한 줄로 적는다. 찾지 못했으면 숨긴 길이 없었는지 있었는지 말하지 않는다.
+
+    예: (찾기: 숨은 길을 찾았다. 지하실로 이어진다)
+        (찾기: 찾은 것이 없다)
+    """
+    if not note.found:
+        return '(찾기: 찾은 것이 없다)'
+    return f'(찾기: 숨은 길을 찾았다. {", ".join(note.found)}(으)로 이어진다)'
+
+
 def describe_move(move: Move) -> str:
     """
     한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, 치료였으면 그 결과를,
     HP 가 바뀌었으면 그 뒤에 붙인다. 지목이었으면 그 결과를, 물건을 쓰거나 건넸으면 그 결과를 붙인다.
     죽음의 굴림을 굴렸으면 그 뒤에, 시간이 지나 나은 부상이 있으면 그 뒤에, 입고 있는 부상이 있으면 그 뒤에,
-    가진 물건이 있으면 맨 뒤에 붙인다.
+    가진 물건이 있으면 그 뒤에, 맵에 서 있으면 그 장소의 이름을 맨 뒤에 붙인다.
+    맵에서 가거나 찾았으면 물건의 결과 자리에 그 결과를 붙인다.
+    서 있는 곳의 출구와 숨긴 길은 붙이지 않는다. 이 줄은 가짜 서술자가 장면으로 그대로 내보낸다(PlaceNote).
     """
     parts = [f'{move.character_name}: {move.content or describe_idle(move)}']
     # 선언을 냈지만 앞사람의 치료가 실패해 그 자리에서 죽었다. 선언한 일을 하지 못했다
@@ -611,6 +691,10 @@ def describe_move(move: Move) -> str:
         parts.append(describe_naming(move.naming))
     if move.item_action is not None:
         parts.append(describe_item_action(move.item_action))
+    if move.travel is not None:
+        parts.append(describe_travel(move.travel))
+    if move.search is not None:
+        parts.append(describe_search(move.search))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
     if move.healed:
@@ -619,6 +703,8 @@ def describe_move(move: Move) -> str:
         parts.append(f'[입은 부상: {describe_injuries(move.injuries)}]')
     if move.items:
         parts.append(f'[소지품: {describe_items(move.items)}]')
+    if move.place is not None:
+        parts.append(f'[있는 곳: {move.place.name}]')
     return ' '.join(parts)
 
 
