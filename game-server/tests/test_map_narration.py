@@ -7,6 +7,7 @@
   - 한 일의 줄: 가기와 찾기의 결과, 서 있는 곳이 붙는다. 출구와 숨은 길은 붙지 않는다.
     가짜 서술자는 이 줄을 장면으로 그대로 내보낸다. 숨은 길이 여기 실리면 모두에게 새어 나간다.
   - 맵 절: 언어 모델의 프롬프트에만 있다. 장소마다 누가 섰는지, 아는 출구, 숨은 길(실마리로만).
+    찾기로 길을 찾은 라운드에는 그 길의 이름을 쓰라는 다루는 법이 붙는다(narration-21).
   - 테이블에서: 닫힐 때 굳히는 각자 한 일에 위치와 출구와 숨은 길이 들어간다. 이 라운드에 찾은 길은 출구가 된다.
   - 맵이 없는 테이블과 옛 라운드: 위치가 없고 맵 절도 없다. 굳혀 둔 옛 문서도 읽힌다.
 """
@@ -20,7 +21,7 @@ from app.assets.scenarios.snapshot import Snapshot
 from app.rounds.moves import MapView, place_note
 from app.rounds.narration_request import read_moves, to_search
 from app.rounds.narrator import Move, NarrationRequest, PlaceNote, SearchNote, TravelNote, describe_move
-from app.rounds.prompt import MAP_NOTE, MAP_TITLE, map_lines, round_text
+from app.rounds.prompt import FOUND_NOTE, MAP_NOTE, MAP_TITLE, map_line, map_lines, round_text
 from app.tables import places
 from tests import test_table_map as map_tables
 from tests.test_map_actions import FOUND, SEARCHING, going, load_dice, play
@@ -70,7 +71,8 @@ def test_a_line_tells_what_a_search_found_or_that_it_found_nothing():
     found = describe_move(Move('약사', '벽을 두드린다.', search=SearchNote(place='광장', found=['지하실'])))
     nothing = describe_move(Move('약사', '벽을 두드린다.', search=SearchNote(place='광장', found=[])))
 
-    assert found == '약사: 벽을 두드린다. (찾기: 숨은 길을 찾았다. 지하실(으)로 이어진다)'
+    # 찾은 길은 이제 아는 길이다. "숨은 길"이라 부르면 맵 절의 "숨은 길은 드러내지 마라"에 눌린다
+    assert found == '약사: 벽을 두드린다. (찾기: 길을 찾아냈다. 지하실(으)로 이어진다)'
     # 숨긴 길이 없었는지, 있는데 못 찾았는지 말하지 않는다
     assert nothing == '약사: 벽을 두드린다. (찾기: 찾은 것이 없다)'
 
@@ -124,6 +126,22 @@ def test_the_map_gathers_characters_by_place_with_exits_and_hints():
         '- 숲(약사): 나가는 길: 성문, 오두막',
         '',
     ]
+
+
+def test_the_rule_for_found_routes_comes_only_when_a_search_found_one():
+    found = Move('약사', '벽을 두드린다.', search=SearchNote(place='광장', found=['지하실']))
+    nothing = Move('약사', '벽을 두드린다.', search=SearchNote(place='광장', found=[]))
+
+    assert FOUND_NOTE in round_text(request_of(Move('기사', '둘러본다.'), found))
+    assert FOUND_NOTE not in round_text(request_of(nothing))
+    assert FOUND_NOTE not in round_text(request_of(Move('기사', '둘러본다.', place=AT_SQUARE)))
+
+
+def test_the_map_rule_keeps_only_the_listed_hidden_routes_secret():
+    # 넓게 막으면 찾은 길까지 쓰지 않는다(narration-21). 숨은 길이 없는 곳에는 실마리를 만들지 않는다
+    assert "'숨은 길'로 적힌 것만" in MAP_NOTE
+    assert "'숨은 길'이 적히지 않은 장소에는 그런 실마리를 만들지 마라" in MAP_NOTE
+    assert map_line('광장', ['기사'], ['성문'], ['지하실']).endswith('숨은 길(플레이어는 모름, 실마리로만): 지하실')
 
 
 def test_a_place_without_known_exits_says_so():

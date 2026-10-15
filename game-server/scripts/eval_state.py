@@ -3,13 +3,15 @@
 """
 서술이 엔진이 정한 상태를 지키는지 실제 언어 모델로 잰다(#111 ④). 서버도 DB 도 쓰지 않는다.
 
-장면은 evals/state/cases.py 에 있다. 쓰러진 NPC, 죽은 NPC, 부상(PC, NPC), 치료(다 나음, 덧남), 지목(틀림, 맞음).
+장면은 evals/state/cases.py 에 있다. 쓰러진 NPC, 죽은 NPC, 부상(PC, NPC), 치료(다 나음, 덧남), 지목(틀림, 맞음),
+맵(숨은 길 옆, 못 찾은 찾기, 찾은 찾기, 간 가기, 못 간 가기).
 장면마다 --repeat 번(기본 3) 서술하게 하고, 낱말로 어림하는 검사가 몇 번 걸렸는지 센다. 걸린 장면은 사람이 읽는다.
 한 번의 결과는 운일 수 있어서 여러 번 돌린다.
 
     uv run python -m scripts.eval_state
     uv run python -m scripts.eval_state --repeat 5 --out $HOME\\state-eval.md
     uv run python -m scripts.eval_state --case naming_wrong naming_right --repeat 10
+    uv run python -m scripts.eval_state --case map_hidden map_search_failed map_search_found --repeat 10
     uv run python -m scripts.eval_state --model gemma4:26b-a4b-it-qat qwen3.6:27b
     uv run python -m scripts.eval_state --fake
 

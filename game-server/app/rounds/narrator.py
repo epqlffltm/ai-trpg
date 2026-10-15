@@ -658,12 +658,14 @@ def describe_search(note: SearchNote) -> str:
     """
     숨긴 길을 찾은 결과를 한 줄로 적는다. 찾지 못했으면 숨긴 길이 없었는지 있었는지 말하지 않는다.
 
-    예: (찾기: 숨은 길을 찾았다. 지하실로 이어진다)
+    찾은 길은 이제 아는 길이라 "숨은 길"이라 부르지 않는다. 맵 절의 "숨은 길은 드러내지 마라"에 눌리지 않게 한다.
+
+    예: (찾기: 길을 찾아냈다. 지하실(으)로 이어진다)
         (찾기: 찾은 것이 없다)
     """
     if not note.found:
         return '(찾기: 찾은 것이 없다)'
-    return f'(찾기: 숨은 길을 찾았다. {", ".join(note.found)}(으)로 이어진다)'
+    return f'(찾기: 길을 찾아냈다. {", ".join(note.found)}(으)로 이어진다)'
 
 
 def describe_move(move: Move) -> str:
