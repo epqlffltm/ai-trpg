@@ -23,6 +23,7 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "test:e2e:cov": "vitest run --config ./vitest.config.e2e.ts --coverage",
     "typeorm": "typeorm -d dist/database/data-source.js",
     "migration:run": "npm run build && npm run typeorm -- migration:run",
     "migration:revert": "npm run build && npm run typeorm -- migration:revert",

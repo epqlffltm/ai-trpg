@@ -104,6 +104,7 @@ npm run test:e2e
 - `npm run build`: TypeScript 를 JavaScript 로 바꿔 `dist/`에 놓는다. 타입이 맞지 않으면 여기서 실패한다. 파이썬에는 없는 단계다.
 - `npm test`(vitest): `src/` 안의 `*.spec.ts`. 함수와 클래스를 하나씩 본다. 서버도 DB 도 쓰지 않는다.
 - `npm run test:e2e`: `test/` 안의 `*.e2e-spec.ts`. 앱을 통째로 만들어 주소로 불러 본다. 실제 PostgreSQL 에서 돈다.
+- `npm run test:cov`, `npm run test:e2e:cov`: 같은 테스트를 돌리며 지나간 줄의 비율(커버리지)도 잰다. 대상은 `src/` 전체(테스트와 마이그레이션은 빼고)이고, 테스트가 불러오지 않은 파일도 0% 로 센다. 결과는 `coverage/unit`, `coverage/e2e` 에 남는다(커밋하지 않는다).
 
 커밋하기 전에 다섯을 모두 돌린다.
 
@@ -555,7 +556,8 @@ PR과 `main` 푸시마다 GitHub Actions가 게시판 서버를 검사한다. `b
 6. 마이그레이션 적용 (`npm run migration:run`): 빈 DB 에 처음부터 끝까지 적용되는지 본다
 7. 마이그레이션 누락 검사 (`npm run migration:check`): 엔티티를 바꾸고 마이그레이션을 만들지 않았으면 실패한다
 8. 테스트용 스키마에 마이그레이션 적용
-9. 테스트 (`npm test`, `npm run test:e2e`)
+9. 테스트 (`npm run test:cov`, `npm run test:e2e:cov`): 두 테스트를 돌리며 지나간 줄을 따로 센다
+10. 커버리지 요약: 두 테스트의 합계를 작업 요약(Summary)에 적는다. 커버리지는 아직 재기만 한다. 기준(이 아래로 떨어지면 실패)은 몇 번 재 본 뒤에 건다(#27).
 
 ## 설계 메모
 

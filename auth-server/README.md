@@ -130,6 +130,13 @@ cd auth-server
 uv run python manage.py test
 ```
 
+테스트가 지나간 줄의 비율(커버리지)은 이렇게 본다. 재는 대상은 `pyproject.toml` 의 `[tool.coverage.run]` 이다(마이그레이션과 테스트는 뺀다).
+
+```
+uv run coverage run manage.py test
+uv run coverage report
+```
+
 테스트에서는 비밀번호 해셔를 가벼운 것으로 바꾼다(`config/test_runner.py`). 기본 해셔는 일부러
 느리게 만든 계산이라 가입과 로그인을 반복하는 테스트 시간의 대부분을 차지한다.
 당시 137개 기준 122.0초에서 4.5초로 줄었다. `runserver`와 측정 스크립트는 원래의 해셔를 쓴다.
@@ -339,7 +346,8 @@ PR과 `main` 푸시마다 GitHub Actions가 인증 서버를 검사한다. `auth
 6. 운영 설정의 배포 검사 (`check --deploy --fail-level WARNING`)
 7. 마이그레이션 누락 검사 (`makemigrations --check --dry-run`): 모델을 바꾸고
    마이그레이션을 만들지 않았으면 실패한다
-8. 테스트 (`manage.py test`)
+8. 테스트 (`coverage run manage.py test`): 테스트를 돌리며 지나간 줄을 센다
+9. 커버리지 요약: 합계와 덜 지나간 파일을 작업 요약(Summary)에 적는다. 커버리지는 아직 재기만 한다. 기준(이 아래로 떨어지면 실패)은 몇 번 재 본 뒤에 건다(#27).
 
 CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 계정으로 테스트한다.
 슈퍼유저로 테스트하면 권한 때문에 실패할 코드가 CI를 통과하기 때문이다.
