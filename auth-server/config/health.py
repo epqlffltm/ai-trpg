@@ -13,6 +13,13 @@ readiness 에 Redis 는 넣지 않는다. 시도 횟수 제한만 쓰고, 죽어
 없어도 일을 하는 것은 readiness 에 넣지 않는다.
 
 응답에는 status 하나만 싣는다. 왜 DB 에 닿지 않는지(오류의 글에는 DB 주소와 계정이 들어 있다)는 로그에만 남긴다.
+
+결제·게시판 서버와 달리 readiness 전체에 시간 제한(3초)을 걸지 않는다. 연결 시간(settings 의
+DATABASE_CONNECT_TIMEOUT_SECONDS, 5초)만 묶여 있다. 동기 Django(psycopg)에는 쿼리 하나만 시간으로 끊는 장치가 없다.
+  - statement_timeout 은 DB 가 살아서 느릴 때만 듣는다. DB 가 멈췄거나 네트워크가 끊겼을 때는 듣지 않는다
+  - 스레드로 떼어 놓고 기다리면 답을 늦출 수는 있지만, 멈춘 스레드는 끝나지 않고 쌓인다
+확인하는 쪽은 compose 의 healthcheck 가 묶는다(timeout 5초, 지나면 실패로 센다). 그동안 이 요청이 워커를 쥐는 것은
+같은 DB 앞의 보통 요청과 같다. docs/observability.md 의 "health 와 readiness" 에 같은 까닭이 있다.
 """
 
 import logging
