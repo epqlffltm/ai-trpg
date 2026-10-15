@@ -17,8 +17,9 @@ from app.ai.call_log import DbCallLog
 from app.ai.calls import CallLog
 from app.ai.openai_compat import OpenAICompatProvider
 from app.core.config import Settings
+from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.llm_narrator import LLMNarrator
-from app.rounds.narrator import FakeNarrator, Narrator
+from app.rounds.narrator import Narrator
 from app.rounds.retrying_narrator import RetryingNarrator
 from app.rounds.tiered_narrator import TieredNarrator
 from app.rounds.tiers import NarrationTier

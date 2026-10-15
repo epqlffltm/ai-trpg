@@ -21,7 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
-from app.rounds.narrator import Impact, ItemActionNote, describe_item_action
+from app.rounds.move_lines import describe_item_action
+from app.rounds.narrator import Impact, ItemActionNote
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 

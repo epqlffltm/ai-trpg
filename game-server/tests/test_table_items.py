@@ -23,8 +23,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.scenarios.snapshot import ItemStackSnapshot
 from app.main import API_PREFIX
 from app.rounds import prompt
+from app.rounds.move_lines import describe_items
 from app.rounds.narration_request import read_moves
-from app.rounds.narrator import ItemNote, Move, NarrationRequest, describe_items
+from app.rounds.narrator import ItemNote, Move, NarrationRequest
 from app.tables.items import starting_stacks
 from app.tables.models import TableItem
 from tests.sheets import SHEET

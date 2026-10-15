@@ -1271,7 +1271,8 @@ records.py      일어난 일을 이벤트로 적기
 선언을 마감하면(`closing` 부터) 모두의 것이 보인다. 판정의 결과도 그때 생겨 모두에게 보인다. 미리 맞추고 싶으면 채팅으로 이야기한다.
 
 **서술자.** GM 의 서술을 만드는 것은 모양(`Narrator`)과 구현으로 나뉘어 있다(`app/rounds/narrator.py`).
-지금 앱에 꽂힌 것은 AI 를 부르지 않는 가짜 서술자다. 선언과 판정의 결과, HP 의 변화를 그대로 늘어놓는다.
+AI 를 부르지 않는 가짜 서술자(`app/rounds/fake_narrator.py`)는 선언과 판정의 결과, HP 의 변화를 한 사람에 한 줄씩 그대로 늘어놓는다.
+그 한 줄을 만드는 법(`app/rounds/move_lines.py`)은 언어 모델의 프롬프트도 함께 쓴다. 장면으로 그대로 나가는 줄이라 모두가 알아도 되는 것만 싣는다.
 서술자는 글만 쓴다. 테이블의 상태를 바꾸지 않고, 선언이 성공했는지를 정하지 않는다.
 엔진이 정한 결과를 선언과 함께 받아 글로 옮긴다. 능력과 난이도는 규칙에 적힌 이름으로 받는다("근력", "보통").
 
@@ -1286,7 +1287,10 @@ app/ai/
   call_log.py         기록을 DB(ai_invocations)에 쓰는 기록장
   models.py           ai_invocations 표
 app/rounds/
+  narrator.py         서술자의 모양(Narrator)과 서술자에게 주는 것의 모양(NarrationRequest, Move …)
   narration_request.py  DB 의 라운드를 서술자에게 줄 모양으로 바꾼다. 각자 한 일을 라운드에 굳히고 다시 읽는다
+  move_lines.py       각자 한 일을 한 줄로 적는 순수 함수(describe_move …). 가짜 서술자와 프롬프트가 함께 쓴다
+  fake_narrator.py    AI 를 부르지 않는 가짜 서술자. 한 일의 줄을 그대로 늘어놓는다
   prompt.py           메시지를 조립하는 순수 함수. 틀의 버전(PROMPT_VERSION)
   llm_narrator.py     조립 → provider 호출 → 받은 글 검사 → 호출 기록
   narrator_setup.py   설정(NARRATOR)을 보고 앱에 꽂을 서술자를 고른다
