@@ -54,8 +54,12 @@ def occupied_places(table: GameTable) -> set[uuid.UUID]:
 
 
 def label_of(state: TableMonster, definition: MonsterSnapshot, counts: Counter[uuid.UUID]) -> str:
-    """이 마리를 부르는 이름. 같은 몬스터가 테이블에 둘 이상이면 이름 뒤에 번호를 붙인다(수로 쥐 2)."""
-    if counts[state.monster_id] > 1:
+    """
+    이 마리를 부르는 이름. 같은 몬스터가 테이블에 둘 이상이면 이름 뒤에 번호를 붙인다(수로 쥐 2).
+
+    네임드 몹은 판 전체에서 한 마리라 번호를 붙이지 않는다.
+    """
+    if not definition.unique and counts[state.monster_id] > 1:
         return f'{definition.name} {state.number}'
     return definition.name
 

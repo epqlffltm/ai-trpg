@@ -66,7 +66,7 @@ async def delete_bestiary(session: AsyncSession, owner_id: uuid.UUID, bestiary_i
 
 def build_monster(bestiary_id: uuid.UUID, data: MonsterCreate) -> Monster:
     """입력에서 몬스터 객체를 만든다. 아직 저장하지 않는다."""
-    return Monster(bestiary_id=bestiary_id, name=data.name, content=data.content, kind=data.kind)
+    return Monster(bestiary_id=bestiary_id, name=data.name, content=data.content, kind=data.kind, unique=data.unique)
 
 
 def apply_monster_changes(monster: Monster, data: MonsterUpdate) -> None:

@@ -19,12 +19,14 @@ from pydantic import (
 )
 
 from app.assets.models import (
+    ATTACK_NAME_MAX_LENGTH,
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
     DEFAULT_CHARACTER_MODES,
     DEFAULT_NARRATION_STYLE,
     ENCOUNTER_MAX_COUNT,
     ITEM_STACK_MAX,
+    MONSTER_MAX_ATTACKS,
     PLAYER_MADE_HP_MAX,
     SCENARIO_MAX_BESTIARIES,
     SCENARIO_MAX_ENCOUNTERS,
@@ -47,6 +49,7 @@ from app.assets.models import (
     QuestStart,
     Rating,
     RouteVisibility,
+    Surprise,
 )
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
@@ -202,6 +205,35 @@ NpcSheets = Annotated[
 ]
 
 
+class MonsterAttack(BaseModel):
+    """
+    몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.
+
+    이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    # 공격의 이름. 서술과 기록에 쓴다(물어뜯기)
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ATTACK_NAME_MAX_LENGTH)]
+    ability: Key
+    difficulty: Key
+    harm: Key
+
+
+def reject_duplicate_attacks(attacks: list[MonsterAttack]) -> list[MonsterAttack]:
+    """같은 이름의 공격이 둘이면 거부한다. 기록에서 어느 공격인지 알 수 없다."""
+    names = [attack.name for attack in attacks]
+    if len(set(names)) != len(names):
+        raise ValueError('같은 이름의 공격이 두 번 있습니다.')
+    return attacks
+
+
+MonsterAttacks = Annotated[
+    list[MonsterAttack], Field(max_length=MONSTER_MAX_ATTACKS), AfterValidator(reject_duplicate_attacks)
+]
+
+
 class MonsterSheet(BaseModel):
     """
     몬스터 시트 하나. 붙인 도감의 몬스터 하나(monster_id)에 숫자를 준다.
@@ -214,6 +246,8 @@ class MonsterSheet(BaseModel):
 
     monster_id: uuid.UUID
     sheet: Sheet
+    # 공격들. 비우면 공격하지 않는 몬스터다(겁먹은 짐승). 숫자와 같은 까닭으로 시나리오에 적는다(룰북의 이름표다)
+    attacks: MonsterAttacks = []
 
     @field_serializer('monster_id')
     def monster_id_as_text(self, monster_id: uuid.UUID) -> str:
@@ -247,6 +281,8 @@ class Encounter(BaseModel):
     place_id: uuid.UUID
     monster_id: uuid.UUID
     count: int = Field(ge=1, le=ENCOUNTER_MAX_COUNT)
+    # 누가 기습하는가. 적지 않으면 기습이 없다
+    surprise: Surprise = Surprise.NONE
 
     @field_serializer('place_id', 'monster_id')
     def id_as_text(self, value: uuid.UUID) -> str:

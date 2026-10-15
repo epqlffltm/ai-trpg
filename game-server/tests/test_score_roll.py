@@ -26,6 +26,7 @@ def rules(**changes) -> Ruleset:
 TWO_ABILITIES = rules(
     abilities=[{'key': 'body', 'name': '몸'}, {'key': 'mind', 'name': '마음'}],
     hp_ability='body',
+    initiative_ability='body',
     score_roll={'count': 2, 'sides': 10, 'keep': 2},
     **NO_INJURIES,
 )
