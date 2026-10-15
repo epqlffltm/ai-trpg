@@ -17,6 +17,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "coverage>=7.11.0",
     "ruff>=0.16.10",
 ]
 
@@ -28,3 +29,12 @@ extend-exclude = ["*/migrations/*"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["accounts", "config", "observability"]
+
+[tool.coverage.run]
+# 우리가 쓴 코드만 잰다. 테스트와 Django 가 만든 마이그레이션은 뺀다
+source = ["accounts", "config", "observability"]
+omit = ["*/migrations/*", "*/tests/*"]
+
+[tool.coverage.report]
+# 한 줄도 없는 파일(__init__.py)은 표에서 뺀다
+skip_empty = true

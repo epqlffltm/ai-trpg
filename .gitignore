@@ -9,3 +9,9 @@ db.sqlite3
 *.pem
 keys/
 trpg_key.txt
+
+# 커버리지를 잴 때 생기는 파일(파이썬의 coverage, Go 의 coverprofile)
+.coverage
+.coverage.*
+htmlcov/
+coverage.out

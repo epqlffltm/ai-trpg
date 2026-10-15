@@ -21,6 +21,7 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.0.0",
     "pyyaml>=6.0.3",
     "ruff>=0.16.10",
 ]
@@ -36,6 +37,14 @@ asyncio_default_test_loop_scope = "session"
 # 실패한 테스트의 기록을 짧게 찍는다. 기본(long)은 실패한 함수가 받은 인자의 값까지 찍는다.
 # DB 에 연결하다 실패하면 그 인자가 비밀번호가 든 접속 주소다
 addopts = "--tb=short"
+
+[tool.coverage.run]
+# 서버의 코드만 잰다. 테스트, 평가 도구(evals), 손으로 돌리는 스크립트는 뺀다
+source = ["app"]
+
+[tool.coverage.report]
+# 한 줄도 없는 파일(__init__.py)은 표에서 뺀다
+skip_empty = true
 
 [tool.ruff]
 # 규칙과 모양은 저장소 루트의 ruff.toml 을 따른다. 인증 서버와 같다

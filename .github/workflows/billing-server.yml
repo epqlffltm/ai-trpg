@@ -135,5 +135,26 @@ jobs:
       # -race 는 두 흐름이 같은 값을 동시에 건드리면 실패하게 한다. 공개키 캐시를 여러 요청이 함께 쓴다.
       # 테이블을 쓰는 테스트는 테스트용 스키마(billing_test)에 마이그레이션을 스스로 적용하고 돈다.
       # -timeout 은 멈춘 테스트를 기본값(10분)까지 기다리지 않고 끊는다
+      # -coverpkg 로 패키지를 건너 지나간 줄까지 센다. 그러지 않으면 sqlc 가 만든 패키지처럼
+      # 다른 패키지의 테스트로만 지나가는 코드가 0% 로 잡힌다
       - name: 테스트
-        run: go test -count=1 -race -timeout 120s ./...
+        run: go test -count=1 -race -timeout 120s -coverpkg=./... -coverprofile=coverage.out ./...
+
+      # 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 아직 기준을 걸지 않는다(재기만 한다).
+      # sqlc 가 만든 코드(internal/*/*db)와 테스트 도우미(internal/testenv)는 뺀다
+      - name: 커버리지 요약
+        run: |
+          grep -v -E '/internal/[a-z]+/[a-z]+db/|/internal/testenv/' coverage.out > coverage.filtered.out
+          total="$(go tool cover -func=coverage.filtered.out | awk '/^total:/ {print $NF}')"
+          echo "결제 서버 커버리지 ${total}"
+          {
+            echo "### 결제 서버 커버리지 ${total}"
+            echo
+            echo "<details><summary>덜 지나간 함수</summary>"
+            echo
+            echo '```'
+            go tool cover -func=coverage.filtered.out | grep -v '^total:' | awk '$NF != "100.0%"'
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
