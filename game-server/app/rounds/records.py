@@ -82,7 +82,7 @@ def record_treatment(session: AsyncSession, table: GameTable, treated: dict, cau
         **patient,
         'injury': treated['injury'],
         'treated': treated['treated'],
-        'heals_after': treated['heals_after'],
+        'heals_at': treated['heals_at'],
         'healed': treated['healed'],
         'mishap': treated['mishap'],
         'died': treated['died'],
@@ -117,6 +117,7 @@ def record_injury(
         'injury': injury_roll['injury'],
         'source': source_of(injury_roll),
         'ends_after_round': injury_roll['ends_after_round'],
+        'heals_at': injury_roll.get('heals_at'),
     }
     recorder.record(session, table, EventType.INJURY_GAINED, payload=payload, cause=cause)
 
