@@ -26,13 +26,11 @@ class Moment:
     round_number 는 닫히는 라운드의 번호다. 짧은 부상은 라운드로 센다.
     now 는 그 라운드가 열린 게임 안의 시각, scene_end 는 그 장면이 끝나는 시각이다(다음 라운드가 열릴 때).
     오래 가는 부상은 now 에 생기고, scene_end 가 나을 시각에 닿으면 낫는다.
-    round_minutes 는 판의 라운드 하나에 흐르는 기본 시간이다. 규칙에 라운드 수로 적힌 기간을 분으로 바꾼다.
     """
 
     round_number: int
     now: int
     scene_end: int
-    round_minutes: int
 
 
 def active(injuries: list[TableInjury]) -> list[TableInjury]:

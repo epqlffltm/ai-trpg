@@ -14,7 +14,7 @@ from app.tables.injuries import Moment
 from app.tables.models import TableInjury
 
 # 2 라운드. 8시 10분에 열려 하룻밤(8시간) 뒤인 16시 10분에 장면이 끝난다
-NIGHT = Moment(round_number=2, now=490, scene_end=490 + 8 * 60, round_minutes=10)
+NIGHT = Moment(round_number=2, now=490, scene_end=490 + 8 * 60)
 
 
 def lasting(heals_at: int, round_number: int = 1) -> TableInjury:

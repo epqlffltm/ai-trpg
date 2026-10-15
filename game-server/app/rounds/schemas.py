@@ -153,9 +153,7 @@ class MishapOut(BaseModel):
     roll: int
     # nothing(아무 일 없음), pain(좀 아픔), worsen(덧남), fatal(즉사)
     kind: str
-    # 덧남의 크기. 규칙에 적힌 라운드 수다. 덧남이 아니면 None 이다
-    rounds: int | None
-    # 덧나서 늦춰진 게임 안의 시간(분). 규칙의 라운드 수에 판의 기본 걸음을 곱했다. 덧남이 아니면 None 이다
+    # 덧나서 늦춰진 게임 안의 시간(분). 덧남이 아니면 None 이다
     delay_minutes: int | None = None
     # 피해의 등급. 피해가 없으면 None 이다. 피해는 effect 나 npc_effect 에 있다
     magnitude: str | None
