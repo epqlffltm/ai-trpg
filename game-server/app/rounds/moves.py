@@ -82,6 +82,7 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
                 downed=is_down(member),
                 death_save=narration_request.find_death_save(round_, member.user_id),
                 dead=sheets.is_dead(member),
+                lost_turn=declaration.outcome.get('turn_lost') if declaration and declaration.outcome else None,
                 replaces=arrival['replaces'] if arrival else None,
                 injuries=worn_notes(ruleset, member),
                 healed=healed_notes(ruleset, ended, member.user_id),

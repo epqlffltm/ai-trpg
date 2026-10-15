@@ -125,6 +125,17 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'lethal',
         'status',
     ),
+    # 몬스터의 공격은 무엇으로 누구를 쳤고 맞혔는지만 보인다.
+    # 굴림의 보정과 합은 몬스터의 능력치를 드러내서 싣지 않는다. 맞은 캐릭터의 HP 는 뒤따르는 hp_changed 에 있다
+    EventType.MONSTER_ATTACKED: (
+        'round',
+        'monster_id',
+        'name',
+        'attack',
+        'user_id',
+        'character_name',
+        'success',
+    ),
     # 부상은 공개다. 누가 무엇을 입었고 언제 풀리는지. 캐릭터면 user_id 와 이름, NPC 면 항목의 id 와 장면의 호칭이다
     EventType.INJURY_GAINED: (
         'round',

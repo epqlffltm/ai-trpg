@@ -256,6 +256,9 @@ class Move:
     death_save: DeathSaveNote | None = None
     # 이 캐릭터가 죽었는가. 이번 라운드에 죽었을 수도, 그 전에 죽었을 수도 있다
     dead: bool = False
+    # 선언을 냈지만 차례가 오기 전에 쓰러지거나 죽어 하지 못했으면 그 까닭(downed, dead). 아니면 None 이다
+    # (app/rounds/judging.py 의 lost_turn). 이 칸이 생기기 전에 굳힌 것은 None 이다
+    lost_turn: str | None = None
     # 이 캐릭터가 이번 라운드에 새로 들어왔으면, 같은 플레이어의 죽은 캐릭터의 이름. 아니면 None 이다.
     # 새로 들어온 캐릭터는 이번 라운드에 아무것도 하지 않았다. 다음 라운드부터 행동한다
     replaces: str | None = None

@@ -82,6 +82,9 @@ class EventType(enum.StrEnum):
     NPC_CHANGED = 'npc_changed'
     # 엔진이 몬스터 한 마리의 HP 와 생사를 바꿨다. 피해다. 원인은 그 판정의 이벤트다
     MONSTER_CHANGED = 'monster_changed'
+    # 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 공격으로 쳤다. 공격, 대상, 성패가 적힌다.
+    # 맞혔으면 그 캐릭터의 HP 의 변화가 이 이벤트를 원인으로 뒤따른다. 원인은 없다(엔진의 차례다)
+    MONSTER_ATTACKED = 'monster_attacked'
     # 캐릭터나 NPC 가 부상을 입었다. 큰 타격이나 쓰러짐에 부상 표를 굴렸거나(원인은 그 HP 의 변화의 이벤트다),
     # 노려 쳤거나, 오래 가는 부상이 나을 때 후유증 표를 굴렸다(원인은 그 부상이 끝난 이벤트다)
     INJURY_GAINED = 'injury_gained'
