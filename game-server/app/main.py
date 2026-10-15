@@ -28,6 +28,7 @@ from app.assets.worlds import router as worlds
 from app.auth.jwks import JwksCache
 from app.billing import settler
 from app.billing.setup import build_billing
+from app.calendar import router as calendar
 from app.chat import router as chat
 from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
@@ -243,6 +244,7 @@ def create_app(
     app.include_router(personas.router, prefix=API_PREFIX)
     app.include_router(tables.router, prefix=API_PREFIX)
     app.include_router(rounds.router, prefix=API_PREFIX)
+    app.include_router(calendar.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)
     app.include_router(chat.router, prefix=API_PREFIX)
     app.include_router(whispers.router, prefix=API_PREFIX)
