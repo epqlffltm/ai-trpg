@@ -31,8 +31,9 @@ from app.engine.action import NAME_GUESS_MAX_LENGTH, ActionKind, NameAction, rea
 from app.lore.retrieval import load_candidates, scene_labels
 from app.main import API_PREFIX
 from app.rounds import prompt
+from app.rounds.move_lines import describe_move, describe_naming
 from app.rounds.naming import answers_of, find_named, matches, normalize
-from app.rounds.narrator import Move, NamingNote, NarrationRequest, describe_move, describe_naming
+from app.rounds.narrator import Move, NamingNote, NarrationRequest
 from app.rounds.router import TARGET_ERRORS
 from app.tables.models import TableNpc
 from tests.signing import SigningKey

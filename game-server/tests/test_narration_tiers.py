@@ -24,8 +24,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.charges import price_code_for
+from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.llm_narrator import NarrationError
-from app.rounds.narrator import NO_PREVIEW, FakeNarrator, NarrationRequest, Preview
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.tiered_narrator import TIER_UNAVAILABLE, TieredNarrator
 from app.rounds.tiers import NarrationTier
 from tests.billing import PRICES, FakeBillingServer
