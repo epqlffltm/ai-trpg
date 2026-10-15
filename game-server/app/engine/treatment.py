@@ -1,13 +1,14 @@
 # game-server/app/engine/treatment.py
 
 """
-치료의 계산. 오래 가는 부상을 치료하는 판정과, 그 결과로 나을 때까지 남은 라운드가 어떻게 바뀌는지.
+치료의 계산. 오래 가는 부상을 치료하는 판정과, 그 결과로 나을 시각이 어떻게 바뀌는지.
 
 무엇을 치료할 수 있는지, 얼마나 어려운지, 실패하면 무엇이 일어나는지는 규칙의 데이터다
 (app/engine/ruleset.py 의 Treatment, MishapTable, Injury.treat_difficulty, treat_rounds).
 
-  - 성공하면 나을 라운드가 treat_rounds 만큼 앞당겨진다. 지금 라운드에 닿으면 그 자리에서 낫는다.
-  - 실패하면 치료 실패 표를 굴린다. 아무 일 없음, 좀 아픔(피해), 덧남(나을 라운드가 늦춰짐), 즉사 중 하나다.
+  - 성공하면 나을 시각이 treat_rounds 만큼 앞당겨진다. 이 장면이 끝나는 때에 닿으면 그 자리에서 낫는다.
+  - 실패하면 치료 실패 표를 굴린다. 아무 일 없음, 좀 아픔(피해), 덧남(나을 시각이 늦춰짐), 즉사 중 하나다.
+  - 시각은 게임 안의 분이다(app/calendar/). 규칙에는 아직 라운드 수로 적혀 있어 판의 기본 걸음을 곱한다(minutes_of).
 
 여기의 함수는 DB 도 HTTP 도 모른다. 규칙과 숫자를 받아 계산만 한다. 주사위만 밖에서 받는다.
 누구를 치료하는지, 그 사람이 정말 그 부상을 입고 있는지는 부른 쪽이 안다(app/rounds/treatments.py).
@@ -17,7 +18,7 @@ from dataclasses import dataclass
 
 from app.engine.check import HinderedCheck, find_difficulty, resolve_hindered
 from app.engine.dice import Dice
-from app.engine.injury import Hindrance, find_injury
+from app.engine.injury import Hindrance, find_injury, minutes_of
 from app.engine.ruleset import Injury, Mishap, MishapRow, MishapTable, Ruleset
 
 
@@ -76,16 +77,25 @@ def roll_mishap(ruleset: Ruleset, dice: Dice) -> MishapRoll:
     return MishapRoll(roll=roll, kind=row.kind, rounds=row.rounds, magnitude=row.magnitude)
 
 
-def shortened(heals_after: int, injury: Injury) -> int:
-    """치료에 성공한 뒤의 나을 라운드. treat_rounds 만큼 앞당긴다. 지금 라운드보다 앞이 될 수도 있다."""
-    return heals_after - injury.treat_rounds
+def shortened(heals_at: int, injury: Injury, round_minutes: int) -> int:
+    """
+    치료에 성공한 뒤의 나을 시각(분). treat_rounds 를 판의 기본 걸음으로 바꾼 만큼 앞당긴다.
+
+    이 장면이 끝나는 때보다 앞이 될 수도 있다. 그러면 그 자리에서 낫는다(is_healed).
+    """
+    return heals_at - minutes_of(injury.treat_rounds, round_minutes)
 
 
-def is_healed(heals_after: int, round_number: int) -> bool:
-    """나을 라운드가 이 라운드이거나 그 앞이면 낫는다. 이 라운드가 닫힐 때 그 자리에서 낫는다."""
-    return heals_after <= round_number
+def is_healed(heals_at: int, scene_end: int) -> bool:
+    """나을 시각이 이 장면이 끝나는 때이거나 그 앞이면 낫는다. 이 라운드가 닫힐 때 그 자리에서 낫는다."""
+    return heals_at <= scene_end
 
 
-def lengthened(heals_after: int, mishap: MishapRoll) -> int:
-    """덧난 뒤의 나을 라운드. 덧남이 아니면 그대로다."""
-    return heals_after + (mishap.rounds or 0)
+def delay_of(mishap: MishapRoll, round_minutes: int) -> int:
+    """덧나서 늦춰지는 시간(분). 덧남이 아니면 0 이다."""
+    return minutes_of(mishap.rounds or 0, round_minutes)
+
+
+def lengthened(heals_at: int, mishap: MishapRoll, round_minutes: int) -> int:
+    """덧난 뒤의 나을 시각(분). 덧남이 아니면 그대로다."""
+    return heals_at + delay_of(mishap, round_minutes)
