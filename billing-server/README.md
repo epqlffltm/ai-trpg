@@ -1359,7 +1359,8 @@ go run ./cmd/server 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .r
 10. 정리 작업을 한 바퀴(`cmd/sweeper -once`), 대사를 한 번(`cmd/reconcile`) 돌린다. 서버의 비밀 없이 뜨는지, 막 만든 스키마가 깨끗한지(끝 코드 0) 본다
 11. 테스트 (`go test -race -coverpkg=./... -coverprofile=coverage.out ./...`). 경쟁 감지기를 켠다. 테스트용 스키마를 쓰므로 9, 10번과 부딪치지 않는다.
     `-coverpkg` 로 패키지를 건너 지나간 줄까지 센다. 그러지 않으면 sqlc 가 만든 패키지처럼 다른 패키지의 테스트로만 지나가는 코드가 0% 로 잡힌다
-12. 커버리지 요약: sqlc 가 만든 코드와 `internal/testenv` 를 빼고 합계와 덜 지나간 함수를 작업 요약(Summary)에 적는다. 커버리지는 아직 재기만 한다. 기준(이 아래로 떨어지면 실패)은 몇 번 재 본 뒤에 건다(#27).
+12. 커버리지 요약: sqlc 가 만든 코드와 `internal/testenv` 를 빼고 합계와 덜 지나간 함수를 작업 요약(Summary)에 적는다
+13. 커버리지 기준: 그 합계가 83% 아래면 실패한다(워크플로의 `COVERAGE_MIN`, 처음 잰 값은 85.1%). 기준은 처음 잰 값보다 조금 낮게 잡았다. 커버리지가 오르면 기준도 올리고, 내릴 때는 PR 에 까닭을 적는다.
 
 ## 구조
 
