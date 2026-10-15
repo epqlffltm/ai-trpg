@@ -140,6 +140,19 @@ uv run python manage.py test
 테스트 실행기는 테스트용 DB(`test_trpg`)를 만들고 지운다. 그래서 `auth` 계정에 `CREATEDB` 가 있어야 한다.
 이 권한은 개발과 CI 에서만 준다. 루트 `.env` 의 `AUTH_DB_ALLOW_TEST_DB=true` 로 DB 볼륨을 처음 만들 때 붙는다(#20).
 
+### 린트와 모양
+
+```
+cd auth-server
+uv run ruff check .
+uv run ruff format .
+```
+
+규칙은 저장소 루트의 `ruff.toml` 이다. 게임 서버와 같은 규칙과 모양(작은따옴표, 한 줄 120자)을 쓴다.
+`ruff check`는 쓰지 않는 import나 정의되지 않은 이름 같은 문제를 실행하지 않고 찾고, `ruff format`은 모양을 맞춘다.
+커밋하기 전에 둘 다 돌린다. CI 는 고치지 않고 검사만 한다.
+Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 코드가 아니라 둘 다 건너뛴다.
+
 ## API
 
 인증 서버의 API는 `/api/v1/auth/` 아래에 있다. 요청과 응답은 JSON이다.
@@ -159,10 +172,10 @@ uv run python manage.py test
 | POST | `/api/v1/auth/logout` | 이 기기의 refresh 토큰 폐기 | refresh 쿠키 |
 | POST | `/api/v1/auth/logout-all` | 모든 기기의 세션 종료 | 필요 |
 | GET | `/api/v1/auth/jwks` | 토큰 검증용 공개키 목록 | 불필요 |
+| GET | `/api/v1/auth/me` | 내 계정 정보 | 필요 |
 
 API 밖에 상태 확인 주소가 둘 있다. 다른 세 서버와 같은 뜻이다(`config/health.py`).
 `GET /health` 는 늘 200, `GET /health/ready` 는 DB 에 닿으면 200, 닿지 않으면 503 이다. 바깥에서는 프록시가 막는다.
-| GET | `/api/v1/auth/me` | 내 계정 정보 | 필요 |
 
 인증이 필요한 API에는 `Authorization: Bearer <access_token>` 헤더를 붙인다.
 
@@ -307,7 +320,6 @@ uv run python manage.py runserver 2>&1 | jq -rR 'fromjson? | [.timestamp, .level
 - **`APP_ENVIRONMENT=production` 이면 `DEBUG=true` 를 쓸 수 없다.** Django 는 `DEBUG` 가 켜져 있으면 예외의 응답에 호출 기록과 설정값을 실어 보낸다.
 - Django 가 스스로 찍던 요청 줄(`runserver` 의 `"GET /api/... 200"`)은 껐다. 주소 뒤에 붙은 값까지 찍었고, 요청이 끝난 줄과 겹친다.
 - 테스트를 돌릴 때는 로그를 찍지 않는다(`config/test_runner.py`). 로그를 보는 테스트는 `assertLogs` 로 직접 잡는다.
-- 이 서버에는 아직 `/health`, `/health/ready` 가 없다.
 
 코드는 `observability/` 에 있다. `identifiers.py`(식별자의 규칙), `context.py`(요청과 작업 동안 식별자를 들고 있는 곳),
 `redaction.py`(가리는 규칙), `formatter.py`(JSON 한 줄), `setup.py`(Django 의 `LOGGING`), `middleware.py`(요청), `jobs.py`(작업).
@@ -316,13 +328,18 @@ uv run python manage.py runserver 2>&1 | jq -rR 'fromjson? | [.timestamp, .level
 ## CI
 
 PR과 `main` 푸시마다 GitHub Actions가 인증 서버를 검사한다. `auth-server/`,
-`docker/postgres/init/`, 워크플로 파일 중 하나가 바뀐 경우에만 돈다.
+`docker/postgres/init/`, 워크플로 파일, 함께 쓰는 ruff 규칙(루트의 `ruff.toml`) 중 하나가 바뀐 경우에만 돈다.
 
 1. 의존성 설치 (`uv sync --locked`): `uv.lock`과 `pyproject.toml`이 어긋나면 실패한다
-2. 설정 검사 (`manage.py check`). 그 전에 이 실행에서만 쓰고 버릴 JWT 키를 만든다
-3. 마이그레이션 누락 검사 (`makemigrations --check --dry-run`): 모델을 바꾸고
+2. 린트 (`ruff check`)
+3. 모양 검사 (`ruff format --check`): 고치지 않고 검사만 한다
+4. 의존성 취약점 검사 (`pip-audit`): 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
+   `uv.lock` 에 잠긴 그대로를 해시와 함께 넘긴다. 고칠 수 없어 받아들이기로 한 것은 워크플로의 `--ignore-vuln` 에 까닭과 함께 적는다
+5. 설정 검사 (`manage.py check`). 그 전에 이 실행에서만 쓰고 버릴 JWT 키를 만든다
+6. 운영 설정의 배포 검사 (`check --deploy --fail-level WARNING`)
+7. 마이그레이션 누락 검사 (`makemigrations --check --dry-run`): 모델을 바꾸고
    마이그레이션을 만들지 않았으면 실패한다
-4. 테스트 (`manage.py test`)
+8. 테스트 (`manage.py test`)
 
 CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 계정으로 테스트한다.
 슈퍼유저로 테스트하면 권한 때문에 실패할 코드가 CI를 통과하기 때문이다.

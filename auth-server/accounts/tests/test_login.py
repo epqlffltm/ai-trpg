@@ -66,9 +66,11 @@ def create_user(**overrides) -> User:
     fields.update(overrides)
     return User.objects.create_user(**fields)
 
+
 def issue_access_token(user: User) -> str:
     """테스트에서는 access 토큰만 필요한 경우가 많다."""
     return issue_token_pair(user).access
+
 
 def base64url(data: bytes) -> str:
     """JWT 가 쓰는 base64url 인코딩. 끝의 = 를 뗀다."""
@@ -264,7 +266,9 @@ class LoginTicketTests(LoginTestCase):
         self.assert_ticket_rejected(self.verify(tampered, self.code))
 
     def test_rejects_expired_ticket(self):
-        with patch('django.core.signing.time.time', return_value=time.time() + LOGIN_TICKET_LIFETIME.total_seconds() + 1):
+        with patch(
+            'django.core.signing.time.time', return_value=time.time() + LOGIN_TICKET_LIFETIME.total_seconds() + 1
+        ):
             response = self.verify(self.ticket, self.code)
 
         self.assert_ticket_rejected(response)
@@ -394,6 +398,8 @@ class AccessTokenContentTests(APITestCase):
         self.assertNotIn(self.user.email, json.dumps(claims))
         self.assertNotIn('user_id', claims)
         self.assertNotEqual(claims['sub'], str(self.user.pk))
+
+
 class JwksTests(APITestCase):
     def test_is_public(self):
         response = self.client.get(JWKS_URL)

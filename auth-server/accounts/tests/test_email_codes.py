@@ -148,9 +148,8 @@ class ConsumeTests(TimeTravelMixin, TestCase):
             self.consume(self.code, user=other_user)
 
     def test_rejects_expired_code(self):
-        with self.at(self.issued_at + CODE_LIFETIME):
-            with self.assertRaises(InvalidEmailCodeError):
-                self.consume(self.code)
+        with self.at(self.issued_at + CODE_LIFETIME), self.assertRaises(InvalidEmailCodeError):
+            self.consume(self.code)
 
     def test_accepts_code_just_before_expiry(self):
         with self.at(self.issued_at + CODE_LIFETIME - timedelta(seconds=1)):
@@ -257,9 +256,8 @@ class IssueLimitTests(TimeTravelMixin, TestCase):
 
     def test_wrong_attempts_do_not_lift_the_cooldown(self):
         code = self.issue_at(self.start)
-        with self.at(self.start + timedelta(seconds=10)):
-            with self.assertRaises(InvalidEmailCodeError):
-                consume_email_code(user=self.user, purpose=SIGNUP, code=wrong_code_for(code))
+        with self.at(self.start + timedelta(seconds=10)), self.assertRaises(InvalidEmailCodeError):
+            consume_email_code(user=self.user, purpose=SIGNUP, code=wrong_code_for(code))
 
         with self.assertRaises(EmailCodeCooldownError):
             self.issue_at(self.start + timedelta(seconds=20))

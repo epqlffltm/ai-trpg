@@ -550,11 +550,12 @@ PR과 `main` 푸시마다 GitHub Actions가 게시판 서버를 검사한다. `b
 1. 의존성 설치 (`npm ci`): `package-lock.json`과 `package.json`이 어긋나면 실패한다
 2. 린트 (`npm run lint`)
 3. 모양 검사 (`npm run format:check`): 고치지 않고 검사만 한다
-4. 빌드 (`npm run build`): 타입 검사를 겸한다
-5. 마이그레이션 적용 (`npm run migration:run`): 빈 DB 에 처음부터 끝까지 적용되는지 본다
-6. 마이그레이션 누락 검사 (`npm run migration:check`): 엔티티를 바꾸고 마이그레이션을 만들지 않았으면 실패한다
-7. 테스트용 스키마에 마이그레이션 적용
-8. 테스트 (`npm test`, `npm run test:e2e`)
+4. 의존성 취약점 검사 (`npm audit --omit=dev --audit-level=high`): 운영에 들어가는 의존성(devDependencies 제외)에 높음 이상의 알려진 취약점이 있으면 실패한다
+5. 빌드 (`npm run build`): 타입 검사를 겸한다
+6. 마이그레이션 적용 (`npm run migration:run`): 빈 DB 에 처음부터 끝까지 적용되는지 본다
+7. 마이그레이션 누락 검사 (`npm run migration:check`): 엔티티를 바꾸고 마이그레이션을 만들지 않았으면 실패한다
+8. 테스트용 스키마에 마이그레이션 적용
+9. 테스트 (`npm test`, `npm run test:e2e`)
 
 ## 설계 메모
 

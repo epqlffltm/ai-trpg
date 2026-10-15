@@ -39,6 +39,7 @@ def validate_username_not_reserved(username: str) -> None:
             code='reserved_username',
         )
 
+
 # 한글, 영문, 숫자, 밑줄만 허용한다.
 # 공백을 막아 "운영자 " 나 "운 영 자" 처럼 예약어 검사를 피해 가는 이름을 쓰지 못하게 한다
 validate_nickname_format = RegexValidator(

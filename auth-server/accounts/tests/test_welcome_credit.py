@@ -199,7 +199,12 @@ class SignupTests(APITestCase):
     """가입 인증을 실제 주소로 지난다. 인증과 함께 줄이 적히는지 본다."""
 
     def signup(self, number: int = 1, email: str = EMAIL):
-        payload = {'username': f'player_{number:02d}', 'email': email, 'nickname': f'플레이어{number}', 'password': PASSWORD}
+        payload = {
+            'username': f'player_{number:02d}',
+            'email': email,
+            'nickname': f'플레이어{number}',
+            'password': PASSWORD,
+        }
         return self.client.post(SIGNUP_URL, payload, format='json')
 
     def verify(self, email: str = EMAIL, code: str | None = None):
@@ -265,9 +270,11 @@ class SignupTests(APITestCase):
         self.signup()
         code = code_from(mail.outbox[-1])
 
-        with patch('accounts.services.request_welcome_credit', side_effect=RuntimeError('DB 가 끊겼다')):
-            with self.assertRaises(RuntimeError):
-                self.verify(code=code)
+        with (
+            patch('accounts.services.request_welcome_credit', side_effect=RuntimeError('DB 가 끊겼다')),
+            self.assertRaises(RuntimeError),
+        ):
+            self.verify(code=code)
 
         self.assertFalse(User.objects.get(username='player_01').is_email_verified)
         self.assertEqual(self.verify(code=code).status_code, status.HTTP_200_OK)
@@ -422,18 +429,24 @@ class RetryTests(TestCase):
         other = pending(2, next_attempt_at=self.start + timedelta(seconds=1))
         failure = BillingUnavailableError('결제 서버가 500 로 답했다')
 
-        with at(self.start + timedelta(seconds=2)), billing_answers(failure, GRANTED):
-            with self.assertLogs('accounts.welcome_credit', level='WARNING'):
-                report = deliver_due_welcome_credits()
+        with (
+            at(self.start + timedelta(seconds=2)),
+            billing_answers(failure, GRANTED),
+            self.assertLogs('accounts.welcome_credit', level='WARNING'),
+        ):
+            report = deliver_due_welcome_credits()
 
         other.refresh_from_db()
         self.assertEqual((report.retried, report.granted), (1, 1))
         self.assertEqual(other.status, WelcomeCreditStatus.GRANTED)
 
     def test_long_errors_are_cut_to_fit(self):
-        with at(self.start), self.assertLogs('accounts.welcome_credit', level='WARNING'):
-            with billing_answers(BillingUnavailableError('x' * 1000)):
-                deliver_due_welcome_credits()
+        with (
+            at(self.start),
+            self.assertLogs('accounts.welcome_credit', level='WARNING'),
+            billing_answers(BillingUnavailableError('x' * 1000)),
+        ):
+            deliver_due_welcome_credits()
 
         self.claim.refresh_from_db()
         self.assertEqual(len(self.claim.last_error), 200)
@@ -497,9 +510,11 @@ class TwoWorkersTests(TransactionTestCase):
     def test_a_worker_that_dies_mid_call_leaves_the_row_pending(self):
         claim = pending()
 
-        with patch('accounts.welcome_credit.grant_welcome_credit', side_effect=KeyboardInterrupt):
-            with self.assertRaises(KeyboardInterrupt):
-                deliver_due_welcome_credits()
+        with (
+            patch('accounts.welcome_credit.grant_welcome_credit', side_effect=KeyboardInterrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            deliver_due_welcome_credits()
 
         claim.refresh_from_db()
         self.assertEqual(claim.status, WelcomeCreditStatus.PENDING)
@@ -518,9 +533,11 @@ class WorkerCommandTests(TestCase):
         pending(2)
         pending(3)
 
-        with billing_answers(GRANTED, ALREADY_GRANTED, BillingUnavailableError('결제 서버가 503 로 답했다')):
-            with self.assertLogs('accounts.welcome_credit', level='WARNING'):
-                output = self.run_once()
+        with (
+            billing_answers(GRANTED, ALREADY_GRANTED, BillingUnavailableError('결제 서버가 503 로 답했다')),
+            self.assertLogs('accounts.welcome_credit', level='WARNING'),
+        ):
+            output = self.run_once()
 
         self.assertIn('지급 1건, 주지 않음 1건, 다시 시도 예정 1건', output)
 
@@ -606,14 +623,16 @@ class EndToEndTests(APITestCase):
     def test_a_dead_billing_server_only_delays_the_credit(self):
         claim = pending()
 
-        with BillingStub(status_code=503, body=b'') as stub:
-            with override_settings(BILLING_URL=stub.url, BILLING_SECRET=SECRET):
-                with self.assertLogs('accounts.welcome_credit', level='WARNING'):
-                    first = deliver_due_welcome_credits()
-                stub.status_code = 201
-                stub.body = b'{"status":"granted","granted":"1000","expires_at":"2026-03-09T09:00:00Z"}'
-                with at(timezone.now() + FIRST_RETRY_DELAY):
-                    second = deliver_due_welcome_credits()
+        with (
+            BillingStub(status_code=503, body=b'') as stub,
+            override_settings(BILLING_URL=stub.url, BILLING_SECRET=SECRET),
+        ):
+            with self.assertLogs('accounts.welcome_credit', level='WARNING'):
+                first = deliver_due_welcome_credits()
+            stub.status_code = 201
+            stub.body = b'{"status":"granted","granted":"1000","expires_at":"2026-03-09T09:00:00Z"}'
+            with at(timezone.now() + FIRST_RETRY_DELAY):
+                second = deliver_due_welcome_credits()
 
         claim.refresh_from_db()
         self.assertEqual((first.retried, second.granted), (1, 1))

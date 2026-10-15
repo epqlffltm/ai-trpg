@@ -17,13 +17,15 @@ def build_jwk(public_key_pem: str, key_id: str) -> dict:
     public_key = serialization.load_pem_public_key(public_key_pem.encode('ascii'))
     # kty, n, e 를 채워 준다
     jwk = RSAAlgorithm.to_jwk(public_key, as_dict=True)
-    jwk.update({
-        # 토큰 머리말의 kid 와 같은 값. 검증하는 쪽이 이 값으로 키를 고른다
-        'kid': key_id,
-        # 이 키는 서명 검증용이다
-        'use': 'sig',
-        'alg': settings.SIMPLE_JWT['ALGORITHM'],
-    })
+    jwk.update(
+        {
+            # 토큰 머리말의 kid 와 같은 값. 검증하는 쪽이 이 값으로 키를 고른다
+            'kid': key_id,
+            # 이 키는 서명 검증용이다
+            'use': 'sig',
+            'alg': settings.SIMPLE_JWT['ALGORITHM'],
+        }
+    )
     return jwk
 
 

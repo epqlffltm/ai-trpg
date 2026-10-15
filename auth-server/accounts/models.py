@@ -23,6 +23,7 @@ from accounts.validators import (
     validate_username_not_reserved,
 )
 
+
 class UserManager(DjangoUserManager):
     """User 를 만드는 방법을 모아 둔 매니저."""
 
@@ -35,6 +36,7 @@ class UserManager(DjangoUserManager):
         """
         extra_fields.setdefault('email_verified_at', timezone.now())
         return super().create_superuser(username, email, password, **extra_fields)
+
 
 class User(AbstractUser):
     # 로그인 ID. 이메일과 분리한다.
@@ -52,7 +54,7 @@ class User(AbstractUser):
     email = models.EmailField('이메일')
 
     # 다른 사용자에게 보이는 이름
-        # 다른 사용자에게 보이는 이름
+    # 다른 사용자에게 보이는 이름
     nickname = models.CharField(
         '닉네임',
         max_length=NICKNAME_MAX_LENGTH,
@@ -69,11 +71,11 @@ class User(AbstractUser):
         unique=True,
         editable=False,
     )
-    
+
     # 이메일 주소의 주인임을 확인한 시각. 비어 있으면 아직 인증하지 않은 계정이다.
     # 참/거짓 대신 시각을 저장한다. 언제 인증했는지도 함께 남는다
     email_verified_at = models.DateTimeField('이메일 인증 시각', null=True, blank=True)
-    
+
     # 세션 버전. 토큰에 이 값을 넣어 발급하고, 검증할 때 현재 값과 비교한다.
     # 값을 올리면 그 전에 발급된 토큰이 전부 무효가 된다.
     # 비밀번호를 바꿨을 때나 토큰 탈취가 의심될 때 올린다
@@ -87,6 +89,7 @@ class User(AbstractUser):
     REQUIRED_FIELDS = ['email', 'nickname']
 
     objects = UserManager()
+
     class Meta:
         verbose_name = '회원'
         verbose_name_plural = '회원'
@@ -102,7 +105,7 @@ class User(AbstractUser):
 
     def __str__(self) -> str:
         return self.username
-    
+
     @property
     def is_email_verified(self) -> bool:
         return self.email_verified_at is not None
@@ -118,7 +121,8 @@ class User(AbstractUser):
 
     def get_short_name(self) -> str:
         return self.nickname
-    
+
+
 class EmailCodePurpose(models.TextChoices):
     """
     인증 코드의 용도.

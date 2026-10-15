@@ -96,6 +96,10 @@ jobs:
       - name: 모양 검사
         run: npm run format:check
 
+      # 운영에 들어가는 의존성(devDependencies 제외)에 높음 이상의 알려진 취약점이 있으면 실패한다
+      - name: 의존성 취약점 검사
+        run: npm audit --omit=dev --audit-level=high
+
       # TypeScript 를 JavaScript 로 바꾼다. 타입이 맞지 않으면 여기서 실패한다
       - name: 빌드
         run: npm run build

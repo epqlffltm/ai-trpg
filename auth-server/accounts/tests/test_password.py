@@ -104,11 +104,11 @@ class PasswordChangeTests(APITestCase):
 
     def test_rejects_weak_new_passwords(self):
         weak_passwords = [
-            'short1!',          # 8자 미만
-            '1234567890',       # 숫자만
-            'password123',      # 흔한 비밀번호
-            'player_01',        # 아이디와 같음
-            OLD_PASSWORD,       # 현재 비밀번호와 같음
+            'short1!',  # 8자 미만
+            '1234567890',  # 숫자만
+            'password123',  # 흔한 비밀번호
+            'player_01',  # 아이디와 같음
+            OLD_PASSWORD,  # 현재 비밀번호와 같음
         ]
         for new_password in weak_passwords:
             with self.subTest(new_password=new_password):
@@ -378,9 +378,11 @@ class PasswordResetConfirmTests(APITestCase):
         log_in(device, 'player_01', OLD_PASSWORD)
 
         # 세션을 끊는 단계가 실패하면 비밀번호 변경과 토큰 소비도 함께 취소되어야 한다
-        with patch('accounts.services.revoke_all_sessions', side_effect=RuntimeError):
-            with self.assertRaises(RuntimeError):
-                self.confirm()
+        with (
+            patch('accounts.services.revoke_all_sessions', side_effect=RuntimeError),
+            self.assertRaises(RuntimeError),
+        ):
+            self.confirm()
 
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(OLD_PASSWORD))

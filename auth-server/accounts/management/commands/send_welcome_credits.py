@@ -40,8 +40,10 @@ class Command(BaseCommand):
         # 비밀이 없으면 모든 요청이 실패한다. 줄마다 실패를 쌓지 않고 여기서 멈춘다
         if not settings.BILLING_SECRET:
             raise CommandError(
-                'BILLING_SECRET 이 없습니다. auth-server/.env 에 결제 서버의 AUTH_SERVER_SECRET 과 같은 값을 적어 주세요. '
-                '(전에 BILLING_SERVICE_SECRET 으로 적어 두었다면 이름이 바뀌었습니다. README 의 "환영 크레딧"을 봐 주세요.)'
+                'BILLING_SECRET 이 없습니다. '
+                'auth-server/.env 에 결제 서버의 AUTH_SERVER_SECRET 과 같은 값을 적어 주세요. '
+                '(전에 BILLING_SERVICE_SECRET 으로 적어 두었다면 이름이 바뀌었습니다. '
+                'README 의 "환영 크레딧"을 봐 주세요.)'
             )
 
         if options['once']:
@@ -86,6 +88,4 @@ class Command(BaseCommand):
         """한 일이 있을 때만 출력한다. 몇 초마다 "0건" 을 찍지 않는다."""
         if report.handled == 0:
             return
-        self.stdout.write(
-            f'지급 {report.granted}건, 주지 않음 {report.skipped}건, 다시 시도 예정 {report.retried}건'
-        )
+        self.stdout.write(f'지급 {report.granted}건, 주지 않음 {report.skipped}건, 다시 시도 예정 {report.retried}건')

@@ -109,6 +109,24 @@ jobs:
       - name: 모양 검사
         run: uv run ruff format --check .
 
+      # 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
+      # uv.lock 에 잠긴 그대로를 해시와 함께 넘긴다. 받아들이기로 한 것은 --ignore-vuln 에 까닭과 함께 적는다
+      - name: 의존성 취약점 검사
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt -q > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip --progress-spinner off
+
+      # 마이그레이션의 끝(head)이 둘 이상이면 실패한다. 두 PR 이 같은 부모 위에 따로 마이그레이션을 얹었다는 뜻이다.
+      # upgrade head 도 멈추지만, 무엇이 문제인지 여기서 먼저 알려 준다
+      - name: 마이그레이션 끝 검사
+        run: |
+          heads="$(uv run alembic heads)"
+          echo "$heads"
+          if [ "$(printf '%s\n' "$heads" | grep -c '(head)')" -ne 1 ]; then
+            echo "::error::마이그레이션의 끝이 하나가 아니다. 뒤에 머지하는 쪽의 down_revision 을 다른 끝으로 옮긴다"
+            exit 1
+          fi
+
       # 빈 DB 에 마이그레이션을 처음부터 끝까지 적용할 수 있는지 본다
       - name: 마이그레이션 적용
         run: uv run alembic upgrade head

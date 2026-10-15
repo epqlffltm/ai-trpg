@@ -69,8 +69,7 @@ def _lock_unreported_events() -> list[SecurityEvent]:
     of=('self',) 는 사건의 행만 잠근다. 함께 읽는 계정의 행까지 잠그면 그동안 그 계정의 로그인이 기다린다.
     """
     return list(
-        SecurityEvent.objects
-        .select_for_update(skip_locked=True, of=('self',))
+        SecurityEvent.objects.select_for_update(skip_locked=True, of=('self',))
         .filter(reported_at__isnull=True)
         .select_related('user')
         .order_by('created_at', 'id')[:MAX_EVENTS_PER_DIGEST]
