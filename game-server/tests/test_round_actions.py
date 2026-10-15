@@ -91,7 +91,16 @@ def stored(action: dict) -> dict:
 
     죽이려는지(lethal)는 붙이지 않으면 false 다.
     """
-    defaults = {'risk': None, 'recover': None, 'target': None, 'harm': None, 'npc': None, 'lethal': False, 'aim': None}
+    defaults = {
+        'risk': None,
+        'recover': None,
+        'target': None,
+        'harm': None,
+        'npc': None,
+        'monster': None,
+        'lethal': False,
+        'aim': None,
+    }
     return {**defaults, **action}
 
 

@@ -146,11 +146,11 @@ def numbers(outcome: dict | None) -> dict | None:
 
     HP 의 변화(effect)는 다른 테스트가 본다(test_round_health.py). NPC 의 변화(npc_effect)도(test_npc_actions.py).
     부상의 영향(hindrance)도(test_injuries.py). 노려 치기(called_shot)도(test_called_shots.py).
-    치료(treatment)도(test_treatment.py).
+    치료(treatment)도(test_treatment.py). 몬스터의 변화(monster_effect)도(test_monster_combat.py).
     """
     if outcome is None:
         return None
-    hidden = ('effect', 'npc_effect', 'hindrance', 'called_shot', 'treatment')
+    hidden = ('effect', 'npc_effect', 'monster_effect', 'hindrance', 'called_shot', 'treatment')
     return {key: value for key, value in outcome.items() if key not in hidden}
 
 

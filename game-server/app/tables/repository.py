@@ -32,6 +32,15 @@ def add_monsters(session: AsyncSession, monsters: list[TableMonster]) -> None:
     session.add_all(monsters)
 
 
+async def list_monsters(session: AsyncSession, table_id: uuid.UUID) -> list[TableMonster]:
+    """
+    테이블의 몬스터 상태들. 순서는 정하지 않는다. 쓰는 쪽이 판의 몬스터 순서로 놓는다(app/rounds/monster_scene.py).
+
+    테이블을 잠근 요청 안에서 읽으면 그대로 고칠 수 있다. 상태는 테이블의 잠금 아래에서만 바뀐다.
+    """
+    return list(await session.scalars(select(TableMonster).where(TableMonster.table_id == table_id)))
+
+
 async def list_npcs(session: AsyncSession, table_id: uuid.UUID) -> list[TableNpc]:
     """
     테이블의 NPC 상태들. 순서는 정하지 않는다. 쓰는 쪽이 판의 인물 순서로 놓는다(app/rounds/cast.py).

@@ -17,6 +17,7 @@ from app.engine.health import Change
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, condition_of
+from app.rounds.monster_scene import SceneMonster
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember, TableNpc
 
@@ -42,6 +43,8 @@ class Judging:
     items: dict[uuid.UUID, CatalogItem] = field(default_factory=dict)
     # 판의 복사본. 맵에서 가고 찾을 때 길과 장소를 찾는다(app/rounds/map_actions.py)
     snapshot: Snapshot | None = None
+    # 이번 장면의 몬스터들(app/rounds/monster_scene.py). 몬스터의 상태는 그 안에 들어 있고, 판정에서 고친다
+    monsters: list[SceneMonster] = field(default_factory=list)
 
 
 def injury_after(judging: Judging, change: Change, max_hp: int, dead: bool, rows: list) -> dict | None:
@@ -102,4 +105,29 @@ def npc_effect(
         'status': npc.status,
         'condition': condition_of(npc),
         'injury_roll': injury_roll,
+    }
+
+
+def monster_effect(monster: SceneMonster, magnitude: str, change: Change, lethal: bool, status_before: str) -> dict:
+    """
+    몬스터 한 마리의 상태가 바뀐 것을 선언의 outcome 에 넣을 문서로. NPC 와 같은 모양이다(npc_effect).
+
+    HP 의 숫자까지 다 적는다. 앉은 사람에게 내보낼 때 숫자를 뺀다(app/rounds/schemas.py, 이벤트의 VISIBLE).
+    몬스터는 부상을 입지 않는다. 부상 표를 굴리지 않는다.
+    """
+    state = monster.state
+    return {
+        'kind': change.kind.value,
+        'magnitude': magnitude,
+        'monster_id': str(state.id),
+        'name': monster.name,
+        'rolls': list(change.rolls),
+        'amount': change.amount,
+        'before': change.before,
+        'after': change.after,
+        'max_hp': state.max_hp,
+        'lethal': lethal,
+        'status_before': status_before,
+        'status': state.status,
+        'condition': condition_of(state),
     }
