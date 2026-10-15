@@ -15,9 +15,10 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import Settings
+from app.core.database import create_engine
 from app.limits.setup import Limiting, build_limiting
 from app.main import create_app
 from app.realtime import service as stream_service
@@ -111,18 +112,33 @@ def auth_server(signing_key: SigningKey) -> FakeAuthServer:
     return FakeAuthServer(keys=[signing_key])
 
 
-@pytest.fixture
-async def app(settings: Settings, auth_server: FakeAuthServer) -> AsyncIterator[FastAPI]:
+@pytest.fixture(scope='session')
+async def engine() -> AsyncIterator[AsyncEngine]:
     """
-    테스트용 설정으로 만든 앱. 인증 서버 자리에 가짜를 꽂는다.
+    DB 연결의 풀. 테스트 전체에서 하나를 만들어 모든 테스트의 앱이 함께 쓴다(#223).
 
-    테스트가 끝나면 연결을 닫는다. 테스트에서는 lifespan 이 돌지 않으므로 직접 닫는다.
+    테스트마다 풀을 새로 만들면 전체 한 번에 연결을 수천 번 새로 맺는다. 연결을 맺는 데는 왕복이 여럿 든다.
+    Windows 의 Docker(WSL2)는 그 왕복을 가끔 몇 초씩 붙잡아, 연결 제한 시간(5초)에 걸린 테스트가 흩어져 실패했다.
+    함께 쓰면 연결을 몇 개만 맺고 다시 쓴다. 연결은 만든 이벤트 루프에 묶이므로 테스트의 루프도 하나다(pyproject.toml).
+    테이블을 비우는 것(clean_tables)은 그대로라 테스트끼리 데이터가 섞이지 않는다.
     """
-    app = create_app(settings, http_client=auth_server.make_client())
+    shared = create_engine(make_test_settings())
+    yield shared
+    await shared.dispose()
+
+
+@pytest.fixture
+async def app(settings: Settings, auth_server: FakeAuthServer, engine: AsyncEngine) -> AsyncIterator[FastAPI]:
+    """
+    테스트용 설정으로 만든 앱. 인증 서버 자리에 가짜를 꽂는다. DB 연결의 풀은 테스트 전체의 것을 쓴다(engine).
+
+    테스트가 끝나면 뒤의 작업을 마무리하고 연결을 닫는다. 테스트에서는 lifespan 이 돌지 않으므로 직접 닫는다.
+    풀은 닫지 않는다. 다음 테스트가 쓴다. 쓰던 연결은 풀로 돌아가 있다(세션이 닫히면서 되돌린다).
+    """
+    app = create_app(settings, http_client=auth_server.make_client(), engine=engine)
     yield app
     await app.state.jobs.aclose()
     await app.state.signal_source.stop()
-    await app.state.engine.dispose()
     await app.state.http_client.aclose()
 
 

@@ -106,6 +106,9 @@ DB_SCHEMA=game_test uv run alembic upgrade head
 ```
 
 DB에 쓰는 테스트는 시작할 때 테이블을 비운다(`clean_tables`). 테스트끼리 데이터가 섞이지 않는다.
+DB 연결의 풀(엔진)은 테스트 전체에서 하나를 만들어 함께 쓴다(`tests/conftest.py` 의 `engine`, #223). 연결은 만든 이벤트 루프에 묶이므로 테스트도 루프 하나에서 돈다(`pyproject.toml` 의 `asyncio_default_*_loop_scope`).
+테스트마다 풀을 새로 만들면 전체 한 번에 연결을 수천 번 새로 맺는다. Windows 의 Docker(WSL2)는 연결을 맺는 왕복을 가끔 몇 초씩 붙잡아, 연결 제한 시간(5초)에 걸린 테스트가 흩어져 `TimeoutError` 로 실패했다.
+그래도 흩어진 `TimeoutError` 가 보이면 Docker 가 흔들린 것이다. `wsl --shutdown` 뒤에 `docker compose up -d` 로 다시 띄우고, 실패한 것만 다시 돌린다(`uv run pytest --lf`).
 비우는 순서는 모델에서 자동으로 뽑는다(`tests/cleaning.py`). 테이블이 새로 생겨도 손으로 고칠 곳이 없고, 빠뜨리면 `tests/test_clean_tables.py` 가 잡는다.
 DB가 꺼져 있으면 DB를 쓰는 테스트가 실패한다.
 인증 서버는 띄우지 않아도 된다. 테스트는 가짜 인증 서버를 쓴다.
