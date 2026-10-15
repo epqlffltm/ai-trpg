@@ -73,8 +73,8 @@ REST = '숨을 고른다.'
 
 # 부상 표(d20)의 눈
 BROKEN_ARM = 17
-# 1 라운드(1일째 8시)에 입은 팔 골절이 낫는 시각. 30 라운드 × 기본 걸음 10분 뒤
-ONE_PM = {'day': 1, 'hour': 13, 'minute': 0, 'time_of_day': 'day'}
+# 1 라운드(1일째 8시)에 입은 팔 골절이 낫는 시각. 14일 뒤
+ARM_HEALS_AT = {'day': 15, 'hour': 8, 'minute': 0, 'time_of_day': 'morning'}
 STUNNED = 11
 LOST_EYE = 20
 
@@ -144,7 +144,8 @@ def test_the_template_table_never_takes_a_hand_and_mostly_leaves_you_whole():
 def test_healing_injuries_leave_aftermath_from_their_own_table():
     arm = find_injury(SRD5, 'broken_arm')
 
-    assert (arm.healing, arm.rounds) == ('heals', 30)
+    # 오래 가는 것은 라운드가 아니라 게임 안의 시간(분)으로 낫는다(판 형식 25)
+    assert (arm.healing, arm.rounds, arm.heal_minutes) == ('heals', None, 14 * 24 * 60)
     assert row_injury(arm.aftermath, 1) == 'crooked_arm'
     assert row_injury(arm.aftermath, 20) is None
 
@@ -285,11 +286,11 @@ def test_only_some_injuries_stop_actions():
 def test_every_injury_but_a_permanent_one_has_an_end():
     assert ends_after(find_injury(SRD5, 'stunned'), 3) == 4
     assert ends_after(find_injury(SRD5, 'poisoned'), 3) == 6
-    # 오래 가는 것은 라운드가 아니라 게임 안의 시각으로 낫는다(달력 2단계). 30 라운드 × 기본 걸음 10분
+    # 오래 가는 것은 라운드가 아니라 게임 안의 시각으로 낫는다(달력 2단계). 14일 뒤
     assert ends_after(find_injury(SRD5, 'broken_arm'), 3) is None
-    assert heals_at(find_injury(SRD5, 'broken_arm'), 480, 10) == 780
+    assert heals_at(find_injury(SRD5, 'broken_arm'), 480) == 480 + 14 * 24 * 60
     assert ends_after(find_injury(SRD5, 'lost_eye'), 3) is None
-    assert heals_at(find_injury(SRD5, 'lost_eye'), 480, 10) is None
+    assert heals_at(find_injury(SRD5, 'lost_eye'), 480) is None
 
 
 def test_disadvantage_takes_the_lower_roll_and_a_penalty_cuts_the_modifier():
@@ -343,16 +344,16 @@ async def test_a_big_hit_can_break_an_arm(client: AsyncClient, app: FastAPI, me:
     closing = await declare(client, me, world['table'], JUMP, jump())
 
     effect = closing['declarations'][0]['outcome']['effect']
-    # 팔 골절은 30 라운드 × 기본 걸음 10분 뒤(1일째 13시)에 낫는다. 테이블은 1일째 8시에 시작했다
+    # 팔 골절은 14일 뒤(15일째 8시)에 낫는다. 테이블은 1일째 8시에 시작했다
     assert effect['injury_roll'] == {
         'trigger': 'big_hit',
         'roll': 17,
         'injury': 'broken_arm',
         'ends_after_round': None,
-        'heals_at': ONE_PM,
+        'heals_at': ARM_HEALS_AT,
     }
     assert (await my_sheet(client, me, world['table']))['injuries'] == [
-        {'injury': 'broken_arm', 'round': 1, 'ends_after_round': None, 'heals_at': ONE_PM}
+        {'injury': 'broken_arm', 'round': 1, 'ends_after_round': None, 'heals_at': ARM_HEALS_AT}
     ]
     (row,) = await injury_rows(session)
     assert (row.injury, row.source, row.round_number, row.npc_entry_id) == ('broken_arm', 'injury_table', 1, None)
@@ -458,7 +459,7 @@ async def test_the_injury_is_recorded_after_the_hit_that_caused_it(
         'injury': 'broken_arm',
         'source': 'injury_table',
         'ends_after_round': None,
-        'heals_at': ONE_PM,
+        'heals_at': ARM_HEALS_AT,
     }
     assert gained['caused_by_sequence'] == changed['sequence']
     assert gained['actor_id'] is None

@@ -409,6 +409,78 @@ def upgrade_from_23(document: dict) -> dict:
     return upgraded
 
 
+def lasting_in_minutes(injury: dict, template_injuries: dict[str, dict], round_minutes: int) -> dict:
+    """
+    부상 하나의 기간을 분으로 옮긴다(형식 25). 짧은 것은 라운드 그대로이고, 오래 가는 것만 바뀐다.
+
+    오래 가는 것은 템플릿에 같은 이름의 부상이 있으면 그 값(며칠)으로, 없으면 라운드 수 × 판의 기본 걸음으로 읽는다.
+    치료할 수 없는 부상(난이도가 비었다)은 앞당기는 시간도 비운다. 짧은 것과 결손은 치료의 칸이 없다.
+    옛 형식을 템플릿으로 채워 올린 문서는 이미 분으로 적혀 있을 수 있다. 그러면 그대로 둔다.
+    """
+    upgraded = {key: value for key, value in injury.items() if key != 'treat_rounds'}
+    if injury['healing'] != 'heals':
+        return {**upgraded, 'treat_difficulty': None, 'treat_minutes': None}
+    template = template_injuries.get(injury['key'], {})
+    rounds = upgraded.pop('rounds', None)
+    if upgraded.get('heal_minutes') is None:
+        upgraded['heal_minutes'] = template.get('heal_minutes') or rounds * round_minutes
+    if upgraded.get('treat_minutes') is None:
+        treat_rounds = injury.get('treat_rounds')
+        fallback = treat_rounds * round_minutes if treat_rounds else None
+        upgraded['treat_minutes'] = template.get('treat_minutes') or fallback
+    if upgraded.get('treat_difficulty') is None or upgraded['treat_minutes'] is None:
+        upgraded['treat_difficulty'] = None
+        upgraded['treat_minutes'] = None
+    return upgraded
+
+
+def delay_in_minutes(row: dict, template_rows: list[dict], round_minutes: int) -> dict:
+    """
+    치료 실패 표의 한 줄의 덧남을 분으로 옮긴다(형식 25). 덧남이 아니면 비운다.
+
+    템플릿에 같은 눈과 종류의 줄이 있으면 그 값으로, 없으면 라운드 수 × 판의 기본 걸음으로 읽는다.
+    """
+    upgraded = {key: value for key, value in row.items() if key != 'rounds'}
+    if row['kind'] != 'worsen':
+        return {**upgraded, 'delay_minutes': None}
+    if upgraded.get('delay_minutes') is not None:
+        return upgraded
+    same = next(
+        (
+            other
+            for other in template_rows
+            if (other['low'], other['high'], other['kind']) == (row['low'], row['high'], row['kind'])
+        ),
+        None,
+    )
+    upgraded['delay_minutes'] = same['delay_minutes'] if same else row['rounds'] * round_minutes
+    return upgraded
+
+
+def upgrade_from_24(document: dict) -> dict:
+    """
+    형식 24 의 문서를 형식 25 로 올린다. 그때는 오래 가는 부상과 치료의 기간이 라운드 수였다.
+
+    이제 게임 안의 시간(분)이다. 규칙이 SRD5 템플릿에서 왔으면 그 템플릿의 값(팔 골절 14일 …)으로 읽고,
+    아니면 라운드 수에 판의 기본 걸음(clock.round_minutes)을 곱해 읽는다. DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    """
+    template = SRD5.model_dump(mode='json')
+    from_template = document['rulebook']['rules'].get('template') == template['template']
+    template_injuries = {injury['key']: injury for injury in template['injuries']} if from_template else {}
+    template_rows = template['treatment']['mishaps']['rows'] if from_template else []
+    round_minutes = document['clock']['round_minutes']
+    rules = dict(document['rulebook']['rules'])
+    rules['injuries'] = [lasting_in_minutes(injury, template_injuries, round_minutes) for injury in rules['injuries']]
+    if rules.get('treatment') is not None:
+        mishaps = rules['treatment']['mishaps']
+        rows = [delay_in_minutes(row, template_rows, round_minutes) for row in mishaps['rows']]
+        rules['treatment'] = {**rules['treatment'], 'mishaps': {**mishaps, 'rows': rows}}
+    upgraded = dict(document)
+    upgraded['rulebook'] = {**document['rulebook'], 'rules': rules}
+    upgraded['format'] = 25
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -435,4 +507,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     21: upgrade_from_21,
     22: upgrade_from_22,
     23: upgrade_from_23,
+    24: upgrade_from_24,
 }
