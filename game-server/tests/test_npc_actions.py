@@ -210,7 +210,8 @@ async def test_only_the_people_in_the_scene_are_listed(client: AsyncClient, me: 
 
     # 드워프는 장면에 나오지 않았고, 고속도로는 인물이 아니다. 이름은 장면의 호칭이다. 진짜 이름은 아직 드러나지 않았다
     lady = {'id': world['lady']['id'], 'name': '악역영애', 'status': 'alive', 'injuries': [], 'named': False}
-    assert cast == {'round': 1, 'people': [lady]}
+    # 몬스터가 없는 판이다
+    assert cast == {'round': 1, 'people': [lady], 'monsters': []}
 
 
 async def test_only_the_seated_see_the_people(client: AsyncClient, me: dict[str, str], signing_key: SigningKey):

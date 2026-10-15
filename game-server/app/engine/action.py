@@ -24,7 +24,7 @@
 행동에는 판정의 결과에 따라 일어날 일을 붙일 수 있다.
   - 실패의 대가(risk): 실패하면 행동한 캐릭터가 피해를 입는다.
   - 성공의 보상(recover): 성공하면 대상이 회복한다. 대상은 앉은 사람(target)이나 NPC(npc)다.
-  - 성공의 타격(harm): 성공하면 대상 NPC(npc)가 피해를 입는다. 앉은 사람끼리는 해치지 않는다.
+  - 성공의 타격(harm): 성공하면 대상 NPC(npc)나 몬스터 한 마리(monster)가 피해를 입는다. 앉은 사람끼리는 해치지 않는다.
 양은 모두 숫자로 받지 않고 규칙의 등급으로 받는다. 어느 것이 일어나는지는 consequence 가 정한다.
 타격에는 죽이려는지(lethal)를 적는다. HP 가 0 이 됐을 때 쓰러질지 죽을지를 가른다(app/tables/npcs.py).
 타격에는 노릴 부상(aim)도 적을 수 있다(노려 치기). 판정이 어려워지고, 성공하면 그 부상이 확정으로 생긴다.
@@ -91,6 +91,9 @@ class CheckAction(BaseModel):
     # 대상 NPC. 판의 로어북 인물 항목의 id 다. 이번 장면에 나온 인물만 고를 수 있다(app/rounds/cast.py).
     # 엔진은 이 값을 읽지 않는다
     npc: uuid.UUID | None = None
+    # 대상 몬스터. 테이블의 몬스터 한 마리의 id 다(table_monsters.id). 자기가 선 장소의 마리만 고를 수 있다
+    # (app/rounds/monster_scene.py). 타격에만 쓴다. 엔진은 이 값을 읽지 않는다
+    monster: uuid.UUID | None = None
     # 타격이 죽이려는 것인가. 아니면 제압이다. HP 가 0 이 되면 제압은 쓰러뜨리고, 죽이려는 것은 죽인다
     lethal: bool = False
     # 노려 치기. 노릴 부상의 이름표(규칙의 Injury.key)다. 판정이 어려워지고, 성공하면 그 부상을 입힌다.
@@ -106,9 +109,26 @@ class CheckAction(BaseModel):
 
     @model_validator(mode='after')
     def require_one_target(self) -> Self:
-        """대상은 하나다. 앉은 사람과 NPC 를 함께 적지 않는다."""
+        """대상은 하나다. 앉은 사람, NPC, 몬스터 중 둘 이상을 함께 적지 않는다."""
         if self.target is not None and self.npc is not None:
             raise ValueError('target 과 npc 는 함께 적지 않습니다.')
+        if self.monster is not None and (self.target is not None or self.npc is not None):
+            raise ValueError('monster 는 target 이나 npc 와 함께 적지 않습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_harm_for_monster(self) -> Self:
+        """
+        몬스터에게 하는 일은 타격뿐이다. 회복과 노려 치기는 몬스터에게 하지 않는다.
+
+        몬스터는 부상을 입지 않는다(부상은 앉은 사람과 NPC 의 것이다). 노릴 부상이 없다.
+        """
+        if self.monster is None:
+            return self
+        if self.harm is None:
+            raise ValueError('monster 는 harm 과 함께 적습니다.')
+        if self.aim is not None:
+            raise ValueError('monster 에게는 aim 을 적지 않습니다.')
         return self
 
     @model_validator(mode='after')
@@ -119,8 +139,8 @@ class CheckAction(BaseModel):
         NPC 에게 하는 일은 타격이나 회복이다. 둘을 함께 붙이지 않는다. 성공하면 둘 중 하나만 일어날 수 있다.
         죽이려는지는 타격에만 뜻이 있다.
         """
-        if self.harm is not None and self.npc is None:
-            raise ValueError('harm 은 npc 와 함께 적습니다.')
+        if self.harm is not None and self.npc is None and self.monster is None:
+            raise ValueError('harm 은 npc 나 monster 와 함께 적습니다.')
         if self.npc is not None and self.harm is None and self.recover is None:
             raise ValueError('npc 는 harm 이나 recover 와 함께 적습니다.')
         if self.harm is not None and self.recover is not None:

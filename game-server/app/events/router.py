@@ -113,6 +113,18 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'status',
         'injury_roll',
     ),
+    # 몬스터의 변화도 NPC 와 같다. 주사위의 눈, 양, 바뀐 생사만 보인다. 이름은 장면에서 부르는 이름이다(수로 쥐 2)
+    EventType.MONSTER_CHANGED: (
+        'round',
+        'monster_id',
+        'name',
+        'kind',
+        'magnitude',
+        'rolls',
+        'amount',
+        'lethal',
+        'status',
+    ),
     # 부상은 공개다. 누가 무엇을 입었고 언제 풀리는지. 캐릭터면 user_id 와 이름, NPC 면 항목의 id 와 장면의 호칭이다
     EventType.INJURY_GAINED: (
         'round',

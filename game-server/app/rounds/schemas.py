@@ -124,6 +124,26 @@ class NpcEffectOut(BaseModel):
     injury_roll: InjuryRollOut | None = None
 
 
+class MonsterEffectOut(BaseModel):
+    """
+    판정의 결과로 몬스터 한 마리의 상태가 바뀐 것. 엔진이 정한 것이다. 피해뿐이다.
+
+    NPC 와 같이 HP 의 숫자는 싣지 않는다. 주사위의 눈과 양, 바뀐 생사는 보인다.
+    """
+
+    # 늘 damage(피해)다. 몬스터에게는 회복이 없다
+    kind: ChangeKind
+    magnitude: str
+    # 바뀐 마리. 장면의 몬스터 목록의 id 와, 부르는 이름(수로 쥐 2)
+    monster_id: uuid.UUID
+    name: str
+    rolls: list[int]
+    amount: int
+    lethal: bool
+    # 바뀐 뒤의 생사. 언데드와 구조물은 HP 가 0 이면 제압이어도 죽음(부서짐)이다
+    status: NpcStatus
+
+
 class MishapOut(BaseModel):
     """치료에 실패해 치료 실패 표를 굴린 것. 엔진이 굴렸다."""
 
@@ -187,6 +207,8 @@ class CheckOutcome(BaseModel):
     effect: EffectOut | None = None
     # 이 판정으로 NPC 의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. effect 와 함께 있지 않다
     npc_effect: NpcEffectOut | None = None
+    # 이 판정으로 몬스터 한 마리의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. 위의 둘과 함께 있지 않다
+    monster_effect: MonsterEffectOut | None = None
     # 치료하는 행동이었으면 그 결과. 아니면 None 이다
     treatment: TreatmentOut | None = None
 
@@ -318,6 +340,22 @@ class SearchOutcome(BaseModel):
     search: SearchOut
 
 
+class TargetGoneOut(BaseModel):
+    """판정할 때 겨눈 몬스터를 칠 수 없었던 것. 엔진은 굴리지 않았다."""
+
+    monster_id: uuid.UUID
+    # 부르는 이름. 장면에 없는 마리였으면 None 이다
+    name: str | None
+    # dead(차례가 오기 전에 죽었다) 또는 elsewhere(다른 장소에 있다)
+    reason: str
+
+
+class TargetGoneOutcome(BaseModel):
+    """몬스터를 겨눈 판정을 굴리지 못한 결과. 판정의 결과(CheckOutcome)와 달리 굴림이 없다."""
+
+    target_gone: TargetGoneOut
+
+
 class DeclarationOut(BaseModel):
     """선언 하나."""
 
@@ -330,8 +368,18 @@ class DeclarationOut(BaseModel):
     action: Action | None
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
-    # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome 이다
-    outcome: CheckOutcome | NamingOutcome | ItemUseOutcome | ItemGiveOutcome | MoveOutcome | SearchOutcome | None
+    # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome 이다.
+    # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome 이다
+    outcome: (
+        CheckOutcome
+        | NamingOutcome
+        | ItemUseOutcome
+        | ItemGiveOutcome
+        | MoveOutcome
+        | SearchOutcome
+        | TargetGoneOutcome
+        | None
+    )
 
 
 class DeathSaveOut(BaseModel):
@@ -403,16 +451,37 @@ class PersonOut(BaseModel):
     injuries: list[str]
 
 
+class SceneMonsterOut(BaseModel):
+    """
+    이번 장면의 몬스터 한 마리. 자기가 선 장소의 죽지 않은 마리를 행동으로 칠 수 있다.
+
+    능력치와 HP 의 숫자는 싣지 않는다. 몸 상태를 말로만 싣는다.
+    """
+
+    # 행동의 monster 칸에 적는 값. 테이블의 몬스터 한 마리의 id 다
+    id: uuid.UUID
+    # 부르는 이름. 같은 몬스터가 테이블에 둘 이상이면 번호가 붙는다(수로 쥐 2)
+    name: str
+    # 있는 장소. 판의 로어북 장소 항목의 id 다. 자기가 선 장소와 같아야 칠 수 있다
+    place_id: uuid.UUID
+    # 살아 있음, 쓰러짐, 죽음
+    status: NpcStatus
+    # 멀쩡함, 다침, 크게 다침, 쓰러짐(의식 없음), 죽음
+    condition: str
+
+
 class SceneCastOut(BaseModel):
     """
-    가장 최근 라운드의 장면에 나온 인물들. 판의 인물 순서다.
+    가장 최근 라운드의 장면에 나온 인물들과 몬스터들. 인물은 판의 인물 순서, 몬스터는 판의 몬스터 순서와 번호 순서다.
 
     장면에 이름이나 호칭이 나온 인물만 들어간다. 로어북의 내용은 싣지 않는다.
+    몬스터는 살아 있는 캐릭터가 서 있는 장소들의 마리다. 도감의 글은 싣지 않는다.
     """
 
     # 어느 라운드의 장면인가
     round: int
     people: list[PersonOut]
+    monsters: list[SceneMonsterOut] = []
 
 
 class RoundPage(BaseModel):
