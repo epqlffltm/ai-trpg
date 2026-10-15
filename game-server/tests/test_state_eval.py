@@ -21,6 +21,7 @@ from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderE
 from app.rounds import prompt
 from app.rounds.cast import CONDITIONS
 from app.rounds.llm_narrator import NARRATION_PARAMS
+from app.rounds.narrator import Move
 from app.rounds.prompt import build_messages
 from evals.lore.narration import prompt_text
 from evals.state import cases
@@ -35,11 +36,21 @@ BY_NAME = {case.name: case for case in CASES}
 QUIET = '리엔의 주먹에 악역영애가 쓰러졌다. 토르빈이 바닥에 떨어진 부채를 집어 들었다. 쿵, 하고 리무진의 문이 닫혔다.'
 
 
+def without_secrets(move: Move) -> Move:
+    """서 있는 곳의 숨은 길을 지운 한 일. 숨은 길은 GM 만 보는 맵 절에 들어간다."""
+    if move.place is None:
+        return move
+    return replace(move, place=replace(move.place, hidden=[]))
+
+
 def prompt_of(case: cases.StateCase, without_memo: bool = False) -> str:
-    """장면의 프롬프트 전부를 한 글로. without_memo 면 GM 메모를 비운다."""
+    """
+    장면의 프롬프트 전부를 한 글로. without_memo 면 GM 만 아는 것(GM 메모, 맵의 숨은 길)을 비운다.
+    """
     request = case.request
     if without_memo:
-        request = replace(request, story=replace(request.story, gm_notes=''))
+        moves = [without_secrets(move) for move in request.moves]
+        request = replace(request, story=replace(request.story, gm_notes=''), moves=moves)
     return prompt_text(build_messages(request))
 
 
@@ -97,7 +108,7 @@ def test_case_names_are_unique():
 def test_every_case_builds_a_prompt_with_its_moves(case: cases.StateCase):
     text = prompt_of(case)
 
-    assert prompt.PROMPT_VERSION == 'narration-20'
+    assert prompt.PROMPT_VERSION == 'narration-21'
     assert all(move.content in text for move in case.request.moves)
 
 
@@ -114,6 +125,45 @@ def test_forbidden_words_are_not_in_the_prompt_outside_the_memo(case: cases.Stat
 def test_the_true_name_is_only_in_the_memo(case: cases.StateCase):
     assert TRUE_NAME in prompt_of(case)
     assert TRUE_NAME not in prompt_of(case, without_memo=True)
+
+
+@pytest.mark.parametrize(
+    'case', [case for case in CASES if cases.HIDDEN_PLACE in case.checks], ids=lambda case: case.name
+)
+def test_the_hidden_place_is_only_in_the_map_for_the_gm(case: cases.StateCase):
+    text = prompt_of(case)
+
+    # 숨은 장소의 이름은 맵 절의 "숨은 길(플레이어는 모름, 실마리로만)" 에만 있다. 한 일의 줄에는 없다
+    assert f'실마리로만): {cases.HIDDEN_PLACE_NAME}' in text
+    assert prompt.MAP_NOTE in text
+    assert cases.HIDDEN_PLACE_NAME not in prompt_of(case, without_memo=True)
+
+
+def test_the_map_cases_cover_hiding_searching_and_travelling():
+    map_cases = [case.name for case in CASES if case.name.startswith('map_')]
+
+    assert map_cases == ['map_hidden', 'map_search_failed', 'map_search_found', 'map_travel', 'map_travel_failed']
+    # 찾은 장면에서만 숨었던 장소의 이름이 나와도 된다(나와야 한다)
+    assert cases.HIDDEN_PLACE not in BY_NAME['map_search_found'].checks
+    assert '(찾기: 찾은 것이 없다)' in prompt_of(BY_NAME['map_search_failed'])
+    assert '(가려던 곳: 주유소. 그쪽으로 이어진 길이 없었다)' in prompt_of(BY_NAME['map_travel_failed'])
+
+
+def test_the_found_case_carries_the_found_route_and_its_rule():
+    text = prompt_of(BY_NAME['map_search_found'])
+
+    assert f'(찾기: 길을 찾아냈다. {cases.HIDDEN_PLACE_NAME}(으)로 이어진다)' in text
+    assert prompt.FOUND_NOTE in text
+    # 찾은 길은 출구다. 숨은 길로 다시 적히지 않는다
+    assert '실마리로만)' not in text
+
+
+@pytest.mark.parametrize(
+    'case', [case for case in CASES if cases.NO_HIDDEN_HINT in case.checks], ids=lambda case: case.name
+)
+def test_hints_are_forbidden_only_where_nothing_is_hidden(case: cases.StateCase):
+    # 숨은 길이 있는 장소에서는 실마리가 맞는 서술이다. 그런 장면에 이 검사를 걸면 잘한 것을 어겼다고 센다
+    assert all(not move.place.hidden for move in case.request.moves if move.place is not None)
 
 
 def test_the_right_naming_reveals_the_name_everywhere_it_is_used():

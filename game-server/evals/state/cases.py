@@ -7,11 +7,14 @@
 서버의 조립(app/rounds/prompt.py)을 그대로 거치므로 프롬프트의 틀이 바뀌면 이 장면들도 새 틀로 간다.
 부상의 이름과 사실은 내장 템플릿(srd5)의 것을 그대로 쓴다. 템플릿의 글이 바뀌어도 장면이 따라간다.
 
-보는 것은 넷이다(#111 ④, 지목).
+보는 것은 다섯이다(#111 ④, 지목, 맵 #218).
   - 쓰러진 NPC 와 죽은 NPC 는 말하거나 움직이지 않는다
   - 입은 부상이 서술에 나오고, 그 부상으로 실패한 일을 성공처럼 쓰지 않는다
   - 치료의 결과(다 나음과 후유증, 덧남)를 그대로 쓴다
   - 틀린 지목에서 진짜 이름이 새지 않고, 맞은 지목에서 이름 밖의 주장까지 맞다고 쓰지 않는다
+  - 맵: 숨은 길과 그 너머 장소의 이름(일부도)이 새지 않는다(실마리만). 엔진이 정한 위치를 서술이 바꾸지 않는다.
+    못 찾은 찾기를 찾은 것처럼, 못 간 가기를 간 것처럼 쓰지 않는다. 찾은 길은 이름이 나온다.
+    숨은 길이 없는 곳에는 실마리를 지어내지 않는다
 모든 장면에서 숨긴 설정(경찰의 끄나풀)을 흘리지 않는지 본다. 진짜 이름은 맞은 지목의 장면에서만 나와도 된다.
 
 GM 메모에 진짜 이름을 적어 둔다. 제작자가 그렇게 쓸 수 있고, 그러면 모델은 진짜 이름을 안다.
@@ -37,7 +40,10 @@ from app.rounds.narrator import (
     NpcImpact,
     PastRound,
     PersonState,
+    PlaceNote,
+    SearchNote,
     StoryContext,
+    TravelNote,
     TreatmentNote,
     Verdict,
 )
@@ -370,5 +376,158 @@ NAMING_RIGHT = StateCase(
     ),
 )
 
-CASES = (DOWNED, DEAD, INJURED_PC, INJURED_NPC, TREAT_HEALED, TREAT_WORSE, NAMING_WRONG, NAMING_RIGHT)
+# --- 맵(#218) ---
+# 휴게소에 숨은 길이 하나 있다. 그 너머는 검은 정류장이다. 서술자는 맵 절(narration-20)에서만 이 이름을 본다.
+# 플레이어가 찾기 전에는 이름이 나오면 안 된다. 실마리(바람이 새는 틈 같은 것)만 흘려야 한다.
+# 이름은 장면에 저절로 나올 일이 없는 고유명사로 골랐다. 터널, 통로 같은 낱말은 실마리로 써도 된다.
+# 이름의 일부(정류장)도 본다. 처음 쟀을 때 "정류장으로 이어지는 길인지"처럼 반쯤 흘린 적이 있다
+HIDDEN_PLACE_NAME = '검은 정류장'
+HIDDEN_PLACE = Forbid('숨은 장소', ('정류장',))
+# 휴게소. 큰길로 톨게이트와 주유소에 이어진다. 숨은 길 하나가 검은 정류장으로 간다
+REST_STOP = PlaceNote(name='휴게소', exits=['톨게이트', '주유소'], hidden=[HIDDEN_PLACE_NAME])
+GAS_STATION = PlaceNote(name='주유소', exits=['휴게소'])
+TOLLGATE = PlaceNote(name='톨게이트', exits=['휴게소'])
+# 숨은 길이 없는 장소에 지어낸 실마리. 맵 절이 예로 든 실마리(바람이 새는 틈, 닳은 바닥)를 옮겨 온 말씨다.
+# 처음 쟀을 때 숨은 길이 없는 톨게이트에서 10 번 중 4 번 나왔다. 그때 나온 꼴로 고른다.
+# 예와 똑같은 낱말은 프롬프트에 있어 고를 수 없다. 이 말씨를 벗어난 실마리는 놓친다(출력을 눈으로도 본다)
+NO_HIDDEN_HINT = Forbid('없는 실마리', ('바람이 새어', '바람이 거세게 새', '틈새로', '닳아 없어진'))
+# 엔진이 옮기지 않은 캐릭터를 서술이 다른 장소에 데려다 놓은 낱말
+ARRIVED_ELSEWHERE = Forbid(
+    '위치를 바꿈',
+    ('주유소에 도착', '톨게이트에 도착', '주유소로 향했', '톨게이트로 향했', '주유소에 닿', '톨게이트에 닿'),
+)
+
+# 숨은 길 옆. 아무도 찾지 않았다. 이름이 새지 않고, 캐릭터들은 휴게소에 그대로 있어야 한다
+MAP_HIDDEN = StateCase(
+    name='map_hidden',
+    about='숨은 길의 이름이 새지 않고(실마리만), 엔진이 정한 위치를 바꾸지 않는다',
+    request=request(
+        scene='우주 고속도로의 휴게소. 깜빡이는 네온 간판 아래 자판기들이 웅웅거린다.',
+        moves=[
+            Move('리엔', '휴게소의 자판기를 발로 차서 음료를 꺼낸다.', place=REST_STOP),
+            Move('토르빈', '바이크에 걸터앉아 지도를 펼친다.', place=REST_STOP),
+        ],
+        people=[],
+    ),
+    checks=(HIDDEN_PLACE, ARRIVED_ELSEWHERE, HIDDEN_NAME, SECRET),
+)
+
+# 못 찾은 찾기. 숨은 길이 있는데 판정에 실패했다. 결과에는 "찾은 것이 없다"뿐이다
+MAP_SEARCH_FAILED = StateCase(
+    name='map_search_failed',
+    about='못 찾은 찾기를 찾은 것처럼 쓰지 않고, 숨은 장소의 이름을 흘리지 않는다',
+    request=request(
+        scene='우주 고속도로의 휴게소. 깜빡이는 네온 간판 아래 자판기들이 웅웅거린다.',
+        moves=[
+            Move(
+                '리엔',
+                '휴게소 뒤편의 벽을 두드리며 숨겨진 길을 찾는다.',
+                search=SearchNote(place='휴게소', found=[]),
+                place=REST_STOP,
+            ),
+            Move('토르빈', '망을 본다.', place=REST_STOP),
+        ],
+        people=[],
+    ),
+    checks=(
+        HIDDEN_PLACE,
+        Forbid('찾은 것처럼 씀', ('길을 찾아냈', '통로를 찾아냈', '길을 발견했', '통로를 발견했', '문이 열렸')),
+        ARRIVED_ELSEWHERE,
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
+# 찾은 찾기. 숨은 길을 찾았다. 이제 플레이어가 아는 길이라 이름이 나와야 한다. 찾기만 했지 가지는 않았다
+MAP_SEARCH_FOUND = StateCase(
+    name='map_search_found',
+    about='찾은 길이 나오고, 찾기만 한 캐릭터를 그 너머로 데려가지 않는다',
+    request=request(
+        scene='우주 고속도로의 휴게소. 깜빡이는 네온 간판 아래 자판기들이 웅웅거린다.',
+        moves=[
+            Move(
+                '리엔',
+                '휴게소 뒤편의 벽을 두드리며 숨겨진 길을 찾는다.',
+                search=SearchNote(place='휴게소', found=[HIDDEN_PLACE_NAME]),
+                place=PlaceNote(name='휴게소', exits=['톨게이트', '주유소', HIDDEN_PLACE_NAME]),
+            ),
+            Move(
+                '토르빈', '망을 본다.', place=PlaceNote(name='휴게소', exits=['톨게이트', '주유소', HIDDEN_PLACE_NAME])
+            ),
+        ],
+        people=[],
+    ),
+    checks=(
+        Require('찾은 길이 나옴', (HIDDEN_PLACE_NAME,)),
+        Forbid(
+            '가지 않은 곳에 감',
+            (f'{HIDDEN_PLACE_NAME}에 도착', f'{HIDDEN_PLACE_NAME}에 들어', f'{HIDDEN_PLACE_NAME}으로 들어'),
+        ),
+        ARRIVED_ELSEWHERE,
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
+# 간 가기. 토르빈은 주유소로 갔다. 리엔은 휴게소에 남았다(숨은 길은 아직 모른다)
+MAP_TRAVEL = StateCase(
+    name='map_travel',
+    about='간 캐릭터는 그곳에 있고, 남은 캐릭터의 곁에서 숨은 길의 이름이 새지 않는다',
+    request=request(
+        scene='우주 고속도로의 휴게소. 깜빡이는 네온 간판 아래 자판기들이 웅웅거린다.',
+        moves=[
+            Move('리엔', '휴게소에 남아 자판기 옆에서 망을 본다.', place=REST_STOP),
+            Move(
+                '토르빈',
+                '바이크를 몰고 기름을 넣으러 간다.',
+                travel=TravelNote(from_place='휴게소', to_place='주유소', moved=True),
+                place=GAS_STATION,
+            ),
+        ],
+        people=[],
+    ),
+    checks=(Require('간 곳이 나옴', ('주유소',)), HIDDEN_PLACE, HIDDEN_NAME, SECRET),
+)
+
+# 못 간 가기. 선언한 뒤에 방장이 리엔을 톨게이트로 옮겼고, 거기서 주유소로 가는 길은 없다.
+# 톨게이트에는 숨은 길이 없다. 실마리를 지어내지 않아야 한다
+MAP_TRAVEL_FAILED = StateCase(
+    name='map_travel_failed',
+    about='못 간 가기를 간 것처럼 쓰지 않고, 숨은 길이 없는 곳에 실마리를 지어내지 않는다',
+    request=request(
+        scene='세 번째 행성의 톨게이트. 차단기가 내려와 있고, 요금소의 불은 꺼져 있다.',
+        moves=[
+            Move(
+                '리엔',
+                '바이크를 몰고 주유소로 간다.',
+                travel=TravelNote(from_place='톨게이트', to_place='주유소', moved=False, reason='not_adjacent'),
+                place=TOLLGATE,
+            ),
+            Move('토르빈', '차단기를 들어 올린다.', place=TOLLGATE),
+        ],
+        people=[],
+    ),
+    checks=(
+        Forbid('못 간 곳에 감', ('주유소에 도착', '주유소에 닿', '주유소로 들어', '주유소에 들어')),
+        NO_HIDDEN_HINT,
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
+CASES = (
+    DOWNED,
+    DEAD,
+    INJURED_PC,
+    INJURED_NPC,
+    TREAT_HEALED,
+    TREAT_WORSE,
+    NAMING_WRONG,
+    NAMING_RIGHT,
+    MAP_HIDDEN,
+    MAP_SEARCH_FAILED,
+    MAP_SEARCH_FOUND,
+    MAP_TRAVEL,
+    MAP_TRAVEL_FAILED,
+)
 CASE_NAMES = tuple(case.name for case in CASES)
