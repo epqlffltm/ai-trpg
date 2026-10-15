@@ -12,6 +12,7 @@
 """
 
 import argparse
+import re
 from dataclasses import replace
 
 import pytest
@@ -26,7 +27,7 @@ from app.rounds.prompt import build_messages
 from evals.lore.narration import prompt_text
 from evals.state import cases
 from evals.state.cases import CASES, HIDDEN_NAME, TRUE_NAME
-from evals.state.checks import Finding, Forbid, NoSpeech, Require, general_hints, run_checks
+from evals.state.checks import Finding, Forbid, NoSpeech, Pattern, Require, general_hints, run_checks
 from evals.state.report import full_report, read_report, tally_lines, total_line
 from evals.state.runner import inspect, narrate, rescore, run_cases
 from scripts import eval_state
@@ -81,6 +82,30 @@ def test_every_quoted_text_is_caught(scene: str, caught: list[str]):
     assert NoSpeech('x').violations(scene) == caught
 
 
+def test_a_pattern_is_caught_once_per_text():
+    check = Pattern('x', re.compile(r'\d+시'))
+
+    assert check.violations('22시가 지나고 22시의 바람이 불었다. 23시였다.') == ['22시', '23시']
+    assert check.violations(QUIET) == []
+
+
+@pytest.mark.parametrize(
+    ('scene', 'caught'),
+    [
+        # narration-23 을 재 본 장면에서 옮겼다
+        ('3일째 22시 20분, 밤의 어둠이 짙게 깔린 고속도로', ['3일째', '22시', '20분']),
+        ('시간이 흘러 13시 10분이 되었을 때', ['13시', '10분']),
+        ('10분의 시간이 흐른 뒤', ['10분']),
+        ('밤 10시 20분의 고속도로', ['10시', '20분']),
+        # 시각이 아닌 숫자와, 숫자 없는 때의 말은 걸리지 않는다
+        ('17번째 행성의 정오를 갓 지난 열기', []),
+        ('새벽빛이 내려앉았다. 밤새 비바람이 몰아쳤다.', []),
+    ],
+)
+def test_clock_digits_are_caught(scene: str, caught: list[str]):
+    assert cases.CLOCK_DIGITS.violations(scene) == caught
+
+
 def test_checks_run_in_order_and_report_passing():
     findings = run_checks('비올레타가 웃었다.', (Require('팔', ('팔',)), Forbid('이름', ('비올레타',))))
 
@@ -108,7 +133,7 @@ def test_case_names_are_unique():
 def test_every_case_builds_a_prompt_with_its_moves(case: cases.StateCase):
     text = prompt_of(case)
 
-    assert prompt.PROMPT_VERSION == 'narration-23'
+    assert prompt.PROMPT_VERSION == 'narration-24'
     assert all(move.content in text for move in case.request.moves)
 
 
