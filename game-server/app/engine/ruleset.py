@@ -456,6 +456,9 @@ class Ruleset(Part):
     # 최대 HP 에 보정을 더하는 능력치. 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구할 때 쓴다.
     # None 이면 능력치가 최대 HP 에 닿지 않는다. 칸 자체는 늘 있어야 한다(기본값이 없다)
     hp_ability: Key | None
+    # 차례를 정하는 능력치(민첩성). 라운드를 닫을 때 몬스터와 섞여 차례를 받으면 이 점수가 높은 쪽이 먼저다.
+    # 기습한 쪽은 이보다 먼저다. None 이면 능력치로 차례를 정하지 않는다. 칸 자체는 늘 있어야 한다(기본값이 없다)
+    initiative_ability: Key | None
     # 점수제. None 이면 이 규칙에는 점수제가 없다. 칸 자체는 늘 있어야 한다(기본값이 없다)
     point_buy: PointBuy | None
     # 능력치의 점수를 주사위로 정하는 법. None 이면 이 규칙에는 그런 방식이 없다. 칸 자체는 늘 있어야 한다
@@ -503,6 +506,14 @@ class Ruleset(Part):
         """최대 HP 에 닿는 능력치는 능력치 중 하나여야 한다."""
         if self.hp_ability is not None and self.hp_ability not in [ability.key for ability in self.abilities]:
             raise ValueError(f'최대 HP 에 닿는 능력치가 능력치에 없습니다: {self.hp_ability}')
+        return self
+
+    @model_validator(mode='after')
+    def require_known_initiative_ability(self) -> Self:
+        """차례를 정하는 능력치는 능력치 중 하나여야 한다."""
+        known = [ability.key for ability in self.abilities]
+        if self.initiative_ability is not None and self.initiative_ability not in known:
+            raise ValueError(f'차례를 정하는 능력치가 능력치에 없습니다: {self.initiative_ability}')
         return self
 
     @model_validator(mode='after')
