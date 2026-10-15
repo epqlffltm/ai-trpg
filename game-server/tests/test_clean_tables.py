@@ -70,7 +70,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     """
     API 로 모든 테이블에 행을 넣는다. 외래 키로 이어진 사슬이 끝까지 생긴다.
 
-    룰북, 세계관, 로어북과 항목, 몬스터 도감과 몬스터, 시나리오(로어북을 붙이고 판을 내고 소개 페이지까지),
+    룰북, 세계관, 로어북과 항목, 몬스터 도감과 몬스터, 시나리오(로어북과 도감을 붙이고 판을 내고 소개 페이지까지),
     테이블(시작해서 시트와 NPC 의 상태와 라운드와 이벤트가 생기고, 굴리고, 선언해서 다치고, 채팅한다), 보관함.
     AI 호출의 기록만은 API 로 생기지 않는다(테스트의 서술자는 모델을 부르지 않는다). 기록장으로 직접 쓴다.
     쪽지도 직접 넣는다. 받을 사람이 있어야 하는데 혼자 앉은 테이블이다.
@@ -89,12 +89,15 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     entry = {'name': '항목', 'kind': 'person'}
     await client.post(f'{url}/lorebooks/{lorebook["id"]}/entries', json=entry, headers=me)
     bestiary = (await client.post(f'{url}/bestiaries', json={'title': '도감'}, headers=me)).json()
-    await client.post(f'{url}/bestiaries/{bestiary["id"]}/monsters', json={'name': '몬스터'}, headers=me)
+    monster_url = f'{url}/bestiaries/{bestiary["id"]}/monsters'
+    monster = (await client.post(monster_url, json={'name': '몬스터'}, headers=me)).json()
     body = {
         'title': '추격전',
         'rulebook_id': rulebook['id'],
         'world_id': world['id'],
         'lorebook_ids': [lorebook['id']],
+        'bestiary_ids': [bestiary['id']],
+        'monster_sheets': [{'monster_id': monster['id'], 'sheet': SHEET}],
         'openings': ['사이렌이 울린다.'],
         'default_sheet': SHEET,
         'default_npc_sheet': SHEET,

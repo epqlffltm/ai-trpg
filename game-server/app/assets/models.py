@@ -77,6 +77,11 @@ SCENARIO_MAX_QUEST_RULES = 50
 SCENARIO_MAX_ROUTES = 200
 # 시나리오 하나에 둘 수 있는 명소(처음부터 아는 장소)의 수
 SCENARIO_MAX_LANDMARKS = 100
+# 시나리오 하나에 붙일 수 있는 몬스터 도감의 수. 로어북과 같다
+SCENARIO_MAX_BESTIARIES = 10
+# 시나리오 하나에 둘 수 있는 몬스터 시트의 수. 시트가 있는 몬스터만 판에 들어가므로 판의 몬스터 수의 상한이다.
+# 도감 하나의 몬스터를 모두 써도 모자라지 않는 만큼이다
+SCENARIO_MAX_MONSTER_SHEETS = 100
 # 판을 낼 때 적는 변경 내용. 사람이 읽는다
 VERSION_NOTE_MAX_LENGTH = 500
 
@@ -384,7 +389,7 @@ class Scenario(AssetContent):
     시나리오의 내용. 테이블이 고르는 것이다.
 
     시나리오는 다른 자산을 모아 만든 조립물이다. 룰북을 중심으로 세계관 등을 붙인다.
-    룰북과 세계관은 하나씩, 로어북은 여러 개 가리킨다. NPC 는 로어북의 인물 항목이다.
+    룰북과 세계관은 하나씩, 로어북과 몬스터 도감은 여러 개 가리킨다. NPC 는 로어북의 인물 항목이다.
 
     초안일 때는 룰북과 스타팅을 비워 둘 수 있다(임시 저장). 게시할 때 둘 다 있는지 검사한다.
     시트(프리젠의 시트, 기본 시트)도 초안일 때는 비워 둘 수 있다. 룰북의 규칙에 맞는지는 게시할 때 본다.
@@ -414,6 +419,9 @@ class Scenario(AssetContent):
         CheckConstraint(f'jsonb_array_length(quests) <= {SCENARIO_MAX_QUEST_RULES}', name='quests_count'),
         CheckConstraint(f'jsonb_array_length(routes) <= {SCENARIO_MAX_ROUTES}', name='routes_count'),
         CheckConstraint(f'cardinality(landmarks) <= {SCENARIO_MAX_LANDMARKS}', name='landmarks_count'),
+        CheckConstraint(
+            f'jsonb_array_length(monster_sheets) <= {SCENARIO_MAX_MONSTER_SHEETS}', name='monster_sheets_count'
+        ),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
@@ -509,6 +517,12 @@ class Scenario(AssetContent):
     # 명소가 아닌 장소는 가 보거나, 그리로 가는 길을 알게 되면 안다. 붙인 로어북의 장소 항목이다
     landmarks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default=text("'{}'"))
 
+    # 몬스터 시트들. 하나하나가 {monster_id, sheet} 다. 붙인 도감의 몬스터 하나에 숫자를 준다.
+    # NPC 시트와 같은 까닭으로 도감이 아니라 여기 둔다. 시트를 적은 몬스터만 이 시나리오가 쓴다(판에 들어간다).
+    # 기본 몬스터 시트는 없다. 고블린과 용이 같은 숫자가 된다.
+    # 가리키는 몬스터가 붙인 도감에 있는지, 규칙에 맞는지는 게시할 때 본다(scenarios/publishing.py)
+    monster_sheets: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
     # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다
     default_npc_sheet: Mapped[dict | None] = mapped_column(JSONB)
@@ -524,6 +538,11 @@ class Scenario(AssetContent):
     # delete-orphan: 이 목록에서 빠진 행은 DB 에서도 지운다
     lorebook_links: Mapped[list['ScenarioLorebook']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='ScenarioLorebook.lorebook_id'
+    )
+
+    # 붙인 몬스터 도감들. 로어북과 같은 까닭으로 연결 테이블(scenario_bestiaries)의 행으로 둔다
+    bestiary_links: Mapped[list['ScenarioBestiary']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='ScenarioBestiary.bestiary_id'
     )
 
     @property
@@ -568,6 +587,21 @@ class Scenario(AssetContent):
             ScenarioLorebook(lorebook_id=lorebook_id) for lorebook_id in lorebook_ids if lorebook_id not in attached
         ]
         self.lorebook_links = kept + added
+
+    @property
+    def bestiary_ids(self) -> list[uuid.UUID]:
+        """붙인 몬스터 도감의 ID 목록."""
+        return [link.bestiary_id for link in self.bestiary_links]
+
+    @bestiary_ids.setter
+    def bestiary_ids(self, bestiary_ids: list[uuid.UUID]) -> None:
+        """붙인 도감을 이 목록으로 바꾼다. 로어북(lorebook_ids)과 같은 법이다. 계속 붙어 있는 것은 행을 그대로 둔다."""
+        kept = [link for link in self.bestiary_links if link.bestiary_id in bestiary_ids]
+        attached = {link.bestiary_id for link in kept}
+        added = [
+            ScenarioBestiary(bestiary_id=bestiary_id) for bestiary_id in bestiary_ids if bestiary_id not in attached
+        ]
+        self.bestiary_links = kept + added
 
 
 class Lorebook(AssetContent):
@@ -649,6 +683,25 @@ class ScenarioLorebook(Base):
     # 기본 키의 색인은 시나리오가 앞이라 "이 로어북을 쓰는 시나리오"를 찾는 데 못 쓴다. 따로 색인을 건다
     lorebook_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('lorebooks.asset_id', ondelete='RESTRICT'), primary_key=True, index=True
+    )
+
+
+class ScenarioBestiary(Base):
+    """
+    시나리오와 몬스터 도감의 연결. 행 하나가 "이 시나리오에 이 도감이 붙어 있다"는 뜻이다. 로어북의 연결과 같다.
+
+    도감의 모델은 app/assets/bestiaries/models.py 에 있다. 이 연결은 시나리오가 갖는 것이라 시나리오 곁에 둔다.
+    """
+
+    __tablename__ = 'scenario_bestiaries'
+
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('scenarios.asset_id', ondelete='CASCADE'), primary_key=True
+    )
+
+    # 붙어 있는 동안에는 도감의 행을 지울 수 없다. "이 도감을 쓰는 시나리오"를 찾는 색인을 따로 건다
+    bestiary_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('bestiaries.asset_id', ondelete='RESTRICT'), primary_key=True, index=True
     )
 
 

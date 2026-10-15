@@ -4,7 +4,7 @@
 시나리오를 만들고, 읽고, 고치고, 지운다.
 
 규칙의 대부분은 모든 자산에 공통이라 app/assets/service.py 에 있다.
-여기에는 시나리오만의 것이 있다. 시나리오는 다른 자산(룰북, 세계관, 로어북)을 가리킨다.
+여기에는 시나리오만의 것이 있다. 시나리오는 다른 자산(룰북, 세계관, 로어북, 몬스터 도감)을 가리킨다.
 가리키는 자산은 자기 것이어야 하고, 지운 것이면 안 된다.
 """
 
@@ -13,12 +13,14 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
+from app.assets.bestiaries.models import Bestiary
 from app.assets.models import AssetContent, AssetType, Lorebook, Rulebook, Scenario, World
 from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate
 
 # 다른 자산을 하나 가리키는 칸과, 그 칸이 가리킬 수 있는 종류.
 # 적힌 순서대로 잠근다. 순서가 늘 같아야 두 요청이 서로를 기다리며 멈추는 일(교착)이 없다.
-# 로어북(lorebook_ids)은 여러 개라 따로 다룬다. 이 칸들 다음에, ID 순서로 잠근다
+# 로어북(lorebook_ids)과 도감(bestiary_ids)은 여러 개라 따로 다룬다.
+# 이 칸들 다음에 로어북, 도감의 차례로, 각각 ID 순서로 잠근다
 REFERENCES: dict[str, type[AssetContent]] = {'rulebook_id': Rulebook, 'world_id': World}
 
 
@@ -30,6 +32,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         rulebook_id=data.rulebook_id,
         world_id=data.world_id,
         lorebook_ids=data.lorebook_ids,
+        bestiary_ids=data.bestiary_ids,
         openings=data.openings,
         recommended_players=data.recommended_players.model_dump(),
         pregens=[pregen.model_dump() for pregen in data.pregens],
@@ -37,6 +40,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         default_sheet=data.default_sheet.model_dump() if data.default_sheet else None,
         npc_sheets=[npc_sheet.model_dump() for npc_sheet in data.npc_sheets],
         default_npc_sheet=data.default_npc_sheet.model_dump() if data.default_npc_sheet else None,
+        monster_sheets=[monster_sheet.model_dump() for monster_sheet in data.monster_sheets],
         items=[rule.model_dump() for rule in data.items],
         starting_items=[stack.model_dump() for stack in data.starting_items],
         quests=[quest.model_dump() for quest in data.quests],
@@ -63,6 +67,9 @@ async def hold_references(session: AsyncSession, owner_id: uuid.UUID, data: Scen
     for lorebook_id in sorted(data.lorebook_ids or []):
         await assets.hold_reference(session, Lorebook, owner_id, lorebook_id, 'lorebook_ids')
 
+    for bestiary_id in sorted(data.bestiary_ids or []):
+        await assets.hold_reference(session, Bestiary, owner_id, bestiary_id, 'bestiary_ids')
+
 
 async def create_scenario(session: AsyncSession, owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
     """시나리오를 만든다. 가리키는 자산이 없으면 AssetReferenceError."""
@@ -88,7 +95,7 @@ async def update_scenario(
     """
     자기 시나리오를 고친다. 없으면 AssetNotFoundError, 가리키는 자산이 없으면 AssetReferenceError.
 
-    시나리오를 잠그고 고친다. 로어북의 목록은 "지금 붙은 것과 비교해서" 바꾸므로,
+    시나리오를 잠그고 고친다. 로어북과 도감의 목록은 "지금 붙은 것과 비교해서" 바꾸므로,
     두 요청이 같은 옛 목록을 보고 각자 바꾸면 둘의 것이 합쳐져 상한을 넘길 수 있다.
     """
     scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
