@@ -61,10 +61,11 @@ def load_backfill_rules() -> dict:
     injuries = load_migration('injuries').INJURY_RULES
     treatment = load_migration('treatment')
     initiative = load_migration('monster_attacks_and_initiative').INITIATIVE_ABILITY
+    minutes = load_migration('injury_minutes')
     treated = [
         {**injury, **treatment.TREATABLE.get(injury['key'], treatment.UNTREATABLE)} for injury in injuries['injuries']
     ]
-    return {
+    filled = {
         **rules,
         'magnitudes': magnitudes,
         'hp_ability': hp_ability,
@@ -77,6 +78,8 @@ def load_backfill_rules() -> dict:
         # SRD5 의 능력치에 민첩이 있으니 채운 값은 그것이다
         'initiative_ability': initiative,
     }
+    # 오래 가는 부상과 치료의 기간을 분으로 옮긴 것(판 형식 25)
+    return minutes.convert(filled, minutes.injury_to_minutes, minutes.row_to_minutes)
 
 
 # --- 내장 템플릿 ---

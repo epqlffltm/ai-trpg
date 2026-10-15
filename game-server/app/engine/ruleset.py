@@ -41,8 +41,10 @@ RULESET_MAX_EFFECTS = 5
 RULESET_MAX_TABLE_ROWS = 20
 # 부상이 서술에 주는 사실의 길이. 라운드마다 AI 의 입력에 들어간다
 INJURY_FACT_MAX_LENGTH = 200
-# 부상이 풀리거나 나을 때까지의 라운드 수
+# 짧은 부상이 풀릴 때까지의 라운드 수
 RULESET_MAX_INJURY_ROUNDS = 1000
+# 오래 가는 부상이 낫기까지, 치료가 앞당기는, 덧나서 늦춰지는 게임 안의 시간(분). 한 해까지
+RULESET_MAX_HEAL_MINUTES = 365 * 24 * 60
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -226,9 +228,10 @@ class Effect(Part):
 class Healing(enum.StrEnum):
     """부상이 낫는 방식."""
 
-    # 짧은 것. 정한 라운드가 지나면 저절로 풀린다(기절, 중독)
+    # 짧은 것. 정한 라운드가 지나면 저절로 풀린다(기절, 중독). "한 장면 동안"이라 라운드로 센다
     ROUNDS = 'rounds'
-    # 오래 가는 것. 정한 라운드가 지나면 낫는다. 치료에 성공하면 그 라운드가 줄어든다. 나을 때 후유증 표를 굴린다(골절)
+    # 오래 가는 것. 정한 게임 안의 시간(분)이 지나면 낫는다. 치료에 성공하면 그 시간이 줄어든다.
+    # 나을 때 후유증 표를 굴린다(골절). "며칠"이라 시간으로 센다(app/calendar/)
     HEALS = 'heals'
     # 결손. 낫지 않는다(손을 잃음)
     PERMANENT = 'permanent'
@@ -283,11 +286,12 @@ class Injury(Part):
     부상 하나. 예: 팔 골절.
 
     효과(effects)는 엔진이 판정에 적용하고, 사실(fact)은 서술자가 지킨다. 둘을 함께 적는다.
-    rounds 는 짧은 것이 풀리기까지, 오래 가는 것이 저절로 낫기까지의 라운드 수다. 결손에는 없다.
+    rounds 는 짧은 것이 풀리기까지의 라운드 수다. 짧은 것에만 있다.
+    heal_minutes 는 오래 가는 것이 저절로 낫기까지의 게임 안의 시간(분)이다. 오래 가는 것에만 있다.
+    짧은 것은 "한 장면 동안"이라 라운드로, 오래 가는 것은 "며칠"이라 시간으로 센다(판 형식 25). 결손은 둘 다 없다.
     aftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.
     aimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.
-    시간은 지금 라운드로 센다. 게임 속 달력과 시계가 생기면 그것으로 옮긴다.
-    treat_difficulty 와 treat_rounds 는 치료다. 치료에 성공하면 나을 때까지 남은 라운드가 줄어든다(#114 다).
+    treat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).
     """
 
     key: Key
@@ -296,31 +300,39 @@ class Injury(Part):
     effects: Annotated[tuple[Effect, ...], Field(max_length=RULESET_MAX_EFFECTS)] = ()
     healing: Healing
     rounds: Annotated[int, Field(ge=1, le=RULESET_MAX_INJURY_ROUNDS)] | None = None
+    heal_minutes: Annotated[int, Field(ge=1, le=RULESET_MAX_HEAL_MINUTES)] | None = None
     aftermath: InjuryTable | None = None
     aimable: bool = False
     # 치료의 난이도. 규칙의 Difficulty.key 다. 비우면 치료할 수 없는 부상이다(시간이 지나야 낫는다)
     treat_difficulty: Key | None = None
-    # 치료에 한 번 성공할 때마다 나을 때까지 남은 라운드에서 빼는 수
-    treat_rounds: Annotated[int, Field(ge=1, le=RULESET_MAX_INJURY_ROUNDS)] | None = None
+    # 치료에 한 번 성공할 때마다 나을 시각을 앞당기는 게임 안의 시간(분)
+    treat_minutes: Annotated[int, Field(ge=1, le=RULESET_MAX_HEAL_MINUTES)] | None = None
 
     @model_validator(mode='after')
     def require_treatment_pair_on_healing(self) -> Self:
         """
-        치료의 난이도와 줄이는 라운드는 함께 적는다. 오래 가는 부상(heals)에만 있다.
+        치료의 난이도와 앞당기는 시간은 함께 적는다. 오래 가는 부상(heals)에만 있다.
 
         짧은 것은 금방 풀리고, 결손은 치료해도 낫지 않는다.
         """
-        if (self.treat_difficulty is None) != (self.treat_rounds is None):
-            raise ValueError('treat_difficulty 와 treat_rounds 는 함께 적습니다.')
+        if (self.treat_difficulty is None) != (self.treat_minutes is None):
+            raise ValueError('treat_difficulty 와 treat_minutes 는 함께 적습니다.')
         if self.treat_difficulty is not None and self.healing != Healing.HEALS:
             raise ValueError('treat_difficulty 는 오래 가는 부상(heals)에만 적습니다.')
         return self
 
     @model_validator(mode='after')
-    def require_rounds_unless_permanent(self) -> Self:
-        """결손이 아니면 라운드 수가 있어야 하고, 결손에는 없다."""
-        if (self.healing == Healing.PERMANENT) != (self.rounds is None):
-            raise ValueError('rounds 는 결손(permanent)이 아닌 부상에만 적습니다.')
+    def require_rounds_only_when_short(self) -> Self:
+        """짧은 것에는 라운드 수가 있어야 하고, 다른 것에는 없다."""
+        if (self.healing == Healing.ROUNDS) != (self.rounds is not None):
+            raise ValueError('rounds 는 짧은 부상(rounds)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_minutes_only_when_healing(self) -> Self:
+        """오래 가는 것에는 낫기까지의 시간이 있어야 하고, 다른 것에는 없다."""
+        if (self.healing == Healing.HEALS) != (self.heal_minutes is not None):
+            raise ValueError('heal_minutes 는 오래 가는 부상(heals)에만 적습니다.')
         return self
 
     @model_validator(mode='after')
@@ -376,7 +388,7 @@ class Mishap(enum.StrEnum):
     NOTHING = 'nothing'
     # 좀 아프다. 치료받는 쪽이 magnitude 만큼 피해를 입는다
     PAIN = 'pain'
-    # 덧난다. 나을 때까지 남은 라운드가 rounds 만큼 늘어난다. magnitude 가 있으면 그만큼 피해도 입는다
+    # 덧난다. 나을 시각이 delay_minutes 만큼 늦춰진다. magnitude 가 있으면 그만큼 피해도 입는다
     WORSEN = 'worsen'
     # 치료받는 쪽이 그 자리에서 죽는다
     FATAL = 'fatal'
@@ -388,16 +400,16 @@ class MishapRow(Part):
     low: Annotated[int, Field(ge=1, le=RULESET_MAX_DIE)]
     high: Annotated[int, Field(ge=1, le=RULESET_MAX_DIE)]
     kind: Mishap
-    # 덧날 때 늘어나는 라운드. 덧남에만 있다
-    rounds: Annotated[int, Field(ge=1, le=RULESET_MAX_INJURY_ROUNDS)] | None = None
+    # 덧날 때 늦춰지는 게임 안의 시간(분). 덧남에만 있다
+    delay_minutes: Annotated[int, Field(ge=1, le=RULESET_MAX_HEAL_MINUTES)] | None = None
     # 피해의 등급. 규칙의 Magnitude.key 다. 좀 아픔에는 있어야 하고, 덧남에는 있어도 된다
     magnitude: Key | None = None
 
     @model_validator(mode='after')
     def require_fields_for_kind(self) -> Self:
         """종류마다 필요한 칸만 적는다."""
-        if (self.kind == Mishap.WORSEN) != (self.rounds is not None):
-            raise ValueError('rounds 는 worsen 에만 적습니다.')
+        if (self.kind == Mishap.WORSEN) != (self.delay_minutes is not None):
+            raise ValueError('delay_minutes 는 worsen 에만 적습니다.')
         if self.kind == Mishap.PAIN and self.magnitude is None:
             raise ValueError('pain 에는 magnitude 를 적습니다.')
         if self.kind in (Mishap.NOTHING, Mishap.FATAL) and self.magnitude is not None:
@@ -422,7 +434,7 @@ class Treatment(Part):
     """
     치료의 규칙. 어느 능력으로 판정하고, 실패하면 무엇이 일어나는지.
 
-    난이도와 줄어드는 라운드는 부상마다 다르다(Injury.treat_difficulty, treat_rounds).
+    난이도와 앞당기는 시간은 부상마다 다르다(Injury.treat_difficulty, treat_minutes).
     """
 
     # 치료 판정에 쓰는 능력. 규칙의 Ability.key 다

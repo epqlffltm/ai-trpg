@@ -140,24 +140,15 @@ def ends_after(injury: Injury, round_number: int) -> int | None:
     return round_number + injury.rounds
 
 
-def minutes_of(rounds: int, round_minutes: int) -> int:
-    """
-    규칙에 라운드 수로 적힌 기간을 게임 안의 분으로 바꾼다. 판의 라운드 하나에 흐르는 기본 시간을 곱한다.
-
-    규칙의 오래 가는 부상과 치료는 아직 라운드 수로 적혀 있다. 시간으로 낫게 하면서 이 셈으로 옮긴다.
-    """
-    return rounds * round_minutes
-
-
-def heals_at(injury: Injury, now: int, round_minutes: int) -> int | None:
+def heals_at(injury: Injury, now: int) -> int | None:
     """
     지금(now, 1일째 0시부터 흐른 분) 생긴 오래 가는 부상이 저절로 낫는 시각(분). 오래 가는 것이 아니면 None.
 
-    규칙의 라운드 수에 판의 기본 걸음을 곱한 만큼 뒤다(minutes_of). 치료로 앞당겨지거나 덧나서 늦춰진다.
+    규칙의 낫기까지의 시간(heal_minutes)만큼 뒤다. 치료로 앞당겨지거나 덧나서 늦춰진다.
     """
     if injury.healing != Healing.HEALS:
         return None
-    return now + minutes_of(injury.rounds, round_minutes)
+    return now + injury.heal_minutes
 
 
 def leaves_aftermath(injury: Injury) -> bool:
