@@ -134,5 +134,22 @@ jobs:
       - name: 마이그레이션 누락 검사
         run: uv run python manage.py makemigrations --check --dry-run
 
+      # 테스트를 돌리며 지나간 줄을 센다. 재는 대상은 pyproject.toml 의 [tool.coverage.run] 이다
       - name: 테스트
-        run: uv run python manage.py test
+        run: uv run coverage run manage.py test
+
+      # 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 아직 기준을 걸지 않는다(재기만 한다).
+      # 표에는 다 지나간 파일을 빼고, 덜 지나간 파일부터 적는다
+      - name: 커버리지 요약
+        run: |
+          total="$(uv run coverage report --format=total)"
+          echo "인증 서버 커버리지 ${total}%"
+          {
+            echo "### 인증 서버 커버리지 ${total}%"
+            echo
+            echo "<details><summary>덜 지나간 파일</summary>"
+            echo
+            uv run coverage report --format=markdown --skip-covered --sort=cover
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
