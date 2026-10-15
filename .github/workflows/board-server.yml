@@ -120,8 +120,25 @@ jobs:
 
       # 함수와 클래스를 하나씩 보는 테스트. DB 를 쓰지 않는다
       - name: 테스트
-        run: npm test
+        run: npm run test:cov
 
       # 앱을 통째로 만들어 주소로 불러 보는 테스트. 실제 DB 에서 돈다
       - name: 앱 테스트
-        run: npm run test:e2e
+        run: npm run test:e2e:cov
+
+      # 두 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 아직 기준을 걸지 않는다(재기만 한다).
+      # 대상은 src 전체다(vitest.config.ts, vitest.config.e2e.ts 의 coverage)
+      - name: 커버리지 요약
+        run: |
+          line() {
+            node -e "const t = require('./coverage/$1/coverage-summary.json').total;
+              console.log('| $2 | ' + t.statements.pct + '% | ' + t.branches.pct + '% | ' + t.functions.pct + '% | ' + t.lines.pct + '% |')"
+          }
+          {
+            echo "### 게시판 서버 커버리지"
+            echo
+            echo "| 테스트 | 문장 | 분기 | 함수 | 줄 |"
+            echo "| --- | --- | --- | --- | --- |"
+            line unit "단위 (npm run test:cov)"
+            line e2e "앱 (npm run test:e2e:cov)"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
