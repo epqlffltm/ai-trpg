@@ -270,6 +270,13 @@ def test_there_is_something_to_draft(characters: bool, things: bool, quests: boo
 # --- 메시지 ---
 
 
+def test_the_rules_keep_items_passed_between_characters_out():
+    # ledger-draft-2: 캐릭터끼리 건넨 것을 손에 넣은 일로 적으면 장부에 물건이 하나 더 생긴다(#229)
+    assert DRAFT_PROMPT_VERSION == 'ledger-draft-2'
+    assert '캐릭터끼리 물건을 건넨 것은 넣지 않는다' in SYSTEM_TEXT
+    assert '마지막에 가진 캐릭터 하나만 넣는다' in SYSTEM_TEXT
+
+
 def test_the_message_lists_the_choices_and_the_scene():
     [system, user] = build_messages(SCENE, CONTEXT)
 
