@@ -64,7 +64,8 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> No
     앞사람이 쓰러뜨린 것을 뒷사람이 일으킬 수 있다. NPC 도 그렇다. 앞사람이 죽인 NPC 는 뒷사람이 바꾸지 못한다.
     같은 부상을 여럿이 치료하면 앞사람부터 차례로 적용한다. 앞사람이 다 낫게 했으면 뒷사람은 치료할 것이 없다.
     앞사람의 치료가 실패해 즉사한 캐릭터는 자기 차례에 행동하지 못한다. 판정도 결과도 없다.
-    scene 은 이번 장면의 NPC 들이다(app/rounds/cast.py). NPC 의 상태는 그 안에 들어 있고, 여기서 고친다.
+    scene 은 이번 장면의 NPC 와 몬스터들이다(app/rounds/cast.py, app/rounds/monster_scene.py).
+    NPC 와 몬스터의 상태는 그 안에 들어 있고, 여기서 고친다. 앞사람이 죽인 몬스터는 뒷사람이 치지 못한다.
     지목은 장면에 나오지 않은 인물도 짚을 수 있어서 상태 전부(scene.npcs)를 함께 넘긴다.
 
     지금 앉아 있고, 선언에 행동을 붙였고, 시트가 있는 사람만 굴린다.
@@ -93,6 +94,7 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> No
         people=person_entries(snapshot),
         items=items.catalog(snapshot),
         snapshot=snapshot,
+        monsters=scene.monsters,
     )
     for member, declaration in rolling:
         # 앞사람의 치료가 실패해 즉사했으면 그 캐릭터는 행동하지 못한다. 쓰러진 것과 다르다

@@ -62,6 +62,9 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
         changed = record_npc_change(session, table, npc_effect_, cause=after)
         holder = {'entry_id': npc_effect_['entry_id'], 'name': npc_effect_['name']}
         record_injury(session, table, npc_effect_.get('injury_roll'), holder, cause=changed)
+    monster_effect = outcome.get('monster_effect')
+    if monster_effect is not None:
+        record_monster_change(session, table, monster_effect, cause=after)
 
 
 def record_treatment(session: AsyncSession, table: GameTable, treated: dict, cause: TableEvent) -> TableEvent:
@@ -135,6 +138,16 @@ def record_npc_change(session: AsyncSession, table: GameTable, effect: dict, cau
     """
     payload = {'round': cause.payload['round'], **effect}
     return recorder.record(session, table, EventType.NPC_CHANGED, payload=payload, cause=cause)
+
+
+def record_monster_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> TableEvent:
+    """
+    몬스터 한 마리의 상태가 바뀐 것을 이벤트로 적는다. 그 변화를 부른 판정의 이벤트(cause)에 잇는다.
+
+    NPC 의 변화와 같다. HP 의 숫자까지 다 적고, 앉은 사람에게 내보낼 칸은 이벤트 API 가 고른다.
+    """
+    payload = {'round': cause.payload['round'], **effect}
+    return recorder.record(session, table, EventType.MONSTER_CHANGED, payload=payload, cause=cause)
 
 
 def record_hp_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> TableEvent:

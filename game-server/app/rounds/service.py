@@ -54,10 +54,11 @@ from app.events import repository as event_repository
 from app.events.models import EventType
 from app.rounds import narration_request, opener, repository
 from app.rounds.acceptance import accept_action, put_declaration
-from app.rounds.cast import CastMember, Scene, cast_of
+from app.rounds.cast import Scene, cast_of
 from app.rounds.errors import Conflict, RoundConflictError, RoundNotFoundError
 from app.rounds.judging import expire_injuries, find_dying, roll_checks, roll_death_saves
 from app.rounds.models import CloseReason, Round, RoundStatus
+from app.rounds.monster_scene import scene_monsters
 from app.rounds.moves import build_moves, frozen_moves, frozen_style, to_people
 from app.rounds.narrator import NarrationRequest
 from app.rounds.prompt import HISTORY_ROUNDS
@@ -161,16 +162,14 @@ async def get_current_round(session: AsyncSession, user_id: uuid.UUID, table_id:
     return table, round_
 
 
-async def get_scene_cast(
-    session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID
-) -> tuple[Round, list[CastMember]]:
+async def get_scene_cast(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> tuple[Round, Scene]:
     """
-    자기가 앉아 있는 테이블의 가장 최근 라운드와, 그 장면의 인물들을 돌려준다. 행동으로 겨눌 수 있는 NPC 들이다.
+    자기가 앉아 있는 테이블의 가장 최근 라운드와, 그 장면을 돌려준다. 행동으로 겨눌 수 있는 NPC 와 몬스터들이다.
 
     앉지 않았으면 TableNotFoundError, 아직 시작하지 않았으면 RoundConflictError.
     """
     table, round_ = await get_current_round(session, user_id, table_id)
-    return round_, (await load_scene(session, table, round_)).cast
+    return round_, await load_scene(session, table, round_)
 
 
 async def get_round(
@@ -256,12 +255,20 @@ async def lock_current_round(
 
 async def load_scene(session: AsyncSession, table: GameTable, round_: Round) -> Scene:
     """
-    이번 장면의 NPC 들을 읽는다. 테이블의 NPC 상태 전부와, 그중 라운드의 장면에 나온 인물들이다.
+    이번 장면의 NPC 와 몬스터들을 읽는다. 테이블의 NPC 상태 전부와, 그중 라운드의 장면에 나온 인물들,
+    그리고 살아 있는 캐릭터가 서 있는 장소들의 몬스터다.
 
-    테이블을 잠근 요청 안에서 부르면 돌려준 인물의 상태를 그대로 고칠 수 있다.
+    테이블을 잠근 요청 안에서 부르면 돌려준 인물과 몬스터의 상태를 그대로 고칠 수 있다.
+    조우가 없는 판이면 몬스터의 상태를 읽지 않는다. 테이블에 몬스터가 없다.
     """
+    snapshot = read_snapshot(table.content)
     states = await table_repository.list_npcs(session, table.id)
-    return Scene(npcs=states, cast=cast_of(read_snapshot(table.content), round_.scene, states))
+    monsters = await table_repository.list_monsters(session, table.id) if snapshot.encounters else []
+    return Scene(
+        npcs=states,
+        cast=cast_of(snapshot, round_.scene, states),
+        monsters=scene_monsters(snapshot, table, monsters),
+    )
 
 
 def hand_over(scheduler: NarrationScheduler, saved: tuple[GameTable, Round]) -> None:
@@ -309,7 +316,7 @@ async def declare(
     if find_arrival(round_, user_id) is not None:
         raise RoundConflictError(Conflict.CHARACTER_ARRIVING)
     scene = await load_scene(session, table, round_)
-    put_declaration(round_, member, data.content, accept_action(table, member, data.action, scene.cast))
+    put_declaration(round_, member, data.content, accept_action(table, member, data.action, scene))
 
     everyone_declared = not waiting_for(table, round_)
     if everyone_declared:

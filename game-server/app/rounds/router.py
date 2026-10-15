@@ -16,11 +16,20 @@ from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
 from app.core.dice import Rolling
 from app.rounds import service, state
-from app.rounds.cast import CastMember, is_named
+from app.rounds.cast import Scene, is_named
 from app.rounds.closing import RoundCloser, closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.rounds.schemas import DeclarationOut, DeclarationUpdate, PersonOut, RoundOut, RoundPage, SceneCastOut
+from app.rounds.monster_scene import condition as monster_condition
+from app.rounds.schemas import (
+    DeclarationOut,
+    DeclarationUpdate,
+    PersonOut,
+    RoundOut,
+    RoundPage,
+    SceneCastOut,
+    SceneMonsterOut,
+)
 from app.tables import injuries
 from app.tables.models import GameTable, TableStatus
 
@@ -87,8 +96,8 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
     )
 
 
-def to_cast(round_: Round, cast: list[CastMember]) -> SceneCastOut:
-    """이번 장면의 인물들을 앉은 사람에게 보여 주는 응답으로 바꾼다. 이름과 생사만 싣는다."""
+def to_cast(round_: Round, scene: Scene) -> SceneCastOut:
+    """이번 장면의 인물과 몬스터들을 앉은 사람에게 보여 주는 응답으로 바꾼다. 이름과 생사(와 몸 상태)만 싣는다."""
     people = [
         PersonOut(
             id=member.entry_id,
@@ -97,9 +106,19 @@ def to_cast(round_: Round, cast: list[CastMember]) -> SceneCastOut:
             injuries=injuries.active_keys(member.npc.injuries),
             named=is_named(member.npc),
         )
-        for member in cast
+        for member in scene.cast
     ]
-    return SceneCastOut(round=round_.number, people=people)
+    monsters = [
+        SceneMonsterOut(
+            id=monster.state.id,
+            name=monster.name,
+            place_id=monster.state.place_id,
+            status=monster.state.status,
+            condition=monster_condition(monster),
+        )
+        for monster in scene.monsters
+    ]
+    return SceneCastOut(round=round_.number, people=people, monsters=monsters)
 
 
 # --- 서비스의 예외를 응답으로 바꾼다. 앱에 한 번 등록한다(app/main.py) ---
@@ -131,6 +150,7 @@ TARGET_ERRORS = {
     'target': 'action.target 이 이 테이블에 앉은 사람이 아닙니다.',
     'npc': 'action.npc 가 이번 장면의 인물이 아닙니다.',
     'place': 'action.place 가 지금 장소에서 아는 길로 이어진 장소가 아닙니다.',
+    'monster': 'action.monster 가 지금 장소의 몬스터가 아닙니다.',
 }
 
 
@@ -166,8 +186,8 @@ async def read_scene_cast(table_id: uuid.UUID, user: CurrentUser, session: Sessi
 
     장면에 이름이나 호칭이 나온 인물만 들어간다. 테이블의 인물 전부가 아니다.
     """
-    round_, cast = await service.get_scene_cast(session, user.user_id, table_id)
-    return to_cast(round_, cast)
+    round_, scene = await service.get_scene_cast(session, user.user_id, table_id)
+    return to_cast(round_, scene)
 
 
 @router.get('/{number}', response_model=RoundOut, status_code=status.HTTP_200_OK)
