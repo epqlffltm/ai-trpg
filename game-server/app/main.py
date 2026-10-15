@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
 from app.assets.lorebooks import router as lorebooks
@@ -105,7 +106,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await app.state.redis.aclose()
 
 
-def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None, http_client: httpx.AsyncClient | None = None, engine: AsyncEngine | None = None
+) -> FastAPI:
     """
     FastAPI 앱을 만들어 돌려준다.
 
@@ -114,6 +117,8 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
 
     http_client 는 다른 서버에 요청을 보낼 때 쓰는 클라이언트다.
     테스트가 가짜 인증 서버로 가는 클라이언트를 넣을 수 있게 밖에서 받는다.
+    engine 은 DB 연결의 풀이다. 주지 않으면 설정으로 새로 만든다.
+    테스트는 풀 하나를 만들어 모든 앱이 함께 쓴다. 테스트마다 새 연결을 맺지 않는다(#223).
     """
     settings = settings or get_settings()
 
@@ -140,7 +145,7 @@ def create_app(settings: Settings | None = None, http_client: httpx.AsyncClient 
     # 엔진을 만드는 것만으로는 DB 에 연결하지 않는다
     # 세션은 신호의 서명자를 들고 다닌다. 테이블을 바꾸고 신호를 보낼 때 이것으로 서명한다(app/realtime/signals.py).
     # 신호를 듣는 쪽도 같은 것으로 맞춰 본다(아래의 PostgresListener)
-    app.state.engine = create_engine(settings)
+    app.state.engine = engine or create_engine(settings)
     app.state.signal_signer = signer_from(settings)
     app.state.session_factory = create_session_factory(app.state.engine, session_info(app.state.signal_signer))
 
