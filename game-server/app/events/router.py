@@ -60,6 +60,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     ),
     # 퀘스트의 이름과 상태, 보상은 공개다. 사건의 글(로어북)은 적지 않는다
     EventType.QUEST_CHANGED: ('entry_id', 'name', 'previous', 'status', 'rewards'),
+    EventType.CLOCK_STEP_CHANGED: ('previous', 'next_step_minutes', 'default'),
     # 캐릭터의 위치는 공개다. 아는 장소만 적히므로 숨긴 장소는 새지 않는다
     EventType.CHARACTER_MOVED: ('round', 'user_id', 'character_name', 'from', 'to'),
     # 찾은 길은 공개다. 찾았으니 이제 모두가 아는 길이다. 굴린 판정은 처음부터 적지 않는다
@@ -68,7 +69,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.WHISPER_SENT: ('user_id', 'character_name', 'recipient_id', 'recipient_character_name'),
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
-    EventType.ROUND_OPENED: ('number', 'deadline_at', 'narration_tier'),
+    # 게임 안의 시각은 공개다. 모두 같은 때에 있다
+    EventType.ROUND_OPENED: ('number', 'deadline_at', 'narration_tier', 'clock', 'passed_minutes'),
     EventType.PLAYER_ACTION: ('round', 'character_name', 'content', 'action'),
     # 굴림은 공개다. 숫자까지 모두에게 보인다
     EventType.CHECK_ROLLED: (

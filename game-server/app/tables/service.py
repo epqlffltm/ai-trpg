@@ -36,6 +36,7 @@ from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
 from app.billing import charges
+from app.calendar import state as calendar
 from app.events import recorder
 from app.events.models import EventType
 from app.limits.setup import Limiting
@@ -87,6 +88,7 @@ async def create_table(
 ) -> GameTable:
     """
     테이블을 만든다. 만든 사람이 방장이 되어 앉는다. offered 는 이 서버가 내주는 서술 등급들이다.
+    판의 시작 시각을 가리키는 게임 안의 시계를 함께 단다(app/calendar/).
 
     판이 없으면 AssetNotFoundError, 없는 스타팅이나 판이 허용하지 않는 캐릭터 방식이나 내주지 않는 서술 등급을
     골랐으면 TableOptionError, 그 판으로는 둘 수 없는 정원이면 TableConflictError.
@@ -108,6 +110,7 @@ async def create_table(
 
     password_hash = await hash_table_password(data.password)
     table = build_table(viewer.user_id, version, snapshot, data, modes, password_hash)
+    calendar.start_clock(table, snapshot)
     repository.add_table(session, table)
     # 테이블을 먼저 DB 에 보낸다. 테이블의 ID 는 그때 정해지고, 이벤트는 그 ID 를 가리킨다
     await session.flush()
