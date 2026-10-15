@@ -206,6 +206,8 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | DELETE | `/api/v1/game/tables/{id}/members/{user_id}/items/{entry_id}` | 그 사람의 지금 캐릭터에게서 물건 빼앗기. `count`(1~99, 기본 1). 방장만. 진행 중에만 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/quests/{entry_id}` | 퀘스트의 상태 바꾸기(`status`: `active`, `succeeded`, `failed`). 방장만. 진행 중에만. 성공이면 보상 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/members/{user_id}/place` | 그 사람의 지금 캐릭터를 맵의 아는 장소로 옮기기(`place_id`). 방장만. 진행 중에만. 길로 이어져 있지 않아도 된다 | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/clock` | 게임 안의 지금 시각(며칠째, 시, 분, 하루의 어느 때)과 다음 라운드에 흐를 시간 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/clock/step` | 다음 라운드가 열릴 때 흐를 시간 정하기(`minutes`, 0분~일주일, `null` 이면 판의 기본). 방장만. 진행 중에만. 한 번 쓰면 판의 기본으로 돌아간다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/members/{user_id}/reroll` | 그 사람에게 "한 번 더 굴리기"를 주기. 방장만. 시나리오의 제작자가 허락한 테이블에서만 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/host` | 방장 넘기기. 방장만 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/narration-style` | 서술 문체 바꾸기. 방장만. 진행 중에도 된다. `null` 이면 판의 추천 문체로 | access 토큰 |
@@ -458,7 +460,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 - `rolled` 는 한 테이블에서 한 사람이 한 번 굴린다. 굴리는 법은 룰북의 규칙에 있다(`rules.score_roll`). 계산은 `app/engine/score_roll.py` 가 한다.
 - 다시 굴리기는 제작자가 정한다(`reroll_allowed`). 켜 두면 방장이 테이블에서 특정한 사람에게 "한 번 더"를 줄 수 있다. 꺼 두면 방장도 주지 못한다. 나쁜 눈이 나와도 그대로 가는 것이 그 시나리오의 뜻일 수 있어서, 방장이 아니라 제작자의 칸이다.
 - 추천 문체(`narration_style`)는 여덟 가지다. `none`(지시하지 않음, 모델이 원래 쓰는 대로), `classic`(정통), `web_novel`(웹소설), `hardboiled`(하드보일드), `emotional`(여성향), `action`(남성향), `dopamine`(도파민), `literary`(문학). 값의 이름은 독자가 아니라 쓰는 기법을 가리킨다. 화면에 보이는 이름은 화면이 정한다. 판에 굳으므로 제작자가 나중에 바꿔도 이미 낸 판과 그 판으로 도는 테이블은 그대로다.
-- 시계(`clock`)는 게임 안의 시각이다(달력 1단계). 1일째 0시부터 센 숫자 시계이고 달 이름은 아직 없다. 테이블의 시계는 판의 시작 시각에서 시작해 라운드가 하나 지날 때마다 `round_minutes` 만큼 흐르게 된다(테이블의 시계와 방장이 라운드마다 바꾸는 것, 서술에 시각을 넣는 것은 다음 단계에서 붙는다). 시간을 정하는 것은 엔진과 방장이고 언어 모델이 아니다.
+- 시계(`clock`)는 게임 안의 시각이다(달력 1단계). 1일째 0시부터 센 숫자 시계이고 달 이름은 아직 없다. 테이블의 시계는 판의 시작 시각에서 시작해 라운드가 하나 지날 때마다 `round_minutes` 만큼 흐른다([테이블의 시계](#시계)). 서술에 시각을 넣는 것은 다음 단계에서 붙는다. 시간을 정하는 것은 엔진과 방장이고 언어 모델이 아니다.
 - 제작자는 여러 방식을 함께 허용할 수 있다. `manual` 과 `point_buy` 를 둘 다 켜면 플레이어가 고른다. 어느 방식으로 만들었는지는 테이블의 모두에게 보인다.
 - 플레이어는 최대 HP 를 적지 못한다. 최대 HP = `base` + 능력치의 보정이고, `cap` 을 넘지 않고 1 아래로 내려가지 않는다(`app/engine/creation.py`). 어느 능력치의 보정인지는 룰북의 규칙(`hp_ability`)이 정한다. `cap` 을 `base` 와 같게 두면 보정은 깎기만 한다.
 
@@ -778,6 +780,7 @@ characters.py   캐릭터 정하기(진행 중에 새 캐릭터를 들일 때도
 | `table_items` | 캐릭터의 소지품. 시트마다 물건(판의 로어북 물건 항목) 한 가지가 한 줄이고 개수(1~99)를 적는다. 0 개가 되면 지운다 |
 | `table_quests` | 테이블의 퀘스트. 판의 사건 항목 하나가 한 줄이고 상태(`hidden`, `active`, `succeeded`, `failed`)를 적는다. 시작할 때 만든다 |
 | `table_found_routes` | 테이블의 캐릭터가 찾아낸 숨긴 길. 판의 길의 두 끝(`from_place`, `to_place`)으로 가리킨다. 찾은 때를 적는다 |
+| `table_clocks` | 테이블의 게임 안의 시계. 테이블 하나에 한 줄. 1일째 0시부터 흐른 분(`minutes`)과 방장이 정한 다음 걸음(`next_step_minutes`, 비면 판의 기본) |
 | `table_visits` | 테이블의 캐릭터가 서 본 맵의 장소. 판의 장소 항목 하나가 한 줄이다. 처음 선 때를 적는다. 테이블이 맵의 무엇을 아는지 계산하는 재료다 |
 | `ledger_drafts` | 장부 초안의 줄. 서술 뒤에 모델이 쓰고 서버가 검증한 장부의 변경 하나가 한 줄이다(`found_item`, `quest_change`). 처지(`pending`, `accepted`, `rejected`, `expired`)를 옮긴다 |
 | `table_monsters` | 몬스터 한 마리마다의 숫자와 생사와 자리. 자기 ID 가 있고(판정이 겨누는 값), 판의 몬스터(`monster_id`)와 같은 몬스터 사이의 번호(`number`), 있는 장소(`place_id`), 능력치, 최대 HP, 지금의 HP, 생사(`table_npcs` 와 같은 값), 만난 첫 라운드(`engaged_round`, 아직이면 비어 있다)를 갖는다. 게임을 시작할 때 판의 조우에서 생긴다([몬스터 도감](#몬스터-도감)) |
@@ -1019,6 +1022,18 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
   캐릭터를 옮기지는 말라는 한 줄이 붙는다. "숨은 길을 드러내지 마라"가 찾은 길까지 막아, 찾았는데 어디로 이어지는지 쓰지 않았다(아래 측정).
   한 일의 줄에 숨은 길을 싣지 않는 까닭: AI 를 부르지 않는 서술자(`NARRATOR=fake`)는 그 줄을 장면으로 그대로 내보낸다. 장면은 모두가 읽는다.
   찾기에 실패했을 때도 결과는 "찾은 것이 없다"뿐이다. 숨긴 길이 있었는지 서술자에게도 이 줄로는 알리지 않는다(맵 절이 따로 안다).
+
+### 시계
+
+게임 안의 시각이다(달력 2단계). 라운드의 마감을 재는 서버의 시계(`app/rounds/clock.py`)와는 다른 것이다. 판의 시계([시나리오](#시나리오)의 `clock`)에서 시작해 테이블마다 흐른다(`table_clocks`, `app/calendar/`).
+
+- **숫자 하나다.** 1일째 0시부터 흐른 분이다. 며칠째, 몇 시, 몇 분, 하루의 어느 때(`time_of_day`: `dawn` 4시~, `morning` 7시~, `day` 11시~, `evening` 17시~, `night` 21시~)는 그 수에서 계산한다. 따로 적지 않으니 서로 어긋나지 않는다. 달과 해, 요일은 아직 없다.
+- **테이블을 만들 때 단다.** 판의 시작 시각을 가리킨다. 첫 라운드는 그 시각에 열린다. 시계가 생기기 전에 만든 테이블은 판의 시작 시각(옛 판이면 1일째 8시)에서 시작한다. 그동안 지난 라운드의 시간은 셀 수 없어서 세지 않았다.
+- **라운드가 열릴 때 흐른다.** 흘리는 것은 엔진이다(`app/rounds/opener.py`). 판의 `round_minutes` 만큼, 방장이 정했으면 그만큼 흐른다. 열린 이벤트(`round_opened`)에 그때의 시각과 흐른 분이 실린다. 모두가 같은 때에 있다.
+- **방장이 다음 걸음을 정한다.** "하룻밤 쉰다"는 `PUT /tables/{id}/clock/step` 에 `{"minutes": 480}` 이다. 방장만(403), 진행 중에만(409 `not_playing`). 0분(같은 장면을 이어 간다)부터 일주일까지다. `minutes` 는 꼭 보낸다. `null` 이면 판의 기본으로 되돌린다. 빈 본문이 몰래 되돌리지 않게 했다.
+  정한 값은 다음 라운드가 열릴 때 한 번 쓰고 지운다. 그 뒤로는 다시 판의 기본이다. 정한 것은 이벤트(`clock_step_changed`)로 모두에게 간다.
+- **시각을 곧바로 고치지는 않는다.** 시계는 앞으로만 흐른다. 되돌리거나 건너뛰어 놓는 API 는 없다. 이야기가 건너뛴 시간은 다음 걸음으로 흘린다.
+- **AI GM 은 시계를 바꾸지 못한다.** 서술에서 "날이 밝았다"고 해도 시각은 그대로다. 서술에 지금 시각을 알려 주는 것은 다음 단계다.
 
 ## 라운드
 
@@ -1684,7 +1699,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `whisper_sent` | 누가 누구에게 쪽지를 보냈다. 알리기로 한 테이블에만 적힌다. 쪽지의 글은 적지 않는다 | `user_id`, `character_name`, `recipient_id`, `recipient_character_name` |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
-| `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_tier`(이 라운드의 서술 등급) |
+| `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_tier`(이 라운드의 서술 등급), `clock`(게임 안의 시각: `day`, `hour`, `minute`, `time_of_day`), `passed_minutes`(앞 라운드부터 흐른 분. 첫 라운드는 0) |
 | `player_action` | 플레이어가 선언한 행동 | `round`, `character_name`, `content`, `action`(행동. 없으면 `null`) |
 | `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면) |
 | `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed`, `injury_roll`(부상 표를 굴렸으면) |
@@ -1701,6 +1716,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `items_lost` | 방장이 캐릭터에게서 물건을 빼앗았다 | `items_gained` 와 같다. `total` 이 0 이면 다 잃었다 |
 | `item_used` | 캐릭터가 소모품을 썼다(또는 못 했다). 그 행동 바로 뒤에 적힌다. 회복했으면 바로 뒤에 `hp_changed` | `round`, `character_name`, `entry_id`, `name`, `used`, `reason`, `target`(회복받은 사람), `remaining` |
 | `item_given` | 캐릭터가 물건을 건넸다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `entry_id`, `name`, `count`, `given`, `reason`, `target`(받은 사람), `remaining`, `target_total` |
+| `clock_step_changed` | 방장이 다음 라운드에 흐를 시간을 정했다 | `previous`(앞의 걸음, 분), `next_step_minutes`(이제 흐를 분), `default`(판의 기본으로 되돌렸으면 `true`) |
 | `quest_changed` | 방장이 퀘스트의 상태를 바꿨다 | `entry_id`, `name`(사건의 이름), `previous`, `status`, `rewards`: 성공이면 받은 사람마다 `user_id`, `character_name`, `items`(물건마다 `entry_id`, `name`, `count`(받은 개수), `total`, `capped`). 실패나 드러내기면 빈 목록 |
 | `character_moved` | 캐릭터가 맵의 다른 장소로 옮겨 갔다. 방장이 옮겼으면 행한 사람이 방장이다. 선언 행동으로 갔으면 행한 사람이 없고 그 행동 바로 뒤에 적힌다 | `user_id`, `character_name`, `from`, `to`: 장소마다 `entry_id`, `name`. 맵이 생기기 전에 시작한 테이블의 캐릭터면 `from` 이 `null`. 선언 행동이면 `round` 도 |
 | `place_searched` | 캐릭터가 서 있는 곳에서 숨긴 길을 찾았다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`, `found`: 찾은 길마다 `from_place`, `to_place`, `two_way`. 못 찾았으면 빈 목록. 굴린 판정은 없다 |

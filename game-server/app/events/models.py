@@ -112,6 +112,9 @@ class EventType(enum.StrEnum):
     # 방장이 퀘스트의 상태를 바꿨다(app/tables/quest_changes.py). 무엇에서 무엇으로, 성공이면 누가 무엇을 받았는가.
     # 숨김으로 바꾸는 일은 없으므로 숨긴 퀘스트는 이 이벤트로 새지 않는다
     QUEST_CHANGED = 'quest_changed'
+    # 방장이 다음 라운드가 열릴 때 흐를 게임 안의 시간을 정했다(app/calendar/service.py). 몇 분에서 몇 분으로.
+    # 시각이 흐른 것은 따로 적지 않는다. 라운드가 열린 이벤트에 그때의 시각이 있다
+    CLOCK_STEP_CHANGED = 'clock_step_changed'
     # 캐릭터가 맵의 다른 장소로 옮겨 갔다. 누가, 어디에서, 어디로.
     # 방장이 옮겼으면(app/tables/place_changes.py) 행한 사람이 방장이다. 선언 행동으로 한 칸 갔으면
     # (app/rounds/map_actions.py) 행한 사람이 없고, 그 행동의 이벤트에 이어지며 라운드의 번호가 있다.
