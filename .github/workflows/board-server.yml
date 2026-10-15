@@ -126,7 +126,7 @@ jobs:
       - name: 앱 테스트
         run: npm run test:e2e:cov
 
-      # 두 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 아직 기준을 걸지 않는다(재기만 한다).
+      # 두 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 기준은 다음 단계에서 본다.
       # 대상은 src 전체다(vitest.config.ts, vitest.config.e2e.ts 의 coverage)
       - name: 커버리지 요약
         run: |
@@ -142,3 +142,23 @@ jobs:
             line unit "단위 (npm run test:cov)"
             line e2e "앱 (npm run test:e2e:cov)"
           } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # 두 테스트의 줄 비율이 각자의 기준 아래로 떨어지면 실패한다. 둘을 따로 본다(단위는 DB 를 쓰는 코드를 지나지 않는다).
+      # 기준은 #27 에서 처음 잰 값(단위 62.3%, 앱 92.7%)보다 조금 낮다. 커버리지가 오르면 기준도 올린다. 내릴 때는 PR 에 까닭을 적는다
+      - name: 커버리지 기준
+        env:
+          UNIT_COVERAGE_MIN: "60"
+          E2E_COVERAGE_MIN: "90"
+        run: |
+          node -e "
+            const checks = [['unit', '단위', +process.env.UNIT_COVERAGE_MIN], ['e2e', '앱', +process.env.E2E_COVERAGE_MIN]];
+            for (const [dir, name, min] of checks) {
+              const pct = require('./coverage/' + dir + '/coverage-summary.json').total.lines.pct;
+              if (pct < min) {
+                console.error(name + ' 테스트의 줄 커버리지 ' + pct + '% 가 기준 ' + min + '% 보다 낮다');
+                process.exitCode = 1;
+              } else {
+                console.log(name + ' 테스트의 줄 커버리지 ' + pct + '% (기준 ' + min + '%)');
+              }
+            }
+          "
