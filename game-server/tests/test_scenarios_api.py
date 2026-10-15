@@ -170,6 +170,7 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'player_made_hp',
         'reroll_allowed',
         'narration_style',
+        'clock',
     }
 
 
