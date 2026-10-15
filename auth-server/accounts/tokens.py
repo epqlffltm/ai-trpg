@@ -134,8 +134,10 @@ def _access_token_for(refresh: RefreshToken, user: User) -> AccessToken:
 
     access 토큰은 refresh 토큰의 sub 와 ver 를 그대로 물려받는다.
     닉네임은 access 토큰에만 싣는다. refresh 토큰은 인증 서버만 읽으므로 이름이 필요 없다.
-    갱신할 때마다 이 함수가 DB 의 닉네임을 다시 읽어 싣는다. 이름이 바뀌면 늦어도 access 토큰의 수명(15분) 뒤에는 새 이름이 실린다.
-    토큰은 서명만 되고 암호화되지 않아 누구나 읽는다. 닉네임은 남에게 보이라고 만든 이름이라 실어도 된다(이메일은 싣지 않는다).
+    갱신할 때마다 이 함수가 DB 의 닉네임을 다시 읽어 싣는다.
+    이름이 바뀌면 늦어도 access 토큰의 수명(15분) 뒤에는 새 이름이 실린다.
+    토큰은 서명만 되고 암호화되지 않아 누구나 읽는다.
+    닉네임은 남에게 보이라고 만든 이름이라 실어도 된다(이메일은 싣지 않는다).
     """
     access = refresh.access_token
     access[NICKNAME_CLAIM] = user.nickname
@@ -229,8 +231,7 @@ def _lock_issued_token(claims: dict) -> OutstandingToken:
     """
     try:
         return (
-            OutstandingToken.objects
-            .select_for_update()
+            OutstandingToken.objects.select_for_update()
             .select_related('user')
             .get(jti=claims.get(api_settings.JTI_CLAIM), user__isnull=False)
         )

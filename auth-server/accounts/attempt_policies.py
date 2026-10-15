@@ -35,7 +35,9 @@ LOGIN_PER_IP = AttemptLimit(name='login-ip', max_attempts=30, window=timedelta(m
 # 한 IP 가 한 계정의 비밀번호를 틀린 횟수. 한 계정을 집중해서 맞히는 것을 막는다.
 # 계정만으로 세지 않는다. 그러면 남의 아이디로 일부러 틀려 주인을 잠글 수 있다
 LOGIN_FAILURES_PER_ACCOUNT_AND_IP = AttemptLimit(
-    name='login-fail-account-ip', max_attempts=5, window=timedelta(minutes=15),
+    name='login-fail-account-ip',
+    max_attempts=5,
+    window=timedelta(minutes=15),
 )
 
 # 한 IP 가 예약어 아이디(admin, root 등)로 로그인을 시도한 횟수. 채우면 그 IP 의 로그인을 막는다.
@@ -56,7 +58,9 @@ PASSWORD_RESET_PER_IP = AttemptLimit(name='password-reset-ip', max_attempts=5, w
 # 로그인한 뒤의 API 라서 IP 가 아니라 사용자로 센다.
 # access 토큰을 훔친 사람이 현재 비밀번호를 맞혀 보는 것을 막는다
 PASSWORD_CHANGE_FAILURES_PER_USER = AttemptLimit(
-    name='password-change-fail-user', max_attempts=5, window=timedelta(minutes=15),
+    name='password-change-fail-user',
+    max_attempts=5,
+    window=timedelta(minutes=15),
 )
 
 

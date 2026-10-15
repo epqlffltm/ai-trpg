@@ -85,11 +85,10 @@ class EnqueueTests(TestCase):
         self.assertNotEqual(first.body, second.body)
 
     def test_row_disappears_when_the_surrounding_transaction_fails(self):
-        with self.assertRaises(RuntimeError):
-            with transaction.atomic():
-                enqueue()
-                # 메일을 적은 뒤에 같은 트랜잭션의 다른 일이 실패한다
-                raise RuntimeError
+        with self.assertRaises(RuntimeError), transaction.atomic():
+            enqueue()
+            # 메일을 적은 뒤에 같은 트랜잭션의 다른 일이 실패한다
+            raise RuntimeError
 
         # 메일을 직접 보냈다면 이미 나가 버렸을 것이다. 적어 둔 것이라 함께 취소된다
         self.assertEqual(OutgoingMail.objects.count(), 0)
@@ -261,7 +260,10 @@ class DiscardTests(TestCase):
 
     def test_late_mail_is_discarded_even_if_the_server_is_back(self):
         # 워커가 5분 넘게 멈춰 있다가 다시 뜬 경우. 늦은 인증 코드는 보내지 않는다
-        with at(self.start + MAIL_SEND_DEADLINE + timedelta(minutes=10)), self.assertLogs('accounts.outbox', level='ERROR'):
+        with (
+            at(self.start + MAIL_SEND_DEADLINE + timedelta(minutes=10)),
+            self.assertLogs('accounts.outbox', level='ERROR'),
+        ):
             report = deliver_due_mail()
 
         self.assertEqual(report.discarded, 1)
@@ -358,8 +360,11 @@ class RequestsDoNotSendMailTests(APITestCase):
 
     def test_reset_request_never_talks_to_the_mail_server(self):
         User.objects.create_user(
-            username='player_01', email=EMAIL, nickname='플레이어',
-            password=PASSWORD, email_verified_at=timezone.now(),
+            username='player_01',
+            email=EMAIL,
+            nickname='플레이어',
+            password=PASSWORD,
+            email_verified_at=timezone.now(),
         )
 
         with patch('accounts.outbox.send_mail') as mail_server:

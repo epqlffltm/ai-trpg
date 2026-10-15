@@ -162,10 +162,10 @@ class SignupValidationTests(SignupTestCase):
 
     def test_rejects_weak_passwords(self):
         weak_passwords = [
-            'short1!',          # 8자 미만
-            '1234567890',       # 숫자만
-            'password123',      # 흔한 비밀번호
-            'player_01',        # 아이디와 같음
+            'short1!',  # 8자 미만
+            '1234567890',  # 숫자만
+            'password123',  # 흔한 비밀번호
+            'player_01',  # 아이디와 같음
         ]
         for password in weak_passwords:
             with self.subTest(password=password):
@@ -399,9 +399,11 @@ class SignupVerifyTests(SignupTestCase):
 
     def test_code_stays_usable_when_marking_verified_fails(self):
         # 인증 처리가 실패하면 코드 소비도 함께 취소되어야 한다
-        with patch('accounts.services._mark_email_verified', side_effect=RuntimeError):
-            with self.assertRaises(RuntimeError):
-                self.verify(self.code)
+        with (
+            patch('accounts.services._mark_email_verified', side_effect=RuntimeError),
+            self.assertRaises(RuntimeError),
+        ):
+            self.verify(self.code)
 
         response = self.verify(self.code)
 

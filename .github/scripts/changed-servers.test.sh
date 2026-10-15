@@ -34,6 +34,8 @@ expect "crontab 은 넷 다" "auth game board billing" "docker/cron/auth.crontab
 expect "서버의 Dockerfile 은 그 서버" "billing" "billing-server/Dockerfile"
 expect "관문 워크플로는 넷 다" "auth game board billing" ".github/workflows/ci.yml"
 expect "관문의 스크립트는 넷 다" "auth game board billing" ".github/scripts/changed-servers.sh"
+expect "함께 쓰는 ruff 규칙은 파이썬 서버 둘" "auth game" "ruff.toml"
+expect "서버 안의 ruff.toml 같은 이름은 그 서버만" "billing" "billing-server/ruff.toml"
 expect "문서만 바뀌면 아무것도" "" "README.md" "docs/observability.md"
 expect "아무것도 안 바뀌면 아무것도" ""
 expect "이름이 비슷한 다른 폴더는 고르지 않는다" "" "board-server-old/x" "authserver/x"

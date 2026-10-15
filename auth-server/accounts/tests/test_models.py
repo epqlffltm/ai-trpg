@@ -34,19 +34,18 @@ class UsernameFormatTests(TestCase):
 
     def test_rejects_invalid_usernames(self):
         invalid_usernames = [
-            'abc',                # 4자 미만
-            'a' * 21,             # 20자 초과
-            'Player01',           # 대문자
-            'user@example.com',   # 이메일 형태
-            'user.name',          # 마침표
-            'player 01',          # 공백
-            '플레이어01',          # 한글
-            'player01\n',         # 끝의 줄바꿈
+            'abc',  # 4자 미만
+            'a' * 21,  # 20자 초과
+            'Player01',  # 대문자
+            'user@example.com',  # 이메일 형태
+            'user.name',  # 마침표
+            'player 01',  # 공백
+            '플레이어01',  # 한글
+            'player01\n',  # 끝의 줄바꿈
         ]
         for username in invalid_usernames:
-            with self.subTest(username=username):
-                with self.assertRaises(ValidationError):
-                    validate_username_format(username)
+            with self.subTest(username=username), self.assertRaises(ValidationError):
+                validate_username_format(username)
 
 
 class ReservedNameTests(TestCase):

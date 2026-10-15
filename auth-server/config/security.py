@@ -8,7 +8,8 @@ APP_ENVIRONMENT=production 이면 안전한 값이 저절로 켜진다. 하나�
 
 HTTPS 로 넘기기(SECURE_SSL_REDIRECT)와 HSTS 는 여기서 하지 않는다. 서버 넷 앞의 nginx 가 TLS 와 함께 맡는다.
   - HSTS 는 도메인 전체에 거는 약속이다. 인증 서버가 내면 인증 서버의 응답에만 붙는다.
-  - 인증 서버가 HTTPS 로 넘기면, 컨테이너끼리 HTTP 로 부르는 것(다른 서버가 공개키를 받는 것, 상태 확인)이 301 로 튕긴다.
+  - 인증 서버가 HTTPS 로 넘기면, 컨테이너끼리 HTTP 로 부르는 것(다른 서버가 공개키를 받는 것, 상태 확인)이
+    301 로 튕긴다.
 그래서 manage.py check --deploy 의 두 경고(W004, W008)는 이유를 적어 끈다(SILENCED_DEPLOY_CHECKS).
 """
 
@@ -51,7 +52,9 @@ def require_secure_refresh_cookie(secure: bool, environment: str) -> None:
     Secure 가 없으면 브라우저가 HTTP 로도 쿠키를 보낸다. refresh 토큰이 평문으로 지나간다.
     """
     if not secure and is_production(environment):
-        raise ImproperlyConfigured('운영 환경(APP_ENVIRONMENT=production)에서는 REFRESH_COOKIE_SECURE 를 끌 수 없습니다.')
+        raise ImproperlyConfigured(
+            '운영 환경(APP_ENVIRONMENT=production)에서는 REFRESH_COOKIE_SECURE 를 끌 수 없습니다.'
+        )
 
 
 def proxy_ssl_header(trusted_proxy_count: int) -> tuple[str, str] | None:

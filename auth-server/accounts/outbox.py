@@ -128,8 +128,7 @@ def _lock_next_due_mail(now) -> OutgoingMail | None:
     워커를 여러 개 띄워도 같은 메일을 두 번 보내지 않고, 서로를 기다리지도 않는다.
     """
     return (
-        OutgoingMail.objects
-        .select_for_update(skip_locked=True)
+        OutgoingMail.objects.select_for_update(skip_locked=True)
         .filter(status=OutgoingMailStatus.PENDING, next_attempt_at__lte=now)
         .order_by('next_attempt_at', 'id')
         .first()
@@ -170,11 +169,14 @@ def _discard(mail: OutgoingMail, now) -> None:
     # 받는 사람의 주소는 로그에 적지 않는다. 관리자 화면에서 번호로 찾는다
     logger.error(
         '메일을 보내지 못하고 버렸다. id=%s 제목=%s 시도=%s 마지막 오류=%s',
-        mail.pk, mail.subject, mail.attempts, mail.last_error or '(시도하지 못함)',
+        mail.pk,
+        mail.subject,
+        mail.attempts,
+        mail.last_error or '(시도하지 못함)',
     )
 
 
 def _describe(error: Exception) -> str:
     """오류를 한 줄로 적는다. 저장 칸의 길이에 맞춰 자른다."""
     text = f'{type(error).__name__}: {error}'
-    return text[:OutgoingMail._meta.get_field('last_error').max_length]
+    return text[: OutgoingMail._meta.get_field('last_error').max_length]
