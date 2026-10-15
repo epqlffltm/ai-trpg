@@ -10,6 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.calendar.schemas import ClockTimeOut
 from app.engine.action import Action
 from app.engine.death import Fate
 from app.engine.health import ChangeKind
@@ -49,8 +50,10 @@ class InjuryRollOut(BaseModel):
     # 부상 표의 눈. 노려 쳤으면 굴리지 않아서 None 이다
     roll: int | None
     injury: str | None
-    # 이 라운드가 닫힐 때 풀리거나 낫는다. 결손은 None 이다
+    # 짧은 부상이면 이 라운드가 닫힐 때 풀린다. 아니면 None 이다
     ends_after_round: int | None
+    # 오래 가는 부상이면 이 게임 안의 시각이 지나면 낫는다. 아니면 None 이다(결손, 짧은 것, 이 단계 전의 기록)
+    heals_at: ClockTimeOut | None = None
 
 
 class CalledShotOut(BaseModel):
@@ -150,8 +153,10 @@ class MishapOut(BaseModel):
     roll: int
     # nothing(아무 일 없음), pain(좀 아픔), worsen(덧남), fatal(즉사)
     kind: str
-    # 덧나서 늘어난 라운드. 덧남이 아니면 None 이다
+    # 덧남의 크기. 규칙에 적힌 라운드 수다. 덧남이 아니면 None 이다
     rounds: int | None
+    # 덧나서 늦춰진 게임 안의 시간(분). 규칙의 라운드 수에 판의 기본 걸음을 곱했다. 덧남이 아니면 None 이다
+    delay_minutes: int | None = None
     # 피해의 등급. 피해가 없으면 None 이다. 피해는 effect 나 npc_effect 에 있다
     magnitude: str | None
 
@@ -176,8 +181,10 @@ class TreatmentOut(BaseModel):
     patient: PatientOut
     # 치료할 부상이 아직 있었는가. 없었으면(앞사람이 먼저 고쳤다) 아무 일도 없었다
     treated: bool
-    # 치료 뒤에 나을 라운드. 그 라운드가 닫힐 때 낫는다. 다 나았거나 치료하지 못했으면 None 이다
-    heals_after: int | None
+    # 치료 뒤에 나을 게임 안의 시각. 다 나았거나 치료하지 못했으면 None 이다
+    heals_at: ClockTimeOut | None = None
+    # 이 장면이 끝난 뒤(다음 라운드가 열린 뒤) 낫기까지 남은 분. 다 나았거나 치료하지 못했으면 None 이다
+    minutes_left: int | None = None
     healed: bool
     # 다 나으면서 굴린 후유증 표. 후유증 표가 없는 부상이면 None 이다
     aftermath: InjuryRollOut | None

@@ -325,7 +325,9 @@ TREAT_WORSE = StateCase(
                     3,
                     3,
                     20,
-                    treatment=TreatmentNote('팔 골절', '토르빈', rounds_left=25, mishap='worsen', worsened_by=5),
+                    treatment=TreatmentNote(
+                        '팔 골절', '토르빈', minutes_left=250, mishap='worsen', worsened_minutes=50
+                    ),
                     impact=Impact('damage', '토르빈', 4, 8, 12, False),
                 ),
             ),

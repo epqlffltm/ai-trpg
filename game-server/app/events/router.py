@@ -138,7 +138,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'character_name',
         'success',
     ),
-    # 부상은 공개다. 누가 무엇을 입었고 언제 풀리는지. 캐릭터면 user_id 와 이름, NPC 면 항목의 id 와 장면의 호칭이다
+    # 부상은 공개다. 누가 무엇을 입었고 언제 풀리는지(짧은 것은 라운드, 오래 가는 것은 게임 안의 시각).
+    # 캐릭터면 user_id 와 이름, NPC 면 항목의 id 와 장면의 호칭이다
     EventType.INJURY_GAINED: (
         'round',
         'user_id',
@@ -148,9 +149,10 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'injury',
         'source',
         'ends_after_round',
+        'heals_at',
     ),
     EventType.INJURY_ENDED: ('round', 'user_id', 'character_name', 'entry_id', 'name', 'injury', 'reason'),
-    # 치료의 결과도 공개다. 나을 라운드와 치료 실패 표의 눈까지 보인다. HP 의 변화는 따로 적힌다
+    # 치료의 결과도 공개다. 나을 시각과 치료 실패 표의 눈까지 보인다. HP 의 변화는 따로 적힌다
     EventType.INJURY_TREATED: (
         'round',
         'user_id',
@@ -159,7 +161,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'name',
         'injury',
         'treated',
-        'heals_after',
+        'heals_at',
         'healed',
         'mishap',
         'died',

@@ -83,9 +83,7 @@ def npc_injury(judging: Judging, action: CheckAction, change: Change, npc: Table
     if npcs.is_dead(npc):
         return None
     if action.aim is not None and change.kind == ChangeKind.DAMAGE:
-        return round_injuries.take_aimed(
-            judging.ruleset, action.aim, npc.injuries, judging.table.id, judging.round_number
-        )
+        return round_injuries.take_aimed(judging.ruleset, action.aim, npc.injuries, judging.table.id, judging.moment)
     return injury_after(judging, change, npc.max_hp, False, npc.injuries)
 
 
