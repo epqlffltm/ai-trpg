@@ -86,6 +86,9 @@ SCENARIO_MAX_MONSTER_SHEETS = 100
 # 테이블을 시작할 때 마리마다 상태가 하나 생긴다. 둘을 곱한 것이 테이블 하나의 몬스터 수의 상한이다
 SCENARIO_MAX_ENCOUNTERS = 50
 ENCOUNTER_MAX_COUNT = 10
+# 몬스터 하나의 공격(스킬)의 수와 이름의 길이. 공격이 여럿이면 차례마다 서버의 주사위로 하나를 고른다
+MONSTER_MAX_ATTACKS = 5
+ATTACK_NAME_MAX_LENGTH = 30
 # 판을 낼 때 적는 변경 내용. 사람이 읽는다
 VERSION_NOTE_MAX_LENGTH = 500
 
@@ -138,6 +141,22 @@ class RouteVisibility(enum.StrEnum):
     FOG = 'fog'
     # 찾아야 안다. 찾는 판정(능력치와 난이도)을 길마다 적는다. 비밀 통로
     HIDDEN = 'hidden'
+
+
+class Surprise(enum.StrEnum):
+    """
+    조우에서 누가 기습하는가. 제작자가 조우마다 정한다.
+
+    기습한 쪽은 만난 첫 라운드(살아 있는 캐릭터가 그 장소에서 처음 차례를 받는 라운드)에 모두 먼저 움직인다.
+    그다음부터는 차례를 정하는 능력치(Ruleset.initiative_ability)의 순서다. 순서를 정하는 것은 라운드 닫기다.
+    """
+
+    # 기습 없음. 처음부터 능력치의 순서다
+    NONE = 'none'
+    # 몬스터가 매복했다. 천장에 붙은 거미
+    MONSTERS = 'monsters'
+    # 일행이 기습한다. 잠든 늑대 무리
+    PARTY = 'party'
 
 
 class QuestStart(enum.StrEnum):

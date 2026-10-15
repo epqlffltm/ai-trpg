@@ -192,7 +192,7 @@ async def test_adds_a_monster(client: AsyncClient, my_headers: dict[str, str]):
     assert response.status_code == status.HTTP_201_CREATED
     monster = response.json()
     # 숫자(시트)는 몬스터에 없다. 시나리오가 룰북에 맞춰 적는다
-    assert set(monster) == {'id', 'name', 'content', 'kind', 'created_at', 'updated_at'}
+    assert set(monster) == {'id', 'name', 'content', 'kind', 'unique', 'created_at', 'updated_at'}
     assert monster['name'] == NAME
     assert monster['content'] == CONTENT
     assert monster['kind'] == MonsterKind.BEAST

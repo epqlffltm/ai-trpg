@@ -31,6 +31,7 @@ def rules(**changes) -> Ruleset:
 ODD_RULES = rules(
     abilities=[{'key': 'body', 'name': '몸'}, {'key': 'mind', 'name': '마음'}],
     hp_ability='body',
+    initiative_ability='body',
     point_buy={'budget': 10, 'costs': [{'score': 6, 'cost': 0}, {'score': 12, 'cost': 3}, {'score': 18, 'cost': 10}]},
     **NO_INJURIES,
 )

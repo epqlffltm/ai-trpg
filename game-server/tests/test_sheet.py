@@ -21,6 +21,7 @@ SMALL_RULES = Ruleset.model_validate(
         **SRD5.model_dump(mode='json'),
         'abilities': [{'key': 'body', 'name': '몸'}, {'key': 'mind', 'name': '마음'}],
         'hp_ability': 'body',
+        'initiative_ability': 'body',
         # 점수의 범위가 달라졌으니 SRD5 의 값표(8~15)는 맞지 않는다. 이 규칙에는 점수제가 없다
         'point_buy': None,
         # 주사위로 정하는 법(3~18)도 이 범위에 맞지 않는다

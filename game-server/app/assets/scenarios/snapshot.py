@@ -30,6 +30,7 @@ from app.assets.models import (
     RouteVisibility,
     Rulebook,
     Scenario,
+    Surprise,
     World,
 )
 from app.assets.scenarios.upgrades import UPGRADES
@@ -60,7 +61,9 @@ from app.engine.sheet import Sheet
 #  20: 길을 아는 때(routes[].visibility: open, fog, hidden)와 명소(landmarks)가 있다. 길의 hidden 은 없어졌다
 #  21: 몬스터(monsters)가 있다. 시트를 적은 몬스터만 들어간다
 #  22: 조우(encounters)가 있다. 맵의 장소에 판의 몬스터가 몇 마리 있는지다
-SNAPSHOT_FORMAT = 22
+#  23: 몬스터에 공격(attacks)과 네임드 표시(unique)가, 조우에 기습(surprise)이,
+#      규칙에 차례를 정하는 능력치(initiative_ability)가 있다
+SNAPSHOT_FORMAT = 23
 
 
 class EntrySnapshot(BaseModel):
@@ -185,6 +188,15 @@ class NpcSheetSnapshot(BaseModel):
     sheet: Sheet
 
 
+class AttackSnapshot(BaseModel):
+    """몬스터의 공격 하나. 이름표(능력치, 난이도, 양의 등급)는 판 안의 규칙의 것이다."""
+
+    name: str
+    ability: str
+    difficulty: str
+    harm: str
+
+
 class MonsterSnapshot(BaseModel):
     """
     몬스터 하나. 도감의 몬스터(글과 타입)와 시나리오의 몬스터 시트(숫자)를 합친 것이다.
@@ -197,6 +209,10 @@ class MonsterSnapshot(BaseModel):
     content: str
     kind: MonsterKind
     sheet: Sheet
+    # 공격들. 비어 있으면 공격하지 않는다
+    attacks: list[AttackSnapshot] = []
+    # 네임드 몹인가. 판 전체에서 한 마리다(Snapshot.require_unique_once)
+    unique: bool = False
 
 
 class EncounterSnapshot(BaseModel):
@@ -205,6 +221,7 @@ class EncounterSnapshot(BaseModel):
     place_id: uuid.UUID
     monster_id: uuid.UUID
     count: int
+    surprise: Surprise = Surprise.NONE
 
 
 class PlayerMadeHpSnapshot(BaseModel):
@@ -312,6 +329,20 @@ class Snapshot(BaseModel):
             raise ValueError('판에 없는 몬스터를 가리키는 조우가 있습니다.')
         if self.encounters and self.start_place is None:
             raise ValueError('조우가 있는데 시작 장소가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_unique_once(self) -> 'Snapshot':
+        """
+        네임드 몹은 판 전체에서 한 마리다. 조우 한 줄에 한 마리, 그런 줄이 하나뿐이어야 한다. 아니면 거부한다.
+
+        게시할 때 이미 막는다(unique_monster_repeated). 읽는 쪽은 네임드 몹을 번호 없이 부른다.
+        """
+        unique = {monster.id for monster in self.monsters if monster.unique}
+        counts = [encounter.count for encounter in self.encounters if encounter.monster_id in unique]
+        lines = [encounter.monster_id for encounter in self.encounters if encounter.monster_id in unique]
+        if any(count > 1 for count in counts) or len(lines) != len(set(lines)):
+            raise ValueError('네임드 몹이 두 마리 이상 있습니다.')
         return self
 
     @model_validator(mode='after')
@@ -432,10 +463,16 @@ def snapshot_entry(entry: LoreEntry) -> EntrySnapshot:
     )
 
 
-def snapshot_monster(monster: Monster, sheet: Sheet) -> MonsterSnapshot:
-    """몬스터와 그 시트를 굳힌다."""
+def snapshot_monster(monster: Monster, sheet: Sheet, attacks: list[AttackSnapshot]) -> MonsterSnapshot:
+    """몬스터와 그 시트, 공격을 굳힌다."""
     return MonsterSnapshot(
-        id=monster.id, name=monster.name, content=monster.content, kind=MonsterKind(monster.kind), sheet=sheet
+        id=monster.id,
+        name=monster.name,
+        content=monster.content,
+        kind=MonsterKind(monster.kind),
+        sheet=sheet,
+        attacks=attacks,
+        unique=monster.unique,
     )
 
 

@@ -60,6 +60,7 @@ def load_backfill_rules() -> dict:
     death_save = load_migration('rulebook_death_save').DEATH_SAVE
     injuries = load_migration('injuries').INJURY_RULES
     treatment = load_migration('treatment')
+    initiative = load_migration('monster_attacks_and_initiative').INITIATIVE_ABILITY
     treated = [
         {**injury, **treatment.TREATABLE.get(injury['key'], treatment.UNTREATABLE)} for injury in injuries['injuries']
     ]
@@ -73,6 +74,8 @@ def load_backfill_rules() -> dict:
         **injuries,
         'injuries': treated,
         'treatment': treatment.TREATMENT,
+        # SRD5 의 능력치에 민첩이 있으니 채운 값은 그것이다
+        'initiative_ability': initiative,
     }
 
 
@@ -247,6 +250,7 @@ def test_the_limits_themselves_are_allowed():
             score_max=5,
             magnitudes=most_magnitudes,
             hp_ability='a0',
+            initiative_ability='a0',
             # 점수가 5 하나뿐인 규칙이다. SRD5 의 값표(8~15)도, 주사위로 나오는 점수(3~18)도 맞지 않는다
             point_buy=None,
             score_roll=None,

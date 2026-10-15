@@ -38,6 +38,8 @@ class MonsterCreate(BaseModel):
     name: MonsterName
     content: MonsterContent = ''
     kind: MonsterKind = MonsterKind.OTHER
+    # 네임드 몹인가. 판 전체에서 한 마리만 둔다
+    unique: bool = False
 
 
 class MonsterUpdate(BaseModel):
@@ -52,6 +54,7 @@ class MonsterUpdate(BaseModel):
     name: MonsterName | None = None
     content: MonsterContent | None = None
     kind: MonsterKind | None = None
+    unique: bool | None = None
 
 
 class MonsterDetail(BaseModel):
@@ -61,5 +64,6 @@ class MonsterDetail(BaseModel):
     name: str
     content: str
     kind: MonsterKind
+    unique: bool
     created_at: datetime
     updated_at: datetime
