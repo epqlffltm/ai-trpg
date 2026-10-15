@@ -41,6 +41,9 @@ from app.engine.ruleset import (
     Treatment,
 )
 
+# 하루(분). 오래 가는 부상과 치료의 기간을 적는 단위
+DAY = 24 * 60
+
 
 class Template(enum.StrEnum):
     """고를 수 있는 템플릿."""
@@ -112,18 +115,19 @@ SRD5_INJURIES = (
         healing=Healing.ROUNDS,
         rounds=3,
     ),
-    # --- 오래 가는 것. 나을 때 후유증 표를 굴린다. 치료에 성공하면 10 라운드씩 빨리 낫는다 ---
+    # --- 오래 가는 것. 게임 안의 시간으로 낫는다(판 형식 25). 나을 때 후유증 표를 굴린다 ---
+    # TRPG 의 흐름에 맞춰 실제보다 짧게 잡았다. 며칠 쉬거나 치료해야 낫는다. 10분짜리 라운드 몇 번으로는 낫지 않는다
     Injury(
         key='broken_arm',
         name='팔 골절',
         fact='한쪽 팔이 부러져 제대로 쓰지 못한다.',
         effects=(disadvantage('str'),),
         healing=Healing.HEALS,
-        rounds=30,
+        heal_minutes=14 * DAY,
         aftermath=InjuryTable(sides=20, rows=rows((1, 5, 'crooked_arm'), (6, 20, None))),
         aimable=True,
         treat_difficulty='hard',
-        treat_rounds=10,
+        treat_minutes=3 * DAY,
     ),
     Injury(
         key='leg_wound',
@@ -131,11 +135,11 @@ SRD5_INJURIES = (
         fact='다리를 깊이 다쳐 절뚝거린다.',
         effects=(disadvantage('dex'),),
         healing=Healing.HEALS,
-        rounds=20,
+        heal_minutes=7 * DAY,
         aftermath=InjuryTable(sides=20, rows=rows((1, 3, 'limp'), (4, 20, None))),
         aimable=True,
         treat_difficulty='medium',
-        treat_rounds=10,
+        treat_minutes=2 * DAY,
     ),
     # --- 결손과 후유증. 낫지 않는다 ---
     Injury(
@@ -198,8 +202,8 @@ SRD5_TREATMENT = Treatment(
         sides=100,
         rows=(
             MishapRow(low=1, high=1, kind=Mishap.FATAL),
-            MishapRow(low=2, high=10, kind=Mishap.WORSEN, rounds=10, magnitude='moderate'),
-            MishapRow(low=11, high=30, kind=Mishap.WORSEN, rounds=5),
+            MishapRow(low=2, high=10, kind=Mishap.WORSEN, delay_minutes=2 * DAY, magnitude='moderate'),
+            MishapRow(low=11, high=30, kind=Mishap.WORSEN, delay_minutes=DAY),
             MishapRow(low=31, high=50, kind=Mishap.PAIN, magnitude='light'),
             MishapRow(low=51, high=100, kind=Mishap.NOTHING),
         ),

@@ -71,7 +71,7 @@ def heals_at_of(row, injury: Injury, moment: Moment) -> int:
     """
     if row.heals_at is not None:
         return row.heals_at
-    return injury_rules.heals_at(injury, moment.now, moment.round_minutes)
+    return injury_rules.heals_at(injury, moment.now)
 
 
 def left_after(heals_at: int, moment: Moment) -> int:
@@ -110,7 +110,7 @@ def cure(judging: Judging, patient: Patient, row, injury: Injury) -> dict:
     """
     moment = judging.moment
     before = heals_at_of(row, injury, moment)
-    after = treatment.shortened(before, injury, moment.round_minutes)
+    after = treatment.shortened(before, injury)
     before_document = round_injuries.heals_at_document(before)
     if treatment.is_healed(after, moment.scene_end):
         aftermath = round_injuries.heal(judging.ruleset, judging.dice, row, patient.rows, judging.table.id, moment)
@@ -167,13 +167,11 @@ def mishap(judging: Judging, patient: Patient, row, injury: Injury) -> tuple[dic
     moment = judging.moment
     rolled = treatment.roll_mishap(judging.ruleset, judging.dice)
     before = heals_at_of(row, injury, moment)
-    delay = treatment.delay_of(rolled, moment.round_minutes)
     fields = {
         'mishap': {
             'roll': rolled.roll,
             'kind': rolled.kind.value,
-            'rounds': rolled.rounds,
-            'delay_minutes': delay or None,
+            'delay_minutes': rolled.delay_minutes,
             'magnitude': rolled.magnitude,
         },
         'heals_at_before': round_injuries.heals_at_document(before),
@@ -183,7 +181,7 @@ def mishap(judging: Judging, patient: Patient, row, injury: Injury) -> tuple[dic
     if rolled.kind == Mishap.FATAL:
         kill_patient(patient)
         return {**fields, 'heals_at': None, 'minutes_left': None, 'died': True}, NO_EFFECTS
-    after = treatment.lengthened(before, rolled, moment.round_minutes)
+    after = treatment.lengthened(before, rolled)
     if after != before:
         injuries.reschedule(row, after)
         fields = {

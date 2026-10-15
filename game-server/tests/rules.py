@@ -21,7 +21,7 @@ NO_INJURIES = {
 # 치료가 없는 규칙의 칸들. 부상은 그대로 두고 어느 부상도 치료할 수 없게 한다
 NO_TREATMENT = {
     'injuries': [
-        {**injury, 'treat_difficulty': None, 'treat_rounds': None}
+        {**injury, 'treat_difficulty': None, 'treat_minutes': None}
         for injury in SRD5.model_dump(mode='json')['injuries']
     ],
     'treatment': None,

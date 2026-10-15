@@ -76,7 +76,7 @@ async def test_the_clock_is_frozen_into_the_version(client: AsyncClient, my_head
 
     version = await publish(client, my_headers, scenario)
 
-    assert version['snapshot']['format'] == SNAPSHOT_FORMAT == 24
+    assert version['snapshot']['format'] == SNAPSHOT_FORMAT >= 24
     assert version['snapshot']['clock'] == NIGHT_MARCH
 
 

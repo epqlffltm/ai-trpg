@@ -67,7 +67,9 @@ from app.engine.sheet import Sheet
 #  23: 몬스터에 공격(attacks)과 네임드 표시(unique)가, 조우에 기습(surprise)이,
 #      규칙에 차례를 정하는 능력치(initiative_ability)가 있다
 #  24: 게임 안의 시계(clock: 시작하는 날과 시, 라운드 하나에 흐르는 기본 시간)가 있다
-SNAPSHOT_FORMAT = 24
+#  25: 오래 가는 부상이 낫기까지(heal_minutes), 치료가 앞당기는(treat_minutes), 덧나서 늦춰지는(delay_minutes)
+#      기간이 라운드 수가 아니라 게임 안의 시간(분)이다. 짧은 부상은 그대로 라운드 수(rounds)다
+SNAPSHOT_FORMAT = 25
 
 
 class EntrySnapshot(BaseModel):
