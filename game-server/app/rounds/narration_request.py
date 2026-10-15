@@ -22,11 +22,13 @@ from dataclasses import asdict
 from pydantic import TypeAdapter
 
 from app.assets.scenarios.snapshot import Snapshot
+from app.calendar import clock, state
 from app.engine.check import find_ability, find_difficulty
 from app.engine.injury import known_injuries
 from app.engine.ruleset import Ruleset
 from app.rounds.models import Declaration, Round
 from app.rounds.narrator import (
+    ClockNote,
     DeathSaveNote,
     Impact,
     ItemActionNote,
@@ -340,6 +342,23 @@ def to_quest_notes(table: GameTable, snapshot: Snapshot) -> list[QuestNote]:
         QuestNote(name=catalog[row.entry_id].name, status=row.status)
         for row in quests.in_catalog_order(table.quests, catalog)
     ]
+
+
+def to_clock_note(table: GameTable) -> ClockNote | None:
+    """
+    테이블의 시계를 서술자에게 줄 모양으로 바꾼다. 지금 시각, 다음 라운드가 열릴 때까지 흐를 시간, 그때의 시각.
+
+    퀘스트처럼 서술을 맡길 때의 것을 읽는다. 방장이 닫은 뒤에 흐를 시간을 정해도 그 라운드의 서술이 따른다.
+    시계가 없는 테이블이면 None 이다.
+    """
+    if table.clock is None:
+        return None
+    passes = state.next_step(table)
+    return ClockNote(
+        now=clock.read_time(table.clock.minutes),
+        ends=clock.read_time(table.clock.minutes + passes),
+        passes_minutes=passes,
+    )
 
 
 def dump_moves(moves: list[Move]) -> list[dict]:
