@@ -57,6 +57,7 @@ def to_detail(scenario: Scenario) -> ScenarioDetail:
         npc_sheets=scenario.npc_sheets,
         default_npc_sheet=scenario.default_npc_sheet,
         monster_sheets=scenario.monster_sheets,
+        encounters=scenario.encounters,
         items=scenario.items,
         starting_items=scenario.starting_items,
         quests=scenario.quests,

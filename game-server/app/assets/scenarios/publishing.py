@@ -32,6 +32,7 @@ from app.assets.models import (
 )
 from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import (
+    Encounter,
     ItemRule,
     ItemStack,
     MonsterSheet,
@@ -104,6 +105,14 @@ class Problem(enum.StrEnum):
     MONSTER_SHEET_MISSING = 'monster_sheet_missing'
     # 룰북의 규칙에 맞지 않는 몬스터 시트가 있다
     MONSTER_SHEET_INVALID = 'monster_sheet_invalid'
+    # 붙인 로어북에 없는 항목을 가리키는 조우가 있다
+    ENCOUNTER_PLACE_MISSING = 'encounter_place_missing'
+    # 장소가 아닌 항목(인물, 물건 …)을 가리키는 조우가 있다
+    ENCOUNTER_NOT_PLACE = 'encounter_not_place'
+    # 시트를 적지 않은 몬스터를 가리키는 조우가 있다. 판에 들어가지 않는 몬스터라 숫자가 없다
+    ENCOUNTER_MONSTER_MISSING = 'encounter_monster_missing'
+    # 조우가 있는데 시작 장소가 없다. 맵이 없는 시나리오에는 몬스터를 둘 곳이 없다
+    ENCOUNTER_MAP_MISSING = 'encounter_map_missing'
 
 
 class ScenarioNotReadyError(Exception):
@@ -328,6 +337,35 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
     ]
 
 
+def read_encounters(scenario: Scenario) -> list[Encounter]:
+    """조우들을 읽는다."""
+    return [Encounter.model_validate(document) for document in scenario.encounters]
+
+
+def find_encounter_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """
+    조우에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    장소는 붙인 로어북의 장소 항목이어야 하고, 몬스터는 시트를 적은 몬스터여야 한다(판에 들어가는 몬스터).
+    시트를 적은 몬스터가 도감에서 지워졌으면 그것은 몬스터 시트의 문제로 따로 적는다(find_monster_sheet_problems).
+    조우는 맵의 장소에 두므로 시작 장소가 있어야 한다.
+    """
+    encounters = read_encounters(scenario)
+    entries = lore_entries(parts)
+    sheeted = {monster_sheet.monster_id for monster_sheet in read_monster_sheets(scenario)}
+    places = [encounter.place_id for encounter in encounters]
+    problems = []
+    if any(place not in entries for place in places):
+        problems.append(Problem.ENCOUNTER_PLACE_MISSING)
+    if any(place in entries and entries[place].kind != LoreKind.PLACE for place in places):
+        problems.append(Problem.ENCOUNTER_NOT_PLACE)
+    if any(encounter.monster_id not in sheeted for encounter in encounters):
+        problems.append(Problem.ENCOUNTER_MONSTER_MISSING)
+    if encounters and scenario.start_place is None:
+        problems.append(Problem.ENCOUNTER_MAP_MISSING)
+    return problems
+
+
 def read_item_rules(scenario: Scenario) -> list[ItemRule]:
     """아이템 규칙들을 읽는다."""
     return [ItemRule.model_validate(document) for document in scenario.items]
@@ -458,6 +496,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_default_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_monster_sheet_problems(scenario, parts, ruleset))
+    problems.extend(find_encounter_problems(scenario, parts))
     problems.extend(find_item_problems(scenario, parts, ruleset))
     problems.extend(find_quest_problems(scenario, parts))
     problems.extend(find_map_problems(scenario, parts, ruleset))
