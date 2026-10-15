@@ -132,6 +132,9 @@ class Verdict:
     impact: Impact | None = None
     # 이 판정으로 NPC 의 HP 가 바뀌었으면 그 내용. 없으면 None 이다. impact 와 함께 있지 않다
     npc_impact: NpcImpact | None = None
+    # 이 판정으로 몬스터 한 마리의 HP 가 바뀌었으면 그 내용. NPC 와 같은 모양이다(숫자 없이 몸 상태).
+    # 없으면 None 이다. 이 칸이 생기기 전에 굳힌 것도 None 이다
+    monster_impact: NpcImpact | None = None
     # 이 판정에 영향을 준 부상들의 이름(보정이 깎였거나 불리했다). 없으면 비어 있다
     hindrances: list[str] = field(default_factory=list)
     # 노려 쳤으면 노린 부상의 이름. 판정이 그만큼 어려웠다. 성공했으면 그 부상이 생겼다(impact 에 적힌다)
@@ -242,6 +245,19 @@ class SearchNote:
 
 
 @dataclass(frozen=True)
+class TargetGoneNote:
+    """
+    겨눈 몬스터를 판정할 때 칠 수 없어 굴리지 않은 것(app/rounds/checks.py 의 target_gone).
+
+    name 은 부르는 이름이다. 장면에 없는 마리였으면 None 이다.
+    reason 은 dead(차례가 오기 전에 죽었다) 또는 elsewhere(다른 장소에 있다)다.
+    """
+
+    name: str | None
+    reason: str
+
+
+@dataclass(frozen=True)
 class Move:
     """한 캐릭터가 이번 라운드에 하겠다고 한 일과, 판정이 있었으면 그 결과."""
 
@@ -277,6 +293,8 @@ class Move:
     # 맵에서 가는 행동이면 그 결과, 찾는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     travel: TravelNote | None = None
     search: SearchNote | None = None
+    # 겨눈 몬스터를 칠 수 없어 굴리지 않았으면 그 까닭. 아니면 None 이다. verdict 와 함께 있지 않다
+    target_gone: TargetGoneNote | None = None
     # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 서 있는 맵의 장소. 맵이 없는 테이블이면 None 이다.
     # 위치를 바꾸는 것은 서버뿐이다. 서술자는 다른 곳으로 옮기지 않는다
     place: PlaceNote | None = None
@@ -411,6 +429,57 @@ class QuestNote:
 
 
 @dataclass(frozen=True)
+class MonsterNote:
+    """
+    이번 장면의 몬스터. 네임드 몹은 한 마리, 일반 몹은 같은 장소의 같은 종류를 한데 모은다.
+
+    엔진이 정한 사실이다. 숫자(HP, 능력치)는 주지 않는다. 몸 상태를 말로 준다(app/rounds/cast.py 의 condition_of).
+    content 는 도감의 글이다. 제작자가 약점을 적었을 수 있어서 이 절에만 넣고, 한 일의 줄에는 싣지 않는다.
+    """
+
+    # 부르는 이름. 네임드 몹은 그 이름이고, 일반 몹은 종류의 이름이다(번호 없이)
+    name: str
+    # 타입의 이름(인간형, 야수 …). 기타면 빈 글이다
+    kind: str
+    content: str
+    # 있는 장소의 이름. 맵의 장소다
+    place: str
+    unique: bool
+    # 마리마다의 몸 상태. 번호 순서다. 네임드 몹은 하나다
+    conditions: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class MonsterTurnNote:
+    """
+    몬스터 한 마리의 차례에 한 일. 엔진이 정한 것이다(app/rounds/monster_attacks.py).
+
+    굴림의 숫자는 주지 않는다. 몬스터의 능력치를 드러낸다. 맞았으면 그 캐릭터의 HP 변화(impact)를 준다.
+    움직이지 못한 차례(쓰러짐, 죽음, 칠 캐릭터가 없음)는 넣지 않는다. 한 일이 없다.
+    """
+
+    # 부르는 이름(수로 쥐 2)
+    name: str
+    # 공격의 이름과, 친 캐릭터
+    attack: str
+    target: str
+    hit: bool
+    impact: Impact | None = None
+
+
+@dataclass(frozen=True)
+class TurnNote:
+    """
+    차례 하나. 캐릭터의 차례면 character_name, 몬스터의 차례면 monster 가 있다.
+
+    이 순서대로 한 일의 줄을 놓는다(app/rounds/move_lines.py 의 round_lines).
+    """
+
+    character_name: str | None = None
+    monster: MonsterTurnNote | None = None
+
+
+@dataclass(frozen=True)
 class NarrationRequest:
     """서술자에게 주는 것. 방금 닫힌 라운드의 내용이다."""
 
@@ -445,6 +514,11 @@ class NarrationRequest:
     whispers: list[WhisperNote] = field(default_factory=list)
     # 테이블의 퀘스트들과 그 지금 상태. 판의 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
     quests: list[QuestNote] = field(default_factory=list)
+    # 이번 장면의 몬스터들. 판의 몬스터 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
+    monsters: list[MonsterNote] = field(default_factory=list)
+    # 이 라운드의 차례(라운드의 turns). 맞붙은 몬스터가 없었으면 비어 있고, 그때는 moves 의 순서다.
+    # 가짜 서술자도 이 순서로 줄을 놓는다
+    turns: list[TurnNote] = field(default_factory=list)
 
 
 class Preview(Protocol):
