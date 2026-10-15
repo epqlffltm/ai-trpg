@@ -57,6 +57,14 @@ SCENARIO_OPENING_MAX_LENGTH = 2000
 SCENARIO_MAX_OPENINGS = 5
 # 테이블 하나에 앉는 플레이어의 수. AI GM 하나에 1~4명이다. 시나리오의 추천 인원도 이 범위 안이다
 TABLE_MAX_PLAYERS = 4
+# 게임 안의 시계(달력 1단계). 1일째 0시부터 분으로 센다. 달 이름 같은 달력은 아직 없다.
+# 시나리오가 시작 시각(며칠째 몇 시)과 라운드 하나에 흐르는 기본 시간을 정한다. 방장이 라운드마다 바꿀 수 있다
+CLOCK_MAX_DAY = 999
+DEFAULT_START_DAY = 1
+DEFAULT_START_HOUR = 8
+# 라운드 하나에 흐르는 시간(분). 기본은 짧은 장면 하나의 길이다. 상한은 일주일이다. 더 건너뛰려면 라운드를 여럿 쓴다
+DEFAULT_ROUND_MINUTES = 10
+ROUND_MAX_MINUTES = 7 * 24 * 60
 # 시나리오 하나에 둘 수 있는 프리젠(제작자가 미리 만든 캐릭터)의 수. 자리마다 둘씩 고를 수 있는 만큼이다
 SCENARIO_MAX_PREGENS = 8
 # 시나리오 하나에 둘 수 있는 NPC 시트의 수. 로어북 하나의 항목이 모두 인물이어도 모자라지 않는 만큼이다
@@ -451,6 +459,9 @@ class Scenario(AssetContent):
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
             name='character_modes_allowed',
         ),
+        CheckConstraint(f'start_day BETWEEN 1 AND {CLOCK_MAX_DAY}', name='start_day_range'),
+        CheckConstraint('start_hour BETWEEN 0 AND 23', name='start_hour_range'),
+        CheckConstraint(f'round_minutes BETWEEN 1 AND {ROUND_MAX_MINUTES}', name='round_minutes_range'),
         # 기준값과 상한은 함께 있거나 함께 없다. 있으면 1 이상이고, 기준값이 상한을 넘지 않는다
         CheckConstraint(
             '(hp_base IS NULL) = (hp_cap IS NULL) AND '
@@ -562,6 +573,18 @@ class Scenario(AssetContent):
     hp_base: Mapped[int | None] = mapped_column(SmallInteger)
     hp_cap: Mapped[int | None] = mapped_column(SmallInteger)
 
+    # 게임 안의 시계. 테이블이 시작할 때의 시각(며칠째, 몇 시)과 라운드 하나에 흐르는 기본 시간(분)이다.
+    # 셋을 한 묶음(clock)으로 다룬다. 테이블의 시계는 판에 굳힌 이 값에서 시작한다(app/calendar)
+    start_day: Mapped[int] = mapped_column(
+        SmallInteger, default=DEFAULT_START_DAY, server_default=text(str(DEFAULT_START_DAY))
+    )
+    start_hour: Mapped[int] = mapped_column(
+        SmallInteger, default=DEFAULT_START_HOUR, server_default=text(str(DEFAULT_START_HOUR))
+    )
+    round_minutes: Mapped[int] = mapped_column(
+        Integer, default=DEFAULT_ROUND_MINUTES, server_default=text(str(DEFAULT_ROUND_MINUTES))
+    )
+
     # 붙인 로어북들. 여러 개라 칸 하나에 담지 못하고 연결 테이블(scenario_lorebooks)의 행으로 둔다.
     # selectin: 시나리오를 읽을 때 함께 읽는다. 비동기에서는 나중에 따로 읽어 오는 방식을 쓸 수 없다.
     # delete-orphan: 이 목록에서 빠진 행은 DB 에서도 지운다
@@ -584,6 +607,18 @@ class Scenario(AssetContent):
         """추천 인원을 바꾼다. 둘을 늘 함께 바꿔서, 최소가 최대보다 큰 상태가 생기지 않게 한다."""
         self.min_players = players['min']
         self.max_players = players['max']
+
+    @property
+    def clock(self) -> dict[str, int]:
+        """게임 안의 시계. 시작 시각과 라운드 하나에 흐르는 기본 시간을 한 묶음으로 다룬다."""
+        return {'start_day': self.start_day, 'start_hour': self.start_hour, 'round_minutes': self.round_minutes}
+
+    @clock.setter
+    def clock(self, clock: dict[str, int]) -> None:
+        """시계를 바꾼다. 셋을 늘 함께 바꾼다."""
+        self.start_day = clock['start_day']
+        self.start_hour = clock['start_hour']
+        self.round_minutes = clock['round_minutes']
 
     @property
     def player_made_hp(self) -> dict[str, int] | None:

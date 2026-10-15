@@ -191,7 +191,8 @@ async def test_attacks_unique_and_surprise_are_frozen_into_the_version(
 
     snapshot = await published(client, me, scenario)
 
-    assert snapshot['format'] == SNAPSHOT_FORMAT == 23
+    # 형식 23 에서 생긴 칸들이다. 형식은 그 뒤로도 올라간다
+    assert snapshot['format'] == SNAPSHOT_FORMAT >= 23
     monsters = {monster['name']: monster for monster in snapshot['monsters']}
     assert (monsters['늪 쥐']['attacks'], monsters['늪 쥐']['unique']) == ([BITE], False)
     assert (monsters['늪의 왕']['attacks'], monsters['늪의 왕']['unique']) == ([SLAM], True)
