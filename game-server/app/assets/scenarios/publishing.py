@@ -16,6 +16,8 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
+from app.assets.bestiaries import repository as monsters
+from app.assets.bestiaries.models import Bestiary, Monster
 from app.assets.lorebooks import repository as entries
 from app.assets.models import (
     PLAYER_MADE_MODES,
@@ -29,8 +31,17 @@ from app.assets.models import (
     World,
 )
 from app.assets.scenarios import repository
-from app.assets.scenarios.schemas import ItemRule, ItemStack, NpcSheet, Pregen, QuestRule, RouteRule, VersionCreate
-from app.assets.scenarios.snapshot import build_snapshot
+from app.assets.scenarios.schemas import (
+    ItemRule,
+    ItemStack,
+    MonsterSheet,
+    NpcSheet,
+    Pregen,
+    QuestRule,
+    RouteRule,
+    VersionCreate,
+)
+from app.assets.scenarios.snapshot import MonsterSnapshot, build_snapshot, snapshot_monster
 from app.assets.service import AssetNotFoundError
 from app.engine.check import find_ability, find_difficulty
 from app.engine.health import find_magnitude
@@ -89,6 +100,10 @@ class Problem(enum.StrEnum):
     MAP_START_MISSING = 'map_start_missing'
     # 숨긴 길을 찾는 판정의 능력치나 난이도가 룰북의 규칙에 없다
     ROUTE_FIND_INVALID = 'route_find_invalid'
+    # 붙인 도감에 없는 몬스터를 가리키는 몬스터 시트가 있다. 몬스터를 지웠거나 도감을 뗐다
+    MONSTER_SHEET_MISSING = 'monster_sheet_missing'
+    # 룰북의 규칙에 맞지 않는 몬스터 시트가 있다
+    MONSTER_SHEET_INVALID = 'monster_sheet_invalid'
 
 
 class ScenarioNotReadyError(Exception):
@@ -111,6 +126,8 @@ class Parts:
     world: World | None
     # 로어북과 그 항목들
     lorebooks: list[tuple[Lorebook, list[LoreEntry]]]
+    # 몬스터 도감과 그 몬스터들
+    bestiaries: list[tuple[Bestiary, list[Monster]]]
 
 
 async def load_parts(session: AsyncSession, owner_id: uuid.UUID, scenario: Scenario) -> Parts:
@@ -128,7 +145,12 @@ async def load_parts(session: AsyncSession, owner_id: uuid.UUID, scenario: Scena
         lorebook = await assets.get_owned(session, Lorebook, owner_id, lorebook_id)
         lorebooks.append((lorebook, await entries.list_entries(session, lorebook_id)))
 
-    return Parts(rulebook=rulebook, world=world, lorebooks=lorebooks)
+    bestiaries = []
+    for bestiary_id in scenario.bestiary_ids:
+        bestiary = await assets.get_owned(session, Bestiary, owner_id, bestiary_id)
+        bestiaries.append((bestiary, await monsters.list_monsters(session, bestiary_id)))
+
+    return Parts(rulebook=rulebook, world=world, lorebooks=lorebooks, bestiaries=bestiaries)
 
 
 def read_ruleset(rulebook: Rulebook | None) -> Ruleset | None:
@@ -265,6 +287,47 @@ def find_default_npc_sheet_problems(scenario: Scenario, parts: Parts, ruleset: R
     return []
 
 
+def bestiary_monsters(parts: Parts) -> dict[uuid.UUID, Monster]:
+    """붙인 도감의 몬스터 전부. 몬스터의 ID 로 찾는다."""
+    return {monster.id: monster for _, found in parts.bestiaries for monster in found}
+
+
+def read_monster_sheets(scenario: Scenario) -> list[MonsterSheet]:
+    """몬스터 시트들을 읽는다."""
+    return [MonsterSheet.model_validate(document) for document in scenario.monster_sheets]
+
+
+def find_monster_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    몬스터 시트에서 문제를 찾는다. 시트가 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    시트는 붙인 도감의 몬스터를 가리켜야 한다. 도감의 몬스터는 시나리오와 따로 지울 수 있다. 굳히기 전에 여기서 막는다.
+    시트가 없는 몬스터는 문제가 아니다. 이 시나리오가 쓰지 않는 몬스터다.
+    룰북이 없으면 규칙에 맞는지는 볼 수 없다.
+    """
+    monster_sheets = read_monster_sheets(scenario)
+    known = bestiary_monsters(parts)
+    problems = []
+    if any(monster_sheet.monster_id not in known for monster_sheet in monster_sheets):
+        problems.append(Problem.MONSTER_SHEET_MISSING)
+    if ruleset and any(not fits(ruleset, monster_sheet.sheet) for monster_sheet in monster_sheets):
+        problems.append(Problem.MONSTER_SHEET_INVALID)
+    return problems
+
+
+def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]:
+    """
+    판에 굳힐 몬스터들. 시트를 적은 몬스터만, 시트를 적은 순서대로다.
+
+    문제를 찾은 뒤에 부른다. 시트가 가리키는 몬스터는 모두 붙인 도감에 있다.
+    """
+    known = bestiary_monsters(parts)
+    return [
+        snapshot_monster(known[monster_sheet.monster_id], monster_sheet.sheet)
+        for monster_sheet in read_monster_sheets(scenario)
+    ]
+
+
 def read_item_rules(scenario: Scenario) -> list[ItemRule]:
     """아이템 규칙들을 읽는다."""
     return [ItemRule.model_validate(document) for document in scenario.items]
@@ -394,6 +457,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_score_roll_problems(scenario, ruleset))
     problems.extend(find_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_default_npc_sheet_problems(scenario, parts, ruleset))
+    problems.extend(find_monster_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_item_problems(scenario, parts, ruleset))
     problems.extend(find_quest_problems(scenario, parts))
     problems.extend(find_map_problems(scenario, parts, ruleset))
@@ -403,7 +467,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
 
 def build_version(scenario: Scenario, rulebook: Rulebook, parts: Parts, number: int, note: str) -> ScenarioVersion:
     """시나리오와 자산들에서 판 객체를 만든다. 아직 저장하지 않는다."""
-    snapshot = build_snapshot(scenario, rulebook, parts.world, parts.lorebooks)
+    snapshot = build_snapshot(scenario, rulebook, parts.world, parts.lorebooks, snapshot_monsters(scenario, parts))
     return ScenarioVersion(
         scenario_id=scenario.asset_id,
         number=number,
