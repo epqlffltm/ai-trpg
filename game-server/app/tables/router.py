@@ -182,7 +182,12 @@ def to_map(table: GameTable, snapshot: Snapshot) -> MapOut | None:
     return MapOut(
         places=[PlaceOut(entry_id=place.id, name=place.name) for place in known.places],
         routes=[
-            RouteOut(from_place=route.from_place, to_place=route.to_place, two_way=route.two_way)
+            RouteOut(
+                from_place=route.from_place,
+                to_place=route.to_place,
+                two_way=route.two_way,
+                travel_minutes=route.travel_minutes,
+            )
             for route in known.routes
         ],
     )

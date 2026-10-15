@@ -350,6 +350,8 @@ class RouteOut(BaseModel):
     from_place: uuid.UUID
     to_place: uuid.UUID
     two_way: bool
+    # 한 칸 가는 데 걸리는 게임 안의 시간(분). 비어 있으면 라운드의 걸음 안에서 간다
+    travel_minutes: int | None = None
 
 
 class MapOut(BaseModel):

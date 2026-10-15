@@ -116,6 +116,18 @@ def exits(known: KnownMap | None, place_id: uuid.UUID) -> list[uuid.UUID]:
     return reachable
 
 
+def route_between(known: KnownMap | None, here: uuid.UUID | None, there: uuid.UUID) -> RouteSnapshot | None:
+    """here 에서 there 로 한 칸에 가는 아는 길. 없으면 None. 판의 길 순서로 처음 것이다(exits 와 같은 방향 규칙)."""
+    if known is None or here is None:
+        return None
+    for route in known.routes:
+        if route.from_place == here and route.to_place == there:
+            return route
+        if route.two_way and route.to_place == here and route.from_place == there:
+            return route
+    return None
+
+
 def hidden_routes_at(snapshot: Snapshot, known: Knowledge, place_id: uuid.UUID) -> list[RouteSnapshot]:
     """그 장소에 한쪽 끝이 닿은, 아직 찾지 않은 숨긴 길들. 판의 길 순서다. 찾기가 굴릴 길들이다."""
     return [

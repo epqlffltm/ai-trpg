@@ -225,12 +225,14 @@ class TravelNote:
 
     moved 가 거짓이면 가지 못했다. 까닭은 reason 이다(not_adjacent: 차례가 왔을 때 이어진 길이 없었다).
     from_place 는 차례가 왔을 때 서 있던 곳이다. 맵 밖에 있었으면 None 이다.
+    travel_minutes 는 지나간 길에 걸린 게임 안의 시간(분)이다. 안 걸렸으면 None 이다.
     """
 
     from_place: str | None
     to_place: str
     moved: bool
     reason: str | None = None
+    travel_minutes: int | None = None
 
 
 @dataclass(frozen=True)

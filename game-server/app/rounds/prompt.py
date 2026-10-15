@@ -95,7 +95,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 화면이 시각을 따로 보여 준다. 장면은 빛과 하늘로 드러내라는 말을 다루는 법에 더한다
 #   narration-25: 오래 가는 부상이 게임 안의 시간으로 낫는다. 치료의 결과 줄의 남은 기간이 라운드 수에서
 #                 시간(낫기까지 2시간 30분, 50분 늦어짐)으로 바뀐다(#248 달력 2단계)
-PROMPT_VERSION = 'narration-25'
+#   narration-26: 가기의 결과 줄에 그 길에 걸린 시간이 붙는다((간 곳: 성문 → 숲, 3시간 걸림)).
+#                 그만큼 다음 라운드가 늦게 열리고, [시각]의 흐르는 시간도 그만큼 길다(달력 2단계, 이동 시간)
+PROMPT_VERSION = 'narration-26'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
