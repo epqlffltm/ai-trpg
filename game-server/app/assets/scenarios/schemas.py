@@ -25,9 +25,11 @@ from app.assets.models import (
     DEFAULT_NARRATION_STYLE,
     ITEM_STACK_MAX,
     PLAYER_MADE_HP_MAX,
+    SCENARIO_MAX_BESTIARIES,
     SCENARIO_MAX_ITEM_RULES,
     SCENARIO_MAX_LANDMARKS,
     SCENARIO_MAX_LOREBOOKS,
+    SCENARIO_MAX_MONSTER_SHEETS,
     SCENARIO_MAX_NPC_SHEETS,
     SCENARIO_MAX_OPENINGS,
     SCENARIO_MAX_PREGENS,
@@ -64,6 +66,18 @@ def reject_duplicates(lorebook_ids: list[uuid.UUID]) -> list[uuid.UUID]:
 
 
 LorebookIds = Annotated[list[uuid.UUID], Field(max_length=SCENARIO_MAX_LOREBOOKS), AfterValidator(reject_duplicates)]
+
+
+def reject_duplicate_bestiaries(bestiary_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    """같은 몬스터 도감이 두 번 있으면 거부한다."""
+    if len(set(bestiary_ids)) != len(bestiary_ids):
+        raise ValueError('같은 도감이 두 번 있습니다.')
+    return bestiary_ids
+
+
+BestiaryIds = Annotated[
+    list[uuid.UUID], Field(max_length=SCENARIO_MAX_BESTIARIES), AfterValidator(reject_duplicate_bestiaries)
+]
 
 
 class RecommendedPlayers(BaseModel):
@@ -183,6 +197,38 @@ def reject_duplicate_entries(npc_sheets: list[NpcSheet]) -> list[NpcSheet]:
 
 NpcSheets = Annotated[
     list[NpcSheet], Field(max_length=SCENARIO_MAX_NPC_SHEETS), AfterValidator(reject_duplicate_entries)
+]
+
+
+class MonsterSheet(BaseModel):
+    """
+    몬스터 시트 하나. 붙인 도감의 몬스터 하나(monster_id)에 숫자를 준다.
+
+    시트를 적은 몬스터만 이 시나리오가 쓴다. 판에는 시트가 있는 몬스터만 들어간다.
+    가리키는 몬스터가 붙인 도감에 있는지, 시트가 규칙에 맞는지는 게시할 때 본다. NPC 시트와 같은 까닭이다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    monster_id: uuid.UUID
+    sheet: Sheet
+
+    @field_serializer('monster_id')
+    def monster_id_as_text(self, monster_id: uuid.UUID) -> str:
+        """몬스터의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(monster_id)
+
+
+def reject_duplicate_monsters(monster_sheets: list[MonsterSheet]) -> list[MonsterSheet]:
+    """같은 몬스터의 시트가 두 번 있으면 거부한다. 어느 숫자를 쓸지 정할 수 없다."""
+    monster_ids = [monster_sheet.monster_id for monster_sheet in monster_sheets]
+    if len(set(monster_ids)) != len(monster_ids):
+        raise ValueError('같은 몬스터의 시트가 두 번 있습니다.')
+    return monster_sheets
+
+
+MonsterSheets = Annotated[
+    list[MonsterSheet], Field(max_length=SCENARIO_MAX_MONSTER_SHEETS), AfterValidator(reject_duplicate_monsters)
 ]
 
 
@@ -385,6 +431,7 @@ class ScenarioCreate(AssetCreate):
     rulebook_id: uuid.UUID | None = None
     world_id: uuid.UUID | None = None
     lorebook_ids: LorebookIds = []
+    bestiary_ids: BestiaryIds = []
     openings: Openings = []
     recommended_players: RecommendedPlayers = RecommendedPlayers(min=1, max=TABLE_MAX_PLAYERS)
     pregens: Pregens = []
@@ -393,6 +440,7 @@ class ScenarioCreate(AssetCreate):
     default_sheet: Sheet | None = None
     npc_sheets: NpcSheets = []
     default_npc_sheet: Sheet | None = None
+    monster_sheets: MonsterSheets = []
     items: ItemRules = []
     starting_items: StartingItems = []
     quests: QuestRules = []
@@ -412,7 +460,8 @@ class ScenarioUpdate(AssetUpdate):
 
     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
-    lorebook_ids, openings, pregens, npc_sheets, items, starting_items, quests, routes, landmarks, character_modes 는
+    lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, items, starting_items, quests, routes,
+    landmarks, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다.
@@ -426,6 +475,7 @@ class ScenarioUpdate(AssetUpdate):
     rulebook_id: uuid.UUID | None = None
     world_id: uuid.UUID | None = None
     lorebook_ids: LorebookIds | None = None
+    bestiary_ids: BestiaryIds | None = None
     openings: Openings | None = None
     recommended_players: RecommendedPlayers | None = None
     pregens: Pregens | None = None
@@ -433,6 +483,7 @@ class ScenarioUpdate(AssetUpdate):
     default_sheet: Sheet | None = None
     npc_sheets: NpcSheets | None = None
     default_npc_sheet: Sheet | None = None
+    monster_sheets: MonsterSheets | None = None
     items: ItemRules | None = None
     starting_items: StartingItems | None = None
     quests: QuestRules | None = None
@@ -464,6 +515,7 @@ class ScenarioDetail(ScenarioSummary):
     rulebook_id: uuid.UUID | None
     world_id: uuid.UUID | None
     lorebook_ids: list[uuid.UUID]
+    bestiary_ids: list[uuid.UUID]
     openings: list[str]
     recommended_players: RecommendedPlayers
     pregens: list[Pregen]
@@ -471,6 +523,7 @@ class ScenarioDetail(ScenarioSummary):
     default_sheet: Sheet | None
     npc_sheets: list[NpcSheet]
     default_npc_sheet: Sheet | None
+    monster_sheets: list[MonsterSheet]
     items: list[ItemRule]
     starting_items: list[ItemStack]
     quests: list[QuestRule]

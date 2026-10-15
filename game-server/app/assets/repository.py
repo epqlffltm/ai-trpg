@@ -19,7 +19,7 @@ import uuid
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import Asset, AssetContent, Scenario, ScenarioLorebook
+from app.assets.models import Asset, AssetContent, Scenario, ScenarioBestiary, ScenarioLorebook
 
 
 def owned[Content: AssetContent](model: type[Content], owner_id: uuid.UUID) -> Select[tuple[Content]]:
@@ -78,8 +78,12 @@ async def find_referrers(session: AsyncSession, asset_id: uuid.UUID) -> list[Ass
     자기 자산만 가리킬 수 있으므로, 돌려주는 것은 모두 이 자산의 주인의 것이다.
     """
     attached_here = select(ScenarioLorebook.scenario_id).where(ScenarioLorebook.lorebook_id == asset_id)
+    bestiary_here = select(ScenarioBestiary.scenario_id).where(ScenarioBestiary.bestiary_id == asset_id)
     points_here = or_(
-        Scenario.rulebook_id == asset_id, Scenario.world_id == asset_id, Scenario.asset_id.in_(attached_here)
+        Scenario.rulebook_id == asset_id,
+        Scenario.world_id == asset_id,
+        Scenario.asset_id.in_(attached_here),
+        Scenario.asset_id.in_(bestiary_here),
     )
     query = (
         select(Asset)

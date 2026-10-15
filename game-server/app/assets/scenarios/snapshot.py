@@ -17,6 +17,7 @@ import uuid
 
 from pydantic import BaseModel, model_validator
 
+from app.assets.bestiaries.models import Monster, MonsterKind
 from app.assets.models import (
     CharacterMode,
     ItemKind,
@@ -57,7 +58,8 @@ from app.engine.sheet import Sheet
 #  18: 사건 항목의 퀘스트 규칙(quests)이 있다
 #  19: 맵의 시작 장소(start_place)와 길(routes)이 있다
 #  20: 길을 아는 때(routes[].visibility: open, fog, hidden)와 명소(landmarks)가 있다. 길의 hidden 은 없어졌다
-SNAPSHOT_FORMAT = 20
+#  21: 몬스터(monsters)가 있다. 시트를 적은 몬스터만 들어간다
+SNAPSHOT_FORMAT = 21
 
 
 class EntrySnapshot(BaseModel):
@@ -182,6 +184,20 @@ class NpcSheetSnapshot(BaseModel):
     sheet: Sheet
 
 
+class MonsterSnapshot(BaseModel):
+    """
+    몬스터 하나. 도감의 몬스터(글과 타입)와 시나리오의 몬스터 시트(숫자)를 합친 것이다.
+
+    한 종류다. 테이블에 몇 마리가 나오든 판에는 하나다. 어느 도감에서 왔는지는 플레이에 쓰지 않아서 싣지 않는다.
+    """
+
+    id: uuid.UUID
+    name: str
+    content: str
+    kind: MonsterKind
+    sheet: Sheet
+
+
 class PlayerMadeHpSnapshot(BaseModel):
     """플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다."""
 
@@ -218,6 +234,8 @@ class Snapshot(BaseModel):
     npc_sheets: list[NpcSheetSnapshot]
     # 기본 NPC 시트. 시트가 없는 인물이 쓴다. 그런 인물이 있으면 반드시 있다
     default_npc_sheet: Sheet | None
+    # 몬스터들. 시나리오가 시트를 적은 몬스터만이다. 하나하나가 숫자를 갖는다
+    monsters: list[MonsterSnapshot] = []
     # 아이템 규칙들. 판 안의 로어북 물건 항목마다 많아야 하나다. 규칙이 없는 물건은 장비다(item_rule_of)
     items: list[ItemRuleSnapshot] = []
     # 시작 소지품. 캐릭터 모두가 테이블이 시작할 때 받는다
@@ -252,6 +270,18 @@ class Snapshot(BaseModel):
         uncovered = [entry for entry in person_entries(self) if entry.id not in covered]
         if uncovered and self.default_npc_sheet is None:
             raise ValueError('시트가 없는 인물이 있는데 기본 NPC 시트가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def reject_duplicate_monsters(self) -> 'Snapshot':
+        """
+        같은 몬스터가 두 번 있으면 거부한다. 어느 숫자를 쓸지 정할 수 없다.
+
+        시나리오의 입력에서 이미 막는다(scenarios/schemas.py). 판을 읽는 쪽은 몬스터의 id 로 하나를 찾는다.
+        """
+        monster_ids = [monster.id for monster in self.monsters]
+        if len(set(monster_ids)) != len(monster_ids):
+            raise ValueError('같은 몬스터가 두 번 있습니다.')
         return self
 
     @model_validator(mode='after')
@@ -363,6 +393,13 @@ def snapshot_entry(entry: LoreEntry) -> EntrySnapshot:
     )
 
 
+def snapshot_monster(monster: Monster, sheet: Sheet) -> MonsterSnapshot:
+    """몬스터와 그 시트를 굳힌다."""
+    return MonsterSnapshot(
+        id=monster.id, name=monster.name, content=monster.content, kind=MonsterKind(monster.kind), sheet=sheet
+    )
+
+
 def snapshot_lorebook(lorebook: Lorebook, entries: list[LoreEntry]) -> LorebookSnapshot:
     """로어북과 그 항목들을 굳힌다."""
     return LorebookSnapshot(
@@ -386,9 +423,17 @@ def snapshot_rulebook(rulebook: Rulebook) -> RulebookSnapshot:
 
 
 def build_snapshot(
-    scenario: Scenario, rulebook: Rulebook, world: World | None, lorebooks: list[tuple[Lorebook, list[LoreEntry]]]
+    scenario: Scenario,
+    rulebook: Rulebook,
+    world: World | None,
+    lorebooks: list[tuple[Lorebook, list[LoreEntry]]],
+    monsters: list[MonsterSnapshot],
 ) -> Snapshot:
-    """시나리오와 그것이 가리키는 자산들에서 판의 내용을 만든다."""
+    """
+    시나리오와 그것이 가리키는 자산들에서 판의 내용을 만든다.
+
+    몬스터는 이미 시트와 합친 것을 받는다. 어느 몬스터에 시트가 있는지는 게시하는 쪽이 도감과 견주어 고른다.
+    """
     return Snapshot(
         title=scenario.asset.title,
         description=scenario.asset.description,
@@ -400,6 +445,7 @@ def build_snapshot(
         default_sheet=scenario.default_sheet,
         npc_sheets=[NpcSheetSnapshot(**npc_sheet) for npc_sheet in scenario.npc_sheets],
         default_npc_sheet=scenario.default_npc_sheet,
+        monsters=monsters,
         items=[ItemRuleSnapshot(**rule) for rule in scenario.items],
         starting_items=[ItemStackSnapshot(**stack) for stack in scenario.starting_items],
         quests=[QuestRuleSnapshot(**quest) for quest in scenario.quests],
