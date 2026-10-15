@@ -40,6 +40,19 @@ def set_next_step(table: GameTable, minutes: int | None) -> None:
     table.clock.next_step_minutes = minutes
 
 
+def stretch_next_step(table: GameTable, minutes: int) -> bool:
+    """
+    다음 라운드가 열릴 때 적어도 minutes 분은 흐르게 한다. 이미 그보다 길면 그대로 둔다. 늘렸으면 True.
+
+    맵에서 시간이 걸리는 길로 갔을 때 엔진이 부른다(app/rounds/map_actions.py). 여럿이 갔으면 가장 긴 길을 따른다.
+    방장이 정한 걸음이 더 길면(하룻밤 쉬기) 줄이지 않는다. 늘린 값은 방장이 정한 것처럼 한 번 쓰고 지워진다.
+    """
+    if next_step(table) >= minutes:
+        return False
+    set_next_step(table, minutes)
+    return True
+
+
 def pass_round(table: GameTable) -> int:
     """새 라운드가 열릴 때 시간을 흘린다. 흐른 분을 돌려준다. 방장이 정한 값은 한 번 쓰고 지운다."""
     passed = next_step(table)
