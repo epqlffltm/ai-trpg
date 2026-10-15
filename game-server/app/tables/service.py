@@ -340,7 +340,7 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
     places.place_at_start(table, snapshot)
     repository.add_npcs(session, npcs.make_npcs(table.id, snapshot))
     repository.add_monsters(session, monsters.make_monsters(table.id, snapshot))
-    table.quests.extend(quests.make_quests(table.id, snapshot))
+    table.quests.extend(quests.make_quests(table.id, snapshot, table.clock.minutes))
 
     table.status = TableStatus.PLAYING
     table.started_at = func.now()

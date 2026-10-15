@@ -136,8 +136,9 @@ def to_item(item: TableItem, catalog: dict[uuid.UUID, CatalogItem]) -> ItemOut:
 
 
 def to_quest(quest: TableQuest, catalog: dict[uuid.UUID, quests.CatalogQuest]) -> QuestOut:
-    """퀘스트 하나를 응답으로 바꾼다. 이름은 판에서 찾는다."""
-    return QuestOut(entry_id=quest.entry_id, name=catalog[quest.entry_id].name, status=quest.status)
+    """퀘스트 하나를 응답으로 바꾼다. 이름은 판에서 찾는다. 기한이 있으면 끝나는 시각을 게임 안의 시각으로 푼다."""
+    due_at = None if quest.due_at is None else clock.as_document(quest.due_at)
+    return QuestOut(entry_id=quest.entry_id, name=catalog[quest.entry_id].name, status=quest.status, due_at=due_at)
 
 
 def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:

@@ -10,6 +10,9 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 퀘스트의 행(
   - 성공하면 보상을 받는다. 앉은 사람의 지금 캐릭터 중 살아 있는 것마다 받는다.
     한 가지의 상한(99 개)에 닿으면 그 사람은 거기까지만 받는다. 다른 사람의 보상은 막지 않는다.
   - 숨긴 퀘스트는 방장만 본다. 드러내야 할 때를 방장이 정하므로 방장은 알아야 한다.
+  - 기한: 판의 규칙에 기한이 있으면 드러날 때(진행 중이 될 때) 끝나는 게임 안의 시각을 적는다.
+    처음부터 진행 중인 것은 테이블이 시작하는 시각부터, 숨겼다가 드러낸 것은 드러낸 라운드가 열린 시각부터 센다.
+    숨긴 채로 바로 끝낸 것에는 적지 않는다. 기한이 지난 것을 실패로 바꾸는 것은 app/rounds/deadlines.py 다.
 """
 
 import uuid
@@ -27,12 +30,17 @@ FINISHED = frozenset({QuestStatus.SUCCEEDED, QuestStatus.FAILED})
 
 @dataclass(frozen=True)
 class CatalogQuest:
-    """판에 있는 퀘스트 하나. 이름은 로어북 사건 항목의 이름, 처음 상태와 보상은 퀘스트 규칙의 것이다."""
+    """
+    판에 있는 퀘스트 하나. 이름은 로어북 사건 항목의 이름, 처음 상태와 보상과 기한은 퀘스트 규칙의 것이다.
+
+    time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 없으면 None.
+    """
 
     entry_id: uuid.UUID
     name: str
     start: QuestStatus
     reward: list[ItemStackSnapshot]
+    time_limit_minutes: int | None = None
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogQuest]:
@@ -41,17 +49,31 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogQuest]:
     for entry in quest_entries(snapshot):
         rule = quest_rule_of(snapshot, entry.id)
         quests[entry.id] = CatalogQuest(
-            entry_id=entry.id, name=entry.name, start=QuestStatus(rule.start), reward=list(rule.reward)
+            entry_id=entry.id,
+            name=entry.name,
+            start=QuestStatus(rule.start),
+            reward=list(rule.reward),
+            time_limit_minutes=rule.time_limit_minutes,
         )
     return quests
 
 
-def make_quests(table_id: uuid.UUID, snapshot: Snapshot) -> list[TableQuest]:
-    """시작할 때 판의 퀘스트마다 상태를 하나씩 만든다."""
-    return [
-        TableQuest(table_id=table_id, entry_id=quest.entry_id, status=quest.start)
-        for quest in catalog(snapshot).values()
-    ]
+def due_at_of(quest: CatalogQuest, revealed_at: int) -> int | None:
+    """그 시각(분)에 드러나는 퀘스트의 기한이 끝나는 시각. 기한이 없으면 None."""
+    if quest.time_limit_minutes is None:
+        return None
+    return revealed_at + quest.time_limit_minutes
+
+
+def make_quest(table_id: uuid.UUID, quest: CatalogQuest, now: int) -> TableQuest:
+    """시작할 때의 퀘스트 하나. 처음부터 진행 중이면 지금(now)부터 기한을 센다."""
+    due_at = due_at_of(quest, now) if quest.start == QuestStatus.ACTIVE else None
+    return TableQuest(table_id=table_id, entry_id=quest.entry_id, status=quest.start, due_at=due_at)
+
+
+def make_quests(table_id: uuid.UUID, snapshot: Snapshot, now: int) -> list[TableQuest]:
+    """시작할 때 판의 퀘스트마다 상태를 하나씩 만든다. now 는 테이블이 시작하는 게임 안의 시각(분)이다."""
+    return [make_quest(table_id, quest, now) for quest in catalog(snapshot).values()]
 
 
 def find_quest(table: GameTable, entry_id: uuid.UUID) -> TableQuest | None:
@@ -94,6 +116,26 @@ def require_changeable(current: QuestStatus, to: QuestStatus) -> None:
     problem = change_problem(current, to)
     if problem is not None:
         raise TableConflictError(problem)
+
+
+def reveal(row: TableQuest, quest: CatalogQuest, now: int) -> None:
+    """진행 중이 된 퀘스트에 기한이 끝나는 시각을 적는다. now 는 드러낸 라운드가 열린 시각이다."""
+    row.due_at = due_at_of(quest, now)
+
+
+def is_overdue(row: TableQuest, round_opened_at: int) -> bool:
+    """
+    기한을 넘겨 실패로 바꿀 퀘스트인가. 진행 중이고, 기한이 이 라운드가 열린 시각이나 그 앞에 끝났다.
+
+    기한이 장면 안에서 끝나도 그 라운드에는 바꾸지 않는다. 그 장면의 결과는 서술이 끝난 뒤에야 보인다.
+    방장이 그것을 보고 성공으로 바꿀 틈을 다음 라운드 하나만큼 둔다. 그 라운드가 닫힐 때까지 그대로면 실패다.
+    """
+    return row.status == QuestStatus.ACTIVE and row.due_at is not None and row.due_at <= round_opened_at
+
+
+def overdue_quests(table: GameTable, round_opened_at: int) -> list[TableQuest]:
+    """기한을 넘긴 퀘스트들. 테이블에 담긴 순서다(부르는 쪽이 판의 순서로 놓는다)."""
+    return [row for row in table.quests if is_overdue(row, round_opened_at)]
 
 
 def rewarded_members(table: GameTable) -> list[TableMember]:

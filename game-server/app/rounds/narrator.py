@@ -422,6 +422,7 @@ class WhisperNote:
 class QuestNote:
     """
     테이블의 퀘스트 하나와 그 지금 상태. 상태는 방장이 정한 사실이다(app/tables/quest_changes.py).
+    기한을 넘겨 서버가 실패로 바꾼 것도 같다(app/rounds/deadlines.py).
 
     status 는 hidden, active, succeeded, failed 다. 숨긴(hidden) 것은 플레이어가 아직 모르는 일이다.
     서술자는 숨긴 것을 드러내지 않고, 진행 중인 것의 결말을 먼저 정하지 않는다.
