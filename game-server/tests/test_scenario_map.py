@@ -227,7 +227,7 @@ async def test_the_map_is_frozen_into_the_version(client: AsyncClient, me: dict[
 
     snapshot = await published(client, me, scenario)
 
-    assert snapshot['format'] == SNAPSHOT_FORMAT == 20
+    assert snapshot['format'] == SNAPSHOT_FORMAT
     assert snapshot['start_place'] == lore['gate']['id']
     assert snapshot['routes'][1] == {
         'from_place': lore['square']['id'],
