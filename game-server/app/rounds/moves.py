@@ -10,18 +10,19 @@ DB 를 모른다.
 """
 
 import uuid
+from dataclasses import dataclass
 
 from app.assets.models import NarrationStyle
-from app.assets.scenarios.snapshot import read_snapshot
+from app.assets.scenarios.snapshot import Snapshot, place_entries, read_snapshot
 from app.engine.injury import find_injury
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.cast import CastMember, condition_of
 from app.rounds.models import Round
-from app.rounds.narrator import HealNote, InjuryNote, ItemNote, Move, PersonState
+from app.rounds.narrator import HealNote, InjuryNote, ItemNote, Move, PersonState, PlaceNote
 from app.rounds.state import find_arrival, find_declaration, has_outcome, is_down, naming_of, rules_of
-from app.tables import injuries, items, sheets
+from app.tables import injuries, items, places, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 
@@ -62,7 +63,11 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
     needs_rules = wounded or bool(ended) or any(has_outcome(declaration) for declaration in declarations)
     ruleset = rules_of(table) if needs_rules else None
     holding = any(member.sheet is not None and member.sheet.items for member in table.members)
-    catalog = items.catalog(read_snapshot(table.content)) if holding else {}
+    on_map = any(member.sheet is not None and member.sheet.place_id is not None for member in table.members)
+    # 판의 복사본은 통째로 읽는 일이라 싸지 않다. 소지품이나 맵이 있을 때만 한 번 읽는다
+    snapshot = read_snapshot(table.content) if holding or on_map else None
+    catalog = items.catalog(snapshot) if holding else {}
+    mapping = map_view(table, snapshot) if on_map else None
 
     moves = []
     for member, declaration in zip(table.members, declarations, strict=True):
@@ -83,9 +88,52 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
                 naming=narration_request.to_naming(naming_of(declaration)),
                 item_action=narration_request.to_item_action(declaration),
                 items=held_notes(catalog, member),
+                travel=narration_request.to_travel(declaration),
+                search=narration_request.to_search(declaration),
+                place=place_note(mapping, member),
             )
         )
     return moves
+
+
+@dataclass(frozen=True)
+class MapView:
+    """
+    이 라운드의 행동까지 반영한 뒤에 테이블이 아는 맵과, 판의 장소 이름들. 캐릭터마다 서 있는 곳을 적을 때 함께 쓴다.
+
+    아는 맵에는 이 라운드에 찾은 숨긴 길이 들어 있다. 찾기와 가기를 판정한 뒤에 만든다.
+    """
+
+    snapshot: Snapshot
+    known: places.KnownMap | None
+    knowledge: places.Knowledge
+    names: dict[uuid.UUID, str]
+
+
+def map_view(table: GameTable, snapshot: Snapshot) -> MapView:
+    """테이블이 지금 아는 맵을 읽는다. 맵이 없는 판이면 아는 맵이 None 이다."""
+    knowledge = places.knowledge(table)
+    names = {entry.id: entry.name for entry in place_entries(snapshot)}
+    return MapView(snapshot, places.known_map(snapshot, knowledge), knowledge, names)
+
+
+def place_note(mapping: MapView | None, member: TableMember) -> PlaceNote | None:
+    """
+    이 사람의 지금 캐릭터가 서 있는 곳을 서술자에게 줄 모양으로. 맵에 서 있지 않으면 None.
+
+    아는 길로 갈 수 있는 곳(exits)과, 그곳에 닿은 아직 찾지 않은 숨긴 길의 다른 끝(hidden)을 함께 준다.
+    hidden 은 GM 만 안다. 언어 모델의 맵 절에만 들어간다(app/rounds/prompt.py).
+    """
+    if mapping is None or member.sheet is None or member.sheet.place_id is None:
+        return None
+    here = member.sheet.place_id
+    exits = places.exits(mapping.known, here)
+    hidden = places.hidden_routes_at(mapping.snapshot, mapping.knowledge, here)
+    return PlaceNote(
+        name=mapping.names[here],
+        exits=[mapping.names[place] for place in exits],
+        hidden=[mapping.names[route.to_place if route.from_place == here else route.from_place] for route in hidden],
+    )
 
 
 def held_notes(catalog: dict[uuid.UUID, CatalogItem], member: TableMember) -> list[ItemNote]:

@@ -35,11 +35,14 @@ from app.rounds.narrator import (
     NpcImpact,
     PastRound,
     QuestNote,
+    SearchNote,
     StoryContext,
+    TravelNote,
     TreatmentNote,
     Verdict,
     WhisperNote,
 )
+from app.rounds.state import move_of, search_of
 from app.tables import quests
 from app.tables.models import GameTable
 from app.whispers.models import Whisper
@@ -117,6 +120,37 @@ def to_item_action(declaration: Declaration | None) -> ItemActionNote | None:
             target=given['target']['character_name'],
         )
     return None
+
+
+def place_name(place: dict | None) -> str | None:
+    """결과에 적힌 장소의 이름. 없으면 None."""
+    return place['name'] if place else None
+
+
+def to_travel(declaration: Declaration | None) -> TravelNote | None:
+    """선언에 적힌 가기의 결과를 서술자에게 줄 모양으로 바꾼다. 가는 행동이 아니면 None."""
+    move = move_of(declaration)
+    if move is None:
+        return None
+    return TravelNote(
+        from_place=place_name(move['from']), to_place=move['to']['name'], moved=move['moved'], reason=move['reason']
+    )
+
+
+def other_end(route: dict, place: dict | None) -> str:
+    """찾은 길에서 찾은 곳의 맞은편 장소의 이름. 길이 어디로 이어지는지다."""
+    if place is not None and route['from_place']['entry_id'] == place['entry_id']:
+        return route['to_place']['name']
+    return route['from_place']['name']
+
+
+def to_search(declaration: Declaration | None) -> SearchNote | None:
+    """선언에 적힌 찾기의 결과를 서술자에게 줄 모양으로 바꾼다. 찾는 행동이 아니면 None. 찾은 길만 있다."""
+    search = search_of(declaration)
+    if search is None:
+        return None
+    place = search['place']
+    return SearchNote(place=place_name(place), found=[other_end(route, place) for route in search['found']])
 
 
 def to_npc_impact(effect: dict | None) -> NpcImpact | None:

@@ -33,6 +33,7 @@ from app.assets.models import LoreKind, NarrationStyle
 from app.rounds.narrator import (
     LoreNote,
     MemoryNote,
+    Move,
     NarrationRequest,
     PastRound,
     PersonHistory,
@@ -71,7 +72,10 @@ from app.rounds.narrator import (
 #   narration-15: 전부터 입은 부상을 이번 라운드에 새로 다친 것처럼 쓰는 일을 막는다(상태 지키기 평가에서 3 번 중 3 번).
 #                 시스템 지시에 "이번 라운드에 생긴 부상은 '새 부상'뿐이다"가 붙고, 판정 줄의 "부상의 영향"이
 #                 "전부터 입은 부상의 영향"으로 바뀐다
-PROMPT_VERSION = 'narration-19'
+#   narration-20: 맵이 있는 테이블이면 "[맵]"이 퀘스트 뒤에 붙는다. 캐릭터가 서 있는 곳마다 아는 출구와,
+#                 아직 찾지 않은 숨긴 길(플레이어는 모름, 실마리로만)이다. 한 일의 줄에 가기와 찾기의 결과,
+#                 서 있는 곳이 붙는다(#218)
+PROMPT_VERSION = 'narration-20'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -300,6 +304,20 @@ QUEST_STATUS_WORDS = {
     'succeeded': '성공',
     'failed': '실패',
 }
+# 캐릭터가 서 있는 곳과 아는 출구, 그리고 GM 만 아는 숨긴 길(#218). 위치는 엔진이 정한 사실이다.
+# 서술이 캐릭터를 다른 곳으로 옮기거나 모르는 길로 가게 하면 장면과 위치가 어긋난다.
+# 숨긴 길은 플레이어도 방장도 모른다. 이름을 드러내면 찾기(search)의 판정이 뜻을 잃는다. 실마리만 흘리게 한다
+MAP_TITLE = '[맵]'
+MAP_NOTE = (
+    '게임 엔진이 정한 캐릭터들의 위치와, 그곳에서 플레이어가 아는 출구다. 이번 라운드의 결과까지 반영했다. '
+    '서술에서 캐릭터를 다른 장소로 옮기지 마라. 장소를 옮기는 것은 엔진이다. '
+    '숨은 길은 플레이어가 모른다. 그 길과 그 너머 장소의 이름을 드러내지 말고, '
+    '찾아볼 만한 실마리(바람이 새는 틈, 닳은 바닥 같은 것)로만 흘려라.'
+)
+# 출구가 없는 장소에 적는 말
+NO_EXITS = '없음'
+
+
 # 캐릭터를 정하기 전에 보낸 쪽지의 이름 자리
 UNNAMED_PLAYER = '(이름을 정하지 않은 플레이어)'
 
@@ -497,12 +515,44 @@ def quest_lines(quests: list[QuestNote]) -> list[str]:
     return [QUEST_TITLE, QUEST_NOTE, *(quest_line(quest) for quest in quests), '']
 
 
+def map_line(name: str, characters: list[str], exits: list[str], hidden: list[str]) -> str:
+    """
+    장소 한 줄. 누가 서 있는지, 아는 출구, 숨은 길.
+
+    예: - 광장(기사, 약사): 나가는 길: 성문, 숲. 숨은 길(플레이어는 모름, 실마리로만): 지하실
+    """
+    line = f'- {name}({", ".join(characters)}): 나가는 길: {", ".join(exits) or NO_EXITS}'
+    if hidden:
+        line += f'. 숨은 길(플레이어는 모름, 실마리로만): {", ".join(hidden)}'
+    return line
+
+
+def map_lines(moves: list[Move]) -> list[str]:
+    """
+    맵을 적는 줄들. 다루는 법 한 줄과, 캐릭터가 서 있는 장소마다 한 줄. 처음 나온 장소의 순서다.
+
+    같은 장소에 선 캐릭터들은 한 줄에 모은다. 출구와 숨은 길은 장소가 같으면 같다.
+    끝에 빈 줄이 붙는다. 맵에 선 캐릭터가 없으면 빈 목록이다.
+    """
+    standing: dict[str, list[Move]] = {}
+    for move in moves:
+        if move.place is not None:
+            standing.setdefault(move.place.name, []).append(move)
+    if not standing:
+        return []
+    lines = [MAP_TITLE, MAP_NOTE]
+    for name, here in standing.items():
+        place = here[0].place
+        lines.append(map_line(name, [move.character_name for move in here], place.exits, place.hidden))
+    return [*lines, '']
+
+
 def round_text(request: NarrationRequest) -> str:
     """
     이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
 
-    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 퀘스트, 인물의 상태가 있으면 맨 앞에 둔다
-    (설정, 지난 일, 이력, 쪽지, 퀘스트, 상태, 이번 라운드의 차례).
+    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 퀘스트, 맵, 인물의 상태가 있으면 맨 앞에 둔다
+    (설정, 지난 일, 이력, 쪽지, 퀘스트, 맵, 상태, 이번 라운드의 차례).
     상태는 이번 라운드의 결과 바로 앞이다. 엔진이 정한 사실이라 결과와 가까이 둔다.
     지목이 있으면 결과 뒤에 다루는 법을 한 줄 붙인다. 소지품이 있으면 그것을 다루는 법도 한 줄 붙인다.
     부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
@@ -512,6 +562,7 @@ def round_text(request: NarrationRequest) -> str:
     lines.extend(history_lines(request.histories))
     lines.extend(whisper_lines(request.whispers))
     lines.extend(quest_lines(request.quests))
+    lines.extend(map_lines(request.moves))
     lines.extend(people_lines(request.people))
     lines.append(f'[{request.round_number} 라운드에 한 일과 결과]')
     lines.extend(describe_move(move) for move in request.moves)
