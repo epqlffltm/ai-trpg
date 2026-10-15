@@ -84,7 +84,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 
 	// 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
 	router.GET("/health", health)
-	router.GET("/health/ready", readiness(deps.DB))
+	router.GET("/health/ready", readiness(deps.DB, logger))
 
 	// 개발용 결제 화면. 로그인 묶음 밖에 둔다. 화면 자체는 누구나 받지만, 화면이 부르는 API 는 토큰이 있어야 한다
 	if deps.CheckoutClientKey != "" {

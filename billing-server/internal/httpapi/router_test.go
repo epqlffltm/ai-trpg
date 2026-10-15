@@ -3,6 +3,7 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -103,6 +104,37 @@ func TestReadinessIsUnavailableWhenTheDatabaseFails(t *testing.T) {
 	// 실패한 이유를 싣지 않는다. 드라이버의 오류에는 주소와 계정 이름이 들어 있을 수 있다
 	if got := strings.TrimSpace(response.Body.String()); got != `{"status":"unavailable"}` {
 		t.Errorf("본문 = %s", got)
+	}
+}
+
+func TestReadinessLogsOnlyTheKindOfFailure(t *testing.T) {
+	const secret = "password=do-not-print-me host=10.0.0.7"
+	db := &fakeDB{err: errors.New(secret)}
+	var logs bytes.Buffer
+	router := httpapi.NewRouter(httpapi.Dependencies{DB: db, Logger: slog.New(slog.NewJSONHandler(&logs, nil))})
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+
+	// 까닭은 로그에서 찾는다. 오류의 종류는 남기고, 오류의 글(주소, 계정)은 남기지 않는다
+	if !strings.Contains(logs.String(), `"msg":"DB 에 닿지 않는다"`) {
+		t.Errorf("DB 에 닿지 않는다는 줄이 없다: %s", logs.String())
+	}
+	if !strings.Contains(logs.String(), `"error_type":"*errors.errorString"`) {
+		t.Errorf("오류의 종류가 없다: %s", logs.String())
+	}
+	if strings.Contains(logs.String(), "do-not-print-me") || strings.Contains(logs.String(), "10.0.0.7") {
+		t.Errorf("오류의 글이 로그에 남았다: %s", logs.String())
+	}
+}
+
+func TestReadinessDoesNotLogWhenTheDatabaseAnswers(t *testing.T) {
+	var logs bytes.Buffer
+	router := httpapi.NewRouter(httpapi.Dependencies{DB: &fakeDB{}, Logger: slog.New(slog.NewJSONHandler(&logs, nil))})
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+
+	if strings.Contains(logs.String(), "DB 에 닿지 않는다") {
+		t.Errorf("DB 가 답했는데 닿지 않는다고 남겼다: %s", logs.String())
 	}
 }
 
