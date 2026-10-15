@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.ai.call_log import DbCallLog
 from app.ai.openai_compat import OpenAICompatProvider
 from app.main import create_app
+from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.llm_narrator import LLMNarrator
-from app.rounds.narrator import FakeNarrator
 from app.rounds.narrator_setup import build_narrator, build_provider, offered_tiers, tier_models
 from app.rounds.retrying_narrator import RetryingNarrator
 from app.rounds.tiered_narrator import TieredNarrator

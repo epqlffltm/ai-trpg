@@ -35,7 +35,8 @@ from app.engine.ruleset import Mishap, Ruleset
 from app.engine.templates import SRD5
 from app.engine.treatment import is_healed, lengthened, roll_mishap, shortened, treat, treatable
 from app.rounds import prompt, service
-from app.rounds.narrator import HealNote, Move, TreatmentNote, describe_move, describe_treatment
+from app.rounds.move_lines import describe_move, describe_treatment
+from app.rounds.narrator import HealNote, Move, TreatmentNote
 from app.tables.models import NpcStatus, TableInjury, TableSheet
 from tests.signing import SigningKey
 from tests.test_injuries import make_format_13

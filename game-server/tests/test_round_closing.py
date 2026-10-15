@@ -37,10 +37,11 @@ from app.main import API_PREFIX
 from app.realtime.service import Cursor
 from app.rounds import closing, service
 from app.rounds.closing import Budgets, failure_reason, seconds_left
+from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.models import Round
 from app.rounds.narration_request import dump_moves
-from app.rounds.narrator import NO_PREVIEW, FakeNarrator, NarrationRequest, Preview
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.retrying_narrator import NarrationFailed
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token

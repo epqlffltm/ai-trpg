@@ -18,9 +18,10 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 
 from app.assets.scenarios.snapshot import Snapshot
+from app.rounds.move_lines import describe_move
 from app.rounds.moves import MapView, place_note
 from app.rounds.narration_request import read_moves, to_search
-from app.rounds.narrator import Move, NarrationRequest, PlaceNote, SearchNote, TravelNote, describe_move
+from app.rounds.narrator import Move, NarrationRequest, PlaceNote, SearchNote, TravelNote
 from app.rounds.prompt import FOUND_NOTE, MAP_NOTE, MAP_TITLE, map_line, map_lines, round_text
 from app.tables import places
 from tests import test_table_map as map_tables
