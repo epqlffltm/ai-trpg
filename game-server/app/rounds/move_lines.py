@@ -10,7 +10,9 @@
   - 언어 모델의 프롬프트(app/rounds/prompt.py)는 이 줄들을 "[N 라운드에 한 일과 결과]"로 넣는다.
 그래서 이 줄에는 모두가 알아도 되는 것만 싣는다. 숨긴 길, 출구, GM 메모처럼 GM 만 아는 것은 프롬프트의 다른 절에 넣는다.
 
-엔진이 정한 결과(판정, 치료, 지목, 물건, 가기와 찾기, 죽음의 굴림, 부상)를 말로 옮길 뿐이다. 아무것도 정하지 않는다.
+엔진이 정한 결과(판정, 치료, 지목, 물건, 가기와 찾기, 죽음의 굴림, 부상, 몬스터의 공격)를 말로 옮길 뿐이다.
+아무것도 정하지 않는다. 몬스터의 줄에는 굴림의 숫자와 도감의 글을 싣지 않는다.
+맞붙은 몬스터가 있던 라운드는 차례 순서로 줄을 놓는다(round_lines).
 결과의 모양은 app/rounds/narrator.py 에 있다.
 """
 
@@ -21,12 +23,15 @@ from app.rounds.narrator import (
     InjuryNote,
     ItemActionNote,
     ItemNote,
+    MonsterTurnNote,
     Move,
     NamingNote,
     NpcImpact,
     SearchNote,
+    TargetGoneNote,
     TravelNote,
     TreatmentNote,
+    TurnNote,
     Verdict,
 )
 
@@ -252,6 +257,10 @@ def describe_move(move: Move) -> str:
             parts.append(describe_impact(move.verdict.impact))
         if move.verdict.npc_impact is not None:
             parts.append(describe_npc_impact(move.verdict.npc_impact))
+        if move.verdict.monster_impact is not None:
+            parts.append(describe_npc_impact(move.verdict.monster_impact))
+    if move.target_gone is not None:
+        parts.append(describe_target_gone(move.target_gone))
     if move.naming is not None:
         parts.append(describe_naming(move.naming))
     if move.item_action is not None:
@@ -271,3 +280,66 @@ def describe_move(move: Move) -> str:
     if move.place is not None:
         parts.append(f'[있는 곳: {move.place.name}]')
     return ' '.join(parts)
+
+
+# 겨눈 몬스터를 칠 수 없었던 까닭의 말
+GONE_REASONS = {'dead': '이미 죽어 있었다', 'elsewhere': '그 자리에 없었다'}
+
+
+def describe_target_gone(note: TargetGoneNote) -> str:
+    """
+    겨눈 몬스터를 칠 수 없어 굴리지 않은 것을 적는다.
+
+    예: (겨눈 상대 수로 쥐 2: 이미 죽어 있었다. 판정하지 않았다)
+        (겨눈 상대: 그 자리에 없었다. 판정하지 않았다)
+    """
+    reason = GONE_REASONS.get(note.reason, GONE_REASONS['elsewhere'])
+    who = f'겨눈 상대 {note.name}' if note.name else '겨눈 상대'
+    return f'({who}: {reason}. 판정하지 않았다)'
+
+
+def describe_monster_turn(note: MonsterTurnNote) -> str:
+    """
+    몬스터 한 마리의 차례를 한 줄로 적는다. 굴림의 숫자는 싣지 않는다. 맞았으면 그 캐릭터의 HP 변화를 붙인다.
+
+    예: 수로 쥐 2: 엘프에게 물기 (맞음) → 엘프 피해 3 (HP 7/10)
+        수로 쥐 2: 엘프에게 물기 (빗나감)
+    도감의 글(생김새, 약점)은 싣지 않는다. 가짜 서술자는 이 줄을 장면으로 그대로 내보낸다.
+    """
+    result = '맞음' if note.hit else '빗나감'
+    line = f'{note.name}: {note.target}에게 {note.attack} ({result})'
+    if note.impact is not None:
+        line += f' {describe_impact(note.impact)}'
+    return line
+
+
+def take_move(moves: list[Move], used: list[bool], name: str) -> Move | None:
+    """아직 놓지 않은 한 일 중에서 이 캐릭터의 것을 찾아 놓은 것으로 표시한다. 없으면 None."""
+    for index, move in enumerate(moves):
+        if not used[index] and move.character_name == name:
+            used[index] = True
+            return move
+    return None
+
+
+def round_lines(moves: list[Move], turns: list[TurnNote]) -> list[str]:
+    """
+    이번 라운드에 한 일의 줄들. 차례가 있으면 차례 순서로 캐릭터와 몬스터의 줄을 섞는다.
+
+    차례가 없으면(맞붙은 몬스터가 없었으면) 한 일의 순서(앉은 순서) 그대로다.
+    차례가 없는 캐릭터(행동 없는 선언, 선언을 내지 않음, 쓰러져 있음)의 줄은 차례들 뒤에 앉은 순서로 놓는다.
+    가짜 서술자와 프롬프트가 함께 쓴다.
+    """
+    if not turns:
+        return [describe_move(move) for move in moves]
+    used = [False] * len(moves)
+    lines = []
+    for turn in turns:
+        if turn.monster is not None:
+            lines.append(describe_monster_turn(turn.monster))
+            continue
+        move = take_move(moves, used, turn.character_name)
+        if move is not None:
+            lines.append(describe_move(move))
+    lines.extend(describe_move(move) for move, done in zip(moves, used, strict=True) if not done)
+    return lines

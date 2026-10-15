@@ -30,10 +30,11 @@ from dataclasses import dataclass
 
 from app.ai.provider import ChatMessage, Role
 from app.assets.models import LoreKind, NarrationStyle
-from app.rounds.move_lines import describe_injuries, describe_move
+from app.rounds.move_lines import describe_injuries, lost_before_acting, round_lines
 from app.rounds.narrator import (
     LoreNote,
     MemoryNote,
+    MonsterNote,
     Move,
     NarrationRequest,
     PastRound,
@@ -79,7 +80,13 @@ from app.rounds.narrator import (
 #                 실마리는 숨은 길이 적힌 장소에서만, 이름의 일부도 쓰지 않게 한다. 숨은 길이 없는 톨게이트에도
 #                 실마리를 지어낸 것(10 번 중 4 번) 때문이다. 찾은 길이 있는 라운드에는 다루는 법 한 줄이 붙고,
 #                 찾기의 결과 줄에서 "숨은 길"이라는 말을 뺀다
-PROMPT_VERSION = 'narration-21'
+#   narration-22: 장면에 몬스터가 있으면 "[몬스터]"가 맵 뒤에 붙는다. 네임드 몹은 마리마다, 일반 몹은 장소마다
+#                 종류와 마리마다의 몸 상태다(숫자 없이). 이번 라운드의 결과는 차례 순서로
+#                 캐릭터와 몬스터의 줄을 섞는다.
+#                 몬스터의 공격 줄(맞음, 빗나감)과, 몬스터를 친 판정의 결과(몸 상태),
+#                 칠 수 없어 굴리지 않은 것이 붙는다.
+#                 선언한 일을 하기 전에 쓰러지거나 죽은 인물이 있으면 그 일이 일어나지 않았다는 한 줄이 붙는다(#231 3d)
+PROMPT_VERSION = 'narration-22'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -324,6 +331,24 @@ MAP_NOTE = (
 # 출구가 없는 장소에 적는 말
 NO_EXITS = '없음'
 
+# 이번 장면의 몬스터와 지금 상태(#231 3d). 엔진이 정한 사실이다. 숫자 없이 말로 준다.
+# 목록에 없는 몬스터가 장면에 걸어 들어오면 플레이어는 칠 수 없는 것을 보게 된다. 장면의 몬스터는 이 목록뿐이다.
+# 도감의 글에는 제작자가 약점을 적을 수 있다. 생김새와 움직임을 그리는 데만 쓰게 한다.
+# 금지하는 낱말을 늘어놓지 않는다. 작은 모델은 금지한 낱말에 끌린다. 할 일을 적는다
+MONSTER_TITLE = '[몬스터]'
+MONSTER_NOTE = (
+    '게임 엔진이 정한 이번 장면의 몬스터들과 지금 상태다. 이번 라운드의 결과까지 반영했다. '
+    '장면에 나오는 몬스터는 이 목록의 것뿐이고, 수와 몸 상태도 이대로다. '
+    '쓰러진 몬스터는 움직이지 않고, 죽은 몬스터는 되살아나지 않는다. '
+    '몬스터의 공격이 맞았는지 빗나갔는지는 결과 줄 그대로 쓴다. 몬스터의 힘은 숫자 없이 모습과 움직임으로 보여 준다. '
+    '설명은 생김새와 움직임을 그리는 데 쓰고, 설명에 적힌 약점은 플레이어가 알아낼 일로 남겨 둔다.'
+)
+# 네임드 몹 표시
+UNIQUE_TAG = '네임드'
+# 차례가 오기 전에 쓰러지거나 죽어 선언한 일을 하지 못한 인물이 있는 라운드에만 붙는 다루는 법(narration-22).
+# "각 인물은 선언한 그 행동을 한다"(THIS_ROUND_ONLY)보다 엔진의 결과가 먼저다
+LOST_TURN_NOTE = "'하려던 일을 하기 전에' 쓰러지거나 죽은 인물은 선언한 일을 하지 못했다. 그 일은 일어나지 않았다."
+
 
 # 캐릭터를 정하기 전에 보낸 쪽지의 이름 자리
 UNNAMED_PLAYER = '(이름을 정하지 않은 플레이어)'
@@ -562,15 +587,59 @@ def map_lines(moves: list[Move]) -> list[str]:
     return [*lines, '']
 
 
+def monster_head(note: MonsterNote) -> str:
+    """몬스터 한 줄의 머리. 이름과 (타입, 네임드)와, 일반 몹이면 마릿수. 예: 수로 쥐(야수) 3마리"""
+    tags = [tag for tag in (note.kind, UNIQUE_TAG if note.unique else '') if tag]
+    head = f'{note.name}({", ".join(tags)})' if tags else note.name
+    return head if note.unique else f'{head} {len(note.conditions)}마리'
+
+
+def count_conditions(conditions: list[str]) -> str:
+    """
+    마리마다의 몸 상태를 센 글. 처음 나온 순서다. 한 마리면 그 상태만.
+
+    예: 멀쩡함 2, 죽음 1
+    """
+    if len(conditions) == 1:
+        return conditions[0]
+    counts: dict[str, int] = {}
+    for condition in conditions:
+        counts[condition] = counts.get(condition, 0) + 1
+    return ', '.join(f'{condition} {count}' for condition, count in counts.items())
+
+
+def monster_line(note: MonsterNote) -> str:
+    """
+    몬스터 한 줄. 머리, 있는 곳, 몸 상태, 설명.
+
+    예: - 수로 쥐(야수) 3마리 [수로 입구]: 멀쩡함 2, 죽음 1. 개만 한 쥐
+        - 해골 기사(언데드, 네임드) [깊은 수로]: 다침. 녹슨 창을 든 해골
+    """
+    place = f' [{note.place}]' if note.place else ''
+    content = f'. {note.content}' if note.content else ''
+    return f'- {monster_head(note)}{place}: {count_conditions(note.conditions)}{content}'
+
+
+def monster_lines(monsters: list[MonsterNote]) -> list[str]:
+    """
+    몬스터를 적는 줄들. 다루는 법 한 줄과 몬스터(무리)마다 한 줄. 끝에 빈 줄이 붙는다. 없으면 빈 목록이다.
+    """
+    if not monsters:
+        return []
+    return [MONSTER_TITLE, MONSTER_NOTE, *(monster_line(note) for note in monsters), '']
+
+
 def round_text(request: NarrationRequest) -> str:
     """
     이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
 
-    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 퀘스트, 맵, 인물의 상태가 있으면 맨 앞에 둔다
-    (설정, 지난 일, 이력, 쪽지, 퀘스트, 맵, 상태, 이번 라운드의 차례).
+    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 퀘스트, 맵, 몬스터, 인물의 상태가 있으면 맨 앞에 둔다
+    (설정, 지난 일, 이력, 쪽지, 퀘스트, 맵, 몬스터, 상태, 이번 라운드의 차례).
+    이번 라운드에 한 일은 차례 순서다. 맞붙은 몬스터가 있었으면 캐릭터와 몬스터의 줄이 섞인다(round_lines).
     상태는 이번 라운드의 결과 바로 앞이다. 엔진이 정한 사실이라 결과와 가까이 둔다.
     지목이 있으면 결과 뒤에 다루는 법을 한 줄 붙인다. 찾기로 길을 찾았으면 그것을 다루는 법도 한 줄 붙인다.
     소지품이 있으면 그것을 다루는 법도 한 줄 붙인다.
+    선언한 일을 하기 전에 쓰러지거나 죽은 인물이 있으면 그 일이 일어나지 않았다는 다루는 법도 한 줄 붙인다.
     부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
     """
     lines = lore_lines(request.lore, {move.character_name for move in request.moves})
@@ -579,9 +648,10 @@ def round_text(request: NarrationRequest) -> str:
     lines.extend(whisper_lines(request.whispers))
     lines.extend(quest_lines(request.quests))
     lines.extend(map_lines(request.moves))
+    lines.extend(monster_lines(request.monsters))
     lines.extend(people_lines(request.people))
     lines.append(f'[{request.round_number} 라운드에 한 일과 결과]')
-    lines.extend(describe_move(move) for move in request.moves)
+    lines.extend(round_lines(request.moves, request.turns))
     lines.append('')
     if any(move.naming is not None for move in request.moves):
         lines.append(NAMING_NOTE)
@@ -589,6 +659,8 @@ def round_text(request: NarrationRequest) -> str:
         lines.append(FOUND_NOTE)
     if any(move.items for move in request.moves):
         lines.append(ITEMS_NOTE)
+    if any(lost_before_acting(move) is not None for move in request.moves):
+        lines.append(LOST_TURN_NOTE)
     lines.append(THIS_ROUND_ONLY)
     reminder = style_reminder(request.style)
     if reminder is not None:
