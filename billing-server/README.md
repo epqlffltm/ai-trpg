@@ -1195,6 +1195,13 @@ go test ./...
 
 `gofmt -l .` 는 모양이 어긋난 파일의 이름을 찍는다. 아무것도 나오지 않아야 한다. 고칠 때는 `gofmt -w .` 다.
 
+테스트가 지나간 줄의 비율(커버리지)은 이렇게 본다. `coverage.out` 은 커밋하지 않는다.
+
+```
+go test -coverpkg=./... -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out
+```
+
 CI 는 테스트를 경쟁 감지기와 함께 돌린다(`go test -race`). 두 흐름이 같은 값을 동시에 건드리면 실패한다.
 Windows 에서는 C 컴파일러(gcc)를 따로 깔아야 `-race` 가 돈다. 깔지 않았으면 로컬에서는 빼고 돌리고 CI 에 맡긴다.
 
@@ -1350,7 +1357,9 @@ go run ./cmd/server 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .r
 8. 빌드 (`go build ./...`)
 9. 마이그레이션을 개발용 스키마에 적용하고, 되돌리고, 다시 적용한다. 되돌리는 SQL 이 틀렸으면 여기서 드러난다
 10. 정리 작업을 한 바퀴(`cmd/sweeper -once`), 대사를 한 번(`cmd/reconcile`) 돌린다. 서버의 비밀 없이 뜨는지, 막 만든 스키마가 깨끗한지(끝 코드 0) 본다
-11. 테스트 (`go test -race ./...`). 경쟁 감지기를 켠다. 테스트용 스키마를 쓰므로 9, 10번과 부딪치지 않는다
+11. 테스트 (`go test -race -coverpkg=./... -coverprofile=coverage.out ./...`). 경쟁 감지기를 켠다. 테스트용 스키마를 쓰므로 9, 10번과 부딪치지 않는다.
+    `-coverpkg` 로 패키지를 건너 지나간 줄까지 센다. 그러지 않으면 sqlc 가 만든 패키지처럼 다른 패키지의 테스트로만 지나가는 코드가 0% 로 잡힌다
+12. 커버리지 요약: sqlc 가 만든 코드와 `internal/testenv` 를 빼고 합계와 덜 지나간 함수를 작업 요약(Summary)에 적는다. 커버리지는 아직 재기만 한다. 기준(이 아래로 떨어지면 실패)은 몇 번 재 본 뒤에 건다(#27).
 
 ## 구조
 
