@@ -19,7 +19,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.calendar.clock import ClockTime, TimeOfDay, read_time
-from app.rounds import prompt, service
+from app.rounds import prompt, service, time_words
 from app.rounds.narrator import ClockNote, Move, NarrationRequest, PlaceNote, QuestNote
 from tests.signing import SigningKey
 from tests.test_round_closing import HeldJobs, started_at
@@ -138,7 +138,7 @@ def test_no_clock_no_section():
 @pytest.mark.parametrize(
     ('minutes', 'text'),
     [
-        (0, prompt.NO_TIME_PASSES),
+        (0, time_words.NO_TIME_PASSES),
         (10, '10분'),
         (60, '1시간'),
         (90, '1시간 30분'),
@@ -149,7 +149,7 @@ def test_no_clock_no_section():
     ],
 )
 def test_how_long_reads(minutes: int, text: str):
-    assert prompt.duration_text(minutes) == text
+    assert time_words.duration_text(minutes) == text
 
 
 @pytest.mark.parametrize(
@@ -163,4 +163,4 @@ def test_how_long_reads(minutes: int, text: str):
     ],
 )
 def test_every_part_of_the_day_has_a_word(part: TimeOfDay, word: str):
-    assert prompt.TIME_OF_DAY_WORDS[part] == word
+    assert time_words.TIME_OF_DAY_WORDS[part] == word

@@ -4,8 +4,9 @@
 치료하는 행동의 결과를 정한다(#114 다).
 
 능력과 난이도는 규칙이 정한다(app/engine/treatment.py).
-  - 성공하면 나을 라운드가 앞당겨지고, 지금에 닿으면 그 자리에서 낫는다. 나을 때 후유증 표를 굴린다.
-  - 실패하면 치료 실패 표를 굴린다. 덧남, 피해, 즉사가 나올 수 있다.
+  - 성공하면 나을 시각이 앞당겨지고, 이 장면이 끝나는 때에 닿으면 그 자리에서 낫는다. 나을 때 후유증 표를 굴린다.
+  - 실패하면 치료 실패 표를 굴린다. 덧남(나을 시각이 늦춰짐), 피해, 즉사가 나올 수 있다.
+  - 시각은 게임 안의 분이다. 닫히는 라운드의 때(Judging.moment)로 정한다.
   - 치료받는 쪽이 떠났거나 죽었거나, 그 부상이 이미 없으면 아무 일도 없다.
 DB 를 모른다. 부상과 시트와 NPC 의 상태를 고친다. 저장하지는 않는다.
 """
@@ -13,6 +14,7 @@ DB 를 모른다. 부상과 시트와 NPC 의 상태를 고친다. 저장하지�
 from dataclasses import asdict, dataclass
 
 from app.engine import health, treatment
+from app.engine import injury as injury_rules
 from app.engine.action import TreatAction
 from app.engine.health import ChangeKind
 from app.engine.ruleset import Injury, Mishap, Ruleset
@@ -21,6 +23,7 @@ from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.effects import Judging, member_effect, npc_effect
 from app.tables import injuries, npcs, sheets
 from app.tables import state as table_state
+from app.tables.injuries import Moment
 from app.tables.models import TableMember
 
 
@@ -59,16 +62,21 @@ def find_patient(judging: Judging, action: TreatAction) -> Patient:
     return Patient(holder=holder, rows=member.sheet.injuries, member=member, alive=not sheets.is_dead(member))
 
 
-def heals_after_of(row, injury: Injury) -> int:
+def heals_at_of(row, injury: Injury, moment: Moment) -> int:
     """
-    입고 있는 오래 가는 부상이 나을 라운드. 적혀 있으면 그것이다.
+    입고 있는 오래 가는 부상이 나을 시각(분). 적혀 있으면 그것이다.
 
-    비어 있으면 이 단계 전에 입은 것이다(마이그레이션이 채우지만 한 번 더 막는다).
-    생긴 라운드에 규칙의 라운드 수를 더한다.
+    비어 있으면 시간으로 낫기 전에 입은 것이다(마이그레이션이 채우지만 한 번 더 막는다).
+    지금부터 규칙의 기간만큼 뒤로 본다.
     """
-    if row.ends_after_round is not None:
-        return row.ends_after_round
-    return row.round_number + injury.rounds
+    if row.heals_at is not None:
+        return row.heals_at
+    return injury_rules.heals_at(injury, moment.now, moment.round_minutes)
+
+
+def left_after(heals_at: int, moment: Moment) -> int:
+    """이 장면이 끝난 뒤(다음 라운드가 열린 뒤) 낫기까지 남은 분."""
+    return heals_at - moment.scene_end
 
 
 def treatment_document(ruleset: Ruleset, injury: Injury, patient: Patient) -> dict:
@@ -84,9 +92,9 @@ def treatment_document(ruleset: Ruleset, injury: Injury, patient: Patient) -> di
         'difficulty': injury.treat_difficulty,
         'patient': patient.holder,
         'treated': True,
-        'heals_after_before': None,
-        'heals_after': None,
-        'rounds_left': None,
+        'heals_at_before': None,
+        'heals_at': None,
+        'minutes_left': None,
         'healed': False,
         'aftermath': None,
         'mishap': None,
@@ -96,19 +104,23 @@ def treatment_document(ruleset: Ruleset, injury: Injury, patient: Patient) -> di
 
 def cure(judging: Judging, patient: Patient, row, injury: Injury) -> dict:
     """
-    치료에 성공했다. 나을 라운드를 앞당긴다. 지금 라운드에 닿으면 그 자리에서 낫고 후유증 표를 굴린다.
+    치료에 성공했다. 나을 시각을 앞당긴다. 이 장면이 끝나는 때에 닿으면 그 자리에서 낫고 후유증 표를 굴린다.
 
     문서에 덮어쓸 칸들을 돌려준다.
     """
-    before = heals_after_of(row, injury)
-    after = treatment.shortened(before, injury)
-    if treatment.is_healed(after, judging.round_number):
-        aftermath = round_injuries.heal(
-            judging.ruleset, judging.dice, row, patient.rows, judging.table.id, judging.round_number
-        )
-        return {'heals_after_before': before, 'healed': True, 'aftermath': aftermath}
+    moment = judging.moment
+    before = heals_at_of(row, injury, moment)
+    after = treatment.shortened(before, injury, moment.round_minutes)
+    before_document = round_injuries.heals_at_document(before)
+    if treatment.is_healed(after, moment.scene_end):
+        aftermath = round_injuries.heal(judging.ruleset, judging.dice, row, patient.rows, judging.table.id, moment)
+        return {'heals_at_before': before_document, 'healed': True, 'aftermath': aftermath}
     injuries.reschedule(row, after)
-    return {'heals_after_before': before, 'heals_after': after, 'rounds_left': after - judging.round_number}
+    return {
+        'heals_at_before': before_document,
+        'heals_at': round_injuries.heals_at_document(after),
+        'minutes_left': left_after(after, moment),
+    }
 
 
 # 치료 실패가 HP 를 바꾸지 않았을 때의 outcome 칸들
@@ -150,28 +162,35 @@ def mishap(judging: Judging, patient: Patient, row, injury: Injury) -> tuple[dic
     치료에 실패했다. 치료 실패 표를 굴리고, 나온 일을 한다.
 
     (치료 문서에 덮어쓸 칸들, outcome 의 effect 와 npc_effect) 를 돌려준다.
-    덧나면 나을 라운드가 늦춰진다. 피해의 등급이 있으면 피해를 입는다. 즉사면 그 자리에서 죽는다.
+    덧나면 나을 시각이 늦춰진다. 피해의 등급이 있으면 피해를 입는다. 즉사면 그 자리에서 죽는다.
     """
+    moment = judging.moment
     rolled = treatment.roll_mishap(judging.ruleset, judging.dice)
-    before = heals_after_of(row, injury)
+    before = heals_at_of(row, injury, moment)
+    delay = treatment.delay_of(rolled, moment.round_minutes)
     fields = {
         'mishap': {
             'roll': rolled.roll,
             'kind': rolled.kind.value,
             'rounds': rolled.rounds,
+            'delay_minutes': delay or None,
             'magnitude': rolled.magnitude,
         },
-        'heals_after_before': before,
-        'heals_after': before,
-        'rounds_left': before - judging.round_number,
+        'heals_at_before': round_injuries.heals_at_document(before),
+        'heals_at': round_injuries.heals_at_document(before),
+        'minutes_left': left_after(before, moment),
     }
     if rolled.kind == Mishap.FATAL:
         kill_patient(patient)
-        return {**fields, 'heals_after': None, 'rounds_left': None, 'died': True}, NO_EFFECTS
-    after = treatment.lengthened(before, rolled)
+        return {**fields, 'heals_at': None, 'minutes_left': None, 'died': True}, NO_EFFECTS
+    after = treatment.lengthened(before, rolled, moment.round_minutes)
     if after != before:
         injuries.reschedule(row, after)
-        fields = {**fields, 'heals_after': after, 'rounds_left': after - judging.round_number}
+        fields = {
+            **fields,
+            'heals_at': round_injuries.heals_at_document(after),
+            'minutes_left': left_after(after, moment),
+        }
     effects = mishap_hurt(judging, patient, rolled.magnitude) if rolled.magnitude else NO_EFFECTS
     return fields, effects
 

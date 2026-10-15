@@ -203,10 +203,10 @@ def to_treatment(treatment: dict | None) -> TreatmentNote | None:
         patient=patient_name(treatment['patient']),
         treated=treatment['treated'],
         healed=treatment['healed'],
-        rounds_left=treatment['rounds_left'],
+        minutes_left=treatment.get('minutes_left'),
         aftermath=aftermath['name'] if aftermath else None,
         mishap=mishap['kind'] if mishap else None,
-        worsened_by=mishap['rounds'] if mishap else None,
+        worsened_minutes=mishap.get('delay_minutes') if mishap else None,
         died=treatment['died'],
     )
 

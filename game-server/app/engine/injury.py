@@ -130,14 +130,34 @@ def blocks_actions(injuries: Iterable[Injury]) -> bool:
 
 def ends_after(injury: Injury, round_number: int) -> int | None:
     """
-    이 라운드에 생긴 부상이 풀리거나 낫는 라운드. 그 라운드가 닫힐 때 풀린다. 결손은 낫지 않아서 None.
+    이 라운드에 생긴 짧은 부상이 풀리는 라운드. 그 라운드가 닫힐 때 풀린다. 짧은 것이 아니면 None.
 
     1 라운드짜리는 다음 라운드 동안 효과가 있고, 그 라운드가 닫힐 때 풀린다.
-    오래 가는 것은 치료로 이 라운드가 앞당겨지거나, 치료에 실패해 늦춰질 수 있다(app/engine/treatment.py).
+    짧은 것은 "한 장면 동안"이라 라운드로 센다. 오래 가는 것은 게임 안의 시간으로 센다(heals_at).
     """
-    if injury.healing == Healing.PERMANENT:
+    if injury.healing != Healing.ROUNDS:
         return None
     return round_number + injury.rounds
+
+
+def minutes_of(rounds: int, round_minutes: int) -> int:
+    """
+    규칙에 라운드 수로 적힌 기간을 게임 안의 분으로 바꾼다. 판의 라운드 하나에 흐르는 기본 시간을 곱한다.
+
+    규칙의 오래 가는 부상과 치료는 아직 라운드 수로 적혀 있다. 시간으로 낫게 하면서 이 셈으로 옮긴다.
+    """
+    return rounds * round_minutes
+
+
+def heals_at(injury: Injury, now: int, round_minutes: int) -> int | None:
+    """
+    지금(now, 1일째 0시부터 흐른 분) 생긴 오래 가는 부상이 저절로 낫는 시각(분). 오래 가는 것이 아니면 None.
+
+    규칙의 라운드 수에 판의 기본 걸음을 곱한 만큼 뒤다(minutes_of). 치료로 앞당겨지거나 덧나서 늦춰진다.
+    """
+    if injury.healing != Healing.HEALS:
+        return None
+    return now + minutes_of(injury.rounds, round_minutes)
 
 
 def leaves_aftermath(injury: Injury) -> bool:

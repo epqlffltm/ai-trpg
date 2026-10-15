@@ -83,7 +83,7 @@ class TreatmentNote:
     """
     치료의 결과. 엔진이 정한 것이다. 서술자는 이것을 바꾸지 못하고 글로 옮기기만 한다.
 
-    부상과 치료받는 쪽은 규칙의 이름과 장면의 호칭이다. 숫자는 남은 라운드만 준다(HP 는 Impact 에 있다).
+    부상과 치료받는 쪽은 규칙의 이름과 장면의 호칭이다. 숫자는 남은 시간만 준다(HP 는 Impact 에 있다).
     """
 
     # 치료한 부상의 이름과 치료받은 쪽
@@ -93,14 +93,14 @@ class TreatmentNote:
     treated: bool = True
     # 치료로 다 나았는가
     healed: bool = False
-    # 낫기까지 남은 라운드. 다 나았거나 치료하지 못했으면 None 이다
-    rounds_left: int | None = None
+    # 이 장면이 끝난 뒤 낫기까지 남은 게임 안의 분. 다 나았거나 치료하지 못했으면 None 이다
+    minutes_left: int | None = None
     # 나으면서 남은 후유증의 이름. 없으면 None 이다
     aftermath: str | None = None
     # 실패했을 때 치료 실패 표에서 나온 일. nothing, pain, worsen, fatal. 성공했거나 치료하지 못했으면 None 이다
     mishap: str | None = None
-    # 덧나서 늘어난 라운드. 덧나지 않았으면 None 이다
-    worsened_by: int | None = None
+    # 덧나서 늦춰진 게임 안의 분. 덧나지 않았으면 None 이다
+    worsened_minutes: int | None = None
     # 치료받던 쪽이 죽었는가(즉사)
     died: bool = False
 

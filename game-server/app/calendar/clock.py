@@ -64,3 +64,9 @@ def read_time(minutes: int) -> ClockTime:
     days, in_day = divmod(minutes, MINUTES_PER_DAY)
     hour, minute = divmod(in_day, MINUTES_PER_HOUR)
     return ClockTime(day=days + 1, hour=hour, minute=minute, time_of_day=time_of_day(hour))
+
+
+def as_document(minutes: int) -> dict:
+    """1일째 0시부터 흐른 분을 이벤트와 응답에 적을 모양으로. 며칠째, 몇 시, 몇 분, 하루의 어느 때."""
+    time = read_time(minutes)
+    return {'day': time.day, 'hour': time.hour, 'minute': time.minute, 'time_of_day': time.time_of_day}
