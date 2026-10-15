@@ -20,6 +20,9 @@ from collections.abc import Callable
 
 from app.assets.models import (
     DEFAULT_NARRATION_STYLE,
+    DEFAULT_ROUND_MINUTES,
+    DEFAULT_START_DAY,
+    DEFAULT_START_HOUR,
     TABLE_MAX_PLAYERS,
     LoreKind,
 )
@@ -390,6 +393,22 @@ def upgrade_from_22(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_23(document: dict) -> dict:
+    """
+    형식 23 의 문서를 형식 24 로 올린다. 그때는 게임 안의 시계가 없었다.
+
+    1일째 8시에 시작하고 라운드 하나에 10분이 흐르는 것으로 읽는다. 새 시나리오의 기본값과 같다.
+    """
+    upgraded = dict(document)
+    upgraded['clock'] = {
+        'start_day': DEFAULT_START_DAY,
+        'start_hour': DEFAULT_START_HOUR,
+        'round_minutes': DEFAULT_ROUND_MINUTES,
+    }
+    upgraded['format'] = 24
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -415,4 +434,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     20: upgrade_from_20,
     21: upgrade_from_21,
     22: upgrade_from_22,
+    23: upgrade_from_23,
 }
