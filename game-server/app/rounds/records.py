@@ -213,6 +213,7 @@ def record_move(session: AsyncSession, table: GameTable, declaration: Declaratio
     payload = {
         'round': cause.payload['round'],
         **{key: move[key] for key in ('user_id', 'character_name', 'from', 'to')},
+        'travel_minutes': move.get('travel_minutes'),
     }
     recorder.record(session, table, EventType.CHARACTER_MOVED, payload=payload, cause=cause)
 

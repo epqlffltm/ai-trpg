@@ -138,7 +138,11 @@ def to_travel(declaration: Declaration | None) -> TravelNote | None:
     if move is None:
         return None
     return TravelNote(
-        from_place=place_name(move['from']), to_place=move['to']['name'], moved=move['moved'], reason=move['reason']
+        from_place=place_name(move['from']),
+        to_place=move['to']['name'],
+        moved=move['moved'],
+        reason=move['reason'],
+        travel_minutes=move.get('travel_minutes'),
     )
 
 

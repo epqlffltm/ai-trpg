@@ -415,6 +415,8 @@ class RouteRule(BaseModel):
     two_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).
     visibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).
     숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.
+    travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
+    (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
     """
 
@@ -425,6 +427,7 @@ class RouteRule(BaseModel):
     two_way: bool = True
     visibility: RouteVisibility = RouteVisibility.OPEN
     find: FindCheck | None = None
+    travel_minutes: int | None = Field(default=None, ge=1, le=ROUND_MAX_MINUTES)
 
     @model_validator(mode='after')
     def leads_somewhere_else(self) -> 'RouteRule':

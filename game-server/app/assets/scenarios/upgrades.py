@@ -481,6 +481,18 @@ def upgrade_from_24(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_25(document: dict) -> dict:
+    """
+    형식 25 의 문서를 형식 26 으로 올린다. 그때는 길에 걸리는 시간이 없었다.
+
+    모두 비운 것으로 읽는다. 라운드의 걸음 안에서 간다. 그때와 같은 동작이다.
+    """
+    upgraded = dict(document)
+    upgraded['routes'] = [{**route, 'travel_minutes': None} for route in document.get('routes', [])]
+    upgraded['format'] = 26
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -508,4 +520,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     22: upgrade_from_22,
     23: upgrade_from_23,
     24: upgrade_from_24,
+    25: upgrade_from_25,
 }

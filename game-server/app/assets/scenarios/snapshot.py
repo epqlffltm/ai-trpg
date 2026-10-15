@@ -69,7 +69,8 @@ from app.engine.sheet import Sheet
 #  24: 게임 안의 시계(clock: 시작하는 날과 시, 라운드 하나에 흐르는 기본 시간)가 있다
 #  25: 오래 가는 부상이 낫기까지(heal_minutes), 치료가 앞당기는(treat_minutes), 덧나서 늦춰지는(delay_minutes)
 #      기간이 라운드 수가 아니라 게임 안의 시간(분)이다. 짧은 부상은 그대로 라운드 수(rounds)다
-SNAPSHOT_FORMAT = 25
+#  26: 길에 한 칸 가는 데 걸리는 게임 안의 시간(routes[].travel_minutes)이 있다
+SNAPSHOT_FORMAT = 26
 
 
 class EntrySnapshot(BaseModel):
@@ -176,7 +177,8 @@ class RouteSnapshot(BaseModel):
     길 하나. 판 안의 로어북 장소 항목 둘을 잇는다.
 
     two_way 가 아니면 from_place 에서 to_place 로만 간다. visibility 는 플레이어가 길을 언제 아는가다.
-    숨긴 길은 찾는 판정(find)으로 드러난다.
+    숨긴 길은 찾는 판정(find)으로 드러난다. travel_minutes 는 한 칸 가는 데 걸리는 게임 안의 시간(분)이다.
+    비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.
     """
 
     from_place: uuid.UUID
@@ -184,6 +186,7 @@ class RouteSnapshot(BaseModel):
     two_way: bool = True
     visibility: RouteVisibility = RouteVisibility.OPEN
     find: FindSnapshot | None = None
+    travel_minutes: int | None = None
 
 
 class PregenSnapshot(BaseModel):
