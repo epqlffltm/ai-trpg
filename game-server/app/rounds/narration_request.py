@@ -30,6 +30,7 @@ from app.rounds.narrator import (
     DeathSaveNote,
     Impact,
     ItemActionNote,
+    MonsterTurnNote,
     Move,
     NamingNote,
     NpcImpact,
@@ -37,8 +38,10 @@ from app.rounds.narrator import (
     QuestNote,
     SearchNote,
     StoryContext,
+    TargetGoneNote,
     TravelNote,
     TreatmentNote,
+    TurnNote,
     Verdict,
     WhisperNote,
 )
@@ -233,6 +236,7 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
         success=outcome['success'],
         impact=to_impact(outcome.get('effect')),
         npc_impact=to_npc_impact(outcome.get('npc_effect')),
+        monster_impact=to_npc_impact(outcome.get('monster_effect')),
         hindrances=hindrance_names(ruleset, outcome.get('hindrance')),
         aimed=aimed_name(ruleset, outcome.get('called_shot')),
         treatment=to_treatment(outcome.get('treatment')),
@@ -346,3 +350,49 @@ def dump_moves(moves: list[Move]) -> list[dict]:
 def read_moves(data: list[dict]) -> list[Move]:
     """라운드에 굳혀 둔 것을 각자 한 일로 다시 읽는다. 모양이 틀리면 ValidationError."""
     return MOVES.validate_python(data)
+
+
+def to_target_gone(declaration: Declaration | None) -> TargetGoneNote | None:
+    """선언에 적힌 "겨눈 몬스터를 칠 수 없었다"를 서술자에게 줄 모양으로. 아니었으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    gone = declaration.outcome.get('target_gone')
+    if gone is None:
+        return None
+    return TargetGoneNote(name=gone['name'], reason=gone['reason'])
+
+
+def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
+    """
+    라운드에 적힌 몬스터의 차례 하나를 서술자에게 줄 모양으로. 움직이지 못한 차례(skipped)면 None.
+
+    굴림의 숫자는 옮기지 않는다. 몬스터의 능력치를 드러낸다.
+    """
+    outcome = turn['outcome']
+    if 'skipped' in outcome:
+        return None
+    return MonsterTurnNote(
+        name=turn['name'],
+        attack=outcome['attack']['name'],
+        target=outcome['character_name'],
+        hit=outcome['success'],
+        impact=to_impact(outcome['effect']),
+    )
+
+
+def to_turn_note(turn: dict) -> TurnNote | None:
+    """라운드에 적힌 차례 하나를 서술자에게 줄 모양으로. 몬스터가 움직이지 못한 차례면 None."""
+    if turn['kind'] == 'pc':
+        return TurnNote(character_name=turn['character_name'])
+    monster = to_monster_turn(turn)
+    return TurnNote(monster=monster) if monster is not None else None
+
+
+def to_turn_notes(turns: list[dict]) -> list[TurnNote]:
+    """
+    라운드에 적힌 차례들(Round.turns)을 서술자에게 줄 모양으로. 차례 순서다. 몬스터가 움직이지 못한 차례는 뺀다.
+
+    차례는 닫기 시작할 때 굳었다(app/rounds/judging.py). 몇 번을 맡겨도 같은 것을 받는다.
+    """
+    notes = [to_turn_note(turn) for turn in turns]
+    return [note for note in notes if note is not None]

@@ -59,7 +59,7 @@ from app.rounds.errors import Conflict, RoundConflictError, RoundNotFoundError
 from app.rounds.judging import expire_injuries, find_dying, roll_checks, roll_death_saves
 from app.rounds.models import CloseReason, Round, RoundStatus
 from app.rounds.monster_scene import scene_monsters
-from app.rounds.moves import build_moves, frozen_moves, frozen_style, to_people
+from app.rounds.moves import build_moves, frozen_moves, frozen_style, to_monster_notes, to_people
 from app.rounds.narrator import NarrationRequest
 from app.rounds.prompt import HISTORY_ROUNDS
 from app.rounds.records import record_actions, record_death_saves, record_injury_endings
@@ -438,6 +438,7 @@ async def load_closing_request(
       - 지난 라운드는 닫혀서 바뀌지 않는다.
       - NPC 의 상태는 닫기 시작할 때 바뀐 뒤로 다음 라운드가 열릴 때까지 바뀌지 않는다.
       - GM 에게 보인 쪽지는 라운드가 열려 있는 동안 보낸 것이다. 닫기 시작한 뒤에 보낸 것은 다음 라운드로 간다.
+      - 몬스터의 상태도 NPC 와 같다. 차례와 몬스터가 한 일은 닫기 시작할 때 라운드에 굳혀 둔 것(turns)이다.
     그래서 서술을 몇 번 다시 맡겨도 서술자는 같은 것을 받는다.
     퀘스트의 상태만은 예외다. 방장이 언제든 바꾸고, 서술을 맡길 때의 것을 읽는다. 굳히지 않는 까닭:
     결정적인 라운드가 닫힌 뒤 방장이 성공을 적으면, 그 라운드의 서술이 성공을 그릴 수 있어야 한다. 지금의 사실이 맞다.
@@ -464,6 +465,8 @@ async def load_closing_request(
         people=to_people(scene.cast, snapshot.rulebook.rules),
         whispers=[narration_request.to_whisper_note(whisper) for whisper in whispers],
         quests=narration_request.to_quest_notes(table, snapshot),
+        monsters=to_monster_notes(snapshot, scene.monsters),
+        turns=narration_request.to_turn_notes(round_.turns),
     )
 
 

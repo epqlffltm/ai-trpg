@@ -12,6 +12,7 @@ DB 를 모른다.
 import uuid
 from dataclasses import dataclass
 
+from app.assets.bestiaries.models import MonsterKind
 from app.assets.models import NarrationStyle
 from app.assets.scenarios.snapshot import Snapshot, place_entries, read_snapshot
 from app.engine.injury import find_injury
@@ -20,7 +21,9 @@ from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.cast import CastMember, condition_of
 from app.rounds.models import Round
-from app.rounds.narrator import HealNote, InjuryNote, ItemNote, Move, PersonState, PlaceNote
+from app.rounds.monster_scene import SceneMonster
+from app.rounds.monster_scene import condition as monster_condition
+from app.rounds.narrator import HealNote, InjuryNote, ItemNote, MonsterNote, Move, PersonState, PlaceNote
 from app.rounds.state import find_arrival, find_declaration, has_outcome, is_down, naming_of, rules_of
 from app.tables import injuries, items, places, sheets
 from app.tables.items import CatalogItem
@@ -91,6 +94,7 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
                 items=held_notes(catalog, member),
                 travel=narration_request.to_travel(declaration),
                 search=narration_request.to_search(declaration),
+                target_gone=narration_request.to_target_gone(declaration),
                 place=place_note(mapping, member),
             )
         )
@@ -182,3 +186,43 @@ def to_people(cast: list[CastMember], ruleset: Ruleset) -> list[PersonState]:
         )
         for member in cast
     ]
+
+
+# 몬스터의 타입을 서술자에게 보일 말. 기타는 적지 않는다
+MONSTER_KINDS = {
+    MonsterKind.HUMANOID: '인간형',
+    MonsterKind.BEAST: '야수',
+    MonsterKind.UNDEAD: '언데드',
+    MonsterKind.CONSTRUCT: '구조물',
+}
+
+
+def monster_note(monsters: list[SceneMonster], place: str) -> MonsterNote:
+    """
+    같은 장소의 같은 몬스터 마리들(네임드면 한 마리)을 서술자에게 줄 모양으로. 마리마다의 몸 상태를 번호 순서로 준다.
+    """
+    definition = monsters[0].definition
+    return MonsterNote(
+        name=definition.name,
+        kind=MONSTER_KINDS.get(definition.kind, ''),
+        content=definition.content,
+        place=place,
+        unique=definition.unique,
+        conditions=[monster_condition(monster) for monster in monsters],
+    )
+
+
+def to_monster_notes(snapshot: Snapshot, monsters: list[SceneMonster]) -> list[MonsterNote]:
+    """
+    이번 장면의 몬스터들을 서술자에게 줄 모양으로. 같은 장소의 같은 몬스터를 하나로 모은다. 장면의 순서다.
+
+    네임드 몹은 판 전체에서 한 마리라 늘 혼자다. 일반 몹은 종류와 마리마다의 몸 상태만 준다.
+    숫자(HP, 능력치)는 주지 않는다.
+    """
+    if not monsters:
+        return []
+    names = {entry.id: entry.name for entry in place_entries(snapshot)}
+    groups: dict[tuple, list[SceneMonster]] = {}
+    for monster in monsters:
+        groups.setdefault((monster.state.place_id, monster.state.monster_id), []).append(monster)
+    return [monster_note(group, names.get(place_id, '')) for (place_id, _), group in groups.items()]

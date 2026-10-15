@@ -7,7 +7,7 @@
 서버의 조립(app/rounds/prompt.py)을 그대로 거치므로 프롬프트의 틀이 바뀌면 이 장면들도 새 틀로 간다.
 부상의 이름과 사실은 내장 템플릿(srd5)의 것을 그대로 쓴다. 템플릿의 글이 바뀌어도 장면이 따라간다.
 
-보는 것은 다섯이다(#111 ④, 지목, 맵 #218).
+보는 것은 여섯이다(#111 ④, 지목, 맵 #218, 몬스터 #231).
   - 쓰러진 NPC 와 죽은 NPC 는 말하거나 움직이지 않는다
   - 입은 부상이 서술에 나오고, 그 부상으로 실패한 일을 성공처럼 쓰지 않는다
   - 치료의 결과(다 나음과 후유증, 덧남)를 그대로 쓴다
@@ -15,6 +15,8 @@
   - 맵: 숨은 길과 그 너머 장소의 이름(일부도)이 새지 않는다(실마리만). 엔진이 정한 위치를 서술이 바꾸지 않는다.
     못 찾은 찾기를 찾은 것처럼, 못 간 가기를 간 것처럼 쓰지 않는다. 찾은 길은 이름이 나온다.
     숨은 길이 없는 곳에는 실마리를 지어내지 않는다
+  - 몬스터: 빗나간 공격을 맞은 것처럼 쓰지 않고, 목록에 없는 몬스터를 늘리지 않는다.
+    몬스터에게 쓰러진 캐릭터는 선언한 일을 하지 않는다. 맞은 공격은 나온다
 모든 장면에서 숨긴 설정(경찰의 끄나풀)을 흘리지 않는지 본다. 진짜 이름은 맞은 지목의 장면에서만 나와도 된다.
 
 GM 메모에 진짜 이름을 적어 둔다. 제작자가 그렇게 쓸 수 있고, 그러면 모델은 진짜 이름을 안다.
@@ -24,7 +26,7 @@ GM 메모에 진짜 이름을 적어 둔다. 제작자가 그렇게 쓸 수 있�
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from app.assets.models import LoreKind, NarrationStyle
 from app.engine.injury import find_injury
@@ -34,6 +36,8 @@ from app.rounds.narrator import (
     Impact,
     InjuryNote,
     LoreNote,
+    MonsterNote,
+    MonsterTurnNote,
     Move,
     NamingNote,
     NarrationRequest,
@@ -45,6 +49,7 @@ from app.rounds.narrator import (
     StoryContext,
     TravelNote,
     TreatmentNote,
+    TurnNote,
     Verdict,
 )
 from app.tables.models import NpcStatus
@@ -515,6 +520,91 @@ MAP_TRAVEL_FAILED = StateCase(
     ),
 )
 
+# 몬스터의 공격이 빗나갔다. 리엔이 먼저 드론 하나를 부쉈고, 남은 드론의 충격탄은 토르빈을 비켜 갔다.
+# 목록에는 드론 두 대(멀쩡함 1, 죽음 1)뿐이다. 더 몰려오게 쓰면 안 된다
+DRONES = MonsterNote(
+    name='순찰 드론',
+    kind='구조물',
+    content='고속도로 위를 떠다니는 둥근 순찰 드론. 충격탄을 쏜다.',
+    place='',
+    unique=False,
+    conditions=[UNHURT, CONDITIONS[NpcStatus.DEAD]],
+)
+SHOCK_MISS = MonsterTurnNote(name='순찰 드론 1', attack='충격탄', target='토르빈', hit=False)
+MONSTER_MISS = StateCase(
+    name='monster_miss',
+    about='빗나간 몬스터의 공격을 맞은 것처럼 쓰지 않고, 목록에 없는 몬스터를 늘리지 않는다',
+    request=replace(
+        request(
+            scene='휴게소 주차장 위로 순찰 드론 두 대가 낮게 떠 있다. 붉은 불빛이 엘프 폭주족을 훑는다.',
+            moves=[
+                Move(
+                    '리엔',
+                    '바이크 헬멧을 던져 드론을 떨어뜨린다.',
+                    verdict=check(
+                        '민첩',
+                        '보통',
+                        17,
+                        2,
+                        15,
+                        monster_impact=NpcImpact('damage', '순찰 드론 2', 7, CONDITIONS[NpcStatus.DEAD]),
+                    ),
+                ),
+                Move('토르빈', '망치를 고쳐 쥐고 숨을 고른다.', verdict=check('건강', '보통', 6, 1, 15)),
+            ],
+            people=[],
+        ),
+        monsters=[DRONES],
+        turns=[TurnNote(character_name='리엔'), TurnNote(monster=SHOCK_MISS), TurnNote(character_name='토르빈')],
+    ),
+    checks=(
+        Forbid('빗나간 공격이 맞음', ('충격탄에 맞', '충격탄을 맞', '감전', '튕겨 나가', '나가떨어')),
+        Forbid('없는 몬스터', ('세 대', '네 대', '드론 떼', '떼를 지어', '증원')),
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
+# 몬스터의 공격에 PC 가 쓰러졌다. 톨게이트지기(네임드)의 쇠막대가 토르빈을 쓰러뜨려, 토르빈은 선언한 일을 하지 못했다
+GATEKEEPER = MonsterNote(
+    name='강철 톨게이트지기',
+    kind='구조물',
+    content='요금소에 붙박인 거대한 기계 팔. 쇠막대를 휘두른다.',
+    place='',
+    unique=True,
+    conditions=[UNHURT],
+)
+BAR_HIT = MonsterTurnNote(
+    name='강철 톨게이트지기',
+    attack='쇠막대 휘두르기',
+    target='토르빈',
+    hit=True,
+    impact=Impact('damage', '토르빈', 9, 0, 12, True),
+)
+MONSTER_DOWNED_PC = StateCase(
+    name='monster_downed_pc',
+    about='몬스터에게 쓰러진 캐릭터는 선언한 일을 하지 않고, 맞은 공격이 나온다',
+    request=replace(
+        request(
+            scene='톨게이트의 차단기 옆에서 강철 팔이 삐걱이며 고개를 든다. 요금소의 불이 하나씩 켜진다.',
+            moves=[
+                Move('리엔', '바이크를 돌려 요금소 뒤로 숨는다.', verdict=check('민첩', '보통', 15, 2, 15)),
+                Move('토르빈', '차단기를 들어 올린다.', downed=True, lost_turn='downed'),
+            ],
+            people=[],
+        ),
+        monsters=[GATEKEEPER],
+        turns=[TurnNote(monster=BAR_HIT), TurnNote(character_name='토르빈'), TurnNote(character_name='리엔')],
+    ),
+    checks=(
+        Forbid('쓰러진 캐릭터가 행동', ('들어 올렸', '들어올렸', '차단기가 올라', '차단기를 올렸')),
+        Require('맞은 공격', ('쇠막대',)),
+        Require('쓰러짐', ('쓰러', '무너', '주저앉', '나뒹')),
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
 CASES = (
     DOWNED,
     DEAD,
@@ -529,5 +619,7 @@ CASES = (
     MAP_SEARCH_FOUND,
     MAP_TRAVEL,
     MAP_TRAVEL_FAILED,
+    MONSTER_MISS,
+    MONSTER_DOWNED_PC,
 )
 CASE_NAMES = tuple(case.name for case in CASES)
