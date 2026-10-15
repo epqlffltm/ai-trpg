@@ -22,12 +22,17 @@ from app.assets.models import (
     ATTACK_NAME_MAX_LENGTH,
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
+    CLOCK_MAX_DAY,
     DEFAULT_CHARACTER_MODES,
     DEFAULT_NARRATION_STYLE,
+    DEFAULT_ROUND_MINUTES,
+    DEFAULT_START_DAY,
+    DEFAULT_START_HOUR,
     ENCOUNTER_MAX_COUNT,
     ITEM_STACK_MAX,
     MONSTER_MAX_ATTACKS,
     PLAYER_MADE_HP_MAX,
+    ROUND_MAX_MINUTES,
     SCENARIO_MAX_BESTIARIES,
     SCENARIO_MAX_ENCOUNTERS,
     SCENARIO_MAX_ITEM_RULES,
@@ -103,6 +108,25 @@ class RecommendedPlayers(BaseModel):
         if self.min > self.max:
             raise ValueError('최소 인원이 최대 인원보다 큽니다.')
         return self
+
+
+class Clock(BaseModel):
+    """
+    게임 안의 시계. 테이블이 시작할 때의 시각(며칠째, 몇 시)과 라운드 하나에 흐르는 기본 시간(분).
+
+    시각은 1일째 0시부터 센다. 달 이름 같은 달력은 아직 없다. 셋을 함께 보낸다.
+    라운드 하나에 흐르는 시간은 방장이 라운드마다 바꿀 수 있다. 여기 적는 것은 바꾸지 않았을 때의 값이다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    start_day: int = Field(ge=1, le=CLOCK_MAX_DAY)
+    start_hour: int = Field(ge=0, le=23)
+    round_minutes: int = Field(ge=1, le=ROUND_MAX_MINUTES)
+
+
+# 시계를 보내지 않은 시나리오의 시계. 1일째 8시에 시작하고 라운드 하나에 10분이 흐른다
+DEFAULT_CLOCK = Clock(start_day=DEFAULT_START_DAY, start_hour=DEFAULT_START_HOUR, round_minutes=DEFAULT_ROUND_MINUTES)
 
 
 class ItemStack(BaseModel):
@@ -524,6 +548,8 @@ class ScenarioCreate(AssetCreate):
     reroll_allowed: bool = False
     # 추천 문체. 테이블의 방장이 고르지 않으면 이것으로 서술한다. 안 보내면 정통이다
     narration_style: NarrationStyle = DEFAULT_NARRATION_STYLE
+    # 게임 안의 시계. 안 보내면 1일째 8시에 시작하고 라운드 하나에 10분이 흐른다
+    clock: Clock = DEFAULT_CLOCK
 
 
 class ScenarioUpdate(AssetUpdate):
@@ -536,7 +562,7 @@ class ScenarioUpdate(AssetUpdate):
     quests, routes, landmarks, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
-    recommended_players 는 최소와 최대를 함께 보낸다.
+    recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
     """
 
     clearable: ClassVar[frozenset[str]] = frozenset(
@@ -566,6 +592,7 @@ class ScenarioUpdate(AssetUpdate):
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
+    clock: Clock | None = None
 
 
 class ScenarioSummary(AssetSummary):
@@ -607,6 +634,7 @@ class ScenarioDetail(ScenarioSummary):
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle
+    clock: Clock
 
 
 VersionNote = Annotated[str, StringConstraints(max_length=VERSION_NOTE_MAX_LENGTH)]

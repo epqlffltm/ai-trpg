@@ -418,6 +418,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'player_made_hp': None,
         'reroll_allowed': False,
         'narration_style': 'classic',
+        'clock': {'start_day': 1, 'start_hour': 8, 'round_minutes': 10},
         'rulebook': {'id': rulebook['id'], 'title': '룰북', 'gm_guide': GM_GUIDE, 'rules': rulebook['rules']},
         'world': {'id': world['id'], 'title': '세계관', 'setting': SETTING, 'gm_notes': GM_NOTES},
         'lorebooks': [

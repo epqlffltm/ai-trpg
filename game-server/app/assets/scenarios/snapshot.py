@@ -19,6 +19,9 @@ from pydantic import BaseModel, model_validator
 
 from app.assets.bestiaries.models import Monster, MonsterKind
 from app.assets.models import (
+    DEFAULT_ROUND_MINUTES,
+    DEFAULT_START_DAY,
+    DEFAULT_START_HOUR,
     CharacterMode,
     ItemKind,
     Lorebook,
@@ -63,7 +66,8 @@ from app.engine.sheet import Sheet
 #  22: 조우(encounters)가 있다. 맵의 장소에 판의 몬스터가 몇 마리 있는지다
 #  23: 몬스터에 공격(attacks)과 네임드 표시(unique)가, 조우에 기습(surprise)이,
 #      규칙에 차례를 정하는 능력치(initiative_ability)가 있다
-SNAPSHOT_FORMAT = 23
+#  24: 게임 안의 시계(clock: 시작하는 날과 시, 라운드 하나에 흐르는 기본 시간)가 있다
+SNAPSHOT_FORMAT = 24
 
 
 class EntrySnapshot(BaseModel):
@@ -106,6 +110,18 @@ class RulebookSnapshot(BaseModel):
     title: str
     gm_guide: str
     rules: Ruleset
+
+
+class ClockSnapshot(BaseModel):
+    """
+    게임 안의 시계. 테이블이 시작할 때의 시각(며칠째, 몇 시)과 라운드 하나에 흐르는 기본 시간(분).
+
+    비우면 새 시나리오의 기본값(1일째 8시, 10분)이다. 형식 24 보다 옛 판은 올릴 때 이 값을 적는다(upgrades.py).
+    """
+
+    start_day: int = DEFAULT_START_DAY
+    start_hour: int = DEFAULT_START_HOUR
+    round_minutes: int = DEFAULT_ROUND_MINUTES
 
 
 class PlayersSnapshot(BaseModel):
@@ -282,6 +298,8 @@ class Snapshot(BaseModel):
     reroll_allowed: bool
     # 추천 문체. 테이블의 방장이 문체를 고르지 않으면 이것으로 서술한다
     narration_style: NarrationStyle
+    # 게임 안의 시계. 테이블의 시계가 여기서 시작한다(app/calendar)
+    clock: ClockSnapshot = ClockSnapshot()
     rulebook: RulebookSnapshot
     world: WorldSnapshot | None
     lorebooks: list[LorebookSnapshot]
@@ -532,6 +550,7 @@ def build_snapshot(
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,
+        clock=ClockSnapshot(**scenario.clock),
         rulebook=snapshot_rulebook(rulebook),
         world=snapshot_world(world) if world else None,
         lorebooks=[snapshot_lorebook(lorebook, entries) for lorebook, entries in lorebooks],
