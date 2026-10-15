@@ -118,6 +118,10 @@ services:
   #
   # 서버끼리는 컨테이너의 이름으로 부른다. 게임, 게시판, 결제 서버는 인증 서버의 공개키(JWKS)를 필요할 때 받아 온다.
   # 인증 서버가 늦게 떠도 뜨는 데는 지장이 없어서 서로 기다리게 하지 않는다.
+  #
+  # 서버 넷의 healthcheck 는 준비됐는지(/health/ready)를 부른다. healthy 는 "DB 에 닿는다"는 뜻이다(docs/observability.md).
+  # DB 가 죽으면 서버들이 unhealthy 로 보이지만 재시작되지는 않는다. Docker 는 unhealthy 를 보고 재시작하지 않는다.
+  # 서버의 healthy 를 기다리는 서비스도 없다. DB 가 돌아오면 다음 확인에서 healthy 로 돌아온다
   # ---------------------------------------------------------------------------
 
   auth-migrate:
@@ -155,7 +159,7 @@ services:
     ports:
       - "127.0.0.1:${AUTH_PORT:-8000}:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -240,7 +244,7 @@ services:
     environment: *game-environment
     extra_hosts: *host-gateway
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/ready', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -272,7 +276,7 @@ services:
     env_file: ./board-server/.env
     environment: *board-environment
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8002/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8002/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -302,7 +306,7 @@ services:
     env_file: ./billing-server/.env
     environment: *billing-environment
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8003/health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8003/health/ready"]
       interval: 10s
       timeout: 5s
       retries: 6
