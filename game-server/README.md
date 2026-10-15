@@ -2170,11 +2170,17 @@ AI 가 서술한 장면을 읽고, 장부(소지품, 퀘스트)에 적을 것의
 - **초안은 덤이다.** 모델이 죽었거나 답이 엉망이어도 예외를 올리지 않고 빈 결과다. 방장은 손으로 하던 대로 하면 된다.
   어떻게 끝났든 호출 기록을 하나 남긴다(쓰임새 `ledger_draft`, 틀의 버전 `ledger-draft-1`).
 
-실제 모델로 재기(`scripts/try_drafts.py`, `evals/drafts/`). 손으로 쓴 장면 일곱(손에 넣음, 보기만 함, 써 버림, 구출, 드러남과 손에 넣음, 목록에 없는 물건, 놓침)과 정답으로, 답을 읽었는지(구조화 출력의 성공률), 정답과 같은지, 더한 것, 놓친 것, 서버가 버린 것(지어낸 것)을 센다.
+실제 모델로 재기(`scripts/try_drafts.py`, `evals/drafts/`). 손으로 쓴 장면과 정답으로, 답을 읽었는지(구조화 출력의 성공률), 정답과 같은지, 더한 것, 놓친 것, 서버가 버린 것(지어낸 것)을 센다.
+- 장면은 열넷이다. 처음 일곱: 손에 넣음(`found`), 보기만 함(`only_seen`), 써 버림(`used`), 구출(`rescued`), 드러남과 손에 넣음(`revealed_and_found`), 목록에 없는 물건(`not_listed`), 놓침(`lost`).
+- 더한 일곱. 애매함: 집었다가 도로 내려놓음(`put_back`), 놓쳤지만 아직 뒤쫓을 수 있음(`lost_trail`). 둘 다 빈 답이 정답이다.
+  말로 쓴 숫자: "세 병"(`counted_in_words`), 다섯 병 중 두 병이 깨짐(`some_broken`, 셋). 여럿: 두 캐릭터가 서로 다른 물건을 얻고 퀘스트도 끝남(`many`).
+  대신 받기: 한 사람이 주워 다른 사람에게 건넴(`picked_for_other`, 장부에는 마지막에 가진 사람), 이미 가진 물건을 캐릭터끼리 건넴(`passed_between`, 빈 답. 건네기는 엔진의 행동이 장부를 고친다).
+- 첫 측정(`ledger-draft-1`, gemma4:26b-a4b-it-qat, 처음 일곱 × 10 번): 읽음 70/70, 정답 70/70, 더한 것·놓친 것·지어낸 것 0, 평균 0.4 초. 장면이 짧고 분명해서 낙관적이라 어려운 장면을 더했다.
 
 ```powershell
 uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --repeat 10 --out $HOME\drafts.md
 uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case found lost
+uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_back lost_trail counted_in_words some_broken many picked_for_other passed_between --repeat 10 --out $HOME\drafts-hard.md
 ```
 
 ## 로그와 요청 식별자
