@@ -282,8 +282,8 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_the_template_is_narration_20():
-    assert prompt.PROMPT_VERSION == 'narration-22'
+def test_the_template_is_narration_23():
+    assert prompt.PROMPT_VERSION == 'narration-23'
 
 
 def test_the_last_message_asks_for_the_declared_actions():

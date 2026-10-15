@@ -30,8 +30,10 @@ from dataclasses import dataclass
 
 from app.ai.provider import ChatMessage, Role
 from app.assets.models import LoreKind, NarrationStyle
+from app.calendar.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR, ClockTime, TimeOfDay
 from app.rounds.move_lines import describe_injuries, lost_before_acting, round_lines
 from app.rounds.narrator import (
+    ClockNote,
     LoreNote,
     MemoryNote,
     MonsterNote,
@@ -86,7 +88,9 @@ from app.rounds.narrator import (
 #                 몬스터의 공격 줄(맞음, 빗나감)과, 몬스터를 친 판정의 결과(몸 상태),
 #                 칠 수 없어 굴리지 않은 것이 붙는다.
 #                 선언한 일을 하기 전에 쓰러지거나 죽은 인물이 있으면 그 일이 일어나지 않았다는 한 줄이 붙는다(#231 3d)
-PROMPT_VERSION = 'narration-22'
+#   narration-23: 게임 안의 시각이 "[시각]"으로 맵 앞에 붙는다. 장면이 시작하는 때, 흐르는 시간, 끝나는 때다.
+#                 흐르는 시간이 길면(한 시간 넘게) 그동안을 건너뛰고 끝나는 때에서 맺으라는 말이 붙는다(#248)
+PROMPT_VERSION = 'narration-23'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -330,6 +334,26 @@ MAP_NOTE = (
 )
 # 출구가 없는 장소에 적는 말
 NO_EXITS = '없음'
+# 게임 안의 시각(#248). 시각은 엔진이 흘린다(app/calendar/). 서술이 "날이 밝았다"고 써도 시계는 그대로다.
+# 밤 장면에 햇빛을 쓰거나, 하룻밤을 건너뛴 장면을 여전히 밤으로 쓰면 장면과 시계가 어긋난다
+CLOCK_TITLE = '[시각]'
+CLOCK_NOTE = (
+    '게임 엔진이 정한 게임 안의 시각이다. 하늘과 빛, 거리의 모습을 이 시각에 맞춰라. '
+    '장면은 끝나는 때에서 맺는다. 그보다 앞서 멈추거나 더 흘려 보내지 마라.'
+)
+# 흐르는 시간이 이보다 길면 그동안을 건너뛰라는 말을 붙인다. 한 라운드의 몇 분과 하룻밤은 쓰는 법이 다르다
+LONG_PASS_MINUTES = 60
+CLOCK_SKIP_NOTE = '흐르는 시간이 길다. 그동안의 일은 몇 문장으로 건너뛰고, 끝나는 때의 모습을 그려라.'
+# 시간이 흐르지 않는 라운드에 적는 말
+NO_TIME_PASSES = '흐르지 않는다(같은 때가 이어진다)'
+# 하루의 어느 때를 서술자에게 보일 말
+TIME_OF_DAY_WORDS = {
+    TimeOfDay.DAWN: '새벽',
+    TimeOfDay.MORNING: '아침',
+    TimeOfDay.DAY: '낮',
+    TimeOfDay.EVENING: '저녁',
+    TimeOfDay.NIGHT: '밤',
+}
 
 # 이번 장면의 몬스터와 지금 상태(#231 3d). 엔진이 정한 사실이다. 숫자 없이 말로 준다.
 # 목록에 없는 몬스터가 장면에 걸어 들어오면 플레이어는 칠 수 없는 것을 보게 된다. 장면의 몬스터는 이 목록뿐이다.
@@ -555,6 +579,41 @@ def quest_lines(quests: list[QuestNote]) -> list[str]:
     return [QUEST_TITLE, QUEST_NOTE, *(quest_line(quest) for quest in quests), '']
 
 
+def time_text(time: ClockTime) -> str:
+    """시각 하나. 예: 3일째 22시 00분(밤)"""
+    return f'{time.day}일째 {time.hour}시 {time.minute:02d}분({TIME_OF_DAY_WORDS[time.time_of_day]})'
+
+
+def duration_text(minutes: int) -> str:
+    """흐르는 시간. 예: 20분, 8시간, 1일 2시간 30분. 0 이면 흐르지 않는다는 말."""
+    if minutes == 0:
+        return NO_TIME_PASSES
+    days, rest = divmod(minutes, MINUTES_PER_DAY)
+    hours, mins = divmod(rest, MINUTES_PER_HOUR)
+    parts = [f'{days}일' if days else '', f'{hours}시간' if hours else '', f'{mins}분' if mins else '']
+    return ' '.join(part for part in parts if part)
+
+
+def clock_lines(clock: ClockNote | None) -> list[str]:
+    """
+    게임 안의 시각을 적는 줄들. 다루는 법, 시작하는 때, 흐르는 시간, 끝나는 때.
+
+    흐르는 시간이 길면 건너뛰라는 말이 붙는다. 끝에 빈 줄이 붙는다. 시계가 없으면 빈 목록이다.
+    """
+    if clock is None:
+        return []
+    lines = [
+        CLOCK_TITLE,
+        CLOCK_NOTE,
+        f'- 장면이 시작하는 때: {time_text(clock.now)}',
+        f'- 흐르는 시간: {duration_text(clock.passes_minutes)}',
+        f'- 장면이 끝나는 때: {time_text(clock.ends)}',
+    ]
+    if clock.passes_minutes > LONG_PASS_MINUTES:
+        lines.append(CLOCK_SKIP_NOTE)
+    return [*lines, '']
+
+
 def map_line(name: str, characters: list[str], exits: list[str], hidden: list[str]) -> str:
     """
     장소 한 줄. 누가 서 있는지, 아는 출구, 숨은 길.
@@ -633,8 +692,8 @@ def round_text(request: NarrationRequest) -> str:
     """
     이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
 
-    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 퀘스트, 맵, 몬스터, 인물의 상태가 있으면 맨 앞에 둔다
-    (설정, 지난 일, 이력, 쪽지, 퀘스트, 맵, 몬스터, 상태, 이번 라운드의 차례).
+    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 퀘스트, 시각, 맵, 몬스터, 인물의 상태가 있으면 맨 앞에 둔다
+    (설정, 지난 일, 이력, 쪽지, 퀘스트, 시각, 맵, 몬스터, 상태, 이번 라운드의 차례).
     이번 라운드에 한 일은 차례 순서다. 맞붙은 몬스터가 있었으면 캐릭터와 몬스터의 줄이 섞인다(round_lines).
     상태는 이번 라운드의 결과 바로 앞이다. 엔진이 정한 사실이라 결과와 가까이 둔다.
     지목이 있으면 결과 뒤에 다루는 법을 한 줄 붙인다. 찾기로 길을 찾았으면 그것을 다루는 법도 한 줄 붙인다.
@@ -647,6 +706,7 @@ def round_text(request: NarrationRequest) -> str:
     lines.extend(history_lines(request.histories))
     lines.extend(whisper_lines(request.whispers))
     lines.extend(quest_lines(request.quests))
+    lines.extend(clock_lines(request.clock))
     lines.extend(map_lines(request.moves))
     lines.extend(monster_lines(request.monsters))
     lines.extend(people_lines(request.people))

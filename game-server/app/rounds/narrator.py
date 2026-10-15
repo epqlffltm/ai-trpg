@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.assets.models import LoreKind, NarrationStyle
+from app.calendar.clock import ClockTime
 from app.rounds.tiers import NarrationTier
 
 
@@ -480,6 +481,20 @@ class TurnNote:
 
 
 @dataclass(frozen=True)
+class ClockNote:
+    """
+    게임 안의 시각. 엔진이 정한 사실이다(app/calendar/).
+
+    now 는 이 라운드가 열린 때다. 서술하는 장면이 시작하는 때다.
+    ends 는 서술한 장면이 끝나는 때다. 다음 라운드가 그 시각에 열린다. passes_minutes 는 그 사이에 흐르는 분이다.
+    """
+
+    now: ClockTime
+    ends: ClockTime
+    passes_minutes: int
+
+
+@dataclass(frozen=True)
 class NarrationRequest:
     """서술자에게 주는 것. 방금 닫힌 라운드의 내용이다."""
 
@@ -519,6 +534,8 @@ class NarrationRequest:
     # 이 라운드의 차례(라운드의 turns). 맞붙은 몬스터가 없었으면 비어 있고, 그때는 moves 의 순서다.
     # 가짜 서술자도 이 순서로 줄을 놓는다
     turns: list[TurnNote] = field(default_factory=list)
+    # 게임 안의 시각. 서술을 맡길 때 테이블의 시계에서 채운다. 시계가 없으면 None. 가짜 서술자는 읽지 않는다
+    clock: ClockNote | None = None
 
 
 class Preview(Protocol):

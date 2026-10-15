@@ -442,6 +442,7 @@ async def load_closing_request(
     그래서 서술을 몇 번 다시 맡겨도 서술자는 같은 것을 받는다.
     퀘스트의 상태만은 예외다. 방장이 언제든 바꾸고, 서술을 맡길 때의 것을 읽는다. 굳히지 않는 까닭:
     결정적인 라운드가 닫힌 뒤 방장이 성공을 적으면, 그 라운드의 서술이 성공을 그릴 수 있어야 한다. 지금의 사실이 맞다.
+    게임 안의 시각도 같다. 닫은 뒤에 방장이 "하룻밤 쉰다"를 정하면 그 라운드의 서술이 새벽에서 맺어야 한다.
     이야기의 바탕과 지난 라운드 몇 개는 가짜 서술자는 읽지 않고, 언어 모델의 서술자가 읽는다.
     """
     table = await table_repository.find_table(session, table_id)
@@ -467,6 +468,7 @@ async def load_closing_request(
         quests=narration_request.to_quest_notes(table, snapshot),
         monsters=to_monster_notes(snapshot, scene.monsters),
         turns=narration_request.to_turn_notes(round_.turns),
+        clock=narration_request.to_clock_note(table),
     )
 
 

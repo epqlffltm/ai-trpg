@@ -7,7 +7,7 @@
 서버의 조립(app/rounds/prompt.py)을 그대로 거치므로 프롬프트의 틀이 바뀌면 이 장면들도 새 틀로 간다.
 부상의 이름과 사실은 내장 템플릿(srd5)의 것을 그대로 쓴다. 템플릿의 글이 바뀌어도 장면이 따라간다.
 
-보는 것은 여섯이다(#111 ④, 지목, 맵 #218, 몬스터 #231).
+보는 것은 일곱이다(#111 ④, 지목, 맵 #218, 몬스터 #231, 시각 #248).
   - 쓰러진 NPC 와 죽은 NPC 는 말하거나 움직이지 않는다
   - 입은 부상이 서술에 나오고, 그 부상으로 실패한 일을 성공처럼 쓰지 않는다
   - 치료의 결과(다 나음과 후유증, 덧남)를 그대로 쓴다
@@ -17,6 +17,7 @@
     숨은 길이 없는 곳에는 실마리를 지어내지 않는다
   - 몬스터: 빗나간 공격을 맞은 것처럼 쓰지 않고, 목록에 없는 몬스터를 늘리지 않는다.
     몬스터에게 쓰러진 캐릭터는 선언한 일을 하지 않는다. 맞은 공격은 나온다
+  - 시각: 밤 장면에 햇빛을, 낮 장면에 한밤을 쓰지 않는다. 하룻밤을 건너뛴 장면은 새벽에서 맺는다
 모든 장면에서 숨긴 설정(경찰의 끄나풀)을 흘리지 않는지 본다. 진짜 이름은 맞은 지목의 장면에서만 나와도 된다.
 
 GM 메모에 진짜 이름을 적어 둔다. 제작자가 그렇게 쓸 수 있고, 그러면 모델은 진짜 이름을 안다.
@@ -29,10 +30,12 @@ import uuid
 from dataclasses import dataclass, replace
 
 from app.assets.models import LoreKind, NarrationStyle
+from app.calendar.clock import read_time, start_minutes
 from app.engine.injury import find_injury
 from app.engine.templates import SRD5
 from app.rounds.cast import CONDITIONS, UNHURT
 from app.rounds.narrator import (
+    ClockNote,
     Impact,
     InjuryNote,
     LoreNote,
@@ -599,7 +602,81 @@ MONSTER_DOWNED_PC = StateCase(
     checks=(
         Forbid('쓰러진 캐릭터가 행동', ('들어 올렸', '들어올렸', '차단기가 올라', '차단기를 올렸')),
         Require('맞은 공격', ('쇠막대',)),
-        Require('쓰러짐', ('쓰러', '무너', '주저앉', '나뒹', '고꾸라', '나자빠', '나동그라')),
+        Require('쓰러짐', ('쓰러', '무너', '주저앉', '나뒹')),
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
+
+def clock_note(day: int, hour: int, passes_minutes: int) -> ClockNote:
+    """며칠째 몇 시에 시작해 passes_minutes 분이 흐르는 장면의 시각. 서버의 to_clock_note 와 같은 셈이다."""
+    now = start_minutes(day, hour)
+    return ClockNote(now=read_time(now), ends=read_time(now + passes_minutes), passes_minutes=passes_minutes)
+
+
+NIGHT_REST_STOP = '우주 고속도로의 휴게소. 깜빡이는 네온 간판 아래 자판기들이 웅웅거린다.'
+# 밤 장면에 쓰면 어긋나는 낮의 빛. '빛' 하나는 넣지 않는다. 네온 빛, 헤드라이트 빛은 밤에도 있다
+DAYLIGHT = Forbid('밤에 햇빛', ('햇빛', '햇살', '햇볕', '한낮', '대낮', '정오', '아침 해', '해가 떴', '날이 밝'))
+
+# 밤의 질주. 3일째 22시에 시작해 20분이 흐른다. 장면은 끝까지 밤이다
+CLOCK_NIGHT = StateCase(
+    name='clock_night',
+    about='밤 장면에 햇빛과 한낮을 쓰지 않는다',
+    request=replace(
+        request(
+            scene=NIGHT_REST_STOP,
+            moves=[
+                Move('리엔', '바이크를 몰고 휴게소를 빠져나가 고속도로를 달린다.'),
+                Move('토르빈', '리엔의 뒤를 바짝 따라 달린다.'),
+            ],
+            people=[],
+        ),
+        clock=clock_note(3, 22, 20),
+    ),
+    checks=(DAYLIGHT, HIDDEN_NAME, SECRET),
+)
+
+# 한낮의 사막. 2일째 13시에 시작해 10분이 흐른다
+CLOCK_DAY = StateCase(
+    name='clock_day',
+    about='낮 장면에 달빛과 한밤을 쓰지 않는다',
+    request=replace(
+        request(
+            scene='두 번째 행성의 사막 구간. 모래 위로 고속도로가 곧게 뻗어 있다.',
+            moves=[
+                Move('리엔', '모래 언덕을 넘어 지름길로 달린다.'),
+                Move('토르빈', '고속도로를 따라 그대로 달린다.'),
+            ],
+            people=[],
+        ),
+        clock=clock_note(2, 13, 10),
+    ),
+    checks=(
+        Forbid('낮에 밤', ('달빛', '한밤', '자정', '밤하늘', '깊은 밤', '어둠이 내려')),
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
+# 하룻밤을 쉬었다. 방장이 다음 걸음을 8시간으로 정했다. 3일째 22시에 잠들어 4일째 6시(새벽)에 장면이 끝난다
+CLOCK_SKIP = StateCase(
+    name='clock_skip',
+    about='하룻밤을 건너뛰고 새벽에서 맺는다. 한낮까지 흘려 보내지 않는다',
+    request=replace(
+        request(
+            scene=NIGHT_REST_STOP,
+            moves=[
+                Move('리엔', '바이크에 기대 하룻밤 잔다.'),
+                Move('토르빈', '휴게소 벤치에서 하룻밤 잔다.'),
+            ],
+            people=[],
+        ),
+        clock=clock_note(3, 22, 8 * 60),
+    ),
+    checks=(
+        Require('새벽에 맺음', ('새벽', '동이 트', '동틀', '여명', '해가 뜨', '날이 밝', '아침')),
+        Forbid('끝나는 때를 넘김', ('한낮', '정오', '대낮', '오후')),
         HIDDEN_NAME,
         SECRET,
     ),
@@ -621,5 +698,8 @@ CASES = (
     MAP_TRAVEL_FAILED,
     MONSTER_MISS,
     MONSTER_DOWNED_PC,
+    CLOCK_NIGHT,
+    CLOCK_DAY,
+    CLOCK_SKIP,
 )
 CASE_NAMES = tuple(case.name for case in CASES)
