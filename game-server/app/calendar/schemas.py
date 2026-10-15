@@ -25,17 +25,22 @@ class StepChange(BaseModel):
     minutes: Annotated[int, Field(ge=0, le=ROUND_MAX_MINUTES)] | None
 
 
-class ClockOut(BaseModel):
+class ClockTimeOut(BaseModel):
+    """게임 안의 한 시각. 며칠째(1 부터), 몇 시, 몇 분, 하루의 어느 때."""
+
+    day: int
+    hour: int
+    minute: int
+    time_of_day: TimeOfDay
+
+
+class ClockOut(ClockTimeOut):
     """
     테이블의 지금 시각과 다음 라운드에 흐를 시간.
 
     next_step_minutes 는 실제로 흐를 시간이다(방장이 정한 값, 없으면 판의 기본). step_changed 가 참이면 방장이 정했다.
     """
 
-    day: int
-    hour: int
-    minute: int
-    time_of_day: TimeOfDay
     next_step_minutes: int
     default_step_minutes: int
     step_changed: bool

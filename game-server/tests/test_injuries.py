@@ -32,6 +32,7 @@ from app.engine.injury import (
     blocks_actions,
     ends_after,
     find_injury,
+    heals_at,
     hindrance_of,
     roll_table,
     row_injury,
@@ -72,6 +73,8 @@ REST = '숨을 고른다.'
 
 # 부상 표(d20)의 눈
 BROKEN_ARM = 17
+# 1 라운드(1일째 8시)에 입은 팔 골절이 낫는 시각. 30 라운드 × 기본 걸음 10분 뒤
+ONE_PM = {'day': 1, 'hour': 13, 'minute': 0, 'time_of_day': 'day'}
 STUNNED = 11
 LOST_EYE = 20
 
@@ -282,9 +285,11 @@ def test_only_some_injuries_stop_actions():
 def test_every_injury_but_a_permanent_one_has_an_end():
     assert ends_after(find_injury(SRD5, 'stunned'), 3) == 4
     assert ends_after(find_injury(SRD5, 'poisoned'), 3) == 6
-    # 오래 가는 것도 나을 라운드가 있다(#114 다). 치료로 앞당겨진다
-    assert ends_after(find_injury(SRD5, 'broken_arm'), 3) == 33
+    # 오래 가는 것은 라운드가 아니라 게임 안의 시각으로 낫는다(달력 2단계). 30 라운드 × 기본 걸음 10분
+    assert ends_after(find_injury(SRD5, 'broken_arm'), 3) is None
+    assert heals_at(find_injury(SRD5, 'broken_arm'), 480, 10) == 780
     assert ends_after(find_injury(SRD5, 'lost_eye'), 3) is None
+    assert heals_at(find_injury(SRD5, 'lost_eye'), 480, 10) is None
 
 
 def test_disadvantage_takes_the_lower_roll_and_a_penalty_cuts_the_modifier():
@@ -338,10 +343,16 @@ async def test_a_big_hit_can_break_an_arm(client: AsyncClient, app: FastAPI, me:
     closing = await declare(client, me, world['table'], JUMP, jump())
 
     effect = closing['declarations'][0]['outcome']['effect']
-    # 팔 골절은 30 라운드 뒤에 낫는다
-    assert effect['injury_roll'] == {'trigger': 'big_hit', 'roll': 17, 'injury': 'broken_arm', 'ends_after_round': 31}
+    # 팔 골절은 30 라운드 × 기본 걸음 10분 뒤(1일째 13시)에 낫는다. 테이블은 1일째 8시에 시작했다
+    assert effect['injury_roll'] == {
+        'trigger': 'big_hit',
+        'roll': 17,
+        'injury': 'broken_arm',
+        'ends_after_round': None,
+        'heals_at': ONE_PM,
+    }
     assert (await my_sheet(client, me, world['table']))['injuries'] == [
-        {'injury': 'broken_arm', 'round': 1, 'ends_after_round': 31}
+        {'injury': 'broken_arm', 'round': 1, 'ends_after_round': None, 'heals_at': ONE_PM}
     ]
     (row,) = await injury_rows(session)
     assert (row.injury, row.source, row.round_number, row.npc_entry_id) == ('broken_arm', 'injury_table', 1, None)
@@ -375,6 +386,7 @@ async def test_a_lucky_roll_leaves_no_injury(client: AsyncClient, app: FastAPI, 
         'roll': 1,
         'injury': None,
         'ends_after_round': None,
+        'heals_at': None,
     }
     assert (await my_sheet(client, me, world['table']))['injuries'] == []
     assert await events_of(client, me, world['table'], 'injury_gained') == []
@@ -445,7 +457,8 @@ async def test_the_injury_is_recorded_after_the_hit_that_caused_it(
         'character_name': '엘프',
         'injury': 'broken_arm',
         'source': 'injury_table',
-        'ends_after_round': 31,
+        'ends_after_round': None,
+        'heals_at': ONE_PM,
     }
     assert gained['caused_by_sequence'] == changed['sequence']
     assert gained['actor_id'] is None
@@ -459,7 +472,9 @@ async def test_a_stunned_character_cannot_act_and_then_comes_to(
     load_dice(app, [FAIL, 3, 4, STUNNED])
     await declare(client, me, table, JUMP, jump())
     await narrated()
-    assert (await my_sheet(client, me, table))['injuries'] == [{'injury': 'stunned', 'round': 1, 'ends_after_round': 2}]
+    assert (await my_sheet(client, me, table))['injuries'] == [
+        {'injury': 'stunned', 'round': 1, 'ends_after_round': 2, 'heals_at': None}
+    ]
 
     # 2 라운드: 행동을 붙이지 못한다. 글은 낼 수 있다
     refused = await send(client, me, table, LIFT, lift())
@@ -514,6 +529,7 @@ async def test_an_npc_knocked_down_can_lose_an_eye(client: AsyncClient, app: Fas
         'roll': 20,
         'injury': 'lost_eye',
         'ends_after_round': None,
+        'heals_at': None,
     }
     (request,) = narrator.requests
     (lady,) = request.people

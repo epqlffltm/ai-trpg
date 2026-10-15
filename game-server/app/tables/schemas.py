@@ -29,6 +29,7 @@ from app.assets.scenarios.schemas import (
     PlayerMadeHp,
     RecommendedPlayers,
 )
+from app.calendar.schemas import ClockTimeOut
 from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
 from app.engine.sheet import Score, Sheet
 from app.rounds.tiers import NarrationTier
@@ -261,6 +262,8 @@ class InjuryOut(BaseModel):
     round: int
     # 짧은 부상이면 이 라운드가 닫힐 때 풀린다. 오래 가는 것과 결손은 None 이다
     ends_after_round: int | None
+    # 오래 가는 부상이면 이 게임 안의 시각이 지나면 낫는다(그 뒤에 닫히는 라운드에서). 짧은 것과 결손은 None 이다
+    heals_at: ClockTimeOut | None = None
 
 
 class ItemOut(BaseModel):

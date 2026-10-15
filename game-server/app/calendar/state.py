@@ -50,5 +50,13 @@ def pass_round(table: GameTable) -> int:
 
 def describe(table: GameTable) -> dict:
     """지금 시각을 이벤트에 적을 모양. 며칠째, 몇 시, 몇 분, 하루의 어느 때."""
-    now = clock.read_time(table.clock.minutes)
-    return {'day': now.day, 'hour': now.hour, 'minute': now.minute, 'time_of_day': now.time_of_day}
+    return clock.as_document(table.clock.minutes)
+
+
+def scene_end(table: GameTable) -> int:
+    """
+    이번 라운드의 장면이 끝나는 시각(분). 다음 라운드가 열릴 시각이다. 지금 시각에 다음 걸음을 더한다.
+
+    라운드가 닫힐 때 오래 가는 부상이 낫는지 이 시각으로 본다(app/rounds/injuries.py).
+    """
+    return table.clock.minutes + next_step(table)

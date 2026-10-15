@@ -30,7 +30,6 @@ from dataclasses import dataclass
 
 from app.ai.provider import ChatMessage, Role
 from app.assets.models import LoreKind, NarrationStyle
-from app.calendar.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR, ClockTime, TimeOfDay
 from app.rounds.move_lines import describe_injuries, lost_before_acting, round_lines
 from app.rounds.narrator import (
     ClockNote,
@@ -46,6 +45,7 @@ from app.rounds.narrator import (
     StoryContext,
     WhisperNote,
 )
+from app.rounds.time_words import duration_text, time_text
 
 # 이 틀의 버전. 틀을 바꾸면 올린다.
 #   narration-1: 처음의 틀
@@ -93,7 +93,9 @@ from app.rounds.narrator import (
 #   narration-24: 시각을 재 보니(gemma4 26b, 10 번씩) 밤과 낮은 지켰지만 "3일째 22시 20분", "13시 10분"처럼
 #                 [시각]의 숫자를 장면에 그대로 옮긴 것이 밤 10 번 중 4 번, 낮 10 번 중 5 번이었다.
 #                 화면이 시각을 따로 보여 준다. 장면은 빛과 하늘로 드러내라는 말을 다루는 법에 더한다
-PROMPT_VERSION = 'narration-24'
+#   narration-25: 오래 가는 부상이 게임 안의 시간으로 낫는다. 치료의 결과 줄의 남은 기간이 라운드 수에서
+#                 시간(낫기까지 2시간 30분, 50분 늦어짐)으로 바뀐다(#248 달력 2단계)
+PROMPT_VERSION = 'narration-25'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -349,16 +351,6 @@ CLOCK_NOTE = (
 # 흐르는 시간이 이보다 길면 그동안을 건너뛰라는 말을 붙인다. 한 라운드의 몇 분과 하룻밤은 쓰는 법이 다르다
 LONG_PASS_MINUTES = 60
 CLOCK_SKIP_NOTE = '흐르는 시간이 길다. 그동안의 일은 몇 문장으로 건너뛰고, 끝나는 때의 모습을 그려라.'
-# 시간이 흐르지 않는 라운드에 적는 말
-NO_TIME_PASSES = '흐르지 않는다(같은 때가 이어진다)'
-# 하루의 어느 때를 서술자에게 보일 말
-TIME_OF_DAY_WORDS = {
-    TimeOfDay.DAWN: '새벽',
-    TimeOfDay.MORNING: '아침',
-    TimeOfDay.DAY: '낮',
-    TimeOfDay.EVENING: '저녁',
-    TimeOfDay.NIGHT: '밤',
-}
 
 # 이번 장면의 몬스터와 지금 상태(#231 3d). 엔진이 정한 사실이다. 숫자 없이 말로 준다.
 # 목록에 없는 몬스터가 장면에 걸어 들어오면 플레이어는 칠 수 없는 것을 보게 된다. 장면의 몬스터는 이 목록뿐이다.
@@ -582,21 +574,6 @@ def quest_lines(quests: list[QuestNote]) -> list[str]:
     if not quests:
         return []
     return [QUEST_TITLE, QUEST_NOTE, *(quest_line(quest) for quest in quests), '']
-
-
-def time_text(time: ClockTime) -> str:
-    """시각 하나. 예: 3일째 22시 00분(밤)"""
-    return f'{time.day}일째 {time.hour}시 {time.minute:02d}분({TIME_OF_DAY_WORDS[time.time_of_day]})'
-
-
-def duration_text(minutes: int) -> str:
-    """흐르는 시간. 예: 20분, 8시간, 1일 2시간 30분. 0 이면 흐르지 않는다는 말."""
-    if minutes == 0:
-        return NO_TIME_PASSES
-    days, rest = divmod(minutes, MINUTES_PER_DAY)
-    hours, mins = divmod(rest, MINUTES_PER_HOUR)
-    parts = [f'{days}일' if days else '', f'{hours}시간' if hours else '', f'{mins}분' if mins else '']
-    return ' '.join(part for part in parts if part)
 
 
 def clock_lines(clock: ClockNote | None) -> list[str]:

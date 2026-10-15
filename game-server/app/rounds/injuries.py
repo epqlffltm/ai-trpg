@@ -13,6 +13,8 @@ import enum
 import uuid
 from dataclasses import dataclass
 
+from app.calendar import clock
+from app.calendar import state as calendar
 from app.engine import injury as injury_rules
 from app.engine.check import HinderedCheck
 from app.engine.dice import Dice
@@ -22,7 +24,27 @@ from app.engine.ruleset import Healing, Injury, Ruleset
 from app.rounds.cast import Scene, find_cast_member
 from app.rounds.narrator import InjuryNote
 from app.tables import injuries, npcs, sheets
-from app.tables.models import InjurySource, TableInjury, TableMember
+from app.tables.injuries import Moment
+from app.tables.models import GameTable, InjurySource, TableInjury, TableMember
+
+
+def moment_of(table: GameTable, round_number: int) -> Moment:
+    """
+    닫히는 라운드의 때. 테이블의 시계에서 지금 시각, 이 장면이 끝나는 시각, 판의 기본 걸음을 읽는다.
+
+    라운드가 닫기 시작할 때 한 번 읽는다. 그 뒤에 방장이 걸음을 바꿔도 이 라운드의 부상은 이 때로 정한다.
+    """
+    return Moment(
+        round_number=round_number,
+        now=table.clock.minutes,
+        scene_end=calendar.scene_end(table),
+        round_minutes=calendar.default_step(table),
+    )
+
+
+def heals_at_document(minutes: int | None) -> dict | None:
+    """나을 시각을 문서에 적을 모양(며칠째, 몇 시, 몇 분, 하루의 어느 때). 없으면 None."""
+    return None if minutes is None else clock.as_document(minutes)
 
 
 def worn(ruleset: Ruleset, rows: list[TableInjury]) -> list[Injury]:
@@ -76,7 +98,14 @@ def injury_document(trigger: Trigger, roll: int | None) -> dict:
 
     trigger 는 까닭(큰 타격, 쓰러짐, 노려 치기)이고, roll 은 부상 표의 눈이다. 노려 쳤으면 굴리지 않아서 None 이다.
     """
-    return {'trigger': trigger.value, 'roll': roll, 'injury': None, 'name': None, 'ends_after_round': None}
+    return {
+        'trigger': trigger.value,
+        'roll': roll,
+        'injury': None,
+        'name': None,
+        'ends_after_round': None,
+        'heals_at': None,
+    }
 
 
 def wound(
@@ -86,18 +115,29 @@ def wound(
     document: dict,
     rows: list[TableInjury],
     table_id: uuid.UUID,
-    round_number: int,
+    moment: Moment,
 ) -> dict:
-    """부상 하나를 입히고, 문서에 무엇이 생겼는지 채워 돌려준다. 규칙에 없는 부상이면 문서를 그대로 돌려준다."""
+    """
+    부상 하나를 입히고, 문서에 무엇이 생겼는지 채워 돌려준다. 규칙에 없는 부상이면 문서를 그대로 돌려준다.
+
+    짧은 것은 풀릴 라운드, 오래 가는 것은 나을 시각이 적힌다. 결손은 둘 다 없다.
+    """
     definition = injury_rules.find_injury(ruleset, key)
     if definition is None:
         return document
-    ends = injury_rules.ends_after(definition, round_number)
-    injuries.inflict(rows, table_id, definition.key, source, round_number, ends)
-    return {**document, 'injury': definition.key, 'name': definition.name, 'ends_after_round': ends}
+    ends = injury_rules.ends_after(definition, moment.round_number)
+    heals = injury_rules.heals_at(definition, moment.now, moment.round_minutes)
+    injuries.inflict(rows, table_id, definition.key, source, moment.round_number, ends, heals)
+    return {
+        **document,
+        'injury': definition.key,
+        'name': definition.name,
+        'ends_after_round': ends,
+        'heals_at': heals_at_document(heals),
+    }
 
 
-def take(ruleset: Ruleset, rolled: TableRoll, rows: list[TableInjury], table_id: uuid.UUID, round_number: int) -> dict:
+def take(ruleset: Ruleset, rolled: TableRoll, rows: list[TableInjury], table_id: uuid.UUID, moment: Moment) -> dict:
     """
     부상 표의 결과를 받아들인다. 부상이 나왔으면 입히고, 굴린 것을 문서로 돌려준다.
 
@@ -107,10 +147,10 @@ def take(ruleset: Ruleset, rolled: TableRoll, rows: list[TableInjury], table_id:
     document = injury_document(rolled.trigger, rolled.roll)
     if rolled.injury is None:
         return document
-    return wound(ruleset, rolled.injury, InjurySource.INJURY_TABLE, document, rows, table_id, round_number)
+    return wound(ruleset, rolled.injury, InjurySource.INJURY_TABLE, document, rows, table_id, moment)
 
 
-def take_aimed(ruleset: Ruleset, key: str, rows: list[TableInjury], table_id: uuid.UUID, round_number: int) -> dict:
+def take_aimed(ruleset: Ruleset, key: str, rows: list[TableInjury], table_id: uuid.UUID, moment: Moment) -> dict:
     """
     노려 친 부상을 입힌다. 문서로 돌려준다. 표를 굴리지 않는다.
 
@@ -119,21 +159,21 @@ def take_aimed(ruleset: Ruleset, key: str, rows: list[TableInjury], table_id: uu
     document = injury_document(Trigger.CALLED_SHOT, None)
     if wears(rows, key):
         return document
-    return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, round_number)
+    return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, moment)
 
 
 def take_aftermath(
-    ruleset: Ruleset, rolled: TableRoll, rows: list[TableInjury], table_id: uuid.UUID, round_number: int
+    ruleset: Ruleset, rolled: TableRoll, rows: list[TableInjury], table_id: uuid.UUID, moment: Moment
 ) -> dict:
     """후유증 표의 결과를 받아들인다. 후유증이 나왔으면 입히고(결손이다), 굴린 것을 문서로 돌려준다."""
     document = injury_document(rolled.trigger, rolled.roll)
     if rolled.injury is None:
         return document
-    return wound(ruleset, rolled.injury, InjurySource.AFTERMATH, document, rows, table_id, round_number)
+    return wound(ruleset, rolled.injury, InjurySource.AFTERMATH, document, rows, table_id, moment)
 
 
 def aftermath_of(
-    ruleset: Ruleset, dice: Dice, row: TableInjury, rows: list[TableInjury], table_id: uuid.UUID, round_number: int
+    ruleset: Ruleset, dice: Dice, row: TableInjury, rows: list[TableInjury], table_id: uuid.UUID, moment: Moment
 ) -> dict | None:
     """
     나은 부상의 후유증 표를 굴리고, 나온 후유증을 입힌다. 굴린 것을 문서로 돌려준다. 굴리지 않았으면 None.
@@ -146,19 +186,19 @@ def aftermath_of(
     rolled = injury_rules.roll_aftermath(definition, dice)
     if rolled is None:
         return None
-    return take_aftermath(ruleset, rolled, rows, table_id, round_number)
+    return take_aftermath(ruleset, rolled, rows, table_id, moment)
 
 
 def heal(
-    ruleset: Ruleset, dice: Dice, row: TableInjury, rows: list[TableInjury], table_id: uuid.UUID, round_number: int
+    ruleset: Ruleset, dice: Dice, row: TableInjury, rows: list[TableInjury], table_id: uuid.UUID, moment: Moment
 ) -> dict | None:
     """
-    오래 가는 부상을 지금 낫게 한다. 치료로 나을 라운드가 지금에 닿았을 때 부른다. 후유증 문서를 돌려준다.
+    오래 가는 부상을 지금 낫게 한다. 치료로 나을 시각이 이 장면이 끝나는 때에 닿았을 때 부른다. 후유증 문서를 돌려준다.
 
     부상을 끝내고, 후유증 표를 굴린다. 후유증 표가 없으면 깨끗이 나아서 None.
     """
     injuries.end(row)
-    return aftermath_of(ruleset, dice, row, rows, table_id, round_number)
+    return aftermath_of(ruleset, dice, row, rows, table_id, moment)
 
 
 def called_shot_document(ruleset: Ruleset, aim: str | None) -> dict | None:
@@ -182,9 +222,9 @@ class EndReason(enum.StrEnum):
 
     # 짧은 것이 정한 라운드가 지나 풀렸다
     EXPIRED = 'expired'
-    # 오래 가는 것이 정한 라운드가 지나 나았다
+    # 오래 가는 것이 나을 시각이 지나 나았다
     HEALED = 'healed'
-    # 치료로 나을 라운드가 앞당겨져 나았다
+    # 치료로 나을 시각이 앞당겨져 나았다
     TREATED = 'treated'
 
 
@@ -215,7 +255,7 @@ def close_out(
     row: TableInjury,
     rows: list[TableInjury],
     table_id: uuid.UUID,
-    round_number: int,
+    moment: Moment,
 ) -> Ended:
     """
     끝난 부상 하나를 정리한다. 오래 가는 것이면 나은 것이고 후유증 표를 굴린다. 짧은 것이면 풀린 것이다.
@@ -224,11 +264,11 @@ def close_out(
     """
     if not is_lasting(ruleset, row):
         return Ended(holder, row)
-    aftermath = aftermath_of(ruleset, dice, row, rows, table_id, round_number)
+    aftermath = aftermath_of(ruleset, dice, row, rows, table_id, moment)
     return Ended(holder, row, EndReason.HEALED, aftermath)
 
 
-def any_due(members: list[TableMember], scene: Scene, round_number: int) -> bool:
+def any_due(members: list[TableMember], scene: Scene, moment: Moment) -> bool:
     """
     이 라운드가 닫힐 때 풀리거나 나을 부상이 하나라도 있는가. 죽은 쪽은 보지 않는다.
 
@@ -237,11 +277,11 @@ def any_due(members: list[TableMember], scene: Scene, round_number: int) -> bool
     living = [member for member in members if member.sheet is not None and not sheets.is_dead(member)]
     rows = [row for member in living for row in member.sheet.injuries]
     rows.extend(row for npc in scene.npcs if not npcs.is_dead(npc) for row in npc.injuries)
-    return any(injuries.is_due(row, round_number) for row in rows)
+    return any(injuries.is_due(row, moment) for row in rows)
 
 
 def expire_all(
-    members: list[TableMember], scene: Scene, ruleset: Ruleset, dice: Dice, table_id: uuid.UUID, round_number: int
+    members: list[TableMember], scene: Scene, ruleset: Ruleset, dice: Dice, table_id: uuid.UUID, moment: Moment
 ) -> list[Ended]:
     """
     이 라운드가 닫힐 때 풀리거나 나을 부상을 모두 끝낸다. 앉은 사람의 지금 캐릭터와 테이블의 NPC 전부다.
@@ -258,16 +298,16 @@ def expire_all(
             continue
         holder = {'user_id': str(member.user_id), 'character_name': member.character_name}
         rows = member.sheet.injuries
-        for row in injuries.expire(rows, round_number):
-            ended.append(close_out(ruleset, dice, holder, row, rows, table_id, round_number))
+        for row in injuries.expire(rows, moment):
+            ended.append(close_out(ruleset, dice, holder, row, rows, table_id, moment))
     for npc in scene.npcs:
         if npcs.is_dead(npc):
             continue
         seen = find_cast_member(scene.cast, npc.entry_id)
         holder = {'entry_id': str(npc.entry_id), 'name': seen.name if seen else ''}
         closed = [
-            close_out(ruleset, dice, holder, row, npc.injuries, table_id, round_number)
-            for row in injuries.expire(npc.injuries, round_number)
+            close_out(ruleset, dice, holder, row, npc.injuries, table_id, moment)
+            for row in injuries.expire(npc.injuries, moment)
         ]
         if seen is not None:
             ended.extend(closed)

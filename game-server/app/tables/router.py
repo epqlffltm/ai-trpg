@@ -17,6 +17,7 @@ from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
+from app.calendar import clock
 from app.core.dice import Rolling
 from app.limits.routing import Limited
 from app.personas import saving
@@ -54,7 +55,7 @@ from app.tables.errors import (
     WrongPasswordError,
 )
 from app.tables.items import CatalogItem
-from app.tables.models import GameTable, TableItem, TableMember, TableQuest, TableRoll, TableSheet
+from app.tables.models import GameTable, TableInjury, TableItem, TableMember, TableQuest, TableRoll, TableSheet
 from app.tables.schemas import (
     CatalogItemOut,
     CharacterOut,
@@ -147,6 +148,14 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
     ]
 
 
+def to_injury(row: TableInjury) -> InjuryOut:
+    """입고 있는 부상 하나를 응답으로. 오래 가는 것이면 나을 시각을 게임 안의 시각으로 푼다."""
+    heals_at = None if row.heals_at is None else clock.as_document(row.heals_at)
+    return InjuryOut(
+        injury=row.injury, round=row.round_number, ends_after_round=row.ends_after_round, heals_at=heals_at
+    )
+
+
 def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem]) -> SheetOut | None:
     """시트를 응답으로 바꾼다. 아직 받지 않았으면 None. 소지품의 이름은 판의 물건(catalog)에서 찾는다."""
     if sheet is None:
@@ -159,10 +168,7 @@ def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem]) ->
         death_successes=sheet.death_successes,
         death_failures=sheet.death_failures,
         dead=sheet.died_at is not None,
-        injuries=[
-            InjuryOut(injury=row.injury, round=row.round_number, ends_after_round=row.ends_after_round)
-            for row in injuries.active(sheet.injuries)
-        ],
+        injuries=[to_injury(row) for row in injuries.active(sheet.injuries)],
         items=[to_item(item, catalog) for item in items.in_catalog_order(sheet.items, catalog)],
         place_id=sheet.place_id,
     )

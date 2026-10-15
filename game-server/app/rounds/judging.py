@@ -119,6 +119,7 @@ def build_judging(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> 
         dice=dice,
         cast=scene.cast,
         round_number=round_.number,
+        moment=round_injuries.moment_of(table, round_.number),
         npcs=scene.npcs,
         people=person_entries(snapshot),
         items=items.catalog(snapshot),
@@ -231,10 +232,12 @@ def roll_death_saves(table: GameTable, dying: list[TableMember], dice: Dice) -> 
 def expire_injuries(table: GameTable, scene: Scene, round_number: int, dice: Dice) -> list[round_injuries.Ended]:
     """
     이 라운드가 닫힐 때 풀리거나 나을 부상을 끝낸다. 끝난 것들을 돌려준다.
+    짧은 것은 라운드로, 오래 가는 것은 이 장면이 끝나는 게임 안의 시각으로 본다(moment_of).
 
     오래 가는 것이 나으면 후유증 표를 굴린다. 그 순서는 앉은 사람, 그다음 NPC 다(app/rounds/injuries.py).
     끝날 부상이 하나도 없으면 규칙을 읽지 않는다. 판에 굳은 복사본을 통째로 읽는 일이라 싸지 않다.
     """
-    if not round_injuries.any_due(table.members, scene, round_number):
+    moment = round_injuries.moment_of(table, round_number)
+    if not round_injuries.any_due(table.members, scene, moment):
         return []
-    return round_injuries.expire_all(table.members, scene, rules_of(table), dice, table.id, round_number)
+    return round_injuries.expire_all(table.members, scene, rules_of(table), dice, table.id, moment)
