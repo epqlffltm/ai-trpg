@@ -20,11 +20,17 @@ NPC 는 로어북의 인물 항목이다. 로어북은 AI 만 읽는 글이라 �
 
 import uuid
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from app.assets.scenarios.snapshot import EntrySnapshot, Snapshot, person_entries
 from app.lore.retrieval import mentions, scene_label
-from app.tables.models import NpcStatus, TableNpc
+from app.tables.models import NpcStatus, TableMonster, TableNpc
+
+if TYPE_CHECKING:
+    # 이번 장면의 몬스터(app/rounds/monster_scene.py).
+    # 그 파일이 이 파일의 condition_of 를 쓰므로 실행할 때는 가져오지 않는다
+    from app.rounds.monster_scene import SceneMonster
 
 
 @dataclass(frozen=True)
@@ -53,6 +59,8 @@ class Scene:
 
     npcs: list[TableNpc]
     cast: list[CastMember]
+    # 이번 장면의 몬스터들. 살아 있는 캐릭터가 서 있는 장소들의 마리다(app/rounds/monster_scene.py)
+    monsters: list['SceneMonster'] = field(default_factory=list)
 
 
 def is_named(npc: TableNpc) -> bool:
@@ -80,9 +88,9 @@ def find_cast_member(cast: list[CastMember], entry_id: uuid.UUID) -> CastMember 
     return next((member for member in cast if member.entry_id == entry_id), None)
 
 
-def condition_of(npc: TableNpc) -> str:
+def condition_of(npc: TableNpc | TableMonster) -> str:
     """
-    NPC 의 몸 상태를 말로. 쓰러짐과 죽음은 생사로, 살아 있으면 HP 가 얼마나 남았는지로 나눈다.
+    NPC 나 몬스터의 몸 상태를 말로. 쓰러짐과 죽음은 생사로, 살아 있으면 HP 가 얼마나 남았는지로 나눈다.
 
     HP 가 가득하면 멀쩡함, 절반을 넘게 남았으면 다침, 그 아래면 크게 다침이다.
     """

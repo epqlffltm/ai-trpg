@@ -8,6 +8,7 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
 
 행동은 일곱이다(app/engine/action.py).
   - 판정(CheckAction). 이번 장면에 나온 NPC 를 겨눌 수 있다(app/rounds/cast.py). 노려 칠 수도 있다.
+    자기가 선 장소의 몬스터 한 마리를 칠 수도 있다(app/rounds/monster_scene.py).
   - 치료(TreatAction). 능력과 난이도는 규칙이 정한다. 대상이 그 부상을 입고 있어야 한다.
   - 지목(NameAction). 인물의 진짜 이름을 짚는다. 맞는지는 여기서 보지 않는다(app/rounds/judging.py).
   - 쓰기(UseAction), 건네기(GiveAction). 판의 물건을 지금 가지고 있어야 한다.
@@ -35,12 +36,14 @@ from app.engine.action import (
 )
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
-from app.rounds.cast import CastMember, find_cast_member, is_named
+from app.rounds.cast import CastMember, Scene, find_cast_member, is_named
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.map_actions import accept_move, accept_search
 from app.rounds.models import Declaration, Round
+from app.rounds.monster_scene import SceneMonster, find_scene_monster, stands_with
 from app.rounds.state import find_declaration, is_down, rules_of
 from app.tables import items, npcs, sheets
+from app.tables import monsters as table_monsters
 from app.tables import state as table_state
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
@@ -80,6 +83,20 @@ def require_npc_target(cast: list[CastMember], npc_id: uuid.UUID, aim: str | Non
         raise RoundConflictError(Conflict.ALREADY_INJURED)
 
 
+def require_monster_target(monsters: list[SceneMonster], member: TableMember, monster_id: uuid.UUID) -> None:
+    """
+    겨눈 몬스터가 이번 장면에서 행동하는 캐릭터와 같은 장소에 있는 죽지 않은(쓰러졌어도 된다) 마리인지 본다.
+
+    장면에 없거나 다른 장소에 있으면 ActionTargetError, 이미 죽었으면 RoundConflictError.
+    장면에 없는 것과 다른 장소에 있는 것을 가르지 않는다. 가르면 아무도 없는 장소의 몬스터가 있다는 것이 드러난다.
+    """
+    monster = find_scene_monster(monsters, monster_id)
+    if monster is None or not stands_with(member, monster):
+        raise ActionTargetError('monster')
+    if table_monsters.is_dead(monster.state):
+        raise RoundConflictError(Conflict.MONSTER_DEAD)
+
+
 def require_able(table: GameTable, member: TableMember) -> Ruleset:
     """
     선언하는 사람이 행동을 붙일 수 있는지 본다. 이 테이블의 규칙을 돌려준다.
@@ -94,15 +111,14 @@ def require_able(table: GameTable, member: TableMember) -> Ruleset:
     return ruleset
 
 
-def accept_check(
-    table: GameTable, member: TableMember, action: CheckAction, cast: list[CastMember], ruleset: Ruleset
-) -> dict:
+def accept_check(table: GameTable, member: TableMember, action: CheckAction, scene: Scene, ruleset: Ruleset) -> dict:
     """
     판정하는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
 
       - 규칙에 없는 능력, 난이도, 양의 등급이면 ActionNotInRulesError.
       - 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
       - 겨눈 NPC 가 이번 장면의 인물이 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
+      - 겨눈 몬스터가 같은 장소의 마리가 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
       - 노린 부상이 규칙에서 노릴 수 없는 것이면 ActionNotInRulesError, 대상이 이미 입었으면 RoundConflictError.
     비워 둔 난이도는 규칙의 기본 난이도로, 비워 둔 회복의 대상은 자기 자신으로 채운다.
     """
@@ -112,7 +128,9 @@ def accept_check(
     if action.target is not None and table_state.find_member(table, action.target) is None:
         raise ActionTargetError('target')
     if action.npc is not None:
-        require_npc_target(cast, action.npc, action.aim)
+        require_npc_target(scene.cast, action.npc, action.aim)
+    if action.monster is not None:
+        require_monster_target(scene.monsters, member, action.monster)
     return aim(actions.settle(ruleset, action), member.user_id).model_dump(mode='json')
 
 
@@ -247,12 +265,12 @@ def accept_action(
     table: GameTable,
     member: TableMember,
     action: AnyAction | None,
-    cast: list[CastMember],
+    scene: Scene,
 ) -> dict | None:
     """
     선언에 붙은 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다. 행동이 없으면 None.
 
-    member 는 선언하는 사람이고, cast 는 이번 장면의 인물들이다.
+    member 는 선언하는 사람이고, scene 은 이번 장면(인물과 몬스터)이다.
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
     accept_move, accept_search).
@@ -261,9 +279,9 @@ def accept_action(
         return None
     ruleset = require_able(table, member)
     if isinstance(action, TreatAction):
-        return accept_treatment(table, member, action, cast, ruleset)
+        return accept_treatment(table, member, action, scene.cast, ruleset)
     if isinstance(action, NameAction):
-        return accept_naming(action, cast)
+        return accept_naming(action, scene.cast)
     if isinstance(action, UseAction):
         return accept_use(table, member, action)
     if isinstance(action, GiveAction):
@@ -272,7 +290,7 @@ def accept_action(
         return accept_move(table, member, action)
     if isinstance(action, SearchAction):
         return accept_search(member, action)
-    return accept_check(table, member, action, cast, ruleset)
+    return accept_check(table, member, action, scene, ruleset)
 
 
 def put_declaration(round_: Round, member: TableMember, content: str, action: dict | None) -> None:

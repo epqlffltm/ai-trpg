@@ -6,6 +6,8 @@
 판정은 닫기 시작할 때 한 번만 한다(app/rounds/judging.py). 결과를 선언에 적어 두고, 그 뒤로는 읽기만 한다.
 HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거나 회복한다(app/engine/health.py).
 행동이 NPC 를 겨눴으면 그 NPC 가 피해를 입거나 회복한다(app/tables/npcs.py 의 change_npc).
+행동이 몬스터를 겨눴으면 그 마리가 피해를 입는다(app/tables/monsters.py 의 change_monster). 몬스터는 부상을 입지 않는다.
+겨눈 마리가 판정할 때 이미 죽었거나 다른 곳에 있으면 굴리지 않고 그 까닭을 적는다(target_gone).
 큰 타격이나 쓰러짐이면 부상 표를 굴린다. 노려 친 타격은 그 부상이 확정으로 생긴다.
 DB 를 모른다. 시트와 NPC 의 상태를 고친다. 저장하지는 않는다.
 """
@@ -19,7 +21,9 @@ from app.engine.check import Check
 from app.engine.health import Change, ChangeKind
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import find_cast_member
-from app.rounds.effects import Judging, injury_after, member_effect, npc_effect
+from app.rounds.effects import Judging, injury_after, member_effect, monster_effect, npc_effect
+from app.rounds.monster_scene import Gone, find_scene_monster, gone_reason
+from app.tables import monsters as table_monsters
 from app.tables import npcs, sheets
 from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember, TableNpc
@@ -106,16 +110,56 @@ def change_cast_member(judging: Judging, action: CheckAction, found: Consequence
     return npc_effect(member, found.magnitude, change, action.lethal, status_before, injury_roll)
 
 
+def change_scene_monster(judging: Judging, action: CheckAction, found: Consequence) -> dict | None:
+    """
+    겨눈 몬스터 한 마리의 HP 와 생사를 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 것이 없으면 None.
+
+    상태를 고치는 것은 change_monster 다. 저장하지는 않는다. 쓰러질지 부서질지는 그 몬스터의 타입이 정한다.
+    판정하기 전에 칠 수 있는지 봤다(target_gone). 그래도 없거나 죽었으면 아무 일도 없는 것으로 둔다.
+    """
+    monster = find_scene_monster(judging.monsters, action.monster)
+    if monster is None or table_monsters.is_dead(monster.state):
+        return None
+
+    status_before = monster.state.status
+    magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
+    traits = table_monsters.traits_of(monster.definition.kind)
+    change = table_monsters.change_monster(monster.state, traits, magnitude, action.lethal, judging.dice)
+    return monster_effect(monster, found.magnitude, change, action.lethal, status_before)
+
+
+def target_gone(judging: Judging, member: TableMember, action: CheckAction) -> dict | None:
+    """
+    겨눈 몬스터를 지금 칠 수 없으면 그 까닭을 문서로. 칠 수 있거나 몬스터를 겨누지 않았으면 None.
+
+    받을 때는 칠 수 있었어도 차례가 오기 전에 앞사람이 죽였을 수 있다. 그때는 판정을 굴리지 않는다.
+    굴리면 실패의 대가를 치를 수 있는데, 칠 상대가 없는 행동이었다.
+    """
+    if action.monster is None:
+        return None
+    monster = find_scene_monster(judging.monsters, action.monster)
+    if monster is None:
+        return {'monster_id': str(action.monster), 'name': None, 'reason': Gone.ELSEWHERE}
+    reason = gone_reason(member, monster)
+    if reason is None:
+        return None
+    return {'monster_id': str(monster.state.id), 'name': monster.name, 'reason': reason}
+
+
 def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction, check: Check) -> dict:
     """
     판정의 결과에 따라 HP 를 바꾸고, 바뀐 내용을 선언의 outcome 에 넣을 칸들로 돌려준다.
 
-    effect 는 앉은 사람의 변화, npc_effect 는 NPC 의 변화다. 한 판정에서 둘 중 하나만 일어난다. 없으면 둘 다 None.
-    대가는 늘 행동한 사람이 입는다. 대상의 일(타격, 회복)은 행동이 NPC 를 겨눴으면 NPC 가, 아니면 앉은 사람이 받는다.
+    effect 는 앉은 사람의 변화, npc_effect 는 NPC 의 변화, monster_effect 는 몬스터의 변화다.
+    한 판정에서 하나만 일어난다. 없으면 effect 와 npc_effect 가 None 이다.
+    monster_effect 는 몬스터를 겨눈 판정에만 적는다. 몬스터가 없는 판정의 결과는 이 칸이 생기기 전과 같다.
+    대가는 늘 행동한 사람이 입는다. 대상의 일(타격, 회복)은 행동이 겨눈 NPC 나 몬스터가, 아니면 앉은 사람이 받는다.
     """
     found = actions.consequence(action, check)
     if found is None:
         return {'effect': None, 'npc_effect': None}
+    if found.recipient == Recipient.TARGET and action.monster is not None:
+        return {'effect': None, 'npc_effect': None, 'monster_effect': change_scene_monster(judging, action, found)}
     if found.recipient == Recipient.TARGET and action.npc is not None:
         return {'effect': None, 'npc_effect': change_cast_member(judging, action, found)}
     return {'effect': change_member(judging, actor, action, found), 'npc_effect': None}
@@ -126,7 +170,11 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction) -> d
     한 사람의 판정하는 행동을 판정하고 그 결과를 정한다. 선언의 outcome 에 적을 문서를 돌려준다.
 
     그 캐릭터가 입은 부상이 이 행동의 능력에 주는 것(보정 깎기, 불리함)을 판정에 적용한다(hindrance).
+    겨눈 몬스터를 지금 칠 수 없으면 굴리지 않고 그 까닭만 적는다(target_gone).
     """
+    gone = target_gone(judging, member, action)
+    if gone is not None:
+        return {'target_gone': gone}
     sheet = member.sheet
     hindrance = round_injuries.hindrance_for(judging.ruleset, sheet.injuries, action.ability)
     hindered = actions.attempt_hindered(judging.ruleset, action, sheet.abilities, judging.dice, hindrance)

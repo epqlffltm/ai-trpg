@@ -34,6 +34,8 @@ class Conflict(enum.StrEnum):
     CHARACTER_ARRIVING = 'character_arriving'
     # 행동이 겨눈 NPC 가 이미 죽었다
     NPC_DEAD = 'npc_dead'
+    # 행동이 겨눈 몬스터가 이미 죽었다(부서졌다)
+    MONSTER_DEAD = 'monster_dead'
     # 캐릭터가 입은 부상 때문에 행동하지 못한다(기절 같은 것). 글만 낼 수 있다
     CHARACTER_INCAPACITATED = 'character_incapacitated'
     # 노려 친 부상을 대상이 이미 입고 있다(이미 잃은 눈)
