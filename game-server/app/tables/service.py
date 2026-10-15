@@ -44,7 +44,7 @@ from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
 from app.rounds.tiers import NarrationTier
-from app.tables import npcs, places, quests, repository, sheets
+from app.tables import monsters, npcs, places, quests, repository, sheets
 from app.tables.building import build_table, hash_table_password, new_invite_code, seat_limit
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
@@ -316,7 +316,8 @@ async def transfer_host(
 async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID) -> GameTable:
     """
     방장이 테이블을 시작한다. 그 뒤로는 새로 들어올 수 없고 캐릭터를 바꿀 수 없다.
-    앉은 사람 모두에게 캐릭터 시트를 주고, 판의 인물마다 NPC 의 상태를, 사건마다 퀘스트를 만들고, 첫 라운드를 연다.
+    앉은 사람 모두에게 캐릭터 시트를 주고, 판의 인물마다 NPC 의 상태를, 사건마다 퀘스트를,
+    조우마다 몬스터의 상태를 만들고, 첫 라운드를 연다.
     맵이 있는 판이면 캐릭터 모두를 시작 장소에 세운다.
     장면은 테이블을 만들 때 고른 스타팅이다.
 
@@ -324,6 +325,7 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
 
     상태를 바꾸고, 시트를 주고, 이벤트를 적고, 라운드를 여는 것이 한 묶음으로 저장된다. 일부만 되는 일이 없다.
     NPC 의 상태는 이벤트에 적지 않는다. 누가 NPC 인지는 로어북의 내용이고, 로어북은 AI 만 읽는다.
+    몬스터의 상태도 적지 않는다. 아직 가 보지 않은 장소에 무엇이 있는지 드러난다.
     """
     table, _ = await lock_seated(session, host_id, table_id)
     require_host(table, host_id)
@@ -334,6 +336,7 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
         raise TableConflictError(Conflict.CHARACTERS_MISSING)
     places.place_at_start(table, snapshot)
     repository.add_npcs(session, npcs.make_npcs(table.id, snapshot))
+    repository.add_monsters(session, monsters.make_monsters(table.id, snapshot))
     table.quests.extend(quests.make_quests(table.id, snapshot))
 
     table.status = TableStatus.PLAYING
