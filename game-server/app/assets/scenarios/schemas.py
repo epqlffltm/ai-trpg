@@ -23,9 +23,11 @@ from app.assets.models import (
     CHARACTER_NAME_MAX_LENGTH,
     DEFAULT_CHARACTER_MODES,
     DEFAULT_NARRATION_STYLE,
+    ENCOUNTER_MAX_COUNT,
     ITEM_STACK_MAX,
     PLAYER_MADE_HP_MAX,
     SCENARIO_MAX_BESTIARIES,
+    SCENARIO_MAX_ENCOUNTERS,
     SCENARIO_MAX_ITEM_RULES,
     SCENARIO_MAX_LANDMARKS,
     SCENARIO_MAX_LOREBOOKS,
@@ -229,6 +231,39 @@ def reject_duplicate_monsters(monster_sheets: list[MonsterSheet]) -> list[Monste
 
 MonsterSheets = Annotated[
     list[MonsterSheet], Field(max_length=SCENARIO_MAX_MONSTER_SHEETS), AfterValidator(reject_duplicate_monsters)
+]
+
+
+class Encounter(BaseModel):
+    """
+    조우 하나. 맵의 장소 하나(place_id)에 몬스터 하나(monster_id)가 count 마리 있다.
+
+    장소가 붙인 로어북의 장소 항목인지, 몬스터가 시트를 적은 몬스터인지는 게시할 때 본다.
+    로어북도 몬스터 시트도 나중에 바꿀 수 있어서 지금 정할 수 없다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    place_id: uuid.UUID
+    monster_id: uuid.UUID
+    count: int = Field(ge=1, le=ENCOUNTER_MAX_COUNT)
+
+    @field_serializer('place_id', 'monster_id')
+    def id_as_text(self, value: uuid.UUID) -> str:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(value)
+
+
+def reject_duplicate_encounters(encounters: list[Encounter]) -> list[Encounter]:
+    """같은 장소의 같은 몬스터가 두 줄이면 거부한다. 한 줄에 마리 수로 적는다."""
+    pairs = [(encounter.place_id, encounter.monster_id) for encounter in encounters]
+    if len(set(pairs)) != len(pairs):
+        raise ValueError('같은 장소의 같은 몬스터가 두 번 있습니다. 한 줄에 마리 수로 적습니다.')
+    return encounters
+
+
+Encounters = Annotated[
+    list[Encounter], Field(max_length=SCENARIO_MAX_ENCOUNTERS), AfterValidator(reject_duplicate_encounters)
 ]
 
 
@@ -441,6 +476,7 @@ class ScenarioCreate(AssetCreate):
     npc_sheets: NpcSheets = []
     default_npc_sheet: Sheet | None = None
     monster_sheets: MonsterSheets = []
+    encounters: Encounters = []
     items: ItemRules = []
     starting_items: StartingItems = []
     quests: QuestRules = []
@@ -460,8 +496,8 @@ class ScenarioUpdate(AssetUpdate):
 
     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
-    lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, items, starting_items, quests, routes,
-    landmarks, character_modes 는
+    lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
+    quests, routes, landmarks, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다.
@@ -484,6 +520,7 @@ class ScenarioUpdate(AssetUpdate):
     npc_sheets: NpcSheets | None = None
     default_npc_sheet: Sheet | None = None
     monster_sheets: MonsterSheets | None = None
+    encounters: Encounters | None = None
     items: ItemRules | None = None
     starting_items: StartingItems | None = None
     quests: QuestRules | None = None
@@ -524,6 +561,7 @@ class ScenarioDetail(ScenarioSummary):
     npc_sheets: list[NpcSheet]
     default_npc_sheet: Sheet | None
     monster_sheets: list[MonsterSheet]
+    encounters: list[Encounter]
     items: list[ItemRule]
     starting_items: list[ItemStack]
     quests: list[QuestRule]

@@ -408,6 +408,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'default_npc_sheet': None,
         # 몬스터 시트를 적지 않았다. 몬스터가 없는 판이다
         'monsters': [],
+        'encounters': [],
         'items': [],
         'starting_items': [],
         'quests': [],

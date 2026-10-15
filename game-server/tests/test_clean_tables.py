@@ -25,7 +25,15 @@ from app.drafts.models import DraftKind, LedgerDraft
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
 from app.memory.indexing import index_table
-from app.tables.models import QuestStatus, TableFoundRoute, TableItem, TableQuest, TableSheet, TableVisit
+from app.tables.models import (
+    QuestStatus,
+    TableFoundRoute,
+    TableItem,
+    TableMonster,
+    TableQuest,
+    TableSheet,
+    TableVisit,
+)
 from app.whispers.models import Whisper
 from tests.cleaning import clear_tables, clearing_order
 from tests.sheets import SHEET
@@ -76,6 +84,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     쪽지도 직접 넣는다. 받을 사람이 있어야 하는데 혼자 앉은 테이블이다.
     소지품도 직접 넣는다. 판에 물건이 있어야 하는데, 물건 항목을 더하면 위의 판과 서술이 달라진다.
     퀘스트도 같은 까닭으로 직접 넣는다(사건 항목). 서 본 곳과 찾은 길도 같다(장소 항목).
+    몬스터의 상태도 같다. 조우를 적으려면 장소 항목과 시작 장소가 있어야 한다.
     장부 초안도 직접 넣는다. 테스트의 서술자는 초안을 쓰지 않는다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
     지난 라운드의 벡터는 다음 서술을 맡길 때 생긴다. 혼자 앉은 테이블이라 선언하면 라운드가 닫히고 서술된다.
@@ -145,6 +154,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         session.add(TableQuest(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4(), status=QuestStatus.HIDDEN))
         session.add(TableVisit(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4()))
         session.add(TableFoundRoute(table_id=uuid.UUID(table['id']), from_place=uuid.uuid4(), to_place=uuid.uuid4()))
+        monster = {'monster_id': uuid.uuid4(), 'number': 1, 'place_id': uuid.uuid4(), 'abilities': {}, 'max_hp': 1}
+        session.add(TableMonster(table_id=uuid.UUID(table['id']), hp=1, status='alive', **monster))
         draft = {'entry_id': str(uuid.uuid4()), 'name': '왕녀 구출', 'previous': 'active', 'status': 'succeeded'}
         session.add(
             LedgerDraft(

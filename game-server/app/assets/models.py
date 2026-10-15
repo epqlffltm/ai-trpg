@@ -82,6 +82,10 @@ SCENARIO_MAX_BESTIARIES = 10
 # 시나리오 하나에 둘 수 있는 몬스터 시트의 수. 시트가 있는 몬스터만 판에 들어가므로 판의 몬스터 수의 상한이다.
 # 도감 하나의 몬스터를 모두 써도 모자라지 않는 만큼이다
 SCENARIO_MAX_MONSTER_SHEETS = 100
+# 시나리오 하나에 둘 수 있는 조우의 수(장소와 몬스터의 짝)와, 조우 하나의 마리 수.
+# 테이블을 시작할 때 마리마다 상태가 하나 생긴다. 둘을 곱한 것이 테이블 하나의 몬스터 수의 상한이다
+SCENARIO_MAX_ENCOUNTERS = 50
+ENCOUNTER_MAX_COUNT = 10
 # 판을 낼 때 적는 변경 내용. 사람이 읽는다
 VERSION_NOTE_MAX_LENGTH = 500
 
@@ -422,6 +426,7 @@ class Scenario(AssetContent):
         CheckConstraint(
             f'jsonb_array_length(monster_sheets) <= {SCENARIO_MAX_MONSTER_SHEETS}', name='monster_sheets_count'
         ),
+        CheckConstraint(f'jsonb_array_length(encounters) <= {SCENARIO_MAX_ENCOUNTERS}', name='encounters_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
@@ -522,6 +527,11 @@ class Scenario(AssetContent):
     # 기본 몬스터 시트는 없다. 고블린과 용이 같은 숫자가 된다.
     # 가리키는 몬스터가 붙인 도감에 있는지, 규칙에 맞는지는 게시할 때 본다(scenarios/publishing.py)
     monster_sheets: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 조우들. 하나하나가 {place_id, monster_id, count} 다. "이 장소에 이 몬스터가 count 마리 있다"는 뜻이다.
+    # 장소는 붙인 로어북의 장소 항목, 몬스터는 시트를 적은 몬스터다. 맵의 길과 같은 까닭으로 여기 둔다.
+    # 테이블을 시작할 때 마리마다 상태를 만들어 그 장소에 둔다(app/tables/monsters.py). 맵이 있어야 한다
+    encounters: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다
