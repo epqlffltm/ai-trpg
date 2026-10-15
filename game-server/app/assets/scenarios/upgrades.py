@@ -493,6 +493,18 @@ def upgrade_from_25(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_26(document: dict) -> dict:
+    """
+    형식 26 의 문서를 형식 27 로 올린다. 그때는 퀘스트에 기한이 없었다.
+
+    모두 비운 것으로 읽는다. 기한 없이 방장이 끝낸다. 그때와 같은 동작이다.
+    """
+    upgraded = dict(document)
+    upgraded['quests'] = [{**quest, 'time_limit_minutes': None} for quest in document.get('quests', [])]
+    upgraded['format'] = 27
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -521,4 +533,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     23: upgrade_from_23,
     24: upgrade_from_24,
     25: upgrade_from_25,
+    26: upgrade_from_26,
 }

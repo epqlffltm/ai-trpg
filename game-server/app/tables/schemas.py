@@ -311,6 +311,9 @@ class QuestOut(BaseModel):
     entry_id: uuid.UUID
     name: str
     status: QuestStatus
+    # 기한이 끝나는 게임 안의 시각. 판의 규칙에 기한이 있는 퀘스트가 드러날 때 정한다. 없으면 None.
+    # 진행 중인데 이 시각이 지나면 그다음에 닫히는 라운드까지 기다렸다가 서버가 실패로 바꾼다
+    due_at: ClockTimeOut | None = None
 
 
 class QuestChange(BaseModel):

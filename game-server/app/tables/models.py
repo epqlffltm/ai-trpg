@@ -654,10 +654,15 @@ class TableQuest(Base):
     상태를 바꾸는 것은 서버뿐이다. 방장이 API 로 바꾼다(app/tables/quest_changes.py). AI 는 바꾸지 못한다.
 
     누구의 것인지는 항목의 ID(entry_id)로만 적는다. 이름과 글은 판에 있다. 글은 AI 만 읽는다.
+    기한이 있는 퀘스트는 드러날 때 끝나는 게임 안의 시각(due_at)을 적는다. 지나면 서버가 실패로 바꾼다
+    (app/rounds/deadlines.py).
     """
 
     __tablename__ = 'table_quests'
-    __table_args__ = (CheckConstraint(one_of('status', QuestStatus), name='status_allowed'),)
+    __table_args__ = (
+        CheckConstraint(one_of('status', QuestStatus), name='status_allowed'),
+        CheckConstraint('due_at IS NULL OR due_at >= 0', name='due_at_not_negative'),
+    )
 
     # 두 칸을 합쳐 기본 키로 삼는다. 한 테이블에서 사건 하나의 상태는 하나다(NPC 와 같다).
     # 테이블의 행이 지워지면 함께 지워진다
@@ -665,6 +670,9 @@ class TableQuest(Base):
     # 판(content)의 로어북 사건 항목의 ID. 판을 고치지 않으므로 가리키는 항목은 늘 있다
     entry_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     status: Mapped[str] = mapped_column(String(20))
+    # 기한이 끝나는 게임 안의 시각(1일째 0시부터의 분). 판의 규칙에 기한이 있는 퀘스트가 드러날 때 정한다.
+    # 기한이 없거나 아직 숨겨 있으면 비어 있다. 끝난 뒤에도 지우지 않는다(무엇이 기한이었는지 남긴다)
+    due_at: Mapped[int | None] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 마지막으로 상태를 바꾼 때. 처음 만든 뒤로 바꾸지 않았으면 비어 있다
