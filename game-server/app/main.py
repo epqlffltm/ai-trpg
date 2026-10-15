@@ -15,6 +15,8 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
+from app.assets.bestiaries import router as bestiaries
+from app.assets.bestiaries.service import BestiaryFullError
 from app.assets.lorebooks import router as lorebooks
 from app.assets.lorebooks.service import LorebookFullError
 from app.assets.routing import handle_asset_in_use, handle_asset_not_found, handle_asset_reference
@@ -235,6 +237,7 @@ def create_app(
     app.include_router(rulebooks.router, prefix=API_PREFIX)
     app.include_router(scenarios.router, prefix=API_PREFIX)
     app.include_router(lorebooks.router, prefix=API_PREFIX)
+    app.include_router(bestiaries.router, prefix=API_PREFIX)
     app.include_router(listings.owner_router, prefix=API_PREFIX)
     app.include_router(listings.public_router, prefix=API_PREFIX)
     app.include_router(personas.router, prefix=API_PREFIX)
@@ -251,6 +254,7 @@ def create_app(
     app.add_exception_handler(AssetInUseError, handle_asset_in_use)
     app.add_exception_handler(AssetReferenceError, handle_asset_reference)
     app.add_exception_handler(LorebookFullError, lorebooks.handle_lorebook_full)
+    app.add_exception_handler(BestiaryFullError, bestiaries.handle_bestiary_full)
     app.add_exception_handler(ScenarioNotReadyError, scenarios.handle_scenario_not_ready)
     app.add_exception_handler(ListingNotReadyError, listings.handle_listing_not_ready)
     app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)

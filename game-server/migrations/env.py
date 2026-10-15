@@ -21,6 +21,7 @@ from app.ai import models as ai_models  # noqa: F401
 
 # 모델을 불러와야 Base.metadata 에 테이블이 등록된다. 이름을 직접 쓰지 않아도 불러오는 것 자체가 필요하다
 from app.assets import models as asset_models  # noqa: F401
+from app.assets.bestiaries import models as bestiary_models  # noqa: F401
 from app.billing import models as billing_models  # noqa: F401
 from app.chat import models as chat_models  # noqa: F401
 from app.core.config import get_settings

@@ -98,6 +98,8 @@ class AssetType(enum.StrEnum):
     RULEBOOK = 'rulebook'
     SCENARIO = 'scenario'
     LOREBOOK = 'lorebook'
+    # 몬스터 도감. 모델은 app/assets/bestiaries/models.py 에 있다
+    BESTIARY = 'bestiary'
 
 
 class ItemKind(enum.StrEnum):
