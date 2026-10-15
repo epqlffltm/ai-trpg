@@ -5,8 +5,10 @@
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
 #     prepare      설정 파일(.env 다섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
-#     up           이미지를 만들고 띄운 뒤, 서버 넷과 프록시가 healthy 가 될 때까지 기다린다
-#     check        마이그레이션이 성공했는지, 서버끼리 닿는지, root 가 아닌지, 이미지에 .env 가 없는지 본다.
+#     up           이미지를 만들고 띄운 뒤, 서버 넷과 프록시가 healthy 가 될 때까지 기다린다.
+#                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다
+#     check        마이그레이션이 성공했는지, 서버마다 준비됐는지(/health/ready), 서버끼리 닿는지, root 가 아닌지,
+#                  이미지에 .env 가 없는지 본다.
 #                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
@@ -21,6 +23,8 @@
 set -euo pipefail
 
 SERVERS=(auth game board billing)
+# 서버마다 컨테이너 안에서 듣는 포트
+declare -A PORTS=([auth]=8000 [game]=8001 [board]=8002 [billing]=8003)
 # 계속 도는 워커와 주기 명령의 컨테이너
 WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron)
 # 주기 명령의 컨테이너와 그 crontab
@@ -202,6 +206,12 @@ reachable_from() {
   esac
 }
 
+# 서버가 제 컨테이너 안에서 준비됐다고(/health/ready 가 200) 답하는가. 503 이면 실패다
+ready_inside() {
+  local server="$1"
+  reachable_from "${server}-server" "http://127.0.0.1:${PORTS[$server]}/health/ready"
+}
+
 # 돌고 있고, 한 번도 다시 뜨지 않았는가. 바로 죽는 워커는 restart 때문에 돌고 있는 것처럼 보인다
 stays_up() {
   running "$1" && [[ "$(docker inspect -f '{{.RestartCount}}' "$(container_of "$1")")" == "0" ]]
@@ -242,6 +252,7 @@ check() {
   local server jwks=http://auth-server:8000/api/v1/auth/jwks
   for server in "${SERVERS[@]}"; do
     report "${server}-migrate 가 성공했다" migrated "$server"
+    report "${server}-server 가 준비됐다(/health/ready 가 200, DB 에 닿는다)" ready_inside "$server"
     report "${server}-server 가 root 가 아니다" not_root "${server}-server"
     report "${server}-server 의 이미지에 .env 가 없다" no_env_file_in_image "${server}-server"
   done
