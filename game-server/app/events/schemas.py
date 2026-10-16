@@ -20,7 +20,7 @@ class EventOut(BaseModel):
     type: EventType
     # 이 일을 한 사람. 사람이 한 일이 아니면 None 이다
     actor_id: uuid.UUID | None
-    # 종류마다 다른 내용. 내보내기로 정한 칸만 들어 있다(app/events/router.py 의 VISIBLE)
+    # 종류마다 다른 내용. 내보내기로 정한 칸만 들어 있다(app/events/responses.py 의 VISIBLE)
     payload: dict
     # 이 이벤트를 일으킨 이벤트의 번호
     caused_by_sequence: int | None

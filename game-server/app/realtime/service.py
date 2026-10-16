@@ -16,6 +16,11 @@ HTTP 를 모른다. 메시지(Frame)를 하나씩 내놓을 뿐이고, 글자로
 저장하지 않는 것(입력 중, 쓰이는 중인 서술의 조각)은 신호가 내용의 전부다. 받은 대로 바로 보내고, 놓치면 그만이다.
 
 DB 연결을 붙잡고 있지 않는다. 스트림은 몇 분씩 열려 있는데 풀의 연결은 몇 개뿐이다. 읽을 때만 잠깐 빌린다.
+
+밀린 것은 한 번에 한 묶음(READ_BATCH)씩 읽는다. 종류마다 한 묶음을 읽고, 연결을 돌려주고, 보낸다.
+묶음이 꽉 찼으면 아직 남았다는 뜻이다. 기다리지 않고 그 종류만 다시 읽는다.
+그래서 긴 기록에 처음부터 다시 붙어도 한 번에 쥐는 메시지는 종류마다 한 묶음까지이고, 읽는 대로 바로 간다.
+묶음마다 아직 앉아 있는지와 토큰이 만료됐는지를 본다. 긴 기록을 보내는 도중에 내보내져도 그 뒤의 것은 가지 않는다.
 """
 
 import enum
@@ -30,9 +35,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.tokens import AccessClaims
 from app.chat import repository as chat_repository
-from app.chat.router import to_message
+from app.chat.responses import to_message
 from app.events import repository as event_repository
-from app.events.router import to_event
+from app.events.responses import to_event
 from app.realtime.hub import Hub
 from app.realtime.listener import SignalSource
 from app.realtime.signals import STORED_KINDS, Kind, NarrationPiece, Notice, Signal
@@ -41,7 +46,7 @@ from app.tables import repository as table_repository
 from app.tables import state as table_state
 from app.tables.models import TableStatus
 from app.whispers import repository as whisper_repository
-from app.whispers.router import to_whisper
+from app.whispers.responses import to_whisper
 
 # 박자. 이 시간(초)마다 주석을 보내고 DB 에서 이벤트와 채팅을 모두 읽는다. 신호가 오고 있어도 그렇게 한다.
 # 주석을 보내는 이유: 써 봐야 연결이 죽었는지 안다. 그리고 중간의 프록시가 조용한 연결을 끊지 않게 한다.
@@ -50,7 +55,7 @@ HEARTBEAT_SECONDS = 15.0
 # 신호를 듣지 못하는 동안(듣는 연결을 맺지 못함) 깨어나는 간격(초). 신호 대신 자주 읽어 늦음을 줄인다
 DEAF_HEARTBEAT_SECONDS = 5.0
 
-# 한 번에 읽는 개수. 밀린 것이 이보다 많으면 여러 번에 나눠 읽는다
+# 한 번에 읽는 개수(종류마다). 밀린 것이 이보다 많으면 여러 번에 나눠 읽고, 읽을 때마다 보낸다
 READ_BATCH = 100
 
 # 메시지의 종류(SSE 의 event 줄)
@@ -73,6 +78,19 @@ class Closed(enum.StrEnum):
     TOKEN_EXPIRED = 'token_expired'
     # 서버가 꺼진다(배포, 재시작). 잠깐 쉬었다가 다시 붙으면 된다
     SERVER_SHUTDOWN = 'server_shutdown'
+
+
+@dataclass(frozen=True)
+class Batch:
+    """
+    한 번 읽은 것. 보낼 메시지들, 스트림을 닫아야 하면 그 이유, 묶음이 꽉 차 아직 남은 종류들.
+
+    남은 것이 있으면 테이블이 끝났어도 닫지 않는다. 남은 것을 다 보낸 뒤에 닫는다.
+    """
+
+    frames: list[Frame]
+    closed: Closed | None = None
+    pending: frozenset[Kind] = frozenset()
 
 
 @dataclass
@@ -158,68 +176,86 @@ def live_frames(received: set[Notice], viewer_id: uuid.UUID) -> list[Frame]:
     return typing_frames(received, viewer_id) + narration_frames(received)
 
 
-async def read_events(session: AsyncSession, table_id: uuid.UUID, cursor: Cursor) -> list[Frame]:
-    """보낸 번호 뒤의 이벤트를 모두 읽어 메시지로 바꾼다. 읽은 만큼 cursor 를 옮긴다."""
-    frames = []
-    while True:
-        events = await event_repository.list_after(session, table_id, cursor.events, READ_BATCH)
-        for event in events:
-            cursor.events = event.sequence
-            frames.append(Frame(event=EVENT_FRAME, data=to_event(event).model_dump_json(), id=cursor.mark()))
-        if len(events) < READ_BATCH:
-            return frames
-
-
-async def read_messages(session: AsyncSession, table_id: uuid.UUID, cursor: Cursor) -> list[Frame]:
-    """보낸 번호 뒤의 채팅을 모두 읽어 메시지로 바꾼다. 읽은 만큼 cursor 를 옮긴다."""
-    frames = []
-    while True:
-        messages = await chat_repository.list_after(session, table_id, cursor.messages, READ_BATCH)
-        for message in messages:
-            cursor.messages = message.sequence
-            frames.append(Frame(event=MESSAGE_FRAME, data=to_message(message).model_dump_json(), id=cursor.mark()))
-        if len(messages) < READ_BATCH:
-            return frames
-
-
-async def read_whispers(session: AsyncSession, table_id: uuid.UUID, user_id: uuid.UUID, cursor: Cursor) -> list[Frame]:
+async def read_events(session: AsyncSession, table_id: uuid.UUID, cursor: Cursor) -> tuple[list[Frame], bool]:
     """
-    이 사람의 쪽지함에서 보낸 번호 뒤의 쪽지를 모두 읽어 메시지로 바꾼다. 읽은 만큼 cursor 를 옮긴다.
+    보낸 번호 뒤의 이벤트를 한 묶음 읽어 메시지로 바꾼다. 읽은 만큼 cursor 를 옮긴다.
 
-    자기 쪽지함만 읽는다. 다른 사람이 주고받은 쪽지는 이 스트림에 오지 않는다.
+    메시지들과, 묶음이 꽉 찼는지(아직 남았을 수 있다)를 돌려준다.
     """
+    events = await event_repository.list_after(session, table_id, cursor.events, READ_BATCH)
     frames = []
-    while True:
-        whispers = await whisper_repository.list_after(session, table_id, user_id, cursor.whispers, READ_BATCH)
-        for whisper in whispers:
-            cursor.whispers = whisper.sequence
-            frames.append(Frame(event=WHISPER_FRAME, data=to_whisper(whisper).model_dump_json(), id=cursor.mark()))
-        if len(whispers) < READ_BATCH:
-            return frames
+    for event in events:
+        cursor.events = event.sequence
+        frames.append(Frame(event=EVENT_FRAME, data=to_event(event).model_dump_json(), id=cursor.mark()))
+    return frames, len(events) == READ_BATCH
+
+
+async def read_messages(session: AsyncSession, table_id: uuid.UUID, cursor: Cursor) -> tuple[list[Frame], bool]:
+    """보낸 번호 뒤의 채팅을 한 묶음 읽어 메시지로 바꾼다. 읽은 만큼 cursor 를 옮긴다. 묶음이 꽉 찼는지도 돌려준다."""
+    messages = await chat_repository.list_after(session, table_id, cursor.messages, READ_BATCH)
+    frames = []
+    for message in messages:
+        cursor.messages = message.sequence
+        frames.append(Frame(event=MESSAGE_FRAME, data=to_message(message).model_dump_json(), id=cursor.mark()))
+    return frames, len(messages) == READ_BATCH
+
+
+async def read_whispers(
+    session: AsyncSession, table_id: uuid.UUID, user_id: uuid.UUID, cursor: Cursor
+) -> tuple[list[Frame], bool]:
+    """
+    이 사람의 쪽지함에서 보낸 번호 뒤의 쪽지를 한 묶음 읽어 메시지로 바꾼다. 읽은 만큼 cursor 를 옮긴다.
+
+    자기 쪽지함만 읽는다. 다른 사람이 주고받은 쪽지는 이 스트림에 오지 않는다. 묶음이 꽉 찼는지도 돌려준다.
+    """
+    whispers = await whisper_repository.list_after(session, table_id, user_id, cursor.whispers, READ_BATCH)
+    frames = []
+    for whisper in whispers:
+        cursor.whispers = whisper.sequence
+        frames.append(Frame(event=WHISPER_FRAME, data=to_whisper(whisper).model_dump_json(), id=cursor.mark()))
+    return frames, len(whispers) == READ_BATCH
+
+
+async def read_kind(
+    session: AsyncSession, kind: Kind, user_id: uuid.UUID, table_id: uuid.UUID, cursor: Cursor
+) -> tuple[list[Frame], bool]:
+    """한 종류를 한 묶음 읽는다. 이벤트, 채팅, 자기 쪽지함이다."""
+    if kind == Kind.EVENTS:
+        return await read_events(session, table_id, cursor)
+    if kind == Kind.MESSAGES:
+        return await read_messages(session, table_id, cursor)
+    return await read_whispers(session, table_id, user_id, cursor)
+
+
+# 읽는 순서. 이벤트, 채팅, 쪽지다
+READ_ORDER = (Kind.EVENTS, Kind.MESSAGES, Kind.WHISPERS)
 
 
 async def read_new(
     session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID, cursor: Cursor, kinds: set[Kind]
-) -> tuple[list[Frame], Closed | None]:
+) -> Batch:
     """
-    새로 생긴 것을 읽는다. 보낼 메시지들과, 스트림을 닫아야 하면 그 이유를 돌려준다.
+    새로 생긴 것을 종류마다 한 묶음씩 읽는다.
 
     읽을 때마다 아직 앉아 있는지부터 본다. 내보내진 사람에게 그 뒤의 채팅이 가면 안 된다.
-    테이블이 끝났으면 남은 것을 다 보낸 뒤에 닫는다.
+    테이블이 끝났으면 남은 것을 다 보낸 뒤에 닫는다. 아직 남은 종류가 있으면 이번에는 닫지 않는다.
     kinds 가 비어 있으면(입력 중 신호만 왔을 때) 앉아 있는지만 본다.
     """
     table = await table_repository.find_table(session, table_id)
     if table is None or table_state.find_member(table, user_id) is None:
-        return [], Closed.NOT_SEATED
+        return Batch(frames=[], closed=Closed.NOT_SEATED)
 
-    frames = []
-    if Kind.EVENTS in kinds:
-        frames += await read_events(session, table_id, cursor)
-    if Kind.MESSAGES in kinds:
-        frames += await read_messages(session, table_id, cursor)
-    if Kind.WHISPERS in kinds:
-        frames += await read_whispers(session, table_id, user_id, cursor)
-    return frames, Closed.TABLE_ENDED if table.status == TableStatus.ENDED else None
+    frames: list[Frame] = []
+    pending = set()
+    for kind in READ_ORDER:
+        if kind not in kinds:
+            continue
+        read, full = await read_kind(session, kind, user_id, table_id, cursor)
+        frames += read
+        if full:
+            pending.add(kind)
+    ended = table.status == TableStatus.ENDED and not pending
+    return Batch(frames=frames, closed=Closed.TABLE_ENDED if ended else None, pending=frozenset(pending))
 
 
 async def stream(
@@ -254,8 +290,10 @@ async def stream(
         # 다음 박자의 시각. 처음 읽기가 모두 읽으므로 거기서부터 센다
         beat_at = clock() + wake_interval(heartbeat, deaf_heartbeat, listening)
         while True:
+            # 읽는 동안만 연결을 빌린다. 보내기 전에 돌려준다
             async with session_factory() as session:
-                frames, closed = await read_new(session, viewer.user_id, table_id, cursor, kinds)
+                batch = await read_new(session, viewer.user_id, table_id, cursor, kinds)
+            frames, closed = batch.frames, batch.closed
             # 앉아 있지 않게 된 사람에게는 저장하지 않는 것(입력 중, 서술의 조각)도 보내지 않는다.
             # 그것들을 먼저, 저장된 것을 나중에 보낸다. 받는 쪽은 그 사람의 채팅이 오면 입력 중 표시를 지우고,
             # 서술의 이벤트(gm_narration)가 오면 미리 보기를 지운다
@@ -266,9 +304,17 @@ async def stream(
 
             if closed is None and seconds_left(viewer) <= 0:
                 closed = Closed.TOKEN_EXPIRED
+            if closed is None and subscription.is_closed():
+                closed = Closed.SERVER_SHUTDOWN
             if closed is not None:
                 yield closed_frame(closed)
                 return
+
+            # 묶음이 꽉 찬 종류는 아직 남았다. 기다리지 않고 그 종류만 다시 읽는다.
+            # 그동안 온 신호는 방송실의 자리에 쌓여 있다가 다음에 기다릴 때 바로 돌아온다
+            if batch.pending:
+                kinds, live = set(batch.pending), []
+                continue
 
             # 다음 박자까지 기다린다. 토큰이 만료되는 때에는 신호가 없어도 깨어나야 한다
             received = await subscription.wait(wait_seconds(beat_at, clock(), viewer))
