@@ -30,8 +30,17 @@ import (
 // 돌려받은 주문의 상태로 결과를 안다. refunded 면 돈이 돌아갔고, refunding 이면 아직 결과를 모른다.
 // 몇 번을 불러도 한 번만 취소된다. 이미 refunded 면 그대로 돌려준다.
 // 결제 대행사가 거절했으면 ErrRefundRefused 를 감싼 오류다. 그때 주문은 paid 로 돌아가 있고 크레딧도 돌아와 있다.
+//
+// 작업 전체는 OperationTimeout 안에 끝난다. 넘으면 ErrTimedOut 을 감싼 오류다(detach).
 func (s *Service) Refund(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (Order, error) {
-	ctx = context.WithoutCancel(ctx)
+	ctx, cancel := s.detach(ctx)
+	defer cancel()
+	refunded, err := s.refund(ctx, userID, orderID)
+	return refunded, timedOut(ctx, err)
+}
+
+// refund 는 Refund 의 본문이다.
+func (s *Service) refund(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (Order, error) {
 	started, err := s.startRefunding(ctx, userID, orderID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// paid 이고 기한 안인 주문이 아니다. 이미 진행된 환불이거나, 할 수 없는 주문이거나, 없는 주문이다

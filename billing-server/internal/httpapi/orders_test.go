@@ -200,6 +200,8 @@ func TestOrderErrorsBecomeStatusCodes(t *testing.T) {
 		{"크레딧을 썼다", order.ErrCreditsUsed, http.StatusConflict},
 		{"다른 요청과 엇갈렸다", order.ErrRefundBusy, http.StatusConflict},
 		{"결제 대행사가 취소를 거절했다", fmt.Errorf("%w(REJECT_CARD_PAYMENT)", order.ErrRefundRefused), http.StatusConflict},
+		// 작업의 마감에 걸렸다(#273). 결제를 실패로 정한 것이 아니다. 다시 보내면 된다. 감싼 원인(DB 의 오류)은 싣지 않는다
+		{"정한 시간이 지났다", errors.Join(order.ErrTimedOut, errors.New(`relation "orders" does not exist`)), http.StatusServiceUnavailable},
 		{"DB 오류", errors.New(`relation "orders" does not exist`), http.StatusInternalServerError},
 	}
 	requests := []request{
