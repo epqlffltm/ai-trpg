@@ -13,10 +13,12 @@
 
 import time
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import OperationalError, close_old_connections
 
 from accounts.outbox import DeliveryReport, deliver_due_mail
+from observability.heartbeat import beat
 from observability.jobs import run_as_job
 
 # 한 묶음을 처리하는 일의 이름. 로그의 operation 칸에 들어간다(docs/observability.md)
@@ -69,11 +71,14 @@ class Command(BaseCommand):
         try:
             # 묶음마다 작업의 식별자(job_id)를 건다. 이 묶음이 남긴 로그가 그 식별자로 묶인다
             with run_as_job(DELIVER_OPERATION):
-                return deliver_due_mail()
+                report = deliver_due_mail()
         except OperationalError as exc:
             # 오류의 종류만 적는다. 오류의 글에는 DB 의 주소와 계정 이름이 들어 있다. 자세한 것은 로그에 남았다
             self.stderr.write(f'DB 에 접속하지 못했습니다. 잠시 뒤 다시 시도합니다: {type(exc).__name__}')
             return DeliveryReport()
+        # DB 에 닿아 한 바퀴를 끝냈다. 닿지 못한 바퀴는 심장박동을 바꾸지 않는다(observability/heartbeat.py)
+        beat(settings.HEARTBEAT_FILE)
+        return report
 
     def _report(self, report: DeliveryReport) -> None:
         """한 일이 있을 때만 출력한다. 1초마다 "0건" 을 찍지 않는다."""

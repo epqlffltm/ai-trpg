@@ -185,6 +185,9 @@ type Jobs struct {
 	Logging  Logging
 	Rules    Rules
 	Payment  Payment
+	// HeartbeatFile 은 계속 도는 작업이 한 바퀴를 끝낼 때마다 시각을 바꾸는 파일이다(jobs.Beat).
+	// compose 가 정리 작업의 컨테이너에 넣는다. 비어 있으면 쓰지 않는다(PC 에서 돌릴 때)
+	HeartbeatFile string
 }
 
 // Addr 는 서버가 요청을 받는 주소를 "host:port" 로 돌려준다.
@@ -245,7 +248,8 @@ func LoadJobs(lookup Lookup) (Jobs, error) {
 	if err := errors.Join(dbErr, loggingErr, rulesErr, paymentErr); err != nil {
 		return Jobs{}, err
 	}
-	return Jobs{Database: db, Logging: logging, Rules: rules, Payment: payment}, nil
+	heartbeat := readString(lookup, "HEARTBEAT_FILE", "")
+	return Jobs{Database: db, Logging: logging, Rules: rules, Payment: payment, HeartbeatFile: heartbeat}, nil
 }
 
 // loadPayment 는 결제 대행사의 설정을 읽는다. 토스페이먼츠면 테스트 키 둘이 있어야 하고, 둘의 종류가 같아야 한다.

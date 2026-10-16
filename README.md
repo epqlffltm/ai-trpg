@@ -85,8 +85,10 @@ docker compose --profile app up -d --build
 docker compose --profile app ps -a
 ```
 
-`*-migrate` 넷이 `Exited (0)`, `*-server` 넷과 `proxy` 가 `healthy`, 워커와 cron 다섯(`auth-mail`, `auth-welcome-credits`, `auth-cron`, `billing-sweeper`, `billing-cron`)이 `Up` 이면 된다.
+`*-migrate` 넷이 `Exited (0)`, `*-server` 넷과 `proxy` 와 워커 셋(`auth-mail`, `auth-welcome-credits`, `billing-sweeper`)이 `healthy`,
+cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
 서버의 `healthy` 는 그 서버가 DB 에 닿는다는 뜻이다(healthcheck 가 `/health/ready` 를 부른다). DB 가 죽으면 `unhealthy` 로 보이고, DB 가 돌아오면 저절로 `healthy` 가 된다.
+워커의 `healthy` 는 그 워커가 DB 에 닿으며 돈다는 뜻이다(2분 안에 한 바퀴를 끝냈다. `docs/observability.md` 의 "워커의 상태").
 끌 때는 `docker compose --profile app down` 이다. 켜 둔 채 Docker Desktop 을 껐다 켜면 다시 뜬다(`restart: unless-stopped`).
 
 - 바깥에서는 프록시 하나로 들어온다. `http://127.0.0.1:8080/api/v1/<auth|game|board|billing>/...` 이다. 서버들의 포트는 열지 않는다.

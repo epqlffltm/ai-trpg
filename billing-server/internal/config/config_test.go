@@ -274,6 +274,15 @@ func TestLoadJobsNeedsNoServerSettings(t *testing.T) {
 	}
 }
 
+func TestLoadJobsReadsTheHeartbeatFile(t *testing.T) {
+	jobs, err := config.LoadJobs(from(map[string]string{
+		"DATABASE_URL": databaseURL, "HEARTBEAT_FILE": "/tmp/heartbeat",
+	}))
+	if err != nil || jobs.HeartbeatFile != "/tmp/heartbeat" {
+		t.Errorf("심장박동 파일 = %q, %v", jobs.HeartbeatFile, err)
+	}
+}
+
 func TestLoadJobsReadsTheSameRulesAsTheServer(t *testing.T) {
 	// 서버와 정리 작업의 규칙이 어긋나면 무료 크레딧과 홀드가 다르게 다뤄진다
 	values := required(map[string]string{
