@@ -28,6 +28,7 @@ from app.engine.ruleset import (
     Injury,
     InjuryTable,
     InjuryTriggers,
+    LongRest,
     Magnitude,
     Mishap,
     MishapRow,
@@ -35,8 +36,11 @@ from app.engine.ruleset import (
     Modifier,
     PointBuy,
     PointCost,
+    Rest,
+    Revive,
     Ruleset,
     ScoreRoll,
+    ShortRest,
     TableRow,
     Treatment,
 )
@@ -210,6 +214,17 @@ SRD5_TREATMENT = Treatment(
     ),
 )
 
+# 쉬기. SRD 5.1 의 짧은 휴식(1시간)과 긴 휴식(8시간)이다. 짧은 휴식의 히트 다이스는 등급 하나(보통, 1d8)로 줄였다.
+# 고비를 넘긴 캐릭터는 SRD 에서 1d4 시간 뒤에 HP 1 로 깨어난다.
+# 여기서는 긴 휴식만큼 흐르면 d20 을 굴려 10 이상이면 깨어난다.
+# 저절로 회복하기는 SRD 에 없다
+SRD5_REST = Rest(
+    short=ShortRest(minutes=60, heal='moderate'),
+    long=LongRest(minutes=8 * 60),
+    revive=Revive(minutes=8 * 60, target=10),
+    natural=None,
+)
+
 SRD5 = Ruleset(
     template=Template.SRD5,
     abilities=(
@@ -266,6 +281,7 @@ SRD5 = Ruleset(
     # 노려 치면 목표값이 5 오른다
     called_shot=CalledShot(mode=CalledShotMode.TARGET_PLUS, amount=5),
     treatment=SRD5_TREATMENT,
+    rest=SRD5_REST,
 )
 
 TEMPLATES: dict[Template, Ruleset] = {Template.SRD5: SRD5}

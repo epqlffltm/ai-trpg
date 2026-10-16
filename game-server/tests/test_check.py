@@ -22,6 +22,8 @@ PLAIN_RULES = Ruleset.model_validate(
         'die': 6,
         # d6 으로는 SRD5 의 죽음의 굴림(목표 10)을 넘을 수 없다. 이 규칙에는 죽음의 굴림이 없다
         'death_save': None,
+        # 되살아나기(목표 10)도 같다. 이 규칙에는 쉬기가 없다
+        'rest': None,
         'difficulties': [{'key': 'normal', 'name': '보통', 'target': 7}],
         'default_difficulty': 'normal',
         # SRD5 의 치료는 SRD5 의 난이도(어려움, 보통)를 가리킨다. 난이도가 다른 규칙이라 뺀다

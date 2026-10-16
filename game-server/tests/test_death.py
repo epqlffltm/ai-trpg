@@ -23,7 +23,7 @@ def rules(**changes) -> Ruleset:
 
 # d6 을 굴려 5 이상이어야 성공하고, 실패 한 번에 죽고, 성공 둘이면 고비를 넘기는 규칙.
 # SRD5 와 다른 규칙에서도 같은 함수가 도는지 본다. 점수의 범위에 맞지 않는 칸은 뺀다
-HARSH = rules(die=6, death_save={'target': 5, 'successes': 2, 'failures': 1})
+HARSH = rules(die=6, death_save={'target': 5, 'successes': 2, 'failures': 1}, rest=None)
 
 
 class WatchedDice:

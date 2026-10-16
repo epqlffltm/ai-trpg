@@ -20,7 +20,7 @@ from app.engine.health import ChangeKind
 from app.engine.ruleset import Injury, Mishap, Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, find_cast_member
-from app.rounds.effects import Judging, member_effect, npc_effect
+from app.rounds.effects import Judging, mark_hurt, member_effect, npc_effect
 from app.tables import injuries, npcs, sheets
 from app.tables import state as table_state
 from app.tables.injuries import Moment
@@ -146,6 +146,7 @@ def mishap_hurt(judging: Judging, patient: Patient, magnitude_key: str) -> dict:
     sheet = patient.member.sheet
     change = health.change_hp(ChangeKind.DAMAGE, magnitude, sheet.hp, sheet.max_hp, judging.dice)
     sheet.hp = change.after
+    mark_hurt(judging, patient.member)
     return {'effect': member_effect(patient.member, magnitude_key, change, None), 'npc_effect': None}
 
 

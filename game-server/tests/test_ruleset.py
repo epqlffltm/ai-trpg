@@ -62,6 +62,7 @@ def load_backfill_rules() -> dict:
     treatment = load_migration('treatment')
     initiative = load_migration('monster_attacks_and_initiative').INITIATIVE_ABILITY
     minutes = load_migration('injury_minutes')
+    rest = load_migration('rulebook_rest')
     treated = [
         {**injury, **treatment.TREATABLE.get(injury['key'], treatment.UNTREATABLE)} for injury in injuries['injuries']
     ]
@@ -78,8 +79,9 @@ def load_backfill_rules() -> dict:
         # SRD5 의 능력치에 민첩이 있으니 채운 값은 그것이다
         'initiative_ability': initiative,
     }
-    # 오래 가는 부상과 치료의 기간을 분으로 옮긴 것(판 형식 25)
-    return minutes.convert(filled, minutes.injury_to_minutes, minutes.row_to_minutes)
+    # 오래 가는 부상과 치료의 기간을 분으로 옮긴 것(판 형식 25), 쉬기를 더한 것(판 형식 28)
+    converted = minutes.convert(filled, minutes.injury_to_minutes, minutes.row_to_minutes)
+    return rest.with_rest(converted)
 
 
 # --- 내장 템플릿 ---
@@ -259,6 +261,8 @@ def test_the_limits_themselves_are_allowed():
             score_roll=None,
             # 부상의 효과는 SRD5 의 능력(근력 …)을 가리킨다. 능력이 다른 규칙이라 부상을 뺀다
             **NO_INJURIES,
+            # 쉬기의 회복 등급도 SRD5 의 등급(보통)을 가리킨다. 등급이 다른 규칙이라 뺀다
+            rest=None,
         )
     )
 

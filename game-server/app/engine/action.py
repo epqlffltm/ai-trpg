@@ -11,13 +11,16 @@
   - 모양(CheckAction): 규칙을 몰라도 볼 수 있는 것. 입력을 받을 때 검사한다.
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
-종류는 일곱이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search).
+종류는 여덟이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search),
+쉬기(rest).
 종류를 나타내는 칸(kind)으로 가른다(Action).
 치료는 능력과 난이도를 받지 않는다. 규칙이 정한다(app/engine/treatment.py).
 지목은 주사위를 굴리지 않는다. 짚은 이름이 정답인지만 본다(app/rounds/naming.py).
 쓰기와 건네기도 판정이 없다. 소지품을 바꾸고, 회복하는 소모품이면 회복의 주사위만 굴린다(app/rounds/item_actions.py).
 가기는 판정이 없다. 이웃한 장소로 한 칸 간다. 찾기는 그 장소의 숨긴 길마다 판의 판정을 굴린다
 (app/rounds/map_actions.py).
+쉬기는 판정이 없다. 쉬는 라운드가 그 휴식의 시간만큼 이어지고, 라운드가 닫힐 때 다치지 않았으면 회복한다
+(app/rounds/rests.py).
 
 행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
 
@@ -63,6 +66,15 @@ class ActionKind(enum.StrEnum):
     MOVE = 'move'
     # 지금 장소에서 숨긴 길을 찾는다. 길마다 판에 적힌 판정을 굴린다
     SEARCH = 'search'
+    # 쉰다. 짧게(short) 또는 길게(long). 쉬는 시간과 회복량은 규칙이 정한다
+    REST = 'rest'
+
+
+class RestLength(enum.StrEnum):
+    """휴식의 길이. 규칙의 Rest.short, Rest.long 에 맞춘다."""
+
+    SHORT = 'short'
+    LONG = 'long'
 
 
 class CheckAction(BaseModel):
@@ -259,8 +271,21 @@ class SearchAction(BaseModel):
     kind: Literal[ActionKind.SEARCH]
 
 
+class RestAction(BaseModel):
+    """
+    쉬는 행동(app/rounds/rests.py). 얼마나 쉬는지(length)만 받는다. 시간과 회복량은 규칙이 정한다.
+
+    쉬는 라운드는 적어도 그 휴식의 시간만큼 이어진다. 그동안 다치면 휴식이 깨져 회복하지 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.REST]
+    length: RestLength
+
+
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
-AnyAction = CheckAction | TreatAction | NameAction | UseAction | GiveAction | MoveAction | SearchAction
+AnyAction = CheckAction | TreatAction | NameAction | UseAction | GiveAction | MoveAction | SearchAction | RestAction
 
 # 선언에 붙는 행동. kind 로 종류를 가른다
 Action = Annotated[AnyAction, Field(discriminator='kind')]
