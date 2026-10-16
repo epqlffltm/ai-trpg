@@ -17,6 +17,9 @@ from config.redis_client import get_redis
 
 LOGIN_URL = reverse('accounts:login')
 LOGIN_VERIFY_URL = reverse('accounts:login-verify')
+SIGNUP_URL = reverse('accounts:signup')
+SIGNUP_VERIFY_URL = reverse('accounts:signup-verify')
+SIGNUP_COMPLETE_URL = reverse('accounts:signup-complete')
 
 
 def code_from(message) -> str:
@@ -46,6 +49,31 @@ def log_in(client, username: str, password: str):
         {'login_ticket': started.data['login_ticket'], 'code': code_from(mail.outbox[-1])},
         format='json',
     )
+
+
+def request_signup_ticket(client, email: str) -> str:
+    """
+    가입의 1, 2단계(이메일 → 코드)를 지나 가입 티켓을 받는다.
+
+    코드는 방금 나간 메일에서 꺼낸다. 테스트 중에는 메일이 mail.outbox 에 쌓인다.
+    """
+    started = client.post(SIGNUP_URL, {'email': email}, format='json')
+    assert started.status_code == status.HTTP_202_ACCEPTED, started.data
+    verified = client.post(SIGNUP_VERIFY_URL, {'email': email, 'code': code_from(mail.outbox[-1])}, format='json')
+    assert verified.status_code == status.HTTP_200_OK, verified.data
+    return verified.data['signup_ticket']
+
+
+def complete_signup(client, ticket: str, *, username: str, nickname: str, password: str):
+    """가입의 3단계만 보낸다."""
+    payload = {'signup_ticket': ticket, 'username': username, 'nickname': nickname, 'password': password}
+    return client.post(SIGNUP_COMPLETE_URL, payload, format='json')
+
+
+def sign_up(client, *, username: str, email: str, nickname: str, password: str):
+    """가입의 세 단계를 모두 지나고, 마지막 응답을 돌려준다."""
+    ticket = request_signup_ticket(client, email)
+    return complete_signup(client, ticket, username=username, nickname=nickname, password=password)
 
 
 def delete_attempt_keys() -> None:

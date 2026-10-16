@@ -20,7 +20,7 @@ from accounts.views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     RefreshView,
-    SignupResendView,
+    SignupCompleteView,
     SignupVerifyView,
     SignupView,
 )
@@ -30,7 +30,7 @@ app_name = 'accounts'
 urlpatterns = [
     path('signup', SignupView.as_view(), name='signup'),
     path('signup/verify', SignupVerifyView.as_view(), name='signup-verify'),
-    path('signup/resend', SignupResendView.as_view(), name='signup-resend'),
+    path('signup/complete', SignupCompleteView.as_view(), name='signup-complete'),
     path('login', LoginView.as_view(), name='login'),
     path('login/verify', LoginVerifyView.as_view(), name='login-verify'),
     path('login/resend', LoginResendView.as_view(), name='login-resend'),

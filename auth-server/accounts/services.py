@@ -15,19 +15,21 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
 from django.utils import timezone
 
 from accounts.email_codes import (
+    ISSUE_WINDOW,
     EmailCodeCooldownError,
     EmailCodeLimitError,
     InvalidEmailCodeError,
     consume_email_code,
     consume_email_token,
+    consume_signup_code,
     has_usable_code,
     issue_email_code,
     issue_email_token,
-    reserve_email_slot,
+    issue_signup_code,
+    reserve_signup_slot,
 )
 from accounts.login_tickets import issue_login_ticket, read_login_ticket
 from accounts.mail import (
@@ -35,15 +37,16 @@ from accounts.mail import (
     send_email_code,
     send_password_changed_notice,
     send_password_reset_link,
+    send_signup_code,
 )
-from accounts.models import EmailCodePurpose, User
+from accounts.models import EmailCodePurpose, SignupCode, User
+from accounts.signup_tickets import issue_signup_ticket, read_signup_ticket
 from accounts.tokens import revoke_all_sessions
 from accounts.welcome_credit import request_welcome_credit
 
-# 인증을 끝내지 않은 계정을 보관하는 시간.
-# 인증 코드의 발급 구간(1시간에 5회)과 같게 잡았다.
-# 가입을 시작하고 1시간 안에, 최대 5번 코드를 받아 인증을 끝내면 된다
-PENDING_ACCOUNT_LIFETIME = timedelta(hours=1)
+# 가입 코드의 행을 남겨 두는 시간. 마지막 발급에서 발급 제한의 구간(1시간)이 지나면
+# 쓸 수 있는 코드(5분)도 지킬 제한도 남지 않는다. 정리 명령이 그런 행을 지운다
+STALE_SIGNUP_CODE_AGE = ISSUE_WINDOW
 
 FIELD_TAKEN_MESSAGES = {
     'username': '이미 사용 중인 아이디입니다.',
@@ -52,16 +55,31 @@ FIELD_TAKEN_MESSAGES = {
 
 
 class DuplicateAccountError(Exception):
-    """아이디, 이메일, 닉네임 중 하나가 이미 쓰이고 있어 계정을 만들 수 없다."""
+    """아이디, 이메일, 닉네임 중 하나가 이미 쓰이고 있어 계정을 만들 수 없다. 사전 조회 뒤에 DB 가 막은 경우다."""
 
 
-class FieldTakenError(Exception):
-    """아이디나 닉네임을 다른 계정이 쓰고 있다. 어느 필드인지와 안내 문구를 담는다."""
+class EmailAlreadyRegisteredError(Exception):
+    """
+    가입 티켓의 이메일로 이미 계정이 있다. 같은 티켓을 두 번 쓴 경우다.
 
-    def __init__(self, field: str):
+    티켓은 그 이메일의 코드를 맞힌 사람만 가지므로, 가입 여부를 알려 줘도 새는 것이 없다.
+    """
+
+
+class InvalidSignupFieldError(Exception):
+    """가입 내용의 한 칸을 받아들일 수 없다. 어느 칸인지와 사람이 읽을 문장들을 담는다."""
+
+    def __init__(self, field: str, messages: list[str]):
         super().__init__()
         self.field = field
-        self.message = FIELD_TAKEN_MESSAGES[field]
+        self.messages = messages
+
+
+class FieldTakenError(InvalidSignupFieldError):
+    """아이디나 닉네임을 다른 계정이 쓰고 있다. 이것은 숨기지 않는다. 다른 값을 골라야 하기 때문이다."""
+
+    def __init__(self, field: str):
+        super().__init__(field, [FIELD_TAKEN_MESSAGES[field]])
 
 
 class InvalidCredentialsError(Exception):
@@ -115,82 +133,67 @@ class LoginChallenge:
     code_sent: bool
 
 
-def start_signup(*, username: str, email: str, nickname: str, password: str) -> None:
+def start_signup(*, email: str) -> None:
     """
-    회원가입을 시작한다. 미인증 계정을 만들고 인증 코드를 메일로 보낸다.
+    가입의 1단계. 그 이메일로 코드를 보낸다. 이미 가입된 주소면 코드 대신 안내 메일을 보낸다.
 
-    이미 가입된 이메일이면 계정을 만들지 않고, 그 주소로 안내 메일을 보낸다.
     두 경우 모두 아무것도 돌려주지 않는다. 호출한 쪽이 둘을 구분할 수 없어야
-    응답으로 이메일의 가입 여부가 드러나지 않는다.
+    응답으로 이메일의 가입 여부가 드러나지 않는다. 두 메일은 같은 발급 제한(그 이메일의 행)을 쓴다.
+    발급 제한에 걸리면 조용히 넘어간다. 다시 보내기도 이 함수다.
 
-    아이디나 닉네임을 다른 계정이 쓰고 있으면 FieldTakenError 를 낸다.
+    계정은 만들지 않는다. 아이디와 비밀번호는 코드를 맞힌 뒤에 정한다(complete_signup).
+    그래서 이메일의 주인이 아닌 사람은 그 이메일의 가입 내용을 정할 수 없다(#271).
     """
-    now = timezone.now()
+    registered_user = _find_user_by_email(email)
+    if registered_user is None:
+        _send_signup_code(email)
+    else:
+        _send_already_registered_notice(email, registered_user)
 
-    # 계정 저장, 코드 발급, 보낼 메일 적기가 한 트랜잭션이다.
-    # 메일을 여기서 직접 보내지 않는다. 발송함에 적을 뿐이고, 보내는 것은 워커다.
-    # 그래서 메일 서버를 기다리며 DB 잠금을 쥐고 있지도, 메일만 나가고 계정은 취소되지도 않는다
+
+def verify_signup(*, email: str, code: str) -> str:
+    """
+    가입의 2단계. 코드를 확인하고, 맞으면 3단계에 쓸 가입 티켓을 돌려준다.
+
+    코드가 틀렸거나, 그 이메일로 보낸 코드가 없으면(이미 가입된 주소 포함) InvalidEmailCodeError 를 낸다.
+    두 경우를 구분하지 않는다. 틀린 횟수는 로그인 코드처럼 세고, 다섯 번 틀리면 코드가 폐기된다.
+    """
+    consume_signup_code(email=email, code=code)
+    # 코드 소비가 커밋된 뒤에 만든다. 티켓은 DB 에 적지 않는다
+    return issue_signup_ticket(email)
+
+
+def complete_signup(*, signup_ticket: str, username: str, nickname: str, password: str) -> User:
+    """
+    가입의 3단계. 티켓의 이메일로 인증된 계정을 만들고, 환영 크레딧을 주라고 적어 둔다.
+
+    티켓이 틀렸거나 만료됐으면 InvalidSignupTicketError, 아이디나 비밀번호가 규칙에 맞지 않거나
+    아이디나 닉네임을 다른 계정이 쓰면 InvalidSignupFieldError, 이미 그 이메일로 가입했으면
+    EmailAlreadyRegisteredError, 사전 조회 뒤에 다른 요청이 먼저 저장했으면 DuplicateAccountError 를 낸다.
+    """
+    email = read_signup_ticket(signup_ticket)
+    _check_username_differs_from_email(username=username, email=email)
+    _check_password_strength(username=username, email=email, nickname=nickname, password=password)
+    _ensure_email_free(email)
+    _ensure_not_taken(username=username, nickname=nickname)
+
     try:
+        # 계정 저장과 환영 크레딧 적기가 한 트랜잭션이다.
+        # 가입은 됐는데 크레딧을 줄 일은 적히지 않은 경우가 생기지 않는다
         with transaction.atomic():
-            _delete_expired_pending_accounts(username=username, nickname=nickname, now=now)
-            _ensure_not_taken(username=username, nickname=nickname, email=email)
-
-            # 이메일이 이미 가입돼 있든 아니든 해싱을 한 번 수행한다.
-            # 가입된 경우에 건너뛰면 응답이 훨씬 빨라져, 걸린 시간으로 가입 여부가 드러난다
-            password_hash = make_password(password)
-
-            registered_user = _find_verified_user(email)
-            if registered_user is None:
-                pending_user = _save_pending_user(
-                    username=username,
-                    email=email,
-                    nickname=nickname,
-                    password_hash=password_hash,
-                    now=now,
-                )
-                _send_signup_code(pending_user)
-            else:
-                _send_already_registered_notice(registered_user)
+            user = _create_verified_user(username=username, email=email, nickname=nickname, password=password)
+            request_welcome_credit(user)
     except IntegrityError as exc:
-        # 사전 조회를 통과한 뒤 다른 요청이 같은 값으로 먼저 저장한 경우
+        # 사전 조회를 통과한 뒤 다른 요청이 같은 값으로 먼저 저장한 경우.
+        # 같은 티켓을 동시에 두 번 보낸 것도 여기다(이메일의 유일 제약)
         raise DuplicateAccountError from exc
+    return user
 
 
-def verify_signup(*, email: str, code: str) -> None:
-    """
-    가입 인증 코드를 확인하고 계정을 인증된 상태로 바꾼다.
-
-    코드가 틀렸거나, 그 이메일로 진행 중인 가입이 없으면 InvalidEmailCodeError 를 낸다.
-    두 경우를 구분하지 않는다.
-    """
-    user = _find_pending_user(email)
-    if user is None:
-        raise InvalidEmailCodeError
-
-    consume_email_code(
-        user=user,
-        purpose=EmailCodePurpose.SIGNUP,
-        code=code,
-        # 코드 소비와 같은 트랜잭션에서 실행된다
-        on_success=lambda: _complete_signup(user),
-    )
-
-
-def resend_signup_code(*, email: str) -> None:
-    """
-    가입 인증 코드를 다시 보낸다.
-
-    그 이메일로 진행 중인 가입이 없거나 발급 제한에 걸리면 아무 일도 하지 않는다.
-    예외도 내지 않는다. 호출한 쪽이 경우를 구분할 수 없어야 한다.
-    """
-    user = _find_pending_user(email)
-    if user is not None:
-        _send_signup_code(user)
-
-
-def delete_expired_pending_accounts() -> int:
-    """보관 시간이 지난 미인증 계정을 모두 지우고, 지운 개수를 돌려준다."""
-    deleted_count, _ = _expired_pending_accounts(timezone.now()).delete()
+def delete_stale_signup_codes() -> int:
+    """마지막 발급에서 발급 제한의 구간이 지난 가입 코드의 행을 지우고, 지운 개수를 돌려준다."""
+    cutoff = timezone.now() - STALE_SIGNUP_CODE_AGE
+    deleted_count, _ = SignupCode.objects.filter(last_issued_at__lt=cutoff).delete()
     return deleted_count
 
 
@@ -319,53 +322,60 @@ def _find_verified_user(email: str) -> User | None:
     return User.objects.filter(email__iexact=email, email_verified_at__isnull=False).first()
 
 
-def _find_pending_user(email: str) -> User | None:
-    return User.objects.filter(email__iexact=email, email_verified_at__isnull=True).first()
-
-
-def _expired_pending_accounts(now):
-    return User.objects.filter(
-        email_verified_at__isnull=True,
-        date_joined__lt=now - PENDING_ACCOUNT_LIFETIME,
-    )
-
-
-def _delete_expired_pending_accounts(*, username: str, nickname: str, now) -> None:
+def _find_user_by_email(email: str) -> User | None:
     """
-    이번 가입 요청과 아이디나 닉네임이 겹치는, 보관 시간이 지난 미인증 계정을 지운다.
+    그 이메일의 계정. 인증했는지는 보지 않는다.
 
-    정리 명령이 돌지 않아도, 필요한 순간에 선점이 풀린다.
+    가입이 인증된 계정만 만들므로 미인증 계정은 관리자가 손으로 만든 것뿐이다. 그래도 그 이메일은 쓰이고 있다.
     """
-    _expired_pending_accounts(now).filter(Q(username=username) | Q(nickname=nickname)).delete()
+    return User.objects.filter(email__iexact=email).first()
 
 
-def _ensure_not_taken(*, username: str, nickname: str, email: str) -> None:
+def _check_username_differs_from_email(*, username: str, email: str) -> None:
     """
-    아이디와 닉네임을 다른 계정이 쓰고 있는지 본다.
+    아이디가 이메일의 @ 앞부분과 같으면 거부한다.
 
-    같은 이메일의 미인증 계정은 제외한다. 그 계정은 이번 요청으로 교체될 것이라
-    자기 자신과 겹치는 것을 중복으로 보면 안 된다.
+    같으면 아이디를 아는 사람이 이메일을 추측할 수 있어 둘을 분리한 의미가 줄어든다.
     """
-    others = User.objects.exclude(email__iexact=email, email_verified_at__isnull=True)
-    if others.filter(username=username).exists():
+    if username == email.split('@')[0]:
+        raise InvalidSignupFieldError('username', ['아이디는 이메일의 @ 앞부분과 달라야 합니다.'])
+
+
+def _check_password_strength(*, username: str, email: str, nickname: str, password: str) -> None:
+    """
+    settings 의 AUTH_PASSWORD_VALIDATORS 로 비밀번호를 검사한다.
+
+    "아이디와 비슷한 비밀번호" 를 걸러내려면 검증기가 아이디를 알아야 한다.
+    저장하지 않는 임시 User 객체에 값을 담아 넘긴다.
+    """
+    candidate = User(username=username, email=email, nickname=nickname)
+    try:
+        validate_password(password, user=candidate)
+    except ValidationError as exc:
+        raise InvalidSignupFieldError('password', list(exc.messages)) from exc
+
+
+def _ensure_email_free(email: str) -> None:
+    if _find_user_by_email(email) is not None:
+        raise EmailAlreadyRegisteredError
+
+
+def _ensure_not_taken(*, username: str, nickname: str) -> None:
+    """아이디와 닉네임을 다른 계정이 쓰고 있는지 본다."""
+    if User.objects.filter(username=username).exists():
         raise FieldTakenError('username')
-    if others.filter(nickname=nickname).exists():
+    if User.objects.filter(nickname=nickname).exists():
         raise FieldTakenError('nickname')
 
 
-def _save_pending_user(*, username: str, email: str, nickname: str, password_hash: str, now) -> User:
+def _create_verified_user(*, username: str, email: str, nickname: str, password: str) -> User:
     """
-    미인증 계정을 만든다. 같은 이메일의 미인증 계정이 있으면 그 행을 고쳐 쓴다.
+    인증된 계정을 만든다. 이메일은 가입 티켓이 증명한 것이라 바로 인증된 것으로 적는다.
 
-    지우고 새로 만들지 않는다. 지우면 인증 코드의 발급 이력도 함께 사라져,
-    가입 요청을 반복하는 것으로 발급 제한을 피해 남의 메일함에 코드를 계속 보낼 수 있다.
+    권한(is_staff, is_superuser)은 기본값 그대로다. 요청 본문에서 오는 값이 아니다.
     """
-    user = _find_pending_user(email) or User(email=email)
-    user.username = username
-    user.nickname = nickname
-    user.password = password_hash
-    # 보관 시간을 이번 요청부터 다시 센다
-    user.date_joined = now
+    user = User(username=username, email=email, nickname=nickname, email_verified_at=timezone.now())
+    user.set_password(password)
     user.save()
     return user
 
@@ -389,35 +399,25 @@ def _set_new_password(user: User, new_password: str) -> None:
     send_password_changed_notice(user=user)
 
 
-def _complete_signup(user: User) -> None:
+def _send_signup_code(email: str) -> None:
     """
-    가입을 마친다. 이메일을 인증된 것으로 바꾸고, 환영 크레딧을 주라고 적어 둔다.
+    가입 코드를 발급하고 그 코드를 담은 메일을 발송함에 적는다. 둘이 한 트랜잭션이다.
 
-    둘은 같은 트랜잭션이다. 인증은 됐는데 크레딧을 줄 일은 적히지 않은 경우가 생기지 않는다.
-    결제 서버를 여기서 부르지 않는다. 적기만 하고, 워커가 맡긴다(welcome_credit.py).
+    발급 제한에 걸리면 조용히 넘어간다.
     """
-    _mark_email_verified(user)
-    request_welcome_credit(user)
-
-
-def _mark_email_verified(user: User) -> None:
-    user.email_verified_at = timezone.now()
-    user.save(update_fields=['email_verified_at'])
-
-
-def _send_signup_code(user: User) -> None:
-    """가입 인증 코드를 발급해 보낸다. 발급 제한에 걸리면 조용히 넘어간다."""
     try:
-        _issue_and_send_code(user, EmailCodePurpose.SIGNUP)
+        with transaction.atomic():
+            code = issue_signup_code(email=email)
+            send_signup_code(email=email, code=code)
     except (EmailCodeCooldownError, EmailCodeLimitError):
         return
 
 
-def _send_already_registered_notice(user: User) -> None:
-    """안내 메일을 보낸다. 인증 코드와 같은 발급 제한을 적용한다."""
+def _send_already_registered_notice(email: str, user: User) -> None:
+    """안내 메일을 보낸다. 가입 코드와 같은 발급 제한(그 이메일의 행)을 적용한다."""
     try:
         with transaction.atomic():
-            reserve_email_slot(user=user, purpose=EmailCodePurpose.SIGNUP)
+            reserve_signup_slot(email=email)
             send_already_registered_notice(user=user)
     except (EmailCodeCooldownError, EmailCodeLimitError):
         return

@@ -21,12 +21,19 @@ from accounts.email_codes import (
     EmailCodeLimitError,
     InvalidEmailCodeError,
     consume_email_code,
+    consume_signup_code,
     generate_code,
     has_usable_code,
+    hash_code,
+    hash_secret,
     issue_email_code,
+    issue_signup_code,
+    reserve_signup_slot,
+    signup_slot,
+    user_slot,
 )
 from accounts.mail import send_email_code
-from accounts.models import EmailCode, EmailCodePurpose, User
+from accounts.models import EmailCode, EmailCodePurpose, SignupCode, User
 
 SIGNUP = EmailCodePurpose.SIGNUP
 LOGIN = EmailCodePurpose.LOGIN
@@ -320,3 +327,52 @@ class SendEmailCodeTests(TestCase):
         send_email_code(user=user, purpose=LOGIN, code='123456')
 
         self.assertIn('로그인 인증', mail.outbox[0].subject)
+
+
+class SignupSlotTests(TestCase):
+    """가입하려는 이메일의 자리(#271). 규칙은 회원의 자리와 같고, 자리만 다르다."""
+
+    def setUp(self):
+        self.user = create_user()
+
+    def test_a_code_of_one_slot_does_not_hash_like_another(self):
+        # 같은 코드라도 자리가 다르면 해시가 다르다. 한 행의 해시를 다른 행에 옮겨 쓸 수 없다
+        member = hash_secret('123456', user_slot(self.user, SIGNUP))
+        signup = hash_secret('123456', signup_slot('someone@example.com'))
+        other = hash_secret('123456', signup_slot('other@example.com'))
+
+        self.assertEqual(len({member, signup, other}), 3)
+
+    def test_the_member_slot_hashes_as_before(self):
+        # 자리를 나누기 전에 발급한 코드도 그대로 맞아야 한다
+        self.assertEqual(
+            hash_code('123456', user=self.user, purpose=LOGIN),
+            hash_secret('123456', user_slot(self.user, LOGIN)),
+        )
+
+    def test_the_email_is_one_slot_whatever_its_case(self):
+        issue_signup_code(email='Someone@Example.com')
+
+        with self.assertRaises(EmailCodeCooldownError):
+            issue_signup_code(email='someone@example.com')
+        self.assertEqual(SignupCode.objects.get().email, 'someone@example.com')
+
+    def test_a_signup_code_is_consumed_once(self):
+        code = issue_signup_code(email='someone@example.com')
+
+        consume_signup_code(email='someone@example.com', code=code)
+
+        with self.assertRaises(InvalidEmailCodeError):
+            consume_signup_code(email='someone@example.com', code=code)
+
+    def test_a_signup_code_does_not_open_a_member_slot(self):
+        code = issue_signup_code(email='someone@example.com')
+
+        with self.assertRaises(InvalidEmailCodeError):
+            consume_email_code(user=self.user, purpose=SIGNUP, code=code)
+
+    def test_reserving_counts_against_the_same_limit(self):
+        reserve_signup_slot(email='someone@example.com')
+
+        with self.assertRaises(EmailCodeCooldownError):
+            issue_signup_code(email='someone@example.com')
