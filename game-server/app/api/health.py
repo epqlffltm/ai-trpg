@@ -8,6 +8,8 @@
 요청을 처리할 준비가 됐는지(DB 에 닿는지)는 readiness.py 가 따로 답한다.
 
 HEAD 도 받는다(본문 없이 같은 상태 코드). 네 서버가 같다. HEAD 로 확인하는 도구가 있다.
+HEAD 는 같은 함수를 따로 등록하고 API 문서에는 올리지 않는다. GET 과 한 번에 등록하면
+문서에 같은 operation id 가 두 번 올라간다. 확인 요청은 문서로 알릴 API 가 아니다.
 요청이 끝난 줄은 성공이면 debug 다(app/observability/middleware.py 의 probe_level_of).
 """
 
@@ -21,7 +23,8 @@ class HealthResponse(BaseModel):
     status: str
 
 
-@router.api_route('/health', methods=['GET', 'HEAD'], response_model=HealthResponse, status_code=status.HTTP_200_OK)
+@router.get('/health', response_model=HealthResponse, status_code=status.HTTP_200_OK)
+@router.head('/health', status_code=status.HTTP_200_OK, include_in_schema=False)
 async def check_health() -> HealthResponse:
     """
     서버 프로세스가 요청을 받을 수 있으면 200 을 돌려준다.
