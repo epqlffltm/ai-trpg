@@ -236,6 +236,44 @@ class TravelNote:
 
 
 @dataclass(frozen=True)
+class RestNote:
+    """
+    쉬는 행동의 결과(app/rounds/rests.py). 엔진이 정한 것이다. 판정이 없다.
+
+    length 는 short(짧은 휴식) 또는 long(긴 휴식)이다. rested 가 거짓이면 휴식이 깨져 회복하지 않았다.
+    까닭은 reason 이다(hurt: 그 라운드에 맞았다, downed: 쓰러졌다, dead: 죽었다). HP 는 쉬기 전과 뒤다.
+    """
+
+    length: str
+    rested: bool
+    reason: str | None = None
+    before: int = 0
+    after: int = 0
+    max_hp: int = 0
+
+
+@dataclass(frozen=True)
+class RevivalNote:
+    """
+    고비를 넘기고 쓰러져 있던 캐릭터가 오래 쉬어 굴린 되살아나기(app/rounds/rests.py). 엔진이 정한 것이다.
+
+    success 가 참이면 HP 1 로 정신이 돌아왔다. 거짓이면 아직 의식이 없다(고비는 넘긴 채다).
+    """
+
+    success: bool
+    hp: int
+
+
+@dataclass(frozen=True)
+class RecoveryNote:
+    """시간이 흘러 저절로 회복한 것(app/rounds/rests.py). 규칙이 켰을 때만 있다. HP 는 회복 전과 뒤다."""
+
+    before: int
+    after: int
+    max_hp: int
+
+
+@dataclass(frozen=True)
 class SearchNote:
     """
     숨긴 길을 찾은 결과(app/rounds/map_actions.py). 찾은 길이 이어지는 장소들의 이름이다. 못 찾았으면 비어 있다.
@@ -298,6 +336,11 @@ class Move:
     search: SearchNote | None = None
     # 겨눈 몬스터를 칠 수 없어 굴리지 않았으면 그 까닭. 아니면 None 이다. verdict 와 함께 있지 않다
     target_gone: TargetGoneNote | None = None
+    # 쉬는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
+    rest: RestNote | None = None
+    # 이 라운드가 닫힐 때 굴린 되살아나기와 저절로 회복. 없었으면 None 이다(app/rounds/rests.py)
+    revival: RevivalNote | None = None
+    recovery: RecoveryNote | None = None
     # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 서 있는 맵의 장소. 맵이 없는 테이블이면 None 이다.
     # 위치를 바꾸는 것은 서버뿐이다. 서술자는 다른 곳으로 옮기지 않는다
     place: PlaceNote | None = None

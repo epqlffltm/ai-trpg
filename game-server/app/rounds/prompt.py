@@ -97,7 +97,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 시간(낫기까지 2시간 30분, 50분 늦어짐)으로 바뀐다(#248 달력 2단계)
 #   narration-26: 가기의 결과 줄에 그 길에 걸린 시간이 붙는다((간 곳: 성문 → 숲, 3시간 걸림)).
 #                 그만큼 다음 라운드가 늦게 열리고, [시각]의 흐르는 시간도 그만큼 길다(달력 2단계, 이동 시간)
-PROMPT_VERSION = 'narration-26'
+#   narration-27: 쉬는 행동의 결과 줄((쉬기: 긴 휴식, HP 2 → 10/10), (쉬기: 짧은 휴식. 맞아서 쉬지 못했다))과
+#                 되살아나기, 저절로 회복의 줄이 붙는다. 쉬기가 있는 라운드에는 그것을 다루는 법(REST_NOTE)이 붙는다.
+PROMPT_VERSION = 'narration-27'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -382,6 +384,16 @@ UNNAMED_PLAYER = '(이름을 정하지 않은 플레이어)'
 FOUND_NOTE = (
     '찾기로 찾은 길은 이제 플레이어가 아는 길이다. 그 길이 어느 장소로 이어지는지 장소의 이름을 써서 보여 줘라. '
     '찾기만 했으니 캐릭터를 그 장소로 옮기지는 마라.'
+)
+
+
+# 쉬기, 되살아나기가 있는 라운드에만 붙는 다루는 법(narration-27). 엔진이 정한 회복을 장면이 뒤집지 않게 한다.
+# 깨진 휴식을 "푹 쉬었다"로, 깨어나지 못한 캐릭터를 일어난 것으로 쓰지 않게 한다
+REST_NOTE = (
+    '쉬기의 결과는 엔진이 정했다. '
+    '쉰 인물은 그 시간 동안 쉬거나 잠든 모습으로 짧게 보여 주고, 회복한 만큼 몸이 나아지게 써라. '
+    "'쉬지 못했다'는 인물은 쉬려다 방해받았다. 제대로 쉰 것처럼 쓰지 마라. "
+    "되살아나기에서 '아직 깨어나지 못했다'는 인물은 여전히 의식이 없다."
 )
 
 
@@ -683,6 +695,7 @@ def round_text(request: NarrationRequest) -> str:
     지목이 있으면 결과 뒤에 다루는 법을 한 줄 붙인다. 찾기로 길을 찾았으면 그것을 다루는 법도 한 줄 붙인다.
     소지품이 있으면 그것을 다루는 법도 한 줄 붙인다.
     선언한 일을 하기 전에 쓰러지거나 죽은 인물이 있으면 그 일이 일어나지 않았다는 다루는 법도 한 줄 붙인다.
+    쉬거나 되살아나기를 굴린 인물이 있으면 그것을 다루는 법도 한 줄 붙인다.
     부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
     """
     lines = lore_lines(request.lore, {move.character_name for move in request.moves})
@@ -705,6 +718,8 @@ def round_text(request: NarrationRequest) -> str:
         lines.append(ITEMS_NOTE)
     if any(lost_before_acting(move) is not None for move in request.moves):
         lines.append(LOST_TURN_NOTE)
+    if any(move.rest is not None or move.revival is not None for move in request.moves):
+        lines.append(REST_NOTE)
     lines.append(THIS_ROUND_ONLY)
     reminder = style_reminder(request.style)
     if reminder is not None:
