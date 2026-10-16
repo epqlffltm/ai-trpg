@@ -183,6 +183,7 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 
 API 밖에 상태 확인 주소가 둘 있다. 다른 세 서버와 같은 뜻이다(`config/health.py`).
 `GET /health` 는 늘 200, `GET /health/ready` 는 DB 에 닿으면 200, 닿지 않으면 503 이다. 바깥에서는 프록시가 막는다.
+둘 다 HEAD 도 받는다(본문 없이 같은 상태 코드). 확인 요청이 끝난 줄은 성공이면 `debug`, 503 이면 `warning` 이라 운영의 로그를 메우지 않는다(`docs/observability.md` 의 "요청이 끝난 줄").
 
 인증이 필요한 API에는 `Authorization: Bearer <access_token>` 헤더를 붙인다.
 

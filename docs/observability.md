@@ -247,6 +247,18 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 4xx 를 `warning` 으로 올리지 않는다. 요청이 틀린 것이고 서버는 제 일을 했다.
 4xx 가 갑자기 느는 것(공격, 깨진 클라이언트)은 줄의 수준이 아니라 메트릭으로 본다.
 
+**상태 확인 주소(`/health`, `/health/ready`)는 수준이 다르다.** 관리 도구가 10초마다 부른다. 그대로 두면 서버마다 하루에 8,640줄이 쌓이고,
+DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 아래를 따른다. `result` 는 위의 표 그대로다.
+
+| 상태 코드 | `level` | 까닭 |
+| --- | --- | --- |
+| 503 | `warning` | 준비 안 됨. 오류가 아니라 이 주소의 답이다. 까닭(오류의 종류)은 readiness 가 따로 남긴다 |
+| 그 밖의 5xx | `error` | 처리하지 못한 예외. 다른 주소와 같다 |
+| 그 밖 | `debug` | 성공. 운영의 수준(`info`)에서는 남지 않는다. 확인이 오는지 보려면 `LOG_LEVEL=debug` 로 띄운다 |
+
+네 서버의 코드: 인증·게임 `observability/middleware.py` 의 `probe_level_of`, 게시판 `request-logging.middleware.ts` 의 `probeLevelOf`, 결제 `internal/httpapi/observability.go` 의 `probeLevelOf`.
+인증 서버는 Django 가 따로 남기는 줄(`django.request` 의 "Service Unavailable: /주소")도 버린다. 예외가 없는 5xx 는 미들웨어의 줄과 겹치고, Django 는 그것을 늘 `error` 로 적는다(`observability/setup.py` 의 `OnlyUnloggedServerErrors`).
+
 ### 프록시의 줄
 
 프록시는 요청마다 한 줄을 남긴다. 칸은 공통 칸과 `request_id`, `operation`(`http.request`), `method`, `status_code`, `duration_ms`, `result` 에 `upstream` 이 더해진다.
@@ -427,6 +439,8 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 - **readiness 에는 "없으면 일을 못 하는 것"만 넣는다.** 인증 서버(JWKS)는 넣지 않는다. 기억한 키로 계속 일할 수 있다.
   AI provider 도 넣지 않는다. 서술이 늦어질 뿐 테이블은 돈다.
 - 두 주소는 API 주소(`/api/v1/...`) 밖에 있고 로그인이 필요 없다. 프록시와 관리 도구가 부른다.
+- **GET 과 HEAD 를 받는다.** HEAD 에는 GET 과 같은 상태 코드로, 본문 없이 답한다. HEAD 로 확인하는 도구가 있다. 다른 메서드는 서버의 기본 답이다(405 또는 404).
+- 요청이 끝난 줄은 성공이면 `debug`, 503 이면 `warning` 이다([요청이 끝난 줄](#요청이-끝난-줄)).
 - 응답에는 `status` 하나만 있다. DB 주소, 계정, 예외의 글, 다른 서버의 주소를 싣지 않는다. 실패한 이유는 서버의 로그에 있다.
 
 | 서버 | `/health` | `/health/ready` | DB 를 기다리는 시간 |

@@ -32,6 +32,8 @@ HTTP_OPERATION = 'http.request'
 UNHANDLED_ERROR_CODE = 'http.unhandled_exception'
 # 맞는 경로의 틀이 없을 때(404) 틀 자리에 적는 표시
 UNMATCHED_ROUTE = '(unmatched)'
+# 상태 확인 주소(config/health.py). 관리 도구가 10초마다 부른다. 요청이 끝난 줄의 수준을 따로 정한다
+PROBE_ROUTES = frozenset({'/health', '/health/ready'})
 
 
 def result_of(status_code: int) -> str:
@@ -43,13 +45,30 @@ def result_of(status_code: int) -> str:
     return 'success'
 
 
-def level_of(status_code: int) -> int:
+def level_of(route: str, status_code: int) -> int:
     """
-    요청이 끝난 줄의 수준. 5xx 만 error 고 나머지는 info 다.
+    요청이 끝난 줄의 수준. 5xx 만 error 고 나머지는 info 다. 상태 확인 주소는 따로 본다(probe_level_of).
 
     4xx 는 요청이 틀린 것이다. 서버는 제 일을 했다. warning 으로 올리면 틀린 비밀번호와 없는 주소가 경고를 메운다.
     """
+    if route in PROBE_ROUTES:
+        return probe_level_of(status_code)
     return logging.ERROR if status_code >= HTTPStatus.INTERNAL_SERVER_ERROR else logging.INFO
+
+
+def probe_level_of(status_code: int) -> int:
+    """
+    상태 확인 요청의 줄의 수준. 네 서버가 같다(docs/observability.md 의 "health 와 readiness").
+
+    성공은 debug 다. 10초마다 오는 확인이 운영의 로그를 메우지 않게 한다.
+    503(준비 안 됨)은 warning 이다. 오류가 아니라 이 주소의 답이다. 까닭은 readiness 가 따로 남긴다(config/health.py).
+    그 밖의 5xx(처리하지 못한 예외)는 다른 주소처럼 error 다.
+    """
+    if status_code == HTTPStatus.SERVICE_UNAVAILABLE:
+        return logging.WARNING
+    if status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
+        return logging.ERROR
+    return logging.DEBUG
 
 
 def route_fields(request) -> dict[str, str]:
@@ -93,7 +112,8 @@ class RequestLoggingMiddleware:
             response = self.get_response(request)
             response[REQUEST_ID_HEADER] = request_id
             status_code = response.status_code
-            logger.log(level_of(status_code), '요청을 처리했다', extra=request_fields(request, status_code, started))
+            fields = request_fields(request, status_code, started)
+            logger.log(level_of(fields['route'], status_code), '요청을 처리했다', extra=fields)
         return response
 
     def process_exception(self, request, exception) -> None:
