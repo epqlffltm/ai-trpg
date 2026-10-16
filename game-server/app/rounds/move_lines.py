@@ -27,6 +27,9 @@ from app.rounds.narrator import (
     Move,
     NamingNote,
     NpcImpact,
+    RecoveryNote,
+    RestNote,
+    RevivalNote,
     SearchNote,
     TargetGoneNote,
     TravelNote,
@@ -161,6 +164,41 @@ def describe_death_save(note: DeathSaveNote) -> str:
     return f'(죽음의 굴림 {result}: {note.roll}, 목표 {note.target}. {counts}, {FATES[note.fate]})'
 
 
+# 휴식의 길이와, 휴식이 깨진 까닭을 서술자에게 주는 말
+REST_LENGTHS = {'short': '짧은 휴식', 'long': '긴 휴식'}
+REST_BREAKS = {'hurt': '맞아서 쉬지 못했다', 'downed': '쓰러져 쉬지 못했다', 'dead': '죽어 쉬지 못했다'}
+
+
+def describe_rest(note: RestNote) -> str:
+    """
+    쉬는 행동의 결과를 한 줄로 적는다.
+
+    예: (쉬기: 긴 휴식, HP 2 → 10/10)
+        (쉬기: 짧은 휴식. 맞아서 쉬지 못했다)
+    """
+    length = REST_LENGTHS.get(note.length, '휴식')
+    if not note.rested:
+        return f'(쉬기: {length}. {REST_BREAKS.get(note.reason, "쉬지 못했다")})'
+    return f'(쉬기: {length}, HP {note.before} → {note.after}/{note.max_hp})'
+
+
+def describe_revival(note: RevivalNote) -> str:
+    """
+    되살아나기의 결과를 한 줄로 적는다.
+
+    예: (되살아나기: 오래 쉬어 정신이 돌아왔다, HP 1)
+        (되살아나기: 아직 깨어나지 못했다. 고비는 넘겼다)
+    """
+    if note.success:
+        return f'(되살아나기: 오래 쉬어 정신이 돌아왔다, HP {note.hp})'
+    return '(되살아나기: 아직 깨어나지 못했다. 고비는 넘겼다)'
+
+
+def describe_recovery(note: RecoveryNote) -> str:
+    """시간이 흘러 저절로 회복한 것을 한 줄로 적는다. 예: (시간이 지나 회복: HP 3 → 8/10)"""
+    return f'(시간이 지나 회복: HP {note.before} → {note.after}/{note.max_hp})'
+
+
 # 물건을 쓰거나 건네지 못한 까닭을 서술자에게 주는 말
 ITEM_FAILURES = {
     'not_held': '가지고 있지 않았다',
@@ -247,7 +285,8 @@ def describe_move(move: Move) -> str:
     HP 가 바뀌었으면 그 뒤에 붙인다. 지목이었으면 그 결과를, 물건을 쓰거나 건넸으면 그 결과를 붙인다.
     죽음의 굴림을 굴렸으면 그 뒤에, 시간이 지나 나은 부상이 있으면 그 뒤에, 입고 있는 부상이 있으면 그 뒤에,
     가진 물건이 있으면 그 뒤에, 맵에 서 있으면 그 장소의 이름을 맨 뒤에 붙인다.
-    맵에서 가거나 찾았으면 물건의 결과 자리에 그 결과를 붙인다.
+    맵에서 가거나 찾았으면 물건의 결과 자리에 그 결과를, 쉬었으면 그 뒤에 쉰 결과를 붙인다.
+    되살아나기와 저절로 회복은 죽음의 굴림 뒤에 붙인다.
     서 있는 곳의 출구와 숨긴 길은 붙이지 않는다. 이 줄은 가짜 서술자가 장면으로 그대로 내보낸다(PlaceNote).
     """
     parts = [f'{move.character_name}: {move.content or describe_idle(move)}']
@@ -274,8 +313,14 @@ def describe_move(move: Move) -> str:
         parts.append(describe_travel(move.travel))
     if move.search is not None:
         parts.append(describe_search(move.search))
+    if move.rest is not None:
+        parts.append(describe_rest(move.rest))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
+    if move.revival is not None:
+        parts.append(describe_revival(move.revival))
+    if move.recovery is not None:
+        parts.append(describe_recovery(move.recovery))
     if move.healed:
         parts.append(describe_healed(move.healed))
     if move.injuries:

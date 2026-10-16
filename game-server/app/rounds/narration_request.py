@@ -38,6 +38,9 @@ from app.rounds.narrator import (
     NpcImpact,
     PastRound,
     QuestNote,
+    RecoveryNote,
+    RestNote,
+    RevivalNote,
     SearchNote,
     StoryContext,
     TargetGoneNote,
@@ -47,7 +50,7 @@ from app.rounds.narrator import (
     Verdict,
     WhisperNote,
 )
-from app.rounds.state import move_of, search_of
+from app.rounds.state import move_of, rest_of, search_of
 from app.tables import quests
 from app.tables.models import GameTable
 from app.whispers.models import Whisper
@@ -144,6 +147,35 @@ def to_travel(declaration: Declaration | None) -> TravelNote | None:
         reason=move['reason'],
         travel_minutes=move.get('travel_minutes'),
     )
+
+
+def to_rest(declaration: Declaration | None) -> RestNote | None:
+    """선언에 적힌 쉬기의 결과를 서술자에게 줄 모양으로 바꾼다. 쉬는 행동이 아니면 None."""
+    rest = rest_of(declaration)
+    if rest is None:
+        return None
+    return RestNote(
+        length=rest['length'],
+        rested=rest['rested'],
+        reason=rest['reason'],
+        before=rest['before'],
+        after=rest['after'],
+        max_hp=rest['max_hp'],
+    )
+
+
+def find_revival(revivals: list[dict], user_id: uuid.UUID) -> RevivalNote | None:
+    """이 라운드가 닫힐 때 그 사람이 굴린 되살아나기(app/rounds/rests.py 의 revive_all). 없으면 None."""
+    found = next((one for one in revivals if one['user_id'] == str(user_id)), None)
+    return None if found is None else RevivalNote(success=found['success'], hp=found['hp'])
+
+
+def find_recovery(natural: list[dict], user_id: uuid.UUID) -> RecoveryNote | None:
+    """이 라운드가 닫힐 때 그 사람이 저절로 회복한 것(app/rounds/rests.py 의 natural_all). 없으면 None."""
+    found = next((one for one in natural if one['user_id'] == str(user_id)), None)
+    if found is None:
+        return None
+    return RecoveryNote(before=found['before'], after=found['after'], max_hp=found['max_hp'])
 
 
 def other_end(route: dict, place: dict | None) -> str:

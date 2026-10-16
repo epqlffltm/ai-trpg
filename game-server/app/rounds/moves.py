@@ -24,6 +24,7 @@ from app.rounds.models import Round
 from app.rounds.monster_scene import SceneMonster
 from app.rounds.monster_scene import condition as monster_condition
 from app.rounds.narrator import HealNote, InjuryNote, ItemNote, MonsterNote, Move, PersonState, PlaceNote
+from app.rounds.rests import NOTHING, Recovered
 from app.rounds.state import find_arrival, find_declaration, has_outcome, is_down, naming_of, rules_of
 from app.tables import injuries, items, places, sheets
 from app.tables.items import CatalogItem
@@ -50,7 +51,12 @@ def healed_notes(ruleset: Ruleset | None, ended: list[round_injuries.Ended], use
     return notes
 
 
-def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ended] | None = None) -> list[Move]:
+def build_moves(
+    table: GameTable,
+    round_: Round,
+    ended: list[round_injuries.Ended] | None = None,
+    recovered: Recovered = NOTHING,
+) -> list[Move]:
     """
     닫히는 라운드에서 각자 한 일을 서술자에게 줄 모양으로 만든다. 닫기 시작할 때 한 번 만들어 라운드에 굳힌다.
 
@@ -59,6 +65,8 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
     쓰러져 있는지, 죽었는지는 이번 라운드의 결과를 반영한 뒤의 것이다. 그래서 판정과 죽음의 굴림 뒤에 부른다.
     이 라운드에 새로 들어온 캐릭터는 라운드에 적힌 것(arrivals)으로 안다. 누구의 뒤를 잇는지를 함께 준다.
     ended 는 이 라운드가 닫힐 때 끝난 부상들이다(expire_injuries). 시간이 지나 나은 것을 함께 준다.
+    recovered 는 이 라운드가 닫힐 때의 되살아나기와 저절로 회복이다(app/rounds/rests.py 의 settle).
+    쉬는 행동의 결과는 선언에 적혀 있다.
     """
     ended = ended or []
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
@@ -95,6 +103,9 @@ def build_moves(table: GameTable, round_: Round, ended: list[round_injuries.Ende
                 travel=narration_request.to_travel(declaration),
                 search=narration_request.to_search(declaration),
                 target_gone=narration_request.to_target_gone(declaration),
+                rest=narration_request.to_rest(declaration),
+                revival=narration_request.find_revival(recovered.revivals, member.user_id),
+                recovery=narration_request.find_recovery(recovered.natural, member.user_id),
                 place=place_note(mapping, member),
             )
         )
