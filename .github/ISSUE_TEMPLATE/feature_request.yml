@@ -1,0 +1,53 @@
+name: 기능과 개선 제안
+description: 새 기능이나 지금 기능을 고칠 방향을 제안합니다.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        같은 Issue 가 있는지 먼저 확인해 주세요.
+        보안 취약점은 이 양식 대신 [SECURITY.md](https://github.com/epqlffltm/ai-trpg/blob/main/SECURITY.md)의 비공개 신고로 알려 주세요.
+  - type: dropdown
+    id: area
+    attributes:
+      label: 관련된 곳
+      description: 해당하는 곳을 모두 고르세요.
+      multiple: true
+      options:
+        - 인증 서버 (auth-server)
+        - 게임 서버 (game-server)
+        - 게시판 서버 (board-server)
+        - 결제 서버 (billing-server)
+        - 프록시와 공용 인프라 (docker)
+        - 프론트엔드 (web)
+        - 여러 곳
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 풀려는 문제
+      description: 지금 무엇이 어렵거나 모자란가요.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 원하는 동작
+      description: 사용자나 서버의 입장에서 어떻게 되기를 바라나요.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 끝났다고 볼 조건
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 영향과 다른 방법
+      description: API 호환, DB 변경, 인증, 결제, 성능에 미치는 것과 다른 해결 방법.

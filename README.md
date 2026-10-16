@@ -30,6 +30,8 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | [game-server/README.md](game-server/README.md) | 게임 서버의 실행, DB와 마이그레이션, API, 토큰 검증, 자산, 게시와 공개, 테이블, 라운드, 이벤트 기록, 채팅, 실시간 스트림, 설계 메모 |
 | [board-server/README.md](board-server/README.md) | 게시판 서버의 실행, DB와 마이그레이션, API(글, 댓글, 고정, 검색, 쓰기 횟수 제한, 신고, 글쓴이의 닉네임), 구조, 로그와 요청 식별자, 설계 메모 |
 | [billing-server/README.md](billing-server/README.md) | 결제 서버의 실행, 설정, API, 주문과 결제, 홀드, 크레딧, 정리 작업과 대사, 마이그레이션, 토큰 검증, 테스트, CI, 구조, 설계 메모 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 기여 지침. 서버의 경계, 기본 검사, 브랜치와 PR 의 모양 |
+| [SECURITY.md](SECURITY.md) | 보안 정책. 취약점을 비공개로 알리는 길 |
 | [docs/observability.md](docs/observability.md) | 네 서버가 함께 지키는 관측 규격. 로그의 모양, 요청·추적·작업 식별자, 민감정보, health 와 readiness, 메트릭의 이름, 관리 서버의 경계 |
 
 ## 요구 사항
