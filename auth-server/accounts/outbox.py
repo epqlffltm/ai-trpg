@@ -5,6 +5,7 @@
 
 적는 쪽(enqueue_mail)은 요청을 처리하는 중에 불린다. DB 에 한 줄을 쓰고 끝난다.
 보내는 쪽(deliver_due_mail)은 워커가 부른다. 메일 서버와 통신하고, 실패하면 다시 시도한다.
+메일 서버와 통신하는 동안에는 트랜잭션도 행 잠금도 쥐지 않는다(#24). 차지하기, 보내기, 마무리 세 걸음이다.
 
 본문은 암호화해서 적는다(mail_crypto.py). 워커가 꺼낼 때 복호화한다.
 
@@ -15,7 +16,7 @@
 import logging
 import smtplib
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -38,6 +39,14 @@ FIRST_RETRY_DELAY = timedelta(seconds=5)
 # 워커가 한 번에 처리하는 최대 개수
 DEFAULT_BATCH_SIZE = 20
 
+# 워커가 메일 하나를 차지하고 보내는 데 쓸 수 있는 시간. 지나면 다른 워커가 다시 가져간다.
+# 메일 서버의 시간 제한(SMTP_TIMEOUT, 10초)은 연결, 인사, 암호화, 인증, 보내기의 단계마다 따로 걸린다.
+# 그 여러 단계보다 넉넉하고, 버리는 시각(5분) 안에 한 번 더 차지할 여유가 남는 길이다
+MAIL_CLAIM_LEASE = timedelta(minutes=2)
+
+# 임대가 끝난 메일을 다시 가져갈 때 마지막 오류 칸에 적는 글
+LEASE_EXPIRED_ERROR = '이전 시도가 정한 시간 안에 끝나지 않았다(워커가 멈췄거나 죽었다)'
+
 
 @dataclass(frozen=True)
 class DeliveryReport:
@@ -50,6 +59,23 @@ class DeliveryReport:
     @property
     def handled(self) -> int:
         return self.sent + self.retried + self.discarded
+
+
+@dataclass(frozen=True)
+class ClaimedMail:
+    """
+    워커가 차지한 메일 한 통. 트랜잭션 밖에서 보낼 때 쓰는 값을 담는다.
+
+    attempt 는 차지할 때 올린 시도 횟수다. 마무리할 때 이 값이 그대로인지 보고 고친다.
+    그 사이에 임대가 끝나 다른 워커가 다시 가져갔다면 횟수가 달라져 있다. 남의 차지를 지우거나 덮지 않는다.
+    """
+
+    pk: int
+    attempt: int
+    expires_at: datetime
+    to_email: str
+    subject: str
+    body: str
 
 
 def enqueue_mail(*, to_email: str, subject: str, body: str) -> None:
@@ -90,15 +116,35 @@ def _deliver_next() -> str | None:
     """
     보낼 차례가 된 메일 하나를 처리한다. 처리할 메일이 없으면 None 을 돌려준다.
 
-    메일 한 통이 트랜잭션 하나다. 행을 잠근 채로 보내고, 결과를 적고, 잠금을 푼다.
-    보내는 도중 워커가 죽으면 트랜잭션이 취소되어 그 메일은 다시 대기 상태로 남는다.
+    차지하기와 마무리는 각각 짧은 트랜잭션이다. 메일 서버와 통신하는 동안에는 DB 의 연결도 잠금도 쥐지 않는다.
+    보내는 도중 워커가 죽으면 임대(MAIL_CLAIM_LEASE)가 끝난 뒤 다른 워커가 다시 가져간다.
     """
-    now = timezone.now()
+    claimed = _claim_next_due_mail(timezone.now())
+    if claimed is None or claimed == 'discarded':
+        return claimed
+    try:
+        _send(to_email=claimed.to_email, subject=claimed.subject, body=claimed.body)
+    except (smtplib.SMTPException, OSError) as exc:
+        # OSError 는 연결 실패와 시간 초과를 포함한다
+        _schedule_retry(claimed, exc, timezone.now())
+        return 'retried'
+    _finish_sent(claimed)
+    return 'sent'
 
+
+def _claim_next_due_mail(now) -> ClaimedMail | str | None:
+    """
+    보낼 차례가 된 메일 하나를 차지한다. 짧은 트랜잭션 하나다.
+
+    버릴 메일이면 그 자리에서 버리고 'discarded' 를, 보낼 메일이 없으면 None 을 돌려준다.
+    차지하면 상태를 '보내는 중' 으로, 다음 시도 시각을 임대가 끝나는 시각으로 바꾸고 커밋한다.
+    """
     with transaction.atomic():
         mail = _lock_next_due_mail(now)
         if mail is None:
             return None
+        if mail.status == OutgoingMailStatus.SENDING:
+            _note_expired_lease(mail)
         if now >= mail.expires_at:
             _discard(mail, now)
             return 'discarded'
@@ -109,27 +155,28 @@ def _deliver_next() -> str | None:
             mail.last_error = _describe(exc)
             _discard(mail, now)
             return 'discarded'
-        try:
-            _send(to_email=mail.to_email, subject=mail.subject, body=body)
-        except (smtplib.SMTPException, OSError) as exc:
-            # OSError 는 연결 실패와 시간 초과를 포함한다
-            _schedule_retry(mail, exc, now)
-            return 'retried'
-        # 본문에 인증 코드가 들어 있다. 보낸 메일은 남기지 않는다
-        mail.delete()
-        return 'sent'
+        _mark_sending(mail, now)
+    return ClaimedMail(
+        pk=mail.pk,
+        attempt=mail.attempts,
+        expires_at=mail.expires_at,
+        to_email=mail.to_email,
+        subject=mail.subject,
+        body=body,
+    )
 
 
 def _lock_next_due_mail(now) -> OutgoingMail | None:
     """
     보낼 차례가 된 메일 하나를 잠그고 가져온다.
 
-    skip_locked 는 다른 워커가 잠근 행을 기다리지 않고 건너뛴다.
-    워커를 여러 개 띄워도 같은 메일을 두 번 보내지 않고, 서로를 기다리지도 않는다.
+    skip_locked 는 다른 워커가 차지하는 중(잠금은 짧다)인 행을 기다리지 않고 건너뛴다.
+    대기 중인 메일과, 임대가 끝난 '보내는 중' 메일을 함께 고른다.
+    보내는 중인 메일의 다음 시도 시각은 임대가 끝나는 시각이다.
     """
     return (
         OutgoingMail.objects.select_for_update(skip_locked=True)
-        .filter(status=OutgoingMailStatus.PENDING, next_attempt_at__lte=now)
+        .filter(status__in=[OutgoingMailStatus.PENDING, OutgoingMailStatus.SENDING], next_attempt_at__lte=now)
         .order_by('next_attempt_at', 'id')
         .first()
     )
@@ -140,18 +187,59 @@ def _send(*, to_email: str, subject: str, body: str) -> None:
     send_mail(subject=subject, message=body, from_email=None, recipient_list=[to_email])
 
 
-def _schedule_retry(mail: OutgoingMail, error: Exception, now) -> None:
+def _mark_sending(mail: OutgoingMail, now) -> None:
     """
-    실패를 기록하고 다음 시도 시각을 정한다.
+    메일을 차지했다고 적는다. 시도 횟수를 올리고, 다음 시도 시각을 임대가 끝나는 시각으로 둔다.
+
+    시도 횟수는 실패한 횟수가 아니라 시작한 횟수다. 마무리할 때 남의 차지인지 가리는 값으로도 쓴다.
+    """
+    mail.status = OutgoingMailStatus.SENDING
+    mail.attempts += 1
+    mail.next_attempt_at = now + MAIL_CLAIM_LEASE
+    mail.save(update_fields=['status', 'attempts', 'next_attempt_at', 'last_error'])
+
+
+def _note_expired_lease(mail: OutgoingMail) -> None:
+    """
+    임대가 끝난 메일을 다시 가져간다고 남긴다. 앞의 워커가 보냈는지 모르므로 이 메일은 두 번 갈 수 있다.
+
+    받는 사람의 주소는 로그에 적지 않는다.
+    """
+    mail.last_error = LEASE_EXPIRED_ERROR
+    logger.warning('임대가 끝난 메일을 다시 가져간다. id=%s 시도=%s', mail.pk, mail.attempts)
+
+
+def _owned(claimed: ClaimedMail):
+    """이 워커가 차지한 그대로인 행만 고르는 조건. 다른 워커가 다시 가져갔으면 아무것도 고르지 않는다."""
+    return OutgoingMail.objects.filter(pk=claimed.pk, status=OutgoingMailStatus.SENDING, attempts=claimed.attempt)
+
+
+def _finish_sent(claimed: ClaimedMail) -> None:
+    """
+    보낸 메일의 행을 지운다. 본문에 인증 코드가 들어 있어 남기지 않는다.
+
+    지울 행이 없으면 임대가 끝나 다른 워커가 다시 가져간 것이다. 메일이 두 번 갔을 수 있다.
+    """
+    deleted, _ = _owned(claimed).delete()
+    if deleted == 0:
+        logger.warning('보낸 메일을 다른 워커가 이미 다시 가져갔다. 두 번 갔을 수 있다. id=%s', claimed.pk)
+
+
+def _schedule_retry(claimed: ClaimedMail, error: Exception, now) -> None:
+    """
+    실패를 기록하고 대기 상태로 돌려 다음 시도 시각을 정한다.
 
     간격은 실패할 때마다 두 배가 된다. 다만 버리는 시각을 넘겨 미루지 않는다.
     넘겨 미루면 버려야 할 메일이 그 뒤까지 대기 상태로 남는다.
     """
-    mail.attempts += 1
-    delay = FIRST_RETRY_DELAY * (2 ** (mail.attempts - 1))
-    mail.next_attempt_at = min(now + delay, mail.expires_at)
-    mail.last_error = _describe(error)
-    mail.save(update_fields=['attempts', 'next_attempt_at', 'last_error'])
+    delay = FIRST_RETRY_DELAY * (2 ** (claimed.attempt - 1))
+    updated = _owned(claimed).update(
+        status=OutgoingMailStatus.PENDING,
+        next_attempt_at=min(now + delay, claimed.expires_at),
+        last_error=_describe(error),
+    )
+    if updated == 0:
+        logger.warning('실패를 적으려던 메일을 다른 워커가 이미 다시 가져갔다. id=%s', claimed.pk)
 
 
 def _discard(mail: OutgoingMail, now) -> None:
