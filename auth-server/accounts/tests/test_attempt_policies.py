@@ -25,7 +25,6 @@ from accounts.attempt_policies import (
     PASSWORD_CHANGE_FAILURES_PER_USER,
     PASSWORD_RESET_PER_IP,
     SIGNUP_PER_IP,
-    SIGNUP_RESEND_PER_IP,
 )
 from accounts.models import User
 from accounts.services import InvalidCredentialsError
@@ -33,7 +32,6 @@ from accounts.tests.helpers import LOGIN_URL, delete_attempt_keys, log_in
 from config.redis_client import get_redis
 
 SIGNUP_URL = reverse('accounts:signup')
-SIGNUP_RESEND_URL = reverse('accounts:signup-resend')
 RESET_URL = reverse('accounts:password-reset')
 CHANGE_URL = reverse('accounts:password-change')
 
@@ -213,13 +211,7 @@ class LoginIpLimitTests(AttemptPolicyTestCase):
 
 class SignupLimitTests(AttemptPolicyTestCase):
     def signup(self, number: int, ip: str = IP):
-        body = {
-            'username': f'newbie_{number}',
-            'email': f'newbie{number}@example.com',
-            'nickname': f'새사람{number}',
-            'password': PASSWORD,
-        }
-        return self.client.post(SIGNUP_URL, body, format='json', REMOTE_ADDR=ip)
+        return self.client.post(SIGNUP_URL, {'email': f'newbie{number}@example.com'}, format='json', REMOTE_ADDR=ip)
 
     def test_blocks_an_ip_that_signs_up_too_often(self):
         for number in range(SIGNUP_PER_IP.max_attempts):
@@ -230,7 +222,6 @@ class SignupLimitTests(AttemptPolicyTestCase):
 
         self.assert_too_many_attempts(response)
         self.assertEqual(len(mail.outbox), 0)
-        self.assertFalse(User.objects.filter(username='newbie_999').exists())
 
     def test_counts_requests_that_fail_validation_too(self):
         # throttle 은 본문을 검증하기 전에 센다. 잘못된 요청을 쏟아붓는 것도 묶인다
@@ -247,25 +238,6 @@ class SignupLimitTests(AttemptPolicyTestCase):
         response = self.signup(999, ip=OTHER_IP)
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
-
-    def test_blocks_an_ip_that_asks_to_resend_too_often(self):
-        for number in range(SIGNUP_RESEND_PER_IP.max_attempts):
-            response = self.client.post(
-                SIGNUP_RESEND_URL,
-                {'email': f'anyone{number}@example.com'},
-                format='json',
-                REMOTE_ADDR=IP,
-            )
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        response = self.client.post(
-            SIGNUP_RESEND_URL,
-            {'email': 'anyone@example.com'},
-            format='json',
-            REMOTE_ADDR=IP,
-        )
-
-        self.assert_too_many_attempts(response)
 
 
 class PasswordResetLimitTests(AttemptPolicyTestCase):

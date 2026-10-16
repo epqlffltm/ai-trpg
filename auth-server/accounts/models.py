@@ -131,26 +131,21 @@ class EmailCodePurpose(models.TextChoices):
     가입 인증용으로 받은 코드로 비밀번호를 바꿀 수 있게 된다.
     """
 
+    # 옛 가입 흐름(미인증 계정에 코드를 붙이던 것)의 값이다. 새로 발급하지 않는다.
+    # 가입 코드는 계정이 생기기 전이라 이메일에 붙는다(SignupCode). 값은 지난 행 때문에 남긴다
     SIGNUP = 'signup', '가입 인증'
     LOGIN = 'login', '로그인 인증'
     PASSWORD_RESET = 'password_reset', '비밀번호 재설정'
 
 
-class EmailCode(models.Model):
+class CodeRecord(models.Model):
     """
-    이메일로 보낸 인증 코드와 그 발급 이력.
+    메일로 보낸 코드 하나와 그 발급 이력. 표가 아니라 두 표(EmailCode, SignupCode)가 함께 쓰는 칸이다.
 
-    회원과 용도마다 행이 하나뿐이다. 새 코드를 발급하면 행을 새로 만들지 않고 덮어쓴다.
+    자리마다 행이 하나뿐이다. 새 코드를 발급하면 행을 새로 만들지 않고 덮어쓴다.
     그래서 테이블이 계속 불어나지 않고, 만료된 코드를 따로 지울 필요가 없다.
+    발급과 검증의 규칙은 email_codes.py 한 곳에 있다.
     """
-
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='email_codes',
-        verbose_name='회원',
-    )
-    purpose = models.CharField('용도', max_length=20, choices=EmailCodePurpose.choices)
 
     # 코드의 원문은 저장하지 않는다. 비교만 하면 되는 값이라 해시로 충분하다.
     # 빈 문자열이면 쓸 수 있는 코드가 없다는 뜻이다(이미 썼거나 폐기됐다)
@@ -162,6 +157,21 @@ class EmailCode(models.Model):
     last_issued_at = models.DateTimeField('마지막 발급 시각')
     window_started_at = models.DateTimeField('발급 횟수를 세기 시작한 시각')
     issued_in_window = models.PositiveSmallIntegerField('구간 안의 발급 횟수', default=0)
+
+    class Meta:
+        abstract = True
+
+
+class EmailCode(CodeRecord):
+    """회원에게 용도마다 보낸 인증 코드(로그인, 비밀번호 재설정)."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='email_codes',
+        verbose_name='회원',
+    )
+    purpose = models.CharField('용도', max_length=20, choices=EmailCodePurpose.choices)
 
     class Meta:
         verbose_name = '인증 코드'
@@ -177,11 +187,34 @@ class EmailCode(models.Model):
         return f'{self.user} / {self.get_purpose_display()}'
 
 
+class SignupCode(CodeRecord):
+    """
+    가입하려는 이메일로 보낸 코드(#271).
+
+    가입은 이메일의 주인임을 먼저 확인하고, 그 뒤에 계정을 만든다. 그래서 코드가 계정이 아니라 이메일에 붙는다.
+    이미 가입된 주소로 보내는 안내 메일도 같은 행으로 센다. 두 경우가 같은 발급 제한을 써야
+    응답이나 메일의 수로 가입 여부가 드러나지 않는다.
+
+    가입을 마쳐도 행을 지우지 않는다. 발급 이력이 남아야 제한을 지킨다. 오래된 행은 정리 명령이 지운다.
+    """
+
+    # 소문자로 적는다(services.py). 같은 주소의 대소문자 차이로 행이 둘 생기지 않는다
+    email = models.EmailField('이메일', unique=True)
+
+    class Meta:
+        verbose_name = '가입 코드'
+        verbose_name_plural = '가입 코드'
+
+    def __str__(self) -> str:
+        return self.email
+
+
 class SecurityEventKind(models.TextChoices):
     LOGIN_IP_LIMITED = 'login_ip_limited', '로그인: IP 시도 제한'
     LOGIN_FAILURES_LIMITED = 'login_failures_limited', '로그인: 비밀번호 틀림 제한'
     RESERVED_USERNAME_LOGIN = 'reserved_username_login', '로그인: 예약어 아이디로 시도해 IP 차단'
     SIGNUP_IP_LIMITED = 'signup_ip_limited', '가입: IP 시도 제한'
+    # 옛 signup/resend 의 것이다. 다시 보내기가 signup 으로 합쳐져(#271) 새로 생기지 않는다. 지난 기록 때문에 남긴다
     SIGNUP_RESEND_IP_LIMITED = 'signup_resend_ip_limited', '가입 코드 재전송: IP 시도 제한'
     PASSWORD_RESET_IP_LIMITED = 'password_reset_ip_limited', '비밀번호 재설정: IP 시도 제한'
     PASSWORD_CHANGE_FAILURES_LIMITED = 'password_change_failures_limited', '비밀번호 변경: 현재 비밀번호 틀림 제한'

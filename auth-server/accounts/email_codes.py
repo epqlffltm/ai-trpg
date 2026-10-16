@@ -7,6 +7,11 @@
 토큰은 링크에 담는 긴 무작위 문자열이다. 그것 하나로 본인을 확인해야 하는 곳(비밀번호 재설정)에 쓴다.
 둘은 같은 테이블과 같은 발급 제한을 쓴다. 다른 것은 값의 길이, 유효 시간, 틀렸을 때의 처리뿐이다.
 
+코드가 사는 자리는 둘이다(CodeSlot).
+  - 회원의 용도별 자리(EmailCode): 로그인, 비밀번호 재설정
+  - 가입하려는 이메일의 자리(SignupCode): 가입. 계정이 생기기 전이라 이메일에 붙는다(#271)
+발급, 제한, 검증의 규칙은 자리와 상관없이 같다. 아래의 함수들은 자리만 받는다.
+
 코드는 PostgreSQL 에 둔다. 로그인마다 인증 코드가 필요한데, 로그인은 이미
 PostgreSQL 없이는 동작하지 않는다. 코드를 다른 저장소에 두면 로그인이 의존하는 것이
 하나 더 늘어난다. 양도 로그인 한 번에 코드 하나라서 별도 저장소가 필요한 부하가 아니다.
@@ -16,13 +21,14 @@ HTTP 를 모른다. 메일 발송도 여기서 하지 않는다(mail.py).
 
 import secrets
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 
-from accounts.models import EmailCode, User
+from accounts.models import CodeRecord, EmailCode, SignupCode, User
 
 CODE_LENGTH = 6
 
@@ -70,6 +76,38 @@ class InvalidEmailCodeError(Exception):
     """
 
 
+@dataclass(frozen=True)
+class CodeSlot:
+    """
+    코드 하나가 사는 자리. 어느 표의 어느 행인지(lookup)와, 해시에 섞을 값(salt)이다.
+
+    salt 에 자리를 넣는다. 같은 코드라도 자리가 다르면 해시가 달라져, 한 행의 해시를 다른 행에 옮겨 쓸 수 없다.
+    """
+
+    model: type[CodeRecord]
+    lookup: dict
+    salt: str
+
+
+def user_slot(user: User, purpose: str) -> CodeSlot:
+    """회원의 용도별 자리. salt 는 이 함수가 생기기 전과 같다. 이미 발급한 코드가 그대로 맞는다."""
+    return CodeSlot(
+        model=EmailCode,
+        lookup={'user': user, 'purpose': purpose},
+        salt=f'accounts.email_code:{purpose}:{user.pk}',
+    )
+
+
+def signup_slot(email: str) -> CodeSlot:
+    """가입하려는 이메일의 자리. 이메일은 소문자로 맞춘다. 대소문자만 다른 주소가 다른 자리가 되지 않게 한다."""
+    normalized = email.lower()
+    return CodeSlot(
+        model=SignupCode,
+        lookup={'email': normalized},
+        salt=f'accounts.signup_code:{normalized}',
+    )
+
+
 def generate_code() -> str:
     """
     숫자로 된 인증 코드를 만든다.
@@ -86,20 +124,18 @@ def generate_token() -> str:
 
 
 def hash_code(code: str, *, user: User, purpose: str) -> str:
+    """회원의 용도별 자리에 저장하는 코드의 해시. hash_secret 을 보라."""
+    return hash_secret(code, user_slot(user, purpose))
+
+
+def hash_secret(secret: str, slot: CodeSlot) -> str:
     """
-    코드를 서버의 비밀키와 섞어 해시한다.
+    코드나 토큰을 서버의 비밀키와 섞어 해시한다.
 
     그냥 해시하면 안 된다. 6자리 코드는 100만 가지뿐이라, DB 가 유출되면
     전부 해시해 보는 것으로 바로 원문을 찾는다. SECRET_KEY 를 섞으면 DB 만으로는 풀 수 없다.
-
-    회원과 용도도 함께 섞는다. 같은 코드라도 회원과 용도가 다르면 해시가 달라져,
-    한 행의 해시를 다른 행에 옮겨 쓸 수 없다.
     """
-    return salted_hmac(
-        key_salt=f'accounts.email_code:{purpose}:{user.pk}',
-        value=code,
-        algorithm='sha256',
-    ).hexdigest()
+    return salted_hmac(key_salt=slot.salt, value=secret, algorithm='sha256').hexdigest()
 
 
 def issue_email_code(*, user: User, purpose: str) -> str:
@@ -109,7 +145,7 @@ def issue_email_code(*, user: User, purpose: str) -> str:
     전에 발급한 코드는 덮어써서 못 쓰게 된다. 유효한 코드는 항상 하나뿐이다.
     발급 제한에 걸리면 EmailCodeCooldownError 나 EmailCodeLimitError 를 낸다.
     """
-    return _issue(user=user, purpose=purpose, secret=generate_code(), lifetime=CODE_LIFETIME)
+    return _issue(user_slot(user, purpose), secret=generate_code(), lifetime=CODE_LIFETIME)
 
 
 def issue_email_token(*, user: User, purpose: str) -> str:
@@ -119,24 +155,12 @@ def issue_email_token(*, user: User, purpose: str) -> str:
     6자리 코드는 한 시간에 25번(코드 5개 × 5번) 추측할 수 있다. 앞 단계 없이
     그것 하나로 계정을 넘겨주는 곳에는 약하다. 토큰은 추측이 불가능한 길이다.
     """
-    return _issue(user=user, purpose=purpose, secret=generate_token(), lifetime=TOKEN_LIFETIME)
+    return _issue(user_slot(user, purpose), secret=generate_token(), lifetime=TOKEN_LIFETIME)
 
 
-def _issue(*, user: User, purpose: str, secret: str, lifetime: timedelta) -> str:
-    """값을 해시해 저장하고 원문을 돌려준다. 코드와 토큰의 발급이 함께 쓴다."""
-    now = timezone.now()
-
-    with transaction.atomic():
-        record = _lock_record(user=user, purpose=purpose, now=now)
-        _ensure_issue_allowed(record, now)
-        _count_issue(record, now)
-        record.code_hash = hash_code(secret, user=user, purpose=purpose)
-        record.expires_at = now + lifetime
-        record.failed_attempts = 0
-        record.last_issued_at = now
-        record.save()
-
-    return secret
+def issue_signup_code(*, email: str) -> str:
+    """가입하려는 이메일에 새 코드를 발급하고 원문을 돌려준다. 제한과 예외는 issue_email_code 와 같다."""
+    return _issue(signup_slot(email), secret=generate_code(), lifetime=CODE_LIFETIME)
 
 
 def reserve_email_slot(*, user: User, purpose: str) -> None:
@@ -147,19 +171,18 @@ def reserve_email_slot(*, user: User, purpose: str) -> None:
     제한 없이 보내면 남의 메일함에 안내 메일을 쏟아부을 수 있다.
     제한에 걸리면 issue_email_code 와 같은 예외를 낸다. 이미 발급된 코드는 건드리지 않는다.
     """
-    now = timezone.now()
+    _reserve(user_slot(user, purpose))
 
-    with transaction.atomic():
-        record = _lock_record(user=user, purpose=purpose, now=now)
-        _ensure_issue_allowed(record, now)
-        _count_issue(record, now)
-        record.last_issued_at = now
-        record.save()
+
+def reserve_signup_slot(*, email: str) -> None:
+    """가입하려는 이메일의 발송 횟수만 센다. 이미 가입된 주소로 안내 메일을 보낼 때 쓴다."""
+    _reserve(signup_slot(email))
 
 
 def has_usable_code(*, user: User, purpose: str) -> bool:
     """아직 쓸 수 있는 코드가 있는지 본다. 코드를 다시 보낼 수 없을 때 안내를 정하는 데 쓴다."""
-    record = EmailCode.objects.filter(user=user, purpose=purpose).first()
+    slot = user_slot(user, purpose)
+    record = slot.model.objects.filter(**slot.lookup).first()
     if record is None or not record.code_hash:
         return False
     return timezone.now() < record.expires_at
@@ -182,7 +205,7 @@ def consume_email_code(
     "코드 소비" 와 "그 결과로 바뀌는 상태" 를 한 덩어리로 묶는다.
     on_success 가 실패하면 코드 소비도 취소되어, 코드는 썼는데 상태는 안 바뀐 경우가 생기지 않는다.
     """
-    _consume(user=user, purpose=purpose, secret=code, on_success=on_success, count_failures=True)
+    _consume(user_slot(user, purpose), secret=code, on_success=on_success, count_failures=True)
 
 
 def consume_email_token(
@@ -198,13 +221,51 @@ def consume_email_token(
     코드와 달리 틀린 횟수를 세지 않는다. 토큰은 추측할 수 없으므로 횟수 제한이 지키는 것이 없다.
     오히려 세면, 이메일 주소만 아는 제3자가 틀린 값을 보내 남의 토큰을 폐기시킬 수 있다.
     """
-    _consume(user=user, purpose=purpose, secret=token, on_success=on_success, count_failures=False)
+    _consume(user_slot(user, purpose), secret=token, on_success=on_success, count_failures=False)
+
+
+def consume_signup_code(*, email: str, code: str) -> None:
+    """
+    가입하려는 이메일의 코드를 확인하고, 맞으면 다시 쓸 수 없게 한다. 틀리면 InvalidEmailCodeError 다.
+
+    틀린 횟수는 로그인 코드처럼 센다. 코드가 맞아도 여기서 바꾸는 상태는 없다. 맞았다는 증명(가입 티켓)은
+    부른 쪽이 트랜잭션이 끝난 뒤에 만든다(signup_tickets.py).
+    """
+    _consume(signup_slot(email), secret=code, on_success=None, count_failures=True)
+
+
+def _issue(slot: CodeSlot, *, secret: str, lifetime: timedelta) -> str:
+    """값을 해시해 저장하고 원문을 돌려준다. 코드와 토큰의 발급이 함께 쓴다."""
+    now = timezone.now()
+
+    with transaction.atomic():
+        record = _lock_record(slot, now)
+        _ensure_issue_allowed(record, now)
+        _count_issue(record, now)
+        record.code_hash = hash_secret(secret, slot)
+        record.expires_at = now + lifetime
+        record.failed_attempts = 0
+        record.last_issued_at = now
+        record.save()
+
+    return secret
+
+
+def _reserve(slot: CodeSlot) -> None:
+    """발급 제한만 확인하고 센다. 쓸 수 있는 코드는 그대로 둔다."""
+    now = timezone.now()
+
+    with transaction.atomic():
+        record = _lock_record(slot, now)
+        _ensure_issue_allowed(record, now)
+        _count_issue(record, now)
+        record.last_issued_at = now
+        record.save()
 
 
 def _consume(
+    slot: CodeSlot,
     *,
-    user: User,
-    purpose: str,
     secret: str,
     on_success: Callable[[], None] | None,
     count_failures: bool,
@@ -220,8 +281,8 @@ def _consume(
 
     with transaction.atomic(durable=True):
         # 행을 잠가, 같은 값으로 동시에 들어온 요청 중 하나만 통과시킨다
-        record = _lock_existing_record(user=user, purpose=purpose)
-        matched = record is not None and _matches(record, secret, now)
+        record = _lock_existing_record(slot)
+        matched = record is not None and _matches(record, secret, slot, now)
         if matched:
             _discard_code(record, now)
             if on_success is not None:
@@ -234,17 +295,16 @@ def _consume(
         raise InvalidEmailCodeError
 
 
-def _lock_record(*, user: User, purpose: str, now) -> EmailCode:
+def _lock_record(slot: CodeSlot, now) -> CodeRecord:
     """
-    회원과 용도에 해당하는 행을 잠그고 가져온다. 없으면 만든다.
+    자리에 해당하는 행을 잠그고 가져온다. 없으면 만든다.
 
     만든 직후의 행은 "한 번도 발급하지 않은" 상태다. 쓸 수 있는 코드가 없고,
     마지막 발급 시각을 충분히 과거로 두어 첫 발급이 쿨다운에 걸리지 않게 한다.
     """
     long_ago = now - ISSUE_WINDOW
-    EmailCode.objects.get_or_create(
-        user=user,
-        purpose=purpose,
+    slot.model.objects.get_or_create(
+        **slot.lookup,
         defaults={
             'code_hash': '',
             'expires_at': long_ago,
@@ -253,14 +313,14 @@ def _lock_record(*, user: User, purpose: str, now) -> EmailCode:
             'issued_in_window': 0,
         },
     )
-    return EmailCode.objects.select_for_update().get(user=user, purpose=purpose)
+    return slot.model.objects.select_for_update().get(**slot.lookup)
 
 
-def _lock_existing_record(*, user: User, purpose: str) -> EmailCode | None:
-    return EmailCode.objects.select_for_update().filter(user=user, purpose=purpose).first()
+def _lock_existing_record(slot: CodeSlot) -> CodeRecord | None:
+    return slot.model.objects.select_for_update().filter(**slot.lookup).first()
 
 
-def _ensure_issue_allowed(record: EmailCode, now) -> None:
+def _ensure_issue_allowed(record: CodeRecord, now) -> None:
     """발급 제한을 확인한다. 걸리면 언제 다시 시도할 수 있는지와 함께 예외를 낸다."""
     cooldown_ends_at = record.last_issued_at + ISSUE_COOLDOWN
     if now < cooldown_ends_at:
@@ -271,7 +331,7 @@ def _ensure_issue_allowed(record: EmailCode, now) -> None:
         raise EmailCodeLimitError(retry_after=window_ends_at - now)
 
 
-def _count_issue(record: EmailCode, now) -> None:
+def _count_issue(record: CodeRecord, now) -> None:
     """
     발급 횟수를 센다. 구간이 지났으면 새 구간을 시작한다.
 
@@ -284,19 +344,17 @@ def _count_issue(record: EmailCode, now) -> None:
     record.issued_in_window += 1
 
 
-def _matches(record: EmailCode, code: str, now) -> bool:
+def _matches(record: CodeRecord, secret: str, slot: CodeSlot, now) -> bool:
     """쓸 수 있는 코드가 있고, 만료되지 않았고, 입력과 일치하는지 본다."""
     if not record.code_hash:
         return False
     if now >= record.expires_at:
         return False
-    expected = record.code_hash
-    actual = hash_code(code, user=record.user, purpose=record.purpose)
     # 일치하는 앞부분의 길이에 따라 비교 시간이 달라지지 않게 한다
-    return constant_time_compare(expected, actual)
+    return constant_time_compare(record.code_hash, hash_secret(secret, slot))
 
 
-def _record_failure(record: EmailCode) -> None:
+def _record_failure(record: CodeRecord) -> None:
     """틀린 횟수를 올린다. 한도에 닿으면 정답 코드까지 폐기한다."""
     if not record.code_hash:
         # 쓸 수 있는 코드가 없는 상태다. 셀 것이 없다
@@ -307,7 +365,7 @@ def _record_failure(record: EmailCode) -> None:
     record.save(update_fields=['failed_attempts', 'code_hash'])
 
 
-def _discard_code(record: EmailCode, now) -> None:
+def _discard_code(record: CodeRecord, now) -> None:
     """
     맞게 쓰인 코드를 다시 쓸 수 없게 한다. 구간 안의 발급 횟수는 남긴다.
 

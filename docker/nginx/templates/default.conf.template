@@ -108,7 +108,7 @@ server {
 
     # 로그인, 인증 코드, 가입, 비밀번호. 인증 서버의 제한(Redis)이 꺼져 있어도 여기서 막는다.
     # 인증 코드 확인(login/verify)과 비밀번호 재설정 확인(password/reset/confirm)은 인증 서버에 제한이 없다. 그 자리를 여기서 메운다
-    location ~ ^/api/v1/auth/(login|login/verify|login/resend|signup|signup/verify|signup/resend|password/change|password/reset|password/reset/confirm)$ {
+    location ~ ^/api/v1/auth/(login|login/verify|login/resend|signup|signup/verify|signup/complete|password/change|password/reset|password/reset/confirm)$ {
         set $proxy_upstream auth;
         set $auth_server auth-server:8000;
         set $retry_after 6;

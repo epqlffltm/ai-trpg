@@ -47,9 +47,8 @@ LOGIN_FAILURES_PER_ACCOUNT_AND_IP = AttemptLimit(
 # 한 사람의 호기심 한 번으로 모두가 한 시간 동안 로그인하지 못하게 되면 지나치다
 LOGIN_IP_BLOCK = AttemptLimit(name='login-ip-block', max_attempts=3, window=timedelta(hours=1))
 
-# 한 IP 의 가입 요청. 가입은 메일을 보낸다. 남의 주소로 메일을 쏟아붓는 것을 막는다
+# 한 IP 의 가입 요청(코드 보내기와 다시 보내기). 가입은 메일을 보낸다. 남의 주소로 메일을 쏟아붓는 것을 막는다
 SIGNUP_PER_IP = AttemptLimit(name='signup-ip', max_attempts=10, window=timedelta(hours=1))
-SIGNUP_RESEND_PER_IP = AttemptLimit(name='signup-resend-ip', max_attempts=10, window=timedelta(hours=1))
 
 # 한 IP 의 비밀번호 재설정 요청. 이것도 메일을 보낸다
 PASSWORD_RESET_PER_IP = AttemptLimit(name='password-reset-ip', max_attempts=5, window=timedelta(hours=1))
