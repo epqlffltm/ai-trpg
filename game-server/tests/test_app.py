@@ -4,6 +4,8 @@
 앱을 만드는 설정을 검증한다. API 문서 화면이 언제 열리는가.
 """
 
+import warnings
+
 from fastapi import status
 
 from app.main import API_PREFIX, create_app
@@ -34,6 +36,19 @@ async def test_docs_open_when_debugging():
 
     assert docs.status_code == status.HTTP_200_OK
     assert openapi.status_code == status.HTTP_200_OK
+
+
+def test_docs_are_built_without_warnings():
+    # 같은 operation id 가 두 번 올라가면 FastAPI 가 경고한다. GET 과 HEAD 를 한 번에 등록했을 때 그랬다
+    app = create_app(make_test_settings(debug=True))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        schema = app.openapi()
+
+    # 확인 요청의 HEAD 는 문서에 없다. GET 만 있다
+    assert set(schema['paths']['/health']) == {'get'}
+    assert set(schema['paths']['/health/ready']) == {'get'}
 
 
 async def test_default_docs_address_is_not_used():
