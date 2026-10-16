@@ -214,6 +214,8 @@ func orderError(c *gin.Context, err error) {
 		errors.Is(err, order.ErrExpired), errors.Is(err, order.ErrNotRefundable), errors.Is(err, order.ErrRefundWindowClosed),
 		errors.Is(err, order.ErrCreditsUsed), errors.Is(err, order.ErrRefundBusy), errors.Is(err, order.ErrRefundRefused):
 		conflict(c, err.Error()+".")
+	case errors.Is(err, order.ErrTimedOut):
+		unavailable(c, order.ErrTimedOut.Error()+".")
 	default:
 		internalError(c, err)
 	}

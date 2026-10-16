@@ -60,11 +60,19 @@ type Decision struct {
 
 // Decide 는 결과를 모르는 주문의 결과를 운영자가 정한다. 끝난 뒤의 주문을 돌려준다.
 // 다른 길이 먼저 같은 결과로 끝냈으면 그대로 돌려주고, 다른 결과로 끝냈으면 ErrDecidedElsewhere 다.
+// 작업 전체는 OperationTimeout 안에 끝난다. 넘으면 ErrTimedOut 을 감싼 오류다(detach).
 func (s *Service) Decide(ctx context.Context, decision Decision) (Order, error) {
+	ctx, cancel := s.detach(ctx)
+	defer cancel()
+	decided, err := s.decide(ctx, decision)
+	return decided, timedOut(ctx, err)
+}
+
+// decide 는 Decide 의 본문이다.
+func (s *Service) decide(ctx context.Context, decision Decision) (Order, error) {
 	if strings.TrimSpace(decision.Reason) == "" || strings.TrimSpace(decision.DecidedBy) == "" {
 		return Order{}, ErrDecisionIncomplete
 	}
-	ctx = context.WithoutCancel(ctx)
 	current, err := s.undecided(ctx, decision.OrderID)
 	if err != nil {
 		return Order{}, err
