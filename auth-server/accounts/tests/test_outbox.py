@@ -1,21 +1,23 @@
 # auth-server/accounts/tests/test_outbox.py
 
 """
-메일 발송함을 검증한다. 적기, 보내기, 실패 후 재시도, 버리기.
+메일 발송함을 검증한다. 적기, 보내기, 실패 후 재시도, 버리기,
+메일 서버와 통신하는 동안 잠금을 쥐지 않는 것과 임대가 끝난 메일을 다시 가져가는 것(#24).
 
 다른 테스트는 메일을 그 자리에서 보내는 방식(inline)으로 돈다.
 이 파일은 실제 운영과 같은 방식(outbox)으로 바꿔서 돈다.
 """
 
 import smtplib
+import threading
 from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch
 
 from django.core import mail
 from django.core.management import call_command
-from django.db import transaction
-from django.test import TestCase, override_settings
+from django.db import DatabaseError, connection, transaction
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -25,6 +27,8 @@ from accounts.mail_crypto import decrypt_mail_body
 from accounts.models import OutgoingMail, OutgoingMailStatus, User
 from accounts.outbox import (
     FIRST_RETRY_DELAY,
+    LEASE_EXPIRED_ERROR,
+    MAIL_CLAIM_LEASE,
     MAIL_SEND_DEADLINE,
     deliver_due_mail,
     enqueue_mail,
@@ -290,6 +294,159 @@ class DiscardTests(TestCase):
             report = deliver_due_mail()
 
         self.assertEqual(report.handled, 0)
+
+
+def lock_from_another_connection(pk: int) -> str:
+    """
+    다른 연결에서 그 행을 기다리지 않고 잠가 본다. 잠갔으면 그때의 상태를, 못 잠갔으면 예외의 이름을 돌려준다.
+
+    다른 워커나 관리자 화면이 같은 행을 건드리는 상황이다. 스레드는 자기 연결을 따로 맺는다.
+    """
+    result: list[str] = []
+
+    def run() -> None:
+        try:
+            with transaction.atomic():
+                result.append(OutgoingMail.objects.select_for_update(nowait=True).get(pk=pk).status)
+        except DatabaseError as exc:
+            result.append(type(exc).__name__)
+        finally:
+            connection.close()
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    thread.join(timeout=10)
+    return result[0]
+
+
+@override_settings(MAIL_DELIVERY='outbox')
+class NoLockWhileSendingTests(TransactionTestCase):
+    """
+    메일 서버와 통신하는 동안 트랜잭션도 행 잠금도 쥐지 않는다(#24). 테스트를 트랜잭션으로 감싸지 않는 종류를 쓴다.
+    """
+
+    def test_the_row_is_free_while_the_mail_server_answers(self):
+        queued = enqueue()
+        seen: dict[str, object] = {}
+
+        def mail_server(**kwargs) -> int:
+            seen['in_transaction'] = connection.in_atomic_block
+            seen['other_connection'] = lock_from_another_connection(queued.pk)
+            seen['row'] = OutgoingMail.objects.values('status', 'attempts').get(pk=queued.pk)
+            return 1
+
+        with patch('accounts.outbox.send_mail', side_effect=mail_server):
+            report = deliver_due_mail()
+
+        self.assertEqual(report.sent, 1)
+        self.assertFalse(seen['in_transaction'])
+        # 다른 연결이 기다리지 않고 잠근다. 잠금을 쥔 채 보냈다면 OperationalError 다
+        self.assertEqual(seen['other_connection'], OutgoingMailStatus.SENDING)
+        # 차지한 것은 이미 커밋되어 다른 연결에도 보인다
+        self.assertEqual(seen['row'], {'status': OutgoingMailStatus.SENDING, 'attempts': 1})
+        self.assertEqual(OutgoingMail.objects.count(), 0)
+
+
+class WorkerDied(Exception):
+    """메일 서버와 통신하는 도중 워커가 죽었다."""
+
+
+@override_settings(MAIL_DELIVERY='outbox')
+class LeaseTests(TestCase):
+    def setUp(self):
+        self.start = timezone.now()
+        with at(self.start):
+            self.queued = enqueue()
+
+    def die_while_sending(self) -> None:
+        """워커가 메일을 차지하고 보내는 도중 죽는다. 행은 '보내는 중' 으로 남는다."""
+        with at(self.start), failing_mail_server(WorkerDied()), self.assertRaises(WorkerDied):
+            deliver_due_mail()
+
+    def test_claimed_mail_waits_for_the_lease_to_end(self):
+        self.die_while_sending()
+
+        self.queued.refresh_from_db()
+        self.assertEqual(self.queued.status, OutgoingMailStatus.SENDING)
+        self.assertEqual(self.queued.next_attempt_at, self.start + MAIL_CLAIM_LEASE)
+        # 앞의 워커가 아직 보내는 중일 수 있다. 임대가 끝나기 전에는 다른 워커가 가져가지 않는다
+        with at(self.start + MAIL_CLAIM_LEASE - timedelta(seconds=1)):
+            self.assertEqual(deliver_due_mail().handled, 0)
+
+    def test_mail_is_picked_up_again_after_the_lease(self):
+        self.die_while_sending()
+
+        with at(self.start + MAIL_CLAIM_LEASE), self.assertLogs('accounts.outbox', level='WARNING') as logs:
+            report = deliver_due_mail()
+
+        self.assertEqual(report.sent, 1)
+        self.assertEqual(mail.outbox[0].body, '본문 123456')
+        self.assertEqual(OutgoingMail.objects.count(), 0)
+        # 받는 사람의 주소는 적지 않는다
+        self.assertIn(f'id={self.queued.pk}', logs.output[0])
+        self.assertNotIn(EMAIL, logs.output[0])
+
+    def test_mail_left_sending_past_the_deadline_is_discarded(self):
+        self.die_while_sending()
+
+        with at(self.start + MAIL_SEND_DEADLINE), self.assertLogs('accounts.outbox', level='WARNING'):
+            report = deliver_due_mail()
+
+        self.queued.refresh_from_db()
+        self.assertEqual(report.discarded, 1)
+        self.assertEqual(self.queued.status, OutgoingMailStatus.DISCARDED)
+        # 운영자가 관리자 화면에서 왜 못 보냈는지 본다
+        self.assertEqual(self.queued.last_error, LEASE_EXPIRED_ERROR)
+
+    def test_a_late_failure_does_not_touch_the_next_workers_claim(self):
+        # 앞의 워커가 메일 서버의 답을 기다리는 동안 임대가 끝났다. 다음 워커가 가져가 보내는 도중이다.
+        # 그 뒤에 앞의 워커가 실패를 받는다. 다음 워커의 차지를 대기 상태로 되돌리면 안 된다
+        calls = 0
+
+        def mail_server(**kwargs) -> int:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                with at(self.start + MAIL_CLAIM_LEASE), self.assertRaises(WorkerDied):
+                    deliver_due_mail()
+                raise smtplib.SMTPServerDisconnected('Connection unexpectedly closed')
+            raise WorkerDied
+
+        with (
+            at(self.start),
+            patch('accounts.outbox.send_mail', side_effect=mail_server),
+            self.assertLogs('accounts.outbox', level='WARNING') as logs,
+        ):
+            deliver_due_mail()
+
+        self.queued.refresh_from_db()
+        self.assertEqual(self.queued.status, OutgoingMailStatus.SENDING)
+        self.assertEqual(self.queued.attempts, 2)
+        self.assertEqual(self.queued.next_attempt_at, self.start + MAIL_CLAIM_LEASE * 2)
+        self.assertIn('다른 워커가 이미 다시 가져갔다', logs.output[-1])
+
+    def test_a_late_success_after_another_worker_sent_it_is_logged(self):
+        # 앞의 워커가 늦게 보냈고, 그 사이 다음 워커도 보냈다. 메일이 두 번 갔다. 남은 행은 없다
+        calls = 0
+
+        def mail_server(**kwargs) -> int:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                with at(self.start + MAIL_CLAIM_LEASE):
+                    deliver_due_mail()
+            return 1
+
+        with (
+            at(self.start),
+            patch('accounts.outbox.send_mail', side_effect=mail_server),
+            self.assertLogs('accounts.outbox', level='WARNING') as logs,
+        ):
+            report = deliver_due_mail()
+
+        self.assertEqual((report.sent, calls), (1, 2))
+        self.assertEqual(OutgoingMail.objects.count(), 0)
+        self.assertIn('두 번 갔을 수 있다', logs.output[-1])
 
 
 @override_settings(MAIL_DELIVERY='outbox')
