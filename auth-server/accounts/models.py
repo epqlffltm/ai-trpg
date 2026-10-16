@@ -277,6 +277,8 @@ class SecurityEvent(models.Model):
 
 class OutgoingMailStatus(models.TextChoices):
     PENDING = 'pending', '발송 대기'
+    # 워커가 차지하고 메일 서버와 통신하는 중이다. 다음 시도 시각이 임대가 끝나는 시각이다
+    SENDING = 'sending', '보내는 중'
     DISCARDED = 'discarded', '버림'
 
 
@@ -303,12 +305,13 @@ class OutgoingMail(models.Model):
         choices=OutgoingMailStatus.choices,
         default=OutgoingMailStatus.PENDING,
     )
+    # 워커가 차지한 횟수다. 차지할 때마다 하나 오른다
     attempts = models.PositiveSmallIntegerField('시도 횟수', default=0)
     # 마지막 실패의 이유. 메일 서버가 돌려준 오류 문구다
     last_error = models.CharField('마지막 오류', max_length=500, blank=True)
 
     created_at = models.DateTimeField('만든 시각', auto_now_add=True)
-    # 이 시각부터 보낼 수 있다. 실패하면 뒤로 미룬다
+    # 이 시각부터 보낼 수 있다. 실패하면 뒤로 미룬다. 보내는 중이면 임대가 끝나는 시각이다
     next_attempt_at = models.DateTimeField('다음 시도 시각')
     # 이 시각이 지나면 보내지 않고 버린다. 늦게 도착한 인증 코드는 쓸모가 없다
     expires_at = models.DateTimeField('버리는 시각')
@@ -318,7 +321,7 @@ class OutgoingMail(models.Model):
         verbose_name = '보낼 메일'
         verbose_name_plural = '보낼 메일'
         indexes = [
-            # 워커가 "지금 보낼 수 있는 대기 중인 메일" 을 찾을 때 쓴다
+            # 워커가 "지금 보낼 수 있는 메일"(대기 중이거나 임대가 끝난 것)을 찾을 때 쓴다
             models.Index(fields=['status', 'next_attempt_at'], name='accounts_mail_due_idx'),
         ]
 
