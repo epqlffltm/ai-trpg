@@ -70,8 +70,8 @@ func (s *Service) notifyConfirm(ctx context.Context, current Order) error {
 // notifyRefund 는 refunding 인 주문에 같은 취소를 다시 보내고 답을 적는다. 거절되어 되돌린 것은 오류가 아니다.
 // 결제 대행사의 답을 받지 못했으면 오류다(대사의 resolveRefund 와 달리 refunding 에 두고 넘어가지 않는다).
 func (s *Service) notifyRefund(ctx context.Context, current Order) error {
-	result, err := s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
-		return s.provider.Cancel(ctx, paymentRequest(current))
+	result, err := s.askProvider(ctx, current, func(ctx context.Context, provider payment.Provider) (payment.Result, error) {
+		return provider.Cancel(ctx, paymentRequest(current))
 	})
 	if err != nil {
 		return err

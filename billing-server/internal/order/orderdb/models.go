@@ -27,4 +27,5 @@ type Order struct {
 	PaidAt         pgtype.Timestamptz
 	ExpiresAt      time.Time
 	RefundedAt     pgtype.Timestamptz
+	Channel        string
 }

@@ -72,7 +72,7 @@ func run() error {
 	defer pool.Close()
 
 	httpapi.SetMode(settings.Debug)
-	services, err := app.NewServices(pool, settings.Rules(), app.NewProvider(settings.Payment), time.Now)
+	services, err := app.NewServices(pool, settings.Rules(), app.NewProviders(settings.Payment), time.Now)
 	if err != nil {
 		return err
 	}
