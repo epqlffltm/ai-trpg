@@ -21,7 +21,6 @@ from accounts.attempt_policies import (
     LOGIN_PER_IP,
     PASSWORD_RESET_PER_IP,
     SIGNUP_PER_IP,
-    SIGNUP_RESEND_PER_IP,
 )
 from accounts.client_ip import get_attempt_subject
 from accounts.models import SecurityEventKind
@@ -63,11 +62,6 @@ class LoginIpThrottle(IpAttemptThrottle):
 class SignupIpThrottle(IpAttemptThrottle):
     limit = SIGNUP_PER_IP
     event_kind = SecurityEventKind.SIGNUP_IP_LIMITED
-
-
-class SignupResendIpThrottle(IpAttemptThrottle):
-    limit = SIGNUP_RESEND_PER_IP
-    event_kind = SecurityEventKind.SIGNUP_RESEND_IP_LIMITED
 
 
 class PasswordResetIpThrottle(IpAttemptThrottle):

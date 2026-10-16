@@ -40,34 +40,37 @@ from accounts.serializers import (
     LoginVerifySerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
+    SignupCompleteSerializer,
     SignupSerializer,
+    SignupVerifiedSerializer,
     SignupVerifySerializer,
     UserSerializer,
 )
 from accounts.services import (
     DuplicateAccountError,
+    EmailAlreadyRegisteredError,
     EmailNotVerifiedError,
-    FieldTakenError,
     InvalidCredentialsError,
+    InvalidSignupFieldError,
     LoginCodeUnavailableError,
     UnacceptablePasswordError,
     WrongCurrentPasswordError,
     change_password,
     complete_login,
+    complete_signup,
     request_password_reset,
     resend_login_code,
-    resend_signup_code,
     reset_password,
     spend_password_check_time,
     start_login,
     start_signup,
     verify_signup,
 )
+from accounts.signup_tickets import InvalidSignupTicketError
 from accounts.throttles import (
     LoginIpThrottle,
     PasswordResetIpThrottle,
     SignupIpThrottle,
-    SignupResendIpThrottle,
 )
 from accounts.tokens import (
     InvalidRefreshTokenError,
@@ -152,7 +155,7 @@ def build_invalid_credentials_response() -> Response:
 
 
 class SignupView(APIView):
-    """POST /api/v1/auth/signup"""
+    """POST /api/v1/auth/signup. 가입의 1단계: 이메일로 코드를 보낸다. 다시 보낼 때도 이것이다."""
 
     # 기본 권한이 IsAuthenticated 라서, 로그인 없이 호출하는 API 는 직접 열어 줘야 한다
     permission_classes = [AllowAny]
@@ -167,19 +170,10 @@ class SignupView(APIView):
         # 검증에 실패하면 400 과 필드별 오류 메시지로 응답한다
         serializer.is_valid(raise_exception=True)
 
-        try:
-            start_signup(**serializer.validated_data)
-        except FieldTakenError as exc:
-            # DRF 의 검증 오류와 같은 모양으로 응답한다
-            return Response({exc.field: [exc.message]}, status=status.HTTP_400_BAD_REQUEST)
-        except DuplicateAccountError:
-            return Response(
-                {'detail': '이미 사용 중인 아이디 또는 닉네임입니다.'},
-                status=status.HTTP_409_CONFLICT,
-            )
+        start_signup(**serializer.validated_data)
 
-        # 새 이메일이든 이미 가입된 이메일이든 같은 응답을 준다.
-        # 계정이 아직 완성되지 않았으므로 201(만들어짐)이 아니라 202(접수됨)다
+        # 새 이메일이든 이미 가입된 이메일이든, 발급 제한에 걸렸든 아니든 같은 응답을 준다.
+        # 계정은 아직 없다. 201(만들어짐)이 아니라 202(접수됨)다
         return Response(
             {'detail': '인증 메일을 보냈습니다. 메일에 적힌 코드를 입력해 주세요.'},
             status=status.HTTP_202_ACCEPTED,
@@ -187,7 +181,7 @@ class SignupView(APIView):
 
 
 class SignupVerifyView(APIView):
-    """POST /api/v1/auth/signup/verify"""
+    """POST /api/v1/auth/signup/verify. 가입의 2단계: 코드를 확인하고 가입 티켓을 준다."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -197,37 +191,55 @@ class SignupVerifyView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            verify_signup(**serializer.validated_data)
+            ticket = verify_signup(**serializer.validated_data)
         except InvalidEmailCodeError:
-            # 틀림, 만료, 이미 씀, 그런 가입이 없음을 구분해 알려 주지 않는다
+            # 틀림, 만료, 이미 씀, 보낸 코드가 없음(이미 가입된 주소 포함)을 구분해 알려 주지 않는다
             return Response(
                 {'detail': '인증 코드가 올바르지 않거나 만료되었습니다.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(
-            {'detail': '이메일 인증이 끝났습니다. 로그인해 주세요.'},
-            status=status.HTTP_200_OK,
+        body = SignupVerifiedSerializer(
+            {'detail': '이메일을 확인했습니다. 아이디와 비밀번호를 정해 가입을 마쳐 주세요.', 'signup_ticket': ticket}
         )
+        return Response(body.data, status=status.HTTP_200_OK)
 
 
-class SignupResendView(APIView):
-    """POST /api/v1/auth/signup/resend"""
+class SignupCompleteView(APIView):
+    """POST /api/v1/auth/signup/complete. 가입의 3단계: 티켓과 가입 내용으로 계정을 만든다."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [SignupResendIpThrottle]
 
     def post(self, request: Request) -> Response:
-        serializer = EmailSerializer(data=request.data)
+        serializer = SignupCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        resend_signup_code(**serializer.validated_data)
+        try:
+            complete_signup(**serializer.validated_data)
+        except InvalidSignupTicketError:
+            return Response(
+                {'detail': '가입을 처음부터 다시 해 주세요.', 'code': 'signup_ticket_invalid'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidSignupFieldError as exc:
+            # DRF 의 검증 오류와 같은 모양으로 응답한다
+            return Response({exc.field: exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+        except EmailAlreadyRegisteredError:
+            return Response(
+                {'detail': '이미 가입을 마친 이메일입니다. 로그인해 주세요.', 'code': 'email_registered'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except DuplicateAccountError:
+            return Response(
+                {'detail': '방금 다른 가입이 같은 아이디, 닉네임 또는 이메일을 가져갔습니다. 다시 시도해 주세요.'},
+                status=status.HTTP_409_CONFLICT,
+            )
 
-        # 진행 중인 가입이 있든 없든, 발급 제한에 걸렸든 아니든 같은 응답을 준다
+        # 이메일은 이미 확인했다. 로그인은 따로 한다(로그인도 이메일 코드를 받는다)
         return Response(
-            {'detail': '가입을 진행 중인 주소라면 인증 메일을 다시 보냈습니다.'},
-            status=status.HTTP_200_OK,
+            {'detail': '가입을 마쳤습니다. 로그인해 주세요.'},
+            status=status.HTTP_201_CREATED,
         )
 
 

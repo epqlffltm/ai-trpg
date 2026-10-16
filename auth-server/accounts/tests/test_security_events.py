@@ -17,7 +17,6 @@ from accounts.attempt_policies import (
     PASSWORD_CHANGE_FAILURES_PER_USER,
     PASSWORD_RESET_PER_IP,
     SIGNUP_PER_IP,
-    SIGNUP_RESEND_PER_IP,
 )
 from accounts.models import SecurityEvent, SecurityEventKind
 from accounts.tests.helpers import LOGIN_URL, log_in
@@ -28,7 +27,6 @@ from accounts.tests.test_attempt_policies import (
     OTHER_IP,
     PASSWORD,
     RESET_URL,
-    SIGNUP_RESEND_URL,
     SIGNUP_URL,
     USERNAME,
     WRONG_PASSWORD,
@@ -119,12 +117,6 @@ class IpLimitEventTests(AttemptPolicyTestCase):
 
         self.assert_too_many_attempts(response)
         self.assert_one_event(SecurityEventKind.SIGNUP_IP_LIMITED)
-
-    def test_signup_resend(self):
-        response = self.post_many(SIGNUP_RESEND_URL, {}, SIGNUP_RESEND_PER_IP.max_attempts + 5)
-
-        self.assert_too_many_attempts(response)
-        self.assert_one_event(SecurityEventKind.SIGNUP_RESEND_IP_LIMITED)
 
     def test_password_reset(self):
         response = self.post_many(RESET_URL, {}, PASSWORD_RESET_PER_IP.max_attempts + 5)
