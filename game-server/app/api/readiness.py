@@ -6,6 +6,8 @@
 프로세스가 살아 있는지(health.py)와는 묻는 것이 다르다.
 여기는 서버가 기대는 것들(지금은 DB)에 닿는지를 본다.
 실패해도 관리 도구는 서버를 재시작하지 않는다. 요청을 잠시 보내지 않을 뿐이다.
+
+HEAD 도 받는다(본문 없이 같은 상태 코드). 요청이 끝난 줄은 성공이면 debug, 503 이면 warning 이다.
 """
 
 import logging
@@ -23,8 +25,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=['health'])
 
 
-@router.get(
+@router.api_route(
     '/health/ready',
+    methods=['GET', 'HEAD'],
     response_model=HealthResponse,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_503_SERVICE_UNAVAILABLE: {'model': HealthResponse}},
