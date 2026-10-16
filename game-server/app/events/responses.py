@@ -53,6 +53,22 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.CHARACTER_MOVED: ('round', 'user_id', 'character_name', 'from', 'to', 'travel_minutes'),
     # 찾은 길은 공개다. 찾았으니 이제 모두가 아는 길이다. 굴린 판정은 처음부터 적지 않는다
     EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found'),
+    # 쉰 것과 그 회복, 깨진 까닭은 공개다. HP 는 다른 회복과 같이 보인다
+    EventType.CHARACTER_RESTED: (
+        'round',
+        'user_id',
+        'character_name',
+        'cause',
+        'length',
+        'rested',
+        'reason',
+        'rolls',
+        'before',
+        'after',
+        'max_hp',
+    ),
+    # 되살아나기의 굴림은 죽음의 굴림처럼 공개다
+    EventType.CHARACTER_REVIVED: ('round', 'user_id', 'character_name', 'roll', 'target', 'success', 'hp'),
     # 누가 누구에게 보냈는지만 보인다. 쪽지의 글은 처음부터 적지 않는다
     EventType.WHISPER_SENT: ('user_id', 'character_name', 'recipient_id', 'recipient_character_name'),
     EventType.TABLE_STARTED: ('members',),

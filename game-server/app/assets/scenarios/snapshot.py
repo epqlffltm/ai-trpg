@@ -71,7 +71,8 @@ from app.engine.sheet import Sheet
 #      기간이 라운드 수가 아니라 게임 안의 시간(분)이다. 짧은 부상은 그대로 라운드 수(rounds)다
 #  26: 길에 한 칸 가는 데 걸리는 게임 안의 시간(routes[].travel_minutes)이 있다
 #  27: 퀘스트 규칙에 드러난 때부터 세는 기한(quests[].time_limit_minutes)이 있다
-SNAPSHOT_FORMAT = 27
+#  28: 규칙에 쉬기(rest: 짧은 휴식, 긴 휴식, 되살아나기, 저절로 회복하기)가 있다
+SNAPSHOT_FORMAT = 28
 
 
 class EntrySnapshot(BaseModel):
