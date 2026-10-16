@@ -48,6 +48,14 @@ class Judging:
     snapshot: Snapshot | None = None
     # 이번 장면의 몬스터들(app/rounds/monster_scene.py). 몬스터의 상태는 그 안에 들어 있고, 판정에서 고친다
     monsters: list[SceneMonster] = field(default_factory=list)
+    # 이번 라운드에 피해를 입은 앉은 사람들(user_id). 판정이 피해를 줄 때마다 더한다(mark_hurt).
+    # 쉬는 사람이 다쳤으면 휴식이 깨진다(app/rounds/rests.py)
+    hurt: set[uuid.UUID] = field(default_factory=set)
+
+
+def mark_hurt(judging: Judging, member: TableMember) -> None:
+    """앉은 사람 하나가 이번 라운드에 피해를 입었다고 적는다."""
+    judging.hurt.add(member.user_id)
 
 
 def injury_after(judging: Judging, change: Change, max_hp: int, dead: bool, rows: list) -> dict | None:

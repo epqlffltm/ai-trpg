@@ -21,7 +21,7 @@ from app.engine.check import Check
 from app.engine.health import Change, ChangeKind
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import find_cast_member
-from app.rounds.effects import Judging, injury_after, member_effect, monster_effect, npc_effect
+from app.rounds.effects import Judging, injury_after, mark_hurt, member_effect, monster_effect, npc_effect
 from app.rounds.monster_scene import Gone, find_scene_monster, gone_reason
 from app.tables import monsters as table_monsters
 from app.tables import npcs, sheets
@@ -67,6 +67,8 @@ def change_sheet(judging: Judging, affected: TableMember | None, kind: ChangeKin
     magnitude = health.find_magnitude(judging.ruleset, magnitude_key)
     change = health.change_hp(kind, magnitude, sheet.hp, sheet.max_hp, judging.dice)
     sheet.hp = change.after
+    if kind == ChangeKind.DAMAGE:
+        mark_hurt(judging, affected)
     # 일어났으면 죽음의 굴림에서 센 것은 처음으로 돌아간다. 다시 쓰러지면 처음부터 센다
     if not change.downed:
         sheets.clear_death_saves(sheet)

@@ -45,6 +45,11 @@ INJURY_FACT_MAX_LENGTH = 200
 RULESET_MAX_INJURY_ROUNDS = 1000
 # 오래 가는 부상이 낫기까지, 치료가 앞당기는, 덧나서 늦춰지는 게임 안의 시간(분). 한 해까지
 RULESET_MAX_HEAL_MINUTES = 365 * 24 * 60
+# 쉬는 데 드는 시간(분)의 상한. 라운드 하나에 흐르는 시간의 상한(일주일)과 같다.
+# 휴식과 되살아나기는 한 장면(라운드 하나) 안에서 그 시간이 흘러야 한다. 더 길면 닿을 수 없다
+RULESET_MAX_REST_MINUTES = 7 * 24 * 60
+# 저절로 회복하는 간격(분)의 하한. 너무 짧으면 긴 장면 하나에 주사위를 셀 수 없이 굴린다
+RULESET_MIN_NATURAL_MINUTES = 10
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -180,6 +185,68 @@ class DeathSave(Part):
     target: Annotated[int, Field(ge=1, le=RULESET_MAX_NUMBER)]
     successes: Annotated[int, Field(ge=1, le=RULESET_MAX_DEATH_SAVES)]
     failures: Annotated[int, Field(ge=1, le=RULESET_MAX_DEATH_SAVES)]
+
+
+RestMinutes = Annotated[int, Field(ge=1, le=RULESET_MAX_REST_MINUTES)]
+
+
+class ShortRest(Part):
+    """짧은 휴식. minutes 분을 쉬면 heal 등급(Magnitude.key)만큼 회복한다."""
+
+    minutes: RestMinutes
+    heal: Key
+
+
+class LongRest(Part):
+    """긴 휴식. minutes 분을 쉬면 최대 HP 까지 회복한다."""
+
+    minutes: RestMinutes
+
+
+class Revive(Part):
+    """
+    되살아나기. 고비를 넘기고(죽음의 굴림의 성공이 다 모여) 쓰러져 있는 캐릭터가 쉬어서 일어나는 법이다.
+
+    한 장면에 minutes 분이 흐르면 규칙의 주사위(Ruleset.die)를 한 번 굴린다. 능력치의 보정은 더하지 않는다.
+    눈이 target 이상이면 HP 1 로 일어난다. 아니면 쓰러진 채로 있고, 다음에 그만큼 흐르면 다시 굴린다.
+    죽음의 굴림과 다르다. 그것은 죽어 가는 캐릭터가 죽는지를 정하고, 이것은 고비를 넘긴 캐릭터가 일어나는지를 정한다.
+    """
+
+    minutes: RestMinutes
+    target: Annotated[int, Field(ge=1, le=RULESET_MAX_NUMBER)]
+
+
+class NaturalRecovery(Part):
+    """
+    저절로 회복하기. 게임 안의 시계가 every_minutes 분의 눈금을 하나 지날 때마다 heal 등급만큼 회복한다.
+
+    눈금은 1일째 0시부터 센다. 한 장면에 지난 눈금의 수만큼 굴린다. 짧은 라운드가 이어져도 눈금을 지나면 회복한다.
+    """
+
+    every_minutes: Annotated[int, Field(ge=RULESET_MIN_NATURAL_MINUTES, le=RULESET_MAX_REST_MINUTES)]
+    heal: Key
+
+
+class Rest(Part):
+    """
+    쉬기. 짧은 휴식과 긴 휴식, 되살아나기, 저절로 회복하기다.
+
+    쉬는 것은 캐릭터가 선언하는 행동이다(app/rounds/rests.py). 쉬는 라운드는 적어도 그 휴식의 시간만큼 이어진다.
+    revive 가 None 이면 쓰러진 캐릭터는 쉬어서 일어나지 못한다(치료나 회복으로만 일어난다).
+    natural 이 None 이면 쉬지 않고는 회복하지 않는다.
+    """
+
+    short: ShortRest
+    long: LongRest
+    revive: Revive | None
+    natural: NaturalRecovery | None
+
+    @model_validator(mode='after')
+    def require_short_shorter_than_long(self) -> Self:
+        """짧은 휴식은 긴 휴식보다 짧아야 한다. 같거나 길면 둘을 가를 까닭이 없다."""
+        if self.short.minutes >= self.long.minutes:
+            raise ValueError('짧은 휴식의 시간이 긴 휴식보다 짧지 않습니다.')
+        return self
 
 
 class EffectKind(enum.StrEnum):
@@ -488,6 +555,8 @@ class Ruleset(Part):
     called_shot: CalledShot | None
     # 치료. None 이면 이 규칙에는 치료가 없다(오래 가는 부상은 시간이 지나야 낫는다). 칸 자체는 늘 있어야 한다
     treatment: Treatment | None
+    # 쉬기. None 이면 이 규칙에는 쉬는 행동이 없다. 칸 자체는 늘 있어야 한다
+    rest: Rest | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
@@ -551,6 +620,24 @@ class Ruleset(Part):
         lowest, highest = self.score_roll.keep, self.score_roll.keep * self.score_roll.sides
         if lowest < self.score_min or highest > self.score_max:
             raise ValueError(f'주사위로 나올 수 있는 점수({lowest}~{highest})가 점수의 범위를 벗어납니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_rest_setup(self) -> Self:
+        """
+        쉬기의 회복 등급은 규칙에 있는 것이어야 하고, 되살아나기는 성공할 수 있어야 한다.
+
+        되살아나기의 목표값이 주사위의 가장 큰 눈보다 크면 쓰러진 캐릭터는 쉬어서 결코 일어나지 못한다.
+        그것을 바라면 revive 를 비운다.
+        """
+        if self.rest is None:
+            return self
+        magnitudes = {magnitude.key for magnitude in self.magnitudes}
+        used = {self.rest.short.heal, *([self.rest.natural.heal] if self.rest.natural is not None else [])}
+        if used - magnitudes:
+            raise ValueError(f'쉬기의 회복 등급이 등급에 없습니다: {", ".join(sorted(used - magnitudes))}')
+        if self.rest.revive is not None and self.rest.revive.target > self.die:
+            raise ValueError('되살아나기의 목표값이 주사위의 가장 큰 눈보다 큽니다.')
         return self
 
     @model_validator(mode='after')

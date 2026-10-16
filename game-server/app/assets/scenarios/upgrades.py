@@ -505,6 +505,21 @@ def upgrade_from_26(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_27(document: dict) -> dict:
+    """
+    형식 27 의 문서를 형식 28 로 올린다. 그때는 규칙에 쉬기가 없었다. HP 는 회복의 행동과 소모품으로만 돌아왔다.
+
+    룰북은 템플릿에서만 만들므로 SRD5 템플릿의 것으로 읽는다. DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    이미 진행 중인 테이블도 이 형식으로 올려 읽는다. 다음 라운드부터 쉴 수 있다.
+    """
+    rest = SRD5.model_dump(mode='json')['rest']
+    rulebook = document['rulebook']
+    upgraded = dict(document)
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'rest': rest}}
+    upgraded['format'] = 28
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -534,4 +549,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     24: upgrade_from_24,
     25: upgrade_from_25,
     26: upgrade_from_26,
+    27: upgrade_from_27,
 }

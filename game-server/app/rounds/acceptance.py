@@ -6,7 +6,7 @@
 DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면의 인물을 받는다.
 저장은 부른 쪽(app/rounds/service.py)이 한다.
 
-행동은 일곱이다(app/engine/action.py).
+행동은 여덟이다(app/engine/action.py).
   - 판정(CheckAction). 이번 장면에 나온 NPC 를 겨눌 수 있다(app/rounds/cast.py). 노려 칠 수도 있다.
     자기가 선 장소의 몬스터 한 마리를 칠 수도 있다(app/rounds/monster_scene.py).
   - 치료(TreatAction). 능력과 난이도는 규칙이 정한다. 대상이 그 부상을 입고 있어야 한다.
@@ -15,6 +15,7 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
     닫힐 때 차례가 오면 다시 본다(app/rounds/item_actions.py). 그사이에 건넸거나 빼앗겼을 수 있다.
   - 가기(MoveAction), 찾기(SearchAction). 맵에 서 있어야 한다. 가기는 아는 길로 이어진 곳으로만
     (app/rounds/map_actions.py).
+  - 쉬기(RestAction). 규칙에 쉬기가 있어야 한다. 쉴 수 없는 곳은 없다(app/rounds/rests.py).
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
 비워 둔 칸(난이도, 회복과 치료의 대상)은 여기서 채워 저장한다. 읽는 쪽이 "비어 있으면"을 다시 따지지 않는다.
 """
@@ -30,6 +31,7 @@ from app.engine.action import (
     GiveAction,
     MoveAction,
     NameAction,
+    RestAction,
     SearchAction,
     TreatAction,
     UseAction,
@@ -41,6 +43,7 @@ from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict
 from app.rounds.map_actions import accept_move, accept_search
 from app.rounds.models import Declaration, Round
 from app.rounds.monster_scene import SceneMonster, find_scene_monster, stands_with
+from app.rounds.rests import accept_rest
 from app.rounds.state import find_declaration, is_down, rules_of
 from app.tables import items, npcs, sheets
 from app.tables import monsters as table_monsters
@@ -273,7 +276,7 @@ def accept_action(
     member 는 선언하는 사람이고, scene 은 이번 장면(인물과 몬스터)이다.
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
-    accept_move, accept_search).
+    accept_move, accept_search, accept_rest).
     """
     if action is None:
         return None
@@ -290,6 +293,8 @@ def accept_action(
         return accept_move(table, member, action)
     if isinstance(action, SearchAction):
         return accept_search(member, action)
+    if isinstance(action, RestAction):
+        return accept_rest(ruleset, action)
     return accept_check(table, member, action, scene, ruleset)
 
 
