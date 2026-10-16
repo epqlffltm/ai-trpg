@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -69,7 +71,7 @@ func TestLoopKeepsGoingAfterAFailedRoundUntilCancelled(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		loop(ctx, sweeper, time.Millisecond)
+		loop(ctx, sweeper, time.Millisecond, "")
 		close(done)
 	}()
 
@@ -89,10 +91,48 @@ func TestLoopStopsWhileWaiting(t *testing.T) {
 	sweeper := &fakeRounder{stopAfter: 1, cancel: cancel}
 	started := time.Now()
 
-	loop(ctx, sweeper, time.Hour)
+	loop(ctx, sweeper, time.Hour, "")
 
 	if time.Since(started) > 5*time.Second || sweeper.rounds != 1 {
 		t.Errorf("바퀴 = %d, 걸린 시간 = %v", sweeper.rounds, time.Since(started))
+	}
+}
+
+func TestLoopBeatsOnlyAfterASuccessfulRound(t *testing.T) {
+	// #258: 심장박동은 DB 에 닿아 끝낸 바퀴만 남긴다. healthy 가 "DB 에 닿으며 돈다"는 뜻이 된다
+	cases := map[string]struct {
+		err       error
+		wantBeats bool
+	}{
+		"성공한 바퀴": {err: nil, wantBeats: true},
+		"실패한 바퀴": {err: errors.New("db is down"), wantBeats: false},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			sweeper := &fakeRounder{stopAfter: 1, cancel: cancel, err: c.err}
+			heartbeat := filepath.Join(t.TempDir(), "heartbeat")
+
+			loop(ctx, sweeper, time.Hour, heartbeat)
+
+			_, statErr := os.Stat(heartbeat)
+			if beat := statErr == nil; beat != c.wantBeats {
+				t.Errorf("심장박동 = %v, 기대 = %v", beat, c.wantBeats)
+			}
+		})
+	}
+}
+
+func TestLoopKeepsGoingWhenTheHeartbeatCannotBeWritten(t *testing.T) {
+	// 심장박동을 남기지 못해도 정리 작업은 멈추지 않는다. healthcheck 가 unhealthy 로 알린다
+	ctx, cancel := context.WithCancel(context.Background())
+	sweeper := &fakeRounder{stopAfter: 2, cancel: cancel}
+	heartbeat := filepath.Join(t.TempDir(), "no-such-folder", "heartbeat")
+
+	loop(ctx, sweeper, time.Millisecond, heartbeat)
+
+	if sweeper.rounds != 2 {
+		t.Errorf("바퀴 = %d, 기대 = 2", sweeper.rounds)
 	}
 }
 
