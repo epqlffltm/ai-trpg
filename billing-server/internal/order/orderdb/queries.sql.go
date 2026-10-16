@@ -51,7 +51,7 @@ const expireOrder = `-- name: ExpireOrder :one
 UPDATE orders
 SET status = 'expired', updated_at = $1::TIMESTAMPTZ
 WHERE id = $2 AND status = 'pending' AND expires_at <= $1::TIMESTAMPTZ
-RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at
+RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel
 `
 
 type ExpireOrderParams struct {
@@ -78,12 +78,13 @@ func (q *Queries) ExpireOrder(ctx context.Context, arg ExpireOrderParams) (Order
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at FROM orders
+SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel FROM orders
 WHERE id = $1
 `
 
@@ -106,12 +107,13 @@ func (q *Queries) GetOrder(ctx context.Context, id uuid.UUID) (Order, error) {
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
 
 const getOrderByKey = `-- name: GetOrderByKey :one
-SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at FROM orders
+SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel FROM orders
 WHERE user_id = $1 AND idempotency_key = $2
 `
 
@@ -139,12 +141,13 @@ func (q *Queries) GetOrderByKey(ctx context.Context, arg GetOrderByKeyParams) (O
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
 
 const getOrderOfUser = `-- name: GetOrderOfUser :one
-SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at FROM orders
+SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel FROM orders
 WHERE id = $1 AND user_id = $2
 `
 
@@ -172,25 +175,27 @@ func (q *Queries) GetOrderOfUser(ctx context.Context, arg GetOrderOfUserParams) 
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
 
 const insertOrder = `-- name: InsertOrder :one
 
-INSERT INTO orders (id, user_id, product_id, price, credits, status, idempotency_key, created_at, updated_at, expires_at)
+INSERT INTO orders (id, user_id, product_id, channel, price, credits, status, idempotency_key, created_at, updated_at, expires_at)
 VALUES (
-    $1, $2, $3, $4, $5,
-    'pending', $6, $7, $7, $8
+    $1, $2, $3, $4, $5, $6,
+    'pending', $7, $8, $8, $9
 )
 ON CONFLICT (user_id, idempotency_key) DO NOTHING
-RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at
+RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel
 `
 
 type InsertOrderParams struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
 	ProductID      string
+	Channel        string
 	Price          int64
 	Credits        credit.Amount
 	IdempotencyKey string
@@ -207,11 +212,13 @@ type InsertOrderParams struct {
 // 상태를 바꾸는 문장은 모두 "지금 이 상태일 때만"이라는 조건을 단다. 두 요청이 함께 와도 한쪽만 바꾼다.
 // 바꾼 쪽은 줄을 돌려받고, 못 바꾼 쪽은 아무 줄도 돌려받지 못한다.
 // 주문을 만든다. 같은 사용자가 같은 키로 이미 만들었으면 아무것도 하지 않고 줄도 돌려주지 않는다.
+// 길(channel)에는 기본값이 있지만 늘 적는다. 기본값은 옛 서버가 떠 있는 동안을 위한 것이다(00009).
 func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) (Order, error) {
 	row := q.db.QueryRow(ctx, insertOrder,
 		arg.ID,
 		arg.UserID,
 		arg.ProductID,
+		arg.Channel,
 		arg.Price,
 		arg.Credits,
 		arg.IdempotencyKey,
@@ -234,12 +241,13 @@ func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) (Order
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
 
 const listStaleConfirming = `-- name: ListStaleConfirming :many
-SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at FROM orders
+SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel FROM orders
 WHERE status = 'confirming' AND updated_at <= $1::TIMESTAMPTZ
 ORDER BY updated_at, id
 LIMIT $2
@@ -275,6 +283,7 @@ func (q *Queries) ListStaleConfirming(ctx context.Context, arg ListStaleConfirmi
 			&i.PaidAt,
 			&i.ExpiresAt,
 			&i.RefundedAt,
+			&i.Channel,
 		); err != nil {
 			return nil, err
 		}
@@ -287,7 +296,7 @@ func (q *Queries) ListStaleConfirming(ctx context.Context, arg ListStaleConfirmi
 }
 
 const listStaleRefunding = `-- name: ListStaleRefunding :many
-SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at FROM orders
+SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel FROM orders
 WHERE status = 'refunding' AND updated_at <= $1::TIMESTAMPTZ
 ORDER BY updated_at, id
 LIMIT $2
@@ -323,6 +332,7 @@ func (q *Queries) ListStaleRefunding(ctx context.Context, arg ListStaleRefunding
 			&i.PaidAt,
 			&i.ExpiresAt,
 			&i.RefundedAt,
+			&i.Channel,
 		); err != nil {
 			return nil, err
 		}
@@ -338,7 +348,7 @@ const markFailed = `-- name: MarkFailed :one
 UPDATE orders
 SET status = 'failed', failure_code = $1::TEXT, updated_at = $2
 WHERE id = $3 AND status = 'confirming'
-RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at
+RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel
 `
 
 type MarkFailedParams struct {
@@ -366,6 +376,7 @@ func (q *Queries) MarkFailed(ctx context.Context, arg MarkFailedParams) (Order, 
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
@@ -374,7 +385,7 @@ const markPaid = `-- name: MarkPaid :one
 UPDATE orders
 SET status = 'paid', paid_at = $1::TIMESTAMPTZ, updated_at = $1::TIMESTAMPTZ
 WHERE id = $2 AND status = 'confirming'
-RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at
+RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel
 `
 
 type MarkPaidParams struct {
@@ -401,6 +412,7 @@ func (q *Queries) MarkPaid(ctx context.Context, arg MarkPaidParams) (Order, erro
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
@@ -409,7 +421,7 @@ const markRefunded = `-- name: MarkRefunded :one
 UPDATE orders
 SET status = 'refunded', refunded_at = $1::TIMESTAMPTZ, updated_at = $1::TIMESTAMPTZ
 WHERE id = $2 AND status = 'refunding'
-RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at
+RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel
 `
 
 type MarkRefundedParams struct {
@@ -436,6 +448,7 @@ func (q *Queries) MarkRefunded(ctx context.Context, arg MarkRefundedParams) (Ord
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
@@ -444,7 +457,7 @@ const restorePaid = `-- name: RestorePaid :one
 UPDATE orders
 SET status = 'paid', updated_at = $1::TIMESTAMPTZ
 WHERE id = $2 AND status = 'refunding'
-RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at
+RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel
 `
 
 type RestorePaidParams struct {
@@ -471,6 +484,7 @@ func (q *Queries) RestorePaid(ctx context.Context, arg RestorePaidParams) (Order
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
@@ -480,7 +494,7 @@ UPDATE orders
 SET status = 'confirming', payment_key = $1::TEXT, updated_at = $2::TIMESTAMPTZ
 WHERE id = $3 AND user_id = $4 AND status = 'pending'
     AND expires_at > $2::TIMESTAMPTZ
-RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at
+RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel
 `
 
 type StartConfirmingParams struct {
@@ -515,6 +529,7 @@ func (q *Queries) StartConfirming(ctx context.Context, arg StartConfirmingParams
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }
@@ -524,7 +539,7 @@ UPDATE orders
 SET status = 'refunding', updated_at = $1::TIMESTAMPTZ
 WHERE id = $2 AND user_id = $3 AND status = 'paid'
     AND paid_at > $4::TIMESTAMPTZ
-RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at
+RETURNING id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel
 `
 
 type StartRefundingParams struct {
@@ -559,6 +574,7 @@ func (q *Queries) StartRefunding(ctx context.Context, arg StartRefundingParams) 
 		&i.PaidAt,
 		&i.ExpiresAt,
 		&i.RefundedAt,
+		&i.Channel,
 	)
 	return i, err
 }

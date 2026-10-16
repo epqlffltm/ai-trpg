@@ -9,9 +9,10 @@
 
 -- name: InsertOrder :one
 -- 주문을 만든다. 같은 사용자가 같은 키로 이미 만들었으면 아무것도 하지 않고 줄도 돌려주지 않는다.
-INSERT INTO orders (id, user_id, product_id, price, credits, status, idempotency_key, created_at, updated_at, expires_at)
+-- 길(channel)에는 기본값이 있지만 늘 적는다. 기본값은 옛 서버가 떠 있는 동안을 위한 것이다(00009).
+INSERT INTO orders (id, user_id, product_id, channel, price, credits, status, idempotency_key, created_at, updated_at, expires_at)
 VALUES (
-    sqlc.arg(id), sqlc.arg(user_id), sqlc.arg(product_id), sqlc.arg(price), sqlc.arg(credits),
+    sqlc.arg(id), sqlc.arg(user_id), sqlc.arg(product_id), sqlc.arg(channel), sqlc.arg(price), sqlc.arg(credits),
     'pending', sqlc.arg(idempotency_key), sqlc.arg(now), sqlc.arg(now), sqlc.arg(expires_at)
 )
 ON CONFLICT (user_id, idempotency_key) DO NOTHING
