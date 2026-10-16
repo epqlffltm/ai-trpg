@@ -51,8 +51,8 @@ func (s *Service) confirm(ctx context.Context, userID uuid.UUID, orderID uuid.UU
 	if err != nil {
 		return Order{}, err
 	}
-	result, err := s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
-		return s.provider.Confirm(ctx, paymentRequest(started))
+	result, err := s.askProvider(ctx, started, func(ctx context.Context, provider payment.Provider) (payment.Result, error) {
+		return provider.Confirm(ctx, paymentRequest(started))
 	})
 	return s.settle(ctx, started, result, err)
 }
@@ -115,8 +115,8 @@ func (s *Service) refuseExpired(ctx context.Context, current Order) error {
 
 // lookUp 은 결과를 모르는 주문의 결제를 결제 대행사에 묻는다. 승인을 다시 요청하지 않는다.
 func (s *Service) lookUp(ctx context.Context, current Order) (payment.Result, error) {
-	return s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
-		return s.provider.Lookup(ctx, paymentRequest(current))
+	return s.askProvider(ctx, current, func(ctx context.Context, provider payment.Provider) (payment.Result, error) {
+		return provider.Lookup(ctx, paymentRequest(current))
 	})
 }
 
@@ -124,13 +124,6 @@ func (s *Service) lookUp(ctx context.Context, current Order) (payment.Result, er
 // 결제 번호가 적힌 주문(confirming 이후)에만 쓴다.
 func paymentRequest(current Order) payment.Request {
 	return payment.Request{PaymentKey: current.PaymentKey, OrderID: current.ID, Amount: current.Price}
-}
-
-// askProvider 는 결제 대행사를 부르되 ProviderTimeout 까지만 기다린다.
-func (s *Service) askProvider(ctx context.Context, ask func(context.Context) (payment.Result, error)) (payment.Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, ProviderTimeout)
-	defer cancel()
-	return ask(ctx)
 }
 
 // settle 은 결제 대행사의 답을 주문에 적는다. 승인이면 크레딧을 넣고, 거절이면 실패로 적는다.

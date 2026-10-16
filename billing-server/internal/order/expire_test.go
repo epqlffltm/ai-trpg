@@ -276,7 +276,7 @@ func TestTheDatabaseKeepsExpiredOrdersWithoutAPaymentKey(t *testing.T) {
 func TestNewServiceRejectsANonPositiveTTL(t *testing.T) {
 	f := setUp(t, approving())
 	for _, bad := range []time.Duration{0, -time.Hour} {
-		if _, err := order.NewService(f.pool, f.clock.Now, f.provider, f.wallet, bad); !errors.Is(err, order.ErrInvalidTTL) {
+		if _, err := order.NewService(f.pool, f.clock.Now, order.Providers{order.ChannelWeb: f.provider}, f.wallet, bad); !errors.Is(err, order.ErrInvalidTTL) {
 			t.Errorf("ttl %v: %v. ErrInvalidTTL 이어야 한다", bad, err)
 		}
 	}

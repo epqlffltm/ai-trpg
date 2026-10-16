@@ -11,6 +11,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/app"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 )
 
@@ -20,7 +21,7 @@ var realRules = config.Rules{SpendFreeFirst: true, FreeCreditTTL: time.Hour, Hol
 // realServices 는 서버와 같은 방법으로 서비스들을 만든다. 만들지 못하면 테스트를 멈춘다.
 func realServices(t *testing.T, pool *pgxpool.Pool, now func() time.Time) app.Services {
 	t.Helper()
-	services, err := app.NewServices(pool, realRules, payment.Fake{}, now)
+	services, err := app.NewServices(pool, realRules, order.Providers{order.ChannelWeb: payment.Fake{}}, now)
 	if err != nil {
 		t.Fatalf("서비스를 만들지 못했다: %v", err)
 	}

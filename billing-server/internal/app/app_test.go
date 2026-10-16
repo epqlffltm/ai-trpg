@@ -28,7 +28,7 @@ var now = time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 func TestNewServicesFollowsTheRules(t *testing.T) {
 	// 규칙마다 다른 값을 줘서, 값이 엉뚱한 서비스로 가면 드러나게 한다
 	rules := config.Rules{SpendFreeFirst: false, FreeCreditTTL: 5 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 3 * time.Hour}
-	services, err := app.NewServices(testenv.Pool(t), rules, payment.Fake{}, func() time.Time { return now })
+	services, err := app.NewServices(testenv.Pool(t), rules, app.NewProviders(config.Payment{Provider: config.ProviderFake}), func() time.Time { return now })
 	if err != nil {
 		t.Fatalf("서비스를 만들지 못했다: %v", err)
 	}
@@ -70,13 +70,16 @@ func TestNewServicesFollowsTheRules(t *testing.T) {
 	}
 }
 
+// fakeProviders 는 서버가 가짜를 고른 때와 같은 결제 대행사다.
+var fakeProviders = app.NewProviders(config.Payment{Provider: config.ProviderFake})
+
 func TestNewServicesRefusesAZeroTTL(t *testing.T) {
 	pool := testenv.Pool(t)
 	clock := func() time.Time { return now }
-	if _, err := app.NewServices(pool, config.Rules{FreeCreditTTL: time.Hour, HoldTTL: 0, OrderTTL: time.Hour}, payment.Fake{}, clock); !errors.Is(err, hold.ErrInvalidTTL) {
+	if _, err := app.NewServices(pool, config.Rules{FreeCreditTTL: time.Hour, HoldTTL: 0, OrderTTL: time.Hour}, fakeProviders, clock); !errors.Is(err, hold.ErrInvalidTTL) {
 		t.Errorf("홀드의 기한이 0: %v", err)
 	}
-	if _, err := app.NewServices(pool, config.Rules{FreeCreditTTL: time.Hour, HoldTTL: time.Hour, OrderTTL: 0}, payment.Fake{}, clock); !errors.Is(err, order.ErrInvalidTTL) {
+	if _, err := app.NewServices(pool, config.Rules{FreeCreditTTL: time.Hour, HoldTTL: time.Hour, OrderTTL: 0}, fakeProviders, clock); !errors.Is(err, order.ErrInvalidTTL) {
 		t.Errorf("주문의 기한이 0: %v", err)
 	}
 }
@@ -114,7 +117,7 @@ func (approveAll) Cancel(context.Context, payment.Request) (payment.Result, erro
 
 func TestNewServicesUsesTheGivenProvider(t *testing.T) {
 	rules := config.Rules{FreeCreditTTL: time.Hour, HoldTTL: time.Hour, OrderTTL: time.Hour}
-	services, err := app.NewServices(testenv.Pool(t), rules, approveAll{}, func() time.Time { return now })
+	services, err := app.NewServices(testenv.Pool(t), rules, order.Providers{order.ChannelWeb: approveAll{}}, func() time.Time { return now })
 	if err != nil {
 		t.Fatalf("서비스를 만들지 못했다: %v", err)
 	}
@@ -130,6 +133,26 @@ func TestNewServicesUsesTheGivenProvider(t *testing.T) {
 
 	if err != nil || confirmed.Status != order.StatusPaid {
 		t.Errorf("주문 = %s, %v. 넘겨준 결제 대행사가 쓰이지 않았다", confirmed.Status, err)
+	}
+}
+
+func TestNewServicesRefusesMissingWebProvider(t *testing.T) {
+	rules := config.Rules{FreeCreditTTL: time.Hour, HoldTTL: time.Hour, OrderTTL: time.Hour}
+	clock := func() time.Time { return now }
+	for name, providers := range map[string]order.Providers{
+		"없다":     nil,
+		"웹이 nil": {order.ChannelWeb: nil},
+	} {
+		if _, err := app.NewServices(testenv.Pool(t), rules, providers, clock); !errors.Is(err, order.ErrNoWebProvider) {
+			t.Errorf("%s: %v. ErrNoWebProvider 여야 한다", name, err)
+		}
+	}
+}
+
+func TestNewProvidersPutsTheConfiguredOneOnTheWeb(t *testing.T) {
+	providers := app.NewProviders(config.Payment{Provider: config.ProviderFake})
+	if len(providers) != 1 || providers[order.ChannelWeb] != (payment.Fake{}) {
+		t.Errorf("길마다의 결제 대행사 = %v", providers)
 	}
 }
 
