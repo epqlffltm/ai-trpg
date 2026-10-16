@@ -13,12 +13,12 @@ ai-trpg의 버그 신고, 기능 제안, 코드 개선을 환영한다. 이 프�
 
 | 폴더 | 역할 | 기술 |
 | --- | --- | --- |
-| \`auth-server/\` | 가입·로그인·JWT 발급 및 계정 | Django |
-| \`game-server/\` | 게임 엔진·테이블·라운드·AI 서술 | FastAPI |
-| \`board-server/\` | 게시글·댓글·신고 | NestJS |
-| \`billing-server/\` | 테스트 결제·크레딧·원장 | Go |
-| \`docker/\`, \`docker-compose.yml\` | 공용 인프라·프록시·컨테이너 | Docker |
-| \`docs/\` | 공통 규격·설계 문서 | Markdown |
+| `auth-server/` | 가입·로그인·JWT 발급 및 계정 | Django |
+| `game-server/` | 게임 엔진·테이블·라운드·AI 서술 | FastAPI |
+| `board-server/` | 게시글·댓글·신고 | NestJS |
+| `billing-server/` | 테스트 결제·크레딧·원장 | Go |
+| `docker/`, `docker-compose.yml` | 공용 인프라·프록시·컨테이너 | Docker |
+| `docs/` | 공통 규격·설계 문서 | Markdown |
 
 프론트엔드는 README 기준 계획 단계이므로, 코드가 실제로 추가되면 해당 문서와 이 표를 함께 갱신한다.
 
@@ -38,24 +38,24 @@ ai-trpg의 버그 신고, 기능 제안, 코드 개선을 환영한다. 이 프�
 
 | 서버 | 검사 명령 |
 | --- | --- |
-| 인증 | \`uv run python manage.py test\`, \`uv run ruff check .\`, \`uv run ruff format --check .\` |
-| 게임 | \`uv run pytest\`, \`uv run ruff check .\`, \`uv run ruff format --check .\` |
-| 게시판 | \`npm run lint\`, \`npm run format:check\`, \`npm run build\`, \`npm test\`, \`npm run test:e2e\` |
-| 결제 | \`go test ./...\`, \`go vet ./...\` |
+| 인증 | `uv run python manage.py test`, `uv run ruff check .`, `uv run ruff format --check .` |
+| 게임 | `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .` |
+| 게시판 | `npm run lint`, `npm run format:check`, `npm run build`, `npm test`, `npm run test:e2e` |
+| 결제 | `go test ./...`, `go vet ./...` |
 
 테스트 DB·환경 변수 설정, 마이그레이션 방법, 서식 검사 등은 각 서버의 README를 기준으로 한다. 변경 범위에 맞는 회귀 테스트를 추가하고, 실행하지 못한 검사는 PR에 이유를 적는다.
 
-환경 변수는 \`.env.example\`을 참고하되 **실제 \`.env\`, JWT 개인키, 토큰, 결제 비밀키는 절대 커밋하지 않는다.** 테스트 로그와 오류 보고에서도 민감정보를 제거한다.
+환경 변수는 `.env.example`을 참고하되 **실제 `.env`, JWT 개인키, 토큰, 결제 비밀키는 절대 커밋하지 않는다.** 테스트 로그와 오류 보고에서도 민감정보를 제거한다.
 
 ## 브랜치와 Pull Request
 
-1. \`main\`에서 작업 브랜치를 만든다(예: \`fix/...\`, \`feat/...\`, \`docs/...\`).
+1. `main`에서 작업 브랜치를 만든다(예: `fix/...`, `feat/...`, `docs/...`).
 2. 변경을 작성하고 관련 테스트·정적 검사를 수행한다.
 3. PR 템플릿에 변경 목적, 영향받는 서버, 검증 결과와 위험 요소를 적는다.
-4. \`main\`에는 PR로 병합한다. 저장소의 필수 검사 \`ci-ok\`가 통과해야 한다.
+4. `main`에는 PR로 병합한다. 저장소의 필수 검사 `ci-ok`가 통과해야 한다.
 5. CI가 통과하더라도 변경의 적절성, 보안, 호환성은 별도로 검토한다.
 
-\`ci-ok\`는 PR에서 변경 파일을 바탕으로 관련 서버 검사를 선택한다. 서버 코드나 공용 인프라가 변경되면 통합 기동 검사도 실행될 수 있다. 문서만 바뀐 PR에서 서버별 검사가 건너뛰어지는 것은 정상일 수 있다.
+`ci-ok`는 PR에서 변경 파일을 바탕으로 관련 서버 검사를 선택한다. 서버 코드나 공용 인프라가 변경되면 통합 기동 검사도 실행될 수 있다. 문서만 바뀐 PR에서 서버별 검사가 건너뛰어지는 것은 정상일 수 있다.
 
 AI 코딩 도구로 만든 변경도 예외가 아니다. **코드의 동작과 영향 범위를 사람이 검토하고, 실제 실행한 테스트만 실행했다고 기록한다.** AI가 제안한 수정은 테스트 결과나 보안 검토를 대신하지 않는다.
 

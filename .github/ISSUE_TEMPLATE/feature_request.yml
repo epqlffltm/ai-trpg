@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         제안을 하기 전에 동일한 Issue가 있는지 확인해 주세요.
-        보안 취약점은 이 양식 대신 SECURITY.md의 비공개 신고 경로를 이용합니다.
+        보안 취약점은 이 양식 대신 [SECURITY.md](https://github.com/epqlffltm/ai-trpg/blob/main/SECURITY.md)의 비공개 신고 경로를 이용합니다.
   - type: dropdown
     id: area
     attributes:

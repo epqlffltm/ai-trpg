@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         보안 취약점(인증 우회, 비밀키 노출 등)은 공개 Issue에 작성하지 마세요.
-        [SECURITY.md의 비공개 신고 안내](../../SECURITY.md)를 따르세요.
+        [SECURITY.md의 비공개 신고 안내](https://github.com/epqlffltm/ai-trpg/blob/main/SECURITY.md)를 따르세요.
         로그와 화면 캡처에서 토큰, 이메일 주소, 개인키, 결제 관련 비밀값을 제거해 주세요.
   - type: dropdown
     id: area
