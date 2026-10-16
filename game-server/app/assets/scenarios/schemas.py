@@ -32,6 +32,7 @@ from app.assets.models import (
     ITEM_STACK_MAX,
     MONSTER_MAX_ATTACKS,
     PLAYER_MADE_HP_MAX,
+    QUEST_MAX_TIME_LIMIT_MINUTES,
     ROUND_MAX_MINUTES,
     SCENARIO_MAX_BESTIARIES,
     SCENARIO_MAX_ENCOUNTERS,
@@ -370,7 +371,9 @@ class QuestRule(BaseModel):
     퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.
 
     start 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.
-    규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상이 없다.
+    time_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.
+    비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).
+    규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한이 없다.
     가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.
     """
 
@@ -380,6 +383,7 @@ class QuestRule(BaseModel):
     start: QuestStart = QuestStart.HIDDEN
     # 시작 소지품과 모양이 같다. 같은 물건은 한 줄에 개수로 적는다
     reward: StartingItems = []
+    time_limit_minutes: int | None = Field(default=None, ge=1, le=QUEST_MAX_TIME_LIMIT_MINUTES)
 
     @field_serializer('entry_id')
     def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
