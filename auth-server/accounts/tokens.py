@@ -166,6 +166,10 @@ def rotate_refresh_token(raw_refresh_token: str) -> TokenPair:
 
     이미 폐기된 토큰이 들어오면 탈취로 본다. 정상 사용자와 공격자 중 한쪽이
     옛 토큰을 쓴 것이므로, 누가 진짜인지 가리지 않고 그 사용자의 모든 세션을 끊는다.
+
+    끊는 것은 그 토큰이 지금 세대(세션 버전)의 것일 때뿐이다(#272). 이미 한 번 끊은 뒤의 세대라면
+    그 사건은 처리됐고, 지금 살아 있는 세션은 그 뒤에 새로 로그인한 것이다. 옛 토큰을 다시 보낼 때마다
+    또 끊으면, 옛 토큰을 가진 사람이 만료(14일)까지 남을 몇 번이고 로그아웃시킬 수 있다. 그때는 거부만 한다.
     """
     claims = _decode_refresh_claims(raw_refresh_token)
 
@@ -174,9 +178,10 @@ def rotate_refresh_token(raw_refresh_token: str) -> TokenPair:
         user = issued.user
         reused = _is_revoked(issued)
         if reused:
-            # 이 변경은 아래에서 예외를 내기 전에 커밋되어야 한다.
-            # 그래서 예외를 트랜잭션 블록 밖에서 낸다
-            revoke_all_sessions(user)
+            if _is_current_generation(user, claims):
+                # 이 변경은 아래에서 예외를 내기 전에 커밋되어야 한다.
+                # 그래서 예외를 트랜잭션 블록 밖에서 낸다
+                revoke_all_sessions(user)
         else:
             _ensure_session_is_current(user, claims)
             _revoke(issued)
@@ -251,5 +256,10 @@ def _ensure_session_is_current(user: User, claims: dict) -> None:
     """비활성 계정이거나, 모든 세션을 끊기 전에 발급된 토큰이면 거부한다."""
     if not user.is_active:
         raise InvalidRefreshTokenError
-    if claims.get(VERSION_CLAIM) != user.token_version:
+    if not _is_current_generation(user, claims):
         raise InvalidRefreshTokenError
+
+
+def _is_current_generation(user: User, claims: dict) -> bool:
+    """토큰이 지금 세션 버전에서 발급된 것인가. 모든 세션을 끊은 뒤에는 그 전의 토큰이 지난 세대다."""
+    return claims.get(VERSION_CLAIM) == user.token_version
