@@ -24,12 +24,17 @@ const uniqueViolation = "23505"
 // confirming 이면 아직 결과를 모른다. 같은 결제 번호로 다시 부르면 이어서 끝낸다. 몇 번을 불러도 크레딧은 한 번만 들어간다.
 //
 // 요청을 보낸 쪽이 중간에 연결을 끊어도 멈추지 않는다. 결제 대행사의 답을 받고도 적지 못하는 일을 줄인다.
+//
+// 작업 전체는 OperationTimeout 안에 끝난다. 넘으면 ErrTimedOut 을 감싼 오류다(detach).
 func (s *Service) Confirm(ctx context.Context, userID uuid.UUID, orderID uuid.UUID, paymentKey string) (Order, error) {
+	ctx, cancel := s.detach(ctx)
+	defer cancel()
 	confirmed, err := s.confirm(ctx, userID, orderID, paymentKey)
 	if err != nil {
-		return confirmed, err
+		return confirmed, timedOut(ctx, err)
 	}
-	return s.withRefundability(context.WithoutCancel(ctx), confirmed)
+	withRefundability, err := s.withRefundability(ctx, confirmed)
+	return withRefundability, timedOut(ctx, err)
 }
 
 // confirm 은 Confirm 의 본문이다. 돌려주는 주문에 청약철회할 수 있는지는 아직 적지 않았다.
@@ -37,7 +42,6 @@ func (s *Service) confirm(ctx context.Context, userID uuid.UUID, orderID uuid.UU
 	if !paymentKeyPattern.MatchString(paymentKey) {
 		return Order{}, ErrInvalidPaymentKey
 	}
-	ctx = context.WithoutCancel(ctx)
 
 	started, err := s.startConfirming(ctx, userID, orderID, paymentKey)
 	if errors.Is(err, pgx.ErrNoRows) {
