@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 보안 취약점 신고
+    url: https://github.com/epqlffltm/ai-trpg/security/advisories/new
+    about: 취약점은 공개 Issue 에 쓰지 말고 비공개로 알려 주세요(SECURITY.md).
