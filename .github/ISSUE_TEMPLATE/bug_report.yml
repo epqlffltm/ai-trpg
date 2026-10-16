@@ -1,0 +1,80 @@
+name: "버그 신고"
+description: "재현 가능한 기능 오류나 회귀 문제를 신고합니다."
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        보안 취약점(인증 우회, 비밀키 노출 등)은 공개 Issue에 작성하지 마세요.
+        [SECURITY.md의 비공개 신고 안내](../../SECURITY.md)를 따르세요.
+        로그와 화면 캡처에서 토큰, 이메일 주소, 개인키, 결제 관련 비밀값을 제거해 주세요.
+  - type: dropdown
+    id: area
+    attributes:
+      label: "영향받는 구성 요소"
+      description: "관련 구성 요소를 모두 선택하세요."
+      multiple: true
+      options:
+        - "인증 서버 (auth-server)"
+        - "게임 서버 (game-server)"
+        - "게시판 서버 (board-server)"
+        - "결제 서버 (billing-server)"
+        - "프록시·공용 인프라 (docker)"
+        - "프론트엔드 (예정)"
+        - "여러 서버·모름"
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: "문제 요약"
+      description: "무슨 문제가 발생했나요?"
+      placeholder: "예: 라운드 종료 후 크레딧 홀드가 반환되지 않습니다."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "재현 방법"
+      description: "테스트 데이터와 조건을 포함해 재현 단계를 적으세요. 재현이 어렵다면 관찰한 조건을 적으세요."
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "기대한 동작"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: "실제 동작"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "실행 환경"
+      description: "가능하면 브랜치·커밋, OS, 로컬/컨테이너 여부, 관련 버전을 적으세요."
+      placeholder: "main / 커밋 SHA / Docker Compose / ..."
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: "오류 로그·추가 정보(선택)"
+      description: "비밀값과 개인정보를 지운 로그 또는 request_id, trace_id를 적어 주세요."
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: "제출 전 확인"
+      options:
+        - label: "보안 취약점의 상세 재현 방법이나 인증 정보·개인정보·비밀값을 포함하지 않았습니다."
+          required: true

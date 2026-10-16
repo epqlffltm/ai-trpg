@@ -1,0 +1,57 @@
+name: "기능·개선 제안"
+description: "새 기능이나 기존 기능의 개선 방향을 제안합니다."
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        제안을 하기 전에 동일한 Issue가 있는지 확인해 주세요.
+        보안 취약점은 이 양식 대신 SECURITY.md의 비공개 신고 경로를 이용합니다.
+  - type: dropdown
+    id: area
+    attributes:
+      label: "관련 구성 요소"
+      description: "제안이 영향을 주는 곳을 선택하세요."
+      multiple: true
+      options:
+        - "인증 서버 (auth-server)"
+        - "게임 서버 (game-server)"
+        - "게시판 서버 (board-server)"
+        - "결제 서버 (billing-server)"
+        - "프록시·공용 인프라 (docker)"
+        - "프론트엔드 (예정)"
+        - "여러 서버·공통"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: "해결하려는 문제"
+      description: "현재 어떤 어려움이나 필요가 있나요?"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "제안하는 변경"
+      description: "사용자나 서버 관점에서 어떤 동작을 원하나요?"
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: "완료 조건"
+      description: "어떤 결과가 나오면 이 기능이 완성되었다고 볼 수 있나요?"
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: "영향 범위·대안(선택)"
+      description: "API 호환성, DB 변경, 인증·결제·성능 영향과 다른 해결 방법을 적어 주세요."
+    validations:
+      required: false
