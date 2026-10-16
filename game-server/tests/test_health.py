@@ -36,3 +36,17 @@ async def test_health_does_not_depend_on_the_database():
 
     # DB 가 죽었다고 관리 도구가 서버까지 재시작하면 안 된다
     assert response.status_code == status.HTTP_200_OK
+
+
+async def test_health_answers_head_without_a_body(client: AsyncClient):
+    # HEAD 로 확인하는 도구가 있다. 네 서버가 같게 답한다
+    response = await client.head('/health')
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.content == b''
+
+
+async def test_health_takes_only_get_and_head(client: AsyncClient):
+    response = await client.post('/health')
+
+    assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED

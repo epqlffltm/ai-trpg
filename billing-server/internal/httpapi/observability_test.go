@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
@@ -236,12 +237,13 @@ func TestEveryResponseCarriesTheRequestID(t *testing.T) {
 func TestTheFinishedLineHasTheCommonFields(t *testing.T) {
 	server := observe(t, nil)
 
-	response := server.send(http.MethodGet, "/health")
+	// 상태 확인 주소가 아닌 보통의 주소로 본다. 상태 확인의 줄은 수준이 다르다(아래)
+	response := server.send(http.MethodGet, meURL, "Authorization", "Bearer the-token")
 
 	line := server.finished(t)
 	for name, want := range map[string]any{
 		"level": "info", "service": "billing-server", "environment": "test", "version": "test-version",
-		"operation": "http.request", "method": "GET", "route": "/health",
+		"operation": "http.request", "method": "GET", "route": meURL,
 		"status_code": float64(200), "result": "success", "request_id": requestIDOf(response),
 	} {
 		if line[name] != want {
@@ -430,5 +432,52 @@ func TestHealthBodiesAreUnchanged(t *testing.T) {
 	// 본문의 모양은 그대로다. 식별자는 머리말로만 돌려준다
 	if body(health) != `{"status":"ok"}` || body(ready) != `{"status":"ok"}` {
 		t.Errorf("본문 = %s, %s", body(health), body(ready))
+	}
+}
+
+// observeWith 는 정해 둔 대로 답하는 DB 를 꽂고 로그를 모으는 라우터다. 상태 확인의 줄을 보는 테스트가 쓴다.
+func observeWith(db database.Pinger) observed {
+	var out bytes.Buffer
+	info := obs.ServiceInfo{Service: obs.ServiceName, Environment: "test", Version: "test-version"}
+	router := httpapi.NewRouter(httpapi.Dependencies{DB: db, Logger: obs.NewLogger(&out, info, slog.LevelDebug)})
+	return observed{router: router, out: &out}
+}
+
+func TestASuccessfulProbeIsDebug(t *testing.T) {
+	for _, path := range []string{httpapi.HealthPath, httpapi.ReadyPath} {
+		t.Run(path, func(t *testing.T) {
+			server := observeWith(&fakeDB{})
+
+			server.send(http.MethodGet, path)
+
+			// 관리 도구가 10초마다 부른다. 운영의 수준(info)에서는 남지 않는다
+			line := server.finished(t)
+			if line["level"] != "debug" || line["route"] != path || line["status_code"] != float64(200) {
+				t.Errorf("상태 확인의 줄 = %v", line)
+			}
+		})
+	}
+}
+
+func TestAnUnavailableProbeIsAWarningNotAnError(t *testing.T) {
+	server := observeWith(&fakeDB{err: errors.New("db is down")})
+
+	server.send(http.MethodGet, httpapi.ReadyPath)
+
+	// 503 은 이 주소의 답이다. 서버의 잘못(error)이 아니다. 결과 칸은 다른 5xx 처럼 server_error 다
+	line := server.finished(t)
+	if line["level"] != "warning" || line["status_code"] != float64(503) || line["result"] != "server_error" {
+		t.Errorf("준비 안 됨의 줄 = %v", line)
+	}
+}
+
+func TestAPanickingProbeIsStillAnError(t *testing.T) {
+	server := observeWith(panickingDB{})
+
+	server.send(http.MethodGet, httpapi.ReadyPath)
+
+	line := server.finished(t)
+	if line["level"] != "error" || line["status_code"] != float64(500) {
+		t.Errorf("패닉의 줄 = %v", line)
 	}
 }

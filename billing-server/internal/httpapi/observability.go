@@ -76,7 +76,7 @@ func logFinished(logger *slog.Logger, c *gin.Context, elapsed time.Duration) {
 		slog.Int64(obs.FieldDurationMS, elapsed.Milliseconds()),
 		slog.String(obs.FieldResult, resultOf(status)),
 	)
-	logger.LogAttrs(c.Request.Context(), levelOf(status), "요청을 처리했다", attrs...)
+	logger.LogAttrs(c.Request.Context(), levelOf(c.FullPath(), status), "요청을 처리했다", attrs...)
 }
 
 // routeAttrs 는 요청이 맞은 주소의 틀을 적는다(/api/v1/billing/orders/:id). 실제 주소가 아니다.
@@ -103,12 +103,36 @@ func resultOf(status int) string {
 	}
 }
 
-// levelOf 는 상태 코드에 맞는 로그의 수준이다. 요청의 잘못(4xx)은 info 다. 서버는 제 일을 했다.
-func levelOf(status int) slog.Level {
+// levelOf 는 요청이 끝난 줄의 수준이다. 요청의 잘못(4xx)은 info 다. 서버는 제 일을 했다.
+// 상태 확인 주소는 따로 본다(probeLevelOf).
+func levelOf(route string, status int) slog.Level {
+	if isProbe(route) {
+		return probeLevelOf(status)
+	}
 	if status >= http.StatusInternalServerError {
 		return slog.LevelError
 	}
 	return slog.LevelInfo
+}
+
+// isProbe 는 상태 확인 주소(/health, /health/ready)인지 본다. 관리 도구가 10초마다 부르는 주소다.
+func isProbe(route string) bool {
+	return route == HealthPath || route == ReadyPath
+}
+
+// probeLevelOf 는 상태 확인 요청의 줄의 수준이다.
+// 성공은 debug 다. 10초마다 오는 확인이 운영의 로그를 메우지 않게 한다.
+// 503(준비 안 됨)은 warning 이다. 오류가 아니라 이 주소의 답이다. 까닭은 레디가 따로 남긴다(health.go).
+// 그 밖의 5xx(패닉 같은 것)는 다른 주소처럼 error 다.
+func probeLevelOf(status int) slog.Level {
+	switch {
+	case status == http.StatusServiceUnavailable:
+		return slog.LevelWarn
+	case status >= http.StatusInternalServerError:
+		return slog.LevelError
+	default:
+		return slog.LevelDebug
+	}
 }
 
 // logHandledErrors 는 핸들러가 남긴 오류(c.Error)를 적는다. internalError 가 5xx 로 답하면서 남긴 원인이다.

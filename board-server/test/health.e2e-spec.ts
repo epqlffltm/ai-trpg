@@ -83,9 +83,24 @@ describe('준비됐는지 확인하는 주소', () => {
     expect(response.status).toBe(503);
     expect(response.body).toEqual({ status: 'unavailable' });
     expect(response.text).not.toContain('board');
-    // 서버의 잘못으로 로그에 남는다. 오류의 글(DB 주소와 계정)은 로그에도 싣지 않는다
-    expect(logs.finishedWith(503)).toMatchObject([{ level: 'error' }]);
+    // 준비 안 됨은 이 주소의 답이라 warning 으로 남는다(서버의 잘못인 error 가 아니다).
+    // 오류의 글(DB 주소와 계정)은 로그에도 싣지 않는다
+    expect(logs.finishedWith(503)).toMatchObject([{ level: 'warning' }]);
     expect(logs.lines.join('\n')).not.toContain(secret);
+  });
+
+  it('DB 에 닿지 않으면 HEAD 에도 본문 없이 503 으로 답한다', async () => {
+    const broken = { ping: () => Promise.reject(new Error('끊겼다')) };
+    const app = await createTestApp((builder) =>
+      builder.overrideProvider(DatabaseHealth).useValue(broken),
+    );
+    captureLogs(app);
+
+    const response = await request(app.getHttpServer()).head('/health/ready');
+    await app.close();
+
+    expect(response.status).toBe(503);
+    expect(response.text).toBeUndefined();
   });
 
   it('DB 에 닿지 않아도 살아 있다고는 답한다', async () => {

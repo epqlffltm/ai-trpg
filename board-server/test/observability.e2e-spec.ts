@@ -152,7 +152,8 @@ describe('요청 식별자', () => {
 
 describe('요청이 끝난 줄', () => {
   it('공통 칸이 모두 있다', async () => {
-    const response = await request(app.getHttpServer()).get('/health');
+    // 상태 확인 주소가 아닌 보통의 주소로 본다. 상태 확인의 줄은 수준이 다르다(아래)
+    const response = await request(app.getHttpServer()).get(`${API}/boards`);
 
     const line = finishedLine();
     expect(line).toMatchObject({
@@ -162,7 +163,7 @@ describe('요청이 끝난 줄', () => {
       version: 'test-version',
       operation: 'http.request',
       method: 'GET',
-      route: '/health',
+      route: `${API}/boards`,
       status_code: 200,
       result: 'success',
       request_id: response.headers['x-request-id'],
@@ -347,6 +348,28 @@ describe('다른 서버를 부를 때', () => {
 });
 
 describe('상태를 확인하는 주소', () => {
+  it.each(['/health', '/health/ready'])(
+    '%s 의 성공은 debug 로 남는다',
+    async (url) => {
+      await request(app.getHttpServer()).get(url);
+
+      // 관리 도구가 10초마다 부른다. 운영의 수준(info)에서는 남지 않는다
+      expect(finishedLine()).toMatchObject({
+        level: 'debug',
+        route: url,
+        status_code: 200,
+      });
+    },
+  );
+
+  it('HEAD 에는 본문 없이 GET 과 같은 상태 코드로 답한다', async () => {
+    const health = await request(app.getHttpServer()).head('/health');
+    const ready = await request(app.getHttpServer()).head('/health/ready');
+
+    expect([health.status, ready.status]).toEqual([200, 200]);
+    expect([health.text, ready.text]).toEqual([undefined, undefined]);
+  });
+
   it('본문의 모양은 그대로다. 식별자는 머리말로만 돌려준다', async () => {
     const health = await request(app.getHttpServer()).get('/health');
     const ready = await request(app.getHttpServer()).get('/health/ready');
