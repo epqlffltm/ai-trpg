@@ -166,7 +166,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | auth-server | 이미 가입한 계정들에 환영 크레딧을 주라고 적어 두기(한 번 돌리는 명령) | `welcome_credit.request_existing` |
 | billing-server | 만료된 홀드·주문, 사라진 무료 크레딧 닫기(정리 작업이 30초마다 한 바퀴. 바퀴마다 새 `job_id`) | `sweep.run` |
 | billing-server | 장부 맞춰 보기와 오래된 결제 끝내기(하루 한 번 돌리는 명령) | `reconcile.run` |
-| auth-server | 인증하지 않은 계정 지우기 | `account.delete_unverified` |
+| auth-server | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기 | `account.delete_unverified` |
 | auth-server | 보안 이벤트 요약 메일 | `security.send_digest` |
 
 ## 로그
@@ -322,7 +322,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
 | `welcome_credit.deliver` | auth | 환영 크레딧을 결제 서버에 맡기기 |
 | `welcome_credit.request_existing` | auth | 이미 가입한 계정들에 환영 크레딧을 주라고 적어 두기 |
-| `account.delete_unverified` | auth | 인증하지 않은 계정 지우기 |
+| `account.delete_unverified` | auth | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기(옛 이름 그대로) |
 | `security.send_digest` | auth | 보안 이벤트 요약 메일 |
 | `auth.jwks_fetch` | billing | 인증 서버에서 공개키 받기 |
 | `order.confirm` | billing | 주문의 결제 승인 |

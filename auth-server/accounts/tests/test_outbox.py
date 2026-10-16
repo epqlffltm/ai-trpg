@@ -316,10 +316,8 @@ class WorkerCommandTests(TestCase):
 class RequestsDoNotSendMailTests(APITestCase):
     """요청을 처리하는 동안에는 메일 서버에 가지 않는다. 적기만 한다."""
 
-    def signup(self, **overrides):
-        payload = {'username': 'player_01', 'email': EMAIL, 'nickname': '플레이어', 'password': PASSWORD}
-        payload.update(overrides)
-        return self.client.post(SIGNUP_URL, payload, format='json')
+    def signup(self, email: str = EMAIL):
+        return self.client.post(SIGNUP_URL, {'email': email}, format='json')
 
     def test_signup_queues_the_code_mail(self):
         response = self.signup()
@@ -346,15 +344,12 @@ class RequestsDoNotSendMailTests(APITestCase):
 
         # 메일 서버의 상태가 요청의 성공과 실패를 바꾸지 않는다
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
-        self.assertTrue(User.objects.filter(username='player_01').exists())
+        self.assertEqual(OutgoingMail.objects.get().to_email, EMAIL)
 
     def test_nothing_is_queued_when_signup_is_rejected(self):
-        self.signup()
-        OutgoingMail.objects.all().delete()
+        response = self.signup(email='not-an-email')
 
-        response = self.signup(email='another@example.com')
-
-        # 아이디가 겹쳐 거부됐다. 계정도 보낼 메일도 생기지 않는다
+        # 이메일의 모양이 틀려 거부됐다. 보낼 메일이 생기지 않는다
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(OutgoingMail.objects.count(), 0)
 

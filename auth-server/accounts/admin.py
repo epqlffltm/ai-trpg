@@ -11,7 +11,7 @@ User 는 Django 의 UserAdmin 을 상속해 비밀번호 해싱과 변경 화면
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from accounts.models import EmailCode, OutgoingMail, SecurityEvent, User, WelcomeCredit
+from accounts.models import EmailCode, OutgoingMail, SecurityEvent, SignupCode, User, WelcomeCredit
 
 
 @admin.register(User)
@@ -66,6 +66,29 @@ class EmailCodeAdmin(admin.ModelAdmin):
 
     @admin.display(boolean=True, description='쓸 수 있는 코드')
     def has_active_code(self, record: EmailCode) -> bool:
+        return bool(record.code_hash)
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(SignupCode)
+class SignupCodeAdmin(admin.ModelAdmin):
+    """가입 코드의 상태를 조회만 한다. 회원의 인증 코드와 같은 까닭으로 만들거나 고치지 못한다."""
+
+    list_display = ('email', 'has_active_code', 'expires_at', 'failed_attempts', 'last_issued_at')
+    search_fields = ('email',)
+    # 해시는 화면에 보여 주지 않는다
+    exclude = ('code_hash',)
+
+    @admin.display(boolean=True, description='쓸 수 있는 코드')
+    def has_active_code(self, record: SignupCode) -> bool:
         return bool(record.code_hash)
 
     def has_add_permission(self, request) -> bool:

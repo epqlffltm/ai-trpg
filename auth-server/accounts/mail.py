@@ -22,7 +22,7 @@ DIGEST_MAX_LISTED_EVENTS = 50
 
 # 용도별 메일 제목과 안내 문구
 EMAIL_CODE_MESSAGES = {
-    EmailCodePurpose.SIGNUP: ('가입 인증 코드', '회원가입을 마치려면 아래 코드를 입력해 주세요.'),
+    EmailCodePurpose.SIGNUP: ('가입 인증 코드', '회원가입을 이어 가려면 아래 코드를 입력해 주세요.'),
     EmailCodePurpose.LOGIN: ('로그인 인증 코드', '로그인을 마치려면 아래 코드를 입력해 주세요.'),
 }
 
@@ -48,6 +48,16 @@ def send_email_code(*, user: User, purpose: str, code: str) -> None:
     """
     subject, body = build_email_code_message(purpose=purpose, code=code)
     enqueue_mail(to_email=user.email, subject=subject, body=body)
+
+
+def send_signup_code(*, email: str, code: str) -> None:
+    """
+    가입하려는 이메일로 코드를 보낸다. 아직 계정이 없어 회원이 아니라 주소로 보낸다(#271).
+
+    문구에 아이디나 닉네임이 없다. 가입 내용은 이 코드를 맞힌 뒤에 정한다.
+    """
+    subject, body = build_email_code_message(purpose=EmailCodePurpose.SIGNUP, code=code)
+    enqueue_mail(to_email=email, subject=subject, body=body)
 
 
 def send_already_registered_notice(*, user: User) -> None:

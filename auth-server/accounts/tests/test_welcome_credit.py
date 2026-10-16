@@ -28,7 +28,7 @@ from rest_framework.test import APITestCase
 from accounts.billing_client import ALREADY_GRANTED, DISABLED, GRANTED, BillingUnavailableError
 from accounts.models import User, WelcomeCredit, WelcomeCreditStatus
 from accounts.tests.billing_stub import SECRET, BillingStub
-from accounts.tests.helpers import code_from, wrong_code_for
+from accounts.tests.helpers import code_from, complete_signup, request_signup_ticket, sign_up, wrong_code_for
 from accounts.welcome_credit import (
     DEFAULT_BATCH_SIZE,
     FIRST_RETRY_DELAY,
@@ -196,62 +196,59 @@ class RequestTests(TestCase):
 
 
 class SignupTests(APITestCase):
-    """가입 인증을 실제 주소로 지난다. 인증과 함께 줄이 적히는지 본다."""
+    """가입을 실제 주소로 지난다. 계정이 생길 때 줄이 함께 적히는지 본다."""
 
-    def signup(self, number: int = 1, email: str = EMAIL):
-        payload = {
-            'username': f'player_{number:02d}',
-            'email': email,
-            'nickname': f'플레이어{number}',
-            'password': PASSWORD,
-        }
-        return self.client.post(SIGNUP_URL, payload, format='json')
+    def ticket(self, email: str = EMAIL) -> str:
+        return request_signup_ticket(self.client, email)
 
-    def verify(self, email: str = EMAIL, code: str | None = None):
-        return self.client.post(VERIFY_URL, {'email': email, 'code': code or code_from(mail.outbox[-1])}, format='json')
+    def complete(self, ticket: str, number: int = 1):
+        return complete_signup(
+            self.client, ticket, username=f'player_{number:02d}', nickname=f'플레이어{number}', password=PASSWORD
+        )
 
-    def signup_and_verify(self, number: int = 1, email: str = EMAIL) -> User:
-        self.signup(number, email)
-        response = self.verify(email)
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+    def sign_up(self, number: int = 1, email: str = EMAIL) -> User:
+        response = self.complete(self.ticket(email), number)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         return User.objects.get(username=f'player_{number:02d}')
 
-    def test_verifying_the_email_queues_the_welcome_credit(self):
-        user = self.signup_and_verify()
+    def test_signing_up_queues_the_welcome_credit(self):
+        user = self.sign_up()
 
         claim = WelcomeCredit.objects.get()
         self.assertEqual(claim.user_public_id, user.public_id)
         self.assertEqual(claim.status, WelcomeCreditStatus.PENDING)
 
-    def test_verifying_never_talks_to_the_billing_server(self):
+    def test_signing_up_never_talks_to_the_billing_server(self):
         # 결제 서버가 죽어 있어도 가입은 끝난다. 요청을 처리하는 쪽은 적기만 한다
         with patch('accounts.billing_client.grant_welcome_credit') as client, billing_is_down() as worker_client:
-            response_user = self.signup_and_verify()
+            user = self.sign_up()
 
-        self.assertTrue(response_user.is_email_verified)
+        self.assertTrue(user.is_email_verified)
         client.assert_not_called()
         worker_client.assert_not_called()
 
-    def test_signing_up_without_verifying_queues_nothing(self):
-        # 인증하지 않은 계정은 주소의 주인인지 모른다. 남의 주소로 가입만 해서 크레딧을 받을 수 없다
-        self.signup()
+    def test_verifying_the_email_without_finishing_queues_nothing(self):
+        # 계정이 생기기 전이다. 줄은 계정과 함께만 적힌다
+        self.ticket()
 
         self.assertEqual(WelcomeCredit.objects.count(), 0)
 
     def test_wrong_code_queues_nothing(self):
-        self.signup()
+        self.client.post(SIGNUP_URL, {'email': EMAIL}, format='json')
 
-        response = self.verify(code=wrong_code_for(code_from(mail.outbox[-1])))
+        response = self.client.post(
+            VERIFY_URL, {'email': EMAIL, 'code': wrong_code_for(code_from(mail.outbox[-1]))}, format='json'
+        )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(WelcomeCredit.objects.count(), 0)
 
     def test_deleting_the_account_and_signing_up_again_does_not_queue_twice(self):
-        first = self.signup_and_verify(1)
+        first = self.sign_up(1)
         first_public_id = first.public_id
         first.delete()
 
-        again = self.signup_and_verify(2)
+        again = self.sign_up(2)
 
         # 가입은 된다. 받는 것만 한 번이다
         self.assertTrue(again.is_email_verified)
@@ -259,25 +256,24 @@ class SignupTests(APITestCase):
         self.assertEqual(WelcomeCredit.objects.get().user_public_id, first_public_id)
 
     def test_tagged_addresses_of_one_mailbox_queue_once(self):
-        first = self.signup_and_verify(1, 'someone+one@example.com')
-        second = self.signup_and_verify(2, 'someone+two@example.com')
+        first = self.sign_up(1, 'someone+one@example.com')
+        second = self.sign_up(2, 'someone+two@example.com')
 
         self.assertTrue(second.is_email_verified)
         self.assertEqual(WelcomeCredit.objects.get().user_public_id, first.public_id)
 
-    def test_verification_is_undone_when_the_row_cannot_be_written(self):
-        # 둘은 한 트랜잭션이다. 줄을 못 적었으면 인증도 안 된 것이고, 같은 코드로 다시 할 수 있다
-        self.signup()
-        code = code_from(mail.outbox[-1])
+    def test_no_account_is_kept_when_the_row_cannot_be_written(self):
+        # 둘은 한 트랜잭션이다. 줄을 못 적었으면 계정도 없고, 같은 티켓으로 다시 할 수 있다
+        ticket = self.ticket()
 
         with (
             patch('accounts.services.request_welcome_credit', side_effect=RuntimeError('DB 가 끊겼다')),
             self.assertRaises(RuntimeError),
         ):
-            self.verify(code=code)
+            self.complete(ticket)
 
-        self.assertFalse(User.objects.get(username='player_01').is_email_verified)
-        self.assertEqual(self.verify(code=code).status_code, status.HTTP_200_OK)
+        self.assertFalse(User.objects.filter(username='player_01').exists())
+        self.assertEqual(self.complete(ticket).status_code, status.HTTP_201_CREATED)
         self.assertEqual(WelcomeCredit.objects.count(), 1)
 
 
@@ -600,9 +596,7 @@ class EndToEndTests(APITestCase):
     """가짜를 끼우지 않는다. 가입 인증부터 결제 서버가 받는 요청까지 지난다."""
 
     def test_signup_ends_with_a_signed_request_for_that_user(self):
-        payload = {'username': 'player_01', 'email': EMAIL, 'nickname': '플레이어', 'password': PASSWORD}
-        self.client.post(SIGNUP_URL, payload, format='json')
-        self.client.post(VERIFY_URL, {'email': EMAIL, 'code': code_from(mail.outbox[-1])}, format='json')
+        sign_up(self.client, username='player_01', email=EMAIL, nickname='플레이어', password=PASSWORD)
         user = User.objects.get(username='player_01')
 
         with BillingStub() as stub, override_settings(BILLING_URL=stub.url, BILLING_SECRET=SECRET):
