@@ -123,6 +123,11 @@ class EventType(enum.StrEnum):
     # 캐릭터가 서 있는 곳에서 숨긴 길을 찾았다(app/rounds/map_actions.py). 찾은 길만 적는다. 못 찾았으면 빈 목록이다.
     # 굴린 판정은 적지 않는다. 숨긴 길이 있었는지가 드러난다
     PLACE_SEARCHED = 'place_searched'
+    # 캐릭터가 쉬었다(app/rounds/rests.py). 쉬는 행동을 선언했거나(cause: rest), 시간이 흘러 저절로 회복했다
+    # (cause: natural). 선언한 휴식이 다쳐서 깨졌으면 rested 가 false 이고 까닭(reason)이 있다
+    CHARACTER_RESTED = 'character_rested'
+    # 고비를 넘기고 쓰러져 있던 캐릭터가 오래 쉬어 되살아나기를 굴렸다(app/rounds/rests.py). 성공이면 HP 1 로 일어났다
+    CHARACTER_REVIVED = 'character_revived'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고, 방장이 다시 맡길 수 있다

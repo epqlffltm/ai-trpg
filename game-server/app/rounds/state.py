@@ -133,6 +133,13 @@ def search_of(declaration: Declaration | None) -> dict | None:
     return declaration.outcome.get('search')
 
 
+def rest_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 쉬기의 결과(app/rounds/rests.py). 쉬는 행동이 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('rest')
+
+
 def naming_of(declaration: Declaration | None) -> dict | None:
     """이 선언에 적힌 지목의 결과(app/rounds/naming.py 의 judge_naming). 지목이 아니었거나 결과가 없으면 None."""
     if declaration is None or declaration.outcome is None:

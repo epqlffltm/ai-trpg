@@ -8,11 +8,13 @@
      몬스터의 공격(app/rounds/monster_attacks.py)을 판정하고, 없으면 들어온 순서로 판정한다.
      판정이면 app/rounds/checks.py, 치료면 app/rounds/treatments.py,
      지목이면 app/rounds/naming.py(주사위를 굴리지 않는다), 물건을 쓰거나 건네면 app/rounds/item_actions.py,
-     맵에서 가거나 찾으면 app/rounds/map_actions.py.
+     맵에서 가거나 찾으면 app/rounds/map_actions.py, 쉬면 app/rounds/rests.py(시간만 늘리고 회복은 4 에서).
   2. 쓰러진 캐릭터는 죽음의 굴림을 굴린다(roll_death_saves, app/engine/death.py).
      이번 라운드에 쓰러진 캐릭터는 굴리지 않는다. 동료가 일으킬 틈이 한 라운드는 있다.
      이번 라운드에 회복을 받아 일어난 캐릭터도 굴리지 않는다. 행동의 결과를 먼저 끝내고 나서 굴린다.
   3. 때가 된 부상을 끝낸다(expire_injuries). 오래 가는 것이 나으면 후유증 표를 굴린다.
+  4. 쉰 사람이 회복하고, 고비를 넘긴 사람이 되살아나기를 굴리고, 저절로 회복한다(app/rounds/rests.py).
+     이번 라운드에 누가 다쳤는지(roll_checks 가 돌려준다)를 보고 정한다. 다친 사람의 휴식은 깨진다.
 DB 를 모른다. 이미 읽어 온 테이블과 이번 장면을 고친다. 저장과 이벤트는 부른 쪽이 한다.
 """
 
@@ -22,7 +24,16 @@ from dataclasses import asdict
 from app.assets.scenarios.snapshot import person_entries, read_snapshot
 from app.engine import action as actions
 from app.engine import death
-from app.engine.action import AnyAction, GiveAction, MoveAction, NameAction, SearchAction, TreatAction, UseAction
+from app.engine.action import (
+    AnyAction,
+    GiveAction,
+    MoveAction,
+    NameAction,
+    RestAction,
+    SearchAction,
+    TreatAction,
+    UseAction,
+)
 from app.engine.dice import Dice
 from app.rounds import initiative
 from app.rounds import injuries as round_injuries
@@ -36,6 +47,7 @@ from app.rounds.models import Declaration, Round
 from app.rounds.monster_attacks import can_act, take_monster_turn
 from app.rounds.monster_scene import SceneMonster
 from app.rounds.naming import judge_naming
+from app.rounds.rests import judge_rest
 from app.rounds.state import find_declaration, rules_of
 from app.rounds.treatments import judge_treatment
 from app.tables import items, sheets
@@ -60,6 +72,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_move(judging, member, action)
     if isinstance(action, SearchAction):
         return judge_search(judging, member)
+    if isinstance(action, RestAction):
+        return judge_rest(judging, action)
     return judge_check(judging, member, action)
 
 
@@ -158,7 +172,7 @@ def take_turns(judging: Judging, turns: list[Turn], declarations: dict[uuid.UUID
     return documents
 
 
-def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> None:
+def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> set[uuid.UUID]:
     """
     닫히는 라운드의 행동과 몬스터의 공격을 판정하고, 결과에 따라 HP 를 바꾸고, 결과를 적는다.
 
@@ -176,21 +190,24 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> No
 
     장면의 마리 중 아직 만나지 않은 것에는 이번 라운드를 만난 첫 라운드로 적는다(mark_engaged).
     기습은 그 라운드에만 쓴다.
+
+    이번 라운드에 피해를 입은 앉은 사람들(user_id)을 돌려준다. 쉬는 사람의 휴식이 깨졌는지 이것으로 본다.
     """
     initiative.mark_engaged(scene.monsters, round_.number)
     rolling = rolling_members(table, round_)
     acting = [monster for monster in scene.monsters if can_act(monster)]
     if not rolling and not acting:
-        return
+        return set()
 
     judging = build_judging(table, round_, dice, scene)
     if not acting:
         for member, declaration in rolling:
             take_member_turn(judging, member, declaration)
-        return
+        return judging.hurt
     turns = build_turns(judging, rolling, acting)
     declarations = {member.user_id: declaration for member, declaration in rolling}
     round_.turns = take_turns(judging, turns, declarations)
+    return judging.hurt
 
 
 def find_dying(table: GameTable) -> list[TableMember]:

@@ -347,6 +347,33 @@ class SearchOutcome(BaseModel):
     search: SearchOut
 
 
+class RestOut(BaseModel):
+    """
+    쉰 결과. 엔진이 정했다(app/rounds/rests.py). 판정이 없다.
+
+    쉬는 라운드는 적어도 그 휴식의 시간만큼 이어진다. 그 라운드에 다쳤거나 쓰러졌거나 죽었으면 휴식이 깨져
+    회복하지 않는다(rested 가 false, reason 이 hurt, downed, dead).
+    """
+
+    # short 또는 long
+    length: str
+    # 그 휴식에 드는 게임 안의 시간(분). 다음 라운드가 적어도 그만큼 뒤에 열렸다
+    minutes: int
+    rested: bool
+    reason: str | None
+    # 짧은 휴식의 회복을 정한 눈들. 긴 휴식(최대 HP 까지)과 깨진 휴식은 빈 목록이다
+    rolls: list[int]
+    before: int
+    after: int
+    max_hp: int
+
+
+class RestOutcome(BaseModel):
+    """쉬는 행동의 결과."""
+
+    rest: RestOut
+
+
 class TargetGoneOut(BaseModel):
     """판정할 때 겨눈 몬스터를 칠 수 없었던 것. 엔진은 굴리지 않았다."""
 
@@ -382,7 +409,8 @@ class DeclarationOut(BaseModel):
     action: Action | None
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
-    # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome 이다.
+    # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
+    # 쉬었으면 RestOutcome 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
     # 차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면 TurnLostOutcome 이다
     outcome: (
@@ -392,6 +420,7 @@ class DeclarationOut(BaseModel):
         | ItemGiveOutcome
         | MoveOutcome
         | SearchOutcome
+        | RestOutcome
         | TargetGoneOutcome
         | TurnLostOutcome
         | None
