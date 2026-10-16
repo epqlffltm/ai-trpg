@@ -15,6 +15,12 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 )
 
+// 상태를 확인하는 주소 둘. 요청의 로그는 이 둘을 따로 다룬다(observability.go 의 isProbe).
+const (
+	HealthPath = "/health"
+	ReadyPath  = "/health/ready"
+)
+
 // ReadinessTimeout 은 준비 상태를 확인할 때 DB 의 답을 기다리는 가장 긴 시간이다.
 // 확인하는 쪽(프록시, 관리 도구)이 오래 붙들려 있지 않게 한다.
 const ReadinessTimeout = 3 * time.Second

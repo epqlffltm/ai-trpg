@@ -8,6 +8,7 @@
 import { currentIds } from './request-context.js';
 import {
   IncomingRequest,
+  levelOf,
   requestLogging,
   resultOf,
   routeFields,
@@ -22,8 +23,12 @@ function makeLog() {
   const lines: { level: string; fields: Record<string, unknown> }[] = [];
   return {
     lines,
+    debug: (fields: object) =>
+      lines.push({ level: 'debug', fields: fields as Record<string, unknown> }),
     log: (fields: object) =>
       lines.push({ level: 'info', fields: fields as Record<string, unknown> }),
+    warn: (fields: object) =>
+      lines.push({ level: 'warn', fields: fields as Record<string, unknown> }),
     error: (fields: object) =>
       lines.push({ level: 'error', fields: fields as Record<string, unknown> }),
   };
@@ -179,6 +184,37 @@ describe('requestLogging', () => {
     const text = JSON.stringify(log.lines);
     expect(text).not.toContain('some-secret-token-value');
     expect(text).not.toContain('cookie-secret-value');
+  });
+});
+
+describe('상태 확인 요청의 수준', () => {
+  it.each([
+    ['/health', 200, 'debug'],
+    ['/health/ready', 200, 'debug'],
+    ['/health/ready', 404, 'debug'],
+    // 준비 안 됨은 이 주소의 답이다. 서버의 잘못(error)이 아니다
+    ['/health/ready', 503, 'warn'],
+    // 처리하지 못한 예외는 다른 주소처럼 error 다
+    ['/health/ready', 500, 'error'],
+  ])('%s 의 %i 는 %s 다', (route, statusCode, level) => {
+    expect(levelOf(route, statusCode)).toBe(level);
+  });
+
+  it('다른 주소는 수준이 그대로다', () => {
+    expect(levelOf('/api/v1/board/me', 503)).toBe('error');
+    expect(levelOf('/api/v1/board/me', 200)).toBe('log');
+    expect(levelOf(undefined, 200)).toBe('log');
+  });
+
+  it('상태 확인의 성공은 debug 로 남긴다', () => {
+    const log = makeLog();
+    const response = makeResponse(200);
+    const request = makeRequest({ route: { path: '/health' } });
+
+    requestLogging(log)(request, response, () => undefined);
+    response.finish();
+
+    expect(log.lines.map((line) => line.level)).toEqual(['debug']);
   });
 });
 
