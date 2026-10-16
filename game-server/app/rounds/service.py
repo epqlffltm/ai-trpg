@@ -234,7 +234,7 @@ def begin_closing(
     ended = expire_injuries(table, scene, round_.number, dice)
     recovered = rests.settle(table, round_, hurt, dice)
     overdue = deadlines.expire_quests(table)
-    round_.moves = narration_request.dump_moves(build_moves(table, round_, ended))
+    round_.moves = narration_request.dump_moves(build_moves(table, round_, ended, recovered))
     round_.narration_style = table.narration_style
     record_actions(session, table, round_, group)
     record_death_saves(session, table, round_, group)
