@@ -3,6 +3,7 @@
 package config_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -256,14 +257,14 @@ func TestLoadJobsNeedsNoServerSettings(t *testing.T) {
 	// 작업 명령은 포트, 공개키 주소, 서명의 비밀이 없어도 돈다
 	jobs, err := config.LoadJobs(from(map[string]string{
 		"DATABASE_URL": databaseURL, "DB_SCHEMA": "billing_test", "HOLD_TTL": "2h", "SPEND_FREE_FIRST": "false",
-		"APP_ENVIRONMENT": "production", "LOG_LEVEL": "debug",
+		"APP_ENVIRONMENT": "staging", "LOG_LEVEL": "debug",
 	}))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
 	}
 	want := config.Jobs{
 		Database: config.Database{URL: databaseURL, Schema: "billing_test"},
-		Logging:  config.Logging{AppEnvironment: "production", AppVersion: "dev", LogLevel: "debug"},
+		Logging:  config.Logging{AppEnvironment: "staging", AppVersion: "dev", LogLevel: "debug"},
 		Rules: config.Rules{
 			SpendFreeFirst: false, FreeCreditTTL: 7 * 24 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 24 * time.Hour,
 		},
@@ -271,6 +272,15 @@ func TestLoadJobsNeedsNoServerSettings(t *testing.T) {
 	}
 	if jobs != want {
 		t.Errorf("설정 = %+v, 기대 = %+v", jobs, want)
+	}
+}
+
+func TestLoadJobsReadsTheHeartbeatFile(t *testing.T) {
+	jobs, err := config.LoadJobs(from(map[string]string{
+		"DATABASE_URL": databaseURL, "HEARTBEAT_FILE": "/tmp/heartbeat",
+	}))
+	if err != nil || jobs.HeartbeatFile != "/tmp/heartbeat" {
+		t.Errorf("심장박동 파일 = %q, %v", jobs.HeartbeatFile, err)
 	}
 }
 
@@ -456,6 +466,37 @@ func TestLoadPaymentFakeIgnoresTossKeys(t *testing.T) {
 	})))
 	if err != nil || settings.Payment != (config.Payment{Provider: "fake"}) {
 		t.Errorf("설정 = %+v, %v", settings.Payment, err)
+	}
+}
+
+func TestProductionRefusesTheFakeProvider(t *testing.T) {
+	// #153: 가짜는 결제 번호의 앞머리만으로 승인한다. 운영에서 뜨면 누구나 크레딧을 얻는다.
+	// 고르지 않아도 기본값이 가짜라 함께 막힌다. 서버와 작업 명령 모두다
+	for name, values := range map[string]map[string]string{
+		"가짜를 골랐다":    {"APP_ENVIRONMENT": "production", "PAYMENT_PROVIDER": "fake"},
+		"아무것도 안 골랐다": {"APP_ENVIRONMENT": "production"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, serverErr := config.Load(from(required(values)))
+			_, jobsErr := config.LoadJobs(from(required(values)))
+			if !errors.Is(serverErr, config.ErrFakeInProduction) || !errors.Is(jobsErr, config.ErrFakeInProduction) {
+				t.Errorf("서버 = %v, 작업 = %v. ErrFakeInProduction 이어야 한다", serverErr, jobsErr)
+			}
+		})
+	}
+}
+
+func TestProductionAcceptsTossAndOtherEnvironmentsAcceptTheFake(t *testing.T) {
+	toss := map[string]string{
+		"APP_ENVIRONMENT": "production", "PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": tossSecretKey, "TOSS_CLIENT_KEY": tossClientKey,
+	}
+	if _, err := config.Load(from(required(toss))); err != nil {
+		t.Errorf("운영의 토스페이먼츠 테스트 모드 = %v", err)
+	}
+	for _, environment := range []string{"development", "staging", "ci"} {
+		if _, err := config.Load(from(required(map[string]string{"APP_ENVIRONMENT": environment}))); err != nil {
+			t.Errorf("%s 의 가짜 = %v", environment, err)
+		}
 	}
 }
 
