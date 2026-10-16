@@ -195,6 +195,50 @@ class RefreshReuseTests(RefreshTestCase):
 
         self.assertEqual(new_client.post(REFRESH_URL).status_code, status.HTTP_200_OK)
 
+    def test_reusing_the_same_old_token_again_does_not_cut_the_new_session(self):
+        # #272: 재사용을 한 번 감지해 모든 세션을 끊었다. 그 뒤에 새로 로그인한 세션은
+        # 같은 옛 토큰을 다시 보내도 끊기지 않는다. 옛 토큰이 남을 로그아웃시키는 수단이 되지 않는다
+        self.client_with_refresh_token(self.stolen_refresh_token).post(REFRESH_URL)
+        new_client = APIClient()
+        access_token = self.login(new_client).data['access_token']
+        version = User.objects.get(pk=self.user.pk).token_version
+
+        # 401 은 쿠키를 지운다. 옛 토큰을 가진 사람은 쿠키를 다시 넣어 보낸다
+        replayed = [
+            self.client_with_refresh_token(self.stolen_refresh_token).post(REFRESH_URL).status_code for _ in range(3)
+        ]
+
+        self.assertEqual(replayed, [status.HTTP_401_UNAUTHORIZED] * 3)
+        self.assertEqual(User.objects.get(pk=self.user.pk).token_version, version)
+        self.assertEqual(self.get_me(access_token).status_code, status.HTTP_200_OK)
+        self.assertEqual(new_client.post(REFRESH_URL).status_code, status.HTTP_200_OK)
+
+    def test_reuse_of_a_current_token_still_cuts_every_session(self):
+        # 지금 세대의 재사용은 여전히 탈취의 신호다. 새 세션에서 갱신한 뒤 그 앞의 토큰을 다시 보낸다
+        self.client_with_refresh_token(self.stolen_refresh_token).post(REFRESH_URL)
+        new_client = APIClient()
+        self.login(new_client)
+        current_but_used = self.refresh_cookie_value(new_client)
+        new_client.post(REFRESH_URL)
+
+        response = self.client_with_refresh_token(current_but_used).post(REFRESH_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(new_client.post(REFRESH_URL).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_a_token_from_before_logout_all_is_refused_without_cutting_again(self):
+        # 모든 기기 로그아웃으로 버전이 올랐다. 그 전의 폐기된 토큰도 지난 세대라 거부만 한다
+        revoke_all_sessions(self.user)
+        new_client = APIClient()
+        self.login(new_client)
+        version = User.objects.get(pk=self.user.pk).token_version
+
+        response = self.client_with_refresh_token(self.stolen_refresh_token).post(REFRESH_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(User.objects.get(pk=self.user.pk).token_version, version)
+        self.assertEqual(new_client.post(REFRESH_URL).status_code, status.HTTP_200_OK)
+
 
 class LogoutTests(RefreshTestCase):
     def test_returns_204_and_clears_cookie(self):
