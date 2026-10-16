@@ -69,7 +69,13 @@ const (
 	ProviderFake = "fake"
 	// ProviderToss 는 토스페이먼츠의 테스트 모드다. TOSS_SECRET_KEY 와 TOSS_CLIENT_KEY 가 있어야 한다.
 	ProviderToss = "toss"
+	// ProductionEnvironment 는 운영의 APP_ENVIRONMENT 다. 여기서는 가짜 결제 대행사로 뜨지 않는다(#153).
+	ProductionEnvironment = "production"
 )
+
+// ErrFakeInProduction 은 운영에서 가짜 결제 대행사를 고른 설정이다. 가짜는 누구나 fake_ok_ 로 크레딧을 얻게 한다.
+var ErrFakeInProduction = errors.New("APP_ENVIRONMENT=production 에서는 PAYMENT_PROVIDER=fake 를 쓸 수 없습니다. " +
+	"가짜 결제 대행사는 결제 번호의 앞머리만으로 승인합니다. PAYMENT_PROVIDER=toss 와 테스트 키를 적어 주세요")
 
 // schemaPattern 은 스키마 이름으로 받는 모양이다. 소문자, 숫자, 밑줄만 받는다.
 // 이름이 접속 설정(search_path)에 그대로 들어가므로 다른 글자를 받지 않는다.
@@ -212,6 +218,7 @@ func Load(lookup Lookup) (Settings, error) {
 	if err := errors.Join(
 		debugErr, portErr, dbErr, jwksErr, rulesErr, loggingErr, webhookErr, welcomeErr, paymentErr,
 		gameSecretErr, authSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret),
+		providerAllowed(logging, payment),
 	); err != nil {
 		return Settings{}, err
 	}
@@ -245,11 +252,20 @@ func LoadJobs(lookup Lookup) (Jobs, error) {
 	logging, loggingErr := loadLogging(lookup)
 	rules, rulesErr := loadRules(lookup)
 	payment, paymentErr := loadPayment(lookup)
-	if err := errors.Join(dbErr, loggingErr, rulesErr, paymentErr); err != nil {
+	if err := errors.Join(dbErr, loggingErr, rulesErr, paymentErr, providerAllowed(logging, payment)); err != nil {
 		return Jobs{}, err
 	}
 	heartbeat := readString(lookup, "HEARTBEAT_FILE", "")
 	return Jobs{Database: db, Logging: logging, Rules: rules, Payment: payment, HeartbeatFile: heartbeat}, nil
+}
+
+// providerAllowed 는 그 환경에서 쓸 수 있는 결제 대행사인지 본다. 운영에서는 가짜를 받지 않는다.
+// 서버와 작업 명령(정리 작업, 대사) 모두 같은 규칙이다. 대사가 가짜에 물으면 가짜의 답으로 원장을 맞춘다.
+func providerAllowed(logging Logging, payment Payment) error {
+	if logging.AppEnvironment == ProductionEnvironment && payment.Provider == ProviderFake {
+		return ErrFakeInProduction
+	}
+	return nil
 }
 
 // loadPayment 는 결제 대행사의 설정을 읽는다. 토스페이먼츠면 테스트 키 둘이 있어야 하고, 둘의 종류가 같아야 한다.
