@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.config import Settings
 from app.main import API_PREFIX, create_app
+from app.observability.middleware import level_of
 from tests.logs import rendered
 from tests.signing import FakeAuthServer, SigningKey, make_access_claims, make_token
 
@@ -76,7 +77,7 @@ async def test_every_request_gets_a_different_id(client: AsyncClient):
 
 
 async def test_a_well_formed_id_is_kept(client: AsyncClient, caplog: pytest.LogCaptureFixture):
-    with caplog.at_level(logging.INFO, logger=REQUEST_LOGGER):
+    with caplog.at_level(logging.DEBUG, logger=REQUEST_LOGGER):
         response = await client.get('/health', headers={'X-Request-ID': 'client-chosen-id-0001'})
 
     assert response.headers['X-Request-ID'] == 'client-chosen-id-0001'
@@ -88,7 +89,7 @@ async def test_a_well_formed_id_is_kept(client: AsyncClient, caplog: pytest.LogC
     ['short', 'a' * 65, 'a' * 3000, 'has space in it', '{"level":"error"}', 'semi;colon-12345', '한글-식별자-12345'],
 )
 async def test_a_malformed_id_is_replaced(client: AsyncClient, caplog: pytest.LogCaptureFixture, value: str):
-    with caplog.at_level(logging.INFO, logger=REQUEST_LOGGER):
+    with caplog.at_level(logging.DEBUG, logger=REQUEST_LOGGER):
         response = await client.get('/health', headers={b'X-Request-ID': value.encode()})
 
     request_id = response.headers['X-Request-ID']
@@ -132,7 +133,7 @@ async def test_control_characters_in_the_id_never_reach_the_log(caplog: pytest.L
         'client': ('127.0.0.1', 1234),
         'server': ('testserver', 80),
     }
-    with caplog.at_level(logging.INFO, logger=REQUEST_LOGGER):
+    with caplog.at_level(logging.DEBUG, logger=REQUEST_LOGGER):
         await app(scope, receive, send)
 
     line = finished_line(caplog)
@@ -143,16 +144,21 @@ async def test_control_characters_in_the_id_never_reach_the_log(caplog: pytest.L
     assert response_headers[b'x-request-id'].decode() == line['request_id']
 
 
-async def test_the_finished_line_has_the_common_fields(client: AsyncClient, caplog: pytest.LogCaptureFixture):
+async def test_the_finished_line_has_the_common_fields(
+    client: AsyncClient, caplog: pytest.LogCaptureFixture, signing_key: SigningKey
+):
+    # 상태 확인 주소가 아닌 보통의 주소로 본다. 상태 확인의 줄은 수준이 다르다(아래)
+    headers = {'Authorization': f'Bearer {make_token(signing_key, make_access_claims())}'}
+
     with caplog.at_level(logging.INFO, logger=REQUEST_LOGGER):
-        response = await client.get('/health')
+        response = await client.get(f'{API_PREFIX}/me', headers=headers)
 
     line = finished_line(caplog)
     for field in ('timestamp', 'level', 'service', 'environment', 'version', 'request_id', 'trace_id'):
         assert line[field], field
     assert line['operation'] == 'http.request'
     assert line['method'] == 'GET'
-    assert line['route'] == '/health'
+    assert line['route'] == f'{API_PREFIX}/me'
     assert line['status_code'] == status.HTTP_200_OK
     assert line['result'] == 'success'
     assert line['level'] == 'info'
@@ -162,7 +168,7 @@ async def test_the_finished_line_has_the_common_fields(client: AsyncClient, capl
 
 
 async def test_the_trace_is_carried_on_from_the_caller(client: AsyncClient, caplog: pytest.LogCaptureFixture):
-    with caplog.at_level(logging.INFO, logger=REQUEST_LOGGER):
+    with caplog.at_level(logging.DEBUG, logger=REQUEST_LOGGER):
         await client.get('/health', headers={'traceparent': TRACEPARENT})
 
     assert finished_line(caplog)['trace_id'] == TRACE_ID
@@ -269,3 +275,34 @@ async def test_health_and_readiness_keep_their_shape(client: AsyncClient):
     # 식별자는 머리말로만 돌려준다. 본문의 모양은 그대로다
     assert health.json() == {'status': 'ok'}
     assert ready.json() == {'status': 'ok'}
+
+
+@pytest.mark.parametrize('url', ['/health', '/health/ready'])
+async def test_a_successful_probe_is_debug(client: AsyncClient, caplog: pytest.LogCaptureFixture, url: str):
+    with caplog.at_level(logging.DEBUG, logger=REQUEST_LOGGER):
+        await client.get(url)
+
+    # 관리 도구가 10초마다 부른다. 운영의 수준(info)에서는 남지 않는다
+    line = finished_line(caplog)
+    assert (line['level'], line['route']) == ('debug', url)
+
+
+async def test_a_successful_probe_is_not_written_at_info(client: AsyncClient, caplog: pytest.LogCaptureFixture):
+    with caplog.at_level(logging.INFO, logger=REQUEST_LOGGER):
+        await client.get('/health')
+
+    assert request_lines(caplog) == []
+
+
+@pytest.mark.parametrize(
+    ('status_code', 'level'),
+    [(200, logging.DEBUG), (404, logging.DEBUG), (503, logging.WARNING), (500, logging.ERROR)],
+)
+def test_the_level_of_a_probe(status_code: int, level: int):
+    # 503 은 이 주소의 답이다(준비 안 됨). 서버의 잘못(error)이 아니다. 패닉 같은 다른 5xx 는 error 다
+    assert level_of('/health/ready', status_code) == level
+
+
+def test_other_routes_keep_their_level():
+    assert level_of(f'{API_PREFIX}/me', 503) == logging.ERROR
+    assert level_of(f'{API_PREFIX}/me', 200) == logging.INFO

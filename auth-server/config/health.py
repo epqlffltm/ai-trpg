@@ -6,6 +6,9 @@
     GET /health         프로세스가 살아 있는가. 아무것도 보지 않는다. 늘 200
     GET /health/ready   요청을 처리할 준비가 됐는가. DB 에 닿으면 200, 닿지 않으면 503
 
+둘 다 HEAD 도 받는다(본문 없이 같은 상태 코드). 네 서버가 같다. 다른 메서드는 405 다.
+요청이 끝난 줄은 성공이면 debug, 503 이면 warning 이다(observability/middleware.py 의 probe_level_of).
+
 API 주소(/api/v1/...) 밖에 두고 로그인 없이 부른다. 컨테이너 관리 도구(compose 의 healthcheck)와 프록시가 부른다.
 바깥에서는 nginx 가 이 주소들을 막는다.
 
@@ -26,7 +29,7 @@ import logging
 
 from django.db import DatabaseError, connection
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_safe
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +51,13 @@ def ping_database() -> None:
         cursor.execute('SELECT 1')
 
 
-@require_GET
+@require_safe
 def health(request: HttpRequest) -> JsonResponse:
     """프로세스가 살아 있으면 200. DB 가 죽어도 200 이다. 다시 띄워도 낫지 않는 문제에 재시작을 되풀이하지 않는다."""
     return status_response(OK)
 
 
-@require_GET
+@require_safe
 def ready(request: HttpRequest) -> JsonResponse:
     """DB 에 닿으면 200, 닿지 않으면 503."""
     try:

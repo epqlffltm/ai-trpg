@@ -63,13 +63,17 @@ class OnlyUnloggedServerErrors(logging.Filter):
 
     Django 는 4xx 와 5xx 응답마다 "Not Found: /주소" 같은 줄을 적는다. 요청이 끝난 줄은 미들웨어가 공통 규격으로
     이미 적는다. Django 의 줄에는 실제 주소가 그대로 들어 있어서 버린다.
+    뷰가 스스로 돌려준 5xx(readiness 의 503 같은 것)도 같다. 예외가 없는 줄이라 미들웨어의 줄 말고 더할 것이 없다.
+    Django 는 그런 응답을 수준을 가리지 않고 error 로 적는다. 남겨 두면 "준비 안 됨"이 10초마다 error 로 쌓인다.
     뷰에서 난 예외도 미들웨어가 식별자와 함께 적는다. 같은 예외를 Django 가 다시 적는 줄은 버린다.
-    남기는 것은 미들웨어가 보지 못한 서버의 오류다. 다른 미들웨어 안에서 난 예외가 그렇다.
+    남기는 것은 미들웨어가 보지 못한 서버의 예외다. 다른 미들웨어 안에서 난 예외가 그렇다.
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
         status_code = getattr(record, 'status_code', SERVER_ERROR)
         if isinstance(status_code, int) and status_code < SERVER_ERROR:
+            return False
+        if record.exc_info is None:
             return False
         return not getattr(getattr(record, 'request', None), LOGGED_UNHANDLED_ATTRIBUTE, False)
 

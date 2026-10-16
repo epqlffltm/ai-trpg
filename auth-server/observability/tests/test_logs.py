@@ -222,8 +222,11 @@ class RedactionTests(SimpleTestCase):
 class DjangoRequestFilterTests(SimpleTestCase):
     """Django 가 요청에 관해 적는 줄을 거르는 것(OnlyUnloggedServerErrors)."""
 
-    def keeps(self, **fields: object) -> bool:
-        return OnlyUnloggedServerErrors().filter(make_record(level=logging.ERROR, **fields))
+    def keeps(self, exception: BaseException | None = None, **fields: object) -> bool:
+        record = make_record(level=logging.ERROR, **fields)
+        if exception is not None:
+            record.exc_info = (type(exception), exception, exception.__traceback__)
+        return OnlyUnloggedServerErrors().filter(record)
 
     def test_client_error_lines_are_dropped(self):
         # "Not Found: /주소" 같은 줄이다. 요청이 끝난 줄은 미들웨어가 이미 적는다
@@ -233,13 +236,20 @@ class DjangoRequestFilterTests(SimpleTestCase):
     def test_an_exception_the_middleware_already_logged_is_dropped(self):
         request = type('Request', (), {LOGGED_UNHANDLED_ATTRIBUTE: True})()
 
-        self.assertFalse(self.keeps(status_code=500, request=request))
+        self.assertFalse(self.keeps(RuntimeError('boom'), status_code=500, request=request))
 
-    def test_a_server_error_nobody_else_logged_is_kept(self):
+    def test_a_server_error_answer_without_an_exception_is_dropped(self):
+        # 뷰가 스스로 돌려준 503(readiness) 같은 것이다. 요청이 끝난 줄은 미들웨어가 제 수준으로 적는다
         request = type('Request', (), {})()
 
-        self.assertTrue(self.keeps(status_code=500, request=request))
-        self.assertTrue(self.keeps())
+        self.assertFalse(self.keeps(status_code=503, request=request))
+        self.assertFalse(self.keeps(status_code=500, request=request))
+
+    def test_an_exception_nobody_else_logged_is_kept(self):
+        request = type('Request', (), {})()
+
+        self.assertTrue(self.keeps(RuntimeError('boom'), status_code=500, request=request))
+        self.assertTrue(self.keeps(RuntimeError('boom')))
 
 
 class SettingsTests(SimpleTestCase):
