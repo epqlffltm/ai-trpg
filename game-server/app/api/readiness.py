@@ -25,13 +25,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=['health'])
 
 
-@router.api_route(
+@router.get(
     '/health/ready',
-    methods=['GET', 'HEAD'],
     response_model=HealthResponse,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_503_SERVICE_UNAVAILABLE: {'model': HealthResponse}},
 )
+# HEAD 는 문서에 올리지 않는다(health.py 와 같은 까닭)
+@router.head('/health/ready', status_code=status.HTTP_200_OK, include_in_schema=False)
 async def check_readiness(
     response: Response,
     session: Annotated[AsyncSession, Depends(get_session)],
