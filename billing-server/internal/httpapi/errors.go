@@ -28,6 +28,11 @@ func conflict(c *gin.Context, detail string) {
 	c.AbortWithStatusJSON(http.StatusConflict, errorBody{Detail: detail})
 }
 
+// unavailable 은 지금은 끝내지 못했지만 다시 보내면 될 때의 응답이다. 원인은 서버의 기록에만 남긴다.
+func unavailable(c *gin.Context, detail string) {
+	c.AbortWithStatusJSON(http.StatusServiceUnavailable, errorBody{Detail: detail})
+}
+
 // internalError 는 서버 쪽의 문제로 처리하지 못했을 때의 응답이다.
 // 원인은 서버의 기록에만 남기고 응답에는 싣지 않는다. DB 의 오류에는 테이블 이름과 쿼리가 들어 있다.
 func internalError(c *gin.Context, cause error) {

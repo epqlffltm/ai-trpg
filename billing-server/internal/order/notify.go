@@ -22,8 +22,16 @@ import (
 // 끝낼 것이 없는 알림(모르는 주문, 이미 끝난 주문, 결제 번호가 다른 알림)은 결제 대행사를 부르지 않고 nil 이다.
 // 서명이 없는 알림(토스페이먼츠)으로 남이 이 주소를 불러도, 결제 대행사를 부르는 것은 진행 중인 주문의 결제 번호를 알 때뿐이다.
 // 결제 대행사에 묻지 못했으면 오류를 돌려준다. 결제 대행사가 알림을 다시 보내게 하려는 것이다.
+//
+// 작업 전체는 OperationTimeout 안에 끝난다. 넘으면 ErrTimedOut 을 감싼 오류다(detach). 결제 대행사가 알림을 다시 보낸다.
 func (s *Service) Notify(ctx context.Context, orderID uuid.UUID, paymentKey string) error {
-	ctx = context.WithoutCancel(ctx)
+	ctx, cancel := s.detach(ctx)
+	defer cancel()
+	return timedOut(ctx, s.notify(ctx, orderID, paymentKey))
+}
+
+// notify 는 Notify 의 본문이다.
+func (s *Service) notify(ctx context.Context, orderID uuid.UUID, paymentKey string) error {
 	current, found, err := s.inFlight(ctx, orderID, paymentKey)
 	if err != nil || !found {
 		return err

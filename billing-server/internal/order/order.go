@@ -46,6 +46,12 @@ import (
 // ProviderTimeout 은 결제 대행사의 답을 기다리는 가장 긴 시간이다. 넘으면 결과를 모르는 것으로 본다.
 const ProviderTimeout = 10 * time.Second
 
+// OperationTimeout 은 결제 작업 하나(승인, 알림, 청약철회, 운영자의 판정)에 주는 가장 긴 시간이다(#273).
+// 풀의 연결을 기다리는 것, 행 잠금, 쿼리, 결제 대행사 호출이 모두 이 안에 든다.
+// 결제 대행사의 답(ProviderTimeout)에 DB 의 일과 한 번의 재조회가 들어갈 여유를 더했다.
+// 지나면 그 자리에서 멈춘다. 상태는 이미 적어 둔 그대로(confirming, refunding) 남고, 다시 보내기와 대사가 결과를 정한다.
+const OperationTimeout = 30 * time.Second
+
 // FailureCodeUnspecified 는 결제 대행사가 거절하면서 이유를 주지 않았을 때 적는 글자다.
 const FailureCodeUnspecified = "declined"
 
@@ -79,6 +85,9 @@ var (
 	ErrCreditsUsed = errors.New("이 주문으로 산 크레딧을 이미 써서 청약철회할 수 없습니다")
 	// ErrRefundBusy 는 같은 주문의 다른 요청과 엇갈렸다는 오류다. 아주 드물다. 다시 보내면 된다.
 	ErrRefundBusy = errors.New("이 주문의 다른 요청을 처리하고 있습니다. 잠시 뒤 다시 보내 주세요")
+	// ErrTimedOut 은 결제 작업이 OperationTimeout 안에 끝나지 않았다는 오류다. 원인(DB 나 결제 대행사의 오류)을 함께 감싼다.
+	// 결제를 실패로 정한 것이 아니다. 주문은 적어 둔 상태에 남고, 같은 요청을 다시 보내거나 주문을 보면 결과를 안다.
+	ErrTimedOut = errors.New("결제 작업이 정한 시간 안에 끝나지 않았습니다. 잠시 뒤 다시 보내거나 주문을 확인해 주세요")
 	// ErrRefundRefused 는 결제 대행사가 취소를 거절했다는 오류다. 크레딧은 돌려놓았고 주문은 paid 다.
 	// 결제 대행사가 준 이유를 덧붙여 감싼다(errors.Is 로 알아본다).
 	ErrRefundRefused = errors.New("결제 대행사가 취소를 거절했습니다")
@@ -164,6 +173,8 @@ type Service struct {
 	wallet   Wallet
 	// ttl 은 주문을 만든 때부터 만료까지의 시간이다.
 	ttl time.Duration
+	// operationTimeout 은 결제 작업 하나에 주는 시간이다. 기본은 OperationTimeout 이다.
+	operationTimeout time.Duration
 }
 
 // NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, ttl 은 주문의 만료까지의 시간이다.
@@ -171,7 +182,32 @@ func NewService(pool *pgxpool.Pool, now func() time.Time, provider payment.Provi
 	if ttl <= 0 {
 		return nil, ErrInvalidTTL
 	}
-	return &Service{pool: pool, now: now, provider: provider, wallet: wallet, ttl: ttl}, nil
+	return &Service{pool: pool, now: now, provider: provider, wallet: wallet, ttl: ttl, operationTimeout: OperationTimeout}, nil
+}
+
+// WithOperationTimeout 은 결제 작업 하나에 주는 시간만 바꾼 Service 를 돌려준다. 테스트가 짧게 줄여 쓴다.
+func (s *Service) WithOperationTimeout(limit time.Duration) *Service {
+	changed := *s
+	changed.operationTimeout = limit
+	return &changed
+}
+
+// detach 는 결제 작업이 쓸 context 를 만든다. 요청의 취소와는 떨어지고, 작업 전체의 마감은 새로 붙는다.
+//
+// 떨어지는 까닭: 요청을 보낸 쪽이 중간에 연결을 끊어도 멈추지 않는다. 결제 대행사의 답을 받고도 적지 못하는 일을 줄인다.
+// 마감을 붙이는 까닭: context.WithoutCancel 은 취소와 함께 마감까지 지운다. 마감이 없으면 풀이 바닥나거나
+// 행 잠금이 풀리지 않을 때 작업이 끝나지 않고 연결과 고루틴을 붙잡는다(#273).
+// 이 아래에서 다시 WithoutCancel 을 부르지 않는다. 부르면 이 마감이 지워진다.
+func (s *Service) detach(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), s.operationTimeout)
+}
+
+// timedOut 은 작업의 마감에 걸려 난 오류에 ErrTimedOut 을 함께 감싼다. 아니면 그대로 돌려준다.
+func timedOut(ctx context.Context, err error) error {
+	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return errors.Join(ErrTimedOut, err)
+	}
+	return err
 }
 
 // clock 은 지금 시각을 DB 가 적는 모양(UTC, 백만분의 1초)으로 맞춰 돌려준다.
