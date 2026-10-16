@@ -193,7 +193,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `PG_WEBHOOK_SECRET` | 없음(필수) | 결제 대행사의 알림에 붙은 서명을 확인하는 비밀. 32자 이상. 로그와 오류에 싣지 않는다 |
 | `GAME_SERVER_SECRET` | 없음(필수) | 게임 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. `PG_WEBHOOK_SECRET` 과 달라야 한다. 로그와 오류에 싣지 않는다 |
 | `AUTH_SERVER_SECRET` | 없음(필수) | 인증 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. 위의 두 비밀과 달라야 한다. 인증 서버의 `BILLING_SECRET` 과 같은 값이다. 로그와 오류에 싣지 않는다 |
-| `PAYMENT_PROVIDER` | `fake` | 꽂을 결제 대행사. `fake`(정해 둔 대로 답하는 가짜) 나 `toss`(토스페이먼츠의 테스트 모드) |
+| `PAYMENT_PROVIDER` | `fake` | 꽂을 결제 대행사. `fake`(정해 둔 대로 답하는 가짜) 나 `toss`(토스페이먼츠의 테스트 모드). `APP_ENVIRONMENT=production` 이면 `fake` 로 뜨지 않는다 |
 | `TOSS_SECRET_KEY` | 없음(`toss` 면 필수) | 토스페이먼츠의 시크릿 키. 승인과 조회에 쓴다. `test_gsk_` 나 `test_sk_` 로 시작하는 테스트 키만 받는다. 로그와 오류에 싣지 않는다 |
 | `TOSS_CLIENT_KEY` | 없음(`toss` 면 필수) | 토스페이먼츠의 클라이언트 키. 결제창(브라우저)에 실리는 공개된 값이다. `test_gck_` 나 `test_ck_` 로 시작한다. 시크릿 키와 같은 종류여야 한다 |
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸에 적힌다. 운영에서는 `production` |
@@ -337,6 +337,10 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 결제 대행사를 부르는 곳(승인, 조회, 취소)은 모두 주문의 길을 보고 그 길의 결제 대행사를 고른다(`internal/order/channel.go`).
 이 서버에 없는 길의 주문이면 부르지 않고, 답을 받지 못한 것과 같이 그 상태 그대로 둔다.
 앱 안의 스토어 결제(구글 플레이)를 붙일 때 길이 하나 는다. 그때도 주문, 크레딧, 원장, 대사는 하나로 둔다.
+
+**운영에서는 가짜로 뜨지 않는다(#153).** `APP_ENVIRONMENT=production` 에서 `PAYMENT_PROVIDER` 가 `fake` 거나 비어 있으면(기본값이 가짜다)
+서버도 작업 명령(정리 작업, 대사)도 설정 오류로 뜨지 않는다. 가짜는 결제 번호의 앞머리(`fake_ok_`)만 보고 승인하므로, 운영에서 뜨면 누구나 크레딧을 얻는다.
+운영에는 `toss` 와 테스트 키를 적는다. 개발과 CI 는 그대로 가짜다.
 
 **흐름**
 
