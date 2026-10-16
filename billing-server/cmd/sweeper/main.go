@@ -103,7 +103,7 @@ func run(args []string, out io.Writer) error {
 		slog.String(obs.FieldOperation, operation),
 		slog.Int64("interval_ms", opts.interval.Milliseconds()),
 	)
-	loop(ctx, sweeper, opts.interval)
+	loop(ctx, sweeper, opts.interval, settings.HeartbeatFile)
 	return nil
 }
 
@@ -132,10 +132,13 @@ func parseOptions(args []string) (options, error) {
 
 // loop 는 ctx 가 끝날 때까지 interval 마다 한 바퀴씩 돈다. 바퀴가 실패해도 멈추지 않는다.
 // 바퀴 도중에 끄라는 신호가 오면 그 바퀴의 남은 일을 하지 않는다. 바뀐 것은 줄 하나씩 끝난 것이라 반쯤 된 것은 없다.
-func loop(ctx context.Context, sweeper rounder, interval time.Duration) {
+// 바퀴가 성공하면 심장박동(heartbeat 파일)의 시각을 바꾼다. 실패한 바퀴(DB 에 닿지 못한 것)는 바꾸지 않는다.
+func loop(ctx context.Context, sweeper rounder, interval time.Duration, heartbeat string) {
 	for {
 		// 실패는 바퀴가 이미 남겼다. 다음 바퀴에 다시 한다
-		_, _ = round(ctx, sweeper)
+		if _, err := round(ctx, sweeper); err == nil {
+			beat(ctx, heartbeat)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -161,6 +164,16 @@ func round(ctx context.Context, sweeper rounder) (sweep.Result, error) {
 		return err
 	})
 	return result, err
+}
+
+// beat 는 심장박동을 남긴다. 남기지 못해도 정리 작업은 멈추지 않는다. healthcheck 가 unhealthy 로 알린다.
+func beat(ctx context.Context, heartbeat string) {
+	if err := jobs.Beat(heartbeat); err != nil {
+		slog.WarnContext(ctx, "심장박동 파일을 바꾸지 못했습니다",
+			slog.String(obs.FieldOperation, operation),
+			slog.String(obs.FieldErrorType, fmt.Sprintf("%T", err)),
+		)
+	}
 }
 
 // printResult 는 -once 로 돌았을 때 정리한 수를 사람이 읽게 찍는다.

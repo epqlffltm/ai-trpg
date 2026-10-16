@@ -734,6 +734,10 @@ uv run python manage.py send_outgoing_mail
 uv run python manage.py send_welcome_credits
 ```
 
+**두 워커의 상태.** 한 바퀴를 DB 에 닿아 끝낼 때마다 심장박동 파일(`HEARTBEAT_FILE`)의 시각을 바꾼다(#258).
+compose 는 이 값을 `/tmp/heartbeat` 로 넣고, 2분 안에 바뀌었으면 `healthy` 로 본다. DB 에 닿지 못하면 워커는 돌지만 `unhealthy` 다.
+PC 에서 직접 돌릴 때는 비워 둔다(파일을 쓰지 않는다). 규격은 `docs/observability.md` 의 "워커의 상태"다.
+
 밀려 있는 것은 관리자 화면의 "환영 크레딧"에서 상태를 "맡기기 전"으로 걸러 본다. 시도 횟수와 마지막 오류가 남아 있다.
 마지막 오류가 `401`이면 두 서버의 비밀이 다르거나 시계가 5분 넘게 벌어진 것이다. 조회만 된다. 지우면 그 메일함이 다시 받을 수 있게 되어 막아 두었다.
 
