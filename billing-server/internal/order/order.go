@@ -40,7 +40,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
-	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 )
 
 // ProviderTimeout 은 결제 대행사의 답을 기다리는 가장 긴 시간이다. 넘으면 결과를 모르는 것으로 본다.
@@ -117,6 +116,8 @@ type Order struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
 	ProductID string
+	// Channel 은 주문을 치른 길이다(channel.go). 결제 대행사를 부를 때 이것으로 고른다.
+	Channel Channel
 	// Price 는 주문할 때의 값이다. 원(KRW)이다.
 	Price int64
 	// Credits 는 치르면 들어오는 산 크레딧의 양이다.
@@ -167,22 +168,27 @@ type Wallet interface {
 
 // Service 는 주문을 만들고 치른다. 서버가 뜰 때 하나 만들어 쓴다.
 type Service struct {
-	pool     *pgxpool.Pool
-	now      func() time.Time
-	provider payment.Provider
-	wallet   Wallet
+	pool *pgxpool.Pool
+	now  func() time.Time
+	// providers 는 길마다 부를 결제 대행사다. 고르는 것은 askProvider 다.
+	providers Providers
+	wallet    Wallet
 	// ttl 은 주문을 만든 때부터 만료까지의 시간이다.
 	ttl time.Duration
 	// operationTimeout 은 결제 작업 하나에 주는 시간이다. 기본은 OperationTimeout 이다.
 	operationTimeout time.Duration
 }
 
-// NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, ttl 은 주문의 만료까지의 시간이다.
-func NewService(pool *pgxpool.Pool, now func() time.Time, provider payment.Provider, wallet Wallet, ttl time.Duration) (*Service, error) {
+// NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, providers 는 길마다 부를 결제 대행사(웹은 꼭 있어야 한다),
+// ttl 은 주문의 만료까지의 시간이다.
+func NewService(pool *pgxpool.Pool, now func() time.Time, providers Providers, wallet Wallet, ttl time.Duration) (*Service, error) {
 	if ttl <= 0 {
 		return nil, ErrInvalidTTL
 	}
-	return &Service{pool: pool, now: now, provider: provider, wallet: wallet, ttl: ttl, operationTimeout: OperationTimeout}, nil
+	if err := checkProviders(providers); err != nil {
+		return nil, err
+	}
+	return &Service{pool: pool, now: now, providers: providers, wallet: wallet, ttl: ttl, operationTimeout: OperationTimeout}, nil
 }
 
 // WithOperationTimeout 은 결제 작업 하나에 주는 시간만 바꾼 Service 를 돌려준다. 테스트가 짧게 줄여 쓴다.

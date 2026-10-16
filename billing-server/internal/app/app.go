@@ -30,11 +30,11 @@ type Services struct {
 	Prices *pricing.Service
 }
 
-// NewServices 는 규칙에 따라 서비스들을 만든다. provider 는 주문이 부를 결제 대행사(NewProvider),
+// NewServices 는 규칙에 따라 서비스들을 만든다. providers 는 주문이 길마다 부를 결제 대행사(NewProviders),
 // now 는 지금 시각을 돌려주는 함수다.
-func NewServices(pool *pgxpool.Pool, rules config.Rules, provider payment.Provider, now func() time.Time) (Services, error) {
+func NewServices(pool *pgxpool.Pool, rules config.Rules, providers order.Providers, now func() time.Time) (Services, error) {
 	wallets := wallet.NewService(pool, now, wallet.Policy{FreeFirst: rules.SpendFreeFirst, FreeTTL: rules.FreeCreditTTL})
-	orders, err := order.NewService(pool, now, provider, wallets, rules.OrderTTL)
+	orders, err := order.NewService(pool, now, providers, wallets, rules.OrderTTL)
 	if err != nil {
 		return Services{}, err
 	}
@@ -46,7 +46,13 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, provider payment.Provid
 	return Services{Wallet: wallets, Orders: orders, Holds: holds, Prices: prices}, nil
 }
 
-// NewProvider 는 설정이 고른 결제 대행사를 만든다. 서버와 대사가 이것으로 만들어 같은 결제 대행사에 묻는다.
+// NewProviders 는 주문의 길마다 부를 결제 대행사를 만든다. 서버와 작업 명령이 이것으로 만들어 같은 결제 대행사에 묻는다.
+// 지금은 웹 하나다.
+func NewProviders(settings config.Payment) order.Providers {
+	return order.Providers{order.ChannelWeb: NewProvider(settings)}
+}
+
+// NewProvider 는 설정이 고른 웹의 결제 대행사를 만든다.
 // 설정이 값을 이미 검사했다. toss 가 아니면 가짜다.
 func NewProvider(settings config.Payment) payment.Provider {
 	if settings.Provider == config.ProviderToss {

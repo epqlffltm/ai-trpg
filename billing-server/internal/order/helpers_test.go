@@ -205,7 +205,7 @@ func setUpAt(t *testing.T, pool *pgxpool.Pool, start time.Time, provider *script
 // newService 는 주문 서비스를 만든다. 만들지 못하면 테스트를 멈춘다.
 func newService(t *testing.T, pool *pgxpool.Pool, now func() time.Time, provider payment.Provider, wallets order.Wallet) *order.Service {
 	t.Helper()
-	service, err := order.NewService(pool, now, provider, wallets, ttl)
+	service, err := order.NewService(pool, now, order.Providers{order.ChannelWeb: provider}, wallets, ttl)
 	if err != nil {
 		t.Fatalf("주문 서비스를 만들지 못했다: %v", err)
 	}

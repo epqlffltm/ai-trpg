@@ -26,8 +26,8 @@ const depositCancelReason = "가상계좌 미지원"
 func (s *Service) refuseDeposit(ctx context.Context, current Order) (Order, error) {
 	request := paymentRequest(current)
 	request.CancelReason = depositCancelReason
-	result, err := s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
-		return s.provider.Cancel(ctx, request)
+	result, err := s.askProvider(ctx, current, func(ctx context.Context, provider payment.Provider) (payment.Result, error) {
+		return provider.Cancel(ctx, request)
 	})
 	if err == nil && result.Status == payment.StatusCanceled {
 		return s.fail(ctx, current, FailureCodeDepositUnsupported)

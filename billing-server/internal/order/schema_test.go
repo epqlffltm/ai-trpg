@@ -47,6 +47,7 @@ func TestTheDatabaseKeepsOrderStatusAndColumnsInStep(t *testing.T) {
 		"크레딧이 0":               "UPDATE orders SET credits = 0 WHERE id = $1",
 		"결제 번호가 있는 expired":    "UPDATE orders SET status = 'expired', payment_key = 'pay_e' WHERE id = $1",
 		"만든 때에 만료":             "UPDATE orders SET expires_at = created_at WHERE id = $1",
+		"모르는 길":                "UPDATE orders SET channel = 'google_play' WHERE id = $1",
 	}
 	for name, sql := range cases {
 		t.Run(name, func(t *testing.T) {

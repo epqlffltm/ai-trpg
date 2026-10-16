@@ -107,8 +107,8 @@ func (s *Service) resumeRefund(ctx context.Context, userID uuid.UUID, orderID uu
 
 // cancelAndSettle 은 결제 대행사에 취소를 요청하고 답을 주문에 적는다. refunding 인 주문에만 부른다.
 func (s *Service) cancelAndSettle(ctx context.Context, current Order) (Order, error) {
-	result, err := s.askProvider(ctx, func(ctx context.Context) (payment.Result, error) {
-		return s.provider.Cancel(ctx, paymentRequest(current))
+	result, err := s.askProvider(ctx, current, func(ctx context.Context, provider payment.Provider) (payment.Result, error) {
+		return provider.Cancel(ctx, paymentRequest(current))
 	})
 	return s.settleRefund(ctx, current, result, err)
 }
