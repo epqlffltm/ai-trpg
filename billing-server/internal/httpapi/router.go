@@ -82,9 +82,13 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	// 처리 중에 패닉이 나도 서버가 죽지 않고 500 으로 답한다
 	router.Use(recoverPanics(logger))
 
-	// 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
-	router.GET("/health", health)
-	router.GET("/health/ready", readiness(deps.DB, logger))
+	// 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다.
+	// HEAD 도 받는다. 같은 핸들러가 돌고, 본문은 net/http 가 버린다. HEAD 로 확인하는 도구가 있다
+	ready := readiness(deps.DB, logger)
+	router.GET(HealthPath, health)
+	router.HEAD(HealthPath, health)
+	router.GET(ReadyPath, ready)
+	router.HEAD(ReadyPath, ready)
 
 	// 개발용 결제 화면. 로그인 묶음 밖에 둔다. 화면 자체는 누구나 받지만, 화면이 부르는 API 는 토큰이 있어야 한다
 	if deps.CheckoutClientKey != "" {

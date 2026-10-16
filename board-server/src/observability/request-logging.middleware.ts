@@ -36,6 +36,16 @@ export const REQUEST_LOGGER = 'RequestLogging';
 
 /** 서버의 잘못으로 보는 상태 코드의 시작 */
 const SERVER_ERROR = 500;
+/** 준비 안 됨. 준비됐는지 묻는 주소의 답이다 */
+const SERVICE_UNAVAILABLE = 503;
+/**
+ * 상태 확인 주소(health/). 관리 도구가 10초마다 부른다. 요청이 끝난 줄의 수준을 따로 정한다(levelOf).
+ * 네 서버가 같다(저장소 루트의 docs/observability.md 의 "health 와 readiness").
+ */
+export const PROBE_ROUTES: ReadonlySet<string> = new Set([
+  '/health',
+  '/health/ready',
+]);
 /** 요청의 잘못으로 보는 상태 코드의 시작 */
 const CLIENT_ERROR = 400;
 
@@ -58,9 +68,14 @@ export interface OutgoingResponse {
 
 /** 요청이 끝난 줄을 남기는 것. Nest 의 Logger 가 이 모양이다. 테스트가 줄을 모으는 것으로 바꿔 꽂는다 */
 export interface RequestLog {
+  debug(message: object): void;
   log(message: object): void;
+  warn(message: object): void;
   error(message: object): void;
 }
+
+/** 요청이 끝난 줄의 수준. RequestLog 의 메서드 이름이다 */
+export type FinishedLevel = 'debug' | 'log' | 'warn' | 'error';
 
 /** 상태 코드를 결과의 이름으로 바꾼다. 5xx 는 서버의 잘못, 4xx 는 요청의 잘못, 나머지는 성공이다. */
 export function resultOf(statusCode: number): string {
@@ -101,9 +116,34 @@ export function requestFields(
 }
 
 /**
- * 요청이 끝났다는 한 줄을 남긴다. 5xx 만 error 고 나머지는 info 다.
+ * 요청이 끝난 줄의 수준. 5xx 만 error 고 나머지는 info(log) 다. 상태 확인 주소는 따로 본다(probeLevelOf).
  *
  * 4xx 는 요청이 틀린 것이다. 서버는 제 일을 했다. warning 으로 올리면 로그인하지 않은 요청과 없는 주소가 경고를 메운다.
+ */
+export function levelOf(route: unknown, statusCode: number): FinishedLevel {
+  if (typeof route === 'string' && PROBE_ROUTES.has(route)) {
+    return probeLevelOf(statusCode);
+  }
+  return statusCode >= SERVER_ERROR ? 'error' : 'log';
+}
+
+/**
+ * 상태 확인 요청의 줄의 수준.
+ *
+ * 성공은 debug 다. 10초마다 오는 확인이 운영의 로그를 메우지 않게 한다.
+ * 503(준비 안 됨)은 warn 이다. 오류가 아니라 이 주소의 답이다. 까닭은 준비됐는지 묻는 API 가 따로 남긴다.
+ * 그 밖의 5xx(처리하지 못한 예외)는 다른 주소처럼 error 다.
+ */
+export function probeLevelOf(statusCode: number): FinishedLevel {
+  if (statusCode === SERVICE_UNAVAILABLE) {
+    return 'warn';
+  }
+  return statusCode >= SERVER_ERROR ? 'error' : 'debug';
+}
+
+/**
+ * 요청이 끝났다는 한 줄을 남긴다. 수준은 levelOf 가 정한다.
+ *
  * 식별자를 직접 싣는다. 이 줄은 응답이 다 나간 뒤에 남는다. 그때는 요청에 걸어 둔 값이 풀려 있을 수 있다.
  */
 export function logFinished(
@@ -113,11 +153,7 @@ export function logFinished(
   statusCode: number,
 ): void {
   const line = { ...fields, ...idsOf(context) };
-  if (statusCode >= SERVER_ERROR) {
-    log.error(line);
-    return;
-  }
-  log.log(line);
+  log[levelOf(fields.route, statusCode)](line);
 }
 
 /** 지금까지 걸린 시간(밀리초). started 는 performance.now() 의 값이다. */

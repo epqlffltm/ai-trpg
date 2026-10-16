@@ -186,3 +186,38 @@ type panickingDB struct{}
 func (panickingDB) Ping(context.Context) error {
 	panic("boom")
 }
+
+// headOf 는 실제 HTTP 서버를 띄워 HEAD 를 보낸다. 본문을 버리는 것은 net/http 의 서버라서 기록기로는 볼 수 없다.
+func headOf(t *testing.T, db database.Pinger, path string) (int, []byte) {
+	t.Helper()
+	server := httptest.NewServer(httpapi.NewRouter(httpapi.Dependencies{DB: db}))
+	defer server.Close()
+	response, err := http.Head(server.URL + path)
+	if err != nil {
+		t.Fatalf("HEAD %s: %v", path, err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("본문을 읽지 못했다: %v", err)
+	}
+	return response.StatusCode, body
+}
+
+func TestHeadIsAnsweredLikeGetWithoutABody(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		db   *fakeDB
+		want int
+	}{
+		{httpapi.HealthPath, &fakeDB{err: errors.New("db is down")}, http.StatusOK},
+		{httpapi.ReadyPath, &fakeDB{}, http.StatusOK},
+		{httpapi.ReadyPath, &fakeDB{err: errors.New("db is down")}, http.StatusServiceUnavailable},
+	} {
+		code, body := headOf(t, tc.db, tc.path)
+
+		if code != tc.want || len(body) != 0 {
+			t.Errorf("HEAD %s: 상태 코드 = %d(기대 %d), 본문 = %q", tc.path, code, tc.want, body)
+		}
+	}
+}
