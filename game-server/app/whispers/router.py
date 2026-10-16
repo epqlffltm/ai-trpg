@@ -16,32 +16,13 @@ from app.assets.routing import MAX_PAGE_SIZE, Session
 from app.auth.dependencies import CurrentUser
 from app.limits.routing import Limited
 from app.whispers import service
-from app.whispers.models import Whisper
+from app.whispers.responses import to_whisper
 from app.whispers.schemas import WhisperCreate, WhisperOut, WhisperPage
 
 router = APIRouter(prefix='/tables/{table_id}/whispers', tags=['whispers'])
 
 # 한 번에 읽는 쪽지의 수
 DEFAULT_WHISPER_LIMIT = 50
-
-
-def to_whisper(whisper: Whisper) -> WhisperOut:
-    """
-    쪽지 한 장을 응답으로 바꾼다. 칸을 하나씩 적어 옮긴다.
-
-    쪽지함의 주인(owner_id)은 싣지 않는다. 읽는 사람 자신이다.
-    """
-    return WhisperOut(
-        sequence=whisper.sequence,
-        sender_id=whisper.sender_id,
-        recipient_id=whisper.recipient_id,
-        sender_character_name=whisper.sender_character_name,
-        recipient_character_name=whisper.recipient_character_name,
-        content=whisper.content,
-        gm_visible=whisper.gm_visible,
-        round=whisper.round_number,
-        created_at=whisper.created_at,
-    )
 
 
 @router.post('', response_model=WhisperOut, status_code=status.HTTP_201_CREATED)

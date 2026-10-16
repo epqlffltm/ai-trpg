@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from app.assets.routing import MAX_PAGE_SIZE, Session
 from app.auth.dependencies import CurrentUser
 from app.chat import service
-from app.chat.models import ChatMessage
+from app.chat.responses import to_message
 from app.chat.schemas import MessageCreate, MessageOut, MessagePage
 from app.chat.typing import TypingThrottle
 from app.limits.routing import Limited
@@ -32,17 +32,6 @@ def get_typing_throttle(request: Request) -> TypingThrottle:
 
 # "입력 중"을 받는 API 가 인자의 형식으로 쓴다
 Throttling = Annotated[TypingThrottle, Depends(get_typing_throttle)]
-
-
-def to_message(message: ChatMessage) -> MessageOut:
-    """채팅 한 줄을 응답으로 바꾼다. 칸을 하나씩 적어 옮긴다."""
-    return MessageOut(
-        sequence=message.sequence,
-        user_id=message.user_id,
-        character_name=message.character_name,
-        content=message.content,
-        created_at=message.created_at,
-    )
 
 
 @router.post('', response_model=MessageOut, status_code=status.HTTP_201_CREATED)
