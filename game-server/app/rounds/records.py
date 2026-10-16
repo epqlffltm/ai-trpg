@@ -135,7 +135,7 @@ def record_npc_change(session: AsyncSession, table: GameTable, effect: dict, cau
     """
     NPC 의 상태가 바뀐 것을 이벤트로 적는다. 그 변화를 부른 판정의 이벤트(cause)에 잇는다.
 
-    HP 의 숫자까지 다 적는다. 앉은 사람에게 내보낼 칸은 이벤트 API 가 고른다(app/events/router.py 의 VISIBLE).
+    HP 의 숫자까지 다 적는다. 앉은 사람에게 내보낼 칸은 이벤트 API 가 고른다(app/events/responses.py 의 VISIBLE).
     행한 사람(actor_id)을 적지 않는다. 상태를 바꾼 것은 엔진이다.
     """
     payload = {'round': cause.payload['round'], **effect}
