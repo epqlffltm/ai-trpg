@@ -202,6 +202,8 @@ async def test_revealing_a_quest_shows_it_to_everyone(client: AsyncClient, me: d
         'previous': 'hidden',
         'status': 'active',
         'rewards': [],
+        'due_at': None,
+        'reason': None,
     }
 
 

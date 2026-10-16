@@ -81,6 +81,8 @@ SCENARIO_MAX_STARTING_ITEMS = 20
 ITEM_STACK_MAX = 99
 # 시나리오 하나에 둘 수 있는 퀘스트 규칙의 수. 사건 항목마다 하나다. 한 판에 쫓는 퀘스트가 이보다 많지는 않다
 SCENARIO_MAX_QUEST_RULES = 50
+# 퀘스트의 기한(분). 드러난 때부터 센다. 상한은 한 해다(오래 가는 부상이 낫는 기간과 같다)
+QUEST_MAX_TIME_LIMIT_MINUTES = 365 * 24 * 60
 # 시나리오 하나에 둘 수 있는 길의 수. 장소 100 개를 이어도 모자라지 않는 만큼이다
 SCENARIO_MAX_ROUTES = 200
 # 시나리오 하나에 둘 수 있는 명소(처음부터 아는 장소)의 수
