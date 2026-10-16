@@ -5,8 +5,9 @@
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
 #     prepare      설정 파일(.env 다섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
-#     up           이미지를 만들고 띄운 뒤, 서버 넷과 프록시가 healthy 가 될 때까지 기다린다.
-#                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다
+#     up           이미지를 만들고 띄운 뒤, 서버 넷과 프록시, 워커 셋이 healthy 가 될 때까지 기다린다.
+#                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
+#                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다
 #     check        마이그레이션이 성공했는지, 서버마다 준비됐는지(/health/ready), 서버끼리 닿는지, root 가 아닌지,
 #                  이미지에 .env 가 없는지 본다.
 #                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다
@@ -27,6 +28,8 @@ SERVERS=(auth game board billing)
 declare -A PORTS=([auth]=8000 [game]=8001 [board]=8002 [billing]=8003)
 # 계속 도는 워커와 주기 명령의 컨테이너
 WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron)
+# 그 가운데 심장박동으로 상태를 알리는 워커(docker-compose.yml 의 x-worker-heartbeat)
+HEARTBEAT_WORKERS=(auth-mail auth-welcome-credits billing-sweeper)
 # 주기 명령의 컨테이너와 그 crontab
 CRONTABS=(auth-cron:docker/cron/auth.crontab billing-cron:docker/cron/billing.crontab)
 # 프록시의 주소와, 관리자 화면 때문에 따로 연 인증 서버의 주소
@@ -117,17 +120,22 @@ health_of() {
   docker inspect -f '{{.State.Health.Status}}' "$(container_of "$1")"
 }
 
+# 컨테이너의 상태 확인이 healthy 인가
+is_healthy() {
+  [[ "$(health_of "$1")" == "healthy" ]]
+}
+
 # 컨테이너가 아직 돌고 있는가
 running() {
   [[ "$(docker inspect -f '{{.State.Running}}' "$(container_of "$1")")" == "true" ]]
 }
 
-# 서버 넷과 프록시가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
+# 서버 넷과 프록시, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
 wait_healthy() {
   local deadline=$((SECONDS + WAIT_SECONDS)) service pending
   while ((SECONDS < deadline)); do
     pending=0
-    for service in "${SERVERS[@]/%/-server}" proxy; do
+    for service in "${SERVERS[@]/%/-server}" proxy "${HEARTBEAT_WORKERS[@]}"; do
       if ! running "$service"; then
         echo "$service 가 죽었다" >&2
         return 1
@@ -135,7 +143,7 @@ wait_healthy() {
       [[ "$(health_of "$service")" == "healthy" ]] || pending=$((pending + 1))
     done
     if ((pending == 0)); then
-      echo "서버 넷과 프록시가 healthy 다"
+      echo "서버 넷과 프록시, 워커 셋이 healthy 다"
       return 0
     fi
     sleep 3
@@ -275,6 +283,9 @@ check_workers() {
   local worker entry service crontab command
   for worker in "${WORKERS[@]}"; do
     report "$worker 가 다시 뜨지 않고 돈다" stays_up "$worker"
+  done
+  for worker in "${HEARTBEAT_WORKERS[@]}"; do
+    report "$worker 가 healthy 다(DB 에 닿으며 돈다)" is_healthy "$worker"
   done
   for entry in "${CRONTABS[@]}"; do
     service="${entry%%:*}"

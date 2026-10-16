@@ -12,7 +12,7 @@
 # 인증 서버만 관리자 화면 때문에 127.0.0.1:8000 을 함께 연다. PC 에서 직접 띄운 인증 서버와 포트가 겹치므로 그것을 먼저 끈다.
 #
 #   docker compose --profile app up -d --build
-#   docker compose --profile app ps -a      # 마이그레이션은 Exited (0), 서버와 프록시는 healthy, 워커와 cron 은 Up 이면 된다
+#   docker compose --profile app ps -a      # 마이그레이션은 Exited (0), 서버·프록시·워커 셋은 healthy, cron 은 Up 이면 된다
 #   docker compose --profile app down
 #
 # 서버의 설정은 각 서버 폴더의 .env 를 그대로 넘긴다(env_file). 그 안의 주소는 PC 에서 직접 띄울 때의 것(127.0.0.1)이라
@@ -46,6 +46,18 @@ x-auth-keys: &auth-keys
   read_only: true
   bind:
     create_host_path: false
+
+# 계속 도는 워커(메일, 환영 크레딧, 결제의 정리 작업)의 상태 확인(#258, docs/observability.md 의 "워커의 상태").
+# 워커는 한 바퀴를 DB 에 닿아 끝낼 때마다 심장박동 파일(HEARTBEAT_FILE)의 시각을 바꾼다. 2분 안에 바뀌었으면 healthy 다.
+# 그래서 워커의 healthy 는 "DB 에 닿으며 돈다"는 뜻이다. 파일이 없거나(아직 한 바퀴도 못 돌았다) 오래됐으면 unhealthy 다.
+# 2분은 정리 작업의 간격(30초)과, 메일 서버나 결제 서버가 느린 한 묶음보다 넉넉한 길이다.
+# 서버처럼 unhealthy 를 보고 재시작하지는 않는다. docker compose ps 와 CI 의 스택 확인이 본다
+x-worker-heartbeat: &worker-heartbeat
+  test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/heartbeat) )) -lt 120"]
+  interval: 15s
+  timeout: 5s
+  retries: 3
+  start_period: 30s
 
 services:
   db:
@@ -176,7 +188,10 @@ services:
     restart: unless-stopped
     command: ["python", "manage.py", "send_outgoing_mail"]
     env_file: ./auth-server/.env
-    environment: *auth-environment
+    environment:
+      <<: *auth-environment
+      HEARTBEAT_FILE: /tmp/heartbeat
+    healthcheck: *worker-heartbeat
     volumes:
       - *auth-keys
     depends_on:
@@ -191,7 +206,10 @@ services:
     restart: unless-stopped
     command: ["python", "manage.py", "send_welcome_credits"]
     env_file: ./auth-server/.env
-    environment: *auth-environment
+    environment:
+      <<: *auth-environment
+      HEARTBEAT_FILE: /tmp/heartbeat
+    healthcheck: *worker-heartbeat
     volumes:
       - *auth-keys
     depends_on:
@@ -322,7 +340,10 @@ services:
     restart: unless-stopped
     command: ["/app/sweeper"]
     env_file: ./billing-server/.env
-    environment: *billing-environment
+    environment:
+      <<: *billing-environment
+      HEARTBEAT_FILE: /tmp/heartbeat
+    healthcheck: *worker-heartbeat
     depends_on:
       billing-migrate:
         condition: service_completed_successfully

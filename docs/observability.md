@@ -445,7 +445,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 
 | 서버 | `/health` | `/health/ready` | DB 를 기다리는 시간 |
 | --- | --- | --- | --- |
-| game-server | 있다 | 있다(DB, 쓰면 Redis) | 3초 |
+| game-server | 있다 | 있다(DB) | 연결 5초. 연결된 뒤 답하지 않는 DB 앞에서는 끝이 없다(#258) |
 | board-server | 있다 | 있다(DB) | 3초 |
 | billing-server | 있다 | 있다(DB) | 3초 |
 | auth-server | 있다 | 있다(DB) | 연결 5초. 연결된 뒤 답하지 않는 DB 앞에서는 끝이 없다(아래) |
@@ -454,10 +454,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
   Docker 는 `unhealthy` 를 보고 재시작하지 않고, 서버의 `healthy` 를 기다리는 서비스도 없다. DB 가 돌아오면 다음 확인에서 `healthy` 로 돌아온다.
   CI 의 스택 확인(`.github/scripts/stack-smoke.sh`)도 네 서버의 레디를 본다.
 - **확인하는 쪽은 healthcheck 의 `timeout`(5초)이 묶는다.** 서버의 레디가 답하지 않아도 5초가 지나면 실패로 센다.
-  서버 쪽의 시간 제한은 그보다 짧게(3초) 두어 503 으로 답하게 한다. 결제(Go 의 context), 게시판(쿼리와 타이머의 경주),
-  게임(`asyncio.wait_for`, 풀이 가득 차 연결을 기다리는 시간까지 든다)이 그렇다.
-- **게임 서버는 `REDIS_URL` 이 있으면 Redis 도 본다.** 로비 비밀번호와 채팅의 시도 제한이 Redis 에 닿지 못하면 닫힌 쪽으로 실패한다(503).
-  Redis 가 없으면 일을 못 하는 서버다. 인증 서버는 Redis 가 죽으면 제한 없이 통과시키므로 넣지 않는다.
+  서버 쪽의 시간 제한은 그보다 짧게(3초) 두어 503 으로 답하게 한다. 결제(Go 의 context)와 게시판(쿼리와 타이머의 경주)이 그렇다.
 - **인증 서버에는 서버 쪽의 전체 제한이 없다.** 동기 Django(psycopg)에는 쿼리 하나만 시간으로 끊는 장치가 없다.
   `statement_timeout` 은 DB 가 살아서 느릴 때만 듣고, DB 가 멈췄거나 네트워크가 끊겼을 때는 듣지 않는다. 스레드로 떼어 기다리면 멈춘 스레드가 쌓인다.
   그래서 연결 시간(5초)만 묶고, 연결된 뒤 멈춘 DB 는 healthcheck 의 5초가 실패로 센다. 그동안 그 요청이 워커를 쥐는 것은 같은 DB 앞의 보통 요청과 같다.
@@ -466,6 +463,29 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 **응답에 서비스 이름과 버전을 더하지 않았다.** 세 서버의 테스트가 본문이 정확히 `{"status":"ok"}` 인 것을 확인하고 있고,
 프록시의 상태 확인이 본문을 글자 그대로 비교하도록 설정될 수 있다. 버전은 로그의 `version` 칸으로 안다.
 상태 확인 응답에도 `X-Request-ID` 머리말은 붙는다. 본문은 그대로다.
+
+### 워커의 상태
+
+워커는 요청을 받지 않으므로 `/health/ready` 가 없다. 대신 **심장박동 파일**로 상태를 알린다(#258).
+
+- 계속 도는 워커가 한 바퀴를 DB 에 닿아 끝낼 때마다 파일(`HEARTBEAT_FILE`)의 시각을 지금으로 바꾼다.
+  DB 에 닿지 못한 바퀴는 바꾸지 않는다. 바꾸지 못해도 워커는 멈추지 않는다(`warning` 한 줄)
+- compose 의 healthcheck(`x-worker-heartbeat`)가 그 시각이 2분 안인지 본다. 그래서 워커의 `healthy` 는 "DB 에 닿으며 돈다"는 뜻이다.
+  파일이 없거나(아직 한 바퀴도 못 돌았다) 오래됐으면 `unhealthy` 다. 서버처럼 Docker 는 `unhealthy` 를 보고 재시작하지 않는다
+- 2분은 정리 작업의 간격(30초)과, 메일 서버나 결제 서버가 느린 한 묶음보다 넉넉한 길이다. 그보다 오래 걸린 묶음은 그동안 `unhealthy` 로 보인다
+- `HEARTBEAT_FILE` 이 비어 있으면 파일을 쓰지 않는다. PC 에서 워커를 직접 돌릴 때다
+- CI 의 스택 확인이 워커 셋의 `healthy` 를 기다리고 확인한다
+
+| 서버 | 워커 | 심장박동 |
+| --- | --- | --- |
+| auth-server | 메일(`send_outgoing_mail`), 환영 크레딧(`send_welcome_credits`) | 있다(`observability/heartbeat.py`) |
+| billing-server | 정리 작업(`cmd/sweeper`) | 있다(`internal/jobs/heartbeat.go`) |
+| auth-server, billing-server | 주기 명령(supercronic) | 없다. 하루 한 번이라 심장박동으로 볼 것이 없다. 실패는 `job.failed` 로그가 알린다 |
+| game-server | 서버 안의 작업(라운드 시계, 청구 정리) | 없다. 서버 프로세스 안에서 돈다. 멈춘 작업을 찾는 것은 #275 다 |
+
+**HTTP 주소를 열지 않고 파일을 쓴다.** 워커마다 작은 HTTP 서버를 띄우면 서버와 같은 모양이 되지만, 워커마다 포트와 코드가 는다.
+파일은 Python 과 Go 가 같은 몇 줄로 쓰고, healthcheck 는 셸의 `stat` 과 `date` 로 본다. 파일은 compose 만 본다.
+대시보드와 알림까지 가려면 작업의 마지막 성공 시각을 메트릭으로 내보낸다(아래 메트릭의 `db_up` 과 작업 메트릭, #25).
 
 ## 메트릭
 
@@ -707,4 +727,5 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
   명령 자신이 남기는 로그는 규격의 JSON 이다. 명령이 끝에 화면에 찍는 요약(`self.stdout`, 결제의 `cmd/reconcile`)은 위의 "사람이 치는 명령"처럼 글이다.
 - **nginx 가 뜨고 꺼지는 줄.** 프록시의 요청 줄은 JSON 이지만, nginx 가 뜰 때와 설정을 다시 읽을 때 남기는 줄은 nginx 의 글 모양이다.
 - **마지막 방어선은 어림이다.** [민감정보](#마지막-방어선)의 끝에 적은 대로다.
+- **주기 명령과 게임 서버 안의 작업에 상태 신호가 없다.** 계속 도는 워커 셋만 심장박동이 있다([워커의 상태](#워커의-상태)).
 - **`warning` 줄의 `error_code`.** `error` 이상에는 붙였지만, 기존의 `warning` 줄 가운데에는 코드가 없는 것이 있다(게임 서버의 JWKS, 임베딩 실패).

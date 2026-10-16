@@ -371,6 +371,10 @@ MAIL_DELIVERY = env('MAIL_DELIVERY', default='outbox' if smtp_host else 'inline'
 if MAIL_DELIVERY not in ('outbox', 'inline'):
     raise ImproperlyConfigured("MAIL_DELIVERY 는 'outbox' 또는 'inline' 이어야 합니다.")
 
+# 워커의 심장박동 파일(observability/heartbeat.py). 워커가 한 바퀴를 DB 에 닿아 끝낼 때마다 시각을 바꾼다.
+# compose 가 워커 컨테이너에 넣고 healthcheck 가 그 시각을 본다. 비어 있으면 쓰지 않는다(PC 에서 돌릴 때)
+HEARTBEAT_FILE = env('HEARTBEAT_FILE', default='')
+
 # 메일의 보내는 사람 주소
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='AI TRPG <no-reply@localhost>')
 
