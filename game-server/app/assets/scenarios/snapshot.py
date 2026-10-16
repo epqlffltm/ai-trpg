@@ -70,7 +70,8 @@ from app.engine.sheet import Sheet
 #  25: 오래 가는 부상이 낫기까지(heal_minutes), 치료가 앞당기는(treat_minutes), 덧나서 늦춰지는(delay_minutes)
 #      기간이 라운드 수가 아니라 게임 안의 시간(분)이다. 짧은 부상은 그대로 라운드 수(rounds)다
 #  26: 길에 한 칸 가는 데 걸리는 게임 안의 시간(routes[].travel_minutes)이 있다
-SNAPSHOT_FORMAT = 26
+#  27: 퀘스트 규칙에 드러난 때부터 세는 기한(quests[].time_limit_minutes)이 있다
+SNAPSHOT_FORMAT = 27
 
 
 class EntrySnapshot(BaseModel):
@@ -158,11 +159,13 @@ class QuestRuleSnapshot(BaseModel):
     퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.
 
     start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건이다.
+    time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.
     """
 
     entry_id: uuid.UUID
     start: QuestStart = QuestStart.HIDDEN
     reward: list[ItemStackSnapshot] = []
+    time_limit_minutes: int | None = None
 
 
 class FindSnapshot(BaseModel):
