@@ -50,6 +50,8 @@ from app.rounds.narrator import (
     PastRound,
     PersonState,
     PlaceNote,
+    RestNote,
+    RevivalNote,
     SearchNote,
     StoryContext,
     TravelNote,
@@ -722,6 +724,73 @@ CLOCK_TRAVEL = StateCase(
     ),
 )
 
+# 밤새 쉬었다. 리엔은 모닥불 옆에서 긴 휴식으로 HP 를 다 되찾고, 고비를 넘겨 쓰러져 있던 토르빈은 되살아나기에 실패했다.
+# 3일째 22시에 시작해 8시간이 흐른다. 리엔은 기운을 되찾고, 토르빈은 여전히 의식이 없다
+REST_NIGHT = StateCase(
+    name='rest_night',
+    about='긴 휴식으로 기운을 되찾고, 깨어나지 못한 인물을 일으키지 않는다',
+    request=replace(
+        request(
+            scene=NIGHT_REST_STOP,
+            moves=[
+                Move(
+                    '리엔',
+                    '토르빈 곁에 모닥불을 피우고 그 옆에서 잔다.',
+                    rest=RestNote(length='long', rested=True, before=3, after=12, max_hp=12),
+                ),
+                Move('토르빈', '정신을 잃은 채 누워 있다.', downed=True, revival=RevivalNote(success=False, hp=0)),
+            ],
+            people=[],
+        ),
+        clock=clock_note(3, 22, 480),
+    ),
+    checks=(
+        Require('잠듦', ('잠', '눈을 붙', '눈을 감', '쉬')),
+        Forbid(
+            '깨어남', ('토르빈이 눈을 뜨', '토르빈이 깨어나', '토르빈이 일어', '토르빈은 눈을 뜨', '토르빈은 깨어나')
+        ),
+        CLOCK_DIGITS,
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
+# 쉬다가 맞았다. 리엔은 짧게 쉬려 했지만 순찰 드론의 충격탄에 맞아 휴식이 깨졌다
+SHOCK_HIT = MonsterTurnNote(
+    name='순찰 드론 1',
+    attack='충격탄',
+    target='리엔',
+    hit=True,
+    impact=Impact('damage', '리엔', 3, 6, 12, False),
+)
+REST_BROKEN = StateCase(
+    name='rest_broken',
+    about='맞아서 깨진 휴식을 푹 쉰 것처럼 쓰지 않는다',
+    request=replace(
+        request(
+            scene='휴게소 주차장 구석. 순찰 드론 두 대가 낮게 떠 붉은 불빛으로 주차장을 훑는다.',
+            moves=[
+                Move(
+                    '리엔',
+                    '바이크에 기대 잠깐 눈을 붙인다.',
+                    rest=RestNote(length='short', rested=False, reason='hurt', before=6, after=6, max_hp=12),
+                ),
+            ],
+            people=[],
+        ),
+        monsters=[DRONES],
+        turns=[TurnNote(monster=SHOCK_HIT), TurnNote(character_name='리엔')],
+        clock=clock_note(3, 22, 60),
+    ),
+    checks=(
+        Forbid('푹 쉼', ('푹 쉬', '푹 잤', '개운', '단잠', '상쾌', '기운을 되찾', '기운을 차렸')),
+        Require('맞음', ('충격탄', '충격', '드론')),
+        CLOCK_DIGITS,
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
 CASES = (
     DOWNED,
     DEAD,
@@ -742,5 +811,7 @@ CASES = (
     CLOCK_DAY,
     CLOCK_SKIP,
     CLOCK_TRAVEL,
+    REST_NIGHT,
+    REST_BROKEN,
 )
 CASE_NAMES = tuple(case.name for case in CASES)
