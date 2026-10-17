@@ -66,7 +66,7 @@ from app.rounds import clock
 from app.rounds import router as rounds
 from app.rounds.closing import closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
-from app.rounds.narrator_setup import build_narrator, offered_tiers
+from app.rounds.narrator_setup import build_narrator, build_router, offered_tiers
 from app.tables import router as tables
 from app.tables.errors import (
     MemberNotFoundError,
@@ -183,14 +183,16 @@ def create_app(
     # 판정에 쓰는 주사위. 서버만 굴린다. 테스트는 정해진 눈을 내는 주사위로 바꿔 꽂는다
     app.state.dice = RandomDice()
 
+    # 모델의 이름으로 부를 창구를 고르는 것(app/ai/routing.py). 부를 때마다 모델 목록(app/catalog)을 DB 에서 읽는다.
+    # 위의 httpx 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다
+    app.state.model_router = build_router(settings, app.state.http_client, app.state.session_factory)
     # GM 의 서술을 만드는 것. 설정(NARRATOR)이 정한다. 기본은 AI 를 부르지 않는 가짜다.
-    # 언어 모델이면 위의 httpx 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다.
-    # 부를 때마다 위의 세션 틀로 DB 에 기록을 남긴다(app/ai/call_log.py)
-    app.state.narrator = build_narrator(settings, app.state.http_client, app.state.session_factory)
+    # 언어 모델이면 위의 것으로 창구를 골라 부른다. 부를 때마다 위의 세션 틀로 DB 에 기록을 남긴다(app/ai/call_log.py)
+    app.state.narrator = build_narrator(settings, app.state.model_router, app.state.session_factory)
     # 방장이 테이블에 고를 수 있는 서술 등급들. 위의 서술자와 같은 설정으로 정한다. 모델이 없는 등급은 고를 수 없다
     app.state.narration_tiers = offered_tiers(settings)
     # 서술한 장면에서 장부 초안을 쓰는 것(app/drafts/). 서술자가 언어 모델일 때만 쓴다. 장부 초안을 켠 테이블만 부른다
-    app.state.drafter = build_drafter(settings, app.state.http_client, app.state.session_factory)
+    app.state.drafter = build_drafter(settings, app.state.model_router, app.state.session_factory)
 
     # 로어북 항목을 벡터로 바꾸는 것. 설정(EMBEDDER)이 정한다. 기본은 모델을 부르지 않는 가짜다.
     # 시나리오를 게시하면 뒤에서 판의 항목을 벡터로 바꾼다(app/lore/indexing.py)

@@ -15,9 +15,10 @@ from collections.abc import AsyncIterator, Callable
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from app.ai import openai_compat
-from app.ai.openai_compat import OpenAICompatProvider, build_body, chat_url, token_limit
+from app.ai.openai_compat import OpenAICompatProvider, WireOptions, build_body, chat_url, token_limit
 from app.ai.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
 
 BASE_URL = 'http://127.0.0.1:11434/v1'
@@ -151,7 +152,7 @@ def test_reasoning_is_off_by_default():
 def test_reasoning_gets_its_own_tokens(reasoning: Reasoning):
     params = GenerationParams(max_tokens=800, temperature=0.8, reasoning=reasoning)
 
-    body = build_body(MODEL, MESSAGES, params, supports_reasoning=True)
+    body = build_body(MODEL, MESSAGES, params, WireOptions(supports_reasoning=True))
 
     # 생각이 답의 몫까지 먹으면 답이 비어 온다. 생각의 몫을 따로 더한다
     assert body['max_tokens'] == 800 + openai_compat.THINKING_TOKENS[reasoning]
@@ -161,10 +162,65 @@ def test_reasoning_gets_its_own_tokens(reasoning: Reasoning):
 def test_a_model_without_reasoning_gets_no_reasoning_field():
     params = GenerationParams(max_tokens=800, temperature=0.8, reasoning=Reasoning.HIGH)
 
-    body = build_body(MODEL, MESSAGES, params, supports_reasoning=False)
+    body = build_body(MODEL, MESSAGES, params, WireOptions(supports_reasoning=False))
 
     assert 'reasoning_effort' not in body
     assert body['max_tokens'] == 800
+
+
+def test_the_token_limit_goes_in_the_field_the_model_takes():
+    body = build_body(MODEL, MESSAGES, PARAMS, WireOptions(token_field='max_completion_tokens'))
+
+    # OpenAI 의 생각하는 모델은 max_tokens 를 받지 않는다
+    assert body['max_completion_tokens'] == 800
+    assert 'max_tokens' not in body
+
+
+def test_a_model_without_temperature_gets_no_temperature():
+    body = build_body(MODEL, MESSAGES, PARAMS, WireOptions(supports_temperature=False))
+
+    assert 'temperature' not in body
+
+
+async def test_a_key_goes_in_the_authorization_header():
+    recorder = streaming(make_stream(SCENE))
+
+    await make_provider(recorder, api_key=SecretStr('sk-test')).complete(MESSAGES, PARAMS)
+
+    (request,) = recorder.requests
+    assert request.headers['Authorization'] == 'Bearer sk-test'
+
+
+@pytest.mark.parametrize('api_key', [None, SecretStr('')])
+async def test_without_a_key_no_authorization_header_is_sent(api_key: SecretStr | None):
+    recorder = streaming(make_stream(SCENE))
+
+    await make_provider(recorder, api_key=api_key).complete(MESSAGES, PARAMS)
+
+    (request,) = recorder.requests
+    assert 'Authorization' not in request.headers
+
+
+def test_the_key_is_not_in_the_repr_of_the_provider():
+    provider = make_provider(streaming(make_stream(SCENE)), api_key=SecretStr('sk-test'))
+
+    assert 'sk-test' not in repr(provider)
+
+
+async def test_the_key_is_not_in_an_error():
+    recorder = streaming(make_stream(SCENE), status=401)
+
+    with pytest.raises(ProviderError) as caught:
+        await make_provider(recorder, api_key=SecretStr('sk-test')).complete(MESSAGES, PARAMS)
+
+    assert 'sk-test' not in str(caught.value)
+    assert 'sk-test' not in repr(caught.value)
+
+
+def test_the_kind_is_set_when_made():
+    # 같은 코드로 서버 곁의 모델과 OpenAI 를 부른다. 기록에는 어느 창구였는지 적는다
+    assert make_provider(streaming(make_stream(SCENE))).kind == 'openai_compat'
+    assert make_provider(streaming(make_stream(SCENE)), kind='openai').kind == 'openai'
 
 
 async def test_the_timeout_is_passed_on():
