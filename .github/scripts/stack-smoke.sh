@@ -11,7 +11,8 @@
 #                  DB 의 백업은 최근 백업 파일이 있으면 healthy 다
 #     check        마이그레이션이 성공했는지, 서버마다 준비됐는지(/health/ready), 서버끼리 닿는지, root 가 아닌지,
 #                  이미지에 .env 가 없는지 본다. 비밀이 그것을 쓰는 프로세스에만 가는지(secret_scope.py),
-#                  바깥에 여는 포트가 정해 둔 것뿐이고 127.0.0.1 에 묶였는지도 본다(port_scope.py).
+#                  바깥에 여는 포트가 정해 둔 것뿐이고 127.0.0.1 에 묶였는지(port_scope.py),
+#                  모든 서비스의 로그에 상한이 있는지도 본다(logging_scope.py, 띄운 컨테이너의 설정).
 #                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
@@ -260,7 +261,7 @@ no_env_file_in_image() {
   compose exec -T "$1" test ! -e /app/.env
 }
 
-# 설정을 보는 검사(secret_scope.py, port_scope.py)의 규칙이 맞는가. 규칙이 틀리면 새는 것을 놓치고 초록이 된다
+# 설정을 보는 검사(secret_scope.py, port_scope.py, logging_scope.py)의 규칙이 맞는가. 규칙이 틀리면 새는 것을 놓치고 초록이 된다
 scope_rules_hold() {
   PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_*_scope.py'
 }
@@ -280,6 +281,17 @@ backup_private() {
 # 컨테이너에 서명 개인키의 폴더가 붙지 않았는가. 끝난 컨테이너(마이그레이션)도 본다
 no_signing_key_mounted() {
   ! docker inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$(container_of "$1")" | grep -qx /app/keys
+}
+
+# 띄운 컨테이너마다 로그에 크기의 상한(max-size)이 붙었는가(#358). 끝난 컨테이너(마이그레이션)도 본다.
+# 설정 검사(logging_scope.py)는 compose 의 설정을 보고, 이것은 Docker 가 실제로 받은 값을 본다
+logs_limited() {
+  local ids id
+  ids="$(compose ps -a -q)"
+  [[ -n "$ids" ]] || return 1
+  for id in $ids; do
+    [[ -n "$(docker inspect -f '{{index .HostConfig.LogConfig.Config "max-size"}}' "$id")" ]] || return 1
+  done
 }
 
 # compose 의 설정을 검사 스크립트에 넘겨 본다. .env 는 읽지 않는다(--no-interpolate, --no-env-resolution).
@@ -314,9 +326,11 @@ check() {
   report "결제 서버가 인증 서버의 공개키를 받는다" reachable_from billing-server "$jwks"
   report "인증 서버가 결제 서버에 닿는다" reachable_from auth-server http://billing-server:8003/health
   report "게임 서버가 결제 서버에 닿는다" reachable_from game-server http://billing-server:8003/health
-  report "설정 검사(비밀, 열린 포트)의 규칙이 맞다" scope_rules_hold
+  report "설정 검사(비밀, 열린 포트, 로그 상한)의 규칙이 맞다" scope_rules_hold
   check_config "비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" .github/scripts/secret_scope.py
   check_config "바깥에 여는 포트는 정해 둔 것뿐이고 모두 127.0.0.1 에 묶였다(port_scope.py)" .github/scripts/port_scope.py
+  check_config "모든 서비스의 로그에 크기와 파일 수의 상한이 있다(logging_scope.py)" .github/scripts/logging_scope.py
+  report "띄운 컨테이너마다 로그에 상한이 붙었다" logs_limited
   for service in "${KEYLESS[@]}"; do
     report "$service 에 서명 개인키가 붙지 않았다" no_signing_key_mounted "$service"
   done
