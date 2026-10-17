@@ -13,7 +13,7 @@ from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.ai.call_log import DbCallLog
-from app.ai.routing import ANTHROPIC_KIND, LOCAL_KIND, OPENAI_KIND, ModelRouter
+from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ModelRouter
 from app.catalog.lookup import DbModelLookup
 from app.main import create_app
 from app.rounds.fake_narrator import FakeNarrator
@@ -121,6 +121,14 @@ def test_the_anthropic_endpoint_carries_the_key_of_the_settings():
     assert 'sk-ant-test' not in repr(router)
 
 
+def test_the_gemini_endpoint_carries_the_key_of_the_settings():
+    router = router_of(make_test_settings(**LLM, gemini_api_key='g-test'))
+
+    assert (router.gemini.base_url, router.gemini.kind) == ('https://generativelanguage.googleapis.com', GEMINI_KIND)
+    assert router.gemini.api_key.get_secret_value() == 'g-test'
+    assert router_of(make_test_settings(**LLM)).gemini is None
+
+
 def test_the_key_is_a_secret_in_the_settings():
     settings = make_test_settings(openai_api_key='sk-test')
 
@@ -219,7 +227,9 @@ def test_premium_models_are_routed_and_recorded_by_the_app():
 def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('OPENAI_API_KEY', 'sk-real')
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-ant-real')
+    monkeypatch.setenv('GEMINI_API_KEY', 'g-real')
 
     # 개발자의 .env 에 진짜 키가 있어도 테스트는 실제 API 를 부르지 않는다
     settings = make_test_settings()
-    assert (settings.openai_api_key.get_secret_value(), settings.anthropic_api_key.get_secret_value()) == ('', '')
+    keys = (settings.openai_api_key, settings.anthropic_api_key, settings.gemini_api_key)
+    assert [key.get_secret_value() for key in keys] == ['', '', '']

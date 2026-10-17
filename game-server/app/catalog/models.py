@@ -97,11 +97,13 @@ class TokenLimitField(enum.StrEnum):
 
 class ReasoningStyle(enum.StrEnum):
     """
-    모델이 생각(thinking)을 켜고 끄는 방식. Claude 의 모델마다 다르다(Anthropic 의 문서, 2026-10).
+    모델이 생각(thinking)을 켜고 끄는 방식. Claude 와 Gemini 의 모델마다 다르다(각 회사의 문서, 2026-10).
 
     서술은 생각을 꺼서 부른다(app/rounds/llm_narrator.py). 끄는 법과, 끌 수 없으면 어떻게 하는지가 모델마다 다르다.
-    부르는 쪽(app/ai/anthropic.py)이 이 값을 보고 요청의 thinking, effort 칸을 만든다.
-    OpenAI 모양의 창구는 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다). Gemini 를 붙일 때 그 방식의 값을 더한다.
+    부르는 쪽(app/ai/anthropic.py, app/ai/gemini.py)이 이 값을 보고 요청의 생각 칸을 만든다.
+    창구마다 받는 값이 다르다(app/catalog/rules.py 의 STYLES_BY_PROVIDER). budget 은 두 창구가 함께 쓴다.
+    OpenAI 모양의 창구는 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다).
+    끌 수 없는 방식(always, level_minimal, level_low, budget_min)의 모델은 판매가를 생각의 몫까지 넣어 매긴다.
     """
 
     # 끌 수 있다(disabled). 켜면 스스로 깊이를 정한다(adaptive + effort). Opus 5, Sonnet 5, Haiku 5.5, Opus 4.6~4.8
@@ -110,8 +112,17 @@ class ReasoningStyle(enum.StrEnum):
     ALWAYS = 'always'
     # disabled 를 받지 않는다. 미리 생각하지 않게 하는 between_tools 로 끈다. Sonnet 5.5
     BETWEEN_TOOLS = 'between_tools'
-    # 켜면 생각의 토큰 상한을 준다(enabled + budget_tokens). 끌 수 있다. Opus·Sonnet·Haiku 4.5
+    # 켜면 생각의 토큰 상한을 준다. 끌 수 있다.
+    # Claude 4.5 세대(enabled + budget_tokens, 끄기 disabled), Gemini 2.5 Flash·Flash-Lite(thinkingBudget, 끄기 0)
     BUDGET = 'budget'
+    # Gemini 의 생각의 깊이(thinkingLevel). 끌 수 없다. 끄라고 하면 가장 낮은 minimal 로 준다.
+    # minimal 도 생각을 끄는 것은 아니다. Gemini 3.6 Flash, 3.5·3.1 Flash-Lite, 3 Flash
+    LEVEL_MINIMAL = 'level_minimal'
+    # Gemini 의 생각의 깊이. 끌 수 없고 minimal 도 받지 않는다. 끄라고 하면 low 로 준다.
+    # Gemini 4 Argon, 3.8 Flash, 3.1 Pro
+    LEVEL_LOW = 'level_low'
+    # Gemini 의 생각의 토큰 상한(thinkingBudget). 끌 수 없다. 끄라고 하면 가장 작은 128 로 준다. Gemini 2.5 Pro
+    BUDGET_MIN = 'budget_min'
 
 
 class AiModel(Base):
