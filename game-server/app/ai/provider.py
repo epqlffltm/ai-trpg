@@ -73,6 +73,11 @@ class Completion:
     모델이 만든 글과, 그것을 만든 사정.
 
     토큰 수는 provider 가 알려 주면 채운다. 알려 주지 않는 provider 도 있어서 비어 있을 수 있다.
+    토큰 수의 뜻은 provider 마다 다르다. 여기서는 OpenAI 의 뜻으로 맞춘다. 다른 provider 는 이 뜻으로 바꿔 채운다.
+      - input_tokens: 보낸 입력 전부.
+        캐시에서 읽은 것(cached_input_tokens)과 캐시에 쓴 것(cache_write_tokens)이 들어 있다.
+      - output_tokens: 쓴 출력 전부. 생각에 쓴 것(reasoning_tokens)이 들어 있다.
+    원가는 이 뜻으로 센다(app/ai/costs.py).
     finish_reason 은 왜 멈췄는가다(다 썼다, 길이 상한에 닿았다 등). 이름은 provider 마다 다르다.
     truncated 는 길이 상한에 걸려 중간에 끊겼다는 뜻이다. provider 가 자기의 finish_reason 을 이 뜻으로 바꿔 둔다.
     쓰는 쪽은 provider 마다 다른 이름을 몰라도 된다.
@@ -84,10 +89,22 @@ class Completion:
     output_tokens: int | None = None
     finish_reason: str | None = None
     truncated: bool = False
+    cached_input_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    reasoning_tokens: int | None = None
 
 
 class ProviderError(Exception):
-    """모델을 부르는 데 실패했다. 연결이 안 되거나, 시간이 넘었거나, 이상한 답이 왔다."""
+    """
+    모델을 부르는 데 실패했다. 연결이 안 되거나, 시간이 넘었거나, 이상한 답이 왔다.
+
+    글(str)은 까닭의 이름이다(timeout, status_429 …). 응답의 본문은 싣지 않는다.
+    retry_after 는 공급자가 "이만큼 뒤에 다시 하라"고 알려 준 초다(Retry-After). 알려 주지 않았으면 None.
+    """
+
+    def __init__(self, reason: str, retry_after: float | None = None) -> None:
+        super().__init__(reason)
+        self.retry_after = retry_after
 
 
 # 흘려 받는 글을 받는 곳. 모델이 새로 쓴 글을 조각마다 받는다(생각 글은 빠져 있다).

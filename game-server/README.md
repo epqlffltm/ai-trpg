@@ -1423,6 +1423,7 @@ app/ai/
   routing.py          모델의 이름으로 창구를 고른다(ModelRouter). 모델 목록의 이름표면 목록대로, 아니면 서버 곁의 모델
   calls.py            AI 호출 한 번의 기록(CallRecord)과 기록을 받는 곳의 모양(CallLog)
   call_log.py         기록을 DB(ai_invocations)에 쓰는 기록장
+  costs.py            호출 한 번의 원가를 그날의 단가로 센다(PriceTag, usage_of)
   models.py           ai_invocations 표
   repository.py       보관 기간이 지난 원문을 비우는 SQL
   retention.py        원문을 비우는 정리 작업(한 시간마다)
@@ -1509,7 +1510,7 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 - 장부 초안도 같은 것으로 고른다. 고르지 못하면 초안 없이 지나간다.
 - 키를 만들 때 OpenAI 의 Limits 화면에서 월 사용 한도를 낮게 걸어 둔다.
 
-**모델 하나 불러 보기.** 목록에 넣은 모델이 키와 날짜판으로 정말 불리는지 켜기 전에 본다. 짧은 장면 하나를 쓰게 하고 글, 토큰 수, 첫 글까지의 시간을 찍는다. 꺼진 모델도 부른다. 은퇴한 모델은 부르지 않는다. 실제로 부르므로 값이 든다.
+**모델 하나 불러 보기.** 목록에 넣은 모델이 키와 날짜판으로 정말 불리는지 켜기 전에 본다. 짧은 장면 하나를 쓰게 하고 글, 토큰 수(캐시, 생각), 그날의 단가로 센 원가, 첫 글까지의 시간을 찍는다. 꺼진 모델도 부른다. 은퇴한 모델은 부르지 않는다. 실제로 부르므로 값이 든다.
 
 ```powershell
 uv run python -m scripts.try_model gpt-6-luna
@@ -1519,6 +1520,7 @@ uv run python -m scripts.try_model gemma4:26b
 
 **다시 시도하기와 넘어가기.** 서술이 실패하면 같은 모델로 한 번 더 부르고, 그래도 안 되면 `LLM_FALLBACK_MODELS` 의 모델로 차례로 넘어간다(`app/rounds/retrying_narrator.py`).
 - 모델마다 두 번까지 부른다. 다시 부르기 전에 1~2초를 무작위로 쉰다. 여러 테이블이 함께 실패해도 다시 부르는 때가 흩어진다.
+- 공급자가 "이만큼 뒤에 다시 하라"고 알려 주면(`retry-after-ms`, `Retry-After`, 429·503) 적어도 그만큼 쉬고 같은 모델로 다시 부른다. 20초(`MAX_RETRY_AFTER_SECONDS`)보다 길면 기다리지 않고 그 모델은 그만 부른다. 오래 기다리면 서술 하나의 시간 안에 다시 부를 수 없다.
 - 다시 부르는 실패: `timeout`, `unreachable`, `interrupted`, `stream_error`, `status_429`, `status_5xx`, `malformed`, 그리고 답은 왔지만 쓰지 않은 것(`cut_off`, `empty`, `too_long`. 모델의 글은 매번 다르다).
 - 같은 모델로 다시 부르지 않는 실패: `status_400`, `401`, `403`, `404`, `422`. 요청이나 설정이 틀렸다. 같은 것을 보내면 또 실패한다.
 - 다음 모델로도 넘어가지 않는 실패: `unreachable`(모델들은 같은 서버에 있다), `401`, `403`. 그 자리에서 그만둔다.
@@ -1599,6 +1601,10 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - 잘 끝났든(`ok`), 답은 왔지만 장면으로 쓰지 않았든(`rejected`: `cut_off`, `empty`, `too_long`), 답을 받지 못했든(`failed`: `timeout`, `unreachable`, `status_503` …) 한 번에 하나다. 실패한 호출도 시간과 토큰을 썼다.
 - 적는 것: 쓰임새(`narration`), 테이블, 라운드 번호, 그때의 방장, provider 의 종류와 모델(답에 적힌 이름, 없으면 부른 이름), 틀의 버전, 추론, 문체, 생성 설정(`temperature`, `max_tokens`), 넣은 로어북 항목(`lore_entry_ids`), 넣은 지난 일(`memory_rounds`), 걸린 시간, 토큰 수, 멈춘 이유, 모델이 쓴 글(쓰지 않은 글도).
 - 생성 설정은 코드의 상수라 틀의 버전과 따로 바뀔 수 있어 함께 적는다. 넣은 로어북 항목은 검색이 맞는 것을 골랐는지 볼 근거다.
+- **자세한 사용량과 원가**(#332, `app/ai/costs.py`). 캐시에서 읽은 입력(`cached_input_tokens`), 캐시에 쓴 입력(`cache_write_tokens`), 생각에 쓴 출력(`reasoning_tokens`)을 적는다. 모두 입력·출력 수에 들어 있다(OpenAI 의 뜻. 다른 provider 는 이 뜻으로 바꿔 채운다).
+  [모델 목록](#모델-목록)의 모델이면 이름표(`model_slug`), 그날의 단가로 센 원가(`cost_usd`, USD 소수 여덟째 자리), 그 단가의 줄(`cost_id`)도 적는다.
+  캐시 읽기·쓰기·나머지 입력·출력을 각자의 단가로 센다(캐시 단가가 없으면 입력 단가). 토큰 수를 모르면 원가를 적지 않는다. 받지 못한 호출에는 원가가 없다. 목록에 없는 모델(서버 곁의 모델)은 이름표와 원가가 비어 있다.
+  사용자의 크레딧과는 상관없다. 크레딧은 라운드를 열 때 정한 값으로만 받는다. 원가는 판매가가 맞는지, 실제 청구서와 맞는지 볼 근거다.
 - 적지 않는 것: 보낸 메시지(라운드에 굳힌 것과 판의 복사본, 틀의 버전으로 다시 조립할 수 있다), 생각 글(GM 메모 등급이다).
 - 대신 보낸 메시지의 지문(`input_digest`)을 적는다. 서버만 아는 키로 만든 HMAC-SHA256 이다. 같은 입력이었는지는 알 수 있고 내용은 알 수 없다.
   그냥 해시면 나머지를 아는 사람이 "GM 메모에 이 문장이 있었나"를 하나씩 대입해 확인할 수 있다. 키(`AI_LOG_HMAC_KEY`)가 없으면 지문을 적지 않는다.

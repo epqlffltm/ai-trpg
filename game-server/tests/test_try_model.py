@@ -10,13 +10,14 @@
 import json
 from dataclasses import dataclass, replace
 from datetime import date
+from decimal import Decimal
 
 import httpx
 from pydantic import SecretStr
 
 from app.ai.provider import GenerationParams, Reasoning
 from app.ai.routing import Endpoint, ModelRouter
-from app.catalog.lookup import CatalogModel
+from app.catalog.lookup import CatalogModel, UnitCost
 from app.catalog.models import Provider, TokenLimitField
 from scripts.try_model import DEFAULT_MAX_TOKENS, build_parser, params_of, try_once
 
@@ -41,7 +42,7 @@ class OneModel:
 
     model: CatalogModel
 
-    async def find(self, slug: str) -> CatalogModel | None:
+    async def find(self, slug: str, day: date) -> CatalogModel | None:
         return self.model if slug == self.model.slug else None
 
 
@@ -79,8 +80,9 @@ async def test_a_disabled_model_is_called_and_summarised():
     assert code == 0
     assert pieces == ['사이렌이 ', '울린다.']
     assert lines[1] == '창구 openai, 답한 모델 gpt-6-luna-2026-09-22, 멈춘 이유 stop'
-    assert lines[2] == '토큰: 입력 60, 출력 9'
-    assert lines[3].startswith('시간: 첫 글 ')
+    assert lines[2] == '토큰: 입력 60(캐시 모름), 출력 9(생각 모름)'
+    assert lines[3] == '원가: 오늘의 단가가 없다(scripts.models set-cost)'
+    assert lines[4].startswith('시간: 첫 글 ')
 
 
 async def test_a_retired_model_is_not_called():
@@ -105,3 +107,18 @@ def test_the_command_line_makes_the_params():
     assert (params.max_tokens, params.reasoning) == (400, Reasoning.LOW)
     # 적지 않으면 생각을 끄고 짧게 쓴다
     assert params_of(build_parser().parse_args(['gpt-6-luna'])) == PARAMS
+
+
+async def test_the_cost_of_the_call_is_shown_with_the_price_of_the_day():
+    priced = replace(LUNA, cost=UnitCost(cost_id=7, input_per_mtok=Decimal('0.1'), output_per_mtok=Decimal('0.5')))
+
+    _, lines = await try_once(router_with(priced, answer()), 'gpt-6-luna', PARAMS, lambda piece: None)
+
+    # 60 x 0.1 + 9 x 0.5 = 10.5 / 1,000,000
+    assert lines[3] == '원가: $0.00001050'
+
+
+async def test_a_model_outside_the_catalog_has_no_cost():
+    _, lines = await try_once(router_with(LUNA, answer()), 'gemma4:26b', PARAMS, lambda piece: None)
+
+    assert lines[3] == '원가: 모델 목록에 없는 모델이라 세지 않는다'
