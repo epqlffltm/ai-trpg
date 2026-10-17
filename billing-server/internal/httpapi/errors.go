@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
 )
 
 // errorBody 는 오류 응답의 모양이다. 다른 서버들과 같은 칸 이름(detail)을 쓴다.
@@ -33,11 +35,19 @@ func unavailable(c *gin.Context, detail string) {
 	c.AbortWithStatusJSON(http.StatusServiceUnavailable, errorBody{Detail: detail})
 }
 
+// dbTimeoutDetail 은 DB 가 시간 제한으로 쿼리를 끊었을 때의 응답이다. 그 쿼리는 적히지 않았다.
+const dbTimeoutDetail = "지금은 요청을 끝내지 못했습니다. 잠시 뒤 같은 요청을 다시 보내 주세요."
+
 // internalError 는 서버 쪽의 문제로 처리하지 못했을 때의 응답이다.
 // 원인은 서버의 기록에만 남기고 응답에는 싣지 않는다. DB 의 오류에는 테이블 이름과 쿼리가 들어 있다.
+// DB 가 시간 제한으로 끊은 것(database.IsTimeout)은 503 이다. 다시 보내면 되는 일이다(#296).
 func internalError(c *gin.Context, cause error) {
 	// 요청을 기록하는 미들웨어(requestLogging)가 이 오류를 요청의 식별자와 함께 적는다
 	_ = c.Error(cause)
+	if database.IsTimeout(cause) {
+		unavailable(c, dbTimeoutDetail)
+		return
+	}
 	c.AbortWithStatusJSON(http.StatusInternalServerError, errorBody{
 		Detail: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
 	})

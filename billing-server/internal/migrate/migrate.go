@@ -95,8 +95,9 @@ func withProvider(databaseURL string, schema string, run func(*goose.Provider) e
 
 // openDB 는 goose 가 쓰는 모양(database/sql)의 연결을 만든다. 서버의 연결 풀과 같은 설정을 쓴다.
 // 그래서 search_path 가 같고, goose 가 만드는 표도 마이그레이션의 테이블도 schema 안에 놓인다.
+// DB 의 한도는 두지 않는다(database.Limits{}). 데이터를 고쳐 쓰는 마이그레이션은 쿼리 하나가 길 수 있다.
 func openDB(databaseURL string, schema string) (*sql.DB, error) {
-	poolConfig, err := database.NewPoolConfig(databaseURL, schema)
+	poolConfig, err := database.NewPoolConfig(databaseURL, schema, database.Limits{})
 	if err != nil {
 		return nil, err
 	}

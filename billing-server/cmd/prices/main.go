@@ -83,7 +83,7 @@ func run(args []string, out io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	pool, err := database.NewPool(ctx, target.URL, target.Schema)
+	pool, err := database.NewPool(ctx, target.URL, target.Schema, database.JobLimits)
 	if err != nil {
 		return err
 	}
