@@ -33,7 +33,7 @@ from app.chat import router as chat
 from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
-from app.core.jobs import BackgroundJobs
+from app.core.job_setup import build_jobs
 from app.drafts import router as ledger_drafts
 from app.drafts.decisions import DraftNotFoundError
 from app.drafts.setup import build_drafter
@@ -172,8 +172,9 @@ def create_app(
     app.state.redis = build_redis(settings)
     app.state.limiting = build_limiting(settings, app.state.redis)
 
-    # 요청과 따로 도는 작업을 들고 있는 것. GM 의 서술이 여기서 돈다(app/rounds/closing.py)
-    app.state.jobs = BackgroundJobs()
+    # 요청과 따로 도는 작업을 들고 있는 것. GM 의 서술이 여기서 돈다(app/rounds/closing.py).
+    # 종류마다 동시에 도는 수와 기다리는 줄의 상한이 있다(app/core/job_setup.py, #275)
+    app.state.jobs = build_jobs(settings)
 
     # 판정에 쓰는 주사위. 서버만 굴린다. 테스트는 정해진 눈을 내는 주사위로 바꿔 꽂는다
     app.state.dice = RandomDice()

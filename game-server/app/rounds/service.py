@@ -351,6 +351,7 @@ async def force_close(
         주사위도 다시 굴리지 않는다. 처음 닫을 때 선언에 적어 둔 결과를 그대로 쓴다.
         닫기 시작한 시각을 지금으로 고치고 실패의 표시를 지운다. 다시 맡긴 것 위에 또 맡기지 않게 한다.
         시각이 바뀌므로 앞서 맡은 작업이 아직 살아 있어도 이 라운드를 더는 바꾸지 못한다(is_run).
+        서버가 스스로 다시 맡긴 횟수(auto_retries)도 0 으로 돌린다. 방장이 지켜보며 맡긴 것이라 새로 센다.
     """
     table, _, round_ = await lock_current_round(session, host_id, table_id)
     table_state.require_host(table, host_id)
@@ -361,6 +362,7 @@ async def force_close(
     elif is_stalled(round_, datetime.now(UTC)):
         round_.closing_at = datetime.now(UTC)
         round_.narration_failed_at = None
+        round_.auto_retries = 0
     else:
         raise RoundConflictError(Conflict.ROUND_CLOSING)
 
