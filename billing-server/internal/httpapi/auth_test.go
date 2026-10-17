@@ -17,6 +17,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/revocations"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
 )
 
@@ -172,7 +173,7 @@ func TestMeWithARealTokenAndKeyServer(t *testing.T) {
 	}))
 	defer authServer.Close()
 	cache := jwks.NewCache(jwks.HTTPFetcher{Client: authServer.Client(), URL: authServer.URL}, time.Now)
-	verifier := auth.NewVerifier(cache, testenv.Issuer, testenv.Audience, time.Now)
+	verifier := auth.NewVerifier(cache, revocations.List{}, testenv.Issuer, testenv.Audience, time.Now)
 
 	access := key.Token(t, testenv.AccessClaims(time.Now()))
 	for range 3 {
@@ -202,7 +203,7 @@ func TestKeyServerDownFromTheStartIsServiceUnavailable(t *testing.T) {
 	authServer := httptest.NewServer(http.NotFoundHandler())
 	authServer.Close()
 	cache := jwks.NewCache(jwks.HTTPFetcher{Client: &http.Client{}, URL: authServer.URL}, time.Now)
-	verifier := auth.NewVerifier(cache, testenv.Issuer, testenv.Audience, time.Now)
+	verifier := auth.NewVerifier(cache, revocations.List{}, testenv.Issuer, testenv.Audience, time.Now)
 
 	response := call(t, verifier, meURL, "Bearer "+key.Token(t, testenv.AccessClaims(time.Now())))
 
