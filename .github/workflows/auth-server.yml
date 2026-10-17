@@ -128,6 +128,7 @@ jobs:
           SMTP_USER: ci-only@example.com
           SMTP_PASSWORD: ci-only-password
           ALLOWED_HOSTS: api.example.com
+          REFRESH_COOKIE_ALLOWED_ORIGINS: https://play.example.com
         run: uv run python manage.py check --deploy --fail-level WARNING
 
       # 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
