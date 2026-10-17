@@ -175,4 +175,7 @@ def _describe_security_event(event: SecurityEvent) -> str:
         parts.append(event.ip)
     if event.user is not None:
         parts.append(f'계정 {event.user.username}')
+    # 운영자가 남긴 사유(계정 정지와 풀기). 다른 사건에서는 비어 있다
+    if event.note:
+        parts.append(f'사유 {event.note}')
     return '  ' + '  '.join(parts)
