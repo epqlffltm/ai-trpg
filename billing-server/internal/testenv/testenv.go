@@ -47,7 +47,7 @@ func Pool(t *testing.T) *pgxpool.Pool {
 	if migrated.err != nil {
 		t.Fatalf("%s 스키마에 마이그레이션을 적용하지 못했다. 스키마가 있는지 확인한다(README 의 '테스트'): %v", Schema, migrated.err)
 	}
-	pool, err := database.NewPool(context.Background(), databaseURL, Schema)
+	pool, err := database.NewPool(context.Background(), databaseURL, Schema, database.ServerLimits)
 	if err != nil {
 		t.Fatalf("풀을 만들지 못했다: %v", err)
 	}

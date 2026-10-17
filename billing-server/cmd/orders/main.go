@@ -88,7 +88,7 @@ func run(args []string, out io.Writer) error {
 	slog.SetDefault(app.NewLogger(os.Stderr, settings.Logging))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	pool, err := database.NewPool(ctx, settings.Database.URL, settings.Database.Schema)
+	pool, err := database.NewPool(ctx, settings.Database.URL, settings.Database.Schema, database.JobLimits)
 	if err != nil {
 		return err
 	}

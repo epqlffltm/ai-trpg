@@ -23,7 +23,7 @@ const unreachableURL = "postgres://billing:unused@127.0.0.1:1/trpg"
 // openPool 은 실제 DB 에 붙는 풀을 만들고, 테스트가 끝나면 닫는다.
 func openPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	pool, err := database.NewPool(context.Background(), testenv.DatabaseURL(t), config.DefaultSchema)
+	pool, err := database.NewPool(context.Background(), testenv.DatabaseURL(t), config.DefaultSchema, database.ServerLimits)
 	if err != nil {
 		t.Fatalf("풀을 만들지 못했다: %v", err)
 	}
@@ -40,7 +40,7 @@ func within(t *testing.T, limit time.Duration) context.Context {
 }
 
 func TestNewPoolConfigSetsSearchPathAndTimeout(t *testing.T) {
-	poolConfig, err := database.NewPoolConfig(unreachableURL, "billing")
+	poolConfig, err := database.NewPoolConfig(unreachableURL, "billing", database.ServerLimits)
 	if err != nil {
 		t.Fatalf("설정을 만들지 못했다: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestNewPoolConfigSetsSearchPathAndTimeout(t *testing.T) {
 
 func TestNewPoolConfigHidesTheURLInErrors(t *testing.T) {
 	const secret = "do-not-print-me"
-	_, err := database.NewPoolConfig("postgres://billing:"+secret+"@127.0.0.1:not-a-port/trpg", "billing")
+	_, err := database.NewPoolConfig("postgres://billing:"+secret+"@127.0.0.1:not-a-port/trpg", "billing", database.ServerLimits)
 
 	if !errors.Is(err, database.ErrInvalidURL) {
 		t.Fatalf("오류 = %v, 기대 = ErrInvalidURL", err)
@@ -67,7 +67,7 @@ func TestNewPoolConfigHidesTheURLInErrors(t *testing.T) {
 
 func TestNewPoolDoesNotConnectUntilUsed(t *testing.T) {
 	// DB 가 죽어 있어도 서버는 떠야 한다. 풀을 만드는 것은 성공하고, 쓸 때 실패한다
-	pool, err := database.NewPool(context.Background(), unreachableURL, "billing")
+	pool, err := database.NewPool(context.Background(), unreachableURL, "billing", database.ServerLimits)
 	if err != nil {
 		t.Fatalf("풀을 만드는 데서 실패했다: %v", err)
 	}

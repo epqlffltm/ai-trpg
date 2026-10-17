@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
@@ -354,6 +356,29 @@ func TestAHandledFailureIsLoggedWithTheRequestID(t *testing.T) {
 	line := server.finished(t)
 	if line["status_code"] != float64(500) || line["result"] != "server_error" || line["level"] != "error" {
 		t.Errorf("500 의 줄 = %v", line)
+	}
+}
+
+func TestADatabaseTimeoutIsA503ToSendAgain(t *testing.T) {
+	// DB 가 lock_timeout 이나 statement_timeout 으로 끊었다(#296). 그 쿼리는 적히지 않았으니 다시 보내면 된다
+	for _, code := range []string{"55P03", "57014"} {
+		t.Run(code, func(t *testing.T) {
+			cause := fmt.Errorf("지갑을 읽지 못했다: %w", &pgconn.PgError{Code: code, Message: "canceling statement"})
+			server := observe(t, &fakeWallet{err: cause})
+
+			response := server.send(http.MethodGet, walletURL, "Authorization", "Bearer the-token")
+
+			if response.Code != http.StatusServiceUnavailable {
+				t.Fatalf("상태 코드 = %d. 503 이어야 한다", response.Code)
+			}
+			failures := server.errorLines(t)
+			if len(failures) != 1 || failures[0]["error_code"] != "database.timeout" {
+				t.Fatalf("오류 줄 = %v", failures)
+			}
+			if line := server.finished(t); line["status_code"] != float64(503) {
+				t.Errorf("요청이 끝난 줄 = %v", line)
+			}
+		})
 	}
 }
 
