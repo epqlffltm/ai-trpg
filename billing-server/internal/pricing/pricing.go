@@ -10,6 +10,9 @@
 // Stripe 의 Price 가 금액을 고칠 수 없고 새 가격을 만들어 옛 것을 보관하는 것과 같은 생각이다.
 //
 // 홀드는 걸 때의 값을 스스로 적어 둔다. 값을 바꿔도 이미 건 홀드는 바뀌지 않는다.
+//
+// 이름마다 등급(Tier)이 있다(#338). 스탠다드는 골드(산 크레딧)와 실버(무료 크레딧) 모두로 내고, 프리미엄은 골드로만 낸다.
+// 등급도 값과 같은 줄에 적어 덧붙이기만 한다. 결제에 쓰는 등급은 이 가격표가 기준이다.
 package pricing
 
 import (
@@ -51,12 +54,38 @@ var (
 	ErrPastEffective = errors.New("적용 시각은 지금보다 앞설 수 없습니다")
 	// ErrSameMoment 는 같은 이름에 같은 적용 시각의 줄이 이미 있다는 오류다.
 	ErrSameMoment = errors.New("같은 이름에 같은 적용 시각의 값이 이미 있습니다")
+	// ErrInvalidTier 는 등급이 standard, premium 가운데 하나가 아니라는 오류다.
+	ErrInvalidTier = errors.New("등급은 standard 나 premium 이어야 합니다")
+	// ErrMissingTier 는 처음 파는 이름에 등급을 적지 않았다는 오류다. 이미 파는 이름은 적지 않으면 그때의 등급을 그대로 쓴다.
+	// 처음 파는 이름에 기본값을 두지 않는다. 프리미엄 모델이 등급을 빠뜨려 실버로 팔리면 그만큼 손해다.
+	ErrMissingTier = errors.New("처음 파는 이름은 등급(standard, premium)을 정해야 합니다")
 )
+
+// Tier 는 가격표 이름의 등급이다. DB 의 price_versions.tier 에 이 글자가 그대로 적힌다.
+type Tier string
+
+const (
+	// TierStandard 는 골드와 실버 모두로 내는 등급이다.
+	TierStandard Tier = "standard"
+	// TierPremium 은 골드로만 내는 등급이다.
+	TierPremium Tier = "premium"
+)
+
+// Valid 는 아는 등급인지다.
+func (t Tier) Valid() bool {
+	return t == TierStandard || t == TierPremium
+}
+
+// PaidOnly 는 골드(산 크레딧)로만 내야 하는지다.
+func (t Tier) PaidOnly() bool {
+	return t == TierPremium
+}
 
 // Price 는 지금 받는 값이다.
 type Price struct {
 	Code    string
 	Credits credit.Amount
+	Tier    Tier
 	// Since 는 이 값이 적용되기 시작한 시각이다.
 	Since time.Time
 }
@@ -68,6 +97,7 @@ type Version struct {
 	// Credits 는 값이다. OnSale 이 false 면(판매를 멈춘 줄) 0 이다.
 	Credits     credit.Amount
 	OnSale      bool
+	Tier        Tier
 	EffectiveAt time.Time
 	Reason      string
 	ChangedBy   string
@@ -79,6 +109,8 @@ type Change struct {
 	Code string
 	// Credits 는 새 값이다. 판매를 멈출 때(Stop)는 읽지 않는다.
 	Credits credit.Amount
+	// Tier 는 등급이다. 비워 두면 적용 시각에 그 이름의 등급을 그대로 쓴다. 처음 파는 이름이면 비울 수 없다.
+	Tier Tier
 	// EffectiveAt 은 적용을 시작할 시각이다. 비워 두면(zero) 지금이다. 지금보다 앞설 수 없다.
 	EffectiveAt time.Time
 	// Reason 과 ChangedBy 는 왜, 누가 바꿨는지다. 둘 다 비울 수 없다.

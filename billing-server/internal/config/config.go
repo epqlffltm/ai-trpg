@@ -38,8 +38,9 @@ const (
 	// DefaultSpendFreeFirst 는 크레딧을 쓸 때 무료 크레딧부터 쓰는지다.
 	// 무료 크레딧은 기한이 지나면 사라지므로, 먼저 써야 사용자가 잃는 것이 적다.
 	DefaultSpendFreeFirst = true
-	// DefaultFreeCreditTTL 은 무료 크레딧이 지급된 뒤 사라질 때까지의 시간이다. 1주일이다.
-	DefaultFreeCreditTTL = 7 * 24 * time.Hour
+	// DefaultFreeCreditTTL 은 무료 크레딧(실버)이 지급된 뒤 사라질 때까지의 시간이다. 30일이다(#338, 유저 결정 2026-10-17).
+	// 환영 크레딧, 출석 보상 모두 같다. 바꿔도 이미 지급한 것의 기한은 그대로다(지급마다 기한을 적어 둔다).
+	DefaultFreeCreditTTL = 30 * 24 * time.Hour
 	// DefaultAppEnvironment 는 배포 환경의 이름이다. 로그의 environment 칸에 적힌다.
 	DefaultAppEnvironment = "development"
 	// DefaultAppVersion 은 배포한 코드의 버전이다. 로그의 version 칸에 적힌다. 운영에서는 git SHA 를 넣는다.

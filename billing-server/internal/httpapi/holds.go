@@ -135,10 +135,12 @@ type holdRejection struct {
 
 // holdRejections 는 부르는 서버의 요청 때문에 난 오류들이다. 여기 없는 오류는 서버 쪽의 문제(500)다.
 // 402 는 "값을 치러야 한다"는 상태 코드다. 부르는 서버가 다른 오류와 가려서 사용자에게 충전을 권할 수 있다.
+// 앞에서부터 찾는다. wallet.ErrPaidInsufficient 는 wallet.ErrInsufficient 를 감싸므로 더 앞에 둔다.
 var holdRejections = []holdRejection{
 	{hold.ErrInvalidReference, http.StatusBadRequest, codeHoldInvalidRequest},
 	{hold.ErrUnknownPrice, http.StatusBadRequest, codePriceUnknown},
 	{hold.ErrPriceNotForSale, http.StatusBadRequest, codePriceNotForSale},
+	{wallet.ErrPaidInsufficient, http.StatusPaymentRequired, codeCreditGoldRequired},
 	{wallet.ErrInsufficient, http.StatusPaymentRequired, codeCreditInsufficient},
 	{hold.ErrNotFound, http.StatusNotFound, codeHoldNotFound},
 	{hold.ErrReferenceReused, http.StatusConflict, codeHoldReferenceReused},

@@ -26,10 +26,10 @@ WHERE code = sqlc.arg(code)
 ORDER BY effective_at, id;
 
 -- name: InsertPriceVersion :one
--- 가격표에 줄 하나를 덧붙인다. amount 가 NULL 이면 판매를 멈추는 줄이다.
-INSERT INTO price_versions (code, amount, effective_at, reason, changed_by, created_at)
+-- 가격표에 줄 하나를 덧붙인다. amount 가 NULL 이면 판매를 멈추는 줄이다. 등급(tier)은 늘 적는다.
+INSERT INTO price_versions (code, amount, tier, effective_at, reason, changed_by, created_at)
 VALUES (
-    sqlc.arg(code), sqlc.narg(amount), sqlc.arg(effective_at), sqlc.arg(reason), sqlc.arg(changed_by), sqlc.arg(now)
+    sqlc.arg(code), sqlc.narg(amount), sqlc.arg(tier), sqlc.arg(effective_at), sqlc.arg(reason), sqlc.arg(changed_by), sqlc.arg(now)
 )
 RETURNING *;
 

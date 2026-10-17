@@ -19,6 +19,7 @@ package wallet
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"time"
 
@@ -41,6 +42,9 @@ var (
 	ErrAlreadyGranted = errors.New("이미 받은 크레딧입니다")
 	// ErrInsufficient 는 쓰려는 양이 가진 것보다 많다는 오류다. 이 오류가 나면 아무것도 바뀌지 않는다.
 	ErrInsufficient = errors.New("크레딧이 모자랍니다")
+	// ErrPaidInsufficient 는 산 크레딧(골드)으로만 내야 하는데 산 크레딧이 모자라다는 오류다(PaidOnly).
+	// 무료 크레딧이 얼마나 있든 같다. ErrInsufficient 를 감싼다. errors.Is(err, ErrInsufficient) 도 참이다.
+	ErrPaidInsufficient = fmt.Errorf("%w. 이 일은 산 크레딧(골드)으로만 냅니다", ErrInsufficient)
 	// ErrNoOrderLot 은 그 사용자에게 그 주문의 묶음이 없다는 오류다.
 	ErrNoOrderLot = errors.New("그 주문으로 들어온 크레딧이 없습니다")
 	// ErrLotUsed 는 그 주문의 크레딧이 일부라도 줄었다는 오류다(쓴 것, 홀드로 묶인 것). 이 오류가 나면 아무것도 바뀌지 않는다.
@@ -95,6 +99,16 @@ const (
 )
 
 // Policy 는 크레딧을 다루는 규칙 가운데 설정으로 바꿀 수 있는 것들이다.
+// Funds 는 무엇으로 낼 수 있는지다. 홀드를 거는 쪽이 가격표의 등급을 보고 고른다.
+type Funds int
+
+const (
+	// AnyCredits 는 산 크레딧과 무료 크레딧 모두로 낸다. 어느 쪽을 먼저 쓰는지는 Policy.FreeFirst 가 정한다.
+	AnyCredits Funds = iota
+	// PaidOnly 는 산 크레딧(골드)으로만 낸다. 무료 크레딧(실버)은 건드리지 않는다.
+	PaidOnly
+)
+
 type Policy struct {
 	// FreeFirst 가 true 면 무료 크레딧부터 쓰고, false 면 산 크레딧부터 쓴다.
 	// 무료 크레딧끼리는 설정과 상관없이 먼저 사라지는 것부터 쓴다.
