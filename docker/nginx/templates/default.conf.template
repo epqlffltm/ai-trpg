@@ -11,6 +11,7 @@
 #     막은 주소도 403 이 아니라 404 다. 그런 주소가 있다는 것조차 알리지 않는다.
 #   - IP 마다 요청 수를 센다(#22). 넘으면 429 다. 인증 서버의 제한(Redis)이 꺼져 있어도 바깥에서 막는다.
 #   - 요청 식별자(X-Request-ID)를 nginx 가 정해 서버에 넘긴다. nginx 의 줄과 서버의 줄이 같은 request_id 로 이어진다.
+#   - 클라이언트가 지어 보낸 IP 와 출처의 머리말(X-Real-IP, Forwarded, X-Forwarded-Host)을 덮거나 지운다(#353, README 의 "외부에 열기 전").
 #   - 로그를 공통 규격(docs/observability.md)의 JSON 으로 남긴다. 경로와 주소 뒤의 값은 적지 않는다.
 
 # 컨테이너의 주소를 Docker 의 DNS 에서 찾고 10초 기억한다. 서버가 다시 떠서 주소가 바뀌어도 따라간다.
@@ -89,6 +90,12 @@ server {
     # 인증 서버는 뒤에서 TRUSTED_PROXY_COUNT(1) 번째만 믿는다(accounts/client_ip.py)
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    # 클라이언트가 지어 보낸 IP 와 출처의 머리말을 서버에 넘기지 않는다(#353). 프록시 뒤의 서버가 믿을 수 있는 것은 위의 넷뿐이다.
+    # X-Real-IP 는 nginx 에 연결한 상대의 주소로 덮는다. 결제 서버(gin)처럼 이 머리말을 읽는 라이브러리가 있다.
+    # Forwarded(RFC 7239)와 X-Forwarded-Host 는 지운다(빈 값이면 nginx 가 보내지 않는다). 이 저장소의 서버는 읽지 않는다
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header Forwarded "";
+    proxy_set_header X-Forwarded-Host "";
     # 서버와의 연결을 HTTP/1.1 로 맺는다. SSE 가 끊기지 않고 흐른다
     proxy_http_version 1.1;
     proxy_set_header Connection "";
