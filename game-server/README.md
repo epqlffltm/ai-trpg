@@ -31,6 +31,7 @@
 - [테이블](#테이블)
 - [라운드](#라운드)
 - [서술 값](#서술-값)
+- [모델 목록](#모델-목록)
 - [이벤트 기록](#이벤트-기록)
 - [채팅](#채팅)
 - [쪽지](#쪽지)
@@ -1799,6 +1800,53 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - 크레딧이 모자란 것을 알린 뒤에 충전해도 정리 작업은 다시 걸지 않는다. 라운드를 닫을 때 다시 걸어 본다. 모자란 사람의 테이블마다 결제 서버를 두드리지 않으려는 것이다.
 - 등급을 넘는 넘어가기는 없다. `premium` 의 모델들이 모두 실패하면 `standard` 로 서술하지 않고 실패로 적는다. 방장이 다시 맡기거나 다음 라운드부터 등급을 낮춘다.
 - 이 기능 전에 연 라운드는 마이그레이션이 그때의 방장에게 청구를 만들어 둔다(진행 중인 테이블의 열린 라운드와 닫는 중인 라운드). 결제 서버를 켜지 않았으면 받지 않고 지나간다.
+
+## 모델 목록
+
+서술에 쓸 수 있는 언어 모델들과 모델마다의 원가 단가를 DB 에 둔다(`app/catalog/`). 표는 둘이다.
+
+| 표 | 무엇 | 규칙 |
+| --- | --- | --- |
+| `ai_models` | 모델 하나에 한 줄. 이름표(slug), 창구(provider), API 모델 이름, 보이는 이름, 회사, 분류, 받는 것, 켜짐, 은퇴일 | 지우지 않는다. 끄거나 은퇴일을 적는다 |
+| `ai_model_costs` | 원가 단가(USD, 백만 토큰당). 입력, 출력, 캐시 읽기, 캐시 쓰기와 시작하는 날, 확인한 날 | 덧붙이기만 한다 |
+
+- **판매가는 여기 없다.** 1인 1라운드에 몇 크레딧인지는 결제 서버의 가격표(`price_versions`, `billing-server` 의 `cmd/prices`)가 정한다. 여기는 공급자에게 내는 값이다. 판매가가 맞는지 볼 때와 실제 사용량의 원가를 잴 때 쓴다.
+- **이름표**는 영어 소문자, 숫자, 붙임표다(`gpt-6-luna`). 점은 쓰지 않는다. 결제 서버의 가격 코드(`narration.<이름표>.i0.o0`)에서 점이 칸을 나눈다. 48자까지다.
+- **이름표, 창구, API 모델 이름은 바꾸지 않는다.** API 모델 이름에는 날짜가 붙은 이름(스냅숏)을 적는다. 별칭은 공급자가 말없이 다른 모델로 돌려 서술의 목소리가 바뀐다. 새 스냅숏은 새 이름표로 넣는다.
+- **창구**는 `openai`, `anthropic`, `gemini`, `local`(서버 곁의 Ollama, LM Studio)이다. 새 창구는 부르는 코드와 마이그레이션이 함께 있어야 한다.
+- **분류**(`basic`, `standard`, `premium`)는 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 정한다. 회사(`vendor`)가 그 안의 소분류다.
+- **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나. 칸은 `openai`, `local` 창구만 적는다.
+- **켜기**: 새로 넣은 모델은 꺼져 있다. 그날의 원가가 있고 은퇴하지 않았어야 켤 수 있다. 원가를 적고 평가 장면을 통과한 뒤에 켠다.
+- **그날의 단가**는 그날 이전에 시작한 것 중 가장 늦은 것이다. 같은 날이면 나중에 적은 것이다. 행사가가 끝나는 날의 값을 미리 적어 둘 수 있고, 잘못 적은 값은 같은 날로 다시 적어 고친다. 앞의 줄은 남는다.
+
+아직 서술은 이 목록을 읽지 않는다. 서술 등급의 모델은 지금처럼 설정(`LLM_MODEL`, `LLM_PREMIUM_MODEL`)이 정한다. 목록으로 부르는 것은 외부 API 창구와 함께 붙인다.
+
+### 관리 명령
+
+관리 화면이 생기기 전까지는 명령으로 다룬다. game-server 폴더에서 돈다. 설정(`.env`)의 DB 를 쓴다. 서버를 띄우지 않아도 된다.
+
+```powershell
+uv run python -m scripts.models list
+uv run python -m scripts.models list --on 2026-12-01
+uv run python -m scripts.models show gpt-6-luna
+uv run python -m scripts.models add gpt-6-luna --provider openai --api-model-id <공식 문서의 날짜 붙은 이름> --name "GPT-6 Luna" --vendor openai --grade standard --token-field max_completion_tokens --reasoning
+uv run python -m scripts.models set-cost gpt-6-luna --input 0.1 --output 0.5 --from 2026-10-17
+uv run python -m scripts.models set-cost gpt-5-6-sol --input 5 --output 30 --from 2026-11-21 --note "행사가 끝남"
+uv run python -m scripts.models update gpt-6-luna --no-temperature
+uv run python -m scripts.models enable gpt-6-luna
+uv run python -m scripts.models disable gpt-6-luna
+uv run python -m scripts.models retire gpt-6-luna --on 2027-06-01
+uv run python -m scripts.models retire gpt-6-luna --cancel
+```
+
+- `list` 는 모델마다 분류, 회사, 상태(켜짐, 꺼짐, 은퇴), 그날의 단가와 1라운드 원가 어림(입력 12,000, 출력 1,200 토큰, 1달러 1,500원)을 찍는다.
+- 거절되면(없는 모델, 틀린 모양, 원가 없이 켜기) 까닭을 찍고 1 로 끝난다.
+- 일은 모두 `app/catalog/service.py` 의 함수가 한다. 나중에 관리 서버가 생기면 같은 함수를 관리 API 로 연다.
+- API 키는 여기 적지 않는다. `.env` 에만 둔다.
+
+**알려진 한계**
+- 누가 언제 무엇을 바꿨는지는 남지 않는다(원가는 줄마다 남는다). 지금은 DB 에 닿는 운영자만 명령을 돌린다. 관리 화면을 붙일 때 바꾼 기록을 더한다.
+- 처음 데이터는 넣어 두지 않는다. API 모델 이름은 공식 문서에서 확인하고 넣는다.
 
 ## 이벤트 기록
 
