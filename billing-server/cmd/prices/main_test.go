@@ -244,3 +244,28 @@ func TestImportPreviewsUnlessApplied(t *testing.T) {
 		t.Errorf("오류 = %v, 화면 = %q. 오류를 돌려주고 아무것도 찍지 않아야 한다", err, out.String())
 	}
 }
+
+func TestParseEntriesReadsAFileSavedByExcel(t *testing.T) {
+	// 윈도우의 엑셀이 "CSV UTF-8" 로 저장하면 맨 앞에 BOM 이 붙고 줄바꿈이 CRLF 다
+	entries, err := parseEntries(strings.NewReader("\ufeffcode,credits,effective_at\r\nnarration.a.i0.o0,120,\r\n"))
+	if err != nil || len(entries) != 1 || entries[0].Code != "narration.a.i0.o0" || entries[0].Credits != 120 {
+		t.Errorf("줄 = %+v, 오류 = %v", entries, err)
+	}
+
+}
+
+func TestImportSaysSoWhenNothingChanges(t *testing.T) {
+	at := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
+	same := []pricing.Planned{{Entry: pricing.Entry{Code: "narration.a.i0.o0", Credits: 120}, EffectiveAt: at,
+		Before: &pricing.Price{Credits: 120}, Effect: pricing.EffectSame}}
+	req := request{action: "import", entries: []pricing.Entry{{Code: "narration.a.i0.o0", Credits: 120}}, reason: "다시 넣기", by: "ops", apply: true}
+
+	var out bytes.Buffer
+	if err := do(context.Background(), &fakePrices{planned: same}, req, &out); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out.String(), "넣은 것이 없습니다") || strings.Contains(out.String(), "넣었습니다") {
+		t.Errorf("화면 = %q. 넣은 줄이 없다고 알려야 한다", out.String())
+	}
+}

@@ -34,6 +34,10 @@ var importHeader = []string{"code", "credits", "effective_at"}
 // stopWord 는 credits 칸에 적으면 판매를 멈추는 줄이 되는 낱말이다.
 const stopWord = "stop"
 
+// utf8BOM 은 파일 맨 앞에 붙는 표시(BOM)다. 윈도우의 엑셀이 "CSV UTF-8" 로 저장하면 붙는다.
+// 떼지 않으면 머리줄의 첫 칸이 "\ufeffcode" 로 읽혀, 맞아 보이는 머리줄이 틀렸다고 나온다.
+const utf8BOM = "\ufeff"
+
 // readEntries 는 파일을 열어 넣을 줄들로 바꾼다.
 func readEntries(path string) ([]pricing.Entry, error) {
 	file, err := os.Open(path)
@@ -53,6 +57,9 @@ func parseEntries(source io.Reader) ([]pricing.Entry, error) {
 	records, err := reader.ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("CSV 를 읽지 못했습니다: %w", err)
+	}
+	if len(records) > 0 {
+		records[0][0] = strings.TrimPrefix(records[0][0], utf8BOM)
 	}
 	if len(records) == 0 || strings.Join(records[0], ",") != strings.Join(importHeader, ",") {
 		return nil, errors.New("첫 줄은 code,credits,effective_at 이어야 합니다")
@@ -107,8 +114,23 @@ func doImport(ctx context.Context, list prices, req request, out io.Writer) erro
 		return err
 	}
 	printPlan(out, planned)
+	if changedLines(planned) == 0 {
+		fmt.Fprintln(out, "바뀌는 줄이 없어 넣은 것이 없습니다. 가격표는 그대로입니다")
+		return nil
+	}
 	fmt.Fprintln(out, "넣었습니다")
 	return nil
+}
+
+// changedLines 는 실제로 넣는 줄(바뀌는 것이 있는 줄)의 수다. 같음(EffectSame)은 넣지 않는다.
+func changedLines(planned []pricing.Planned) int {
+	count := 0
+	for _, line := range planned {
+		if line.Effect != pricing.EffectSame {
+			count++
+		}
+	}
+	return count
 }
 
 // printPlan 은 줄마다 무엇이 바뀌는지 한 줄씩 찍고, 끝에 바뀌는 종류별로 센 수를 찍는다.
