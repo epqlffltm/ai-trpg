@@ -20,8 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import repository
 from app.catalog.errors import CatalogConflictError, Conflict, InvalidModelError, ModelNotFoundError
-from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot, Provider, TokenLimitField
-from app.catalog.rules import is_retired, token_field_problem
+from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot, Provider, ReasoningStyle, TokenLimitField
+from app.catalog.rules import is_retired, reasoning_style_problem, token_field_problem
 from app.catalog.schemas import CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 
 
@@ -67,10 +67,14 @@ async def add_model(session: AsyncSession, data: ModelCreate) -> AiModel:
     return model
 
 
-def check_token_field(model: AiModel, changes: dict[str, object]) -> None:
-    """바꾼 뒤의 출력 상한의 칸이 모델의 창구에 맞아야 한다."""
+def check_fields(model: AiModel, changes: dict[str, object]) -> None:
+    """바꾼 뒤의 출력 상한의 칸과 생각을 켜고 끄는 방식이 모델의 창구에 맞아야 한다."""
+    provider = Provider(model.provider)
     field = changes.get('token_limit_field', model.token_limit_field)
-    problem = token_field_problem(Provider(model.provider), TokenLimitField(field) if field else None)
+    style = changes.get('reasoning_style', model.reasoning_style)
+    problem = token_field_problem(provider, TokenLimitField(field) if field else None) or reasoning_style_problem(
+        provider, ReasoningStyle(style) if style else None
+    )
     if problem:
         raise InvalidModelError(f'{model.slug}: {problem}')
 
@@ -79,7 +83,7 @@ async def update_model(session: AsyncSession, slug: str, data: ModelUpdate) -> A
     """모델에서 적은 것만 바꾼다."""
     model = await require_model(session, slug)
     changes = data.changes()
-    check_token_field(model, changes)
+    check_fields(model, changes)
     for name, value in changes.items():
         setattr(model, name, value)
     await session.commit()

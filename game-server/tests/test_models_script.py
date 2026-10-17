@@ -213,3 +213,40 @@ async def test_switching_to_the_same_snapshot_says_why(session: AsyncSession):
     code, lines = await run(session, 'switch-snapshot', 'gpt-6-luna', '--api-model-id', 'gpt-6-luna-2026-09-22')
 
     assert (code, lines) == (1, ['gpt-6-luna: 지금과 같은 날짜판이다'])
+
+
+# --- Claude ---
+
+ADD_OPUS = [
+    'add',
+    'claude-opus-5-5',
+    '--provider',
+    'anthropic',
+    '--api-model-id',
+    'claude-opus-5-5-20260901',
+    '--name',
+    'Claude Opus 5.5',
+    '--vendor',
+    'anthropic',
+    '--grade',
+    'premium',
+    '--reasoning',
+    '--no-temperature',
+    '--reasoning-style',
+    'always',
+]
+
+
+async def test_a_claude_model_is_added_with_its_reasoning_style(session: AsyncSession):
+    assert (await run(session, *ADD_OPUS))[0] == 0
+
+    _, lines = await run(session, 'show', 'claude-opus-5-5')
+
+    assert lines[2] == '  생각의 깊이 고름, 온도 안 받음, 출력 상한의 칸 정해짐, 생각의 방식 always'
+
+
+async def test_a_claude_model_without_a_reasoning_style_is_refused(session: AsyncSession):
+    code, lines = await run(session, *ADD_OPUS[:-2])
+
+    assert code == 1
+    assert '생각을 켜고 끄는 방식' in lines[0]

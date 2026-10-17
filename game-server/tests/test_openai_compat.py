@@ -19,12 +19,12 @@ import pytest
 from pydantic import SecretStr
 
 from app.ai import openai_compat
+from app.ai.http_stream import retry_after_of
 from app.ai.openai_compat import (
     OpenAICompatProvider,
     WireOptions,
     build_body,
     chat_url,
-    retry_after_of,
     token_limit,
 )
 from app.ai.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
