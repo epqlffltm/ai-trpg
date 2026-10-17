@@ -362,6 +362,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `order.stuck` | 결제 서버가 남긴다. 대사가 결제 대행사에 다시 묻고도, 결과를 모르는 채(`confirming`, `refunding`)로 하루가 지난 주문이 있다. 주문마다 `warning` 한 줄. `order_id`, `status`, `since`. 사람이 상점관리자에서 확인하고 `cmd/orders decide` 로 정한다 |
 | `pricing.review_due` | 결제 서버가 남긴다. 대사가 셀 때, 공급사 가격 변경의 할 일(`announce` D-30, `notice` D-14, `final` D-1) 가운데 때가 되었는데 끝내지 않은 것이 있다. 할 일마다 `warning` 한 줄. `review_id`, `subject`, `step`, `stage`(`d30`·`d14`·`d1`·`overdue`), `days_left`, `changes_at`. 끝냈다고 적을 때까지(`cmd/pricereviews done`) 날마다 나온다 |
 | `database.timeout` | 결제 서버가 남긴다. DB 가 시간 제한(`lock_timeout` 이나 `statement_timeout`, SQLSTATE `55P03`·`57014`)으로 쿼리를 끊었다. 그 쿼리는 적히지 않았고 주소는 503 으로 답했다. 다시 보내면 된다. 잦으면 잠금을 오래 쥔 쪽이나 느린 쿼리를 찾는다 |
+| `request.timeout` | 결제 서버가 남긴다. 요청이 마감(10초) 안에 끝나지 않았다. 연결 풀을 기다린 시간을 포함한다. 쿼리 중이었으면 취소했고 적히지 않았다. 주소는 503 으로 답했다. 다시 보내면 된다. 잦으면 연결 풀이 모자란지(결제 서버 README 의 "연결 풀의 크기") 먼저 본다 |
 | `sweep.behind` | 결제 서버가 남긴다. 대사가 셀 때, 만료된 지 한참(기본 10분) 지났는데 정리되지 않은 것이 있다. 정리 작업이 멈췄거나 밀렸다. `warning` |
 
 `error` 이상의 줄에는 `error_code` 를 붙인다. 새 코드를 만들면 이 표에 더한다.

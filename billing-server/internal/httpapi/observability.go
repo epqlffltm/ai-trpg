@@ -30,6 +30,8 @@ const (
 	codeInternal = "internal.error"
 	// DB 가 시간 제한(lock_timeout, statement_timeout)으로 쿼리를 끊은 오류의 코드(#296). 503 으로 답했다
 	codeDatabaseTimeout = "database.timeout"
+	// 요청이 마감(RequestTimeout)에 걸린 오류의 코드(#334). 연결 풀을 기다리다 걸린 것과 쿼리 중에 걸린 것이다. 503 으로 답했다
+	codeRequestTimeout = "request.timeout"
 )
 
 // 요청이 어떻게 끝났는지(result 칸).
@@ -151,12 +153,17 @@ func logHandledErrors(logger *slog.Logger, c *gin.Context) {
 	}
 }
 
-// errorCodeOf 는 핸들러가 남긴 오류의 코드를 고른다. DB 가 시간 제한으로 끊은 것만 따로 센다.
+// errorCodeOf 는 핸들러가 남긴 오류의 코드를 고른다. 다시 보내면 되는 둘은 따로 센다.
+// DB 가 끊은 것은 잠금이나 느린 쿼리를, 요청의 마감에 걸린 것은 연결 풀이 모자란 것을 먼저 의심한다.
 func errorCodeOf(err error) string {
-	if database.IsTimeout(err) {
+	switch {
+	case database.IsTimeout(err):
 		return codeDatabaseTimeout
+	case pastDeadline(err):
+		return codeRequestTimeout
+	default:
+		return codeInternal
 	}
-	return codeInternal
 }
 
 // recoverPanics 는 처리 중에 패닉이 나도 서버가 죽지 않고 500 으로 답하게 하는 미들웨어다.
