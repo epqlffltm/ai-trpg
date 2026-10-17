@@ -9,7 +9,7 @@
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다
 #     check        마이그레이션이 성공했는지, 서버마다 준비됐는지(/health/ready), 서버끼리 닿는지, root 가 아닌지,
-#                  이미지에 .env 가 없는지 본다.
+#                  이미지에 .env 가 없는지 본다. 비밀이 그것을 쓰는 프로세스에만 가는지도 본다(secret_scope.py).
 #                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
@@ -30,6 +30,8 @@ declare -A PORTS=([auth]=8000 [game]=8001 [board]=8002 [billing]=8003)
 WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron)
 # 그 가운데 심장박동으로 상태를 알리는 워커(docker-compose.yml 의 x-worker-heartbeat)
 HEARTBEAT_WORKERS=(auth-mail auth-welcome-credits billing-sweeper)
+# 서명 개인키를 받지 않는 인증의 프로세스(#274). 키 폴더는 auth-server 에만 붙는다
+KEYLESS=(auth-migrate auth-mail auth-welcome-credits auth-cron)
 # 주기 명령의 컨테이너와 그 crontab
 CRONTABS=(auth-cron:docker/cron/auth.crontab billing-cron:docker/cron/billing.crontab)
 # 프록시의 주소와, 관리자 화면 때문에 따로 연 인증 서버의 주소
@@ -256,6 +258,29 @@ no_env_file_in_image() {
   compose exec -T "$1" test ! -e /app/.env
 }
 
+# 비밀의 범위 검사(secret_scope.py)의 규칙이 맞는가. 규칙이 틀리면 새는 비밀을 놓치고 초록이 된다
+secret_scope_rules_hold() {
+  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_secret_scope.py'
+}
+
+# 컨테이너에 서명 개인키의 폴더가 붙지 않았는가. 끝난 컨테이너(마이그레이션)도 본다
+no_signing_key_mounted() {
+  ! docker inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$(container_of "$1")" | grep -qx /app/keys
+}
+
+# compose 의 설정에서 비밀이 그것을 쓰는 프로세스에만 가는지 본다. .env 는 읽지 않는다(--no-env-resolution).
+# 실패하면 무엇이 새는지(프로세스와 비밀의 이름)를 함께 찍는다. 값은 찍지 않는다
+check_secret_scope() {
+  local name="비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" problems
+  if problems="$(compose config --no-interpolate --no-env-resolution --format json | python3 .github/scripts/secret_scope.py 2>&1)"; then
+    echo "ok   $name"
+  else
+    echo "FAIL $name"
+    sed 's/^/     /' <<<"$problems"
+    failures=$((failures + 1))
+  fi
+}
+
 check() {
   local server jwks=http://auth-server:8000/api/v1/auth/jwks
   for server in "${SERVERS[@]}"; do
@@ -274,6 +299,11 @@ check() {
   report "결제 서버가 인증 서버의 공개키를 받는다" reachable_from billing-server "$jwks"
   report "인증 서버가 결제 서버에 닿는다" reachable_from auth-server http://billing-server:8003/health
   report "게임 서버가 결제 서버에 닿는다" reachable_from game-server http://billing-server:8003/health
+  report "비밀의 범위 검사의 규칙이 맞다" secret_scope_rules_hold
+  check_secret_scope
+  for service in "${KEYLESS[@]}"; do
+    report "$service 에 서명 개인키가 붙지 않았다" no_signing_key_mounted "$service"
+  done
   check_workers
   finish
 }
