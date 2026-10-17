@@ -380,6 +380,14 @@ CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 
 
 **키 ID(`kid`)는 공개키의 해시로 정한다.** 이름을 사람이 붙이지 않으므로, 키를 바꾸면 ID도
 자동으로 바뀐다. JWKS가 목록인 것은 키를 교체하는 동안 옛 키와 새 키를 함께 내보내기 위해서다.
+해시는 파일의 글자가 아니라 늘 같은 모양으로 다시 쓴 PEM 에서 계산한다. 윈도우에서 저장해 줄바꿈이 바뀌어도 같은 키는 같은 ID 다.
+
+**서명 키는 하나, 검증 키는 여럿이다(#21).** 새 토큰은 서명 키로만 서명하고, 받은 토큰은 머리말의 `kid` 로
+검증 키 목록(서명 키 + `JWT_EXTRA_PUBLIC_KEY_PATHS`)에서 공개키를 고른다. 모르는 `kid` 나 `kid` 가 없는 토큰은 거부한다.
+인증 서버 자신도 이 목록으로 검증해야 한다. 키를 바꾼 뒤에도 옛 키로 서명한 refresh 토큰(14일)을 받아야 사용자가 로그아웃되지 않는다.
+검증만 하는 키는 공개키 파일로 받는다. 옛 개인키를 남겨 둘 까닭이 없다.
+키를 다루는 곳은 `accounts/key_ring.py` 하나다. 지금은 설정(파일)에서 읽고 바꿀 때 서버를 다시 띄운다.
+키를 DB 에 두고 다시 띄우지 않고 바꾸게 되면 그 모듈의 `current_key_ring` 만 바꾼다(개인키를 DB 에 두면 암호화가 필요하다).
 
 **access 토큰은 15분만 유효하다.** 다른 서버는 인증 서버에 묻지 않고 서명과 만료만 확인한다.
 탈취된 토큰을 중간에 취소할 방법이 없으므로 수명을 짧게 잡는다.
@@ -685,6 +693,31 @@ IP로 보여 한 사람의 시도가 모두를 막는다.
 이미지를 만들 때 `collectstatic` 으로 모아 둔다. 개발 중에는 `STATIC_ROOT` 를 적지 않는다.
 네 서버를 함께 컨테이너로 띄우는 법은 [저장소 README](../README.md#4-서버-넷을-컨테이너로-선택)에 있다.
 
+**JWT 키 교체(#21).** 세 단계다. 단계마다 설정을 고치고 인증 서버를 다시 띄운다. 다른 세 서버는 고치지 않는다.
+그쪽은 JWKS 를 1시간 기억하고, 모르는 `kid` 가 오면 다시 받아 간다.
+
+1. 새 키를 미리 알린다. 새 개인키를 만들고 공개키를 꺼내 검증 키에 넣는다. 서명은 아직 옛 키다.
+   ```
+   uv run python scripts/generate_jwt_key.py keys/jwt-private-next.pem
+   uv run python scripts/export_jwt_public_key.py keys/jwt-private-next.pem keys/jwt-public-next.pem
+   ```
+   `.env` 에 `JWT_EXTRA_PUBLIC_KEY_PATHS=keys/jwt-public-next.pem` 을 적고 다시 띄운다. JWKS 에 키가 둘 실린다. **1시간 넘게** 둔다(다른 서버의 JWKS 기억 시간).
+2. 서명을 바꾼다. 옛 키의 공개키를 꺼내 두고, 새 개인키를 서명 키 자리로 옮긴다.
+   ```
+   uv run python scripts/export_jwt_public_key.py keys/jwt-private.pem keys/jwt-public-old.pem
+   ```
+   옛 `keys/jwt-private.pem` 을 지우고 `keys/jwt-private-next.pem` 을 `keys/jwt-private.pem` 으로 이름을 바꾼다.
+   `.env` 를 `JWT_EXTRA_PUBLIC_KEY_PATHS=keys/jwt-public-old.pem` 으로 고치고 다시 띄운다(`jwt-public-next.pem` 은 이제 서명 키라 지운다).
+   compose 는 서명 키의 경로를 `keys/jwt-private.pem` 으로 정해 두므로 파일 이름을 바꾸는 방식으로 한다.
+3. **14일 뒤** 옛 키를 뺀다. `JWT_EXTRA_PUBLIC_KEY_PATHS` 를 비우고 다시 띄운 뒤 `keys/jwt-public-old.pem` 을 지운다.
+   14일은 refresh 토큰의 수명이다. 그 전에 빼면 옛 키로 받은 refresh 토큰이 모두 거부되어 그 사용자들이 다시 로그인해야 한다.
+
+설정이 틀리면 서버가 뜨지 않는다: 공개키 파일이 없다, 공개키가 아니다(개인키를 넣었다), 같은 키가 두 번 들어 있다(서명 키와 같은 것도).
+
+**키가 샜을 때(긴급 폐기).** 1단계 없이 새 개인키를 서명 키 자리에 두고, 샌 키는 검증 키에 넣지 않은 채 다시 띄운다.
+인증 서버는 샌 키로 서명한 토큰을 바로 거부하고, 모든 사용자가 다시 로그인한다.
+다른 세 서버는 JWKS 를 기억하는 동안(최대 1시간) 샌 키로 만든 access 토큰을 받을 수 있다. 그 기억 규칙을 바꾸는 일은 이번에 하지 않았다.
+
 **운영 환경의 보안 설정(#19).** `APP_ENVIRONMENT=production` 이면 따로 켜지 않아도 아래가 켜진다(`config/security.py`).
 - 세션 쿠키와 CSRF 쿠키(관리자 화면)에 Secure 를 붙인다.
 - refresh 쿠키의 Secure(`REFRESH_COOKIE_SECURE`)를 끄면 서버가 뜨지 않는다. `DEBUG` 를 켜도, 메일 서버(`SMTP_HOST`)가 없어도 뜨지 않는다.
@@ -765,7 +798,7 @@ IP 차단이 꺼져 있는 상태다. 로그인은 계속 된다. 그동안에�
 
 | 묶음 | 이슈 |
 | --- | --- |
-| 배포 전에 해야 하는 것 | [#21](https://github.com/epqlffltm/ai-trpg/issues/21) JWT 키 교체 |
+| 배포 전에 해야 하는 것 | 없음 |
 | 규모가 커지면 할 것 | [#25](https://github.com/epqlffltm/ai-trpg/issues/25) 로그 수집과 대시보드, [#26](https://github.com/epqlffltm/ai-trpg/issues/26) Redis 차단기 |
 | 프론트에서 할 것 | [#30](https://github.com/epqlffltm/ai-trpg/issues/30) refresh를 한 번에 하나만, [#31](https://github.com/epqlffltm/ai-trpg/issues/31) 비밀번호 재설정 화면 |
 
