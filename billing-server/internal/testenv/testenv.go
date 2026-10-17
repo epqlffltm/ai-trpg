@@ -27,6 +27,13 @@ import (
 // Schema 는 테스트가 테이블을 만들고 쓰는 스키마다.
 const Schema = "billing_test"
 
+// MaxConns 는 테스트의 풀 하나가 여는 가장 많은 연결 수다.
+// pgx 의 기본값은 CPU 의 수(적어도 4)라 PC 마다 다르다. 16스레드 PC 에서는 go test 가 패키지 여럿을 함께 돌리고
+// 풀마다 16개까지 열어, PostgreSQL 의 연결 자리(기본 100)가 모자라 상관없는 테스트가 실패했다.
+// 4 는 CI 와 코어가 적은 PC 의 기본값과 같다. 테스트는 이 수로 늘 돌아 왔다. 테스트는 하나씩 돌고(t.Parallel 없음),
+// 한 테스트가 한꺼번에 쥐는 연결은 몇 개뿐이다.
+const MaxConns = 4
+
 // migrated 는 이 프로세스에서 테스트용 스키마에 마이그레이션을 적용한 결과를 기억한다.
 // 테스트마다 다시 적용하지 않는다.
 var migrated struct {
@@ -47,12 +54,22 @@ func Pool(t *testing.T) *pgxpool.Pool {
 	if migrated.err != nil {
 		t.Fatalf("%s 스키마에 마이그레이션을 적용하지 못했다. 스키마가 있는지 확인한다(README 의 '테스트'): %v", Schema, migrated.err)
 	}
-	pool, err := database.NewPool(context.Background(), databaseURL, Schema, database.ServerLimits)
+	pool, err := newPool(databaseURL)
 	if err != nil {
 		t.Fatalf("풀을 만들지 못했다: %v", err)
 	}
 	t.Cleanup(pool.Close)
 	return pool
+}
+
+// newPool 은 테스트용 스키마를 쓰고 연결을 MaxConns 개까지만 여는 풀을 만든다. 서버와 같은 한도(ServerLimits)를 쓴다.
+func newPool(databaseURL string) (*pgxpool.Pool, error) {
+	poolConfig, err := database.NewPoolConfig(databaseURL, Schema, database.ServerLimits)
+	if err != nil {
+		return nil, err
+	}
+	poolConfig.MaxConns = MaxConns
+	return pgxpool.NewWithConfig(context.Background(), poolConfig)
 }
 
 // DatabaseURL 은 테스트가 쓸 접속 주소를 돌려준다. 없으면 테스트를 실패시킨다.
