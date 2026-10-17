@@ -25,12 +25,16 @@ import {
   readJwtIssuer,
   readLogLevel,
   readPort,
+  readSessionRevocationsUrl,
 } from './environment.js';
 
 /** 테스트에 쓰는 DB 주소. 실제로 접속하지 않는다 */
 const DATABASE_URL = 'postgresql://board:secret-password@127.0.0.1:5432/trpg';
 /** 테스트에 쓰는 공개키 주소. 실제로 부르지 않는다 */
 const AUTH_JWKS_URL = 'http://127.0.0.1:8000/api/v1/auth/jwks';
+/** 공개키 주소의 옆. 끊긴 세션의 목록을 내주는 주소다 */
+const AUTH_SESSION_REVOCATIONS_URL =
+  'http://127.0.0.1:8000/api/v1/auth/session-revocations';
 
 describe('readPort', () => {
   it.each([undefined, '', '   '])('적지 않으면(%j) 기본 포트다', (value) => {
@@ -175,6 +179,38 @@ describe('readAuthJwksUrl', () => {
   });
 });
 
+describe('readSessionRevocationsUrl', () => {
+  it('적지 않으면 공개키 주소의 옆이다', () => {
+    expect(readSessionRevocationsUrl(undefined, AUTH_JWKS_URL)).toBe(
+      AUTH_SESSION_REVOCATIONS_URL,
+    );
+    expect(readSessionRevocationsUrl('  ', AUTH_JWKS_URL)).toBe(
+      AUTH_SESSION_REVOCATIONS_URL,
+    );
+  });
+
+  it('적으면 그 주소다', () => {
+    const url = 'https://auth.example.com/revoked';
+
+    expect(readSessionRevocationsUrl(` ${url} `, AUTH_JWKS_URL)).toBe(url);
+  });
+
+  it('http 나 https 주소가 아니면 뜨지 않는다', () => {
+    expect(() =>
+      readSessionRevocationsUrl('ftp://auth/revoked', AUTH_JWKS_URL),
+    ).toThrow('AUTH_SESSION_REVOCATIONS_URL');
+  });
+
+  it.each([
+    'http://127.0.0.1:8000/keys.json',
+    'http://127.0.0.1:8000/api/v1/auth/jwks?v=2',
+  ])('공개키 주소가 /jwks 로 끝나지 않으면 적어야 한다: %s', (jwksUrl) => {
+    expect(() => readSessionRevocationsUrl(undefined, jwksUrl)).toThrow(
+      'AUTH_SESSION_REVOCATIONS_URL 을 적어야 합니다',
+    );
+  });
+});
+
 describe('readJwtIssuer', () => {
   it.each([undefined, '', '   '])('적지 않으면(%j) 기본값이다', (value) => {
     expect(readJwtIssuer(value)).toBe(DEFAULT_JWT_ISSUER);
@@ -312,6 +348,7 @@ describe('readEnvironment', () => {
       DATABASE_URL,
       DB_SCHEMA: DEFAULT_DB_SCHEMA,
       AUTH_JWKS_URL,
+      AUTH_SESSION_REVOCATIONS_URL,
       JWT_ISSUER: DEFAULT_JWT_ISSUER,
       JWT_AUDIENCE: DEFAULT_JWT_AUDIENCE,
       APP_ENVIRONMENT: DEFAULT_APP_ENVIRONMENT,
@@ -341,6 +378,7 @@ describe('readEnvironment', () => {
       DATABASE_URL,
       DB_SCHEMA: 'board_test',
       AUTH_JWKS_URL,
+      AUTH_SESSION_REVOCATIONS_URL,
       JWT_ISSUER: 'other-auth',
       JWT_AUDIENCE: 'board-staging',
       APP_ENVIRONMENT: 'production',
