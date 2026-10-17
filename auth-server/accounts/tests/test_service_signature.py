@@ -10,7 +10,7 @@ import re
 
 from django.test import SimpleTestCase
 
-from accounts.service_signature import SIGNATURE_HEADER, sign_request
+from accounts.service_signature import SIGNATURE_HEADER, sign_request, verify_request
 
 SECRET = 'this-is-a-test-secret-of-32-chars!'
 SENT_AT = 1772442000
@@ -64,3 +64,45 @@ class SignRequestTests(SimpleTestCase):
 
     def _digest(self, signature: str) -> str:
         return re.fullmatch(r't=\d+,v1=([0-9a-f]{64})', signature).group(1)
+
+
+class VerifyRequestTests(SimpleTestCase):
+    """결제 서버가 서명해 보낸 요청을 확인한다(#352). 결제 서버의 internal/signature 와 같은 규칙이다."""
+
+    def verify(self, header: str | None = None, **overrides) -> bool:
+        fields = {'secret': SECRET, 'method': 'POST', 'request_uri': PATH, 'body': BODY, 'now': SENT_AT}
+        fields.update(overrides)
+        return verify_request(header=sign() if header is None else header, **fields)
+
+    def test_accepts_the_value_the_billing_server_makes(self):
+        # 결제 서버가 같은 비밀과 내용으로 만드는 값이다(위의 값과 같다)
+        self.assertTrue(self.verify('t=1772442000,v1=9270f18fd4635b8f4489bf06d6c6f42275f2b08ea19876090cb7c2ea02a62aec'))
+
+    def test_refuses_a_request_that_is_not_the_signed_one(self):
+        refused = {
+            '다른 메서드': {'method': 'PUT'},
+            '다른 주소': {'request_uri': '/api/v1/auth/service/other'},
+            '다른 본문': {'body': BODY + b' '},
+            '다른 비밀': {'secret': 'another-secret-that-is-32-chars!!'},
+        }
+        for name, overrides in refused.items():
+            with self.subTest(name):
+                self.assertFalse(self.verify(**overrides))
+
+    def test_refuses_a_bad_header(self):
+        for header in ('', 'nope', 't=1772442000', 'v1=' + '0' * 64, 't=x,v1=' + '0' * 64, sign().upper()):
+            with self.subTest(header=header):
+                self.assertFalse(self.verify(header))
+
+    def test_accepts_five_minutes_either_way_and_no_more(self):
+        self.assertTrue(self.verify(now=SENT_AT + 300))
+        self.assertTrue(self.verify(now=SENT_AT - 300))
+        self.assertFalse(self.verify(now=SENT_AT + 301))
+        self.assertFalse(self.verify(now=SENT_AT - 301))
+
+    def test_an_empty_or_short_secret_accepts_nothing(self):
+        # 설정이 빠진 서버는 서명을 하나도 받지 않는다. 빈 비밀로 만든 서명도 마찬가지다
+        for secret in ('', 'short'):
+            with self.subTest(secret=secret):
+                header = sign(secret=secret)
+                self.assertFalse(self.verify(header, secret=secret))

@@ -24,6 +24,7 @@ from accounts.views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     RefreshView,
+    ServiceGuardianNoticeView,
     SessionRevocationsView,
     SignupCompleteView,
     SignupVerifyView,
@@ -52,4 +53,5 @@ urlpatterns = [
     path('guardian/request', GuardianRequestView.as_view(), name='guardian-request'),
     path('guardian/consent', GuardianConsentView.as_view(), name='guardian-consent'),
     path('guardian/revoke', GuardianRevokeView.as_view(), name='guardian-revoke'),
+    path('service/guardian-notices', ServiceGuardianNoticeView.as_view(), name='service-guardian-notices'),
 ]

@@ -62,8 +62,9 @@ SECRETS = [
     ),
     # 메일 서버의 비밀번호. 발송함의 워커가 보낸다. 바로 보내는 설정(MAIL_DELIVERY=inline)에서는 서버와 cron 도 보낸다
     *secrets('auth-server', ['auth-server', 'auth-mail', 'auth-cron'], 'SMTP_PASSWORD'),
-    # 결제 서버를 부르는 비밀. 환영 크레딧의 워커만 부른다
-    *secrets('auth-server', ['auth-welcome-credits'], 'BILLING_SECRET'),
+    # 결제 서버와 함께 아는 비밀. 환영 크레딧의 워커가 결제 서버를 부르고,
+    # 서버가 결제 서버의 보호자 알림(#352)의 서명을 확인한다
+    *secrets('auth-server', ['auth-server', 'auth-welcome-credits'], 'BILLING_SECRET'),
     # 게임 서버의 비밀. 마이그레이션은 DB 만 쓴다
     *secrets(
         'game-server',
@@ -76,7 +77,9 @@ SECRETS = [
         'AI_LOG_HMAC_KEY',
     ),
     # 결제 서버가 요청의 서명을 확인하는 비밀. 요청을 받는 서버만 쓴다
-    *secrets('billing-server', ['billing-server'], 'PG_WEBHOOK_SECRET', 'GAME_SERVER_SECRET', 'AUTH_SERVER_SECRET'),
+    *secrets('billing-server', ['billing-server'], 'PG_WEBHOOK_SECRET', 'GAME_SERVER_SECRET'),
+    # 인증 서버와 함께 아는 비밀. 서버가 인증 서버의 요청을 확인하고, 정리 작업이 보호자 알림(#352)에 서명한다
+    *secrets('billing-server', ['billing-server', 'billing-sweeper'], 'AUTH_SERVER_SECRET'),
     # 결제 대행사의 키. 서버와 대사(cron)가 결제 대행사를 부른다. 정리 작업(sweeper)은 부르지 않는다(config.LoadSweeper)
     *secrets('billing-server', ['billing-server', 'billing-cron'], 'TOSS_SECRET_KEY'),
 ]

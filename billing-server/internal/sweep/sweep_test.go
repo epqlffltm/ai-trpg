@@ -7,6 +7,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/guardiannotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
 )
 
@@ -92,6 +93,53 @@ func TestAnEmptyRoundIsNothing(t *testing.T) {
 	result, err := sweep.New(holds, wallets, orders, 10).Round(context.Background())
 
 	if err != nil || result.Any() {
+		t.Errorf("결과 = %+v, %v", result, err)
+	}
+}
+
+// fakeNotices 는 정해 둔 대로 답하는 보호자 알림이다.
+type fakeNotices struct {
+	result guardiannotice.Result
+	err    error
+	limit  int
+}
+
+func (f *fakeNotices) Round(_ context.Context, limit int) (guardiannotice.Result, error) {
+	f.limit = limit
+	return f.result, f.err
+}
+
+func TestNoticesRunWhenAttached(t *testing.T) {
+	var order []string
+	holds, wallets, orders := steps(&order)
+	notices := &fakeNotices{result: guardiannotice.Result{Queued: 1, Sent: 1}}
+
+	result, err := sweep.New(holds, wallets, orders, 7).WithNotices(notices).Round(context.Background())
+
+	if err != nil || result.Notices != notices.result || notices.limit != 7 || !result.Any() {
+		t.Errorf("결과 = %+v, %v, limit = %d", result, err, notices.limit)
+	}
+}
+
+func TestAFailingNoticeStepDoesNotStopTheOthers(t *testing.T) {
+	var order []string
+	holds, wallets, orders := steps(&order)
+	notices := &fakeNotices{err: errors.New("DB 가 끊겼다")}
+
+	_, err := sweep.New(holds, wallets, orders, 7).WithNotices(notices).Round(context.Background())
+
+	if err == nil || len(order) != 3 {
+		t.Errorf("오류 = %v, 돈 차례 = %v", err, order)
+	}
+}
+
+func TestWithoutNoticesTheRoundIsAsBefore(t *testing.T) {
+	var order []string
+	holds, wallets, orders := steps(&order)
+
+	result, err := sweep.New(holds, wallets, orders, 7).Round(context.Background())
+
+	if err != nil || result.Notices != (guardiannotice.Result{}) {
 		t.Errorf("결과 = %+v, %v", result, err)
 	}
 }
