@@ -658,6 +658,9 @@ class HeldJobs:
         job.close()
         self.names.append(name)
 
+    def spawn_once(self, job, name: str, operation: str = '') -> None:
+        self.spawn(job, name, operation)
+
     def count(self) -> int:
         return 0
 

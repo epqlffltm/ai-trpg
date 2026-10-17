@@ -117,6 +117,14 @@ class Settings(BaseSettings):
     # 모르는 모델에 보냈다가 오류가 나면 false 로 바꾼다
     llm_supports_reasoning: bool = True
 
+    # 서술을 동시에 몇 개까지 돌리나(app/core/jobs.py, #275). 넘는 것은 차례를 기다린다.
+    # 모델이 한 번에 받는 수(Ollama 의 OLLAMA_NUM_PARALLEL, 외부 API 의 속도 제한)에 맞춘다.
+    # 기다리는 시간도 서술 하나의 시간(닫기 시작한 때부터)에 들어간다. 너무 작으면 몰릴 때 시간 초과가 난다
+    job_narration_concurrency: int = Field(default=4, ge=1, le=64)
+
+    # 색인(로어북, 기억)을 종류마다 동시에 몇 개까지 돌리나. 임베딩 모델을 서술과 함께 쓰므로 작게 둔다
+    job_index_concurrency: int = Field(default=2, ge=1, le=16)
+
     # 로어북 항목을 벡터로 바꾸는 것(임베딩)을 누가 하나. fake 는 모델을 부르지 않는 가짜(기본), llm 은 임베딩 모델.
     # 서술(NARRATOR)과 따로 켠다. 테스트와 CI 는 늘 가짜다
     embedder: Literal['fake', 'llm'] = 'fake'
