@@ -6,8 +6,10 @@ AI 호출의 기록(ai_invocations). 모델을 한 번 부를 때마다 한 줄�
 게임의 이벤트(table_events)와 따로 둔다. 이벤트는 테이블에서 일어난 일이고 앉은 사람 모두가 읽는다.
 이것은 운영과 비용의 기록이다. 플레이어에게 내보내지 않는다.
 
-규칙 둘.
-  - 덧붙이기만 한다. 적은 줄은 고치지 않고 지우지 않는다. 사용량과 비용의 근거다.
+규칙 셋.
+  - 덧붙이기만 한다. 적은 줄은 지우지 않고, 원문(text) 말고는 고치지 않는다. 사용량과 비용의 근거다.
+  - 원문은 보관 기간(AI_LOG_TEXT_RETENTION_DAYS, 기본 30일)이 지나면 비운다(app/ai/retention.py, #274).
+    원문을 볼 수 있는 사람은 DB 에 닿는 운영자뿐이다. API 로 내보내지 않는다.
   - 테이블에 외래 키를 걸지 않는다. 기록은 테이블보다 오래 산다. 테이블이 지워져도 남는다.
 
 생각 글과 보낸 메시지는 적지 않는다(app/ai/calls.py). 보낸 메시지는 지문(HMAC)만 남긴다.
@@ -23,6 +25,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.ai.calls import Outcome
 from app.assets.models import one_of
 from app.core.database import Base
+
+# 원문이 남은 줄이라는 조건. 마이그레이션도 같은 글자를 쓴다
+TEXT_KEPT = 'text IS NOT NULL'
 
 
 class AiInvocation(Base):
@@ -40,6 +45,9 @@ class AiInvocation(Base):
         CheckConstraint('max_tokens > 0', name='max_tokens_positive'),
         # "이 테이블의 호출들"을 시간 순서로 찾는다
         Index('ix_ai_invocations_table_id_created_at', 'table_id', 'created_at'),
+        # 보관 기간이 지난 원문을 오래된 것부터 찾는다(app/ai/retention.py). 원문이 남은 줄만 색인에 든다.
+        # 비운 줄은 빠지므로 정리할 때마다 지금까지의 기록을 모두 훑지 않는다
+        Index('ix_ai_invocations_text_kept', 'created_at', postgresql_where=TEXT_KEPT),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -70,7 +78,8 @@ class AiInvocation(Base):
     output_tokens: Mapped[int | None] = mapped_column(Integer)
     finish_reason: Mapped[str | None] = mapped_column(String(40))
 
-    # 모델이 쓴 글. 쓰지 않은 글도 남긴다. 받지 못했으면 비어 있다. API 로 내보내지 않는다
+    # 모델이 쓴 글. 쓰지 않은 글도 남긴다. 받지 못했으면 비어 있다. API 로 내보내지 않는다.
+    # 보관 기간이 지나면 비운다(app/ai/retention.py)
     text: Mapped[str | None] = mapped_column(Text)
 
     # 생성 설정. 이 칸이 생기기 전의 줄은 비어 있다
