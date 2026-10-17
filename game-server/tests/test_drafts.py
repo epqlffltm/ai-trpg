@@ -19,7 +19,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.calls import Outcome
+from app.ai.calls import Outcome, chars_of
 from app.ai.fake import FakeCallLog, FakeProvider
 from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Role
 from app.assets.scenarios.snapshot import read_snapshot
@@ -354,6 +354,8 @@ async def test_the_writer_returns_what_survived_and_logs_the_call():
         0.0,
         GOOD_REPLY,
     )
+    # 입력 토큰 수와 견주어 글자당 토큰 수를 잰다(app/rounds/budget.py)
+    assert record.input_chars == chars_of(call.messages)
 
 
 async def test_nothing_to_draft_calls_nobody():

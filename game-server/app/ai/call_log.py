@@ -43,6 +43,7 @@ def to_row(record: CallRecord) -> AiInvocation:
         lore_entry_ids=list(record.lore_entry_ids),
         memory_rounds=list(record.memory_rounds),
         input_digest=record.input_digest,
+        input_chars=record.input_chars,
         cached_input_tokens=usage.cached_input_tokens,
         cache_write_tokens=usage.cache_write_tokens,
         reasoning_tokens=usage.reasoning_tokens,

@@ -18,7 +18,7 @@ import time
 import uuid
 from dataclasses import dataclass
 
-from app.ai.calls import CallLog, CallRecord, CallScope, Outcome, input_digest
+from app.ai.calls import CallLog, CallRecord, CallScope, Outcome, chars_of, input_digest
 from app.ai.costs import PriceTag, usage_of
 from app.ai.provider import Completion, GenerationParams, LLMProvider, ProviderError
 from app.drafts.context import DraftContext, has_choices
@@ -87,8 +87,9 @@ class DraftWriter:
         completion: Completion | None = None,
         error: str | None = None,
         digest: str | None = None,
+        input_chars: int | None = None,
     ) -> CallRecord:
-        """호출 한 번을 기록의 모양으로 만든다."""
+        """호출 한 번을 기록의 모양으로 만든다. 보낸 메시지의 지문과 글자 수를 함께 적는다."""
         return CallRecord(
             scope=CallScope(PURPOSE, request.table_id, request.round_number, request.host_id),
             provider=self.provider.kind,
@@ -105,6 +106,7 @@ class DraftWriter:
             temperature=self.params.temperature,
             max_tokens=self.params.max_tokens,
             input_digest=digest,
+            input_chars=input_chars,
             usage=usage_of(completion, self.price),
         )
 
@@ -118,17 +120,22 @@ class DraftWriter:
             return NOTHING
         messages = build_messages(request.scene, request.context)
         digest = input_digest(messages, self.digest_key)
+        chars = chars_of(messages)
         started = time.perf_counter()
         try:
             completion = await self.provider.complete(messages, self.params)
         except ProviderError as error:
-            await self.log.write(self.describe(request, elapsed_ms(started), error=str(error), digest=digest))
+            await self.log.write(
+                self.describe(request, elapsed_ms(started), error=str(error), digest=digest, input_chars=chars)
+            )
             return NOTHING
         latency_ms = elapsed_ms(started)
         try:
             checked = read_completion(completion, request.context)
         except OutputError as error:
-            await self.log.write(self.describe(request, latency_ms, completion, error=error.reason, digest=digest))
+            await self.log.write(
+                self.describe(request, latency_ms, completion, error=error.reason, digest=digest, input_chars=chars)
+            )
             return NOTHING
-        await self.log.write(self.describe(request, latency_ms, completion, digest=digest))
+        await self.log.write(self.describe(request, latency_ms, completion, digest=digest, input_chars=chars))
         return checked

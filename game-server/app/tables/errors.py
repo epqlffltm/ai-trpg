@@ -82,6 +82,8 @@ class Conflict(enum.StrEnum):
     DRAFT_DECIDED = 'draft_decided'
     # 장부 초안을 쓴 뒤에 그 캐릭터가 바뀌었다(죽고 새 캐릭터가 들어왔다). 초안의 캐릭터에게 줄 수 없다
     DRAFT_STALE = 'draft_stale'
+    # 판의 작가 글(진행 지침, 세계관, GM 메모)이 서술의 입력 예산을 넘어 시작할 수 없다(app/rounds/budget.py)
+    STORY_TOO_LONG = 'story_too_long'
 
 
 class TableConflictError(Exception):

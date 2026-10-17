@@ -4,7 +4,8 @@
 언어 모델로 GM 의 서술을 쓰는 서술자. app/rounds/narrator.py 의 Narrator 모양을 따른다.
 
 하는 일은 넷이다. 넷을 한 함수에 섞지 않는다.
-  1. 메시지를 조립한다(app/rounds/prompt.py, 순수 함수).
+  1. 입력 예산에 맞게 요청을 줄이고(app/rounds/budget.py) 메시지를 조립한다(app/rounds/prompt.py, 순수 함수).
+     기록에는 줄인 요청이 넣은 로어북 항목과 기억을 적는다. 실제로 보낸 것이다.
   2. provider 를 부른다(app/ai/provider.py). 어느 모델인지는 모른다.
   3. 받은 글을 검사한다. 장면으로 쓸 수 있는 글만 돌려준다.
   4. 부른 것을 기록한다(app/ai/calls.py). 잘 끝났든, 글을 쓰지 않았든, 부르지 못했든 한 번에 하나.
@@ -18,17 +19,23 @@
 다시 시도하기와 다른 모델로 넘어가기는 이 서술자를 감싸는 쪽이 한다(app/rounds/retrying_narrator.py).
 """
 
+import logging
 import time
 from dataclasses import dataclass
 
-from app.ai.calls import CallLog, CallRecord, CallScope, Outcome, input_digest
+from app.ai.calls import CallLog, CallRecord, CallScope, Outcome, chars_of, input_digest
 from app.ai.costs import PriceTag, usage_of
-from app.ai.provider import Completion, GenerationParams, LLMProvider, ProviderError
+from app.ai.provider import ChatMessage, Completion, GenerationParams, LLMProvider, ProviderError
+from app.catalog.rules import ROUND_OUTPUT_TOKENS
+from app.rounds.budget import INPUT_BUDGET, estimate_messages, fit_request
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.prompt import PROMPT_VERSION, build_messages
 
-# 서술을 만들 때의 설정. 몇 문단의 장면이면 충분하다. 너무 딱딱하지 않게 조금 다양하게 쓴다
-NARRATION_PARAMS = GenerationParams(max_tokens=800, temperature=0.8)
+logger = logging.getLogger(__name__)
+
+# 서술을 만들 때의 설정. 몇 문단의 장면이면 충분하다. 너무 딱딱하지 않게 조금 다양하게 쓴다.
+# 출력 상한은 판매가가 가정한 출력(1,200 토큰)과 같다. 생각을 끌 수 없는 모델은 창구가 생각의 몫을 더한다
+NARRATION_PARAMS = GenerationParams(max_tokens=ROUND_OUTPUT_TOKENS, temperature=0.8)
 
 # 호출 기록에 적는 쓰임새
 PURPOSE = 'narration'
@@ -78,6 +85,26 @@ def narration_scope(request: NarrationRequest) -> CallScope:
     )
 
 
+def warn_if_over_budget(request: NarrationRequest, messages: list[ChatMessage]) -> None:
+    """
+    줄이고도 입력이 예산을 넘으면 경고를 남긴다. 빼지 않는 것(작가의 글, 이번 라운드)만으로 큰 때다.
+
+    부르는 것은 막지 않는다. 라운드를 실패시키면 앉은 사람 모두가 멈춘다. 경고로 그런 판이 얼마나 되는지 본다.
+    """
+    tokens = estimate_messages(messages)
+    if tokens <= INPUT_BUDGET:
+        return
+    logger.warning(
+        '서술의 입력이 예산을 넘는다. 뺄 것을 다 빼고 그대로 부른다',
+        extra={
+            'table_id': str(request.table_id),
+            'round_number': request.round_number,
+            'estimated_tokens': tokens,
+            'budget': INPUT_BUDGET,
+        },
+    )
+
+
 def outcome_of(completion: Completion | None, error: str | None) -> Outcome:
     """호출이 어떻게 끝났나. 답이 없으면 받지 못한 것, 답이 있는데 이유가 있으면 쓰지 않은 것이다."""
     if completion is None:
@@ -110,12 +137,13 @@ class LLMNarrator:
         completion: Completion | None = None,
         error: str | None = None,
         digest: str | None = None,
+        input_chars: int | None = None,
     ) -> CallRecord:
         """
-        호출 한 번을 기록의 모양으로 만든다.
+        호출 한 번을 기록의 모양으로 만든다. request 는 예산에 맞게 줄인 요청이다.
 
         답이 있으면 답에 적힌 모델의 이름을 쓴다. 없으면(받지 못했으면) provider 가 들고 있는 이름이다.
-        생성 설정, 넣은 로어북 항목, 보낸 메시지의 지문(digest)을 함께 적는다.
+        생성 설정, 넣은 로어북 항목, 보낸 메시지의 지문(digest)과 글자 수(input_chars)를 함께 적는다.
         """
         return CallRecord(
             scope=narration_scope(request),
@@ -136,6 +164,7 @@ class LLMNarrator:
             lore_entry_ids=tuple(note.entry_id for note in request.lore),
             memory_rounds=tuple(note.round_number for note in request.memories),
             input_digest=digest,
+            input_chars=input_chars,
             usage=usage_of(completion, self.price),
         )
 
@@ -146,23 +175,31 @@ class LLMNarrator:
         부르는 것이 시도 하나다. 부르기 전에 미리 보기를 새로 시작하고, 받는 조각을 넘긴다.
         부르고 나면 어떻게 끝났든 기록을 하나 남기고, 실패면 그 예외를 그대로 올린다.
         이야기의 바탕이 없는 요청은 부르지 않는다. 부르지 않았으니 기록도, 미리 보기도 없다.
+        입력이 예산을 넘으면 덜 중요한 것부터 빼고 부른다(app/rounds/budget.py).
         """
         if request.story is None:
             raise NarrationError('no_story')
-        messages = build_messages(request)
+        sent = fit_request(request)
+        messages = build_messages(sent)
+        warn_if_over_budget(sent, messages)
         digest = input_digest(messages, self.digest_key)
+        chars = chars_of(messages)
         preview.begin()
         started = time.perf_counter()
         try:
             completion = await self.provider.complete(messages, self.params, preview.text)
         except ProviderError as error:
-            await self.log.write(self.describe(request, elapsed_ms(started), error=str(error), digest=digest))
+            await self.log.write(
+                self.describe(sent, elapsed_ms(started), error=str(error), digest=digest, input_chars=chars)
+            )
             raise
         latency_ms = elapsed_ms(started)
         try:
             scene = accept_completion(completion)
         except NarrationError as error:
-            await self.log.write(self.describe(request, latency_ms, completion, error=str(error), digest=digest))
+            await self.log.write(
+                self.describe(sent, latency_ms, completion, error=str(error), digest=digest, input_chars=chars)
+            )
             raise
-        await self.log.write(self.describe(request, latency_ms, completion, digest=digest))
+        await self.log.write(self.describe(sent, latency_ms, completion, digest=digest, input_chars=chars))
         return scene
