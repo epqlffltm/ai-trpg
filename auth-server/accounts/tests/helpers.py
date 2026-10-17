@@ -14,7 +14,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from config.redis_client import get_redis
+from config.redis_client import get_redis, redis_breaker
 
 LOGIN_URL = reverse('accounts:login')
 LOGIN_VERIFY_URL = reverse('accounts:login-verify')
@@ -99,3 +99,13 @@ def delete_attempt_keys() -> None:
     client = get_redis()
     for key in client.scan_iter(match=f'{settings.ATTEMPT_LIMIT_KEY_PREFIX}:*'):
         client.delete(key)
+
+
+def reset_redis_breaker() -> None:
+    """
+    Redis 앞의 차단기를 닫힌 처음 상태로 되돌린다.
+
+    차단기는 프로세스에 하나라 테스트 사이에 상태가 남는다. Redis 가 죽은 것을 흉내 낸 테스트가 열어 둔 채 끝나면,
+    다음 테스트의 제한이 Redis 에 묻지 않고 통과되어 엉뚱하게 실패한다. 제한을 켜고 도는 테스트가 앞뒤로 부른다.
+    """
+    redis_breaker.close()

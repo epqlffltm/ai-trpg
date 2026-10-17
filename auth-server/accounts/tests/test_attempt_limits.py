@@ -22,8 +22,8 @@ from accounts.attempt_limits import (
     count_failure,
     ensure_not_blocked,
 )
-from accounts.tests.helpers import delete_attempt_keys
-from config.redis_client import get_redis
+from accounts.tests.helpers import delete_attempt_keys, reset_redis_breaker
+from config.redis_client import REDIS_FAILURES_BEFORE_OPEN, build_redis_breaker, get_redis
 
 LIMIT = AttemptLimit(name='test-limit', max_attempts=3, window=timedelta(minutes=10))
 OTHER_LIMIT = AttemptLimit(name='test-other', max_attempts=3, window=timedelta(minutes=10))
@@ -36,6 +36,8 @@ class AttemptLimitTestCase(SimpleTestCase):
     def setUp(self):
         delete_attempt_keys()
         self.addCleanup(delete_attempt_keys)
+        reset_redis_breaker()
+        self.addCleanup(reset_redis_breaker)
 
     def key_for(self, subject: str) -> str:
         return _key(LIMIT, subject)
@@ -196,6 +198,47 @@ class RedisDownTests(AttemptLimitTestCase):
             self.assertLogs('accounts.attempt_limits', level='WARNING'),
         ):
             count_attempt(LIMIT, 'someone')
+
+
+class StuckRedisTests(AttemptLimitTestCase):
+    """멈춘 Redis 는 연달아 실패하면 차단기가 막아, 요청마다 기다리지 않는다(#26)."""
+
+    def stuck_redis(self):
+        return patch('accounts.attempt_limits.get_redis', side_effect=redis.TimeoutError('timed out'))
+
+    def test_stops_asking_after_failures_in_a_row(self):
+        with self.stuck_redis() as client, self.assertLogs('accounts.attempt_limits', level='WARNING'):
+            for _ in range(10):
+                count_attempt(LIMIT, 'someone')
+                ensure_not_blocked(LIMIT, 'someone')
+                count_failure(LIMIT, 'someone')
+                clear_attempts(LIMIT, 'someone')
+
+        self.assertEqual(client.call_count, REDIS_FAILURES_BEFORE_OPEN)
+
+    def test_logs_each_failure_until_the_breaker_opens_then_once(self):
+        with (
+            self.stuck_redis(),
+            self.assertLogs('accounts.attempt_limits', level='WARNING') as limit_logs,
+            self.assertLogs('config.redis_client', level='WARNING') as breaker_logs,
+        ):
+            for _ in range(10):
+                count_attempt(LIMIT, 'someone')
+
+        # 차단기를 연 실패는 차단기가 남긴다. 그 뒤의 요청은 남기지 않는다
+        self.assertEqual(len(limit_logs.output), REDIS_FAILURES_BEFORE_OPEN - 1)
+        self.assertEqual(len(breaker_logs.output), 1)
+
+    def test_limits_work_again_once_redis_answers(self):
+        with patch('accounts.attempt_limits.redis_breaker', build_redis_breaker(open_seconds=0)):
+            with self.stuck_redis(), self.assertLogs('accounts.attempt_limits', level='WARNING'):
+                for _ in range(REDIS_FAILURES_BEFORE_OPEN):
+                    count_attempt(LIMIT, 'someone')
+
+            for _ in range(LIMIT.max_attempts):
+                count_attempt(LIMIT, 'someone')
+            with self.assertRaises(TooManyAttemptsError):
+                count_attempt(LIMIT, 'someone')
 
 
 class DisabledTests(SimpleTestCase):
