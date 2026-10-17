@@ -95,6 +95,25 @@ class TokenLimitField(enum.StrEnum):
     MAX_COMPLETION_TOKENS = 'max_completion_tokens'
 
 
+class ReasoningStyle(enum.StrEnum):
+    """
+    모델이 생각(thinking)을 켜고 끄는 방식. Claude 의 모델마다 다르다(Anthropic 의 문서, 2026-10).
+
+    서술은 생각을 꺼서 부른다(app/rounds/llm_narrator.py). 끄는 법과, 끌 수 없으면 어떻게 하는지가 모델마다 다르다.
+    부르는 쪽(app/ai/anthropic.py)이 이 값을 보고 요청의 thinking, effort 칸을 만든다.
+    OpenAI 모양의 창구는 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다). Gemini 를 붙일 때 그 방식의 값을 더한다.
+    """
+
+    # 끌 수 있다(disabled). 켜면 스스로 깊이를 정한다(adaptive + effort). Opus 5, Sonnet 5, Haiku 5.5, Opus 4.6~4.8
+    ADAPTIVE = 'adaptive'
+    # 끌 수 없다. 끄라고 하면 effort 를 low 로 주고 출력 상한에 생각의 몫을 더한다. Opus 5.5, Fable 5.1·5
+    ALWAYS = 'always'
+    # disabled 를 받지 않는다. 미리 생각하지 않게 하는 between_tools 로 끈다. Sonnet 5.5
+    BETWEEN_TOOLS = 'between_tools'
+    # 켜면 생각의 토큰 상한을 준다(enabled + budget_tokens). 끌 수 있다. Opus·Sonnet·Haiku 4.5
+    BUDGET = 'budget'
+
+
 class AiModel(Base):
     """서술에 쓸 수 있는 모델 하나."""
 
@@ -104,6 +123,9 @@ class AiModel(Base):
         CheckConstraint(one_of('grade', Grade), name='grade_allowed'),
         CheckConstraint(
             f'token_limit_field IS NULL OR {one_of("token_limit_field", TokenLimitField)}', name='token_field_allowed'
+        ),
+        CheckConstraint(
+            f'reasoning_style IS NULL OR {one_of("reasoning_style", ReasoningStyle)}', name='reasoning_style_allowed'
         ),
         # 같은 창구의 같은 모델을 두 이름표로 넣지 않는다. 목록에 같은 모델이 둘 보인다
         UniqueConstraint('provider', 'api_model_id', name='uq_ai_models_api_model'),
@@ -123,6 +145,8 @@ class AiModel(Base):
     supports_reasoning: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
     supports_temperature: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text('true'))
     token_limit_field: Mapped[str | None] = mapped_column(String(30))
+    # 생각을 켜고 끄는 방식(ReasoningStyle). anthropic 창구만 적는다
+    reasoning_style: Mapped[str | None] = mapped_column(String(20))
 
     # 켜져 있나. 새로 넣은 모델은 꺼져 있다
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))

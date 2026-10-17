@@ -13,7 +13,7 @@ from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.ai.call_log import DbCallLog
-from app.ai.routing import LOCAL_KIND, OPENAI_KIND, ModelRouter
+from app.ai.routing import ANTHROPIC_KIND, LOCAL_KIND, OPENAI_KIND, ModelRouter
 from app.catalog.lookup import DbModelLookup
 from app.main import create_app
 from app.rounds.fake_narrator import FakeNarrator
@@ -107,6 +107,18 @@ def test_the_openai_endpoint_carries_the_key_of_the_settings():
     assert router.openai.api_key.get_secret_value() == 'sk-test'
     # 비밀값이라 찍어도 보이지 않는다
     assert 'sk-test' not in repr(router)
+
+
+def test_without_a_claude_key_there_is_no_anthropic_endpoint():
+    assert router_of(make_test_settings(**LLM)).anthropic is None
+
+
+def test_the_anthropic_endpoint_carries_the_key_of_the_settings():
+    router = router_of(make_test_settings(**LLM, anthropic_api_key='sk-ant-test'))
+
+    assert (router.anthropic.base_url, router.anthropic.kind) == ('https://api.anthropic.com', ANTHROPIC_KIND)
+    assert router.anthropic.api_key.get_secret_value() == 'sk-ant-test'
+    assert 'sk-ant-test' not in repr(router)
 
 
 def test_the_key_is_a_secret_in_the_settings():
@@ -206,6 +218,8 @@ def test_premium_models_are_routed_and_recorded_by_the_app():
 
 def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('OPENAI_API_KEY', 'sk-real')
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-ant-real')
 
     # 개발자의 .env 에 진짜 키가 있어도 테스트는 실제 API 를 부르지 않는다
-    assert make_test_settings().openai_api_key.get_secret_value() == ''
+    settings = make_test_settings()
+    assert (settings.openai_api_key.get_secret_value(), settings.anthropic_api_key.get_secret_value()) == ('', '')
