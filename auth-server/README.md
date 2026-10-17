@@ -720,14 +720,14 @@ IP로 보여 한 사람의 시도가 모두를 막는다.
 네 서버를 함께 컨테이너로 띄우는 법은 [저장소 README](../README.md#4-서버-넷을-컨테이너로-선택)에 있다.
 
 **JWT 키 교체(#21).** 세 단계다. 단계마다 설정을 고치고 인증 서버를 다시 띄운다. 다른 세 서버는 고치지 않는다.
-그쪽은 JWKS 를 1시간 기억하고, 모르는 `kid` 가 오면 다시 받아 간다.
+그쪽은 JWKS 를 기억해 두고(게임·결제 서버 5분, 게시판 서버 1시간), 모르는 `kid` 가 오면 다시 받아 간다.
 
 1. 새 키를 미리 알린다. 새 개인키를 만들고 공개키를 꺼내 검증 키에 넣는다. 서명은 아직 옛 키다.
    ```
    uv run python scripts/generate_jwt_key.py keys/jwt-private-next.pem
    uv run python scripts/export_jwt_public_key.py keys/jwt-private-next.pem keys/jwt-public-next.pem
    ```
-   `.env` 에 `JWT_EXTRA_PUBLIC_KEY_PATHS=keys/jwt-public-next.pem` 을 적고 다시 띄운다. JWKS 에 키가 둘 실린다. **1시간 넘게** 둔다(다른 서버의 JWKS 기억 시간).
+   `.env` 에 `JWT_EXTRA_PUBLIC_KEY_PATHS=keys/jwt-public-next.pem` 을 적고 다시 띄운다. JWKS 에 키가 둘 실린다. **1시간 넘게** 둔다(다른 서버의 JWKS 기억 시간 중 가장 긴 것).
 2. 서명을 바꾼다. 옛 키의 공개키를 꺼내 두고, 새 개인키를 서명 키 자리로 옮긴다.
    ```
    uv run python scripts/export_jwt_public_key.py keys/jwt-private.pem keys/jwt-public-old.pem
@@ -742,7 +742,8 @@ IP로 보여 한 사람의 시도가 모두를 막는다.
 
 **키가 샜을 때(긴급 폐기).** 1단계 없이 새 개인키를 서명 키 자리에 두고, 샌 키는 검증 키에 넣지 않은 채 다시 띄운다.
 인증 서버는 샌 키로 서명한 토큰을 바로 거부하고, 모든 사용자가 다시 로그인한다.
-다른 세 서버는 JWKS 를 기억하는 동안(최대 1시간) 샌 키로 만든 access 토큰을 받을 수 있다. 그 기억 규칙을 바꾸는 일은 이번에 하지 않았다.
+다른 세 서버는 JWKS 를 기억하는 동안 샌 키로 만든 access 토큰을 받을 수 있다. 게임·결제 서버는 최대 5분이고,
+인증 서버에 닿지 못해도 마지막으로 받은 지 30분이 지나면 키를 버린다(#274). 게시판 서버는 아직 1시간이다. 그보다 급하면 그 서버들을 다시 띄운다.
 
 **운영 환경의 보안 설정(#19).** `APP_ENVIRONMENT=production` 이면 따로 켜지 않아도 아래가 켜진다(`config/security.py`).
 - 세션 쿠키와 CSRF 쿠키(관리자 화면)에 Secure 를 붙인다.
