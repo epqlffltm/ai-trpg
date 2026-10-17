@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/attendance"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 )
 
@@ -136,6 +137,9 @@ type Settings struct {
 	OrderTTL time.Duration
 	// WelcomeCredits 는 사용자가 한 번 받는 환영 크레딧의 양이다. 0 이면 주지 않는다.
 	WelcomeCredits credit.Amount
+	// AttendanceSilver 는 출석의 하루 양이다(#339). 첫째 값이 1일째이고, 길이가 주기의 날 수다. 마지막 날에 보물 상자를 연다.
+	// 바꾸면 그 뒤에 받는 출석부터 적용된다. 이미 받은 날의 기록은 그대로다.
+	AttendanceSilver attendance.Schedule
 	// WebhookSecret 은 결제 대행사의 알림에 붙은 서명을 확인하는 비밀이다. 로그와 오류에 싣지 않는다.
 	WebhookSecret string
 	// GameServerSecret 은 게임 서버가 보낸 요청의 서명을 확인하는 비밀이다. 게임 서버도 같은 값을 갖는다.
@@ -242,10 +246,11 @@ func Load(lookup Lookup) (Settings, error) {
 	gameSecret, gameSecretErr := readSecret(lookup, "GAME_SERVER_SECRET", MinServiceSecretLength)
 	authSecret, authSecretErr := readSecret(lookup, "AUTH_SERVER_SECRET", MinServiceSecretLength)
 	welcome, welcomeErr := readCredits(lookup, "WELCOME_CREDITS", DefaultWelcomeCredits, MaxWelcomeCredits)
+	attendanceSilver, attendanceErr := readSchedule(lookup, "ATTENDANCE_SILVER")
 	payment, paymentErr := loadPayment(lookup)
 
 	if err := errors.Join(
-		debugErr, portErr, dbErr, jwksErr, revocationsErr, rulesErr, loggingErr, webhookErr, welcomeErr, paymentErr,
+		debugErr, portErr, dbErr, jwksErr, revocationsErr, rulesErr, loggingErr, webhookErr, welcomeErr, attendanceErr, paymentErr,
 		gameSecretErr, authSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret),
 		providerAllowed(logging, payment),
 	); err != nil {
@@ -269,6 +274,7 @@ func Load(lookup Lookup) (Settings, error) {
 		HoldTTL:            rules.HoldTTL,
 		OrderTTL:           rules.OrderTTL,
 		WelcomeCredits:     welcome,
+		AttendanceSilver:   attendanceSilver,
 		WebhookSecret:      webhookSecret,
 		GameServerSecret:   gameSecret,
 		AuthServerSecret:   authSecret,
@@ -490,6 +496,28 @@ func readCredits(lookup Lookup, name string, fallback credit.Amount, maximum cre
 		return 0, fmt.Errorf("%s 는 0 부터 %s 사이의 크레딧 양이어야 합니다", name, maximum)
 	}
 	return amount, nil
+}
+
+// readSchedule 은 출석의 하루 양을 쉼표로 나눈 목록으로 읽는다(140,160,180). 적지 않으면 기본값(attendance.DefaultSchedule)이다.
+// 날 수와 양의 범위는 attendance.Schedule 의 규칙을 따른다.
+func readSchedule(lookup Lookup, name string) (attendance.Schedule, error) {
+	value, ok := lookup(name)
+	if !ok || strings.TrimSpace(value) == "" {
+		return attendance.DefaultSchedule(), nil
+	}
+	parts := strings.Split(value, ",")
+	schedule := make(attendance.Schedule, 0, len(parts))
+	for _, part := range parts {
+		amount, err := credit.Parse(strings.TrimSpace(part))
+		if err != nil {
+			return nil, fmt.Errorf("%s 는 쉼표로 나눈 실버의 양이어야 합니다(예: 140,160,180)", name)
+		}
+		schedule = append(schedule, amount)
+	}
+	if err := schedule.Validate(); err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return schedule, nil
 }
 
 // readSecret 은 반드시 있어야 하는 비밀을 읽는다. minimum 글자보다 짧으면 오류다.

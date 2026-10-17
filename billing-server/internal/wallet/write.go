@@ -51,26 +51,63 @@ func (s *Service) GrantFree(ctx context.Context, userID uuid.UUID, amount credit
 // 이 사용자가 같은 이름으로 이미 받았으면 ErrAlreadyGranted 를 돌려주고 아무것도 바꾸지 않는다.
 // 받은 것을 다 썼거나 기한이 지나 사라졌어도 다시 받지 못한다.
 func (s *Service) GrantFreeOnce(ctx context.Context, userID uuid.UUID, amount credit.Amount, key string) (Grant, error) {
-	if err := checkAmount(amount); err != nil {
+	if err := checkGrantOnce(amount, key); err != nil {
 		return Grant{}, err
-	}
-	if !grantKeyPattern.MatchString(key) {
-		return Grant{}, ErrInvalidGrantKey
 	}
 	var grant Grant
 	err := s.withLockedWallet(ctx, userID, func(ctx context.Context, c change) error {
-		// 지갑의 줄을 잠근 채로 본다. 같은 사용자의 두 요청이 함께 와도 뒤의 것은 앞의 것이 준 것을 본다
-		taken, err := c.queries.HasFreeGrantWithKey(ctx, walletdb.HasFreeGrantWithKeyParams{UserID: userID, GrantKey: key})
-		if err != nil {
-			return err
-		}
-		if taken {
-			return ErrAlreadyGranted
-		}
-		grant = Grant{Amount: amount, ExpiresAt: c.now.Add(s.policy.FreeTTL)}
-		return c.openGrant(ctx, because(ReasonGrant), amount, grant.ExpiresAt, pgtype.Text{String: key, Valid: true})
+		var err error
+		grant, err = s.grantOnce(ctx, c, amount, key)
+		return err
 	})
 	if err != nil {
+		return Grant{}, err
+	}
+	return grant, nil
+}
+
+// GrantFreeOnceInTx 는 GrantFreeOnce 와 같지만 부르는 쪽이 연 트랜잭션(tx) 안에서 한다.
+// 출석처럼 "받았다는 기록"과 크레딧이 함께 되거나 함께 안 되어야 할 때 쓴다.
+// ErrAlreadyGranted 를 돌려주면 부르는 쪽이 트랜잭션을 되돌린다.
+func (s *Service) GrantFreeOnceInTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, key string) (Grant, error) {
+	if err := checkGrantOnce(amount, key); err != nil {
+		return Grant{}, err
+	}
+	var grant Grant
+	err := lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
+		var err error
+		grant, err = s.grantOnce(ctx, c, amount, key)
+		return err
+	})
+	if err != nil {
+		return Grant{}, err
+	}
+	return grant, nil
+}
+
+// checkGrantOnce 는 한 번만 주는 지급의 양과 이름을 본다.
+func checkGrantOnce(amount credit.Amount, key string) error {
+	if err := checkAmount(amount); err != nil {
+		return err
+	}
+	if !grantKeyPattern.MatchString(key) {
+		return ErrInvalidGrantKey
+	}
+	return nil
+}
+
+// grantOnce 는 잠근 지갑(c)에 그 이름의 지급이 없으면 준다. 있으면 ErrAlreadyGranted 다.
+func (s *Service) grantOnce(ctx context.Context, c change, amount credit.Amount, key string) (Grant, error) {
+	// 지갑의 줄을 잠근 채로 본다. 같은 사용자의 두 요청이 함께 와도 뒤의 것은 앞의 것이 준 것을 본다
+	taken, err := c.queries.HasFreeGrantWithKey(ctx, walletdb.HasFreeGrantWithKeyParams{UserID: c.userID, GrantKey: key})
+	if err != nil {
+		return Grant{}, err
+	}
+	if taken {
+		return Grant{}, ErrAlreadyGranted
+	}
+	grant := Grant{Amount: amount, ExpiresAt: c.now.Add(s.policy.FreeTTL)}
+	if err := c.openGrant(ctx, because(ReasonGrant), amount, grant.ExpiresAt, pgtype.Text{String: key, Valid: true}); err != nil {
 		return Grant{}, err
 	}
 	return grant, nil
