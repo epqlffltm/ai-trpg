@@ -13,6 +13,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/catalog"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/eligibility"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 )
 
@@ -221,6 +222,10 @@ func orderError(c *gin.Context, err error) {
 		conflict(c, err.Error()+".")
 	case errors.Is(err, order.ErrTimedOut):
 		unavailable(c, order.ErrTimedOut.Error()+".")
+	case errors.Is(err, eligibility.ErrVerificationRequired):
+		abort(c, http.StatusForbidden, codePaymentVerificationRequired, err.Error()+".")
+	case errors.Is(err, eligibility.ErrGuardianConsentRequired):
+		abort(c, http.StatusForbidden, codePaymentGuardianConsentRequired, err.Error()+".")
 	default:
 		internalError(c, err)
 	}

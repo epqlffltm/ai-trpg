@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/eligibility"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
@@ -203,6 +204,9 @@ func TestOrderErrorsBecomeStatusCodes(t *testing.T) {
 		// 작업의 마감에 걸렸다(#273). 결제를 실패로 정한 것이 아니다. 다시 보내면 된다. 감싼 원인(DB 의 오류)은 싣지 않는다
 		{"정한 시간이 지났다", errors.Join(order.ErrTimedOut, errors.New(`relation "orders" does not exist`)), http.StatusServiceUnavailable},
 		{"DB 오류", errors.New(`relation "orders" does not exist`), http.StatusInternalServerError},
+		// 결제 자격(#337). 주문 서비스를 감싼 층(eligibility.Guarded)이 낸다
+		{"본인인증 전", eligibility.ErrVerificationRequired, http.StatusForbidden},
+		{"보호자 동의가 없는 미성년자", eligibility.ErrGuardianConsentRequired, http.StatusForbidden},
 	}
 	requests := []request{
 		{method: http.MethodPost, path: ordersURL, body: `{"product_id":"x"}`},
