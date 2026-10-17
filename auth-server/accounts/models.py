@@ -297,6 +297,31 @@ class OutgoingMailStatus(models.TextChoices):
     DISCARDED = 'discarded', '버림'
 
 
+class MailReceipt(models.Model):
+    """
+    보낸 메일의 기록(#352). 발송함의 줄은 보내면 지우므로(본문에 인증 코드가 있어서) 보냈다는 사실이 남지 않는다.
+    보냈다는 것을 남겨야 하는 메일(보호자의 결제 알림)만 이 기록을 붙여 적는다.
+
+    받는 사람, 제목, 본문은 적지 않는다. 메일 서버가 받았는지와 그 시각만 남긴다.
+    "그 주소로 그날 보냈고 메일 서버가 받았다"를 보여 주는 데 쓴다. 받는 사람이 읽었는지는 알 수 없다.
+    """
+
+    # 무엇의 기록인지. guardian_payment_notice 같은 글자다
+    purpose = models.CharField('용도', max_length=40)
+    created_at = models.DateTimeField('적은 시각', auto_now_add=True)
+    # 메일 서버가 받은 시각. 비어 있으면 아직 보내지 못했다
+    sent_at = models.DateTimeField('보낸 시각', null=True, blank=True)
+    # 끝내 보내지 못하고 버린 시각
+    discarded_at = models.DateTimeField('버린 시각', null=True, blank=True)
+
+    class Meta:
+        verbose_name = '보낸 메일의 기록'
+        verbose_name_plural = '보낸 메일의 기록'
+
+    def __str__(self) -> str:
+        return f'{self.purpose} / {self.sent_at or self.discarded_at or "보내기 전"}'
+
+
 class OutgoingMail(models.Model):
     """
     보내야 할 메일. 발송함(outbox)이다.
@@ -331,6 +356,15 @@ class OutgoingMail(models.Model):
     # 이 시각이 지나면 보내지 않고 버린다. 늦게 도착한 인증 코드는 쓸모가 없다
     expires_at = models.DateTimeField('버리는 시각')
     discarded_at = models.DateTimeField('버린 시각', null=True, blank=True)
+    # 보냈다는 것을 남길 메일이면 그 기록. 메일의 줄은 보내면 지워지고 기록은 남는다
+    receipt = models.ForeignKey(
+        MailReceipt,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='mails',
+        verbose_name='보낸 메일의 기록',
+    )
 
     class Meta:
         verbose_name = '보낼 메일'
@@ -528,3 +562,63 @@ class PaymentEligibility(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user} / {self.delivered_version}/{self.version}'
+
+
+class GuardianNoticeKind(models.TextChoices):
+    PAID = 'paid', '결제'
+    REFUNDED = 'refunded', '청약철회'
+
+
+class GuardianNoticeOutcome(models.TextChoices):
+    # 보호자에게 보낼 메일을 적었다
+    QUEUED = 'queued', '메일을 적음'
+    # 알릴 보호자가 없다(그새 동의를 철회했다, 계정이 지워졌다)
+    SKIPPED = 'skipped', '알릴 보호자가 없음'
+
+
+class GuardianNotice(models.Model):
+    """
+    결제 서버가 보낸 보호자 알림 하나(#352). 미성년자의 결제와 청약철회다.
+
+    주문과 종류(결제, 청약철회)마다 한 줄이다. 결제 서버가 답을 못 받고 다시 보내도 메일은 한 번만 간다.
+    메일을 보냈는지는 붙인 기록(MailReceipt)이 남긴다.
+    """
+
+    # 결제 서버의 주문 번호
+    order_id = models.UUIDField('주문 번호')
+    kind = models.CharField('종류', max_length=20, choices=GuardianNoticeKind.choices)
+    # 결제한 미성년자. 계정이 지워져도 기록은 남긴다
+    minor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='guardian_notices',
+        verbose_name='미성년자',
+    )
+    minor_public_id = models.UUIDField('미성년자의 공개 ID')
+    product_id = models.CharField('상품', max_length=100)
+    # 원(KRW)이다
+    price = models.PositiveBigIntegerField('값')
+    credits = models.PositiveBigIntegerField('크레딧')
+    occurred_at = models.DateTimeField('결제나 청약철회가 끝난 시각')
+    outcome = models.CharField('결과', max_length=20, choices=GuardianNoticeOutcome.choices)
+    receipt = models.OneToOneField(
+        MailReceipt,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='guardian_notice',
+        verbose_name='보낸 메일의 기록',
+    )
+    created_at = models.DateTimeField('받은 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '보호자 결제 알림'
+        verbose_name_plural = '보호자 결제 알림'
+        constraints = [
+            models.UniqueConstraint(fields=['order_id', 'kind'], name='accounts_guardiannotice_once'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.order_id} / {self.get_kind_display()} / {self.get_outcome_display()}'

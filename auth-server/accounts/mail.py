@@ -7,14 +7,16 @@ accounts 앱이 보내는 메일.
 코드와 토큰을 만들거나 검증하지 않는다(email_codes.py).
 """
 
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.utils import timezone
 
 from accounts.email_codes import CODE_LIFETIME, TOKEN_LIFETIME
 from accounts.guardian_links import CONSENT_LINK_LIFETIME
-from accounts.models import EmailCodePurpose, SecurityEvent, User
+from accounts.models import EmailCodePurpose, GuardianNoticeKind, MailReceipt, SecurityEvent, User
 from accounts.outbox import enqueue_mail
 
 # 보안 이벤트 요약 메일에 한 줄씩 적는 사건의 최대 수. 넘는 만큼은 건수만 알린다.
@@ -202,7 +204,8 @@ def send_guardian_consent_request(*, minor: User, guardian_email: str, token: st
             f'AI TRPG 의 회원 {minor.nickname} 님(만 19세 미만)이 이 주소를 보호자로 적고\n'
             '결제에 대한 동의를 부탁했습니다.\n\n'
             '동의하면 그 회원이 크레딧을 살 수 있습니다. 결제할 때마다 이 주소로 알림을 보내고,\n'
-            '언제든 그 메일의 링크로 동의를 철회할 수 있습니다. 동의는 회원이 만 19세가 되는 날까지입니다.\n\n'
+            '언제든 그 메일의 링크로 동의를 철회할 수 있습니다. 동의는 회원이 만 19세가 되는 날까지입니다.\n'
+            '결제 알림은 이 이메일로만 보냅니다. 문자나 카카오톡으로는 보내지 않습니다.\n\n'
             '동의하려면 아래 링크를 열고 보호자 본인의 휴대폰으로 본인인증을 해 주세요.\n\n'
             f'{link}\n\n'
             f'이 링크는 {days}일 동안 쓸 수 있습니다.\n'
@@ -219,7 +222,8 @@ def send_guardian_consented_notice(*, minor: User, guardian_email: str, revoke_t
         subject='[AI TRPG] 보호자 동의가 적혔습니다',
         body=(
             f'회원 {minor.nickname} 님의 결제에 동의하셨습니다. 이제 그 회원이 크레딧을 살 수 있습니다.\n'
-            '결제할 때마다 이 주소로 알림을 보냅니다.\n\n'
+            '결제할 때마다 이 주소로 알림을 보냅니다.\n'
+            '알림은 이 이메일로만 갑니다(문자나 카카오톡으로는 보내지 않습니다).\n\n'
             '동의를 철회하려면 아래 링크를 열어 주세요. 철회하면 바로 결제가 막힙니다.\n\n'
             f'{link}\n\n'
             '이 메일을 지우지 말고 보관해 주세요. 결제 알림 메일에도 같은 링크가 들어 있습니다.'
@@ -251,3 +255,52 @@ def send_minor_guardian_notice(*, minor: User, consented: bool) -> None:
             '다시 결제하려면 보호자에게 다시 동의를 받아 주세요.'
         )
     enqueue_mail(to_email=minor.email, subject=subject, body=body)
+
+
+# 결제 알림에 적는 시각의 시간대. 보호자가 사는 곳이다
+_KOREA = ZoneInfo('Asia/Seoul')
+# 결제 알림의 제목과 첫 줄. 종류마다 다르다
+GUARDIAN_NOTICE_TEXTS = {
+    GuardianNoticeKind.PAID: ('결제 알림', '결제했습니다'),
+    GuardianNoticeKind.REFUNDED: ('청약철회 알림', '결제를 청약철회(환불)했습니다'),
+}
+
+
+def send_guardian_payment_notice(
+    *,
+    minor: User,
+    guardian_email: str,
+    kind: str,
+    product_id: str,
+    price: int,
+    credits: int,
+    occurred_at: datetime,
+    revoke_token: str,
+    receipt: MailReceipt,
+    deadline: timedelta,
+) -> None:
+    """
+    보호자에게 미성년자의 결제나 청약철회를 알린다(#352). 철회 링크를 함께 싣는다.
+
+    닉네임만 적는다. 결제 수단이나 카드 번호는 이 서버가 모르고 적지도 않는다. 시각은 한국 시각이다.
+    """
+    title, verb = GUARDIAN_NOTICE_TEXTS[kind]
+    when = occurred_at.astimezone(_KOREA).strftime('%Y-%m-%d %H:%M')
+    link = build_guardian_link(base_url=settings.GUARDIAN_REVOKE_URL, token=revoke_token)
+    enqueue_mail(
+        to_email=guardian_email,
+        subject=f'[AI TRPG] {title}',
+        body=(
+            f'회원 {minor.nickname} 님이 {verb}.\n\n'
+            f'상품: {product_id}\n'
+            f'금액: {price:,}원 ({credits:,} 크레딧)\n'
+            f'시각: {when} (한국 시각)\n\n'
+            '모르는 결제라면 회원과 이야기해 주세요.\n'
+            '청약철회는 결제한 날부터 7일 안에, 크레딧을 쓰지 않았을 때 회원이 할 수 있습니다.\n'
+            '앞으로의 결제를 막으려면 아래 링크로 동의를 철회해 주세요. 철회하면 바로 결제가 막힙니다.\n\n'
+            f'{link}\n\n'
+            '이 알림은 동의할 때 적은 이 이메일로만 보냅니다.'
+        ),
+        receipt=receipt,
+        deadline=deadline,
+    )

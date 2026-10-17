@@ -14,7 +14,9 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from accounts.models import (
     EmailCode,
     GuardianConsent,
+    GuardianNotice,
     IdentityVerification,
+    MailReceipt,
     OutgoingMail,
     PaymentEligibility,
     SecurityEvent,
@@ -264,3 +266,30 @@ class PaymentEligibilityAdmin(ReadOnlyAdmin):
     list_display = ('user', 'version', 'delivered_version', 'attempts', 'last_error', 'next_attempt_at')
     search_fields = ('user__username',)
     ordering = ('next_attempt_at',)
+
+
+@admin.register(GuardianNotice)
+class GuardianNoticeAdmin(ReadOnlyAdmin):
+    """
+    결제 서버가 보낸 보호자 알림을 조회만 한다(#352). 다툼이 생기면 "언제 무엇을 알렸는가"를 여기서 본다.
+
+    메일을 보냈는지는 붙은 기록(보낸 메일의 기록)의 보낸 시각이다.
+    """
+
+    list_display = ('order_id', 'kind', 'minor', 'price', 'occurred_at', 'outcome', 'mailed_at', 'created_at')
+    list_filter = ('kind', 'outcome')
+    search_fields = ('order_id', 'minor__username')
+    ordering = ('-created_at',)
+
+    @admin.display(description='메일을 보낸 시각')
+    def mailed_at(self, notice: GuardianNotice):
+        return notice.receipt.sent_at if notice.receipt else None
+
+
+@admin.register(MailReceipt)
+class MailReceiptAdmin(ReadOnlyAdmin):
+    """보낸 메일의 기록을 조회만 한다. 받는 사람과 본문은 없다."""
+
+    list_display = ('purpose', 'created_at', 'sent_at', 'discarded_at')
+    list_filter = ('purpose',)
+    ordering = ('-created_at',)
