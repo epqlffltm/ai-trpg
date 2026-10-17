@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.call_log import DbCallLog
-from app.ai.calls import CallScope, Outcome, input_digest
+from app.ai.calls import CallScope, Outcome, chars_of, input_digest
 from app.ai.fake import FAKE_MODEL, FakeCallLog, FakeProvider
 from app.ai.models import AiInvocation
 from app.ai.provider import (
@@ -36,8 +36,9 @@ from app.ai.provider import (
 from app.assets.models import NarrationStyle
 from app.main import API_PREFIX
 from app.rounds import llm_narrator, prompt
+from app.rounds.budget import INPUT_BUDGET, estimate_messages, fit_request
 from app.rounds.llm_narrator import NARRATION_PARAMS, LLMNarrator, NarrationError, accept_completion, accept_scene
-from app.rounds.narrator import LoreNote, MemoryNote, Move, NarrationRequest, StoryContext
+from app.rounds.narrator import LoreNote, MemoryNote, Move, NarrationRequest, PastRound, StoryContext
 from tests.previews import RecordingPreview
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -104,6 +105,11 @@ async def test_a_reply_cut_by_the_length_limit_is_not_a_scene():
 
 def test_a_complete_reply_is_accepted():
     assert accept_completion(Completion(text=f' {REPLY} ', model=FAKE_MODEL)) == REPLY
+
+
+def test_the_output_limit_is_the_priced_output():
+    # 판매가는 출력 1,200 토큰으로 매겼다(app/catalog/rules.py). 상한도 같다
+    assert NARRATION_PARAMS.max_tokens == 1_200
 
 
 def test_reasoning_is_off_for_narration():
@@ -263,6 +269,59 @@ async def test_the_digest_is_that_of_the_messages_sent():
     (call,) = provider.calls
     expected = input_digest(call.messages, b'server-key')
     assert [record.input_digest for record in log.records] == [expected, expected]
+
+
+async def test_the_record_carries_the_characters_sent():
+    log = FakeCallLog()
+    provider = FakeProvider(reply=REPLY)
+
+    await LLMNarrator(provider, log).narrate(scoped_request())
+    with pytest.raises(ProviderError):
+        await LLMNarrator(BrokenProvider(), log).narrate(scoped_request())
+
+    # 입력 토큰 수와 견주어 글자당 토큰 수를 잰다. 받지 못한 호출도 보낸 글자는 안다
+    (call,) = provider.calls
+    assert [record.input_chars for record in log.records] == [chars_of(call.messages)] * 2
+
+
+def long_request() -> NarrationRequest:
+    """예산을 넘는 요청. 지난 기록 셋을 다 빼도 로어북 항목이 많아 넘친다."""
+    history = [PastRound(number=number, scene='고속도로. ' * 190, lines=['엘프: 달린다.']) for number in (6, 7, 8)]
+    lore = [LoreNote(entry_id=uuid.uuid4(), name=f'항목{index}', content='설정. ' * 600) for index in range(6)]
+    return replace(scoped_request(), history=history, lore=lore)
+
+
+async def test_a_long_request_is_cut_to_the_budget_before_it_is_sent():
+    log = FakeCallLog()
+    provider = FakeProvider(reply=REPLY)
+    request = long_request()
+    assert estimate_messages(prompt.build_messages(request)) > INPUT_BUDGET
+
+    await LLMNarrator(provider, log).narrate(request)
+
+    # 보낸 것은 줄인 요청이고, 기록의 로어북 항목도 실제로 보낸 것이다
+    (call,) = provider.calls
+    sent = fit_request(request)
+    assert call.messages == prompt.build_messages(sent)
+    assert estimate_messages(call.messages) <= INPUT_BUDGET
+    assert sent.history == []
+    assert 0 < len(sent.lore) < len(request.lore)
+    assert log.records[0].lore_entry_ids == tuple(note.entry_id for note in sent.lore)
+
+
+async def test_a_request_over_the_budget_by_what_cannot_be_cut_is_still_sent(caplog):
+    provider = FakeProvider(reply=REPLY)
+    request = scoped_request(story=replace(STORY, setting='행성. ' * 3000))
+
+    with caplog.at_level('WARNING', logger='app.rounds.llm_narrator'):
+        scene = await LLMNarrator(provider, FakeCallLog()).narrate(request)
+
+    # 라운드를 실패시키지 않는다. 경고로 그런 판이 얼마나 되는지 본다
+    assert scene == REPLY
+    assert len(provider.calls) == 1
+    (warning,) = caplog.records
+    assert (warning.table_id, warning.budget) == (str(TABLE), INPUT_BUDGET)
+    assert warning.estimated_tokens > INPUT_BUDGET
 
 
 async def test_the_record_carries_what_the_provider_reported():
@@ -438,7 +497,8 @@ async def test_a_refused_reply_leaves_the_round_closing(
 async def test_a_round_narrated_by_the_model_leaves_a_record(
     client: AsyncClient, app: FastAPI, me: dict[str, str], narrated, session: AsyncSession
 ):
-    app.state.narrator = LLMNarrator(FakeProvider(reply=REPLY), DbCallLog(app.state.session_factory))
+    provider = FakeProvider(reply=REPLY)
+    app.state.narrator = LLMNarrator(provider, DbCallLog(app.state.session_factory))
     table_url = await start_solo(client, me)
 
     await play_round(client, me, table_url, '달린다.', narrated)
@@ -448,6 +508,7 @@ async def test_a_round_narrated_by_the_model_leaves_a_record(
     table_id = uuid.UUID(table_url.rsplit('/', 1)[1])
     assert (row.purpose, row.table_id, row.round_number, row.host_id) == ('narration', table_id, 1, ME)
     assert (row.outcome, row.narration_style, row.text) == ('ok', 'classic', REPLY)
+    assert row.input_chars == chars_of(provider.calls[0].messages)
 
 
 @pytest.mark.usefixtures('clean_tables')
