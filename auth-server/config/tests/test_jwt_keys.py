@@ -18,7 +18,15 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
-from config.jwt_keys import build_verification_keys, compute_key_id, derive_public_key_pem, read_public_key_pem
+from config.jwt_keys import (
+    NO_KEYS,
+    build_verification_keys,
+    compute_key_id,
+    derive_public_key_pem,
+    load_key_material,
+    private_key_path,
+    read_public_key_pem,
+)
 
 
 def private_pem() -> str:
@@ -91,6 +99,46 @@ class VerificationKeysTests(KeyFilesTestCase):
 
         with self.assertRaisesMessage(ImproperlyConfigured, '같은 JWT 키가 두 번'):
             build_verification_keys(self.signing_public, paths)
+
+
+class PrivateKeyPathTests(SimpleTestCase):
+    def test_a_relative_path_is_under_the_server_folder(self):
+        self.assertEqual(
+            private_key_path('keys/jwt-private.pem', Path('/srv/auth')), Path('/srv/auth/keys/jwt-private.pem')
+        )
+
+    def test_an_empty_path_means_no_signing_key(self):
+        # 워커와 마이그레이션은 경로를 비워 키 없이 뜬다(#274). 빈 글자를 붙여 폴더를 가리키지 않는다
+        for value in ('', '   '):
+            with self.subTest(value=value):
+                self.assertIsNone(private_key_path(value, Path('/srv/auth')))
+
+
+class LoadKeyMaterialTests(KeyFilesTestCase):
+    def test_reads_the_signing_key_and_the_extra_keys(self):
+        private = private_pem()
+        public = derive_public_key_pem(private)
+        other = derive_public_key_pem(private_pem())
+
+        keys = load_key_material(self.write('private.pem', private), [self.write('other.pem', other)])
+
+        self.assertEqual(
+            (keys.signing_key_pem, keys.public_key_pem, keys.key_id), (private, public, compute_key_id(public))
+        )
+        self.assertEqual(list(keys.verification_keys), [compute_key_id(public), compute_key_id(other)])
+
+    def test_reads_nothing_without_a_signing_key(self):
+        # 서명하지 않는 프로세스는 검증도 하지 않는다. 검증용 공개키의 경로가 틀려도 읽지 않는다
+        keys = load_key_material(None, [self.folder / 'none.pem'])
+
+        self.assertEqual(keys, NO_KEYS)
+        self.assertIsNone(keys.signing_key_pem)
+        self.assertEqual(keys.verification_keys, {})
+
+    def test_still_refuses_a_missing_signing_key_file(self):
+        # 경로를 적었는데 파일이 없으면 지금처럼 뜨지 않는다. 비운 것과 잘못 적은 것은 다르다
+        with self.assertRaisesMessage(ImproperlyConfigured, '개인키 파일이 없습니다'):
+            load_key_material(self.folder / 'none.pem', [])
 
 
 def load_export_script():

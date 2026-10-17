@@ -20,6 +20,12 @@
 # DB 주소는 이 파일이 읽는 루트 .env 의 비밀번호로 만든다. 비밀번호를 두 곳에 적지 않는다.
 #
 # 이 파일에는 비밀을 적지 않는다. 비밀은 루트 .env 와 각 서버의 .env, 인증 서버의 키 파일에만 있다.
+#
+# 비밀은 그것을 쓰는 프로세스에만 준다(#274). env_file 은 서버 폴더의 .env 를 통째로 넘기므로,
+# 그 프로세스가 쓰지 않는 비밀은 environment 에서 빈 값으로 덮는다(environment 가 env_file 보다 앞선다).
+# 인증 서버의 서명 개인키(키 폴더)는 auth-server 에만 붙인다. 나머지는 JWT_PRIVATE_KEY_PATH 를 비워 키 없이 뜬다.
+# 어느 프로세스가 무엇을 받는지는 .github/scripts/secret_scope.py 의 표에 있다. CI 가 이 파일과 표가 맞는지 본다.
+# 새 비밀을 더하면 그 표에도 적는다
 
 x-auth-image: &auth-image
   build: ./auth-server
@@ -52,6 +58,48 @@ x-auth-keys: &auth-keys
 # 그래서 워커의 healthy 는 "DB 에 닿으며 돈다"는 뜻이다. 파일이 없거나(아직 한 바퀴도 못 돌았다) 오래됐으면 unhealthy 다.
 # 2분은 정리 작업의 간격(30초)과, 메일 서버나 결제 서버가 느린 한 묶음보다 넉넉한 길이다.
 # 서버처럼 unhealthy 를 보고 재시작하지는 않는다. docker compose ps 와 CI 의 스택 확인이 본다
+# 인증 서버의 프로세스가 함께 쓰는 설정. 비밀은 없다(비밀은 auth-server/.env 에서 온다)
+x-auth-environment: &auth-environment
+  DATABASE_URL: postgres://auth:${AUTH_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
+  REDIS_URL: redis://redis:6379/0
+  # 다른 서버가 공개키를 받으러 올 때 Host 머리말이 auth-server 다. 목록에 없으면 Django 가 400 으로 막는다
+  ALLOWED_HOSTS: localhost,127.0.0.1,auth-server
+  BILLING_URL: http://billing-server:8003
+  # 앞에 프록시가 하나 있다. X-Forwarded-For 의 맨 뒤(프록시가 붙인 주소)를 클라이언트의 IP 로 믿는다.
+  # 프록시를 거치지 않고 8000 으로 직접 오는 요청(관리자 화면)은 헤더가 없어 연결한 상대의 주소를 쓴다
+  TRUSTED_PROXY_COUNT: "1"
+
+# 서명하지 않는 인증 프로세스(마이그레이션, 워커, cron). 키 폴더를 붙이지 않고 키의 경로를 비운다.
+# .env 에 경로를 적어 두었어도 여기서 덮는다. 경로가 비면 설정이 키를 읽지 않는다(config/jwt_keys.py)
+x-auth-without-signing-key: &auth-without-signing-key
+  JWT_PRIVATE_KEY_PATH: ""
+
+# 게임 서버의 프로세스가 함께 쓰는 설정. 비밀은 없다(비밀은 game-server/.env 에서 온다)
+x-game-environment: &game-environment
+  DATABASE_URL: postgresql+asyncpg://game:${GAME_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
+  AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
+  # 모든 서버를 함께 띄우므로 결제 서버에 붙인다. game-server/.env 에 BILLING_SECRET 이 있어야 뜬다
+  BILLING_URL: http://billing-server:8003
+  # 언어 모델(Ollama)은 컨테이너 밖, 이 PC 에서 돈다. 컨테이너 안의 127.0.0.1 은 컨테이너 자신이다.
+  # 다른 곳의 모델을 쓰면 루트 .env 의 GAME_LLM_BASE_URL 을 적는다. game-server/.env 의 LLM_BASE_URL 은 여기서 덮인다
+  LLM_BASE_URL: ${GAME_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+  # 로비의 비밀번호와 채팅의 시도 횟수를 Redis 로 센다(#56). 인증 서버와 같은 Redis 다. 키의 앞부분이 달라 섞이지 않는다
+  REDIS_URL: redis://redis:6379/0
+
+# 결제 서버의 프로세스가 함께 쓰는 설정. 비밀은 없다(비밀은 billing-server/.env 에서 온다)
+x-billing-environment: &billing-environment
+  DATABASE_URL: postgres://billing:${BILLING_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
+  AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
+  HOST: 0.0.0.0
+  PORT: "8003"
+
+# 요청을 받지 않는 결제 프로세스(마이그레이션, 정리 작업, cron). 요청의 서명을 확인하는 비밀을 비운다.
+# 작업 명령의 설정(LoadJobs, LoadDatabase)은 이 셋을 읽지 않는다
+x-billing-without-request-secrets: &billing-without-request-secrets
+  PG_WEBHOOK_SECRET: ""
+  GAME_SERVER_SECRET: ""
+  AUTH_SERVER_SECRET: ""
+
 x-worker-heartbeat: &worker-heartbeat
   test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/heartbeat) )) -lt 120"]
   interval: 15s
@@ -141,20 +189,10 @@ services:
     profiles: [app]
     command: ["python", "manage.py", "migrate", "--noinput"]
     env_file: ./auth-server/.env
-    environment: &auth-environment
-      DATABASE_URL: postgres://auth:${AUTH_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
-      REDIS_URL: redis://redis:6379/0
-      # 키 파일은 아래에서 붙인 폴더에 있다. .env 에 다른 경로를 적어 두었어도 컨테이너에서는 이 경로다
-      JWT_PRIVATE_KEY_PATH: keys/jwt-private.pem
-      # 다른 서버가 공개키를 받으러 올 때 Host 머리말이 auth-server 다. 목록에 없으면 Django 가 400 으로 막는다
-      ALLOWED_HOSTS: localhost,127.0.0.1,auth-server
-      BILLING_URL: http://billing-server:8003
-      # 앞에 프록시가 하나 있다. X-Forwarded-For 의 맨 뒤(프록시가 붙인 주소)를 클라이언트의 IP 로 믿는다.
-      # 프록시를 거치지 않고 8000 으로 직접 오는 요청(관리자 화면)은 헤더가 없어 연결한 상대의 주소를 쓴다
-      TRUSTED_PROXY_COUNT: "1"
-    # 설정 파일이 읽힐 때 개인키를 읽는다. 마이그레이션에도 키가 있어야 한다
-    volumes:
-      - *auth-keys
+    environment:
+      <<: [*auth-environment, *auth-without-signing-key]
+      BILLING_SECRET: ""
+      SMTP_PASSWORD: ""
     depends_on:
       db:
         condition: service_healthy
@@ -164,7 +202,13 @@ services:
     profiles: [app]
     restart: unless-stopped
     env_file: ./auth-server/.env
-    environment: *auth-environment
+    environment:
+      <<: *auth-environment
+      # 키 파일은 아래에서 붙인 폴더에 있다. .env 에 다른 경로를 적어 두었어도 컨테이너에서는 이 경로다
+      JWT_PRIVATE_KEY_PATH: keys/jwt-private.pem
+      # 결제 서버를 부르는 것은 환영 크레딧의 워커다. 서버는 부르지 않는다
+      BILLING_SECRET: ""
+    # 토큰에 서명하는 것은 이 서버뿐이다. 키 폴더는 여기에만 붙인다
     volumes:
       - *auth-keys
     # 관리자 화면용. 위의 설명을 본다
@@ -189,11 +233,10 @@ services:
     command: ["python", "manage.py", "send_outgoing_mail"]
     env_file: ./auth-server/.env
     environment:
-      <<: *auth-environment
+      <<: [*auth-environment, *auth-without-signing-key]
       HEARTBEAT_FILE: /tmp/heartbeat
+      BILLING_SECRET: ""
     healthcheck: *worker-heartbeat
-    volumes:
-      - *auth-keys
     depends_on:
       auth-migrate:
         condition: service_completed_successfully
@@ -207,11 +250,10 @@ services:
     command: ["python", "manage.py", "send_welcome_credits"]
     env_file: ./auth-server/.env
     environment:
-      <<: *auth-environment
+      <<: [*auth-environment, *auth-without-signing-key]
       HEARTBEAT_FILE: /tmp/heartbeat
+      SMTP_PASSWORD: ""
     healthcheck: *worker-heartbeat
-    volumes:
-      - *auth-keys
     depends_on:
       auth-migrate:
         condition: service_completed_successfully
@@ -224,9 +266,11 @@ services:
     restart: unless-stopped
     command: ["supercronic", "-quiet", "-json", "-passthrough-logs", "/etc/supercronic/crontab"]
     env_file: ./auth-server/.env
-    environment: *auth-environment
+    # 요약 메일을 발송함에 적지 않고 바로 보내는 설정(MAIL_DELIVERY=inline)도 있어 SMTP_PASSWORD 는 남긴다
+    environment:
+      <<: [*auth-environment, *auth-without-signing-key]
+      BILLING_SECRET: ""
     volumes:
-      - *auth-keys
       - ./docker/cron/auth.crontab:/etc/supercronic/crontab:ro
     depends_on:
       auth-migrate:
@@ -237,16 +281,16 @@ services:
     profiles: [app]
     command: ["alembic", "upgrade", "head"]
     env_file: ./game-server/.env
-    environment: &game-environment
-      DATABASE_URL: postgresql+asyncpg://game:${GAME_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
-      AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
-      # 모든 서버를 함께 띄우므로 결제 서버에 붙인다. game-server/.env 에 BILLING_SECRET 이 있어야 뜬다
-      BILLING_URL: http://billing-server:8003
-      # 언어 모델(Ollama)은 컨테이너 밖, 이 PC 에서 돈다. 컨테이너 안의 127.0.0.1 은 컨테이너 자신이다.
-      # 다른 곳의 모델을 쓰면 루트 .env 의 GAME_LLM_BASE_URL 을 적는다. game-server/.env 의 LLM_BASE_URL 은 여기서 덮인다
-      LLM_BASE_URL: ${GAME_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
-      # 로비의 비밀번호와 채팅의 시도 횟수를 Redis 로 센다(#56). 인증 서버와 같은 Redis 다. 키의 앞부분이 달라 섞이지 않는다
-      REDIS_URL: redis://redis:6379/0
+    # 마이그레이션은 DB 만 쓴다. 모델의 키와 서버끼리의 비밀을 비운다.
+    # 결제 서버의 주소도 비운다. 주소가 있으면 설정이 BILLING_SECRET 을 요구한다
+    environment:
+      <<: *game-environment
+      BILLING_URL: ""
+      BILLING_SECRET: ""
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      SIGNAL_SECRET: ""
+      AI_LOG_HMAC_KEY: ""
     # host.docker.internal 이 이 PC 를 가리키게 한다. Docker Desktop 에는 원래 있고, 리눅스에는 이 줄이 있어야 한다
     extra_hosts: &host-gateway
       - "host.docker.internal:host-gateway"
@@ -308,11 +352,10 @@ services:
     profiles: [app]
     command: ["/app/migrate", "up"]
     env_file: ./billing-server/.env
-    environment: &billing-environment
-      DATABASE_URL: postgres://billing:${BILLING_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
-      AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
-      HOST: 0.0.0.0
-      PORT: "8003"
+    # 마이그레이션은 DB 만 읽는다(config.LoadDatabase). 서명의 비밀과 결제 대행사의 키를 비운다
+    environment:
+      <<: [*billing-environment, *billing-without-request-secrets]
+      TOSS_SECRET_KEY: ""
     depends_on:
       db:
         condition: service_healthy
@@ -340,8 +383,10 @@ services:
     restart: unless-stopped
     command: ["/app/sweeper"]
     env_file: ./billing-server/.env
+    # 결제 대행사를 부르지 않지만, 지금은 작업 명령의 설정(LoadJobs)이 결제 대행사의 키를 요구해 TOSS_SECRET_KEY 는 남긴다.
+    # 결제 세션이 정리 작업이 결제 설정을 읽지 않게 바꾸면 비운다
     environment:
-      <<: *billing-environment
+      <<: [*billing-environment, *billing-without-request-secrets]
       HEARTBEAT_FILE: /tmp/heartbeat
     healthcheck: *worker-heartbeat
     depends_on:
@@ -355,7 +400,9 @@ services:
     restart: unless-stopped
     command: ["supercronic", "-quiet", "-json", "-passthrough-logs", "/etc/supercronic/crontab"]
     env_file: ./billing-server/.env
-    environment: *billing-environment
+    # 대사는 결제 대행사에 결과를 묻는다. TOSS_SECRET_KEY 는 남긴다
+    environment:
+      <<: [*billing-environment, *billing-without-request-secrets]
     volumes:
       - ./docker/cron/billing.crontab:/etc/supercronic/crontab:ro
     depends_on:
