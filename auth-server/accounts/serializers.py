@@ -97,6 +97,25 @@ class IdentityVerifySerializer(serializers.Serializer):
     token = serializers.CharField(max_length=1000)
 
 
+class GuardianRequestSerializer(serializers.Serializer):
+    """보호자에게 동의를 부탁한다. 보호자의 이메일 하나를 받는다."""
+
+    guardian_email = serializers.EmailField()
+
+
+class GuardianConsentSerializer(serializers.Serializer):
+    """보호자의 동의. 메일의 동의 링크에서 꺼낸 글자와, 보호자가 본인확인 업체에서 받은 글자를 받는다."""
+
+    consent_token = serializers.CharField(max_length=500)
+    identity_token = serializers.CharField(max_length=1000)
+
+
+class GuardianRevokeSerializer(serializers.Serializer):
+    """보호자의 철회. 메일의 철회 링크에서 꺼낸 글자를 받는다."""
+
+    revoke_token = serializers.CharField(max_length=500)
+
+
 class IdentityStatusSerializer(serializers.Serializer):
     """본인인증 상태(identity_status.IdentityStatus). 내 정보와 본인인증의 응답에 실린다."""
 

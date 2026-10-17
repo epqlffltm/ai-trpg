@@ -13,8 +13,10 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from accounts.models import (
     EmailCode,
+    GuardianConsent,
     IdentityVerification,
     OutgoingMail,
+    PaymentEligibility,
     SecurityEvent,
     SignupCode,
     User,
@@ -220,3 +222,45 @@ class IdentityVerificationAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None) -> bool:
         return False
+
+
+class ReadOnlyAdmin(admin.ModelAdmin):
+    """조회만 하는 화면. 만들고 고치고 지우는 것은 API 와 워커가 한다."""
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(GuardianConsent)
+class GuardianConsentAdmin(ReadOnlyAdmin):
+    """
+    보호자 동의를 조회만 한다(#336).
+
+    고치면 보호자를 거치지 않고 결제가 열린다. 지우면 동의의 기록(누가 언제 동의했는지)이 사라진다.
+    """
+
+    list_display = ('minor', 'status', 'requested_at', 'consented_at', 'revoked_at')
+    list_filter = ('status',)
+    search_fields = ('minor__username',)
+    ordering = ('-requested_at',)
+    # 링크의 일회 값과 사람 열쇠는 보여 주지 않는다. 일회 값이 보이면 링크를 만들 수 있다
+    exclude = ('link_nonce', 'guardian_person_key')
+
+
+@admin.register(PaymentEligibility)
+class PaymentEligibilityAdmin(ReadOnlyAdmin):
+    """
+    결제 서버에 알릴 결제 자격을 조회만 한다. 밀려 있는 줄을 확인하는 곳이다.
+
+    알린 버전이 버전보다 작으면 아직 나가지 못한 것이다. 시도 횟수와 마지막 오류가 남아 있다.
+    """
+
+    list_display = ('user', 'version', 'delivered_version', 'attempts', 'last_error', 'next_attempt_at')
+    search_fields = ('user__username',)
+    ordering = ('next_attempt_at',)

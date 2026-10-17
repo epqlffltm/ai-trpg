@@ -22,7 +22,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.billing_client import ALREADY_GRANTED, DISABLED, GRANTED, BillingUnavailableError
+from accounts.billing_client import ALREADY_GRANTED, DISABLED, GRANTED, WELCOME_PATH, BillingUnavailableError
 from accounts.identity import person_key
 from accounts.models import IdentityVerification, User, WelcomeCredit, WelcomeCreditStatus
 from accounts.tests.billing_stub import SECRET, BillingStub
@@ -524,8 +524,10 @@ class EndToEndTests(APITestCase):
             # 다시 돌려도 또 부르지 않는다
             call_command('send_welcome_credits', '--once', stdout=StringIO())
 
-        self.assertEqual(len(stub.requests), 1)
-        request = stub.requests[0]
+        # 본인인증은 결제 자격도 알린다(payment_eligibility.py). 여기서는 환영 크레딧의 요청만 본다
+        welcome = [request for request in stub.requests if request.path == WELCOME_PATH]
+        self.assertEqual(len(welcome), 1)
+        request = welcome[0]
         self.assertTrue(request.has_valid_signature())
         self.assertIn(str(user.public_id).encode(), request.body)
         # 메일 주소와 사람 열쇠는 결제 서버에 보내지 않는다
