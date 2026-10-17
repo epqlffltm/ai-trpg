@@ -23,6 +23,7 @@ from uuid import UUID
 from django.db import transaction
 from django.utils import timezone
 
+from accounts.backoff import retry_delay
 from accounts.billing_client import GRANTED, BillingUnavailableError, grant_welcome_credit
 from accounts.models import WelcomeCredit, WelcomeCreditStatus
 
@@ -38,8 +39,6 @@ BILLING_UNAVAILABLE_ERROR_CODE = 'billing.unavailable'
 FIRST_RETRY_DELAY = timedelta(seconds=5)
 # 간격은 여기까지만 늘어난다. 메일과 달리 늦게 줘도 쓸모가 있어서 버리지 않고 계속 시도한다
 MAX_RETRY_DELAY = timedelta(hours=1)
-# 간격이 MAX_RETRY_DELAY 에 닿는 실패 횟수. 그 뒤로는 2 의 거듭제곱을 더 키우지 않는다
-_DOUBLINGS_UNTIL_MAX = 10
 
 # 워커가 한 번에 처리하는 최대 개수
 DEFAULT_BATCH_SIZE = 20
@@ -143,7 +142,7 @@ def _schedule_retry(claim: WelcomeCredit, error: Exception, now) -> None:
     버리지 않는다. 결제 서버가 하루를 죽어 있어도 살아나면 지급된다.
     """
     claim.attempts += 1
-    claim.next_attempt_at = now + _retry_delay(claim.attempts)
+    claim.next_attempt_at = now + retry_delay(claim.attempts, first=FIRST_RETRY_DELAY, maximum=MAX_RETRY_DELAY)
     claim.last_error = str(error)[: WelcomeCredit._meta.get_field('last_error').max_length]
     claim.save(update_fields=['attempts', 'next_attempt_at', 'last_error'])
     # 받는 사람은 적지 않는다. 관리자 화면에서 번호로 찾는다
@@ -157,9 +156,3 @@ def _schedule_retry(claim: WelcomeCredit, error: Exception, now) -> None:
             'attempt': claim.attempts,
         },
     )
-
-
-def _retry_delay(attempts: int) -> timedelta:
-    """attempts 번 실패한 뒤에 기다릴 시간."""
-    doublings = min(attempts - 1, _DOUBLINGS_UNTIL_MAX)
-    return min(FIRST_RETRY_DELAY * (2**doublings), MAX_RETRY_DELAY)

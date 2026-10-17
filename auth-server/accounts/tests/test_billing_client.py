@@ -11,6 +11,7 @@ import json
 import os
 import time
 import uuid
+from datetime import date
 from unittest.mock import patch
 
 from django.core.exceptions import ImproperlyConfigured
@@ -19,10 +20,13 @@ from django.test import SimpleTestCase, override_settings
 from accounts import billing_client
 from accounts.billing_client import (
     ALREADY_GRANTED,
+    APPLIED,
     DISABLED,
     GRANTED,
+    STALE,
     BillingUnavailableError,
     grant_welcome_credit,
+    report_payment_eligibility,
 )
 from accounts.tests.billing_stub import SECRET, BillingStub, closed_port_url
 from config.billing import validate_billing_url, validate_service_secret
@@ -197,3 +201,49 @@ class SettingsTests(SimpleTestCase):
             validate_service_secret('short-secret-value')
         # 오류에 값을 싣지 않는다
         self.assertNotIn('short-secret-value', str(raised.exception))
+
+
+def report(stub: BillingStub, legal_adult_from=None, guardian_consent: bool = False) -> str:
+    """가짜 결제 서버를 가리키게 설정을 바꾸고 결제 자격을 알린다."""
+    with override_settings(BILLING_URL=stub.url, BILLING_SECRET=SECRET):
+        return report_payment_eligibility(
+            user_public_id=USER_ID, version=7, legal_adult_from=legal_adult_from, guardian_consent=guardian_consent
+        )
+
+
+class EligibilityTests(SimpleTestCase):
+    """결제 자격을 알리는 요청(#336, 결제 서버의 #337)."""
+
+    def test_posts_the_state_with_its_version(self):
+        with BillingStub(status_code=200, body=b'{"status":"applied"}') as stub:
+            outcome = report(stub, legal_adult_from=date(2027, 3, 15), guardian_consent=True)
+
+        request = stub.requests[0]
+        self.assertEqual(outcome, APPLIED)
+        self.assertEqual(request.path, '/api/v1/billing/service/eligibility')
+        self.assertTrue(request.has_valid_signature())
+        self.assertEqual(
+            json.loads(request.body),
+            {'user_id': str(USER_ID), 'version': 7, 'legal_adult_from': '2027-03-15', 'guardian_consent': True},
+        )
+
+    def test_an_adult_is_sent_without_a_date(self):
+        with BillingStub(status_code=200, body=b'{"status":"applied"}') as stub:
+            report(stub)
+
+        self.assertIsNone(json.loads(stub.requests[0].body)['legal_adult_from'])
+
+    def test_a_stale_answer_is_finished_too(self):
+        with BillingStub(status_code=200, body=b'{"status":"stale"}') as stub:
+            self.assertEqual(report(stub), STALE)
+
+    def test_anything_else_means_try_again_later(self):
+        # 404 는 결제 서버에 이 주소가 아직 없는 것이다(#337 전). 버리지 않고 다시 보낸다
+        answers = [(404, b''), (201, b'{"status":"applied"}'), (200, b'{"status":"granted"}'), (500, b'')]
+        for status_code, body in answers:
+            with (
+                self.subTest(status_code=status_code, body=body),
+                BillingStub(status_code=status_code, body=body) as stub,
+                self.assertRaises(BillingUnavailableError),
+            ):
+                report(stub)

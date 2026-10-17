@@ -31,6 +31,20 @@ from accounts.attempt_policies import (
 from accounts.client_ip import get_attempt_subject
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
 from accounts.email_codes import InvalidEmailCodeError
+from accounts.guardian import (
+    GuardianConsentActiveError,
+    GuardianEmailIsOwnError,
+    GuardianIsMinorError,
+    GuardianNotAdultError,
+    GuardianNotNeededError,
+    GuardianRequestUnavailableError,
+    IdentityRequiredError,
+    give_guardian_consent,
+    guardian_status_of,
+    request_guardian_consent,
+    revoke_guardian_consent,
+)
+from accounts.guardian_links import InvalidGuardianLinkError
 from accounts.identity import (
     IdentityAlreadyVerifiedError,
     IdentityInUseError,
@@ -45,6 +59,9 @@ from accounts.models import User
 from accounts.origin_check import is_allowed_origin, log_refused_origin, read_origin
 from accounts.serializers import (
     EmailSerializer,
+    GuardianConsentSerializer,
+    GuardianRequestSerializer,
+    GuardianRevokeSerializer,
     IdentityStatusSerializer,
     IdentityVerifySerializer,
     LoginChallengeSerializer,
@@ -160,18 +177,21 @@ def build_login_ticket_invalid_response() -> Response:
 
 
 def build_code_unavailable_response(retry_after: timedelta) -> Response:
+    """인증 코드를 지금은 보낼 수 없을 때의 응답."""
+    return build_retry_later_response(
+        '인증 코드를 너무 자주 요청했습니다. 잠시 뒤에 다시 시도해 주세요.', 'login_code_unavailable', retry_after
+    )
+
+
+def build_retry_later_response(detail: str, code: str, retry_after: timedelta) -> Response:
     """
-    인증 코드를 지금은 보낼 수 없을 때의 응답.
+    메일을 지금은 보낼 수 없을 때의 응답(429).
 
     기다릴 시간을 본문과 Retry-After 머리말에 초 단위로 싣는다. 올림해서, 그 시간 뒤에는 반드시 되게 한다.
     """
     seconds = max(1, math.ceil(retry_after.total_seconds()))
     response = Response(
-        {
-            'detail': '인증 코드를 너무 자주 요청했습니다. 잠시 뒤에 다시 시도해 주세요.',
-            'code': 'login_code_unavailable',
-            'retry_after': seconds,
-        },
+        {'detail': detail, 'code': code, 'retry_after': seconds},
         status=status.HTTP_429_TOO_MANY_REQUESTS,
     )
     response['Retry-After'] = str(seconds)
@@ -183,14 +203,14 @@ def build_identity_body(user: User) -> dict:
     return IdentityStatusSerializer(identity_status_of(user, korean_today())).data
 
 
-def build_identity_error_response(detail: str, code: str, status_code: int) -> Response:
-    """본인인증을 거절하는 응답."""
+def build_coded_error_response(detail: str, code: str, status_code: int) -> Response:
+    """요청을 거절하는 응답. 화면이 가를 수 있게 오류의 이름(code)을 싣는다."""
     return Response({'detail': detail, 'code': code}, status=status_code)
 
 
 def build_under_age_response() -> Response:
     """만 14세 미만이라 계정을 막은 뒤의 응답. 이 기기의 refresh 쿠키도 지운다. 세션은 이미 끊겼다."""
-    response = build_identity_error_response(
+    response = build_coded_error_response(
         '만 14세 미만은 이용할 수 없습니다. 계정을 막고 가입할 때 받은 정보를 지웠습니다.',
         'identity_under_age',
         status.HTTP_403_FORBIDDEN,
@@ -588,20 +608,20 @@ class IdentityVerifyView(APIView):
         try:
             verify_identity(user=request.user, ip=get_attempt_subject(request), **serializer.validated_data)
         except IdentityAlreadyVerifiedError:
-            return build_identity_error_response(
+            return build_coded_error_response(
                 '이미 본인인증을 마친 계정입니다.', 'identity_already_verified', status.HTTP_409_CONFLICT
             )
         except IdentityTokenError:
             # 위조, 만료, 이미 쓴 것을 구분해 알려 주지 않는다
-            return build_identity_error_response(
+            return build_coded_error_response(
                 '본인인증을 처음부터 다시 해 주세요.', 'identity_token_invalid', status.HTTP_400_BAD_REQUEST
             )
         except IdentityUnavailableError:
-            return build_identity_error_response(
+            return build_coded_error_response(
                 '지금은 본인인증을 받을 수 없습니다.', 'identity_unavailable', status.HTTP_503_SERVICE_UNAVAILABLE
             )
         except IdentityInUseError:
-            return build_identity_error_response(
+            return build_coded_error_response(
                 '다른 계정에서 이미 본인인증을 마친 분입니다. 한 분은 한 계정에서만 인증할 수 있습니다.',
                 'identity_in_use',
                 status.HTTP_409_CONFLICT,
@@ -614,6 +634,116 @@ class IdentityVerifyView(APIView):
         return Response({'identity': build_identity_body(request.user)}, status=status.HTTP_201_CREATED)
 
 
+def build_guardian_link_invalid_response() -> Response:
+    """보호자의 링크를 쓸 수 없을 때의 응답. 위조, 만료, 새 요청으로 바뀐 링크를 구분하지 않는다."""
+    return build_coded_error_response(
+        '링크를 쓸 수 없습니다. 회원에게 다시 요청해 달라고 해 주세요.',
+        'guardian_link_invalid',
+        status.HTTP_400_BAD_REQUEST,
+    )
+
+
+class GuardianRequestView(APIView):
+    """POST /api/v1/auth/guardian/request. 미성년자가 보호자에게 결제 동의를 부탁한다(#336)."""
+
+    # 로그인한 본인만 한다. 기본 권한(IsAuthenticated)을 쓴다
+
+    def post(self, request: Request) -> Response:
+        serializer = GuardianRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            request_guardian_consent(minor=request.user, **serializer.validated_data)
+        except IdentityRequiredError:
+            return build_coded_error_response(
+                '먼저 본인인증을 해 주세요.', 'identity_verification_required', status.HTTP_403_FORBIDDEN
+            )
+        except GuardianNotNeededError:
+            return build_coded_error_response(
+                '성년이라 보호자의 동의가 필요 없습니다.', 'guardian_not_needed', status.HTTP_409_CONFLICT
+            )
+        except GuardianConsentActiveError:
+            return build_coded_error_response(
+                '보호자가 이미 동의했습니다. 보호자를 바꾸려면 지금의 보호자가 먼저 철회해야 합니다.',
+                'guardian_consent_active',
+                status.HTTP_409_CONFLICT,
+            )
+        except GuardianEmailIsOwnError:
+            return Response(
+                {'guardian_email': ['보호자의 이메일을 적어 주세요. 내 이메일은 쓸 수 없습니다.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except GuardianRequestUnavailableError as exc:
+            return build_retry_later_response(
+                '보호자에게 너무 자주 요청했습니다. 잠시 뒤에 다시 시도해 주세요.',
+                'guardian_request_unavailable',
+                exc.retry_after,
+            )
+
+        return Response(
+            {'detail': '보호자에게 동의 요청 메일을 보냈습니다.', 'guardian_consent': 'requested'},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class GuardianConsentView(APIView):
+    """POST /api/v1/auth/guardian/consent. 보호자가 메일의 링크에서 본인인증을 하고 동의한다."""
+
+    # 보호자는 계정이 없다. 링크의 서명과 보호자의 본인인증이 확인이다
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = GuardianConsentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            give_guardian_consent(**serializer.validated_data)
+        except InvalidGuardianLinkError:
+            return build_guardian_link_invalid_response()
+        except GuardianNotNeededError:
+            return build_coded_error_response(
+                '그 회원은 이미 성년이라 동의가 필요 없습니다.', 'guardian_not_needed', status.HTTP_409_CONFLICT
+            )
+        except IdentityTokenError:
+            return build_coded_error_response(
+                '본인인증을 처음부터 다시 해 주세요.', 'identity_token_invalid', status.HTTP_400_BAD_REQUEST
+            )
+        except IdentityUnavailableError:
+            return build_coded_error_response(
+                '지금은 본인인증을 받을 수 없습니다.', 'identity_unavailable', status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except GuardianNotAdultError:
+            return build_coded_error_response(
+                '보호자는 성년(만 19세 이상)이어야 합니다.', 'guardian_not_adult', status.HTTP_403_FORBIDDEN
+            )
+        except GuardianIsMinorError:
+            return build_coded_error_response(
+                '회원 본인은 보호자가 될 수 없습니다.', 'guardian_is_minor', status.HTTP_409_CONFLICT
+            )
+
+        return Response({'detail': '동의를 적었습니다. 확인 메일을 보냈습니다.'}, status=status.HTTP_200_OK)
+
+
+class GuardianRevokeView(APIView):
+    """POST /api/v1/auth/guardian/revoke. 보호자가 메일의 링크로 동의를 철회한다."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = GuardianRevokeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            revoked = revoke_guardian_consent(**serializer.validated_data)
+        except InvalidGuardianLinkError:
+            return build_guardian_link_invalid_response()
+
+        # 이미 철회된 링크를 다시 열어도 같은 결과다. 이번에 철회했는지만 알려 준다
+        return Response({'detail': '동의를 철회했습니다.', 'revoked': revoked}, status=status.HTTP_200_OK)
+
+
 class MeView(APIView):
     """GET /api/v1/auth/me"""
 
@@ -621,5 +751,9 @@ class MeView(APIView):
 
     def get(self, request: Request) -> Response:
         # 인증 클래스가 토큰을 검증하고 request.user 에 사용자를 넣어 준다
-        body = {**UserSerializer(request.user).data, 'identity': build_identity_body(request.user)}
+        body = {
+            **UserSerializer(request.user).data,
+            'identity': build_identity_body(request.user),
+            'guardian_consent': guardian_status_of(request.user),
+        }
         return Response(body, status=status.HTTP_200_OK)

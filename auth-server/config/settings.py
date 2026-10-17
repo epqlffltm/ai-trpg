@@ -408,6 +408,12 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='AI TRPG <no-reply@localh
 # 인증 서버의 주소가 아니다. 링크는 화면을 열기만 하고, 변경은 그 화면이 API 에 POST 로 요청한다
 PASSWORD_RESET_URL = env('PASSWORD_RESET_URL', default='http://localhost:5173/reset-password')
 
+# 보호자에게 보내는 두 링크가 가리키는 프론트 화면(#336). 재설정 링크처럼 토큰은 # 뒤에 붙는다.
+# 동의 화면은 보호자의 본인인증을 받아 POST /api/v1/auth/guardian/consent 를,
+# 철회 화면은 POST /api/v1/auth/guardian/revoke 를 부른다
+GUARDIAN_CONSENT_URL = env('GUARDIAN_CONSENT_URL', default='http://localhost:5173/guardian/consent')
+GUARDIAN_REVOKE_URL = env('GUARDIAN_REVOKE_URL', default='http://localhost:5173/guardian/revoke')
+
 
 # 결제 서버
 # 본인인증을 마친 사용자에게 환영 크레딧을 주라고 결제 서버에 맡긴다(accounts/welcome_credit.py).

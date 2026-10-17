@@ -13,6 +13,7 @@ from unittest.mock import patch
 from django.db import OperationalError
 from django.test import SimpleTestCase, TestCase, override_settings
 
+from accounts import payment_eligibility
 from accounts.management.commands import send_outgoing_mail, send_welcome_credits
 from observability.heartbeat import beat
 
@@ -67,9 +68,21 @@ class WorkerHeartbeatTests(TestCase):
         self.path = Path(folder.name) / 'heartbeat'
 
     def one_round(self, module, deliver: str, **patched) -> None:
-        """워커의 한 바퀴를 돈다."""
+        """
+        워커의 한 바퀴를 돈다.
+
+        결제 서버에 맡기는 워커는 결제 자격도 보낸다. 그것은 비어 있는 것으로 둔다.
+        워커는 바퀴마다 끊긴 DB 연결을 버린다. 테스트의 트랜잭션 안에서는 그것이 연결을 닫아,
+        실제로 DB 를 읽으면 실패한다.
+        """
         command = module.Command(stdout=StringIO(), stderr=StringIO())
-        with override_settings(HEARTBEAT_FILE=str(self.path)), patch.object(module, deliver, **patched):
+        with (
+            override_settings(HEARTBEAT_FILE=str(self.path)),
+            patch.object(module, deliver, **patched),
+            patch.object(
+                payment_eligibility, 'deliver_due_eligibility', return_value=payment_eligibility.DeliveryReport()
+            ),
+        ):
             command._deliver_safely()
 
     def test_a_round_that_reached_the_database_beats(self):

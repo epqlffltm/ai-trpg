@@ -8,7 +8,7 @@
   3. 만 14세 미만이면 계정을 막고 모은 개인정보를 지운다. 개인정보 보호법(22조의2)은 만 14세 미만의
      개인정보를 보호자의 동의 없이 모으지 못하게 한다. 이 서비스는 보호자 동의를 받아 가입시키지 않는다
   4. 다른 계정이 이미 인증한 사람이면 거절한다. 한 사람은 한 계정에서만 인증한다
-  5. 인증 기록과 환영 크레딧을 한 트랜잭션에서 적는다
+  5. 인증 기록과 환영 크레딧, 결제 서버에 알릴 결제 자격을 한 트랜잭션에서 적는다
 
 결과는 바로 토큰에 실리지 않는다. 다음에 토큰을 갱신할 때 실린다(tokens.py). 화면은 인증 뒤에 갱신을 부른다.
 """
@@ -30,6 +30,7 @@ from accounts.models import (
     SignupCode,
     User,
 )
+from accounts.payment_eligibility import mark_changed
 from accounts.security_events import record_security_event
 from accounts.tokens import revoke_all_sessions
 from accounts.welcome_credit import request_welcome_credit
@@ -101,7 +102,7 @@ def _ensure_not_verified(user: User) -> None:
 @transaction.atomic
 def _record_verification(user: User, result: IdentityResult, provider_name: str, today: date) -> IdentityVerification:
     """
-    인증 기록과 환영 크레딧을 한 트랜잭션에서 적는다.
+    인증 기록과 환영 크레딧, 결제 자격을 한 트랜잭션에서 적는다.
 
     계정의 줄을 잠근다. 같은 계정의 요청 둘이 함께 와도 하나만 적힌다. 그래서 남는 유일 제약 위반은
     사람 열쇠뿐이다. 다른 계정이 먼저 그 사람으로 인증했다.
@@ -122,6 +123,8 @@ def _record_verification(user: User, result: IdentityResult, provider_name: str,
         # 트랜잭션 전체가 취소된다. 환영 크레딧도 적히지 않는다
         raise IdentityInUseError from exc
     request_welcome_credit(user_public_id=locked.public_id, recipient_key=key)
+    # 결제 서버가 이 사용자의 나이(성년이 되는 날)를 알게 한다. 결제는 그것으로 가른다(#337)
+    mark_changed(locked)
     return verification
 
 
