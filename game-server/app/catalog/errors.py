@@ -30,6 +30,8 @@ class Conflict(enum.StrEnum):
     NO_COST = 'no_cost'
     # 은퇴한 모델은 켜지 않는다
     RETIRED = 'retired'
+    # 날짜판을 지금과 같은 이름으로 바꾸려 했다
+    SAME_SNAPSHOT = 'same_snapshot'
 
 
 CONFLICT_MESSAGES = {
@@ -37,6 +39,7 @@ CONFLICT_MESSAGES = {
     Conflict.API_MODEL_TAKEN: '같은 창구의 같은 API 모델을 이미 넣었다',
     Conflict.NO_COST: '오늘의 원가 단가가 없다. set-cost 로 먼저 적는다',
     Conflict.RETIRED: '은퇴한 모델이다',
+    Conflict.SAME_SNAPSHOT: '지금과 같은 날짜판이다',
 }
 
 
