@@ -1,7 +1,7 @@
 # game-server/scripts/try_model.py
 
 """
-모델 하나를 실제로 불러 본다. 짧은 장면 하나를 쓰게 하고, 글과 토큰 수, 걸린 시간을 찍는다.
+모델 하나를 실제로 불러 본다. 짧은 장면 하나를 쓰게 하고, 글과 토큰 수, 원가, 걸린 시간을 찍는다.
 
 쓰는 때.
   - 모델 목록에 넣은 모델(scripts/models.py add)이 API 모델 이름과 키로 정말 불리는지 볼 때. 켜기 전이다.
@@ -30,6 +30,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.ai.costs import PriceTag, cost_usd
 from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
 from app.ai.routing import ModelRouter
 from app.core.config import get_settings
@@ -76,12 +77,31 @@ class FirstText:
         return None if self.at is None else round((self.at - self.started) * 1000)
 
 
-def summary_lines(kind: str, completion: Completion, total_ms: int, first_ms: int | None) -> list[str]:
+def known(value: int | None) -> str:
+    """토큰 수. 모르면 '모름'."""
+    return '모름' if value is None else str(value)
+
+
+def cost_line(completion: Completion, price: PriceTag | None) -> str:
+    """원가의 줄. 모델 목록에 없는 모델이면 세지 않는다."""
+    if price is None:
+        return '원가: 모델 목록에 없는 모델이라 세지 않는다'
+    if price.cost is None:
+        return '원가: 오늘의 단가가 없다(scripts.models set-cost)'
+    amount = cost_usd(completion, price.cost)
+    return '원가: 토큰 수를 몰라 세지 못했다' if amount is None else f'원가: ${amount}'
+
+
+def summary_lines(
+    kind: str, completion: Completion, price: PriceTag | None, total_ms: int, first_ms: int | None
+) -> list[str]:
     """부른 결과의 요약. 글은 흘려 받을 때 이미 찍었다."""
     return [
         f'창구 {kind}, 답한 모델 {completion.model}, 멈춘 이유 {completion.finish_reason or "모름"}'
         + (' (길이 상한에 걸림)' if completion.truncated else ''),
-        f'토큰: 입력 {completion.input_tokens or "모름"}, 출력 {completion.output_tokens or "모름"}',
+        f'토큰: 입력 {known(completion.input_tokens)}(캐시 {known(completion.cached_input_tokens)}), '
+        f'출력 {known(completion.output_tokens)}(생각 {known(completion.reasoning_tokens)})',
+        cost_line(completion, price),
         f'시간: 첫 글 {first_ms if first_ms is not None else "-"}ms, 전체 {total_ms}ms',
     ]
 
@@ -95,7 +115,7 @@ async def try_once(
     꺼진 모델도 부른다(allow_disabled). 고르지 못하거나 부르다 실패하면 까닭만 돌려준다.
     """
     try:
-        provider = await router.provider_for(name, allow_disabled=True)
+        route = await router.route(name, allow_disabled=True)
     except ProviderError as error:
         return 1, [f'{name}: 부를 수 없다 ({error})']
     first = FirstText(started=time.perf_counter())
@@ -105,11 +125,11 @@ async def try_once(
         write(piece)
 
     try:
-        completion = await provider.complete(MESSAGES, params, on_text)
+        completion = await route.provider.complete(MESSAGES, params, on_text)
     except ProviderError as error:
         return 1, [f'{name}: 부르다 실패했다 ({error})']
     total_ms = round((time.perf_counter() - first.started) * 1000)
-    return 0, ['', *summary_lines(provider.kind, completion, total_ms, first.ms())]
+    return 0, ['', *summary_lines(route.provider.kind, completion, route.price, total_ms, first.ms())]
 
 
 def write_live(piece: str) -> None:

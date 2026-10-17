@@ -20,6 +20,7 @@ from app.ai.models import AiInvocation
 def to_row(record: CallRecord) -> AiInvocation:
     """기록을 DB 의 한 줄로 바꾼다. 아직 저장하지 않는다."""
     scope = record.scope
+    usage = record.usage
     return AiInvocation(
         purpose=scope.purpose,
         table_id=scope.table_id,
@@ -42,6 +43,12 @@ def to_row(record: CallRecord) -> AiInvocation:
         lore_entry_ids=list(record.lore_entry_ids),
         memory_rounds=list(record.memory_rounds),
         input_digest=record.input_digest,
+        cached_input_tokens=usage.cached_input_tokens,
+        cache_write_tokens=usage.cache_write_tokens,
+        reasoning_tokens=usage.reasoning_tokens,
+        model_slug=usage.model_slug,
+        cost_usd=usage.cost_usd,
+        cost_id=usage.cost_id,
     )
 
 

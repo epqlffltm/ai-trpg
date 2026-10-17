@@ -22,6 +22,7 @@ import hmac
 import json
 import uuid
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Protocol
 
 from app.ai.provider import ChatMessage, Reasoning
@@ -53,6 +54,29 @@ class CallScope:
 
 
 @dataclass(frozen=True)
+class CallUsage:
+    """
+    호출 한 번의 자세한 사용량과 원가. 모르면 None 이다.
+
+    토큰 수는 provider 가 알려 준 만큼이다(뜻은 app/ai/provider.py 의 Completion).
+    model_slug 는 모델 목록의 이름표다. 목록에 없는 모델(서버 곁의 모델)이면 None 이다.
+    cost_usd 는 그날의 단가로 센 원가(USD), cost_id 는 그 단가의 줄(ai_model_costs.id)이다.
+    단가가 없거나 답을 받지 못했으면 None.
+    """
+
+    cached_input_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    model_slug: str | None = None
+    cost_usd: Decimal | None = None
+    cost_id: int | None = None
+
+
+# 사용량을 모를 때. 모델 목록에 없는 모델을 부른 것이다
+NO_USAGE = CallUsage()
+
+
+@dataclass(frozen=True)
 class CallRecord:
     """
     AI 호출 한 번. 무엇을 위해, 어떤 조건으로 불렀고, 어떻게 끝났나.
@@ -64,6 +88,7 @@ class CallRecord:
     lore_entry_ids 는 프롬프트에 넣은 로어북 항목들이다(app/lore/retrieval.py). 검색이 맞는 것을 골랐는지 볼 근거다.
     memory_rounds 는 프롬프트에 넣은 지난 일(라운드의 번호)들이다(app/memory/retrieval.py).
     input_digest 는 보낸 메시지의 지문이다(input_digest 함수). 키가 없으면 None.
+    usage 는 자세한 사용량과 원가다(CallUsage, app/ai/costs.py 의 usage_of 가 만든다).
     """
 
     scope: CallScope
@@ -84,6 +109,7 @@ class CallRecord:
     lore_entry_ids: tuple[uuid.UUID, ...] = ()
     memory_rounds: tuple[int, ...] = ()
     input_digest: str | None = None
+    usage: CallUsage = NO_USAGE
 
 
 def input_digest(messages: list[ChatMessage], key: bytes | None) -> str | None:

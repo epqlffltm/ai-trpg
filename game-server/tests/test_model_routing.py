@@ -84,7 +84,8 @@ class FakeLookup:
     models: dict[str, CatalogModel] = field(default_factory=dict)
     found: list[str] = field(default_factory=list)
 
-    async def find(self, slug: str) -> CatalogModel | None:
+    async def find(self, slug: str, day: date) -> CatalogModel | None:
+        assert day == TODAY
         self.found.append(slug)
         return self.models.get(slug)
 
@@ -334,19 +335,19 @@ async def test_the_database_lookup_finds_a_plain_value(app, session: AsyncSessio
     await service.add_model(session, LUNA_ROW)
     lookup = DbModelLookup(app.state.session_factory)
 
-    found = await lookup.find('gpt-6-luna')
+    found = await lookup.find('gpt-6-luna', TODAY)
 
     # 세션과 떨어진 값이다. 나중에 캐시에 담아 여럿이 읽어도 된다
     assert found == replace(LUNA, enabled=False)
-    assert await lookup.find('gemma4:26b') is None
+    assert await lookup.find('gemma4:26b', TODAY) is None
 
 
 @pytest.mark.usefixtures('clean_tables')
 async def test_the_database_lookup_sees_a_change_at_once(app, session: AsyncSession):
     await service.add_model(session, LUNA_ROW)
     lookup = DbModelLookup(app.state.session_factory)
-    before = await lookup.find('gpt-6-luna')
+    before = await lookup.find('gpt-6-luna', TODAY)
 
     await service.update_model(session, 'gpt-6-luna', ModelUpdate(supports_temperature=True))
 
-    assert (before.supports_temperature, (await lookup.find('gpt-6-luna')).supports_temperature) == (False, True)
+    assert (before.supports_temperature, (await lookup.find('gpt-6-luna', TODAY)).supports_temperature) == (False, True)

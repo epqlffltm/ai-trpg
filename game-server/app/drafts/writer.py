@@ -19,6 +19,7 @@ import uuid
 from dataclasses import dataclass
 
 from app.ai.calls import CallLog, CallRecord, CallScope, Outcome, input_digest
+from app.ai.costs import PriceTag, usage_of
 from app.ai.provider import Completion, GenerationParams, LLMProvider, ProviderError
 from app.drafts.context import DraftContext, has_choices
 from app.drafts.output import OutputError, read_output
@@ -70,12 +71,14 @@ class DraftWriter:
     언어 모델로 장부 초안을 받는 것. provider 를 바꿔 끼우면 다른 모델이 고른다.
 
     log 는 호출을 기록하는 곳이다. 비워 둘 수 없다. digest_key 는 보낸 메시지의 지문(HMAC)을 만드는 키다.
+    price 는 모델 목록의 이름표와 그날의 단가다. 있으면 기록에 원가를 센다(app/ai/costs.py).
     """
 
     provider: LLMProvider
     log: CallLog
     params: GenerationParams = DRAFT_PARAMS
     digest_key: bytes | None = None
+    price: PriceTag | None = None
 
     def describe(
         self,
@@ -102,6 +105,7 @@ class DraftWriter:
             temperature=self.params.temperature,
             max_tokens=self.params.max_tokens,
             input_digest=digest,
+            usage=usage_of(completion, self.price),
         )
 
     async def draft(self, request: DraftRequest) -> Checked:
