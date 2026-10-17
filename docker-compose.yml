@@ -94,7 +94,7 @@ x-billing-environment: &billing-environment
   PORT: "8003"
 
 # 요청을 받지 않는 결제 프로세스(마이그레이션, 정리 작업, cron). 요청의 서명을 확인하는 비밀을 비운다.
-# 작업 명령의 설정(LoadJobs, LoadDatabase)은 이 셋을 읽지 않는다
+# 작업 명령의 설정(LoadJobs, LoadSweeper, LoadDatabase)은 이 셋을 읽지 않는다
 x-billing-without-request-secrets: &billing-without-request-secrets
   PG_WEBHOOK_SECRET: ""
   GAME_SERVER_SECRET: ""
@@ -418,10 +418,10 @@ services:
     restart: unless-stopped
     command: ["/app/sweeper"]
     env_file: ./billing-server/.env
-    # 결제 대행사를 부르지 않지만, 지금은 작업 명령의 설정(LoadJobs)이 결제 대행사의 키를 요구해 TOSS_SECRET_KEY 는 남긴다.
-    # 결제 세션이 정리 작업이 결제 설정을 읽지 않게 바꾸면 비운다
+    # 결제 대행사를 부르지 않는다. 설정(config.LoadSweeper)이 결제 대행사의 설정을 읽지 않아 TOSS_SECRET_KEY 도 비운다
     environment:
       <<: [*billing-environment, *billing-without-request-secrets]
+      TOSS_SECRET_KEY: ""
       HEARTBEAT_FILE: /tmp/heartbeat
     healthcheck: *worker-heartbeat
     depends_on:

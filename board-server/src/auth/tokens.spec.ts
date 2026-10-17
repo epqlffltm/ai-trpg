@@ -91,8 +91,37 @@ describe('buildAccessClaims', () => {
     expect(claims).toEqual({
       userId: USER_ID,
       expiresAt: new Date('2027-01-15T08:00:00.000Z'),
+      version: 0,
     });
   });
+
+  it('세션 버전(ver)을 꺼낸다. 없으면 0 이다', () => {
+    const claims = (ver?: unknown) =>
+      buildAccessClaims({
+        token_type: 'access',
+        sub: USER_ID,
+        exp: 1_800_000_000,
+        ...(ver === undefined ? {} : { ver }),
+      });
+
+    expect(claims(3).version).toBe(3);
+    expect(claims(0).version).toBe(0);
+    expect(claims().version).toBe(0);
+  });
+
+  it.each([-1, 1.5, '3', null, true])(
+    '세션 버전이 0 이상의 정수가 아니면 거부한다: %s',
+    (ver) => {
+      expect(() =>
+        buildAccessClaims({
+          token_type: 'access',
+          sub: USER_ID,
+          exp: 1_800_000_000,
+          ver,
+        }),
+      ).toThrow(InvalidTokenError);
+    },
+  );
 
   it('닉네임이 있으면 함께 꺼낸다', () => {
     const claims = buildAccessClaims({
