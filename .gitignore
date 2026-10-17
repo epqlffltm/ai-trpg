@@ -10,6 +10,9 @@ db.sqlite3
 keys/
 trpg_key.txt
 
+# DB 의 백업(docker-compose.yml 의 db-backup). 이메일, 비밀번호 해시, 결제 원장이 들어 있다
+/backups/
+
 # 커버리지를 잴 때 생기는 파일(파이썬의 coverage, Go 의 coverprofile)
 .coverage
 .coverage.*
