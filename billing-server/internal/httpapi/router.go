@@ -27,10 +27,12 @@ type Dependencies struct {
 	Verifier TokenVerifier
 	// Wallet 은 지갑을 읽는다.
 	Wallet WalletReader
+	// Eligibility 는 인증 서버가 알려 준 결제 자격을 받아 적는다.
+	Eligibility EligibilityRecorder
 	// Welcome 은 환영 크레딧을 준다. WelcomeCredits 는 그 양이다. 0 이면 주지 않는다.
 	Welcome        WelcomeGranter
 	WelcomeCredits credit.Amount
-	// Orders 는 주문을 만들고 치른다.
+	// Orders 는 주문을 만들고 치른다. 서버는 결제 자격으로 감싼 것(eligibility.Guard)을 넣는다.
 	Orders OrderService
 	// Notifier 는 결제 대행사의 알림을 처리한다.
 	Notifier PaymentNotifier
@@ -134,6 +136,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 
 	authServer := service.Group("", requireService(AuthServer, deps.AuthServerSecret, deps.Now))
 	authServer.POST("/grants/welcome", grantWelcome(deps.Welcome, deps.WelcomeCredits))
+	authServer.POST("/eligibility", recordEligibility(deps.Eligibility))
 
 	return router
 }
