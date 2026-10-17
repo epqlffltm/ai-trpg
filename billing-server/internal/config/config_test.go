@@ -298,12 +298,69 @@ func TestLoadJobsNeedsNoServerSettings(t *testing.T) {
 	}
 }
 
-func TestLoadJobsReadsTheHeartbeatFile(t *testing.T) {
-	jobs, err := config.LoadJobs(from(map[string]string{
-		"DATABASE_URL": databaseURL, "HEARTBEAT_FILE": "/tmp/heartbeat",
+func TestLoadSweeperNeedsNoPaymentSettings(t *testing.T) {
+	// 정리 작업은 결제 대행사를 부르지 않는다. 토스페이먼츠를 골라 두고 키를 주지 않아도, 운영에서 가짜를 골라도 뜬다
+	for name, values := range map[string]map[string]string{
+		"토스인데 키가 없다":  {"PAYMENT_PROVIDER": "toss"},
+		"토스인데 키가 틀렸다": {"PAYMENT_PROVIDER": "toss", "TOSS_SECRET_KEY": "live_sk_x", "TOSS_CLIENT_KEY": "nope"},
+		"운영인데 가짜다":    {"PAYMENT_PROVIDER": "fake", "APP_ENVIRONMENT": "production"},
+		"모르는 결제 대행사":  {"PAYMENT_PROVIDER": "nope"},
+	} {
+		values["DATABASE_URL"] = databaseURL
+		if _, err := config.LoadSweeper(from(values)); err != nil {
+			t.Errorf("%s: %v. 결제 대행사의 설정을 읽지 않아야 한다", name, err)
+		}
+	}
+}
+
+func TestLoadSweeperReadsWhatItUses(t *testing.T) {
+	sweeper, err := config.LoadSweeper(from(map[string]string{
+		"DATABASE_URL": databaseURL, "DB_SCHEMA": "billing_test", "HOLD_TTL": "2h", "SPEND_FREE_FIRST": "false",
+		"APP_ENVIRONMENT": "staging", "LOG_LEVEL": "debug", "HEARTBEAT_FILE": "/tmp/heartbeat",
 	}))
-	if err != nil || jobs.HeartbeatFile != "/tmp/heartbeat" {
-		t.Errorf("심장박동 파일 = %q, %v", jobs.HeartbeatFile, err)
+	if err != nil {
+		t.Fatalf("설정을 읽지 못했다: %v", err)
+	}
+	want := config.Sweeper{
+		Database: config.Database{URL: databaseURL, Schema: "billing_test"},
+		Logging:  config.Logging{AppEnvironment: "staging", AppVersion: "dev", LogLevel: "debug"},
+		Rules: config.Rules{
+			SpendFreeFirst: false, FreeCreditTTL: 30 * 24 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 24 * time.Hour,
+		},
+		HeartbeatFile: "/tmp/heartbeat",
+	}
+	if sweeper != want {
+		t.Errorf("설정 = %+v, 기대 = %+v", sweeper, want)
+	}
+}
+
+func TestLoadSweeperReadsTheSameRulesAsTheServer(t *testing.T) {
+	// 서버와 정리 작업의 규칙이 어긋나면 무료 크레딧과 홀드가 다르게 다뤄진다
+	values := required(map[string]string{
+		"SPEND_FREE_FIRST": "false", "FREE_CREDIT_TTL": "3h", "HOLD_TTL": "2h", "ORDER_TTL": "90m",
+		"APP_ENVIRONMENT": "staging", "APP_VERSION": "v1.2.3", "LOG_LEVEL": "error",
+	})
+	settings, serverErr := config.Load(from(values))
+	sweeper, sweeperErr := config.LoadSweeper(from(values))
+	if serverErr != nil || sweeperErr != nil {
+		t.Fatalf("설정을 읽지 못했다: %v, %v", serverErr, sweeperErr)
+	}
+	if settings.Rules() != sweeper.Rules || settings.Logging() != sweeper.Logging {
+		t.Errorf("서버 = %+v %+v, 정리 작업 = %+v %+v", settings.Rules(), settings.Logging(), sweeper.Rules, sweeper.Logging)
+	}
+}
+
+func TestLoadSweeperReportsEveryProblemAtOnce(t *testing.T) {
+	_, err := config.LoadSweeper(from(map[string]string{
+		"DB_SCHEMA": "NOPE", "HOLD_TTL": "nope", "ORDER_TTL": "1s", "SPEND_FREE_FIRST": "nope", "LOG_LEVEL": "loud",
+	}))
+	if err == nil {
+		t.Fatal("오류가 나야 하는데 나지 않았다")
+	}
+	for _, name := range []string{"DATABASE_URL", "DB_SCHEMA", "HOLD_TTL", "ORDER_TTL", "SPEND_FREE_FIRST", "LOG_LEVEL"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("오류에 %s 가 없다: %v", name, err)
+		}
 	}
 }
 
