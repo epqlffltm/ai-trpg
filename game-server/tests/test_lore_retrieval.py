@@ -53,7 +53,7 @@ from app.lore.retrieval import (
 )
 from app.main import API_PREFIX
 from app.rounds import prompt
-from app.rounds.llm_narrator import LLMNarrator
+from app.rounds.llm_narrator import NARRATION_PARAMS, LLMNarrator
 from app.rounds.narrator import Move, NarrationRequest
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -533,7 +533,7 @@ async def test_closing_a_round_puts_the_lore_in_the_prompt_and_the_record(
     dwarf_id = await entry_id(app, table, '드워프')
     assert dwarf_id in row.lore_entry_ids
     assert row.prompt_version == prompt.PROMPT_VERSION
-    assert (row.temperature, row.max_tokens) == (0.8, 800)
+    assert (row.temperature, row.max_tokens) == (NARRATION_PARAMS.temperature, NARRATION_PARAMS.max_tokens)
     assert row.input_digest is not None and len(row.input_digest) == 64
 
 

@@ -10,6 +10,10 @@ DB 를 모른다. 이미 읽어 온 테이블과 자리를 받아 보기만 한�
 
 import uuid
 
+from app.assets.models import NarrationStyle
+from app.assets.scenarios.snapshot import Snapshot
+from app.rounds.budget import story_fits
+from app.rounds.narration_request import to_story
 from app.rounds.tiers import NarrationTier
 from app.tables import sheets
 from app.tables.errors import Conflict, NotHostError, TableConflictError, TableNotFoundError, TableOptionError
@@ -39,6 +43,17 @@ def require_recruiting(table: GameTable) -> None:
     """테이블이 모집 중인지 확인한다. 아니면 TableConflictError."""
     if table.status != TableStatus.RECRUITING:
         raise TableConflictError(Conflict.NOT_RECRUITING)
+
+
+def require_story_fits(table: GameTable, snapshot: Snapshot) -> None:
+    """
+    판의 작가 글(진행 지침, 세계관, GM 메모)이 서술의 입력 예산 안에 드는지 확인한다. 아니면 TableConflictError.
+
+    작가의 글은 라운드마다 통째로 들어간다(app/rounds/budget.py). 예산을 혼자 넘으면 어느 라운드든 판 값보다 비싸다.
+    시작할 때 막는다. 라운드 중간에 서술이 실패하는 것보다 낫고, 아직 아무도 값을 내지 않았다.
+    """
+    if not story_fits(to_story(snapshot), NarrationStyle(table.narration_style)):
+        raise TableConflictError(Conflict.STORY_TOO_LONG)
 
 
 def require_choosing(table: GameTable, member: TableMember) -> None:

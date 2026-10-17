@@ -50,6 +50,7 @@ class AiInvocation(Base):
             name='token_details_not_negative',
         ),
         CheckConstraint('cost_usd >= 0', name='cost_not_negative'),
+        CheckConstraint('input_chars >= 0', name='input_chars_not_negative'),
         # "이 테이블의 호출들"을 시간 순서로 찾는다
         Index('ix_ai_invocations_table_id_created_at', 'table_id', 'created_at'),
         # 보관 기간이 지난 원문을 오래된 것부터 찾는다(app/ai/retention.py). 원문이 남은 줄만 색인에 든다.
@@ -114,3 +115,8 @@ class AiInvocation(Base):
     # 단가의 줄에 외래 키를 걸지 않는다. 기록은 무엇보다 오래 산다(위의 규칙). 단가의 줄도 지우지 않는다
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 8))
     cost_id: Mapped[int | None] = mapped_column(Integer)
+
+    # 보낸 메시지의 글자 수의 합. 위의 입력 토큰 수와 나란히 놓아 모델마다 글자당 토큰 수를 잰다.
+    # 서술의 입력 예산은 글자 수로 어림한다(app/rounds/budget.py). 그 비율을 이 기록으로 고친다.
+    # 이 칸이 생기기 전의 줄은 비어 있다
+    input_chars: Mapped[int | None] = mapped_column(Integer)

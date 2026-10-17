@@ -15,11 +15,20 @@ from decimal import Decimal
 import httpx
 from pydantic import SecretStr
 
-from app.ai.provider import GenerationParams, Reasoning
+from app.ai.calls import chars_of
+from app.ai.provider import ChatMessage, GenerationParams, Reasoning, Role
 from app.ai.routing import Endpoint, ModelRouter
 from app.catalog.lookup import CatalogModel, UnitCost
 from app.catalog.models import Provider, TokenLimitField
-from scripts.try_model import DEFAULT_MAX_TOKENS, build_parser, params_of, try_once
+from scripts.try_model import (
+    DEFAULT_MAX_TOKENS,
+    MESSAGES,
+    build_parser,
+    messages_of,
+    params_of,
+    read_text,
+    try_once,
+)
 
 TODAY = date(2026, 10, 17)
 KEY = 'sk-test'
@@ -122,3 +131,29 @@ async def test_a_model_outside_the_catalog_has_no_cost():
     _, lines = await try_once(router_with(LUNA, answer()), 'gemma4:26b', PARAMS, lambda piece: None)
 
     assert lines[3] == '원가: 모델 목록에 없는 모델이라 세지 않는다'
+
+
+async def test_the_characters_sent_and_the_tokens_per_character_are_shown():
+    code, lines = await try_once(router_with(LUNA, answer()), 'gpt-6-luna', PARAMS, lambda piece: None)
+
+    # 서술의 입력 예산은 글자 수로 어림한다. 이 줄로 모델마다 글자당 토큰 수를 잰다
+    chars = chars_of(MESSAGES)
+    assert code == 0
+    assert lines[5] == f'보낸 글자: {chars}자, 글자당 입력 토큰 {60 / chars:.2f}'
+
+
+async def test_a_long_text_is_sent_after_the_system_line(tmp_path):
+    path = tmp_path / 'long.txt'
+    path.write_text('고속도로가 끝없이 이어진다. ' * 100, encoding='utf-8')
+
+    messages = messages_of(read_text(path))
+    code, lines = await try_once(router_with(LUNA, answer()), 'gpt-6-luna', PARAMS, lambda piece: None, messages)
+
+    # 짧은 예시는 역할의 머리 같은 고정 토큰이 커서 비율이 부풀어 보인다. 긴 글로 잰다
+    assert messages == [MESSAGES[0], ChatMessage(Role.USER, path.read_text(encoding='utf-8'))]
+    assert lines[5].startswith(f'보낸 글자: {chars_of(messages)}자, ')
+    assert build_parser().parse_args(['gpt-6-luna', '--text-file', str(path)]).text_file == path
+
+
+def test_without_a_text_file_the_example_scene_is_sent():
+    assert messages_of(read_text(None)) == MESSAGES

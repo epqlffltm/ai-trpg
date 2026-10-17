@@ -24,6 +24,8 @@ from app.assets.models import (
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
     TABLE_MAX_PLAYERS,
+    WORLD_GM_NOTES_MAX_LENGTH,
+    WORLD_SETTING_MAX_LENGTH,
     Asset,
     AssetType,
     Scenario,
@@ -792,6 +794,25 @@ async def test_starts_when_everyone_has_a_character(client: AsyncClient, me: dic
     assert started.json()['started_at'] is not None
     assert again.status_code == status.HTTP_409_CONFLICT
     assert again.json()['reason'] == 'not_recruiting'
+
+
+async def test_a_story_over_the_narration_budget_does_not_start(client: AsyncClient, me: dict[str, str]):
+    long_world = {
+        'title': '세계관',
+        'setting': '가' * WORLD_SETTING_MAX_LENGTH,
+        'gm_notes': '나' * WORLD_GM_NOTES_MAX_LENGTH,
+    }
+    world = (await client.post(WORLDS_URL, json=long_world, headers=me)).json()
+    table = await open_table(client, me, world_id=world['id'])
+    await set_character(client, me, table, pregen_index=0)
+
+    refused = await client.post(table_url(table, '/start'), headers=me)
+
+    # 작가의 글은 라운드마다 통째로 들어간다. 판매가의 입력 예산을 혼자 넘으면 어느 라운드든 판 값보다 비싸다.
+    # 아직 아무도 값을 내지 않은 시작 때 막는다(app/rounds/budget.py)
+    assert refused.status_code == status.HTTP_409_CONFLICT
+    assert refused.json()['reason'] == 'story_too_long'
+    assert (await read(client, me, table))['status'] == 'recruiting'
 
 
 async def test_ends_the_table(client: AsyncClient, me: dict[str, str], friend: dict[str, str]):
