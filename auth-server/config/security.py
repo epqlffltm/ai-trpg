@@ -13,6 +13,8 @@ HTTPS 로 넘기기(SECURE_SSL_REDIRECT)와 HSTS 는 여기서 하지 않는다.
 그래서 manage.py check --deploy 의 두 경고(W004, W008)는 이유를 적어 끈다(SILENCED_DEPLOY_CHECKS).
 """
 
+import re
+
 from django.core.exceptions import ImproperlyConfigured
 
 from config.mail_backends import PRODUCTION
@@ -55,6 +57,54 @@ def require_secure_refresh_cookie(secure: bool, environment: str) -> None:
         raise ImproperlyConfigured(
             '운영 환경(APP_ENVIRONMENT=production)에서는 REFRESH_COOKIE_SECURE 를 끌 수 없습니다.'
         )
+
+
+# 개발 환경에서 REFRESH_COOKIE_ALLOWED_ORIGINS 를 적지 않았을 때 허용하는 출처.
+# docker compose 의 nginx 주소(PROXY_PORT 의 기본값 8080)다. 운영에는 기본값이 없다
+DEVELOPMENT_COOKIE_ORIGINS = ('http://localhost:8080', 'http://127.0.0.1:8080')
+
+# 출처는 "scheme://host[:port]" 다. 경로, 물음표, 사용자 정보는 들어가지 않는다(브라우저의 Origin 머리말과 같은 모양).
+# 호스트는 도메인, IPv4, 대괄호로 싼 IPv6 다
+ORIGIN_PATTERN = re.compile(r'https?://(?:[a-z0-9.-]+|\[[0-9a-f:.]+\])(?::[0-9]{1,5})?')
+
+
+def default_cookie_origins(environment: str) -> list[str]:
+    """REFRESH_COOKIE_ALLOWED_ORIGINS 를 적지 않았을 때의 값. 운영이면 비어 있다(그러면 뜨지 않는다)."""
+    if is_production(environment):
+        return []
+    return list(DEVELOPMENT_COOKIE_ORIGINS)
+
+
+def parse_cookie_origin(value: str) -> str:
+    """
+    설정에 적힌 출처 하나를 브라우저가 보내는 모양(소문자, 끝의 / 없음)으로 바꾼다. 모양이 틀리면 뜨지 않는다.
+
+    끝의 / 는 떼어 준다. 브라우저의 Origin 에는 붙지 않아 그대로 두면 영영 맞지 않는다.
+    경로가 붙은 값은 고쳐 주지 않고 거부한다. 무엇을 뜻했는지 짐작하지 않는다.
+    """
+    origin = value.strip().lower().removesuffix('/')
+    if not ORIGIN_PATTERN.fullmatch(origin):
+        raise ImproperlyConfigured(
+            f'REFRESH_COOKIE_ALLOWED_ORIGINS 의 값은 https://example.com 처럼 경로 없이 적습니다: {value!r}'
+        )
+    return origin
+
+
+def require_cookie_origins(origins: list[str], environment: str) -> None:
+    """
+    refresh 쿠키를 받을 출처의 목록을 확인한다. 비어 있거나 운영인데 https 가 아닌 것이 있으면 뜨지 않는다.
+
+    비어 있으면 refresh 와 logout 이 늘 거부된다. 운영에서 http 출처를 허용하면 쿠키를 쓰는 요청을
+    평문 페이지가 보낼 수 있다.
+    """
+    if not origins:
+        raise ImproperlyConfigured('REFRESH_COOKIE_ALLOWED_ORIGINS 가 비어 있습니다. 화면을 여는 주소를 적습니다.')
+    if is_production(environment):
+        insecure = [origin for origin in origins if not origin.startswith('https://')]
+        if insecure:
+            raise ImproperlyConfigured(
+                f'운영 환경에서는 REFRESH_COOKIE_ALLOWED_ORIGINS 에 https 출처만 적습니다: {", ".join(insecure)}'
+            )
 
 
 def proxy_ssl_header(trusted_proxy_count: int) -> tuple[str, str] | None:
