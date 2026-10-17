@@ -5,9 +5,10 @@
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
 #     prepare      설정 파일(.env 다섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
-#     up           이미지를 만들고 띄운 뒤, 서버 넷과 프록시, 워커 셋이 healthy 가 될 때까지 기다린다.
+#     up           이미지를 만들고 띄운 뒤, 서버 넷과 프록시, 상태 확인이 있는 워커가 healthy 가 될 때까지 기다린다.
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
-#                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다
+#                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
+#                  DB 의 백업은 최근 백업 파일이 있으면 healthy 다
 #     check        마이그레이션이 성공했는지, 서버마다 준비됐는지(/health/ready), 서버끼리 닿는지, root 가 아닌지,
 #                  이미지에 .env 가 없는지 본다. 비밀이 그것을 쓰는 프로세스에만 가는지도 본다(secret_scope.py).
 #                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다
@@ -27,9 +28,9 @@ SERVERS=(auth game board billing)
 # 서버마다 컨테이너 안에서 듣는 포트
 declare -A PORTS=([auth]=8000 [game]=8001 [board]=8002 [billing]=8003)
 # 계속 도는 워커와 주기 명령의 컨테이너
-WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron)
-# 그 가운데 심장박동으로 상태를 알리는 워커(docker-compose.yml 의 x-worker-heartbeat)
-HEARTBEAT_WORKERS=(auth-mail auth-welcome-credits billing-sweeper)
+WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron db-backup)
+# 그 가운데 상태 확인이 있는 워커. 심장박동(docker-compose.yml 의 x-worker-heartbeat)을 보거나, DB 의 백업은 최근 백업 파일을 본다
+HEARTBEAT_WORKERS=(auth-mail auth-welcome-credits billing-sweeper db-backup)
 # 서명 개인키를 받지 않는 인증의 프로세스(#274). 키 폴더는 auth-server 에만 붙는다
 KEYLESS=(auth-migrate auth-mail auth-welcome-credits auth-cron)
 # 주기 명령의 컨테이너와 그 crontab
@@ -145,7 +146,7 @@ wait_healthy() {
       [[ "$(health_of "$service")" == "healthy" ]] || pending=$((pending + 1))
     done
     if ((pending == 0)); then
-      echo "서버 넷과 프록시, 워커 셋이 healthy 다"
+      echo "서버 넷과 프록시, 상태 확인이 있는 워커가 healthy 다"
       return 0
     fi
     sleep 3
@@ -263,6 +264,18 @@ secret_scope_rules_hold() {
   PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_secret_scope.py'
 }
 
+# 지금의 DB 를 뜨고, 그 백업을 같은 DB 서버의 빈 DB 에 풀어 표마다 줄 수가 같은지 본다(docker/backup/db-backup.sh).
+# 처음 뜬 백업은 마이그레이션이 끝나기 전의 것일 수 있다. 그래서 마이그레이션이 끝난 지금 다시 뜬다
+backup_restores() {
+  compose exec -T db-backup sh /usr/local/bin/db-backup.sh once &&
+    compose exec -T db-backup sh /usr/local/bin/db-backup.sh check
+}
+
+# 백업 파일을 주인만 읽는가. 이메일, 비밀번호 해시, 결제 원장이 들어 있다
+backup_private() {
+  [[ -z "$(compose exec -T db-backup find /backups -maxdepth 1 -name 'trpg-*.dump' ! -perm 600)" ]]
+}
+
 # 컨테이너에 서명 개인키의 폴더가 붙지 않았는가. 끝난 컨테이너(마이그레이션)도 본다
 no_signing_key_mounted() {
   ! docker inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$(container_of "$1")" | grep -qx /app/keys
@@ -304,6 +317,8 @@ check() {
   for service in "${KEYLESS[@]}"; do
     report "$service 에 서명 개인키가 붙지 않았다" no_signing_key_mounted "$service"
   done
+  report "백업을 빈 DB 에 풀면 원본과 같다" backup_restores
+  report "백업 파일을 주인만 읽는다" backup_private
   check_workers
   finish
 }
