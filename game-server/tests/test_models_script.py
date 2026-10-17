@@ -178,3 +178,38 @@ async def test_an_update_with_nothing_to_change_is_refused(session: AsyncSession
 
     assert code == 1
     assert '바꿀 것이 없다' in lines[0]
+
+
+# --- 날짜판 ---
+
+
+async def test_switching_the_snapshot_says_the_model_is_off(session: AsyncSession):
+    await run(session, *ADD_LUNA)
+
+    code, lines = await run(
+        session, 'switch-snapshot', 'gpt-6-luna', '--api-model-id', 'gpt-6-luna-2026-12-01', '--note', '공지'
+    )
+
+    assert code == 0
+    assert lines == [
+        'gpt-6-luna: 날짜판을 gpt-6-luna-2026-12-01 로 바꿨다. 꺼져 있다',
+        '평가 장면(말투 검사 포함)을 다시 통과하면 켠다(enable)',
+    ]
+
+
+async def test_show_prints_the_switches(session: AsyncSession):
+    await run(session, *ADD_LUNA)
+    await run(session, 'switch-snapshot', 'gpt-6-luna', '--api-model-id', 'gpt-6-luna-2026-12-01', '--note', '공지')
+
+    _, lines = await run(session, 'show', 'gpt-6-luna')
+
+    assert lines[-2] == '날짜판을 바꾼 일:'
+    assert lines[-1].endswith(': gpt-6-luna-2026-09-22 → gpt-6-luna-2026-12-01, 공지')
+
+
+async def test_switching_to_the_same_snapshot_says_why(session: AsyncSession):
+    await run(session, *ADD_LUNA)
+
+    code, lines = await run(session, 'switch-snapshot', 'gpt-6-luna', '--api-model-id', 'gpt-6-luna-2026-09-22')
+
+    assert (code, lines) == (1, ['gpt-6-luna: 지금과 같은 날짜판이다'])

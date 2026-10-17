@@ -1803,16 +1803,18 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 
 ## 모델 목록
 
-서술에 쓸 수 있는 언어 모델들과 모델마다의 원가 단가를 DB 에 둔다(`app/catalog/`). 표는 둘이다.
+서술에 쓸 수 있는 언어 모델들과 모델마다의 원가 단가를 DB 에 둔다(`app/catalog/`). 표는 셋이다.
 
 | 표 | 무엇 | 규칙 |
 | --- | --- | --- |
 | `ai_models` | 모델 하나에 한 줄. 이름표(slug), 창구(provider), API 모델 이름, 보이는 이름, 회사, 분류, 받는 것, 켜짐, 은퇴일 | 지우지 않는다. 끄거나 은퇴일을 적는다 |
 | `ai_model_costs` | 원가 단가(USD, 백만 토큰당). 입력, 출력, 캐시 읽기, 캐시 쓰기와 시작하는 날, 확인한 날 | 덧붙이기만 한다 |
+| `ai_model_snapshots` | 날짜판(API 모델 이름)을 바꾼 기록. 앞의 이름, 새 이름, 덧붙인 말, 바꾼 때 | 덧붙이기만 한다 |
 
 - **판매가는 여기 없다.** 1인 1라운드에 몇 크레딧인지는 결제 서버의 가격표(`price_versions`, `billing-server` 의 `cmd/prices`)가 정한다. 여기는 공급자에게 내는 값이다. 판매가가 맞는지 볼 때와 실제 사용량의 원가를 잴 때 쓴다.
 - **이름표**는 영어 소문자, 숫자, 붙임표다(`gpt-6-luna`). 점은 쓰지 않는다. 결제 서버의 가격 코드(`narration.<이름표>.i0.o0`)에서 점이 칸을 나눈다. 48자까지다.
-- **이름표, 창구, API 모델 이름은 바꾸지 않는다.** API 모델 이름에는 날짜가 붙은 이름(스냅숏)을 적는다. 별칭은 공급자가 말없이 다른 모델로 돌려 서술의 목소리가 바뀐다. 새 스냅숏은 새 이름표로 넣는다.
+- **이름표는 상품 이름이다**(API 모델 이름에서 날짜를 빼고 점을 붙임표로: `gpt-6-1-sol`, `claude-opus-5-5`). 이름표와 창구는 바꾸지 않는다.
+- **API 모델 이름에는 날짜가 붙은 이름(날짜판)을 적는다.** 별칭은 공급자가 말없이 다른 모델로 돌려 서술의 목소리가 바뀐다. 공급자가 새 날짜판을 내면 이름표와 값은 그대로 두고 날짜판만 `switch-snapshot` 으로 바꾼다. 바꾸면 기록이 남고 모델이 꺼진다. 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다. `update` 로는 날짜판을 바꾸지 못한다. 둘이 동시에 바꿔도 기록이 끊기지 않게 모델의 줄을 잠그고 바꾼다.
 - **창구**는 `openai`, `anthropic`, `gemini`, `local`(서버 곁의 Ollama, LM Studio)이다. 새 창구는 부르는 코드와 마이그레이션이 함께 있어야 한다.
 - **분류**(`basic`, `standard`, `premium`)는 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 정한다. 회사(`vendor`)가 그 안의 소분류다.
 - **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나. 칸은 `openai`, `local` 창구만 적는다.
@@ -1833,12 +1835,14 @@ uv run python -m scripts.models add gpt-6-luna --provider openai --api-model-id 
 uv run python -m scripts.models set-cost gpt-6-luna --input 0.1 --output 0.5 --from 2026-10-17
 uv run python -m scripts.models set-cost gpt-5-6-sol --input 5 --output 30 --from 2026-11-21 --note "행사가 끝남"
 uv run python -m scripts.models update gpt-6-luna --no-temperature
+uv run python -m scripts.models switch-snapshot gpt-6-luna --api-model-id <새 날짜판> --note "공급자 공지"
 uv run python -m scripts.models enable gpt-6-luna
 uv run python -m scripts.models disable gpt-6-luna
 uv run python -m scripts.models retire gpt-6-luna --on 2027-06-01
 uv run python -m scripts.models retire gpt-6-luna --cancel
 ```
 
+- `show` 는 받는 것, 단가들(앞으로 쓸 것까지), 날짜판을 바꾼 일들을 찍는다.
 - `list` 는 모델마다 분류, 회사, 상태(켜짐, 꺼짐, 은퇴), 그날의 단가와 1라운드 원가 어림(입력 12,000, 출력 1,200 토큰, 1달러 1,500원)을 찍는다.
 - 거절되면(없는 모델, 틀린 모양, 원가 없이 켜기) 까닭을 찍고 1 로 끝난다.
 - 일은 모두 `app/catalog/service.py` 의 함수가 한다. 나중에 관리 서버가 생기면 같은 함수를 관리 API 로 연다.

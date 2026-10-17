@@ -23,7 +23,7 @@ from app.ai.calls import CallRecord, CallScope, Outcome
 from app.ai.provider import Reasoning
 from app.catalog import service as catalog
 from app.catalog.models import Grade, Provider
-from app.catalog.schemas import CostCreate, ModelCreate
+from app.catalog.schemas import CostCreate, ModelCreate, SnapshotSwitch
 from app.drafts.models import DraftKind, LedgerDraft
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
@@ -101,7 +101,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     퀘스트도 같은 까닭으로 직접 넣는다(사건 항목). 서 본 곳과 찾은 길도 같다(장소 항목).
     몬스터의 상태도 같다. 조우를 적으려면 장소 항목과 시작 장소가 있어야 한다.
     장부 초안도 직접 넣는다. 테스트의 서술자는 초안을 쓰지 않는다.
-    모델 목록과 원가도 직접 넣는다. API 가 없고 관리 명령(scripts/models.py)으로만 생긴다.
+    모델 목록과 원가, 날짜판을 바꾼 기록도 직접 넣는다. API 가 없고 관리 명령(scripts/models.py)으로만 생긴다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
     지난 라운드의 벡터는 다음 서술을 맡길 때 생긴다. 혼자 앉은 테이블이라 선언하면 라운드가 닫히고 서술된다.
     서술을 기다린 뒤 색인을 직접 돌린다.
@@ -183,6 +183,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     async with app.state.session_factory() as session:
         await catalog.add_model(session, CATALOG_MODEL)
         await catalog.add_cost(session, CATALOG_MODEL.slug, CATALOG_COST)
+        await catalog.switch_snapshot(session, CATALOG_MODEL.slug, SnapshotSwitch(api_model_id='gemma4:31b'))
 
 
 def test_tables_that_point_are_cleared_before_the_tables_they_point_to():

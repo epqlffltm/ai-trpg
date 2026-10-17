@@ -3,7 +3,7 @@
 """
 모델 목록(ai_models, ai_model_costs)을 읽고 적는 SQL. 커밋하지 않는다.
 
-원가 단가는 적기만 한다. 고치거나 지우는 함수를 두지 않는다(app/catalog/models.py).
+원가 단가와 날짜판을 바꾼 기록은 적기만 한다. 고치거나 지우는 함수를 두지 않는다(app/catalog/models.py).
 """
 
 from datetime import date
@@ -12,12 +12,17 @@ from sqlalchemy import Select, exists, select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalog.models import AiModel, AiModelCost
+from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot
 
 
 async def get_model(session: AsyncSession, slug: str) -> AiModel | None:
     """그 이름표의 모델. 없으면 None."""
     return await session.get(AiModel, slug)
+
+
+async def lock_model(session: AsyncSession, slug: str) -> AiModel | None:
+    """그 이름표의 모델을 잠그고 읽는다. 트랜잭션이 끝날 때까지 다른 쪽은 기다린다. 없으면 None."""
+    return await session.get(AiModel, slug, with_for_update=True, populate_existing=True)
 
 
 async def list_models(session: AsyncSession) -> list[AiModel]:
@@ -70,3 +75,15 @@ async def cost_history(session: AsyncSession, slug: str) -> list[AiModelCost]:
     """그 모델의 단가들. 앞으로 쓸 것까지 모두, 늦게 시작하는 것부터."""
     query = select(AiModelCost).where(AiModelCost.model_slug == slug)
     return list(await session.scalars(latest_first(query)))
+
+
+async def add_snapshot(session: AsyncSession, snapshot: AiModelSnapshot) -> None:
+    """날짜판을 바꾼 일을 적는다."""
+    session.add(snapshot)
+    await session.flush()
+
+
+async def snapshot_history(session: AsyncSession, slug: str) -> list[AiModelSnapshot]:
+    """그 모델의 날짜판을 바꾼 일들. 나중에 바꾼 것부터."""
+    query = select(AiModelSnapshot).where(AiModelSnapshot.model_slug == slug).order_by(AiModelSnapshot.id.desc())
+    return list(await session.scalars(query))
