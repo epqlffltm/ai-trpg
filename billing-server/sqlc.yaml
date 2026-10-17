@@ -128,3 +128,16 @@ sql:
               type: Amount
               pointer: true
             nullable: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/pricereview/queries.sql
+    gen:
+      go:
+        package: pricereviewdb
+        out: internal/pricereview/pricereviewdb
+        sql_package: pgx/v5
+        # 이 패키지의 쿼리가 쓰지 않는 테이블의 구조체는 만들지 않는다
+        omit_unused_structs: true
+        overrides:
+          - db_type: timestamptz
+            go_type: time.Time

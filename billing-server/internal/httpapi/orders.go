@@ -195,9 +195,14 @@ func orderIDParam(c *gin.Context) (uuid.UUID, bool) {
 
 // readJSON 은 요청의 본문을 target 에 읽는다. 읽지 못하면 400 으로 답하고 false 를 돌려준다.
 func readJSON(c *gin.Context, target any) bool {
+	return readJSONWithCode(c, target, "")
+}
+
+// readJSONWithCode 는 readJSON 과 같되, 읽지 못했을 때의 400 에 오류의 이름(code)을 싣는다. 우리 서버들이 부르는 주소가 쓴다.
+func readJSONWithCode(c *gin.Context, target any, code string) bool {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBodyBytes)
 	if err := c.ShouldBindJSON(target); err != nil {
-		badRequest(c, "요청의 본문을 JSON 으로 읽지 못했습니다.")
+		abort(c, http.StatusBadRequest, code, "요청의 본문을 JSON 으로 읽지 못했습니다.")
 		return false
 	}
 	return true

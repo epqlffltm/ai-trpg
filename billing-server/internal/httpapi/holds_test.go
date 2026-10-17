@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -210,33 +211,66 @@ func TestExtendingAHoldAnswersWithTheNewExpiry(t *testing.T) {
 	}
 }
 
-func TestHoldErrorsBecomeStatusCodes(t *testing.T) {
+// errorOf 는 오류 응답의 본문을 읽는다.
+func errorOf(t *testing.T, response *httptest.ResponseRecorder) map[string]string {
+	t.Helper()
+	var got map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatalf("오류 응답이 JSON 이 아니다: %s", body(response))
+	}
+	return got
+}
+
+func TestHoldErrorsBecomeStatusCodesAndNames(t *testing.T) {
 	cases := map[string]struct {
-		url  string
-		text string
-		err  error
-		want int
+		url    string
+		text   string
+		err    error
+		status int
+		code   string
 	}{
-		"이름표의 모양이 틀렸다":     {holdsURL, holdText, hold.ErrInvalidReference, http.StatusBadRequest},
-		"가격표에 없는 이름이다":     {holdsURL, holdText, hold.ErrUnknownPrice, http.StatusBadRequest},
-		"크레딧이 모자란다":        {holdsURL, holdText, wallet.ErrInsufficient, http.StatusPaymentRequired},
-		"이름표를 다른 사용자에게 썼다": {holdsURL, holdText, hold.ErrReferenceReused, http.StatusConflict},
-		"확정할 홀드가 없다":       {captureURL, settleText, hold.ErrNotFound, http.StatusNotFound},
-		"돌려줄 홀드가 없다":       {releaseURL, settleText, hold.ErrNotFound, http.StatusNotFound},
-		"돌려준 것을 확정한다":      {captureURL, settleText, hold.ErrAlreadyReleased, http.StatusConflict},
-		"확정한 것을 돌려 달라고 한다": {releaseURL, settleText, hold.ErrAlreadyCaptured, http.StatusConflict},
-		"연장할 홀드가 없다":       {extendURL, settleText, hold.ErrNotFound, http.StatusNotFound},
-		"확정한 것을 연장한다":      {extendURL, settleText, hold.ErrAlreadyCaptured, http.StatusConflict},
-		"돌려준 것을 연장한다":      {extendURL, settleText, hold.ErrAlreadyReleased, http.StatusConflict},
+		"이름표의 모양이 틀렸다":     {holdsURL, holdText, hold.ErrInvalidReference, http.StatusBadRequest, "hold.invalid_request"},
+		"가격표에 없는 이름이다":     {holdsURL, holdText, hold.ErrUnknownPrice, http.StatusBadRequest, "price.unknown"},
+		"판매를 멈춘 이름이다":      {holdsURL, holdText, hold.ErrPriceNotForSale, http.StatusBadRequest, "price.not_for_sale"},
+		"크레딧이 모자란다":        {holdsURL, holdText, wallet.ErrInsufficient, http.StatusPaymentRequired, "credit.insufficient"},
+		"이름표를 다른 사용자에게 썼다": {holdsURL, holdText, hold.ErrReferenceReused, http.StatusConflict, "hold.reference_reused"},
+		"확정할 홀드가 없다":       {captureURL, settleText, hold.ErrNotFound, http.StatusNotFound, "hold.not_found"},
+		"돌려줄 홀드가 없다":       {releaseURL, settleText, hold.ErrNotFound, http.StatusNotFound, "hold.not_found"},
+		"돌려준 것을 확정한다":      {captureURL, settleText, hold.ErrAlreadyReleased, http.StatusConflict, "hold.already_released"},
+		"확정한 것을 돌려 달라고 한다": {releaseURL, settleText, hold.ErrAlreadyCaptured, http.StatusConflict, "hold.already_captured"},
+		"연장할 홀드가 없다":       {extendURL, settleText, hold.ErrNotFound, http.StatusNotFound, "hold.not_found"},
+		"확정한 것을 연장한다":      {extendURL, settleText, hold.ErrAlreadyCaptured, http.StatusConflict, "hold.already_captured"},
+		"돌려준 것을 연장한다":      {extendURL, settleText, hold.ErrAlreadyReleased, http.StatusConflict, "hold.already_released"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			response := asGame(t, holdDeps(&fakeHolds{err: tc.err}), tc.url, tc.text)
 
-			if response.Code != tc.want || !strings.Contains(body(response), `"detail":"`) {
-				t.Errorf("상태 코드 = %d, 본문 = %s. 기대 = %d", response.Code, body(response), tc.want)
+			got := errorOf(t, response)
+			if response.Code != tc.status || got["code"] != tc.code || got["detail"] != tc.err.Error()+"." {
+				t.Errorf("상태 코드 = %d, 본문 = %s. 기대 = %d, %s", response.Code, body(response), tc.status, tc.code)
 			}
 		})
+	}
+}
+
+func TestWrappedHoldErrorsKeepTheirName(t *testing.T) {
+	// 서비스가 오류를 감싸 올려도 이름은 같다
+	wrapped := fmt.Errorf("홀드를 걸지 못했다: %w", hold.ErrPriceNotForSale)
+
+	response := asGame(t, holdDeps(&fakeHolds{err: wrapped}), holdsURL, holdText)
+
+	if got := errorOf(t, response); response.Code != http.StatusBadRequest || got["code"] != "price.not_for_sale" {
+		t.Errorf("상태 코드 = %d, 본문 = %s", response.Code, body(response))
+	}
+}
+
+func TestServerSideHoldErrorsHaveNoName(t *testing.T) {
+	// 5xx 에는 이름이 없다. 부르는 서버는 같은 요청을 다시 보낸다
+	response := asGame(t, holdDeps(&fakeHolds{err: errors.New("db")}), holdsURL, holdText)
+
+	if _, named := errorOf(t, response)["code"]; response.Code != http.StatusInternalServerError || named {
+		t.Errorf("상태 코드 = %d, 본문 = %s", response.Code, body(response))
 	}
 }
 
@@ -276,8 +310,8 @@ func TestSignedButUnusableHoldRequestsAreBadRequests(t *testing.T) {
 
 			response := asGame(t, holdDeps(holds), tc.url, tc.text)
 
-			if response.Code != http.StatusBadRequest || holds.calls != 0 {
-				t.Errorf("상태 코드 = %d, 서비스를 부른 횟수 = %d", response.Code, holds.calls)
+			if response.Code != http.StatusBadRequest || holds.calls != 0 || errorOf(t, response)["code"] != "hold.invalid_request" {
+				t.Errorf("상태 코드 = %d, 본문 = %s, 서비스를 부른 횟수 = %d", response.Code, body(response), holds.calls)
 			}
 		})
 	}
@@ -326,7 +360,7 @@ func TestRequestsWithoutAValidServiceSignatureAreUnauthorized(t *testing.T) {
 				t.Errorf("상태 코드 = %d, 서비스를 부른 횟수 = %d. 401 이고 부르지 않아야 한다", response.Code, holds.calls)
 			}
 			// 무엇이 틀렸는지 말하지 않는다
-			if want := `{"detail":"요청의 서명이 맞지 않습니다."}`; body(response) != want {
+			if want := `{"detail":"요청의 서명이 맞지 않습니다.","code":"service.bad_signature"}`; body(response) != want {
 				t.Errorf("본문 = %s", body(response))
 			}
 		})

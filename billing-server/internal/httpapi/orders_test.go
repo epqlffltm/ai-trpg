@@ -268,6 +268,10 @@ func TestBadBodiesAreRejectedBeforeTheService(t *testing.T) {
 				if response.Code != http.StatusBadRequest || orders.calls != 0 {
 					t.Errorf("%s: 상태 코드 = %d, 서비스를 부른 횟수 = %d", path, response.Code, orders.calls)
 				}
+				// 사용자가 부르는 주소의 오류에는 이름(code)이 없다. 우리 서버들이 부르는 주소에만 싣는다
+				if strings.Contains(body(response), `"code"`) {
+					t.Errorf("%s: 사용자 주소의 오류에 이름이 실렸다: %s", path, body(response))
+				}
 			}
 		})
 	}

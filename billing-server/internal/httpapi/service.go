@@ -33,13 +33,13 @@ func requireService(name string, secret string, now func() time.Time) gin.Handle
 	return func(c *gin.Context) {
 		raw, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodyBytes))
 		if err != nil {
-			badRequest(c, "요청의 본문을 읽지 못했습니다.")
+			abort(c, http.StatusBadRequest, codeServiceBadRequest, "요청의 본문을 읽지 못했습니다.")
 			return
 		}
 		header := c.GetHeader(serviceauth.SignatureHeader)
 		// 주소는 받은 그대로(경로와 그 뒤에 붙은 값)를 쓴다. 부르는 서버가 서명한 것과 같은 글자여야 한다
 		if err := serviceauth.Verify(secret, header, c.Request.Method, c.Request.URL.RequestURI(), raw, now()); err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, errorBody{Detail: "요청의 서명이 맞지 않습니다."})
+			abort(c, http.StatusUnauthorized, codeServiceBadSignature, "요청의 서명이 맞지 않습니다.")
 			return
 		}
 		c.Request.Body = io.NopCloser(bytes.NewReader(raw))

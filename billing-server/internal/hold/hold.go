@@ -44,8 +44,10 @@ import (
 var (
 	// ErrInvalidReference 는 이름표의 모양이 틀렸다는 오류다.
 	ErrInvalidReference = errors.New("이름표는 영문자, 숫자, 점, 밑줄, 쌍점, 붙임표로 된 8자에서 200자여야 합니다")
-	// ErrUnknownPrice 는 가격표에 그런 이름이 없거나 판매를 멈춘 이름이라는 오류다.
-	ErrUnknownPrice = errors.New("가격표에 그런 이름이 없거나 판매를 멈췄습니다")
+	// ErrUnknownPrice 는 가격표에 그런 이름이 없다는 오류다. 처음 값이 미래로 예약되어 아직 적용되지 않은 이름도 같다.
+	ErrUnknownPrice = errors.New("가격표에 그런 이름이 없습니다")
+	// ErrPriceNotForSale 은 판매를 멈춘 이름이라는 오류다. 부르는 서버는 그 모델을 고를 수 없게 하면 된다.
+	ErrPriceNotForSale = errors.New("판매를 멈춘 이름입니다")
 	// ErrReferenceReused 는 같은 이름표로 다른 내용의 홀드를 걸려 했다는 오류다.
 	ErrReferenceReused = errors.New("같은 이름표로 다른 홀드를 걸 수 없습니다")
 	// ErrNotFound 는 그런 홀드가 없다는 오류다.
