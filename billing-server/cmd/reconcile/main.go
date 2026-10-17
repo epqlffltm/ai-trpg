@@ -10,13 +10,16 @@
 //  2. 지갑, 지급 묶음, 주문, 홀드가 원장과 맞는지 본다. 읽기만 한다. 고치지 않는다.
 //  3. 정리 작업(cmd/sweeper)이 밀려 있지 않은지 센다.
 //  4. 1 을 하고도 하루 넘게 결과를 모르는 주문을 찾는다. 사람이 확인하고 cmd/orders 로 결과를 정한다.
+//  5. 공급사 가격 변경의 할 일(D-30 첫 공지, D-14 자세한 공지와 새 값 예약, D-1 마지막 알림) 가운데
+//     때가 되었는데 끝내지 않은 것을 찾는다. 사람이 하고 cmd/pricereviews done 으로 끝냈다고 적는다.
 //
 // 끝 코드로 결과를 알린다. 예약한 쪽이 이것으로 경보를 건다.
 //
 //	0  장부가 맞다
 //	1  맞지 않는 줄이 있다. 줄마다 error(ledger.mismatch) 로 남긴다. 사람이 봐야 한다
 //	2  끝내지 못했다(설정, DB, 결제 대행사). 다음에 다시 돌린다
-//	3  장부는 맞는데, 결과를 끝내 모르는 주문이 있다. 주문마다 warning(order.stuck) 로 남긴다. 사람이 결과를 정한다
+//	3  장부는 맞는데, 사람이 할 일이 있다. 결과를 끝내 모르는 주문은 주문마다 warning(order.stuck),
+//	   때가 된 가격 변경의 할 일은 할 일마다 warning(pricing.review_due) 로 남긴다
 //
 // 여럿이면 앞의 것을 알린다(1, 2, 3 의 차례). 장부가 틀린 것이 가장 급하다.
 package main
@@ -41,6 +44,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jobs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricereview"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/reconcile"
 )
 
@@ -51,6 +55,7 @@ const (
 	errorCodeMismatch = "ledger.mismatch"
 	errorCodeBehind   = "sweep.behind"
 	errorCodeStuck    = "order.stuck"
+	errorCodeReview   = "pricing.review_due"
 	// defaultStaleAfter 는 confirming·refunding 에 이만큼 머문 주문을 결제 대행사에 묻는다.
 	// 승인·취소 요청 하나는 길어야 몇십 초다(order.ProviderTimeout). 그보다 넉넉히 둬서 진행 중인 요청과 엇갈리지 않게 한다.
 	defaultStaleAfter = 10 * time.Minute
@@ -112,7 +117,8 @@ func run(args []string, out io.Writer) int {
 		return exitFailed
 	}
 
-	report, err := once(ctx, reconcile.New(pool, services.Orders, time.Now), opts)
+	reviews := pricereview.NewService(pool, time.Now)
+	report, err := once(ctx, reconcile.New(pool, services.Orders, reviews, time.Now), opts)
 	printReport(out, report, err)
 	return exitCode(report, err)
 }
@@ -188,6 +194,7 @@ func logReport(ctx context.Context, report reconcile.Report) {
 			slog.Time("since", stuck.UpdatedAt),
 		)
 	}
+	logReviews(ctx, report.Reviews)
 	if report.Overdue.Any() {
 		slog.WarnContext(ctx, "정리 작업이 밀려 있습니다",
 			slog.String(obs.FieldOperation, operation),
@@ -199,7 +206,24 @@ func logReport(ctx context.Context, report reconcile.Report) {
 	}
 }
 
-// printReport 는 결과를 사람이 읽게 찍는다. 번호는 찍지 않는다. 번호는 로그에 있다.
+// logReviews 는 때가 된 가격 변경의 할 일을 하나씩 warning 으로 남긴다. 할 일을 끝냈다고 적을 때까지 날마다 남긴다.
+func logReviews(ctx context.Context, due []pricereview.Due) {
+	for _, d := range due {
+		slog.WarnContext(ctx, "공급사 가격 변경의 할 일이 남았습니다",
+			slog.String(obs.FieldOperation, operation),
+			slog.String(obs.FieldErrorCode, errorCodeReview),
+			slog.Int64("review_id", d.ReviewID),
+			slog.String("subject", d.Subject),
+			slog.String("step", string(d.Step)),
+			slog.String("stage", string(d.Stage)),
+			slog.Int("days_left", d.DaysLeft),
+			slog.Time("changes_at", d.ChangesAt),
+		)
+	}
+}
+
+// printReport 는 결과를 사람이 읽게 찍는다. 사용자, 주문, 원장의 번호는 찍지 않는다. 번호는 로그에 있다.
+// 가격 변경 할 일의 번호는 찍는다. 운영자가 적은 할 일이고, cmd/pricereviews done 에 그 번호를 쓴다.
 func printReport(out io.Writer, report reconcile.Report, err error) {
 	fmt.Fprintf(out, "오래된 주문: %d (치름 %d, 실패 %d, 환불 %d, 환불 거절 %d, 아직 모름 %d, 오류 %d)\n",
 		report.Stale.Found, report.Stale.Paid, report.Stale.Failed, report.Stale.Refunded, report.Stale.RefundRefused,
@@ -208,6 +232,7 @@ func printReport(out io.Writer, report reconcile.Report, err error) {
 	fmt.Fprintf(out, "밀린 정리: 홀드 %d, 주문 %d, 무료 크레딧 묶음 %d\n",
 		report.Overdue.Holds, report.Overdue.Orders, report.Overdue.FreeGrants)
 	printStuck(out, report.Stuck)
+	printReviews(out, report.Reviews)
 	if err != nil {
 		fmt.Fprintln(out, "끝내지 못했습니다. 로그를 봐 주세요")
 	}
@@ -227,6 +252,32 @@ func printStuck(out io.Writer, stuck []order.Order) {
 	if len(stuck) > 0 {
 		fmt.Fprintln(out, "go run ./cmd/orders stuck 으로 보고, 상점관리자에서 확인한 뒤 go run ./cmd/orders decide 로 정합니다")
 	}
+}
+
+// stepNames 는 할 일을 사람이 읽는 이름이다.
+var stepNames = map[pricereview.Step]string{
+	pricereview.StepAnnounce: "첫 공지",
+	pricereview.StepNotice:   "자세한 공지와 새 값 예약",
+	pricereview.StepFinal:    "마지막 알림",
+}
+
+// printReviews 는 때가 된 가격 변경의 할 일을 한 줄씩 찍는다. 있으면 다음에 할 일도 알린다.
+func printReviews(out io.Writer, due []pricereview.Due) {
+	fmt.Fprintf(out, "가격 변경 할 일: %d\n", len(due))
+	for _, d := range due {
+		fmt.Fprintf(out, "  #%d %s: %s (%s)\n", d.ReviewID, d.Subject, stepNames[d.Step], dayLabel(d.DaysLeft))
+	}
+	if len(due) > 0 {
+		fmt.Fprintln(out, "go run ./cmd/pricereviews list 로 보고, 한 뒤 go run ./cmd/pricereviews done 으로 끝냈다고 적습니다")
+	}
+}
+
+// dayLabel 은 남은 날을 D-14 처럼 쓴다. 공급사가 이미 값을 바꿨으면 "N일 늦음"이다.
+func dayLabel(daysLeft int) string {
+	if daysLeft > 0 {
+		return fmt.Sprintf("D-%d", daysLeft)
+	}
+	return fmt.Sprintf("값이 바뀐 뒤 %d일", -daysLeft)
 }
 
 // exitCode 는 결과를 끝 코드로 바꾼다. 맞지 않는 줄이 있으면, 끝내지 못한 것보다 먼저 알린다.

@@ -13,26 +13,60 @@ import (
 // errorBody 는 오류 응답의 모양이다. 다른 서버들과 같은 칸 이름(detail)을 쓴다.
 type errorBody struct {
 	Detail string `json:"detail"`
+	// Code 는 부르는 서버가 읽는 오류의 이름이다(price.unknown 같은 것). detail 은 사람이 읽는 글이라 바뀔 수 있다.
+	// 우리 서버들이 부르는 주소(/service/...)의 4xx 에만 싣는다. 사용자가 부르는 주소와 5xx 에는 없다(칸이 빠진다).
+	// 5xx 는 이름으로 가릴 것이 없다. 같은 요청을 다시 보내면 된다.
+	Code string `json:"code,omitempty"`
+}
+
+// 우리 서버들이 읽는 오류의 이름. 한번 정하면 바꾸지 않는다. 새 경우가 생기면 이름을 더한다.
+// 이름은 "무엇.어떻게" 모양이다. README 의 "오류의 이름" 표에 같은 목록이 있다.
+const (
+	// codeHoldInvalidRequest 는 홀드 요청의 본문이 틀렸다는 것이다(JSON 이 아니다, user_id 가 없다, 이름표의 모양이 틀렸다).
+	codeHoldInvalidRequest = "hold.invalid_request"
+	// codePriceUnknown 은 가격표에 그런 이름이 없다는 것이다. 부르는 서버의 버그다.
+	codePriceUnknown = "price.unknown"
+	// codePriceNotForSale 은 판매를 멈춘 이름이라는 것이다. 부르는 서버의 모델 목록이 옛것이다. 목록을 다시 받으면 된다.
+	codePriceNotForSale = "price.not_for_sale"
+	// codeCreditInsufficient 는 크레딧이 모자라다는 것이다(402). 사용자에게 충전을 권한다.
+	codeCreditInsufficient = "credit.insufficient"
+	// codeHoldNotFound 는 그 이름표의 홀드가 없다는 것이다.
+	codeHoldNotFound = "hold.not_found"
+	// codeHoldReferenceReused 는 같은 이름표로 다른 홀드(다른 사용자나 다른 가격표 이름)를 걸려 했다는 것이다.
+	codeHoldReferenceReused = "hold.reference_reused"
+	// codeHoldAlreadyCaptured 는 이미 확정한 홀드라는 것이다.
+	codeHoldAlreadyCaptured = "hold.already_captured"
+	// codeHoldAlreadyReleased 는 이미 돌려준 홀드라는 것이다. 만료되어 돌려준 것도 같다.
+	codeHoldAlreadyReleased = "hold.already_released"
+	// codeServiceBadRequest 는 서명을 확인하려고 본문을 읽지 못했다는 것이다(너무 크다).
+	codeServiceBadRequest = "service.bad_request"
+	// codeServiceBadSignature 는 요청의 서명이 맞지 않다는 것이다(비밀이 다르다, 시각이 너무 어긋났다).
+	codeServiceBadSignature = "service.bad_signature"
+)
+
+// abort 는 오류로 답하고 요청을 끝낸다. code 가 비면 code 칸이 빠진다.
+func abort(c *gin.Context, status int, code string, detail string) {
+	c.AbortWithStatusJSON(status, errorBody{Detail: detail, Code: code})
 }
 
 // badRequest 는 요청의 값이 틀렸을 때의 응답이다. 무엇을 고치면 되는지 적는다.
 func badRequest(c *gin.Context, detail string) {
-	c.AbortWithStatusJSON(http.StatusBadRequest, errorBody{Detail: detail})
+	abort(c, http.StatusBadRequest, "", detail)
 }
 
 // notFound 는 그런 것이 없을 때의 응답이다. 남의 것도 없는 것으로 답한다.
 func notFound(c *gin.Context, detail string) {
-	c.AbortWithStatusJSON(http.StatusNotFound, errorBody{Detail: detail})
+	abort(c, http.StatusNotFound, "", detail)
 }
 
 // conflict 는 요청이 지금의 상태와 맞지 않을 때의 응답이다. 같은 요청을 다시 보내도 되지 않는다.
 func conflict(c *gin.Context, detail string) {
-	c.AbortWithStatusJSON(http.StatusConflict, errorBody{Detail: detail})
+	abort(c, http.StatusConflict, "", detail)
 }
 
 // unavailable 은 지금은 끝내지 못했지만 다시 보내면 될 때의 응답이다. 원인은 서버의 기록에만 남긴다.
 func unavailable(c *gin.Context, detail string) {
-	c.AbortWithStatusJSON(http.StatusServiceUnavailable, errorBody{Detail: detail})
+	abort(c, http.StatusServiceUnavailable, "", detail)
 }
 
 // dbTimeoutDetail 은 DB 가 시간 제한으로 쿼리를 끊었을 때의 응답이다. 그 쿼리는 적히지 않았다.
