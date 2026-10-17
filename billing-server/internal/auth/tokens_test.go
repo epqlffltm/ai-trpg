@@ -16,6 +16,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/revocations"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
 )
 
@@ -46,7 +47,7 @@ func setup(t *testing.T) (testenv.SigningKey, *auth.Verifier, *fakeKeys) {
 	t.Helper()
 	key := testenv.NewSigningKey(t, 0, "key-1")
 	keys := &fakeKeys{keys: map[string]*rsa.PublicKey{key.KeyID: &key.Private.PublicKey}}
-	verifier := auth.NewVerifier(keys, testenv.Issuer, testenv.Audience, func() time.Time { return now })
+	verifier := auth.NewVerifier(keys, revocations.List{}, testenv.Issuer, testenv.Audience, func() time.Time { return now })
 	return key, verifier, keys
 }
 
@@ -255,7 +256,7 @@ func TestVerifyWorksWithTheRealCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	cache := jwks.NewCache(staticFetcher{keys: parsed}, func() time.Time { return now })
-	verifier := auth.NewVerifier(cache, testenv.Issuer, testenv.Audience, func() time.Time { return now })
+	verifier := auth.NewVerifier(cache, revocations.List{}, testenv.Issuer, testenv.Audience, func() time.Time { return now })
 
 	if _, err := verifier.Verify(context.Background(), key.Token(t, testenv.AccessClaims(now))); err != nil {
 		t.Errorf("멀쩡한 토큰을 거부했다: %v", err)
@@ -269,4 +270,40 @@ type staticFetcher struct {
 
 func (f staticFetcher) Fetch(context.Context) (jwks.KeySet, error) {
 	return f.keys, nil
+}
+
+func TestVerifyRejectsATokenOfARevokedSession(t *testing.T) {
+	key := testenv.NewSigningKey(t, 0, "key-1")
+	keys := &fakeKeys{keys: map[string]*rsa.PublicKey{key.KeyID: &key.Private.PublicKey}}
+	// 인증 서버에서 이 사용자의 세션을 끊어 버전이 3 이 되었다(#274)
+	sessions := revocations.List{revocations.Digest(testenv.UserID): 3}
+	verifier := auth.NewVerifier(keys, sessions, testenv.Issuer, testenv.Audience, func() time.Time { return now })
+
+	for version, accepted := range map[int]bool{2: false, 3: true, 4: true} {
+		claims := testenv.AccessClaims(now)
+		claims["ver"] = version
+		_, err := verifier.Verify(context.Background(), key.Token(t, claims))
+		if (err == nil) != accepted {
+			t.Errorf("ver %d: 오류 = %v, 받아야 하는가 = %v", version, err, accepted)
+		}
+		if err != nil && !errors.Is(err, auth.ErrInvalidToken) {
+			t.Errorf("ver %d: 오류 = %v. ErrInvalidToken 이어야 한다(401)", version, err)
+		}
+	}
+
+	// ver 가 없는 토큰은 0 으로 본다
+	claims := testenv.AccessClaims(now)
+	delete(claims, "ver")
+	rejected(t, verifier, key.Token(t, claims))
+}
+
+func TestVerifyIgnoresOtherUsersRevocations(t *testing.T) {
+	key := testenv.NewSigningKey(t, 0, "key-1")
+	keys := &fakeKeys{keys: map[string]*rsa.PublicKey{key.KeyID: &key.Private.PublicKey}}
+	sessions := revocations.List{revocations.Digest("1b4e28ba-2fa1-11d2-883f-0016d3cca427"): 9}
+	verifier := auth.NewVerifier(keys, sessions, testenv.Issuer, testenv.Audience, func() time.Time { return now })
+
+	if _, err := verifier.Verify(context.Background(), key.Token(t, testenv.AccessClaims(now))); err != nil {
+		t.Errorf("다른 사용자의 끊긴 세션 때문에 거부했다: %v", err)
+	}
 }

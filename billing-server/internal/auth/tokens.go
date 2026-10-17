@@ -3,8 +3,8 @@
 // Package auth 는 인증 서버가 발급한 access 토큰을 검증한다.
 //
 // 인증 서버의 DB 를 보지 않는다. 공개키로 서명을 확인하고, 토큰 안에 적힌 값만 본다.
-// 그래서 인증 서버에서 로그아웃하거나 계정이 정지돼도, 이미 발급된 access 토큰은 만료될 때까지 통한다.
-// access 토큰의 수명을 짧게(15분) 잡는 이유다. 게임 서버(game-server/app/auth/tokens.py)와 같은 규칙이다.
+// 인증 서버에서 세션을 끊은 것(비밀번호 변경, 계정 정지 등)은 인증 서버가 내주는 끊긴 세션의 목록으로 안다(#274).
+// 목록은 30초마다 받으므로, 끊은 뒤 30초쯤은 옛 토큰이 통한다. 게임 서버(game-server/app/auth/tokens.py)와 같은 규칙이다.
 //
 // 확인하는 것:
 //   - 서명 방식이 RS256 인가. 토큰이 스스로 적어 온 방식을 믿지 않는다.
@@ -13,6 +13,7 @@
 //   - 인증 서버가 발급했는가(iss).
 //   - 이 서버에 쓰라고 발급됐는가(aud).
 //   - access 토큰인가. refresh 토큰도 같은 키로 서명되므로 종류를 따로 본다.
+//   - 끊긴 세션의 것이 아닌가. 토큰의 세션 버전(ver)이 목록의 것보다 낮으면 끊기기 전에 발급된 토큰이다.
 //
 // 서명을 확인하는 일은 직접 쓰지 않고 라이브러리(golang-jwt)에 맡긴다. 여기서 정하는 것은 무엇을 받아들일지다.
 package auth
@@ -58,23 +59,32 @@ type KeySource interface {
 	Key(ctx context.Context, kid string) (*rsa.PublicKey, error)
 }
 
+// SessionChecker 는 그 사용자(sub)의 그 세션 버전의 토큰이 끊긴 세션의 것인지 알려 주는 것의 모양이다.
+// *revocations.Cache 가 이 모양이다. 테스트는 revocations.List 를 넣는다.
+type SessionChecker interface {
+	Revoked(sub string, version int) bool
+}
+
 // tokenClaims 는 토큰 안의 값 중에서 이 서버가 읽는 것이다.
 // iss, aud, exp, sub 같은 표준 값은 RegisteredClaims 에 들어 있다.
 type tokenClaims struct {
 	TokenType string `json:"token_type"`
+	// Version 은 세션 버전(ver)이다. 없으면 0 으로 본다(인증 서버 README 의 약속)
+	Version int `json:"ver"`
 	jwt.RegisteredClaims
 }
 
 // Verifier 는 access 토큰을 검증한다. 앱 하나에 하나만 만들어 모든 요청이 함께 쓴다.
 type Verifier struct {
-	keys   KeySource
-	parser *jwt.Parser
+	keys     KeySource
+	sessions SessionChecker
+	parser   *jwt.Parser
 }
 
 // NewVerifier 는 검증기를 만든다.
-// issuer 는 토큰을 발급한 서버의 이름(iss), audience 는 이 서버의 이름(aud)이다.
+// sessions 는 끊긴 세션을 알려 준다. issuer 는 토큰을 발급한 서버의 이름(iss), audience 는 이 서버의 이름(aud)이다.
 // now 는 지금 시각을 알려 준다. 테스트가 만료를 기다리지 않고 시간을 돌릴 수 있게 밖에서 받는다.
-func NewVerifier(keys KeySource, issuer string, audience string, now func() time.Time) *Verifier {
+func NewVerifier(keys KeySource, sessions SessionChecker, issuer string, audience string, now func() time.Time) *Verifier {
 	parser := jwt.NewParser(
 		jwt.WithValidMethods([]string{algorithm}),
 		jwt.WithIssuer(issuer),
@@ -84,7 +94,7 @@ func NewVerifier(keys KeySource, issuer string, audience string, now func() time
 		jwt.WithLeeway(ClockSkew),
 		jwt.WithTimeFunc(now),
 	)
-	return &Verifier{keys: keys, parser: parser}
+	return &Verifier{keys: keys, sessions: sessions, parser: parser}
 }
 
 // Verify 는 access 토큰을 검증하고 그 안의 값을 돌려준다.
@@ -100,7 +110,15 @@ func (v *Verifier) Verify(ctx context.Context, token string) (Claims, error) {
 	if err != nil {
 		return Claims{}, ErrInvalidToken
 	}
-	return toClaims(claims)
+	verified, err := toClaims(claims)
+	if err != nil {
+		return Claims{}, err
+	}
+	// 끊긴 세션의 토큰도 이유를 나누지 않고 받을 수 없는 토큰이다. 사용자는 다시 로그인한다
+	if v.sessions.Revoked(claims.Subject, claims.Version) {
+		return Claims{}, ErrInvalidToken
+	}
+	return verified, nil
 }
 
 // findKey 는 라이브러리가 서명을 확인하기 전에 부르는 함수를 만든다. 토큰의 머리말에서 kid 를 읽어 키를 찾는다.

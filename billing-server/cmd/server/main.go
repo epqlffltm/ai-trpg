@@ -28,6 +28,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/revocations"
 )
 
 const (
@@ -78,7 +79,7 @@ func run() error {
 	}
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		DB:                pool,
-		Verifier:          newVerifier(settings),
+		Verifier:          newVerifier(ctx, settings),
 		Wallet:            services.Wallet,
 		Welcome:           services.Wallet,
 		WelcomeCredits:    settings.WelcomeCredits,
@@ -98,11 +99,14 @@ func run() error {
 
 // newVerifier 는 access 토큰을 검증하는 것을 만든다. 만드는 것만으로는 인증 서버를 부르지 않는다.
 // 처음 토큰을 검증할 때 공개키를 가져온다. 그래서 인증 서버가 죽어 있어도 이 서버는 뜬다.
-func newVerifier(settings config.Settings) *auth.Verifier {
+// 끊긴 세션의 목록은 ctx 가 끝날 때까지 따로 30초마다 받는다(#274). 요청이 그것을 기다리지 않는다.
+func newVerifier(ctx context.Context, settings config.Settings) *auth.Verifier {
 	// 다른 서버에 요청을 보내는 클라이언트. 시간 제한은 요청마다 부르는 쪽이 건다(jwks.FetchTimeout)
-	fetcher := jwks.HTTPFetcher{Client: &http.Client{}, URL: settings.AuthJWKSURL}
-	keys := jwks.NewCache(fetcher, time.Now)
-	return auth.NewVerifier(keys, settings.JWTIssuer, settings.JWTAudience, time.Now)
+	client := &http.Client{}
+	keys := jwks.NewCache(jwks.HTTPFetcher{Client: client, URL: settings.AuthJWKSURL}, time.Now)
+	sessions := revocations.NewCache(revocations.HTTPFetcher{Client: client, URL: settings.AuthRevocationsURL})
+	go sessions.Run(ctx, revocations.RefreshInterval)
+	return auth.NewVerifier(keys, sessions, settings.JWTIssuer, settings.JWTAudience, time.Now)
 }
 
 // loadDotEnv 는 현재 폴더의 .env 를 환경 변수로 올린다. 파일이 없으면 아무것도 하지 않는다.
