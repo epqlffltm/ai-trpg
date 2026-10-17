@@ -7,6 +7,9 @@
     uv run python -m scripts.models show gpt-6-luna
     uv run python -m scripts.models add gpt-6-luna --provider openai --api-model-id <공식 문서의 날짜 붙은 이름> \\
         --name "GPT-6 Luna" --vendor openai --grade standard --token-field max_completion_tokens --reasoning
+    uv run python -m scripts.models add claude-opus-5-5 --provider anthropic --api-model-id <공식 문서의 이름> \\
+        --name "Claude Opus 5.5" --vendor anthropic --grade premium --reasoning --no-temperature \\
+        --reasoning-style always
     uv run python -m scripts.models set-cost gpt-6-luna --input 0.1 --output 0.5 --from 2026-10-17
     uv run python -m scripts.models update gpt-6-luna --no-temperature
     uv run python -m scripts.models switch-snapshot gpt-6-luna --api-model-id <새 날짜판> --note "공급자 공지"
@@ -38,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import service
 from app.catalog.errors import CatalogConflictError, InvalidModelError, ModelNotFoundError
-from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot, Grade, Provider, TokenLimitField
+from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot, Grade, Provider, ReasoningStyle, TokenLimitField
 from app.catalog.rules import is_offered, is_retired, round_cost_usd
 from app.catalog.schemas import CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 from app.core.config import get_settings
@@ -112,11 +115,12 @@ def snapshot_line(snapshot: AiModelSnapshot) -> str:
 def detail_lines(model: AiModel, costs: list[AiModelCost], snapshots: list[AiModelSnapshot], today: date) -> list[str]:
     """모델 하나를 자세히. 받는 것과 단가들, 날짜판을 바꾼 일들."""
     token_field = model.token_limit_field or '정해짐'
+    reasoning_style = f', 생각의 방식 {model.reasoning_style}' if model.reasoning_style else ''
     return [
         f'{model.slug}: {model.display_name} ({model.vendor}, {model.grade}, {status_of(model, today)})',
         f'  창구 {model.provider}, API 모델 {model.api_model_id}',
         f'  생각의 깊이 {"고름" if model.supports_reasoning else "못 고름"}, '
-        f'온도 {"받음" if model.supports_temperature else "안 받음"}, 출력 상한의 칸 {token_field}',
+        f'온도 {"받음" if model.supports_temperature else "안 받음"}, 출력 상한의 칸 {token_field}{reasoning_style}',
         f'  은퇴일 {model.retires_on or "없음"}',
         '원가 단가(USD, 백만 토큰당):' if costs else '원가 단가가 없다',
         *[cost_line(cost) for cost in costs],
@@ -137,6 +141,7 @@ def create_of(args: argparse.Namespace) -> ModelCreate:
         supports_reasoning=args.reasoning,
         supports_temperature=args.temperature,
         token_limit_field=args.token_field,
+        reasoning_style=args.reasoning_style,
     )
 
 
@@ -149,6 +154,7 @@ def update_of(args: argparse.Namespace) -> ModelUpdate:
         supports_reasoning=args.reasoning,
         supports_temperature=args.temperature,
         token_limit_field=args.token_field,
+        reasoning_style=args.reasoning_style,
     )
 
 
@@ -260,6 +266,11 @@ def add_capability_options(parser: argparse.ArgumentParser, defaults: bool) -> N
         '--token-field',
         choices=list(TokenLimitField),
         help='출력 상한의 칸. openai, local 창구만 적는다',
+    )
+    parser.add_argument(
+        '--reasoning-style',
+        choices=list(ReasoningStyle),
+        help='생각을 켜고 끄는 방식. anthropic 창구만 적는다(always: 끌 수 없는 모델)',
     )
 
 

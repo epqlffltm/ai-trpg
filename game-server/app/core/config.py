@@ -126,6 +126,12 @@ class Settings(BaseSettings):
     # OpenAI 의 API 주소. /chat/completions 앞까지다. 바꿀 일이 거의 없다
     openai_base_url: str = 'https://api.openai.com/v1'
 
+    # Anthropic(Claude)의 API 키. 비우면 모델 목록의 anthropic 창구 모델을 부르지 않는다(provider_not_configured).
+    # 비밀값이다. .env 에만 적는다. 로그, 오류, 호출 기록에 싣지 않는다. 키에 월 사용 한도를 걸어 둔다
+    anthropic_api_key: SecretStr = SecretStr('')
+    # Anthropic 의 API 주소. /v1/messages 앞까지다. 바꿀 일이 거의 없다
+    anthropic_base_url: str = 'https://api.anthropic.com'
+
     # 서술을 동시에 몇 개까지 돌리나(app/core/jobs.py, #275). 넘는 것은 차례를 기다린다.
     # 모델이 한 번에 받는 수(Ollama 의 OLLAMA_NUM_PARALLEL, 외부 API 의 속도 제한)에 맞춘다.
     # 기다리는 시간도 서술 하나의 시간(닫기 시작한 때부터)에 들어간다. 너무 작으면 몰릴 때 시간 초과가 난다

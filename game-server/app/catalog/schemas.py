@@ -12,8 +12,8 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.catalog.models import Grade, Provider, TokenLimitField
-from app.catalog.rules import token_field_problem
+from app.catalog.models import Grade, Provider, ReasoningStyle, TokenLimitField
+from app.catalog.rules import reasoning_style_problem, token_field_problem
 
 # 이름표. 영어 소문자와 숫자를 붙임표로 잇는다. 점은 쓰지 않는다. 결제 서버의 가격 코드에서 점이 칸을 나눈다.
 # narration.<이름표>.i0.o0 이 결제 서버의 가격 코드 길이(64자) 안에 들도록 48자까지다
@@ -44,11 +44,14 @@ class ModelCreate(BaseModel):
     supports_reasoning: bool = False
     supports_temperature: bool = True
     token_limit_field: TokenLimitField | None = None
+    reasoning_style: ReasoningStyle | None = None
 
     @model_validator(mode='after')
-    def token_field_fits_provider(self) -> Self:
-        """출력 상한의 칸이 창구에 맞아야 한다."""
-        problem = token_field_problem(self.provider, self.token_limit_field)
+    def fields_fit_provider(self) -> Self:
+        """출력 상한의 칸과 생각을 켜고 끄는 방식이 창구에 맞아야 한다."""
+        problem = token_field_problem(self.provider, self.token_limit_field) or reasoning_style_problem(
+            self.provider, self.reasoning_style
+        )
         if problem:
             raise ValueError(problem)
         return self
@@ -60,7 +63,7 @@ class ModelUpdate(BaseModel):
 
     이름표와 창구는 없다. 바꾸지 않는다(app/catalog/models.py).
     API 모델 이름(날짜판)도 없다. 날짜판은 SnapshotSwitch 로만 바꾼다. 바꾸면 모델이 꺼진다.
-    출력 상한의 칸을 비우는 일도 없다. 칸을 적는 창구의 모델은 늘 칸이 있어야 하고, 아닌 창구의 모델은 늘 없다.
+    출력 상한의 칸과 생각의 방식을 비우는 일도 없다. 적는 창구의 모델은 늘 있어야 하고, 아닌 창구의 모델은 늘 없다.
     """
 
     model_config = ConfigDict(extra='forbid', frozen=True)
@@ -71,6 +74,7 @@ class ModelUpdate(BaseModel):
     supports_reasoning: bool | None = None
     supports_temperature: bool | None = None
     token_limit_field: TokenLimitField | None = None
+    reasoning_style: ReasoningStyle | None = None
 
     @model_validator(mode='after')
     def something_changes(self) -> Self:

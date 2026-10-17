@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import repository, service
 from app.catalog.errors import CatalogConflictError, Conflict, InvalidModelError, ModelNotFoundError
-from app.catalog.models import AiModel, AiModelCost, Grade, Provider, TokenLimitField
+from app.catalog.models import AiModel, AiModelCost, Grade, Provider, ReasoningStyle, TokenLimitField
 from app.catalog.rules import is_offered, is_retired, round_cost_usd
 from app.catalog.schemas import SLUG_MAX_LENGTH, CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 
@@ -50,6 +50,8 @@ OPUS = ModelCreate(
     display_name='Claude Opus 5.5',
     vendor='anthropic',
     grade=Grade.PREMIUM,
+    supports_temperature=False,
+    reasoning_style=ReasoningStyle.ALWAYS,
 )
 
 
@@ -98,6 +100,16 @@ def test_an_openai_model_needs_its_token_field():
 def test_a_claude_model_takes_no_token_field():
     with pytest.raises(ValidationError, match='적지 않는다'):
         ModelCreate(**{**OPUS.model_dump(), 'token_limit_field': TokenLimitField.MAX_TOKENS})
+
+
+def test_a_claude_model_needs_its_reasoning_style():
+    with pytest.raises(ValidationError, match='생각을 켜고 끄는 방식'):
+        ModelCreate(**{**OPUS.model_dump(), 'reasoning_style': None})
+
+
+def test_an_openai_model_takes_no_reasoning_style():
+    with pytest.raises(ValidationError, match='적지 않는다'):
+        ModelCreate(**{**LUNA.model_dump(), 'reasoning_style': ReasoningStyle.ADAPTIVE})
 
 
 def test_api_model_ids_have_no_spaces():
@@ -233,6 +245,21 @@ async def test_a_token_field_cannot_be_given_to_a_claude_model(session: AsyncSes
         await service.update_model(
             session, 'claude-opus-5-5', ModelUpdate(token_limit_field=TokenLimitField.MAX_TOKENS)
         )
+
+
+async def test_a_reasoning_style_cannot_be_given_to_an_openai_model(session: AsyncSession):
+    await service.add_model(session, LUNA)
+
+    with pytest.raises(InvalidModelError, match='생각을 켜고 끄는 방식을 적지 않는다'):
+        await service.update_model(session, 'gpt-6-luna', ModelUpdate(reasoning_style=ReasoningStyle.ADAPTIVE))
+
+
+async def test_the_reasoning_style_of_a_claude_model_can_be_changed(session: AsyncSession):
+    await service.add_model(session, OPUS)
+
+    await service.update_model(session, 'claude-opus-5-5', ModelUpdate(reasoning_style=ReasoningStyle.ADAPTIVE))
+
+    assert (await fresh_model(session, 'claude-opus-5-5')).reasoning_style == 'adaptive'
 
 
 async def test_unknown_models_are_not_found(session: AsyncSession):

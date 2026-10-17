@@ -24,6 +24,7 @@ import pytest
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.anthropic import AnthropicProvider
 from app.ai.fake import FakeCallLog
 from app.ai.openai_compat import WireOptions
 from app.ai.provider import ProviderError
@@ -36,7 +37,7 @@ from app.ai.routing import (
 )
 from app.catalog import service
 from app.catalog.lookup import CatalogModel, DbModelLookup
-from app.catalog.models import Grade, Provider, TokenLimitField
+from app.catalog.models import Grade, Provider, ReasoningStyle, TokenLimitField
 from app.catalog.schemas import ModelCreate, ModelUpdate
 from app.drafts.context import DraftContext
 from app.drafts.routed_writer import RoutedDraftWriter
@@ -74,7 +75,16 @@ GEMMA = CatalogModel(
     enabled=True,
     retires_on=None,
 )
-OPUS = replace(LUNA, slug='claude-opus-5-5', provider=Provider.ANTHROPIC, token_limit_field=None)
+OPUS = replace(
+    LUNA,
+    slug='claude-opus-5-5',
+    provider=Provider.ANTHROPIC,
+    api_model_id='claude-opus-5-5-20260901',
+    token_limit_field=None,
+    reasoning_style=ReasoningStyle.ALWAYS,
+)
+GEMINI = replace(LUNA, slug='gemini-4-argon', provider=Provider.GEMINI, token_limit_field=None)
+ANTHROPIC_URL = 'https://api.anthropic.com'
 
 
 @dataclass
@@ -118,9 +128,10 @@ class Transport:
 def make_router(
     *models: CatalogModel, transport: Transport | None = None, with_key: bool = True, lookup: FakeLookup | None = None
 ) -> ModelRouter:
-    """그 모델들이 든 목록으로 고르는 것. 키를 빼면 OpenAI 의 창구가 없다."""
+    """그 모델들이 든 목록으로 고르는 것. 키를 빼면 OpenAI 와 Anthropic 의 창구가 없다."""
     client = httpx.AsyncClient(transport=httpx.MockTransport(transport or Transport()))
     openai = Endpoint(OPENAI_URL, SecretStr(KEY), 'openai') if with_key else None
+    anthropic = Endpoint(ANTHROPIC_URL, SecretStr(KEY), 'anthropic') if with_key else None
     return ModelRouter(
         lookup=lookup or FakeLookup({model.slug: model for model in models}),
         client=client,
@@ -129,6 +140,7 @@ def make_router(
         timeout=30,
         local_options=WireOptions(supports_reasoning=False),
         today=lambda: TODAY,
+        anthropic=anthropic,
     )
 
 
@@ -209,7 +221,29 @@ async def test_a_local_model_needs_no_key():
 
 
 async def test_a_provider_without_code_is_unsupported():
-    assert await refused(make_router(OPUS), 'claude-opus-5-5') == PROVIDER_UNSUPPORTED
+    assert await refused(make_router(GEMINI), 'gemini-4-argon') == PROVIDER_UNSUPPORTED
+
+
+async def test_a_claude_model_is_called_through_the_anthropic_endpoint():
+    provider = await make_router(OPUS).provider_for('claude-opus-5-5')
+
+    assert isinstance(provider, AnthropicProvider)
+    assert (provider.base_url, provider.model, provider.kind) == (
+        ANTHROPIC_URL,
+        'claude-opus-5-5-20260901',
+        'anthropic',
+    )
+    assert provider.api_key.get_secret_value() == KEY
+    # 생각의 방식과 온도는 모델 목록의 값이다
+    assert (provider.reasoning_style, provider.supports_temperature, provider.timeout) == (
+        ReasoningStyle.ALWAYS,
+        False,
+        30,
+    )
+
+
+async def test_a_claude_model_without_a_key_is_not_configured():
+    assert await refused(make_router(OPUS, with_key=False), 'claude-opus-5-5') == PROVIDER_NOT_CONFIGURED
 
 
 async def test_a_refusal_leaves_a_warning(caplog: pytest.LogCaptureFixture):

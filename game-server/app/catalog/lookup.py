@@ -20,7 +20,7 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.catalog import repository
-from app.catalog.models import AiModel, AiModelCost, Provider, TokenLimitField
+from app.catalog.models import AiModel, AiModelCost, Provider, ReasoningStyle, TokenLimitField
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,7 @@ class CatalogModel:
     enabled: bool
     retires_on: date | None
     cost: UnitCost | None = None
+    reasoning_style: ReasoningStyle | None = None
 
 
 class ModelLookup(Protocol):
@@ -80,6 +81,7 @@ def to_value(model: AiModel, cost: AiModelCost | None = None) -> CatalogModel:
         enabled=model.enabled,
         retires_on=model.retires_on,
         cost=cost_value(cost) if cost else None,
+        reasoning_style=ReasoningStyle(model.reasoning_style) if model.reasoning_style else None,
     )
 
 
