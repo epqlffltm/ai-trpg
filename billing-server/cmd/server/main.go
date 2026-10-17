@@ -22,6 +22,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/app"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/attendance"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
@@ -78,6 +79,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// 출석(#339). 하루 양이나 보물 상자의 확률표가 틀렸으면 서버가 뜨지 않는다
+	attendances, err := attendance.NewService(pool, time.Now, services.Wallet, services.Eligibility,
+		attendance.Options{Schedule: settings.AttendanceSilver})
+	if err != nil {
+		return err
+	}
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		DB:                pool,
 		Verifier:          newVerifier(ctx, settings),
@@ -85,6 +92,7 @@ func run() error {
 		Welcome:           services.Wallet,
 		WelcomeCredits:    settings.WelcomeCredits,
 		Eligibility:       services.Eligibility,
+		Attendance:        attendances,
 		Orders:            eligibility.Guard(services.Orders, services.Eligibility),
 		Notifier:          services.Orders,
 		WebhookSecret:     settings.WebhookSecret,
