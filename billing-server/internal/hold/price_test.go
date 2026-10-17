@@ -26,7 +26,7 @@ func (f fixture) newPrice(credits credit.Amount) string {
 // setPrice 는 그 이름의 값을 정한다. at 이 비었으면 지금부터다.
 func (f fixture) setPrice(code string, credits credit.Amount, at time.Time) {
 	f.t.Helper()
-	change := pricing.Change{Code: code, Credits: credits, EffectiveAt: at, Reason: "테스트", ChangedBy: "test"}
+	change := pricing.Change{Code: code, Credits: credits, Tier: pricing.TierStandard, EffectiveAt: at, Reason: "테스트", ChangedBy: "test"}
 	if _, err := pricing.NewService(f.pool, f.clock.Now).Set(ctx(f.t), change); err != nil {
 		f.t.Fatalf("값을 정하지 못했다: %v", err)
 	}

@@ -39,6 +39,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold/holddb"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
 var (
@@ -105,7 +106,7 @@ type Hold struct {
 // Wallet 은 홀드로 크레딧을 빼고 돌려놓는 것의 모양이다. *wallet.Service 가 이 모양이다.
 // 홀드가 연 트랜잭션을 넘겨받아 그 안에서 한다.
 type Wallet interface {
-	TakeForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, holdID uuid.UUID) error
+	TakeForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, holdID uuid.UUID, funds wallet.Funds) error
 	ReturnForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, holdID uuid.UUID) error
 }
 
