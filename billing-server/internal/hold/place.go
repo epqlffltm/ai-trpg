@@ -62,12 +62,16 @@ func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, re
 	return placed, created, nil
 }
 
-// priceAt 은 가격표에서 그 이름의 at 시각의 값을 찾는다. 없거나 판매를 멈췄으면 ErrUnknownPrice 다.
+// priceAt 은 가격표에서 그 이름의 at 시각의 값을 찾는다. 없으면 ErrUnknownPrice, 판매를 멈췄으면 ErrPriceNotForSale 이다.
+// 둘을 나눈다. 없는 이름은 부르는 서버의 버그이고, 멈춘 이름은 그 서버의 모델 목록이 아직 옛것이라는 뜻이다.
 // 가격표를 읽지 못한 것(DB 오류)은 그대로 올린다. 부르는 쪽의 잘못(400)이 아니다.
 func (s *Service) priceAt(ctx context.Context, code string, at time.Time) (pricing.Price, error) {
 	price, err := s.prices.At(ctx, code, at)
-	if errors.Is(err, pricing.ErrUnknownCode) || errors.Is(err, pricing.ErrNotForSale) {
+	switch {
+	case errors.Is(err, pricing.ErrUnknownCode):
 		return pricing.Price{}, ErrUnknownPrice
+	case errors.Is(err, pricing.ErrNotForSale):
+		return pricing.Price{}, ErrPriceNotForSale
 	}
 	return price, err
 }
