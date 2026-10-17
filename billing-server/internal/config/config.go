@@ -119,6 +119,8 @@ type Settings struct {
 	DBSchema string
 	// AuthJWKSURL 은 인증 서버가 공개키를 내주는 주소다. 이 주소에서 받은 키로 서명된 토큰을 믿는다.
 	AuthJWKSURL string
+	// AuthRevocationsURL 은 인증 서버가 끊긴 세션의 목록을 내주는 주소다(#274). 적지 않으면 AuthJWKSURL 옆의 주소다.
+	AuthRevocationsURL string
 	// JWTIssuer 는 받아들이는 토큰의 발급자(iss), JWTAudience 는 이 서버의 이름(aud)이다.
 	JWTIssuer   string
 	JWTAudience string
@@ -207,6 +209,7 @@ func Load(lookup Lookup) (Settings, error) {
 	port, portErr := readPort(lookup, "PORT", DefaultPort)
 	db, dbErr := LoadDatabase(lookup)
 	jwksURL, jwksErr := readHTTPURL(lookup, "AUTH_JWKS_URL")
+	revocationsURL, revocationsErr := readRevocationsURL(lookup, jwksURL)
 	rules, rulesErr := loadRules(lookup)
 	logging, loggingErr := loadLogging(lookup)
 	webhookSecret, webhookErr := readSecret(lookup, "PG_WEBHOOK_SECRET", MinWebhookSecretLength)
@@ -216,33 +219,34 @@ func Load(lookup Lookup) (Settings, error) {
 	payment, paymentErr := loadPayment(lookup)
 
 	if err := errors.Join(
-		debugErr, portErr, dbErr, jwksErr, rulesErr, loggingErr, webhookErr, welcomeErr, paymentErr,
+		debugErr, portErr, dbErr, jwksErr, revocationsErr, rulesErr, loggingErr, webhookErr, welcomeErr, paymentErr,
 		gameSecretErr, authSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret),
 		providerAllowed(logging, payment),
 	); err != nil {
 		return Settings{}, err
 	}
 	return Settings{
-		Debug:            debug,
-		AppEnvironment:   logging.AppEnvironment,
-		AppVersion:       logging.AppVersion,
-		LogLevel:         logging.LogLevel,
-		Host:             readString(lookup, "HOST", DefaultHost),
-		Port:             port,
-		DatabaseURL:      db.URL,
-		DBSchema:         db.Schema,
-		AuthJWKSURL:      jwksURL,
-		JWTIssuer:        readString(lookup, "JWT_ISSUER", DefaultJWTIssuer),
-		JWTAudience:      readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
-		SpendFreeFirst:   rules.SpendFreeFirst,
-		FreeCreditTTL:    rules.FreeCreditTTL,
-		HoldTTL:          rules.HoldTTL,
-		OrderTTL:         rules.OrderTTL,
-		WelcomeCredits:   welcome,
-		WebhookSecret:    webhookSecret,
-		GameServerSecret: gameSecret,
-		AuthServerSecret: authSecret,
-		Payment:          payment,
+		Debug:              debug,
+		AppEnvironment:     logging.AppEnvironment,
+		AppVersion:         logging.AppVersion,
+		LogLevel:           logging.LogLevel,
+		Host:               readString(lookup, "HOST", DefaultHost),
+		Port:               port,
+		DatabaseURL:        db.URL,
+		DBSchema:           db.Schema,
+		AuthJWKSURL:        jwksURL,
+		AuthRevocationsURL: revocationsURL,
+		JWTIssuer:          readString(lookup, "JWT_ISSUER", DefaultJWTIssuer),
+		JWTAudience:        readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
+		SpendFreeFirst:     rules.SpendFreeFirst,
+		FreeCreditTTL:      rules.FreeCreditTTL,
+		HoldTTL:            rules.HoldTTL,
+		OrderTTL:           rules.OrderTTL,
+		WelcomeCredits:     welcome,
+		WebhookSecret:      webhookSecret,
+		GameServerSecret:   gameSecret,
+		AuthServerSecret:   authSecret,
+		Payment:            payment,
 	}, nil
 }
 
@@ -455,6 +459,28 @@ func readHTTPURL(lookup Lookup, name string) (string, error) {
 		return "", fmt.Errorf("%s 는 http:// 나 https:// 로 시작하는 주소여야 합니다", name)
 	}
 	return value, nil
+}
+
+// jwksPath 와 revocationsPath 는 인증 서버의 두 주소의 끝이다. 둘은 같은 곳(/api/v1/auth)에 있다.
+const (
+	jwksPath        = "/jwks"
+	revocationsPath = "/session-revocations"
+)
+
+// readRevocationsURL 은 끊긴 세션 목록의 주소를 읽는다(AUTH_SESSION_REVOCATIONS_URL).
+// 적지 않으면 공개키 주소(…/jwks) 옆의 …/session-revocations 다. 공개키 주소가 그렇게 끝나지 않으면 적어야 한다.
+// 공개키 주소가 틀렸으면(jwksURL 이 비었으면) 그 오류가 이미 따로 나므로 여기서는 더하지 않는다.
+func readRevocationsURL(lookup Lookup, jwksURL string) (string, error) {
+	if value, ok := lookup("AUTH_SESSION_REVOCATIONS_URL"); ok && value != "" {
+		return readHTTPURL(lookup, "AUTH_SESSION_REVOCATIONS_URL")
+	}
+	if jwksURL == "" {
+		return "", nil
+	}
+	if !strings.HasSuffix(jwksURL, jwksPath) {
+		return "", errors.New("AUTH_JWKS_URL 이 /jwks 로 끝나지 않습니다. AUTH_SESSION_REVOCATIONS_URL 을 적어야 합니다")
+	}
+	return strings.TrimSuffix(jwksURL, jwksPath) + revocationsPath, nil
 }
 
 // readBool 은 참과 거짓을 읽는다. true, false, 1, 0 같은 값을 받는다.
