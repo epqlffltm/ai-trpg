@@ -12,6 +12,7 @@ from django.conf import settings
 from django.core import mail
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from config.redis_client import get_redis
 
@@ -20,6 +21,19 @@ LOGIN_VERIFY_URL = reverse('accounts:login-verify')
 SIGNUP_URL = reverse('accounts:signup')
 SIGNUP_VERIFY_URL = reverse('accounts:signup-verify')
 SIGNUP_COMPLETE_URL = reverse('accounts:signup-complete')
+
+
+class BrowserClient(APIClient):
+    """
+    우리 화면의 브라우저처럼 요청마다 Origin 을 붙이는 클라이언트.
+
+    브라우저는 POST 에 Origin 을 늘 붙이고, refresh 와 logout 은 허용한 출처의 요청만 받는다(accounts/origin_check.py).
+    붙이는 값은 허용 목록의 첫 출처다. 요청에 HTTP_ORIGIN 을 직접 주면 그 값이 쓰인다.
+    """
+
+    def __init__(self, *args, **defaults):
+        defaults.setdefault('HTTP_ORIGIN', settings.REFRESH_COOKIE_ALLOWED_ORIGINS[0])
+        super().__init__(*args, **defaults)
 
 
 def code_from(message) -> str:

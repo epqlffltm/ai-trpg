@@ -31,7 +31,10 @@ from config.jwt_keys import (
 from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
 from config.security import (
     SILENCED_DEPLOY_CHECKS,
+    default_cookie_origins,
+    parse_cookie_origin,
     proxy_ssl_header,
+    require_cookie_origins,
     require_secure_refresh_cookie,
     secure_cookies,
 )
@@ -246,6 +249,15 @@ SIMPLE_JWT = {
 REFRESH_COOKIE_SECURE = env.bool('REFRESH_COOKIE_SECURE', default=True)
 # 운영에서는 끌 수 없다. 끄면 서버가 뜨지 않는다
 require_secure_refresh_cookie(REFRESH_COOKIE_SECURE, APP_ENVIRONMENT)
+
+# refresh 쿠키를 쓰는 주소(refresh, logout)를 부를 수 있는 출처.
+# 요청의 Origin 머리말과 비교한다(accounts/origin_check.py).
+# 화면을 여는 주소를 적는다. 개발에서 적지 않으면 compose 의 nginx 주소다. 운영에서는 꼭 적고 https 여야 한다
+REFRESH_COOKIE_ALLOWED_ORIGINS = [
+    parse_cookie_origin(value)
+    for value in env.list('REFRESH_COOKIE_ALLOWED_ORIGINS', default=default_cookie_origins(APP_ENVIRONMENT))
+]
+require_cookie_origins(REFRESH_COOKIE_ALLOWED_ORIGINS, APP_ENVIRONMENT)
 
 
 # 운영 환경의 보안(config/security.py)
