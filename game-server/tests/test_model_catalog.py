@@ -5,13 +5,15 @@
 
 "오늘"은 테스트가 정한다. 실제 시계를 읽지 않는다.
 
-넷을 본다.
+다섯을 본다.
   - 모양: 이름표, 출력 상한의 칸과 창구, 바꿀 것, 단가(app/catalog/schemas.py).
   - 판단: 은퇴, 쓸 수 있나, 1라운드 원가 어림(app/catalog/rules.py).
   - 모델: 넣기(꺼진 채로, 겹치면 거절), 바꾸기(적은 것만), 켜기(원가가 있고 은퇴하지 않아야), 끄기, 은퇴일.
   - 원가: 덧붙이기만 한다. 그날의 단가는 그날 이전에 시작한 것 중 가장 늦은 것, 같은 날이면 나중에 적은 것이다.
+  - 날짜판: 따로 둔 일로만 바꾼다. 바꾸면 기록이 남고 모델이 꺼진다. 이름표와 값은 그대로다.
 """
 
+import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -24,7 +26,7 @@ from app.catalog import repository, service
 from app.catalog.errors import CatalogConflictError, Conflict, InvalidModelError, ModelNotFoundError
 from app.catalog.models import AiModel, AiModelCost, Grade, Provider, TokenLimitField
 from app.catalog.rules import is_offered, is_retired, round_cost_usd
-from app.catalog.schemas import SLUG_MAX_LENGTH, CostCreate, ModelCreate, ModelUpdate
+from app.catalog.schemas import SLUG_MAX_LENGTH, CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -355,3 +357,94 @@ async def test_cache_prices_are_kept(session: AsyncSession):
 
     current = await repository.cost_on(session, 'claude-opus-5-5', TODAY)
     assert (current.cached_input_per_mtok, current.cache_write_per_mtok) == (Decimal('0.4'), Decimal('5'))
+
+
+# --- 날짜판 ---
+
+NEXT_LUNA = 'gpt-6-luna-2026-12-01'
+
+
+async def enabled_luna(session: AsyncSession) -> None:
+    """원가를 적고 켠 LUNA."""
+    await service.add_model(session, LUNA)
+    await service.add_cost(session, 'gpt-6-luna', cost())
+    await service.enable_model(session, 'gpt-6-luna', TODAY)
+
+
+def test_an_update_cannot_change_the_snapshot():
+    # 날짜판은 SnapshotSwitch 로만 바꾼다
+    with pytest.raises(ValidationError):
+        ModelUpdate(api_model_id=NEXT_LUNA)
+
+
+async def test_switching_the_snapshot_keeps_the_slug_and_disables_the_model(session: AsyncSession):
+    await enabled_luna(session)
+
+    await service.switch_snapshot(session, 'gpt-6-luna', SnapshotSwitch(api_model_id=NEXT_LUNA, note='공지'))
+
+    model = await fresh_model(session, 'gpt-6-luna')
+    assert (model.api_model_id, model.enabled) == (NEXT_LUNA, False)
+    # 같은 상품이라 값은 그대로다. 평가를 다시 통과하면 그대로 켤 수 있다
+    await service.enable_model(session, 'gpt-6-luna', TODAY)
+
+
+async def test_a_switch_is_recorded(session: AsyncSession):
+    await enabled_luna(session)
+    await service.switch_snapshot(session, 'gpt-6-luna', SnapshotSwitch(api_model_id=NEXT_LUNA, note='공지'))
+    await service.switch_snapshot(session, 'gpt-6-luna', SnapshotSwitch(api_model_id='gpt-6-luna-2027-03-01'))
+
+    detail = await service.show_model(session, 'gpt-6-luna')
+
+    # 나중에 바꾼 것부터
+    assert [(row.previous_api_model_id, row.api_model_id, row.note) for row in detail.snapshots] == [
+        (NEXT_LUNA, 'gpt-6-luna-2027-03-01', None),
+        ('gpt-6-luna-2026-09-22', NEXT_LUNA, '공지'),
+    ]
+
+
+async def test_switching_to_the_same_snapshot_is_refused(session: AsyncSession):
+    await service.add_model(session, LUNA)
+
+    with pytest.raises(CatalogConflictError) as caught:
+        await service.switch_snapshot(session, 'gpt-6-luna', SnapshotSwitch(api_model_id=LUNA.api_model_id))
+    assert caught.value.reason == Conflict.SAME_SNAPSHOT
+    assert (await service.show_model(session, 'gpt-6-luna')).snapshots == []
+
+
+async def test_switching_to_a_snapshot_another_model_uses_is_refused(session: AsyncSession):
+    await service.add_model(session, LUNA)
+    await service.add_model(session, luna_with(slug='gpt-6-luna-mini', api_model_id=NEXT_LUNA))
+
+    with pytest.raises(CatalogConflictError) as caught:
+        await service.switch_snapshot(session, 'gpt-6-luna', SnapshotSwitch(api_model_id=NEXT_LUNA))
+    assert caught.value.reason == Conflict.API_MODEL_TAKEN
+
+
+async def test_switching_an_unknown_model_is_not_found(session: AsyncSession):
+    with pytest.raises(ModelNotFoundError):
+        await service.switch_snapshot(session, 'nothing', SnapshotSwitch(api_model_id=NEXT_LUNA))
+
+
+async def test_switches_at_the_same_time_keep_the_chain(app, session: AsyncSession, monkeypatch: pytest.MonkeyPatch):
+    await service.add_model(session, LUNA)
+    checked = service.require_new_snapshot
+
+    async def slow_check(*args) -> None:
+        # 읽고 나서 잠깐 쉰다. 잠그지 않으면 그사이에 다른 쪽도 옛 이름을 읽는다
+        await checked(*args)
+        await asyncio.sleep(0.05)
+
+    monkeypatch.setattr(service, 'require_new_snapshot', slow_check)
+
+    async def switch(api_model_id: str) -> None:
+        async with app.state.session_factory() as own:
+            await service.switch_snapshot(own, 'gpt-6-luna', SnapshotSwitch(api_model_id=api_model_id))
+
+    await asyncio.gather(switch(NEXT_LUNA), switch('gpt-6-luna-2027-03-01'))
+
+    # 모델의 줄을 잠그므로 뒤에 바꾼 쪽은 앞에서 바꾼 이름을 "앞의 이름"으로 적는다
+    detail = await service.show_model(session, 'gpt-6-luna')
+    later, earlier = detail.snapshots
+    assert earlier.previous_api_model_id == LUNA.api_model_id
+    assert later.previous_api_model_id == earlier.api_model_id
+    assert detail.model.api_model_id == later.api_model_id

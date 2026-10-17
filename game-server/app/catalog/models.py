@@ -3,10 +3,11 @@
 """
 모델 목록. 서술에 쓸 수 있는 언어 모델들과, 모델마다의 원가 단가다.
 
-표 둘이다.
+표 셋이다.
   - ai_models: 모델 하나에 한 줄. 어느 창구(provider)로 부르고, API 에 어떤 이름으로 보내고, 어떻게 보이고, 켜져 있는가.
   - ai_model_costs: 모델의 원가 단가(USD, 백만 토큰당). 덧붙이기만 한다. 고치지도 지우지도 않는다.
     공급자가 가격을 바꾸면 새 줄을 적는다. 그래야 "그때 원가가 얼마였나"를 나중에 볼 수 있다.
+  - ai_model_snapshots: 날짜판(API 모델 이름)을 바꾼 기록. 덧붙이기만 한다.
 
 판매가(1인 1라운드에 몇 크레딧)는 여기 없다. 결제 서버의 가격표(price_versions)가 정한다.
 여기는 공급자에게 내는 값이다. 판매가를 정할 때와 실제 사용량의 원가를 잴 때 쓴다.
@@ -14,9 +15,13 @@
 규칙 몇 가지.
   - 모델을 지우지 않는다. 지난 라운드와 청구 기록이 그 모델을 가리킨다.
     빼려면 끄거나(enabled) 은퇴일(retires_on)을 적는다.
-  - 이름표(slug), 창구, API 모델 이름은 만든 뒤에 바꾸지 않는다. API 모델 이름이 바뀌면 다른 모델이다.
-    같은 이름표가 다른 모델을 가리키면 서술의 목소리가 말없이 바뀐다. 새 줄로 넣는다.
-  - API 모델 이름에는 날짜가 붙은 이름(스냅숏)을 적는다. 별칭(gpt-x-latest 같은)은 공급자가 말없이 다른 모델로 돌린다.
+  - 이름표(slug)는 상품 이름이다(gpt-6-1-sol, claude-opus-5-5). 결제 서버의 가격 코드가 이것을 그대로 쓴다.
+    이름표와 창구는 바꾸지 않는다.
+  - API 모델 이름에는 날짜가 붙은 이름(날짜판)을 적는다. 별칭(gpt-x-latest 같은)은 공급자가 말없이 다른 모델로 돌린다.
+    공급자가 새 날짜판을 내면 이름표는 그대로 두고 날짜판만 바꾼다(유저 결정, 2026-10-17). 같은 상품이라 값도 그대로다.
+    다만 서술의 목소리가 바뀔 수 있다. 그래서 날짜판은 따로 둔 명령으로만 바꾼다
+    (app/catalog/service.py 의 switch_snapshot).
+    바꾸면 기록이 남고 모델이 꺼진다. 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다.
   - 새로 넣은 모델은 꺼진 채로 시작한다. 원가를 적고, 평가 장면을 통과한 뒤에 켠다.
 
 창구(provider)와 분류(grade)는 코드가 아는 값만 받는다.
@@ -162,3 +167,22 @@ class AiModelCost(Base):
     note: Mapped[str | None] = mapped_column(String(200))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AiModelSnapshot(Base):
+    """날짜판을 바꾼 일 하나. 앞의 이름과 새 이름. 덧붙이기만 한다."""
+
+    __tablename__ = 'ai_model_snapshots'
+    __table_args__ = (
+        CheckConstraint('previous_api_model_id <> api_model_id', name='snapshot_changes'),
+        # "이 모델의 날짜판이 어떻게 바뀌었나"를 바꾼 순서대로 찾는다
+        Index('ix_ai_model_snapshots_model_slug_id', 'model_slug', 'id'),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    model_slug: Mapped[str] = mapped_column(ForeignKey('ai_models.slug', ondelete='RESTRICT'))
+    previous_api_model_id: Mapped[str] = mapped_column(String(200))
+    api_model_id: Mapped[str] = mapped_column(String(200))
+    # 덧붙일 말(공급자의 공지, 바꾼 까닭 …)
+    note: Mapped[str | None] = mapped_column(String(200))
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -58,7 +58,8 @@ class ModelUpdate(BaseModel):
     """
     모델에서 바꿀 것. 적은 것만 바꾼다. 하나는 적어야 한다.
 
-    이름표, 창구, API 모델 이름은 없다. 바꾸지 않는다(app/catalog/models.py).
+    이름표와 창구는 없다. 바꾸지 않는다(app/catalog/models.py).
+    API 모델 이름(날짜판)도 없다. 날짜판은 SnapshotSwitch 로만 바꾼다. 바꾸면 모델이 꺼진다.
     출력 상한의 칸을 비우는 일도 없다. 칸을 적는 창구의 모델은 늘 칸이 있어야 하고, 아닌 창구의 모델은 늘 없다.
     """
 
@@ -102,3 +103,12 @@ class CostCreate(BaseModel):
         if self.cached_input_per_mtok is not None and self.cached_input_per_mtok > self.input_per_mtok:
             raise ValueError('캐시 읽기 단가가 입력 단가보다 비싸다. 칸을 바꿔 적지 않았나 본다')
         return self
+
+
+class SnapshotSwitch(BaseModel):
+    """날짜판 바꾸기. 새 API 모델 이름과 덧붙일 말."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    api_model_id: ApiModelId
+    note: Note | None = None
