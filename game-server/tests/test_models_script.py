@@ -250,3 +250,28 @@ async def test_a_claude_model_without_a_reasoning_style_is_refused(session: Asyn
 
     assert code == 1
     assert '생각을 켜고 끄는 방식' in lines[0]
+
+
+async def test_a_gemini_model_is_added_with_a_gemini_style(session: AsyncSession):
+    argon = [
+        'add',
+        'gemini-4-argon',
+        '--provider',
+        'gemini',
+        '--api-model-id',
+        'gemini-4-argon',
+        '--name',
+        'Gemini 4 Argon',
+        '--vendor',
+        'google',
+        '--grade',
+        'premium',
+        '--no-temperature',
+        '--reasoning-style',
+    ]
+
+    assert (await run(session, *argon, 'level_low'))[0] == 0
+    code, lines = await run(session, *[part if part != 'gemini-4-argon' else 'gemini-x' for part in argon], 'always')
+    # always 는 Claude 의 방식이다
+    assert code == 1
+    assert '받는 생각의 방식이 아니다' in lines[0]

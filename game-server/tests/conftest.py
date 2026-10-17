@@ -53,7 +53,7 @@ def make_test_settings(**overrides) -> Settings:
     # 제한을 보는 테스트만 켠다(tests/test_attempt_limits.py).
     # Redis 는 쓰지 않는다(메모리). Redis 로 세는 것은 그 파일이 따로 본다
     # premium 등급의 모델은 비워 둔다. 언어 모델을 켠 테스트에서 개발자의 .env 가 고를 수 있는 등급을 바꾸지 않는다
-    # OpenAI, Anthropic 의 키와 주소도 비우고 고정한다. 개발자의 .env 에 진짜 키가 있어도
+    # OpenAI, Anthropic, Gemini 의 키와 주소도 비우고 고정한다. 개발자의 .env 에 진짜 키가 있어도
     # 테스트가 실제 API 를 부르거나 키를 쥐지 않는다
     # 로그는 경고부터 남긴다. 요청마다 한 줄씩 남는 것(info)까지 남기면, 로그를 잡아 "이 줄 하나만 남았다"를 보는
     # 테스트에 요청의 줄이 섞인다. 요청의 줄을 보는 테스트는 그 로거의 수준을 내려서 잡는다
@@ -76,6 +76,8 @@ def make_test_settings(**overrides) -> Settings:
         'openai_base_url': 'https://api.openai.com/v1',
         'anthropic_api_key': '',
         'anthropic_base_url': 'https://api.anthropic.com',
+        'gemini_api_key': '',
+        'gemini_base_url': 'https://generativelanguage.googleapis.com',
         'redis_url': '',
         'limits_enabled': False,
     }
