@@ -11,7 +11,8 @@
   - 모델마다 두 번까지 부른다. 사이에 1~2초를 무작위로 쉰다.
     여러 테이블이 함께 실패해도 다시 부르는 때가 흩어진다.
   - 같은 요청을 다시 보내 봐야 소용없는 실패(요청이나 설정이 틀림)는 그 모델로 다시 부르지 않는다.
-  - 다른 모델로 가도 소용없는 실패(서버가 꺼짐, 권한 없음)면 넘어가지 않고 그만둔다. 모델들은 같은 서버에 있다.
+  - 다른 모델로 가도 소용없는 실패(서버가 꺼짐, 권한 없음)면 넘어가지 않고 그만둔다. 모델들은 같은 서버에 있다고 본다.
+    한 등급에 창구가 다른 모델을 섞어 적으면 이 가정이 맞지 않는다. 섞어 적지 않는다(넘어가기는 모델 고르기에서 없앤다).
   - 서술 하나에 쓰는 시간에 상한이 있다(NARRATION_BUDGET_SECONDS). 남은 시간이 한 번 부르는 시간보다 짧으면
     새로 부르지 않는다. 부르는 도중에 끊지 않으므로 시작한 호출은 모두 끝나고 기록된다.
 끝내 실패하면 NarrationFailed 를 올린다. 이유는 마지막 실패의 것이다.
@@ -27,6 +28,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.ai.provider import ProviderError
+from app.ai.routing import UNROUTABLE
 from app.core.config import NARRATION_BUDGET_SECONDS
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Narrator, Preview
@@ -36,8 +38,11 @@ ATTEMPTS_PER_MODEL = 2
 # 다시 부르기 전에 쉬는 시간(초)의 범위. 이 안에서 무작위로 고른다
 PAUSE_SECONDS = (1.0, 2.0)
 
-# 같은 모델로 다시 불러도 소용없는 실패. 요청이나 설정이 틀렸다(404 는 그 이름의 모델이 없다)
-NOT_FOR_THIS_MODEL = frozenset({'status_400', 'status_401', 'status_403', 'status_404', 'status_422', 'no_story'})
+# 같은 모델로 다시 불러도 소용없는 실패. 요청이나 설정이 틀렸다(404 는 그 이름의 모델이 없다).
+# 모델 목록의 모델을 부를 수 없는 것(꺼짐, 키 없음, 창구의 코드 없음)도 같다(app/ai/routing.py)
+NOT_FOR_THIS_MODEL = (
+    frozenset({'status_400', 'status_401', 'status_403', 'status_404', 'status_422', 'no_story'}) | UNROUTABLE
+)
 # 다른 모델로 넘어가도 소용없는 실패. 서버가 꺼졌거나, 권한이 없거나, 요청에 이야기의 바탕이 없다
 NOT_FOR_ANY_MODEL = frozenset({'unreachable', 'status_401', 'status_403', 'no_story'})
 

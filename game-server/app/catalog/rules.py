@@ -10,8 +10,9 @@
 
 from datetime import date
 from decimal import Decimal
+from typing import Protocol
 
-from app.catalog.models import AiModel, AiModelCost, Provider, TokenLimitField
+from app.catalog.models import AiModelCost, Provider, TokenLimitField
 
 # 출력 상한의 칸을 적어야 하는 창구. OpenAI 모양의 API 다. 나머지 창구는 칸이 정해져 있어 적지 않는다
 TOKEN_FIELD_PROVIDERS = frozenset({Provider.OPENAI, Provider.LOCAL})
@@ -20,6 +21,16 @@ TOKEN_FIELD_PROVIDERS = frozenset({Provider.OPENAI, Provider.LOCAL})
 ROUND_INPUT_TOKENS = 12_000
 ROUND_OUTPUT_TOKENS = 1_200
 MILLION = Decimal(1_000_000)
+
+
+class Switchable(Protocol):
+    """켜짐과 은퇴일이 있는 것. 모델의 ORM 객체(AiModel)와 찾은 값(app/catalog/lookup.py 의 CatalogModel)이 맞는다."""
+
+    @property
+    def enabled(self) -> bool: ...
+
+    @property
+    def retires_on(self) -> date | None: ...
 
 
 def token_field_problem(provider: Provider, field: TokenLimitField | None) -> str | None:
@@ -31,12 +42,12 @@ def token_field_problem(provider: Provider, field: TokenLimitField | None) -> st
     return None
 
 
-def is_retired(model: AiModel, today: date) -> bool:
+def is_retired(model: Switchable, today: date) -> bool:
     """그날 은퇴했나. 은퇴일 당일부터 은퇴다."""
     return model.retires_on is not None and today >= model.retires_on
 
 
-def is_offered(model: AiModel, today: date) -> bool:
+def is_offered(model: Switchable, today: date) -> bool:
     """그날 쓸 수 있나. 켜져 있고 은퇴하지 않았다."""
     return model.enabled and not is_retired(model, today)
 

@@ -1419,7 +1419,8 @@ AI 를 부르지 않는 가짜 서술자(`app/rounds/fake_narrator.py`)는 선�
 app/ai/
   provider.py         provider 의 모양(LLMProvider)과 메시지, 생성 설정, 결과의 타입. 어느 회사의 SDK 타입도 쓰지 않는다
   fake.py             가짜 provider. 정해 둔 글을 돌려주고 받은 것을 적어 둔다. 자동 테스트는 이것만 쓴다
-  openai_compat.py    OpenAI 와 같은 모양의 주소를 부르는 provider. Ollama, LM Studio, vLLM 을 이것 하나로 부른다
+  openai_compat.py    OpenAI 와 같은 모양의 주소를 부르는 provider. Ollama, LM Studio, vLLM, OpenAI 를 이것 하나로 부른다
+  routing.py          모델의 이름으로 창구를 고른다(ModelRouter). 모델 목록의 이름표면 목록대로, 아니면 서버 곁의 모델
   calls.py            AI 호출 한 번의 기록(CallRecord)과 기록을 받는 곳의 모양(CallLog)
   call_log.py         기록을 DB(ai_invocations)에 쓰는 기록장
   models.py           ai_invocations 표
@@ -1430,6 +1431,7 @@ app/rounds/
   narration_request.py  DB 의 라운드를 서술자에게 줄 모양으로 바꾼다. 각자 한 일을 라운드에 굳히고 다시 읽는다
   move_lines.py       각자 한 일을 한 줄로 적는 순수 함수(describe_move …). 가짜 서술자와 프롬프트가 함께 쓴다
   fake_narrator.py    AI 를 부르지 않는 가짜 서술자. 한 일의 줄을 그대로 늘어놓는다
+  routed_narrator.py  서술할 때마다 창구를 골라(routing.py) 언어 모델 서술자로 부르는 서술자
   prompt.py           메시지를 조립하는 순수 함수. 틀의 버전(PROMPT_VERSION)
   llm_narrator.py     조립 → provider 호출 → 받은 글 검사 → 호출 기록
   narrator_setup.py   설정(NARRATOR)을 보고 앱에 꽂을 서술자를 고른다
@@ -1487,13 +1489,40 @@ LM Studio 면 `LLM_BASE_URL=http://127.0.0.1:1234/v1` 이다. `NARRATOR=llm` 인
 - 라운드는 연 때의 등급의 모델들로 서술한다(`app/rounds/tiered_narrator.py`). 다시 시도하기와 넘어가기는 그 등급 안에서만 한다. 등급 안에서 다음 모델로 넘어가도 값은 그대로다(라운드를 열 때 건 값). 다른 등급의 모델로는 넘어가지 않는다. 값이 다르다.
 - **`premium` 을 켜기 전에 결제 서버의 가격표에 `narration.premium` 을 먼저 적는다**(`billing-server` 의 `go run ./cmd/prices set narration.premium <크레딧> -reason "..."`). 없으면 결제 서버가 홀드를 받지 않는다(400). 그 라운드의 청구는 `failed` 가 되고(`billing.rejected`) 서술하지 않는다(`billing_unavailable`).
 - `premium` 의 모델을 지운 뒤에도 그 등급으로 이미 연 라운드는 서술하지 않는다(`tier_unavailable`). 더 싼 등급으로 서술하면 낸 값과 받은 서술이 어긋난다. 설정을 되돌리고 방장이 다시 맡기면 서술한다. 등급을 거두려면 먼저 그 등급의 테이블이 다음 라운드부터 `standard` 가 되게 한다.
-- 모델은 모두 같은 주소(`LLM_BASE_URL`)에 있다. 클라우드 모델처럼 주소와 키가 다른 provider 를 등급에 붙이는 것은 그 provider 를 더할 때 한다.
+- 적은 이름이 [모델 목록](#모델-목록)의 이름표면 목록의 창구로 부른다(아래 "외부 API 모델"). 아니면 `LLM_BASE_URL` 의 그 모델이다. 한 등급에 창구가 다른 모델을 섞어 적지 않는다. 넘어가기 규칙은 모델들이 같은 서버에 있다고 본다.
+
+**외부 API 모델(OpenAI).** [모델 목록](#모델-목록)에 넣은 모델은 설정에 이름표를 적어 부른다(`app/ai/routing.py`).
+
+```
+NARRATOR=llm
+LLM_MODEL=gpt-6-luna
+# 비밀값이다. .env 에만 적는다. 비우면 openai 창구의 모델을 부르지 않는다
+OPENAI_API_KEY=
+# 기본값이 있다
+OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+- 서술할 때마다 모델 목록을 DB 에서 한 줄 읽는다. 관리 명령으로 끄거나 날짜판을 바꾸면 서버를 다시 띄우지 않아도 다음 서술부터 맞는다. 읽는 것은 모양(`app/catalog/lookup.py` 의 `ModelLookup`)을 거친다. 서술이 잦아지면 같은 모양의 캐시로 바꿔 꽂는다.
+- 목록의 창구, 날짜판(API 모델 이름), 받는 칸(출력 상한의 칸, 온도, 생각의 깊이)대로 보낸다. 키는 `Authorization` 머리에만 싣고 로그, 오류, 기록에 싣지 않는다.
+- 부를 수 없으면 다른 모델로 바꿔 부르지 않고 그 서술이 실패한다: 꺼졌거나 은퇴함(`model_unavailable`), 키가 없음(`provider_not_configured`), 그 창구의 코드가 아직 없음(`provider_unsupported`, Claude·Gemini).
+- 기록(`ai_invocations.provider`)에는 서버 곁의 모델이면 `openai_compat`, OpenAI 면 `openai` 가 남는다.
+- 장부 초안도 같은 것으로 고른다. 고르지 못하면 초안 없이 지나간다.
+- 키를 만들 때 OpenAI 의 Limits 화면에서 월 사용 한도를 낮게 걸어 둔다.
+
+**모델 하나 불러 보기.** 목록에 넣은 모델이 키와 날짜판으로 정말 불리는지 켜기 전에 본다. 짧은 장면 하나를 쓰게 하고 글, 토큰 수, 첫 글까지의 시간을 찍는다. 꺼진 모델도 부른다. 은퇴한 모델은 부르지 않는다. 실제로 부르므로 값이 든다.
+
+```powershell
+uv run python -m scripts.try_model gpt-6-luna
+uv run python -m scripts.try_model gpt-6-luna --reasoning low --max-tokens 400
+uv run python -m scripts.try_model gemma4:26b
+```
 
 **다시 시도하기와 넘어가기.** 서술이 실패하면 같은 모델로 한 번 더 부르고, 그래도 안 되면 `LLM_FALLBACK_MODELS` 의 모델로 차례로 넘어간다(`app/rounds/retrying_narrator.py`).
 - 모델마다 두 번까지 부른다. 다시 부르기 전에 1~2초를 무작위로 쉰다. 여러 테이블이 함께 실패해도 다시 부르는 때가 흩어진다.
 - 다시 부르는 실패: `timeout`, `unreachable`, `interrupted`, `stream_error`, `status_429`, `status_5xx`, `malformed`, 그리고 답은 왔지만 쓰지 않은 것(`cut_off`, `empty`, `too_long`. 모델의 글은 매번 다르다).
 - 같은 모델로 다시 부르지 않는 실패: `status_400`, `401`, `403`, `404`, `422`. 요청이나 설정이 틀렸다. 같은 것을 보내면 또 실패한다.
 - 다음 모델로도 넘어가지 않는 실패: `unreachable`(모델들은 같은 서버에 있다), `401`, `403`. 그 자리에서 그만둔다.
+- 모델 목록의 모델을 부를 수 없는 것(`model_unavailable`, `provider_not_configured`, `provider_unsupported`)은 같은 모델로 다시 부르지 않는다. 부르지 않았으므로 `ai_invocations` 에 남지 않고 warning 한 줄이 남는다.
 - 서술 하나에 쓰는 시간은 150초를 넘지 않는다. 남은 시간이 한 번 부르는 시간(`LLM_TIMEOUT_SECONDS`)보다 짧으면 새로 부르지 않는다. 부르는 도중에 끊지 않으므로, 시작한 호출은 모두 끝나고 기록된다.
 - 시도 하나하나가 `ai_invocations` 에 따로 남는다.
 - 쓰는 동안의 글은 앉은 사람들에게 미리 보기로 흘러간다. 시도가 바뀌면 미리 보기도 새로 시작한다([서술의 미리 보기](#서술의-미리-보기)).
@@ -1821,7 +1850,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **켜기**: 새로 넣은 모델은 꺼져 있다. 그날의 원가가 있고 은퇴하지 않았어야 켤 수 있다. 원가를 적고 평가 장면을 통과한 뒤에 켠다.
 - **그날의 단가**는 그날 이전에 시작한 것 중 가장 늦은 것이다. 같은 날이면 나중에 적은 것이다. 행사가가 끝나는 날의 값을 미리 적어 둘 수 있고, 잘못 적은 값은 같은 날로 다시 적어 고친다. 앞의 줄은 남는다.
 
-아직 서술은 이 목록을 읽지 않는다. 서술 등급의 모델은 지금처럼 설정(`LLM_MODEL`, `LLM_PREMIUM_MODEL`)이 정한다. 목록으로 부르는 것은 외부 API 창구와 함께 붙인다.
+서술 등급의 모델은 지금처럼 설정(`LLM_MODEL`, `LLM_PREMIUM_MODEL`)이 정한다. 거기에 이름표를 적으면 이 목록대로 부른다([외부 API 모델](#라운드)). 켜기 전에는 `scripts.try_model` 로 불러 본다.
 
 ### 관리 명령
 

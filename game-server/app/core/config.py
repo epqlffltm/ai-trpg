@@ -95,7 +95,9 @@ class Settings(BaseSettings):
     # 기본은 같은 PC 의 Ollama 다. Ollama 는 인증이 없으므로 같은 PC(127.0.0.1) 밖으로 열지 않는다
     llm_base_url: str = 'http://127.0.0.1:11434/v1'
 
-    # 모델의 이름. narrator=llm 이면 반드시 적는다(예: gemma4:26b)
+    # 모델의 이름. narrator=llm 이면 반드시 적는다(예: gemma4:26b).
+    # 모델 목록(app/catalog, scripts/models.py)의 이름표를 적으면 목록의 창구와 날짜판으로 부른다(예: gpt-6-luna).
+    # 목록에 없는 이름이면 LLM_BASE_URL 의 그 모델을 부른다. 아래의 넘어갈 모델, premium 모델도 같다
     llm_model: str = ''
 
     # 첫 모델이 끝내 실패하면 차례로 넘어갈 모델들. 쉼표로 나눠 적는다(예: gemma4:31b-it-qat,qwen3.6:27b).
@@ -114,8 +116,15 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=NARRATION_BUDGET_SECONDS)
 
     # 모델이 추론 수준(reasoning_effort)을 아는가. 알면 늘 보내서 기본으로 추론을 끈다.
-    # 모르는 모델에 보냈다가 오류가 나면 false 로 바꾼다
+    # 모르는 모델에 보냈다가 오류가 나면 false 로 바꾼다. 모델 목록의 모델은 목록에 적은 것을 따른다
     llm_supports_reasoning: bool = True
+
+    # OpenAI 의 API 키. 비우면 모델 목록의 openai 창구 모델을 부르지 않는다(그 서술은 provider_not_configured).
+    # 비밀값이다. .env 에만 적는다. 로그, 오류, 호출 기록에 싣지 않는다.
+    # 키에 월 사용 한도를 걸어 둔다(OpenAI 의 Limits 화면)
+    openai_api_key: SecretStr = SecretStr('')
+    # OpenAI 의 API 주소. /chat/completions 앞까지다. 바꿀 일이 거의 없다
+    openai_base_url: str = 'https://api.openai.com/v1'
 
     # 서술을 동시에 몇 개까지 돌리나(app/core/jobs.py, #275). 넘는 것은 차례를 기다린다.
     # 모델이 한 번에 받는 수(Ollama 의 OLLAMA_NUM_PARALLEL, 외부 API 의 속도 제한)에 맞춘다.
