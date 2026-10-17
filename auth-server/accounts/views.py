@@ -31,6 +31,7 @@ from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refr
 from accounts.email_codes import InvalidEmailCodeError
 from accounts.jwks import build_jwks
 from accounts.login_tickets import InvalidLoginTicketError
+from accounts.origin_check import is_allowed_origin, log_refused_origin, read_origin
 from accounts.serializers import (
     EmailSerializer,
     LoginChallengeSerializer,
@@ -113,6 +114,27 @@ def build_session_expired_response() -> Response:
     )
     clear_refresh_cookie(response)
     return response
+
+
+def build_origin_refused_response() -> Response:
+    """
+    허용하지 않은 출처에서 온 쿠키 요청의 응답. 쿠키는 지우지 않는다.
+
+    지우면 다른 곳의 페이지가 사용자를 로그아웃시킬 수 있다. 그것이 이 검사로 막으려는 일이다.
+    """
+    return Response(
+        {'detail': '허용하지 않은 곳에서 온 요청입니다.', 'code': 'origin_not_allowed'},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def refuse_unknown_origin(request: Request) -> Response | None:
+    """쿠키를 쓰는 요청의 출처를 본다. 허용하지 않은 출처면 거부 응답을, 허용한 출처면 None 을 돌려준다."""
+    origin = read_origin(request)
+    if is_allowed_origin(origin):
+        return None
+    log_refused_origin(origin, request.path)
+    return build_origin_refused_response()
 
 
 def build_login_ticket_invalid_response() -> Response:
@@ -436,6 +458,11 @@ class RefreshView(APIView):
     authentication_classes = []
 
     def post(self, request: Request) -> Response:
+        # 쿠키를 읽기 전에 본다. 우리 화면에서 온 요청에만 쿠키를 쓴다
+        refused = refuse_unknown_origin(request)
+        if refused is not None:
+            return refused
+
         refresh_token = read_refresh_cookie(request)
         if refresh_token is None:
             return build_session_expired_response()
@@ -457,6 +484,11 @@ class LogoutView(APIView):
     authentication_classes = []
 
     def post(self, request: Request) -> Response:
+        # 다른 곳의 페이지가 사용자를 로그아웃시키지 못하게 한다
+        refused = refuse_unknown_origin(request)
+        if refused is not None:
+            return refused
+
         refresh_token = read_refresh_cookie(request)
         if refresh_token is not None:
             # 이미 쓸 수 없는 토큰이면 로그아웃의 목적은 이미 달성되어 있다

@@ -15,7 +15,7 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 
 from accounts.cookies import REFRESH_COOKIE_NAME, REFRESH_COOKIE_PATH
 from accounts.models import User
-from accounts.tests.helpers import log_in
+from accounts.tests.helpers import BrowserClient, log_in
 from accounts.tokens import RefreshToken, issue_token_pair, revoke_all_sessions
 
 REFRESH_URL = reverse('accounts:refresh')
@@ -42,6 +42,8 @@ def create_user(**overrides) -> User:
 class RefreshTestCase(APITestCase):
     """로그인해서 refresh 쿠키를 가진 상태에서 시작한다."""
 
+    client_class = BrowserClient
+
     def setUp(self):
         self.user = create_user()
         self.login_response = self.login(self.client)
@@ -54,13 +56,13 @@ class RefreshTestCase(APITestCase):
 
     def client_with_refresh_token(self, refresh_token: str) -> APIClient:
         """주어진 refresh 토큰을 쿠키로 가진 새 클라이언트. 다른 기기나 공격자를 흉내 낸다."""
-        client = APIClient()
+        client = BrowserClient()
         client.cookies[REFRESH_COOKIE_NAME] = refresh_token
         return client
 
     def get_me(self, access_token: str):
         # 쿠키가 없는 새 클라이언트로 요청한다. access 토큰만으로 인증되는지 본다
-        return APIClient().get(ME_URL, HTTP_AUTHORIZATION=f'Bearer {access_token}')
+        return BrowserClient().get(ME_URL, HTTP_AUTHORIZATION=f'Bearer {access_token}')
 
 
 class RefreshCookieTests(RefreshTestCase):
@@ -119,7 +121,7 @@ class RefreshRotationTests(RefreshTestCase):
         self.assertEqual(BlacklistedToken.objects.count(), 1)
 
     def test_requires_cookie(self):
-        response = APIClient().post(REFRESH_URL)
+        response = BrowserClient().post(REFRESH_URL)
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -190,7 +192,7 @@ class RefreshReuseTests(RefreshTestCase):
     def test_user_can_log_in_again_after_reuse(self):
         self.client_with_refresh_token(self.stolen_refresh_token).post(REFRESH_URL)
 
-        new_client = APIClient()
+        new_client = BrowserClient()
         self.login(new_client)
 
         self.assertEqual(new_client.post(REFRESH_URL).status_code, status.HTTP_200_OK)
@@ -199,7 +201,7 @@ class RefreshReuseTests(RefreshTestCase):
         # #272: 재사용을 한 번 감지해 모든 세션을 끊었다. 그 뒤에 새로 로그인한 세션은
         # 같은 옛 토큰을 다시 보내도 끊기지 않는다. 옛 토큰이 남을 로그아웃시키는 수단이 되지 않는다
         self.client_with_refresh_token(self.stolen_refresh_token).post(REFRESH_URL)
-        new_client = APIClient()
+        new_client = BrowserClient()
         access_token = self.login(new_client).data['access_token']
         version = User.objects.get(pk=self.user.pk).token_version
 
@@ -216,7 +218,7 @@ class RefreshReuseTests(RefreshTestCase):
     def test_reuse_of_a_current_token_still_cuts_every_session(self):
         # 지금 세대의 재사용은 여전히 탈취의 신호다. 새 세션에서 갱신한 뒤 그 앞의 토큰을 다시 보낸다
         self.client_with_refresh_token(self.stolen_refresh_token).post(REFRESH_URL)
-        new_client = APIClient()
+        new_client = BrowserClient()
         self.login(new_client)
         current_but_used = self.refresh_cookie_value(new_client)
         new_client.post(REFRESH_URL)
@@ -229,7 +231,7 @@ class RefreshReuseTests(RefreshTestCase):
     def test_a_token_from_before_logout_all_is_refused_without_cutting_again(self):
         # 모든 기기 로그아웃으로 버전이 올랐다. 그 전의 폐기된 토큰도 지난 세대라 거부만 한다
         revoke_all_sessions(self.user)
-        new_client = APIClient()
+        new_client = BrowserClient()
         self.login(new_client)
         version = User.objects.get(pk=self.user.pk).token_version
 
@@ -256,7 +258,7 @@ class LogoutTests(RefreshTestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_does_not_end_other_sessions(self):
-        other_device = APIClient()
+        other_device = BrowserClient()
         self.login(other_device)
 
         self.client.post(LOGOUT_URL)
@@ -267,7 +269,7 @@ class LogoutTests(RefreshTestCase):
         # 로그아웃한 토큰이 다시 들어온 것도 "폐기된 토큰의 재사용" 이다.
         # 이 경우에도 모든 세션을 끊는다. 훔친 토큰일 수 있기 때문이다
         refresh_token = self.refresh_cookie_value()
-        other_device = APIClient()
+        other_device = BrowserClient()
         self.login(other_device)
         self.client.post(LOGOUT_URL)
 
@@ -276,7 +278,7 @@ class LogoutTests(RefreshTestCase):
         self.assertEqual(other_device.post(REFRESH_URL).status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_succeeds_without_cookie(self):
-        response = APIClient().post(LOGOUT_URL)
+        response = BrowserClient().post(LOGOUT_URL)
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -296,7 +298,7 @@ class LogoutAllTests(RefreshTestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_ends_every_session(self):
-        other_device = APIClient()
+        other_device = BrowserClient()
         self.login(other_device)
 
         response = self.logout_all(self.login_response.data['access_token'])
