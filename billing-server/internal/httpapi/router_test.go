@@ -150,7 +150,7 @@ func TestReadinessGivesTheDatabaseALimitedTime(t *testing.T) {
 }
 
 func TestReadinessWithTheRealDatabase(t *testing.T) {
-	pool, err := database.NewPool(context.Background(), testenv.DatabaseURL(t), config.DefaultSchema)
+	pool, err := database.NewPool(context.Background(), testenv.DatabaseURL(t), config.DefaultSchema, database.ServerLimits)
 	if err != nil {
 		t.Fatalf("풀을 만들지 못했다: %v", err)
 	}
