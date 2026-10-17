@@ -28,6 +28,7 @@ from datetime import UTC, date, datetime
 import httpx
 from pydantic import SecretStr
 
+from app.ai.costs import PriceTag
 from app.ai.openai_compat import DEFAULT_TOKEN_FIELD, LOCAL_OPTIONS, OpenAICompatProvider, WireOptions
 from app.ai.provider import ProviderError
 from app.catalog.lookup import CatalogModel, ModelLookup
@@ -51,6 +52,14 @@ OPENAI_KIND = 'openai'
 def today_utc() -> date:
     """오늘(UTC). 은퇴일과 견준다."""
     return datetime.now(UTC).date()
+
+
+@dataclass(frozen=True)
+class Route:
+    """고른 것. 부를 provider 와, 모델 목록의 모델이면 그 이름표와 그날의 단가(price). 목록에 없으면 price 는 None."""
+
+    provider: OpenAICompatProvider
+    price: PriceTag | None
 
 
 @dataclass(frozen=True)
@@ -126,17 +135,22 @@ class ModelRouter:
         endpoint = self.endpoint_for(model.provider)
         return self.build(endpoint, model.api_model_id, options_of(model))
 
-    async def provider_for(self, name: str, allow_disabled: bool = False) -> OpenAICompatProvider:
+    async def route(self, name: str, allow_disabled: bool = False) -> Route:
         """
-        그 이름의 모델을 부를 provider. 목록에 없는 이름이면 서버 곁의 모델이다.
+        그 이름의 모델을 부를 provider 와 매길 단가. 목록에 없는 이름이면 서버 곁의 모델이고 단가가 없다.
 
         목록의 모델을 부를 수 없으면 warning 한 줄을 남기고 ProviderError 를 올린다.
         """
-        model = await self.lookup.find(name)
+        model = await self.lookup.find(name, self.today())
         if model is None:
-            return self.build(self.local, name, self.local_options)
+            return Route(self.build(self.local, name, self.local_options), price=None)
         try:
-            return self.from_catalog(model, allow_disabled)
+            provider = self.from_catalog(model, allow_disabled)
         except ProviderError as error:
             logger.warning('모델 목록의 모델을 부를 수 없습니다: %s', name, extra={'model': name, 'reason': str(error)})
             raise
+        return Route(provider, PriceTag(model.slug, model.cost))
+
+    async def provider_for(self, name: str, allow_disabled: bool = False) -> OpenAICompatProvider:
+        """그 이름의 모델을 부를 provider. route 에서 단가를 뺀 것이다."""
+        return (await self.route(name, allow_disabled)).provider

@@ -12,13 +12,21 @@ OpenAI 와 같은 모양의 주소를 부르는 provider(app/ai/openai_compat.py
 import asyncio
 import json
 from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime
 
 import httpx
 import pytest
 from pydantic import SecretStr
 
 from app.ai import openai_compat
-from app.ai.openai_compat import OpenAICompatProvider, WireOptions, build_body, chat_url, token_limit
+from app.ai.openai_compat import (
+    OpenAICompatProvider,
+    WireOptions,
+    build_body,
+    chat_url,
+    retry_after_of,
+    token_limit,
+)
 from app.ai.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
 
 BASE_URL = 'http://127.0.0.1:11434/v1'
@@ -221,6 +229,47 @@ def test_the_kind_is_set_when_made():
     # 같은 코드로 서버 곁의 모델과 OpenAI 를 부른다. 기록에는 어느 창구였는지 적는다
     assert make_provider(streaming(make_stream(SCENE))).kind == 'openai_compat'
     assert make_provider(streaming(make_stream(SCENE)), kind='openai').kind == 'openai'
+
+
+async def test_an_error_status_carries_the_told_wait():
+    def busy(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={'retry-after': '7'}, text='{"error": "slow down"}')
+
+    with pytest.raises(ProviderError) as caught:
+        await make_provider(Recorder(busy)).complete(MESSAGES, PARAMS)
+
+    assert (str(caught.value), caught.value.retry_after) == ('status_429', 7.0)
+
+
+async def test_an_error_status_without_a_told_wait_has_none():
+    with pytest.raises(ProviderError) as caught:
+        await make_provider(streaming('', status=500)).complete(MESSAGES, PARAMS)
+
+    assert caught.value.retry_after is None
+
+
+@pytest.mark.parametrize(
+    ('headers', 'seconds'),
+    [
+        ({'retry-after': '3'}, 3.0),
+        ({'retry-after': '1.5'}, 1.5),
+        # OpenAI 는 밀리초로도 준다. 더 잘다라서 먼저 본다
+        ({'retry-after-ms': '250', 'retry-after': '1'}, 0.25),
+        # HTTP 날짜면 지금부터 그때까지
+        ({'retry-after': 'Sat, 17 Oct 2026 12:00:10 GMT'}, 10.0),
+        # 지난 때면 기다리지 않는다
+        ({'retry-after': 'Sat, 17 Oct 2026 11:59:00 GMT'}, 0.0),
+        ({'retry-after': '-5'}, 0.0),
+        # 읽을 수 없으면 알려 주지 않은 것이다
+        ({'retry-after': 'soon'}, None),
+        ({'retry-after-ms': 'soon'}, None),
+        ({}, None),
+    ],
+)
+def test_the_told_wait_is_read_from_the_headers(headers: dict, seconds: float | None):
+    now = datetime(2026, 10, 17, 12, 0, 0, tzinfo=UTC)
+
+    assert retry_after_of(httpx.Headers(headers), now) == seconds
 
 
 async def test_the_timeout_is_passed_on():
