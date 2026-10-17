@@ -14,6 +14,7 @@ import httpx
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.ai import retention
 from app.api import health, me, readiness
 from app.assets.bestiaries import router as bestiaries
 from app.assets.bestiaries.service import BestiaryFullError
@@ -90,16 +91,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     (app/realtime/shutdown.py). 닫는 일은 신호 처리기가 아니라 이벤트 루프가 한다.
     꺼질 때 신호를 듣는 연결, DB 연결, 인증 서버로 가는 연결, Redis 연결을 전부 닫는다.
     닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
-    라운드의 시계(마감이 지난 라운드를 닫는 것)와 청구 정리(서술 값을 결제 서버에 맡기는 것)는 뜰 때 돌기 시작하고,
+    라운드의 시계(마감이 지난 라운드를 닫는 것), 청구 정리(서술 값을 결제 서버에 맡기는 것),
+    AI 호출 기록의 원문 정리(보관 기간이 지난 원문을 비우는 것)는 뜰 때 돌기 시작하고,
     꺼질 때 가장 먼저 멈춘다. 시계가 맡긴 서술이 뒤의 작업 마무리에 들어가도록 순서를 지킨다.
     """
     loop = asyncio.get_running_loop()
     running = clock.start(app.state.round_clock)
     settling = settler.start(app.state.charge_settler)
+    pruning = retention.start(app.state.ai_log_pruner)
     with closing_on_exit(lambda: loop.call_soon_threadsafe(app.state.hub.close_all)):
         yield
     await running.halt()
     await settling.halt()
+    await pruning.halt()
     # 뒤에서 돌던 작업을 먼저 마무리한다. 작업이 DB 를 쓰므로 DB 를 닫기 전에 한다
     await app.state.jobs.aclose()
     await app.state.signal_source.stop()
@@ -220,6 +224,13 @@ def create_app(
     app.state.charge_settler = settler.ChargeSettler(
         session_factory=app.state.session_factory,
         billing=lambda: app.state.billing,
+    )
+
+    # AI 호출의 기록에 남은 원문을 보관 기간(AI_LOG_TEXT_RETENTION_DAYS)이 지나면 비우는 정리 작업(app/ai/retention.py).
+    # 한 시간마다 돈다. lifespan 이 돌리고 멈춘다
+    app.state.ai_log_pruner = retention.AiLogPruner(
+        session_factory=app.state.session_factory,
+        retention_days=settings.ai_log_text_retention_days,
     )
 
     # 마감이 지난 라운드를 몇 초마다 찾아 닫는 시계(app/rounds/clock.py). lifespan 이 돌리고 멈춘다.

@@ -5,11 +5,14 @@
 """
 
 import asyncio
+import logging
 
 import pytest
 
 from app.auth.jwks import (
     JWKS_CACHE_SECONDS,
+    JWKS_MAX_STALE_SECONDS,
+    JWKS_UNAVAILABLE_ERROR_CODE,
     REFETCH_INTERVAL_SECONDS,
     JwksCache,
     JwksFetchError,
@@ -18,6 +21,7 @@ from app.auth.jwks import (
     parse_jwks,
 )
 from tests.conftest import TEST_JWKS_URL
+from tests.logs import rendered
 from tests.signing import FakeAuthServer, SigningKey, make_signing_key
 
 
@@ -127,6 +131,84 @@ async def test_fetches_again_once_the_server_is_back(cache: JwksCache, auth_serv
     await cache.get_key('key-1')
 
     assert auth_server.calls == 3
+
+
+# --- 너무 오래 다시 가져오지 못했을 때(#274) ---
+
+
+async def test_old_keys_are_used_until_the_stale_limit(cache: JwksCache, auth_server: FakeAuthServer, clock: FakeClock):
+    await cache.get_key('key-1')
+    auth_server.down = True
+
+    clock.advance(JWKS_MAX_STALE_SECONDS - 1)
+    found = await cache.get_key('key-1')
+
+    # 상한 직전까지는 기억한 키로 버틴다
+    assert found.key_id == 'key-1'
+
+
+async def test_old_keys_are_dropped_after_the_stale_limit(
+    cache: JwksCache, auth_server: FakeAuthServer, clock: FakeClock, caplog: pytest.LogCaptureFixture
+):
+    await cache.get_key('key-1')
+    auth_server.down = True
+    clock.advance(JWKS_MAX_STALE_SECONDS)
+
+    with caplog.at_level(logging.ERROR, logger='app.auth.jwks'), pytest.raises(JwksUnavailableError):
+        await cache.get_key('key-1')
+
+    # 인증 서버가 뺀 키를 끝없이 믿지 않는다. 사람이 봐야 하는 줄이 하나 남는다
+    (line,) = rendered(caplog.records, 'app.auth.jwks')
+    assert (line['level'], line['error_code']) == ('error', JWKS_UNAVAILABLE_ERROR_CODE)
+
+
+async def test_dropping_is_told_once(
+    cache: JwksCache, auth_server: FakeAuthServer, clock: FakeClock, caplog: pytest.LogCaptureFixture
+):
+    await cache.get_key('key-1')
+    auth_server.down = True
+    clock.advance(JWKS_MAX_STALE_SECONDS)
+
+    with caplog.at_level(logging.ERROR, logger='app.auth.jwks'):
+        for _ in range(3):
+            with pytest.raises(JwksUnavailableError):
+                await cache.get_key('key-1')
+
+    assert len(rendered(caplog.records, 'app.auth.jwks')) == 1
+
+
+async def test_keys_come_back_with_the_auth_server(cache: JwksCache, auth_server: FakeAuthServer, clock: FakeClock):
+    await cache.get_key('key-1')
+    auth_server.down = True
+    clock.advance(JWKS_MAX_STALE_SECONDS)
+    with pytest.raises(JwksUnavailableError):
+        await cache.get_key('key-1')
+
+    auth_server.down = False
+    clock.advance(REFETCH_INTERVAL_SECONDS)
+
+    assert (await cache.get_key('key-1')).key_id == 'key-1'
+
+
+async def test_the_stale_limit_counts_from_the_last_successful_fetch(
+    cache: JwksCache, auth_server: FakeAuthServer, clock: FakeClock
+):
+    await cache.get_key('key-1')
+    clock.advance(JWKS_CACHE_SECONDS)
+    # 기억 시간이 지나 다시 가져왔다. 상한은 여기서부터 센다
+    await cache.get_key('key-1')
+    auth_server.down = True
+
+    clock.advance(JWKS_MAX_STALE_SECONDS - 1)
+
+    assert (await cache.get_key('key-1')).key_id == 'key-1'
+
+
+def test_the_limits_fit_together():
+    # 상한은 기억 시간보다 길어야 한다. 짧으면 인증 서버가 잠깐만 죽어도 기억 시간이 끝나자마자 막힌다
+    assert REFETCH_INTERVAL_SECONDS < JWKS_CACHE_SECONDS < JWKS_MAX_STALE_SECONDS
+    # 긴급 폐기에 걸리는 시간. 인증 서버가 살아 있으면 5분, 죽어 있어도 30분
+    assert (JWKS_CACHE_SECONDS, JWKS_MAX_STALE_SECONDS) == (5 * 60, 30 * 60)
 
 
 async def test_reports_unavailable_when_there_is_no_key_at_all(cache: JwksCache, auth_server: FakeAuthServer):
