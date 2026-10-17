@@ -29,12 +29,11 @@ from app.ai.anthropic_stream import read_claude_stream
 from app.ai.http_stream import bearer_headers, stream_completion
 from app.ai.openai_compat import THINKING_TOKENS
 from app.ai.provider import ChatMessage, Completion, GenerationParams, Reasoning, Role, TextSink, ignore_text
+from app.ai.thinking import LOWEST_EFFORT, thinking_budget
 from app.catalog.models import ReasoningStyle
 
 # 머리에 싣는 API 의 판
 ANTHROPIC_VERSION = '2023-06-01'
-# 끌 수 없는 모델에 끄라고 할 때 주는 생각의 깊이
-LOWEST_EFFORT = Reasoning.LOW
 
 
 def messages_url(base_url: str) -> str:
@@ -52,18 +51,6 @@ def turns_of(messages: list[ChatMessage]) -> list[dict[str, str]]:
     return [
         {'role': message.role.value, 'content': message.content} for message in messages if message.role != Role.SYSTEM
     ]
-
-
-def thinks(style: ReasoningStyle, reasoning: Reasoning) -> bool:
-    """이 호출에서 모델이 생각하나. 생각을 켰거나, 끌 수 없는 모델이다."""
-    return reasoning != Reasoning.NONE or style == ReasoningStyle.ALWAYS
-
-
-def thinking_budget(style: ReasoningStyle, reasoning: Reasoning) -> int:
-    """생각에 더 주는 토큰. 생각하지 않으면 0. 끌 수 없는 모델에 끄라고 하면 가장 낮은 깊이의 몫이다."""
-    if not thinks(style, reasoning):
-        return 0
-    return THINKING_TOKENS[LOWEST_EFFORT if reasoning == Reasoning.NONE else reasoning]
 
 
 def thinking_off(style: ReasoningStyle) -> dict[str, Any]:

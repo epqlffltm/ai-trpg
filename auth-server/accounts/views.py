@@ -19,6 +19,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.age import korean_today
 from accounts.attempt_policies import (
     block_ip_if_reserved_username,
     clear_login_attempts,
@@ -30,11 +31,22 @@ from accounts.attempt_policies import (
 from accounts.client_ip import get_attempt_subject
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
 from accounts.email_codes import InvalidEmailCodeError
+from accounts.identity import (
+    IdentityAlreadyVerifiedError,
+    IdentityInUseError,
+    UnderMinAgeError,
+    verify_identity,
+)
+from accounts.identity_providers import IdentityTokenError, IdentityUnavailableError
+from accounts.identity_status import identity_status_of
 from accounts.jwks import build_jwks
 from accounts.login_tickets import InvalidLoginTicketError
+from accounts.models import User
 from accounts.origin_check import is_allowed_origin, log_refused_origin, read_origin
 from accounts.serializers import (
     EmailSerializer,
+    IdentityStatusSerializer,
+    IdentityVerifySerializer,
     LoginChallengeSerializer,
     LoginResponseSerializer,
     LoginSerializer,
@@ -163,6 +175,27 @@ def build_code_unavailable_response(retry_after: timedelta) -> Response:
         status=status.HTTP_429_TOO_MANY_REQUESTS,
     )
     response['Retry-After'] = str(seconds)
+    return response
+
+
+def build_identity_body(user: User) -> dict:
+    """계정의 본인인증 상태를 응답에 싣는 모양으로 바꾼다. 오늘은 한국 날짜다."""
+    return IdentityStatusSerializer(identity_status_of(user, korean_today())).data
+
+
+def build_identity_error_response(detail: str, code: str, status_code: int) -> Response:
+    """본인인증을 거절하는 응답."""
+    return Response({'detail': detail, 'code': code}, status=status_code)
+
+
+def build_under_age_response() -> Response:
+    """만 14세 미만이라 계정을 막은 뒤의 응답. 이 기기의 refresh 쿠키도 지운다. 세션은 이미 끊겼다."""
+    response = build_identity_error_response(
+        '만 14세 미만은 이용할 수 없습니다. 계정을 막고 가입할 때 받은 정보를 지웠습니다.',
+        'identity_under_age',
+        status.HTTP_403_FORBIDDEN,
+    )
+    clear_refresh_cookie(response)
     return response
 
 
@@ -543,6 +576,44 @@ class SessionRevocationsView(APIView):
         return response
 
 
+class IdentityVerifyView(APIView):
+    """POST /api/v1/auth/identity/verify. 휴대폰 본인인증(#336)."""
+
+    # 로그인한 본인만 한다. 기본 권한(IsAuthenticated)을 쓴다
+
+    def post(self, request: Request) -> Response:
+        serializer = IdentityVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            verify_identity(user=request.user, ip=get_attempt_subject(request), **serializer.validated_data)
+        except IdentityAlreadyVerifiedError:
+            return build_identity_error_response(
+                '이미 본인인증을 마친 계정입니다.', 'identity_already_verified', status.HTTP_409_CONFLICT
+            )
+        except IdentityTokenError:
+            # 위조, 만료, 이미 쓴 것을 구분해 알려 주지 않는다
+            return build_identity_error_response(
+                '본인인증을 처음부터 다시 해 주세요.', 'identity_token_invalid', status.HTTP_400_BAD_REQUEST
+            )
+        except IdentityUnavailableError:
+            return build_identity_error_response(
+                '지금은 본인인증을 받을 수 없습니다.', 'identity_unavailable', status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except IdentityInUseError:
+            return build_identity_error_response(
+                '다른 계정에서 이미 본인인증을 마친 분입니다. 한 분은 한 계정에서만 인증할 수 있습니다.',
+                'identity_in_use',
+                status.HTTP_409_CONFLICT,
+            )
+        except UnderMinAgeError:
+            return build_under_age_response()
+
+        # 토큰은 다시 주지 않는다. 화면이 갱신(refresh)을 부르면 adult_content 가 실린 토큰을 받는다.
+        # 여기서 새 쌍을 주면 쿠키 속의 옛 refresh 토큰이 폐기되지 않은 채 남는다
+        return Response({'identity': build_identity_body(request.user)}, status=status.HTTP_201_CREATED)
+
+
 class MeView(APIView):
     """GET /api/v1/auth/me"""
 
@@ -550,4 +621,5 @@ class MeView(APIView):
 
     def get(self, request: Request) -> Response:
         # 인증 클래스가 토큰을 검증하고 request.user 에 사용자를 넣어 준다
-        return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
+        body = {**UserSerializer(request.user).data, 'identity': build_identity_body(request.user)}
+        return Response(body, status=status.HTTP_200_OK)

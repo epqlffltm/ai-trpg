@@ -1,47 +1,39 @@
 # auth-server/accounts/tests/test_welcome_credit.py
 
 """
-환영 크레딧을 검증한다. 메일함마다 한 번만 적기, 가입 인증과 함께 적기, 결제 서버에 맡기기, 실패 후 재시도.
+환영 크레딧을 검증한다. 사람마다·계정마다 한 번만 적기, 본인인증과 함께 적기, 결제 서버에 맡기기, 실패 후 재시도.
 
 결제 서버를 부르는 함수는 대부분 가짜로 바꿔 끼운다. 이 파일이 보는 것은 "언제 부르고 결과를 어떻게 적는가"다.
 요청의 모양은 test_billing_client.py 가 본다. 끝에서 한 번, 가짜를 끼우지 않고 끝까지 지난다.
 """
 
-import hashlib
 import threading
 import time
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 from io import StringIO
 from unittest.mock import patch
 
-from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection, transaction
-from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
-from django.urls import reverse
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.billing_client import ALREADY_GRANTED, DISABLED, GRANTED, BillingUnavailableError
-from accounts.models import User, WelcomeCredit, WelcomeCreditStatus
+from accounts.identity import person_key
+from accounts.models import IdentityVerification, User, WelcomeCredit, WelcomeCreditStatus
 from accounts.tests.billing_stub import SECRET, BillingStub
-from accounts.tests.helpers import code_from, complete_signup, request_signup_ticket, sign_up, wrong_code_for
+from accounts.tests.helpers import authorize, identity_token, log_in, sign_up, verify_identity
 from accounts.welcome_credit import (
     DEFAULT_BATCH_SIZE,
     FIRST_RETRY_DELAY,
     MAX_RETRY_DELAY,
     deliver_due_welcome_credits,
-    mailbox_key,
-    mailbox_of,
     request_welcome_credit,
-    request_welcome_credits_for_verified_users,
 )
-
-SIGNUP_URL = reverse('accounts:signup')
-VERIFY_URL = reverse('accounts:signup-verify')
 
 EMAIL = 'someone@example.com'
 PASSWORD = 'correct-horse-battery'
@@ -61,7 +53,7 @@ def make_user(number: int = 1, email: str | None = None, verified: bool = True) 
 def pending(number: int = 1, **overrides) -> WelcomeCredit:
     """맡기기 전인 줄 하나를 만든다."""
     fields = {
-        'mailbox_key': mailbox_key(f'player{number}@example.com'),
+        'recipient_key': person_key(f'person-{number}'),
         'user_public_id': uuid.uuid4(),
         'next_attempt_at': timezone.now(),
     }
@@ -87,101 +79,72 @@ def billing_is_down():
     )
 
 
-class MailboxTests(SimpleTestCase):
-    def test_same_mailbox_whatever_the_case_or_the_tag(self):
-        same = ['someone@example.com', 'Someone@Example.COM', 'someone+trpg@example.com', ' someone+a+b@example.com ']
-        for email in same:
-            with self.subTest(email):
-                self.assertEqual(mailbox_of(email), 'someone@example.com')
-
-    def test_different_mailboxes_stay_different(self):
-        others = [
-            'someone@example.org',
-            'some.one@example.com',
-            'someone2@example.com',
-            'someone@mail.example.com',
-        ]
-        for email in others:
-            with self.subTest(email):
-                self.assertNotEqual(mailbox_of(email), 'someone@example.com')
-
-    def test_only_the_tag_before_the_at_sign_is_cut(self):
-        # 꼬리표는 사용자 이름에만 있다. @ 뒤는 건드리지 않는다
-        self.assertEqual(mailbox_of('someone+tag@sub+domain.example.com'), 'someone@sub+domain.example.com')
-        self.assertEqual(mailbox_of('+only-a-tag@example.com'), '@example.com')
-
-    def test_key_is_the_same_for_the_same_mailbox(self):
-        self.assertEqual(mailbox_key('someone@example.com'), mailbox_key('SomeOne+again@example.com'))
-        self.assertNotEqual(mailbox_key('someone@example.com'), mailbox_key('someone@example.org'))
-        self.assertRegex(mailbox_key('someone@example.com'), r'^[0-9a-f]{64}$')
-
-    def test_key_cannot_be_rebuilt_from_the_address_alone(self):
-        # 주소는 짐작할 수 있는 값이다. 그냥 해시면 DB 를 읽은 사람이 주소를 넣어 보며 가입 여부를 알아낸다
-        plain = hashlib.sha256(b'someone@example.com').hexdigest()
-
-        self.assertNotEqual(mailbox_key('someone@example.com'), plain)
-        with override_settings(SECRET_KEY='another-secret-key-for-this-test-only'):
-            other = mailbox_key('someone@example.com')
-        self.assertNotEqual(mailbox_key('someone@example.com'), other)
+def ask(user: User, di: str = 'person-1') -> bool:
+    """그 사용자가 그 사람으로 본인인증을 했을 때처럼 환영 크레딧을 적는다."""
+    return request_welcome_credit(user_public_id=user.public_id, recipient_key=person_key(di))
 
 
 class RequestTests(TestCase):
     def test_writes_one_pending_row_for_the_user(self):
         user = make_user()
 
-        created = request_welcome_credit(user)
+        created = ask(user)
 
         claim = WelcomeCredit.objects.get()
         self.assertTrue(created)
         self.assertEqual(claim.user_public_id, user.public_id)
+        self.assertEqual(claim.recipient_key, person_key('person-1'))
         self.assertEqual(claim.status, WelcomeCreditStatus.PENDING)
         self.assertEqual(claim.attempts, 0)
         self.assertLessEqual(claim.next_attempt_at, timezone.now())
         self.assertIsNone(claim.finished_at)
 
-    def test_does_not_store_the_address(self):
-        user = make_user(email='someone@example.com')
-
-        request_welcome_credit(user)
-
-        row = WelcomeCredit.objects.values().get()
-        self.assertNotIn('someone', ' '.join(str(value) for value in row.values()))
-
     def test_asking_twice_writes_once(self):
         user = make_user()
 
-        request_welcome_credit(user)
-        created = request_welcome_credit(user)
+        ask(user)
+        created = ask(user)
 
         self.assertFalse(created)
         self.assertEqual(WelcomeCredit.objects.count(), 1)
 
-    def test_another_account_on_the_same_mailbox_gets_nothing(self):
-        first = make_user(1, email='someone@example.com')
-        second = make_user(2, email='someone+second@example.com')
-        request_welcome_credit(first)
+    def test_another_account_of_the_same_person_gets_nothing(self):
+        # 계정을 지우고 새 계정에서 다시 본인인증을 했다. 사람은 같다
+        first = make_user(1)
+        ask(first)
+        first.delete()
+        again = make_user(2)
 
-        created = request_welcome_credit(second)
+        created = ask(again)
 
         self.assertFalse(created)
         # 먼저 온 계정의 줄이 그대로다. 나중 계정으로 바뀌지 않는다
-        self.assertEqual(WelcomeCredit.objects.get().user_public_id, first.public_id)
+        self.assertNotEqual(WelcomeCredit.objects.get().user_public_id, again.public_id)
 
-    def test_finished_row_still_blocks_the_mailbox(self):
-        first = make_user(1, email='someone@example.com')
-        request_welcome_credit(first)
+    def test_an_account_that_got_it_before_gets_nothing_more(self):
+        # #336 전에 이메일 인증으로 받은 계정이다. 그 줄의 열쇠는 메일함의 것이라 사람 열쇠와 다르다
+        user = make_user()
+        pending(user_public_id=user.public_id, recipient_key='0' * 64, status=WelcomeCreditStatus.GRANTED)
+
+        created = ask(user)
+
+        self.assertFalse(created)
+        self.assertEqual(WelcomeCredit.objects.count(), 1)
+
+    def test_finished_row_still_blocks_the_person(self):
+        first = make_user(1)
+        ask(first)
         WelcomeCredit.objects.update(status=WelcomeCreditStatus.GRANTED, finished_at=timezone.now())
         first.delete()
-        again = make_user(2, email='someone@example.com')
 
-        created = request_welcome_credit(again)
+        created = ask(make_user(2))
 
         self.assertFalse(created)
         self.assertEqual(WelcomeCredit.objects.get().status, WelcomeCreditStatus.GRANTED)
 
-    def test_different_mailboxes_each_get_a_row(self):
-        request_welcome_credit(make_user(1))
-        request_welcome_credit(make_user(2))
+    def test_different_people_each_get_a_row(self):
+        ask(make_user(1), 'person-1')
+        ask(make_user(2), 'person-2')
 
         self.assertEqual(WelcomeCredit.objects.count(), 2)
 
@@ -189,91 +152,83 @@ class RequestTests(TestCase):
         user = make_user()
 
         with self.assertRaises(RuntimeError), transaction.atomic():
-            request_welcome_credit(user)
-            raise RuntimeError('가입 인증이 중간에 실패했다')
+            ask(user)
+            raise RuntimeError('본인인증이 중간에 실패했다')
 
         self.assertEqual(WelcomeCredit.objects.count(), 0)
 
 
-class SignupTests(APITestCase):
-    """가입을 실제 주소로 지난다. 계정이 생길 때 줄이 함께 적히는지 본다."""
+class IdentityTests(APITestCase):
+    """본인인증을 실제 주소로 지난다. 인증 기록이 생길 때 줄이 함께 적히는지 본다."""
 
-    def ticket(self, email: str = EMAIL) -> str:
-        return request_signup_ticket(self.client, email)
+    def verified(self, number: int = 1, di: str = 'person-1', birth_date: date | None = None):
+        user = make_user(number)
+        authorize(self.client, user)
+        token = identity_token(di, birth_date) if birth_date else identity_token(di)
+        return user, verify_identity(self.client, token)
 
-    def complete(self, ticket: str, number: int = 1):
-        return complete_signup(
-            self.client, ticket, username=f'player_{number:02d}', nickname=f'플레이어{number}', password=PASSWORD
-        )
+    def test_verifying_the_identity_queues_the_welcome_credit(self):
+        user, response = self.verified()
 
-    def sign_up(self, number: int = 1, email: str = EMAIL) -> User:
-        response = self.complete(self.ticket(email), number)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
-        return User.objects.get(username=f'player_{number:02d}')
-
-    def test_signing_up_queues_the_welcome_credit(self):
-        user = self.sign_up()
-
         claim = WelcomeCredit.objects.get()
         self.assertEqual(claim.user_public_id, user.public_id)
         self.assertEqual(claim.status, WelcomeCreditStatus.PENDING)
 
-    def test_signing_up_never_talks_to_the_billing_server(self):
-        # 결제 서버가 죽어 있어도 가입은 끝난다. 요청을 처리하는 쪽은 적기만 한다
-        with patch('accounts.billing_client.grant_welcome_credit') as client, billing_is_down() as worker_client:
-            user = self.sign_up()
+    def test_a_minor_gets_it_too(self):
+        # 환영 크레딧은 결제가 아니다. 만 14세 이상이면 받는다
+        today = timezone.localdate()
+        _, response = self.verified(birth_date=date(today.year - 15, 1, 1))
 
-        self.assertTrue(user.is_email_verified)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(WelcomeCredit.objects.count(), 1)
+
+    def test_verifying_never_talks_to_the_billing_server(self):
+        # 결제 서버가 죽어 있어도 본인인증은 끝난다. 요청을 처리하는 쪽은 적기만 한다
+        with patch('accounts.billing_client.grant_welcome_credit') as client, billing_is_down() as worker_client:
+            _, response = self.verified()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         client.assert_not_called()
         worker_client.assert_not_called()
 
-    def test_verifying_the_email_without_finishing_queues_nothing(self):
-        # 계정이 생기기 전이다. 줄은 계정과 함께만 적힌다
-        self.ticket()
+    def test_refused_verifications_queue_nothing(self):
+        refused = {
+            'token_invalid': identity_token('person-1', date(1990, 1, 1)).replace('fake:', 'real:'),
+            'under_age': identity_token('person-1', timezone.localdate() - timedelta(days=365 * 10)),
+        }
+        for number, (reason, token) in enumerate(refused.items(), start=1):
+            with self.subTest(reason):
+                authorize(self.client, make_user(number))
 
-        self.assertEqual(WelcomeCredit.objects.count(), 0)
+                response = verify_identity(self.client, token)
 
-    def test_wrong_code_queues_nothing(self):
-        self.client.post(SIGNUP_URL, {'email': EMAIL}, format='json')
+                self.assertGreaterEqual(response.status_code, 400)
+                self.assertEqual(WelcomeCredit.objects.count(), 0)
 
-        response = self.client.post(
-            VERIFY_URL, {'email': EMAIL, 'code': wrong_code_for(code_from(mail.outbox[-1]))}, format='json'
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(WelcomeCredit.objects.count(), 0)
-
-    def test_deleting_the_account_and_signing_up_again_does_not_queue_twice(self):
-        first = self.sign_up(1)
-        first_public_id = first.public_id
+    def test_the_same_person_on_another_account_gets_nothing(self):
+        first, _ = self.verified(1)
         first.delete()
 
-        again = self.sign_up(2)
+        again, response = self.verified(2)
 
-        # 가입은 된다. 받는 것만 한 번이다
-        self.assertTrue(again.is_email_verified)
-        self.assertNotEqual(again.public_id, first_public_id)
-        self.assertEqual(WelcomeCredit.objects.get().user_public_id, first_public_id)
+        # 인증은 된다. 받는 것만 한 번이다
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotEqual(WelcomeCredit.objects.get().user_public_id, again.public_id)
 
-    def test_tagged_addresses_of_one_mailbox_queue_once(self):
-        first = self.sign_up(1, 'someone+one@example.com')
-        second = self.sign_up(2, 'someone+two@example.com')
-
-        self.assertTrue(second.is_email_verified)
-        self.assertEqual(WelcomeCredit.objects.get().user_public_id, first.public_id)
-
-    def test_no_account_is_kept_when_the_row_cannot_be_written(self):
-        # 둘은 한 트랜잭션이다. 줄을 못 적었으면 계정도 없고, 같은 티켓으로 다시 할 수 있다
-        ticket = self.ticket()
+    def test_no_verification_is_kept_when_the_row_cannot_be_written(self):
+        # 둘은 한 트랜잭션이다. 줄을 못 적었으면 인증 기록도 없고, 다시 할 수 있다
+        user = make_user()
+        authorize(self.client, user)
 
         with (
-            patch('accounts.services.request_welcome_credit', side_effect=RuntimeError('DB 가 끊겼다')),
+            patch('accounts.identity.request_welcome_credit', side_effect=RuntimeError('DB 가 끊겼다')),
             self.assertRaises(RuntimeError),
         ):
-            self.complete(ticket)
+            verify_identity(self.client)
 
-        self.assertFalse(User.objects.filter(username='player_01').exists())
-        self.assertEqual(self.complete(ticket).status_code, status.HTTP_201_CREATED)
+        self.assertFalse(IdentityVerification.objects.exists())
+        self.assertEqual(verify_identity(self.client).status_code, status.HTTP_201_CREATED)
         self.assertEqual(WelcomeCredit.objects.count(), 1)
 
 
@@ -456,7 +411,7 @@ class RetryTests(TestCase):
         self.assertEqual(record.welcome_credit_id, self.claim.pk)
         logged = record.getMessage() + ' '.join(str(value) for value in vars(record).values())
         self.assertNotIn(str(self.claim.user_public_id), logged)
-        self.assertNotIn(self.claim.mailbox_key, logged)
+        self.assertNotIn(self.claim.recipient_key, logged)
 
 
 class TwoWorkersTests(TransactionTestCase):
@@ -553,51 +508,15 @@ class WorkerCommandTests(TestCase):
         self.assertEqual(claim.attempts, 0)
 
 
-class ExistingAccountsTests(TestCase):
-    def run_command(self) -> str:
-        output = StringIO()
-        call_command('request_welcome_credits', stdout=output)
-        return output.getvalue()
-
-    def test_queues_every_verified_account_once(self):
-        first = make_user(1)
-        second = make_user(2)
-        make_user(3, verified=False)
-
-        output = self.run_command()
-
-        queued = set(WelcomeCredit.objects.values_list('user_public_id', flat=True))
-        self.assertEqual(queued, {first.public_id, second.public_id})
-        self.assertIn('2개', output)
-
-    def test_running_again_queues_nothing_new(self):
-        make_user(1)
-        self.run_command()
-
-        output = self.run_command()
-
-        self.assertEqual(WelcomeCredit.objects.count(), 1)
-        self.assertIn('0개', output)
-
-    def test_the_account_verified_first_gets_the_shared_mailbox(self):
-        now = timezone.now()
-        late = make_user(1, email='someone+late@example.com')
-        early = make_user(2, email='someone+early@example.com')
-        User.objects.filter(pk=late.pk).update(email_verified_at=now)
-        User.objects.filter(pk=early.pk).update(email_verified_at=now - timedelta(days=3))
-
-        created = request_welcome_credits_for_verified_users()
-
-        self.assertEqual(created, 1)
-        self.assertEqual(WelcomeCredit.objects.get().user_public_id, early.public_id)
-
-
 class EndToEndTests(APITestCase):
     """가짜를 끼우지 않는다. 가입 인증부터 결제 서버가 받는 요청까지 지난다."""
 
-    def test_signup_ends_with_a_signed_request_for_that_user(self):
+    def test_identity_ends_with_a_signed_request_for_that_user(self):
         sign_up(self.client, username='player_01', email=EMAIL, nickname='플레이어', password=PASSWORD)
         user = User.objects.get(username='player_01')
+        logged_in = log_in(self.client, 'player_01', PASSWORD)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {logged_in.data["access_token"]}')
+        self.assertEqual(verify_identity(self.client).status_code, status.HTTP_201_CREATED)
 
         with BillingStub() as stub, override_settings(BILLING_URL=stub.url, BILLING_SECRET=SECRET):
             output = StringIO()
@@ -609,8 +528,9 @@ class EndToEndTests(APITestCase):
         request = stub.requests[0]
         self.assertTrue(request.has_valid_signature())
         self.assertIn(str(user.public_id).encode(), request.body)
-        # 메일 주소는 결제 서버에 보내지 않는다
+        # 메일 주소와 사람 열쇠는 결제 서버에 보내지 않는다
         self.assertNotIn(b'someone', request.body)
+        self.assertNotIn(person_key('person-1').encode(), request.body)
         self.assertEqual(WelcomeCredit.objects.get().status, WelcomeCreditStatus.GRANTED)
         self.assertIn('지급 1건', output.getvalue())
 

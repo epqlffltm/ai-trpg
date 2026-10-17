@@ -42,7 +42,6 @@ from accounts.mail import (
 from accounts.models import EmailCodePurpose, SignupCode, User
 from accounts.signup_tickets import issue_signup_ticket, read_signup_ticket
 from accounts.tokens import revoke_all_sessions
-from accounts.welcome_credit import request_welcome_credit
 
 # 가입 코드의 행을 남겨 두는 시간. 마지막 발급에서 발급 제한의 구간(1시간)이 지나면
 # 쓸 수 있는 코드(5분)도 지킬 제한도 남지 않는다. 정리 명령이 그런 행을 지운다
@@ -165,7 +164,9 @@ def verify_signup(*, email: str, code: str) -> str:
 
 def complete_signup(*, signup_ticket: str, username: str, nickname: str, password: str) -> User:
     """
-    가입의 3단계. 티켓의 이메일로 인증된 계정을 만들고, 환영 크레딧을 주라고 적어 둔다.
+    가입의 3단계. 티켓의 이메일로 인증된 계정을 만든다.
+
+    환영 크레딧은 여기서 적지 않는다. 본인인증 때 적는다(identity.py, #336). 이메일은 얼마든지 만들 수 있다.
 
     티켓이 틀렸거나 만료됐으면 InvalidSignupTicketError, 아이디나 비밀번호가 규칙에 맞지 않거나
     아이디나 닉네임을 다른 계정이 쓰면 InvalidSignupFieldError, 이미 그 이메일로 가입했으면
@@ -178,11 +179,9 @@ def complete_signup(*, signup_ticket: str, username: str, nickname: str, passwor
     _ensure_not_taken(username=username, nickname=nickname)
 
     try:
-        # 계정 저장과 환영 크레딧 적기가 한 트랜잭션이다.
-        # 가입은 됐는데 크레딧을 줄 일은 적히지 않은 경우가 생기지 않는다
+        # 유일 제약에 걸리면 이 안쪽만 되돌린다. 바깥에 트랜잭션이 있어도 그대로 쓸 수 있다
         with transaction.atomic():
             user = _create_verified_user(username=username, email=email, nickname=nickname, password=password)
-            request_welcome_credit(user)
     except IntegrityError as exc:
         # 사전 조회를 통과한 뒤 다른 요청이 같은 값으로 먼저 저장한 경우.
         # 같은 티켓을 동시에 두 번 보낸 것도 여기다(이메일의 유일 제약)
