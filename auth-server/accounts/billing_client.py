@@ -83,7 +83,7 @@ def report_payment_eligibility(
     결제 서버에 사용자의 결제 자격을 알리고, 결과를 돌려준다.
 
     결과는 APPLIED(받아 적었다)나 STALE(이미 같거나 더 높은 버전이 있다)다. 둘 다 끝난 것이다.
-    그 밖의 모든 경우(결제 서버에 이 주소가 아직 없는 404 를 포함한다)는 BillingUnavailableError 다.
+    그 밖의 모든 경우(결제 서버가 이 주소를 모르는 옛 판이라 404 인 것을 포함한다)는 BillingUnavailableError 다.
     legal_adult_from 이 None 이면 이미 성년이다. 날짜는 한국 날짜다.
     """
     body = json.dumps(

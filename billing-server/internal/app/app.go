@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/eligibility"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
@@ -24,10 +25,11 @@ import (
 
 // Services 는 크레딧을 다루는 서비스들이다. 가격표(Prices)는 홀드가 쓰고, 값을 바꾸는 명령(cmd/prices)도 쓴다.
 type Services struct {
-	Wallet *wallet.Service
-	Orders *order.Service
-	Holds  *hold.Service
-	Prices *pricing.Service
+	Wallet      *wallet.Service
+	Orders      *order.Service
+	Holds       *hold.Service
+	Prices      *pricing.Service
+	Eligibility *eligibility.Service
 }
 
 // NewServices 는 규칙에 따라 서비스들을 만든다. providers 는 주문이 길마다 부를 결제 대행사(NewProviders),
@@ -43,7 +45,7 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, providers order.Provide
 	if err != nil {
 		return Services{}, err
 	}
-	return Services{Wallet: wallets, Orders: orders, Holds: holds, Prices: prices}, nil
+	return Services{Wallet: wallets, Orders: orders, Holds: holds, Prices: prices, Eligibility: eligibility.NewService(pool, now)}, nil
 }
 
 // NewProviders 는 주문의 길마다 부를 결제 대행사를 만든다. 서버와 작업 명령이 이것으로 만들어 같은 결제 대행사에 묻는다.

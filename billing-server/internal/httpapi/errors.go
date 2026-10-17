@@ -14,7 +14,8 @@ import (
 type errorBody struct {
 	Detail string `json:"detail"`
 	// Code 는 부르는 서버가 읽는 오류의 이름이다(price.unknown 같은 것). detail 은 사람이 읽는 글이라 바뀔 수 있다.
-	// 우리 서버들이 부르는 주소(/service/...)의 4xx 에만 싣는다. 사용자가 부르는 주소와 5xx 에는 없다(칸이 빠진다).
+	// 우리 서버들이 부르는 주소(/service/...)의 4xx 에 싣는다. 사용자가 부르는 주소에는 화면이 갈래를 나눠야 하는 것에만 싣는다
+	// (결제 자격의 403: 본인인증으로 보낼지, 보호자 동의로 보낼지). 5xx 에는 없다(칸이 빠진다).
 	// 5xx 는 이름으로 가릴 것이 없다. 같은 요청을 다시 보내면 된다.
 	Code string `json:"code,omitempty"`
 }
@@ -41,6 +42,12 @@ const (
 	codeHoldAlreadyCaptured = "hold.already_captured"
 	// codeHoldAlreadyReleased 는 이미 돌려준 홀드라는 것이다. 만료되어 돌려준 것도 같다.
 	codeHoldAlreadyReleased = "hold.already_released"
+	// codeEligibilityInvalidRequest 는 결제 자격의 본문이 틀렸다는 것이다(칸이 빠졌다, 날짜의 모양이 틀렸다, 버전이 0 이하다).
+	codeEligibilityInvalidRequest = "eligibility.invalid_request"
+	// codePaymentVerificationRequired 는 본인인증을 하지 않아 결제할 수 없다는 것이다(403). 화면은 본인인증으로 보낸다.
+	codePaymentVerificationRequired = "payment.verification_required"
+	// codePaymentGuardianConsentRequired 는 미성년자인데 보호자가 동의하지 않았다는 것이다(403). 화면은 보호자 동의로 보낸다.
+	codePaymentGuardianConsentRequired = "payment.guardian_consent_required"
 	// codeServiceBadRequest 는 서명을 확인하려고 본문을 읽지 못했다는 것이다(너무 크다).
 	codeServiceBadRequest = "service.bad_request"
 	// codeServiceBadSignature 는 요청의 서명이 맞지 않다는 것이다(비밀이 다르다, 시각이 너무 어긋났다).

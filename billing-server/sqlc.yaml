@@ -141,3 +141,24 @@ sql:
         overrides:
           - db_type: timestamptz
             go_type: time.Time
+  - engine: postgresql
+    schema: migrations
+    queries: internal/eligibility/queries.sql
+    gen:
+      go:
+        package: eligibilitydb
+        out: internal/eligibility/eligibilitydb
+        sql_package: pgx/v5
+        # 이 패키지의 쿼리가 쓰지 않는 테이블의 구조체는 만들지 않는다
+        omit_unused_structs: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: timestamptz
+            go_type: time.Time
+          # 성년이 되는 날. nil 이면 이미 성년이다
+          - column: payment_eligibility.legal_adult_from
+            go_type:
+              type: time.Time
+              pointer: true
+            nullable: true
