@@ -81,6 +81,11 @@ class User(AbstractUser):
     # 비밀번호를 바꿨을 때나 토큰 탈취가 의심될 때 올린다
     token_version = models.PositiveIntegerField('세션 버전', default=0)
 
+    # 세션 버전을 마지막으로 올린 시각. 비어 있으면 한 번도 끊은 적이 없다.
+    # 다른 서버는 세션 버전을 모른다. 이 시각이 access 토큰의 수명 안이면
+    # 끊긴 세션 목록에 싣는다(session_revocations.py)
+    sessions_revoked_at = models.DateTimeField('세션을 끊은 시각', null=True, blank=True, db_index=True)
+
     # AbstractUser 가 가진 실명 필드를 없앤다. 수집하지 않는 정보의 컬럼은 두지 않는다
     first_name = None
     last_name = None
@@ -220,6 +225,9 @@ class SecurityEventKind(models.TextChoices):
     PASSWORD_CHANGE_FAILURES_LIMITED = 'password_change_failures_limited', '비밀번호 변경: 현재 비밀번호 틀림 제한'
     # 공격은 아니지만 운영자가 알아야 하는 사건이라 같은 곳에 남긴다
     MAIL_DISCARDED = 'mail_discarded', '메일: 보내지 못하고 버림'
+    # 운영자가 한 일이다. 사유(note)를 함께 남긴다
+    ACCOUNT_SUSPENDED = 'account_suspended', '계정: 정지'
+    ACCOUNT_RESTORED = 'account_restored', '계정: 정지를 풂'
 
 
 class SecurityEvent(models.Model):
@@ -249,6 +257,9 @@ class SecurityEvent(models.Model):
         on_delete=models.SET_NULL,
         related_name='security_events',
     )
+    # 운영자가 남긴 사유. 계정을 정지하거나 풀 때만 적는다. 다른 사건에서는 비어 있다.
+    # 비밀번호, 코드, 이메일 주소 같은 것은 적지 않는다(명령이 길이만 막고 내용은 보지 못한다)
+    note = models.CharField('사유', max_length=200, blank=True)
     created_at = models.DateTimeField('일어난 시각', auto_now_add=True)
     # 요약 메일에 실어 운영자에게 알린 시각. 아직 알리지 않았으면 비어 있다.
     # "지난 한 시간" 처럼 시간으로 자르지 않고 이 표시로 고른다.

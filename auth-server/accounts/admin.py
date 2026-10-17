@@ -21,15 +21,17 @@ class UserAdmin(DjangoUserAdmin):
     search_fields = ('username', 'email', 'nickname')
     ordering = ('-date_joined',)
 
-    # 값이 자동으로 정해지는 필드는 화면에서 고칠 수 없게 한다
-    readonly_fields = ('public_id', 'token_version', 'last_login', 'date_joined')
+    # 값이 자동으로 정해지는 필드는 화면에서 고칠 수 없게 한다.
+    # is_active 도 여기서 끄지 못한다. 정지는 관리 명령(suspend_account)으로 한다.
+    # 화면에서 끄면 세션 버전이 오르지 않아, 다른 서버에서 옛 access 토큰이 만료(15분)까지 통한다
+    readonly_fields = ('public_id', 'token_version', 'sessions_revoked_at', 'is_active', 'last_login', 'date_joined')
 
     # 수정 화면. 기본 구성에서 first_name, last_name 을 빼고 nickname, public_id 를 넣는다
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('프로필', {'fields': ('email', 'email_verified_at', 'nickname', 'public_id')}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
-        ('기록', {'fields': ('token_version', 'last_login', 'date_joined')}),
+        ('기록', {'fields': ('token_version', 'sessions_revoked_at', 'last_login', 'date_joined')}),
     )
 
     @admin.display(boolean=True, description='이메일 인증')
@@ -135,7 +137,7 @@ class SecurityEventAdmin(admin.ModelAdmin):
     기록이다. 관리자 화면에서 만들거나 고치거나 지울 수 있으면 기록으로서 믿을 수 없다.
     """
 
-    list_display = ('created_at', 'kind', 'ip', 'user', 'reported_at')
+    list_display = ('created_at', 'kind', 'ip', 'user', 'note', 'reported_at')
     list_filter = ('kind',)
     search_fields = ('ip', 'user__username')
     date_hierarchy = 'created_at'
