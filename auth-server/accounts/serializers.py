@@ -9,7 +9,7 @@ Serializer 는 검증과 변환만 한다. 계정을 만드는 일은 services.p
 from rest_framework import serializers
 
 from accounts.email_codes import CODE_LENGTH
-from accounts.models import User
+from accounts.models import GuardianNoticeKind, User
 from accounts.validators import (
     validate_nickname_format,
     validate_nickname_not_reserved,
@@ -114,6 +114,18 @@ class GuardianRevokeSerializer(serializers.Serializer):
     """보호자의 철회. 메일의 철회 링크에서 꺼낸 글자를 받는다."""
 
     revoke_token = serializers.CharField(max_length=500)
+
+
+class GuardianNoticeSerializer(serializers.Serializer):
+    """결제 서버가 보낸 보호자 알림(#352). 본문의 모양만 본다. 서명은 뷰가 먼저 본다."""
+
+    order_id = serializers.UUIDField()
+    kind = serializers.ChoiceField(choices=GuardianNoticeKind.choices)
+    user_id = serializers.UUIDField()
+    product_id = serializers.CharField(max_length=100)
+    price = serializers.IntegerField(min_value=1)
+    credits = serializers.IntegerField(min_value=1)
+    occurred_at = serializers.DateTimeField()
 
 
 class IdentityStatusSerializer(serializers.Serializer):

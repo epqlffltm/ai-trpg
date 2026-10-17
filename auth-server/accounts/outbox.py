@@ -9,6 +9,9 @@
 
 본문은 암호화해서 적는다(mail_crypto.py). 워커가 꺼낼 때 복호화한다.
 
+보낸 메일의 줄은 지운다. 보냈다는 사실을 남겨야 하는 메일은 기록(MailReceipt)을 붙여 적는다(#352).
+보내면 그 기록에 보낸 시각을, 버리면 버린 시각을 적는다.
+
 적는 일이 계정 생성이나 코드 발급과 같은 트랜잭션에 들어간다. 그래서
 "계정은 만들어졌는데 보낼 메일은 적히지 않은" 상태나 그 반대가 생기지 않는다.
 """
@@ -24,7 +27,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.mail_crypto import UnreadableMailBodyError, decrypt_mail_body, encrypt_mail_body
-from accounts.models import OutgoingMail, OutgoingMailStatus, SecurityEventKind
+from accounts.models import MailReceipt, OutgoingMail, OutgoingMailStatus, SecurityEventKind
 from accounts.security_events import record_security_event
 
 logger = logging.getLogger(__name__)
@@ -76,18 +79,31 @@ class ClaimedMail:
     to_email: str
     subject: str
     body: str
+    # 보냈다는 것을 남길 기록. 없으면 None 이다
+    receipt_id: int | None = None
 
 
-def enqueue_mail(*, to_email: str, subject: str, body: str) -> None:
+def enqueue_mail(
+    *,
+    to_email: str,
+    subject: str,
+    body: str,
+    receipt: MailReceipt | None = None,
+    deadline: timedelta = MAIL_SEND_DEADLINE,
+) -> None:
     """
     메일을 보내 달라고 맡긴다.
 
     발송함에 적기만 하고 돌아온다. 실제 발송은 워커가 한다.
     MAIL_DELIVERY 가 'inline' 이면 발송함을 거치지 않고 그 자리에서 보낸다.
     inline 은 테스트와, 워커를 띄우지 않은 개발 환경을 위한 것이다.
+
+    receipt 를 주면 보냈거나 버렸을 때 그 기록에 적는다. deadline 은 버리기까지의 시간이다.
+    인증 코드는 5분이 지나면 쓸모가 없지만, 결제 알림은 하루 늦어도 쓸모가 있다.
     """
     if settings.MAIL_DELIVERY == 'inline':
         _send(to_email=to_email, subject=subject, body=body)
+        _mark_receipt(receipt.pk if receipt else None, sent_at=timezone.now())
         return
 
     now = timezone.now()
@@ -97,7 +113,8 @@ def enqueue_mail(*, to_email: str, subject: str, body: str) -> None:
         # 본문에는 인증 코드나 재설정 토큰이 들어 있다. 암호화해서 적는다
         body=encrypt_mail_body(body),
         next_attempt_at=now,
-        expires_at=now + MAIL_SEND_DEADLINE,
+        expires_at=now + deadline,
+        receipt=receipt,
     )
 
 
@@ -163,6 +180,7 @@ def _claim_next_due_mail(now) -> ClaimedMail | str | None:
         to_email=mail.to_email,
         subject=mail.subject,
         body=body,
+        receipt_id=mail.receipt_id,
     )
 
 
@@ -223,6 +241,8 @@ def _finish_sent(claimed: ClaimedMail) -> None:
     deleted, _ = _owned(claimed).delete()
     if deleted == 0:
         logger.warning('보낸 메일을 다른 워커가 이미 다시 가져갔다. 두 번 갔을 수 있다. id=%s', claimed.pk)
+    # 보낸 것은 사실이다. 다른 워커가 다시 가져갔어도 기록에는 먼저 보낸 시각이 남는다
+    _mark_receipt(claimed.receipt_id, sent_at=timezone.now())
 
 
 def _schedule_retry(claimed: ClaimedMail, error: Exception, now) -> None:
@@ -252,6 +272,7 @@ def _discard(mail: OutgoingMail, now) -> None:
     mail.body = ''
     mail.discarded_at = now
     mail.save(update_fields=['status', 'body', 'discarded_at', 'last_error'])
+    _mark_receipt(mail.receipt_id, discarded_at=now)
     # 운영자에게 가는 요약 메일에 실린다. 버리는 것과 같은 트랜잭션이라 둘 중 하나만 남는 일이 없다
     record_security_event(kind=SecurityEventKind.MAIL_DISCARDED)
     # 받는 사람의 주소는 로그에 적지 않는다. 관리자 화면에서 번호로 찾는다
@@ -262,6 +283,18 @@ def _discard(mail: OutgoingMail, now) -> None:
         mail.attempts,
         mail.last_error or '(시도하지 못함)',
     )
+
+
+def _mark_receipt(receipt_id: int | None, **when) -> None:
+    """
+    보낸 메일의 기록에 보낸 시각(sent_at)이나 버린 시각(discarded_at)을 적는다. 기록이 없으면 아무것도 하지 않는다.
+
+    이미 적힌 시각은 덮지 않는다. 처음 보낸 때가 남는다.
+    """
+    if receipt_id is None:
+        return
+    (field,) = when
+    MailReceipt.objects.filter(pk=receipt_id, **{f'{field}__isnull': True}).update(**when)
 
 
 def _describe(error: Exception) -> str:

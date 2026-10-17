@@ -691,3 +691,49 @@ func TestTossNotificationsOnlyWithToss(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadSweeperFindsWhereToSendGuardianNotices(t *testing.T) {
+	// 적지 않으면 공개키 주소 옆이다. 인증 서버의 주소들은 같은 곳(/api/v1/auth)에 있다
+	derived, derivedErr := config.LoadSweeper(from(map[string]string{
+		"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": "http://auth:8000/api/v1/auth/jwks", "AUTH_SERVER_SECRET": authSecret,
+	}))
+	written, writtenErr := config.LoadSweeper(from(map[string]string{
+		"DATABASE_URL": databaseURL, "AUTH_GUARDIAN_NOTICES_URL": "http://other:9000/notices", "AUTH_SERVER_SECRET": authSecret,
+	}))
+
+	if derivedErr != nil || derived.GuardianNotices.URL != "http://auth:8000/api/v1/auth/service/guardian-notices" ||
+		derived.GuardianNotices.Secret != authSecret || !derived.GuardianNotices.Enabled() {
+		t.Errorf("만든 주소 = %+v, %v", derived.GuardianNotices, derivedErr)
+	}
+	if writtenErr != nil || written.GuardianNotices.URL != "http://other:9000/notices" {
+		t.Errorf("적은 주소 = %+v, %v", written.GuardianNotices, writtenErr)
+	}
+}
+
+func TestLoadSweeperRunsWithoutTheAuthServer(t *testing.T) {
+	// 비밀이나 주소가 없으면 보호자 알림을 적기만 한다. 정리 작업은 뜬다
+	for name, values := range map[string]map[string]string{
+		"둘 다 없다": {},
+		"비밀이 없다": {"AUTH_JWKS_URL": "http://auth:8000/api/v1/auth/jwks"},
+		"주소가 없다": {"AUTH_SERVER_SECRET": authSecret},
+	} {
+		values["DATABASE_URL"] = databaseURL
+		sweeper, err := config.LoadSweeper(from(values))
+		if err != nil || sweeper.GuardianNotices.Enabled() {
+			t.Errorf("%s: %+v, %v", name, sweeper.GuardianNotices, err)
+		}
+	}
+}
+
+func TestLoadSweeperRefusesABadAuthSetting(t *testing.T) {
+	for name, values := range map[string]map[string]string{
+		"짧은 비밀":           {"AUTH_SERVER_SECRET": "short"},
+		"http 가 아닌 주소":    {"AUTH_GUARDIAN_NOTICES_URL": "file:///etc/passwd"},
+		"/jwks 로 끝나지 않는다": {"AUTH_JWKS_URL": "http://auth:8000/keys"},
+	} {
+		values["DATABASE_URL"] = databaseURL
+		if _, err := config.LoadSweeper(from(values)); err == nil {
+			t.Errorf("%s: 오류가 나야 한다", name)
+		}
+	}
+}

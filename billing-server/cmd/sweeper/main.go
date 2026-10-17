@@ -6,8 +6,9 @@
 //	go run ./cmd/sweeper -once        한 바퀴만 돌고, 정리한 수를 화면에 찍고 끝난다
 //	go run ./cmd/sweeper -interval 1m -limit 200
 //
-// 한 바퀴에 하는 일: 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 원장에 적고, 만료된 주문을 끝낸다(internal/sweep).
+// 한 바퀴에 하는 일: 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 원장에 적고, 만료된 주문을 끝내고, 보호자에게 알릴 결제를 보낸다(internal/sweep).
 // 서버와 같은 설정(.env)을 읽는다. 다만 포트, 공개키 주소, 서명의 비밀, 결제 대행사의 키는 없어도 돈다(config.LoadSweeper).
+// 미성년자의 결제를 보호자에게 알리라고 인증 서버에 보낸다(AUTH_SERVER_SECRET 이 있을 때, #352).
 // 결제 대행사를 부르지 않는다. 주문 서비스에는 부르면 오류를 내는 것을 끼운다(app.NoProviders).
 //
 // 바퀴 하나가 작업 하나다(job_id). 바퀴가 실패해도 끄지 않는다. 그 바퀴를 error 로 남기고 다음 바퀴에 다시 한다.
@@ -31,6 +32,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/app"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/guardiannotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jobs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
@@ -93,7 +95,8 @@ func run(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	sweeper := sweep.New(services.Holds, services.Wallet, services.Orders, opts.limit)
+	sweeper := sweep.New(services.Holds, services.Wallet, services.Orders, opts.limit).
+		WithNotices(guardiannotice.NewService(pool, time.Now, noticeSender(settings.GuardianNotices)))
 
 	if opts.once {
 		result, err := round(ctx, sweeper)
@@ -106,6 +109,17 @@ func run(args []string, out io.Writer) error {
 	)
 	loop(ctx, sweeper, opts.interval, settings.HeartbeatFile)
 	return nil
+}
+
+// noticeSender 는 보호자 알림을 인증 서버에 보내는 것을 만든다. 보낼 곳이나 비밀이 없으면 nil 이다(적기만 한다).
+func noticeSender(settings config.GuardianNotices) guardiannotice.Sender {
+	if !settings.Enabled() {
+		slog.Warn("인증 서버의 알림 주소나 AUTH_SERVER_SECRET 이 없습니다. 보호자에게 알릴 결제를 적기만 하고 보내지 않습니다",
+			slog.String(obs.FieldOperation, operation),
+		)
+		return nil
+	}
+	return guardiannotice.NewHTTPSender(settings.URL, settings.Secret, time.Now)
 }
 
 // parseOptions 는 명령 줄을 읽는다.
@@ -160,6 +174,9 @@ func round(ctx context.Context, sweeper rounder) (sweep.Result, error) {
 				slog.Int("expired_holds", result.Holds),
 				slog.Int("expired_free_credit_users", result.FreeCreditUsers),
 				slog.Int("expired_orders", result.Orders),
+				slog.Int("guardian_notices_queued", result.Notices.Queued),
+				slog.Int("guardian_notices_sent", result.Notices.Sent),
+				slog.Int("guardian_notices_retried", result.Notices.Retried),
 			)
 		}
 		return err
@@ -179,8 +196,9 @@ func beat(ctx context.Context, heartbeat string) {
 
 // printResult 는 -once 로 돌았을 때 정리한 수를 사람이 읽게 찍는다.
 func printResult(out io.Writer, result sweep.Result) {
-	fmt.Fprintf(out, "돌려준 홀드: %d\n무료 크레딧을 정리한 사용자: %d\n끝낸 주문: %d\n",
-		result.Holds, result.FreeCreditUsers, result.Orders)
+	fmt.Fprintf(out, "돌려준 홀드: %d\n무료 크레딧을 정리한 사용자: %d\n끝낸 주문: %d\n보호자 알림: 적음 %d, 보냄 %d, 다시 보낼 것 %d\n",
+		result.Holds, result.FreeCreditUsers, result.Orders,
+		result.Notices.Queued, result.Notices.Sent, result.Notices.Retried)
 }
 
 // loadDotEnv 는 현재 폴더의 .env 를 환경 변수로 올린다. 파일이 없으면 아무것도 하지 않는다.
