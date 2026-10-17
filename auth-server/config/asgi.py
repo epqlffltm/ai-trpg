@@ -1,9 +1,11 @@
+# auth-server/config/asgi.py
+
 """
-ASGI config for config project.
+ASGI 의 입구. 요청을 받는 서버(gunicorn)가 이 파일의 application 을 불러 쓴다.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
+설정을 읽고 앱을 만든 뒤, 서명 키가 있는지 본다. 요청을 받는 서버는 토큰에 서명하므로 키가 없으면 뜨지 않는다(#274).
+워커와 마이그레이션(manage.py 의 명령)은 이 파일을 거치지 않으므로 키 없이 뜬다.
 
-For more information on this file, see
 https://docs.djangoproject.com/en/6.1/howto/deployment/asgi/
 """
 
@@ -11,6 +13,10 @@ import os
 
 from django.core.asgi import get_asgi_application
 
+from accounts.key_ring import require_signing_key
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 application = get_asgi_application()
+
+require_signing_key()

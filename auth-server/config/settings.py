@@ -22,12 +22,7 @@ import environ
 from django.core.exceptions import ImproperlyConfigured
 
 from config.billing import validate_billing_url, validate_service_secret
-from config.jwt_keys import (
-    build_verification_keys,
-    compute_key_id,
-    derive_public_key_pem,
-    read_private_key_pem,
-)
+from config.jwt_keys import load_key_material, private_key_path
 from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
 from config.security import (
     SILENCED_DEPLOY_CHECKS,
@@ -194,34 +189,36 @@ REST_FRAMEWORK = {
 # https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html
 
 # 개인키는 파일로 두고 .env 에는 경로만 적는다. PEM 은 여러 줄이라 .env 값으로 넣기 불편하다.
-# 상대 경로는 auth-server 폴더를 기준으로 한다
-JWT_PRIVATE_KEY_PATH = BASE_DIR / env('JWT_PRIVATE_KEY_PATH', default='keys/jwt-private.pem')
-
-_jwt_private_key_pem = read_private_key_pem(JWT_PRIVATE_KEY_PATH)
-
-# 공개키. JWKS 로 내보내고, 인증 서버 자신도 토큰을 검증할 때 쓴다
-JWT_PUBLIC_KEY_PEM = derive_public_key_pem(_jwt_private_key_pem)
-
-# 토큰 머리말의 kid 와 JWKS 의 kid 에 같은 값이 들어간다
-JWT_KEY_ID = compute_key_id(JWT_PUBLIC_KEY_PEM)
-
-# 서명에 쓰는 개인키. 토큰을 만들 때 accounts/key_ring.py 가 읽는다
-JWT_SIGNING_KEY_PEM = _jwt_private_key_pem
+# 상대 경로는 auth-server 폴더를 기준으로 한다.
+# 빈 값이면 키를 읽지 않는다. 서명하지 않는 프로세스(워커, 마이그레이션)는 키 없이 뜬다(compose 가 비운다, #274).
+# 서버의 입구(config/wsgi.py)는 키가 없으면 뜨지 않는다
+JWT_PRIVATE_KEY_PATH = private_key_path(env('JWT_PRIVATE_KEY_PATH', default='keys/jwt-private.pem'), BASE_DIR)
 
 # 서명하지 않고 검증만 하는 공개키 파일들(#21). 쉼표로 구분한다. 상대 경로는 auth-server 폴더 기준이다.
 # 키를 교체하는 동안 옛 키와, 미리 알릴 다음 키를 여기에 둔다. JWKS 에도 함께 실린다.
 # 교체 절차는 README 의 "운영 메모" > "JWT 키 교체"에 있다
 JWT_EXTRA_PUBLIC_KEY_PATHS = [BASE_DIR / path for path in env.list('JWT_EXTRA_PUBLIC_KEY_PATHS', default=[])]
 
+_jwt_keys = load_key_material(JWT_PRIVATE_KEY_PATH, JWT_EXTRA_PUBLIC_KEY_PATHS)
+
+# 서명에 쓰는 개인키. 토큰을 만들 때 accounts/key_ring.py 가 읽는다. 서명하지 않는 프로세스는 None 이다
+JWT_SIGNING_KEY_PEM = _jwt_keys.signing_key_pem
+
+# 공개키. JWKS 로 내보내고, 인증 서버 자신도 토큰을 검증할 때 쓴다
+JWT_PUBLIC_KEY_PEM = _jwt_keys.public_key_pem
+
+# 토큰 머리말의 kid 와 JWKS 의 kid 에 같은 값이 들어간다
+JWT_KEY_ID = _jwt_keys.key_id
+
 # 검증할 수 있는 공개키 전부. 키 ID → 공개키 PEM, 서명 키가 맨 앞이다
-JWT_VERIFICATION_KEYS = build_verification_keys(JWT_PUBLIC_KEY_PEM, JWT_EXTRA_PUBLIC_KEY_PATHS)
+JWT_VERIFICATION_KEYS = _jwt_keys.verification_keys
 
 SIMPLE_JWT = {
     # 비대칭 서명. 개인키는 이 서버만 갖고, 다른 서버는 공개키로 검증만 한다.
     # 대칭키(HS256)를 여러 서버가 공유하면 검증만 해야 할 서버도 토큰을 만들 수 있다
     'ALGORITHM': 'RS256',
-    'SIGNING_KEY': _jwt_private_key_pem,
-    'VERIFYING_KEY': JWT_PUBLIC_KEY_PEM,
+    'SIGNING_KEY': JWT_SIGNING_KEY_PEM,
+    'VERIFYING_KEY': JWT_PUBLIC_KEY_PEM or '',
     # 누가 발급했고(iss) 누구에게 쓰라고 발급했는지(aud).
     # 검증하는 서버는 aud 에 자기 이름이 있는지 확인한다.
     # 토큰 하나에 모든 서버의 이름을 싣는다. 프론트는 토큰 하나로 모든 서버를 부른다.
