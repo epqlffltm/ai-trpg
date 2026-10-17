@@ -63,7 +63,7 @@ docker compose up -d
 docker compose ps
 ```
 
-`db`와 `redis`가 모두 `healthy`이면 정상이다.
+`db`, `redis`, `db-backup`이 모두 `healthy`이면 정상이다. `db-backup`은 첫 백업을 뜬 뒤에 `healthy`가 된다([백업과 복원](#백업과-복원)).
 
 첫 기동 때 `docker/postgres/init/`의 스크립트가 서버별 DB 계정과 스키마를 만든다.
 이 스크립트는 데이터 볼륨이 비어 있을 때만 실행된다.
@@ -85,7 +85,7 @@ docker compose --profile app up -d --build
 docker compose --profile app ps -a
 ```
 
-`*-migrate` 넷이 `Exited (0)`, `*-server` 넷과 `proxy` 와 워커 셋(`auth-mail`, `auth-welcome-credits`, `billing-sweeper`)이 `healthy`,
+`*-migrate` 넷이 `Exited (0)`, `*-server` 넷과 `proxy` 와 워커 넷(`auth-mail`, `auth-welcome-credits`, `billing-sweeper`, `db-backup`)이 `healthy`,
 cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
 서버의 `healthy` 는 그 서버가 DB 에 닿는다는 뜻이다(healthcheck 가 `/health/ready` 를 부른다). DB 가 죽으면 `unhealthy` 로 보이고, DB 가 돌아오면 저절로 `healthy` 가 된다.
 워커의 `healthy` 는 그 워커가 DB 에 닿으며 돈다는 뜻이다(2분 안에 한 바퀴를 끝냈다. `docs/observability.md` 의 "워커의 상태").
@@ -110,6 +110,38 @@ cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
   어느 프로세스가 무엇을 받는지는 `.github/scripts/secret_scope.py` 의 표에 있다. 새 비밀을 더하면 그 표에도 적는다. 표에 없으면 CI(`stack`)가 실패한다.
 - 포트가 다른 프로그램과 겹치면 루트 `.env` 의 `PROXY_PORT`(8080), `AUTH_PORT`(8000)로 바꾼다.
 
+## 백업과 복원
+
+`db-backup` 이 DB 하나를 통째로 한 파일로 뜬다(#274). 인프라를 띄우면 함께 뜨고, 지금 한 번, 그 뒤로 하루에 한 번 뜬다.
+파일은 PC 의 폴더(루트 `.env` 의 `BACKUP_DIR`, 기본은 저장소의 `backups/`)에 `trpg-<UTC 시각>.dump` 로 쌓이고 최근 14개(`BACKUP_KEEP`)만 남는다.
+
+```
+docker compose run --rm db-backup once     # 지금 한 번 뜬다
+docker compose run --rm db-backup check    # 가장 최근 백업을 빈 DB 에 풀어 표마다 줄 수가 원본과 같은지 본다
+```
+
+- 네 서버의 스키마가 같은 순간의 상태로 한 파일에 든다. 서버끼리 짝이 맞아야 하는 줄(게임의 홀드 기록과 결제의 홀드)이 있어서 서버마다 따로 뜨지 않는다
+- 테스트용 스키마(`*_test`)와 DB 계정은 뜨지 않는다. 계정은 새 볼륨에서 초기화 스크립트가 만든다
+- Redis 는 뜨지 않는다. 시도 횟수와 캐시뿐이라 사라져도 다시 쌓인다
+- 복원이 되는지는 CI(`stack`)가 PR 마다 본다. 마이그레이션을 마친 DB 를 뜨고, 같은 DB 서버의 빈 DB 에 풀어 표마다 줄 수를 맞춰 본다
+- **백업에는 이메일, 비밀번호 해시, 결제 원장이 들어 있다.** 파일은 주인만 읽게(600) 만든다. 리눅스에서는 주인이 root 라 `sudo` 로 읽는다.
+  `docker compose down -v` 로 볼륨을 지워도 백업은 남지만, 같은 디스크라 디스크가 망가지면 함께 사라진다. 다른 장비(NAS 등)에 복사해 둔다.
+  옮길 때는 암호화한다. 예: `gpg --symmetric --cipher-algo AES256 trpg-<시각>.dump`
+- `.env` 와 JWT 키(`auth-server/keys/`)는 백업에 넣지 않는다. 백업과 같은 곳에 두면 그 하나로 모든 것이 열린다. 따로, 다른 곳에 둔다
+
+**복원.** 서버를 모두 끄고 DB 를 새로 만든 뒤 푼다. 지금의 데이터는 백업 시점의 것으로 바뀐다.
+
+```
+docker compose --profile app stop          # 컨테이너로 띄운 서버가 있으면. PC 에서 띄운 서버도 끈다
+docker compose down -v                     # 볼륨이 망가졌을 때만. 지금의 데이터가 사라진다
+docker compose up -d db                    # 새 볼륨이면 초기화 스크립트가 계정과 스키마를 만든다
+docker compose run --rm --entrypoint pg_restore db-backup --clean --if-exists --exit-on-error --dbname=trpg /backups/trpg-<시각>.dump
+```
+
+`--clean --if-exists` 는 백업에 든 것을 지우고 다시 만든다. 초기화 스크립트가 만든 빈 스키마 위에 그대로 풀린다.
+`--dbname` 은 루트 `.env` 의 `POSTGRES_DB` 다(기본 `trpg`). 다 풀면 서버를 띄운다. 마이그레이션은 이미 백업에 든 상태라 할 일이 없다.
+풀기 전에는 `db` 만 띄운다. `docker compose up -d` 로 모두 띄우면 `db-backup` 이 곧바로 빈 DB 를 하나 떠서 쌓는다.
+
 ## 설계 메모
 
 서버 하나에 속하지 않는 결정만 적는다. 서버별 결정은 각 서버의 설명서에 있다.
@@ -130,7 +162,7 @@ cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
 관문은 바뀐 파일을 보고 그 서버의 CI 만 부른다(`.github/scripts/changed-servers.sh`). 부르지 않은 서버는 건너뛴 것이고 통과로 친다.
 서버의 CI 넷을 따로 필수로 걸지 않은 이유: 서버마다 자기 폴더가 바뀔 때만 돈다. 돌지 않은 필수 검사를 GitHub 은 "기다리는 중"으로 두고 머지를 막는다.
 `docker/` 아래(DB 초기화 스크립트, 프록시의 설정, crontab), compose 파일, 관문 자신이 바뀌면 넷 다 돈다. 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 `ruff.toml`)이 바뀌면 인증과 게임이 돈다. `main` 에 들어간 뒤에는 서버의 CI 가 예전처럼 제 폴더가 바뀔 때만 스스로 돈다. 위의 배지가 그 결과다.
-서버가 하나라도 바뀌면 관문의 `stack` 이 네 서버의 이미지를 만들어 compose 로 함께 띄우고, 마이그레이션이 성공했는지, 서버끼리 닿는지, 워커가 다시 뜨기를 되풀이하지 않는지, crontab 의 명령이 한 번씩 성공하는지, 비밀이 그것을 쓰는 프로세스에만 가는지, 프록시가 주소를 나누고 막는지를 본다(`.github/scripts/stack-smoke.sh`).
+서버가 하나라도 바뀌면 관문의 `stack` 이 네 서버의 이미지를 만들어 compose 로 함께 띄우고, 마이그레이션이 성공했는지, 서버끼리 닿는지, 워커가 다시 뜨기를 되풀이하지 않는지, crontab 의 명령이 한 번씩 성공하는지, 비밀이 그것을 쓰는 프로세스에만 가는지, DB 의 백업이 풀리는지, 프록시가 주소를 나누고 막는지를 본다(`.github/scripts/stack-smoke.sh`).
 
 **이미지는 서버마다 같은 규칙으로 만든다.** 여러 단계로 빌드해 실행에 필요한 것만 담고, root 가 아닌 사용자(번호로 적는다)로 돌린다.
 기본 이미지는 버전을 고정한다. 비밀(`.env`, JWT 키)은 `.dockerignore` 로 막아 이미지에 넣지 않고, 띄울 때 compose 가 넘긴다.
@@ -202,7 +234,8 @@ billing-server/           Go 결제 서버 (독립된 Go 모듈). 연습용이�
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
 docker/nginx/templates/   프록시(nginx)의 설정
 docker/cron/              주기 명령의 crontab (인증, 결제)
+docker/backup/            DB 의 백업과 복원 확인 스크립트
 docs/                     서버들이 함께 지키는 규격 (관측)
-docker-compose.yml        PostgreSQL, Redis, 서버 넷과 워커, cron, 프록시(프로필 app)
+docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 서버 넷과 워커, cron, 프록시(프로필 app)
 .env.example              인프라 환경 변수 목록
 ```
