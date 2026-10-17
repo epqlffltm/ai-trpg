@@ -8,6 +8,7 @@ JWT 발급, 갱신, 폐기.
     - 토큰 머리말에 키 ID(kid)를 넣고, 검증할 때는 그 kid 의 공개키를 고른다(키 교체, #21).
     - 토큰에 세션 버전(ver)을 넣어, 사용자의 모든 세션을 한 번에 끊을 수 있게 한다.
     - access 토큰에 닉네임(nickname)을 넣어, 다른 서버가 인증 서버를 부르지 않고 글쓴이의 이름을 알게 한다.
+    - access 토큰에 성인용 내용을 볼 수 있는지(adult_content)를 넣는다(#336, 게임 서버의 #59).
     - refresh 토큰은 쓸 때마다 새것으로 바꾸고, 이미 폐기된 토큰이 다시 쓰이면 탈취로 본다.
 """
 
@@ -25,6 +26,8 @@ from rest_framework_simplejwt.tokens import AccessToken as SimpleJWTAccessToken
 from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
 from rest_framework_simplejwt.utils import datetime_from_epoch
 
+from accounts.age import korean_today
+from accounts.identity_status import identity_status_of
 from accounts.key_ring import current_key_ring
 from accounts.models import User
 
@@ -32,6 +35,8 @@ from accounts.models import User
 VERSION_CLAIM = 'ver'
 # 닉네임을 담는 클레임 이름. OpenID Connect 의 표준 클레임 이름을 따른다
 NICKNAME_CLAIM = 'nickname'
+# 성인용 내용을 볼 수 있는지를 담는 클레임 이름. 참이나 거짓이다. 이 클레임이 없는 옛 토큰은 거짓으로 본다
+ADULT_CONTENT_CLAIM = 'adult_content'
 
 
 class InvalidRefreshTokenError(Exception):
@@ -153,9 +158,14 @@ def _access_token_for(refresh: RefreshToken, user: User) -> AccessToken:
     이름이 바뀌면 늦어도 access 토큰의 수명(15분) 뒤에는 새 이름이 실린다.
     토큰은 서명만 되고 암호화되지 않아 누구나 읽는다.
     닉네임은 남에게 보이라고 만든 이름이라 실어도 된다(이메일은 싣지 않는다).
+
+    성인용 내용을 볼 수 있는지도 갱신할 때마다 오늘(한국 날짜) 기준으로 다시 정한다.
+    본인인증을 마친 사람이 만 19세가 되는 해의 1월 1일을 지났으면 참이다. 인증한 뒤나 그날이 온 뒤의 첫 갱신부터 실린다.
+    참, 거짓만 싣는다. 생일이나 나이는 싣지 않는다.
     """
     access = refresh.access_token
     access[NICKNAME_CLAIM] = user.nickname
+    access[ADULT_CONTENT_CLAIM] = identity_status_of(user, korean_today()).adult_content
     return access
 
 

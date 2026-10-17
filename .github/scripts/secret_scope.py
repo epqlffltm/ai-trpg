@@ -71,6 +71,7 @@ SECRETS = [
         'BILLING_SECRET',
         'OPENAI_API_KEY',
         'ANTHROPIC_API_KEY',
+        'GEMINI_API_KEY',
         'SIGNAL_SECRET',
         'AI_LOG_HMAC_KEY',
     ),

@@ -22,6 +22,7 @@ import environ
 from django.core.exceptions import ImproperlyConfigured
 
 from config.billing import validate_billing_url, validate_service_secret
+from config.identity import default_identity_provider, validate_identity_provider
 from config.jwt_keys import load_key_material, private_key_path
 from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
 from config.security import (
@@ -409,7 +410,7 @@ PASSWORD_RESET_URL = env('PASSWORD_RESET_URL', default='http://localhost:5173/re
 
 
 # 결제 서버
-# 가입을 마친 사용자에게 환영 크레딧을 주라고 결제 서버에 맡긴다(accounts/welcome_credit.py).
+# 본인인증을 마친 사용자에게 환영 크레딧을 주라고 결제 서버에 맡긴다(accounts/welcome_credit.py).
 # 맡기는 일은 워커(manage.py send_welcome_credits)가 한다. 요청을 처리하는 쪽은 결제 서버를 부르지 않는다
 
 # 결제 서버의 주소. 끝에 빗금을 붙이지 않는다
@@ -418,3 +419,12 @@ BILLING_URL = validate_billing_url(env('BILLING_URL', default='http://127.0.0.1:
 # 결제 서버와 함께 아는 비밀. 요청에 서명할 때 쓴다. 결제 서버의 AUTH_SERVER_SECRET 과 같은 값이다.
 # 비어 있으면 워커가 돌지 못한다. 서버는 이 값 없이도 뜬다. 가입과 로그인에는 쓰이지 않는다
 BILLING_SECRET = validate_service_secret(env('BILLING_SECRET', default=''))
+
+
+# 본인확인(#336)
+# 휴대폰 본인인증을 받는 업체. fake(가짜, 개발용) 또는 disabled(받지 않음)다(config/identity.py).
+# 적지 않으면 운영은 disabled, 다른 환경은 fake 다. 운영에서 fake 를 고르면 서버가 뜨지 않는다
+IDENTITY_PROVIDER = validate_identity_provider(
+    env('IDENTITY_PROVIDER', default=default_identity_provider(APP_ENVIRONMENT)),
+    APP_ENVIRONMENT,
+)

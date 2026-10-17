@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.catalog import repository, service
 from app.catalog.errors import CatalogConflictError, Conflict, InvalidModelError, ModelNotFoundError
 from app.catalog.models import AiModel, AiModelCost, Grade, Provider, ReasoningStyle, TokenLimitField
-from app.catalog.rules import is_offered, is_retired, round_cost_usd
+from app.catalog.rules import always_thinks, is_offered, is_retired, round_cost_usd
 from app.catalog.schemas import SLUG_MAX_LENGTH, CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -110,6 +110,43 @@ def test_a_claude_model_needs_its_reasoning_style():
 def test_an_openai_model_takes_no_reasoning_style():
     with pytest.raises(ValidationError, match='적지 않는다'):
         ModelCreate(**{**LUNA.model_dump(), 'reasoning_style': ReasoningStyle.ADAPTIVE})
+
+
+def test_a_gemini_model_takes_only_the_gemini_styles():
+    gemini = {
+        **OPUS.model_dump(),
+        'slug': 'gemini-4-argon',
+        'provider': Provider.GEMINI,
+        'api_model_id': 'gemini-4-argon',
+    }
+
+    assert ModelCreate(**{**gemini, 'reasoning_style': ReasoningStyle.LEVEL_LOW}).reasoning_style == 'level_low'
+    # adaptive 는 Claude 의 방식이다
+    with pytest.raises(ValidationError, match='받는 생각의 방식이 아니다'):
+        ModelCreate(**{**gemini, 'reasoning_style': ReasoningStyle.ADAPTIVE})
+
+
+def test_a_claude_model_takes_only_the_claude_styles():
+    with pytest.raises(ValidationError, match='받는 생각의 방식이 아니다'):
+        ModelCreate(**{**OPUS.model_dump(), 'reasoning_style': ReasoningStyle.LEVEL_MINIMAL})
+
+
+@pytest.mark.parametrize(
+    ('style', 'always'),
+    [
+        (ReasoningStyle.ALWAYS, True),
+        (ReasoningStyle.LEVEL_MINIMAL, True),
+        (ReasoningStyle.LEVEL_LOW, True),
+        (ReasoningStyle.BUDGET_MIN, True),
+        (ReasoningStyle.ADAPTIVE, False),
+        (ReasoningStyle.BETWEEN_TOOLS, False),
+        (ReasoningStyle.BUDGET, False),
+        (None, False),
+    ],
+)
+def test_the_styles_that_cannot_stop_thinking(style: ReasoningStyle | None, always: bool):
+    # 이 모델들은 판매가와 출력 상한에 생각의 몫을 넣는다
+    assert always_thinks(style) is always
 
 
 def test_api_model_ids_have_no_spaces():

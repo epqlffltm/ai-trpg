@@ -5,7 +5,7 @@
 
     1. signup           이메일 → 코드 메일(이미 가입된 주소면 안내 메일)
     2. signup/verify    이메일과 코드 → 가입 티켓
-    3. signup/complete  티켓과 아이디, 닉네임, 비밀번호 → 인증된 계정
+    3. signup/complete  티켓과 아이디, 닉네임, 비밀번호, 만 14세 이상 확인 → 인증된 계정
 
 실제 URL 로 요청을 보내 뷰, Serializer, service, DB 를 한 번에 거친다.
 두 연결이 엇갈리는 경우는 맨 아래의 TransactionTestCase 가 진짜 트랜잭션 둘로 본다.
@@ -28,7 +28,7 @@ from rest_framework.test import APITestCase
 
 from accounts.email_codes import ISSUE_COOLDOWN, MAX_FAILED_ATTEMPTS, MAX_ISSUES_PER_WINDOW
 from accounts.login_tickets import issue_login_ticket
-from accounts.models import EmailCode, SignupCode, User
+from accounts.models import EmailCode, SignupCode, User, WelcomeCredit
 from accounts.services import (
     STALE_SIGNUP_CODE_AGE,
     DuplicateAccountError,
@@ -51,7 +51,7 @@ EMAIL = 'someone@example.com'
 
 def account(**overrides) -> dict:
     """가입 내용(3단계). 테스트마다 달라지는 값만 넘기고 나머지는 기본값을 쓴다."""
-    payload = {'username': 'player_01', 'nickname': '플레이어', 'password': PASSWORD}
+    payload = {'username': 'player_01', 'nickname': '플레이어', 'password': PASSWORD, 'age_over_14': True}
     payload.update(overrides)
     return payload
 
@@ -382,17 +382,11 @@ class SignupCompleteTests(SignupTestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('signup_ticket', response.data)
 
-    def test_the_account_is_not_kept_when_the_welcome_credit_cannot_be_written(self):
-        # 계정 저장과 환영 크레딧 적기는 한 트랜잭션이다. 줄을 못 적었으면 계정도 없다
-        with (
-            patch('accounts.services.request_welcome_credit', side_effect=RuntimeError('DB 가 끊겼다')),
-            self.assertRaises(RuntimeError),
-        ):
-            self.complete(self.ticket)
-
-        self.assertEqual(User.objects.count(), 0)
-        # 티켓은 그대로 쓸 수 있다
+    def test_signing_up_queues_no_welcome_credit(self):
+        # 환영 크레딧은 본인인증 때 적는다(#336). 이메일은 얼마든지 만들 수 있다
         self.assertEqual(self.complete(self.ticket).status_code, status.HTTP_201_CREATED)
+
+        self.assertEqual(WelcomeCredit.objects.count(), 0)
 
     def test_returns_409_when_the_database_rejects_a_duplicate(self):
         # 동시 요청으로 사전 조회를 둘 다 통과한 상황을 흉내 낸다
@@ -452,6 +446,18 @@ class SignupCompleteValidationTests(SignupTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('nickname', response.data)
+
+    def test_rejects_an_account_without_the_age_confirmation(self):
+        # 만 14세 미만은 받지 않는다. 자기 신고라 실제 나이는 본인인증에서 다시 본다(#336)
+        self.assert_rejected('age_over_14', age_over_14=False)
+
+        payload = {'signup_ticket': self.ticket, **account()}
+        del payload['age_over_14']
+        response = self.client.post(COMPLETE_URL, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('age_over_14', response.data)
+        self.assertEqual(User.objects.count(), 0)
 
     def test_a_rejected_attempt_keeps_the_ticket_usable(self):
         self.complete(self.ticket, password='short1!')
