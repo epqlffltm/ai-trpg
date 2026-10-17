@@ -7,7 +7,8 @@
 //	go run ./cmd/sweeper -interval 1m -limit 200
 //
 // 한 바퀴에 하는 일: 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 원장에 적고, 만료된 주문을 끝낸다(internal/sweep).
-// 서버와 같은 설정(.env)을 읽는다. 다만 포트, 공개키 주소, 서명의 비밀은 없어도 돈다(config.LoadJobs).
+// 서버와 같은 설정(.env)을 읽는다. 다만 포트, 공개키 주소, 서명의 비밀, 결제 대행사의 키는 없어도 돈다(config.LoadSweeper).
+// 결제 대행사를 부르지 않는다. 주문 서비스에는 부르면 오류를 내는 것을 끼운다(app.NoProviders).
 //
 // 바퀴 하나가 작업 하나다(job_id). 바퀴가 실패해도 끄지 않는다. 그 바퀴를 error 로 남기고 다음 바퀴에 다시 한다.
 // 둘을 띄워도 같은 것을 두 번 정리하지 않는다. 그래도 하나면 충분하다.
@@ -75,7 +76,7 @@ func run(args []string, out io.Writer) error {
 		return err
 	}
 	loadDotEnv()
-	settings, err := config.LoadJobs(os.LookupEnv)
+	settings, err := config.LoadSweeper(os.LookupEnv)
 	if err != nil {
 		return err
 	}
@@ -88,7 +89,7 @@ func run(args []string, out io.Writer) error {
 		return err
 	}
 	defer pool.Close()
-	services, err := app.NewServices(pool, settings.Rules, app.NewProviders(settings.Payment), time.Now)
+	services, err := app.NewServices(pool, settings.Rules, app.NoProviders(), time.Now)
 	if err != nil {
 		return err
 	}
