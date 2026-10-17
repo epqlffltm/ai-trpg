@@ -4,6 +4,7 @@
 모델 목록의 판단들. DB 를 모른다. 받은 값만 보고 답한다.
 
   - token_field_problem: 출력 상한의 칸이 창구에 맞나
+  - reasoning_style_problem: 생각을 켜고 끄는 방식이 창구에 맞나
   - is_retired, is_offered: 그날 은퇴했나, 그날 쓸 수 있나
   - round_cost_usd: 단가로 어림한 1인 1라운드의 원가
 """
@@ -12,10 +13,13 @@ from datetime import date
 from decimal import Decimal
 from typing import Protocol
 
-from app.catalog.models import AiModelCost, Provider, TokenLimitField
+from app.catalog.models import AiModelCost, Provider, ReasoningStyle, TokenLimitField
 
 # 출력 상한의 칸을 적어야 하는 창구. OpenAI 모양의 API 다. 나머지 창구는 칸이 정해져 있어 적지 않는다
 TOKEN_FIELD_PROVIDERS = frozenset({Provider.OPENAI, Provider.LOCAL})
+
+# 생각을 켜고 끄는 방식을 적어야 하는 창구. 모델마다 방식이 다르다
+REASONING_STYLE_PROVIDERS = frozenset({Provider.ANTHROPIC})
 
 # 1라운드를 어림하는 토큰 수. 판매가를 정할 때 쓴 값과 같다(프로젝트 문서 model-pricing-plan)
 ROUND_INPUT_TOKENS = 12_000
@@ -39,6 +43,15 @@ def token_field_problem(provider: Provider, field: TokenLimitField | None) -> st
         return f'{provider} 창구의 모델은 출력 상한의 칸(max_tokens, max_completion_tokens)을 적어야 한다'
     if provider not in TOKEN_FIELD_PROVIDERS and field is not None:
         return f'{provider} 창구의 모델은 출력 상한의 칸을 적지 않는다'
+    return None
+
+
+def reasoning_style_problem(provider: Provider, style: ReasoningStyle | None) -> str | None:
+    """생각을 켜고 끄는 방식이 창구에 맞지 않으면 그 까닭, 맞으면 None."""
+    if provider in REASONING_STYLE_PROVIDERS and style is None:
+        return f'{provider} 창구의 모델은 생각을 켜고 끄는 방식(adaptive, always, between_tools, budget)을 적어야 한다'
+    if provider not in REASONING_STYLE_PROVIDERS and style is not None:
+        return f'{provider} 창구의 모델은 생각을 켜고 끄는 방식을 적지 않는다'
     return None
 
 

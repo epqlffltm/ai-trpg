@@ -25,32 +25,23 @@ SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되�
 답은 늘 흘려 받는다(stream). 쓰는 대로 조각을 받아 앉은 사람에게 미리 보여 줄 수 있다(app/ai/streaming.py).
 흘려 받지 않는 길을 따로 두지 않는다. Ollama, LM Studio, vLLM, OpenAI 가 모두 흘려 보낸다. 길이 둘이면 검증도 둘이다.
 
-시간의 상한.
-  httpx 의 timeout 은 "다음 바이트가 올 때까지"의 상한이다. 흘려 받으면 조각이 계속 오는 한 끝없이 길어질 수 있다.
-  그래서 호출 전체에 따로 상한(timeout)을 건다. 다시 시도하는 쪽이 "한 번 부르는 데 이만큼"을 믿고 남은 시간을 센다.
-
-실패는 모두 ProviderError 다. 응답의 본문은 오류에 싣지 않는다. 본문에 프롬프트(GM 메모 포함)가 되돌아와 있을 수 있다.
-  상태 코드로 실패하면 "이만큼 뒤에 다시 하라"는 머리(retry-after-ms, Retry-After)를 읽어 오류에 싣는다(retry_after).
-  다시 부를지, 얼마나 기다릴지는 다시 시도하는 쪽(app/rounds/retrying_narrator.py)이 정한다.
-  - 연결이 안 됨: unreachable. 받는 도중에 끊김: interrupted. 둘을 나눈다. 서버가 꺼진 것과 한 번 끊긴 것은 다르다.
-  - 시간 초과: timeout. 상태 코드: status_코드. 도중의 오류 조각: stream_error. 모양이 다름: malformed.
+보내고 받는 HTTP 의 일(시간의 상한, 실패의 이름, Retry-After)은 app/ai/http_stream.py 가 한다.
+Claude 의 provider 와 같다.
+흘러온 줄을 읽는 것은 app/ai/streaming.py 다. 도중의 오류 조각은 stream_error, 모양이 다르면 malformed 다.
 """
 
-import asyncio
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from email.utils import parsedate_to_datetime
+from functools import partial
 from typing import Any
 
 import httpx
 from pydantic import SecretStr
 
+from app.ai.http_stream import bearer_headers, stream_completion
 from app.ai.provider import (
     ChatMessage,
     Completion,
     GenerationParams,
-    ProviderError,
     Reasoning,
     TextSink,
     ignore_text,
@@ -119,83 +110,6 @@ def build_body(
     return body
 
 
-def auth_headers(api_key: SecretStr | None) -> dict[str, str]:
-    """키가 있으면 Authorization 머리. 없으면(서버 곁의 모델) 빈 것."""
-    if api_key is None or not api_key.get_secret_value():
-        return {}
-    return {'Authorization': f'Bearer {api_key.get_secret_value()}'}
-
-
-def parse_retry_after(value: str, now: datetime) -> float | None:
-    """Retry-After 의 값을 초로. 초의 수이거나 HTTP 날짜다. 읽을 수 없으면 None. 지난 때면 0."""
-    try:
-        return max(float(value), 0.0)
-    except ValueError:
-        pass
-    try:
-        when = parsedate_to_datetime(value)
-    except (TypeError, ValueError):
-        return None
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=UTC)
-    return max((when - now).total_seconds(), 0.0)
-
-
-def retry_after_of(headers: httpx.Headers, now: datetime | None = None) -> float | None:
-    """
-    응답의 머리에서 다시 하기까지 기다릴 초. 알려 주지 않았으면 None.
-
-    OpenAI 는 밀리초로 주는 retry-after-ms 도 보낸다. 더 잘다라서 먼저 본다.
-    """
-    milliseconds = headers.get('retry-after-ms')
-    if milliseconds:
-        try:
-            return max(float(milliseconds) / 1000, 0.0)
-        except ValueError:
-            pass
-    value = headers.get('retry-after')
-    if not value:
-        return None
-    return parse_retry_after(value.strip(), now or datetime.now(UTC))
-
-
-async def lines_of(response: httpx.Response) -> AsyncIterator[str]:
-    """받는 중인 응답의 줄들. 받는 도중의 시간 초과와 끊김을 ProviderError 로 바꾼다."""
-    try:
-        async for line in response.aiter_lines():
-            yield line
-    except httpx.TimeoutException as exc:
-        raise ProviderError('timeout') from exc
-    except httpx.HTTPError as exc:
-        raise ProviderError('interrupted') from exc
-
-
-async def stream_chat(
-    client: httpx.AsyncClient,
-    url: str,
-    body: dict[str, Any],
-    headers: dict[str, str],
-    timeout: float,
-    model: str,
-    on_text: TextSink,
-) -> Completion:
-    """
-    요청을 보내고 흘러오는 답을 끝까지 읽는다.
-
-    답이 오기 시작하기 전의 실패(연결, 시간 초과, 상태 코드)를 여기서 ProviderError 로 바꾼다.
-    받는 도중의 실패는 lines_of 가 바꾼다.
-    """
-    try:
-        async with client.stream('POST', url, json=body, headers=headers, timeout=timeout) as response:
-            if response.status_code != httpx.codes.OK:
-                raise ProviderError(f'status_{response.status_code}', retry_after=retry_after_of(response.headers))
-            return await read_stream(lines_of(response), model, on_text)
-    except httpx.TimeoutException as exc:
-        raise ProviderError('timeout') from exc
-    except httpx.HTTPError as exc:
-        raise ProviderError('unreachable') from exc
-
-
 @dataclass(frozen=True)
 class OpenAICompatProvider:
     """
@@ -229,10 +143,6 @@ class OpenAICompatProvider:
         호출 전체가 timeout 초를 넘으면 끊는다. 조각이 계속 와도 끊는다.
         """
         body = build_body(self.model, messages, params, self.options)
-        headers = auth_headers(self.api_key)
+        read = partial(read_stream, model=self.model, on_text=on_text)
         url = chat_url(self.base_url)
-        try:
-            async with asyncio.timeout(self.timeout):
-                return await stream_chat(self.client, url, body, headers, self.timeout, self.model, on_text)
-        except TimeoutError as exc:
-            raise ProviderError('timeout') from exc
+        return await stream_completion(self.client, url, body, bearer_headers(self.api_key), self.timeout, read)

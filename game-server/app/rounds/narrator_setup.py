@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.ai.call_log import DbCallLog
 from app.ai.calls import CallLog
 from app.ai.openai_compat import WireOptions
-from app.ai.routing import LOCAL_KIND, OPENAI_KIND, Endpoint, ModelRouter
+from app.ai.routing import ANTHROPIC_KIND, LOCAL_KIND, OPENAI_KIND, Endpoint, ModelRouter
 from app.catalog.lookup import DbModelLookup
 from app.core.config import Settings
 from app.rounds.fake_narrator import FakeNarrator
@@ -42,6 +42,13 @@ def openai_endpoint(settings: Settings) -> Endpoint | None:
     return Endpoint(base_url=settings.openai_base_url, api_key=settings.openai_api_key, kind=OPENAI_KIND)
 
 
+def anthropic_endpoint(settings: Settings) -> Endpoint | None:
+    """Anthropic(Claude)의 창구. 키를 적지 않았으면 None 이다."""
+    if not settings.anthropic_api_key.get_secret_value():
+        return None
+    return Endpoint(base_url=settings.anthropic_base_url, api_key=settings.anthropic_api_key, kind=ANTHROPIC_KIND)
+
+
 def build_router(
     settings: Settings, client: httpx.AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> ModelRouter:
@@ -51,6 +58,7 @@ def build_router(
         client=client,
         local=local_endpoint(settings),
         openai=openai_endpoint(settings),
+        anthropic=anthropic_endpoint(settings),
         timeout=settings.llm_timeout_seconds,
         local_options=WireOptions(supports_reasoning=settings.llm_supports_reasoning),
     )
