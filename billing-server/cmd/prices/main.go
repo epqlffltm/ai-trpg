@@ -4,11 +4,13 @@
 //
 //	go run ./cmd/prices list                                    이름마다 지금의 값
 //	go run ./cmd/prices history <이름>                          그 이름의 모든 줄(예약 포함)
-//	go run ./cmd/prices set <이름> <크레딧> -reason "<이유>"    값을 정한다. 없던 이름이면 새로 판다
+//	go run ./cmd/prices set <이름> <크레딧> -reason "<이유>"    값을 정한다. 없던 이름이면 새로 판다(-tier 가 있어야 한다)
 //	go run ./cmd/prices stop <이름> -reason "<이유>"            판매를 멈춘다
 //	go run ./cmd/prices import <파일> -reason "<이유>"          파일의 줄들을 무엇이 바뀌는지 미리 본다(가격표는 그대로)
 //	go run ./cmd/prices import <파일> -reason "<이유>" -apply   파일의 줄들을 한 트랜잭션으로 넣는다
 //
+// set 은 -tier <standard|premium>으로 등급을 정한다. 처음 파는 이름은 꼭 적고, 이미 파는 이름은 적지 않으면 그때의 등급 그대로다.
+// premium 은 골드(산 크레딧)로만 낸다. 판매를 멈추는 줄(stop)에는 그때의 등급이 그대로 적힌다.
 // set 과 stop 은 -at <시각>(RFC 3339, 예: 2026-11-01T00:00:00+09:00)으로 적용을 미래로 미룰 수 있고,
 // -by <이름>으로 바꾼 사람을 적는다. 적지 않으면 "cli:<이 PC 의 계정 이름>"이다.
 // import 의 적용 시각은 파일의 줄마다 적는다(import.go). 다 들어가거나 하나도 들어가지 않는다.
@@ -42,7 +44,7 @@ import (
 const usage = `쓰는 법:
   go run ./cmd/prices list
   go run ./cmd/prices history <이름>
-  go run ./cmd/prices set <이름> <크레딧> -reason "<이유>" [-at <시각>] [-by <이름>]
+  go run ./cmd/prices set <이름> <크레딧> -reason "<이유>" [-tier <standard|premium>] [-at <시각>] [-by <이름>]
   go run ./cmd/prices stop <이름> -reason "<이유>" [-at <시각>] [-by <이름>]
   go run ./cmd/prices import <파일> -reason "<이유>" [-apply] [-by <이름>]`
 
@@ -55,9 +57,11 @@ type request struct {
 	code   string
 	// credits 는 set 의 값이다.
 	credits credit.Amount
-	at      time.Time
-	reason  string
-	by      string
+	// tier 는 set 의 등급이다. 비면 그때의 등급 그대로다.
+	tier   pricing.Tier
+	at     time.Time
+	reason string
+	by     string
 	// file 은 import 가 읽을 파일이고, entries 는 그 파일에서 읽은 줄들이다(run 이 채운다).
 	file    string
 	entries []pricing.Entry
@@ -115,8 +119,9 @@ func parse(args []string, changer string) (request, error) {
 	flags := flag.NewFlagSet("prices", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	req := request{}
-	var at string
+	var at, tier string
 	flags.StringVar(&req.reason, "reason", "", "바꾼 이유")
+	flags.StringVar(&tier, "tier", "", "set 의 등급(standard, premium)")
 	flags.StringVar(&req.by, "by", changer, "바꾼 사람")
 	flags.StringVar(&at, "at", "", "적용을 시작할 시각(RFC 3339)")
 	flags.BoolVar(&req.apply, "apply", false, "import 를 미리 보기만 하지 않고 넣는다")
@@ -127,9 +132,10 @@ func parse(args []string, changer string) (request, error) {
 	if req, err = readWords(req, words); err != nil {
 		return request{}, err
 	}
-	if err := checkOptions(req, at); err != nil {
+	if err := checkOptions(req, at, tier); err != nil {
 		return request{}, err
 	}
+	req.tier = pricing.Tier(tier)
 	if at != "" {
 		if req.at, err = time.Parse(time.RFC3339, at); err != nil {
 			return request{}, errors.New("-at 은 2026-11-01T00:00:00+09:00 모양이어야 합니다")
@@ -180,9 +186,15 @@ func readWords(req request, words []string) (request, error) {
 	return req, nil
 }
 
-// checkOptions 는 그 일에 쓰지 않는 옵션이 붙었는지 본다. -at 은 set·stop 에만, -apply 는 import 에만 쓴다.
+// checkOptions 는 그 일에 쓰지 않는 옵션이 붙었는지 본다. -at 은 set·stop 에만, -apply 는 import 에만, -tier 는 set 에만 쓴다.
 // 붙여도 아무 일도 하지 않는 옵션을 조용히 넘기면, 쓴 사람은 적용된 줄 안다.
-func checkOptions(req request, at string) error {
+func checkOptions(req request, at string, tier string) error {
+	if tier != "" && req.action != "set" {
+		return errors.New("-tier 는 set 에만 씁니다. import 는 파일의 줄마다 tier 를 적습니다.\n" + usage)
+	}
+	if tier != "" && !pricing.Tier(tier).Valid() {
+		return errors.New("-tier 는 standard 나 premium 이어야 합니다.\n" + usage)
+	}
 	if at != "" && req.action != "set" && req.action != "stop" {
 		return errors.New("-at 은 set 과 stop 에만 씁니다. import 는 파일의 줄마다 effective_at 을 적습니다.\n" + usage)
 	}
@@ -194,7 +206,7 @@ func checkOptions(req request, at string) error {
 
 // do 는 읽은 일을 가격표에 하고 결과를 찍는다.
 func do(ctx context.Context, list prices, req request, out io.Writer) error {
-	change := pricing.Change{Code: req.code, Credits: req.credits, EffectiveAt: req.at, Reason: req.reason, ChangedBy: req.by}
+	change := pricing.Change{Code: req.code, Credits: req.credits, Tier: req.tier, EffectiveAt: req.at, Reason: req.reason, ChangedBy: req.by}
 	switch req.action {
 	case "list":
 		versions, err := list.Current(ctx)
@@ -233,8 +245,8 @@ func formatVersion(version pricing.Version) string {
 	if version.OnSale {
 		value = version.Credits.String() + " 크레딧"
 	}
-	return fmt.Sprintf("%s  %s  %s 부터  (%s, %s)",
-		version.Code, value, version.EffectiveAt.Local().Format(timeLayout), version.Reason, version.ChangedBy)
+	return fmt.Sprintf("%s  %s  %s  %s 부터  (%s, %s)",
+		version.Code, value, version.Tier, version.EffectiveAt.Local().Format(timeLayout), version.Reason, version.ChangedBy)
 }
 
 // defaultChanger 는 -by 를 적지 않았을 때 바꾼 사람으로 적을 이름이다. 이 PC 의 계정 이름을 쓴다.

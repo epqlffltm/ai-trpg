@@ -209,10 +209,13 @@ func TestParseEntriesRefusesBrokenFiles(t *testing.T) {
 func TestImportPreviewsUnlessApplied(t *testing.T) {
 	at := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 	planned := []pricing.Planned{
-		{Entry: pricing.Entry{Code: "narration.a.i0.o0", Credits: 120}, EffectiveAt: at, Effect: pricing.EffectNew},
-		{Entry: pricing.Entry{Code: "narration.b.i0.o0", Credits: 240}, EffectiveAt: at,
-			Before: &pricing.Price{Credits: 120}, Effect: pricing.EffectRaise},
-		{Entry: pricing.Entry{Code: "narration.c.i0.o0", Stop: true}, EffectiveAt: at, Before: &pricing.Price{Credits: 30}, Effect: pricing.EffectStop},
+		{Entry: pricing.Entry{Code: "narration.a.i0.o0", Credits: 120}, EffectiveAt: at, Tier: pricing.TierStandard, Effect: pricing.EffectNew},
+		{Entry: pricing.Entry{Code: "narration.b.i0.o0", Credits: 240}, EffectiveAt: at, Tier: pricing.TierStandard,
+			Before: &pricing.Price{Credits: 120, Tier: pricing.TierStandard}, Effect: pricing.EffectRaise},
+		{Entry: pricing.Entry{Code: "narration.c.i0.o0", Stop: true}, EffectiveAt: at, Tier: pricing.TierPremium,
+			Before: &pricing.Price{Credits: 30, Tier: pricing.TierPremium}, Effect: pricing.EffectStop},
+		{Entry: pricing.Entry{Code: "narration.d.i0.o0", Credits: 300, Tier: pricing.TierPremium}, EffectiveAt: at, Tier: pricing.TierPremium,
+			Before: &pricing.Price{Credits: 300, Tier: pricing.TierStandard}, Effect: pricing.EffectRetier},
 	}
 	entries := []pricing.Entry{{Code: "narration.a.i0.o0", Credits: 120}}
 	req := request{action: "import", entries: entries, reason: "모델별 가격", by: "ops"}
@@ -224,8 +227,9 @@ func TestImportPreviewsUnlessApplied(t *testing.T) {
 	if err != nil || preview.action != "plan" || preview.reason != "모델별 가격" || preview.by != "ops" || len(preview.entries) != 1 {
 		t.Fatalf("오류 = %v, 넘긴 것 = %s %q %q %v", err, preview.action, preview.reason, preview.by, preview.entries)
 	}
-	for _, want := range []string{"narration.a.i0.o0  새로  - → 120", "narration.b.i0.o0  올림  120 → 240", "narration.c.i0.o0  멈춤  30 → 판매 중지",
-		"새로 1, 올림 1, 내림 0, 멈춤 1, 같음(넣지 않음) 0", "미리 보기만 했습니다"} {
+	for _, want := range []string{"narration.a.i0.o0  새로  - → 120 standard", "narration.b.i0.o0  올림  120 standard → 240 standard",
+		"narration.c.i0.o0  멈춤  30 premium → 판매 중지", "narration.d.i0.o0  등급  300 standard → 300 premium",
+		"새로 1, 올림 1, 내림 0, 등급 1, 멈춤 1, 같음(넣지 않음) 0", "미리 보기만 했습니다"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("화면에 %q 가 없다:\n%s", want, text)
 		}
@@ -267,5 +271,75 @@ func TestImportSaysSoWhenNothingChanges(t *testing.T) {
 
 	if !strings.Contains(out.String(), "넣은 것이 없습니다") || strings.Contains(out.String(), "넣었습니다") {
 		t.Errorf("화면 = %q. 넣은 줄이 없다고 알려야 한다", out.String())
+	}
+}
+
+func TestParseEntriesReadsTheTierColumn(t *testing.T) {
+	text := "code,credits,effective_at,tier\n" +
+		"narration.a.i0.o0,120,,standard\n" +
+		"narration.b.i0.o0,600,,premium\n" +
+		"narration.c.i0.o0,30,,\n" +
+		"narration.d.i0.o0,stop,,\n"
+
+	entries, err := parseEntries(strings.NewReader(text))
+
+	if err != nil || len(entries) != 4 {
+		t.Fatalf("줄 = %+v, %v", entries, err)
+	}
+	want := []pricing.Tier{pricing.TierStandard, pricing.TierPremium, "", ""}
+	for i, entry := range entries {
+		if entry.Tier != want[i] {
+			t.Errorf("%d: 등급 = %q, 기대 %q", i, entry.Tier, want[i])
+		}
+	}
+	if !entries[3].Stop {
+		t.Errorf("stop 줄 = %+v", entries[3])
+	}
+}
+
+func TestParseEntriesRefusesBadTiers(t *testing.T) {
+	cases := map[string]string{
+		"모르는 등급":      "code,credits,effective_at,tier\nnarration.a.i0.o0,120,,basic\n",
+		"대문자 등급":      "code,credits,effective_at,tier\nnarration.a.i0.o0,120,,Premium\n",
+		"머리줄보다 칸이 적다": "code,credits,effective_at,tier\nnarration.a.i0.o0,120,\n",
+		"옛 머리줄에 등급 칸": "code,credits,effective_at\nnarration.a.i0.o0,120,,premium\n",
+		"머리줄의 차례":     "code,credits,tier,effective_at\nnarration.a.i0.o0,120,premium,\n",
+	}
+	for name, text := range cases {
+		if _, err := parseEntries(strings.NewReader(text)); err == nil {
+			t.Errorf("%s: 오류가 나야 한다", name)
+		}
+	}
+}
+
+func TestTierIsOnlyForSet(t *testing.T) {
+	req, err := parse([]string{"set", "narration.x", "600", "-tier", "premium", "-reason", "r"}, "cli:me")
+	if err != nil || req.tier != pricing.TierPremium {
+		t.Errorf("set 의 등급 = %q, %v", req.tier, err)
+	}
+	bads := [][]string{
+		{"stop", "narration.x", "-tier", "premium", "-reason", "r"},
+		{"import", "prices.csv", "-tier", "premium", "-reason", "r"},
+		{"list", "-tier", "standard"},
+		{"set", "narration.x", "600", "-tier", "basic", "-reason", "r"},
+	}
+	for _, args := range bads {
+		if _, err := parse(args, "cli:me"); err == nil {
+			t.Errorf("%v: 오류가 나야 한다", args)
+		}
+	}
+}
+
+func TestDoPassesTheTierToSet(t *testing.T) {
+	fake := &fakePrices{answer: []pricing.Version{{Code: "narration.x", Credits: 600, OnSale: true, Tier: pricing.TierPremium}}}
+	var out bytes.Buffer
+
+	err := do(context.Background(), fake, request{action: "set", code: "narration.x", credits: 600, tier: pricing.TierPremium, reason: "r", by: "ops"}, &out)
+
+	if err != nil || fake.change.Tier != pricing.TierPremium {
+		t.Errorf("넘긴 등급 = %q, %v", fake.change.Tier, err)
+	}
+	if !strings.Contains(out.String(), "narration.x  600 크레딧  premium") {
+		t.Errorf("화면 = %q", out.String())
 	}
 }

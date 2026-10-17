@@ -14,7 +14,7 @@ import (
 
 const currentPrice = `-- name: CurrentPrice :one
 
-SELECT id, code, amount, effective_at, reason, changed_by, created_at FROM price_versions
+SELECT id, code, amount, effective_at, reason, changed_by, created_at, tier FROM price_versions
 WHERE code = $1 AND effective_at <= $2::TIMESTAMPTZ
 ORDER BY effective_at DESC
 LIMIT 1
@@ -43,12 +43,13 @@ func (q *Queries) CurrentPrice(ctx context.Context, arg CurrentPriceParams) (Pri
 		&i.Reason,
 		&i.ChangedBy,
 		&i.CreatedAt,
+		&i.Tier,
 	)
 	return i, err
 }
 
 const currentPrices = `-- name: CurrentPrices :many
-SELECT DISTINCT ON (code) id, code, amount, effective_at, reason, changed_by, created_at
+SELECT DISTINCT ON (code) id, code, amount, effective_at, reason, changed_by, created_at, tier
 FROM price_versions
 WHERE effective_at <= $1::TIMESTAMPTZ
 ORDER BY code, effective_at DESC
@@ -72,6 +73,7 @@ func (q *Queries) CurrentPrices(ctx context.Context, now time.Time) ([]PriceVers
 			&i.Reason,
 			&i.ChangedBy,
 			&i.CreatedAt,
+			&i.Tier,
 		); err != nil {
 			return nil, err
 		}
@@ -84,27 +86,29 @@ func (q *Queries) CurrentPrices(ctx context.Context, now time.Time) ([]PriceVers
 }
 
 const insertPriceVersion = `-- name: InsertPriceVersion :one
-INSERT INTO price_versions (code, amount, effective_at, reason, changed_by, created_at)
+INSERT INTO price_versions (code, amount, tier, effective_at, reason, changed_by, created_at)
 VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, code, amount, effective_at, reason, changed_by, created_at
+RETURNING id, code, amount, effective_at, reason, changed_by, created_at, tier
 `
 
 type InsertPriceVersionParams struct {
 	Code        string
 	Amount      *credit.Amount
+	Tier        string
 	EffectiveAt time.Time
 	Reason      string
 	ChangedBy   string
 	Now         time.Time
 }
 
-// 가격표에 줄 하나를 덧붙인다. amount 가 NULL 이면 판매를 멈추는 줄이다.
+// 가격표에 줄 하나를 덧붙인다. amount 가 NULL 이면 판매를 멈추는 줄이다. 등급(tier)은 늘 적는다.
 func (q *Queries) InsertPriceVersion(ctx context.Context, arg InsertPriceVersionParams) (PriceVersion, error) {
 	row := q.db.QueryRow(ctx, insertPriceVersion,
 		arg.Code,
 		arg.Amount,
+		arg.Tier,
 		arg.EffectiveAt,
 		arg.Reason,
 		arg.ChangedBy,
@@ -119,12 +123,13 @@ func (q *Queries) InsertPriceVersion(ctx context.Context, arg InsertPriceVersion
 		&i.Reason,
 		&i.ChangedBy,
 		&i.CreatedAt,
+		&i.Tier,
 	)
 	return i, err
 }
 
 const priceHistory = `-- name: PriceHistory :many
-SELECT id, code, amount, effective_at, reason, changed_by, created_at FROM price_versions
+SELECT id, code, amount, effective_at, reason, changed_by, created_at, tier FROM price_versions
 WHERE code = $1
 ORDER BY effective_at, id
 `
@@ -147,6 +152,7 @@ func (q *Queries) PriceHistory(ctx context.Context, code string) ([]PriceVersion
 			&i.Reason,
 			&i.ChangedBy,
 			&i.CreatedAt,
+			&i.Tier,
 		); err != nil {
 			return nil, err
 		}
@@ -159,7 +165,7 @@ func (q *Queries) PriceHistory(ctx context.Context, code string) ([]PriceVersion
 }
 
 const upcomingPrices = `-- name: UpcomingPrices :many
-SELECT DISTINCT ON (code) id, code, amount, effective_at, reason, changed_by, created_at
+SELECT DISTINCT ON (code) id, code, amount, effective_at, reason, changed_by, created_at, tier
 FROM price_versions
 WHERE effective_at > $1::TIMESTAMPTZ
 ORDER BY code, effective_at
@@ -183,6 +189,7 @@ func (q *Queries) UpcomingPrices(ctx context.Context, now time.Time) ([]PriceVer
 			&i.Reason,
 			&i.ChangedBy,
 			&i.CreatedAt,
+			&i.Tier,
 		); err != nil {
 			return nil, err
 		}

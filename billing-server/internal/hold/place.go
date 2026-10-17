@@ -12,14 +12,16 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold/holddb"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
-// Place 는 사용자의 크레딧을 가격표의 값만큼 먼저 빼 둔다.
+// Place 는 사용자의 크레딧을 가격표의 값만큼 먼저 빼 둔다. 프리미엄 이름이면 산 크레딧(골드)에서만 뺀다.
 // source 는 부르는 서버의 이름이고, reference 는 그 서버가 이 홀드에 붙인 이름표다.
 //
 // 같은 서버가 같은 이름표로 다시 부르면 새로 빼지 않고 먼저 건 홀드를 돌려준다(지금의 상태 그대로. 연장하지 않는다).
 // 새 홀드의 만료 시각은 지금부터 ttl 뒤다.
 // 두 번째 값은 이번에 새로 걸었으면 true 다. 크레딧이 모자라면 wallet.ErrInsufficient 이고 홀드도 남지 않는다.
+// 프리미엄인데 골드가 모자라면 wallet.ErrPaidInsufficient 다(ErrInsufficient 도 참이다).
 func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, reference string, priceCode string) (Hold, bool, error) {
 	if !referencePattern.MatchString(reference) {
 		return Hold{}, false, ErrInvalidReference
@@ -54,7 +56,7 @@ func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, re
 		}
 		placed, created = toHold(row), true
 		// 크레딧을 빼지 못하면 오류가 올라가고, 방금 만든 홀드의 줄도 함께 되돌려진다
-		return s.wallet.TakeForHold(ctx, tx, userID, price.Credits, row.ID)
+		return s.wallet.TakeForHold(ctx, tx, userID, price.Credits, row.ID, fundsFor(price.Tier))
 	})
 	if err != nil {
 		return Hold{}, false, err
@@ -74,6 +76,14 @@ func (s *Service) priceAt(ctx context.Context, code string, at time.Time) (prici
 		return pricing.Price{}, ErrPriceNotForSale
 	}
 	return price, err
+}
+
+// fundsFor 는 가격표의 등급으로 무엇으로 낼지 정한다. 프리미엄은 산 크레딧(골드)으로만 낸다.
+func fundsFor(tier pricing.Tier) wallet.Funds {
+	if tier.PaidOnly() {
+		return wallet.PaidOnly
+	}
+	return wallet.AnyCredits
 }
 
 // existingHold 는 같은 이름표로 먼저 건 홀드를 돌려준다. 그 홀드의 사용자나 가격표 이름이 이번 요청과 다르면 ErrReferenceReused 다.
