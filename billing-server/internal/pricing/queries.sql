@@ -32,3 +32,11 @@ VALUES (
     sqlc.arg(code), sqlc.narg(amount), sqlc.arg(effective_at), sqlc.arg(reason), sqlc.arg(changed_by), sqlc.arg(now)
 )
 RETURNING *;
+
+-- name: UpcomingPrices :many
+-- 이름마다 아직 적용되지 않은 줄 가운데 가장 이른 줄을 읽는다(다음에 바뀔 값). 판매를 멈추는 예약도 함께 읽는다(amount 가 NULL).
+SELECT DISTINCT ON (code) *
+FROM price_versions
+WHERE effective_at > sqlc.arg(now)::TIMESTAMPTZ
+ORDER BY code, effective_at;
+

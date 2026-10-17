@@ -6,9 +6,12 @@
 //	go run ./cmd/prices history <이름>                          그 이름의 모든 줄(예약 포함)
 //	go run ./cmd/prices set <이름> <크레딧> -reason "<이유>"    값을 정한다. 없던 이름이면 새로 판다
 //	go run ./cmd/prices stop <이름> -reason "<이유>"            판매를 멈춘다
+//	go run ./cmd/prices import <파일> -reason "<이유>"          파일의 줄들을 무엇이 바뀌는지 미리 본다(가격표는 그대로)
+//	go run ./cmd/prices import <파일> -reason "<이유>" -apply   파일의 줄들을 한 트랜잭션으로 넣는다
 //
 // set 과 stop 은 -at <시각>(RFC 3339, 예: 2026-11-01T00:00:00+09:00)으로 적용을 미래로 미룰 수 있고,
 // -by <이름>으로 바꾼 사람을 적는다. 적지 않으면 "cli:<이 PC 의 계정 이름>"이다.
+// import 의 적용 시각은 파일의 줄마다 적는다(import.go). 다 들어가거나 하나도 들어가지 않는다.
 //
 // 가격표는 덧붙이기만 한다. 값을 고치거나 줄을 지우는 명령은 없다. 잘못 넣었으면 새 값을 다시 넣는다.
 // 나중에 관리 서버가 생기면 같은 일(pricing.Service 의 Set, Stop)을 관리자용 주소로 연다.
@@ -40,7 +43,8 @@ const usage = `쓰는 법:
   go run ./cmd/prices list
   go run ./cmd/prices history <이름>
   go run ./cmd/prices set <이름> <크레딧> -reason "<이유>" [-at <시각>] [-by <이름>]
-  go run ./cmd/prices stop <이름> -reason "<이유>" [-at <시각>] [-by <이름>]`
+  go run ./cmd/prices stop <이름> -reason "<이유>" [-at <시각>] [-by <이름>]
+  go run ./cmd/prices import <파일> -reason "<이유>" [-apply] [-by <이름>]`
 
 // timeLayout 은 화면에 시각을 찍는 모양이다. 이 PC 의 시간대로 찍는다.
 const timeLayout = "2006-01-02 15:04:05 -07:00"
@@ -54,6 +58,11 @@ type request struct {
 	at      time.Time
 	reason  string
 	by      string
+	// file 은 import 가 읽을 파일이고, entries 는 그 파일에서 읽은 줄들이다(run 이 채운다).
+	file    string
+	entries []pricing.Entry
+	// apply 가 false 면 import 는 미리 보기만 한다.
+	apply bool
 }
 
 // prices 는 이 명령이 쓰는 가격표의 모양이다. *pricing.Service 가 이 모양이다.
@@ -62,6 +71,8 @@ type prices interface {
 	History(ctx context.Context, code string) ([]pricing.Version, error)
 	Set(ctx context.Context, change pricing.Change) (pricing.Version, error)
 	Stop(ctx context.Context, change pricing.Change) (pricing.Version, error)
+	Plan(ctx context.Context, entries []pricing.Entry, reason string, changedBy string) ([]pricing.Planned, error)
+	Import(ctx context.Context, entries []pricing.Entry, reason string, changedBy string) ([]pricing.Planned, error)
 }
 
 func main() {
@@ -75,6 +86,12 @@ func run(args []string, out io.Writer) error {
 	req, err := parse(args, defaultChanger())
 	if err != nil {
 		return err
+	}
+	// 파일을 DB 에 붙기 전에 읽는다. 파일이 틀렸으면 DB 를 건드리지 않고 끝난다
+	if req.action == "import" {
+		if req.entries, err = readEntries(req.file); err != nil {
+			return err
+		}
 	}
 	loadDotEnv()
 	target, err := config.LoadDatabase(os.LookupEnv)
@@ -102,11 +119,15 @@ func parse(args []string, changer string) (request, error) {
 	flags.StringVar(&req.reason, "reason", "", "바꾼 이유")
 	flags.StringVar(&req.by, "by", changer, "바꾼 사람")
 	flags.StringVar(&at, "at", "", "적용을 시작할 시각(RFC 3339)")
+	flags.BoolVar(&req.apply, "apply", false, "import 를 미리 보기만 하지 않고 넣는다")
 	words, err := parseInterleaved(flags, args)
 	if err != nil {
 		return request{}, errors.New(usage)
 	}
 	if req, err = readWords(req, words); err != nil {
+		return request{}, err
+	}
+	if err := checkOptions(req, at); err != nil {
 		return request{}, err
 	}
 	if at != "" {
@@ -148,13 +169,27 @@ func readWords(req request, words []string) (request, error) {
 		req.action, req.code, req.credits = "set", words[1], credit.Amount(amount)
 	case len(words) == 2 && words[0] == "stop":
 		req.action, req.code = "stop", words[1]
+	case len(words) == 2 && words[0] == "import":
+		req.action, req.file = "import", words[1]
 	default:
 		return request{}, errors.New(usage)
 	}
-	if (req.action == "set" || req.action == "stop") && req.reason == "" {
+	if (req.action == "set" || req.action == "stop" || req.action == "import") && req.reason == "" {
 		return request{}, errors.New("-reason 으로 바꾸는 이유를 적어야 합니다.\n" + usage)
 	}
 	return req, nil
+}
+
+// checkOptions 는 그 일에 쓰지 않는 옵션이 붙었는지 본다. -at 은 set·stop 에만, -apply 는 import 에만 쓴다.
+// 붙여도 아무 일도 하지 않는 옵션을 조용히 넘기면, 쓴 사람은 적용된 줄 안다.
+func checkOptions(req request, at string) error {
+	if at != "" && req.action != "set" && req.action != "stop" {
+		return errors.New("-at 은 set 과 stop 에만 씁니다. import 는 파일의 줄마다 effective_at 을 적습니다.\n" + usage)
+	}
+	if req.apply && req.action != "import" {
+		return errors.New("-apply 는 import 에만 씁니다.\n" + usage)
+	}
+	return nil
 }
 
 // do 는 읽은 일을 가격표에 하고 결과를 찍는다.
@@ -170,6 +205,8 @@ func do(ctx context.Context, list prices, req request, out io.Writer) error {
 	case "set":
 		version, err := list.Set(ctx, change)
 		return printVersions(out, []pricing.Version{version}, err)
+	case "import":
+		return doImport(ctx, list, req, out)
 	default:
 		version, err := list.Stop(ctx, change)
 		return printVersions(out, []pricing.Version{version}, err)
