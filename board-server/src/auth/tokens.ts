@@ -14,6 +14,9 @@
  *   - 인증 서버가 발급했는가(iss).
  *   - 이 서버에 쓰라고 발급됐는가(aud). 토큰에는 대상의 목록이 실리고, 그 안에 이 서버의 이름이 있어야 한다.
  *   - access 토큰인가. refresh 토큰도 같은 키로 서명되므로 종류를 따로 본다.
+ *   - 세션 버전(ver)이 0 이상의 정수인가. 없으면 0 으로 본다(인증 서버 README 의 약속).
+ *
+ * 끊긴 세션의 것인지(ver 가 끊긴 세션 목록의 것보다 낮은가)는 여기서 보지 않는다. 목록을 기억하는 쪽(token-verifier.ts)이 본다.
  */
 
 import { decodeProtectedHeader, errors, JWTPayload, jwtVerify } from 'jose';
@@ -25,6 +28,8 @@ import { ALGORITHM, JwksCache, UnknownKeyError } from './jwks.js';
 const REQUIRED_CLAIMS = ['exp', 'iss', 'aud', 'sub'];
 /** access 토큰의 token_type 값. 인증 서버(simplejwt)가 넣는다 */
 const ACCESS_TOKEN_TYPE = 'access';
+/** 세션 버전이 없는 토큰의 버전. 인증 서버가 버전을 싣기 전에 발급한 토큰이다 */
+const DEFAULT_SESSION_VERSION = 0;
 /**
  * 서버끼리 시계가 조금 어긋나는 것을 봐주는 시간(초).
  * 0 이면 인증 서버의 시계가 1초만 빨라도 방금 발급한 토큰이 "아직 유효하지 않다"로 거부된다
@@ -49,6 +54,8 @@ export interface AccessClaims {
   readonly userId: string;
   /** 토큰이 만료되는 시각(exp) */
   readonly expiresAt: Date;
+  /** 세션 버전(ver). 인증 서버가 사용자의 세션을 모두 끊으면 오른다. 끊긴 세션 목록과 맞춰 본다 */
+  readonly version: number;
   /**
    * 인증 서버가 실어 보낸 닉네임(nickname). 없거나 받아들일 수 없는 값이면 undefined 다(authors/nickname.ts).
    * 없어도 토큰은 받는다. 이 클레임이 생기기 전에 발급한 토큰이 있다
@@ -99,6 +106,17 @@ export async function decodeClaims(
   }
 }
 
+/** 세션 버전(ver)을 읽는다. 없으면 0 이다. 0 이상의 정수가 아니면 받아들일 수 없는 토큰이다. */
+export function readSessionVersion(value: unknown): number {
+  if (value === undefined) {
+    return DEFAULT_SESSION_VERSION;
+  }
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new InvalidTokenError();
+  }
+  return value as number;
+}
+
 /**
  * 토큰 안의 값에서 이 서버가 쓰는 것만 꺼낸다. access 토큰이 아니거나 주인의 ID 가 UUID 가 아니면 거부한다.
  * 닉네임은 받아들일 수 있을 때만 싣는다. 이상한 닉네임 때문에 토큰을 거부하지 않는다.
@@ -117,6 +135,7 @@ export function buildAccessClaims(claims: JWTPayload): AccessClaims {
   return {
     userId: claims.sub.toLowerCase(),
     expiresAt: new Date(claims.exp * 1000),
+    version: readSessionVersion(claims.ver),
     ...(nickname === undefined ? {} : { nickname }),
   };
 }
