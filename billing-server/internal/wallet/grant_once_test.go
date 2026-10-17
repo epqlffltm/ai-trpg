@@ -191,3 +191,75 @@ func TestTheDatabaseRefusesTheSameGrantKeyTwice(t *testing.T) {
 
 	f.wantBalance(0, 1000)
 }
+
+// grantOnceInTx 는 트랜잭션을 열어 GrantFreeOnceInTx 를 부른다. commit 이 false 면 되돌린다.
+func (f fixture) grantOnceInTx(amount credit.Amount, key string, commit bool) (wallet.Grant, error) {
+	f.t.Helper()
+	tx, err := f.pool.Begin(ctx(f.t))
+	if err != nil {
+		f.t.Fatalf("트랜잭션을 열지 못했다: %v", err)
+	}
+	grant, grantErr := f.service.GrantFreeOnceInTx(ctx(f.t), tx, f.user, amount, key)
+	if grantErr != nil || !commit {
+		if err := tx.Rollback(ctx(f.t)); err != nil {
+			f.t.Fatalf("되돌리지 못했다: %v", err)
+		}
+		return grant, grantErr
+	}
+	if err := tx.Commit(ctx(f.t)); err != nil {
+		f.t.Fatalf("적지 못했다: %v", err)
+	}
+	return grant, nil
+}
+
+func TestGrantFreeOnceInTxGivesWhenTheCallerCommits(t *testing.T) {
+	f := setUp(t, freeFirst)
+
+	grant, err := f.grantOnceInTx(140, "attendance-20261018", true)
+
+	if err != nil || grant.Amount != 140 || !grant.ExpiresAt.Equal(f.clock.Now().Add(week)) {
+		t.Fatalf("준 것 = %+v, %v", grant, err)
+	}
+	f.wantBalance(0, 140)
+	f.wantLedger(line{wallet.KindFree, wallet.ReasonGrant, 140})
+}
+
+func TestGrantFreeOnceInTxIsUndoneWhenTheCallerRollsBack(t *testing.T) {
+	f := setUp(t, freeFirst)
+
+	if _, err := f.grantOnceInTx(140, "attendance-20261018", false); err != nil {
+		t.Fatalf("주지 못했다: %v", err)
+	}
+
+	// 지급도 원장도 남지 않는다. 같은 이름으로 다시 받을 수 있다
+	f.wantBalance(0, 0)
+	f.wantLedger()
+	if _, err := f.grantOnce(140, "attendance-20261018"); err != nil {
+		t.Fatalf("되돌린 뒤에는 다시 받아야 한다: %v", err)
+	}
+}
+
+func TestGrantFreeOnceInTxRefusesAKeyAlreadyGiven(t *testing.T) {
+	f := setUp(t, freeFirst)
+	if _, err := f.grantOnce(140, "attendance-20261018"); err != nil {
+		t.Fatalf("주지 못했다: %v", err)
+	}
+
+	_, err := f.grantOnceInTx(140, "attendance-20261018", true)
+
+	if !errors.Is(err, wallet.ErrAlreadyGranted) {
+		t.Fatalf("ErrAlreadyGranted 이어야 하는데 %v 다", err)
+	}
+	f.wantBalance(0, 140)
+}
+
+func TestGrantFreeOnceInTxChecksTheAmountAndKey(t *testing.T) {
+	f := setUp(t, freeFirst)
+	if _, err := f.grantOnceInTx(0, "attendance-20261018", true); !errors.Is(err, wallet.ErrInvalidAmount) {
+		t.Errorf("0 은 ErrInvalidAmount 이어야 하는데 %v 다", err)
+	}
+	if _, err := f.grantOnceInTx(1, "Bad Key", true); !errors.Is(err, wallet.ErrInvalidGrantKey) {
+		t.Errorf("틀린 이름은 ErrInvalidGrantKey 이어야 하는데 %v 다", err)
+	}
+	f.wantBalance(0, 0)
+}

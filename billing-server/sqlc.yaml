@@ -183,3 +183,41 @@ sql:
               type: time.Time
               pointer: true
             nullable: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/attendance/queries.sql
+    gen:
+      go:
+        package: attendancedb
+        out: internal/attendance/attendancedb
+        sql_package: pgx/v5
+        # 이 패키지의 쿼리가 쓰지 않는 테이블의 구조체는 만들지 않는다
+        omit_unused_structs: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: timestamptz
+            go_type: time.Time
+          # 출석한 날(한국 날짜)은 0시 UTC 의 time.Time 으로 받는다
+          - db_type: date
+            go_type: time.Time
+          - column: attendance_claims.silver
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+          # 상자의 실버. 상자를 열지 않은 날이면 nil 이다
+          - column: attendance_claims.chest_silver
+            go_type:
+              import: github.com/epqlffltm/ai-trpg/billing-server/internal/credit
+              type: Amount
+              pointer: true
+            nullable: true
+          # 확률표의 버전과 결과의 이름. 상자를 열지 않은 날이면 nil 이다
+          - column: attendance_claims.chest_table
+            go_type:
+              type: string
+              pointer: true
+            nullable: true
+          - column: attendance_claims.chest_outcome
+            go_type:
+              type: string
+              pointer: true
+            nullable: true

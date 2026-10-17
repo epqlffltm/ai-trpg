@@ -121,3 +121,17 @@ func TestABadUpdateIsRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestVerifiedIsWhetherTheAuthServerToldUs(t *testing.T) {
+	service, _ := setUp(t)
+	user := uuid.New()
+	if verified, err := service.Verified(context.Background(), user); err != nil || verified {
+		t.Fatalf("알려 주기 전에는 본인인증 전이어야 한다: %v, %v", verified, err)
+	}
+	// 보호자 동의가 없는 미성년자도 본인인증은 한 것이다
+	adultFrom := time.Date(2029, 6, 1, 0, 0, 0, 0, time.UTC)
+	apply(t, service, eligibility.Update{UserID: user, Version: 1, LegalAdultFrom: &adultFrom})
+	if verified, err := service.Verified(context.Background(), user); err != nil || !verified {
+		t.Fatalf("알려 준 뒤에는 본인인증을 한 것이어야 한다: %v, %v", verified, err)
+	}
+}

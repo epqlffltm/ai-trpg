@@ -15,7 +15,7 @@ type errorBody struct {
 	Detail string `json:"detail"`
 	// Code 는 부르는 서버가 읽는 오류의 이름이다(price.unknown 같은 것). detail 은 사람이 읽는 글이라 바뀔 수 있다.
 	// 우리 서버들이 부르는 주소(/service/...)의 4xx 에 싣는다. 사용자가 부르는 주소에는 화면이 갈래를 나눠야 하는 것에만 싣는다
-	// (결제 자격의 403: 본인인증으로 보낼지, 보호자 동의로 보낼지). 5xx 에는 없다(칸이 빠진다).
+	// (결제 자격의 403: 본인인증으로 보낼지, 보호자 동의로 보낼지. 출석의 403 과 409). 5xx 에는 없다(칸이 빠진다).
 	// 5xx 는 이름으로 가릴 것이 없다. 같은 요청을 다시 보내면 된다.
 	Code string `json:"code,omitempty"`
 }
@@ -48,6 +48,10 @@ const (
 	codePaymentVerificationRequired = "payment.verification_required"
 	// codePaymentGuardianConsentRequired 는 미성년자인데 보호자가 동의하지 않았다는 것이다(403). 화면은 보호자 동의로 보낸다.
 	codePaymentGuardianConsentRequired = "payment.guardian_consent_required"
+	// codeAttendanceVerificationRequired 는 본인인증을 하지 않아 출석 보상을 받을 수 없다는 것이다(403). 화면은 본인인증으로 보낸다.
+	codeAttendanceVerificationRequired = "attendance.verification_required"
+	// codeAttendanceAlreadyClaimed 는 오늘 이미 출석 보상을 받았다는 것이다(409). 다음 날 한국 자정에 다시 받을 수 있다.
+	codeAttendanceAlreadyClaimed = "attendance.already_claimed"
 	// codeServiceBadRequest 는 서명을 확인하려고 본문을 읽지 못했다는 것이다(너무 크다).
 	codeServiceBadRequest = "service.bad_request"
 	// codeServiceBadSignature 는 요청의 서명이 맞지 않다는 것이다(비밀이 다르다, 시각이 너무 어긋났다).
