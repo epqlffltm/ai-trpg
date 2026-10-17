@@ -11,6 +11,8 @@ from cryptography.hazmat.primitives import serialization
 from django.conf import settings
 from jwt.algorithms import RSAAlgorithm
 
+from accounts.key_ring import current_key_ring
+
 
 def build_jwk(public_key_pem: str, key_id: str) -> dict:
     """PEM 형식의 공개키 하나를 JWK 로 바꾼다."""
@@ -31,13 +33,12 @@ def build_jwk(public_key_pem: str, key_id: str) -> dict:
 
 def build_jwks() -> dict:
     """
-    지금 쓰는 공개키를 담은 JWKS 를 돌려준다.
+    검증할 수 있는 공개키를 모두 담은 JWKS 를 돌려준다. 서명 키가 맨 앞이다.
 
-    keys 가 목록인 것은 키를 교체하는 동안 옛 키와 새 키를 함께 내보내기 위해서다.
-    지금은 키가 하나다.
+    키를 교체하는 동안에는 옛 키와 새 키가 함께 실린다(#21). 다른 서버는 토큰 머리말의 kid 로 고른다.
     """
     return {
         'keys': [
-            build_jwk(settings.JWT_PUBLIC_KEY_PEM, settings.JWT_KEY_ID),
+            build_jwk(public_key_pem, key_id) for key_id, public_key_pem in current_key_ring().verification_keys.items()
         ],
     }
