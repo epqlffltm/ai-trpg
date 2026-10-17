@@ -33,6 +33,7 @@ type Scheduled struct {
 	// Credits 는 바뀔 값이다. OnSale 이 false 면(판매를 멈추는 예약) 0 이다.
 	Credits     credit.Amount
 	OnSale      bool
+	Tier        Tier
 	EffectiveAt time.Time
 }
 
@@ -62,11 +63,11 @@ func mergeListings(current []Version, upcoming []Version) []Listing {
 	byCode := map[string]*Listing{}
 	for _, version := range current {
 		if version.OnSale {
-			listingFor(byCode, version.Code).Current = &Price{Code: version.Code, Credits: version.Credits, Since: version.EffectiveAt}
+			listingFor(byCode, version.Code).Current = &Price{Code: version.Code, Credits: version.Credits, Tier: version.Tier, Since: version.EffectiveAt}
 		}
 	}
 	for _, version := range upcoming {
-		listingFor(byCode, version.Code).Next = &Scheduled{Credits: version.Credits, OnSale: version.OnSale, EffectiveAt: version.EffectiveAt}
+		listingFor(byCode, version.Code).Next = &Scheduled{Credits: version.Credits, OnSale: version.OnSale, Tier: version.Tier, EffectiveAt: version.EffectiveAt}
 	}
 	return sortedListings(byCode)
 }
