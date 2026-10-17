@@ -186,7 +186,7 @@ type Rules struct {
 	OrderTTL       time.Duration
 }
 
-// Jobs 는 작업 명령(cmd/sweeper, cmd/reconcile)이 읽는 설정이다.
+// Jobs 는 결제 대행사에 묻는 작업 명령(cmd/reconcile, cmd/orders)이 읽는 설정이다.
 // 요청을 받지 않으므로 포트, 공개키 주소, 서명의 비밀이 없어도 돈다.
 // 결제 대행사의 설정은 읽는다. 대사가 서버와 같은 결제 대행사에 결과를 묻는다.
 type Jobs struct {
@@ -194,7 +194,16 @@ type Jobs struct {
 	Logging  Logging
 	Rules    Rules
 	Payment  Payment
-	// HeartbeatFile 은 계속 도는 작업이 한 바퀴를 끝낼 때마다 시각을 바꾸는 파일이다(jobs.Beat).
+}
+
+// Sweeper 는 정리 작업(cmd/sweeper)이 읽는 설정이다. 결제 대행사의 설정은 읽지 않는다.
+// 정리 작업이 다루는 것(만료된 홀드, 사라진 무료 크레딧, 만료된 pending 주문)은 DB 만으로 끝난다.
+// 그래서 결제 대행사의 키(TOSS_SECRET_KEY)를 주지 않아도 돈다. 비밀은 쓰는 프로세스에만 준다(docker-compose.yml).
+type Sweeper struct {
+	Database Database
+	Logging  Logging
+	Rules    Rules
+	// HeartbeatFile 은 한 바퀴를 끝낼 때마다 시각을 바꾸는 파일이다(jobs.Beat).
 	// compose 가 정리 작업의 컨테이너에 넣는다. 비어 있으면 쓰지 않는다(PC 에서 돌릴 때)
 	HeartbeatFile string
 }
@@ -251,7 +260,7 @@ func Load(lookup Lookup) (Settings, error) {
 	}, nil
 }
 
-// LoadJobs 는 작업 명령이 쓰는 설정만 읽어 검사한다. 틀린 것이 여럿이면 한 번에 모두 알려 준다.
+// LoadJobs 는 결제 대행사에 묻는 작업 명령이 쓰는 설정만 읽어 검사한다. 틀린 것이 여럿이면 한 번에 모두 알려 준다.
 func LoadJobs(lookup Lookup) (Jobs, error) {
 	db, dbErr := LoadDatabase(lookup)
 	logging, loggingErr := loadLogging(lookup)
@@ -260,8 +269,20 @@ func LoadJobs(lookup Lookup) (Jobs, error) {
 	if err := errors.Join(dbErr, loggingErr, rulesErr, paymentErr, providerAllowed(logging, payment)); err != nil {
 		return Jobs{}, err
 	}
+	return Jobs{Database: db, Logging: logging, Rules: rules, Payment: payment}, nil
+}
+
+// LoadSweeper 는 정리 작업이 쓰는 설정만 읽어 검사한다. 틀린 것이 여럿이면 한 번에 모두 알려 준다.
+// 결제 대행사의 설정(PAYMENT_PROVIDER, TOSS_*)은 적혀 있어도 읽지 않는다.
+func LoadSweeper(lookup Lookup) (Sweeper, error) {
+	db, dbErr := LoadDatabase(lookup)
+	logging, loggingErr := loadLogging(lookup)
+	rules, rulesErr := loadRules(lookup)
+	if err := errors.Join(dbErr, loggingErr, rulesErr); err != nil {
+		return Sweeper{}, err
+	}
 	heartbeat := readString(lookup, "HEARTBEAT_FILE", "")
-	return Jobs{Database: db, Logging: logging, Rules: rules, Payment: payment, HeartbeatFile: heartbeat}, nil
+	return Sweeper{Database: db, Logging: logging, Rules: rules, HeartbeatFile: heartbeat}, nil
 }
 
 // providerAllowed 는 그 환경에서 쓸 수 있는 결제 대행사인지 본다. 운영에서는 가짜를 받지 않는다.
