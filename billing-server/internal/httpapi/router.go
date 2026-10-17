@@ -53,6 +53,8 @@ type Dependencies struct {
 	Now func() time.Time
 	// Logger 는 요청의 기록을 남기는 곳이다. 넣지 않으면 프로세스의 기본 로거(slog.Default)다.
 	Logger *slog.Logger
+	// RequestTimeout 은 요청 하나를 처리하는 가장 긴 시간이다. 넣지 않으면 RequestTimeout(10초)이다. 테스트가 짧게 줄여 쓴다.
+	RequestTimeout time.Duration
 }
 
 // SetMode 는 gin 의 동작 방식을 정한다. debug 가 아니면 등록한 주소 목록 같은 개발용 출력을 끈다.
@@ -83,6 +85,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	router.Use(requestLogging(logger))
 	// 처리 중에 패닉이 나도 서버가 죽지 않고 500 으로 답한다
 	router.Use(recoverPanics(logger))
+	// 요청 하나를 처리하는 시간에 마감을 둔다. 연결 풀을 기다리는 시간도 여기에 든다(deadline.go)
+	router.Use(requestDeadline(requestTimeoutOf(deps)))
 
 	// 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다.
 	// HEAD 도 받는다. 같은 핸들러가 돌고, 본문은 net/http 가 버린다. HEAD 로 확인하는 도구가 있다
