@@ -28,7 +28,7 @@ from accounts.attempt_policies import (
 )
 from accounts.models import User
 from accounts.services import InvalidCredentialsError
-from accounts.tests.helpers import LOGIN_URL, delete_attempt_keys, log_in
+from accounts.tests.helpers import LOGIN_URL, delete_attempt_keys, log_in, reset_redis_breaker
 from config.redis_client import get_redis
 
 SIGNUP_URL = reverse('accounts:signup')
@@ -61,6 +61,8 @@ class AttemptPolicyTestCase(APITestCase):
     def setUp(self):
         delete_attempt_keys()
         self.addCleanup(delete_attempt_keys)
+        reset_redis_breaker()
+        self.addCleanup(reset_redis_breaker)
 
     def login(self, username: str = USERNAME, password: str = PASSWORD, ip: str = IP):
         return self.client.post(
