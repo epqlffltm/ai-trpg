@@ -5,7 +5,7 @@ JWT 발급, 갱신, 폐기.
 
 토큰의 생성, 서명, 검증과 폐기 목록(블랙리스트) 테이블은 simplejwt 가 제공한다.
 여기서는 그 위에 이 프로젝트의 규칙을 얹는다.
-    - 토큰 머리말에 키 ID(kid)를 넣는다.
+    - 토큰 머리말에 키 ID(kid)를 넣고, 검증할 때는 그 kid 의 공개키를 고른다(키 교체, #21).
     - 토큰에 세션 버전(ver)을 넣어, 사용자의 모든 세션을 한 번에 끊을 수 있게 한다.
     - access 토큰에 닉네임(nickname)을 넣어, 다른 서버가 인증 서버를 부르지 않고 글쓴이의 이름을 알게 한다.
     - refresh 토큰은 쓸 때마다 새것으로 바꾸고, 이미 폐기된 토큰이 다시 쓰이면 탈취로 본다.
@@ -14,7 +14,6 @@ JWT 발급, 갱신, 폐기.
 from dataclasses import dataclass
 
 import jwt
-from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from rest_framework_simplejwt.backends import TokenBackend
@@ -25,6 +24,7 @@ from rest_framework_simplejwt.tokens import AccessToken as SimpleJWTAccessToken
 from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
 from rest_framework_simplejwt.utils import datetime_from_epoch
 
+from accounts.key_ring import current_key_ring
 from accounts.models import User
 
 # 세션 버전을 담는 클레임 이름
@@ -46,11 +46,11 @@ class TokenPair:
 
 
 class KeyIdTokenBackend(TokenBackend):
-    """서명할 때 머리말에 kid 를 넣는 TokenBackend."""
+    """서명할 때 머리말에 kid 를 넣고, 검증할 때 kid 로 공개키를 고르는 TokenBackend."""
 
     def encode(self, payload: dict) -> str:
         """
-        부모의 encode 와 같은 일을 하되 headers 에 kid 를 더한다.
+        부모의 encode 와 같은 일을 하되, 지금의 서명 키로 서명하고 headers 에 그 키의 kid 를 더한다.
 
         검증하는 쪽은 JWKS 의 키 목록에서 kid 가 같은 키를 골라 쓴다.
         kid 가 없으면 키를 교체하는 동안 어느 키로 검증할지 알 수 없다.
@@ -61,13 +61,27 @@ class KeyIdTokenBackend(TokenBackend):
         if self.issuer is not None:
             jwt_payload['iss'] = self.issuer
 
+        key_ring = current_key_ring()
         return jwt.encode(
             jwt_payload,
-            self.prepared_signing_key,
+            key_ring.signing_key_pem,
             algorithm=self.algorithm,
-            headers={'kid': settings.JWT_KEY_ID},
+            headers={'kid': key_ring.signing_key_id},
             json_encoder=self.json_encoder,
         )
+
+    def get_verifying_key(self, token) -> str:
+        """
+        토큰 머리말의 kid 로 검증할 공개키를 고른다. 부모의 decode 가 부른다.
+
+        키를 교체하는 동안에는 옛 키로 서명한 refresh 토큰(14일)도 검증해야 한다. 하나의 키로는 안 된다.
+        모르는 kid 이거나 kid 가 없으면 거부한다. 검증 목록에서 뺀 키로 서명한 토큰이다.
+        머리말을 읽지 못하는 토큰은 jwt 의 오류가 나고, 부모의 decode 가 "Token is invalid" 로 바꾼다.
+        """
+        public_key_pem = current_key_ring().verification_key(jwt.get_unverified_header(token).get('kid'))
+        if public_key_pem is None:
+            raise TokenBackendError('알 수 없는 키로 서명된 토큰입니다.')
+        return public_key_pem
 
 
 # simplejwt 가 내부에서 만드는 것과 같은 설정으로, 클래스만 바꿔 만든다
