@@ -11,9 +11,9 @@
 from accounts.models import SecurityEvent, User
 
 
-def record_security_event(*, kind: str, ip: str = '', user: User | None = None) -> None:
-    """보안 이벤트 하나를 남긴다."""
-    SecurityEvent.objects.create(kind=kind, ip=ip, user=user)
+def record_security_event(*, kind: str, ip: str = '', user: User | None = None, note: str = '') -> None:
+    """보안 이벤트 하나를 남긴다. note 는 운영자가 남긴 사유다(계정 정지와 풀기)."""
+    SecurityEvent.objects.create(kind=kind, ip=ip, user=user, note=note)
 
 
 def find_user_by_username(username: str) -> User | None:
