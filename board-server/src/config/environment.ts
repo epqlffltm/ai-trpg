@@ -56,6 +56,7 @@ export interface Environment {
   DATABASE_URL: string;
   DB_SCHEMA: string;
   AUTH_JWKS_URL: string;
+  AUTH_SESSION_REVOCATIONS_URL: string;
   JWT_ISSUER: string;
   JWT_AUDIENCE: string;
   APP_ENVIRONMENT: string;
@@ -151,6 +152,41 @@ export function readAuthJwksUrl(value: unknown): string {
     );
   }
   return url;
+}
+
+/** 공개키 주소의 끝. 끊긴 세션 목록의 주소는 그 옆이다 */
+const JWKS_PATH_END = '/jwks';
+/** 끊긴 세션 목록의 주소의 끝. 인증 서버가 공개키와 같은 자리에 둔다 */
+const REVOCATIONS_PATH_END = '/session-revocations';
+
+/**
+ * 인증 서버가 끊긴 세션의 목록을 내주는 주소를 읽는다(#274).
+ *
+ * 적지 않았으면 공개키 주소(AUTH_JWKS_URL)의 옆이다(…/jwks → …/session-revocations). 결제 서버와 같은 규칙이다.
+ * 공개키 주소가 /jwks 로 끝나지 않으면 옆을 알 수 없으니 적어야 한다. http:// 나 https:// 주소여야 한다.
+ */
+export function readSessionRevocationsUrl(
+  value: unknown,
+  jwksUrl: string,
+): string {
+  if (isSet(value)) {
+    const url = value.trim();
+    if (!isHttpUrl(url)) {
+      throw new Error(
+        'AUTH_SESSION_REVOCATIONS_URL 은 http:// 나 https:// 로 시작하는 주소여야 합니다.',
+      );
+    }
+    return url;
+  }
+  const jwks = new URL(jwksUrl);
+  if (!jwks.pathname.endsWith(JWKS_PATH_END) || jwks.search !== '') {
+    throw new Error(
+      'AUTH_JWKS_URL 이 /jwks 로 끝나지 않으면 AUTH_SESSION_REVOCATIONS_URL 을 적어야 합니다.',
+    );
+  }
+  jwks.pathname =
+    jwks.pathname.slice(0, -JWKS_PATH_END.length) + REVOCATIONS_PATH_END;
+  return jwks.toString();
 }
 
 /** 믿는 토큰의 발급자(iss)를 읽는다. 적지 않았으면 기본값이다. */
@@ -252,6 +288,10 @@ export function readEnvironment(
     PORT: readPort(variables.PORT),
     ...readDatabaseSettings(variables),
     AUTH_JWKS_URL: readAuthJwksUrl(variables.AUTH_JWKS_URL),
+    AUTH_SESSION_REVOCATIONS_URL: readSessionRevocationsUrl(
+      variables.AUTH_SESSION_REVOCATIONS_URL,
+      readAuthJwksUrl(variables.AUTH_JWKS_URL),
+    ),
     JWT_ISSUER: readJwtIssuer(variables.JWT_ISSUER),
     JWT_AUDIENCE: readJwtAudience(variables.JWT_AUDIENCE),
     APP_ENVIRONMENT: readAppEnvironment(variables.APP_ENVIRONMENT),

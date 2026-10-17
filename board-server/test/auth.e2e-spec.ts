@@ -8,13 +8,21 @@
  * 토큰이 틀리는 경우 하나하나는 src/auth/tokens.spec.ts 가 본다.
  */
 
+import { createServer, Server } from 'node:http';
+import { AddressInfo } from 'node:net';
 import { Controller, Get, Logger, Module } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { API_PREFIX } from '../src/app.setup.js';
 import { JwksFetchError, LoadKeys } from '../src/auth/jwks.js';
 import { Public } from '../src/auth/public.decorator.js';
-import { createTestApp, useKeys } from './app.js';
+import {
+  loadRevocations,
+  RevocationList,
+  RevocationsFetchError,
+  subDigest,
+} from '../src/auth/session-revocations.js';
+import { both, createTestApp, useKeys, useRevocations } from './app.js';
 import { captureLogs } from './logs.js';
 import {
   forgeToken,
@@ -267,5 +275,111 @@ describe('인증 서버에 닿지 않을 때', () => {
     await app.close();
 
     expect(response.status).toBe(200);
+  });
+});
+
+describe('끊긴 세션(#274)', () => {
+  /** 인증 서버가 USER_ID 의 세션을 버전 2 부터만 받도록 끊은 목록 */
+  const cut: RevocationList = new Map([[subDigest(USER_ID), 2]]);
+
+  /** 토큰을 붙여 /me 를 부른다. */
+  function readMe(app: NestExpressApplication, token: string) {
+    return request(app.getHttpServer())
+      .get(ME)
+      .set('Authorization', `Bearer ${token}`);
+  }
+
+  it('끊기 전에 발급된 토큰은 401 이고, 다른 틀린 토큰과 응답이 같다', async () => {
+    const app = await createTestApp(
+      both(
+        useKeys(() => publicKeys(key)),
+        useRevocations(() => Promise.resolve(cut)),
+      ),
+    );
+
+    const old = await readMe(app, await signToken(key, { version: 1 }));
+    const renewed = await readMe(app, await signToken(key, { version: 2 }));
+    await app.close();
+
+    expect(old.status).toBe(401);
+    expect(old.body).toEqual({ detail: '인증이 필요합니다.' });
+    expect(old.headers['www-authenticate']).toBe('Bearer');
+    // 다시 로그인해 받은 토큰(버전이 오른 것)은 통한다
+    expect(renewed.status).toBe(200);
+  });
+
+  it('인증 서버가 HTTP 로 내준 목록을 받아 막는다', async () => {
+    // 인증 서버 대신 목록만 내주는 작은 서버. 받아 오는 길(fetch, 크기 제한, 모양 검사)까지 실제로 지난다
+    const document = JSON.stringify({
+      revocations: [{ sub_sha256: subDigest(USER_ID), min_ver: 2 }],
+      refresh_interval_seconds: 30,
+    });
+    const authServer: Server = createServer((_request, response) => {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(document);
+    });
+    await new Promise<void>((resolve) =>
+      authServer.listen(0, '127.0.0.1', resolve),
+    );
+    const { port } = authServer.address() as AddressInfo;
+    const url = `http://127.0.0.1:${port}/api/v1/auth/session-revocations`;
+    const app = await createTestApp(
+      both(
+        useKeys(() => publicKeys(key)),
+        useRevocations(() => loadRevocations(url)),
+      ),
+    );
+
+    // 앱이 뜰 때 받기 시작하지만 기다리지 않는다. 받을 때까지 기다린 뒤 부른다
+    await vi.waitFor(async () => {
+      const response = await readMe(app, await signToken(key, { version: 1 }));
+      expect(response.status).toBe(401);
+    });
+    await app.close();
+    await new Promise((resolve) => authServer.close(resolve));
+  });
+
+  it('다른 사용자의 토큰은 막지 않는다', async () => {
+    const app = await createTestApp(
+      both(
+        useKeys(() => publicKeys(key)),
+        useRevocations(() => Promise.resolve(cut)),
+      ),
+    );
+
+    const response = await readMe(
+      app,
+      await signToken(key, {
+        subject: '1b4e28ba-2fa1-11d2-883f-0016d3cca427',
+        version: 0,
+      }),
+    );
+    await app.close();
+
+    expect(response.status).toBe(200);
+  });
+
+  it('목록을 받지 못해도 서버는 뜨고, 토큰을 막지 않는다. 받지 못한 것은 경고로 남는다', async () => {
+    // 앱이 뜰 때 바로 한 번 받는다. 받지 못한 경고를 화면에 찍지 않고 모은다
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const app = await createTestApp(
+      both(
+        useKeys(() => publicKeys(key)),
+        useRevocations(() =>
+          Promise.reject(new RevocationsFetchError('연결하지 못했다')),
+        ),
+      ),
+    );
+
+    const response = await readMe(app, await signToken(key, { version: 0 }));
+    await app.close();
+    vi.restoreAllMocks();
+
+    expect(response.status).toBe(200);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ error_code: 'auth.revocations_unavailable' }),
+    );
   });
 });

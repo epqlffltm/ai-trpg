@@ -77,9 +77,8 @@ SECRETS = [
     ),
     # 결제 서버가 요청의 서명을 확인하는 비밀. 요청을 받는 서버만 쓴다
     *secrets('billing-server', ['billing-server'], 'PG_WEBHOOK_SECRET', 'GAME_SERVER_SECRET', 'AUTH_SERVER_SECRET'),
-    # 결제 대행사의 키. 서버와 대사(cron)가 결제 대행사를 부른다.
-    # 정리 작업(sweeper)은 부르지 않지만 지금은 작업 명령의 설정(LoadJobs)이 키를 요구한다. 결제 세션이 고치면 뺀다
-    *secrets('billing-server', ['billing-server', 'billing-cron', 'billing-sweeper'], 'TOSS_SECRET_KEY'),
+    # 결제 대행사의 키. 서버와 대사(cron)가 결제 대행사를 부른다. 정리 작업(sweeper)은 부르지 않는다(config.LoadSweeper)
+    *secrets('billing-server', ['billing-server', 'billing-cron'], 'TOSS_SECRET_KEY'),
 ]
 
 
