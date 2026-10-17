@@ -22,7 +22,12 @@ import environ
 from django.core.exceptions import ImproperlyConfigured
 
 from config.billing import validate_billing_url, validate_service_secret
-from config.jwt_keys import compute_key_id, derive_public_key_pem, read_private_key_pem
+from config.jwt_keys import (
+    build_verification_keys,
+    compute_key_id,
+    derive_public_key_pem,
+    read_private_key_pem,
+)
 from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
 from config.security import (
     SILENCED_DEPLOY_CHECKS,
@@ -196,6 +201,17 @@ JWT_PUBLIC_KEY_PEM = derive_public_key_pem(_jwt_private_key_pem)
 
 # 토큰 머리말의 kid 와 JWKS 의 kid 에 같은 값이 들어간다
 JWT_KEY_ID = compute_key_id(JWT_PUBLIC_KEY_PEM)
+
+# 서명에 쓰는 개인키. 토큰을 만들 때 accounts/key_ring.py 가 읽는다
+JWT_SIGNING_KEY_PEM = _jwt_private_key_pem
+
+# 서명하지 않고 검증만 하는 공개키 파일들(#21). 쉼표로 구분한다. 상대 경로는 auth-server 폴더 기준이다.
+# 키를 교체하는 동안 옛 키와, 미리 알릴 다음 키를 여기에 둔다. JWKS 에도 함께 실린다.
+# 교체 절차는 README 의 "운영 메모" > "JWT 키 교체"에 있다
+JWT_EXTRA_PUBLIC_KEY_PATHS = [BASE_DIR / path for path in env.list('JWT_EXTRA_PUBLIC_KEY_PATHS', default=[])]
+
+# 검증할 수 있는 공개키 전부. 키 ID → 공개키 PEM, 서명 키가 맨 앞이다
+JWT_VERIFICATION_KEYS = build_verification_keys(JWT_PUBLIC_KEY_PEM, JWT_EXTRA_PUBLIC_KEY_PATHS)
 
 SIMPLE_JWT = {
     # 비대칭 서명. 개인키는 이 서버만 갖고, 다른 서버는 공개키로 검증만 한다.
