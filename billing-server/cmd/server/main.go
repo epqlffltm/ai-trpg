@@ -25,6 +25,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/eligibility"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
@@ -83,7 +84,8 @@ func run() error {
 		Wallet:            services.Wallet,
 		Welcome:           services.Wallet,
 		WelcomeCredits:    settings.WelcomeCredits,
-		Orders:            services.Orders,
+		Eligibility:       services.Eligibility,
+		Orders:            eligibility.Guard(services.Orders, services.Eligibility),
 		Notifier:          services.Orders,
 		WebhookSecret:     settings.WebhookSecret,
 		TossWebhook:       settings.ReceivesTossNotifications(),
