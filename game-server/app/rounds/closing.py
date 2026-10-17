@@ -78,6 +78,12 @@ TIMED_OUT = 'timeout'
 # 결제 서버를 두지 않을 때. 받지 않는다
 FREE = FreeBilling()
 
+# 서술을 맡은 작업의 종류. 로그의 operation 이고, 동시에 도는 수를 이 종류로 센다(app/core/jobs.py)
+NARRATE_OPERATION = 'round.narrate'
+# 서술이 돌거나 기다리는 수의 상한. 테이블마다 닫는 중인 라운드는 하나뿐이라 보통은 열린 테이블의 수를 넘지 않는다.
+# 넘으면 맡지 않는다. 그 라운드는 닫는 중으로 남고, 서버의 시계가 찾아 다시 맡긴다(app/rounds/recovery.py)
+NARRATION_CAPACITY = 200
+
 
 class ChargeNotSecured(Exception):
     """서술 값을 잡지 못했다. reason 은 이벤트에 적는 이유다(insufficient_credits, billing_unavailable)."""
@@ -382,7 +388,12 @@ class RoundCloser:
     drafter: Drafter = NO_DRAFTS
 
     def schedule(self, table_id: uuid.UUID, number: int, started: datetime) -> None:
-        """이 라운드의 서술을 맡긴다. 기다리지 않고 바로 돌아온다. started 는 저장한 닫기 시작한 시각이다."""
+        """
+        이 라운드의 서술을 맡긴다. 기다리지 않고 바로 돌아온다. started 는 저장한 닫기 시작한 시각이다.
+
+        서술의 자리가 다 찼으면 작업 관리자가 맡지 않는다(로그만 남는다). 라운드는 닫는 중으로 남고,
+        한참 뒤에(service.CLOSING_RETRY_SECONDS) 서버의 시계가 다시 맡긴다.
+        """
         job = narrate_round(
             self.session_factory,
             self.narrator,
@@ -395,7 +406,7 @@ class RoundCloser:
             billing=self.billing,
             drafter=self.drafter,
         )
-        self.jobs.spawn(job, name=f'narrate:{table_id}:{number}', operation='round.narrate')
+        self.jobs.spawn(job, name=f'narrate:{table_id}:{number}', operation=NARRATE_OPERATION)
 
 
 def closer_of(state: Any) -> RoundCloser:
