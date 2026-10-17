@@ -15,12 +15,12 @@ from django.core import mail
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APIClient, APITestCase
+from rest_framework.test import APITestCase
 
 from accounts.cookies import REFRESH_COOKIE_NAME
 from accounts.email_codes import ISSUE_COOLDOWN, MAX_FAILED_ATTEMPTS, TOKEN_LIFETIME
 from accounts.models import EmailCode, User
-from accounts.tests.helpers import log_in, start_login
+from accounts.tests.helpers import BrowserClient, log_in, start_login
 
 CHANGE_URL = reverse('accounts:password-change')
 RESET_URL = reverse('accounts:password-reset')
@@ -62,6 +62,8 @@ def after(elapsed: timedelta):
 
 
 class PasswordChangeTests(APITestCase):
+    client_class = BrowserClient
+
     def setUp(self):
         self.user = create_user()
         self.access_token = log_in(self.client, 'player_01', OLD_PASSWORD).data['access_token']
@@ -76,7 +78,7 @@ class PasswordChangeTests(APITestCase):
         )
 
     def get_me(self, access_token: str):
-        return APIClient().get(ME_URL, HTTP_AUTHORIZATION=f'Bearer {access_token}')
+        return BrowserClient().get(ME_URL, HTTP_AUTHORIZATION=f'Bearer {access_token}')
 
     def test_changes_the_password(self):
         response = self.change()
@@ -129,7 +131,7 @@ class PasswordChangeTests(APITestCase):
         self.assertEqual(self.client.post(REFRESH_URL).status_code, status.HTTP_200_OK)
 
     def test_other_devices_are_logged_out(self):
-        other_device = APIClient()
+        other_device = BrowserClient()
         other_access_token = log_in(other_device, 'player_01', OLD_PASSWORD).data['access_token']
 
         self.change()
@@ -138,7 +140,7 @@ class PasswordChangeTests(APITestCase):
         self.assertEqual(other_device.post(REFRESH_URL).status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_failed_change_keeps_every_session(self):
-        other_device = APIClient()
+        other_device = BrowserClient()
         log_in(other_device, 'player_01', OLD_PASSWORD)
 
         self.change(current_password='not-my-password')
@@ -148,7 +150,7 @@ class PasswordChangeTests(APITestCase):
 
     def test_login_in_progress_cannot_be_completed_after_change(self):
         # 비밀번호를 아는 누군가가 로그인 1단계까지 가 있는 상태
-        pending_ticket = start_login(APIClient(), 'player_01', OLD_PASSWORD).data['login_ticket']
+        pending_ticket = start_login(BrowserClient(), 'player_01', OLD_PASSWORD).data['login_ticket']
 
         self.change()
 
@@ -163,8 +165,8 @@ class PasswordChangeTests(APITestCase):
     def test_old_password_no_longer_logs_in(self):
         self.change()
 
-        old = start_login(APIClient(), 'player_01', OLD_PASSWORD)
-        new = start_login(APIClient(), 'player_01', NEW_PASSWORD)
+        old = start_login(BrowserClient(), 'player_01', OLD_PASSWORD)
+        new = start_login(BrowserClient(), 'player_01', NEW_PASSWORD)
 
         self.assertEqual(old.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(new.status_code, status.HTTP_202_ACCEPTED)
@@ -261,11 +263,13 @@ class PasswordResetRequestTests(APITestCase):
         # 요청만으로는 아무것도 바뀌지 않는다. 남이 요청해도 주인은 영향을 받지 않는다
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(OLD_PASSWORD))
-        me = APIClient().get(ME_URL, HTTP_AUTHORIZATION=f'Bearer {access_token}')
+        me = BrowserClient().get(ME_URL, HTTP_AUTHORIZATION=f'Bearer {access_token}')
         self.assertEqual(me.status_code, status.HTTP_200_OK)
 
 
 class PasswordResetConfirmTests(APITestCase):
+    client_class = BrowserClient
+
     def setUp(self):
         self.user = create_user()
         self.client.post(RESET_URL, {'email': EMAIL}, format='json')
@@ -364,17 +368,17 @@ class PasswordResetConfirmTests(APITestCase):
         self.assertNotIn('new_password', response.data)
 
     def test_logs_out_every_device(self):
-        device = APIClient()
+        device = BrowserClient()
         access_token = log_in(device, 'player_01', OLD_PASSWORD).data['access_token']
 
         self.confirm()
 
-        me = APIClient().get(ME_URL, HTTP_AUTHORIZATION=f'Bearer {access_token}')
+        me = BrowserClient().get(ME_URL, HTTP_AUTHORIZATION=f'Bearer {access_token}')
         self.assertEqual(me.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(device.post(REFRESH_URL).status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_sessions_survive_when_saving_the_password_fails(self):
-        device = APIClient()
+        device = BrowserClient()
         log_in(device, 'player_01', OLD_PASSWORD)
 
         # 세션을 끊는 단계가 실패하면 비밀번호 변경과 토큰 소비도 함께 취소되어야 한다
@@ -392,8 +396,8 @@ class PasswordResetConfirmTests(APITestCase):
     def test_can_log_in_with_the_new_password(self):
         self.confirm()
 
-        old = start_login(APIClient(), 'player_01', OLD_PASSWORD)
-        new = log_in(APIClient(), 'player_01', NEW_PASSWORD)
+        old = start_login(BrowserClient(), 'player_01', OLD_PASSWORD)
+        new = log_in(BrowserClient(), 'player_01', NEW_PASSWORD)
 
         self.assertEqual(old.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(new.status_code, status.HTTP_200_OK)
