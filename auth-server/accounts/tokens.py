@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import jwt
 from django.db import transaction
 from django.db.models import F
+from django.utils import timezone
 from rest_framework_simplejwt.backends import TokenBackend
 from rest_framework_simplejwt.exceptions import TokenBackendError
 from rest_framework_simplejwt.settings import api_settings
@@ -223,9 +224,10 @@ def revoke_all_sessions(user: User) -> None:
 
     토큰을 하나씩 찾아 폐기하지 않는다. 버전이 다른 토큰은 검증에서 걸러진다.
     읽어서 더한 뒤 저장하면 동시 요청에서 증가가 유실되므로 DB 에서 직접 더한다.
+    끊은 시각도 같은 문장에서 적는다. 다른 서버에 내주는 끊긴 세션 목록이 이 시각으로 고른다(session_revocations.py).
     """
-    User.objects.filter(pk=user.pk).update(token_version=F('token_version') + 1)
-    user.refresh_from_db(fields=['token_version'])
+    User.objects.filter(pk=user.pk).update(token_version=F('token_version') + 1, sessions_revoked_at=timezone.now())
+    user.refresh_from_db(fields=['token_version', 'sessions_revoked_at'])
 
 
 def _decode_refresh_claims(raw_refresh_token: str) -> dict:
