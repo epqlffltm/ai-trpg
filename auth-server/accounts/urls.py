@@ -9,6 +9,7 @@ config/urls.py 가 이 파일을 /api/v1/auth/ 아래에 연결한다.
 from django.urls import path
 
 from accounts.views import (
+    IdentityVerifyView,
     JwksView,
     LoginResendView,
     LoginVerifyView,
@@ -44,4 +45,5 @@ urlpatterns = [
     path('jwks', JwksView.as_view(), name='jwks'),
     path('session-revocations', SessionRevocationsView.as_view(), name='session-revocations'),
     path('me', MeView.as_view(), name='me'),
+    path('identity/verify', IdentityVerifyView.as_view(), name='identity-verify'),
 ]

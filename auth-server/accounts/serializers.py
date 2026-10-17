@@ -76,6 +76,33 @@ class SignupCompleteSerializer(serializers.Serializer):
         # 앞뒤 공백도 비밀번호의 일부다. 기본 동작인 공백 제거를 끈다
         trim_whitespace=False,
     )
+    # "만 14세 이상입니다" 확인(#336). 참이어야 가입된다. 자기 신고라 거짓말을 막지는 못한다.
+    # 실제 나이는 본인인증에서 알고, 그때 만 14세 미만이면 계정을 막는다(identity.py)
+    age_over_14 = serializers.BooleanField()
+
+    def validate_age_over_14(self, confirmed: bool) -> bool:
+        if not confirmed:
+            raise serializers.ValidationError('만 14세 이상만 가입할 수 있습니다.', code='under_min_age')
+        return confirmed
+
+    def validate(self, attrs: dict) -> dict:
+        """확인은 여기서 끝난다. 계정에 적는 값이 아니라 services.py 에 넘기지 않는다."""
+        attrs.pop('age_over_14')
+        return attrs
+
+
+class IdentityVerifySerializer(serializers.Serializer):
+    """본인인증. 본인확인 업체의 화면에서 받은 글자 하나를 받는다. 모양은 업체가 정한다(identity_providers.py)."""
+
+    token = serializers.CharField(max_length=1000)
+
+
+class IdentityStatusSerializer(serializers.Serializer):
+    """본인인증 상태(identity_status.IdentityStatus). 내 정보와 본인인증의 응답에 실린다."""
+
+    verified = serializers.BooleanField()
+    legal_adult = serializers.BooleanField()
+    adult_content = serializers.BooleanField()
 
 
 class LoginSerializer(serializers.Serializer):

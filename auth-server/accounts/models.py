@@ -228,6 +228,10 @@ class SecurityEventKind(models.TextChoices):
     # 운영자가 한 일이다. 사유(note)를 함께 남긴다
     ACCOUNT_SUSPENDED = 'account_suspended', '계정: 정지'
     ACCOUNT_RESTORED = 'account_restored', '계정: 정지를 풂'
+    # 본인인증(#336). 만 14세 미만이라 계정을 막고 개인정보를 지웠다
+    IDENTITY_UNDER_AGE = 'identity_under_age', '본인인증: 만 14세 미만이라 계정을 막음'
+    # 다른 계정이 이미 인증한 사람이다. 부모의 휴대폰이나 계정을 여럿 만드는 것을 운영자가 알아본다
+    IDENTITY_IN_USE = 'identity_in_use', '본인인증: 다른 계정에서 인증한 사람'
 
 
 class SecurityEvent(models.Model):
@@ -349,22 +353,23 @@ class WelcomeCreditStatus(models.TextChoices):
 
 class WelcomeCredit(models.Model):
     """
-    환영 크레딧을 받을 메일함 하나. 두 가지 일을 한다.
+    환영 크레딧을 받을 사람 하나. 두 가지 일을 한다.
 
-    하나는 "이 메일함은 이미 받았다"는 기록이다. 메일함마다 한 줄만 있을 수 있다.
-    계정을 지우고 같은 주소로 다시 가입해도, a+1@x.com 과 a+2@x.com 으로 계정을 둘 만들어도 줄은 하나다.
+    하나는 "이 사람은 이미 받았다"는 기록이다. 사람마다 한 줄만 있을 수 있다.
+    계정을 지우고 다시 가입해 본인인증을 해도 줄은 하나다.
 
-    다른 하나는 결제 서버에 맡길 일의 목록(outbox)이다. 가입 인증과 같은 트랜잭션에서 적고,
+    다른 하나는 결제 서버에 맡길 일의 목록(outbox)이다. 본인인증과 같은 트랜잭션에서 적고,
     따로 도는 워커(manage.py send_welcome_credits)가 꺼내 결제 서버에 맡긴다.
-    그래서 결제 서버가 느리거나 죽어도 가입은 영향을 받지 않고, 살아나면 지급된다.
+    그래서 결제 서버가 느리거나 죽어도 본인인증은 영향을 받지 않고, 살아나면 지급된다.
 
     끝난 줄도 지우지 않는다. 지우면 "이미 받았다"는 기록이 사라진다.
     """
 
-    # 메일 주소를 정리한 뒤 서버의 비밀키로 서명한 값이다(welcome_credit.py). 주소 자체는 적지 않는다.
-    # 계정을 지운 뒤에도 이 줄은 남는다. 주소를 그대로 적어 두면 지운 계정의 주소가 남게 된다
-    mailbox_key = models.CharField('메일함의 열쇠', max_length=64, unique=True)
-    # 받을 사용자의 공개 ID. 결제 서버가 아는 사용자 번호다.
+    # 받는 사람의 열쇠. 본인인증의 사람 열쇠(IdentityVerification.person_key)와 같은 값이다(identity.py).
+    # #336 전에 적힌 줄은 메일함(이메일 주소를 정리한 것)의 열쇠다. 섞는 비밀이 달라 두 열쇠가 겹치지 않는다.
+    # 계정을 지운 뒤에도 이 줄은 남는다. 그래서 DI 나 주소를 그대로 적지 않고 서버의 비밀키로 서명한 값만 적는다
+    recipient_key = models.CharField('받는 사람의 열쇠', max_length=64, unique=True)
+    # 받을 사용자의 공개 ID. 결제 서버가 아는 사용자 번호다. 한 계정은 한 번만 받는다(welcome_credit.py).
     # 외래 키로 두지 않는다. 계정이 지워져도 이 줄은 남아야 한다
     user_public_id = models.UUIDField('받는 사용자의 공개 ID')
 
@@ -393,3 +398,41 @@ class WelcomeCredit(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user_public_id} / {self.get_status_display()}'
+
+
+class IdentityVerification(models.Model):
+    """
+    휴대폰 본인인증을 마친 기록(#336). 계정마다 하나, 사람마다 하나다.
+
+    한 사람은 한 계정에서만 인증한다. 계정을 지우면 이 기록도 지워져, 같은 사람이 새 계정에서 다시 인증할 수 있다.
+    환영 크레딧은 사람에게 한 번이라 그때는 다시 받지 못한다(WelcomeCredit 은 지우지 않는다).
+
+    업체가 준 것 가운데 남기는 것은 사람 열쇠와 두 날짜뿐이다. DI, 생일, 이름, 전화번호는 적지 않는다.
+    날짜는 아직 오지 않았을 때만 적는다. 이미 지났으면 비운다. 성인의 날짜를 적어 두면 그것이 곧 생일이다.
+    미성년자의 날짜는 그날 저절로 성인이 되게 하려고 적는다. 다시 인증하지 않아도 된다(age.has_reached).
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='identity_verification',
+        verbose_name='회원',
+    )
+    # 업체가 준 DI 를 서버의 비밀키로 서명한 값이다(identity.py). DI 는 짐작할 수 없지만,
+    # 다른 서비스와 함께 쓰는 값(CI)처럼 바깥에서 이어 붙이지 못하게 그대로 적지 않는다
+    person_key = models.CharField('사람 열쇠', max_length=64, unique=True)
+    # 민법의 성년이 되는 날(만 19세 생일). 결제가 본다. 비어 있으면 인증할 때 이미 성년이었다
+    legal_adult_from = models.DateField('성년이 되는 날', null=True, blank=True)
+    # 청소년 보호법의 청소년이 아니게 되는 날(만 19세가 되는 해의 1월 1일). 성인용 내용이 본다.
+    # 비어 있으면 인증할 때 이미 지났다
+    adult_content_from = models.DateField('성인용 내용을 볼 수 있게 되는 날', null=True, blank=True)
+    # 확인해 준 업체(config/identity.py). 가짜 업체로 한 인증을 나중에 가려낼 수 있다
+    provider = models.CharField('업체', max_length=20)
+    verified_at = models.DateTimeField('인증한 시각')
+
+    class Meta:
+        verbose_name = '본인인증'
+        verbose_name_plural = '본인인증'
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.provider}'

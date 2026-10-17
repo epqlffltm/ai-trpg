@@ -1844,8 +1844,8 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
    ```
    s=$(sed -n 's/^GAME_SERVER_SECRET=//p' billing-server/.env); printf '\nBILLING_URL=http://127.0.0.1:8003\nBILLING_SECRET=%s\n' "$s" >> game-server/.env; unset s
    ```
-2. 앉을 사용자 모두에게 크레딧이 있어야 한다(각자 낸다). 가입하면 인증 서버가 환영 크레딧을 결제 서버에 맡긴다(`auth-server/README.md` 의 `send_welcome_credits`).
-   그 기능 전에 가입한 계정은 인증 서버의 `request_welcome_credits` 를 한 번 돌린다. 잔액은 결제 서버의 `GET /api/v1/billing/wallet` 으로 본다.
+2. 앉을 사용자 모두에게 크레딧이 있어야 한다(각자 낸다). 본인인증을 하면 인증 서버가 환영 크레딧을 결제 서버에 맡긴다(`auth-server/README.md` 의 "본인인증"과 `send_welcome_credits`).
+   잔액은 결제 서버의 `GET /api/v1/billing/wallet` 으로 본다.
 3. 게임 서버를 다시 띄우고 테이블을 시작한다. 몇 초 뒤 앉은 사람마다 잔액이 서술 한 번의 값만큼 줄고(홀드), 원장에 `hold` 줄이 생긴다.
    라운드가 서술되면 확정되고, 테이블을 끝내면 돌아온다(`release` 줄).
 

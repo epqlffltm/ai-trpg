@@ -11,7 +11,15 @@ User 는 Django 의 UserAdmin 을 상속해 비밀번호 해싱과 변경 화면
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from accounts.models import EmailCode, OutgoingMail, SecurityEvent, SignupCode, User, WelcomeCredit
+from accounts.models import (
+    EmailCode,
+    IdentityVerification,
+    OutgoingMail,
+    SecurityEvent,
+    SignupCode,
+    User,
+    WelcomeCredit,
+)
 
 
 @admin.register(User)
@@ -160,7 +168,7 @@ class WelcomeCreditAdmin(admin.ModelAdmin):
     환영 크레딧을 조회만 한다. 운영자가 결제 서버에 맡기지 못하고 밀려 있는 줄을 확인하는 곳이다.
 
     상태를 "맡기기 전" 으로 걸러 보면 아직 나가지 못한 줄과 마지막 오류가 나온다.
-    줄을 지우면 그 메일함이 환영 크레딧을 다시 받을 수 있게 된다. 그래서 지우는 것도 막는다.
+    줄을 지우면 그 사람이 환영 크레딧을 다시 받을 수 있게 된다. 그래서 지우는 것도 막는다.
     """
 
     list_display = (
@@ -175,8 +183,34 @@ class WelcomeCreditAdmin(admin.ModelAdmin):
     list_filter = ('status',)
     search_fields = ('user_public_id',)
     ordering = ('-created_at',)
-    # 메일함의 열쇠는 화면에 보여 주지 않는다. 볼 일이 없는 값이다
-    exclude = ('mailbox_key',)
+    # 받는 사람의 열쇠는 화면에 보여 주지 않는다. 볼 일이 없는 값이다
+    exclude = ('recipient_key',)
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(IdentityVerification)
+class IdentityVerificationAdmin(admin.ModelAdmin):
+    """
+    본인인증의 기록을 조회만 한다(#336).
+
+    만들거나 고치면 업체를 거치지 않고 성인이 된다. 지우면 같은 사람이 다른 계정에서 다시 인증할 수 있다.
+    계정을 지우면 함께 지워진다.
+    """
+
+    list_display = ('user', 'provider', 'legal_adult_from', 'adult_content_from', 'verified_at')
+    list_filter = ('provider',)
+    search_fields = ('user__username',)
+    ordering = ('-verified_at',)
+    # 사람 열쇠는 화면에 보여 주지 않는다. 볼 일이 없는 값이다
+    exclude = ('person_key',)
 
     def has_add_permission(self, request) -> bool:
         return False
