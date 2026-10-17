@@ -28,7 +28,8 @@ class RoutedDraftWriter:
     async def draft(self, request: DraftRequest) -> Checked:
         """provider 를 고르고, 그것으로 초안을 받는다. 고르지 못하면 NOTHING."""
         try:
-            provider = await self.router.provider_for(self.model)
+            route = await self.router.route(self.model)
         except ProviderError:
             return NOTHING
-        return await DraftWriter(provider, self.log, digest_key=self.digest_key).draft(request)
+        writer = DraftWriter(route.provider, self.log, digest_key=self.digest_key, price=route.price)
+        return await writer.draft(request)

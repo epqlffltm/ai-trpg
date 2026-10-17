@@ -8,6 +8,8 @@ OpenAI 모양의 스트리밍은 SSE 다. 줄마다 'data: {...}' 가 오고, �
   - 멈춘 이유(finish_reason)는 마지막 글 조각에 온다.
   - 토큰 수(usage)는 맨 끝의 choices 가 빈 조각에 온다. 요청에 stream_options.include_usage 를 실어야 온다.
     싣지 않거나 모르는 서버면 오지 않는다. 그때는 토큰 수가 비어 있다.
+    OpenAI 는 캐시에서 읽은 입력(prompt_tokens_details.cached_tokens)과
+    생각에 쓴 출력(completion_tokens_details.reasoning_tokens)도 알려 준다. 둘 다 전체 수에 들어 있다.
   - 도중에 서버가 오류를 만나면 {"error": ...} 조각이 온다.
 [DONE] 도 멈춘 이유도 오지 않고 끝나면 도중에 끊긴 것이다. 받은 데까지를 답으로 치지 않는다.
 
@@ -87,6 +89,13 @@ class Chunk:
     finish_reason: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cached_input_tokens: int | None = None
+    reasoning_tokens: int | None = None
+
+
+def detail_of(usage: dict, group: str, name: str) -> int | None:
+    """토큰 수의 자세한 칸(prompt_tokens_details.cached_tokens 같은 것). 없으면 None."""
+    return (usage.get(group) or {}).get(name)
 
 
 def data_of(line: str) -> str | None:
@@ -120,6 +129,8 @@ def parse_chunk(data: str) -> Chunk:
             finish_reason=choice.get('finish_reason'),
             input_tokens=usage.get('prompt_tokens'),
             output_tokens=usage.get('completion_tokens'),
+            cached_input_tokens=detail_of(usage, 'prompt_tokens_details', 'cached_tokens'),
+            reasoning_tokens=detail_of(usage, 'completion_tokens_details', 'reasoning_tokens'),
         )
     except (KeyError, IndexError, TypeError, AttributeError) as exc:
         raise ProviderError('malformed') from exc
@@ -141,6 +152,8 @@ class StreamState:
     finish_reason: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cached_input_tokens: int | None = None
+    reasoning_tokens: int | None = None
     done: bool = False
 
     def add(self, chunk: Chunk) -> str:
@@ -153,6 +166,10 @@ class StreamState:
             self.input_tokens = chunk.input_tokens
         if chunk.output_tokens is not None:
             self.output_tokens = chunk.output_tokens
+        if chunk.cached_input_tokens is not None:
+            self.cached_input_tokens = chunk.cached_input_tokens
+        if chunk.reasoning_tokens is not None:
+            self.reasoning_tokens = chunk.reasoning_tokens
         return self.thinking.feed(chunk.text)
 
     def is_complete(self) -> bool:
@@ -168,6 +185,8 @@ class StreamState:
             output_tokens=self.output_tokens,
             finish_reason=self.finish_reason,
             truncated=self.finish_reason == LENGTH_FINISH,
+            cached_input_tokens=self.cached_input_tokens,
+            reasoning_tokens=self.reasoning_tokens,
         )
 
 

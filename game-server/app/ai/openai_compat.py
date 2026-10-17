@@ -30,6 +30,8 @@ SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되�
   그래서 호출 전체에 따로 상한(timeout)을 건다. 다시 시도하는 쪽이 "한 번 부르는 데 이만큼"을 믿고 남은 시간을 센다.
 
 실패는 모두 ProviderError 다. 응답의 본문은 오류에 싣지 않는다. 본문에 프롬프트(GM 메모 포함)가 되돌아와 있을 수 있다.
+  상태 코드로 실패하면 "이만큼 뒤에 다시 하라"는 머리(retry-after-ms, Retry-After)를 읽어 오류에 싣는다(retry_after).
+  다시 부를지, 얼마나 기다릴지는 다시 시도하는 쪽(app/rounds/retrying_narrator.py)이 정한다.
   - 연결이 안 됨: unreachable. 받는 도중에 끊김: interrupted. 둘을 나눈다. 서버가 꺼진 것과 한 번 끊긴 것은 다르다.
   - 시간 초과: timeout. 상태 코드: status_코드. 도중의 오류 조각: stream_error. 모양이 다름: malformed.
 """
@@ -37,6 +39,8 @@ SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되�
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -122,6 +126,39 @@ def auth_headers(api_key: SecretStr | None) -> dict[str, str]:
     return {'Authorization': f'Bearer {api_key.get_secret_value()}'}
 
 
+def parse_retry_after(value: str, now: datetime) -> float | None:
+    """Retry-After 의 값을 초로. 초의 수이거나 HTTP 날짜다. 읽을 수 없으면 None. 지난 때면 0."""
+    try:
+        return max(float(value), 0.0)
+    except ValueError:
+        pass
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return max((when - now).total_seconds(), 0.0)
+
+
+def retry_after_of(headers: httpx.Headers, now: datetime | None = None) -> float | None:
+    """
+    응답의 머리에서 다시 하기까지 기다릴 초. 알려 주지 않았으면 None.
+
+    OpenAI 는 밀리초로 주는 retry-after-ms 도 보낸다. 더 잘다라서 먼저 본다.
+    """
+    milliseconds = headers.get('retry-after-ms')
+    if milliseconds:
+        try:
+            return max(float(milliseconds) / 1000, 0.0)
+        except ValueError:
+            pass
+    value = headers.get('retry-after')
+    if not value:
+        return None
+    return parse_retry_after(value.strip(), now or datetime.now(UTC))
+
+
 async def lines_of(response: httpx.Response) -> AsyncIterator[str]:
     """받는 중인 응답의 줄들. 받는 도중의 시간 초과와 끊김을 ProviderError 로 바꾼다."""
     try:
@@ -151,7 +188,7 @@ async def stream_chat(
     try:
         async with client.stream('POST', url, json=body, headers=headers, timeout=timeout) as response:
             if response.status_code != httpx.codes.OK:
-                raise ProviderError(f'status_{response.status_code}')
+                raise ProviderError(f'status_{response.status_code}', retry_after=retry_after_of(response.headers))
             return await read_stream(lines_of(response), model, on_text)
     except httpx.TimeoutException as exc:
         raise ProviderError('timeout') from exc

@@ -23,6 +23,7 @@ from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderE
 from app.rounds.llm_narrator import LLMNarrator, NarrationError
 from app.rounds.narrator import NO_PREVIEW, Move, NarrationRequest, Preview, StoryContext
 from app.rounds.retrying_narrator import (
+    MAX_RETRY_AFTER_SECONDS,
     PAUSE_SECONDS,
     NarrationFailed,
     RetryingNarrator,
@@ -351,3 +352,58 @@ async def test_a_retry_with_the_model_shows_the_new_text_from_the_start():
     await narrator.narrate(REQUEST, preview)
 
     assert preview.shown() == ['엔진 소리가', SCENE]
+
+
+# --- 공급자가 알려 준 대기 시간(Retry-After) ---
+
+
+async def test_a_told_wait_longer_than_the_pause_is_followed():
+    setup = Setup()
+    first = setup.model('first', ProviderError('status_429', retry_after=7.0), SCENE)
+
+    assert await setup.narrator(first).narrate(REQUEST) == SCENE
+
+    # 무작위로 쉴 시간(1.5초)보다 길게 알려 줬다. 그만큼 쉬고 같은 모델로 다시 부른다
+    assert (setup.calls, setup.pauses) == (['first', 'first'], [7.0])
+
+
+async def test_a_told_wait_shorter_than_the_pause_keeps_the_pause():
+    setup = Setup()
+    first = setup.model('first', ProviderError('status_503', retry_after=0.2), SCENE)
+
+    await setup.narrator(first).narrate(REQUEST)
+
+    # 여러 테이블이 함께 다시 부르지 않게 흩어 쉬는 시간은 그대로 둔다
+    assert setup.pauses == [1.5]
+
+
+async def test_a_told_wait_over_the_limit_is_not_waited_for():
+    setup = Setup()
+    first = setup.model('first', ProviderError('status_429', retry_after=MAX_RETRY_AFTER_SECONDS + 1))
+    second = setup.model('second', SCENE)
+
+    assert await setup.narrator(first, second).narrate(REQUEST) == SCENE
+
+    # 그 모델은 그만 부른다. 넘어갈 모델이 있으면 넘어간다. 쉬지 않는다
+    assert (setup.calls, setup.pauses) == (['first', 'second'], [])
+
+
+async def test_a_told_wait_at_the_limit_is_waited_for():
+    setup = Setup()
+    first = setup.model('first', ProviderError('status_429', retry_after=MAX_RETRY_AFTER_SECONDS), SCENE)
+
+    await setup.narrator(first).narrate(REQUEST)
+
+    assert setup.pauses == [MAX_RETRY_AFTER_SECONDS]
+
+
+async def test_a_told_wait_that_leaves_no_time_ends_the_narration():
+    setup = Setup()
+    # 처음 부르는 데 80초가 걸렸다. 20초를 기다리면 한 번 더 부를 시간(60초)이 남지 않는다
+    first = setup.model('first', ProviderError('status_429', retry_after=MAX_RETRY_AFTER_SECONDS), SCENE, cost=80.0)
+
+    with pytest.raises(NarrationFailed) as caught:
+        await setup.narrator(first).narrate(REQUEST)
+
+    assert caught.value.reason == 'status_429'
+    assert setup.calls == ['first']

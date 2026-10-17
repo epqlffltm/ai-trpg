@@ -10,6 +10,9 @@
 정책.
   - 모델마다 두 번까지 부른다. 사이에 1~2초를 무작위로 쉰다.
     여러 테이블이 함께 실패해도 다시 부르는 때가 흩어진다.
+  - 공급자가 "이만큼 뒤에 다시 하라"고 알려 주면(Retry-After, 429·503) 적어도 그만큼 쉬고 같은 모델로 다시 부른다.
+    다만 MAX_RETRY_AFTER_SECONDS(20초)보다 길면 기다리지 않는다. 그 모델은 그만 부른다.
+    서술 하나의 시간에 상한이 있어서, 오래 기다리면 다시 불러도 끝낼 시간이 없다.
   - 같은 요청을 다시 보내 봐야 소용없는 실패(요청이나 설정이 틀림)는 그 모델로 다시 부르지 않는다.
   - 다른 모델로 가도 소용없는 실패(서버가 꺼짐, 권한 없음)면 넘어가지 않고 그만둔다. 모델들은 같은 서버에 있다고 본다.
     한 등급에 창구가 다른 모델을 섞어 적으면 이 가정이 맞지 않는다. 섞어 적지 않는다(넘어가기는 모델 고르기에서 없앤다).
@@ -37,6 +40,8 @@ from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Narrator, Preview
 ATTEMPTS_PER_MODEL = 2
 # 다시 부르기 전에 쉬는 시간(초)의 범위. 이 안에서 무작위로 고른다
 PAUSE_SECONDS = (1.0, 2.0)
+# 공급자가 알려 준 대기 시간(Retry-After)을 이만큼까지만 따른다. 넘으면 그 모델로 다시 부르지 않는다
+MAX_RETRY_AFTER_SECONDS = 20.0
 
 # 같은 모델로 다시 불러도 소용없는 실패. 요청이나 설정이 틀렸다(404 는 그 이름의 모델이 없다).
 # 모델 목록의 모델을 부를 수 없는 것(꺼짐, 키 없음, 창구의 코드 없음)도 같다(app/ai/routing.py)
@@ -87,6 +92,19 @@ class RetryingNarrator:
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
     clock: Callable[[], float] = time.monotonic
 
+    def wait_before_retry(self, error: ProviderError | NarrationError) -> float | None:
+        """
+        같은 모델로 다시 부르기 전에 쉴 초. 다시 부르지 않을 것이면 None.
+
+        공급자가 대기 시간을 알려 줬으면 무작위로 쉴 시간과 견줘 긴 쪽이다. 상한을 넘으면 None 이다.
+        """
+        retry_after = getattr(error, 'retry_after', None)
+        if retry_after is None:
+            return self.pause()
+        if retry_after > MAX_RETRY_AFTER_SECONDS:
+            return None
+        return max(self.pause(), retry_after)
+
     def has_time(self, started: float) -> bool:
         """started 부터 지금까지 쓴 시간에 한 번 더 부르는 시간을 더해도 상한 안인가."""
         return self.clock() - started + self.attempt_timeout <= self.budget
@@ -96,16 +114,18 @@ class RetryingNarrator:
         started = self.clock()
         reason = 'no_model'
         for narrator in self.narrators:
+            wait: float | None = None
             for number in range(self.attempts):
                 if number > 0:
-                    await self.sleep(self.pause())
+                    await self.sleep(wait)
                 if not self.has_time(started):
                     raise NarrationFailed(reason)
                 try:
                     return await narrator.narrate(request, preview)
                 except (ProviderError, NarrationError) as error:
                     reason = str(error)
-                if not can_retry(reason):
+                    wait = self.wait_before_retry(error)
+                if not can_retry(reason) or wait is None:
                     break
             if not can_fall_back(reason):
                 break
