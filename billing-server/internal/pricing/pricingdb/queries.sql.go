@@ -157,3 +157,39 @@ func (q *Queries) PriceHistory(ctx context.Context, code string) ([]PriceVersion
 	}
 	return items, nil
 }
+
+const upcomingPrices = `-- name: UpcomingPrices :many
+SELECT DISTINCT ON (code) id, code, amount, effective_at, reason, changed_by, created_at
+FROM price_versions
+WHERE effective_at > $1::TIMESTAMPTZ
+ORDER BY code, effective_at
+`
+
+// 이름마다 아직 적용되지 않은 줄 가운데 가장 이른 줄을 읽는다(다음에 바뀔 값). 판매를 멈추는 예약도 함께 읽는다(amount 가 NULL).
+func (q *Queries) UpcomingPrices(ctx context.Context, now time.Time) ([]PriceVersion, error) {
+	rows, err := q.db.Query(ctx, upcomingPrices, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PriceVersion
+	for rows.Next() {
+		var i PriceVersion
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Amount,
+			&i.EffectiveAt,
+			&i.Reason,
+			&i.ChangedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
