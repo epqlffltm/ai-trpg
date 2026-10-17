@@ -14,7 +14,6 @@
 import logging
 import uuid
 
-import httpx
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
@@ -25,6 +24,7 @@ from app.ai.call_log import DbCallLog
 from app.ai.fake import FakeCallLog, FakeProvider
 from app.drafts.drafting import NO_DRAFTS
 from app.drafts.models import DraftStatus, LedgerDraft
+from app.drafts.routed_writer import RoutedDraftWriter
 from app.drafts.setup import build_drafter
 from app.drafts.writer import DraftRequest, DraftWriter
 from app.main import create_app
@@ -270,8 +270,10 @@ async def test_only_the_host_reads_the_drafts(client: AsyncClient, me: dict, fri
 
 
 def test_the_fake_narrator_drafts_nothing():
-    assert build_drafter(make_test_settings(), httpx.AsyncClient(), async_sessionmaker()) is NO_DRAFTS
-    assert create_app(make_test_settings()).state.drafter is NO_DRAFTS
+    app = create_app(make_test_settings())
+
+    assert build_drafter(make_test_settings(), app.state.model_router, async_sessionmaker()) is NO_DRAFTS
+    assert app.state.drafter is NO_DRAFTS
 
 
 def test_the_language_model_drafts_with_the_first_standard_model():
@@ -282,10 +284,11 @@ def test_the_language_model_drafts_with_the_first_standard_model():
 
     drafter = app.state.drafter
 
-    # 장면을 쓴 모델과 같은 것으로, 같은 기록장에, 같은 키로 서명한다. 넘어갈 모델은 쓰지 않는다
-    assert isinstance(drafter, DraftWriter)
-    assert drafter.provider.model == 'gemma4:26b'
-    assert drafter.provider.client is app.state.http_client
+    # 장면을 쓴 모델과 같은 것으로, 같은 기록장에, 같은 키로 서명한다. 넘어갈 모델은 쓰지 않는다.
+    # 창구는 서술자와 같은 것이 부를 때마다 고른다
+    assert isinstance(drafter, RoutedDraftWriter)
+    assert drafter.model == 'gemma4:26b'
+    assert drafter.router is app.state.model_router
     assert isinstance(drafter.log, DbCallLog)
     assert drafter.log.session_factory is app.state.session_factory
     assert drafter.digest_key == settings.digest_key()

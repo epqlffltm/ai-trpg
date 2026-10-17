@@ -3,8 +3,17 @@
 """
 OpenAI 와 같은 모양의 주소(/chat/completions)를 부르는 provider.
 
-Ollama, LM Studio, vLLM, 그리고 같은 모양을 받는 클라우드 API 를 이 하나로 부른다. 주소와 모델 이름만 다르다.
+Ollama, LM Studio, vLLM, 그리고 같은 모양을 받는 클라우드 API(OpenAI)를 이 하나로 부른다.
+주소, 모델 이름, 키, 모델이 받는 칸만 다르다. 어느 모델을 어떤 값으로 부를지는 app/ai/routing.py 가 정한다.
 SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되고, 앱이 이미 httpx 클라이언트를 하나 들고 있다.
+
+키(api_key)가 있으면 Authorization 머리에 싣는다. 서버 곁의 모델(Ollama)은 키가 없다.
+키는 오류, 로그, 기록 어디에도 싣지 않는다. 비밀값(SecretStr)으로 들고 다니다 머리를 만들 때만 꺼낸다.
+
+모델마다 받는 칸이 다르다(app/catalog/models.py).
+  - 출력 상한: 서버 곁의 모델과 옛 모델은 max_tokens 를 받는다.
+    OpenAI 의 생각하는 모델은 max_completion_tokens 만 받는다(token_field).
+  - 온도: 받지 않는 모델에는 싣지 않는다(supports_temperature). 실으면 400 이 난다.
 
 추론(생각 모드):
   추론하는 모델은 답하기 전에 속으로 따져 보는 글을 쓴다. Ollama 는 그 글을 content 가 아니라 reasoning 칸에 담는다.
@@ -28,9 +37,10 @@ SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되�
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any
 
 import httpx
+from pydantic import SecretStr
 
 from app.ai.provider import (
     ChatMessage,
@@ -45,6 +55,24 @@ from app.ai.streaming import read_stream
 
 # 추론을 켰을 때 생각에 더 주는 토큰. 답에 쓰는 상한(max_tokens)은 그대로 두고 이만큼을 더한다
 THINKING_TOKENS = {Reasoning.LOW: 1024, Reasoning.MEDIUM: 4096, Reasoning.HIGH: 8192}
+# 출력 상한을 담는 칸의 기본 이름. 서버 곁의 모델이 받는 것이다
+DEFAULT_TOKEN_FIELD = 'max_tokens'
+
+
+@dataclass(frozen=True)
+class WireOptions:
+    """모델이 받는 칸. 보낼 본문을 만들 때 본다. 기본값은 서버 곁의 모델(Ollama)에 맞다."""
+
+    # 추론 수준(reasoning_effort)을 아는가
+    supports_reasoning: bool = True
+    # 온도를 받는가
+    supports_temperature: bool = True
+    # 출력 상한을 담는 칸의 이름(max_tokens, max_completion_tokens)
+    token_field: str = DEFAULT_TOKEN_FIELD
+
+
+# 따로 정하지 않았을 때 받는 칸. 서버 곁의 모델이다
+LOCAL_OPTIONS = WireOptions()
 
 
 def chat_url(base_url: str) -> str:
@@ -65,24 +93,33 @@ def token_limit(params: GenerationParams, supports_reasoning: bool) -> int:
 
 
 def build_body(
-    model: str, messages: list[ChatMessage], params: GenerationParams, supports_reasoning: bool
+    model: str, messages: list[ChatMessage], params: GenerationParams, options: WireOptions = LOCAL_OPTIONS
 ) -> dict[str, Any]:
     """
     보낼 요청의 본문. 추론을 아는 모델에는 추론 수준을 늘 싣는다. 끌 때도 'none' 을 보내야 꺼진다.
 
+    출력 상한은 모델이 받는 칸에 싣는다. 온도는 받는 모델에만 싣는다.
     흘려 받는다. 토큰 수는 흘려 받을 때 따로 달라고 해야 온다(include_usage).
     """
     body: dict[str, Any] = {
         'model': model,
         'messages': [to_wire(message) for message in messages],
-        'max_tokens': token_limit(params, supports_reasoning),
-        'temperature': params.temperature,
+        options.token_field: token_limit(params, options.supports_reasoning),
         'stream': True,
         'stream_options': {'include_usage': True},
     }
-    if supports_reasoning:
+    if options.supports_temperature:
+        body['temperature'] = params.temperature
+    if options.supports_reasoning:
         body['reasoning_effort'] = params.reasoning.value
     return body
+
+
+def auth_headers(api_key: SecretStr | None) -> dict[str, str]:
+    """키가 있으면 Authorization 머리. 없으면(서버 곁의 모델) 빈 것."""
+    if api_key is None or not api_key.get_secret_value():
+        return {}
+    return {'Authorization': f'Bearer {api_key.get_secret_value()}'}
 
 
 async def lines_of(response: httpx.Response) -> AsyncIterator[str]:
@@ -97,7 +134,13 @@ async def lines_of(response: httpx.Response) -> AsyncIterator[str]:
 
 
 async def stream_chat(
-    client: httpx.AsyncClient, url: str, body: dict[str, Any], timeout: float, model: str, on_text: TextSink
+    client: httpx.AsyncClient,
+    url: str,
+    body: dict[str, Any],
+    headers: dict[str, str],
+    timeout: float,
+    model: str,
+    on_text: TextSink,
 ) -> Completion:
     """
     요청을 보내고 흘러오는 답을 끝까지 읽는다.
@@ -106,7 +149,7 @@ async def stream_chat(
     받는 도중의 실패는 lines_of 가 바꾼다.
     """
     try:
-        async with client.stream('POST', url, json=body, timeout=timeout) as response:
+        async with client.stream('POST', url, json=body, headers=headers, timeout=timeout) as response:
             if response.status_code != httpx.codes.OK:
                 raise ProviderError(f'status_{response.status_code}')
             return await read_stream(lines_of(response), model, on_text)
@@ -122,16 +165,23 @@ class OpenAICompatProvider:
     OpenAI 와 같은 모양의 주소를 부르는 provider.
 
     client 는 앱이 들고 있는 httpx 클라이언트다. 닫는 것은 앱이 한다.
-    base_url 은 /chat/completions 앞까지다(Ollama 면 http://127.0.0.1:11434/v1).
+    base_url 은 /chat/completions 앞까지다(Ollama 면 http://127.0.0.1:11434/v1, OpenAI 면 https://api.openai.com/v1).
+    kind 는 호출의 기록에 적는 창구의 이름이다. 서버 곁의 모델이면 openai_compat, OpenAI 면 openai 다.
+    api_key 는 repr 에 나오지 않는다(SecretStr).
     """
-
-    kind: ClassVar[str] = 'openai_compat'
 
     client: httpx.AsyncClient
     base_url: str
     model: str
     timeout: float = 120.0
-    supports_reasoning: bool = True
+    options: WireOptions = LOCAL_OPTIONS
+    api_key: SecretStr | None = None
+    kind: str = 'openai_compat'
+
+    @property
+    def supports_reasoning(self) -> bool:
+        """추론 수준을 아는 모델인가."""
+        return self.options.supports_reasoning
 
     async def complete(
         self, messages: list[ChatMessage], params: GenerationParams, on_text: TextSink = ignore_text
@@ -141,9 +191,11 @@ class OpenAICompatProvider:
 
         호출 전체가 timeout 초를 넘으면 끊는다. 조각이 계속 와도 끊는다.
         """
-        body = build_body(self.model, messages, params, self.supports_reasoning)
+        body = build_body(self.model, messages, params, self.options)
+        headers = auth_headers(self.api_key)
+        url = chat_url(self.base_url)
         try:
             async with asyncio.timeout(self.timeout):
-                return await stream_chat(self.client, chat_url(self.base_url), body, self.timeout, self.model, on_text)
+                return await stream_chat(self.client, url, body, headers, self.timeout, self.model, on_text)
         except TimeoutError as exc:
             raise ProviderError('timeout') from exc

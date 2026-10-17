@@ -16,7 +16,7 @@ SDK 가 바뀌거나 회사를 옮겨도, 이 파일 밖의 코드는 바뀌지 
 import enum
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import ClassVar, Protocol
+from typing import Protocol
 
 
 class Role(enum.StrEnum):
@@ -104,11 +104,12 @@ class LLMProvider(Protocol):
     """
     모델을 부르는 것의 모양. 이 메서드와 두 이름이 있으면 provider 다.
 
-    kind 는 provider 의 종류(openai_compat, fake), model 은 부르는 모델의 이름이다. 호출을 기록할 때 쓴다.
+    kind 는 provider 의 종류(openai_compat, openai, fake), model 은 부르는 모델의 이름이다. 호출을 기록할 때 쓴다.
+    kind 는 클래스에 박아 두어도 되고(가짜), 만들 때 정해도 된다(같은 코드로 서버 곁의 모델과 OpenAI 를 부른다).
     실패하면 답이 없어서 모델의 이름을 답에서 읽을 수 없다. 그래서 provider 가 들고 있게 한다.
     """
 
-    kind: ClassVar[str]
+    kind: str
     model: str
 
     async def complete(

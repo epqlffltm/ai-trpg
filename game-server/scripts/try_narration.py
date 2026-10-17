@@ -43,7 +43,7 @@ from pathlib import Path
 
 import httpx
 
-from app.ai.openai_compat import OpenAICompatProvider
+from app.ai.openai_compat import OpenAICompatProvider, WireOptions
 from app.ai.openai_embedder import OpenAICompatEmbedder
 from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
 from app.assets.models import LoreKind, NarrationStyle
@@ -195,7 +195,7 @@ def make_provider(client: httpx.AsyncClient, arguments: argparse.Namespace, mode
         base_url=arguments.base_url,
         model=model,
         timeout=arguments.timeout,
-        supports_reasoning=not arguments.no_reasoning_field,
+        options=WireOptions(supports_reasoning=not arguments.no_reasoning_field),
     )
 
 
