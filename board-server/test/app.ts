@@ -13,8 +13,12 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, TestingModuleBuilder } from '@nestjs/testing';
 import { AppModule } from '../src/app.module.js';
 import { setupApp } from '../src/app.setup.js';
-import { JWKS_LOADER } from '../src/auth/auth.module.js';
+import { JWKS_LOADER, REVOCATIONS_LOADER } from '../src/auth/auth.module.js';
 import { JwksFetchError, LoadKeys } from '../src/auth/jwks.js';
+import {
+  LoadRevocations,
+  NO_REVOCATIONS,
+} from '../src/auth/session-revocations.js';
 import { Environment } from '../src/config/environment.js';
 import {
   WRITE_LIMITS,
@@ -36,6 +40,18 @@ const noAuthServer: LoadKeys = () =>
 /** 키를 가져오는 함수를 바꿔 꽂는다. createTestApp 에 넘긴다. */
 export function useKeys(load: LoadKeys): Customize {
   return (builder) => builder.overrideProvider(JWKS_LOADER).useValue(load);
+}
+
+/**
+ * 테스트용 앱이 기본으로 쓰는, 끊긴 세션의 목록을 가져오는 함수. 늘 빈 목록이다. 테스트는 인증 서버를 부르지 않는다.
+ * 받지 못하는 함수로 두면 앱이 뜰 때마다 경고 줄이 찍힌다. 세션을 끊어 보는 테스트는 바꿔 꽂는다(useRevocations)
+ */
+const noRevocations: LoadRevocations = () => Promise.resolve(NO_REVOCATIONS);
+
+/** 끊긴 세션의 목록을 가져오는 함수를 바꿔 꽂는다. createTestApp 에 넘긴다. */
+export function useRevocations(load: LoadRevocations): Customize {
+  return (builder) =>
+    builder.overrideProvider(REVOCATIONS_LOADER).useValue(load);
 }
 
 /**
@@ -75,6 +91,7 @@ export async function createTestApp(
 ): Promise<NestExpressApplication> {
   const builder = both(
     useKeys(noAuthServer),
+    useRevocations(noRevocations),
     useWriteLimits(NO_WRITE_LIMITS),
   )(Test.createTestingModule({ imports: [AppModule, ...probes] }));
   const module = await customize(builder).compile();
