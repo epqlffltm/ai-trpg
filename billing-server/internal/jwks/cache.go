@@ -11,21 +11,33 @@ import (
 	"time"
 
 	"golang.org/x/sync/singleflight"
+
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 )
 
 // 토큰을 검증할 때마다 인증 서버에 묻지 않는다. 한 번 가져온 키를 기억해 두고 쓴다.
-// 인증 서버가 죽어 있어도, 기억한 키가 있으면 이미 로그인한 사용자의 요청을 계속 처리한다.
-// 게임 서버(game-server/app/auth/jwks.py)와 같은 규칙이다. 두 서버가 인증 서버의 장애에 똑같이 굴어야 한다.
+// 인증 서버가 잠깐 죽어 있어도, 기억한 키가 있으면 이미 로그인한 사용자의 요청을 계속 처리한다.
+// 게임 서버(game-server/app/auth/jwks.py)와 같은 규칙과 값이다. 서버마다 다르면 인증 서버가 죽었을 때 어디는 막히고 어디는 통한다.
 //
-// 규칙은 넷이다.
-//  1. 기억한 지 CacheDuration 이 지나면 다시 가져온다.
+// 규칙은 다섯이다.
+//  1. 기억한 지 CacheDuration(5분)이 지나면 다시 가져온다.
 //  2. 기억에 없는 키 ID(kid)가 오면 다시 가져온다. 인증 서버가 키를 바꾼 경우다.
 //  3. 다시 가져오기는 RefetchInterval 에 한 번만 시도한다.
 //     가짜 kid 를 계속 보내 인증 서버에 요청이 몰리게 하는 것을 막고, 죽은 인증 서버를 요청마다 기다리지 않는다.
 //  4. 다시 가져오기에 실패하면 기억하던 키를 계속 쓴다.
+//  5. 다만 마지막으로 가져온 지 MaxStale(30분)이 지나면 기억하던 키를 버린다(#274).
+//     그 뒤로는 다시 가져올 때까지 토큰을 받아들이지 않는다(ErrUnavailable, 주소는 503).
+//
+// 5 가 없으면 인증 서버에 닿지 못하는 동안 옛 키를 끝없이 믿는다. 서명 키가 새서 인증 서버가 그 키를 빼도(긴급 폐기),
+// 이 서버는 그 키로 만든 토큰을 계속 받는다. 인증 서버를 쓰러뜨리면 그 기간을 원하는 만큼 늘릴 수 있다.
+// 서명 키가 새면 만료 시각도 마음대로 정한 토큰을 만들 수 있어 access 토큰의 수명은 막아 주지 못한다.
+// "이 서버가 그 키를 얼마나 빨리 안 믿게 되나"만이 막는다. 인증 서버가 살아 있으면 5분, 죽어 있어도 30분이다.
+// 대신 인증 서버가 30분 넘게 죽어 있으면 이 서버의 로그인이 필요한 요청도 모두 막힌다.
 const (
-	// CacheDuration 은 가져온 키를 기억하는 시간이다.
-	CacheDuration = time.Hour
+	// CacheDuration 은 가져온 키를 기억하는 시간이다. 인증 서버가 뺀 키를 이만큼 더 믿을 수 있다(긴급 폐기에 걸리는 시간).
+	CacheDuration = 5 * time.Minute
+	// MaxStale 은 다시 가져오지 못해도 기억한 키를 쓰는 가장 긴 시간이다. 마지막으로 가져온 때부터 센다. 지나면 키를 버린다.
+	MaxStale = 30 * time.Minute
 	// RefetchInterval 은 다시 가져오기를 시도하는 최소 간격이다.
 	RefetchInterval = time.Minute
 )
@@ -72,7 +84,26 @@ func (c *Cache) Key(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	if c.needsRefetch(kid) {
 		c.refetchOnce(ctx)
 	}
+	c.forgetIfTooStale(ctx)
 	return c.find(kid)
+}
+
+// forgetIfTooStale 은 마지막으로 가져온 지 MaxStale 이 지났으면 기억한 키를 버린다. 다시 가져올 때까지 토큰을 받아들이지 않는다.
+// 로그인이 필요한 요청이 모두 막히는 일이라 사람이 봐야 한다. 버릴 때 error 로 한 번 남긴다(버린 뒤에는 버릴 키가 없다).
+func (c *Cache) forgetIfTooStale(ctx context.Context) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.keys) == 0 || c.now().Sub(c.fetchedAt) < MaxStale {
+		return
+	}
+	slog.ErrorContext(ctx, "공개키를 오래 다시 가져오지 못해 기억한 키를 버렸다. 인증 서버를 확인해야 한다",
+		slog.String(obs.FieldOperation, fetchOperation),
+		slog.String(obs.FieldErrorCode, fetchErrorCode),
+		slog.Int("key_count", len(c.keys)),
+		slog.Float64("max_stale_seconds", MaxStale.Seconds()),
+	)
+	c.keys = nil
 }
 
 // find 는 기억한 것에서 kid 를 찾는다.
