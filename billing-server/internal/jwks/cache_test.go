@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -214,6 +215,90 @@ func TestCacheKeepsOldKeysWhenRefetchFails(t *testing.T) {
 	}
 	if fetcher.count() != 2 {
 		t.Errorf("%d번 불렀다. 두 번이어야 한다", fetcher.count())
+	}
+}
+
+// deadAuthServer 는 처음 한 번 키를 받은 뒤 인증 서버가 죽은 상태를 만든다.
+func deadAuthServer(t *testing.T) (*jwks.Cache, *fakeFetcher, *fakeClock, func() string) {
+	t.Helper()
+	cache, fetcher, clock := newCache(t, keySet(t, "key-1"))
+	mustFind(t, cache, "key-1")
+	fetcher.set(nil, jwks.ErrFetch)
+	return cache, fetcher, clock, captureLog(t)
+}
+
+func TestCacheKeepsOldKeysUntilMaxStale(t *testing.T) {
+	cache, _, clock, logged := deadAuthServer(t)
+
+	// 인증 서버가 잠깐 죽어 있어도 이미 로그인한 사용자는 쫓겨나지 않는다
+	clock.Advance(jwks.MaxStale - time.Second)
+	mustFind(t, cache, "key-1")
+
+	if strings.Contains(logged(), "auth.jwks_unavailable") && strings.Contains(logged(), "버렸다") {
+		t.Errorf("상한 전인데 키를 버렸다고 남겼다: %s", logged())
+	}
+}
+
+func TestCacheForgetsKeysAtMaxStale(t *testing.T) {
+	cache, _, clock, logged := deadAuthServer(t)
+
+	// 서명 키가 새서 인증 서버가 뺐더라도, 인증 서버에 닿지 못하는 동안 그 키를 끝없이 믿지 않는다
+	clock.Advance(jwks.MaxStale)
+	if _, err := cache.Key(context.Background(), "key-1"); !errors.Is(err, jwks.ErrUnavailable) {
+		t.Fatalf("오류 = %v. ErrUnavailable 이어야 한다(주소는 503)", err)
+	}
+	if _, err := cache.Key(context.Background(), "key-1"); !errors.Is(err, jwks.ErrUnavailable) {
+		t.Fatalf("버린 뒤의 오류 = %v", err)
+	}
+
+	// 사람이 봐야 하는 일이라 error 로 남기되, 요청마다가 아니라 버릴 때 한 번이다
+	if got := strings.Count(logged(), "기억한 키를 버렸다"); got != 1 {
+		t.Errorf("버렸다는 줄이 %d번이다. 한 번이어야 한다: %s", got, logged())
+	}
+	for _, want := range []string{"ERROR 공개키를", "error_code=auth.jwks_unavailable"} {
+		if !strings.Contains(logged(), want) {
+			t.Errorf("로그에 %s 가 없다: %s", want, logged())
+		}
+	}
+}
+
+func TestCacheTakesKeysAgainOnceTheAuthServerIsBack(t *testing.T) {
+	cache, fetcher, clock, _ := deadAuthServer(t)
+	clock.Advance(jwks.MaxStale)
+	_, _ = cache.Key(context.Background(), "key-1")
+
+	clock.Advance(jwks.RefetchInterval)
+	fetcher.set(keySet(t, "key-1"), nil)
+
+	mustFind(t, cache, "key-1")
+}
+
+func TestMaxStaleCountsFromTheLastSuccessfulFetch(t *testing.T) {
+	cache, fetcher, clock := newCache(t, keySet(t, "key-1"))
+	mustFind(t, cache, "key-1")
+
+	// 20분 뒤에는 인증 서버가 살아 있어 다시 받았다
+	clock.Advance(20 * time.Minute)
+	mustFind(t, cache, "key-1")
+	fetcher.set(nil, jwks.ErrFetch)
+
+	// 처음 받은 때부터는 40분이지만, 마지막으로 받은 때부터는 20분이다
+	clock.Advance(20 * time.Minute)
+	mustFind(t, cache, "key-1")
+
+	clock.Advance(10 * time.Minute)
+	if _, err := cache.Key(context.Background(), "key-1"); !errors.Is(err, jwks.ErrUnavailable) {
+		t.Errorf("마지막으로 받은 지 30분인데 오류 = %v", err)
+	}
+}
+
+func TestTheCacheLimitsMatchTheGameServer(t *testing.T) {
+	// 게임 서버(game-server/app/auth/jwks.py)와 같은 값이다. 인증 서버의 키 교체 절차도 이 값에 기댄다
+	if jwks.CacheDuration != 5*time.Minute || jwks.MaxStale != 30*time.Minute {
+		t.Errorf("기억 %v, 상한 %v. 게임 서버와 같은 5분, 30분이어야 한다", jwks.CacheDuration, jwks.MaxStale)
+	}
+	if !(jwks.RefetchInterval < jwks.CacheDuration && jwks.CacheDuration < jwks.MaxStale) {
+		t.Errorf("다시 가져오기 %v < 기억 %v < 상한 %v 이어야 한다", jwks.RefetchInterval, jwks.CacheDuration, jwks.MaxStale)
 	}
 }
 
