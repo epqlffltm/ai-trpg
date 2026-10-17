@@ -10,6 +10,8 @@
     uv run python -m scripts.models add claude-opus-5-5 --provider anthropic --api-model-id <공식 문서의 이름> \\
         --name "Claude Opus 5.5" --vendor anthropic --grade premium --reasoning --no-temperature \\
         --reasoning-style always
+    uv run python -m scripts.models add gemini-4-argon --provider gemini --api-model-id gemini-4-argon \\
+        --name "Gemini 4 Argon" --vendor google --grade premium --reasoning --no-temperature --reasoning-style level_low
     uv run python -m scripts.models set-cost gpt-6-luna --input 0.1 --output 0.5 --from 2026-10-17
     uv run python -m scripts.models update gpt-6-luna --no-temperature
     uv run python -m scripts.models switch-snapshot gpt-6-luna --api-model-id <새 날짜판> --note "공급자 공지"
@@ -270,7 +272,7 @@ def add_capability_options(parser: argparse.ArgumentParser, defaults: bool) -> N
     parser.add_argument(
         '--reasoning-style',
         choices=list(ReasoningStyle),
-        help='생각을 켜고 끄는 방식. anthropic 창구만 적는다(always: 끌 수 없는 모델)',
+        help='생각을 켜고 끄는 방식. anthropic, gemini 창구만 적는다. 창구마다 받는 값이 다르다',
     )
 
 

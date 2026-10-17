@@ -24,10 +24,10 @@ from app.ai.anthropic import (
     AnthropicProvider,
     build_body,
     messages_url,
-    thinking_budget,
 )
 from app.ai.openai_compat import THINKING_TOKENS
 from app.ai.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
+from app.ai.thinking import thinking_budget
 from app.catalog.models import ReasoningStyle
 
 BASE_URL = 'https://api.anthropic.com'
