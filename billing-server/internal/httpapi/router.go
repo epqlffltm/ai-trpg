@@ -40,6 +40,8 @@ type Dependencies struct {
 	TossWebhook bool
 	// Holds 는 홀드를 걸고, 확정하고, 돌려주고, 연장한다. 게임 서버가 부른다.
 	Holds HoldService
+	// Prices 는 가격 목록을 읽는다. 게임 서버가 부른다.
+	Prices PriceLister
 	// GameServerSecret 은 게임 서버가 보낸 요청의 서명을 확인하는 비밀이다.
 	GameServerSecret string
 	// AuthServerSecret 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다.
@@ -124,6 +126,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	game.POST("/holds/capture", captureHold(deps.Holds))
 	game.POST("/holds/release", releaseHold(deps.Holds))
 	game.POST("/holds/extend", extendHold(deps.Holds))
+	game.GET("/prices", listPrices(deps.Prices))
 
 	authServer := service.Group("", requireService(AuthServer, deps.AuthServerSecret, deps.Now))
 	authServer.POST("/grants/welcome", grantWelcome(deps.Welcome, deps.WelcomeCredits))
