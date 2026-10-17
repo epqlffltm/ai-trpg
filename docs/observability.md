@@ -157,7 +157,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | 서버 | 작업 | `operation` |
 | --- | --- | --- |
 | game-server | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
-| game-server | 마감이 지난 라운드 닫기와 크레딧을 기다리는 시간이 지난 라운드 마무리(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `closed`, `credit_waits`) | `round.close_overdue` |
+| game-server | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리, 서술이 사라진 라운드 다시 맡기기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `closed`, `credit_waits`, `recovered`, `gave_up`) | `round.close_overdue` |
 | game-server | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `charge.settle` |
 | game-server | 로어북 항목의 벡터 만들기 | `lore.index` |
 | game-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
@@ -288,6 +288,9 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | 서버를 끄느라 취소됐다 | `cancelled` | `warning` |
 | 예외로 끝났다 | `server_error` | `error`. `error_code` 는 `job.failed` |
 
+게임 서버는 작업의 종류마다 동시에 도는 수가 정해져 있어 차례를 기다릴 수 있다(#275). 끝난 줄에 기다린 시간 `queue_ms`(정수, 천분의 1초)를 `duration_ms` 와 따로 싣는다.
+차례를 기다리다 취소되면 `cancelled` 줄에 `queue_ms` 만 있다.
+
 ### 수준
 
 | 수준 | 언제 | 예 |
@@ -310,7 +313,8 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `http.request` | 전부 | HTTP 요청 하나를 처리했다. 어느 주소인지는 `method` 와 `route` 에 있다 |
 | `job.run` | game | 이름을 따로 주지 않은 작업 |
 | `round.narrate` | game | 라운드의 AI 서술 |
-| `round.close_overdue` | game | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리(#181) |
+| `round.close_overdue` | game | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리(#181), 서술이 사라진 라운드 다시 맡기기(#275) |
+| `round.recover` | game | 서술이 사라진 라운드 하나를 다시 맡기거나 그만두기(서버의 시계의 한 바퀴 안. `table_id`, `round`, `auto_retries`) |
 | `lore.index` | game | 로어북 색인 |
 | `memory.index` | game | 기억 색인 |
 | `charge.settle` | game | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴) |
@@ -342,6 +346,8 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `http.unhandled_exception` | 요청을 처리하다 아무도 잡지 않은 예외(패닉)가 났다 |
 | `internal.error` | 그 밖의 서버 쪽 오류. 핸들러가 스스로 5xx 로 답한 것, 코드를 따로 주지 않고 예외를 남긴 것 |
 | `job.failed` | 작업이 예외로 끝났다 |
+| `job.refused` | 게임 서버가 작업을 맡지 않았다. 그 종류(`operation`)의 돌거나 기다리는 작업이 상한(`capacity`)에 닿았다. 서술은 서버의 시계가, 색인은 다음 검색이 다시 맡긴다. `warning` |
+| `round.stalled` | 게임 서버가 서술이 되풀이해 사라진 라운드를 더 다시 맡기지 않고 실패(`stalled`)로 적었다. 같은 서술이 할 때마다 서버를 죽이고 있을 수 있다. `table_id`, `round`, `auto_retries`. 방장이 다시 맡길 수 있다. `warning` |
 | `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다 |
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했거나, 결과를 알 수 없는 답이 왔다(토스페이먼츠의 5xx, 401, "처리 중" 같은 것). 주문은 `confirming` 에 남고 다시 부르거나 대사가 조회해 끝낸다. 청약철회(`order.refund`)면 `refunding` 에 남고 다시 부르거나 대사가 같은 취소를 다시 보낸다. 가상계좌(입금 대기)를 취소하지 못했을 때도 이 코드다(`order.confirm`, `cancel_status`). `warning` |
 | `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 서술 뒤의 확정을 정해 둔 시간 안에 끝내지 못해 정리 작업에 넘긴 것도 이 코드다(`warning`). 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
@@ -481,7 +487,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 | auth-server | 메일(`send_outgoing_mail`), 환영 크레딧(`send_welcome_credits`) | 있다(`observability/heartbeat.py`) |
 | billing-server | 정리 작업(`cmd/sweeper`) | 있다(`internal/jobs/heartbeat.go`) |
 | auth-server, billing-server | 주기 명령(supercronic) | 없다. 하루 한 번이라 심장박동으로 볼 것이 없다. 실패는 `job.failed` 로그가 알린다 |
-| game-server | 서버 안의 작업(라운드 시계, 청구 정리) | 없다. 서버 프로세스 안에서 돈다. 멈춘 작업을 찾는 것은 #275 다 |
+| game-server | 서버 안의 작업(라운드 시계, 청구 정리) | 없다. 서버 프로세스 안에서 돈다. 서술이 사라진 라운드는 시계가 찾아 다시 맡긴다(#275, `round.recover`) |
 
 **HTTP 주소를 열지 않고 파일을 쓴다.** 워커마다 작은 HTTP 서버를 띄우면 서버와 같은 모양이 되지만, 워커마다 포트와 코드가 는다.
 파일은 Python 과 Go 가 같은 몇 줄로 쓰고, healthcheck 는 셸의 `stat` 과 `date` 로 본다. 파일은 compose 만 본다.

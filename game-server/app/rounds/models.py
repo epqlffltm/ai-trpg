@@ -31,6 +31,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -85,6 +86,7 @@ class Round(Base):
     __tablename__ = 'table_rounds'
     __table_args__ = (
         CheckConstraint('number >= 1', name='number_positive'),
+        CheckConstraint('auto_retries >= 0', name='auto_retries_not_negative'),
         # 한 테이블에 같은 번호의 라운드가 둘일 수 없다
         UniqueConstraint('table_id', 'number'),
         # 한 테이블에 닫히지 않은 라운드(열림, 닫는 중)는 하나뿐이다. 조건이 붙은 유일 색인이다.
@@ -134,6 +136,10 @@ class Round(Base):
     # 서술이 끝내 실패한 시각. 다시 시도하고 넘어가도 안 됐다. 비어 있으면 실패하지 않았거나 아직 도는 중이다.
     # 실패한 것을 아니까 방장은 기다리지 않고 바로 다시 맡길 수 있다. 다시 맡기면 비운다(app/rounds/service.py)
     narration_failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 서술을 맡은 작업이 사라져 서버가 스스로 다시 맡긴 횟수(app/rounds/recovery.py, #275).
+    # 정해 둔 횟수를 넘으면 더 맡기지 않고 실패(stalled)로 적어 방장에게 넘긴다. 방장이 다시 맡기면 0 으로 돌린다.
+    # 이 칸이 생기기 전의 라운드는 0 이다
+    auto_retries: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
 
     # 이 라운드가 닫힐 때 굴린 죽음의 굴림들(app/engine/death.py). 굴린 순서다. 굴린 것이 없으면 빈 목록이다.
     # 하나하나가 {user_id, character_name, roll, target, success, successes, failures, fate} 다.
