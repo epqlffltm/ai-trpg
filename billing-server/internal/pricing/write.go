@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
@@ -47,9 +48,15 @@ func (s *Service) append(ctx context.Context, change Change, credits *credit.Amo
 	if err != nil {
 		return Version{}, err
 	}
-	row, err := pricingdb.New(s.pool).InsertPriceVersion(ctx, pricingdb.InsertPriceVersionParams{
+	queries := pricingdb.New(s.pool)
+	tier, err := resolveTier(ctx, queries, change.Code, effective, change.Tier)
+	if err != nil {
+		return Version{}, err
+	}
+	row, err := queries.InsertPriceVersion(ctx, pricingdb.InsertPriceVersionParams{
 		Code:        change.Code,
 		Amount:      credits,
+		Tier:        string(tier),
 		EffectiveAt: effective,
 		Reason:      change.Reason,
 		ChangedBy:   change.ChangedBy,
@@ -81,6 +88,25 @@ func checkChange(change Change, now time.Time) (time.Time, error) {
 		return time.Time{}, ErrPastEffective
 	}
 	return effective, nil
+}
+
+// resolveTier 는 새 줄에 적을 등급을 정한다. asked 를 적었으면 그것이고, 비웠으면 at 시각에 그 이름의 등급이다.
+// at 시각에 적용된 줄이 없으면(처음 파는 이름) 비울 수 없다(ErrMissingTier).
+func resolveTier(ctx context.Context, queries *pricingdb.Queries, code string, at time.Time, asked Tier) (Tier, error) {
+	if asked != "" {
+		if !asked.Valid() {
+			return "", ErrInvalidTier
+		}
+		return asked, nil
+	}
+	row, err := queries.CurrentPrice(ctx, pricingdb.CurrentPriceParams{Code: code, Now: at})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrMissingTier
+	}
+	if err != nil {
+		return "", err
+	}
+	return Tier(row.Tier), nil
 }
 
 // validNote 는 이유나 바꾼 사람이 비지 않았고 너무 길지 않은지 본다.

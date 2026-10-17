@@ -75,9 +75,9 @@ func TestLoadFillsDefaults(t *testing.T) {
 		AuthRevocationsURL: "http://127.0.0.1:8000/api/v1/auth/session-revocations",
 		JWTIssuer:          "ai-trpg-auth",
 		JWTAudience:        "ai-trpg-billing",
-		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 1주일 뒤에 사라진다
+		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 30일 뒤에 사라진다
 		SpendFreeFirst: true,
-		FreeCreditTTL:  7 * 24 * time.Hour,
+		FreeCreditTTL:  30 * 24 * time.Hour,
 		// 적지 않으면 홀드와 주문은 하루 뒤에 만료된다
 		HoldTTL:  24 * time.Hour,
 		OrderTTL: 24 * time.Hour,
@@ -289,7 +289,7 @@ func TestLoadJobsNeedsNoServerSettings(t *testing.T) {
 		Database: config.Database{URL: databaseURL, Schema: "billing_test"},
 		Logging:  config.Logging{AppEnvironment: "staging", AppVersion: "dev", LogLevel: "debug"},
 		Rules: config.Rules{
-			SpendFreeFirst: false, FreeCreditTTL: 7 * 24 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 24 * time.Hour,
+			SpendFreeFirst: false, FreeCreditTTL: 30 * 24 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 24 * time.Hour,
 		},
 		Payment: config.Payment{Provider: "fake"},
 	}

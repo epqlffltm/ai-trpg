@@ -68,7 +68,7 @@ func ctx(t *testing.T) context.Context {
 
 // change 는 이 테스트의 이름으로 바꿀 내용을 만든다.
 func (f fixture) change(credits credit.Amount) pricing.Change {
-	return pricing.Change{Code: f.code, Credits: credits, Reason: "테스트", ChangedBy: "test"}
+	return pricing.Change{Code: f.code, Credits: credits, Tier: pricing.TierStandard, Reason: "테스트", ChangedBy: "test"}
 }
 
 // set 은 값을 정한다. 실패하면 테스트를 멈춘다.
@@ -107,7 +107,7 @@ func TestSetMakesANewPriceAvailableNow(t *testing.T) {
 		t.Fatalf("줄 = %+v", version)
 	}
 	price, err := f.priceNow()
-	if err != nil || price != (pricing.Price{Code: f.code, Credits: 120, Since: startedAt}) {
+	if err != nil || price != (pricing.Price{Code: f.code, Credits: 120, Tier: pricing.TierStandard, Since: startedAt}) {
 		t.Errorf("지금의 값 = %+v, %v", price, err)
 	}
 }
@@ -227,7 +227,7 @@ func TestCurrentListsEachNameOnceWithItsLiveLine(t *testing.T) {
 	f := setUp(t)
 	stoppedCode := "test." + uuid.NewString()
 	f.set(f.change(50))
-	f.set(pricing.Change{Code: stoppedCode, Credits: 30, Reason: "r", ChangedBy: "b"})
+	f.set(pricing.Change{Code: stoppedCode, Credits: 30, Tier: pricing.TierStandard, Reason: "r", ChangedBy: "b"})
 	f.clock.Advance(time.Minute)
 	f.set(f.change(90))
 	if _, err := f.service.Stop(ctx(t), pricing.Change{Code: stoppedCode, Reason: "r", ChangedBy: "b"}); err != nil {
@@ -271,17 +271,23 @@ func TestTheDatabaseKeepsThePriceListAppendOnly(t *testing.T) {
 			t.Errorf("%s: 오류 = %v. 트리거(23001)가 막아야 한다", name, err)
 		}
 	}
-	insert := `INSERT INTO price_versions (code, amount, effective_at, reason, changed_by, created_at) VALUES ($1, $2, $3, $4, $5, $3)`
+	insert := `INSERT INTO price_versions (code, amount, effective_at, reason, changed_by, tier, created_at) VALUES ($1, $2, $3, $4, $5, $6, $3)`
 	for name, args := range map[string][]any{
-		"값이 0":        {f.code, 0, startedAt.Add(time.Hour), "r", "b"},
-		"값이 너무 크다":    {f.code, 1_000_001, startedAt.Add(time.Hour), "r", "b"},
-		"이름의 모양":      {"Narration", 5, startedAt.Add(time.Hour), "r", "b"},
-		"이유가 빈 글자":    {f.code, 5, startedAt.Add(time.Hour), "", "b"},
-		"바꾼 사람이 빈 글자": {f.code, 5, startedAt.Add(time.Hour), "r", ""},
+		"값이 0":        {f.code, 0, startedAt.Add(time.Hour), "r", "b", "standard"},
+		"값이 너무 크다":    {f.code, 1_000_001, startedAt.Add(time.Hour), "r", "b", "standard"},
+		"이름의 모양":      {"Narration", 5, startedAt.Add(time.Hour), "r", "b", "standard"},
+		"이유가 빈 글자":    {f.code, 5, startedAt.Add(time.Hour), "", "b", "standard"},
+		"바꾼 사람이 빈 글자": {f.code, 5, startedAt.Add(time.Hour), "r", "", "standard"},
+		"모르는 등급":      {f.code, 5, startedAt.Add(time.Hour), "r", "b", "basic"},
 	} {
 		_, err := f.pool.Exec(ctx(t), insert, args...)
 		if err == nil || !strings.Contains(err.Error(), "23514") {
 			t.Errorf("%s: 오류 = %v. CHECK(23514)로 거절해야 한다", name, err)
 		}
+	}
+	// 등급에는 기본값이 없다. 빠뜨리면 DB 가 막는다(NOT NULL, 23502)
+	_, err := f.pool.Exec(ctx(t), `INSERT INTO price_versions (code, amount, effective_at, reason, changed_by, created_at) VALUES ($1, 5, $2, 'r', 'b', $2)`, f.code, startedAt.Add(2*time.Hour))
+	if err == nil || !strings.Contains(err.Error(), "23502") {
+		t.Errorf("등급을 빠뜨린 줄: 오류 = %v. NOT NULL(23502)로 거절해야 한다", err)
 	}
 }

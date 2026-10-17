@@ -4,13 +4,15 @@
 //
 // 파일은 CSV 다. 첫 줄은 머리줄이고, # 로 시작하는 줄은 설명으로 보고 넘긴다.
 //
-//	code,credits,effective_at
+//	code,credits,effective_at,tier
 //	# 새 모델
-//	narration.claude-sonnet-5-5.i0.o0,120,
-//	narration.gemini-4-argon.i0.o0,240,2026-12-01T00:00:00+09:00
-//	narration.old-model.i0.o0,stop,
+//	narration.claude-sonnet-5-5.i0.o0,120,,standard
+//	narration.gemini-4-argon.i0.o0,240,2026-12-01T00:00:00+09:00,premium
+//	narration.old-model.i0.o0,stop,,
 //
 // credits 에 stop 을 적으면 판매를 멈추는 줄이다. effective_at 을 비우면 지금부터다.
+// tier 는 standard 나 premium 이다. 비우면 그때의 등급 그대로이고, 처음 파는 이름이면 비울 수 없다.
+// tier 칸이 없는 옛 모양(code,credits,effective_at)도 받는다. 그때는 모든 줄의 tier 를 비운 것과 같다.
 package main
 
 import (
@@ -29,7 +31,10 @@ import (
 )
 
 // importHeader 는 파일의 첫 줄이다. 칸의 차례를 사람이 보고 알게 한다.
-var importHeader = []string{"code", "credits", "effective_at"}
+var importHeader = []string{"code", "credits", "effective_at", "tier"}
+
+// oldImportHeader 는 tier 칸이 생기기 전(#338)의 첫 줄이다. 이미 만들어 둔 파일을 그대로 쓸 수 있게 받는다.
+var oldImportHeader = importHeader[:3]
 
 // stopWord 는 credits 칸에 적으면 판매를 멈추는 줄이 되는 낱말이다.
 const stopWord = "stop"
@@ -52,7 +57,8 @@ func readEntries(path string) ([]pricing.Entry, error) {
 func parseEntries(source io.Reader) ([]pricing.Entry, error) {
 	reader := csv.NewReader(source)
 	reader.Comment = '#'
-	reader.FieldsPerRecord = len(importHeader)
+	// 0 이면 첫 줄(머리줄)의 칸 수를 모든 줄이 따라야 한다. 머리줄이 옛 모양인지 새 모양인지는 아래에서 본다
+	reader.FieldsPerRecord = 0
 	reader.TrimLeadingSpace = true
 	records, err := reader.ReadAll()
 	if err != nil {
@@ -61,8 +67,8 @@ func parseEntries(source io.Reader) ([]pricing.Entry, error) {
 	if len(records) > 0 {
 		records[0][0] = strings.TrimPrefix(records[0][0], utf8BOM)
 	}
-	if len(records) == 0 || strings.Join(records[0], ",") != strings.Join(importHeader, ",") {
-		return nil, errors.New("첫 줄은 code,credits,effective_at 이어야 합니다")
+	if len(records) == 0 || !knownHeader(records[0]) {
+		return nil, errors.New("첫 줄은 code,credits,effective_at,tier 이어야 합니다")
 	}
 	entries := make([]pricing.Entry, 0, len(records)-1)
 	for i, record := range records[1:] {
@@ -75,7 +81,13 @@ func parseEntries(source io.Reader) ([]pricing.Entry, error) {
 	return entries, nil
 }
 
-// parseEntry 는 CSV 의 줄 하나(이름, 값, 적용 시각)를 넣을 줄로 바꾼다.
+// knownHeader 는 머리줄이 새 모양이나 옛 모양(tier 칸이 없음)인지 본다.
+func knownHeader(header []string) bool {
+	joined := strings.Join(header, ",")
+	return joined == strings.Join(importHeader, ",") || joined == strings.Join(oldImportHeader, ",")
+}
+
+// parseEntry 는 CSV 의 줄 하나(이름, 값, 적용 시각, 등급)를 넣을 줄로 바꾼다.
 func parseEntry(record []string) (pricing.Entry, error) {
 	entry := pricing.Entry{Code: strings.TrimSpace(record[0])}
 	value := strings.TrimSpace(record[1])
@@ -94,6 +106,13 @@ func parseEntry(record []string) (pricing.Entry, error) {
 			return pricing.Entry{}, errors.New("effective_at 은 2026-12-01T00:00:00+09:00 모양이어야 합니다")
 		}
 		entry.EffectiveAt = effective
+	}
+	if len(record) > 3 {
+		tier := pricing.Tier(strings.TrimSpace(record[3]))
+		if tier != "" && !tier.Valid() {
+			return pricing.Entry{}, errors.New("tier 는 standard, premium 이거나 비어 있어야 합니다")
+		}
+		entry.Tier = tier
 	}
 	return entry, nil
 }
@@ -140,20 +159,20 @@ func printPlan(out io.Writer, planned []pricing.Planned) {
 		counts[line.Effect]++
 		fmt.Fprintln(out, formatPlanned(line))
 	}
-	fmt.Fprintf(out, "새로 %d, 올림 %d, 내림 %d, 멈춤 %d, 같음(넣지 않음) %d\n",
+	fmt.Fprintf(out, "새로 %d, 올림 %d, 내림 %d, 등급 %d, 멈춤 %d, 같음(넣지 않음) %d\n",
 		counts[pricing.EffectNew], counts[pricing.EffectRaise], counts[pricing.EffectLower],
-		counts[pricing.EffectStop], counts[pricing.EffectSame])
+		counts[pricing.EffectRetier], counts[pricing.EffectStop], counts[pricing.EffectSame])
 }
 
-// formatPlanned 는 계산한 줄 하나를 "이름  바뀜  전 → 후  언제" 모양의 글로 바꾼다.
+// formatPlanned 는 계산한 줄 하나를 "이름  바뀜  전 → 후  언제" 모양의 글로 바꾼다. 값 뒤에 등급을 붙인다(120 standard).
 func formatPlanned(line pricing.Planned) string {
 	before := "-"
 	if line.Before != nil {
-		before = line.Before.Credits.String()
+		before = line.Before.Credits.String() + " " + string(line.Before.Tier)
 	}
 	after := "판매 중지"
 	if !line.Entry.Stop {
-		after = line.Entry.Credits.String()
+		after = line.Entry.Credits.String() + " " + string(line.Tier)
 	}
 	return fmt.Sprintf("%s  %s  %s → %s  %s 부터",
 		line.Entry.Code, effectLabel(line.Effect), before, after, line.EffectiveAt.Local().Format(timeLayout))
@@ -168,6 +187,8 @@ func effectLabel(effect pricing.Effect) string {
 		return "올림"
 	case pricing.EffectLower:
 		return "내림"
+	case pricing.EffectRetier:
+		return "등급"
 	case pricing.EffectStop:
 		return "멈춤"
 	default:

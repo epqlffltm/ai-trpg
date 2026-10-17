@@ -35,7 +35,7 @@ func (f fixture) takeForHold(service *wallet.Service, holdID uuid.UUID, amount c
 		service = f.service
 	}
 	return pgx.BeginFunc(ctx(f.t), f.pool, func(tx pgx.Tx) error {
-		return service.TakeForHold(ctx(f.t), tx, f.user, amount, holdID)
+		return service.TakeForHold(ctx(f.t), tx, f.user, amount, holdID, wallet.AnyCredits)
 	})
 }
 
