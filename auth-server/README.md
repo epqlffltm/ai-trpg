@@ -637,7 +637,17 @@ PostgreSQL에 둔 이유와 어긋난다. 테이블에 적는 방식은 PostgreS
 코드의 오답 제한)는 전부 PostgreSQL에 있다. 횟수 제한은 그 앞에서 속도를 늦추는 보조 장치다.
 Redis 장애가 로그인 장애가 되면 안 되므로, Redis에 닿지 못하면 경고 로그를 남기고 통과시킨다.
 연결과 응답을 0.2초까지만 기다린다. Redis가 죽어 있으면 즉시 실패하지만, 응답 없이 멈춰 있으면
-요청마다 그만큼 느려진다. 실패가 이어질 때 아예 묻지 않는 장치(차단기)는 두지 않았다.
+명령마다 그만큼 기다린다. 로그인 한 번이 Redis를 서너 번 부르므로 로그인마다 0.6~0.8초가 늘어난다.
+
+**그래서 Redis 앞에 차단기를 둔다(#26, `config/redis_client.py`).** 연달아 3번 실패하면 열어서 30초 동안
+Redis에 묻지 않고 바로 통과시킨다. 30초가 지나면 요청 하나로 시험해, 성공하면 닫고 실패하면 다시 30초 연다.
+결과(제한 없이 통과)는 차단기가 없을 때와 같고, 기다리는 시간과 요청마다 쌓이던 경고 로그만 없어진다.
+Redis가 살아난 뒤 제한이 다시 켜지기까지 최대 30초가 걸린다.
+Redis의 오류(`RedisError`)만 센다. 코드의 실수 같은 다른 예외는 Redis가 아프다는 신호가 아니다.
+차단기는 [pybreaker](https://pypi.org/project/pybreaker/)를 쓴다. 열림, 시험, 닫힘의 전환을 직접 짜면 틀리기 쉽다.
+상태는 프로세스마다 따로 있다. pybreaker 는 상태를 Redis에 두는 기능도 있지만, 죽은 Redis에 둘 수는 없다.
+pybreaker 의 `call()` 은 명령이 끝날 때까지 잠금을 쥐어, 한 프로세스의 Redis 명령이 한 줄로 선다.
+gunicorn 의 sync 워커는 프로세스에 스레드가 하나라 손해가 없다. 스레드 워커(gthread)로 바꾸면 다시 본다.
 
 **횟수 올리기와 유효 시간 걸기는 Lua 스크립트 하나다.** 따로 보내면 횟수를 올린 직후 서버가
 죽었을 때 유효 시간이 없는 키가 남아, 그 대상은 영영 막힌다. 구간은 첫 시도에서 시작해 고정된다.
@@ -810,6 +820,9 @@ uv run python manage.py send_security_digest
 
 **Redis 장애.** 로그에 `시도 횟수를 셀 수 없어 제한 없이 통과시켰다`가 찍히면 시도 횟수 제한과
 IP 차단이 꺼져 있는 상태다. 로그인은 계속 된다. 그동안에는 보안 이벤트도 남지 않는다.
+연달아 실패하면 `Redis 를 쓸 수 없어 차단기를 열었다`가 찍히고, 그 뒤로는 요청마다 남지 않는다.
+Redis가 계속 죽어 있으면 30초마다(시험이 실패할 때마다) 이 줄이 다시 찍힌다.
+`Redis 가 돌아와 차단기를 닫았다`가 찍히면 제한이 다시 켜진 것이다. 줄은 프로세스(워커)마다 따로 찍힌다.
 
 **아직 하지 않은 것.** 할 일은 [GitHub Issues](https://github.com/epqlffltm/ai-trpg/issues)에서 관리한다.
 이 문서에 목록을 따로 두지 않는다. 두 곳에 적으면 한쪽이 낡는다.
@@ -817,7 +830,7 @@ IP 차단이 꺼져 있는 상태다. 로그인은 계속 된다. 그동안에�
 | 묶음 | 이슈 |
 | --- | --- |
 | 배포 전에 해야 하는 것 | 없음 |
-| 규모가 커지면 할 것 | [#25](https://github.com/epqlffltm/ai-trpg/issues/25) 로그 수집과 대시보드, [#26](https://github.com/epqlffltm/ai-trpg/issues/26) Redis 차단기 |
+| 규모가 커지면 할 것 | [#25](https://github.com/epqlffltm/ai-trpg/issues/25) 로그 수집과 대시보드 |
 | 프론트에서 할 것 | [#30](https://github.com/epqlffltm/ai-trpg/issues/30) refresh를 한 번에 하나만, [#31](https://github.com/epqlffltm/ai-trpg/issues/31) 비밀번호 재설정 화면 |
 
 인증 서버의 것만 보려면 [`auth-server` 라벨](https://github.com/epqlffltm/ai-trpg/issues?q=is%3Aissue+is%3Aopen+label%3Aauth-server)로 거른다.
