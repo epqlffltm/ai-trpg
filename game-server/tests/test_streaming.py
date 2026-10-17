@@ -154,6 +154,27 @@ def test_the_last_pieces_carry_the_finish_and_the_counts():
     assert usage == Chunk(input_tokens=21, output_tokens=53)
 
 
+def test_the_cached_input_and_the_reasoning_counts_are_read():
+    usage = (
+        '{"choices":[],"usage":{"prompt_tokens":1200,"completion_tokens":300,'
+        '"prompt_tokens_details":{"cached_tokens":1024},"completion_tokens_details":{"reasoning_tokens":120}}}'
+    )
+
+    # OpenAI 가 알려 준다. 둘 다 전체 수에 들어 있다
+    assert parse_chunk(usage) == Chunk(
+        input_tokens=1200, output_tokens=300, cached_input_tokens=1024, reasoning_tokens=120
+    )
+
+
+def test_the_detailed_counts_reach_the_completion():
+    state = StreamState('m')
+    state.add(Chunk(input_tokens=1200, output_tokens=300, cached_input_tokens=1024, reasoning_tokens=120))
+
+    completion = state.to_completion()
+
+    assert (completion.cached_input_tokens, completion.reasoning_tokens) == (1024, 120)
+
+
 def test_the_thinking_field_is_not_read():
     data = '{"choices":[{"delta":{"reasoning":"' + SECRET + '"},"finish_reason":null}]}'
 

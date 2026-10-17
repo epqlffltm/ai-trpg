@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass
 
 from app.ai.calls import CallLog, CallRecord, CallScope, Outcome, input_digest
+from app.ai.costs import PriceTag, usage_of
 from app.ai.provider import Completion, GenerationParams, LLMProvider, ProviderError
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.prompt import PROMPT_VERSION, build_messages
@@ -93,12 +94,14 @@ class LLMNarrator:
 
     log 는 호출을 기록하는 곳이다. 비워 둘 수 없다. 기록 없이 모델을 부르는 길을 만들지 않는다.
     digest_key 는 보낸 메시지의 지문(HMAC)을 만드는 키다. 없으면 지문을 남기지 않는다(app/ai/calls.py).
+    price 는 모델 목록의 이름표와 그날의 단가다. 있으면 기록에 원가를 센다(app/ai/costs.py). 목록에 없는 모델이면 None.
     """
 
     provider: LLMProvider
     log: CallLog
     params: GenerationParams = NARRATION_PARAMS
     digest_key: bytes | None = None
+    price: PriceTag | None = None
 
     def describe(
         self,
@@ -133,6 +136,7 @@ class LLMNarrator:
             lore_entry_ids=tuple(note.entry_id for note in request.lore),
             memory_rounds=tuple(note.round_number for note in request.memories),
             input_digest=digest,
+            usage=usage_of(completion, self.price),
         )
 
     async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
