@@ -22,6 +22,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricereview"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/reconcile"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
@@ -42,6 +43,7 @@ type fixture struct {
 	pool     *pgxpool.Pool
 	elapsed  *time.Duration
 	services app.Services
+	reviews  *pricereview.Service
 	user     uuid.UUID
 }
 
@@ -51,11 +53,12 @@ func setUp(t *testing.T) fixture {
 	pool := testenv.Pool(t)
 	testenv.ExclusiveSweep(t, pool)
 	elapsed := new(time.Duration)
-	services, err := app.NewServices(pool, rules, order.Providers{order.ChannelWeb: payment.Fake{}}, func() time.Time { return testenv.SweepEra.Add(*elapsed) })
+	now := func() time.Time { return testenv.SweepEra.Add(*elapsed) }
+	services, err := app.NewServices(pool, rules, order.Providers{order.ChannelWeb: payment.Fake{}}, now)
 	if err != nil {
 		t.Fatalf("서비스를 만들지 못했다: %v", err)
 	}
-	return fixture{t: t, pool: pool, elapsed: elapsed, services: services, user: uuid.New()}
+	return fixture{t: t, pool: pool, elapsed: elapsed, services: services, reviews: pricereview.NewService(pool, now), user: uuid.New()}
 }
 
 func ctx(t *testing.T) context.Context {
@@ -73,7 +76,7 @@ func (f fixture) now() time.Time {
 // run 은 대사를 한 번 한다.
 func (f fixture) run() reconcile.Report {
 	f.t.Helper()
-	report, err := reconcile.New(f.pool, f.services.Orders, f.now).Run(ctx(f.t), reconcile.Options{StaleAfter: staleAfter, Limit: everything})
+	report, err := reconcile.New(f.pool, f.services.Orders, f.reviews, f.now).Run(ctx(f.t), reconcile.Options{StaleAfter: staleAfter, Limit: everything})
 	if err != nil {
 		f.t.Fatalf("대사가 실패했다: %v", err)
 	}
@@ -580,7 +583,7 @@ func TestChecksRunEvenWhenListingStuckOrdersFails(t *testing.T) {
 	f := setUp(t)
 	f.exec(`INSERT INTO wallets (user_id, paid_balance, created_at, updated_at) VALUES ($1, 5, $2, $2)`, f.user, f.now())
 
-	report, err := reconcile.New(f.pool, stuckFailing{f.services.Orders}, f.now).Run(ctx(t), reconcile.Options{StaleAfter: staleAfter, Limit: everything})
+	report, err := reconcile.New(f.pool, stuckFailing{f.services.Orders}, f.reviews, f.now).Run(ctx(t), reconcile.Options{StaleAfter: staleAfter, Limit: everything})
 
 	if err == nil {
 		t.Error("사람이 볼 주문을 찾지 못한 것을 알려야 한다")
@@ -592,12 +595,56 @@ func TestChecksRunEvenWhenResolvingFails(t *testing.T) {
 	f := setUp(t)
 	f.exec(`INSERT INTO wallets (user_id, paid_balance, created_at, updated_at) VALUES ($1, 5, $2, $2)`, f.user, f.now())
 
-	report, err := reconcile.New(f.pool, failingResolver{}, f.now).Run(ctx(t), reconcile.Options{StaleAfter: staleAfter, Limit: everything})
+	report, err := reconcile.New(f.pool, failingResolver{}, f.reviews, f.now).Run(ctx(t), reconcile.Options{StaleAfter: staleAfter, Limit: everything})
 
 	if err == nil {
 		t.Error("주문을 끝내지 못한 것을 알려야 한다")
 	}
 	wantFlagged(t, report, reconcile.CheckPaidBalance, f.user.String())
+}
+
+// failingReviews 는 때가 된 할 일을 찾지 못한다.
+type failingReviews struct{}
+
+func (failingReviews) Due(context.Context) ([]pricereview.Due, error) {
+	return nil, errors.New("할 일을 읽지 못했다")
+}
+
+func TestChecksRunEvenWhenListingReviewsFails(t *testing.T) {
+	f := setUp(t)
+	f.exec(`INSERT INTO wallets (user_id, paid_balance, created_at, updated_at) VALUES ($1, 5, $2, $2)`, f.user, f.now())
+
+	report, err := reconcile.New(f.pool, f.services.Orders, failingReviews{}, f.now).Run(ctx(t), reconcile.Options{StaleAfter: staleAfter, Limit: everything})
+
+	if err == nil {
+		t.Error("할 일을 찾지 못한 것을 알려야 한다")
+	}
+	wantFlagged(t, report, reconcile.CheckPaidBalance, f.user.String())
+}
+
+// reviewDue 는 대사의 결과에 그 할 일이 있는지다.
+func reviewDue(report reconcile.Report, id int64, step pricereview.Step) bool {
+	return slices.ContainsFunc(report.Reviews, func(d pricereview.Due) bool { return d.ReviewID == id && d.Step == step })
+}
+
+func TestPriceReviewsThatAreDueAreForAPerson(t *testing.T) {
+	f := setUp(t)
+	added, err := f.reviews.Add(ctx(t), pricereview.Draft{Subject: "대사 테스트", ChangesAt: f.now().Add(20 * 24 * time.Hour), CreatedBy: "test"})
+	if err != nil {
+		t.Fatalf("할 일을 적지 못했다: %v", err)
+	}
+
+	report := f.run()
+
+	if !reviewDue(report, added.ID, pricereview.StepAnnounce) || reviewDue(report, added.ID, pricereview.StepNotice) || !report.NeedsPerson() {
+		t.Errorf("20일 전에는 첫 공지만 할 일이어야 한다: %+v", report.Reviews)
+	}
+	if _, err := f.reviews.Done(ctx(t), added.ID, pricereview.StepAnnounce, "test", ""); err != nil {
+		t.Fatalf("끝냈다고 적지 못했다: %v", err)
+	}
+	if reviewDue(f.run(), added.ID, pricereview.StepAnnounce) {
+		t.Error("끝낸 할 일이 다시 나왔다")
+	}
 }
 
 func TestReconcileWritesNothingWhileChecking(t *testing.T) {

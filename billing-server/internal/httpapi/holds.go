@@ -68,11 +68,11 @@ type holdBody struct {
 func placeHold(holds HoldService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var request placeHoldRequest
-		if !readJSON(c, &request) {
+		if !readJSONWithCode(c, &request, codeHoldInvalidRequest) {
 			return
 		}
 		if request.UserID == uuid.Nil {
-			badRequest(c, "user_id 가 있어야 합니다.")
+			abort(c, http.StatusBadRequest, codeHoldInvalidRequest, "user_id 가 있어야 합니다.")
 			return
 		}
 		placed, isNew, err := holds.Place(c.Request.Context(), caller(c), request.UserID, request.Reference, request.PriceCode)
@@ -114,7 +114,7 @@ func extendHold(holds HoldService) gin.HandlerFunc {
 func settleHold(settle func(ctx context.Context, source string, reference string) (hold.Hold, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var request settleHoldRequest
-		if !readJSON(c, &request) {
+		if !readJSONWithCode(c, &request, codeHoldInvalidRequest) {
 			return
 		}
 		settled, err := settle(c.Request.Context(), caller(c), request.Reference)
@@ -126,21 +126,44 @@ func settleHold(settle func(ctx context.Context, source string, reference string
 	}
 }
 
+// holdRejection 은 홀드의 오류 하나가 어떤 응답이 되는지다.
+type holdRejection struct {
+	err    error
+	status int
+	code   string
+}
+
+// holdRejections 는 부르는 서버의 요청 때문에 난 오류들이다. 여기 없는 오류는 서버 쪽의 문제(500)다.
+// 402 는 "값을 치러야 한다"는 상태 코드다. 부르는 서버가 다른 오류와 가려서 사용자에게 충전을 권할 수 있다.
+var holdRejections = []holdRejection{
+	{hold.ErrInvalidReference, http.StatusBadRequest, codeHoldInvalidRequest},
+	{hold.ErrUnknownPrice, http.StatusBadRequest, codePriceUnknown},
+	{hold.ErrPriceNotForSale, http.StatusBadRequest, codePriceNotForSale},
+	{wallet.ErrInsufficient, http.StatusPaymentRequired, codeCreditInsufficient},
+	{hold.ErrNotFound, http.StatusNotFound, codeHoldNotFound},
+	{hold.ErrReferenceReused, http.StatusConflict, codeHoldReferenceReused},
+	{hold.ErrAlreadyCaptured, http.StatusConflict, codeHoldAlreadyCaptured},
+	{hold.ErrAlreadyReleased, http.StatusConflict, codeHoldAlreadyReleased},
+}
+
 // holdError 는 홀드를 다루다 난 오류를 HTTP 응답으로 바꾼다.
 func holdError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, hold.ErrInvalidReference), errors.Is(err, hold.ErrUnknownPrice):
-		badRequest(c, err.Error()+".")
-	case errors.Is(err, wallet.ErrInsufficient):
-		// 402 는 "값을 치러야 한다"는 상태 코드다. 부르는 서버가 다른 오류와 가려서 사용자에게 충전을 권할 수 있다
-		c.AbortWithStatusJSON(http.StatusPaymentRequired, errorBody{Detail: err.Error() + "."})
-	case errors.Is(err, hold.ErrNotFound):
-		notFound(c, err.Error()+".")
-	case errors.Is(err, hold.ErrReferenceReused), errors.Is(err, hold.ErrAlreadyCaptured), errors.Is(err, hold.ErrAlreadyReleased):
-		conflict(c, err.Error()+".")
-	default:
+	rejection, ok := rejectionOf(err)
+	if !ok {
 		internalError(c, err)
+		return
 	}
+	abort(c, rejection.status, rejection.code, err.Error()+".")
+}
+
+// rejectionOf 는 오류가 부르는 서버의 요청 때문에 난 것이면 그 응답을 찾는다. 서버 쪽의 문제면 두 번째 값이 false 다.
+func rejectionOf(err error) (holdRejection, bool) {
+	for _, rejection := range holdRejections {
+		if errors.Is(err, rejection.err) {
+			return rejection, true
+		}
+	}
+	return holdRejection{}, false
 }
 
 // toHoldBody 는 홀드를 응답의 모양으로 바꾼다.

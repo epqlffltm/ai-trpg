@@ -86,8 +86,9 @@ func TestAStoppedOrScheduledPriceCannotBeHeldYet(t *testing.T) {
 	_, _, stoppedErr := f.service.Place(ctx(t), source, f.user, newReference(), stopped)
 	_, _, earlyErr := f.service.Place(ctx(t), source, f.user, newReference(), scheduled)
 
-	if !errors.Is(stoppedErr, hold.ErrUnknownPrice) || !errors.Is(earlyErr, hold.ErrUnknownPrice) {
-		t.Errorf("멈춘 이름 = %v, 예약 전 = %v. 둘 다 ErrUnknownPrice 이어야 한다", stoppedErr, earlyErr)
+	// 멈춘 이름과 아직 없는 이름을 가린다. 부르는 서버가 다르게 다룬다
+	if !errors.Is(stoppedErr, hold.ErrPriceNotForSale) || !errors.Is(earlyErr, hold.ErrUnknownPrice) {
+		t.Errorf("멈춘 이름 = %v, 예약 전 = %v. ErrPriceNotForSale, ErrUnknownPrice 이어야 한다", stoppedErr, earlyErr)
 	}
 	f.wantBalance(500, 0)
 	if got := f.count("holds", ""); got != 0 {
