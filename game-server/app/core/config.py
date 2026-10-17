@@ -125,6 +125,10 @@ class Settings(BaseSettings):
     # 색인(로어북, 기억)을 종류마다 동시에 몇 개까지 돌리나. 임베딩 모델을 서술과 함께 쓰므로 작게 둔다
     job_index_concurrency: int = Field(default=2, ge=1, le=16)
 
+    # AI 호출의 기록(ai_invocations)에 남은 원문(모델이 쓴 글)을 며칠 두나(app/ai/retention.py, #274).
+    # 지나면 원문만 비우고 모델, 토큰 수, 걸린 시간 같은 것은 남긴다
+    ai_log_text_retention_days: int = Field(default=30, ge=1, le=3650)
+
     # 로어북 항목을 벡터로 바꾸는 것(임베딩)을 누가 하나. fake 는 모델을 부르지 않는 가짜(기본), llm 은 임베딩 모델.
     # 서술(NARRATOR)과 따로 켠다. 테스트와 CI 는 늘 가짜다
     embedder: Literal['fake', 'llm'] = 'fake'
