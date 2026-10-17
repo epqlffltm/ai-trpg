@@ -2,22 +2,24 @@
 
 """
 설정을 보고 서술자를 고르는 규칙(app/rounds/narrator_setup.py)과, 앱에 꽂히는 서술자를 검증한다.
-서술 등급마다의 모델들과 방장에게 내주는 등급도 본다.
+서술 등급마다의 모델들과 방장에게 내주는 등급, 창구를 고르는 것(build_router)의 값도 본다.
 
-모델을 부르지 않는다. 고르고 만드는 것만 본다.
+모델을 부르지 않는다. 고르고 만드는 것만 본다. 창구를 고르는 규칙은 tests/test_model_routing.py 가 본다.
 """
 
 import httpx
 import pytest
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.ai.call_log import DbCallLog
-from app.ai.openai_compat import OpenAICompatProvider
+from app.ai.routing import LOCAL_KIND, OPENAI_KIND, ModelRouter
+from app.catalog.lookup import DbModelLookup
 from app.main import create_app
 from app.rounds.fake_narrator import FakeNarrator
-from app.rounds.llm_narrator import LLMNarrator
-from app.rounds.narrator_setup import build_narrator, build_provider, offered_tiers, tier_models
+from app.rounds.narrator_setup import build_narrator, build_router, offered_tiers, tier_models
 from app.rounds.retrying_narrator import RetryingNarrator
+from app.rounds.routed_narrator import RoutedNarrator
 from app.rounds.tiered_narrator import TieredNarrator
 from app.rounds.tiers import NarrationTier
 from tests.conftest import make_test_settings
@@ -26,66 +28,92 @@ LLM = {'narrator': 'llm', 'llm_model': 'gemma4:26b'}
 PREMIUM = {'llm_premium_model': 'qwen3.6:27b'}
 
 
+def router_of(settings) -> ModelRouter:
+    """그 설정으로 만든, 창구를 고르는 것."""
+    return build_router(settings, httpx.AsyncClient(), async_sessionmaker())
+
+
+def narrator_of(settings):
+    """그 설정으로 만든 서술자."""
+    return build_narrator(settings, router_of(settings), async_sessionmaker())
+
+
 def standard(narrator) -> RetryingNarrator:
     """언어 모델의 서술자에서 standard 등급의 서술자."""
     return narrator.narrators[NarrationTier.STANDARD]
 
 
 def test_the_fake_narrator_is_chosen_by_default():
-    narrator = build_narrator(make_test_settings(), httpx.AsyncClient(), async_sessionmaker())
-
-    assert isinstance(narrator, FakeNarrator)
+    assert isinstance(narrator_of(make_test_settings()), FakeNarrator)
 
 
 def test_the_language_model_narrator_retries_one_model_by_default():
-    narrator = build_narrator(make_test_settings(**LLM), httpx.AsyncClient(), async_sessionmaker())
+    narrator = narrator_of(make_test_settings(**LLM))
 
     # 등급으로 고르는 서술자다. premium 의 모델을 적지 않으면 standard 하나뿐이다
     assert isinstance(narrator, TieredNarrator)
     assert set(narrator.narrators) == {NarrationTier.STANDARD}
-    # 넘어갈 모델을 적지 않으면 첫 모델 하나를 다시 시도하는 서술자다
+    # 넘어갈 모델을 적지 않으면 첫 모델 하나를 다시 시도하는 서술자다. 창구는 부를 때 고른다
     assert isinstance(standard(narrator), RetryingNarrator)
     (inner,) = standard(narrator).narrators
-    assert isinstance(inner, LLMNarrator)
-    assert isinstance(inner.provider, OpenAICompatProvider)
-    assert (inner.provider.kind, inner.provider.model) == ('openai_compat', 'gemma4:26b')
+    assert isinstance(inner, RoutedNarrator)
+    assert inner.model == 'gemma4:26b'
 
 
 def test_the_fallback_models_follow_the_first_in_order():
-    settings = make_test_settings(**LLM, llm_fallback_models=' gemma4:31b-it-qat, ,qwen3.6:27b ')
-
-    narrator = build_narrator(settings, httpx.AsyncClient(), async_sessionmaker())
+    narrator = narrator_of(make_test_settings(**LLM, llm_fallback_models=' gemma4:31b-it-qat, ,qwen3.6:27b '))
 
     # 빈 이름과 앞뒤 공백은 뺀다. 적은 차례대로 넘어간다
-    assert [inner.provider.model for inner in standard(narrator).narrators] == [
-        'gemma4:26b',
-        'gemma4:31b-it-qat',
-        'qwen3.6:27b',
-    ]
+    assert [inner.model for inner in standard(narrator).narrators] == ['gemma4:26b', 'gemma4:31b-it-qat', 'qwen3.6:27b']
 
 
 def test_one_call_may_take_as_long_as_the_timeout():
-    narrator = build_narrator(
-        make_test_settings(**LLM, llm_timeout_seconds=45), httpx.AsyncClient(), async_sessionmaker()
-    )
+    narrator = narrator_of(make_test_settings(**LLM, llm_timeout_seconds=45))
 
     # 남은 시간을 셀 때 쓴다. 남은 시간이 이보다 짧으면 새로 부르지 않는다
     assert standard(narrator).attempt_timeout == 45
 
 
-def test_the_provider_takes_its_values_from_the_settings():
+def test_the_router_takes_its_values_from_the_settings():
     client = httpx.AsyncClient()
+    factory = async_sessionmaker()
     settings = make_test_settings(
         **LLM, llm_base_url='http://127.0.0.1:1234/v1', llm_timeout_seconds=30, llm_supports_reasoning=False
     )
 
-    provider = build_provider(settings, client, 'gemma4:31b-it-qat')
+    router = build_router(settings, client, factory)
 
-    assert provider.client is client
-    assert provider.base_url == 'http://127.0.0.1:1234/v1'
-    assert provider.model == 'gemma4:31b-it-qat'
-    assert provider.timeout == 30
-    assert provider.supports_reasoning is False
+    assert router.client is client
+    assert (router.local.base_url, router.local.api_key, router.local.kind) == (
+        'http://127.0.0.1:1234/v1',
+        None,
+        LOCAL_KIND,
+    )
+    assert router.timeout == 30
+    assert router.local_options.supports_reasoning is False
+    # 모델 목록은 부를 때마다 앱의 DB 에서 읽는다
+    assert isinstance(router.lookup, DbModelLookup)
+    assert router.lookup.session_factory is factory
+
+
+def test_without_a_key_there_is_no_openai_endpoint():
+    assert router_of(make_test_settings(**LLM)).openai is None
+
+
+def test_the_openai_endpoint_carries_the_key_of_the_settings():
+    router = router_of(make_test_settings(**LLM, openai_api_key='sk-test'))
+
+    assert (router.openai.base_url, router.openai.kind) == ('https://api.openai.com/v1', OPENAI_KIND)
+    assert router.openai.api_key.get_secret_value() == 'sk-test'
+    # 비밀값이라 찍어도 보이지 않는다
+    assert 'sk-test' not in repr(router)
+
+
+def test_the_key_is_a_secret_in_the_settings():
+    settings = make_test_settings(openai_api_key='sk-test')
+
+    assert isinstance(settings.openai_api_key, SecretStr)
+    assert 'sk-test' not in repr(settings)
 
 
 def test_tests_use_the_fake_narrator_whatever_the_env_file_says(monkeypatch: pytest.MonkeyPatch):
@@ -104,12 +132,13 @@ def test_the_app_plugs_in_the_chosen_narrator():
     assert isinstance(llm.state.narrator, TieredNarrator)
 
 
-def test_every_model_is_called_with_the_client_the_app_closes():
+def test_every_model_is_routed_by_the_router_of_the_app():
     app = create_app(make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat'))
 
-    # 앱이 꺼질 때 이 클라이언트를 닫는다(lifespan). 따로 만든 클라이언트면 닫히지 않고 남는다
+    # 창구를 고르는 것은 앱에 하나다. 앱의 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다(lifespan)
+    assert app.state.model_router.client is app.state.http_client
     for inner in standard(app.state.narrator).narrators:
-        assert inner.provider.client is app.state.http_client
+        assert inner.router is app.state.model_router
 
 
 def test_every_model_call_is_recorded_in_the_database_of_the_app():
@@ -122,17 +151,13 @@ def test_every_model_call_is_recorded_in_the_database_of_the_app():
 
 
 def test_every_model_signs_its_input_with_the_key_of_the_settings():
-    settings = make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat', ai_log_hmac_key='server-key')
+    narrator = narrator_of(make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat', ai_log_hmac_key='k'))
 
-    narrator = build_narrator(settings, httpx.AsyncClient(), async_sessionmaker())
-
-    assert [inner.digest_key for inner in standard(narrator).narrators] == [b'server-key', b'server-key']
+    assert [inner.digest_key for inner in standard(narrator).narrators] == [b'k', b'k']
 
 
 def test_without_a_key_no_model_signs():
-    narrator = build_narrator(make_test_settings(**LLM), httpx.AsyncClient(), async_sessionmaker())
-
-    assert [inner.digest_key for inner in standard(narrator).narrators] == [None]
+    assert [inner.digest_key for inner in standard(narrator_of(make_test_settings(**LLM))).narrators] == [None]
 
 
 # --- 서술 등급 ---
@@ -141,12 +166,12 @@ def test_without_a_key_no_model_signs():
 def test_premium_has_its_own_models_in_order():
     settings = make_test_settings(**LLM, **PREMIUM, llm_premium_fallback_models=' gemma4:31b-it-qat, ')
 
-    narrator = build_narrator(settings, httpx.AsyncClient(), async_sessionmaker())
+    narrator = narrator_of(settings)
 
     # 등급마다 따로 다시 시도하고 넘어간다. premium 이 실패해도 standard 의 모델로 넘어가지 않는다(값이 다르다)
     premium = narrator.narrators[NarrationTier.PREMIUM]
-    assert [inner.provider.model for inner in premium.narrators] == ['qwen3.6:27b', 'gemma4:31b-it-qat']
-    assert [inner.provider.model for inner in standard(narrator).narrators] == ['gemma4:26b']
+    assert [inner.model for inner in premium.narrators] == ['qwen3.6:27b', 'gemma4:31b-it-qat']
+    assert [inner.model for inner in standard(narrator).narrators] == ['gemma4:26b']
 
 
 def test_premium_fallbacks_without_a_first_model_offer_nothing():
@@ -171,9 +196,16 @@ def test_the_app_plugs_in_the_offered_tiers():
     assert create_app(make_test_settings()).state.narration_tiers == set(NarrationTier)
 
 
-def test_premium_models_are_called_with_the_client_and_log_of_the_app():
+def test_premium_models_are_routed_and_recorded_by_the_app():
     app = create_app(make_test_settings(**LLM, **PREMIUM))
 
     for inner in app.state.narrator.narrators[NarrationTier.PREMIUM].narrators:
-        assert inner.provider.client is app.state.http_client
+        assert inner.router is app.state.model_router
         assert inner.log.session_factory is app.state.session_factory
+
+
+def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('OPENAI_API_KEY', 'sk-real')
+
+    # 개발자의 .env 에 진짜 키가 있어도 테스트는 실제 API 를 부르지 않는다
+    assert make_test_settings().openai_api_key.get_secret_value() == ''
