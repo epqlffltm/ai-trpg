@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.rounds.models import Round
+from app.tables.models import GameTable, TableStatus
 
 
 def add_round(session: AsyncSession, round_: Round) -> None:
@@ -71,6 +72,30 @@ async def find_overdue_table_ids(session: AsyncSession, now: datetime, limit: in
         select(Round.table_id)
         .where(Round.closed_at.is_(None), Round.closing_at.is_(None), Round.deadline_at <= now)
         .order_by(Round.deadline_at)
+        .limit(limit)
+    )
+    return list(await session.scalars(query))
+
+
+async def find_vanished_table_ids(session: AsyncSession, before: datetime, limit: int) -> list[uuid.UUID]:
+    """
+    서술을 맡은 작업이 사라진 것으로 보이는 라운드의 테이블들. 오래된 것부터 limit 개.
+
+    진행 중인 테이블의 닫는 중인 라운드 중에서, 서술의 실패를 적지 않았고 before 보다 먼저 닫기 시작한 것이다.
+    잠그지 않는다. 고른 뒤 테이블을 잠그고 다시 본다(app/rounds/recovery.py).
+    끝난 테이블은 빼야 한다. 끝난 테이블의 닫는 중인 라운드는 그대로 남아서, 빼지 않으면 바퀴마다 다시 고른다.
+    닫히지 않은 라운드는 테이블마다 하나뿐이라(uq_table_rounds_open) 훑는 양이 열린 테이블의 수를 넘지 않는다.
+    """
+    query = (
+        select(Round.table_id)
+        .join(GameTable, GameTable.id == Round.table_id)
+        .where(
+            Round.closed_at.is_(None),
+            Round.closing_at <= before,
+            Round.narration_failed_at.is_(None),
+            GameTable.status == TableStatus.PLAYING,
+        )
+        .order_by(Round.closing_at)
         .limit(limit)
     )
     return list(await session.scalars(query))

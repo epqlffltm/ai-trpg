@@ -28,6 +28,11 @@ from app.lore.texts import batched, entry_text, missing_entries, version_entries
 
 logger = logging.getLogger(__name__)
 
+# 색인을 맡은 작업의 종류. 로그의 operation 이고, 동시에 도는 수를 이 종류로 센다(app/core/jobs.py)
+INDEX_OPERATION = 'lore.index'
+# 색인이 돌거나 기다리는 수의 상한. 넘으면 맡지 않는다. 다음에 검색할 때 벡터가 모자란 것을 보고 다시 맡긴다
+INDEX_CAPACITY = 50
+
 
 async def load_missing(
     session_factory: async_sessionmaker[AsyncSession], version_id: uuid.UUID, model: str
@@ -91,6 +96,11 @@ class LoreIndexer:
     jobs: BackgroundJobs
 
     def schedule(self, version_id: uuid.UUID) -> None:
-        """이 판의 색인을 맡긴다. 기다리지 않고 바로 돌아온다."""
+        """
+        이 판의 색인을 맡긴다. 기다리지 않고 바로 돌아온다.
+
+        같은 판의 색인이 이미 돌거나 기다리면 맡지 않는다. 검색할 때마다 벡터가 모자라면 다시 맡기므로,
+        임베딩 모델이 죽어 있는 동안 같은 색인이 겹겹이 쌓이지 않게 한다. 같은 것을 두 번 해도 결과는 같다.
+        """
         job = index_version(self.session_factory, self.embedder, version_id)
-        self.jobs.spawn(job, name=f'index-lore:{version_id}', operation='lore.index')
+        self.jobs.spawn_once(job, name=f'index-lore:{version_id}', operation=INDEX_OPERATION)
