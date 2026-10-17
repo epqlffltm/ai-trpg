@@ -175,8 +175,8 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | POST | `/api/v1/auth/password/change` | 비밀번호 변경. 다른 기기는 로그아웃 | 필요 |
 | POST | `/api/v1/auth/password/reset` | 비밀번호 재설정 링크를 메일로 보냄 | 불필요 |
 | POST | `/api/v1/auth/password/reset/confirm` | 재설정 링크의 토큰으로 새 비밀번호 설정 | 재설정 토큰 |
-| POST | `/api/v1/auth/refresh` | refresh 쿠키로 새 access 토큰 발급 | refresh 쿠키 |
-| POST | `/api/v1/auth/logout` | 이 기기의 refresh 토큰 폐기 | refresh 쿠키 |
+| POST | `/api/v1/auth/refresh` | refresh 쿠키로 새 access 토큰 발급 | refresh 쿠키, 허용한 Origin |
+| POST | `/api/v1/auth/logout` | 이 기기의 refresh 토큰 폐기 | refresh 쿠키, 허용한 Origin |
 | POST | `/api/v1/auth/logout-all` | 모든 기기의 세션 종료 | 필요 |
 | GET | `/api/v1/auth/jwks` | 토큰 검증용 공개키 목록 | 불필요 |
 | GET | `/api/v1/auth/me` | 내 계정 정보 | 필요 |
@@ -269,6 +269,11 @@ IPv6는 주소 하나가 아니라 앞 64비트가 같은 묶음을 한 곳으�
 
 access 토큰이 만료되면 프론트는 `/refresh`를 호출해 새 access 토큰을 받는다.
 `/refresh`가 `401`이면 다시 로그인해야 한다.
+
+`/refresh`와 `/logout`은 허용한 출처(`REFRESH_COOKIE_ALLOWED_ORIGINS`)에서 온 요청만 받는다.
+`Origin` 머리말이 다르거나, 없거나, `null` 이면 `403`(`code: origin_not_allowed`)이고 쿠키는 그대로 둔다.
+브라우저는 POST 에 `Origin` 을 저절로 붙이므로 프론트가 할 일은 없다.
+curl 로 시험할 때는 `-H 'Origin: http://localhost:8080'` 처럼 직접 붙인다.
 
 프론트는 `/refresh`를 한 번에 하나만 호출해야 한다. 같은 refresh 토큰으로 두 요청이
 동시에 가면 하나만 성공하고, 나머지는 폐기된 토큰의 재사용으로 처리되어 모든 세션이 끊긴다.
@@ -396,6 +401,17 @@ CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 
 곳에 두면 XSS로는 훔칠 수 없다. 쿠키 경로를 인증 API로 제한해 다른 요청에는 실리지 않고,
 `SameSite=Strict`로 다른 사이트에서 시작된 요청에도 실리지 않는다. access 토큰은 다른 서버에도
 보내야 해서 쿠키에 담지 않는다.
+
+**쿠키를 쓰는 `/refresh`와 `/logout`은 `Origin` 을 허용 목록과 비교한다(`accounts/origin_check.py`).**
+`SameSite` 는 "사이트"(등록한 도메인) 단위라, 같은 도메인의 다른 하위 도메인(예: `chat.example.com`)에서 보낸 요청에는 쿠키가 실린다.
+그 페이지가 `/logout` 을 부르면 사용자가 로그아웃되고, `/refresh` 를 부르면 토큰이 돌아간다. 그래서 출처를 직접 본다.
+목록과 글자 그대로 같아야 한다(대소문자는 보지 않는다). 앞부분만 같은 `https://play.example.com.evil.test` 는 다르다.
+`Origin` 이 없거나 `null`(파일, 샌드박스 iframe)이면 어디서 왔는지 모르므로 거부한다.
+거부할 때는 쿠키를 지우지 않는다. 지우면 이 검사가 막으려는 "다른 곳의 페이지가 로그아웃시키기"가 그대로 된다.
+거부는 로그에만 남기고 DB 의 보안 이벤트로는 남기지 않는다. 누구나 일으킬 수 있어 요청 수만큼 행이 쌓인다.
+Django 의 CSRF 토큰도 생각했으나 하지 않았다. 주소 둘을 위해 프론트가 토큰을 읽어 매번 실어야 한다.
+직접 만든 머리말(`X-Requested-With`)을 요구하는 방법은 CORS 설정에 기대는 간접 방어라 하지 않았다.
+`/logout-all` 은 검사하지 않는다. access 토큰(`Authorization`)으로 본인을 확인하고, 다른 곳의 페이지는 그 토큰을 실을 수 없다.
 
 **refresh 토큰은 쓸 때마다 교체하고, 폐기된 토큰이 다시 쓰이면 모든 세션을 끊는다.**
 폐기된 토큰이 다시 들어왔다는 것은 정상 사용자와 공격자 중 한쪽이 옛 토큰을 쓴 것이다.
@@ -722,6 +738,8 @@ IP로 보여 한 사람의 시도가 모두를 막는다.
 - 세션 쿠키와 CSRF 쿠키(관리자 화면)에 Secure 를 붙인다.
 - refresh 쿠키의 Secure(`REFRESH_COOKIE_SECURE`)를 끄면 서버가 뜨지 않는다. `DEBUG` 를 켜도, 메일 서버(`SMTP_HOST`)가 없어도 뜨지 않는다.
 - `ALLOWED_HOSTS` 에 실제 도메인을 적는다. 비어 있으면 모든 요청이 400 이다.
+- `REFRESH_COOKIE_ALLOWED_ORIGINS` 에 화면을 여는 주소를 https 로 적는다. 비어 있거나 http 가 섞이면 뜨지 않는다.
+  개발에서는 적지 않으면 compose 의 nginx 주소(`http://localhost:8080`, `http://127.0.0.1:8080`)다. `PROXY_PORT` 를 바꿨으면 같이 적는다.
 
 `TRUSTED_PROXY_COUNT` 가 1 이상이면 프록시가 넘기는 `X-Forwarded-Proto` 로 "원래 HTTPS 였다"를 안다(`SECURE_PROXY_SSL_HEADER`).
 HTTPS 로 넘기기와 HSTS 는 인증 서버가 하지 않는다. 서버 넷 앞의 nginx 가 TLS 와 함께 맡는다(배포 단계에서 켠다).
