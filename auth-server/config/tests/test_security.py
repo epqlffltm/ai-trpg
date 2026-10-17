@@ -16,9 +16,13 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
 from config.security import (
+    DEVELOPMENT_COOKIE_ORIGINS,
     FORWARDED_PROTO_HEADER,
+    default_cookie_origins,
     is_production,
+    parse_cookie_origin,
     proxy_ssl_header,
+    require_cookie_origins,
     require_secure_refresh_cookie,
     secure_cookies,
 )
@@ -39,6 +43,8 @@ PRODUCTION_ENVIRONMENT = {
     'REFRESH_COOKIE_SECURE': 'true',
     # 비어 있으면 check --deploy 가 경고한다(W020). 운영에서는 실제 도메인을 적는다
     'ALLOWED_HOSTS': 'api.example.com',
+    # 운영에는 기본값이 없다. 화면을 여는 주소를 적는다
+    'REFRESH_COOKIE_ALLOWED_ORIGINS': 'https://play.example.com',
 }
 
 
@@ -79,6 +85,34 @@ class FunctionTests(SimpleTestCase):
         self.assertEqual(proxy_ssl_header(1), FORWARDED_PROTO_HEADER)
 
 
+class CookieOriginFunctionTests(SimpleTestCase):
+    def test_development_defaults_to_the_compose_proxy(self):
+        self.assertEqual(default_cookie_origins('development'), list(DEVELOPMENT_COOKIE_ORIGINS))
+
+    def test_production_has_no_default(self):
+        self.assertEqual(default_cookie_origins('production'), [])
+
+    def test_origin_is_written_the_way_browsers_send_it(self):
+        self.assertEqual(parse_cookie_origin(' HTTPS://Play.Example.com/ '), 'https://play.example.com')
+        self.assertEqual(parse_cookie_origin('http://localhost:8080'), 'http://localhost:8080')
+        self.assertEqual(parse_cookie_origin('http://[::1]:8080'), 'http://[::1]:8080')
+
+    def test_origin_with_a_path_or_without_a_scheme_is_refused(self):
+        for value in ('https://play.example.com/app', 'play.example.com', 'https://play.example.com?x=1', '*', ''):
+            with self.subTest(value=value), self.assertRaises(ImproperlyConfigured):
+                parse_cookie_origin(value)
+
+    def test_empty_list_is_refused(self):
+        with self.assertRaises(ImproperlyConfigured):
+            require_cookie_origins([], 'development')
+
+    def test_production_allows_only_https(self):
+        require_cookie_origins(['https://play.example.com'], 'production')
+        require_cookie_origins(['http://localhost:8080'], 'development')
+        with self.assertRaises(ImproperlyConfigured):
+            require_cookie_origins(['https://play.example.com', 'http://play.example.com'], 'production')
+
+
 class ProductionSettingsTests(SimpleTestCase):
     def test_production_passes_the_deploy_check_without_warnings(self):
         result = run_manage('check', '--deploy', '--fail-level', 'WARNING', **PRODUCTION_ENVIRONMENT)
@@ -90,6 +124,23 @@ class ProductionSettingsTests(SimpleTestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('REFRESH_COOKIE_SECURE', result.stderr)
+
+    def test_production_refuses_to_start_without_cookie_origins(self):
+        environment = {
+            key: value for key, value in PRODUCTION_ENVIRONMENT.items() if key != 'REFRESH_COOKIE_ALLOWED_ORIGINS'
+        }
+        result = run_manage('check', **environment)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('REFRESH_COOKIE_ALLOWED_ORIGINS', result.stderr)
+
+    def test_production_refuses_to_start_with_an_http_cookie_origin(self):
+        result = run_manage(
+            'check', **{**PRODUCTION_ENVIRONMENT, 'REFRESH_COOKIE_ALLOWED_ORIGINS': 'http://play.example.com'}
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('https', result.stderr)
 
     def test_production_cookies_are_secure(self):
         result = run_manage(
