@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -36,8 +38,9 @@ const ConnectTimeout = 5 * time.Second
 // 드라이버의 오류를 그대로 올리지 않는다. 접속 주소에는 비밀번호가 들어 있다.
 var ErrInvalidURL = errors.New("DATABASE_URL 을 읽지 못했습니다. postgres://계정:비밀번호@주소:포트/DB 모양인지 확인해 주세요")
 
-// Limits 는 DB 가 스스로 쿼리를 끊는 시간들이다. 0 이면 그 설정을 보내지 않는다(PostgreSQL 의 기본, 끊지 않음).
-// 값을 정한 근거는 README 의 설계 메모 "DB 도 스스로 끊는다" 에 잰 숫자와 함께 있다.
+// Limits 는 프로세스마다의 DB 한도다. DB 가 스스로 쿼리를 끊는 시간들과, 한꺼번에 쥐는 연결의 수다.
+// 시간이 0 이면 그 설정을 보내지 않는다(PostgreSQL 의 기본, 끊지 않음). 연결의 수가 0 이면 pgx 의 기본이다.
+// 값을 정한 근거는 README 의 설계 메모 "DB 도 스스로 끊는다", "연결 풀의 크기" 에 잰 숫자와 함께 있다.
 type Limits struct {
 	// LockTimeout 은 행이나 테이블의 잠금을 기다리는 가장 긴 시간이다(lock_timeout). 넘으면 55P03 이다
 	LockTimeout time.Duration
@@ -46,15 +49,20 @@ type Limits struct {
 	// ClientCheckInterval 은 쿼리가 도는 동안 DB 가 클라이언트가 살아 있는지 보는 간격이다(client_connection_check_interval).
 	// 클라이언트가 죽었으면 쿼리를 버린다. 잠금을 기다리는 동안에도 본다
 	ClientCheckInterval time.Duration
+	// MaxConns 는 풀이 한꺼번에 쥐는 연결의 가장 많은 수다. 접속 주소에 pool_max_conns 를 적었으면 그 값이 앞선다.
+	// pgx 의 기본(이 프로세스의 CPU 수와 4 중 큰 것)은 DB 가 아니라 이 프로세스의 CPU 를 보므로 쓰지 않는다
+	MaxConns int32
 }
 
 var (
 	// ServerLimits 는 서버(cmd/server)의 한도다. 요청 하나의 쿼리는 몇 밀리초에 끝난다.
 	// 둘 다 결제 작업의 마감(order.OperationTimeout, 30초)보다 짧다. 마감 전에 DB 가 먼저 끊고 503 으로 답한다
-	ServerLimits = Limits{LockTimeout: 5 * time.Second, StatementTimeout: 10 * time.Second, ClientCheckInterval: time.Second}
-	// JobLimits 는 작업 명령(cmd/sweeper, cmd/reconcile, cmd/orders, cmd/prices)의 한도다.
+	// 연결 8 은 재 보니 처리량이 멈추는 곳이다(4 → 8 에서 24% 늘고 8 → 16 은 그대로)
+	ServerLimits = Limits{LockTimeout: 5 * time.Second, StatementTimeout: 10 * time.Second, ClientCheckInterval: time.Second, MaxConns: 8}
+	// JobLimits 는 작업 명령(cmd/sweeper, cmd/reconcile, cmd/orders, cmd/prices, cmd/pricereviews)의 한도다.
 	// 대사의 검사는 테이블 전체를 훑어 데이터가 늘수록 길어진다. 쿼리 하나는 길게 두고, 잠금은 서버와 같게 둔다
-	JobLimits = Limits{LockTimeout: 5 * time.Second, StatementTimeout: 5 * time.Minute, ClientCheckInterval: time.Second}
+	// 작업 명령은 쿼리를 차례로 보내므로(동시에 도는 것이 없다) 연결 하나면 되고 하나는 여유다. 같은 DB 를 쓰는 서버들의 연결을 아낀다
+	JobLimits = Limits{LockTimeout: 5 * time.Second, StatementTimeout: 5 * time.Minute, ClientCheckInterval: time.Second, MaxConns: 2}
 )
 
 // SQLSTATE 의 번호. DB 가 시간 제한으로 쿼리를 끊었을 때 오는 것이다.
@@ -78,6 +86,9 @@ func NewPoolConfig(databaseURL string, schema string, limits Limits) (*pgxpool.C
 	for name, value := range limits.runtimeParams() {
 		poolConfig.ConnConfig.RuntimeParams[name] = value
 	}
+	if limits.MaxConns > 0 && !setsMaxConns(databaseURL) {
+		poolConfig.MaxConns = limits.MaxConns
+	}
 	poolConfig.AfterConnect = readTimesInUTC
 	return poolConfig, nil
 }
@@ -97,6 +108,19 @@ func (l Limits) runtimeParams() map[string]string {
 		}
 	}
 	return params
+}
+
+// maxConnsParam 은 접속 주소에 연결의 수를 적는 이름이다. pgx 가 읽는다(postgres://…?pool_max_conns=16).
+const maxConnsParam = "pool_max_conns"
+
+// setsMaxConns 는 접속 주소에 연결의 수(pool_max_conns)를 적었는지 본다. 적었으면 운영에서 정한 값이라 코드의 값보다 앞선다.
+// 주소는 URL 모양(postgres://…?pool_max_conns=16)과 낱말 모양(host=… pool_max_conns=16)이 있다.
+func setsMaxConns(databaseURL string) bool {
+	parsed, err := url.Parse(databaseURL)
+	if err == nil && (parsed.Scheme == "postgres" || parsed.Scheme == "postgresql") {
+		return parsed.Query().Has(maxConnsParam)
+	}
+	return strings.Contains(databaseURL, maxConnsParam+"=")
 }
 
 // IsTimeout 은 DB 가 시간 제한으로 쿼리를 끊었다는 오류인지 본다(lock_timeout, statement_timeout).

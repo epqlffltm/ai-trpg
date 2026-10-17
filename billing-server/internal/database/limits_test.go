@@ -269,3 +269,51 @@ func TestIsTimeoutKnowsTheDatabaseTimeouts(t *testing.T) {
 		t.Error("DB 의 오류가 아닌 것을 시간 제한으로 봤다")
 	}
 }
+
+func TestThePoolSizeComesFromTheProcess(t *testing.T) {
+	for name, limits := range map[string]database.Limits{"server": database.ServerLimits, "job": database.JobLimits} {
+		poolConfig, err := database.NewPoolConfig(unreachableURL, "billing", limits)
+		if err != nil {
+			t.Fatalf("%s: 설정을 만들지 못했다: %v", name, err)
+		}
+		if poolConfig.MaxConns != limits.MaxConns {
+			t.Errorf("%s: 연결 %d, 기대 = %d", name, poolConfig.MaxConns, limits.MaxConns)
+		}
+	}
+	// 재 본 값이다(README 의 "연결 풀의 크기"). 작업 명령은 서버보다 적게 쥔다
+	if database.ServerLimits.MaxConns != 8 || database.JobLimits.MaxConns != 2 {
+		t.Errorf("서버 %d, 작업 명령 %d. 8 과 2 여야 한다", database.ServerLimits.MaxConns, database.JobLimits.MaxConns)
+	}
+}
+
+func TestThePoolSizeInTheURLWins(t *testing.T) {
+	// 운영에서 DB 의 코어가 더 많으면 접속 주소에서 올린다. 코드의 값이 덮어쓰지 않는다
+	for _, databaseURL := range []string{
+		unreachableURL + "?pool_max_conns=16",
+		"host=127.0.0.1 port=1 user=billing dbname=trpg pool_max_conns=16",
+	} {
+		poolConfig, err := database.NewPoolConfig(databaseURL, "billing", database.ServerLimits)
+		if err != nil {
+			t.Fatalf("%q: 설정을 만들지 못했다: %v", databaseURL, err)
+		}
+		if poolConfig.MaxConns != 16 {
+			t.Errorf("%q: 연결 %d. 주소의 16 이어야 한다", databaseURL, poolConfig.MaxConns)
+		}
+	}
+}
+
+func TestNoPoolSizeKeepsTheDriverDefault(t *testing.T) {
+	// 마이그레이션처럼 한도가 없는(Limits{}) 쪽은 pgx 의 기본 그대로다
+	defaults, err := pgxpool.ParseConfig(unreachableURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	poolConfig, err := database.NewPoolConfig(unreachableURL, "billing", database.Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if poolConfig.MaxConns != defaults.MaxConns {
+		t.Errorf("연결 %d, pgx 의 기본 = %d", poolConfig.MaxConns, defaults.MaxConns)
+	}
+}
