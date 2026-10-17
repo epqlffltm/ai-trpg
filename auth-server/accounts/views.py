@@ -12,6 +12,7 @@ import math
 from datetime import timedelta
 
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -67,6 +68,7 @@ from accounts.services import (
     start_signup,
     verify_signup,
 )
+from accounts.session_revocations import build_revocation_document
 from accounts.signup_tickets import InvalidSignupTicketError
 from accounts.throttles import (
     LoginIpThrottle,
@@ -524,6 +526,20 @@ class JwksView(APIView):
     def get(self, request: Request) -> Response:
         response = Response(build_jwks(), status=status.HTTP_200_OK)
         response['Cache-Control'] = f'public, max-age={JWKS_CACHE_SECONDS}'
+        return response
+
+
+class SessionRevocationsView(APIView):
+    """GET /api/v1/auth/session-revocations"""
+
+    # 다른 서버가 30초마다 받아 간다(#274). JWKS 처럼 인증 없이 열린다. 사용자는 해시로만 실린다
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request: Request) -> Response:
+        response = Response(build_revocation_document(timezone.now()), status=status.HTTP_200_OK)
+        # 중간에서 기억해 두지 않는다. 끊은 세션이 늦게 알려지면 이 목록을 두는 뜻이 줄어든다
+        response['Cache-Control'] = 'no-store'
         return response
 
 
