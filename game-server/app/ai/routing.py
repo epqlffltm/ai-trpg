@@ -10,8 +10,8 @@
 
 목록의 모델을 부를 수 없으면 ProviderError 다. 다른 모델로 바꿔 부르지 않는다. 값이 다른 모델로 몰래 넘어가지 않는다.
   - model_unavailable: 꺼졌거나 은퇴했다. 관리 명령으로 켜야 한다(scripts/models.py).
-  - provider_not_configured: 그 창구의 키가 없다(OPENAI_API_KEY, ANTHROPIC_API_KEY).
-  - provider_unsupported: 그 창구를 부르는 코드가 아직 없다(Gemini).
+  - provider_not_configured: 그 창구의 키가 없다(OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY).
+  - provider_unsupported: 그 창구를 부르는 코드가 아직 없다. 지금은 모든 창구에 코드가 있다. 새 창구를 더할 때 쓴다.
 이때는 부르지 않았으므로 호출의 기록(ai_invocations)이 없다. 대신 warning 한 줄을 남긴다.
 
 평가(scripts/try_model.py)는 꺼진 모델도 부른다(allow_disabled). 켜기 전에 평가 장면을 돌려야 하기 때문이다.
@@ -30,6 +30,7 @@ from pydantic import SecretStr
 
 from app.ai.anthropic import AnthropicProvider
 from app.ai.costs import PriceTag
+from app.ai.gemini import GeminiProvider
 from app.ai.openai_compat import DEFAULT_TOKEN_FIELD, LOCAL_OPTIONS, OpenAICompatProvider, WireOptions
 from app.ai.provider import LLMProvider, ProviderError
 from app.catalog.lookup import CatalogModel, ModelLookup
@@ -49,6 +50,7 @@ UNROUTABLE = frozenset({MODEL_UNAVAILABLE, PROVIDER_NOT_CONFIGURED, PROVIDER_UNS
 LOCAL_KIND = 'openai_compat'
 OPENAI_KIND = 'openai'
 ANTHROPIC_KIND = 'anthropic'
+GEMINI_KIND = 'gemini'
 
 
 def today_utc() -> date:
@@ -96,7 +98,7 @@ class ModelRouter:
     이름으로 provider 를 고른다. 앱에 하나 둔다(app/rounds/narrator_setup.py 의 build_router).
 
     lookup: 모델 목록에서 찾는 것(app/catalog/lookup.py). 지금은 부를 때마다 DB 에서 읽는다.
-    local: 서버 곁의 모델의 창구(LLM_BASE_URL). openai, anthropic: 외부 API 의 창구. 키가 없으면 None 이다.
+    local: 서버 곁의 모델의 창구(LLM_BASE_URL). openai, anthropic, gemini: 외부 API 의 창구. 키가 없으면 None 이다.
     local_options: 서버 곁의 모델이 받는 칸(LLM_SUPPORTS_REASONING). 목록에 없는 이름에 쓴다.
     today 는 테스트가 바꿔 꽂는다.
     """
@@ -109,12 +111,13 @@ class ModelRouter:
     local_options: WireOptions = LOCAL_OPTIONS
     today: Callable[[], date] = today_utc
     anthropic: Endpoint | None = None
+    gemini: Endpoint | None = None
 
     def endpoint_for(self, provider: Provider) -> Endpoint:
         """창구의 이름으로 창구를 고른다. 키가 없거나 코드가 없으면 ProviderError."""
         if provider == Provider.LOCAL:
             return self.local
-        external = {Provider.OPENAI: self.openai, Provider.ANTHROPIC: self.anthropic}
+        external = {Provider.OPENAI: self.openai, Provider.ANTHROPIC: self.anthropic, Provider.GEMINI: self.gemini}
         if provider not in external:
             raise ProviderError(PROVIDER_UNSUPPORTED)
         endpoint = external[provider]
@@ -147,12 +150,27 @@ class ModelRouter:
             kind=endpoint.kind,
         )
 
+    def build_gemini(self, endpoint: Endpoint, model: CatalogModel) -> GeminiProvider:
+        """Gemini 를 부르는 provider. 생각의 방식과 온도는 모델 목록의 값이다."""
+        return GeminiProvider(
+            client=self.client,
+            base_url=endpoint.base_url,
+            model=model.api_model_id,
+            api_key=endpoint.api_key,
+            reasoning_style=model.reasoning_style or ReasoningStyle.LEVEL_LOW,
+            supports_temperature=model.supports_temperature,
+            timeout=self.timeout,
+            kind=endpoint.kind,
+        )
+
     def from_catalog(self, model: CatalogModel, allow_disabled: bool) -> LLMProvider:
         """목록의 모델을 부를 provider. 창구마다 부르는 코드가 다르다. 부를 수 없으면 ProviderError."""
         check_callable(model, self.today(), allow_disabled)
         endpoint = self.endpoint_for(model.provider)
         if model.provider == Provider.ANTHROPIC:
             return self.build_claude(endpoint, model)
+        if model.provider == Provider.GEMINI:
+            return self.build_gemini(endpoint, model)
         return self.build(endpoint, model.api_model_id, options_of(model))
 
     async def route(self, name: str, allow_disabled: bool = False) -> Route:

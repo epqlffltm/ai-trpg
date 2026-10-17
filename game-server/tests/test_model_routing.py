@@ -26,12 +26,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.anthropic import AnthropicProvider
 from app.ai.fake import FakeCallLog
+from app.ai.gemini import GeminiProvider
 from app.ai.openai_compat import WireOptions
 from app.ai.provider import ProviderError
 from app.ai.routing import (
     MODEL_UNAVAILABLE,
     PROVIDER_NOT_CONFIGURED,
-    PROVIDER_UNSUPPORTED,
     Endpoint,
     ModelRouter,
 )
@@ -83,7 +83,15 @@ OPUS = replace(
     token_limit_field=None,
     reasoning_style=ReasoningStyle.ALWAYS,
 )
-GEMINI = replace(LUNA, slug='gemini-4-argon', provider=Provider.GEMINI, token_limit_field=None)
+GEMINI = replace(
+    LUNA,
+    slug='gemini-4-argon',
+    provider=Provider.GEMINI,
+    api_model_id='gemini-4-argon',
+    token_limit_field=None,
+    reasoning_style=ReasoningStyle.LEVEL_LOW,
+)
+GEMINI_URL = 'https://generativelanguage.googleapis.com'
 ANTHROPIC_URL = 'https://api.anthropic.com'
 
 
@@ -132,6 +140,7 @@ def make_router(
     client = httpx.AsyncClient(transport=httpx.MockTransport(transport or Transport()))
     openai = Endpoint(OPENAI_URL, SecretStr(KEY), 'openai') if with_key else None
     anthropic = Endpoint(ANTHROPIC_URL, SecretStr(KEY), 'anthropic') if with_key else None
+    gemini = Endpoint(GEMINI_URL, SecretStr(KEY), 'gemini') if with_key else None
     return ModelRouter(
         lookup=lookup or FakeLookup({model.slug: model for model in models}),
         client=client,
@@ -141,6 +150,7 @@ def make_router(
         local_options=WireOptions(supports_reasoning=False),
         today=lambda: TODAY,
         anthropic=anthropic,
+        gemini=gemini,
     )
 
 
@@ -220,8 +230,17 @@ async def test_a_local_model_needs_no_key():
     assert (await make_router(GEMMA, with_key=False).provider_for('gemma-4')).model == 'gemma4:26b'
 
 
-async def test_a_provider_without_code_is_unsupported():
-    assert await refused(make_router(GEMINI), 'gemini-4-argon') == PROVIDER_UNSUPPORTED
+async def test_a_gemini_model_is_called_through_the_gemini_endpoint():
+    provider = await make_router(GEMINI).provider_for('gemini-4-argon')
+
+    assert isinstance(provider, GeminiProvider)
+    assert (provider.base_url, provider.model, provider.kind) == (GEMINI_URL, 'gemini-4-argon', 'gemini')
+    assert provider.api_key.get_secret_value() == KEY
+    assert (provider.reasoning_style, provider.supports_temperature) == (ReasoningStyle.LEVEL_LOW, False)
+
+
+async def test_a_gemini_model_without_a_key_is_not_configured():
+    assert await refused(make_router(GEMINI, with_key=False), 'gemini-4-argon') == PROVIDER_NOT_CONFIGURED
 
 
 async def test_a_claude_model_is_called_through_the_anthropic_endpoint():

@@ -4,7 +4,7 @@
 모델 목록의 판단들. DB 를 모른다. 받은 값만 보고 답한다.
 
   - token_field_problem: 출력 상한의 칸이 창구에 맞나
-  - reasoning_style_problem: 생각을 켜고 끄는 방식이 창구에 맞나
+  - reasoning_style_problem: 생각을 켜고 끄는 방식이 창구에 맞나, always_thinks: 생각을 끌 수 없는 모델인가
   - is_retired, is_offered: 그날 은퇴했나, 그날 쓸 수 있나
   - round_cost_usd: 단가로 어림한 1인 1라운드의 원가
 """
@@ -18,8 +18,19 @@ from app.catalog.models import AiModelCost, Provider, ReasoningStyle, TokenLimit
 # 출력 상한의 칸을 적어야 하는 창구. OpenAI 모양의 API 다. 나머지 창구는 칸이 정해져 있어 적지 않는다
 TOKEN_FIELD_PROVIDERS = frozenset({Provider.OPENAI, Provider.LOCAL})
 
-# 생각을 켜고 끄는 방식을 적어야 하는 창구. 모델마다 방식이 다르다
-REASONING_STYLE_PROVIDERS = frozenset({Provider.ANTHROPIC})
+# 생각을 켜고 끄는 방식을 적어야 하는 창구와, 그 창구가 받는 방식들. 모델마다 방식이 다르다
+STYLES_BY_PROVIDER = {
+    Provider.ANTHROPIC: frozenset(
+        {ReasoningStyle.ADAPTIVE, ReasoningStyle.ALWAYS, ReasoningStyle.BETWEEN_TOOLS, ReasoningStyle.BUDGET}
+    ),
+    Provider.GEMINI: frozenset(
+        {ReasoningStyle.LEVEL_MINIMAL, ReasoningStyle.LEVEL_LOW, ReasoningStyle.BUDGET, ReasoningStyle.BUDGET_MIN}
+    ),
+}
+# 생각을 끌 수 없는 방식들. 이 모델들은 판매가를 생각의 몫까지 넣어 매긴다(유저 결정, model-pricing-plan 9-2)
+ALWAYS_THINKING = frozenset(
+    {ReasoningStyle.ALWAYS, ReasoningStyle.LEVEL_MINIMAL, ReasoningStyle.LEVEL_LOW, ReasoningStyle.BUDGET_MIN}
+)
 
 # 1라운드를 어림하는 토큰 수. 판매가를 정할 때 쓴 값과 같다(프로젝트 문서 model-pricing-plan)
 ROUND_INPUT_TOKENS = 12_000
@@ -46,13 +57,25 @@ def token_field_problem(provider: Provider, field: TokenLimitField | None) -> st
     return None
 
 
+def styles_text(provider: Provider) -> str:
+    """그 창구가 받는 방식들을 글로(안내에 쓴다)."""
+    return ', '.join(sorted(STYLES_BY_PROVIDER[provider]))
+
+
 def reasoning_style_problem(provider: Provider, style: ReasoningStyle | None) -> str | None:
     """생각을 켜고 끄는 방식이 창구에 맞지 않으면 그 까닭, 맞으면 None."""
-    if provider in REASONING_STYLE_PROVIDERS and style is None:
-        return f'{provider} 창구의 모델은 생각을 켜고 끄는 방식(adaptive, always, between_tools, budget)을 적어야 한다'
-    if provider not in REASONING_STYLE_PROVIDERS and style is not None:
-        return f'{provider} 창구의 모델은 생각을 켜고 끄는 방식을 적지 않는다'
+    if provider not in STYLES_BY_PROVIDER:
+        return None if style is None else f'{provider} 창구의 모델은 생각을 켜고 끄는 방식을 적지 않는다'
+    if style is None:
+        return f'{provider} 창구의 모델은 생각을 켜고 끄는 방식({styles_text(provider)})을 적어야 한다'
+    if style not in STYLES_BY_PROVIDER[provider]:
+        return f'{provider} 창구가 받는 생각의 방식이 아니다({styles_text(provider)} 중 하나)'
     return None
+
+
+def always_thinks(style: ReasoningStyle | None) -> bool:
+    """생각을 끌 수 없는 모델인가. 판매가와 출력 상한에 생각의 몫을 넣는다."""
+    return style in ALWAYS_THINKING
 
 
 def is_retired(model: Switchable, today: date) -> bool:
