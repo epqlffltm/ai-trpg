@@ -206,6 +206,22 @@ type Sweeper struct {
 	// HeartbeatFile 은 한 바퀴를 끝낼 때마다 시각을 바꾸는 파일이다(jobs.Beat).
 	// compose 가 정리 작업의 컨테이너에 넣는다. 비어 있으면 쓰지 않는다(PC 에서 돌릴 때)
 	HeartbeatFile string
+	// GuardianNotices 는 보호자에게 알릴 결제를 인증 서버에 보내는 설정이다(#352).
+	GuardianNotices GuardianNotices
+}
+
+// GuardianNotices 는 정리 작업이 보호자 알림을 인증 서버에 보낼 곳과 비밀이다.
+// 둘 중 하나라도 비면 보내지 않는다. 알릴 일은 적어 두었다가 설정한 뒤에 나간다.
+type GuardianNotices struct {
+	// URL 은 인증 서버의 알림 주소다. AUTH_GUARDIAN_NOTICES_URL 이고, 적지 않으면 AUTH_JWKS_URL 옆의 …/service/guardian-notices 다.
+	URL string
+	// Secret 은 인증 서버와 함께 아는 비밀이다(AUTH_SERVER_SECRET). 인증 서버가 이 서버를 부를 때와 같은 짝이다.
+	Secret string
+}
+
+// Enabled 는 보낼 곳과 비밀이 모두 있는지다.
+func (g GuardianNotices) Enabled() bool {
+	return g.URL != "" && g.Secret != ""
 }
 
 // Addr 는 서버가 요청을 받는 주소를 "host:port" 로 돌려준다.
@@ -274,15 +290,50 @@ func LoadJobs(lookup Lookup) (Jobs, error) {
 
 // LoadSweeper 는 정리 작업이 쓰는 설정만 읽어 검사한다. 틀린 것이 여럿이면 한 번에 모두 알려 준다.
 // 결제 대행사의 설정(PAYMENT_PROVIDER, TOSS_*)은 적혀 있어도 읽지 않는다.
+// 인증 서버의 비밀(AUTH_SERVER_SECRET)은 보호자 알림을 보내는 데만 쓴다. 없으면 알릴 일을 적기만 한다.
 func LoadSweeper(lookup Lookup) (Sweeper, error) {
 	db, dbErr := LoadDatabase(lookup)
 	logging, loggingErr := loadLogging(lookup)
 	rules, rulesErr := loadRules(lookup)
-	if err := errors.Join(dbErr, loggingErr, rulesErr); err != nil {
+	notices, noticesErr := readGuardianNotices(lookup)
+	if err := errors.Join(dbErr, loggingErr, rulesErr, noticesErr); err != nil {
 		return Sweeper{}, err
 	}
 	heartbeat := readString(lookup, "HEARTBEAT_FILE", "")
-	return Sweeper{Database: db, Logging: logging, Rules: rules, HeartbeatFile: heartbeat}, nil
+	return Sweeper{Database: db, Logging: logging, Rules: rules, HeartbeatFile: heartbeat, GuardianNotices: notices}, nil
+}
+
+// guardianNoticesPath 는 인증 서버의 알림 주소의 끝이다. 공개키(…/jwks)와 같은 곳(/api/v1/auth)에 있다.
+const guardianNoticesPath = "/service/guardian-notices"
+
+// readGuardianNotices 는 보호자 알림을 보낼 곳과 비밀을 읽는다. 없어도 된다(그러면 보내지 않는다). 있으면 모양을 본다.
+func readGuardianNotices(lookup Lookup) (GuardianNotices, error) {
+	var notices GuardianNotices
+	var secretErr, urlErr error
+	if value, ok := lookup("AUTH_SERVER_SECRET"); ok && value != "" {
+		notices.Secret, secretErr = readSecret(lookup, "AUTH_SERVER_SECRET", MinServiceSecretLength)
+	}
+	notices.URL, urlErr = readGuardianNoticesURL(lookup)
+	return notices, errors.Join(secretErr, urlErr)
+}
+
+// readGuardianNoticesURL 은 알림 주소를 읽는다. 적지 않았으면 공개키 주소에서 만든다. 둘 다 없으면 빈 글자다.
+func readGuardianNoticesURL(lookup Lookup) (string, error) {
+	if value, ok := lookup("AUTH_GUARDIAN_NOTICES_URL"); ok && value != "" {
+		return readHTTPURL(lookup, "AUTH_GUARDIAN_NOTICES_URL")
+	}
+	value, ok := lookup("AUTH_JWKS_URL")
+	if !ok || value == "" {
+		return "", nil
+	}
+	jwksURL, err := readHTTPURL(lookup, "AUTH_JWKS_URL")
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasSuffix(jwksURL, jwksPath) {
+		return "", errors.New("AUTH_JWKS_URL 이 /jwks 로 끝나지 않습니다. AUTH_GUARDIAN_NOTICES_URL 을 적어야 합니다")
+	}
+	return strings.TrimSuffix(jwksURL, jwksPath) + guardianNoticesPath, nil
 }
 
 // providerAllowed 는 그 환경에서 쓸 수 있는 결제 대행사인지 본다. 운영에서는 가짜를 받지 않는다.

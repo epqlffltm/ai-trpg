@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/guardiannotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
 )
 
@@ -138,8 +139,8 @@ func TestLoopKeepsGoingWhenTheHeartbeatCannotBeWritten(t *testing.T) {
 
 func TestPrintResultShowsTheCounts(t *testing.T) {
 	var out bytes.Buffer
-	printResult(&out, sweep.Result{Holds: 2, FreeCreditUsers: 1, Orders: 3})
-	for _, want := range []string{"돌려준 홀드: 2", "무료 크레딧을 정리한 사용자: 1", "끝낸 주문: 3"} {
+	printResult(&out, sweep.Result{Holds: 2, FreeCreditUsers: 1, Orders: 3, Notices: guardiannotice.Result{Queued: 4, Sent: 5, Retried: 6}})
+	for _, want := range []string{"돌려준 홀드: 2", "무료 크레딧을 정리한 사용자: 1", "끝낸 주문: 3", "보호자 알림: 적음 4, 보냄 5, 다시 보낼 것 6"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("화면 = %q, %q 가 없다", out.String(), want)
 		}

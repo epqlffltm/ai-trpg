@@ -162,3 +162,24 @@ sql:
               type: time.Time
               pointer: true
             nullable: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/guardiannotice/queries.sql
+    gen:
+      go:
+        package: guardiannoticedb
+        out: internal/guardiannotice/guardiannoticedb
+        sql_package: pgx/v5
+        # 이 패키지의 쿼리가 쓰지 않는 테이블의 구조체는 만들지 않는다
+        omit_unused_structs: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: timestamptz
+            go_type: time.Time
+          # 보낸 시각. 보내기 전이면 nil 이다
+          - column: guardian_notices.sent_at
+            go_type:
+              type: time.Time
+              pointer: true
+            nullable: true

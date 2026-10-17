@@ -9,6 +9,7 @@ accounts 앱의 API 뷰.
 
 import contextlib
 import math
+import time
 from datetime import timedelta
 
 from django.conf import settings
@@ -45,6 +46,7 @@ from accounts.guardian import (
     revoke_guardian_consent,
 )
 from accounts.guardian_links import InvalidGuardianLinkError
+from accounts.guardian_notices import PaymentNotice, record_payment_notice
 from accounts.identity import (
     IdentityAlreadyVerifiedError,
     IdentityInUseError,
@@ -60,6 +62,7 @@ from accounts.origin_check import is_allowed_origin, log_refused_origin, read_or
 from accounts.serializers import (
     EmailSerializer,
     GuardianConsentSerializer,
+    GuardianNoticeSerializer,
     GuardianRequestSerializer,
     GuardianRevokeSerializer,
     IdentityStatusSerializer,
@@ -77,6 +80,7 @@ from accounts.serializers import (
     SignupVerifySerializer,
     UserSerializer,
 )
+from accounts.service_signature import SIGNATURE_HEADER, verify_request
 from accounts.services import (
     DuplicateAccountError,
     EmailAlreadyRegisteredError,
@@ -742,6 +746,53 @@ class GuardianRevokeView(APIView):
 
         # 이미 철회된 링크를 다시 열어도 같은 결과다. 이번에 철회했는지만 알려 준다
         return Response({'detail': '동의를 철회했습니다.', 'revoked': revoked}, status=status.HTTP_200_OK)
+
+
+def has_billing_signature(request: Request) -> bool:
+    """
+    요청이 결제 서버가 서명해 보낸 것인지 본다. 비밀은 BILLING_SECRET 이다(결제 서버의 AUTH_SERVER_SECRET 과 같은 값).
+
+    본문을 읽기 전에 부른다. 서명한 바이트 그대로(request.body)와 주소(경로와 그 뒤의 값)로 확인한다.
+    """
+    return verify_request(
+        secret=settings.BILLING_SECRET,
+        header=request.headers.get(SIGNATURE_HEADER, ''),
+        method=request.method,
+        request_uri=request.get_full_path(),
+        body=request.body,
+        now=int(time.time()),
+    )
+
+
+class ServiceGuardianNoticeView(APIView):
+    """POST /api/v1/auth/service/guardian-notices. 결제 서버가 미성년자의 결제와 청약철회를 알린다(#352)."""
+
+    # 사용자의 토큰이 아니라 결제 서버의 서명으로 확인한다. 프록시는 이 주소를 바깥에 열지 않는다
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        if not has_billing_signature(request):
+            return build_coded_error_response(
+                '서명이 맞지 않습니다.', 'service_bad_signature', status.HTTP_401_UNAUTHORIZED
+            )
+        serializer = GuardianNoticeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        fields = serializer.validated_data
+
+        outcome = record_payment_notice(
+            PaymentNotice(
+                order_id=fields['order_id'],
+                kind=fields['kind'],
+                user_public_id=fields['user_id'],
+                product_id=fields['product_id'],
+                price=fields['price'],
+                credits=fields['credits'],
+                occurred_at=fields['occurred_at'],
+            )
+        )
+        # queued(메일을 적었다), skipped(알릴 보호자가 없다), duplicate(이미 받았다). 셋 다 결제 서버에는 끝난 일이다
+        return Response({'status': outcome}, status=status.HTTP_200_OK)
 
 
 class MeView(APIView):
