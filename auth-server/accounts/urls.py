@@ -20,6 +20,7 @@ from accounts.views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     RefreshView,
+    SessionRevocationsView,
     SignupCompleteView,
     SignupVerifyView,
     SignupView,
@@ -41,5 +42,6 @@ urlpatterns = [
     path('logout', LogoutView.as_view(), name='logout'),
     path('logout-all', LogoutAllView.as_view(), name='logout-all'),
     path('jwks', JwksView.as_view(), name='jwks'),
+    path('session-revocations', SessionRevocationsView.as_view(), name='session-revocations'),
     path('me', MeView.as_view(), name='me'),
 ]
