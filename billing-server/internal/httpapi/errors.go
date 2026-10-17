@@ -69,20 +69,31 @@ func unavailable(c *gin.Context, detail string) {
 	abort(c, http.StatusServiceUnavailable, "", detail)
 }
 
-// dbTimeoutDetail 은 DB 가 시간 제한으로 쿼리를 끊었을 때의 응답이다. 그 쿼리는 적히지 않았다.
-const dbTimeoutDetail = "지금은 요청을 끝내지 못했습니다. 잠시 뒤 같은 요청을 다시 보내 주세요."
+// retryDetail 은 지금은 끝내지 못했지만 같은 요청을 다시 보내면 될 때의 응답이다.
+// DB 가 시간 제한으로 끊었거나 요청의 마감에 걸렸다. 어느 쪽이든 그 쿼리는 적히지 않았다.
+const retryDetail = "지금은 요청을 끝내지 못했습니다. 잠시 뒤 같은 요청을 다시 보내 주세요."
 
 // internalError 는 서버 쪽의 문제로 처리하지 못했을 때의 응답이다.
 // 원인은 서버의 기록에만 남기고 응답에는 싣지 않는다. DB 의 오류에는 테이블 이름과 쿼리가 들어 있다.
-// DB 가 시간 제한으로 끊은 것(database.IsTimeout)은 503 이다. 다시 보내면 되는 일이다(#296).
+// 다시 보내면 되는 것(retryable)은 503 이다. 클라이언트가 이미 떠났으면 서버의 오류로 적지 않는다(499).
 func internalError(c *gin.Context, cause error) {
+	if clientLeft(c, cause) {
+		c.AbortWithStatus(statusClientClosed)
+		return
+	}
 	// 요청을 기록하는 미들웨어(requestLogging)가 이 오류를 요청의 식별자와 함께 적는다
 	_ = c.Error(cause)
-	if database.IsTimeout(cause) {
-		unavailable(c, dbTimeoutDetail)
+	if retryable(cause) {
+		unavailable(c, retryDetail)
 		return
 	}
 	c.AbortWithStatusJSON(http.StatusInternalServerError, errorBody{
 		Detail: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
 	})
+}
+
+// retryable 은 같은 요청을 다시 보내면 되는 오류인지 본다.
+// DB 가 시간 제한으로 끊은 것(#296)과 요청의 마감에 걸린 것(#334)이다.
+func retryable(cause error) bool {
+	return database.IsTimeout(cause) || pastDeadline(cause)
 }
