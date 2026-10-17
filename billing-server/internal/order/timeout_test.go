@@ -88,9 +88,9 @@ func TestAConfirmWaitingForALockedOrderStopsAtTheDeadline(t *testing.T) {
 	if confirms, _ := f.provider.calls(); confirms != 0 {
 		t.Errorf("결제 대행사를 %d번 불렀다", confirms)
 	}
-	// 주문은 pending 이거나 confirming 이다. 이쪽이 기다림을 그만두어도 DB 는 취소 신호를 받기 전까지 그 쿼리를 쥐고 있다.
-	// 그 사이에 잠금이 풀리면 결제 번호를 적는 한 줄짜리 쿼리(트랜잭션 밖)가 마저 적힌다.
-	// 어느 쪽이든 결과를 모르는 상태라 다시 보내기와 대사가 끝낸다. DB 쪽의 시간 제한은 따로 잰다(#273 의 B)
+	// 주문은 pending 이거나 confirming 이다. 마감에 걸리면 pgx 가 DB 에 취소 요청을 보내지만, 그 요청은 비동기로 가서 몇 밀리초 늦게 닿는다.
+	// 바로 아래에서 잠금을 곧장 풀므로, 그 틈에 결제 번호를 적는 한 줄짜리 쿼리(트랜잭션 밖)가 마저 적힐 수 있다.
+	// 어느 쪽이든 결과를 모르는 상태라 다시 보내기와 대사가 끝낸다. 앱이 죽어 취소 요청이 가지 않는 경우는 DB 가 끊는다(#296, database.Limits)
 	if stored := f.stored(created.ID); stored.Status != order.StatusPending && stored.Status != order.StatusConfirming {
 		t.Errorf("주문의 상태 = %s. pending 이나 confirming 이어야 한다", stored.Status)
 	}

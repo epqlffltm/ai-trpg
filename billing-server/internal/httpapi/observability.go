@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 )
 
@@ -27,6 +28,8 @@ const (
 	codeUnhandled = "http.unhandled_exception"
 	// 핸들러가 스스로 5xx 로 답한 오류의 코드
 	codeInternal = "internal.error"
+	// DB 가 시간 제한(lock_timeout, statement_timeout)으로 쿼리를 끊은 오류의 코드(#296). 503 으로 답했다
+	codeDatabaseTimeout = "database.timeout"
 )
 
 // 요청이 어떻게 끝났는지(result 칸).
@@ -141,11 +144,19 @@ func logHandledErrors(logger *slog.Logger, c *gin.Context) {
 	for _, handled := range c.Errors {
 		logger.LogAttrs(c.Request.Context(), slog.LevelError, "요청을 처리하다 오류가 났다",
 			slog.String(obs.FieldOperation, httpOperation),
-			slog.String(obs.FieldErrorCode, codeInternal),
+			slog.String(obs.FieldErrorCode, errorCodeOf(handled.Err)),
 			slog.String(obs.FieldErrorType, fmt.Sprintf("%T", handled.Err)),
 			slog.String(obs.FieldErrorMessage, handled.Err.Error()),
 		)
 	}
+}
+
+// errorCodeOf 는 핸들러가 남긴 오류의 코드를 고른다. DB 가 시간 제한으로 끊은 것만 따로 센다.
+func errorCodeOf(err error) string {
+	if database.IsTimeout(err) {
+		return codeDatabaseTimeout
+	}
+	return codeInternal
 }
 
 // recoverPanics 는 처리 중에 패닉이 나도 서버가 죽지 않고 500 으로 답하게 하는 미들웨어다.
