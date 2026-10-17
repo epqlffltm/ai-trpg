@@ -73,6 +73,7 @@ func TestParseRejectsWrongCommands(t *testing.T) {
 		{"extend"},
 		{"extend", "table:1:round:3", "extra"},
 		{"refund", "table:1:round:3"},
+		{"prices", `"abc"`, "extra"},
 	}
 	for _, args := range cases {
 		if _, err := parse(args); err == nil || !strings.Contains(err.Error(), "쓰는 법") {
@@ -125,5 +126,43 @@ func TestSendSaysWhenTheServerIsNotUp(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "서버가 떠 있는지") || strings.Contains(err.Error(), secret) {
 		t.Errorf("오류 = %v", err)
+	}
+}
+
+func TestPricesIsASignedGetWithTheLastETag(t *testing.T) {
+	sentAt := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
+	var verified error
+	var method, path, ifNoneMatch, contentType string
+	var bodyLength int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		method, path, bodyLength = r.Method, r.URL.Path, len(raw)
+		ifNoneMatch, contentType = r.Header.Get("If-None-Match"), r.Header.Get("Content-Type")
+		verified = serviceauth.Verify(secret, r.Header.Get(serviceauth.SignatureHeader), r.Method, r.URL.RequestURI(), raw, sentAt)
+		w.Header().Set("ETag", `"new"`)
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer server.Close()
+	request, err := parse([]string{"prices", `"old"`})
+	if err != nil {
+		t.Fatalf("명령을 읽지 못했다: %v", err)
+	}
+	var out bytes.Buffer
+
+	err = send(settingsFor(t, server), request, sentAt, &out)
+
+	if err != nil || verified != nil {
+		t.Fatalf("보내기 = %v, 서버의 서명 확인 = %v", err, verified)
+	}
+	if method != http.MethodGet || path != "/api/v1/billing/service/prices" || bodyLength != 0 || contentType != "" || ifNoneMatch != `"old"` {
+		t.Errorf("메서드 = %s, 주소 = %s, 본문 %d 바이트, Content-Type = %q, If-None-Match = %q", method, path, bodyLength, contentType, ifNoneMatch)
+	}
+	if out.String() != "ETag \"new\"\n304 \n" {
+		t.Errorf("적은 글 = %q", out.String())
+	}
+
+	plain, _ := parse([]string{"prices"})
+	if plain.ifNoneMatch != "" || plain.body != nil {
+		t.Errorf("ETag 없이 = %+v", plain)
 	}
 }
