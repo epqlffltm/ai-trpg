@@ -30,7 +30,7 @@ class RoutedNarrator:
     digest_key: bytes | None = None
 
     async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
-        """provider 를 고르고, 그것으로 서술한다."""
-        provider = await self.router.provider_for(self.model)
-        narrator = LLMNarrator(provider, self.log, digest_key=self.digest_key)
+        """provider 를 고르고, 그것으로 서술한다. 모델 목록의 모델이면 그날의 단가로 원가를 센다."""
+        route = await self.router.route(self.model)
+        narrator = LLMNarrator(route.provider, self.log, digest_key=self.digest_key, price=route.price)
         return await narrator.narrate(request, preview)

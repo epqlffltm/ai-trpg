@@ -13,12 +13,14 @@ AI 호출의 기록(ai_invocations). 모델을 한 번 부를 때마다 한 줄�
   - 테이블에 외래 키를 걸지 않는다. 기록은 테이블보다 오래 산다. 테이블이 지워져도 남는다.
 
 생각 글과 보낸 메시지는 적지 않는다(app/ai/calls.py). 보낸 메시지는 지문(HMAC)만 남긴다.
+모델 목록의 모델이면 이름표와 원가도 남긴다(app/ai/costs.py). 실제 청구서와 견줄 근거다.
 """
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, Float, Index, Integer, String, Text, Uuid, func
+from sqlalchemy import CheckConstraint, DateTime, Float, Index, Integer, Numeric, String, Text, Uuid, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -43,6 +45,11 @@ class AiInvocation(Base):
         CheckConstraint('latency_ms >= 0', name='latency_not_negative'),
         CheckConstraint('input_tokens >= 0 AND output_tokens >= 0', name='tokens_not_negative'),
         CheckConstraint('max_tokens > 0', name='max_tokens_positive'),
+        CheckConstraint(
+            'cached_input_tokens >= 0 AND cache_write_tokens >= 0 AND reasoning_tokens >= 0',
+            name='token_details_not_negative',
+        ),
+        CheckConstraint('cost_usd >= 0', name='cost_not_negative'),
         # "이 테이블의 호출들"을 시간 순서로 찾는다
         Index('ix_ai_invocations_table_id_created_at', 'table_id', 'created_at'),
         # 보관 기간이 지난 원문을 오래된 것부터 찾는다(app/ai/retention.py). 원문이 남은 줄만 색인에 든다.
@@ -94,3 +101,16 @@ class AiInvocation(Base):
 
     # 보낸 메시지의 지문(HMAC-SHA256, 16진수 64자). 서버의 키가 없으면 비어 있다
     input_digest: Mapped[str | None] = mapped_column(String(64))
+
+    # 자세한 토큰 수. 캐시에서 읽은 입력, 캐시에 쓴 입력, 생각에 쓴 출력. 모두 위의 입력·출력 수에 들어 있다.
+    # provider 가 알려 주지 않으면, 그리고 이 칸이 생기기 전의 줄은 비어 있다
+    cached_input_tokens: Mapped[int | None] = mapped_column(Integer)
+    cache_write_tokens: Mapped[int | None] = mapped_column(Integer)
+    reasoning_tokens: Mapped[int | None] = mapped_column(Integer)
+
+    # 모델 목록(app/catalog)의 이름표. 목록에 없는 모델(서버 곁의 모델)이면 비어 있다
+    model_slug: Mapped[str | None] = mapped_column(String(48))
+    # 그날의 단가로 센 원가(USD)와 그 단가의 줄(ai_model_costs.id). 모르면 비어 있다(app/ai/costs.py).
+    # 단가의 줄에 외래 키를 걸지 않는다. 기록은 무엇보다 오래 산다(위의 규칙). 단가의 줄도 지우지 않는다
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 8))
+    cost_id: Mapped[int | None] = mapped_column(Integer)
