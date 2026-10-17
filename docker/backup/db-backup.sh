@@ -23,6 +23,10 @@ BACKUP_DIR="${BACKUP_DIR:-/backups}"
 BACKUP_KEEP="${BACKUP_KEEP:-14}"
 # 다시 뜨는 간격(초). 하루다
 BACKUP_INTERVAL_SECONDS="${BACKUP_INTERVAL_SECONDS:-86400}"
+# 뜨지 못했을 때 다시 뜨기까지의 간격(초). 1분이다. 하루를 기다리면 그날의 백업이 통째로 빠진다.
+# 스택을 처음 띄울 때 마이그레이션의 ALTER TABLE 과 pg_dump 의 잠금이 겹쳐 Postgres 가 pg_dump 를 끊는 일이 있다(deadlock detected).
+# 마이그레이션은 몇 초면 끝나므로 1분 뒤에는 뜬다
+BACKUP_RETRY_SECONDS="${BACKUP_RETRY_SECONDS:-60}"
 # 백업 파일의 이름. 뜬 시각(UTC)이 붙는다. 이름 순서가 시간 순서다
 PREFIX="trpg-"
 SUFFIX=".dump"
@@ -77,12 +81,17 @@ stop() {
   exit 0
 }
 
-# 지금 한 번 뜨고 간격마다 다시 뜬다. 한 번 실패해도 멈추지 않는다. 다음 바퀴가 다시 뜬다
+# 지금 한 번 뜨고 간격마다 다시 뜬다. 실패해도 멈추지 않는다. 실패하면 BACKUP_RETRY_SECONDS 뒤에 다시 뜬다
 loop() {
   trap stop TERM INT
   while true; do
-    backup || log "뜨지 못했다. 다음 바퀴에 다시 뜬다"
-    sleep "$BACKUP_INTERVAL_SECONDS" &
+    if backup; then
+      wait_for="$BACKUP_INTERVAL_SECONDS"
+    else
+      log "뜨지 못했다. ${BACKUP_RETRY_SECONDS}초 뒤에 다시 뜬다"
+      wait_for="$BACKUP_RETRY_SECONDS"
+    fi
+    sleep "$wait_for" &
     wait $!
   done
 }
