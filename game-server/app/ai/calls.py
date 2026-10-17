@@ -88,6 +88,7 @@ class CallRecord:
     lore_entry_ids 는 프롬프트에 넣은 로어북 항목들이다(app/lore/retrieval.py). 검색이 맞는 것을 골랐는지 볼 근거다.
     memory_rounds 는 프롬프트에 넣은 지난 일(라운드의 번호)들이다(app/memory/retrieval.py).
     input_digest 는 보낸 메시지의 지문이다(input_digest 함수). 키가 없으면 None.
+    input_chars 는 보낸 메시지의 글자 수의 합이다(chars_of 함수). input_tokens 와 나란히 놓아 글자당 토큰 수를 잰다.
     usage 는 자세한 사용량과 원가다(CallUsage, app/ai/costs.py 의 usage_of 가 만든다).
     """
 
@@ -109,7 +110,13 @@ class CallRecord:
     lore_entry_ids: tuple[uuid.UUID, ...] = ()
     memory_rounds: tuple[int, ...] = ()
     input_digest: str | None = None
+    input_chars: int | None = None
     usage: CallUsage = NO_USAGE
+
+
+def chars_of(messages: list[ChatMessage]) -> int:
+    """보낸 메시지들의 글자 수의 합. 역할의 이름은 세지 않는다."""
+    return sum(len(message.content) for message in messages)
 
 
 def input_digest(messages: list[ChatMessage], key: bytes | None) -> str | None:

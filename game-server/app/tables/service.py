@@ -60,6 +60,7 @@ from app.tables.state import (
     require_not_ended,
     require_offered,
     require_recruiting,
+    require_story_fits,
 )
 
 # --- 만들기 ---
@@ -324,7 +325,8 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
     맵이 있는 판이면 캐릭터 모두를 시작 장소에 세운다.
     장면은 테이블을 만들 때 고른 스타팅이다.
 
-    방장이 아니면 NotHostError, 모집 중이 아니거나 캐릭터를 만들지 않은 사람이 있으면 TableConflictError.
+    방장이 아니면 NotHostError, 모집 중이 아니거나 캐릭터를 만들지 않은 사람이 있거나
+    판의 작가 글이 서술의 입력 예산을 넘으면 TableConflictError.
 
     상태를 바꾸고, 시트를 주고, 이벤트를 적고, 라운드를 여는 것이 한 묶음으로 저장된다. 일부만 되는 일이 없다.
     NPC 의 상태는 이벤트에 적지 않는다. 누가 NPC 인지는 로어북의 내용이고, 로어북은 AI 만 읽는다.
@@ -334,6 +336,7 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
     require_host(table, host_id)
     require_recruiting(table)
     snapshot = read_snapshot(table.content)
+    require_story_fits(table, snapshot)
     # 캐릭터를 정하지 않은 사람이 있으면 그 사람이 받을 시트도 없다. 아무에게도 주지 않고 거절한다
     if not sheets.hand_out(table, snapshot):
         raise TableConflictError(Conflict.CHARACTERS_MISSING)

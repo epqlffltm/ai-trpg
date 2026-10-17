@@ -50,6 +50,7 @@ RECORD = CallRecord(
     lore_entry_ids=(ENTRY,),
     memory_rounds=(3, 7),
     input_digest='ab' * 32,
+    input_chars=5300,
 )
 
 # 받지 못한 호출. 글도 토큰도 없고 이유가 있다
@@ -80,6 +81,7 @@ def test_a_record_becomes_a_row_with_every_field():
     assert row.text == RECORD.text
     assert (row.temperature, row.max_tokens) == (0.8, 800)
     assert (row.lore_entry_ids, row.input_digest) == ([ENTRY], 'ab' * 32)
+    assert row.input_chars == 5300
     assert row.memory_rounds == [3, 7]
 
 
@@ -127,6 +129,7 @@ async def test_a_record_does_not_need_the_table_to_exist(app: FastAPI, session: 
         (replace(RECORD, latency_ms=-1), 'latency_not_negative'),
         (replace(RECORD, output_tokens=-5), 'tokens_not_negative'),
         (replace(RECORD, max_tokens=0), 'max_tokens_positive'),
+        (replace(RECORD, input_chars=-1), 'input_chars_not_negative'),
         (replace(RECORD, outcome='lost', error='lost'), 'outcome_allowed'),
     ],
 )
