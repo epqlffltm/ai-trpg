@@ -26,6 +26,17 @@
 # 인증 서버의 서명 개인키(키 폴더)는 auth-server 에만 붙인다. 나머지는 JWT_PRIVATE_KEY_PATH 를 비워 키 없이 뜬다.
 # 어느 프로세스가 무엇을 받는지는 .github/scripts/secret_scope.py 의 표에 있다. CI 가 이 파일과 표가 맞는지 본다.
 # 새 비밀을 더하면 그 표에도 적는다
+#
+# 컨테이너의 로그(docker logs)는 서비스마다 크기에 상한을 둔다(x-logging, #358). 상한이 없으면 VM 의 디스크가 차서 DB 가 멈춘다.
+# 새 서비스에도 logging: *logging 을 붙인다. 빠뜨리면 CI 가 실패한다(.github/scripts/logging_scope.py)
+
+# 컨테이너 로그의 상한. 파일 하나가 10MB 가 되면 새 파일로 넘기고, 5개를 넘으면 가장 오래된 것을 지운다.
+# 서비스마다 최대 50MB, 17개면 850MB 쯤이다. json-file 이라 docker logs 가 그대로 되고, 나중에 로그를 모을 때(#25) 수집기가 읽기 쉽다
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
 
 x-auth-image: &auth-image
   build: ./auth-server
@@ -114,6 +125,7 @@ services:
     # pgvector 가 포함된 이미지. 인증 서버는 벡터를 쓰지 않지만
     # 게임 서버가 같은 인스턴스를 쓰므로 처음부터 맞춰 둔다
     image: pgvector/pgvector:pg17
+    logging: *logging
     environment:
       # 관리용 슈퍼유저. 서버는 이 계정으로 접속하지 않는다
       POSTGRES_USER: ${POSTGRES_USER:-trpg}
@@ -157,6 +169,7 @@ services:
   #   docker compose run --rm db-backup check    # 가장 최근 백업을 빈 DB 에 풀어 원본과 줄 수가 같은지 본다
   db-backup:
     image: pgvector/pgvector:pg17
+    logging: *logging
     restart: unless-stopped
     entrypoint: ["sh", "/usr/local/bin/db-backup.sh"]
     command: ["loop"]
@@ -184,6 +197,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    logging: *logging
     # 죽으면 다시 띄운다. docker compose down 으로 끈 것은 다시 뜨지 않는다
     restart: unless-stopped
     # AOF 를 켠다. 로그인 시도 횟수와 IP 차단 기록이 들어갈 자리다.
@@ -221,6 +235,7 @@ services:
   auth-migrate:
     <<: *auth-image
     profiles: [app]
+    logging: *logging
     command: ["python", "manage.py", "migrate", "--noinput"]
     env_file: ./auth-server/.env
     environment:
@@ -234,6 +249,7 @@ services:
   auth-server:
     <<: *auth-image
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     env_file: ./auth-server/.env
     environment:
@@ -263,6 +279,7 @@ services:
   auth-mail:
     <<: *auth-image
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     command: ["python", "manage.py", "send_outgoing_mail"]
     env_file: ./auth-server/.env
@@ -280,6 +297,7 @@ services:
   auth-welcome-credits:
     <<: *auth-image
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     command: ["python", "manage.py", "send_welcome_credits"]
     env_file: ./auth-server/.env
@@ -297,6 +315,7 @@ services:
   auth-cron:
     <<: *auth-image
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     command: ["supercronic", "-quiet", "-json", "-passthrough-logs", "/etc/supercronic/crontab"]
     env_file: ./auth-server/.env
@@ -313,6 +332,7 @@ services:
   game-migrate:
     <<: *game-image
     profiles: [app]
+    logging: *logging
     command: ["alembic", "upgrade", "head"]
     env_file: ./game-server/.env
     # 마이그레이션은 DB 만 쓴다. 모델의 키와 서버끼리의 비밀을 비운다.
@@ -336,6 +356,7 @@ services:
   game-server:
     <<: *game-image
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     env_file: ./game-server/.env
     environment: *game-environment
@@ -355,6 +376,7 @@ services:
   board-migrate:
     <<: *board-image
     profiles: [app]
+    logging: *logging
     command: ["node_modules/.bin/typeorm", "-d", "dist/database/data-source.js", "migration:run"]
     env_file: ./board-server/.env
     environment: &board-environment
@@ -369,6 +391,7 @@ services:
   board-server:
     <<: *board-image
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     env_file: ./board-server/.env
     environment: *board-environment
@@ -385,6 +408,7 @@ services:
   billing-migrate:
     <<: *billing-image
     profiles: [app]
+    logging: *logging
     command: ["/app/migrate", "up"]
     env_file: ./billing-server/.env
     # 마이그레이션은 DB 만 읽는다(config.LoadDatabase). 서명의 비밀과 결제 대행사의 키를 비운다
@@ -398,6 +422,7 @@ services:
   billing-server:
     <<: *billing-image
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     env_file: ./billing-server/.env
     environment: *billing-environment
@@ -416,6 +441,7 @@ services:
   billing-sweeper:
     <<: *billing-image
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     command: ["/app/sweeper"]
     env_file: ./billing-server/.env
@@ -437,6 +463,7 @@ services:
   billing-cron:
     <<: *billing-image
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     command: ["supercronic", "-quiet", "-json", "-passthrough-logs", "/etc/supercronic/crontab"]
     env_file: ./billing-server/.env
@@ -452,6 +479,7 @@ services:
   proxy:
     image: nginxinc/nginx-unprivileged:1.30-alpine3.24
     profiles: [app]
+    logging: *logging
     restart: unless-stopped
     # 설정의 틀. 이미지가 뜰 때 ${APP_ENVIRONMENT} 같은 자리를 아래의 environment 로 채워 conf.d 에 쓴다
     volumes:
