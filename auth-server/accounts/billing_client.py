@@ -1,18 +1,21 @@
 # auth-server/accounts/billing_client.py
 
 """
-결제 서버를 부른다. 지금 부르는 일은 하나다. 가입을 마친 사용자에게 환영 크레딧을 주라고 맡긴다.
+결제 서버를 부른다. 부르는 일은 둘이다.
+  - 본인인증을 마친 사용자에게 환영 크레딧을 주라고 맡긴다(welcome_credit.py)
+  - 사용자의 결제 자격(성년이 되는 날, 보호자 동의)을 알린다(payment_eligibility.py, #336)
 
 요청마다 서명을 붙인다(service_signature.py). 결제 서버가 그것으로 인증 서버임을 확인한다.
 
 이 모듈은 요청 하나를 보내고 결과를 돌려주는 일만 한다. 언제 부르는지, 실패하면 언제 다시 부르는지는
-모른다. 그것은 welcome_credit.py 가 정한다.
+모른다. 그것은 부르는 모듈이 정한다.
 """
 
 import json
 import time
 import urllib.error
 import urllib.request
+from datetime import date
 from uuid import UUID
 
 from django.conf import settings
@@ -23,6 +26,9 @@ from observability.context import outgoing_headers
 # 환영 크레딧을 주라고 맡기는 주소. 호스트를 뺀 경로다. 서명에도 이 글자가 들어간다
 WELCOME_PATH = '/api/v1/billing/service/grants/welcome'
 
+# 결제 자격을 알리는 주소(결제 서버의 #337)
+ELIGIBILITY_PATH = '/api/v1/billing/service/eligibility'
+
 # 결제 서버의 답을 기다리는 가장 긴 시간(초). 워커가 죽은 서버를 무한정 기다리지 않게 한다
 TIMEOUT_SECONDS = 5
 
@@ -31,6 +37,12 @@ GRANTED = 'granted'
 ALREADY_GRANTED = 'already_granted'
 DISABLED = 'disabled'
 WELCOME_OUTCOMES = (GRANTED, ALREADY_GRANTED, DISABLED)
+
+# 결제 자격에 결제 서버가 돌려주는 결과. 둘 다 "알릴 일이 끝났다"는 뜻이다
+APPLIED = 'applied'
+# 결제 서버가 이미 같거나 더 높은 버전을 가지고 있다
+STALE = 'stale'
+ELIGIBILITY_OUTCOMES = (APPLIED, STALE)
 
 
 class BillingUnavailableError(Exception):
@@ -61,7 +73,31 @@ def grant_welcome_credit(*, user_public_id: UUID) -> str:
     status_code, text = _post(WELCOME_PATH, body)
     if status_code not in (200, 201):
         raise BillingUnavailableError(f'결제 서버가 {status_code} 로 답했다')
-    return _read_outcome(text)
+    return _read_outcome(text, WELCOME_OUTCOMES)
+
+
+def report_payment_eligibility(
+    *, user_public_id: UUID, version: int, legal_adult_from: date | None, guardian_consent: bool
+) -> str:
+    """
+    결제 서버에 사용자의 결제 자격을 알리고, 결과를 돌려준다.
+
+    결과는 APPLIED(받아 적었다)나 STALE(이미 같거나 더 높은 버전이 있다)다. 둘 다 끝난 것이다.
+    그 밖의 모든 경우(결제 서버에 이 주소가 아직 없는 404 를 포함한다)는 BillingUnavailableError 다.
+    legal_adult_from 이 None 이면 이미 성년이다. 날짜는 한국 날짜다.
+    """
+    body = json.dumps(
+        {
+            'user_id': str(user_public_id),
+            'version': version,
+            'legal_adult_from': legal_adult_from.isoformat() if legal_adult_from else None,
+            'guardian_consent': guardian_consent,
+        }
+    ).encode()
+    status_code, text = _post(ELIGIBILITY_PATH, body)
+    if status_code != 200:
+        raise BillingUnavailableError(f'결제 서버가 {status_code} 로 답했다')
+    return _read_outcome(text, ELIGIBILITY_OUTCOMES)
 
 
 def _post(path: str, body: bytes) -> tuple[int, bytes]:
@@ -101,12 +137,12 @@ def _opener() -> urllib.request.OpenerDirector:
     return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
 
 
-def _read_outcome(text: bytes) -> str:
-    """결제 서버의 답에서 결과를 꺼낸다. 아는 결과가 아니면 BillingUnavailableError 다."""
+def _read_outcome(text: bytes, known: tuple[str, ...]) -> str:
+    """결제 서버의 답에서 결과를 꺼낸다. known 에 없는 결과면 BillingUnavailableError 다."""
     try:
         outcome = json.loads(text).get('status')
     except (ValueError, AttributeError) as exc:
         raise BillingUnavailableError('결제 서버의 답을 읽지 못했다') from exc
-    if outcome not in WELCOME_OUTCOMES:
+    if outcome not in known:
         raise BillingUnavailableError('결제 서버가 모르는 결과로 답했다')
     return outcome

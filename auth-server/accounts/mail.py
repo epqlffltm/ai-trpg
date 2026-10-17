@@ -13,6 +13,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from accounts.email_codes import CODE_LIFETIME, TOKEN_LIFETIME
+from accounts.guardian_links import CONSENT_LINK_LIFETIME
 from accounts.models import EmailCodePurpose, SecurityEvent, User
 from accounts.outbox import enqueue_mail
 
@@ -179,3 +180,74 @@ def _describe_security_event(event: SecurityEvent) -> str:
     if event.note:
         parts.append(f'사유 {event.note}')
     return '  ' + '  '.join(parts)
+
+
+def build_guardian_link(*, base_url: str, token: str) -> str:
+    """보호자 화면을 여는 링크. 토큰은 # 뒤에 둔다(재설정 링크와 같은 까닭)."""
+    return f'{base_url}#{urlencode({"token": token})}'
+
+
+def send_guardian_consent_request(*, minor: User, guardian_email: str, token: str) -> None:
+    """
+    보호자에게 동의를 부탁하는 메일. 동의 링크가 들어 있다(#336).
+
+    미성년자의 닉네임만 적는다. 아이디와 이메일은 보호자에게 보이지 않는다. 닉네임은 남에게 보이라고 만든 이름이다.
+    """
+    days = CONSENT_LINK_LIFETIME.days
+    link = build_guardian_link(base_url=settings.GUARDIAN_CONSENT_URL, token=token)
+    enqueue_mail(
+        to_email=guardian_email,
+        subject='[AI TRPG] 보호자 동의 요청',
+        body=(
+            f'AI TRPG 의 회원 {minor.nickname} 님(만 19세 미만)이 이 주소를 보호자로 적고\n'
+            '결제에 대한 동의를 부탁했습니다.\n\n'
+            '동의하면 그 회원이 크레딧을 살 수 있습니다. 결제할 때마다 이 주소로 알림을 보내고,\n'
+            '언제든 그 메일의 링크로 동의를 철회할 수 있습니다. 동의는 회원이 만 19세가 되는 날까지입니다.\n\n'
+            '동의하려면 아래 링크를 열고 보호자 본인의 휴대폰으로 본인인증을 해 주세요.\n\n'
+            f'{link}\n\n'
+            f'이 링크는 {days}일 동안 쓸 수 있습니다.\n'
+            '모르는 요청이라면 이 메일을 무시해 주세요. 동의하지 않으면 아무 일도 일어나지 않습니다.'
+        ),
+    )
+
+
+def send_guardian_consented_notice(*, minor: User, guardian_email: str, revoke_token: str) -> None:
+    """보호자에게 동의가 적혔음을 알린다. 철회 링크가 들어 있다."""
+    link = build_guardian_link(base_url=settings.GUARDIAN_REVOKE_URL, token=revoke_token)
+    enqueue_mail(
+        to_email=guardian_email,
+        subject='[AI TRPG] 보호자 동의가 적혔습니다',
+        body=(
+            f'회원 {minor.nickname} 님의 결제에 동의하셨습니다. 이제 그 회원이 크레딧을 살 수 있습니다.\n'
+            '결제할 때마다 이 주소로 알림을 보냅니다.\n\n'
+            '동의를 철회하려면 아래 링크를 열어 주세요. 철회하면 바로 결제가 막힙니다.\n\n'
+            f'{link}\n\n'
+            '이 메일을 지우지 말고 보관해 주세요. 결제 알림 메일에도 같은 링크가 들어 있습니다.'
+        ),
+    )
+
+
+def send_guardian_revoked_notice(*, minor: User, guardian_email: str) -> None:
+    """보호자에게 철회가 적혔음을 알린다."""
+    enqueue_mail(
+        to_email=guardian_email,
+        subject='[AI TRPG] 보호자 동의를 철회했습니다',
+        body=(
+            f'회원 {minor.nickname} 님의 결제에 대한 동의를 철회하셨습니다. 이제 그 회원은 결제할 수 없습니다.\n'
+            '이 주소로 더 메일을 보내지 않습니다.'
+        ),
+    )
+
+
+def send_minor_guardian_notice(*, minor: User, consented: bool) -> None:
+    """미성년자에게 보호자가 동의했거나 철회했음을 알린다."""
+    if consented:
+        subject = '[AI TRPG] 보호자가 결제에 동의했습니다'
+        body = '보호자가 결제에 동의했습니다. 이제 크레딧을 살 수 있습니다.\n결제할 때마다 보호자에게 알림이 갑니다.'
+    else:
+        subject = '[AI TRPG] 보호자가 결제 동의를 철회했습니다'
+        body = (
+            '보호자가 결제에 대한 동의를 철회했습니다. 이제 결제할 수 없습니다.\n'
+            '다시 결제하려면 보호자에게 다시 동의를 받아 주세요.'
+        )
+    enqueue_mail(to_email=minor.email, subject=subject, body=body)

@@ -436,3 +436,95 @@ class IdentityVerification(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user} / {self.provider}'
+
+
+class GuardianConsentStatus(models.TextChoices):
+    REQUESTED = 'requested', '동의를 기다림'
+    CONSENTED = 'consented', '동의함'
+    REVOKED = 'revoked', '철회함'
+
+
+class GuardianConsent(models.Model):
+    """
+    미성년자(만 19세 미만)의 결제에 대한 보호자의 동의(#336). 미성년자마다 하나다. 보호자는 한 명이다.
+
+    보호자는 계정을 만들지 않는다. 미성년자가 보호자의 이메일을 적으면 그 주소로 동의 링크가 가고,
+    보호자가 링크에서 휴대폰 본인인증을 하고 동의한다. 철회는 동의를 알리는 메일과 결제 알림 메일의 링크로 한다.
+
+    동의는 미성년자가 성년이 되는 날(IdentityVerification.legal_adult_from)이나 보호자가 철회할 때까지다.
+    성년이 되는 날을 따로 적지 않는다. 결제 서버가 그 날짜를 함께 받아 스스로 센다(payment_eligibility.py).
+    동의한 동안에는 미성년자가 보호자를 바꿀 수 없다.
+    바꾸게 하면 아무 성인에게 다시 동의를 받아 보호자의 철회를 피할 수 있다.
+    """
+
+    minor = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='guardian_consent',
+        verbose_name='미성년자',
+    )
+    # 동의 링크와 결제 알림을 보낼 곳. 철회하면 비운다. 더 보낼 일이 없다
+    guardian_email = models.EmailField('보호자의 이메일', blank=True)
+    status = models.CharField('상태', max_length=20, choices=GuardianConsentStatus.choices)
+    # 링크에 서명해 넣는 값(guardian_links.py). 새로 요청하면 바뀌어 앞서 보낸 링크를 쓸 수 없게 된다
+    link_nonce = models.CharField('링크의 일회 값', max_length=32)
+    # 동의한 보호자의 사람 열쇠(identity.person_key). 미성년자 본인이 아닌지 보는 데 쓰고,
+    # 다툼이 생기면 누가 동의했는지 맞춰 본다
+    guardian_person_key = models.CharField('보호자의 사람 열쇠', max_length=64, blank=True)
+
+    requested_at = models.DateTimeField('요청한 시각')
+    consented_at = models.DateTimeField('동의한 시각', null=True, blank=True)
+    revoked_at = models.DateTimeField('철회한 시각', null=True, blank=True)
+
+    # 요청 메일의 발송 제한. 남의 메일함에 링크를 퍼붓지 못하게 한다(guardian.py)
+    window_started_at = models.DateTimeField('요청 횟수를 세기 시작한 시각')
+    requests_in_window = models.PositiveSmallIntegerField('구간 안의 요청 횟수', default=0)
+
+    class Meta:
+        verbose_name = '보호자 동의'
+        verbose_name_plural = '보호자 동의'
+
+    def __str__(self) -> str:
+        return f'{self.minor} / {self.get_status_display()}'
+
+
+class PaymentEligibility(models.Model):
+    """
+    결제 서버에 알릴 결제 자격(#336, 결제 서버의 #337). 본인인증을 마친 계정마다 하나다.
+
+    알리는 것은 사건이 아니라 지금의 상태다(성년이 되는 날, 보호자 동의). 바뀔 때마다 버전을 올리고,
+    워커가 그때의 상태를 버전과 함께 보낸다. 결제 서버는 가진 것보다 높은 버전만 받는다.
+    그래서 늦게 도착하거나 두 번 도착해도, 사이의 변경을 몇 번 건너뛰어도 마지막 상태로 맞는다.
+    결제 서버는 결제할 때 이 서버를 부르지 않는다. 자기 DB 에 받아 둔 것만 본다.
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='payment_eligibility',
+        verbose_name='회원',
+    )
+    # 상태가 바뀔 때마다 하나 오른다
+    version = models.PositiveBigIntegerField('버전', default=0)
+    # 결제 서버가 받았다고 답한 가장 높은 버전. version 보다 작으면 보낼 일이 있다
+    delivered_version = models.PositiveBigIntegerField('알린 버전', default=0)
+
+    attempts = models.PositiveIntegerField('시도 횟수', default=0)
+    last_error = models.CharField('마지막 오류', max_length=200, blank=True)
+    # 이 시각부터 보낼 수 있다. 실패하면 뒤로 미룬다. 워커가 보내는 동안은 임대가 끝나는 시각이다
+    next_attempt_at = models.DateTimeField('다음 시도 시각')
+
+    class Meta:
+        verbose_name = '결제 자격 알림'
+        verbose_name_plural = '결제 자격 알림'
+        indexes = [
+            # 워커가 "보낼 것이 있고 때가 된 줄" 을 찾을 때 쓴다. 다 알린 줄은 색인에 넣지 않는다
+            models.Index(
+                fields=['next_attempt_at'],
+                name='accounts_eligibility_due_idx',
+                condition=models.Q(version__gt=models.F('delivered_version')),
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.delivered_version}/{self.version}'

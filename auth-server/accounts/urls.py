@@ -9,6 +9,9 @@ config/urls.py 가 이 파일을 /api/v1/auth/ 아래에 연결한다.
 from django.urls import path
 
 from accounts.views import (
+    GuardianConsentView,
+    GuardianRequestView,
+    GuardianRevokeView,
     IdentityVerifyView,
     JwksView,
     LoginResendView,
@@ -46,4 +49,7 @@ urlpatterns = [
     path('session-revocations', SessionRevocationsView.as_view(), name='session-revocations'),
     path('me', MeView.as_view(), name='me'),
     path('identity/verify', IdentityVerifyView.as_view(), name='identity-verify'),
+    path('guardian/request', GuardianRequestView.as_view(), name='guardian-request'),
+    path('guardian/consent', GuardianConsentView.as_view(), name='guardian-consent'),
+    path('guardian/revoke', GuardianRevokeView.as_view(), name='guardian-revoke'),
 ]
