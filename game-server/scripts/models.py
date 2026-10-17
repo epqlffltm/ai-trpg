@@ -9,6 +9,7 @@
         --name "GPT-6 Luna" --vendor openai --grade standard --token-field max_completion_tokens --reasoning
     uv run python -m scripts.models set-cost gpt-6-luna --input 0.1 --output 0.5 --from 2026-10-17
     uv run python -m scripts.models update gpt-6-luna --no-temperature
+    uv run python -m scripts.models switch-snapshot gpt-6-luna --api-model-id <새 날짜판> --note "공급자 공지"
     uv run python -m scripts.models enable gpt-6-luna
     uv run python -m scripts.models disable gpt-6-luna
     uv run python -m scripts.models retire gpt-6-luna --on 2027-06-01
@@ -37,9 +38,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import service
 from app.catalog.errors import CatalogConflictError, InvalidModelError, ModelNotFoundError
-from app.catalog.models import AiModel, AiModelCost, Grade, Provider, TokenLimitField
+from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot, Grade, Provider, TokenLimitField
 from app.catalog.rules import is_offered, is_retired, round_cost_usd
-from app.catalog.schemas import CostCreate, ModelCreate, ModelUpdate
+from app.catalog.schemas import CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 from app.core.config import get_settings
 from app.core.database import create_engine, create_session_factory
 
@@ -102,8 +103,14 @@ def cost_line(cost: AiModelCost) -> str:
     return '  ' + ', '.join(parts)
 
 
-def detail_lines(model: AiModel, costs: list[AiModelCost], today: date) -> list[str]:
-    """모델 하나를 자세히. 받는 것과 단가들."""
+def snapshot_line(snapshot: AiModelSnapshot) -> str:
+    """날짜판을 바꾼 일 하나의 줄. 바꾼 날(UTC)과 앞뒤 이름, 덧붙인 말."""
+    line = f'  {snapshot.changed_at.date()}: {snapshot.previous_api_model_id} → {snapshot.api_model_id}'
+    return f'{line}, {snapshot.note}' if snapshot.note else line
+
+
+def detail_lines(model: AiModel, costs: list[AiModelCost], snapshots: list[AiModelSnapshot], today: date) -> list[str]:
+    """모델 하나를 자세히. 받는 것과 단가들, 날짜판을 바꾼 일들."""
     token_field = model.token_limit_field or '정해짐'
     return [
         f'{model.slug}: {model.display_name} ({model.vendor}, {model.grade}, {status_of(model, today)})',
@@ -113,6 +120,8 @@ def detail_lines(model: AiModel, costs: list[AiModelCost], today: date) -> list[
         f'  은퇴일 {model.retires_on or "없음"}',
         '원가 단가(USD, 백만 토큰당):' if costs else '원가 단가가 없다',
         *[cost_line(cost) for cost in costs],
+        *(['날짜판을 바꾼 일:'] if snapshots else []),
+        *[snapshot_line(snapshot) for snapshot in snapshots],
     ]
 
 
@@ -168,7 +177,7 @@ async def list_command(session: AsyncSession, args: argparse.Namespace, today: d
 async def show_command(session: AsyncSession, args: argparse.Namespace, today: date) -> list[str]:
     """모델 하나를 자세히."""
     detail = await service.show_model(session, args.slug)
-    return detail_lines(detail.model, detail.costs, today)
+    return detail_lines(detail.model, detail.costs, detail.snapshots, today)
 
 
 async def add_command(session: AsyncSession, args: argparse.Namespace, today: date) -> list[str]:
@@ -181,6 +190,17 @@ async def update_command(session: AsyncSession, args: argparse.Namespace, today:
     """모델에서 적은 것만 바꾼다."""
     model = await service.update_model(session, args.slug, update_of(args))
     return [f'{model.slug}: 바꿨다']
+
+
+async def switch_snapshot_command(session: AsyncSession, args: argparse.Namespace, today: date) -> list[str]:
+    """날짜판을 바꾼다. 모델이 꺼진다."""
+    model = await service.switch_snapshot(
+        session, args.slug, SnapshotSwitch(api_model_id=args.api_model_id, note=args.note)
+    )
+    return [
+        f'{model.slug}: 날짜판을 {model.api_model_id} 로 바꿨다. 꺼져 있다',
+        '평가 장면(말투 검사 포함)을 다시 통과하면 켠다(enable)',
+    ]
 
 
 async def set_cost_command(session: AsyncSession, args: argparse.Namespace, today: date) -> list[str]:
@@ -214,6 +234,7 @@ COMMANDS: dict[str, Command] = {
     'show': show_command,
     'add': add_command,
     'update': update_command,
+    'switch-snapshot': switch_snapshot_command,
     'set-cost': set_cost_command,
     'enable': enable_command,
     'disable': disable_command,
@@ -253,12 +274,22 @@ def add_model_parsers(commands: argparse._SubParsersAction) -> None:
     add.add_argument('--grade', required=True, choices=list(Grade))
     add_capability_options(add, defaults=True)
 
-    update = commands.add_parser('update', help='적은 것만 바꾼다. 이름표, 창구, API 모델 이름은 바꾸지 않는다')
+    update = commands.add_parser(
+        'update', help='적은 것만 바꾼다. 이름표와 창구는 바꾸지 않는다. 날짜판은 switch-snapshot'
+    )
     update.add_argument('slug')
     update.add_argument('--name')
     update.add_argument('--vendor')
     update.add_argument('--grade', choices=list(Grade))
     add_capability_options(update, defaults=False)
+
+
+def add_snapshot_parser(commands: argparse._SubParsersAction) -> None:
+    """switch-snapshot 의 명령줄."""
+    switch = commands.add_parser('switch-snapshot', help='날짜판(API 모델 이름)을 바꾼다. 기록이 남고 모델이 꺼진다')
+    switch.add_argument('slug')
+    switch.add_argument('--api-model-id', required=True, help='새 날짜판. 공식 문서의 날짜 붙은 이름')
+    switch.add_argument('--note', help='덧붙일 말(공급자의 공지 …)')
 
 
 def add_cost_parser(commands: argparse._SubParsersAction) -> None:
@@ -293,6 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
     listing.add_argument('--on', type=date.fromisoformat, help='이 날의 단가로 본다')
     commands.add_parser('show', help='모델 하나와 그 단가들').add_argument('slug')
     add_model_parsers(commands)
+    add_snapshot_parser(commands)
     add_cost_parser(commands)
     add_switch_parsers(commands)
     return parser
