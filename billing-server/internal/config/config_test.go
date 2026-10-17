@@ -71,8 +71,10 @@ func TestLoadFillsDefaults(t *testing.T) {
 		DatabaseURL:    databaseURL,
 		DBSchema:       "billing",
 		AuthJWKSURL:    jwksURL,
-		JWTIssuer:      "ai-trpg-auth",
-		JWTAudience:    "ai-trpg-billing",
+		// 적지 않으면 공개키 주소 옆이다
+		AuthRevocationsURL: "http://127.0.0.1:8000/api/v1/auth/session-revocations",
+		JWTIssuer:          "ai-trpg-auth",
+		JWTAudience:        "ai-trpg-billing",
 		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 1주일 뒤에 사라진다
 		SpendFreeFirst: true,
 		FreeCreditTTL:  7 * 24 * time.Hour,
@@ -94,50 +96,52 @@ func TestLoadFillsDefaults(t *testing.T) {
 
 func TestLoadReadsEveryValue(t *testing.T) {
 	settings, err := config.Load(from(map[string]string{
-		"DEBUG":              "true",
-		"HOST":               "0.0.0.0",
-		"PORT":               "9000",
-		"DATABASE_URL":       databaseURL,
-		"DB_SCHEMA":          "billing_test",
-		"AUTH_JWKS_URL":      "https://auth.example.com/jwks",
-		"JWT_ISSUER":         "some-issuer",
-		"JWT_AUDIENCE":       "some-audience",
-		"SPEND_FREE_FIRST":   "false",
-		"FREE_CREDIT_TTL":    "36h30m",
-		"HOLD_TTL":           "2h",
-		"ORDER_TTL":          "30m",
-		"PG_WEBHOOK_SECRET":  "0123456789abcdef0123456789abcdef",
-		"GAME_SERVER_SECRET": "fedcba9876543210fedcba9876543210",
-		"AUTH_SERVER_SECRET": "00112233445566778899aabbccddeeff",
-		"WELCOME_CREDITS":    "250",
-		"APP_ENVIRONMENT":    "production",
-		"APP_VERSION":        "3f2a9c1",
-		"LOG_LEVEL":          "warning",
-		"PAYMENT_PROVIDER":   "toss",
-		"TOSS_SECRET_KEY":    tossSecretKey,
-		"TOSS_CLIENT_KEY":    tossClientKey,
+		"DEBUG":                        "true",
+		"HOST":                         "0.0.0.0",
+		"PORT":                         "9000",
+		"DATABASE_URL":                 databaseURL,
+		"DB_SCHEMA":                    "billing_test",
+		"AUTH_JWKS_URL":                "https://auth.example.com/jwks",
+		"AUTH_SESSION_REVOCATIONS_URL": "https://auth.example.com/revoked",
+		"JWT_ISSUER":                   "some-issuer",
+		"JWT_AUDIENCE":                 "some-audience",
+		"SPEND_FREE_FIRST":             "false",
+		"FREE_CREDIT_TTL":              "36h30m",
+		"HOLD_TTL":                     "2h",
+		"ORDER_TTL":                    "30m",
+		"PG_WEBHOOK_SECRET":            "0123456789abcdef0123456789abcdef",
+		"GAME_SERVER_SECRET":           "fedcba9876543210fedcba9876543210",
+		"AUTH_SERVER_SECRET":           "00112233445566778899aabbccddeeff",
+		"WELCOME_CREDITS":              "250",
+		"APP_ENVIRONMENT":              "production",
+		"APP_VERSION":                  "3f2a9c1",
+		"LOG_LEVEL":                    "warning",
+		"PAYMENT_PROVIDER":             "toss",
+		"TOSS_SECRET_KEY":              tossSecretKey,
+		"TOSS_CLIENT_KEY":              tossClientKey,
 	}))
 	if err != nil {
 		t.Fatalf("설정을 읽지 못했다: %v", err)
 	}
 
 	want := config.Settings{
-		Debug:          true,
-		AppEnvironment: "production",
-		AppVersion:     "3f2a9c1",
-		LogLevel:       "warning",
-		Host:           "0.0.0.0",
-		Port:           9000,
-		DatabaseURL:    databaseURL,
-		DBSchema:       "billing_test",
-		AuthJWKSURL:    "https://auth.example.com/jwks",
-		JWTIssuer:      "some-issuer",
-		JWTAudience:    "some-audience",
-		SpendFreeFirst: false,
-		FreeCreditTTL:  36*time.Hour + 30*time.Minute,
-		HoldTTL:        2 * time.Hour,
-		OrderTTL:       30 * time.Minute,
-		WelcomeCredits: 250,
+		Debug:              true,
+		AppEnvironment:     "production",
+		AppVersion:         "3f2a9c1",
+		LogLevel:           "warning",
+		Host:               "0.0.0.0",
+		Port:               9000,
+		DatabaseURL:        databaseURL,
+		DBSchema:           "billing_test",
+		AuthJWKSURL:        "https://auth.example.com/jwks",
+		AuthRevocationsURL: "https://auth.example.com/revoked",
+		JWTIssuer:          "some-issuer",
+		JWTAudience:        "some-audience",
+		SpendFreeFirst:     false,
+		FreeCreditTTL:      36*time.Hour + 30*time.Minute,
+		HoldTTL:            2 * time.Hour,
+		OrderTTL:           30 * time.Minute,
+		WelcomeCredits:     250,
 		// 꼭 32자다. 받는 가장 짧은 길이다
 		WebhookSecret:    "0123456789abcdef0123456789abcdef",
 		GameServerSecret: "fedcba9876543210fedcba9876543210",
@@ -149,6 +153,25 @@ func TestLoadReadsEveryValue(t *testing.T) {
 	}
 	if settings.Addr() != "0.0.0.0:9000" {
 		t.Errorf("주소 = %q, 기대 = %q", settings.Addr(), "0.0.0.0:9000")
+	}
+}
+
+func TestTheRevocationsURLMustBeGivenWhenItCannotBeDerived(t *testing.T) {
+	// 공개키 주소가 …/jwks 로 끝나지 않으면 옆 주소를 짐작하지 않는다
+	_, err := config.Load(from(required(map[string]string{"AUTH_JWKS_URL": "https://auth.example.com/keys"})))
+	if err == nil || !strings.Contains(err.Error(), "AUTH_SESSION_REVOCATIONS_URL") {
+		t.Errorf("오류 = %v. AUTH_SESSION_REVOCATIONS_URL 을 적으라고 해야 한다", err)
+	}
+
+	settings, err := config.Load(from(required(map[string]string{
+		"AUTH_JWKS_URL": "https://auth.example.com/keys", "AUTH_SESSION_REVOCATIONS_URL": "https://auth.example.com/revoked",
+	})))
+	if err != nil || settings.AuthRevocationsURL != "https://auth.example.com/revoked" {
+		t.Errorf("설정 = %q, 오류 = %v", settings.AuthRevocationsURL, err)
+	}
+
+	if _, err := config.Load(from(required(map[string]string{"AUTH_SESSION_REVOCATIONS_URL": "ftp://auth.example.com/x"}))); err == nil {
+		t.Error("http 가 아닌 주소를 받았다")
 	}
 }
 
