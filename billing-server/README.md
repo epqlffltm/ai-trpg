@@ -1149,6 +1149,10 @@ compose 로 띄우면 둘 다 저절로 돈다([compose 로 서버 넷과 함께
 2. 기한이 지난 무료 크레딧을, 그 뒤로 변경이 없는 사용자의 원장에도 적는다(`expire` 줄)
 3. 만료된 `pending` 주문을 `expired` 로 끝낸다. `confirming` 은 건드리지 않는다. 돈이 나갔을 수 있다
 
+셋 모두 DB 만으로 끝난다. 결제 대행사를 부르지 않아서 결제 대행사의 설정(`PAYMENT_PROVIDER`, `TOSS_*`)을 읽지 않고, 키가 없어도 돈다(`config.LoadSweeper`).
+주문 서비스에는 부르면 오류(`payment.ErrNoProvider`)를 내는 자리 채움(`payment.None`)을 끼운다. 가짜를 끼우면 잘못 불렸을 때 "승인됨" 같은 답으로 원장이 바뀐다.
+compose 는 정리 작업에 `TOSS_SECRET_KEY` 를 주지 않는다. 결제 대행사에 묻는 것은 서버와 대사뿐이다.
+
 ```
 go run ./cmd/sweeper                          30초마다 한 바퀴. Ctrl+C 로 끈다
 go run ./cmd/sweeper -once                    한 바퀴만 돌고 정리한 수를 찍는다
@@ -1596,7 +1600,7 @@ billing-server/
   cmd/orders/main.go      결과를 끝내 모르는 주문을 보고, 운영자가 결과를 정하는 명령
   migrations/             테이블을 만들고 바꾸는 SQL. 실행 파일에 담긴다(embed.go)
   internal/
-    config/               설정을 환경 변수에서 읽고 검사한다. 서버의 것(Load)과 작업 명령의 것(LoadJobs)
+    config/               설정을 환경 변수에서 읽고 검사한다. 서버의 것(Load), 결제 대행사에 묻는 작업 명령의 것(LoadJobs), 정리 작업의 것(LoadSweeper)
     app/                  서버와 작업 명령이 같은 방법으로 서비스(지갑, 주문, 홀드)와 로거를 만든다
     database/             연결 풀을 만든다. search_path, 접속 제한, 풀의 크기
     migrate/              마이그레이션 파일을 적용하고 되돌린다. goose 를 부르는 얇은 층
@@ -1611,7 +1615,7 @@ billing-server/
       queries.sql           이 패키지가 쓰는 SQL 전부
       walletdb/             sqlc 가 queries.sql 에서 만든 코드. 손으로 고치지 않는다
     catalog/              파는 상품의 목록. 무엇을 얼마에 파는지
-    payment/              결제 대행사. 모양(payment.go), 가짜(fake.go), 토스페이먼츠의 승인·조회·취소(toss.go)와 알림 읽기(toss_webhook.go), 알림의 서명(webhook.go)
+    payment/              결제 대행사. 모양(payment.go), 가짜(fake.go), 부르지 않는 프로세스의 자리 채움(none.go), 토스페이먼츠의 승인·조회·취소(toss.go)와 알림 읽기(toss_webhook.go), 알림의 서명(webhook.go)
     signature/            비밀로 글자에 서명하고 확인한다(HMAC, 시각 포함). 아래 둘이 함께 쓴다
     serviceauth/          우리 서버끼리의 요청에 붙는 서명. 메서드, 주소, 본문에 서명한다
     pricing/              크레딧을 받는 일의 가격표. 무엇에 몇 크레딧을 받는지. DB 에 덧붙이기만 한다

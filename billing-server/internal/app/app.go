@@ -52,6 +52,11 @@ func NewProviders(settings config.Payment) order.Providers {
 	return order.Providers{order.ChannelWeb: NewProvider(settings)}
 }
 
+// NoProviders 는 결제 대행사를 부르지 않는 정리 작업의 것이다. 웹 자리에 부르면 오류를 내는 것(payment.None)을 둔다.
+func NoProviders() order.Providers {
+	return order.Providers{order.ChannelWeb: payment.None{}}
+}
+
 // NewProvider 는 설정이 고른 웹의 결제 대행사를 만든다.
 // 설정이 값을 이미 검사했다. toss 가 아니면 가짜다.
 func NewProvider(settings config.Payment) payment.Provider {
