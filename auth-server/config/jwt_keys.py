@@ -5,9 +5,14 @@ JWT 서명 키를 읽고, 거기서 공개키와 키 ID 를 만든다. 검증에
 
 settings.py 가 기동할 때 한 번 호출한다. Django 모델이나 설정을 import 하지 않는다.
 설정을 읽는 도중에 불리는 코드가 설정에 의존하면 순환 참조가 생긴다.
+
+개인키는 토큰에 서명하는 프로세스(서버)만 갖는다. 워커와 마이그레이션은 서명하지 않으므로 경로를 비워 키 없이 뜬다.
+키가 없는 프로세스가 서명하려 하면 accounts/key_ring.py 가 막는다.
+서버의 입구(config/wsgi.py)는 키가 없으면 뜨지 않는다.
 """
 
 import hashlib
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
@@ -15,6 +20,54 @@ from django.core.exceptions import ImproperlyConfigured
 
 # 키 ID 로 쓸 해시의 길이. 키를 구별하는 이름표라서 전체 해시가 필요하지 않다
 KEY_ID_LENGTH = 16
+
+
+@dataclass(frozen=True)
+class KeyMaterial:
+    """설정에 싣는 JWT 키들. 서명하지 않는 프로세스는 모두 비어 있다(NO_KEYS)."""
+
+    # 새 토큰에 서명하는 개인키 PEM
+    signing_key_pem: str | None = None
+    # 서명 키의 공개키 PEM 과 키 ID
+    public_key_pem: str | None = None
+    key_id: str | None = None
+    # 받은 토큰을 검증할 수 있는 공개키들. 키 ID → 공개키 PEM. 서명 키가 맨 앞이다
+    verification_keys: dict[str, str] = field(default_factory=dict)
+
+
+# 서명하지 않는 프로세스의 키들. 아무 키도 없다
+NO_KEYS = KeyMaterial()
+
+
+def private_key_path(value: str, base_dir: Path) -> Path | None:
+    """
+    설정에 적힌 개인키의 경로. 상대 경로는 base_dir 를 기준으로 한다.
+
+    비어 있으면 None 이다. 이 프로세스는 서명하지 않는다(워커, 마이그레이션).
+    빈 글자를 base_dir 에 붙이면 폴더 자체가 되어 "파일이 아니다"라는 엉뚱한 오류가 난다. 그래서 따로 가린다.
+    """
+    value = value.strip()
+    if not value:
+        return None
+    return base_dir / value
+
+
+def load_key_material(signing_key_path: Path | None, extra_public_key_paths: list[Path]) -> KeyMaterial:
+    """
+    서명 키와 검증 키들을 읽는다. 서명 키의 경로가 없으면 아무것도 읽지 않는다(NO_KEYS).
+
+    서명하지 않는 프로세스는 받은 토큰을 검증하지도 않는다. 그래서 검증만 하는 공개키도 읽지 않는다.
+    """
+    if signing_key_path is None:
+        return NO_KEYS
+    signing_key_pem = read_private_key_pem(signing_key_path)
+    public_key_pem = derive_public_key_pem(signing_key_pem)
+    return KeyMaterial(
+        signing_key_pem=signing_key_pem,
+        public_key_pem=public_key_pem,
+        key_id=compute_key_id(public_key_pem),
+        verification_keys=build_verification_keys(public_key_pem, extra_public_key_paths),
+    )
 
 
 def read_private_key_pem(path: Path) -> str:

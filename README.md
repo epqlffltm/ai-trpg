@@ -102,8 +102,12 @@ cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
 - 게임 서버의 언어 모델은 컨테이너 밖, 이 PC 의 Ollama(`host.docker.internal:11434`)로 간다.
   다른 곳의 모델을 쓰면 루트 `.env` 의 `GAME_LLM_BASE_URL` 에 적는다. `game-server/.env` 의 `LLM_BASE_URL` 은 덮인다.
 - 인증 서버의 JWT 개인키는 `auth-server/keys/` 를 읽기 전용으로 붙인다. 이미지에는 넣지 않는다.
+  토큰에 서명하는 `auth-server` 에만 붙인다. 인증의 워커와 마이그레이션은 키 없이 뜬다(`JWT_PRIVATE_KEY_PATH` 를 비운다).
   **리눅스에서는** 키 파일의 주인이 PC 의 사용자라 컨테이너의 사용자(번호 10001)가 읽지 못한다.
   `sudo chown 10001 auth-server/keys/jwt-private.pem` 으로 주인을 바꾼다(권한은 600 그대로). Docker Desktop(Windows, macOS)에서는 그대로 읽힌다.
+- 서버의 `.env` 는 통째로 넘어가지만, 비밀은 그것을 쓰는 프로세스에만 간다(#274). 쓰지 않는 비밀은 compose 가 빈 값으로 덮는다.
+  예를 들어 결제 서버의 정리 작업은 요청의 서명을 확인하는 비밀을, 게임 서버의 마이그레이션은 모델의 키를 받지 않는다.
+  어느 프로세스가 무엇을 받는지는 `.github/scripts/secret_scope.py` 의 표에 있다. 새 비밀을 더하면 그 표에도 적는다. 표에 없으면 CI(`stack`)가 실패한다.
 - 포트가 다른 프로그램과 겹치면 루트 `.env` 의 `PROXY_PORT`(8080), `AUTH_PORT`(8000)로 바꾼다.
 
 ## 설계 메모
@@ -126,7 +130,7 @@ cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
 관문은 바뀐 파일을 보고 그 서버의 CI 만 부른다(`.github/scripts/changed-servers.sh`). 부르지 않은 서버는 건너뛴 것이고 통과로 친다.
 서버의 CI 넷을 따로 필수로 걸지 않은 이유: 서버마다 자기 폴더가 바뀔 때만 돈다. 돌지 않은 필수 검사를 GitHub 은 "기다리는 중"으로 두고 머지를 막는다.
 `docker/` 아래(DB 초기화 스크립트, 프록시의 설정, crontab), compose 파일, 관문 자신이 바뀌면 넷 다 돈다. 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 `ruff.toml`)이 바뀌면 인증과 게임이 돈다. `main` 에 들어간 뒤에는 서버의 CI 가 예전처럼 제 폴더가 바뀔 때만 스스로 돈다. 위의 배지가 그 결과다.
-서버가 하나라도 바뀌면 관문의 `stack` 이 네 서버의 이미지를 만들어 compose 로 함께 띄우고, 마이그레이션이 성공했는지, 서버끼리 닿는지, 워커가 다시 뜨기를 되풀이하지 않는지, crontab 의 명령이 한 번씩 성공하는지, 프록시가 주소를 나누고 막는지를 본다(`.github/scripts/stack-smoke.sh`).
+서버가 하나라도 바뀌면 관문의 `stack` 이 네 서버의 이미지를 만들어 compose 로 함께 띄우고, 마이그레이션이 성공했는지, 서버끼리 닿는지, 워커가 다시 뜨기를 되풀이하지 않는지, crontab 의 명령이 한 번씩 성공하는지, 비밀이 그것을 쓰는 프로세스에만 가는지, 프록시가 주소를 나누고 막는지를 본다(`.github/scripts/stack-smoke.sh`).
 
 **이미지는 서버마다 같은 규칙으로 만든다.** 여러 단계로 빌드해 실행에 필요한 것만 담고, root 가 아닌 사용자(번호로 적는다)로 돌린다.
 기본 이미지는 버전을 고정한다. 비밀(`.env`, JWT 키)은 `.dockerignore` 로 막아 이미지에 넣지 않고, 띄울 때 compose 가 넘긴다.
