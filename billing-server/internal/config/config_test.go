@@ -4,10 +4,12 @@ package config_test
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/attendance"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 )
 
@@ -82,14 +84,16 @@ func TestLoadFillsDefaults(t *testing.T) {
 		HoldTTL:  24 * time.Hour,
 		OrderTTL: 24 * time.Hour,
 		// 적지 않으면 환영 크레딧은 1,000 이다
-		WelcomeCredits:   1_000,
+		WelcomeCredits: 1_000,
+		// 적지 않으면 출석은 140 에서 260 까지 7일이다
+		AttendanceSilver: attendance.Schedule{140, 160, 180, 200, 220, 240, 260},
 		WebhookSecret:    webhookSecret,
 		GameServerSecret: gameSecret,
 		AuthServerSecret: authSecret,
 		// 적지 않으면 가짜 결제 대행사다
 		Payment: config.Payment{Provider: "fake"},
 	}
-	if settings != want {
+	if !reflect.DeepEqual(settings, want) {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
 	}
 }
@@ -113,6 +117,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		"GAME_SERVER_SECRET":           "fedcba9876543210fedcba9876543210",
 		"AUTH_SERVER_SECRET":           "00112233445566778899aabbccddeeff",
 		"WELCOME_CREDITS":              "250",
+		"ATTENDANCE_SILVER":            " 10, 20 ,30",
 		"APP_ENVIRONMENT":              "production",
 		"APP_VERSION":                  "3f2a9c1",
 		"LOG_LEVEL":                    "warning",
@@ -142,13 +147,15 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		HoldTTL:            2 * time.Hour,
 		OrderTTL:           30 * time.Minute,
 		WelcomeCredits:     250,
+		// 칸 사이의 빈칸은 무시한다
+		AttendanceSilver: attendance.Schedule{10, 20, 30},
 		// 꼭 32자다. 받는 가장 짧은 길이다
 		WebhookSecret:    "0123456789abcdef0123456789abcdef",
 		GameServerSecret: "fedcba9876543210fedcba9876543210",
 		AuthServerSecret: "00112233445566778899aabbccddeeff",
 		Payment:          config.Payment{Provider: "toss", TossSecretKey: tossSecretKey, TossClientKey: tossClientKey},
 	}
-	if settings != want {
+	if !reflect.DeepEqual(settings, want) {
 		t.Errorf("설정 = %+v, 기대 = %+v", settings, want)
 	}
 	if settings.Addr() != "0.0.0.0:9000" {
@@ -394,6 +401,31 @@ func TestLoadJobsReportsEveryProblemAtOnce(t *testing.T) {
 	for _, name := range []string{"DATABASE_URL", "DB_SCHEMA", "HOLD_TTL", "ORDER_TTL", "SPEND_FREE_FIRST", "LOG_LEVEL"} {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("오류에 %s 가 없다: %v", name, err)
+		}
+	}
+}
+
+func TestLoadRejectsABadAttendanceSchedule(t *testing.T) {
+	for _, text := range []string{"140,,180", "140,abc", "140,0", "-1", "100001", "1,1,1,1,1,1,1,1,1,1,1,1,1,1,1"} {
+		_, err := config.Load(from(required(map[string]string{"ATTENDANCE_SILVER": text})))
+		if err == nil || !strings.Contains(err.Error(), "ATTENDANCE_SILVER") {
+			t.Errorf("ATTENDANCE_SILVER=%s 는 거절해야 한다: %v", text, err)
+		}
+	}
+}
+
+func TestLoadAcceptsTheEdgesOfTheAttendanceSchedule(t *testing.T) {
+	cases := map[string]attendance.Schedule{
+		"1":                           {1},
+		"100000":                      {100_000},
+		"1,1,1,1,1,1,1,1,1,1,1,1,1,1": {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+		// 빈 값은 적지 않은 것과 같다
+		" ": attendance.DefaultSchedule(),
+	}
+	for text, want := range cases {
+		settings, err := config.Load(from(required(map[string]string{"ATTENDANCE_SILVER": text})))
+		if err != nil || !reflect.DeepEqual(settings.AttendanceSilver, want) {
+			t.Errorf("ATTENDANCE_SILVER=%q: %v, %v", text, settings.AttendanceSilver, err)
 		}
 	}
 }

@@ -32,6 +32,8 @@ type Dependencies struct {
 	// Welcome 은 환영 크레딧을 준다. WelcomeCredits 는 그 양이다. 0 이면 주지 않는다.
 	Welcome        WelcomeGranter
 	WelcomeCredits credit.Amount
+	// Attendance 는 출석과 보물 상자다(#339). 넣지 않으면 그 주소들을 열지 않는다.
+	Attendance AttendanceService
 	// Orders 는 주문을 만들고 치른다. 서버는 결제 자격으로 감싼 것(eligibility.Guard)을 넣는다.
 	Orders OrderService
 	// Notifier 는 결제 대행사의 알림을 처리한다.
@@ -114,6 +116,12 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	api.GET("/orders/:id", getOrder(deps.Orders))
 	api.POST("/orders/:id/confirm", confirmOrder(deps.Orders))
 	api.POST("/orders/:id/refund", refundOrder(deps.Orders))
+	if deps.Attendance != nil {
+		api.GET("/attendance", getAttendance(deps.Attendance))
+		api.POST("/attendance", claimAttendance(deps.Attendance))
+		// 하루 양과 보물 상자의 확률을 공개한다. 로그인 묶음 밖에 둔다. 가입하기 전에도 볼 수 있다
+		router.GET(APIPrefix+"/attendance/rewards", attendanceRewards(deps.Attendance))
+	}
 
 	// 결제 대행사가 부르는 주소다. 로그인 묶음 밖에 둔다. 토큰 대신 본문의 서명을 확인한다
 	router.POST(APIPrefix+"/webhooks/payment", paymentWebhook(deps.Notifier, deps.WebhookSecret, deps.Now))
