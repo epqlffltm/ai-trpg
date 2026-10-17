@@ -7,6 +7,9 @@
 여기는 그 앞에서 시도의 속도를 늦출 뿐이다. 그래서 Redis 가 죽으면 막지 않고 통과시킨다.
 Redis 장애가 로그인 장애가 되어서는 안 된다.
 
+Redis 명령은 모두 차단기(config/redis_client.py 의 redis_breaker)를 거친다. 연달아 실패해 차단기가 열리면
+한동안 Redis 에 묻지 않고 바로 통과시킨다. 멈춘 Redis 를 요청마다 기다리지 않는다.
+
 HTTP 를 모른다. 무엇을 기준으로 셀지(IP, 계정)는 부르는 쪽이 정해 문자열로 넘긴다.
 """
 
@@ -15,10 +18,11 @@ import logging
 from dataclasses import dataclass
 from datetime import timedelta
 
+import pybreaker
 import redis
 from django.conf import settings
 
-from config.redis_client import get_redis
+from config.redis_client import get_redis, redis_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,9 @@ if count == 1 then
 end
 return {count, redis.call('TTL', KEYS[1])}
 """
+
+# Redis 를 쓸 수 없을 때 나는 예외. 차단기가 열려 있으면 Redis 에 묻지 않고 CircuitBreakerError 를 낸다
+REDIS_UNAVAILABLE = (redis.RedisError, pybreaker.CircuitBreakerError)
 
 
 @dataclass(frozen=True)
@@ -71,8 +78,8 @@ def count_attempt(limit: AttemptLimit, subject: str) -> None:
     if not settings.ATTEMPT_LIMITS_ENABLED:
         return
     try:
-        count, seconds_left = _increment(limit, subject)
-    except redis.RedisError as exc:
+        count, seconds_left = redis_breaker.call(_increment, limit, subject)
+    except REDIS_UNAVAILABLE as exc:
         _log_redis_failure(exc)
         return
     if count > limit.max_attempts:
@@ -91,8 +98,8 @@ def ensure_not_blocked(limit: AttemptLimit, subject: str) -> None:
     if not settings.ATTEMPT_LIMITS_ENABLED:
         return
     try:
-        count, seconds_left = _read(limit, subject)
-    except redis.RedisError as exc:
+        count, seconds_left = redis_breaker.call(_read, limit, subject)
+    except REDIS_UNAVAILABLE as exc:
         _log_redis_failure(exc)
         return
     if count >= limit.max_attempts:
@@ -108,8 +115,8 @@ def count_failure(limit: AttemptLimit, subject: str) -> bool:
     if not settings.ATTEMPT_LIMITS_ENABLED:
         return False
     try:
-        count, _ = _increment(limit, subject)
-    except redis.RedisError as exc:
+        count, _ = redis_breaker.call(_increment, limit, subject)
+    except REDIS_UNAVAILABLE as exc:
         _log_redis_failure(exc)
         return False
     return count == limit.max_attempts
@@ -120,8 +127,8 @@ def clear_attempts(limit: AttemptLimit, subject: str) -> None:
     if not settings.ATTEMPT_LIMITS_ENABLED:
         return
     try:
-        get_redis().delete(_key(limit, subject))
-    except redis.RedisError as exc:
+        redis_breaker.call(_delete, limit, subject)
+    except REDIS_UNAVAILABLE as exc:
         _log_redis_failure(exc)
 
 
@@ -130,6 +137,11 @@ def _increment(limit: AttemptLimit, subject: str) -> tuple[int, int]:
     window_seconds = int(limit.window.total_seconds())
     count, seconds_left = get_redis().eval(INCREMENT_SCRIPT, 1, _key(limit, subject), window_seconds)
     return int(count), int(seconds_left)
+
+
+def _delete(limit: AttemptLimit, subject: str) -> None:
+    """세던 횟수를 지운다."""
+    get_redis().delete(_key(limit, subject))
 
 
 def _read(limit: AttemptLimit, subject: str) -> tuple[int, int]:
@@ -169,5 +181,8 @@ def _log_redis_failure(error: Exception) -> None:
     Redis 를 쓸 수 없었음을 남긴다. 요청은 막지 않고 통과시킨다.
 
     경고로 남겨야 한다. 조용히 넘어가면 제한이 꺼져 있다는 것을 아무도 모른다.
+    차단기 때문에 묻지 않은 것은 남기지 않는다. 차단기가 열릴 때 한 번 남겼다. 요청마다 남기면 로그를 메운다.
     """
+    if isinstance(error, pybreaker.CircuitBreakerError):
+        return
     logger.warning('시도 횟수를 셀 수 없어 제한 없이 통과시켰다: %s: %s', type(error).__name__, error)
