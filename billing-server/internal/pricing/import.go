@@ -32,6 +32,8 @@ type Entry struct {
 	Stop bool
 	// EffectiveAt 은 적용을 시작할 시각이다. 비워 두면(zero) 지금이다. 지금보다 앞설 수 없다.
 	EffectiveAt time.Time
+	// Tier 는 등급이다. 비워 두면 그 시각의 등급을 그대로 쓴다(Change.Tier 와 같다).
+	Tier Tier
 }
 
 // Effect 는 줄 하나가 가격표를 어떻게 바꾸는지다.
@@ -45,7 +47,9 @@ const (
 	EffectLower Effect = "lower"
 	// EffectStop 은 판매를 멈추는 것이다.
 	EffectStop Effect = "stop"
-	// EffectSame 은 그 시각의 값과 같아 바뀌는 것이 없는 줄이다. 넣지 않는다.
+	// EffectRetier 는 값은 같고 등급만 바꾸는 것이다.
+	EffectRetier Effect = "retier"
+	// EffectSame 은 그 시각의 값과 등급이 같아 바뀌는 것이 없는 줄이다. 넣지 않는다.
 	EffectSame Effect = "same"
 )
 
@@ -56,6 +60,8 @@ type Planned struct {
 	EffectiveAt time.Time
 	// Before 는 그 시각에 바뀌기 전의 값이다. 그때 팔지 않으면 nil 이다.
 	Before *Price
+	// Tier 는 실제로 적힐 등급이다(비웠으면 그 시각의 등급).
+	Tier   Tier
 	Effect Effect
 }
 
@@ -125,7 +131,11 @@ func planEntry(ctx context.Context, queries *pricingdb.Queries, now time.Time, e
 	if entry.Stop && !everSold {
 		return Planned{}, ErrUnknownCode
 	}
-	return Planned{Entry: entry, EffectiveAt: effective, Before: before, Effect: effectOf(entry, before)}, nil
+	tier, err := resolveTier(ctx, queries, entry.Code, effective, entry.Tier)
+	if err != nil {
+		return Planned{}, err
+	}
+	return Planned{Entry: entry, EffectiveAt: effective, Before: before, Tier: tier, Effect: effectOf(entry, tier, before)}, nil
 }
 
 // checkEntry 는 줄 하나의 이름, 값, 이유, 바꾼 사람, 적용 시각을 확인하고 적용 시각을 돌려준다. Set·Stop 과 같은 규칙이다.
@@ -149,11 +159,13 @@ func priceBefore(ctx context.Context, queries *pricingdb.Queries, code string, a
 	if row.Amount == nil {
 		return nil, true, nil
 	}
-	return &Price{Code: row.Code, Credits: *row.Amount, Since: row.EffectiveAt}, true, nil
+	price := toPrice(row)
+	return &price, true, nil
 }
 
-// effectOf 는 바뀌기 전의 값과 새 줄을 견줘 무엇이 바뀌는지 정한다.
-func effectOf(entry Entry, before *Price) Effect {
+// effectOf 는 바뀌기 전의 값과 새 줄(값과 등급)을 견줘 무엇이 바뀌는지 정한다.
+// 판매를 멈추는 줄은 등급을 보지 않는다. 멈춘 동안의 등급은 아무것도 바꾸지 않는다.
+func effectOf(entry Entry, tier Tier, before *Price) Effect {
 	switch {
 	case entry.Stop && before == nil:
 		return EffectSame
@@ -165,6 +177,8 @@ func effectOf(entry Entry, before *Price) Effect {
 		return EffectRaise
 	case entry.Credits < before.Credits:
 		return EffectLower
+	case tier != before.Tier:
+		return EffectRetier
 	default:
 		return EffectSame
 	}
@@ -179,6 +193,7 @@ func insertPlanned(ctx context.Context, queries *pricingdb.Queries, now time.Tim
 		_, err := queries.InsertPriceVersion(ctx, pricingdb.InsertPriceVersionParams{
 			Code:        line.Entry.Code,
 			Amount:      amountOf(line.Entry),
+			Tier:        string(line.Tier),
 			EffectiveAt: line.EffectiveAt,
 			Reason:      reason,
 			ChangedBy:   changedBy,

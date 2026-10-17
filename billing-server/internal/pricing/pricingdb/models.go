@@ -18,4 +18,5 @@ type PriceVersion struct {
 	Reason      string
 	ChangedBy   string
 	CreatedAt   time.Time
+	Tier        string
 }

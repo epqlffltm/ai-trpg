@@ -44,7 +44,7 @@ func TestPlanShowsEachChangeAndWritesNothing(t *testing.T) {
 		{Code: lowered, Credits: 90},
 		{Code: same, Credits: 120},
 		{Code: stopped, Stop: true},
-		{Code: fresh, Credits: 70},
+		{Code: fresh, Credits: 70, Tier: pricing.TierStandard},
 	}
 
 	planned, err := f.service.Plan(ctx(t), entries, "모델별 가격", "test")
@@ -78,7 +78,7 @@ func TestImportAddsTheChangesAndSkipsTheSameOnes(t *testing.T) {
 	f := setUp(t)
 	f.set(f.change(120))
 	fresh := newCode()
-	entries := []pricing.Entry{{Code: f.code, Credits: 120}, {Code: fresh, Credits: 70}}
+	entries := []pricing.Entry{{Code: f.code, Credits: 120}, {Code: fresh, Credits: 70, Tier: pricing.TierStandard}}
 
 	planned, err := f.service.Import(ctx(t), entries, "모델별 가격", "test")
 
@@ -97,19 +97,19 @@ func TestImportAddsTheChangesAndSkipsTheSameOnes(t *testing.T) {
 func TestImportWritesNothingWhenAnyLineIsWrong(t *testing.T) {
 	cases := map[string]func(f fixture, first string) []pricing.Entry{
 		"값이 0": func(_ fixture, first string) []pricing.Entry {
-			return []pricing.Entry{{Code: first, Credits: 100}, {Code: newCode(), Credits: 0}}
+			return []pricing.Entry{{Code: first, Credits: 100, Tier: pricing.TierStandard}, {Code: newCode(), Credits: 0}}
 		},
 		"이름의 모양": func(_ fixture, first string) []pricing.Entry {
-			return []pricing.Entry{{Code: first, Credits: 100}, {Code: "Narration.X", Credits: 10}}
+			return []pricing.Entry{{Code: first, Credits: 100, Tier: pricing.TierStandard}, {Code: "Narration.X", Credits: 10}}
 		},
 		"지난 시각": func(_ fixture, first string) []pricing.Entry {
-			return []pricing.Entry{{Code: first, Credits: 100}, {Code: newCode(), Credits: 10, EffectiveAt: startedAt.Add(-time.Hour)}}
+			return []pricing.Entry{{Code: first, Credits: 100, Tier: pricing.TierStandard}, {Code: newCode(), Credits: 10, EffectiveAt: startedAt.Add(-time.Hour)}}
 		},
 		"같은 이름이 둘": func(_ fixture, first string) []pricing.Entry {
-			return []pricing.Entry{{Code: first, Credits: 100}, {Code: first, Credits: 200}}
+			return []pricing.Entry{{Code: first, Credits: 100, Tier: pricing.TierStandard}, {Code: first, Credits: 200}}
 		},
 		"판 적 없는 이름의 판매 중지": func(_ fixture, first string) []pricing.Entry {
-			return []pricing.Entry{{Code: first, Credits: 100}, {Code: newCode(), Stop: true}}
+			return []pricing.Entry{{Code: first, Credits: 100, Tier: pricing.TierStandard}, {Code: newCode(), Stop: true}}
 		},
 		// 계산은 통과하고 넣다가 걸리는 경우다. 앞 줄은 이미 넣었지만 트랜잭션이 함께 되돌린다
 		"같은 적용 시각의 줄이 이미 있다": func(f fixture, first string) []pricing.Entry {
@@ -118,7 +118,7 @@ func TestImportWritesNothingWhenAnyLineIsWrong(t *testing.T) {
 			change := f.change(50)
 			change.Code, change.EffectiveAt = taken, later
 			f.set(change)
-			return []pricing.Entry{{Code: first, Credits: 100}, {Code: taken, Credits: 60, EffectiveAt: later}}
+			return []pricing.Entry{{Code: first, Credits: 100, Tier: pricing.TierStandard}, {Code: taken, Credits: 60, EffectiveAt: later}}
 		},
 	}
 	for name, build := range cases {
@@ -142,7 +142,7 @@ func TestImportReportsTheUnderlyingErrors(t *testing.T) {
 	f := setUp(t)
 	cases := map[error][]pricing.Entry{
 		pricing.ErrNoEntries:      nil,
-		pricing.ErrDuplicateEntry: {{Code: f.code, Credits: 1}, {Code: f.code, Credits: 2}},
+		pricing.ErrDuplicateEntry: {{Code: f.code, Credits: 1, Tier: pricing.TierStandard}, {Code: f.code, Credits: 2, Tier: pricing.TierStandard}},
 		pricing.ErrInvalidCredits: {{Code: f.code, Credits: pricing.MaxCredits + 1}},
 		pricing.ErrUnknownCode:    {{Code: f.code, Stop: true}},
 	}

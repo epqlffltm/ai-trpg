@@ -28,8 +28,11 @@ const (
 	codePriceUnknown = "price.unknown"
 	// codePriceNotForSale 은 판매를 멈춘 이름이라는 것이다. 부르는 서버의 모델 목록이 옛것이다. 목록을 다시 받으면 된다.
 	codePriceNotForSale = "price.not_for_sale"
-	// codeCreditInsufficient 는 크레딧이 모자라다는 것이다(402). 사용자에게 충전을 권한다.
+	// codeCreditInsufficient 는 크레딧이 모자라다는 것이다(402). 골드와 실버를 합쳐도 모자란다. 사용자에게 충전을 권한다.
 	codeCreditInsufficient = "credit.insufficient"
+	// codeCreditGoldRequired 는 프리미엄이라 골드(산 크레딧)로만 내는데 골드가 모자라다는 것이다(402).
+	// 실버(무료 크레딧)가 얼마나 있든 같다. 사용자에게 "프리미엄은 골드로만"을 알린다.
+	codeCreditGoldRequired = "credit.gold_required"
 	// codeHoldNotFound 는 그 이름표의 홀드가 없다는 것이다.
 	codeHoldNotFound = "hold.not_found"
 	// codeHoldReferenceReused 는 같은 이름표로 다른 홀드(다른 사용자나 다른 가격표 이름)를 걸려 했다는 것이다.

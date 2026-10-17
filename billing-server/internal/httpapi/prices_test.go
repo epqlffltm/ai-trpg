@@ -34,11 +34,11 @@ func (f *fakeLister) List(context.Context) ([]pricing.Listing, error) {
 // aListing 은 지금 값과 다음 값이 있는 목록이다.
 func aListing() []pricing.Listing {
 	return []pricing.Listing{
-		{Code: "narration.a.i0.o0", Current: &pricing.Price{Code: "narration.a.i0.o0", Credits: 120, Since: webhookNow},
-			Next: &pricing.Scheduled{Credits: 240, OnSale: true, EffectiveAt: webhookNow.Add(24 * time.Hour)}},
-		{Code: "narration.b.i0.o0", Current: &pricing.Price{Code: "narration.b.i0.o0", Credits: 30, Since: webhookNow},
-			Next: &pricing.Scheduled{OnSale: false, EffectiveAt: webhookNow.Add(48 * time.Hour)}},
-		{Code: "narration.c.i0.o0", Next: &pricing.Scheduled{Credits: 80, OnSale: true, EffectiveAt: webhookNow.Add(time.Hour)}},
+		{Code: "narration.a.i0.o0", Current: &pricing.Price{Code: "narration.a.i0.o0", Credits: 120, Tier: pricing.TierStandard, Since: webhookNow},
+			Next: &pricing.Scheduled{Credits: 240, OnSale: true, Tier: pricing.TierPremium, EffectiveAt: webhookNow.Add(24 * time.Hour)}},
+		{Code: "narration.b.i0.o0", Current: &pricing.Price{Code: "narration.b.i0.o0", Credits: 30, Tier: pricing.TierPremium, Since: webhookNow},
+			Next: &pricing.Scheduled{OnSale: false, Tier: pricing.TierPremium, EffectiveAt: webhookNow.Add(48 * time.Hour)}},
+		{Code: "narration.c.i0.o0", Next: &pricing.Scheduled{Credits: 80, OnSale: true, Tier: pricing.TierStandard, EffectiveAt: webhookNow.Add(time.Hour)}},
 	}
 }
 
@@ -63,11 +63,12 @@ func TestThePriceListGivesCurrentAndNextValues(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("상태 코드 = %d, 본문 = %s", response.Code, body(response))
 	}
-	// 값은 글자다. 지금 팔지 않으면 credits 와 since 가 null, 판매 중지 예약은 next.credits 가 null 이다
+	// 값은 글자다. 지금 팔지 않으면 credits, since, tier 가 null, 판매 중지 예약은 next.credits 와 next.tier 가 null 이다
+	// 등급은 값과 함께 바뀔 수 있다(a 는 내일부터 premium)
 	want := `{"prices":[` +
-		`{"code":"narration.a.i0.o0","credits":"120","since":"2026-03-02T09:00:00Z","next":{"credits":"240","effective_at":"2026-03-03T09:00:00Z"}},` +
-		`{"code":"narration.b.i0.o0","credits":"30","since":"2026-03-02T09:00:00Z","next":{"credits":null,"effective_at":"2026-03-04T09:00:00Z"}},` +
-		`{"code":"narration.c.i0.o0","credits":null,"since":null,"next":{"credits":"80","effective_at":"2026-03-02T10:00:00Z"}}]}`
+		`{"code":"narration.a.i0.o0","credits":"120","since":"2026-03-02T09:00:00Z","tier":"standard","next":{"credits":"240","tier":"premium","effective_at":"2026-03-03T09:00:00Z"}},` +
+		`{"code":"narration.b.i0.o0","credits":"30","since":"2026-03-02T09:00:00Z","tier":"premium","next":{"credits":null,"tier":null,"effective_at":"2026-03-04T09:00:00Z"}},` +
+		`{"code":"narration.c.i0.o0","credits":null,"since":null,"tier":null,"next":{"credits":"80","tier":"standard","effective_at":"2026-03-02T10:00:00Z"}}]}`
 	if body(response) != want {
 		t.Errorf("본문 = %s\n기대 = %s", body(response), want)
 	}

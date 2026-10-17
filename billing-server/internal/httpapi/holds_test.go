@@ -233,6 +233,7 @@ func TestHoldErrorsBecomeStatusCodesAndNames(t *testing.T) {
 		"가격표에 없는 이름이다":     {holdsURL, holdText, hold.ErrUnknownPrice, http.StatusBadRequest, "price.unknown"},
 		"판매를 멈춘 이름이다":      {holdsURL, holdText, hold.ErrPriceNotForSale, http.StatusBadRequest, "price.not_for_sale"},
 		"크레딧이 모자란다":        {holdsURL, holdText, wallet.ErrInsufficient, http.StatusPaymentRequired, "credit.insufficient"},
+		"프리미엄인데 골드가 모자란다":  {holdsURL, holdText, wallet.ErrPaidInsufficient, http.StatusPaymentRequired, "credit.gold_required"},
 		"이름표를 다른 사용자에게 썼다": {holdsURL, holdText, hold.ErrReferenceReused, http.StatusConflict, "hold.reference_reused"},
 		"확정할 홀드가 없다":       {captureURL, settleText, hold.ErrNotFound, http.StatusNotFound, "hold.not_found"},
 		"돌려줄 홀드가 없다":       {releaseURL, settleText, hold.ErrNotFound, http.StatusNotFound, "hold.not_found"},

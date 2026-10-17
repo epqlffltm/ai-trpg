@@ -4,6 +4,7 @@ package wallet
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -93,14 +94,16 @@ func (s *Service) Spend(ctx context.Context, userID uuid.UUID, amount credit.Amo
 
 // TakeForHold 는 홀드로 크레딧을 뺀다. 부르는 쪽이 연 트랜잭션(tx) 안에서 한다.
 // 홀드를 만드는 일과 크레딧을 빼는 일이 함께 되거나 함께 안 되게 하려는 것이다.
-// 어디서 뺄지는 Spend 와 같은 규칙(Policy.FreeFirst)을 따른다. 가진 것이 모자라면 ErrInsufficient 다.
+// funds 가 AnyCredits 면 Spend 와 같은 규칙(Policy.FreeFirst)을 따르고, 모자라면 ErrInsufficient 다.
+// PaidOnly 면 산 크레딧에서만 빼고, 모자라면 ErrPaidInsufficient 다.
 // 원장에는 hold 줄이 남고 그 줄이 홀드를 가리킨다. 어디서 얼마를 뺐는지는 그 줄들이 기억한다.
-func (s *Service) TakeForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, holdID uuid.UUID) error {
+// 그래서 돌려줄 때(ReturnForHold)는 funds 를 다시 받지 않는다. 뺐던 자리로 돌아간다.
+func (s *Service) TakeForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, holdID uuid.UUID, funds Funds) error {
 	if err := checkAmount(amount); err != nil {
 		return err
 	}
 	return lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
-		plan, err := c.plan(ctx, amount, s.policy.FreeFirst)
+		plan, err := c.planFrom(ctx, amount, s.policy.FreeFirst, funds)
 		if err != nil {
 			return err
 		}
@@ -208,6 +211,23 @@ func (c change) plan(ctx context.Context, amount credit.Amount, freeFirst bool) 
 		return spendPlan{}, err
 	}
 	return planSpend(amount, lots, grants, freeFirst)
+}
+
+// planFrom 은 funds 에 맞춰 amount 를 어디서 뺄지 정한다. PaidOnly 면 무료 크레딧의 묶음을 읽지 않는다.
+func (c change) planFrom(ctx context.Context, amount credit.Amount, freeFirst bool, funds Funds) (spendPlan, error) {
+	if funds != PaidOnly {
+		return c.plan(ctx, amount, freeFirst)
+	}
+	lots, err := c.openLots(ctx)
+	if err != nil {
+		return spendPlan{}, err
+	}
+	// 무료 크레딧의 묶음을 넘기지 않으므로 어느 쪽을 먼저 쓰는지(freeFirst)는 상관없다
+	plan, err := planSpend(amount, lots, nil, false)
+	if errors.Is(err, ErrInsufficient) {
+		return spendPlan{}, ErrPaidInsufficient
+	}
+	return plan, err
 }
 
 // openLots 는 남은 것이 있는 산 크레딧의 묶음을 먼저 들어온 것부터 돌려준다.
