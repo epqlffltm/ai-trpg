@@ -59,7 +59,7 @@
 | 결제 | `billing-server/` | Go (gin) | 8003 | `ai-trpg-billing` | `billing`, `billing_test` | `04-billing-role.sql` | 크레딧 지갑과 원장, 주문과 충전, 홀드·확정·반환, 청약철회, 환영 크레딧과 출석 보상, 가격표(모델마다의 값, 등급, 행사가)와 가격 할 일. 연습용이며 실제 결제가 아니다 |
 
 - `03-extensions.sql` 은 확장(pgvector)이다.
-- `game-server/` 는 `trpg-server/` 로 이름을 바꿀 계획이다(2026-10-19). 범위는 폴더, 컨테이너, CI, 문서이고, 토큰의 대상(`ai-trpg-game`), DB 계정·스키마(`game`), 환경변수(`GAME_*`), 포트, 주소(`/api/v1/game/`)는 그대로 두자는 제안이다(계약이나 저장된 데이터라서). 이름을 바꾸는 PR 에서 확정하고, 그때까지 이 문서는 `game-server` 로 적는다.
+- `game-server/` 는 `trpg-server/` 로 이름을 바꿀 계획이다(2026-10-19). 범위는 폴더, 컨테이너, CI, 문서, 로그의 `service`(`trpg-server`, [이름 규칙](#이름-규칙))이고, 토큰의 대상(`ai-trpg-game`), DB 계정·스키마(`game`), 환경변수(`GAME_*`), 포트, 주소(`/api/v1/game/`)는 그대로 두자는 제안이다(계약이나 저장된 데이터라서). 이름을 바꾸는 PR 에서 확정하고, 그때까지 이 문서는 `game-server` 로 적는다.
 - 세계관과 로어북은 지금 game-server 에 있고, 나중에 asset-server 로 옮긴다([순서](#순서)).
 - 결제는 실제 돈을 받지 않는다. 토스페이먼츠는 테스트 키만 쓴다.
 
