@@ -492,7 +492,7 @@
 
 **확인할 것**
 
-- **실버가 언제 사라지는지는 지갑 응답에 없다.** 잔액 합계만 온다. "N 실버가 며칠 뒤에 사라진다"를 보이려면 서버가 묶음별 기한을 줘야 한다. 원장에는 사라진 뒤의 `expire` 줄만 있다(출석 받기의 응답 `expires_at` 은 그 한 번의 지급 기한이다). (이슈 #430)
+- **실버가 언제 사라지는지는 지갑 응답에 없다.** 잔액 합계만 온다. "N 실버가 며칠 뒤에 사라진다"를 보이려면 서버가 묶음별 기한을 줘야 한다. 원장에는 사라진 뒤의 `expire` 줄만 있다(출석 받기의 응답 `expires_at` 은 그 한 번의 지급 기한이다). 7일 안에 사라질 양의 합과 가장 이른 기한은 알림함의 `credit.expiring` 으로 온다(A10). 지갑 화면에 늘 보이려면 여전히 서버가 줘야 한다. (이슈 #430)
 - 홀드로 빠진 크레딧(`hold`)이 서술 뒤에 확정되는 줄(`spend`)과 어떻게 이어지는지 사용자에게 어떻게 보일지. `hold_id` 로 묶을 수 있다.
 - 헤더의 잔액을 읽는 시점. 서술이 끝날 때마다 읽으면 요청이 많아진다. 스트림 이벤트 `narration_credits_short` 같은 것으로 다시 읽을지 정한다.
 
@@ -691,25 +691,35 @@
 
 **7. 첫 출시**
 
-들어간다(필수 공통 묶음)로 적혀 있다. 그런데 아래 이유로 내용이 비어 있을 수 있다.
+들어간다(필수 공통 묶음).
 
 **확인할 것**
 
-- **알림을 넣는 서버는 게임 서버뿐이다.** 모델 은퇴 셋과 운영자의 제재 셋을 넣는다(아래 표). 결제와 게시판 서버에서 알림을 넣는 코드는 아직 없다. 첫 출시의 필수에 두려면 최소한 결제(충전 완료, 환불, 크레딧 부족)가 무엇을 넣을지 정한다. (이슈 #385)
-- 지금 오는 `kind` 는 게임 서버의 여섯 가지다. 화면이 `kind` 별로 문장을 만든다. 모르는 `kind` 는 일반 문구로 보인다. 결제와 게시판의 `kind` 는 정해지지 않았다.
+- **알림을 넣는 서버는 게임, 결제, 게시판 셋이다.** 게임은 모델 은퇴 셋과 운영자의 제재 셋, 결제는 결제와 크레딧 넷, 게시판은 댓글 둘을 넣는다(아래 표). 원본은 `game-server/README.md` 와 `board-server/README.md` 의 "알림 보내기", `billing-server/README.md` 의 "정리 작업과 대사"(사용자의 알림함), 받는 쪽은 `notification-server/README.md` 의 "알림 넣기(서버끼리)"다.
+- 지금 오는 `kind` 는 아래 열두 가지다. 화면이 `kind` 별로 문장을 만든다. 모르는 `kind` 는 일반 문구로 보인다. 화면은 `source` 와 `kind` 를 함께 보고 문장을 고른다. 표에 없는 짝은 일반 문구로 보인다.
 
-  | `kind` | 받는 사람 | `payload` |
-  | --- | --- | --- |
-  | `narration_model.retiring` | 테이블의 방장 | `table_id`, `title`, `narration_model`, `retires_on`, `days_left` |
-  | `narration_model.replaced` | 방장 | `table_id`, `title`, `from`, `narration_model`, `reason`, `round`, `price` |
-  | `narration_model.unavailable` | 방장 | `table_id`, `title`, `narration_model`, `reason` |
-  | `scenario.sanctioned` | 시나리오 제작자 | `scenario_id`, `title`, `version_number`, `publishing_banned` |
-  | `publishing.banned` | 공개가 금지된 사람 | `automatic`(저절로 올랐는지) |
-  | `publishing.unbanned` | 그 사람 | 없음 |
+  | `kind` | `source` | 받는 사람 | `payload` |
+  | --- | --- | --- | --- |
+  | `narration_model.retiring` | `game` | 테이블의 방장 | `table_id`, `title`, `narration_model`, `retires_on`, `days_left` |
+  | `narration_model.replaced` | `game` | 방장 | `table_id`, `title`, `from`, `narration_model`, `reason`, `round`, `price` |
+  | `narration_model.unavailable` | `game` | 방장 | `table_id`, `title`, `narration_model`, `reason` |
+  | `scenario.sanctioned` | `game` | 시나리오 제작자 | `scenario_id`, `title`, `version_number`, `publishing_banned` |
+  | `publishing.banned` | `game` | 공개가 금지된 사람 | `automatic`(저절로 올랐는지) |
+  | `publishing.unbanned` | `game` | 그 사람 | 없음 |
+  | `order.paid` | `billing` | 결제한 사람 | `order_id`, `product_id`, `price`(원, 숫자), `credits`(글자) |
+  | `order.refunded` | `billing` | 청약철회한 사람 | `order.paid` 와 같다 |
+  | `credit.welcome` | `billing` | 환영 크레딧을 받은 사람 | `amount`(글자), `expires_at` |
+  | `credit.expiring` | `billing` | 무료 크레딧이 7일 안에 사라지는 사람. 한 사람에게 7일에 한 번 | `amount`(사라질 양의 합, 글자), `first_expires_at`(가장 먼저 사라지는 때) |
+  | `post.commented` | `board` | 글쓴이 | `board_slug`, `post_id`, `post_title`, `comment_id` |
+  | `comment.replied` | `board` | 그 댓글의 글쓴이 | `board_slug`, `post_id`, `post_title`, `comment_id`, `parent_id` |
 
+  크레딧의 양(`credits`, `amount`)은 정확한 값을 지키려고 글자로 온다(A6 과 같다). `expires_at`, `first_expires_at` 은 UTC 의 ISO 8601 시각이다.
+  자기 글에 자기가 단 댓글, 자기 댓글에 자기가 단 답글은 알리지 않는다. 답글은 그 댓글의 글쓴이에게만 가고 글쓴이에게 또 가지 않는다. 댓글의 내용은 싣지 않는다(지운 댓글도 알림함에는 남아서). 눌렀을 때 글로 가서 댓글을 본다.
+  크레딧이 모자라다는 것은 알림이 아니다. 테이블 방(B6)이 그 자리에서 보인다.
   제재 알림에는 사유와 운영자를 싣지 않는다(신고한 사람이 드러날 수 있어서). 화면도 사유를 보이지 않는다.
 - 알림을 눌렀을 때 어디로 가는지(`payload` 의 ID 로 가는 화면 주소)는 `kind` 마다 정한다.
 - 알림을 끄는 설정은 서버에 없다.
+- 시나리오 제작자에게 추천 모델의 은퇴를 알릴지, 제재의 까닭을 당사자에게 어떻게 알릴지는 정하지 않았다. (이슈 #385)
 
 ### A11 공지·게시판
 
@@ -778,7 +788,7 @@
 
 - 게시판의 `slug` 네 개와 이름, 차례는 `GET /boards` 에서 읽는다. 문서에는 적지 않았다.
 - **"내가 운영자인가"를 알려 주는 값이 없다.** `GET /me` 는 `user_id` 만 준다. 운영자만 쓰는 게시판에서 쓰기 버튼을 미리 숨기려면 서버가 알려 줘야 한다. (이슈 #389)
-- 댓글에 알림이 없다(A10). 내 글에 댓글이 달렸을 때 알리려면 게시판 서버가 알림을 넣어야 한다.
+- 내 글에 댓글이, 내 댓글에 답글이 달리면 알림이 간다(A10 의 `post.commented`, `comment.replied`). 알림을 누르면 `board_slug` 와 `post_id` 로 이 화면의 글로 간다.
 - 글에 이미지를 붙이는 길이 없다. 본문은 글자뿐이다. 본문을 서식으로 보일지(마크다운 같은 것) 정한다. 서식을 허용하면 화면이 위험한 입력을 걸러야 한다.
 - 닉네임이 토큰에 실려 오므로 닉네임을 바꾼 사람의 옛 글에 새 이름이 나오는 때는 그 사람이 다시 로그인해 이 서버를 처음 부른 뒤다.
 
@@ -1662,7 +1672,7 @@
 
 다시 볼 것:
 
-- **A10 알림은 필수에 있지만 지금 넣는 서버는 게임뿐이다**(모델 은퇴, 제재). 결제(충전, 환불)의 알림을 정해야 알림함이 공통 화면다워진다. (이슈 #385)
+- **A10 알림은 게임, 결제, 게시판이 모두 넣는다**(모델 은퇴, 제재, 결제와 청약철회, 환영과 곧 사라질 크레딧, 댓글과 답글). 읽지 않은 수는 화면이 다시 물어야 한다(실시간으로 밀어 주지 않는다).
 - **A4 보호자 동의를 이후에 두면 미성년자는 충전하지 못한다.** 서버가 막는다(`payment.guardian_consent_required`). 첫 출시에서 미성년자를 받을지 정한다.
 - **A8 청약철회, A9 출석을 이후에 두어도 서버에는 이미 있다.** 실제 결제를 연다면 A8 은 같이 열어야 할 수 있다(약관 확인). A9 는 무료 이용의 중심이니 앞당길지 정한다.
 - **A11 은 읽기(공지)만 앞당길 수 있다.** 점검과 약관 변경을 알릴 곳이 필요하다.
