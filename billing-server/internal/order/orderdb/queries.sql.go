@@ -246,6 +246,107 @@ func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) (Order
 	return i, err
 }
 
+const listOrdersOfUser = `-- name: ListOrdersOfUser :many
+SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel FROM orders
+WHERE user_id = $1
+ORDER BY created_at DESC, id DESC
+LIMIT $2
+`
+
+type ListOrdersOfUserParams struct {
+	UserID   uuid.UUID
+	RowLimit int32
+}
+
+// 사용자의 주문을 만든 시각이 늦은 것부터 읽는다. 같은 시각이면 번호가 큰 것부터다(orders_user_created_idx).
+func (q *Queries) ListOrdersOfUser(ctx context.Context, arg ListOrdersOfUserParams) ([]Order, error) {
+	rows, err := q.db.Query(ctx, listOrdersOfUser, arg.UserID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Order
+	for rows.Next() {
+		var i Order
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ProductID,
+			&i.Price,
+			&i.Credits,
+			&i.Status,
+			&i.IdempotencyKey,
+			&i.PaymentKey,
+			&i.FailureCode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PaidAt,
+			&i.ExpiresAt,
+			&i.RefundedAt,
+			&i.Channel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrdersOfUserBefore = `-- name: ListOrdersOfUserBefore :many
+SELECT o.id, o.user_id, o.product_id, o.price, o.credits, o.status, o.idempotency_key, o.payment_key, o.failure_code, o.created_at, o.updated_at, o.paid_at, o.expires_at, o.refunded_at, o.channel FROM orders o
+JOIN orders cursor_order ON cursor_order.id = $1 AND cursor_order.user_id = $2
+WHERE o.user_id = $2 AND (o.created_at, o.id) < (cursor_order.created_at, cursor_order.id)
+ORDER BY o.created_at DESC, o.id DESC
+LIMIT $3
+`
+
+type ListOrdersOfUserBeforeParams struct {
+	Before   uuid.UUID
+	UserID   uuid.UUID
+	RowLimit int32
+}
+
+// 사용자의 주문 중 before 주문보다 앞선 것을 늦은 것부터 읽는다. 다음 쪽이다.
+// before 가 그 사용자의 주문이 아니면(없거나 남의 것이면) 줄이 없다. 남의 주문이 있는지 알려 주지 않는다.
+func (q *Queries) ListOrdersOfUserBefore(ctx context.Context, arg ListOrdersOfUserBeforeParams) ([]Order, error) {
+	rows, err := q.db.Query(ctx, listOrdersOfUserBefore, arg.Before, arg.UserID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Order
+	for rows.Next() {
+		var i Order
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ProductID,
+			&i.Price,
+			&i.Credits,
+			&i.Status,
+			&i.IdempotencyKey,
+			&i.PaymentKey,
+			&i.FailureCode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PaidAt,
+			&i.ExpiresAt,
+			&i.RefundedAt,
+			&i.Channel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStaleConfirming = `-- name: ListStaleConfirming :many
 SELECT id, user_id, product_id, price, credits, status, idempotency_key, payment_key, failure_code, created_at, updated_at, paid_at, expires_at, refunded_at, channel FROM orders
 WHERE status = 'confirming' AND updated_at <= $1::TIMESTAMPTZ

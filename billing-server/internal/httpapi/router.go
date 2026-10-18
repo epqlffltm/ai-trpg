@@ -113,6 +113,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	api.GET("/wallet/entries", listEntries(deps.Wallet))
 	api.GET("/products", listProducts)
 	api.POST("/orders", createOrder(deps.Orders))
+	api.GET("/orders", listOrders(deps.Orders))
 	api.GET("/orders/:id", getOrder(deps.Orders))
 	api.POST("/orders/:id/confirm", confirmOrder(deps.Orders))
 	api.POST("/orders/:id/refund", refundOrder(deps.Orders))

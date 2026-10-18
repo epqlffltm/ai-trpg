@@ -584,18 +584,23 @@
 
 **2. 보여 주는 정보와 출처**
 
-`GET /orders/{id}` 의 주문: `id`, `product_id`, `price`(원, 숫자), `credits`(글자), `status`, `failure_code`, `created_at`, `expires_at`, `paid_at`, `refundable`(지금 철회할 수 있는가), `refundable_until`(치른 시각 + 7일), `refunded_at`.
+`GET /orders/{id}` 의 주문: `id`, `product_id`, `price`(원, 숫자), `credits`(글자), `status`, `failure_code`, `created_at`, `expires_at`, `paid_at`, `refundable`(지금 철회할 수 있는가), `refundable_until`(치른 시각 + 7일), `refunded_at`, `refund_blocked`(치른 주문인데 철회할 수 없는 까닭).
+
+`refund_blocked` 는 `window_closed`(7 일이 지남) 또는 `credits_used`(그 주문의 크레딧을 일부라도 썼음. 홀드로 묶인 것도). 철회할 수 있거나 치른 주문이 아니면 `null` 이다(치르지 않은 주문은 `status` 가 말한다).
+
+내 주문 목록 `GET /orders?before=&limit=`: 만든 시각이 늦은 것부터 `{"orders": [...], "next_before": "…"}`. 한 줄은 주문 하나와 같은 모양이다. 상태와 상관없이 모두 온다(만들기만 하고 치르지 않은 것, 만료된 것도. 숨길지는 화면이 정한다). `limit` 은 1~50(기본 20), 다음 쪽은 `next_before` 를 `before` 로 넣는다. `next_before` 가 `null` 이면 끝이다.
 
 **3. 할 수 있는 행동**
 
 | 행동 | 호출 | 동작 |
 | --- | --- | --- |
+| 주문 목록 | `GET /orders` | 쪽 넘기기 |
 | 주문 읽기 | `GET /orders/{id}` | |
 | 청약철회 | `POST /orders/{id}/refund` | 본문 없음. 금액과 이유는 서버가 정한다(전액, 청약철회). 수수료 없음 |
 
 **4. 버튼이 비활성인 조건**
 
-환불 버튼은 `refundable` 이 참일 때만 연다. 서버가 거절하는 경우는 모두 409 다: 치른 주문이 아님, 7 일이 지남, **그 주문의 크레딧을 일부라도 썼음**(홀드로 묶인 것도 준 것으로 센다), 결제 대행사가 취소를 거절함(크레딧은 돌아오고 주문은 `paid`), 같은 주문의 다른 요청과 엇갈림(다시 보낸다). 무료 크레딧은 상관없다.
+환불 버튼은 `refundable` 이 참일 때만 연다. 닫혀 있으면 `refund_blocked` 로 까닭을 보인다("7일이 지나 환불할 수 없습니다", "이 주문의 골드를 써서 환불할 수 없습니다"). 서버가 거절하는 경우는 모두 409 고, 본문의 `code` 가 까닭이다: `refund.not_paid`(치른 주문이 아님), `refund.window_closed`(7 일이 지남), `refund.credits_used`(**그 주문의 크레딧을 일부라도 썼음**. 홀드로 묶인 것도 준 것으로 센다), `refund.refused`(결제 대행사가 취소를 거절함. 크레딧은 돌아오고 주문은 `paid`), `refund.busy`(같은 주문의 다른 요청과 엇갈림. 다시 보낸다). 무료 크레딧은 상관없다.
 
 **5. 상태**
 
@@ -612,8 +617,7 @@
 
 **확인할 것**
 
-- **주문 목록 경로가 없다.** `GET /orders/{id}` 하나뿐이어서 "내 주문 내역"은 원장(`wallet/entries`)에서 `reason` 이 `deposit`, `refund` 이고 `order_id` 가 있는 줄로 이어야 한다. 주문 목록을 서버가 주는 것이 낫다. 결제 세션과 정한다. (이슈 #430)
-- 철회가 안 되는 이유(크레딧을 썼음, 7 일이 지남)를 화면이 구분해 보이려면 서버가 이유를 줘야 한다. 지금은 `refundable` 참/거짓과 409 뿐이다. (이슈 #430)
+- 만들기만 하고 치르지 않은(`pending`, `expired`) 주문을 목록에 보일지 정한다. 결제창을 열고 닫기만 해도 생긴다.
 - 법적으로 7 일 철회와 이미 쓴 크레딧의 환불 규정이 맞는지는 약관과 함께 확인한다. 이 문서는 서버의 동작만 적는다.
 
 ### A9 출석·보물 상자

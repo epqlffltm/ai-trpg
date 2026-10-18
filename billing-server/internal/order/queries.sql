@@ -28,6 +28,22 @@ WHERE user_id = sqlc.arg(user_id) AND idempotency_key = sqlc.arg(idempotency_key
 SELECT * FROM orders
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
+-- name: ListOrdersOfUser :many
+-- 사용자의 주문을 만든 시각이 늦은 것부터 읽는다. 같은 시각이면 번호가 큰 것부터다(orders_user_created_idx).
+SELECT * FROM orders
+WHERE user_id = sqlc.arg(user_id)
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(row_limit);
+
+-- name: ListOrdersOfUserBefore :many
+-- 사용자의 주문 중 before 주문보다 앞선 것을 늦은 것부터 읽는다. 다음 쪽이다.
+-- before 가 그 사용자의 주문이 아니면(없거나 남의 것이면) 줄이 없다. 남의 주문이 있는지 알려 주지 않는다.
+SELECT o.* FROM orders o
+JOIN orders cursor_order ON cursor_order.id = sqlc.arg(before) AND cursor_order.user_id = sqlc.arg(user_id)
+WHERE o.user_id = sqlc.arg(user_id) AND (o.created_at, o.id) < (cursor_order.created_at, cursor_order.id)
+ORDER BY o.created_at DESC, o.id DESC
+LIMIT sqlc.arg(row_limit);
+
 -- name: GetOrder :one
 -- 주문 하나를 읽는다. 누구의 것인지 따지지 않는다. 결제 대행사의 알림을 처리할 때만 쓴다.
 SELECT * FROM orders

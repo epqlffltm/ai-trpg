@@ -14,6 +14,7 @@ import (
 type Orders interface {
 	Create(ctx context.Context, userID uuid.UUID, productID string, idempotencyKey string) (order.Order, bool, error)
 	Get(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (order.Order, error)
+	List(ctx context.Context, userID uuid.UUID, before *uuid.UUID, limit int) (order.OrderPage, error)
 	Confirm(ctx context.Context, userID uuid.UUID, orderID uuid.UUID, paymentKey string) (order.Order, error)
 	Refund(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (order.Order, error)
 }
@@ -27,7 +28,7 @@ type Checker interface {
 //
 // 승인 때 다시 보는 까닭: 주문은 하루 동안 열려 있다. 그 사이에 보호자가 동의를 철회할 수 있다.
 // 승인을 요청하기 전에 막으면 결제 대행사가 돈을 가져가지 않는다(결제창에서 인증한 것은 승인 전까지 청구되지 않는다).
-// 조회와 청약철회는 막지 않는다. 철회는 돈을 돌려주는 일이다.
+// 조회(주문 하나, 목록)와 청약철회는 막지 않는다. 철회는 돈을 돌려주는 일이다.
 // 결제 대행사의 알림(가상계좌의 입금)은 이 층을 지나지 않는다. 승인 때 이미 보았다.
 //
 // 주문 패키지에 넣지 않고 감싸는 까닭: 주문은 "무엇을 얼마에 어떻게 치르는가"를 맡고, 누가 결제할 수 있는가는 따로 바뀐다.

@@ -52,6 +52,17 @@ const (
 	codeAttendanceVerificationRequired = "attendance.verification_required"
 	// codeAttendanceAlreadyClaimed 는 오늘 이미 출석 보상을 받았다는 것이다(409). 다음 날 한국 자정에 다시 받을 수 있다.
 	codeAttendanceAlreadyClaimed = "attendance.already_claimed"
+	// 청약철회를 할 수 없는 까닭(409, #430). 화면이 "왜 환불할 수 없는지"를 보인다.
+	// codeRefundWindowClosed 는 치른 지 7일이 지났다는 것이다.
+	codeRefundWindowClosed = "refund.window_closed"
+	// codeRefundCreditsUsed 는 그 주문으로 산 크레딧을 일부라도 썼거나 홀드로 묶었다는 것이다.
+	codeRefundCreditsUsed = "refund.credits_used"
+	// codeRefundNotPaid 는 치른 주문이 아니라는 것이다(만들기만 했다, 거절됐다, 만료됐다).
+	codeRefundNotPaid = "refund.not_paid"
+	// codeRefundBusy 는 같은 주문의 다른 요청과 엇갈렸다는 것이다. 잠시 뒤 다시 보내면 된다.
+	codeRefundBusy = "refund.busy"
+	// codeRefundRefused 는 결제 대행사가 취소를 거절했다는 것이다. 크레딧은 돌아와 있고 주문은 paid 다.
+	codeRefundRefused = "refund.refused"
 	// codeServiceBadRequest 는 서명을 확인하려고 본문을 읽지 못했다는 것이다(너무 크다).
 	codeServiceBadRequest = "service.bad_request"
 	// codeServiceBadSignature 는 요청의 서명이 맞지 않다는 것이다(비밀이 다르다, 시각이 너무 어긋났다).
