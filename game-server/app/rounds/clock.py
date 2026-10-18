@@ -37,6 +37,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.billing import repository as billing_repository
+from app.billing.price_list import FREE_PRICES, PriceList
 from app.core import loops
 from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
 from app.core.loops import Running
@@ -75,6 +76,8 @@ class RoundClock:
     dice: Callable[[], Dice]
     interval: float = CLOCK_INTERVAL_SECONDS
     clock: Callable[[], datetime] = now_utc
+    # 서술을 그만두고 다음 라운드를 열 때 알릴 값을 찾는 가격 목록. 부를 때마다 앱에서 꺼낸다
+    prices: Callable[[], PriceList] = lambda: FREE_PRICES
 
     async def overdue(self, now: datetime) -> list[uuid.UUID]:
         """마감이 지난 라운드의 테이블들. 잠그지 않고 고른다."""
@@ -147,7 +150,7 @@ class RoundClock:
         """한 테이블의 사라진 서술을 다시 맡기거나 그만둔다. 실패하면 로그에 남기고 NOTHING."""
         try:
             async with self.session_factory() as session:
-                return await recovery.recover(session, table_id, now, self.scheduler())
+                return await recovery.recover(session, table_id, now, self.scheduler(), self.prices())
         except Exception:
             logger.exception(
                 '서술이 사라진 라운드를 다시 맡기지 못했습니다',

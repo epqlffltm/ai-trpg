@@ -224,6 +224,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/tables/{id}/rounds` | 라운드 목록. 처음 것부터. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds/current` | 가장 최근 라운드. 진행 중이면 지금 선언을 받는 라운드 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds/{number}` | 라운드 하나 | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/rounds/{number}/charges` | 그 라운드의 서술 값을 내는 사람마다의 청구(`[{"user_id", "status", "credits"}]`). `credits` 는 결제 서버가 실제로 홀드한 값이고 걸기 전에는 `null` 이다. 앉은 사람만([라운드의 값](#라운드의-값)) | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/rounds/current/declaration` | 선언 내기. 다시 내면 바뀐다. `action` 으로 행동(판정)을 하나 붙일 수 있다. 모두 냈으면 라운드가 닫기 시작한다(`closing`). 다음 라운드는 스트림으로 온다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/close` | 라운드 닫기. 202. 방장만. 선언을 기다리지 않고 넘어간다. 오래 멈춘 라운드에 다시 부르면 서술을 다시 맡긴다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/events` | 테이블의 이벤트. 일어난 순서대로. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
@@ -1805,7 +1806,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 ## 서술 값
 
 라운드의 AI 서술 한 번마다 크레딧을 받는다([#148](https://github.com/epqlffltm/ai-trpg/issues/148)). 크레딧의 잔액과 원장은 결제 서버만 안다(`billing-server/`).
-게임 서버는 결제 서버에 "이 사용자에게서 이 가격표의 값을 잡아 둬라(홀드), 확정해라, 돌려줘라"를 맡길 뿐이다. 금액도 모른다. 가격표의 이름만 보낸다.
+게임 서버는 결제 서버에 "이 사용자에게서 이 가격표의 값을 잡아 둬라(홀드), 확정해라, 돌려줘라"를 맡길 뿐이다. 금액을 셈하지 않는다. 가격표의 이름만 보낸다. 앉은 사람에게 보여 주는 값은 결제 서버가 준 글자 그대로 옮긴다([라운드의 값](#라운드의-값)).
 가격표의 이름은 라운드의 서술 모델의 것이다(`narration.<이름표>.i0.o0`, `charges.price_code_of`). 모델은 라운드를 열 때 굳고 그 모델로만 서술하므로 건 값과 서술한 모델이 늘 같다([모델 고르기](#모델-고르기)). 서술 모델이 없는 옛 라운드는 옛 가격표(`narration.standard`, `charges.LEGACY_PRICE_CODE`)로 건다.
 
 ```
@@ -1821,7 +1822,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 테이블이 끝난다 ──▶ 정리 작업이 끝나지 않은 청구를 release_due 로 ──▶ released
 ```
 
-**누가 내나.** 라운드를 열 때 앉아 있는 사람 모두다(쓰러진 사람도, [#180](https://github.com/epqlffltm/ai-trpg/issues/180)). 각자 그 라운드의 등급의 값을 낸다. 나눠 내지 않는다(`charges.payers_of`).
+**누가 내나.** 라운드를 열 때 앉아 있는 사람 모두다(쓰러진 사람도, [#180](https://github.com/epqlffltm/ai-trpg/issues/180)). 각자 그 라운드의 모델의 값을 낸다. 나눠 내지 않는다(`charges.payers_of`).
 청구는 "라운드 × 내는 사람" 한 줄씩이고 이름표가 사람마다 다르다. 결제 서버는 홀드를 사람마다 따로 받는다.
 - **한 사람이라도 모자라면 서술하지 않는다**(`insufficient_credits`). 누가 모자란지는 `narration_credits_short` 의 `user_id` 로 앉은 사람 모두가 본다. 닫을 때는 모두에게 함께 걸어 보므로 모자란 사람이 여럿이면 모두 알린다.
   낼 수 있는 사람의 홀드는 그대로 둔다. 모자란 사람이 충전하고 방장이 다시 맡기면 같은 홀드로 서술한다(두 번 빠지지 않는다).
@@ -1911,8 +1912,17 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 **알려진 한계**
 - 방장이 테이블을 끝내지 않고 버려 두면 열린 라운드의 값(앉은 사람마다 서술 한 번)이 계속 묶여 있다. 게임 서버가 연장하므로 결제 서버의 만료로도 풀리지 않는다. 방장이 끝내거나 그 사람이 나가야 돌아온다.
 - 크레딧이 모자란 것을 알린 뒤에 충전해도 정리 작업은 다시 걸지 않는다. 라운드를 닫을 때 다시 걸어 본다. 모자란 사람의 테이블마다 결제 서버를 두드리지 않으려는 것이다.
-- 등급을 넘는 넘어가기는 없다. `premium` 의 모델들이 모두 실패하면 `standard` 로 서술하지 않고 실패로 적는다. 방장이 다시 맡기거나 다음 라운드부터 등급을 낮춘다.
+- 다른 모델로 넘어가지 않는다. 그 모델이 끝내 실패하면 다른 모델로 서술하지 않고 실패로 적는다. 방장이 다시 맡기거나 모델을 바꾼다.
 - 이 기능 전에 연 라운드는 마이그레이션이 그때의 방장에게 청구를 만들어 둔다(진행 중인 테이블의 열린 라운드와 닫는 중인 라운드). 결제 서버를 켜지 않았으면 받지 않고 지나간다.
+
+### 라운드의 값
+
+라운드를 열 때 앉은 사람에게 1인 1라운드의 값을 알린다(`app/rounds/round_price.py`, #379). 값은 결제 서버의 가격 목록이 정한다. 게임 서버는 따로 계산하지 않는다.
+- **알린 값.** 그 라운드의 모델의 지금 값(`credits`, `tier`)을 라운드에 적고 `round_opened` 이벤트의 `price` 와 라운드의 응답의 `price` 에 싣는다. 테이블을 시작할 때, 서술이 끝나 다음 라운드가 열릴 때, 서술을 그만두고 다음 라운드를 열 때 모두다. 모델이 모두에게 같으므로 값도 모두에게 같다.
+- **홀드한 값.** 사람마다 결제 서버가 실제로 홀드한 값(홀드의 답의 `amount`)을 청구에 적는다(`narration_charges.held_credits`). `GET .../rounds/{number}/charges` 로 본다. 라운드를 연 뒤 몇 초 안에 걸리고, 그 전에는 `null` 이다. 알린 값과 같은 가격 목록에서 나오므로 같다. 열고 걸기 사이에 결제 서버가 값을 바꾼 경우(예약된 인상의 시각)만 다르고, 그때 실제로 내는 값은 홀드한 값이다.
+- **모델을 바꾸면** 아직 서술하지 않은 지금 라운드의 알린 값도 새 모델의 것으로 바뀌고(`narration_model_changed`, `narration_model_replaced` 의 `price`), 홀드한 값은 새 가격표로 다시 걸 때(서술 전)까지 비운다.
+- **알릴 수 없으면** 비운다(`null`). 결제 서버 없이 도는 서버, 모델이 없는 옛 테이블, 지금 팔지 않는 모델, 가격 목록을 받지 못한 때다. 라운드를 여는 것은 막지 않는다.
+- 실버와 골드 중 무엇으로 냈는지는 아직 싣지 않는다. 결제 서버의 홀드의 답이 나눠 주는지 확인한 뒤 더한다.
 
 ## 모델 목록
 
@@ -2052,10 +2062,10 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `narration_style_changed` | 방장이 서술 문체를 바꿨다. 다음 서술부터 그 문체다 | `narration_style`: 바꾼 문체 |
 | `round_time_limit_changed` | 방장이 라운드의 시간 제한을 바꿨다. 다음 라운드부터 쓴다 | `round_time_limit`: 바꾼 값(초, 없으면 `null`) |
 | `narration_tier_changed` | 방장이 서술 등급을 바꿨다. 서술 등급을 없앤 뒤로는 적지 않는다. 그 전의 기록에만 있다 | `narration_tier`: 바꾼 등급 |
-| `narration_model_changed` | 방장이 서술 모델을 바꿨다. 다음 라운드부터 그 모델이다. 아직 서술하지 않은 지금 라운드도 바꿨으면 `round` 가 있다 | `narration_model`: 바꾼 모델의 이름표, `round`: 함께 바꾼 지금 라운드의 번호(없으면 `null`) |
+| `narration_model_changed` | 방장이 서술 모델을 바꿨다. 다음 라운드부터 그 모델이다. 아직 서술하지 않은 지금 라운드도 바꿨으면 `round` 가 있다 | `narration_model`: 바꾼 모델의 이름표, `round`: 함께 바꾼 지금 라운드의 번호(없으면 `null`), `price`: 그 라운드에 새로 알린 값(바꾸지 않았거나 알릴 수 없으면 `null`) |
 | `narration_model_not_for_sale` | 라운드의 서술 모델을 결제 서버가 팔지 않는다. 라운드마다 한 번. 방장이 모델을 바꾸면 그 라운드를 새 가격표로 다시 건다 | `round`, `narration_model` |
 | `narration_model_retiring` | 테이블의 서술 모델이 곧 은퇴한다. 30, 14, 7, 1 일 남았을 때 한 번씩([모델 은퇴](#모델-은퇴)) | `narration_model`, `retires_on`, `days_left` |
-| `narration_model_replaced` | 서술 모델이 은퇴해 서버가 같은 회사의 다른 모델로 바꿨다 | `from`: 옛 모델, `narration_model`: 새 모델, `reason`: `retired`, `round`: 함께 바꾼 지금 라운드의 번호(없으면 `null`) |
+| `narration_model_replaced` | 서술 모델이 은퇴해 서버가 같은 회사의 다른 모델로 바꿨다 | `from`: 옛 모델, `narration_model`: 새 모델, `reason`: `retired`, `round`: 함께 바꾼 지금 라운드의 번호(없으면 `null`), `price`: 그 라운드에 새로 알린 값(없으면 `null`) |
 | `narration_model_unavailable` | 서술 모델이 은퇴했는데 같은 회사에 대신할 모델이 없다. 방장이 모델을 골라야 서술한다 | `narration_model`, `reason`: `retired` |
 | `credit_wait_changed` | 방장이 크레딧이 모자란 사람을 기다리는 규칙을 바꿨다 | `credit_wait_seconds`, `remove_short_payers` |
 | `whisper_notice_changed` | 방장이 쪽지를 보낸 사실을 알릴지 바꿨다 | `whisper_notice` |
@@ -2063,7 +2073,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `whisper_sent` | 누가 누구에게 쪽지를 보냈다. 알리기로 한 테이블에만 적힌다. 쪽지의 글은 적지 않는다 | `user_id`, `character_name`, `recipient_id`, `recipient_character_name` |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
-| `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_model`(이 라운드의 서술 모델. 모델을 고르는 규칙 전의 테이블이면 `null`), `clock`(게임 안의 시각: `day`, `hour`, `minute`, `time_of_day`), `passed_minutes`(앞 라운드부터 흐른 분. 첫 라운드는 0) |
+| `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_model`(이 라운드의 서술 모델. 모델을 고르는 규칙 전의 테이블이면 `null`), `price`(1인 1라운드의 값 `{"credits", "tier"}`. 알릴 수 없으면 `null`), `clock`(게임 안의 시각: `day`, `hour`, `minute`, `time_of_day`), `passed_minutes`(앞 라운드부터 흐른 분. 첫 라운드는 0) |
 | `player_action` | 플레이어가 선언한 행동 | `round`, `character_name`, `content`, `action`(행동. 없으면 `null`) |
 | `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면) |
 | `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed`, `injury_roll`(부상 표를 굴렸으면) |

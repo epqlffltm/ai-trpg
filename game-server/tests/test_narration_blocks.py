@@ -196,7 +196,7 @@ async def test_changing_the_model_reprices_the_blocked_round(
     await tick(app)
     (first, _) = await charges_of(session, table)
 
-    assert changed['payload'] == {'narration_model': 'claude-opus-5-5', 'round': 1}
+    assert changed['payload'] == {'narration_model': 'claude-opus-5-5', 'round': 1, 'price': None}
     assert repriced == ('release_due', OPUS_CODE)
     assert (await current(client, me, table))['number'] == 2
     # 새 이름표, 새 가격표로 걸어 확정했다. 빠진 것은 Opus 의 값뿐이다

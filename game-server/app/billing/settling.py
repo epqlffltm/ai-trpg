@@ -278,7 +278,14 @@ async def try_hold(
     allowed = (ChargeStatus.PENDING, ChargeStatus.SHORT)
     extend_at = next_extension(now, outcome.expires_at)
     if await write_move(
-        session_factory, charge, allowed, ChargeStatus.HELD, attempts=0, last_error=None, next_attempt_at=extend_at
+        session_factory,
+        charge,
+        allowed,
+        ChargeStatus.HELD,
+        attempts=0,
+        last_error=None,
+        next_attempt_at=extend_at,
+        held_credits=outcome.amount,
     ):
         return Readiness.READY
     return await after_lost_race(session_factory, charge, now)
