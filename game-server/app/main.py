@@ -259,6 +259,7 @@ def create_app(
         session_factory=app.state.session_factory,
         scheduler=lambda: closer_of(app.state),
         dice=lambda: app.state.dice,
+        prices=lambda: app.state.price_list,
     )
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다

@@ -46,10 +46,15 @@ class ExtendResult(enum.StrEnum):
 
 @dataclass(frozen=True)
 class HoldOutcome:
-    """홀드를 걸어 본 결과와, 잡혔으면 결제 서버가 정한 만료 시각(UTC). 결제 서버가 시각을 주지 않으면 None."""
+    """
+    홀드를 걸어 본 결과와, 잡혔으면 결제 서버가 정한 만료 시각(UTC)과 홀드한 값(amount, 글자).
+
+    결제 서버가 시각이나 값을 주지 않으면 None 이다.
+    """
 
     result: HoldResult
     expires_at: datetime | None = None
+    amount: str | None = None
 
 
 @dataclass(frozen=True)

@@ -228,7 +228,12 @@ async def reprice_round(
         update(NarrationCharge)
         .where(NarrationCharge.round_id == round_id, NarrationCharge.status.in_(allowed))
         .values(
-            status=ChargeStatus.RELEASE_DUE, price_code=price_code, next_attempt_at=now, attempts=0, last_error=None
+            status=ChargeStatus.RELEASE_DUE,
+            price_code=price_code,
+            next_attempt_at=now,
+            attempts=0,
+            last_error=None,
+            held_credits=None,
         )
         .execution_options(synchronize_session=False)
     )
