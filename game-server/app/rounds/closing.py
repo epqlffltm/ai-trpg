@@ -183,6 +183,15 @@ class Budgets:
 BUDGETS = Budgets()
 
 
+def counts_as_failure(error: Exception) -> bool:
+    """
+    이 실패를 서술의 실패로 세는가(service.NARRATION_FAILURE_LIMIT). 서술 값을 잡지 못한 것만 세지 않는다.
+
+    값을 잡지 못하면 모델을 부르지 않았으니 원가가 들지 않았다. 충전하거나 내보낸 뒤 다시 맡기면 되는 일이다.
+    """
+    return not isinstance(error, ChargeNotSecured)
+
+
 def failure_reason(error: Exception) -> str:
     """
     작업을 실패시킨 예외에서 앉은 사람에게 알릴 실패의 이유를 꺼낸다.
@@ -313,10 +322,12 @@ async def settle_payment(
 
 
 async def record_failure(
-    session_factory: async_sessionmaker[AsyncSession], run: Run, reason: str, timeout: float
+    session_factory: async_sessionmaker[AsyncSession], run: Run, reason: str, counted: bool, timeout: float
 ) -> None:
     """
     맡은 서술이 실패한 것을 적는다. timeout 초까지만 해 본다. 적지 못해도 예외를 올리지 않는다.
+
+    counted 면 서술의 실패로 센다. 정해 둔 횟수에 닿으면 서술을 그만두고 엔진의 결과로 다음 라운드를 연다.
 
     DB 가 응답하지 않아 실패한 작업은 실패를 적는 것도 안 될 수 있다. 그때는 로그만 남는다.
     라운드는 닫는 중에 머물고, 방장은 한참 뒤에(service.CLOSING_RETRY_SECONDS) 다시 맡길 수 있다.
@@ -325,7 +336,7 @@ async def record_failure(
     try:
         async with asyncio.timeout(timeout):
             async with session_factory() as session:
-                await service.fail_closing(session, run.table_id, run.number, run.started, reason)
+                await service.fail_closing(session, run.table_id, run.number, run.started, reason, counted)
     except Exception:
         logger.exception('서술의 실패를 적지 못했다(테이블 %s, %s 라운드)', run.table_id, run.number)
 
@@ -363,7 +374,7 @@ async def narrate_round(
         async with asyncio.timeout(seconds_left(started, datetime.now(UTC), budgets.job)):
             scene = await close_run(session_factory, narrator, run, finders, billing, budgets)
     except Exception as error:
-        await record_failure(session_factory, run, failure_reason(error), budgets.failure)
+        await record_failure(session_factory, run, failure_reason(error), counts_as_failure(error), budgets.failure)
         raise
     await settle_payment(session_factory, billing, run, budgets.billing)
     if scene is not None:

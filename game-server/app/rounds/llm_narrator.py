@@ -13,13 +13,15 @@
 모델이 쓰는 대로 받은 조각은 미리 보기에 그대로 넘긴다. 검사하기 전의 글이다. 받지 않으면 버려지는 글이 된다.
 
 모델의 글은 장면이 될 뿐이다. 상태를 바꾸지 않는다. 결과(판정, HP, 죽음)는 엔진이 이미 정해 DB 에 적었다.
-그래서 검사는 "장면으로 쓸 수 있는가"만 본다. 끊기지 않았고, 비어 있지 않고, 너무 길지 않은가.
+그래서 검사는 "장면으로 쓸 수 있는가"만 본다. 비어 있지 않고, 너무 길지 않은가.
+출력 상한에 걸려 끊긴 글은 마지막 문장까지 잘라 받는다. 그렇게 남은 글이 너무 짧을 때만 받지 않는다.
 
 한 번만 부른다. 실패하면 예외를 그대로 올린다.
 다시 시도하기와 다른 모델로 넘어가기는 이 서술자를 감싸는 쪽이 한다(app/rounds/retrying_narrator.py).
 """
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 
@@ -43,6 +45,12 @@ PURPOSE = 'narration'
 # 장면으로 받는 글의 상한(글자 수). 다음 라운드의 요청에 다시 들어가므로, 길면 그만큼 다음 호출이 비싸진다
 SCENE_MAX_LENGTH = 4000
 
+# 출력 상한에 걸려 잘린 글을 마지막 문장까지 잘라 받을 때, 이보다 짧으면 받지 않고 다시 부른다(cut_off).
+# 생각을 끌 수 없는 모델이 생각에 출력을 다 써서 본문이 거의 없는 경우가 여기에 걸린다
+TRUNCATED_MIN_LENGTH = 300
+# 문장의 끝. 마침표·느낌표·물음표·말줄임표 뒤에 닫는 따옴표나 괄호가 붙을 수 있다
+SENTENCE_END = re.compile(r'[.!?…。]["\'”’」』)\]]*')
+
 
 class NarrationError(Exception):
     """서술자가 장면으로 쓸 글을 만들지 못했다. 글이 끊겼거나, 비었거나, 너무 길거나, 요청에 이야기의 바탕이 없다."""
@@ -62,14 +70,34 @@ def accept_scene(text: str) -> str:
     return scene
 
 
+def trim_to_sentence(text: str) -> str:
+    """마지막으로 끝난 문장까지만 남긴다. 끝난 문장이 없으면 빈 글이다."""
+    ends = [match.end() for match in SENTENCE_END.finditer(text)]
+    return text[: ends[-1]].strip() if ends else ''
+
+
+def accept_truncated(text: str) -> str:
+    """
+    출력 상한에 걸려 잘린 글을 마지막 문장까지 잘라 장면으로 받는다. 너무 짧으면 NarrationError(cut_off).
+
+    버리고 다시 부르면 같은 값을 한 번 더 내고, 같은 요청이라 또 잘리기 쉽다. 이어 쓰게 하면 출력이
+    판매가가 가정한 양(1,200 토큰)을 넘는다. 그래서 끝난 문장까지만 받는다. 문장 중간에서 끊긴 글은 굳지 않는다.
+    """
+    scene = trim_to_sentence(text.strip())
+    if len(scene) < TRUNCATED_MIN_LENGTH:
+        raise NarrationError('cut_off')
+    logger.warning('잘린 서술을 마지막 문장까지 받았다', extra={'result': 'truncated', 'kept_chars': len(scene)})
+    return accept_scene(scene)
+
+
 def accept_completion(completion: Completion) -> str:
     """
     provider 의 답을 장면으로 받는다. 안 되면 NarrationError.
 
-    길이 상한에 걸려 끊긴 답은 받지 않는다. 너무 긴 글을 잘라 받지 않는 것과 같은 이유다.
+    길이 상한에 걸려 끊긴 답은 마지막 문장까지 잘라 받는다(accept_truncated). 너무 짧으면 다시 부른다.
     """
     if completion.truncated:
-        raise NarrationError('cut_off')
+        return accept_truncated(completion.text)
     return accept_scene(completion.text)
 
 

@@ -292,3 +292,15 @@ def test_the_language_model_drafts_with_the_first_standard_model():
     assert isinstance(drafter.log, DbCallLog)
     assert drafter.log.session_factory is app.state.session_factory
     assert drafter.digest_key == settings.digest_key()
+
+
+@pytest.mark.parametrize(
+    ('draft_model', 'expected'), [('gemini-3-1-flash-lite', 'gemini-3-1-flash-lite'), ('  ', 'gemma4:26b')]
+)
+def test_the_drafts_have_their_own_model(draft_model: str, expected: str):
+    settings = make_test_settings(narrator='llm', llm_model='gemma4:26b', draft_model=draft_model)
+
+    drafter = build_drafter(settings, create_app(settings).state.model_router, async_sessionmaker())
+
+    # 장부 초안은 청구하지 않는 호출이다. 서술의 기본 모델과 따로 싼 모델로 둘 수 있다. 비우면 서술의 첫 모델이다
+    assert drafter.model == expected

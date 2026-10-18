@@ -95,8 +95,8 @@ async def test_an_empty_reply_is_not_a_scene(text: str):
         await LLMNarrator(FakeProvider(reply=text), FakeCallLog()).narrate(make_request())
 
 
-async def test_a_reply_cut_by_the_length_limit_is_not_a_scene():
-    # 문장 중간에서 끊긴 글이 기록으로 굳는다. 너무 긴 글을 잘라 받지 않는 것과 같은 이유다
+async def test_a_short_reply_cut_by_the_length_limit_is_not_a_scene():
+    # 잘린 글은 마지막 문장까지 받지만(test_truncated_narration.py), 남은 글이 너무 짧으면 받지 않는다
     with pytest.raises(NarrationError) as caught:
         await LLMNarrator(FakeProvider(reply=REPLY, truncated=True), FakeCallLog()).narrate(make_request())
 

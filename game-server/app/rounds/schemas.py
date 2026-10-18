@@ -481,6 +481,9 @@ class RoundOut(BaseModel):
     closed_at: datetime | None
     # 서술이 끝내 실패한 시각. 있으면 방장이 기다리지 않고 다시 맡길 수 있다. 다시 맡기면 비워진다
     narration_failed_at: datetime | None
+    # 서술이 실패로 끝난 횟수. 3 번에 닿으면 서술을 그만두고 엔진의 결과로 다음 라운드를 연다(값은 받지 않는다).
+    # 화면은 이것으로 "다시 맡기기 N 번 남음"을 보여 준다
+    narration_failures: int
 
 
 class PersonOut(BaseModel):
