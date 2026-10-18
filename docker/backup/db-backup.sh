@@ -27,6 +27,11 @@ BACKUP_INTERVAL_SECONDS="${BACKUP_INTERVAL_SECONDS:-86400}"
 # 스택을 처음 띄울 때 마이그레이션의 ALTER TABLE 과 pg_dump 의 잠금이 겹쳐 Postgres 가 pg_dump 를 끊는 일이 있다(deadlock detected).
 # 마이그레이션은 몇 초면 끝나므로 1분 뒤에는 뜬다
 BACKUP_RETRY_SECONDS="${BACKUP_RETRY_SECONDS:-60}"
+# pg_dump 가 처음에 표의 잠금(ACCESS SHARE)을 잡으며 기다리는 가장 긴 시간. 넘으면 pg_dump 가 물러나고 위의 간격 뒤에 다시 뜬다.
+# 교착이 나면 Postgres 는 먼저 기다리기 시작한 쪽을 deadlock_timeout(기본 1초) 뒤에 끊는다. 그쪽이 마이그레이션이면
+# *-migrate 가 실패하고 서버가 뜨지 않는다. 이보다 짧게 두어, 마이그레이션이 잡은 표를 만나면 교착이 되기 전에 pg_dump 가 먼저 물러난다.
+# 잠금을 다 잡은 뒤의 덤프에는 쓰이지 않는다
+BACKUP_LOCK_WAIT="${BACKUP_LOCK_WAIT:-500ms}"
 # 백업 파일의 이름. 뜬 시각(UTC)이 붙는다. 이름 순서가 시간 순서다
 PREFIX="trpg-"
 SUFFIX=".dump"
@@ -48,7 +53,7 @@ dump_once() {
   final="$BACKUP_DIR/$(backup_name)"
   partial="$final.partial"
   umask 077
-  if ! pg_dump --format=custom --exclude-schema='*_test' --file="$partial"; then
+  if ! pg_dump --format=custom --exclude-schema='*_test' --lock-wait-timeout="$BACKUP_LOCK_WAIT" --file="$partial"; then
     rm -f "$partial"
     return 1
   fi
