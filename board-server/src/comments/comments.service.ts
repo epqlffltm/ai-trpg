@@ -12,9 +12,12 @@
 
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
+import { CommentContext, noticesForComment } from '../notifications/notices.js';
+import { queueNotices } from '../notifications/outbox.js';
 import { OperatorsService } from '../operators/operators.service.js';
 import { WriteLimitsService } from '../write-limits/write-limits.service.js';
+import { Post } from '../posts/post.entity.js';
 import { PostsService } from '../posts/posts.service.js';
 import { Comment } from './comment.entity.js';
 import { CommentThread } from './comment.response.js';
@@ -97,25 +100,46 @@ export class CommentsService {
    *
    * 없는 글이면 404 다. 답글을 달 수 없는 댓글이면 400(없는 댓글, 답글에 다는 답글)이나 409(답글이 다 참)다.
    * 너무 자주 쓰면 429 다.
+   *
+   * 글쓴이(답글이면 그 댓글의 글쓴이)에게 보낼 알림을 같은 트랜잭션에 발송함에 적는다(#385, notifications/notices.ts).
    */
   async create(
     postId: string,
     authorId: string,
     input: NewComment,
   ): Promise<Comment> {
-    await this.posts.get(postId);
-    if (input.parentId !== undefined) {
-      await this.ensureCanReplyTo(postId, input.parentId);
-    }
+    const post = await this.posts.get(postId);
+    const parent =
+      input.parentId === undefined
+        ? null
+        : await this.ensureCanReplyTo(postId, input.parentId);
     await this.writeLimits.ensureCanWriteComment(authorId);
-    return this.comments.save(
-      this.comments.create({
-        postId,
-        parentId: input.parentId ?? null,
+    return this.comments.manager.transaction((manager) =>
+      this.saveWithNotices(manager, post, parent, authorId, input.content),
+    );
+  }
+
+  /** 댓글을 저장하고 그 알림을 발송함에 적는다. 부른 쪽의 트랜잭션(manager) 안에서 한다. */
+  private async saveWithNotices(
+    manager: EntityManager,
+    post: Post,
+    parent: Comment | null,
+    authorId: string,
+    content: string,
+  ): Promise<Comment> {
+    const comment = await manager.save(
+      manager.create(Comment, {
+        postId: post.id,
+        parentId: parent?.id ?? null,
         authorId,
-        content: input.content,
+        content,
       }),
     );
+    await queueNotices(
+      manager,
+      noticesForComment(contextOf(post, parent, comment)),
+    );
+    return comment;
   }
 
   /** 댓글의 내용을 고친다. 없는 댓글이면 404, 글쓴이가 아니면 403 이다. */
@@ -179,7 +203,7 @@ export class CommentsService {
   }
 
   /**
-   * 이 댓글에 답글을 달아도 되는지 확인한다. 안 되면 예외를 낸다.
+   * 이 댓글에 답글을 달아도 되는지 확인한다. 안 되면 예외를 낸다. 되면 그 댓글을 돌려준다.
    *
    * 답글의 수는 세어 보고 넣는다. 그사이에 다른 요청이 답글을 달면 끝을 한둘 넘을 수 있다.
    * 이 끝은 응답이 한없이 커지는 것을 막으려는 것이라 그 정도는 넘어도 된다. 정확히 지키려면
@@ -188,7 +212,7 @@ export class CommentsService {
   private async ensureCanReplyTo(
     postId: string,
     parentId: string,
-  ): Promise<void> {
+  ): Promise<Comment> {
     const parent = await this.comments.findOneBy({ id: parentId, postId });
     if (parent === null) {
       throw parentNotFound();
@@ -201,6 +225,7 @@ export class CommentsService {
     if (!hasRoomForReply(replyCount)) {
       throw tooManyReplies();
     }
+    return parent;
   }
 
   /** 운영자인지 답한다. 글쓴이 자신이면 묻지 않는다. 글쓴이는 운영자가 아니어도 지울 수 있다. */
@@ -213,4 +238,23 @@ export class CommentsService {
     }
     return this.operators.isOperator(userId);
   }
+}
+
+/** 새 댓글이 달린 곳을 알림을 정하는 모양으로 바꾼다. */
+export function contextOf(
+  post: Post,
+  parent: Comment | null,
+  comment: Comment,
+): CommentContext {
+  return {
+    post: {
+      id: post.id,
+      title: post.title,
+      authorId: post.authorId,
+      boardSlug: post.board.slug,
+    },
+    parent:
+      parent === null ? null : { id: parent.id, authorId: parent.authorId },
+    comment: { id: comment.id, authorId: comment.authorId },
+  };
 }

@@ -13,6 +13,7 @@
 - [실행](#실행)
 - [DB와 마이그레이션](#db와-마이그레이션)
 - [API](#api)
+- [알림 보내기](#알림-보내기)
 - [구조](#구조)
 - [로그와 요청 식별자](#로그와-요청-식별자)
 - [CI](#ci)
@@ -374,6 +375,47 @@ npm run migration:revert                                     # 마지막 하나 
 401 은 왜 틀렸는지 알리지 않는다. 만료든 서명이 틀렸든 응답이 같다. 클라이언트는 401 이면 토큰을 갱신하고, 503 이면 로그아웃시키지 않고 잠시 뒤 다시 부른다.
 게임 서버와 같은 응답이다.
 
+## 알림 보내기
+
+내 글에 댓글이 달리거나 내 댓글에 답글이 달리면 그 사람의 알림함에 알린다(#385, `src/notifications/`). 알림함은 알림 서버에 있다([알림 서버의 README](../notification-server/README.md)).
+
+| 알림의 `kind` | 언제, 누구에게 | `payload` |
+| --- | --- | --- |
+| `post.commented` | 내 글에 댓글이 달렸다. 글쓴이에게 | `board_slug`, `post_id`, `post_title`, `comment_id` |
+| `comment.replied` | 내 댓글에 답글이 달렸다. 그 댓글의 글쓴이에게 | 위에 더해 `parent_id`(답글을 단 댓글) |
+
+- **자기에게는 알리지 않는다.** 자기 글에 단 댓글, 자기 댓글에 단 답글은 알림이 없다.
+- **답글은 댓글의 글쓴이에게만 간다.** 글쓴이에게 "글에 댓글이 달렸다"를 또 보내지 않는다. 답글마다 둘씩 가면 시끄럽다.
+- **댓글의 글은 싣지 않는다.** 댓글을 지워도 알림함에는 남기 때문이다. 화면은 글로 가서 댓글을 본다.
+- **발송함에 먼저 적는다.** 댓글을 저장하는 트랜잭션에 발송함(`outgoing_notifications`)에 한 줄을 적고, 알림 서버에는 뒤에서 5초마다 보낸다.
+  댓글만 남고 알림이 사라지거나, 알림만 가고 댓글이 되돌려지는 일이 없다. 알림 서버가 죽어도 댓글은 써진다.
+- 열쇠(`source_key`)는 `<kind>:<댓글 번호>` 다. 다시 보내도, 서버가 여럿이어도 알림 서버에는 한 줄이다.
+- 보내면 줄을 지운다. 닿지 못하면(연결 실패, 시간 초과, 401, 408, 429, 5xx) 10초부터 두 배씩 1시간까지 늘려 다시 보낸다.
+  알림 서버가 받지 않으면(409, 413, 422 등) 버그라 `failed` 로 두고 다시 보내지 않는다. 7일 넘게 못 보낸 것은 지운다. 게임 서버의 발송함과 같은 규칙이다.
+- 서명은 결제 서버를 부를 때와 같은 모양이다(`src/notifications/signing.ts`). 주소는 `POST /api/v1/notification/service/board/notifications` 다.
+
+| 환경 변수 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `NOTIFICATION_URL` | 없음(보내지 않음) | 알림 서버의 주소. `http://127.0.0.1:8004`. 비우면 발송함에 적기만 한다(7일이 지나면 지워진다) |
+| `NOTIFICATION_SECRET` | 없음 | 요청에 서명하는 비밀. 알림 서버의 `BOARD_SERVER_SECRET` 과 같은 값, 32자 이상. `NOTIFICATION_URL` 을 적었으면 없을 때 서버가 뜨지 않는다. 비밀값이다 |
+
+**알림 서버와 붙여 보기.** 알림 서버가 떠 있어야 한다. 비밀을 하나 만들어 두 파일에 함께 넣는다. **저장소 루트에서** 실행한다. 값은 화면에 찍히지 않는다.
+`notification-server/.env` 에 `BOARD_SERVER_SECRET` 이 이미 있으면 이 명령 대신 그 값을 `NOTIFICATION_SECRET` 으로 옮겨 적는다.
+
+```powershell
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); $s = [BitConverter]::ToString($b).Replace('-','').ToLower(); Add-Content notification-server/.env "`nBOARD_SERVER_SECRET=$s"; Add-Content board-server/.env "`nNOTIFICATION_URL=http://127.0.0.1:8004`nNOTIFICATION_SECRET=$s"; Remove-Variable s, b
+```
+
+```bash
+s=$(openssl rand -hex 32); printf '\nBOARD_SERVER_SECRET=%s\n' "$s" >> notification-server/.env; printf '\nNOTIFICATION_URL=http://127.0.0.1:8004\nNOTIFICATION_SECRET=%s\n' "$s" >> board-server/.env; unset s
+```
+
+두 서버를 다시 띄우고 남의 글에 댓글을 달면 몇 초 뒤 글쓴이의 알림함(`GET /api/v1/notification/me/notifications`)에 알림이 생긴다.
+
+**알려진 한계**
+- 신고의 처리(운영자가 글이나 댓글을 내린 것)는 알리지 않는다.
+- 실패로 남긴 알림을 다시 보내는 명령이 없다. 로그(`notification.rejected`)를 보고 고친 뒤 DB 에서 지운다.
+
 ## 구조
 
 ```
@@ -484,6 +526,15 @@ src/
     database.module.ts           서버의 DB 연결
     database.health.ts           DB 에 닿는지 확인한다
     data-source.ts               마이그레이션 도구가 읽는 연결
+  notifications/                 사용자의 알림함(알림 서버)에 넣기(#385)
+    notices.ts                   새 댓글을 누구에게 무슨 알림으로 보낼지 정한다. DB 를 모른다
+    outgoing-notification.entity.ts  발송함의 한 줄
+    outbox.ts                    부른 쪽의 트랜잭션에서 발송함에 적는다
+    signing.ts                   알림 서버에 보내는 요청에 서명한다
+    notification-client.ts       알림 서버를 부르고 답을 보냈다·다시 보낸다·받지 않았다로 가른다
+    notification-dispatcher.ts   한 바퀴: 오래된 것을 지우고, 차례가 된 것을 보내고, 결과를 적는다
+    notification-dispatcher.runner.ts  그 바퀴를 5초마다 돌린다. 앱이 뜨면 시작하고 닫히면 멈춘다
+    notifications.module.ts      위의 것들을 묶는다. 주소가 없으면 보내는 것이 없다
   health/                        살아 있는지, 준비됐는지 확인하는 API
   migrations/                    마이그레이션 파일
 test/

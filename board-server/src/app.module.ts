@@ -30,6 +30,7 @@ import { AllExceptionsFilter } from './errors/all-exceptions.filter.js';
 import { validationPipe } from './errors/validation.js';
 import { HealthModule } from './health/health.module.js';
 import { MeModule } from './me/me.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { PostsModule } from './posts/posts.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 
@@ -49,6 +50,7 @@ import { ReportsModule } from './reports/reports.module.js';
     PostsModule,
     CommentsModule,
     ReportsModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_PIPE, useFactory: validationPipe },

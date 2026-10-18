@@ -24,6 +24,7 @@ import {
   readJwtAudience,
   readJwtIssuer,
   readLogLevel,
+  readNotificationSettings,
   readPort,
   readSessionRevocationsUrl,
 } from './environment.js';
@@ -354,6 +355,8 @@ describe('readEnvironment', () => {
       APP_ENVIRONMENT: DEFAULT_APP_ENVIRONMENT,
       APP_VERSION: DEFAULT_APP_VERSION,
       LOG_LEVEL: DEFAULT_LOG_LEVEL,
+      NOTIFICATION_URL: '',
+      NOTIFICATION_SECRET: '',
     });
   });
 
@@ -369,6 +372,8 @@ describe('readEnvironment', () => {
       APP_ENVIRONMENT: 'production',
       APP_VERSION: '3f2a1b9',
       LOG_LEVEL: 'warning',
+      NOTIFICATION_URL: 'http://notification:8004',
+      NOTIFICATION_SECRET: SECRET,
       PATH: '/usr/bin',
     });
 
@@ -384,6 +389,8 @@ describe('readEnvironment', () => {
       APP_ENVIRONMENT: 'production',
       APP_VERSION: '3f2a1b9',
       LOG_LEVEL: 'warning',
+      NOTIFICATION_URL: 'http://notification:8004',
+      NOTIFICATION_SECRET: SECRET,
     });
   });
 
@@ -399,5 +406,45 @@ describe('readEnvironment', () => {
     expect(() =>
       readEnvironment({ DATABASE_URL, AUTH_JWKS_URL, PORT: 'abc' }),
     ).toThrow('PORT');
+  });
+});
+
+/** 알림 서버의 비밀로 쓰는 32자 넘는 글자. 테스트에서만 쓴다 */
+const SECRET = 'board-notification-test-secret-of-32';
+
+describe('readNotificationSettings', () => {
+  it('주소를 적지 않으면 둘 다 빈 글자다. 알림을 적기만 한다', () => {
+    expect(readNotificationSettings(undefined, SECRET)).toEqual({
+      NOTIFICATION_URL: '',
+      NOTIFICATION_SECRET: '',
+    });
+    expect(readNotificationSettings('  ', undefined)).toEqual({
+      NOTIFICATION_URL: '',
+      NOTIFICATION_SECRET: '',
+    });
+  });
+
+  it('주소와 비밀을 앞뒤 빈칸 없이 읽는다', () => {
+    expect(
+      readNotificationSettings(' http://notification:8004 ', ` ${SECRET} `),
+    ).toEqual({
+      NOTIFICATION_URL: 'http://notification:8004',
+      NOTIFICATION_SECRET: SECRET,
+    });
+  });
+
+  it('http 가 아닌 주소는 받지 않는다', () => {
+    expect(() =>
+      readNotificationSettings('file:///etc/passwd', SECRET),
+    ).toThrow('NOTIFICATION_URL');
+  });
+
+  it('주소를 적었는데 비밀이 없거나 짧으면 뜨지 않는다. 비밀은 예외에 싣지 않는다', () => {
+    expect(() =>
+      readNotificationSettings('http://notification:8004', undefined),
+    ).toThrow('NOTIFICATION_SECRET');
+    expect(() =>
+      readNotificationSettings('http://notification:8004', 'short-secret'),
+    ).toThrow(/^(?!.*short-secret)/);
   });
 });
