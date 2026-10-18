@@ -32,6 +32,7 @@ from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.rounds import judging, service
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
+from tests.narration_model import with_model
 from tests.sheets import make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -133,7 +134,7 @@ async def seat_duo(client: AsyncClient, me: dict[str, str], friend: dict[str, st
         'openings': ['사이렌이 울린다.'],
         'default_sheet': PLAIN,
     }
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 2}
     table = (await client.post(TABLES_URL, json=body, headers=me)).json()

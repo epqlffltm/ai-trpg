@@ -18,16 +18,13 @@ from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND,
 from app.catalog.lookup import DbModelLookup
 from app.main import create_app
 from app.rounds.fake_narrator import FakeNarrator
-from app.rounds.narrator_setup import build_narrator, build_router, offered_tiers, tier_models
+from app.rounds.narrator_setup import build_narrator, build_router
 from app.rounds.picked_narrator import PickedNarrator
 from app.rounds.retrying_narrator import RetryingNarrator
 from app.rounds.routed_narrator import RoutedNarrator
-from app.rounds.tiered_narrator import TieredNarrator
-from app.rounds.tiers import NarrationTier
 from tests.conftest import make_test_settings
 
 LLM = {'narrator': 'llm', 'llm_model': 'gemma4:26b'}
-PREMIUM = {'llm_premium_model': 'qwen3.6:27b'}
 
 
 def router_of(settings) -> ModelRouter:
@@ -40,14 +37,9 @@ def narrator_of(settings):
     return build_narrator(settings, router_of(settings), async_sessionmaker())
 
 
-def tiered(narrator) -> TieredNarrator:
-    """언어 모델의 서술자에서 모델을 고르지 않은 라운드의 서술자(등급으로 고른다)."""
-    return narrator.default
-
-
 def standard(narrator) -> RetryingNarrator:
-    """언어 모델의 서술자에서 standard 등급의 서술자."""
-    return tiered(narrator).narrators[NarrationTier.STANDARD]
+    """언어 모델의 서술자에서 모델이 없는 옛 라운드의 서술자(설정의 기본 모델들)."""
+    return narrator.default
 
 
 def test_the_fake_narrator_is_chosen_by_default():
@@ -57,10 +49,8 @@ def test_the_fake_narrator_is_chosen_by_default():
 def test_the_language_model_narrator_retries_one_model_by_default():
     narrator = narrator_of(make_test_settings(**LLM))
 
-    # 모델을 고르지 않은 라운드는 등급으로 고르는 서술자다. premium 의 모델을 적지 않으면 standard 하나뿐이다
+    # 라운드의 모델로 고르는 서술자다. 모델이 없는 옛 라운드는 설정의 기본 모델들로 서술한다
     assert isinstance(narrator, PickedNarrator)
-    assert isinstance(tiered(narrator), TieredNarrator)
-    assert set(tiered(narrator).narrators) == {NarrationTier.STANDARD}
     # 넘어갈 모델을 적지 않으면 첫 모델 하나를 다시 시도하는 서술자다. 창구는 부를 때 고른다
     assert isinstance(standard(narrator), RetryingNarrator)
     (inner,) = standard(narrator).narrators
@@ -188,50 +178,6 @@ def test_without_a_key_no_model_signs():
     assert [inner.digest_key for inner in standard(narrator_of(make_test_settings(**LLM))).narrators] == [None]
 
 
-# --- 서술 등급 ---
-
-
-def test_premium_has_its_own_models_in_order():
-    settings = make_test_settings(**LLM, **PREMIUM, llm_premium_fallback_models=' gemma4:31b-it-qat, ')
-
-    narrator = narrator_of(settings)
-
-    # 등급마다 따로 다시 시도하고 넘어간다. premium 이 실패해도 standard 의 모델로 넘어가지 않는다(값이 다르다)
-    premium = tiered(narrator).narrators[NarrationTier.PREMIUM]
-    assert [inner.model for inner in premium.narrators] == ['qwen3.6:27b', 'gemma4:31b-it-qat']
-    assert [inner.model for inner in standard(narrator).narrators] == ['gemma4:26b']
-
-
-def test_premium_fallbacks_without_a_first_model_offer_nothing():
-    settings = make_test_settings(**LLM, llm_premium_model='  ', llm_premium_fallback_models='qwen3.6:27b')
-
-    # 넘어갈 모델만 적은 것은 적지 않은 것이다. 첫 모델이 없으면 내주지 않는다
-    assert tier_models(settings) == {NarrationTier.STANDARD: ['gemma4:26b']}
-
-
-def test_the_language_model_offers_only_the_tiers_with_models():
-    assert offered_tiers(make_test_settings(**LLM)) == {NarrationTier.STANDARD}
-    assert offered_tiers(make_test_settings(**LLM, **PREMIUM)) == {NarrationTier.STANDARD, NarrationTier.PREMIUM}
-
-
-def test_the_fake_narrator_offers_every_tier():
-    # 가짜는 모델을 부르지 않는다. 등급을 고르는 흐름을 모델 없이 해 볼 수 있다
-    assert offered_tiers(make_test_settings()) == set(NarrationTier)
-
-
-def test_the_app_plugs_in_the_offered_tiers():
-    assert create_app(make_test_settings(**LLM)).state.narration_tiers == {NarrationTier.STANDARD}
-    assert create_app(make_test_settings()).state.narration_tiers == set(NarrationTier)
-
-
-def test_premium_models_are_routed_and_recorded_by_the_app():
-    app = create_app(make_test_settings(**LLM, **PREMIUM))
-
-    for inner in tiered(app.state.narrator).narrators[NarrationTier.PREMIUM].narrators:
-        assert inner.router is app.state.model_router
-        assert inner.log.session_factory is app.state.session_factory
-
-
 # --- 방장이 고른 모델 ---
 
 
@@ -240,7 +186,7 @@ def test_a_picked_model_is_retried_alone():
 
     chain = narrator.chain_for('claude-sonnet-5-5')
 
-    # 그 모델의 값을 걸었으니 넘어갈 모델이 없다. 등급의 넘어갈 모델(gemma4:31b-it-qat)도 쓰지 않는다
+    # 그 모델의 값을 걸었으니 넘어갈 모델이 없다. 설정의 넘어갈 모델(gemma4:31b-it-qat)도 쓰지 않는다
     assert isinstance(chain, RetryingNarrator)
     (inner,) = chain.narrators
     assert (inner.model, inner.digest_key) == ('claude-sonnet-5-5', b'k')
@@ -267,11 +213,10 @@ def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatc
 
 
 def test_every_chain_shares_one_retry_budget():
-    narrator = narrator_of(make_test_settings(**LLM, **PREMIUM))
+    narrator = narrator_of(make_test_settings(**LLM))
 
     budgets = {
         id(standard(narrator).retry_budget),
-        id(tiered(narrator).narrators[NarrationTier.PREMIUM].retry_budget),
         id(narrator.chain_for('gpt-6-luna').retry_budget),
         id(narrator.chain_for('claude-sonnet-5-5').retry_budget),
     }

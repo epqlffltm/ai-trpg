@@ -30,6 +30,7 @@ from app.main import API_PREFIX
 from app.tables import sheets
 from app.tables.models import TableMember
 from app.tables.schemas import CharacterUpdate
+from tests.narration_model import with_model
 from tests.sheets import SHEET, handed_out, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -86,7 +87,7 @@ async def make_scenario(client: AsyncClient, headers: dict[str, str], **fields) 
         'default_sheet': DEFAULT_SHEET,
     }
     body.update(fields)
-    response = await client.post(SCENARIOS_URL, json=body, headers=headers)
+    response = await client.post(SCENARIOS_URL, json=with_model(body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 
@@ -188,7 +189,7 @@ async def test_the_hp_values_can_be_changed_and_cleared(client: AsyncClient, me:
     ],
 )
 async def test_rejects_bad_hp_values(client: AsyncClient, me: dict[str, str], hp: dict):
-    response = await client.post(SCENARIOS_URL, json={'title': '추격전', 'player_made_hp': hp}, headers=me)
+    response = await client.post(SCENARIOS_URL, json=with_model({'title': '추격전', 'player_made_hp': hp}), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 

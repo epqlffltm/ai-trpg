@@ -21,6 +21,7 @@ from app.assets.models import SCENARIO_MAX_LANDMARKS, SCENARIO_MAX_ROUTES
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot, has_map, place_entries, read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_18, upgrade_from_19
 from app.main import API_PREFIX
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_npc_sheets import add_entry, create_scenario, post, published, refused
@@ -190,7 +191,7 @@ B = '00000000-0000-4000-8000-00000000000b'
     ],
 )
 async def test_rejects_badly_shaped_routes(client: AsyncClient, me: dict[str, str], routes: list):
-    response = await client.post(SCENARIOS_URL, json={'title': '성', 'routes': routes}, headers=me)
+    response = await client.post(SCENARIOS_URL, json=with_model({'title': '성', 'routes': routes}), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -201,7 +202,7 @@ async def test_rejects_badly_shaped_routes(client: AsyncClient, me: dict[str, st
     ids=['same-place-twice', 'not-an-id', 'too-many-landmarks'],
 )
 async def test_rejects_badly_shaped_landmarks(client: AsyncClient, me: dict[str, str], landmarks: list):
-    response = await client.post(SCENARIOS_URL, json={'title': '성', 'landmarks': landmarks}, headers=me)
+    response = await client.post(SCENARIOS_URL, json=with_model({'title': '성', 'landmarks': landmarks}), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 

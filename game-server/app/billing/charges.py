@@ -44,28 +44,26 @@ def payers_of(table: GameTable) -> list[uuid.UUID]:
     """
     이 테이블의 라운드 서술 값을 내는 사람들. 라운드를 열 때 앉아 있는 사람 모두다(쓰러진 사람도). 앉은 차례다.
 
-    각자 등급의 값을 낸다. 나눠 내지 않는다(#180). 사람마다 이름표가 달라 결제 서버는 홀드를 따로 받는다.
+    각자 그 모델의 값을 낸다. 나눠 내지 않는다(#180). 사람마다 이름표가 달라 결제 서버는 홀드를 따로 받는다.
     """
     return [member.user_id for member in table.members]
 
 
-def price_code_for(tier: str) -> str:
-    """
-    서술 등급의 가격표 이름(narration.standard, narration.premium). 값은 결제 서버의 가격표가 정한다.
-
-    결제 서버에 없는 이름이면 홀드를 받지 않는다(400, billing.rejected). 등급을 더하면 결제 서버에도 가격을 먼저 적는다.
-    """
-    return f'{PRICE_CODE_PREFIX}.{tier}'
+# 모델이 없는 라운드의 가격표 이름. 서술 등급이 있던 때의 standard 의 것이다.
+# 모델을 고르는 규칙 전에 만든 테이블과 연 라운드만 쓴다. 결제 서버가 이 이름을 팔지 않으면 홀드를 받지 않고,
+# 방장이 모델을 고르면 풀린다(app/tables/narration_models.py)
+LEGACY_PRICE_CODE = f'{PRICE_CODE_PREFIX}.standard'
 
 
 def price_code_of(round_: Round) -> str:
     """
-    그 라운드의 서술 값의 가격표 이름. 모델을 굳힌 라운드면 그 모델의 것(narration.<이름표>.i0.o0),
-    아니면 등급의 것(narration.standard)이다. 둘 다 결제 서버의 가격표가 값을 정한다.
+    그 라운드의 서술 값의 가격표 이름. 그 모델의 것(narration.<이름표>.i0.o0)이다. 값은 결제 서버의 가격표가 정한다.
+
+    모델이 없는 옛 라운드는 LEGACY_PRICE_CODE 다.
     """
     if round_.narration_model is not None:
         return narration_code(round_.narration_model)
-    return price_code_for(round_.narration_tier)
+    return LEGACY_PRICE_CODE
 
 
 # 방장이 라운드의 모델을 바꿀 때 새 가격표로 다시 걸 청구들. 아직 서술 값을 받지 않았다.

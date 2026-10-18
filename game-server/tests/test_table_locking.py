@@ -32,8 +32,9 @@ from app.tables import state as table_state
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember
 from app.tables.schemas import CharacterUpdate, JoinRequest, LobbyJoinRequest, TableCreate
-from tests.conftest import EVERY_TIER, no_limits
+from tests.conftest import no_limits
 from tests.indexers import NO_INDEXER
+from tests.narration_model import TEST_MODEL, free_picker, today
 from tests.sheets import SHEET
 from tests.signing import make_viewer
 
@@ -64,16 +65,17 @@ async def open_table(session: AsyncSession, capacity: int, is_public: bool = Fal
     """내가 방장인 테이블을 연다. 프리젠이 하나 있는 시나리오로 만든다."""
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
     data = ScenarioCreate(
+        narration_model=TEST_MODEL,
         title='시나리오',
         rulebook_id=rulebook.asset_id,
         openings=['도입부'],
         pregens=[{'name': '폭주족 엘프', 'sheet': SHEET}],
         default_sheet=SHEET,
     )
-    scenario = await scenarios.create_scenario(session, ME, data)
+    scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     table = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=capacity, is_public=is_public)
-    return await service.create_table(session, make_viewer(ME), table, EVERY_TIER)
+    return await service.create_table(session, make_viewer(ME), table, free_picker())
 
 
 async def count_members(session: AsyncSession, table_id: uuid.UUID) -> int:

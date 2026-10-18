@@ -41,6 +41,7 @@ from app.rounds.monster_attacks import Skipped, choose, stopped_by, take_monster
 from app.rounds.move_lines import describe_move
 from app.rounds.narrator import Move
 from app.tables.models import NpcStatus, TableMonster, TableSheet
+from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -109,7 +110,7 @@ def kick(monster: str, lethal: bool = True) -> dict:
 
 
 async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -> dict:
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 

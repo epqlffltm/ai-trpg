@@ -9,12 +9,14 @@
 """
 
 import uuid
+from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
 from app.assets.bestiaries.models import Bestiary
 from app.assets.models import AssetContent, AssetType, Lorebook, Rulebook, Scenario, World
+from app.assets.scenarios.recommended_model import require_recommendable
 from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate
 
 # 다른 자산을 하나 가리키는 칸과, 그 칸이 가리킬 수 있는 종류.
@@ -51,6 +53,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
         reroll_allowed=data.reroll_allowed,
         narration_style=data.narration_style,
+        narration_model=data.narration_model,
         clock=data.clock.model_dump(),
     )
 
@@ -73,8 +76,13 @@ async def hold_references(session: AsyncSession, owner_id: uuid.UUID, data: Scen
         await assets.hold_reference(session, Bestiary, owner_id, bestiary_id, 'bestiary_ids')
 
 
-async def create_scenario(session: AsyncSession, owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
-    """시나리오를 만든다. 가리키는 자산이 없으면 AssetReferenceError."""
+async def create_scenario(session: AsyncSession, owner_id: uuid.UUID, data: ScenarioCreate, today: date) -> Scenario:
+    """
+    시나리오를 만든다. 가리키는 자산이 없으면 AssetReferenceError.
+
+    추천 서술 모델이 서비스 중인 모델이 아니면 RecommendedModelError. today 는 은퇴했는지 볼 날이다.
+    """
+    await require_recommendable(session, data.narration_model, today)
     await hold_references(session, owner_id, data)
     return await assets.create(session, build_scenario(owner_id, data))
 
@@ -91,16 +99,30 @@ async def list_scenarios(
     return await assets.list_owned(session, Scenario, owner_id, limit, offset)
 
 
+async def require_model_change(session: AsyncSession, scenario: Scenario, data: ScenarioUpdate, today: date) -> None:
+    """
+    고친 뒤의 추천 서술 모델을 확인한다. 아니면 RecommendedModelError.
+
+    보낸 모델은 서비스 중이어야 한다. 보내지 않았으면 지금의 모델을 그대로 두므로 다시 보지 않는다.
+    지금 모델이 은퇴해도 다른 칸을 고칠 수 있다. 작성자가 알림을 보고 고를 때까지 테이블은 대체 모델로 만든다.
+    추천 모델이 없는 옛 시나리오는 모델을 함께 보내야 저장된다.
+    """
+    if data.narration_model is not None or scenario.narration_model is None:
+        await require_recommendable(session, data.narration_model, today)
+
+
 async def update_scenario(
-    session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, data: ScenarioUpdate
+    session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, data: ScenarioUpdate, today: date
 ) -> Scenario:
     """
-    자기 시나리오를 고친다. 없으면 AssetNotFoundError, 가리키는 자산이 없으면 AssetReferenceError.
+    자기 시나리오를 고친다. 없으면 AssetNotFoundError, 가리키는 자산이 없으면 AssetReferenceError,
+    추천 서술 모델이 맞지 않으면 RecommendedModelError(require_model_change).
 
     시나리오를 잠그고 고친다. 로어북과 도감의 목록은 "지금 붙은 것과 비교해서" 바꾸므로,
     두 요청이 같은 옛 목록을 보고 각자 바꾸면 둘의 것이 합쳐져 상한을 넘길 수 있다.
     """
     scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
+    await require_model_change(session, scenario, data, today)
     await hold_references(session, owner_id, data)
     return await assets.save_changes(session, scenario, data)
 

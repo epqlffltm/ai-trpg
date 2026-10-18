@@ -26,6 +26,7 @@ from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.tables import sheets
 from app.tables.models import GameTable, TableMember, TableSheet
+from tests.narration_model import with_model
 from tests.sheets import SHEET, handed_out, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -81,7 +82,7 @@ async def publish_scenario(client: AsyncClient, headers: dict[str, str], **field
         'default_sheet': DEFAULT_SHEET,
     }
     body.update(fields)
-    scenario = await client.post(SCENARIOS_URL, json=body, headers=headers)
+    scenario = await client.post(SCENARIOS_URL, json=with_model(body), headers=headers)
     assert scenario.status_code == status.HTTP_201_CREATED, scenario.text
     published = await client.post(f'{SCENARIOS_URL}/{scenario.json()["id"]}/versions', json={}, headers=headers)
     assert published.status_code == status.HTTP_201_CREATED, published.text

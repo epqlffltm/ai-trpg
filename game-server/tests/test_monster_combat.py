@@ -32,6 +32,7 @@ from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.tables.models import NpcStatus, TableMonster
 from app.tables.monsters import TRAITS, Traits, change_monster, status_after, traits_of
+from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -88,7 +89,7 @@ def strike(monster: str, harm: str = 'moderate', lethal: bool = False, **fields)
 
 
 async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -> dict:
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 

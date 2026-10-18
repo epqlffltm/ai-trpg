@@ -28,6 +28,7 @@ from app.rounds.narration_request import read_moves
 from app.rounds.narrator import ItemNote, Move, NarrationRequest
 from app.tables.items import starting_stacks
 from app.tables.models import TableItem
+from tests.narration_model import asset_body
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -71,7 +72,7 @@ def stranger(signing_key: SigningKey) -> dict[str, str]:
 
 
 async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -> dict:
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 

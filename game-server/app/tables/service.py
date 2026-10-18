@@ -44,12 +44,12 @@ from app.listings import service as listings
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
-from app.rounds.tiers import NarrationTier
 from app.tables import monsters, npcs, places, quests, repository, sheets
 from app.tables.building import build_table, hash_table_password, new_invite_code, seat_limit
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
-from app.tables.model_picker import ModelPicker, require_pickable
+from app.tables.model_choice import ModelChoice, choose_model
+from app.tables.model_picker import ModelPicker
 from app.tables.models import GameTable, TableMember, TableStatus
 from app.tables.password_attempts import guarded_password_check
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
@@ -59,7 +59,6 @@ from app.tables.state import (
     require_host,
     require_member,
     require_not_ended,
-    require_offered,
     require_recruiting,
     require_story_fits,
 )
@@ -85,24 +84,24 @@ async def resolve_version(session: AsyncSession, viewer: AccessClaims, data: Tab
     return version
 
 
+def created_payload(choice: ModelChoice) -> dict:
+    """테이블을 만든 이벤트에 싣는 것. 정한 서술 모델과 시나리오의 추천 모델. 둘이 다르면 화면이 알린다."""
+    return {'narration_model': choice.slug, 'recommended_model': choice.recommended}
+
+
 async def create_table(
-    session: AsyncSession,
-    viewer: AccessClaims,
-    data: TableCreate,
-    offered: frozenset[NarrationTier],
-    picker: ModelPicker | None = None,
+    session: AsyncSession, viewer: AccessClaims, data: TableCreate, picker: ModelPicker
 ) -> GameTable:
     """
-    테이블을 만든다. 만든 사람이 방장이 되어 앉는다. offered 는 이 서버가 내주는 서술 등급들이다.
-    서술 모델을 골랐으면 picker 로 지금 고를 수 있는 모델인지 본다(app/tables/model_picker.py).
+    테이블을 만든다. 만든 사람이 방장이 되어 앉는다.
+    서술 모델은 방장이 고른 것, 아니면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대신 쓸 모델이다
+    (app/tables/model_choice.py). picker 로 지금 고를 수 있는지 본다.
     판의 시작 시각을 가리키는 게임 안의 시계를 함께 단다(app/calendar/).
 
-    판이 없으면 AssetNotFoundError, 없는 스타팅이나 판이 허용하지 않는 캐릭터 방식이나 내주지 않는 서술 등급을
-    골랐으면 TableOptionError, 그 판으로는 둘 수 없는 정원이면 TableConflictError.
-    고를 수 없는 서술 모델이면 TableOptionError(narration_model).
+    판이 없으면 AssetNotFoundError, 없는 스타팅이나 판이 허용하지 않는 캐릭터 방식을 골랐으면 TableOptionError,
+    그 판으로는 둘 수 없는 정원이면 TableConflictError.
+    서술 모델을 정하지 못하면 TableOptionError(narration_model).
     """
-    require_offered(data.narration_tier, offered)
-    await require_pickable(session, picker, data.narration_model)
     version = await resolve_version(session, viewer, data)
     snapshot = read_snapshot(version.snapshot)
 
@@ -117,13 +116,17 @@ async def create_table(
     if by_pregens is not None and data.capacity > by_pregens:
         raise TableConflictError(Conflict.PREGENS_TOO_FEW)
 
+    recommended = await versions.recommended_model(session, version.scenario_id)
+    choice = await choose_model(session, picker, data.narration_model, recommended)
     password_hash = await hash_table_password(data.password)
     table = build_table(viewer.user_id, version, snapshot, data, modes, password_hash)
+    table.narration_model = choice.slug
     calendar.start_clock(table, snapshot)
     repository.add_table(session, table)
     # 테이블을 먼저 DB 에 보낸다. 테이블의 ID 는 그때 정해지고, 이벤트는 그 ID 를 가리킨다
     await session.flush()
-    recorder.record(session, table, EventType.TABLE_CREATED, actor_id=viewer.user_id)
+    payload = created_payload(choice)
+    recorder.record(session, table, EventType.TABLE_CREATED, actor_id=viewer.user_id, payload=payload)
     await commit(session, table)
     return await repository.reload_table(session, table.id)
 

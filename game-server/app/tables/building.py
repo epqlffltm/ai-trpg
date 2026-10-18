@@ -58,6 +58,7 @@ def build_table(
 
     판의 내용을 통째로 복사해 온다. 옛 형식의 판이면 지금의 모양으로 올린 것을 복사한다.
     만든 사람이 방장이자 첫 참가자다. modes 는 이 테이블에서 허용할 캐릭터 방식이다.
+    서술 모델은 비워 둔다. 시나리오의 추천 모델과 가격 목록을 보고 서비스가 정한다(app/tables/model_choice.py).
     password_hash 는 비밀번호를 계산해 둔 값이다. 비밀번호가 없으면 None 이다.
     """
     return GameTable(
@@ -75,8 +76,6 @@ def build_table(
         password_hash=password_hash,
         narration_style=choose_narration_style(snapshot, data.narration_style),
         round_time_limit=data.round_time_limit,
-        narration_tier=data.narration_tier,
-        narration_model=data.narration_model,
         credit_wait_seconds=data.credit_wait_seconds,
         remove_short_payers=data.remove_short_payers,
         whisper_notice=data.whisper_notice,

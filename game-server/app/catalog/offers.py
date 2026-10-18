@@ -14,12 +14,20 @@
 
 결제에 쓰는 등급은 가격표의 등급(tier)이 기준이다(model-pricing-plan 9-1). 모델 목록의 분류(grade)는 보여 주기용이다.
 둘이 다르면(premium 이 한쪽에만) 경고를 남긴다. 고르는 것은 막지 않는다.
+
+시나리오의 추천 모델을 쓸 수 없으면 같은 회사의 다른 모델로 대신한다(replacement_for, 유저 결정, 2026-10-18).
+  1. 운영자가 그 회사의 대체 모델로 정한 모델(scripts/models.py fallback)을 지금 고를 수 있으면 그것.
+  2. 아니면 그 회사에서 지금 고를 수 있는 standard 중 가장 싼 모델. 값이 같으면 이름표 순서다.
+     standard 는 가격표의 등급으로 본다.
+     결제 서버 없이 도는 서버는 값도 등급도 없으니 모델 목록의 분류로 보고 이름표 순서다.
+  3. 둘 다 없으면 없다. 새 테이블은 방장이 고른다.
 """
 
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +50,8 @@ class ModelCard:
     grade: Grade
     enabled: bool
     retires_on: date | None
+    # 운영자가 정한 그 회사의 대체 모델인가
+    vendor_fallback: bool = False
 
 
 @dataclass(frozen=True)
@@ -61,6 +71,8 @@ class OfferedModel:
     next: Change | None = None
     # 지금 값이 행사가인가. 행사가면 next 가 행사가 끝나는 때와 그 뒤의 값이다
     promo: bool = False
+    # 운영자가 정한 그 회사의 대체 모델인가
+    vendor_fallback: bool = False
 
 
 @dataclass(frozen=True)
@@ -80,12 +92,15 @@ def to_card(model: AiModel) -> ModelCard:
         grade=Grade(model.grade),
         enabled=model.enabled,
         retires_on=model.retires_on,
+        vendor_fallback=model.vendor_fallback,
     )
 
 
 def free_offer(card: ModelCard) -> OfferedModel:
     """결제 서버 없이 도는 서버의 내줌. 값이 없다."""
-    return OfferedModel(card.slug, card.display_name, card.vendor, card.grade, credits=None, tier=None)
+    return OfferedModel(
+        card.slug, card.display_name, card.vendor, card.grade, None, None, vendor_fallback=card.vendor_fallback
+    )
 
 
 def offer(card: ModelCard, book: PriceBook, now: datetime) -> OfferedModel | None:
@@ -106,7 +121,15 @@ def offer(card: ModelCard, book: PriceBook, now: datetime) -> OfferedModel | Non
         return None
     sale = price.current
     return OfferedModel(
-        card.slug, card.display_name, card.vendor, card.grade, sale.credits, sale.tier, price.next, sale.promo
+        card.slug,
+        card.display_name,
+        card.vendor,
+        card.grade,
+        sale.credits,
+        sale.tier,
+        price.next,
+        sale.promo,
+        card.vendor_fallback,
     )
 
 
@@ -114,6 +137,32 @@ def offered_models(cards: Sequence[ModelCard], book: PriceBook, now: datetime) -
     """내줄 수 있는 모델들. 회사, 보이는 이름 순서다(화면이 회사별로 묶는다)."""
     offers = [found for card in cards if (found := offer(card, book, now)) is not None]
     return sorted(offers, key=lambda found: (found.vendor, found.display_name))
+
+
+def is_standard(found: OfferedModel) -> bool:
+    """standard 인가. 가격표의 등급으로 본다. 등급이 없으면(결제 서버 없이 도는 서버) 모델 목록의 분류로 본다."""
+    if found.tier is not None:
+        return found.tier == Tier.STANDARD
+    return found.grade == Grade.STANDARD
+
+
+def cheapness(found: OfferedModel) -> tuple[Decimal, str]:
+    """싼 순서의 열쇠. 값, 그다음 이름표. 값이 없으면 0 으로 보아 이름표 순서가 된다."""
+    return Decimal(found.credits or 0), found.slug
+
+
+def replacement_for(offers: Sequence[OfferedModel], vendor: str) -> OfferedModel | None:
+    """
+    그 회사의 대신 쓸 모델. 운영자가 정한 대체 모델이 먼저고, 없으면 standard 중 가장 싼 모델이다. 없으면 None.
+
+    offers 는 지금 고를 수 있는 모델들이다(offered_models). 고를 수 없는 대체 모델은 이미 빠져 있다.
+    """
+    same_vendor = [found for found in offers if found.vendor == vendor]
+    chosen = next((found for found in same_vendor if found.vendor_fallback), None)
+    if chosen is not None:
+        return chosen
+    standards = [found for found in same_vendor if is_standard(found)]
+    return min(standards, key=cheapness, default=None)
 
 
 def grade_disagrees(found: OfferedModel) -> bool:
@@ -144,6 +193,19 @@ async def find_offered(session: AsyncSession, prices: PriceList, slug: str, now:
     if model is None:
         return None
     return offer(to_card(model), await prices.book(), now)
+
+
+async def find_replacement(
+    session: AsyncSession, prices: PriceList, vendor: str, now: datetime, excluding: str
+) -> OfferedModel | None:
+    """
+    그 회사의 대신 쓸 모델(replacement_for). 모델 목록과 가격 목록을 읽어 지금 고를 수 있는 모델 안에서 고른다.
+
+    excluding 은 대신하려는 모델이다. 그 모델은 후보에서 뺀다.
+    가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다.
+    """
+    cards = [to_card(model) for model in await repository.list_models(session) if model.slug != excluding]
+    return replacement_for(offered_models(cards, await prices.book(), now), vendor)
 
 
 async def list_offered(session: AsyncSession, prices: PriceList, now: datetime) -> Offering:
