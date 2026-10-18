@@ -140,6 +140,8 @@ services:
       BILLING_DB_PASSWORD: ${BILLING_DB_PASSWORD:?.env 에 BILLING_DB_PASSWORD 를 설정하세요}
       # 게시판 서버 전용 계정의 비밀번호. 초기화 스크립트가 읽는다
       BOARD_DB_PASSWORD: ${BOARD_DB_PASSWORD:?.env 에 BOARD_DB_PASSWORD 를 설정하세요}
+      # 알림 서버 전용 계정의 비밀번호. 초기화 스크립트가 읽는다
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?.env 에 NOTIFICATION_DB_PASSWORD 를 설정하세요}
       # 인증 서버 계정에 테스트용 DB 를 만들 권한(CREATEDB)을 줄지. 개발에서만 true 로 둔다.
       # 운영에서는 적지 않는다(false). 볼륨이 비어 있는 첫 기동 때만 반영된다(#20)
       AUTH_DB_ALLOW_TEST_DB: ${AUTH_DB_ALLOW_TEST_DB:-false}
