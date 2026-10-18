@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Asset, Rating, ScenarioVersion
+from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import RecommendedPlayers
 from app.auth.dependencies import CurrentUser
@@ -90,7 +91,7 @@ async def update_listing(
     scenario_id: uuid.UUID, data: ListingUpdate, user: CurrentUser, session: Session
 ) -> ListingDetail:
     """자기 시나리오의 소개 페이지를 고친다. 보낸 칸만 바뀐다. 판을 새로 내지 않아도 된다."""
-    listing = await service.update_listing(session, user.user_id, scenario_id, data)
+    listing = await service.update_listing(session, user.user_id, scenario_id, data, allowed_ratings(user))
     return await to_owner_response(session, listing)
 
 
@@ -99,7 +100,7 @@ async def set_publication(
     scenario_id: uuid.UUID, data: PublicationUpdate, user: CurrentUser, session: Session
 ) -> ListingDetail:
     """공개할 판을 정한다. 시나리오 하나에 공개 판은 하나다. version 을 null 로 보내면 공개를 내린다."""
-    listing = await service.set_publication(session, user.user_id, scenario_id, data)
+    listing = await service.set_publication(session, user.user_id, scenario_id, data, allowed_ratings(user))
     return await to_owner_response(session, listing)
 
 

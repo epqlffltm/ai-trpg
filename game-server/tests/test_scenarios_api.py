@@ -69,8 +69,20 @@ def their_headers(signing_key: SigningKey) -> dict[str, str]:
     return bearer(signing_key, SOMEONE_ELSE)
 
 
-def bearer(signing_key: SigningKey, user_id: uuid.UUID) -> dict[str, str]:
-    token = make_token(signing_key, make_access_claims(sub=str(user_id)))
+@pytest.fixture
+def adult_headers(signing_key: SigningKey) -> dict[str, str]:
+    """성인용 내용을 볼 수 있는 내 토큰의 머리말(#59). 나와 같은 사람이다."""
+    return bearer(signing_key, ME, adult_content=True)
+
+
+@pytest.fixture
+def operator_headers(signing_key: SigningKey) -> dict[str, str]:
+    """성인 인증을 하지 않은 운영자인 내 토큰의 머리말(#390). 나와 같은 사람이다."""
+    return bearer(signing_key, ME, roles=['operator'])
+
+
+def bearer(signing_key: SigningKey, user_id: uuid.UUID, **claims) -> dict[str, str]:
+    token = make_token(signing_key, make_access_claims(sub=str(user_id), **claims))
     return {'Authorization': f'Bearer {token}'}
 
 
@@ -268,12 +280,12 @@ async def test_the_database_rejects_a_narration_style_it_does_not_know(session: 
 # --- 등급 ---
 
 
-async def test_the_rating_is_chosen_on_the_scenario(client: AsyncClient, my_headers: dict[str, str]):
-    scenario = await create(client, SCENARIOS_URL, my_headers, rating='adult')
+async def test_the_rating_is_chosen_on_the_scenario(client: AsyncClient, adult_headers: dict[str, str]):
+    scenario = await create(client, SCENARIOS_URL, adult_headers, rating='adult')
     url = f'{SCENARIOS_URL}/{scenario["id"]}'
 
-    lowered = await client.patch(url, json={'rating': 'all'}, headers=my_headers)
-    untouched = await client.patch(url, json={'openings': [OPENING]}, headers=my_headers)
+    lowered = await client.patch(url, json={'rating': 'all'}, headers=adult_headers)
+    untouched = await client.patch(url, json={'openings': [OPENING]}, headers=adult_headers)
 
     assert scenario['rating'] == 'adult'
     assert lowered.json()['rating'] == 'all'
@@ -281,9 +293,11 @@ async def test_the_rating_is_chosen_on_the_scenario(client: AsyncClient, my_head
     assert untouched.json()['rating'] == 'all'
 
 
-async def test_the_list_carries_the_rating(client: AsyncClient, my_headers: dict[str, str]):
+async def test_the_list_carries_the_rating(
+    client: AsyncClient, my_headers: dict[str, str], adult_headers: dict[str, str]
+):
     await create(client, SCENARIOS_URL, my_headers, title='전체 이용가')
-    await create(client, SCENARIOS_URL, my_headers, title='성인용', rating='adult')
+    await create(client, SCENARIOS_URL, adult_headers, title='성인용', rating='adult')
 
     response = await client.get(SCENARIOS_URL, headers=my_headers)
 
@@ -291,6 +305,68 @@ async def test_the_list_carries_the_rating(client: AsyncClient, my_headers: dict
     ratings = {item['title']: item['rating'] for item in response.json()['items']}
     assert ratings == {'전체 이용가': 'all', '성인용': 'adult'}
     assert response.json()['total'] == 2
+
+
+# --- 성인용 쓰기(#390) ---
+
+
+async def test_someone_who_may_not_see_adult_content_cannot_write_it(client: AsyncClient, my_headers: dict[str, str]):
+    response = await client.post(
+        SCENARIOS_URL, json=asset_body(SCENARIOS_URL, {'title': TITLE, 'rating': 'adult'}), headers=my_headers
+    )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()['code'] == 'adult_content_required'
+    assert (await client.get(SCENARIOS_URL, headers=my_headers)).json()['total'] == 0
+
+
+async def test_an_all_ages_scenario_cannot_be_raised_to_adult(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create(client, SCENARIOS_URL, my_headers)
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    response = await client.patch(url, json={'rating': 'adult'}, headers=my_headers)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert (await client.get(url, headers=my_headers)).json()['rating'] == 'all'
+
+
+@pytest.mark.parametrize('change', [{'openings': [OPENING]}, {'rating': 'all'}], ids=['openings', 'lower'])
+async def test_an_adult_scenario_cannot_be_edited_without_seeing_adult_content(
+    client: AsyncClient, my_headers: dict[str, str], adult_headers: dict[str, str], change: dict
+):
+    # 같은 사람이 성인용 내용을 볼 수 없는 토큰으로 고친다. 전체 이용가로 내리는 것도 막는다
+    scenario = await create(client, SCENARIOS_URL, adult_headers, rating='adult')
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    response = await client.patch(url, json=change, headers=my_headers)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert (await client.get(url, headers=adult_headers)).json()['rating'] == 'adult'
+
+
+async def test_an_adult_scenario_can_still_be_read_and_deleted(
+    client: AsyncClient, my_headers: dict[str, str], adult_headers: dict[str, str]
+):
+    scenario = await create(client, SCENARIOS_URL, adult_headers, rating='adult')
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    read = await client.get(url, headers=my_headers)
+    deleted = await client.delete(url, headers=my_headers)
+
+    assert read.status_code == status.HTTP_200_OK
+    assert deleted.status_code == status.HTTP_204_NO_CONTENT
+
+
+async def test_an_operator_writes_adult_scenarios_without_the_check(
+    client: AsyncClient, operator_headers: dict[str, str]
+):
+    scenario = await create(client, SCENARIOS_URL, operator_headers, rating='adult')
+    url = f'{SCENARIOS_URL}/{scenario["id"]}'
+
+    edited = await client.patch(url, json={'openings': [OPENING]}, headers=operator_headers)
+
+    assert edited.status_code == status.HTTP_200_OK
+    assert edited.json()['rating'] == 'adult'
 
 
 @pytest.mark.parametrize(

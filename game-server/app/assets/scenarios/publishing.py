@@ -10,6 +10,7 @@ SQL 을 모른다. 판을 읽고 쓰는 일은 repository.py 에 맡긴다.
 
 import enum
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -25,11 +26,13 @@ from app.assets.models import (
     Lorebook,
     LoreEntry,
     LoreKind,
+    Rating,
     Rulebook,
     Scenario,
     ScenarioVersion,
     World,
 )
+from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import (
     Encounter,
@@ -565,10 +568,16 @@ class VersionIndexer(Protocol):
 
 
 async def publish(
-    session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, data: VersionCreate, indexer: VersionIndexer
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    scenario_id: uuid.UUID,
+    data: VersionCreate,
+    indexer: VersionIndexer,
+    allowed: Sequence[Rating] = ALL_AGES_ONLY,
 ) -> ScenarioVersion:
     """
     자기 시나리오를 게시한다. 시나리오가 없으면 AssetNotFoundError, 조건을 갖추지 못했으면 ScenarioNotReadyError.
+    성인용 초안인데 allowed 에 성인용이 없으면 AdultContentRequiredError(#390, app/assets/ratings.py).
 
     시나리오를 잠그고 한다. 번호는 "지금까지의 가장 큰 번호 + 1"이라, 두 요청이 동시에 세면 같은 번호를 얻는다.
     잠그면 나중 요청은 앞의 판이 저장된 뒤에 센다. DB 의 UNIQUE 는 잠금을 빠뜨렸을 때의 마지막 방어선이다.
@@ -576,6 +585,7 @@ async def publish(
     커밋 전에 맡기면, 커밋이 실패했을 때 없는 판을 색인하려 한다.
     """
     scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
+    require_rating(scenario.asset.rating, allowed)
     parts = await load_parts(session, owner_id, scenario)
 
     problems = find_problems(scenario, parts)

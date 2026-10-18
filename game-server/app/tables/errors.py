@@ -8,6 +8,7 @@ HTTP 상태 코드는 여기서 정하지 않는다. 무엇이 틀렸는지만 �
   - MemberNotFoundError: 그 사람은 이 테이블에 앉아 있지 않다(404).
   - NotHostError: 방장만 하는 일이다(403).
   - WrongPasswordError: 테이블의 비밀번호가 틀렸다(403).
+  - 성인용 테이블의 거절(403)은 등급을 가르는 곳의 것(app/assets/ratings.py 의 AdultContentRequiredError)을 쓴다.
   - TableConflictError: 요청은 맞지만 테이블의 지금 상태와 부딪힌다. 까닭은 Conflict 다(409).
   - TableOptionError: 고를 수 없는 것을 골랐다(422).
 """
@@ -52,8 +53,6 @@ class Conflict(enum.StrEnum):
     PREGENS_TOO_FEW = 'pregens_too_few'
     # 방장은 자신을 내보낼 수 없다. 나가기를 쓴다
     CANNOT_KICK_SELF = 'cannot_kick_self'
-    # 이 등급의 테이블은 혼자서만 할 수 있다(성인 인증이 생길 때까지)
-    SOLO_ONLY = 'solo_only'
     # 이 테이블에서 이미 굴렸다. 한 사람은 한 번 굴린다. 방장이 "한 번 더"를 줘야 다시 굴린다
     ALREADY_ROLLED = 'already_rolled'
     # 아직 굴리지 않았다. 굴린 점수가 있어야 능력치에 놓을 수 있고, "한 번 더"를 받을 수 있다

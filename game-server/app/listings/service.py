@@ -8,16 +8,20 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 두 부류의 사람이 쓴다.
   - 제작자: 자기 시나리오의 공개 정보를 고친다. 시나리오가 자기 것인지부터 확인한다.
   - 다른 사용자: 공개된 것을 본다. 볼 수 있는 등급만 본다.
+
+등급을 가르는 곳은 app/assets/ratings.py 다.
 """
 
 import enum
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
 from app.assets.models import Rating, Scenario, ScenarioVersion
+from app.assets.ratings import ALL_AGES_ONLY, allowed_ratings, require_rating
 from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
@@ -47,16 +51,6 @@ class ListingNotReadyError(Exception):
     def __init__(self, problems: list[Problem]) -> None:
         super().__init__()
         self.problems = problems
-
-
-def allowed_ratings(viewer: AccessClaims) -> list[Rating]:
-    """
-    보는 사람이 볼 수 있는 등급.
-
-    지금은 누구에게나 전체 이용가만 보인다. 인증 서버에 성인 인증이 없어서, 토큰으로는 성인인지 알 수 없다.
-    성인 인증이 생기면 여기서 토큰을 읽어 성인용을 더한다. 등급을 가르는 곳은 이 함수 하나다.
-    """
-    return [Rating.ALL]
 
 
 def find_problems(listing: Listing) -> list[Problem]:
@@ -124,16 +118,23 @@ async def get_listing(session: AsyncSession, owner_id: uuid.UUID, scenario_id: u
 
 
 async def update_listing(
-    session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, data: ListingUpdate
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    scenario_id: uuid.UUID,
+    data: ListingUpdate,
+    allowed: Sequence[Rating] = ALL_AGES_ONLY,
 ) -> Listing:
     """
     자기 시나리오의 소개 페이지를 고친다. 시나리오가 없으면 AssetNotFoundError.
 
     공개 중인 페이지를 고쳐서 조건을 못 갖추게 되면 ListingNotReadyError. 고치려면 공개를 먼저 내린다.
+    시나리오나 공개 중인 판이 성인용인데 allowed 에 성인용이 없으면 AdultContentRequiredError(#390).
     시나리오를 잠그고 한다. 공개 정보가 없을 때 두 요청이 동시에 만들면 부딪힌다.
     """
-    await assets.lock_owned(session, Scenario, owner_id, scenario_id)
+    scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
+    require_rating(scenario.asset.rating, allowed)
     listing = await get_or_create(session, scenario_id)
+    require_rating(listing.rating, allowed)
     apply_changes(listing, data)
 
     if listing.version_id is not None:
@@ -147,12 +148,18 @@ async def update_listing(
 
 
 async def set_publication(
-    session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, data: PublicationUpdate
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    scenario_id: uuid.UUID,
+    data: PublicationUpdate,
+    allowed: Sequence[Rating] = ALL_AGES_ONLY,
 ) -> Listing:
     """
     자기 시나리오의 공개할 판을 정한다. 번호를 비우면 공개를 내린다.
 
-    시나리오나 판이 없으면 AssetNotFoundError, 소개 페이지가 조건을 못 갖췄으면 ListingNotReadyError.
+    시나리오나 판이 없으면 AssetNotFoundError, 소개 페이지가 조건을 못 갖췄으면 ListingNotReadyError,
+    성인용 판인데 allowed 에 성인용이 없으면 AdultContentRequiredError(#390).
+    공개를 내리는 것은 등급과 상관없이 된다. 성인용을 공개의 길에서 거두는 일이라 막을 까닭이 없다.
     """
     await assets.lock_owned(session, Scenario, owner_id, scenario_id)
     listing = await get_or_create(session, scenario_id)
@@ -163,6 +170,7 @@ async def set_publication(
         version = await versions.find_version(session, scenario_id, data.version)
         if version is None:
             raise AssetNotFoundError
+        require_rating(read_snapshot(version.snapshot).rating, allowed)
         problems = find_problems(listing)
         if problems:
             raise ListingNotReadyError(problems)
