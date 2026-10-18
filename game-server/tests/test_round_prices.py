@@ -164,6 +164,8 @@ async def test_changing_the_model_announces_the_new_price(
 ):
     table = await start_with(client, me, narration_model='gpt-6-luna')
     await tick(app)
+    # Luna 를 더는 팔지 않는다. 시작한 테이블은 지금 모델을 쓸 수 없을 때만 바꾼다(app/tables/narration_models.py)
+    app.state.price_list = FixedPrices(book(on_sale('claude-opus-5-5', '60')))
 
     await client.put(table_url(table, '/narration-model'), json={'narration_model': 'claude-opus-5-5'}, headers=me)
     repriced = await charges_out(client, me, table, 1)
