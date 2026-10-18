@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import time
+from datetime import UTC, datetime
 
 import jwt
 import pytest
@@ -190,6 +191,74 @@ async def test_rejects_a_subject_that_is_not_a_user_id(
 
     with pytest.raises(InvalidTokenError):
         await verify(token, jwks, settings)
+
+
+# --- 성인용 내용을 볼 수 있는가(#59) ---
+
+
+async def test_reads_that_the_token_may_see_adult_content(key: SigningKey, jwks: JwksCache, settings: Settings):
+    token = make_token(key, make_access_claims(adult_content=True))
+
+    claims = await verify(token, jwks, settings)
+
+    assert claims.adult_content is True
+
+
+async def test_a_token_without_the_value_may_not_see_adult_content(
+    key: SigningKey, jwks: JwksCache, settings: Settings
+):
+    # 본인인증 전이거나 그 값이 생기기 전에 발급된 토큰이다. 거부하지 않고, 볼 수 없는 것으로 받는다
+    claims = await verify(make_token(key, make_access_claims()), jwks, settings)
+
+    assert claims.adult_content is False
+
+
+def test_claims_made_without_a_token_may_not_see_adult_content():
+    # 서버 안의 작업이나 테스트가 토큰 없이 만든 값이 성인용을 여는 일이 없다
+    claims = AccessClaims(user_id=TEST_USER_ID, expires_at=datetime.now(UTC))
+
+    assert (claims.adult_content, claims.is_operator) == (False, False)
+
+
+@pytest.mark.parametrize('value', [False, 'true', 1, None, {}])
+async def test_only_a_json_true_opens_adult_content(
+    value: object, key: SigningKey, jwks: JwksCache, settings: Settings
+):
+    token = make_token(key, make_access_claims(adult_content=value))
+
+    claims = await verify(token, jwks, settings)
+
+    assert claims.adult_content is False
+
+
+# --- 운영자인가(#390) ---
+
+
+async def test_reads_that_the_token_is_an_operator(key: SigningKey, jwks: JwksCache, settings: Settings):
+    token = make_token(key, make_access_claims(roles=['operator']))
+
+    claims = await verify(token, jwks, settings)
+
+    assert claims.is_operator is True
+    # 운영자라고 성인용 내용의 칸이 바뀌지는 않는다. 등급의 예외는 등급을 가르는 곳이 정한다
+    assert claims.adult_content is False
+
+
+@pytest.mark.parametrize('roles', [None, [], ['editor'], 'operator', {'operator': True}, ['Operator']])
+async def test_only_a_list_with_operator_makes_an_operator(
+    roles: object, key: SigningKey, jwks: JwksCache, settings: Settings
+):
+    claims = make_access_claims() if roles is None else make_access_claims(roles=roles)
+
+    verified = await verify(make_token(key, claims), jwks, settings)
+
+    assert verified.is_operator is False
+
+
+async def test_unknown_roles_beside_operator_are_ignored(key: SigningKey, jwks: JwksCache, settings: Settings):
+    token = make_token(key, make_access_claims(roles=['editor', 'operator']))
+
+    assert (await verify(token, jwks, settings)).is_operator is True
 
 
 # --- 인증 서버가 죽었을 때 ---
