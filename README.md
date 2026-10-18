@@ -33,6 +33,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 기여 지침. 서버의 경계, 기본 검사, 브랜치와 PR 의 모양 |
 | [SECURITY.md](SECURITY.md) | 보안 정책. 취약점을 비공개로 알리는 길 |
 | [docs/observability.md](docs/observability.md) | 네 서버가 함께 지키는 관측 규격. 로그의 모양, 요청·추적·작업 식별자, 민감정보, health 와 readiness, 메트릭의 이름, 관리 서버의 경계 |
+| [docs/README.md](docs/README.md) | 문서 안내. 서비스 구조 명세, 공용 코드 규칙, 플랫폼과 제품 방향, 화면 명세, AI 챗 서비스 조사 |
 
 ## 요구 사항
 
