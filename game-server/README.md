@@ -217,6 +217,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/narration-style` | 서술 문체 바꾸기. 방장만. 진행 중에도 된다. `null` 이면 판의 추천 문체로 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/round-time-limit` | 라운드의 시간 제한(초) 바꾸기. 방장만. 진행 중에도 되고 다음 라운드부터 쓴다. `null` 이면 시간 제한 없음 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/narration-tier` | 서술 등급 바꾸기. 방장만. 이 서버가 내주는 등급만. 진행 중에도 되고 다음 라운드부터 쓴다 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/narration-model` | 서술 모델 바꾸기(`{"narration_model": "gpt-6-luna"}`). 방장만. 고를 수 있는 모델만. `null` 이면 서버의 기본(등급). 진행 중에도 되고 다음 라운드부터 쓴다 ([모델 고르기](#모델-고르기)) | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/credit-wait` | 크레딧이 모자란 사람을 기다리는 시간(`credit_wait_seconds`, 30~3600초)과 지나면 빼는지(`remove_short_payers`) 바꾸기. 방장만. 둘 다 적는다. 진행 중에도 되고 지금 기다리는 라운드에도 바로 쓴다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/whisper-notice` | 쪽지를 보낸 사실을 모두에게 알릴지(`whisper_notice`) 바꾸기. 방장만. 바꾼 뒤에 보내는 쪽지부터 따른다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/ledger-drafts` | 서술한 장면에서 장부 초안을 쓸지(`ledger_drafts`) 바꾸기. 방장만. 바꾼 뒤에 서술하는 라운드부터 따른다 | access 토큰 |
@@ -1912,7 +1913,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 
 ### 고를 수 있는 모델
 
-`GET /tables/narration-models` 는 방장이 테이블의 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값을 준다(`app/catalog/offers.py`, #332). 아직 테이블이 이 목록에서 고르지는 않는다(다음 PR). 지금은 보여 주기만 한다.
+`GET /tables/narration-models` 는 방장이 테이블의 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값을 준다(`app/catalog/offers.py`, #332). 방장은 이 목록에서 고른다([모델 고르기](#모델-고르기)).
 - **두 목록에 다 있어야 나온다.** 이 목록에서 켜져 있고 은퇴하지 않았으며, 결제 서버의 가격 목록에 그 이름표의 가격표 이름(`narration.<이름표>.i0.o0`)이 있고 지금 팔고 있어야 한다. 원가를 적고 평가를 통과해 켠 모델을 결제 서버가 값을 붙여 판다.
 - **값은 결제 서버가 정한 그대로다**(`credits`, 글자). 게임 서버는 셈하지 않는다. `tier` 가 `premium` 이면 골드(유료 크레딧)로만 낸다. 결제에 쓰는 등급은 이것이 기준이고, 이 목록의 분류(`grade`)는 화면의 묶음이다. 둘이 다르면(premium 이 한쪽에만) 경고를 남긴다(`모델 목록의 분류와 결제 서버 가격표의 등급이 다르다`).
 - **값이 바뀌는 예약이 있으면 `next` 에 싣는다**(`{"credits": "310", "tier": "premium", "effective_at": "..."}`). 화면이 "12월 1일부터 310"처럼 미리 알린다. `next.credits` 가 `null` 이면 그 시각부터 팔지 않는다. 시각이 지나면 게임 서버가 스스로 갈아 끼운다.
@@ -1920,6 +1921,20 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **받지 못하면 마지막 목록을 쓴다**(`결제 서버의 가격 목록을 새로 받지 못했다`). 고를 수 있는 모델이 갑자기 사라지지 않는다. 한 번도 받지 못했으면 503 이다. 값을 모르는 모델은 내주지 않는다.
 - **결제 서버 없이 도는 서버**(`BILLING_URL` 비움)는 켜진 모델을 모두 값 없이 내준다(`"free": true`). 지금도 결제 서버가 없으면 홀드 없이 서술한다. 로컬 모델(Ollama)도 `--provider local` 로 이 목록에 넣으면 고를 수 있다.
 - 로그인한 사람에게만 보인다. 가격을 아무나 긁어 가지 못하게 한다.
+
+### 모델 고르기
+
+방장이 테이블을 만들 때(`narration_model`) 또는 진행 중에(`PUT .../narration-model`) 서술 모델을 고른다(`app/tables/model_picker.py`, `app/tables/narration_models.py`).
+- **고를 수 있는 모델만 된다.** 위의 목록과 같은 규칙이다. 목록에 없거나, 꺼졌거나, 은퇴했거나, 결제 서버가 팔지 않으면 422 다. 모델을 고르는데 가격 목록을 받지 못했으면 503 이다. 고르지 않으면(또는 같은 값이면) 가격 목록을 묻지 않는다.
+- **`null` 이면 서버의 기본이다.** 지금까지처럼 서술 등급의 모델들(`LLM_MODEL` …)로 서술하고 등급의 가격표(`narration.standard`)로 건다. 이 칸이 생기기 전의 테이블과 라운드도 `null` 이다.
+- **라운드를 열 때 굳는다**(등급과 같다). 라운드의 `narration_model` 과 `round_opened` 이벤트에 실린다. 바꾼 값은 다음 라운드부터다. 열려 있는 라운드는 연 때의 모델의 값으로 청구를 적었고 그 모델로 서술한다.
+- **값은 그 모델의 가격표로 건다**(`narration.<이름표>.i0.o0`, `app/billing/charges.py` 의 `price_code_of`). 금액은 홀드를 걸 때 결제 서버가 정하고 그때 잔액에서 빠진다. 건 뒤에 값이 바뀌어도 그 홀드는 그대로다. 다음 라운드의 홀드부터 새 값이다. 만료되어 다시 거는 홀드(`:r1`)는 그때의 값이다.
+- **그 모델로만 서술한다**(`app/rounds/picked_narrator.py`). 같은 모델로 다시 시도는 하지만 다른 모델로 넘어가지 않는다. 다른 모델로 서술하면 낸 값과 받은 서술이 어긋난다. 끝내 실패하면 라운드는 닫는 중에 머물고 방장이 다시 맡긴다.
+- 바꾼 것은 `narration_model_changed` 이벤트로 남는다. 각자 값을 내므로 앉은 사람 모두가 본다.
+
+**알려진 한계(다음 PR)**
+- 고른 모델을 결제 서버가 팔지 않게 되면(`price.not_for_sale`, 400) 지금은 `billing_unavailable` 로 서술이 막힌다. premium 으로 바뀌어 골드 없는 사람이 있으면(`credit.gold_required`, 402) 크레딧이 모자란 것과 똑같이 다뤄진다(충전을 기다리다 빼기). 골드를 사야 풀리는데 화면은 그 까닭을 모른다. 다음 PR 에서 까닭을 청구에 적어 방장에게 누가 왜 막혔는지 알리고, 선언을 받는 동안에는 열린 라운드의 모델도 바꿀 수 있게 한다(바꾸면 청구를 새 가격표로 다시 건다).
+- 등급(`narration_tier`)과 함께 있다. 모델 고르기가 자리 잡으면 등급을 걷어낸다.
 
 ### 관리 명령
 
@@ -1976,13 +1991,14 @@ uv run python -m scripts.models retire gpt-6-luna --cancel
 | `narration_style_changed` | 방장이 서술 문체를 바꿨다. 다음 서술부터 그 문체다 | `narration_style`: 바꾼 문체 |
 | `round_time_limit_changed` | 방장이 라운드의 시간 제한을 바꿨다. 다음 라운드부터 쓴다 | `round_time_limit`: 바꾼 값(초, 없으면 `null`) |
 | `narration_tier_changed` | 방장이 서술 등급을 바꿨다. 다음 라운드부터 그 등급이다 | `narration_tier`: 바꾼 등급 |
+| `narration_model_changed` | 방장이 서술 모델을 바꿨다. 다음 라운드부터 그 모델이다 | `narration_model`: 바꾼 모델의 이름표(`null` 이면 서버의 기본) |
 | `credit_wait_changed` | 방장이 크레딧이 모자란 사람을 기다리는 규칙을 바꿨다 | `credit_wait_seconds`, `remove_short_payers` |
 | `whisper_notice_changed` | 방장이 쪽지를 보낸 사실을 알릴지 바꿨다 | `whisper_notice` |
 | `ledger_drafts_changed` | 방장이 장부 초안을 쓸지 바꿨다 | `ledger_drafts` |
 | `whisper_sent` | 누가 누구에게 쪽지를 보냈다. 알리기로 한 테이블에만 적힌다. 쪽지의 글은 적지 않는다 | `user_id`, `character_name`, `recipient_id`, `recipient_character_name` |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
-| `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_tier`(이 라운드의 서술 등급), `clock`(게임 안의 시각: `day`, `hour`, `minute`, `time_of_day`), `passed_minutes`(앞 라운드부터 흐른 분. 첫 라운드는 0) |
+| `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_tier`(이 라운드의 서술 등급), `narration_model`(이 라운드의 서술 모델. 고르지 않았으면 `null`), `clock`(게임 안의 시각: `day`, `hour`, `minute`, `time_of_day`), `passed_minutes`(앞 라운드부터 흐른 분. 첫 라운드는 0) |
 | `player_action` | 플레이어가 선언한 행동 | `round`, `character_name`, `content`, `action`(행동. 없으면 `null`) |
 | `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면) |
 | `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed`, `injury_roll`(부상 표를 굴렸으면) |

@@ -474,6 +474,8 @@ class RoundOut(BaseModel):
     deadline_at: datetime | None
     # 이 라운드의 서술 등급. 열 때 굳은 것이다. 방장이 테이블의 등급을 바꿔도 이 라운드는 이 등급으로 서술한다
     narration_tier: NarrationTier
+    # 이 라운드의 서술 모델(이름표). 열 때 굳은 것이다. 없으면 null 이고 위의 등급으로 서술한다
+    narration_model: str | None
     # 닫기 시작한 시각과 닫힌 시각. 아직이면 None 이다
     closing_at: datetime | None
     closed_at: datetime | None

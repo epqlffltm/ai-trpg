@@ -56,7 +56,7 @@ def open_round(session: AsyncSession, table: GameTable, number: int, scene: str,
     scene 은 이 라운드를 여는 GM 의 서술이다. cause 는 이 라운드를 열게 한 이벤트다(테이블 시작, 앞 라운드의 닫힘).
     이벤트는 "GM 이 서술했다 → 라운드가 열렸다" 순서로 둘을 적는다.
     마감은 지금부터 테이블의 시간 제한만큼 뒤다. 서술을 기다린 시간은 세지 않는다.
-    서술 등급은 테이블의 지금 등급이다. 이 라운드가 닫힐 때까지 바뀌지 않는다.
+    서술 등급과 서술 모델은 테이블의 지금 것이다. 이 라운드가 닫힐 때까지 바뀌지 않는다.
     서술 값의 청구를 함께 적는다(charges.charge_round).
     첫 라운드가 아니면 게임 안의 시간을 흘린다(calendar.pass_round). 방장이 정한 걸음이 있으면 그것으로.
 
@@ -66,7 +66,12 @@ def open_round(session: AsyncSession, table: GameTable, number: int, scene: str,
     opened = now_utc()
     deadline = deadline_for(table, opened)
     round_ = Round(
-        table_id=table.id, number=number, scene=scene, deadline_at=deadline, narration_tier=table.narration_tier
+        table_id=table.id,
+        number=number,
+        scene=scene,
+        deadline_at=deadline,
+        narration_tier=table.narration_tier,
+        narration_model=table.narration_model,
     )
     repository.add_round(session, round_)
     charges.charge_round(session, table, round_, opened)
@@ -75,6 +80,7 @@ def open_round(session: AsyncSession, table: GameTable, number: int, scene: str,
         'number': number,
         'deadline_at': deadline.isoformat() if deadline is not None else None,
         'narration_tier': round_.narration_tier,
+        'narration_model': round_.narration_model,
         'clock': calendar.describe(table),
         'passed_minutes': passed,
     }
