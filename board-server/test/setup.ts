@@ -49,3 +49,6 @@ delete process.env.JWT_AUDIENCE;
 delete process.env.APP_ENVIRONMENT;
 delete process.env.APP_VERSION;
 delete process.env.LOG_LEVEL;
+// 알림 서버는 부르지 않는다. 알림은 발송함에 적히기만 한다. 보내는 것을 보는 테스트는 가짜를 꽂는다
+delete process.env.NOTIFICATION_URL;
+delete process.env.NOTIFICATION_SECRET;

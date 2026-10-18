@@ -62,6 +62,10 @@ export interface Environment {
   APP_ENVIRONMENT: string;
   APP_VERSION: string;
   LOG_LEVEL: LogLevelChoice;
+  /** 알림 서버의 주소. 비어 있으면 알림을 보내지 않고 발송함에 적기만 한다 */
+  NOTIFICATION_URL: string;
+  /** 알림 서버에 보내는 요청에 서명하는 비밀. 주소가 비어 있으면 빈 글자다 */
+  NOTIFICATION_SECRET: string;
 }
 
 /** DB 에 연결하는 데 필요한 설정. 마이그레이션 도구는 이것만 읽는다. */
@@ -265,6 +269,43 @@ export function readLogLevel(value: unknown): LogLevelChoice {
   return choice;
 }
 
+/** 알림 서버의 비밀의 가장 짧은 길이. 알림 서버(BOARD_SERVER_SECRET)와 같은 기준이다 */
+export const NOTIFICATION_SECRET_MIN_LENGTH = 32;
+
+/** 알림 서버의 주소와 서명의 비밀. 사용자의 알림함에 알림을 넣는다(#385). */
+export type NotificationSettings = Pick<
+  Environment,
+  'NOTIFICATION_URL' | 'NOTIFICATION_SECRET'
+>;
+
+/**
+ * 알림 서버의 주소와 비밀을 읽는다. 둘 다 적지 않았으면 빈 글자다(알림을 적기만 한다).
+ *
+ * 주소를 적었으면 http:// 나 https:// 주소여야 하고, 비밀이 32자 이상이어야 한다.
+ * 비밀이 없으면 알림 서버가 모든 알림을 401 로 거절한다. 그것을 뜰 때 알린다. 예외의 글에 비밀을 싣지 않는다.
+ */
+export function readNotificationSettings(
+  url: unknown,
+  secret: unknown,
+): NotificationSettings {
+  if (!isSet(url)) {
+    return { NOTIFICATION_URL: '', NOTIFICATION_SECRET: '' };
+  }
+  const address = url.trim();
+  if (!isHttpUrl(address)) {
+    throw new Error(
+      'NOTIFICATION_URL 은 http:// 나 https:// 로 시작하는 주소여야 합니다.',
+    );
+  }
+  const written = typeof secret === 'string' ? secret.trim() : '';
+  if (written.length < NOTIFICATION_SECRET_MIN_LENGTH) {
+    throw new Error(
+      `NOTIFICATION_URL 을 적었으면 NOTIFICATION_SECRET 을 ${NOTIFICATION_SECRET_MIN_LENGTH}자 이상 적어야 합니다.`,
+    );
+  }
+  return { NOTIFICATION_URL: address, NOTIFICATION_SECRET: written };
+}
+
 /** 환경 변수에서 DB 에 관한 설정만 읽는다. 마이그레이션 도구가 쓴다. 틀린 값이 있으면 예외를 낸다. */
 export function readDatabaseSettings(
   variables: Record<string, unknown>,
@@ -297,5 +338,9 @@ export function readEnvironment(
     APP_ENVIRONMENT: readAppEnvironment(variables.APP_ENVIRONMENT),
     APP_VERSION: readAppVersion(variables.APP_VERSION),
     LOG_LEVEL: readLogLevel(variables.LOG_LEVEL),
+    ...readNotificationSettings(
+      variables.NOTIFICATION_URL,
+      variables.NOTIFICATION_SECRET,
+    ),
   };
 }

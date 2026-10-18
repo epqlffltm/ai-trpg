@@ -66,14 +66,15 @@ write_new() {
 }
 
 # 여섯 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
-# 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버, 알림 서버와 게임 서버,
-# 알림 서버와 결제 서버). 알림 서버의 게시판 서명 비밀은 아직 넣는 쪽이 없어 알림 서버에만 적는다
+# 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버,
+# 알림 서버와 게임·결제·게시판 서버)
 write_env_files() {
-  local game_secret auth_secret notify_secret billing_notify_secret
+  local game_secret auth_secret notify_secret billing_notify_secret board_notify_secret
   game_secret="$(throwaway)"
   auth_secret="$(throwaway)"
   notify_secret="$(throwaway)"
   billing_notify_secret="$(throwaway)"
+  board_notify_secret="$(throwaway)"
   write_new .env <<EOF
 POSTGRES_PASSWORD=$(throwaway)
 AUTH_DB_PASSWORD=$(throwaway)
@@ -90,7 +91,9 @@ EOF
 BILLING_SECRET=$game_secret
 NOTIFICATION_SECRET=$notify_secret
 EOF
-  write_new board-server/.env < /dev/null
+  write_new board-server/.env <<EOF
+NOTIFICATION_SECRET=$board_notify_secret
+EOF
   write_new billing-server/.env <<EOF
 PG_WEBHOOK_SECRET=$(throwaway)
 GAME_SERVER_SECRET=$game_secret
@@ -100,7 +103,7 @@ EOF
   write_new notification-server/.env <<EOF
 GAME_SERVER_SECRET=$notify_secret
 BILLING_SERVER_SECRET=$billing_notify_secret
-BOARD_SERVER_SECRET=$(throwaway)
+BOARD_SERVER_SECRET=$board_notify_secret
 EOF
 }
 
@@ -277,6 +280,18 @@ asyncio.run(main())
 PY
 }
 
+# 게시판 서버가 제 설정(NOTIFICATION_URL, NOTIFICATION_SECRET)으로 서명한 알림을 알림 서버가 받는가(201).
+# 게임 서버의 것과 같다. 서버가 쓰는 코드(dist/notifications)를 그대로 불러 보낸다
+board_notification_accepted() {
+  compose exec -T board-server node --input-type=module -e "
+import { randomUUID } from 'node:crypto';
+import { HttpNotificationSender } from './dist/notifications/notification-client.js';
+const sender = new HttpNotificationSender(process.env.NOTIFICATION_URL, process.env.NOTIFICATION_SECRET);
+const sent = await sender.send({ sourceKey: 'stack-smoke:' + randomUUID(), userId: randomUUID(), kind: 'stack.smoke', payload: {} });
+process.exit(sent.delivery === 'delivered' ? 0 : 1);
+"
+}
+
 # 서버가 제 컨테이너 안에서 준비됐다고(/health/ready 가 200) 답하는가. 503 이면 실패다
 ready_inside() {
   local server="$1"
@@ -390,6 +405,8 @@ check() {
   report "게임 서버가 알림 서버에 닿는다" reachable_from game-server http://notification-server:8004/health
   report "게임 서버가 서명한 알림을 알림 서버가 받는다" game_notification_accepted
   report "결제 서버의 정리 작업이 알림 서버에 닿는다" reachable_from billing-sweeper http://notification-server:8004/health
+  report "게시판 서버가 알림 서버에 닿는다" reachable_from board-server http://notification-server:8004/health
+  report "게시판 서버가 서명한 알림을 알림 서버가 받는다" board_notification_accepted
   report "설정 검사(비밀, 열린 포트, 로그 상한)의 규칙이 맞다" scope_rules_hold
   check_config "비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" .github/scripts/secret_scope.py
   check_config "바깥에 여는 포트는 정해 둔 것뿐이고 모두 127.0.0.1 에 묶였다(port_scope.py)" .github/scripts/port_scope.py
