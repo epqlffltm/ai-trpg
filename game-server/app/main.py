@@ -62,6 +62,7 @@ from app.memory.retrieval import MemoryRetriever, MemoryThresholds
 from app.observability.middleware import RequestLoggingMiddleware
 from app.observability.responses import handle_unexpected_error
 from app.observability.setup import configure_logging
+from app.operators import router as operators
 from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
 from app.realtime import router as realtime
@@ -272,6 +273,7 @@ def create_app(
     app.include_router(whispers.router, prefix=API_PREFIX)
     app.include_router(ledger_drafts.router, prefix=API_PREFIX)
     app.include_router(realtime.router, prefix=API_PREFIX)
+    app.include_router(operators.router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다
     app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)
