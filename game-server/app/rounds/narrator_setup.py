@@ -10,7 +10,7 @@
 
 모델마다 어느 창구로 부를지는 서술할 때 고른다(app/ai/routing.py 의 ModelRouter, app/rounds/routed_narrator.py).
 설정에 적은 이름이 모델 목록의 이름표면 목록대로, 아니면 서버 곁의 모델(LLM_BASE_URL)이다.
-고르는 것(build_router)도 앱에 하나만 만든다. 장부 초안(app/drafts/setup.py)도 같은 것을 쓴다.
+고르는 것(build_router)도 앱에 하나만 만든다.
 """
 
 import httpx

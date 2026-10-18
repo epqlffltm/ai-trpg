@@ -8,7 +8,7 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 퀘스트의 행(
   - 판의 사건 항목 하나가 퀘스트 하나다. 처음 상태는 판의 퀘스트 규칙의 것이다(규칙이 없으면 숨김).
   - 바뀌는 길: 숨김 → 진행 중 / 성공, 진행 중 → 성공 / 실패. 끝난 것은 그대로다. 숨김으로 돌아가지 않는다.
   - 드러내기와 성공은 엔진만 정한다. 판의 조건을 라운드가 닫힐 때 보고 바꾼다(app/rounds/quest_goals.py).
-    방장의 요청과 장부 초안은 진행 중인 퀘스트의 실패만 한다(#367).
+    방장의 요청은 진행 중인 퀘스트의 실패만 한다(#367).
   - 성공하면 보상을 받는다. 앉은 사람의 지금 캐릭터 중 살아 있는 것마다 받는다.
     한 가지의 상한(99 개)에 닿으면 그 사람은 거기까지만 받는다. 다른 사람의 보상은 막지 않는다.
   - 숨긴 퀘스트는 아무도 보지 않는다. 방장도 PC 라서 다른 사람이 모르는 것을 알면 안 된다.
@@ -138,7 +138,6 @@ def change_problem(current: QuestStatus, to: QuestStatus) -> Conflict | None:
 
     바꿀 상태의 까닭(target_problem)을 먼저 본다. 그다음 끝난 것은 quest_finished 다.
     숨김으로 바꾸는 것은 입력에서 받지 않는다(app/tables/schemas.py 의 QuestChange).
-    방장의 요청(require_changeable)과 AI 의 장부 초안(app/drafts/validation.py)이 같은 길을 쓴다.
     """
     problem = target_problem(to)
     if problem is not None:
