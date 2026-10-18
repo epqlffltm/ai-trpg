@@ -47,7 +47,7 @@ from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
 from app.rounds.round_price import price_of
-from app.tables import monsters, npcs, places, quests, repository, sheets
+from app.tables import monsters, npcs, place_items, places, quests, repository, sheets
 from app.tables.building import build_table, hash_table_password, new_invite_code, require_rating
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
@@ -362,6 +362,7 @@ async def start_table(
     repository.add_npcs(session, npcs.make_npcs(table.id, snapshot))
     repository.add_monsters(session, monsters.make_monsters(table.id, snapshot))
     table.quests.extend(quests.make_quests(table.id, snapshot, table.clock.minutes))
+    table.place_items.extend(place_items.make_place_items(table.id, snapshot))
 
     table.status = TableStatus.PLAYING
     table.started_at = func.now()

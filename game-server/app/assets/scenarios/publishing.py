@@ -38,11 +38,13 @@ from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import (
     Encounter,
+    FindCheck,
     ItemRule,
     ItemStack,
     MonsterAttack,
     MonsterSheet,
     NpcSheet,
+    PlaceItem,
     Pregen,
     QuestCondition,
     QuestRule,
@@ -124,6 +126,10 @@ class Problem(enum.StrEnum):
     MAP_START_MISSING = 'map_start_missing'
     # 숨긴 길을 찾는 판정의 능력치나 난이도가 룰북의 규칙에 없다
     ROUTE_FIND_INVALID = 'route_find_invalid'
+    # 놓인 물건이 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)에 있다. 아무도 그곳에 설 수 없다
+    PLACE_ITEM_OFF_MAP = 'place_item_off_map'
+    # 숨긴 물건을 찾는 판정의 능력치나 난이도가 룰북의 규칙에 없다
+    PLACE_ITEM_FIND_INVALID = 'place_item_find_invalid'
     # 붙인 도감에 없는 몬스터를 가리키는 몬스터 시트가 있다. 몬스터를 지웠거나 도감을 뗐다
     MONSTER_SHEET_MISSING = 'monster_sheet_missing'
     # 룰북의 규칙에 맞지 않는 몬스터 시트가 있다
@@ -436,7 +442,7 @@ def read_quest_rules(scenario: Scenario) -> list[QuestRule]:
 def item_references(scenario: Scenario) -> list[uuid.UUID]:
     """
     물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품, 퀘스트마다의 보상,
-    몬스터마다의 드롭.
+    몬스터마다의 드롭, 장소에 놓인 물건.
     """
     stacks = [ItemStack.model_validate(document) for document in scenario.starting_items]
     for document in scenario.pregens:
@@ -444,7 +450,8 @@ def item_references(scenario: Scenario) -> list[uuid.UUID]:
     for quest in read_quest_rules(scenario):
         stacks.extend(quest.reward)
     drops = [drop.entry_id for sheet in read_monster_sheets(scenario) for drop in sheet.drops]
-    return [rule.entry_id for rule in read_item_rules(scenario)] + [stack.entry_id for stack in stacks] + drops
+    placed = [rule.entry_id for rule in read_place_items(scenario)]
+    return [rule.entry_id for rule in read_item_rules(scenario)] + [stack.entry_id for stack in stacks] + drops + placed
 
 
 def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
@@ -605,11 +612,34 @@ def map_places(scenario: Scenario, routes: list[RouteRule]) -> list[uuid.UUID]:
     return places
 
 
-def find_check_problem(route: RouteRule, ruleset: Ruleset) -> bool:
-    """숨긴 길을 찾는 판정이 룰북의 규칙에 맞지 않는가. 능력치와 난이도가 규칙에 있어야 한다."""
-    if route.find is None:
+def find_invalid(find: FindCheck | None, ruleset: Ruleset) -> bool:
+    """찾는 판정(숨긴 길, 숨긴 물건)이 룰북의 규칙에 맞지 않는가. 능력치와 난이도가 규칙에 있어야 한다."""
+    if find is None:
         return False
-    return find_ability(ruleset, route.find.ability) is None or find_difficulty(ruleset, route.find.difficulty) is None
+    return find_ability(ruleset, find.ability) is None or find_difficulty(ruleset, find.difficulty) is None
+
+
+def read_place_items(scenario: Scenario) -> list[PlaceItem]:
+    """장소에 놓인 물건들을 읽는다."""
+    return [PlaceItem.model_validate(document) for document in scenario.place_items]
+
+
+def find_place_item_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    장소에 놓인 물건에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    장소는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 맵에 없는 장소에는 아무도 설 수 없다.
+    가리키는 물건이 붙인 로어북의 물건 항목인지는 아이템과 함께 본다(find_item_problems).
+    숨긴 물건을 찾는 판정은 룰북의 능력치와 난이도여야 한다(룰북이 없으면 못 본다).
+    """
+    rules = read_place_items(scenario)
+    on_map = set(map_places(scenario, read_routes(scenario)))
+    problems = []
+    if any(rule.place_id not in on_map for rule in rules):
+        problems.append(Problem.PLACE_ITEM_OFF_MAP)
+    if ruleset and any(find_invalid(rule.find, ruleset) for rule in rules):
+        problems.append(Problem.PLACE_ITEM_FIND_INVALID)
+    return problems
 
 
 def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
@@ -630,7 +660,7 @@ def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None)
         problems.append(Problem.MAP_NOT_PLACE)
     if (routes or scenario.landmarks) and scenario.start_place is None:
         problems.append(Problem.MAP_START_MISSING)
-    if ruleset and any(find_check_problem(route, ruleset) for route in routes):
+    if ruleset and any(find_invalid(route.find, ruleset) for route in routes):
         problems.append(Problem.ROUTE_FIND_INVALID)
     return problems
 
@@ -669,6 +699,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_item_problems(scenario, parts, ruleset))
     problems.extend(find_quest_problems(scenario, parts))
     problems.extend(find_map_problems(scenario, parts, ruleset))
+    problems.extend(find_place_item_problems(scenario, ruleset))
     problems.extend(find_seating_problems(scenario))
     return problems
 

@@ -48,6 +48,7 @@ from app.assets.models import (
     SCENARIO_MAX_MONSTER_SHEETS,
     SCENARIO_MAX_NPC_SHEETS,
     SCENARIO_MAX_OPENINGS,
+    SCENARIO_MAX_PLACE_ITEMS,
     SCENARIO_MAX_PREGENS,
     SCENARIO_MAX_QUEST_RULES,
     SCENARIO_MAX_ROUTES,
@@ -58,6 +59,7 @@ from app.assets.models import (
     CharacterMode,
     ItemKind,
     NarrationStyle,
+    PlaceItemVisibility,
     QuestConditionKind,
     QuestMatch,
     QuestStart,
@@ -596,6 +598,52 @@ Landmarks = Annotated[
 ]
 
 
+class PlaceItem(BaseModel):
+    """
+    장소에 놓인 물건 한 줄. 맵의 장소 하나(place_id)에 물건 하나(entry_id)가 count 개 있다(#279).
+
+    visibility 는 플레이어가 언제 아는가다(기본은 보임, PlaceItemVisibility). 보이는 물건은 줍기(take)로 가져간다.
+    숨긴 물건에는 찾는 판정(find)이 있어야 하고, 보이는 물건에는 없다. 숨긴 길과 같다.
+    장소가 맵의 장소인지, 물건이 붙인 로어북의 물건 항목인지, 판정이 룰북의 규칙에 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    place_id: uuid.UUID
+    entry_id: uuid.UUID
+    count: int = Field(default=1, ge=1, le=ITEM_STACK_MAX)
+    visibility: PlaceItemVisibility = PlaceItemVisibility.OPEN
+    find: FindCheck | None = None
+
+    @model_validator(mode='after')
+    def find_only_when_hidden(self) -> 'PlaceItem':
+        """숨긴 물건에만 찾는 판정이 있다. 숨긴 물건에 없으면, 보이는 물건에 있으면 거부한다."""
+        hidden = self.visibility == PlaceItemVisibility.HIDDEN
+        if hidden and self.find is None:
+            raise ValueError('숨긴 물건에는 찾는 판정(find)이 있어야 합니다.')
+        if not hidden and self.find is not None:
+            raise ValueError('찾는 판정(find)은 숨긴 물건에만 적습니다.')
+        return self
+
+    @field_serializer('place_id', 'entry_id')
+    def id_as_text(self, value: uuid.UUID) -> str:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(value)
+
+
+def reject_duplicate_place_items(rules: list[PlaceItem]) -> list[PlaceItem]:
+    """같은 장소의 같은 물건이 같은 보이기로 두 줄이면 거부한다. 한 줄에 개수로 적는다."""
+    keys = [(rule.place_id, rule.entry_id, rule.visibility) for rule in rules]
+    if len(set(keys)) != len(keys):
+        raise ValueError('같은 장소에 같은 물건이 두 번 있습니다. 한 줄에 개수로 적습니다.')
+    return rules
+
+
+PlaceItems = Annotated[
+    list[PlaceItem], Field(max_length=SCENARIO_MAX_PLACE_ITEMS), AfterValidator(reject_duplicate_place_items)
+]
+
+
 QuestRules = Annotated[
     list[QuestRule], Field(max_length=SCENARIO_MAX_QUEST_RULES), AfterValidator(reject_duplicate_quests)
 ]
@@ -667,6 +715,7 @@ class ScenarioCreate(AssetCreate):
     start_place: uuid.UUID | None = None
     routes: Routes = []
     landmarks: Landmarks = []
+    place_items: PlaceItems = []
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
@@ -685,7 +734,7 @@ class ScenarioUpdate(AssetUpdate):
     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-    quests, routes, landmarks, character_modes 는
+    quests, routes, landmarks, place_items, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -715,6 +764,7 @@ class ScenarioUpdate(AssetUpdate):
     start_place: uuid.UUID | None = None
     routes: Routes | None = None
     landmarks: Landmarks | None = None
+    place_items: PlaceItems | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
@@ -772,6 +822,7 @@ class ScenarioDetail(ScenarioSummary):
     start_place: uuid.UUID | None
     routes: list[RouteRule]
     landmarks: list[uuid.UUID]
+    place_items: list[PlaceItem]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle

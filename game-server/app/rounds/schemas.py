@@ -357,22 +357,64 @@ class FoundRouteOut(BaseModel):
     two_way: bool
 
 
+class FoundItemOut(BaseModel):
+    """찾아서 가진 숨긴 물건 한 가지(app/rounds/place_item_actions.py). 찾은 사람이 바로 갖는다."""
+
+    entry_id: uuid.UUID
+    name: str
+    # 가진 개수. 한 가지의 상한(99)에 닿으면 거기까지다
+    count: int
+    # 상한을 넘어 그 자리에 보이게 남은 개수
+    left: int
+    # 가진 뒤의 개수
+    total: int
+
+
 class SearchOut(BaseModel):
     """
-    찾은 결과. 엔진이 정했다(app/rounds/map_actions.py).
+    찾은 결과. 엔진이 정했다(app/rounds/map_actions.py, app/rounds/place_item_actions.py).
 
-    찾은 길만 있다. 굴린 판정과 못 찾은 길은 없다. 숨긴 길이 없는 곳과, 있는데 못 찾은 곳의 결과가 같다.
+    찾은 길과 물건만 있다. 굴린 판정과 못 찾은 것은 없다. 숨긴 것이 없는 곳과, 있는데 못 찾은 곳의 결과가 같다.
     """
 
     # 찾은 곳
     place: PlaceRefOut | None
     found: list[FoundRouteOut]
+    # 찾아서 가진 물건들. 물건을 찾기 전(#279)에 정한 결과에는 없다
+    items: list[FoundItemOut] = []
 
 
 class SearchOutcome(BaseModel):
     """찾는 행동의 결과."""
 
     search: SearchOut
+
+
+class TakeOut(BaseModel):
+    """
+    주운 결과. 엔진이 정했다(app/rounds/place_item_actions.py). 판정이 없다.
+
+    count 는 부른 개수, taken 은 주운 개수다. 다 줍지 못했으면 reason 이 있다
+    (gone: 남은 것이 없었다, not_enough: 남은 만큼 주웠다, full: 한 가지의 상한에 닿았다).
+    """
+
+    user_id: uuid.UUID
+    character_name: str
+    # 주운 곳
+    place: PlaceRefOut | None
+    entry_id: uuid.UUID
+    name: str
+    count: int
+    taken: int
+    # 주운 뒤의 개수
+    total: int
+    reason: str | None
+
+
+class TakeOutcome(BaseModel):
+    """줍는 행동의 결과."""
+
+    take: TakeOut
 
 
 class RestOut(BaseModel):
@@ -438,7 +480,7 @@ class DeclarationOut(BaseModel):
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
     # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
-    # 쉬었으면 RestOutcome 이다.
+    # 놓인 물건을 주웠으면 TakeOutcome, 쉬었으면 RestOutcome 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
     # 차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면 TurnLostOutcome 이다
     outcome: (
@@ -448,6 +490,7 @@ class DeclarationOut(BaseModel):
         | ItemGiveOutcome
         | MoveOutcome
         | SearchOutcome
+        | TakeOutcome
         | RestOutcome
         | TargetGoneOutcome
         | TurnLostOutcome

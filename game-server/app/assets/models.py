@@ -99,6 +99,8 @@ SCENARIO_MAX_MONSTER_SHEETS = 100
 # 테이블을 시작할 때 마리마다 상태가 하나 생긴다. 둘을 곱한 것이 테이블 하나의 몬스터 수의 상한이다
 SCENARIO_MAX_ENCOUNTERS = 50
 ENCOUNTER_MAX_COUNT = 10
+# 시나리오 하나에 둘 수 있는 놓인 물건의 줄 수(장소, 물건, 보이는지의 짝). 한 줄의 개수는 한 가지의 상한(99)까지다
+SCENARIO_MAX_PLACE_ITEMS = 100
 # 몬스터 하나의 공격(스킬)의 수와 이름의 길이. 공격이 여럿이면 차례마다 서버의 주사위로 하나를 고른다
 MONSTER_MAX_ATTACKS = 5
 ATTACK_NAME_MAX_LENGTH = 30
@@ -156,6 +158,19 @@ class RouteVisibility(enum.StrEnum):
     # 캐릭터가 길의 한쪽 끝에 서 보면 안다. 잘 알려지지 않은 오솔길
     FOG = 'fog'
     # 찾아야 안다. 찾는 판정(능력치와 난이도)을 길마다 적는다. 비밀 통로
+    HIDDEN = 'hidden'
+
+
+class PlaceItemVisibility(enum.StrEnum):
+    """
+    장소에 놓인 물건을 플레이어가 언제 아는가. 제작자가 줄마다 정한다.
+
+    숨긴 물건은 숨긴 길과 같다. 방장도 모른다. 시나리오를 만든 사람과 AI GM 만 안다.
+    """
+
+    # 그 장소에 서 본 뒤부터 보인다. 줍기(take)로 가져간다. 탁자 위의 물약
+    OPEN = 'open'
+    # 찾아야 안다. 찾는 판정(능력치와 난이도)을 줄마다 적는다. 찾은 사람이 바로 갖는다. 마루 밑의 열쇠
     HIDDEN = 'hidden'
 
 
@@ -499,6 +514,7 @@ class Scenario(AssetContent):
             f'jsonb_array_length(monster_sheets) <= {SCENARIO_MAX_MONSTER_SHEETS}', name='monster_sheets_count'
         ),
         CheckConstraint(f'jsonb_array_length(encounters) <= {SCENARIO_MAX_ENCOUNTERS}', name='encounters_count'),
+        CheckConstraint(f'jsonb_array_length(place_items) <= {SCENARIO_MAX_PLACE_ITEMS}', name='place_items_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
@@ -614,6 +630,12 @@ class Scenario(AssetContent):
     # 장소는 붙인 로어북의 장소 항목, 몬스터는 시트를 적은 몬스터다. 맵의 길과 같은 까닭으로 여기 둔다.
     # 테이블을 시작할 때 마리마다 상태를 만들어 그 장소에 둔다(app/tables/monsters.py). 맵이 있어야 한다
     encounters: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 장소에 놓인 물건들. 하나하나가 {place_id, entry_id, count, visibility, find} 다.
+    # "이 장소에 이 물건이 count 개 있다"는 뜻이다. 장소는 맵의 장소, 물건은 붙인 로어북의 물건 항목이다.
+    # 숨긴 물건(hidden)은 찾는 판정(find)으로 드러난다. 테이블을 시작할 때 줄마다 남은 개수를 만든다
+    # (app/tables/place_items.py). 가져가면 그 테이블에서 줄어든다. 판은 그대로다
+    place_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다
