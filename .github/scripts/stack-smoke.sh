@@ -252,7 +252,8 @@ reachable_from() {
 
 # 게임 서버가 제 설정(NOTIFICATION_URL, NOTIFICATION_SECRET)으로 서명한 알림을 알림 서버가 받는가(201).
 # 닿기만 하고 서명이 어긋나면(두 .env 의 비밀이 다르다) 알림이 발송함에 쌓이기만 한다. 그것을 여기서 잡는다.
-# 받는 사람은 이 실행에서만 쓰는 무작위 값이다
+# 받는 사람은 이 실행에서만 쓰는 무작위 값이다. 알림 서버는 서버마다 넣을 수 있는 kind 를 정해 두었으므로
+# 게임 서버의 kind 중 값이 필요 없는 것(publishing.unbanned)으로 보낸다(notification-server/app/notifications/catalog.py)
 game_notification_accepted() {
   compose exec -T game-server python - <<'PY'
 import asyncio
@@ -270,7 +271,7 @@ async def main() -> None:
     async with httpx.AsyncClient() as client:
         notifications = build_notifications(get_settings(), client)
         notification = OutgoingNotification(
-            source_key=f'stack-smoke:{uuid.uuid4()}', user_id=uuid.uuid4(), kind='stack.smoke', payload={}
+            source_key=f'stack-smoke:{uuid.uuid4()}', user_id=uuid.uuid4(), kind='publishing.unbanned', payload={}
         )
         sent = await notifications.send(notification)
     raise SystemExit(0 if sent.delivery == Delivery.DELIVERED else 1)
@@ -281,13 +282,15 @@ PY
 }
 
 # 게시판 서버가 제 설정(NOTIFICATION_URL, NOTIFICATION_SECRET)으로 서명한 알림을 알림 서버가 받는가(201).
-# 게임 서버의 것과 같다. 서버가 쓰는 코드(dist/notifications)를 그대로 불러 보낸다
+# 게임 서버의 것과 같다. 서버가 쓰는 코드(dist/notifications)를 그대로 불러 보낸다.
+# 게시판의 kind(post.commented)에 화면이 쓰는 칸을 채워 보낸다
 board_notification_accepted() {
   compose exec -T board-server node --input-type=module -e "
 import { randomUUID } from 'node:crypto';
 import { HttpNotificationSender } from './dist/notifications/notification-client.js';
 const sender = new HttpNotificationSender(process.env.NOTIFICATION_URL, process.env.NOTIFICATION_SECRET);
-const sent = await sender.send({ sourceKey: 'stack-smoke:' + randomUUID(), userId: randomUUID(), kind: 'stack.smoke', payload: {} });
+const payload = { board_slug: 'free', post_id: '1', post_title: 'stack-smoke', comment_id: '1' };
+const sent = await sender.send({ sourceKey: 'stack-smoke:' + randomUUID(), userId: randomUUID(), kind: 'post.commented', payload });
 process.exit(sent.delivery === 'delivered' ? 0 : 1);
 "
 }
