@@ -64,6 +64,10 @@ class FreePriceList:
         return FREE_BOOK
 
 
+# 결제 서버 없이 도는 서버의 가격 목록. 값을 알리지 않는 곳(테스트, 가격을 몰라도 되는 길)의 기본값이다
+FREE_PRICES = FreePriceList()
+
+
 @dataclass(frozen=True)
 class Cached:
     """받아 둔 목록. etag 는 그 목록의 버전, checked_at 은 마지막으로 물어본 때(time.monotonic)다."""

@@ -23,10 +23,12 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import charges
+from app.catalog.offers import OfferedModel
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds import repository as round_repository
 from app.rounds.models import Round, RoundStatus
+from app.rounds.round_price import announce, price_payload
 from app.tables.model_picker import ModelPicker, require_pickable
 from app.tables.models import GameTable
 from app.tables.schemas import NarrationModelUpdate
@@ -56,9 +58,14 @@ def forget_retire_notices(table: GameTable) -> None:
     table.retire_notice_days = None
 
 
-async def apply_to_round(session: AsyncSession, round_: Round, model: str) -> None:
-    """라운드의 모델을 바꾸고, 그 라운드의 청구를 새 가격표로 다시 걸게 적는다."""
+async def apply_to_round(session: AsyncSession, round_: Round, model: str, price: OfferedModel | None) -> None:
+    """
+    라운드의 모델을 바꾸고, 그 라운드의 청구를 새 가격표로 다시 걸게 적는다.
+
+    price 는 새 모델의 지금 값이다. 라운드에 알린 값도 바꾼다(app/rounds/round_price.py).
+    """
     round_.narration_model = model
+    announce(round_, price)
     await charges.reprice_round(session, round_, datetime.now(UTC))
 
 
@@ -79,13 +86,17 @@ async def change_narration_model(
 
     if is_unchanged(table, round_, data.narration_model):
         return table
-    await require_pickable(session, picker, data.narration_model)
+    found = await require_pickable(session, picker, data.narration_model)
 
     table.narration_model = data.narration_model
     forget_retire_notices(table)
     applied = takes_new_model(round_)
     if applied:
-        await apply_to_round(session, round_, data.narration_model)
-    payload = {'narration_model': data.narration_model, 'round': round_.number if applied else None}
+        await apply_to_round(session, round_, data.narration_model, found)
+    payload = {
+        'narration_model': data.narration_model,
+        'round': round_.number if applied else None,
+        'price': price_payload(round_) if applied else None,
+    }
     recorder.record(session, table, EventType.NARRATION_MODEL_CHANGED, actor_id=host_id, payload=payload)
     return await save(session, table)

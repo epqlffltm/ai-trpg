@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
+from app.billing.models import NarrationCharge
 from app.core.dice import Rolling
 from app.rounds import service, state
 from app.rounds.cast import Scene, is_named
@@ -22,11 +23,13 @@ from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundCon
 from app.rounds.models import Declaration, Round, RoundStatus
 from app.rounds.monster_scene import condition as monster_condition
 from app.rounds.schemas import (
+    ChargeOut,
     DeclarationOut,
     DeclarationUpdate,
     PersonOut,
     RoundOut,
     RoundPage,
+    RoundPriceOut,
     SceneCastOut,
     SceneMonsterOut,
 )
@@ -50,6 +53,18 @@ Closing = Annotated[RoundCloser, Depends(get_closer)]
 
 # 라운드의 번호. 1 부터다
 RoundNumber = Annotated[int, Path(ge=1)]
+
+
+def to_price(round_: Round) -> RoundPriceOut | None:
+    """라운드에 알린 1인 1라운드의 값. 알리지 못했으면 None."""
+    if round_.announced_credits is None:
+        return None
+    return RoundPriceOut(credits=round_.announced_credits, tier=round_.announced_tier)
+
+
+def to_charge(charge: NarrationCharge) -> ChargeOut:
+    """청구 하나를 앉은 사람에게 보여 주는 응답으로. 이름표와 가격표 이름, 실패의 까닭은 싣지 않는다."""
+    return ChargeOut(user_id=charge.payer_id, status=charge.status, credits=charge.held_credits)
 
 
 def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
@@ -90,6 +105,7 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
         created_at=round_.created_at,
         deadline_at=round_.deadline_at,
         narration_model=round_.narration_model,
+        price=to_price(round_),
         closing_at=round_.closing_at,
         closed_at=round_.closed_at,
         narration_failed_at=round_.narration_failed_at,
@@ -189,6 +205,20 @@ async def read_scene_cast(table_id: uuid.UUID, user: CurrentUser, session: Sessi
     """
     round_, scene = await service.get_scene_cast(session, user.user_id, table_id)
     return to_cast(round_, scene)
+
+
+@router.get('/{number}/charges', response_model=list[ChargeOut], status_code=status.HTTP_200_OK)
+async def read_round_charges(
+    table_id: uuid.UUID, number: RoundNumber, user: CurrentUser, session: Session
+) -> list[ChargeOut]:
+    """
+    라운드의 서술 값을 내는 사람마다의 청구. 앉은 사람만 본다. 라운드를 열 때 앉아 있던 사람 모두다.
+
+    값(credits)은 결제 서버가 실제로 홀드한 값이다. 라운드를 연 뒤 몇 초 안에 걸린다. 그 전에는 null 이다.
+    이 기록이 생기기 전에 연 라운드나 결제 서버 없이 도는 서버면 빈 목록이다.
+    """
+    charges = await service.get_round_charges(session, user.user_id, table_id, number)
+    return [to_charge(charge) for charge in charges]
 
 
 @router.get('/{number}', response_model=RoundOut, status_code=status.HTTP_200_OK)
