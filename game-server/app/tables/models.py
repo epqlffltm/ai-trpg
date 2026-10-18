@@ -257,11 +257,6 @@ class GameTable(Base):
     # 바꾼 뒤에 보내는 쪽지부터 따른다
     whisper_notice: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 
-    # 서술한 장면에서 장부 초안을 쓰는가(app/drafts/). 켜면 라운드마다 모델을 한 번 더 부른다.
-    # 끄면(기본) 부르지 않는다. 방장이 장면을 읽고 손으로 장부를 고친다. 만들 때 방장이 고르고 진행 중에도 바꿀 수 있다.
-    # 바꾼 뒤에 서술하는 라운드부터 따른다
-    ledger_drafts: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
-
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.
     # server_default: DB 에도 기본값을 둔다. 이 칸이 생기기 전에 만든 테이블은 0 에서 시작한다

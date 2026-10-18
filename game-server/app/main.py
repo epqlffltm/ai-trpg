@@ -44,9 +44,6 @@ from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
 from app.core.job_setup import build_jobs
-from app.drafts import router as ledger_drafts
-from app.drafts.decisions import DraftNotFoundError
-from app.drafts.setup import build_drafter
 from app.engine.dice import RandomDice
 from app.events import router as events
 from app.limits.attempts import LimitsUnavailable, TooManyAttempts
@@ -213,8 +210,6 @@ def create_app(
     # GM 의 서술을 만드는 것. 설정(NARRATOR)이 정한다. 기본은 AI 를 부르지 않는 가짜다.
     # 언어 모델이면 위의 것으로 창구를 골라 부른다. 부를 때마다 위의 세션 틀로 DB 에 기록을 남긴다(app/ai/call_log.py)
     app.state.narrator = build_narrator(settings, app.state.model_router, app.state.session_factory)
-    # 서술한 장면에서 장부 초안을 쓰는 것(app/drafts/). 서술자가 언어 모델일 때만 쓴다. 장부 초안을 켠 테이블만 부른다
-    app.state.drafter = build_drafter(settings, app.state.model_router, app.state.session_factory)
 
     # 로어북 항목을 벡터로 바꾸는 것. 설정(EMBEDDER)이 정한다. 기본은 모델을 부르지 않는 가짜다.
     # 시나리오를 게시하면 뒤에서 판의 항목을 벡터로 바꾼다(app/lore/indexing.py)
@@ -305,7 +300,6 @@ def create_app(
     app.include_router(events.router, prefix=API_PREFIX)
     app.include_router(chat.router, prefix=API_PREFIX)
     app.include_router(whispers.router, prefix=API_PREFIX)
-    app.include_router(ledger_drafts.router, prefix=API_PREFIX)
     app.include_router(realtime.router, prefix=API_PREFIX)
     app.include_router(operators.router, prefix=API_PREFIX)
 
@@ -327,7 +321,6 @@ def create_app(
     app.add_exception_handler(WrongPasswordError, tables.handle_wrong_password)
     app.add_exception_handler(AdultContentRequiredError, handle_adult_content_required)
     app.add_exception_handler(TableConflictError, tables.handle_table_conflict)
-    app.add_exception_handler(DraftNotFoundError, ledger_drafts.handle_draft_not_found)
     app.add_exception_handler(TableOptionError, tables.handle_table_option)
     app.add_exception_handler(SanctionConflictError, operators.handle_sanction_conflict)
     app.add_exception_handler(PublicationRefusedError, operators.handle_publication_refused)

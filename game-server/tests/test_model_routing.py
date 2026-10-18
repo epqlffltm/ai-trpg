@@ -1,7 +1,7 @@
 # game-server/tests/test_model_routing.py
 
 """
-모델의 이름으로 창구를 고르는 것(app/ai/routing.py)과, 그것으로 부를 때 고르는 서술자·장부 초안을 검증한다.
+모델의 이름으로 창구를 고르는 것(app/ai/routing.py)과, 그것으로 부를 때 고르는 서술자를 검증한다.
 
 실제 모델을 부르지 않는다. httpx 의 가짜 전송이 서버 곁의 모델과 OpenAI 인 척 답한다.
 모델 목록은 사전으로 흉내 낸다(FakeLookup). DB 에서 읽는 것(DbModelLookup)은 맨 아래에서 본다.
@@ -10,7 +10,7 @@
 넷을 본다.
   - 고르기: 목록에 없는 이름은 서버 곁의 모델, 목록의 모델은 목록의 창구·날짜판·받는 칸.
   - 못 고르기: 꺼짐, 은퇴, 키 없음, 코드 없는 창구. 다른 모델로 바꿔 부르지 않는다. warning 한 줄.
-  - 부르기: 고른 대로 보낸다(주소, 키, 칸). 서술자와 장부 초안이 부를 때마다 고른다.
+  - 부르기: 고른 대로 보낸다(주소, 키, 칸). 서술자가 부를 때마다 고른다.
   - DB: 목록을 부를 때마다 읽는다. 끄면 다음 서술부터 바로 맞는다.
 """
 
@@ -39,10 +39,6 @@ from app.catalog import service
 from app.catalog.lookup import CatalogModel, DbModelLookup
 from app.catalog.models import Grade, Provider, ReasoningStyle, TokenLimitField
 from app.catalog.schemas import ModelCreate, ModelUpdate
-from app.drafts.context import DraftContext
-from app.drafts.routed_writer import RoutedDraftWriter
-from app.drafts.validation import NOTHING
-from app.drafts.writer import DraftRequest
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 from app.rounds.retrying_narrator import NarrationFailed, RetryingNarrator
 from app.rounds.routed_narrator import RoutedNarrator
@@ -402,18 +398,6 @@ async def test_an_unavailable_model_is_not_tried_again():
     # 다시 불러도 꺼진 모델이다. 한 번만 찾고 그만둔다
     assert caught.value.reason == MODEL_UNAVAILABLE
     assert lookup.found == ['gpt-6-luna']
-
-
-async def test_drafts_are_skipped_when_the_model_is_unavailable():
-    lookup = FakeLookup({'gpt-6-luna': replace(LUNA, enabled=False)})
-    log = FakeCallLog()
-    writer = RoutedDraftWriter('gpt-6-luna', make_router(lookup=lookup), log)
-
-    checked = await writer.draft(DraftRequest(scene=SCENE, context=DraftContext(characters={}, items={}, quests={})))
-
-    # 초안은 덤이다. 고르지 못하면 없이 지나간다. 부르지 않았으니 기록도 없다
-    assert checked is NOTHING
-    assert (lookup.found, log.records) == (['gpt-6-luna'], [])
 
 
 # --- DB ---
