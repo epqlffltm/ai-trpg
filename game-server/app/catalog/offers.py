@@ -73,6 +73,8 @@ class OfferedModel:
     promo: bool = False
     # 운영자가 정한 그 회사의 대체 모델인가
     vendor_fallback: bool = False
+    # 이 날부터 쓰지 않는다(모델 목록의 은퇴일). 화면이 "12월 1일 종료"를 보여 준다. 정해지지 않았으면 None
+    retires_on: date | None = None
 
 
 @dataclass(frozen=True)
@@ -99,7 +101,14 @@ def to_card(model: AiModel) -> ModelCard:
 def free_offer(card: ModelCard) -> OfferedModel:
     """결제 서버 없이 도는 서버의 내줌. 값이 없다."""
     return OfferedModel(
-        card.slug, card.display_name, card.vendor, card.grade, None, None, vendor_fallback=card.vendor_fallback
+        card.slug,
+        card.display_name,
+        card.vendor,
+        card.grade,
+        None,
+        None,
+        vendor_fallback=card.vendor_fallback,
+        retires_on=card.retires_on,
     )
 
 
@@ -130,6 +139,7 @@ def offer(card: ModelCard, book: PriceBook, now: datetime) -> OfferedModel | Non
         price.next,
         sale.promo,
         card.vendor_fallback,
+        card.retires_on,
     )
 
 

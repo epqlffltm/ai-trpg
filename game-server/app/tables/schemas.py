@@ -8,7 +8,7 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -268,6 +268,9 @@ class NarrationModelOut(BaseModel):
     # 지금 값이 행사가인가. 행사가면 next 가 행사가 끝나는 때와 그 뒤의 값이다(화면이 "11월 21일까지, 그 뒤 440")
     promo: bool
     next: NextPriceOut | None
+    # 이 날부터 쓰지 않는다(공급자가 내리는 날). 이 모델을 쓰는 테이블은 그날 같은 회사의 다른 모델로 바뀐다.
+    # 화면이 "12월 1일 종료"를 보여 준다. 정해지지 않았으면 null
+    retires_on: date | None
 
 
 class NarrationModelsOut(BaseModel):
