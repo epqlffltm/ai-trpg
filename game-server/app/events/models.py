@@ -134,6 +134,9 @@ class EventType(enum.StrEnum):
     ROUND_CLOSED = 'round_closed'
     # GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고, 방장이 다시 맡길 수 있다
     NARRATION_FAILED = 'narration_failed'
+    # GM 의 서술이 정해 둔 횟수만큼 실패해 서술을 그만뒀다. 서술 값은 받지 않는다(돌려준다).
+    # 엔진이 정한 결과의 줄로 다음 라운드를 연다(app/rounds/service.py 의 abandon_narration)
+    NARRATION_ABANDONED = 'narration_abandoned'
     # 이 라운드의 서술 값을 내는 사람 하나(user_id)의 크레딧이 모자란다. 걸어 보고 알았다(app/billing/).
     # 그 사람이 충전하지 않거나 방장이 내보내지 않으면 라운드를 닫을 때 서술이 실패한다(insufficient_credits)
     NARRATION_CREDITS_SHORT = 'narration_credits_short'

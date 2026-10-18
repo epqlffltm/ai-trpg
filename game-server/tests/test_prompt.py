@@ -282,8 +282,16 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_the_template_is_narration_26():
-    assert prompt.PROMPT_VERSION == 'narration-27'
+def test_the_template_is_narration_28():
+    assert prompt.PROMPT_VERSION == 'narration-28'
+
+
+def test_the_rules_ask_for_a_scene_shorter_than_the_output_limit():
+    system = build_messages(make_request())[0].content
+
+    # 출력 상한(1,200 토큰)에 걸려 잘리지 않게 길이를 적는다. 재 본 모델은 한국어 한 글자에 0.47~0.63 토큰이다
+    assert '600~900자 안팎' in system
+    assert '1,200자를 넘기지 마라' in system
 
 
 def test_the_last_message_asks_for_the_declared_actions():

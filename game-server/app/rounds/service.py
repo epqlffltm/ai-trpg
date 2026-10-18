@@ -51,7 +51,7 @@ from app.core.config import BILLING_BUDGET_SECONDS, NARRATION_BUDGET_SECONDS
 from app.engine.dice import Dice
 from app.events import recorder
 from app.events import repository as event_repository
-from app.events.models import EventType
+from app.events.models import EventType, TableEvent
 from app.rounds import deadlines, narration_request, opener, repository, rests
 from app.rounds.acceptance import accept_action, put_declaration
 from app.rounds.cast import Scene, cast_of
@@ -59,6 +59,7 @@ from app.rounds.errors import Conflict, RoundConflictError, RoundNotFoundError
 from app.rounds.judging import expire_injuries, find_dying, roll_checks, roll_death_saves
 from app.rounds.models import CloseReason, Round, RoundStatus
 from app.rounds.monster_scene import scene_monsters
+from app.rounds.move_lines import round_lines
 from app.rounds.moves import build_moves, frozen_moves, frozen_style, to_monster_notes, to_people
 from app.rounds.narrator import NarrationRequest
 from app.rounds.prompt import HISTORY_ROUNDS
@@ -100,6 +101,11 @@ CLOSING_RETRY_MARGIN_SECONDS = 5.0
 # 작업이 살아 있을 수 있는 가장 긴 시간보다 길어야 한다. 짧으면 아직 도는 서술 위에 또 서술을 맡긴다.
 # 그래서 따로 적지 않고 위의 시간들을 더해서 만든다. 하나를 늘리면 이것도 늘어난다
 CLOSING_RETRY_SECONDS = CLOSING_JOB_SECONDS + FAILURE_RECORD_SECONDS + CLOSING_RETRY_MARGIN_SECONDS
+
+# 서술이 실패로 끝나도 되는 횟수. 처음 맡긴 것과 방장이 다시 맡긴 두 번이다. 여기에 닿으면 서술을 그만둔다.
+# 실패한 라운드는 값을 받지 않으므로 다시 맡길 때마다 드는 원가(같은 모델로 최대 두 번)가 모두 우리 몫이다.
+# 상한이 없으면 그 원가에 끝이 없다. 서술 값을 잡지 못한 실패(크레딧 모자람 등)는 모델을 부르지 않았으니 세지 않는다
+NARRATION_FAILURE_LIMIT = 3
 
 # 서술자에게 주는 쪽지(GM 에게도 보인 것)의 수. 보낸 사람마다 그 라운드의 최근 것만 이만큼(app/whispers/, #196).
 # 서술 값은 앉은 사람 모두가 낸다. 한 사람이 쪽지를 쏟아 내 프롬프트를 키우면 모두가 그 값을 치른다
@@ -482,12 +488,17 @@ async def load_closing_request(
     )
 
 
-async def fail_closing(session: AsyncSession, table_id: uuid.UUID, number: int, started: datetime, reason: str) -> None:
+async def fail_closing(
+    session: AsyncSession, table_id: uuid.UUID, number: int, started: datetime, reason: str, counted: bool = True
+) -> None:
     """
     닫는 중인 라운드의 서술이 끝내 실패한 것을 적는다. 저장한다.
 
     라운드는 닫는 중에 머문다. 실패한 시각을 적어 방장이 기다리지 않고 다시 맡길 수 있게 하고,
     앉은 사람 모두에게 이벤트로 알린다. reason 은 마지막 실패의 이유다(timeout, cut_off …).
+
+    counted 면 서술의 실패로 센다(narration_failures). 서술 값을 잡지 못해 모델을 부르지 않은 실패는 세지 않는다.
+    센 횟수가 NARRATION_FAILURE_LIMIT 에 닿으면 실패로 적지 않고 서술을 그만둔다(abandon_narration).
 
     테이블을 잠그고, 잠근 뒤에 이 라운드가 started 에 맡긴 서술을 아직 기다리는지, 실패가 적히지 않았는지 본다.
     아니면 아무것도 하지 않는다.
@@ -506,11 +517,59 @@ async def fail_closing(session: AsyncSession, table_id: uuid.UUID, number: int, 
     if round_.narration_failed_at is not None:
         return
 
+    if counted:
+        round_.narration_failures += 1
+    if round_.narration_failures >= NARRATION_FAILURE_LIMIT:
+        await abandon_narration(session, table, round_, reason)
+        return
     round_.narration_failed_at = datetime.now(UTC)
     closed = await event_repository.find_latest(session, table_id, EventType.ROUND_CLOSED)
     payload = {'round': number, 'reason': reason}
     recorder.record(session, table, EventType.NARRATION_FAILED, payload=payload, cause=closed)
     await tables.commit(session, table)
+
+
+def engine_scene(table: GameTable, round_: Round) -> str:
+    """
+    서술 없이 엔진이 정한 결과만으로 쓴 장면. 각자 한 일과 판정의 줄을 늘어놓는다(가짜 서술자와 같은 모양).
+
+    닫기 시작할 때 굳힌 것을 읽는다. 서술을 그만둔 라운드의 다음 장면이 된다.
+    """
+    turns = narration_request.to_turn_notes(round_.turns)
+    lines = [f'[{round_.number} 라운드의 결과]', *round_lines(frozen_moves(table, round_), turns)]
+    return '\n'.join(lines)
+
+
+async def close_and_open(
+    session: AsyncSession, table: GameTable, round_: Round, scene: str, paid: bool, cause: TableEvent | None
+) -> None:
+    """
+    잠근 테이블의 닫는 중인 라운드를 닫고, scene 을 장면으로 하는 다음 라운드를 연다. 저장한다.
+
+    paid 면 서술 값을 확정할 것, 아니면 돌려줄 것으로 적는다. 테이블이 끝났으면 다음 라운드를 열지 않고 돌려준다.
+    cause 는 다음 라운드를 열게 한 이벤트다. 닫은 것을 먼저 DB 에 보낸다(유일 색인 uq_table_rounds_open).
+    """
+    now = datetime.now(UTC)
+    round_.closed_at = now
+    playing = table.status == TableStatus.PLAYING
+    if playing:
+        await session.flush()
+        opener.open_round(session, table, number=round_.number + 1, scene=scene, cause=cause)
+    await charges.settle_round(session, round_.id, paid and playing, now)
+    await tables.commit(session, table)
+
+
+async def abandon_narration(session: AsyncSession, table: GameTable, round_: Round, reason: str) -> None:
+    """
+    잠근 테이블의 라운드의 서술을 그만둔다. 값을 받지 않고, 엔진의 결과로 다음 라운드를 연다. 저장한다.
+
+    판정, 피해, 회복, 죽음은 닫기 시작할 때 엔진이 이미 정해 적었다. 서술이 없어도 게임의 사실은 사라지지 않는다.
+    그래서 테이블을 멈추지 않는다. 앉은 사람 모두에게 이벤트로 알린다(narration_abandoned).
+    """
+    closed = await event_repository.find_latest(session, table.id, EventType.ROUND_CLOSED)
+    payload = {'round': round_.number, 'reason': reason, 'failures': round_.narration_failures}
+    abandoned = recorder.record(session, table, EventType.NARRATION_ABANDONED, payload=payload, cause=closed)
+    await close_and_open(session, table, round_, engine_scene(table, round_), paid=False, cause=abandoned)
 
 
 async def finish_closing(
@@ -536,12 +595,5 @@ async def finish_closing(
     if table is None or not is_run(round_, started):
         return
 
-    now = datetime.now(UTC)
-    round_.closed_at = now
-    delivered = table.status == TableStatus.PLAYING
-    if delivered:
-        await session.flush()
-        closed = await event_repository.find_latest(session, table_id, EventType.ROUND_CLOSED)
-        opener.open_round(session, table, number=number + 1, scene=scene, cause=closed)
-    await charges.settle_round(session, round_.id, delivered, now)
-    await tables.commit(session, table)
+    closed = await event_repository.find_latest(session, table_id, EventType.ROUND_CLOSED)
+    await close_and_open(session, table, round_, scene, paid=True, cause=closed)
