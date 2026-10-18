@@ -66,6 +66,11 @@ class FakeBillingServer:
     calls: list[tuple[str, str]] = field(default_factory=list)
     extended: list[str] = field(default_factory=list)
     headers: list[httpx.Headers] = field(default_factory=list)
+    # 판매를 멈춘 가격표 이름들(400 price.not_for_sale)
+    not_for_sale: set[str] = field(default_factory=set)
+    # 골드로만 내는 가격표 이름들(프리미엄)과 골드가 있는 사람들. 없으면 402 credit.gold_required
+    gold_only: set[str] = field(default_factory=set)
+    gold: set[uuid.UUID] = field(default_factory=set)
     # 만료 시각을 정하는 시계와 HOLD_TTL. 테스트가 바꿔 꽂는다
     clock: Callable[[], datetime] = utc_now
     ttl: timedelta = HOLD_TTL
@@ -80,11 +85,12 @@ class FakeBillingServer:
         fresh = sent_at.isdigit() and abs(time.time() - int(sent_at)) <= TOLERANCE
         return fresh and hmac.compare_digest(parts.get('v1', ''), expected)
 
-    def answer(self, status_code: int, reference: str = '') -> httpx.Response:
-        """홀드를 담은 답. 홀드가 없으면 상태 코드만."""
+    def answer(self, status_code: int, reference: str = '', code: str | None = None) -> httpx.Response:
+        """홀드를 담은 답. 홀드가 없으면 상태 코드만. 4xx 면 결제 서버처럼 오류의 이름(code)을 싣는다."""
         hold = self.holds.get(reference)
         if hold is None or status_code >= 300:
-            return httpx.Response(status_code, json={'detail': '...'})
+            body = {'detail': '...', **({'code': code} if code else {})}
+            return httpx.Response(status_code, json=body)
         body = {
             'reference': reference,
             'user_id': hold.user_id,
@@ -102,11 +108,15 @@ class FakeBillingServer:
             same = (existing.user_id, existing.price_code) == (user_id, price_code)
             return self.answer(200, reference) if same else self.answer(409)
         if price_code not in PRICES:
-            return self.answer(400)
+            return self.answer(400, code='price.unknown')
+        if price_code in self.not_for_sale:
+            return self.answer(400, code='price.not_for_sale')
+        if price_code in self.gold_only and uuid.UUID(user_id) not in self.gold:
+            return self.answer(402, code='credit.gold_required')
         amount = PRICES[price_code]
         balance = self.balances.get(uuid.UUID(user_id), 0)
         if balance < amount:
-            return self.answer(402)
+            return self.answer(402, code='credit.insufficient')
         self.balances[uuid.UUID(user_id)] = balance - amount
         self.holds[reference] = FakeHold(user_id, price_code, amount, self.clock() + self.ttl)
         return self.answer(201, reference)

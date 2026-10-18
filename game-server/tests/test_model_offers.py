@@ -221,7 +221,8 @@ async def test_the_api_lists_the_models_with_their_prices(client: AsyncClient, a
             'grade': 'standard',
             'credits': '300',
             'tier': 'standard',
-            'next': {'credits': '310', 'tier': 'premium', 'effective_at': '2026-12-01T00:00:00Z'},
+            'promo': False,
+            'next': {'credits': '310', 'tier': 'premium', 'promo': False, 'effective_at': '2026-12-01T00:00:00Z'},
         },
         {
             'slug': 'gpt-6-luna',
@@ -230,6 +231,7 @@ async def test_the_api_lists_the_models_with_their_prices(client: AsyncClient, a
             'grade': 'standard',
             'credits': '20',
             'tier': 'standard',
+            'promo': False,
             'next': None,
         },
     ]
@@ -294,3 +296,28 @@ async def test_only_a_signed_in_user_sees_the_prices(client: AsyncClient):
 
 def test_now_is_utc():
     assert abs(utc_now() - datetime.now(UTC)) < timedelta(seconds=5)
+
+
+def test_a_promo_is_offered_with_its_end():
+    end = Change(Sale('440', Tier.STANDARD), LATER)
+    price = Price(narration_code('gpt-6-luna'), Sale('330', Tier.STANDARD, promo=True), end)
+
+    found = offer(card(), book(price), NOW)
+
+    assert found is not None and (found.credits, found.promo, found.next) == ('330', True, end)
+
+
+@pytest.mark.usefixtures('two_models')
+async def test_the_api_shows_a_promo_and_its_end(client: AsyncClient, app: FastAPI, me: dict[str, str]):
+    end = Change(Sale('440', Tier.STANDARD), LATER)
+    app.state.price_list = FixedPrices(book(Price(narration_code('gpt-6-luna'), Sale('330', Tier.BASIC, True), end)))
+
+    (luna,) = (await client.get(MODELS_URL, headers=me)).json()['models']
+
+    assert (luna['credits'], luna['tier'], luna['promo']) == ('330', 'basic', True)
+    assert luna['next'] == {
+        'credits': '440',
+        'tier': 'standard',
+        'promo': False,
+        'effective_at': '2026-12-01T00:00:00Z',
+    }

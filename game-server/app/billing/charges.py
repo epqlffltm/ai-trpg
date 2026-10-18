@@ -68,6 +68,22 @@ def price_code_of(round_: Round) -> str:
     return price_code_for(round_.narration_tier)
 
 
+# 방장이 라운드의 모델을 바꿀 때 새 가격표로 다시 걸 청구들. 아직 서술 값을 받지 않았다.
+# 걸어야 함, 걸림, 모자람, 그리고 가격표를 팔지 않아 실패한 것이다. 확정할 것·확정한 것은 이미 서술했다
+REPRICEABLE = (ChargeStatus.PENDING, ChargeStatus.HELD, ChargeStatus.SHORT, ChargeStatus.FAILED)
+
+
+async def reprice_round(session: AsyncSession, round_: Round, now: datetime) -> int:
+    """
+    라운드의 모델을 바꾼 뒤 그 라운드의 청구를 새 가격표(price_code_of)로 다시 걸게 적는다. 옮긴 수.
+
+    같은 이름표로는 다른 가격표를 걸 수 없다(결제 서버의 hold.reference_reused). 그래서 옛 홀드를 돌려줄 것으로
+    적고, 서술 전에 새 이름표로 새 가격표를 건다(app/billing/settling.py 의 restore). 크레딧을 기다리다 돌려준 청구를
+    다시 거는 길과 같다. 부른 쪽의 트랜잭션 안에서 돈다. 결제 서버는 부르지 않는다.
+    """
+    return await repository.reprice_round(session, round_.id, REPRICEABLE, price_code_of(round_), now)
+
+
 def reference_for(table_id: uuid.UUID, number: int, payer_id: uuid.UUID, renewals: int = 0) -> str:
     """
     결제 서버의 이름표. 테이블, 라운드, 내는 사람으로 짓는다. 같은 라운드의 같은 사람이면 언제 지어도 같다.

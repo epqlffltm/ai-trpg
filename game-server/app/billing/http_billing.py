@@ -32,6 +32,7 @@ import httpx
 from pydantic import SecretStr
 
 from app.billing.client import (
+    GOLD_REQUIRED_CODE,
     BillingRejected,
     BillingUnavailable,
     ExtendOutcome,
@@ -88,14 +89,23 @@ def expires_at_of(response: httpx.Response) -> datetime | None:
     return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
+def error_code_of(response: httpx.Response) -> str | None:
+    """4xx 의 본문에 결제 서버가 붙인 오류의 이름(code). 없거나 읽을 수 없으면 None. 그 밖의 칸은 읽지 않는다."""
+    try:
+        code = response.json().get('code')
+    except (ValueError, AttributeError):
+        return None
+    return code if isinstance(code, str) else None
+
+
 def require_success(response: httpx.Response) -> None:
-    """2xx 가 아니면 예외로 바꾼다. 다시 부를 일이면 BillingUnavailable, 아니면 BillingRejected."""
+    """2xx 가 아니면 예외로 바꾼다. 다시 부를 일이면 BillingUnavailable, 아니면 BillingRejected(오류의 이름과 함께)."""
     if response.is_success:
         return
     reason = unavailable_reason(response.status_code)
     if reason is not None:
         raise BillingUnavailable(reason)
-    raise BillingRejected(response.status_code)
+    raise BillingRejected(response.status_code, error_code_of(response))
 
 
 def require_status(response: httpx.Response, expected: str) -> None:
@@ -105,8 +115,14 @@ def require_status(response: httpx.Response, expected: str) -> None:
 
 
 def hold_result(response: httpx.Response) -> HoldOutcome:
-    """홀드를 거는 요청의 답을 결과로 바꾼다. 잡혔으면 만료 시각을 함께 준다."""
+    """
+    홀드를 거는 요청의 답을 결과로 바꾼다. 잡혔으면 만료 시각을 함께 준다.
+
+    402 는 크레딧이 모자란 것이다. 오류의 이름이 credit.gold_required 면 골드가 모자란 것으로 가른다.
+    """
     if response.status_code == httpx.codes.PAYMENT_REQUIRED:
+        if error_code_of(response) == GOLD_REQUIRED_CODE:
+            return HoldOutcome(HoldResult.GOLD_REQUIRED)
         return HoldOutcome(HoldResult.SHORT)
     require_success(response)
     require_status(response, 'held')

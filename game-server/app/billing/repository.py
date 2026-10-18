@@ -201,3 +201,35 @@ async def move_round(
         .execution_options(synchronize_session=False)
     )
     return (await session.execute(statement)).rowcount
+
+
+async def has_failed_with(session: AsyncSession, round_id: uuid.UUID, errors: tuple[str, ...]) -> bool:
+    """라운드의 청구 중 errors 의 까닭으로 실패한(failed) 것이 있는가."""
+    query = select(
+        exists().where(
+            NarrationCharge.round_id == round_id,
+            NarrationCharge.status == ChargeStatus.FAILED,
+            NarrationCharge.last_error.in_(errors),
+        )
+    )
+    return bool(await session.scalar(query))
+
+
+async def reprice_round(
+    session: AsyncSession, round_id: uuid.UUID, allowed: tuple[ChargeStatus, ...], price_code: str, now: datetime
+) -> int:
+    """
+    라운드의 청구 중 allowed 의 상태인 것을 새 가격표로 다시 걸게 돌려줄 것(release_due)으로 옮긴다. 옮긴 수.
+
+    옛 이름표의 홀드는 정리 작업이 돌려준다(걸린 적이 없으면 결제 서버가 404 로 답하고 된 것으로 본다).
+    그 뒤 서술 전에 새 이름표, 새 가격표로 다시 건다(app/billing/settling.py 의 restore).
+    """
+    statement = (
+        update(NarrationCharge)
+        .where(NarrationCharge.round_id == round_id, NarrationCharge.status.in_(allowed))
+        .values(
+            status=ChargeStatus.RELEASE_DUE, price_code=price_code, next_attempt_at=now, attempts=0, last_error=None
+        )
+        .execution_options(synchronize_session=False)
+    )
+    return (await session.execute(statement)).rowcount

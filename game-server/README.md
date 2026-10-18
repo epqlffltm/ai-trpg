@@ -194,7 +194,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_tier` 로 서술 등급을 고른다(비우면 `standard`). `credit_wait_seconds`, `remove_short_payers` 로 크레딧이 모자란 사람을 기다리는 규칙을 고른다(비우면 5분, 켬). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables` | 내가 앉아 있는 테이블 목록. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/join` | 초대 코드로 테이블에 들어가 앉는다 | access 토큰 |
-| GET | `/api/v1/game/tables/narration-models` | 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값(`{"free": false, "models": [{"slug", "display_name", "vendor", "grade", "credits", "tier", "next"}]}`). 가격 목록을 받지 못했으면 503 ([고를 수 있는 모델](#고를-수-있는-모델)) | access 토큰 |
+| GET | `/api/v1/game/tables/narration-models` | 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값(`{"free": false, "models": [{"slug", "display_name", "vendor", "grade", "credits", "tier", "promo", "next"}]}`). 가격 목록을 받지 못했으면 503 ([고를 수 있는 모델](#고를-수-있는-모델)) | access 토큰 |
 | GET | `/api/v1/game/tables/narration-tiers` | 이 서버가 내주는 서술 등급들(`{"tiers": ["standard", "premium"]}`). 테이블을 만들거나 등급을 바꿀 때 이 중에서 고른다 | access 토큰 |
 | GET | `/api/v1/game/tables/lobby` | 로비. 들어갈 수 있는 테이블 목록. 최근에 만든 것부터. `scenario_id`, `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/join` | 로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 `password` 를 보낸다 | access 토큰 |
@@ -1924,7 +1924,9 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 `GET /tables/narration-models` 는 방장이 테이블의 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값을 준다(`app/catalog/offers.py`, #332). 방장은 이 목록에서 고른다([모델 고르기](#모델-고르기)).
 - **두 목록에 다 있어야 나온다.** 이 목록에서 켜져 있고 은퇴하지 않았으며, 결제 서버의 가격 목록에 그 이름표의 가격표 이름(`narration.<이름표>.i0.o0`)이 있고 지금 팔고 있어야 한다. 원가를 적고 평가를 통과해 켠 모델을 결제 서버가 값을 붙여 판다.
 - **값은 결제 서버가 정한 그대로다**(`credits`, 글자). 게임 서버는 셈하지 않는다. `tier` 가 `premium` 이면 골드(유료 크레딧)로만 낸다. 결제에 쓰는 등급은 이것이 기준이고, 이 목록의 분류(`grade`)는 화면의 묶음이다. 둘이 다르면(premium 이 한쪽에만) 경고를 남긴다(`모델 목록의 분류와 결제 서버 가격표의 등급이 다르다`).
-- **값이 바뀌는 예약이 있으면 `next` 에 싣는다**(`{"credits": "310", "tier": "premium", "effective_at": "..."}`). 화면이 "12월 1일부터 310"처럼 미리 알린다. `next.credits` 가 `null` 이면 그 시각부터 팔지 않는다. 시각이 지나면 게임 서버가 스스로 갈아 끼운다.
+- **등급(`tier`)은 `basic`, `standard`, `premium` 이다.** `basic` 은 가장 싼 모델의 묶음이고 내는 방법은 `standard` 와 같다. 모르는 등급을 받으면 목록 전체를 읽지 못하므로(503) 결제 서버는 게임 서버가 등급을 안 뒤에 그 줄을 넣는다.
+- **행사가면 `promo` 가 `true` 다.** 그때 `next` 는 행사가 끝나는 때와 그 뒤의 값이다. 화면이 "11월 21일까지 330, 그 뒤 440"처럼 보여 준다. 결제 서버가 이 칸을 싣지 않으면 정가(`false`)다.
+- **값이 바뀌는 예약이 있으면 `next` 에 싣는다**(`{"credits": "310", "tier": "premium", "promo": false, "effective_at": "..."}`). 화면이 "12월 1일부터 310"처럼 미리 알린다. `next.credits` 가 `null` 이면 그 시각부터 팔지 않는다. 시각이 지나면 게임 서버가 스스로 갈아 끼운다.
 - **가격 목록은 받아 두고 1분쯤마다 버전으로 다시 묻는다**(`app/billing/price_list.py`). 결제 서버의 `GET /api/v1/billing/service/prices` 를 홀드와 같은 서명으로 부르고, 응답의 `ETag` 를 `If-None-Match` 에 실어 다시 묻는다. 바뀐 것이 없으면 304 다. 여럿이 함께 물어도 한 번만 묻는다.
 - **받지 못하면 마지막 목록을 쓴다**(`결제 서버의 가격 목록을 새로 받지 못했다`). 고를 수 있는 모델이 갑자기 사라지지 않는다. 한 번도 받지 못했으면 503 이다. 값을 모르는 모델은 내주지 않는다.
 - **결제 서버 없이 도는 서버**(`BILLING_URL` 비움)는 켜진 모델을 모두 값 없이 내준다(`"free": true`). 지금도 결제 서버가 없으면 홀드 없이 서술한다. 로컬 모델(Ollama)도 `--provider local` 로 이 목록에 넣으면 고를 수 있다.
@@ -1935,13 +1937,20 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 방장이 테이블을 만들 때(`narration_model`) 또는 진행 중에(`PUT .../narration-model`) 서술 모델을 고른다(`app/tables/model_picker.py`, `app/tables/narration_models.py`).
 - **고를 수 있는 모델만 된다.** 위의 목록과 같은 규칙이다. 목록에 없거나, 꺼졌거나, 은퇴했거나, 결제 서버가 팔지 않으면 422 다. 모델을 고르는데 가격 목록을 받지 못했으면 503 이다. 고르지 않으면(또는 같은 값이면) 가격 목록을 묻지 않는다.
 - **`null` 이면 서버의 기본이다.** 지금까지처럼 서술 등급의 모델들(`LLM_MODEL` …)로 서술하고 등급의 가격표(`narration.standard`)로 건다. 이 칸이 생기기 전의 테이블과 라운드도 `null` 이다.
-- **라운드를 열 때 굳는다**(등급과 같다). 라운드의 `narration_model` 과 `round_opened` 이벤트에 실린다. 바꾼 값은 다음 라운드부터다. 열려 있는 라운드는 연 때의 모델의 값으로 청구를 적었고 그 모델로 서술한다.
+- **라운드를 열 때 굳는다**(등급과 같다). 라운드의 `narration_model` 과 `round_opened` 이벤트에 실린다. 바꾼 값은 다음 라운드부터다.
+- **아직 서술하지 않은 지금 라운드는 함께 바뀐다.** 선언을 받는 중이거나 서술이 실패해 멈춘 라운드(닫는 중, `narration_failed_at` 있음)면 그 라운드의 모델도 바꾸고, 그 라운드의 청구를 새 가격표로 다시 건다(`app/billing/charges.py` 의 `reprice_round`). 같은 이름표로는 다른 가격표를 걸 수 없어서(결제 서버의 `hold.reference_reused`) 옛 홀드는 돌려줄 것으로 적고, 서술 전에 새 이름표(`…:r1`)로 새 가격표를 건다. 크레딧을 기다리다 돌려준 청구를 다시 거는 길(`settling.restore`)과 같다. 서술이 돌고 있는 라운드는 바꾸지 않는다. 연 때의 모델의 값을 걸었고 그 모델로 서술하는 중이다. 이벤트에 적용한 라운드의 번호(`round`)가 실린다(테이블만 바뀌었으면 `null`).
 - **값은 그 모델의 가격표로 건다**(`narration.<이름표>.i0.o0`, `app/billing/charges.py` 의 `price_code_of`). 금액은 홀드를 걸 때 결제 서버가 정하고 그때 잔액에서 빠진다. 건 뒤에 값이 바뀌어도 그 홀드는 그대로다. 다음 라운드의 홀드부터 새 값이다. 만료되어 다시 거는 홀드(`:r1`)는 그때의 값이다.
 - **그 모델로만 서술한다**(`app/rounds/picked_narrator.py`). 같은 모델로 다시 시도는 하지만 다른 모델로 넘어가지 않는다. 다른 모델로 서술하면 낸 값과 받은 서술이 어긋난다. 끝내 실패하면 라운드는 닫는 중에 머물고 방장이 다시 맡긴다.
 - 바꾼 것은 `narration_model_changed` 이벤트로 남는다. 각자 값을 내므로 앉은 사람 모두가 본다.
 
-**알려진 한계(다음 PR)**
-- 고른 모델을 결제 서버가 팔지 않게 되면(`price.not_for_sale`, 400) 지금은 `billing_unavailable` 로 서술이 막힌다. premium 으로 바뀌어 골드 없는 사람이 있으면(`credit.gold_required`, 402) 크레딧이 모자란 것과 똑같이 다뤄진다(충전을 기다리다 빼기). 골드를 사야 풀리는데 화면은 그 까닭을 모른다. 다음 PR 에서 까닭을 청구에 적어 방장에게 누가 왜 막혔는지 알리고, 선언을 받는 동안에는 열린 라운드의 모델도 바꿀 수 있게 한다(바꾸면 청구를 새 가격표로 다시 건다).
+**막힌 라운드**(`app/billing/settling.py`). 결제 서버의 오류의 이름(`code`)으로 까닭을 가른다.
+- **팔지 않는 모델**(400 `price.not_for_sale`, `price.unknown`). 청구를 실패로 적고(`last_error`), 라운드마다 처음 알았을 때 한 번 모두에게 알린다(`narration_model_not_for_sale`). 버그가 아니라서 warning 이다. 홀드는 라운드가 열리자마자 걸어 보므로 보통은 선언을 받는 동안 안다. 방장이 모델을 바꾸지 않으면 서술이 `model_not_for_sale` 로 실패한다.
+- **골드가 모자람**(402 `credit.gold_required`). 프리미엄은 골드로만 낸다. 크레딧이 모자란 것(`credit.insufficient`)과 같이 다룬다(모자람, 기다리는 시간이 지나면 테이블의 규칙대로 빼기). 다른 것은 까닭이다. 청구와 `narration_credits_short` 이벤트에 `reason`(`insufficient`, `gold_required`)이 실리고, 서술은 `gold_required` 로 실패한다. 골드를 사거나, 방장이 그 사람을 내보내거나, 모델을 바꾸면 풀린다.
+- 두 가지 다 모델을 부르지 않았으니 서술의 실패로 세지 않는다([라운드](#라운드)의 "서술이 끝나지 못하면"). 서술 실패의 이유가 여럿이면 사람이 움직여야 풀리는 것부터 알린다(팔지 않음, 골드, 크레딧, 결제 서버의 답 없음 차례).
+- 방장이 모델을 바꾸면 위의 "아직 서술하지 않은 지금 라운드"대로 그 라운드의 청구를 새 가격표로 다시 걸고, 방장이 다시 맡기면 서술한다.
+- 새 가격표로 다시 거는 것은 서술 전에 한다. 그래서 바꾼 모델에서 또 모자란 사람이 있는지는 다시 맡길 때 안다.
+
+**알려진 한계**
 - 등급(`narration_tier`)과 함께 있다. 모델 고르기가 자리 잡으면 등급을 걷어낸다.
 
 ### 관리 명령
@@ -1999,7 +2008,8 @@ uv run python -m scripts.models retire gpt-6-luna --cancel
 | `narration_style_changed` | 방장이 서술 문체를 바꿨다. 다음 서술부터 그 문체다 | `narration_style`: 바꾼 문체 |
 | `round_time_limit_changed` | 방장이 라운드의 시간 제한을 바꿨다. 다음 라운드부터 쓴다 | `round_time_limit`: 바꾼 값(초, 없으면 `null`) |
 | `narration_tier_changed` | 방장이 서술 등급을 바꿨다. 다음 라운드부터 그 등급이다 | `narration_tier`: 바꾼 등급 |
-| `narration_model_changed` | 방장이 서술 모델을 바꿨다. 다음 라운드부터 그 모델이다 | `narration_model`: 바꾼 모델의 이름표(`null` 이면 서버의 기본) |
+| `narration_model_changed` | 방장이 서술 모델을 바꿨다. 다음 라운드부터 그 모델이다. 아직 서술하지 않은 지금 라운드도 바꿨으면 `round` 가 있다 | `narration_model`: 바꾼 모델의 이름표(`null` 이면 서버의 기본), `round`: 함께 바꾼 지금 라운드의 번호(없으면 `null`) |
+| `narration_model_not_for_sale` | 라운드의 서술 모델을 결제 서버가 팔지 않는다. 라운드마다 한 번. 방장이 모델을 바꾸면 그 라운드를 새 가격표로 다시 건다 | `round`, `narration_model` |
 | `credit_wait_changed` | 방장이 크레딧이 모자란 사람을 기다리는 규칙을 바꿨다 | `credit_wait_seconds`, `remove_short_payers` |
 | `whisper_notice_changed` | 방장이 쪽지를 보낸 사실을 알릴지 바꿨다 | `whisper_notice` |
 | `ledger_drafts_changed` | 방장이 장부 초안을 쓸지 바꿨다 | `ledger_drafts` |
@@ -2032,8 +2042,8 @@ uv run python -m scripts.models retire gpt-6-luna --cancel
 | `character_joined` | 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다 | `round`, `user_id`, `character_name`, `replaces`: 죽은 캐릭터의 이름, `mode`, `pregen_index`, `number`: 그 사람의 몇 번째 캐릭터인지, `sheet`: 받은 시트, `place`: 들어온 장소(`entry_id`, `name`, 맵이 없으면 `null`) |
 | `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `reason`(`all_declared`, `host`, `timeout`), `idle`: 선언을 내지 않은 사람. 쓰러진 사람과 그 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다 |
 | `narration_abandoned` | GM 의 서술이 세 번 실패해 서술을 그만뒀다. 서술 값은 받지 않는다. 엔진이 정한 결과의 줄로 다음 라운드가 열린다 | `round`, `reason`: 마지막 실패의 이유, `failures`: 실패한 횟수 |
-| `narration_failed` | GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고 방장이 바로 다시 맡길 수 있다 | `round`, `reason`: 마지막 실패의 이유. 서술 값을 잡지 못했으면 `insufficient_credits` 또는 `billing_unavailable`([서술 값](#서술-값)). 라운드의 등급의 모델이 서버에 없으면 `tier_unavailable`([서술 등급](#테이블)) |
-| `narration_credits_short` | 이 라운드의 서술 값을 내는 사람 하나의 크레딧이 모자란다. 서버가 값을 걸어 보고 알았다. 한 라운드에 사람마다 한 번 | `round`, `user_id`: 모자란 사람. 그 사람이 충전하지 않거나 방장이 내보내지 않으면 라운드를 닫을 때 서술이 실패한다(`insufficient_credits`) |
+| `narration_failed` | GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고 방장이 바로 다시 맡길 수 있다 | `round`, `reason`: 마지막 실패의 이유. 서술 값을 잡지 못했으면 `model_not_for_sale`, `gold_required`, `insufficient_credits`, `billing_unavailable` 중 하나([서술 값](#서술-값), [모델 고르기](#모델-고르기)). 라운드의 등급의 모델이 서버에 없으면 `tier_unavailable`([서술 등급](#테이블)) |
+| `narration_credits_short` | 이 라운드의 서술 값을 내는 사람 하나의 크레딧이 모자란다. 서버가 값을 걸어 보고 알았다. 한 라운드에 사람마다 한 번 | `round`, `user_id`: 모자란 사람, `reason`: 무엇이 모자란가(`insufficient` 크레딧, `gold_required` 프리미엄의 골드). 그 사람이 충전하지 않거나 방장이 내보내지 않으면 라운드를 닫을 때 서술이 실패한다(`insufficient_credits`, `gold_required`) |
 | `member_dropped` | 크레딧이 모자란 사람을 기다리는 시간이 지나 서버가 그 사람을 자리에서 뺐다. 나머지로 다시 서술한다. 방장이었으면 바로 뒤에 `host_changed` | `round`, `user_id`, `character_name` |
 | `narration_credits_released` | 크레딧이 모자란 사람을 기다리는 시간이 지나 낼 수 있는 사람의 값을 돌려줬다(자동으로 빼기를 끈 테이블). 라운드는 멈춘 채로 있다. 방장이 다시 맡기면 모두에게 다시 건다 | `round` |
 | `table_ended` | 테이블이 끝났다 | |
