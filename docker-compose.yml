@@ -95,6 +95,9 @@ x-game-environment: &game-environment
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
   # 모든 서버를 함께 띄우므로 결제 서버에 붙인다. game-server/.env 에 BILLING_SECRET 이 있어야 뜬다
   BILLING_URL: http://billing-server:8003
+  # 방장에게 보내는 알림도 알림 서버에 넣는다. game-server/.env 에 NOTIFICATION_SECRET 이 있어야 뜬다
+  # (알림 서버의 GAME_SERVER_SECRET 과 같은 값)
+  NOTIFICATION_URL: http://notification-server:8004
   # 언어 모델(Ollama)은 컨테이너 밖, 이 PC 에서 돈다. 컨테이너 안의 127.0.0.1 은 컨테이너 자신이다.
   # 다른 곳의 모델을 쓰면 루트 .env 의 GAME_LLM_BASE_URL 을 적는다. game-server/.env 의 LLM_BASE_URL 은 여기서 덮인다
   LLM_BASE_URL: ${GAME_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
@@ -347,11 +350,13 @@ services:
     command: ["alembic", "upgrade", "heads"]
     env_file: ./game-server/.env
     # 마이그레이션은 DB 만 쓴다. 모델의 키와 서버끼리의 비밀을 비운다.
-    # 결제 서버의 주소도 비운다. 주소가 있으면 설정이 BILLING_SECRET 을 요구한다
+    # 결제 서버와 알림 서버의 주소도 비운다. 주소가 있으면 설정이 그 비밀을 요구한다
     environment:
       <<: *game-environment
       BILLING_URL: ""
       BILLING_SECRET: ""
+      NOTIFICATION_URL: ""
+      NOTIFICATION_SECRET: ""
       OPENAI_API_KEY: ""
       ANTHROPIC_API_KEY: ""
       GEMINI_API_KEY: ""
