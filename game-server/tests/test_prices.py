@@ -133,3 +133,42 @@ def test_the_price_code_of_a_model_is_its_slug_with_the_base_steps():
     assert narration_code('claude-sonnet-5-5') == 'narration.claude-sonnet-5-5.i0.o0'
     # 등급의 가격표 이름과 앞부분이 같다(app/billing/charges.py)
     assert charges.price_code_for('standard').split('.')[0] == narration_code('x').split('.')[0]
+
+
+def test_the_basic_tier_and_the_promo_are_read():
+    body = {
+        'prices': [
+            {
+                'code': 'narration.gemini-2-5-flash-lite.i0.o0',
+                'credits': '20',
+                'since': '2026-10-18T00:00:00Z',
+                'tier': 'basic',
+                'promo': False,
+                'next': None,
+            },
+            {
+                'code': 'narration.gpt-5-6-sol.i0.o0',
+                'credits': '330',
+                'since': '2026-10-18T05:00:00Z',
+                'tier': 'standard',
+                'promo': True,
+                'next': {'credits': '440', 'tier': 'standard', 'promo': False, 'effective_at': '2026-11-21T00:00:00Z'},
+            },
+        ]
+    }
+
+    book = parse_price_list(json.dumps(body).encode())
+    sol = book.prices['narration.gpt-5-6-sol.i0.o0']
+
+    # 모르는 등급이면 목록 전체를 읽지 못한다. basic 을 알아야 결제 서버가 그 줄을 넣는다
+    assert book.prices['narration.gemini-2-5-flash-lite.i0.o0'].current == Sale('20', Tier.BASIC)
+    # 행사가면 다음 값이 행사가 끝나는 때와 그 뒤의 값이다. 화면이 "11월 21일까지 330, 그 뒤 440"
+    assert sol.current == Sale('330', Tier.STANDARD, promo=True)
+    assert sol.next is not None and sol.next.sale == Sale('440', Tier.STANDARD)
+
+
+def test_a_missing_promo_is_the_regular_price():
+    # 이 칸이 생기기 전의 결제 서버는 싣지 않는다(위의 EXAMPLE)
+    book = parse_price_list(json.dumps(EXAMPLE).encode())
+
+    assert book.prices['narration.plain.i0.o0'].current.promo is False
