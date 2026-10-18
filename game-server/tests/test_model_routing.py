@@ -91,8 +91,21 @@ GEMINI = replace(
     token_limit_field=None,
     reasoning_style=ReasoningStyle.LEVEL_LOW,
 )
+GLM = CatalogModel(
+    slug='glm-4-7-flash',
+    provider=Provider.ZAI,
+    api_model_id='glm-4.7-flash',
+    supports_reasoning=False,
+    supports_temperature=True,
+    token_limit_field=None,
+    enabled=True,
+    retires_on=None,
+    reasoning_style=ReasoningStyle.THINKING_TYPE,
+)
+GLM_ALWAYS = replace(GLM, slug='glm-5-3', api_model_id='glm-5.3', reasoning_style=ReasoningStyle.ALWAYS)
 GEMINI_URL = 'https://generativelanguage.googleapis.com'
 ANTHROPIC_URL = 'https://api.anthropic.com'
+ZAI_URL = 'https://api.z.ai/api/paas/v4'
 
 
 @dataclass
@@ -141,6 +154,7 @@ def make_router(
     openai = Endpoint(OPENAI_URL, SecretStr(KEY), 'openai') if with_key else None
     anthropic = Endpoint(ANTHROPIC_URL, SecretStr(KEY), 'anthropic') if with_key else None
     gemini = Endpoint(GEMINI_URL, SecretStr(KEY), 'gemini') if with_key else None
+    zai = Endpoint(ZAI_URL, SecretStr(KEY), 'zai') if with_key else None
     return ModelRouter(
         lookup=lookup or FakeLookup({model.slug: model for model in models}),
         client=client,
@@ -151,6 +165,7 @@ def make_router(
         today=lambda: TODAY,
         anthropic=anthropic,
         gemini=gemini,
+        zai=zai,
     )
 
 
@@ -301,6 +316,39 @@ async def test_an_openai_call_carries_the_key_and_the_fields_the_model_takes():
     # 기록에는 어느 창구였는지 적는다
     (record,) = log.records
     assert record.provider == 'openai'
+
+
+async def test_a_zai_model_is_called_like_openai_with_its_thinking_switch():
+    transport = Transport()
+    log = FakeCallLog()
+    narrator = RoutedNarrator('glm-4-7-flash', make_router(GLM, transport=transport), log)
+
+    assert await narrator.narrate(request()) == SCENE
+
+    (sent,) = transport.requests
+    assert str(sent.url) == f'{ZAI_URL}/chat/completions'
+    assert sent.headers['Authorization'] == f'Bearer {KEY}'
+    body = transport.body()
+    assert body['model'] == 'glm-4.7-flash'
+    # 서술은 생각을 끈다. Z.ai 는 reasoning_effort 가 아니라 thinking 칸으로 끈다. 출력 상한은 max_tokens 다
+    assert body['thinking'] == {'type': 'disabled'}
+    assert 'reasoning_effort' not in body
+    assert 'max_tokens' in body
+    (record,) = log.records
+    assert record.provider == 'zai'
+
+
+async def test_a_zai_model_that_always_thinks_gets_the_thinking_share():
+    always = await make_router(GLM_ALWAYS).provider_for('glm-5-3')
+    switch = await make_router(GLM).provider_for('glm-4-7-flash')
+
+    # 끌 수 없는 모델에는 끄라는 칸을 보내지 않고, 생각의 몫을 출력 상한에 더한다
+    assert always.options == WireOptions(supports_reasoning=False, always_thinks=True)
+    assert switch.options == WireOptions(supports_reasoning=False, thinking_switch=True)
+
+
+async def test_a_zai_model_without_a_key_is_not_configured():
+    assert await refused(make_router(GLM, with_key=False), 'glm-4-7-flash') == PROVIDER_NOT_CONFIGURED
 
 
 async def test_a_local_call_sends_no_key():

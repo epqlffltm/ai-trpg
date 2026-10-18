@@ -20,7 +20,7 @@ from app.ai.call_log import DbCallLog
 from app.ai.calls import CallLog
 from app.ai.openai_compat import WireOptions
 from app.ai.retry_budget import RetryBudget
-from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, Endpoint, ModelRouter
+from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ZAI_KIND, Endpoint, ModelRouter
 from app.catalog.lookup import DbModelLookup
 from app.core.config import Settings
 from app.rounds.fake_narrator import FakeNarrator
@@ -56,6 +56,13 @@ def gemini_endpoint(settings: Settings) -> Endpoint | None:
     return Endpoint(base_url=settings.gemini_base_url, api_key=settings.gemini_api_key, kind=GEMINI_KIND)
 
 
+def zai_endpoint(settings: Settings) -> Endpoint | None:
+    """Z.ai(GLM)의 창구. OpenAI 와 같은 모양이다. 키를 적지 않았으면 None 이다."""
+    if not settings.zai_api_key.get_secret_value():
+        return None
+    return Endpoint(base_url=settings.zai_base_url, api_key=settings.zai_api_key, kind=ZAI_KIND)
+
+
 def build_router(
     settings: Settings, client: httpx.AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> ModelRouter:
@@ -67,6 +74,7 @@ def build_router(
         openai=openai_endpoint(settings),
         anthropic=anthropic_endpoint(settings),
         gemini=gemini_endpoint(settings),
+        zai=zai_endpoint(settings),
         timeout=settings.llm_timeout_seconds,
         local_options=WireOptions(supports_reasoning=settings.llm_supports_reasoning),
     )

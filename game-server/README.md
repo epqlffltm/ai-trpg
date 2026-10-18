@@ -1511,7 +1511,7 @@ LM Studio 면 `LLM_BASE_URL=http://127.0.0.1:1234/v1` 이다. `NARRATOR=llm` 인
 **기본 모델.** 라운드는 테이블의 서술 모델로 서술한다([모델 고르기](#모델-고르기)). `LLM_MODEL` 과 `LLM_FALLBACK_MODELS` 는 서술 모델이 없는 옛 라운드(모델을 고르는 규칙 전에 연 라운드)와 장부 초안(`DRAFT_MODEL` 을 비웠을 때)의 기본이다.
 - 적은 이름이 [모델 목록](#모델-목록)의 이름표면 목록의 창구로 부른다(아래 "외부 API 모델"). 아니면 `LLM_BASE_URL` 의 그 모델이다. 창구가 다른 모델을 섞어 적지 않는다. 넘어가기 규칙은 모델들이 같은 서버에 있다고 본다.
 
-**외부 API 모델(OpenAI, Claude, Gemini).** [모델 목록](#모델-목록)에 넣은 모델은 설정에 이름표를 적어 부른다(`app/ai/routing.py`).
+**외부 API 모델(OpenAI, Claude, Gemini, Z.ai).** [모델 목록](#모델-목록)에 넣은 모델은 설정에 이름표를 적어 부른다(`app/ai/routing.py`).
 
 ```
 NARRATOR=llm
@@ -1522,16 +1522,19 @@ OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 # 비밀값이다. 비우면 gemini 창구의 모델을 부르지 않는다
 GEMINI_API_KEY=
+# 비밀값이다. 비우면 zai 창구(GLM)의 모델을 부르지 않는다
+ZAI_API_KEY=
 # 기본값이 있다
 OPENAI_BASE_URL=https://api.openai.com/v1
 ANTHROPIC_BASE_URL=https://api.anthropic.com
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com
+ZAI_BASE_URL=https://api.z.ai/api/paas/v4
 ```
 
 - 서술할 때마다 모델 목록을 DB 에서 한 줄 읽는다. 관리 명령으로 끄거나 날짜판을 바꾸면 서버를 다시 띄우지 않아도 다음 서술부터 맞는다. 읽는 것은 모양(`app/catalog/lookup.py` 의 `ModelLookup`)을 거친다. 서술이 잦아지면 같은 모양의 캐시로 바꿔 꽂는다.
 - 목록의 창구, 날짜판(API 모델 이름), 받는 칸(출력 상한의 칸, 온도, 생각의 깊이)대로 보낸다. 키는 머리(`Authorization`, Gemini 는 `x-goog-api-key`)에만 싣고 주소, 로그, 오류, 기록에 싣지 않는다.
 - 부를 수 없으면 다른 모델로 바꿔 부르지 않고 그 서술이 실패한다: 꺼졌거나 은퇴함(`model_unavailable`), 키가 없음(`provider_not_configured`), 그 창구의 코드가 아직 없음(`provider_unsupported`, 지금은 없다. 새 창구를 더할 때).
-- 기록(`ai_invocations.provider`)에는 서버 곁의 모델이면 `openai_compat`, OpenAI 면 `openai`, Claude 면 `anthropic`, Gemini 면 `gemini` 가 남는다.
+- 기록(`ai_invocations.provider`)에는 서버 곁의 모델이면 `openai_compat`, OpenAI 면 `openai`, Claude 면 `anthropic`, Gemini 면 `gemini`, Z.ai 면 `zai` 가 남는다.
 - **Claude**(`app/ai/anthropic.py`, Anthropic Messages API 를 SDK 없이 부른다). 시스템 지시는 맨 위의 `system` 칸에 이어 붙여 싣는다. 머리는 `Authorization: Bearer`, `anthropic-version: 2023-06-01`.
   - 생각을 켜고 끄는 법이 모델마다 달라 모델 목록의 `reasoning_style` 대로 보낸다. 서술은 생각을 꺼서 부른다.
 
@@ -1562,8 +1565,19 @@ GEMINI_BASE_URL=https://generativelanguage.googleapis.com
   - 생각의 요약은 달라고 하지 않는다. 생각의 조각(`thought: true`)이 와도 읽지 않는다.
   - 토큰 수: `promptTokenCount` 에는 캐시(`cachedContentTokenCount`)가 들어 있어 그대로 쓴다. `candidatesTokenCount` 에는 생각(`thoughtsTokenCount`)이 빠져 있어 더한다. 생각의 수는 `reasoning_tokens` 에 남는다. `MAX_TOKENS` 면 잘린 것이다. 보낸 글이 막히면(`promptFeedback.blockReason`) 글 없이 끝나고 그 까닭이 멈춘 이유로 남는다.
   - 온도: Gemini 3 부터는 기본값을 바꾸지 말라고 권한다. 모델 목록의 `--no-temperature`.
+- **Z.ai**(GLM). OpenAI 와 같은 모양이라 OpenAI 의 provider(`app/ai/openai_compat.py`)로 부른다. 주소와 키와 받는 칸만 다르다. 출력 상한의 칸은 `max_tokens` 로 정해져 있어 적지 않는다.
+  - 생각은 `reasoning_effort` 가 아니라 `thinking` 칸으로 켜고 끈다. 모델 목록의 `reasoning_style`:
+
+    | 방식 | 모델(2026-10 문서) | 끌 때 | 켤 때 |
+    | --- | --- | --- | --- |
+    | `thinking_type` | GLM-4.7, 4.7-Flash, 4.6, 5.1, 5.2 | `{"type": "disabled"}` | `{"type": "enabled"}`, 출력 상한에 그 깊이의 몫을 더한다 |
+    | `always` | GLM-5.3, 5.3-Flash | 끌 수 없다. 칸을 보내지 않고(`disabled` 를 보내면 400) 출력 상한에 생각의 몫(1,024)을 더한다 | 같다 |
+
+  - 사용자의 글이 국외(싱가포르)에서 처리된다. 파는 모델로 열기 전에 국외 이전을 안내한다.
+  - 무료 모델(`glm-4-7-flash`, 동시에 1개만 부른다)은 시험용이다. 모델 목록에만 넣고 결제 서버의 가격표에는 올리지 않는다. 결제 서버가 있는 서버에서는 고를 수 있는 모델에 나오지 않고, 결제 서버 없이 도는 로컬에서만 고를 수 있다.
+  - 같은 모양의 창구(Kimi, 다른 나라에서 띄운 공개 모델 등)를 더할 때는 창구의 이름(마이그레이션), 주소와 키의 설정, 라우터의 칸 하나, 생각의 방식만 더하면 된다.
 - 장부 초안도 같은 것으로 고른다. 고르지 못하면 초안 없이 지나간다.
-- 키를 만들 때 OpenAI 의 Limits 화면에서 월 사용 한도를 낮게 걸어 둔다. Anthropic, Google 도 같다.
+- 키를 만들 때 OpenAI 의 Limits 화면에서 월 사용 한도를 낮게 걸어 둔다. Anthropic, Google, Z.ai 도 같다.
 
 **모델 하나 불러 보기.** 목록에 넣은 모델이 키와 날짜판으로 정말 불리는지 켜기 전에 본다. 짧은 장면 하나를 쓰게 하고 글, 토큰 수(캐시, 생각), 그날의 단가로 센 원가, 첫 글까지의 시간, 보낸 글자 수와 글자당 입력 토큰 수를 찍는다. 꺼진 모델도 부른다. 은퇴한 모델은 부르지 않는다. 실제로 부르므로 값이 든다.
 글자당 토큰 수는 입력 예산의 비율을 고칠 근거다. 짧은 예시는 역할의 머리 같은 고정 토큰이 커서 부풀어 보이니, 긴 한국어 글(UTF-8 파일)을 `--text-file` 로 보내 잰다. 그 파일은 저장소에 두지 않는다.
@@ -1914,9 +1928,9 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **이름표**는 영어 소문자, 숫자, 붙임표다(`gpt-6-luna`). 점은 쓰지 않는다. 결제 서버의 가격 코드(`narration.<이름표>.i0.o0`)에서 점이 칸을 나눈다. 48자까지다.
 - **이름표는 상품 이름이다**(API 모델 이름에서 날짜를 빼고 점을 붙임표로: `gpt-6-1-sol`, `claude-opus-5-5`). 이름표와 창구는 바꾸지 않는다.
 - **API 모델 이름에는 날짜가 붙은 이름(날짜판)을 적는다.** 별칭은 공급자가 말없이 다른 모델로 돌려 서술의 목소리가 바뀐다. 공급자가 새 날짜판을 내면 이름표와 값은 그대로 두고 날짜판만 `switch-snapshot` 으로 바꾼다. 바꾸면 기록이 남고 모델이 꺼진다. 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다. `update` 로는 날짜판을 바꾸지 못한다. 둘이 동시에 바꿔도 기록이 끊기지 않게 모델의 줄을 잠그고 바꾼다.
-- **창구**는 `openai`, `anthropic`, `gemini`, `local`(서버 곁의 Ollama, LM Studio)이다. 새 창구는 부르는 코드와 마이그레이션이 함께 있어야 한다.
+- **창구**는 `openai`, `anthropic`, `gemini`, `zai`(GLM), `local`(서버 곁의 Ollama, LM Studio)이다. 새 창구는 부르는 코드와 마이그레이션이 함께 있어야 한다.
 - **분류**(`basic`, `standard`, `premium`)는 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 정한다. 회사(`vendor`)가 그 안의 소분류다.
-- **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나, 생각을 켜고 끄는 방식(`reasoning_style`). 칸은 `openai`, `local` 창구만, 방식은 `anthropic`, `gemini` 창구만 적는다(`--reasoning-style`). 창구마다 받는 방식이 다르다.
+- **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나, 생각을 켜고 끄는 방식(`reasoning_style`). 칸은 `openai`, `local` 창구만, 방식은 `anthropic`, `gemini`, `zai` 창구만 적는다(`--reasoning-style`). 창구마다 받는 방식이 다르다.
 - **켜기**: 새로 넣은 모델은 꺼져 있다. 그날의 원가가 있고 은퇴하지 않았어야 켤 수 있다. 원가를 적고 평가 장면을 통과한 뒤에 켠다.
 - **그날의 단가**는 그날 이전에 시작한 것 중 가장 늦은 것이다. 같은 날이면 나중에 적은 것이다. 행사가가 끝나는 날의 값을 미리 적어 둘 수 있고, 잘못 적은 값은 같은 날로 다시 적어 고친다. 앞의 줄은 남는다.
 
@@ -1977,6 +1991,7 @@ uv run python -m scripts.models list
 uv run python -m scripts.models list --on 2026-12-01
 uv run python -m scripts.models show gpt-6-luna
 uv run python -m scripts.models add gpt-6-luna --provider openai --api-model-id <공식 문서의 날짜 붙은 이름> --name "GPT-6 Luna" --vendor openai --grade standard --token-field max_completion_tokens --reasoning
+uv run python -m scripts.models add glm-4-7-flash --provider zai --api-model-id glm-4.7-flash --name "GLM-4.7-Flash" --vendor zai --grade basic --reasoning-style thinking_type
 uv run python -m scripts.models add claude-opus-5-5 --provider anthropic --api-model-id <공식 문서의 이름> --name "Claude Opus 5.5" --vendor anthropic --grade premium --reasoning --no-temperature --reasoning-style always
 uv run python -m scripts.models set-cost gpt-6-luna --input 0.1 --output 0.5 --from 2026-10-17
 uv run python -m scripts.models set-cost gpt-5-6-sol --input 5 --output 30 --from 2026-11-21 --note "행사가 끝남"
