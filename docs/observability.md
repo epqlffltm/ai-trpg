@@ -266,7 +266,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 
 프록시는 요청마다 한 줄을 남긴다. 칸은 공통 칸과 `request_id`, `operation`(`http.request`), `method`, `status_code`, `duration_ms`, `result` 에 `upstream` 이 더해진다.
 
-- `upstream` 은 요청을 보낸 서버의 이름이다(`auth`, `game`, `board`, `billing`). 프록시가 직접 답한 것(막은 주소의 404)은 `proxy` 다.
+- `upstream` 은 요청을 보낸 서버의 이름이다(`auth`, `game`, `board`, `billing`, `notification`). 프록시가 직접 답한 것(막은 주소의 404)은 `proxy` 다.
   요청 수 제한의 429 는 그 서버의 이름이 실린다. 어느 서버로 가던 요청이 막혔는지 보인다.
 - **경로를 적지 않는다.** 프록시는 주소의 틀(`route`)을 모른다. 실제 경로에는 사용자와 테이블의 번호가 들어 있다. 틀은 서버의 줄에 있다.
 - `status_code` 는 클라이언트가 받은 값이다. 서버에 닿지 못했으면 502, 서버가 늦으면 504 이고 `level` 은 `error` 다.
@@ -473,7 +473,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 
 - **compose 의 healthcheck 는 `/health/ready` 를 부른다.** 그래서 `healthy` 는 "DB 에 닿는다"는 뜻이다. DB 가 죽으면 서버가 `unhealthy` 로 보인다.
   Docker 는 `unhealthy` 를 보고 재시작하지 않고, 서버의 `healthy` 를 기다리는 서비스도 없다. DB 가 돌아오면 다음 확인에서 `healthy` 로 돌아온다.
-  CI 의 스택 확인(`.github/scripts/stack-smoke.sh`)도 네 서버의 레디를 본다.
+  CI 의 스택 확인(`.github/scripts/stack-smoke.sh`)도 모든 서버의 레디를 본다.
 - **확인하는 쪽은 healthcheck 의 `timeout`(5초)이 묶는다.** 서버의 레디가 답하지 않아도 5초가 지나면 실패로 센다.
   서버 쪽의 시간 제한은 그보다 짧게(3초) 두어 503 으로 답하게 한다. 결제(Go 의 context)와 게시판(쿼리와 타이머의 경주)이 그렇다.
 - **인증 서버에는 서버 쪽의 전체 제한이 없다.** 동기 Django(psycopg)에는 쿼리 하나만 시간으로 끊는 장치가 없다.

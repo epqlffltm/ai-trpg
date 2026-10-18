@@ -158,9 +158,9 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 
 한 번도 충전하지 않았으면 잔액은 `{"paid":"0","free":"0","total":"0"}` 이다. 충전해 보는 방법은 [주문과 결제](#주문과-결제)에 있다.
 
-### compose 로 서버 넷과 함께 띄우기
+### compose 로 모든 서버와 함께 띄우기
 
-개발 중에는 위처럼 PC 에서 직접 띄운다. 서버 넷을 컨테이너로 함께 띄우는 방법은 [저장소의 README](../README.md)에 있다(`docker compose --profile app up -d --build`).
+개발 중에는 위처럼 PC 에서 직접 띄운다. 모든 서버를 컨테이너로 함께 띄우는 방법은 [저장소의 README](../README.md)에 있다(`docker compose --profile app up -d --build`).
 그때 결제 서버에 관해 다른 것만 적는다.
 
 - 같은 `billing-server/.env` 를 쓴다. 주소(DB, 인증 서버의 공개키)와 `HOST`, `PORT` 만 compose 가 덮어쓴다
@@ -1249,7 +1249,7 @@ DB 의 칸과 API 의 모양은 그대로다. 그래서 API 는 처음부터 양
 
 홀드와 주문에는 만료가 있다. 끝이 열린 채로 남은 것을 닫는 일과, 장부가 맞는지 보는 일은 서버와 따로 돈다.
 둘 다 서버와 같은 `.env` 를 읽는다. 포트, 공개키 주소, 서명의 비밀은 없어도 돈다([설정](#설정)).
-compose 로 띄우면 둘 다 저절로 돈다([compose 로 서버 넷과 함께 띄우기](#compose-로-서버-넷과-함께-띄우기)).
+compose 로 띄우면 둘 다 저절로 돈다([compose 로 모든 서버와 함께 띄우기](#compose-로-모든-서버와-함께-띄우기)).
 
 **정리 작업**(`cmd/sweeper`)은 계속 도는 프로세스다. 한 바퀴에 넷을 차례로 한다.
 

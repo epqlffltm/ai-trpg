@@ -37,6 +37,19 @@ uv run uvicorn app.main:app --port 8004 --reload
 `http://127.0.0.1:8004/health` 가 `{"status":"ok"}` 를 돌려주면 서버가 뜬 것이고,
 `http://127.0.0.1:8004/health/ready` 가 `{"status":"ok"}` 를 돌려주면 DB 까지 연결된 것이다.
 
+### compose 로 모든 서버와 함께 띄우기
+
+개발 중에는 위처럼 PC 에서 직접 띄운다. 모든 서버를 컨테이너로 함께 띄우는 방법은 [저장소의 README](../README.md#4-모든-서버를-컨테이너로-선택)에 있다(`docker compose --profile app up -d --build`).
+그때 알림 서버에 관해 다른 것만 적는다.
+
+- 같은 `notification-server/.env` 를 쓴다. 주소(DB, 인증 서버의 공개키)만 compose 가 덮어쓴다. 끊긴 세션 목록의 주소는 공개키 주소 옆이라 따로 적지 않는다
+- 테이블은 `notification-migrate` 가 서버보다 먼저 한 번 만든다. 마이그레이션에는 서명 비밀을 주지 않는다
+- 보관 기간이 지난 알림 지우기는 서버 안에서 돈다. 따로 띄울 워커나 cron 이 없다
+- 바깥 주소는 프록시 하나다. `http://127.0.0.1:8080/api/v1/notification/...`. 알림 서버의 포트(8004)는 열지 않는다
+- 서버끼리 부르는 `/api/v1/notification/service/` 는 프록시가 바깥에서 막는다(404). 알림을 넣는 서버는 프록시를 거치지 않고 컨테이너 이름(`notification-server:8004`)으로 부른다
+- `/health` 는 `/api/v1/` 밖이라 바깥에서 열리지 않는다. compose 의 healthcheck 가 컨테이너 안에서 `/health/ready` 를 부른다
+- 이미지(`Dockerfile`)는 게임 서버의 것과 같은 모양이다. root 가 아닌 사용자(번호 10001)로 돌고, `.env` 와 테스트는 넣지 않는다
+
 ## 설정
 
 환경 변수나 `notification-server/.env` 에서 읽는다.
