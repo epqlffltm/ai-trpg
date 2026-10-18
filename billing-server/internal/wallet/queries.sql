@@ -141,10 +141,13 @@ LIMIT 1;
 
 -- name: ListEntries :many
 -- 한 사용자의 원장을 최근 것부터 읽는다. before 보다 앞선(번호가 작은) 줄만 읽는다.
-SELECT id, operation_id, kind, reason, amount, order_id, hold_id, created_at
-FROM ledger_entries
-WHERE user_id = sqlc.arg(user_id) AND id < sqlc.arg(before)
-ORDER BY id DESC
+-- 홀드의 줄(hold, release)에는 그 홀드의 지금 상태(held, captured, released)를 붙인다(#430). 홀드의 줄이 아니면 NULL 이다.
+-- 확정은 원장에 줄을 남기지 않으므로, hold 줄만 보고는 아직 기다리는지 쓰였는지 알 수 없다.
+SELECT e.id, e.operation_id, e.kind, e.reason, e.amount, e.order_id, e.hold_id, e.created_at, h.status AS hold_status
+FROM ledger_entries e
+LEFT JOIN holds h ON h.id = e.hold_id
+WHERE e.user_id = sqlc.arg(user_id) AND e.id < sqlc.arg(before)
+ORDER BY e.id DESC
 LIMIT sqlc.arg(row_limit);
 
 -- name: ListUsersWithDueFreeGrants :many

@@ -320,6 +320,10 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `amount` | 늘었으면 양수, 줄었으면 음수 |
 | `order_id` | 이 크레딧이 들어온 주문. 주문으로 들어온 줄이 아니면 `null` |
 | `hold_id` | 이 줄을 남긴 홀드. 빠진 줄(`hold`)과 돌아온 줄(`release`)이 같은 값을 갖는다. 그 밖의 줄은 `null` |
+| `hold_status` | 그 홀드의 지금 상태(#430). `held`(서술의 결과를 기다림), `captured`(확정되어 그대로 쓰임), `released`(돌려줌. 같은 `hold_id` 의 `release` 줄이 있다). 홀드의 줄이 아니면 `null` |
+
+확정은 원장에 줄을 남기지 않는다([홀드](#홀드)). 그래서 `hold` 줄만으로는 아직 기다리는지 쓰였는지 알 수 없어, 읽을 때 그 홀드의 상태를 붙인다.
+읽은 순간의 값이다. 같은 줄도 나중에 읽으면 `held` 에서 `captured` 나 `released` 로 바뀌어 있을 수 있다.
 
 원장을 나눠 읽는 쿼리는 둘이다.
 
