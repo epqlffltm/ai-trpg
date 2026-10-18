@@ -337,7 +337,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
     """
     테이블을 참가자에게 보여 주는 응답으로 바꾼다. 여기 적은 칸만 나간다.
 
-    viewer_id 는 보는 사람이다. 초대 코드와 숨긴 퀘스트는 방장에게만 싣는다.
+    viewer_id 는 보는 사람이다. 초대 코드는 방장에게만 싣는다. 숨긴 퀘스트는 아무에게도 싣지 않는다.
     """
     snapshot = read_snapshot(table.content)
     catalog = items.catalog(snapshot)
@@ -354,7 +354,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         recommended_narration_style=snapshot.narration_style,
         pregens=to_pregen_choices(table, snapshot),
         items=to_catalog(catalog),
-        quests=[to_quest(quest, quest_catalog) for quest in quests.visible_quests(table, quest_catalog, viewer_id)],
+        quests=[to_quest(quest, quest_catalog) for quest in quests.visible_quests(table, quest_catalog)],
         map=to_map(table, snapshot),
         members=[to_member(table, member, catalog) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
@@ -617,11 +617,10 @@ async def change_quest(
     table_id: uuid.UUID, entry_id: uuid.UUID, data: QuestChange, user: CurrentUser, session: Session
 ) -> TableDetail:
     """
-    방장이 퀘스트의 상태를 바꾼다. 진행 중에만 된다. 판의 퀘스트(로어북의 사건 항목)만 된다.
+    방장이 진행 중인 퀘스트를 실패로 끝낸다. 진행 중인 테이블에서만 된다. 판의 드러난 퀘스트만 된다.
 
-    숨김 → 진행 중 / 성공 / 실패, 진행 중 → 성공 / 실패. 끝난 것은 409(quest_finished),
-    진행 중을 다시 진행 중으로는 409(quest_already_active). 숨김으로는 바꾸지 않는다(422).
-    성공이면 살아 있는 캐릭터마다 보상을 준다. 한 가지를 99 개까지 갖고, 넘는 만큼은 받지 않는다.
+    성공과 드러내기는 엔진이 판의 조건으로 정한다. 409(quest_success_by_engine, quest_reveal_by_engine).
+    끝난 것은 409(quest_finished). 숨긴 퀘스트는 없는 것과 같다(422). 숨김으로는 바꾸지 않는다(422).
     AI 는 퀘스트를 바꾸지 못한다. 모두에게 이벤트(quest_changed)가 간다.
     """
     table = await quest_changes.change_quest(session, user.user_id, table_id, entry_id, data.status)
