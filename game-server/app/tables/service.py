@@ -29,6 +29,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets import ratings
 from app.assets import service as assets
 from app.assets.models import Scenario, ScenarioVersion
 from app.assets.scenarios import repository as versions
@@ -45,7 +46,7 @@ from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
 from app.tables import monsters, npcs, places, quests, repository, sheets
-from app.tables.building import build_table, hash_table_password, new_invite_code, seat_limit
+from app.tables.building import build_table, hash_table_password, new_invite_code, require_rating
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
 from app.tables.model_choice import ModelChoice, choose_model
@@ -99,19 +100,19 @@ async def create_table(
     판의 시작 시각을 가리키는 게임 안의 시계를 함께 단다(app/calendar/).
 
     판이 없으면 AssetNotFoundError, 없는 스타팅이나 판이 허용하지 않는 캐릭터 방식을 골랐으면 TableOptionError,
+    성인용 판인데 성인용 내용을 볼 수 없는 사람이면 AdultContentRequiredError,
     그 판으로는 둘 수 없는 정원이면 TableConflictError.
     서술 모델을 정하지 못하면 TableOptionError(narration_model).
     """
     version = await resolve_version(session, viewer, data)
     snapshot = read_snapshot(version.snapshot)
+    require_rating(viewer, snapshot.rating)
 
     if data.opening_index >= len(snapshot.openings):
         raise TableOptionError('opening_index')
     modes = sheets.narrow_modes(snapshot.character_modes, data.character_modes)
     if modes is None:
         raise TableOptionError('character_modes')
-    if data.capacity > seat_limit(viewer, snapshot):
-        raise TableConflictError(Conflict.SOLO_ONLY)
     by_pregens = sheets.seats_by_pregens(snapshot, modes)
     if by_pregens is not None and data.capacity > by_pregens:
         raise TableConflictError(Conflict.PREGENS_TOO_FEW)
@@ -158,9 +159,9 @@ async def list_lobby(
 
     scenario_id 를 주면 그 시나리오로 열린 테이블만 돌려준다.
     """
-    ratings = listings.allowed_ratings(viewer)
-    tables = await repository.list_lobby(session, ratings, scenario_id, limit, offset)
-    total = await repository.count_lobby(session, ratings, scenario_id)
+    allowed = ratings.allowed_ratings(viewer)
+    tables = await repository.list_lobby(session, allowed, scenario_id, limit, offset)
+    total = await repository.count_lobby(session, allowed, scenario_id)
     return tables, total
 
 
@@ -200,15 +201,17 @@ async def join_table(session: AsyncSession, viewer: AccessClaims, data: JoinRequ
     """
     초대 코드로 테이블에 들어가 앉는다.
 
-    코드가 틀렸거나 볼 수 없는 등급의 테이블이면 TableNotFoundError.
+    코드가 틀렸으면 TableNotFoundError, 성인용 테이블인데 성인용 내용을 볼 수 없는 사람이면 AdultContentRequiredError.
+    코드를 받은 사람은 테이블이 있다는 것을 이미 알아서 숨기지 않는다. 화면이 본인인증으로 안내할 수 있게 까닭을 알린다.
     모집 중이 아니거나, 이미 앉아 있거나, 자리가 없으면 TableConflictError.
 
     비밀번호를 묻지 않는다. 초대 코드를 가진 사람은 방장이 직접 부른 사람이다.
     테이블을 잠그고 한다. 한 자리가 남았을 때 두 사람이 동시에 "자리가 있네"를 보고 둘 다 앉는 일을 막는다.
     """
     table = await repository.lock_table_by_invite_code(session, data.invite_code)
-    if table is None or table.rating not in listings.allowed_ratings(viewer):
+    if table is None:
         raise TableNotFoundError
+    require_rating(viewer, table.rating)
 
     take_seat(table, viewer.user_id)
     recorder.record(session, table, EventType.MEMBER_JOINED, actor_id=viewer.user_id, payload={'via': 'invite'})
@@ -229,7 +232,7 @@ async def join_public_table(
     비밀번호와 로비에 보이는지는 테이블을 만든 뒤로 바뀌지 않으므로, 잠그기 전에 봐도 낡은 값이 아니다.
     """
     table = await repository.find_table(session, table_id)
-    if table is None or not table.is_public or table.rating not in listings.allowed_ratings(viewer):
+    if table is None or not table.is_public or table.rating not in ratings.allowed_ratings(viewer):
         raise TableNotFoundError
     await guarded_password_check(table, viewer.user_id, data.password, limiting)
 

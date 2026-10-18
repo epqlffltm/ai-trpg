@@ -14,6 +14,10 @@ access 토큰의 수명을 짧게(15분) 잡는 이유다.
   - 인증 서버가 발급했는가(iss).
   - 이 서버에 쓰라고 발급됐는가(aud).
   - access 토큰인가. refresh 토큰도 같은 키로 서명되므로 종류를 따로 본다.
+
+성인용 내용을 볼 수 있는지(adult_content)도 토큰에서 읽는다(#59). 인증 서버가 본인인증의 생년월일로 정해 싣는다.
+그 값이 없는 토큰(본인인증 전, 그 값이 생기기 전에 발급된 토큰)은 볼 수 없는 것으로 본다. 거부하지는 않는다.
+운영자인지(roles 에 "operator")도 읽는다(#390, docs/architecture/operators.md). 없으면 일반 사용자다.
 """
 
 import uuid
@@ -35,6 +39,12 @@ REQUIRED_CLAIMS = ['exp', 'iss', 'aud', 'sub']
 
 # access 토큰의 token_type 값. 인증 서버(simplejwt)가 넣는다
 ACCESS_TOKEN_TYPE = 'access'
+
+# 성인용 내용을 볼 수 있는지가 적힌 칸의 이름. 인증 서버의 accounts/tokens.py 의 ADULT_CONTENT_CLAIM 과 같다
+ADULT_CONTENT_CLAIM = 'adult_content'
+# 역할의 목록이 적힌 칸과 운영자의 역할 이름. 인증 서버의 accounts/tokens.py 의 ROLES_CLAIM, accounts/roles.py 와 같다
+ROLES_CLAIM = 'roles'
+OPERATOR_ROLE = 'operator'
 
 # 서버끼리 시계가 조금 어긋나는 것을 봐주는 시간.
 # 0 이면 인증 서버의 시계가 1초만 빨라도 방금 발급한 토큰이 "아직 유효하지 않다"로 거부된다
@@ -59,6 +69,13 @@ class AccessClaims:
     # 토큰이 만료되는 시각(exp). 요청 하나는 검증한 순간에 끝나므로 볼 일이 없다.
     # 스트림처럼 오래 열려 있는 응답이 본다. 만료된 뒤에도 계속 보내면 로그아웃한 사람의 연결이 살아 있게 된다
     expires_at: datetime
+
+    # 성인용 내용을 볼 수 있는가(#59). 등급을 가르는 곳(app/listings/service.py 의 allowed_ratings)만 본다.
+    # 기본값은 볼 수 없음이다. 토큰을 거치지 않고 만든 값(테스트, 서버 안의 작업)이 성인용을 여는 일이 없게
+    adult_content: bool = False
+
+    # 운영자인가(#390). 성인 등급의 확인을 받지 않는다(allowed_ratings). 기본값은 아님이다(위와 같은 까닭)
+    is_operator: bool = False
 
 
 def read_key_id(token: str) -> str:
@@ -104,7 +121,32 @@ def build_access_claims(claims: dict) -> AccessClaims:
     except (ValueError, TypeError, AttributeError) as error:
         raise InvalidTokenError from error
     # exp 가 숫자라는 것은 decode_claims 가 이미 확인했다
-    return AccessClaims(user_id=user_id, expires_at=datetime.fromtimestamp(claims['exp'], UTC))
+    expires_at = datetime.fromtimestamp(claims['exp'], UTC)
+    return AccessClaims(
+        user_id=user_id,
+        expires_at=expires_at,
+        adult_content=read_adult_content(claims),
+        is_operator=read_is_operator(claims),
+    )
+
+
+def read_adult_content(claims: dict) -> bool:
+    """
+    토큰이 성인용 내용을 볼 수 있다고 적었는가. JSON 의 true 일 때만 그렇다.
+
+    없거나 다른 값("true" 같은 글자, 1)이면 볼 수 없다. 서명된 토큰이라도 모양이 틀린 값으로 성인용을 열지 않는다.
+    """
+    return claims.get(ADULT_CONTENT_CLAIM) is True
+
+
+def read_is_operator(claims: dict) -> bool:
+    """
+    토큰이 운영자라고 적었는가. 역할의 목록에 "operator" 가 정확히 있을 때만 그렇다.
+
+    목록이 아니면(글자 "operator" 하나, 객체) 운영자가 아니다. 모르는 역할은 무시한다.
+    """
+    roles = claims.get(ROLES_CLAIM)
+    return isinstance(roles, list) and OPERATOR_ROLE in roles
 
 
 async def verify_access_token(token: str, jwks: JwksCache, settings: Settings) -> AccessClaims:
