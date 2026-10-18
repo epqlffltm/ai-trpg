@@ -28,7 +28,9 @@ from app.tables.models import QuestStatus
 #                   자리는 not_listed 를 그대로 두고 드러난 퀘스트를 놓치게 했다(revealed_and_found 10/10, 일지를 적음)
 #   ledger-draft-4: -2 로 되돌린다. not_listed 는 남은 실패로 받아들인다. 서버가 통째로 버려 장부는 바뀌지 않는다
 #   ledger-draft-5: 퀘스트를 이룬 일(succeeded)을 넣지 않는다. 성공은 엔진이 조건을 보고 정한다(#367)
-DRAFT_PROMPT_VERSION = 'ledger-draft-5'
+#   ledger-draft-6: 숨긴 퀘스트가 드러난 일(active)도 넣지 않는다. 드러내기도 엔진이 조건을 보고 정한다.
+#                   목록에는 진행 중인 퀘스트만 있다. 숨긴 퀘스트는 방장에게도 보이지 않는다(#367)
+DRAFT_PROMPT_VERSION = 'ledger-draft-6'
 
 SYSTEM_TEXT = '\n'.join(
     [
@@ -38,18 +40,18 @@ SYSTEM_TEXT = '\n'.join(
         '보기만 한 것, 가지려 했지만 못 한 것, 쓴 것은 넣지 않는다.',
         '- 캐릭터끼리 물건을 건넨 것은 넣지 않는다. 일행이 이미 가진 물건이 옮겨 갔을 뿐이다. '
         '일행 밖에서 주운 물건을 다른 캐릭터에게 건넸으면 마지막에 가진 캐릭터 하나만 넣는다.',
-        '- quest_changes: 숨긴 퀘스트가 드러난 일(active), 놓친 일(failed). 이룬 일은 게임이 정하니 넣지 않는다.',
+        '- quest_changes: 진행 중인 퀘스트를 놓친 일(failed)만. 이룬 일과 새로 드러난 일은 게임이 정하니 넣지 않는다.',
         '- 아래 목록의 이름표(p1, i1, q1)만 쓴다. 목록에 없는 캐릭터, 물건, 퀘스트는 넣지 않는다.',
         '- 확실하지 않으면 넣지 않는다. 일어난 일이 없으면 두 목록을 비운다.',
         '- 이것은 초안이다. 방장이 확인한 뒤에야 기록이 된다.',
         '- JSON 객체 하나만 답한다. 설명을 붙이지 않는다.',
         '형식: {"found_items": [{"character": "p1", "item": "i1", "count": 1}], '
-        '"quest_changes": [{"quest": "q1", "status": "active"}]}',
+        '"quest_changes": [{"quest": "q1", "status": "failed"}]}',
     ]
 )
 
-# 퀘스트의 상태를 모델에게 보일 말. 끝난 퀘스트는 목록에 없다
-STATUS_WORDS = {QuestStatus.HIDDEN: '숨김', QuestStatus.ACTIVE: '진행 중'}
+# 퀘스트의 상태를 모델에게 보일 말. 진행 중인 퀘스트만 목록에 있다
+STATUS_WORDS = {QuestStatus.ACTIVE: '진행 중'}
 
 # 목록이 비었을 때 적는 말
 EMPTY_LIST = '(없음)'

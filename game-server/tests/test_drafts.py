@@ -55,13 +55,13 @@ MINE = uuid.UUID('cccccccc-0000-4000-8000-000000000003')
 
 SCENE = '기사는 상자에서 치유 물약 둘을 꺼냈다. 왕녀가 감옥에서 풀려났다.'
 
-# 기사 하나, 물약 하나, 퀘스트 둘(진행 중인 왕녀 구출, 숨긴 광산의 비밀)
+# 기사 하나, 물약 하나, 퀘스트 둘(진행 중인 왕녀 구출, 광산의 비밀). 숨긴 퀘스트는 목록에 없다(ledger-draft-6)
 CONTEXT = DraftContext(
     characters={'p1': CharacterChoice('p1', KNIGHT, '기사')},
     items={'i1': ItemChoice('i1', POTION, '치유 물약')},
     quests={
         'q1': QuestChoice('q1', RESCUE, '왕녀 구출', QuestStatus.ACTIVE),
-        'q2': QuestChoice('q2', MINE, '광산의 비밀', QuestStatus.HIDDEN),
+        'q2': QuestChoice('q2', MINE, '광산의 비밀', QuestStatus.ACTIVE),
     },
 )
 
@@ -142,27 +142,20 @@ def test_drafts_within_the_lists_are_accepted():
     assert checked.rejected == []
 
 
-def test_a_hidden_quest_may_be_drafted_as_revealed():
-    output = DraftOutput.model_validate({'quest_changes': [{'quest': 'q2', 'status': 'active'}]})
-
-    assert check_output(output, CONTEXT).quests == [
-        QuestDraft(MINE, '광산의 비밀', QuestStatus.HIDDEN, QuestStatus.ACTIVE)
-    ]
-
-
 @pytest.mark.parametrize(
     ('document', 'rejected'),
     [
         ({'found_items': [{'character': 'p2', 'item': 'i1', 'count': 1}]}, Rejected('found_item', 'unknown_character')),
         ({'found_items': [{'character': 'p1', 'item': 'i9', 'count': 1}]}, Rejected('found_item', 'unknown_item')),
         ({'quest_changes': [{'quest': 'q7', 'status': 'failed'}]}, Rejected('quest_change', 'unknown_quest')),
-        ({'quest_changes': [{'quest': 'q1', 'status': 'active'}]}, Rejected('quest_change', 'quest_already_active')),
+        # 드러내기도 엔진이 조건을 보고 정한다(ledger-draft-6, #367)
+        ({'quest_changes': [{'quest': 'q1', 'status': 'active'}]}, Rejected('quest_change', 'quest_reveal_by_engine')),
         (
             {'quest_changes': [{'quest': 'q1', 'status': 'succeeded'}]},
             Rejected('quest_change', 'quest_success_by_engine'),
         ),
     ],
-    ids=['made-up-character', 'made-up-item', 'made-up-quest', 'already-active', 'success-is-for-the-engine'],
+    ids=['made-up-character', 'made-up-item', 'made-up-quest', 'reveal-is-for-the-engine', 'success-is-for-the-engine'],
 )
 def test_drafts_outside_the_rules_are_rejected_with_a_reason(document: dict, rejected: Rejected):
     checked = check_output(DraftOutput.model_validate(document), CONTEXT)
@@ -176,13 +169,13 @@ def test_the_same_draft_twice_keeps_the_first():
             {'character': 'p1', 'item': 'i1', 'count': 2},
             {'character': 'p1', 'item': 'i1', 'count': 5},
         ],
-        'quest_changes': [{'quest': 'q2', 'status': 'active'}, {'quest': 'q2', 'status': 'failed'}],
+        'quest_changes': [{'quest': 'q2', 'status': 'failed'}, {'quest': 'q2', 'status': 'failed'}],
     }
 
     checked = check_output(DraftOutput.model_validate(document), CONTEXT)
 
     assert [item.count for item in checked.items] == [2]
-    assert [quest.status for quest in checked.quests] == [QuestStatus.ACTIVE]
+    assert [quest.entry_id for quest in checked.quests] == [MINE]
     assert checked.rejected == [Rejected('found_item', 'duplicate'), Rejected('quest_change', 'duplicate')]
 
 
@@ -227,11 +220,8 @@ async def test_the_lists_come_from_the_table(
 
     assert characters == [('p1', '기사'), ('p2', '약사')]
     assert things == [('i1', '치유 물약'), ('i2', '밧줄')]
-    assert quests == [
-        ('q1', '왕녀 구출', QuestStatus.ACTIVE),
-        ('q2', '광산의 비밀', QuestStatus.HIDDEN),
-        ('q3', '배신자', QuestStatus.HIDDEN),
-    ]
+    # 숨긴 광산의 비밀과 배신자는 없다. 초안은 방장이 보므로 숨긴 퀘스트의 이름이 새면 안 된다
+    assert quests == [('q1', '왕녀 구출', QuestStatus.ACTIVE)]
 
 
 async def test_the_dead_and_the_finished_are_left_out(
@@ -247,7 +237,8 @@ async def test_the_dead_and_the_finished_are_left_out(
     # 이름표는 남은 것끼리 다시 붙는다
     assert characters == [('p1', '기사')]
     assert context.characters['p1'].user_id == ME
-    assert quests == [('q1', '광산의 비밀', QuestStatus.HIDDEN), ('q2', '배신자', QuestStatus.HIDDEN)]
+    # 끝난 왕녀 구출도 빠졌다. 남은 것은 숨긴 것뿐이라 퀘스트 목록이 비었다
+    assert quests == []
 
 
 @pytest.mark.parametrize(
@@ -283,7 +274,8 @@ def test_the_rules_keep_items_passed_between_characters_out():
 def test_the_place_for_unlisted_items_is_gone_again():
     # ledger-draft-4: -3 의 자리(unlisted_items)는 드러난 퀘스트를 놓치게 해서 뺐다. 그 칸이 오면 모양이 틀린 답이다
     # ledger-draft-5: 이룬 일(succeeded)은 엔진이 정한다
-    assert DRAFT_PROMPT_VERSION == 'ledger-draft-5'
+    # ledger-draft-6: 드러난 일(active)도 엔진이 정한다
+    assert DRAFT_PROMPT_VERSION == 'ledger-draft-6'
     assert 'unlisted_items' not in SYSTEM_TEXT
     with pytest.raises(OutputError) as raised:
         read_output('{"found_items": [], "unlisted_items": ["녹슨 장검"]}')
@@ -303,7 +295,7 @@ def test_the_message_lists_the_choices_and_the_scene():
             '- i1: 치유 물약',
             '[퀘스트]',
             '- q1: 왕녀 구출 (진행 중)',
-            '- q2: 광산의 비밀 (숨김)',
+            '- q2: 광산의 비밀 (진행 중)',
             '',
             '[장면]',
             SCENE,
