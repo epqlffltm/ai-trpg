@@ -1,9 +1,9 @@
 # 화면 명세
 
 사용자 화면과 관리자 화면을 만들기 전에, 무엇이 필요한지를 한곳에 정리하는 문서다.
-디자인 도구에 시안을 맡기기 전에 이 문서의 칸을 채우는 것이 목적이다. 화면별 명세는 B1~B8, B10 을 채웠다(아래 [화면별 명세](#화면별-명세)).
+디자인 도구에 시안을 맡기기 전에 이 문서의 칸을 채우는 것이 목적이다. 화면별 명세는 B1~B10 을 채웠다(아래 [화면별 명세](#화면별-명세)).
 
-- 기준: `main` `6402c5d` (2026-10-18). B1~B8, B10 의 서버 쪽 값은 이 시점의 `game-server` 에서 읽었다
+- 기준: `main` `688b044` (2026-10-18). B1~B10 의 서버 쪽 값은 이 시점의 `game-server` 에서 읽었다
 - 서버의 API 가 **있는지**를 화면마다 적는다. "있음"은 지금 서버가 그 기능을 갖췄다는 뜻이고, 화면의 완성 여부와는 별개다.
 - 서비스 구조는 [서비스 구조 명세](../architecture/services.md), 제품 방향은 [플랫폼과 제품 방향](platform.md).
 
@@ -721,6 +721,116 @@
 - 골드·실버 잔액은 게임 서버 응답에 없다. 고르는 창에서 "내 골드로 몇 라운드"를 보이려면 결제 서버의 지갑(A6)을 따로 읽는다. 읽을지, 라운드를 열 때 거절을 기다릴지 정한다.
 - 모델의 소개글(어떤 문체인지, 빠른지)과 평가 결과를 보이는 칸은 서버에 없다. 이름과 묶음(`grade`)만 있다.
 - 시나리오가 추천한 모델과 방장이 고른 모델이 다를 때 알림(`recommended_model` 이 이벤트에 실려 온다)을 어디에 어떻게 보일지.
+
+### B9 제작 도구
+
+**1. 목적과 경로**
+
+제작자가 재료(세계관, 룰북, 로어북, 몬스터 모음)를 만들고, 그것을 모아 시나리오를 조립하고, 게시해서 공개한다.
+
+- 오는 경로: 마이페이지(A5) 또는 탐색(B1)의 "만들기".
+- 나가는 길: 공개하면 B2 시나리오 소개에 나타난다.
+- 일이 길고 칸이 많다. 한 화면이 아니라 **재료 목록 → 재료 편집 → 시나리오 조립 → 게시와 공개**의 흐름이다.
+
+**2. 보여 주는 정보와 출처**
+
+모두 만든 사람 자신의 것만 읽고 쓴다. 남의 자산은 있어도 404(없는 것)이고, 다른 사람의 자산을 가리키면 422다.
+
+| 재료 | 경로 | 칸 | 비고 |
+| --- | --- | --- | --- |
+| 세계관 | `/worlds` | `title`, `description`, `setting`(8000 자), `gm_notes`(4000 자) | `gm_notes` 는 GM 전용이라 테이블 참가자에게 가지 않는다 |
+| 룰북 | `/rulebooks` | `title`, `description`, `gm_guide`(4000 자), `template` | 규칙(`rules`)을 직접 받지 않는다. 템플릿 이름만 고르고 규칙은 서버가 채운다. 응답에는 `rules` 가 있다 |
+| 로어북 | `/lorebooks`, `/lorebooks/{id}/entries` | 로어북은 `title`, `description`. 항목은 `name`, `keywords`, `content`, `kind`, `true_names` | 항목의 종류(`kind`)는 `person`, `place`, `item`, `faction`, `species`, `legend`, `event`, `other` 다. 기본은 `other` |
+| 몬스터 모음 | `/bestiaries`, `/bestiaries/{id}/monsters` | 모음은 `title`, `description`. 몬스터는 `name`, `content`, `kind`, `unique` | `unique` 는 판 전체에서 한 마리만 두는 네임드다 |
+| 시나리오 | `/scenarios` | 아래 | |
+
+공통:
+
+- 제목은 앞뒤 공백을 떼고 1~100 자, 소개는 1000 자까지다.
+- 목록은 `GET /worlds` 처럼 종류마다 있고, 쪽은 `limit`(기본 20, 최대 100)과 `offset`, 응답은 `items`, `total` 이다. 목록은 긴 글을 싣지 않는다. 열어야 긴 글이 온다.
+- 지금 `visibility` 는 `private` 하나뿐이다. 재료는 공개하지 않는다.
+- 재료는 등급을 가리지 않는다. 등급(`all`, `adult`)은 시나리오를 조립할 때 정한다.
+- 모르는 칸이 오면 거부한다(`extra='forbid'`). 보낸 칸만 바뀐다(`PATCH`). 글을 비우려면 빈 문자열을 보낸다.
+
+시나리오(`POST /scenarios`)는 **제목, 추천 서술 모델(`narration_model`)만 필수**이고 나머지는 비워 두고 임시 저장할 수 있다. 칸의 묶음과 한도:
+
+| 묶음 | 칸 | 한도 |
+| --- | --- | --- |
+| 재료 연결 | `rulebook_id`, `world_id`, `lorebook_ids`, `bestiary_ids` | 로어북 10, 몬스터 모음 10 |
+| 스타팅 | `openings` | 5 개, 하나에 2000 자 |
+| 인원과 캐릭터 | `recommended_players`, `character_modes`, `pregens`, `default_sheet`, `player_made_hp`, `reroll_allowed` | 추천 인원 1~4, 프리젠 8 |
+| 인물·물건·퀘스트 | `npc_sheets`, `items`, `starting_items`, `quests` | 인물 시트 100, 물건 규칙 100, 시작 물건 20, 퀘스트 50(조건은 퀘스트마다 5) |
+| 지도 | `start_place`, `routes`, `landmarks` | 길 200, 명소 100 |
+| 몬스터 배치 | `monster_sheets`, `encounters` | 몬스터 시트 100, 조우 50 |
+| 서술 | `narration_style`, `narration_model`, `clock` | 문체는 안 보내면 정통. 시계는 안 보내면 1일째 8시, 한 라운드에 10분 |
+| 등급 | `rating` | 안 보내면 `all`. 성인용은 직접 골라야 한다 |
+
+**3. 할 수 있는 행동**
+
+| 행동 | 호출 | 동작 |
+| --- | --- | --- |
+| 재료 만들기·고치기·지우기 | 종류마다 `POST`, `PATCH`, `DELETE` | 지우기는 204 |
+| 로어북 항목, 몬스터 추가·고치기·지우기 | `/lorebooks/{id}/entries`, `/bestiaries/{id}/monsters` | 모음 안의 낱개를 다룬다 |
+| 시나리오 조립 | `POST`, `PATCH /scenarios/{id}` | 임시 저장. 고칠 때 룰북·세계관·시트·시작 장소는 `null` 로 떼고, 로어북은 목록을 통째로 바꾼다 |
+| 게시 | `POST /scenarios/{id}/versions` `{note}` | 지금의 초안이 새 판으로 굳는다. `note` 는 변경 내용(500 자까지), 비워도 된다 |
+| 판 보기 | `GET /scenarios/{id}/versions`, `.../versions/{n}` | 판 목록과, 굳힌 내용이 담긴 판 하나 |
+| 소개 페이지 쓰기 | `GET`, `PATCH /scenarios/{id}/listing` | 한 줄 소개(100 자), 소개글(5000 자), 장르(3 개까지), 태그(10 개까지, 하나에 20 자). 판을 새로 내지 않아도 고칠 수 있다 |
+| 공개·내리기 | `PUT /scenarios/{id}/listing/publication` `{version}` | 공개할 판의 번호. `null` 이면 공개를 내린다. 시나리오 하나에 공개 판은 하나다 |
+
+**4. 버튼이 비활성인 조건**
+
+| 상황 | 서버의 답 | 화면의 처리 |
+| --- | --- | --- |
+| 게시할 조건이 모자람 | 409 `{detail, problems[]}` | `problems` 는 갖추지 못한 조건 **전부**다. 하나씩 고치고 다시 시도하지 않게 한 번에 준다. 화면이 칸을 짚어 보인다(아래 표) |
+| 공개할 조건이 모자람 | 409 `{detail, problems[]}` | 같은 모양이다 |
+| 다른 자산이 쓰는 재료를 지움 | 409 `{detail, used_by[{id, title}]}` | 쓰는 시나리오의 목록을 보이고 거기서 떼어 낸 뒤 다시 지우게 한다 |
+| 가리키는 재료가 없음(남의 것 포함) | 422 | 어느 칸(`field`)인지 보이고 다시 고르게 한다 |
+| 성인 인증 전에 성인용으로 올림 | 403 `code: adult_content_required` | 본인인증(A3)으로 안내한다 |
+| 서술 모델이 서비스 중이 아님 | 422 `{field: narration_model, reason: not_offered 또는 missing}` | 모델을 다시 고르게 한다(B8) |
+
+게시할 때 `problems` 로 올 수 있는 조건(이름표)과 짚을 칸:
+
+| 칸 | 이름표 |
+| --- | --- |
+| 룰북, 스타팅 | `rulebook_missing`, `opening_missing` |
+| 프리젠, 기본 시트 | `pregen_sheet_missing`, `pregen_sheet_invalid`, `pregens_too_few`, `default_sheet_missing`, `default_sheet_invalid` |
+| 직접 정하는 방식 | `player_made_hp_missing`, `point_buy_missing`, `score_roll_missing` |
+| 인물 시트 | `npc_sheet_entry_missing`, `npc_sheet_not_person`, `npc_sheet_invalid`, `default_npc_sheet_missing`, `default_npc_sheet_invalid` |
+| 물건 | `item_entry_missing`, `item_not_item`, `item_magnitude_missing` |
+| 퀘스트 | `quest_entry_missing`, `quest_not_event`, `quest_condition_missing`, `quest_condition_invalid`, `quest_condition_impossible` |
+| 지도 | `map_place_missing`, `map_not_place`, `map_start_missing`, `route_find_invalid` |
+| 몬스터, 조우 | `monster_sheet_missing`, `monster_sheet_invalid`, `monster_attack_invalid`, `unique_monster_repeated`, `encounter_place_missing`, `encounter_not_place`, `encounter_monster_missing`, `encounter_map_missing` |
+
+**5. 상태**
+
+| 상황 | 서버의 답 | 화면의 처리 |
+| --- | --- | --- |
+| 로딩, 빈 목록 | | 처음 만드는 사람에게는 "첫 재료 만들기"를 안내한다 |
+| 임시 저장 | 200 | 필수 두 칸(제목, 추천 서술 모델)만 있으면 저장된다. 게시 전에는 비어 있어도 된다 |
+| 게시 직후 | 201 | 판의 로어북 항목은 뒤에서 벡터로 바뀐다. 응답은 그것을 기다리지 않는다. 바뀌는 중인지 알리는 칸은 없다(확인할 것) |
+| 공개하지 않은 소개 페이지 | `version: null` | 미리 써 둘 수 있다. 공개하기 전에는 아무에게도 보이지 않는다 |
+| 권한 없음, 없는 자산 | 404 | 목록으로 돌아가는 길 |
+
+**6. PC 와 모바일**
+
+초안이다.
+
+- PC: 왼쪽에 재료 종류 목록, 가운데 편집, 오른쪽에 "게시 조건" 점검 패널. 시나리오는 칸이 많아 묶음(위의 표)마다 접는 섹션으로 둔다.
+- 모바일: 편집은 읽기와 간단한 고치기까지만 두고, 긴 조립은 PC 를 권한다. 이 선택 자체를 정해야 한다(확인할 것).
+
+**7. 첫 출시**
+
+이후다([첫 출시의 범위](#첫-출시의-범위)). 다만 첫 출시의 B1~B8 은 공개된 시나리오가 있어야 하므로, 첫 시나리오는 이 화면 없이 넣어야 한다(아래 확인할 것).
+
+**확인할 것**
+
+- **B9 가 이후라면 첫 시나리오를 누가 어떻게 넣는지 정해야 한다.** 서버의 경로로 직접 넣을 수는 있다. 운영자가 스크립트로 넣을지, 제작자 몇 명에게만 이 화면을 열어 줄지 정한다.
+- **게시 조건을 미리 알 길이 없다.** `problems` 는 게시를 시도해야 온다. 시나리오를 저장할 때 같은 검사를 돌려 주는 경로(드라이 런)가 있으면 화면이 실시간으로 점검 패널을 보일 수 있다. 서버에 더할지 정한다.
+- 판의 로어북 색인(벡터)이 끝났는지 알려 주는 칸이 없다. 게시 직후 바로 테이블을 열었을 때 서술에 로어가 반영되는지의 기준이 필요하다.
+- 시트, 길, 퀘스트, 조우의 모양이 크다. 화면이 이 칸들을 폼으로 짜는 데 필요한 응답 모양(`Sheet`, `RouteRule`, `QuestRule`, `Encounter`, `ItemRule`)은 이 문서에 옮기지 않았다. B9 를 시안으로 넘기기 전에 서버의 `app/assets/scenarios/schemas.py` 에서 칸마다 옮긴다.
+- 몬스터 `kind` 의 값 목록, 룰북 `template` 의 선택지를 화면이 어디서 읽는지(응답에 목록이 있는지)는 확인하지 못했다.
+- 재료를 공개해서 다른 제작자가 쓰게 하는 길이 없다(`visibility` 가 `private` 하나). 제품에서 약속하는지 정한다.
+- 모바일에서 어디까지 편집하게 할지.
 
 ### B10 라운드 기록·되돌리기
 
