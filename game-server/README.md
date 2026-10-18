@@ -2766,11 +2766,7 @@ uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_bac
 
 ## 운영자 API
 
-<<<<<<< HEAD
-운영자가 남의 테이블과 시나리오를 본다(#391). 규칙의 원본은 [운영자 권한](../docs/architecture/operators.md)이다. 읽기만 한다. 제재는 #392 다.
-=======
 운영자가 남의 테이블과 시나리오를 보고(#391) 제재한다(#392). 규칙의 원본은 [운영자 권한](../docs/architecture/operators.md)이다.
->>>>>>> origin/main
 
 - 운영자는 access 토큰의 `roles` 에 `"operator"` 가 있는 사람이다(인증 서버의 그룹 `operators`, #389). 아니면 모든 주소가 404 다. 앉은 사람, 만든 사람도 그렇다.
 - 모든 주소가 쿼리의 `reason`(1~200자, 공백만은 안 됨)을 받는다. 없으면 422 다. 신고 번호나 짧은 글을 적는다.
@@ -2787,8 +2783,6 @@ uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_bac
 
 아직 없는 것: 장부 초안, 라운드의 기억, 초안이 가리키는 재료(룰북, 세계관, 로어북), AI 호출 기록.
 
-<<<<<<< HEAD
-=======
 **제재(#392).** 본문으로 사유를 받는다(`{"reason": "신고 #7"}`, 앞뒤 공백을 떼고 1~200자). 규칙의 원본은 [운영자 권한의 제재](../docs/architecture/operators.md#제재)다.
 
 | 메서드 | 주소 | 무엇을 | 답 |
@@ -2803,7 +2797,6 @@ uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_bac
 - 제재는 `operator_actions`(덧붙이기만, 트리거)에 제재와 한 트랜잭션으로 남는다. 상태는 `scenario_sanctions`(제재된 판), `publishing_bans`(사람마다 한 줄, 풀면 `lifted_at`)에 있다.
 - 사용자 정지는 게임 서버에 없다. 인증 서버의 명령으로 한다.
 
->>>>>>> origin/main
 **감사 기록(`operator_reads`).** 볼 때마다 한 줄이 남는다. 운영자(`operator_id`), 시각(`read_at`), 무엇(`target_kind`, `target_id`, 판이면 `target_number`), 사유(`reason`), `request_id`.
 
 - **먼저 적고 커밋한 뒤에 읽는다.** 없는 테이블을 본 시도도 남는다. 무엇을 보려 했는지가 기록의 목적이다.
