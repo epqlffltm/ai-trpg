@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # .github/scripts/stack-smoke.sh
 #
-# compose 로 서버 넷을 컨테이너로 띄워 보고 확인한다. 관문 워크플로(.github/workflows/ci.yml 의 stack)가 부른다.
+# compose 로 모든 서버를 컨테이너로 띄워 보고 확인한다. 관문 워크플로(.github/workflows/ci.yml 의 stack)가 부른다.
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
-#     prepare      설정 파일(.env 다섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
-#     up           이미지를 만들고 띄운 뒤, 서버 넷과 프록시, 상태 확인이 있는 워커가 healthy 가 될 때까지 기다린다.
+#     prepare      설정 파일(.env 여섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
+#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, 상태 확인이 있는 워커가 healthy 가 될 때까지 기다린다.
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
 #                  DB 의 백업은 최근 백업 파일이 있으면 healthy 다
@@ -27,9 +27,9 @@
 
 set -euo pipefail
 
-SERVERS=(auth game board billing)
+SERVERS=(auth game board billing notification)
 # 서버마다 컨테이너 안에서 듣는 포트
-declare -A PORTS=([auth]=8000 [game]=8001 [board]=8002 [billing]=8003)
+declare -A PORTS=([auth]=8000 [game]=8001 [board]=8002 [billing]=8003 [notification]=8004)
 # 계속 도는 워커와 주기 명령의 컨테이너
 WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron db-backup)
 # 그 가운데 상태 확인이 있는 워커. 심장박동(docker-compose.yml 의 x-worker-heartbeat)을 보거나, DB 의 백업은 최근 백업 파일을 본다
@@ -65,18 +65,21 @@ write_new() {
   cat > "$path"
 }
 
-# 다섯 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
-# 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버)
+# 여섯 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
+# 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버, 알림 서버와 게임 서버).
+# 알림 서버의 결제·게시판 서명 비밀은 아직 넣는 쪽이 없어 알림 서버에만 적는다
 write_env_files() {
-  local game_secret auth_secret
+  local game_secret auth_secret notify_secret
   game_secret="$(throwaway)"
   auth_secret="$(throwaway)"
+  notify_secret="$(throwaway)"
   write_new .env <<EOF
 POSTGRES_PASSWORD=$(throwaway)
 AUTH_DB_PASSWORD=$(throwaway)
 GAME_DB_PASSWORD=$(throwaway)
 BILLING_DB_PASSWORD=$(throwaway)
 BOARD_DB_PASSWORD=$(throwaway)
+NOTIFICATION_DB_PASSWORD=$(throwaway)
 EOF
   write_new auth-server/.env <<EOF
 SECRET_KEY=$(throwaway)
@@ -84,6 +87,7 @@ BILLING_SECRET=$auth_secret
 EOF
   write_new game-server/.env <<EOF
 BILLING_SECRET=$game_secret
+NOTIFICATION_SECRET=$notify_secret
 EOF
   write_new board-server/.env < /dev/null
   write_new billing-server/.env <<EOF
@@ -91,10 +95,15 @@ PG_WEBHOOK_SECRET=$(throwaway)
 GAME_SERVER_SECRET=$game_secret
 AUTH_SERVER_SECRET=$auth_secret
 EOF
+  write_new notification-server/.env <<EOF
+GAME_SERVER_SECRET=$notify_secret
+BILLING_SERVER_SECRET=$(throwaway)
+BOARD_SERVER_SECRET=$(throwaway)
+EOF
 }
 
 # JWT 개인키를 만든다. 주인만 읽게 두고 주인을 컨테이너의 사용자로 바꾼다.
-# 리눅스에서 키 폴더를 컨테이너에 붙일 때 해야 하는 일과 같다(README 의 "서버 넷을 컨테이너로")
+# 리눅스에서 키 폴더를 컨테이너에 붙일 때 해야 하는 일과 같다(README 의 "모든 서버를 컨테이너로")
 write_jwt_key() {
   local key=auth-server/keys/jwt-private.pem
   mkdir -p auth-server/keys
@@ -136,7 +145,7 @@ running() {
   [[ "$(docker inspect -f '{{.State.Running}}' "$(container_of "$1")")" == "true" ]]
 }
 
-# 서버 넷과 프록시, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
+# 서버들과 프록시, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
 wait_healthy() {
   local deadline=$((SECONDS + WAIT_SECONDS)) service pending
   while ((SECONDS < deadline)); do
@@ -149,7 +158,7 @@ wait_healthy() {
       [[ "$(health_of "$service")" == "healthy" ]] || pending=$((pending + 1))
     done
     if ((pending == 0)); then
-      echo "서버 넷과 프록시, 상태 확인이 있는 워커가 healthy 다"
+      echo "서버들과 프록시, 상태 확인이 있는 워커가 healthy 다"
       return 0
     fi
     sleep 3
@@ -227,13 +236,43 @@ limited_after() {
 reachable_from() {
   local service="$1" url="$2"
   case "$service" in
-    auth-server | game-server)
+    auth-server | game-server | notification-server)
       compose exec -T "$service" python -c "import urllib.request; urllib.request.urlopen('$url', timeout=5)" ;;
     board-server)
       compose exec -T "$service" node -e "fetch('$url').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" ;;
     billing-server)
       compose exec -T "$service" wget -q -O /dev/null "$url" ;;
   esac
+}
+
+# 게임 서버가 제 설정(NOTIFICATION_URL, NOTIFICATION_SECRET)으로 서명한 알림을 알림 서버가 받는가(201).
+# 닿기만 하고 서명이 어긋나면(두 .env 의 비밀이 다르다) 알림이 발송함에 쌓이기만 한다. 그것을 여기서 잡는다.
+# 받는 사람은 이 실행에서만 쓰는 무작위 값이다
+game_notification_accepted() {
+  compose exec -T game-server python - <<'PY'
+import asyncio
+import uuid
+
+import httpx
+
+from app.core.config import get_settings
+from app.notifications.client import Delivery
+from app.notifications.models import OutgoingNotification
+from app.notifications.setup import build_notifications
+
+
+async def main() -> None:
+    async with httpx.AsyncClient() as client:
+        notifications = build_notifications(get_settings(), client)
+        notification = OutgoingNotification(
+            source_key=f'stack-smoke:{uuid.uuid4()}', user_id=uuid.uuid4(), kind='stack.smoke', payload={}
+        )
+        sent = await notifications.send(notification)
+    raise SystemExit(0 if sent.delivery == Delivery.DELIVERED else 1)
+
+
+asyncio.run(main())
+PY
 }
 
 # 서버가 제 컨테이너 안에서 준비됐다고(/health/ready 가 200) 답하는가. 503 이면 실패다
@@ -341,8 +380,13 @@ check() {
   report "게임 서버가 인증 서버의 공개키를 받는다" reachable_from game-server "$jwks"
   report "게시판 서버가 인증 서버의 공개키를 받는다" reachable_from board-server "$jwks"
   report "결제 서버가 인증 서버의 공개키를 받는다" reachable_from billing-server "$jwks"
+  report "알림 서버가 인증 서버의 공개키를 받는다" reachable_from notification-server "$jwks"
+  report "알림 서버가 인증 서버의 끊긴 세션 목록을 받는다" reachable_from notification-server \
+    http://auth-server:8000/api/v1/auth/session-revocations
   report "인증 서버가 결제 서버에 닿는다" reachable_from auth-server http://billing-server:8003/health
   report "게임 서버가 결제 서버에 닿는다" reachable_from game-server http://billing-server:8003/health
+  report "게임 서버가 알림 서버에 닿는다" reachable_from game-server http://notification-server:8004/health
+  report "게임 서버가 서명한 알림을 알림 서버가 받는다" game_notification_accepted
   report "설정 검사(비밀, 열린 포트, 로그 상한)의 규칙이 맞다" scope_rules_hold
   check_config "비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" .github/scripts/secret_scope.py
   check_config "바깥에 여는 포트는 정해 둔 것뿐이고 모두 127.0.0.1 에 묶였다(port_scope.py)" .github/scripts/port_scope.py
@@ -383,6 +427,7 @@ check_proxy() {
   report "프록시로 게임 서버에 닿는다" status_is 401 "$PROXY/api/v1/game/me"
   report "프록시로 게시판 서버에 닿는다" status_is 401 "$PROXY/api/v1/board/me"
   report "프록시로 결제 서버에 닿는다" status_is 401 "$PROXY/api/v1/billing/me"
+  report "프록시로 알림 서버에 닿는다" status_is 401 "$PROXY/api/v1/notification/me/notifications"
   report "프록시는 관리자 화면을 막는다" status_is 404 "$PROXY/admin/login/"
   report "프록시는 관리자 화면의 CSS 를 막는다" status_is 404 "$PROXY/static/admin/css/base.css"
   report "프록시는 점 두 개로 돌아가는 주소도 막는다" status_is 404 "$PROXY/api/v1/auth/%2e%2e/%2e%2e/admin/login/" --path-as-is
@@ -390,6 +435,8 @@ check_proxy() {
   report "프록시는 서버끼리만 부르는 결제 주소를 막는다" status_is 404 "$PROXY/api/v1/billing/service/holds" -X POST
   # 인증 서버에 닿으면 서명이 없어 401 이다(#352)
   report "프록시는 서버끼리만 부르는 인증 주소를 막는다" status_is 404 "$PROXY/api/v1/auth/service/guardian-notices" -X POST
+  # 알림 서버에 닿으면 서명이 없어 401 이다
+  report "프록시는 서버끼리만 부르는 알림 주소를 막는다" status_is 404 "$PROXY/api/v1/notification/service/game/notifications" -X POST
   report "프록시는 서버의 상태 확인 주소를 막는다" status_is 404 "$PROXY/health"
   report "프록시는 그 밖의 주소를 막는다" status_is 404 "$PROXY/"
   report "프록시가 요청 식별자를 하나 정해 돌려준다" one_request_id_from_proxy

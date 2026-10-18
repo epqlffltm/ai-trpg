@@ -1,6 +1,6 @@
 # 관측 규격
 
-네 서버(`auth-server`, `game-server`, `board-server`, `billing-server`)가 로그, 메트릭, 추적 정보를 같은 모양으로 남기기 위한 약속이다.
+서버들(`auth-server`, `game-server`, `board-server`, `billing-server`, `notification-server`)이 로그, 메트릭, 추적 정보를 같은 모양으로 남기기 위한 약속이다.
 언어와 프레임워크는 서버마다 다르지만, 밖에서 보이는 칸의 이름과 뜻은 같다.
 
 이 문서가 기준이다. 칸의 이름이나 뜻을 바꾸려면 이 문서부터 고치고 네 서버를 함께 고친다.
@@ -25,10 +25,10 @@
 
 | | 상태 |
 | --- | --- |
-| 요청 식별자(`X-Request-ID`)와 추적 식별자(`traceparent`) | 네 서버에 구현 |
-| 공통 모양의 JSON 로그 | 네 서버에 구현 |
-| 민감정보를 가리는 마지막 방어선 | 네 서버에 구현 |
-| 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server 에 구현. board-server 는 아직 그런 작업이 없다 |
+| 요청 식별자(`X-Request-ID`)와 추적 식별자(`traceparent`) | 다섯 서버에 구현 |
+| 공통 모양의 JSON 로그 | 다섯 서버에 구현 |
+| 민감정보를 가리는 마지막 방어선 | 다섯 서버에 구현 |
+| 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
 | 메트릭 | 이름과 규칙만 정했다. 내보내는 코드는 없다 |
 | 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
 | OpenTelemetry Collector, Prometheus, Loki, Tempo, Grafana | 없다 |
@@ -58,6 +58,7 @@
 | 게임 서버 | `game-server` |
 | 게시판 서버 | `board-server` |
 | 결제 서버 | `billing-server` |
+| 알림 서버 | `notification-server` |
 | 프록시(nginx) | `proxy` |
 
 프록시는 서버 넷 앞에 서는 nginx 다(`docker/nginx/templates/default.conf.template`). 요청이 끝난 줄만 남긴다. [프록시의 줄](#프록시의-줄)에 따로 적었다.
@@ -160,6 +161,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | game-server | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리, 서술이 사라진 라운드 다시 맡기기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `closed`, `credit_waits`, `recovered`, `gave_up`) | `round.close_overdue` |
 | game-server | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `charge.settle` |
 | game-server | 서술 모델의 은퇴를 알리고, 은퇴하면 같은 회사의 다른 모델로 바꾸기(지켜보기가 한 시간마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `noticed`, `replaced`, `stranded`, `failed`) | `model.retirement` |
+| game-server | 발송함의 알림을 알림 서버에 보내기(5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `sent`, `retried`, `rejected`, `failed`, `dropped`) | `notification.send` |
 | game-server | 로어북 항목의 벡터 만들기 | `lore.index` |
 | game-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
@@ -168,6 +170,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | billing-server | 만료된 홀드·주문, 사라진 무료 크레딧 닫기(정리 작업이 30초마다 한 바퀴. 바퀴마다 새 `job_id`) | `sweep.run` |
 | billing-server | 장부 맞춰 보기와 오래된 결제 끝내기(하루 한 번 돌리는 명령) | `reconcile.run` |
 | auth-server | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기 | `account.delete_unverified` |
+| notification-server | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업이 한 시간마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `deleted`, `retention_days`) | `notification.prune` |
 | auth-server | 보안 이벤트 요약 메일 | `security.send_digest` |
 
 ## 로그
@@ -264,7 +267,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 
 프록시는 요청마다 한 줄을 남긴다. 칸은 공통 칸과 `request_id`, `operation`(`http.request`), `method`, `status_code`, `duration_ms`, `result` 에 `upstream` 이 더해진다.
 
-- `upstream` 은 요청을 보낸 서버의 이름이다(`auth`, `game`, `board`, `billing`). 프록시가 직접 답한 것(막은 주소의 404)은 `proxy` 다.
+- `upstream` 은 요청을 보낸 서버의 이름이다(`auth`, `game`, `board`, `billing`, `notification`). 프록시가 직접 답한 것(막은 주소의 404)은 `proxy` 다.
   요청 수 제한의 429 는 그 서버의 이름이 실린다. 어느 서버로 가던 요청이 막혔는지 보인다.
 - **경로를 적지 않는다.** 프록시는 주소의 틀(`route`)을 모른다. 실제 경로에는 사용자와 테이블의 번호가 들어 있다. 틀은 서버의 줄에 있다.
 - `status_code` 는 클라이언트가 받은 값이다. 서버에 닿지 못했으면 502, 서버가 늦으면 504 이고 `level` 은 `error` 다.
@@ -320,7 +323,10 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `memory.index` | game | 기억 색인 |
 | `charge.settle` | game | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴) |
 | `model.retirement` | game | 서술 모델의 은퇴를 알리고 바꾸기(지켜보기의 한 바퀴, 한 시간마다. 라운드가 열린 뒤 그 테이블 하나도 본다) |
+| `notification.send` | game | 발송함의 알림을 알림 서버에 보내기(작업의 한 바퀴). 못 보낸 알림마다 `notification_id`, `kind`, `reason` 을 싣는다. 받는 사람과 `payload` 는 싣지 않는다 |
 | `ai_log.prune` | game | AI 호출 기록에서 보관 기간(기본 30일)이 지난 원문 비우기(정리 작업의 한 바퀴, 한 시간마다. `cleared`, `retention_days`) |
+| `notification.put` | notification | 다른 서버가 서명한 요청으로 알림을 넣기. `source`, `kind`, `notification_id`, `outcome`(`created`, `existing`). 받는 사람과 `payload` 는 싣지 않는다 |
+| `notification.prune` | notification | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업의 한 바퀴, 한 시간마다. `deleted`, `retention_days`) |
 | `billing.hold` | game | 결제 서버에 서술 값의 홀드를 걸기 |
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
 | `billing.release` | game | 결제 서버에 홀드의 반환을 맡기기 |
@@ -334,7 +340,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `account.delete_unverified` | auth | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기(옛 이름 그대로) |
 | `security.send_digest` | auth | 보안 이벤트 요약 메일 |
 | `auth.jwks_fetch` | billing | 인증 서버에서 공개키 받기 |
-| `auth.revocations_fetch` | game, billing | 인증 서버에서 끊긴 세션의 목록 받기(30초마다) |
+| `auth.revocations_fetch` | game, billing, notification | 인증 서버에서 끊긴 세션의 목록 받기(30초마다) |
 | `order.confirm` | billing | 주문의 결제 승인 |
 | `order.refund` | billing | 주문의 청약철회(결제 취소) |
 | `order.decide` | billing | 운영자가 결과를 모르던 주문의 결과를 정하기(`cmd/orders decide`). `from_status`, `outcome`, `decided_by`, `reason` 을 남긴다 |
@@ -354,11 +360,13 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `job.failed` | 작업이 예외로 끝났다 |
 | `job.refused` | 게임 서버가 작업을 맡지 않았다. 그 종류(`operation`)의 돌거나 기다리는 작업이 상한(`capacity`)에 닿았다. 서술은 서버의 시계가, 색인은 다음 검색이 다시 맡긴다. `warning` |
 | `round.stalled` | 게임 서버가 서술이 되풀이해 사라진 라운드를 더 다시 맡기지 않고 실패(`stalled`)로 적었다. 같은 서술이 할 때마다 서버를 죽이고 있을 수 있다. `table_id`, `round`, `auto_retries`. 방장이 다시 맡길 수 있다. `warning` |
-| `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다. 게임 서버와 결제 서버는 마지막으로 받은 지 30분이 지나 기억한 키를 버릴 때 `error` 로 남긴다(그 뒤 인증이 필요한 요청은 503). 사람이 인증 서버를 봐야 한다 |
-| `auth.revocations_unavailable` | 게임 서버, 결제 서버, 게시판 서버가 남긴다. 인증 서버에서 끊긴 세션의 목록(`/api/v1/auth/session-revocations`)을 받지 못했다. 마지막으로 받은 목록을 그대로 쓴다. 30초마다 다시 받으므로 인증 서버가 죽어 있으면 그만큼 줄이 쌓인다. `reason` 에 종류를 싣는다. `warning` |
+| `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다. 게임 서버, 결제 서버, 알림 서버는 마지막으로 받은 지 30분이 지나 기억한 키를 버릴 때 `error` 로 남긴다(그 뒤 인증이 필요한 요청은 503). 사람이 인증 서버를 봐야 한다 |
+| `auth.revocations_unavailable` | 게임 서버, 결제 서버, 게시판 서버, 알림 서버가 남긴다. 인증 서버에서 끊긴 세션의 목록(`/api/v1/auth/session-revocations`)을 받지 못했다. 마지막으로 받은 목록을 그대로 쓴다. 30초마다 다시 받으므로 인증 서버가 죽어 있으면 그만큼 줄이 쌓인다. `reason` 에 종류를 싣는다. `warning` |
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했거나, 결과를 알 수 없는 답이 왔다(토스페이먼츠의 5xx, 401, "처리 중" 같은 것). 주문은 `confirming` 에 남고 다시 부르거나 대사가 조회해 끝낸다. 청약철회(`order.refund`)면 `refunding` 에 남고 다시 부르거나 대사가 같은 취소를 다시 보낸다. 가상계좌(입금 대기)를 취소하지 못했을 때도 이 코드다(`order.confirm`, `cancel_status`). `warning` |
 | `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 서술 뒤의 확정을 정해 둔 시간 안에 끝내지 못해 정리 작업에 넘긴 것도 이 코드다(`warning`). 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
 | `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다. 연장이면 홀드를 그대로 두고 한 시간 뒤에 다시 부른다. 서술 뒤의 확정이 409(만료되어 돌려준 홀드)면 그 값은 받지 못한다. 홀드가 400 이면 가격표에 그 모델의 가격표 이름(`narration.<이름표>.i0.o0`)이 없는지 먼저 본다 |
+| `notification.unavailable` | 게임 서버가 알림 서버에 알림을 넣지 못했다(연결 실패, 시간 초과, 401, 408, 429, 5xx). 발송함에 남아 늘어나는 간격으로 다시 보낸다. 서명이 거절된 것(401, `reason: unauthorized`)이면 `error`, 그 밖에는 `warning` |
+| `notification.rejected` | 알림 서버가 게임 서버의 알림을 받지 않았다(409 같은 열쇠로 다른 알림, 413, 422 등). 다시 보내도 같다. 발송함에 `failed` 로 남는다. `reason` 에 답의 코드. 버그다. `error` |
 | `signals.bad_signature` | 게임 서버가 서명이 맞지 않는 실시간 신호(NOTIFY)를 받아 버렸다. 같은 DB 의 다른 계정이 꾸며 보냈거나, 게임 서버들의 `SIGNAL_SECRET` 이 서로 다르다. `sender_pid` 에 보낸 연결의 프로세스 번호를 싣는다(`pg_stat_activity` 에서 계정을 찾는다). 받은 글자는 싣지 않는다. `warning` |
 | `ledger_draft.failed` | 게임 서버가 서술한 장면에서 장부 초안을 쓰지 못했다(테이블을 읽기, 모델 부르기, 줄 적기 중 하나가 예외로 끝났거나 90 초가 지났다). 라운드는 이미 닫혔고 방장은 손으로 장부를 고치면 된다. `table_id`, `round`. 모델의 답을 읽지 못한 것(`not_json` 등)은 이 코드가 아니라 호출 기록에 남는다. `warning` |
 | `limits.unavailable` | 게임 서버가 시도 횟수를 세는 곳(Redis)에 닿지 못했다. `limit` 에 어느 제한인지, `blocked` 에 막았는지(로비의 비밀번호) 통과시켰는지(채팅) 싣는다. `warning` |
@@ -465,10 +473,11 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 | board-server | 있다 | 있다(DB) | 3초 |
 | billing-server | 있다 | 있다(DB) | 3초 |
 | auth-server | 있다 | 있다(DB) | 연결 5초. 연결된 뒤 답하지 않는 DB 앞에서는 끝이 없다(아래) |
+| notification-server | 있다 | 있다(DB) | 3초 |
 
 - **compose 의 healthcheck 는 `/health/ready` 를 부른다.** 그래서 `healthy` 는 "DB 에 닿는다"는 뜻이다. DB 가 죽으면 서버가 `unhealthy` 로 보인다.
   Docker 는 `unhealthy` 를 보고 재시작하지 않고, 서버의 `healthy` 를 기다리는 서비스도 없다. DB 가 돌아오면 다음 확인에서 `healthy` 로 돌아온다.
-  CI 의 스택 확인(`.github/scripts/stack-smoke.sh`)도 네 서버의 레디를 본다.
+  CI 의 스택 확인(`.github/scripts/stack-smoke.sh`)도 모든 서버의 레디를 본다.
 - **확인하는 쪽은 healthcheck 의 `timeout`(5초)이 묶는다.** 서버의 레디가 답하지 않아도 5초가 지나면 실패로 센다.
   서버 쪽의 시간 제한은 그보다 짧게(3초) 두어 503 으로 답하게 한다. 결제(Go 의 context)와 게시판(쿼리와 타이머의 경주)이 그렇다.
 - **인증 서버에는 서버 쪽의 전체 제한이 없다.** 동기 Django(psycopg)에는 쿼리 하나만 시간으로 끊는 장치가 없다.
@@ -498,6 +507,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 | billing-server | 정리 작업(`cmd/sweeper`) | 있다(`internal/jobs/heartbeat.go`) |
 | auth-server, billing-server | 주기 명령(supercronic) | 없다. 하루 한 번이라 심장박동으로 볼 것이 없다. 실패는 `job.failed` 로그가 알린다 |
 | game-server | 서버 안의 작업(라운드 시계, 청구 정리) | 없다. 서버 프로세스 안에서 돈다. 서술이 사라진 라운드는 시계가 찾아 다시 맡긴다(#275, `round.recover`) |
+| notification-server | 서버 안의 작업(지난 알림 지우기, 끊긴 세션 목록 받기) | 없다. 서버 프로세스 안에서 돈다. 실패는 `job.failed`(지우기)와 `auth.revocations_unavailable`(목록) 로그가 알린다 |
 
 **HTTP 주소를 열지 않고 파일을 쓴다.** 워커마다 작은 HTTP 서버를 띄우면 서버와 같은 모양이 되지만, 워커마다 포트와 코드가 는다.
 파일은 Python 과 Go 가 같은 몇 줄로 쓰고, healthcheck 는 셸의 `stat` 과 `date` 로 본다. 파일은 compose 만 본다.
@@ -523,7 +533,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 써도 되는 것 | 값 |
 | --- | --- |
-| `service` | 네 가지 |
+| `service` | 서버의 수만큼(지금 다섯) |
 | `method` | HTTP 메서드 |
 | `route` | 주소의 틀. 로그의 `route` 와 같은 값이다. 맞은 것이 없으면 `(unmatched)` |
 | `status_code` | 상태 코드 |
@@ -676,6 +686,7 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 | game-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/auth/revocations.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
 | board-server | `src/observability/request-logging.middleware.ts` | `src/observability/request-context.ts` | `src/auth/jwks.ts` 의 `outgoingHeaders()` |
 | billing-server | `internal/httpapi/observability.go` | `internal/obs/context.go` | `internal/jwks/fetch.go` 의 `obs.SetOutgoingHeaders()` |
+| notification-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/auth/revocations.py` 의 `outgoing_headers()` |
 
 "들고 있는 곳"이 로그에 `trace_id` 를 넘긴다. SDK 를 붙이면 여기서 지금의 span 에서 trace id 를 읽게만 바꾸면 로그의 모양은 그대로다.
 `request_id` 와 `job_id` 는 OpenTelemetry 에 없는 개념이라 지금의 코드가 그대로 남는다. span 의 속성으로도 싣는다.
@@ -727,6 +738,8 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 | 처리하지 못한 예외 | 미들웨어의 `process_exception` | `Exception` 처리기 | 전역 예외 필터 | `recover` 미들웨어 |
 | 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | 없다 | `jobs.Run()` |
 | 코드의 자리 | `observability/` | `app/observability/` | `src/observability/` | `internal/obs/`, `internal/httpapi/observability.go` |
+
+notification-server 는 game-server 의 것(`app/observability/`)을 그대로 가져왔다. 뒤에서 도는 작업이 정리 작업 하나라 `BackgroundJobs` 는 없고, 정리 작업이 바퀴마다 `job_scope` 를 건다.
 
 기존 로그는 고쳐 쓰지 않았다. `logging.getLogger(__name__)`, Nest 의 `new Logger(...)`, Go 의 표준 `log` 로 남기던 줄이 그대로 같은 JSON 으로 나간다.
 프레임워크가 스스로 찍던 요청 줄(uvicorn 의 access log, Django 의 `django.server`, gin 의 `Logger`)은 껐다. 주소 뒤의 값까지 찍었고, 요청이 끝난 줄과 겹친다.

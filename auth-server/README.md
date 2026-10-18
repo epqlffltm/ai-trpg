@@ -379,6 +379,7 @@ curl 로 시험할 때는 `-H 'Origin: http://localhost:8080'` 처럼 직접 붙
 | 게임 서버 | `ai-trpg-game` |
 | 게시판 서버 | `ai-trpg-board` |
 | 결제 서버 | `ai-trpg-billing` |
+| 알림 서버 | `ai-trpg-notification` |
 
 서버가 늘면 `config/settings.py`의 기본값과 `.env.example`에 이름을 더한다. `.env`에 `JWT_AUDIENCE`를 적어 둔 곳은 그 줄도 고친다.
 고치기 전에 발급한 access 토큰에는 새 이름이 없다. 수명이 15분이라 그 뒤로는 저절로 맞는다.
@@ -937,7 +938,7 @@ IP로 보여 한 사람의 시도가 모두를 막는다.
 프로세스 수는 `WEB_CONCURRENCY` 로 정한다(적지 않으면 1). gunicorn 이 스스로 남기는 줄도 공통 규격의 JSON 으로 나간다.
 `DEBUG` 를 끄면 Django 가 정적 파일을 내주지 않는다. 관리자 화면의 CSS 와 JS 는 whitenoise 가 `STATIC_ROOT` 에서 내준다.
 이미지를 만들 때 `collectstatic` 으로 모아 둔다. 개발 중에는 `STATIC_ROOT` 를 적지 않는다.
-네 서버를 함께 컨테이너로 띄우는 법은 [저장소 README](../README.md#4-서버-넷을-컨테이너로-선택)에 있다.
+모든 서버를 함께 컨테이너로 띄우는 법은 [저장소 README](../README.md#4-모든-서버를-컨테이너로-선택)에 있다.
 
 **서명 키는 서버만 갖는다(#274).** 개인키로는 누구의 토큰이든 만들 수 있다. 그래서 그 키를 쓰는 프로세스(요청을 받는 서버)에만 준다.
 `JWT_PRIVATE_KEY_PATH` 가 비면 설정이 키를 읽지 않는다(`config/jwt_keys.py`). 메일·환영 크레딧의 워커, cron, 마이그레이션은 서명하지 않으므로 compose 가 경로를 비우고 키 폴더를 붙이지 않는다.
