@@ -256,7 +256,11 @@ async def test_short_credits_are_told_before_anyone_declares(
 
     # 앉은 사람 모두에게 한 번 알린다. 모자란 청구는 정리 작업이 다시 걸지 않는다(충전했는지는 닫을 때 본다)
     assert await event_types(client, friend, table) == ['narration_credits_short']
-    assert (await last_event(client, friend, table))['payload'] == {'round': 1, 'user_id': str(ME)}
+    assert (await last_event(client, friend, table))['payload'] == {
+        'round': 1,
+        'user_id': str(ME),
+        'reason': 'insufficient',
+    }
     assert await statuses_of(session, table) == ['short']
     assert len(host_calls(billing)) == 1
 
