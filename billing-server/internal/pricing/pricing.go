@@ -11,8 +11,11 @@
 //
 // 홀드는 걸 때의 값을 스스로 적어 둔다. 값을 바꿔도 이미 건 홀드는 바뀌지 않는다.
 //
-// 이름마다 등급(Tier)이 있다(#338). 스탠다드는 골드(산 크레딧)와 실버(무료 크레딧) 모두로 내고, 프리미엄은 골드로만 낸다.
+// 이름마다 등급(Tier)이 있다(#338). 베이직과 스탠다드는 골드(산 크레딧)와 실버(무료 크레딧) 모두로 내고, 프리미엄은 골드로만 낸다.
 // 등급도 값과 같은 줄에 적어 덧붙이기만 한다. 결제에 쓰는 등급은 이 가격표가 기준이다.
+//
+// 줄마다 행사가 표시(Promo)가 있다. 행사가는 끝나는 때가 정해진 값이고, 끝나는 때는 그 이름의 다음 줄이 정한다.
+// 그래서 행사가 줄은 그보다 늦은 줄이 먼저 있어야 넣을 수 있다(ErrPromoNeedsEnd).
 package pricing
 
 import (
@@ -54,17 +57,25 @@ var (
 	ErrPastEffective = errors.New("적용 시각은 지금보다 앞설 수 없습니다")
 	// ErrSameMoment 는 같은 이름에 같은 적용 시각의 줄이 이미 있다는 오류다.
 	ErrSameMoment = errors.New("같은 이름에 같은 적용 시각의 값이 이미 있습니다")
-	// ErrInvalidTier 는 등급이 standard, premium 가운데 하나가 아니라는 오류다.
-	ErrInvalidTier = errors.New("등급은 standard 나 premium 이어야 합니다")
+	// ErrInvalidTier 는 등급이 basic, standard, premium 가운데 하나가 아니라는 오류다.
+	ErrInvalidTier = errors.New("등급은 basic, standard, premium 가운데 하나여야 합니다")
 	// ErrMissingTier 는 처음 파는 이름에 등급을 적지 않았다는 오류다. 이미 파는 이름은 적지 않으면 그때의 등급을 그대로 쓴다.
 	// 처음 파는 이름에 기본값을 두지 않는다. 프리미엄 모델이 등급을 빠뜨려 실버로 팔리면 그만큼 손해다.
-	ErrMissingTier = errors.New("처음 파는 이름은 등급(standard, premium)을 정해야 합니다")
+	ErrMissingTier = errors.New("처음 파는 이름은 등급(basic, standard, premium)을 정해야 합니다")
+	// ErrPromoNeedsEnd 는 행사가 줄을 넣는데 그보다 늦은 줄(행사가 끝나는 때)이 없다는 오류다.
+	// 끝이 없는 행사가는 사용자에게 "언제까지"를 말해 주지 못한다. 정가(또는 판매 중지)를 먼저 예약한다.
+	ErrPromoNeedsEnd = errors.New("행사가는 끝나는 때가 있어야 합니다. 그 뒤의 값(정가)을 먼저 미래 시각으로 넣으세요")
+	// ErrPromoStop 은 판매를 멈추는 줄을 행사가로 적었다는 오류다. 값이 없는 줄은 행사가일 수 없다.
+	ErrPromoStop = errors.New("판매를 멈추는 줄은 행사가일 수 없습니다")
 )
 
 // Tier 는 가격표 이름의 등급이다. DB 의 price_versions.tier 에 이 글자가 그대로 적힌다.
 type Tier string
 
 const (
+	// TierBasic 은 가장 싼 모델의 등급이다. 내는 방법은 스탠다드와 같다(골드와 실버 모두).
+	// 따로 두는 것은 화면에서 묶어 보이고, 이벤트로 이 묶음만 내리거나 무료로 열기 위해서다.
+	TierBasic Tier = "basic"
 	// TierStandard 는 골드와 실버 모두로 내는 등급이다.
 	TierStandard Tier = "standard"
 	// TierPremium 은 골드로만 내는 등급이다.
@@ -73,7 +84,7 @@ const (
 
 // Valid 는 아는 등급인지다.
 func (t Tier) Valid() bool {
-	return t == TierStandard || t == TierPremium
+	return t == TierBasic || t == TierStandard || t == TierPremium
 }
 
 // PaidOnly 는 골드(산 크레딧)로만 내야 하는지다.
@@ -86,6 +97,8 @@ type Price struct {
 	Code    string
 	Credits credit.Amount
 	Tier    Tier
+	// Promo 는 행사가인지다. 끝나는 때는 다음 줄(가격 목록의 Next)이다.
+	Promo bool
 	// Since 는 이 값이 적용되기 시작한 시각이다.
 	Since time.Time
 }
@@ -95,9 +108,11 @@ type Version struct {
 	ID   int64
 	Code string
 	// Credits 는 값이다. OnSale 이 false 면(판매를 멈춘 줄) 0 이다.
-	Credits     credit.Amount
-	OnSale      bool
-	Tier        Tier
+	Credits credit.Amount
+	OnSale  bool
+	Tier    Tier
+	// Promo 는 행사가 줄인지다. 판매를 멈추는 줄은 늘 false 다.
+	Promo       bool
 	EffectiveAt time.Time
 	Reason      string
 	ChangedBy   string
@@ -111,6 +126,9 @@ type Change struct {
 	Credits credit.Amount
 	// Tier 는 등급이다. 비워 두면 적용 시각에 그 이름의 등급을 그대로 쓴다. 처음 파는 이름이면 비울 수 없다.
 	Tier Tier
+	// Promo 면 행사가 줄이다. 그 이름에 이 줄보다 늦은 줄이 먼저 있어야 한다. 등급과 달리 이어받지 않는다(적지 않으면 정가다).
+	// 판매를 멈출 때(Stop)는 쓸 수 없다.
+	Promo bool
 	// EffectiveAt 은 적용을 시작할 시각이다. 비워 두면(zero) 지금이다. 지금보다 앞설 수 없다.
 	EffectiveAt time.Time
 	// Reason 과 ChangedBy 는 왜, 누가 바꿨는지다. 둘 다 비울 수 없다.

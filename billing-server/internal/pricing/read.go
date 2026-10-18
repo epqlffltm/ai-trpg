@@ -30,7 +30,7 @@ func (s *Service) At(ctx context.Context, code string, at time.Time) (Price, err
 
 // toPrice 는 값이 있는 줄을 Price 로 바꾼다. 부르는 쪽이 row.Amount 가 nil 이 아닌지 확인했다.
 func toPrice(row pricingdb.PriceVersion) Price {
-	return Price{Code: row.Code, Credits: *row.Amount, Tier: Tier(row.Tier), Since: row.EffectiveAt}
+	return Price{Code: row.Code, Credits: *row.Amount, Tier: Tier(row.Tier), Promo: row.Promo, Since: row.EffectiveAt}
 }
 
 // Current 는 이름마다 지금 적용된 줄을 이름 순서로 돌려준다. 판매를 멈춘 이름도 함께 돌려준다(OnSale 이 false).
@@ -67,6 +67,7 @@ func toVersion(row pricingdb.PriceVersion) Version {
 		ID:          row.ID,
 		Code:        row.Code,
 		Tier:        Tier(row.Tier),
+		Promo:       row.Promo,
 		EffectiveAt: row.EffectiveAt,
 		Reason:      row.Reason,
 		ChangedBy:   row.ChangedBy,
