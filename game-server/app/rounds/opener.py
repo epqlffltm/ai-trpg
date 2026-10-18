@@ -26,10 +26,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import charges
 from app.calendar import state as calendar
+from app.catalog.offers import OfferedModel
 from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.rounds import repository
 from app.rounds.models import Round
+from app.rounds.round_price import announce, price_payload
 from app.tables.models import GameTable
 
 
@@ -49,7 +51,14 @@ def deadline_for(table: GameTable, opened: datetime) -> datetime | None:
     return opened + timedelta(seconds=table.round_time_limit)
 
 
-def open_round(session: AsyncSession, table: GameTable, number: int, scene: str, cause: TableEvent) -> Round:
+def open_round(
+    session: AsyncSession,
+    table: GameTable,
+    number: int,
+    scene: str,
+    cause: TableEvent,
+    price: OfferedModel | None = None,
+) -> Round:
     """
     새 라운드를 연다. 연 라운드를 돌려준다. 저장하지는 않는다.
 
@@ -58,6 +67,7 @@ def open_round(session: AsyncSession, table: GameTable, number: int, scene: str,
     마감은 지금부터 테이블의 시간 제한만큼 뒤다. 서술을 기다린 시간은 세지 않는다.
     서술 모델은 테이블의 지금 것이다. 아직 서술하지 않은 동안에만 방장이 바꿀 수 있다(app/tables/narration_models.py).
     서술 값의 청구를 함께 적는다(charges.charge_round).
+    price 는 그 모델의 지금 값이다(app/rounds/round_price.py). 라운드와 열린 이벤트에 1인 1라운드의 값으로 싣는다.
     첫 라운드가 아니면 게임 안의 시간을 흘린다(calendar.pass_round). 방장이 정한 걸음이 있으면 그것으로.
 
     앞 라운드가 있으면 닫은 것을 먼저 DB 에 보낸 뒤에 부른다(유일 색인 uq_table_rounds_open).
@@ -72,6 +82,7 @@ def open_round(session: AsyncSession, table: GameTable, number: int, scene: str,
         deadline_at=deadline,
         narration_model=table.narration_model,
     )
+    announce(round_, price)
     repository.add_round(session, round_)
     charges.charge_round(session, table, round_, opened)
     narration = recorder.record(session, table, EventType.GM_NARRATION, payload={'text': scene}, cause=cause)
@@ -79,6 +90,7 @@ def open_round(session: AsyncSession, table: GameTable, number: int, scene: str,
         'number': number,
         'deadline_at': deadline.isoformat() if deadline is not None else None,
         'narration_model': round_.narration_model,
+        'price': price_payload(round_),
         'clock': calendar.describe(table),
         'passed_minutes': passed,
     }

@@ -89,6 +89,15 @@ def expires_at_of(response: httpx.Response) -> datetime | None:
     return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
+def amount_of(response: httpx.Response) -> str | None:
+    """홀드를 담은 답의 값(amount). 없거나 읽을 수 없으면 None. 셈하지 않으니 글자 그대로 둔다."""
+    try:
+        amount = response.json()['amount']
+    except (ValueError, KeyError, TypeError):
+        return None
+    return str(amount) if isinstance(amount, (str, int)) else None
+
+
 def error_code_of(response: httpx.Response) -> str | None:
     """4xx 의 본문에 결제 서버가 붙인 오류의 이름(code). 없거나 읽을 수 없으면 None. 그 밖의 칸은 읽지 않는다."""
     try:
@@ -126,7 +135,7 @@ def hold_result(response: httpx.Response) -> HoldOutcome:
         return HoldOutcome(HoldResult.SHORT)
     require_success(response)
     require_status(response, 'held')
-    return HoldOutcome(HoldResult.HELD, expires_at_of(response))
+    return HoldOutcome(HoldResult.HELD, expires_at_of(response), amount_of(response))
 
 
 def capture_result(response: httpx.Response) -> None:
