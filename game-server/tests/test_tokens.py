@@ -11,11 +11,13 @@ import json
 import time
 from datetime import UTC, datetime
 
+import httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 
 from app.auth.jwks import JwksCache, JwksUnavailableError
+from app.auth.revocations import RevocationList
 from app.auth.tokens import CLOCK_SKEW_SECONDS, AccessClaims, InvalidTokenError, verify_access_token
 from app.core.config import Settings
 from tests.conftest import TEST_JWKS_URL, make_test_settings
@@ -50,7 +52,12 @@ def settings() -> Settings:
 
 
 async def verify(token: str, jwks: JwksCache, settings: Settings) -> AccessClaims:
-    return await verify_access_token(token, jwks, settings)
+    # 끊긴 세션의 목록은 비어 있다(한 번도 받지 않았다). 목록으로 거부하는 것은 tests/test_revocations.py 가 본다
+    return await verify_access_token(token, jwks, empty_revocations(), settings)
+
+
+def empty_revocations() -> RevocationList:
+    return RevocationList(httpx.AsyncClient(), 'http://auth.test/api/v1/auth/session-revocations')
 
 
 # --- 받아야 하는 토큰 ---

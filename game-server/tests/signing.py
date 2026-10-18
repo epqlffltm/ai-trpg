@@ -17,7 +17,9 @@ import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
 
+from app.auth.revocations import digest_subject
 from app.auth.tokens import AccessClaims
+from app.core.config import SESSION_REVOCATIONS_PATH
 
 # 테스트용 키의 길이. 짧을수록 빨리 만들어진다. 실제 서비스의 키는 인증 서버가 만든다
 TEST_KEY_BITS = 2048
@@ -27,6 +29,11 @@ TEST_USER_ID = uuid.UUID('11111111-2222-4333-8444-555555555555')
 
 # 인증 서버의 access 토큰 수명과 같다
 ACCESS_TOKEN_SECONDS = 15 * 60
+
+
+def revoked_entry(subject: str, min_version: int) -> dict:
+    """끊긴 세션의 목록의 한 줄. 인증 서버가 내주는 모양 그대로다."""
+    return {'sub_sha256': digest_subject(subject), 'min_ver': min_version}
 
 
 @dataclass
@@ -85,23 +92,30 @@ def make_viewer(
 @dataclass
 class FakeAuthServer:
     """
-    키 목록을 내주는 가짜 인증 서버.
+    키 목록과 끊긴 세션의 목록을 내주는 가짜 인증 서버.
 
-    keys 를 바꾸면 키를 교체한 것이고, down 을 켜면 죽은 것이다. 몇 번 불렸는지 센다.
+    keys 를 바꾸면 키를 교체한 것이고, down 을 켜면 죽은 것이다. 키 목록이 몇 번 불렸는지 센다(calls).
+    revocations 는 끊긴 세션의 목록에 실을 줄이다(app/auth/revocations.py).
+    주소가 /session-revocations 로 끝나면 이것을 준다.
     """
 
     keys: list[SigningKey] = field(default_factory=list)
     down: bool = False
     calls: int = 0
+    revocations: list[dict] = field(default_factory=list)
 
     async def handle(self, request: httpx.Request) -> httpx.Response:
         """요청 하나에 답한다. httpx 가 네트워크 대신 이 함수를 부른다."""
-        self.calls += 1
+        is_revocations = request.url.path.endswith(SESSION_REVOCATIONS_PATH)
+        if not is_revocations:
+            self.calls += 1
         # 실제 네트워크처럼 응답을 기다리는 틈을 만든다. 이 틈에 다른 요청이 끼어든다.
         # 틈이 없으면 요청이 하나씩 차례로 끝나서, 동시에 올 때의 문제가 드러나지 않는다
         await asyncio.sleep(0)
         if self.down:
             raise httpx.ConnectError('연결할 수 없다', request=request)
+        if is_revocations:
+            return httpx.Response(200, json={'revocations': self.revocations, 'refresh_interval_seconds': 30})
         return httpx.Response(200, json={'keys': [key.jwk for key in self.keys]})
 
     def make_client(self) -> httpx.AsyncClient:
