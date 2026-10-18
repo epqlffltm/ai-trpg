@@ -16,7 +16,7 @@ import (
 // 가격 목록. 게임 서버가 받아 캐싱하고, 자기 모델 목록과 이름으로 맞춰 붙여 로그인한 사용자에게 보여 준다.
 //
 // 이름마다 지금 값과 다음에 바뀔 값(예약)을 함께 준다. 예약까지 받아 두면 부르는 쪽이 그 시각에 스스로 갈아 끼울 수 있고,
-// 사용자에게 "12월 1일부터 240" 처럼 미리 알릴 수 있다.
+// 사용자에게 "12월 1일부터 420" 처럼 미리 알릴 수 있다. 지금 값이 행사가(Promo)면 "다음 값"이 행사가 끝난 뒤의 값이다.
 // 목록은 보여 주는 값일 뿐이다. 실제로 받는 값은 홀드를 걸 때 그 시각의 가격표(At)로 정한다.
 
 // Listing 은 가격 목록의 이름 하나다.
@@ -31,9 +31,11 @@ type Listing struct {
 // Scheduled 는 아직 적용되지 않은 다음 값이다.
 type Scheduled struct {
 	// Credits 는 바뀔 값이다. OnSale 이 false 면(판매를 멈추는 예약) 0 이다.
-	Credits     credit.Amount
-	OnSale      bool
-	Tier        Tier
+	Credits credit.Amount
+	OnSale  bool
+	Tier    Tier
+	// Promo 는 그 값도 행사가인지다(행사가 다음에 또 행사가를 이어 붙인 경우).
+	Promo       bool
 	EffectiveAt time.Time
 }
 
@@ -63,11 +65,15 @@ func mergeListings(current []Version, upcoming []Version) []Listing {
 	byCode := map[string]*Listing{}
 	for _, version := range current {
 		if version.OnSale {
-			listingFor(byCode, version.Code).Current = &Price{Code: version.Code, Credits: version.Credits, Tier: version.Tier, Since: version.EffectiveAt}
+			listingFor(byCode, version.Code).Current = &Price{
+				Code: version.Code, Credits: version.Credits, Tier: version.Tier, Promo: version.Promo, Since: version.EffectiveAt,
+			}
 		}
 	}
 	for _, version := range upcoming {
-		listingFor(byCode, version.Code).Next = &Scheduled{Credits: version.Credits, OnSale: version.OnSale, Tier: version.Tier, EffectiveAt: version.EffectiveAt}
+		listingFor(byCode, version.Code).Next = &Scheduled{
+			Credits: version.Credits, OnSale: version.OnSale, Tier: version.Tier, Promo: version.Promo, EffectiveAt: version.EffectiveAt,
+		}
 	}
 	return sortedListings(byCode)
 }

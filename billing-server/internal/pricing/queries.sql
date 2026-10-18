@@ -26,12 +26,18 @@ WHERE code = sqlc.arg(code)
 ORDER BY effective_at, id;
 
 -- name: InsertPriceVersion :one
--- 가격표에 줄 하나를 덧붙인다. amount 가 NULL 이면 판매를 멈추는 줄이다. 등급(tier)은 늘 적는다.
-INSERT INTO price_versions (code, amount, tier, effective_at, reason, changed_by, created_at)
+-- 가격표에 줄 하나를 덧붙인다. amount 가 NULL 이면 판매를 멈추는 줄이다. 등급(tier)과 행사가 표시(promo)는 늘 적는다.
+INSERT INTO price_versions (code, amount, tier, promo, effective_at, reason, changed_by, created_at)
 VALUES (
-    sqlc.arg(code), sqlc.narg(amount), sqlc.arg(tier), sqlc.arg(effective_at), sqlc.arg(reason), sqlc.arg(changed_by), sqlc.arg(now)
+    sqlc.arg(code), sqlc.narg(amount), sqlc.arg(tier), sqlc.arg(promo), sqlc.arg(effective_at), sqlc.arg(reason), sqlc.arg(changed_by), sqlc.arg(now)
 )
 RETURNING *;
+
+-- name: HasLaterVersion :one
+-- 그 이름에 적용 시각이 after 보다 늦은 줄이 있는지 본다. 행사가 줄은 끝나는 때(다음 줄)가 먼저 있어야 한다.
+SELECT EXISTS (
+    SELECT 1 FROM price_versions WHERE code = sqlc.arg(code) AND effective_at > sqlc.arg(after)::TIMESTAMPTZ
+);
 
 -- name: UpcomingPrices :many
 -- 이름마다 아직 적용되지 않은 줄 가운데 가장 이른 줄을 읽는다(다음에 바뀔 값). 판매를 멈추는 예약도 함께 읽는다(amount 가 NULL).
