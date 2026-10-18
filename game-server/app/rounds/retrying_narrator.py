@@ -16,6 +16,8 @@
   - 같은 요청을 다시 보내 봐야 소용없는 실패(요청이나 설정이 틀림)는 그 모델로 다시 부르지 않는다.
   - 다른 모델로 가도 소용없는 실패(서버가 꺼짐, 권한 없음)면 넘어가지 않고 그만둔다. 모델들은 같은 서버에 있다고 본다.
     한 등급에 창구가 다른 모델을 섞어 적으면 이 가정이 맞지 않는다. 섞어 적지 않는다(넘어가기는 모델 고르기에서 없앤다).
+  - 같은 모델로 다시 부르는 것에는 예산이 있다(app/ai/retry_budget.py). 최근 1분의 첫 시도의 10%(적어도 3번)까지다.
+    예산이 없으면 다시 부르지 않는다. 공급자가 내려가 모두가 실패할 때 재시도가 일을 두 배로 키우지 않게 한다.
   - 서술 하나에 쓰는 시간에 상한이 있다(NARRATION_BUDGET_SECONDS). 남은 시간이 한 번 부르는 시간보다 짧으면
     새로 부르지 않는다. 부르는 도중에 끊지 않으므로 시작한 호출은 모두 끝나고 기록된다.
 끝내 실패하면 NarrationFailed 를 올린다. 이유는 마지막 실패의 것이다.
@@ -25,16 +27,20 @@
 """
 
 import asyncio
+import logging
 import random
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.ai.provider import ProviderError
+from app.ai.retry_budget import RetryBudget
 from app.ai.routing import UNROUTABLE
 from app.core.config import NARRATION_BUDGET_SECONDS
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Narrator, Preview
+
+logger = logging.getLogger(__name__)
 
 # 한 모델을 몇 번까지 부르나. 처음 한 번과 다시 한 번
 ATTEMPTS_PER_MODEL = 2
@@ -70,6 +76,11 @@ def can_fall_back(reason: str) -> bool:
     return reason not in NOT_FOR_ANY_MODEL
 
 
+def budget_key(narrator: Narrator) -> str:
+    """재시도 예산을 세는 이름. 모델의 이름(RoutedNarrator.model)이다. 이름이 없는 서술자는 종류의 이름이다."""
+    return getattr(narrator, 'model', type(narrator).__name__)
+
+
 def random_pause() -> float:
     """다시 부르기 전에 쉴 시간(초). 범위 안에서 무작위다."""
     return random.uniform(*PAUSE_SECONDS)
@@ -81,6 +92,7 @@ class RetryingNarrator:
     다시 시도하고 넘어가는 서술자. narrators 는 모델마다 하나, 부를 차례대로다.
 
     attempt_timeout 은 한 번 부르는 시간의 상한이다(LLM_TIMEOUT_SECONDS). 남은 시간을 셀 때 쓴다.
+    retry_budget 은 앱이 함께 쓰는 재시도 예산이다. 없으면(None) 예산 없이 attempts 번까지 부른다.
     pause, sleep, clock 은 테스트가 바꿔 꽂는다. 테스트가 실제로 쉬거나 실제 시계를 읽지 않게 한다.
     """
 
@@ -91,6 +103,7 @@ class RetryingNarrator:
     pause: Callable[[], float] = random_pause
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
     clock: Callable[[], float] = time.monotonic
+    retry_budget: RetryBudget | None = None
 
     def wait_before_retry(self, error: ProviderError | NarrationError) -> float | None:
         """
@@ -105,6 +118,21 @@ class RetryingNarrator:
             return None
         return max(self.pause(), retry_after)
 
+    def note_first(self, narrator: Narrator) -> None:
+        """그 모델에 첫 시도를 보낸다고 예산에 적는다."""
+        if self.retry_budget is not None:
+            self.retry_budget.note_request(budget_key(narrator))
+
+    def may_retry(self, narrator: Narrator) -> bool:
+        """그 모델로 다시 불러도 되는가. 예산이 없으면 경고를 남기고 False."""
+        if self.retry_budget is None or self.retry_budget.try_retry(budget_key(narrator)):
+            return True
+        logger.warning(
+            '재시도 예산이 다 되어 같은 모델로 다시 부르지 않는다',
+            extra={'model': budget_key(narrator), 'result': 'retry_budget_exhausted'},
+        )
+        return False
+
     def has_time(self, started: float) -> bool:
         """started 부터 지금까지 쓴 시간에 한 번 더 부르는 시간을 더해도 상한 안인가."""
         return self.clock() - started + self.attempt_timeout <= self.budget
@@ -115,8 +143,11 @@ class RetryingNarrator:
         reason = 'no_model'
         for narrator in self.narrators:
             wait: float | None = None
+            self.note_first(narrator)
             for number in range(self.attempts):
                 if number > 0:
+                    if not self.may_retry(narrator):
+                        break
                     await self.sleep(wait)
                 if not self.has_time(started):
                     raise NarrationFailed(reason)

@@ -104,6 +104,10 @@ class Settings(BaseSettings):
     # 비우면 넘어가지 않는다(기본). 같은 주소(LLM_BASE_URL)의 모델들이다
     llm_fallback_models: str = ''
 
+    # 장부 초안(app/drafts/)을 쓰는 모델. 적는 법은 LLM_MODEL 과 같다. 비우면 LLM_MODEL 이다.
+    # 장부 초안은 청구하지 않는 호출이라 원가가 모두 우리 몫이다. 고르는 일이라 싼 모델(Flash 급)이면 충분하다
+    draft_model: str = ''
+
     # premium 등급(app/rounds/tiers.py)으로 서술하는 첫 모델과 넘어갈 모델들. 적는 법은 위의 둘과 같다.
     # 비우면 premium 을 내주지 않는다(기본). 방장은 standard 만 고를 수 있다. 같은 주소(LLM_BASE_URL)의 모델들이다.
     # 적기 전에 결제 서버의 가격표에 narration.premium 을 먼저 적는다. 없으면 결제 서버가 홀드를 받지 않는다
@@ -273,6 +277,10 @@ class Settings(BaseSettings):
     def llm_models(self) -> list[str]:
         """standard 등급으로 부를 모델들을 부를 차례대로. 첫 모델 다음에 넘어갈 모델들이다."""
         return model_chain(self.llm_model, self.llm_fallback_models)
+
+    def draft_model_name(self) -> str:
+        """장부 초안을 쓰는 모델. DRAFT_MODEL 을 적지 않았으면 standard 등급의 첫 모델(LLM_MODEL)이다."""
+        return self.draft_model.strip() or self.llm_models()[0]
 
     def llm_premium_models(self) -> list[str]:
         """premium 등급으로 부를 모델들을 부를 차례대로. 첫 모델을 적지 않았으면 빈 목록이다(내주지 않는다)."""
