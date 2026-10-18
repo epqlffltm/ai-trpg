@@ -55,7 +55,7 @@ from app.engine.dice import Dice
 from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
-from app.rounds import deadlines, narration_request, opener, repository, rests
+from app.rounds import deadlines, narration_request, opener, quest_goals, repository, rests
 from app.rounds.acceptance import accept_action, put_declaration
 from app.rounds.cast import Scene, cast_of
 from app.rounds.errors import Conflict, RoundConflictError, RoundNotFoundError
@@ -232,9 +232,11 @@ def begin_closing(
     판정과 죽음의 굴림을 끝낸 뒤에 때가 된 부상을 끝낸다. 이번 라운드의 판정에는 아직 효과가 있었다.
     오래 가는 것이 나으면 후유증 표를 굴린다(expire_injuries).
     그다음 쉰 사람이 회복하고, 고비를 넘긴 사람이 되살아나기를 굴리고, 저절로 회복한다(app/rounds/rests.py).
-    그 라운드에 다친 사람의 휴식은 깨진다. 그다음 기한을 넘긴 퀘스트를 실패로 바꾼다(app/rounds/deadlines.py).
+    그 라운드에 다친 사람의 휴식은 깨진다. 그다음 조건을 채운 퀘스트를 성공으로 바꾸고(app/rounds/quest_goals.py),
+    기한을 넘긴 퀘스트를 실패로 바꾼다(app/rounds/deadlines.py). 이룬 것을 먼저 본다.
+    기한 전 마지막 라운드에 이루었으면 성공이다.
     이벤트는 행동(과 그 판정, 치료, 변화, 부상, 휴식)들 → 죽음의 굴림들 → 끝난 부상들 → 되살아나기와 저절로 회복 →
-    기한을 넘긴 퀘스트들 → 닫힘 순서로 적는다. 한 묶음이다.
+    이룬 퀘스트들 → 기한을 넘긴 퀘스트들 → 닫힘 순서로 적는다. 한 묶음이다.
     맞붙은 몬스터가 있던 라운드는 행동과 몬스터의 공격을 차례 순서로 적는다(round_.turns, app/rounds/initiative.py).
     나중에 적히는 서술과 열림도 이 묶음에 들어간다.
 
@@ -250,6 +252,7 @@ def begin_closing(
     round_.death_saves = roll_death_saves(table, dying, dice)
     ended = expire_injuries(table, scene, round_.number, dice)
     recovered = rests.settle(table, round_, hurt, dice)
+    achieved = quest_goals.complete_quests(table, scene.all_monsters, scene.npcs)
     overdue = deadlines.expire_quests(table)
     round_.moves = narration_request.dump_moves(build_moves(table, round_, ended, recovered))
     round_.narration_style = table.narration_style
@@ -257,6 +260,7 @@ def begin_closing(
     record_death_saves(session, table, round_, group)
     record_injury_endings(session, table, ended, round_.number, group)
     record_recoveries(session, table, recovered, group)
+    quest_goals.record_successes(session, table, achieved, group)
     deadlines.record_failures(session, table, overdue, group)
     idle = [str(user_id) for user_id in waiting_for(table, round_)]
     payload = {'number': round_.number, 'idle': idle, 'reason': reason}
@@ -294,6 +298,7 @@ async def load_scene(session: AsyncSession, table: GameTable, round_: Round) -> 
         npcs=states,
         cast=cast_of(snapshot, round_.scene, states),
         monsters=scene_monsters(snapshot, table, monsters),
+        all_monsters=monsters,
     )
 
 

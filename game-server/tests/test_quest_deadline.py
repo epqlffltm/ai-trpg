@@ -172,7 +172,7 @@ async def test_a_revealed_quest_counts_from_the_round_it_was_revealed(
 async def test_a_quest_finished_while_hidden_has_no_time_limit(client: AsyncClient, me: dict, friend: dict, lore: dict):
     table = await start_with_deadlines(client, me, friend, lore)
 
-    response = await change(client, me, table, lore['traitor'], 'succeeded')
+    response = await change(client, me, table, lore['traitor'], 'failed')
 
     assert due_of(response.json(), '배신자') is None
 
@@ -230,13 +230,12 @@ async def test_a_quest_the_host_finished_in_time_is_left_alone(
     await step(client, me, table, HOUR)
     await play(client, me, friend, table, narrated)
 
-    # 기한이 지났어도 방장이 장면을 보고 성공으로 바꿨다. 보상을 받고 그대로다
-    await change(client, me, table, lore['rescue'], 'succeeded')
+    # 기한이 지났어도 방장이 먼저 실패로 끝냈다. 끝난 것은 기한이 다시 바꾸지 않는다
+    await change(client, me, table, lore['rescue'], 'failed')
     await play(client, me, friend, table, narrated)
 
     seen = await read_table(client, friend, table)
-    assert ('왕녀 구출', 'succeeded') in quests_in(seen)
-    assert held(seen, FRIEND) == [('치유 물약', 2)]
+    assert ('왕녀 구출', 'failed') in quests_in(seen)
     assert len(await events_of(client, me, table, 'quest_changed')) == 1
 
 

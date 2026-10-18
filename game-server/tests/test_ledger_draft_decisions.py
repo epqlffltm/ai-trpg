@@ -4,7 +4,7 @@
 방장이 장부 초안의 줄을 받아들이거나 버린다.
 
 넷을 본다.
-  - 받아들이기: 장부가 바뀐다. 방장이 손으로 할 때와 같은 이벤트, 같은 규칙(보상 포함)이다.
+  - 받아들이기: 장부가 바뀐다. 방장이 손으로 할 때와 같은 이벤트, 같은 규칙이다. 성공은 받아들이지 않는다(엔진의 몫).
   - 버리기: 장부는 그대로다. 끝난 테이블에서도 된다.
   - 다시 보기: 초안을 쓴 뒤에 장부가 바뀌었으면 받아들이지 않는다(죽음, 캐릭터 바뀜, 99 개, 끝난 퀘스트).
   - 한 번만: 결정했거나 만료된 줄, 동시에 두 번 받아들이기, 방장이 아닌 사람, 다른 테이블의 줄.
@@ -29,7 +29,7 @@ from tests.test_table_quests import change, start_duo
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
 # 앞의 테스트들의 픽스처를 그대로 쓴다. 방장(기사), 함께 앉는 사람(약사), 사건과 물건이 든 로어북,
-# 앉지 않는 사람, 그리고 "기사가 물약 둘을 손에 넣었고 왕녀 구출을 이뤘다"는 초안을 쓰는 모델
+# 앉지 않는 사람, 그리고 "기사가 물약 둘을 손에 넣었고 왕녀 구출을 놓쳤다"는 초안을 쓰는 모델
 me = quest_tables.me
 friend = quest_tables.friend
 lore = quest_tables.lore
@@ -95,21 +95,38 @@ async def test_accepting_a_found_item_puts_it_in_the_ledger(
     assert [draft['id'] for draft in (await drafts_of(client, me, table)).json()['items']] == [quest['id']]
 
 
-async def test_accepting_a_quest_change_changes_the_quest_with_its_reward(
+async def test_accepting_a_quest_change_changes_the_quest(
     client: AsyncClient, me: dict, friend: dict, lore: dict, provider, narrated
 ):
     table, _, quest = await drafted(client, me, friend, lore, narrated)
 
     response = await accept(client, me, table, quest)
 
-    # 방장이 손으로 바꿀 때와 같은 길이다. 성공의 보상(물약 둘, 밧줄 하나)이 살아 있는 캐릭터마다 간다
+    # 방장이 손으로 바꿀 때와 같은 길이다. 실패에는 보상이 없다
     assert response.status_code == status.HTTP_200_OK, response.text
-    assert quest_tables.quests_in(response.json())[0] == ('왕녀 구출', 'succeeded')
-    assert held(response.json(), ME) == held(response.json(), FRIEND) == [('치유 물약', 2), ('밧줄', 1)]
+    assert quest_tables.quests_in(response.json())[0] == ('왕녀 구출', 'failed')
+    assert held(response.json(), ME) == held(response.json(), FRIEND) == []
     [event] = await events_of(client, friend, table, 'quest_changed')
-    assert (event['payload']['previous'], event['payload']['status']) == ('active', 'succeeded')
+    assert (event['payload']['previous'], event['payload']['status']) == ('active', 'failed')
     # 바꾼 사람은 받아들인 방장이다. AI 가 아니다
     assert event['actor_id'] == str(ME)
+
+
+async def test_an_old_success_draft_is_not_accepted(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, provider, narrated, session: AsyncSession
+):
+    table, _, quest = await drafted(client, me, friend, lore, narrated)
+    # 성공을 엔진의 몫으로 옮기기 전에 쓴 초안이다. 받아들이면 방장이 성공을 정하게 된다
+    await session.execute(
+        text("UPDATE ledger_drafts SET payload = jsonb_set(payload, '{status}', '\"succeeded\"') WHERE id = :id"),
+        {'id': quest['id']},
+    )
+    await session.commit()
+
+    response = await accept(client, me, table, quest)
+
+    assert refused(response, 'quest_success_by_engine')
+    assert quest_tables.quests_in(await read_table(client, me, table))[0] == ('왕녀 구출', 'active')
 
 
 async def test_a_full_stack_takes_only_what_fits(

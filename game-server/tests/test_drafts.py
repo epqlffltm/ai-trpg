@@ -67,7 +67,7 @@ CONTEXT = DraftContext(
 
 GOOD_REPLY = (
     '{"found_items": [{"character": "p1", "item": "i1", "count": 2}], '
-    '"quest_changes": [{"quest": "q1", "status": "succeeded"}]}'
+    '"quest_changes": [{"quest": "q1", "status": "failed"}]}'
 )
 
 
@@ -78,7 +78,7 @@ def test_a_reply_is_read_as_drafts():
     output = read_output(GOOD_REPLY)
 
     assert [(item.character, item.item, item.count) for item in output.found_items] == [('p1', 'i1', 2)]
-    assert [(quest.quest, quest.status) for quest in output.quest_changes] == [('q1', 'succeeded')]
+    assert [(quest.quest, quest.status) for quest in output.quest_changes] == [('q1', 'failed')]
 
 
 def test_a_fenced_reply_is_unwrapped():
@@ -138,7 +138,7 @@ def test_drafts_within_the_lists_are_accepted():
     checked = check_output(read_output(GOOD_REPLY), CONTEXT)
 
     assert checked.items == [ItemDraft(KNIGHT, '기사', POTION, '치유 물약', 2)]
-    assert checked.quests == [QuestDraft(RESCUE, '왕녀 구출', QuestStatus.ACTIVE, QuestStatus.SUCCEEDED)]
+    assert checked.quests == [QuestDraft(RESCUE, '왕녀 구출', QuestStatus.ACTIVE, QuestStatus.FAILED)]
     assert checked.rejected == []
 
 
@@ -157,8 +157,12 @@ def test_a_hidden_quest_may_be_drafted_as_revealed():
         ({'found_items': [{'character': 'p1', 'item': 'i9', 'count': 1}]}, Rejected('found_item', 'unknown_item')),
         ({'quest_changes': [{'quest': 'q7', 'status': 'failed'}]}, Rejected('quest_change', 'unknown_quest')),
         ({'quest_changes': [{'quest': 'q1', 'status': 'active'}]}, Rejected('quest_change', 'quest_already_active')),
+        (
+            {'quest_changes': [{'quest': 'q1', 'status': 'succeeded'}]},
+            Rejected('quest_change', 'quest_success_by_engine'),
+        ),
     ],
-    ids=['made-up-character', 'made-up-item', 'made-up-quest', 'already-active'],
+    ids=['made-up-character', 'made-up-item', 'made-up-quest', 'already-active', 'success-is-for-the-engine'],
 )
 def test_drafts_outside_the_rules_are_rejected_with_a_reason(document: dict, rejected: Rejected):
     checked = check_output(DraftOutput.model_validate(document), CONTEXT)
@@ -172,13 +176,13 @@ def test_the_same_draft_twice_keeps_the_first():
             {'character': 'p1', 'item': 'i1', 'count': 2},
             {'character': 'p1', 'item': 'i1', 'count': 5},
         ],
-        'quest_changes': [{'quest': 'q1', 'status': 'succeeded'}, {'quest': 'q1', 'status': 'failed'}],
+        'quest_changes': [{'quest': 'q2', 'status': 'active'}, {'quest': 'q2', 'status': 'failed'}],
     }
 
     checked = check_output(DraftOutput.model_validate(document), CONTEXT)
 
     assert [item.count for item in checked.items] == [2]
-    assert [quest.status for quest in checked.quests] == [QuestStatus.SUCCEEDED]
+    assert [quest.status for quest in checked.quests] == [QuestStatus.ACTIVE]
     assert checked.rejected == [Rejected('found_item', 'duplicate'), Rejected('quest_change', 'duplicate')]
 
 
@@ -234,7 +238,7 @@ async def test_the_dead_and_the_finished_are_left_out(
     client: AsyncClient, me: dict, friend: dict, lore: dict, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await change(client, me, table, lore['rescue'], 'succeeded')
+    await change(client, me, table, lore['rescue'], 'failed')
     await kill(session, FRIEND)
 
     context = await context_of(session, table)
@@ -278,7 +282,8 @@ def test_the_rules_keep_items_passed_between_characters_out():
 
 def test_the_place_for_unlisted_items_is_gone_again():
     # ledger-draft-4: -3 의 자리(unlisted_items)는 드러난 퀘스트를 놓치게 해서 뺐다. 그 칸이 오면 모양이 틀린 답이다
-    assert DRAFT_PROMPT_VERSION == 'ledger-draft-4'
+    # ledger-draft-5: 이룬 일(succeeded)은 엔진이 정한다
+    assert DRAFT_PROMPT_VERSION == 'ledger-draft-5'
     assert 'unlisted_items' not in SYSTEM_TEXT
     with pytest.raises(OutputError) as raised:
         read_output('{"found_items": [], "unlisted_items": ["녹슨 장검"]}')
@@ -339,7 +344,7 @@ async def test_the_writer_returns_what_survived_and_logs_the_call():
     checked = await DraftWriter(provider, log).draft(sent)
 
     assert [item.count for item in checked.items] == [2]
-    assert [quest.status for quest in checked.quests] == [QuestStatus.SUCCEEDED]
+    assert [quest.status for quest in checked.quests] == [QuestStatus.FAILED]
     [call] = provider.calls
     assert (call.messages, call.params) == (build_messages(SCENE, CONTEXT), DRAFT_PARAMS)
     [record] = log.records

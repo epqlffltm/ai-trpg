@@ -27,7 +27,8 @@ from app.tables.models import QuestStatus
 #                   목록에 없는 물건을 적을 자리(unlisted_items)를 더했다. 문장은 아무것도 바꾸지 못했고,
 #                   자리는 not_listed 를 그대로 두고 드러난 퀘스트를 놓치게 했다(revealed_and_found 10/10, 일지를 적음)
 #   ledger-draft-4: -2 로 되돌린다. not_listed 는 남은 실패로 받아들인다. 서버가 통째로 버려 장부는 바뀌지 않는다
-DRAFT_PROMPT_VERSION = 'ledger-draft-4'
+#   ledger-draft-5: 퀘스트를 이룬 일(succeeded)을 넣지 않는다. 성공은 엔진이 조건을 보고 정한다(#367)
+DRAFT_PROMPT_VERSION = 'ledger-draft-5'
 
 SYSTEM_TEXT = '\n'.join(
     [
@@ -37,13 +38,13 @@ SYSTEM_TEXT = '\n'.join(
         '보기만 한 것, 가지려 했지만 못 한 것, 쓴 것은 넣지 않는다.',
         '- 캐릭터끼리 물건을 건넨 것은 넣지 않는다. 일행이 이미 가진 물건이 옮겨 갔을 뿐이다. '
         '일행 밖에서 주운 물건을 다른 캐릭터에게 건넸으면 마지막에 가진 캐릭터 하나만 넣는다.',
-        '- quest_changes: 숨긴 퀘스트가 드러난 일(active), 퀘스트를 이룬 일(succeeded), 놓친 일(failed).',
+        '- quest_changes: 숨긴 퀘스트가 드러난 일(active), 놓친 일(failed). 이룬 일은 게임이 정하니 넣지 않는다.',
         '- 아래 목록의 이름표(p1, i1, q1)만 쓴다. 목록에 없는 캐릭터, 물건, 퀘스트는 넣지 않는다.',
         '- 확실하지 않으면 넣지 않는다. 일어난 일이 없으면 두 목록을 비운다.',
         '- 이것은 초안이다. 방장이 확인한 뒤에야 기록이 된다.',
         '- JSON 객체 하나만 답한다. 설명을 붙이지 않는다.',
         '형식: {"found_items": [{"character": "p1", "item": "i1", "count": 1}], '
-        '"quest_changes": [{"quest": "q1", "status": "succeeded"}]}',
+        '"quest_changes": [{"quest": "q1", "status": "active"}]}',
     ]
 )
 

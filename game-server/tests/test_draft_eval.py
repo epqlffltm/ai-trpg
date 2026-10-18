@@ -65,14 +65,14 @@ async def test_a_perfect_answer_scores_as_exact(case: DraftCase):
 
 async def test_extra_missed_and_unreadable_are_counted():
     log = FakeCallLog()
-    rescued = next(case for case in CASES if case.name == 'rescued')
+    lost = next(case for case in CASES if case.name == 'lost')
     found = next(case for case in CASES if case.name == 'found')
-    # 구출 장면에 물건을 더하고(더한 것 1) 퀘스트를 빠뜨렸다(놓친 것 1). 없는 이름표 하나(지어낸 것 1)
+    # 놓친 장면에 물건을 더하고(더한 것 1) 퀘스트를 빠뜨렸다(놓친 것 1). 없는 이름표 하나(지어낸 것 1)
     wrong = json.dumps(
         {'found_items': [{'character': 'p1', 'item': 'i2', 'count': 1}, {'character': 'p9', 'item': 'i1', 'count': 1}]}
     )
 
-    first = await try_case(DraftWriter(FakeProvider(reply=wrong), log), log, 'fake', rescued)
+    first = await try_case(DraftWriter(FakeProvider(reply=wrong), log), log, 'fake', lost)
     second = await try_case(DraftWriter(FakeProvider(reply='물약을 찾았다'), log), log, 'fake', found)
 
     assert (first.read, first.exact, first.extra, first.missed, first.rejected) == (True, False, 1, 1, 1)
