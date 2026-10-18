@@ -229,6 +229,12 @@ class GameTable(Base):
     narration_tier: Mapped[str] = mapped_column(
         String(20), default=NarrationTier.STANDARD, server_default=text(f"'{NarrationTier.STANDARD}'")
     )
+    # 방장이 고른 서술 모델(모델 목록의 이름표, app/catalog/). 값은 결제 서버의 narration.<이름표>.i0.o0 이다.
+    # 비어 있으면 서버의 기본(서술 등급)으로 서술한다. 이 칸이 생기기 전에 만든 테이블도 비어 있다.
+    # 라운드를 열 때 그 라운드의 것으로 굳는다(등급과 같다). 그래서 바꾼 값은 다음 라운드부터 쓴다.
+    # 길이는 모델 목록의 이름표와 같다(48자). 모델 목록을 가리키는 외래 키는 두지 않는다.
+    # 고를 때 확인한다(app/tables/model_picker.py)
+    narration_model: Mapped[str | None] = mapped_column(String(48))
 
     # 라운드의 시간 제한(초). 라운드가 열린 때부터 센다. 지나면 서버가 라운드를 닫는다(app/rounds/clock.py).
     # 비어 있으면 시간 제한이 없다. 모두 내거나 방장이 닫을 때만 닫힌다.

@@ -128,6 +128,10 @@ class Round(Base):
     narration_tier: Mapped[str] = mapped_column(
         String(20), default=NarrationTier.STANDARD, server_default=text(f"'{NarrationTier.STANDARD}'")
     )
+    # 서술 모델(모델 목록의 이름표). 열 때 테이블이 고른 모델로 정하고 고치지 않는다(등급과 같다).
+    # 있으면 그 모델의 가격표(narration.<이름표>.i0.o0)로 값을 걸고 그 모델로만 서술한다. 다른 모델로 넘어가지 않는다.
+    # 비어 있으면 위의 등급으로 걸고 서술한다. 테이블이 모델을 고르지 않았거나, 이 칸이 생기기 전에 연 라운드다
+    narration_model: Mapped[str | None] = mapped_column(String(48))
     # 닫기 시작한 시각. 선언을 마감하고 서술을 맡긴 때다. 비어 있으면 아직 선언을 받는 중이다.
     # 서술을 다시 맡기면 이 시각을 지금으로 고친다. "맡긴 지 얼마나 됐나"를 이것으로 안다(app/rounds/service.py)
     closing_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

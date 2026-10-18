@@ -56,6 +56,8 @@ class EventType(enum.StrEnum):
     ROUND_TIME_LIMIT_CHANGED = 'round_time_limit_changed'
     # 방장이 서술 등급을 바꿨다. 다음 라운드부터 그 등급이다
     NARRATION_TIER_CHANGED = 'narration_tier_changed'
+    # 방장이 서술 모델을 바꿨다(비우면 서버의 기본). 다음 라운드부터 그 모델이다
+    NARRATION_MODEL_CHANGED = 'narration_model_changed'
     # 방장이 크레딧이 모자란 사람을 기다리는 규칙(시간, 자동으로 빼기)을 바꿨다
     CREDIT_WAIT_CHANGED = 'credit_wait_changed'
     # 방장이 쪽지를 보낸 사실을 알릴지(whisper_notice)를 바꿨다. 바꾼 뒤에 보내는 쪽지부터 따른다
