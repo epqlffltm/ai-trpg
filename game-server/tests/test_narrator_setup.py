@@ -13,6 +13,7 @@ from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.ai.call_log import DbCallLog
+from app.ai.retry_budget import RetryBudget
 from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ModelRouter
 from app.catalog.lookup import DbModelLookup
 from app.main import create_app
@@ -263,3 +264,18 @@ def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatc
     settings = make_test_settings()
     keys = (settings.openai_api_key, settings.anthropic_api_key, settings.gemini_api_key)
     assert [key.get_secret_value() for key in keys] == ['', '', '']
+
+
+def test_every_chain_shares_one_retry_budget():
+    narrator = narrator_of(make_test_settings(**LLM, **PREMIUM))
+
+    budgets = {
+        id(standard(narrator).retry_budget),
+        id(tiered(narrator).narrators[NarrationTier.PREMIUM].retry_budget),
+        id(narrator.chain_for('gpt-6-luna').retry_budget),
+        id(narrator.chain_for('claude-sonnet-5-5').retry_budget),
+    }
+
+    # 재시도의 비율은 앱 전체에서 센다. 서술마다 새 예산이면 공급자가 아플 때 막지 못한다
+    assert len(budgets) == 1
+    assert isinstance(standard(narrator).retry_budget, RetryBudget)

@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.ai.call_log import DbCallLog
 from app.ai.calls import CallLog
 from app.ai.openai_compat import WireOptions
+from app.ai.retry_budget import RetryBudget
 from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, Endpoint, ModelRouter
 from app.catalog.lookup import DbModelLookup
 from app.core.config import Settings
@@ -86,13 +87,17 @@ def offered_tiers(settings: Settings) -> frozenset[NarrationTier]:
     return frozenset(tier_models(settings))
 
 
-def build_chain(settings: Settings, router: ModelRouter, log: CallLog, models: list[str]) -> RetryingNarrator:
+def build_chain(
+    settings: Settings, router: ModelRouter, log: CallLog, models: list[str], retry_budget: RetryBudget
+) -> RetryingNarrator:
     """
     모델마다 서술자를 하나씩 만들어(첫 모델, 넘어갈 모델들 차례로) 다시 시도하는 서술자로 감싼다. 한 등급의 서술자다.
+
+    재시도 예산(retry_budget)은 앱에 하나다. 모든 서술자가 함께 쓴다(app/ai/retry_budget.py).
     """
     key = settings.digest_key()
     narrators = [RoutedNarrator(model, router, log, digest_key=key) for model in models]
-    return RetryingNarrator(narrators, attempt_timeout=settings.llm_timeout_seconds)
+    return RetryingNarrator(narrators, attempt_timeout=settings.llm_timeout_seconds, retry_budget=retry_budget)
 
 
 def build_narrator(
@@ -108,7 +113,9 @@ def build_narrator(
     if settings.narrator != 'llm':
         return FakeNarrator()
     log = DbCallLog(session_factory)
-    chains = {tier: build_chain(settings, router, log, models) for tier, models in tier_models(settings).items()}
+    budget = RetryBudget()
+    tiers = tier_models(settings).items()
+    chains = {tier: build_chain(settings, router, log, models, budget) for tier, models in tiers}
     return PickedNarrator(
-        chain_for=lambda model: build_chain(settings, router, log, [model]), default=TieredNarrator(chains)
+        chain_for=lambda model: build_chain(settings, router, log, [model], budget), default=TieredNarrator(chains)
     )

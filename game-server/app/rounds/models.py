@@ -87,6 +87,7 @@ class Round(Base):
     __table_args__ = (
         CheckConstraint('number >= 1', name='number_positive'),
         CheckConstraint('auto_retries >= 0', name='auto_retries_not_negative'),
+        CheckConstraint('narration_failures >= 0', name='narration_failures_not_negative'),
         # 한 테이블에 같은 번호의 라운드가 둘일 수 없다
         UniqueConstraint('table_id', 'number'),
         # 한 테이블에 닫히지 않은 라운드(열림, 닫는 중)는 하나뿐이다. 조건이 붙은 유일 색인이다.
@@ -144,6 +145,12 @@ class Round(Base):
     # 정해 둔 횟수를 넘으면 더 맡기지 않고 실패(stalled)로 적어 방장에게 넘긴다. 방장이 다시 맡기면 0 으로 돌린다.
     # 이 칸이 생기기 전의 라운드는 0 이다
     auto_retries: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
+    # 서술이 실패로 끝난 횟수(app/rounds/service.py 의 fail_closing). 서술 값을 잡지 못한 실패는 세지 않는다.
+    # 정해 둔 횟수(NARRATION_FAILURE_LIMIT)에 닿으면 서술을 그만두고, 값을 받지 않고,
+    # 엔진의 결과만으로 다음 라운드를 연다.
+    # 방장이 다시 맡겨도 0 으로 돌리지 않는다. 다시 맡길 때마다 드는 원가에 상한을 두려는 것이다.
+    # 이 칸이 생기기 전의 라운드는 0 이다
+    narration_failures: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
 
     # 이 라운드가 닫힐 때 굴린 죽음의 굴림들(app/engine/death.py). 굴린 순서다. 굴린 것이 없으면 빈 목록이다.
     # 하나하나가 {user_id, character_name, roll, target, success, successes, failures, fate} 다.
