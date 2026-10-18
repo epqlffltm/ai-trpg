@@ -32,6 +32,7 @@ from app.assets.scenarios.schemas import (
 from app.billing.prices import Tier
 from app.calendar.schemas import ClockTimeOut
 from app.catalog.models import Grade
+from app.catalog.schemas import Slug
 from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
 from app.engine.sheet import Score, Sheet
 from app.rounds.tiers import NarrationTier
@@ -88,6 +89,9 @@ class TableCreate(BaseModel):
     # 서술 등급. 적지 않으면 standard 다. 이 서버가 내주는 등급만 된다(GET /tables/narration-tiers).
     # 만든 뒤에도 방장이 바꿀 수 있다
     narration_tier: NarrationTier = NarrationTier.STANDARD
+    # 서술 모델(모델 목록의 이름표). 적지 않으면 서버의 기본(위의 등급)으로 서술한다.
+    # 고를 수 있는 모델만 된다(GET /tables/narration-models). 만든 뒤에도 방장이 바꿀 수 있다
+    narration_model: Slug | None = None
     # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 빼고 서술하는가. 만든 뒤에도 방장이 바꿀 수 있다
     credit_wait_seconds: CreditWait = DEFAULT_CREDIT_WAIT
     remove_short_payers: bool = True
@@ -231,6 +235,14 @@ class NarrationTierUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     narration_tier: NarrationTier
+
+
+class NarrationModelUpdate(BaseModel):
+    """서술 모델을 바꿀 때 받는 값. null 이면 서버의 기본(서술 등급)으로 돌아간다. 칸을 빼먹으면 거부한다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    narration_model: Slug | None
 
 
 class NarrationTiersOut(BaseModel):
@@ -511,6 +523,9 @@ class TableSummary(BaseModel):
     round_time_limit: int | None
     # 지금의 서술 등급. 로비에서 들어가기 전에 어느 모델로 서술하는지 안다. 바꾸면 다음 라운드부터다
     narration_tier: NarrationTier
+    # 방장이 고른 서술 모델(이름표). 없으면 null 이고 서버의 기본(위의 등급)으로 서술한다. 바꾸면 다음 라운드부터다.
+    # 값은 GET /tables/narration-models 에서 이름표로 찾는다
+    narration_model: str | None
     # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 자리에서 빼는가. 들어가기 전에 안다
     credit_wait_seconds: int
     remove_short_payers: bool

@@ -49,6 +49,7 @@ from app.tables import monsters, npcs, places, quests, repository, sheets
 from app.tables.building import build_table, hash_table_password, new_invite_code, seat_limit
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
+from app.tables.model_picker import ModelPicker, require_pickable
 from app.tables.models import GameTable, TableMember, TableStatus
 from app.tables.password_attempts import guarded_password_check
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
@@ -85,16 +86,23 @@ async def resolve_version(session: AsyncSession, viewer: AccessClaims, data: Tab
 
 
 async def create_table(
-    session: AsyncSession, viewer: AccessClaims, data: TableCreate, offered: frozenset[NarrationTier]
+    session: AsyncSession,
+    viewer: AccessClaims,
+    data: TableCreate,
+    offered: frozenset[NarrationTier],
+    picker: ModelPicker | None = None,
 ) -> GameTable:
     """
     테이블을 만든다. 만든 사람이 방장이 되어 앉는다. offered 는 이 서버가 내주는 서술 등급들이다.
+    서술 모델을 골랐으면 picker 로 지금 고를 수 있는 모델인지 본다(app/tables/model_picker.py).
     판의 시작 시각을 가리키는 게임 안의 시계를 함께 단다(app/calendar/).
 
     판이 없으면 AssetNotFoundError, 없는 스타팅이나 판이 허용하지 않는 캐릭터 방식이나 내주지 않는 서술 등급을
     골랐으면 TableOptionError, 그 판으로는 둘 수 없는 정원이면 TableConflictError.
+    고를 수 없는 서술 모델이면 TableOptionError(narration_model).
     """
     require_offered(data.narration_tier, offered)
+    await require_pickable(session, picker, data.narration_model)
     version = await resolve_version(session, viewer, data)
     snapshot = read_snapshot(version.snapshot)
 

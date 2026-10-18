@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import repository
 from app.billing.models import ChargeStatus, NarrationCharge
-from app.billing.prices import PRICE_CODE_PREFIX
+from app.billing.prices import PRICE_CODE_PREFIX, narration_code
 from app.rounds.models import Round
 from app.tables.models import GameTable
 
@@ -58,6 +58,16 @@ def price_code_for(tier: str) -> str:
     return f'{PRICE_CODE_PREFIX}.{tier}'
 
 
+def price_code_of(round_: Round) -> str:
+    """
+    그 라운드의 서술 값의 가격표 이름. 모델을 굳힌 라운드면 그 모델의 것(narration.<이름표>.i0.o0),
+    아니면 등급의 것(narration.standard)이다. 둘 다 결제 서버의 가격표가 값을 정한다.
+    """
+    if round_.narration_model is not None:
+        return narration_code(round_.narration_model)
+    return price_code_for(round_.narration_tier)
+
+
 def reference_for(table_id: uuid.UUID, number: int, payer_id: uuid.UUID, renewals: int = 0) -> str:
     """
     결제 서버의 이름표. 테이블, 라운드, 내는 사람으로 짓는다. 같은 라운드의 같은 사람이면 언제 지어도 같다.
@@ -92,7 +102,7 @@ def charge_round(session: AsyncSession, table: GameTable, round_: Round, now: da
 
     라운드는 아직 저장하지 않았어도 된다. 저장할 때 라운드를 먼저 넣는다(NarrationCharge.round).
     결제 서버는 부르지 않는다. 정리 작업이 곧 걸고(크레딧이 모자란 것을 일찍 알린다),
-    라운드를 닫을 때 걸렸는지 다시 본다. 값은 라운드의 서술 등급의 것이다(price_code_for).
+    라운드를 닫을 때 걸렸는지 다시 본다. 값은 라운드의 서술 모델이나 등급의 것이다(price_code_of).
 
     처음 부를 시각은 now(라운드를 연 시각, 앱의 시계)다. DB 의 now() 에 맡기지 않는다.
     정리 작업은 앱의 시계로 부를 차례를 고른다(repository.find_due). DB 의 시계가 앞서면 그만큼 늦게 건다.
@@ -102,7 +112,7 @@ def charge_round(session: AsyncSession, table: GameTable, round_: Round, now: da
             round=round_,
             payer_id=payer,
             reference=reference_for(table.id, round_.number, payer),
-            price_code=price_code_for(round_.narration_tier),
+            price_code=price_code_of(round_),
             status=ChargeStatus.PENDING,
             next_attempt_at=now,
         )
