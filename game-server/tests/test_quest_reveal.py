@@ -23,8 +23,6 @@ from httpx import AsyncClient
 
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_30
-from app.drafts.context import quest_choices
-from app.tables.models import QuestStatus
 from tests.narration_model import asset_body
 from tests.test_quest_deadline import EIGHT, clock_at
 from tests.test_quest_goals import (
@@ -289,23 +287,3 @@ async def test_the_host_cannot_end_a_hidden_quest(client: AsyncClient, me: dict[
     # 없는 퀘스트와 같은 답이다
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert names(await read_table(client, me, table)) == []
-
-
-def test_a_draft_lists_only_active_quests():
-    hidden, active = uuid.uuid4(), uuid.uuid4()
-    rows = [
-        type('Row', (), {'entry_id': hidden, 'status': QuestStatus.HIDDEN})(),
-        type('Row', (), {'entry_id': active, 'status': QuestStatus.ACTIVE})(),
-    ]
-    catalog = {
-        hidden: type('Quest', (), {'name': '숨은 비밀'})(),
-        active: type('Quest', (), {'name': '왕녀 구출'})(),
-    }
-    table = type('Table', (), {'quests': rows})()
-
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr('app.drafts.context.quests.catalog', lambda snapshot: catalog)
-        choices = quest_choices(table, snapshot=None)
-
-    # 초안은 방장이 본다. 숨긴 퀘스트의 이름이 실리면 방장에게 샌다
-    assert [choice.name for choice in choices.values()] == ['왕녀 구출']

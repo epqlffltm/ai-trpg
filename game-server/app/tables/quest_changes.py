@@ -68,7 +68,6 @@ def apply_change(
     """
     잠근 테이블의 퀘스트 하나를 실패로 바꾸고 이벤트를 적는다. 저장하지 않는다.
 
-    방장이 바꿀 때(change_quest)와 방장이 장부 초안을 받아들일 때(app/drafts/decisions.py)가 같이 쓴다.
     성공과 드러내기는 하지 못한다(quest_success_by_engine, quest_reveal_by_engine). 엔진이 한다.
     그 까닭은 퀘스트를 찾기 전에 본다. 숨긴 퀘스트가 있는지 답으로 새지 않는다.
     이 테이블의 드러난 퀘스트가 아니면 TableOptionError, 바꿀 수 없는 상태면 TableConflictError.

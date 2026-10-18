@@ -102,7 +102,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'narration_model_pick',
         'credit_waits',
     ),
-    # 서술: 프롬프트, 서술자, 로어와 기억의 검색, 장부 초안
+    # 서술: 프롬프트, 서술자, 로어와 기억의 검색
     'narration': (
         'narrat',
         'clock_narration',
@@ -115,9 +115,6 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'lore_',
         'memory',
         'person_history',
-        'draft',
-        'ledger_draft',
-        'stale_drafts',
         'state_eval',
     ),
     # 테이블: 방, 자리, 캐릭터의 교체, 테이블의 시트·물건·맵·퀘스트·시계

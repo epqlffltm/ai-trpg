@@ -109,16 +109,12 @@ class Settings(BaseSettings):
     # 모델의 이름. narrator=llm 이면 반드시 적는다(예: gemma4:26b).
     # 모델 목록(app/catalog, scripts/models.py)의 이름표를 적으면 목록의 창구와 날짜판으로 부른다(예: gpt-6-luna).
     # 목록에 없는 이름이면 LLM_BASE_URL 의 그 모델을 부른다. 아래의 넘어갈 모델도 같다.
-    # 서술은 테이블의 서술 모델로 한다. 이것은 서술 모델이 없는 옛 라운드와 장부 초안의 기본이다
+    # 서술은 테이블의 서술 모델로 한다. 이것은 서술 모델이 없는 옛 라운드의 기본이다
     llm_model: str = ''
 
     # 첫 모델이 끝내 실패하면 차례로 넘어갈 모델들. 쉼표로 나눠 적는다(예: gemma4:31b-it-qat,qwen3.6:27b).
     # 비우면 넘어가지 않는다(기본). 같은 주소(LLM_BASE_URL)의 모델들이다
     llm_fallback_models: str = ''
-
-    # 장부 초안(app/drafts/)을 쓰는 모델. 적는 법은 LLM_MODEL 과 같다. 비우면 LLM_MODEL 이다.
-    # 장부 초안은 청구하지 않는 호출이라 원가가 모두 우리 몫이다. 고르는 일이라 싼 모델(Flash 급)이면 충분하다
-    draft_model: str = ''
 
     # 모델의 답을 한 번 기다리는 시간(초). 처음 부를 때는 모델을 메모리에 올리느라 수십 초가 걸린다.
     # 서술은 요청과 따로 도는 작업이라 플레이어의 요청이 이만큼 기다리지는 않는다.
@@ -329,10 +325,6 @@ class Settings(BaseSettings):
     def llm_models(self) -> list[str]:
         """standard 등급으로 부를 모델들을 부를 차례대로. 첫 모델 다음에 넘어갈 모델들이다."""
         return model_chain(self.llm_model, self.llm_fallback_models)
-
-    def draft_model_name(self) -> str:
-        """장부 초안을 쓰는 모델. DRAFT_MODEL 을 적지 않았으면 기본 모델(LLM_MODEL)이다."""
-        return self.draft_model.strip() or self.llm_models()[0]
 
 
 @lru_cache

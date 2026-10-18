@@ -512,6 +512,21 @@ async def test_only_listed_payload_fields_leave(client: AsyncClient, me: dict[st
     assert 'hidden_roll' not in response.text
 
 
+async def test_an_event_of_the_removed_ledger_drafts_can_still_be_read(
+    client: AsyncClient, me: dict[str, str], session: AsyncSession
+):
+    table = await open_table(client, me)
+    stored = await session.get(GameTable, uuid.UUID(table['id']))
+    # 장부 초안을 걷어내기 전(#371)에 적힌 이벤트다. 이제는 생기지 않는다
+    recorder.record(session, stored, EventType.LEDGER_DRAFTS_CHANGED, actor_id=ME, payload={'ledger_drafts': True})
+    await session.commit()
+
+    response = await client.get(table_url(table, '/events'), headers=me)
+
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json()['items'][-1]['payload'] == {'ledger_drafts': True}
+
+
 # --- 함께 저장된다 ---
 
 
