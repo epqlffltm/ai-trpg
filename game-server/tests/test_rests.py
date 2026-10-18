@@ -32,6 +32,7 @@ from app.rounds import rests
 from app.rounds.errors import ActionNotInRulesError
 from tests import test_character_death as death_tests
 from tests import test_monster_turns as monster_tests
+from tests.narration_model import with_model
 from tests.test_character_death import (
     FRIEND,
     LAUGH,
@@ -396,7 +397,7 @@ async def start_with_natural_recovery(client: AsyncClient, me: dict, friend: dic
     )
     await session.commit()
     body = {'title': '추격전', 'rulebook_id': rulebook['id'], 'openings': ['사이렌이 울린다.'], 'default_sheet': PLAIN}
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 2}
     table = (await client.post(TABLES_URL, json=body, headers=me)).json()

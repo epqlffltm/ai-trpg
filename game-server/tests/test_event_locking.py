@@ -32,8 +32,8 @@ from app.tables import seating
 from app.tables import service as tables
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
-from tests.conftest import EVERY_TIER
 from tests.indexers import NO_INDEXER
+from tests.narration_model import TEST_MODEL, free_picker, today
 from tests.sheets import SHEET
 from tests.signing import make_viewer
 
@@ -63,11 +63,17 @@ async def is_waiting(task: asyncio.Task) -> bool:
 async def open_table(session: AsyncSession) -> GameTable:
     """내가 앉은 테이블을 연다. 이벤트가 하나(만들어짐) 적혀 있다."""
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
-    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook.asset_id, openings=['도입부'], default_sheet=SHEET)
-    scenario = await scenarios.create_scenario(session, ME, data)
+    data = ScenarioCreate(
+        narration_model=TEST_MODEL,
+        title='시나리오',
+        rulebook_id=rulebook.asset_id,
+        openings=['도입부'],
+        default_sheet=SHEET,
+    )
+    scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     create = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=3)
-    return await tables.create_table(session, make_viewer(ME), create, EVERY_TIER)
+    return await tables.create_table(session, make_viewer(ME), create, free_picker())
 
 
 async def test_two_events_at_once_get_different_sequences(session: AsyncSession, other_session: AsyncSession):

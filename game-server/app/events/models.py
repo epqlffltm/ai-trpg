@@ -54,7 +54,7 @@ class EventType(enum.StrEnum):
     NARRATION_STYLE_CHANGED = 'narration_style_changed'
     # 방장이 라운드의 시간 제한을 바꿨다. 다음 라운드부터 쓴다
     ROUND_TIME_LIMIT_CHANGED = 'round_time_limit_changed'
-    # 방장이 서술 등급을 바꿨다. 다음 라운드부터 그 등급이다
+    # 방장이 서술 등급을 바꿨다. 서술 등급을 없앤 뒤로는 적지 않는다. 그 전에 적은 이벤트를 읽으려고 남긴다
     NARRATION_TIER_CHANGED = 'narration_tier_changed'
     # 방장이 서술 모델을 바꿨다(비우면 서버의 기본). 다음 라운드부터 그 모델이다
     NARRATION_MODEL_CHANGED = 'narration_model_changed'

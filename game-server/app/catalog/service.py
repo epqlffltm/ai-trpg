@@ -1,7 +1,8 @@
 # game-server/app/catalog/service.py
 
 """
-모델 목록을 다루는 일. 모델 넣기, 바꾸기, 날짜판 바꾸기, 원가 적기, 켜기, 끄기, 은퇴일 적기, 목록 보기.
+모델 목록을 다루는 일.
+모델 넣기, 바꾸기, 날짜판 바꾸기, 원가 적기, 켜기, 끄기, 은퇴일 적기, 대체 모델 정하기, 목록 보기.
 
 HTTP 를 모른다. SQL 을 모른다. 일마다 commit 하나로 저장한다.
 지금은 관리 명령(scripts/models.py)이 부른다. 나중에 관리 서버가 생기면 같은 함수들을 관리 API 로 연다.
@@ -84,6 +85,9 @@ async def update_model(session: AsyncSession, slug: str, data: ModelUpdate) -> A
     model = await require_model(session, slug)
     changes = data.changes()
     check_fields(model, changes)
+    if changes.get('vendor', model.vendor) != model.vendor:
+        # 대체 모델은 회사마다 정한다. 회사를 옮기면 옛 회사의 대체 표시를 들고 가지 않는다
+        model.vendor_fallback = False
     for name, value in changes.items():
         setattr(model, name, value)
     await session.commit()
@@ -158,6 +162,29 @@ async def retire_model(session: AsyncSession, slug: str, on: date | None) -> AiM
     """은퇴일을 적는다. None 이면 은퇴일을 지운다(공급자가 내리는 날을 미뤘다)."""
     model = await require_model(session, slug)
     model.retires_on = on
+    await session.commit()
+    return model
+
+
+async def set_fallback(session: AsyncSession, slug: str, today: date) -> AiModel:
+    """
+    그 모델을 회사의 대체 모델로 정한다. 같은 회사의 앞의 대체 모델은 표시가 지워진다. 은퇴한 모델은 정하지 않는다.
+
+    꺼진 모델도 정할 수 있다. 꺼져 있는 동안에는 같은 회사의 standard 중 가장 싼 모델을 쓴다(app/catalog/offers.py).
+    """
+    model = await require_model(session, slug)
+    if is_retired(model, today):
+        raise CatalogConflictError(slug, Conflict.RETIRED)
+    await repository.clear_fallback(session, model.vendor)
+    model.vendor_fallback = True
+    await session.commit()
+    return model
+
+
+async def clear_fallback(session: AsyncSession, slug: str) -> AiModel:
+    """그 모델의 대체 모델 표시를 지운다. 그 회사는 standard 중 가장 싼 모델로 대체한다."""
+    model = await require_model(session, slug)
+    model.vendor_fallback = False
     await session.commit()
     return model
 

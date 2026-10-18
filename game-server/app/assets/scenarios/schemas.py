@@ -5,7 +5,7 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, ClassVar
 
 from pydantic import (
@@ -57,8 +57,10 @@ from app.assets.models import (
     RouteVisibility,
     Surprise,
 )
+from app.assets.scenarios.recommended_model import ModelState
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
+from app.catalog.schemas import Slug
 from app.engine.ruleset import Key
 from app.engine.sheet import Sheet
 
@@ -555,6 +557,8 @@ class ScenarioCreate(AssetCreate):
     reroll_allowed: bool = False
     # 추천 문체. 테이블의 방장이 고르지 않으면 이것으로 서술한다. 안 보내면 정통이다
     narration_style: NarrationStyle = DEFAULT_NARRATION_STYLE
+    # 추천 서술 모델의 이름표. 반드시 보낸다. 서비스 중인 모델이어야 한다(app/assets/scenarios/recommended_model.py)
+    narration_model: Slug
     # 게임 안의 시계. 안 보내면 1일째 8시에 시작하고 라운드 하나에 10분이 흐른다
     clock: Clock = DEFAULT_CLOCK
 
@@ -599,7 +603,22 @@ class ScenarioUpdate(AssetUpdate):
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
+    # 비울 수 없다. 보내면 서비스 중인 모델이어야 한다
+    narration_model: Slug | None = None
     clock: Clock | None = None
+
+
+class ModelStatusOut(BaseModel):
+    """
+    작성자 화면에 보이는 추천 서술 모델의 상태(app/assets/scenarios/recommended_model.py).
+
+    state 가 ok 가 아니면 화면이 작성자에게 알린다. replacement 는 지금 테이블을 만들면 대신 쓸 모델이다.
+    가격 목록을 받지 못했거나 같은 회사에 대신할 모델이 없으면 null 이다. 그때는 방장이 모델을 고른다.
+    """
+
+    state: ModelState
+    retires_on: date | None
+    replacement: str | None
 
 
 class ScenarioSummary(AssetSummary):
@@ -641,6 +660,10 @@ class ScenarioDetail(ScenarioSummary):
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle
+    # 이 규칙 전에 만든 시나리오만 비어 있다
+    narration_model: str | None
+    # 추천 서술 모델의 상태. 추천 모델이 없으면 null
+    narration_model_status: ModelStatusOut | None
     clock: Clock
 
 

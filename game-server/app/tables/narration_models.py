@@ -11,7 +11,7 @@
 그 라운드의 청구는 새 모델의 가격표로 다시 건다(app/billing/charges.py 의 reprice_round). 옛 홀드는 돌려준다.
 서술이 돌고 있는 라운드는 바꾸지 않는다. 연 때의 모델의 값을 걸어 두었고 그 모델로 서술하는 중이다.
 
-고를 수 있는 모델만 된다(app/tables/model_picker.py). null 로 바꾸면 서버의 기본(서술 등급)으로 돌아간다.
+고를 수 있는 모델만 된다(app/tables/model_picker.py). 비울 수 없다. 서버의 기본 모델로 돌아가는 길은 없다.
 바꾼 것은 이벤트로 남긴다. 지금 라운드에도 적용했으면 그 번호를 싣는다. 각자 값을 내므로 모두가 알아야 한다.
 
 HTTP 를 모른다. 테이블을 잠그고 한다.
@@ -43,14 +43,14 @@ def takes_new_model(round_: Round | None) -> bool:
     return round_.status == RoundStatus.CLOSING and round_.narration_failed_at is not None
 
 
-def is_unchanged(table: GameTable, round_: Round | None, model: str | None) -> bool:
+def is_unchanged(table: GameTable, round_: Round | None, model: str) -> bool:
     """바꿀 것이 없는가. 테이블의 모델이 같고, 지금 바꿀 수 있는 라운드가 있으면 그 라운드의 모델도 같다."""
     if table.narration_model != model:
         return False
     return not takes_new_model(round_) or round_.narration_model == model
 
 
-async def apply_to_round(session: AsyncSession, round_: Round, model: str | None) -> None:
+async def apply_to_round(session: AsyncSession, round_: Round, model: str) -> None:
     """라운드의 모델을 바꾸고, 그 라운드의 청구를 새 가격표로 다시 걸게 적는다."""
     round_.narration_model = model
     await charges.reprice_round(session, round_, datetime.now(UTC))

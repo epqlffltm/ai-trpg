@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.models import TABLE_MAX_PLAYERS, Asset, AssetType, Scenario, ScenarioVersion
 from app.main import API_PREFIX
 from app.tables.models import TABLE_PASSWORD_MAX_LENGTH, TABLE_PASSWORD_MIN_LENGTH, GameTable, TableMember
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -71,7 +72,7 @@ async def publish_scenario(client: AsyncClient, headers: dict[str, str], title: 
     """게시할 조건을 갖춘 시나리오를 만들고 판을 하나 낸다. 시나리오를 돌려준다. 판의 번호는 1 이다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북', 'gm_guide': GM_GUIDE}, headers=headers)
     body = {'title': title, 'rulebook_id': rulebook.json()['id'], 'openings': [OPENING], 'default_sheet': SHEET}
-    scenario = await client.post(SCENARIOS_URL, json=body, headers=headers)
+    scenario = await client.post(SCENARIOS_URL, json=with_model(body), headers=headers)
     assert scenario.status_code == status.HTTP_201_CREATED, scenario.text
     published = await client.post(f'{SCENARIOS_URL}/{scenario.json()["id"]}/versions', json={}, headers=headers)
     assert published.status_code == status.HTTP_201_CREATED, published.text
@@ -197,7 +198,6 @@ async def test_the_lobby_lists_the_newest_table_first(client: AsyncClient, me: d
         'has_password',
         'narration_style',
         'round_time_limit',
-        'narration_tier',
         'narration_model',
         'credit_wait_seconds',
         'remove_short_payers',

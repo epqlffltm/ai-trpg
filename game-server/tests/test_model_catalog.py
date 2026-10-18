@@ -28,7 +28,7 @@ from app.catalog.models import AiModel, AiModelCost, Grade, Provider, ReasoningS
 from app.catalog.rules import always_thinks, is_offered, is_retired, round_cost_usd
 from app.catalog.schemas import SLUG_MAX_LENGTH, CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 
-pytestmark = pytest.mark.usefixtures('clean_tables')
+pytestmark = pytest.mark.usefixtures('empty_catalog')
 
 TODAY = date(2026, 10, 17)
 

@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.settling import Readiness, worst
 from tests.billing import FakeBillingServer
+from tests.narration_model import TEST_PRICE_CODE
 from tests.signing import SigningKey
 from tests.test_narration_billing import PRICE, charges_of, close_round, tick
 from tests.test_npc_actions import events_of
@@ -108,7 +109,7 @@ async def test_opening_a_round_charges_everyone_seated(
 
     # 사람마다 한 줄, 같은 가격표, 다른 이름표(결제 서버가 따로 받는다)
     assert [charge.status for charge in mine + theirs] == ['pending', 'pending']
-    assert mine[0].price_code == theirs[0].price_code == 'narration.standard'
+    assert mine[0].price_code == theirs[0].price_code == TEST_PRICE_CODE
     assert mine[0].reference.endswith(str(ME))
     assert theirs[0].reference.endswith(str(FRIEND))
 

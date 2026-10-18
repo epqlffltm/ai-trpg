@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import API_PREFIX
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -74,7 +75,7 @@ async def open_table(client: AsyncClient, headers: dict[str, str]) -> dict:
         'character_modes': ['pregen', 'custom', 'manual'],
         'player_made_hp': {'base': 10, 'cap': 12},
     }
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=headers)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=headers)).json()
     version = await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=headers)
     assert version.status_code == status.HTTP_201_CREATED, version.text
     table = await client.post(

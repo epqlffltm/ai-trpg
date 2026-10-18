@@ -39,6 +39,7 @@ from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate, VersionCreate
 from app.assets.service import AssetInUseError, AssetReferenceError
 from tests.indexers import NO_INDEXER
+from tests.narration_model import TEST_MODEL, today
 from tests.sheets import SHEET
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -67,7 +68,11 @@ async def test_deleting_waits_for_a_scenario_being_saved(session: AsyncSession, 
 
     # A: 룰북을 붙잡고 시나리오를 올렸지만 아직 커밋하지 않았다
     await assets.hold_reference(session, Rulebook, ME, rulebook_id, 'rulebook_id')
-    session.add(scenarios.build_scenario(ME, ScenarioCreate(title='시나리오', rulebook_id=rulebook_id)))
+    session.add(
+        scenarios.build_scenario(
+            ME, ScenarioCreate(narration_model=TEST_MODEL, title='시나리오', rulebook_id=rulebook_id)
+        )
+    )
     await session.flush()
 
     # B: 그 룰북을 지우려 한다. A 가 끝날 때까지 기다려야 한다
@@ -90,8 +95,8 @@ async def test_saving_a_scenario_waits_for_a_delete(session: AsyncSession, other
     await session.flush()
 
     # B: 그 룰북을 가리키는 시나리오를 만들려 한다. A 가 끝날 때까지 기다려야 한다
-    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook_id)
-    saving = asyncio.create_task(scenarios.create_scenario(other_session, ME, data))
+    data = ScenarioCreate(narration_model=TEST_MODEL, title='시나리오', rulebook_id=rulebook_id)
+    saving = asyncio.create_task(scenarios.create_scenario(other_session, ME, data, today()))
     assert await is_waiting(saving)
 
     await session.commit()
@@ -135,7 +140,11 @@ async def test_adding_an_entry_waits_for_another_entry_being_added(
 async def test_updating_a_scenario_waits_for_another_update(session: AsyncSession, other_session: AsyncSession):
     first = (await lorebooks.create_lorebook(session, ME, LorebookCreate(title='첫째'))).asset_id
     second = (await lorebooks.create_lorebook(session, ME, LorebookCreate(title='둘째'))).asset_id
-    scenario_id = (await scenarios.create_scenario(session, ME, ScenarioCreate(title='시나리오'))).asset_id
+    scenario_id = (
+        await scenarios.create_scenario(
+            session, ME, ScenarioCreate(narration_model=TEST_MODEL, title='시나리오'), today()
+        )
+    ).asset_id
 
     # A: 시나리오를 잠그고 첫째 로어북을 붙였지만 아직 커밋하지 않았다
     scenario = await assets.lock_owned(session, Scenario, ME, scenario_id)
@@ -144,7 +153,7 @@ async def test_updating_a_scenario_waits_for_another_update(session: AsyncSessio
 
     # B: 같은 시나리오의 목록을 둘째 로어북으로 바꾸려 한다. A 가 끝날 때까지 기다려야 한다
     data = ScenarioUpdate(lorebook_ids=[second])
-    updating = asyncio.create_task(scenarios.update_scenario(other_session, ME, scenario_id, data))
+    updating = asyncio.create_task(scenarios.update_scenario(other_session, ME, scenario_id, data, today()))
     assert await is_waiting(updating)
 
     await session.commit()
@@ -161,8 +170,10 @@ async def test_updating_a_scenario_waits_for_another_update(session: AsyncSessio
 
 async def test_publishing_waits_for_another_publish(session: AsyncSession, other_session: AsyncSession):
     rulebook_id = (await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰'))).asset_id
-    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook_id, openings=['도입부'], default_sheet=SHEET)
-    scenario_id = (await scenarios.create_scenario(session, ME, data)).asset_id
+    data = ScenarioCreate(
+        narration_model=TEST_MODEL, title='시나리오', rulebook_id=rulebook_id, openings=['도입부'], default_sheet=SHEET
+    )
+    scenario_id = (await scenarios.create_scenario(session, ME, data, today())).asset_id
 
     # A: 시나리오를 잠그고 1번 판을 올렸지만 아직 커밋하지 않았다
     await assets.lock_owned(session, Scenario, ME, scenario_id)

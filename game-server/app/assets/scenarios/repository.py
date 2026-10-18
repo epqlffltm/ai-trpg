@@ -15,7 +15,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import ScenarioVersion
+from app.assets.models import Scenario, ScenarioVersion
 
 
 def add_version(session: AsyncSession, version: ScenarioVersion) -> None:
@@ -43,4 +43,10 @@ async def list_versions(session: AsyncSession, scenario_id: uuid.UUID) -> list[S
 async def find_version(session: AsyncSession, scenario_id: uuid.UUID, number: int) -> ScenarioVersion | None:
     """시나리오의 판 하나를 번호로 찾는다. 없으면 None."""
     query = select(ScenarioVersion).where(ScenarioVersion.scenario_id == scenario_id, ScenarioVersion.number == number)
+    return await session.scalar(query)
+
+
+async def recommended_model(session: AsyncSession, scenario_id: uuid.UUID) -> str | None:
+    """그 시나리오의 추천 서술 모델. 지금의 값이다(판에 굳히지 않는다). 없으면 None."""
+    query = select(Scenario.narration_model).where(Scenario.asset_id == scenario_id)
     return await session.scalar(query)

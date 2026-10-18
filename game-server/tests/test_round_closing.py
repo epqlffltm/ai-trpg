@@ -43,6 +43,7 @@ from app.rounds.models import Round
 from app.rounds.narration_request import dump_moves
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.retrying_narrator import NarrationFailed
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -148,7 +149,7 @@ async def start_duo(client: AsyncClient, me: dict[str, str], friend: dict[str, s
     """나와 친구가 앉은 테이블을 시작한다. 이벤트가 다섯 개 적혀 있다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북'}, headers=me)
     body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS, 'default_sheet': SHEET}
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 2}
     table = (await client.post(TABLES_URL, json=body, headers=me)).json()

@@ -7,7 +7,6 @@
 """
 
 import uuid
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -18,8 +17,9 @@ from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
-from app.billing.price_list import PriceList, PriceListUnavailable
+from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import Change
+from app.billing.routing import Now, Prices
 from app.calendar import clock
 from app.catalog import offers
 from app.catalog.offers import OfferedModel
@@ -30,7 +30,6 @@ from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
 from app.rounds import service as round_service
 from app.rounds.router import Closing
-from app.rounds.tiers import NarrationTier
 from app.tables import (
     credit_waits,
     deaths,
@@ -48,7 +47,6 @@ from app.tables import (
     service,
     sheets,
     styles,
-    tiers,
     time_limits,
     whisper_notices,
 )
@@ -82,8 +80,6 @@ from app.tables.schemas import (
     NarrationModelsOut,
     NarrationModelUpdate,
     NarrationStyleUpdate,
-    NarrationTiersOut,
-    NarrationTierUpdate,
     NextPriceOut,
     PlaceChange,
     PlaceOut,
@@ -102,29 +98,6 @@ from app.tables.schemas import (
 )
 
 router = APIRouter(prefix='/tables', tags=['tables'])
-
-
-def get_offered_tiers(request: Request) -> frozenset[NarrationTier]:
-    """이 서버가 내주는 서술 등급들. 앱을 만들 때 설정으로 정해 꽂아 둔 것이다(app/main.py)."""
-    return request.app.state.narration_tiers
-
-
-# 서술 등급을 고르는 API 가 인자의 형식으로 쓴다
-OfferedTiers = Annotated[frozenset[NarrationTier], Depends(get_offered_tiers)]
-
-
-def get_price_list(request: Request) -> PriceList:
-    """결제 서버의 가격 목록을 받아 두는 것. 앱을 만들 때 설정으로 정해 꽂아 둔 것이다(app/main.py)."""
-    return request.app.state.price_list
-
-
-def utc_now() -> datetime:
-    """지금 시각(UTC). 테스트가 dependency_overrides 로 바꿔 꽂는다."""
-    return datetime.now(UTC)
-
-
-Prices = Annotated[PriceList, Depends(get_price_list)]
-Now = Annotated[datetime, Depends(utc_now)]
 
 
 def get_model_picker(prices: Prices, now: Now) -> ModelPicker:
@@ -185,7 +158,6 @@ def to_summary(table: GameTable) -> TableSummary:
         has_password=table.password_hash is not None,
         narration_style=table.narration_style,
         round_time_limit=table.round_time_limit,
-        narration_tier=table.narration_tier,
         narration_model=table.narration_model,
         credit_wait_seconds=table.credit_wait_seconds,
         remove_short_payers=table.remove_short_payers,
@@ -435,11 +407,14 @@ async def handle_table_option(request: Request, error: TableOptionError) -> JSON
 
 
 @router.post('', response_model=TableDetail, status_code=status.HTTP_201_CREATED)
-async def create_table(
-    data: TableCreate, user: CurrentUser, session: Session, offered: OfferedTiers, picker: Picker
-) -> TableDetail:
-    """테이블을 만든다. 만든 사람이 방장이 되어 앉는다. 서술 모델은 고를 수 있는 것만 된다."""
-    table = await service.create_table(session, user, data, offered, picker)
+async def create_table(data: TableCreate, user: CurrentUser, session: Session, picker: Picker) -> TableDetail:
+    """
+    테이블을 만든다. 만든 사람이 방장이 되어 앉는다.
+
+    서술 모델은 고른 것, 아니면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대체 모델이다.
+    셋 다 없으면 422(narration_model)다. 방장이 모델을 골라 다시 보낸다.
+    """
+    table = await service.create_table(session, user, data, picker)
     return to_detail(table, user.user_id)
 
 
@@ -461,13 +436,7 @@ async def list_tables(user: CurrentUser, session: Session, paging: Paging) -> Ta
 ScenarioFilter = Annotated[uuid.UUID | None, Query()]
 
 
-# /narration-tiers, /narration-models, /lobby 를 /{table_id} 보다 먼저 적는다. 먼저 적은 주소가 먼저 맞춰진다
-@router.get('/narration-tiers', response_model=NarrationTiersOut, status_code=status.HTTP_200_OK)
-async def list_narration_tiers(user: CurrentUser, offered: OfferedTiers) -> NarrationTiersOut:
-    """이 서버가 내주는 서술 등급들. 테이블을 만들거나 등급을 바꿀 때 이 중에서 고른다. 값은 결제 서버의 가격표다."""
-    return NarrationTiersOut(tiers=[tier for tier in NarrationTier if tier in offered])
-
-
+# /narration-models, /lobby 를 /{table_id} 보다 먼저 적는다. 먼저 적은 주소가 먼저 맞춰진다
 @router.get('/narration-models', response_model=NarrationModelsOut, status_code=status.HTTP_200_OK)
 async def list_narration_models(user: CurrentUser, session: Session, prices: Prices, now: Now) -> NarrationModelsOut:
     """
@@ -699,29 +668,15 @@ async def change_round_time_limit(
     return to_detail(table, user.user_id)
 
 
-@router.put('/{table_id}/narration-tier', response_model=TableDetail, status_code=status.HTTP_200_OK)
-async def change_narration_tier(
-    table_id: uuid.UUID, data: NarrationTierUpdate, user: CurrentUser, session: Session, offered: OfferedTiers
-) -> TableDetail:
-    """
-    서술 등급을 바꾼다. 방장만 한다. 이 서버가 내주는 등급만 된다(GET /tables/narration-tiers).
-
-    진행 중에도 된다. 바꾼 값은 다음 라운드부터 쓴다.
-    지금 열린 라운드는 연 때의 등급으로 값을 걸었고 그 등급으로 서술한다.
-    """
-    table = await tiers.change_narration_tier(session, user.user_id, table_id, data, offered)
-    return to_detail(table, user.user_id)
-
-
 @router.put('/{table_id}/narration-model', response_model=TableDetail, status_code=status.HTTP_200_OK)
 async def change_narration_model(
     table_id: uuid.UUID, data: NarrationModelUpdate, user: CurrentUser, session: Session, picker: Picker
 ) -> TableDetail:
     """
-    서술 모델을 바꾼다. 방장만 한다. 고를 수 있는 모델만 된다(GET /tables/narration-models). null 이면 서버의 기본이다.
+    서술 모델을 바꾼다. 방장만 한다. 고를 수 있는 모델만 된다(GET /tables/narration-models).
 
     진행 중에도 된다. 바꾼 값은 다음 라운드부터 쓴다.
-    지금 열린 라운드는 연 때의 모델의 값으로 청구를 적었고 그 모델로 서술한다.
+    다만 아직 서술하지 않은 지금 라운드(선언을 받는 중이거나 서술이 실패해 멈춤)는 함께 바꾸고 새 값으로 다시 건다.
     """
     table = await narration_models.change_narration_model(session, user.user_id, table_id, data, picker)
     return to_detail(table, user.user_id)

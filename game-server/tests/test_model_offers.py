@@ -20,12 +20,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import FREE_BOOK, Change, Price, PriceBook, Sale, Tier, narration_code
+from app.billing.routing import utc_now
 from app.catalog import service as catalog
 from app.catalog.models import Grade, Provider, ReasoningStyle, TokenLimitField
 from app.catalog.offers import ModelCard, OfferedModel, grade_disagrees, offer, offered_models
 from app.catalog.schemas import CostCreate, ModelCreate
 from app.main import API_PREFIX
-from app.tables.router import utc_now
 from tests.signing import SigningKey, make_access_claims, make_token
 
 NOW = datetime(2026, 10, 18, 3, 0, tzinfo=UTC)
@@ -192,7 +192,7 @@ async def add_enabled(session: AsyncSession, data: ModelCreate) -> None:
 
 
 @pytest.fixture
-async def two_models(app: FastAPI, session: AsyncSession, clean_tables) -> None:
+async def two_models(app: FastAPI, session: AsyncSession, empty_catalog) -> None:
     """켜진 모델 둘. 결제 서버는 Luna 만 팔고, Opus 에는 올라갈 값이 예약돼 있다."""
     await add_enabled(session, LUNA)
     await add_enabled(session, OPUS)

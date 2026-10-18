@@ -140,6 +140,8 @@ class AiModel(Base):
         ),
         # 같은 창구의 같은 모델을 두 이름표로 넣지 않는다. 목록에 같은 모델이 둘 보인다
         UniqueConstraint('provider', 'api_model_id', name='uq_ai_models_api_model'),
+        # 회사마다 대체 모델은 하나뿐이다
+        Index('uq_ai_models_vendor_fallback', 'vendor', unique=True, postgresql_where=text('vendor_fallback')),
     )
 
     # 이름표. 결제 서버의 가격 코드(narration.<이름표>.i0.o0)와 기록이 이것으로 모델을 가리킨다
@@ -163,6 +165,9 @@ class AiModel(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
     # 이 날부터 쓰지 않는다. 공급자가 모델을 내리는 날이다. 없으면 정해지지 않았다
     retires_on: Mapped[date | None] = mapped_column(Date)
+    # 그 회사의 대체 모델인가. 시나리오의 추천 모델을 쓸 수 없을 때 같은 회사의 이 모델로 바꾼다(app/catalog/offers.py).
+    # 운영자가 정한다(scripts/models.py fallback). 정하지 않았으면 같은 회사의 standard 중 가장 싼 모델이다
+    vendor_fallback: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

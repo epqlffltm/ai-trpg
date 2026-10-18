@@ -25,6 +25,7 @@ from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot, read_snapsh
 from app.assets.scenarios.upgrades import upgrade_from_21
 from app.main import API_PREFIX
 from app.tables.models import NpcStatus, TableMonster
+from tests.narration_model import asset_body, with_model
 from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -51,7 +52,7 @@ def me(signing_key: SigningKey) -> dict[str, str]:
 
 
 async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -> dict:
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 
@@ -184,7 +185,9 @@ async def test_a_scenario_starts_without_encounters(client: AsyncClient, me: dic
     ],
 )
 async def test_rejects_bad_encounters(client: AsyncClient, me: dict[str, str], encounters: list):
-    response = await client.post(SCENARIOS_URL, json={'title': '지하 수로', 'encounters': encounters}, headers=me)
+    response = await client.post(
+        SCENARIOS_URL, json=with_model({'title': '지하 수로', 'encounters': encounters}), headers=me
+    )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
