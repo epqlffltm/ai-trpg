@@ -6,8 +6,8 @@
 넷을 본다.
   - 판: 퀘스트 규칙에 드러난 때부터 세는 기한(time_limit_minutes)을 적는다. 1분부터 한 해까지다.
     옛 판은 기한 없이 읽는다.
-  - 정하기: 처음부터 진행 중인 것은 테이블이 시작하는 시각부터, 숨겼다가 드러낸 것은 드러낸 라운드가 열린 시각부터 센다.
-    숨긴 것과 숨김에서 바로 끝낸 것에는 기한이 없다.
+  - 정하기: 처음부터 진행 중인 것은 테이블이 시작하는 시각부터, 숨겼다가 드러난 것은 드러난 라운드가 열린 시각부터 센다.
+    숨긴 것에는 기한이 없다(숨긴 채로 이룬 것은 tests/test_quest_goals.py). 드러내는 것은 엔진이다(판의 조건).
   - 실패: 기한이 지난 뒤 처음 열린 라운드가 닫힐 때까지 진행 중이면 서버가 실패로 바꾼다.
     기한이 장면 안에서 끝난 라운드에는 바꾸지 않는다. 방장이 그 장면의 서술을 보고 결과를 정할 틈이다.
     이미 끝낸 것과 기한이 없는 것은 건드리지 않는다.
@@ -37,6 +37,7 @@ from tests.test_table_items import (
     SCENARIOS_URL,
     TABLES_URL,
     events_of,
+    give,
     held,
     post,
     read_table,
@@ -64,12 +65,18 @@ def clock_at(minutes: int) -> dict:
     return {'day': 1, 'hour': hour, 'minute': minute, 'time_of_day': time_of_day}
 
 
+def holding(entry: dict) -> dict:
+    """누가 그 물건을 가지면 채워지는 조건."""
+    return {'kind': 'hold_item', 'target': entry['id']}
+
+
 async def open_with_deadlines(client: AsyncClient, me: dict, friend: dict, lore: dict) -> dict:
     """
     둘이 앉은 테이블. 시작하지 않았다.
 
-    판: 왕녀 구출은 처음부터 진행 중이고 기한이 20분이다. 성공하면 물약 둘을 준다.
-    배신자는 숨긴 채로 시작하고 드러나면 기한이 한 시간이다. 광산의 비밀은 규칙이 없다(숨김, 기한 없음).
+    판: 왕녀 구출은 처음부터 진행 중이고 기한이 20분이다. 성공하면 물약 둘을 준다(이루는 조건은 없다).
+    배신자는 숨긴 채로 시작하고 누가 밧줄을 가지면 드러난다. 드러나면 기한이 한 시간이다.
+    광산의 비밀은 누가 물약을 가지면 드러나고 기한이 없다.
     """
     rulebook = await post(client, RULEBOOKS_URL, me, title='룰북')
     body = {
@@ -86,7 +93,8 @@ async def open_with_deadlines(client: AsyncClient, me: dict, friend: dict, lore:
                 'reward': [{'entry_id': lore['potion']['id'], 'count': 2}],
                 'time_limit_minutes': 20,
             },
-            {'entry_id': lore['traitor']['id'], 'time_limit_minutes': HOUR},
+            {'entry_id': lore['traitor']['id'], 'time_limit_minutes': HOUR, 'reveal': [holding(lore['rope'])]},
+            {'entry_id': lore['mine']['id'], 'reveal': [holding(lore['potion'])]},
         ],
     }
     scenario = await post(client, SCENARIOS_URL, me, **body)
@@ -147,10 +155,9 @@ def test_an_old_version_reads_every_quest_as_having_no_time_limit():
 async def test_an_active_quest_counts_from_the_start(client: AsyncClient, me: dict, friend: dict, lore: dict):
     table = await start_with_deadlines(client, me, friend, lore)
 
-    # 8시에 시작해 20분 뒤. 숨긴 것과 규칙이 없는 것에는 기한이 없다
+    # 8시에 시작해 20분 뒤. 숨긴 것은 보이지 않고 기한도 없다
     assert due_of(table, '왕녀 구출') == clock_at(EIGHT + 20)
-    assert due_of(table, '배신자') is None
-    assert due_of(table, '광산의 비밀') is None
+    assert [quest['name'] for quest in table['quests']] == ['왕녀 구출']
 
 
 async def test_a_revealed_quest_counts_from_the_round_it_was_revealed(
@@ -158,23 +165,16 @@ async def test_a_revealed_quest_counts_from_the_round_it_was_revealed(
 ):
     table = await start_with_deadlines(client, me, friend, lore)
     await play(client, me, friend, table, narrated)
+    given = await give(client, me, table, ME, lore['rope'])
+    assert given.status_code == status.HTTP_200_OK, given.text
 
-    # 둘째 라운드는 8시 10분에 열렸다. 그때부터 한 시간
-    response = await change(client, me, table, lore['traitor'], 'active')
+    # 둘째 라운드는 8시 10분에 열렸다. 그 라운드가 닫힐 때 드러나고 그때부터 한 시간
+    await play(client, me, friend, table, narrated)
 
-    assert response.status_code == status.HTTP_200_OK, response.text
     assert due_of(await read_table(client, friend, table), '배신자') == clock_at(EIGHT + 10 + HOUR)
     [event] = await events_of(client, friend, table, 'quest_changed')
     assert event['payload']['due_at'] == clock_at(EIGHT + 10 + HOUR)
-    assert event['payload']['reason'] is None
-
-
-async def test_a_quest_finished_while_hidden_has_no_time_limit(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_with_deadlines(client, me, friend, lore)
-
-    response = await change(client, me, table, lore['traitor'], 'failed')
-
-    assert due_of(response.json(), '배신자') is None
+    assert event['payload']['reason'] == 'conditions_met'
 
 
 # --- 실패 ---
@@ -243,7 +243,8 @@ async def test_a_quest_without_a_time_limit_never_fails(
     client: AsyncClient, me: dict, friend: dict, lore: dict, narrated
 ):
     table = await start_with_deadlines(client, me, friend, lore)
-    await change(client, me, table, lore['mine'], 'active')
+    await give(client, me, table, ME, lore['potion'])
+    await play(client, me, friend, table, narrated)
     await step(client, me, table, 7 * 24 * HOUR)
 
     await play(client, me, friend, table, narrated)

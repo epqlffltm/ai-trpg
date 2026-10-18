@@ -36,6 +36,7 @@ from app.assets.models import (
     MONSTER_MAX_DROPS,
     PLAYER_MADE_HP_MAX,
     QUEST_CONDITION_MAX_COUNT,
+    QUEST_LINK_CONDITIONS,
     QUEST_MAX_CONDITIONS,
     QUEST_MAX_TIME_LIMIT_MINUTES,
     ROUND_MAX_MINUTES,
@@ -413,7 +414,8 @@ class QuestCondition(BaseModel):
     퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).
 
     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것), hold_item 은 물건 항목,
-    defeat_npc 는 인물 항목이다. count 는 defeat_monster 와 hold_item 만 쓴다. 나머지는 1 로 둔다.
+    defeat_npc 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
+    count 는 defeat_monster 와 hold_item 만 쓴다. 나머지는 1 로 둔다.
     가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.
     """
 
@@ -459,6 +461,10 @@ class QuestRule(BaseModel):
     conditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).
     match 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.
     조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.
+    reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.
+    숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기에만 쓴다.
+    자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).
+    사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.
     규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.
     가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.
     """
@@ -472,6 +478,29 @@ class QuestRule(BaseModel):
     time_limit_minutes: int | None = Field(default=None, ge=1, le=QUEST_MAX_TIME_LIMIT_MINUTES)
     conditions: QuestConditions = []
     match: QuestMatch = QuestMatch.ALL
+    reveal: QuestConditions = []
+    reveal_match: QuestMatch = QuestMatch.ALL
+
+    @model_validator(mode='after')
+    def links_only_in_reveal(self) -> 'QuestRule':
+        """다른 퀘스트를 보는 조건은 드러나는 조건에만 쓴다. 이루는 것은 이 퀘스트의 일로 정한다."""
+        if any(condition.kind in QUEST_LINK_CONDITIONS for condition in self.conditions):
+            raise ValueError('quest_succeeded 와 quest_failed 는 드러나는 조건(reveal)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def reveal_only_when_hidden(self) -> 'QuestRule':
+        """처음부터 진행 중인 퀘스트는 드러날 일이 없다."""
+        if self.reveal and self.start != QuestStart.HIDDEN:
+            raise ValueError('드러나는 조건(reveal)은 숨긴 채로 시작하는 퀘스트에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def reveal_not_on_itself(self) -> 'QuestRule':
+        """자기 자신이 끝나야 드러나는 조건은 뜻이 없다. 숨긴 채로 끝나면 그때 드러난다."""
+        if any(condition.target == self.entry_id for condition in self.reveal):
+            raise ValueError('드러나는 조건이 자기 자신을 가리킵니다.')
+        return self
 
     @field_serializer('entry_id')
     def entry_id_as_text(self, entry_id: uuid.UUID) -> str:

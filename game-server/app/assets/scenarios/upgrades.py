@@ -545,6 +545,18 @@ def upgrade_from_29(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_30(document: dict) -> dict:
+    """
+    형식 30 의 문서를 형식 31 로 올린다. 그때는 퀘스트에 드러나는 조건이 없었다. 방장이 손으로 드러냈다.
+
+    조건이 없는 것으로 읽는다. 사람이 드러내는 길은 없어졌으므로 옛 판의 숨긴 퀘스트는 이루어야만 드러난다.
+    """
+    upgraded = dict(document)
+    upgraded['quests'] = [{**quest, 'reveal': [], 'reveal_match': 'all'} for quest in document.get('quests', [])]
+    upgraded['format'] = 31
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -577,4 +589,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     27: upgrade_from_27,
     28: upgrade_from_28,
     29: upgrade_from_29,
+    30: upgrade_from_30,
 }

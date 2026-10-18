@@ -1,24 +1,31 @@
 # game-server/app/rounds/quest_goals.py
 
 """
-라운드가 닫힐 때 이룬 퀘스트를 성공으로 바꾼다(app/rounds/service.py 의 begin_closing, #367).
+라운드가 닫힐 때 숨긴 퀘스트를 드러내고 이룬 퀘스트를 성공으로 바꾼다(app/rounds/service.py 의 begin_closing, #367).
 
-성공은 엔진만 정한다. 방장은 PC 라서 결과를 정하지 않고, AI 는 상태를 바꾸지 못한다.
+드러내기와 성공은 엔진만 정한다. 방장은 PC 라서 결과를 정하지 않고, AI 는 상태를 바꾸지 못한다.
 판의 퀘스트 규칙에 적은 조건(app/assets/models.py 의 QuestConditionKind)을 지금의 상태로 본다.
   - reach_place: 그 장소에 죽지 않은 캐릭터가 서 있다.
   - defeat_monster: 그 몬스터가 count 마리 이상 쓰러지거나 죽었다. 테이블 전체의 마리를 센다(장면 밖도).
   - hold_item: 죽지 않은 캐릭터들이 그 물건을 모두 합쳐 count 개 이상 가졌다.
   - defeat_npc: 그 인물이 쓰러지거나 죽었다.
-조건이 여럿이면 퀘스트마다 정한 대로 모두(all) 또는 하나라도(any) 채워야 한다. 조건이 없는 퀘스트는 성공하지 않는다.
+  - quest_succeeded, quest_failed: 그 퀘스트가 성공했다, 실패했다(퀘스트 잇기). 드러나는 조건에만 있다.
+조건이 여럿이면 퀘스트마다 정한 대로 모두(all) 또는 하나라도(any) 채워야 한다.
 
+  - 드러나기(reveal): 숨긴 퀘스트의 드러나는 조건이 채워지면 진행 중으로 바꾼다. 기한은 그때부터 센다.
+    조건이 없으면 드러나지 않는다. 이루어야만 드러난다.
+  - 성공(conditions): 숨김이나 진행 중인 퀘스트의 이루는 조건이 채워지면 성공으로 바꾸고 보상을 준다.
+    조건이 없으면 성공하지 않는다. 숨긴 채로 채웠으면 드러내며 바로 성공이다. 우연히 이룬 일도 이룬 것이다.
+  - 드러내기를 먼저, 성공을 그다음에 본다. 그 라운드에 드러난 퀘스트도 그 라운드에 이룰 수 있다.
+    퀘스트 잇기가 있으므로 바뀐 것이 없을 때까지 되풀이한다(settle_quests). 퀘스트마다 많아야 두 번 바뀌므로 끝난다.
   - 이번 라운드의 판정(이동, 타격, 물건, 휴식)을 모두 끝낸 뒤에 본다. 그 라운드에 한 일이 그 라운드에 반영된다.
   - 기한보다 먼저 본다. 기한이 넘어 실패로 바뀌기 전 마지막 라운드에 이루었으면 성공이다.
-  - 숨긴 퀘스트도 본다. 채워졌으면 드러내며 바로 성공이다. 우연히 이룬 일도 이룬 것이다.
-  - 성공하면 보상을 준다(app/tables/quests.py 의 give_rewards). 사람이 한 일이 아니므로 누가 했는지는 비우고
-    까닭(conditions_met)을 적는다. 기한의 실패(app/rounds/deadlines.py)와 같은 모양이다.
+    기한의 실패를 기다리는 퀘스트는 실패를 적은 뒤 한 번 더 본다(begin_closing).
+  - 사람이 한 일이 아니므로 누가 했는지는 비우고 까닭(conditions_met)을 적는다.
+    기한의 실패(app/rounds/deadlines.py)와 같은 모양이다.
 
 DB 를 모른다. 잠근 테이블의 퀘스트 행과 소지품을 고치고 이벤트에 적을 모양을 돌려준다.
-이벤트를 적는 것은 record_successes 다.
+이벤트를 적는 것은 record_changes 다.
 """
 
 import uuid
@@ -66,10 +73,25 @@ def npc_defeated(npcs: Iterable[TableNpc], entry_id: uuid.UUID) -> bool:
     return any(npc.entry_id == entry_id and npc.status != NpcStatus.ALIVE for npc in npcs)
 
 
+def quest_ended(table: GameTable, entry_id: uuid.UUID, status: QuestStatus) -> bool:
+    """그 퀘스트가 그 상태(성공, 실패)로 끝났는가. 퀘스트의 행이 없으면 아니다."""
+    row = quests.find_quest(table, entry_id)
+    return row is not None and row.status == status
+
+
+# 퀘스트 잇기의 조건마다 기다리는 끝난 상태
+LINKED_STATUS = {
+    QuestConditionKind.QUEST_SUCCEEDED: QuestStatus.SUCCEEDED,
+    QuestConditionKind.QUEST_FAILED: QuestStatus.FAILED,
+}
+
+
 def is_met(
     condition: QuestConditionSnapshot, table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]
 ) -> bool:
     """조건 하나가 지금 채워졌는가."""
+    if condition.kind in LINKED_STATUS:
+        return quest_ended(table, condition.target, LINKED_STATUS[condition.kind])
     if condition.kind == QuestConditionKind.REACH_PLACE:
         return reached(table, condition.target)
     if condition.kind == QuestConditionKind.HOLD_ITEM:
@@ -79,12 +101,28 @@ def is_met(
     return npc_defeated(npcs, condition.target)
 
 
-def is_achieved(quest: CatalogQuest, table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]) -> bool:
-    """그 퀘스트를 이루었는가. 조건이 없으면 이루지 않는다. 모두(all) 또는 하나라도(any)는 퀘스트가 정한다."""
-    if not quest.conditions:
+def all_met(
+    conditions: tuple[QuestConditionSnapshot, ...],
+    match: QuestMatch,
+    table: GameTable,
+    monsters: list[TableMonster],
+    npcs: list[TableNpc],
+) -> bool:
+    """조건들이 채워졌는가. 조건이 없으면 아니다. 모두(all) 또는 하나라도(any)는 퀘스트가 정한다."""
+    if not conditions:
         return False
-    met = [is_met(condition, table, monsters, npcs) for condition in quest.conditions]
-    return all(met) if quest.match == QuestMatch.ALL else any(met)
+    met = [is_met(condition, table, monsters, npcs) for condition in conditions]
+    return all(met) if match == QuestMatch.ALL else any(met)
+
+
+def is_achieved(quest: CatalogQuest, table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]) -> bool:
+    """그 퀘스트를 이루었는가. 이루는 조건(conditions)을 본다."""
+    return all_met(quest.conditions, quest.match, table, monsters, npcs)
+
+
+def is_revealed(quest: CatalogQuest, table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]) -> bool:
+    """그 퀘스트가 드러날 때인가. 드러나는 조건(reveal)을 본다."""
+    return all_met(quest.reveal, quest.reveal_match, table, monsters, npcs)
 
 
 def succeed(table: GameTable, row: TableQuest, quest: CatalogQuest, things: dict[uuid.UUID, CatalogItem]) -> dict:
@@ -100,28 +138,79 @@ def succeed(table: GameTable, row: TableQuest, quest: CatalogQuest, things: dict
     return describe(quest, previous, QuestStatus.SUCCEEDED, rewards, row.due_at, reason=CONDITIONS_MET)
 
 
+def show(table: GameTable, row: TableQuest, quest: CatalogQuest) -> dict:
+    """
+    드러날 때가 된 숨긴 퀘스트 하나를 진행 중으로 바꾼다. 이벤트에 적을 모양을 돌려준다.
+
+    판의 기한이 있으면 이 라운드가 열린 시각부터 센다(app/tables/quests.py 의 reveal).
+    """
+    row.status = QuestStatus.ACTIVE
+    row.changed_at = func.now()
+    quests.reveal(row, quest, table.clock.minutes)
+    return describe(quest, QuestStatus.HIDDEN, QuestStatus.ACTIVE, [], row.due_at, reason=CONDITIONS_MET)
+
+
 def open_quests(table: GameTable) -> list[TableQuest]:
     """아직 끝나지 않은 퀘스트들(숨김, 진행 중). 이 중에서 이룬 것을 찾는다."""
     return [row for row in table.quests if row.status not in FINISHED]
 
 
-def complete_quests(table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]) -> list[dict]:
+def hidden_quests(table: GameTable) -> list[TableQuest]:
+    """숨긴 퀘스트들. 이 중에서 드러날 것을 찾는다."""
+    return [row for row in table.quests if row.status == QuestStatus.HIDDEN]
+
+
+def reveal_quests(
+    table: GameTable, catalog: dict[uuid.UUID, CatalogQuest], monsters: list[TableMonster], npcs: list[TableNpc]
+) -> list[dict]:
+    """
+    드러날 때가 된 숨긴 퀘스트를 모두 진행 중으로 바꾼다. 판의 순서로, 이벤트에 적을 모양들을 돌려준다.
+
+    모두 본 뒤에 바꾼다. 한 퀘스트가 드러난 것이 같은 바퀴의 다른 퀘스트를 드러내지 않는다(잇기는 끝난 것만 본다).
+    """
+    shown = [row for row in hidden_quests(table) if is_revealed(catalog[row.entry_id], table, monsters, npcs)]
+    return [show(table, row, catalog[row.entry_id]) for row in quests.in_catalog_order(shown, catalog)]
+
+
+def complete_quests(
+    table: GameTable,
+    catalog: dict[uuid.UUID, CatalogQuest],
+    things: dict[uuid.UUID, CatalogItem],
+    monsters: list[TableMonster],
+    npcs: list[TableNpc],
+) -> list[dict]:
     """
     이룬 퀘스트를 모두 성공으로 바꾼다. 판의 순서로, 이벤트에 적을 모양들을 돌려준다.
 
+    모두 본 뒤에 바꾼다. 같은 바퀴에 이룬 것은 서로의 조건에 영향을 주지 않는다(이루는 조건에는 잇기가 없다).
+    """
+    achieved = [row for row in open_quests(table) if is_achieved(catalog[row.entry_id], table, monsters, npcs)]
+    return [succeed(table, row, catalog[row.entry_id], things) for row in quests.in_catalog_order(achieved, catalog)]
+
+
+def settle_quests(table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]) -> list[dict]:
+    """
+    드러낼 것을 드러내고 이룬 것을 성공으로 바꾼다. 바뀐 것이 없을 때까지 되풀이한다. 바뀐 차례로 돌려준다.
+
+    한 바퀴에 드러내기를 먼저, 성공을 그다음에 본다. 성공이 다른 퀘스트를 드러내면(잇기) 다음 바퀴에 드러난다.
+    퀘스트마다 많아야 두 번(숨김 → 진행 중 → 성공) 바뀌므로 되풀이는 끝난다.
     monsters 와 npcs 는 테이블의 상태 전부다(장면 밖도). 끝나지 않은 퀘스트가 없으면 판을 읽지 않는다.
     """
-    rows = open_quests(table)
-    if not rows:
+    if not open_quests(table):
         return []
     snapshot = read_snapshot(table.content)
     catalog = quests.catalog(snapshot)
     things = items.catalog(snapshot)
-    achieved = [row for row in rows if is_achieved(catalog[row.entry_id], table, monsters, npcs)]
-    return [succeed(table, row, catalog[row.entry_id], things) for row in quests.in_catalog_order(achieved, catalog)]
+    changes: list[dict] = []
+    while True:
+        changed = reveal_quests(table, catalog, monsters, npcs)
+        changed.extend(complete_quests(table, catalog, things, monsters, npcs))
+        if not changed:
+            return changes
+        changes.extend(changed)
 
 
-def record_successes(session: AsyncSession, table: GameTable, successes: list[dict], group: uuid.UUID) -> None:
-    """이루어 성공한 퀘스트마다 이벤트를 적는다. 닫힘의 묶음(group)에 넣는다. 행한 사람은 없다."""
-    for payload in successes:
+def record_changes(session: AsyncSession, table: GameTable, changes: list[dict], group: uuid.UUID) -> None:
+    """엔진이 바꾼 퀘스트마다 이벤트를 적는다. 닫힘의 묶음(group)에 넣는다. 행한 사람은 없다."""
+    for payload in changes:
         recorder.record(session, table, EventType.QUEST_CHANGED, payload=payload, group=group)

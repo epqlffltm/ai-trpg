@@ -4,7 +4,8 @@
 방장이 장부 초안의 줄을 받아들이거나 버린다.
 
 넷을 본다.
-  - 받아들이기: 장부가 바뀐다. 방장이 손으로 할 때와 같은 이벤트, 같은 규칙이다. 성공은 받아들이지 않는다(엔진의 몫).
+  - 받아들이기: 장부가 바뀐다. 방장이 손으로 할 때와 같은 이벤트, 같은 규칙이다.
+    성공과 드러내기는 받아들이지 않는다(엔진의 몫).
   - 버리기: 장부는 그대로다. 끝난 테이블에서도 된다.
   - 다시 보기: 초안을 쓴 뒤에 장부가 바뀌었으면 받아들이지 않는다(죽음, 캐릭터 바뀜, 99 개, 끝난 퀘스트).
   - 한 번만: 결정했거나 만료된 줄, 동시에 두 번 받아들이기, 방장이 아닌 사람, 다른 테이블의 줄.
@@ -127,6 +128,27 @@ async def test_an_old_success_draft_is_not_accepted(
 
     assert refused(response, 'quest_success_by_engine')
     assert quest_tables.quests_in(await read_table(client, me, table))[0] == ('왕녀 구출', 'active')
+
+
+async def test_an_old_reveal_draft_is_not_accepted(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, provider, narrated, session: AsyncSession
+):
+    table, _, quest = await drafted(client, me, friend, lore, narrated)
+    # 드러내기를 엔진의 몫으로 옮기기 전에 쓴 초안이다(ledger-draft-5 까지). 숨긴 광산의 비밀을 드러내자고 했다
+    await session.execute(
+        text(
+            'UPDATE ledger_drafts SET payload = payload || jsonb_build_object('
+            "'entry_id', CAST(:mine AS text), 'name', '광산의 비밀', 'previous', 'hidden', 'status', 'active') "
+            'WHERE id = :id'
+        ),
+        {'id': quest['id'], 'mine': lore['mine']['id']},
+    )
+    await session.commit()
+
+    response = await accept(client, me, table, quest)
+
+    assert refused(response, 'quest_reveal_by_engine')
+    assert quest_tables.quests_in(await read_table(client, me, table)) == [('왕녀 구출', 'active')]
 
 
 async def test_a_full_stack_takes_only_what_fits(
