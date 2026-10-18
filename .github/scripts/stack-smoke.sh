@@ -66,12 +66,13 @@ write_new() {
 }
 
 # 여섯 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
-# 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버).
-# 알림 서버의 서명 비밀은 아직 넣는 쪽이 없어 알림 서버에만 적는다. 마이그레이션이 그것을 받지 않는지 비밀 검사가 본다
+# 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버, 알림 서버와 게임 서버).
+# 알림 서버의 결제·게시판 서명 비밀은 아직 넣는 쪽이 없어 알림 서버에만 적는다
 write_env_files() {
-  local game_secret auth_secret
+  local game_secret auth_secret notify_secret
   game_secret="$(throwaway)"
   auth_secret="$(throwaway)"
+  notify_secret="$(throwaway)"
   write_new .env <<EOF
 POSTGRES_PASSWORD=$(throwaway)
 AUTH_DB_PASSWORD=$(throwaway)
@@ -86,6 +87,7 @@ BILLING_SECRET=$auth_secret
 EOF
   write_new game-server/.env <<EOF
 BILLING_SECRET=$game_secret
+NOTIFICATION_SECRET=$notify_secret
 EOF
   write_new board-server/.env < /dev/null
   write_new billing-server/.env <<EOF
@@ -94,7 +96,7 @@ GAME_SERVER_SECRET=$game_secret
 AUTH_SERVER_SECRET=$auth_secret
 EOF
   write_new notification-server/.env <<EOF
-GAME_SERVER_SECRET=$(throwaway)
+GAME_SERVER_SECRET=$notify_secret
 BILLING_SERVER_SECRET=$(throwaway)
 BOARD_SERVER_SECRET=$(throwaway)
 EOF
@@ -243,6 +245,36 @@ reachable_from() {
   esac
 }
 
+# 게임 서버가 제 설정(NOTIFICATION_URL, NOTIFICATION_SECRET)으로 서명한 알림을 알림 서버가 받는가(201).
+# 닿기만 하고 서명이 어긋나면(두 .env 의 비밀이 다르다) 알림이 발송함에 쌓이기만 한다. 그것을 여기서 잡는다.
+# 받는 사람은 이 실행에서만 쓰는 무작위 값이다
+game_notification_accepted() {
+  compose exec -T game-server python - <<'PY'
+import asyncio
+import uuid
+
+import httpx
+
+from app.core.config import get_settings
+from app.notifications.client import Delivery
+from app.notifications.models import OutgoingNotification
+from app.notifications.setup import build_notifications
+
+
+async def main() -> None:
+    async with httpx.AsyncClient() as client:
+        notifications = build_notifications(get_settings(), client)
+        notification = OutgoingNotification(
+            source_key=f'stack-smoke:{uuid.uuid4()}', user_id=uuid.uuid4(), kind='stack.smoke', payload={}
+        )
+        sent = await notifications.send(notification)
+    raise SystemExit(0 if sent.delivery == Delivery.DELIVERED else 1)
+
+
+asyncio.run(main())
+PY
+}
+
 # 서버가 제 컨테이너 안에서 준비됐다고(/health/ready 가 200) 답하는가. 503 이면 실패다
 ready_inside() {
   local server="$1"
@@ -353,6 +385,8 @@ check() {
     http://auth-server:8000/api/v1/auth/session-revocations
   report "인증 서버가 결제 서버에 닿는다" reachable_from auth-server http://billing-server:8003/health
   report "게임 서버가 결제 서버에 닿는다" reachable_from game-server http://billing-server:8003/health
+  report "게임 서버가 알림 서버에 닿는다" reachable_from game-server http://notification-server:8004/health
+  report "게임 서버가 서명한 알림을 알림 서버가 받는다" game_notification_accepted
   report "설정 검사(비밀, 열린 포트, 로그 상한)의 규칙이 맞다" scope_rules_hold
   check_config "비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" .github/scripts/secret_scope.py
   check_config "바깥에 여는 포트는 정해 둔 것뿐이고 모두 127.0.0.1 에 묶였다(port_scope.py)" .github/scripts/port_scope.py
