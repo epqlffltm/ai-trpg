@@ -37,6 +37,7 @@ from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
 from app.billing import charges
+from app.billing.price_list import FREE_PRICES, PriceList
 from app.calendar import state as calendar
 from app.events import recorder
 from app.events.models import EventType
@@ -45,6 +46,7 @@ from app.listings import service as listings
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
+from app.rounds.round_price import price_of
 from app.tables import monsters, npcs, places, quests, repository, sheets
 from app.tables.building import build_table, hash_table_password, new_invite_code, require_rating
 from app.tables.characters import accept_character, roster, write_character
@@ -331,7 +333,9 @@ async def transfer_host(
     return await save(session, table)
 
 
-async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID) -> GameTable:
+async def start_table(
+    session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, prices: PriceList = FREE_PRICES
+) -> GameTable:
     """
     방장이 테이블을 시작한다. 그 뒤로는 새로 들어올 수 없고 캐릭터를 바꿀 수 없다.
     앉은 사람 모두에게 캐릭터 시트를 주고, 판의 인물마다 NPC 의 상태를, 사건마다 퀘스트를,
@@ -364,7 +368,8 @@ async def start_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
     payload = {'members': roster(table)}
     started = recorder.record(session, table, EventType.TABLE_STARTED, actor_id=host_id, payload=payload)
     opening = snapshot.openings[table.opening_index]
-    opener.open_round(session, table, number=1, scene=opening, cause=started)
+    price = await price_of(session, prices, table.narration_model, datetime.now(UTC))
+    opener.open_round(session, table, number=1, scene=opening, cause=started, price=price)
     return await save(session, table)
 
 

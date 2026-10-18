@@ -318,6 +318,7 @@ async def test_starting_writes_the_roster_the_scene_and_the_round(
         'number',
         'deadline_at',
         'narration_model',
+        'price',
         'clock',
         'passed_minutes',
     }
