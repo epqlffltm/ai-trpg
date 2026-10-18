@@ -128,6 +128,17 @@ SELECT
 FROM free_grants g
 WHERE g.user_id = sqlc.arg(user_id) AND g.remaining > 0 AND g.expires_at > sqlc.arg(now);
 
+-- name: GetNextFreeExpiry :one
+-- 아직 사라지지 않은 무료 크레딧 중 가장 먼저 사라지는 시각과, 그 시각에 사라지는 양을 읽는다.
+-- 같은 시각에 사라지는 묶음이 여럿이면 그 양을 더한다. 무료 크레딧이 없으면 줄이 없다.
+-- 잔액(GetBalance)과 같은 트랜잭션에서 읽어 같은 순간의 값이 되게 한다(read.go 의 Balance).
+SELECT g.expires_at, SUM(g.remaining)::BIGINT AS amount
+FROM free_grants g
+WHERE g.user_id = sqlc.arg(user_id) AND g.remaining > 0 AND g.expires_at > sqlc.arg(now)
+GROUP BY g.expires_at
+ORDER BY g.expires_at
+LIMIT 1;
+
 -- name: ListEntries :many
 -- 한 사용자의 원장을 최근 것부터 읽는다. before 보다 앞선(번호가 작은) 줄만 읽는다.
 SELECT id, operation_id, kind, reason, amount, order_id, hold_id, created_at

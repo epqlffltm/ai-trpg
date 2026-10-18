@@ -5,6 +5,7 @@ package wallet_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -175,4 +176,91 @@ func TestEntriesAcceptTheLargestPage(t *testing.T) {
 	if err != nil || len(page.Entries) != 1 {
 		t.Errorf("쪽 = %+v, %v", page, err)
 	}
+}
+
+// wantNextExpiry 는 가장 먼저 사라지는 무료 크레딧이 기대와 같은지 본다. 양이 0 이면 없어야 한다.
+func (f fixture) wantNextExpiry(amount credit.Amount, at time.Time) {
+	f.t.Helper()
+	balance, err := f.service.Balance(ctx(f.t), f.user)
+	if err != nil {
+		f.t.Fatalf("잔액을 읽지 못했다: %v", err)
+	}
+	next := balance.NextExpiry
+	if amount == 0 {
+		if next != nil {
+			f.t.Errorf("가장 먼저 사라지는 것 = %+v. 없어야 한다", *next)
+		}
+		return
+	}
+	if next == nil || next.Amount != amount || !next.At.Equal(at) {
+		f.t.Errorf("가장 먼저 사라지는 것 = %+v, 기대 = %d 이 %v 에", next, amount, at)
+	}
+}
+
+func TestNoFreeCreditsMeansNothingExpires(t *testing.T) {
+	f := setUp(t, freeFirst)
+	f.deposit(100)
+
+	// 산 크레딧은 사라지지 않는다
+	f.wantNextExpiry(0, time.Time{})
+}
+
+func TestTheEarliestGrantIsTheNextToExpire(t *testing.T) {
+	f := setUp(t, freeFirst)
+	start := f.clock.Now()
+	f.grant(10)
+	f.clock.Advance(24 * time.Hour)
+	f.grant(20)
+
+	f.wantNextExpiry(10, start.Add(week))
+	f.wantBalance(0, 30)
+}
+
+func TestGrantsThatExpireAtTheSameMomentAreAddedUp(t *testing.T) {
+	f := setUp(t, freeFirst)
+	start := f.clock.Now()
+	f.grant(10)
+	f.grant(5)
+	f.clock.Advance(time.Hour)
+	f.grant(20)
+
+	f.wantNextExpiry(15, start.Add(week))
+}
+
+func TestSpendingTakesFromTheGrantThatExpiresFirst(t *testing.T) {
+	f := setUp(t, freeFirst)
+	start := f.clock.Now()
+	f.grant(10)
+	f.clock.Advance(time.Hour)
+	f.grant(20)
+
+	f.spend(4)
+	f.wantNextExpiry(6, start.Add(week))
+
+	// 첫 묶음을 다 쓰면 다음 묶음이 가장 먼저 사라지는 것이다
+	f.spend(6)
+	f.wantNextExpiry(20, start.Add(time.Hour+week))
+}
+
+func TestAGrantPastItsExpiryIsNotTheNextToExpire(t *testing.T) {
+	f := setUp(t, freeFirst)
+	start := f.clock.Now()
+	f.grant(10)
+	f.clock.Advance(time.Hour)
+	f.grant(20)
+
+	// 첫 묶음이 사라지는 바로 그 시각이다. 그 시각부터는 쓸 수 없다
+	f.clock.Advance(week - time.Hour)
+	f.wantNextExpiry(20, start.Add(time.Hour+week))
+
+	f.clock.Advance(time.Hour)
+	f.wantNextExpiry(0, time.Time{})
+}
+
+func TestAnotherUsersGrantsAreNotTheNextToExpire(t *testing.T) {
+	f := setUp(t, freeFirst)
+	other := setUpAt(t, f.pool, f.clock, freeFirst)
+	other.grant(50)
+
+	f.wantNextExpiry(0, time.Time{})
 }

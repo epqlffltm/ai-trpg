@@ -123,6 +123,16 @@ type Balance struct {
 	Paid credit.Amount
 	// Free 는 아직 사라지지 않은 무료 크레딧이다.
 	Free credit.Amount
+	// NextExpiry 는 무료 크레딧 중 가장 먼저 사라지는 것이다. 무료 크레딧이 없으면 nil 이다(#430).
+	NextExpiry *Expiry
+}
+
+// Expiry 는 같은 시각에 사라지는 무료 크레딧이다.
+type Expiry struct {
+	// Amount 는 그 시각에 사라지는 양이다. 같은 시각의 묶음이 여럿이면 더한 것이다.
+	Amount credit.Amount
+	// At 은 사라지는 시각이다. 이 시각부터는 쓸 수 없다.
+	At time.Time
 }
 
 // Total 은 산 크레딧과 무료 크레딧을 더한 양이다.
