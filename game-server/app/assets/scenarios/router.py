@@ -7,6 +7,9 @@
 모든 주소가 로그인을 요구한다. 자기 시나리오만 다룰 수 있다.
 
 /scenarios/{id}/versions 는 그 시나리오의 판이다. 판은 만들고 읽기만 한다. 고치거나 지우는 주소가 없다.
+
+시나리오의 응답에는 추천 서술 모델의 상태가 실린다(app/assets/scenarios/recommended_model.py).
+대신 쓸 모델을 보이려고 결제 서버의 가격 목록을 읽는다. 받지 못해도 응답은 나간다(대신 쓸 모델만 비운다).
 """
 
 import uuid
@@ -19,7 +22,9 @@ from app.assets.models import Scenario, ScenarioVersion
 from app.assets.routing import Paging, Session, to_summary
 from app.assets.scenarios import publishing, service
 from app.assets.scenarios.publishing import ScenarioNotReadyError
+from app.assets.scenarios.recommended_model import MISSING, ModelStatus, RecommendedModelError, model_status
 from app.assets.scenarios.schemas import (
+    ModelStatusOut,
     ScenarioCreate,
     ScenarioDetail,
     ScenarioPage,
@@ -31,6 +36,7 @@ from app.assets.scenarios.schemas import (
 )
 from app.assets.scenarios.snapshot import read_snapshot
 from app.auth.dependencies import CurrentUser
+from app.billing.routing import Now, Prices
 from app.lore.indexing import LoreIndexer
 
 router = APIRouter(prefix='/scenarios', tags=['scenarios'])
@@ -41,8 +47,15 @@ def to_scenario_summary(scenario: Scenario) -> ScenarioSummary:
     return ScenarioSummary(**to_summary(scenario.asset).model_dump(), rating=scenario.asset.rating)
 
 
-def to_detail(scenario: Scenario) -> ScenarioDetail:
-    """시나리오를 만든 사람에게 보여 주는 응답으로 바꾼다."""
+def to_status_out(found: ModelStatus | None) -> ModelStatusOut | None:
+    """추천 모델의 상태를 응답의 모양으로."""
+    if found is None:
+        return None
+    return ModelStatusOut(state=found.state, retires_on=found.retires_on, replacement=found.replacement)
+
+
+def to_detail(scenario: Scenario, found: ModelStatus | None) -> ScenarioDetail:
+    """시나리오를 만든 사람에게 보여 주는 응답으로 바꾼다. found 는 추천 모델의 상태다."""
     return ScenarioDetail(
         **to_scenario_summary(scenario).model_dump(),
         rulebook_id=scenario.rulebook_id,
@@ -67,8 +80,15 @@ def to_detail(scenario: Scenario) -> ScenarioDetail:
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,
+        narration_model=scenario.narration_model,
+        narration_model_status=to_status_out(found),
         clock=scenario.clock,
     )
+
+
+async def detail_of(session: Session, prices: Prices, now: Now, scenario: Scenario) -> ScenarioDetail:
+    """추천 모델의 상태를 읽어 붙인 응답."""
+    return to_detail(scenario, await model_status(session, prices, scenario.narration_model, now))
 
 
 def to_version_summary(version: ScenarioVersion) -> VersionSummary:
@@ -79,6 +99,19 @@ def to_version_summary(version: ScenarioVersion) -> VersionSummary:
 def to_version_detail(version: ScenarioVersion) -> VersionDetail:
     """판을 만든 사람에게 보여 주는 응답으로 바꾼다. 굳힌 내용을 계약의 모양으로 다시 읽어 싣는다."""
     return VersionDetail(**to_version_summary(version).model_dump(), snapshot=read_snapshot(version.snapshot))
+
+
+async def handle_recommended_model(request: Request, error: RecommendedModelError) -> JSONResponse:
+    """
+    추천 서술 모델을 저장할 수 없으면 422 로 답한다. 앱에 한 번 등록한다(app/main.py).
+
+    정하지 않은 것과 서비스 중인 모델이 아닌 것을 나눠 싣는다. 화면이 모델 목록을 다시 받아 고르게 한다.
+    """
+    detail = '추천 서술 모델을 골라야 합니다.' if error.reason == MISSING else '서비스 중인 모델이 아닙니다.'
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': detail, 'field': 'narration_model', 'reason': error.reason},
+    )
 
 
 async def handle_scenario_not_ready(request: Request, error: ScenarioNotReadyError) -> JSONResponse:
@@ -94,10 +127,12 @@ async def handle_scenario_not_ready(request: Request, error: ScenarioNotReadyErr
 
 
 @router.post('', response_model=ScenarioDetail, status_code=status.HTTP_201_CREATED)
-async def create_scenario(data: ScenarioCreate, user: CurrentUser, session: Session) -> ScenarioDetail:
-    """시나리오를 만든다. 룰북, 세계관, 로어북은 자기 것만 가리킬 수 있다."""
-    scenario = await service.create_scenario(session, user.user_id, data)
-    return to_detail(scenario)
+async def create_scenario(
+    data: ScenarioCreate, user: CurrentUser, session: Session, prices: Prices, now: Now
+) -> ScenarioDetail:
+    """시나리오를 만든다. 룰북, 세계관, 로어북은 자기 것만 가리킬 수 있다. 추천 서술 모델을 반드시 고른다."""
+    scenario = await service.create_scenario(session, user.user_id, data, now.date())
+    return await detail_of(session, prices, now, scenario)
 
 
 @router.get('', response_model=ScenarioPage, status_code=status.HTTP_200_OK)
@@ -108,19 +143,21 @@ async def list_scenarios(user: CurrentUser, session: Session, paging: Paging) ->
 
 
 @router.get('/{scenario_id}', response_model=ScenarioDetail, status_code=status.HTTP_200_OK)
-async def read_scenario(scenario_id: uuid.UUID, user: CurrentUser, session: Session) -> ScenarioDetail:
-    """자기 시나리오 하나를 돌려준다."""
+async def read_scenario(
+    scenario_id: uuid.UUID, user: CurrentUser, session: Session, prices: Prices, now: Now
+) -> ScenarioDetail:
+    """자기 시나리오 하나를 돌려준다. 추천 서술 모델의 상태를 함께 싣는다."""
     scenario = await service.get_scenario(session, user.user_id, scenario_id)
-    return to_detail(scenario)
+    return await detail_of(session, prices, now, scenario)
 
 
 @router.patch('/{scenario_id}', response_model=ScenarioDetail, status_code=status.HTTP_200_OK)
 async def update_scenario(
-    scenario_id: uuid.UUID, data: ScenarioUpdate, user: CurrentUser, session: Session
+    scenario_id: uuid.UUID, data: ScenarioUpdate, user: CurrentUser, session: Session, prices: Prices, now: Now
 ) -> ScenarioDetail:
     """자기 시나리오를 고친다. 보낸 칸만 바뀐다. 룰북과 세계관은 null 로 떼고, 로어북은 목록을 통째로 바꾼다."""
-    scenario = await service.update_scenario(session, user.user_id, scenario_id, data)
-    return to_detail(scenario)
+    scenario = await service.update_scenario(session, user.user_id, scenario_id, data, now.date())
+    return await detail_of(session, prices, now, scenario)
 
 
 @router.delete('/{scenario_id}', status_code=status.HTTP_204_NO_CONTENT)

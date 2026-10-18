@@ -59,7 +59,6 @@ from app.assets.models import (
     one_of,
 )
 from app.core.database import Base
-from app.rounds.tiers import NarrationTier
 
 # 초대 코드의 길이(글자 수). 코드를 아는 사람만 테이블에 들어온다
 INVITE_CODE_LENGTH = 12
@@ -160,7 +159,6 @@ class GameTable(Base):
             name='character_modes_allowed',
         ),
         CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
-        CheckConstraint(one_of('narration_tier', NarrationTier), name='narration_tier_allowed'),
         CheckConstraint(
             f'round_time_limit IS NULL OR round_time_limit BETWEEN {ROUND_TIME_LIMIT_MIN} AND {ROUND_TIME_LIMIT_MAX}',
             name='round_time_limit_range',
@@ -222,16 +220,12 @@ class GameTable(Base):
     # 이 칸이 생기기 전에 만든 테이블은 정통이다. 그 테이블의 판도 정통을 추천하는 것으로 읽힌다
     narration_style: Mapped[str] = mapped_column(String(20), server_default=text("'classic'"))
 
-    # 서술 등급(app/rounds/tiers.py). 어느 모델들로 서술하고 한 번에 얼마를 받는가.
-    # 만들 때 방장이 고르고 진행 중에도 바꿀 수 있다.
-    # 라운드를 열 때 그 라운드의 등급으로 굳는다. 그래서 바꾼 값은 다음 라운드부터 쓴다.
-    # 이 서버가 내주는 등급만 고를 수 있다(설정이 정한다). 이 칸이 생기기 전에 만든 테이블은 standard 다
-    narration_tier: Mapped[str] = mapped_column(
-        String(20), default=NarrationTier.STANDARD, server_default=text(f"'{NarrationTier.STANDARD}'")
-    )
-    # 방장이 고른 서술 모델(모델 목록의 이름표, app/catalog/). 값은 결제 서버의 narration.<이름표>.i0.o0 이다.
-    # 비어 있으면 서버의 기본(서술 등급)으로 서술한다. 이 칸이 생기기 전에 만든 테이블도 비어 있다.
-    # 라운드를 열 때 그 라운드의 것으로 굳는다(등급과 같다). 그래서 바꾼 값은 다음 라운드부터 쓴다.
+    # 서술 모델(모델 목록의 이름표, app/catalog/). 값은 결제 서버의 narration.<이름표>.i0.o0 이다.
+    # 만들 때 정한다. 방장이 고른 것, 아니면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대체 모델이다
+    # (app/tables/model_choice.py). 진행 중에도 방장이 바꿀 수 있다.
+    # 비어 있는 것은 이 규칙 전에 만든 테이블뿐이다. 서버의 기본 모델(LLM_MODEL)로 서술하고 옛 가격표로 건다
+    # (app/billing/charges.py 의 LEGACY_PRICE_CODE).
+    # 라운드를 열 때 그 라운드의 것으로 굳는다. 그래서 바꾼 값은 보통 다음 라운드부터 쓴다.
     # 길이는 모델 목록의 이름표와 같다(48자). 모델 목록을 가리키는 외래 키는 두지 않는다.
     # 고를 때 확인한다(app/tables/model_picker.py)
     narration_model: Mapped[str | None] = mapped_column(String(48))

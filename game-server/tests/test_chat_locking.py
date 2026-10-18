@@ -33,8 +33,9 @@ from app.tables import service as tables
 from app.tables import state as table_state
 from app.tables.models import GameTable
 from app.tables.schemas import JoinRequest, TableCreate
-from tests.conftest import EVERY_TIER, no_limits
+from tests.conftest import no_limits
 from tests.indexers import NO_INDEXER
+from tests.narration_model import TEST_MODEL, free_picker, today
 from tests.sheets import SHEET
 from tests.signing import make_viewer
 
@@ -63,11 +64,17 @@ async def is_waiting(task: asyncio.Task) -> bool:
 async def open_duo(session: AsyncSession) -> GameTable:
     """나와 친구가 앉은 테이블을 연다."""
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
-    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook.asset_id, openings=['도입부'], default_sheet=SHEET)
-    scenario = await scenarios.create_scenario(session, ME, data)
+    data = ScenarioCreate(
+        narration_model=TEST_MODEL,
+        title='시나리오',
+        rulebook_id=rulebook.asset_id,
+        openings=['도입부'],
+        default_sheet=SHEET,
+    )
+    scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     create = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=2)
-    table = await tables.create_table(session, make_viewer(ME), create, EVERY_TIER)
+    table = await tables.create_table(session, make_viewer(ME), create, free_picker())
     return await tables.join_table(session, make_viewer(FRIEND), JoinRequest(invite_code=table.invite_code))
 
 

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import API_PREFIX
 from app.tables.models import GameTable
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -86,7 +87,7 @@ async def publish(client: AsyncClient, me: dict, recommended: str) -> dict:
         'default_sheet': SHEET,
         'narration_style': recommended,
     }
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     return scenario
 

@@ -516,6 +516,13 @@ class Scenario(AssetContent):
         String(20), default=DEFAULT_NARRATION_STYLE, server_default=text("'classic'")
     )
 
+    # 추천 서술 모델. 모델 목록(app/catalog)의 이름표다.
+    # 저장할 때 반드시 정한다(app/assets/scenarios/recommended_model.py).
+    # 테이블을 만들 때 테이블로 복사한다. 판에 굳히지 않는다. 모델을 쓸 수 있는지는 내용과 따로 바뀐다.
+    # 비어 있는 것은 이 규칙 전에 만든 시나리오뿐이다. 그 시나리오로 테이블을 만들면 방장이 모델을 고른다.
+    # 모델 목록을 외래키로 가리키지 않는다. 모델 목록은 다른 서비스로 옮겨 갈 수 있다(docs/architecture/shared-code.md)
+    narration_model: Mapped[str | None] = mapped_column(String(48))
+
     # 기본 시트. 캐릭터를 직접 만든 사람이 받는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 직접 만들기를 허용했으면 게시할 때 있어야 한다
     default_sheet: Mapped[dict | None] = mapped_column(JSONB)

@@ -27,6 +27,7 @@ from app.engine.sheet import Sheet
 from app.main import API_PREFIX
 from app.tables.models import NpcStatus, TableNpc
 from app.tables.npcs import make_npcs
+from tests.narration_model import asset_body, with_model
 from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -54,7 +55,7 @@ def me(signing_key: SigningKey) -> dict[str, str]:
 
 
 async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -> dict:
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 
@@ -137,7 +138,9 @@ async def test_the_same_person_cannot_have_two_sheets(client: AsyncClient, me: d
     twice = [npc(lore['lady'], LADY_SHEET), npc(lore['lady'], DWARF_SHEET)]
 
     response = await client.post(
-        SCENARIOS_URL, json={'title': '추격전', 'rulebook_id': rulebook['id'], 'npc_sheets': twice}, headers=me
+        SCENARIOS_URL,
+        json=with_model({'title': '추격전', 'rulebook_id': rulebook['id'], 'npc_sheets': twice}),
+        headers=me,
     )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
@@ -156,7 +159,9 @@ async def test_the_same_person_cannot_have_two_sheets(client: AsyncClient, me: d
     ],
 )
 async def test_an_npc_sheet_must_have_the_shape_of_a_sheet(client: AsyncClient, me: dict[str, str], npc_sheet: dict):
-    response = await client.post(SCENARIOS_URL, json={'title': '추격전', 'npc_sheets': [npc_sheet]}, headers=me)
+    response = await client.post(
+        SCENARIOS_URL, json=with_model({'title': '추격전', 'npc_sheets': [npc_sheet]}), headers=me
+    )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 

@@ -33,6 +33,7 @@ from app.assets.models import (
 )
 from app.main import API_PREFIX
 from app.tables.models import INVITE_CODE_LENGTH, GameTable, TableMember
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -107,7 +108,7 @@ async def publish_scenario(client: AsyncClient, headers: dict[str, str], **field
         'default_sheet': SHEET,
     }
     body.update(fields)
-    scenario = await client.post(SCENARIOS_URL, json=body, headers=headers)
+    scenario = await client.post(SCENARIOS_URL, json=with_model(body), headers=headers)
     assert scenario.status_code == status.HTTP_201_CREATED, scenario.text
     published = await client.post(f'{SCENARIOS_URL}/{scenario.json()["id"]}/versions', json={}, headers=headers)
     assert published.status_code == status.HTTP_201_CREATED, published.text
@@ -228,7 +229,6 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'has_password',
         'narration_style',
         'round_time_limit',
-        'narration_tier',
         'narration_model',
         'credit_wait_seconds',
         'remove_short_payers',
@@ -546,7 +546,6 @@ async def test_lists_only_the_tables_i_sit_at(client: AsyncClient, me: dict[str,
         'has_password',
         'narration_style',
         'round_time_limit',
-        'narration_tier',
         'narration_model',
         'credit_wait_seconds',
         'remove_short_payers',

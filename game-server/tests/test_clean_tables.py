@@ -39,6 +39,7 @@ from app.tables.models import (
 )
 from app.whispers.models import Whisper
 from tests.cleaning import clear_tables, clearing_order
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -129,7 +130,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         'character_modes': ['custom', 'rolled'],
         'player_made_hp': {'base': 10, 'cap': 12},
     }
-    scenario = (await client.post(f'{url}/scenarios', json=body, headers=me)).json()
+    scenario = (await client.post(f'{url}/scenarios', json=with_model(body), headers=me)).json()
     await client.post(f'{url}/scenarios/{scenario["id"]}/versions', json={}, headers=me)
     await app.state.jobs.drain()
     await client.patch(f'{url}/scenarios/{scenario["id"]}/listing', json={'tagline': '달린다'}, headers=me)

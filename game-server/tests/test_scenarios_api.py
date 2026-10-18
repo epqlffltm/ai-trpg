@@ -34,6 +34,7 @@ from app.assets.models import (
     World,
 )
 from app.main import API_PREFIX
+from tests.narration_model import asset_body, with_model
 from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -77,7 +78,7 @@ async def create(client: AsyncClient, url: str, headers: dict[str, str], **field
     """API 로 자산 하나를 만들고 응답의 본문을 돌려준다. 주소가 종류를 정한다."""
     body = {'title': TITLE}
     body.update(fields)
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 
@@ -105,7 +106,7 @@ async def test_every_address_requires_login(client: AsyncClient, method: str, pa
 
 
 async def test_creates_a_draft_with_only_a_title(client: AsyncClient, my_headers: dict[str, str]):
-    response = await client.post(SCENARIOS_URL, json={'title': TITLE}, headers=my_headers)
+    response = await client.post(SCENARIOS_URL, json=with_model({'title': TITLE}), headers=my_headers)
 
     # 임시 저장. 룰북이 없어도 만들어진다
     assert response.status_code == status.HTTP_201_CREATED
@@ -170,6 +171,8 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'player_made_hp',
         'reroll_allowed',
         'narration_style',
+        'narration_model',
+        'narration_model_status',
         'clock',
     }
 
@@ -216,7 +219,7 @@ async def test_a_scenario_is_saved_as_the_scenario_type(
     ],
 )
 async def test_rejects_bad_input(client: AsyncClient, my_headers: dict[str, str], body: dict):
-    response = await client.post(SCENARIOS_URL, json=body, headers=my_headers)
+    response = await client.post(SCENARIOS_URL, json=with_model(body), headers=my_headers)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -243,7 +246,9 @@ async def test_the_narration_style_is_recommended_on_the_scenario(client: AsyncC
 async def test_rejects_a_narration_style_it_does_not_know(client: AsyncClient, my_headers: dict[str, str], style: str):
     scenario = await create(client, SCENARIOS_URL, my_headers)
 
-    created = await client.post(SCENARIOS_URL, json={'title': TITLE, 'narration_style': style}, headers=my_headers)
+    created = await client.post(
+        SCENARIOS_URL, json=with_model({'title': TITLE, 'narration_style': style}), headers=my_headers
+    )
     updated = await client.patch(
         f'{SCENARIOS_URL}/{scenario["id"]}', json={'narration_style': style}, headers=my_headers
     )
@@ -313,7 +318,9 @@ async def test_materials_have_no_rating(client: AsyncClient, my_headers: dict[st
 async def test_rejects_an_asset_that_does_not_exist(
     client: AsyncClient, my_headers: dict[str, str], field: str, target_url: str
 ):
-    response = await client.post(SCENARIOS_URL, json={'title': TITLE, field: NO_SUCH_ID}, headers=my_headers)
+    response = await client.post(
+        SCENARIOS_URL, json=with_model({'title': TITLE, field: NO_SUCH_ID}), headers=my_headers
+    )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     # 어느 칸이 틀렸는지 알려 준다
@@ -326,8 +333,10 @@ async def test_someone_elses_asset_looks_like_it_does_not_exist(
 ):
     theirs = await create(client, target_url, their_headers)
 
-    stolen = await client.post(SCENARIOS_URL, json={'title': TITLE, field: theirs['id']}, headers=my_headers)
-    missing = await client.post(SCENARIOS_URL, json={'title': TITLE, field: NO_SUCH_ID}, headers=my_headers)
+    stolen = await client.post(
+        SCENARIOS_URL, json=with_model({'title': TITLE, field: theirs['id']}), headers=my_headers
+    )
+    missing = await client.post(SCENARIOS_URL, json=with_model({'title': TITLE, field: NO_SUCH_ID}), headers=my_headers)
 
     # 남의 자산과 없는 자산의 답이 똑같다. 그 ID 의 자산이 있다는 것이 드러나지 않는다
     assert stolen.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
@@ -339,7 +348,9 @@ async def test_rejects_a_deleted_asset(client: AsyncClient, my_headers: dict[str
     target = await create(client, target_url, my_headers)
     await client.delete(f'{target_url}/{target["id"]}', headers=my_headers)
 
-    response = await client.post(SCENARIOS_URL, json={'title': TITLE, field: target['id']}, headers=my_headers)
+    response = await client.post(
+        SCENARIOS_URL, json=with_model({'title': TITLE, field: target['id']}), headers=my_headers
+    )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -348,7 +359,9 @@ async def test_rejects_an_asset_of_the_wrong_type(client: AsyncClient, my_header
     world = await create(client, WORLDS_URL, my_headers)
 
     # 룰북 자리에 세계관을 넣는다
-    response = await client.post(SCENARIOS_URL, json={'title': TITLE, 'rulebook_id': world['id']}, headers=my_headers)
+    response = await client.post(
+        SCENARIOS_URL, json=with_model({'title': TITLE, 'rulebook_id': world['id']}), headers=my_headers
+    )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -358,7 +371,7 @@ async def test_nothing_is_saved_when_a_reference_is_rejected(client: AsyncClient
 
     # 룰북은 맞고 세계관이 틀렸다
     body = {'title': TITLE, 'rulebook_id': rulebook['id'], 'world_id': NO_SUCH_ID}
-    response = await client.post(SCENARIOS_URL, json=body, headers=my_headers)
+    response = await client.post(SCENARIOS_URL, json=with_model(body), headers=my_headers)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert (await client.get(SCENARIOS_URL, headers=my_headers)).json()['total'] == 0
@@ -556,7 +569,7 @@ async def test_rejects_bad_players_and_pregens(client: AsyncClient, my_headers: 
     )
     url = f'{SCENARIOS_URL}/{scenario["id"]}'
 
-    created = await client.post(SCENARIOS_URL, json={'title': '시나리오', **fields}, headers=my_headers)
+    created = await client.post(SCENARIOS_URL, json=with_model({'title': '시나리오', **fields}), headers=my_headers)
     updated = await client.patch(url, json=fields, headers=my_headers)
 
     assert created.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
@@ -734,7 +747,7 @@ async def test_rejects_a_lorebook_that_cannot_be_attached(
     for bad_id in (NO_SUCH_ID, theirs['id'], deleted['id'], world['id']):
         # 맞는 것과 섞어 보내도, 하나가 틀리면 전부 거부한다
         body = {'title': TITLE, 'lorebook_ids': [mine['id'], bad_id]}
-        response = await client.post(SCENARIOS_URL, json=body, headers=my_headers)
+        response = await client.post(SCENARIOS_URL, json=with_model(body), headers=my_headers)
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert 'lorebook_ids' in response.json()['detail']
@@ -960,7 +973,7 @@ async def test_rejects_bad_sheets_and_modes(client: AsyncClient, my_headers: dic
     scenario = await create(client, SCENARIOS_URL, my_headers, default_sheet=SHEET)
     url = f'{SCENARIOS_URL}/{scenario["id"]}'
 
-    created = await client.post(SCENARIOS_URL, json={'title': '시나리오', **fields}, headers=my_headers)
+    created = await client.post(SCENARIOS_URL, json=with_model({'title': '시나리오', **fields}), headers=my_headers)
     updated = await client.patch(url, json=fields, headers=my_headers)
 
     assert created.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
