@@ -30,6 +30,7 @@ from app.listings import repository
 from app.listings.models import Genre, Listing
 from app.listings.repository import PublicRow
 from app.listings.schemas import ListingUpdate, PublicationUpdate
+from app.operators.publishing import require_publishable
 
 
 class Problem(enum.StrEnum):
@@ -158,7 +159,8 @@ async def set_publication(
     자기 시나리오의 공개할 판을 정한다. 번호를 비우면 공개를 내린다.
 
     시나리오나 판이 없으면 AssetNotFoundError, 소개 페이지가 조건을 못 갖췄으면 ListingNotReadyError,
-    성인용 판인데 allowed 에 성인용이 없으면 AdultContentRequiredError(#390).
+    성인용 판인데 allowed 에 성인용이 없으면 AdultContentRequiredError(#390),
+    운영자가 제재한 판이거나 공개 금지 중이면 PublicationRefusedError(#392, app/operators/publishing.py).
     공개를 내리는 것은 등급과 상관없이 된다. 성인용을 공개의 길에서 거두는 일이라 막을 까닭이 없다.
     """
     await assets.lock_owned(session, Scenario, owner_id, scenario_id)
@@ -171,6 +173,7 @@ async def set_publication(
         if version is None:
             raise AssetNotFoundError
         require_rating(read_snapshot(version.snapshot).rating, allowed)
+        await require_publishable(session, owner_id, version.id)
         problems = find_problems(listing)
         if problems:
             raise ListingNotReadyError(problems)

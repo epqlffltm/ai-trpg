@@ -63,6 +63,8 @@ from app.observability.middleware import RequestLoggingMiddleware
 from app.observability.responses import handle_unexpected_error
 from app.observability.setup import configure_logging
 from app.operators import router as operators
+from app.operators.publishing import PublicationRefusedError
+from app.operators.sanctions import SanctionConflictError
 from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
 from app.realtime import router as realtime
@@ -306,6 +308,8 @@ def create_app(
     app.add_exception_handler(TableConflictError, tables.handle_table_conflict)
     app.add_exception_handler(DraftNotFoundError, ledger_drafts.handle_draft_not_found)
     app.add_exception_handler(TableOptionError, tables.handle_table_option)
+    app.add_exception_handler(SanctionConflictError, operators.handle_sanction_conflict)
+    app.add_exception_handler(PublicationRefusedError, operators.handle_publication_refused)
     app.add_exception_handler(RoundNotFoundError, rounds.handle_round_not_found)
     app.add_exception_handler(RoundConflictError, rounds.handle_round_conflict)
     app.add_exception_handler(ActionNotInRulesError, rounds.handle_action_not_in_rules)
