@@ -50,6 +50,12 @@ def is_unchanged(table: GameTable, round_: Round | None, model: str) -> bool:
     return not takes_new_model(round_) or round_.narration_model == model
 
 
+def forget_retire_notices(table: GameTable) -> None:
+    """은퇴를 알린 것을 지운다. 모델이 바뀌면 새 모델의 은퇴일로 처음부터 다시 센다(app/tables/model_retirement.py)."""
+    table.retire_notice_for = None
+    table.retire_notice_days = None
+
+
 async def apply_to_round(session: AsyncSession, round_: Round, model: str) -> None:
     """라운드의 모델을 바꾸고, 그 라운드의 청구를 새 가격표로 다시 걸게 적는다."""
     round_.narration_model = model
@@ -76,6 +82,7 @@ async def change_narration_model(
     await require_pickable(session, picker, data.narration_model)
 
     table.narration_model = data.narration_model
+    forget_retire_notices(table)
     applied = takes_new_model(round_)
     if applied:
         await apply_to_round(session, round_, data.narration_model)

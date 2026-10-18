@@ -56,7 +56,7 @@ class EventType(enum.StrEnum):
     ROUND_TIME_LIMIT_CHANGED = 'round_time_limit_changed'
     # 방장이 서술 등급을 바꿨다. 서술 등급을 없앤 뒤로는 적지 않는다. 그 전에 적은 이벤트를 읽으려고 남긴다
     NARRATION_TIER_CHANGED = 'narration_tier_changed'
-    # 방장이 서술 모델을 바꿨다(비우면 서버의 기본). 다음 라운드부터 그 모델이다
+    # 방장이 서술 모델을 바꿨다. 다음 라운드부터 그 모델이다
     NARRATION_MODEL_CHANGED = 'narration_model_changed'
     # 방장이 크레딧이 모자란 사람을 기다리는 규칙(시간, 자동으로 빼기)을 바꿨다
     CREDIT_WAIT_CHANGED = 'credit_wait_changed'
@@ -143,6 +143,12 @@ class EventType(enum.StrEnum):
     # 라운드의 서술 모델을 결제 서버가 팔지 않는다(판매를 멈췄거나 아직 열지 않았다). 라운드마다 처음 알았을 때 한 번.
     # 방장이 모델을 바꾸면 그 라운드의 청구를 새 가격표로 다시 건다. 바꾸지 않으면 서술이 실패한다(model_not_for_sale)
     NARRATION_MODEL_NOT_FOR_SALE = 'narration_model_not_for_sale'
+    # 테이블의 서술 모델이 곧 은퇴한다. 30, 14, 7, 1 일 남았을 때 한 번씩(app/tables/model_retirement.py)
+    NARRATION_MODEL_RETIRING = 'narration_model_retiring'
+    # 서술 모델이 은퇴해 서버가 같은 회사의 다른 모델로 바꿨다. 아직 서술하지 않은 지금 라운드도 바꿨으면 round 가 있다
+    NARRATION_MODEL_REPLACED = 'narration_model_replaced'
+    # 서술 모델이 은퇴했는데 같은 회사에 대신할 모델이 없다. 방장이 모델을 골라야 서술한다
+    NARRATION_MODEL_UNAVAILABLE = 'narration_model_unavailable'
     # 크레딧이 모자란 사람을 기다리는 시간이 지나 서버가 그 사람을 자리에서 뺐다. 나머지로 다시 서술한다
     MEMBER_DROPPED = 'member_dropped'
     # 크레딧이 모자란 사람을 기다리는 시간이 지나 낼 수 있는 사람의 값을 돌려줬다. 라운드는 멈춘 채로 있다
