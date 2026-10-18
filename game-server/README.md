@@ -194,6 +194,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_tier` 로 서술 등급을 고른다(비우면 `standard`). `credit_wait_seconds`, `remove_short_payers` 로 크레딧이 모자란 사람을 기다리는 규칙을 고른다(비우면 5분, 켬). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables` | 내가 앉아 있는 테이블 목록. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/join` | 초대 코드로 테이블에 들어가 앉는다 | access 토큰 |
+| GET | `/api/v1/game/tables/narration-models` | 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값(`{"free": false, "models": [{"slug", "display_name", "vendor", "grade", "credits", "tier", "next"}]}`). 가격 목록을 받지 못했으면 503 ([고를 수 있는 모델](#고를-수-있는-모델)) | access 토큰 |
 | GET | `/api/v1/game/tables/narration-tiers` | 이 서버가 내주는 서술 등급들(`{"tiers": ["standard", "premium"]}`). 테이블을 만들거나 등급을 바꿀 때 이 중에서 고른다 | access 토큰 |
 | GET | `/api/v1/game/tables/lobby` | 로비. 들어갈 수 있는 테이블 목록. 최근에 만든 것부터. `scenario_id`, `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/join` | 로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 `password` 를 보낸다 | access 토큰 |
@@ -1908,6 +1909,17 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **그날의 단가**는 그날 이전에 시작한 것 중 가장 늦은 것이다. 같은 날이면 나중에 적은 것이다. 행사가가 끝나는 날의 값을 미리 적어 둘 수 있고, 잘못 적은 값은 같은 날로 다시 적어 고친다. 앞의 줄은 남는다.
 
 서술 등급의 모델은 지금처럼 설정(`LLM_MODEL`, `LLM_PREMIUM_MODEL`)이 정한다. 거기에 이름표를 적으면 이 목록대로 부른다([외부 API 모델](#라운드)). 켜기 전에는 `scripts.try_model` 로 불러 본다.
+
+### 고를 수 있는 모델
+
+`GET /tables/narration-models` 는 방장이 테이블의 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값을 준다(`app/catalog/offers.py`, #332). 아직 테이블이 이 목록에서 고르지는 않는다(다음 PR). 지금은 보여 주기만 한다.
+- **두 목록에 다 있어야 나온다.** 이 목록에서 켜져 있고 은퇴하지 않았으며, 결제 서버의 가격 목록에 그 이름표의 가격표 이름(`narration.<이름표>.i0.o0`)이 있고 지금 팔고 있어야 한다. 원가를 적고 평가를 통과해 켠 모델을 결제 서버가 값을 붙여 판다.
+- **값은 결제 서버가 정한 그대로다**(`credits`, 글자). 게임 서버는 셈하지 않는다. `tier` 가 `premium` 이면 골드(유료 크레딧)로만 낸다. 결제에 쓰는 등급은 이것이 기준이고, 이 목록의 분류(`grade`)는 화면의 묶음이다. 둘이 다르면(premium 이 한쪽에만) 경고를 남긴다(`모델 목록의 분류와 결제 서버 가격표의 등급이 다르다`).
+- **값이 바뀌는 예약이 있으면 `next` 에 싣는다**(`{"credits": "310", "tier": "premium", "effective_at": "..."}`). 화면이 "12월 1일부터 310"처럼 미리 알린다. `next.credits` 가 `null` 이면 그 시각부터 팔지 않는다. 시각이 지나면 게임 서버가 스스로 갈아 끼운다.
+- **가격 목록은 받아 두고 1분쯤마다 버전으로 다시 묻는다**(`app/billing/price_list.py`). 결제 서버의 `GET /api/v1/billing/service/prices` 를 홀드와 같은 서명으로 부르고, 응답의 `ETag` 를 `If-None-Match` 에 실어 다시 묻는다. 바뀐 것이 없으면 304 다. 여럿이 함께 물어도 한 번만 묻는다.
+- **받지 못하면 마지막 목록을 쓴다**(`결제 서버의 가격 목록을 새로 받지 못했다`). 고를 수 있는 모델이 갑자기 사라지지 않는다. 한 번도 받지 못했으면 503 이다. 값을 모르는 모델은 내주지 않는다.
+- **결제 서버 없이 도는 서버**(`BILLING_URL` 비움)는 켜진 모델을 모두 값 없이 내준다(`"free": true`). 지금도 결제 서버가 없으면 홀드 없이 서술한다. 로컬 모델(Ollama)도 `--provider local` 로 이 목록에 넣으면 고를 수 있다.
+- 로그인한 사람에게만 보인다. 가격을 아무나 긁어 가지 못하게 한다.
 
 ### 관리 명령
 
