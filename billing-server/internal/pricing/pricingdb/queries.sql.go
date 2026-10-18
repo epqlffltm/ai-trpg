@@ -14,7 +14,7 @@ import (
 
 const currentPrice = `-- name: CurrentPrice :one
 
-SELECT id, code, amount, effective_at, reason, changed_by, created_at, tier FROM price_versions
+SELECT id, code, amount, effective_at, reason, changed_by, created_at, tier, promo FROM price_versions
 WHERE code = $1 AND effective_at <= $2::TIMESTAMPTZ
 ORDER BY effective_at DESC
 LIMIT 1
@@ -44,12 +44,13 @@ func (q *Queries) CurrentPrice(ctx context.Context, arg CurrentPriceParams) (Pri
 		&i.ChangedBy,
 		&i.CreatedAt,
 		&i.Tier,
+		&i.Promo,
 	)
 	return i, err
 }
 
 const currentPrices = `-- name: CurrentPrices :many
-SELECT DISTINCT ON (code) id, code, amount, effective_at, reason, changed_by, created_at, tier
+SELECT DISTINCT ON (code) id, code, amount, effective_at, reason, changed_by, created_at, tier, promo
 FROM price_versions
 WHERE effective_at <= $1::TIMESTAMPTZ
 ORDER BY code, effective_at DESC
@@ -74,6 +75,7 @@ func (q *Queries) CurrentPrices(ctx context.Context, now time.Time) ([]PriceVers
 			&i.ChangedBy,
 			&i.CreatedAt,
 			&i.Tier,
+			&i.Promo,
 		); err != nil {
 			return nil, err
 		}
@@ -85,30 +87,51 @@ func (q *Queries) CurrentPrices(ctx context.Context, now time.Time) ([]PriceVers
 	return items, nil
 }
 
-const insertPriceVersion = `-- name: InsertPriceVersion :one
-INSERT INTO price_versions (code, amount, tier, effective_at, reason, changed_by, created_at)
-VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+const hasLaterVersion = `-- name: HasLaterVersion :one
+SELECT EXISTS (
+    SELECT 1 FROM price_versions WHERE code = $1 AND effective_at > $2::TIMESTAMPTZ
 )
-RETURNING id, code, amount, effective_at, reason, changed_by, created_at, tier
+`
+
+type HasLaterVersionParams struct {
+	Code  string
+	After time.Time
+}
+
+// 그 이름에 적용 시각이 after 보다 늦은 줄이 있는지 본다. 행사가 줄은 끝나는 때(다음 줄)가 먼저 있어야 한다.
+func (q *Queries) HasLaterVersion(ctx context.Context, arg HasLaterVersionParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasLaterVersion, arg.Code, arg.After)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const insertPriceVersion = `-- name: InsertPriceVersion :one
+INSERT INTO price_versions (code, amount, tier, promo, effective_at, reason, changed_by, created_at)
+VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8
+)
+RETURNING id, code, amount, effective_at, reason, changed_by, created_at, tier, promo
 `
 
 type InsertPriceVersionParams struct {
 	Code        string
 	Amount      *credit.Amount
 	Tier        string
+	Promo       bool
 	EffectiveAt time.Time
 	Reason      string
 	ChangedBy   string
 	Now         time.Time
 }
 
-// 가격표에 줄 하나를 덧붙인다. amount 가 NULL 이면 판매를 멈추는 줄이다. 등급(tier)은 늘 적는다.
+// 가격표에 줄 하나를 덧붙인다. amount 가 NULL 이면 판매를 멈추는 줄이다. 등급(tier)과 행사가 표시(promo)는 늘 적는다.
 func (q *Queries) InsertPriceVersion(ctx context.Context, arg InsertPriceVersionParams) (PriceVersion, error) {
 	row := q.db.QueryRow(ctx, insertPriceVersion,
 		arg.Code,
 		arg.Amount,
 		arg.Tier,
+		arg.Promo,
 		arg.EffectiveAt,
 		arg.Reason,
 		arg.ChangedBy,
@@ -124,12 +147,13 @@ func (q *Queries) InsertPriceVersion(ctx context.Context, arg InsertPriceVersion
 		&i.ChangedBy,
 		&i.CreatedAt,
 		&i.Tier,
+		&i.Promo,
 	)
 	return i, err
 }
 
 const priceHistory = `-- name: PriceHistory :many
-SELECT id, code, amount, effective_at, reason, changed_by, created_at, tier FROM price_versions
+SELECT id, code, amount, effective_at, reason, changed_by, created_at, tier, promo FROM price_versions
 WHERE code = $1
 ORDER BY effective_at, id
 `
@@ -153,6 +177,7 @@ func (q *Queries) PriceHistory(ctx context.Context, code string) ([]PriceVersion
 			&i.ChangedBy,
 			&i.CreatedAt,
 			&i.Tier,
+			&i.Promo,
 		); err != nil {
 			return nil, err
 		}
@@ -165,7 +190,7 @@ func (q *Queries) PriceHistory(ctx context.Context, code string) ([]PriceVersion
 }
 
 const upcomingPrices = `-- name: UpcomingPrices :many
-SELECT DISTINCT ON (code) id, code, amount, effective_at, reason, changed_by, created_at, tier
+SELECT DISTINCT ON (code) id, code, amount, effective_at, reason, changed_by, created_at, tier, promo
 FROM price_versions
 WHERE effective_at > $1::TIMESTAMPTZ
 ORDER BY code, effective_at
@@ -190,6 +215,7 @@ func (q *Queries) UpcomingPrices(ctx context.Context, now time.Time) ([]PriceVer
 			&i.ChangedBy,
 			&i.CreatedAt,
 			&i.Tier,
+			&i.Promo,
 		); err != nil {
 			return nil, err
 		}
