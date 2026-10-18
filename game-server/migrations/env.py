@@ -3,7 +3,7 @@
 """
 Alembic 이 마이그레이션을 실행할 때 부르는 파일.
 
-    uv run alembic upgrade head                          # 마이그레이션 적용
+    uv run alembic upgrade heads                         # 마이그레이션 적용. 끝이 여럿이면 모두
     uv run alembic revision --autogenerate -m "설명"      # 모델과 DB 를 비교해 새 마이그레이션 만들기
     uv run alembic check                                 # 모델을 바꾸고 마이그레이션을 안 만들었는지 검사
 
