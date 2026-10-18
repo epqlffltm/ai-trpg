@@ -139,9 +139,21 @@ type Order struct {
 	// Refundable 은 지금 청약철회할 수 있는지다. paid 이고, 기한 안이고, 그 주문의 크레딧이 하나도 줄지 않았어야 한다.
 	// 읽은 순간의 값이다. 실제로 할 수 있는지는 청약철회를 요청할 때 다시 본다.
 	Refundable bool
+	// RefundBlocked 는 치른 주문인데 청약철회할 수 없는 까닭이다. 할 수 있거나 치른 주문이 아니면 비어 있다(#430).
+	RefundBlocked RefundBlock
 	// RefundedAt 은 환불된 시각이다. refunded 일 때만 있다.
 	RefundedAt *time.Time
 }
+
+// RefundBlock 은 치른 주문(paid)을 청약철회할 수 없는 까닭이다. 화면이 "왜 환불할 수 없는지"를 보인다.
+type RefundBlock string
+
+const (
+	// RefundBlockWindowClosed 는 치른 지 7일(RefundWindow)이 지났다는 것이다.
+	RefundBlockWindowClosed RefundBlock = "window_closed"
+	// RefundBlockCreditsUsed 는 그 주문으로 산 크레딧이 일부라도 줄었다는 것이다(쓴 것, 홀드로 묶인 것).
+	RefundBlockCreditsUsed RefundBlock = "credits_used"
+)
 
 // Depositor 는 주문으로 산 크레딧을 넣는 것의 모양이다.
 // 주문이 연 트랜잭션을 넘겨받아 그 안에서 넣는다.
