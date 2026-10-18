@@ -159,6 +159,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | game-server | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
 | game-server | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리, 서술이 사라진 라운드 다시 맡기기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `closed`, `credit_waits`, `recovered`, `gave_up`) | `round.close_overdue` |
 | game-server | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `charge.settle` |
+| game-server | 서술 모델의 은퇴를 알리고, 은퇴하면 같은 회사의 다른 모델로 바꾸기(지켜보기가 한 시간마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `noticed`, `replaced`, `stranded`, `failed`) | `model.retirement` |
 | game-server | 로어북 항목의 벡터 만들기 | `lore.index` |
 | game-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
@@ -318,6 +319,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `lore.index` | game | 로어북 색인 |
 | `memory.index` | game | 기억 색인 |
 | `charge.settle` | game | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴) |
+| `model.retirement` | game | 서술 모델의 은퇴를 알리고 바꾸기(지켜보기의 한 바퀴, 한 시간마다. 라운드가 열린 뒤 그 테이블 하나도 본다) |
 | `ai_log.prune` | game | AI 호출 기록에서 보관 기간(기본 30일)이 지난 원문 비우기(정리 작업의 한 바퀴, 한 시간마다. `cleared`, `retention_days`) |
 | `billing.hold` | game | 결제 서버에 서술 값의 홀드를 걸기 |
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |

@@ -223,6 +223,7 @@ async def test_the_api_lists_the_models_with_their_prices(client: AsyncClient, a
             'tier': 'standard',
             'promo': False,
             'next': {'credits': '310', 'tier': 'premium', 'promo': False, 'effective_at': '2026-12-01T00:00:00Z'},
+            'retires_on': None,
         },
         {
             'slug': 'gpt-6-luna',
@@ -233,6 +234,7 @@ async def test_the_api_lists_the_models_with_their_prices(client: AsyncClient, a
             'tier': 'standard',
             'promo': False,
             'next': None,
+            'retires_on': None,
         },
     ]
 
