@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -37,6 +38,7 @@ const (
 type OrderService interface {
 	Create(ctx context.Context, userID uuid.UUID, productID string, idempotencyKey string) (order.Order, bool, error)
 	Get(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (order.Order, error)
+	List(ctx context.Context, userID uuid.UUID, before *uuid.UUID, limit int) (order.OrderPage, error)
 	Confirm(ctx context.Context, userID uuid.UUID, orderID uuid.UUID, paymentKey string) (order.Order, error)
 	Refund(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (order.Order, error)
 }
@@ -85,7 +87,21 @@ type orderBody struct {
 	RefundableUntil *time.Time `json:"refundable_until"`
 	// RefundedAt 은 환불된 시각이다. refunded 가 아니면 null 이다.
 	RefundedAt *time.Time `json:"refunded_at"`
+	// RefundBlocked 는 치른 주문인데 청약철회할 수 없는 까닭이다(window_closed, credits_used).
+	// 할 수 있거나 치른 주문이 아니면 null 이다. 치른 주문이 아니면 status 가 말한다.
+	RefundBlocked *order.RefundBlock `json:"refund_blocked"`
 }
+
+// ordersBody 는 주문 목록의 응답 모양이다.
+type ordersBody struct {
+	// Orders 는 만든 시각이 늦은 것부터다.
+	Orders []orderBody `json:"orders"`
+	// NextBefore 는 다음 쪽을 읽을 때 before 에 넣을 주문 번호다. 더 읽을 것이 없으면 null 이다.
+	NextBefore *uuid.UUID `json:"next_before"`
+}
+
+// DefaultOrderListSize 는 주문 목록에서 limit 을 적지 않으면 돌려주는 주문 수다.
+const DefaultOrderListSize = 20
 
 // listProducts 는 파는 상품을 돌려준다.
 func listProducts(c *gin.Context) {
@@ -136,6 +152,53 @@ func getOrder(orders OrderService) gin.HandlerFunc {
 	}
 }
 
+// listOrders 는 토큰의 주인의 주문을 만든 시각이 늦은 것부터 돌려주는 핸들러를 만든다(#430).
+func listOrders(orders OrderService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		before, limit, ok := orderPageQuery(c)
+		if !ok {
+			badRequest(c, "before 는 주문 번호, limit 은 1 부터 "+strconv.Itoa(order.MaxListSize)+" 사이의 정수여야 합니다.")
+			return
+		}
+		page, err := orders.List(c.Request.Context(), currentUser(c).UserID, before, limit)
+		if err != nil {
+			orderError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, toOrdersBody(page))
+	}
+}
+
+// orderPageQuery 는 주소의 before 와 limit 을 읽는다. 적지 않으면 가장 최근 주문부터 DefaultOrderListSize 개다.
+// 받을 수 없는 값이면 false 다.
+func orderPageQuery(c *gin.Context) (before *uuid.UUID, limit int, ok bool) {
+	limit = DefaultOrderListSize
+	if text, given := c.GetQuery("before"); given {
+		value, err := uuid.Parse(text)
+		if err != nil {
+			return nil, 0, false
+		}
+		before = &value
+	}
+	if text, given := c.GetQuery("limit"); given {
+		value, err := strconv.Atoi(text)
+		if err != nil || value < 1 || value > order.MaxListSize {
+			return nil, 0, false
+		}
+		limit = value
+	}
+	return before, limit, true
+}
+
+// toOrdersBody 는 주문 목록의 한 쪽을 응답의 모양으로 바꾼다. 주문이 없으면 빈 목록이다(null 이 아니다).
+func toOrdersBody(page order.OrderPage) ordersBody {
+	body := ordersBody{Orders: make([]orderBody, 0, len(page.Orders)), NextBefore: page.NextBefore}
+	for _, current := range page.Orders {
+		body.Orders = append(body.Orders, toOrderBody(current))
+	}
+	return body
+}
+
 // confirmOrder 는 결제의 승인을 요청하는 핸들러를 만든다.
 // 결과가 났으면(승인이든 거절이든) 200, 아직 결과를 모르면 202 다. 어느 쪽이든 본문의 status 가 지금의 상태다.
 func confirmOrder(orders OrderService) gin.HandlerFunc {
@@ -164,6 +227,7 @@ func confirmOrder(orders OrderService) gin.HandlerFunc {
 // refundOrder 는 청약철회를 요청하는 핸들러를 만든다. 본문은 받지 않는다. 전액을 취소하고, 이유는 서버가 정한다.
 // 환불되었으면 200, 크레딧은 뺐지만 결제 대행사의 답을 아직 모르면 202 다(나중에 다시 보내거나 주문을 본다).
 // 할 수 없는 청약철회(기한이 지났다, 크레딧을 썼다, 치른 주문이 아니다, 결제 대행사가 거절했다)는 409 다.
+// 409 에는 까닭의 이름(code)을 싣는다(refundError).
 func refundOrder(orders OrderService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		orderID, ok := orderIDParam(c)
@@ -209,16 +273,43 @@ func readJSONWithCode(c *gin.Context, target any, code string) bool {
 	return true
 }
 
+// refundCodes 는 청약철회를 할 수 없는 오류와 그 까닭의 이름이다. 모두 409 다.
+var refundCodes = []struct {
+	err  error
+	code string
+}{
+	{order.ErrRefundWindowClosed, codeRefundWindowClosed},
+	{order.ErrCreditsUsed, codeRefundCreditsUsed},
+	{order.ErrNotRefundable, codeRefundNotPaid},
+	{order.ErrRefundBusy, codeRefundBusy},
+	{order.ErrRefundRefused, codeRefundRefused},
+}
+
+// refundError 는 청약철회를 할 수 없는 오류면 409 와 까닭의 이름으로 답하고 true 를 돌려준다. 아니면 false 다.
+func refundError(c *gin.Context, err error) bool {
+	for _, known := range refundCodes {
+		if errors.Is(err, known.err) {
+			abort(c, http.StatusConflict, known.code, err.Error()+".")
+			return true
+		}
+	}
+	return false
+}
+
 // orderError 는 주문을 다루다 난 오류를 HTTP 응답으로 바꾼다.
 func orderError(c *gin.Context, err error) {
+	if refundError(c, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, order.ErrInvalidKey), errors.Is(err, order.ErrUnknownProduct), errors.Is(err, order.ErrInvalidPaymentKey):
+		badRequest(c, err.Error()+".")
+	case errors.Is(err, order.ErrInvalidListRange):
 		badRequest(c, err.Error()+".")
 	case errors.Is(err, order.ErrNotFound):
 		notFound(c, err.Error()+".")
 	case errors.Is(err, order.ErrKeyReused), errors.Is(err, order.ErrPaymentKeyMismatch), errors.Is(err, order.ErrPaymentKeyUsed),
-		errors.Is(err, order.ErrExpired), errors.Is(err, order.ErrNotRefundable), errors.Is(err, order.ErrRefundWindowClosed),
-		errors.Is(err, order.ErrCreditsUsed), errors.Is(err, order.ErrRefundBusy), errors.Is(err, order.ErrRefundRefused):
+		errors.Is(err, order.ErrExpired):
 		conflict(c, err.Error()+".")
 	case errors.Is(err, order.ErrTimedOut):
 		unavailable(c, order.ErrTimedOut.Error()+".")
@@ -249,6 +340,10 @@ func toOrderBody(o order.Order) orderBody {
 	}
 	if o.FailureCode != "" {
 		body.FailureCode = &o.FailureCode
+	}
+	if o.RefundBlocked != "" {
+		blocked := o.RefundBlocked
+		body.RefundBlocked = &blocked
 	}
 	return body
 }
