@@ -28,7 +28,8 @@ from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferen
 from app.assets.worlds import router as worlds
 from app.auth.jwks import JwksCache
 from app.billing import settler
-from app.billing.setup import build_billing
+from app.billing.price_list import PriceListUnavailable
+from app.billing.setup import build_billing, build_price_list
 from app.calendar import router as calendar
 from app.chat import router as chat
 from app.chat.typing import TypingThrottle
@@ -220,6 +221,8 @@ def create_app(
     # 라운드의 서술 값을 받는 결제 서버(app/billing/). 설정(BILLING_URL)이 정한다. 비우면 받지 않는다.
     # 위의 httpx 클라이언트로 부른다. 요청마다 두 서버만 아는 비밀(BILLING_SECRET)로 서명한다
     app.state.billing = build_billing(settings, app.state.http_client)
+    # 결제 서버의 가격 목록을 1분쯤마다 버전으로 다시 묻는 것(app/billing/price_list.py). 방장이 고를 모델에 값을 붙인다
+    app.state.price_list = build_price_list(settings, app.state.http_client)
 
     # 끝나지 않은 청구를 몇 초마다 결제 서버에 마저 맡기는 정리 작업(app/billing/settler.py). lifespan 이 돌리고 멈춘다.
     # 결제 서버는 부를 때마다 앱에서 꺼낸다. 테스트가 바꿔 꽂은 것을 쓴다
@@ -276,6 +279,7 @@ def create_app(
     app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)
     app.add_exception_handler(PersonaConflictError, personas.handle_persona_conflict)
     app.add_exception_handler(TableNotFoundError, tables.handle_table_not_found)
+    app.add_exception_handler(PriceListUnavailable, tables.handle_prices_unavailable)
     app.add_exception_handler(MemberNotFoundError, tables.handle_member_not_found)
     app.add_exception_handler(NotHostError, tables.handle_not_host)
     app.add_exception_handler(WrongPasswordError, tables.handle_wrong_password)

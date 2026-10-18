@@ -18,11 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import repository
 from app.billing.models import ChargeStatus, NarrationCharge
+from app.billing.prices import PRICE_CODE_PREFIX
 from app.rounds.models import Round
 from app.tables.models import GameTable
-
-# 결제 서버의 가격표 이름의 앞부분. 라운드의 AI 서술 한 번이다. 뒤에 서술 등급이 붙는다(price_code_for)
-PRICE_CODE_PREFIX = 'narration'
 
 # 결제 서버의 답을 받지 못했을 때 다시 부르기까지 기다리는 시간(초). 부를 때마다 두 배가 되고, 상한에서 멈춘다
 RETRY_BASE_SECONDS = 5.0
