@@ -1,7 +1,8 @@
 # game-server/app/rounds/place_item_actions.py
 
 """
-장소에 놓인 물건을 줍고(take) 찾는(search) 일(#279). 선언을 받을 때 보고(accept_take), 라운드가 닫힐 때 정한다.
+장소에 놓인 물건을 줍고(take) 찾고(search, #279), 가진 물건을 내려놓는(put_down) 일.
+선언을 받을 때 보고(accept_take, app/rounds/acceptance.py 의 accept_put_down), 라운드가 닫힐 때 정한다.
 
 방장은 PC 라서 얻는 것을 정하지 않는다(#367). 판에 놓인 물건을 엔진이 준다.
   - 줍기: 지금 서 있는 장소에 보이게 놓인 물건을 count 개 가져간다. 판정이 없다.
@@ -10,13 +11,16 @@
   - 찾기(숨긴 물건): 찾기 행동이 숨긴 길과 함께 이 장소의 숨긴 물건마다 판의 판정을 굴린다(app/rounds/map_actions.py).
     찾으면 찾은 사람이 바로 갖는다. 상한을 넘어 남은 것은 그 자리에 보이는 물건으로 남는다.
     **찾지 못한 판정은 아무 데도 적지 않는다.** 숨긴 길과 같다. 숨긴 물건이 있었는지 드러나지 않는다.
-맵에 서 있지 않은 캐릭터는 줍지 못한다(not_on_map).
+  - 내려놓기: 가진 물건을 count 개 지금 장소에 둔다. 판정이 없다. 보이게 놓여 누구나 주울 수 있다.
+    차례가 오면 다시 본다. 그사이 앞사람에게 건넸거나 썼으면 놓지 않는다(not_held).
+    줍기는 받을 때 그 자리에 보이는 것만 받는다. 그래서 내려놓은 것은 다음 라운드부터 줍는다.
+맵에 서 있지 않은 캐릭터는 줍지도 내려놓지도 못한다(not_on_map).
 
 DB 를 모른다. 남은 개수(app/tables/place_items.py)와 소지품을 고친다. 저장하지 않는다.
 """
 
 from app.assets.scenarios.snapshot import PlaceItemSnapshot
-from app.engine.action import TakeAction
+from app.engine.action import PutDownAction, TakeAction
 from app.engine.check import find_difficulty, resolve_hindered
 from app.rounds import injuries as round_injuries
 from app.rounds.effects import Judging
@@ -36,7 +40,7 @@ class Source:
 
 
 class Reason:
-    """주운 것이 부른 것보다 적은 까닭. 결과의 reason 에 적는다."""
+    """주운 것이 부른 것보다 적거나 내려놓지 못한 까닭. 결과의 reason 에 적는다."""
 
     # 차례가 왔을 때 그 물건이 하나도 남아 있지 않았다(앞사람이 가져갔다)
     GONE = 'gone'
@@ -44,6 +48,8 @@ class Reason:
     NOT_ENOUGH = 'not_enough'
     # 한 가지를 가질 수 있는 개수(99)에 닿았다. 그만큼만 주웠다
     FULL = 'full'
+    # 차례가 왔을 때 내려놓을 만큼 가지고 있지 않았다(앞사람에게 건넸거나 썼다)
+    NOT_HELD = 'not_held'
 
 
 def accept_take(table: GameTable, member: TableMember, action: TakeAction) -> dict:
@@ -143,3 +149,30 @@ def search_items(judging: Judging, member: TableMember) -> list[dict]:
         for row in place_items.hidden_rows(judging.table, here)
         if finds_item(judging, member, rules[row.slot])
     ]
+
+
+def judge_put_down(judging: Judging, member: TableMember, action: PutDownAction) -> dict:
+    """
+    차례가 온 사람이 내려놓는다. 결과를 선언의 outcome 에 넣을 문서로 돌려준다.
+
+    put 이 참이면 내려놓았다. 그만큼 가지고 있지 않으면 놓지 않고 까닭(not_held)을 적는다.
+    remaining 은 내려놓은 뒤에 가진 개수다.
+    """
+    table, here = judging.table, member.sheet.place_id
+    held = here is not None and items.count_of(member.sheet, action.item) >= action.count
+    if held:
+        items.remove_items(member.sheet, action.item, action.count)
+        place_items.put_down(table, here, action.item, action.count)
+    return {
+        'put_down': {
+            'user_id': str(member.user_id),
+            'character_name': member.character_name,
+            'place': places.describe(judging.snapshot, here),
+            'entry_id': str(action.item),
+            'name': judging.items[action.item].name,
+            'count': action.count,
+            'put': held,
+            'reason': None if held else Reason.NOT_HELD,
+            'remaining': items.count_of(member.sheet, action.item),
+        }
+    }

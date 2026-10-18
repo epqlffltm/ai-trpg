@@ -72,12 +72,14 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'rounds_api',
         'roll_locking',
     ),
-    # 모험: 몬스터와 조우, 맵과 이동, 물건, NPC 의 행동, 퀘스트
+    # 모험: 몬스터와 조우, 맵과 이동, 물건(쓰기, 건네기, 줍기, 내려놓기), NPC 의 행동, 퀘스트
     'adventure': (
         'monster',
         'encounters',
         'map_actions',
         'item_actions',
+        'place_items',
+        'put_down',
         'npc_actions',
         'quest',
         'travel_time',

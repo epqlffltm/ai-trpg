@@ -417,6 +417,32 @@ class TakeOutcome(BaseModel):
     take: TakeOut
 
 
+class PutDownOut(BaseModel):
+    """
+    내려놓은 결과. 엔진이 정했다(app/rounds/place_item_actions.py). 판정이 없다.
+
+    put 이 참이면 그 장소에 보이게 놓였다. 차례가 왔을 때 그만큼 가지고 있지 않았으면 놓지 않았다(reason 이 not_held).
+    """
+
+    user_id: uuid.UUID
+    character_name: str
+    # 놓은 곳
+    place: PlaceRefOut | None
+    entry_id: uuid.UUID
+    name: str
+    count: int
+    put: bool
+    reason: str | None
+    # 내려놓은 뒤에 가진 개수
+    remaining: int
+
+
+class PutDownOutcome(BaseModel):
+    """내려놓는 행동의 결과."""
+
+    put_down: PutDownOut
+
+
 class RestOut(BaseModel):
     """
     쉰 결과. 엔진이 정했다(app/rounds/rests.py). 판정이 없다.
@@ -480,7 +506,7 @@ class DeclarationOut(BaseModel):
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
     # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
-    # 놓인 물건을 주웠으면 TakeOutcome, 쉬었으면 RestOutcome 이다.
+    # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 쉬었으면 RestOutcome 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
     # 차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면 TurnLostOutcome 이다
     outcome: (
@@ -491,6 +517,7 @@ class DeclarationOut(BaseModel):
         | MoveOutcome
         | SearchOutcome
         | TakeOutcome
+        | PutDownOutcome
         | RestOutcome
         | TargetGoneOutcome
         | TurnLostOutcome
