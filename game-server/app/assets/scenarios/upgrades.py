@@ -520,6 +520,18 @@ def upgrade_from_27(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_28(document: dict) -> dict:
+    """
+    형식 28 의 문서를 형식 29 로 올린다. 그때는 몬스터에 드롭이 없었다.
+
+    모두 비운 것으로 읽는다. 쓰러뜨려도 아무것도 나오지 않는다. 그때와 같은 동작이다.
+    """
+    upgraded = dict(document)
+    upgraded['monsters'] = [{**monster, 'drops': []} for monster in document.get('monsters', [])]
+    upgraded['format'] = 29
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -550,4 +562,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     25: upgrade_from_25,
     26: upgrade_from_26,
     27: upgrade_from_27,
+    28: upgrade_from_28,
 }

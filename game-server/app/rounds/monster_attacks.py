@@ -19,7 +19,7 @@ from dataclasses import asdict
 from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine import check as checks
 from app.engine.check import Check
-from app.engine.dice import Dice
+from app.engine.dice import choose
 from app.engine.health import ChangeKind
 from app.rounds.checks import change_sheet
 from app.rounds.effects import Judging
@@ -63,13 +63,6 @@ def victims_of(judging: Judging, monster: SceneMonster) -> list[TableMember]:
         and not sheets.is_dead(member)
         and not sheets.is_downed_alive(member)
     ]
-
-
-def choose[T](options: list[T], dice: Dice) -> T:
-    """여럿 중 하나를 서버의 주사위로 고른다. 하나뿐이면 굴리지 않는다."""
-    if len(options) == 1:
-        return options[0]
-    return options[dice.roll(len(options)) - 1]
 
 
 def roll_attack(judging: Judging, monster: SceneMonster, attack: AttackSnapshot) -> Check:

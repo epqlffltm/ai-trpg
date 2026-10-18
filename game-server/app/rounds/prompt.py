@@ -101,7 +101,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 되살아나기, 저절로 회복의 줄이 붙는다. 쉬기가 있는 라운드에는 그것을 다루는 법(REST_NOTE)이 붙는다.
 #   narration-28: 장면의 길이를 적는다(600~900자 안팎, 길어도 1,200자). 출력 상한(1,200 토큰)에 걸려 잘리는 일을 줄인다.
 #                 잘린 글은 마지막 문장까지 잘라 받는데(app/rounds/llm_narrator.py), 잘리지 않는 것이 가장 싸다.
-PROMPT_VERSION = 'narration-28'
+#   narration-29: 몬스터를 처음 쓰러뜨려 엔진이 준 물건이 판정 줄에 붙는다((얻은 물건: 늑대 가죽 2개 → 엘프)).
+#                 더 들 수 없어 잃은 것도 붙는다. 받을 사람이 없어 사라진 드롭은 붙이지 않는다(#372)
+PROMPT_VERSION = 'narration-29'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3

@@ -72,7 +72,8 @@ from app.engine.sheet import Sheet
 #  26: 길에 한 칸 가는 데 걸리는 게임 안의 시간(routes[].travel_minutes)이 있다
 #  27: 퀘스트 규칙에 드러난 때부터 세는 기한(quests[].time_limit_minutes)이 있다
 #  28: 규칙에 쉬기(rest: 짧은 휴식, 긴 휴식, 되살아나기, 저절로 회복하기)가 있다
-SNAPSHOT_FORMAT = 28
+#  29: 몬스터에 쓰러뜨렸을 때 나오는 물건(drops: 물건 항목, 개수, 확률)이 있다
+SNAPSHOT_FORMAT = 29
 
 
 class EntrySnapshot(BaseModel):
@@ -222,6 +223,14 @@ class AttackSnapshot(BaseModel):
     harm: str
 
 
+class DropSnapshot(BaseModel):
+    """몬스터의 드롭 한 줄. 판 안의 로어북 물건 항목 하나(entry_id)가 chance(%)로 count 개 나온다."""
+
+    entry_id: uuid.UUID
+    count: int
+    chance: int
+
+
 class MonsterSnapshot(BaseModel):
     """
     몬스터 하나. 도감의 몬스터(글과 타입)와 시나리오의 몬스터 시트(숫자)를 합친 것이다.
@@ -238,6 +247,8 @@ class MonsterSnapshot(BaseModel):
     attacks: list[AttackSnapshot] = []
     # 네임드 몹인가. 판 전체에서 한 마리다(Snapshot.require_unique_once)
     unique: bool = False
+    # 쓰러뜨렸을 때 나오는 물건들. 비어 있으면 드롭이 없다. 형식 29 보다 옛 판은 모두 비어 있다
+    drops: list[DropSnapshot] = []
 
 
 class EncounterSnapshot(BaseModel):
@@ -490,8 +501,10 @@ def snapshot_entry(entry: LoreEntry) -> EntrySnapshot:
     )
 
 
-def snapshot_monster(monster: Monster, sheet: Sheet, attacks: list[AttackSnapshot]) -> MonsterSnapshot:
-    """몬스터와 그 시트, 공격을 굳힌다."""
+def snapshot_monster(
+    monster: Monster, sheet: Sheet, attacks: list[AttackSnapshot], drops: list[DropSnapshot]
+) -> MonsterSnapshot:
+    """몬스터와 그 시트, 공격, 드롭을 굳힌다."""
     return MonsterSnapshot(
         id=monster.id,
         name=monster.name,
@@ -500,6 +513,7 @@ def snapshot_monster(monster: Monster, sheet: Sheet, attacks: list[AttackSnapsho
         sheet=sheet,
         attacks=attacks,
         unique=monster.unique,
+        drops=drops,
     )
 
 
