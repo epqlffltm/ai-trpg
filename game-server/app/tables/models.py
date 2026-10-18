@@ -292,8 +292,9 @@ class GameTable(Base):
     # 많아야 길의 수라 테이블을 읽을 때 함께 읽는다
     found_routes: Mapped[list['TableFoundRoute']] = relationship(lazy='selectin', cascade='all, delete-orphan')
 
-    # 이 테이블의 장소에 남은 물건들. 판의 놓인 물건 줄마다 하나다(app/tables/place_items.py).
-    # 많아야 줄의 수(100)라 테이블을 읽을 때 함께 읽는다. 보여 줄 때는 판의 줄 순서(slot)로 놓는다
+    # 이 테이블의 장소에 남은 물건들. 판의 놓인 물건 줄마다 하나, 캐릭터가 내려놓아 생긴 줄이 그 뒤에 있다
+    # (app/tables/place_items.py). 내려놓은 줄은 장소와 물건의 짝마다 많아야 하나라 테이블을 읽을 때 함께 읽는다.
+    # 보여 줄 때는 줄 순서(slot)로 놓는다
     place_items: Mapped[list['TablePlaceItem']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='TablePlaceItem.slot'
     )
@@ -730,6 +731,7 @@ class TablePlaceItem(Base):
     테이블 하나에서 판의 놓인 물건 한 줄(slot)이 아직 몇 개 남았는가(#279).
 
     시작할 때 판의 줄마다 하나씩 만든다. 장소와 물건은 판에서 옮겨 적는다. 판을 다시 읽지 않고 장소로 찾는다.
+    캐릭터가 내려놓으면 그 장소의 같은 물건의 보이는 줄에 더하고, 없으면 판의 줄 뒤에 보이는 줄을 하나 더한다.
     가져가면(줍기, 찾기) 줄어든다. 0 이 되어도 지우지 않는다. 무엇이 있었는지 남긴다.
     숨긴 줄(hidden)은 찾으면 보이는 줄이 된다. 찾은 사람이 갖고, 상한을 넘어 남은 것은 보이게 남는다.
     바꾸는 것은 엔진뿐이다(app/rounds/place_item_actions.py). 방장도 AI 도 바꾸지 못한다.
@@ -742,6 +744,7 @@ class TablePlaceItem(Base):
     )
 
     # 두 칸을 합쳐 기본 키로 삼는다. 판의 놓인 물건(place_items)의 순번이다. 판은 바뀌지 않으므로 밀리지 않는다.
+    # 내려놓아 생긴 줄은 판의 줄 뒤의 번호다. 판에 없는 번호라 판의 줄(찾는 판정)과 짝짓지 않는다
     # 테이블의 행이 지워지면 함께 지워진다
     table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
     slot: Mapped[int] = mapped_column(SmallInteger, primary_key=True)

@@ -283,7 +283,7 @@ def test_the_lore_stays_out_of_the_system_message():
 
 
 def test_the_template_is_narration_31():
-    assert prompt.PROMPT_VERSION == 'narration-31'
+    assert prompt.PROMPT_VERSION == 'narration-32'
 
 
 def test_the_rules_ask_for_a_scene_shorter_than_the_output_limit():
