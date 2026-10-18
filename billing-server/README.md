@@ -798,8 +798,8 @@ go run ./cmd/prices import prices.csv -reason "모델별 가격" -apply    넣�
 ```
 code,credits,effective_at,tier
 # 새 모델
-narration.claude-sonnet-5-5.i0.o0,120,,standard
-narration.gemini-4-argon.i0.o0,240,2026-12-01T00:00:00+09:00,premium
+narration.claude-sonnet-5-5.i0.o0,170,,standard
+narration.gemini-4-argon.i0.o0,420,2026-12-01T00:00:00+09:00,premium
 narration.old-model.i0.o0,stop,,
 ```
 
@@ -813,6 +813,18 @@ narration.old-model.i0.o0,stop,,
 **가격표의 이름.** 모델마다의 값은 `narration.<모델>.i<입력 단계>.o<출력 단계>` 로 짓는다(유저 결정, 2026-10-17). 처음에는 `i0.o0` 만 쓴다.
 `<모델>` 은 API 모델 ID 에서 날짜를 빼고 점을 붙임표로 바꾼 것이다(`claude-opus-5-5`, `gpt-6-1-sol`, `gemini-3-1-pro-preview`).
 공급자가 같은 모델의 새 날짜판을 내도 파는 상품은 같으므로 이름을 바꾸지 않는다. 어느 날짜판을 부르는지는 게임 서버가 안다.
+
+**단계가 약속하는 양.** 값은 그 단계의 상한까지 다 썼을 때의 원가로 매긴다. 그래서 부르는 쪽은 실제로 쓰는 토큰이 상한을 넘지 않게 지킨다.
+
+| 단계 | 상한(공급자가 세는 실제 토큰) |
+| --- | --- |
+| `i0` | 입력 12,000 |
+| `o0` | 출력 1,200. 생각을 끌 수 없는 모델은 생각 몫 1,024 를 더해 2,224 |
+
+- 게임 서버가 입력을 글자 수로 어림해 자르는 것은 이 상한을 지키는 방법일 뿐이다. 실제 토큰을 재 보고 글자 상한을 늘려도 토큰이 상한 안이면 값은 그대로다
+- 글자당 토큰은 회사와 모델마다 다르다. 글자 상한을 늘릴 때는 모델(적어도 회사)마다 따로 정한다
+- 상한보다 많이 쓰고 싶으면 다음 단계(`i1`, `o1`)의 이름을 새로 판다. 같은 이름의 상한을 늘리면 그 이름의 값이 원가를 못 덮는다
+- 상한 안에서 실제로 덜 쓰는 만큼(그리고 캐시가 맞는 만큼)은 남는 몫이다. 호출 기록이 쌓이면 그것을 보고 값을 내린다. 내리는 것은 공지 없이 바로 넣을 수 있다
 
 응답은 홀드다. 확정, 반환, 연장의 응답도 같은 모양이다.
 
@@ -963,8 +975,10 @@ headers = {
 
 ```json
 {"prices": [
-  {"code": "narration.gemini-4-argon.i0.o0", "credits": "120", "since": "2026-10-17T00:00:00Z", "tier": "standard",
-   "next": {"credits": "240", "tier": "premium", "effective_at": "2026-11-30T15:00:00Z"}},
+  {"code": "narration.gemini-3-8-flash.i0.o0", "credits": "80", "since": "2026-10-18T03:25:55Z", "tier": "standard",
+   "next": {"credits": "160", "tier": "standard", "effective_at": "2026-12-31T15:00:00Z"}},
+  {"code": "narration.gemini-4-argon.i0.o0", "credits": null, "since": null, "tier": null,
+   "next": {"credits": "420", "tier": "premium", "effective_at": "2026-11-30T15:00:00Z"}},
   {"code": "narration.old-model.i0.o0", "credits": "30", "since": "2026-10-01T00:00:00Z", "tier": "standard",
    "next": {"credits": null, "tier": null, "effective_at": "2026-12-01T00:00:00Z"}}
 ]}
@@ -975,7 +989,7 @@ headers = {
 - 지금 팔고 있거나 바뀔 예약이 있는 이름만 나온다. 판매를 멈췄고 예약도 없는 이름은 빠진다. 이름 순서다
 - `credits` 는 글자다. 지금 팔지 않으면(예약만 있으면) `credits`, `since` 가 `null` 이다
 - `next` 는 다음에 바뀔 값 하나다. 예약이 없으면 `null`, `next.credits` 가 `null` 이면 그 시각부터 판매를 멈춘다.
-  게임 서버는 `effective_at` 이 되면 스스로 갈아 끼우고, 사용자에게 "12월 1일부터 240" 처럼 미리 알릴 수 있다
+  게임 서버는 `effective_at` 이 되면 스스로 갈아 끼우고, 사용자에게 "12월 1일부터 420" 처럼 미리 알릴 수 있다
 - **캐시하고 버전으로 묻는다.** 응답의 `ETag` 를 적어 두고 1분쯤마다 `If-None-Match` 에 실어 다시 부른다.
   바뀐 것이 없으면 본문 없이 304 다. 바뀌었으면 새 목록과 새 `ETag` 가 오니 옛 캐시를 버린다.
   `ETag` 는 본문의 해시라서, 가격표에 줄을 더할 때뿐 아니라 예약한 값이 적용 시각을 지날 때도 저절로 바뀐다. 결제 서버가 게임 서버를 부르지 않는다
@@ -1008,12 +1022,12 @@ go run ./cmd/pricereviews cancel 3 -note "공급사가 인상을 거둬들임"
 지금 알려진 변경(2026-10-17 조사). 처음 한 번 이렇게 적는다. 공지에 시각이 없어 그날 0시(UTC)로 적었다. 더 이르게 잡으려면 시각을 앞당긴다.
 
 ```
-go run ./cmd/pricereviews add "GPT-5.6 Sol 행사가 끝" -at 2026-11-21T00:00:00Z -note "공식: 행사가 4/20 은 최소 11-21 까지. 그 뒤 5/30 은 2차 출처"
-go run ./cmd/pricereviews add "Gemini 4 Argon 두 배" -at 2026-12-01T00:00:00Z -note "2/10 에서 4/20. 판매가 240"
-go run ./cmd/pricereviews add "Gemini 3.8·3.6 Flash 두 배" -at 2027-01-01T00:00:00Z -note "0.75/3.75 에서 1.5/7.5. 판매가 60 에서 90"
+go run ./cmd/pricereviews add "GPT-5.6 Sol 행사가 끝" -at 2026-11-21T00:00:00Z -note "공식: 행사가 4/20 은 최소 11-21 까지. 그 뒤 5/30 은 2차 출처. 판매가 330(행사가 기준), 5/30 이면 440"
+go run ./cmd/pricereviews add "Gemini 3.8·3.6 Flash 두 배" -at 2027-01-01T00:00:00Z -note "0.75/3.75 에서 1.5/7.5. 판매가 80 에서 160"
 ```
 
-GPT-5.6 Sol 은 오늘(10-17)부터 35일 남아 아직 경고가 없다. 10-22 부터 `announce` 가 나온다.
+- GPT-5.6 Sol 은 10-22 부터 `announce` 가 나온다. 그 뒤의 공식 값이 나오지 않으면 그날 전에 판매를 멈추는 것도 길이다(`cmd/prices stop -at`)
+- Gemini 4 Argon(2026-12-01 두 배)은 적지 않는다. 값이 오른 뒤부터 팔기 시작하므로(가격표의 첫 줄이 12-01 부터 420) 미리 알릴 옛 값이 없다
 
 **손으로 해 보기.** 게임 서버를 띄우지 않고 해 볼 때는 명령이 대신 부른다. 서버와 같은 `.env` 에서 비밀과 주소를 읽어 서명한다.
 
