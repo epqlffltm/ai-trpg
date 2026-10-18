@@ -9,13 +9,15 @@
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
 from app.assets.bestiaries.models import Bestiary
-from app.assets.models import AssetContent, AssetType, Lorebook, Rulebook, Scenario, World
+from app.assets.models import AssetContent, AssetType, Lorebook, Rating, Rulebook, Scenario, World
+from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios.recommended_model import require_recommendable
 from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate
 
@@ -76,12 +78,20 @@ async def hold_references(session: AsyncSession, owner_id: uuid.UUID, data: Scen
         await assets.hold_reference(session, Bestiary, owner_id, bestiary_id, 'bestiary_ids')
 
 
-async def create_scenario(session: AsyncSession, owner_id: uuid.UUID, data: ScenarioCreate, today: date) -> Scenario:
+async def create_scenario(
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    data: ScenarioCreate,
+    today: date,
+    allowed: Sequence[Rating] = ALL_AGES_ONLY,
+) -> Scenario:
     """
     시나리오를 만든다. 가리키는 자산이 없으면 AssetReferenceError.
 
     추천 서술 모델이 서비스 중인 모델이 아니면 RecommendedModelError. today 는 은퇴했는지 볼 날이다.
+    allowed 는 만드는 사람이 쓸 수 있는 등급이다(app/assets/ratings.py). 그 밖의 등급이면 AdultContentRequiredError.
     """
+    require_rating(data.rating, allowed)
     await require_recommendable(session, data.narration_model, today)
     await hold_references(session, owner_id, data)
     return await assets.create(session, build_scenario(owner_id, data))
@@ -112,16 +122,28 @@ async def require_model_change(session: AsyncSession, scenario: Scenario, data: 
 
 
 async def update_scenario(
-    session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, data: ScenarioUpdate, today: date
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    scenario_id: uuid.UUID,
+    data: ScenarioUpdate,
+    today: date,
+    allowed: Sequence[Rating] = ALL_AGES_ONLY,
 ) -> Scenario:
     """
     자기 시나리오를 고친다. 없으면 AssetNotFoundError, 가리키는 자산이 없으면 AssetReferenceError,
     추천 서술 모델이 맞지 않으면 RecommendedModelError(require_model_change).
 
+    지금의 등급이나 바꿀 등급이 allowed 에 없으면 AdultContentRequiredError(#390).
+    성인용 시나리오는 어느 칸도 고칠 수 없다. 전체 이용가로 내리는 것도 막는다. 그러면 성인용 글이 전체 이용가로 나간다.
+    읽기와 지우기는 막지 않는다.
+
     시나리오를 잠그고 고친다. 로어북과 도감의 목록은 "지금 붙은 것과 비교해서" 바꾸므로,
     두 요청이 같은 옛 목록을 보고 각자 바꾸면 둘의 것이 합쳐져 상한을 넘길 수 있다.
     """
     scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
+    require_rating(scenario.asset.rating, allowed)
+    if data.rating is not None:
+        require_rating(data.rating, allowed)
     await require_model_change(session, scenario, data, today)
     await hold_references(session, owner_id, data)
     return await assets.save_changes(session, scenario, data)

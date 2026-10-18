@@ -63,8 +63,8 @@ PREGENS = [
 SCENARIO_PREGENS = [{**pregen, 'sheet': SHEET} for pregen in PREGENS]
 
 
-def bearer(signing_key: SigningKey, user_id: uuid.UUID) -> dict[str, str]:
-    token = make_token(signing_key, make_access_claims(sub=str(user_id)))
+def bearer(signing_key: SigningKey, user_id: uuid.UUID, **claims) -> dict[str, str]:
+    token = make_token(signing_key, make_access_claims(sub=str(user_id), **claims))
     return {'Authorization': f'Bearer {token}'}
 
 
@@ -78,6 +78,24 @@ def me(signing_key: SigningKey) -> dict[str, str]:
 def friend(signing_key: SigningKey) -> dict[str, str]:
     """테이블에 들어오는 사람의 머리말."""
     return bearer(signing_key, FRIEND)
+
+
+@pytest.fixture
+def adult_me(signing_key: SigningKey) -> dict[str, str]:
+    """성인용 내용을 볼 수 있는 내 토큰의 머리말(#59)."""
+    return bearer(signing_key, ME, adult_content=True)
+
+
+@pytest.fixture
+def adult_friend(signing_key: SigningKey) -> dict[str, str]:
+    """성인용 내용을 볼 수 있는, 들어오는 사람의 머리말."""
+    return bearer(signing_key, FRIEND, adult_content=True)
+
+
+@pytest.fixture
+def operator(signing_key: SigningKey) -> dict[str, str]:
+    """성인 인증을 하지 않은 운영자의 머리말(#390)."""
+    return bearer(signing_key, THIRD, roles=['operator'])
 
 
 @pytest.fixture
@@ -407,27 +425,46 @@ async def test_my_own_scenario_needs_a_version_that_exists(client: AsyncClient, 
     assert no_such_scenario.status_code == status.HTTP_404_NOT_FOUND
 
 
-async def test_an_adult_version_can_only_be_played_alone(client: AsyncClient, me: dict[str, str]):
-    scenario = await publish_scenario(client, me, rating='adult')
-    body = {'scenario_id': scenario['id'], 'version': 1}
+async def test_an_adult_version_is_opened_only_by_someone_who_may_see_it(
+    client: AsyncClient, me: dict[str, str], adult_me: dict[str, str]
+):
+    scenario = await publish_scenario(client, adult_me, rating='adult')
+    body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': TABLE_MAX_PLAYERS}
 
-    # 성인 인증이 없는 동안에는 제작자가 혼자 시험해 보는 것만 된다
-    alone = await client.post(TABLES_URL, json={**body, 'capacity': 1}, headers=me)
-    together = await client.post(TABLES_URL, json={**body, 'capacity': 2}, headers=me)
+    # 자기가 쓴 성인용 시나리오라도, 성인용 내용을 볼 수 없는 토큰으로는 혼자서도 열지 못한다. 서술은 AI 가 새로 쓴다
+    refused = await client.post(TABLES_URL, json={**body, 'capacity': 1}, headers=me)
+    opened = await client.post(TABLES_URL, json=body, headers=adult_me)
 
-    assert alone.status_code == status.HTTP_201_CREATED
-    assert alone.json()['rating'] == 'adult'
-    assert together.status_code == status.HTTP_409_CONFLICT
-    assert together.json()['reason'] == 'solo_only'
+    assert refused.status_code == status.HTTP_403_FORBIDDEN
+    assert refused.json()['code'] == 'adult_content_required'
+    assert opened.status_code == status.HTTP_201_CREATED, opened.text
+    assert (opened.json()['rating'], opened.json()['capacity']) == ('adult', TABLE_MAX_PLAYERS)
 
 
-async def test_nobody_can_join_an_adult_table(client: AsyncClient, me: dict[str, str], friend: dict[str, str]):
-    table = await open_table(client, me, capacity=1, rating='adult')
+async def test_an_invite_to_an_adult_table_tells_why_it_is_refused(
+    client: AsyncClient, adult_me: dict[str, str], friend: dict[str, str], adult_friend: dict[str, str]
+):
+    table = await open_table(client, adult_me, rating='adult')
+    body = {'invite_code': table['invite_code']}
 
-    response = await client.post(f'{TABLES_URL}/join', json={'invite_code': table['invite_code']}, headers=friend)
+    refused = await client.post(f'{TABLES_URL}/join', json=body, headers=friend)
+    joined = await client.post(f'{TABLES_URL}/join', json=body, headers=adult_friend)
 
-    # 자리가 없다고 알려 주지 않는다. 볼 수 없는 등급의 테이블은 없는 것으로 보인다
-    assert response.status_code == status.HTTP_404_NOT_FOUND
+    # 코드를 받은 사람은 테이블이 있다는 것을 이미 안다. 숨기지 않고 본인인증으로 안내하게 까닭을 알린다
+    assert refused.status_code == status.HTTP_403_FORBIDDEN
+    assert refused.json()['code'] == 'adult_content_required'
+    assert joined.status_code == status.HTTP_200_OK, joined.text
+    assert len(joined.json()['members']) == 2
+
+
+async def test_an_operator_joins_an_adult_table_without_the_check(
+    client: AsyncClient, adult_me: dict[str, str], operator: dict[str, str]
+):
+    table = await open_table(client, adult_me, rating='adult')
+
+    joined = await client.post(f'{TABLES_URL}/join', json={'invite_code': table['invite_code']}, headers=operator)
+
+    assert joined.status_code == status.HTTP_200_OK, joined.text
 
 
 # --- 들어가기 ---

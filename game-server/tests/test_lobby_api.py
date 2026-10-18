@@ -45,8 +45,8 @@ GM_GUIDE = '진지한 장면은 금지다. 모든 추격은 바이크로 한다.
 PASSWORD = '열려라 참깨'
 
 
-def bearer(signing_key: SigningKey, user_id: uuid.UUID) -> dict[str, str]:
-    token = make_token(signing_key, make_access_claims(sub=str(user_id)))
+def bearer(signing_key: SigningKey, user_id: uuid.UUID, **claims) -> dict[str, str]:
+    token = make_token(signing_key, make_access_claims(sub=str(user_id), **claims))
     return {'Authorization': f'Bearer {token}'}
 
 
@@ -68,10 +68,23 @@ def third(signing_key: SigningKey) -> dict[str, str]:
     return bearer(signing_key, THIRD)
 
 
-async def publish_scenario(client: AsyncClient, headers: dict[str, str], title: str = TITLE) -> dict:
+@pytest.fixture
+def adult_me(signing_key: SigningKey) -> dict[str, str]:
+    """성인용 내용을 볼 수 있는 내 머리말(#59)."""
+    return bearer(signing_key, ME, adult_content=True)
+
+
+@pytest.fixture
+def adult_friend(signing_key: SigningKey) -> dict[str, str]:
+    """성인용 내용을 볼 수 있는, 로비를 보고 들어오는 사람의 머리말."""
+    return bearer(signing_key, FRIEND, adult_content=True)
+
+
+async def publish_scenario(client: AsyncClient, headers: dict[str, str], title: str = TITLE, **fields) -> dict:
     """게시할 조건을 갖춘 시나리오를 만들고 판을 하나 낸다. 시나리오를 돌려준다. 판의 번호는 1 이다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북', 'gm_guide': GM_GUIDE}, headers=headers)
     body = {'title': title, 'rulebook_id': rulebook.json()['id'], 'openings': [OPENING], 'default_sheet': SHEET}
+    body.update(fields)
     scenario = await client.post(SCENARIOS_URL, json=with_model(body), headers=headers)
     assert scenario.status_code == status.HTTP_201_CREATED, scenario.text
     published = await client.post(f'{SCENARIOS_URL}/{scenario.json()["id"]}/versions', json={}, headers=headers)
@@ -262,7 +275,7 @@ async def make_adult_table(session: AsyncSession) -> GameTable:
     """
     서비스를 거치지 않고, 로비에 보이는 성인용 4인 테이블을 저장한다.
 
-    서비스로는 만들 수 없는 테이블이다(성인용은 혼자서만 한다). 등급으로 거르는 조건을 따로 확인하려고 만든다.
+    등급으로 거르는 조건만 따로 확인하려고, 시나리오의 내용 없이 만든다.
     """
     scenario = Scenario(asset=Asset(owner_id=ME, type=AssetType.SCENARIO, title='시나리오'))
     session.add(scenario)
@@ -284,9 +297,25 @@ async def test_an_adult_table_is_not_in_the_lobby(client: AsyncClient, friend: d
     page = await lobby(client, friend)
     joined = await client.post(f'{TABLES_URL}/{table.id}/join', json={}, headers=friend)
 
-    # 성인 인증이 생길 때까지 성인용 테이블은 아무에게도 보이지 않는다
+    # 성인용 내용을 볼 수 없는 사람에게 성인용 테이블은 없는 것이다. 초대 코드와 달리 403 으로 알리지 않는다
     assert (ids(page), page['total']) == ([], 0)
     assert joined.status_code == status.HTTP_404_NOT_FOUND
+
+
+async def test_an_adult_table_is_in_the_lobby_only_for_someone_who_may_see_it(
+    client: AsyncClient, adult_me: dict[str, str], friend: dict[str, str], adult_friend: dict[str, str]
+):
+    scenario = await publish_scenario(client, adult_me, rating='adult')
+    table = await open_table(client, adult_me, scenario)
+
+    hidden = await lobby(client, friend)
+    refused = await client.post(join_url(table), json={}, headers=friend)
+    shown = await lobby(client, adult_friend)
+    joined = await client.post(join_url(table), json={}, headers=adult_friend)
+
+    assert (ids(hidden), refused.status_code) == ([], status.HTTP_404_NOT_FOUND)
+    assert ids(shown) == [table['id']]
+    assert joined.status_code == status.HTTP_200_OK, joined.text
 
 
 # --- 초대 코드 없이 들어간다 ---
