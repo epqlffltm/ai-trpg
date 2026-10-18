@@ -141,7 +141,8 @@ def to_next_out(change: Change | None) -> NextPriceOut | None:
         return None
     credits = change.sale.credits if change.sale else None
     tier = change.sale.tier if change.sale else None
-    return NextPriceOut(credits=credits, tier=tier, effective_at=change.effective_at)
+    promo = change.sale.promo if change.sale else False
+    return NextPriceOut(credits=credits, tier=tier, promo=promo, effective_at=change.effective_at)
 
 
 def to_model_out(found: OfferedModel) -> NarrationModelOut:
@@ -153,6 +154,7 @@ def to_model_out(found: OfferedModel) -> NarrationModelOut:
         grade=found.grade,
         credits=found.credits,
         tier=found.tier,
+        promo=found.promo,
         next=to_next_out(found.next),
     )
 
