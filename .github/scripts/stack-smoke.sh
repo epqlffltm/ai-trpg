@@ -14,7 +14,8 @@
 #                  바깥에 여는 포트가 정해 둔 것뿐이고 127.0.0.1 에 묶였는지(port_scope.py),
 #                  모든 서비스의 로그에 상한이 있는지도 본다(logging_scope.py, 띄운 컨테이너의 설정).
 #                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다
-#     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한.
+#     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한,
+#                  모든 응답(서버의 응답, 404, 429)의 보안 머리말.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
 #     logs         모든 컨테이너의 로그를 찍는다. 실패했을 때 부른다
 #     down         컨테이너와 볼륨을 지운다
@@ -194,6 +195,22 @@ one_request_id_from_proxy() {
   local headers
   headers="$(curl -s -D - -o /dev/null --max-time 5 -H 'X-Request-ID: client-chosen-0001' "$PROXY/api/v1/auth/jwks")"
   [[ "$(grep -ci '^x-request-id:' <<<"$headers")" == "1" ]] && ! grep -qi 'client-chosen-0001' <<<"$headers"
+}
+
+# 머리말 목록에 그 머리말이 한 번만 있고 값이 이것인가. 이름의 대소문자는 가리지 않는다
+one_header() {
+  local headers="$1" name="$2" value="$3"
+  [[ "$(grep -ci "^$name:" <<<"$headers")" == "1" ]] && grep -qixF "$name: $value" <<<"$headers"
+}
+
+# 프록시를 거친 응답에 보안 머리말 셋이 하나씩, 정한 값으로 붙었는가(#361). 둘째 인자부터는 curl 에 넘긴다.
+# 서버가 같은 머리말을 보내도(인증 서버의 nosniff 등) 하나만 있어야 한다
+security_headers() {
+  local url="$1" headers; shift
+  headers="$(curl -s -D - -o /dev/null --max-time 5 "$@" "$url" | tr -d '\r')"
+  one_header "$headers" X-Content-Type-Options nosniff &&
+    one_header "$headers" Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" &&
+    one_header "$headers" Referrer-Policy no-referrer
 }
 
 # 같은 주소를 count 번 부른 뒤 한 번 더 부르면 429 와 Retry-After(초)가 오는가. 넷째 인자부터는 curl 에 넘긴다
@@ -376,7 +393,13 @@ check_proxy() {
   report "프록시는 서버의 상태 확인 주소를 막는다" status_is 404 "$PROXY/health"
   report "프록시는 그 밖의 주소를 막는다" status_is 404 "$PROXY/"
   report "프록시가 요청 식별자를 하나 정해 돌려준다" one_request_id_from_proxy
+  report "서버의 응답에 보안 머리말이 하나씩 붙는다" security_headers "$PROXY/api/v1/auth/jwks"
+  report "막은 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/"
+  report "서버끼리만 부르는 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/api/v1/billing/service/holds" -X POST
   report "인증의 민감한 요청을 IP 마다 막는다" limited_after 12 "$PROXY/api/v1/auth/login" 6 \
+    -X POST -H 'Content-Type: application/json' -d '{}'
+  # 위에서 제한을 채웠으므로 한 번 더 부르면 429 다
+  report "요청 수 제한의 429 에도 보안 머리말이 붙는다" security_headers "$PROXY/api/v1/auth/login" \
     -X POST -H 'Content-Type: application/json' -d '{}'
   report "게시판 검색을 IP 마다 막는다" limited_after 10 "$PROXY/api/v1/board/posts?q=smoke" 1
   finish
