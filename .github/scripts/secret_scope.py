@@ -83,6 +83,15 @@ SECRETS = [
     *secrets('billing-server', ['billing-server', 'billing-sweeper'], 'AUTH_SERVER_SECRET'),
     # 결제 대행사의 키. 서버와 대사(cron)가 결제 대행사를 부른다. 정리 작업(sweeper)은 부르지 않는다(config.LoadSweeper)
     *secrets('billing-server', ['billing-server', 'billing-cron'], 'TOSS_SECRET_KEY'),
+    # 알림 서버가 알림을 넣는 요청의 서명을 확인하는 비밀. 넣는 서버마다 하나다. 요청을 받는 서버만 쓴다.
+    # 알림 서버는 아직 compose 에 없다. 들어오면 마이그레이션(notification-migrate)에는 주지 않는다
+    *secrets(
+        'notification-server',
+        ['notification-server'],
+        'GAME_SERVER_SECRET',
+        'BILLING_SERVER_SECRET',
+        'BOARD_SERVER_SECRET',
+    ),
 ]
 
 

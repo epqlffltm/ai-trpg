@@ -77,6 +77,7 @@ AUTH_DB_PASSWORD=$(throwaway)
 GAME_DB_PASSWORD=$(throwaway)
 BILLING_DB_PASSWORD=$(throwaway)
 BOARD_DB_PASSWORD=$(throwaway)
+NOTIFICATION_DB_PASSWORD=$(throwaway)
 EOF
   write_new auth-server/.env <<EOF
 SECRET_KEY=$(throwaway)

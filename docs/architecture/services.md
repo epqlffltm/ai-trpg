@@ -53,6 +53,7 @@
 | 인증 | `auth-server/` | Django | 8000 | `ai-trpg-auth` | `auth` | `01-auth-role.sql` | 가입, 로그인, 본인인증과 보호자 동의, 토큰 발급(RS256)과 JWKS, 메일 발송, 보안 이벤트 |
 | 게임 | `game-server/` | FastAPI | 8001 | `ai-trpg-game` | `game`, `game_test` | `02-game-role.sql` | 자산(세계관, 룰북, 시나리오, 로어북), 테이블과 라운드, 규칙 엔진, AI 서술, 서술 모델 목록(원가, 날짜판, 회사의 대체 모델), 서술 값의 청구(결제 서버에 홀드를 걸고 확정·반환), 실시간 스트림 |
 | 게시판 | `board-server/` | NestJS (TypeScript) | 8002 | `ai-trpg-board` | `board`, `board_test` | `05-board-role.sql` | 공지, 글, 댓글, 검색, 신고, 운영자 권한 |
+| 알림 | `notification-server/` | FastAPI | 8004 | `ai-trpg-notification` | `notification`, `notification_test` | `06-notification-role.sql` | 사람에게 보내는 알림함(#385). 다른 서버가 서명한 요청으로 넣고, 사용자가 자기 알림을 읽고 읽음으로 한다 |
 | 결제 | `billing-server/` | Go (gin) | 8003 | `ai-trpg-billing` | `billing`, `billing_test` | `04-billing-role.sql` | 크레딧 지갑과 원장, 주문과 충전, 홀드·확정·반환, 청약철회, 환영 크레딧과 출석 보상, 가격표(모델마다의 값, 등급, 행사가)와 가격 할 일. 연습용이며 실제 결제가 아니다 |
 
 - `03-extensions.sql` 은 확장(pgvector)이다.
@@ -64,13 +65,14 @@
 
 | 서비스 | 폴더 | 기술 | 포트 | 토큰의 대상 | 스키마 | 초기화 스크립트 | 하는 일 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| chat | `chat-server/` | FastAPI | 8004 (예약, 만들 때 확정) | `ai-trpg-chat` (제안, [열린 질문](#열린-질문)) | `chat` | `06-chat-role.sql` | 캐릭터와 1:1 대화. 캐릭터 만들기, 페르소나, 대화 조작(다시 생성, 분기), 기억 |
-| story | `story-server/` | 미정(FastAPI 안) | 8005 (예약, 만들 때 확정) | `ai-trpg-story` (제안) | `story` | `07-story-role.sql` | 세계관 안에서 여러 인물과 이야기를 즐기는 형태. 인물마다의 호감도, 장소와 이동, 이벤트와 엔딩 |
+| chat | `chat-server/` | FastAPI | 8005 (예약, 만들 때 확정) | `ai-trpg-chat` (제안, [열린 질문](#열린-질문)) | `chat` | `07-chat-role.sql` | 캐릭터와 1:1 대화. 캐릭터 만들기, 페르소나, 대화 조작(다시 생성, 분기), 기억 |
+| story | `story-server/` | 미정(FastAPI 안) | 8006 (예약, 만들 때 확정) | `ai-trpg-story` (제안) | `story` | `08-story-role.sql` | 세계관 안에서 여러 인물과 이야기를 즐기는 형태. 인물마다의 호감도, 장소와 이동, 이벤트와 엔딩 |
 | 관리 | 이름 미정(`ops-server` 후보) | FastAPI | 미정 | 미정 | `ops` | 미정 | 운영 조회와 집계, 관리자 작업 요청과 감사 기록. [관측 규격의 경계](../observability.md#관리-서버의-경계)를 따른다 |
 | 프런트엔드 | `web/` | React + TypeScript | - | - | - | - | 사용자 화면과 관리자 화면. [화면 명세](../product/screens.md) |
 | 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | AI 호출과 공용 템플릿. [공용 코드 규칙](shared-code.md) |
 
 - 포트와 스크립트 번호는 비어 있는 다음 번호를 예약한 것이다. 서버를 실제로 만드는 PR 에서 확정한다.
+  알림 서버가 먼저 만들어져 8004 와 06 을 썼다. chat 과 story 의 예약은 하나씩 밀렸다.
 - chat 과 story 를 나눈 까닭은 데이터의 모양이 다르기 때문이다. chat 은 캐릭터 하나와의 대화 기록이 중심이고, story 는 장소, 인물, 호감도 같은 서버가 검증하는 상태가 중심이다.
   처음 만드는 것은 chat 이고, story 는 그 뒤다([순서](#순서)).
 
@@ -96,13 +98,14 @@
 | 결제 → 인증 | 미성년자의 결제와 청약철회를 보호자에게 알리라는 부탁(정리 작업이 보낸다) | `billing-server/README.md` 의 "정리 작업과 대사" |
 | 결제 대행사 → 결제 | 결제 알림(웹훅). 본문의 결과를 믿지 않고 결제 대행사에 다시 묻는다 | `billing-server/README.md` 의 "주문과 결제" |
 | 결제 → 결제 대행사 | 결제 승인, 취소, 결과 묻기 | `billing-server/README.md` 의 "주문과 결제" |
-| 게임, 게시판, 결제 → 인증 | 공개키(JWKS)와 끊긴 세션의 목록 받기 | `auth-server/README.md` |
+| 게임, 게시판, 결제, 알림 → 인증 | 공개키(JWKS)와 끊긴 세션의 목록 받기 | `auth-server/README.md` |
 
 앞으로 생길 길(계획):
 
 | 부르는 쪽 → 받는 쪽 | 무엇을 | 비고 |
 | --- | --- | --- |
 | chat, story → 결제 | 대화나 장면의 값을 홀드로 받기, 가격 목록 받기 | 게임 서버와 같은 방식. 서명 비밀은 서버마다 따로(`CHAT_SERVER_SECRET`, `STORY_SERVER_SECRET`)고, 비밀마다 쓸 수 있는 가격표 이름의 머리가 정해진다([이름 규칙](#이름-규칙)). chat-server 를 만드는 PR 에서 결제 쪽도 함께 고친다 |
+| 게임, 결제, 게시판 → 알림 | 사람에게 보낼 알림 넣기. 받는 쪽(`POST /api/v1/notification/service/{source}/notifications`)은 있다 | 서명 비밀은 넣는 서버마다 따로(`GAME_SERVER_SECRET` 등, 알림 서버의 설정). 넣는 쪽은 발송함에 적고 워커가 보낸다(인증 → 결제의 환영 크레딧과 같다). 원본은 `notification-server/README.md` 의 "알림 넣기" |
 | 인증 → 게시판 | 닉네임 바꾸기와 탈퇴 알림 | 인증 서버에 그 기능이 생길 때 |
 | 관리 → 인증, 게시판, 결제, 게임, chat, story | 정지, 숨기기, 가격표 바꾸기, 결과를 모르는 주문 정하기 같은 관리자 작업 요청 | 각 서비스의 관리자용 API 를 부른다. 관리 서버가 다른 서비스의 DB 를 고치지 않는다 |
 | 서비스 → 로그 수집기(Collector) | 로그, 메트릭, 추적 | 관리 서버를 거치지 않는다. [관측 규격](../observability.md#opentelemetry-collector-를-붙일-자리) |
@@ -127,7 +130,7 @@
 | --- | --- | --- |
 | 폴더, 로그의 `service` 값 | `<이름>-server` 로 같게. 설정으로 바꾸지 않는다 | `chat-server` |
 | DB 계정과 스키마 | 이름 그대로. 테스트 스키마는 `<이름>_test` | `chat`, `chat_test` |
-| 초기화 스크립트 | `NN-<이름>-role.sql`, 다음 번호부터 | `06-chat-role.sql` |
+| 초기화 스크립트 | `NN-<이름>-role.sql`, 다음 번호부터 | `07-chat-role.sql` |
 | 토큰의 대상(`aud`) | `ai-trpg-<이름>` | `ai-trpg-chat` |
 | 프록시 주소 | `/api/v1/<이름>/` | `/api/v1/chat/` |
 | 이미지·워커·마이그레이션 | `<이름>-server`, `<이름>-migrate` 등 | `chat-migrate` |
@@ -136,7 +139,7 @@
 
 - 서비스 이름은 하는 일을 쓴다. 브랜드 이름을 쓰지 않는다. 사용자에게 보이는 이름이 바뀌어도 코드는 바뀌지 않게 하려는 것이다.
 - 사용자에게 보이는 이름(플랫폼 이름, 제품 이름)은 서비스 이름과 별개이고 아직 정하지 않았다.
-- 2026-10-18 에 정한 이름: `chat-server`, `story-server`.
+- 2026-10-18 에 정한 이름: `chat-server`, `story-server`, `notification-server`.
 
 ## 토큰과 권한
 
