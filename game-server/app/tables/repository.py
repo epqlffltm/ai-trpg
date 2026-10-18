@@ -8,12 +8,14 @@
 """
 
 import uuid
+from datetime import date, timedelta
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from app.assets.models import Rating, ScenarioVersion
+from app.catalog.models import AiModel
 from app.tables.models import GameTable, TableMember, TableMonster, TableNpc, TableStatus
 
 
@@ -153,3 +155,22 @@ async def list_lobby(
 async def count_lobby(session: AsyncSession, allowed_ratings: list[Rating], scenario_id: uuid.UUID | None) -> int:
     """로비에 보이는 테이블이 몇 개인지 센다."""
     return await session.scalar(select(func.count()).select_from(open_to(allowed_ratings, scenario_id).subquery())) or 0
+
+
+async def find_tables_near_retirement(session: AsyncSession, today: date, within_days: int) -> list[uuid.UUID]:
+    """
+    서술 모델의 은퇴일이 오늘부터 within_days 일 안에 들었거나 이미 지난, 끝나지 않은 테이블들. 잠그지 않는다.
+
+    모델 목록과 이름표로 잇는다(외래 키는 없다). 은퇴를 알리고 바꾸는 작업이 쓴다(app/tables/retirement_watch.py).
+    """
+    query = (
+        select(GameTable.id)
+        .join(AiModel, AiModel.slug == GameTable.narration_model)
+        .where(
+            GameTable.status != TableStatus.ENDED,
+            AiModel.retires_on.is_not(None),
+            AiModel.retires_on <= today + timedelta(days=within_days),
+        )
+        .order_by(GameTable.id)
+    )
+    return list(await session.scalars(query))

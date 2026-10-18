@@ -43,6 +43,7 @@ from app.tables import (
     quest_changes,
     quests,
     replacements,
+    repository,
     rolls,
     service,
     sheets,
@@ -61,6 +62,7 @@ from app.tables.errors import (
 from app.tables.items import CatalogItem
 from app.tables.model_picker import ModelPicker
 from app.tables.models import GameTable, TableInjury, TableItem, TableMember, TableQuest, TableRoll, TableSheet
+from app.tables.retirement_watch import RetirementWatch
 from app.tables.schemas import (
     CatalogItemOut,
     CharacterOut,
@@ -108,6 +110,14 @@ def get_model_picker(prices: Prices, now: Now) -> ModelPicker:
 Picker = Annotated[ModelPicker, Depends(get_model_picker)]
 
 
+def get_retirement_watch(request: Request) -> RetirementWatch:
+    """서술 모델의 은퇴를 지켜보는 작업. 앱에 하나 꽂혀 있다(app/main.py)."""
+    return request.app.state.retirement_watch
+
+
+Watch = Annotated[RetirementWatch, Depends(get_retirement_watch)]
+
+
 def to_next_out(change: Change | None) -> NextPriceOut | None:
     """예약된 바뀜을 응답으로. 판매를 멈추는 예약이면 값과 등급이 null 이다."""
     if change is None:
@@ -129,6 +139,7 @@ def to_model_out(found: OfferedModel) -> NarrationModelOut:
         tier=found.tier,
         promo=found.promo,
         next=to_next_out(found.next),
+        retires_on=found.retires_on,
     )
 
 
@@ -724,9 +735,15 @@ async def change_ledger_drafts(
 
 
 @router.post('/{table_id}/start', response_model=TableDetail, status_code=status.HTTP_200_OK)
-async def start_table(table_id: uuid.UUID, user: CurrentUser, session: Session) -> TableDetail:
-    """테이블을 시작한다. 모든 참가자가 캐릭터를 만들어 둬야 한다."""
-    table = await service.start_table(session, user.user_id, table_id)
+async def start_table(table_id: uuid.UUID, user: CurrentUser, session: Session, watch: Watch) -> TableDetail:
+    """
+    테이블을 시작한다. 모든 참가자가 캐릭터를 만들어 둬야 한다.
+
+    첫 라운드를 연 뒤 서술 모델의 은퇴를 본다(app/tables/retirement_watch.py). 은퇴했으면 바뀐 모델로 답한다.
+    """
+    await service.start_table(session, user.user_id, table_id)
+    await watch.after_round_opened(table_id)
+    table = await repository.reload_table(session, table_id)
     return to_detail(table, user.user_id)
 
 
