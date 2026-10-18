@@ -20,6 +20,10 @@
   - 같은 회사에 대신할 모델이 없으면 바꾸지 않고 알린다(narration_model_unavailable). 그 은퇴일에 한 번이다.
     방장이 모델을 고르기 전까지 그 테이블은 서술할 수 없다.
 
+알림함
+  - 위의 세 이벤트는 방장의 알림함에도 간다(app/notifications/outbox.py 의 tell_host). 이벤트와 같은 트랜잭션에
+    발송함에 적고, 알림 서버에는 뒤에서 보낸다. 모델을 바꿀 수 있는 사람이 방장이라 방장에게만 보낸다.
+
 언제 보나
   - 뒤에서 도는 작업이 한 시간마다 은퇴일이 30 일 안에 든 모델의 테이블을 본다(app/tables/retirement_watch.py).
   - 라운드가 열린 뒤에도 그 테이블을 한 번 본다. 작업이 아직 돌지 않았어도 놓치지 않는다.
@@ -41,6 +45,7 @@ from app.catalog.offers import OfferedModel
 from app.catalog.rules import is_retired
 from app.events import recorder
 from app.events.models import EventType
+from app.notifications import outbox
 from app.rounds import repository as round_repository
 from app.rounds.round_price import price_payload
 from app.tables import repository as table_repository
@@ -119,13 +124,14 @@ async def replacement_of(
 
 
 def notify_retiring(session: AsyncSession, table: GameTable, model: AiModel, stage: int, today: date) -> None:
-    """은퇴가 다가온다고 알리고 그 단계를 적는다."""
+    """은퇴가 다가온다고 알리고(방장의 알림함에도) 그 단계를 적는다."""
     payload = {
         'narration_model': model.slug,
         'retires_on': model.retires_on.isoformat(),
         'days_left': days_left(model.retires_on, today),
     }
-    recorder.record(session, table, EventType.NARRATION_MODEL_RETIRING, payload=payload)
+    event = recorder.record(session, table, EventType.NARRATION_MODEL_RETIRING, payload=payload)
+    outbox.tell_host(session, table, event)
     mark_noticed(table, model.retires_on, stage)
 
 
@@ -148,13 +154,15 @@ async def replace_model(session: AsyncSession, table: GameTable, retired: str, r
         'round': round_.number if applied else None,
         'price': price_payload(round_) if applied else None,
     }
-    recorder.record(session, table, EventType.NARRATION_MODEL_REPLACED, payload=payload)
+    event = recorder.record(session, table, EventType.NARRATION_MODEL_REPLACED, payload=payload)
+    outbox.tell_host(session, table, event)
 
 
 def notify_stranded(session: AsyncSession, table: GameTable, model: AiModel) -> None:
     """은퇴한 모델 대신 쓸 모델이 같은 회사에 없다고 알린다. 그 은퇴일에 한 번이다."""
     payload = {'narration_model': model.slug, 'reason': RETIRED}
-    recorder.record(session, table, EventType.NARRATION_MODEL_UNAVAILABLE, payload=payload)
+    event = recorder.record(session, table, EventType.NARRATION_MODEL_UNAVAILABLE, payload=payload)
+    outbox.tell_host(session, table, event)
     mark_noticed(table, model.retires_on, UNAVAILABLE_NOTICE)
 
 

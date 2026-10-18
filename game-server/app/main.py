@@ -60,6 +60,8 @@ from app.lore.setup import build_embedder
 from app.memory.history import HistoryCollector
 from app.memory.indexing import MemoryIndexer
 from app.memory.retrieval import MemoryRetriever, MemoryThresholds
+from app.notifications import dispatcher
+from app.notifications.setup import build_notifications
 from app.observability.middleware import RequestLoggingMiddleware
 from app.observability.responses import handle_unexpected_error
 from app.observability.setup import configure_logging
@@ -106,7 +108,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     라운드의 시계(마감이 지난 라운드를 닫는 것), 청구 정리(서술 값을 결제 서버에 맡기는 것),
     AI 호출 기록의 원문 정리(보관 기간이 지난 원문을 비우는 것), 서술 모델의 은퇴 지켜보기,
-    끊긴 세션 목록 받기는 뜰 때 돌기 시작하고,
+    알림 보내기(발송함의 알림을 알림 서버에 넣는 것), 끊긴 세션 목록 받기는 뜰 때 돌기 시작하고,
     꺼질 때 가장 먼저 멈춘다. 시계가 맡긴 서술이 뒤의 작업 마무리에 들어가도록 순서를 지킨다.
     """
     loop = asyncio.get_running_loop()
@@ -114,6 +116,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settling = settler.start(app.state.charge_settler)
     pruning = retention.start(app.state.ai_log_pruner)
     watching = retirement_watch.start(app.state.retirement_watch)
+    dispatching = dispatcher.start(app.state.notification_dispatcher)
     revoking = revocations.start(app.state.revocations)
     with closing_on_exit(lambda: loop.call_soon_threadsafe(app.state.hub.close_all)):
         yield
@@ -121,6 +124,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await settling.halt()
     await pruning.halt()
     await watching.halt()
+    await dispatching.halt()
     await revoking.halt()
     # 뒤에서 돌던 작업을 먼저 마무리한다. 작업이 DB 를 쓰므로 DB 를 닫기 전에 한다
     await app.state.jobs.aclose()
@@ -253,6 +257,17 @@ def create_app(
     app.state.retirement_watch = retirement_watch.RetirementWatch(
         session_factory=app.state.session_factory,
         prices=lambda: app.state.price_list,
+    )
+
+    # 방장에게 보내는 알림을 넣는 알림 서버(app/notifications/). 설정(NOTIFICATION_URL)이 정한다. 비우면 None 이고
+    # 알림은 발송함에 적히기만 한다. 위의 httpx 클라이언트로 부른다.
+    # 요청마다 두 서버만 아는 비밀(NOTIFICATION_SECRET)로 서명한다
+    app.state.notifications = build_notifications(settings, app.state.http_client)
+    # 발송함의 알림을 몇 초마다 알림 서버에 보내는 작업(app/notifications/dispatcher.py). lifespan 이 돌리고 멈춘다.
+    # 알림 서버는 부를 때마다 앱에서 꺼낸다. 테스트가 바꿔 꽂은 것을 쓴다
+    app.state.notification_dispatcher = dispatcher.NotificationDispatcher(
+        session_factory=app.state.session_factory,
+        notifications=lambda: app.state.notifications,
     )
 
     # AI 호출의 기록에 남은 원문을 보관 기간(AI_LOG_TEXT_RETENTION_DAYS)이 지나면 비우는 정리 작업(app/ai/retention.py).

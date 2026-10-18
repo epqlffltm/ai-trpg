@@ -2104,8 +2104,10 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 
 ## 알림 보내기
 
-방장에게 보내는 알림을 알림 서버에 넣는다(#385, `app/notifications/`). 알림함은 알림 서버에 있다([알림 서버의 README](../notification-server/README.md)).
-지금 보내는 것은 서술 모델의 은퇴 셋이다([모델 은퇴](#모델-은퇴)). 받는 사람은 방장뿐이다. 모델을 바꿀 수 있는 사람이 방장이고, 앉은 사람은 같은 이름의 테이블 이벤트로 이미 본다.
+사람에게 보내는 알림을 알림 서버에 넣는다(#385, `app/notifications/`). 알림함은 알림 서버에 있다([알림 서버의 README](../notification-server/README.md)).
+지금 보내는 것은 둘이다. 서술 모델의 은퇴 셋은 방장에게, 운영자의 제재 셋은 당사자에게 간다.
+
+**서술 모델의 은퇴**([모델 은퇴](#모델-은퇴)). 받는 사람은 방장뿐이다. 모델을 바꿀 수 있는 사람이 방장이고, 앉은 사람은 같은 이름의 테이블 이벤트로 이미 본다.
 
 | 테이블 이벤트 | 알림의 `kind` | 알림의 `payload` |
 | --- | --- | --- |
@@ -2114,6 +2116,19 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `narration_model_unavailable` | `narration_model.unavailable` | `table_id`, `title`, `narration_model`, `reason` |
 
 `payload` 는 이벤트의 것에 테이블의 ID 와 제목을 붙인 것이다. 알림함이 게임 서버를 부르지 않고 보여 줄 수 있게 한다. 판의 내용(GM 전용 글)은 싣지 않는다.
+
+**운영자의 제재**([운영자 API](#운영자-api), `app/operators/notices.py`). 제재와 감사 기록과 같은 트랜잭션에 적는다.
+
+| 제재 | 받는 사람 | 알림의 `kind` | 알림의 `payload` |
+| --- | --- | --- | --- |
+| 시나리오 제재 | 제작자 | `scenario.sanctioned` | `scenario_id`, `title`, `version_number`, `publishing_banned`(제재 뒤에 공개 금지 중인가) |
+| 공개 금지 | 그 사람 | `publishing.banned` | `automatic`: 제재가 정해진 수에 닿아 저절로 올랐으면 `true`, 운영자가 했으면 `false` |
+| 공개 금지 풀기 | 그 사람 | `publishing.unbanned` | 없음(`{}`) |
+
+- 시나리오 제재로 저절로 금지되면 알림이 둘이다(제재, 금지). 이미 금지 중이었으면 제재 하나다.
+- **사유와 운영자는 싣지 않는다.** 사유는 운영자가 감사 기록에 남기는 글(신고 번호, 메모)이라 신고한 사람이 드러날 수 있다. 테이블 끝내기의 이벤트와 같은 규칙이다.
+- **테이블 끝내기는 알리지 않는다.** 앉은 사람이 테이블의 이벤트(`table_ended`, `by: operator`)로 본다.
+- 열쇠는 `<kind>:<감사 기록의 번호>` 다. 같은 사람을 다시 금지해도 다른 알림이다. 저절로 오른 금지는 원인인 시나리오 제재의 번호를 쓴다(kind 가 달라 겹치지 않는다).
 
 **발송함에 먼저 적는다.** 알림을 정한 이벤트와 같은 트랜잭션에 발송함(`outgoing_notifications`)에 한 줄을 적고, 알림 서버에는 뒤에서 보낸다(`app/notifications/dispatcher.py`, 5초마다).
 - 이벤트만 남고 알림이 사라지거나, 알림만 가고 일이 되돌려지는 일이 없다. 알림 서버를 부르는 동안 테이블을 잠그지 않고, 알림 서버가 죽어도 게임의 일은 멈추지 않는다.
@@ -2144,7 +2159,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 2. 게임 서버를 다시 띄운다. 모델의 은퇴일을 30 일 안으로 적고(`scripts.models retire`) 그 모델의 테이블이 있으면, 한 시간 안에(라운드가 열리면 바로) 방장의 알림함(`GET /api/v1/notification/me/notifications`)에 알림이 생긴다.
 
 **알려진 한계**
-- 시나리오 작성자에게는 보내지 않는다. 은퇴 지켜보기는 테이블만 본다. 작성자는 시나리오 응답의 `narration_model_status` 로 본다([추천 모델](#추천-모델)).
+- 서술 모델의 은퇴를 시나리오 작성자에게는 보내지 않는다. 은퇴 지켜보기는 테이블만 본다. 작성자는 시나리오 응답의 `narration_model_status` 로 본다([추천 모델](#추천-모델)).
 - 실패로 남긴 알림을 다시 보내는 명령이 없다. 로그(`notification.rejected`)를 보고 고친 뒤 DB 에서 지운다.
 
 ## 이벤트 기록
@@ -2872,6 +2887,7 @@ uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_bac
 - 제재된 시나리오가 설정 `PUBLISHING_BAN_THRESHOLD`(기본 3)개가 되면 저절로 공개 금지가 된다. 금지되어도 테이블을 열고 들어가는 것은 된다.
 - 제재는 `operator_actions`(덧붙이기만, 트리거)에 제재와 한 트랜잭션으로 남는다. 상태는 `scenario_sanctions`(제재된 판), `publishing_bans`(사람마다 한 줄, 풀면 `lifted_at`)에 있다.
 - 사용자 정지는 게임 서버에 없다. 인증 서버의 명령으로 한다.
+- 시나리오 제재, 공개 금지와 풀기는 당사자의 알림함에 간다. 사유와 운영자는 싣지 않는다([알림 보내기](#알림-보내기)).
 
 **감사 기록(`operator_reads`).** 볼 때마다 한 줄이 남는다. 운영자(`operator_id`), 시각(`read_at`), 무엇(`target_kind`, `target_id`, 판이면 `target_number`), 사유(`reason`), `request_id`.
 
