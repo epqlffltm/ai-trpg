@@ -231,6 +231,10 @@ class Settings(BaseSettings):
     chat_messages_per_window: int = Field(default=5, ge=1)
     chat_window_seconds: int = Field(default=10, ge=1)
 
+    # 공개 금지(블랙리스트, #392). 한 사람의 시나리오가 운영자에게 이만큼 제재되면 저절로 공개를 막는다.
+    # 운영자가 풀면 그 뒤의 제재부터 다시 센다. 자기 시나리오와 남의 시나리오로 플레이하는 것은 막지 않는다
+    publishing_ban_threshold: int = Field(default=3, ge=1)
+
     @model_validator(mode='after')
     def require_a_model_for_llm(self) -> Self:
         """언어 모델로 서술하겠다면서 모델 이름이 없으면 뜨지 않는다. 첫 라운드를 닫을 때 알게 되는 것보다 낫다."""
