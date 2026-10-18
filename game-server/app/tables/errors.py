@@ -77,6 +77,8 @@ class Conflict(enum.StrEnum):
     QUEST_FINISHED = 'quest_finished'
     # 이미 진행 중인 퀘스트를 진행 중으로 바꾸려 했다
     QUEST_ALREADY_ACTIVE = 'quest_already_active'
+    # 시작한 테이블의 서술 모델을 바꾸려 했다. 지금 모델을 쓸 수 있으면 시작한 뒤에는 고정이다
+    NARRATION_MODEL_LOCKED = 'narration_model_locked'
     # 퀘스트를 사람이 성공으로 바꾸려 했다. 성공은 시나리오의 조건을 보고 엔진이 정한다(app/rounds/quest_goals.py)
     QUEST_SUCCESS_BY_ENGINE = 'quest_success_by_engine'
     # 장부 초안의 그 줄은 이미 결정했거나(받아들임, 버림) 만료됐다
