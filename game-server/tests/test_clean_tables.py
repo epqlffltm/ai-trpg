@@ -39,6 +39,7 @@ from app.tables.models import (
     TableFoundRoute,
     TableItem,
     TableMonster,
+    TablePlaceItem,
     TableQuest,
     TableSheet,
     TableVisit,
@@ -105,7 +106,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     AI 호출의 기록만은 API 로 생기지 않는다(테스트의 서술자는 모델을 부르지 않는다). 기록장으로 직접 쓴다.
     쪽지도 직접 넣는다. 받을 사람이 있어야 하는데 혼자 앉은 테이블이다.
     소지품도 직접 넣는다. 판에 물건이 있어야 하는데, 물건 항목을 더하면 위의 판과 서술이 달라진다.
-    퀘스트도 같은 까닭으로 직접 넣는다(사건 항목). 서 본 곳과 찾은 길도 같다(장소 항목).
+    퀘스트도 같은 까닭으로 직접 넣는다(사건 항목). 서 본 곳과 찾은 길, 장소에 남은 물건도 같다(장소 항목).
     몬스터의 상태도 같다. 조우를 적으려면 장소 항목과 시작 장소가 있어야 한다.
     장부 초안도 직접 넣는다. 테스트의 서술자는 초안을 쓰지 않는다.
     모델 목록과 원가, 날짜판을 바꾼 기록도 직접 넣는다. API 가 없고 관리 명령(scripts/models.py)으로만 생긴다.
@@ -178,6 +179,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         session.add(TableQuest(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4(), status=QuestStatus.HIDDEN))
         session.add(TableVisit(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4()))
         session.add(TableFoundRoute(table_id=uuid.UUID(table['id']), from_place=uuid.uuid4(), to_place=uuid.uuid4()))
+        placed = {'slot': 0, 'place_id': uuid.uuid4(), 'entry_id': uuid.uuid4(), 'count': 1, 'hidden': False}
+        session.add(TablePlaceItem(table_id=uuid.UUID(table['id']), **placed))
         monster = {'monster_id': uuid.uuid4(), 'number': 1, 'place_id': uuid.uuid4(), 'abilities': {}, 'max_hp': 1}
         session.add(TableMonster(table_id=uuid.UUID(table['id']), hp=1, status='alive', **monster))
         draft = {'entry_id': str(uuid.uuid4()), 'name': '왕녀 구출', 'previous': 'active', 'status': 'succeeded'}

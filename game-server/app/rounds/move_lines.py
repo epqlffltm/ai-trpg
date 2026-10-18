@@ -32,6 +32,7 @@ from app.rounds.narrator import (
     RestNote,
     RevivalNote,
     SearchNote,
+    TakeNote,
     TargetGoneNote,
     TravelNote,
     TreatmentNote,
@@ -274,16 +275,48 @@ def describe_travel(note: TravelNote) -> str:
 
 def describe_search(note: SearchNote) -> str:
     """
-    숨긴 길을 찾은 결과를 한 줄로 적는다. 찾지 못했으면 숨긴 길이 없었는지 있었는지 말하지 않는다.
+    숨긴 길과 숨긴 물건을 찾은 결과를 한 줄로 적는다. 찾지 못했으면 숨긴 것이 없었는지 있었는지 말하지 않는다.
 
     찾은 길은 이제 아는 길이라 "숨은 길"이라 부르지 않는다. 맵 절의 "숨은 길은 드러내지 마라"에 눌리지 않게 한다.
+    찾은 물건도 "숨은 물건"이라 부르지 않는다. 이미 찾은 사람이 가졌다.
 
     예: (찾기: 길을 찾아냈다. 지하실(으)로 이어진다)
+        (찾기: 은열쇠을(를) 찾아 챙겼다)
         (찾기: 찾은 것이 없다)
     """
-    if not note.found:
-        return '(찾기: 찾은 것이 없다)'
-    return f'(찾기: 길을 찾아냈다. {", ".join(note.found)}(으)로 이어진다)'
+    parts = []
+    if note.found:
+        parts.append(f'길을 찾아냈다. {", ".join(note.found)}(으)로 이어진다')
+    if note.items:
+        parts.append(f'{describe_items(note.items)}을(를) 찾아 챙겼다')
+    return f'(찾기: {". ".join(parts) or "찾은 것이 없다"})'
+
+
+# 다 줍지 못한 까닭의 말(app/rounds/place_item_actions.py 의 Reason)
+TAKE_SHORT_WORDS = {
+    'gone': '남아 있지 않았다',
+    'not_enough': '남은 것만 주웠다',
+    'full': '더 들 수 없어 그만큼만 주웠다',
+}
+
+
+def describe_take(note: TakeNote) -> str:
+    """
+    놓인 물건을 주운 결과를 한 줄로 적는다.
+
+    예: (줍기: 치유 물약 2개를 주웠다)
+        (줍기: 치유 물약 1개를 주웠다. 남은 것만 주웠다)
+        (줍기: 치유 물약이(가) 남아 있지 않았다)
+        (줍기: 치유 물약을(를) 더 들 수 없어 줍지 못했다)
+    """
+    if not note.taken and note.reason == 'gone':
+        return f'(줍기: {note.name}이(가) {TAKE_SHORT_WORDS["gone"]})'
+    if not note.taken:
+        return f'(줍기: {note.name}을(를) 더 들 수 없어 줍지 못했다)'
+    taken = f'{note.name} {note.taken}개를 주웠다'
+    if note.reason is None:
+        return f'(줍기: {taken})'
+    return f'(줍기: {taken}. {TAKE_SHORT_WORDS[note.reason]})'
 
 
 def lost_before_acting(move: Move) -> str | None:
@@ -338,6 +371,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_travel(move.travel))
     if move.search is not None:
         parts.append(describe_search(move.search))
+    if move.take is not None:
+        parts.append(describe_take(move.take))
     if move.rest is not None:
         parts.append(describe_rest(move.rest))
     if move.death_save is not None:

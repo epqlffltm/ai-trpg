@@ -34,6 +34,7 @@ from app.rounds.narrator import (
     DroppedNote,
     Impact,
     ItemActionNote,
+    ItemNote,
     MonsterTurnNote,
     Move,
     NamingNote,
@@ -45,6 +46,7 @@ from app.rounds.narrator import (
     RevivalNote,
     SearchNote,
     StoryContext,
+    TakeNote,
     TargetGoneNote,
     TravelNote,
     TreatmentNote,
@@ -52,7 +54,7 @@ from app.rounds.narrator import (
     Verdict,
     WhisperNote,
 )
-from app.rounds.state import move_of, rest_of, search_of
+from app.rounds.state import move_of, rest_of, search_of, take_of
 from app.tables import quests
 from app.tables.models import GameTable
 from app.whispers.models import Whisper
@@ -188,12 +190,28 @@ def other_end(route: dict, place: dict | None) -> str:
 
 
 def to_search(declaration: Declaration | None) -> SearchNote | None:
-    """선언에 적힌 찾기의 결과를 서술자에게 줄 모양으로 바꾼다. 찾는 행동이 아니면 None. 찾은 길만 있다."""
+    """
+    선언에 적힌 찾기의 결과를 서술자에게 줄 모양으로 바꾼다. 찾는 행동이 아니면 None. 찾은 길과 가진 물건만 있다.
+
+    물건을 찾기 전(#279)에 굳힌 결과에는 items 가 없다. 찾은 물건이 없던 것과 같다.
+    """
     search = search_of(declaration)
     if search is None:
         return None
     place = search['place']
-    return SearchNote(place=place_name(place), found=[other_end(route, place) for route in search['found']])
+    return SearchNote(
+        place=place_name(place),
+        found=[other_end(route, place) for route in search['found']],
+        items=[ItemNote(name=one['name'], count=one['count']) for one in search.get('items', []) if one['count']],
+    )
+
+
+def to_take(declaration: Declaration | None) -> TakeNote | None:
+    """선언에 적힌 줍기의 결과를 서술자에게 줄 모양으로 바꾼다. 줍는 행동이 아니면 None."""
+    take = take_of(declaration)
+    if take is None:
+        return None
+    return TakeNote(name=take['name'], count=take['count'], taken=take['taken'], reason=take['reason'])
 
 
 def to_npc_impact(effect: dict | None) -> NpcImpact | None:

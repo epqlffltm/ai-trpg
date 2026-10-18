@@ -11,14 +11,15 @@
   - 모양(CheckAction): 규칙을 몰라도 볼 수 있는 것. 입력을 받을 때 검사한다.
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
-종류는 여덟이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search),
-쉬기(rest).
+종류는 아홉이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search),
+쉬기(rest), 줍기(take).
 종류를 나타내는 칸(kind)으로 가른다(Action).
 치료는 능력과 난이도를 받지 않는다. 규칙이 정한다(app/engine/treatment.py).
 지목은 주사위를 굴리지 않는다. 짚은 이름이 정답인지만 본다(app/rounds/naming.py).
 쓰기와 건네기도 판정이 없다. 소지품을 바꾸고, 회복하는 소모품이면 회복의 주사위만 굴린다(app/rounds/item_actions.py).
-가기는 판정이 없다. 이웃한 장소로 한 칸 간다. 찾기는 그 장소의 숨긴 길마다 판의 판정을 굴린다
-(app/rounds/map_actions.py).
+가기는 판정이 없다. 이웃한 장소로 한 칸 간다. 찾기는 그 장소의 숨긴 길과 숨긴 물건마다 판의 판정을 굴린다
+(app/rounds/map_actions.py). 줍기는 판정이 없다. 그 장소에 보이게 놓인 물건을 가져간다
+(app/rounds/place_item_actions.py).
 쉬기는 판정이 없다. 쉬는 라운드가 그 휴식의 시간만큼 이어지고, 라운드가 닫힐 때 다치지 않았으면 회복한다
 (app/rounds/rests.py).
 
@@ -64,10 +65,12 @@ class ActionKind(enum.StrEnum):
     GIVE = 'give'
     # 맵에서 지금 장소와 아는 길로 이어진 장소로 한 칸 간다
     MOVE = 'move'
-    # 지금 장소에서 숨긴 길을 찾는다. 길마다 판에 적힌 판정을 굴린다
+    # 지금 장소에서 숨긴 길과 숨긴 물건을 찾는다. 하나하나 판에 적힌 판정을 굴린다
     SEARCH = 'search'
     # 쉰다. 짧게(short) 또는 길게(long). 쉬는 시간과 회복량은 규칙이 정한다
     REST = 'rest'
+    # 지금 장소에 보이게 놓인 물건을 줍는다
+    TAKE = 'take'
 
 
 class RestLength(enum.StrEnum):
@@ -261,9 +264,10 @@ class MoveAction(BaseModel):
 
 class SearchAction(BaseModel):
     """
-    지금 서 있는 장소에서 숨긴 길을 찾는 행동(app/rounds/map_actions.py). 받는 값이 없다.
+    지금 서 있는 장소에서 숨긴 길과 숨긴 물건을 찾는 행동(app/rounds/map_actions.py). 받는 값이 없다.
 
-    무엇으로 굴리는지(능력과 난이도)는 길마다 판에 적혀 있다. 플레이어는 숨긴 길이 있는지조차 모른다.
+    무엇으로 굴리는지(능력과 난이도)는 길과 물건마다 판에 적혀 있다. 플레이어는 숨긴 것이 있는지조차 모른다.
+    찾은 물건은 찾은 사람이 바로 갖는다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -284,8 +288,32 @@ class RestAction(BaseModel):
     length: RestLength
 
 
+class TakeAction(BaseModel):
+    """
+    지금 서 있는 장소에 보이게 놓인 물건(item) count 개를 줍는 행동(app/rounds/place_item_actions.py).
+
+    item 은 판의 로어북 물건 항목의 id 다. 판정이 없다. 남은 것보다 많이 부르면 남은 만큼, 한 가지의 상한까지 줍는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.TAKE]
+    item: uuid.UUID
+    count: int = Field(default=1, ge=1, le=GIVE_MAX_COUNT)
+
+
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
-AnyAction = CheckAction | TreatAction | NameAction | UseAction | GiveAction | MoveAction | SearchAction | RestAction
+AnyAction = (
+    CheckAction
+    | TreatAction
+    | NameAction
+    | UseAction
+    | GiveAction
+    | MoveAction
+    | SearchAction
+    | RestAction
+    | TakeAction
+)
 
 # 선언에 붙는 행동. kind 로 종류를 가른다
 Action = Annotated[AnyAction, Field(discriminator='kind')]

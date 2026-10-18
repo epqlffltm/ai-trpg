@@ -234,11 +234,15 @@ class PlaceNote:
     hidden 은 그 장소에 닿은, 아직 찾지 않은 숨긴 길의 다른 끝의 이름이다. GM 만 안다. 플레이어도 방장도 모른다.
     hidden 은 언어 모델의 맵 절(app/rounds/prompt.py)에만 싣는다. 한 일의 줄(describe_move)에는 싣지 않는다.
     가짜 서술자는 그 줄을 장면으로 내보내므로, 거기 실으면 숨긴 길이 모두에게 새어 나간다.
+    items 는 그 장소에 보이게 놓인 물건들(이름과 개수), hidden_items 는 아직 찾지 않은
+    숨긴 물건의 이름이다. hidden_items 도 GM 만 안다. hidden 과 같이 맵 절에만 싣는다(#279).
     """
 
     name: str
     exits: list[str] = field(default_factory=list)
     hidden: list[str] = field(default_factory=list)
+    items: list[ItemNote] = field(default_factory=list)
+    hidden_items: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -299,13 +303,31 @@ class RecoveryNote:
 @dataclass(frozen=True)
 class SearchNote:
     """
-    숨긴 길을 찾은 결과(app/rounds/map_actions.py). 찾은 길이 이어지는 장소들의 이름이다. 못 찾았으면 비어 있다.
+    숨긴 길과 숨긴 물건을 찾은 결과(app/rounds/map_actions.py, app/rounds/place_item_actions.py).
 
-    숨긴 길이 없는 곳과, 있는데 못 찾은 곳의 결과가 같다. 굴린 판정은 적혀 있지 않다.
+    found 는 찾은 길이 이어지는 장소들의 이름, items 는 찾아서 가진 물건들(이름과 가진 개수)이다.
+    못 찾았으면 비어 있다.
+    숨긴 것이 없는 곳과, 있는데 못 찾은 곳의 결과가 같다. 굴린 판정은 적혀 있지 않다.
     """
 
     place: str | None
     found: list[str] = field(default_factory=list)
+    items: list[ItemNote] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class TakeNote:
+    """
+    장소에 놓인 물건을 주운 결과(app/rounds/place_item_actions.py). 엔진이 정한 것이다. 판정이 없다.
+
+    taken 은 주운 개수다. 0 이면 줍지 못했다. reason 은 부른 것보다 적게 주운 까닭이다
+    (gone: 남은 것이 없었다, not_enough: 남은 만큼만, full: 더 가질 수 없다). 다 주웠으면 None 이다.
+    """
+
+    name: str
+    count: int
+    taken: int
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -357,6 +379,8 @@ class Move:
     # 맵에서 가는 행동이면 그 결과, 찾는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     travel: TravelNote | None = None
     search: SearchNote | None = None
+    # 놓인 물건을 줍는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
+    take: TakeNote | None = None
     # 겨눈 몬스터를 칠 수 없어 굴리지 않았으면 그 까닭. 아니면 None 이다. verdict 와 함께 있지 않다
     target_gone: TargetGoneNote | None = None
     # 쉬는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
