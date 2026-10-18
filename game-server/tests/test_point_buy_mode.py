@@ -31,6 +31,7 @@ from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.tables import sheets
 from app.tables.schemas import CharacterUpdate
+from tests.narration_model import with_model
 from tests.sheets import handed_out, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -82,7 +83,7 @@ async def make_scenario(client: AsyncClient, headers: dict[str, str], **fields) 
         'default_sheet': DEFAULT_SHEET,
     }
     body.update(fields)
-    response = await client.post(SCENARIOS_URL, json=body, headers=headers)
+    response = await client.post(SCENARIOS_URL, json=with_model(body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 

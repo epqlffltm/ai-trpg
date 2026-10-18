@@ -16,6 +16,7 @@ from fastapi import status
 from httpx import AsyncClient
 
 from app.calendar.clock import ClockTime, TimeOfDay, read_time, start_minutes, time_of_day
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey
 from tests.test_rounds_api import (
@@ -74,7 +75,7 @@ async def open_solo(client: AsyncClient, me: dict[str, str], clock: dict | None 
     }
     if clock is not None:
         body['clock'] = clock
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 1}
     table = await client.post(TABLES_URL, json=body, headers=me)

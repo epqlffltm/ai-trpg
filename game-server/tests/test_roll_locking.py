@@ -30,8 +30,8 @@ from app.tables import repository, rolls, service
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableRoll
 from app.tables.schemas import TableCreate
-from tests.conftest import EVERY_TIER
 from tests.indexers import NO_INDEXER
+from tests.narration_model import TEST_MODEL, free_picker, today
 from tests.sheets import SHEET
 from tests.signing import make_viewer
 
@@ -63,6 +63,7 @@ async def open_table(session: AsyncSession) -> GameTable:
     """내가 방장인 테이블을 연다. 주사위로 정하기를 허용하는 시나리오로 만든다."""
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
     data = ScenarioCreate(
+        narration_model=TEST_MODEL,
         title='시나리오',
         rulebook_id=rulebook.asset_id,
         openings=['도입부'],
@@ -70,10 +71,10 @@ async def open_table(session: AsyncSession) -> GameTable:
         character_modes=['custom', 'rolled'],
         player_made_hp={'base': 10, 'cap': 12},
     )
-    scenario = await scenarios.create_scenario(session, ME, data)
+    scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     table = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=1)
-    return await service.create_table(session, make_viewer(ME), table, EVERY_TIER)
+    return await service.create_table(session, make_viewer(ME), table, free_picker())
 
 
 async def test_rolling_waits_for_another_roll(session: AsyncSession, other_session: AsyncSession):

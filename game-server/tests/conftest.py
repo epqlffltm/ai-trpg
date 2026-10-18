@@ -23,15 +23,12 @@ from app.limits.setup import Limiting, build_limiting
 from app.main import create_app
 from app.realtime import service as stream_service
 from app.realtime.service import Cursor
-from app.rounds.tiers import NarrationTier
 from tests.cleaning import clear_tables
+from tests.narration_model import add_test_model
 from tests.signing import FakeAuthServer, SigningKey, make_signing_key, make_viewer
 from tests.streaming import LONG_HEARTBEAT, Reader
 
 TEST_SCHEMA = 'game_test'
-
-# 서술 등급 모두. 서비스를 바로 부르는 테스트가 "이 서버가 내주는 등급"으로 넘긴다(가짜 서술자는 모두 내준다)
-EVERY_TIER = frozenset(NarrationTier)
 
 # 존재하지 않는 주소. 테스트는 실제 인증 서버에 요청을 보내지 않는다
 TEST_JWKS_URL = 'http://auth.test/api/v1/auth/jwks'
@@ -52,7 +49,6 @@ def make_test_settings(**overrides) -> Settings:
     # 시도 횟수 제한은 끈다. 채팅을 여러 번 쓰는 테스트가 막히지 않게 한다.
     # 제한을 보는 테스트만 켠다(tests/test_attempt_limits.py).
     # Redis 는 쓰지 않는다(메모리). Redis 로 세는 것은 그 파일이 따로 본다
-    # premium 등급의 모델은 비워 둔다. 언어 모델을 켠 테스트에서 개발자의 .env 가 고를 수 있는 등급을 바꾸지 않는다
     # OpenAI, Anthropic, Gemini 의 키와 주소도 비우고 고정한다. 개발자의 .env 에 진짜 키가 있어도
     # 테스트가 실제 API 를 부르거나 키를 쥐지 않는다
     # 로그는 경고부터 남긴다. 요청마다 한 줄씩 남는 것(info)까지 남기면, 로그를 잡아 "이 줄 하나만 남았다"를 보는
@@ -70,8 +66,6 @@ def make_test_settings(**overrides) -> Settings:
         'memory_keyword_max_distance': 2.0,
         'billing_url': '',
         'billing_secret': '',
-        'llm_premium_model': '',
-        'llm_premium_fallback_models': '',
         'openai_api_key': '',
         'openai_base_url': 'https://api.openai.com/v1',
         'anthropic_api_key': '',
@@ -172,7 +166,16 @@ async def clean_tables(app: FastAPI) -> None:
     테스트를 트랜잭션으로 감싸 되돌리는 방법을 쓰지 않는다.
     그러면 앱의 커밋이 진짜로 일어나지 않아, 저장의 경계가 맞는지 볼 수 없다.
     끝난 뒤가 아니라 시작할 때 비운다. 앞의 테스트가 도중에 죽어 찌꺼기를 남겨도 영향을 받지 않는다.
+    비운 뒤 모델 목록에 테스트 모델 하나를 켜 둔다. 시나리오는 추천 서술 모델이 있어야 저장된다
+    (tests/narration_model.py).
     """
+    await clear_tables(app.state.engine)
+    await add_test_model(app.state.engine)
+
+
+@pytest.fixture
+async def empty_catalog(app: FastAPI) -> None:
+    """clean_tables 와 같되 모델 목록을 비워 둔 채 시작한다. 모델 목록 자체를 보는 테스트가 쓴다."""
     await clear_tables(app.state.engine)
 
 

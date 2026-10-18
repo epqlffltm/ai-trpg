@@ -31,8 +31,8 @@ from app.tables import replacements, repository, service, sheets
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable
 from app.tables.schemas import CharacterUpdate, TableCreate
-from tests.conftest import EVERY_TIER
 from tests.indexers import NO_INDEXER
+from tests.narration_model import TEST_MODEL, free_picker, today
 from tests.sheets import SHEET
 from tests.signing import make_viewer
 
@@ -60,11 +60,17 @@ async def is_waiting(task: asyncio.Task) -> bool:
 async def start_with_a_dead_character(session: AsyncSession) -> GameTable:
     """혼자 앉아 시작한 테이블. 내 캐릭터 '엘프'는 죽어 있다. 첫 라운드가 열려 있다."""
     rulebook = await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰북'))
-    data = ScenarioCreate(title='시나리오', rulebook_id=rulebook.asset_id, openings=['도입부'], default_sheet=SHEET)
-    scenario = await scenarios.create_scenario(session, ME, data)
+    data = ScenarioCreate(
+        narration_model=TEST_MODEL,
+        title='시나리오',
+        rulebook_id=rulebook.asset_id,
+        openings=['도입부'],
+        default_sheet=SHEET,
+    )
+    scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
     created = TableCreate(scenario_id=scenario.asset_id, version=1, capacity=1)
-    table = await service.create_table(session, make_viewer(ME), created, EVERY_TIER)
+    table = await service.create_table(session, make_viewer(ME), created, free_picker())
     await service.set_character(session, ME, table.id, CharacterUpdate(name='엘프'))
     await service.start_table(session, ME, table.id)
     # 죽이는 길(쓰러뜨리고 보내기)은 다른 테스트가 본다. 여기서는 죽어 있는 상태만 필요하다

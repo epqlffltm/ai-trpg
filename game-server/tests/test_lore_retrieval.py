@@ -55,6 +55,7 @@ from app.main import API_PREFIX
 from app.rounds import prompt
 from app.rounds.llm_narrator import NARRATION_PARAMS, LLMNarrator
 from app.rounds.narrator import Move, NarrationRequest
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -121,7 +122,7 @@ async def open_table(client: AsyncClient, me: dict[str, str], entries: list[dict
         # 인물 항목이 있다. 시트가 없는 인물이 받을 숫자가 있어야 게시된다
         'default_npc_sheet': SHEET,
     }
-    scenario = (await client.post(f'{API_PREFIX}/scenarios', json=body, headers=me)).json()
+    scenario = (await client.post(f'{API_PREFIX}/scenarios', json=with_model(body), headers=me)).json()
     await client.post(f'{API_PREFIX}/scenarios/{scenario["id"]}/versions', json={}, headers=me)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 1}
     table = await client.post(f'{API_PREFIX}/tables', json=body, headers=me)

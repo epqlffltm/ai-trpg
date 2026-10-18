@@ -15,6 +15,7 @@ from httpx import AsyncClient
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_23
 from tests import test_versions_api as versions
+from tests.narration_model import with_model
 from tests.test_scenarios_api import SCENARIOS_URL, create
 from tests.test_versions_api import create_ready_scenario, publish
 
@@ -63,7 +64,9 @@ async def test_the_clock_is_set_and_replaced_as_a_whole(client: AsyncClient, my_
     ids=['day-zero', 'day-too-late', 'hour-negative', 'hour-24', 'no-time', 'over-a-week', 'missing', 'unknown-field'],
 )
 async def test_rejects_a_bad_clock(client: AsyncClient, my_headers: dict[str, str], clock: dict):
-    response = await client.post(SCENARIOS_URL, json={'title': '시나리오', 'clock': clock}, headers=my_headers)
+    response = await client.post(
+        SCENARIOS_URL, json=with_model({'title': '시나리오', 'clock': clock}), headers=my_headers
+    )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 

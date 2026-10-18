@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from scripts.models import build_parser, execute
 
-pytestmark = pytest.mark.usefixtures('clean_tables')
+pytestmark = pytest.mark.usefixtures('empty_catalog')
 
 TODAY = date(2026, 10, 17)
 ADD_LUNA = [

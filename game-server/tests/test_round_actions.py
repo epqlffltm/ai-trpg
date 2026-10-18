@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import API_PREFIX
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -59,7 +60,7 @@ async def start_duo(client: AsyncClient, me: dict[str, str], friend: dict[str, s
     """나와 친구가 앉은 테이블을 시작한다. 규칙은 SRD5 템플릿이다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북'}, headers=me)
     body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': ['사이렌이 울린다.']}
-    scenario = (await client.post(SCENARIOS_URL, json={**body, 'default_sheet': SHEET}, headers=me)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model({**body, 'default_sheet': SHEET}), headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     created = await client.post(
         TABLES_URL, json={'scenario_id': scenario['id'], 'version': 1, 'capacity': 2}, headers=me

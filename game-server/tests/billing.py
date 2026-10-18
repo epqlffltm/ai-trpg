@@ -26,11 +26,14 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from pydantic import SecretStr
 
+from app.billing.charges import LEGACY_PRICE_CODE
 from app.billing.http_billing import HttpBilling
+from tests.narration_model import TEST_PRICE_CODE
 
 BILLING_URL = 'http://billing.test'
 SECRET = 'test-billing-secret-0123456789abcdef'
-PRICES = {'narration.standard': 50, 'narration.premium': 120}
+# 테스트 모델의 가격표와, 서술 모델이 없는 옛 라운드의 가격표(app/billing/charges.py 의 LEGACY_PRICE_CODE)
+PRICES = {TEST_PRICE_CODE: 50, LEGACY_PRICE_CODE: 50}
 # 결제 서버가 받아 주는 시각의 차이(초)
 TOLERANCE = 300
 # 홀드가 걸리거나 연장된 뒤 만료될 때까지(결제 서버의 HOLD_TTL 기본값)

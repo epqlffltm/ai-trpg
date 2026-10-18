@@ -25,6 +25,7 @@ from app.realtime.service import Cursor
 from app.realtime.signals import Kind, Signal
 from app.realtime.signing import BAD_SIGNATURE_ERROR_CODE, SignalSigner, signer_from
 from tests.conftest import make_test_settings
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -65,7 +66,7 @@ async def open_duo(client: AsyncClient, me: dict[str, str], friend: dict[str, st
     """나와 친구가 앉은 테이블을 연다. 이벤트가 둘(만들어짐, 들어옴) 적혀 있다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북'}, headers=me)
     body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS, 'default_sheet': SHEET}
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 2}
     response = await client.post(TABLES_URL, json=body, headers=me)

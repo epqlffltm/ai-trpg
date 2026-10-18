@@ -30,6 +30,7 @@ from app.lore import indexing, repository, texts
 from app.lore.models import LoreEmbedding
 from app.lore.texts import batched, entry_text, missing_entries, version_entries
 from app.main import API_PREFIX
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -68,7 +69,7 @@ async def publish_with_lore(client: AsyncClient, me: dict[str, str], entries: li
         'openings': ['사이렌이 울린다.'],
         'default_sheet': SHEET,
     }
-    scenario = (await client.post(f'{API_PREFIX}/scenarios', json=body, headers=me)).json()
+    scenario = (await client.post(f'{API_PREFIX}/scenarios', json=with_model(body), headers=me)).json()
     version = await client.post(f'{API_PREFIX}/scenarios/{scenario["id"]}/versions', json={}, headers=me)
     assert version.status_code == status.HTTP_201_CREATED, version.text
     return uuid.UUID(version.json()['id'])

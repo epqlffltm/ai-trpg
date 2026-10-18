@@ -24,6 +24,7 @@ from app.assets.routing import handle_asset_in_use, handle_asset_not_found, hand
 from app.assets.rulebooks import router as rulebooks
 from app.assets.scenarios import router as scenarios
 from app.assets.scenarios.publishing import ScenarioNotReadyError
+from app.assets.scenarios.recommended_model import RecommendedModelError
 from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
 from app.assets.worlds import router as worlds
 from app.auth.jwks import JwksCache
@@ -67,7 +68,7 @@ from app.rounds import clock
 from app.rounds import router as rounds
 from app.rounds.closing import closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
-from app.rounds.narrator_setup import build_narrator, build_router, offered_tiers
+from app.rounds.narrator_setup import build_narrator, build_router
 from app.tables import router as tables
 from app.tables.errors import (
     MemberNotFoundError,
@@ -190,8 +191,6 @@ def create_app(
     # GM 의 서술을 만드는 것. 설정(NARRATOR)이 정한다. 기본은 AI 를 부르지 않는 가짜다.
     # 언어 모델이면 위의 것으로 창구를 골라 부른다. 부를 때마다 위의 세션 틀로 DB 에 기록을 남긴다(app/ai/call_log.py)
     app.state.narrator = build_narrator(settings, app.state.model_router, app.state.session_factory)
-    # 방장이 테이블에 고를 수 있는 서술 등급들. 위의 서술자와 같은 설정으로 정한다. 모델이 없는 등급은 고를 수 없다
-    app.state.narration_tiers = offered_tiers(settings)
     # 서술한 장면에서 장부 초안을 쓰는 것(app/drafts/). 서술자가 언어 모델일 때만 쓴다. 장부 초안을 켠 테이블만 부른다
     app.state.drafter = build_drafter(settings, app.state.model_router, app.state.session_factory)
 
@@ -272,6 +271,7 @@ def create_app(
     app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)
     app.add_exception_handler(AssetInUseError, handle_asset_in_use)
     app.add_exception_handler(AssetReferenceError, handle_asset_reference)
+    app.add_exception_handler(RecommendedModelError, scenarios.handle_recommended_model)
     app.add_exception_handler(LorebookFullError, lorebooks.handle_lorebook_full)
     app.add_exception_handler(BestiaryFullError, bestiaries.handle_bestiary_full)
     app.add_exception_handler(ScenarioNotReadyError, scenarios.handle_scenario_not_ready)

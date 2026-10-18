@@ -27,6 +27,7 @@ from app.rounds.narrator import QuestNote
 from app.tables import quests
 from app.tables.models import QuestStatus, TableQuest
 from tests import test_table_quests as quest_tables
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.test_map_actions import play
 from tests.test_table_items import (
@@ -124,7 +125,7 @@ def due_of(table: dict, name: str) -> dict | None:
 async def test_rejects_a_bad_time_limit(client: AsyncClient, me: dict, lore: dict, minutes):
     body = {'title': '기한', 'quests': [{'entry_id': lore['rescue']['id'], 'time_limit_minutes': minutes}]}
 
-    response = await client.post(SCENARIOS_URL, json=body, headers=me)
+    response = await client.post(SCENARIOS_URL, json=with_model(body), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
