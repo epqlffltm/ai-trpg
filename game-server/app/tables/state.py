@@ -15,7 +15,6 @@ from app.assets.scenarios.snapshot import Snapshot
 from app.catalog.offers import OfferedModel
 from app.rounds.budget import story_fits
 from app.rounds.narration_request import to_story
-from app.rounds.tiers import NarrationTier
 from app.tables import sheets
 from app.tables.errors import Conflict, NotHostError, TableConflictError, TableNotFoundError, TableOptionError
 from app.tables.models import GameTable, TableMember, TableStatus
@@ -77,16 +76,6 @@ def require_not_ended(table: GameTable) -> None:
     """테이블이 끝나지 않았는지 확인한다. 끝났으면 TableConflictError."""
     if table.status == TableStatus.ENDED:
         raise TableConflictError(Conflict.ALREADY_ENDED)
-
-
-def require_offered(tier: NarrationTier, offered: frozenset[NarrationTier]) -> None:
-    """
-    이 서버가 내주는 서술 등급인지 확인한다. 아니면 TableOptionError(narration_tier).
-
-    모델을 적지 않은 등급을 고르면 그 등급의 라운드는 서술할 수 없다(tier_unavailable). 고를 때 막는다.
-    """
-    if tier not in offered:
-        raise TableOptionError('narration_tier')
 
 
 def require_model_offered(found: OfferedModel | None) -> None:

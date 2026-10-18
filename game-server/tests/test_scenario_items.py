@@ -21,6 +21,7 @@ from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot, item_entrie
 from app.assets.scenarios.upgrades import upgrade_from_16
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_npc_sheets import add_entry, create_scenario, post, published, refused
@@ -145,7 +146,7 @@ async def test_items_are_replaced_as_a_whole(client: AsyncClient, me: dict[str, 
     ],
 )
 async def test_rejects_badly_shaped_items(client: AsyncClient, me: dict[str, str], fields: dict):
-    response = await client.post(SCENARIOS_URL, json={'title': '추격전', **fields}, headers=me)
+    response = await client.post(SCENARIOS_URL, json=with_model({'title': '추격전', **fields}), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 

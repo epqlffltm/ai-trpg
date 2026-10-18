@@ -20,6 +20,7 @@ from app.assets.models import SCENARIO_MAX_QUEST_RULES, SCENARIO_MAX_STARTING_IT
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot, quest_entries, quest_rule_of, read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_17
 from app.main import API_PREFIX
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_npc_sheets import add_entry, create_scenario, post, published, refused
@@ -132,7 +133,7 @@ async def test_quests_are_replaced_as_a_whole(client: AsyncClient, me: dict[str,
     ],
 )
 async def test_rejects_badly_shaped_quests(client: AsyncClient, me: dict[str, str], quests: list):
-    response = await client.post(SCENARIOS_URL, json={'title': '추격전', 'quests': quests}, headers=me)
+    response = await client.post(SCENARIOS_URL, json=with_model({'title': '추격전', 'quests': quests}), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 

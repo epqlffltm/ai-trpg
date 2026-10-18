@@ -34,6 +34,7 @@ from app.rounds.move_lines import describe_npc_impact
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, NpcImpact, PersonState, Preview
 from app.tables.models import NpcStatus, TableNpc
 from app.tables.npcs import change_npc, status_after
+from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -100,7 +101,7 @@ def tend(npc: str, recover: str = 'light') -> dict:
 
 
 async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -> dict:
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 

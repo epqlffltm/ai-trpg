@@ -46,6 +46,7 @@ from app.assets.scenarios.upgrades import (
 from app.engine.sheet import fits
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
+from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -96,7 +97,7 @@ async def create(client: AsyncClient, url: str, headers: dict[str, str], **field
     """API 로 자산 하나를 만들고 응답의 본문을 돌려준다. 주소가 종류를 정한다."""
     body = {'title': TITLE}
     body.update(fields)
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 

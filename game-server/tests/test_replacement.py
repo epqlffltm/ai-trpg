@@ -34,6 +34,7 @@ from app.tables import state as table_state
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember, TableRoll, TableStatus
 from app.tables.router import find_pregen_holders
+from tests.narration_model import with_model
 from tests.sheets import make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -165,7 +166,7 @@ async def seat_duo(client: AsyncClient, me: dict[str, str], friend: dict[str, st
         'reroll_allowed': True,
         **scenario,
     }
-    created = await client.post(SCENARIOS_URL, json=body, headers=me)
+    created = await client.post(SCENARIOS_URL, json=with_model(body), headers=me)
     assert created.status_code == status.HTTP_201_CREATED, created.text
     published = await client.post(f'{SCENARIOS_URL}/{created.json()["id"]}/versions', json={}, headers=me)
     assert published.status_code == status.HTTP_201_CREATED, published.text
@@ -950,7 +951,7 @@ async def test_a_lone_player_carries_on_with_a_new_character(
 ):
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북'}, headers=me)
     body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': ['사이렌.'], 'default_sheet': PLAIN}
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=me)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     table = (
         await client.post(TABLES_URL, json={'scenario_id': scenario['id'], 'capacity': 1, 'version': 1}, headers=me)

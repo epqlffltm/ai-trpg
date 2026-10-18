@@ -15,7 +15,6 @@ from app.engine.action import Action
 from app.engine.death import Fate
 from app.engine.health import ChangeKind
 from app.rounds.models import DECLARATION_MAX_LENGTH, RoundStatus
-from app.rounds.tiers import NarrationTier
 from app.tables.models import NpcStatus
 
 # 선언의 글. 공백이 아닌 글자가 하나는 있어야 한다. 앞뒤 공백은 떼지 않는다
@@ -472,9 +471,8 @@ class RoundOut(BaseModel):
     # 선언의 마감. 지나면 서버가 닫기 시작한다. 시간 제한이 없는 테이블이면 None 이다.
     # 화면은 이것과 지금 시각으로 남은 시간을 보여 준다
     deadline_at: datetime | None
-    # 이 라운드의 서술 등급. 열 때 굳은 것이다. 방장이 테이블의 등급을 바꿔도 이 라운드는 이 등급으로 서술한다
-    narration_tier: NarrationTier
-    # 이 라운드의 서술 모델(이름표). 열 때 굳은 것이다. 없으면 null 이고 위의 등급으로 서술한다
+    # 이 라운드의 서술 모델(이름표). 열 때 굳은 것이다. 아직 서술하지 않은 라운드는 방장이 바꾸면 함께 바뀐다.
+    # 모델을 고르는 규칙 전에 연 라운드만 null 이다(서버의 기본 모델)
     narration_model: str | None
     # 닫기 시작한 시각과 닫힌 시각. 아직이면 None 이다
     closing_at: datetime | None

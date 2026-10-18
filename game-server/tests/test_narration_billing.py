@@ -38,6 +38,7 @@ from app.rounds.closing import ChargeNotSecured, failure_reason
 from app.rounds.models import Round
 from tests.billing import FakeBillingServer
 from tests.logs import rendered
+from tests.narration_model import TEST_PRICE_CODE
 from tests.signing import SigningKey
 from tests.test_round_closing import (
     FRIEND,
@@ -63,7 +64,7 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 # 서술 한 번의 값. 가짜 결제 서버의 가격표다
 PRICE = 50
 # 가짜 결제 서버의 standard 가격표 이름. 등급을 고르지 않은 테이블의 라운드가 건다
-PRICE_CODE = 'narration.standard'
+PRICE_CODE = TEST_PRICE_CODE
 # 함께 앉는 사람의 크레딧. 이 파일의 테스트가 그 사람 때문에 막히지 않을 만큼
 FRIEND_CREDITS = 100_000
 

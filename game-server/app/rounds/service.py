@@ -74,7 +74,6 @@ from app.rounds.state import (
     require_started,
     waiting_for,
 )
-from app.rounds.tiers import NarrationTier
 from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables import sheets
@@ -448,7 +447,7 @@ async def load_closing_request(
     None 이면 할 일이 없다. 다른 작업이 이미 마무리했거나, 그 뒤에 다시 맡겼거나, 테이블이 지워졌다.
     잠그지 않는다. 읽는 것은 모두 더 바뀌지 않는다.
       - 각자 한 일과 문체는 닫기 시작할 때 굳혀 둔 것이다. 그 뒤에 누가 나가도, 방장이 문체를 바꿔도 그대로다.
-      - 서술 등급과 서술 모델은 라운드를 열 때 굳혀 둔 것이다. 방장이 바꿔도 그 라운드는 건 값의 것으로 서술한다.
+      - 서술 모델은 라운드를 열 때 굳혀 둔 것이다. 서술이 돌기 시작한 라운드는 방장이 바꿔도 그대로다.
       - 이야기의 바탕은 판의 복사본에서 꺼낸다. 판은 고치지 않는다.
       - 지난 라운드는 닫혀서 바뀌지 않는다.
       - NPC 의 상태는 닫기 시작할 때 바뀐 뒤로 다음 라운드가 열릴 때까지 바뀌지 않는다.
@@ -475,7 +474,6 @@ async def load_closing_request(
         story=narration_request.to_story(snapshot),
         history=[narration_request.to_past(past) for past in history],
         style=frozen_style(table, round_),
-        tier=NarrationTier(round_.narration_tier),
         model=round_.narration_model,
         table_id=table.id,
         host_id=table.host_id,

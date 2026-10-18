@@ -21,6 +21,7 @@ from app.assets.models import SCENARIO_MAX_BESTIARIES
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot, read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_20
 from app.main import API_PREFIX
+from tests.narration_model import asset_body, with_model
 from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -58,7 +59,7 @@ def bearer(signing_key: SigningKey, user_id: uuid.UUID) -> dict[str, str]:
 
 
 async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -> dict:
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 
@@ -155,7 +156,7 @@ async def test_a_scenario_starts_without_bestiaries_or_monster_sheets(client: As
     ],
 )
 async def test_rejects_bad_monster_fields(client: AsyncClient, me: dict[str, str], fields: dict):
-    response = await client.post(SCENARIOS_URL, json={'title': '지하 수로', **fields}, headers=me)
+    response = await client.post(SCENARIOS_URL, json=with_model({'title': '지하 수로', **fields}), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -166,7 +167,7 @@ async def test_only_my_own_bestiaries_can_be_attached(client: AsyncClient, me: d
 
     for bestiary_id in (theirs['id'], NO_SUCH_ID, lorebook['id']):
         response = await client.post(
-            SCENARIOS_URL, json={'title': '지하 수로', 'bestiary_ids': [bestiary_id]}, headers=me
+            SCENARIOS_URL, json=with_model({'title': '지하 수로', 'bestiary_ids': [bestiary_id]}), headers=me
         )
 
         # 남의 도감, 없는 도감, 다른 종류의 자산은 모두 같은 답이다
