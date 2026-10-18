@@ -27,6 +27,14 @@ BACKUP_INTERVAL_SECONDS="${BACKUP_INTERVAL_SECONDS:-86400}"
 # 스택을 처음 띄울 때 마이그레이션의 ALTER TABLE 과 pg_dump 의 잠금이 겹쳐 Postgres 가 pg_dump 를 끊는 일이 있다(deadlock detected).
 # 마이그레이션은 몇 초면 끝나므로 1분 뒤에는 뜬다
 BACKUP_RETRY_SECONDS="${BACKUP_RETRY_SECONDS:-60}"
+# pg_dump 가 처음에 표의 잠금을 잡을 때, 잠금을 잡는 문장 하나를 기다리는 가장 긴 시간(밀리초).
+# pg_dump 는 표마다 따로 잠그지 않고 여러 표를 한 문장으로 잠근다(LOCK TABLE a, b, ... IN ACCESS SHARE MODE).
+# 그 문장이 이 시간 안에 끝나지 않으면 pg_dump 가 먼저 물러나고 BACKUP_RETRY_SECONDS 뒤에 다시 뜬다.
+# PostgreSQL 이 교착을 찾는 시간(deadlock_timeout, 기본 1초)보다 짧아야 한다. 마이그레이션은 그 문장이 잡은 표에서 기다리기 시작하므로,
+# 교착을 찾기 전에 pg_dump 가 물러나 마이그레이션 쪽이 끊기는 일(서버가 뜨지 않는다)이 없다. 잠금을 다 잡은 뒤의 덤프에는 쓰이지 않는다.
+# 표가 아주 많으면 pg_dump 가 문장을 여럿으로 나눈다(문장의 글이 아주 길 때). 그러면 앞 문장의 표에서 기다리는 마이그레이션에는
+# 이 보장이 약해진다. 지금의 표 수(70쯤)는 한 문장에 든다
+BACKUP_LOCK_WAIT_MS="${BACKUP_LOCK_WAIT_MS:-500}"
 # 백업 파일의 이름. 뜬 시각(UTC)이 붙는다. 이름 순서가 시간 순서다
 PREFIX="trpg-"
 SUFFIX=".dump"
@@ -44,16 +52,54 @@ backup_name() {
 
 # DB 를 한 파일로 뜬다. 다 쓴 뒤에 이름을 바꾼다. 뜨다 멈춘 파일이 백업으로 보이지 않게 한다.
 # 실패는 단계마다 직접 돌려준다. loop 가 "backup || ..." 으로 부르면 set -e 가 함수 안에서 꺼지기 때문이다
+# pg_dump 가 stderr 에 남긴 것(오류, 경고)은 바로 찍지 않고 받아 두었다가 접속 주소를 지우고 찍는다(log_dump_output)
 dump_once() {
   final="$BACKUP_DIR/$(backup_name)"
   partial="$final.partial"
+  errors="$(mktemp)"
   umask 077
-  if ! pg_dump --format=custom --exclude-schema='*_test' --file="$partial"; then
+  if ! pg_dump --format=custom --exclude-schema='*_test' --lock-wait-timeout="$BACKUP_LOCK_WAIT_MS" \
+      --file="$partial" 2>"$errors"; then
     rm -f "$partial"
+    report_dump_error "$errors"
+    rm -f "$errors"
     return 1
   fi
+  # 성공해도 경고가 남을 수 있다. 버리지 않는다
+  log_dump_output "$errors"
+  rm -f "$errors"
   chmod 600 "$partial" && mv "$partial" "$final" || return 1
   log "떴다 $(basename "$final") ($(wc -c < "$final") bytes)"
+}
+
+# pg_dump 의 오류를 로그에 남긴다. 잠금을 기다리다 물러난 것이면 그렇게 적는다.
+# pg_dump 는 --lock-wait-timeout 을 잠금을 잡는 문장(LOCK TABLE)의 statement_timeout 으로 건다. 그래서 그 오류는 "statement timeout" 이다.
+# 덤프의 나머지에는 statement_timeout 을 걸지 않으므로, 이 글이 보이면 잠금을 기다리다 물러난 것이다.
+# 접속 주소(호스트, IP, 포트, 소켓)는 지운다. 비밀번호는 libpq 가 오류에 싣지 않는다(PGPASSWORD 는 환경 변수에만 있다)
+report_dump_error() {
+  if grep -qE 'statement timeout|lock timeout' "$1"; then
+    log "다른 작업이 표를 잠그고 있어 ${BACKUP_LOCK_WAIT_MS}ms 안에 잠금을 잡지 못했다(마이그레이션 중일 수 있다)"
+  fi
+  log_dump_output "$1"
+}
+
+# pg_dump 가 stderr 에 남긴 것을 접속 주소를 지우고 한 줄씩 로그에 남긴다. 비어 있으면 아무것도 찍지 않는다
+log_dump_output() {
+  hide_address < "$1" | while IFS= read -r line; do
+    log "pg_dump: $line"
+  done
+}
+
+# 접속 주소를 지운다. libpq 의 "connection to server at \"db\" (172.18.0.2), port 5432 failed" 와
+# "connection to server on socket \"/var/run/postgresql/.s.PGSQL.5432\" failed" 를 "connection to server failed" 로,
+# 이름을 찾지 못했을 때의 "could not translate host name \"db\" to address" 를 "could not translate host name to address" 로 바꾼다
+hide_address() {
+  sed -E \
+    -e 's/connection to server at "[^"]*" \([^)]*\), port [0-9]+/connection to server/g' \
+    -e 's/connection to server at "[^"]*", port [0-9]+/connection to server/g' \
+    -e 's/connection to server on socket "[^"]*"/connection to server/g' \
+    -e 's/could not translate host name "[^"]*"/could not translate host name/g' \
+    -e 's/^pg_dump: //'
 }
 
 # 가장 최근의 백업부터 이름을 한 줄씩 낸다
