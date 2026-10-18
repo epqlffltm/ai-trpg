@@ -28,6 +28,10 @@ BILLING_SECRET_MIN_LENGTH = 32
 # 실시간 신호에 서명하는 비밀의 가장 짧은 길이
 SIGNAL_SECRET_MIN_LENGTH = 32
 
+# 인증 서버의 두 주소의 끝. 둘은 같은 곳(/api/v1/auth)에 있다
+JWKS_PATH = '/jwks'
+SESSION_REVOCATIONS_PATH = '/session-revocations'
+
 
 def model_chain(first: str, fallbacks: str) -> list[str]:
     """첫 모델과 쉼표로 나눈 넘어갈 모델들을 부를 차례대로 늘어놓는다. 빈 이름과 앞뒤 공백은 뺀다."""
@@ -79,6 +83,10 @@ class Settings(BaseSettings):
     # 여기서 받은 키로 서명된 토큰을 믿는다. 엉뚱한 주소를 기본으로 믿는 것보다 뜨지 않는 쪽이 낫다.
     # 예: http://127.0.0.1:8000/api/v1/auth/jwks
     auth_jwks_url: str
+
+    # 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). 비우면 AUTH_JWKS_URL 옆(…/session-revocations)이다.
+    # AUTH_JWKS_URL 이 /jwks 로 끝나지 않으면 적어야 한다. 쓰는 곳은 session_revocations_url 이다
+    auth_session_revocations_url: str = ''
 
     # 토큰을 발급한 서버의 이름(iss). 인증 서버의 JWT_ISSUER 와 같아야 한다
     jwt_issuer: str = 'ai-trpg-auth'
@@ -234,6 +242,21 @@ class Settings(BaseSettings):
     # 공개 금지(블랙리스트, #392). 한 사람의 시나리오가 운영자에게 이만큼 제재되면 저절로 공개를 막는다.
     # 운영자가 풀면 그 뒤의 제재부터 다시 센다. 자기 시나리오와 남의 시나리오로 플레이하는 것은 막지 않는다
     publishing_ban_threshold: int = Field(default=3, ge=1)
+
+    @model_validator(mode='after')
+    def require_a_revocations_url(self) -> Self:
+        """끊긴 세션 목록의 주소를 알 수 없으면 뜨지 않는다. 목록 없이 뜨면 끊긴 세션이 만료까지 통한다."""
+        if not self.auth_session_revocations_url.strip() and not self.auth_jwks_url.endswith(JWKS_PATH):
+            raise ValueError(
+                f'AUTH_JWKS_URL 이 {JWKS_PATH} 로 끝나지 않는다. AUTH_SESSION_REVOCATIONS_URL 을 적어야 한다'
+            )
+        return self
+
+    @property
+    def session_revocations_url(self) -> str:
+        """끊긴 세션 목록의 주소. 적은 값이 있으면 그것, 없으면 공개키 주소 옆이다."""
+        written = self.auth_session_revocations_url.strip()
+        return written or self.auth_jwks_url.removesuffix(JWKS_PATH) + SESSION_REVOCATIONS_PATH
 
     @model_validator(mode='after')
     def require_a_model_for_llm(self) -> Self:
