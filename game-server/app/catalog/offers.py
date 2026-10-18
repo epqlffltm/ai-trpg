@@ -59,6 +59,8 @@ class OfferedModel:
     credits: str | None
     tier: Tier | None
     next: Change | None = None
+    # 지금 값이 행사가인가. 행사가면 next 가 행사가 끝나는 때와 그 뒤의 값이다
+    promo: bool = False
 
 
 @dataclass(frozen=True)
@@ -103,7 +105,9 @@ def offer(card: ModelCard, book: PriceBook, now: datetime) -> OfferedModel | Non
     if price.current is None:
         return None
     sale = price.current
-    return OfferedModel(card.slug, card.display_name, card.vendor, card.grade, sale.credits, sale.tier, price.next)
+    return OfferedModel(
+        card.slug, card.display_name, card.vendor, card.grade, sale.credits, sale.tier, price.next, sale.promo
+    )
 
 
 def offered_models(cards: Sequence[ModelCard], book: PriceBook, now: datetime) -> list[OfferedModel]:
