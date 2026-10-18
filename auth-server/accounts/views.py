@@ -348,7 +348,7 @@ class LoginView(APIView):
             return build_invalid_credentials_response()
 
         # 예약어 아이디면 센다. 한도를 채우면 다음 요청부터 이 IP 가 막힌다. 이 요청은 그대로 진행한다.
-        # 예약어인 계정은 없으므로 아래에서 평소처럼 거절된다
+        # 그 아이디의 계정이 있으면 세지 않는다(규칙이 넓어지기 전에 만든 계정). 없으면 아래에서 평소처럼 거절된다
         block_ip_if_reserved_username(**attempt)
 
         # 비밀번호를 확인하기 전에 먼저 센다. 한도를 넘었으면 여기서 TooManyAttemptsError 가 난다.

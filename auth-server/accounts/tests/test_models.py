@@ -54,9 +54,23 @@ class ReservedNameTests(TestCase):
         self.assertTrue(is_reserved_name(' Admin '))
         self.assertTrue(is_reserved_name('운영자'))
 
+    def test_a_number_after_a_reserved_word_is_reserved(self):
+        self.assertTrue(is_reserved_name('admin1'))
+        self.assertTrue(is_reserved_name('root_2'))
+        self.assertTrue(is_reserved_name('Admin1234'))
+        self.assertTrue(is_reserved_name('운영자0001'))
+
     def test_partial_match_is_not_reserved(self):
         self.assertFalse(is_reserved_name('badminton'))
-        self.assertFalse(is_reserved_name('admin123'))
+        self.assertFalse(is_reserved_name('admin_fan'))
+        self.assertFalse(is_reserved_name('my_admin1'))
+
+    def test_only_the_stated_variants_are_reserved(self):
+        self.assertFalse(is_reserved_name('admin12345'))  # 숫자 5자리
+        self.assertFalse(is_reserved_name('admin__1'))  # 밑줄 두 개
+        self.assertFalse(is_reserved_name('admin_'))  # 숫자 없는 밑줄
+        self.assertFalse(is_reserved_name('r00t'))  # 글자 치환
+        self.assertFalse(is_reserved_name('admin\u0663'))  # 아랍 숫자
 
     def test_reserved_username_is_rejected(self):
         with self.assertRaises(ValidationError):
