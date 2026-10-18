@@ -181,7 +181,7 @@ async def test_the_host_changes_the_model_and_it_is_recorded(client: AsyncClient
     assert response.status_code == status.HTTP_200_OK, response.text
     assert response.json()['narration_model'] == 'claude-opus-5-5'
     # 아직 라운드가 없다. 테이블의 모델만 바뀌었다
-    assert changed['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None}
+    assert changed['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None, 'price': None}
 
 
 async def test_the_model_cannot_be_cleared(client: AsyncClient, me: dict[str, str]):
@@ -262,7 +262,7 @@ async def test_a_change_while_declaring_applies_to_the_open_round(
 
     # 아직 서술하지 않은 라운드라 그 라운드도 Opus 다. 청구는 새 가격표로 다시 건다(test_narration_blocks.py)
     assert changed['narration_model'] == 'claude-opus-5-5'
-    assert event['payload'] == {'narration_model': 'claude-opus-5-5', 'round': 1}
+    assert event['payload'] == {'narration_model': 'claude-opus-5-5', 'round': 1, 'price': None}
     assert [request.model for request in recording.requests] == ['claude-opus-5-5']
 
 
@@ -282,7 +282,7 @@ async def test_a_change_while_narrating_waits_for_the_next_round(
     # 연 때의 모델의 값을 걸었고 그 모델로 서술하는 중이다. 테이블만 바뀌고 다음 라운드부터다
     assert response.json()['narration_model'] == 'claude-opus-5-5'
     assert (await current(client, me, table))['narration_model'] == 'gpt-6-luna'
-    assert event['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None}
+    assert event['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None, 'price': None}
 
 
 async def test_an_old_round_without_a_model_is_narrated_by_the_default(

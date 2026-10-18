@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.price_list import PriceList
 from app.catalog import offers
+from app.catalog.offers import OfferedModel
 from app.tables.state import require_model_offered
 
 
@@ -28,10 +29,12 @@ class ModelPicker:
     now: datetime
 
 
-async def require_pickable(session: AsyncSession, picker: ModelPicker, slug: str) -> None:
+async def require_pickable(session: AsyncSession, picker: ModelPicker, slug: str) -> OfferedModel:
     """
-    고를 수 있는 모델인지 확인한다. 아니면 TableOptionError(narration_model).
+    고를 수 있는 모델인지 확인하고 그 값을 붙여 돌려준다. 아니면 TableOptionError(narration_model).
 
     가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다(503).
     """
-    require_model_offered(await offers.find_offered(session, picker.prices, slug, picker.now))
+    found = await offers.find_offered(session, picker.prices, slug, picker.now)
+    require_model_offered(found)
+    return found

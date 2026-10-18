@@ -735,13 +735,16 @@ async def change_ledger_drafts(
 
 
 @router.post('/{table_id}/start', response_model=TableDetail, status_code=status.HTTP_200_OK)
-async def start_table(table_id: uuid.UUID, user: CurrentUser, session: Session, watch: Watch) -> TableDetail:
+async def start_table(
+    table_id: uuid.UUID, user: CurrentUser, session: Session, watch: Watch, prices: Prices
+) -> TableDetail:
     """
     테이블을 시작한다. 모든 참가자가 캐릭터를 만들어 둬야 한다.
 
+    첫 라운드에 1인 1라운드의 값을 알린다(app/rounds/round_price.py).
     첫 라운드를 연 뒤 서술 모델의 은퇴를 본다(app/tables/retirement_watch.py). 은퇴했으면 바뀐 모델로 답한다.
     """
-    await service.start_table(session, user.user_id, table_id)
+    await service.start_table(session, user.user_id, table_id, prices)
     await watch.after_round_opened(table_id)
     table = await repository.reload_table(session, table_id)
     return to_detail(table, user.user_id)
