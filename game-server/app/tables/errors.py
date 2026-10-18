@@ -81,10 +81,6 @@ class Conflict(enum.StrEnum):
     NARRATION_MODEL_LOCKED = 'narration_model_locked'
     # 퀘스트를 사람이 성공으로 바꾸려 했다. 성공은 시나리오의 조건을 보고 엔진이 정한다(app/rounds/quest_goals.py)
     QUEST_SUCCESS_BY_ENGINE = 'quest_success_by_engine'
-    # 장부 초안의 그 줄은 이미 결정했거나(받아들임, 버림) 만료됐다
-    DRAFT_DECIDED = 'draft_decided'
-    # 장부 초안을 쓴 뒤에 그 캐릭터가 바뀌었다(죽고 새 캐릭터가 들어왔다). 초안의 캐릭터에게 줄 수 없다
-    DRAFT_STALE = 'draft_stale'
     # 판의 작가 글(진행 지침, 세계관, GM 메모)이 서술의 입력 예산을 넘어 시작할 수 없다(app/rounds/budget.py)
     STORY_TOO_LONG = 'story_too_long'
 

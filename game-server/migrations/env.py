@@ -28,7 +28,6 @@ from app.catalog import models as catalog_models  # noqa: F401
 from app.chat import models as chat_models  # noqa: F401
 from app.core.config import get_settings
 from app.core.database import Base, create_engine
-from app.drafts import models as draft_models  # noqa: F401
 from app.events import models as event_models  # noqa: F401
 from app.listings import models as listing_models  # noqa: F401
 from app.lore import models as lore_models  # noqa: F401
