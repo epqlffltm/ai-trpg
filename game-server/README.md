@@ -2739,7 +2739,7 @@ uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_bac
 
 ## 운영자 API
 
-운영자가 남의 테이블과 시나리오를 본다(#391). 규칙의 원본은 [운영자 권한](../docs/architecture/operators.md)이다. 읽기만 한다. 제재는 #392 다.
+운영자가 남의 테이블과 시나리오를 보고(#391) 제재한다(#392). 규칙의 원본은 [운영자 권한](../docs/architecture/operators.md)이다.
 
 - 운영자는 access 토큰의 `roles` 에 `"operator"` 가 있는 사람이다(인증 서버의 그룹 `operators`, #389). 아니면 모든 주소가 404 다. 앉은 사람, 만든 사람도 그렇다.
 - 모든 주소가 쿼리의 `reason`(1~200자, 공백만은 안 됨)을 받는다. 없으면 422 다. 신고 번호나 짧은 글을 적는다.
@@ -2755,6 +2755,20 @@ uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_bac
 | GET | `/api/v1/game/admin/scenarios/{id}/versions/{number}` | 판 하나와 굳힌 내용 전부. 테이블은 이 내용으로 돈다 |
 
 아직 없는 것: 장부 초안, 라운드의 기억, 초안이 가리키는 재료(룰북, 세계관, 로어북), AI 호출 기록.
+
+**제재(#392).** 본문으로 사유를 받는다(`{"reason": "신고 #7"}`, 앞뒤 공백을 떼고 1~200자). 규칙의 원본은 [운영자 권한의 제재](../docs/architecture/operators.md#제재)다.
+
+| 메서드 | 주소 | 무엇을 | 답 |
+| --- | --- | --- | --- |
+| POST | `/api/v1/game/admin/scenarios/{id}/sanction` | 공개 중인 판을 제재한다. 공개를 내리고 그 판은 다시 공개하지 못한다 | 201 `{scenario_id, version_number, owner_id, publishing_banned}`. 공개 중이 아니면 409 `not_published` |
+| POST | `/api/v1/game/admin/tables/{id}/end` | 테이블을 끝낸다. 이벤트 `table_ended` 의 payload 가 `{"by": "operator"}` 다(운영자와 사유는 없다) | 200 테이블. 이미 끝났으면 409 `already_ended` |
+| POST | `/api/v1/game/admin/users/{id}/publishing-ban` | 공개를 금지한다 | 200 `{user_id, banned, banned_at, banned_by, lifted_at}`. 이미 금지 중이면 409 `already_banned` |
+| POST | `/api/v1/game/admin/users/{id}/publishing-ban/lift` | 공개 금지를 푼다. 그 뒤의 제재부터 다시 센다 | 200. 금지 중이 아니면 409 `not_banned` |
+
+- 제작자가 판을 공개할 때(`PUT /scenarios/{id}/listing/publication`) 제재된 판이면 403 `{"code": "version_sanctioned"}`, 공개 금지 중이면 403 `{"code": "publishing_banned"}` 다. 고쳐서 새 판을 내면 공개할 수 있다. 공개를 내리는 것은 막지 않는다.
+- 제재된 시나리오가 설정 `PUBLISHING_BAN_THRESHOLD`(기본 3)개가 되면 저절로 공개 금지가 된다. 금지되어도 테이블을 열고 들어가는 것은 된다.
+- 제재는 `operator_actions`(덧붙이기만, 트리거)에 제재와 한 트랜잭션으로 남는다. 상태는 `scenario_sanctions`(제재된 판), `publishing_bans`(사람마다 한 줄, 풀면 `lifted_at`)에 있다.
+- 사용자 정지는 게임 서버에 없다. 인증 서버의 명령으로 한다.
 
 **감사 기록(`operator_reads`).** 볼 때마다 한 줄이 남는다. 운영자(`operator_id`), 시각(`read_at`), 무엇(`target_kind`, `target_id`, 판이면 `target_number`), 사유(`reason`), `request_id`.
 

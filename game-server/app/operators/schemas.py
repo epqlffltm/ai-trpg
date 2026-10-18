@@ -6,9 +6,11 @@
 
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.operators.models import REASON_MAX_LENGTH
 from app.whispers.schemas import WhisperOut
 
 
@@ -43,3 +45,37 @@ class OperatorWhisperPage(BaseModel):
 
     items: list[WhisperOut]
     total: int = Field(ge=0)
+
+
+# 제재의 사유. 신고 번호나 짧은 글. 앞뒤 공백을 떼고 1~200자
+ReasonText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=REASON_MAX_LENGTH)]
+
+
+class ActionRequest(BaseModel):
+    """제재를 할 때 받는 값(#392). 사유만 받는다. 누가 했는지는 토큰에서 읽는다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    reason: ReasonText
+
+
+class SanctionOut(BaseModel):
+    """시나리오를 제재한 결과."""
+
+    scenario_id: uuid.UUID
+    # 제재되어 다시 공개하지 못하는 판의 번호
+    version_number: int
+    owner_id: uuid.UUID
+    # 제작자가 공개 금지 중인가. 이 제재로 정해진 수에 닿았으면 참이 된다
+    publishing_banned: bool
+
+
+class PublishingBanOut(BaseModel):
+    """한 사람의 공개 금지."""
+
+    user_id: uuid.UUID
+    banned: bool
+    banned_at: datetime
+    # 금지한 운영자. 저절로 금지되었으면 None
+    banned_by: uuid.UUID | None
+    lifted_at: datetime | None
