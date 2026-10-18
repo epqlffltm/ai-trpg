@@ -28,6 +28,8 @@ from app.assets.models import (
     LoreEntry,
     LoreKind,
     NarrationStyle,
+    QuestConditionKind,
+    QuestMatch,
     QuestStart,
     Rating,
     RouteVisibility,
@@ -73,7 +75,8 @@ from app.engine.sheet import Sheet
 #  27: 퀘스트 규칙에 드러난 때부터 세는 기한(quests[].time_limit_minutes)이 있다
 #  28: 규칙에 쉬기(rest: 짧은 휴식, 긴 휴식, 되살아나기, 저절로 회복하기)가 있다
 #  29: 몬스터에 쓰러뜨렸을 때 나오는 물건(drops: 물건 항목, 개수, 확률)이 있다
-SNAPSHOT_FORMAT = 29
+#  30: 퀘스트 규칙에 이루는 조건(quests[].conditions)과 그 조건을 맞추는 법(quests[].match: all, any)이 있다
+SNAPSHOT_FORMAT = 30
 
 
 class EntrySnapshot(BaseModel):
@@ -156,18 +159,29 @@ class ItemRuleSnapshot(BaseModel):
     heals: str | None = None
 
 
+class QuestConditionSnapshot(BaseModel):
+    """퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목이다."""
+
+    kind: QuestConditionKind
+    target: uuid.UUID
+    count: int = 1
+
+
 class QuestRuleSnapshot(BaseModel):
     """
     퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.
 
     start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건이다.
     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.
+    conditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.
     """
 
     entry_id: uuid.UUID
     start: QuestStart = QuestStart.HIDDEN
     reward: list[ItemStackSnapshot] = []
     time_limit_minutes: int | None = None
+    conditions: list[QuestConditionSnapshot] = []
+    match: QuestMatch = QuestMatch.ALL
 
 
 class FindSnapshot(BaseModel):

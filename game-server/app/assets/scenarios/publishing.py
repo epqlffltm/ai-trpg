@@ -26,6 +26,7 @@ from app.assets.models import (
     Lorebook,
     LoreEntry,
     LoreKind,
+    QuestConditionKind,
     Rating,
     Rulebook,
     Scenario,
@@ -42,6 +43,7 @@ from app.assets.scenarios.schemas import (
     MonsterSheet,
     NpcSheet,
     Pregen,
+    QuestCondition,
     QuestRule,
     RouteRule,
     VersionCreate,
@@ -104,6 +106,12 @@ class Problem(enum.StrEnum):
     QUEST_ENTRY_MISSING = 'quest_entry_missing'
     # 사건이 아닌 항목(인물, 물건 …)을 가리키는 퀘스트 규칙이 있다
     QUEST_NOT_EVENT = 'quest_not_event'
+    # 퀘스트의 조건이 가리키는 것이 없다. 붙인 로어북에 없는 항목이거나, 시트를 적지 않은 몬스터다
+    QUEST_CONDITION_MISSING = 'quest_condition_missing'
+    # 퀘스트의 조건이 맞지 않는 종류를 가리킨다(장소에 닿기인데 물건 항목 …)
+    QUEST_CONDITION_INVALID = 'quest_condition_invalid'
+    # 퀘스트의 조건을 이룰 수 없다. 맵에 없는 장소이거나, 판에 놓인 마리보다 많이 쓰러뜨려야 한다
+    QUEST_CONDITION_IMPOSSIBLE = 'quest_condition_impossible'
     # 붙인 로어북에 없는 항목을 가리키는 시작 장소, 길, 명소가 있다
     MAP_PLACE_MISSING = 'map_place_missing'
     # 장소가 아닌 항목(인물, 물건 …)을 가리키는 시작 장소, 길, 명소가 있다
@@ -460,7 +468,7 @@ def find_quest_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     퀘스트 규칙에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
 
     가리키는 것은 붙인 로어북의 사건 항목이어야 한다. 아이템 규칙과 같은 까닭으로 굳히기 전에 여기서 막는다.
-    보상의 물건은 아이템과 함께 본다(find_item_problems).
+    보상의 물건은 아이템과 함께 본다(find_item_problems). 이루는 조건은 find_condition_problems 가 본다.
     """
     entries = lore_entries(parts)
     pointed = [rule.entry_id for rule in read_quest_rules(scenario)]
@@ -469,7 +477,57 @@ def find_quest_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
         problems.append(Problem.QUEST_ENTRY_MISSING)
     if any(entry_id in entries and entries[entry_id].kind != LoreKind.EVENT for entry_id in pointed):
         problems.append(Problem.QUEST_NOT_EVENT)
-    return problems
+    return problems + find_condition_problems(scenario, parts)
+
+
+# 조건의 종류마다 target 이 가리켜야 하는 로어북 항목의 종류. 몬스터를 쓰러뜨리기는 로어북이 아니라 몬스터 시트다
+CONDITION_ENTRY_KINDS = {
+    QuestConditionKind.REACH_PLACE: LoreKind.PLACE,
+    QuestConditionKind.HOLD_ITEM: LoreKind.ITEM,
+    QuestConditionKind.DEFEAT_NPC: LoreKind.PERSON,
+}
+
+
+def placed_count(scenario: Scenario, monster_id: uuid.UUID) -> int:
+    """판의 조우에 놓인 그 몬스터의 마리 수 전부."""
+    return sum(encounter.count for encounter in read_encounters(scenario) if encounter.monster_id == monster_id)
+
+
+def condition_problem(condition: QuestCondition, scenario: Scenario, parts: Parts) -> Problem | None:
+    """
+    조건 하나의 문제. 없으면 None.
+
+    몬스터를 쓰러뜨리기는 시트를 적은 몬스터여야 하고(판에 들어가는 몬스터), 놓인 마리보다 많이 요구하지 않는다.
+    장소에 닿기는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 맵에 없는 장소에는 설 수 없다.
+    """
+    if condition.kind == QuestConditionKind.DEFEAT_MONSTER:
+        sheeted = {sheet.monster_id for sheet in read_monster_sheets(scenario)}
+        if condition.target not in sheeted:
+            return Problem.QUEST_CONDITION_MISSING
+        if placed_count(scenario, condition.target) < condition.count:
+            return Problem.QUEST_CONDITION_IMPOSSIBLE
+        return None
+    entry = lore_entries(parts).get(condition.target)
+    if entry is None:
+        return Problem.QUEST_CONDITION_MISSING
+    if entry.kind != CONDITION_ENTRY_KINDS[condition.kind]:
+        return Problem.QUEST_CONDITION_INVALID
+    if condition.kind == QuestConditionKind.REACH_PLACE and condition.target not in map_places(
+        scenario, read_routes(scenario)
+    ):
+        return Problem.QUEST_CONDITION_IMPOSSIBLE
+    return None
+
+
+def find_condition_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """퀘스트의 조건들에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만, 정한 순서로 적는다."""
+    found = {
+        condition_problem(condition, scenario, parts)
+        for rule in read_quest_rules(scenario)
+        for condition in rule.conditions
+    }
+    order = [Problem.QUEST_CONDITION_MISSING, Problem.QUEST_CONDITION_INVALID, Problem.QUEST_CONDITION_IMPOSSIBLE]
+    return [problem for problem in order if problem in found]
 
 
 def read_routes(scenario: Scenario) -> list[RouteRule]:

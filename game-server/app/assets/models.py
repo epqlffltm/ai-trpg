@@ -83,6 +83,9 @@ ITEM_STACK_MAX = 99
 SCENARIO_MAX_QUEST_RULES = 50
 # 퀘스트의 기한(분). 드러난 때부터 센다. 상한은 한 해다(오래 가는 부상이 낫는 기간과 같다)
 QUEST_MAX_TIME_LIMIT_MINUTES = 365 * 24 * 60
+# 퀘스트 하나의 조건의 수와, 조건 하나가 세는 수(쓰러뜨린 마리, 가진 개수)의 상한
+QUEST_MAX_CONDITIONS = 5
+QUEST_CONDITION_MAX_COUNT = 99
 # 시나리오 하나에 둘 수 있는 길의 수. 장소 100 개를 이어도 모자라지 않는 만큼이다
 SCENARIO_MAX_ROUTES = 200
 # 시나리오 하나에 둘 수 있는 명소(처음부터 아는 장소)의 수
@@ -183,6 +186,36 @@ class QuestStart(enum.StrEnum):
     HIDDEN = 'hidden'
     # 처음부터 진행 중이다. 플레이어가 처음부터 쫓는 목표다
     ACTIVE = 'active'
+
+
+class QuestConditionKind(enum.StrEnum):
+    """
+    퀘스트의 조건 하나가 무엇을 보는가. 엔진이 이미 아는 사실(상태)만 본다(app/rounds/quest_goals.py).
+
+    target 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물이다.
+    """
+
+    # 그 장소에 죽지 않은 캐릭터가 서 있다
+    REACH_PLACE = 'reach_place'
+    # 그 몬스터가 count 마리 이상 쓰러지거나 죽었다
+    DEFEAT_MONSTER = 'defeat_monster'
+    # 죽지 않은 캐릭터들이 그 물건을 모두 합쳐 count 개 이상 가졌다
+    HOLD_ITEM = 'hold_item'
+    # 그 인물(NPC)이 쓰러지거나 죽었다
+    DEFEAT_NPC = 'defeat_npc'
+
+
+# count 를 쓰는 조건. 나머지는 1 이다
+COUNTED_CONDITIONS = frozenset({QuestConditionKind.DEFEAT_MONSTER, QuestConditionKind.HOLD_ITEM})
+
+
+class QuestMatch(enum.StrEnum):
+    """퀘스트의 조건이 여럿일 때 언제 이룬 것인가."""
+
+    # 모두 채워야 한다
+    ALL = 'all'
+    # 하나라도 채우면 된다
+    ANY = 'any'
 
 
 class Visibility(enum.StrEnum):

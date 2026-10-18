@@ -7,6 +7,8 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 퀘스트의 행(
 
   - 판의 사건 항목 하나가 퀘스트 하나다. 처음 상태는 판의 퀘스트 규칙의 것이다(규칙이 없으면 숨김).
   - 바뀌는 길: 숨김 → 진행 중 / 성공 / 실패, 진행 중 → 성공 / 실패. 끝난 것은 그대로다. 숨김으로 돌아가지 않는다.
+  - 성공은 엔진만 정한다. 판의 조건을 라운드가 닫힐 때 보고 바꾼다(app/rounds/quest_goals.py).
+    방장의 요청과 장부 초안은 드러내기와 실패만 한다(#367).
   - 성공하면 보상을 받는다. 앉은 사람의 지금 캐릭터 중 살아 있는 것마다 받는다.
     한 가지의 상한(99 개)에 닿으면 그 사람은 거기까지만 받는다. 다른 사람의 보상은 막지 않는다.
   - 숨긴 퀘스트는 방장만 본다. 드러내야 할 때를 방장이 정하므로 방장은 알아야 한다.
@@ -18,7 +20,14 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 퀘스트의 행(
 import uuid
 from dataclasses import dataclass
 
-from app.assets.scenarios.snapshot import ItemStackSnapshot, Snapshot, quest_entries, quest_rule_of
+from app.assets.models import QuestMatch
+from app.assets.scenarios.snapshot import (
+    ItemStackSnapshot,
+    QuestConditionSnapshot,
+    Snapshot,
+    quest_entries,
+    quest_rule_of,
+)
 from app.tables import items, sheets
 from app.tables.errors import Conflict, TableConflictError, TableOptionError
 from app.tables.items import CatalogItem
@@ -34,6 +43,7 @@ class CatalogQuest:
     판에 있는 퀘스트 하나. 이름은 로어북 사건 항목의 이름, 처음 상태와 보상과 기한은 퀘스트 규칙의 것이다.
 
     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 없으면 None.
+    conditions 는 이루는 조건, match 는 그것을 맞추는 법이다. 조건이 없으면 성공하지 않는다.
     """
 
     entry_id: uuid.UUID
@@ -41,6 +51,8 @@ class CatalogQuest:
     start: QuestStatus
     reward: list[ItemStackSnapshot]
     time_limit_minutes: int | None = None
+    conditions: tuple[QuestConditionSnapshot, ...] = ()
+    match: QuestMatch = QuestMatch.ALL
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogQuest]:
@@ -54,6 +66,8 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogQuest]:
             start=QuestStatus(rule.start),
             reward=list(rule.reward),
             time_limit_minutes=rule.time_limit_minutes,
+            conditions=tuple(rule.conditions),
+            match=rule.match,
         )
     return quests
 
@@ -101,9 +115,12 @@ def change_problem(current: QuestStatus, to: QuestStatus) -> Conflict | None:
     지금 상태에서 그 상태로 바꿀 수 없는 까닭. 바꿀 수 있으면 None.
 
     끝난 것은 quest_finished, 이미 진행 중인 것을 진행 중으로 바꾸면 quest_already_active.
+    성공으로 바꾸면 quest_success_by_engine 이다. 성공은 엔진이 조건을 보고 정한다(app/rounds/quest_goals.py).
     숨김으로 바꾸는 것은 입력에서 받지 않는다(app/tables/schemas.py 의 QuestChange).
     방장의 요청(require_changeable)과 AI 의 장부 초안(app/drafts/validation.py)이 같은 길을 쓴다.
     """
+    if to == QuestStatus.SUCCEEDED:
+        return Conflict.QUEST_SUCCESS_BY_ENGINE
     if current in FINISHED:
         return Conflict.QUEST_FINISHED
     if current == QuestStatus.ACTIVE and to == QuestStatus.ACTIVE:
@@ -128,7 +145,7 @@ def is_overdue(row: TableQuest, round_opened_at: int) -> bool:
     기한을 넘겨 실패로 바꿀 퀘스트인가. 진행 중이고, 기한이 이 라운드가 열린 시각이나 그 앞에 끝났다.
 
     기한이 장면 안에서 끝나도 그 라운드에는 바꾸지 않는다. 그 장면의 결과는 서술이 끝난 뒤에야 보인다.
-    방장이 그것을 보고 성공으로 바꿀 틈을 다음 라운드 하나만큼 둔다. 그 라운드가 닫힐 때까지 그대로면 실패다.
+    그 장면 다음 라운드 하나만큼 틈을 둔다. 그 라운드에 조건을 채우면 성공이고, 닫힐 때까지 그대로면 실패다.
     """
     return row.status == QuestStatus.ACTIVE and row.due_at is not None and row.due_at <= round_opened_at
 

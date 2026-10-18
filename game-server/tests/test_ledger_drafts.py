@@ -54,10 +54,10 @@ friend = quest_tables.friend
 lore = quest_tables.lore
 stranger = quest_tables.stranger
 
-# 기사(p1)가 치유 물약(i1) 둘을 손에 넣었고, 왕녀 구출(q1)을 이뤘다는 초안. 없는 캐릭터(p9)의 줄은 서버가 버린다
+# 기사(p1)가 치유 물약(i1) 둘을 손에 넣었고, 왕녀 구출(q1)을 놓쳤다는 초안. 없는 캐릭터(p9)의 줄은 서버가 버린다
 REPLY = (
     '{"found_items": [{"character": "p1", "item": "i1", "count": 2}, {"character": "p9", "item": "i1", "count": 1}], '
-    '"quest_changes": [{"quest": "q1", "status": "succeeded"}]}'
+    '"quest_changes": [{"quest": "q1", "status": "failed"}]}'
 )
 
 
@@ -175,7 +175,7 @@ async def test_the_scene_is_drafted_after_narration_without_touching_the_ledger(
         'entry_id': lore['rescue']['id'],
         'name': '왕녀 구출',
         'previous': 'active',
-        'status': 'succeeded',
+        'status': 'failed',
     }
     # AI 는 장부를 바꾸지 못한다. 방장이 받아들이기 전에는 그대로다
     detail = await read_table(client, me, table)

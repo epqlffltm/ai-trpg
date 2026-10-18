@@ -55,12 +55,15 @@ class Scene:
     이번 장면을 다루는 데 필요한 NPC 들. 테이블의 NPC 상태 전부와, 그중 장면에 나온 인물들.
 
     장면에 나오지 않은 인물도 상태가 바뀔 수 있다(짧은 부상이 풀린다). 그래서 둘을 함께 든다.
+    몬스터도 장면의 마리와 테이블의 마리 전부를 함께 든다. 장면의 마리는 그 전부 중 일부다(같은 객체다).
     """
 
     npcs: list[TableNpc]
     cast: list[CastMember]
     # 이번 장면의 몬스터들. 살아 있는 캐릭터가 서 있는 장소들의 마리다(app/rounds/monster_scene.py)
     monsters: list['SceneMonster'] = field(default_factory=list)
+    # 테이블의 몬스터 상태 전부. 장면 밖의 마리도 든다. 퀘스트의 조건(몇 마리를 쓰러뜨렸나)을 셀 때 쓴다
+    all_monsters: list[TableMonster] = field(default_factory=list)
 
 
 def is_named(npc: TableNpc) -> bool:
