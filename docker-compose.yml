@@ -432,6 +432,7 @@ services:
     environment:
       <<: [*billing-environment, *billing-without-request-secrets]
       TOSS_SECRET_KEY: ""
+      NOTIFICATION_SECRET: ""
     depends_on:
       db:
         condition: service_healthy
@@ -442,7 +443,10 @@ services:
     logging: *logging
     restart: unless-stopped
     env_file: ./billing-server/.env
-    environment: *billing-environment
+    # 사용자의 알림은 정리 작업이 넣는다. 서버는 알림 서버를 부르지 않는다
+    environment:
+      <<: *billing-environment
+      NOTIFICATION_SECRET: ""
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8003/health/ready"]
       interval: 10s
@@ -454,7 +458,7 @@ services:
         condition: service_completed_successfully
 
   # 결제 서버의 정리 작업. 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 적고, 만료된 주문을 끝내고,
-  # 보호자에게 알릴 결제를 인증 서버에 보낸다. 30초마다 돈다
+  # 보호자에게 알릴 결제를 인증 서버에, 사용자에게 알릴 일을 알림 서버에 보낸다. 30초마다 돈다
   billing-sweeper:
     <<: *billing-image
     profiles: [app]
@@ -464,13 +468,15 @@ services:
     env_file: ./billing-server/.env
     # 결제 대행사를 부르지 않는다. 설정(config.LoadSweeper)이 결제 대행사의 설정을 읽지 않아 TOSS_SECRET_KEY 도 비운다.
     # 요청을 받지 않으니 받는 쪽의 비밀(PG_WEBHOOK_SECRET, GAME_SERVER_SECRET)도 비운다.
-    # AUTH_SERVER_SECRET 은 남긴다. 미성년자의 결제를 보호자에게 알리라고 인증 서버에 서명해 보낸다(#352)
+    # AUTH_SERVER_SECRET 은 남긴다. 미성년자의 결제를 보호자에게 알리라고 인증 서버에 서명해 보낸다(#352).
+    # NOTIFICATION_SECRET 도 남긴다. 사용자에게 알릴 일을 알림 서버에 서명해 넣는다(#385)
     environment:
       <<: *billing-environment
       PG_WEBHOOK_SECRET: ""
       GAME_SERVER_SECRET: ""
       TOSS_SECRET_KEY: ""
       HEARTBEAT_FILE: /tmp/heartbeat
+      NOTIFICATION_URL: http://notification-server:8004
     healthcheck: *worker-heartbeat
     depends_on:
       billing-migrate:
@@ -487,6 +493,7 @@ services:
     # 대사는 결제 대행사에 결과를 묻는다. TOSS_SECRET_KEY 는 남긴다
     environment:
       <<: [*billing-environment, *billing-without-request-secrets]
+      NOTIFICATION_SECRET: ""
     volumes:
       - ./docker/cron/billing.crontab:/etc/supercronic/crontab:ro
     depends_on:

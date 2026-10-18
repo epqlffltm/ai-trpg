@@ -769,3 +769,44 @@ func TestLoadSweeperRefusesABadAuthSetting(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadSweeperReadsWhereToSendUserNotices(t *testing.T) {
+	notificationSecret := "do-not-print-this-notification-secret"
+	sweeper, err := config.LoadSweeper(from(map[string]string{
+		"DATABASE_URL": databaseURL, "NOTIFICATION_URL": "http://notification:8004", "NOTIFICATION_SECRET": notificationSecret,
+	}))
+
+	if err != nil || sweeper.UserNotices.URL != "http://notification:8004" ||
+		sweeper.UserNotices.Secret != notificationSecret || !sweeper.UserNotices.Enabled() {
+		t.Errorf("알림 서버 = %+v, %v", sweeper.UserNotices, err)
+	}
+}
+
+func TestLoadSweeperRunsWithoutTheNotificationServer(t *testing.T) {
+	// 비밀이나 주소가 없으면 사용자의 알림을 적기만 한다. 정리 작업은 뜬다
+	for name, values := range map[string]map[string]string{
+		"둘 다 없다": {},
+		"비밀이 없다": {"NOTIFICATION_URL": "http://notification:8004"},
+		"주소가 없다": {"NOTIFICATION_SECRET": "do-not-print-this-notification-secret"},
+	} {
+		values["DATABASE_URL"] = databaseURL
+		sweeper, err := config.LoadSweeper(from(values))
+		if err != nil || sweeper.UserNotices.Enabled() {
+			t.Errorf("%s: %+v, %v", name, sweeper.UserNotices, err)
+		}
+	}
+}
+
+func TestLoadSweeperRefusesABadNotificationSetting(t *testing.T) {
+	for name, values := range map[string]map[string]string{
+		"짧은 비밀":        {"NOTIFICATION_SECRET": "short"},
+		"http 가 아닌 주소": {"NOTIFICATION_URL": "file:///etc/passwd"},
+		// 한쪽이 아는 비밀로 다른 쪽인 척할 수 없게 한다
+		"인증 서버와 같은 비밀": {"AUTH_SERVER_SECRET": authSecret, "NOTIFICATION_SECRET": authSecret},
+	} {
+		values["DATABASE_URL"] = databaseURL
+		if _, err := config.LoadSweeper(from(values)); err == nil {
+			t.Errorf("%s: 오류가 나야 한다", name)
+		}
+	}
+}
