@@ -33,6 +33,7 @@ from app.events import models as event_models  # noqa: F401
 from app.listings import models as listing_models  # noqa: F401
 from app.lore import models as lore_models  # noqa: F401
 from app.memory import models as memory_models  # noqa: F401
+from app.operators import models as operator_models  # noqa: F401
 from app.personas import models as persona_models  # noqa: F401
 from app.rounds import models as round_models  # noqa: F401
 from app.tables import models as table_models  # noqa: F401
