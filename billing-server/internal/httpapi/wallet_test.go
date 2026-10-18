@@ -164,11 +164,24 @@ func TestEntriesReturnsLinesAndTheNextCursor(t *testing.T) {
 		t.Fatalf("상태 코드 = %d, 기대 = %d", response.Code, http.StatusOK)
 	}
 	want := `{"entries":[` +
-		`{"id":"42","operation_id":"99999999-8888-4777-8666-555555555555","kind":"paid","reason":"spend","amount":"-20","order_id":null,"hold_id":null,"created_at":"2026-03-02T09:00:00Z"},` +
-		`{"id":"41","operation_id":"99999999-8888-4777-8666-555555555555","kind":"free","reason":"spend","amount":"-30","order_id":null,"hold_id":null,"created_at":"2026-03-02T09:00:00Z"}` +
+		`{"id":"42","operation_id":"99999999-8888-4777-8666-555555555555","kind":"paid","reason":"spend","amount":"-20","order_id":null,"hold_id":null,"hold_status":null,"created_at":"2026-03-02T09:00:00Z"},` +
+		`{"id":"41","operation_id":"99999999-8888-4777-8666-555555555555","kind":"free","reason":"spend","amount":"-30","order_id":null,"hold_id":null,"hold_status":null,"created_at":"2026-03-02T09:00:00Z"}` +
 		`],"next_before":"41"}`
 	if got := body(response); got != want {
 		t.Errorf("본문 = %s\n기대 = %s", got, want)
+	}
+}
+
+func TestAHoldLineCarriesItsHoldsStatus(t *testing.T) {
+	holdID := mustUUID(t, "77777777-6666-4555-8444-333333333333")
+	reader := &fakeWallet{page: wallet.Page{Entries: []wallet.Entry{
+		{ID: 7, Kind: wallet.KindPaid, Reason: wallet.ReasonHold, Amount: -50, HoldID: &holdID, HoldStatus: wallet.HoldCaptured},
+	}}}
+
+	response := asUser(t, reader, testenv.UserID, entriesURL)
+
+	if got := body(response); !strings.Contains(got, `"hold_id":"`+holdID.String()+`","hold_status":"captured"`) {
+		t.Errorf("본문 = %s", got)
 	}
 }
 
