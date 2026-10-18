@@ -140,6 +140,9 @@ class EventType(enum.StrEnum):
     # 이 라운드의 서술 값을 내는 사람 하나(user_id)의 크레딧이 모자란다. 걸어 보고 알았다(app/billing/).
     # 그 사람이 충전하지 않거나 방장이 내보내지 않으면 라운드를 닫을 때 서술이 실패한다(insufficient_credits)
     NARRATION_CREDITS_SHORT = 'narration_credits_short'
+    # 라운드의 서술 모델을 결제 서버가 팔지 않는다(판매를 멈췄거나 아직 열지 않았다). 라운드마다 처음 알았을 때 한 번.
+    # 방장이 모델을 바꾸면 그 라운드의 청구를 새 가격표로 다시 건다. 바꾸지 않으면 서술이 실패한다(model_not_for_sale)
+    NARRATION_MODEL_NOT_FOR_SALE = 'narration_model_not_for_sale'
     # 크레딧이 모자란 사람을 기다리는 시간이 지나 서버가 그 사람을 자리에서 뺐다. 나머지로 다시 서술한다
     MEMBER_DROPPED = 'member_dropped'
     # 크레딧이 모자란 사람을 기다리는 시간이 지나 낼 수 있는 사람의 값을 돌려줬다. 라운드는 멈춘 채로 있다

@@ -265,6 +265,8 @@ class NextPriceOut(BaseModel):
 
     credits: str | None
     tier: Tier | None
+    # 그때부터의 값도 행사가인가
+    promo: bool
     effective_at: datetime
 
 
@@ -282,6 +284,8 @@ class NarrationModelOut(BaseModel):
     grade: Grade
     credits: str | None
     tier: Tier | None
+    # 지금 값이 행사가인가. 행사가면 next 가 행사가 끝나는 때와 그 뒤의 값이다(화면이 "11월 21일까지, 그 뒤 440")
+    promo: bool
     next: NextPriceOut | None
 
 
