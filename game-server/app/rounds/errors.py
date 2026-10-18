@@ -81,7 +81,7 @@ class ActionTargetError(Exception):
     선언에 붙은 행동의 대상이 겨눌 수 없는 것이다.
 
     field 는 행동의 어느 칸인지다. target 이면 이 테이블에 앉은 사람이 아니고, npc 면 이번 장면에 나온 인물이 아니다.
-    place 면 지금 장소에서 아는 길로 이어진 장소가 아니다.
+    place 면 지금 장소에서 아는 길로 이어진 장소가 아니다. item 이면 지금 장소에 보이게 놓인 물건이 아니다(줍기).
     """
 
     def __init__(self, field: str) -> None:

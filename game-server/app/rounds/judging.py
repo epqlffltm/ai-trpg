@@ -31,6 +31,7 @@ from app.engine.action import (
     NameAction,
     RestAction,
     SearchAction,
+    TakeAction,
     TreatAction,
     UseAction,
 )
@@ -47,6 +48,7 @@ from app.rounds.models import Declaration, Round
 from app.rounds.monster_attacks import can_act, take_monster_turn
 from app.rounds.monster_scene import SceneMonster
 from app.rounds.naming import judge_naming
+from app.rounds.place_item_actions import judge_take, search_items
 from app.rounds.rests import judge_rest
 from app.rounds.state import find_declaration, rules_of
 from app.rounds.treatments import judge_treatment
@@ -58,7 +60,7 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     """
     한 사람의 행동을 판정하고 그 결과를 정한다.
     행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming),
-    물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(judge_search)다.
+    물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(search_place), 줍기(judge_take)다.
     """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
@@ -71,10 +73,22 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     if isinstance(action, MoveAction):
         return judge_move(judging, member, action)
     if isinstance(action, SearchAction):
-        return judge_search(judging, member)
+        return search_place(judging, member)
+    if isinstance(action, TakeAction):
+        return judge_take(judging, member, action)
     if isinstance(action, RestAction):
         return judge_rest(judging, action)
     return judge_check(judging, member, action)
+
+
+def search_place(judging: Judging, member: TableMember) -> dict:
+    """
+    지금 장소를 찾는다. 숨긴 길을 먼저(app/rounds/map_actions.py), 숨긴 물건을 그다음에 굴린다
+    (app/rounds/place_item_actions.py). 찾은 것만 결과에 적는다.
+    """
+    outcome = judge_search(judging, member)
+    outcome['search']['items'] = search_items(judging, member)
+    return outcome
 
 
 def lost_turn(member: TableMember) -> str | None:

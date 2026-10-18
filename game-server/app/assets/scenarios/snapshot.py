@@ -28,6 +28,7 @@ from app.assets.models import (
     LoreEntry,
     LoreKind,
     NarrationStyle,
+    PlaceItemVisibility,
     QuestConditionKind,
     QuestMatch,
     QuestStart,
@@ -78,7 +79,8 @@ from app.engine.sheet import Sheet
 #  30: 퀘스트 규칙에 이루는 조건(quests[].conditions)과 그 조건을 맞추는 법(quests[].match: all, any)이 있다
 #  31: 퀘스트 규칙에 드러나는 조건(quests[].reveal)과 그 조건을 맞추는 법(quests[].reveal_match)이 있다.
 #      조건에 다른 퀘스트의 성공과 실패(quest_succeeded, quest_failed)가 있다
-SNAPSHOT_FORMAT = 31
+#  32: 장소에 놓인 물건(place_items: 장소, 물건, 개수, 보이기 open·hidden, 숨긴 것의 찾는 판정)이 있다
+SNAPSHOT_FORMAT = 32
 
 
 class EntrySnapshot(BaseModel):
@@ -279,6 +281,20 @@ class EncounterSnapshot(BaseModel):
     surprise: Surprise = Surprise.NONE
 
 
+class PlaceItemSnapshot(BaseModel):
+    """
+    장소에 놓인 물건 한 줄. 판 안의 장소 항목 하나(place_id)에 판 안의 물건 항목 하나(entry_id)가 count 개 있다.
+
+    숨긴 물건(hidden)은 찾는 판정(find)으로 드러난다. 판의 줄 순서가 테이블의 남은 개수(table_place_items)의 번호다.
+    """
+
+    place_id: uuid.UUID
+    entry_id: uuid.UUID
+    count: int
+    visibility: PlaceItemVisibility = PlaceItemVisibility.OPEN
+    find: FindSnapshot | None = None
+
+
 class PlayerMadeHpSnapshot(BaseModel):
     """플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다."""
 
@@ -331,6 +347,8 @@ class Snapshot(BaseModel):
     routes: list[RouteSnapshot] = []
     # 명소. 처음부터 아는 장소들이다. 판 안의 로어북 장소 항목이다. 명소가 있으면 시작 장소도 있다
     landmarks: list[uuid.UUID] = []
+    # 장소에 놓인 물건들. 장소는 판 안의 장소 항목, 물건은 판 안의 물건 항목이다. 있으면 시작 장소도 있다
+    place_items: list[PlaceItemSnapshot] = []
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용했으면 반드시 있다
     player_made_hp: PlayerMadeHpSnapshot | None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 제작자가 정한 것이다
@@ -437,6 +455,22 @@ class Snapshot(BaseModel):
             raise ValueError('장소 항목이 아닌 것을 가리키는 시작 장소, 길, 명소가 있습니다.')
         if (self.routes or self.landmarks) and self.start_place is None:
             raise ValueError('길이나 명소가 있는데 시작 장소가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_place_item_targets(self) -> 'Snapshot':
+        """
+        놓인 물건이 모두 판 안의 장소 항목과 물건 항목을 가리키는지, 놓인 물건이 있으면 시작 장소가 있는지 본다.
+        아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽(테이블)은 줄마다 장소와 물건이 있다고 믿고 쓴다.
+        """
+        places = {entry.id for entry in place_entries(self)}
+        things = {entry.id for entry in item_entries(self)}
+        if any(rule.place_id not in places or rule.entry_id not in things for rule in self.place_items):
+            raise ValueError('장소나 물건이 아닌 것을 가리키는 놓인 물건이 있습니다.')
+        if self.place_items and self.start_place is None:
+            raise ValueError('놓인 물건이 있는데 시작 장소가 없습니다.')
         return self
 
     @model_validator(mode='after')
@@ -589,6 +623,7 @@ def build_snapshot(
         start_place=scenario.start_place,
         routes=[RouteSnapshot(**route) for route in scenario.routes],
         landmarks=list(scenario.landmarks),
+        place_items=[PlaceItemSnapshot(**rule) for rule in scenario.place_items],
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,

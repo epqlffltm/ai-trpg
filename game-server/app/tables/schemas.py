@@ -370,15 +370,26 @@ class PlaceChange(BaseModel):
     place_id: uuid.UUID
 
 
+class PlaceItemOut(BaseModel):
+    """장소에 보이게 놓인 물건 한 가지. 같은 물건은 합친 개수다. 이름은 판의 로어북 물건 항목의 이름이다."""
+
+    entry_id: uuid.UUID
+    name: str
+    count: int
+
+
 class PlaceOut(BaseModel):
     """
     아는 장소 하나. 이름은 판의 로어북 장소 항목의 이름이다.
 
     장소의 글은 싣지 않는다. 로어북은 AI 가 읽는 설정이다.
+    items 는 그곳에 보이게 놓인 물건들이다. 누군가 서 본 장소만 싣는다. 숨긴 물건은 싣지 않는다
+    (app/tables/place_items.py). 줍기(take)로 가져간다.
     """
 
     entry_id: uuid.UUID
     name: str
+    items: list[PlaceItemOut] = []
 
 
 class RouteOut(BaseModel):
