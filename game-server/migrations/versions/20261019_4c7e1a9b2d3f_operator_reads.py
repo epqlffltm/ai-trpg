@@ -1,7 +1,7 @@
 """operator reads
 
 Revision ID: 4c7e1a9b2d3f
-Revises: 4b8e2d7f1a6c
+Revises: 2e6b8d4f9a3c
 Create Date: 2026-10-19 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = '4c7e1a9b2d3f'
-down_revision: str | Sequence[str] | None = '4b8e2d7f1a6c'
+down_revision: str | Sequence[str] | None = '2e6b8d4f9a3c'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
