@@ -75,7 +75,8 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
         record_injury(session, table, npc_effect_.get('injury_roll'), holder, cause=changed)
     monster_effect = outcome.get('monster_effect')
     if monster_effect is not None:
-        record_monster_change(session, table, monster_effect, cause=after)
+        changed = record_monster_change(session, table, monster_effect, cause=after)
+        record_drop(session, table, outcome.get('drop'), cause=changed)
 
 
 def record_treatment(session: AsyncSession, table: GameTable, treated: dict, cause: TableEvent) -> TableEvent:
@@ -160,6 +161,29 @@ def record_monster_change(session: AsyncSession, table: GameTable, effect: dict,
     """
     payload = {'round': cause.payload['round'], **effect}
     return recorder.record(session, table, EventType.MONSTER_CHANGED, payload=payload, cause=cause)
+
+
+def record_drop(session: AsyncSession, table: GameTable, drop: dict | None, cause: TableEvent) -> None:
+    """
+    몬스터를 쓰러뜨려 얻은 물건을 이벤트로 적는다. 그 마리가 쓰러진 변화의 이벤트(cause)에 잇는다.
+
+    방장이 줄 때와 같은 종류(items_gained)를 물건마다 하나씩 적는다. 출처(source, monster_id, monster_name)와
+    상한을 넘어 잃은 개수(lost)가 더 붙는다. 받을 사람이 없어 사라졌으면 아무도 얻지 않아 적지 않는다.
+    행한 사람(actor_id)을 적지 않는다. 굴리고 준 것은 엔진이다.
+    """
+    if drop is None or drop['user_id'] is None:
+        return
+    for thing in drop['items']:
+        payload = {
+            'round': cause.payload['round'],
+            'user_id': drop['user_id'],
+            'character_name': drop['character_name'],
+            **thing,
+            'source': drop['source'],
+            'monster_id': drop['monster_id'],
+            'monster_name': drop['monster_name'],
+        }
+        recorder.record(session, table, EventType.ITEMS_GAINED, payload=payload, cause=cause)
 
 
 def record_hp_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> TableEvent:
