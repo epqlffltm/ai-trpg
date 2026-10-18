@@ -165,11 +165,13 @@ async def test_a_retired_model_is_replaced_in_the_table_and_the_open_round(
     # 같은 회사의 standard 중 가장 싼 Mini 다. 선언을 받는 중인 1 라운드도 바뀌고 새 가격표로 다시 건다
     assert await table_model(session, table) == 'gpt-6-mini'
     assert (await current(client, me, table))['narration_model'] == 'gpt-6-mini'
+    # 바뀐 라운드의 1인 1라운드의 값도 새 모델의 것으로 알린다
     assert replaced['payload'] == {
         'from': 'gpt-6-luna',
         'narration_model': 'gpt-6-mini',
         'reason': 'retired',
         'round': 1,
+        'price': {'credits': '10', 'tier': 'standard'},
     }
     # 바꾼 뒤에는 볼 것이 없다
     await tick(app, NOW + timedelta(hours=1))

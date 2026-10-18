@@ -125,6 +125,10 @@ class Round(Base):
     # 아직 서술하지 않은 라운드는 방장이 모델을 바꾸면 함께 바뀐다(app/tables/narration_models.py).
     # 비어 있으면 서버의 기본 모델로 서술하고 옛 가격표로 건다. 모델을 고르는 규칙 전에 연 라운드다
     narration_model: Mapped[str | None] = mapped_column(String(48))
+    # 열 때(또는 모델을 바꿀 때) 앉은 사람에게 알린 1인 1라운드의 값과 그 등급(app/rounds/round_price.py).
+    # 결제 서버의 가격 목록의 값 그대로다(글자, "120"). 알리지 못했으면 비어 있다. 실제로 홀드한 값은 청구에 있다
+    announced_credits: Mapped[str | None] = mapped_column(String(32))
+    announced_tier: Mapped[str | None] = mapped_column(String(20))
     # 닫기 시작한 시각. 선언을 마감하고 서술을 맡긴 때다. 비어 있으면 아직 선언을 받는 중이다.
     # 서술을 다시 맡기면 이 시각을 지금으로 고친다. "맡긴 지 얼마나 됐나"를 이것으로 안다(app/rounds/service.py)
     closing_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

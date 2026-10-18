@@ -60,6 +60,7 @@ from app.ai.provider import ProviderError
 from app.billing import settling
 from app.billing.client import Billing
 from app.billing.free_billing import FreeBilling
+from app.billing.price_list import FREE_PRICES, PriceList
 from app.core.jobs import BackgroundJobs
 from app.drafts.drafting import NO_DRAFTS, Drafter, draft_ledger
 from app.rounds import service
@@ -284,6 +285,7 @@ async def close_run(
     finders: Finders,
     billing: Billing,
     budgets: Budgets,
+    prices: PriceList = FREE_PRICES,
 ) -> str | None:
     """
     맡은 서술 하나를 처음부터 끝까지 한다. 읽고, 값을 잡고, 고르고, 서술하고, 닫기를 마무리한다. 쓴 장면을 돌려준다.
@@ -299,7 +301,7 @@ async def close_run(
     request = await gather_context(request, finders, budgets.retrieval)
     scene = await write_scene(session_factory, narrator, request, run)
     async with session_factory() as session:
-        await service.finish_closing(session, run.table_id, run.number, run.started, scene)
+        await service.finish_closing(session, run.table_id, run.number, run.started, scene, prices)
     return scene
 
 
@@ -331,7 +333,12 @@ async def settle_payment(
 
 
 async def record_failure(
-    session_factory: async_sessionmaker[AsyncSession], run: Run, reason: str, counted: bool, timeout: float
+    session_factory: async_sessionmaker[AsyncSession],
+    run: Run,
+    reason: str,
+    counted: bool,
+    timeout: float,
+    prices: PriceList = FREE_PRICES,
 ) -> None:
     """
     맡은 서술이 실패한 것을 적는다. timeout 초까지만 해 본다. 적지 못해도 예외를 올리지 않는다.
@@ -345,7 +352,7 @@ async def record_failure(
     try:
         async with asyncio.timeout(timeout):
             async with session_factory() as session:
-                await service.fail_closing(session, run.table_id, run.number, run.started, reason, counted)
+                await service.fail_closing(session, run.table_id, run.number, run.started, reason, counted, prices)
     except Exception:
         logger.exception('서술의 실패를 적지 못했다(테이블 %s, %s 라운드)', run.table_id, run.number)
 
@@ -363,9 +370,11 @@ async def narrate_round(
     billing: Billing = FREE,
     drafter: Drafter = NO_DRAFTS,
     after_open: AfterOpen = nothing_after_open,
+    prices: PriceList = FREE_PRICES,
 ) -> None:
     """
     닫는 중인 라운드 하나를 서술하고 닫는다. 요청 밖에서 돈다.
+    prices 는 다음 라운드에 알릴 1인 1라운드의 값을 찾는 가격 목록이다(app/rounds/round_price.py).
 
     started 는 이 서술을 맡기며 적은 닫기 시작한 시각이다. 그때부터 budgets.job 초 안에 끝낸다.
     넘으면 하던 일을 끊고 실패(timeout)를 적는다. 맡긴 뒤에 오래 기다렸다가 돌기 시작했으면 그만큼 덜 쓴다.
@@ -384,9 +393,10 @@ async def narrate_round(
     finders = Finders(lore, memories, histories)
     try:
         async with asyncio.timeout(seconds_left(started, datetime.now(UTC), budgets.job)):
-            scene = await close_run(session_factory, narrator, run, finders, billing, budgets)
+            scene = await close_run(session_factory, narrator, run, finders, billing, budgets, prices)
     except Exception as error:
-        await record_failure(session_factory, run, failure_reason(error), counts_as_failure(error), budgets.failure)
+        reason, counted = failure_reason(error), counts_as_failure(error)
+        await record_failure(session_factory, run, reason, counted, budgets.failure, prices)
         await after_open(table_id)
         raise
     await settle_payment(session_factory, billing, run, budgets.billing)
@@ -412,6 +422,7 @@ class RoundCloser:
     billing: Billing = FREE
     drafter: Drafter = NO_DRAFTS
     after_open: AfterOpen = nothing_after_open
+    prices: PriceList = FREE_PRICES
 
     def schedule(self, table_id: uuid.UUID, number: int, started: datetime) -> None:
         """
@@ -432,6 +443,7 @@ class RoundCloser:
             billing=self.billing,
             drafter=self.drafter,
             after_open=self.after_open,
+            prices=self.prices,
         )
         self.jobs.spawn(job, name=f'narrate:{table_id}:{number}', operation=NARRATE_OPERATION)
 
@@ -452,4 +464,5 @@ def closer_of(state: Any) -> RoundCloser:
         billing=state.billing,
         drafter=state.drafter,
         after_open=state.retirement_watch.after_round_opened,
+        prices=state.price_list,
     )

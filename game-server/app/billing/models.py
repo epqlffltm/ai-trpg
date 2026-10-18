@@ -123,6 +123,9 @@ class NarrationCharge(Base):
     next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 마지막으로 부르지 못한 까닭(unreachable, timeout, server_error, unauthorized, rejected_409 …). 본문은 적지 않는다
     last_error: Mapped[str | None] = mapped_column(String(40))
+    # 결제 서버가 실제로 홀드한 값(홀드의 답의 amount, 글자). 걸리기 전이거나 결제 서버가 값을 주지 않으면 비어 있다.
+    # 새 가격표로 다시 걸게 되면(reprice) 비운다. 앉은 사람에게 보여 주기만 하고 셈에 쓰지 않는다
+    held_credits: Mapped[str | None] = mapped_column(String(32))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

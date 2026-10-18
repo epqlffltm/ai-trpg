@@ -47,6 +47,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import read_snapshot
 from app.billing import charges
+from app.billing import repository as billing_repository
+from app.billing.models import NarrationCharge
+from app.billing.price_list import FREE_PRICES, PriceList
 from app.core.config import BILLING_BUDGET_SECONDS, NARRATION_BUDGET_SECONDS
 from app.engine.dice import Dice
 from app.events import recorder
@@ -64,6 +67,7 @@ from app.rounds.moves import build_moves, frozen_moves, frozen_style, to_monster
 from app.rounds.narrator import NarrationRequest
 from app.rounds.prompt import HISTORY_ROUNDS
 from app.rounds.records import record_actions, record_death_saves, record_injury_endings, record_recoveries
+from app.rounds.round_price import price_of
 from app.rounds.schemas import DeclarationUpdate
 from app.rounds.state import (
     find_arrival,
@@ -186,6 +190,14 @@ async def get_round(
     if round_ is None:
         raise RoundNotFoundError
     return table, round_
+
+
+async def get_round_charges(
+    session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID, number: int
+) -> list[NarrationCharge]:
+    """자기가 앉아 있는 테이블의 라운드 하나의 청구들. 라운드가 없으면 RoundNotFoundError."""
+    await get_round(session, user_id, table_id, number)
+    return await billing_repository.find_round_charges(session, table_id, number)
 
 
 async def list_rounds(
@@ -487,7 +499,13 @@ async def load_closing_request(
 
 
 async def fail_closing(
-    session: AsyncSession, table_id: uuid.UUID, number: int, started: datetime, reason: str, counted: bool = True
+    session: AsyncSession,
+    table_id: uuid.UUID,
+    number: int,
+    started: datetime,
+    reason: str,
+    counted: bool = True,
+    prices: PriceList = FREE_PRICES,
 ) -> None:
     """
     닫는 중인 라운드의 서술이 끝내 실패한 것을 적는다. 저장한다.
@@ -497,6 +515,7 @@ async def fail_closing(
 
     counted 면 서술의 실패로 센다(narration_failures). 서술 값을 잡지 못해 모델을 부르지 않은 실패는 세지 않는다.
     센 횟수가 NARRATION_FAILURE_LIMIT 에 닿으면 실패로 적지 않고 서술을 그만둔다(abandon_narration).
+    prices 는 그만두고 다음 라운드를 열 때 알릴 값을 찾는 가격 목록이다.
 
     테이블을 잠그고, 잠근 뒤에 이 라운드가 started 에 맡긴 서술을 아직 기다리는지, 실패가 적히지 않았는지 본다.
     아니면 아무것도 하지 않는다.
@@ -518,7 +537,7 @@ async def fail_closing(
     if counted:
         round_.narration_failures += 1
     if round_.narration_failures >= NARRATION_FAILURE_LIMIT:
-        await abandon_narration(session, table, round_, reason)
+        await abandon_narration(session, table, round_, reason, prices)
         return
     round_.narration_failed_at = datetime.now(UTC)
     closed = await event_repository.find_latest(session, table_id, EventType.ROUND_CLOSED)
@@ -539,25 +558,35 @@ def engine_scene(table: GameTable, round_: Round) -> str:
 
 
 async def close_and_open(
-    session: AsyncSession, table: GameTable, round_: Round, scene: str, paid: bool, cause: TableEvent | None
+    session: AsyncSession,
+    table: GameTable,
+    round_: Round,
+    scene: str,
+    paid: bool,
+    cause: TableEvent | None,
+    prices: PriceList = FREE_PRICES,
 ) -> None:
     """
     잠근 테이블의 닫는 중인 라운드를 닫고, scene 을 장면으로 하는 다음 라운드를 연다. 저장한다.
 
     paid 면 서술 값을 확정할 것, 아니면 돌려줄 것으로 적는다. 테이블이 끝났으면 다음 라운드를 열지 않고 돌려준다.
     cause 는 다음 라운드를 열게 한 이벤트다. 닫은 것을 먼저 DB 에 보낸다(유일 색인 uq_table_rounds_open).
+    prices 로 다음 라운드의 1인 1라운드의 값을 찾아 알린다(app/rounds/round_price.py).
     """
     now = datetime.now(UTC)
     round_.closed_at = now
     playing = table.status == TableStatus.PLAYING
     if playing:
+        price = await price_of(session, prices, table.narration_model, now)
         await session.flush()
-        opener.open_round(session, table, number=round_.number + 1, scene=scene, cause=cause)
+        opener.open_round(session, table, number=round_.number + 1, scene=scene, cause=cause, price=price)
     await charges.settle_round(session, round_.id, paid and playing, now)
     await tables.commit(session, table)
 
 
-async def abandon_narration(session: AsyncSession, table: GameTable, round_: Round, reason: str) -> None:
+async def abandon_narration(
+    session: AsyncSession, table: GameTable, round_: Round, reason: str, prices: PriceList = FREE_PRICES
+) -> None:
     """
     잠근 테이블의 라운드의 서술을 그만둔다. 값을 받지 않고, 엔진의 결과로 다음 라운드를 연다. 저장한다.
 
@@ -567,11 +596,17 @@ async def abandon_narration(session: AsyncSession, table: GameTable, round_: Rou
     closed = await event_repository.find_latest(session, table.id, EventType.ROUND_CLOSED)
     payload = {'round': round_.number, 'reason': reason, 'failures': round_.narration_failures}
     abandoned = recorder.record(session, table, EventType.NARRATION_ABANDONED, payload=payload, cause=closed)
-    await close_and_open(session, table, round_, engine_scene(table, round_), paid=False, cause=abandoned)
+    scene = engine_scene(table, round_)
+    await close_and_open(session, table, round_, scene, paid=False, cause=abandoned, prices=prices)
 
 
 async def finish_closing(
-    session: AsyncSession, table_id: uuid.UUID, number: int, started: datetime, scene: str
+    session: AsyncSession,
+    table_id: uuid.UUID,
+    number: int,
+    started: datetime,
+    scene: str,
+    prices: PriceList = FREE_PRICES,
 ) -> None:
     """
     닫는 중인 라운드를 닫고, 서술(scene)을 장면으로 하는 다음 라운드를 연다. 저장한다.
@@ -594,4 +629,4 @@ async def finish_closing(
         return
 
     closed = await event_repository.find_latest(session, table_id, EventType.ROUND_CLOSED)
-    await close_and_open(session, table, round_, scene, paid=True, cause=closed)
+    await close_and_open(session, table, round_, scene, paid=True, cause=closed, prices=prices)
