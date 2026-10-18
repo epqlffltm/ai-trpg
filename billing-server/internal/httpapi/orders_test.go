@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,10 @@ type fakeOrders struct {
 	productID  string
 	key        string
 	paymentKey string
+
+	page   order.OrderPage
+	before *uuid.UUID
+	limit  int
 }
 
 func (f *fakeOrders) Create(_ context.Context, userID uuid.UUID, productID string, key string) (order.Order, bool, error) {
@@ -52,6 +57,12 @@ func (f *fakeOrders) Get(_ context.Context, userID uuid.UUID, id uuid.UUID) (ord
 	f.calls++
 	f.user, f.orderID = userID, id
 	return f.order, f.err
+}
+
+func (f *fakeOrders) List(_ context.Context, userID uuid.UUID, before *uuid.UUID, limit int) (order.OrderPage, error) {
+	f.calls++
+	f.user, f.before, f.limit = userID, before, limit
+	return f.page, f.err
 }
 
 func (f *fakeOrders) Confirm(_ context.Context, userID uuid.UUID, id uuid.UUID, paymentKey string) (order.Order, error) {
@@ -142,7 +153,7 @@ func TestCreateOrderAnswersCreatedForANewOrder(t *testing.T) {
 	}
 	want := `{"id":"` + orderID + `","product_id":"credits-1000","price":1000,"credits":"1000","status":"pending",` +
 		`"failure_code":null,"created_at":"2026-03-02T09:00:00Z","expires_at":"2026-03-03T09:00:00Z","paid_at":null,` +
-		`"refundable":false,"refundable_until":null,"refunded_at":null}`
+		`"refundable":false,"refundable_until":null,"refunded_at":null,"refund_blocked":null}`
 	if got := body(response); got != want {
 		t.Errorf("본문 = %s\n기대 = %s", got, want)
 	}
@@ -191,6 +202,7 @@ func TestOrderErrorsBecomeStatusCodes(t *testing.T) {
 		{"키의 모양이 틀렸다", order.ErrInvalidKey, http.StatusBadRequest},
 		{"없는 상품", order.ErrUnknownProduct, http.StatusBadRequest},
 		{"결제 번호의 모양이 틀렸다", order.ErrInvalidPaymentKey, http.StatusBadRequest},
+		{"목록의 범위가 틀렸다", order.ErrInvalidListRange, http.StatusBadRequest},
 		{"없는 주문", order.ErrNotFound, http.StatusNotFound},
 		{"같은 키로 다른 주문", order.ErrKeyReused, http.StatusConflict},
 		{"다른 결제 번호", order.ErrPaymentKeyMismatch, http.StatusConflict},
@@ -211,6 +223,7 @@ func TestOrderErrorsBecomeStatusCodes(t *testing.T) {
 	requests := []request{
 		{method: http.MethodPost, path: ordersURL, body: `{"product_id":"x"}`},
 		{method: http.MethodGet, path: ordersURL + "/" + orderID},
+		{method: http.MethodGet, path: ordersURL},
 		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/confirm", body: `{"payment_key":"x"}`},
 		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/refund"},
 	}
@@ -236,6 +249,7 @@ func TestOrderAddressesNeedAToken(t *testing.T) {
 		{method: http.MethodGet, path: productsURL},
 		{method: http.MethodPost, path: ordersURL, body: `{"product_id":"credits-1000"}`},
 		{method: http.MethodGet, path: ordersURL + "/" + orderID},
+		{method: http.MethodGet, path: ordersURL},
 		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/confirm", body: `{"payment_key":"fake_ok_1"}`},
 		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/refund"},
 	}
@@ -391,7 +405,9 @@ func TestTheOrderShowsWhetherItCanBeRefunded(t *testing.T) {
 	refundable := sampleOrder(t, order.StatusPaid)
 	refundable.PaidAt, refundable.RefundableUntil, refundable.Refundable = &paidAt, &until, true
 	used := refundable
-	used.Refundable = false
+	used.Refundable, used.RefundBlocked = false, order.RefundBlockCreditsUsed
+	late := refundable
+	late.Refundable, late.RefundBlocked = false, order.RefundBlockWindowClosed
 	refunded := sampleOrder(t, order.StatusRefunded)
 	refunded.PaidAt, refunded.RefundableUntil, refunded.RefundedAt = &paidAt, &until, &refundedAt
 	cases := []struct {
@@ -399,10 +415,11 @@ func TestTheOrderShowsWhetherItCanBeRefunded(t *testing.T) {
 		order order.Order
 		want  string
 	}{
-		{"청약철회할 수 있다", refundable, `"refundable":true,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":null`},
-		{"크레딧을 썼다", used, `"refundable":false,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":null`},
-		{"치르지 않았다", sampleOrder(t, order.StatusPending), `"refundable":false,"refundable_until":null,"refunded_at":null`},
-		{"환불되었다", refunded, `"refundable":false,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":"2026-03-03T10:00:00Z"`},
+		{"청약철회할 수 있다", refundable, `"refundable":true,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":null,"refund_blocked":null`},
+		{"크레딧을 썼다", used, `"refundable":false,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":null,"refund_blocked":"credits_used"`},
+		{"7일이 지났다", late, `"refundable":false,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":null,"refund_blocked":"window_closed"`},
+		{"치르지 않았다", sampleOrder(t, order.StatusPending), `"refundable":false,"refundable_until":null,"refunded_at":null,"refund_blocked":null`},
+		{"환불되었다", refunded, `"refundable":false,"refundable_until":"2026-03-09T09:05:00Z","refunded_at":"2026-03-03T10:00:00Z","refund_blocked":null`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -414,5 +431,83 @@ func TestTheOrderShowsWhetherItCanBeRefunded(t *testing.T) {
 				t.Errorf("상태 코드 = %d, 본문 = %s. 기대 = %s", response.Code, body(response), tc.want)
 			}
 		})
+	}
+}
+
+func TestARefusedRefundSaysWhy(t *testing.T) {
+	// 409 의 까닭을 화면이 나눠 보인다(#430). 7일이 지났는지, 크레딧을 썼는지
+	cases := map[string]error{
+		"refund.window_closed": order.ErrRefundWindowClosed,
+		"refund.credits_used":  order.ErrCreditsUsed,
+		"refund.not_paid":      order.ErrNotRefundable,
+		"refund.busy":          order.ErrRefundBusy,
+		"refund.refused":       fmt.Errorf("%w(REJECT_CARD_PAYMENT)", order.ErrRefundRefused),
+	}
+	for code, err := range cases {
+		response := send(t, httpapi.Dependencies{Orders: &fakeOrders{err: err}}, request{
+			method: http.MethodPost, path: ordersURL + "/" + orderID + "/refund",
+		})
+
+		if response.Code != http.StatusConflict || !strings.Contains(body(response), `"code":"`+code+`"`) {
+			t.Errorf("%s: %d %s", code, response.Code, body(response))
+		}
+	}
+	// 청약철회가 아닌 409 에는 까닭의 이름이 없다
+	response := send(t, httpapi.Dependencies{Orders: &fakeOrders{err: order.ErrExpired}}, request{
+		method: http.MethodPost, path: ordersURL + "/" + orderID + "/confirm", body: `{"payment_key":"x"}`,
+	})
+	if response.Code != http.StatusConflict || strings.Contains(body(response), `"code"`) {
+		t.Errorf("만료된 주문: %d %s", response.Code, body(response))
+	}
+}
+
+func TestOrdersAreListedNewestFirstForTheTokensOwner(t *testing.T) {
+	next := mustUUID(t, "11111111-2222-4333-8444-555555555555")
+	orders := &fakeOrders{page: order.OrderPage{Orders: []order.Order{sampleOrder(t, order.StatusPaid)}, NextBefore: &next}}
+
+	response := send(t, httpapi.Dependencies{Orders: orders}, request{method: http.MethodGet, path: ordersURL})
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("상태 코드 = %d, 본문 = %s", response.Code, body(response))
+	}
+	got := body(response)
+	if !strings.HasPrefix(got, `{"orders":[{"id":"`+orderID+`"`) || !strings.HasSuffix(got, `],"next_before":"`+next.String()+`"}`) {
+		t.Errorf("본문 = %s", got)
+	}
+	// 토큰의 주인의 것을 처음부터 기본 크기로 읽었다
+	if orders.user.String() != testenv.UserID || orders.before != nil || orders.limit != httpapi.DefaultOrderListSize {
+		t.Errorf("물어본 것 = %s, %v, %d", orders.user, orders.before, orders.limit)
+	}
+}
+
+func TestAnEmptyOrderListIsAnEmptyArray(t *testing.T) {
+	response := send(t, httpapi.Dependencies{Orders: &fakeOrders{}}, request{method: http.MethodGet, path: ordersURL})
+
+	if got := body(response); response.Code != http.StatusOK || got != `{"orders":[],"next_before":null}` {
+		t.Errorf("본문 = %d %s", response.Code, got)
+	}
+}
+
+func TestTheOrderListTakesBeforeAndLimit(t *testing.T) {
+	orders := &fakeOrders{}
+
+	response := send(t, httpapi.Dependencies{Orders: orders}, request{
+		method: http.MethodGet, path: ordersURL + "?before=" + orderID + "&limit=" + strconv.Itoa(order.MaxListSize),
+	})
+
+	if response.Code != http.StatusOK || orders.before == nil || orders.before.String() != orderID || orders.limit != order.MaxListSize {
+		t.Errorf("%d %s, 물어본 것 = %v, %d", response.Code, body(response), orders.before, orders.limit)
+	}
+}
+
+func TestTheOrderListRefusesABadRange(t *testing.T) {
+	for _, query := range []string{"?before=abc", "?limit=0", "?limit=" + strconv.Itoa(order.MaxListSize+1), "?limit=x"} {
+		orders := &fakeOrders{}
+
+		response := send(t, httpapi.Dependencies{Orders: orders}, request{method: http.MethodGet, path: ordersURL + query})
+
+		if response.Code != http.StatusBadRequest || orders.calls != 0 {
+			t.Errorf("%s: %d %s, 불린 횟수 = %d", query, response.Code, body(response), orders.calls)
+		}
 	}
 }

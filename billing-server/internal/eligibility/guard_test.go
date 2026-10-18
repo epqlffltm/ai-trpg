@@ -28,6 +28,11 @@ func (r *recordingOrders) Get(context.Context, uuid.UUID, uuid.UUID) (order.Orde
 	return order.Order{}, nil
 }
 
+func (r *recordingOrders) List(context.Context, uuid.UUID, *uuid.UUID, int) (order.OrderPage, error) {
+	r.called = append(r.called, "list")
+	return order.OrderPage{}, nil
+}
+
 func (r *recordingOrders) Confirm(context.Context, uuid.UUID, uuid.UUID, string) (order.Order, error) {
 	r.called = append(r.called, "confirm")
 	return order.Order{}, nil
@@ -66,10 +71,11 @@ func TestAGuardLetsReadingAndRefundingThrough(t *testing.T) {
 	ctx := context.Background()
 
 	_, getErr := guarded.Get(ctx, uuid.New(), uuid.New())
+	_, listErr := guarded.List(ctx, uuid.New(), nil, 20)
 	_, refundErr := guarded.Refund(ctx, uuid.New(), uuid.New())
 
-	if getErr != nil || refundErr != nil || len(orders.called) != 2 {
-		t.Errorf("조회 = %v, 철회 = %v, 불린 것 = %v", getErr, refundErr, orders.called)
+	if getErr != nil || listErr != nil || refundErr != nil || len(orders.called) != 3 {
+		t.Errorf("조회 = %v, 목록 = %v, 철회 = %v, 불린 것 = %v", getErr, listErr, refundErr, orders.called)
 	}
 }
 

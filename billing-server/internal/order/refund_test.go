@@ -176,13 +176,14 @@ func TestAnUndecidedCancelStaysRefunding(t *testing.T) {
 
 func TestRefundIsOnlyWithinSevenDays(t *testing.T) {
 	cases := []struct {
-		name    string
-		elapsed time.Duration
-		wantErr error
+		name        string
+		elapsed     time.Duration
+		wantErr     error
+		wantBlocked order.RefundBlock
 	}{
-		{"기한 바로 전(백만분의 1초 전)", order.RefundWindow - time.Microsecond, nil},
-		{"기한이 된 순간", order.RefundWindow, order.ErrRefundWindowClosed},
-		{"기한이 지난 뒤", order.RefundWindow + time.Hour, order.ErrRefundWindowClosed},
+		{"기한 바로 전(백만분의 1초 전)", order.RefundWindow - time.Microsecond, nil, ""},
+		{"기한이 된 순간", order.RefundWindow, order.ErrRefundWindowClosed, order.RefundBlockWindowClosed},
+		{"기한이 지난 뒤", order.RefundWindow + time.Hour, order.ErrRefundWindowClosed, order.RefundBlockWindowClosed},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -190,8 +191,8 @@ func TestRefundIsOnlyWithinSevenDays(t *testing.T) {
 			paid := f.paid()
 			f.clock.Advance(tc.elapsed)
 			got, err := f.service.Get(ctx(t), f.user, paid.ID)
-			if err != nil || got.Refundable != (tc.wantErr == nil) {
-				t.Errorf("읽은 주문의 청약철회 = %v, %v", got.Refundable, err)
+			if err != nil || got.Refundable != (tc.wantErr == nil) || got.RefundBlocked != tc.wantBlocked {
+				t.Errorf("읽은 주문의 청약철회 = %v, 까닭 = %q, %v", got.Refundable, got.RefundBlocked, err)
 			}
 
 			_, err = f.refund(paid.ID)
@@ -216,8 +217,8 @@ func TestRefundNeedsUntouchedCredits(t *testing.T) {
 	if err := f.wallet.Spend(ctx(t), f.user, 1); err != nil {
 		t.Fatalf("크레딧을 쓰지 못했다: %v", err)
 	}
-	if got, _ := f.service.Get(ctx(t), f.user, paid.ID); got.Refundable {
-		t.Error("하나 쓴 주문을 청약철회할 수 있다고 한다")
+	if got, _ := f.service.Get(ctx(t), f.user, paid.ID); got.Refundable || got.RefundBlocked != order.RefundBlockCreditsUsed {
+		t.Errorf("하나 쓴 주문의 청약철회 = %v, 까닭 = %q. credits_used 여야 한다", got.Refundable, got.RefundBlocked)
 	}
 
 	_, err := f.refund(paid.ID)
@@ -244,8 +245,9 @@ func TestOnlyPaidOrdersCanBeRefunded(t *testing.T) {
 			t.Errorf("%s: 오류 = %v. ErrNotRefundable 이어야 한다", name, err)
 		}
 	}
-	if got, _ := f.service.Get(ctx(t), f.user, pending.ID); got.Refundable || got.RefundableUntil != nil {
-		t.Errorf("치르지 않은 주문의 청약철회 = %v, %v", got.Refundable, got.RefundableUntil)
+	// 치르지 않은 주문은 까닭을 적지 않는다. 상태가 말한다
+	if got, _ := f.service.Get(ctx(t), f.user, pending.ID); got.Refundable || got.RefundableUntil != nil || got.RefundBlocked != "" {
+		t.Errorf("치르지 않은 주문의 청약철회 = %v, %v, %q", got.Refundable, got.RefundableUntil, got.RefundBlocked)
 	}
 	// 남의 주문과 없는 주문은 없는 것과 같다
 	other := setUpAt(t, f.pool, startedAt, approving())

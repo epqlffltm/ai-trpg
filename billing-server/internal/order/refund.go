@@ -173,10 +173,15 @@ func (s *Service) restorePaid(ctx context.Context, current Order, code string) (
 	return reloaded, fmt.Errorf("%w(%s)", ErrRefundRefused, code)
 }
 
-// withRefundability 는 주문에 지금 청약철회할 수 있는지를 적는다. paid 이고 기한 안이면 그 주문의 크레딧이 줄지 않았는지 본다.
+// withRefundability 는 주문에 지금 청약철회할 수 있는지와, 치른 주문인데 할 수 없으면 그 까닭을 적는다.
+// paid 이고 기한 안이면 그 주문의 크레딧이 줄지 않았는지 본다. 치른 주문이 아니면 까닭을 적지 않는다(상태가 말한다).
 func (s *Service) withRefundability(ctx context.Context, current Order) (Order, error) {
-	current.Refundable = false
-	if current.Status != StatusPaid || current.RefundableUntil == nil || !s.clock().Before(*current.RefundableUntil) {
+	current.Refundable, current.RefundBlocked = false, ""
+	if current.Status != StatusPaid || current.RefundableUntil == nil {
+		return current, nil
+	}
+	if !s.clock().Before(*current.RefundableUntil) {
+		current.RefundBlocked = RefundBlockWindowClosed
 		return current, nil
 	}
 	full, err := s.wallet.OrderLotFull(ctx, current.UserID, current.ID)
@@ -184,6 +189,9 @@ func (s *Service) withRefundability(ctx context.Context, current Order) (Order, 
 		return Order{}, err
 	}
 	current.Refundable = full
+	if !full {
+		current.RefundBlocked = RefundBlockCreditsUsed
+	}
 	return current, nil
 }
 
