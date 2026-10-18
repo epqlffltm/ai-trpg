@@ -8,6 +8,7 @@ AI 호출의 기록에 남은 원문을 보관 기간이 지나면 비우는 것
 넷을 본다.
   - 비우기: 보관 기간이 지난 원문만 비운다. 줄과 그 밖의 칸(모델, 토큰 수, 결과)은 남는다. 기간 안의 원문은 그대로다.
   - 나눠 비우기: 한 묶음씩, 한 바퀴에 정해 둔 묶음까지만. 밀린 것은 다음 바퀴에 마저 비운다.
+    한 묶음은 묶음의 수를 넘지 않는다(고르기와 비우기를 나눈다). 다른 서버가 잠근 줄은 건너뛴다.
   - 기록: 비운 것이 있으면 info, 없으면 debug 한 줄. 비운 수가 실린다.
   - 설정: 기본 30일, 하루보다 짧게 할 수 없다. 앱에 기간이 꽂힌다.
 """
@@ -17,10 +18,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai import retention
+from app.ai import repository, retention
 from app.ai.models import AiInvocation
 from app.ai.retention import PRUNE_OPERATION, AiLogPruner, cutoff
 from app.core.config import Settings
@@ -140,6 +141,42 @@ async def test_a_round_clears_a_bounded_number_of_batches(
     assert await pruner.tick() == 4
     assert await texts(app) == [None, None, None, None, '모델이 쓴 장면']
     assert await pruner.tick() == 1
+
+
+async def test_one_batch_never_clears_more_than_the_limit(app: FastAPI, session: AsyncSession):
+    for days in range(40, 45):
+        await add_call(session, days_ago=days)
+
+    async with app.state.session_factory() as work:
+        cleared = await repository.clear_old_texts(work, cutoff(NOW, RETENTION_DAYS), 2)
+        await work.commit()
+
+    # 고르기와 비우기가 한 문장이면 계획기에 따라 묶음보다 많이 비울 수 있다. 두 문장이라 늘 묶음까지다
+    assert cleared == 2
+    assert await texts(app) == [None, None, '모델이 쓴 장면', '모델이 쓴 장면', '모델이 쓴 장면']
+
+
+async def test_a_row_locked_by_another_server_is_skipped(app: FastAPI, session: AsyncSession):
+    oldest = await add_call(session, days_ago=50)
+    await add_call(session, days_ago=40)
+    before = cutoff(NOW, RETENTION_DAYS)
+
+    async with app.state.session_factory() as other, app.state.session_factory() as work:
+        # 다른 서버가 가장 오래된 줄을 잠그고 있다
+        await other.execute(select(AiInvocation).where(AiInvocation.id == oldest.id).with_for_update())
+        # 건너뛰지 않고 기다리면 2 초 뒤에 실패한다. 테스트가 멈춰 있지 않게 한다
+        await work.execute(text("SET LOCAL lock_timeout = '2s'"))
+        cleared = await repository.clear_old_texts(work, before, 1)
+        await work.commit()
+        await other.rollback()
+
+    # 기다리지 않고 건너뛰어 다음 줄을 비운다
+    assert cleared == 1
+    assert await texts(app) == ['모델이 쓴 장면', None]
+
+
+async def test_nothing_chosen_clears_nothing(session: AsyncSession):
+    assert await repository.clear_texts(session, []) == 0
 
 
 # --- 기록 ---
