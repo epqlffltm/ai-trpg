@@ -194,7 +194,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_model` 로 서술 모델을 고른다(비우면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대체 모델. [추천 모델](#추천-모델)). `credit_wait_seconds`, `remove_short_payers` 로 크레딧이 모자란 사람을 기다리는 규칙을 고른다(비우면 5분, 켬). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables` | 내가 앉아 있는 테이블 목록. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/join` | 초대 코드로 테이블에 들어가 앉는다 | access 토큰 |
-| GET | `/api/v1/game/tables/narration-models` | 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값(`{"free": false, "models": [{"slug", "display_name", "vendor", "grade", "credits", "tier", "promo", "next"}]}`). 가격 목록을 받지 못했으면 503 ([고를 수 있는 모델](#고를-수-있는-모델)) | access 토큰 |
+| GET | `/api/v1/game/tables/narration-models` | 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값(`{"free": false, "models": [{"slug", "display_name", "vendor", "grade", "credits", "tier", "promo", "next", "retires_on"}]}`). 가격 목록을 받지 못했으면 503 ([고를 수 있는 모델](#고를-수-있는-모델)) | access 토큰 |
 | GET | `/api/v1/game/tables/lobby` | 로비. 들어갈 수 있는 테이블 목록. 최근에 만든 것부터. `scenario_id`, `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/join` | 로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 `password` 를 보낸다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}` | 내가 앉아 있는 테이블 하나 | access 토큰 |
@@ -1979,8 +1979,19 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **몰래 바꾸지 않는다.** `table_created` 이벤트에 정한 모델과 추천 모델이 함께 실린다. 둘이 다르면 화면이 알린다.
 - **작성자 화면에 상태를 보인다**(`narration_model_status`). `ok`, `retiring`(은퇴일 `retires_on` 이 정해졌다), `unavailable`(꺼졌거나 은퇴했거나 목록에 없다)이고, `replacement` 는 지금 테이블을 만들면 대신 쓸 모델이다. 가격 목록을 받지 못하면 `replacement` 만 비운다. 알림함이 생기기 전까지 이것이 작성자에게 알리는 방법이다.
 
+### 모델 은퇴
+
+공급자가 모델을 내리는 날(모델 목록의 은퇴일, `scripts.models retire`)이 정해지면 그 모델을 쓰는 테이블에 미리 알리고, 그날이 되면 같은 회사의 다른 모델로 바꾼다(`app/tables/model_retirement.py`).
+- **미리 알린다.** 은퇴일이 30, 14, 7, 1 일 남았을 때 한 번씩, 모두 네 번(`narration_model_retiring`). 앉은 사람 모두가 본다. 서버가 꺼져 있다가 늦게 보면 지금 닿은 단계 하나만 알린다. 은퇴일이 미뤄지거나 방장이 모델을 바꾸면 처음부터 다시 센다.
+- **은퇴일은 목록에도 보인다.** `GET /tables/narration-models` 의 `retires_on`. 화면이 "12월 1일 종료"를 보여 준다.
+- **은퇴하면 바꾼다.** 대신 쓸 모델은 [추천 모델](#추천-모델)과 같은 규칙이다(운영자가 정한 회사의 대체 모델, 없으면 같은 회사의 standard 중 가장 싼 모델). 방장이 모델을 바꾸는 것과 같은 길이라, 아직 서술하지 않은 지금 라운드도 바꾸고 그 라운드의 청구를 새 가격표로 다시 건다. `narration_model_replaced` 이벤트에 옛 모델, 새 모델, 까닭, 함께 바꾼 라운드가 실린다.
+- **은퇴만 바꾼다.** 운영자가 잠깐 끄거나 결제 서버가 판매를 멈춘 것은 다시 켜질 수 있어 바꾸지 않는다. 그때는 [막힌 라운드](#모델-고르기)대로 방장에게 알리고 방장이 바꾼다.
+- **같은 회사에 대신할 모델이 없으면** 바꾸지 않고 한 번 알린다(`narration_model_unavailable`). 다른 회사로는 넘기지 않는다. 방장이 모델을 고를 때까지 그 테이블은 서술할 수 없다.
+- **언제 보나.** 뒤에서 도는 작업이 한 시간마다 은퇴일이 30 일 안에 들었거나 지난 모델의 테이블을 본다(`app/tables/retirement_watch.py`, 로그의 operation 은 `model.retirement`). 은퇴는 날짜(UTC)의 시작부터라 하루에 한 번이면 하루 가까이 막힐 수 있다. 라운드가 열린 뒤에도 그 테이블을 본다(테이블을 시작할 때, 서술이 끝나 다음 라운드가 열릴 때). 테이블을 잠그고 보고 알린 단계를 적어 두므로, 서버가 여럿이어도 같은 알림이 두 번 가지 않는다.
+- **가격 목록을 받지 못하면** 그 테이블은 바꾸지 않고 다음에 다시 본다. 값을 모르는 모델로 바꾸지 않는다.
+
 **알려진 한계**
-- 은퇴하는 모델로 진행 중인 테이블은 아직 저절로 바뀌지 않는다. 은퇴를 미리 알리고 은퇴하면 같은 규칙으로 바꾸는 것은 다음 일이다.
+- 은퇴 직전에 열려 은퇴 뒤에 서술이 돌기 시작한 라운드는 연 때의 모델을 부르다 실패한다(`model_unavailable`). 다음 바퀴(한 시간 안)에 그 라운드도 바꾸고 새 가격표로 다시 건다. 방장이 다시 맡기면 서술한다.
 
 ### 관리 명령
 
@@ -2043,6 +2054,9 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `narration_tier_changed` | 방장이 서술 등급을 바꿨다. 서술 등급을 없앤 뒤로는 적지 않는다. 그 전의 기록에만 있다 | `narration_tier`: 바꾼 등급 |
 | `narration_model_changed` | 방장이 서술 모델을 바꿨다. 다음 라운드부터 그 모델이다. 아직 서술하지 않은 지금 라운드도 바꿨으면 `round` 가 있다 | `narration_model`: 바꾼 모델의 이름표, `round`: 함께 바꾼 지금 라운드의 번호(없으면 `null`) |
 | `narration_model_not_for_sale` | 라운드의 서술 모델을 결제 서버가 팔지 않는다. 라운드마다 한 번. 방장이 모델을 바꾸면 그 라운드를 새 가격표로 다시 건다 | `round`, `narration_model` |
+| `narration_model_retiring` | 테이블의 서술 모델이 곧 은퇴한다. 30, 14, 7, 1 일 남았을 때 한 번씩([모델 은퇴](#모델-은퇴)) | `narration_model`, `retires_on`, `days_left` |
+| `narration_model_replaced` | 서술 모델이 은퇴해 서버가 같은 회사의 다른 모델로 바꿨다 | `from`: 옛 모델, `narration_model`: 새 모델, `reason`: `retired`, `round`: 함께 바꾼 지금 라운드의 번호(없으면 `null`) |
+| `narration_model_unavailable` | 서술 모델이 은퇴했는데 같은 회사에 대신할 모델이 없다. 방장이 모델을 골라야 서술한다 | `narration_model`, `reason`: `retired` |
 | `credit_wait_changed` | 방장이 크레딧이 모자란 사람을 기다리는 규칙을 바꿨다 | `credit_wait_seconds`, `remove_short_payers` |
 | `whisper_notice_changed` | 방장이 쪽지를 보낸 사실을 알릴지 바꿨다 | `whisper_notice` |
 | `ledger_drafts_changed` | 방장이 장부 초안을 쓸지 바꿨다 | `ledger_drafts` |

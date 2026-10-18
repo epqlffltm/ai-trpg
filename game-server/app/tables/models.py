@@ -21,11 +21,12 @@
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -229,6 +230,10 @@ class GameTable(Base):
     # 길이는 모델 목록의 이름표와 같다(48자). 모델 목록을 가리키는 외래 키는 두지 않는다.
     # 고를 때 확인한다(app/tables/model_picker.py)
     narration_model: Mapped[str | None] = mapped_column(String(48))
+    # 서술 모델의 은퇴를 어디까지 알렸는가(app/tables/model_retirement.py). 은퇴일과, 알린 단계(30, 14, 7, 1 일 전).
+    # 대신할 모델이 없다고 알렸으면 단계가 0 이다. 은퇴일이 바뀌거나 모델이 바뀌면 처음부터 다시 센다
+    retire_notice_for: Mapped[date | None] = mapped_column(Date)
+    retire_notice_days: Mapped[int | None] = mapped_column(SmallInteger)
 
     # 라운드의 시간 제한(초). 라운드가 열린 때부터 센다. 지나면 서버가 라운드를 닫는다(app/rounds/clock.py).
     # 비어 있으면 시간 제한이 없다. 모두 내거나 방장이 닫을 때만 닫힌다.
