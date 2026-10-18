@@ -78,6 +78,8 @@ SECRETS = [
         'SIGNAL_SECRET',
         'AI_LOG_HMAC_KEY',
     ),
+    # 게시판 서버가 알림 서버에 댓글의 알림을 넣는 비밀(#385). 서버만 쓴다. 마이그레이션에는 주지 않는다
+    *secrets('board-server', ['board-server'], 'NOTIFICATION_SECRET'),
     # 결제 서버가 요청의 서명을 확인하는 비밀. 요청을 받는 서버만 쓴다
     *secrets('billing-server', ['billing-server'], 'PG_WEBHOOK_SECRET', 'GAME_SERVER_SECRET'),
     # 인증 서버와 함께 아는 비밀. 서버가 인증 서버의 요청을 확인하고, 정리 작업이 보호자 알림(#352)에 서명한다
