@@ -30,6 +30,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing.price_list import FREE_PRICES, PriceList
 from app.rounds import repository, service
 from app.rounds.models import Round, RoundStatus
 from app.rounds.service import NarrationScheduler, hand_over, save
@@ -118,7 +119,7 @@ async def retry(
     )
 
 
-async def give_up(session: AsyncSession, table: GameTable, round_: Round) -> None:
+async def give_up(session: AsyncSession, table: GameTable, round_: Round, prices: PriceList = FREE_PRICES) -> None:
     """
     다시 맡기기를 그만두고 실패(stalled)로 적는다. 앉은 사람 모두에게 알린다. 저장한다.
 
@@ -126,7 +127,7 @@ async def give_up(session: AsyncSession, table: GameTable, round_: Round) -> Non
     사람이 봐야 하는 일이라 warning 으로 남긴다. 같은 서술이 되풀이해 사라졌다.
     """
     number, started, retries = round_.number, round_.closing_at, round_.auto_retries
-    await service.fail_closing(session, table.id, number, started, STALLED)
+    await service.fail_closing(session, table.id, number, started, STALLED, prices=prices)
     logger.warning(
         '서술을 맡은 작업이 되풀이해 사라져 다시 맡기기를 그만뒀습니다',
         extra={
@@ -139,8 +140,18 @@ async def give_up(session: AsyncSession, table: GameTable, round_: Round) -> Non
     )
 
 
-async def recover(session: AsyncSession, table_id: uuid.UUID, now: datetime, scheduler: NarrationScheduler) -> Recovery:
-    """테이블 하나의 사라진 서술을 다시 맡기거나 그만둔다. 무엇을 했는지 돌려준다."""
+async def recover(
+    session: AsyncSession,
+    table_id: uuid.UUID,
+    now: datetime,
+    scheduler: NarrationScheduler,
+    prices: PriceList = FREE_PRICES,
+) -> Recovery:
+    """
+    테이블 하나의 사라진 서술을 다시 맡기거나 그만둔다. 무엇을 했는지 돌려준다.
+
+    prices 는 그만둘 때 다음 라운드에 알릴 값을 찾는 가격 목록이다.
+    """
     found = await lock_vanished_round(session, table_id, now)
     if found is None:
         # 잠금을 푼다. 바꾼 것이 없다. 되돌리기(rollback)는 세션이 들고 있던 객체를 낡은 것으로 만든다
@@ -148,7 +159,7 @@ async def recover(session: AsyncSession, table_id: uuid.UUID, now: datetime, sch
         return Recovery.NOTHING
     table, round_ = found
     if not can_retry(round_):
-        await give_up(session, table, round_)
+        await give_up(session, table, round_, prices)
         return Recovery.GAVE_UP
     await retry(session, table, round_, now, scheduler)
     return Recovery.RETRIED

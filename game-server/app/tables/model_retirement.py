@@ -37,10 +37,12 @@ from app.billing.price_list import PriceList
 from app.catalog import offers
 from app.catalog import repository as catalog
 from app.catalog.models import AiModel
+from app.catalog.offers import OfferedModel
 from app.catalog.rules import is_retired
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds import repository as round_repository
+from app.rounds.round_price import price_payload
 from app.tables import repository as table_repository
 from app.tables.models import GameTable, TableStatus
 from app.tables.narration_models import apply_to_round, forget_retire_notices, takes_new_model
@@ -105,14 +107,15 @@ def is_watched(table: GameTable) -> bool:
     return table.status != TableStatus.ENDED and table.narration_model is not None
 
 
-async def replacement_of(session: AsyncSession, prices: PriceList, model: AiModel, now: datetime) -> str | None:
+async def replacement_of(
+    session: AsyncSession, prices: PriceList, model: AiModel, now: datetime
+) -> OfferedModel | None:
     """
     은퇴하는 모델 대신 쓸 같은 회사의 모델. 없으면 None.
 
     가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다. 다음에 다시 본다.
     """
-    found = await offers.find_replacement(session, prices, model.vendor, now, excluding=model.slug)
-    return found.slug if found else None
+    return await offers.find_replacement(session, prices, model.vendor, now, excluding=model.slug)
 
 
 def notify_retiring(session: AsyncSession, table: GameTable, model: AiModel, stage: int, today: date) -> None:
@@ -126,23 +129,24 @@ def notify_retiring(session: AsyncSession, table: GameTable, model: AiModel, sta
     mark_noticed(table, model.retires_on, stage)
 
 
-async def replace_model(session: AsyncSession, table: GameTable, retired: str, replacement: str) -> None:
+async def replace_model(session: AsyncSession, table: GameTable, retired: str, replacement: OfferedModel) -> None:
     """
     테이블의 모델을 대신 쓸 모델로 바꾸고 알린다. 아직 서술하지 않은 지금 라운드도 바꾸고 새 가격표로 다시 건다.
 
     방장이 바꾸는 것(app/tables/narration_models.py)과 같은 규칙이다. 다른 것은 바꾼 사람이 서버라는 것뿐이다.
     """
     round_ = await round_repository.find_latest_round(session, table.id)
-    table.narration_model = replacement
+    table.narration_model = replacement.slug
     applied = takes_new_model(round_)
     if applied:
-        await apply_to_round(session, round_, replacement)
+        await apply_to_round(session, round_, replacement.slug, replacement)
     forget_retire_notices(table)
     payload = {
         'from': retired,
-        'narration_model': replacement,
+        'narration_model': replacement.slug,
         'reason': RETIRED,
         'round': round_.number if applied else None,
+        'price': price_payload(round_) if applied else None,
     }
     recorder.record(session, table, EventType.NARRATION_MODEL_REPLACED, payload=payload)
 

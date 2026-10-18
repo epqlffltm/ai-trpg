@@ -25,7 +25,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.NARRATION_STYLE_CHANGED: ('narration_style',),
     EventType.ROUND_TIME_LIMIT_CHANGED: ('round_time_limit',),
     EventType.NARRATION_TIER_CHANGED: ('narration_tier',),
-    EventType.NARRATION_MODEL_CHANGED: ('narration_model', 'round'),
+    EventType.NARRATION_MODEL_CHANGED: ('narration_model', 'round', 'price'),
     EventType.CREDIT_WAIT_CHANGED: ('credit_wait_seconds', 'remove_short_payers'),
     EventType.WHISPER_NOTICE_CHANGED: ('whisper_notice',),
     EventType.LEDGER_DRAFTS_CHANGED: ('ledger_drafts',),
@@ -75,7 +75,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
     # 게임 안의 시각은 공개다. 모두 같은 때에 있다
-    EventType.ROUND_OPENED: ('number', 'deadline_at', 'narration_model', 'clock', 'passed_minutes'),
+    EventType.ROUND_OPENED: ('number', 'deadline_at', 'narration_model', 'price', 'clock', 'passed_minutes'),
     EventType.PLAYER_ACTION: ('round', 'character_name', 'content', 'action'),
     # 굴림은 공개다. 숫자까지 모두에게 보인다
     EventType.CHECK_ROLLED: (
@@ -205,7 +205,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.NARRATION_CREDITS_SHORT: ('round', 'user_id', 'reason'),
     EventType.NARRATION_MODEL_NOT_FOR_SALE: ('round', 'narration_model'),
     EventType.NARRATION_MODEL_RETIRING: ('narration_model', 'retires_on', 'days_left'),
-    EventType.NARRATION_MODEL_REPLACED: ('from', 'narration_model', 'reason', 'round'),
+    EventType.NARRATION_MODEL_REPLACED: ('from', 'narration_model', 'reason', 'round', 'price'),
     EventType.NARRATION_MODEL_UNAVAILABLE: ('narration_model', 'reason'),
     EventType.MEMBER_DROPPED: ('round', 'user_id', 'character_name'),
     EventType.NARRATION_CREDITS_RELEASED: ('round',),
