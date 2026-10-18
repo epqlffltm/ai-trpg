@@ -14,6 +14,8 @@
   - 사용자 정지는 여기에 없다. 인증 서버의 명령(suspend_account)으로 한다. 관리 서버가 생기면 그쪽으로 옮긴다
 
 제재는 감사 기록(operator_actions)과 한 트랜잭션에서 커밋한다. 제재가 되지 않았으면 기록도 남지 않는다.
+당사자의 알림(시나리오 제재, 공개 금지와 풀기)도 같은 트랜잭션에서 발송함에 적는다(app/operators/notices.py).
+테이블 끝내기는 알리지 않는다. 앉은 사람이 테이블의 이벤트로 본다.
 HTTP 를 모른다. 운영자인지는 부르는 쪽(app/operators/router.py)이 확인했다.
 """
 
@@ -31,7 +33,7 @@ from app.events.models import EventType
 from app.listings import repository as listings
 from app.listings.service import unpublish
 from app.observability.context import current_ids
-from app.operators import repository
+from app.operators import notices, repository
 from app.operators.models import ActionKind, OperatorAction, PublishingBan, ScenarioSanction
 from app.operators.publishing import is_active
 from app.tables import repository as tables
@@ -67,6 +69,17 @@ class SanctionConflictError(Exception):
     def __init__(self, reason: SanctionConflict) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+class BanState(enum.StrEnum):
+    """제재 하나를 본 뒤의 공개 금지."""
+
+    # 금지 중이 아니다
+    NOT_BANNED = 'not_banned'
+    # 이미 금지 중이었다
+    ALREADY_BANNED = 'already_banned'
+    # 이번 제재로 저절로 금지되었다
+    NEWLY_BANNED = 'newly_banned'
 
 
 @dataclass(frozen=True)
@@ -137,20 +150,31 @@ async def impose_ban(
     return ban
 
 
-async def ban_if_due(session: AsyncSession, owner_id: uuid.UUID, now: datetime, threshold: int) -> bool:
+async def ban_if_due(session: AsyncSession, owner_id: uuid.UUID, now: datetime, threshold: int) -> BanState:
     """
-    제재된 수가 금지에 닿았으면 저절로 공개를 금지한다. 금지 중인지를 돌려준다. 사람마다 잠근 뒤에 부른다.
+    제재된 수가 금지에 닿았으면 저절로 공개를 금지한다. 그 뒤의 공개 금지를 돌려준다. 사람마다 잠근 뒤에 부른다.
 
     풀린 적이 있으면 푼 뒤의 제재만 센다.
     """
     ban = await repository.find_ban(session, owner_id)
     if is_active(ban):
-        return True
+        return BanState.ALREADY_BANNED
     count = await repository.count_sanctions(session, owner_id, ban.lifted_at if ban else None)
     if not reached(count, threshold):
-        return False
+        return BanState.NOT_BANNED
     await impose_ban(session, owner_id, None, AUTO_BAN_REASON, now)
-    return True
+    return BanState.NEWLY_BANNED
+
+
+async def tell_owner(
+    session: AsyncSession, action: OperatorAction, owner_id: uuid.UUID, title: str, version_number: int, ban: BanState
+) -> None:
+    """시나리오 제재를 제작자에게 알린다. 이번 제재로 저절로 금지되었으면 그것도 따로 알린다. 기록을 flush 한다."""
+    await session.flush()
+    banned = ban != BanState.NOT_BANNED
+    notices.tell_sanctioned(session, action, owner_id, title, version_number, banned)
+    if ban == BanState.NEWLY_BANNED:
+        notices.tell_banned(session, action, owner_id, automatic=True)
 
 
 # --- 운영자의 제재 ---
@@ -187,12 +211,13 @@ async def sanction_scenario(
     unpublish(listing)
     await session.flush()
     await repository.lock_owner(session, owner_id)
-    banned = await ban_if_due(session, owner_id, now, threshold)
+    ban = await ban_if_due(session, owner_id, now, threshold)
     action = build_action(operator_id, ActionKind.SCENARIO_SANCTION, scenario_id, reason, now)
     repository.add_action(session, action)
+    await tell_owner(session, action, owner_id, scenario.asset.title, version.number, ban)
     await session.commit()
     log_action(action)
-    return SanctionResult(scenario_id, version.number, owner_id, banned)
+    return SanctionResult(scenario_id, version.number, owner_id, ban != BanState.NOT_BANNED)
 
 
 async def end_table(
@@ -228,6 +253,8 @@ async def ban_publisher(
     ban = await impose_ban(session, user_id, operator_id, reason, now)
     action = build_action(operator_id, ActionKind.PUBLISHING_BAN, user_id, reason, now)
     repository.add_action(session, action)
+    await session.flush()
+    notices.tell_banned(session, action, user_id, automatic=False)
     await session.commit()
     log_action(action)
     return ban
@@ -244,6 +271,8 @@ async def lift_ban(
     ban.lifted_at, ban.lifted_by = now, operator_id
     action = build_action(operator_id, ActionKind.PUBLISHING_UNBAN, user_id, reason, now)
     repository.add_action(session, action)
+    await session.flush()
+    notices.tell_unbanned(session, action, user_id)
     await session.commit()
     log_action(action)
     return ban
