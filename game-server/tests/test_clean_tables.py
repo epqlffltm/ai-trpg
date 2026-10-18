@@ -11,6 +11,7 @@
 """
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI
@@ -28,6 +29,8 @@ from app.drafts.models import DraftKind, LedgerDraft
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
 from app.memory.indexing import index_table
+from app.operators.models import ReadKind
+from app.operators.service import build_read
 from app.tables.models import (
     QuestStatus,
     TableFoundRoute,
@@ -179,6 +182,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
                 table_id=uuid.UUID(table['id']), round_number=1, position=0, kind=DraftKind.QUEST_CHANGE, payload=draft
             )
         )
+        # 덧붙이기만 하는 표. 트리거가 DELETE 를 막아 TRUNCATE 로 비워진다(tests/cleaning.py)
+        session.add(build_read(ME, ReadKind.TABLE, uuid.UUID(table['id']), '신고', datetime.now(UTC)))
         await session.commit()
 
     async with app.state.session_factory() as session:
@@ -207,6 +212,8 @@ async def test_cleaning_empties_every_table(
     await fill_every_table(client, app, me)
     before = await row_counts(session)
     assert [name for name, count in before.items() if count == 0] == []
+    # 센 트랜잭션을 끝낸다. 덧붙이기만 하는 표는 TRUNCATE 로 비워서, 읽고 있는 트랜잭션이 있으면 그것을 기다린다
+    await session.commit()
 
     await clear_tables(app.state.engine)
 
