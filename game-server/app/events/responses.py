@@ -25,7 +25,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.NARRATION_STYLE_CHANGED: ('narration_style',),
     EventType.ROUND_TIME_LIMIT_CHANGED: ('round_time_limit',),
     EventType.NARRATION_TIER_CHANGED: ('narration_tier',),
-    EventType.NARRATION_MODEL_CHANGED: ('narration_model',),
+    EventType.NARRATION_MODEL_CHANGED: ('narration_model', 'round'),
     EventType.CREDIT_WAIT_CHANGED: ('credit_wait_seconds', 'remove_short_payers'),
     EventType.WHISPER_NOTICE_CHANGED: ('whisper_notice',),
     EventType.LEDGER_DRAFTS_CHANGED: ('ledger_drafts',),
@@ -202,7 +202,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     # 실패의 이유도 보인다(timeout, cut_off …). 모델이 쓴 글이나 보낸 프롬프트는 싣지 않는다
     EventType.NARRATION_FAILED: ('round', 'reason'),
     EventType.NARRATION_ABANDONED: ('round', 'reason', 'failures'),
-    EventType.NARRATION_CREDITS_SHORT: ('round', 'user_id'),
+    EventType.NARRATION_CREDITS_SHORT: ('round', 'user_id', 'reason'),
+    EventType.NARRATION_MODEL_NOT_FOR_SALE: ('round', 'narration_model'),
     EventType.MEMBER_DROPPED: ('round', 'user_id', 'character_name'),
     EventType.NARRATION_CREDITS_RELEASED: ('round',),
     EventType.TABLE_ENDED: (),

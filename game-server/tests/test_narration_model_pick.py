@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.price_list import PriceListUnavailable
@@ -164,7 +165,8 @@ async def test_the_host_changes_the_model_and_it_is_recorded(client: AsyncClient
 
     assert response.status_code == status.HTTP_200_OK, response.text
     assert response.json()['narration_model'] == 'claude-opus-5-5'
-    assert changed['payload'] == {'narration_model': 'claude-opus-5-5'}
+    # 아직 라운드가 없다. 테이블의 모델만 바뀌었다
+    assert changed['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None}
 
 
 async def test_null_goes_back_to_the_default(client: AsyncClient, me: dict[str, str]):
@@ -230,20 +232,39 @@ async def test_a_round_takes_the_model_of_the_table_when_it_opens(client: AsyncC
     assert opened['payload']['narration_model'] == 'gpt-6-luna'
 
 
-async def test_the_change_waits_for_the_next_round(
+async def test_a_change_while_declaring_applies_to_the_open_round(
     client: AsyncClient, me: dict[str, str], recording: RecordingNarrator, narrated
 ):
     table = await start_with(client, me, narration_model='gpt-6-luna')
 
     await set_model(client, me, table, 'claude-opus-5-5')
-    unchanged = await current(client, me, table)
+    changed = await current(client, me, table)
+    (event,) = await events_of(client, me, table, 'narration_model_changed')
     await close_solo(client, me, table, narrated)
-    second = await current(client, me, table)
 
-    # 열려 있던 라운드는 Luna 의 값을 걸었으니 Luna 로 서술한다. 다음 라운드부터 Opus 다
-    assert unchanged['narration_model'] == 'gpt-6-luna'
-    assert [request.model for request in recording.requests] == ['gpt-6-luna']
-    assert second['narration_model'] == 'claude-opus-5-5'
+    # 아직 서술하지 않은 라운드라 그 라운드도 Opus 다. 청구는 새 가격표로 다시 건다(test_narration_blocks.py)
+    assert changed['narration_model'] == 'claude-opus-5-5'
+    assert event['payload'] == {'narration_model': 'claude-opus-5-5', 'round': 1}
+    assert [request.model for request in recording.requests] == ['claude-opus-5-5']
+
+
+async def test_a_change_while_narrating_waits_for_the_next_round(
+    client: AsyncClient, me: dict[str, str], session: AsyncSession
+):
+    table = await start_with(client, me, narration_model='gpt-6-luna')
+    # 서술이 돌고 있는 라운드(닫는 중, 실패하지 않음)와 같다
+    await session.execute(
+        text('UPDATE table_rounds SET closing_at = now() WHERE table_id = :id'), {'id': uuid.UUID(table['id'])}
+    )
+    await session.commit()
+
+    response = await set_model(client, me, table, 'claude-opus-5-5')
+    (event,) = await events_of(client, me, table, 'narration_model_changed')
+
+    # 연 때의 모델의 값을 걸었고 그 모델로 서술하는 중이다. 테이블만 바뀌고 다음 라운드부터다
+    assert response.json()['narration_model'] == 'claude-opus-5-5'
+    assert (await current(client, me, table))['narration_model'] == 'gpt-6-luna'
+    assert event['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None}
 
 
 async def test_a_round_without_a_model_is_narrated_by_its_tier(
@@ -271,16 +292,24 @@ async def test_each_round_holds_the_price_of_its_model(
     monkeypatch.setitem(PRICES, narration_code('gpt-6-luna'), 20)
     table = await start_with(client, me, narration_model='gpt-6-luna')
     await tick(app)
+    await close_solo(client, me, table, narrated)
+    await tick(app)
+    # 2 라운드가 Luna 로 열린 뒤 모델을 비운다. 2 라운드도 아직 서술하지 않았으니 등급의 가격표로 바뀐다
     await set_model(client, me, table, None)
+    await tick(app)
     await close_solo(client, me, table, narrated)
     await tick(app)
 
     charges = await charges_of(session, table)
 
-    # 1 라운드는 Luna 의 가격표로 걸고 확정했다. 2 라운드는 모델이 없어 등급의 가격표로 걸었다
-    assert [charge.price_code for charge in charges] == ['narration.gpt-6-luna.i0.o0', 'narration.standard']
-    assert [charge.status for charge in charges] == ['captured', 'held']
-    assert billing.balance(ME) == 1000 - 20 - PRICES['narration.standard']
+    # 1 라운드는 Luna 의 가격표로 걸고 확정했다. 2 라운드는 등급의 가격표로 다시 걸어 확정했다. 3 라운드는 등급이다
+    assert [charge.price_code for charge in charges] == [
+        'narration.gpt-6-luna.i0.o0',
+        'narration.standard',
+        'narration.standard',
+    ]
+    assert [charge.status for charge in charges] == ['captured', 'captured', 'held']
+    assert billing.balance(ME) == 1000 - 20 - 2 * PRICES['narration.standard']
 
 
 # --- 서술자 ---
@@ -301,3 +330,25 @@ async def test_the_picked_narrator_uses_the_model_of_the_round():
     # 모델이 굳은 라운드는 그 모델의 서술자만, 아닌 라운드는 등급의 서술자만 받는다
     assert [request.round_number for request in made['gpt-6-luna'].requests] == [1]
     assert [request.round_number for request in default.requests] == [2]
+
+
+async def test_the_same_model_still_reaches_a_round_that_kept_the_old_one(
+    client: AsyncClient, me: dict[str, str], session: AsyncSession
+):
+    table = await start_with(client, me, narration_model='gpt-6-luna')
+    round_filter = {'id': uuid.UUID(table['id'])}
+    await session.execute(text('UPDATE table_rounds SET closing_at = now() WHERE table_id = :id'), round_filter)
+    await session.commit()
+    await set_model(client, me, table, 'claude-opus-5-5')
+    # 그 서술이 실패해 멈췄다. 테이블은 이미 Opus 지만 라운드는 Luna 그대로다
+    await session.execute(
+        text('UPDATE table_rounds SET narration_failed_at = now() WHERE table_id = :id'), round_filter
+    )
+    await session.commit()
+
+    await set_model(client, me, table, 'claude-opus-5-5')
+    events = await events_of(client, me, table, 'narration_model_changed')
+
+    # 같은 값이라도 멈춘 라운드에는 아직 닿지 않았으니 바꾼다
+    assert (await current(client, me, table))['narration_model'] == 'claude-opus-5-5'
+    assert [event['payload']['round'] for event in events] == [None, 1]

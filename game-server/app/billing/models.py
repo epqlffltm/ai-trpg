@@ -110,7 +110,8 @@ class NarrationCharge(Base):
     renewals: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
 
     # 결제 서버의 가격표 이름. 값은 결제 서버가 정한다. 게임 서버는 금액을 모른다
-    price_code: Mapped[str] = mapped_column(String(40))
+    # 결제 서버의 가격표 이름의 길이 상한(64자)과 같다. narration.<이름표 48자>.i0.o0 이 들어간다
+    price_code: Mapped[str] = mapped_column(String(64))
 
     status: Mapped[str] = mapped_column(String(20), default=ChargeStatus.PENDING)
 

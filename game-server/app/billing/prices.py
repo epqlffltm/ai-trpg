@@ -8,6 +8,8 @@
   - 지금 팔지 않으면(예약만 있으면) credits, tier 가 null 이다.
   - next.credits 가 null 이면 그 시각부터 판매를 멈춘다.
   - credits 는 글자다("120"). 게임 서버는 셈하지 않고 보여 주기만 하므로 글자 그대로 둔다.
+  - promo 는 그 값이 행사가(끝나는 때가 정해진 값)인지다. 행사가면 next 가 행사가 끝나는 때와 그 뒤의 값이다.
+    비어 있으면 정가다. 이 칸이 생기기 전의 결제 서버는 싣지 않는다.
 
 목록은 보여 주는 값이다. 실제로 빠지는 값은 홀드를 걸 때 결제 서버가 그 시각의 가격표로 정한다.
 이 파일은 DB 도 네트워크도 모른다. 받아 오는 것은 app/billing/price_list.py 다.
@@ -31,7 +33,15 @@ Credits = Annotated[str, StringConstraints(pattern=r'^\d+(\.\d+)?$')]
 
 
 class Tier(enum.StrEnum):
-    """결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1)."""
+    """
+    결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).
+
+    결제 서버가 모르는 등급을 보내면 목록 전체를 읽지 못한다(503).
+    그래서 결제 서버는 게임 서버가 등급을 안 뒤에 그 줄을 넣는다.
+    """
+
+    # 가장 싼 모델의 묶음. 내는 방법은 standard 와 같다. 이벤트로 묶음째 내리거나 무료로 열려고 따로 둔다
+    BASIC = 'basic'
 
     # 실버(무료 크레딧)를 먼저 쓰고, 모자라면 골드
     STANDARD = 'standard'
@@ -46,6 +56,7 @@ class NextPriceBody(BaseModel):
 
     credits: Credits | None
     tier: Tier | None
+    promo: bool | None = None
     effective_at: AwareDatetime
 
 
@@ -57,6 +68,7 @@ class PriceBody(BaseModel):
     code: str
     credits: Credits | None
     tier: Tier | None
+    promo: bool | None = None
     next: NextPriceBody | None = None
 
 
@@ -70,10 +82,11 @@ class PriceListBody(BaseModel):
 
 @dataclass(frozen=True)
 class Sale:
-    """팔고 있는 값. credits 는 1인 1번의 값(글자)이다."""
+    """팔고 있는 값. credits 는 1인 1번의 값(글자)이다. promo 면 행사가다(끝나는 때와 그 뒤의 값은 다음 값)."""
 
     credits: str
     tier: Tier
+    promo: bool = False
 
 
 @dataclass(frozen=True)
@@ -114,19 +127,20 @@ def narration_code(slug: str) -> str:
     return f'{PRICE_CODE_PREFIX}.{slug}.{BASE_STEPS}'
 
 
-def sale_of(credits: str | None, tier: Tier | None) -> Sale | None:
-    """값과 등급으로 판매를 만든다. 둘 중 하나라도 없으면 팔지 않는 것이다."""
+def sale_of(credits: str | None, tier: Tier | None, promo: bool | None) -> Sale | None:
+    """값과 등급으로 판매를 만든다. 둘 중 하나라도 없으면 팔지 않는 것이다. 행사가 표시가 비었으면 정가다."""
     if credits is None or tier is None:
         return None
-    return Sale(credits=credits, tier=tier)
+    return Sale(credits=credits, tier=tier, promo=bool(promo))
 
 
 def to_price(body: PriceBody) -> Price:
     """응답의 이름 하나를 값으로."""
     change = None
     if body.next is not None:
-        change = Change(sale=sale_of(body.next.credits, body.next.tier), effective_at=body.next.effective_at)
-    return Price(code=body.code, current=sale_of(body.credits, body.tier), next=change)
+        sale = sale_of(body.next.credits, body.next.tier, body.next.promo)
+        change = Change(sale=sale, effective_at=body.next.effective_at)
+    return Price(code=body.code, current=sale_of(body.credits, body.tier, body.promo), next=change)
 
 
 def parse_price_list(raw: bytes) -> PriceBook:
