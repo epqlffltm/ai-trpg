@@ -128,7 +128,7 @@ POST /api/v1/notification/service/{source}/notifications
 X-Service-Signature: t=<보낸 시각(초)>,v1=<서명>
 Content-Type: application/json
 
-{"source_key": "scenario-sanction:42", "user_id": "<받는 사람의 public_id>", "kind": "scenario.sanctioned", "payload": {"scenario_id": "…"}}
+{"source_key": "scenario-sanction:42", "user_id": "<받는 사람의 public_id>", "kind": "publishing.banned", "payload": {"automatic": false}}
 ```
 
 | 답 | 뜻 |
@@ -139,6 +139,9 @@ Content-Type: application/json
 | 409 `{"detail": {"code": "key_reused", "source_key": "…"}}` | 같은 열쇠로 다른 알림(받는 사람, `kind`, `payload` 중 하나가 다르다)을 넣으려 했다 |
 | 413 | 본문이 16KB 를 넘는다 |
 | 422 | 본문의 모양이 틀렸다 |
+| 422 `{"detail": {"code": "kind_unknown", "kind": "…"}}` | [알림의 종류](#알림의-종류) 표에 없는 `kind` 다 |
+| 422 `{"detail": {"code": "kind_not_allowed", "kind": "…"}}` | 표에 있지만 그 서버가 넣는 `kind` 가 아니다(게시판 서버가 `order.paid` 를 넣으려 했다) |
+| 422 `{"detail": {"code": "payload_missing_fields", "kind": "…", "missing": ["title"]}}` | `payload` 에 꼭 있어야 하는 칸이 없다. 빠진 칸을 이름 차례로 싣는다 |
 
 - `source` 는 넣는 서버의 이름이다: `game`, `billing`, `board`. 모르는 이름도 401 이다(404 가 아니다. 어느 이름이 있는지 알리지 않는다).
   지금 넣는 서버는 게임 서버(서술 모델의 은퇴를 방장에게, 운영자의 제재를 당사자에게, [게임 서버의 알림 보내기](../game-server/README.md#알림-보내기))와
@@ -154,7 +157,42 @@ Content-Type: application/json
 - **같은 알림은 한 줄이다.** 넣는 서버는 답을 못 받으면 같은 `source_key` 로 다시 보낸다. 동시에 같은 열쇠가 여럿 와도
   DB 가 하나만 넣는다(`INSERT … ON CONFLICT DO NOTHING`). 먼저 찾아보고 없으면 넣는 방식은 동시에 온 둘이 모두 "없다"를 본다.
 - **받은 시각은 이 서버의 시계다.** 넣는 서버가 적은 시각을 믿지 않는다.
+- **`kind` 는 서명을 확인하고 모양을 본 뒤, DB 에 닿기 전에 표와 견준다.** 같은 열쇠의 줄이 있어도 표에 맞지 않으면 409 가 아니라 422 다.
 - 로그에는 넣은 서버, `kind`, 알림의 `id`, 결과(`created`, `existing`)만 남긴다(`operation`: `notification.put`). 받는 사람과 `payload` 는 남기지 않는다.
+  표에 맞지 않아 받지 않은 것은 `warning`(`notification.kind_refused`)으로 넣은 서버, `kind`, 까닭(`refusal`), 빠진 칸의 이름(`missing_fields`)을 남긴다.
+
+### 알림의 종류
+
+서명은 어느 서버가 보냈는지만 확인한다. 그 서버가 그 알림을 넣어도 되는지는 `kind` 의 표(`app/notifications/catalog.py`)로 본다.
+표가 없으면 한 서버의 버그나 새어 나간 비밀로 다른 서버의 알림(결제 완료, 공개 금지)을 넣을 수 있다.
+화면은 `kind` 를 보고 글을 만들기 때문에 사용자에게는 진짜처럼 보인다.
+
+| `kind` | 넣는 서버 | `payload` 에 꼭 있어야 하는 칸 |
+| --- | --- | --- |
+| `narration_model.retiring` | `game` | `table_id`, `title`, `narration_model`, `retires_on`, `days_left` |
+| `narration_model.replaced` | `game` | `table_id`, `title`, `from`, `narration_model`, `reason`, `round`, `price` |
+| `narration_model.unavailable` | `game` | `table_id`, `title`, `narration_model`, `reason` |
+| `scenario.sanctioned` | `game` | `scenario_id`, `title`, `version_number`, `publishing_banned` |
+| `publishing.banned` | `game` | `automatic` |
+| `publishing.unbanned` | `game` | 없음 |
+| `order.paid` | `billing` | `order_id`, `product_id`, `price`, `credits` |
+| `order.refunded` | `billing` | `order_id`, `product_id`, `price`, `credits` |
+| `credit.welcome` | `billing` | `amount`, `expires_at` |
+| `credit.expiring` | `billing` | `amount`, `first_expires_at` |
+| `post.commented` | `board` | `board_slug`, `post_id`, `post_title`, `comment_id` |
+| `comment.replied` | `board` | `board_slug`, `post_id`, `post_title`, `comment_id`, `parent_id` |
+
+- 각 칸의 뜻과 받는 사람은 넣는 서버의 README(게임과 게시판의 "알림 보내기", 결제의 "정리 작업과 대사")와
+  화면 명세(`docs/product/screens.md` 의 A10)에 있다.
+- **칸이 있는지만 본다.** 값이 `null` 인 칸은 있는 것이다(`narration_model.replaced` 의 `round`, `price` 는 `null` 일 수 있다).
+  값의 모양(글자인지 숫자인지)은 보지 않는다. 그건 넣는 서버의 테스트가 지킨다.
+- **표에 없는 칸이 더 있는 것은 받는다.** 넣는 서버가 칸을 먼저 더하고 화면이 나중에 쓰는 순서를 막지 않는다.
+- **남의 `kind` 면 칸을 보지 않는다.** 무엇이 빠졌는지를 남의 서버에 알려 주지 않는다(`kind_not_allowed` 가 먼저다).
+- 넣는 서버는 422 를 "받지 않았다"로 처리한다. 발송함에 `failed` 로 남기고 `error`(`notification.rejected`)를 남긴다. 다시 보내지 않는다.
+
+**새 `kind` 를 더할 때:** 넣는 서버의 코드와 함께 이 표(`app/notifications/catalog.py` 와 이 README), 화면 명세(A10)를 같은 PR 에서 고친다.
+배포는 알림 서버가 먼저다. 넣는 서버가 먼저 나가면 그 사이의 알림은 422 로 `failed` 가 되어 버려진다.
+`tests/test_catalog.py` 의 `SENT_BY` 에도 더한다. 표와 넣는 서버의 목록이 어긋나면 테스트가 실패한다.
 
 ## 보관 기간
 
@@ -178,7 +216,7 @@ Content-Type: application/json
 | `operation` | 언제 |
 | --- | --- |
 | `http.request` | 요청이 끝났다 |
-| `notification.put` | 다른 서버가 알림을 넣었다(`source`, `kind`, `notification_id`, `outcome`) |
+| `notification.put` | 다른 서버가 알림을 넣었다(`source`, `kind`, `notification_id`, `outcome`). 표에 맞지 않아 받지 않았으면 `warning`(`notification.kind_refused`, `refusal`, `missing_fields`) |
 | `notification.prune` | 보관 기간이 지난 알림을 지웠다(`deleted`, `retention_days`). 지운 것이 없으면 `debug` |
 | `auth.revocations_fetch` | 끊긴 세션의 목록을 받지 못했다(`warning`, `auth.revocations_unavailable`) |
 
