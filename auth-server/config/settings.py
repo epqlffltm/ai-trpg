@@ -227,7 +227,7 @@ SIMPLE_JWT = {
     'ISSUER': env('JWT_ISSUER', default='ai-trpg-auth'),
     'AUDIENCE': env.list(
         'JWT_AUDIENCE',
-        default=['ai-trpg-auth', 'ai-trpg-game', 'ai-trpg-board', 'ai-trpg-billing'],
+        default=['ai-trpg-auth', 'ai-trpg-game', 'ai-trpg-board', 'ai-trpg-billing', 'ai-trpg-notification'],
     ),
     # 다른 서버는 블랙리스트를 보지 않고 서명과 만료만 확인한다.
     # 그래서 탈취됐을 때 쓸 수 있는 시간을 짧게 잡는다

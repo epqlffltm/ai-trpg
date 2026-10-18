@@ -4,23 +4,23 @@
 # PR 에서 바뀐 파일을 보고 검사할 서버를 고른다. 관문 워크플로(.github/workflows/ci.yml)가 부른다.
 #
 #   사용: changed-servers.sh <기준 커밋> <PR 의 커밋>
-#   출력: GITHUB_OUTPUT 의 모양으로 서버마다 한 줄. auth=true, game=false, board=false, billing=true
+#   출력: GITHUB_OUTPUT 의 모양으로 서버마다 한 줄. auth=true, game=false, board=false, billing=true, notification=false
 #
 # 고르는 규칙:
 #   - 서버의 폴더(auth-server/ 등)나 그 서버의 워크플로(.github/workflows/auth-server.yml)가 바뀌면 그 서버
-#   - docker/ 아래(DB 초기화 스크립트, 프록시의 설정, crontab)나 compose 파일(docker-compose.yml)이 바뀌면 넷 다.
-#     네 서버의 DB 계정, 컨테이너로 띄우고 잇는 법, 주기 명령이 거기 있다
-#   - 관문 자신(.github/workflows/ci.yml, .github/scripts/)이 바뀌면 넷 다. 관문이 맞는지 넷으로 확인한다
-#   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증과 게임
+#   - docker/ 아래(DB 초기화 스크립트, 프록시의 설정, crontab)나 compose 파일(docker-compose.yml)이 바뀌면 모두.
+#     서버들의 DB 계정, 컨테이너로 띄우고 잇는 법, 주기 명령이 거기 있다
+#   - 관문 자신(.github/workflows/ci.yml, .github/scripts/)이 바뀌면 모두. 관문이 맞는지 모두로 확인한다
+#   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증, 게임, 알림
 #   - 그 밖(문서, 루트 README 등)은 아무것도 고르지 않는다
-#   - 바뀐 파일을 알 수 없으면(커밋을 찾지 못함) 넷 다. 모르면 검사하는 쪽으로 기운다
+#   - 바뀐 파일을 알 수 없으면(커밋을 찾지 못함) 모두. 모르면 검사하는 쪽으로 기운다
 #
 # 남이 만든 액션(dorny/paths-filter 등)을 쓰지 않았다. 저장소를 읽는 외부 코드를 하나 줄이고, 규칙을 여기서 다 본다.
 
 set -euo pipefail
 
 # 검사하는 서버들. 출력의 이름과 폴더의 이름
-SERVERS=(auth game board billing)
+SERVERS=(auth game board billing notification)
 
 # 한 서버를 고르는 경로들인가. 서버 이름과 경로를 받는다.
 belongs_to() {
@@ -28,12 +28,12 @@ belongs_to() {
   [[ "$path" == "${server}-server/"* || "$path" == ".github/workflows/${server}-server.yml" ]]
 }
 
-# 파이썬 서버들(인증, 게임)이 함께 쓰는 설정인가. 바뀌면 둘의 린트와 모양 검사를 다시 돌려야 한다.
+# 파이썬 서버들(인증, 게임, 알림)이 함께 쓰는 설정인가. 바뀌면 그 서버들의 린트와 모양 검사를 다시 돌려야 한다.
 python_shared() {
   [[ "$1" == "ruff.toml" ]]
 }
 
-# 넷 다 고르는 경로인가.
+# 모두 고르는 경로인가.
 affects_all() {
   local path="$1"
   [[ "$path" == docker/* || "$path" == "docker-compose.yml" ||
@@ -53,6 +53,7 @@ select_servers() {
     if python_shared "$path"; then
       picked[auth]=1
       picked[game]=1
+      picked[notification]=1
     fi
     for server in "${SERVERS[@]}"; do
       if belongs_to "$server" "$path"; then picked[$server]=1; fi
@@ -63,7 +64,7 @@ select_servers() {
   done
 }
 
-# 넷 다 고른 출력.
+# 모두 고른 출력.
 select_all() {
   local server
   for server in "${SERVERS[@]}"; do echo "${server}=true"; done
@@ -77,7 +78,7 @@ changed_files() {
 main() {
   local base="${1:-}" head="${2:-}" files
   if [[ -z "$base" || -z "$head" ]] || ! files="$(changed_files "$base" "$head" 2>/dev/null)"; then
-    echo "바뀐 파일을 알 수 없어 넷 다 검사한다" >&2
+    echo "바뀐 파일을 알 수 없어 모두 검사한다" >&2
     select_all
     return
   fi
