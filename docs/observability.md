@@ -16,7 +16,7 @@
 - [health 와 readiness](#health-와-readiness)
 - [메트릭](#메트릭)
 - [개발 환경과 운영 환경](#개발-환경과-운영-환경)
-- [OpenTelemetry Collector 를 붙일 자리](#opentelemetry-collector-를-붙일-자리)
+- [수집기(Grafana Alloy)를 붙일 자리](#수집기grafana-alloy를-붙일-자리)
 - [관리 서버의 경계](#관리-서버의-경계)
 - [서버별 구현](#서버별-구현)
 - [알려진 빈틈](#알려진-빈틈)
@@ -31,7 +31,7 @@
 | 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
 | 메트릭 | 이름과 규칙만 정했다. 내보내는 코드는 없다 |
 | 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
-| OpenTelemetry Collector, Prometheus, Loki, Tempo, Grafana | 없다 |
+| 수집기(Grafana Alloy), Prometheus, Loki, Tempo, Grafana | 없다. 수집기는 Alloy 로 정했다(2026-10-19, [아래](#수집기grafana-alloy를-붙일-자리)) |
 | 관리 서버, 관리 DB, 관리자 화면, Gemma 요약 | 없다 |
 
 ## 로그, 메트릭, 추적의 역할
@@ -177,7 +177,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 
 ### 한 줄의 모양
 
-한 줄에 JSON 객체 하나다. 표준 오류(stderr)로 내보낸다. 파일에 쓰지 않는다. 모으는 일은 실행 환경(컨테이너 런타임, Collector)이 한다.
+한 줄에 JSON 객체 하나다. 표준 오류(stderr)로 내보낸다. 파일에 쓰지 않는다. 모으는 일은 실행 환경(컨테이너 런타임, 수집기)이 한다.
 
 ```json
 {"timestamp":"2026-10-11T09:00:00.123Z","level":"info","service":"game-server","environment":"production","version":"3f2a9c1","logger":"app.observability.middleware","message":"요청을 처리했다","request_id":"0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","operation":"http.request","method":"POST","route":"/api/v1/game/tables/{table_id}/rounds/current/close","status_code":202,"duration_ms":38,"result":"success"}
@@ -652,22 +652,64 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
   읽기 불편하면 `jq` 로 본다. 예: `uv run uvicorn app.main:app 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message] | @tsv'`
 - 개발과 운영에서 달라지는 것은 설정값뿐이다. 코드의 길이 갈리지 않는다. 가리는 규칙도 같다.
 
-## OpenTelemetry Collector 를 붙일 자리
+## 수집기(Grafana Alloy)를 붙일 자리
 
-지금은 Collector 가 없다. 붙일 때 바꿀 곳을 미리 적어 둔다. 순서는 로그, 메트릭, 추적이 좋다. 뒤로 갈수록 코드를 많이 고친다.
+지금은 수집기가 없다(#25). 붙일 때 정한 것과 바꿀 곳을 미리 적어 둔다. 순서는 로그, 메트릭, 추적이다. 뒤로 갈수록 서버 코드를 많이 고친다.
 
 ```
-서버(stderr 의 JSON) ──▶ Collector ──▶ 로그 저장소(Loki 등)
-서버(OTLP)           ──▶ Collector ──▶ 메트릭 저장소(Prometheus 등), 추적 저장소(Tempo 등)
+서버(stderr 의 JSON) ─▶ Docker(json-file) ─▶ Alloy ─▶ Loki        ─┐
+서버(OTLP)                              ─▶ Alloy ─▶ Prometheus   ─┼─▶ Grafana ◀─ 관리 서버(문)
+                                                 └▶ Tempo(나중) ─┘
 ```
 
-**1. 로그 — 코드를 고치지 않는다.**
-서버는 지금처럼 stderr 에 JSON 을 쓴다. Collector 가 컨테이너의 로그를 읽어(`filelog` receiver) JSON 을 푼다.
-옮길 것: `timestamp` → 시각, `level` → severity, `trace_id` → 로그 레코드의 trace id, `service`·`environment`·`version` →
-resource 의 `service.name`·`deployment.environment.name`·`service.version`. 칸의 이름을 OpenTelemetry 의 이름으로 바꾸는 일은 Collector 의 설정에서 한다.
+### 정한 것 (2026-10-19)
+
+| 항목 | 정한 것 | 까닭 |
+| --- | --- | --- |
+| 수집기 | **Grafana Alloy** | Docker 를 직접 살펴 compose 의 서비스 이름을 붙인다(컨테이너가 스물이 넘는다). 로그, 메트릭(Prometheus 수집과 OTLP), 추적(OTLP)을 하나로 받아 단계마다 수집기를 바꾸지 않는다. 보여 주는 쪽을 Grafana 로 정해서 맞추는 품이 가장 적다 |
+| 고르지 않은 것 | OpenTelemetry Collector(contrib), Vector, Fluent Bit, Promtail | Collector 는 업체에 묶이지 않지만 로그 파일에 컨테이너 번호만 있어 이름을 붙이는 설정이 길다. Vector 와 Fluent Bit 는 추적까지 가면 수집기가 하나 더 필요하다. Promtail 은 지원이 끝났다(2026-03-02) |
+| 자리 | 지금은 서버들과 **같은 VM**. 문제가 생기면 로그와 메트릭을 S3 에 따로 두고 VM 을 나눈다 | 혼자 쓰는 동안 비용을 늘리지 않는다. 옮길 때 서버 코드와 수집기의 설정은 거의 그대로고 보내는 주소와 저장소만 바뀐다 |
+| 보관 | Loki **14일**(`staging`). 정식 공개 전에 30일 + 그보다 오래된 것은 압축해 S3 에 90일로 다시 본다 | 장애는 보통 며칠 안에 알아챈다. 오래 남겨야 하는 기록(운영자의 접속과 조작, 보안 이벤트, 결제)은 각 서버의 DB 가 원본이다(아래) |
+| Grafana 를 여는 곳 | 관리 서버가 생기기 전에는 **SSH 터널로만**. 생긴 뒤에는 **관리 서버가 문**이다(Grafana 의 auth proxy) | 바깥에 Grafana 의 로그인 화면을 열지 않는다. 운영자 확인은 관리 서버가 토큰의 `roles` 로 한 번만 한다 |
+| 켜는 법 | compose 의 프로필 `observability`. 로컬은 기본으로 꺼 두고 `staging` 에서 켠다 | 개발 PC 를 무겁게 하지 않는다 |
+
+### 1. 로그 — 서버 코드를 고치지 않는다
+
+서버는 지금처럼 stderr 에 JSON 을 쓰고, Docker 가 json-file 로 적는다(`docker-compose.yml` 의 `x-logging`). Alloy 가 Docker 에서 컨테이너 목록과 로그를 읽어 Loki 로 보낸다.
+
+- **컨테이너의 이름.** compose 의 서비스 이름(`auth-server`, `auth-mail`, `billing-sweeper` …)을 붙인다. 서버의 `service` 칸과 다를 수 있다(워커와 주기 명령은 그 서버의 `service` 를 쓴다). 둘 다 남긴다.
+- **Docker 소켓.** 컨테이너 목록을 보려면 Docker 의 API 가 필요하다. 소켓을 Alloy 에 그대로 붙이면 그 컨테이너가 VM 의 관리자 권한을 갖는다. **읽기만 허용하는 소켓 프록시**(컨테이너 목록과 로그만)를 앞에 둔다.
+- **JSON 을 푼다.** 옮길 것: `timestamp` → 시각, `level` → 수준, `trace_id` 와 `request_id`, `job_id` → 줄의 값, `service`·`environment`·`version` → 줄의 출처. 칸의 이름을 바꾸는 일은 Alloy 의 설정에서 한다.
+- **JSON 이 아닌 줄도 모은다.** 본문을 그대로 두고 JSON 이 아니라는 표시만 붙인다. PostgreSQL, Redis, certbot, nginx 가 뜨고 꺼지는 줄, supercronic 의 줄, 사람이 치는 명령의 안내([알려진 빈틈](#알려진-빈틈))가 여기 든다. 버리면 DB 가 죽는 순간이 보이지 않는다.
+- **수집이 늦어도 잃지 않게.** 서비스마다 Docker 의 로그는 50MB(10MB × 5)까지라 Alloy 가 멈춘 동안 파일이 돌아 버리면 그 구간을 잃는다. Alloy 가 읽은 자리를 디스크에 기억하게 하고, 줄이 많은 서비스(나중의 chat)만 상한을 키운다.
+- **수집 쪽이 죽어도 서버는 돈다.** 서버는 stderr 에 쓰기만 한다. Alloy 나 Loki 가 멈춰도 요청은 영향을 받지 않는다.
+
+**Loki 의 label.** label 하나의 값마다 저장 단위(스트림)가 생긴다. 메트릭의 [label](#label) 처럼 값의 종류가 정해진 것만 쓴다.
+
+| label 로 쓰는 것 | 값 |
+| --- | --- |
+| `service` | 로그를 낸 서버(위의 표) |
+| `container` | compose 의 서비스 이름 |
+| `environment` | `development`, `staging`, `production` |
+| `level` | `debug`, `info`, `warning`, `error` |
+
+- `request_id`, `trace_id`, `job_id`, `user_id`, `table_id`, `order_id`, 대화방 번호는 **label 로 쓰지 않는다.** 줄의 값(structured metadata)이나 본문으로 둔다. Grafana 에서 `trace_id` 로 찾는 것은 그래도 된다.
+- 민감정보의 규칙([민감정보](#민감정보))은 그대로다. 로그에 적지 않는 것은 모은 뒤에도 없다. 대화의 원문, 캐릭터 설정, prompt 는 서버가 싣지 않는다.
+- 스트리밍(서술, 나중의 chat)은 조각마다 줄을 남기지 않는다. 한 번의 서술이나 턴이 끝날 때 한 줄이다.
+
+**오래 남겨야 하는 기록은 Loki 가 원본이 아니다.**
+
+| 기록 | 원본 | 기간 |
+| --- | --- | --- |
+| 운영 로그(요청, 오류, 작업) | Loki | 위의 보관 기간 |
+| 개인정보를 다루는 시스템에 들어간 사람의 기록(운영자의 조회와 조작, 관리자 화면) | 각 서버의 DB(`operator_actions`, 인증 서버의 보안 이벤트, [운영자 권한](architecture/operators.md)) | 1년 이상. 정보주체 5만 명 이상이거나 민감정보·고유식별정보를 다루면 2년 이상(개인정보의 안전성 확보조치 기준 8조). 공개 전에 처리방침과 함께 다시 확인한다(법률 검토가 아니다) |
+| 결제와 청약철회 | 결제 서버의 원장(DB, 덧붙이기만) | 지우지 않는다 |
+
+**나중에 S3 로 옮길 때.** Loki 는 저장소 설정만 바꿔 S3 에 쓴다. Prometheus 는 스스로 S3 에 쓰지 못한다. 메트릭을 S3 에 두려면 Mimir 나 Thanos 를 하나 더 둬야 해서, 메트릭 단계에서 정한다.
 
 **2. 메트릭 — 서버마다 한 곳에 SDK 를 붙인다.**
-위의 [목록](#목록)대로 계측한다. 내보내는 주소는 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 받는다.
+위의 [목록](#목록)대로 계측한다. 내보내는 주소는 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 받는다(Alloy 의 OTLP 수신 주소). Alloy 가 Prometheus 로 넘긴다.
+새로 만드는 서버(asset, chat, 관리)는 처음부터 SDK 를 붙이고 시작한다. 나중에 다섯 서버를 고치는 것보다 싸다.
 
 | 무엇 | 붙일 자리 |
 | --- | --- |
@@ -697,6 +739,7 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 ### 맡을 것
 
 - 관리자의 인증과 권한. 일반 사용자의 토큰으로 들어가지 못한다.
+- Grafana 로 들어가는 문. 관리 서버가 운영자인지 확인한 뒤 사용자 이름을 머리말에 실어 Grafana(auth proxy 모드)로 넘긴다. Grafana 는 바깥에서 바로 닿지 못한다.
 - 운영 집계의 조회. 저장소(메트릭, 로그, 추적)에 물어서 보여 준다.
 - 서버별 장애와 부하의 표시.
 - AI 호출의 품질과 비용의 집계. 게임 서버의 AI 호출 기록이 근거다.
@@ -706,7 +749,7 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 
 ### 맡지 않을 것
 
-- **모든 서버의 로그를 HTTP 로 직접 받는 수집기.** 로그는 Collector 가 모은다. 관리 서버가 죽었다고 서버들의 로그가 쌓이거나 사라지면 안 된다.
+- **모든 서버의 로그를 HTTP 로 직접 받는 수집기.** 로그는 수집기(Alloy)가 모은다. 관리 서버가 죽었다고 서버들의 로그가 쌓이거나 사라지면 안 된다.
 - **Prometheus, Loki, Tempo 같은 저장소의 기능을 다시 만드는 것.** 관리 서버는 그 저장소에 묻는 쪽이다.
 - **AI 가 수치 기준 없이 장애인지 아닌지를 정하는 것.**
 - **게임 상태와 결제 원장을 직접 고치는 것.** 고쳐야 하면 그 서버의 API 를 부른다. 규칙과 검증은 그 서버에 있다.
