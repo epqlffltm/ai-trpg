@@ -126,6 +126,24 @@ def test_a_gemini_model_takes_only_the_gemini_styles():
         ModelCreate(**{**gemini, 'reasoning_style': ReasoningStyle.ADAPTIVE})
 
 
+def test_a_zai_model_takes_a_switch_or_always_and_no_token_field():
+    glm = {
+        **OPUS.model_dump(),
+        'slug': 'glm-4-7-flash',
+        'provider': Provider.ZAI,
+        'api_model_id': 'glm-4.7-flash',
+    }
+
+    assert ModelCreate(**{**glm, 'reasoning_style': ReasoningStyle.THINKING_TYPE}).reasoning_style == 'thinking_type'
+    assert ModelCreate(**{**glm, 'reasoning_style': ReasoningStyle.ALWAYS}).reasoning_style == 'always'
+    # thinking 칸으로 켜고 끄는 것은 Z.ai 의 방식이다. Claude 의 방식은 받지 않는다
+    with pytest.raises(ValidationError, match='받는 생각의 방식이 아니다'):
+        ModelCreate(**{**glm, 'reasoning_style': ReasoningStyle.ADAPTIVE})
+    # 출력 상한의 칸은 max_tokens 로 정해져 있다
+    with pytest.raises(ValidationError, match='적지 않는다'):
+        ModelCreate(**{**glm, 'reasoning_style': ReasoningStyle.ALWAYS, 'token_limit_field': 'max_tokens'})
+
+
 def test_a_claude_model_takes_only_the_claude_styles():
     with pytest.raises(ValidationError, match='받는 생각의 방식이 아니다'):
         ModelCreate(**{**OPUS.model_dump(), 'reasoning_style': ReasoningStyle.LEVEL_MINIMAL})
@@ -141,6 +159,7 @@ def test_a_claude_model_takes_only_the_claude_styles():
         (ReasoningStyle.ADAPTIVE, False),
         (ReasoningStyle.BETWEEN_TOOLS, False),
         (ReasoningStyle.BUDGET, False),
+        (ReasoningStyle.THINKING_TYPE, False),
         (None, False),
     ],
 )
@@ -512,3 +531,20 @@ async def test_switches_at_the_same_time_keep_the_chain(app, session: AsyncSessi
     assert earlier.previous_api_model_id == LUNA.api_model_id
     assert later.previous_api_model_id == earlier.api_model_id
     assert detail.model.api_model_id == later.api_model_id
+
+
+async def test_the_database_takes_a_zai_model_with_its_thinking_switch(session: AsyncSession):
+    data = ModelCreate(
+        slug='glm-4-7-flash',
+        provider=Provider.ZAI,
+        api_model_id='glm-4.7-flash',
+        display_name='GLM-4.7-Flash',
+        vendor='zai',
+        grade=Grade.BASIC,
+        reasoning_style=ReasoningStyle.THINKING_TYPE,
+    )
+
+    model = await service.add_model(session, data)
+
+    # DB 의 CHECK 도 새 창구와 새 방식을 받는다
+    assert (model.provider, model.reasoning_style, model.enabled) == ('zai', 'thinking_type', False)

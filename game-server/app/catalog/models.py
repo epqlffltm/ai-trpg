@@ -71,6 +71,8 @@ class Provider(enum.StrEnum):
     GEMINI = 'gemini'
     # 서버 곁에서 도는 모델(Ollama, LM Studio). 설정의 LLM_BASE_URL 로 부른다
     LOCAL = 'local'
+    # Z.ai 의 API(GLM). OpenAI 와 같은 모양이다. 출력 상한의 칸은 max_tokens 로 정해져 있다
+    ZAI = 'zai'
 
 
 class Grade(enum.StrEnum):
@@ -100,10 +102,11 @@ class ReasoningStyle(enum.StrEnum):
     모델이 생각(thinking)을 켜고 끄는 방식. Claude 와 Gemini 의 모델마다 다르다(각 회사의 문서, 2026-10).
 
     서술은 생각을 꺼서 부른다(app/rounds/llm_narrator.py). 끄는 법과, 끌 수 없으면 어떻게 하는지가 모델마다 다르다.
-    부르는 쪽(app/ai/anthropic.py, app/ai/gemini.py)이 이 값을 보고 요청의 생각 칸을 만든다.
+    부르는 쪽(app/ai/anthropic.py, app/ai/gemini.py, app/ai/openai_compat.py)이 이 값을 보고 요청의 생각 칸을 만든다.
     창구마다 받는 값이 다르다(app/catalog/rules.py 의 STYLES_BY_PROVIDER). budget 은 두 창구가 함께 쓴다.
-    OpenAI 모양의 창구는 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다).
+    OpenAI 와 서버 곁의 모델은 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다).
     끌 수 없는 방식(always, level_minimal, level_low, budget_min)의 모델은 판매가를 생각의 몫까지 넣어 매긴다.
+    OpenAI 모양이어도 생각의 칸이 다른 창구(Z.ai)는 이 칸을 쓴다. 끌 수 있으면 thinking_type, 끌 수 없으면 always 다.
     """
 
     # 끌 수 있다(disabled). 켜면 스스로 깊이를 정한다(adaptive + effort). Opus 5, Sonnet 5, Haiku 5.5, Opus 4.6~4.8
@@ -123,6 +126,8 @@ class ReasoningStyle(enum.StrEnum):
     LEVEL_LOW = 'level_low'
     # Gemini 의 생각의 토큰 상한(thinkingBudget). 끌 수 없다. 끄라고 하면 가장 작은 128 로 준다. Gemini 2.5 Pro
     BUDGET_MIN = 'budget_min'
+    # 생각을 thinking 칸({"type": "enabled" | "disabled"})으로 켜고 끈다. 끌 수 있다. Z.ai 의 GLM-4.7·4.6·5.1·5.2 등
+    THINKING_TYPE = 'thinking_type'
 
 
 class AiModel(Base):

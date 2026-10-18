@@ -21,6 +21,7 @@ from pydantic import SecretStr
 from app.ai import openai_compat
 from app.ai.http_stream import retry_after_of
 from app.ai.openai_compat import (
+    THINKING_TOKENS,
     OpenAICompatProvider,
     WireOptions,
     build_body,
@@ -151,9 +152,33 @@ async def test_the_body_carries_the_model_the_messages_and_the_settings():
     }
 
 
+def test_the_thinking_switch_replaces_the_reasoning_effort():
+    options = WireOptions(supports_reasoning=False, thinking_switch=True)
+    on = GenerationParams(max_tokens=800, temperature=0.8, reasoning=Reasoning.LOW)
+
+    off_body = build_body(MODEL, MESSAGES, PARAMS, options)
+    on_body = build_body(MODEL, MESSAGES, on, options)
+
+    # Z.ai 는 thinking 칸으로 끈다. 끌 때도 보낸다. 켜면 생각의 몫을 상한에 더한다
+    assert (off_body['thinking'], off_body['max_tokens']) == ({'type': 'disabled'}, 800)
+    assert (on_body['thinking'], on_body['max_tokens']) == ({'type': 'enabled'}, 800 + THINKING_TOKENS[Reasoning.LOW])
+    assert 'reasoning_effort' not in off_body
+
+
+def test_a_model_that_always_thinks_gets_the_lowest_share_and_no_switch():
+    options = WireOptions(supports_reasoning=True, thinking_switch=True, always_thinks=True)
+
+    body = build_body(MODEL, MESSAGES, PARAMS, options)
+
+    # 끌 수 없으니 끄라는 칸을 보내지 않는다(보내면 400). 생각이 장면의 몫을 먹지 않게 가장 낮은 몫을 더한다
+    assert 'thinking' not in body
+    assert 'reasoning_effort' not in body
+    assert body['max_tokens'] == 800 + THINKING_TOKENS[Reasoning.LOW]
+
+
 def test_reasoning_is_off_by_default():
     assert PARAMS.reasoning == Reasoning.NONE
-    assert token_limit(PARAMS, supports_reasoning=True) == 800
+    assert token_limit(PARAMS, WireOptions(supports_reasoning=True)) == 800
 
 
 @pytest.mark.parametrize('reasoning', [Reasoning.LOW, Reasoning.MEDIUM, Reasoning.HIGH])

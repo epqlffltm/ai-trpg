@@ -3,7 +3,7 @@
 """
 OpenAI 와 같은 모양의 주소(/chat/completions)를 부르는 provider.
 
-Ollama, LM Studio, vLLM, 그리고 같은 모양을 받는 클라우드 API(OpenAI)를 이 하나로 부른다.
+Ollama, LM Studio, vLLM, 그리고 같은 모양을 받는 클라우드 API(OpenAI, Z.ai)를 이 하나로 부른다.
 주소, 모델 이름, 키, 모델이 받는 칸만 다르다. 어느 모델을 어떤 값으로 부를지는 app/ai/routing.py 가 정한다.
 SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되고, 앱이 이미 httpx 클라이언트를 하나 들고 있다.
 
@@ -20,6 +20,9 @@ SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되�
   추론은 토큰을 먹는다. 끄지 않으면 생각만 하다가 길이 상한에 닿아 답(content)이 비어 오기도 한다.
   그래서 추론 수준(reasoning_effort)을 늘 보낸다. 끌 때는 'none' 이다. 켤 때는 생각에 쓸 토큰을 상한에 더한다.
   추론을 모르는 모델이면(supports_reasoning=False) 보내지 않는다.
+  생각을 다른 칸으로 켜고 끄는 창구도 있다(Z.ai 의 thinking: {"type": "disabled"}). 그런 모델은 thinking_switch 다.
+  끌 수 없는 모델(always_thinks)에는 끄라는 칸을 보내지 않고, 끄라고 해도 가장 낮은 깊이의 몫을 상한에 더한다.
+  생각이 장면의 몫을 먹어 장면이 잘리지 않게 한다(app/ai/thinking.py 와 같은 규칙).
   content 에 생각 글(<think>...</think>)이 섞여 오면 떼어 낸다. 실행기나 모델에 따라 그렇게 오는 경우가 있다.
 
 답은 늘 흘려 받는다(stream). 쓰는 대로 조각을 받아 앉은 사람에게 미리 보여 줄 수 있다(app/ai/streaming.py).
@@ -64,6 +67,11 @@ class WireOptions:
     supports_temperature: bool = True
     # 출력 상한을 담는 칸의 이름(max_tokens, max_completion_tokens)
     token_field: str = DEFAULT_TOKEN_FIELD
+    # 생각을 thinking 칸({"type": "enabled" | "disabled"})으로 켜고 끄는가(Z.ai).
+    # 그러면 reasoning_effort 는 보내지 않는다
+    thinking_switch: bool = False
+    # 생각을 끌 수 없는가. 끄라고 해도 생각한다
+    always_thinks: bool = False
 
 
 # 따로 정하지 않았을 때 받는 칸. 서버 곁의 모델이다
@@ -80,11 +88,27 @@ def to_wire(message: ChatMessage) -> dict[str, str]:
     return {'role': message.role.value, 'content': message.content}
 
 
-def token_limit(params: GenerationParams, supports_reasoning: bool) -> int:
-    """보낼 토큰 상한. 추론을 켜면 생각에 쓸 몫을 더한다. 생각이 답의 몫까지 먹지 않게 한다."""
-    if not supports_reasoning or params.reasoning == Reasoning.NONE:
-        return params.max_tokens
-    return params.max_tokens + THINKING_TOKENS[params.reasoning]
+def thinking_tokens(params: GenerationParams, options: WireOptions) -> int:
+    """
+    생각에 더 주는 토큰. 생각하지 않으면 0.
+
+    생각을 켤 수 있는 모델에 켜라고 했으면 그 깊이의 몫이다. 끌 수 없는 모델에 끄라고 했으면 가장 낮은 깊이의 몫이다.
+    """
+    if params.reasoning != Reasoning.NONE and (options.supports_reasoning or options.thinking_switch):
+        return THINKING_TOKENS[params.reasoning]
+    if options.always_thinks:
+        return THINKING_TOKENS[Reasoning.LOW]
+    return 0
+
+
+def token_limit(params: GenerationParams, options: WireOptions) -> int:
+    """보낼 토큰 상한. 생각하면 생각에 쓸 몫을 더한다. 생각이 답의 몫까지 먹지 않게 한다."""
+    return params.max_tokens + thinking_tokens(params, options)
+
+
+def thinking_switch(params: GenerationParams) -> dict[str, str]:
+    """thinking 칸. 끄라고 했으면 disabled, 아니면 enabled 다."""
+    return {'type': 'disabled' if params.reasoning == Reasoning.NONE else 'enabled'}
 
 
 def build_body(
@@ -92,6 +116,7 @@ def build_body(
 ) -> dict[str, Any]:
     """
     보낼 요청의 본문. 추론을 아는 모델에는 추론 수준을 늘 싣는다. 끌 때도 'none' 을 보내야 꺼진다.
+    thinking 칸으로 켜고 끄는 모델에는 그 칸을 늘 싣는다. 끌 수 없는 모델에는 생각의 칸을 싣지 않는다.
 
     출력 상한은 모델이 받는 칸에 싣는다. 온도는 받는 모델에만 싣는다.
     흘려 받는다. 토큰 수는 흘려 받을 때 따로 달라고 해야 온다(include_usage).
@@ -99,13 +124,17 @@ def build_body(
     body: dict[str, Any] = {
         'model': model,
         'messages': [to_wire(message) for message in messages],
-        options.token_field: token_limit(params, options.supports_reasoning),
+        options.token_field: token_limit(params, options),
         'stream': True,
         'stream_options': {'include_usage': True},
     }
     if options.supports_temperature:
         body['temperature'] = params.temperature
-    if options.supports_reasoning:
+    if options.always_thinks:
+        return body
+    if options.thinking_switch:
+        body['thinking'] = thinking_switch(params)
+    elif options.supports_reasoning:
         body['reasoning_effort'] = params.reasoning.value
     return body
 
@@ -117,7 +146,7 @@ class OpenAICompatProvider:
 
     client 는 앱이 들고 있는 httpx 클라이언트다. 닫는 것은 앱이 한다.
     base_url 은 /chat/completions 앞까지다(Ollama 면 http://127.0.0.1:11434/v1, OpenAI 면 https://api.openai.com/v1).
-    kind 는 호출의 기록에 적는 창구의 이름이다. 서버 곁의 모델이면 openai_compat, OpenAI 면 openai 다.
+    kind 는 호출의 기록에 적는 창구의 이름이다. 서버 곁의 모델이면 openai_compat, OpenAI 면 openai, Z.ai 면 zai 다.
     api_key 는 repr 에 나오지 않는다(SecretStr).
     """
 
