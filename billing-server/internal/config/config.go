@@ -212,6 +212,22 @@ type Sweeper struct {
 	HeartbeatFile string
 	// GuardianNotices 는 보호자에게 알릴 결제를 인증 서버에 보내는 설정이다(#352).
 	GuardianNotices GuardianNotices
+	// UserNotices 는 사용자의 알림함에 알릴 일을 알림 서버에 보내는 설정이다(#385).
+	UserNotices UserNotices
+}
+
+// UserNotices 는 정리 작업이 사용자의 알림을 알림 서버에 보낼 곳과 비밀이다.
+// 둘 중 하나라도 비면 보내지 않는다. 알릴 일은 적어 두었다가 설정한 뒤에 나간다(7일이 지난 것은 보내지 않는다).
+type UserNotices struct {
+	// URL 은 알림 서버의 주소다(NOTIFICATION_URL, http://127.0.0.1:8004). 경로(/api/v1/notification/...)는 붙이지 않는다.
+	URL string
+	// Secret 은 알림 서버와 함께 아는 비밀이다(NOTIFICATION_SECRET). 알림 서버의 BILLING_SERVER_SECRET 과 같은 값이다.
+	Secret string
+}
+
+// Enabled 는 보낼 곳과 비밀이 모두 있는지다.
+func (u UserNotices) Enabled() bool {
+	return u.URL != "" && u.Secret != ""
 }
 
 // GuardianNotices 는 정리 작업이 보호자 알림을 인증 서버에 보낼 곳과 비밀이다.
@@ -302,11 +318,39 @@ func LoadSweeper(lookup Lookup) (Sweeper, error) {
 	logging, loggingErr := loadLogging(lookup)
 	rules, rulesErr := loadRules(lookup)
 	notices, noticesErr := readGuardianNotices(lookup)
-	if err := errors.Join(dbErr, loggingErr, rulesErr, noticesErr); err != nil {
+	userNotices, userNoticesErr := readUserNotices(lookup)
+	if err := errors.Join(
+		dbErr, loggingErr, rulesErr, noticesErr, userNoticesErr, differentSecret(notices.Secret, userNotices.Secret),
+	); err != nil {
 		return Sweeper{}, err
 	}
 	heartbeat := readString(lookup, "HEARTBEAT_FILE", "")
-	return Sweeper{Database: db, Logging: logging, Rules: rules, HeartbeatFile: heartbeat, GuardianNotices: notices}, nil
+	return Sweeper{
+		Database: db, Logging: logging, Rules: rules, HeartbeatFile: heartbeat,
+		GuardianNotices: notices, UserNotices: userNotices,
+	}, nil
+}
+
+// readUserNotices 는 사용자의 알림을 보낼 곳과 비밀을 읽는다. 없어도 된다(그러면 보내지 않는다). 있으면 모양을 본다.
+func readUserNotices(lookup Lookup) (UserNotices, error) {
+	var notices UserNotices
+	var secretErr, urlErr error
+	if value, ok := lookup("NOTIFICATION_SECRET"); ok && value != "" {
+		notices.Secret, secretErr = readSecret(lookup, "NOTIFICATION_SECRET", MinServiceSecretLength)
+	}
+	if value, ok := lookup("NOTIFICATION_URL"); ok && value != "" {
+		notices.URL, urlErr = readHTTPURL(lookup, "NOTIFICATION_URL")
+	}
+	return notices, errors.Join(secretErr, urlErr)
+}
+
+// differentSecret 은 인증 서버의 비밀과 알림 서버의 비밀이 다른지 본다. 비어 있으면 보지 않는다.
+// 같은 값이면 한쪽이 아는 비밀로 다른 쪽인 척할 수 있고, 하나가 새면 둘 다 샌 것이 된다.
+func differentSecret(authSecret string, notificationSecret string) error {
+	if authSecret != "" && authSecret == notificationSecret {
+		return errors.New("AUTH_SERVER_SECRET 과 NOTIFICATION_SECRET 은 서로 다른 값이어야 합니다")
+	}
+	return nil
 }
 
 // guardianNoticesPath 는 인증 서버의 알림 주소의 끝이다. 공개키(…/jwks)와 같은 곳(/api/v1/auth)에 있다.

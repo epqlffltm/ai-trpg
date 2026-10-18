@@ -84,6 +84,8 @@ SECRETS = [
     *secrets('billing-server', ['billing-server', 'billing-sweeper'], 'AUTH_SERVER_SECRET'),
     # 결제 대행사의 키. 서버와 대사(cron)가 결제 대행사를 부른다. 정리 작업(sweeper)은 부르지 않는다(config.LoadSweeper)
     *secrets('billing-server', ['billing-server', 'billing-cron'], 'TOSS_SECRET_KEY'),
+    # 알림 서버와 함께 아는 비밀. 정리 작업이 사용자에게 알릴 일을 알림 서버에 넣는다(#385). 서버와 대사는 부르지 않는다
+    *secrets('billing-server', ['billing-sweeper'], 'NOTIFICATION_SECRET'),
     # 알림 서버가 알림을 넣는 요청의 서명을 확인하는 비밀. 넣는 서버마다 하나다. 요청을 받는 서버만 쓴다.
     # 마이그레이션(notification-migrate)에는 주지 않는다
     *secrets(

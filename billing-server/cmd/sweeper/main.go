@@ -6,9 +6,11 @@
 //	go run ./cmd/sweeper -once        한 바퀴만 돌고, 정리한 수를 화면에 찍고 끝난다
 //	go run ./cmd/sweeper -interval 1m -limit 200
 //
-// 한 바퀴에 하는 일: 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 원장에 적고, 만료된 주문을 끝내고, 보호자에게 알릴 결제를 보낸다(internal/sweep).
+// 한 바퀴에 하는 일: 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 원장에 적고, 만료된 주문을 끝내고, 보호자에게 알릴 결제를 보내고,
+// 사용자에게 알릴 일(결제, 청약철회, 환영 크레딧, 곧 사라질 무료 크레딧)을 알림 서버에 넣는다(internal/sweep).
 // 서버와 같은 설정(.env)을 읽는다. 다만 포트, 공개키 주소, 서명의 비밀, 결제 대행사의 키는 없어도 돈다(config.LoadSweeper).
 // 미성년자의 결제를 보호자에게 알리라고 인증 서버에 보낸다(AUTH_SERVER_SECRET 이 있을 때, #352).
+// 사용자의 알림을 알림 서버에 넣는다(NOTIFICATION_URL 과 NOTIFICATION_SECRET 이 있을 때, #385).
 // 결제 대행사를 부르지 않는다. 주문 서비스에는 부르면 오류를 내는 것을 끼운다(app.NoProviders).
 //
 // 바퀴 하나가 작업 하나다(job_id). 바퀴가 실패해도 끄지 않는다. 그 바퀴를 error 로 남기고 다음 바퀴에 다시 한다.
@@ -36,6 +38,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jobs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice"
 )
 
 const (
@@ -96,7 +99,8 @@ func run(args []string, out io.Writer) error {
 		return err
 	}
 	sweeper := sweep.New(services.Holds, services.Wallet, services.Orders, opts.limit).
-		WithNotices(guardiannotice.NewService(pool, time.Now, noticeSender(settings.GuardianNotices)))
+		WithNotices(guardiannotice.NewService(pool, time.Now, noticeSender(settings.GuardianNotices))).
+		WithUserNotices(usernotice.NewService(pool, time.Now, userNoticeSender(settings.UserNotices)))
 
 	if opts.once {
 		result, err := round(ctx, sweeper)
@@ -120,6 +124,17 @@ func noticeSender(settings config.GuardianNotices) guardiannotice.Sender {
 		return nil
 	}
 	return guardiannotice.NewHTTPSender(settings.URL, settings.Secret, time.Now)
+}
+
+// userNoticeSender 는 사용자의 알림을 알림 서버에 보내는 것을 만든다. 보낼 곳이나 비밀이 없으면 nil 이다(적기만 한다).
+func userNoticeSender(settings config.UserNotices) usernotice.Sender {
+	if !settings.Enabled() {
+		slog.Warn("NOTIFICATION_URL 이나 NOTIFICATION_SECRET 이 없습니다. 사용자에게 알릴 일을 적기만 하고 보내지 않습니다",
+			slog.String(obs.FieldOperation, operation),
+		)
+		return nil
+	}
+	return usernotice.NewHTTPSender(settings.URL, settings.Secret, time.Now)
 }
 
 // parseOptions 는 명령 줄을 읽는다.
@@ -177,6 +192,12 @@ func round(ctx context.Context, sweeper rounder) (sweep.Result, error) {
 				slog.Int("guardian_notices_queued", result.Notices.Queued),
 				slog.Int("guardian_notices_sent", result.Notices.Sent),
 				slog.Int("guardian_notices_retried", result.Notices.Retried),
+				slog.Int("user_notices_queued", result.UserNotices.Queued),
+				slog.Int("user_notices_sent", result.UserNotices.Sent),
+				slog.Int("user_notices_retried", result.UserNotices.Retried),
+				slog.Int("user_notices_rejected", result.UserNotices.Rejected),
+				slog.Int("user_notices_expired", result.UserNotices.Expired),
+				slog.Int("user_notices_purged", result.UserNotices.Purged),
 			)
 		}
 		return err
@@ -199,6 +220,9 @@ func printResult(out io.Writer, result sweep.Result) {
 	fmt.Fprintf(out, "돌려준 홀드: %d\n무료 크레딧을 정리한 사용자: %d\n끝낸 주문: %d\n보호자 알림: 적음 %d, 보냄 %d, 다시 보낼 것 %d\n",
 		result.Holds, result.FreeCreditUsers, result.Orders,
 		result.Notices.Queued, result.Notices.Sent, result.Notices.Retried)
+	users := result.UserNotices
+	fmt.Fprintf(out, "사용자 알림: 적음 %d, 보냄 %d, 다시 보낼 것 %d, 받지 않음 %d, 보내지 않기로 함 %d, 지움 %d\n",
+		users.Queued, users.Sent, users.Retried, users.Rejected, users.Expired, users.Purged)
 }
 
 // loadDotEnv 는 현재 폴더의 .env 를 환경 변수로 올린다. 파일이 없으면 아무것도 하지 않는다.
