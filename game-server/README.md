@@ -73,7 +73,7 @@ docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -f /docker-entryp
 cd game-server
 cp .env.example .env
 uv sync
-uv run alembic upgrade head
+uv run alembic upgrade heads
 uv run uvicorn app.main:app --port 8001 --reload --timeout-graceful-shutdown 5
 ```
 
@@ -100,10 +100,10 @@ uv run ruff format .
 
 ```
 # PowerShell
-$env:DB_SCHEMA='game_test'; uv run alembic upgrade head; Remove-Item Env:DB_SCHEMA
+$env:DB_SCHEMA='game_test'; uv run alembic upgrade heads; Remove-Item Env:DB_SCHEMA
 
 # bash
-DB_SCHEMA=game_test uv run alembic upgrade head
+DB_SCHEMA=game_test uv run alembic upgrade heads
 ```
 
 DB에 쓰는 테스트는 시작할 때 테이블을 비운다(`clean_tables`). 테스트끼리 데이터가 섞이지 않는다.
@@ -124,10 +124,17 @@ DB가 꺼져 있으면 DB를 쓰는 테스트가 실패한다.
 테이블 구조의 변경은 Alembic으로 관리한다. DB 주소와 스키마는 앱과 같은 설정에서 읽는다.
 
 ```
-uv run alembic upgrade head                        # 마이그레이션 적용
+uv run alembic upgrade heads                       # 마이그레이션 적용. 끝이 여럿이면 모두
 uv run alembic revision --autogenerate -m "설명"    # 모델과 DB를 비교해 새 마이그레이션 만들기
 uv run alembic check                               # 모델을 바꾸고 마이그레이션을 안 만들었는지 검사
 ```
+
+마이그레이션의 끝(head)은 하나로 강제하지 않는다. 여러 PR 이 같은 부모 위에 따로 마이그레이션을 얹어도 그대로 머지하고, `upgrade heads` 로 모든 끝을 적용한다.
+갈래끼리는 어느 쪽이 먼저 적용될지 정해져 있지 않다. 그래서 아래를 지킨다.
+
+- 다른 PR 의 마이그레이션이 만든 표나 열에 기대면 `depends_on` 에 그 revision 을 적어 선후를 정한다.
+- `main` 을 합친 뒤 끝이 둘 이상이면 새 마이그레이션을 만들 때 `--head <revision>` 으로 어느 끝 위에 얹을지 정한다(정하지 않으면 Alembic 이 멈춘다).
+- 되돌리기(`downgrade`)는 끝이 여럿이면 `-1` 이 어느 갈래를 되돌릴지 정해져 있지 않다. 되돌릴 revision 을 이름으로 적는다(`downgrade <revision>`).
 
 | 환경 변수 | 기본값 | 설명 |
 | --- | --- | --- |
@@ -2786,9 +2793,8 @@ PostgreSQL(pgvector 가 든 이미지)과 Redis 를 띄우고, 로컬과 같은 
 3. 모양 검사 (`ruff format --check`): 고치지 않고 검사만 한다
 4. 의존성 취약점 검사 (`pip-audit`): 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
    고칠 수 없어 받아들이기로 한 것은 워크플로의 `--ignore-vuln` 에 까닭과 함께 적는다
-5. 마이그레이션 끝 검사 (`alembic heads`): 끝이 둘 이상이면 실패한다. 두 PR 이 같은 부모 위에 따로 마이그레이션을 얹은 것이다.
-   PR 하나하나는 끝이 하나라 통과하고, 둘이 머지된 main 에서야 갈라진다. 머지하기 전에 PR 을 최신 main 위로 올려 다시 돌리면 PR 에서 잡힌다
-6. 마이그레이션 적용 (`alembic upgrade head`): 빈 DB에 처음부터 끝까지 적용되는지 본다
+5. 마이그레이션 끝 (`alembic heads`): 끝을 찍기만 한다. 끝이 여럿이어도 실패하지 않는다([DB와 마이그레이션](#db와-마이그레이션))
+6. 마이그레이션 적용 (`alembic upgrade heads`): 빈 DB에 처음부터 모든 끝까지 적용되는지 본다
 7. 마이그레이션 누락 검사 (`alembic check`): 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
 8. 테스트용 스키마에 마이그레이션 적용
 9. 테스트 (`pytest --cov`): 테스트를 돌리며 지나간 줄을 센다

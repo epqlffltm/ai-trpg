@@ -333,7 +333,7 @@ services:
     <<: *game-image
     profiles: [app]
     logging: *logging
-    command: ["alembic", "upgrade", "head"]
+    command: ["alembic", "upgrade", "heads"]
     env_file: ./game-server/.env
     # 마이그레이션은 DB 만 쓴다. 모델의 키와 서버끼리의 비밀을 비운다.
     # 결제 서버의 주소도 비운다. 주소가 있으면 설정이 BILLING_SECRET 을 요구한다

@@ -116,20 +116,14 @@ jobs:
           uv export --frozen --no-dev --no-emit-project --format requirements-txt -q > "$RUNNER_TEMP/requirements.txt"
           uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip --progress-spinner off
 
-      # 마이그레이션의 끝(head)이 둘 이상이면 실패한다. 두 PR 이 같은 부모 위에 따로 마이그레이션을 얹었다는 뜻이다.
-      # upgrade head 도 멈추지만, 무엇이 문제인지 여기서 먼저 알려 준다
-      - name: 마이그레이션 끝 검사
-        run: |
-          heads="$(uv run alembic heads)"
-          echo "$heads"
-          if [ "$(printf '%s\n' "$heads" | grep -c '(head)')" -ne 1 ]; then
-            echo "::error::마이그레이션의 끝이 하나가 아니다. 뒤에 머지하는 쪽의 down_revision 을 다른 끝으로 옮긴다"
-            exit 1
-          fi
+      # 마이그레이션의 끝(head)을 찍기만 한다. 끝이 여럿이어도 실패하지 않는다.
+      # 여러 PR 이 같은 부모 위에 따로 마이그레이션을 얹는 일이 잦아 끝을 하나로 강제하지 않는다. 적용은 upgrade heads 로 모두 한다
+      - name: 마이그레이션 끝
+        run: uv run alembic heads
 
-      # 빈 DB 에 마이그레이션을 처음부터 끝까지 적용할 수 있는지 본다
+      # 빈 DB 에 마이그레이션을 처음부터 모든 끝까지 적용할 수 있는지 본다
       - name: 마이그레이션 적용
-        run: uv run alembic upgrade head
+        run: uv run alembic upgrade heads
 
       # 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
       - name: 마이그레이션 누락 검사
@@ -139,7 +133,7 @@ jobs:
       - name: 테스트용 스키마에 마이그레이션 적용
         env:
           DB_SCHEMA: game_test
-        run: uv run alembic upgrade head
+        run: uv run alembic upgrade heads
 
       # 테스트를 돌리며 지나간 줄을 센다. 재는 대상은 pyproject.toml 의 [tool.coverage.run] 이다.
       # 표는 아래 요약 단계에서 적는다. 여기서는 찍지 않는다(--cov-report=)
