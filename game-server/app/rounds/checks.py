@@ -8,6 +8,7 @@ HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거�
 행동이 NPC 를 겨눴으면 그 NPC 가 피해를 입거나 회복한다(app/tables/npcs.py 의 change_npc).
 행동이 몬스터를 겨눴으면 그 마리가 피해를 입는다(app/tables/monsters.py 의 change_monster). 몬스터는 부상을 입지 않는다.
 겨눈 마리가 판정할 때 이미 죽었거나 다른 곳에 있으면 굴리지 않고 그 까닭을 적는다(target_gone).
+살아 있던 마리를 처음 쓰러뜨리면 엔진이 드롭을 굴려 그 장소의 한 명에게 준다(app/rounds/drops.py).
 큰 타격이나 쓰러짐이면 부상 표를 굴린다. 노려 친 타격은 그 부상이 확정으로 생긴다.
 DB 를 모른다. 시트와 NPC 의 상태를 고친다. 저장하지는 않는다.
 """
@@ -19,6 +20,7 @@ from app.engine import health
 from app.engine.action import CheckAction, Consequence, Recipient
 from app.engine.check import Check
 from app.engine.health import Change, ChangeKind
+from app.rounds import drops
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import find_cast_member
 from app.rounds.effects import Judging, injury_after, mark_hurt, member_effect, monster_effect, npc_effect
@@ -146,11 +148,26 @@ def target_gone(judging: Judging, member: TableMember, action: CheckAction) -> d
     return {'monster_id': str(monster.state.id), 'name': monster.name, 'reason': reason}
 
 
+def monster_outcome(judging: Judging, action: CheckAction, found: Consequence) -> dict:
+    """
+    몬스터를 친 판정의 결과 칸들. 마리의 변화(monster_effect)와, 처음 쓰러뜨려 무엇이 나왔으면 그 드롭(drop)이다.
+
+    drop 은 나온 것이 있을 때만 적는다. 드롭이 없는 판정의 결과는 이 칸이 생기기 전과 같다.
+    """
+    effect = change_scene_monster(judging, action, found)
+    outcome = {'effect': None, 'npc_effect': None, 'monster_effect': effect}
+    drop = drops.drop_after(judging, effect)
+    if drop is not None:
+        outcome['drop'] = drop
+    return outcome
+
+
 def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction, check: Check) -> dict:
     """
     판정의 결과에 따라 HP 를 바꾸고, 바뀐 내용을 선언의 outcome 에 넣을 칸들로 돌려준다.
 
     effect 는 앉은 사람의 변화, npc_effect 는 NPC 의 변화, monster_effect 는 몬스터의 변화다.
+    몬스터를 처음 쓰러뜨려 무엇이 나왔으면 drop 도 있다(app/rounds/drops.py).
     한 판정에서 하나만 일어난다. 없으면 effect 와 npc_effect 가 None 이다.
     monster_effect 는 몬스터를 겨눈 판정에만 적는다. 몬스터가 없는 판정의 결과는 이 칸이 생기기 전과 같다.
     대가는 늘 행동한 사람이 입는다. 대상의 일(타격, 회복)은 행동이 겨눈 NPC 나 몬스터가, 아니면 앉은 사람이 받는다.
@@ -159,7 +176,7 @@ def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction,
     if found is None:
         return {'effect': None, 'npc_effect': None}
     if found.recipient == Recipient.TARGET and action.monster is not None:
-        return {'effect': None, 'npc_effect': None, 'monster_effect': change_scene_monster(judging, action, found)}
+        return monster_outcome(judging, action, found)
     if found.recipient == Recipient.TARGET and action.npc is not None:
         return {'effect': None, 'npc_effect': change_cast_member(judging, action, found)}
     return {'effect': change_member(judging, actor, action, found), 'npc_effect': None}

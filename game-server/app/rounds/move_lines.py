@@ -18,6 +18,7 @@
 
 from app.rounds.narrator import (
     DeathSaveNote,
+    DropNote,
     HealNote,
     Impact,
     InjuryNote,
@@ -138,6 +139,28 @@ def describe_npc_impact(impact: NpcImpact) -> str:
     """NPC 의 HP 가 바뀐 것을 한 줄로 적는다. 숫자는 양만 적는다. 예: → 악역영애 피해 5 (크게 다침)"""
     word = '피해' if impact.kind == 'damage' else '회복'
     return f'→ {impact.name} {word} {impact.amount} ({impact.condition})' + new_injury(impact.injury)
+
+
+def describe_drop(drop: DropNote) -> str:
+    """
+    몬스터를 쓰러뜨려 얻은 물건을 한 줄로 적는다. 더 들 수 없어 잃은 것이 있으면 그것도 적는다.
+
+    예: (얻은 물건: 늑대 가죽 2개, 송곳니 → 엘프)
+        (얻은 물건: 치유 물약 → 엘프. 치유 물약 1개는 더 들 수 없어 잃었다)
+        (얻을 물건: 치유 물약 2개 → 엘프. 더 들 수 없어 모두 잃었다)
+    """
+    got = ', '.join(describe_stack(one.name, one.count) for one in drop.items if one.count)
+    lost = ', '.join(describe_stack(one.name, one.lost, always=True) for one in drop.items if one.lost)
+    if not got:
+        return f'(얻을 물건: {lost} → {drop.receiver}. 더 들 수 없어 모두 잃었다)'
+    if not lost:
+        return f'(얻은 물건: {got} → {drop.receiver})'
+    return f'(얻은 물건: {got} → {drop.receiver}. {lost}는 더 들 수 없어 잃었다)'
+
+
+def describe_stack(name: str, count: int, always: bool = False) -> str:
+    """물건 몇 개를 적는다. 하나면 개수를 적지 않는다(소지품과 같다). always 면 하나라도 적는다."""
+    return f'{name} {count}개' if always or count != 1 else name
 
 
 def describe_idle(move: Move) -> str:
@@ -303,6 +326,8 @@ def describe_move(move: Move) -> str:
             parts.append(describe_npc_impact(move.verdict.npc_impact))
         if move.verdict.monster_impact is not None:
             parts.append(describe_npc_impact(move.verdict.monster_impact))
+        if move.verdict.drop is not None:
+            parts.append(describe_drop(move.verdict.drop))
     if move.target_gone is not None:
         parts.append(describe_target_gone(move.target_gone))
     if move.naming is not None:

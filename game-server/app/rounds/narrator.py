@@ -78,6 +78,28 @@ class NpcImpact:
 
 
 @dataclass(frozen=True)
+class DroppedNote:
+    """드롭으로 나온 물건 하나. 이름과 받은 개수, 더 들 수 없어 잃은 개수다."""
+
+    name: str
+    count: int
+    lost: int = 0
+
+
+@dataclass(frozen=True)
+class DropNote:
+    """
+    몬스터를 쓰러뜨려 얻은 물건. 엔진이 굴리고 엔진이 줬다. 서술자는 이것을 사실로 받아 쓰기만 한다.
+
+    receiver 는 받은 캐릭터의 이름이다. 받을 사람이 없어 사라진 드롭은 서술자에게 주지 않는다.
+    """
+
+    monster: str
+    receiver: str
+    items: list[DroppedNote]
+
+
+@dataclass(frozen=True)
 class TreatmentNote:
     """
     치료의 결과. 엔진이 정한 것이다. 서술자는 이것을 바꾸지 못하고 글로 옮기기만 한다.
@@ -135,6 +157,8 @@ class Verdict:
     # 이 판정으로 몬스터 한 마리의 HP 가 바뀌었으면 그 내용. NPC 와 같은 모양이다(숫자 없이 몸 상태).
     # 없으면 None 이다. 이 칸이 생기기 전에 굳힌 것도 None 이다
     monster_impact: NpcImpact | None = None
+    # 이 판정으로 몬스터를 처음 쓰러뜨려 얻은 물건. 없으면 None 이다. 이 칸이 생기기 전에 굳힌 것도 None 이다
+    drop: DropNote | None = None
     # 이 판정에 영향을 준 부상들의 이름(보정이 깎였거나 불리했다). 없으면 비어 있다
     hindrances: list[str] = field(default_factory=list)
     # 노려 쳤으면 노린 부상의 이름. 판정이 그만큼 어려웠다. 성공했으면 그 부상이 생겼다(impact 에 적힌다)

@@ -46,7 +46,13 @@ from app.assets.scenarios.schemas import (
     RouteRule,
     VersionCreate,
 )
-from app.assets.scenarios.snapshot import AttackSnapshot, MonsterSnapshot, build_snapshot, snapshot_monster
+from app.assets.scenarios.snapshot import (
+    AttackSnapshot,
+    DropSnapshot,
+    MonsterSnapshot,
+    build_snapshot,
+    snapshot_monster,
+)
 from app.assets.service import AssetNotFoundError
 from app.engine.check import find_ability, find_difficulty
 from app.engine.health import find_magnitude
@@ -87,7 +93,8 @@ class Problem(enum.StrEnum):
     DEFAULT_NPC_SHEET_MISSING = 'default_npc_sheet_missing'
     # 기본 NPC 시트가 룰북의 규칙에 맞지 않는다
     DEFAULT_NPC_SHEET_INVALID = 'default_npc_sheet_invalid'
-    # 붙인 로어북에 없는 항목을 가리키는 아이템 규칙이나 소지품(시작 소지품, 프리젠의 소지품, 퀘스트의 보상)이 있다
+    # 붙인 로어북에 없는 항목을 가리키는 아이템 규칙이나 소지품(시작 소지품, 프리젠의 소지품, 퀘스트의 보상,
+    # 몬스터의 드롭)이 있다
     ITEM_ENTRY_MISSING = 'item_entry_missing'
     # 물건이 아닌 항목(인물, 장소 …)을 가리키는 아이템 규칙이나 소지품이 있다
     ITEM_NOT_ITEM = 'item_not_item'
@@ -369,6 +376,7 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             known[monster_sheet.monster_id],
             monster_sheet.sheet,
             [AttackSnapshot(**attack.model_dump()) for attack in monster_sheet.attacks],
+            [DropSnapshot(**drop.model_dump()) for drop in monster_sheet.drops],
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]
@@ -414,13 +422,17 @@ def read_quest_rules(scenario: Scenario) -> list[QuestRule]:
 
 
 def item_references(scenario: Scenario) -> list[uuid.UUID]:
-    """물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품, 퀘스트마다의 보상."""
+    """
+    물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품, 퀘스트마다의 보상,
+    몬스터마다의 드롭.
+    """
     stacks = [ItemStack.model_validate(document) for document in scenario.starting_items]
     for document in scenario.pregens:
         stacks.extend(Pregen.model_validate(document).items)
     for quest in read_quest_rules(scenario):
         stacks.extend(quest.reward)
-    return [rule.entry_id for rule in read_item_rules(scenario)] + [stack.entry_id for stack in stacks]
+    drops = [drop.entry_id for sheet in read_monster_sheets(scenario) for drop in sheet.drops]
+    return [rule.entry_id for rule in read_item_rules(scenario)] + [stack.entry_id for stack in stacks] + drops
 
 
 def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:

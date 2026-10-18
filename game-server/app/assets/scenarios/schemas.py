@@ -28,9 +28,11 @@ from app.assets.models import (
     DEFAULT_ROUND_MINUTES,
     DEFAULT_START_DAY,
     DEFAULT_START_HOUR,
+    DROP_CHANCE_MAX,
     ENCOUNTER_MAX_COUNT,
     ITEM_STACK_MAX,
     MONSTER_MAX_ATTACKS,
+    MONSTER_MAX_DROPS,
     PLAYER_MADE_HP_MAX,
     QUEST_MAX_TIME_LIMIT_MINUTES,
     ROUND_MAX_MINUTES,
@@ -261,6 +263,37 @@ MonsterAttacks = Annotated[
 ]
 
 
+class MonsterDrop(BaseModel):
+    """
+    몬스터의 드롭 한 줄. 살아 있던 마리가 처음 쓰러지면 chance(%)로 붙인 로어북의 물건 항목(entry_id)이 count 개 나온다.
+
+    줄마다 따로 굴린다. 항목이 붙인 로어북의 물건인지는 게시할 때 본다.
+    소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    count: int = Field(ge=1, le=ITEM_STACK_MAX)
+    chance: int = Field(ge=1, le=DROP_CHANCE_MAX)
+
+    @field_serializer('entry_id')
+    def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
+        """항목의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(entry_id)
+
+
+def reject_duplicate_drops(drops: list[MonsterDrop]) -> list[MonsterDrop]:
+    """같은 물건이 두 줄이면 거부한다. 한 줄에 개수와 확률로 적는다."""
+    entry_ids = [drop.entry_id for drop in drops]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 물건의 드롭이 두 번 있습니다. 한 줄에 개수와 확률로 적습니다.')
+    return drops
+
+
+MonsterDrops = Annotated[list[MonsterDrop], Field(max_length=MONSTER_MAX_DROPS), AfterValidator(reject_duplicate_drops)]
+
+
 class MonsterSheet(BaseModel):
     """
     몬스터 시트 하나. 붙인 도감의 몬스터 하나(monster_id)에 숫자를 준다.
@@ -275,6 +308,8 @@ class MonsterSheet(BaseModel):
     sheet: Sheet
     # 공격들. 비우면 공격하지 않는 몬스터다(겁먹은 짐승). 숫자와 같은 까닭으로 시나리오에 적는다(룰북의 이름표다)
     attacks: MonsterAttacks = []
+    # 쓰러뜨렸을 때 나오는 물건들. 비우면 드롭이 없다. 엔진이 굴리고 엔진이 준다(#372)
+    drops: MonsterDrops = []
 
     @field_serializer('monster_id')
     def monster_id_as_text(self, monster_id: uuid.UUID) -> str:

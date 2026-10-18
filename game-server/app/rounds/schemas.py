@@ -146,6 +146,33 @@ class MonsterEffectOut(BaseModel):
     status: NpcStatus
 
 
+class DroppedItemOut(BaseModel):
+    """드롭으로 나온 물건 하나. 받은 개수, 한 가지의 상한을 넘어 잃은 개수, 받은 뒤의 개수다."""
+
+    entry_id: uuid.UUID
+    name: str
+    count: int
+    lost: int
+    # 받은 사람이 없어 사라졌으면 None 이다
+    total: int | None
+
+
+class DropOut(BaseModel):
+    """
+    몬스터를 처음 쓰러뜨려 나온 물건들. 엔진이 굴리고 엔진이 줬다(app/rounds/drops.py).
+
+    받는 사람은 그 마리가 있던 장소의 죽지 않은 캐릭터 중 서버의 주사위로 고른 한 명이다.
+    그 장소에 받을 사람이 없었으면 user_id 가 None 이고 나온 것은 모두 사라졌다(lost).
+    """
+
+    source: str
+    monster_id: uuid.UUID
+    monster_name: str
+    user_id: uuid.UUID | None
+    character_name: str | None
+    items: list[DroppedItemOut]
+
+
 class MishapOut(BaseModel):
     """치료에 실패해 치료 실패 표를 굴린 것. 엔진이 굴렸다."""
 
@@ -213,6 +240,8 @@ class CheckOutcome(BaseModel):
     npc_effect: NpcEffectOut | None = None
     # 이 판정으로 몬스터 한 마리의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. 위의 둘과 함께 있지 않다
     monster_effect: MonsterEffectOut | None = None
+    # 이 판정으로 몬스터를 처음 쓰러뜨려 무엇이 나왔으면 그 드롭. 아니면 None 이다
+    drop: DropOut | None = None
     # 치료하는 행동이었으면 그 결과. 아니면 None 이다
     treatment: TreatmentOut | None = None
 
