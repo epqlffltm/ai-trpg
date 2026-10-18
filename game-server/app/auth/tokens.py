@@ -4,8 +4,8 @@
 인증 서버가 발급한 access 토큰을 검증한다.
 
 인증 서버의 DB 를 보지 않는다. 공개키로 서명을 확인하고, 토큰 안에 적힌 값만 본다.
-그래서 인증 서버에서 로그아웃하거나 계정이 정지돼도, 이미 발급된 access 토큰은 만료될 때까지 통한다.
-access 토큰의 수명을 짧게(15분) 잡는 이유다.
+인증 서버에서 세션을 끊은 사람(로그아웃, 비밀번호 변경, 계정 정지)의 토큰은 끊긴 세션의 목록으로 거부한다
+(app/auth/revocations.py, #274). 목록을 30초마다 받으므로 끊은 뒤 길어야 30초쯤 더 통한다.
 
 확인하는 것:
   - 서명 방식이 RS256 인가. 토큰이 스스로 적어 온 방식을 믿지 않는다.
@@ -14,6 +14,7 @@ access 토큰의 수명을 짧게(15분) 잡는 이유다.
   - 인증 서버가 발급했는가(iss).
   - 이 서버에 쓰라고 발급됐는가(aud).
   - access 토큰인가. refresh 토큰도 같은 키로 서명되므로 종류를 따로 본다.
+  - 끊긴 세션의 것이 아닌가. 세션 버전(ver, 없으면 0)이 목록의 min_ver 보다 낮으면 거부한다.
 
 성인용 내용을 볼 수 있는지(adult_content)도 토큰에서 읽는다(#59). 인증 서버가 본인인증의 생년월일로 정해 싣는다.
 그 값이 없는 토큰(본인인증 전, 그 값이 생기기 전에 발급된 토큰)은 볼 수 없는 것으로 본다. 거부하지는 않는다.
@@ -27,6 +28,7 @@ from datetime import UTC, datetime
 import jwt
 
 from app.auth.jwks import JwksCache, UnknownKeyError
+from app.auth.revocations import RevocationList, is_version
 from app.core.config import Settings
 
 # 이 서버가 받는 서명 방식. 하나만 적는다.
@@ -45,6 +47,8 @@ ADULT_CONTENT_CLAIM = 'adult_content'
 # 역할의 목록이 적힌 칸과 운영자의 역할 이름. 인증 서버의 accounts/tokens.py 의 ROLES_CLAIM, accounts/roles.py 와 같다
 ROLES_CLAIM = 'roles'
 OPERATOR_ROLE = 'operator'
+# 세션 버전이 적힌 칸. 인증 서버가 세션을 끊을 때마다 올린다. 없으면 0 으로 본다(인증 서버 README 의 약속)
+SESSION_VERSION_CLAIM = 'ver'
 
 # 서버끼리 시계가 조금 어긋나는 것을 봐주는 시간.
 # 0 이면 인증 서버의 시계가 1초만 빨라도 방금 발급한 토큰이 "아직 유효하지 않다"로 거부된다
@@ -149,11 +153,34 @@ def read_is_operator(claims: dict) -> bool:
     return isinstance(roles, list) and OPERATOR_ROLE in roles
 
 
-async def verify_access_token(token: str, jwks: JwksCache, settings: Settings) -> AccessClaims:
+def read_session_version(claims: dict) -> int:
+    """
+    토큰의 세션 버전을 읽는다. 없으면 0 이다.
+
+    있는데 0 이상의 정수가 아니면 거부한다. 모양이 틀린 값을 0 으로 읽으면 끊긴 세션이 통할 수 있다.
+    """
+    version = claims.get(SESSION_VERSION_CLAIM, 0)
+    if not is_version(version):
+        raise InvalidTokenError
+    return version
+
+
+def ensure_not_revoked(claims: dict, revocations: RevocationList) -> None:
+    """끊긴 세션의 토큰이면 InvalidTokenError. sub 는 글자 그대로 견준다(목록이 그 글자의 해시다)."""
+    if revocations.is_revoked(claims['sub'], read_session_version(claims)):
+        raise InvalidTokenError
+
+
+async def verify_access_token(
+    token: str,
+    jwks: JwksCache,
+    revocations: RevocationList,
+    settings: Settings,
+) -> AccessClaims:
     """
     access 토큰을 검증하고 그 안의 값을 돌려준다.
 
-    토큰이 틀렸으면 InvalidTokenError.
+    토큰이 틀렸거나 끊긴 세션의 것이면 InvalidTokenError.
     키를 구할 수 없어 맞는지 틀린지 알 수 없으면 JwksUnavailableError 가 그대로 올라간다.
     """
     key_id = read_key_id(token)
@@ -163,4 +190,6 @@ async def verify_access_token(token: str, jwks: JwksCache, settings: Settings) -
         raise InvalidTokenError from error
 
     claims = decode_claims(token, key, settings)
-    return build_access_claims(claims)
+    access = build_access_claims(claims)
+    ensure_not_revoked(claims, revocations)
+    return access
