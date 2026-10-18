@@ -118,6 +118,7 @@ func toEntry(row walletdb.ListEntriesRow) Entry {
 		Amount:      row.Amount,
 		OrderID:     row.OrderID,
 		HoldID:      row.HoldID,
+		HoldStatus:  HoldStatus(row.HoldStatus.String),
 		CreatedAt:   row.CreatedAt,
 	}
 }

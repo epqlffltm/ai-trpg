@@ -258,6 +258,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `GET /api/v1/billing/wallet/entries` | 200 `{"entries":[...],"next_before":"41"}` | 토큰의 주인의 원장. 최근 것부터 |
 | `GET /api/v1/billing/products` | 200 `{"products":[...]}` | 파는 상품. 번호, 이름, 값(원), 크레딧 |
 | `POST /api/v1/billing/orders` | 201 또는 200, 주문 | 주문을 만든다. `Idempotency-Key` 머리말이 있어야 한다 |
+| `GET /api/v1/billing/orders` | 200 `{"orders":[...],"next_before":"…"}` | 토큰의 주인의 주문. 만든 시각이 늦은 것부터. `before`(주문 번호), `limit`(1~50, 기본 20) |
 | `GET /api/v1/billing/orders/{id}` | 200, 주문 | 토큰의 주인의 주문 하나 |
 | `POST /api/v1/billing/orders/{id}/confirm` | 200 또는 202, 주문 | 결제의 승인을 요청한다. 승인되면 크레딧이 들어온다 |
 | `POST /api/v1/billing/orders/{id}/refund` | 200 또는 202, 주문 | 청약철회. 치른 지 7일 안이고 그 주문의 크레딧이 하나도 줄지 않았으면 전액을 취소한다 |
@@ -319,6 +320,10 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `amount` | 늘었으면 양수, 줄었으면 음수 |
 | `order_id` | 이 크레딧이 들어온 주문. 주문으로 들어온 줄이 아니면 `null` |
 | `hold_id` | 이 줄을 남긴 홀드. 빠진 줄(`hold`)과 돌아온 줄(`release`)이 같은 값을 갖는다. 그 밖의 줄은 `null` |
+| `hold_status` | 그 홀드의 지금 상태(#430). `held`(서술의 결과를 기다림), `captured`(확정되어 그대로 쓰임), `released`(돌려줌. 같은 `hold_id` 의 `release` 줄이 있다). 홀드의 줄이 아니면 `null` |
+
+확정은 원장에 줄을 남기지 않는다([홀드](#홀드)). 그래서 `hold` 줄만으로는 아직 기다리는지 쓰였는지 알 수 없어, 읽을 때 그 홀드의 상태를 붙인다.
+읽은 순간의 값이다. 같은 줄도 나중에 읽으면 `held` 에서 `captured` 나 `released` 로 바뀌어 있을 수 있다.
 
 원장을 나눠 읽는 쿼리는 둘이다.
 
@@ -439,6 +444,16 @@ Idempotency-Key: 4f0c2b1e-7a52-4d43-9a57-2f6f0d0e9b11
 값(`price`)은 원이라 소수가 없어서 숫자로 준다. 크레딧은 다른 주소들처럼 글자다.
 `refundable` 은 지금 청약철회할 수 있는지다(화면이 환불 단추를 보일지 정한다). `refundable_until` 은 청약철회를 받는 마지막 시각(치른 시각 + 7일)이고,
 치르지 않았으면 `null` 이다. `refunded_at` 은 환불된 시각이다.
+`refund_blocked` 는 치른 주문(`paid`)인데 청약철회할 수 없는 까닭이다(#430). `window_closed`(7일이 지났다), `credits_used`(그 주문의 크레딧을 썼거나 홀드로 묶었다).
+할 수 있거나 치른 주문이 아니면 `null` 이다. 치른 주문이 아니면 `status` 가 말한다.
+
+**주문 목록(#430).** `GET /api/v1/billing/orders` 는 토큰의 주인의 주문을 만든 시각이 늦은 것부터 준다. 상태와 상관없이 모두 싣는다(만들기만 하고 치르지 않은 것, 만료된 것도).
+한 줄의 모양은 주문 하나와 같다. `limit` 은 1~50(기본 20)이고, 다음 쪽은 응답의 `next_before` 를 `before` 에 넣는다. `next_before` 가 `null` 이면 끝이다.
+
+- 같은 시각에 만든 주문은 번호로 차례를 정한다. 쪽을 넘기는 사이에 새 주문이 생겨도 겹치거나 빠지지 않는다(앞 쪽의 마지막 주문보다 앞선 것을 읽는다).
+- `before` 가 내 주문이 아니면(없거나 남의 것이면) 빈 목록이다. 남의 주문이 있는지 알려 주지 않는다.
+- 한 쪽의 기한 안 치른 주문마다 그 주문의 크레딧이 줄었는지 따로 읽는다(`refundable`). 그래서 한 쪽을 50 으로 막는다.
+- 색인은 `orders_user_created_idx (user_id, created_at DESC, id DESC)` 다(`00018_orders_by_user.sql`).
 
 **상태.** 한 방향으로만 흐른다.
 
@@ -526,7 +541,11 @@ POST /api/v1/billing/orders/{id}/refund
 | 200, `status` 가 `refunded` | 취소되었다. 돈이 돌아갔고 그 주문의 크레딧이 빠졌다. 이미 환불된 주문에 다시 보내도 같은 답이다 |
 | 202, `status` 가 `refunding` | 크레딧은 뺐는데 결제 대행사의 답을 받지 못했다. 결과를 모른다 |
 | 404 | 그런 주문이 없다. 남의 주문도 같은 답이다 |
-| 409 | 치른 주문이 아니다. 7일이 지났다. 그 주문의 크레딧을 썼다. 결제 대행사가 취소를 거절했다(크레딧은 돌아오고 주문은 `paid` 다). 같은 주문의 다른 요청과 엇갈렸다(다시 보낸다) |
+| 409 `refund.not_paid` | 치른 주문이 아니다 |
+| 409 `refund.window_closed` | 7일이 지났다 |
+| 409 `refund.credits_used` | 그 주문의 크레딧을 썼거나 홀드로 묶었다 |
+| 409 `refund.refused` | 결제 대행사가 취소를 거절했다. 크레딧은 돌아오고 주문은 `paid` 다 |
+| 409 `refund.busy` | 같은 주문의 다른 요청과 엇갈렸다. 다시 보낸다 |
 | 503 | 작업이 30초 안에 끝나지 않았다(DB 가 막혔다). 주문은 적어 둔 상태(`paid` 나 `refunding`)에 남는다. 다시 보낸다 |
 
 차례는 승인과 같은 모양이다. 결제 대행사를 부르는 동안 트랜잭션을 열어 두지 않는다.
@@ -933,7 +952,8 @@ narration.old-model.i0.o0,stop,,,
 - 5xx 에는 `code` 가 없다. 이름으로 가릴 것이 없고, 같은 요청을 다시 보내면 된다
 - 사용자가 부르는 주소(`/me`, `/wallet`, `/orders`)의 오류에는 `code` 가 없다(칸이 빠진다). 웹 화면은 상태 코드와 `detail` 만 쓴다.
   하나 다른 것이 결제 자격의 403 이다(`payment.verification_required`, `payment.guardian_consent_required`, 위의 "결제할 수 있는 사람"). 화면이 갈 곳을 가른다.
-  출석의 403·409(`attendance.verification_required`, `attendance.already_claimed`, [크레딧](#크레딧)의 "출석과 보물 상자")도 같다
+  출석의 403·409(`attendance.verification_required`, `attendance.already_claimed`, [크레딧](#크레딧)의 "출석과 보물 상자")와
+  청약철회의 409(`refund.*`, [주문과 결제](#주문과-결제)의 "청약철회")도 같다. 화면이 할 수 없는 까닭을 나눠 보인다
 - 상태 코드는 그대로다. `code` 를 읽지 않는 옛 게임 서버도 지금처럼 돈다
 
 **부르는 쪽이 이 답들에 기대고 있다.** 게임 서버의 `app/billing/http_billing.py` 가 위의 표를 그대로 옮겨 적었다.
@@ -1433,6 +1453,7 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 `00015_price_basic.sql` 은 `basic` 줄이 하나라도 있으면 되돌려지지 않는다. 가격표는 덧붙이기만 하므로 그 줄을 지울 수 없다.
 `00016_price_promo.sql` 은 언제든 되돌려진다. 다만 언제 행사가로 팔았는지의 기록이 사라진다. 개발용 DB 에서만 되돌린다.
 `00017_user_notices.sql` 은 언제든 되돌려진다. 아직 보내지 못한 사용자의 알림이 사라진다. 다시 적용하면 지난 사흘의 일을 다시 적어 보낸다. 알림 서버가 열쇠로 한 번만 두므로 알림이 두 번 생기지는 않는다.
+`00018_orders_by_user.sql` 은 언제든 되돌려진다. 색인 하나뿐이다. 되돌리면 주문 목록(`GET /orders`)이 느려질 뿐이다.
 
 `00005_expiry.sql` 을 적용할 때 이미 있는 `held` 홀드는 **적용한 때부터** 하루를 받는다. 만든 때부터 세면 적용하자마자 오래된 것이 한꺼번에 풀린다.
 이미 있는 주문은 만든 때부터 하루다. `pending` 은 돈이 오간 적이 없어 바로 끝나도 안전하다.
@@ -1853,6 +1874,7 @@ billing-server/
       order.go              타입, 오류, 상태
       channel.go            결제 경로(channel). 주문의 길을 보고 그 길의 결제 대행사를 골라 부른다
       create.go             주문 만들기와 읽기. 중복 방지 키
+      list.go               내 주문 목록(쪽 넘기기)
       confirm.go            승인 요청, 결과 적기. 만료된 주문의 거절
       deposit.go            가상계좌(입금 대기)로 온 결제를 곧바로 취소하고 끝내기
       notify.go             결제 대행사의 알림 처리. 진행 중인 승인은 조회하고, 진행 중인 취소는 다시 보낸다

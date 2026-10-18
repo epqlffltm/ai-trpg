@@ -55,8 +55,10 @@ type entryBody struct {
 	// OrderID 는 이 크레딧이 들어온 주문이다. 주문으로 들어온 줄이 아니면 null 이다.
 	OrderID *uuid.UUID `json:"order_id"`
 	// HoldID 는 이 줄을 남긴 홀드다. 빠진 줄(hold)과 돌아온 줄(release)이 같은 번호를 갖는다. 아니면 null 이다.
-	HoldID    *uuid.UUID `json:"hold_id"`
-	CreatedAt time.Time  `json:"created_at"`
+	HoldID *uuid.UUID `json:"hold_id"`
+	// HoldStatus 는 그 홀드의 지금 상태다(held, captured, released). 홀드의 줄이 아니면 null 이다(#430).
+	HoldStatus *wallet.HoldStatus `json:"hold_status"`
+	CreatedAt  time.Time          `json:"created_at"`
 }
 
 // entriesBody 는 원장 응답의 모양이다.
@@ -129,18 +131,28 @@ func pageQuery(c *gin.Context) (before int64, limit int, ok bool) {
 func toEntriesBody(page wallet.Page) entriesBody {
 	entries := make([]entryBody, 0, len(page.Entries))
 	for _, entry := range page.Entries {
-		entries = append(entries, entryBody{
-			ID:          strconv.FormatInt(entry.ID, 10),
-			OperationID: entry.OperationID,
-			Kind:        entry.Kind,
-			Reason:      entry.Reason,
-			Amount:      entry.Amount,
-			OrderID:     entry.OrderID,
-			HoldID:      entry.HoldID,
-			CreatedAt:   entry.CreatedAt,
-		})
+		entries = append(entries, toEntryBody(entry))
 	}
 	return entriesBody{Entries: entries, NextBefore: nextBefore(page.NextBefore)}
+}
+
+// toEntryBody 는 원장 한 줄을 응답의 모양으로 바꾼다. 홀드의 줄이 아니면 hold_status 는 null 이다.
+func toEntryBody(entry wallet.Entry) entryBody {
+	body := entryBody{
+		ID:          strconv.FormatInt(entry.ID, 10),
+		OperationID: entry.OperationID,
+		Kind:        entry.Kind,
+		Reason:      entry.Reason,
+		Amount:      entry.Amount,
+		OrderID:     entry.OrderID,
+		HoldID:      entry.HoldID,
+		CreatedAt:   entry.CreatedAt,
+	}
+	if entry.HoldStatus != "" {
+		status := entry.HoldStatus
+		body.HoldStatus = &status
+	}
+	return body
 }
 
 // nextBefore 는 다음 쪽의 시작 값을 글자로 바꾼다. 다음 쪽이 없으면(0) nil 이다.

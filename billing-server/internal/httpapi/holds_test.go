@@ -534,6 +534,10 @@ func TestHoldingCreditsEndToEndWithTheRealDatabase(t *testing.T) {
 	if strings.Count(history, `"hold_id":"`+placed.ID+`"`) != 2 {
 		t.Errorf("첫 홀드를 가리키는 줄이 둘이 아니다: %s", history)
 	}
+	// 첫 홀드는 확정되었다. 확정은 원장에 줄을 남기지 않지만, 두 줄에 확정되었다고 붙는다(#430)
+	if strings.Count(history, `"hold_id":"`+placed.ID+`","hold_status":"captured"`) != 2 {
+		t.Errorf("확정된 홀드의 줄에 상태가 붙지 않았다: %s", history)
+	}
 }
 
 func TestHoldsExpireUnlessExtendedEndToEnd(t *testing.T) {
