@@ -325,6 +325,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
 | `billing.release` | game | 결제 서버에 홀드의 반환을 맡기기 |
 | `billing.extend` | game | 결제 서버에 홀드의 연장을 맡기기(만료 전에) |
+| `operator.read` | game | 운영자가 남의 테이블이나 시나리오를 운영자 API 로 보았다(#391). `operator_id`, `target_kind`, `target_id`, `target_number`. 사유는 싣지 않는다(자유 글). 원본은 DB 의 감사 기록(`operator_reads`)이다 |
 | `ledger_draft.write` | game | 서술한 장면에서 장부 초안을 쓰고 줄로 적기(서술을 맡은 작업의 끝, `round.narrate` 의 `job_id`) |
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
 | `welcome_credit.deliver` | auth | 환영 크레딧을 결제 서버에 맡기기 |

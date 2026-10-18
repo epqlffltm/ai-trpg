@@ -39,6 +39,7 @@
 - [시도 횟수 제한](#시도-횟수-제한)
 - [로어북 검색](#로어북-검색)
 - [장부 초안](#장부-초안)
+- [운영자 API](#운영자-api)
 - [로그와 요청 식별자](#로그와-요청-식별자)
 - [CI](#ci)
 - [설계 메모](#설계-메모)
@@ -2728,6 +2729,34 @@ uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --repeat 10 --
 uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case found lost
 uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_back lost_trail counted_in_words some_broken many picked_for_other passed_between --repeat 10 --out $HOME\drafts-hard.md
 ```
+
+## 운영자 API
+
+운영자가 남의 테이블과 시나리오를 본다(#391). 규칙의 원본은 [운영자 권한](../docs/architecture/operators.md)이다. 읽기만 한다. 제재는 #392 다.
+
+- 운영자는 access 토큰의 `roles` 에 `"operator"` 가 있는 사람이다(인증 서버의 그룹 `operators`, #389). 아니면 모든 주소가 404 다. 앉은 사람, 만든 사람도 그렇다.
+- 모든 주소가 쿼리의 `reason`(1~200자, 공백만은 안 됨)을 받는다. 없으면 422 다. 신고 번호나 짧은 글을 적는다.
+- 앉아 있는지, 만든 사람인지를 보지 않는다. 일반 API 로 테이블에 들어가면 참가자로 보이지만, 이 주소로 보면 아무도 모른다.
+
+| 메서드 | 주소 | 무엇을 |
+| --- | --- | --- |
+| GET | `/api/v1/game/admin/tables/{id}` | 테이블의 상태, 앉은 사람, 굳힌 판의 내용(`content`) 전부. 진행 지침, GM 전용 설정, 로어북, GM 메모가 들어 있다 |
+| GET | `/api/v1/game/admin/tables/{id}/events` | 기록(서술, 행동, 판정). `after`, `limit` 은 앉은 사람의 것과 같다 |
+| GET | `/api/v1/game/admin/tables/{id}/messages` | 테이블 대화. `after`, `limit` |
+| GET | `/api/v1/game/admin/tables/{id}/whispers` | 귓속말 전부. 쪽지함마다가 아니라 한 장씩, 보낸 순서. `limit`, `offset`, `total` |
+| GET | `/api/v1/game/admin/scenarios/{id}` | 시나리오의 초안. 만든 사람이 보는 모양 그대로다 |
+| GET | `/api/v1/game/admin/scenarios/{id}/versions/{number}` | 판 하나와 굳힌 내용 전부. 테이블은 이 내용으로 돈다 |
+
+아직 없는 것: 장부 초안, 라운드의 기억, 초안이 가리키는 재료(룰북, 세계관, 로어북), AI 호출 기록.
+
+**감사 기록(`operator_reads`).** 볼 때마다 한 줄이 남는다. 운영자(`operator_id`), 시각(`read_at`), 무엇(`target_kind`, `target_id`, 판이면 `target_number`), 사유(`reason`), `request_id`.
+
+- **먼저 적고 커밋한 뒤에 읽는다.** 없는 테이블을 본 시도도 남는다. 무엇을 보려 했는지가 기록의 목적이다.
+- 본 내용은 싣지 않는다. 같은 것을 로그에도 남긴다(`operation`: `operator.read`, 사유는 빼고). 로그는 수집되기 전에 사라질 수 있어 DB 가 원본이다.
+- **덧붙이기만 한다.** DB 의 트리거(`operator_reads_no_rewrite`)가 UPDATE 와 DELETE 를 막는다. TRUNCATE 는 막지 않는다. 테스트가 비울 때 쓴다(`tests/cleaning.py`).
+  앱과 마이그레이션이 같은 DB 계정이라, 이 막음은 실수를 막는 데까지다. 계정을 나누면 TRUNCATE 권한을 마이그레이션 계정에만 둔다.
+- 테이블과 시나리오에 외래 키를 걸지 않는다. 기록은 그것들보다 오래 산다.
+- 운영자가 성인 등급의 예외로 일반 API 를 쓸 때(목록, 들어오기)는 남기지 않는다. 그것은 일반 사용자의 일이다.
 
 ## 로그와 요청 식별자
 
