@@ -35,7 +35,6 @@ from app.catalog.models import Grade
 from app.catalog.schemas import Slug
 from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
 from app.engine.sheet import Score, Sheet
-from app.rounds.tiers import NarrationTier
 from app.tables.models import (
     CREDIT_WAIT_MAX,
     CREDIT_WAIT_MIN,
@@ -86,10 +85,7 @@ class TableCreate(BaseModel):
     narration_style: NarrationStyle | None = None
     # 라운드의 시간 제한(초). 적지 않으면 5 분이다. null 이면 시간 제한이 없다. 만든 뒤에도 방장이 바꿀 수 있다
     round_time_limit: RoundTimeLimit | None = DEFAULT_ROUND_TIME_LIMIT
-    # 서술 등급. 적지 않으면 standard 다. 이 서버가 내주는 등급만 된다(GET /tables/narration-tiers).
-    # 만든 뒤에도 방장이 바꿀 수 있다
-    narration_tier: NarrationTier = NarrationTier.STANDARD
-    # 서술 모델(모델 목록의 이름표). 적지 않으면 서버의 기본(위의 등급)으로 서술한다.
+    # 서술 모델(모델 목록의 이름표). 적지 않으면 시나리오의 추천 모델이고, 쓸 수 없으면 같은 회사의 대체 모델이다.
     # 고를 수 있는 모델만 된다(GET /tables/narration-models). 만든 뒤에도 방장이 바꿀 수 있다
     narration_model: Slug | None = None
     # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 빼고 서술하는가. 만든 뒤에도 방장이 바꿀 수 있다
@@ -229,27 +225,12 @@ class LedgerDraftsUpdate(BaseModel):
     ledger_drafts: bool
 
 
-class NarrationTierUpdate(BaseModel):
-    """서술 등급을 바꿀 때 받는 값. 칸을 빼먹으면 거부한다."""
-
-    model_config = ConfigDict(extra='forbid')
-
-    narration_tier: NarrationTier
-
-
 class NarrationModelUpdate(BaseModel):
-    """서술 모델을 바꿀 때 받는 값. null 이면 서버의 기본(서술 등급)으로 돌아간다. 칸을 빼먹으면 거부한다."""
+    """서술 모델을 바꿀 때 받는 값. 칸을 빼먹으면 거부한다. 비울 수 없다(서버의 기본 모델로 돌아가지 않는다)."""
 
     model_config = ConfigDict(extra='forbid')
 
-    narration_model: Slug | None
-
-
-class NarrationTiersOut(BaseModel):
-    """이 서버가 내주는 서술 등급들. 테이블을 만들거나 등급을 바꾸는 화면이 고를 것을 보여 준다."""
-
-    # 값은 결제 서버의 가격표(narration.<등급>)가 정한다. 여기에는 싣지 않는다
-    tiers: list[NarrationTier]
+    narration_model: Slug
 
 
 class HostTransfer(BaseModel):
@@ -525,10 +506,8 @@ class TableSummary(BaseModel):
     narration_style: NarrationStyle
     # 라운드의 시간 제한(초). 없으면 null 이다. 로비에서 들어가기 전에 얼마나 빨리 진행되는지 안다
     round_time_limit: int | None
-    # 지금의 서술 등급. 로비에서 들어가기 전에 어느 모델로 서술하는지 안다. 바꾸면 다음 라운드부터다
-    narration_tier: NarrationTier
-    # 방장이 고른 서술 모델(이름표). 없으면 null 이고 서버의 기본(위의 등급)으로 서술한다. 바꾸면 다음 라운드부터다.
-    # 값은 GET /tables/narration-models 에서 이름표로 찾는다
+    # 지금의 서술 모델(이름표). 로비에서 들어가기 전에 어느 모델로 서술하는지 안다. 바꾸면 보통 다음 라운드부터다.
+    # 값은 GET /tables/narration-models 에서 이름표로 찾는다. 이 규칙 전에 만든 테이블만 null 이다(서버의 기본 모델)
     narration_model: str | None
     # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 자리에서 빼는가. 들어가기 전에 안다
     credit_wait_seconds: int

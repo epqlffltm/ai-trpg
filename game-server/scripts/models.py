@@ -88,7 +88,9 @@ def cost_text(cost: AiModelCost | None) -> str:
 def model_line(model: AiModel, cost: AiModelCost | None, today: date) -> str:
     """목록의 한 줄."""
     retires = f' 은퇴일 {model.retires_on}' if model.retires_on else ''
-    return f'{model.slug:<28} {model.grade:<9} {model.vendor:<10} {status_of(model, today)}  {cost_text(cost)}{retires}'
+    fallback = ' 대체' if model.vendor_fallback else ''
+    line = f'{model.slug:<28} {model.grade:<9} {model.vendor:<10} {status_of(model, today)}  {cost_text(cost)}'
+    return f'{line}{retires}{fallback}'
 
 
 def cost_line(cost: AiModelCost) -> str:
@@ -123,7 +125,7 @@ def detail_lines(model: AiModel, costs: list[AiModelCost], snapshots: list[AiMod
         f'  창구 {model.provider}, API 모델 {model.api_model_id}',
         f'  생각의 깊이 {"고름" if model.supports_reasoning else "못 고름"}, '
         f'온도 {"받음" if model.supports_temperature else "안 받음"}, 출력 상한의 칸 {token_field}{reasoning_style}',
-        f'  은퇴일 {model.retires_on or "없음"}',
+        f'  은퇴일 {model.retires_on or "없음"}{", 회사의 대체 모델" if model.vendor_fallback else ""}',
         '원가 단가(USD, 백만 토큰당):' if costs else '원가 단가가 없다',
         *[cost_line(cost) for cost in costs],
         *(['날짜판을 바꾼 일:'] if snapshots else []),
@@ -237,6 +239,15 @@ async def retire_command(session: AsyncSession, args: argparse.Namespace, today:
     return [f'{model.slug}: {model.retires_on}부터 쓰지 않는다']
 
 
+async def fallback_command(session: AsyncSession, args: argparse.Namespace, today: date) -> list[str]:
+    """회사의 대체 모델을 정하거나 지운다."""
+    if args.cancel:
+        model = await service.clear_fallback(session, args.slug)
+        return [f'{model.slug}: 대체 모델에서 뺐다. {model.vendor} 는 standard 중 가장 싼 모델로 대체한다']
+    model = await service.set_fallback(session, args.slug, today)
+    return [f'{model.slug}: {model.vendor} 의 대체 모델로 정했다']
+
+
 COMMANDS: dict[str, Command] = {
     'list': list_command,
     'show': show_command,
@@ -247,6 +258,7 @@ COMMANDS: dict[str, Command] = {
     'enable': enable_command,
     'disable': disable_command,
     'retire': retire_command,
+    'fallback': fallback_command,
 }
 
 
@@ -319,7 +331,7 @@ def add_cost_parser(commands: argparse._SubParsersAction) -> None:
 
 
 def add_switch_parsers(commands: argparse._SubParsersAction) -> None:
-    """enable, disable, retire 의 명령줄."""
+    """enable, disable, retire, fallback 의 명령줄."""
     commands.add_parser('enable', help='켠다. 오늘의 원가가 있어야 한다').add_argument('slug')
     commands.add_parser('disable', help='끈다. 지우지 않는다').add_argument('slug')
     retire = commands.add_parser('retire', help='은퇴일을 적는다. 그날부터 쓰지 않는다')
@@ -327,6 +339,11 @@ def add_switch_parsers(commands: argparse._SubParsersAction) -> None:
     when = retire.add_mutually_exclusive_group(required=True)
     when.add_argument('--on', type=date.fromisoformat, help='은퇴일')
     when.add_argument('--cancel', action='store_true', help='은퇴일을 지운다')
+    fallback = commands.add_parser(
+        'fallback', help='회사의 대체 모델로 정한다. 시나리오의 추천 모델을 쓸 수 없을 때 같은 회사의 이 모델로 바꾼다'
+    )
+    fallback.add_argument('slug')
+    fallback.add_argument('--cancel', action='store_true', help='대체 모델에서 뺀다')
 
 
 def build_parser() -> argparse.ArgumentParser:

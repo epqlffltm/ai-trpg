@@ -36,6 +36,7 @@ from app.tables.models import GameTable
 from app.whispers.models import Whisper
 from app.whispers.service import target_round
 from tests.conftest import make_test_settings
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_chat_api import make_table
@@ -97,7 +98,7 @@ async def open_trio(client: AsyncClient, host: dict, *guests: dict, **options) -
     """첫 사람이 테이블을 열고 나머지가 들어온다. 아직 시작하지 않았고, 아무도 캐릭터가 없다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북'}, headers=host)
     body = {'title': '밀서', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS, 'default_sheet': SHEET}
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=host)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=host)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=host)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 3, **options}
     response = await client.post(TABLES_URL, json=body, headers=host)

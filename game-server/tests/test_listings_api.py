@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.models import Asset, AssetType, Scenario, ScenarioVersion
 from app.listings.models import LISTING_MAX_GENRES, LISTING_MAX_TAGS, TAG_MAX_LENGTH, TAGLINE_MAX_LENGTH, Listing
 from app.main import API_PREFIX
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -75,7 +76,7 @@ async def create_scenario(client: AsyncClient, headers: dict[str, str], **fields
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북', 'gm_guide': GM_GUIDE}, headers=headers)
     body = {'title': TITLE, 'rulebook_id': rulebook.json()['id'], 'openings': [OPENING], 'default_sheet': SHEET}
     body.update(fields)
-    response = await client.post(SCENARIOS_URL, json=body, headers=headers)
+    response = await client.post(SCENARIOS_URL, json=with_model(body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 

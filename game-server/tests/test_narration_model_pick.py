@@ -4,13 +4,12 @@
 방장이 테이블의 서술 모델을 고르는 것(app/tables/model_picker.py, app/tables/narration_models.py)을 검증한다.
 
 보는 것.
-  - 만들 때: 고르지 않으면 null(서버의 기본, 서술 등급).
-    고를 수 있는 모델만 된다(GET /tables/narration-models 와 같은 규칙).
-    모델을 고르지 않으면 결제 서버의 가격 목록을 묻지 않는다. 고르는데 목록을 받지 못하면 503 이다.
-  - 바꾸기: 방장만, 고를 수 있는 모델만, null 이면 기본으로. 이벤트로 남는다. 같은 값이면 아무것도 적지 않는다.
-  - 라운드에 굳기: 열 때의 모델로 값을 걸고 서술한다. 열려 있는 동안 바꿔도 그 라운드는 그대로, 다음 라운드부터 바뀐다.
-  - 값: 모델의 가격표 이름(narration.<이름표>.i0.o0)으로 건다. 모델이 없는 라운드는 등급의 것이다.
-  - 서술자: 모델이 굳은 라운드는 그 모델의 서술자, 아니면 등급의 서술자.
+  - 만들 때: 고르지 않으면 시나리오의 추천 모델이다(대신 쓰는 것은 test_recommended_model.py).
+    고를 수 있는 모델만 된다(GET /tables/narration-models 와 같은 규칙). 가격 목록을 받지 못하면 503 이다.
+  - 바꾸기: 방장만, 고를 수 있는 모델만, 비울 수 없다. 이벤트로 남는다. 같은 값이면 아무것도 적지 않는다.
+  - 라운드에 굳기: 열 때의 모델로 값을 걸고 서술한다. 서술이 돌고 있으면 그 라운드는 그대로, 다음 라운드부터 바뀐다.
+  - 값: 모델의 가격표 이름(narration.<이름표>.i0.o0)으로 건다. 모델이 없는 옛 라운드는 옛 가격표다.
+  - 서술자: 모델이 굳은 라운드는 그 모델의 서술자, 모델이 없는 옛 라운드는 서버의 기본 서술자.
 """
 
 import uuid
@@ -22,12 +21,14 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing.charges import LEGACY_PRICE_CODE
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import FREE_BOOK, narration_code
+from app.billing.routing import utc_now
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.picked_narrator import PickedNarrator
-from app.tables.router import utc_now
 from tests.billing import PRICES, FakeBillingServer
+from tests.narration_model import TEST_MODEL, TEST_PRICE_CODE
 from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, OPUS, FixedPrices, add_enabled, book, on_sale
 from tests.test_narration_billing import charges_of, tick
@@ -99,6 +100,14 @@ async def set_model(client: AsyncClient, headers: dict[str, str], table: dict, m
     return await client.put(table_url(table, '/narration-model'), json={'narration_model': model}, headers=headers)
 
 
+async def clear_models(session: AsyncSession, table: dict) -> None:
+    """테이블과 그 라운드들의 서술 모델을 비운다. 모델을 고르는 규칙 전에 만든 테이블과 같다."""
+    table_filter = {'id': uuid.UUID(table['id'])}
+    await session.execute(text('UPDATE game_tables SET narration_model = NULL WHERE id = :id'), table_filter)
+    await session.execute(text('UPDATE table_rounds SET narration_model = NULL WHERE table_id = :id'), table_filter)
+    await session.commit()
+
+
 async def close_solo(client: AsyncClient, me: dict[str, str], table: dict, narrated) -> None:
     """혼자 앉은 테이블의 라운드를 선언으로 닫고, 서술이 끝날 때까지 기다린다."""
     await declare(client, me, table, LAUGH)
@@ -108,14 +117,20 @@ async def close_solo(client: AsyncClient, me: dict[str, str], table: dict, narra
 # --- 만들 때 ---
 
 
-async def test_without_a_pick_the_table_uses_the_default(client: AsyncClient, app: FastAPI, me: dict[str, str]):
-    # 모델을 고르지 않으면 가격 목록을 묻지 않는다. 결제 서버가 내려가 있어도 테이블을 만든다
+async def test_without_a_pick_the_table_takes_the_recommended_model(client: AsyncClient, me: dict[str, str]):
+    response = await open_with(client, me)
+
+    assert response.status_code == status.HTTP_201_CREATED, response.text
+    assert response.json()['narration_model'] == TEST_MODEL
+
+
+async def test_without_the_price_list_no_table_is_made(client: AsyncClient, app: FastAPI, me: dict[str, str]):
     app.state.price_list = FixedPrices(FREE_BOOK, error=PriceListUnavailable('unreachable'))
 
     response = await open_with(client, me)
 
-    assert response.status_code == status.HTTP_201_CREATED, response.text
-    assert response.json()['narration_model'] is None
+    # 고르지 않아도 추천 모델을 지금 파는지 본다. 값을 모르는 모델로 테이블을 만들지 않는다
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
 
 
 async def test_an_offered_model_can_be_picked(client: AsyncClient, me: dict[str, str]):
@@ -169,13 +184,14 @@ async def test_the_host_changes_the_model_and_it_is_recorded(client: AsyncClient
     assert changed['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None}
 
 
-async def test_null_goes_back_to_the_default(client: AsyncClient, me: dict[str, str]):
+async def test_the_model_cannot_be_cleared(client: AsyncClient, me: dict[str, str]):
     table = (await open_with(client, me, narration_model='gpt-6-luna')).json()
 
     response = await set_model(client, me, table, None)
 
-    assert response.status_code == status.HTTP_200_OK, response.text
-    assert response.json()['narration_model'] is None
+    # 서버의 기본 모델로 돌아가는 길은 없다. 늘 고를 수 있는 모델 하나로 서술한다
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert await events_of(client, me, table, 'narration_model_changed') == []
 
 
 async def test_the_same_model_writes_nothing(client: AsyncClient, app: FastAPI, me: dict[str, str]):
@@ -210,7 +226,9 @@ async def test_a_model_that_cannot_be_picked_is_rejected_later(client: AsyncClie
     assert await events_of(client, me, table, 'narration_model_changed') == []
 
 
-@pytest.mark.parametrize('body', [{}, {'narration_model': 'gpt-6-luna', 'extra': 1}, {'narration_model': 7}])
+@pytest.mark.parametrize(
+    'body', [{}, {'narration_model': None}, {'narration_model': 'gpt-6-luna', 'extra': 1}, {'narration_model': 7}]
+)
 async def test_a_bad_change_is_rejected(client: AsyncClient, me: dict[str, str], body: dict):
     table = (await open_with(client, me)).json()
 
@@ -267,14 +285,30 @@ async def test_a_change_while_narrating_waits_for_the_next_round(
     assert event['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None}
 
 
-async def test_a_round_without_a_model_is_narrated_by_its_tier(
-    client: AsyncClient, me: dict[str, str], recording: RecordingNarrator, narrated
+async def test_an_old_round_without_a_model_is_narrated_by_the_default(
+    client: AsyncClient, me: dict[str, str], session: AsyncSession, recording: RecordingNarrator, narrated
 ):
     table = await start_with(client, me)
+    await clear_models(session, table)
 
     await close_solo(client, me, table, narrated)
 
-    assert [(request.model, request.tier) for request in recording.requests] == [(None, 'standard')]
+    # 모델을 고르는 규칙 전에 연 라운드다. 서버의 기본 서술자(LLM_MODEL)가 받는다
+    assert [request.model for request in recording.requests] == [None]
+
+
+async def test_an_old_round_without_a_model_holds_the_legacy_price(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession, billing: FakeBillingServer, narrated
+):
+    table = await start_with(client, me)
+    await clear_models(session, table)
+    await close_solo(client, me, table, narrated)
+    await tick(app)
+
+    charges = await charges_of(session, table)
+
+    # 1 라운드는 테스트 모델로 열려 걸었다. 모델이 없는 테이블이 연 2 라운드는 옛 가격표로 건다
+    assert [charge.price_code for charge in charges] == [TEST_PRICE_CODE, LEGACY_PRICE_CODE]
 
 
 # --- 값 ---
@@ -290,26 +324,27 @@ async def test_each_round_holds_the_price_of_its_model(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setitem(PRICES, narration_code('gpt-6-luna'), 20)
+    monkeypatch.setitem(PRICES, narration_code('claude-opus-5-5'), 60)
     table = await start_with(client, me, narration_model='gpt-6-luna')
     await tick(app)
     await close_solo(client, me, table, narrated)
     await tick(app)
-    # 2 라운드가 Luna 로 열린 뒤 모델을 비운다. 2 라운드도 아직 서술하지 않았으니 등급의 가격표로 바뀐다
-    await set_model(client, me, table, None)
+    # 2 라운드가 Luna 로 열린 뒤 Opus 로 바꾼다. 2 라운드도 아직 서술하지 않았으니 Opus 의 가격표로 바뀐다
+    await set_model(client, me, table, 'claude-opus-5-5')
     await tick(app)
     await close_solo(client, me, table, narrated)
     await tick(app)
 
     charges = await charges_of(session, table)
 
-    # 1 라운드는 Luna 의 가격표로 걸고 확정했다. 2 라운드는 등급의 가격표로 다시 걸어 확정했다. 3 라운드는 등급이다
+    # 1 라운드는 Luna 의 가격표로 걸고 확정했다. 2 라운드는 Opus 의 가격표로 다시 걸어 확정했다. 3 라운드도 Opus 다
     assert [charge.price_code for charge in charges] == [
         'narration.gpt-6-luna.i0.o0',
-        'narration.standard',
-        'narration.standard',
+        'narration.claude-opus-5-5.i0.o0',
+        'narration.claude-opus-5-5.i0.o0',
     ]
     assert [charge.status for charge in charges] == ['captured', 'captured', 'held']
-    assert billing.balance(ME) == 1000 - 20 - 2 * PRICES['narration.standard']
+    assert billing.balance(ME) == 1000 - 20 - 2 * 60
 
 
 # --- 서술자 ---
@@ -327,7 +362,7 @@ async def test_the_picked_narrator_uses_the_model_of_the_round():
     await narrator.narrate(NarrationRequest(round_number=1, scene='장면', moves=[], model='gpt-6-luna'))
     await narrator.narrate(NarrationRequest(round_number=2, scene='장면', moves=[]))
 
-    # 모델이 굳은 라운드는 그 모델의 서술자만, 아닌 라운드는 등급의 서술자만 받는다
+    # 모델이 굳은 라운드는 그 모델의 서술자만, 모델이 없는 옛 라운드는 기본 서술자만 받는다
     assert [request.round_number for request in made['gpt-6-luna'].requests] == [1]
     assert [request.round_number for request in default.requests] == [2]
 

@@ -39,6 +39,7 @@ from app.rounds import llm_narrator, prompt
 from app.rounds.budget import INPUT_BUDGET, estimate_messages, fit_request
 from app.rounds.llm_narrator import NARRATION_PARAMS, LLMNarrator, NarrationError, accept_completion, accept_scene
 from app.rounds.narrator import LoreNote, MemoryNote, Move, NarrationRequest, PastRound, StoryContext
+from tests.narration_model import with_model
 from tests.previews import RecordingPreview
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
@@ -392,7 +393,7 @@ async def start_solo(client: AsyncClient, me: dict[str, str], with_world: bool =
     if with_world:
         world_body = {'title': '세계', 'setting': SETTING, 'gm_notes': GM_NOTES}
         body['world_id'] = (await client.post(f'{url}/worlds', json=world_body, headers=me)).json()['id']
-    scenario = (await client.post(f'{url}/scenarios', json=body, headers=me)).json()
+    scenario = (await client.post(f'{url}/scenarios', json=with_model(body), headers=me)).json()
     await client.post(f'{url}/scenarios/{scenario["id"]}/versions', json={}, headers=me)
     table = await client.post(
         f'{url}/tables', json={'scenario_id': scenario['id'], 'version': 1, 'capacity': 1}, headers=me

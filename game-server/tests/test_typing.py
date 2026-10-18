@@ -21,6 +21,7 @@ from app.chat.typing import PRUNE_THRESHOLD, TYPING_INTERVAL_SECONDS, TypingThro
 from app.main import API_PREFIX
 from app.realtime.service import Cursor
 from app.realtime.signals import Kind, Signal
+from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 from tests.streaming import DeafSource
@@ -84,7 +85,7 @@ async def open_trio(client: AsyncClient, *headers: dict[str, str]) -> dict:
     host, *guests = headers
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북'}, headers=host)
     body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS, 'default_sheet': SHEET}
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=host)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=host)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=host)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 3}
     response = await client.post(TABLES_URL, json=body, headers=host)

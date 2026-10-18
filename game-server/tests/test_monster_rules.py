@@ -29,6 +29,7 @@ from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.rounds.monster_scene import label_of
 from app.tables.models import NpcStatus, TableMonster
+from tests.narration_model import asset_body, with_model
 from tests.sheets import SHEET, make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -56,7 +57,7 @@ def me(signing_key: SigningKey) -> dict[str, str]:
 
 
 async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -> dict:
-    response = await client.post(url, json=body, headers=headers)
+    response = await client.post(url, json=asset_body(url, body), headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 
@@ -167,7 +168,7 @@ async def test_attacks_and_surprise_are_saved_and_read_back(client: AsyncClient,
 async def test_rejects_bad_attacks(client: AsyncClient, me: dict[str, str], attacks: list):
     sheet = {'monster_id': NO_SUCH_ID, 'sheet': SHEET, 'attacks': attacks}
 
-    response = await client.post(SCENARIOS_URL, json={'title': '늪', 'monster_sheets': [sheet]}, headers=me)
+    response = await client.post(SCENARIOS_URL, json=with_model({'title': '늪', 'monster_sheets': [sheet]}), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -175,7 +176,7 @@ async def test_rejects_bad_attacks(client: AsyncClient, me: dict[str, str], atta
 async def test_rejects_an_unknown_surprise(client: AsyncClient, me: dict[str, str]):
     bad = {'place_id': NO_SUCH_ID, 'monster_id': NO_SUCH_ID, 'count': 1, 'surprise': 'everyone'}
 
-    response = await client.post(SCENARIOS_URL, json={'title': '늪', 'encounters': [bad]}, headers=me)
+    response = await client.post(SCENARIOS_URL, json=with_model({'title': '늪', 'encounters': [bad]}), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 

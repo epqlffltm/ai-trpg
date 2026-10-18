@@ -131,8 +131,8 @@ def test_a_stop_takes_the_name_off_sale_when_its_time_comes():
 
 def test_the_price_code_of_a_model_is_its_slug_with_the_base_steps():
     assert narration_code('claude-sonnet-5-5') == 'narration.claude-sonnet-5-5.i0.o0'
-    # 등급의 가격표 이름과 앞부분이 같다(app/billing/charges.py)
-    assert charges.price_code_for('standard').split('.')[0] == narration_code('x').split('.')[0]
+    # 모델이 없는 옛 라운드의 가격표 이름과 앞부분이 같다(app/billing/charges.py)
+    assert charges.LEGACY_PRICE_CODE.split('.')[0] == narration_code('x').split('.')[0]
 
 
 def test_the_basic_tier_and_the_promo_are_read():

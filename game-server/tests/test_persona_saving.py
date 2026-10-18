@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
 from app.personas.models import PERSONA_MAX_PER_OWNER, Persona
+from tests.narration_model import with_model
 from tests.sheets import make_sheet
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -101,7 +102,7 @@ async def open_table(
         'character_modes': EVERY_MODE,
         'player_made_hp': PLAYER_MADE_HP,
     }
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=me)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=me)).json()
     published = await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=me)
     assert published.status_code == status.HTTP_201_CREATED, published.text
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': capacity}

@@ -8,7 +8,7 @@
 
 from datetime import date
 
-from sqlalchemy import Select, exists, select
+from sqlalchemy import Select, exists, select, update
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,12 @@ async def list_models(session: AsyncSession) -> list[AiModel]:
     """모든 모델. 회사, 이름표 순서다."""
     query = select(AiModel).order_by(AiModel.vendor, AiModel.slug)
     return list(await session.scalars(query))
+
+
+async def clear_fallback(session: AsyncSession, vendor: str) -> None:
+    """그 회사의 대체 모델 표시를 지운다. 새로 정하기 전에 먼저 지워야 회사마다 하나라는 제약에 걸리지 않는다."""
+    query = update(AiModel).where(AiModel.vendor == vendor, AiModel.vendor_fallback).values(vendor_fallback=False)
+    await session.execute(query.execution_options(synchronize_session='fetch'))
 
 
 async def api_model_taken(session: AsyncSession, provider: str, api_model_id: str) -> bool:

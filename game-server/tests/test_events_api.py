@@ -25,6 +25,7 @@ from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.main import API_PREFIX
 from app.tables.models import GameTable
+from tests.narration_model import TEST_MODEL, with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -85,7 +86,7 @@ async def open_table(client: AsyncClient, headers: dict[str, str], **fields) -> 
     """내 시나리오를 만들어 그 판으로 테이블을 연다. 아직 시작하지 않은 테이블을 돌려준다."""
     rulebook = await client.post(RULEBOOKS_URL, json={'title': '룰북', 'gm_guide': GM_GUIDE}, headers=headers)
     body = {'title': '추격전', 'rulebook_id': rulebook.json()['id'], 'openings': OPENINGS, 'default_sheet': SHEET}
-    scenario = (await client.post(SCENARIOS_URL, json=body, headers=headers)).json()
+    scenario = (await client.post(SCENARIOS_URL, json=with_model(body), headers=headers)).json()
     await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=headers)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 3, **fields}
     response = await client.post(TABLES_URL, json=body, headers=headers)
@@ -156,7 +157,9 @@ async def test_creating_a_table_writes_the_first_event(client: AsyncClient, me: 
     assert page['last_sequence'] == 1
     (event,) = page['items']
     assert (event['sequence'], event['type'], event['actor_id']) == (1, 'table_created', str(ME))
-    assert (event['payload'], event['caused_by_sequence']) == ({}, None)
+    # 정한 서술 모델과 시나리오의 추천 모델이 함께 실린다. 둘이 다르면 화면이 대신 쓴 것을 알린다
+    payload = {'narration_model': TEST_MODEL, 'recommended_model': TEST_MODEL}
+    assert (event['payload'], event['caused_by_sequence']) == (payload, None)
     assert event['created_at'] is not None
 
 
@@ -314,7 +317,6 @@ async def test_starting_writes_the_roster_the_scene_and_the_round(
     assert set(opened['payload']) == {
         'number',
         'deadline_at',
-        'narration_tier',
         'narration_model',
         'clock',
         'passed_minutes',
