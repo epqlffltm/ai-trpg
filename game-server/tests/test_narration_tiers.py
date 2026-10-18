@@ -352,7 +352,7 @@ async def test_a_tier_missing_from_the_price_table_is_not_narrated(
     (failed,) = await events_of(client, me, table, 'narration_failed')
     (charge,) = await charges_of(session, table)
 
-    # 결제 서버가 받지 않는다(400). 외상으로 서술하지 않는다
-    assert charge.status == 'failed'
-    assert failed['payload']['reason'] == 'billing_unavailable'
+    # 결제 서버가 받지 않는다(400 price.unknown). 외상으로 서술하지 않는다. 팔지 않는 가격표로 알린다
+    assert (charge.status, charge.last_error) == ('failed', 'price.unknown')
+    assert failed['payload']['reason'] == 'model_not_for_sale'
     assert billing.balance(ME) == 1000

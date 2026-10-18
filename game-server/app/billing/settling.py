@@ -32,10 +32,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.billing import repository
 from app.billing.charges import EXTEND_REJECTED_RETRY, next_extension, reference_for, retry_delay
-from app.billing.client import Billing, BillingRejected, BillingUnavailable, ExtendResult, HoldResult
+from app.billing.client import (
+    PRICE_UNAVAILABLE,
+    Billing,
+    BillingRejected,
+    BillingUnavailable,
+    ExtendResult,
+    HoldResult,
+)
 from app.billing.models import SECURED_STATUSES, ChargeStatus, NarrationCharge
 from app.events import recorder
 from app.events.models import EventType
+from app.rounds.models import Round
 from app.tables import repository as table_repository
 from app.tables import service as tables
 
@@ -50,6 +58,10 @@ UNAVAILABLE_ERROR_CODE = 'billing.unavailable'
 REJECTED_ERROR_CODE = 'billing.rejected'
 
 
+# 모자람의 까닭. 청구(last_error)와 이벤트(narration_credits_short 의 reason)에 적는다
+SHORT_INSUFFICIENT = 'insufficient'
+SHORT_GOLD = 'gold_required'
+
 # 돌려줄 것이거나 돌려준 청구. 떠난 사람의 것이거나, 크레딧을 기다리다 돌려준 앉은 사람의 것이다(secure_charge)
 RETURNED_STATUSES = (ChargeStatus.RELEASE_DUE, ChargeStatus.RELEASED)
 
@@ -59,6 +71,11 @@ class Readiness(enum.StrEnum):
 
     # 값을 잡아 두었다
     READY = 'ready'
+    # 테이블의 서술 모델을 결제 서버가 팔지 않는다(판매를 멈췄거나 아직 열지 않았다). 방장이 모델을 바꾸면 된다
+    NOT_FOR_SALE = 'model_not_for_sale'
+    # 내는 사람 중 누가 골드가 모자란다. 프리미엄 모델은 골드로만 낸다. 골드를 사거나, 방장이 그 사람을 내보내거나
+    # 모델을 바꾸면 된다
+    GOLD_REQUIRED = 'gold_required'
     # 내는 사람 중 누가 크레딧이 모자란다. 그 사람이 충전하거나 방장이 그 사람을 내보낸 뒤 다시 맡기면 된다
     SHORT = 'insufficient_credits'
     # 결제 서버의 답을 받지 못했거나, 이 청구는 더 걸 수 없다(돌려줬다, 거절됐다)
@@ -143,22 +160,59 @@ async def note_rejected(
     )
 
 
-async def note_short(session_factory: async_sessionmaker[AsyncSession], charge: NarrationCharge) -> None:
+async def note_short(
+    session_factory: async_sessionmaker[AsyncSession], charge: NarrationCharge, reason: str = SHORT_INSUFFICIENT
+) -> None:
     """
     크레딧이 모자란 것을 적는다. 처음 모자란 것을 알았을 때(걸어야 함 → 모자람)만 앉은 사람 모두에게 이벤트로 알린다.
-    누가 모자란지(user_id)를 싣는다. 모자란 사람이 충전하거나 방장이 그 사람을 내보내면 서술할 수 있다.
+    누가 모자란지(user_id)와 무엇이 모자란지(reason: 크레딧 insufficient, 골드 gold_required)를 싣는다.
+    모자란 사람이 충전하거나 방장이 그 사람을 내보내면 서술할 수 있다. 골드가 모자라면 방장이 모델을 바꿔도 된다.
+    무엇이 모자란지는 청구에도 적는다(last_error). 다시 걸어 볼 때까지 그대로다.
 
     테이블을 잠그고 적는다. 이벤트의 번호를 매기는 일이 테이블의 잠금 아래에서만 일어난다.
     """
     async with session_factory() as session:
         table_id, number = await repository.find_round_of(session, charge)
         table = await table_repository.lock_table(session, table_id)
-        moved = await repository.move(session, charge.id, (ChargeStatus.PENDING,), ChargeStatus.SHORT)
+        moved = await repository.move(
+            session, charge.id, (ChargeStatus.PENDING,), ChargeStatus.SHORT, last_error=reason
+        )
         if table is None or not moved:
             await session.commit()
             return
-        payload = {'round': number, 'user_id': str(charge.payer_id)}
+        payload = {'round': number, 'user_id': str(charge.payer_id), 'reason': reason}
         recorder.record(session, table, EventType.NARRATION_CREDITS_SHORT, payload=payload)
+        await tables.commit(session, table)
+
+
+async def note_price_unavailable(
+    session_factory: async_sessionmaker[AsyncSession], charge: NarrationCharge, error: BillingRejected
+) -> None:
+    """
+    결제 서버가 그 가격표의 이름을 팔지 않는다(price.not_for_sale, price.unknown). 청구를 실패로 적는다.
+
+    버그가 아니라 판매를 멈췄거나 아직 열지 않은 모델이다. 그래서 오류가 아니라 warning 으로 남긴다.
+    라운드마다 처음 알았을 때만 앉은 사람 모두에게 이벤트로 알린다(narration_model_not_for_sale). 내는 사람마다
+    같은 일이라 한 번이면 된다. 방장이 테이블의 모델을 바꾸면 그 라운드의 청구를 새 가격표로 다시 건다
+    (app/tables/narration_models.py). 테이블을 잠그고 적는다.
+    """
+    logger.warning(
+        '결제 서버가 서술 모델의 가격표를 팔지 않는다',
+        extra={**log_fields(charge, HOLD_OPERATION), 'reason': error.code, 'result': 'not_for_sale'},
+    )
+    async with session_factory() as session:
+        table_id, number = await repository.find_round_of(session, charge)
+        table = await table_repository.lock_table(session, table_id)
+        first = not await repository.has_failed_with(session, charge.round_id, tuple(PRICE_UNAVAILABLE))
+        moved = await repository.move(
+            session, charge.id, (ChargeStatus(charge.status),), ChargeStatus.FAILED, last_error=error.code
+        )
+        if table is None or not moved or not first:
+            await session.commit()
+            return
+        round_ = await session.get_one(Round, charge.round_id)
+        payload = {'round': number, 'narration_model': round_.narration_model}
+        recorder.record(session, table, EventType.NARRATION_MODEL_NOT_FOR_SALE, payload=payload)
         await tables.commit(session, table)
 
 
@@ -210,8 +264,14 @@ async def try_hold(
         await note_unavailable(session_factory, charge, HOLD_OPERATION, error, now)
         return Readiness.UNAVAILABLE
     except BillingRejected as error:
+        if error.price_unavailable:
+            await note_price_unavailable(session_factory, charge, error)
+            return Readiness.NOT_FOR_SALE
         await note_rejected(session_factory, charge, HOLD_OPERATION, error)
         return Readiness.UNAVAILABLE
+    if outcome.result == HoldResult.GOLD_REQUIRED:
+        await note_short(session_factory, charge, SHORT_GOLD)
+        return Readiness.GOLD_REQUIRED
     if outcome.result == HoldResult.SHORT:
         await note_short(session_factory, charge)
         return Readiness.SHORT
@@ -409,6 +469,8 @@ async def secure(
         return Readiness.READY
     if status in (ChargeStatus.PENDING, ChargeStatus.SHORT):
         return await try_hold(session_factory, billing, charge, now)
+    if status == ChargeStatus.FAILED and charge.last_error in PRICE_UNAVAILABLE:
+        return Readiness.NOT_FOR_SALE
     return Readiness.UNAVAILABLE
 
 
@@ -453,11 +515,13 @@ async def secure_charge(
 
 def worst(results: list[Readiness]) -> Readiness:
     """
-    여럿의 결과를 하나로. 모자란 사람이 있으면 모자람, 아니면 답을 못 받은 것이 있으면 그것, 모두 잡았으면 READY.
+    여럿의 결과를 하나로. 사람이 움직여야 풀리는 것을 앞에 둔다. 모두 잡았으면 READY.
 
-    모자람을 앞에 둔다. 답을 못 받은 것은 정리 작업이 저절로 다시 하지만, 모자람은 사람이 움직여야 풀린다.
+    팔지 않는 모델(방장이 모델을 바꿔야 한다), 골드가 모자람, 크레딧이 모자람, 답을 못 받음 차례다.
+    답을 못 받은 것은 정리 작업이 저절로 다시 하지만, 앞의 것들은 사람이 움직여야 풀린다.
     """
-    for readiness in (Readiness.SHORT, Readiness.UNAVAILABLE):
+    order = (Readiness.NOT_FOR_SALE, Readiness.GOLD_REQUIRED, Readiness.SHORT, Readiness.UNAVAILABLE)
+    for readiness in order:
         if readiness in results:
             return readiness
     return Readiness.READY

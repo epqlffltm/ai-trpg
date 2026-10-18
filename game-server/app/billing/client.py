@@ -28,6 +28,9 @@ class HoldResult(enum.StrEnum):
     HELD = 'held'
     # 크레딧이 모자란다. 하나도 빼지 않았고 홀드도 남지 않았다. 충전한 뒤 같은 이름표로 다시 걸 수 있다
     SHORT = 'short'
+    # 프리미엄 가격표라 골드(유료 크레딧)로만 내는데 골드가 모자란다(credit.gold_required). 실버가 얼마나 있든 같다.
+    # 모자람과 같이 홀드가 남지 않는다. 골드를 산 뒤 같은 이름표로 다시 걸 수 있다
+    GOLD_REQUIRED = 'gold_required'
 
 
 class ExtendResult(enum.StrEnum):
@@ -71,16 +74,31 @@ class BillingUnavailable(Exception):
         self.reason = reason
 
 
+# 결제 서버가 가격표의 이름을 받지 않을 때의 오류의 이름. 판매를 멈췄거나, 그런 이름이 없거나 아직 열지 않았다
+PRICE_UNAVAILABLE = frozenset({'price.not_for_sale', 'price.unknown'})
+# 결제 서버가 골드가 모자란다고 할 때의 오류의 이름(402)
+GOLD_REQUIRED_CODE = 'credit.gold_required'
+
+
 class BillingRejected(Exception):
     """
     결제 서버가 요청을 받아들이지 않았다. 다시 불러도 같다. 이름표를 짓는 코드의 버그이거나 두 서버의 기록이 어긋났다.
 
     status_code 는 결제 서버의 답이다(400, 404, 409 …). 본문은 싣지 않는다.
+
+    code 는 결제 서버가 붙인 오류의 이름이다(price.not_for_sale, price.unknown …). 없으면 None.
+    가격표의 이름을 팔지 않는 것(PRICE_UNAVAILABLE)은 버그가 아니다. 판매를 멈췄거나 아직 열지 않은 모델이다.
     """
 
-    def __init__(self, status_code: int) -> None:
+    def __init__(self, status_code: int, code: str | None = None) -> None:
         super().__init__(f'billing rejected: {status_code}')
         self.status_code = status_code
+        self.code = code
+
+    @property
+    def price_unavailable(self) -> bool:
+        """그 가격표의 이름을 지금 팔지 않아서 거절했나."""
+        return self.code in PRICE_UNAVAILABLE
 
 
 class Billing(Protocol):
