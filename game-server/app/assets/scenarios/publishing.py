@@ -22,6 +22,7 @@ from app.assets.bestiaries.models import Bestiary, Monster
 from app.assets.lorebooks import repository as entries
 from app.assets.models import (
     PLAYER_MADE_MODES,
+    QUEST_LINK_CONDITIONS,
     CharacterMode,
     Lorebook,
     LoreEntry,
@@ -110,8 +111,11 @@ class Problem(enum.StrEnum):
     QUEST_CONDITION_MISSING = 'quest_condition_missing'
     # 퀘스트의 조건이 맞지 않는 종류를 가리킨다(장소에 닿기인데 물건 항목 …)
     QUEST_CONDITION_INVALID = 'quest_condition_invalid'
-    # 퀘스트의 조건을 이룰 수 없다. 맵에 없는 장소이거나, 판에 놓인 마리보다 많이 쓰러뜨려야 한다
+    # 퀘스트의 조건을 이룰 수 없다. 맵에 없는 장소이거나, 판에 놓인 마리보다 많이 쓰러뜨려야 하거나,
+    # 이루는 조건이 없어 성공하지 않는 퀘스트의 성공을 기다린다
     QUEST_CONDITION_IMPOSSIBLE = 'quest_condition_impossible'
+    # 퀘스트의 드러나는 조건이 돌고 돈다(가가 드러나려면 나가 끝나야 하고, 나가 드러나려면 가가 끝나야 한다)
+    QUEST_REVEAL_CYCLE = 'quest_reveal_cycle'
     # 붙인 로어북에 없는 항목을 가리키는 시작 장소, 길, 명소가 있다
     MAP_PLACE_MISSING = 'map_place_missing'
     # 장소가 아닌 항목(인물, 물건 …)을 가리키는 시작 장소, 길, 명소가 있다
@@ -468,23 +472,31 @@ def find_quest_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     퀘스트 규칙에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
 
     가리키는 것은 붙인 로어북의 사건 항목이어야 한다. 아이템 규칙과 같은 까닭으로 굳히기 전에 여기서 막는다.
-    보상의 물건은 아이템과 함께 본다(find_item_problems). 이루는 조건은 find_condition_problems 가 본다.
+    보상의 물건은 아이템과 함께 본다(find_item_problems). 이루는 조건과 드러나는 조건은 find_condition_problems,
+    드러나는 조건이 돌고 도는지는 has_reveal_cycle 이 본다.
     """
     entries = lore_entries(parts)
-    pointed = [rule.entry_id for rule in read_quest_rules(scenario)]
+    rules = read_quest_rules(scenario)
+    pointed = [rule.entry_id for rule in rules]
     problems = []
     if any(entry_id not in entries for entry_id in pointed):
         problems.append(Problem.QUEST_ENTRY_MISSING)
     if any(entry_id in entries and entries[entry_id].kind != LoreKind.EVENT for entry_id in pointed):
         problems.append(Problem.QUEST_NOT_EVENT)
-    return problems + find_condition_problems(scenario, parts)
+    problems.extend(find_condition_problems(scenario, parts))
+    if has_reveal_cycle(rules):
+        problems.append(Problem.QUEST_REVEAL_CYCLE)
+    return problems
 
 
-# 조건의 종류마다 target 이 가리켜야 하는 로어북 항목의 종류. 몬스터를 쓰러뜨리기는 로어북이 아니라 몬스터 시트다
+# 조건의 종류마다 target 이 가리켜야 하는 로어북 항목의 종류. 몬스터를 쓰러뜨리기는 로어북이 아니라 몬스터 시트다.
+# 퀘스트 잇기는 사건 항목이다. 판의 사건 항목 하나가 퀘스트 하나다
 CONDITION_ENTRY_KINDS = {
     QuestConditionKind.REACH_PLACE: LoreKind.PLACE,
     QuestConditionKind.HOLD_ITEM: LoreKind.ITEM,
     QuestConditionKind.DEFEAT_NPC: LoreKind.PERSON,
+    QuestConditionKind.QUEST_SUCCEEDED: LoreKind.EVENT,
+    QuestConditionKind.QUEST_FAILED: LoreKind.EVENT,
 }
 
 
@@ -493,12 +505,19 @@ def placed_count(scenario: Scenario, monster_id: uuid.UUID) -> int:
     return sum(encounter.count for encounter in read_encounters(scenario) if encounter.monster_id == monster_id)
 
 
+def can_succeed(scenario: Scenario, entry_id: uuid.UUID) -> bool:
+    """그 퀘스트가 성공할 수 있는가. 이루는 조건이 있어야 한다. 규칙이 없는 사건은 성공하지 않는다."""
+    return any(rule.entry_id == entry_id and rule.conditions for rule in read_quest_rules(scenario))
+
+
 def condition_problem(condition: QuestCondition, scenario: Scenario, parts: Parts) -> Problem | None:
     """
     조건 하나의 문제. 없으면 None.
 
     몬스터를 쓰러뜨리기는 시트를 적은 몬스터여야 하고(판에 들어가는 몬스터), 놓인 마리보다 많이 요구하지 않는다.
     장소에 닿기는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 맵에 없는 장소에는 설 수 없다.
+    다른 퀘스트의 성공을 기다리면 그 퀘스트에 이루는 조건이 있어야 한다. 없으면 성공하지 않는다.
+    실패는 기한이나 방장이 정하므로 따로 보지 않는다.
     """
     if condition.kind == QuestConditionKind.DEFEAT_MONSTER:
         sheeted = {sheet.monster_id for sheet in read_monster_sheets(scenario)}
@@ -516,18 +535,60 @@ def condition_problem(condition: QuestCondition, scenario: Scenario, parts: Part
         scenario, read_routes(scenario)
     ):
         return Problem.QUEST_CONDITION_IMPOSSIBLE
+    if condition.kind == QuestConditionKind.QUEST_SUCCEEDED and not can_succeed(scenario, condition.target):
+        return Problem.QUEST_CONDITION_IMPOSSIBLE
     return None
 
 
 def find_condition_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
-    """퀘스트의 조건들에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만, 정한 순서로 적는다."""
+    """
+    퀘스트의 조건들(이루는 조건, 드러나는 조건)에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만, 정한 순서로 적는다.
+    """
     found = {
         condition_problem(condition, scenario, parts)
         for rule in read_quest_rules(scenario)
-        for condition in rule.conditions
+        for condition in [*rule.conditions, *rule.reveal]
     }
     order = [Problem.QUEST_CONDITION_MISSING, Problem.QUEST_CONDITION_INVALID, Problem.QUEST_CONDITION_IMPOSSIBLE]
     return [problem for problem in order if problem in found]
+
+
+def reveal_links(rules: list[QuestRule]) -> dict[uuid.UUID, set[uuid.UUID]]:
+    """퀘스트마다 드러나려면 끝나야 하는 다른 퀘스트들(퀘스트 잇기)."""
+    return {
+        rule.entry_id: {condition.target for condition in rule.reveal if condition.kind in QUEST_LINK_CONDITIONS}
+        for rule in rules
+    }
+
+
+def leads_back(
+    links: dict[uuid.UUID, set[uuid.UUID]], entry_id: uuid.UUID, path: set[uuid.UUID], done: set[uuid.UUID]
+) -> bool:
+    """
+    그 퀘스트에서 잇기를 따라가다 지금 따라온 길(path)로 돌아오는가. 깊이로 따라간다.
+
+    다 본 퀘스트(done)는 다시 보지 않는다. 거기서는 돌아오는 길이 없었다.
+    """
+    if entry_id in path:
+        return True
+    if entry_id in done:
+        return False
+    path.add(entry_id)
+    found = any(leads_back(links, target, path, done) for target in links.get(entry_id, ()))
+    path.discard(entry_id)
+    done.add(entry_id)
+    return found
+
+
+def has_reveal_cycle(rules: list[QuestRule]) -> bool:
+    """
+    드러나는 조건이 돌고 도는가. 퀘스트 잇기를 따라가다 처음 퀘스트로 돌아오면 돈다.
+
+    숨긴 퀘스트는 숨긴 채로도 이룰 수 있어 막히지는 않는다. 다만 서로를 기다리는 것은 만든 사람의 실수다.
+    """
+    links = reveal_links(rules)
+    done: set[uuid.UUID] = set()
+    return any(leads_back(links, entry_id, set(), done) for entry_id in links)
 
 
 def read_routes(scenario: Scenario) -> list[RouteRule]:

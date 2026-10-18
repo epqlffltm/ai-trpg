@@ -179,10 +179,10 @@ class QuestStart(enum.StrEnum):
     """
     퀘스트가 테이블이 시작할 때 어떤 상태인가.
 
-    규칙을 적지 않은 사건 항목은 숨긴 채로 시작한다. 이야기가 거기 닿으면 방장이 드러낸다.
+    규칙을 적지 않은 사건 항목은 숨긴 채로 시작한다. 드러나는 조건이 없어서 드러나지 않는다.
     """
 
-    # 플레이어에게 보이지 않는다. GM 만 안다. 이야기가 닿으면 방장이 드러낸다
+    # 아무에게도 보이지 않는다(방장에게도). GM 만 안다. 드러나는 조건(reveal)을 채우면 엔진이 드러낸다
     HIDDEN = 'hidden'
     # 처음부터 진행 중이다. 플레이어가 처음부터 쫓는 목표다
     ACTIVE = 'active'
@@ -192,7 +192,8 @@ class QuestConditionKind(enum.StrEnum):
     """
     퀘스트의 조건 하나가 무엇을 보는가. 엔진이 이미 아는 사실(상태)만 본다(app/rounds/quest_goals.py).
 
-    target 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물이다.
+    target 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물, 다른 퀘스트(사건)다.
+    다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)에만 쓴다. 이루는 조건(conditions)에는 쓰지 않는다.
     """
 
     # 그 장소에 죽지 않은 캐릭터가 서 있다
@@ -203,10 +204,16 @@ class QuestConditionKind(enum.StrEnum):
     HOLD_ITEM = 'hold_item'
     # 그 인물(NPC)이 쓰러지거나 죽었다
     DEFEAT_NPC = 'defeat_npc'
+    # 그 퀘스트가 성공했다
+    QUEST_SUCCEEDED = 'quest_succeeded'
+    # 그 퀘스트가 실패했다
+    QUEST_FAILED = 'quest_failed'
 
 
 # count 를 쓰는 조건. 나머지는 1 이다
 COUNTED_CONDITIONS = frozenset({QuestConditionKind.DEFEAT_MONSTER, QuestConditionKind.HOLD_ITEM})
+# 다른 퀘스트를 보는 조건(퀘스트 잇기). 드러나는 조건에만 쓴다
+QUEST_LINK_CONDITIONS = frozenset({QuestConditionKind.QUEST_SUCCEEDED, QuestConditionKind.QUEST_FAILED})
 
 
 class QuestMatch(enum.StrEnum):

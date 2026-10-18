@@ -76,7 +76,9 @@ from app.engine.sheet import Sheet
 #  28: 규칙에 쉬기(rest: 짧은 휴식, 긴 휴식, 되살아나기, 저절로 회복하기)가 있다
 #  29: 몬스터에 쓰러뜨렸을 때 나오는 물건(drops: 물건 항목, 개수, 확률)이 있다
 #  30: 퀘스트 규칙에 이루는 조건(quests[].conditions)과 그 조건을 맞추는 법(quests[].match: all, any)이 있다
-SNAPSHOT_FORMAT = 30
+#  31: 퀘스트 규칙에 드러나는 조건(quests[].reveal)과 그 조건을 맞추는 법(quests[].reveal_match)이 있다.
+#      조건에 다른 퀘스트의 성공과 실패(quest_succeeded, quest_failed)가 있다
+SNAPSHOT_FORMAT = 31
 
 
 class EntrySnapshot(BaseModel):
@@ -160,7 +162,7 @@ class ItemRuleSnapshot(BaseModel):
 
 
 class QuestConditionSnapshot(BaseModel):
-    """퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목이다."""
+    """퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목, 사건 항목(퀘스트)이다."""
 
     kind: QuestConditionKind
     target: uuid.UUID
@@ -174,6 +176,7 @@ class QuestRuleSnapshot(BaseModel):
     start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건이다.
     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.
     conditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.
+    reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.
     """
 
     entry_id: uuid.UUID
@@ -182,6 +185,8 @@ class QuestRuleSnapshot(BaseModel):
     time_limit_minutes: int | None = None
     conditions: list[QuestConditionSnapshot] = []
     match: QuestMatch = QuestMatch.ALL
+    reveal: list[QuestConditionSnapshot] = []
+    reveal_match: QuestMatch = QuestMatch.ALL
 
 
 class FindSnapshot(BaseModel):

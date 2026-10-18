@@ -5,10 +5,11 @@
 
 다섯을 본다.
   - 시작: 판의 사건마다 퀘스트가 생긴다. 처음 상태는 판의 퀘스트 규칙의 것이고, 규칙이 없으면 숨김이다.
-  - 보이기: 숨긴 것은 방장만 본다. 사건의 글(로어북)은 아무에게도 나가지 않는다.
-  - 방장이 바꾸기: 진행 중에, 판의 퀘스트만, 정한 길로만(드러내기, 실패). 성공은 엔진만 정한다(quest_success_by_engine).
-    끝난 것은 되돌리지 않는다. 이벤트로 남는다.
-  - 성공과 보상은 엔진이 조건을 보고 정한다. 그 테스트는 tests/test_quest_goals.py 에 있다.
+  - 보이기: 숨긴 것은 아무도(방장도) 보지 않는다. 사건의 글(로어북)은 아무에게도 나가지 않는다.
+  - 방장이 바꾸기: 진행 중에, 판의 드러난 퀘스트만, 실패로만. 드러내기와 성공은 엔진만 정한다
+    (quest_reveal_by_engine, quest_success_by_engine). 숨긴 것은 없는 것과 같다. 끝난 것은 되돌리지 않는다.
+  - 드러내기와 성공과 보상은 엔진이 조건을 보고 정한다. 그 테스트는 tests/test_quest_goals.py 와
+    tests/test_quest_reveal.py 에 있다.
   - 서술: 서술을 맡길 때 퀘스트 전부가 이름과 상태로 서술자에게 간다. 닫기 시작할 때 굳히지 않는다.
 """
 
@@ -145,15 +146,21 @@ def quests_in(table: dict) -> list[tuple[str, str]]:
 # --- 시작과 보이기 ---
 
 
-async def test_quests_appear_when_the_table_starts(client: AsyncClient, me: dict, friend: dict, lore: dict):
+async def test_quests_appear_when_the_table_starts(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, session: AsyncSession
+):
     table = await open_duo(client, me, friend, lore)
     assert (await read_table(client, me, table))['quests'] == []
 
     started = await start_duo_from(client, me, table)
+    rows = await session.execute(
+        text('SELECT status FROM table_quests WHERE table_id = :table_id ORDER BY status'), {'table_id': table['id']}
+    )
 
-    # 판의 순서(로어북의 항목 순서)다. 규칙이 없는 광산의 비밀은 숨긴 채로 시작한다
-    assert quests_in(started) == [('왕녀 구출', 'active'), ('광산의 비밀', 'hidden'), ('배신자', 'hidden')]
+    # 사건마다 하나씩 생긴다. 규칙이 없는 광산의 비밀은 숨긴 채로 시작한다. 숨긴 것은 방장에게도 보이지 않는다
+    assert quests_in(started) == [('왕녀 구출', 'active')]
     assert started['quests'][0]['entry_id'] == lore['rescue']['id']
+    assert sorted(status for (status,) in rows) == ['active', 'hidden', 'hidden']
 
 
 async def start_duo_from(client: AsyncClient, me: dict, table: dict) -> dict:
@@ -162,18 +169,17 @@ async def start_duo_from(client: AsyncClient, me: dict, table: dict) -> dict:
     return started.json()
 
 
-async def test_hidden_quests_are_shown_only_to_the_host(client: AsyncClient, me: dict, friend: dict, lore: dict):
+async def test_hidden_quests_are_shown_to_nobody(client: AsyncClient, me: dict, friend: dict, lore: dict):
     table = await start_duo(client, me, friend, lore)
 
-    seen = await read_table(client, friend, table)
-
-    # 숨긴 것이 있다는 것조차 알리지 않는다
-    assert quests_in(seen) == [('왕녀 구출', 'active')]
+    # 숨긴 것이 있다는 것조차 알리지 않는다. 방장도 PC 다
+    for headers in (me, friend):
+        assert quests_in(await read_table(client, headers, table)) == [('왕녀 구출', 'active')]
 
 
 async def test_the_text_of_an_event_never_leaves(client: AsyncClient, me: dict, friend: dict, lore: dict):
     table = await start_duo(client, me, friend, lore)
-    await change(client, me, table, lore['traitor'], 'failed')
+    await change(client, me, table, lore['rescue'], 'failed')
 
     for headers in (me, friend):
         detail = await client.get(table_url(table), headers=headers)
@@ -185,34 +191,26 @@ async def test_the_text_of_an_event_never_leaves(client: AsyncClient, me: dict, 
 # --- 방장이 바꾸기 ---
 
 
-async def test_revealing_a_quest_shows_it_to_everyone(client: AsyncClient, me: dict, friend: dict, lore: dict):
+@pytest.mark.parametrize('quest', ['rescue', 'mine'])
+async def test_the_host_cannot_reveal_a_quest(client: AsyncClient, me: dict, friend: dict, lore: dict, quest: str):
     table = await start_duo(client, me, friend, lore)
 
-    response = await change(client, me, table, lore['mine'], 'active')
+    response = await change(client, me, table, lore[quest], 'active')
 
-    assert response.status_code == status.HTTP_200_OK, response.text
-    assert quests_in(await read_table(client, friend, table)) == [('왕녀 구출', 'active'), ('광산의 비밀', 'active')]
-    [event] = await events_of(client, friend, table, 'quest_changed')
-    assert event['actor_id'] == str(ME)
-    assert event['payload'] == {
-        'entry_id': lore['mine']['id'],
-        'name': '광산의 비밀',
-        'previous': 'hidden',
-        'status': 'active',
-        'rewards': [],
-        'due_at': None,
-        'reason': None,
-    }
+    # 드러나는 것은 판의 조건을 보고 엔진이 정한다. 진행 중이든 숨겼든 같은 답이라 숨긴 것이 새지 않는다
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()['reason'] == 'quest_reveal_by_engine'
+    assert await events_of(client, me, table, 'quest_changed') == []
 
 
-async def test_a_hidden_quest_can_fail_at_once(client: AsyncClient, me: dict, friend: dict, lore: dict):
+async def test_the_host_cannot_end_a_hidden_quest(client: AsyncClient, me: dict, friend: dict, lore: dict):
     table = await start_duo(client, me, friend, lore)
 
     response = await change(client, me, table, lore['traitor'], 'failed')
 
-    # 모르는 새 놓친 일이다. 끝난 것은 모두에게 보인다
-    assert response.status_code == status.HTTP_200_OK, response.text
-    assert ('배신자', 'failed') in quests_in(await read_table(client, friend, table))
+    # 방장에게도 숨긴 퀘스트는 없는 것과 같다
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert await events_of(client, me, table, 'quest_changed') == []
 
 
 async def test_a_quest_can_fail(client: AsyncClient, me: dict, friend: dict, lore: dict):
@@ -232,21 +230,14 @@ async def test_a_quest_can_fail(client: AsyncClient, me: dict, friend: dict, lor
     )
 
 
-@pytest.mark.parametrize(
-    ('first', 'second', 'reason'),
-    [
-        ('failed', 'failed', 'quest_finished'),
-        ('failed', 'active', 'quest_finished'),
-        ('active', 'active', 'quest_already_active'),
-    ],
-)
+@pytest.mark.parametrize(('second', 'reason'), [('failed', 'quest_finished'), ('active', 'quest_reveal_by_engine')])
 async def test_some_changes_are_refused(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, first: str, second: str, reason: str
+    client: AsyncClient, me: dict, friend: dict, lore: dict, second: str, reason: str
 ):
     table = await start_duo(client, me, friend, lore)
-    await change(client, me, table, lore['mine'], first)
+    await change(client, me, table, lore['rescue'], 'failed')
 
-    response = await change(client, me, table, lore['mine'], second)
+    response = await change(client, me, table, lore['rescue'], second)
 
     assert response.status_code == status.HTTP_409_CONFLICT
     assert response.json()['reason'] == reason
@@ -284,7 +275,7 @@ async def test_only_quests_of_the_table_can_be_changed(
     table = await start_duo(client, me, friend, lore)
     entry = {'id': NO_SUCH_ID} if what == 'nothing' else lore[what]
 
-    response = await change(client, me, table, entry, 'active')
+    response = await change(client, me, table, entry, 'failed')
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -319,7 +310,7 @@ async def test_a_table_started_before_quests_existed_has_none_to_change(
     await session.execute(text('DELETE FROM table_quests WHERE table_id = :table_id'), {'table_id': table['id']})
     await session.commit()
 
-    response = await change(client, me, table, lore['mine'], 'active')
+    response = await change(client, me, table, lore['rescue'], 'failed')
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert (await read_table(client, me, table))['quests'] == []
@@ -328,21 +319,19 @@ async def test_a_table_started_before_quests_existed_has_none_to_change(
 # --- 규칙과 DB ---
 
 
-@pytest.mark.parametrize(
-    ('current', 'to'),
-    [
-        (QuestStatus.HIDDEN, QuestStatus.ACTIVE),
-        (QuestStatus.HIDDEN, QuestStatus.FAILED),
-        (QuestStatus.ACTIVE, QuestStatus.FAILED),
-    ],
-)
-def test_the_allowed_changes(current: QuestStatus, to: QuestStatus):
-    require_changeable(current, to)
+def test_the_allowed_change():
+    # 사람에게 남은 것은 진행 중인 것을 실패로 끝내는 것뿐이다. 숨긴 것은 그 앞에서 없는 것으로 걸러진다
+    require_changeable(QuestStatus.ACTIVE, QuestStatus.FAILED)
 
 
 @pytest.mark.parametrize('current', [QuestStatus.HIDDEN, QuestStatus.ACTIVE, QuestStatus.FAILED])
 def test_people_never_succeed_a_quest(current: QuestStatus):
     assert change_problem(current, QuestStatus.SUCCEEDED) == Conflict.QUEST_SUCCESS_BY_ENGINE
+
+
+@pytest.mark.parametrize('current', [QuestStatus.HIDDEN, QuestStatus.ACTIVE, QuestStatus.FAILED])
+def test_people_never_reveal_a_quest(current: QuestStatus):
+    assert change_problem(current, QuestStatus.ACTIVE) == Conflict.QUEST_REVEAL_BY_ENGINE
 
 
 def test_adding_up_to_the_cap_gives_what_fits():

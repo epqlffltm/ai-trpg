@@ -8,8 +8,9 @@
     초안을 쓸 때의 그 캐릭터여야 한다(409 draft_stale. 죽고 새 캐릭터가 들어왔으면 새 캐릭터에게 주지 않는다).
     한 가지를 99 개까지 갖는다. 넘는 만큼은 받지 않는다(퀘스트의 보상과 같다). 이미 99 개면 409 too_many_items.
     방장이 손으로 주는 것과 같은 이벤트(items_gained)가 모두에게 간다.
-  - 퀘스트: 방장이 손으로 바꿀 때와 같은 길이다(app/tables/quest_changes.py 의 apply_change). 같은 규칙, 같은 보상,
-    같은 이벤트(quest_changed). 그사이 끝났거나 이미 드러났으면 그 충돌(quest_finished, quest_already_active)이다.
+  - 퀘스트: 방장이 손으로 바꿀 때와 같은 길이다(app/tables/quest_changes.py 의 apply_change). 같은 규칙,
+    같은 이벤트(quest_changed). 실패만 받는다. 그사이 끝났으면 그 충돌(quest_finished)이다.
+    드러내기를 엔진의 몫으로 옮기기 전에 쓴 드러내기 초안은 받지 않는다(quest_reveal_by_engine).
 버리는 것은 줄의 처지만 바꾼다. 장부는 그대로다. 끝난 테이블에서도 버릴 수 있다(정리).
 
 이미 결정했거나 만료된 줄은 다시 결정하지 못한다(409 draft_decided).
