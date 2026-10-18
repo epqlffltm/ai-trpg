@@ -7,6 +7,7 @@
 """
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -17,7 +18,11 @@ from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
+from app.billing.price_list import PriceList, PriceListUnavailable
+from app.billing.prices import Change
 from app.calendar import clock
+from app.catalog import offers
+from app.catalog.offers import OfferedModel
 from app.core.dice import Rolling
 from app.limits.routing import Limited
 from app.personas import saving
@@ -71,9 +76,12 @@ from app.tables.schemas import (
     LobbyJoinRequest,
     MapOut,
     MemberOut,
+    NarrationModelOut,
+    NarrationModelsOut,
     NarrationStyleUpdate,
     NarrationTiersOut,
     NarrationTierUpdate,
+    NextPriceOut,
     PlaceChange,
     PlaceOut,
     PregenChoice,
@@ -100,6 +108,54 @@ def get_offered_tiers(request: Request) -> frozenset[NarrationTier]:
 
 # 서술 등급을 고르는 API 가 인자의 형식으로 쓴다
 OfferedTiers = Annotated[frozenset[NarrationTier], Depends(get_offered_tiers)]
+
+
+def get_price_list(request: Request) -> PriceList:
+    """결제 서버의 가격 목록을 받아 두는 것. 앱을 만들 때 설정으로 정해 꽂아 둔 것이다(app/main.py)."""
+    return request.app.state.price_list
+
+
+def utc_now() -> datetime:
+    """지금 시각(UTC). 테스트가 dependency_overrides 로 바꿔 꽂는다."""
+    return datetime.now(UTC)
+
+
+Prices = Annotated[PriceList, Depends(get_price_list)]
+Now = Annotated[datetime, Depends(utc_now)]
+
+
+def to_next_out(change: Change | None) -> NextPriceOut | None:
+    """예약된 바뀜을 응답으로. 판매를 멈추는 예약이면 값과 등급이 null 이다."""
+    if change is None:
+        return None
+    credits = change.sale.credits if change.sale else None
+    tier = change.sale.tier if change.sale else None
+    return NextPriceOut(credits=credits, tier=tier, effective_at=change.effective_at)
+
+
+def to_model_out(found: OfferedModel) -> NarrationModelOut:
+    """고를 수 있는 모델 하나를 응답으로."""
+    return NarrationModelOut(
+        slug=found.slug,
+        display_name=found.display_name,
+        vendor=found.vendor,
+        grade=found.grade,
+        credits=found.credits,
+        tier=found.tier,
+        next=to_next_out(found.next),
+    )
+
+
+async def handle_prices_unavailable(request: Request, error: PriceListUnavailable) -> JSONResponse:
+    """
+    가격 목록을 받지 못했고 받아 둔 것도 없으면 503 이다. 값을 모르는 모델을 내주지 않는다.
+
+    까닭(unreachable, status_401 …)은 싣지 않는다. 결제 서버의 사정이다. 서버 로그에는 남는다.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={'detail': '모델의 값을 받아 오지 못했습니다. 잠시 뒤에 다시 시도해 주세요.'},
+    )
 
 
 def to_summary(table: GameTable) -> TableSummary:
@@ -389,11 +445,22 @@ async def list_tables(user: CurrentUser, session: Session, paging: Paging) -> Ta
 ScenarioFilter = Annotated[uuid.UUID | None, Query()]
 
 
-# /narration-tiers 와 /lobby 를 /{table_id} 보다 먼저 적는다. 먼저 적은 주소가 먼저 맞춰진다
+# /narration-tiers, /narration-models, /lobby 를 /{table_id} 보다 먼저 적는다. 먼저 적은 주소가 먼저 맞춰진다
 @router.get('/narration-tiers', response_model=NarrationTiersOut, status_code=status.HTTP_200_OK)
 async def list_narration_tiers(user: CurrentUser, offered: OfferedTiers) -> NarrationTiersOut:
     """이 서버가 내주는 서술 등급들. 테이블을 만들거나 등급을 바꿀 때 이 중에서 고른다. 값은 결제 서버의 가격표다."""
     return NarrationTiersOut(tiers=[tier for tier in NarrationTier if tier in offered])
+
+
+@router.get('/narration-models', response_model=NarrationModelsOut, status_code=status.HTTP_200_OK)
+async def list_narration_models(user: CurrentUser, session: Session, prices: Prices, now: Now) -> NarrationModelsOut:
+    """
+    테이블의 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값. 로그인한 사람에게만 보인다(가격 수집 막기).
+
+    모델 목록에서 켜져 있고 결제 서버가 지금 파는 모델만 나온다. 값이 바뀌는 예약이 있으면 next 에 싣는다.
+    """
+    offering = await offers.list_offered(session, prices, now)
+    return NarrationModelsOut(free=offering.free, models=[to_model_out(found) for found in offering.models])
 
 
 @router.get('/lobby', response_model=TablePage, status_code=status.HTTP_200_OK)

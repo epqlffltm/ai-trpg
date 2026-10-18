@@ -29,7 +29,9 @@ from app.assets.scenarios.schemas import (
     PlayerMadeHp,
     RecommendedPlayers,
 )
+from app.billing.prices import Tier
 from app.calendar.schemas import ClockTimeOut
+from app.catalog.models import Grade
 from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
 from app.engine.sheet import Score, Sheet
 from app.rounds.tiers import NarrationTier
@@ -244,6 +246,38 @@ class HostTransfer(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     user_id: uuid.UUID
+
+
+class NextPriceOut(BaseModel):
+    """예약된 값의 바뀜. credits 가 null 이면 effective_at 부터 팔지 않는다."""
+
+    credits: str | None
+    tier: Tier | None
+    effective_at: datetime
+
+
+class NarrationModelOut(BaseModel):
+    """
+    고를 수 있는 서술 모델 하나와 1인 1라운드의 값.
+
+    credits 는 결제 서버가 정한 값(글자, "120")이다. 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.
+    tier 가 premium 이면 골드(유료 크레딧)로만 낸다. grade 는 화면의 묶음(basic, standard, premium)이다.
+    """
+
+    slug: str
+    display_name: str
+    vendor: str
+    grade: Grade
+    credits: str | None
+    tier: Tier | None
+    next: NextPriceOut | None
+
+
+class NarrationModelsOut(BaseModel):
+    """고를 수 있는 서술 모델들. free 는 결제 서버 없이 도는 서버라 값이 없다는 뜻이다."""
+
+    free: bool
+    models: list[NarrationModelOut]
 
 
 class CharacterOut(BaseModel):
