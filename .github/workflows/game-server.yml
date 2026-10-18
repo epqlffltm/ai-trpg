@@ -6,6 +6,14 @@
 #
 # PR 에서는 관문(.github/workflows/ci.yml)이 바뀐 파일을 보고 이 워크플로를 부른다.
 # 고르는 규칙은 .github/scripts/changed-servers.sh 에 있다. 검사할 것을 바꾸면 이 파일만 고친다.
+#
+# 테스트가 3000 개를 넘어 한 작업으로 돌리면 오래 걸린다. 관련 있는 테스트끼리 묶어(scripts/ci_groups.py)
+# 묶음마다 작업 하나로 동시에 돌린다. 작업마다 자기 PostgreSQL 과 Redis 를 띄우므로 서로의 데이터가 섞이지 않는다.
+#
+#   checks      린트, 모양, 의존성 취약점, 마이그레이션(한 번만)
+#   groups      묶음의 이름을 읽는다
+#   test        묶음마다 하나. 테스트를 돌리고 지나간 줄을 센 파일을 남긴다
+#   coverage    묶음들의 파일을 합쳐 커버리지를 요약하고 기준을 본다
 
 name: game-server
 
@@ -24,12 +32,23 @@ on:
 permissions:
   contents: read
 
+# CI 전용 값. 이 실행이 끝나면 사라지는 DB 에만 쓰이므로 비밀값이 아니다.
+# .env 파일 없이 환경 변수만으로 설정을 읽는다
+env:
+  AUTH_DB_PASSWORD: ci-auth-password
+  GAME_DB_PASSWORD: ci-game-password
+  BILLING_DB_PASSWORD: ci-billing-password
+  BOARD_DB_PASSWORD: ci-board-password
+  DATABASE_URL: postgresql+asyncpg://game:ci-game-password@127.0.0.1:5432/trpg
+  # 필수 설정이라 적는다. CI 에는 인증 서버가 없고, 테스트는 가짜 인증 서버를 쓴다.
+  # 이 주소로는 요청이 가지 않는다
+  AUTH_JWKS_URL: http://127.0.0.1:8000/api/v1/auth/jwks
+
 jobs:
-  test:
+  # 테스트와 상관없는 검사. 묶음마다 되풀이하지 않고 한 번만 한다. 테스트와 동시에 돈다
+  checks:
     runs-on: ubuntu-latest
-    # 테스트가 3400 개를 넘어 PC 에서 10~11 분 걸린다. 10 분이면 끝나기 전에 멈춘다(cancelled).
-    # 멈춘 테스트를 하염없이 기다리지 않게 하려는 상한이라, 지금 걸리는 시간의 두 배쯤으로 둔다
-    timeout-minutes: 25
+    timeout-minutes: 15
 
     services:
       # docker-compose.yml 과 같은 이미지를 쓴다
@@ -47,29 +66,6 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
-
-      # 시도 횟수 제한의 테스트가 실제 Redis 에서 돈다(tests/test_attempt_limits.py, 15 번 DB)
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
-    # CI 전용 값. 이 실행이 끝나면 사라지는 DB 에만 쓰이므로 비밀값이 아니다.
-    # .env 파일 없이 환경 변수만으로 설정을 읽는다
-    env:
-      AUTH_DB_PASSWORD: ci-auth-password
-      GAME_DB_PASSWORD: ci-game-password
-      BILLING_DB_PASSWORD: ci-billing-password
-      BOARD_DB_PASSWORD: ci-board-password
-      DATABASE_URL: postgresql+asyncpg://game:ci-game-password@127.0.0.1:5432/trpg
-      # 필수 설정이라 적는다. CI 에는 인증 서버가 없고, 테스트는 가짜 인증 서버를 쓴다.
-      # 이 주소로는 요청이 가지 않는다
-      AUTH_JWKS_URL: http://127.0.0.1:8000/api/v1/auth/jwks
 
     defaults:
       run:
@@ -129,16 +125,150 @@ jobs:
       - name: 마이그레이션 누락 검사
         run: uv run alembic check
 
-      # 테스트는 game_test 스키마에서 돈다. 그 스키마에도 테이블을 만든다
+  # 테스트의 묶음을 읽는다. 묶음은 scripts/ci_groups.py 한 곳에만 적는다. 이 파일에 이름을 다시 적지 않는다
+  groups:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      names: ${{ steps.read.outputs.names }}
+
+    defaults:
+      run:
+        working-directory: game-server
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v9.0.0
+
+      # 표준 라이브러리만 쓰는 스크립트라 의존성을 설치하지 않는다
+      - name: 묶음 읽기
+        id: read
+        run: |
+          echo "names=$(uv run --no-project python -m scripts.ci_groups json)" >> "$GITHUB_OUTPUT"
+          uv run --no-project python -m scripts.ci_groups summary >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    needs: groups
+    name: test (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    # 한 묶음은 PC 에서 2~3 분이다. 멈춘 테스트를 하염없이 기다리지 않게 하려는 상한이다
+    timeout-minutes: 15
+
+    strategy:
+      # 한 묶음이 실패해도 나머지는 끝까지 돌린다. 어느 묶음에서 무엇이 깨졌는지 한 번에 본다
+      fail-fast: false
+      matrix:
+        group: ${{ fromJSON(needs.groups.outputs.names) }}
+
+    services:
+      # docker-compose.yml 과 같은 이미지를 쓴다
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: trpg
+          POSTGRES_PASSWORD: ci-root-password
+          POSTGRES_DB: trpg
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U trpg -d trpg"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      # 시도 횟수 제한의 테스트가 실제 Redis 에서 돈다(tests/test_attempt_limits.py, 15 번 DB)
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: game-server
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: DB 계정과 스키마 만들기
+        working-directory: .
+        env:
+          PGPASSWORD: ci-root-password
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/01-auth-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/02-game-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/03-extensions.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/04-billing-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/05-board-role.sql
+
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: 의존성 설치
+        run: uv sync --locked
+
+      # 테스트는 game_test 스키마에서 돈다. 그 스키마에 테이블을 만든다
       - name: 테스트용 스키마에 마이그레이션 적용
         env:
           DB_SCHEMA: game_test
         run: uv run alembic upgrade heads
 
-      # 테스트를 돌리며 지나간 줄을 센다. 재는 대상은 pyproject.toml 의 [tool.coverage.run] 이다.
-      # 표는 아래 요약 단계에서 적는다. 여기서는 찍지 않는다(--cov-report=)
+      # 이 묶음의 파일만 돌리며 지나간 줄을 센다. 재는 대상은 pyproject.toml 의 [tool.coverage.run] 이다.
+      # 센 파일은 묶음의 이름을 붙여 남긴다. 합치는 것은 coverage 작업이다
       - name: 테스트
-        run: uv run pytest --cov --cov-report=
+        env:
+          GROUP: ${{ matrix.group }}
+        run: |
+          read -ra files <<< "$(uv run --no-project python -m scripts.ci_groups files "$GROUP")"
+          uv run pytest --cov --cov-report= "${files[@]}"
+          mv .coverage "coverage-$GROUP.data"
+
+      - name: 지나간 줄을 센 파일 남기기
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-coverage-${{ matrix.group }}
+          path: game-server/coverage-${{ matrix.group }}.data
+          retention-days: 1
+          if-no-files-found: error
+
+  coverage:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: game-server
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: 의존성 설치
+        run: uv sync --locked
+
+      - name: 묶음들의 파일 받기
+        uses: actions/download-artifact@v4
+        with:
+          pattern: game-coverage-*
+          path: game-server/coverage-parts
+          merge-multiple: true
+
+      # 묶음들이 센 것을 하나로 합친다. 모든 작업이 같은 경로에 체크아웃하므로 파일의 경로가 맞는다
+      - name: 합치기
+        run: uv run coverage combine coverage-parts/*.data
 
       # 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 기준은 다음 단계에서 본다.
       # 표에는 다 지나간 파일을 빼고, 덜 지나간 파일부터 적는다
