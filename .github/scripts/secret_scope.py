@@ -70,6 +70,7 @@ SECRETS = [
         'game-server',
         ['game-server'],
         'BILLING_SECRET',
+        'NOTIFICATION_SECRET',
         'OPENAI_API_KEY',
         'ANTHROPIC_API_KEY',
         'GEMINI_API_KEY',

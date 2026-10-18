@@ -25,6 +25,9 @@ BILLING_BUDGET_SECONDS = 10.0
 # 결제 서버의 비밀의 가장 짧은 길이. 결제 서버(GAME_SERVER_SECRET)와 같은 기준이다
 BILLING_SECRET_MIN_LENGTH = 32
 
+# 알림 서버의 비밀의 가장 짧은 길이. 알림 서버(GAME_SERVER_SECRET)와 같은 기준이다
+NOTIFICATION_SECRET_MIN_LENGTH = 32
+
 # 실시간 신호에 서명하는 비밀의 가장 짧은 길이
 SIGNAL_SECRET_MIN_LENGTH = 32
 
@@ -220,6 +223,17 @@ class Settings(BaseSettings):
     # 결제 서버를 한 번 부르는 시간의 상한(초)
     billing_timeout_seconds: float = Field(default=5.0, gt=0, le=BILLING_BUDGET_SECONDS)
 
+    # 알림 서버의 주소. 방장에게 보내는 알림을 여기 넣는다(app/notifications/). 비우면 보내지 않고 발송함에 적기만 한다.
+    # 테스트와 알림 서버 없는 개발은 비운 채로 돈다. 예: http://127.0.0.1:8004
+    notification_url: str = ''
+
+    # 알림 서버에 보내는 요청에 서명하는 비밀. 알림 서버의 GAME_SERVER_SECRET 과 같은 값이어야 한다. 32자 이상.
+    # 결제 서버의 비밀(BILLING_SECRET)과 다른 값이다. 비밀값이다. 로그와 오류에 싣지 않는다
+    notification_secret: SecretStr = SecretStr('')
+
+    # 알림 서버를 한 번 부르는 시간의 상한(초). 뒤에서 보내므로 사람이 기다리지 않는다
+    notification_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+
     # 시도 횟수 제한(app/limits/, #56)을 세는 Redis 의 주소(redis://...). 비우면 서버 안의 메모리로 센다(기본).
     # 메모리는 서버가 하나일 때만 맞고 다시 띄우면 지워진다. 서버를 여럿 띄우거나 운영에서는 적는다.
     # 인증 서버와 같은 Redis 를 써도 된다. 키의 앞부분(LIMIT_KEY_PREFIX)이 달라 섞이지 않는다
@@ -279,6 +293,15 @@ class Settings(BaseSettings):
             raise ValueError(
                 f'BILLING_URL 을 적었으면 BILLING_SECRET 을 {BILLING_SECRET_MIN_LENGTH}자 이상 적어야 합니다'
             )
+        return self
+
+    @model_validator(mode='after')
+    def require_a_notification_secret(self) -> Self:
+        """알림 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. 알림 서버가 모든 알림을 401 로 거절한다."""
+        secret = self.notification_secret.get_secret_value()
+        if self.notification_url.strip() and len(secret) < NOTIFICATION_SECRET_MIN_LENGTH:
+            minimum = NOTIFICATION_SECRET_MIN_LENGTH
+            raise ValueError(f'NOTIFICATION_URL 을 적었으면 NOTIFICATION_SECRET 을 {minimum}자 이상 적어야 합니다')
         return self
 
     @model_validator(mode='after')

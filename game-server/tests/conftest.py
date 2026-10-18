@@ -46,6 +46,8 @@ def make_test_settings(**overrides) -> Settings:
     # bge-m3 와 다르다(기본값 0.45, 0.50 이면 이름이 나온 항목도 걸러진다). 키워드의 상한은 끈다(코사인 거리는 2 까지).
     # 지난 일(기억)의 거리 기준도 같은 까닭으로 가짜에 맞춘다
     # 결제 서버는 부르지 않는다(받지 않는 것). 결제 서버를 쓰는 테스트는 가짜를 꽂는다(tests/billing.py)
+    # 알림 서버도 부르지 않는다(발송함에 적기만 한다).
+    # 보내는 것을 보는 테스트는 가짜를 꽂는다(tests/test_notifications.py)
     # 시도 횟수 제한은 끈다. 채팅을 여러 번 쓰는 테스트가 막히지 않게 한다.
     # 제한을 보는 테스트만 켠다(tests/test_attempt_limits.py).
     # Redis 는 쓰지 않는다(메모리). Redis 로 세는 것은 그 파일이 따로 본다
@@ -66,6 +68,8 @@ def make_test_settings(**overrides) -> Settings:
         'memory_keyword_max_distance': 2.0,
         'billing_url': '',
         'billing_secret': '',
+        'notification_url': '',
+        'notification_secret': '',
         'openai_api_key': '',
         'openai_base_url': 'https://api.openai.com/v1',
         'anthropic_api_key': '',
