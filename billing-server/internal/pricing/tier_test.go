@@ -40,7 +40,7 @@ func TestANewNameNeedsATier(t *testing.T) {
 func TestAnUnknownTierIsRefused(t *testing.T) {
 	f := setUp(t)
 	change := f.change(120)
-	change.Tier = "basic"
+	change.Tier = "gold"
 
 	if _, err := f.service.Set(ctx(t), change); !errors.Is(err, pricing.ErrInvalidTier) {
 		t.Errorf("오류 = %v. ErrInvalidTier 이어야 한다", err)

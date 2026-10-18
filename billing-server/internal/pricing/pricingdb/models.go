@@ -19,4 +19,5 @@ type PriceVersion struct {
 	ChangedBy   string
 	CreatedAt   time.Time
 	Tier        string
+	Promo       bool
 }

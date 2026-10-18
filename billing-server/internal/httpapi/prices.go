@@ -44,9 +44,11 @@ type priceBody struct {
 	Credits *credit.Amount `json:"credits"`
 	// Since 는 지금 값이 적용되기 시작한 시각이다. Credits 가 null 이면 null 이다.
 	Since *time.Time `json:"since"`
-	// Tier 는 지금의 등급이다(standard, premium). premium 은 골드로만 낸다. Credits 가 null 이면 null 이다.
+	// Tier 는 지금의 등급이다(basic, standard, premium). premium 은 골드로만 낸다. Credits 가 null 이면 null 이다.
 	// 결제에 쓰는 등급은 이것이 기준이다. 게임 서버의 모델 목록의 분류와 다르면 게임 서버가 알린다.
 	Tier *pricing.Tier `json:"tier"`
+	// Promo 는 지금 값이 행사가인지다. 행사가 끝나는 때와 그 뒤의 값은 Next 다. Credits 가 null 이면 false 다.
+	Promo bool `json:"promo"`
 	// Next 는 다음에 바뀔 값이다. 예약이 없으면 null 이다.
 	Next *nextPriceBody `json:"next"`
 }
@@ -56,8 +58,10 @@ type nextPriceBody struct {
 	// Credits 는 바뀔 값이다. null 이면 이 시각부터 판매를 멈춘다.
 	Credits *credit.Amount `json:"credits"`
 	// Tier 는 이 시각부터의 등급이다. Credits 가 null 이면 null 이다.
-	Tier        *pricing.Tier `json:"tier"`
-	EffectiveAt time.Time     `json:"effective_at"`
+	Tier *pricing.Tier `json:"tier"`
+	// Promo 는 이 시각부터의 값도 행사가인지다. Credits 가 null 이면 false 다.
+	Promo       bool      `json:"promo"`
+	EffectiveAt time.Time `json:"effective_at"`
 }
 
 // listPrices 는 가격 목록의 핸들러를 만든다. 요청의 If-None-Match 가 지금 목록의 ETag 와 같으면 304 다.
@@ -99,13 +103,13 @@ func toPriceBody(listing pricing.Listing) priceBody {
 	body := priceBody{Code: listing.Code}
 	if listing.Current != nil {
 		credits, since, tier := listing.Current.Credits, listing.Current.Since, listing.Current.Tier
-		body.Credits, body.Since, body.Tier = &credits, &since, &tier
+		body.Credits, body.Since, body.Tier, body.Promo = &credits, &since, &tier, listing.Current.Promo
 	}
 	if listing.Next != nil {
 		next := nextPriceBody{EffectiveAt: listing.Next.EffectiveAt}
 		if listing.Next.OnSale {
 			credits, tier := listing.Next.Credits, listing.Next.Tier
-			next.Credits, next.Tier = &credits, &tier
+			next.Credits, next.Tier, next.Promo = &credits, &tier, listing.Next.Promo
 		}
 		body.Next = &next
 	}

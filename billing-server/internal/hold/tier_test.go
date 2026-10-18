@@ -27,6 +27,31 @@ func (f fixture) newPremium(credits credit.Amount) string {
 	return code
 }
 
+// newBasic 은 이 테스트만 쓰는 베이직 이름을 만들고 값을 정한다.
+func (f fixture) newBasic(credits credit.Amount) string {
+	f.t.Helper()
+	code := "test." + uuid.NewString()
+	change := pricing.Change{Code: code, Credits: credits, Tier: pricing.TierBasic, Reason: "테스트", ChangedBy: "test"}
+	if _, err := pricing.NewService(f.pool, f.clock.Now).Set(ctx(f.t), change); err != nil {
+		f.t.Fatalf("값을 정하지 못했다: %v", err)
+	}
+	return code
+}
+
+func TestABasicHoldCanBePaidWithSilver(t *testing.T) {
+	// 베이직은 스탠다드처럼 실버로 낸다. 골드가 없어도 걸린다
+	f := setUp(t)
+	f.fund(0, 300)
+	code := f.newBasic(10)
+
+	placed, created, err := f.service.Place(ctx(t), source, f.user, newReference(), code)
+
+	if err != nil || !created || placed.Amount != 10 {
+		t.Fatalf("홀드 = %+v, 새로 = %v, 오류 = %v", placed, created, err)
+	}
+	f.wantBalance(0, 290)
+}
+
 func TestAPremiumHoldTakesOnlyGold(t *testing.T) {
 	f := setUp(t)
 	f.fund(500, 300)

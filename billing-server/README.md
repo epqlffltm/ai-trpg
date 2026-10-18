@@ -750,6 +750,7 @@ go run ./cmd/fakepg toss-notify <주문 번호> <결제 번호>
 
 | 등급 | 무엇으로 내나 | 모자랄 때 |
 | --- | --- | --- |
+| `basic` | `standard` 와 같다. 가장 싼 모델(무료 API 와 그 유료판처럼 원가가 거의 없는 모델)을 묶어 보이려고 따로 둔다 | 402 `credit.insufficient` |
 | `standard` | 골드(산 크레딧)와 실버(무료 크레딧). 어느 쪽을 먼저 쓰는지는 `SPEND_FREE_FIRST` | 402 `credit.insufficient` |
 | `premium` | 골드로만. 실버가 아무리 많아도 쓰지 않는다 | 402 `credit.gold_required` |
 
@@ -757,6 +758,18 @@ go run ./cmd/fakepg toss-notify <주문 번호> <결제 번호>
 - 홀드는 **걸 때의 등급**을 따른다. 등급이 바뀌기 전에 건 홀드는 그대로다. 돌려줄 때는 뺐던 자리(골드면 골드)로 돌아간다
 - 판매를 멈추는 줄에도 그때의 등급이 적힌다. 다시 팔 때 등급을 적지 않으면 멈추기 전의 등급이다
 - 게임 서버의 모델 목록에도 분류가 있지만 그것은 화면에 묶어 보여 주는 데 쓴다. 둘이 다르면 게임 서버가 알린다
+- `basic` 을 따로 둔 것은 내는 방법이 달라서가 아니다. 이벤트로 그 묶음만 내리거나 무료로 여는 일을 이름 하나씩이 아니라 등급으로 보이려는 것이다
+- **`basic` 줄은 가격 목록을 읽는 쪽이 `basic` 을 안 뒤에 넣는다.** 모르는 등급을 받으면 목록 전체를 읽지 못하는 쪽이 있다(등급을 정해진 값으로만 받는 경우).
+  마이그레이션(`00015`)은 먼저 적용해도 된다. 줄이 없으면 목록에 `basic` 이 나오지 않는다
+
+**행사가.** 줄마다 행사가 표시(`promo`)가 있다. 행사가는 **끝나는 때가 정해진 값**이다(공급사의 행사가를 그대로 옮긴 값, 우리의 할인 이벤트).
+
+- 끝나는 때는 따로 적지 않는다. **그 이름의 다음 줄**(행사가 끝난 뒤의 값이나 판매 중지)이 정한다
+- 그래서 행사가 줄은 **그보다 늦은 줄이 먼저 있어야** 넣을 수 있다. 끝이 없는 행사가는 "언제까지"를 말해 주지 못한다
+- 가격 목록이 지금 값의 `promo` 와 다음 값을 함께 보인다. 사용자는 처음부터 "11월 21일까지의 값, 그 뒤 440" 을 안다.
+  그래서 행사가 끝나 정가로 오르는 것은 미리 알린 값이고, 공급사 인상처럼 D-30 부터 따로 알릴 일이 아니다
+- 등급과 달리 **이어받지 않는다.** 표시 없이 값을 바꾸면 정가 줄이다. 판매를 멈추는 줄은 행사가일 수 없다(DB 도 막는다)
+- 정가가 행사가보다 낮게 정해지면(공식 값이 예상보다 낮으면) 다음 줄을 더 낮은 값으로 다시 넣는다. 내리는 것은 공지 없이 된다
 
 - 모델마다 값을 다르게 받을 때는 이름을 더한다(`narration.gemma4-26b` 처럼). 게임 서버가 모델마다 그 이름을 보낸다.
   이름은 점으로 나눈 소문자, 숫자, `_`, `-` 로 된 64자 이하다. 모델 이름의 `:` 는 쓰지 못한다. 게임 서버가 모델마다 이름을 짓는다
@@ -771,10 +784,13 @@ go run ./cmd/prices history narration.gemma4-26b                                
 go run ./cmd/prices set narration.gemma4-26b 80 -tier standard -reason "새 모델"  값을 정한다. 없던 이름이면 새로 판다
 go run ./cmd/prices set narration.gemma4-26b 80 -tier premium -reason "등급"     등급만 바꾼다(줄을 더한다)
 go run ./cmd/prices stop narration.gemma4-26b -reason "모델을 내림"              판매를 멈춘다
+go run ./cmd/prices set narration.gpt-5-6-sol.i0.o0 440 -at 2026-11-21T00:00:00Z -reason "행사가 끝난 뒤의 정가"   먼저 끝을 예약한다
+go run ./cmd/prices set narration.gpt-5-6-sol.i0.o0 330 -promo -reason "공급사 행사가"                         그다음 지금 값을 행사가로 적는다
 ```
 
-- `-tier` 는 `set` 에만 쓴다. **처음 파는 이름은 꼭 적는다.** 기본값을 두지 않았다. 프리미엄 모델이 등급을 빠뜨려 실버로 팔리면 그만큼 손해다.
+- `-tier` 는 `set` 에만 쓴다(`basic`, `standard`, `premium`). **처음 파는 이름은 꼭 적는다.** 기본값을 두지 않았다. 프리미엄 모델이 등급을 빠뜨려 실버로 팔리면 그만큼 손해다.
   이미 파는 이름은 적지 않으면 그 시각의 등급 그대로다
+- `-promo` 도 `set` 에만 쓴다. 그 이름에 이 줄보다 늦은 줄이 없으면 넣지 않는다. 값 뒤에 `(행사가)` 가 찍힌다
 
 - `-at 2026-11-01T00:00:00+09:00` 을 붙이면 그때부터 바뀐다(예약). 지난 시각은 받지 않는다. 지난 일에 받은 값의 기록이 틀어진다
 - `-by <이름>` 으로 바꾼 사람을 적는다. 적지 않으면 `cli:<이 PC 의 계정 이름>` 이다
@@ -791,20 +807,26 @@ go run ./cmd/prices import prices.csv -reason "모델별 가격" -apply    넣�
 ```
 
 파일은 CSV 다. 첫 줄은 머리줄이고 `#` 로 시작하는 줄은 설명이다. `credits` 에 `stop` 을 적으면 판매를 멈추는 줄이다. `effective_at` 을 비우면 지금부터다.
-`tier` 는 `standard` 나 `premium` 이다. 비우면 그 시각의 등급 그대로이고, 처음 파는 이름이면 비울 수 없다.
-`tier` 칸이 없는 옛 모양(`code,credits,effective_at`)도 받는다. 모든 줄의 `tier` 를 비운 것과 같다.
+`tier` 는 `basic`, `standard`, `premium` 가운데 하나다. 비우면 그 시각의 등급 그대로이고, 처음 파는 이름이면 비울 수 없다.
+`promo` 에 `true` 를 적으면 행사가 줄이다. 비우거나 `false` 면 정가다. 행사가 줄은 그 이름에 더 늦은 줄이 가격표에 먼저 있어야 한다.
+한 파일에 같은 이름을 두 번 적을 수 없으므로, 행사가 끝난 뒤의 값은 먼저 따로 넣는다(`set -at`).
+칸이 적은 옛 모양(`code,credits,effective_at` 과 `code,credits,effective_at,tier`)도 받는다. 없는 칸은 비운 것과 같다.
 엑셀에서 "CSV UTF-8" 로 저장한 파일도 읽는다(맨 앞의 BOM 을 떼고, CRLF 줄바꿈도 받는다).
 
 ```
-code,credits,effective_at,tier
+code,credits,effective_at,tier,promo
 # 새 모델
-narration.claude-sonnet-5-5.i0.o0,170,,standard
-narration.gemini-4-argon.i0.o0,420,2026-12-01T00:00:00+09:00,premium
-narration.old-model.i0.o0,stop,,
+narration.claude-sonnet-5-5.i0.o0,170,,standard,
+narration.gemini-4-argon.i0.o0,420,2026-12-01T00:00:00+09:00,premium,
+narration.glm-4-7-flash.i0.o0,10,,basic,
+# 행사가(정가 440 을 2026-11-21 로 먼저 넣어 두었다)
+narration.gpt-5-6-sol.i0.o0,330,,,true
+narration.old-model.i0.o0,stop,,,
 ```
 
-- 미리 보기는 줄마다 `새로`, `올림`, `내림`, `등급`, `멈춤`, `같음` 과 바뀌기 전 → 뒤의 값과 등급을 찍는다(`120 standard → 120 premium`).
-  `등급` 은 값은 같고 등급만 바뀌는 줄이다. 그 시각의 값과 등급이 같은 줄(`같음`)은 넣지 않는다.
+- 미리 보기는 줄마다 `새로`, `올림`, `내림`, `등급`, `행사 표시`, `행사 끝`, `멈춤`, `같음` 과 바뀌기 전 → 뒤의 값과 등급을 찍는다(`120 standard → 120 premium`). 행사가면 값 뒤에 `(행사가)` 가 붙는다.
+  `등급` 은 값은 같고 등급만 바뀌는 줄이다. `행사 표시` 는 값과 등급은 같고 행사가 표시만 붙이거나 떼는 줄이다.
+  `행사 끝` 은 행사가에서 정가로 오르는 줄이다. 공급사 인상(`올림`)과 나눠 보인다. 그 시각의 값, 등급, 표시가 모두 같은 줄(`같음`)은 넣지 않는다.
   모든 줄이 `같음` 이면 `-apply` 도 넣은 것이 없다고 알린다
 - 틀린 줄이 하나라도 있으면 그 줄의 번호와 이름을 알리고 아무것도 넣지 않는다. 같은 이름이 두 번 나와도 그렇다
 - 이유와 바꾼 사람(`-reason`, `-by`)은 파일 전체에 하나다. 적용 시각은 줄마다 적으므로 `-at` 은 받지 않는다
@@ -975,16 +997,20 @@ headers = {
 
 ```json
 {"prices": [
-  {"code": "narration.gemini-3-8-flash.i0.o0", "credits": "80", "since": "2026-10-18T03:25:55Z", "tier": "standard",
-   "next": {"credits": "160", "tier": "standard", "effective_at": "2026-12-31T15:00:00Z"}},
-  {"code": "narration.gemini-4-argon.i0.o0", "credits": null, "since": null, "tier": null,
-   "next": {"credits": "420", "tier": "premium", "effective_at": "2026-11-30T15:00:00Z"}},
-  {"code": "narration.old-model.i0.o0", "credits": "30", "since": "2026-10-01T00:00:00Z", "tier": "standard",
-   "next": {"credits": null, "tier": null, "effective_at": "2026-12-01T00:00:00Z"}}
+  {"code": "narration.gemini-3-8-flash.i0.o0", "credits": "80", "since": "2026-10-18T03:25:55Z", "tier": "standard", "promo": false,
+   "next": {"credits": "160", "tier": "standard", "promo": false, "effective_at": "2026-12-31T15:00:00Z"}},
+  {"code": "narration.gemini-4-argon.i0.o0", "credits": null, "since": null, "tier": null, "promo": false,
+   "next": {"credits": "420", "tier": "premium", "promo": false, "effective_at": "2026-11-30T15:00:00Z"}},
+  {"code": "narration.gpt-5-6-sol.i0.o0", "credits": "330", "since": "2026-10-18T05:00:00Z", "tier": "standard", "promo": true,
+   "next": {"credits": "440", "tier": "standard", "promo": false, "effective_at": "2026-11-21T00:00:00Z"}},
+  {"code": "narration.old-model.i0.o0", "credits": "30", "since": "2026-10-01T00:00:00Z", "tier": "standard", "promo": false,
+   "next": {"credits": null, "tier": null, "promo": false, "effective_at": "2026-12-01T00:00:00Z"}}
 ]}
 ```
 
-- `tier` 는 그 값의 등급이다(`standard`, `premium`). `premium` 은 골드로만 낸다. 값이 `null` 이면 등급도 `null` 이다
+- `tier` 는 그 값의 등급이다(`basic`, `standard`, `premium`). `premium` 은 골드로만 낸다. 값이 `null` 이면 등급도 `null` 이다
+- `promo` 는 그 값이 행사가인지다. 행사가면 `next` 가 행사가 끝나는 때와 그 뒤의 값이다. 값이 `null` 이면 `false` 다.
+  화면에 "행사가, 11월 21일까지(그 뒤 440)" 처럼 보인다. 이 칸은 더해진 것이라, 모르는 칸을 버리는 쪽은 그대로 돈다
 
 - 지금 팔고 있거나 바뀔 예약이 있는 이름만 나온다. 판매를 멈췄고 예약도 없는 이름은 빠진다. 이름 순서다
 - `credits` 는 글자다. 지금 팔지 않으면(예약만 있으면) `credits`, `since` 가 `null` 이다
@@ -1351,6 +1377,8 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 `00012_payment_eligibility.sql` 은 언제든 되돌려진다. 받아 둔 결제 자격이 지워져 모두 "본인인증 전"이 된다. 인증 서버가 다시 알려 줘야 결제가 된다.
 `00013_guardian_notices.sql` 은 언제든 되돌려진다. 다시 적용하면 지난 30일의 미성년자 결제를 다시 적어 보낸다. 인증 서버가 주문으로 한 번만 보내므로 메일이 두 번 가지는 않는다.
 `00014_attendance.sql` 은 언제든 되돌려진다. 출석의 기록이 지워져 모두 1일째부터 다시 센다. 받은 실버는 지갑에 남고, 지급의 이름(`attendance-날짜`)이 남아 같은 날에 다시 받지는 못한다. 개발용 DB 에서만 되돌린다.
+`00015_price_basic.sql` 은 `basic` 줄이 하나라도 있으면 되돌려지지 않는다. 가격표는 덧붙이기만 하므로 그 줄을 지울 수 없다.
+`00016_price_promo.sql` 은 언제든 되돌려진다. 다만 언제 행사가로 팔았는지의 기록이 사라진다. 개발용 DB 에서만 되돌린다.
 
 `00005_expiry.sql` 을 적용할 때 이미 있는 `held` 홀드는 **적용한 때부터** 하루를 받는다. 만든 때부터 세면 적용하자마자 오래된 것이 한꺼번에 풀린다.
 이미 있는 주문은 만든 때부터 하루다. `pending` 은 돈이 오간 적이 없어 바로 끝나도 안전하다.
@@ -1365,6 +1393,8 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 `00011_price_tiers.sql` 도 서버를 켠 채로 적용해도 된다. 서버는 가격표를 읽기만 한다. 이미 있는 줄은 `standard` 가 되고, `narration.premium` 만 `premium` 이 된다.
 등급 칸에는 기본값이 없으므로, 적용한 뒤에는 새 `cmd/prices` 로 값을 넣는다(옛 것은 등급을 적지 않아 실패한다).
 `00010_price_reviews.sql` 도 서버를 켠 채로 적용해도 된다. 새 표 둘을 만들 뿐이고, 서버는 그 표를 읽지 않는다. 다만 새 대사는 이것을 적용한 뒤에 돌린다(표가 없으면 끝 코드 2).
+`00015_price_basic.sql` 과 `00016_price_promo.sql` 도 서버를 켠 채로 적용해도 된다. 서버는 가격표를 읽기만 한다. 다만 새 서버는 `promo` 칸을 읽으므로 새 서버를 띄우기 전에 `00016` 까지 적용한다.
+`promo` 칸에는 기본값이 없으므로, 적용한 뒤에는 새 `cmd/prices` 로 값을 넣는다(옛 것은 표시를 적지 않아 실패한다). 이미 있는 줄은 모두 정가(`false`)다.
 
 서버와 같은 설정(`.env` 의 `DATABASE_URL`, `DB_SCHEMA`)을 읽는다. 접속 주소를 명령 줄에 적지 않는다.
 어느 스키마를 바꾸는지 첫 줄에 찍는다. 테스트용 스키마는 손으로 맞추지 않는다. 테스트가 스스로 적용한다([테스트](#테스트)).

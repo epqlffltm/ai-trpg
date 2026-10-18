@@ -271,14 +271,15 @@ func TestTheDatabaseKeepsThePriceListAppendOnly(t *testing.T) {
 			t.Errorf("%s: 오류 = %v. 트리거(23001)가 막아야 한다", name, err)
 		}
 	}
-	insert := `INSERT INTO price_versions (code, amount, effective_at, reason, changed_by, tier, created_at) VALUES ($1, $2, $3, $4, $5, $6, $3)`
+	insert := `INSERT INTO price_versions (code, amount, effective_at, reason, changed_by, tier, promo, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $3)`
 	for name, args := range map[string][]any{
-		"값이 0":        {f.code, 0, startedAt.Add(time.Hour), "r", "b", "standard"},
-		"값이 너무 크다":    {f.code, 1_000_001, startedAt.Add(time.Hour), "r", "b", "standard"},
-		"이름의 모양":      {"Narration", 5, startedAt.Add(time.Hour), "r", "b", "standard"},
-		"이유가 빈 글자":    {f.code, 5, startedAt.Add(time.Hour), "", "b", "standard"},
-		"바꾼 사람이 빈 글자": {f.code, 5, startedAt.Add(time.Hour), "r", "", "standard"},
-		"모르는 등급":      {f.code, 5, startedAt.Add(time.Hour), "r", "b", "basic"},
+		"값이 0":        {f.code, 0, startedAt.Add(time.Hour), "r", "b", "standard", false},
+		"값이 너무 크다":    {f.code, 1_000_001, startedAt.Add(time.Hour), "r", "b", "standard", false},
+		"이름의 모양":      {"Narration", 5, startedAt.Add(time.Hour), "r", "b", "standard", false},
+		"이유가 빈 글자":    {f.code, 5, startedAt.Add(time.Hour), "", "b", "standard", false},
+		"바꾼 사람이 빈 글자": {f.code, 5, startedAt.Add(time.Hour), "r", "", "standard", false},
+		"모르는 등급":      {f.code, 5, startedAt.Add(time.Hour), "r", "b", "gold", false},
+		"멈추는 줄이 행사가":  {f.code, nil, startedAt.Add(time.Hour), "r", "b", "standard", true},
 	} {
 		_, err := f.pool.Exec(ctx(t), insert, args...)
 		if err == nil || !strings.Contains(err.Error(), "23514") {
@@ -289,5 +290,14 @@ func TestTheDatabaseKeepsThePriceListAppendOnly(t *testing.T) {
 	_, err := f.pool.Exec(ctx(t), `INSERT INTO price_versions (code, amount, effective_at, reason, changed_by, created_at) VALUES ($1, 5, $2, 'r', 'b', $2)`, f.code, startedAt.Add(2*time.Hour))
 	if err == nil || !strings.Contains(err.Error(), "23502") {
 		t.Errorf("등급을 빠뜨린 줄: 오류 = %v. NOT NULL(23502)로 거절해야 한다", err)
+	}
+	// 행사가 표시에도 기본값이 없다
+	_, err = f.pool.Exec(ctx(t), `INSERT INTO price_versions (code, amount, effective_at, reason, changed_by, tier, created_at) VALUES ($1, 5, $2, 'r', 'b', 'standard', $2)`, f.code, startedAt.Add(3*time.Hour))
+	if err == nil || !strings.Contains(err.Error(), "23502") {
+		t.Errorf("행사가 표시를 빠뜨린 줄: 오류 = %v. NOT NULL(23502)로 거절해야 한다", err)
+	}
+	// basic 은 아는 등급이다(00015)
+	if _, err := f.pool.Exec(ctx(t), insert, f.code, 5, startedAt.Add(4*time.Hour), "r", "b", "basic", false); err != nil {
+		t.Errorf("basic 줄: 오류 = %v. 받아야 한다", err)
 	}
 }
