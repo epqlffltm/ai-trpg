@@ -325,7 +325,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `model.retirement` | game | 서술 모델의 은퇴를 알리고 바꾸기(지켜보기의 한 바퀴, 한 시간마다. 라운드가 열린 뒤 그 테이블 하나도 본다) |
 | `notification.send` | game, billing, board | 알림 서버에 알림을 보내기. 게임·게시판 서버는 발송함 작업의 한 바퀴(5초마다), 결제 서버는 정리 작업(`sweep.run`) 안에서 못 보낸 알림마다 한 줄이다. 못 보낸 알림마다 발송함의 번호(게임 `notification_id`, 결제 `notice_id`), `kind`, `reason` 을 싣는다. 받는 사람과 `payload` 는 싣지 않는다 |
 | `ai_log.prune` | game | AI 호출 기록에서 보관 기간(기본 30일)이 지난 원문 비우기(정리 작업의 한 바퀴, 한 시간마다. `cleared`, `retention_days`) |
-| `notification.put` | notification | 다른 서버가 서명한 요청으로 알림을 넣기. `source`, `kind`, `notification_id`, `outcome`(`created`, `existing`). 받는 사람과 `payload` 는 싣지 않는다 |
+| `notification.put` | notification | 다른 서버가 서명한 요청으로 알림을 넣기. `source`, `kind`, `notification_id`, `outcome`(`created`, `existing`). 표에 맞지 않아 받지 않았으면 `notification.kind_refused` 다. 받는 사람과 `payload` 는 싣지 않는다 |
 | `notification.prune` | notification | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업의 한 바퀴, 한 시간마다. `deleted`, `retention_days`) |
 | `billing.hold` | game | 결제 서버에 서술 값의 홀드를 걸기 |
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
@@ -367,6 +367,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다. 연장이면 홀드를 그대로 두고 한 시간 뒤에 다시 부른다. 서술 뒤의 확정이 409(만료되어 돌려준 홀드)면 그 값은 받지 못한다. 홀드가 400 이면 가격표에 그 모델의 가격표 이름(`narration.<이름표>.i0.o0`)이 없는지 먼저 본다 |
 | `notification.unavailable` | 게임 서버, 결제 서버(정리 작업), 게시판 서버가 알림 서버에 알림을 넣지 못했다(연결 실패, 시간 초과, 401, 408, 429, 5xx). 발송함에 남아 늘어나는 간격으로 다시 보낸다. 서명이 거절된 것(401, `reason: unauthorized`)이면 `error`, 그 밖에는 `warning` |
 | `notification.rejected` | 알림 서버가 게임·결제·게시판 서버의 알림을 받지 않았다(409 같은 열쇠로 다른 알림, 413, 422 등). 다시 보내도 같다. 발송함에 `failed` 로 남는다. `reason` 에 답의 코드. 버그다. `error` |
+| `notification.kind_refused` | 알림 서버가 서명은 맞지만 알림의 종류 표(`notification-server/app/notifications/catalog.py`)에 맞지 않는 알림을 받지 않았다(422). `refusal` 에 까닭(`kind_unknown`, `kind_not_allowed`, `payload_missing_fields`), `missing_fields` 에 빠진 칸의 이름을 싣는다. 넣는 서버의 버그이거나 남의 알림을 넣으려 한 것이다. 넣는 서버 쪽에는 `notification.rejected` 가 남는다. `warning` |
 | `signals.bad_signature` | 게임 서버가 서명이 맞지 않는 실시간 신호(NOTIFY)를 받아 버렸다. 같은 DB 의 다른 계정이 꾸며 보냈거나, 게임 서버들의 `SIGNAL_SECRET` 이 서로 다르다. `sender_pid` 에 보낸 연결의 프로세스 번호를 싣는다(`pg_stat_activity` 에서 계정을 찾는다). 받은 글자는 싣지 않는다. `warning` |
 | `ledger_draft.failed` | 게임 서버가 서술한 장면에서 장부 초안을 쓰지 못했다(테이블을 읽기, 모델 부르기, 줄 적기 중 하나가 예외로 끝났거나 90 초가 지났다). 라운드는 이미 닫혔고 방장은 손으로 장부를 고치면 된다. `table_id`, `round`. 모델의 답을 읽지 못한 것(`not_json` 등)은 이 코드가 아니라 호출 기록에 남는다. `warning` |
 | `limits.unavailable` | 게임 서버가 시도 횟수를 세는 곳(Redis)에 닿지 못했다. `limit` 에 어느 제한인지, `blocked` 에 막았는지(로비의 비밀번호) 통과시켰는지(채팅) 싣는다. `warning` |
