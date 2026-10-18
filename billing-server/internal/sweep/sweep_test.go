@@ -9,6 +9,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/guardiannotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice"
 )
 
 // fakeStep 은 정해 둔 수와 오류로 답하는 가짜다. 받은 limit 과 부른 차례를 적는다.
@@ -141,5 +142,42 @@ func TestWithoutNoticesTheRoundIsAsBefore(t *testing.T) {
 
 	if err != nil || result.Notices != (guardiannotice.Result{}) {
 		t.Errorf("결과 = %+v, %v", result, err)
+	}
+}
+
+// fakeUserNotices 는 정해 둔 대로 답하는 사용자 알림이다.
+type fakeUserNotices struct {
+	result usernotice.Result
+	err    error
+	limit  int
+}
+
+func (f *fakeUserNotices) Round(_ context.Context, limit int) (usernotice.Result, error) {
+	f.limit = limit
+	return f.result, f.err
+}
+
+func TestUserNoticesRunWhenAttached(t *testing.T) {
+	var order []string
+	holds, wallets, orders := steps(&order)
+	userNotices := &fakeUserNotices{result: usernotice.Result{Queued: 2, Sent: 1}}
+
+	result, err := sweep.New(holds, wallets, orders, 7).WithUserNotices(userNotices).Round(context.Background())
+
+	if err != nil || result.UserNotices != userNotices.result || userNotices.limit != 7 || !result.Any() {
+		t.Errorf("결과 = %+v, %v, limit = %d", result, err, userNotices.limit)
+	}
+}
+
+func TestAFailingUserNoticeStepDoesNotStopTheOthers(t *testing.T) {
+	var order []string
+	holds, wallets, orders := steps(&order)
+	notices := &fakeNotices{result: guardiannotice.Result{Sent: 1}}
+	userNotices := &fakeUserNotices{err: errors.New("DB 가 끊겼다")}
+
+	result, err := sweep.New(holds, wallets, orders, 7).WithNotices(notices).WithUserNotices(userNotices).Round(context.Background())
+
+	if err == nil || len(order) != 3 || result.Notices.Sent != 1 {
+		t.Errorf("결과 = %+v, 오류 = %v, 돈 차례 = %v", result, err, order)
 	}
 }

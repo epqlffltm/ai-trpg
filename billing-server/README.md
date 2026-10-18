@@ -182,6 +182,8 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `AUTH_JWKS_URL` | 없음(필수) | 인증 서버가 공개키를 내주는 주소. `http://127.0.0.1:8000/api/v1/auth/jwks` |
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `AUTH_GUARDIAN_NOTICES_URL` | `AUTH_JWKS_URL` 옆(`…/service/guardian-notices`) | (정리 작업) 보호자 결제 알림을 보내는 인증 서버의 주소(#352). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
+| `NOTIFICATION_URL` | 없음(보내지 않음) | (정리 작업) 사용자의 알림을 넣는 알림 서버의 주소(#385). `http://127.0.0.1:8004`. 경로는 붙이지 않는다. 비우면 알릴 일을 적기만 한다 |
+| `NOTIFICATION_SECRET` | 없음 | (정리 작업) 알림 서버에 보내는 요청에 서명하는 비밀. 알림 서버의 `BILLING_SERVER_SECRET` 과 같은 값, 32자 이상, `AUTH_SERVER_SECRET` 과 달라야 한다. 비우면 적기만 한다. 로그와 오류에 싣지 않는다 |
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰을 발급한 서버의 이름(`iss`). 인증 서버의 `JWT_ISSUER` 와 같아야 한다 |
 | `JWT_AUDIENCE` | `ai-trpg-billing` | 이 서버의 이름. 토큰의 대상(`aud`)에 이 이름이 있어야 받는다 |
 | `HOST` | `127.0.0.1` | 서버가 요청을 받는 주소 |
@@ -1251,17 +1253,19 @@ DB 의 칸과 API 의 모양은 그대로다. 그래서 API 는 처음부터 양
 둘 다 서버와 같은 `.env` 를 읽는다. 포트, 공개키 주소, 서명의 비밀은 없어도 돈다([설정](#설정)).
 compose 로 띄우면 둘 다 저절로 돈다([compose 로 모든 서버와 함께 띄우기](#compose-로-모든-서버와-함께-띄우기)).
 
-**정리 작업**(`cmd/sweeper`)은 계속 도는 프로세스다. 한 바퀴에 넷을 차례로 한다.
+**정리 작업**(`cmd/sweeper`)은 계속 도는 프로세스다. 한 바퀴에 다섯을 차례로 한다.
 
 1. 만료된 홀드를 돌려준다(`release_reason` 이 `expired`). 크레딧이 뺐던 자리로 돌아간다
 2. 기한이 지난 무료 크레딧을, 그 뒤로 변경이 없는 사용자의 원장에도 적는다(`expire` 줄)
 3. 만료된 `pending` 주문을 `expired` 로 끝낸다. `confirming` 은 건드리지 않는다. 돈이 나갔을 수 있다
 4. 미성년자의 결제와 청약철회를 보호자에게 알리라고 인증 서버에 보낸다(#352, 아래 "보호자 결제 알림")
+5. 결제, 청약철회, 환영 크레딧, 곧 사라질 무료 크레딧을 사용자의 알림함에 넣는다(#385, 아래 "사용자의 알림함")
 
 앞의 셋은 DB 만으로 끝난다. 결제 대행사를 부르지 않아서 결제 대행사의 설정(`PAYMENT_PROVIDER`, `TOSS_*`)을 읽지 않고, 키가 없어도 돈다(`config.LoadSweeper`).
 주문 서비스에는 부르면 오류(`payment.ErrNoProvider`)를 내는 자리 채움(`payment.None`)을 끼운다. 가짜를 끼우면 잘못 불렸을 때 "승인됨" 같은 답으로 원장이 바뀐다.
 compose 는 정리 작업에 `TOSS_SECRET_KEY` 를 주지 않는다. 결제 대행사에 묻는 것은 서버와 대사뿐이다.
 넷째 일 때문에 `AUTH_SERVER_SECRET` 은 준다. 인증 서버를 부르는 것은 정리 작업뿐이다.
+다섯째 일 때문에 `NOTIFICATION_SECRET` 도 준다. 알림 서버를 부르는 것도 정리 작업뿐이다(서버와 대사는 받지 않는다).
 
 **보호자 결제 알림(#352).** 이 서버는 보호자의 이메일을 모른다. 알릴 일을 인증 서버에 보내고, 인증 서버가 동의한 보호자의 메일로 알린다.
 
@@ -1277,6 +1281,46 @@ POST /api/v1/auth/service/guardian-notices        (인증 서버의 주소. AUTH
 {"order_id": "...", "kind": "paid", "user_id": "...", "product_id": "credits-1000", "price": 1000, "credits": 1000, "occurred_at": "2026-03-02T09:30:00Z"}
 → 200 {"status": "queued"}(메일을 적었다), {"status": "skipped"}(알릴 보호자가 없다), {"status": "duplicate"}(이미 받았다)
 ```
+
+**사용자의 알림함(#385).** 알림함은 알림 서버에 있다(`notification-server/README.md`). 보호자 결제 알림과 같은 방식이다(`internal/usernotice`).
+
+| 알림의 `kind` | 언제 | `payload` | 열쇠(`source_key`) |
+| --- | --- | --- | --- |
+| `order.paid` | 결제가 끝났다(가상계좌는 입금되었을 때) | `order_id`, `product_id`, `price`(원, 숫자), `credits`(글자) | `order.paid:<주문>` |
+| `order.refunded` | 청약철회가 끝났다 | 위와 같다 | `order.refunded:<주문>` |
+| `credit.welcome` | 환영 크레딧을 받았다 | `amount`(글자), `expires_at` | `credit.welcome:<지급 묶음>` |
+| `credit.expiring` | 7일 안에 사라질 무료 크레딧이 남았다 | `amount`(그 크레딧을 모두 더한 양), `first_expires_at`(가장 먼저 사라지는 시각) | `credit.expiring:<사람>:<한국 날짜>` |
+
+- 알릴 일은 주문과 지급 묶음에서 찾는다(`user_notices`). 바퀴마다 지난 사흘(`LookBack`)의 결제, 청약철회, 환영 크레딧을 적는다.
+  보호자 알림(30일)보다 짧다. 사흘 지난 결제의 알림은 늦어서 쓸모가 적고, 이 기능을 처음 켤 때 지난 결제를 몰아 보내지 않는다
+- **사라질 크레딧은 사람마다 7일에 한 번이다.** 출석으로 날마다 실버를 받는 사람에게 날마다 알리지 않는다.
+  알린 지 7일이 지났는데 7일 안에 사라질 것이 또 남았으면 다시 알린다. 시각은 UTC 의 RFC 3339 글자다(`2026-04-09T09:00:00Z`)
+- 받는 사람, 금액, 상품만 싣는다. 결제 대행사의 번호와 오류의 글은 싣지 않는다
+- 보내기는 줄을 30초 차지하고 잠금 밖에서 한다. 닿지 못하면(연결 실패, 시간 초과, 401, 408, 429, 5xx) 5초부터 두 배씩 늘려(1시간까지) 다시 보낸다.
+  401 은 두 서버의 비밀이 다르거나 시계가 어긋난 것이라 오류로 남긴다
+- 알림 서버가 받지 않으면(409 같은 열쇠로 다른 알림, 413, 422 등) 버그다. `failed` 로 두고 다시 보내지 않는다(`notification.rejected`)
+- 7일(`StaleAfter`) 넘게 보내지 못한 것은 보내지 않는다(`expired`). 끝난 것(`sent`, `failed`, `expired`)은 30일 뒤에 지운다.
+  지운 줄을 다시 적지 않게 거슬러 보는 기간(사흘)이 두는 기간(30일)보다 짧다
+- `NOTIFICATION_URL` 이나 `NOTIFICATION_SECRET` 이 없으면 적기만 한다. 7일 안에 설정하면 나간다
+
+```
+POST /api/v1/notification/service/billing/notifications        (알림 서버의 주소. NOTIFICATION_SECRET 으로 서명)
+{"source_key": "order.paid:...", "user_id": "...", "kind": "order.paid", "payload": {"order_id": "...", "product_id": "credits-1000", "price": 1000, "credits": "1000"}}
+→ 201 {"id": 7, "status": "created"}(새로 넣었다), 200 {"status": "existing"}(이미 있다)
+```
+
+**알림 서버와 붙여 보기.** 알림 서버가 떠 있어야 한다. 비밀을 하나 만들어 두 파일에 함께 넣는다. **저장소 루트에서** 실행한다. 값은 화면에 찍히지 않는다.
+`notification-server/.env` 에 `BILLING_SERVER_SECRET` 이 이미 있으면 이 명령 대신 그 값을 `NOTIFICATION_SECRET` 으로 옮겨 적는다.
+
+```
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); $s = [BitConverter]::ToString($b).Replace('-','').ToLower(); Add-Content notification-server/.env "`nBILLING_SERVER_SECRET=$s"; Add-Content billing-server/.env "`nNOTIFICATION_URL=http://127.0.0.1:8004`nNOTIFICATION_SECRET=$s"; Remove-Variable s, b
+```
+
+```
+s=$(openssl rand -hex 32); printf '\nBILLING_SERVER_SECRET=%s\n' "$s" >> notification-server/.env; printf '\nNOTIFICATION_URL=http://127.0.0.1:8004\nNOTIFICATION_SECRET=%s\n' "$s" >> billing-server/.env; unset s
+```
+
+알림 서버를 다시 띄우고 정리 작업을 한 바퀴 돌리면(`go run ./cmd/sweeper -once`) 지난 사흘의 결제가 사용자의 알림함(`GET /api/v1/notification/me/notifications`)에 생긴다.
 
 ```
 go run ./cmd/sweeper                          30초마다 한 바퀴. Ctrl+C 로 끈다
@@ -1379,6 +1423,7 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 `00014_attendance.sql` 은 언제든 되돌려진다. 출석의 기록이 지워져 모두 1일째부터 다시 센다. 받은 실버는 지갑에 남고, 지급의 이름(`attendance-날짜`)이 남아 같은 날에 다시 받지는 못한다. 개발용 DB 에서만 되돌린다.
 `00015_price_basic.sql` 은 `basic` 줄이 하나라도 있으면 되돌려지지 않는다. 가격표는 덧붙이기만 하므로 그 줄을 지울 수 없다.
 `00016_price_promo.sql` 은 언제든 되돌려진다. 다만 언제 행사가로 팔았는지의 기록이 사라진다. 개발용 DB 에서만 되돌린다.
+`00017_user_notices.sql` 은 언제든 되돌려진다. 아직 보내지 못한 사용자의 알림이 사라진다. 다시 적용하면 지난 사흘의 일을 다시 적어 보낸다. 알림 서버가 열쇠로 한 번만 두므로 알림이 두 번 생기지는 않는다.
 
 `00005_expiry.sql` 을 적용할 때 이미 있는 `held` 홀드는 **적용한 때부터** 하루를 받는다. 만든 때부터 세면 적용하자마자 오래된 것이 한꺼번에 풀린다.
 이미 있는 주문은 만든 때부터 하루다. `pending` 은 돈이 오간 적이 없어 바로 끝나도 안전하다.
@@ -1409,7 +1454,7 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 
 **SQL 에서 Go 코드 만들기(sqlc)**
 
-쿼리는 패키지마다 `queries.sql` 에 SQL 로 적는다(`internal/wallet`, `internal/order`, `internal/hold`, `internal/reconcile`, `internal/pricing`). [sqlc](https://sqlc.dev) 가 그것을 읽어 Go 함수(`walletdb/`, `orderdb/`, `holddb/`, `reconciledb/`, `pricingdb/`)를 만든다.
+쿼리는 패키지마다 `queries.sql` 에 SQL 로 적는다(`internal/wallet`, `internal/order`, `internal/hold`, `internal/reconcile`, `internal/pricing`, `internal/usernotice` 등). [sqlc](https://sqlc.dev) 가 그것을 읽어 Go 함수(`walletdb/`, `orderdb/`, `holddb/`, `reconciledb/`, `pricingdb/`)를 만든다.
 만들어진 코드는 커밋한다. 그래서 **쿼리를 고치지 않는 한 sqlc 를 깔 필요가 없다.** 쿼리나 테이블을 고쳤을 때만 다시 만든다.
 
 ```
@@ -1776,6 +1821,12 @@ billing-server/
       http.go               인증 서버에 서명한 요청을 보내기
       queries.sql           이 패키지가 쓰는 SQL 전부
       guardiannoticedb/     sqlc 가 queries.sql 에서 만든 코드
+    usernotice/           결제와 크레딧의 일을 사용자의 알림함(알림 서버)에 넣기. 주문과 지급 묶음에서 찾아 적고, 서명해 보낸다
+      notice.go             타입(알릴 일, 종류, 보낸 결과, 한 바퀴의 결과), 기간들, 보내는 것의 모양
+      store.go              적기, 정리(보내지 않기로 하기, 지우기), 차지하고 보내기, 결과 적기
+      http.go               알림 서버에 서명한 요청을 보내기. 답을 받았다·다시 보낸다·받지 않았다로 가른다
+      queries.sql           이 패키지가 쓰는 SQL 전부
+      usernoticedb/         sqlc 가 queries.sql 에서 만든 코드
     eligibility/          결제할 수 있는 사람(성년 또는 보호자 동의). 인증 서버가 알려 준 것을 적고 가른다
       eligibility.go        타입, 오류, 가르기(Decide), 한국 날짜. DB 를 건드리지 않는다
       store.go              받아 적기(높은 버전만), 지금 결제할 수 있는지
@@ -2212,6 +2263,10 @@ DB 에서 읽을 때도 UTC 로 받는다(`internal/database` 의 `readTimesInUT
 주문의 `paid_at`·`refunded_at` 은 어느 길로 끝났든 남는다. 그것을 읽어 적으면 빠질 곳이 없다. 대가는 바퀴마다 지난 30일의 결제를 훑는 것이다(색인이 있다).
 정리 작업이 30일 넘게 멈추면 그 앞의 결제는 알리지 않는다.
 같은 비밀(`AUTH_SERVER_SECRET`)을 양쪽으로 쓴다. 두 서버는 이미 서로를 믿고, 서명에 주소가 들어가 한쪽 방향의 요청을 다른 방향의 주소에 쓸 수 없다. 새 짝을 두면 설정만 는다.
+
+**사용자의 알림도 주문과 지급 묶음에서 찾는다(`internal/usernotice`, #385).** 보호자 알림과 같은 까닭이다. 결제를 끝내는 길이 여럿이고, 환영 크레딧은 지급 묶음의 이름(`welcome`)으로 남는다. 사라질 크레딧은 일이 아니라 상태라서 찾는 수밖에 없다.
+보호자 알림과 표를 합치지 않았다. 받는 곳(인증 서버와 알림 서버), 비밀, 실패의 뜻(알림 서버는 받지 않는 답이 있다)이 다르고, 사라질 크레딧처럼 주문이 아닌 일도 있다.
+게임 서버는 이벤트를 적는 자리에서 같은 트랜잭션에 발송함을 적는다. 게임 서버의 알림(은퇴, 제재)은 그 일을 하는 곳이 하나씩이라 그 자리에서 적어도 빠질 곳이 없다.
 
 **결제 자격은 주문을 감싸는 층에서 본다(`internal/eligibility`).** 주문 패키지는 무엇을 얼마에 어떻게 치르는가를 맡는다. 누가 결제할 수 있는가는 따로 바뀐다(법, 보호자 동의).
 그래서 주문 서비스를 고치지 않고 사용자가 부르는 주문의 일만 감쌌다(`eligibility.Guard`). 정리 작업, 대사, 결제 대행사의 알림은 감싸지 않은 주문 서비스를 쓴다.
