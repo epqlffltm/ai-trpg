@@ -444,7 +444,7 @@
 - 지갑이 없는 사용자도 200 이고 모두 `"0"`, `next_expiry` 는 `null` 이다.
 - `next_expiry` 의 `amount` 는 그 시각에 사라지는 양이다(같은 시각의 지급이 여럿이면 더한 것). 그 뒤에 사라질 실버는 싣지 않는다. `expires_at` 은 UTC 고, 그 시각부터 쓸 수 없다. "10 실버가 3일 뒤에 사라진다"처럼 보인다.
 
-원장 `GET /api/v1/billing/wallet/entries?limit=&before=`: 최근 것부터. 한 줄은 `id`, `operation_id`(한 번의 변경이 남긴 줄을 묶는다), `kind`(`paid`/`free`), `reason`, `amount`(늘면 양수, 줄면 음수), `order_id`, `hold_id`, `created_at` 이다. `limit` 은 1~100(기본 20), 다음 쪽은 응답의 `next_before` 를 `before` 로 넣는다. `next_before` 가 `null` 이면 끝이다.
+원장 `GET /api/v1/billing/wallet/entries?limit=&before=`: 최근 것부터. 한 줄은 `id`, `operation_id`(한 번의 변경이 남긴 줄을 묶는다), `kind`(`paid`/`free`), `reason`, `amount`(늘면 양수, 줄면 음수), `order_id`, `hold_id`, `hold_status`, `created_at` 이다. `limit` 은 1~100(기본 20), 다음 쪽은 응답의 `next_before` 를 `before` 로 넣는다. `next_before` 가 `null` 이면 끝이다.
 
 `reason` 의 뜻과 화면의 말(제안):
 
@@ -453,7 +453,7 @@
 | `deposit` | 산 크레딧이 들어옴 | 충전 |
 | `grant` | 무료 크레딧 지급 | 지급(환영, 출석, 상자) |
 | `spend` | 씀 | 사용 |
-| `hold` / `release` | 서술 값을 먼저 빼 둠 / 돌아옴 | 서술 값 대기 / 반환 |
+| `hold` / `release` | 서술 값을 먼저 빼 둠 / 돌아옴 | `hold_status` 에 따라 서술 값 대기(`held`), 사용(`captured`), 반환(`released`) / 반환 |
 | `expire` | 실버가 기한이 지나 사라짐 | 만료 |
 | `refund` / `unrefund` | 청약철회로 빠짐 / 철회가 거절되어 돌아옴 | 환불 / 환불 취소 |
 | `regroup` | 내부 정리. 같은 작업의 줄을 더하면 0 | 보이지 않거나 접는다 |
@@ -495,7 +495,7 @@
 **확인할 것**
 
 - 지갑은 가장 먼저 사라지는 실버 하나(`next_expiry`)만 준다. 사라질 날마다의 목록은 없다. 7일 안에 사라질 양의 합은 알림함의 `credit.expiring` 으로도 온다(A10). 두 값은 다를 수 있다(지갑은 가장 이른 시각의 양만, 알림은 7일 안의 합).
-- 홀드로 빠진 크레딧(`hold`)이 서술 뒤에 확정되는 줄(`spend`)과 어떻게 이어지는지 사용자에게 어떻게 보일지. `hold_id` 로 묶을 수 있다.
+- 홀드의 줄(`hold`, `release`)에는 그 홀드의 지금 상태 `hold_status` 가 붙는다. `held` 는 "서술 값 대기", `captured` 는 "사용", `released` 는 "반환"으로 보인다(제안). 확정은 원장에 줄을 남기지 않으므로 `spend` 줄이 따로 생기지 않는다. `released` 인 홀드는 같은 `hold_id` 의 `release` 줄과 짝지어 접을 수 있다.
 - 헤더의 잔액을 읽는 시점. 서술이 끝날 때마다 읽으면 요청이 많아진다. 스트림 이벤트 `narration_credits_short` 같은 것으로 다시 읽을지 정한다.
 
 ### A7 충전과 결제

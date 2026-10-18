@@ -153,9 +153,25 @@ type Entry struct {
 	// OrderID 는 이 크레딧이 들어온 주문이다. 주문으로 들어온 줄이 아니면 nil 이다.
 	OrderID *uuid.UUID
 	// HoldID 는 이 줄을 남긴 홀드다. 홀드로 빠지거나(hold) 돌아온(release) 줄이 아니면 nil 이다.
-	HoldID    *uuid.UUID
-	CreatedAt time.Time
+	HoldID *uuid.UUID
+	// HoldStatus 는 그 홀드의 지금 상태다(읽은 순간의 것). 홀드의 줄이 아니면 비어 있다(#430).
+	HoldStatus HoldStatus
+	CreatedAt  time.Time
 }
+
+// HoldStatus 는 원장의 홀드 줄이 가리키는 홀드의 지금 상태다. 화면이 hold 줄을 "기다림", "씀", "돌아옴"으로 나눠 보인다.
+// 확정(captured)은 원장에 줄을 남기지 않는다. 그래서 줄의 이유(reason)만으로는 알 수 없고 홀드에서 읽는다.
+// 값은 홀드 패키지의 상태(hold.Status)와 같다. 이 패키지가 홀드 패키지를 부르지 않도록 따로 둔다.
+type HoldStatus string
+
+const (
+	// HoldHeld 는 아직 결과를 기다린다는 것이다. 서술이 끝나면 확정되거나 돌아온다.
+	HoldHeld HoldStatus = "held"
+	// HoldCaptured 는 확정되었다는 것이다. 빠진 크레딧이 그대로 쓰였다.
+	HoldCaptured HoldStatus = "captured"
+	// HoldReleased 는 돌려주었다는 것이다(요청했거나 만료되었다). 같은 hold_id 의 release 줄이 있다.
+	HoldReleased HoldStatus = "released"
+)
 
 // Service 는 크레딧을 넣고, 쓰고, 읽는다. 서버가 뜰 때 하나 만들어 쓴다.
 type Service struct {
