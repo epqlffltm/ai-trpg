@@ -71,11 +71,24 @@ func TestWalletReturnsBothKindsAndTheirSum(t *testing.T) {
 		t.Fatalf("상태 코드 = %d, 기대 = %d", response.Code, http.StatusOK)
 	}
 	// 양은 숫자가 아니라 글자로 나간다
-	if got, want := body(response), `{"paid":"100","free":"30","total":"130"}`; got != want {
+	if got, want := body(response), `{"paid":"100","free":"30","total":"130","next_expiry":null}`; got != want {
 		t.Errorf("본문 = %s, 기대 = %s", got, want)
 	}
 	if len(reader.users) != 1 || reader.users[0].String() != testenv.UserID {
 		t.Errorf("지갑에 물어본 사용자 = %v, 기대 = %s", reader.users, testenv.UserID)
+	}
+}
+
+func TestWalletSaysWhenTheFirstFreeCreditsExpire(t *testing.T) {
+	// 시각은 UTC 로 나간다. 서버의 시간대가 무엇이든 같다
+	at := time.Date(2026, 3, 9, 18, 0, 0, 0, time.FixedZone("KST", 9*60*60))
+	reader := &fakeWallet{balance: wallet.Balance{Free: 30, NextExpiry: &wallet.Expiry{Amount: 10, At: at}}}
+
+	response := asUser(t, reader, testenv.UserID, walletURL)
+
+	want := `{"paid":"0","free":"30","total":"30","next_expiry":{"amount":"10","expires_at":"2026-03-09T09:00:00Z"}}`
+	if got := body(response); response.Code != http.StatusOK || got != want {
+		t.Errorf("본문 = %d %s, 기대 = %s", response.Code, got, want)
 	}
 }
 
@@ -239,7 +252,7 @@ func TestWalletWithTheRealDatabase(t *testing.T) {
 	}
 
 	balance := asUser(t, service, user.String(), walletURL)
-	if got, want := body(balance), `{"paid":"80","free":"0","total":"80"}`; balance.Code != http.StatusOK || got != want {
+	if got, want := body(balance), `{"paid":"80","free":"0","total":"80","next_expiry":null}`; balance.Code != http.StatusOK || got != want {
 		t.Errorf("잔액 = %d %s, 기대 = 200 %s", balance.Code, got, want)
 	}
 

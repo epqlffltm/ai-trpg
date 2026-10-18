@@ -150,8 +150,8 @@ func (f fixture) wantBalance(paid credit.Amount, free credit.Amount) {
 	if err != nil {
 		f.t.Fatalf("잔액을 읽지 못했다: %v", err)
 	}
-	if want := (wallet.Balance{Paid: paid, Free: free}); got != want {
-		f.t.Errorf("잔액 = %+v, 기대 = %+v", got, want)
+	if got.Paid != paid || got.Free != free {
+		f.t.Errorf("잔액 = 산 것 %d, 무료 %d. 기대 = 산 것 %d, 무료 %d", got.Paid, got.Free, paid, free)
 	}
 }
 

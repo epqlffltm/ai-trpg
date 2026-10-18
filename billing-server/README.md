@@ -156,7 +156,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/billing/wallet
 ```
 
-한 번도 충전하지 않았으면 잔액은 `{"paid":"0","free":"0","total":"0"}` 이다. 충전해 보는 방법은 [주문과 결제](#주문과-결제)에 있다.
+한 번도 충전하지 않았으면 잔액은 `{"paid":"0","free":"0","total":"0","next_expiry":null}` 이다. 충전해 보는 방법은 [주문과 결제](#주문과-결제)에 있다.
 
 ### compose 로 모든 서버와 함께 띄우기
 
@@ -254,7 +254,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | 주소 | 답 | 뜻 |
 | --- | --- | --- |
 | `GET /api/v1/billing/me` | 200 `{"user_id":"..."}` | 토큰의 주인(인증 서버의 `public_id`) |
-| `GET /api/v1/billing/wallet` | 200 `{"paid":"80","free":"30","total":"110"}` | 토큰의 주인이 지금 쓸 수 있는 크레딧. 산 것, 무료, 둘의 합 |
+| `GET /api/v1/billing/wallet` | 200 `{"paid":"80","free":"30","total":"110","next_expiry":{"amount":"10","expires_at":"2026-10-22T15:00:00Z"}}` | 토큰의 주인이 지금 쓸 수 있는 크레딧. 산 것, 무료, 둘의 합, 무료 중 가장 먼저 사라지는 것(아래) |
 | `GET /api/v1/billing/wallet/entries` | 200 `{"entries":[...],"next_before":"41"}` | 토큰의 주인의 원장. 최근 것부터 |
 | `GET /api/v1/billing/products` | 200 `{"products":[...]}` | 파는 상품. 번호, 이름, 값(원), 크레딧 |
 | `POST /api/v1/billing/orders` | 201 또는 200, 주문 | 주문을 만든다. `Idempotency-Key` 머리말이 있어야 한다 |
@@ -1102,6 +1102,15 @@ API 와 코드의 이름(`paid`, `free`)은 그대로다.
 | 사라지는가 | 사라지지 않는다 | 지급된 뒤 `FREE_CREDIT_TTL`(30일)이 지나면 사라진다 |
 | 무엇에 쓰나 | 모든 등급 | 스탠다드 등급만([홀드](#홀드)의 "등급") |
 | 어디에 있나 | 들어올 때마다 묶음 하나(`paid_lots`). 주문으로 들어왔으면 그 주문의 묶음이다. 합은 지갑(`wallets.paid_balance`)에도 있다 | 지급 하나가 묶음 하나(`free_grants`). 묶음마다 남은 양과 사라지는 시각이 있다 |
+
+**곧 사라질 무료 크레딧(#430).** 지갑(`GET /wallet`)의 `next_expiry` 는 무료 크레딧 중 가장 먼저 사라지는 것이다.
+`amount` 는 그 시각에 사라지는 양이고(같은 시각에 사라지는 묶음이 여럿이면 더한다), `expires_at` 은 그 시각(UTC)이다. 무료 크레딧이 없으면 `null` 이다.
+
+- 하나만 준다. 화면은 "10 실버가 3일 뒤에 사라진다"를 보인다. 날마다의 목록이 필요해지면 따로 주소를 둔다.
+- 잔액과 같은 순간의 값이다. 두 쿼리를 읽기 전용 `REPEATABLE READ` 트랜잭션 하나에서 읽는다(`wallet.Service.Balance`).
+  따로 읽으면 그 사이에 홀드가 끼어들어 사라질 양이 무료 크레딧보다 많아 보일 수 있다.
+- 쓰면 먼저 사라지는 묶음부터 줄어든다. 그 묶음을 다 쓰면 다음 묶음이 `next_expiry` 가 된다.
+- 7일 안에 사라질 양의 합은 사용자의 알림함에도 간다(`credit.expiring`, [정리 작업과 대사](#정리-작업과-대사)).
 
 **환영 크레딧.** 휴대폰 본인인증을 마친 사용자는(인증 서버의 #336. 그 전에는 이메일 인증 때) 무료 크레딧 `WELCOME_CREDITS`(기본 1,000)를 한 번 받는다.
 사용자가 직접 받지 않는다. [인증 서버](../auth-server/README.md)가 본인인증을 처리한 뒤 이 서버에 맡긴다.
