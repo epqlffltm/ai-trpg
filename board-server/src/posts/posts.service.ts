@@ -14,7 +14,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import { Board } from '../boards/board.entity.js';
-import { OperatorsService } from '../operators/operators.service.js';
+import type { Actor } from '../auth/actor.js';
 import { WriteLimitsService } from '../write-limits/write-limits.service.js';
 import { offsetOf, Page, pageOf } from './page.js';
 import { Post } from './post.entity.js';
@@ -33,8 +33,6 @@ import {
   canWrite,
   isAuthor,
   isOperatorOnly,
-  needsOperatorCheckToDelete,
-  needsOperatorCheckToEdit,
 } from './posts.policy.js';
 
 /** 새 글에 적는 값. */
@@ -72,7 +70,6 @@ export function hasChanges(changes: PostChanges): boolean {
 export class PostsService {
   constructor(
     @InjectRepository(Post) private readonly posts: Repository<Post>,
-    private readonly operators: OperatorsService,
     private readonly writeLimits: WriteLimitsService,
   ) {}
 
@@ -119,13 +116,13 @@ export class PostsService {
   }
 
   /** 게시판에 글을 쓴다. 운영자만 쓰는 게시판인데 운영자가 아니면 403, 너무 자주 쓰면 429 다. */
-  async create(board: Board, authorId: string, input: NewPost): Promise<Post> {
-    await this.ensureCanWrite(board, authorId);
-    await this.writeLimits.ensureCanWritePost(authorId);
+  async create(board: Board, author: Actor, input: NewPost): Promise<Post> {
+    ensureCanWrite(board, author);
+    await this.writeLimits.ensureCanWritePost(author);
     const post = await this.posts.save(
       this.posts.create({
         boardId: board.id,
-        authorId,
+        authorId: author.userId,
         title: input.title,
         content: input.content,
         pinnedAt: null,
@@ -140,18 +137,15 @@ export class PostsService {
    * 글을 고친다. 고칠 칸이 없으면 400, 없는 글이면 404, 글쓴이가 아니면 403 이다.
    * 운영자만 쓰는 게시판의 글은 글쓴이가 지금 운영자가 아니어도 403 이다.
    */
-  async update(
-    id: string,
-    userId: string,
-    changes: PostChanges,
-  ): Promise<Post> {
+  async update(id: string, actor: Actor, changes: PostChanges): Promise<Post> {
     if (!hasChanges(changes)) {
       throw nothingToUpdate();
     }
     const post = await this.get(id);
-    const isOperator = await this.isOperatorToEdit(post, userId);
-    if (!canEdit(post, post.board, userId, isOperator)) {
-      throw isAuthor(post, userId) ? operatorOnlyEdit() : notYourPostToEdit();
+    if (!canEdit(post, post.board, actor.userId, actor.isOperator)) {
+      throw isAuthor(post, actor.userId)
+        ? operatorOnlyEdit()
+        : notYourPostToEdit();
     }
     post.title = changes.title ?? post.title;
     post.content = changes.content ?? post.content;
@@ -162,42 +156,20 @@ export class PostsService {
    * 글을 지운다. 없는 글이면 404, 지울 수 없는 사람이면 403 이다. 행은 남기고 지운 시각을 적는다.
    * 고정한 글을 지우면 고정한 글의 목록에서도 빠진다. 지운 글은 어느 목록에도 들지 않는다.
    */
-  async remove(id: string, userId: string): Promise<void> {
+  async remove(id: string, actor: Actor): Promise<void> {
     const post = await this.get(id);
-    const isOperator = await this.isOperatorIfNeeded(post, userId);
-    if (!canDelete(post, post.board, userId, isOperator)) {
+    if (!canDelete(post, post.board, actor.userId, actor.isOperator)) {
       throw isOperatorOnly(post.board)
         ? operatorOnlyDelete()
         : notYourPostToDelete();
     }
     await this.posts.softDelete({ id: post.id });
   }
+}
 
-  /** 이 게시판에 써도 되는지 확인한다. 안 되면 403 을 낸다. 운영자인지는 운영자만 쓰는 게시판일 때만 묻는다. */
-  private async ensureCanWrite(board: Board, userId: string): Promise<void> {
-    const isOperator =
-      isOperatorOnly(board) && (await this.operators.isOperator(userId));
-    if (!canWrite(board, isOperator)) {
-      throw operatorOnlyBoard();
-    }
-  }
-
-  /** 운영자인지 답한다. 고쳐도 되는지 아는 데 필요 없으면 DB 에 묻지 않고 아니라고 답한다. */
-  private async isOperatorToEdit(post: Post, userId: string): Promise<boolean> {
-    if (!needsOperatorCheckToEdit(post, post.board, userId)) {
-      return false;
-    }
-    return this.operators.isOperator(userId);
-  }
-
-  /** 운영자인지 답한다. 지워도 되는지 아는 데 필요 없으면 DB 에 묻지 않고 아니라고 답한다. */
-  private async isOperatorIfNeeded(
-    post: Post,
-    userId: string,
-  ): Promise<boolean> {
-    if (!needsOperatorCheckToDelete(post, post.board, userId)) {
-      return false;
-    }
-    return this.operators.isOperator(userId);
+/** 이 게시판에 써도 되는지 확인한다. 안 되면 403 을 낸다. */
+function ensureCanWrite(board: Board, author: Actor): void {
+  if (!canWrite(board, author.isOperator)) {
+    throw operatorOnlyBoard();
   }
 }

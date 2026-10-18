@@ -51,11 +51,7 @@ export class ReportReviewsController {
     @Query() query: ListReportsQuery,
     @CurrentUser() user: AccessClaims,
   ): Promise<Page<OpenReportGroupResponse>> {
-    const page = await this.reviews.listOpen(
-      user.userId,
-      query.page,
-      query.size,
-    );
+    const page = await this.reviews.listOpen(user, query.page, query.size);
     return {
       ...page,
       items: page.items.map(({ group, state }) =>
@@ -94,7 +90,7 @@ export class ReportReviewsController {
     @Body() input: HandleReportsDto,
     @CurrentUser() user: AccessClaims,
   ): Promise<void> {
-    await this.reviews.handle(postTarget(id), user.userId, input.outcome);
+    await this.reviews.handle(postTarget(id), user, input.outcome);
   }
 
   /** 한 댓글에 걸린 열린 신고를 모두 처리한다. */
@@ -105,7 +101,7 @@ export class ReportReviewsController {
     @Body() input: HandleReportsDto,
     @CurrentUser() user: AccessClaims,
   ): Promise<void> {
-    await this.reviews.handle(commentTarget(id), user.userId, input.outcome);
+    await this.reviews.handle(commentTarget(id), user, input.outcome);
   }
 
   /** 글이나 댓글 하나에 걸린 신고들을 응답의 모양으로 돌려준다. */
@@ -116,7 +112,7 @@ export class ReportReviewsController {
   ): Promise<Page<ReportResponse>> {
     const page = await this.reviews.listFor(
       target,
-      user.userId,
+      user,
       query.page,
       query.size,
     );

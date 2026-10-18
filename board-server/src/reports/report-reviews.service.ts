@@ -14,9 +14,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
+import type { Actor } from '../auth/actor.js';
 import { Comment } from '../comments/comment.entity.js';
 import { commentNotFound } from '../comments/comments.errors.js';
-import { OperatorsService } from '../operators/operators.service.js';
 import { offsetOf, Page, pageOf } from '../posts/page.js';
 import { Post } from '../posts/post.entity.js';
 import { postNotFound } from '../posts/posts.errors.js';
@@ -49,7 +49,6 @@ export class ReportReviewsService {
     @InjectRepository(Report) private readonly reports: Repository<Report>,
     @InjectRepository(Post) private readonly posts: Repository<Post>,
     @InjectRepository(Comment) private readonly comments: Repository<Comment>,
-    private readonly operators: OperatorsService,
   ) {}
 
   /**
@@ -57,11 +56,11 @@ export class ReportReviewsService {
    * 운영자가 아니면 403 이다.
    */
   async listOpen(
-    userId: string,
+    actor: Actor,
     page: number,
     size: number,
   ): Promise<Page<DescribedGroup>> {
-    await this.ensureOperator(userId);
+    ensureOperator(actor);
     const [groups, total] = await Promise.all([
       this.findOpenGroups(offsetOf(page, size), size),
       this.countOpenTargets(),
@@ -80,11 +79,11 @@ export class ReportReviewsService {
    */
   async listFor(
     target: ReportTarget,
-    userId: string,
+    actor: Actor,
     page: number,
     size: number,
   ): Promise<Page<Report>> {
-    await this.ensureOperator(userId);
+    ensureOperator(actor);
     await this.ensureExists(target);
     const [items, total] = await this.reports.findAndCount({
       where: whereTarget(target),
@@ -103,24 +102,17 @@ export class ReportReviewsService {
    */
   async handle(
     target: ReportTarget,
-    userId: string,
+    actor: Actor,
     outcome: ReportOutcome,
   ): Promise<void> {
-    await this.ensureOperator(userId);
+    ensureOperator(actor);
     await this.ensureExists(target);
     const result = await this.reports.update(
       { ...whereTarget(target), handledAt: IsNull() },
-      { handledAt: () => 'now()', handledBy: userId, outcome },
+      { handledAt: () => 'now()', handledBy: actor.userId, outcome },
     );
     if (result.affected === 0) {
       throw noOpenReports();
-    }
-  }
-
-  /** 운영자인지 확인한다. 아니면 403 을 낸다. */
-  private async ensureOperator(userId: string): Promise<void> {
-    if (!(await this.operators.isOperator(userId))) {
-      throw operatorOnlyReports();
     }
   }
 
@@ -245,5 +237,12 @@ export class ReportReviewsService {
       throw new Error('신고당한 것을 찾지 못했다');
     }
     return state;
+  }
+}
+
+/** 운영자인지 확인한다. 아니면 403 을 낸다. */
+function ensureOperator(actor: Actor): void {
+  if (!actor.isOperator) {
+    throw operatorOnlyReports();
   }
 }

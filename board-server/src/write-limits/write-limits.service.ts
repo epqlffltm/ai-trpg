@@ -16,8 +16,8 @@
 import { HttpException, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ObjectLiteral, Repository } from 'typeorm';
+import type { Actor } from '../auth/actor.js';
 import { Comment } from '../comments/comment.entity.js';
-import { OperatorsService } from '../operators/operators.service.js';
 import { Post } from '../posts/post.entity.js';
 import { Report } from '../reports/report.entity.js';
 import {
@@ -44,67 +44,65 @@ export class WriteLimitsService {
     @InjectRepository(Post) private readonly posts: Repository<Post>,
     @InjectRepository(Comment) private readonly comments: Repository<Comment>,
     @InjectRepository(Report) private readonly reports: Repository<Report>,
-    private readonly operators: OperatorsService,
     @Inject(WRITE_LIMITS_TOKEN) private readonly limits: WriteLimits,
   ) {}
 
   /** 이 사람이 지금 글을 써도 되는지 확인한다. 너무 자주 썼으면 429 를 낸다. */
-  async ensureCanWritePost(userId: string): Promise<void> {
+  async ensureCanWritePost(actor: Actor): Promise<void> {
     await this.ensureWithin(
       this.posts,
       'author_id',
-      userId,
+      actor,
       this.limits.post,
       tooManyPosts,
     );
   }
 
   /** 이 사람이 지금 댓글을 써도 되는지 확인한다. 너무 자주 썼으면 429 를 낸다. */
-  async ensureCanWriteComment(userId: string): Promise<void> {
+  async ensureCanWriteComment(actor: Actor): Promise<void> {
     await this.ensureWithin(
       this.comments,
       'author_id',
-      userId,
+      actor,
       this.limits.comment,
       tooManyComments,
     );
   }
 
   /** 이 사람이 지금 신고해도 되는지 확인한다. 너무 자주 했으면 429 를 낸다. */
-  async ensureCanReport(userId: string): Promise<void> {
+  async ensureCanReport(actor: Actor): Promise<void> {
     await this.ensureWithin(
       this.reports,
       'reporter_id',
-      userId,
+      actor,
       this.limits.report,
       tooManyReports,
     );
   }
 
   /**
-   * 한도 안인지 확인한다. 넘었으면 운영자인지 보고, 아니면 거절한다.
-   * 운영자인지는 한도를 넘었을 때만 묻는다. 대부분의 쓰기는 한도 안이라 쿼리가 하나로 끝난다.
+   * 한도 안인지 확인한다. 넘었으면 거절한다.
+   * 운영자는 한도가 없다. 운영자인지는 토큰이 알려 주므로(auth/roles.ts) 세지 않고 바로 통과한다.
    */
   private async ensureWithin<Written extends ObjectLiteral>(
     written: Repository<Written>,
     owner: OwnerColumn,
-    userId: string,
+    actor: Actor,
     limit: WriteLimit,
     refuse: (retryAfter: number) => HttpException,
   ): Promise<void> {
+    if (actor.isOperator) {
+      return;
+    }
     const retryAfter = await this.secondsUntilAllowed(
       written,
       owner,
-      userId,
+      actor.userId,
       limit,
     );
-    if (retryAfter === undefined) {
-      return;
+    if (retryAfter !== undefined) {
+      throw refuse(retryAfter);
     }
-    if (await this.operators.isOperator(userId)) {
-      return;
-    }
-    throw refuse(retryAfter);
   }
 
   /**

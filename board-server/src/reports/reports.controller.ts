@@ -43,7 +43,7 @@ export class ReportsController {
     @Body() input: CreateReportDto,
     @CurrentUser() user: AccessClaims,
   ): Promise<ReportReceiptResponse> {
-    const report = await this.reports.file(postTarget(id), user.userId, input);
+    const report = await this.reports.file(postTarget(id), user, input);
     return toReportReceiptResponse(report);
   }
 
@@ -55,11 +55,7 @@ export class ReportsController {
     @Body() input: CreateReportDto,
     @CurrentUser() user: AccessClaims,
   ): Promise<ReportReceiptResponse> {
-    const report = await this.reports.file(
-      commentTarget(id),
-      user.userId,
-      input,
-    );
+    const report = await this.reports.file(commentTarget(id), user, input);
     return toReportReceiptResponse(report);
   }
 }

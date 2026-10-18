@@ -112,7 +112,7 @@ export class PostsController {
     @CurrentUser() user: AccessClaims,
   ): Promise<PostResponse> {
     const board = await this.boards.getBySlug(slug);
-    const post = await this.posts.create(board, user.userId, input);
+    const post = await this.posts.create(board, user, input);
     return toPostResponse(post, {
       boardSlug: board.slug,
       commentCount: 0,
@@ -138,7 +138,7 @@ export class PostsController {
     @Body() changes: UpdatePostDto,
     @CurrentUser() user: AccessClaims,
   ): Promise<PostResponse> {
-    const post = await this.posts.update(id, user.userId, changes);
+    const post = await this.posts.update(id, user, changes);
     return this.toFullResponse(post);
   }
 
@@ -149,7 +149,7 @@ export class PostsController {
     @Param('id', PostIdPipe) id: string,
     @CurrentUser() user: AccessClaims,
   ): Promise<void> {
-    await this.posts.remove(id, user.userId);
+    await this.posts.remove(id, user);
   }
 
   /** 게시판과 함께 읽은 글 하나를 본문까지 응답의 모양으로 바꾼다. 댓글 수와 글쓴이의 이름을 따로 읽는다. */

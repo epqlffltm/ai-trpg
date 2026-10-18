@@ -94,7 +94,26 @@ describe('로그인이 필요한 API', () => {
     const response = await readMe(await signToken(key));
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ user_id: USER_ID });
+    expect(response.body).toEqual({ user_id: USER_ID, is_operator: false });
+  });
+
+  it('roles 에 operator 가 있으면 운영자라고 돌려준다', async () => {
+    const response = await readMe(
+      await signToken(key, { roles: ['operator'] }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.is_operator).toBe(true);
+  });
+
+  it.each([
+    ['roles 가 없는 토큰', { roles: null }],
+    ['roles 가 목록이 아닌 토큰', { roles: 'operator' }],
+  ])('%s 은 받되 운영자가 아니다', async (_name, options) => {
+    const response = await readMe(await signToken(key, options));
+
+    expect(response.status).toBe(200);
+    expect(response.body.is_operator).toBe(false);
   });
 
   it('토큰이 없으면 401 이고, 어떤 방식으로 인증하는지 머리말로 알린다', async () => {

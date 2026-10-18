@@ -190,7 +190,7 @@ describe('댓글 쓰기', () => {
   });
 
   it('운영자만 글을 쓰는 게시판의 글에도 댓글은 누구나 단다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const notice = await writtenPostId('notice', OPERATOR);
 
     const response = await comment(
@@ -538,7 +538,7 @@ describe('댓글 고치기', () => {
   });
 
   it('운영자도 남의 댓글은 고치지 못한다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const id = await commentId(WRITER);
 
     const response = await edit(OPERATOR, id, {
@@ -674,7 +674,7 @@ describe('댓글 지우기', () => {
   });
 
   it('운영자는 남의 댓글도 지운다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const id = await commentId(WRITER);
 
     const response = await remove(OPERATOR, id);

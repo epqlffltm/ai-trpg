@@ -16,12 +16,15 @@
  *   - access 토큰인가. refresh 토큰도 같은 키로 서명되므로 종류를 따로 본다.
  *   - 세션 버전(ver)이 0 이상의 정수인가. 없으면 0 으로 본다(인증 서버 README 의 약속).
  *
+ * 운영자인지(roles)도 읽는다(auth/roles.ts). 틀린 모양이어도 토큰을 거부하지 않고 운영자가 아니라고 본다.
+ *
  * 끊긴 세션의 것인지(ver 가 끊긴 세션 목록의 것보다 낮은가)는 여기서 보지 않는다. 목록을 기억하는 쪽(token-verifier.ts)이 본다.
  */
 
 import { decodeProtectedHeader, errors, JWTPayload, jwtVerify } from 'jose';
 import { readNickname } from '../authors/nickname.js';
 import { Environment } from '../config/environment.js';
+import { readIsOperator, ROLES_CLAIM } from './roles.js';
 import { ALGORITHM, JwksCache, UnknownKeyError } from './jwks.js';
 
 /** 토큰에 반드시 있어야 하는 값. 없으면 확인을 건너뛰지 않고 거부한다 */
@@ -61,6 +64,8 @@ export interface AccessClaims {
    * 없어도 토큰은 받는다. 이 클레임이 생기기 전에 발급한 토큰이 있다
    */
   readonly nickname?: string;
+  /** 운영자인가. 토큰의 roles 에 "operator" 가 있을 때만 참이다(auth/roles.ts) */
+  readonly isOperator: boolean;
 }
 
 /**
@@ -136,6 +141,7 @@ export function buildAccessClaims(claims: JWTPayload): AccessClaims {
     userId: claims.sub.toLowerCase(),
     expiresAt: new Date(claims.exp * 1000),
     version: readSessionVersion(claims.ver),
+    isOperator: readIsOperator(claims[ROLES_CLAIM]),
     ...(nickname === undefined ? {} : { nickname }),
   };
 }
