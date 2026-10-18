@@ -167,7 +167,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
 | auth-server | 환영 크레딧을 결제 서버에 맡기기(워커가 한 번 훑는 것) | `welcome_credit.deliver` |
 | auth-server | 결제 자격(성년이 되는 날, 보호자 동의)을 결제 서버에 알리기(같은 워커가 한 번 훑는 것) | `payment_eligibility.deliver` |
-| billing-server | 만료된 홀드·주문, 사라진 무료 크레딧 닫기(정리 작업이 30초마다 한 바퀴. 바퀴마다 새 `job_id`) | `sweep.run` |
+| billing-server | 만료된 홀드·주문, 사라진 무료 크레딧 닫기, 보호자와 사용자에게 알릴 일 보내기(정리 작업이 30초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `user_notices_queued`, `_sent`, `_retried`, `_rejected`, `_expired`, `_purged`) | `sweep.run` |
 | billing-server | 장부 맞춰 보기와 오래된 결제 끝내기(하루 한 번 돌리는 명령) | `reconcile.run` |
 | auth-server | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기 | `account.delete_unverified` |
 | notification-server | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업이 한 시간마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `deleted`, `retention_days`) | `notification.prune` |
@@ -323,7 +323,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `memory.index` | game | 기억 색인 |
 | `charge.settle` | game | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴) |
 | `model.retirement` | game | 서술 모델의 은퇴를 알리고 바꾸기(지켜보기의 한 바퀴, 한 시간마다. 라운드가 열린 뒤 그 테이블 하나도 본다) |
-| `notification.send` | game | 발송함의 알림을 알림 서버에 보내기(작업의 한 바퀴). 못 보낸 알림마다 `notification_id`, `kind`, `reason` 을 싣는다. 받는 사람과 `payload` 는 싣지 않는다 |
+| `notification.send` | game, billing | 알림 서버에 알림을 보내기. 게임 서버는 발송함 작업의 한 바퀴, 결제 서버는 정리 작업(`sweep.run`) 안에서 못 보낸 알림마다 한 줄이다. 못 보낸 알림마다 발송함의 번호(게임 `notification_id`, 결제 `notice_id`), `kind`, `reason` 을 싣는다. 받는 사람과 `payload` 는 싣지 않는다 |
 | `ai_log.prune` | game | AI 호출 기록에서 보관 기간(기본 30일)이 지난 원문 비우기(정리 작업의 한 바퀴, 한 시간마다. `cleared`, `retention_days`) |
 | `notification.put` | notification | 다른 서버가 서명한 요청으로 알림을 넣기. `source`, `kind`, `notification_id`, `outcome`(`created`, `existing`). 받는 사람과 `payload` 는 싣지 않는다 |
 | `notification.prune` | notification | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업의 한 바퀴, 한 시간마다. `deleted`, `retention_days`) |
@@ -365,8 +365,8 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했거나, 결과를 알 수 없는 답이 왔다(토스페이먼츠의 5xx, 401, "처리 중" 같은 것). 주문은 `confirming` 에 남고 다시 부르거나 대사가 조회해 끝낸다. 청약철회(`order.refund`)면 `refunding` 에 남고 다시 부르거나 대사가 같은 취소를 다시 보낸다. 가상계좌(입금 대기)를 취소하지 못했을 때도 이 코드다(`order.confirm`, `cancel_status`). `warning` |
 | `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 서술 뒤의 확정을 정해 둔 시간 안에 끝내지 못해 정리 작업에 넘긴 것도 이 코드다(`warning`). 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
 | `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다. 연장이면 홀드를 그대로 두고 한 시간 뒤에 다시 부른다. 서술 뒤의 확정이 409(만료되어 돌려준 홀드)면 그 값은 받지 못한다. 홀드가 400 이면 가격표에 그 모델의 가격표 이름(`narration.<이름표>.i0.o0`)이 없는지 먼저 본다 |
-| `notification.unavailable` | 게임 서버가 알림 서버에 알림을 넣지 못했다(연결 실패, 시간 초과, 401, 408, 429, 5xx). 발송함에 남아 늘어나는 간격으로 다시 보낸다. 서명이 거절된 것(401, `reason: unauthorized`)이면 `error`, 그 밖에는 `warning` |
-| `notification.rejected` | 알림 서버가 게임 서버의 알림을 받지 않았다(409 같은 열쇠로 다른 알림, 413, 422 등). 다시 보내도 같다. 발송함에 `failed` 로 남는다. `reason` 에 답의 코드. 버그다. `error` |
+| `notification.unavailable` | 게임 서버나 결제 서버(정리 작업)가 알림 서버에 알림을 넣지 못했다(연결 실패, 시간 초과, 401, 408, 429, 5xx). 발송함에 남아 늘어나는 간격으로 다시 보낸다. 서명이 거절된 것(401, `reason: unauthorized`)이면 `error`, 그 밖에는 `warning` |
+| `notification.rejected` | 알림 서버가 게임 서버나 결제 서버의 알림을 받지 않았다(409 같은 열쇠로 다른 알림, 413, 422 등). 다시 보내도 같다. 발송함에 `failed` 로 남는다. `reason` 에 답의 코드. 버그다. `error` |
 | `signals.bad_signature` | 게임 서버가 서명이 맞지 않는 실시간 신호(NOTIFY)를 받아 버렸다. 같은 DB 의 다른 계정이 꾸며 보냈거나, 게임 서버들의 `SIGNAL_SECRET` 이 서로 다르다. `sender_pid` 에 보낸 연결의 프로세스 번호를 싣는다(`pg_stat_activity` 에서 계정을 찾는다). 받은 글자는 싣지 않는다. `warning` |
 | `ledger_draft.failed` | 게임 서버가 서술한 장면에서 장부 초안을 쓰지 못했다(테이블을 읽기, 모델 부르기, 줄 적기 중 하나가 예외로 끝났거나 90 초가 지났다). 라운드는 이미 닫혔고 방장은 손으로 장부를 고치면 된다. `table_id`, `round`. 모델의 답을 읽지 못한 것(`not_json` 등)은 이 코드가 아니라 호출 기록에 남는다. `warning` |
 | `limits.unavailable` | 게임 서버가 시도 횟수를 세는 곳(Redis)에 닿지 못했다. `limit` 에 어느 제한인지, `blocked` 에 막았는지(로비의 비밀번호) 통과시켰는지(채팅) 싣는다. `warning` |
