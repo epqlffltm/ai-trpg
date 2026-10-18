@@ -6,8 +6,10 @@ import (
 	"context"
 	"errors"
 	"math"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet/walletdb"
@@ -31,14 +33,49 @@ type Page struct {
 	NextBefore int64
 }
 
-// Balance 는 사용자가 지금 쓸 수 있는 크레딧을 돌려준다. 지갑이 없는 사용자는 모두 0 이다.
-// 읽기만 한다. 기한이 지난 무료 크레딧은 세지 않지만, 사라졌다는 기록은 다음 변경 때 남는다.
+// Balance 는 사용자가 지금 쓸 수 있는 크레딧과, 무료 크레딧 중 가장 먼저 사라지는 것을 돌려준다.
+// 지갑이 없는 사용자는 모두 0 이다. 읽기만 한다. 기한이 지난 무료 크레딧은 세지 않지만, 사라졌다는 기록은 다음 변경 때 남는다.
+//
+// 두 쿼리를 읽기 전용 REPEATABLE READ 트랜잭션 하나에서 읽는다. 두 값이 같은 순간의 것이어야
+// "가장 먼저 사라지는 양"이 "무료 크레딧"보다 많아 보이는 일이 없다. 시각도 하나(now)로 정한다.
 func (s *Service) Balance(ctx context.Context, userID uuid.UUID) (Balance, error) {
-	row, err := walletdb.New(s.pool).GetBalance(ctx, walletdb.GetBalanceParams{UserID: userID, Now: s.clock()})
+	now := s.clock()
+	var balance Balance
+	options := pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}
+	err := pgx.BeginTxFunc(ctx, s.pool, options, func(tx pgx.Tx) error {
+		var err error
+		balance, err = readBalance(ctx, walletdb.New(tx), userID, now)
+		return err
+	})
 	if err != nil {
 		return Balance{}, err
 	}
-	return Balance{Paid: credit.Amount(row.Paid), Free: credit.Amount(row.Free)}, nil
+	return balance, nil
+}
+
+// readBalance 는 잔액과 가장 먼저 사라지는 무료 크레딧을 읽는다. 부른 쪽의 트랜잭션(queries) 안에서 한다.
+func readBalance(ctx context.Context, queries *walletdb.Queries, userID uuid.UUID, now time.Time) (Balance, error) {
+	row, err := queries.GetBalance(ctx, walletdb.GetBalanceParams{UserID: userID, Now: now})
+	if err != nil {
+		return Balance{}, err
+	}
+	next, err := nextExpiry(ctx, queries, userID, now)
+	if err != nil {
+		return Balance{}, err
+	}
+	return Balance{Paid: credit.Amount(row.Paid), Free: credit.Amount(row.Free), NextExpiry: next}, nil
+}
+
+// nextExpiry 는 무료 크레딧 중 가장 먼저 사라지는 것을 읽는다. 무료 크레딧이 없으면 nil 이다.
+func nextExpiry(ctx context.Context, queries *walletdb.Queries, userID uuid.UUID, now time.Time) (*Expiry, error) {
+	row, err := queries.GetNextFreeExpiry(ctx, walletdb.GetNextFreeExpiryParams{UserID: userID, Now: now})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &Expiry{Amount: credit.Amount(row.Amount), At: row.ExpiresAt}, nil
 }
 
 // Entries 는 사용자의 원장을 최근 것부터 limit 줄까지 돌려준다. before 보다 번호가 작은 줄만 읽는다.

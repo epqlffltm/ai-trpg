@@ -259,9 +259,10 @@ func TestWelcomeWithTheRealDatabase(t *testing.T) {
 	if second.Code != http.StatusOK || !strings.Contains(body(second), `"status":"already_granted"`) {
 		t.Errorf("둘째 요청 = %d %s. 200 already_granted 여야 한다", second.Code, body(second))
 	}
-	// 한 번만 들어갔다. 사용자는 자기 토큰으로 잔액을 본다
+	// 한 번만 들어갔다. 사용자는 자기 토큰으로 잔액을 보고, 그 크레딧이 언제 사라지는지도 본다
 	balance := sendAs(t, deps, user, request{method: http.MethodGet, path: walletURL})
-	if got, want := body(balance), `{"paid":"0","free":"1000","total":"1000"}`; got != want {
+	wantBody := `{"paid":"0","free":"1000","total":"1000","next_expiry":{"amount":"1000","expires_at":"2026-03-09T09:00:00Z"}}`
+	if got, want := body(balance), wantBody; got != want {
 		t.Errorf("잔액 = %s, 기대 = %s", got, want)
 	}
 	// 다른 사용자는 따로 받는다

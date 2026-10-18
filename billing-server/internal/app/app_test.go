@@ -22,7 +22,6 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
-	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
 var now = time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
@@ -67,8 +66,8 @@ func TestNewServicesFollowsTheRules(t *testing.T) {
 		t.Errorf("주문의 만료 시각 = %v", created.ExpiresAt)
 	}
 	// 산 크레딧부터 쓴다
-	if balance != (wallet.Balance{Paid: 50, Free: 30}) {
-		t.Errorf("잔액 = %+v. 산 크레딧에서 빠져야 한다", balance)
+	if balance.Paid != 50 || balance.Free != 30 {
+		t.Errorf("잔액 = 산 것 %d, 무료 %d. 산 크레딧에서 빠져야 한다", balance.Paid, balance.Free)
 	}
 }
 

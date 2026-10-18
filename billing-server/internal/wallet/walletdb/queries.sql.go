@@ -141,6 +141,35 @@ func (q *Queries) GetBalance(ctx context.Context, arg GetBalanceParams) (GetBala
 	return i, err
 }
 
+const getNextFreeExpiry = `-- name: GetNextFreeExpiry :one
+SELECT g.expires_at, SUM(g.remaining)::BIGINT AS amount
+FROM free_grants g
+WHERE g.user_id = $1 AND g.remaining > 0 AND g.expires_at > $2
+GROUP BY g.expires_at
+ORDER BY g.expires_at
+LIMIT 1
+`
+
+type GetNextFreeExpiryParams struct {
+	UserID uuid.UUID
+	Now    time.Time
+}
+
+type GetNextFreeExpiryRow struct {
+	ExpiresAt time.Time
+	Amount    int64
+}
+
+// 아직 사라지지 않은 무료 크레딧 중 가장 먼저 사라지는 시각과, 그 시각에 사라지는 양을 읽는다.
+// 같은 시각에 사라지는 묶음이 여럿이면 그 양을 더한다. 무료 크레딧이 없으면 줄이 없다.
+// 잔액(GetBalance)과 같은 트랜잭션에서 읽어 같은 순간의 값이 되게 한다(read.go 의 Balance).
+func (q *Queries) GetNextFreeExpiry(ctx context.Context, arg GetNextFreeExpiryParams) (GetNextFreeExpiryRow, error) {
+	row := q.db.QueryRow(ctx, getNextFreeExpiry, arg.UserID, arg.Now)
+	var i GetNextFreeExpiryRow
+	err := row.Scan(&i.ExpiresAt, &i.Amount)
+	return i, err
+}
+
 const getOrderLot = `-- name: GetOrderLot :one
 SELECT id, amount, remaining
 FROM paid_lots

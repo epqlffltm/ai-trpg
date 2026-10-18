@@ -34,6 +34,14 @@ type walletBody struct {
 	Paid  credit.Amount `json:"paid"`
 	Free  credit.Amount `json:"free"`
 	Total credit.Amount `json:"total"`
+	// NextExpiry 는 무료 크레딧 중 가장 먼저 사라지는 것이다. 무료 크레딧이 없으면 null 이다(#430).
+	NextExpiry *expiryBody `json:"next_expiry"`
+}
+
+// expiryBody 는 같은 시각에 사라지는 무료 크레딧의 응답 모양이다.
+type expiryBody struct {
+	Amount    credit.Amount `json:"amount"`
+	ExpiresAt time.Time     `json:"expires_at"`
 }
 
 // entryBody 는 원장 한 줄의 응답 모양이다.
@@ -66,8 +74,17 @@ func getWallet(reader WalletReader) gin.HandlerFunc {
 			internalError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, walletBody{Paid: balance.Paid, Free: balance.Free, Total: balance.Total()})
+		c.JSON(http.StatusOK, toWalletBody(balance))
 	}
+}
+
+// toWalletBody 는 잔액을 응답의 모양으로 바꾼다. 시각은 UTC 로 나간다.
+func toWalletBody(balance wallet.Balance) walletBody {
+	body := walletBody{Paid: balance.Paid, Free: balance.Free, Total: balance.Total()}
+	if next := balance.NextExpiry; next != nil {
+		body.NextExpiry = &expiryBody{Amount: next.Amount, ExpiresAt: next.At.UTC()}
+	}
+	return body
 }
 
 // listEntries 는 토큰의 주인의 원장을 최근 것부터 돌려주는 핸들러를 만든다.

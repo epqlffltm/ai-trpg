@@ -197,7 +197,7 @@ func TestBuyingCreditsEndToEndWithTheRealDatabase(t *testing.T) {
 	if confirmed.Code != http.StatusOK || !strings.Contains(body(confirmed), `"status":"paid"`) {
 		t.Fatalf("승인 = %d %s", confirmed.Code, body(confirmed))
 	}
-	if got := body(as(request{method: http.MethodGet, path: walletURL})); got != `{"paid":"5000","free":"0","total":"5000"}` {
+	if got := body(as(request{method: http.MethodGet, path: walletURL})); got != `{"paid":"5000","free":"0","total":"5000","next_expiry":null}` {
 		t.Errorf("잔액 = %s", got)
 	}
 	// 원장의 줄이 그 주문을 가리킨다
@@ -224,7 +224,7 @@ func TestBuyingCreditsEndToEndWithTheRealDatabase(t *testing.T) {
 	if got := body(as(request{method: http.MethodGet, path: ordersURL + "/" + second})); !strings.Contains(got, `"status":"paid"`) {
 		t.Errorf("알림 뒤의 주문 = %s", got)
 	}
-	if got := body(as(request{method: http.MethodGet, path: walletURL})); got != `{"paid":"10000","free":"0","total":"10000"}` {
+	if got := body(as(request{method: http.MethodGet, path: walletURL})); got != `{"paid":"10000","free":"0","total":"10000","next_expiry":null}` {
 		t.Errorf("알림 뒤의 잔액 = %s", got)
 	}
 
@@ -237,7 +237,7 @@ func TestBuyingCreditsEndToEndWithTheRealDatabase(t *testing.T) {
 	if declined.Code != http.StatusOK || !strings.Contains(body(declined), `"status":"failed","failure_code":"card_declined"`) {
 		t.Errorf("거절 = %d %s", declined.Code, body(declined))
 	}
-	if got := body(as(request{method: http.MethodGet, path: walletURL})); got != `{"paid":"10000","free":"0","total":"10000"}` {
+	if got := body(as(request{method: http.MethodGet, path: walletURL})); got != `{"paid":"10000","free":"0","total":"10000","next_expiry":null}` {
 		t.Errorf("거절 뒤의 잔액 = %s", got)
 	}
 
