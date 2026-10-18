@@ -86,6 +86,19 @@ class LoginIpBlockTests(AttemptPolicyTestCase):
 
         self.assertEqual(self.login().status_code, status.HTTP_202_ACCEPTED)
 
+    def test_a_numbered_reserved_name_is_blocked(self):
+        self.get_blocked(username='admin1')
+
+        self.assert_rejected_like_a_wrong_password(self.login())
+
+    def test_an_existing_account_with_a_numbered_reserved_name_is_not_counted(self):
+        # 예약어의 규칙이 넓어지기 전에 만든 계정이다. 주인이 틀려도 IP 가 막히지 않는다
+        create_user(username='admin1', email='admin1@example.com', nickname='옛날계정')
+
+        self.get_blocked(username='admin1')
+
+        self.assertEqual(self.login().status_code, status.HTTP_202_ACCEPTED)
+
     def test_only_login_is_blocked(self):
         self.get_blocked()
 
