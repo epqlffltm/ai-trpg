@@ -7,7 +7,8 @@
   - 결제 서버의 답 읽기: 402 의 credit.gold_required 는 골드가 모자람, 400 의 price.* 는 팔지 않는 가격표다.
   - 팔지 않는 모델: 청구가 실패로 적히고, 라운드마다 한 번 모두에게 알린다. 서술은 model_not_for_sale 로 실패한다.
     서술의 실패로 세지 않는다. 방장이 모델을 바꾸면 그 라운드의 청구를 새 가격표로 다시 걸어 서술한다.
-  - 골드가 모자람: 크레딧이 모자란 것과 같이 다루되 까닭(gold_required)을 알린다. 모델을 바꾸면 풀린다.
+  - 골드가 모자람: 크레딧이 모자란 것과 같이 다루되 까닭(gold_required)을 알린다. 골드를 사면 풀린다.
+    모델은 팔고 있으니 시작한 뒤에는 바꿀 수 없다(app/tables/narration_models.py).
   - 긴 이름표의 가격표 이름도 청구에 들어간다(64자).
 """
 
@@ -28,7 +29,7 @@ from app.catalog.schemas import ModelCreate
 from app.rounds.service import NARRATION_FAILURE_LIMIT
 from tests.billing import PRICES, FakeBillingServer
 from tests.signing import SigningKey
-from tests.test_model_offers import LUNA, NOW, OPUS, FixedPrices, add_enabled
+from tests.test_model_offers import LUNA, NOW, OPUS, FixedPrices, add_enabled, book, on_sale
 from tests.test_narration_billing import charges_of, tick
 from tests.test_npc_actions import bearer, declare, events_of, table_url
 from tests.test_round_time_limit import current, start_with
@@ -186,6 +187,8 @@ async def test_changing_the_model_reprices_the_blocked_round(
     await tick(app)
     await declare(client, me, table, LAUGH)
     await narrated()
+    # 결제 서버의 가격 목록에서도 Luna 가 빠졌다. 지금 모델을 쓸 수 없으니 시작한 뒤에도 바꿀 수 있다
+    app.state.price_list = FixedPrices(book(on_sale('claude-opus-5-5', '300')))
 
     # 서술이 실패해 멈춘 라운드다. 그 라운드의 모델도 바뀌고, 청구는 새 가격표로 다시 건다
     await set_model(client, me, table, 'claude-opus-5-5')
@@ -196,7 +199,11 @@ async def test_changing_the_model_reprices_the_blocked_round(
     await tick(app)
     (first, _) = await charges_of(session, table)
 
-    assert changed['payload'] == {'narration_model': 'claude-opus-5-5', 'round': 1, 'price': None}
+    assert changed['payload'] == {
+        'narration_model': 'claude-opus-5-5',
+        'round': 1,
+        'price': {'tier': 'standard', 'credits': '300'},
+    }
     assert repriced == ('release_due', OPUS_CODE)
     assert (await current(client, me, table))['number'] == 2
     # 새 이름표, 새 가격표로 걸어 확정했다. 빠진 것은 Opus 의 값뿐이다
@@ -232,7 +239,7 @@ async def test_a_premium_model_without_gold_is_told_with_its_reason(
     assert (await current(client, me, table))['narration_failures'] == 0
 
 
-async def test_changing_to_a_standard_model_unblocks_the_round(
+async def test_a_model_still_sold_cannot_be_changed_for_want_of_gold(
     client: AsyncClient, app: FastAPI, me: dict[str, str], billing: FakeBillingServer, narrated
 ):
     billing.gold_only.add(OPUS_CODE)
@@ -241,14 +248,15 @@ async def test_changing_to_a_standard_model_unblocks_the_round(
     await declare(client, me, table, LAUGH)
     await narrated()
 
-    await set_model(client, me, table, 'gpt-6-luna')
-    await tick(app)
-    await retry(client, me, table, narrated)
-    await tick(app)
+    response = await client.put(
+        table_url(table, '/narration-model'), json={'narration_model': 'gpt-6-luna'}, headers=me
+    )
 
-    # 1 라운드는 Luna 로 다시 걸어 확정했고, 2 라운드도 Luna 로 걸었다. 골드는 쓰지 않았다
-    assert (await current(client, me, table))['number'] == 2
-    assert billing.balance(ME) == 1000 - 20 - 20
+    # Opus 는 아직 판다. 골드가 모자란 것은 한 사람의 일이라 방장이 모두의 모델을 바꾸는 까닭이 되지 않는다.
+    # 골드를 사거나, 모자란 사람을 기다리거나 빼는 길로 푼다
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()['reason'] == 'narration_model_locked'
+    assert (await current(client, me, table))['narration_model'] == 'claude-opus-5-5'
 
 
 async def test_buying_gold_also_unblocks_the_round(

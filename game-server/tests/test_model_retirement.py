@@ -137,7 +137,8 @@ async def test_a_postponed_retirement_counts_again(client: AsyncClient, app: Fas
 
 @pytest.mark.usefixtures('models')
 async def test_the_host_changing_the_model_counts_again(client: AsyncClient, app: FastAPI, session, me):
-    table = await start_with(client, me, narration_model='gpt-6-luna')
+    # 모집 중인 테이블이다. 시작한 테이블은 쓸 수 있는 모델을 바꾸지 못한다(app/tables/narration_models.py)
+    table = (await open_with(client, me, narration_model='gpt-6-luna')).json()
     await retire(session, 'gpt-6-luna', TODAY + timedelta(days=5))
     await tick(app, NOW)
 
