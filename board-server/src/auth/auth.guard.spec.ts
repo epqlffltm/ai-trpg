@@ -26,6 +26,8 @@ import { AccessClaims, InvalidTokenError } from './tokens.js';
 const USER: AccessClaims = {
   userId: '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b',
   expiresAt: new Date('2027-01-15T08:00:00.000Z'),
+  version: 1,
+  isOperator: false,
 };
 
 /** 문지기가 보는 컨트롤러의 흉내. 표시가 붙은 것과 안 붙은 것이 있다. */

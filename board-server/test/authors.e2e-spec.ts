@@ -135,7 +135,7 @@ describe('글쓴이의 닉네임을 싣는다', () => {
   });
 
   it('글 읽기, 글 목록, 고정한 글, 검색에도 나온다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const mine = await writtenId(WRITER, '모험가');
     const pinnedId = await writtenId(READER, '구경꾼');
     await request(app.getHttpServer())

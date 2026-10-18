@@ -17,6 +17,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import type { Actor } from '../auth/actor.js';
 import { Comment } from '../comments/comment.entity.js';
 import { commentNotFound } from '../comments/comments.errors.js';
 import { Post } from '../posts/post.entity.js';
@@ -52,18 +53,18 @@ export class ReportsService {
    */
   async file(
     target: ReportTarget,
-    reporterId: string,
+    reporter: Actor,
     input: NewReport,
   ): Promise<Report> {
     const authorId = await this.authorOf(target);
-    if (!canReport(authorId, reporterId)) {
+    if (!canReport(authorId, reporter.userId)) {
       throw cannotReportOwn(target.type);
     }
-    if (await this.hasReported(target, reporterId)) {
+    if (await this.hasReported(target, reporter.userId)) {
       throw alreadyReported();
     }
-    await this.writeLimits.ensureCanReport(reporterId);
-    return this.save(target, reporterId, input);
+    await this.writeLimits.ensureCanReport(reporter);
+    return this.save(target, reporter.userId, input);
   }
 
   /** 신고하는 것을 쓴 사람. 없거나 지운 것이면 404 를 낸다. */

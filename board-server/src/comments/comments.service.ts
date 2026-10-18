@@ -15,7 +15,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
 import { CommentContext, noticesForComment } from '../notifications/notices.js';
 import { queueNotices } from '../notifications/outbox.js';
-import { OperatorsService } from '../operators/operators.service.js';
+import type { Actor } from '../auth/actor.js';
 import { WriteLimitsService } from '../write-limits/write-limits.service.js';
 import { Post } from '../posts/post.entity.js';
 import { PostsService } from '../posts/posts.service.js';
@@ -34,7 +34,6 @@ import {
   canEdit,
   canHaveReplies,
   hasRoomForReply,
-  isAuthor,
 } from './comments.policy.js';
 import { fetchCount, Slice, sliceOf } from './slice.js';
 import { threadsOf } from './threads.js';
@@ -61,7 +60,6 @@ export class CommentsService {
   constructor(
     @InjectRepository(Comment) private readonly comments: Repository<Comment>,
     private readonly posts: PostsService,
-    private readonly operators: OperatorsService,
     private readonly writeLimits: WriteLimitsService,
   ) {}
 
@@ -105,7 +103,7 @@ export class CommentsService {
    */
   async create(
     postId: string,
-    authorId: string,
+    author: Actor,
     input: NewComment,
   ): Promise<Comment> {
     const post = await this.posts.get(postId);
@@ -113,9 +111,9 @@ export class CommentsService {
       input.parentId === undefined
         ? null
         : await this.ensureCanReplyTo(postId, input.parentId);
-    await this.writeLimits.ensureCanWriteComment(authorId);
+    await this.writeLimits.ensureCanWriteComment(author);
     return this.comments.manager.transaction((manager) =>
-      this.saveWithNotices(manager, post, parent, authorId, input.content),
+      this.saveWithNotices(manager, post, parent, author.userId, input.content),
     );
   }
 
@@ -157,10 +155,9 @@ export class CommentsService {
    *
    * 답글이 달린 댓글을 지워도 답글은 남는다. 목록에는 그 댓글의 자리가 "지운 댓글"로 나온다.
    */
-  async remove(id: string, userId: string): Promise<void> {
+  async remove(id: string, actor: Actor): Promise<void> {
     const comment = await this.get(id);
-    const isOperator = await this.isOperatorIfNeeded(comment, userId);
-    if (!canDelete(comment, userId, isOperator)) {
+    if (!canDelete(comment, actor.userId, actor.isOperator)) {
       throw notYourCommentToDelete();
     }
     await this.comments.softDelete({ id: comment.id });
@@ -226,17 +223,6 @@ export class CommentsService {
       throw tooManyReplies();
     }
     return parent;
-  }
-
-  /** 운영자인지 답한다. 글쓴이 자신이면 묻지 않는다. 글쓴이는 운영자가 아니어도 지울 수 있다. */
-  private async isOperatorIfNeeded(
-    comment: Comment,
-    userId: string,
-  ): Promise<boolean> {
-    if (isAuthor(comment, userId)) {
-      return false;
-    }
-    return this.operators.isOperator(userId);
   }
 }
 

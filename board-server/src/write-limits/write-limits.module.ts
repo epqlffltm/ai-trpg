@@ -10,7 +10,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Comment } from '../comments/comment.entity.js';
-import { OperatorsModule } from '../operators/operators.module.js';
 import { Post } from '../posts/post.entity.js';
 import { Report } from '../reports/report.entity.js';
 import { WRITE_LIMITS } from './write-limits.policy.js';
@@ -20,7 +19,7 @@ import {
 } from './write-limits.service.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Post, Comment, Report]), OperatorsModule],
+  imports: [TypeOrmModule.forFeature([Post, Comment, Report])],
   providers: [
     WriteLimitsService,
     { provide: WRITE_LIMITS_TOKEN, useValue: WRITE_LIMITS },

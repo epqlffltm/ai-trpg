@@ -78,7 +78,7 @@ export class CommentsController {
     @Body() input: CreateCommentDto,
     @CurrentUser() user: AccessClaims,
   ): Promise<CommentResponse> {
-    const comment = await this.comments.create(postId, user.userId, {
+    const comment = await this.comments.create(postId, user, {
       content: input.content,
       parentId: input.parent_id ?? undefined,
     });
@@ -104,7 +104,7 @@ export class CommentsController {
     @Param('id', CommentIdPipe) id: string,
     @CurrentUser() user: AccessClaims,
   ): Promise<void> {
-    await this.comments.remove(id, user.userId);
+    await this.comments.remove(id, user);
   }
 
   /** 댓글 하나를 응답의 모양으로 바꾼다. 글쓴이의 이름을 따로 읽는다. */

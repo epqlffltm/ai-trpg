@@ -9,9 +9,11 @@
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DataSource } from 'typeorm';
 import { AuthorsService } from '../src/authors/authors.service.js';
+import { forgetOperators, grantOperator, revokeOperator } from './tokens.js';
 
 /**
- * 신고, 글, 댓글, 운영자, 글쓴이의 닉네임, 알림의 발송함을 모두 비우고, 번호를 1 부터 다시 센다. 테스트마다 먼저 부른다.
+ * 신고, 글, 댓글, 글쓴이의 닉네임, 알림의 발송함을 모두 비우고, 번호를 1 부터 다시 센다. 테스트마다 먼저 부른다.
+ * 운영자 그룹(test/tokens.ts)도 비운다.
  *
  * 앞의 테스트가 남긴 글이 다음 테스트의 목록에 섞이지 않게 한다.
  * 신고는 글과 댓글을, 댓글은 글을 가리키므로 한 번에 비운다. 따로 비우면 DB 가 막는다.
@@ -20,30 +22,24 @@ export async function clearData(app: NestExpressApplication): Promise<void> {
   await app
     .get(DataSource)
     .query(
-      'TRUNCATE "reports", "comments", "posts", "operators", "authors", "outgoing_notifications" RESTART IDENTITY',
+      'TRUNCATE "reports", "comments", "posts", "authors", "outgoing_notifications" RESTART IDENTITY',
     );
+  forgetOperators();
   // 서버는 최근에 적은 닉네임을 기억해 두고 다시 적지 않는다. 테이블을 비웠으니 그 기억도 비운다
   app.get(AuthorsService).forgetRecent();
 }
 
-/** 사용자를 운영자로 만든다. userId 는 인증 서버의 public_id 다. */
-export async function makeOperator(
-  app: NestExpressApplication,
-  userId: string,
-): Promise<void> {
-  await app
-    .get(DataSource)
-    .query('INSERT INTO "operators" ("user_id") VALUES ($1)', [userId]);
+/**
+ * 사용자를 운영자로 만든다. userId 는 인증 서버의 public_id 다.
+ * 인증 서버의 operators 그룹에 넣는 것과 같다. 그 뒤에 만든 토큰에 roles 가 실린다(test/tokens.ts).
+ */
+export function makeOperator(userId: string): void {
+  grantOperator(userId);
 }
 
-/** 사용자를 운영자에서 내린다. */
-export async function removeOperator(
-  app: NestExpressApplication,
-  userId: string,
-): Promise<void> {
-  await app
-    .get(DataSource)
-    .query('DELETE FROM "operators" WHERE "user_id" = $1', [userId]);
+/** 사용자를 운영자에서 내린다. 그 뒤에 만든 토큰부터 운영자가 아니다. */
+export function removeOperator(userId: string): void {
+  revokeOperator(userId);
 }
 
 /**

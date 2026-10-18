@@ -18,7 +18,11 @@ import { postTarget } from './report-target.js';
 import { ReportsService } from './reports.service.js';
 
 const WRITER = '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b';
-const READER = '7d0e3a52-1f4b-4c8e-8a21-9b6c5d4e3f2a';
+/** 신고하는 사람. 운영자가 아니다 */
+const READER = {
+  userId: '7d0e3a52-1f4b-4c8e-8a21-9b6c5d4e3f2a',
+  isOperator: false,
+};
 
 /** DB 가 이 번호의 오류를 낸 것처럼 만든다. */
 function queryFailed(code: string): QueryFailedError {
