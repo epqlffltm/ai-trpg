@@ -22,6 +22,13 @@ class Dice(Protocol):
         ...
 
 
+def choose[T](options: list[T], dice: Dice) -> T:
+    """여럿 중 하나를 서버의 주사위로 고른다. 하나뿐이면 굴리지 않는다. 비어 있으면 부르지 않는다."""
+    if len(options) == 1:
+        return options[0]
+    return options[dice.roll(len(options)) - 1]
+
+
 class RandomDice:
     """
     진짜 주사위. 운영체제의 난수를 쓴다.

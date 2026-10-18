@@ -30,6 +30,8 @@ from app.rounds.models import Declaration, Round
 from app.rounds.narrator import (
     ClockNote,
     DeathSaveNote,
+    DropNote,
+    DroppedNote,
     Impact,
     ItemActionNote,
     MonsterTurnNote,
@@ -211,6 +213,19 @@ def to_npc_impact(effect: dict | None) -> NpcImpact | None:
     )
 
 
+def to_drop(drop: dict | None) -> DropNote | None:
+    """
+    선언에 적힌 드롭을 서술자에게 줄 모양으로 바꾼다. 드롭이 없었으면 None.
+
+    받을 사람이 없어 사라진 드롭도 None 이다. 아무도 얻지 않았으니 장면에 쓸 것이 없다.
+    받은 것도 잃은 것도 없는 물건은 뺀다.
+    """
+    if drop is None or drop['user_id'] is None:
+        return None
+    things = [DroppedNote(name=one['name'], count=one['count'], lost=one['lost']) for one in drop['items']]
+    return DropNote(monster=drop['monster_name'], receiver=drop['character_name'], items=things)
+
+
 def check_terms(declaration: Declaration) -> tuple[str, str]:
     """
     판정에 쓴 능력과 난이도의 key. 판정하는 행동은 행동에 적혀 있고, 치료는 규칙이 정해 결과에 적혀 있다.
@@ -275,6 +290,7 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
         impact=to_impact(outcome.get('effect')),
         npc_impact=to_npc_impact(outcome.get('npc_effect')),
         monster_impact=to_npc_impact(outcome.get('monster_effect')),
+        drop=to_drop(outcome.get('drop')),
         hindrances=hindrance_names(ruleset, outcome.get('hindrance')),
         aimed=aimed_name(ruleset, outcome.get('called_shot')),
         treatment=to_treatment(outcome.get('treatment')),

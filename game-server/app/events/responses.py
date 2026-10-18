@@ -29,8 +29,21 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.CREDIT_WAIT_CHANGED: ('credit_wait_seconds', 'remove_short_payers'),
     EventType.WHISPER_NOTICE_CHANGED: ('whisper_notice',),
     EventType.LEDGER_DRAFTS_CHANGED: ('ledger_drafts',),
-    # 소지품은 공개다. 누가 무엇을 몇 개 받거나 잃었고, 그 뒤에 몇 개인가
-    EventType.ITEMS_GAINED: ('user_id', 'character_name', 'entry_id', 'name', 'count', 'total'),
+    # 소지품은 공개다. 누가 무엇을 몇 개 받거나 잃었고, 그 뒤에 몇 개인가.
+    # 몬스터를 쓰러뜨려 얻었으면 라운드, 출처(source: monster, 그 마리와 장면의 호칭), 상한을 넘어 잃은 개수가 더 있다
+    EventType.ITEMS_GAINED: (
+        'round',
+        'user_id',
+        'character_name',
+        'entry_id',
+        'name',
+        'count',
+        'total',
+        'lost',
+        'source',
+        'monster_id',
+        'monster_name',
+    ),
     EventType.ITEMS_LOST: ('user_id', 'character_name', 'entry_id', 'name', 'count', 'total'),
     # 물건을 쓰고 건넨 것도 공개다. 못 했으면 까닭(reason)이 있다
     EventType.ITEM_USED: ('round', 'character_name', 'entry_id', 'name', 'used', 'reason', 'target', 'remaining'),
