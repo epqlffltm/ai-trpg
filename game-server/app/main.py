@@ -33,6 +33,7 @@ from app.assets.scenarios.publishing import ScenarioNotReadyError
 from app.assets.scenarios.recommended_model import RecommendedModelError
 from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
 from app.assets.worlds import router as worlds
+from app.auth import revocations
 from app.auth.jwks import JwksCache
 from app.billing import settler
 from app.billing.price_list import PriceListUnavailable
@@ -62,6 +63,9 @@ from app.memory.retrieval import MemoryRetriever, MemoryThresholds
 from app.observability.middleware import RequestLoggingMiddleware
 from app.observability.responses import handle_unexpected_error
 from app.observability.setup import configure_logging
+from app.operators import router as operators
+from app.operators.publishing import PublicationRefusedError
+from app.operators.sanctions import SanctionConflictError
 from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
 from app.realtime import router as realtime
@@ -101,7 +105,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     꺼질 때 신호를 듣는 연결, DB 연결, 인증 서버로 가는 연결, Redis 연결을 전부 닫는다.
     닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     라운드의 시계(마감이 지난 라운드를 닫는 것), 청구 정리(서술 값을 결제 서버에 맡기는 것),
-    AI 호출 기록의 원문 정리(보관 기간이 지난 원문을 비우는 것), 서술 모델의 은퇴 지켜보기는 뜰 때 돌기 시작하고,
+    AI 호출 기록의 원문 정리(보관 기간이 지난 원문을 비우는 것), 서술 모델의 은퇴 지켜보기,
+    끊긴 세션 목록 받기는 뜰 때 돌기 시작하고,
     꺼질 때 가장 먼저 멈춘다. 시계가 맡긴 서술이 뒤의 작업 마무리에 들어가도록 순서를 지킨다.
     """
     loop = asyncio.get_running_loop()
@@ -109,12 +114,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settling = settler.start(app.state.charge_settler)
     pruning = retention.start(app.state.ai_log_pruner)
     watching = retirement_watch.start(app.state.retirement_watch)
+    revoking = revocations.start(app.state.revocations)
     with closing_on_exit(lambda: loop.call_soon_threadsafe(app.state.hub.close_all)):
         yield
     await running.halt()
     await settling.halt()
     await pruning.halt()
     await watching.halt()
+    await revoking.halt()
     # 뒤에서 돌던 작업을 먼저 마무리한다. 작업이 DB 를 쓰므로 DB 를 닫기 전에 한다
     await app.state.jobs.aclose()
     await app.state.signal_source.stop()
@@ -171,6 +178,8 @@ def create_app(
     # 만드는 것만으로는 인증 서버에 요청을 보내지 않는다. 처음 토큰을 검증할 때 가져온다
     app.state.http_client = http_client or httpx.AsyncClient()
     app.state.jwks = JwksCache(app.state.http_client, settings.auth_jwks_url)
+    # 끊긴 세션의 목록(app/auth/revocations.py). 30초마다 받는다. lifespan 이 돌리고 멈춘다
+    app.state.revocations = revocations.RevocationList(app.state.http_client, settings.session_revocations_url)
 
     # 스트림을 열어 둔 연결들을 깨우는 방송실과, 다른 요청(다른 서버)이 보낸 신호를 듣는 것.
     # 만드는 것만으로는 DB 에 연결하지 않는다. 처음 스트림이 열릴 때 연결한다.
@@ -283,6 +292,7 @@ def create_app(
     app.include_router(whispers.router, prefix=API_PREFIX)
     app.include_router(ledger_drafts.router, prefix=API_PREFIX)
     app.include_router(realtime.router, prefix=API_PREFIX)
+    app.include_router(operators.router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다
     app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)
@@ -304,6 +314,8 @@ def create_app(
     app.add_exception_handler(TableConflictError, tables.handle_table_conflict)
     app.add_exception_handler(DraftNotFoundError, ledger_drafts.handle_draft_not_found)
     app.add_exception_handler(TableOptionError, tables.handle_table_option)
+    app.add_exception_handler(SanctionConflictError, operators.handle_sanction_conflict)
+    app.add_exception_handler(PublicationRefusedError, operators.handle_publication_refused)
     app.add_exception_handler(RoundNotFoundError, rounds.handle_round_not_found)
     app.add_exception_handler(RoundConflictError, rounds.handle_round_conflict)
     app.add_exception_handler(ActionNotInRulesError, rounds.handle_action_not_in_rules)

@@ -40,7 +40,8 @@ LOGIN_FAILURES_PER_ACCOUNT_AND_IP = AttemptLimit(
     window=timedelta(minutes=15),
 )
 
-# 한 IP 가 예약어 아이디(admin, root 등)로 로그인을 시도한 횟수. 채우면 그 IP 의 로그인을 막는다.
+# 한 IP 가 예약어 아이디(admin, root 등과 admin1 같은 번호 변형)로 로그인을 시도한 횟수.
+# 채우면 그 IP 의 로그인을 막는다.
 # 예약어는 누구도 아이디로 쓸 수 없다(운영자 계정도 마찬가지다). 그 아이디로 로그인해 보는 것은
 # 오타로 일어나지 않는다. 관리자 계정을 찾는 탐색에 가깝다.
 # 그래도 한 번에 막지는 않는다. 공유기 뒤의 여러 사람이 한 IP 로 보이는데,
@@ -84,11 +85,21 @@ def block_ip_if_reserved_username(*, ip: str, username: str) -> None:
 
     이미 막혀 있는 IP 는 이 함수까지 오지 않는다. 그래서 이벤트는 막을 때마다 한 번 남는다.
     """
-    if not is_reserved_name(username):
+    if not _is_reserved_probe(username):
         return
     now_blocked = count_failure(LOGIN_IP_BLOCK, ip)
     if now_blocked:
         record_security_event(kind=SecurityEventKind.RESERVED_USERNAME_LOGIN, ip=ip)
+
+
+def _is_reserved_probe(username: str) -> bool:
+    """
+    예약어 아이디로 관리자 계정을 찾아보는 시도인지 본다.
+
+    그 아이디의 계정이 있으면 탐색이 아니다. 예약어의 규칙이 넓어지기 전에 만든 계정(admin1)이다.
+    그 주인이 자기 로그인으로 IP 를 막지 않게 한다. 예약어가 아닌 이름에는 DB 를 묻지 않는다.
+    """
+    return is_reserved_name(username) and not User.objects.filter(username=username).exists()
 
 
 def count_login_attempt(*, ip: str, username: str) -> None:

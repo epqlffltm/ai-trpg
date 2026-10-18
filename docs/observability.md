@@ -325,6 +325,8 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
 | `billing.release` | game | 결제 서버에 홀드의 반환을 맡기기 |
 | `billing.extend` | game | 결제 서버에 홀드의 연장을 맡기기(만료 전에) |
+| `operator.act` | game | 운영자가 제재했다(#392). `operator_id`, `action`(`scenario_sanction`, `table_end`, `publishing_ban`, `publishing_unban`), `target_id`. 사유는 싣지 않는다. 원본은 DB 의 `operator_actions` 다 |
+| `operator.read` | game | 운영자가 남의 테이블이나 시나리오를 운영자 API 로 보았다(#391). `operator_id`, `target_kind`, `target_id`, `target_number`. 사유는 싣지 않는다(자유 글). 원본은 DB 의 감사 기록(`operator_reads`)이다 |
 | `ledger_draft.write` | game | 서술한 장면에서 장부 초안을 쓰고 줄로 적기(서술을 맡은 작업의 끝, `round.narrate` 의 `job_id`) |
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
 | `welcome_credit.deliver` | auth | 환영 크레딧을 결제 서버에 맡기기 |
@@ -332,6 +334,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `account.delete_unverified` | auth | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기(옛 이름 그대로) |
 | `security.send_digest` | auth | 보안 이벤트 요약 메일 |
 | `auth.jwks_fetch` | billing | 인증 서버에서 공개키 받기 |
+| `auth.revocations_fetch` | game, billing | 인증 서버에서 끊긴 세션의 목록 받기(30초마다) |
 | `order.confirm` | billing | 주문의 결제 승인 |
 | `order.refund` | billing | 주문의 청약철회(결제 취소) |
 | `order.decide` | billing | 운영자가 결과를 모르던 주문의 결과를 정하기(`cmd/orders decide`). `from_status`, `outcome`, `decided_by`, `reason` 을 남긴다 |
@@ -352,7 +355,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `job.refused` | 게임 서버가 작업을 맡지 않았다. 그 종류(`operation`)의 돌거나 기다리는 작업이 상한(`capacity`)에 닿았다. 서술은 서버의 시계가, 색인은 다음 검색이 다시 맡긴다. `warning` |
 | `round.stalled` | 게임 서버가 서술이 되풀이해 사라진 라운드를 더 다시 맡기지 않고 실패(`stalled`)로 적었다. 같은 서술이 할 때마다 서버를 죽이고 있을 수 있다. `table_id`, `round`, `auto_retries`. 방장이 다시 맡길 수 있다. `warning` |
 | `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다. 게임 서버와 결제 서버는 마지막으로 받은 지 30분이 지나 기억한 키를 버릴 때 `error` 로 남긴다(그 뒤 인증이 필요한 요청은 503). 사람이 인증 서버를 봐야 한다 |
-| `auth.revocations_unavailable` | 결제 서버와 게시판 서버가 남긴다. 인증 서버에서 끊긴 세션의 목록(`/api/v1/auth/session-revocations`)을 받지 못했다. 마지막으로 받은 목록을 그대로 쓴다. 30초마다 다시 받으므로 인증 서버가 죽어 있으면 그만큼 줄이 쌓인다. `reason` 에 종류를 싣는다. `warning` |
+| `auth.revocations_unavailable` | 게임 서버, 결제 서버, 게시판 서버가 남긴다. 인증 서버에서 끊긴 세션의 목록(`/api/v1/auth/session-revocations`)을 받지 못했다. 마지막으로 받은 목록을 그대로 쓴다. 30초마다 다시 받으므로 인증 서버가 죽어 있으면 그만큼 줄이 쌓인다. `reason` 에 종류를 싣는다. `warning` |
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했거나, 결과를 알 수 없는 답이 왔다(토스페이먼츠의 5xx, 401, "처리 중" 같은 것). 주문은 `confirming` 에 남고 다시 부르거나 대사가 조회해 끝낸다. 청약철회(`order.refund`)면 `refunding` 에 남고 다시 부르거나 대사가 같은 취소를 다시 보낸다. 가상계좌(입금 대기)를 취소하지 못했을 때도 이 코드다(`order.confirm`, `cancel_status`). `warning` |
 | `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 서술 뒤의 확정을 정해 둔 시간 안에 끝내지 못해 정리 작업에 넘긴 것도 이 코드다(`warning`). 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
 | `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다. 연장이면 홀드를 그대로 두고 한 시간 뒤에 다시 부른다. 서술 뒤의 확정이 409(만료되어 돌려준 홀드)면 그 값은 받지 못한다. 홀드가 400 이면 가격표에 그 모델의 가격표 이름(`narration.<이름표>.i0.o0`)이 없는지 먼저 본다 |
@@ -670,7 +673,7 @@ resource 의 `service.name`·`deployment.environment.name`·`service.version`. �
 | | 받는 곳(미들웨어) | 들고 있는 곳 | 보내는 곳 |
 | --- | --- | --- | --- |
 | auth-server | `observability/middleware.py` | `observability/context.py` | `accounts/billing_client.py` 의 `outgoing_headers()` |
-| game-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
+| game-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/auth/revocations.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
 | board-server | `src/observability/request-logging.middleware.ts` | `src/observability/request-context.ts` | `src/auth/jwks.ts` 의 `outgoingHeaders()` |
 | billing-server | `internal/httpapi/observability.go` | `internal/obs/context.go` | `internal/jwks/fetch.go` 의 `obs.SetOutgoingHeaders()` |
 

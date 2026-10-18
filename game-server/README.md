@@ -143,6 +143,7 @@ uv run alembic check                               # 모델을 바꾸고 마이�
 | `DB_SCHEMA` | `game` | 테이블이 놓이는 스키마. 테스트는 `game_test`로 고정한다 |
 | `DEBUG` | `false` | API 문서 화면을 켠다 |
 | `AUTH_JWKS_URL` | 없음(필수) | 인증 서버가 공개키를 내주는 주소. 여기서 받은 키로 서명된 토큰을 믿는다 |
+| `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다. 알 수 없으면 서버가 뜨지 않는다 |
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰의 발급자(`iss`). 인증 서버의 `JWT_ISSUER`와 같아야 한다 |
 | `JWT_AUDIENCE` | `ai-trpg-game` | 이 서버의 이름. 토큰의 대상(`aud`)에 이 이름이 있어야 받는다 |
 
@@ -283,7 +284,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 인증 서버의 DB를 보지 않고, 요청마다 인증 서버를 부르지도 않는다.
 
 확인하는 것: 서명 방식이 RS256인가, 인증 서버의 키로 서명됐는가, 만료되지 않았는가(`exp`),
-발급자가 맞는가(`iss`), 이 서버용인가(`aud`), access 토큰인가(`token_type`). 서버 간 시계 차이는 10초까지 봐준다.
+발급자가 맞는가(`iss`), 이 서버용인가(`aud`), access 토큰인가(`token_type`), 끊긴 세션의 것이 아닌가(`ver`). 서버 간 시계 차이는 10초까지 봐준다.
 
 공개키는 이렇게 다룬다.
 
@@ -306,9 +307,21 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 더 엄격하게(다시 가져오지 못하면 바로 거부) 하려면 먼저 공개키를 인증 서버 프로그램과 떼어 내보내야 한다(예: 공개키 파일을 프록시가 그대로 내보내기).
 그러지 않으면 인증 서버가 다시 뜨는 동안 플랫폼 전체가 함께 멈춘다.
 
+**끊긴 세션은 목록으로 안다(#274).** 인증 서버에서 세션을 끊으면(비밀번호 변경과 재설정, 모든 기기 로그아웃, 계정 정지)
+그 사용자의 세션 버전이 오른다. 게임 서버는 토큰만 보므로 따로 받은 목록(`/api/v1/auth/session-revocations`)으로 안다(`app/auth/revocations.py`).
+목록의 모양은 [인증 서버](../auth-server/README.md#다른-서버에서-토큰을-검증하는-방법)의 5단계에 있다. 결제 서버, 게시판 서버와 같은 규칙이다.
+
+- 서버가 뜨자마자 받고 그 뒤 30초마다 다시 받는다. 요청과 따로 받으므로 요청이 인증 서버를 기다리지 않는다
+- 토큰의 `sub` 를 SHA-256 으로 바꾼 값이 목록에 있고, 토큰의 `ver`(없으면 0)가 그 줄의 `min_ver` 보다 낮으면 401 이다.
+  `ver` 가 0 이상의 정수가 아니면 목록과 상관없이 401 이다. 틀린 값을 0 으로 읽으면 끊긴 세션이 통할 수 있다
+- 받지 못하면 마지막으로 받은 목록을 그대로 쓴다. 한 번도 받지 못했으면 아무 세션도 끊긴 것으로 보지 않는다(공개키도 없으면 어차피 503 이다)
+- 한 줄이라도 모양이 틀린 문서는 통째로 받지 않는다. 틀린 줄만 건너뛰면 그 사용자의 끊긴 세션이 조용히 통한다. 문서는 8MB, 답은 5초까지만 기다린다
+- 받지 못할 때마다 `warning` 한 줄을 남긴다(`error_code: auth.revocations_unavailable`, `reason` 에 종류)
+
 알아 둘 한계:
 
-- 인증 서버에서 로그아웃하거나 계정이 정지돼도, 이미 발급된 access 토큰은 만료될 때까지(15분) 통한다(#274 의 4 번, 방식은 인증 서버와 함께 정한다).
+- 세션을 끊은 뒤 새 요청이 막히기까지 길어야 30초쯤 걸린다(목록을 받는 간격).
+- 이미 열린 테이블 스트림은 세션을 끊어도 바로 닫히지 않는다. 토큰이 만료될 때(15분) 닫힌다(`token_expired`).
 - 인증 서버가 키를 폐기해도, 기억 시간이 끝날 때까지(최대 5분)는 그 키를 믿는다. 급하면 게임 서버를 재시작한다.
 - 키를 한 번도 가져오지 못했거나 30분 넘게 다시 가져오지 못한 상태에서 인증 서버가 죽어 있으면 인증이 필요한 API는 503을 준다.
 
@@ -2753,7 +2766,11 @@ uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_bac
 
 ## 운영자 API
 
+<<<<<<< HEAD
 운영자가 남의 테이블과 시나리오를 본다(#391). 규칙의 원본은 [운영자 권한](../docs/architecture/operators.md)이다. 읽기만 한다. 제재는 #392 다.
+=======
+운영자가 남의 테이블과 시나리오를 보고(#391) 제재한다(#392). 규칙의 원본은 [운영자 권한](../docs/architecture/operators.md)이다.
+>>>>>>> origin/main
 
 - 운영자는 access 토큰의 `roles` 에 `"operator"` 가 있는 사람이다(인증 서버의 그룹 `operators`, #389). 아니면 모든 주소가 404 다. 앉은 사람, 만든 사람도 그렇다.
 - 모든 주소가 쿼리의 `reason`(1~200자, 공백만은 안 됨)을 받는다. 없으면 422 다. 신고 번호나 짧은 글을 적는다.
@@ -2770,6 +2787,23 @@ uv run python -m scripts.try_drafts --model gemma4:26b-a4b-it-qat --case put_bac
 
 아직 없는 것: 장부 초안, 라운드의 기억, 초안이 가리키는 재료(룰북, 세계관, 로어북), AI 호출 기록.
 
+<<<<<<< HEAD
+=======
+**제재(#392).** 본문으로 사유를 받는다(`{"reason": "신고 #7"}`, 앞뒤 공백을 떼고 1~200자). 규칙의 원본은 [운영자 권한의 제재](../docs/architecture/operators.md#제재)다.
+
+| 메서드 | 주소 | 무엇을 | 답 |
+| --- | --- | --- | --- |
+| POST | `/api/v1/game/admin/scenarios/{id}/sanction` | 공개 중인 판을 제재한다. 공개를 내리고 그 판은 다시 공개하지 못한다 | 201 `{scenario_id, version_number, owner_id, publishing_banned}`. 공개 중이 아니면 409 `not_published` |
+| POST | `/api/v1/game/admin/tables/{id}/end` | 테이블을 끝낸다. 이벤트 `table_ended` 의 payload 가 `{"by": "operator"}` 다(운영자와 사유는 없다) | 200 테이블. 이미 끝났으면 409 `already_ended` |
+| POST | `/api/v1/game/admin/users/{id}/publishing-ban` | 공개를 금지한다 | 200 `{user_id, banned, banned_at, banned_by, lifted_at}`. 이미 금지 중이면 409 `already_banned` |
+| POST | `/api/v1/game/admin/users/{id}/publishing-ban/lift` | 공개 금지를 푼다. 그 뒤의 제재부터 다시 센다 | 200. 금지 중이 아니면 409 `not_banned` |
+
+- 제작자가 판을 공개할 때(`PUT /scenarios/{id}/listing/publication`) 제재된 판이면 403 `{"code": "version_sanctioned"}`, 공개 금지 중이면 403 `{"code": "publishing_banned"}` 다. 고쳐서 새 판을 내면 공개할 수 있다. 공개를 내리는 것은 막지 않는다.
+- 제재된 시나리오가 설정 `PUBLISHING_BAN_THRESHOLD`(기본 3)개가 되면 저절로 공개 금지가 된다. 금지되어도 테이블을 열고 들어가는 것은 된다.
+- 제재는 `operator_actions`(덧붙이기만, 트리거)에 제재와 한 트랜잭션으로 남는다. 상태는 `scenario_sanctions`(제재된 판), `publishing_bans`(사람마다 한 줄, 풀면 `lifted_at`)에 있다.
+- 사용자 정지는 게임 서버에 없다. 인증 서버의 명령으로 한다.
+
+>>>>>>> origin/main
 **감사 기록(`operator_reads`).** 볼 때마다 한 줄이 남는다. 운영자(`operator_id`), 시각(`read_at`), 무엇(`target_kind`, `target_id`, 판이면 `target_number`), 사유(`reason`), `request_id`.
 
 - **먼저 적고 커밋한 뒤에 읽는다.** 없는 테이블을 본 시도도 남는다. 무엇을 보려 했는지가 기록의 목적이다.
