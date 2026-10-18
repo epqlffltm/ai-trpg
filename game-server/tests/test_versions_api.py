@@ -83,8 +83,20 @@ def their_headers(signing_key: SigningKey) -> dict[str, str]:
     return bearer(signing_key, SOMEONE_ELSE)
 
 
-def bearer(signing_key: SigningKey, user_id: uuid.UUID) -> dict[str, str]:
-    token = make_token(signing_key, make_access_claims(sub=str(user_id)))
+@pytest.fixture
+def adult_headers(signing_key: SigningKey) -> dict[str, str]:
+    """성인용 내용을 볼 수 있는 내 토큰의 머리말(#59). 나와 같은 사람이다."""
+    return bearer(signing_key, ME, adult_content=True)
+
+
+@pytest.fixture
+def operator_headers(signing_key: SigningKey) -> dict[str, str]:
+    """성인 인증을 하지 않은 운영자인 내 토큰의 머리말(#390). 나와 같은 사람이다."""
+    return bearer(signing_key, ME, roles=['operator'])
+
+
+def bearer(signing_key: SigningKey, user_id: uuid.UUID, **claims) -> dict[str, str]:
+    token = make_token(signing_key, make_access_claims(sub=str(user_id), **claims))
     return {'Authorization': f'Bearer {token}'}
 
 
@@ -227,14 +239,28 @@ async def test_the_refusal_lists_every_problem(client: AsyncClient, my_headers: 
     assert response.json()['problems'] == ['rulebook_missing', 'opening_missing', 'default_sheet_missing']
 
 
-async def test_the_rating_comes_from_the_scenario_alone(client: AsyncClient, my_headers: dict[str, str]):
-    world = await create(client, WORLDS_URL, my_headers)
-    all_ages = await create_ready_scenario(client, my_headers, world_id=world['id'])
-    adult = await create_ready_scenario(client, my_headers, world_id=world['id'], rating='adult')
+async def test_the_rating_comes_from_the_scenario_alone(client: AsyncClient, adult_headers: dict[str, str]):
+    world = await create(client, WORLDS_URL, adult_headers)
+    all_ages = await create_ready_scenario(client, adult_headers, world_id=world['id'])
+    adult = await create_ready_scenario(client, adult_headers, world_id=world['id'], rating='adult')
 
     # 등급은 시나리오를 조립할 때 제작자가 정한다. 같은 재료로 전체 이용가와 성인용을 둘 다 만들 수 있다
-    assert (await publish(client, my_headers, all_ages))['snapshot']['rating'] == 'all'
-    assert (await publish(client, my_headers, adult))['snapshot']['rating'] == 'adult'
+    assert (await publish(client, adult_headers, all_ages))['snapshot']['rating'] == 'all'
+    assert (await publish(client, adult_headers, adult))['snapshot']['rating'] == 'adult'
+
+
+async def test_an_adult_draft_is_published_only_by_someone_who_may_see_it(
+    client: AsyncClient, my_headers: dict[str, str], adult_headers: dict[str, str], operator_headers: dict[str, str]
+):
+    scenario = await create_ready_scenario(client, adult_headers, rating='adult')
+
+    refused = await client.post(versions_url(scenario), json={}, headers=my_headers)
+
+    assert refused.status_code == status.HTTP_403_FORBIDDEN
+    assert refused.json()['code'] == 'adult_content_required'
+    assert (await client.get(versions_url(scenario), headers=adult_headers)).json() == []
+    # 성인 인증을 하지 않은 운영자는 막지 않는다(#390)
+    assert (await publish(client, operator_headers, scenario))['snapshot']['rating'] == 'adult'
 
 
 async def test_fixing_the_problems_lets_it_publish(client: AsyncClient, my_headers: dict[str, str]):

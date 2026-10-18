@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Asset, AssetContent
+from app.assets.ratings import AdultContentRequiredError
 from app.assets.schemas import AssetPage, AssetSummary
 from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
 from app.core.database import get_session
@@ -62,6 +63,19 @@ async def handle_asset_not_found(request: Request, error: AssetNotFoundError) ->
     남의 자산도 404 다. 403 을 주면 그 ID 의 자산이 있다는 것이 드러난다.
     """
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={'detail': '찾을 수 없습니다.'})
+
+
+async def handle_adult_content_required(request: Request, error: AdultContentRequiredError) -> JSONResponse:
+    """
+    "성인용이다"는 403 이다(#59, #390). 화면이 본인인증으로 안내하게 code 를 싣는다. 앱에 한 번 등록한다(app/main.py).
+
+    404 가 아니다. 이 응답을 받는 사람은 자기 시나리오를 쓰는 중이거나 초대 코드를 받아서,
+    그것이 있다는 것을 이미 안다. 공개 목록과 로비에서는 이 응답이 나오지 않는다(없는 것으로 보인다).
+    """
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={'detail': '성인 인증을 한 사람만 이용할 수 있습니다.', 'code': 'adult_content_required'},
+    )
 
 
 async def handle_asset_in_use(request: Request, error: AssetInUseError) -> JSONResponse:

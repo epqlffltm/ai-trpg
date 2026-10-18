@@ -1,7 +1,7 @@
 # game-server/app/tables/building.py
 
 """
-테이블을 만드는 데 쓰는 것들. 초대 코드, 정원의 상한, 문체, 판에서 테이블 객체 만들기, 비밀번호.
+테이블을 만드는 데 쓰는 것들. 초대 코드, 등급의 확인, 문체, 판에서 테이블 객체 만들기, 비밀번호.
 
 DB 를 모른다. 판에서 테이블 객체를 만들 뿐 저장하지 않는다(build_table).
 비밀번호의 계산은 느려서 다른 스레드에서 돌린다(hash_table_password, check_table_password).
@@ -11,10 +11,10 @@ import asyncio
 import secrets
 import uuid
 
-from app.assets.models import TABLE_MAX_PLAYERS, CharacterMode, NarrationStyle, ScenarioVersion
+from app.assets import ratings
+from app.assets.models import CharacterMode, NarrationStyle, ScenarioVersion
 from app.assets.scenarios.snapshot import Snapshot
 from app.auth.tokens import AccessClaims
-from app.listings import service as listings
 from app.tables import passwords
 from app.tables.errors import (
     WrongPasswordError,
@@ -28,16 +28,15 @@ def new_invite_code() -> str:
     return secrets.token_urlsafe(9)
 
 
-def seat_limit(viewer: AccessClaims, snapshot: Snapshot) -> int:
+def require_rating(viewer: AccessClaims, rating: str) -> None:
     """
-    이 사람이 이 판으로 테이블을 만들 때 둘 수 있는 가장 큰 정원.
+    이 사람이 이 등급의 테이블을 만들거나 들어올 수 있는지 본다.
+    없으면 AdultContentRequiredError(app/assets/ratings.py).
 
-    볼 수 없는 등급의 판이면(지금은 성인용 전부) 혼자서만 한다. 제작자가 자기 것을 시험해 보는 용도다.
-    성인 인증이 생기면 allowed_ratings 가 성인용을 돌려주고, 이 제한은 저절로 풀린다.
+    테이블이 있다는 것을 이미 아는 경우에만 부른다(자기 시나리오로 만들기, 초대 코드로 들어오기).
+    성인용 내용을 볼 수 없는 사람은 자기가 쓴 성인용 시나리오로도 테이블을 열지 못한다. 서술은 AI 가 새로 쓰기 때문이다.
     """
-    if snapshot.rating in listings.allowed_ratings(viewer):
-        return TABLE_MAX_PLAYERS
-    return 1
+    ratings.require_rating(rating, ratings.allowed_ratings(viewer))
 
 
 def choose_narration_style(snapshot: Snapshot, chosen: NarrationStyle | None) -> NarrationStyle:
