@@ -129,6 +129,19 @@ def warn_disagreements(offers: Sequence[OfferedModel]) -> None:
             )
 
 
+async def find_offered(session: AsyncSession, prices: PriceList, slug: str, now: datetime) -> OfferedModel | None:
+    """
+    그 이름표의 모델을 지금 고를 수 있으면 값을 붙여 돌려준다. 모델 목록에 없거나 고를 수 없으면 None.
+
+    방장이 테이블의 모델을 고를 때 쓴다(app/tables/model_picker.py). 목록(list_offered)과 같은 규칙이다.
+    가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다.
+    """
+    model = await repository.get_model(session, slug)
+    if model is None:
+        return None
+    return offer(to_card(model), await prices.book(), now)
+
+
 async def list_offered(session: AsyncSession, prices: PriceList, now: datetime) -> Offering:
     """
     방장이 고를 수 있는 모델들. 모델 목록을 DB 에서 읽고, 가격 목록을 받아(받아 둔 것) 맞춰 붙인다.

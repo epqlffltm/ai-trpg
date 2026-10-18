@@ -18,6 +18,7 @@ from app.catalog.lookup import DbModelLookup
 from app.main import create_app
 from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.narrator_setup import build_narrator, build_router, offered_tiers, tier_models
+from app.rounds.picked_narrator import PickedNarrator
 from app.rounds.retrying_narrator import RetryingNarrator
 from app.rounds.routed_narrator import RoutedNarrator
 from app.rounds.tiered_narrator import TieredNarrator
@@ -38,9 +39,14 @@ def narrator_of(settings):
     return build_narrator(settings, router_of(settings), async_sessionmaker())
 
 
+def tiered(narrator) -> TieredNarrator:
+    """언어 모델의 서술자에서 모델을 고르지 않은 라운드의 서술자(등급으로 고른다)."""
+    return narrator.default
+
+
 def standard(narrator) -> RetryingNarrator:
     """언어 모델의 서술자에서 standard 등급의 서술자."""
-    return narrator.narrators[NarrationTier.STANDARD]
+    return tiered(narrator).narrators[NarrationTier.STANDARD]
 
 
 def test_the_fake_narrator_is_chosen_by_default():
@@ -50,9 +56,10 @@ def test_the_fake_narrator_is_chosen_by_default():
 def test_the_language_model_narrator_retries_one_model_by_default():
     narrator = narrator_of(make_test_settings(**LLM))
 
-    # 등급으로 고르는 서술자다. premium 의 모델을 적지 않으면 standard 하나뿐이다
-    assert isinstance(narrator, TieredNarrator)
-    assert set(narrator.narrators) == {NarrationTier.STANDARD}
+    # 모델을 고르지 않은 라운드는 등급으로 고르는 서술자다. premium 의 모델을 적지 않으면 standard 하나뿐이다
+    assert isinstance(narrator, PickedNarrator)
+    assert isinstance(tiered(narrator), TieredNarrator)
+    assert set(tiered(narrator).narrators) == {NarrationTier.STANDARD}
     # 넘어갈 모델을 적지 않으면 첫 모델 하나를 다시 시도하는 서술자다. 창구는 부를 때 고른다
     assert isinstance(standard(narrator), RetryingNarrator)
     (inner,) = standard(narrator).narrators
@@ -149,7 +156,7 @@ def test_the_app_plugs_in_the_chosen_narrator():
     llm = create_app(make_test_settings(**LLM))
 
     assert isinstance(fake.state.narrator, FakeNarrator)
-    assert isinstance(llm.state.narrator, TieredNarrator)
+    assert isinstance(llm.state.narrator, PickedNarrator)
 
 
 def test_every_model_is_routed_by_the_router_of_the_app():
@@ -189,7 +196,7 @@ def test_premium_has_its_own_models_in_order():
     narrator = narrator_of(settings)
 
     # 등급마다 따로 다시 시도하고 넘어간다. premium 이 실패해도 standard 의 모델로 넘어가지 않는다(값이 다르다)
-    premium = narrator.narrators[NarrationTier.PREMIUM]
+    premium = tiered(narrator).narrators[NarrationTier.PREMIUM]
     assert [inner.model for inner in premium.narrators] == ['qwen3.6:27b', 'gemma4:31b-it-qat']
     assert [inner.model for inner in standard(narrator).narrators] == ['gemma4:26b']
 
@@ -219,9 +226,32 @@ def test_the_app_plugs_in_the_offered_tiers():
 def test_premium_models_are_routed_and_recorded_by_the_app():
     app = create_app(make_test_settings(**LLM, **PREMIUM))
 
-    for inner in app.state.narrator.narrators[NarrationTier.PREMIUM].narrators:
+    for inner in tiered(app.state.narrator).narrators[NarrationTier.PREMIUM].narrators:
         assert inner.router is app.state.model_router
         assert inner.log.session_factory is app.state.session_factory
+
+
+# --- 방장이 고른 모델 ---
+
+
+def test_a_picked_model_is_retried_alone():
+    narrator = narrator_of(make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat', ai_log_hmac_key='k'))
+
+    chain = narrator.chain_for('claude-sonnet-5-5')
+
+    # 그 모델의 값을 걸었으니 넘어갈 모델이 없다. 등급의 넘어갈 모델(gemma4:31b-it-qat)도 쓰지 않는다
+    assert isinstance(chain, RetryingNarrator)
+    (inner,) = chain.narrators
+    assert (inner.model, inner.digest_key) == ('claude-sonnet-5-5', b'k')
+
+
+def test_a_picked_model_is_routed_and_recorded_by_the_app():
+    app = create_app(make_test_settings(**LLM))
+
+    (inner,) = app.state.narrator.chain_for('gpt-6-luna').narrators
+
+    assert inner.router is app.state.model_router
+    assert inner.log.session_factory is app.state.session_factory
 
 
 def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatch):

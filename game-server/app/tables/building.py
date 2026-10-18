@@ -76,6 +76,7 @@ def build_table(
         narration_style=choose_narration_style(snapshot, data.narration_style),
         round_time_limit=data.round_time_limit,
         narration_tier=data.narration_tier,
+        narration_model=data.narration_model,
         credit_wait_seconds=data.credit_wait_seconds,
         remove_short_payers=data.remove_short_payers,
         whisper_notice=data.whisper_notice,

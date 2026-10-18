@@ -38,6 +38,7 @@ from app.tables import (
     item_grants,
     items,
     ledger_draft_options,
+    narration_models,
     place_changes,
     places,
     quest_changes,
@@ -60,6 +61,7 @@ from app.tables.errors import (
     WrongPasswordError,
 )
 from app.tables.items import CatalogItem
+from app.tables.model_picker import ModelPicker
 from app.tables.models import GameTable, TableInjury, TableItem, TableMember, TableQuest, TableRoll, TableSheet
 from app.tables.schemas import (
     CatalogItemOut,
@@ -78,6 +80,7 @@ from app.tables.schemas import (
     MemberOut,
     NarrationModelOut,
     NarrationModelsOut,
+    NarrationModelUpdate,
     NarrationStyleUpdate,
     NarrationTiersOut,
     NarrationTierUpdate,
@@ -122,6 +125,14 @@ def utc_now() -> datetime:
 
 Prices = Annotated[PriceList, Depends(get_price_list)]
 Now = Annotated[datetime, Depends(utc_now)]
+
+
+def get_model_picker(prices: Prices, now: Now) -> ModelPicker:
+    """방장이 고른 서술 모델을 확인할 것. 가격 목록은 모델을 골랐을 때만 묻는다(app/tables/model_picker.py)."""
+    return ModelPicker(prices=prices, now=now)
+
+
+Picker = Annotated[ModelPicker, Depends(get_model_picker)]
 
 
 def to_next_out(change: Change | None) -> NextPriceOut | None:
@@ -173,6 +184,7 @@ def to_summary(table: GameTable) -> TableSummary:
         narration_style=table.narration_style,
         round_time_limit=table.round_time_limit,
         narration_tier=table.narration_tier,
+        narration_model=table.narration_model,
         credit_wait_seconds=table.credit_wait_seconds,
         remove_short_payers=table.remove_short_payers,
         whisper_notice=table.whisper_notice,
@@ -421,9 +433,11 @@ async def handle_table_option(request: Request, error: TableOptionError) -> JSON
 
 
 @router.post('', response_model=TableDetail, status_code=status.HTTP_201_CREATED)
-async def create_table(data: TableCreate, user: CurrentUser, session: Session, offered: OfferedTiers) -> TableDetail:
-    """테이블을 만든다. 만든 사람이 방장이 되어 앉는다."""
-    table = await service.create_table(session, user, data, offered)
+async def create_table(
+    data: TableCreate, user: CurrentUser, session: Session, offered: OfferedTiers, picker: Picker
+) -> TableDetail:
+    """테이블을 만든다. 만든 사람이 방장이 되어 앉는다. 서술 모델은 고를 수 있는 것만 된다."""
+    table = await service.create_table(session, user, data, offered, picker)
     return to_detail(table, user.user_id)
 
 
@@ -694,6 +708,20 @@ async def change_narration_tier(
     지금 열린 라운드는 연 때의 등급으로 값을 걸었고 그 등급으로 서술한다.
     """
     table = await tiers.change_narration_tier(session, user.user_id, table_id, data, offered)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/narration-model', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_narration_model(
+    table_id: uuid.UUID, data: NarrationModelUpdate, user: CurrentUser, session: Session, picker: Picker
+) -> TableDetail:
+    """
+    서술 모델을 바꾼다. 방장만 한다. 고를 수 있는 모델만 된다(GET /tables/narration-models). null 이면 서버의 기본이다.
+
+    진행 중에도 된다. 바꾼 값은 다음 라운드부터 쓴다.
+    지금 열린 라운드는 연 때의 모델의 값으로 청구를 적었고 그 모델로 서술한다.
+    """
+    table = await narration_models.change_narration_model(session, user.user_id, table_id, data, picker)
     return to_detail(table, user.user_id)
 
 

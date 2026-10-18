@@ -24,6 +24,7 @@ from app.catalog.lookup import DbModelLookup
 from app.core.config import Settings
 from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.narrator import Narrator
+from app.rounds.picked_narrator import PickedNarrator
 from app.rounds.retrying_narrator import RetryingNarrator
 from app.rounds.routed_narrator import RoutedNarrator
 from app.rounds.tiered_narrator import TieredNarrator
@@ -101,10 +102,13 @@ def build_narrator(
     설정이 llm 이면 언어 모델로 서술하는 서술자, 아니면 가짜 서술자.
 
     언어 모델이면 등급마다 다시 시도하는 서술자를 하나씩 만들고, 라운드의 등급으로 고르는 서술자로 감싼다.
-    모두 같은 기록장에 쓴다(ai_invocations). 가짜는 모델을 부르지 않으니 남길 것이 없다. 등급도 읽지 않는다.
+    방장이 모델을 고른 라운드는 그 모델 하나만 다시 시도하는 서술자로 서술한다(PickedNarrator). 넘어갈 모델이 없다.
+    모두 같은 기록장에 쓴다(ai_invocations). 가짜는 모델을 부르지 않으니 남길 것이 없다. 등급과 모델도 읽지 않는다.
     """
     if settings.narrator != 'llm':
         return FakeNarrator()
     log = DbCallLog(session_factory)
     chains = {tier: build_chain(settings, router, log, models) for tier, models in tier_models(settings).items()}
-    return TieredNarrator(chains)
+    return PickedNarrator(
+        chain_for=lambda model: build_chain(settings, router, log, [model]), default=TieredNarrator(chains)
+    )

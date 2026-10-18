@@ -12,6 +12,7 @@ import uuid
 
 from app.assets.models import NarrationStyle
 from app.assets.scenarios.snapshot import Snapshot
+from app.catalog.offers import OfferedModel
 from app.rounds.budget import story_fits
 from app.rounds.narration_request import to_story
 from app.rounds.tiers import NarrationTier
@@ -86,3 +87,14 @@ def require_offered(tier: NarrationTier, offered: frozenset[NarrationTier]) -> N
     """
     if tier not in offered:
         raise TableOptionError('narration_tier')
+
+
+def require_model_offered(found: OfferedModel | None) -> None:
+    """
+    방장이 고른 서술 모델이 지금 고를 수 있는 것인지 확인한다. 아니면 TableOptionError(narration_model).
+
+    found 는 고를 수 있는 목록에서 찾은 것이다(app/catalog/offers.py 의 find_offered). 없으면 None 이다.
+    모델 목록에 없거나, 꺼졌거나, 은퇴했거나, 결제 서버가 팔지 않는 모델이다.
+    """
+    if found is None:
+        raise TableOptionError('narration_model')
