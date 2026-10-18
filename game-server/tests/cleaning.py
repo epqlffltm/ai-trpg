@@ -6,10 +6,22 @@
 conftest.py 에 두지 않고 따로 둔다. 테스트 파일이 conftest.py 를 직접 불러오지 않게 하려는 것이다.
 """
 
-from sqlalchemy import Table
+from sqlalchemy import Executable, Table, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.database import Base
+
+
+def clearing_statement(table: Table) -> Executable:
+    """
+    테이블 하나를 비우는 문장. 보통은 DELETE 다.
+
+    덧붙이기만 하는 테이블(info 의 append_only, 예: operator_reads)은 트리거가 DELETE 를 막아서 TRUNCATE 로 비운다.
+    다른 테이블이 가리키지 않는 테이블이라 CASCADE 가 필요 없다.
+    """
+    if table.info.get('append_only'):
+        return text(f'TRUNCATE {table.name}')
+    return table.delete()
 
 
 def clearing_order() -> list[Table]:
@@ -34,4 +46,4 @@ async def clear_tables(engine: AsyncEngine) -> None:
     """
     async with engine.begin() as connection:
         for table in clearing_order():
-            await connection.execute(table.delete())
+            await connection.execute(clearing_statement(table))

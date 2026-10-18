@@ -415,6 +415,10 @@ class SignupCompleteValidationTests(SignupTestCase):
     def test_rejects_a_reserved_username(self):
         self.assert_rejected('username', username='admin')
 
+    def test_rejects_a_numbered_reserved_username(self):
+        self.assert_rejected('username', username='admin1')
+        self.assert_rejected('username', username='root_2')
+
     def test_rejects_a_username_equal_to_the_email_local_part(self):
         # 티켓 속의 이메일과 견준다
         self.assert_rejected('username', username='someone')
@@ -422,6 +426,7 @@ class SignupCompleteValidationTests(SignupTestCase):
     def test_rejects_reserved_nicknames(self):
         self.assert_rejected('nickname', nickname='운영자')
         self.assert_rejected('nickname', nickname='GM')
+        self.assert_rejected('nickname', nickname='운영자1')
 
     def test_rejects_a_nickname_with_spaces(self):
         self.assert_rejected('nickname', nickname='운 영 자')
