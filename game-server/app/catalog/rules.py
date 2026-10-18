@@ -26,6 +26,8 @@ STYLES_BY_PROVIDER = {
     Provider.GEMINI: frozenset(
         {ReasoningStyle.LEVEL_MINIMAL, ReasoningStyle.LEVEL_LOW, ReasoningStyle.BUDGET, ReasoningStyle.BUDGET_MIN}
     ),
+    # 끌 수 있으면 thinking 칸으로 끈다. 끌 수 없는 모델(GLM-5.3 계열)은 칸을 보내지 않고 생각의 몫을 더한다
+    Provider.ZAI: frozenset({ReasoningStyle.THINKING_TYPE, ReasoningStyle.ALWAYS}),
 }
 # 생각을 끌 수 없는 방식들. 이 모델들은 판매가를 생각의 몫까지 넣어 매긴다(유저 결정, model-pricing-plan 9-2)
 ALWAYS_THINKING = frozenset(

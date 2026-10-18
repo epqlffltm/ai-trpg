@@ -10,7 +10,7 @@
 
 목록의 모델을 부를 수 없으면 ProviderError 다. 다른 모델로 바꿔 부르지 않는다. 값이 다른 모델로 몰래 넘어가지 않는다.
   - model_unavailable: 꺼졌거나 은퇴했다. 관리 명령으로 켜야 한다(scripts/models.py).
-  - provider_not_configured: 그 창구의 키가 없다(OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY).
+  - provider_not_configured: 그 창구의 키가 없다(OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, ZAI_API_KEY).
   - provider_unsupported: 그 창구를 부르는 코드가 아직 없다. 지금은 모든 창구에 코드가 있다. 새 창구를 더할 때 쓴다.
 이때는 부르지 않았으므로 호출의 기록(ai_invocations)이 없다. 대신 warning 한 줄을 남긴다.
 
@@ -35,7 +35,7 @@ from app.ai.openai_compat import DEFAULT_TOKEN_FIELD, LOCAL_OPTIONS, OpenAICompa
 from app.ai.provider import LLMProvider, ProviderError
 from app.catalog.lookup import CatalogModel, ModelLookup
 from app.catalog.models import Provider, ReasoningStyle
-from app.catalog.rules import is_offered, is_retired
+from app.catalog.rules import always_thinks, is_offered, is_retired
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ LOCAL_KIND = 'openai_compat'
 OPENAI_KIND = 'openai'
 ANTHROPIC_KIND = 'anthropic'
 GEMINI_KIND = 'gemini'
+ZAI_KIND = 'zai'
 
 
 def today_utc() -> date:
@@ -76,11 +77,19 @@ class Endpoint:
 
 
 def options_of(model: CatalogModel) -> WireOptions:
-    """목록의 모델이 받는 칸."""
+    """
+    목록의 모델이 받는 칸. OpenAI 모양으로 부르는 창구(openai, local, zai)의 모델에 쓴다.
+
+    생각의 방식(reasoning_style)이 있으면 그것을 따른다. thinking 칸으로 켜고 끄거나(thinking_type), 끌 수 없다(always).
+    그런 모델에는 reasoning_effort 를 보내지 않는다(app/ai/openai_compat.py 의 build_body).
+    """
+    style = model.reasoning_style
     return WireOptions(
         supports_reasoning=model.supports_reasoning,
         supports_temperature=model.supports_temperature,
         token_field=model.token_limit_field or DEFAULT_TOKEN_FIELD,
+        thinking_switch=style == ReasoningStyle.THINKING_TYPE,
+        always_thinks=always_thinks(style),
     )
 
 
@@ -98,7 +107,9 @@ class ModelRouter:
     이름으로 provider 를 고른다. 앱에 하나 둔다(app/rounds/narrator_setup.py 의 build_router).
 
     lookup: 모델 목록에서 찾는 것(app/catalog/lookup.py). 지금은 부를 때마다 DB 에서 읽는다.
-    local: 서버 곁의 모델의 창구(LLM_BASE_URL). openai, anthropic, gemini: 외부 API 의 창구. 키가 없으면 None 이다.
+    local: 서버 곁의 모델의 창구(LLM_BASE_URL). openai, anthropic, gemini, zai: 외부 API 의 창구. 키가 없으면 None 이다.
+    OpenAI 와 같은 모양의 창구(openai, zai)는 같은 provider 로 부른다. 주소와 키와 받는 칸만 다르다.
+    같은 모양의 창구를 더할 때는 여기에 칸을 하나, endpoint_for 의 표에 줄을 하나 더한다.
     local_options: 서버 곁의 모델이 받는 칸(LLM_SUPPORTS_REASONING). 목록에 없는 이름에 쓴다.
     today 는 테스트가 바꿔 꽂는다.
     """
@@ -112,12 +123,18 @@ class ModelRouter:
     today: Callable[[], date] = today_utc
     anthropic: Endpoint | None = None
     gemini: Endpoint | None = None
+    zai: Endpoint | None = None
 
     def endpoint_for(self, provider: Provider) -> Endpoint:
         """창구의 이름으로 창구를 고른다. 키가 없거나 코드가 없으면 ProviderError."""
         if provider == Provider.LOCAL:
             return self.local
-        external = {Provider.OPENAI: self.openai, Provider.ANTHROPIC: self.anthropic, Provider.GEMINI: self.gemini}
+        external = {
+            Provider.OPENAI: self.openai,
+            Provider.ANTHROPIC: self.anthropic,
+            Provider.GEMINI: self.gemini,
+            Provider.ZAI: self.zai,
+        }
         if provider not in external:
             raise ProviderError(PROVIDER_UNSUPPORTED)
         endpoint = external[provider]
