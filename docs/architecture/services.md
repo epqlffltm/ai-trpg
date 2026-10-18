@@ -103,6 +103,7 @@
 | 결제 → 인증 | 미성년자의 결제와 청약철회를 보호자에게 알리라는 부탁(정리 작업이 보낸다) | `billing-server/README.md` 의 "정리 작업과 대사" |
 | 결제 대행사 → 결제 | 결제 알림(웹훅). 본문의 결과를 믿지 않고 결제 대행사에 다시 묻는다 | `billing-server/README.md` 의 "주문과 결제" |
 | 결제 → 결제 대행사 | 결제 승인, 취소, 결과 묻기 | `billing-server/README.md` 의 "주문과 결제" |
+| 게임, 결제, 게시판 → 알림 | 사람에게 보낼 알림 넣기(`POST /api/v1/notification/service/{source}/notifications`). 서명 비밀은 넣는 서버마다 따로다(알림 서버의 `GAME_SERVER_SECRET`, `BILLING_SERVER_SECRET`, `BOARD_SERVER_SECRET`). 게임과 게시판은 일이 일어난 트랜잭션에서 발송함에 적고 5초마다 보낸다. 결제는 정리 작업이 주문과 지급에서 알릴 일을 찾아 보낸다 | `notification-server/README.md` 의 "알림 넣기" |
 | 게임, 게시판, 결제, 알림 → 인증 | 공개키(JWKS)와 끊긴 세션의 목록 받기 | `auth-server/README.md` |
 
 앞으로 생길 길(계획):
@@ -111,7 +112,6 @@
 | --- | --- | --- |
 | chat → 결제 | 대화의 값을 홀드로 받기, 가격 목록 받기 | 게임 서버와 같은 방식. 서명 비밀은 서버마다 따로(`CHAT_SERVER_SECRET`)고, 비밀마다 쓸 수 있는 가격표 이름의 머리가 정해진다([이름 규칙](#이름-규칙)). chat-server 를 만드는 PR 에서 결제 쪽도 함께 고친다 |
 | 게임, chat → 자산 | 방이나 대화를 만들 때, 쓸 자산의 게시된 판을 가져와 자기 DB 에 복사해 고정한다. 턴마다 부르지 않는다 | 서명 비밀은 부르는 서버마다 따로 둔다. 쓸 수 있는 사람인지(소유자나 공개)와 등급은 asset-server 가 판단한다. 가져온 뒤 원본이 바뀌어도 복사본은 그대로고, 새 판이 있다고 알리기만 한다 |
-| 게임, 결제, 게시판 → 알림 | 사람에게 보낼 알림 넣기. 받는 쪽(`POST /api/v1/notification/service/{source}/notifications`)은 있다 | 서명 비밀은 넣는 서버마다 따로(`GAME_SERVER_SECRET` 등, 알림 서버의 설정). 넣는 쪽은 발송함에 적고 워커가 보낸다(인증 → 결제의 환영 크레딧과 같다). 원본은 `notification-server/README.md` 의 "알림 넣기" |
 | 인증 → 게시판 | 닉네임 바꾸기와 탈퇴 알림 | 인증 서버에 그 기능이 생길 때 |
 | 관리 → 인증, 게시판, 결제, 게임, 자산, chat | 정지, 숨기기, 가격표 바꾸기, 결과를 모르는 주문 정하기 같은 관리자 작업 요청 | 각 서비스의 관리자용 API 를 부른다. 관리 서버가 다른 서비스의 DB 를 고치지 않는다 |
 | 서비스 → 로그 수집기(Collector) | 로그, 메트릭, 추적 | 관리 서버를 거치지 않는다. [관측 규격](../observability.md#opentelemetry-collector-를-붙일-자리) |
