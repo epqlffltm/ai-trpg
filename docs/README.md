@@ -7,6 +7,7 @@
 | [observability.md](observability.md) | 서버들이 함께 지키는 관측 규격. 로그의 모양, 요청·추적·작업 식별자, 민감정보, health 와 readiness, 메트릭의 이름, 관리 서버의 경계 |
 | [architecture/services.md](architecture/services.md) | 서비스 구조 명세. 서버 목록과 계획, 나누는 기준, 서비스 사이의 길, 토큰, 데이터, 이름 규칙, 서비스를 더할 때 고칠 곳, 열린 질문 |
 | [architecture/operators.md](architecture/operators.md) | 운영자 권한. 누가 운영자인가(토큰의 `roles`), 서비스마다 운영자가 더 할 수 있는 것, 감사 기록, 사용자에게 알릴 것, 순서 |
+| [architecture/deployment.md](architecture/deployment.md) | 배포 설계. 첫 배포(운영자 혼자 쓰는 서버)의 클라우드, 막는 법, 환경 이름, TLS, 올리는 방식, 비밀, 백업, 지켜보기, VM 준비 순서 |
 | [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. 공유 후보, 언제 뽑는지, 버전과 CI |
 | [product/platform.md](product/platform.md) | 플랫폼과 제품 방향. 제품 셋(TRPG, chat, story), 원칙, 화면과 모바일의 방향, 정하지 않은 것 |
 | [product/screens.md](product/screens.md) | 화면 명세의 목차 초안. 흐름, 화면 목록, 화면마다 채울 칸, 공통 상태, 첫 출시의 범위 |
