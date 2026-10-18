@@ -30,7 +30,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.WHISPER_NOTICE_CHANGED: ('whisper_notice',),
     EventType.LEDGER_DRAFTS_CHANGED: ('ledger_drafts',),
     # 소지품은 공개다. 누가 무엇을 몇 개 받거나 잃었고, 그 뒤에 몇 개인가.
-    # 몬스터를 쓰러뜨려 얻었으면 라운드, 출처(source: monster, 그 마리와 장면의 호칭), 상한을 넘어 잃은 개수가 더 있다
+    # 몬스터를 쓰러뜨려 얻었으면 라운드, 출처(source: monster, 그 마리와 장면의 호칭), 상한을 넘어 잃은 개수가 더 있다.
+    # 장소에서 주웠거나 찾았으면 라운드, 출처(source: place, search), 장소(place)가 더 있다
     EventType.ITEMS_GAINED: (
         'round',
         'user_id',
@@ -43,6 +44,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'source',
         'monster_id',
         'monster_name',
+        'place',
     ),
     EventType.ITEMS_LOST: ('user_id', 'character_name', 'entry_id', 'name', 'count', 'total'),
     # 물건을 쓰고 건넨 것도 공개다. 못 했으면 까닭(reason)이 있다
@@ -66,7 +68,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     # 캐릭터의 위치는 공개다. 아는 장소만 적히므로 숨긴 장소는 새지 않는다
     EventType.CHARACTER_MOVED: ('round', 'user_id', 'character_name', 'from', 'to', 'travel_minutes'),
     # 찾은 길은 공개다. 찾았으니 이제 모두가 아는 길이다. 굴린 판정은 처음부터 적지 않는다
-    EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found'),
+    EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found', 'items'),
     # 쉰 것과 그 회복, 깨진 까닭은 공개다. HP 는 다른 회복과 같이 보인다
     EventType.CHARACTER_RESTED: (
         'round',

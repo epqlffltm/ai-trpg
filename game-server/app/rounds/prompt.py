@@ -30,7 +30,7 @@ from dataclasses import dataclass
 
 from app.ai.provider import ChatMessage, Role
 from app.assets.models import LoreKind, NarrationStyle
-from app.rounds.move_lines import describe_injuries, lost_before_acting, round_lines
+from app.rounds.move_lines import describe_injuries, describe_items, lost_before_acting, round_lines
 from app.rounds.narrator import (
     ClockNote,
     LoreNote,
@@ -41,6 +41,7 @@ from app.rounds.narrator import (
     PastRound,
     PersonHistory,
     PersonState,
+    PlaceNote,
     QuestNote,
     StoryContext,
     WhisperNote,
@@ -105,7 +106,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 더 들 수 없어 잃은 것도 붙는다. 받을 사람이 없어 사라진 드롭은 붙이지 않는다(#372)
 #   narration-30: [퀘스트]의 다루는 법이 "방장이 정한"에서 "게임이 정한"으로 바뀐다.
 #                 성공은 엔진이 조건을 보고 정한다(#367)
-PROMPT_VERSION = 'narration-30'
+#   narration-31: [맵]의 장소 줄에 보이게 놓인 물건과 숨은 물건(플레이어는 모름, 실마리로만)이,
+#                 한 일의 줄에 줍기의 결과와 찾기로 찾은 물건이 붙는다(#279). 다루는 법에 숨은 물건이 더해진다
+PROMPT_VERSION = 'narration-31'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -346,7 +349,9 @@ MAP_NOTE = (
     '서술에서 캐릭터를 다른 장소로 옮기지 마라. 장소를 옮기는 것은 엔진이다. '
     "아래에 '숨은 길'로 적힌 것만 플레이어가 모른다. 그 길 너머 장소의 이름은 일부라도 쓰지 말고, "
     '그 장소에서만 찾아볼 만한 실마리(바람이 새는 틈, 닳은 바닥 같은 것)로 흘려라. '
-    "'숨은 길'이 적히지 않은 장소에는 그런 실마리를 만들지 마라."
+    "'숨은 길'이 적히지 않은 장소에는 그런 실마리를 만들지 마라. "
+    "'숨은 물건'도 같다. 그 물건의 이름은 쓰지 말고 그 장소에서만 실마리로 흘려라. "
+    "'놓인 물건'은 플레이어도 본다. 캐릭터가 줍기 전에는 아직 그 자리에 있다."
 )
 # 출구가 없는 장소에 적는 말
 NO_EXITS = '없음'
@@ -617,15 +622,20 @@ def clock_lines(clock: ClockNote | None) -> list[str]:
     return [*lines, '']
 
 
-def map_line(name: str, characters: list[str], exits: list[str], hidden: list[str]) -> str:
+def map_line(name: str, characters: list[str], place: PlaceNote) -> str:
     """
-    장소 한 줄. 누가 서 있는지, 아는 출구, 숨은 길.
+    장소 한 줄. 누가 서 있는지, 아는 출구, 숨은 길, 놓인 물건, 숨은 물건.
 
-    예: - 광장(기사, 약사): 나가는 길: 성문, 숲. 숨은 길(플레이어는 모름, 실마리로만): 지하실
+    예: - 광장(기사, 약사): 나가는 길: 성문, 숲. 숨은 길(플레이어는 모름, 실마리로만): 지하실.
+        놓인 물건: 치유 물약 2개. 숨은 물건(플레이어는 모름, 실마리로만): 은열쇠
     """
-    line = f'- {name}({", ".join(characters)}): 나가는 길: {", ".join(exits) or NO_EXITS}'
-    if hidden:
-        line += f'. 숨은 길(플레이어는 모름, 실마리로만): {", ".join(hidden)}'
+    line = f'- {name}({", ".join(characters)}): 나가는 길: {", ".join(place.exits) or NO_EXITS}'
+    if place.hidden:
+        line += f'. 숨은 길(플레이어는 모름, 실마리로만): {", ".join(place.hidden)}'
+    if place.items:
+        line += f'. 놓인 물건: {describe_items(place.items)}'
+    if place.hidden_items:
+        line += f'. 숨은 물건(플레이어는 모름, 실마리로만): {", ".join(place.hidden_items)}'
     return line
 
 
@@ -645,7 +655,7 @@ def map_lines(moves: list[Move]) -> list[str]:
     lines = [MAP_TITLE, MAP_NOTE]
     for name, here in standing.items():
         place = here[0].place
-        lines.append(map_line(name, [move.character_name for move in here], place.exits, place.hidden))
+        lines.append(map_line(name, [move.character_name for move in here], place))
     return [*lines, '']
 
 

@@ -39,6 +39,7 @@ from app.tables import (
     ledger_draft_options,
     narration_models,
     place_changes,
+    place_items,
     places,
     quest_changes,
     quests,
@@ -84,6 +85,7 @@ from app.tables.schemas import (
     NarrationStyleUpdate,
     NextPriceOut,
     PlaceChange,
+    PlaceItemOut,
     PlaceOut,
     PregenChoice,
     QuestChange,
@@ -228,13 +230,34 @@ def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem]) ->
     )
 
 
-def to_map(table: GameTable, snapshot: Snapshot) -> MapOut | None:
-    """테이블이 아는 맵을 응답으로 바꾼다. 맵이 없는 판이면 None. 아는 것만 싣는다(app/tables/places.py)."""
+def to_place_items(table: GameTable, place_id: uuid.UUID, catalog: dict[uuid.UUID, CatalogItem]) -> list[PlaceItemOut]:
+    """
+    그 장소에 보이게 놓인 물건들을 응답으로 바꾼다. 서 본 적 없는 장소면 빈 목록이다.
+
+    숨긴 물건은 싣지 않는다(app/tables/place_items.py).
+    """
+    if place_id not in place_items.seen_places(table):
+        return []
+    return [
+        PlaceItemOut(entry_id=pile.entry_id, name=catalog[pile.entry_id].name, count=pile.count)
+        for pile in place_items.piles_at(table, place_id)
+    ]
+
+
+def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, CatalogItem]) -> MapOut | None:
+    """
+    테이블이 아는 맵을 응답으로 바꾼다. 맵이 없는 판이면 None. 아는 것만 싣는다(app/tables/places.py).
+
+    catalog 는 판의 물건들이다. 장소에 놓인 물건의 이름을 찾는다.
+    """
     known = places.known_map(snapshot, places.knowledge(table))
     if known is None:
         return None
     return MapOut(
-        places=[PlaceOut(entry_id=place.id, name=place.name) for place in known.places],
+        places=[
+            PlaceOut(entry_id=place.id, name=place.name, items=to_place_items(table, place.id, catalog))
+            for place in known.places
+        ],
         routes=[
             RouteOut(
                 from_place=route.from_place,
@@ -355,7 +378,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         pregens=to_pregen_choices(table, snapshot),
         items=to_catalog(catalog),
         quests=[to_quest(quest, quest_catalog) for quest in quests.visible_quests(table, quest_catalog)],
-        map=to_map(table, snapshot),
+        map=to_map(table, snapshot, catalog),
         members=[to_member(table, member, catalog) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
         started_at=table.started_at,

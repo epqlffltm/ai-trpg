@@ -103,7 +103,9 @@ def test_a_hidden_route_is_hinted_from_either_end():
     secret = {'from_place': str(SQUARE), 'to_place': str(GATE), 'visibility': 'hidden', 'find': {'ability': 'wis'}}
     snapshot = Snapshot.model_validate(map_document(start_place=str(GATE), routes=[secret]))
     known = places.Knowledge(seen=frozenset({GATE}), found=frozenset())
-    mapping = MapView(snapshot, places.known_map(snapshot, known), known, {GATE: '성문', SQUARE: '광장'})
+    table = SimpleNamespace(place_items=[])
+    names = {GATE: '성문', SQUARE: '광장'}
+    mapping = MapView(table, snapshot, places.known_map(snapshot, known), known, names, {})
 
     at_gate = place_note(mapping, SimpleNamespace(sheet=SimpleNamespace(place_id=GATE)))
     at_square = place_note(mapping, SimpleNamespace(sheet=SimpleNamespace(place_id=SQUARE)))
@@ -142,7 +144,9 @@ def test_the_map_rule_keeps_only_the_listed_hidden_routes_secret():
     # 넓게 막으면 찾은 길까지 쓰지 않는다(narration-21). 숨은 길이 없는 곳에는 실마리를 만들지 않는다
     assert "'숨은 길'로 적힌 것만" in MAP_NOTE
     assert "'숨은 길'이 적히지 않은 장소에는 그런 실마리를 만들지 마라" in MAP_NOTE
-    assert map_line('광장', ['기사'], ['성문'], ['지하실']).endswith('숨은 길(플레이어는 모름, 실마리로만): 지하실')
+    place = PlaceNote(name='광장', exits=['성문'], hidden=['지하실'])
+
+    assert map_line('광장', ['기사'], place).endswith('숨은 길(플레이어는 모름, 실마리로만): 지하실')
 
 
 def test_a_place_without_known_exits_says_so():

@@ -22,6 +22,7 @@ from app.events.models import EventType, TableEvent
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.models import Declaration, Round
+from app.rounds.place_item_actions import Source
 from app.rounds.rests import Cause, Recovered
 from app.rounds.state import (
     find_declaration,
@@ -32,6 +33,7 @@ from app.rounds.state import (
     naming_of,
     rest_of,
     search_of,
+    take_of,
 )
 from app.tables.models import DeathCause, GameTable, InjurySource, TableMember
 
@@ -256,10 +258,53 @@ def record_search(session: AsyncSession, table: GameTable, declaration: Declarat
     """
     찾기의 결과를 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. 행한 사람을 적지 않는다.
 
-    찾은 길만 있다. 굴린 판정은 결과에도 없다(app/rounds/map_actions.py). 숨긴 길이 있었는지 드러나지 않는다.
+    찾은 길과 물건만 있다. 굴린 판정은 결과에도 없다(app/rounds/map_actions.py). 숨긴 것이 있었는지 드러나지 않는다.
+    찾은 물건은 찾은 사람이 가졌으므로 그 뒤에 물건마다 items_gained 를 잇는다(source 는 search).
     """
-    payload = {'round': cause.payload['round'], 'character_name': declaration.character_name, **search_of(declaration)}
-    recorder.record(session, table, EventType.PLACE_SEARCHED, payload=payload, cause=cause)
+    search = search_of(declaration)
+    payload = {'round': cause.payload['round'], 'character_name': declaration.character_name, **search}
+    searched = recorder.record(session, table, EventType.PLACE_SEARCHED, payload=payload, cause=cause)
+    for thing in search.get('items', []):
+        if thing['count']:
+            record_gained(session, table, declaration, thing, Source.SEARCH, search['place'], searched)
+
+
+def record_take(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    줍기의 결과를 이벤트로 적는다. 하나라도 주웠으면 items_gained 하나다(source 는 place). 그 행동의 이벤트에 잇는다.
+
+    못 주웠으면(남은 것이 없었다, 가득 찼다) 적지 않는다. 바뀐 것이 없다. 까닭은 라운드의 선언 결과에 있다.
+    행한 사람을 적지 않는다. 판의 물건을 준 것은 엔진이다.
+    """
+    take = take_of(declaration)
+    if not take['taken']:
+        return
+    thing = {key: take[key] for key in ('entry_id', 'name', 'total')} | {'count': take['taken']}
+    record_gained(session, table, declaration, thing, Source.PLACE, take['place'], cause)
+
+
+def record_gained(
+    session: AsyncSession,
+    table: GameTable,
+    declaration: Declaration,
+    thing: dict,
+    source: str,
+    place: dict | None,
+    cause: TableEvent,
+) -> None:
+    """장소에서 얻은 물건 한 가지를 items_gained 로 적는다. 방장이 줄 때와 같은 종류에 출처와 장소가 붙는다."""
+    payload = {
+        'round': cause.payload['round'],
+        'user_id': str(declaration.user_id),
+        'character_name': declaration.character_name,
+        'entry_id': thing['entry_id'],
+        'name': thing['name'],
+        'count': thing['count'],
+        'total': thing['total'],
+        'source': source,
+        'place': place,
+    }
+    recorder.record(session, table, EventType.ITEMS_GAINED, payload=payload, cause=cause)
 
 
 def record_rest(
@@ -327,6 +372,8 @@ def record_declaration(
         record_move(session, table, declaration, cause=acted)
     elif search_of(declaration) is not None:
         record_search(session, table, declaration, cause=acted)
+    elif take_of(declaration) is not None:
+        record_take(session, table, declaration, cause=acted)
     elif rest_of(declaration) is not None:
         record_rest(session, table, member, declaration, cause=acted)
 
