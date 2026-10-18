@@ -8,7 +8,7 @@
     async def read_me(user: CurrentUser) -> ...
 
 검증의 결과를 HTTP 응답으로 바꾸는 일도 여기서 한다.
-  - 토큰이 없거나 틀렸다 -> 401. 클라이언트는 토큰을 갱신하거나 다시 로그인한다.
+  - 토큰이 없거나 틀렸거나 끊긴 세션의 것이다 -> 401. 클라이언트는 토큰을 갱신하거나 다시 로그인한다.
   - 키를 구할 수 없어 확인하지 못했다 -> 503. 클라이언트의 잘못이 아니다. 로그아웃시키면 안 된다.
 """
 
@@ -61,7 +61,12 @@ async def get_current_user(
         raise unauthorized()
 
     try:
-        return await verify_access_token(credentials.credentials, request.app.state.jwks, request.app.state.settings)
+        return await verify_access_token(
+            credentials.credentials,
+            request.app.state.jwks,
+            request.app.state.revocations,
+            request.app.state.settings,
+        )
     except InvalidTokenError as error:
         raise unauthorized() from error
     except JwksUnavailableError as error:
