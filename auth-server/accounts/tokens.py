@@ -9,6 +9,7 @@ JWT 발급, 갱신, 폐기.
     - 토큰에 세션 버전(ver)을 넣어, 사용자의 모든 세션을 한 번에 끊을 수 있게 한다.
     - access 토큰에 닉네임(nickname)을 넣어, 다른 서버가 인증 서버를 부르지 않고 글쓴이의 이름을 알게 한다.
     - access 토큰에 성인용 내용을 볼 수 있는지(adult_content)를 넣는다(#336, 게임 서버의 #59).
+    - access 토큰에 역할(roles)을 넣는다. 운영자면 ["operator"](#389, docs/architecture/operators.md).
     - refresh 토큰은 쓸 때마다 새것으로 바꾸고, 이미 폐기된 토큰이 다시 쓰이면 탈취로 본다.
 """
 
@@ -30,6 +31,7 @@ from accounts.age import korean_today
 from accounts.identity_status import identity_status_of
 from accounts.key_ring import current_key_ring
 from accounts.models import User
+from accounts.roles import roles_of
 
 # 세션 버전을 담는 클레임 이름
 VERSION_CLAIM = 'ver'
@@ -37,6 +39,8 @@ VERSION_CLAIM = 'ver'
 NICKNAME_CLAIM = 'nickname'
 # 성인용 내용을 볼 수 있는지를 담는 클레임 이름. 참이나 거짓이다. 이 클레임이 없는 옛 토큰은 거짓으로 본다
 ADULT_CONTENT_CLAIM = 'adult_content'
+# 역할을 담는 클레임 이름. 글자의 목록이다. 일반 사용자는 빈 목록이고, 이 클레임이 없는 옛 토큰도 일반 사용자로 본다
+ROLES_CLAIM = 'roles'
 
 
 class InvalidRefreshTokenError(Exception):
@@ -162,10 +166,13 @@ def _access_token_for(refresh: RefreshToken, user: User) -> AccessToken:
     성인용 내용을 볼 수 있는지도 갱신할 때마다 오늘(한국 날짜) 기준으로 다시 정한다.
     본인인증을 마친 사람이 만 19세가 되는 해의 1월 1일을 지났으면 참이다. 인증한 뒤나 그날이 온 뒤의 첫 갱신부터 실린다.
     참, 거짓만 싣는다. 생일이나 나이는 싣지 않는다.
+
+    역할도 갱신할 때마다 그룹을 다시 읽어 싣는다. 운영자에서 빼면 늦어도 15분 뒤에는 빠진다.
     """
     access = refresh.access_token
     access[NICKNAME_CLAIM] = user.nickname
     access[ADULT_CONTENT_CLAIM] = identity_status_of(user, korean_today()).adult_content
+    access[ROLES_CLAIM] = roles_of(user)
     return access
 
 
