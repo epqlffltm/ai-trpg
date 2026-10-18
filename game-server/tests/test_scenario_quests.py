@@ -73,15 +73,24 @@ async def test_quests_are_saved_and_read_back(client: AsyncClient, me: dict[str,
 
     read = (await client.get(f'{SCENARIOS_URL}/{scenario["id"]}', headers=me)).json()
 
-    # 시작 상태를 적지 않으면 숨김, 보상과 기한을 적지 않으면 없다
+    # 시작 상태를 적지 않으면 숨김, 보상과 기한과 조건을 적지 않으면 없다
     assert read['quests'] == [
         {
             'entry_id': lore['rescue']['id'],
             'start': 'active',
             'reward': [stack(lore['potion'], 2)],
             'time_limit_minutes': None,
+            'conditions': [],
+            'match': 'all',
         },
-        {'entry_id': lore['mine']['id'], 'start': 'hidden', 'reward': [], 'time_limit_minutes': None},
+        {
+            'entry_id': lore['mine']['id'],
+            'start': 'hidden',
+            'reward': [],
+            'time_limit_minutes': None,
+            'conditions': [],
+            'match': 'all',
+        },
     ]
 
 
@@ -162,6 +171,8 @@ async def test_quests_are_frozen_into_the_version(client: AsyncClient, me: dict[
             'start': 'active',
             'reward': [stack(lore['potion'], 2)],
             'time_limit_minutes': None,
+            'conditions': [],
+            'match': 'all',
         }
     ]
 

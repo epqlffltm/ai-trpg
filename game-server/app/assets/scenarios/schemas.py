@@ -23,6 +23,7 @@ from app.assets.models import (
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
     CLOCK_MAX_DAY,
+    COUNTED_CONDITIONS,
     DEFAULT_CHARACTER_MODES,
     DEFAULT_NARRATION_STYLE,
     DEFAULT_ROUND_MINUTES,
@@ -34,6 +35,8 @@ from app.assets.models import (
     MONSTER_MAX_ATTACKS,
     MONSTER_MAX_DROPS,
     PLAYER_MADE_HP_MAX,
+    QUEST_CONDITION_MAX_COUNT,
+    QUEST_MAX_CONDITIONS,
     QUEST_MAX_TIME_LIMIT_MINUTES,
     ROUND_MAX_MINUTES,
     SCENARIO_MAX_BESTIARIES,
@@ -54,6 +57,8 @@ from app.assets.models import (
     CharacterMode,
     ItemKind,
     NarrationStyle,
+    QuestConditionKind,
+    QuestMatch,
     QuestStart,
     Rating,
     RouteVisibility,
@@ -403,6 +408,47 @@ def reject_duplicate_rules(rules: list[ItemRule]) -> list[ItemRule]:
 ItemRules = Annotated[list[ItemRule], Field(max_length=SCENARIO_MAX_ITEM_RULES), AfterValidator(reject_duplicate_rules)]
 
 
+class QuestCondition(BaseModel):
+    """
+    퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).
+
+    reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것), hold_item 은 물건 항목,
+    defeat_npc 는 인물 항목이다. count 는 defeat_monster 와 hold_item 만 쓴다. 나머지는 1 로 둔다.
+    가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: QuestConditionKind
+    target: uuid.UUID
+    count: int = Field(default=1, ge=1, le=QUEST_CONDITION_MAX_COUNT)
+
+    @model_validator(mode='after')
+    def count_only_when_counted(self) -> 'QuestCondition':
+        """세지 않는 조건(장소에 닿기, 인물 쓰러뜨리기)에는 count 를 적지 않는다."""
+        if self.count != 1 and self.kind not in COUNTED_CONDITIONS:
+            raise ValueError('count 는 defeat_monster 와 hold_item 에만 적습니다.')
+        return self
+
+    @field_serializer('target')
+    def target_as_text(self, target: uuid.UUID) -> str:
+        """가리키는 것의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(target)
+
+
+def reject_duplicate_conditions(conditions: list[QuestCondition]) -> list[QuestCondition]:
+    """같은 종류의 같은 대상이 두 줄이면 거부한다. 한 줄에 count 로 적는다."""
+    pairs = [(condition.kind, condition.target) for condition in conditions]
+    if len(set(pairs)) != len(pairs):
+        raise ValueError('같은 조건이 두 번 있습니다.')
+    return conditions
+
+
+QuestConditions = Annotated[
+    list[QuestCondition], Field(max_length=QUEST_MAX_CONDITIONS), AfterValidator(reject_duplicate_conditions)
+]
+
+
 class QuestRule(BaseModel):
     """
     퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.
@@ -410,7 +456,10 @@ class QuestRule(BaseModel):
     start 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.
     time_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.
     비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).
-    규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한이 없다.
+    conditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).
+    match 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.
+    조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.
+    규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.
     가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.
     """
 
@@ -421,6 +470,8 @@ class QuestRule(BaseModel):
     # 시작 소지품과 모양이 같다. 같은 물건은 한 줄에 개수로 적는다
     reward: StartingItems = []
     time_limit_minutes: int | None = Field(default=None, ge=1, le=QUEST_MAX_TIME_LIMIT_MINUTES)
+    conditions: QuestConditions = []
+    match: QuestMatch = QuestMatch.ALL
 
     @field_serializer('entry_id')
     def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
