@@ -12,6 +12,8 @@
 #   - IP 마다 요청 수를 센다(#22). 넘으면 429 다. 인증 서버의 제한(Redis)이 꺼져 있어도 바깥에서 막는다.
 #   - 요청 식별자(X-Request-ID)를 nginx 가 정해 서버에 넘긴다. nginx 의 줄과 서버의 줄이 같은 request_id 로 이어진다.
 #   - 클라이언트가 지어 보낸 IP 와 출처의 머리말(X-Real-IP, Forwarded, X-Forwarded-Host)을 덮거나 지운다(#353, README 의 "외부에 열기 전").
+#   - 모든 응답에 보안 머리말(nosniff, CSP, Referrer-Policy)을 붙인다(#361, security-headers.inc.template).
+#     add_header 를 쓰는 location 은 그 파일을 include 한다. 안 하면 server 의 것을 물려받지 못한다.
 #   - 로그를 공통 규격(docs/observability.md)의 JSON 으로 남긴다. 경로와 주소 뒤의 값은 적지 않는다.
 
 # 컨테이너의 주소를 Docker 의 DNS 에서 찾고 10초 기억한다. 서버가 다시 떠서 주소가 바뀌어도 따라간다.
@@ -96,6 +98,12 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header Forwarded "";
     proxy_set_header X-Forwarded-Host "";
+    # 보안 머리말(#361). 서버가 보낸 같은 머리말(인증 서버의 nosniff, Referrer-Policy 등)은 지우고 이 값 하나만 보낸다.
+    # 여기 것은 add_header 가 없는 location(서버에 넘기는 곳)이 물려받는다
+    proxy_hide_header X-Content-Type-Options;
+    proxy_hide_header Content-Security-Policy;
+    proxy_hide_header Referrer-Policy;
+    include /etc/nginx/conf.d/security-headers.inc;
     # 서버와의 연결을 HTTP/1.1 로 맺는다. SSE 가 끊기지 않고 흐른다
     proxy_http_version 1.1;
     proxy_set_header Connection "";
@@ -127,6 +135,7 @@ server {
     location ^~ /api/v1/auth/service/ {
         types { }
         add_header X-Request-ID $request_id always;
+        include /etc/nginx/conf.d/security-headers.inc;
         return 404 '{"detail":"찾을 수 없습니다."}';
     }
 
@@ -181,6 +190,7 @@ server {
         # 주소의 확장자(.css 등)로 형식을 고르지 않는다. 본문은 늘 JSON 이다
         types { }
         add_header X-Request-ID $request_id always;
+        include /etc/nginx/conf.d/security-headers.inc;
         return 404 '{"detail":"찾을 수 없습니다."}';
     }
 
@@ -191,27 +201,32 @@ server {
         # 주소의 확장자(.css 등)로 형식을 고르지 않는다. 본문은 늘 JSON 이다
         types { }
         add_header X-Request-ID $request_id always;
+        include /etc/nginx/conf.d/security-headers.inc;
         return 404 '{"detail":"찾을 수 없습니다."}';
     }
 
     location @too_many_requests {
         add_header Retry-After $retry_after always;
         add_header X-Request-ID $request_id always;
+        include /etc/nginx/conf.d/security-headers.inc;
         return 429 '{"detail":"요청이 너무 많습니다. 잠시 뒤에 다시 시도하세요.","code":"too_many_requests"}';
     }
 
     location @bad_gateway {
         add_header X-Request-ID $request_id always;
+        include /etc/nginx/conf.d/security-headers.inc;
         return 502 '{"detail":"서버에 닿지 못했습니다. 잠시 뒤에 다시 시도하세요."}';
     }
 
     location @gateway_timeout {
         add_header X-Request-ID $request_id always;
+        include /etc/nginx/conf.d/security-headers.inc;
         return 504 '{"detail":"서버가 제때 답하지 않았습니다. 잠시 뒤에 다시 시도하세요."}';
     }
 
     # nginx 가 직접 답하는 본문은 JSON 이다. 서버가 답한 것은 서버가 정한 형식 그대로다.
-    # nginx 가 답할 때는 location 마다 X-Request-ID 를 붙인다. 여기서 붙이면 서버가 돌려준 것과 두 번 실린다
+    # nginx 가 답할 때는 location 마다 X-Request-ID 를 붙인다. 여기서 붙이면 서버가 돌려준 것과 두 번 실린다.
+    # location 에 add_header 를 쓰면 보안 머리말도 사라지므로 security-headers.inc 를 함께 include 한다
     default_type application/json;
 }
 

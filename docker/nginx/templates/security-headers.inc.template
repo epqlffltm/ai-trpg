@@ -1,0 +1,16 @@
+# docker/nginx/templates/security-headers.inc.template
+# 프록시가 모든 응답에 붙이는 보안 머리말(#361). default.conf.template 이 server 와 location 에서 include 한다.
+#
+# 이미지가 뜰 때 이 파일도 ${이름} 을 바꿔 /etc/nginx/conf.d/security-headers.inc 로 쓴다(바꿀 것은 없다).
+# 끝이 .conf 가 아니라서 nginx 가 http 에서 저절로 읽지 않는다. include 한 곳에서만 쓰인다.
+#
+# nginx 의 함정: location 에 add_header 가 하나라도 있으면 server 의 add_header 를 모두 버린다.
+# 그래서 add_header 를 쓰는 location 은 이 파일도 include 한다. 빠뜨리면 그 응답에서 머리말이 빠진다.
+#
+# 응답이 JSON 이라도 브라우저가 HTML 로 짐작해 실행하지 않게 한다(nosniff).
+# 문서로 열려도 아무것도 불러오거나 실행하지 못하고, 다른 사이트의 iframe 에 들어가지 못한다(CSP).
+# 주소에 든 값이 다른 사이트로 새지 않게 한다(Referrer-Policy).
+# 화면(#290)을 이 프록시로 내주게 되면 화면에는 화면에 맞는 CSP 를 따로 둔다. 이 값은 API 의 것이다
+add_header X-Content-Type-Options "nosniff" always;
+add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
+add_header Referrer-Policy "no-referrer" always;
