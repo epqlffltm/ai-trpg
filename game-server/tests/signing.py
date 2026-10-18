@@ -69,13 +69,17 @@ def make_access_claims(**overrides) -> dict:
     return claims
 
 
-def make_viewer(user_id: uuid.UUID, seconds: float = ACCESS_TOKEN_SECONDS) -> AccessClaims:
+def make_viewer(
+    user_id: uuid.UUID, seconds: float = ACCESS_TOKEN_SECONDS, *, adult_content: bool = False
+) -> AccessClaims:
     """
     검증을 마친 토큰의 값을 직접 만든다. 서비스를 API 없이 부르는 테스트가 쓴다.
 
     seconds 는 지금부터 만료까지의 시간이다. 음수를 주면 이미 만료된 것이 된다.
+    adult_content 는 성인용 내용을 볼 수 있는지다. 기본은 볼 수 없음이다(인증 서버의 본인인증 전과 같다).
     """
-    return AccessClaims(user_id=user_id, expires_at=datetime.now(UTC) + timedelta(seconds=seconds))
+    expires_at = datetime.now(UTC) + timedelta(seconds=seconds)
+    return AccessClaims(user_id=user_id, expires_at=expires_at, adult_content=adult_content)
 
 
 @dataclass

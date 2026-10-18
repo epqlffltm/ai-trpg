@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.assets.models import Scenario, ScenarioVersion
+from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session, to_summary
 from app.assets.scenarios import publishing, service
 from app.assets.scenarios.publishing import ScenarioNotReadyError
@@ -131,7 +132,7 @@ async def create_scenario(
     data: ScenarioCreate, user: CurrentUser, session: Session, prices: Prices, now: Now
 ) -> ScenarioDetail:
     """시나리오를 만든다. 룰북, 세계관, 로어북은 자기 것만 가리킬 수 있다. 추천 서술 모델을 반드시 고른다."""
-    scenario = await service.create_scenario(session, user.user_id, data, now.date())
+    scenario = await service.create_scenario(session, user.user_id, data, now.date(), allowed_ratings(user))
     return await detail_of(session, prices, now, scenario)
 
 
@@ -156,7 +157,9 @@ async def update_scenario(
     scenario_id: uuid.UUID, data: ScenarioUpdate, user: CurrentUser, session: Session, prices: Prices, now: Now
 ) -> ScenarioDetail:
     """자기 시나리오를 고친다. 보낸 칸만 바뀐다. 룰북과 세계관은 null 로 떼고, 로어북은 목록을 통째로 바꾼다."""
-    scenario = await service.update_scenario(session, user.user_id, scenario_id, data, now.date())
+    scenario = await service.update_scenario(
+        session, user.user_id, scenario_id, data, now.date(), allowed_ratings(user)
+    )
     return await detail_of(session, prices, now, scenario)
 
 
@@ -187,7 +190,7 @@ async def publish_scenario(
 
     판의 로어북 항목은 뒤에서 벡터로 바뀐다. 응답은 그것을 기다리지 않는다.
     """
-    version = await publishing.publish(session, user.user_id, scenario_id, data, indexer)
+    version = await publishing.publish(session, user.user_id, scenario_id, data, indexer, allowed_ratings(user))
     return to_version_detail(version)
 
 

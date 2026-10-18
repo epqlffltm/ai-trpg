@@ -61,8 +61,26 @@ def their_headers(signing_key: SigningKey) -> dict[str, str]:
     return bearer(signing_key, SOMEONE_ELSE)
 
 
-def bearer(signing_key: SigningKey, user_id: uuid.UUID) -> dict[str, str]:
-    token = make_token(signing_key, make_access_claims(sub=str(user_id)))
+@pytest.fixture
+def adult_headers(signing_key: SigningKey) -> dict[str, str]:
+    """성인용 내용을 볼 수 있는 다른 사람의 머리말(#59)."""
+    return bearer(signing_key, SOMEONE_ELSE, adult_content=True)
+
+
+@pytest.fixture
+def my_adult_headers(signing_key: SigningKey) -> dict[str, str]:
+    """성인용 내용을 볼 수 있는 내 토큰의 머리말. 성인용 시나리오를 쓰고 공개하는 사람이다(#390)."""
+    return bearer(signing_key, ME, adult_content=True)
+
+
+@pytest.fixture
+def operator_headers(signing_key: SigningKey) -> dict[str, str]:
+    """성인 인증을 하지 않은 운영자의 머리말(#390)."""
+    return bearer(signing_key, SOMEONE_ELSE, roles=['operator'])
+
+
+def bearer(signing_key: SigningKey, user_id: uuid.UUID, **claims) -> dict[str, str]:
+    token = make_token(signing_key, make_access_claims(sub=str(user_id), **claims))
     return {'Authorization': f'Bearer {token}'}
 
 
@@ -521,38 +539,98 @@ async def test_the_title_follows_the_scenario(client: AsyncClient, my_headers: d
 # --- 성인용 ---
 
 
-async def test_an_adult_scenario_can_be_made_public_but_is_not_listed(
-    client: AsyncClient, my_headers: dict[str, str], their_headers: dict[str, str]
+async def test_an_adult_scenario_is_not_listed_for_someone_who_may_not_see_it(
+    client: AsyncClient, my_headers: dict[str, str], my_adult_headers: dict[str, str], their_headers: dict[str, str]
 ):
-    scenario = await make_public(client, my_headers, rating='adult')
+    scenario = await make_public(client, my_adult_headers, rating='adult')
 
     mine = (await client.get(listing_url(scenario), headers=my_headers)).json()
     listed = await client.get(LISTINGS_URL, headers=their_headers)
     read = await client.get(f'{LISTINGS_URL}/{scenario["id"]}', headers=their_headers)
     read_by_owner = await client.get(f'{LISTINGS_URL}/{scenario["id"]}', headers=my_headers)
 
-    # 제작자의 화면에는 공개 중이고 성인용이라고 나온다
+    # 제작자의 화면에는 공개 중이고 성인용이라고 나온다. 읽기는 막지 않는다
     assert (mine['version'], mine['rating']) == (1, 'adult')
-    # 성인 인증이 아직 없어서, 공개의 길에서는 누구에게도 보이지 않는다. 만든 사람에게도 그렇다
+    # 성인용 내용을 볼 수 없는 토큰에는 공개의 길에서 보이지 않는다. 만든 사람이라도 그렇다
     assert listed.json() == {'items': [], 'total': 0}
     assert read.status_code == status.HTTP_404_NOT_FOUND
     assert read_by_owner.status_code == status.HTTP_404_NOT_FOUND
 
 
-async def test_the_rating_comes_from_the_public_version_not_the_draft(
-    client: AsyncClient, my_headers: dict[str, str], their_headers: dict[str, str]
+@pytest.mark.parametrize('viewer', ['adult_headers', 'operator_headers'])
+async def test_an_adult_scenario_is_listed_for_someone_who_may_see_it(
+    client: AsyncClient, my_adult_headers: dict[str, str], viewer: str, request: pytest.FixtureRequest
 ):
-    scenario = await make_public(client, my_headers, rating='adult')
+    headers = request.getfixturevalue(viewer)
+    scenario = await make_public(client, my_adult_headers, rating='adult')
+
+    listed = (await client.get(LISTINGS_URL, headers=headers)).json()
+    read = await client.get(f'{LISTINGS_URL}/{scenario["id"]}', headers=headers)
+
+    # 성인용 내용을 볼 수 있는 사람과, 성인 인증을 하지 않은 운영자(#390)에게 보인다
+    assert [item['scenario_id'] for item in listed['items']] == [scenario['id']]
+    assert read.status_code == status.HTTP_200_OK
+    assert read.json()['rating'] == 'adult'
+
+
+async def test_an_adult_version_is_made_public_only_by_someone_who_may_see_it(
+    client: AsyncClient, my_headers: dict[str, str], my_adult_headers: dict[str, str]
+):
+    scenario = await make_public(client, my_adult_headers, rating='adult')
+    publication = f'{listing_url(scenario)}/publication'
+
+    edited = await client.patch(listing_url(scenario), json={'tagline': '바꾼 한줄'}, headers=my_headers)
+    taken_down = await client.put(publication, json={'version': None}, headers=my_headers)
+    put_back = await client.put(publication, json={'version': 1}, headers=my_headers)
+
+    # 성인용 내용을 볼 수 없는 토큰으로는 소개를 고치거나 성인용 판을 공개하지 못한다
+    assert edited.status_code == status.HTTP_403_FORBIDDEN
+    assert put_back.status_code == status.HTTP_403_FORBIDDEN
+    assert put_back.json()['code'] == 'adult_content_required'
+    # 공개를 내리는 것은 된다. 성인용을 공개의 길에서 거두는 일이다
+    assert taken_down.status_code == status.HTTP_200_OK
+    assert taken_down.json()['version'] is None
+
+
+async def test_the_page_of_an_adult_draft_cannot_be_written_without_seeing_adult_content(
+    client: AsyncClient, my_headers: dict[str, str], my_adult_headers: dict[str, str]
+):
+    # 아직 공개한 적 없는 성인용 초안. 공개 정보의 등급은 기본값(전체 이용가)이라 초안의 등급으로 막는다
+    scenario = await create_scenario(client, my_adult_headers, rating='adult')
+
+    response = await client.patch(listing_url(scenario), json={'tagline': TAGLINE}, headers=my_headers)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+async def test_the_page_of_a_public_adult_version_cannot_be_written_without_seeing_adult_content(
+    client: AsyncClient, my_headers: dict[str, str], my_adult_headers: dict[str, str]
+):
+    # 성인용 판을 공개한 뒤 초안만 전체 이용가로 내렸다. 공개 중인 판이 성인용이라 막는다
+    scenario = await make_public(client, my_adult_headers, rating='adult')
+    lowered = await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'rating': 'all'}, headers=my_adult_headers)
+    assert lowered.status_code == status.HTTP_200_OK
+
+    response = await client.patch(listing_url(scenario), json={'tagline': '바꾼 한줄'}, headers=my_headers)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+async def test_the_rating_comes_from_the_public_version_not_the_draft(
+    client: AsyncClient, my_adult_headers: dict[str, str], their_headers: dict[str, str]
+):
+    headers = my_adult_headers
+    scenario = await make_public(client, headers, rating='adult')
 
     # 공개한 뒤에 초안의 등급을 전체 이용가로 내린다. 공개 중인 판은 여전히 성인용이다
-    await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'rating': 'all'}, headers=my_headers)
+    await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json={'rating': 'all'}, headers=headers)
 
-    assert (await client.get(listing_url(scenario), headers=my_headers)).json()['rating'] == 'adult'
+    assert (await client.get(listing_url(scenario), headers=headers)).json()['rating'] == 'adult'
     assert (await client.get(LISTINGS_URL, headers=their_headers)).json()['total'] == 0
 
     # 전체 이용가로 새 판을 내고 그 판을 공개하면 그때 보인다
-    number = await publish_version(client, my_headers, scenario)
-    await client.put(f'{listing_url(scenario)}/publication', json={'version': number}, headers=my_headers)
+    number = await publish_version(client, headers, scenario)
+    await client.put(f'{listing_url(scenario)}/publication', json={'version': number}, headers=headers)
 
     assert (await client.get(LISTINGS_URL, headers=their_headers)).json()['total'] == 1
 

@@ -20,7 +20,13 @@ from app.assets.bestiaries import router as bestiaries
 from app.assets.bestiaries.service import BestiaryFullError
 from app.assets.lorebooks import router as lorebooks
 from app.assets.lorebooks.service import LorebookFullError
-from app.assets.routing import handle_asset_in_use, handle_asset_not_found, handle_asset_reference
+from app.assets.ratings import AdultContentRequiredError
+from app.assets.routing import (
+    handle_adult_content_required,
+    handle_asset_in_use,
+    handle_asset_not_found,
+    handle_asset_reference,
+)
 from app.assets.rulebooks import router as rulebooks
 from app.assets.scenarios import router as scenarios
 from app.assets.scenarios.publishing import ScenarioNotReadyError
@@ -283,6 +289,7 @@ def create_app(
     app.add_exception_handler(MemberNotFoundError, tables.handle_member_not_found)
     app.add_exception_handler(NotHostError, tables.handle_not_host)
     app.add_exception_handler(WrongPasswordError, tables.handle_wrong_password)
+    app.add_exception_handler(AdultContentRequiredError, handle_adult_content_required)
     app.add_exception_handler(TableConflictError, tables.handle_table_conflict)
     app.add_exception_handler(DraftNotFoundError, ledger_drafts.handle_draft_not_found)
     app.add_exception_handler(TableOptionError, tables.handle_table_option)
