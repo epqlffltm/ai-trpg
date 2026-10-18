@@ -11,6 +11,8 @@ import { AccessClaims } from './tokens.js';
 const USER: AccessClaims = {
   userId: '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b',
   expiresAt: new Date('2027-01-15T08:00:00.000Z'),
+  version: 1,
+  isOperator: false,
 };
 
 describe('userOf', () => {

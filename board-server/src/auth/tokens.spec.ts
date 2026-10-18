@@ -92,8 +92,35 @@ describe('buildAccessClaims', () => {
       userId: USER_ID,
       expiresAt: new Date('2027-01-15T08:00:00.000Z'),
       version: 0,
+      isOperator: false,
     });
   });
+
+  it('roles 에 operator 가 있으면 운영자다', () => {
+    const claims = buildAccessClaims({
+      token_type: 'access',
+      sub: USER_ID,
+      exp: 1_800_000_000,
+      roles: ['operator'],
+    });
+
+    expect(claims.isOperator).toBe(true);
+  });
+
+  it.each([[[]], ['operator'], [{ operator: true }], [null]])(
+    'roles 가 운영자 목록이 아니면(%j) 토큰은 받고 운영자가 아니다',
+    (roles) => {
+      const claims = buildAccessClaims({
+        token_type: 'access',
+        sub: USER_ID,
+        exp: 1_800_000_000,
+        roles,
+      });
+
+      expect(claims.userId).toBe(USER_ID);
+      expect(claims.isOperator).toBe(false);
+    },
+  );
 
   it('세션 버전(ver)을 꺼낸다. 없으면 0 이다', () => {
     const claims = (ver?: unknown) =>

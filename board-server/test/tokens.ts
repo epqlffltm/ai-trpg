@@ -6,6 +6,9 @@
  * 인증 서버가 발급하는 access 토큰과 같은 모양으로 만든다(auth-server/accounts/tokens.py).
  * 머리말에 kid, 안에는 iss, aud(목록), sub(public_id), exp, token_type 이 있다.
  * 테스트는 여기서 한 가지씩만 틀리게 바꿔, 그 하나 때문에 거부되는지 본다.
+ *
+ * 운영자는 인증 서버의 operators 그룹을 흉내 낸다. grantOperator 로 넣은 사람의 토큰에는 roles 에 "operator" 가 실린다.
+ * 인증 서버처럼 토큰을 만들 때 그룹을 읽으므로, 빼면(revokeOperator) 그 뒤에 만든 토큰부터 운영자가 아니다.
  */
 
 import { exportJWK, generateKeyPair, JWK, SignJWT } from 'jose';
@@ -42,6 +45,37 @@ export interface TokenOptions {
   nickname?: string;
   /** 토큰에 싣는 세션 버전(ver). 적지 않으면 1 이다 */
   version?: number;
+  /**
+   * 토큰에 싣는 역할(roles). 적지 않으면 인증 서버처럼 정한다. 운영자 그룹에 있으면 ["operator"], 아니면 [] 다.
+   * 틀린 모양을 시험할 때는 그 값을 그대로 적는다
+   */
+  roles?: unknown;
+}
+
+/** 운영자 그룹에 든 사람들의 public_id. 인증 서버의 Django 그룹 operators 를 흉내 낸다 */
+const operators = new Set<string>();
+
+/** 사람을 운영자 그룹에 넣는다. 그 뒤에 만든 토큰부터 운영자다. */
+export function grantOperator(userId: string): void {
+  operators.add(userId);
+}
+
+/** 사람을 운영자 그룹에서 뺀다. 그 뒤에 만든 토큰부터 운영자가 아니다. */
+export function revokeOperator(userId: string): void {
+  operators.delete(userId);
+}
+
+/** 운영자 그룹을 비운다. 테스트마다 먼저 부른다(test/data.ts 의 clearData). */
+export function forgetOperators(): void {
+  operators.clear();
+}
+
+/** 토큰에 실을 역할. 적은 것이 없으면 운영자 그룹을 보고 정한다. */
+function rolesFor(subject: string, roles: unknown): unknown {
+  if (roles !== undefined) {
+    return roles;
+  }
+  return operators.has(subject) ? ['operator'] : [];
 }
 
 /** 새 RSA 키 한 벌을 만든다. */
@@ -76,9 +110,11 @@ export function signToken(
   key: SigningKey,
   options: TokenOptions = {},
 ): Promise<string> {
+  const subject = options.subject ?? USER_ID;
   return new SignJWT({
     token_type: options.tokenType ?? 'access',
     ver: options.version ?? 1,
+    roles: rolesFor(subject, options.roles),
     ...(options.nickname === undefined ? {} : { nickname: options.nickname }),
   })
     .setProtectedHeader({
@@ -88,7 +124,7 @@ export function signToken(
     })
     .setIssuer(options.issuer ?? ISSUER)
     .setAudience(options.audience ?? AUDIENCES)
-    .setSubject(options.subject ?? USER_ID)
+    .setSubject(subject)
     .setExpirationTime(nowSeconds() + (options.expiresInSeconds ?? 900))
     .setJti('test-token')
     .sign(key.privateKey);

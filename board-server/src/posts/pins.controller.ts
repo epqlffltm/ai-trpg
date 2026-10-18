@@ -39,7 +39,7 @@ export class PinsController {
     @Body() input: PinPostDto,
     @CurrentUser() user: AccessClaims,
   ): Promise<void> {
-    await this.pins.pin(id, user.userId, input.days, new Date());
+    await this.pins.pin(id, user, input.days, new Date());
   }
 
   /** 글의 고정을 푼다. */
@@ -49,6 +49,6 @@ export class PinsController {
     @Param('id', PostIdPipe) id: string,
     @CurrentUser() user: AccessClaims,
   ): Promise<void> {
-    await this.pins.unpin(id, user.userId);
+    await this.pins.unpin(id, user);
   }
 }

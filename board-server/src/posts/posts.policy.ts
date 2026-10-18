@@ -15,7 +15,7 @@
 import { Board } from '../boards/board.entity.js';
 import { Post } from './post.entity.js';
 
-/** 이 게시판은 운영자만 쓰는가. 운영자인지 DB 에 물어야 하는지를 이것으로 안다. */
+/** 이 게시판은 운영자만 쓰는가. */
 export function isOperatorOnly(board: Pick<Board, 'writePolicy'>): boolean {
   return board.writePolicy === 'operator';
 }
@@ -55,18 +55,6 @@ export function canEdit(
 }
 
 /**
- * 고쳐도 되는지 알려면 운영자인지를 DB 에 물어야 하는가.
- * 운영자만 쓰는 게시판의 제 글일 때만 묻는다. 남의 글은 묻지 않아도 안 되고, 누구나 쓰는 게시판의 제 글은 묻지 않아도 된다.
- */
-export function needsOperatorCheckToEdit(
-  post: Pick<Post, 'authorId'>,
-  board: Pick<Board, 'writePolicy'>,
-  userId: string,
-): boolean {
-  return isOperatorOnly(board) && isAuthor(post, userId);
-}
-
-/**
  * 이 글을 지워도 되는가. 글쓴이와 운영자다.
  * 운영자만 쓰는 게시판의 글은 운영자만 지운다. 글쓴이여도 지금 운영자가 아니면 지우지 못한다.
  */
@@ -80,16 +68,4 @@ export function canDelete(
     return isOperator;
   }
   return isAuthor(post, userId) || isOperator;
-}
-
-/**
- * 지워도 되는지 알려면 운영자인지를 DB 에 물어야 하는가.
- * 누구나 쓰는 게시판의 제 글이면 묻지 않는다. 글쓴이는 운영자가 아니어도 지운다.
- */
-export function needsOperatorCheckToDelete(
-  post: Pick<Post, 'authorId'>,
-  board: Pick<Board, 'writePolicy'>,
-  userId: string,
-): boolean {
-  return isOperatorOnly(board) || !isAuthor(post, userId);
 }

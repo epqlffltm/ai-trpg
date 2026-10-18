@@ -13,7 +13,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThan, Not, Repository } from 'typeorm';
 import { Board } from '../boards/board.entity.js';
-import { OperatorsService } from '../operators/operators.service.js';
+import type { Actor } from '../auth/actor.js';
 import { canPin, hasRoomToPin, pinEndsAt } from './pins.policy.js';
 import { Post } from './post.entity.js';
 import { operatorOnlyPin, pinLimitReached } from './posts.errors.js';
@@ -24,7 +24,6 @@ export class PinsService {
   constructor(
     @InjectRepository(Post) private readonly posts: Repository<Post>,
     private readonly postsService: PostsService,
-    private readonly operators: OperatorsService,
   ) {}
 
   /**
@@ -50,14 +49,9 @@ export class PinsService {
    * 글을 days 일 동안 고정한다. 이미 고정한 글이면 기간을 새로 잡는다. 맨 위로 올라온다.
    * 없는 글이면 404, 운영자가 아니면 403, 그 게시판에 고정한 글이 이미 다 찼으면 409 다.
    */
-  async pin(
-    id: string,
-    userId: string,
-    days: number,
-    now: Date,
-  ): Promise<void> {
+  async pin(id: string, actor: Actor, days: number, now: Date): Promise<void> {
     const post = await this.postsService.get(id);
-    await this.ensureCanPin(userId);
+    ensureCanPin(actor);
     if (!hasRoomToPin(await this.countOthersPinned(post, now))) {
       throw pinLimitReached();
     }
@@ -65,17 +59,10 @@ export class PinsService {
   }
 
   /** 글의 고정을 푼다. 고정하지 않은 글이어도 오류가 아니다. 없는 글이면 404, 운영자가 아니면 403 이다. */
-  async unpin(id: string, userId: string): Promise<void> {
+  async unpin(id: string, actor: Actor): Promise<void> {
     const post = await this.postsService.get(id);
-    await this.ensureCanPin(userId);
+    ensureCanPin(actor);
     await this.writePin(post.id, null, null);
-  }
-
-  /** 고정해도 되는 사람인지 확인한다. 아니면 403 을 낸다. */
-  private async ensureCanPin(userId: string): Promise<void> {
-    if (!canPin(await this.operators.isOperator(userId))) {
-      throw operatorOnlyPin();
-    }
   }
 
   /** 같은 게시판에서 이 글 말고 지금 고정되어 있는 글의 수. */
@@ -100,5 +87,12 @@ export class PinsService {
       .set({ pinnedAt, pinnedUntil, updatedAt: () => '"updated_at"' })
       .where({ id })
       .execute();
+  }
+}
+
+/** 고정해도 되는 사람인지 확인한다. 아니면 403 을 낸다. */
+function ensureCanPin(actor: Actor): void {
+  if (!canPin(actor.isOperator)) {
+    throw operatorOnlyPin();
   }
 }

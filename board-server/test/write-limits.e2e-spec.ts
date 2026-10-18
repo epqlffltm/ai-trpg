@@ -45,7 +45,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await clearData(app);
-  await makeOperator(app, OPERATOR);
+  makeOperator(OPERATOR);
 });
 
 /** 이 사람의 토큰을 붙인 머리말. */

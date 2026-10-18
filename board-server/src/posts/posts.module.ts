@@ -1,7 +1,7 @@
 // board-server/src/posts/posts.module.ts
 
 /**
- * 글을 맡는 모듈. 게시판을 찾는 데 BoardsModule 을, 운영자인지 묻는 데 OperatorsModule 을 쓴다.
+ * 글을 맡는 모듈. 게시판을 찾는 데 BoardsModule 을 쓴다. 운영자인지는 토큰이 알려 준다(auth/roles.ts).
  * 글을 고정하고 푸는 일(PinsService)도 여기에 있다. 고정은 글의 상태다.
  * 글을 찾는 일(PostsSearchService)도 여기에 있다.
  * 글에 달린 댓글의 수는 CommentCountsModule 이 세고, 글쓴이의 닉네임은 AuthorsModule 이 읽는다.
@@ -13,7 +13,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthorsModule } from '../authors/authors.module.js';
 import { BoardsModule } from '../boards/boards.module.js';
 import { CommentCountsModule } from '../comment-counts/comment-counts.module.js';
-import { OperatorsModule } from '../operators/operators.module.js';
 import { WriteLimitsModule } from '../write-limits/write-limits.module.js';
 import { PinsController } from './pins.controller.js';
 import { PinsService } from './pins.service.js';
@@ -31,7 +30,6 @@ import { PostsService } from './posts.service.js';
   imports: [
     TypeOrmModule.forFeature([Post]),
     BoardsModule,
-    OperatorsModule,
     CommentCountsModule,
     WriteLimitsModule,
     AuthorsModule,

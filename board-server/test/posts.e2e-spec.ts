@@ -170,7 +170,7 @@ describe('글 쓰기', () => {
   });
 
   it('운영자만 쓰는 게시판에 운영자는 쓴다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
 
     const response = await write(OPERATOR, 'notice');
 
@@ -396,7 +396,7 @@ describe('글 고치기', () => {
   });
 
   it('운영자도 남의 글은 고치지 못한다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const id = await writtenId(WRITER);
 
     const response = await edit(OPERATOR, id, { title: '운영자가 고친 제목' });
@@ -405,7 +405,7 @@ describe('글 고치기', () => {
   });
 
   it('운영자만 쓰는 게시판의 글은 지금 운영자인 글쓴이가 고친다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const id = await writtenId(OPERATOR, 'notice');
 
     const response = await edit(OPERATOR, id, { title: '고친 공지' });
@@ -415,9 +415,9 @@ describe('글 고치기', () => {
   });
 
   it('운영자만 쓰는 게시판의 글은 글쓴이여도 운영자에서 내려왔으면 고치지 못한다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const id = await writtenId(OPERATOR, 'notice');
-    await removeOperator(app, OPERATOR);
+    removeOperator(OPERATOR);
 
     const response = await edit(OPERATOR, id, {
       title: '내려온 뒤에 고친 공지',
@@ -432,8 +432,8 @@ describe('글 고치기', () => {
 
   it('다른 운영자도 남의 공지는 고치지 못한다', async () => {
     const another = 'e5f6a7b8-9c0d-4e1f-8a2b-3c4d5e6f7a8b';
-    await makeOperator(app, OPERATOR);
-    await makeOperator(app, another);
+    makeOperator(OPERATOR);
+    makeOperator(another);
     const id = await writtenId(OPERATOR, 'notice');
 
     const response = await edit(another, id, { title: '남이 고친 공지' });
@@ -537,7 +537,7 @@ describe('글 지우기', () => {
   });
 
   it('운영자는 남의 글도 지운다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const id = await writtenId(WRITER);
 
     const response = await remove(OPERATOR, id);
@@ -547,7 +547,7 @@ describe('글 지우기', () => {
   });
 
   it('운영자만 쓰는 게시판의 글은 운영자가 지운다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const id = await writtenId(OPERATOR, 'notice');
 
     const response = await remove(OPERATOR, id);
@@ -557,9 +557,9 @@ describe('글 지우기', () => {
   });
 
   it('운영자만 쓰는 게시판의 글은 글쓴이여도 운영자에서 내려왔으면 지우지 못한다', async () => {
-    await makeOperator(app, OPERATOR);
+    makeOperator(OPERATOR);
     const id = await writtenId(OPERATOR, 'notice');
-    await removeOperator(app, OPERATOR);
+    removeOperator(OPERATOR);
 
     const response = await remove(OPERATOR, id);
 
