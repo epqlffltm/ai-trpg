@@ -102,3 +102,21 @@ def mark_first_fall(npc: TableNpc, round_number: int) -> bool:
         return False
     npc.fell_round = round_number
     return True
+
+
+def mark_robbed(npc: TableNpc, round_number: int) -> None:
+    """
+    쓰러져 있는 NPC 가 물건을 빼앗겼다고 적는다. 처음 빼앗긴 라운드만 적는다(여러 번 빼앗겨도 반응은 한 번이다).
+
+    죽은 NPC 는 깨어나지 않으므로 적지 않는다. 상태를 고친다. 저장하지는 않는다.
+    """
+    if npc.status == NpcStatus.DOWNED and npc.robbed_round is None:
+        npc.robbed_round = round_number
+
+
+def take_robbed(npc: TableNpc) -> bool:
+    """깨어나는 NPC 가 쓰러진 동안 빼앗겼었는가. 그랬으면 적어 둔 것을 비우고 참이다(반응은 한 번만 굴린다)."""
+    if npc.robbed_round is None:
+        return False
+    npc.robbed_round = None
+    return True

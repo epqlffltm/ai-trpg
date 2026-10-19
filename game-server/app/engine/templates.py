@@ -39,6 +39,7 @@ from app.engine.ruleset import (
     PointCost,
     Rest,
     Revive,
+    RobbedWake,
     Ruleset,
     ScoreRoll,
     ShortRest,
@@ -241,6 +242,9 @@ SRD5_STEAL = Steal(
     distracted=2,
 )
 
+# 쓰러져 있는 동안 빼앗긴 인물이 깨어나면 열에 하나는 적대하고, 열에 넷은 경계한다. 나머지는 눈치채지 못한다
+SRD5_ROBBED_WAKE = RobbedWake(hostile=10, wary=40)
+
 SRD5 = Ruleset(
     template=Template.SRD5,
     abilities=(
@@ -299,6 +303,7 @@ SRD5 = Ruleset(
     treatment=SRD5_TREATMENT,
     rest=SRD5_REST,
     steal=SRD5_STEAL,
+    robbed_wake=SRD5_ROBBED_WAKE,
 )
 
 TEMPLATES: dict[Template, Ruleset] = {Template.SRD5: SRD5}

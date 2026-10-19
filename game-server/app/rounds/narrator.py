@@ -87,6 +87,18 @@ class DroppedNote:
 
 
 @dataclass(frozen=True)
+class WakeNote:
+    """
+    쓰러진 동안 빼앗겼던 NPC 가 깨어나 그것을 알아챈 것(app/rounds/wakes.py). 엔진이 굴리고 정한 것이다.
+
+    attitude 는 바뀐 태도의 말(경계, 적대)이다. 눈치채지 못했거나 태도가 바뀌지 않았으면 서술자에게 주지 않는다.
+    """
+
+    name: str
+    attitude: str
+
+
+@dataclass(frozen=True)
 class DropNote:
     """
     몬스터나 NPC 를 쓰러뜨려 얻은 물건. 엔진이 굴리고 엔진이 줬다. 서술자는 이것을 사실로 받아 쓰기만 한다.
@@ -160,6 +172,8 @@ class Verdict:
     monster_impact: NpcImpact | None = None
     # 이 판정으로 몬스터를 처음 쓰러뜨려 얻은 물건. 없으면 None 이다. 이 칸이 생기기 전에 굳힌 것도 None 이다
     drop: DropNote | None = None
+    # 이 판정으로 쓰러진 동안 빼앗겼던 인물을 일으켰고 그 인물이 그것을 알아챘으면 그 반응. 아니면 None 이다
+    wake: WakeNote | None = None
     # 이 판정에 영향을 준 부상들의 이름(보정이 깎였거나 불리했다). 없으면 비어 있다
     hindrances: list[str] = field(default_factory=list)
     # 노려 쳤으면 노린 부상의 이름. 판정이 그만큼 어려웠다. 성공했으면 그 부상이 생겼다(impact 에 적힌다)

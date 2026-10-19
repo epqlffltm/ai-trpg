@@ -14,6 +14,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from app.assets.models import NpcAttitude
 from app.rounds.cast import CastMember
 from app.rounds.monster_scene import SceneMonster
 from app.tables import carried, monster_items, npc_items
@@ -76,7 +77,11 @@ def monster_victim(monster: SceneMonster) -> Victim:
 
 
 def npc_victim(person: CastMember) -> Victim:
-    """NPC 하나를 대상으로 본다. 시트를 적지 않은 인물은 아무것도 지니지 않고 둔하지 않다."""
+    """
+    NPC 하나를 대상으로 본다. 시트를 적지 않은 인물은 아무것도 지니지 않고 둔하지 않다.
+
+    경계하는 인물은 싸움 전이어도 방심하지 않는다(#494).
+    """
     npc = person.npc
     return Victim(
         key=person.entry_id,
@@ -84,7 +89,7 @@ def npc_victim(person: CastMember) -> Victim:
         abilities=npc.abilities,
         kind=None,
         dull=person.definition.dull if person.definition else False,
-        unwary=is_unwary(npc),
+        unwary=is_unwary(npc) and npc.attitude != NpcAttitude.WARY,
         held=npc_items.carried(npc, person.definition),
         set_count=lambda slot, count: npc_items.set_count(npc, slot, count),
         origin=npc_origin(person),

@@ -290,6 +290,24 @@ class Steal(Part):
         return self
 
 
+class RobbedWake(Part):
+    """
+    쓰러져 있는 동안 물건을 빼앗긴 NPC 가 깨어날 때의 반응(#494). 백면체를 한 번 굴려 정한다.
+
+    hostile(%) 이하면 적대, 그다음 wary(%) 만큼이면 경계, 나머지는 눈치채지 못한다. 둘의 합은 100 을 넘지 않는다.
+    """
+
+    hostile: Annotated[int, Field(ge=0, le=100)]
+    wary: Annotated[int, Field(ge=0, le=100)]
+
+    @model_validator(mode='after')
+    def reject_over_hundred(self) -> Self:
+        """적대와 경계의 확률을 더해 100 을 넘으면 굴림이 맞지 않는다."""
+        if self.hostile + self.wary > 100:
+            raise ValueError('깨어날 때의 적대와 경계의 확률을 더하면 100 을 넘습니다.')
+        return self
+
+
 class EffectKind(enum.StrEnum):
     """
     부상이 엔진에 주는 효과의 종류. 엔진이 실제로 집행하는 것은 이것뿐이다.
@@ -600,6 +618,8 @@ class Ruleset(Part):
     rest: Rest | None
     # 훔치기. None 이면 이 규칙에는 훔치는 행동이 없다. 칸 자체는 늘 있어야 한다
     steal: Steal | None
+    # 쓰러져 있는 동안 빼앗긴 NPC 가 깨어날 때의 반응. None 이면 반응이 없다. 칸 자체는 늘 있어야 한다
+    robbed_wake: RobbedWake | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
