@@ -414,9 +414,10 @@ no_env_file_in_image() {
 }
 
 # 설정을 보는 검사(secret_scope.py, port_scope.py, logging_scope.py, dashboard_scope.py)의 규칙이 맞는가.
-# 규칙이 틀리면 새는 것을 놓치고 초록이 된다
+# 규칙이 틀리면 새는 것을 놓치고 초록이 된다. .env 를 만들고 비밀을 채우는 도구(tools/fill_env.py)의 테스트도 함께 돌린다
 scope_rules_hold() {
-  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_*_scope.py'
+  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_*_scope.py' &&
+    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_fill_env.py'
 }
 
 # 지금의 DB 를 뜨고, 그 백업을 같은 DB 서버의 빈 DB 에 풀어 표마다 줄 수가 같은지 본다(docker/backup/db-backup.sh).
@@ -770,7 +771,7 @@ check() {
   report "결제 서버의 정리 작업이 알림 서버에 닿는다" reachable_from billing-sweeper http://notification-server:8004/health
   report "게시판 서버가 알림 서버에 닿는다" reachable_from board-server http://notification-server:8004/health
   report "게시판 서버가 서명한 알림을 알림 서버가 받는다" board_notification_accepted
-  report "설정 검사(비밀, 열린 포트, 로그 상한, 대시보드)의 규칙이 맞다" scope_rules_hold
+  report "설정 검사(비밀, 열린 포트, 로그 상한, 대시보드)와 .env 를 채우는 도구의 규칙이 맞다" scope_rules_hold
   check_config "비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" compose .github/scripts/secret_scope.py
   check_config "바깥에 여는 포트는 정해 둔 것뿐이고 모두 127.0.0.1 에 묶였다(port_scope.py)" compose .github/scripts/port_scope.py
   check_config "모든 서비스의 로그에 크기와 파일 수의 상한이 있다(logging_scope.py)" compose .github/scripts/logging_scope.py

@@ -53,13 +53,25 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 
 ### 1. 인프라 환경 변수
 
-`.env.example`을 복사해 `.env`를 만들고 `POSTGRES_PASSWORD`, `AUTH_DB_PASSWORD`,
-`GAME_DB_PASSWORD`, `BILLING_DB_PASSWORD`, `BOARD_DB_PASSWORD`, `NOTIFICATION_DB_PASSWORD`를 채운다. 이 파일은 커밋하지 않는다.
-개발 PC 에서는 `AUTH_DB_ALLOW_TEST_DB=true` 를 그대로 둔다. 인증 서버의 테스트가 테스트용 DB 를 만든다. 운영에서는 이 줄을 지운다.
+여섯 개의 `.env`(루트와 서버 다섯)를 `.env.example` 에서 만들고, 비밀번호와 비밀을 난수로 채운다. 저장소 루트에서 실행한다.
+이 파일들은 커밋하지 않는다.
 
 ```
-cp .env.example .env
+uv run --no-project python tools/fill_env.py
 ```
+
+- 비었거나 자리표시자(`바꿔야합니다`, `여기에비밀번호`)인 비밀만 채운다. 이미 적힌 값은 바꾸지 않는다. 몇 번 돌려도 된다
+- 두 파일이 함께 아는 값은 같은 값으로 맞춘다. 루트의 DB 비밀번호와 그 서버의 `DATABASE_URL`, 서버끼리의 비밀(결제 서버의 `AUTH_SERVER_SECRET` 과 인증 서버의 `BILLING_SECRET` 등)이다.
+  한쪽에만 값이 있으면 그 값을 다른 쪽에 옮겨 적는다. 양쪽이 서로 다르면 고치지 않고 알린다
+- `.env.example` 에서 주석으로 막아 둔 줄은 주석인 채로 값만 채운다. 기능은 `#` 를 지울 때 켜진다
+- 값은 화면에 찍지 않는다. 무엇을 채웠는지 이름만 찍는다. 미리 보려면 `--dry-run` 을 붙인다
+- 결제 대행사, 메일 서버, AI 의 키처럼 밖에서 받는 키는 채우지 않는다. 그 이름을 따로 알린다
+- Grafana 의 관리자 비밀번호도 난수다. 루트 `.env` 의 `GRAFANA_ADMIN_PASSWORD` 를 읽어 들어간다
+- DB 의 볼륨이 이미 있으면 DB 의 계정은 옛 비밀번호 그대로다. 적힌 값을 바꾸지 않으니 평소에는 문제가 없다.
+  `.env` 를 잃어버렸을 때만 계정의 비밀번호를 다시 맞춘다(새 비밀번호로 `ALTER ROLE`)
+
+개발 PC 에서는 `AUTH_DB_ALLOW_TEST_DB=true` 를 그대로 둔다. 인증 서버의 테스트가 테스트용 DB 를 만든다. 운영에서는 이 줄을 지운다.
+손으로 만들려면 `cp .env.example .env` 로 복사해 값을 채운다. 각 줄의 뜻은 `.env.example` 의 주석에 있다.
 
 ### 2. 인프라
 
