@@ -172,7 +172,7 @@ docker compose run --rm --entrypoint pg_restore db-backup --clean --if-exists --
 
 ## 로그와 메트릭 모으기
 
-compose 의 컨테이너 로그와 메트릭을 모아(Grafana Alloy) 저장하고(Loki, Prometheus) 본다(Grafana)(#25). 프로필 `observability` 로 켠다. 기본으로 꺼져 있다.
+compose 의 컨테이너 로그와 메트릭을 모아(Grafana Alloy) 저장하고(Loki, Prometheus) 본다(Grafana)(#25). 규칙에 걸리면 경보를 보낸다(Alertmanager). 프로필 `observability` 로 켠다. 기본으로 꺼져 있다.
 서버는 지금처럼 stderr 에 JSON 을 쓰고, 메트릭은 OTLP 로 Alloy 에 민다(지금은 결제 서버, 나머지는 붙이는 중이다). 이것들이 멈춰도 요청은 영향을 받지 않는다.
 정한 것과 까닭은 [관측 규격의 수집기](docs/observability.md#수집기grafana-alloy를-붙일-자리)에 있다.
 
@@ -192,7 +192,7 @@ docker compose --profile app --profile observability up -d --build
 docker compose --profile app --profile observability ps
 ```
 
-`prometheus` 와 `grafana` 가 `healthy`, `alloy`, `loki`, `docker-socket-proxy` 가 `Up` 이면 된다. `http://127.0.0.1:3000` 에서 `admin` 과 그 비밀번호로 들어가
+`prometheus`, `alertmanager`, `grafana` 가 `healthy`, `alloy`, `loki`, `docker-socket-proxy` 가 `Up` 이면 된다. `http://127.0.0.1:3000` 에서 `admin` 과 그 비밀번호로 들어가
 Explore 에서 데이터 소스 Loki(로그)나 Prometheus(메트릭)를 고른다. 서버(VM)에서는 SSH 터널로 붙는다. `ssh -L 3000:127.0.0.1:3000 <서버>` 를 띄워 두고 같은 주소를 연다.
 대시보드는 Dashboards 의 폴더 `ai-trpg` 에 있다. 지금은 결제 서버(`/d/billing-server`), PostgreSQL(`/d/postgres`), Redis(`/d/redis`)다. 저장소의 `docker/grafana/dashboards/` 가 원본이라 화면에서 고치지 못한다.
 고치는 법은 [관측 규격의 대시보드](docs/observability.md#대시보드)에 있다.
@@ -208,13 +208,43 @@ Explore 에서 데이터 소스 Loki(로그)나 Prometheus(메트릭)를 고른�
 메트릭(Prometheus):
 
 ```
-up                                                      # Alloy 가 긁는 것(alloy, loki, prometheus, grafana)이 살아 있는가
+up                                                      # Alloy 가 긁는 것(alloy, loki, prometheus, alertmanager, grafana)이 살아 있는가
 sum by (service) (rate(http_server_requests_total[5m])) # 서버마다 초당 요청(서버에 메트릭을 붙인 뒤)
 ```
 
 - 서버의 메트릭은 label `service` 로 가른다. 프로세스마다 `instance` 가 다르니 `sum by (service, …)` 로 합친다. 이름과 label 은 [관측 규격의 메트릭](docs/observability.md#메트릭)에 있다
 - Prometheus 는 받기만 하고 아무것도 긁지 않는다. 긁는 일과 서버의 OTLP 를 받는 일은 Alloy 가 한다. 그래서 저장소를 Mimir 로 바꿀 때 Alloy 와 Grafana 의 주소만 바뀐다
 - 메트릭도 14일 뒤에 지운다(`docker/prometheus/prometheus.yml`). Prometheus 가 멈춘 동안의 메트릭은 Alloy 가 볼륨(`alloydata`)에 두었다가 보낸다
+
+경보:
+
+규칙은 `docker/prometheus/rules/ai-trpg.yml` 이다(무엇이 언제 울리는지는 [관측 규격의 경보](docs/observability.md#경보)). 울리면 Alertmanager 가 루트 `.env` 에 적은 받는 곳으로 보낸다.
+적은 것만 켠다. 넷을 다 적으면 같은 경보가 넷에 함께 간다. 하나도 없으면 Grafana 의 Alerting 화면에서만 본다. 모두 비밀값이라 `tools/fill_env.py` 가 만들지 않는다.
+
+| 받는 곳 | 루트 `.env` 에 적는 것 | 만드는 법 |
+| --- | --- | --- |
+| Discord | `ALERT_DISCORD_WEBHOOK_URL` | 받을 채널의 설정 > 연동 > 웹후크 > 새 웹후크 > 웹후크 URL 복사 |
+| Slack | `ALERT_SLACK_WEBHOOK_URL` | https://api.slack.com/apps 에서 앱을 만들고 Incoming Webhooks 를 켠 뒤 채널을 골라 주소(`https://hooks.slack.com/services/…`)를 받는다 |
+| Telegram | `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | Telegram 의 @BotFather 에게 `/newbot` 으로 봇을 만들고 토큰을 받는다. 봇에게 말을 한 번 건 뒤 `https://api.telegram.org/bot<토큰>/getUpdates` 를 열어 `chat.id` 를 적는다 |
+| 메일 | `ALERT_SMTP_USER`, `ALERT_SMTP_PASSWORD`, 받는 사람을 바꾸려면 `ALERT_EMAIL_TO` | Gmail 이면 2단계 인증을 켠 뒤 https://myaccount.google.com/apppasswords 에서 앱 비밀번호를 하나 더 만든다. 서버들이 사용자에게 보내는 메일의 것과 나눠 둔다 |
+
+적은 뒤에는 컨테이너를 새로 만든다(`restart` 는 환경 변수를 다시 읽지 않는다). 로그의 첫 줄에 켠 받는 곳이 찍힌다(`alertmanager: 받는 곳: discord telegram`).
+반쯤 적으면(토큰만, 계정만) 그 까닭을 찍고 뜨지 않는다.
+
+```
+docker compose --profile observability up -d alertmanager
+docker compose --profile observability logs alertmanager
+```
+
+시험 경보를 하나 넣어 본다. 30초쯤 뒤에 받는 곳마다 오고, 5분 뒤에 풀렸다는 알림이 온다.
+
+```
+docker compose --profile observability exec alertmanager amtool alert add alertname=TestAlert severity=warning --annotation=summary=시험 --alertmanager.url=http://127.0.0.1:9093
+```
+
+- 잠시 끄려면(점검하는 동안) Grafana 의 Alerting > Silences 에서 데이터 소스 Alertmanager 를 골라 만든다. 끈 것은 볼륨(`alertmanagerdata`)에 남는다
+- Alertmanager 는 포트를 열지 않는다. 화면에 로그인이 없어서 열면 누구나 경보를 끈다
+- Prometheus 나 Alertmanager, VM 자신이 죽은 것은 알리지 못한다([관측 규격의 알려진 빈틈](docs/observability.md#알려진-빈틈))
 
 - label 은 `service`, `container`, `environment`, `level`, `mode` 뿐이다. 식별자(`request_id`, `trace_id`, `job_id`)와 `version` 은 줄의 값(structured metadata)이라 `|` 뒤에서 거른다.
   JSON 이 아닌 줄(DB, Redis, Loki 등)은 `log_format="other"` 이 붙는다
@@ -229,7 +259,7 @@ sum by (service) (rate(http_server_requests_total[5m])) # 서버마다 초당 �
 ## 외부에 열기 전
 
 로컬에서는 모두 이 PC(127.0.0.1)에서만 닿는다. VM 에 올려 바깥에 열 때 지킬 것이다(#274, #353).
-VM 의 설정은 로컬의 `docker-compose.yml` 위에 덮어쓰는 `docker-compose.staging.yml` 이다(#451). 어느 서버에 어떤 값으로 올리는지는 [배포 설계](docs/architecture/deployment.md)에, VM 을 처음 준비하는 명령은 [staging VM 준비](docs/operations/staging-vm.md)에 있다.
+VM 의 설정은 로컬의 `docker-compose.yml` 위에 덮어쓰는 `docker-compose.staging.yml` 이다(#451). 어느 서버에 어떤 값으로 올리는지는 [배포 설계](docs/architecture/deployment.md)에 있다.
 
 **바깥에서 닿는 길은 프록시 하나다.** 로컬의 compose 가 여는 포트는 모두 `127.0.0.1` 에 묶었다. staging 에서 모든 주소에 여는 것은 프록시의 80, 443 둘뿐이다.
 
@@ -410,7 +440,6 @@ docker/loki/              로그 저장소(Loki)의 설정
 docker/prometheus/        메트릭 저장소(Prometheus)의 설정
 docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki, Prometheus)
 docs/                     서버들이 함께 지키는 규격 (관측)
-tools/                    패치 zip 을 적용하는 도구(apply_ai_update.py), staging 의 .env 여섯을 만드는 도구(staging_env.py)
 docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 모든 서버와 워커, cron, 프록시(프로필 app), 로그와 메트릭 모으기(프로필 observability)
 docker-compose.staging.yml  staging(VM)에서 위의 파일에 덮어쓰는 설정. TLS, 허용 주소, certbot, 임베딩의 Ollama, 환경 이름
 .env.example              인프라 환경 변수 목록

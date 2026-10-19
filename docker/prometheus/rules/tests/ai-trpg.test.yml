@@ -1,0 +1,318 @@
+# docker/prometheus/rules/tests/ai-trpg.test.yml
+# 경보 규칙(../ai-trpg.yml)의 시험. 지어낸 시계열을 넣고, 정한 때에 울리는지(또는 울리지 않는지) 본다.
+#
+#   promtool test rules docker/prometheus/rules/tests/ai-trpg.test.yml
+#
+# stack-smoke.sh 의 check 가 Prometheus 의 컨테이너 안에서 돌린다. 규칙을 고치면 여기도 고친다.
+
+rule_files:
+  - ../ai-trpg.yml
+
+evaluation_interval: 15s
+
+tests:
+  # 수집기가 멈추면(2분부터 값이 없다) 마지막 값이 보이는 5분과 for 의 5분 뒤에 울린다
+  - interval: 1m
+    input_series:
+      - series: 'up{job="alloy", instance="127.0.0.1:12345"}'
+        values: '1 1 1 _x14'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: MetricsCollectorDown
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: MetricsCollectorDown
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: MetricsCollectorDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: 수집기(Alloy)의 메트릭이 들어오지 않는다
+              description: 서버, DB, Redis 의 메트릭이 모두 끊겼을 수 있다. docker compose ps alloy 와 Alloy 의 로그를 본다
+
+  # Loki, Grafana, Alertmanager 가운데 닿지 않는 것이 job 마다 울린다
+  - interval: 1m
+    input_series:
+      - series: 'up{job="loki", instance="loki:3100"}'
+        values: '1 1 0x10'
+      - series: 'up{job="grafana", instance="grafana:3000"}'
+        values: '1x12'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: ObservabilityComponentDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: loki
+              instance: loki:3100
+            exp_annotations:
+              summary: loki 에 5분 동안 닿지 않는다
+              description: 로그 모으기(loki), 화면(grafana), 경보 보내기(alertmanager) 가운데 하나다. 그 컨테이너의 로그를 본다
+
+  # DB 가 1분 넘게 닿지 않으면 울린다. 잠깐(1분 안) 끊긴 것은 울리지 않는다
+  - interval: 30s
+    input_series:
+      - series: 'pg_up{job="postgres", instance="db"}'
+        values: '1 0 1 1 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: PostgresDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: PostgresDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: postgres
+              instance: db
+            exp_annotations:
+              summary: DB(PostgreSQL)에 붙지 못한다
+              description: 서버들이 함께 DB 를 잃었을 수 있다. docker compose ps db 를 본다. DB 가 살아 있으면 MONITOR_DB_PASSWORD 와 monitor 계정을 본다
+
+  # 연결이 한도의 80% 를 10분 넘게 넘으면 울린다
+  - interval: 1m
+    input_series:
+      - series: 'pg_stat_activity_count{job="postgres", datname="trpg", state="idle"}'
+        values: '85x15'
+      - series: 'pg_settings_max_connections{job="postgres"}'
+        values: '100x15'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PostgresConnectionsNearLimit
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: PostgresConnectionsNearLimit
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: DB 연결이 max_connections 의 85% 다
+              description: 서버들의 연결 풀의 합이 한도에 가깝다. 닿으면 새 연결이 거절된다. 대시보드 postgres 의 "상태마다의 연결"을 본다
+
+  # 지난 10분에 교착이 한 번이라도 있으면 울린다. 다른 DB(postgres)의 것은 보지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'pg_stat_database_deadlocks{job="postgres", instance="db", datname="trpg"}'
+        values: '0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+      - series: 'pg_stat_database_deadlocks{job="postgres", instance="db", datname="postgres"}'
+        values: '0+1x17'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: PostgresDeadlocks
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: PostgresDeadlocks
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: postgres
+              instance: db
+              datname: trpg
+            exp_annotations:
+              summary: 지난 10분 동안 DB 에 교착이 있었다
+              description: PostgreSQL 이 트랜잭션 하나를 되돌려 풀었다. 같은 시각의 서버 로그에서 오류(error_code)를 찾는다
+      # 10분이 지나면 그친다
+      - eval_time: 16m
+        alertname: PostgresDeadlocks
+        exp_alerts: []
+
+  - interval: 30s
+    input_series:
+      - series: 'redis_up{job="redis", instance="redis"}'
+        values: '1 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RedisDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: redis
+              instance: redis
+            exp_annotations:
+              summary: Redis 에 붙지 못한다
+              description: 시도 횟수 제한이 서버의 메모리로 넘어가거나(게임) 꺼진다(인증). docker compose ps redis 를 본다
+
+  # AOF 쓰기가 실패하면 울린다
+  - interval: 30s
+    input_series:
+      - series: 'redis_aof_last_write_status{job="redis", instance="redis"}'
+        values: '1 1 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: RedisAOFWriteFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: redis
+              instance: redis
+            exp_annotations:
+              summary: Redis 가 AOF 파일에 쓰지 못한다
+              description: 다시 뜨면 시도 횟수와 IP 차단의 기록을 잃는다. 디스크가 찼는지 본다
+
+  # 5xx 가 많아도 요청이 아주 적으면 울리지 않는다. 요청이 많고 5xx 가 10% 면 10분 뒤에 울린다
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="billing-server", route="/x", method="GET", status_code="200", instance="server-a"}'
+        values: '0+54x30'
+      - series: 'http_server_requests_total{service="billing-server", route="/x", method="GET", status_code="500", instance="server-a"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="game-server", route="/x", method="GET", status_code="500", instance="server-b"}'
+        values: '0+600x30'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: BillingServerErrors
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: BillingServerErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 결제 서버의 5xx 가 10% 다
+              description: 대시보드 billing-server 의 "상태 코드"와 로그의 error_code 를 본다
+
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="billing-server", route="/x", method="GET", status_code="500", instance="server-a"}'
+        values: '0+1x30'
+    alert_rule_test:
+      # 분당 1번(초당 0.017)뿐이라 모두 5xx 라도 울리지 않는다
+      - eval_time: 25m
+        alertname: BillingServerErrors
+        exp_alerts: []
+
+  # 결제 서버의 인스턴스마다 울린다
+  - interval: 30s
+    input_series:
+      - series: 'db_up{service="billing-server", instance="server-a"}'
+        values: '1 1 0 0 0 0 0'
+      - series: 'db_up{service="game-server", instance="server-b"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BillingDatabaseUnreachable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: billing-server
+              instance: server-a
+            exp_annotations:
+              summary: 결제 서버가 DB 에 닿지 못한다
+              description: 결제, 홀드, 크레딧이 모두 멈춘다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+  # 부르지 못한 것이 15분에 세 번까지는 울리지 않는다. 네 번이면 울린다
+  - interval: 1m
+    input_series:
+      - series: 'payment_provider_calls_total{service="billing-server", provider="toss", operation="confirm", outcome="unavailable", instance="server-a"}'
+        values: '0 1 2 3 3 3 5 5'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: BillingPaymentProviderUnavailable
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: BillingPaymentProviderUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 결제 대행사를 부르지 못하는 일이 지난 15분에 세 번을 넘었다
+              description: 설정(PAYMENT_PROVIDER, TOSS_SECRET_KEY)이 틀렸거나 결제 대행사에 닿지 않는다. 결제 서버의 로그를 본다
+
+  # 결과를 모르는 결제가 하나라도 있으면 바로 울린다
+  - interval: 1m
+    input_series:
+      - series: 'payment_provider_calls_total{service="billing-server", provider="toss", operation="confirm", outcome="unknown", instance="server-a"}'
+        values: '0 0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BillingPaymentOutcomeUnknown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: BillingPaymentOutcomeUnknown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 결제 대행사가 답하지 않은 결제가 있다
+              description: 주문이 confirming 에 남아 있을 수 있다. 하루 한 번의 대사가 끝낸다. 계속되면 결제 대행사의 상태를 본다
+
+  # 되돌린 원장의 일은 이유마다 울린다. expire 는 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'billing_ledger_operations_total{service="billing-server", reason="deposit", result="failure", instance="server-a"}'
+        values: '0 0 1 1'
+      - series: 'billing_ledger_operations_total{service="billing-server", reason="expire", result="failure", instance="server-a"}'
+        values: '0 5 9 12'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BillingLedgerRollbacks
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              reason: deposit
+            exp_annotations:
+              summary: 원장에 적었다가 되돌린 deposit 이 있다
+              description: 크레딧은 바뀌지 않았다(되돌렸다). 같은 시각의 결제 서버 로그에서 오류를 찾는다
+
+  # 결제 서버가 떠 있는데 정리 작업이 성공하지 않으면 울린다. 결제 서버가 없으면(메트릭이 없으면) 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'db_up{service="billing-server", instance="server-a"}'
+        values: '1x30'
+      - series: 'background_jobs_finished_total{service="billing-server", operation="sweep.run", result="success", instance="sweeper-a"}'
+        values: '0+2x5 10x25'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BillingSweepStalled
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: BillingSweepStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 결제 서버의 정리 작업이 10분 넘게 성공하지 않았다
+              description: 만료된 홀드와 주문이 돌아가지 않는다. docker compose ps billing-sweeper 와 그 로그를 본다
+
+  - interval: 1m
+    input_series:
+      - series: 'up{job="loki", instance="loki:3100"}'
+        values: '1x30'
+    alert_rule_test:
+      # 결제 서버도 정리 작업도 없다(observability 만 띄운 PC). 울리지 않는다
+      - eval_time: 25m
+        alertname: BillingSweepStalled
+        exp_alerts: []
+
+  # 대사: 돈 적이 있는데 26시간 동안 없으면 울린다. 실패하면 하루 동안 울린다
+  - interval: 1h
+    input_series:
+      - series: 'background_jobs_finished_total{service="billing-server", operation="reconcile.run", result="success", instance="reconcile-a"}'
+        values: '1 _x40'
+      - series: 'background_jobs_finished_total{service="billing-server", operation="reconcile.run", result="server_error", instance="reconcile-b"}'
+        values: '_x2 1 _x38'
+    alert_rule_test:
+      - eval_time: 10h
+        alertname: BillingReconcileMissed
+        exp_alerts: []
+      - eval_time: 30h
+        alertname: BillingReconcileMissed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 하루 한 번의 대사가 26시간 동안 돌지 않았다
+              description: billing-cron 의 crontab 과 로그를 본다. 결과를 모르는 주문이 끝나지 않고 쌓인다
+      - eval_time: 3h
+        alertname: BillingReconcileFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 지난 하루의 대사가 성공하지 못했다
+              description: 장부의 검사가 어긋났거나 DB 에 닿지 못했다. billing-cron 의 로그(operation=reconcile.run)를 본다
+      - eval_time: 30h
+        alertname: BillingReconcileFailed
+        exp_alerts: []

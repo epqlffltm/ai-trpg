@@ -595,15 +595,15 @@ services:
   # ---------------------------------------------------------------------------
   # 로그와 메트릭 모으기 (observability 프로필, #25)
   #
-  # 이 compose 의 컨테이너 로그와 메트릭을 모아(Alloy) 저장하고(Loki, Prometheus) 본다(Grafana). 기본으로 꺼져 있다. staging 에서 켠다.
+  # 이 compose 의 컨테이너 로그와 메트릭을 모아(Alloy) 저장하고(Loki, Prometheus) 본다(Grafana). 규칙에 걸리면 경보를 보낸다(Alertmanager). 기본으로 꺼져 있다. staging 에서 켠다.
   # 서버 코드와 서버의 설정은 그대로다. 서버는 stderr 에 쓰기만 하고, 이 넷이 멈춰도 요청은 영향을 받지 않는다.
   #
   #   docker compose --profile app --profile observability up -d --build
   #   그다음 http://127.0.0.1:3000 (VM 에서는 SSH 터널: ssh -L 3000:127.0.0.1:3000 <서버>)
   #
-  # 망을 셋으로 나눈다. 서버들은 기본 망(default)에 있어서 Loki, Prometheus, Grafana, 소켓 프록시에 닿지 않는다.
+  # 망을 셋으로 나눈다. 서버들은 기본 망(default)에 있어서 Loki, Prometheus, Alertmanager, Grafana, 소켓 프록시에 닿지 않는다.
   #   docker-api     소켓 프록시와 Alloy 만. 바깥으로 나가지 못한다(internal)
-  #   observability  Alloy, Loki, Prometheus, Grafana. Grafana 의 포트를 열려고 internal 로 두지 않는다
+  #   observability  Alloy, Loki, Prometheus, Alertmanager, Grafana. Grafana 의 포트를 열고 Alertmanager 가 바깥으로 보내려고 internal 로 두지 않는다
   #   telemetry      Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스(지금은 결제 서버의 셋). 서버는 여기서 Alloy 의 4318 에만 닿는다(internal).
   #                  서버의 프로세스는 메트릭을 붙이는 PR 에서 이 망에 더한다(networks 에 default 도 함께 적고, x-telemetry-environment 를 붙인다)
   # 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "수집기(Grafana Alloy)를 붙일 자리"에 있다
@@ -687,10 +687,50 @@ services:
       - --web.enable-remote-write-receiver
     volumes:
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # 경보 규칙과 그 시험(tests/). 시험은 stack-smoke.sh 가 이 컨테이너의 promtool 로 돌린다
+      - ./docker/prometheus/rules:/etc/prometheus/rules:ro
       - prometheusdata:/prometheus
     networks: [observability]
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # 경보를 보내는 곳. Prometheus 가 규칙(docker/prometheus/rules)으로 울린 경보를 묶어 Discord, Slack, Telegram, 메일로 보낸다.
+  # 받는 곳은 루트 .env 의 ALERT_* 에 적은 것만 켠다. 설정 파일은 시작 명령(docker/alertmanager/entrypoint.sh)이 그 값으로 만든다.
+  # 포트를 열지 않는다. 지금 울리는 경보와 잠시 끄기(silence)는 Grafana 의 Alerting 화면(데이터 소스 alertmanager)에서 본다.
+  # 끈 것과 보낸 기록은 볼륨(alertmanagerdata)에 남겨 다시 떠도 같은 알림을 또 보내지 않는다
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    profiles: [observability]
+    logging: *logging
+    restart: unless-stopped
+    # 이미지의 사용자(nobody)로 돈다. 이미지의 시작 명령은 /bin/alertmanager 다
+    entrypoint: ["/bin/sh", "/etc/alertmanager/entrypoint.sh"]
+    command:
+      - --storage.path=/alertmanager
+      # 하나만 띄운다. 여럿을 묶는 길(gossip, 9094)을 열지 않는다
+      - --cluster.listen-address=
+    environment:
+      ALERT_DISCORD_WEBHOOK_URL: ${ALERT_DISCORD_WEBHOOK_URL:-}
+      ALERT_SLACK_WEBHOOK_URL: ${ALERT_SLACK_WEBHOOK_URL:-}
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:-}
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:-}
+      # Telegram 의 API 주소. 비우면 https://api.telegram.org 다. CI 가 흉내(alert-sink)로 바꾼다
+      ALERT_TELEGRAM_API_URL: ${ALERT_TELEGRAM_API_URL:-}
+      ALERT_SMTP_USER: ${ALERT_SMTP_USER:-}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
+      ALERT_SMTP_SMARTHOST: ${ALERT_SMTP_SMARTHOST:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+    volumes:
+      - ./docker/alertmanager/entrypoint.sh:/etc/alertmanager/entrypoint.sh:ro
+      - alertmanagerdata:/alertmanager
+    # observability 망은 internal 이 아니라 바깥(Discord 등)으로 나간다. 서버들의 망(default)에는 없다
+    networks: [observability]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/ready"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -742,12 +782,13 @@ services:
     depends_on:
       - loki
       - prometheus
+      - alertmanager
 
 networks:
   # 소켓 프록시와 Alloy 만 있는 망. 바깥으로 나가지 못한다
   docker-api:
     internal: true
-  # Alloy, Loki, Prometheus, Grafana 의 망
+  # Alloy, Loki, Prometheus, Alertmanager, Grafana 의 망
   observability:
   # Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스. 바깥으로 나가지 못한다
   telemetry:
@@ -762,4 +803,5 @@ volumes:
   alloydata:
   lokidata:
   prometheusdata:
+  alertmanagerdata:
   grafanadata:
