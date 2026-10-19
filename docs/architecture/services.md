@@ -184,7 +184,7 @@
 | 토큰의 대상 | `auth-server/config/settings.py` 의 `JWT_AUDIENCE`, 그 테스트, 인증 서버 README |
 | DB 계정과 스키마 | `docker/postgres/init/NN-<이름>-role.sql`, 루트 `.env.example` 의 `<이름>_DB_PASSWORD` |
 | 컨테이너 | `docker-compose.yml` 의 `<이름>-migrate`, `<이름>-server`(프로필 `app`) |
-| 프록시 | `docker/nginx/templates/default.conf.template` 의 upstream 과 `/api/v1/<이름>/` 위치, 요청 수 제한 |
+| 프록시 | `docker/nginx/templates/api.inc.template` 의 `/api/v1/<이름>/` 위치(로컬과 staging 이 함께 쓴다), 요청 수 제한(`http.inc.template`) |
 | 비밀과 포트 검사 | `.github/scripts/secret_scope.py`, `port_scope.py`, `logging_scope.py` 의 표 |
 | CI | `.github/workflows/<이름>-server.yml`, `ci.yml`, `.github/scripts/changed-servers.sh` |
 | 관측 | `docs/observability.md` 의 서비스 이름 표와 작업, operation, 오류 코드 표 |

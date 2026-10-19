@@ -29,6 +29,7 @@ expect "두 서버가 바뀌면 둘" "auth board" "auth-server/accounts/tokens.p
 expect "서버의 워크플로가 바뀌면 그 서버" "game" ".github/workflows/game-server.yml"
 expect "DB 초기화 스크립트는 모두" "auth game board billing notification" "docker/postgres/init/06-x.sql"
 expect "compose 파일은 모두" "auth game board billing notification" "docker-compose.yml"
+expect "staging 의 compose 파일도 모두" "auth game board billing notification" "docker-compose.staging.yml"
 expect "프록시의 설정은 모두" "auth game board billing notification" "docker/nginx/templates/default.conf.template"
 expect "crontab 은 모두" "auth game board billing notification" "docker/cron/auth.crontab"
 expect "서버의 Dockerfile 은 그 서버" "billing" "billing-server/Dockerfile"

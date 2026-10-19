@@ -206,20 +206,21 @@ sum by (service) (rate(http_server_requests_total[5m])) # 서버마다 초당 �
 ## 외부에 열기 전
 
 로컬에서는 모두 이 PC(127.0.0.1)에서만 닿는다. VM 에 올려 바깥에 열 때 지킬 것이다(#274, #353).
-TLS(HTTPS)를 실제로 붙이는 일은 도메인과 배포할 곳이 정해진 뒤에 한다. 여기에는 그때 무엇을 바꾸는지를 적는다.
+VM 의 설정은 로컬의 `docker-compose.yml` 위에 덮어쓰는 `docker-compose.staging.yml` 이다(#451). 어느 서버에 어떤 값으로 올리는지는 [배포 설계](docs/architecture/deployment.md)에 있다.
 
-**바깥에서 닿는 길은 프록시 하나다.** compose 가 여는 포트는 다섯이고 모두 `127.0.0.1` 에 묶었다.
+**바깥에서 닿는 길은 프록시 하나다.** 로컬의 compose 가 여는 포트는 모두 `127.0.0.1` 에 묶었다. staging 에서 모든 주소에 여는 것은 프록시의 80, 443 둘뿐이다.
 
 | 서비스 | 포트 | 까닭 |
 | --- | --- | --- |
-| `proxy` | `127.0.0.1:8080` | 바깥의 요청이 들어오는 입구. 운영에서는 이 자리가 443 이 된다 |
+| `proxy` | `127.0.0.1:8080`. staging 은 `80`(→8080), `443`(→8443) | 바깥의 요청이 들어오는 입구. staging 에서는 모든 주소에 연다. 그 밖은 staging 에서도 `127.0.0.1` 이다 |
 | `auth-server` | `127.0.0.1:8000` | 관리자 화면. SSH 터널로만 붙는다(`ssh -L 8000:127.0.0.1:8000 <서버>`) |
 | `db`, `redis` | `127.0.0.1` | PC 에서 직접 띄운 서버가 붙는다 |
 | `grafana` | `127.0.0.1:3000` | 로그를 보는 화면(프로필 `observability`). SSH 터널로만 붙는다(`ssh -L 3000:127.0.0.1:3000 <서버>`). 관리 서버가 생기면 그것이 문이 된다 |
 
 - 게임, 게시판, 결제 서버와 워커는 포트를 열지 않는다. 열면 프록시의 요청 수 제한과 경로 차단을 건너뛰는 길이 된다
 - **Docker 는 VM 의 방화벽(ufw 등)을 거치지 않고 포트를 연다.** `127.0.0.1:` 을 빼면 방화벽이 있어도 그 포트가 바로 바깥에 열린다.
-  CI(`stack`)가 이것을 본다(`.github/scripts/port_scope.py`). 포트를 열어도 되는 서비스는 그 파일의 표에 까닭과 함께 적는다
+  CI(`stack`)가 이것을 본다(`.github/scripts/port_scope.py`). 포트를 열어도 되는 서비스는 그 파일의 표에 까닭과 함께 적는다.
+  staging 의 설정은 `--public` 으로 본다. 그때만 프록시의 둘(`PUBLIC_PORTS`)을 모든 주소에 열어도 된다
 - `network_mode: host` 는 쓰지 않는다. 컨테이너가 VM 의 네트워크를 그대로 쓰면 `ports` 와 상관없이 다 열린다
 
 **프록시는 믿을 수 있는 머리말만 넘긴다.** 프록시 뒤의 서버는 프록시가 정한 머리말만 믿을 수 있다. 클라이언트가 지어 보낸 것은 지우거나 덮는다.
@@ -241,11 +242,13 @@ IP 를 쓰는 것은 인증 서버(시도 횟수)와 프록시(요청 수 제한
 | `X-Content-Type-Options` | `nosniff` | JSON 을 HTML 이나 스크립트로 짐작해 실행하는 것. 게시판처럼 사용자의 글을 돌려주는 응답에서 특히 |
 | `Content-Security-Policy` | `default-src 'none'; frame-ancestors 'none'` | API 응답이 문서로 열려도 아무것도 불러오거나 실행하지 못한다. 다른 사이트의 iframe 에 들어가지 못한다 |
 | `Referrer-Policy` | `no-referrer` | 주소에 든 값이 다른 사이트로 새는 것 |
+| `Strict-Transport-Security` | `max-age=31536000`(HTTPS 의 응답에만) | 한 번 HTTPS 로 온 브라우저가 1년 동안 HTTP 로 오지 않는다. 하위 도메인과 preload 는 붙이지 않는다 |
 
 - 값은 `docker/nginx/templates/security-headers.inc.template` 한 곳에 있다
 - nginx 는 location 에 `add_header` 가 하나라도 있으면 server 의 `add_header` 를 모두 버린다. 그래서 `add_header` 를 쓰는 location 은 그 파일을 `include` 한다.
   빠뜨리면 그 응답에서만 조용히 빠진다. CI(`stack`)가 서버의 응답, 막은 주소의 404, 429 에서 본다
-- 이 CSP 는 API 의 것이다. 화면(#290)을 이 프록시로 내주게 되면 화면에는 화면에 맞는 값을 따로 둔다. HSTS 는 TLS 를 붙일 때 함께 붙인다
+- 이 CSP 는 API 의 것이다. 화면(#290)을 이 프록시로 내주게 되면 화면에는 화면에 맞는 값을 따로 둔다
+- HSTS 의 값은 연결이 HTTPS 일 때만 채워진다(`docker/nginx/templates/http.inc.template` 의 `map`). 로컬의 HTTP 응답에는 없다. 인증 서버는 HSTS 를 내지 않는다(`auth-server/config/security.py`)
 
 **컨테이너의 로그는 서비스마다 상한이 있다(#358).** Docker 의 기본은 로그 파일을 끝없이 키운다. VM 에서 오래 띄우면 디스크가 차고, 그러면 DB 가 쓰지 못해 멈춘다.
 
@@ -259,14 +262,17 @@ IP 를 쓰는 것은 인증 서버(시도 횟수)와 프록시(요청 수 제한
   { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "5" } }
   ```
 
-**TLS 는 nginx 가 직접 끝낸다(기본).** VM 한 대라면 앞에 한 단계를 더 두지 않는다. 지금의 규칙(프록시가 하나)이 그대로라 바꿀 것이 가장 적다. 붙일 때 할 일:
+**TLS 는 nginx 가 직접 끝낸다(staging, #451).** VM 한 대라 앞에 한 단계를 더 두지 않는다. 지금의 규칙(프록시가 하나)이 그대로라 바꿀 것이 가장 적다.
 
-- nginx 가 `8443`(TLS)과 `8080`(HTTP)을 듣는다. 이미지(nginx-unprivileged)는 1024 아래의 포트를 열 수 없으므로 compose 가 `443:8443`, `80:8080` 으로 잇는다
-- 바깥에 여는 그 둘을 `port_scope.py` 의 `PUBLIC_PORTS` 에 적는다. 그 밖은 그대로 `127.0.0.1` 이다
-- 인증서는 Let's Encrypt 로 받는다. 받는 일(HTTP-01, `/.well-known/acme-challenge/`)과 갱신은 보조 컨테이너(certbot 등)가 하고, 갱신하면 nginx 를 다시 읽힌다(reload)
-- 인증서는 90일짜리다. 갱신이 조용히 실패하면 석 달 뒤 사이트가 멈춘다. 남은 날짜를 보는 검사를 함께 둔다
-- HTTP 는 HTTPS 로 넘기고(301), HSTS(`Strict-Transport-Security`)를 nginx 가 붙인다. 인증 서버는 하지 않는다(`auth-server/config/security.py`)
-- 인증 서버는 `TRUSTED_PROXY_COUNT=1` 그대로다
+- nginx 가 `8443`(TLS)과 `8080`(HTTP)을 듣는다. 이미지(nginx-unprivileged)는 1024 아래의 포트를 열 수 없으므로 compose 가 `443:8443`, `80:8080` 으로 잇는다(`docker/nginx/staging/default.conf.template`)
+- nginx 의 설정은 나눠 둔다. 주소를 서버에 나누는 몸통(`api.inc.template`)과 http 단계(`http.inc.template`)는 로컬과 staging 이 함께 쓰고, 듣는 포트와 TLS, 허용 주소만 다르다. 로컬의 몸통을 고치면 staging 도 같이 바뀐다
+- 8080 은 인증서의 확인 파일(HTTP-01, `/.well-known/acme-challenge/`)만 답하고 나머지는 정한 도메인의 HTTPS 로 넘긴다(301). 받은 Host 로 넘기지 않는다
+- 8443 은 허용 주소(`docker/nginx/allowlist/*.conf`, git 에 올리지 않는다)에서 온 요청만 서버에 넘긴다. 그 밖은 403 이다. 가동 확인(`/healthz`)은 모두에게 답한다
+- 인증서는 Let's Encrypt 로 받는다. 처음 한 번은 손으로 받고(`docker compose run --rm -p 80:80 certbot issue`), 그 뒤로는 certbot 컨테이너가 12시간마다 갱신한다(`docker/certbot/`)
+- 갱신한 인증서는 프록시가 제 쪽에서 알아채 다시 읽는다(`docker/nginx/staging/start.sh`). certbot 에 Docker 소켓을 주지 않는다
+- 인증서는 90일짜리다. 갱신이 조용히 실패하면 석 달 뒤 사이트가 멈춘다. 14일보다 적게 남으면 certbot 컨테이너가 `unhealthy` 다(`docker/certbot/cert_check.py`)
+- 인증 서버는 `TRUSTED_PROXY_COUNT=1` 그대로다. `X-Forwarded-Proto` 가 `https` 로 가므로 인증 서버가 HTTPS 를 안다
+- CI(`stack`)가 staging 의 프록시를 자체 서명 인증서로 띄워 본다(`stack-smoke.sh check-staging`)
 
 **앞에 한 단계가 더 생기면(다른 프록시, 클라우드 로드밸런서, Cloudflare) 셋을 함께 바꾼다.** 하나라도 빠지면 오류 없이 조용히 틀린다.
 
@@ -298,6 +304,7 @@ IP 를 쓰는 것은 인증 서버(시도 횟수)와 프록시(요청 수 제한
 서버의 CI 를 따로 필수로 걸지 않은 이유: 서버마다 자기 폴더가 바뀔 때만 돈다. 돌지 않은 필수 검사를 GitHub 은 "기다리는 중"으로 두고 머지를 막는다.
 `docker/` 아래(DB 초기화 스크립트, 프록시의 설정, crontab), compose 파일, 관문 자신이 바뀌면 모두 돈다. 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 `ruff.toml`)이 바뀌면 인증, 게임, 알림이 돈다. `main` 에 들어간 뒤에는 서버의 CI 가 예전처럼 제 폴더가 바뀔 때만 스스로 돈다. 위의 배지가 그 결과다.
 서버가 하나라도 바뀌면 관문의 `stack` 이 모든 서버의 이미지를 만들어 compose 로 함께 띄우고, 마이그레이션이 성공했는지, 서버끼리 닿는지, 워커가 다시 뜨기를 되풀이하지 않는지, crontab 의 명령이 한 번씩 성공하는지, 비밀이 그것을 쓰는 프로세스에만 가는지, 바깥에 여는 포트가 127.0.0.1 에 묶였는지, 모든 컨테이너의 로그에 상한이 있는지, DB 의 백업이 풀리는지, 프록시가 주소를 나누고 막는지, 모든 응답에 보안 머리말을 붙이는지를 본다(`.github/scripts/stack-smoke.sh`).
+staging 의 설정(`docker-compose.staging.yml`)도 겹쳐 읽어 같은 규칙으로 보고, staging 의 프록시를 하나 더 띄워 HTTPS, 넘기기, 허용 주소, HSTS 를 본다(`check-staging`). staging 의 설정을 고친 PR 도 모든 서버를 고른다.
 
 **이미지는 서버마다 같은 규칙으로 만든다.** 여러 단계로 빌드해 실행에 필요한 것만 담고, root 가 아닌 사용자(번호로 적는다)로 돌린다.
 기본 이미지는 버전을 고정한다. 비밀(`.env`, JWT 키)은 `.dockerignore` 로 막아 이미지에 넣지 않고, 띄울 때 compose 가 넘긴다.
@@ -368,7 +375,10 @@ board-server/             NestJS 게시판 서버 (독립된 npm 프로젝트)
 billing-server/           Go 결제 서버 (독립된 Go 모듈). 연습용이고 실제 결제가 아니다
 notification-server/      FastAPI 알림 서버 (독립된 uv 프로젝트)
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
-docker/nginx/templates/   프록시(nginx)의 설정
+docker/nginx/templates/   프록시(nginx)의 설정. 로컬과 staging 이 함께 쓰는 몸통(api.inc), http 단계(http.inc), 보안 머리말
+docker/nginx/staging/     staging 의 프록시: 듣는 포트와 TLS, 허용 주소, 인증서를 지켜보다 다시 읽히는 시작 스크립트
+docker/nginx/allowlist/   staging 의 허용 주소. 보기(allow.conf.example)만 올리고 실제 파일(*.conf)은 VM 에만 둔다
+docker/certbot/           staging 의 인증서(Let's Encrypt)를 받고 갱신하는 스크립트, 인증서의 남은 날짜 검사
 docker/cron/              주기 명령의 crontab (인증, 결제)
 docker/backup/            DB 의 백업과 복원 확인 스크립트
 docker/alloy/             수집기(Grafana Alloy)의 설정. 로그(config.alloy)와 메트릭(metrics.alloy)
@@ -377,5 +387,6 @@ docker/prometheus/        메트릭 저장소(Prometheus)의 설정
 docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki, Prometheus)
 docs/                     서버들이 함께 지키는 규격 (관측)
 docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 모든 서버와 워커, cron, 프록시(프로필 app), 로그와 메트릭 모으기(프로필 observability)
+docker-compose.staging.yml  staging(VM)에서 위의 파일에 덮어쓰는 설정. TLS, 허용 주소, certbot, 임베딩의 Ollama, 환경 이름
 .env.example              인프라 환경 변수 목록
 ```

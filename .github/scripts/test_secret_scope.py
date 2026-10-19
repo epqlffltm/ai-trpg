@@ -78,6 +78,28 @@ class SecretScopeTests(unittest.TestCase):
 
         self.assertEqual(self.problems(services), ['auth-mail: JWT_PRIVATE_KEY_PATH 를 비우지 않았다'])
 
+    def test_reads_the_environment_as_a_list_too(self):
+        # 파일을 둘 겹치면(docker-compose.staging.yml) compose 가 environment 를 "이름=값"의 목록으로 낸다
+        services = {
+            'auth-mail': {**service(), 'environment': ['JWT_PRIVATE_KEY_PATH=', 'BILLING_SECRET=', 'DEBUG=false']},
+            'auth-cron': {
+                **service(),
+                'environment': ['JWT_PRIVATE_KEY_PATH=', 'SECRET_KEY=', 'APP_ENVIRONMENT=staging'],
+            },
+        }
+
+        self.assertEqual(
+            self.problems(services), ['auth-cron: BILLING_SECRET 를 받는다. environment 에서 빈 값으로 덮는다']
+        )
+
+    def test_a_name_without_a_value_in_the_list_is_not_blanked(self):
+        # "BILLING_SECRET" 만 적은 줄은 compose 를 띄운 셸의 값을 넘긴다. 비운 것이 아니다
+        services = {'auth-mail': {**service(), 'environment': ['JWT_PRIVATE_KEY_PATH=', 'BILLING_SECRET']}}
+
+        self.assertEqual(
+            self.problems(services), ['auth-mail: BILLING_SECRET 를 받는다. environment 에서 빈 값으로 덮는다']
+        )
+
     def test_a_new_secret_in_an_example_must_be_listed(self):
         server = self.root / 'auth-server'
         server.mkdir()
