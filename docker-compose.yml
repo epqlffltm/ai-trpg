@@ -449,8 +449,10 @@ services:
     # 댓글과 답글의 알림을 알림 서버에 넣는다(#385). board-server/.env 에 NOTIFICATION_SECRET 이 있어야 뜬다
     # (알림 서버의 BOARD_SERVER_SECRET 과 같은 값)
     environment:
-      <<: *board-environment
+      <<: [*board-environment, *telemetry-environment]
       NOTIFICATION_URL: http://notification-server:8004
+    # span 을 Alloy 에 민다(telemetry). 인증 서버와 알림 서버에는 default 로 닿는다
+    networks: [default, telemetry]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8002/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 10s
@@ -618,7 +620,7 @@ services:
   # 망을 셋으로 나눈다. 서버들은 기본 망(default)에 있어서 Loki, Prometheus, Alertmanager, Tempo, Grafana, 소켓 프록시에 닿지 않는다.
   #   docker-api     소켓 프록시와 Alloy 만. 바깥으로 나가지 못한다(internal)
   #   observability  Alloy, Loki, Prometheus, Alertmanager, Tempo, Grafana. Grafana 의 포트를 열고 Alertmanager 가 바깥으로 보내려고 internal 로 두지 않는다
-  #   telemetry      Alloy 와, 메트릭이나 span 을 OTLP 로 미는 서버의 프로세스(결제, 알림, TRPG, 인증 서버). 서버는 여기서 Alloy 의 4318 에만 닿는다(internal).
+  #   telemetry      Alloy 와, 메트릭이나 span 을 OTLP 로 미는 서버의 프로세스(다섯 서버). 서버는 여기서 Alloy 의 4318 에만 닿는다(internal).
   #                  서버의 프로세스는 메트릭이나 span 을 붙이는 PR 에서 이 망에 더한다(networks 에 default 도 함께 적고, x-telemetry-environment 를 붙인다)
   # 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "수집기(Grafana Alloy)를 붙일 자리"에 있다
   # ---------------------------------------------------------------------------

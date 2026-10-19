@@ -79,20 +79,23 @@ LOKI_LABELS=(container environment level mode service)
 # 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다
 METRIC_SERVERS=(billing)
 # span 을 내보내는 서버(docs/observability.md 의 "3. 추적"). 서버에 span 을 붙이면 여기와 아래 둘에 더한다
-TRACE_SERVERS=(auth trpg billing notification)
+TRACE_SERVERS=(auth trpg board billing notification)
 # 추적 번호를 실어 한 번 부를 주소(메서드와 경로). 401 이어도 된다. 요청의 span 은 걸린다. 상태 확인은 span 이 없다
 declare -A TRACE_PROBES=(
   [auth]="GET /api/v1/auth/jwks"
   [trpg]="GET /api/v1/game/me"
+  [board]="GET /api/v1/board/me"
   [billing]="POST /api/v1/billing/webhooks/payment"
   [notification]="GET /api/v1/notification/me/notifications"
 )
 # 그 아래에 쿼리의 span 이 있는지 볼 작업(operation). 서버가 뜨면 곧 한 바퀴 돈다.
 # 인증 서버의 것은 주기 명령(send_security_digest)이다. 워커와 주기 명령의 검사(check_workers)가 먼저 한 번 돌린다.
-# 인증 서버의 워커는 할 일이 없던 바퀴를 보내지 않아 쓸 수 없다
+# 인증 서버의 워커는 할 일이 없던 바퀴를 보내지 않아 쓸 수 없다.
+# 게시판 서버의 알림 보내기도 보낼 것이 없던 바퀴는 보내지 않는다. 추적을 보기 전에 발송함에 알림 하나를 적는다(queue_board_notification)
 declare -A TRACE_JOBS=(
   [auth]=security.send_digest
   [trpg]=round.close_overdue
+  [board]=notification.send
   [billing]=sweep.run
   [notification]=notification.prune
 )
@@ -705,6 +708,19 @@ tempo_searches() {
     python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("traces") else 1)'
 }
 
+# 게시판 서버의 발송함에 알림 하나를 적는다. 게시판 서버가 5초 안에 알림 서버에 보낸다(notification.send 의 한 바퀴).
+# 댓글을 쓰려면 토큰이 들어서 DB 에 바로 적는다. 칸은 board-server/src/notifications/outgoing-notification.entity.ts 다.
+# payload 는 화면이 쓰는 칸(post.commented)이다. 알림 서버가 받는다(board_notification_accepted 와 같다)
+queue_board_notification() {
+  local sql
+  sql="INSERT INTO board.outgoing_notifications (source_key, user_id, kind, payload)
+    VALUES ('stack-smoke:$(cat /proc/sys/kernel/random/uuid)', '$(cat /proc/sys/kernel/random/uuid)', 'post.commented',
+      '{\"board_slug\": \"free\", \"post_id\": \"1\", \"post_title\": \"stack-smoke\", \"comment_id\": \"1\"}')"
+  # 관리 계정과 DB 의 이름은 db 컨테이너 안의 환경 변수로 읽는다. 그래서 작은따옴표로 넘겨 그 안에서 펼친다
+  # shellcheck disable=SC2016
+  compose exec -T -e SQL="$sql" db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -qc "$SQL"'
+}
+
 # 서버의 span 을 본다. 요청, 그 줄의 trace_id, 정리 작업과 그 안의 쿼리
 check_server_spans() {
   local server service trace
@@ -721,6 +737,8 @@ check_server_spans() {
     report "$service 가 Tempo 에 닿지 않는다(telemetry 망에서는 Alloy 에만 닿는다)" \
       unreachable_from "$service" http://tempo:3200/ready
   done
+  report "게시판 서버가 부른 알림 서버의 span 이 게시판 서버의 작업 span 아래에 들어온다(추적이 서버를 건넌다)" \
+    eventually tempo_searches '{resource.service.name="board-server" && name="notification.send"} >> {resource.service.name="notification-server" && kind=server}'
 }
 
 # 추적을 본다. 시험 span 이 Alloy 를 거쳐 Tempo 에 들어오는가, Grafana 가 Tempo 에 닿는가, 서버의 span 이 들어오는가
@@ -732,6 +750,7 @@ check_traces() {
   report "Grafana 가 Tempo 에 닿는다(데이터 소스 tempo)" grafana_reaches tempo
   report "시험 span 을 OTLP 로 Alloy 에 민다(telemetry 망)" push_probe_span "$trace"
   report "민 span 이 Alloy 를 거쳐 Tempo 에 들어온다(추적 번호로 찾는다)" eventually tempo_finds_trace "$trace"
+  report "게시판 서버의 발송함에 알림 하나를 적는다(보내는 작업의 span 을 남기게 한다)" queue_board_notification
   check_server_spans
 }
 

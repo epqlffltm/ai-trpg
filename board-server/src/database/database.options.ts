@@ -9,6 +9,7 @@
 
 import { DataSourceOptions } from 'typeorm';
 import { DatabaseSettings } from '../config/environment.js';
+import { TracedClient } from '../observability/db-spans.js';
 
 /**
  * DB 에 연결을 맺을 때 기다리는 최대 시간(밀리초).
@@ -37,13 +38,18 @@ export function searchPathOption(schema: string): string {
  *   - synchronize 는 늘 끈다. 켜면 서버가 뜰 때 엔티티에 맞춰 테이블을 제멋대로 고친다. 칸을 지우면 데이터도 지워진다.
  *     테이블은 마이그레이션으로만 바꾼다.
  *   - migrationsRun 도 끈다. 서버가 뜨면서 마이그레이션을 돌리지 않는다. 서버가 여러 대면 동시에 돌린다.
+ *   - 풀이 맺는 연결은 쿼리마다 span 을 거는 것(TracedClient)이다. 걸린 span 이 없으면 pg 의 것 그대로다
+ *     (observability/db-spans.ts).
  */
 export function databaseOptions(settings: DatabaseSettings): PostgresOptions {
   return {
     type: 'postgres',
     url: settings.DATABASE_URL,
     connectTimeoutMS: CONNECT_TIMEOUT_MS,
-    extra: { options: searchPathOption(settings.DB_SCHEMA) },
+    extra: {
+      options: searchPathOption(settings.DB_SCHEMA),
+      Client: TracedClient,
+    },
     synchronize: false,
     migrationsRun: false,
   };
