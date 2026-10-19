@@ -38,6 +38,8 @@ const (
 	readHeaderTimeout = 5 * time.Second
 	// 끌 때 처리 중인 요청을 기다리는 가장 긴 시간. 넘으면 남은 연결을 끊고 끈다
 	shutdownTimeout = 10 * time.Second
+	// 메트릭의 label instance 앞에 붙는 이 프로세스의 이름
+	metricsProcess = "server"
 )
 
 func main() {
@@ -68,7 +70,14 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := database.NewPool(ctx, settings.DatabaseURL, settings.DBSchema, database.ServerLimits)
+	// 메트릭을 수집기에 민다(OTEL_EXPORTER_OTLP_ENDPOINT 가 있을 때). 끌 때 남은 것을 보낸다
+	meters, err := app.StartMetrics(ctx, os.LookupEnv, settings.Logging(), metricsProcess)
+	if err != nil {
+		return err
+	}
+	defer app.CloseMetrics(meters)
+
+	pool, err := database.NewMeteredPool(ctx, settings.DatabaseURL, settings.DBSchema, database.ServerLimits, meters.Meter())
 	if err != nil {
 		return err
 	}
@@ -103,6 +112,7 @@ func run() error {
 		AuthServerSecret:  settings.AuthServerSecret,
 		CheckoutClientKey: settings.CheckoutClientKey(),
 		Now:               time.Now,
+		Meter:             meters.Meter(),
 	})
 	return serve(ctx, newServer(settings, router))
 }

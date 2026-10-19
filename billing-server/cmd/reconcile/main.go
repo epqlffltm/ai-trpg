@@ -51,6 +51,8 @@ import (
 const (
 	// operation 은 대사 한 번의 이름이다. 로그의 operation 칸에 적힌다.
 	operation = "reconcile.run"
+	// metricsProcess 는 메트릭의 label instance 앞에 붙는 이 프로세스의 이름이다.
+	metricsProcess = "reconcile"
 	// 대사가 남기는 오류 코드. docs/observability.md 의 표에 있다.
 	errorCodeMismatch = "ledger.mismatch"
 	errorCodeBehind   = "sweep.behind"
@@ -105,7 +107,19 @@ func run(args []string, out io.Writer) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	pool, err := database.NewPool(ctx, settings.Database.URL, settings.Database.Schema, database.JobLimits)
+	// 대사 한 번을 작업으로 센다(OTEL_EXPORTER_OTLP_ENDPOINT 가 있을 때). 하루 한 번 짧게 돌고 끝나므로
+	// 보내는 간격을 기다리지 않고 끝날 때 한 번 보낸다(CloseMetrics)
+	meters, err := app.StartMetrics(ctx, os.LookupEnv, settings.Logging, metricsProcess)
+	if err != nil {
+		logStartFailed(err)
+		return exitFailed
+	}
+	defer app.CloseMetrics(meters)
+	if err := jobs.Measure(meters.Meter()); err != nil {
+		logStartFailed(err)
+		return exitFailed
+	}
+	pool, err := database.NewMeteredPool(ctx, settings.Database.URL, settings.Database.Schema, database.JobLimits, meters.Meter())
 	if err != nil {
 		logStartFailed(err)
 		return exitFailed

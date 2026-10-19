@@ -55,6 +55,9 @@ LOG_WAIT_SECONDS=60
 GRAFANA="${GRAFANA:-http://127.0.0.1:3000}"
 # Loki 의 label 로 쓰는 것(docs/observability.md 의 "Loki 의 label"). 이것 말고는 label 이 없어야 한다
 LOKI_LABELS=(container environment level mode service)
+# 메트릭을 OTLP 로 미는 서버(docs/observability.md 의 "2. 메트릭"). 서버에 메트릭을 붙이면 여기에 더한다.
+# 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다
+METRIC_SERVERS=(billing)
 # 서버의 망 밖(소켓 프록시와 Loki 의 망)에서 주소를 부를 때 잠깐 띄우는 이미지. compose 의 redis 와 같아 이미 받아 두었다.
 # 그 안의 busybox wget 을 쓴다
 PROBE_IMAGE=redis:7-alpine
@@ -99,6 +102,7 @@ BILLING_DB_PASSWORD=$(throwaway)
 BOARD_DB_PASSWORD=$(throwaway)
 NOTIFICATION_DB_PASSWORD=$(throwaway)
 GRAFANA_ADMIN_PASSWORD=$(throwaway)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
 EOF
   write_new auth-server/.env <<EOF
 SECRET_KEY=$(throwaway)
@@ -545,6 +549,29 @@ check_metrics() {
     report "Alloy 가 $job 의 메트릭을 긁어 보낸다" eventually prometheus_finds "up{job=\"$job\"} == 1"
   done
   report "게임 서버가 Prometheus 에 닿지 않는다" unreachable_from game-server http://prometheus:9090/-/ready
+  report "결제 서버가 Prometheus 에 닿지 않는다(telemetry 망에서는 Alloy 에만 닿는다)" \
+    unreachable_from billing-server http://prometheus:9090/-/ready
+  check_server_metrics
+}
+
+# 서버가 민 메트릭이 정한 이름과 label 로 들어오는지 본다. 서버의 프로세스는 label instance 의 앞부분으로 가른다
+check_server_metrics() {
+  local server service
+  for server in "${METRIC_SERVERS[@]}"; do
+    service="${server}-server"
+    report "$service 의 요청 수가 들어온다(http_server_requests_total, instance=server-…)" \
+      eventually prometheus_finds "http_server_requests_total{service=\"$service\", route=\"/health/ready\", instance=~\"server-.+\"}"
+    report "$service 의 요청 시간이 초로 들어온다(http_server_request_duration_seconds)" \
+      eventually prometheus_finds "http_server_request_duration_seconds_count{service=\"$service\"}"
+    report "$service 가 DB 에 닿는다고 적었다(db_up == 1)" eventually prometheus_finds "db_up{service=\"$service\"} == 1"
+    report "$service 의 연결 풀이 들어온다(db_pool_connections, db_pool_connections_max)" \
+      eventually prometheus_finds "db_pool_connections{service=\"$service\", state=\"idle\"} and on(instance) db_pool_connections_max"
+  done
+  # 결제 서버의 작업. 정리 작업은 30초마다 돌고, 대사는 check_workers 가 한 번 돌렸다(끝날 때 한 번 민다)
+  report "결제 서버의 정리 작업이 작업 메트릭을 민다(sweep.run, instance=sweeper-…)" \
+    eventually prometheus_finds 'background_jobs_finished_total{service="billing-server", operation="sweep.run", result="success", instance=~"sweeper-.+"}'
+  report "결제 서버의 대사가 끝날 때 작업 메트릭을 민다(reconcile.run)" \
+    eventually prometheus_finds 'background_jobs_finished_total{service="billing-server", operation="reconcile.run"}'
 }
 
 # 모두 돌고 있고, 한 번도 다시 뜨지 않았는가
