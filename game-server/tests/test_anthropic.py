@@ -25,10 +25,10 @@ from app.ai.anthropic import (
     build_body,
     messages_url,
 )
+from app.ai.catalog_contract import ReasoningStyle
 from app.ai.openai_compat import THINKING_TOKENS
 from app.ai.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
 from app.ai.thinking import thinking_budget
-from app.catalog.models import ReasoningStyle
 
 BASE_URL = 'https://api.anthropic.com'
 MODEL = 'claude-opus-5-5-20260901'

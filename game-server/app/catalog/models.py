@@ -24,6 +24,8 @@
     바꾸면 기록이 남고 모델이 꺼진다. 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다.
   - 새로 넣은 모델은 꺼진 채로 시작한다. 원가를 적고, 평가 장면을 통과한 뒤에 켠다.
 
+창구(provider), 생각의 방식(reasoning_style), 출력 상한의 칸(token_limit_field)의 열거형은 AI 를 부르는 코드도 쓰므로
+모델 목록의 계약(app/ai/catalog_contract.py)에 있다(#496). 보이는 분류(Grade)는 서비스의 몫이라 여기 남는다.
 창구(provider)와 분류(grade)는 코드가 아는 값만 받는다.
 새 창구는 그것을 부르는 코드가 있어야 하므로 마이그레이션과 함께 늘린다.
 회사(vendor)는 보이는 데만 쓰는 이름이라 모양만 본다(app/catalog/schemas.py).
@@ -53,26 +55,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from app.assets.models import one_of
 from app.core.database import Base
 
 # 단가 칸의 자릿수. 백만 토큰당 USD 를 소수 여섯째 자리까지 적는다($0.075 같은 값이 있다)
 PRICE_TYPE = Numeric(12, 6)
-
-
-class Provider(enum.StrEnum):
-    """모델을 부르는 창구. 창구마다 부르는 코드가 따로 있다."""
-
-    # OpenAI 의 API
-    OPENAI = 'openai'
-    # Anthropic 의 API(Claude)
-    ANTHROPIC = 'anthropic'
-    # Google 의 Gemini API
-    GEMINI = 'gemini'
-    # 서버 곁에서 도는 모델(Ollama, LM Studio). 설정의 LLM_BASE_URL 로 부른다
-    LOCAL = 'local'
-    # Z.ai 의 API(GLM). OpenAI 와 같은 모양이다. 출력 상한의 칸은 max_tokens 로 정해져 있다
-    ZAI = 'zai'
 
 
 class Grade(enum.StrEnum):
@@ -83,51 +71,6 @@ class Grade(enum.StrEnum):
     STANDARD = 'standard'
     # 비싼 모델(Opus, Fable, Astra, Argon)
     PREMIUM = 'premium'
-
-
-class TokenLimitField(enum.StrEnum):
-    """
-    OpenAI 모양의 API 에서 출력 상한을 담는 칸의 이름. 모델마다 받는 칸이 다르다.
-
-    서버 곁의 모델과 옛 모델은 max_tokens 를, OpenAI 의 생각하는 모델은 max_completion_tokens 만 받는다.
-    Claude 와 Gemini 의 API 는 칸이 하나로 정해져 있어 적지 않는다.
-    """
-
-    MAX_TOKENS = 'max_tokens'
-    MAX_COMPLETION_TOKENS = 'max_completion_tokens'
-
-
-class ReasoningStyle(enum.StrEnum):
-    """
-    모델이 생각(thinking)을 켜고 끄는 방식. Claude 와 Gemini 의 모델마다 다르다(각 회사의 문서, 2026-10).
-
-    서술은 생각을 꺼서 부른다(app/rounds/llm_narrator.py). 끄는 법과, 끌 수 없으면 어떻게 하는지가 모델마다 다르다.
-    부르는 쪽(app/ai/anthropic.py, app/ai/gemini.py, app/ai/openai_compat.py)이 이 값을 보고 요청의 생각 칸을 만든다.
-    창구마다 받는 값이 다르다(app/catalog/rules.py 의 STYLES_BY_PROVIDER). budget 은 두 창구가 함께 쓴다.
-    OpenAI 와 서버 곁의 모델은 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다).
-    끌 수 없는 방식(always, level_minimal, level_low, budget_min)의 모델은 판매가를 생각의 몫까지 넣어 매긴다.
-    OpenAI 모양이어도 생각의 칸이 다른 창구(Z.ai)는 이 칸을 쓴다. 끌 수 있으면 thinking_type, 끌 수 없으면 always 다.
-    """
-
-    # 끌 수 있다(disabled). 켜면 스스로 깊이를 정한다(adaptive + effort). Opus 5, Sonnet 5, Haiku 5.5, Opus 4.6~4.8
-    ADAPTIVE = 'adaptive'
-    # 끌 수 없다. 끄라고 하면 effort 를 low 로 주고 출력 상한에 생각의 몫을 더한다. Opus 5.5, Fable 5.1·5
-    ALWAYS = 'always'
-    # disabled 를 받지 않는다. 미리 생각하지 않게 하는 between_tools 로 끈다. Sonnet 5.5
-    BETWEEN_TOOLS = 'between_tools'
-    # 켜면 생각의 토큰 상한을 준다. 끌 수 있다.
-    # Claude 4.5 세대(enabled + budget_tokens, 끄기 disabled), Gemini 2.5 Flash·Flash-Lite(thinkingBudget, 끄기 0)
-    BUDGET = 'budget'
-    # Gemini 의 생각의 깊이(thinkingLevel). 끌 수 없다. 끄라고 하면 가장 낮은 minimal 로 준다.
-    # minimal 도 생각을 끄는 것은 아니다. Gemini 3.6 Flash, 3.5·3.1 Flash-Lite, 3 Flash
-    LEVEL_MINIMAL = 'level_minimal'
-    # Gemini 의 생각의 깊이. 끌 수 없고 minimal 도 받지 않는다. 끄라고 하면 low 로 준다.
-    # Gemini 4 Argon, 3.8 Flash, 3.1 Pro
-    LEVEL_LOW = 'level_low'
-    # Gemini 의 생각의 토큰 상한(thinkingBudget). 끌 수 없다. 끄라고 하면 가장 작은 128 로 준다. Gemini 2.5 Pro
-    BUDGET_MIN = 'budget_min'
-    # 생각을 thinking 칸({"type": "enabled" | "disabled"})으로 켜고 끈다. 끌 수 있다. Z.ai 의 GLM-4.7·4.6·5.1·5.2 등
-    THINKING_TYPE = 'thinking_type'
 
 
 class AiModel(Base):
