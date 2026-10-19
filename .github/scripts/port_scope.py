@@ -32,6 +32,8 @@ PUBLISHERS = {
     # PC 에서 직접 띄운 서버가 붙는다
     'db': 'PC 에서 띄운 서버가 붙는 DB',
     'redis': 'PC 에서 띄운 서버가 붙는 Redis',
+    # 로그를 보는 화면(observability 프로필). SSH 터널로만 붙는다(README)
+    'grafana': '로그를 보는 화면',
 }
 # 루프백이 아닌 곳에 열어도 되는 (서비스, 컨테이너 안의 포트). 외부에 열 때 프록시의 443 같은 것을 여기에 적는다
 PUBLIC_PORTS: frozenset[tuple[str, str]] = frozenset()

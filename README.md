@@ -15,6 +15,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 구성 요소 | 폴더 | 상태 |
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
+| 로그 모으기 (Grafana Alloy, Loki, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것까지 완료(compose 의 프로필 `observability`, [아래](#로그-모으기)). 메트릭과 추적은 예정 |
 | 인증 서버 (Django) | [`auth-server/`](auth-server/README.md) | 회원가입(이메일 인증), 로그인(이메일 인증), 비밀번호 변경과 재설정, 메일 발송, 토큰 갱신, 로그아웃, JWKS, 시도 횟수 제한, 보안 이벤트 기록, 가입한 사용자의 환영 크레딧을 결제 서버에 맡기기, access 토큰에 닉네임 싣기까지 완료 |
 | 게임 서버 (FastAPI) | [`game-server/`](game-server/README.md) | 뼈대(서버 실행, DB, 인증 서버 토큰 검증, CI)와 자산 네 종류(세계관, 룰북, 시나리오, 로어북)의 만들기, 목록, 읽기, 고치기, 지우기와 시나리오 게시(판으로 굳히기, 스타팅 여러 개, 추천 인원과 프리젠), 공개와 소개 페이지, 공개 목록, 테이블 만들기와 참가(초대 코드, 로비와 비밀번호, 캐릭터, 방장), 라운드(선언 모으기, 가짜 서술자), 이벤트 기록, 채팅, 실시간 스트림(SSE, "입력 중" 표시), 룰북의 규칙 데이터(내장 템플릿 `srd5`), 시나리오의 캐릭터 시트와 캐릭터 방식, 테이블의 캐릭터 시트, 주사위와 판정(순수 함수), 선언에 붙이는 행동, 라운드를 닫을 때의 판정, 피해와 회복과 쓰러짐, 능력치를 직접 적는 캐릭터 방식, 점수제로 능력치를 사는 캐릭터 방식, 주사위로 능력치를 정하는 캐릭터 방식과 다시 굴리기, 죽음의 굴림과 캐릭터의 죽음, 죽은 뒤에 새 캐릭터 들이기, 캐릭터 보관함, 라운드의 서술 값 받기(결제 서버의 홀드), 시나리오의 추천 서술 모델과 테이블마다 고르는 서술 모델까지 완료 |
 | 게시판 서버 (NestJS) | [`board-server/`](board-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, CI), 인증 서버 토큰 검증, 게시판 넷과 글(쓰기, 목록, 읽기, 고치기, 지우기, 운영자), 댓글과 답글, 글마다의 댓글 수, 글 고정(기한이 지나면 저절로 내려감), 글 검색, 쓰기 횟수 제한, 글과 댓글의 신고(운영자가 묶어 읽고 처리), 글쓴이의 닉네임 표시까지 완료 |
@@ -156,18 +157,53 @@ docker compose run --rm --entrypoint pg_restore db-backup --clean --if-exists --
 `--dbname` 은 루트 `.env` 의 `POSTGRES_DB` 다(기본 `trpg`). 다 풀면 서버를 띄운다. 마이그레이션은 이미 백업에 든 상태라 할 일이 없다.
 풀기 전에는 `db` 만 띄운다. `docker compose up -d` 로 모두 띄우면 `db-backup` 이 곧바로 빈 DB 를 하나 떠서 쌓는다.
 
+## 로그 모으기
+
+compose 의 컨테이너 로그를 모아(Grafana Alloy) 저장하고(Loki) 본다(Grafana)(#25). 프로필 `observability` 로 켠다. 기본으로 꺼져 있다.
+서버 코드와 서버의 설정은 그대로다. 서버는 지금처럼 stderr 에 JSON 을 쓰고, 이 넷이 멈춰도 요청은 영향을 받지 않는다.
+정한 것과 까닭은 [관측 규격의 수집기](docs/observability.md#수집기grafana-alloy를-붙일-자리)에 있다.
+
+루트 `.env` 에 Grafana 의 관리자 비밀번호를 적고 띄운다. 비밀번호가 비어 있으면 Grafana 가 뜨지 않는다.
+
+```
+docker compose --profile app --profile observability up -d --build
+docker compose --profile app --profile observability ps
+```
+
+`grafana` 가 `healthy`, `alloy`, `loki`, `docker-socket-proxy` 가 `Up` 이면 된다. `http://127.0.0.1:3000` 에서 `admin` 과 그 비밀번호로 들어가
+Explore 에서 데이터 소스 Loki 를 고른다. 서버(VM)에서는 SSH 터널로 붙는다. `ssh -L 3000:127.0.0.1:3000 <서버>` 를 띄워 두고 같은 주소를 연다.
+끌 때도 두 프로필을 붙인다. `docker compose --profile app --profile observability down`
+
+```
+{service="game-server", level="error"}                 # 게임 서버의 오류
+{container="billing-sweeper"}                           # 결제 서버의 정리 작업(컨테이너 이름)
+{service="auth-server"} | trace_id="4bf92f35..."        # 한 요청이나 작업의 줄
+{container="db"}                                        # PostgreSQL 의 줄(JSON 이 아니다)
+```
+
+- label 은 `service`, `container`, `environment`, `level`, `mode` 뿐이다. 식별자(`request_id`, `trace_id`, `job_id`)와 `version` 은 줄의 값(structured metadata)이라 `|` 뒤에서 거른다.
+  JSON 이 아닌 줄(DB, Redis, Loki 등)은 `log_format="other"` 이 붙는다
+- 이 compose 프로젝트의 컨테이너만 모은다. 로그는 14일 뒤에 지운다(`docker/loki/config.yaml`). 오래 남겨야 하는 기록(운영자의 접속과 조작, 보안 이벤트, 결제)의 원본은 각 서버의 DB 다
+- Alloy 는 Docker 의 소켓을 직접 붙이지 않고 읽기만 넘기는 프록시(`docker-socket-proxy`)를 거친다. 그 프록시는 Alloy 만 닿는 망에 있고 서버들은 프록시에도 Loki 에도 닿지 않는다.
+  프록시는 컨테이너의 환경 변수(비밀)를 읽을 수 있으므로 다른 서비스를 그 망(`docker-api`)에 붙이지 않는다
+- 비밀번호는 볼륨(`grafanadata`)이 비어 있는 첫 기동 때만 반영된다. 나중에 바꿀 때는
+  `docker compose --profile observability exec grafana grafana cli admin reset-admin-password <새 비밀번호>` 다
+- 포트가 겹치면 루트 `.env` 의 `GRAFANA_PORT`(3000)로 바꾼다
+- 끝나고 바로 사라지는 컨테이너(`*-migrate`)는 Alloy 가 찾기 전에(15초마다 찾는다) 끝나면 모이지 않는다. 마이그레이션의 로그는 `docker compose logs <서비스>` 로 본다
+
 ## 외부에 열기 전
 
 로컬에서는 모두 이 PC(127.0.0.1)에서만 닿는다. VM 에 올려 바깥에 열 때 지킬 것이다(#274, #353).
 TLS(HTTPS)를 실제로 붙이는 일은 도메인과 배포할 곳이 정해진 뒤에 한다. 여기에는 그때 무엇을 바꾸는지를 적는다.
 
-**바깥에서 닿는 길은 프록시 하나다.** compose 가 여는 포트는 넷이고 모두 `127.0.0.1` 에 묶었다.
+**바깥에서 닿는 길은 프록시 하나다.** compose 가 여는 포트는 다섯이고 모두 `127.0.0.1` 에 묶었다.
 
 | 서비스 | 포트 | 까닭 |
 | --- | --- | --- |
 | `proxy` | `127.0.0.1:8080` | 바깥의 요청이 들어오는 입구. 운영에서는 이 자리가 443 이 된다 |
 | `auth-server` | `127.0.0.1:8000` | 관리자 화면. SSH 터널로만 붙는다(`ssh -L 8000:127.0.0.1:8000 <서버>`) |
 | `db`, `redis` | `127.0.0.1` | PC 에서 직접 띄운 서버가 붙는다 |
+| `grafana` | `127.0.0.1:3000` | 로그를 보는 화면(프로필 `observability`). SSH 터널로만 붙는다(`ssh -L 3000:127.0.0.1:3000 <서버>`). 관리 서버가 생기면 그것이 문이 된다 |
 
 - 게임, 게시판, 결제 서버와 워커는 포트를 열지 않는다. 열면 프록시의 요청 수 제한과 경로 차단을 건너뛰는 길이 된다
 - **Docker 는 VM 의 방화벽(ufw 등)을 거치지 않고 포트를 연다.** `127.0.0.1:` 을 빼면 방화벽이 있어도 그 포트가 바로 바깥에 열린다.
@@ -203,7 +239,7 @@ IP 를 쓰는 것은 인증 서버(시도 횟수)와 프록시(요청 수 제한
 
 - `docker-compose.yml` 의 `x-logging`(json-file, 파일 하나 10MB, 5개까지)을 모든 서비스가 `logging: *logging` 으로 쓴다. 서비스마다 최대 50MB, 17개면 850MB 쯤이다
 - 새 서비스가 이것을 빠뜨리면 CI(`stack`)가 실패한다(`.github/scripts/logging_scope.py`). 띄운 컨테이너에 상한이 실제로 붙었는지도 본다
-- 지난 로그는 상한을 넘으면 사라진다. 오래 남기고 찾아보는 일은 로그를 한곳에 모을 때(#25) 한다
+- 지난 로그는 상한을 넘으면 사라진다. 오래 남기고 찾아보는 일은 [로그 모으기](#로그-모으기)(Loki, 14일)가 한다
 - VM 을 만들 때 Docker 의 기본값에도 같은 상한을 둔다. compose 밖에서 띄운 컨테이너(`docker run` 으로 잠깐 띄운 것)도 디스크를 채우지 않는다.
   `/etc/docker/daemon.json` 에 아래를 적고 Docker 를 다시 띄운다. 이미 만든 컨테이너에는 붙지 않는다
 
@@ -323,7 +359,10 @@ docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기�
 docker/nginx/templates/   프록시(nginx)의 설정
 docker/cron/              주기 명령의 crontab (인증, 결제)
 docker/backup/            DB 의 백업과 복원 확인 스크립트
+docker/alloy/             로그 수집기(Grafana Alloy)의 설정
+docker/loki/              로그 저장소(Loki)의 설정
+docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki)
 docs/                     서버들이 함께 지키는 규격 (관측)
-docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 모든 서버와 워커, cron, 프록시(프로필 app)
+docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 모든 서버와 워커, cron, 프록시(프로필 app), 로그 모으기(프로필 observability)
 .env.example              인프라 환경 변수 목록
 ```
