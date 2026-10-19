@@ -82,10 +82,22 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
         holder = {'entry_id': npc_effect_['entry_id'], 'name': npc_effect_['name']}
         record_injury(session, table, npc_effect_.get('injury_roll'), holder, cause=changed)
         record_drop(session, table, outcome.get('drop'), cause=changed)
+        record_wake(session, table, outcome.get('wake'), cause=changed)
     monster_effect = outcome.get('monster_effect')
     if monster_effect is not None:
         changed = record_monster_change(session, table, monster_effect, cause=after)
         record_drop(session, table, outcome.get('drop'), cause=changed)
+
+
+def record_wake(session: AsyncSession, table: GameTable, wake: dict | None, cause: TableEvent) -> None:
+    """
+    깨어날 때의 반응으로 태도가 바뀌었으면 npc_attitude_changed 로 적는다. 그 인물이 일어난 변화(cause)에 잇는다.
+
+    굴렸어도 태도가 바뀌지 않았으면(눈치채지 못했거나 이미 그만큼 날 서 있었다) 적지 않는다. 굴림은 선언의 결과에 있다.
+    """
+    if wake is None or wake['attitude_change'] is None:
+        return
+    record_attitude_change(session, table, wake['attitude_change'], wake['name'], cause=cause)
 
 
 def record_treatment(session: AsyncSession, table: GameTable, treated: dict, cause: TableEvent) -> TableEvent:

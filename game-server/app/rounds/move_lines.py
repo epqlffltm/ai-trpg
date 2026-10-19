@@ -42,6 +42,7 @@ from app.rounds.narrator import (
     TreatmentNote,
     TurnNote,
     Verdict,
+    WakeNote,
 )
 from app.rounds.time_words import duration_text
 
@@ -144,6 +145,15 @@ def describe_npc_impact(impact: NpcImpact) -> str:
     """NPC 의 HP 가 바뀐 것을 한 줄로 적는다. 숫자는 양만 적는다. 예: → 악역영애 피해 5 (크게 다침)"""
     word = '피해' if impact.kind == 'damage' else '회복'
     return f'→ {impact.name} {word} {impact.amount} ({impact.condition})' + new_injury(impact.injury)
+
+
+def describe_wake(wake: WakeNote) -> str:
+    """
+    깨어난 인물이 쓰러진 동안 빼앗긴 것을 알아챈 것을 한 줄로 적는다.
+
+    예: (깨어난 악역영애 이(가) 품이 빈 것을 알아챘다. 태도: 경계)
+    """
+    return f'(깨어난 {wake.name} 이(가) 품이 빈 것을 알아챘다. 태도: {wake.attitude})'
 
 
 def describe_drop(drop: DropNote) -> str:
@@ -435,6 +445,8 @@ def describe_move(move: Move) -> str:
             parts.append(describe_npc_impact(move.verdict.monster_impact))
         if move.verdict.drop is not None:
             parts.append(describe_drop(move.verdict.drop))
+        if move.verdict.wake is not None:
+            parts.append(describe_wake(move.verdict.wake))
     if move.target_gone is not None:
         parts.append(describe_target_gone(move.target_gone))
     if move.naming is not None:
