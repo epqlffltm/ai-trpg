@@ -4,6 +4,8 @@
 #
 # 루트 .env 의 ALERT_* 로 설정 파일을 만들고 Alertmanager 를 띄운다. Alertmanager 의 설정 파일은 환경 변수를 펼치지 않는다.
 # 받는 곳(Discord, Slack, Telegram, 메일)은 값을 적은 것만 켠다. 하나도 없으면 경보는 Grafana 에서만 본다.
+# 바깥 감시(ALERT_HEARTBEAT_WEBHOOK_URL)를 적으면 늘 울리는 Watchdog 을 그 주소로만 1~2분마다 보낸다. 끊기면 바깥 감시가 알린다.
+# Watchdog 은 적지 않아도 운영자의 받는 곳에 가지 않는다(버린다).
 # 비밀(웹후크 주소, 봇 토큰, 메일 비밀번호)은 설정 파일에 적지 않고 주인만 읽는 파일에 따로 둔다(*_file).
 # 설정 파일과 비밀은 컨테이너 안(/tmp)에만 있다. 컨테이너를 다시 만들면 루트 .env 로 다시 만든다.
 #
@@ -55,6 +57,7 @@ validate() {
   both_or_neither ALERT_SMTP_USER "${ALERT_SMTP_USER:-}" ALERT_SMTP_PASSWORD "${ALERT_SMTP_PASSWORD:-}"
   if [ -n "${ALERT_DISCORD_WEBHOOK_URL:-}" ]; then require_url ALERT_DISCORD_WEBHOOK_URL "$ALERT_DISCORD_WEBHOOK_URL"; fi
   if [ -n "${ALERT_SLACK_WEBHOOK_URL:-}" ]; then require_url ALERT_SLACK_WEBHOOK_URL "$ALERT_SLACK_WEBHOOK_URL"; fi
+  if [ -n "${ALERT_HEARTBEAT_WEBHOOK_URL:-}" ]; then require_url ALERT_HEARTBEAT_WEBHOOK_URL "$ALERT_HEARTBEAT_WEBHOOK_URL"; fi
   if [ -n "${ALERT_TELEGRAM_CHAT_ID:-}" ] && ! printf '%s' "$ALERT_TELEGRAM_CHAT_ID" | grep -Eq '^-?[0-9]+$'; then
     fail "ALERT_TELEGRAM_CHAT_ID 는 숫자다(그룹은 -100 으로 시작한다)"
   fi
@@ -110,8 +113,21 @@ email() {
 YAML
 }
 
+# 바깥 감시. Watchdog 을 그 주소로 POST 한다(healthchecks.io 의 ping 주소 등). 풀림은 보내지 않는다(늘 울린다)
+heartbeat() {
+  [ -n "${ALERT_HEARTBEAT_WEBHOOK_URL:-}" ] || return 0
+  enabled="$enabled heartbeat"
+  cat <<YAML
+    webhook_configs:
+      - url_file: $(quote "$(secret_file heartbeat-webhook-url "$ALERT_HEARTBEAT_WEBHOOK_URL")")
+        send_resolved: false
+        max_alerts: 1
+YAML
+}
+
 # 묶는 법과 되풀이. 같은 경보 이름과 서버(또는 인프라의 job)를 한 알림으로 묶는다.
 # 첫 알림은 30초 모아 보내고, 묶음이 바뀌면 5분마다, 그대로면 4시간마다 다시 보낸다. 풀리면 풀렸다고 보낸다(send_resolved)
+# Watchdog 만 따로 바깥 감시로 보낸다. 기다리지 않고 1분마다 다시 보낸다. 운영자의 받는 곳으로 내려가지 않는다(continue 가 없다)
 route() {
   cat <<YAML
 route:
@@ -120,6 +136,12 @@ route:
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
+  routes:
+    - matchers: ['alertname = Watchdog']
+      receiver: heartbeat
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
 
 # DB 가 죽었으면 서버마다의 "DB 에 닿지 못한다"는 보내지 않는다. 원인 하나에 알림 하나다
 inhibit_rules:
@@ -127,8 +149,12 @@ inhibit_rules:
     target_matchers: ['alertname =~ ".+DatabaseUnreachable"']
 
 receivers:
-  - name: operator
 YAML
+}
+
+# 받는 쪽 하나의 머리. 그 아래에 받는 곳마다의 설정이 붙는다
+receiver() {
+  printf '  - name: %s\n' "$1"
 }
 
 # 설정 파일을 만든다. 주인만 읽는 폴더에 쓴다
@@ -138,10 +164,13 @@ render() {
   validate
   {
     route
+    receiver operator
     discord
     slack
     telegram
     email
+    receiver heartbeat
+    heartbeat
   } > "$CONFIG"
   if [ -n "$enabled" ]; then
     echo "alertmanager: 받는 곳:$enabled" >&2

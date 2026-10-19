@@ -231,6 +231,7 @@ sum by (service) (rate(http_server_requests_total[5m])) # 서버마다 초당 �
 | Slack | `ALERT_SLACK_WEBHOOK_URL` | https://api.slack.com/apps 에서 앱을 만들고 Incoming Webhooks 를 켠 뒤 채널을 골라 주소(`https://hooks.slack.com/services/…`)를 받는다 |
 | Telegram | `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | Telegram 의 @BotFather 에게 `/newbot` 으로 봇을 만들고 토큰을 받는다. 봇에게 말을 한 번 건 뒤 `https://api.telegram.org/bot<토큰>/getUpdates` 를 열어 `chat.id` 를 적는다 |
 | 메일 | `ALERT_SMTP_USER`, `ALERT_SMTP_PASSWORD`, 받는 사람을 바꾸려면 `ALERT_EMAIL_TO` | Gmail 이면 2단계 인증을 켠 뒤 https://myaccount.google.com/apppasswords 에서 앱 비밀번호를 하나 더 만든다. 서버들이 사용자에게 보내는 메일의 것과 나눠 둔다 |
+| 바깥 감시 | `ALERT_HEARTBEAT_WEBHOOK_URL` | https://healthchecks.io 에 가입하고(무료) 검사(Check)를 하나 만든다. 주기(Period) 5분, 여유(Grace) 5분으로 두고 ping 주소(`https://hc-ping.com/…`)를 적는다. 끊겼을 때 받을 곳(메일, Discord, Slack, Telegram)은 healthchecks.io 의 Integrations 에서 따로 고른다 |
 
 적은 뒤에는 컨테이너를 새로 만든다(`restart` 는 환경 변수를 다시 읽지 않는다). 로그의 첫 줄에 켠 받는 곳이 찍힌다(`alertmanager: 받는 곳: discord telegram`).
 반쯤 적으면(토큰만, 계정만) 그 까닭을 찍고 뜨지 않는다.
@@ -248,7 +249,9 @@ docker compose --profile observability exec alertmanager amtool alert add alertn
 
 - 잠시 끄려면(점검하는 동안) Grafana 의 Alerting > Silences 에서 데이터 소스 Alertmanager 를 골라 만든다. 끈 것은 볼륨(`alertmanagerdata`)에 남는다
 - Alertmanager 는 포트를 열지 않는다. 화면에 로그인이 없어서 열면 누구나 경보를 끈다
-- Prometheus 나 Alertmanager, VM 자신이 죽은 것은 알리지 못한다([관측 규격의 알려진 빈틈](docs/observability.md#알려진-빈틈))
+- 바깥 감시는 늘 울리는 경보(`Watchdog`)를 1~2분마다 받는다. Prometheus 나 Alertmanager, PC 나 VM, 인터넷이 죽으면 그 신호가 끊겨 바깥 감시가 알린다. 적지 않으면 그런 것은 알리지 못한다
+- 바깥 감시가 신호를 받는지는 healthchecks.io 의 그 검사가 초록(up)인지로 본다. 처음 적고 2분쯤 뒤에 초록이 된다
+- 받는 곳 가운데 하나로 보내지 못하면 `AlertDeliveryFailing` 이 나머지 받는 곳으로 간다(웹후크를 지웠다, 메일의 비밀번호가 틀렸다)
 
 - label 은 `service`, `container`, `environment`, `level`, `mode` 뿐이다. 식별자(`request_id`, `trace_id`, `job_id`)와 `version` 은 줄의 값(structured metadata)이라 `|` 뒤에서 거른다.
   JSON 이 아닌 줄(DB, Redis, Loki 등)은 `log_format="other"` 이 붙는다
