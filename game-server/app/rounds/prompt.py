@@ -110,7 +110,8 @@ from app.rounds.time_words import duration_text, time_text
 #                 한 일의 줄에 줍기의 결과와 찾기로 찾은 물건이 붙는다(#279). 다루는 법에 숨은 물건이 더해진다
 #   narration-32: 한 일의 줄에 내려놓기의 결과가 붙는다((내려놓기: 밧줄 1개를 내려놓았다)).
 #                 내려놓은 물건은 그 장소의 놓인 물건 줄에도 보인다
-PROMPT_VERSION = 'narration-32'
+#   narration-33: 이룬 퀘스트가 가져간 물건이 한 일의 줄에 붙는다((넘긴 물건: 약초 배달에 약초 2개))
+PROMPT_VERSION = 'narration-33'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3

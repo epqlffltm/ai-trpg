@@ -45,11 +45,13 @@ def describe(
     rewards: list[dict],
     due_at: int | None,
     reason: str | None = None,
+    consumed: list[dict] | None = None,
 ) -> dict:
     """
     바꾼 것을 이벤트에 적을 모양. 무엇이, 무엇에서 무엇으로, 누가 무엇을 받았는가, 기한은 언제 끝나는가.
 
     reason 은 사람이 아니라 서버가 바꾼 까닭이다(기한을 넘김, app/rounds/deadlines.py). 사람이 바꿨으면 None.
+    consumed 는 이룬 퀘스트가 가져간 물건이다(app/rounds/quest_handover.py). 보상과 같은 모양이다. 없으면 빈 목록이다.
     """
     return {
         'entry_id': str(quest.entry_id),
@@ -57,6 +59,7 @@ def describe(
         'previous': previous,
         'status': status,
         'rewards': rewards,
+        'consumed': consumed or [],
         'due_at': due_at_document(due_at),
         'reason': reason,
     }

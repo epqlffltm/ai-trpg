@@ -19,6 +19,7 @@
 from app.rounds.narrator import (
     DeathSaveNote,
     DropNote,
+    HandOverNote,
     HealNote,
     Impact,
     InjuryNote,
@@ -332,6 +333,16 @@ def describe_put_down(note: PutDownNote) -> str:
     return f'(내려놓기: {note.name} {note.count}개를 가지고 있지 않았다)'
 
 
+def describe_handed_over(notes: list[HandOverNote]) -> str:
+    """
+    이룬 퀘스트에 넘긴 물건들을 한 줄로 적는다. 퀘스트의 차례, 그 안의 물건 차례다.
+
+    예: (넘긴 물건: 약초 배달에 약초 2개)
+        (넘긴 물건: 약초 배달에 약초 2개, 편지 전하기에 편지 1개)
+    """
+    return '(넘긴 물건: ' + ', '.join(f'{note.quest}에 {note.name} {note.count}개' for note in notes) + ')'
+
+
 def lost_before_acting(move: Move) -> str | None:
     """
     선언을 냈지만 차례가 오기 전에 죽거나 쓰러져 하지 못했으면 그 말. 아니면 None.
@@ -388,6 +399,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_take(move.take))
     if move.put_down is not None:
         parts.append(describe_put_down(move.put_down))
+    if move.handed_over:
+        parts.append(describe_handed_over(move.handed_over))
     if move.rest is not None:
         parts.append(describe_rest(move.rest))
     if move.death_save is not None:

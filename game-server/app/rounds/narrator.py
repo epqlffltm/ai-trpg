@@ -344,6 +344,19 @@ class PutDownNote:
 
 
 @dataclass(frozen=True)
+class HandOverNote:
+    """
+    이룬 퀘스트가 이 캐릭터에게서 가져간 물건 한 가지(app/rounds/quest_handover.py). 엔진이 정한 것이다.
+
+    quest 는 퀘스트(사건)의 이름, name 은 물건의 이름, count 는 낸 개수다. 배달을 마친 것이다.
+    """
+
+    quest: str
+    name: str
+    count: int
+
+
+@dataclass(frozen=True)
 class TargetGoneNote:
     """
     겨눈 몬스터를 판정할 때 칠 수 없어 굴리지 않은 것(app/rounds/checks.py 의 target_gone).
@@ -396,6 +409,8 @@ class Move:
     take: TakeNote | None = None
     # 가진 물건을 내려놓는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     put_down: PutDownNote | None = None
+    # 이 라운드가 닫힐 때 이룬 퀘스트가 이 캐릭터에게서 가져간 물건들. 퀘스트마다, 물건마다 한 줄이다
+    handed_over: list[HandOverNote] = field(default_factory=list)
     # 겨눈 몬스터를 칠 수 없어 굴리지 않았으면 그 까닭. 아니면 None 이다. verdict 와 함께 있지 않다
     target_gone: TargetGoneNote | None = None
     # 쉬는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
