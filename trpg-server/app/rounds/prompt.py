@@ -123,7 +123,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 ((깨어난 악역영애 이(가) 품이 빈 것을 알아챘다. 태도: 경계)). 태도에 경계가 더해진다(#494)
 #   narration-39: 싸우는 인물(NPC)의 공격 줄이 차례 순서로 섞인다(악역영애: 엘프에게 부채 후리기 (맞음)).
 #                 [인물의 상태] 의 다루는 법에 인물의 공격은 결과 줄에 있을 때뿐이라는 말이 더해진다(#487)
-PROMPT_VERSION = 'narration-39'
+#   narration-40: 몬스터와 인물이 쓰러진 캐릭터를 친 줄이 붙는다
+#                 (수로 쥐 2: 쓰러진 엘프에게 물기 (맞음) → 엘프 죽음의 굴림 실패 +1 (실패 2/3, 죽어 가는 중)) (#369)
+PROMPT_VERSION = 'narration-40'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3

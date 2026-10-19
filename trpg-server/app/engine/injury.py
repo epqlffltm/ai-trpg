@@ -82,13 +82,22 @@ def trigger_of(ruleset: Ruleset, change: Change, max_hp: int, dead: bool) -> Tri
     """
     if change.kind != ChangeKind.DAMAGE or dead:
         return None
-    triggers = ruleset.injury_triggers
-    if triggers.downed and change.before > 0 and change.after == 0:
+    if ruleset.injury_triggers.downed and change.before > 0 and change.after == 0:
         return Trigger.DOWNED
-    percent = triggers.big_hit_percent
-    if percent is not None and change.amount * 100 >= percent * max_hp:
+    if is_big_hit(ruleset, change, max_hp):
         return Trigger.BIG_HIT
     return None
+
+
+def is_big_hit(ruleset: Ruleset, change: Change, max_hp: int) -> bool:
+    """
+    이 피해가 큰 타격인가. 주사위가 정한 양(amount)이 최대 HP 의 규칙의 비율(big_hit_percent) 이상이다.
+
+    규칙이 큰 타격을 껐으면(None) 늘 거짓이다. 회복은 큰 타격이 아니다.
+    부상 표(trigger_of)와, 큰 타격으로 쓰러졌는지(app/rounds/checks.py 의 change_sheet)가 함께 쓴다.
+    """
+    percent = ruleset.injury_triggers.big_hit_percent
+    return change.kind == ChangeKind.DAMAGE and percent is not None and change.amount * 100 >= percent * max_hp
 
 
 def row_injury(table: InjuryTable, roll: int) -> str | None:

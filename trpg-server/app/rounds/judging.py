@@ -147,11 +147,14 @@ def rolling_members(table: GameTable, round_: Round) -> list[tuple[TableMember, 
     ]
 
 
-def build_judging(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> Judging:
+def build_judging(
+    table: GameTable, round_: Round, dice: Dice, scene: Scene, downed: frozenset[uuid.UUID] = frozenset()
+) -> Judging:
     """
     이번 라운드의 판정에 함께 쓰는 것들을 모은다.
 
     판의 복사본(규칙, 인물 항목, 물건, 맵)을 통째로 읽는다. 싸지 않아서 판정할 것이 있을 때만 부른다.
+    downed 는 판정을 시작하기 전에 쓰러져 있던 사람들이다(몬스터와 NPC 가 칠 수 있다).
     """
     snapshot = read_snapshot(table.content)
     return Judging(
@@ -166,6 +169,7 @@ def build_judging(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> 
         items=items.catalog(snapshot),
         snapshot=snapshot,
         monsters=scene.monsters,
+        downed_at_start=downed,
     )
 
 
@@ -227,6 +231,9 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> se
     NPC 와 몬스터의 상태는 그 안에 들어 있고, 여기서 고친다. 앞사람이 죽인 몬스터는 뒷사람이 치지 못한다.
     지목은 장면에 나오지 않은 인물도 짚을 수 있어서 상태 전부(scene.npcs)를 함께 넘긴다.
 
+    판정을 시작하기 전에 쓰러져 있던 사람들을 한 번 뜬다. 몬스터와 NPC 는 그들도 칠 수 있다(#369,
+    app/rounds/downed_strikes.py). 이번 라운드에 앞 차례에서 쓰러진 사람은 이번 라운드에는 맞지 않는다.
+
     장면의 마리 중 아직 만나지 않은 것에는 이번 라운드를 만난 첫 라운드로 적는다(mark_engaged).
     기습은 그 라운드에만 쓴다.
 
@@ -239,7 +246,8 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> se
     if not rolling and not acting and not fighting:
         return set()
 
-    judging = build_judging(table, round_, dice, scene)
+    downed = frozenset(member.user_id for member in find_dying(table))
+    judging = build_judging(table, round_, dice, scene, downed)
     if not acting and not fighting:
         for member, declaration in rolling:
             take_member_turn(judging, member, declaration)
