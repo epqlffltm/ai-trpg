@@ -227,6 +227,7 @@ def kill(sheet: TableSheet) -> None:
 
 
 def clear_death_saves(sheet: TableSheet) -> None:
-    """죽음의 굴림에서 센 것을 처음으로 돌린다. 회복을 받아 일어났을 때 부른다."""
+    """죽음의 굴림에서 센 것과 어떻게 쓰러졌는지를 처음으로 돌린다. 회복을 받아 일어났을 때 부른다."""
     sheet.death_successes = 0
     sheet.death_failures = 0
+    sheet.downed_by_big_hit = False

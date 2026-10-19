@@ -18,6 +18,7 @@
 
 from app.rounds.narrator import (
     DeathSaveNote,
+    DownedStrikeNote,
     DropNote,
     HandOverNote,
     HealNote,
@@ -510,13 +511,26 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
     예: 수로 쥐 2: 엘프에게 물기 (맞음) → 엘프 피해 3 (HP 7/10)
         수로 쥐 2: 엘프에게 물기 (빗나감)
         악역영애: 엘프에게 부채 후리기 (맞음) → 엘프 피해 2 (HP 8/10)
+        수로 쥐 2: 쓰러진 엘프에게 물기 (맞음) → 엘프 죽음의 굴림 실패 +1 (실패 2/3, 죽어 가는 중)
     도감의 글(생김새, 약점)은 싣지 않는다. 가짜 서술자는 이 줄을 장면으로 그대로 내보낸다.
     """
     result = '맞음' if note.hit else '빗나감'
-    line = f'{note.name}: {note.target}에게 {note.attack} ({result})'
+    target = note.target if note.downed is None else f'쓰러진 {note.target}'
+    line = f'{note.name}: {target}에게 {note.attack} ({result})'
     if note.impact is not None:
         line += f' {describe_impact(note.impact)}'
+    if note.downed is not None and note.downed.added:
+        line += f' {describe_downed_strike(note.target, note.downed)}'
     return line
+
+
+def describe_downed_strike(target: str, note: DownedStrikeNote) -> str:
+    """
+    쓰러진 캐릭터를 맞힌 결과를 줄 뒤에 붙일 글. 피해 대신 죽음의 굴림 실패가 쌓인다(#369).
+
+    예: → 엘프 죽음의 굴림 실패 +2 (실패 3/3, 죽음)
+    """
+    return f'→ {target} 죽음의 굴림 실패 +{note.added} (실패 {note.failures}/{note.limit}, {FATES[note.fate]})'
 
 
 def take_move(moves: list[Move], used: list[bool], name: str) -> Move | None:

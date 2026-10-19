@@ -1516,7 +1516,7 @@ records.py      일어난 일을 이벤트로 적기
   3. 그래도 같으면 서버의 주사위(규칙의 `die`)다. 같은 무리만 굴리고, 높은 눈이 먼저다. 눈도 같으면 앉은 사람, 그다음 장면의 몬스터, 그다음 장면의 인물 순서다.
 - 만난 첫 라운드는 마리가 처음 장면에 든(살아 있는 캐릭터와 같은 장소에 있는) 라운드다. 선언을 마감할 때 `table_monsters.engaged_round` 에 적고 고치지 않는다.
 - 행동이 없는 선언은 차례가 없다. 몬스터는 그래도 그 캐릭터를 칠 수 있다.
-- 몬스터의 차례에는 같은 장소에 서 있는(쓰러지지 않은) 캐릭터 하나를 공격 하나로 친다. 대상과 공격은 서버의 주사위로 고른다(하나뿐이면 굴리지 않는다). 판정은 앉은 사람의 것과 같은 계산이다(몬스터의 그 능력치 점수, 공격의 난이도). 맞히면 공격의 양의 등급만큼 피해를 주고, 쓰러짐과 부상 표도 앉은 사람의 것과 같다.
+- 몬스터의 차례에는 같은 장소의 캐릭터 하나를 공격 하나로 친다. 서 있는 캐릭터와, 선언을 마감할 때 이미 쓰러져 있던 캐릭터가 대상이다([쓰러진 캐릭터를 치기](#라운드)). 대상과 공격은 서버의 주사위로 고른다(하나뿐이면 굴리지 않는다). 판정은 앉은 사람의 것과 같은 계산이다(몬스터의 그 능력치 점수, 공격의 난이도). 맞히면 공격의 양의 등급만큼 피해를 주고, 쓰러짐과 부상 표도 앉은 사람의 것과 같다.
 - 차례가 오기 전에 쓰러지거나 죽은 캐릭터는 행동하지 못한다. 굴리지 않고 그 까닭을 적는다.
 
 ```json
@@ -1525,7 +1525,7 @@ records.py      일어난 일을 이벤트로 적기
 
   `turn_lost` 는 `downed`(앞 차례에 쓰러졌다) 또는 `dead`(앞 차례에 죽었다, 앞사람의 치료가 실패한 즉사도)다.
 - 차례가 오기 전에 쓰러지거나 죽은 마리는 공격하지 않는다. 칠 캐릭터가 없어도 그렇다(`skipped`: `downed`, `dead`, `no_target`).
-- 차례와 몬스터의 결과는 라운드의 `turns` 에 적힌다. 하나하나가 `{kind, first, score, tiebreak}` 에 캐릭터면 `user_id`, `character_name`, 몬스터면 `monster_id`, `name`, `outcome` 이다. 몬스터의 `outcome` 은 `{"skipped": …}` 이거나 `{attack, user_id, character_name, roll, modifier, total, target, success, effect}` 다. 몬스터의 점수와 HP 의 숫자가 들어 있어 응답으로 내보내지 않는다. 앉은 사람은 이벤트(`monster_attacked`, `hp_changed`)로 본다.
+- 차례와 몬스터의 결과는 라운드의 `turns` 에 적힌다. 하나하나가 `{kind, first, score, tiebreak}` 에 캐릭터면 `user_id`, `character_name`, 몬스터면 `monster_id`, `name`, `outcome` 이다. 몬스터의 `outcome` 은 `{"skipped": …}` 이거나 `{attack, user_id, character_name, roll, modifier, total, target, success, effect}` 다. 쓰러진 캐릭터를 쳤으면 `effect` 는 `null` 이고 `downed_strike` 가 더 있다. 몬스터의 점수와 HP 의 숫자가 들어 있어 응답으로 내보내지 않는다. 앉은 사람은 이벤트(`monster_attacked`, `hp_changed`)로 본다.
 - 판정과 같이 닫기 시작할 때 한 번만 굴린다. 서술을 다시 맡겨도 다시 굴리지 않는다.
 - 이벤트도 차례 순서로 적힌다. 행동이 없는 선언은 차례들 뒤에 앉은 순서로 적힌다.
 
@@ -1536,10 +1536,10 @@ records.py      일어난 일을 이벤트로 적기
   - 이번 라운드에 싸움이 붙은 인물은 다음 라운드부터 친다. 차례는 판정을 시작하기 전에 정하기 때문이다.
   - 싸움은 끝나지 않는다(`fought_round` 를 비우지 않는다). 장면에 나오지 않거나 쓰러지거나 죽으면 치지 않는다.
 - 인물은 기습하지 않는다. 차례 능력치의 점수는 테이블의 그 인물의 것이다.
-- NPC 는 장소가 없다(#282). 앉은 사람의 서 있는 캐릭터가 모두 대상이 될 수 있다. 고르는 차례는 이렇다. 앞의 것이 칠 수 없는 대상이면(쓰러졌다) 다음으로 간다.
+- NPC 는 장소가 없다(#282). 앉은 사람의 서 있는 캐릭터와, 선언을 마감할 때 이미 쓰러져 있던 캐릭터가 모두 대상이 될 수 있다(몬스터와 같다). 고르는 차례는 이렇다. 앞의 것이 칠 수 없는 대상이면(이번 라운드에 쓰러졌다) 다음으로 간다.
   1. 이번 라운드에 이 인물에게서 훔치다 들킨 도둑
   2. 이번 라운드에 이 인물을 타격으로 겨눈 사람 중에서 서버의 주사위로
-  3. 그 밖의 서 있는 캐릭터 중에서 서버의 주사위로
+  3. 그 밖의 칠 수 있는 캐릭터 중에서 서버의 주사위로
 - 판정은 몬스터의 것과 같은 계산(인물의 그 능력치 점수, 공격의 난이도)에 인물이 입은 부상의 영향을 더한다. 친 대상과는 싸운 것으로 적는다.
 - 차례가 오기 전에 쓰러지거나 죽었거나, 입은 부상 때문에 움직이지 못하거나(기절 같은 것), 칠 캐릭터가 없으면 치지 않는다(`skipped`: `downed`, `dead`, `incapacitated`, `no_target`).
 - 라운드의 `turns` 에서 인물의 차례는 `kind` 가 `npc` 이고 `entry_id`, `name`(장면의 호칭), `outcome` 이 있다. `outcome` 은 몬스터의 것에 `hindrance`(부상의 영향, 없으면 `null`)가 더해진 모양이다. 앉은 사람은 이벤트(`npc_attacked`, `hp_changed`)로 본다.
@@ -1562,12 +1562,23 @@ records.py      일어난 일을 이벤트로 적기
 - 굴린 것은 라운드에 적힌다(`death_saves`). 선언이 아니라 라운드에 적는 것은 쓰러진 사람이 선언을 내지 않아도 되기 때문이다. 이벤트(`death_save_rolled`)로도 남는다. 판정과 같이 닫기 시작할 때 한 번만 굴리고, 서술을 다시 맡겨도 다시 굴리지 않는다.
 - 규칙에 죽음의 굴림이 없으면(`rules.death_save` 가 `null`) 굴리지 않는다. 쓰러진 캐릭터는 쓰러진 채로 있다.
 
+**쓰러진 캐릭터를 치기.** 몬스터와 싸우는 NPC 는 쓰러진 캐릭터도 친다(#369, `app/rounds/downed_strikes.py`). 쓰러진 쪽이 서 있는 쪽보다 안전하면 안 되고, 일행이 모두 쓰러져도 전투가 멈추지 않고 마무리되어야 한다.
+
+- 선언을 마감할 때 이미 쓰러져 있던(죽지 않은) 캐릭터가 대상의 후보다. 이번 라운드에 앞 차례에서 쓰러진 캐릭터는 다음 라운드부터다. 동료가 일으킬 틈이다. 고비를 넘긴 캐릭터도 쓰러진 채라 후보다.
+- 서 있는 캐릭터와 같은 주사위로 고른다(가중치 없음). 서 있는 동료가 적을수록 쓰러진 사람이 노려지기 쉽다.
+- 판정은 서 있는 대상과 같다. 맞히면 피해는 없고 죽음의 굴림 실패가 쌓인다. 큰 타격(규칙의 `big_hit_percent` 이상의 한 번의 피해)으로 쓰러진 캐릭터면 2, 아니면 1 이다. 공격이 작아도 같다. 빗나가면 아무 일도 없다.
+- 어떻게 쓰러졌는지는 쓰러질 때 시트에 적고(`table_sheets.downed_by_big_hit`, 마이그레이션 `b4f1c8d2e6a3`), 일어날 때 지운다. 이미 쓰러져 있던 캐릭터는 큰 타격이 아닌 것으로 둔다.
+- 실패가 규칙의 수에 닿으면 그 자리에서 죽는다(라운드 끝의 굴림을 기다리지 않는다). 넘겨 세지 않는다. 죽지 않았으면 라운드 끝의 죽음의 굴림은 그대로 굴린다.
+- 규칙에 죽음의 굴림이 없으면 쓰러진 캐릭터는 후보가 아니다. 죽일 길이 없는 판이다.
+- 차례의 `outcome` 에 `downed_strike` 가 적힌다. `added`(이번에 쌓인 실패, 빗나가면 0), `failures`(그 뒤의 실패), `limit`(죽는 수), `fate`(`dying`, `stable`, `dead`)다. 이벤트(`monster_attacked`, `npc_attacked`)에도 보인다. 죽었으면 바로 뒤에 `character_died`(`cause`: `struck_down`)가 그 공격을 원인으로 적힌다.
+- 전멸한 뒤 테이블이 어떻게 끝나는가는 따로 정한다.
+
 플레이어는 쓰러진 자기 캐릭터를 그 전에 스스로 보낼 수 있다(`DELETE /tables/{id}/character`). 동료의 회복이나 주사위를 기다리지 않고 넘어가려는 때다.
 서 있는 캐릭터는 보낼 수 없다(409 `character_not_downed`). 마음에 안 드는 캐릭터를 버리는 길이 되면 안 된다.
 
 - 죽은 캐릭터는 되살아나지 않는다(`members[].sheet.dead`). 회복의 대상이 돼도 HP 가 바뀌지 않고, 양을 정하는 주사위도 굴리지 않는다. 죽었다고 적는 함수만 있고 되살리는 함수는 없다.
 - 캐릭터가 죽은 사람은 글도 낼 수 없다(409 `character_dead`). 쓰러진 사람과 다르다. 라운드는 그 사람을 기다리지 않는다.
-- 죽음은 이벤트(`character_died`)로 남는다. 어떻게 죽었는지(`cause`: `death_save`, `gave_up`, `treatment`)가 함께 적힌다.
+- 죽음은 이벤트(`character_died`)로 남는다. 어떻게 죽었는지(`cause`: `death_save`, `gave_up`, `treatment`, `struck_down`)가 함께 적힌다.
 
 **부상.** HP 와 따로 몸에 남는 일이다. 무엇이 있고 언제 생기는지는 규칙의 데이터다(`injuries`, `injury_table`, `injury_triggers`). PC 와 NPC 모두 입는다.
 
@@ -2381,14 +2392,14 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `npc_attitude_changed` | 엔진이 NPC 의 태도를 바꿨다. 그렇게 만든 일 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `previous`, `attitude`(`friendly`, `neutral`, `wary`, `hostile`), `reason`(`caught_stealing` 훔치다 들킴, `robbed_while_down` 쓰러진 동안 빼앗기고 깨어남) |
 | `npc_changed` | 엔진이 NPC 의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`. HP 의 숫자는 내보내지 않는다 |
 | `monster_changed` | 엔진이 몬스터 한 마리의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `monster_id`, `name`(부르는 이름), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`. HP 의 숫자는 내보내지 않는다 |
-| `monster_attacked` | 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 쳤다. 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `monster_id`, `name`(부르는 이름), `attack`(`name`, `ability`, `difficulty`, `harm`), `user_id`, `character_name`, `success`. 굴림의 보정과 합은 몬스터의 능력치를 드러내서 내보내지 않는다 |
-| `npc_attacked` | 엔진이 싸우는 NPC 의 차례에 캐릭터 하나를 쳤다(#487). 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `entry_id`, `name`(장면의 호칭), `attack`, `user_id`, `character_name`, `success`. 굴림과 부상의 영향은 내보내지 않는다 |
+| `monster_attacked` | 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 쳤다. 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `monster_id`, `name`(부르는 이름), `attack`(`name`, `ability`, `difficulty`, `harm`), `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만). 굴림의 보정과 합은 몬스터의 능력치를 드러내서 내보내지 않는다 |
+| `npc_attacked` | 엔진이 싸우는 NPC 의 차례에 캐릭터 하나를 쳤다(#487). 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `entry_id`, `name`(장면의 호칭), `attack`, `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만). 굴림과 부상의 영향은 내보내지 않는다 |
 | `injury_gained` | 캐릭터나 NPC 가 부상을 입었다. 그 HP 의 변화 바로 뒤에 적힌다 | `round`, 캐릭터면 `user_id`, `character_name`, NPC 면 `entry_id`, `name`, 그리고 `injury`, `source`, `ends_after_round`(짧은 것), `heals_at`(오래 가는 것의 나을 시각: `day`, `hour`, `minute`, `time_of_day`) |
 | `injury_ended` | 부상이 끝났다. 정한 라운드가 지나 풀렸거나 나을 시각이 지나 나았으면 그 라운드의 죽음의 굴림들 뒤, 닫힘 앞에 적힌다. 치료로 나았으면 그 치료 바로 뒤에 적힌다 | `round`, 누구인지(위와 같다), `injury`, `reason`(`expired` 짧은 것이 풀림, `healed` 오래 가는 것이 나음, `treated` 치료로 나음). 후유증이 생겼으면 바로 뒤에 `injury_gained`(`source`: `aftermath`) |
 | `injury_treated` | 엔진이 치료의 결과를 정했다. 그 판정 바로 뒤에 적힌다 | `round`, 누구인지(위와 같다), `injury`, `treated`, `heals_at`, `healed`, `mishap`(실패 표를 굴렸으면 `roll`, `kind`, `rounds`, `delay_minutes`, `magnitude`), `died` |
 | `naming_resolved` | 엔진이 지목의 결과를 정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `guess`, `correct`, `entry_id`, `name`(맞았으면 진짜 이름, 아니면 `null`), `label`, `newly` |
 | `death_save_rolled` | 엔진이 쓰러진 캐릭터의 죽음의 굴림을 굴렸다. 그 라운드의 행동들 뒤, 닫힘 앞에 적힌다 | `round`, `user_id`, `character_name`, `roll`, `target`, `success`, `successes`, `failures`, `fate`(`dying`, `stable`, `dead`) |
-| `character_died` | 캐릭터가 죽었다. 죽음의 굴림으로 죽었으면 그 굴림 바로 뒤에, 치료 실패의 즉사면 그 치료 바로 뒤에 적힌다 | `user_id`, `character_name`, `cause`(`death_save`, `gave_up`, `treatment`). 죽음의 굴림이나 치료로 죽었으면 `round` 도 |
+| `character_died` | 캐릭터가 죽었다. 죽음의 굴림으로 죽었으면 그 굴림 바로 뒤에, 치료 실패의 즉사면 그 치료 바로 뒤에, 쓰러진 채 맞아 죽었으면 그 공격 바로 뒤에 적힌다 | `user_id`, `character_name`, `cause`(`death_save`, `gave_up`, `treatment`, `struck_down`). 스스로 보낸 것이 아니면 `round` 도 |
 | `items_gained` | 캐릭터가 물건을 얻었다. 방장이 줬거나(행한 사람이 방장), 몬스터를 쓰러뜨려 엔진이 줬거나(행한 사람이 없고 `monster_changed` 에 잇는다), 장소에서 줍거나 찾았다(행한 사람이 없고 그 행동이나 `place_searched` 에 잇는다) | `user_id`, `character_name`, `entry_id`, `name`(물건의 이름), `count`(받은 개수), `total`(그 뒤의 개수). 몬스터의 드롭이면 `round`, `source`(`monster`), `monster_id`, `monster_name`(장면의 호칭), `lost`(상한을 넘어 잃은 개수)가 더 있다. NPC 의 드롭이면 `source` 가 `npc` 이고 `monster_id`, `monster_name` 대신 `npc_id`, `npc_name` 이 있다(`npc_changed` 에 잇는다). 장소에서 얻었으면 `round`, `source`(`place` 주움, `search` 찾음), `place`(`entry_id`, `name`)가 더 있다. 훔쳤으면 `round`, `source`(`steal`), 몬스터면 `monster_id`, `monster_name`, NPC 면 `npc_id`, `npc_name` 이 더 있다(`steal_attempted` 에 잇는다). 빼앗았으면 `source` 가 `loot` 이고 대상의 칸은 훔친 것과 같다(그 행동의 이벤트에 잇는다) |
 | `items_lost` | 방장이 캐릭터에게서 물건을 빼앗았다 | `items_gained` 와 같다. `total` 이 0 이면 다 잃었다 |
 | `item_used` | 캐릭터가 소모품을 썼다(또는 못 했다). 그 행동 바로 뒤에 적힌다. 회복했으면 바로 뒤에 `hp_changed` | `round`, `character_name`, `entry_id`, `name`, `used`, `reason`, `target`(회복받은 사람), `remaining` |
@@ -2421,7 +2432,7 @@ AI 호출은 AI 를 붙일 때 더한다.
 **누가 했나(`actor_id`).** 사람이 한 일이면 그 사람이다. GM 의 서술, 저절로 닫힌 라운드, 방장이 나가서 바뀐 방장처럼
 사람이 한 일이 아니면 비어 있다. 판정(`check_rolled`)과 HP 의 변화(`hp_changed`, `npc_changed`, `monster_changed`), 몬스터와 NPC 의 공격(`monster_attacked`, `npc_attacked`)도 비어 있다. 주사위를 굴리고 HP 를 바꾼 것은 플레이어가 아니라 엔진이다.
 능력치의 굴림(`abilities_rolled`)은 굴려 달라고 한 사람이 적힌다. 라운드의 판정과 달리, 그 사람이 직접 누른 일이다.
-죽음의 굴림(`death_save_rolled`)과 그 굴림으로 죽은 것(`character_died`)은 비어 있다. 치료의 결과(`injury_treated`)와 치료 실패로 죽은 것, 지목의 결과(`naming_resolved`)도 비어 있다. 쉰 것(`character_rested`)과 되살아나기(`character_revived`)도 비어 있다. 스스로 보내서 죽은 것은 보낸 사람이 적힌다.
+죽음의 굴림(`death_save_rolled`)과 그 굴림으로 죽은 것(`character_died`), 쓰러진 채 맞아 죽은 것도 비어 있다. 치료의 결과(`injury_treated`)와 치료 실패로 죽은 것, 지목의 결과(`naming_resolved`)도 비어 있다. 쉰 것(`character_rested`)과 되살아나기(`character_revived`)도 비어 있다. 스스로 보내서 죽은 것은 보낸 사람이 적힌다.
 새 캐릭터를 들인 것(`character_joined`)은 들인 사람이 적힌다.
 
 **묶음과 원인.** 요청 하나가 낳은 이벤트는 `action_group_id` 가 같다.
