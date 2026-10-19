@@ -13,6 +13,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order/orderdb"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
@@ -62,7 +63,8 @@ func (s *Service) refund(ctx context.Context, userID uuid.UUID, orderID uuid.UUI
 func (s *Service) startRefunding(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (Order, error) {
 	now := s.clock()
 	var started Order
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	// 지갑이 원장에 적은 일은 커밋한 뒤에 세어진다(txn.Run)
+	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		row, err := orderdb.New(tx).StartRefunding(ctx, orderdb.StartRefundingParams{
 			ID: orderID, UserID: userID, Now: now, PaidAfter: now.Add(-RefundWindow),
 		})
@@ -155,7 +157,8 @@ func (s *Service) markRefunded(ctx context.Context, current Order) (Order, error
 // 다른 요청이 먼저 끝냈으면 아무것도 하지 않는다. 되돌렸으면 결제 대행사의 이유를 담은 ErrRefundRefused 를 함께 돌려준다.
 func (s *Service) restorePaid(ctx context.Context, current Order, code string) (Order, error) {
 	restored := false
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	// 지갑이 원장에 적은 일은 커밋한 뒤에 세어진다(txn.Run)
+	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		_, err := orderdb.New(tx).RestorePaid(ctx, orderdb.RestorePaidParams{ID: current.ID, Now: s.clock()})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil

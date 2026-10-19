@@ -18,7 +18,15 @@ import (
 // 같은 사용자가 같은 키(idempotencyKey)로 다시 부르면 새로 만들지 않고 먼저 만든 주문을 돌려준다.
 // 두 번째 값은 이번에 새로 만들었으면 true 다. 요청이 중간에 끊겨 클라이언트가 다시 보내도 주문이 둘 생기지 않는다.
 // 먼저 만든 주문이 만료되었어도 그것을 돌려준다(status 가 expired). 새로 사려면 새 키로 만든다.
+// 키의 결과(처음, 다시 보냄, 다른 내용)를 센다(metrics.go).
 func (s *Service) Create(ctx context.Context, userID uuid.UUID, productID string, idempotencyKey string) (Order, bool, error) {
+	created, isNew, err := s.create(ctx, userID, productID, idempotencyKey)
+	s.metrics.keyed(ctx, isNew, err)
+	return created, isNew, err
+}
+
+// create 는 Create 의 본문이다.
+func (s *Service) create(ctx context.Context, userID uuid.UUID, productID string, idempotencyKey string) (Order, bool, error) {
 	if !idempotencyKeyPattern.MatchString(idempotencyKey) {
 		return Order{}, false, ErrInvalidKey
 	}

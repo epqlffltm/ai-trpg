@@ -14,6 +14,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/attendance/attendancedb"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/eligibility"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
@@ -128,7 +129,8 @@ func (s *Service) Claim(ctx context.Context, userID uuid.UUID) (Claim, error) {
 	}
 	now := s.clock()
 	var claim Claim
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	// 지갑이 원장에 적은 일은 커밋한 뒤에 세어진다(txn.Run)
+	err = txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
 		claim, err = s.claimIn(ctx, tx, userID, now)
 		return err

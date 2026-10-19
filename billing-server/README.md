@@ -1789,6 +1789,8 @@ compose 로 띄울 때는 루트 `.env` 에 적는다(프로필 `observability` 
 | `db_pool_connections_max` | 서버, 정리 작업, 대사 | 없음 |
 | `db_pool_wait_seconds` | 서버, 정리 작업, 대사 | 없음. 풀에서 연결을 얻으려고 기다린 시간 |
 | `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | 정리 작업(`sweep.run`), 대사(`reconcile.run`) | `operation`. 끝난 수에는 `result`(`success`, `server_error`, `cancelled`) |
+| `billing_ledger_operations_total` | 서버, 정리 작업, 대사 | `reason`(원장의 이유), `result`(`success`, `failure`). 원장에 적은 일(작업 번호 하나)의 수 |
+| `billing_idempotency_total` | 서버 | `kind`(`order`, `hold`), `outcome`(`first`, `replayed`, `conflict`) |
 | `billing_orders_total` | 서버, 정리 작업(`expired`), 대사 | `status`. 그 상태가 된 주문의 수 |
 | `payment_provider_calls_total` | 서버, 대사 | `provider`(`PAYMENT_PROVIDER`), `operation`(`confirm`, `lookup`, `cancel`), `outcome` |
 | `payment_webhooks_total` | 서버 | `provider`(서명한 알림은 `fake`, 토스의 알림은 `toss`), `result`(`accepted`, `ignored`, `bad_signature`, `bad_request`, `unavailable`) |
@@ -1800,7 +1802,7 @@ compose 로 띄울 때는 루트 `.env` 에 적는다(프로필 `observability` 
 - 사람이 치는 명령(`cmd/migrate`, `cmd/orders`, `cmd/prices`, `cmd/pricereviews`, `cmd/fakepg`, `cmd/fakegame`)은 메트릭을 내지 않는다
 - 업무 메트릭의 값과 뜻은 docs/observability.md 의 "결제 (billing)" 표에 있다. 주문은 커밋한 뒤에, 상태를 실제로 바꾼 프로세스가 센다. 같은 주문을 다시 보낸 요청은 다시 세지 않는다
 - 결제 대행사는 감싸서 센다(`payment.Measured`). 주문의 코드도, 결제 대행사의 코드도 세는 것을 모른다
-- 원장(`billing_ledger_operations_total`)과 중복 방지 키(`billing_idempotency_total`)는 아직이다. 지갑의 일은 다른 트랜잭션 안에서 돌아서, 커밋한 것만 세려면 고칠 곳이 많다. 따로 한다
+- 원장은 커밋한 뒤에 센다. 지갑의 일은 주문, 홀드, 출석이 연 트랜잭션 안에서도 돈다. 그래서 크레딧을 바꾸는 트랜잭션은 모두 `txn.Run` 으로 열고, 지갑은 셀 것을 그 트랜잭션에 담기만 한다(`txn.AfterCommit`). `pgx.BeginFunc` 로 연 트랜잭션 안의 지갑의 일은 세어지지 않는다. 지갑을 부르는 트랜잭션을 새로 만들면 `txn.Run` 으로 열고, 그 패키지의 테스트에서 센 것을 확인한다
 
 로컬에서 보내 보려면 루트의 `docker compose --profile observability up -d` 로 Alloy 와 Prometheus 를 띄운다.
 Alloy 의 4318 은 바깥에 열지 않으므로, 서버도 compose 로(`--profile app`) 띄워 Grafana 의 Prometheus 에서 `{service="billing-server"}` 로 찾는다.
@@ -1931,6 +1933,7 @@ billing-server/
       queries.sql           검사의 SQL 전부. 모두 읽기만 한다
       reconciledb/          sqlc 가 queries.sql 에서 만든 코드
     batch/                줄 여러 개를 하나씩 처리하는 규칙. 하나가 실패해도 나머지를 한다
+    txn/                  커밋한 뒤에 할 일(원장의 메트릭)을 실어 나르는 트랜잭션. 크레딧을 바꾸는 트랜잭션은 이것으로 연다
     jobs/                 요청과 따로 도는 일에 job_id 를 걸고 끝난 줄을 남긴다. 작업의 메트릭(metrics.go)
     jwks/                 인증 서버의 공개키. 읽기(keys.go), 가져오기(fetch.go), 기억하기(cache.go)
     auth/                 access 토큰 검증. 무엇을 받아들일지 정한다

@@ -31,7 +31,7 @@ func (s *Service) OrderLotFull(ctx context.Context, userID uuid.UUID, orderID uu
 // TakeForRefund 는 그 주문의 묶음을 비운다. 원장에 refund 줄이 그 묶음을 가리켜 남는다.
 // 묶음이 하나도 줄지 않았을 때만 한다. 줄었으면(쓴 것, 홀드로 묶인 것) ErrLotUsed, 묶음이 없으면 ErrNoOrderLot 이고 아무것도 바꾸지 않는다.
 func (s *Service) TakeForRefund(ctx context.Context, tx pgx.Tx, userID uuid.UUID, orderID uuid.UUID) error {
-	return lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
+	return s.lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
 		lot, err := c.orderLot(ctx, orderID)
 		if err != nil {
 			return err
@@ -46,7 +46,7 @@ func (s *Service) TakeForRefund(ctx context.Context, tx pgx.Tx, userID uuid.UUID
 // ReturnRefund 는 TakeForRefund 로 비운 그 주문의 묶음을 다시 채운다. 원장에 unrefund 줄이 남는다.
 // 결제 대행사가 취소를 확실히 거절했을 때만 부른다. 묶음이 비어 있지 않으면 DB 가 막는다(넣은 양을 넘을 수 없다).
 func (s *Service) ReturnRefund(ctx context.Context, tx pgx.Tx, userID uuid.UUID, orderID uuid.UUID) error {
-	return lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
+	return s.lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
 		lot, err := c.orderLot(ctx, orderID)
 		if err != nil {
 			return err

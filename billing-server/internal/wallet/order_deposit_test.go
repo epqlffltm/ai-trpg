@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
@@ -30,7 +31,7 @@ func (f fixture) newOrder() uuid.UUID {
 // depositForOrder 는 트랜잭션을 열어 주문의 크레딧을 넣고, after 가 돌려준 오류에 따라 확정하거나 되돌린다.
 func (f fixture) depositForOrder(orderID uuid.UUID, amount credit.Amount, after error) error {
 	f.t.Helper()
-	return pgx.BeginFunc(ctx(f.t), f.pool, func(tx pgx.Tx) error {
+	return txn.Run(ctx(f.t), f.pool, func(tx pgx.Tx) error {
 		if err := f.service.DepositForOrder(ctx(f.t), tx, f.user, amount, orderID); err != nil {
 			return err
 		}
