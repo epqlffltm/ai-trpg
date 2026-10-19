@@ -32,6 +32,7 @@
 | 메트릭 | billing-server 에 구현(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)). 나머지 넷은 아직 내보내지 않는다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
 | DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
 | 대시보드 | billing-server, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
+| 경보 | 수집 쪽, DB 와 Redis, billing-server 의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
 | 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
 | 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)) |
@@ -804,8 +805,8 @@ Prometheus 에 쓰는 것은 Alloy 하나, 읽는 것은 Grafana 하나다. 이 
 | 파일 | 하는 일 |
 | --- | --- |
 | `docker-compose.yml` 의 `prometheus` | `prom/prometheus:v3.15.0-busybox`. 받기만 한다(`--web.enable-remote-write-receiver`). 포트를 열지 않는다. healthcheck 는 `/-/ready` |
-| `docker/prometheus/prometheus.yml` | 긁는 설정이 없다. 늦게 온 점 10분, 보관 14일 |
-| `docker/alloy/metrics.alloy` | OTLP 받기(HTTP 4318) → 묶기 → 이름 바꾸기 → label `service` 붙이기 → remote write. 수집 쪽 자신(alloy, loki, prometheus, grafana)을 15초마다 긁는다 |
+| `docker/prometheus/prometheus.yml` | 긁는 설정이 없다. 늦게 온 점 10분, 보관 14일. 경보 규칙(`rules/`)을 15초마다 평가해 Alertmanager 로 넘긴다([경보](#경보)) |
+| `docker/alloy/metrics.alloy` | OTLP 받기(HTTP 4318) → 묶기 → 이름 바꾸기 → label `service` 붙이기 → remote write. 수집 쪽 자신(alloy, loki, prometheus, alertmanager, grafana)을 15초마다 긁는다 |
 | `docker/grafana/provisioning/datasources/prometheus.yaml` | 데이터 소스 uid `prometheus`. 화면에서 고치지 못한다 |
 | 망 `telemetry` | Alloy 하나만 있다(internal). 서버의 프로세스는 그 서버에 메트릭을 붙이는 PR 에서 더한다 |
 | `.github/scripts/stack-smoke.sh` 의 `check_metrics` | CI(`stack`)가 PR 마다 아래를 본다 |
@@ -846,7 +847,7 @@ Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-
 | Prometheus 의 쿼리는 모든 선택자에 그 서버의 `service` 를 건다. 인프라는 그 `job` 을 건다 | 다섯 서버가 같은 이름(`http_server_requests_total`, `db_up` …)을 쓴다. 빠뜨리면 다른 서버의 것이 섞인다 |
 | 시간 창은 `$__rate_interval` 이다 | 수집 간격(15초)과 화면의 시간 범위에 맞춰 Grafana 가 고른다. 고정한 `[1m]` 은 넓은 범위에서 점을 건너뛴다 |
 | 짧게 돌고 끝나는 프로세스(대사)는 `last_over_time(…[1d])` 로 본다. `rate` 로 보지 않는다 | 끝날 때 한 번만 민다. 실행마다 `instance` 가 새것이라 시계열마다 점이 하나뿐이고, `rate`, `increase` 는 점 둘이 있어야 값이 난다. 그래서 `rate` 를 쓰는 패널은 `instance!~"reconcile-.+"` 로 대사를 빼고, 대사는 따로 둔다 |
-| 경보 규칙은 아직 두지 않는다 | 규칙을 돌릴 곳(Prometheus 의 rule, Alertmanager)이 아직 없다. 두게 되면 Prometheus 형식의 파일로 둔다(Mimir 의 ruler 가 같은 형식을 읽는다) |
+| 경보는 대시보드에 걸지 않는다(Grafana 의 경보를 쓰지 않는다) | 규칙은 Prometheus 의 규칙 파일이다([아래](#경보)). 대시보드의 패널과 경보의 조건이 같을 필요가 없다 |
 
 `billing-server` 의 대시보드는 한눈에(DB, 5xx 비율, 결과를 모르는 결제 대행사 호출, 되돌린 원장의 일), 요청, DB 연결, 결제, 원장, 정리 작업과 대사의 여섯 줄이다.
 `postgres` 는 한눈에(DB, 연결 / 최대, DB 의 크기, 교착), 연결과 트랜잭션, 읽기와 쓰기(캐시 적중률, 행, 임시 파일, 스키마마다의 크기), 표(큰 표, 죽은 행이 많은 표)다.
@@ -854,6 +855,59 @@ Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-
 대시보드의 규칙은 `.github/scripts/dashboard_scope.py` 가 보고, 그 규칙 자체는 `test_dashboard_scope.py` 가 본다.
 CI(`stack`)는 거기에 더해 Grafana 가 파일의 대시보드를 모두 읽었는지, 모든 Prometheus 쿼리가 Grafana 의 데이터 소스 프록시를 거쳐 오류 없이 도는지 본다.
 값이 없는 것(CI 에 결제가 없어 생기지 않은 메트릭)은 오류가 아니다. 이름이나 PromQL 이 틀린 것을 잡는다.
+
+#### 경보
+
+```
+Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 누르기, 잠시 끄기) ─▶ Discord, Slack, Telegram, 메일
+```
+
+켜는 법과 받는 곳을 만드는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기)에 있다.
+
+| 항목 | 정한 것 | 까닭 |
+| --- | --- | --- |
+| 규칙을 돌리는 곳 | Prometheus 의 규칙 파일(`docker/prometheus/rules/ai-trpg.yml`). Grafana 의 경보를 쓰지 않는다 | 규칙이 저장소의 파일이라 PR 로 고치고 promtool 로 시험한다. Mimir 의 ruler 가 같은 파일을 읽는다(위의 "Mimir 로 옮길 수 있게 지키는 것" 4). Grafana 의 경보는 Grafana 의 DB 에 남아 대시보드처럼 무엇을 왜 바꿨는지 PR 에 남지 않는다 |
+| 보내는 곳 | Alertmanager 하나(`prom/alertmanager:v0.34.1`). 받는 곳 넷을 한 받는 쪽(`operator`)에 둔다 | 같은 경보가 넷에 함께 간다. 하나가 막혀도(웹후크를 지웠다, 메일이 스팸함에 갔다) 나머지로 안다 |
+| 켜는 법 | 루트 `.env` 의 `ALERT_*` 에 적은 것만 켠다. 시작 명령(`docker/alertmanager/entrypoint.sh`)이 그 값으로 설정 파일을 만든다. 하나를 반쯤 적으면(Telegram 의 토큰만) 뜨지 않는다 | Alertmanager 의 설정 파일은 환경 변수를 펼치지 않는다. 설정 파일을 저장소에 두면 비밀을 적거나, 받는 곳을 바꿀 때마다 파일을 고쳐야 한다 |
+| 비밀 | 웹후크 주소, 봇 토큰, 메일 비밀번호는 설정 파일이 아니라 주인만 읽는 파일에 둔다(`webhook_url_file`, `api_url_file`, `bot_token_file`, `auth_password_file`). Alertmanager 만 받는다(`secret_scope.py` 의 `ROOT_SECRETS`) | 설정을 찍거나(amtool, 로그) 옮겨도 비밀이 함께 가지 않는다. 웹후크 주소는 아는 사람이 누구나 그 채널에 쓰므로 비밀이다 |
+| 메일 | Gmail 의 SMTP 를 그대로 쓴다. 앱 비밀번호는 서버들이 사용자에게 보내는 메일(인증 서버의 `SMTP_PASSWORD`)과 따로 만든다 | 운영자 한 사람만 받는다. 사용자에게 보내는 메일은 운영에서 다른 메일 서비스로 바꾼다. 나눠 두면 하나가 새도 그것만 지운다 |
+| 묶기 | `alertname`, `service`, `job` 으로 묶는다. 처음 30초를 모아 보내고, 묶음이 바뀌면 5분, 그대로면 4시간마다 다시 보낸다. 풀리면 풀렸다고 보낸다 | 한 서버의 프로세스 여럿(`instance`)이 함께 울려도 알림은 하나다 |
+| 누르기 | `PostgresDown` 이 울리는 동안 `…DatabaseUnreachable` 은 보내지 않는다 | 원인 하나에 알림 하나다. 서버마다 DB 경보를 붙이면 이름을 `<서버>DatabaseUnreachable` 로 짓는다 |
+| 보는 곳 | 포트를 열지 않는다. 울리는 것과 잠시 끄기(silence)는 Grafana 의 Alerting 화면에서 데이터 소스 `alertmanager` 를 골라 본다 | Alertmanager 의 화면에는 로그인이 없다. 열면 누구나 경보를 끈다 |
+
+| 고르지 않은 것 | 까닭 |
+| --- | --- |
+| Grafana 의 경보(Grafana-managed alerts) | 위의 "규칙을 돌리는 곳". 규칙을 돌리는 곳이 Grafana 가 되어 Grafana 가 죽으면 경보도 멈춘다 |
+| 받는 곳마다 받는 쪽(receiver)을 나누고 severity 로 고르기 | 운영자가 한 사람이라 모두 같은 곳으로 간다. 사람이 늘면 `route` 에 `routes` 를 더해 나눈다 |
+| 설정 파일을 저장소에 두고 비밀만 파일로 붙이기 | 받는 곳을 켜고 끌 때마다 설정 파일을 고친다. 붙일 비밀 파일을 VM 에 따로 만들어야 한다 |
+
+규칙(`severity` 가 `critical` 이면 바로, `warning` 이면 그날 안에 본다):
+
+| 묶음 | 경보 | severity | 조건 |
+| --- | --- | --- | --- |
+| collectors | `MetricsCollectorDown` | critical | Alloy 의 `up` 이 끊겼다(10분쯤 뒤에 울린다, 아래). 다른 경보가 모두 멈춘다 |
+| collectors | `ObservabilityComponentDown` | warning | loki, grafana, alertmanager 의 `up` 이 5분 동안 0 이다 |
+| datastores | `PostgresDown`, `RedisDown` | critical | exporter 가 1분 동안 붙지 못한다 |
+| datastores | `RedisAOFWriteFailing` | critical | AOF 의 마지막 쓰기가 1분 동안 실패다 |
+| datastores | `PostgresConnectionsNearLimit` | warning | 연결이 `max_connections` 의 80% 를 10분 동안 넘는다 |
+| datastores | `PostgresDeadlocks` | warning | 지난 10분에 `trpg` 에 교착이 있었다 |
+| billing-server | `BillingDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
+| billing-server | `BillingServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다 |
+| billing-server | `BillingPaymentOutcomeUnknown` | warning | 지난 15분에 결제 대행사가 답하지 않은 호출(`outcome="unknown"`)이 있다. 돈이 나갔을 수 있다 |
+| billing-server | `BillingPaymentProviderUnavailable` | warning | 지난 15분에 결제 대행사를 부르지 못한 것이 세 번을 넘는다 |
+| billing-server | `BillingLedgerRollbacks` | warning | 지난 15분에 원장에 적었다가 되돌린 일이 있다(`expire` 는 뺀다. [목록](#목록)의 뜻) |
+| billing-server | `BillingSweepStalled` | warning | 결제 서버가 떠 있는데 정리 작업이 10분 넘게 성공하지 않았다 |
+| billing-server | `BillingReconcileMissed` | warning | 지난 이레 안에 돈 대사가 지난 26시간에는 돌지 않았다. 한 번도 돈 적이 없으면 울리지 않는다 |
+| billing-server | `BillingReconcileFailed` | warning | 지난 하루의 대사가 성공하지 못했다 |
+
+- **규칙마다 시험이 있다**(`docker/prometheus/rules/tests/ai-trpg.test.yml`). 지어낸 시계열을 넣고 정한 때에 울리는지, 울리지 않을 때(요청이 아주 적다, 다른 서버의 것이다) 조용한지 본다. 규칙을 고치면 시험도 고친다.
+  `docker compose --profile observability exec prometheus promtool test rules /etc/prometheus/rules/tests/ai-trpg.test.yml`
+- **"없어졌다"는 5분 늦다.** 받기만 하는 Prometheus 는 마지막 값을 5분 동안 살아 있는 것으로 본다(긁을 때처럼 끊긴 표시가 오지 않는다). 그래서 `MetricsCollectorDown` 은 그 5분과 `for: 5m` 뒤에 울린다.
+- **짧게 도는 대사는 `last_over_time` 으로 본다.** 끝날 때 한 번만 밀어서 `increase` 로는 값이 나지 않는다(대시보드의 규칙과 같은 까닭).
+- **서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다.** 묶음의 이름은 서비스 이름(`billing-server`)이고 경보의 이름은 서버의 이름으로 시작한다(`Billing…`). 시험도 함께 더한다.
+- **CI 가 보는 것.** 규칙의 시험이 통과한다. Prometheus 가 규칙 파일의 묶음을 모두 읽었고 Alertmanager 를 찾았다. 건강한 스택에서 울리는 경보가 없다(선택자가 틀린 규칙이 여기서 울린다).
+  Alertmanager 가 root 가 아니고, 받는 곳 넷을 모두 적은 설정이 맞고(`amtool check-config`), 반쯤 적으면 뜨지 않고, 봇 토큰이 설정 파일에 없다. Grafana 가 Alertmanager 에 닿는다.
+  받는 곳의 흉내(`.github/scripts/alert_sink.py`)를 띄우고 시험 경보를 넣어, Discord, Slack, Telegram 의 주소로 넘어가는지 본다. 메일은 보내 보지 않는다(설정만 본다).
 
 #### 계측기를 만드는 법
 
@@ -984,6 +1038,7 @@ notification-server 는 game-server 의 것(`app/observability/`)을 그대로 �
   명령 자신이 남기는 로그는 규격의 JSON 이다. 명령이 끝에 화면에 찍는 요약(`self.stdout`, 결제의 `cmd/reconcile`)은 위의 "사람이 치는 명령"처럼 글이다.
 - **nginx 가 뜨고 꺼지는 줄.** 프록시의 요청 줄은 JSON 이지만, nginx 가 뜰 때와 설정을 다시 읽을 때 남기는 줄은 nginx 의 글 모양이다.
 - **마지막 방어선은 어림이다.** [민감정보](#마지막-방어선)의 끝에 적은 대로다.
+- **경보를 보내는 쪽이 죽은 것은 알리지 못한다.** Prometheus 나 Alertmanager, VM 이 통째로 죽으면 알릴 곳이 없다. 늘 울리는 경보를 바깥의 감시(healthchecks.io 같은 것)에 보내고 끊기면 그쪽이 알리게 하는 것은 나중이다(#25)
 - **주기 명령과 게임 서버 안의 작업에 상태 신호가 없다.** 계속 도는 워커 셋만 심장박동이 있다. DB 의 백업, 인증서, 바깥 백업은 결과의 날짜로 본다([워커의 상태](#워커의-상태)). 컨테이너의 `unhealthy` 를 경보로 잇는 일은 아직 없다(#25)
 - **끝나고 바로 사라지는 컨테이너의 로그는 모이지 않을 수 있다.** Alloy 는 도는 컨테이너만 15초마다 찾는다. 그 전에 끝나는 마이그레이션(`*-migrate`)의 줄은 Loki 에 없을 수 있다. `docker compose logs <서비스>` 로 본다.
 - **Alloy 가 읽고 아직 보내지 못한 줄.** Alloy 가 그 순간에 죽으면 메모리에 있던 줄(Loki 로 보내려고 모은 묶음)은 잃는다. 읽은 자리는 이미 넘어갔다.

@@ -56,6 +56,7 @@ prometheus.scrape "infra" {
 		{"__address__" = "loki:3100", "job" = "loki"},
 		{"__address__" = "prometheus:9090", "job" = "prometheus"},
 		{"__address__" = "grafana:3000", "job" = "grafana"},
+		{"__address__" = "alertmanager:9093", "job" = "alertmanager"},
 	]
 	scrape_interval = "15s"
 	forward_to      = [prometheus.remote_write.local.receiver]

@@ -27,8 +27,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# 비밀로 보는 이름. .env.example 에서 이 모양의 이름을 찾아 표에 있는지 본다
-SECRET_NAME = re.compile(r'SECRET|PASSWORD|API_KEY|HMAC_KEY')
+# 비밀로 보는 이름. .env.example 에서 이 모양의 이름을 찾아 표에 있는지 본다.
+# 웹후크의 주소는 아는 사람이 누구나 글을 쓰므로 비밀이다(ALERT_DISCORD_WEBHOOK_URL 등). tools/fill_env.py 와 같은 규칙이다
+SECRET_NAME = re.compile(r'SECRET|PASSWORD|API_KEY|HMAC_KEY|TOKEN|WEBHOOK_URL')
 # 이름이 비밀처럼 보이지만 비밀이 아닌 설정
 NOT_SECRETS = frozenset({'PASSWORD_RESET_URL'})
 # .env.example 의 한 줄. 주석으로 막아 둔 것(# NAME=)도 센다. 켜는 법을 알리는 줄이다
@@ -121,6 +122,11 @@ ROOT_SECRETS: dict[str, frozenset[str]] = {
     'GRAFANA_ADMIN_PASSWORD': frozenset({'grafana'}),
     # 바깥 백업이 S3 에 올리고 받는 접근 키(staging). 그 컨테이너만 쓴다
     'BACKUP_AWS_SECRET_ACCESS_KEY': frozenset({'backup-offsite'}),
+    # 경보를 보내는 곳(Discord, Slack, Telegram, 메일)의 비밀. 경보를 보내는 Alertmanager 만 쓴다
+    'ALERT_DISCORD_WEBHOOK_URL': frozenset({'alertmanager'}),
+    'ALERT_SLACK_WEBHOOK_URL': frozenset({'alertmanager'}),
+    'ALERT_TELEGRAM_BOT_TOKEN': frozenset({'alertmanager'}),
+    'ALERT_SMTP_PASSWORD': frozenset({'alertmanager'}),
 }
 
 

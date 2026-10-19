@@ -1,0 +1,20 @@
+# docker/grafana/provisioning/datasources/alertmanager.yaml
+# Grafana 가 뜰 때 Alertmanager 를 데이터 소스로 붙인다(#25). docker-compose.yml 의 grafana(프로필 observability)가 읽는다.
+#
+# Alertmanager 는 포트를 열지 않는다. 지금 울리는 경보와 잠시 끄기(silence)는 Grafana 의 Alerting 화면에서 이 데이터 소스를 골라 본다.
+# 경보 규칙은 Grafana 가 아니라 Prometheus 가 돌린다(docker/prometheus/rules). Grafana 에서 만든 경보는 여기로 보내지 않는다.
+# 화면에서 고치지 못하게 한다(editable: false). uid 를 alertmanager 로 고정한다
+apiVersion: 1
+
+datasources:
+  - name: Alertmanager
+    type: alertmanager
+    uid: alertmanager
+    access: proxy
+    # compose 의 망(observability)에서의 주소다. 바깥에는 열지 않는다
+    url: http://alertmanager:9093
+    editable: false
+    jsonData:
+      # Prometheus 의 Alertmanager 다(Mimir 로 바꾸면 mimir)
+      implementation: prometheus
+      handleGrafanaManagedAlerts: false
