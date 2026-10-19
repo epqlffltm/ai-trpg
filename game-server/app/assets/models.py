@@ -147,6 +147,24 @@ class ItemKind(enum.StrEnum):
     CONSUMABLE = 'consumable'
 
 
+class ItemRarity(enum.StrEnum):
+    """
+    물건의 등급. 낮은 것부터 높은 것의 차례다. 규칙을 적지 않은 물건은 노말이다.
+
+    엔진은 등급이 높을수록 훔치기 어렵게 한다(#456). 값(가격)은 아직 없다. 사고팔기(#278)에서 더한다.
+    """
+
+    NORMAL = 'normal'
+    RARE = 'rare'
+    UNIQUE = 'unique'
+    EPIC = 'epic'
+    LEGENDARY = 'legendary'
+
+
+# 등급의 차례. 0 이 노말이다. 훔치기가 등급마다 얼마나 어려워지는지를 셀 때 쓴다
+RARITY_ORDER: tuple[ItemRarity, ...] = tuple(ItemRarity)
+
+
 class RouteVisibility(enum.StrEnum):
     """
     맵의 길을 플레이어가 언제 아는가. 제작자가 길마다 정한다.

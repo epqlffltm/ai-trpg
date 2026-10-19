@@ -14,7 +14,7 @@ DB 를 모른다. 이미 읽어 온 시트와 판을 받아 소지품의 행(Tab
 import uuid
 from dataclasses import dataclass
 
-from app.assets.models import ITEM_STACK_MAX, ItemKind
+from app.assets.models import ITEM_STACK_MAX, ItemKind, ItemRarity
 from app.assets.scenarios.snapshot import ItemStackSnapshot, Snapshot, item_entries, item_rule_of
 from app.tables.errors import Conflict, TableConflictError, TableOptionError
 from app.tables.models import TableItem, TableSheet
@@ -22,12 +22,13 @@ from app.tables.models import TableItem, TableSheet
 
 @dataclass(frozen=True)
 class CatalogItem:
-    """판에 있는 물건 하나. 이름은 로어북 항목의 이름, 종류와 회복의 양은 아이템 규칙의 것이다."""
+    """판에 있는 물건 하나. 이름은 로어북 항목의 이름, 종류와 회복의 양과 등급은 아이템 규칙의 것이다."""
 
     entry_id: uuid.UUID
     name: str
     kind: ItemKind
     heals: str | None
+    rarity: ItemRarity = ItemRarity.NORMAL
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -35,7 +36,9 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
     items = {}
     for entry in item_entries(snapshot):
         rule = item_rule_of(snapshot, entry.id)
-        items[entry.id] = CatalogItem(entry_id=entry.id, name=entry.name, kind=rule.kind, heals=rule.heals)
+        items[entry.id] = CatalogItem(
+            entry_id=entry.id, name=entry.name, kind=rule.kind, heals=rule.heals, rarity=rule.rarity
+        )
     return items
 
 

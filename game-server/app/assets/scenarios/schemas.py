@@ -59,6 +59,7 @@ from app.assets.models import (
     VERSION_NOTE_MAX_LENGTH,
     CharacterMode,
     ItemKind,
+    ItemRarity,
     NarrationStyle,
     PlaceItemVisibility,
     QuestConditionKind,
@@ -394,15 +395,17 @@ class ItemRule(BaseModel):
     """
     아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.
 
-    규칙이 없는 물건 항목은 장비(gear)다. 소모품만 회복의 양(heals)을 적을 수 있다.
+    규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.
     heals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.
+    rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
     entry_id: uuid.UUID
-    kind: ItemKind
+    kind: ItemKind = ItemKind.GEAR
     heals: Key | None = None
+    rarity: ItemRarity = ItemRarity.NORMAL
 
     @model_validator(mode='after')
     def heal_only_with_consumables(self) -> 'ItemRule':

@@ -184,7 +184,7 @@ def to_item(item: TableItem, catalog: dict[uuid.UUID, CatalogItem]) -> ItemOut:
     소지품은 판의 물건만 가리킨다(판에 없는 물건은 줄 수 없다). 판은 바뀌지 않으므로 늘 찾는다.
     """
     found = catalog[item.entry_id]
-    return ItemOut(entry_id=item.entry_id, name=found.name, kind=found.kind, count=item.count)
+    return ItemOut(entry_id=item.entry_id, name=found.name, kind=found.kind, rarity=found.rarity, count=item.count)
 
 
 def to_quest(quest: TableQuest, catalog: dict[uuid.UUID, quests.CatalogQuest]) -> QuestOut:
@@ -196,7 +196,7 @@ def to_quest(quest: TableQuest, catalog: dict[uuid.UUID, quests.CatalogQuest]) -
 def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
     """판의 물건들을 응답으로 바꾼다."""
     return [
-        CatalogItemOut(entry_id=item.entry_id, name=item.name, kind=item.kind, heals=item.heals)
+        CatalogItemOut(entry_id=item.entry_id, name=item.name, kind=item.kind, heals=item.heals, rarity=item.rarity)
         for item in catalog.values()
     ]
 

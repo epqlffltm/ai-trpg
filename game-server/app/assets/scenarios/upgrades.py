@@ -611,6 +611,14 @@ def upgrade_from_33(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_34(document: dict) -> dict:
+    """형식 34 의 문서를 형식 35 로 올린다. 그때는 물건에 등급이 없었다. 모두 노말로 읽는다."""
+    upgraded = dict(document)
+    upgraded['items'] = [{**rule, 'rarity': 'normal'} for rule in document.get('items', [])]
+    upgraded['format'] = 35
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -647,4 +655,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     31: upgrade_from_31,
     32: upgrade_from_32,
     33: upgrade_from_33,
+    34: upgrade_from_34,
 }
