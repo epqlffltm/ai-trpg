@@ -341,7 +341,8 @@ def add_missing_lines(root: Path, relative: str, env: EnvFile) -> Outcome | None
             added.append(block.key)
     if not added:
         return None
-    return Outcome(f'{relative} 의 새 줄', f'.env.example 에서 {len(added)}개를 더했다(쓰려면 # 를 지운다): {", ".join(added)}')
+    names = ', '.join(added)
+    return Outcome(f'{relative} 의 새 줄', f'.env.example 에서 {len(added)}개를 더했다(쓰려면 # 를 지운다): {names}')
 
 
 def append_line(env: EnvFile, template: str, value: str) -> None:
@@ -383,9 +384,7 @@ def fill(root: Path, files: dict[str, EnvFile], secret: Secret) -> Outcome:
     copied = bool(filled)
     value = filled.pop() if copied else secrets.token_hex(SECRET_BYTES)
     written = [spot for spot in secret.spots if place(root, files[spot.file], spot, value)]
-    enabled = [
-        spot for spot in secret.spots if is_pair(secret) and not spot.url and enable(files[spot.file], spot.key)
-    ]
+    enabled = [spot for spot in secret.spots if is_pair(secret) and not spot.url and enable(files[spot.file], spot.key)]
     return Outcome(secret.name, described(written, enabled, copied))
 
 
