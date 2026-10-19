@@ -37,11 +37,13 @@ class Collector:
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self) -> None:
                 body = self.rfile.read(int(self.headers['Content-Length']))
-                request = ExportTraceServiceRequest()
-                request.ParseFromString(body)
                 with collector.lock:
                     collector.paths.append(self.path)
-                    collector.requests.append(request)
+                if self.path == '/v1/traces':
+                    request = ExportTraceServiceRequest()
+                    request.ParseFromString(body)
+                    with collector.lock:
+                        collector.requests.append(request)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/x-protobuf')
                 self.end_headers()
@@ -60,6 +62,16 @@ class Collector:
                 for resource in request.resource_spans
                 for scope in resource.scope_spans
                 for span in scope.spans
+            ]
+
+    def scopes(self) -> list:
+        """받은 span 의 묶음(만든 쪽의 이름마다)."""
+        with self.lock:
+            return [
+                scope
+                for request in self.requests
+                for resource in request.resource_spans
+                for scope in resource.scope_spans
             ]
 
     def resource(self) -> dict[str, str]:
@@ -156,6 +168,9 @@ async def test_shutting_down_the_server_sends_what_is_left(
         await client.get('/api/v1/notification/me/notifications')
 
     assert 'GET /api/v1/notification/me/notifications' in received.span_names()
+    # FastAPI 가 스스로 내보내는 것(span, 메트릭, 로그)은 없다
+    assert set(received.paths) == {'/v1/traces'}
+    assert all(scope.scope.name == 'notification-server' for scope in received.scopes())
 
 
 async def test_a_scope_that_is_not_http_gets_no_span():
