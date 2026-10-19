@@ -94,6 +94,8 @@ class Problem(enum.StrEnum):
     NPC_SHEET_NOT_PERSON = 'npc_sheet_not_person'
     # 룰북의 규칙에 맞지 않는 NPC 시트가 있다
     NPC_SHEET_INVALID = 'npc_sheet_invalid'
+    # NPC 시트의 공격의 능력치, 난이도, 양의 등급이 룰북의 규칙에 없다(#487)
+    NPC_ATTACK_INVALID = 'npc_attack_invalid'
     # 시트가 없는 인물 항목이 있는데 기본 NPC 시트가 없다. 그 인물이 받을 숫자가 없다
     DEFAULT_NPC_SHEET_MISSING = 'default_npc_sheet_missing'
     # 기본 NPC 시트가 룰북의 규칙에 맞지 않는다
@@ -299,7 +301,7 @@ def find_npc_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset |
 
     시트는 붙인 로어북의 인물 항목을 가리켜야 한다. 로어북의 항목은 시나리오와 따로 고칠 수 있어서,
     고치는 동안 지운 항목이나 종류를 바꾼 항목을 가리키게 될 수 있다. 굳히기 전에 여기서 막는다.
-    룰북이 없으면 규칙에 맞는지는 볼 수 없다.
+    공격의 이름표도 룰북의 것이어야 한다(몬스터의 공격과 같은 검사다). 룰북이 없으면 규칙에 맞는지는 볼 수 없다.
     """
     npc_sheets = read_npc_sheets(scenario)
     entries = lore_entries(parts)
@@ -311,6 +313,8 @@ def find_npc_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset |
         problems.append(Problem.NPC_SHEET_NOT_PERSON)
     if ruleset and any(not fits(ruleset, npc_sheet.sheet) for npc_sheet in npc_sheets):
         problems.append(Problem.NPC_SHEET_INVALID)
+    if ruleset and any(attack_fault(ruleset, attack) for npc_sheet in npc_sheets for attack in npc_sheet.attacks):
+        problems.append(Problem.NPC_ATTACK_INVALID)
     return problems
 
 

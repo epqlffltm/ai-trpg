@@ -92,7 +92,8 @@ from app.engine.sheet import Sheet
 #  38: 인물의 NPC 시트에 지닌 물건(npc_sheets[].equipment, inventory)과 둔한지(dull)가 있다. 몬스터와 같은 모양이다
 #  39: 인물의 NPC 시트에 훔치다 들켰을 때(npc_sheets[].on_caught: hostile, fight)가 있다
 #  40: 규칙에 빼앗긴 NPC 가 깨어날 때의 반응(robbed_wake: hostile, wary)이 있다. 태도에 경계(wary)가 더해졌다
-SNAPSHOT_FORMAT = 40
+#  41: 인물의 NPC 시트에 공격(npc_sheets[].attacks)이 있다. 몬스터의 공격과 같은 모양이다
+SNAPSHOT_FORMAT = 41
 
 
 class EntrySnapshot(BaseModel):
@@ -258,6 +259,15 @@ class CarriedItemSnapshot(BaseModel):
     chance: int
 
 
+class AttackSnapshot(BaseModel):
+    """몬스터의 공격 하나. 이름표(능력치, 난이도, 양의 등급)는 판 안의 규칙의 것이다."""
+
+    name: str
+    ability: str
+    difficulty: str
+    harm: str
+
+
 class NpcSheetSnapshot(BaseModel):
     """NPC 시트 하나. 판 안의 로어북 인물 항목 하나(entry_id)의 숫자와 처음 태도와 지닌 물건이다."""
 
@@ -272,15 +282,8 @@ class NpcSheetSnapshot(BaseModel):
     dull: bool = False
     # 훔치다 들켰을 때. 형식 39 보다 옛 판의 인물은 적대만 한다
     on_caught: NpcCaught = NpcCaught.HOSTILE
-
-
-class AttackSnapshot(BaseModel):
-    """몬스터의 공격 하나. 이름표(능력치, 난이도, 양의 등급)는 판 안의 규칙의 것이다."""
-
-    name: str
-    ability: str
-    difficulty: str
-    harm: str
+    # 공격들. 몬스터의 것과 같은 모양이다. 형식 41 보다 옛 판의 인물은 공격이 없다
+    attacks: list[AttackSnapshot] = []
 
 
 class MonsterSnapshot(BaseModel):

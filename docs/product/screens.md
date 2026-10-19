@@ -1480,7 +1480,7 @@
 | 룰북, 스타팅 | `rulebook_missing`, `opening_missing` |
 | 프리젠, 기본 시트 | `pregen_sheet_missing`, `pregen_sheet_invalid`, `pregens_too_few`, `default_sheet_missing`, `default_sheet_invalid` |
 | 직접 정하는 방식 | `player_made_hp_missing`, `point_buy_missing`, `score_roll_missing` |
-| 인물 시트 | `npc_sheet_entry_missing`, `npc_sheet_not_person`, `npc_sheet_invalid`, `default_npc_sheet_missing`, `default_npc_sheet_invalid` |
+| 인물 시트 | `npc_sheet_entry_missing`, `npc_sheet_not_person`, `npc_sheet_invalid`, `npc_attack_invalid`, `default_npc_sheet_missing`, `default_npc_sheet_invalid` |
 | 물건 | `item_entry_missing`, `item_not_item`, `item_magnitude_missing` |
 | 퀘스트 | `quest_entry_missing`, `quest_not_event`, `quest_condition_missing`, `quest_condition_invalid`, `quest_condition_impossible` |
 | 지도 | `map_place_missing`, `map_not_place`, `map_start_missing`, `route_find_invalid` |
