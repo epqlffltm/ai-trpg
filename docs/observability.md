@@ -31,7 +31,8 @@
 | 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
 | 메트릭 | 이름과 규칙만 정했다. 내보내는 코드는 없다 |
 | 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
-| 수집기(Grafana Alloy), Prometheus, Loki, Tempo, Grafana | 없다. 수집기는 Alloy 로 정했다(2026-10-19, [아래](#수집기grafana-alloy를-붙일-자리)) |
+| 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그 모으기](../README.md#로그-모으기) |
+| Prometheus, Tempo | 없다. 수집기(Alloy)에 붙일 자리만 정했다([아래](#수집기grafana-alloy를-붙일-자리)) |
 | 관리 서버, 관리 DB, 관리자 화면, Gemma 요약 | 없다 |
 
 ## 로그, 메트릭, 추적의 역할
@@ -666,7 +667,8 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 ## 수집기(Grafana Alloy)를 붙일 자리
 
-지금은 수집기가 없다(#25). 붙일 때 정한 것과 바꿀 곳을 미리 적어 둔다. 순서는 로그, 메트릭, 추적이다. 뒤로 갈수록 서버 코드를 많이 고친다.
+수집기를 붙일 때 정한 것과 바꿀 곳을 적어 둔다(#25). 순서는 로그, 메트릭, 추적이다. 뒤로 갈수록 서버 코드를 많이 고친다.
+로그는 붙였다([붙인 것](#붙인-것-로그)). 메트릭과 추적은 아직이다.
 
 ```
 서버(stderr 의 JSON) ─▶ Docker(json-file) ─▶ Alloy ─▶ Loki        ─┐
@@ -691,7 +693,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 - **컨테이너의 이름.** compose 의 서비스 이름(`auth-server`, `auth-mail`, `billing-sweeper` …)을 붙인다. 서버의 `service` 칸과 다를 수 있다(워커와 주기 명령은 그 서버의 `service` 를 쓴다). 둘 다 남긴다.
 - **Docker 소켓.** 컨테이너 목록을 보려면 Docker 의 API 가 필요하다. 소켓을 Alloy 에 그대로 붙이면 그 컨테이너가 VM 의 관리자 권한을 갖는다. **읽기만 허용하는 소켓 프록시**(컨테이너 목록과 로그만)를 앞에 둔다.
-- **JSON 을 푼다.** 옮길 것: `timestamp` → 시각, `level` → 수준, `trace_id` 와 `request_id`, `job_id` → 줄의 값, `service`·`environment`·`version` → 줄의 출처. 칸의 이름을 바꾸는 일은 Alloy 의 설정에서 한다.
+- **JSON 을 푼다.** 옮길 것: `level` → 수준, `trace_id` 와 `request_id`, `job_id` → 줄의 값, `service`·`environment`·`version` → 줄의 출처. 칸의 이름을 바꾸는 일은 Alloy 의 설정에서 한다. 시각은 서버의 `timestamp` 가 아니라 Docker 의 것을 쓰기로 했다([붙인 것](#붙인-것-로그)).
 - **JSON 이 아닌 줄도 모은다.** 본문을 그대로 두고 JSON 이 아니라는 표시만 붙인다. PostgreSQL, Redis, certbot, nginx 가 뜨고 꺼지는 줄, supercronic 의 줄, 사람이 치는 명령의 안내([알려진 빈틈](#알려진-빈틈))가 여기 든다. 버리면 DB 가 죽는 순간이 보이지 않는다.
 - **수집이 늦어도 잃지 않게.** 서비스마다 Docker 의 로그는 50MB(10MB × 5)까지라 Alloy 가 멈춘 동안 파일이 돌아 버리면 그 구간을 잃는다. Alloy 가 읽은 자리를 디스크에 기억하게 하고, 줄이 많은 서비스(나중의 chat)만 상한을 키운다.
 - **수집 쪽이 죽어도 서버는 돈다.** 서버는 stderr 에 쓰기만 한다. Alloy 나 Loki 가 멈춰도 요청은 영향을 받지 않는다.
@@ -703,12 +705,38 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `service` | 로그를 낸 서버(위의 표) |
 | `container` | compose 의 서비스 이름 |
 | `environment` | `development`, `staging`, `production` |
-| `level` | `debug`, `info`, `warning`, `error` |
+| `level` | `debug`, `info`, `warning`, `error`, `critical` |
 | `mode` | `chat`, `story`. chat 서버의 줄에만 있다. story 만 따로 볼 수 있게 한다 |
 
 - `request_id`, `trace_id`, `job_id`, `user_id`, `table_id`, `order_id`, 대화방 번호는 **label 로 쓰지 않는다.** 줄의 값(structured metadata)이나 본문으로 둔다. Grafana 에서 `trace_id` 로 찾는 것은 그래도 된다.
 - 민감정보의 규칙([민감정보](#민감정보))은 그대로다. 로그에 적지 않는 것은 모은 뒤에도 없다. 대화의 원문, 캐릭터 설정, prompt 는 서버가 싣지 않는다.
 - 스트리밍(서술, 나중의 chat)은 조각마다 줄을 남기지 않는다. 한 번의 서술이나 턴이 끝날 때 한 줄이다.
+
+#### 붙인 것 (로그)
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `docker-compose.yml` 의 "로그 모으기" | `docker-socket-proxy`, `alloy`, `loki`, `grafana`. 모두 프로필 `observability` 이고 `logging: *logging` 을 쓴다 |
+| `docker/alloy/config.alloy` | 컨테이너 찾기 → `container` 붙이기 → 로그 읽기 → JSON 풀기 → Loki 로 보내기 |
+| `docker/loki/config.yaml` | 한 프로세스, 볼륨에 파일로. 14일 뒤에 지운다 |
+| `docker/grafana/provisioning/datasources/loki.yaml` | Grafana 가 뜰 때 Loki 를 데이터 소스(uid `loki`)로 붙인다. 화면에서 고치지 못한다 |
+| `.github/scripts/stack-smoke.sh` 의 `check_logs` | CI(`stack`)가 PR 마다 아래를 본다 |
+
+- **줄을 어떻게 옮기는가.** `service`, `environment`, `level`, `mode` 는 label 이다. `request_id`, `trace_id`, `job_id`, `version` 은 줄의 값이다.
+  `version` 은 값의 종류가 적지만 배포할 때마다 스트림이 새로 생기므로 label 로 두지 않았다. 칸의 이름은 바꾸지 않았다. 서버의 칸 이름이 그대로 Loki 의 이름이다.
+- **시각은 Docker 의 것이다.** 서버의 `timestamp` 로 바꾸지 않았다. Docker 가 그 줄을 받은 때라 서버의 값과 천분의 몇 초 차이다.
+  JSON 이 아닌 줄과 같은 시계로 줄을 세워야 DB 가 죽은 순간과 서버의 오류가 같은 순서로 보인다. 서버의 `timestamp` 는 본문에 그대로 있다.
+- **공통 모양인지 표시한다.** `service` 칸이 있는 줄은 줄의 값 `log_format="standard"`, 없는 줄(DB, Redis, Loki, supercronic 등)은 `"other"` 다. 본문은 그대로다.
+  다른 프로그램의 줄도 JSON 이고 `level` 칸이 있으면(supercronic, Alloy, Grafana) 그 값이 label `level` 로 붙는다. `warn` 처럼 규격 밖의 값이 있을 수 있다.
+- **Loki 가 스스로 만드는 label `service_name` 은 껐다**(`discover_service_name: []`). `service` 가 없는 줄에 컨테이너의 이름을 넣어서 두 뜻이 섞인다.
+- **이 compose 프로젝트의 컨테이너만 모은다.** 같은 PC 의 다른 프로젝트는 모으지 않는다(`com.docker.compose.project` 로 거른다).
+- **소켓 프록시가 넘기는 것.** 컨테이너(`CONTAINERS`)와 네트워크(`NETWORKS`)의 GET, 기본으로 열린 `PING`, `VERSION`, `EVENTS` 뿐이다. 쓰기(POST, DELETE)와 이미지, 볼륨, 비밀, exec 는 403 이다.
+  컨테이너의 GET 에는 inspect 가 들어 있어 **컨테이너의 환경 변수(비밀)가 읽힌다.** 그래서 프록시는 Alloy 만 있는 망(`docker-api`, 바깥으로 나가지 못한다)에 둔다.
+- **망을 나눴다.** 서버들은 기본 망(`default`)에만 있어서 소켓 프록시에도 Loki 에도 닿지 않는다. Alloy, Loki, Grafana 는 `observability` 망이다. Grafana 의 포트를 열려고 그 망은 `internal` 이 아니다.
+- **root 가 아니다.** Alloy 는 이미지가 만들어 둔 사용자(473)로 띄운다. 로그를 파일이 아니라 Docker 의 API 로 읽으므로 root 가 필요 없다. Loki 와 Grafana 는 이미지가 처음부터 root 가 아니다.
+- **Loki 가 멈추면.** Alloy 가 끝없이 다시 보낸다(`max_backoff_retries = 0`). 그동안 읽기도 멈추고 읽은 자리는 볼륨(`alloydata`)에 남는다. Docker 의 로그가 그 사이에 돌아 버리면 그 구간은 잃는다.
+- **CI 가 보는 것.** 서버의 줄을 `service`, `container`, `level` 로 찾는다. 추적 식별자를 실어 부른 요청의 줄을 `trace_id` 로 거른다. DB 의 줄이 `log_format="other"` 로 들어온다.
+  label 이 위의 다섯뿐이다. Grafana 가 Loki 에 닿는다. 소켓 프록시가 컨테이너 목록은 넘기고 컨테이너 만들기(POST)와 이미지 목록은 403 으로 막는다. 서버들이 소켓 프록시와 Loki 에 닿지 않는다.
 
 **오래 남겨야 하는 기록은 Loki 가 원본이 아니다.**
 
@@ -812,4 +840,6 @@ notification-server 는 game-server 의 것(`app/observability/`)을 그대로 �
 - **nginx 가 뜨고 꺼지는 줄.** 프록시의 요청 줄은 JSON 이지만, nginx 가 뜰 때와 설정을 다시 읽을 때 남기는 줄은 nginx 의 글 모양이다.
 - **마지막 방어선은 어림이다.** [민감정보](#마지막-방어선)의 끝에 적은 대로다.
 - **주기 명령과 게임 서버 안의 작업에 상태 신호가 없다.** 계속 도는 워커 셋만 심장박동이 있다([워커의 상태](#워커의-상태)).
+- **끝나고 바로 사라지는 컨테이너의 로그는 모이지 않을 수 있다.** Alloy 는 도는 컨테이너만 15초마다 찾는다. 그 전에 끝나는 마이그레이션(`*-migrate`)의 줄은 Loki 에 없을 수 있다. `docker compose logs <서비스>` 로 본다.
+- **Alloy 가 읽고 아직 보내지 못한 줄.** Alloy 가 그 순간에 죽으면 메모리에 있던 줄(Loki 로 보내려고 모은 묶음)은 잃는다. 읽은 자리는 이미 넘어갔다.
 - **`warning` 줄의 `error_code`.** `error` 이상에는 붙였지만, 기존의 `warning` 줄 가운데에는 코드가 없는 것이 있다(게임 서버의 JWKS, 임베딩 실패).

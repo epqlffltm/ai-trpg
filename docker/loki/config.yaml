@@ -1,0 +1,66 @@
+# docker/loki/config.yaml
+# 로그 저장소(Loki)의 설정(#25). docker-compose.yml 의 loki(프로필 observability)가 읽는다.
+#
+# 서버 한 대(VM)에 프로세스 하나로 띄운다. 저장은 컨테이너의 볼륨(lokidata)에 파일로 한다.
+# 나중에 VM 을 나누면 아래 storage 의 filesystem 을 s3 로 바꾼다. 서버와 수집기(Alloy)의 설정은 그대로다.
+# 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "수집기(Grafana Alloy)를 붙일 자리"에 있다.
+
+# 로그인 없이 받는다. compose 의 망(observability)에서 Alloy 와 Grafana 만 닿고, 바깥에 포트를 열지 않는다
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  # Loki 자신의 로그. 수집기가 함께 모은다(JSON 이 아닌 줄로 들어온다)
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+schema_config:
+  configs:
+    # 처음 쌓는 날부터 이 모양이다. 모양을 바꿀 때는 이 줄을 고치지 않고 새 날짜의 줄을 더한다
+    - from: "2026-10-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # 보관 기간. staging 은 14일이다(docs/observability.md). 지우는 것은 아래 compactor 가 한다
+  retention_period: 336h
+  # 줄의 값(request_id, trace_id, job_id, log_format)을 label 이 아니라 structured metadata 로 받는다
+  allow_structured_metadata: true
+  # label 의 수가 늘지 않게 막는다. 쓰는 label 은 service, container, environment, level, mode 다
+  max_label_names_per_series: 8
+  # Loki 가 스스로 label service_name 을 만들지 않게 한다. service 가 없는 줄(DB 등)에는 컨테이너의 이름을 넣어서
+  # service 와 container 의 뜻이 섞인다. 서비스는 service, 컨테이너는 container 로 찾는다
+  discover_service_name: []
+  # 한 서버가 로그를 쏟아내도 디스크와 메모리를 다 쓰지 않게 들어오는 양을 묶는다(서버 한 대 기준)
+  ingestion_rate_mb: 4
+  ingestion_burst_size_mb: 8
+  # 수집기가 멈췄다 다시 읽는 옛 줄은 받는다. 일주일보다 오래된 줄은 받지 않는다(처음 켤 때 쌓여 있던 Docker 의 로그 가운데)
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem
+
+# Grafana Labs 에 사용 통계를 보내지 않는다
+analytics:
+  reporting_enabled: false
