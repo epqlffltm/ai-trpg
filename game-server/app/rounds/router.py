@@ -21,8 +21,10 @@ from app.rounds.cast import Scene, is_named
 from app.rounds.closing import RoundCloser, closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.models import Declaration, Round, RoundStatus
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.monster_scene import condition as monster_condition
 from app.rounds.schemas import (
+    CarriedOut,
     ChargeOut,
     DeclarationOut,
     DeclarationUpdate,
@@ -33,7 +35,8 @@ from app.rounds.schemas import (
     SceneCastOut,
     SceneMonsterOut,
 )
-from app.tables import injuries
+from app.tables import injuries, monster_items
+from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableStatus
 
 router = APIRouter(prefix='/tables/{table_id}/rounds', tags=['rounds'])
@@ -113,8 +116,20 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
     )
 
 
-def to_cast(round_: Round, scene: Scene) -> SceneCastOut:
-    """이번 장면의 인물과 몬스터들을 앉은 사람에게 보여 주는 응답으로 바꾼다. 이름과 생사(와 몸 상태)만 싣는다."""
+def to_carried(monster: SceneMonster, things: dict[uuid.UUID, CatalogItem]) -> list[CarriedOut]:
+    """그 마리가 지금 지닌 것을 응답으로 바꾼다. 장비 다음 소지품의 차례다."""
+    return [
+        CarriedOut(entry_id=one.entry_id, name=things[one.entry_id].name, count=one.count, equipped=one.equipped)
+        for one in monster_items.carried(monster.state, monster.definition)
+    ]
+
+
+def to_cast(round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem]) -> SceneCastOut:
+    """
+    이번 장면의 인물과 몬스터들을 앉은 사람에게 보여 주는 응답으로 바꾼다. 이름과 생사(와 몸 상태)를 싣는다.
+
+    몬스터는 지닌 물건도 싣는다. things 는 판의 물건들이다(이름).
+    """
     people = [
         PersonOut(
             id=member.entry_id,
@@ -132,6 +147,7 @@ def to_cast(round_: Round, scene: Scene) -> SceneCastOut:
             place_id=monster.state.place_id,
             status=monster.state.status,
             condition=monster_condition(monster),
+            items=to_carried(monster, things),
         )
         for monster in scene.monsters
     ]
@@ -204,8 +220,8 @@ async def read_scene_cast(table_id: uuid.UUID, user: CurrentUser, session: Sessi
 
     장면에 이름이나 호칭이 나온 인물만 들어간다. 테이블의 인물 전부가 아니다.
     """
-    round_, scene = await service.get_scene_cast(session, user.user_id, table_id)
-    return to_cast(round_, scene)
+    round_, scene, things = await service.get_scene_cast(session, user.user_id, table_id)
+    return to_cast(round_, scene, things)
 
 
 @router.get('/{number}/charges', response_model=list[ChargeOut], status_code=status.HTTP_200_OK)

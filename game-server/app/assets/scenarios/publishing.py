@@ -53,7 +53,7 @@ from app.assets.scenarios.schemas import (
 )
 from app.assets.scenarios.snapshot import (
     AttackSnapshot,
-    DropSnapshot,
+    MonsterItemSnapshot,
     MonsterSnapshot,
     build_snapshot,
     snapshot_monster,
@@ -394,7 +394,8 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             known[monster_sheet.monster_id],
             monster_sheet.sheet,
             [AttackSnapshot(**attack.model_dump()) for attack in monster_sheet.attacks],
-            [DropSnapshot(**drop.model_dump()) for drop in monster_sheet.drops],
+            [MonsterItemSnapshot(**line.model_dump()) for line in monster_sheet.equipment],
+            [MonsterItemSnapshot(**line.model_dump()) for line in monster_sheet.inventory],
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]
@@ -442,16 +443,19 @@ def read_quest_rules(scenario: Scenario) -> list[QuestRule]:
 def item_references(scenario: Scenario) -> list[uuid.UUID]:
     """
     물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품, 퀘스트마다의 보상,
-    몬스터마다의 드롭, 장소에 놓인 물건.
+    몬스터마다 지닌 물건(장비와 소지품), 장소에 놓인 물건.
     """
     stacks = [ItemStack.model_validate(document) for document in scenario.starting_items]
     for document in scenario.pregens:
         stacks.extend(Pregen.model_validate(document).items)
     for quest in read_quest_rules(scenario):
         stacks.extend(quest.reward)
-    drops = [drop.entry_id for sheet in read_monster_sheets(scenario) for drop in sheet.drops]
+    carried = [
+        line.entry_id for sheet in read_monster_sheets(scenario) for line in [*sheet.equipment, *sheet.inventory]
+    ]
     placed = [rule.entry_id for rule in read_place_items(scenario)]
-    return [rule.entry_id for rule in read_item_rules(scenario)] + [stack.entry_id for stack in stacks] + drops + placed
+    rules = [rule.entry_id for rule in read_item_rules(scenario)]
+    return rules + [stack.entry_id for stack in stacks] + carried + placed
 
 
 def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:

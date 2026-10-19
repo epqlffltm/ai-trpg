@@ -652,6 +652,35 @@ class TableMonster(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    # 이 마리가 지닌 물건 중 판에 적은 개수에서 바뀐 줄들(app/tables/monster_items.py). 줄이 없으면 판의 개수 그대로다.
+    # 많아야 판의 줄의 수(장비 5, 소지품 10)라 마리를 읽을 때 함께 읽는다
+    items: Mapped[list['TableMonsterItem']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='TableMonsterItem.slot'
+    )
+
+
+class TableMonsterItem(Base):
+    """
+    몬스터 한 마리가 지닌 물건 한 줄(slot)이 지금 몇 개인가(#456).
+
+    판의 몬스터에 적은 줄(장비 다음 소지품의 차례)의 번호가 slot 이다. 처음에는 판의 개수 그대로라 행이 없다.
+    떨어뜨리거나 빼앗겨 개수가 바뀐 줄만 행이 생긴다. 이미 진행 중인 테이블의 마리도 채우지 않고 그대로 읽힌다.
+    0 이 되어도 지우지 않는다. 지우면 판의 개수로 돌아간다.
+    바꾸는 것은 엔진뿐이다(app/rounds/drops.py). 방장도 AI 도 바꾸지 못한다.
+    """
+
+    __tablename__ = 'table_monster_items'
+    __table_args__ = (
+        CheckConstraint('count >= 0', name='count_not_negative'),
+        CheckConstraint('slot >= 0', name='slot_not_negative'),
+    )
+
+    # 두 칸을 합쳐 기본 키로 삼는다. 마리의 행이 지워지면 함께 지워진다
+    monster_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('table_monsters.id', ondelete='CASCADE'), primary_key=True)
+    slot: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    # 지금 지닌 개수
+    count: Mapped[int] = mapped_column(SmallInteger)
+
 
 class TableQuest(Base):
     """
