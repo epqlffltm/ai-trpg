@@ -141,7 +141,8 @@ docker compose run --rm db-backup check    # 가장 최근 백업을 빈 DB 에 
 - 복원이 되는지는 CI(`stack`)가 PR 마다 본다. 마이그레이션을 마친 DB 를 뜨고, 같은 DB 서버의 빈 DB 에 풀어 표마다 줄 수를 맞춰 본다
 - **백업에는 이메일, 비밀번호 해시, 결제 원장이 들어 있다.** 파일은 주인만 읽게(600) 만든다. 리눅스에서는 주인이 root 라 `sudo` 로 읽는다.
   `docker compose down -v` 로 볼륨을 지워도 백업은 남지만, 같은 디스크라 디스크가 망가지면 함께 사라진다. 다른 장비(NAS 등)에 복사해 둔다.
-  옮길 때는 암호화한다. 예: `gpg --symmetric --cipher-algo AES256 trpg-<시각>.dump`
+  옮길 때는 암호화한다. 예: `age -r <공개키> -o trpg-<시각>.dump.age trpg-<시각>.dump`
+- **staging(VM)에서는 `backup-offsite` 가 바깥에 한 벌 더 둔다.** 덤프를 age 로 잠가(열쇠 둘) S3 에 올리고, 일주일에 한 번 버킷의 것을 받아 실제로 풀어 본다(`docker/backup-offsite/`). 열쇠와 버킷의 권한, VM 을 잃었을 때 되살리는 법은 [배포 설계의 백업](docs/architecture/deployment.md#백업)에 있다
 - `.env` 와 JWT 키(`auth-server/keys/`)는 백업에 넣지 않는다. 백업과 같은 곳에 두면 그 하나로 모든 것이 열린다. 따로, 다른 곳에 둔다
 
 **복원.** 서버를 모두 끄고 DB 를 새로 만든 뒤 푼다. 지금의 데이터는 백업 시점의 것으로 바뀐다.
@@ -383,6 +384,7 @@ docker/nginx/allowlist/   staging 의 허용 주소. 보기(allow.conf.example)�
 docker/certbot/           staging 의 인증서(Let's Encrypt)를 받고 갱신하는 스크립트, 인증서의 남은 날짜 검사
 docker/cron/              주기 명령의 crontab (인증, 결제)
 docker/backup/            DB 의 백업과 복원 확인 스크립트
+docker/backup-offsite/    staging 의 바깥 백업: age 로 잠가 S3 에 올리고 주마다 풀어 보는 스크립트, 그 이미지, S3 접근 키의 권한
 docker/alloy/             수집기(Grafana Alloy)의 설정. 로그(config.alloy)와 메트릭(metrics.alloy)
 docker/loki/              로그 저장소(Loki)의 설정
 docker/prometheus/        메트릭 저장소(Prometheus)의 설정
