@@ -12,6 +12,7 @@ stack-smoke.sh 의 check-staging 이 부른다.
 
 import contextlib
 import io
+import os
 import re
 import shutil
 import stat
@@ -65,6 +66,8 @@ class StagingEnvTests(unittest.TestCase):
     def env(self, target: str) -> dict[str, str]:
         return read_env(self.root / target)
 
+    # Windows 에는 리눅스의 파일 권한이 없어 늘 666 으로 읽힌다. VM(리눅스)과 CI 에서만 본다
+    @unittest.skipUnless(os.name == 'posix', '파일 권한(600)은 리눅스에서만 뜻이 있다')
     def test_writes_all_six_files_for_the_owner_only(self):
         self.assertEqual(self.run_tool(), 0)
 
