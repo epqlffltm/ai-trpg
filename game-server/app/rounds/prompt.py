@@ -113,7 +113,9 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-33: 이룬 퀘스트가 가져간 물건이 한 일의 줄에 붙는다((넘긴 물건: 약초 배달에 약초 2개))
 #   narration-34: 한 일의 줄에 훔치기의 결과가 붙는다((훔치기: 수로 쥐 1 에게서 송곳니 1개를 몰래 빼냈다),
 #                 들켰으면 그 마리가 도둑을 노린다는 말). 판정은 엔진이 굴렸고 판정 줄은 없다
-PROMPT_VERSION = 'narration-34'
+#   narration-35: [인물의 상태] 의 줄에 태도가 붙는다(중립이 아니면, 태도: 적대).
+#                 다루는 법에 태도도 엔진이 정한 사실이라는 말이 더해진다(#474)
+PROMPT_VERSION = 'narration-35'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -310,7 +312,8 @@ HISTORY_NOTE = (
 PEOPLE_TITLE = '[인물의 상태]'
 PEOPLE_NOTE = (
     '게임 엔진이 정한 이번 장면 인물들의 지금 상태다. 이번 라운드의 결과까지 반영했다. 바꾸지 마라. '
-    '쓰러진 인물은 의식이 없다. 말하거나 움직이지 않는다. 죽은 인물은 되살아나지 않는다.'
+    '쓰러진 인물은 의식이 없다. 말하거나 움직이지 않는다. 죽은 인물은 되살아나지 않는다. '
+    '태도(우호, 적대)도 엔진이 정한 사실이다. 적힌 태도대로 일행을 대한다. 적히지 않은 인물은 중립이다.'
 )
 
 
@@ -568,9 +571,14 @@ def people_lines(people: list[PersonState]) -> list[str]:
 
 
 def person_line(person: PersonState) -> str:
-    """인물 한 줄. 몸 상태 뒤에 입은 부상(이름과 사실)을 붙인다. 예: - 악역영애: 크게 다침. 부상: 오른손 잃음(…)"""
+    """
+    인물 한 줄. 몸 상태 뒤에 태도(중립이 아니면)와 입은 부상(이름과 사실)을 붙인다.
+
+    예: - 악역영애: 크게 다침. 태도: 적대. 부상: 오른손 잃음(…)
+    """
+    attitude = f'. 태도: {person.attitude}' if person.attitude else ''
     injured = f'. 부상: {describe_injuries(person.injuries)}' if person.injuries else ''
-    return f'- {person.name}: {person.condition}{injured}'
+    return f'- {person.name}: {person.condition}{attitude}{injured}'
 
 
 def whisper_line(whisper: WhisperNote) -> str:

@@ -540,6 +540,8 @@ class PersonState:
     condition: str
     # 입고 있는 부상들. 생긴 순서다
     injuries: list[InjuryNote] = field(default_factory=list)
+    # 일행을 대하는 태도의 말(우호, 적대). 중립이면 None 이다(app/tables/npc_attitudes.py)
+    attitude: str | None = None
 
 
 @dataclass(frozen=True)

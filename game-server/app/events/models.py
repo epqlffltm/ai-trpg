@@ -83,6 +83,8 @@ class EventType(enum.StrEnum):
     HP_CHANGED = 'hp_changed'
     # 엔진이 NPC 의 HP 와 생사를 바꿨다. 피해나 회복이다. 원인은 그 판정의 이벤트다
     NPC_CHANGED = 'npc_changed'
+    # 엔진이 NPC 의 태도(우호, 중립, 적대)를 바꿨다(app/tables/npc_attitudes.py). 원인은 그렇게 만든 일의 이벤트다
+    NPC_ATTITUDE_CHANGED = 'npc_attitude_changed'
     # 엔진이 몬스터 한 마리의 HP 와 생사를 바꿨다. 피해다. 원인은 그 판정의 이벤트다
     MONSTER_CHANGED = 'monster_changed'
     # 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 공격으로 쳤다. 공격, 대상, 성패가 적힌다.

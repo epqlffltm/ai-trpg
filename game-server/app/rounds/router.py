@@ -143,6 +143,7 @@ def to_cast(round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem]) -
             status=member.npc.status,
             injuries=injuries.active_keys(member.npc.injuries),
             named=is_named(member.npc),
+            attitude=member.npc.attitude,
         )
         for member in scene.cast
     ]

@@ -29,6 +29,7 @@ from app.rounds.state import find_arrival, find_declaration, has_outcome, is_dow
 from app.tables import injuries, items, place_items, places, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
+from app.tables.npc_attitudes import attitude_word
 
 
 def healed_notes(ruleset: Ruleset | None, ended: list[round_injuries.Ended], user_id: uuid.UUID) -> list[HealNote]:
@@ -221,6 +222,7 @@ def to_people(cast: list[CastMember], ruleset: Ruleset) -> list[PersonState]:
             name=member.name,
             condition=condition_of(member.npc),
             injuries=round_injuries.notes(ruleset, member.npc.injuries),
+            attitude=attitude_word(member.npc),
         )
         for member in cast
     ]
