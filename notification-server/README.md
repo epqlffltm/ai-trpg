@@ -62,6 +62,7 @@ uv run uvicorn app.main:app --port 8004 --reload
 | `APP_ENVIRONMENT` | `development` | 로그의 `environment` 칸. 동작은 바꾸지 않는다 |
 | `APP_VERSION` | `dev` | 로그의 `version` 칸. 배포할 때 git SHA 나 이미지의 버전을 넣는다 |
 | `LOG_LEVEL` | `info` | 이 수준부터 로그를 남긴다(`debug`, `info`, `warning`, `error`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적)) |
 | `NOTIFICATION_RETENTION_DAYS` | `30` | 알림을 지우기 전까지 두는 날 수. 받은 시각부터 센다 |
 | `AUTH_JWKS_URL` | 없음(필수) | 인증 서버가 공개키를 내주는 주소. 여기서 받은 키로 서명된 토큰을 믿는다 |
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
@@ -210,7 +211,7 @@ Content-Type: application/json
 
 - 로그는 한 줄에 하나의 JSON 이다(`service`: `notification-server`). 표준 오류로 나간다.
 - 요청마다 `X-Request-ID` 를 걸고 응답에 돌려준다. 요청이 끝나면 한 줄(`http.request`)을 남긴다. 주소는 틀(`/api/v1/notification/me/notifications/{notification_id}/read`)로 적고 실제 번호와 쿼리는 적지 않는다.
-- 인증 서버를 부를 때 `traceparent` 로 추적을 이어 준다.
+- 인증 서버를 부를 때 `traceparent` 로 추적을 이어 준다. span 을 내보내면 그 호출의 span 이 부모가 된다.
 - 처리하지 못한 예외는 내부를 드러내지 않는 500 이다. 원인은 로그에 남는다. DB 주소, 토큰 같은 것은 로그에서도 가린다.
 
 | `operation` | 언제 |
@@ -219,6 +220,28 @@ Content-Type: application/json
 | `notification.put` | 다른 서버가 알림을 넣었다(`source`, `kind`, `notification_id`, `outcome`). 표에 맞지 않아 받지 않았으면 `warning`(`notification.kind_refused`, `refusal`, `missing_fields`) |
 | `notification.prune` | 보관 기간이 지난 알림을 지웠다(`deleted`, `retention_days`). 지운 것이 없으면 `debug` |
 | `auth.revocations_fetch` | 끊긴 세션의 목록을 받지 못했다(`warning`, `auth.revocations_unavailable`) |
+
+## 추적
+
+요청, 인증 서버를 부르는 것, 쿼리, 정리 작업을 span 으로 남겨 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 민다. 수집기가 Tempo 에 넘긴다.
+규칙과 까닭은 [관측 규격](../docs/observability.md)의 "3. 추적"에 있다. 결제 서버(Go)가 본보기이고, 이 서버가 Python 의 본보기다.
+주소가 비어 있으면 span 이 생기지 않고 로그는 지금과 같다.
+
+| span | 이름 | 코드 |
+| --- | --- | --- |
+| 요청 | `GET /api/v1/notification/me/notifications`(메서드와 경로의 틀). 상태 확인은 걸지 않는다 | `app/observability/request_spans.py` |
+| 인증 서버를 부르는 것 | `HTTP GET` | `app/observability/http_spans.py` |
+| 쿼리 | `db SELECT notifications`(종류와 테이블). 손으로 쓴 것은 `db SELECT` | `app/observability/db_spans.py` |
+| 정리 작업 | `notification.prune`. 한 바퀴가 새 추적 하나다 | `app/observability/spans.py` 의 `job_span` |
+
+- 로그의 `trace_id` 가 span 의 trace id 와 같다. 요청의 span 에는 `request_id`, 작업의 span 에는 `job_id` 를 싣는다
+- 싣지 않는 것: 주소의 경로와 뒤의 값, 머리말, 본문, SQL 의 문장과 값, 예외의 글. 쿼리가 실패하면 SQLSTATE 만 적는다
+- 요청이나 작업 밖의 쿼리와 호출(끊긴 세션의 목록을 30초마다 받는 것)은 span 을 걸지 않는다
+- 받은 `traceparent` 가 "기록하지 않음"(flags `00`)이어도 남긴다
+- span 은 따로 도는 스레드가 묶어서 보낸다. 서버가 꺼질 때 남은 것을 보낸다(5초 안). 수집기가 죽어 있어도 요청은 영향을 받지 않는다
+
+테스트는 `tests/spans.py` 로 메모리에 모아 이름, 부모, 속성을 본다(`spans` fixture). 보내는 길은 `tests/test_tracing_setup.py` 가 가짜 수집기로 본다.
+Tempo 에 들어오는지는 저장소의 CI(`stack`)가 본다.
 
 ## DB
 

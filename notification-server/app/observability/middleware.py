@@ -25,7 +25,8 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.observability.context import request_scope
-from app.observability.identifiers import REQUEST_ID_HEADER, TRACEPARENT_HEADER, request_id_from, trace_from
+from app.observability.identifiers import REQUEST_ID_HEADER, TRACEPARENT_HEADER, Trace, request_id_from, trace_from
+from app.observability.spans import ATTRIBUTE_REQUEST_ID, span_trace, tag_current_span
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,15 @@ def single_header(headers: Headers, name: str) -> str | None:
     return values[0] if len(values) == 1 else None
 
 
+def trace_of_request(headers: Headers) -> Trace:
+    """
+    요청이 속한 추적. 서버 span 이 걸려 있으면(request_spans.py) 그 span 의 것이라 로그와 추적이 같은 번호다.
+
+    없으면(상태 확인, span 을 내보내지 않는 PC) 받은 traceparent 를 이어 가거나 새로 시작한다.
+    """
+    return span_trace() or trace_from(single_header(headers, TRACEPARENT_HEADER))
+
+
 def request_fields(scope: Scope, status_code: int, started: float) -> dict[str, object]:
     """요청이 끝난 줄에 싣는 칸들."""
     return {
@@ -137,7 +147,9 @@ class RequestLoggingMiddleware:
 
         headers = Headers(scope=scope)
         request_id = request_id_from(single_header(headers, REQUEST_ID_HEADER))
-        trace = trace_from(single_header(headers, TRACEPARENT_HEADER))
+        trace = trace_of_request(headers)
+        # 서버 span 에 요청 식별자를 싣는다. 응답의 X-Request-ID 로 Tempo 에서 그 요청을 찾는다
+        tag_current_span(ATTRIBUTE_REQUEST_ID, request_id)
         scope[SCOPE_REQUEST_ID] = request_id
         started = time.perf_counter()
         # 응답이 시작될 때의 상태 코드. 응답이 시작되기 전에 예외가 나면 비어 있다
