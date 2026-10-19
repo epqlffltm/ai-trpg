@@ -440,6 +440,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
                 'inventory': [],
                 'dull': False,
                 'on_caught': 'hostile',
+                'attacks': [],
             }
         ],
         'default_npc_sheet': None,
