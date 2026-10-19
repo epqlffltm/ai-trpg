@@ -9,7 +9,7 @@
 | [architecture/operators.md](architecture/operators.md) | 운영자 권한. 누가 운영자인가(토큰의 `roles`), 서비스마다 운영자가 더 할 수 있는 것, 감사 기록, 사용자에게 알릴 것, 순서 |
 | [architecture/deployment.md](architecture/deployment.md) | 배포 설계. 첫 배포(운영자 혼자 쓰는 서버)의 클라우드, 막는 법, 환경 이름, TLS 와 인증서, 모델, 올리는 방식, 비밀, 백업(age 로 잠가 S3 에, 주마다 풀어 보기), 지켜보기, VM 준비 순서 |
 | [operations/staging-vm.md](operations/staging-vm.md) | staging VM 준비. 배포 설계의 "VM 준비 순서"를 실제 명령으로. AWS, VM 의 기본, Docker, Tailscale, 열쇠, `.env`(`tools/staging_env.py`), 첫 인증서, 띄우기, 확인 |
-| [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. 공유 후보, 언제 뽑는지, 버전과 CI |
+| [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. 공유 후보, 언제 뽑는지, 버전과 CI, `app/ai` 를 뽑는 방식의 결정(#380) |
 | [product/platform.md](product/platform.md) | 플랫폼과 제품 방향. 제품 셋(TRPG, chat, story), 원칙, 화면과 모바일의 방향, 정하지 않은 것 |
 | [product/screens.md](product/screens.md) | 화면 명세의 목차 초안. 흐름, 화면 목록, 화면마다 채울 칸, 공통 상태, 첫 출시의 범위 |
 | [product/market-research.md](product/market-research.md) | 다른 AI 캐릭터 챗 서비스를 본 조사. 만드는 구조, 돈을 받는 방식, 반복되는 문제 |
