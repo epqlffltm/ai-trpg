@@ -11,7 +11,7 @@
  *   - failed: 알림 서버가 받지 않았다(같은 열쇠로 다른 알림, 모양이 틀렸다). 버그다. 사람이 보도록 남긴다
  *   - 오래(7일) 보내지 못한 pending 은 보내지 않고 지운다
  *
- * 게임 서버의 발송함(game-server/app/notifications/models.py)과 같은 모양이다.
+ * 게임 서버의 발송함(trpg-server/app/notifications/models.py)과 같은 모양이다.
  */
 
 import {

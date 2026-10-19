@@ -14,7 +14,7 @@
 | 위치 | 하는 일 | 기술 |
 | --- | --- | --- |
 | `auth-server/` | 계정, 인증, JWT 발급 | Django |
-| `game-server/` | 게임 엔진, 라운드, AI 서술 | FastAPI |
+| `trpg-server/` | 게임 엔진, 라운드, AI 서술 | FastAPI |
 | `board-server/` | 게시판, 댓글, 신고 | NestJS |
 | `billing-server/` | 연습용 결제, 크레딧, 원장 | Go |
 | `docker/`, `docker-compose.yml` | 공용 인프라, 프록시, 컨테이너 | Docker |

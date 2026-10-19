@@ -110,9 +110,9 @@ class StagingEnvTests(unittest.TestCase):
             notification['BOARD_SERVER_SECRET'],
             self.env('auth-server/.env')['SECRET_KEY'],
             self.env('auth-server/.env')['BILLING_SECRET'],
-            self.env('game-server/.env')['BILLING_SECRET'],
-            self.env('game-server/.env')['SIGNAL_SECRET'],
-            self.env('game-server/.env')['AI_LOG_HMAC_KEY'],
+            self.env('trpg-server/.env')['BILLING_SECRET'],
+            self.env('trpg-server/.env')['SIGNAL_SECRET'],
+            self.env('trpg-server/.env')['AI_LOG_HMAC_KEY'],
             self.env('billing-server/.env')['PG_WEBHOOK_SECRET'],
             self.env('.env')['POSTGRES_PASSWORD'],
             self.env('.env')['GRAFANA_ADMIN_PASSWORD'],
@@ -136,8 +136,8 @@ class StagingEnvTests(unittest.TestCase):
         self.assertEqual(root['BACKUP_AGE_RECIPIENTS'], 'age1master age1check')
         self.assertEqual(root['AUTH_DB_ALLOW_TEST_DB'], 'false')
         self.assertEqual(self.env('billing-server/.env')['PAYMENT_PROVIDER'], 'fake')
-        self.assertEqual(self.env('game-server/.env')['NARRATOR'], 'llm')
-        self.assertEqual(self.env('game-server/.env')['LLM_MODEL'], 'glm-4-7-flash')
+        self.assertEqual(self.env('trpg-server/.env')['NARRATOR'], 'llm')
+        self.assertEqual(self.env('trpg-server/.env')['LLM_MODEL'], 'glm-4-7-flash')
 
     def test_staging_lines_of_the_root_example_are_the_ones_enabled(self):
         # 루트 예시는 로컬용 줄(# GAME_LLM_BASE_URL=http://host.docker.internal...) 뒤에 staging 용 줄을 둔다.
@@ -178,7 +178,7 @@ class StagingEnvTests(unittest.TestCase):
 
         self.assertEqual(self.env('.env')['BACKUP_AWS_ACCESS_KEY_ID'], '')
         self.assertEqual(self.env('.env')['BACKUP_AWS_SECRET_ACCESS_KEY'], '')
-        self.assertEqual(self.env('game-server/.env')['ZAI_API_KEY'], '')
+        self.assertEqual(self.env('trpg-server/.env')['ZAI_API_KEY'], '')
 
     def test_refuses_and_writes_nothing_when_one_file_exists(self):
         (self.root / 'board-server/.env').write_text('LEFT=alone\n', encoding='utf-8')

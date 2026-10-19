@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	secret = "game-server-test-secret-of-32-chars"
+	secret = "trpg-server-test-secret-of-32-chars"
 	user   = "11111111-2222-4333-8444-555555555555"
 )
 

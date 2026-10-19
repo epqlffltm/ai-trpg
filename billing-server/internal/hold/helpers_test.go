@@ -21,7 +21,7 @@ import (
 
 const (
 	// source 는 테스트가 쓰는 "부르는 서버"의 이름이다.
-	source = "game-server"
+	source = "trpg-server"
 	// priceCode 와 price 는 테스트가 쓰는 가격표의 줄이다.
 	priceCode               = pricing.NarrationStandard
 	price     credit.Amount = 50

@@ -51,9 +51,9 @@
 
 set -euo pipefail
 
-SERVERS=(auth game board billing notification)
+SERVERS=(auth trpg board billing notification)
 # 서버마다 컨테이너 안에서 듣는 포트
-declare -A PORTS=([auth]=8000 [game]=8001 [board]=8002 [billing]=8003 [notification]=8004)
+declare -A PORTS=([auth]=8000 [trpg]=8001 [board]=8002 [billing]=8003 [notification]=8004)
 # 계속 도는 워커와 주기 명령의 컨테이너
 WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron db-backup)
 # 그 가운데 상태 확인이 있는 워커. 심장박동(docker-compose.yml 의 x-worker-heartbeat)을 보거나, DB 의 백업은 최근 백업 파일을 본다
@@ -171,7 +171,7 @@ EOF
 SECRET_KEY=$(throwaway)
 BILLING_SECRET=$auth_secret
 EOF
-  write_new game-server/.env <<EOF
+  write_new trpg-server/.env <<EOF
 BILLING_SECRET=$game_secret
 NOTIFICATION_SECRET=$notify_secret
 EOF
@@ -341,7 +341,7 @@ limited_after() {
 reachable_from() {
   local service="$1" url="$2"
   case "$service" in
-    auth-server | game-server | notification-server)
+    auth-server | trpg-server | notification-server)
       compose exec -T "$service" python -c "import urllib.request; urllib.request.urlopen('$url', timeout=5)" ;;
     board-server)
       compose exec -T "$service" node -e "fetch('$url').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" ;;
@@ -355,7 +355,7 @@ reachable_from() {
 # 받는 사람은 이 실행에서만 쓰는 무작위 값이다. 알림 서버는 서버마다 넣을 수 있는 kind 를 정해 두었으므로
 # 게임 서버의 kind 중 값이 필요 없는 것(publishing.unbanned)으로 보낸다(notification-server/app/notifications/catalog.py)
 game_notification_accepted() {
-  compose exec -T game-server python - <<'PY'
+  compose exec -T trpg-server python - <<'PY'
 import asyncio
 import uuid
 
@@ -581,8 +581,8 @@ check_logs() {
   report "소켓 프록시가 컨테이너 만들기(POST)를 막는다" socket_proxy_refuses /containers/create \
     --post-data '{}' --header 'Content-Type: application/json'
   report "소켓 프록시가 이미지 목록을 막는다" socket_proxy_refuses /images/json
-  report "게임 서버가 소켓 프록시에 닿지 않는다" unreachable_from game-server http://docker-socket-proxy:2375/version
-  report "게임 서버가 Loki 에 닿지 않는다" unreachable_from game-server http://loki:3100/ready
+  report "게임 서버가 소켓 프록시에 닿지 않는다" unreachable_from trpg-server http://docker-socket-proxy:2375/version
+  report "게임 서버가 Loki 에 닿지 않는다" unreachable_from trpg-server http://loki:3100/ready
   report "결제 서버가 Loki 에 닿지 않는다" unreachable_from billing-server http://loki:3100/ready
 }
 
@@ -730,7 +730,7 @@ check_metrics() {
   report "monitor 계정은 서버의 표를 읽지 못한다" monitor_cannot_read_tables
   report "monitor 계정은 쓰지 못한다(읽기 전용)" monitor_cannot_write
   report "Alloy 가 서버들의 망(default)에 없다. DB 와 Redis 에는 datastore-metrics 로만 닿는다" alloy_off_server_network
-  report "게임 서버가 Prometheus 에 닿지 않는다" unreachable_from game-server http://prometheus:9090/-/ready
+  report "게임 서버가 Prometheus 에 닿지 않는다" unreachable_from trpg-server http://prometheus:9090/-/ready
   report "결제 서버가 Prometheus 에 닿지 않는다(telemetry 망에서는 Alloy 에만 닿는다)" \
     unreachable_from billing-server http://prometheus:9090/-/ready
   check_server_metrics
@@ -987,15 +987,15 @@ check() {
   report "인증 서버의 DB 계정에 CREATEDB 가 없다" auth_cannot_create_databases
   report "관리자 화면을 인증 서버의 포트에서 연다" status_is 200 "$ADMIN/admin/login/"
   report "관리자 화면의 CSS 를 내준다" reachable_from_host "$ADMIN/static/admin/css/base.css"
-  report "게임 서버가 인증 서버의 공개키를 받는다" reachable_from game-server "$jwks"
+  report "게임 서버가 인증 서버의 공개키를 받는다" reachable_from trpg-server "$jwks"
   report "게시판 서버가 인증 서버의 공개키를 받는다" reachable_from board-server "$jwks"
   report "결제 서버가 인증 서버의 공개키를 받는다" reachable_from billing-server "$jwks"
   report "알림 서버가 인증 서버의 공개키를 받는다" reachable_from notification-server "$jwks"
   report "알림 서버가 인증 서버의 끊긴 세션 목록을 받는다" reachable_from notification-server \
     http://auth-server:8000/api/v1/auth/session-revocations
   report "인증 서버가 결제 서버에 닿는다" reachable_from auth-server http://billing-server:8003/health
-  report "게임 서버가 결제 서버에 닿는다" reachable_from game-server http://billing-server:8003/health
-  report "게임 서버가 알림 서버에 닿는다" reachable_from game-server http://notification-server:8004/health
+  report "게임 서버가 결제 서버에 닿는다" reachable_from trpg-server http://billing-server:8003/health
+  report "게임 서버가 알림 서버에 닿는다" reachable_from trpg-server http://notification-server:8004/health
   report "게임 서버가 서명한 알림을 알림 서버가 받는다" game_notification_accepted
   report "결제 서버의 정리 작업이 알림 서버에 닿는다" reachable_from billing-sweeper http://notification-server:8004/health
   report "게시판 서버가 알림 서버에 닿는다" reachable_from board-server http://notification-server:8004/health

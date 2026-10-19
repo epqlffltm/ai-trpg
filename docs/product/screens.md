@@ -3,7 +3,7 @@
 사용자 화면과 관리자 화면을 만들기 전에, 무엇이 필요한지를 한곳에 정리하는 문서다.
 디자인 도구에 시안을 맡기기 전에 이 문서의 칸을 채우는 것이 목적이다. 화면별 명세는 A1~A12, B1~B10 을 채웠다(아래 [화면별 명세](#화면별-명세)).
 
-- 기준: `main` `f29bfd9` (2026-10-18). A 는 `auth-server`, `billing-server`, `notification-server`, B 는 `game-server` 를 이 시점에 읽었다
+- 기준: `main` `f29bfd9` (2026-10-18). A 는 `auth-server`, `billing-server`, `notification-server`, B 는 `trpg-server` 를 이 시점에 읽었다
 - 서버의 API 가 **있는지**를 화면마다 적는다. "있음"은 지금 서버가 그 기능을 갖췄다는 뜻이고, 화면의 완성 여부와는 별개다.
 - 서비스 구조는 [서비스 구조 명세](../architecture/services.md), 제품 방향은 [플랫폼과 제품 방향](platform.md).
 
@@ -146,7 +146,7 @@
 
 ## 화면별 명세
 
-"화면마다 채울 칸"의 일곱 칸을 화면마다 채운다. 서버 쪽 값은 `game-server` 의 응답 모양에서 읽은 것이다. 코드로 확인하지 못한 것은 각 화면 끝의 "확인할 것"에 모았다.
+"화면마다 채울 칸"의 일곱 칸을 화면마다 채운다. 서버 쪽 값은 `trpg-server` 의 응답 모양에서 읽은 것이다. 코드로 확인하지 못한 것은 각 화면 끝의 "확인할 것"에 모았다.
 
 ### A1 첫 화면·탐색
 
@@ -701,7 +701,7 @@
 
 **확인할 것**
 
-- **알림을 넣는 서버는 게임, 결제, 게시판 셋이다.** 게임은 모델 은퇴 셋과 운영자의 제재 셋, 결제는 결제와 크레딧 넷, 게시판은 댓글 둘을 넣는다(아래 표). 원본은 `game-server/README.md` 와 `board-server/README.md` 의 "알림 보내기", `billing-server/README.md` 의 "정리 작업과 대사"(사용자의 알림함), 받는 쪽은 `notification-server/README.md` 의 "알림 넣기(서버끼리)"다.
+- **알림을 넣는 서버는 게임, 결제, 게시판 셋이다.** 게임은 모델 은퇴 셋과 운영자의 제재 셋, 결제는 결제와 크레딧 넷, 게시판은 댓글 둘을 넣는다(아래 표). 원본은 `trpg-server/README.md` 와 `board-server/README.md` 의 "알림 보내기", `billing-server/README.md` 의 "정리 작업과 대사"(사용자의 알림함), 받는 쪽은 `notification-server/README.md` 의 "알림 넣기(서버끼리)"다.
 - 지금 오는 `kind` 는 아래 열두 가지다. 화면이 `kind` 별로 문장을 만든다. 모르는 `kind` 는 일반 문구로 보인다. 화면은 `source` 와 `kind` 를 함께 보고 문장을 고른다. 표에 없는 짝은 일반 문구로 보인다.
 
   | `kind` | `source` | 받는 사람 | `payload` |

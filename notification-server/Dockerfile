@@ -1,7 +1,7 @@
 # notification-server/Dockerfile
 # 알림 서버의 이미지. 저장소 루트의 docker-compose.yml 이 app 프로필로 띄운다.
 #
-# 게임 서버의 것(game-server/Dockerfile)과 같은 모양이다. 단계 둘로 나눈다.
+# 게임 서버의 것(trpg-server/Dockerfile)과 같은 모양이다. 단계 둘로 나눈다.
 #   deps    : 의존성을 깔고 소스를 담는다. 의존성(uv.lock)이 그대로면 까는 일은 캐시를 쓴다
 #   runtime : 실행에 필요한 것만 담는다. root 가 아닌 사용자로 돈다
 #

@@ -293,7 +293,7 @@ func TestMaxStaleCountsFromTheLastSuccessfulFetch(t *testing.T) {
 }
 
 func TestTheCacheLimitsMatchTheGameServer(t *testing.T) {
-	// 게임 서버(game-server/app/auth/jwks.py)와 같은 값이다. 인증 서버의 키 교체 절차도 이 값에 기댄다
+	// 게임 서버(trpg-server/app/auth/jwks.py)와 같은 값이다. 인증 서버의 키 교체 절차도 이 값에 기댄다
 	if jwks.CacheDuration != 5*time.Minute || jwks.MaxStale != 30*time.Minute {
 		t.Errorf("기억 %v, 상한 %v. 게임 서버와 같은 5분, 30분이어야 한다", jwks.CacheDuration, jwks.MaxStale)
 	}

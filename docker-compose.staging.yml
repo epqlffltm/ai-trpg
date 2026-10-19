@@ -57,7 +57,7 @@ x-auth-staging: &auth-staging
   REFRESH_COOKIE_ALLOWED_ORIGINS: https://${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}
 
 # 임베딩 모델. 이 VM 의 Ollama 가 받아 두고(ollama-pull), 게임 서버가 쓴다. 로어 검색의 기준(LORE_MAX_DISTANCE)이 이 모델로 잰 값이다.
-# 바꾸면 game-server 의 scripts.eval_lore 로 기준을 다시 재고 색인을 다시 만든다
+# 바꾸면 trpg-server 의 scripts.eval_lore 로 기준을 다시 재고 색인을 다시 만든다
 x-embedding-model: &embedding-model bge-m3
 
 services:
@@ -72,14 +72,14 @@ services:
   auth-cron:
     environment: *auth-staging
 
-  game-migrate:
+  trpg-migrate:
     environment: *staging-debug-off
-  game-server:
+  trpg-server:
     environment:
       <<: *staging-debug-off
       # 로컬 모델(Ollama 창구)의 주소. 집 PC 의 사설망(Tailscale) 주소다: http://<집 PC 의 100.x 주소>:11434/v1
       # VM 에는 GPU 가 없다. 로컬의 기본값(host.docker.internal)은 이 VM 자신이라 쓸 수 없어 적지 않으면 뜨지 않는다.
-      # Z.ai 같은 외부 창구는 이 주소를 쓰지 않는다(game-server/.env 의 키와 창구 주소)
+      # Z.ai 같은 외부 창구는 이 주소를 쓰지 않는다(trpg-server/.env 의 키와 창구 주소)
       LLM_BASE_URL: ${GAME_LLM_BASE_URL:?루트 .env 에 GAME_LLM_BASE_URL 을 적는다(집 PC 의 Ollama, 사설망 주소)}
       # 임베딩은 이 VM 의 Ollama 다. 꼭 적는다. 비우면 LLM_BASE_URL(집 PC)로 간다
       EMBEDDER: llm

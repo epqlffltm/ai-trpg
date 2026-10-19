@@ -29,7 +29,7 @@ const (
 	releaseURL = holdsURL + "/release"
 	extendURL  = holdsURL + "/extend"
 	// gameSecret 은 테스트의 게임 서버와 결제 서버가 함께 아는 비밀이다.
-	gameSecret = "game-server-test-secret-of-32-chars"
+	gameSecret = "trpg-server-test-secret-of-32-chars"
 	holdRef    = "table:7f3c:round:3"
 	holdText   = `{"user_id":"` + testenv.UserID + `","reference":"` + holdRef + `","price_code":"narration.standard"}`
 	settleText = `{"reference":"` + holdRef + `"}`

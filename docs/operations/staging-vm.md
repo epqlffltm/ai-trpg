@@ -184,7 +184,7 @@ python3 tools/staging_env.py --domain <도메인> --acme-email <메일> \
 
 ```bash
 nano .env                       # BACKUP_AWS_ACCESS_KEY_ID, BACKUP_AWS_SECRET_ACCESS_KEY (1번의 접근 키)
-nano game-server/.env           # ZAI_API_KEY
+nano trpg-server/.env           # ZAI_API_KEY
 ```
 
 경보를 휴대폰 등으로 받으려면 루트 `.env` 에 받는 곳(Discord, Slack, Telegram, 메일 가운데 적은 것만)을 적는다. 적는 이름과 만드는 법은 README 의 "경보"에 있다. 적지 않으면 Grafana 의 Alerting 화면에서만 본다.
@@ -226,11 +226,11 @@ docker compose ps -a
 
 ## 9. 모델 목록과 운영자 계정
 
-**[VM] 모델 목록.** 목록이 비어 있으면 시나리오를 저장하지 못한다. 넣는 명령의 값은 [게임 서버의 README](../../game-server/README.md) 의 `scripts.models` 에 있다.
+**[VM] 모델 목록.** 목록이 비어 있으면 시나리오를 저장하지 못한다. 넣는 명령의 값은 [게임 서버의 README](../../trpg-server/README.md) 의 `scripts.models` 에 있다.
 
 ```bash
-docker compose exec game-server python -m scripts.models list
-docker compose exec game-server python -m scripts.models add glm-4-7-flash --provider zai --api-model-id glm-4.7-flash \
+docker compose exec trpg-server python -m scripts.models list
+docker compose exec trpg-server python -m scripts.models add glm-4-7-flash --provider zai --api-model-id glm-4.7-flash \
   --name "GLM-4.7-Flash" --vendor zai --grade basic --reasoning-style thinking_type
 ```
 

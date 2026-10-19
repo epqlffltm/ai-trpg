@@ -77,7 +77,7 @@ class DashboardScopeTests(unittest.TestCase):
         self.assertIn('선택자가 없다', problems[0])
 
     def test_another_servers_name_does_not_count(self):
-        problems = check({'billing-server': dashboard(panel('db_up{service="game-server"}'))})
+        problems = check({'billing-server': dashboard(panel('db_up{service="trpg-server"}'))})
 
         self.assertEqual(len(problems), 1)
 
