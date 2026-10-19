@@ -97,6 +97,12 @@ func run(args []string, out io.Writer) error {
 		return err
 	}
 	defer app.CloseMetrics(meters)
+	// 바퀴마다 span 을 민다(같은 주소가 있을 때). 그 안의 쿼리와 알림 서버를 부르는 것이 아래에 붙는다
+	tracer, err := app.StartTracing(ctx, os.LookupEnv, settings.Logging, metricsProcess)
+	if err != nil {
+		return err
+	}
+	defer app.CloseTracing(tracer)
 	if err := jobs.Measure(meters.Meter()); err != nil {
 		return err
 	}

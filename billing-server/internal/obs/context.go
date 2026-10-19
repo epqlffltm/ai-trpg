@@ -5,6 +5,8 @@ package obs
 import (
 	"context"
 	"net/http"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // idsKey 는 context 에 식별자를 넣는 열쇠다. 이 패키지만 쓰는 타입이라 다른 값과 겹치지 않는다.
@@ -30,12 +32,20 @@ func WithRequest(ctx context.Context, requestID string, trace Trace) context.Con
 
 // WithJob 은 작업의 식별자를 실은 context 를 돌려준다. 요청의 식별자는 떼고, 추적은 이어 간다.
 // 작업은 그것을 띄운 요청이 끝난 뒤에도 돈다. 요청 식별자를 달고 있으면 끝난 요청의 일로 보인다.
+// 이어 갈 추적이 없으면 작업의 span 의 추적을, 그것도 없으면 새 추적을 쓴다.
 func WithJob(ctx context.Context, jobID string) context.Context {
-	trace := CurrentIDs(ctx).Trace
-	if trace.ID == "" {
-		trace = NewTrace()
+	return context.WithValue(ctx, idsKey{}, IDs{JobID: jobID, Trace: jobTrace(ctx)})
+}
+
+// jobTrace 는 작업이 속할 추적이다. 요청의 것, 작업의 span 의 것, 새것의 차례로 고른다.
+func jobTrace(ctx context.Context) Trace {
+	if current := CurrentIDs(ctx).Trace; current.ID != "" {
+		return current
 	}
-	return context.WithValue(ctx, idsKey{}, IDs{JobID: jobID, Trace: trace})
+	if spanned, ok := TraceOf(ctx); ok {
+		return spanned
+	}
+	return NewTrace()
 }
 
 // CurrentIDs 는 context 에 실린 식별자들을 돌려준다. 없으면 빈 값이다.
@@ -48,13 +58,18 @@ func CurrentIDs(ctx context.Context) IDs {
 }
 
 // SetOutgoingHeaders 는 우리 서버끼리 부르는 요청에 추적을 이어 붙인다. 요청의 context 에 추적이 없으면 아무것도 하지 않는다.
+// span 이 걸려 있으면 그 span 을 부모로 붙인다. 받는 서버의 span 이 그 아래에 이어진다.
 //
 // 요청 식별자(X-Request-ID)는 넘기지 않는다. 받는 서버가 제 요청의 식별자를 따로 만든다. 둘은 trace_id 로 이어진다.
 // 우리 서버가 아닌 곳(결제 대행사)을 부르는 요청에는 쓰지 않는다. 내부의 흐름을 밖에 알릴 까닭이 없다.
 func SetOutgoingHeaders(request *http.Request) {
-	trace := CurrentIDs(request.Context()).Trace
-	if trace.ID == "" {
+	if spanContext := trace.SpanContextFromContext(request.Context()); spanContext.IsValid() {
+		request.Header.Set(TraceparentHeader, spanTraceparent(spanContext))
 		return
 	}
-	request.Header.Set(TraceparentHeader, FormatTraceparent(trace))
+	current := CurrentIDs(request.Context()).Trace
+	if current.ID == "" {
+		return
+	}
+	request.Header.Set(TraceparentHeader, FormatTraceparent(current))
 }

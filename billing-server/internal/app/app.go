@@ -11,9 +11,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
@@ -24,6 +26,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/tracing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
@@ -93,9 +96,11 @@ func NoProviders() order.Providers {
 
 // NewProvider 는 설정이 고른 웹의 결제 대행사를 만든다.
 // 설정이 값을 이미 검사했다. toss 가 아니면 가짜다.
+// 결제 대행사를 부르는 것도 span 으로 남긴다. 우리 서버가 아니라서 traceparent 는 붙이지 않는다.
 func NewProvider(settings config.Payment) payment.Provider {
 	if settings.Provider == config.ProviderToss {
-		return payment.NewToss(settings.TossSecretKey, payment.TossAPIURL, nil)
+		client := &http.Client{Transport: tracing.Transport(nil, false)}
+		return payment.NewToss(settings.TossSecretKey, payment.TossAPIURL, client)
 	}
 	return payment.Fake{}
 }
@@ -105,13 +110,18 @@ func NewProvider(settings config.Payment) payment.Provider {
 func NewMetrics(ctx context.Context, settings config.Metrics, logging config.Logging, process string) (*metrics.Provider, error) {
 	return metrics.NewProvider(ctx,
 		metrics.Exporting{Endpoint: settings.Endpoint, Interval: settings.Interval},
-		metrics.Identity{
-			Service:     obs.ServiceName,
-			Version:     logging.AppVersion,
-			Environment: logging.AppEnvironment,
-			Process:     process,
-		},
+		identityOf(logging, process),
 	)
+}
+
+// identityOf 는 메트릭과 추적에 붙는 출처다(서비스, 버전, 환경, 프로세스).
+func identityOf(logging config.Logging, process string) metrics.Identity {
+	return metrics.Identity{
+		Service:     obs.ServiceName,
+		Version:     logging.AppVersion,
+		Environment: logging.AppEnvironment,
+		Process:     process,
+	}
 }
 
 // StartMetrics 는 메트릭의 설정을 읽고(config.LoadMetrics) 미는 것을 만든다. 설정이 틀렸으면 프로세스가 뜨지 않는다.
@@ -129,6 +139,32 @@ func CloseMetrics(provider *metrics.Provider) {
 	if err := provider.Shutdown(); err != nil {
 		slog.Warn("남은 메트릭을 수집기에 보내지 못했습니다",
 			slog.String(obs.FieldOperation, "metrics.shutdown"),
+			slog.String(obs.FieldErrorType, fmt.Sprintf("%T", err)),
+		)
+	}
+}
+
+// StartTracing 은 추적(span)을 수집기에 미는 것을 만들고 프로세스 전체(otel 의 전역)에 둔다.
+// 보내는 곳은 메트릭과 같다(OTEL_EXPORTER_OTLP_ENDPOINT). 없으면 아무것도 하지 않는 것을 둔다(span 이 생기지 않는다).
+// 설정이 틀렸으면 프로세스가 뜨지 않는다. 끌 때 CloseTracing 을 부른다.
+func StartTracing(ctx context.Context, lookup config.Lookup, logging config.Logging, process string) (*tracing.Provider, error) {
+	settings, err := config.LoadMetrics(lookup)
+	if err != nil {
+		return nil, err
+	}
+	provider, err := tracing.NewProvider(ctx, metrics.Exporting{Endpoint: settings.Endpoint}, identityOf(logging, process))
+	if err != nil {
+		return nil, err
+	}
+	otel.SetTracerProvider(provider.TracerProvider())
+	return provider, nil
+}
+
+// CloseTracing 은 남은 span 을 보내고 끈다. 보내지 못해도 끄는 일은 멈추지 않는다. 까닭은 경고로 남긴다(CloseMetrics 와 같다).
+func CloseTracing(provider *tracing.Provider) {
+	if err := provider.Shutdown(); err != nil {
+		slog.Warn("남은 추적을 수집기에 보내지 못했습니다",
+			slog.String(obs.FieldOperation, "tracing.shutdown"),
 			slog.String(obs.FieldErrorType, fmt.Sprintf("%T", err)),
 		)
 	}
