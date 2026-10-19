@@ -187,7 +187,8 @@ async def test_conditions_are_saved_and_published(client: AsyncClient, me: dict[
 
     response = await publish(client, me, scenario)
 
-    assert scenario['quests'][0]['conditions'] == rule['conditions']
+    # 가져가는지(consume)를 적지 않았으면 가져가지 않는다
+    assert scenario['quests'][0]['conditions'] == [{**one, 'consume': False} for one in rule['conditions']]
     snapshot = read_snapshot(response.json()['snapshot'])
     (published,) = snapshot.quests
     assert published.match == QuestMatch.ANY

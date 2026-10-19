@@ -418,6 +418,8 @@ class QuestCondition(BaseModel):
     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것), hold_item 은 물건 항목,
     defeat_npc 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
     count 는 defeat_monster 와 hold_item 만 쓴다. 나머지는 1 로 둔다.
+    consume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).
+    일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.
     가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.
     """
 
@@ -426,12 +428,20 @@ class QuestCondition(BaseModel):
     kind: QuestConditionKind
     target: uuid.UUID
     count: int = Field(default=1, ge=1, le=QUEST_CONDITION_MAX_COUNT)
+    consume: bool = False
 
     @model_validator(mode='after')
     def count_only_when_counted(self) -> 'QuestCondition':
         """세지 않는 조건(장소에 닿기, 인물 쓰러뜨리기)에는 count 를 적지 않는다."""
         if self.count != 1 and self.kind not in COUNTED_CONDITIONS:
             raise ValueError('count 는 defeat_monster 와 hold_item 에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def consume_only_items(self) -> 'QuestCondition':
+        """가져가는 것은 물건뿐이다. 장소나 몬스터를 가져갈 수 없다."""
+        if self.consume and self.kind != QuestConditionKind.HOLD_ITEM:
+            raise ValueError('consume 은 hold_item 에만 적습니다.')
         return self
 
     @field_serializer('target')
@@ -488,6 +498,13 @@ class QuestRule(BaseModel):
         """다른 퀘스트를 보는 조건은 드러나는 조건에만 쓴다. 이루는 것은 이 퀘스트의 일로 정한다."""
         if any(condition.kind in QUEST_LINK_CONDITIONS for condition in self.conditions):
             raise ValueError('quest_succeeded 와 quest_failed 는 드러나는 조건(reveal)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def consume_only_on_success(self) -> 'QuestRule':
+        """드러날 때는 아무것도 가져가지 않는다. 가져가는 것은 이룰 때다."""
+        if any(condition.consume for condition in self.reveal):
+            raise ValueError('consume 은 이루는 조건(conditions)에만 적습니다.')
         return self
 
     @model_validator(mode='after')

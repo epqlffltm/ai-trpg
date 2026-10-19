@@ -8,14 +8,17 @@
   - reach_place: 그 장소에 죽지 않은 캐릭터가 서 있다.
   - defeat_monster: 그 몬스터가 count 마리 이상 쓰러지거나 죽었다. 테이블 전체의 마리를 센다(장면 밖도).
   - hold_item: 죽지 않은 캐릭터들이 그 물건을 모두 합쳐 count 개 이상 가졌다.
+    consume 이면 이룰 때 그만큼 가져간다(배달, app/rounds/quest_handover.py).
   - defeat_npc: 그 인물이 쓰러지거나 죽었다.
   - quest_succeeded, quest_failed: 그 퀘스트가 성공했다, 실패했다(퀘스트 잇기). 드러나는 조건에만 있다.
 조건이 여럿이면 퀘스트마다 정한 대로 모두(all) 또는 하나라도(any) 채워야 한다.
 
   - 드러나기(reveal): 숨긴 퀘스트의 드러나는 조건이 채워지면 진행 중으로 바꾼다. 기한은 그때부터 센다.
     조건이 없으면 드러나지 않는다. 이루어야만 드러난다.
-  - 성공(conditions): 숨김이나 진행 중인 퀘스트의 이루는 조건이 채워지면 성공으로 바꾸고 보상을 준다.
-    조건이 없으면 성공하지 않는다. 숨긴 채로 채웠으면 드러내며 바로 성공이다. 우연히 이룬 일도 이룬 것이다.
+  - 성공(conditions): 숨김이나 진행 중인 퀘스트의 이루는 조건이 채워지면 성공으로 바꾸고, 가져가는 물건을 뺀 뒤
+    보상을 준다. 조건이 없으면 성공하지 않는다. 숨긴 채로 채웠으면 드러내며 바로 성공이다. 우연히 이룬 일도 이룬 것이다.
+  - 성공은 판의 순서로 하나씩 보고 바로 바꾼다. 앞 퀘스트가 가져간 물건은 뒤 퀘스트가 셀 때 이미 없다.
+    같은 물건을 가져가는 퀘스트 둘을 한 번에 이루지 않는다. 앞 퀘스트의 보상은 뒤 퀘스트가 셀 때 이미 있다.
   - 드러내기를 먼저, 성공을 그다음에 본다. 그 라운드에 드러난 퀘스트도 그 라운드에 이룰 수 있다.
     퀘스트 잇기가 있으므로 바뀐 것이 없을 때까지 되풀이한다(settle_quests). 퀘스트마다 많아야 두 번 바뀌므로 끝난다.
   - 이번 라운드의 판정(이동, 타격, 물건, 휴식)을 모두 끝낸 뒤에 본다. 그 라운드에 한 일이 그 라운드에 반영된다.
@@ -38,6 +41,7 @@ from app.assets.models import QuestConditionKind, QuestMatch
 from app.assets.scenarios.snapshot import QuestConditionSnapshot, read_snapshot
 from app.events import recorder
 from app.events.models import EventType
+from app.rounds.quest_handover import hand_over
 from app.tables import items, quests, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, NpcStatus, QuestStatus, TableMember, TableMonster, TableNpc, TableQuest
@@ -125,17 +129,37 @@ def is_revealed(quest: CatalogQuest, table: GameTable, monsters: list[TableMonst
     return all_met(quest.reveal, quest.reveal_match, table, monsters, npcs)
 
 
-def succeed(table: GameTable, row: TableQuest, quest: CatalogQuest, things: dict[uuid.UUID, CatalogItem]) -> dict:
+def consumed_conditions(
+    quest: CatalogQuest, table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]
+) -> list[QuestConditionSnapshot]:
     """
-    이룬 퀘스트 하나를 성공으로 바꾸고 보상을 준다. 이벤트에 적을 모양을 돌려준다.
+    이룰 때 물건을 가져가는 조건들. consume 을 적은 물건 갖기 중 지금 채워진 것이다.
+
+    하나라도(any)로 이뤘으면 채운 조건의 물건만 가져간다. 채우지 않은 조건의 물건은 모자라서 가져갈 수 없다.
+    """
+    return [
+        condition for condition in quest.conditions if condition.consume and is_met(condition, table, monsters, npcs)
+    ]
+
+
+def succeed(
+    table: GameTable,
+    row: TableQuest,
+    quest: CatalogQuest,
+    things: dict[uuid.UUID, CatalogItem],
+    consumed: list[QuestConditionSnapshot],
+) -> dict:
+    """
+    이룬 퀘스트 하나를 성공으로 바꾸고, 가져가는 물건을 뺀 뒤 보상을 준다. 이벤트에 적을 모양을 돌려준다.
 
     숨긴 채로 이룬 것에는 기한이 끝나는 시각을 적지 않는다. 드러나는 순간 끝났다.
     """
     previous = row.status
     row.status = QuestStatus.SUCCEEDED
     row.changed_at = func.now()
+    handed = hand_over(living(table), consumed, things)
     rewards = quests.give_rewards(table, quest, things)
-    return describe(quest, previous, QuestStatus.SUCCEEDED, rewards, row.due_at, reason=CONDITIONS_MET)
+    return describe(quest, previous, QuestStatus.SUCCEEDED, rewards, row.due_at, reason=CONDITIONS_MET, consumed=handed)
 
 
 def show(table: GameTable, row: TableQuest, quest: CatalogQuest) -> dict:
@@ -182,10 +206,15 @@ def complete_quests(
     """
     이룬 퀘스트를 모두 성공으로 바꾼다. 판의 순서로, 이벤트에 적을 모양들을 돌려준다.
 
-    모두 본 뒤에 바꾼다. 같은 바퀴에 이룬 것은 서로의 조건에 영향을 주지 않는다(이루는 조건에는 잇기가 없다).
+    하나씩 보고 바로 바꾼다. 앞 퀘스트가 가져간 물건과 준 보상이 뒤 퀘스트의 조건에 반영된다.
     """
-    achieved = [row for row in open_quests(table) if is_achieved(catalog[row.entry_id], table, monsters, npcs)]
-    return [succeed(table, row, catalog[row.entry_id], things) for row in quests.in_catalog_order(achieved, catalog)]
+    changes = []
+    for row in quests.in_catalog_order(open_quests(table), catalog):
+        quest = catalog[row.entry_id]
+        if is_achieved(quest, table, monsters, npcs):
+            consumed = consumed_conditions(quest, table, monsters, npcs)
+            changes.append(succeed(table, row, quest, things, consumed))
+    return changes
 
 
 def settle_quests(table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]) -> list[dict]:

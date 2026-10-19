@@ -569,6 +569,30 @@ def upgrade_from_31(document: dict) -> dict:
     return upgraded
 
 
+def without_consume(condition: dict) -> dict:
+    """그때의 조건 하나. 이룰 때 아무것도 가져가지 않았다."""
+    return {**condition, 'consume': False}
+
+
+def upgrade_from_32(document: dict) -> dict:
+    """
+    형식 32 의 문서를 형식 33 으로 올린다. 그때는 물건 갖기를 이뤄도 물건이 그대로 남았다.
+
+    모든 조건을 가져가지 않는 것으로 읽는다. 그때와 같은 동작이다.
+    """
+    upgraded = dict(document)
+    upgraded['quests'] = [
+        {
+            **quest,
+            'conditions': [without_consume(condition) for condition in quest.get('conditions', [])],
+            'reveal': [without_consume(condition) for condition in quest.get('reveal', [])],
+        }
+        for quest in document.get('quests', [])
+    ]
+    upgraded['format'] = 33
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -603,4 +627,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     29: upgrade_from_29,
     30: upgrade_from_30,
     31: upgrade_from_31,
+    32: upgrade_from_32,
 }
