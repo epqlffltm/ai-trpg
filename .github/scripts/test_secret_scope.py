@@ -63,7 +63,7 @@ class SecretScopeTests(unittest.TestCase):
 
     def test_a_secret_from_another_server_does_not_count(self):
         # 게임 서버의 .env 에는 인증 서버의 BILLING_SECRET 이 없다. 같은 이름이라도 서버마다 따로 본다
-        services = {'game-migrate': service(server='game-server')}
+        services = {'trpg-migrate': service(server='trpg-server')}
 
         self.assertEqual(self.problems(services), [])
 

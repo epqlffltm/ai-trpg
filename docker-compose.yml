@@ -47,8 +47,8 @@ x-auth-image: &auth-image
   image: ai-trpg/auth-server:local
 
 x-game-image: &game-image
-  build: ./game-server
-  image: ai-trpg/game-server:local
+  build: ./trpg-server
+  image: ai-trpg/trpg-server:local
 
 x-board-image: &board-image
   build: ./board-server
@@ -93,17 +93,17 @@ x-auth-environment: &auth-environment
 x-auth-without-signing-key: &auth-without-signing-key
   JWT_PRIVATE_KEY_PATH: ""
 
-# 게임 서버의 프로세스가 함께 쓰는 설정. 비밀은 없다(비밀은 game-server/.env 에서 온다)
+# 게임 서버의 프로세스가 함께 쓰는 설정. 비밀은 없다(비밀은 trpg-server/.env 에서 온다)
 x-game-environment: &game-environment
   DATABASE_URL: postgresql+asyncpg://game:${GAME_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
-  # 모든 서버를 함께 띄우므로 결제 서버에 붙인다. game-server/.env 에 BILLING_SECRET 이 있어야 뜬다
+  # 모든 서버를 함께 띄우므로 결제 서버에 붙인다. trpg-server/.env 에 BILLING_SECRET 이 있어야 뜬다
   BILLING_URL: http://billing-server:8003
-  # 방장에게 보내는 알림도 알림 서버에 넣는다. game-server/.env 에 NOTIFICATION_SECRET 이 있어야 뜬다
+  # 방장에게 보내는 알림도 알림 서버에 넣는다. trpg-server/.env 에 NOTIFICATION_SECRET 이 있어야 뜬다
   # (알림 서버의 GAME_SERVER_SECRET 과 같은 값)
   NOTIFICATION_URL: http://notification-server:8004
   # 언어 모델(Ollama)은 컨테이너 밖, 이 PC 에서 돈다. 컨테이너 안의 127.0.0.1 은 컨테이너 자신이다.
-  # 다른 곳의 모델을 쓰면 루트 .env 의 GAME_LLM_BASE_URL 을 적는다. game-server/.env 의 LLM_BASE_URL 은 여기서 덮인다
+  # 다른 곳의 모델을 쓰면 루트 .env 의 GAME_LLM_BASE_URL 을 적는다. trpg-server/.env 의 LLM_BASE_URL 은 여기서 덮인다
   LLM_BASE_URL: ${GAME_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
   # 로비의 비밀번호와 채팅의 시도 횟수를 Redis 로 센다(#56). 인증 서버와 같은 Redis 다. 키의 앞부분이 달라 섞이지 않는다
   REDIS_URL: redis://redis:6379/0
@@ -368,12 +368,12 @@ services:
       auth-migrate:
         condition: service_completed_successfully
 
-  game-migrate:
+  trpg-migrate:
     <<: *game-image
     profiles: [app]
     logging: *logging
     command: ["alembic", "upgrade", "heads"]
-    env_file: ./game-server/.env
+    env_file: ./trpg-server/.env
     # 마이그레이션은 DB 만 쓴다. 모델의 키와 서버끼리의 비밀을 비운다.
     # 결제 서버와 알림 서버의 주소도 비운다. 주소가 있으면 설정이 그 비밀을 요구한다
     environment:
@@ -395,12 +395,12 @@ services:
       db:
         condition: service_healthy
 
-  game-server:
+  trpg-server:
     <<: *game-image
     profiles: [app]
     logging: *logging
     restart: unless-stopped
-    env_file: ./game-server/.env
+    env_file: ./trpg-server/.env
     environment: *game-environment
     extra_hosts: *host-gateway
     healthcheck:
@@ -410,7 +410,7 @@ services:
       retries: 6
       start_period: 10s
     depends_on:
-      game-migrate:
+      trpg-migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy

@@ -1,7 +1,7 @@
 # ai-trpg
 
 [![auth-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/auth-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/auth-server.yml)
-[![game-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/game-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/game-server.yml)
+[![trpg-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/trpg-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/trpg-server.yml)
 [![board-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/board-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/board-server.yml)
 [![billing-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/billing-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/billing-server.yml)
 [![notification-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/notification-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/notification-server.yml)
@@ -17,7 +17,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
 | 로그와 메트릭 모으기 (Grafana Alloy, Loki, Prometheus, Tempo, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것, 메트릭의 저장소(OTLP 로 받는 길), 결제 서버의 메트릭(HTTP, DB 풀, 작업, 주문, 결제 대행사, 알림, 원장, 중복 방지 키), PostgreSQL 과 Redis 의 메트릭, 대시보드, 경보, 추적의 저장소(Tempo), 결제 서버의 span(요청, 서버 사이의 호출, 쿼리, 작업)까지 완료(compose 의 프로필 `observability`, [아래](#로그와-메트릭-모으기)). 나머지 서버의 메트릭과 span 은 예정 |
 | 인증 서버 (Django) | [`auth-server/`](auth-server/README.md) | 회원가입(이메일 인증), 로그인(이메일 인증), 비밀번호 변경과 재설정, 메일 발송, 토큰 갱신, 로그아웃, JWKS, 시도 횟수 제한, 보안 이벤트 기록, 가입한 사용자의 환영 크레딧을 결제 서버에 맡기기, access 토큰에 닉네임 싣기까지 완료 |
-| 게임 서버 (FastAPI) | [`game-server/`](game-server/README.md) | 뼈대(서버 실행, DB, 인증 서버 토큰 검증, CI)와 자산 네 종류(세계관, 룰북, 시나리오, 로어북)의 만들기, 목록, 읽기, 고치기, 지우기와 시나리오 게시(판으로 굳히기, 스타팅 여러 개, 추천 인원과 프리젠), 공개와 소개 페이지, 공개 목록, 테이블 만들기와 참가(초대 코드, 로비와 비밀번호, 캐릭터, 방장), 라운드(선언 모으기, 가짜 서술자), 이벤트 기록, 채팅, 실시간 스트림(SSE, "입력 중" 표시), 룰북의 규칙 데이터(내장 템플릿 `srd5`), 시나리오의 캐릭터 시트와 캐릭터 방식, 테이블의 캐릭터 시트, 주사위와 판정(순수 함수), 선언에 붙이는 행동, 라운드를 닫을 때의 판정, 피해와 회복과 쓰러짐, 능력치를 직접 적는 캐릭터 방식, 점수제로 능력치를 사는 캐릭터 방식, 주사위로 능력치를 정하는 캐릭터 방식과 다시 굴리기, 죽음의 굴림과 캐릭터의 죽음, 죽은 뒤에 새 캐릭터 들이기, 캐릭터 보관함, 라운드의 서술 값 받기(결제 서버의 홀드), 시나리오의 추천 서술 모델과 테이블마다 고르는 서술 모델까지 완료 |
+| 게임 서버 (FastAPI) | [`trpg-server/`](trpg-server/README.md) | 뼈대(서버 실행, DB, 인증 서버 토큰 검증, CI)와 자산 네 종류(세계관, 룰북, 시나리오, 로어북)의 만들기, 목록, 읽기, 고치기, 지우기와 시나리오 게시(판으로 굳히기, 스타팅 여러 개, 추천 인원과 프리젠), 공개와 소개 페이지, 공개 목록, 테이블 만들기와 참가(초대 코드, 로비와 비밀번호, 캐릭터, 방장), 라운드(선언 모으기, 가짜 서술자), 이벤트 기록, 채팅, 실시간 스트림(SSE, "입력 중" 표시), 룰북의 규칙 데이터(내장 템플릿 `srd5`), 시나리오의 캐릭터 시트와 캐릭터 방식, 테이블의 캐릭터 시트, 주사위와 판정(순수 함수), 선언에 붙이는 행동, 라운드를 닫을 때의 판정, 피해와 회복과 쓰러짐, 능력치를 직접 적는 캐릭터 방식, 점수제로 능력치를 사는 캐릭터 방식, 주사위로 능력치를 정하는 캐릭터 방식과 다시 굴리기, 죽음의 굴림과 캐릭터의 죽음, 죽은 뒤에 새 캐릭터 들이기, 캐릭터 보관함, 라운드의 서술 값 받기(결제 서버의 홀드), 시나리오의 추천 서술 모델과 테이블마다 고르는 서술 모델까지 완료 |
 | 게시판 서버 (NestJS) | [`board-server/`](board-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, CI), 인증 서버 토큰 검증, 게시판 넷과 글(쓰기, 목록, 읽기, 고치기, 지우기, 운영자), 댓글과 답글, 글마다의 댓글 수, 글 고정(기한이 지나면 저절로 내려감), 글 검색, 쓰기 횟수 제한, 글과 댓글의 신고(운영자가 묶어 읽고 처리), 글쓴이의 닉네임 표시까지 완료 |
 | 결제 서버 (Go) | [`billing-server/`](billing-server/README.md) | 뼈대, 인증 서버 토큰 검증, 지갑과 원장(산 크레딧과 기한이 있는 무료 크레딧), 주문과 충전(가짜 결제 대행사, 중복 방지 키, 알림), 토스페이먼츠 테스트 모드(결제위젯, 승인, 조회, 취소, 알림), 7일 안의 청약철회(주문마다 산 크레딧의 묶음), 환영 크레딧(인증 서버가 맡긴다), 홀드·확정·반환과 서버 간 서명, 홀드와 주문의 만료·연장과 정리 작업, 하루 한 번의 대사, DB 의 가격표(모델별 서술 값)까지 완료. 게임 서버가 라운드의 서술 값을 홀드로 받는다. 실제 결제가 아니라 연습용이다 |
 | 알림 서버 (FastAPI) | [`notification-server/`](notification-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, 상태 확인, CI), 알림 넣기(서버끼리의 서명), 알림함(목록, 읽지 않은 수, 읽음), 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, 보관 기간(30일) 정리, 컨테이너(compose 의 프로필 `app`)까지 완료. 게임 서버가 서술 모델의 은퇴를 방장에게, 운영자의 제재를 당사자에게 넣고, 결제 서버의 정리 작업이 결제·청약철회·환영 크레딧·곧 사라질 무료 크레딧을, 게시판 서버가 댓글과 답글을 넣는다 |
@@ -30,7 +30,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 문서 | 내용 |
 | --- | --- |
 | [auth-server/README.md](auth-server/README.md) | 인증 서버의 실행, API, 설계 메모, 운영 메모, 자주 겪는 문제 |
-| [game-server/README.md](game-server/README.md) | 게임 서버의 실행, DB와 마이그레이션, API, 토큰 검증, 자산, 게시와 공개, 테이블, 라운드, 이벤트 기록, 채팅, 실시간 스트림, 설계 메모 |
+| [trpg-server/README.md](trpg-server/README.md) | 게임 서버의 실행, DB와 마이그레이션, API, 토큰 검증, 자산, 게시와 공개, 테이블, 라운드, 이벤트 기록, 채팅, 실시간 스트림, 설계 메모 |
 | [board-server/README.md](board-server/README.md) | 게시판 서버의 실행, DB와 마이그레이션, API(글, 댓글, 고정, 검색, 쓰기 횟수 제한, 신고, 글쓴이의 닉네임), 구조, 로그와 요청 식별자, 설계 메모 |
 | [notification-server/README.md](notification-server/README.md) | 알림 서버의 실행, 설정, 상태 확인, 알림함과 알림 넣기 API, 토큰 검증, 보관 기간, 로그, DB 와 마이그레이션, 테스트 |
 | [billing-server/README.md](billing-server/README.md) | 결제 서버의 실행, 설정, API, 주문과 결제, 홀드, 크레딧, 정리 작업과 대사, 마이그레이션, 토큰 검증, 테스트, CI, 구조, 설계 메모 |
@@ -92,7 +92,7 @@ docker compose ps
 ### 3. 서버
 
 - 인증 서버: [auth-server/README.md](auth-server/README.md#실행)
-- 게임 서버: [game-server/README.md](game-server/README.md#실행)
+- 게임 서버: [trpg-server/README.md](trpg-server/README.md#실행)
 - 게시판 서버: [board-server/README.md](board-server/README.md#실행)
 - 결제 서버: [billing-server/README.md](billing-server/README.md#실행)
 - 알림 서버: [notification-server/README.md](notification-server/README.md#실행)
@@ -119,19 +119,19 @@ cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
   운영에서는 관리자 화면의 쿠키가 Secure 다. 브라우저는 `localhost` 에서만 HTTP 로도 그 쿠키를 주고받으므로 이 주소로 연다.
 - 서버의 설정은 3번에서 만든 각 서버의 `.env` 를 그대로 쓴다. 그 안의 주소(`127.0.0.1`)만 compose 가
   컨테이너의 이름(`db`, `redis`, `auth-server` 등)으로 바꿔 넘긴다. DB 주소는 루트 `.env` 의 비밀번호로 만든다.
-- 모든 서버를 함께 띄우므로 게임 서버와 인증 서버는 결제 서버에 붙는다. `game-server/.env` 와 `auth-server/.env` 에 `BILLING_SECRET` 이 있어야 한다.
+- 모든 서버를 함께 띄우므로 게임 서버와 인증 서버는 결제 서버에 붙는다. `trpg-server/.env` 와 `auth-server/.env` 에 `BILLING_SECRET` 이 있어야 한다.
   없으면 게임 서버가 뜨지 않고, 인증 서버의 환영 크레딧 워커가 오류로 끝나 다시 뜨기를 되풀이한다.
 - 알림 서버는 `notification-server/.env` 가 있어야 뜬다. 알림을 넣는 서버의 서명 비밀(`*_SERVER_SECRET`)은 비어 있어도 뜨고, 그 서버의 알림만 401 로 받지 않는다.
-- 게임 서버는 방장에게 보내는 알림을 알림 서버에 넣는다. `game-server/.env` 에 `NOTIFICATION_SECRET` 이 있어야 뜨고,
+- 게임 서버는 방장에게 보내는 알림을 알림 서버에 넣는다. `trpg-server/.env` 에 `NOTIFICATION_SECRET` 이 있어야 뜨고,
   그 값이 `notification-server/.env` 의 `GAME_SERVER_SECRET` 과 같아야 알림이 들어간다(다르면 401 로 발송함에 쌓인다).
-  두 값을 맞추는 명령은 [게임 서버의 알림 보내기](game-server/README.md#알림-보내기)에 있다.
+  두 값을 맞추는 명령은 [게임 서버의 알림 보내기](trpg-server/README.md#알림-보내기)에 있다.
 - 결제 서버의 정리 작업도 사용자의 알림을 알림 서버에 넣는다. `billing-server/.env` 의 `NOTIFICATION_SECRET` 이
   `notification-server/.env` 의 `BILLING_SERVER_SECRET` 과 같아야 한다. 없으면 정리 작업은 뜨되 알릴 일을 적기만 한다.
   두 값을 맞추는 명령은 [결제 서버의 정리 작업과 대사](billing-server/README.md#정리-작업과-대사)의 "사용자의 알림함"에 있다.
 - 게시판 서버도 댓글의 알림을 알림 서버에 넣는다. `board-server/.env` 에 `NOTIFICATION_SECRET` 이 있어야 뜨고,
   그 값이 `notification-server/.env` 의 `BOARD_SERVER_SECRET` 과 같아야 한다. 명령은 [게시판 서버의 알림 보내기](board-server/README.md#알림-보내기)에 있다.
 - 게임 서버의 언어 모델은 컨테이너 밖, 이 PC 의 Ollama(`host.docker.internal:11434`)로 간다.
-  다른 곳의 모델을 쓰면 루트 `.env` 의 `GAME_LLM_BASE_URL` 에 적는다. `game-server/.env` 의 `LLM_BASE_URL` 은 덮인다.
+  다른 곳의 모델을 쓰면 루트 `.env` 의 `GAME_LLM_BASE_URL` 에 적는다. `trpg-server/.env` 의 `LLM_BASE_URL` 은 덮인다.
 - 인증 서버의 JWT 개인키는 `auth-server/keys/` 를 읽기 전용으로 붙인다. 이미지에는 넣지 않는다.
   토큰에 서명하는 `auth-server` 에만 붙인다. 인증의 워커와 마이그레이션은 키 없이 뜬다(`JWT_PRIVATE_KEY_PATH` 를 비운다).
   **리눅스에서는** 키 파일의 주인이 PC 의 사용자라 컨테이너의 사용자(번호 10001)가 읽지 못한다.
@@ -203,7 +203,7 @@ Explore 에서 데이터 소스 Loki(로그), Prometheus(메트릭), Tempo(추�
 끌 때도 두 프로필을 붙인다. `docker compose --profile app --profile observability down`
 
 ```
-{service="game-server", level="error"}                 # 게임 서버의 오류
+{service="trpg-server", level="error"}                 # 게임 서버의 오류
 {container="billing-sweeper"}                           # 결제 서버의 정리 작업(컨테이너 이름)
 {service="auth-server"} | trace_id="4bf92f35..."        # 한 요청이나 작업의 줄
 {container="db"}                                        # PostgreSQL 의 줄(JSON 이 아니다)
@@ -352,7 +352,7 @@ IP 를 쓰는 것은 인증 서버(시도 횟수)와 프록시(요청 수 제한
 
 **DB 인스턴스는 하나, 계정과 스키마는 서버마다 따로 쓴다.** 인증 서버는 `auth` 계정으로
 `auth` 스키마만, 게임 서버는 `game` 계정으로 `game` 스키마만, 결제 서버는 `billing` 계정으로 `billing` 스키마만, 게시판 서버는 `board` 계정으로 `board` 스키마만, 알림 서버는 `notification` 계정으로 `notification` 스키마만 쓴다. 다른 서버의 테이블을 직접 읽는 코드는 DB 권한에서 거부된다.
-게임 서버의 테스트(`game-server/tests/test_schema_isolation.py`)가 이 경계를 확인한다. 새 서버를 더하면 그 서버의 테스트에도 자기 계정으로 같은 검사를 둔다.
+게임 서버의 테스트(`trpg-server/tests/test_schema_isolation.py`)가 이 경계를 확인한다. 새 서버를 더하면 그 서버의 테스트에도 자기 계정으로 같은 검사를 둔다.
 서버 간 데이터 교환은 API로만 한다.
 
 **로그인은 인증 서버만 한다.** 다른 서버는 인증 서버의 공개키로 토큰을 검증만 한다.
@@ -430,7 +430,7 @@ docker compose up -d
 .github/workflows/        서버별 CI 와 PR 의 관문(ci.yml)
 .github/scripts/          관문이 검사할 서버를 고르는 스크립트와 그 테스트, 컨테이너로 띄워 보는 스크립트, 설정 검사(비밀, 열린 포트, 로그 상한)
 auth-server/              Django 인증 서버 (독립된 uv 프로젝트)
-game-server/              FastAPI 게임 서버 (독립된 uv 프로젝트)
+trpg-server/              FastAPI 게임 서버 (독립된 uv 프로젝트)
 board-server/             NestJS 게시판 서버 (독립된 npm 프로젝트)
 billing-server/           Go 결제 서버 (독립된 Go 모듈). 연습용이고 실제 결제가 아니다
 notification-server/      FastAPI 알림 서버 (독립된 uv 프로젝트)

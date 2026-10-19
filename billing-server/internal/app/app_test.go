@@ -45,7 +45,7 @@ func TestNewServicesFollowsTheRules(t *testing.T) {
 		t.Fatalf("무료 크레딧을 주지 못했다: %v", err)
 	}
 
-	placed, _, err := services.Holds.Place(ctx, "game-server", user, "table:"+uuid.NewString()+":round:1", pricing.NarrationStandard)
+	placed, _, err := services.Holds.Place(ctx, "trpg-server", user, "table:"+uuid.NewString()+":round:1", pricing.NarrationStandard)
 	if err != nil {
 		t.Fatalf("홀드를 걸지 못했다: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestASweepRoundNeverCallsTheProvider(t *testing.T) {
 	if _, err := services.Wallet.GrantFreeOnce(ctx, uuid.New(), 30, "sweep-test"); err != nil {
 		t.Fatalf("무료 크레딧을 주지 못했다: %v", err)
 	}
-	if _, _, err := services.Holds.Place(ctx, "game-server", user, "table:"+uuid.NewString()+":round:1", pricing.NarrationStandard); err != nil {
+	if _, _, err := services.Holds.Place(ctx, "trpg-server", user, "table:"+uuid.NewString()+":round:1", pricing.NarrationStandard); err != nil {
 		t.Fatalf("홀드를 걸지 못했다: %v", err)
 	}
 	created, _, err := services.Orders.Create(ctx, user, "credits-1000", "key-"+uuid.NewString())

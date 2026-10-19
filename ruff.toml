@@ -1,5 +1,5 @@
 # ruff.toml
-# 파이썬 서버들(auth-server, game-server, notification-server)이 함께 쓰는 ruff 규칙이다.
+# 파이썬 서버들(auth-server, trpg-server, notification-server)이 함께 쓰는 ruff 규칙이다.
 #
 # 서버마다 pyproject.toml 의 [tool.ruff] 에서 이 파일을 이어받는다(extend). 규칙을 바꿀 때는 여기 한 곳만 고친다.
 # 서버마다 다른 것(자기 패키지의 이름, 빼는 폴더)만 서버의 설정에 적는다.

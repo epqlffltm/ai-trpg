@@ -11,7 +11,7 @@
 한 번에 몇십만 줄을 지우면 그동안 그 줄들을 잠그고 트랜잭션이 길어진다. 밀린 것은 다음 바퀴에 마저 지운다.
 서버가 뜨자마자 첫 바퀴가 돈다. 서버가 여럿이어도 된다. 다른 서버가 잠근 줄은 건너뛴다.
 
-게임 서버의 AI 호출 기록 정리(game-server/app/ai/retention.py)와 같은 모양이다.
+게임 서버의 AI 호출 기록 정리(trpg-server/app/ai/retention.py)와 같은 모양이다.
 바퀴마다 job_id 를 걸고, operation 은 notification.prune 이다. 지운 것이 없으면 debug, 있으면 info 로 한 줄을 남긴다.
 """
 

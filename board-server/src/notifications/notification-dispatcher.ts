@@ -13,7 +13,7 @@
  *
  * 서버가 여럿이면 모두 같은 일을 한다. 같은 알림을 둘이 보내도 알림 서버는 열쇠로 한 줄만 둔다.
  * 결과는 "아직 기다리는 줄일 때만" 적는다. 한 서버가 지운 줄을 다른 서버가 되살리지 않는다.
- * 게임 서버의 것(game-server/app/notifications/dispatcher.py)과 같은 규칙이다.
+ * 게임 서버의 것(trpg-server/app/notifications/dispatcher.py)과 같은 규칙이다.
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
