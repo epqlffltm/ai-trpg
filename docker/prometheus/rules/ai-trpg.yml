@@ -50,13 +50,13 @@ groups:
           description: 서버, DB, Redis 의 메트릭이 모두 끊겼을 수 있다. docker compose ps alloy 와 Alloy 의 로그를 본다
 
       - alert: ObservabilityComponentDown
-        expr: up{job=~"loki|grafana|alertmanager"} == 0
+        expr: up{job=~"loki|tempo|grafana|alertmanager"} == 0
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: '{{ $labels.job }} 에 5분 동안 닿지 않는다'
-          description: 로그 모으기(loki), 화면(grafana), 경보 보내기(alertmanager) 가운데 하나다. 그 컨테이너의 로그를 본다
+          description: 로그 모으기(loki), 추적 모으기(tempo), 화면(grafana), 경보 보내기(alertmanager) 가운데 하나다. 그 컨테이너의 로그를 본다
 
   # DB(PostgreSQL)와 Redis. Alloy 안의 exporter 가 읽는다(docker/alloy/metrics.alloy)
   - name: datastores

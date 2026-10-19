@@ -2,7 +2,8 @@
 # Grafana 가 뜰 때 Loki 를 데이터 소스로 붙인다(#25). docker-compose.yml 의 grafana(프로필 observability)가 읽는다.
 #
 # 화면에서 고치지 못하게 한다(editable: false). 바꿀 때는 이 파일을 고치고 Grafana 를 다시 띄운다.
-# uid 를 정해 둔다. 대시보드와 stack-smoke.sh 가 이 이름(loki)으로 찾는다
+# uid 를 정해 둔다. 대시보드와 stack-smoke.sh 가 이 이름(loki)으로 찾는다.
+# 줄의 trace_id 에서 그 추적(Tempo, uid tempo)으로 건너간다(derivedFields). 이 파일의 $$ 는 $ 를 적은 것이다
 apiVersion: 1
 
 datasources:
@@ -17,3 +18,11 @@ datasources:
     jsonData:
       # 한 번에 받아 오는 줄의 수. Grafana 의 기본(1000)과 같다
       maxLines: 1000
+      # 줄의 값(structured metadata) trace_id 를 추적의 링크로 바꾼다
+      derivedFields:
+        - name: trace_id
+          matcherType: label
+          matcherRegex: trace_id
+          datasourceUid: tempo
+          url: '$${__value.raw}'
+          urlDisplayLabel: 추적 보기
