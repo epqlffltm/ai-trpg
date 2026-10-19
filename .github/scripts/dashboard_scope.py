@@ -5,10 +5,10 @@ Grafana 의 대시보드(docker/grafana/dashboards/*.json)가 정해 둔 규칙�
 
 규칙(docs/observability.md 의 "대시보드"):
   - 서버마다 파일 하나다. 파일 이름이 서비스 이름이고, 대시보드의 uid 도 그 이름이다
-    (billing-server.json, uid billing-server)
+    (billing-server.json, uid billing-server). Alloy 가 긁는 인프라(postgres, redis)는 그 job 의 이름이다
   - 데이터 소스는 uid 로 고정해 부른다(prometheus, loki). 저장소를 Mimir 로 바꿀 때 데이터 소스의 주소만 바뀐다.
     화면에서 "Export for sharing externally" 로 내보낸 파일의 ${DS_PROMETHEUS} 같은 자리와 __inputs 는 받지 않는다
-  - Prometheus 의 쿼리는 모든 선택자({…})에 그 서버의 service 를 건다.
+  - Prometheus 의 쿼리는 모든 선택자({…})에 그 서버의 service 를 건다(인프라는 job).
     다섯 서버가 같은 이름(http_server_requests_total)을 쓰므로, 빠뜨리면 다른 서버의 요청까지 섞여 보인다
   - 패널의 id 는 대시보드 안에서 겹치지 않는다
 
@@ -46,6 +46,9 @@ MACROS = {
 
 # 쿼리 안의 label 선택자. 대시보드의 이름표({{route}})는 legendFormat 에만 있고 쿼리에는 없다
 SELECTOR = re.compile(r'\{[^{}]*\}')
+
+# 대시보드가 누구의 것인지 가르는 label. 서버가 민 메트릭은 service, Alloy 가 긁는 인프라는 job 이다
+OWNER_LABELS = ('service', 'job')
 
 # 쿼리 하나에 기다리는 시간(초)
 QUERY_TIMEOUT = 10
@@ -133,16 +136,22 @@ def prometheus_queries(name: str, panels: list[dict]) -> list[Query]:
     return queries
 
 
+def owner_matchers(dashboard: str) -> list[str]:
+    """그 대시보드의 것이라고 가르는 선택자의 조각들(service="billing-server", job="billing-server")."""
+    return [f'{label}="{dashboard}"' for label in OWNER_LABELS]
+
+
 def check_service_filter(query: Query) -> list[str]:
-    """쿼리의 모든 선택자에 그 서버의 service 가 걸렸는지 본다."""
-    wanted = f'service="{query.dashboard}"'
+    """쿼리의 모든 선택자에 그 서버의 service(인프라는 job)가 걸렸는지 본다."""
+    wanted = owner_matchers(query.dashboard)
+    shown = ' 나 '.join(wanted)
     selectors = SELECTOR.findall(query.expr)
     if not selectors:
-        return [f'{query.dashboard}: 패널 {query.panel!r} 의 쿼리에 선택자가 없다. {wanted} 를 건다: {query.expr}']
+        return [f'{query.dashboard}: 패널 {query.panel!r} 의 쿼리에 선택자가 없다. {shown} 를 건다: {query.expr}']
     return [
-        f'{query.dashboard}: 패널 {query.panel!r} 의 선택자 {selector} 에 {wanted} 가 없다'
+        f'{query.dashboard}: 패널 {query.panel!r} 의 선택자 {selector} 에 {shown} 가 없다'
         for selector in selectors
-        if wanted not in selector
+        if not any(matcher in selector for matcher in wanted)
     ]
 
 

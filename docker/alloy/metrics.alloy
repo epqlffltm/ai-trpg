@@ -5,6 +5,7 @@
 //   서버(OTLP) ─▶ 받기(otelcol.receiver.otlp) ─▶ 묶기(otelcol.processor.batch) ─▶ 이름 바꾸기(otelcol.exporter.prometheus)
 //              ─▶ service 붙이기(prometheus.relabel) ─▶ 보내기(prometheus.remote_write)
 //   Alloy, Loki, Prometheus, Grafana 자신 ─▶ 긁기(prometheus.scrape) ─▶ 보내기(prometheus.remote_write)
+//   PostgreSQL, Redis ─▶ Alloy 안의 exporter ─▶ 이름표 붙이기(discovery.relabel) ─▶ 긁기 ─▶ 보내기
 // Prometheus 에 쓰는 것은 여기의 prometheus.remote_write 하나다. 저장소를 Mimir 로 바꾸면 그 주소만 바뀐다.
 // 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "2. 메트릭"에 있다.
 
@@ -56,6 +57,65 @@ prometheus.scrape "infra" {
 		{"__address__" = "prometheus:9090", "job" = "prometheus"},
 		{"__address__" = "grafana:3000", "job" = "grafana"},
 	]
+	scrape_interval = "15s"
+	forward_to      = [prometheus.remote_write.local.receiver]
+}
+
+// DB(PostgreSQL)의 메트릭. Alloy 안의 exporter(postgres_exporter)가 읽는다. 컨테이너를 늘리지 않는다.
+// 통계만 읽는 계정(monitor, docker/postgres/init/07-monitor-role.sql)으로 붙는다. 서버들의 표는 읽지 못한다.
+// DB 와 Redis, Alloy 만 있는 망(datastore-metrics)으로 닿는다. Alloy 는 서버들의 망(default)에 없다.
+// 비밀번호는 루트 .env 의 MONITOR_DB_PASSWORD 다. 주소에 그대로 들어가므로 영문과 숫자로만 짓는다
+prometheus.exporter.postgres "db" {
+	data_source_names = [string.format(
+		"postgresql://monitor:%s@db:5432/%s?sslmode=disable",
+		sys.env("MONITOR_DB_PASSWORD"),
+		sys.env("MONITOR_DB_NAME"),
+	)]
+
+	// 다른 DB 를 찾아 붙지 않는다. 서버들은 한 DB(trpg)의 스키마를 나눠 쓴다
+	autodiscovery {
+		enabled = false
+	}
+}
+
+// Redis 의 메트릭. 비밀번호가 없다(compose 의 redis). 같은 망(datastore-metrics)으로 닿는다
+prometheus.exporter.redis "redis" {
+	redis_addr = "redis:6379"
+}
+
+// exporter 가 정한 이름표(job="integrations/…", instance=주소)를 수집 쪽과 같은 모양으로 바꾼다.
+// job 으로 가른다(postgres, redis). service 는 붙이지 않는다. service 는 서버의 메트릭에만 붙는다
+discovery.relabel "db" {
+	targets = prometheus.exporter.postgres.db.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "postgres"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "db"
+	}
+}
+
+discovery.relabel "redis" {
+	targets = prometheus.exporter.redis.redis.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "redis"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "redis"
+	}
+}
+
+// DB 와 Redis 를 15초마다 긁는다. 수집 쪽 자신(infra)과 같은 간격이다
+prometheus.scrape "datastores" {
+	targets         = array.concat(discovery.relabel.db.output, discovery.relabel.redis.output)
 	scrape_interval = "15s"
 	forward_to      = [prometheus.remote_write.local.receiver]
 }
