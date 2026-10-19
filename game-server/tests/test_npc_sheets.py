@@ -110,7 +110,8 @@ async def published(client: AsyncClient, headers: dict[str, str], scenario: dict
 
 
 def npc(entry: dict, sheet: dict) -> dict:
-    return {'entry_id': entry['id'], 'sheet': sheet}
+    """인물의 NPC 시트. 태도를 적지 않으면 중립으로 읽혀 돌아온다."""
+    return {'entry_id': entry['id'], 'sheet': sheet, 'attitude': 'neutral'}
 
 
 # --- 시나리오: 적고 읽고 고친다 ---

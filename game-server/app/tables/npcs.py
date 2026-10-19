@@ -7,7 +7,7 @@ DB 를 모른다. 이미 읽어 온 판과 상태를 받아 객체를 만들거�
 
 만들기. 게임을 시작할 때 판의 인물 항목마다 상태를 하나씩 만든다(app/tables/service.py). 숫자는 판에서 온다.
 그 인물의 NPC 시트가 있으면 그것, 없으면 기본 NPC 시트다(app/assets/scenarios/snapshot.py 의 npc_sheet_of).
-HP 는 가득 찬 채로, 살아 있는 채로 시작한다.
+HP 는 가득 찬 채로, 살아 있는 채로, 판에 적은 태도로(없으면 중립) 시작한다.
 
 바꾸기. NPC 의 HP 와 생사를 바꾸는 함수는 change_npc 와 kill 둘이다.
 판정의 결과로 라운드가 부른다(app/rounds/checks.py, app/rounds/treatments.py).
@@ -20,7 +20,8 @@ HP 는 가득 찬 채로, 살아 있는 채로 시작한다.
 
 import uuid
 
-from app.assets.scenarios.snapshot import Snapshot, npc_sheet_of, person_entries
+from app.assets.models import NpcAttitude
+from app.assets.scenarios.snapshot import Snapshot, npc_attitude_of, npc_sheet_of, person_entries
 from app.engine import health
 from app.engine.dice import Dice
 from app.engine.health import Change, ChangeKind
@@ -29,8 +30,10 @@ from app.engine.sheet import Sheet
 from app.tables.models import NpcStatus, TableNpc
 
 
-def new_npc(table_id: uuid.UUID, entry_id: uuid.UUID, source: Sheet) -> TableNpc:
-    """인물 하나의 상태를 만든다. 시트의 숫자를 복사하고, HP 를 가득 채우고, 살아 있는 것으로 둔다."""
+def new_npc(
+    table_id: uuid.UUID, entry_id: uuid.UUID, source: Sheet, attitude: NpcAttitude = NpcAttitude.NEUTRAL
+) -> TableNpc:
+    """인물 하나의 상태를 만든다. 시트의 숫자를 복사하고, HP 를 가득 채우고, 살아 있는 것으로, 그 태도로 둔다."""
     return TableNpc(
         table_id=table_id,
         entry_id=entry_id,
@@ -38,12 +41,16 @@ def new_npc(table_id: uuid.UUID, entry_id: uuid.UUID, source: Sheet) -> TableNpc
         max_hp=source.max_hp,
         hp=source.max_hp,
         status=NpcStatus.ALIVE,
+        attitude=attitude,
     )
 
 
 def make_npcs(table_id: uuid.UUID, snapshot: Snapshot) -> list[TableNpc]:
     """이 테이블의 인물마다 상태를 만든다. 판의 인물 항목 순서다. 인물이 없으면 빈 목록이다."""
-    return [new_npc(table_id, entry.id, npc_sheet_of(snapshot, entry.id)) for entry in person_entries(snapshot)]
+    return [
+        new_npc(table_id, entry.id, npc_sheet_of(snapshot, entry.id), npc_attitude_of(snapshot, entry.id))
+        for entry in person_entries(snapshot)
+    ]
 
 
 def is_dead(npc: TableNpc) -> bool:

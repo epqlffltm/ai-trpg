@@ -29,6 +29,7 @@ from app.assets.models import (
     LoreEntry,
     LoreKind,
     NarrationStyle,
+    NpcAttitude,
     PlaceItemVisibility,
     QuestConditionKind,
     QuestMatch,
@@ -86,7 +87,8 @@ from app.engine.sheet import Sheet
 #      드롭(drops)은 없어졌다. 드롭은 지닌 것에서만 나온다
 #  35: 아이템 규칙에 물건의 등급(items[].rarity: normal, rare, unique, epic, legendary)이 있다
 #  36: 규칙에 훔치기(steal)가, 몬스터에 둔한지(dull)가 있다
-SNAPSHOT_FORMAT = 36
+#  37: 인물의 NPC 시트에 처음 태도(npc_sheets[].attitude: friendly, neutral, hostile)가 있다
+SNAPSHOT_FORMAT = 37
 
 
 class EntrySnapshot(BaseModel):
@@ -241,10 +243,12 @@ class PregenSnapshot(BaseModel):
 
 
 class NpcSheetSnapshot(BaseModel):
-    """NPC 시트 하나. 판 안의 로어북 인물 항목 하나(entry_id)의 숫자다."""
+    """NPC 시트 하나. 판 안의 로어북 인물 항목 하나(entry_id)의 숫자와 처음 태도다."""
 
     entry_id: uuid.UUID
     sheet: Sheet
+    # 처음 태도. 형식 37 보다 옛 판의 인물은 중립이다
+    attitude: NpcAttitude = NpcAttitude.NEUTRAL
 
 
 class AttackSnapshot(BaseModel):
@@ -560,6 +564,12 @@ def npc_sheet_of(snapshot: Snapshot, entry_id: uuid.UUID) -> Sheet:
     """
     own = next((npc_sheet.sheet for npc_sheet in snapshot.npc_sheets if npc_sheet.entry_id == entry_id), None)
     return own or snapshot.default_npc_sheet
+
+
+def npc_attitude_of(snapshot: Snapshot, entry_id: uuid.UUID) -> NpcAttitude:
+    """인물 항목 하나의 처음 태도. 그 인물의 NPC 시트가 있으면 그 태도, 없으면 중립이다."""
+    own = next((npc_sheet for npc_sheet in snapshot.npc_sheets if npc_sheet.entry_id == entry_id), None)
+    return own.attitude if own else NpcAttitude.NEUTRAL
 
 
 def snapshot_entry(entry: LoreEntry) -> EntrySnapshot:
