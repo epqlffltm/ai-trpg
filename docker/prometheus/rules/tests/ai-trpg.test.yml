@@ -82,7 +82,7 @@ tests:
               instance: loki:3100
             exp_annotations:
               summary: loki 에 5분 동안 닿지 않는다
-              description: 로그 모으기(loki), 화면(grafana), 경보 보내기(alertmanager) 가운데 하나다. 그 컨테이너의 로그를 본다
+              description: 로그 모으기(loki), 추적 모으기(tempo), 화면(grafana), 경보 보내기(alertmanager) 가운데 하나다. 그 컨테이너의 로그를 본다
 
   # DB 가 1분 넘게 닿지 않으면 울린다. 잠깐(1분 안) 끊긴 것은 울리지 않는다
   - interval: 30s
