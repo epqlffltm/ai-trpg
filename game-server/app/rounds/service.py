@@ -178,13 +178,18 @@ async def get_scene_cast(
     """
     자기가 앉아 있는 테이블의 가장 최근 라운드와, 그 장면을 돌려준다. 행동으로 겨눌 수 있는 NPC 와 몬스터들이다.
 
-    판의 물건들(이름)도 돌려준다. 몬스터가 지닌 것의 이름이다. 장면에 몬스터가 없으면 판을 읽지 않고 비운다.
+    판의 물건들(이름)도 돌려준다. 몬스터와 인물이 지닌 것의 이름이다. 지닐 수 있는 것이 없으면 판을 읽지 않고 비운다.
     앉지 않았으면 TableNotFoundError, 아직 시작하지 않았으면 RoundConflictError.
     """
     table, round_ = await get_current_round(session, user_id, table_id)
     scene = await load_scene(session, table, round_)
-    things = items.catalog(read_snapshot(table.content)) if scene.monsters else {}
+    things = items.catalog(read_snapshot(table.content)) if may_carry(scene) else {}
     return round_, scene, things
+
+
+def may_carry(scene: Scene) -> bool:
+    """장면에 무언가 지닐 수 있는 것이 있는가. 몬스터가 있거나, NPC 시트를 적은 인물이 있다."""
+    return bool(scene.monsters) or any(member.definition is not None for member in scene.cast)
 
 
 async def get_round(

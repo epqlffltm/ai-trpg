@@ -23,7 +23,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from app.assets.scenarios.snapshot import EntrySnapshot, Snapshot, person_entries
+from app.assets.scenarios.snapshot import EntrySnapshot, NpcSheetSnapshot, Snapshot, own_npc_sheet, person_entries
 from app.lore.retrieval import mentions, scene_label
 from app.tables.models import NpcStatus, TableMonster, TableNpc
 
@@ -35,11 +35,16 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class CastMember:
-    """이번 장면의 인물 하나. 장면에서 부르는 이름과 이 테이블에서의 상태다."""
+    """
+    이번 장면의 인물 하나. 장면에서 부르는 이름과 이 테이블에서의 상태와 판에 적은 NPC 시트다.
+
+    definition 은 지닌 물건을 셀 때 쓴다(app/tables/npc_items.py). 시트를 적지 않은 인물은 None 이다.
+    """
 
     entry_id: uuid.UUID
     name: str
     npc: TableNpc
+    definition: NpcSheetSnapshot | None = None
 
 
 # 서술자에게 주는 NPC 의 몸 상태. HP 의 숫자를 주지 않는다. 숫자를 주면 모델이 그것을 장면에 쓴다
@@ -80,7 +85,9 @@ def cast_of(snapshot: Snapshot, scene: str, npcs: Iterable[TableNpc]) -> list[Ca
     """이 장면에 나온 인물들. 판의 인물 항목 순서다. 상태가 없는 인물은 뺀다."""
     states = {npc.entry_id: npc for npc in npcs}
     return [
-        CastMember(entry.id, label_of(entry, scene, states[entry.id]), states[entry.id])
+        CastMember(
+            entry.id, label_of(entry, scene, states[entry.id]), states[entry.id], own_npc_sheet(snapshot, entry.id)
+        )
         for entry in person_entries(snapshot)
         if entry.id in states and mentions(entry, scene)
     ]

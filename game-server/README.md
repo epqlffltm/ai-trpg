@@ -465,7 +465,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 | `pregens` (프리젠, 8개) | 제작자가 미리 만들어 둔 캐릭터. 하나하나가 `{"name", "description", "sheet", "items"}` 이다(이름 50자, 설명 1,000자). 플레이어가 테이블에 앉을 때 골라서 자기 캐릭터로 가져갈 수 있다. 같은 이름은 거부한다. `items` 는 그 프리젠을 고른 사람이 더 받는 소지품이다(시작 소지품과 모양이 같다) |
 | `character_modes` (캐릭터 방식) | 테이블에 앉는 사람이 캐릭터를 얻는 방식 중 허용하는 것. 아래 표의 값들이다. 하나는 있어야 한다. 적지 않으면 `pregen` 과 `custom` 이다. 응답에는 늘 같은 순서로 싣는다 |
 | `default_sheet` (기본 시트) | `custom` 으로 만든 캐릭터가 받는 시트. 초안일 때는 비워 둘 수 있다 |
-| `npc_sheets` (NPC 시트, 100개) | 붙인 로어북의 인물 항목에 주는 숫자와 처음 태도. 하나하나가 `{"entry_id", "sheet", "attitude"}` 이다. `attitude` 는 `friendly`(우호), `neutral`(중립, 기본), `hostile`(적대)이다. 시트가 없는 인물은 중립이다(#474). 시트는 비워 둘 수 없다. 같은 항목이 두 번 있으면 거부한다 |
+| `npc_sheets` (NPC 시트, 100개) | 붙인 로어북의 인물 항목에 주는 숫자와 처음 태도, 지닌 물건. 하나하나가 `{"entry_id", "sheet", "attitude", "equipment", "inventory", "dull"}` 이다. `attitude` 는 `friendly`(우호), `neutral`(중립, 기본), `hostile`(적대)이다. 시트가 없는 인물은 중립이다(#474). `equipment`(장비, 5줄), `inventory`(소지품, 10줄), `dull`(둔한지)은 몬스터 시트와 같은 모양이다(#457). 처음 쓰러졌을 때의 드롭은 여기서만 나온다. 시트가 없는 인물은 아무것도 지니지 않는다. 시트는 비워 둘 수 없다. 같은 항목이 두 번 있으면 거부한다 |
 | `default_npc_sheet` (기본 NPC 시트) | 시트가 없는 인물이 받는 숫자. 초안일 때는 비워 둘 수 있다 |
 | `encounters` (조우, 50개) | 맵의 장소에 있는 몬스터. 하나하나가 `{"place_id", "monster_id", "count", "surprise"}` 이다(1~10마리). `surprise` 는 누가 기습하는가다: `none`(기본, 기습 없음), `monsters`(몬스터가 매복), `party`(일행이 기습, 잠든 무리). 장소는 붙인 로어북의 장소 항목, 몬스터는 시트를 적은 몬스터다. 같은 장소의 같은 몬스터는 한 줄에 마리 수로 적는다(두 줄이면 거부한다). 맵이 있어야 한다(`start_place`) |
 | `monster_sheets` (몬스터 시트, 100개) | 붙인 도감의 몬스터에 주는 숫자와 공격, 지닌 물건. 하나하나가 `{"monster_id", "sheet", "attacks", "equipment", "inventory", "dull"}` 이다. `attacks`(5개)는 공격(스킬) 하나하나가 `{"name", "ability", "difficulty", "harm"}` 이다(이름 30자, 나머지는 룰북의 이름표). 비우면 공격하지 않는 몬스터다. 같은 이름의 공격이 둘이면 거부한다. `equipment`(장비, 5개)와 `inventory`(소지품, 10개)는 마리마다 지닌 물건 하나하나가 `{"entry_id", "count", "chance"}` 이다(붙인 로어북의 물건 항목, 1~99개(기본 1), 쓰러졌을 때 떨어질 확률 1~100%(기본 100)). 장비는 몸에 걸치거나 쥔 것, 소지품은 품에 넣은 것이다. 비우면 아무것도 지니지 않는다. 드롭은 지닌 것에서만 나온다([몬스터의 드롭](#라운드)). 같은 물건이 두 줄이면(장비와 소지품에 걸쳐서도) 거부한다. 예전의 `drops` 는 없어졌다(`inventory` 로 옮겼다, 마이그레이션 `5d2c8e7a1f34`). `dull`(기본 `false`)은 둔한 몬스터다. 훔치기가 룰북의 `steal.dull` 만큼 쉽다. 시트를 적은 몬스터만 이 시나리오가 쓴다(판에 들어간다). 시트는 비워 둘 수 없다. 같은 몬스터가 두 번 있으면 거부한다 |
@@ -769,6 +769,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
   - 형식 35: 아이템 규칙의 등급(`items[].rarity`). 그 전 판의 물건은 모두 노말로 읽는다
   - 형식 36: 규칙의 훔치기(`steal`)와 몬스터의 둔함(`monsters[].dull`). 그 전 판은 `srd5` 의 훔치기와 둔하지 않은 몬스터로 읽는다
   - 형식 37: NPC 시트의 처음 태도(`npc_sheets[].attitude`). 그 전 판의 인물은 모두 중립으로 읽는다
+  - 형식 38: NPC 시트의 지닌 물건(`npc_sheets[].equipment`, `inventory`)과 둔한지(`dull`). 그 전 판의 인물은 아무것도 지니지 않고 둔하지 않다
 - 규칙을 템플릿의 값으로 채워 읽는 형식(4, 6~10, 14, 15, 23, 25, 28, 36)은 DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 형식 12 의 항목의 종류와 형식 16 의 지목의 정답도 DB 의 항목에 채웠다.
 - 옛 판의 규칙에 점수제가 채워져도 그 판에서 점수제를 쓸 수 있게 되는 것은 아니다. 옛 판이 허용한 방식은 그때 있던 것 그대로다. 방식이 나중에 늘어도 옛 판에 저절로 켜지지 않는다.
 - 게시는 "굳히기"다. 남에게 보이게 하는 것은 따로다([공개와 소개 페이지](#공개와-소개-페이지)). 굳힌 내용(`snapshot`)은 공개해도 만든 사람만 본다.
@@ -898,7 +899,8 @@ characters.py   캐릭터 정하기(진행 중에 새 캐릭터를 들일 때도
 | `table_clocks` | 테이블의 게임 안의 시계. 테이블 하나에 한 줄. 1일째 0시부터 흐른 분(`minutes`)과 방장이 정한 다음 걸음(`next_step_minutes`, 비면 판의 기본) |
 | `table_visits` | 테이블의 캐릭터가 서 본 맵의 장소. 판의 장소 항목 하나가 한 줄이다. 처음 선 때를 적는다. 테이블이 맵의 무엇을 아는지 계산하는 재료다 |
 | `table_monsters` | 몬스터 한 마리마다의 숫자와 생사와 자리. 자기 ID 가 있고(판정이 겨누는 값), 판의 몬스터(`monster_id`)와 같은 몬스터 사이의 번호(`number`), 있는 장소(`place_id`), 능력치, 최대 HP, 지금의 HP, 생사(`table_npcs` 와 같은 값), 만난 첫 라운드(`engaged_round`, 아직이면 비어 있다)를 갖는다. 게임을 시작할 때 판의 조우에서 생긴다([몬스터 도감](#몬스터-도감)) |
-| `table_npcs` | 로어북의 인물 항목마다의 숫자와 생사. 테이블과 항목의 ID(`entry_id`)로 찾는다. 능력치(`abilities`, JSON), 최대 HP, 지금의 HP, 생사(`status`: `alive`, `downed`, `dead`), 지목으로 진짜 이름이 드러난 라운드(`named_round`, 아직이면 비어 있다). 게임을 시작할 때 생긴다 |
+| `table_npcs` | 로어북의 인물 항목마다의 숫자와 생사. 테이블과 항목의 ID(`entry_id`)로 찾는다. 능력치(`abilities`, JSON), 최대 HP, 지금의 HP, 생사(`status`: `alive`, `downed`, `dead`), 지목으로 진짜 이름이 드러난 라운드(`named_round`, 아직이면 비어 있다), 태도(`attitude`), 처음 쓰러진 라운드(`fell_round`, 드롭은 이때 한 번만). 게임을 시작할 때 생긴다 |
+| `table_monster_items`, `table_npc_items` | 몬스터 한 마리나 NPC 하나가 지닌 물건 중 판의 개수에서 바뀐 줄(줄의 번호 `slot`, 지금 개수). 줄이 없으면 판의 개수 그대로다. 0 이 되어도 지우지 않는다 |
 
 **판의 복사본.** 테이블은 만들 때 판의 내용을 통째로 복사해 온다. 이 복사본은 고치지 않는다.
 플레이하면서 바뀌는 것(캐릭터의 HP, NPC 의 생사)은 따로 칸을 둔다(`table_sheets`, `table_npcs`). 문서 안의 값은 DB 가 검사하지 못하고, 하나를 바꾸려고 문서를 통째로 다시 쓰게 된다.
@@ -1259,10 +1261,12 @@ records.py      일어난 일을 이벤트로 적기
 **이번 장면의 인물.** 행동으로 겨눌 수 있는 NPC 는 가장 최근 라운드의 장면에 나온 인물이다(`GET /tables/{id}/rounds/current/people`).
 
 ```json
-{"round": 3, "people": [{"id": "…", "name": "악역영애", "status": "alive", "injuries": [], "named": false, "attitude": "neutral"}],
+{"round": 3, "people": [{"id": "…", "name": "악역영애", "status": "alive", "injuries": [], "named": false, "attitude": "neutral",
+             "items": [{"entry_id": "…", "name": "부채", "rarity": "rare", "count": 1, "equipped": true}]}],
  "monsters": [{"id": "…", "name": "수로 쥐 2", "place_id": "…", "status": "alive", "condition": "다침"}]}
 ```
 
+- `items` 는 그 인물이 지금 지닌 물건이다(#457). 판의 NPC 시트에 적은 장비 다음 소지품의 차례이고, 떨어뜨리거나 빼앗긴 것은 빠진다. 숨긴 소지품은 없다. 몬스터의 `items` 와 같은 모양이다.
 - `attitude` 는 그 인물이 일행을 대하는 태도다(`friendly`, `neutral`, `hostile`, #474). 처음은 판에 적은 것이고, 바꾸는 것은 엔진뿐이다(방장도 AI 도 바꾸지 못한다). 바뀌면 이벤트(`npc_attitude_changed`)가 남는다. 처음으로 태도를 바꾸는 규칙은 NPC 에게서 훔치다 들킨 것이다(#457).
 - NPC 는 로어북의 인물 항목이다. 로어북은 AI 만 읽는 글이라 인물의 목록을 통째로 보여 주지 않는다. 장면(앞 라운드의 서술, 첫 라운드는 스타팅)은 모두가 이미 읽은 글이라, 거기 나온 인물만 고르면 새로 드러나는 것이 없다.
 - 나왔는지는 로어북 검색과 같은 법으로 본다. 항목의 이름이나 키워드가 장면에 그대로 있으면 나온 것이다. 이름(`name`)도 검색과 같이 장면의 호칭이다. 진짜 이름이 장면에 아직 안 나왔으면 장면에 나온 키워드 중 가장 긴 것이다. 그래서 인물 항목의 키워드는 그 인물을 부르는 호칭으로 적는다. 이 목록으로 앉은 사람에게 보일 수 있다.
@@ -1467,6 +1471,12 @@ records.py      일어난 일을 이벤트로 적기
 - 받는 사람은 그 마리가 있던 장소의 죽지 않은 캐릭터 중 서버의 주사위로 고른 한 명이다. 쓰러져 있어도 받는다. 나온 것은 모두 그 사람이 받는다. 막타를 친 사람에게 주지 않는 것은 막타를 노리게 되기 때문이고, 모두에게 같은 양을 주지 않는 것은 물건이 사람 수만큼 늘기 때문이다.
 - 그 장소에 받을 사람이 없으면 나온 것은 사라진다(`user_id` 가 `null`, `lost` 에 나온 개수). 한 가지의 상한(99개)을 넘으면 넘친 몫을 잃는다(`lost`). 라운드를 닫는 중이라 거절하지 않는다.
 - 받은 것은 물건마다 이벤트(`items_gained`)로 모두에게 간다. 그 마리가 쓰러진 변화(`monster_changed`)에 잇고 행한 사람이 없다. 서술자에게는 판정 줄에 `(얻은 물건: 늑대 가죽 2개 → 엘프)` 가 붙는다(`narration-29`). 사라진 드롭은 붙이지 않는다.
+
+**NPC 의 드롭.** 몬스터와 같은 규칙으로 NPC 가 지닌 것(`npc_sheets[].equipment`, `inventory`)에서 나온다(#457). 다른 것은 셋이다.
+- `drop` 의 `source` 가 `npc` 이고, 그 마리 대신 그 인물(`npc_id` 는 인물 항목의 id, `npc_name` 은 장면의 호칭)이 적힌다. `monster_id`, `monster_name` 은 `null` 이다. 몬스터의 드롭에서는 반대로 `npc_id`, `npc_name` 이 `null` 이다.
+- NPC 는 회복하면 일어난다. 처음 쓰러진 라운드를 적어 두고(`table_npcs.fell_round`) 그때 한 번만 굴린다. 일어났다가 또 쓰러져도 다시 굴리지 않는다. 판정에 맞아 쓰러질 때만이다(치료에 실패해 즉사한 것은 굴리지 않는다).
+- NPC 는 장소가 없다(장면에 나오면 그 장면에 있다). 받는 사람은 친 사람이 선 장소의 죽지 않은 캐릭터 중 한 명이다.
+- 이벤트(`items_gained`)는 그 인물이 쓰러진 변화(`npc_changed`)에 잇는다. 나오지 않은 줄은 그 인물이 그대로 지닌다.
 
 **차례와 몬스터의 공격.** 장면에 **맞붙은 몬스터**(공격이 있고 쓰러지지 않은 마리)가 있으면 선언을 마감할 때 차례를 정하고, 그 순서로 행동과 몬스터의 공격을 판정한다. 없으면 앉은 순서 그대로다.
 
@@ -2330,7 +2340,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `naming_resolved` | 엔진이 지목의 결과를 정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `guess`, `correct`, `entry_id`, `name`(맞았으면 진짜 이름, 아니면 `null`), `label`, `newly` |
 | `death_save_rolled` | 엔진이 쓰러진 캐릭터의 죽음의 굴림을 굴렸다. 그 라운드의 행동들 뒤, 닫힘 앞에 적힌다 | `round`, `user_id`, `character_name`, `roll`, `target`, `success`, `successes`, `failures`, `fate`(`dying`, `stable`, `dead`) |
 | `character_died` | 캐릭터가 죽었다. 죽음의 굴림으로 죽었으면 그 굴림 바로 뒤에, 치료 실패의 즉사면 그 치료 바로 뒤에 적힌다 | `user_id`, `character_name`, `cause`(`death_save`, `gave_up`, `treatment`). 죽음의 굴림이나 치료로 죽었으면 `round` 도 |
-| `items_gained` | 캐릭터가 물건을 얻었다. 방장이 줬거나(행한 사람이 방장), 몬스터를 쓰러뜨려 엔진이 줬거나(행한 사람이 없고 `monster_changed` 에 잇는다), 장소에서 줍거나 찾았다(행한 사람이 없고 그 행동이나 `place_searched` 에 잇는다) | `user_id`, `character_name`, `entry_id`, `name`(물건의 이름), `count`(받은 개수), `total`(그 뒤의 개수). 몬스터의 드롭이면 `round`, `source`(`monster`), `monster_id`, `monster_name`(장면의 호칭), `lost`(상한을 넘어 잃은 개수)가 더 있다. 장소에서 얻었으면 `round`, `source`(`place` 주움, `search` 찾음), `place`(`entry_id`, `name`)가 더 있다. 훔쳤으면 `round`, `source`(`steal`), `monster_id`, `monster_name` 이 더 있다(`steal_attempted` 에 잇는다) |
+| `items_gained` | 캐릭터가 물건을 얻었다. 방장이 줬거나(행한 사람이 방장), 몬스터를 쓰러뜨려 엔진이 줬거나(행한 사람이 없고 `monster_changed` 에 잇는다), 장소에서 줍거나 찾았다(행한 사람이 없고 그 행동이나 `place_searched` 에 잇는다) | `user_id`, `character_name`, `entry_id`, `name`(물건의 이름), `count`(받은 개수), `total`(그 뒤의 개수). 몬스터의 드롭이면 `round`, `source`(`monster`), `monster_id`, `monster_name`(장면의 호칭), `lost`(상한을 넘어 잃은 개수)가 더 있다. NPC 의 드롭이면 `source` 가 `npc` 이고 `monster_id`, `monster_name` 대신 `npc_id`, `npc_name` 이 있다(`npc_changed` 에 잇는다). 장소에서 얻었으면 `round`, `source`(`place` 주움, `search` 찾음), `place`(`entry_id`, `name`)가 더 있다. 훔쳤으면 `round`, `source`(`steal`), `monster_id`, `monster_name` 이 더 있다(`steal_attempted` 에 잇는다) |
 | `items_lost` | 방장이 캐릭터에게서 물건을 빼앗았다 | `items_gained` 와 같다. `total` 이 0 이면 다 잃었다 |
 | `item_used` | 캐릭터가 소모품을 썼다(또는 못 했다). 그 행동 바로 뒤에 적힌다. 회복했으면 바로 뒤에 `hp_changed` | `round`, `character_name`, `entry_id`, `name`, `used`, `reason`, `target`(회복받은 사람), `remaining` |
 | `item_given` | 캐릭터가 물건을 건넸다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `entry_id`, `name`, `count`, `given`, `reason`, `target`(받은 사람), `remaining`, `target_total` |

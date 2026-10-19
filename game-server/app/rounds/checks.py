@@ -170,12 +170,26 @@ def monster_outcome(judging: Judging, action: CheckAction, found: Consequence) -
     return outcome
 
 
+def npc_outcome(judging: Judging, actor: TableMember, action: CheckAction, found: Consequence) -> dict:
+    """
+    NPC 를 겨눈 판정의 결과 칸들. NPC 의 변화(npc_effect)와, 처음 쓰러뜨려 무엇이 나왔으면 그 드롭(drop)이다.
+
+    drop 은 나온 것이 있을 때만 적는다. 받는 곳은 친 사람이 선 장소다(app/rounds/drops.py).
+    """
+    effect = change_cast_member(judging, action, found)
+    outcome = {'effect': None, 'npc_effect': effect}
+    drop = drops.npc_drop_after(judging, actor, effect)
+    if drop is not None:
+        outcome['drop'] = drop
+    return outcome
+
+
 def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction, check: Check) -> dict:
     """
     판정의 결과에 따라 HP 를 바꾸고, 바뀐 내용을 선언의 outcome 에 넣을 칸들로 돌려준다.
 
     effect 는 앉은 사람의 변화, npc_effect 는 NPC 의 변화, monster_effect 는 몬스터의 변화다.
-    몬스터를 처음 쓰러뜨려 무엇이 나왔으면 drop 도 있다(app/rounds/drops.py).
+    몬스터나 NPC 를 처음 쓰러뜨려 무엇이 나왔으면 drop 도 있다(app/rounds/drops.py).
     한 판정에서 하나만 일어난다. 없으면 effect 와 npc_effect 가 None 이다.
     monster_effect 는 몬스터를 겨눈 판정에만 적는다. 몬스터가 없는 판정의 결과는 이 칸이 생기기 전과 같다.
     대가는 늘 행동한 사람이 입는다. 대상의 일(타격, 회복)은 행동이 겨눈 NPC 나 몬스터가, 아니면 앉은 사람이 받는다.
@@ -186,7 +200,7 @@ def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction,
     if found.recipient == Recipient.TARGET and action.monster is not None:
         return monster_outcome(judging, action, found)
     if found.recipient == Recipient.TARGET and action.npc is not None:
-        return {'effect': None, 'npc_effect': change_cast_member(judging, action, found)}
+        return npc_outcome(judging, actor, action, found)
     return {'effect': change_member(judging, actor, action, found), 'npc_effect': None}
 
 

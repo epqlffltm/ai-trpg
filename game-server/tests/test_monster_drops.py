@@ -27,7 +27,7 @@ from httpx import AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import DROP_CHANCE_MAX, ITEM_STACK_MAX, MONSTER_MAX_INVENTORY
+from app.assets.models import CARRIED_MAX_INVENTORY, DROP_CHANCE_MAX, ITEM_STACK_MAX
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_28
 from app.engine.dice import ScriptedDice
@@ -244,7 +244,7 @@ async def test_the_same_item_twice_is_refused(client: AsyncClient, me: dict[str,
 async def test_a_monster_has_at_most_ten_inventory_lines(client: AsyncClient, me: dict[str, str]):
     world = await make_world(client, me)
     entries = f'{LOREBOOKS_URL}/{world["lorebook"]["id"]}/entries'
-    things = [await post(client, entries, me, name=f'조각 {n}', kind='item') for n in range(MONSTER_MAX_INVENTORY + 1)]
+    things = [await post(client, entries, me, name=f'조각 {n}', kind='item') for n in range(CARRIED_MAX_INVENTORY + 1)]
     drops = [drop(thing) for thing in things]
     body = {
         'title': '수로',
@@ -296,6 +296,8 @@ async def test_downing_a_monster_gives_its_drops(
         'source': 'monster',
         'monster_id': rat['id'],
         'monster_name': '수로 쥐 1',
+        'npc_id': None,
+        'npc_name': None,
         'user_id': str(ME),
         'character_name': '엘프',
         'items': [
@@ -520,7 +522,7 @@ def test_with_no_one_there_the_drop_vanishes():
     ],
 )
 def test_the_drop_line(items: list[DroppedNote], line: str):
-    assert describe_drop(DropNote(monster='수로 쥐 1', receiver='엘프', items=items)) == line
+    assert describe_drop(DropNote(holder='수로 쥐 1', receiver='엘프', items=items)) == line
 
 
 def test_a_vanished_drop_is_not_recorded(monkeypatch: pytest.MonkeyPatch):
