@@ -323,19 +323,30 @@ class PutDownAction(BaseModel):
 
 class StealAction(BaseModel):
     """
-    같은 장소의 몬스터 한 마리(monster)가 지닌 물건 하나(item)를 훔치는 행동(app/rounds/steals.py).
+    같은 장소의 몬스터 한 마리(monster)나 이번 장면의 인물(npc)이 지닌 물건 하나(item)를 훔치는 행동
+    (app/rounds/steals.py). monster 와 npc 중 하나만 적는다.
 
     능력과 난이도는 받지 않는다. 규칙(Ruleset.steal)이 정하고, 물건과 대상에 따라 목표값이 오르내린다.
-    성공하면 그 줄을 통째로 갖는다. 들키면 그 마리가 이번 라운드의 차례에 도둑을 노린다.
+    성공하면 그 줄을 통째로 갖는다. 들키면 몬스터는 이번 라운드의 차례에 도둑을 노린다.
+    NPC 는 적대가 되고, 그 인물의 시트가 정했으면(on_caught: fight) 싸움도 붙는다(#457).
     """
 
     model_config = ConfigDict(extra='forbid')
 
     kind: Literal[ActionKind.STEAL]
     # 테이블의 몬스터 한 마리의 id 다(table_monsters.id). 자기가 선 장소의 마리만 고를 수 있다
-    monster: uuid.UUID
-    # 그 마리가 지닌 물건의 항목 id 다. 장면의 몬스터 목록의 items 에서 고른다
+    monster: uuid.UUID | None = None
+    # 판의 로어북 인물 항목의 id 다. 이번 장면의 죽지 않은 인물만 고를 수 있다(app/rounds/cast.py)
+    npc: uuid.UUID | None = None
+    # 그 대상이 지닌 물건의 항목 id 다. 장면의 인물이나 몬스터 목록의 items 에서 고른다
     item: uuid.UUID
+
+    @model_validator(mode='after')
+    def require_one_victim(self) -> Self:
+        """훔칠 대상은 하나다. monster 와 npc 중 하나만 적는다."""
+        if (self.monster is None) == (self.npc is None):
+            raise ValueError('monster 와 npc 중 하나만 적습니다.')
+        return self
 
 
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다

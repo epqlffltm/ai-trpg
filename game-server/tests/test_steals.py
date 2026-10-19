@@ -304,6 +304,8 @@ async def test_a_success_takes_the_whole_line(client: AsyncClient, app: FastAPI,
         'character_name': '엘프',
         'monster_id': rat['id'],
         'monster_name': '수로 쥐',
+        'npc_id': None,
+        'npc_name': None,
         'entry_id': world['pelt']['id'],
         'name': '늑대 가죽',
         'check': {'roll': 12, 'modifier': 0, 'total': 12, 'target': 12, 'success': True},
@@ -314,6 +316,8 @@ async def test_a_success_takes_the_whole_line(client: AsyncClient, app: FastAPI,
         'left': 0,
         'total': 2,
         'reason': None,
+        'fight': False,
+        'attitude_change': None,
     }
     assert held_items(await read_table(client, me, world['table']), ME) == [('늑대 가죽', 2)]
     assert carried(await scene_monster(client, me, world, '수로 쥐')) == [('송곳니', 1), ('왕관', 1)]
@@ -428,8 +432,8 @@ def test_a_ruleset_without_stealing_refuses_it():
 
 
 def test_a_downed_monster_is_unwary():
-    fought = SimpleNamespace(state=SimpleNamespace(fought_round=2, status=NpcStatus.DOWNED))
-    awake = SimpleNamespace(state=SimpleNamespace(fought_round=2, status=NpcStatus.ALIVE))
+    fought = SimpleNamespace(fought_round=2, status=NpcStatus.DOWNED)
+    awake = SimpleNamespace(fought_round=2, status=NpcStatus.ALIVE)
 
     assert (is_unwary(fought), is_unwary(awake)) == (True, False)
 
@@ -486,15 +490,15 @@ async def test_a_dull_mark_is_published(client: AsyncClient, me: dict):
     ('note', 'line'),
     [
         (
-            StealNote(monster='수로 쥐', name='송곳니', count=1, stolen=True, caught=False),
+            StealNote(victim='수로 쥐', name='송곳니', count=1, stolen=True, caught=False),
             '(훔치기: 수로 쥐 에게서 송곳니 1개를 몰래 빼냈다)',
         ),
         (
-            StealNote(monster='수로 쥐', name='송곳니', count=0, stolen=False, caught=True),
+            StealNote(victim='수로 쥐', name='송곳니', count=0, stolen=False, caught=True),
             '(훔치기: 수로 쥐 에게서 송곳니을(를) 훔치다 들켰다. 수로 쥐 이(가) 노린다)',
         ),
         (
-            StealNote(monster='수로 쥐', name='송곳니', count=0, stolen=False, caught=False),
+            StealNote(victim='수로 쥐', name='송곳니', count=0, stolen=False, caught=False),
             '(훔치기: 수로 쥐 은(는) 송곳니을(를) 이미 지니지 않았다)',
         ),
     ],
@@ -512,11 +516,11 @@ async def test_the_narrator_is_told_about_the_steal(client: AsyncClient, app: Fa
 
     (request,) = narrator.requests
     (moved,) = request.moves
-    assert moved.steal == StealNote(monster='수로 쥐', name='늑대 가죽', count=0, stolen=False, caught=True)
+    assert moved.steal == StealNote(victim='수로 쥐', name='늑대 가죽', count=0, stolen=False, caught=True, fight=True)
 
 
 def test_the_move_line_carries_the_steal():
-    note = StealNote(monster='수로 쥐', name='송곳니', count=1, stolen=True, caught=False)
+    note = StealNote(victim='수로 쥐', name='송곳니', count=1, stolen=True, caught=False)
 
     line = describe_move(Move(character_name='엘프', content=STEAL, steal=note))
 

@@ -439,6 +439,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
                 'equipment': [],
                 'inventory': [],
                 'dull': False,
+                'on_caught': 'hostile',
             }
         ],
         'default_npc_sheet': None,

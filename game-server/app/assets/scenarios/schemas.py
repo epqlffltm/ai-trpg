@@ -62,6 +62,7 @@ from app.assets.models import (
     ItemRarity,
     NarrationStyle,
     NpcAttitude,
+    NpcCaught,
     PlaceItemVisibility,
     QuestConditionKind,
     QuestMatch,
@@ -262,6 +263,7 @@ class NpcSheet(BaseModel):
 
     attitude 는 일행을 처음 어떻게 대하는가다(우호, 중립(기본), 적대). 테이블에서는 엔진이 바꾼다(#474).
     지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.
+    on_caught 는 훔치다 들켰을 때다. 늘 적대가 되고, fight 면 싸움도 붙는다(기본 hostile, 적대만).
 
     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
@@ -278,6 +280,8 @@ class NpcSheet(BaseModel):
     inventory: CarriedInventory = []
     # 둔한가. 둔하면 훔치기가 쉽다(룰북 규칙의 steal.dull 만큼). 눈치 능력치와는 따로 더한다
     dull: bool = False
+    # 훔치다 들켰을 때. 적대만(hostile) 하는가, 싸움도 붙는가(fight)
+    on_caught: NpcCaught = NpcCaught.HOSTILE
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'NpcSheet':

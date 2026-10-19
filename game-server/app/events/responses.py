@@ -76,12 +76,15 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'reason',
         'remaining',
     ),
-    # 훔치기의 판정은 다른 판정처럼 공개다. 몬스터의 능력치는 적지 않는다(목표값에 섞여 있다)
+    # 훔치기의 판정은 다른 판정처럼 공개다. 대상의 능력치는 적지 않는다(목표값에 섞여 있다).
+    # 대상이 몬스터면 monster_id·monster_name, NPC 면 npc_id·npc_name 이 있다. 들켜 싸움이 붙었으면 fight 가 참이다
     EventType.STEAL_ATTEMPTED: (
         'round',
         'character_name',
         'monster_id',
         'monster_name',
+        'npc_id',
+        'npc_name',
         'entry_id',
         'name',
         'check',
@@ -92,6 +95,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'left',
         'total',
         'reason',
+        'fight',
     ),
     # 퀘스트의 이름과 상태, 보상, 기한, 서버가 바꾼 까닭(기한을 넘김)은 공개다. 사건의 글(로어북)은 적지 않는다.
     # 숨긴 퀘스트에는 기한을 적지 않는다(드러날 때 정한다). 숨김에서 바로 끝낸 것도 기한이 비어 있다

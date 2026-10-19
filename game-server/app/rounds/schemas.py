@@ -458,21 +458,33 @@ class RolledOut(BaseModel):
     success: bool
 
 
+class AttitudeChangeOut(BaseModel):
+    """엔진이 바꾼 NPC 의 태도. 앞의 태도, 바뀐 태도, 까닭(caught_stealing 훔치다 들킴)."""
+
+    previous: NpcAttitude
+    attitude: NpcAttitude
+    reason: str
+
+
 class StealOut(BaseModel):
     """
     훔친 결과. 엔진이 정했다(app/rounds/steals.py).
 
-    stolen 이 참이면 훔쳤다(count 는 훔친 개수, left 는 그 마리에게 남은 개수, total 은 도둑이 가진 개수).
-    거짓이고 check 가 있으면 들켰다. 그 마리는 이번 라운드의 차례에 도둑을 친다.
+    대상이 몬스터면 monster_id 와 monster_name 이, NPC 면 npc_id(인물 항목의 id)와 npc_name(장면의 호칭)이 있다.
+    stolen 이 참이면 훔쳤다(count 는 훔친 개수, left 는 대상에게 남은 개수, total 은 도둑이 가진 개수).
+    거짓이고 check 가 있으면 들켰다. 몬스터는 이번 라운드의 차례에 도둑을 친다(fight 가 늘 참이다).
+    NPC 는 적대가 되고(attitude_change, 이미 적대였으면 None), 시트가 정했으면 싸움도 붙는다(fight).
     check 가 없으면 굴리지 않았다(reason 이 gone: 앞사람이 먼저 훔쳤다). full 은 상한에 닿아 그만큼만 훔친 것이다.
     factors 는 목표값을 오르내리게 한 것들이다(equipped, rarity, dull_kind, dull, unwary, distracted).
-    대상의 눈치(능력치의 보정)는 늘 보지만 몬스터의 숫자라 따로 적지 않는다. target 에 섞여 있다.
+    대상의 눈치(능력치의 보정)는 늘 보지만 대상의 숫자라 따로 적지 않는다. target 에 섞여 있다.
     """
 
     user_id: uuid.UUID
     character_name: str
-    monster_id: uuid.UUID
-    monster_name: str
+    monster_id: uuid.UUID | None = None
+    monster_name: str | None = None
+    npc_id: uuid.UUID | None = None
+    npc_name: str | None = None
     entry_id: uuid.UUID
     name: str
     check: RolledOut | None
@@ -483,6 +495,10 @@ class StealOut(BaseModel):
     left: int
     total: int
     reason: str | None
+    # 들켜 싸움이 붙었는가. 이 칸이 생기기 전의 결과는 거짓으로 읽는다
+    fight: bool = False
+    # 들켜 바뀐 NPC 의 태도. 몬스터이거나, 들키지 않았거나, 이미 적대였으면 None 이다
+    attitude_change: AttitudeChangeOut | None = None
 
 
 class StealOutcome(BaseModel):
@@ -519,9 +535,11 @@ class RestOutcome(BaseModel):
 
 
 class TargetGoneOut(BaseModel):
-    """판정할 때 겨눈 몬스터를 칠 수 없었던 것. 엔진은 굴리지 않았다."""
+    """판정할 때 겨눈 몬스터(나 훔치려던 NPC)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다."""
 
-    monster_id: uuid.UUID
+    # 몬스터면 monster_id, NPC 면 npc_id 가 있다
+    monster_id: uuid.UUID | None = None
+    npc_id: uuid.UUID | None = None
     # 부르는 이름. 장면에 없는 마리였으면 None 이다
     name: str | None
     # dead(차례가 오기 전에 죽었다) 또는 elsewhere(다른 장소에 있다)
