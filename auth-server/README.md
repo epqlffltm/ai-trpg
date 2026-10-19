@@ -132,6 +132,7 @@ fake:<DI>:<생일 YYYY-MM-DD>      예: fake:person-1:1990-05-17
 DI 는 업체가 사람마다 주는 값이다. 같은 DI 는 같은 사람이다. 영문, 숫자, `+/=_-` 로 128자까지 쓴다.
 운영(`APP_ENVIRONMENT=production`)에서는 가짜 업체를 고를 수 없다(서버가 뜨지 않는다). 적지 않으면 `disabled` 로 떠서
 본인인증이 `503`(`code: identity_unavailable`)으로 끝난다. 가짜 업체를 운영에서 쓰면 누구나 아무 생일이나 적어 성인이 된다.
+`staging`(VM 에 올린 운영자용 서버)에서는 가짜 업체로 뜬다. 남이 들어오는 것은 nginx 의 허용 주소가 막는다.
 
 ### 테스트
 
@@ -434,7 +435,8 @@ uv run python manage.py runserver 2>&1 | jq -rR 'fromjson? | [.timestamp, .level
   메일 워커는 1초마다 돌아서, 잘 끝난 것은 `debug` 로 남긴다. 실패만 `error`(`error_code: job.failed`)로 남는다.
 - **`APP_ENVIRONMENT=production` 이면 `SMTP_HOST` 를 꼭 적어야 한다.** 적지 않으면 서버가 뜨지 않는다.
   `SMTP_HOST` 가 없으면 메일을 보내지 않고 터미널에 찍는데, 거기에는 받는 사람의 주소와 인증 코드가 그대로 나온다. 운영에서는 그것이 로그에 남는다.
-- **`APP_ENVIRONMENT=production` 이면 `DEBUG=true` 를 쓸 수 없다.** Django 는 `DEBUG` 가 켜져 있으면 예외의 응답에 호출 기록과 설정값을 실어 보낸다.
+  `staging` 은 메일 서버 없이 뜬다. 인증 코드가 찍힌 줄이 로그 모으기(Loki)에 14일 남으니 메일 서버를 붙이기 전까지 그렇다는 것을 안다.
+- **`APP_ENVIRONMENT` 가 `staging` 이나 `production` 이면 `DEBUG=true` 를 쓸 수 없다.** Django 는 `DEBUG` 가 켜져 있으면 예외의 응답에 호출 기록과 설정값을 실어 보낸다.
 - Django 가 스스로 찍던 요청 줄(`runserver` 의 `"GET /api/... 200"`)은 껐다. 주소 뒤에 붙은 값까지 찍었고, 요청이 끝난 줄과 겹친다.
 - 테스트를 돌릴 때는 로그를 찍지 않는다(`config/test_runner.py`). 로그를 보는 테스트는 `assertLogs` 로 직접 잡는다.
 
@@ -977,8 +979,21 @@ IP로 보여 한 사람의 시도가 모두를 막는다.
 - 세션 쿠키와 CSRF 쿠키(관리자 화면)에 Secure 를 붙인다.
 - refresh 쿠키의 Secure(`REFRESH_COOKIE_SECURE`)를 끄면 서버가 뜨지 않는다. `DEBUG` 를 켜도, 메일 서버(`SMTP_HOST`)가 없어도 뜨지 않는다.
 - `ALLOWED_HOSTS` 에 실제 도메인을 적는다. 비어 있으면 모든 요청이 400 이다.
+  nginx 는 `Host` 를 받은 그대로(도메인) 넘긴다. compose 가 덮는 값(`localhost,127.0.0.1,auth-server`)에 도메인을 더한다. `auth-server` 는 다른 서버가 공개키를 받는 이름이라 빼지 않는다.
 - `REFRESH_COOKIE_ALLOWED_ORIGINS` 에 화면을 여는 주소를 https 로 적는다. 비어 있거나 http 가 섞이면 뜨지 않는다.
   개발에서는 적지 않으면 compose 의 nginx 주소(`http://localhost:8080`, `http://127.0.0.1:8080`)다. `PROXY_PORT` 를 바꿨으면 같이 적는다.
+
+**staging(VM 에 올린 운영자용 서버).** `APP_ENVIRONMENT=staging` 도 도메인과 HTTPS 뒤에 있다(바깥에 연 환경, `config/environments.py`).
+`.env.example` 은 로컬 개발의 값(`DEBUG=true`, `REFRESH_COOKIE_SECURE=false`)이라 그대로 옮기면 틀린 채로 뜰 수 있어서, 전송의 안전은 운영과 같이 막는다.
+
+| | development | staging | production |
+| --- | --- | --- | --- |
+| `DEBUG=true` | 된다 | 뜨지 않는다 | 뜨지 않는다 |
+| `REFRESH_COOKIE_SECURE=false` | 된다 | 뜨지 않는다 | 뜨지 않는다 |
+| `REFRESH_COOKIE_ALLOWED_ORIGINS` | 적지 않으면 compose 의 nginx 주소 | 꼭 적는다. https 만 | 꼭 적는다. https 만 |
+| 메일 서버 없이(터미널 메일) | 된다 | 된다 | 뜨지 않는다 |
+| 가짜 본인인증(`IDENTITY_PROVIDER=fake`) | 기본 | 기본 | 뜨지 않는다. 기본은 `disabled` |
+| 관리자 화면 쿠키의 Secure | 없다 | 없다 | 붙는다 |
 
 `TRUSTED_PROXY_COUNT` 가 1 이상이면 프록시가 넘기는 `X-Forwarded-Proto` 로 "원래 HTTPS 였다"를 안다(`SECURE_PROXY_SSL_HEADER`).
 HTTPS 로 넘기기와 HSTS 는 인증 서버가 하지 않는다. 서버 넷 앞의 nginx 가 TLS 와 함께 맡는다(배포 단계에서 켠다).
