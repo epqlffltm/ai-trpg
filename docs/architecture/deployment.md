@@ -180,7 +180,7 @@ CI(`stack`)가 운영 설정도 본다(`.github/scripts/stack-smoke.sh check-sta
 - 루트 `.env` 에 staging 의 값을 더 적는다(`.env.example` 의 "staging" 절): `COMPOSE_FILE`, `COMPOSE_PROFILES`, `DOMAIN`, `ACME_EMAIL`, `GAME_LLM_BASE_URL`, `GRAFANA_ADMIN_PASSWORD`, `OTEL_EXPORTER_OTLP_ENDPOINT`, 바깥 백업의 `BACKUP_S3_BUCKET`, `BACKUP_AWS_ACCESS_KEY_ID`, `BACKUP_AWS_SECRET_ACCESS_KEY`, `BACKUP_AGE_RECIPIENTS`.
 - 비밀번호 관리자에 둘 것: 각 `.env`, JWT 키, 바깥 백업의 주 열쇠와 확인 열쇠, S3 의 접근 키.
 - **로컬의 값을 그대로 옮기지 않는다.** DB 비밀번호, 서버끼리의 서명 비밀, JWT 키를 VM 에서 새로 만든다. 로컬의 값은 이 PC 의 여러 곳(작업 폴더 넷)에 퍼져 있다.
-- 서버끼리 같아야 하는 비밀은 짝을 맞춘다. `tools/fill_env.py` 가 맞추고, 짝의 표는 그 도구의 `SECRETS` 하나다. staging 에서는 `tools/staging_env.py` 가 그 도구를 부른 뒤, 예시에서 주석으로 막힌 짝의 줄을 켠다.
+- 서버끼리 같아야 하는 비밀은 짝을 맞춘다. `tools/fill_env.py` 가 맞추고 예시에서 주석으로 막힌 짝의 줄도 켠다. 짝의 표는 그 도구의 `SECRETS` 하나다. staging 에서는 `tools/staging_env.py` 가 그 도구를 부른 뒤, 한 파일만 아는 비밀의 줄(`SIGNAL_SECRET` 등)도 켠다.
 
 | 이쪽 | 저쪽(같은 값) |
 | --- | --- |

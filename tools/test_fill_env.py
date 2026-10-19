@@ -109,14 +109,51 @@ class FillEnvTests(unittest.TestCase):
 
         auth, game, board = self.env('auth-server/.env'), self.env('game-server/.env'), self.env('board-server/.env')
         billing, notification = self.env('billing-server/.env'), self.env('notification-server/.env')
-        self.assertEqual(auth['#BILLING_SECRET'], billing['AUTH_SERVER_SECRET'])
-        self.assertEqual(game['#BILLING_SECRET'], billing['GAME_SERVER_SECRET'])
-        self.assertEqual(game['#NOTIFICATION_SECRET'], notification['GAME_SERVER_SECRET'])
-        self.assertEqual(billing['#NOTIFICATION_SECRET'], notification['BILLING_SERVER_SECRET'])
-        self.assertEqual(board['#NOTIFICATION_SECRET'], notification['BOARD_SERVER_SECRET'])
+        self.assertEqual(auth['BILLING_SECRET'], billing['AUTH_SERVER_SECRET'])
+        self.assertEqual(game['BILLING_SECRET'], billing['GAME_SERVER_SECRET'])
+        self.assertEqual(game['NOTIFICATION_SECRET'], notification['GAME_SERVER_SECRET'])
+        self.assertEqual(billing['NOTIFICATION_SECRET'], notification['BILLING_SERVER_SECRET'])
+        self.assertEqual(board['NOTIFICATION_SECRET'], notification['BOARD_SERVER_SECRET'])
+
+    def test_both_sides_of_a_pair_are_uncommented(self):
+        # compose 가 주소(BILLING_URL, NOTIFICATION_URL)를 주므로 비밀이 막혀 있으면 서버가 뜨지 않는다
+        self.fill()
+
+        for relative, key in (
+            ('auth-server/.env', 'BILLING_SECRET'),
+            ('game-server/.env', 'BILLING_SECRET'),
+            ('game-server/.env', 'NOTIFICATION_SECRET'),
+            ('board-server/.env', 'NOTIFICATION_SECRET'),
+            ('billing-server/.env', 'NOTIFICATION_SECRET'),
+        ):
+            env = self.env(relative)
+            self.assertNotIn(f'#{key}', env, relative)
+            self.assertEqual(len(env[key]), 64, relative)
+
+    def test_a_filled_but_commented_pair_is_uncommented_later(self):
+        # 앞의 판이 주석인 채로 채워 둔 .env 다. 값은 그대로 두고 주석만 푼다
+        shared = 'b' * 64
+        (self.root / 'game-server/.env').write_text(
+            f'DATABASE_URL=postgresql+asyncpg://game:pw@db/trpg\n# BILLING_SECRET={shared}\n', encoding='utf-8'
+        )
+        (self.root / 'billing-server/.env').write_text(f'GAME_SERVER_SECRET={shared}\n', encoding='utf-8')
+
+        _, outcomes, _ = self.fill()
+
+        self.assertEqual(self.env('game-server/.env')['BILLING_SECRET'], shared)
+        action = next(o.action for o in outcomes if o.name == '게임 서버 → 결제 서버')
+        self.assertIn('주석을 풀었다: game-server/.env 의 BILLING_SECRET', action)
+
+    def test_a_pair_with_two_different_values_stays_commented(self):
+        (self.root / 'game-server/.env').write_text('# BILLING_SECRET=one\n', encoding='utf-8')
+        (self.root / 'billing-server/.env').write_text('GAME_SERVER_SECRET=two\n', encoding='utf-8')
+
+        self.fill()
+
+        self.assertEqual(self.env('game-server/.env')['#BILLING_SECRET'], 'one')
 
     def test_commented_lines_stay_commented(self):
-        # 값만 채운다. 기능을 켜는 것은 사람이 # 를 지울 때다
+        # 한 파일만 아는 비밀은 값만 채운다. 켜면 동작이 바뀐다. 켜는 것은 사람이 # 를 지울 때다
         self.fill()
 
         game = self.env('game-server/.env')
@@ -185,6 +222,45 @@ class FillEnvTests(unittest.TestCase):
         self.assertTrue(root.startswith('POSTGRES_PASSWORD=mine\n'), root)
         self.assertEqual(len(values(root)['MONITOR_DB_PASSWORD']), 64)
         self.assertEqual(len(self.env('game-server/.env')['#SIGNAL_SECRET']), 64)
+
+    def test_new_example_lines_are_added_commented_with_their_notes(self):
+        # 경보처럼 .env 를 만든 뒤에 생긴 줄이다. 설명과 함께 주석으로 막아 더한다. 동작은 바뀌지 않는다
+        (self.root / '.env.example').write_text(
+            'POSTGRES_PASSWORD=\n\n# --- 경보 ---\n# 받는 곳의 웹후크\n# ALERT_SLACK_WEBHOOK_URL=\n'
+            '# Grafana 의 포트\nGRAFANA_PORT=3000\n',
+            encoding='utf-8',
+        )
+        (self.root / '.env').write_text('POSTGRES_PASSWORD=mine\n', encoding='utf-8')
+
+        _, outcomes, _ = self.fill()
+
+        root = (self.root / '.env').read_text(encoding='utf-8')
+        self.assertEqual(
+            root,
+            'POSTGRES_PASSWORD=mine\n\n# --- 경보 ---\n# 받는 곳의 웹후크\n# ALERT_SLACK_WEBHOOK_URL=\n'
+            '# Grafana 의 포트\n# GRAFANA_PORT=3000\n',
+        )
+        action = next(o.action for o in outcomes if o.name == '.env 의 새 줄')
+        self.assertIn('ALERT_SLACK_WEBHOOK_URL, GRAFANA_PORT', action)
+
+    def test_new_lines_follow_windows_line_endings(self):
+        (self.root / '.env').write_bytes(b'POSTGRES_PASSWORD=mine\r\n')
+
+        self.fill()
+
+        self.assertNotIn(b'\n', (self.root / '.env').read_bytes().replace(b'\r\n', b''))
+
+    def test_a_secret_line_added_later_is_filled_and_uncommented(self):
+        # 알림 서버보다 먼저 만든 게임 서버의 .env 다. 짝의 줄이 없다
+        (self.root / 'game-server/.env').write_text(
+            'DATABASE_URL=postgresql+asyncpg://game:pw@db/trpg\n', encoding='utf-8'
+        )
+
+        self.fill()
+
+        game = self.env('game-server/.env')
+        self.assertEqual(game['NOTIFICATION_SECRET'], self.env('notification-server/.env')['GAME_SERVER_SECRET'])
+        self.assertEqual(len(game['#SIGNAL_SECRET']), 64)
 
     def test_running_again_changes_nothing(self):
         self.fill()

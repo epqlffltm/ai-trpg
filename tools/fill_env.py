@@ -10,9 +10,13 @@
      DB 계정의 비밀번호는 루트 .env 와 그 서버의 DATABASE_URL(postgres://계정:<여기>@…)에 같은 값을 넣는다.
   3. 이미 적힌 값은 바꾸지 않는다. 짝의 한쪽에만 값이 있으면 그 값을 다른 쪽에 옮겨 적는다.
      양쪽의 값이 서로 다르면 고치지 않고 알린다(어느 쪽이 맞는지 이 스크립트는 모른다).
-  4. .env.example 에서 주석으로 막아 둔 줄(# BILLING_SECRET=)은 주석인 채로 값만 채운다. 기능을 켜지 않는다.
-     # 를 지워 켤 때 짝의 값이 이미 맞아 있다.
-  5. .env 에 그 줄이 아예 없으면(.env.example 에 나중에 생긴 줄) .env.example 의 모양(주석인지)대로 끝에 더한다.
+  4. 두 파일이 함께 아는 비밀(서버끼리의 비밀)은 주석으로 막혀 있으면 값을 채우고 주석을 푼다.
+     한쪽만 켜져 있으면 compose 로 띄운 서버가 뜨지 않거나(주소는 compose 가 주므로) 서버끼리의 요청이 401 이 된다.
+     비밀만 켜는 것은 기능을 켜지 않는다. 기능은 주소(BILLING_URL, NOTIFICATION_URL)가 켠다.
+     한 파일만 아는 비밀(SIGNAL_SECRET, AI_LOG_HMAC_KEY)은 주석인 채로 값만 채운다. 켜면 동작이 바뀐다.
+  5. 이미 있는 .env 에 없는 줄(.env.example 에 나중에 생긴 줄)은 그 위의 설명과 함께 끝에 더한다.
+     값이 있어 동작을 바꿀 수 있는 줄은 주석으로 막아 더한다. 켜는 것은 사람이 한다.
+     위의 표에 있는 비밀은 .env.example 의 모양(주석인지)대로 더하고 2~4 를 한다.
 
 비밀의 값은 화면에 찍지 않는다. 무엇을 채웠는지 이름만 찍는다.
 결제 대행사, 메일 서버, AI 의 키, S3 의 접근 키처럼 밖에서 받는 키는 채우지 않는다. 그 이름을 따로 알린다.
@@ -75,6 +79,15 @@ class Secret:
 
     name: str
     spots: tuple[Spot, ...]
+
+
+@dataclass(frozen=True)
+class Block:
+    """.env.example 의 줄 하나와 그 바로 위의 설명(주석). paragraph 면 빈 줄 뒤에서 시작하는 묶음이다."""
+
+    key: str
+    lines: tuple[str, ...]
+    paragraph: bool
 
 
 def database(account: str, root_key: str) -> Secret:
@@ -225,6 +238,112 @@ def write_value(env: EnvFile, index: int, value: str) -> None:
     env.changed = True
 
 
+def is_pair(secret: Secret) -> bool:
+    """두 파일 이상이 함께 아는 비밀인가."""
+    return len(secret.spots) > 1
+
+
+def enable(env: EnvFile, key: str) -> bool:
+    """
+    주석으로 막힌 그 이름의 줄을 값 그대로 푼다. 풀었으면 True 다.
+    켜진 줄이 이미 있거나(find_line 이 그 줄을 먼저 찾는다) 값이 아직 비었으면 그대로 둔다.
+    """
+    index = find_line(env.lines, key)
+    if index is None:
+        return False
+    match = LINE.match(env.lines[index])
+    if not match['comment'] or not is_filled(match['value']):
+        return False
+    env.lines[index] = env.lines[index][len(match['comment']) :]
+    env.changed = True
+    return True
+
+
+def where(spots: list[Spot]) -> str:
+    """자리들을 사람이 읽을 글로."""
+    return ', '.join(f'{spot.file} 의 {spot.key}' for spot in spots)
+
+
+def described(written: list[Spot], enabled: list[Spot], copied: bool) -> str:
+    """비밀 하나에 한 일. 아무것도 하지 않았으면 '이미 채워져 있다' 다."""
+    parts = []
+    if written:
+        parts.append(f'{"맞췄다" if copied else "새로 만들었다"}: {where(written)}')
+    if enabled:
+        parts.append(f'주석을 풀었다: {where(enabled)}')
+    return '. '.join(parts) or '이미 채워져 있다'
+
+
+def is_note(line: str) -> bool:
+    """설명의 줄인가. 주석이지만 "# 이름=값" 처럼 막아 둔 설정은 아니다."""
+    return line.lstrip().startswith('#') and not LINE.match(line)
+
+
+def example_blocks(lines: list[str]) -> list[Block]:
+    """.env.example 의 이름마다 그 줄과 바로 위의 설명. 같은 이름이 여럿이면 처음 것이다."""
+    blocks, seen = [], set()
+    for index, line in enumerate(lines):
+        match = LINE.match(line)
+        if not match or match['key'] in seen:
+            continue
+        seen.add(match['key'])
+        start = index
+        while start > 0 and is_note(lines[start - 1]):
+            start -= 1
+        paragraph = start == 0 or not lines[start - 1].strip()
+        blocks.append(Block(match['key'], tuple(lines[start : index + 1]), paragraph))
+    return blocks
+
+
+def listed_keys(relative: str) -> set[str]:
+    """그 파일에서 표(SECRETS)가 채우는 줄의 이름들. 주소 안의 비밀번호(DATABASE_URL)는 뺀다."""
+    return {spot.key for secret in SECRETS for spot in secret.spots if spot.file == relative and not spot.url}
+
+
+def commented(line: str) -> str:
+    """설정의 줄을 주석으로 막은 모양. 이미 막혀 있으면 그대로다."""
+    return line if LINE.match(line)['comment'] else f'# {line}'
+
+
+def with_newline(line: str, newline: str) -> str:
+    """줄 끝을 그 파일의 줄바꿈으로 바꾼다."""
+    return line.rstrip('\r\n') + newline
+
+
+def append_block(env: EnvFile, block: Block, keep_form: bool) -> None:
+    """
+    .env 끝에 설명과 줄을 더한다. keep_form 이 아니면 줄을 주석으로 막는다.
+    묶음의 시작이면 빈 줄을 하나 띄운다. 줄바꿈은 그 파일의 것을 따른다.
+    """
+    newline = newline_of(env)
+    if env.lines and not env.lines[-1].endswith('\n'):
+        env.lines[-1] += newline
+    if block.paragraph and env.lines and env.lines[-1].strip():
+        env.lines.append(newline)
+    *notes, line = block.lines
+    env.lines += [with_newline(item, newline) for item in [*notes, line if keep_form else commented(line)]]
+    env.changed = True
+
+
+def add_missing_lines(root: Path, relative: str, env: EnvFile) -> Outcome | None:
+    """
+    이미 있는 .env 에 없는 .env.example 의 줄을 더한다. 새로 만든 파일과 .env.example 이 없는 곳은 보지 않는다.
+    더한 것이 없으면 None 이다.
+    """
+    example = (root / relative).with_name('.env.example')
+    if env.created or not example.exists():
+        return None
+    keep = listed_keys(relative)
+    added = []
+    for block in example_blocks(read_lines(example)):
+        if find_line(env.lines, block.key) is None:
+            append_block(env, block, block.key in keep)
+            added.append(block.key)
+    if not added:
+        return None
+    return Outcome(f'{relative} 의 새 줄', f'.env.example 에서 {len(added)}개를 더했다(쓰려면 # 를 지운다): {", ".join(added)}')
+
+
 def append_line(env: EnvFile, template: str, value: str) -> None:
     """.env 끝에 줄을 더한다. 모양(주석인지)은 .env.example 의 그 줄을 따른다."""
     newline = newline_of(env)
@@ -253,19 +372,21 @@ def place(root: Path, env: EnvFile, spot: Spot, secret: str) -> bool:
 
 
 def fill(root: Path, files: dict[str, EnvFile], secret: Secret) -> Outcome:
-    """비밀 하나를 채운다. 짝의 한쪽에 값이 있으면 그 값을, 없으면 새 난수를 쓴다."""
+    """
+    비밀 하나를 채운다. 짝의 한쪽에 값이 있으면 그 값을, 없으면 새 난수를 쓴다.
+    짝이 있는 비밀이면 주석으로 막힌 줄을 푼다. 값이 서로 달라 고치지 못하면 풀지도 않는다.
+    """
     known = {secret_of(raw_value(files[spot.file], spot.key), spot) for spot in secret.spots}
     filled = {value for value in known if is_filled(value)}
     if len(filled) > 1:
-        names = ', '.join(f'{spot.file} 의 {spot.key}' for spot in secret.spots)
-        return Outcome(secret.name, f'값이 서로 다르다. 고치지 않았다. 손으로 맞춘다: {names}')
+        return Outcome(secret.name, f'값이 서로 다르다. 고치지 않았다. 손으로 맞춘다: {where(list(secret.spots))}')
     copied = bool(filled)
     value = filled.pop() if copied else secrets.token_hex(SECRET_BYTES)
     written = [spot for spot in secret.spots if place(root, files[spot.file], spot, value)]
-    if not written:
-        return Outcome(secret.name, '이미 채워져 있다')
-    where = ', '.join(f'{spot.file} 의 {spot.key}' for spot in written)
-    return Outcome(secret.name, f'{"맞췄다" if copied else "새로 만들었다"}: {where}')
+    enabled = [
+        spot for spot in secret.spots if is_pair(secret) and not spot.url and enable(files[spot.file], spot.key)
+    ]
+    return Outcome(secret.name, described(written, enabled, copied))
 
 
 def external_keys(files: dict[str, EnvFile]) -> list[str]:
@@ -292,9 +413,10 @@ def save(env: EnvFile) -> None:
 
 
 def run(root: Path, dry_run: bool) -> tuple[dict[str, EnvFile], list[Outcome], list[str]]:
-    """파일을 읽고 비밀을 채운다. dry_run 이면 쓰지 않는다."""
+    """파일을 읽고, 없는 줄을 더하고, 비밀을 채운다. dry_run 이면 쓰지 않는다."""
     files = {relative: load(root, relative) for relative in ENV_FILES}
-    outcomes = [fill(root, files, secret) for secret in SECRETS]
+    added = [add_missing_lines(root, relative, env) for relative, env in files.items()]
+    outcomes = [outcome for outcome in added if outcome] + [fill(root, files, secret) for secret in SECRETS]
     if not dry_run:
         for env in files.values():
             save(env)
