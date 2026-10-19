@@ -37,6 +37,7 @@ from app.rounds.narrator import (
     Impact,
     ItemActionNote,
     ItemNote,
+    LootNote,
     MonsterTurnNote,
     Move,
     NamingNote,
@@ -58,7 +59,7 @@ from app.rounds.narrator import (
     Verdict,
     WhisperNote,
 )
-from app.rounds.state import move_of, put_down_of, rest_of, search_of, steal_of, take_of
+from app.rounds.state import loot_of, move_of, put_down_of, rest_of, search_of, steal_of, take_of
 from app.tables import quests
 from app.tables.models import GameTable
 from app.whispers.models import Whisper
@@ -258,6 +259,15 @@ def to_steal(declaration: Declaration | None) -> StealNote | None:
         hostile=steal.get('attitude_change') is not None,
         fight=steal.get('fight', False),
     )
+
+
+def to_loot(declaration: Declaration | None) -> LootNote | None:
+    """선언에 적힌 빼앗기의 결과를 서술자에게 줄 모양으로 바꾼다. 빼앗는 행동이 아니면 None."""
+    loot = loot_of(declaration)
+    if loot is None:
+        return None
+    victim = loot['npc_name'] if loot['npc_id'] is not None else loot['monster_name']
+    return LootNote(victim=victim, name=loot['name'], count=loot['count'], looted=loot['looted'], reason=loot['reason'])
 
 
 def to_npc_impact(effect: dict | None) -> NpcImpact | None:

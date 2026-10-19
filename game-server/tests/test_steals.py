@@ -39,7 +39,8 @@ from app.rounds.errors import ActionNotInRulesError
 from app.rounds.models import Round
 from app.rounds.move_lines import describe_move, describe_steal
 from app.rounds.narrator import Move, StealNote
-from app.rounds.steals import is_unwary, require_steal
+from app.rounds.steals import require_steal
+from app.rounds.victims import is_unwary
 from app.tables.models import NpcStatus
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
