@@ -19,10 +19,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.call_log import DbCallLog
 from app.ai.calls import CallScope, Outcome, chars_of, input_digest
 from app.ai.fake import FAKE_MODEL, FakeCallLog, FakeProvider
-from app.ai.models import AiInvocation
 from app.ai.provider import (
     ChatMessage,
     Completion,
@@ -33,6 +31,8 @@ from app.ai.provider import (
     TextSink,
     ignore_text,
 )
+from app.ai_log.call_log import DbCallLog
+from app.ai_log.models import AiInvocation
 from app.assets.models import NarrationStyle
 from app.main import API_PREFIX
 from app.rounds import llm_narrator, prompt

@@ -12,9 +12,9 @@ import pytest
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.ai.call_log import DbCallLog
 from app.ai.retry_budget import RetryBudget
 from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ZAI_KIND, ModelRouter
+from app.ai_log.call_log import DbCallLog
 from app.catalog.lookup import DbModelLookup
 from app.main import create_app
 from app.rounds.fake_narrator import FakeNarrator

@@ -1,9 +1,9 @@
-# game-server/app/ai/repository.py
+# game-server/app/ai_log/repository.py
 
 """
 AI 호출의 기록(ai_invocations)을 고치는 SQL. 커밋하지 않는다.
 
-기록을 쓰는 것은 app/ai/call_log.py 다. 여기는 보관 기간이 지난 원문을 비우는 것(app/ai/retention.py)만 있다.
+기록을 쓰는 것은 app/ai_log/call_log.py 다. 여기는 보관 기간이 지난 원문을 비우는 것(app/ai_log/retention.py)만 있다.
 """
 
 import uuid
@@ -12,7 +12,7 @@ from datetime import datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.models import AiInvocation
+from app.ai_log.models import AiInvocation
 
 
 async def choose_old_texts(session: AsyncSession, before: datetime, limit: int) -> list[uuid.UUID]:
