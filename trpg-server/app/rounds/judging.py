@@ -4,8 +4,9 @@
 닫히는 라운드의 판정. 닫기 시작할 때 한 번만 한다(app/rounds/service.py 의 begin_closing).
 
 서술이 실패해 다시 맡겨도 주사위를 다시 굴리지 않는다. 다시 굴리면 서술을 실패시켜 결과를 바꿀 수 있다.
-  1. 행동들을 판정한다(roll_checks). 맞붙은 몬스터가 있으면 차례(app/rounds/initiative.py)대로 행동과
-     몬스터의 공격(app/rounds/monster_attacks.py)을 판정하고, 없으면 들어온 순서로 판정한다.
+  1. 행동들을 판정한다(roll_checks). 맞붙은 몬스터나 싸우는 NPC 가 있으면 차례(app/rounds/initiative.py)대로 행동과
+     몬스터의 공격(app/rounds/monster_attacks.py), NPC 의 공격(app/rounds/npc_attacks.py)을 판정하고,
+     없으면 들어온 순서로 판정한다.
      판정이면 app/rounds/checks.py, 치료면 app/rounds/treatments.py,
      지목이면 app/rounds/naming.py(주사위를 굴리지 않는다), 물건을 쓰거나 건네면 app/rounds/item_actions.py,
      맵에서 가거나 찾으면 app/rounds/map_actions.py, 쉬면 app/rounds/rests.py(시간만 늘리고 회복은 4 에서).
@@ -39,9 +40,9 @@ from app.engine.action import (
     UseAction,
 )
 from app.engine.dice import Dice
-from app.rounds import initiative
+from app.rounds import initiative, npc_attacks
 from app.rounds import injuries as round_injuries
-from app.rounds.cast import Scene
+from app.rounds.cast import CastMember, Scene
 from app.rounds.checks import judge_check
 from app.rounds.effects import Judging
 from app.rounds.initiative import Turn
@@ -169,42 +170,54 @@ def build_judging(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> 
 
 
 def build_turns(
-    judging: Judging, rolling: list[tuple[TableMember, Declaration]], acting: list[SceneMonster]
+    judging: Judging,
+    rolling: list[tuple[TableMember, Declaration]],
+    acting: list[SceneMonster],
+    fighting: list[CastMember],
 ) -> list[Turn]:
     """
-    행동할 사람들과 공격할 마리들의 차례를 정한다(app/rounds/initiative.py). 앉은 사람, 그다음 몬스터로 넘긴다.
+    행동할 사람들과 공격할 마리들과 싸우는 인물들의 차례를 정한다(app/rounds/initiative.py).
+
+    앉은 사람, 그다음 몬스터, 그다음 인물로 넘긴다.
     """
     ruleset, snapshot = judging.ruleset, judging.snapshot
     ambushed = initiative.ambushed_places(snapshot, judging.monsters, judging.round_number)
     turns = [initiative.member_turn(ruleset, member, ambushed) for member, _ in rolling]
     turns += [initiative.monster_turn(ruleset, snapshot, monster, judging.round_number) for monster in acting]
+    turns += [initiative.npc_turn(ruleset, person) for person in fighting]
     return initiative.order_turns(turns, ruleset.die, judging.dice)
 
 
-def take_turns(judging: Judging, turns: list[Turn], declarations: dict[uuid.UUID, Declaration]) -> list[dict]:
+def take_turn(judging: Judging, turn: Turn, declarations: dict[uuid.UUID, Declaration]) -> dict:
     """
-    차례대로 판정한다. 라운드의 turns 에 적을 문서들을 돌려준다.
+    차례 하나를 판정한다. 라운드의 turns 에 적을 문서를 돌려준다.
 
-    앉은 사람의 결과는 그 사람의 선언에, 몬스터의 결과는 차례의 문서(outcome)에 적는다.
+    앉은 사람의 결과는 그 사람의 선언에, 몬스터와 인물의 결과는 차례의 문서(outcome)에 적는다.
     """
-    documents = []
-    for turn in turns:
-        document = initiative.turn_document(turn)
-        if turn.kind == initiative.TurnKind.PC:
-            take_member_turn(judging, turn.member, declarations[turn.member.user_id])
-        else:
-            document['outcome'] = take_monster_turn(judging, turn.monster)
-        documents.append(document)
-    return documents
+    document = initiative.turn_document(turn)
+    if turn.kind == initiative.TurnKind.PC:
+        take_member_turn(judging, turn.member, declarations[turn.member.user_id])
+    elif turn.kind == initiative.TurnKind.NPC:
+        document['outcome'] = npc_attacks.take_npc_turn(judging, turn.npc)
+    else:
+        document['outcome'] = take_monster_turn(judging, turn.monster)
+    return document
+
+
+def take_turns(judging: Judging, turns: list[Turn], declarations: dict[uuid.UUID, Declaration]) -> list[dict]:
+    """차례대로 판정한다. 앞 차례의 결과를 다 끝낸 뒤 다음 차례로 간다. 라운드의 turns 에 적을 문서들을 돌려준다."""
+    return [take_turn(judging, turn, declarations) for turn in turns]
 
 
 def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> set[uuid.UUID]:
     """
     닫히는 라운드의 행동과 몬스터의 공격을 판정하고, 결과에 따라 HP 를 바꾸고, 결과를 적는다.
 
-    장면에 맞붙은 몬스터(공격이 있고 쓰러지지 않은 마리, app/rounds/monster_attacks.py 의 can_act)가 있으면
-    차례를 정해 그 순서로 굴린다(app/rounds/initiative.py). 차례와 몬스터의 결과는 라운드의 turns 에 적는다.
-    없으면 들어온(앉은) 순서로 굴리고 turns 는 비어 있다. 몬스터가 없는 판은 이 칸이 생기기 전과 같다.
+    장면에 맞붙은 몬스터(공격이 있고 쓰러지지 않은 마리, app/rounds/monster_attacks.py 의 can_act)나
+    싸우는 인물(적대이고 싸움이 붙었고 공격이 있는 인물, app/rounds/npc_attacks.py 의 can_act)이 있으면
+    차례를 정해 그 순서로 굴린다(app/rounds/initiative.py). 차례와 몬스터, 인물의 결과는 라운드의 turns 에 적는다.
+    없으면 들어온(앉은) 순서로 굴리고 turns 는 비어 있다. 둘 다 없는 판은 이 칸이 생기기 전과 같다.
+    싸우는 인물은 판정을 시작하기 전에 고른다. 이번 라운드에 싸움이 붙은 인물은 다음 라운드부터 친다.
 
     한 사람의 판정과 그 결과(피해, 회복, 부상, 치료)를 끝낸 뒤에 다음 차례로 넘어간다.
     앞사람이 쓰러뜨린 것을 뒷사람이 일으킬 수 있다. NPC 도 그렇다. 앞사람이 죽인 NPC 는 뒷사람이 바꾸지 못한다.
@@ -222,15 +235,16 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> se
     initiative.mark_engaged(scene.monsters, round_.number)
     rolling = rolling_members(table, round_)
     acting = [monster for monster in scene.monsters if can_act(monster)]
-    if not rolling and not acting:
+    fighting = [person for person in scene.cast if npc_attacks.can_act(person)]
+    if not rolling and not acting and not fighting:
         return set()
 
     judging = build_judging(table, round_, dice, scene)
-    if not acting:
+    if not acting and not fighting:
         for member, declaration in rolling:
             take_member_turn(judging, member, declaration)
         return judging.hurt
-    turns = build_turns(judging, rolling, acting)
+    turns = build_turns(judging, rolling, acting, fighting)
     declarations = {member.user_id: declaration for member, declaration in rolling}
     round_.turns = take_turns(judging, turns, declarations)
     return judging.hurt

@@ -525,9 +525,9 @@ def to_target_gone(declaration: Declaration | None) -> TargetGoneNote | None:
 
 def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
     """
-    라운드에 적힌 몬스터의 차례 하나를 서술자에게 줄 모양으로. 움직이지 못한 차례(skipped)면 None.
+    라운드에 적힌 몬스터나 인물의 차례 하나를 서술자에게 줄 모양으로. 움직이지 못한 차례(skipped)면 None.
 
-    굴림의 숫자는 옮기지 않는다. 몬스터의 능력치를 드러낸다.
+    둘의 outcome 은 같은 모양이다. 굴림의 숫자와 부상의 영향은 옮기지 않는다. 그 능력치를 드러낸다.
     """
     outcome = turn['outcome']
     if 'skipped' in outcome:
@@ -542,16 +542,18 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
 
 
 def to_turn_note(turn: dict) -> TurnNote | None:
-    """라운드에 적힌 차례 하나를 서술자에게 줄 모양으로. 몬스터가 움직이지 못한 차례면 None."""
+    """라운드에 적힌 차례 하나를 서술자에게 줄 모양으로. 몬스터나 인물이 움직이지 못한 차례면 None."""
     if turn['kind'] == 'pc':
         return TurnNote(character_name=turn['character_name'])
-    monster = to_monster_turn(turn)
-    return TurnNote(monster=monster) if monster is not None else None
+    attack = to_monster_turn(turn)
+    if attack is None:
+        return None
+    return TurnNote(npc=attack) if turn['kind'] == 'npc' else TurnNote(monster=attack)
 
 
 def to_turn_notes(turns: list[dict]) -> list[TurnNote]:
     """
-    라운드에 적힌 차례들(Round.turns)을 서술자에게 줄 모양으로. 차례 순서다. 몬스터가 움직이지 못한 차례는 뺀다.
+    라운드에 적힌 차례들(Round.turns)을 서술자에게 줄 모양으로. 차례 순서다. 움직이지 못한 차례는 뺀다.
 
     차례는 닫기 시작할 때 굳었다(app/rounds/judging.py). 몇 번을 맡겨도 같은 것을 받는다.
     """
