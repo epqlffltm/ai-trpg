@@ -685,7 +685,7 @@ services:
       retries: 6
       start_period: 10s
 
-  # 로그와 메트릭을 보는 화면. Loki 와 Prometheus 는 뜰 때 데이터 소스로 붙는다(docker/grafana/provisioning).
+  # 로그와 메트릭을 보는 화면. Loki 와 Prometheus 는 뜰 때 데이터 소스로, 서버마다의 대시보드는 파일로 붙는다(docker/grafana).
   # 이 PC(127.0.0.1)에만 연다. 관리 서버가 생기기 전에는 SSH 터널로만 붙는다.
   # 관리자 비밀번호는 루트 .env 의 GRAFANA_ADMIN_PASSWORD 다. 볼륨(grafanadata)이 비어 있는 첫 기동 때만 반영된다
   grafana:
@@ -713,6 +713,9 @@ services:
       GF_LOG_CONSOLE_FORMAT: json
     volumes:
       - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      # 대시보드는 저장소의 파일이 원본이다(docker/grafana/dashboards). 화면에서 고치지 못한다
+      - ./docker/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/grafana/dashboards:/etc/grafana/dashboards:ro
       - grafanadata:/var/lib/grafana
     ports:
       - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
