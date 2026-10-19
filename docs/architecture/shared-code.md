@@ -6,6 +6,7 @@
 - `shared/` 는 아직 없다. 이 문서는 만들기 전에 정해 두는 규칙이다.
 - 2026-10-19: 자산은 asset-server 가 원본을 갖는다는 결정을 반영했다(원칙 1·2, 공유 표, 템플릿, 열린 질문).
 - 2026-10-19: `app/ai` 를 뽑는 방식을 정했다(#380). 모델 목록, `shared/` 를 가져오는 법, CI, 뽑는 때다([정한 것](#정한-것)). "AI 호출"의 `app/ai` 표는 `main` `0930cf9` 기준이다.
+- 2026-10-19: `app/ai` 의 경계 정리가 끝났다(#506, #508, #509). `app/ai` 는 이제 `app.ai` 밖의 `app.*` 를 가져오지 않는다. "AI 호출"의 표에 옮긴 곳을 적었다(기준 `main` `1cda0ba`).
 
 ## 목차
 
@@ -48,14 +49,15 @@
 ### AI 호출 (`shared/ai-core`)
 
 게임 서버의 `app/ai` 에서 뽑는다. 창구(OpenAI 호환, Claude, Gemini), 스트리밍, 토큰 예산, 원가 기록, 재시도 예산이 이미 있다.
-다만 `app/ai` 는 다른 폴더에 기대는 곳이 있어서, 그대로 떼어 낼 수는 없다(기준 `0930cf9`. 21개 파일 가운데 7개).
+`app/ai` 가 다른 폴더에 기대던 곳(기준 `0930cf9`. 21개 파일 가운데 7개)은 game-server 안에서 정리했다. 지금은 폴더째 옮길 수 있는 상태다.
+`game-server/tests/test_ai_boundary.py` 가 `app/ai` 에서 `app.ai` 밖의 `app.*` 를 가져오면 실패한다. 예외는 없다.
 
-| `app/ai` 가 기대는 곳 | 무엇을 가져오나 | 뽑을 때 |
+| `app/ai` 가 기대던 곳 | 무엇을 가져왔나 | 정리한 것 |
 | --- | --- | --- |
-| `app/catalog` (`lookup`, `models`, `rules`) | 모델 목록의 계약: 열거형(`Provider`, `ReasoningStyle`, `TokenLimitField`), 값 모양(`CatalogModel`, `UnitCost`), 읽는 쪽의 약속(`ModelLookup`), 순수 규칙(`always_thinks`, `is_offered`, `is_retired`). `routing`, `anthropic`, `gemini`, `thinking`, `costs` 가 가져온다. DB 는 가져오지 않는다 | 계약은 `app/ai` 로 옮기고 의존을 뒤집는다(#496). DB 를 읽는 `DbModelLookup` 과 표(`ai_models` 등), `offers` 는 `app/catalog` 에 남는다 |
-| `app/core` (`loops`, `jobs`, `database`) | 뒤에서 도는 작업의 틀, DB 기반. `retention`(글 보관 기한 지우기)과 `models`(호출 기록의 표)가 가져온다 | 둘을 호출 기록의 표(`repository`, `call_log` 포함)와 함께 서비스 쪽으로 뺀다(#497) |
-| `app/observability` | 작업 식별자(`job_scope`, `new_job_id`). `retention` 이 가져온다 | `retention` 과 함께 서비스에 남는다(#497) |
-| `app/assets/models` | 표를 만들 때 쓰는 도우미(`one_of`). 호출 기록의 표가 가져온다 | 표와 함께 서비스에 남는다(#497) |
+| `app/catalog` (`lookup`, `models`, `rules`) | 모델 목록의 계약: 열거형(`Provider`, `ReasoningStyle`, `TokenLimitField`), 값 모양(`CatalogModel`, `UnitCost`), 읽는 쪽의 약속(`ModelLookup`), 순수 규칙(`always_thinks`, `is_offered`, `is_retired`). `routing`, `anthropic`, `gemini`, `thinking`, `costs` 가 가져온다. DB 는 가져오지 않는다 | 계약을 `app/ai/catalog_contract.py` 로 옮겼다. `app/catalog` 가 거기서 가져온다(#496, #506). DB 를 읽는 `DbModelLookup` 과 표(`ai_models` 등), `offers`, 원가 반올림(`round_cost_usd`)은 `app/catalog` 에 남았다 |
+| `app/core` (`loops`, `jobs`, `database`) | 뒤에서 도는 작업의 틀, DB 기반. `retention`(글 보관 기한 지우기)과 `models`(호출 기록의 표)가 가져온다 | `models`, `repository`, `call_log`(`DbCallLog`), `retention` 을 `app/ai_log` 로 옮겼다(#497, #508). 기록을 받는 곳의 모양(`CallLog`)과 기록 한 줄(`CallRecord`)은 `app/ai/calls.py` 에 남았다 |
+| `app/observability` | 작업 식별자(`job_scope`, `new_job_id`). `retention` 이 가져온다 | `retention` 과 함께 `app/ai_log` 로 갔다(#508) |
+| `app/assets/models` | 표를 만들 때 쓰는 도우미(`one_of`). 호출 기록의 표가 가져온다 | 표와 함께 `app/ai_log` 로 갔다(#508) |
 | `app/billing` (`catalog/offers.py` 가 가져온다) | 가격 목록, 가격표의 등급 | 판매가와 등급은 결제 서버가 정한다. 그것으로 고를 수 있는 모델을 맞춰 붙이는 것(`offers`)은 서비스에 남는다 |
 
 | 공용으로 올릴 후보 | 서비스에 남는 것 |
@@ -84,7 +86,7 @@ TRPG 와 chat(의 두 모드)이 비슷한 모양으로 쓰는 것들이다. 같
 
 ## 언제 뽑는가
 
-- AI 호출 코드는 두 단계로 뽑는다. 지금은 game-server 안에서 `app/ai` 가 다른 폴더를 가져오지 않게 경계만 정리한다(#496, #497, #498). `shared/ai-core` 로 실제로 옮기는 일은 두 번째로 쓰는 곳인 chat-server 를 만드는 PR 에서 한다(#499). 쓰는 곳이 하나뿐인 공용 패키지를 먼저 만들지 않는다(원칙 4).
+- AI 호출 코드는 두 단계로 뽑는다. 첫 단계로 game-server 안에서 `app/ai` 가 다른 폴더를 가져오지 않게 경계를 정리했다(#496, #497, #498. 끝). `shared/ai-core` 로 실제로 옮기는 일은 두 번째로 쓰는 곳인 chat-server 를 만드는 PR 에서 한다(#499). 쓰는 곳이 하나뿐인 공용 패키지를 먼저 만들지 않는다(원칙 4).
 - 템플릿은 asset-server 를 만들 때 정한다. 캐릭터는 처음부터 asset-server 에서 만들고, 세계관과 로어북은 game-server 에서 옮겨 온다. chat 이라는 두 번째 사용자가 확실하므로 일찍 정한다.
   그 밖의 템플릿(지도, 물건, 인물)은 chat 이 실제로 쓰려고 할 때 뽑는다. 처음부터 공용 패키지로 만들지 않는다.
   두 서비스에 맞는 모양인지 쓰임을 보기 전에 공용으로 만들면 둘 다에 맞지 않는 모양이 되기 쉽다.
@@ -102,7 +104,7 @@ TRPG 와 chat(의 두 모드)이 비슷한 모양으로 쓰는 것들이다. 같
 - 처음에는 게임 서버를 만드는 쪽이 공용 코드의 변경을 주도하고, 나중에 쓰는 서비스가 따라간다. 공용 코드 때문에 한 서비스의 진행이 다른 서비스에 막히는 일을 줄이려는 것이다.
 - 공용으로 올라간 뒤에 형식을 바꿀 때는, 쓰는 서비스를 모두 확인하고 한 PR 에서 맞춘다.
 - 게임 서버의 `app/ai`, `app/lore`, `app/memory`, `app/assets` 는 공용 후보이므로 고칠 때는 이 문서를 읽고 쓰임을 확인한다.
-- `app/ai` 가 `app.ai` 밖의 `app.*` 를 가져오면 테스트가 실패한다(#498). 예외를 두지 않는다. 필요하면 경계를 다시 의논한다.
+- `app/ai` 가 `app.ai` 밖의 `app.*` 를 가져오면 테스트가 실패한다(`game-server/tests/test_ai_boundary.py`, #498). 예외를 두지 않는다. 필요하면 경계를 다시 의논한다.
 
 ## 정한 것
 
@@ -114,7 +116,7 @@ TRPG 와 chat(의 두 모드)이 비슷한 모양으로 쓰는 것들이다. 같
 | 모델의 이름표가 서비스 사이에서 어긋나는 것 | 결제 서버의 가격표에 없는 이름표는 고를 수 없어 바로 드러난다. 원가 단가가 어긋나도 원가 기록만 틀리고 판매가는 결제 서버의 것이다. 파일 원본으로 옮길 때 한곳에서 정한다 | - |
 | `shared/` 를 이미지에 넣는 법 | uv 의 경로 의존(`[tool.uv.sources] ai-core = { path = "../shared/ai-core" }`)과 compose 의 `build.additional_contexts: shared: ./shared`. Dockerfile 은 `COPY --from=shared`. 이미지 안에서 서버는 `/app`, 공용 코드는 `/shared` 라 상대 경로가 그대로 맞는다 | 빌드 범위를 루트로: 다른 서버의 `.env` 가 빌드에 섞일 수 있다. 서버마다 복사: 같은 코드가 두 벌이다. 따로 패키지와 태그: 혼자 쓰는 저장소에 무겁다 |
 | 공용 코드의 변경이 부르는 CI | 서버의 `pyproject.toml` 의 경로 의존을 읽어 고른다([버전과 CI](#버전과-ci)) | 표를 적는다: 새 서버가 쓰기 시작할 때 고치는 것을 잊는다. 모두 돌린다: Python 이 아닌 서버까지 돈다 |
-| 뽑는 때 | 지금은 경계만(#496 계약 옮기기, #497 호출 기록 빼내기, #498 CI 로 지키기), 옮기기는 chat-server 를 만들 때(#499) | 지금 `shared/` 를 만든다: 쓰는 곳이 하나뿐인데 빌드와 CI 를 먼저 바꿔야 한다 |
+| 뽑는 때 | 먼저 경계만(#496 계약 옮기기, #497 호출 기록 빼내기, #498 테스트로 지키기. 끝), 옮기기는 chat-server 를 만들 때(#499) | 지금 `shared/` 를 만든다: 쓰는 곳이 하나뿐인데 빌드와 CI 를 먼저 바꿔야 한다 |
 
 ## 열린 질문
 
