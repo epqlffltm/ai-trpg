@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/httpapi"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/metrics"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/metrics/metricstest"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 )
 
 // 요청과 DB 의 상태가 정한 이름과 label 로 세어지는지 본다. 이름과 label 은 docs/observability.md 의 "메트릭"에 있다.
@@ -135,5 +137,72 @@ func TestARouterWithoutAMeterStillAnswers(t *testing.T) {
 	// 메트릭을 넣지 않은 테스트와 명령은 세지 않을 뿐이다
 	if code := get(t, &fakeDB{}, httpapi.HealthPath).Code; code != http.StatusOK {
 		t.Errorf("상태 = %d", code)
+	}
+}
+
+// webhookLabels 는 알림 수의 label 이다.
+func webhookLabels(provider, result string) []attribute.KeyValue {
+	return []attribute.KeyValue{attribute.String("provider", provider), attribute.String("result", result)}
+}
+
+// signedNotifications 는 메트릭을 모으는 라우터로 서명한 알림을 보낸다.
+func signedNotifications(t *testing.T, notifier httpapi.PaymentNotifier) (*metricstest.Recorder, func(text, signature string) int) {
+	t.Helper()
+	recorder := metricstest.New(t)
+	deps := httpapi.Dependencies{
+		Notifier: notifier, WebhookSecret: webhookSecret, Now: func() time.Time { return webhookNow }, Meter: recorder.Meter(),
+	}
+	notify := func(text, signature string) int {
+		headers := map[string]string{}
+		if signature != "" {
+			headers[payment.SignatureHeader] = signature
+		}
+		return send(t, deps, request{method: http.MethodPost, path: webhookURL, body: text, headers: headers, anonymous: true}).Code
+	}
+	return recorder, notify
+}
+
+func TestSignedNotificationsAreCountedByHowTheyEnded(t *testing.T) {
+	recorder, notify := signedNotifications(t, &fakeNotifier{})
+	notify(webhookText, signed(webhookText))
+	notify(webhookText, signed(webhookText))
+	notify(webhookText, "")
+	notify(`{"payment_key":"fake_ok_1"}`, signed(`{"payment_key":"fake_ok_1"}`))
+
+	want := map[string]int64{"accepted": 2, "bad_signature": 1, "bad_request": 1}
+	for result, count := range want {
+		if got := recorder.Int64("payment_webhooks", webhookLabels("fake", result)...); got != count {
+			t.Errorf("result %s = %d. %d 여야 한다", result, got, count)
+		}
+	}
+}
+
+func TestANotificationThatAsksForARetryIsCountedAsUnavailable(t *testing.T) {
+	recorder, notify := signedNotifications(t, &fakeNotifier{err: errors.New("provider is down")})
+	if code := notify(webhookText, signed(webhookText)); code != http.StatusServiceUnavailable {
+		t.Fatalf("상태 코드 = %d", code)
+	}
+
+	if got := recorder.Int64("payment_webhooks", webhookLabels("fake", "unavailable")...); got != 1 {
+		t.Errorf("다시 보내 달라고 한 알림 = %d. 1 이어야 한다", got)
+	}
+}
+
+func TestTossNotificationsAreCountedUnderToss(t *testing.T) {
+	recorder := metricstest.New(t)
+	deps := httpapi.Dependencies{Notifier: &fakeNotifier{}, TossWebhook: true, Meter: recorder.Meter()}
+	toss := func(text string) {
+		send(t, deps, request{method: http.MethodPost, path: httpapi.TossWebhookPath, body: text, anonymous: true})
+	}
+	toss(tossPaymentChanged)
+	toss(`{"eventType":"CANCEL_STATUS_CHANGED","createdAt":"x","data":{}}`)
+	toss("not json")
+
+	// 다루지 않는 알림은 200 으로 받지만 accepted 와 가른다. 받아서 한 일이 없다
+	want := map[string]int64{"accepted": 1, "ignored": 1, "bad_request": 1}
+	for result, count := range want {
+		if got := recorder.Int64("payment_webhooks", webhookLabels("toss", result)...); got != count {
+			t.Errorf("result %s = %d. %d 여야 한다", result, got, count)
+		}
 	}
 }

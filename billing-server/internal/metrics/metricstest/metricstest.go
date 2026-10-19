@@ -101,6 +101,22 @@ func (r *Recorder) Int64(name string, attrs ...attribute.KeyValue) int64 {
 	return 0
 }
 
+// HasPoint 는 정수 메트릭에 label 이 꼭 맞는 점이 있는지 본다. 메트릭이 아직 없으면 점도 없다.
+func (r *Recorder) HasPoint(name string, attrs ...attribute.KeyValue) bool {
+	r.t.Helper()
+	found, ok := r.lookup(name)
+	if !ok {
+		return false
+	}
+	want := attribute.NewSet(attrs...)
+	for _, point := range int64Points(r.t, found) {
+		if point.Attributes.Equals(&want) {
+			return true
+		}
+	}
+	return false
+}
+
 // HistogramCount 는 히스토그램에서 label 이 꼭 맞는 점이 센 수다. 없으면 테스트를 멈춘다.
 func (r *Recorder) HistogramCount(name string, attrs ...attribute.KeyValue) uint64 {
 	r.t.Helper()

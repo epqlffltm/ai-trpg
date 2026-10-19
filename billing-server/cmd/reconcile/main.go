@@ -125,8 +125,18 @@ func run(args []string, out io.Writer) int {
 		return exitFailed
 	}
 	defer pool.Close()
-	services, err := app.NewServices(pool, settings.Rules, app.NewProviders(settings.Payment), time.Now)
+	// 오래된 주문을 결제 대행사에 물어 끝낸다. 부른 수와 바꾼 주문의 상태를 센다
+	providers, err := app.MeasureProviders(app.NewProviders(settings.Payment), settings.Payment.Provider, meters.Meter())
 	if err != nil {
+		logStartFailed(err)
+		return exitFailed
+	}
+	services, err := app.NewServices(pool, settings.Rules, providers, time.Now)
+	if err != nil {
+		logStartFailed(err)
+		return exitFailed
+	}
+	if err := app.MeasureServices(services, meters.Meter()); err != nil {
 		logStartFailed(err)
 		return exitFailed
 	}

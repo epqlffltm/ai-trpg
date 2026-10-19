@@ -109,6 +109,10 @@ func run(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// 만료로 끝낸 주문을 센다
+	if err := app.MeasureServices(services, meters.Meter()); err != nil {
+		return err
+	}
 	sweeper := sweep.New(services.Holds, services.Wallet, services.Orders, opts.limit).
 		WithNotices(guardiannotice.NewService(pool, time.Now, noticeSender(settings.GuardianNotices))).
 		WithUserNotices(usernotice.NewService(pool, time.Now, userNoticeSender(settings.UserNotices)))

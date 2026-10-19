@@ -28,27 +28,29 @@ const TossWebhookPath = APIPrefix + "/webhooks/toss"
 //   - 본문을 읽지 못한다 -> 400
 //   - 토스페이먼츠에 결과를 묻지 못했다 -> 503. 토스페이먼츠가 알림을 다시 보낸다
 //   - 그 밖에는 200. 다루지 않는 종류의 알림, 끝낼 것이 없는 알림도 200 이다. 다시 보낼 까닭이 없다
-func tossWebhook(notifier PaymentNotifier) gin.HandlerFunc {
+//
+// 어떻게 끝냈는지 payment_webhooks 로 센다(metrics.go). 서명이 없는 알림이라 bad_signature 는 없다.
+func tossWebhook(notifier PaymentNotifier, webhooks webhookCounter) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		raw, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, payment.TossNotificationMaxBytes))
-		if err != nil {
-			badRequest(c, "알림의 본문을 읽지 못했습니다.")
-			return
-		}
-		notification, relevant, err := payment.ReadTossNotification(raw)
-		if err != nil {
-			badRequest(c, err.Error()+".")
-			return
-		}
-		if !relevant {
-			c.JSON(http.StatusOK, webhookBody{Received: true})
-			return
-		}
-		if err := notifier.Notify(c.Request.Context(), notification.OrderID, notification.PaymentKey); err != nil {
-			_ = c.Error(err)
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, errorBody{Detail: "지금은 알림을 처리할 수 없습니다. 다시 보내 주세요."})
-			return
-		}
-		c.JSON(http.StatusOK, webhookBody{Received: true})
+		webhooks.count(c.Request.Context(), webhookToss, handleTossWebhook(c, notifier))
 	}
+}
+
+// handleTossWebhook 은 토스페이먼츠의 알림 하나에 답하고, 어떻게 끝냈는지(label result) 돌려준다.
+func handleTossWebhook(c *gin.Context, notifier PaymentNotifier) string {
+	raw, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, payment.TossNotificationMaxBytes))
+	if err != nil {
+		badRequest(c, "알림의 본문을 읽지 못했습니다.")
+		return webhookBadRequest
+	}
+	notification, relevant, err := payment.ReadTossNotification(raw)
+	if err != nil {
+		badRequest(c, err.Error()+".")
+		return webhookBadRequest
+	}
+	if !relevant {
+		c.JSON(http.StatusOK, webhookBody{Received: true})
+		return webhookIgnored
+	}
+	return notify(c, notifier, notification.OrderID, notification.PaymentKey)
 }

@@ -1789,13 +1789,18 @@ compose 로 띄울 때는 루트 `.env` 에 적는다(프로필 `observability` 
 | `db_pool_connections_max` | 서버, 정리 작업, 대사 | 없음 |
 | `db_pool_wait_seconds` | 서버, 정리 작업, 대사 | 없음. 풀에서 연결을 얻으려고 기다린 시간 |
 | `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | 정리 작업(`sweep.run`), 대사(`reconcile.run`) | `operation`. 끝난 수에는 `result`(`success`, `server_error`, `cancelled`) |
+| `billing_orders_total` | 서버, 정리 작업(`expired`), 대사 | `status`. 그 상태가 된 주문의 수 |
+| `payment_provider_calls_total` | 서버, 대사 | `provider`(`PAYMENT_PROVIDER`), `operation`(`confirm`, `lookup`, `cancel`), `outcome` |
+| `payment_webhooks_total` | 서버 | `provider`(서명한 알림은 `fake`, 토스의 알림은 `toss`), `result`(`accepted`, `ignored`, `bad_signature`, `bad_request`, `unavailable`) |
 
 - 모든 메트릭에 `service="billing-server"` 가 붙는다(수집기가 붙인다). 프로세스는 `instance` 의 앞부분으로 가른다: `server-…`, `sweeper-…`, `reconcile-…`
 - 메서드는 HTTP 가 정한 것만 그대로 적고, 그 밖은 `_OTHER` 다. 실제 주소, 사용자, 주문 번호는 label 로 쓰지 않는다
 - 대사는 하루 한 번 짧게 돌고 끝난다. 보내는 간격(15초)을 기다리지 않고 끝날 때 한 번 보낸다. 수집기가 답하지 않으면 5초 뒤에 버리고 끝난다
 - 수집기가 죽어 있어도 서버는 뜨고 요청은 영향을 받지 않는다. 보내지 못한 묶음은 버린다
 - 사람이 치는 명령(`cmd/migrate`, `cmd/orders`, `cmd/prices`, `cmd/pricereviews`, `cmd/fakepg`, `cmd/fakegame`)은 메트릭을 내지 않는다
-- 결제의 업무 메트릭(원장, 중복 방지 키, 주문, 결제 대행사, 알림)은 아직이다(docs/observability.md 의 "결제 (billing)" 표)
+- 업무 메트릭의 값과 뜻은 docs/observability.md 의 "결제 (billing)" 표에 있다. 주문은 커밋한 뒤에, 상태를 실제로 바꾼 프로세스가 센다. 같은 주문을 다시 보낸 요청은 다시 세지 않는다
+- 결제 대행사는 감싸서 센다(`payment.Measured`). 주문의 코드도, 결제 대행사의 코드도 세는 것을 모른다
+- 원장(`billing_ledger_operations_total`)과 중복 방지 키(`billing_idempotency_total`)는 아직이다. 지갑의 일은 다른 트랜잭션 안에서 돌아서, 커밋한 것만 세려면 고칠 곳이 많다. 따로 한다
 
 로컬에서 보내 보려면 루트의 `docker compose --profile observability up -d` 로 Alloy 와 Prometheus 를 띄운다.
 Alloy 의 4318 은 바깥에 열지 않으므로, 서버도 compose 로(`--profile app`) 띄워 Grafana 의 Prometheus 에서 `{service="billing-server"}` 로 찾는다.

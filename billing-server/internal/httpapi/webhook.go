@@ -41,28 +41,41 @@ type webhookBody struct {
 //   - 본문을 읽지 못한다 -> 400
 //   - 결제 대행사에 결과를 묻지 못했다 -> 503. 결제 대행사가 알림을 다시 보낸다
 //   - 그 밖에는 200. 끝낼 것이 없는 알림(모르는 주문, 이미 끝난 주문)도 200 이다. 다시 보낼 까닭이 없다
-func paymentWebhook(notifier PaymentNotifier, secret string, now func() time.Time) gin.HandlerFunc {
+//
+// 어떻게 끝냈는지 payment_webhooks 로 센다(metrics.go).
+func paymentWebhook(notifier PaymentNotifier, secret string, now func() time.Time, webhooks webhookCounter) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 서명은 받은 바이트 그대로에 대한 것이다. JSON 으로 읽기 전의 본문을 확인한다
-		raw, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodyBytes))
-		if err != nil {
-			badRequest(c, "알림의 본문을 읽지 못했습니다.")
-			return
-		}
-		if err := payment.VerifySignature(secret, c.GetHeader(payment.SignatureHeader), raw, now()); err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, errorBody{Detail: "알림의 서명이 맞지 않습니다."})
-			return
-		}
-		var request webhookRequest
-		if err := json.Unmarshal(raw, &request); err != nil || request.OrderID == uuid.Nil || request.PaymentKey == "" {
-			badRequest(c, "알림의 본문에 order_id 와 payment_key 가 있어야 합니다.")
-			return
-		}
-		if err := notifier.Notify(c.Request.Context(), request.OrderID, request.PaymentKey); err != nil {
-			_ = c.Error(err)
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, errorBody{Detail: "지금은 알림을 처리할 수 없습니다. 다시 보내 주세요."})
-			return
-		}
-		c.JSON(http.StatusOK, webhookBody{Received: true})
+		webhooks.count(c.Request.Context(), webhookFake, handlePaymentWebhook(c, notifier, secret, now))
 	}
+}
+
+// handlePaymentWebhook 은 서명한 알림 하나에 답하고, 어떻게 끝냈는지(label result) 돌려준다.
+func handlePaymentWebhook(c *gin.Context, notifier PaymentNotifier, secret string, now func() time.Time) string {
+	// 서명은 받은 바이트 그대로에 대한 것이다. JSON 으로 읽기 전의 본문을 확인한다
+	raw, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodyBytes))
+	if err != nil {
+		badRequest(c, "알림의 본문을 읽지 못했습니다.")
+		return webhookBadRequest
+	}
+	if err := payment.VerifySignature(secret, c.GetHeader(payment.SignatureHeader), raw, now()); err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, errorBody{Detail: "알림의 서명이 맞지 않습니다."})
+		return webhookBadSignature
+	}
+	var request webhookRequest
+	if err := json.Unmarshal(raw, &request); err != nil || request.OrderID == uuid.Nil || request.PaymentKey == "" {
+		badRequest(c, "알림의 본문에 order_id 와 payment_key 가 있어야 합니다.")
+		return webhookBadRequest
+	}
+	return notify(c, notifier, request.OrderID, request.PaymentKey)
+}
+
+// notify 는 알림이 가리키는 주문을 끝내고 답한다. 결제 대행사에 묻지 못했으면 503 이다. 결제 대행사가 다시 보낸다.
+func notify(c *gin.Context, notifier PaymentNotifier, orderID uuid.UUID, paymentKey string) string {
+	if err := notifier.Notify(c.Request.Context(), orderID, paymentKey); err != nil {
+		_ = c.Error(err)
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, errorBody{Detail: "지금은 알림을 처리할 수 없습니다. 다시 보내 주세요."})
+		return webhookUnavailable
+	}
+	c.JSON(http.StatusOK, webhookBody{Received: true})
+	return webhookAccepted
 }
