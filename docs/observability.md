@@ -29,10 +29,10 @@
 | 공통 모양의 JSON 로그 | 다섯 서버에 구현 |
 | 민감정보를 가리는 마지막 방어선 | 다섯 서버에 구현 |
 | 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
-| 메트릭 | 이름과 규칙만 정했다. 내보내는 코드는 없다 |
+| 메트릭 | 이름과 규칙, 보내는 길과 저장소를 정했다([아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)). 내보내는 코드는 없다 |
 | 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그 모으기](../README.md#로그-모으기) |
-| Prometheus, Tempo | 없다. 수집기(Alloy)에 붙일 자리만 정했다([아래](#수집기grafana-alloy를-붙일-자리)) |
+| Prometheus, Tempo | 없다. Prometheus 는 정했고(2026-10-19) 다음 PR 에서 붙인다. Tempo 는 자리만 정했다([아래](#수집기grafana-alloy를-붙일-자리)) |
 | 관리 서버, 관리 DB, 관리자 화면, Gemma 요약 | 없다 |
 
 ## 로그, 메트릭, 추적의 역할
@@ -528,6 +528,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 ## 메트릭
 
 **이름과 규칙만 정했다. 내보내는 코드는 아직 없다.** 붙일 때 이 표를 따른다.
+보내는 길(OTLP → Alloy → Prometheus)과 계측기를 만드는 법은 [수집기의 2. 메트릭](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)에 있다.
 
 ### 규칙
 
@@ -668,7 +669,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 ## 수집기(Grafana Alloy)를 붙일 자리
 
 수집기를 붙일 때 정한 것과 바꿀 곳을 적어 둔다(#25). 순서는 로그, 메트릭, 추적이다. 뒤로 갈수록 서버 코드를 많이 고친다.
-로그는 붙였다([붙인 것](#붙인-것-로그)). 메트릭과 추적은 아직이다.
+로그는 붙였다([붙인 것](#붙인-것-로그)). 메트릭은 정한 것만 있고([2. 메트릭](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)), 추적은 아직이다.
 
 ```
 서버(stderr 의 JSON) ─▶ Docker(json-file) ─▶ Alloy ─▶ Loki        ─┐
@@ -746,20 +747,72 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | 개인정보를 다루는 시스템에 들어간 사람의 기록(운영자의 조회와 조작, 관리자 화면) | 각 서버의 DB(`operator_actions`, 인증 서버의 보안 이벤트, [운영자 권한](architecture/operators.md)) | 1년 이상. 정보주체 5만 명 이상이거나 민감정보·고유식별정보를 다루면 2년 이상(개인정보의 안전성 확보조치 기준 8조). 공개 전에 처리방침과 함께 다시 확인한다(법률 검토가 아니다) |
 | 결제와 청약철회 | 결제 서버의 원장(DB, 덧붙이기만) | 지우지 않는다 |
 
-**나중에 S3 로 옮길 때.** Loki 는 저장소 설정만 바꿔 S3 에 쓴다. Prometheus 는 스스로 S3 에 쓰지 못한다. 메트릭을 S3 에 두려면 Mimir 나 Thanos 를 하나 더 둬야 해서, 메트릭 단계에서 정한다.
+**나중에 S3 로 옮길 때.** Loki 는 저장소 설정만 바꿔 S3 에 쓴다. Prometheus 는 스스로 S3 에 쓰지 못한다. 메트릭은 Mimir 로 바꿔 S3 에 쓴다([Mimir 로 옮길 수 있게](#mimir-로-옮길-수-있게-지키는-것)).
 
-**2. 메트릭 — 서버마다 한 곳에 SDK 를 붙인다.**
-위의 [목록](#목록)대로 계측한다. 내보내는 주소는 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 받는다(Alloy 의 OTLP 수신 주소). Alloy 가 Prometheus 로 넘긴다.
-새로 만드는 서버(asset, chat, 관리)는 처음부터 SDK 를 붙이고 시작한다. 나중에 다섯 서버를 고치는 것보다 싸다.
+### 2. 메트릭 — 서버는 OTLP 로 밀고, 인프라는 Alloy 가 긁는다
+
+```
+서버, 워커, cron ─(OTLP, HTTP 4318)─▶ Alloy ─(remote write)─▶ Prometheus ─▶ Grafana
+PostgreSQL, Redis ◀─(긁기, Alloy 안의 exporter)─ Alloy ┘
+```
+
+#### 정한 것 (2026-10-19)
+
+| 항목 | 정한 것 | 까닭 |
+| --- | --- | --- |
+| 서버가 보내는 법 | **OTLP 로 Alloy 에 민다**(HTTP, protobuf, 4318). 서버, 워커, cron 모두 같다 | 계속 도는 워커가 넷, 하루 한 번 도는 cron 이 둘이다. 긁기로 가면 워커마다 HTTP 서버를 붙이고(워커의 상태를 파일로 정한 까닭과 같다, [워커의 상태](#워커의-상태)), cron 은 긁을 수 없어 Pushgateway 가 하나 더 든다. 추적(3단계)도 같은 SDK 라 내보내기 하나만 더하면 된다. gunicorn 의 프로세스를 늘려도(`WEB_CONCURRENCY`) 프로세스마다 따로 보내면 된다 |
+| 방향 | 서버 → Alloy 한쪽만. 서버와 Alloy 만 있는 망 `telemetry` 를 새로 둔다. Alloy 는 서버의 포트에 닿지 않는다 | 긁기는 Alloy 가 모든 서버의 API 포트에 닿아야 한다. Alloy 가 뚫리면 모든 API 를 부를 수 있다. 서버들은 지금처럼 Loki, Grafana, 소켓 프록시에 닿지 않는다 |
+| 인프라 | PostgreSQL, Redis 는 **Alloy 안의 exporter 가 긁는다**(`prometheus.exporter.postgres`, `prometheus.exporter.redis`). 컨테이너를 늘리지 않는다 | 서버 코드가 아니라 고칠 수 없다. 컨테이너의 CPU·메모리(cAdvisor)는 VM 의 `/sys` 와 Docker 의 폴더를 읽어야 해서 권한을 따로 정한다(나중) |
+| 저장소 | **Prometheus 단독**, 보관 **14일**. 받기만 한다(remote write 수신). Prometheus 는 아무것도 긁지 않는다 | 시계열이 1~2만 개 안쪽이라 한 프로세스로 넉넉하다. 로그와 기간이 같아야 같은 시각을 함께 본다. **S3 가 필요해지면 Mimir(한 프로세스)로 바꾼다.** 그때 서버 코드와 계측은 그대로다(아래) |
+| 순서 | ① 인프라(Prometheus, Alloy 의 OTLP 수신, 망, Grafana 의 데이터 소스) → ② 결제 서버(본보기) → ③ PostgreSQL·Redis → ④ 나머지 서버는 그 서버를 맡은 세션이 본보기대로 | 인프라는 서버 코드 없이 시험 지표 하나로 CI 에서 확인한다. 실패하면 원인이 인프라뿐이다. 서버마다의 PR 은 작고 다른 세션과 겹치지 않는다 |
+
+| 고르지 않은 것 | 까닭 |
+| --- | --- |
+| 서버의 `/metrics` 를 Alloy 가 긁기 | 위의 워커와 cron, Alloy 가 서버의 API 포트에 닿는 것. Python 은 gunicorn 의 프로세스가 여럿이면 multiprocess 모드가 따로 든다 |
+| Prometheus 가 직접 긁기 | 위와 같고, 컨테이너를 찾으려고 Prometheus 에도 Docker 의 API 가 든다. 수집기가 둘이 된다 |
+| 서버 → Prometheus(또는 Mimir)의 OTLP 수신으로 바로 | 저장소를 바꾸면 서버 다섯의 설정을 고친다. OTLP 의 이름을 Prometheus 의 이름으로 바꾸는 규칙이 저장소마다 달라 이름이 흔들린다 |
+| 로그(요청이 끝난 줄)에서 Alloy 가 메트릭을 만들기 | 서버 코드를 고치지 않지만 로그에 있는 것만 된다. 처리 중인 요청 수, DB 풀 같은 지금의 값을 만들지 못한다. 로그가 밀리면 메트릭도 밀린다 |
+| 처음부터 Mimir, VictoriaMetrics, Thanos | Mimir 는 이 규모에 무겁다(메모리 1GB 안팎, 설정이 많다). VictoriaMetrics 는 질의가 MetricsQL 이라 PromQL 과 조금 다르다. Thanos 는 부품이 셋 는다 |
+| Grafana Cloud 무료 | 메트릭(서버 이름, 주소의 틀)이 바깥으로 나가고 계정에 묶인다 |
+
+#### Mimir 로 옮길 수 있게 지키는 것
+
+Prometheus 에 쓰는 것은 Alloy 하나, 읽는 것은 Grafana 하나다. 이 둘의 주소만 바꾸면 옮겨지게 아래를 지킨다.
+
+1. **Prometheus 는 받기만 한다.** `scrape_configs` 를 두지 않는다. 긁는 일은 모두 Alloy 가 하고 `prometheus.remote_write` 로 보낸다. Mimir 도 remote write(`/api/v1/push`)로 받는다.
+2. **OTLP 의 이름을 Prometheus 의 이름으로 바꾸는 일은 Alloy 가 한다**(`otelcol.exporter.prometheus`). Prometheus 나 Mimir 의 OTLP 수신을 쓰지 않는다. 바꾸는 곳이 Alloy 하나라 저장소를 바꿔도 메트릭의 이름과 label 이 그대로다.
+3. **Grafana 의 데이터 소스는 uid `prometheus` 로 고정한다.** 대시보드와 경보는 uid 로 찾는다. 옮길 때 같은 uid 에 주소만 Mimir 의 것(`http://mimir:9009/prometheus`, 시작 안내의 포트)으로 바꾼다.
+4. **기록 규칙과 경보 규칙은 Prometheus 의 규칙 파일 형식으로 따로 둔다.** Mimir 의 ruler 가 같은 형식을 받는다. Prometheus 의 실행 인자에만 있는 기능에 기대지 않는다.
+5. **tenant 는 하나다.** Alloy 는 tenant 머리말(`X-Scope-OrgID`)을 보내지 않는다. Mimir 는 `multitenancy_enabled: false` 로 띄운다.
+6. **늦게 온 점을 받는다.** 미는 방식이라 점이 몇 초 늦거나 순서가 바뀔 수 있다. Prometheus 의 `out_of_order_time_window` 를 10분으로 둔다. Mimir 에도 같은 이름의 한도가 있다.
+7. **보관 기간은 한 값이다.** Prometheus 의 `--storage.tsdb.retention.time=14d` 가 Mimir 의 `compactor_blocks_retention_period: 14d` 가 된다. 볼륨은 따로(`prometheusdata`) 둔다.
+8. **옮기는 법.** Alloy 의 `prometheus.remote_write` 에 보낼 곳을 둘(Prometheus, Mimir) 두고 14일 동안 함께 쓴다. 그다음 Grafana 의 데이터 소스를 Mimir 로 바꾸고 Prometheus 를 끈다. 지난 데이터를 옮기지 않아도 14일이면 같아진다. 옮겨야 하면 mimirtool 의 backfill 로 Prometheus 의 블록을 올린다.
+
+#### 계측기를 만드는 법
+
+위의 [목록](#목록)대로 계측한다. 새로 만드는 서버(asset, chat, 관리)는 처음부터 SDK 를 붙이고 시작한다. 나중에 다섯 서버를 고치는 것보다 싸다.
 
 | 무엇 | 붙일 자리 |
 | --- | --- |
 | HTTP 요청 수, 시간, 처리 중인 수 | 요청이 끝난 줄을 남기는 미들웨어. 같은 값(`method`, `route`, `status_code`, 걸린 시간)을 이미 갖고 있다 |
-| 작업 | game-server `app/core/jobs.py`, auth-server `observability/jobs.py` |
+| 작업 | game-server `app/core/jobs.py`, auth-server `observability/jobs.py`, billing-server `internal/jobs/jobs.go` |
 | AI 호출 | game-server `app/ai/calls.py` 의 `CallLog`. 기록을 받는 것을 하나 더 꽂는다 |
 | DB 풀 | 서버마다 풀을 만드는 곳 |
 
-**3. 추적 — 식별자를 다루는 코드를 SDK 로 바꾼다.**
+- **이름.** 계측기의 이름은 표의 이름에서 `_total` 과 단위(`_seconds`, `_bytes`)를 뗀 것이고, 단위는 계측기의 단위로 준다(초 `s`, 바이트 `By`). Alloy 가 단위와 `_total` 을 붙여 표의 이름이 된다.
+  예: 이름 `http_server_request_duration`, 단위 `s` → `http_server_request_duration_seconds`. 셀 수에는 단위를 비운다(`1` 을 주면 gauge 에 `_ratio` 가 붙는다). CI 가 표의 이름으로 찾는다.
+- **`service` label.** 서비스 이름은 OTLP 의 `service.name`(코드에 적힌 이름, [서비스 이름](#서비스-이름-환경-버전))이다. Alloy 가 이것을 모든 메트릭의 label `service` 로 옮긴다. 워커와 cron 도 그 서버의 이름이다.
+- **프로세스마다 `service.instance.id` 가 다르다.** 같으면 두 프로세스의 수가 서로 덮어쓴다. 조회는 `sum by (service, …)` 로 합친다.
+- **히스토그램의 구간을 정한다.** SDK 의 기본 구간은 밀리초를 가정한 숫자라 초로 재면 거의 모두 첫 칸에 든다. 시간은 `0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10` 초다. 서술과 AI 호출처럼 긴 것은 그 계측기만 `… 30, 60, 120` 을 더한다.
+- **주소.** `OTEL_EXPORTER_OTLP_ENDPOINT`(compose 에서 `http://alloy:4318`)로 받는다. **비어 있으면 내보내지 않는다.** 계측은 그대로 돌고 보내기만 없다. PC 에서 띄운 서버가 없는 주소로 보내며 오류를 남기지 않는다.
+- **간격은 15초다**(`OTEL_METRIC_EXPORT_INTERVAL=15000`). SDK 의 기본(60초)이면 `rate(…[1m])` 에 점이 하나뿐이다.
+- **gunicorn 은 워커가 갈라진 뒤에 켠다**(`post_fork`). 갈라지기 전에 켜면 내보내는 스레드가 워커에 따라오지 않아 조용히 아무것도 가지 않는다.
+- **cron 처럼 짧게 도는 명령은 끝날 때 한 번 내보낸다**(SDK 의 `shutdown`/`force_flush`). 간격을 기다리기 전에 끝나면 아무것도 가지 않는다.
+- **Alloy 가 멈춰도 요청은 영향을 받지 않는다.** 내보내기는 뒤에서 돌고, 다시 보내다 안 되면 그 묶음을 버린다. 메모리에 쌓아 두지 않는다.
+- **테스트.** SDK 의 메모리 수집기(in-memory reader)로 계측기의 이름, 단위, label 을 본다. 끝에서 끝까지(Prometheus 에서 찾아지는가)는 CI 의 `stack` 이 본다.
+
+### 3. 추적 — 식별자를 다루는 코드를 SDK 로 바꾼다
+
 지금의 코드는 `traceparent` 를 직접 읽고 쓴다. SDK 를 붙이면 그 일을 SDK 의 propagator 가 한다. 바꿀 곳은 서버마다 셋이다.
 
 | | 받는 곳(미들웨어) | 들고 있는 곳 | 보내는 곳 |
