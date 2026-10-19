@@ -31,6 +31,7 @@ expect "DB 초기화 스크립트는 모두" "auth game board billing notificati
 expect "compose 파일은 모두" "auth game board billing notification" "docker-compose.yml"
 expect "staging 의 compose 파일도 모두" "auth game board billing notification" "docker-compose.staging.yml"
 expect "staging 의 .env 를 만드는 도구도 모두" "auth game board billing notification" "tools/staging_env.py"
+expect ".env 의 비밀을 채우는 도구도 모두" "auth game board billing notification" "tools/fill_env.py"
 expect "패치를 적용하는 도구는 고르지 않는다" "" "tools/apply_ai_update.py"
 expect "프록시의 설정은 모두" "auth game board billing notification" "docker/nginx/templates/default.conf.template"
 expect "crontab 은 모두" "auth game board billing notification" "docker/cron/auth.crontab"
