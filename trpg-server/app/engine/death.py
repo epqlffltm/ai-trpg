@@ -7,6 +7,7 @@
 실패가 정해진 수만큼 모이면 죽고, 성공이 정해진 수만큼 모이면 고비를 넘긴다.
 
 지금까지 센 것(성공 몇 번, 실패 몇 번)은 밖에서 받는다. 여기서는 한 번 굴리고, 그 뒤의 수를 돌려준다.
+쓰러진 채 공격을 맞으면 굴리지 않고 실패가 쌓인다(add_failures, #369). 큰 타격으로 쓰러졌으면 더 쌓인다.
 센 것을 어디에 적어 두는지, 언제 굴리는지는 부르는 쪽의 일이다.
 
 주사위는 밖에서 받는다(app/engine/dice.py). 여기의 함수는 DB 도 HTTP 도 모른다.
@@ -61,6 +62,43 @@ def fate_of(death_save: DeathSave, successes: int, failures: int) -> Fate:
 def is_rolling(death_save: DeathSave, successes: int, failures: int) -> bool:
     """이 캐릭터가 아직 굴려야 하는가. 죽어 가는 중일 때만 굴린다."""
     return fate_of(death_save, successes, failures) == Fate.DYING
+
+
+# 쓰러진 채 공격을 맞으면 쌓이는 실패. 큰 타격으로 쓰러진 캐릭터는 더 쌓인다(#369).
+# 공격이 작아도 같다. 제작자가 조정하길 원하면 규칙의 칸으로 옮긴다(판 형식을 올린다)
+STRUCK_FAILURES = 1
+STRUCK_AFTER_BIG_HIT_FAILURES = 2
+
+
+@dataclass(frozen=True)
+class Struck:
+    """쓰러진 채 공격을 맞아 쌓인 실패. added 는 이번에 쌓인 수, failures 는 그 뒤의 수, limit 는 죽는 수다."""
+
+    added: int
+    failures: int
+    limit: int
+    fate: Fate
+
+
+def struck_failures(downed_by_big_hit: bool) -> int:
+    """쓰러진 채 공격을 맞으면 쌓이는 실패의 수. 큰 타격으로 쓰러졌으면 더 많다."""
+    return STRUCK_AFTER_BIG_HIT_FAILURES if downed_by_big_hit else STRUCK_FAILURES
+
+
+def add_failures(death_save: DeathSave, successes: int, failures: int, count: int) -> Struck:
+    """
+    실패를 count 번 쌓고 갈림길을 정한다. 주사위를 굴리지 않는다.
+
+    죽는 수를 넘겨 세지 않는다. 고비를 넘긴 캐릭터도 실패가 쌓이고, 죽는 수에 닿으면 죽는다.
+    닿지 않으면 고비를 넘긴 채다(성공은 그대로다).
+    """
+    after = min(failures + count, death_save.failures)
+    return Struck(
+        added=after - failures,
+        failures=after,
+        limit=death_save.failures,
+        fate=fate_of(death_save, successes, after),
+    )
 
 
 def roll_death_save(ruleset: Ruleset, successes: int, failures: int, dice: Dice) -> DeathSaveRoll | None:

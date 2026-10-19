@@ -32,6 +32,7 @@ from app.rounds.models import Declaration, Round
 from app.rounds.narrator import (
     ClockNote,
     DeathSaveNote,
+    DownedStrikeNote,
     DropNote,
     DroppedNote,
     HandOverNote,
@@ -538,6 +539,16 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
         target=outcome['character_name'],
         hit=outcome['success'],
         impact=to_impact(outcome['effect']),
+        downed=to_downed_strike(outcome.get('downed_strike')),
+    )
+
+
+def to_downed_strike(struck: dict | None) -> DownedStrikeNote | None:
+    """차례에 적힌 쓰러진 캐릭터를 친 결과를 서술자에게 줄 모양으로. 서 있는 캐릭터를 쳤으면 None."""
+    if struck is None:
+        return None
+    return DownedStrikeNote(
+        added=struck['added'], failures=struck['failures'], limit=struck['limit'], fate=struck['fate']
     )
 
 

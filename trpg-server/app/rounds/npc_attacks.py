@@ -12,13 +12,15 @@ NPC 의 차례(#487). 싸움이 붙은 적대 인물이 캐릭터 하나를 공�
 
 차례가 오면 먼저 칠 수 있는지 본다. 앞 차례에 쓰러지거나 죽었으면, 입은 부상 때문에 움직이지 못하면(기절 같은 것),
 칠 캐릭터가 없으면 굴리지 않는다(skipped). 앉은 사람이 그런 부상이면 행동을 붙이지 못하는 것과 같다.
-대상. NPC 는 장소가 없다(#282). 앉은 사람의 서 있는(쓰러지지 않은) 캐릭터가 모두 대상이 될 수 있다.
+대상. NPC 는 장소가 없다(#282). 앉은 사람의 서 있는 캐릭터와, 라운드를 닫기 시작할 때부터 쓰러져 있던 캐릭터가
+모두 대상이 될 수 있다(#369, app/rounds/downed_strikes.py). 몬스터와 같다.
   1. 이번 라운드에 이 인물에게서 훔치다 들킨 도둑(app/rounds/steals.py). 몬스터와 같다
   2. 이번 라운드에 이 인물과 싸운 사람(타격으로 겨눴다) 중에서 서버의 주사위로
-  3. 그 밖의 서 있는 캐릭터 중에서 서버의 주사위로
+  3. 그 밖의 칠 수 있는 캐릭터 중에서 서버의 주사위로
   앞의 것이 칠 수 있는 대상이 아니면(쓰러졌다) 다음 것으로 간다. 고를 것이 하나뿐이면 굴리지 않는다.
 판정은 인물의 점수와 공격의 난이도로 굴린다. 몬스터와 달리 인물은 부상을 입으므로 그 영향을 받는다.
 맞히면 그 공격의 양의 등급만큼 피해를 준다. 피해, 쓰러짐, 부상 표는 앉은 사람의 것과 같다(change_sheet).
+쓰러진 대상을 맞히면 피해 대신 죽음의 굴림 실패가 쌓인다(몬스터의 hit_outcome).
 친 대상과는 싸운 것으로 적는다(mark_npc_fight).
 DB 를 모른다. 시트를 고친다. 저장하지는 않는다.
 """
@@ -28,13 +30,11 @@ from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine import check as checks
 from app.engine.check import HinderedCheck
 from app.engine.dice import choose
-from app.engine.health import ChangeKind
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember
-from app.rounds.checks import change_sheet
+from app.rounds.downed_strikes import can_be_struck
 from app.rounds.effects import Judging, mark_npc_fight
-from app.rounds.monster_attacks import Skipped, attack_outcome
-from app.tables import sheets
+from app.rounds.monster_attacks import Skipped, hit_outcome
 from app.tables.models import NpcStatus, TableMember
 
 # 입은 부상 때문에 움직이지 못했다(기절 같은 것). 몬스터는 부상을 입지 않아 이 까닭이 없다
@@ -64,17 +64,17 @@ def stopped_by(judging: Judging, person: CastMember) -> str | None:
     return None
 
 
-def standing_members(judging: Judging) -> list[TableMember]:
-    """칠 수 있는 캐릭터들. 앉은 사람 중 시트가 있고 쓰러지지도 죽지도 않았다. 장소는 보지 않는다. 앉은 순서다."""
-    return [
-        member
-        for member in judging.table.members
-        if member.sheet is not None and not sheets.is_dead(member) and not sheets.is_downed_alive(member)
-    ]
+def targets_of(judging: Judging) -> list[TableMember]:
+    """
+    칠 수 있는 캐릭터들. 장소는 보지 않는다. 앉은 순서다.
+
+    서 있는 캐릭터와, 라운드를 닫기 시작할 때부터 쓰러져 있던 캐릭터다(can_be_struck).
+    """
+    return [member for member in judging.table.members if can_be_struck(judging, member)]
 
 
 def pick_victim(judging: Judging, person: CastMember, victims: list[TableMember]) -> TableMember:
-    """칠 대상. 들킨 도둑, 그다음 이번 라운드에 이 인물과 싸운 사람, 그다음 서 있는 누구나다. 주사위는 서버의 것이다."""
+    """칠 대상. 들킨 도둑, 그다음 이번 라운드에 이 인물과 싸운 사람, 그다음 칠 수 있는 누구나다. 주사위는 서버의 것."""
     thief = judging.provoked.get(person.entry_id)
     caught = next((victim for victim in victims if victim.user_id == thief), None)
     if caught is not None:
@@ -102,18 +102,17 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
     인물 하나의 차례를 판정한다. 차례의 outcome 에 적을 문서를 돌려준다.
 
     움직이지 못하면 {'skipped': 까닭} 이다. 대상, 공격, 판정, 피해의 차례로 주사위를 굴린다.
-    문서는 몬스터의 것(attack_outcome)에 부상의 영향(hindrance)을 더한 것이다.
+    문서는 몬스터의 것(hit_outcome)에 부상의 영향(hindrance)을 더한 것이다.
     """
     stopped = stopped_by(judging, person)
     if stopped is not None:
         return {'skipped': stopped}
-    victims = standing_members(judging)
+    victims = targets_of(judging)
     if not victims:
         return {'skipped': Skipped.NO_TARGET}
     victim = pick_victim(judging, person, victims)
     mark_npc_fight(judging, person.npc, victim)
     attack = choose(person.definition.attacks, judging.dice)
     rolled = roll_attack(judging, person, attack)
-    effect = change_sheet(judging, victim, ChangeKind.DAMAGE, attack.harm) if rolled.check.success else None
-    outcome = attack_outcome(attack, victim, rolled.check, effect)
+    outcome = hit_outcome(judging, attack, victim, rolled.check)
     return {**outcome, 'hindrance': round_injuries.hindrance_document(rolled)}

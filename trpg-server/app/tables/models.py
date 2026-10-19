@@ -87,6 +87,8 @@ class DeathCause(enum.StrEnum):
     GAVE_UP = 'gave_up'
     # 치료에 실패해 치료 실패 표에서 즉사가 나왔다(#114 다)
     TREATMENT = 'treatment'
+    # 쓰러진 채 몬스터나 NPC 의 공격을 맞아 죽음의 굴림 실패가 다 모였다(#369)
+    STRUCK_DOWN = 'struck_down'
 
 
 class TableStatus(enum.StrEnum):
@@ -457,6 +459,9 @@ class TableSheet(Base):
     # 회복을 받아 일어나면 둘 다 0 으로 돌아간다. 이 값도 엔진만 고친다
     death_successes: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
     death_failures: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
+    # 큰 타격으로 쓰러졌는가(#369). 쓰러진 채 공격을 맞으면 실패가 더 쌓인다(app/engine/death.py).
+    # 쓰러질 때 정하고, 일어날 때(죽음의 굴림에서 센 것을 비울 때) 지운다
+    downed_by_big_hit: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
     # 죽은 시각. 비어 있으면 살아 있다(쓰러져 있을 수는 있다). 한 번 적으면 지우지 않는다. 죽음은 되돌릴 수 없다
     died_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
