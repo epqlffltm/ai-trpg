@@ -18,7 +18,7 @@ import (
 
 const (
 	// GameServer 는 게임 서버의 이름이다. 홀드에 "누가 걸었는가"로 적힌다. 관측 규격의 서비스 이름과 같다.
-	GameServer = "game-server"
+	GameServer = "trpg-server"
 	// AuthServer 는 인증 서버의 이름이다.
 	AuthServer = "auth-server"
 	// callerKey 는 서명을 확인한 서버의 이름을 요청에 실어 두는 이름이다.

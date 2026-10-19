@@ -32,13 +32,13 @@ func TestExpireOneSkipsAHoldExtendedAfterItWasListed(t *testing.T) {
 		t.Fatalf("산 크레딧을 넣지 못했다: %v", err)
 	}
 	reference := "table:" + uuid.NewString() + ":round:1"
-	placed, _, err := service.Place(ctx, "game-server", user, reference, pricing.NarrationStandard)
+	placed, _, err := service.Place(ctx, "trpg-server", user, reference, pricing.NarrationStandard)
 	if err != nil {
 		t.Fatalf("홀드를 걸지 못했다: %v", err)
 	}
 	// 만료 시각이 되었다. 정리 작업이 이 홀드를 읽었다고 치고, 돌려주기 전에 연장이 먼저 왔다
 	at = at.Add(24 * time.Hour)
-	if _, err := service.Extend(ctx, "game-server", reference); err != nil {
+	if _, err := service.Extend(ctx, "trpg-server", reference); err != nil {
 		t.Fatalf("연장하지 못했다: %v", err)
 	}
 
@@ -47,7 +47,7 @@ func TestExpireOneSkipsAHoldExtendedAfterItWasListed(t *testing.T) {
 	if err != nil || changed {
 		t.Errorf("돌려줬다 = %v, %v. 연장된 홀드는 돌려주지 않아야 한다", changed, err)
 	}
-	row, err := holddb.New(pool).GetHoldByReference(ctx, holddb.GetHoldByReferenceParams{Source: "game-server", Reference: reference})
+	row, err := holddb.New(pool).GetHoldByReference(ctx, holddb.GetHoldByReferenceParams{Source: "trpg-server", Reference: reference})
 	if err != nil || Status(row.Status) != StatusHeld {
 		t.Errorf("홀드 = %+v, %v. held 여야 한다", row.Status, err)
 	}

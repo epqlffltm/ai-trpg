@@ -31,7 +31,7 @@
                                      │ REST, SSE
                                  프록시 (nginx)          /api/v1/<서비스>/...
    ┌──────────┬──────────┬─────────┴─┬─────────────┬─────────────┬─────────────┬─────────────┐
- auth-server game-server board-server billing-server asset-server chat-server  관리 서버
+ auth-server trpg-server board-server billing-server asset-server chat-server  관리 서버
   (Django)   (FastAPI)   (NestJS)     (Go)         (FastAPI,계획) (FastAPI,계획) (FastAPI,계획)
      │           │            │            │             │             │             │
   스키마      스키마       스키마        스키마        스키마        스키마        스키마
@@ -42,7 +42,7 @@
 
 - 서비스마다 프로세스, DB 스키마, DB 계정이 따로다. 서로의 테이블을 읽지 않고 API 로 주고받는다.
 - 계정과 결제는 공용 서비스다. 어느 서비스든 로그인은 인증 서버가, 크레딧은 결제 서버가 맡는다.
-- 사용자에게 보이는 제품은 셋이다. **TRPG**(game-server), **chat**(1:1 캐릭터 대화), **story**(세계관 안에서 여러 인물과 이야기를 즐기는 형태).
+- 사용자에게 보이는 제품은 셋이다. **TRPG**(trpg-server), **chat**(1:1 캐릭터 대화), **story**(세계관 안에서 여러 인물과 이야기를 즐기는 형태).
   chat 과 story 는 대화가 한 턴을 이끄는 같은 구조라서 **chat-server 한 서버의 두 모드**로 시작한다. TRPG 는 주사위 판정이 한 턴을 이끌어서 서버를 따로 둔다.
 - 제작자가 만드는 자산(세계관, 로어북, 캐릭터)의 원본은 **asset-server** 가 갖는다. 서비스는 방이나 대화를 시작할 때 게시된 판을 자기 DB 로 복사해 고정하고, 대화와 게임의 상태는 섞지 않는다. 형식(템플릿)과 코드는 [공유한다](shared-code.md).
 
@@ -53,14 +53,14 @@
 | 서비스 | 폴더 | 기술 | 포트 | 토큰의 대상(`aud`) | DB 계정·스키마 | 초기화 스크립트 | 하는 일 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 인증 | `auth-server/` | Django | 8000 | `ai-trpg-auth` | `auth` | `01-auth-role.sql` | 가입, 로그인, 본인인증과 보호자 동의, 토큰 발급(RS256)과 JWKS, 메일 발송, 보안 이벤트 |
-| 게임 | `game-server/` | FastAPI | 8001 | `ai-trpg-game` | `game`, `game_test` | `02-game-role.sql` | 자산(세계관, 룰북, 시나리오, 로어북), 테이블과 라운드, 규칙 엔진, AI 서술, 서술 모델 목록(원가, 날짜판, 회사의 대체 모델), 서술 값의 청구(결제 서버에 홀드를 걸고 확정·반환), 실시간 스트림 |
+| 게임 | `trpg-server/` | FastAPI | 8001 | `ai-trpg-game` | `game`, `game_test` | `02-game-role.sql` | 자산(세계관, 룰북, 시나리오, 로어북), 테이블과 라운드, 규칙 엔진, AI 서술, 서술 모델 목록(원가, 날짜판, 회사의 대체 모델), 서술 값의 청구(결제 서버에 홀드를 걸고 확정·반환), 실시간 스트림 |
 | 게시판 | `board-server/` | NestJS (TypeScript) | 8002 | `ai-trpg-board` | `board`, `board_test` | `05-board-role.sql` | 공지, 글, 댓글, 검색, 신고, 운영자 권한 |
 | 알림 | `notification-server/` | FastAPI | 8004 | `ai-trpg-notification` | `notification`, `notification_test` | `06-notification-role.sql` | 사람에게 보내는 알림함(#385). 다른 서버가 서명한 요청으로 넣고, 사용자가 자기 알림을 읽고 읽음으로 한다 |
 | 결제 | `billing-server/` | Go (gin) | 8003 | `ai-trpg-billing` | `billing`, `billing_test` | `04-billing-role.sql` | 크레딧 지갑과 원장, 주문과 충전, 홀드·확정·반환, 청약철회, 환영 크레딧과 출석 보상, 가격표(모델마다의 값, 등급, 행사가)와 가격 할 일. 연습용이며 실제 결제가 아니다 |
 
 - `03-extensions.sql` 은 확장(pgvector)이다.
-- `game-server/` 는 `trpg-server/` 로 이름을 바꿀 계획이다(2026-10-19). 범위는 폴더, 컨테이너, CI, 문서, 로그의 `service`(`trpg-server`, [이름 규칙](#이름-규칙))이고, 토큰의 대상(`ai-trpg-game`), DB 계정·스키마(`game`), 환경변수(`GAME_*`), 포트, 주소(`/api/v1/game/`)는 그대로 두자는 제안이다(계약이나 저장된 데이터라서). 이름을 바꾸는 PR 에서 확정하고, 그때까지 이 문서는 `game-server` 로 적는다.
-- 세계관과 로어북은 지금 game-server 에 있고, 나중에 asset-server 로 옮긴다([순서](#순서)).
+- 게임 서버의 폴더는 2026-10-19 에 `game-server/` 에서 `trpg-server/` 로 바꿨다(#480). 함께 바꾼 것은 컨테이너(`trpg-server`, `trpg-migrate`), CI, 문서, 로그의 `service`(`trpg-server`, [이름 규칙](#이름-규칙)), 결제 서버가 홀드에 적는 부른 서버의 이름이다. 토큰의 대상(`ai-trpg-game`), DB 계정·스키마(`game`), 환경변수(`GAME_*`), 포트, 주소(`/api/v1/game/`)는 계약이나 저장된 데이터라서 그대로 둔다.
+- 세계관과 로어북은 지금 trpg-server 에 있고, 나중에 asset-server 로 옮긴다([순서](#순서)).
 - 결제는 실제 돈을 받지 않는다. 토스페이먼츠는 테스트 키만 쓴다.
 
 ### 계획인 것
@@ -197,10 +197,10 @@
 
 1. 게임 서버를 끝까지 플레이할 수 있게 마무리하고, 프런트엔드의 공통 껍데기(로그인, 잔액, 충전)와 TRPG 플레이 화면을 붙인다.
 2. 배포(클라우드, 도메인, TLS)와 로그·메트릭 수집 스택(Alloy, Loki, Prometheus, Grafana). 정한 것은 [관측 규격](../observability.md#수집기grafana-alloy를-붙일-자리)에 있다. 로그(Alloy, Loki, Grafana)는 compose 의 프로필 `observability` 로 붙였다. staging 의 운영 설정과 TLS(#451), 바깥 백업은 붙였고 VM 준비가 남았다([배포 설계의 만드는 순서](deployment.md#만드는-순서)).
-3. `shared/` 의 AI 호출 코드를 게임 서버에서 뽑는다. 방식은 정했다([공용 코드 규칙의 정한 것](shared-code.md#정한-것)). game-server 안에서 경계는 정리했고(#496, #497, #498), `shared/` 로 옮기는 일은 chat-server 를 만들 때 한다(#499).
-4. `asset-server` 를 새로 만들고, 새 종류인 캐릭터를 처음부터 거기서 만든다. 같은 때에 game-server 가 세계관과 로어북의 게시된 판을, asset-server 가 나중에 줄 것과 같은 모양의 API 로 내준다.
+3. `shared/` 의 AI 호출 코드를 게임 서버에서 뽑는다. 방식은 정했다([공용 코드 규칙의 정한 것](shared-code.md#정한-것)). trpg-server 안에서 경계는 정리했고(#496, #497, #498), `shared/` 로 옮기는 일은 chat-server 를 만들 때 한다(#499).
+4. `asset-server` 를 새로 만들고, 새 종류인 캐릭터를 처음부터 거기서 만든다. 같은 때에 trpg-server 가 세계관과 로어북의 게시된 판을, asset-server 가 나중에 줄 것과 같은 모양의 API 로 내준다.
 5. `chat-server` 의 첫 버전. 캐릭터를 쓴 대화(판 가져오기), 스트리밍 대화, 다시 생성, 자동 요약 기억, 모델 등급과 크레딧, 장소와 소지품. 자세한 순서는 [chat 서버 설계](chat-server.md#만드는-순서).
-6. 세계관과 로어북(항목 포함)을 game-server 에서 asset-server 로 옮긴다. 쓰는 쪽이 복사본을 들고 있어서 chat 은 거의 안 바뀐다. 이전은 따로 설계한다.
+6. 세계관과 로어북(항목 포함)을 trpg-server 에서 asset-server 로 옮긴다. 쓰는 쪽이 복사본을 들고 있어서 chat 은 거의 안 바뀐다. 이전은 따로 설계한다.
 7. 관리 서버의 첫 버전. 신고 처리, 비용 집계, 지금 명령으로 하는 결제 운영 작업(가격표, 가격 할 일, 결과를 모르는 주문). 잔액 환불은 아직 없는 기능이라 설계가 필요하다([열린 질문](#열린-질문)).
 8. chat-server 의 story 모드. 여러 인물, 호감도, 이벤트와 엔딩. 공용 템플릿(지도, 물건, 인물)이 TRPG 에서 쓰이며 검증된 뒤에 올린다.
 
@@ -226,7 +226,7 @@
 **구조**
 - 관리 서버의 이름, 포트, 스키마 이름(`ops` 는 우선의 안).
 - story 모드를 서버로 쪼개는 기준(대화 모델이나 상태의 모양이 갈라질 때). 커지면 나눌 생각이다(2026-10-19). 공용 코드는 그때 chat 쪽에 걸리지 않게 둔다([공용 코드 규칙](shared-code.md#원칙) 원칙 5).
-- `game-server` → `trpg-server` 이름 변경의 범위(토큰의 대상, 스키마, 주소를 그대로 둘지).
+- 토큰의 대상(`ai-trpg-game`), DB 스키마(`game`), 환경 변수(`GAME_*`), 주소(`/api/v1/game/`)도 `trpg` 로 바꿀지. 지금은 계약과 저장된 데이터라서 그대로 둔다(#480).
 - 페르소나를 asset-server 로 옮길지(지금은 서비스마다 보관함).
 - 남의 공개 자산을 가져오는 권한과 라이선스. 처음에는 제작자 본인이 자기 자산을 쓰는 것만 허용한다.
 - Django 관리자(`/admin/`)를 남길지, 관리 서버가 대신하면 닫을지.

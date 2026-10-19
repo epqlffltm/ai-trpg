@@ -70,7 +70,7 @@ class CheckTests(unittest.TestCase):
         self.assertIn('billing-server: 포트를 연다', problems[0])
 
     def test_host_networking_is_refused(self):
-        problems = check(config(**{'game-server': {'network_mode': 'host'}}))
+        problems = check(config(**{'trpg-server': {'network_mode': 'host'}}))
 
         self.assertEqual(len(problems), 1)
         self.assertIn('network_mode: host', problems[0])

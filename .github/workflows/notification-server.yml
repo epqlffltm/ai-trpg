@@ -3,7 +3,7 @@
 #
 # PR 에서는 관문(.github/workflows/ci.yml)이 바뀐 파일을 보고 이 워크플로를 부른다.
 # 고르는 규칙은 .github/scripts/changed-servers.sh 에 있다. 검사할 것을 바꾸면 이 파일만 고친다.
-# 단계는 게임 서버의 것(game-server.yml)과 같다. 다른 점은 Redis 와 pgvector 확장이 필요 없다는 것이다.
+# 단계는 게임 서버의 것(trpg-server.yml)과 같다. 다른 점은 Redis 와 pgvector 확장이 필요 없다는 것이다.
 
 name: notification-server
 

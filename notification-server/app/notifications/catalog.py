@@ -45,7 +45,7 @@ def rule(source: str, *required: str) -> KindRule:
 
 
 # 받는 알림의 표. 넣는 서버의 코드가 원본이다
-# (game-server/README.md, board-server/README.md 의 "알림 보내기", billing-server/README.md 의 "정리 작업과 대사")
+# (trpg-server/README.md, board-server/README.md 의 "알림 보내기", billing-server/README.md 의 "정리 작업과 대사")
 KINDS: Mapping[str, KindRule] = MappingProxyType(
     {
         # 게임: 서술 모델의 은퇴를 방장에게

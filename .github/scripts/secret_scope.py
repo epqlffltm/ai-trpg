@@ -73,8 +73,8 @@ SECRETS = [
     *secrets('auth-server', ['auth-server', 'auth-welcome-credits'], 'BILLING_SECRET'),
     # 게임 서버의 비밀. 마이그레이션은 DB 만 쓴다
     *secrets(
-        'game-server',
-        ['game-server'],
+        'trpg-server',
+        ['trpg-server'],
         'BILLING_SECRET',
         'NOTIFICATION_SECRET',
         'OPENAI_API_KEY',
@@ -114,7 +114,7 @@ ROOT_SECRETS: dict[str, frozenset[str]] = {
     'AUTH_DB_PASSWORD': frozenset(
         {'db', 'auth-migrate', 'auth-server', 'auth-mail', 'auth-welcome-credits', 'auth-cron'}
     ),
-    'GAME_DB_PASSWORD': frozenset({'db', 'game-migrate', 'game-server'}),
+    'GAME_DB_PASSWORD': frozenset({'db', 'trpg-migrate', 'trpg-server'}),
     'BILLING_DB_PASSWORD': frozenset({'db', 'billing-migrate', 'billing-server', 'billing-sweeper', 'billing-cron'}),
     'BOARD_DB_PASSWORD': frozenset({'db', 'board-migrate', 'board-server'}),
     'NOTIFICATION_DB_PASSWORD': frozenset({'db', 'notification-migrate', 'notification-server'}),

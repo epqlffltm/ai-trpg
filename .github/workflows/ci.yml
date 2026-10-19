@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       auth: ${{ steps.pick.outputs.auth }}
-      game: ${{ steps.pick.outputs.game }}
+      trpg: ${{ steps.pick.outputs.trpg }}
       board: ${{ steps.pick.outputs.board }}
       billing: ${{ steps.pick.outputs.billing }}
       notification: ${{ steps.pick.outputs.notification }}
@@ -58,10 +58,10 @@ jobs:
     if: needs.changes.outputs.auth == 'true'
     uses: ./.github/workflows/auth-server.yml
 
-  game-server:
+  trpg-server:
     needs: changes
-    if: needs.changes.outputs.game == 'true'
-    uses: ./.github/workflows/game-server.yml
+    if: needs.changes.outputs.trpg == 'true'
+    uses: ./.github/workflows/trpg-server.yml
 
   board-server:
     needs: changes
@@ -109,7 +109,7 @@ jobs:
   stack:
     needs: changes
     if: >-
-      needs.changes.outputs.auth == 'true' || needs.changes.outputs.game == 'true' ||
+      needs.changes.outputs.auth == 'true' || needs.changes.outputs.trpg == 'true' ||
       needs.changes.outputs.board == 'true' || needs.changes.outputs.billing == 'true' ||
       needs.changes.outputs.notification == 'true'
     runs-on: ubuntu-latest
@@ -146,7 +146,7 @@ jobs:
   # always(): 앞의 작업이 실패해도 이 작업은 돈다. 돌지 않으면 GitHub 이 "기다리는 중"으로 둔다
   ci-ok:
     if: always()
-    needs: [changes, repo-python, auth-server, game-server, board-server, billing-server, notification-server, stack]
+    needs: [changes, repo-python, auth-server, trpg-server, board-server, billing-server, notification-server, stack]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

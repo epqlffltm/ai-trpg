@@ -75,7 +75,7 @@ loki.process "standard" {
 	}
 
 	// 값이 끝없이 많은 것(식별자)과 배포마다 바뀌는 것(version)은 줄의 값(structured metadata)으로 둔다.
-	// label 이 아니어도 Grafana 에서 {service="game-server"} | trace_id="…" 처럼 거를 수 있다
+	// label 이 아니어도 Grafana 에서 {service="trpg-server"} | trace_id="…" 처럼 거를 수 있다
 	stage.structured_metadata {
 		values = {
 			version    = "",

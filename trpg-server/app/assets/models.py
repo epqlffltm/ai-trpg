@@ -1,0 +1,925 @@
+# trpg-server/app/assets/models.py
+
+"""
+자산의 테이블 모델.
+
+자산은 사용자가 만들어 두고 플레이할 때 조립해 쓰는 재료다(세계관, 로어북, NPC, 몬스터 등).
+
+테이블을 둘로 나눈다.
+  - assets: 모든 자산이 똑같이 갖는 것. 누구 것인가, 무슨 종류인가, 누구에게 보이는가.
+  - worlds 등: 그 종류만 갖는 내용. 종류마다 테이블이 하나씩 있고, 모두 AssetContent 를 물려받는다.
+
+자산이 다른 자산을 가리킬 수 있다. 시나리오가 룰북과 세계관을 하나씩, 로어북을 여러 개 가리킨다.
+자산에 딸린 행이 여럿일 수 있다. 로어북에 항목이 딸린다. 항목은 자산이 아니다.
+
+지금까지의 것은 모두 초안이다. 제작자가 언제든 고친다.
+시나리오를 게시하면 그 순간의 내용이 판(ScenarioVersion)으로 굳는다. 판은 고치지 않는다.
+
+공통 부분을 한 테이블에 두면, 권한 검사 같은 규칙을 종류마다 다시 짜지 않아도 되고,
+"아무 자산이나 가리키는 것"(방이 쓴 자산, 구매한 자산)이 외래 키 하나로 된다.
+
+스키마 이름을 적지 않는다. 연결의 search_path 가 정한다(app/core/database.py).
+"""
+
+import enum
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
+
+from app.core.database import Base
+
+# 글의 길이 제한(글자 수). 꾸밈 문법을 포함한 원문 기준이다
+TITLE_MAX_LENGTH = 100
+DESCRIPTION_MAX_LENGTH = 1000
+# 아래 둘은 턴마다 AI 의 입력에 들어간다. 길이가 곧 비용이다
+WORLD_SETTING_MAX_LENGTH = 8000
+WORLD_GM_NOTES_MAX_LENGTH = 4000
+RULEBOOK_GM_GUIDE_MAX_LENGTH = 4000
+# 테이블이 시작될 때 한 번 읽어 주는 글이다. 턴마다 다시 들어가지 않는다
+SCENARIO_OPENING_MAX_LENGTH = 2000
+# 시나리오 하나에 둘 수 있는 스타팅(도입부)의 수. 테이블을 만드는 사람이 한 화면에서 보고 고른다
+SCENARIO_MAX_OPENINGS = 5
+# 테이블 하나에 앉는 플레이어의 수. AI GM 하나에 1~4명이다. 시나리오의 추천 인원도 이 범위 안이다
+TABLE_MAX_PLAYERS = 4
+# 게임 안의 시계(달력 1단계). 1일째 0시부터 분으로 센다. 달 이름 같은 달력은 아직 없다.
+# 시나리오가 시작 시각(며칠째 몇 시)과 라운드 하나에 흐르는 기본 시간을 정한다. 방장이 라운드마다 바꿀 수 있다
+CLOCK_MAX_DAY = 999
+DEFAULT_START_DAY = 1
+DEFAULT_START_HOUR = 8
+# 라운드 하나에 흐르는 시간(분). 기본은 짧은 장면 하나의 길이다. 상한은 일주일이다. 더 건너뛰려면 라운드를 여럿 쓴다
+DEFAULT_ROUND_MINUTES = 10
+ROUND_MAX_MINUTES = 7 * 24 * 60
+# 시나리오 하나에 둘 수 있는 프리젠(제작자가 미리 만든 캐릭터)의 수. 자리마다 둘씩 고를 수 있는 만큼이다
+SCENARIO_MAX_PREGENS = 8
+# 시나리오 하나에 둘 수 있는 NPC 시트의 수. 로어북 하나의 항목이 모두 인물이어도 모자라지 않는 만큼이다
+SCENARIO_MAX_NPC_SHEETS = 100
+# 캐릭터의 이름과 설명. 설명은 턴마다 AI 의 입력에 들어간다. 사람 수만큼 들어가므로 길이가 곧 비용이다
+CHARACTER_NAME_MAX_LENGTH = 50
+CHARACTER_DESCRIPTION_MAX_LENGTH = 1000
+# 시나리오 하나에 붙일 수 있는 로어북의 수. 플레이할 때 살펴볼 항목의 수가 이 값에 비례한다
+SCENARIO_MAX_LOREBOOKS = 10
+# 시나리오 하나에 둘 수 있는 아이템 규칙의 수. NPC 시트와 같다. 로어북 하나의 항목이 모두 물건이어도 모자라지 않는다
+SCENARIO_MAX_ITEM_RULES = 100
+# 시작 소지품의 가짓수(시나리오의 것, 프리젠 하나의 것)와 한 가지의 개수
+SCENARIO_MAX_STARTING_ITEMS = 20
+ITEM_STACK_MAX = 99
+# 시나리오 하나에 둘 수 있는 퀘스트 규칙의 수. 사건 항목마다 하나다. 한 판에 쫓는 퀘스트가 이보다 많지는 않다
+SCENARIO_MAX_QUEST_RULES = 50
+# 퀘스트의 기한(분). 드러난 때부터 센다. 상한은 한 해다(오래 가는 부상이 낫는 기간과 같다)
+QUEST_MAX_TIME_LIMIT_MINUTES = 365 * 24 * 60
+# 퀘스트 하나의 조건의 수와, 조건 하나가 세는 수(쓰러뜨린 마리, 가진 개수)의 상한
+QUEST_MAX_CONDITIONS = 5
+QUEST_CONDITION_MAX_COUNT = 99
+# 시나리오 하나에 둘 수 있는 길의 수. 장소 100 개를 이어도 모자라지 않는 만큼이다
+SCENARIO_MAX_ROUTES = 200
+# 시나리오 하나에 둘 수 있는 명소(처음부터 아는 장소)의 수
+SCENARIO_MAX_LANDMARKS = 100
+# 시나리오 하나에 붙일 수 있는 몬스터 도감의 수. 로어북과 같다
+SCENARIO_MAX_BESTIARIES = 10
+# 시나리오 하나에 둘 수 있는 몬스터 시트의 수. 시트가 있는 몬스터만 판에 들어가므로 판의 몬스터 수의 상한이다.
+# 도감 하나의 몬스터를 모두 써도 모자라지 않는 만큼이다
+SCENARIO_MAX_MONSTER_SHEETS = 100
+# 시나리오 하나에 둘 수 있는 조우의 수(장소와 몬스터의 짝)와, 조우 하나의 마리 수.
+# 테이블을 시작할 때 마리마다 상태가 하나 생긴다. 둘을 곱한 것이 테이블 하나의 몬스터 수의 상한이다
+SCENARIO_MAX_ENCOUNTERS = 50
+ENCOUNTER_MAX_COUNT = 10
+# 시나리오 하나에 둘 수 있는 놓인 물건의 줄 수(장소, 물건, 보이는지의 짝). 한 줄의 개수는 한 가지의 상한(99)까지다
+SCENARIO_MAX_PLACE_ITEMS = 100
+# 몬스터 하나의 공격(스킬)의 수와 이름의 길이. 공격이 여럿이면 차례마다 서버의 주사위로 하나를 고른다
+MONSTER_MAX_ATTACKS = 5
+ATTACK_NAME_MAX_LENGTH = 30
+# 몬스터나 NPC 하나가 지닌 장비와 소지품의 줄 수, 쓰러졌을 때 줄 하나가 떨어질 확률(%)의 범위.
+# 드롭은 지닌 것에서만 나온다. 줄마다 따로 굴린다(app/engine/drops.py)
+CARRIED_MAX_EQUIPMENT = 5
+CARRIED_MAX_INVENTORY = 10
+DROP_CHANCE_MAX = 100
+# 판을 낼 때 적는 변경 내용. 사람이 읽는다
+VERSION_NOTE_MAX_LENGTH = 500
+
+# 로어북의 항목. 항목은 통째로 AI 의 입력에 들어가는 단위다. 짧게 쪼개 둘수록 필요한 것만 넣을 수 있다
+LOREBOOK_MAX_ENTRIES = 100
+LORE_ENTRY_NAME_MAX_LENGTH = 100
+LORE_ENTRY_CONTENT_MAX_LENGTH = 500
+LORE_ENTRY_MAX_KEYWORDS = 5
+LORE_KEYWORD_MAX_LENGTH = 30
+# 인물을 지목할 때 맞다고 받는 이름의 수와 길이(LoreEntry.true_names)
+LORE_ENTRY_MAX_TRUE_NAMES = 5
+LORE_TRUE_NAME_MAX_LENGTH = 50
+
+
+class AssetType(enum.StrEnum):
+    """자산의 종류. 종류마다 내용을 담는 테이블이 따로 있다."""
+
+    WORLD = 'world'
+    RULEBOOK = 'rulebook'
+    SCENARIO = 'scenario'
+    LOREBOOK = 'lorebook'
+    # 몬스터 도감. 모델은 app/assets/bestiaries/models.py 에 있다
+    BESTIARY = 'bestiary'
+
+
+class ItemKind(enum.StrEnum):
+    """
+    아이템의 종류. 엔진이 다르게 다루는 것만 나눈다.
+
+    규칙을 적지 않은 물건 항목은 장비다. 갖고만 있고, 서술할 때 GM 에게 소지품으로 알려 준다.
+    """
+
+    # 갖고만 있는 물건. 쓴다고 없어지지 않는다
+    GEAR = 'gear'
+    # 쓰면 하나 줄어드는 물건. 회복의 양(heals)을 적었으면 쓸 때 엔진이 HP 를 그만큼 되돌린다
+    CONSUMABLE = 'consumable'
+
+
+class NpcAttitude(enum.StrEnum):
+    """
+    NPC 가 일행을 대하는 태도(#474). 판의 인물(npc_sheets)에 처음 태도를 적고, 테이블에서 엔진이 바꾼다.
+
+    정확해야 하는 값이라 서술(AI)에 맡기지 않는다. 서술에는 사실로 준다. 방장도 바꾸지 못한다.
+    """
+
+    FRIENDLY = 'friendly'
+    NEUTRAL = 'neutral'
+    # 경계한다. 적대하지는 않지만 의심한다(#494). 경계하는 인물에게서는 훔치기의 방심 보정이 없다
+    WARY = 'wary'
+    HOSTILE = 'hostile'
+
+
+class NpcCaught(enum.StrEnum):
+    """
+    NPC 에게서 훔치다 들켰을 때 그 NPC 가 어떻게 나오는가(#457). 판의 인물(npc_sheets)마다 작성자가 정한다.
+
+    들키면 늘 적대가 된다. hostile 은 적대만, fight 는 적대하고 싸움이 붙는다(싸운 것으로 친다).
+    누가 어떻게 나올지는 엔진이 시트를 보고 정한다. 서술(AI)이 정하지 않는다.
+    """
+
+    HOSTILE = 'hostile'
+    FIGHT = 'fight'
+
+
+class ItemRarity(enum.StrEnum):
+    """
+    물건의 등급. 낮은 것부터 높은 것의 차례다. 규칙을 적지 않은 물건은 노말이다.
+
+    엔진은 등급이 높을수록 훔치기 어렵게 한다(#456). 값(가격)은 아직 없다. 사고팔기(#278)에서 더한다.
+    """
+
+    NORMAL = 'normal'
+    RARE = 'rare'
+    UNIQUE = 'unique'
+    EPIC = 'epic'
+    LEGENDARY = 'legendary'
+
+
+# 등급의 차례. 0 이 노말이다. 훔치기가 등급마다 얼마나 어려워지는지를 셀 때 쓴다
+RARITY_ORDER: tuple[ItemRarity, ...] = tuple(ItemRarity)
+
+
+class RouteVisibility(enum.StrEnum):
+    """
+    맵의 길을 플레이어가 언제 아는가. 제작자가 길마다 정한다.
+
+    아는 길의 두 끝은 아는 장소다. 길을 알면 어디로 가는지도 안다.
+    숨긴 길은 방장도 모른다. 시나리오를 만든 사람과 AI GM 만 안다.
+    """
+
+    # 처음부터 안다. 큰길, 이름난 뱃길
+    OPEN = 'open'
+    # 캐릭터가 길의 한쪽 끝에 서 보면 안다. 잘 알려지지 않은 오솔길
+    FOG = 'fog'
+    # 찾아야 안다. 찾는 판정(능력치와 난이도)을 길마다 적는다. 비밀 통로
+    HIDDEN = 'hidden'
+
+
+class PlaceItemVisibility(enum.StrEnum):
+    """
+    장소에 놓인 물건을 플레이어가 언제 아는가. 제작자가 줄마다 정한다.
+
+    숨긴 물건은 숨긴 길과 같다. 방장도 모른다. 시나리오를 만든 사람과 AI GM 만 안다.
+    """
+
+    # 그 장소에 서 본 뒤부터 보인다. 줍기(take)로 가져간다. 탁자 위의 물약
+    OPEN = 'open'
+    # 찾아야 안다. 찾는 판정(능력치와 난이도)을 줄마다 적는다. 찾은 사람이 바로 갖는다. 마루 밑의 열쇠
+    HIDDEN = 'hidden'
+
+
+class Surprise(enum.StrEnum):
+    """
+    조우에서 누가 기습하는가. 제작자가 조우마다 정한다.
+
+    기습한 쪽은 만난 첫 라운드(살아 있는 캐릭터가 그 장소에서 처음 차례를 받는 라운드)에 모두 먼저 움직인다.
+    그다음부터는 차례를 정하는 능력치(Ruleset.initiative_ability)의 순서다. 순서를 정하는 것은 라운드 닫기다.
+    """
+
+    # 기습 없음. 처음부터 능력치의 순서다
+    NONE = 'none'
+    # 몬스터가 매복했다. 천장에 붙은 거미
+    MONSTERS = 'monsters'
+    # 일행이 기습한다. 잠든 늑대 무리
+    PARTY = 'party'
+
+
+class QuestStart(enum.StrEnum):
+    """
+    퀘스트가 테이블이 시작할 때 어떤 상태인가.
+
+    규칙을 적지 않은 사건 항목은 숨긴 채로 시작한다. 드러나는 조건이 없어서 드러나지 않는다.
+    """
+
+    # 아무에게도 보이지 않는다(방장에게도). GM 만 안다. 드러나는 조건(reveal)을 채우면 엔진이 드러낸다
+    HIDDEN = 'hidden'
+    # 처음부터 진행 중이다. 플레이어가 처음부터 쫓는 목표다
+    ACTIVE = 'active'
+
+
+class QuestConditionKind(enum.StrEnum):
+    """
+    퀘스트의 조건 하나가 무엇을 보는가. 엔진이 이미 아는 사실(상태)만 본다(app/rounds/quest_goals.py).
+
+    target 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물, 다른 퀘스트(사건)다.
+    다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)에만 쓴다. 이루는 조건(conditions)에는 쓰지 않는다.
+    """
+
+    # 그 장소에 죽지 않은 캐릭터가 서 있다
+    REACH_PLACE = 'reach_place'
+    # 그 몬스터가 count 마리 이상 쓰러지거나 죽었다
+    DEFEAT_MONSTER = 'defeat_monster'
+    # 죽지 않은 캐릭터들이 그 물건을 모두 합쳐 count 개 이상 가졌다
+    HOLD_ITEM = 'hold_item'
+    # 그 인물(NPC)이 쓰러지거나 죽었다
+    DEFEAT_NPC = 'defeat_npc'
+    # 그 퀘스트가 성공했다
+    QUEST_SUCCEEDED = 'quest_succeeded'
+    # 그 퀘스트가 실패했다
+    QUEST_FAILED = 'quest_failed'
+
+
+# count 를 쓰는 조건. 나머지는 1 이다
+COUNTED_CONDITIONS = frozenset({QuestConditionKind.DEFEAT_MONSTER, QuestConditionKind.HOLD_ITEM})
+# 다른 퀘스트를 보는 조건(퀘스트 잇기). 드러나는 조건에만 쓴다
+QUEST_LINK_CONDITIONS = frozenset({QuestConditionKind.QUEST_SUCCEEDED, QuestConditionKind.QUEST_FAILED})
+
+
+class QuestMatch(enum.StrEnum):
+    """퀘스트의 조건이 여럿일 때 언제 이룬 것인가."""
+
+    # 모두 채워야 한다
+    ALL = 'all'
+    # 하나라도 채우면 된다
+    ANY = 'any'
+
+
+class Visibility(enum.StrEnum):
+    """누구에게 보이는가. 지금은 만든 사람만 본다. 공개 기능을 만들 때 값을 늘린다."""
+
+    PRIVATE = 'private'
+
+
+class Rating(enum.StrEnum):
+    """이용 등급."""
+
+    ALL = 'all'
+    ADULT = 'adult'
+
+
+class NarrationStyle(enum.StrEnum):
+    """
+    GM 의 서술 문체. 시나리오의 제작자가 하나를 추천하고, 테이블의 방장이 고를 수 있다.
+
+    값마다 서술자에게 주는 지시가 다르다(app/rounds/prompt.py). 화면에 보이는 이름은 화면이 정한다.
+    값의 이름은 독자가 아니라 쓰는 기법을 가리킨다.
+    """
+
+    # 문체를 지시하지 않는다. 모델이 원래 쓰는 대로다. 결과를 바꾸지 않는 것 같은 GM 의 규칙은 그대로다
+    NONE = 'none'
+    # 정통. 3인칭 과거형, 묘사 중심, 고른 호흡
+    CLASSIC = 'classic'
+    # 웹소설. 짧은 문단, 빠른 리듬
+    WEB_NOVEL = 'web_novel'
+    # 하드보일드. 짧고 건조한 문장
+    HARDBOILED = 'hardboiled'
+    # 여성향. 인물 사이의 관계와 감정의 결
+    EMOTIONAL = 'emotional'
+    # 남성향. 빠른 전개, 힘과 액션
+    ACTION = 'action'
+    # 도파민. 자극적이고 호쾌한 전개
+    DOPAMINE = 'dopamine'
+    # 문학. 은유와 감각적인 이미지, 느린 호흡
+    LITERARY = 'literary'
+
+
+# 제작자가 고르지 않았을 때 추천하는 문체. 이 칸이 생기기 전의 시나리오와 판도 이것으로 읽는다
+DEFAULT_NARRATION_STYLE = NarrationStyle.CLASSIC
+
+
+class LoreKind(enum.StrEnum):
+    """
+    로어북 항목의 종류. 시스템이 다르게 다루는 것만 나눈다. 더 촘촘한 분류는 나중에 자유 태그로 받는다.
+
+    종류마다 하는 일(app/lore/retrieval.py, app/rounds/prompt.py):
+      - 인물: 이름이 장면에 아직 안 나왔으면 장면의 호칭으로 이름표를 바꾸고 진짜 이름을 뺀다
+      - 전설: 사실로 단정하지 않고 흘릴 수 있는 이야기로 다룬다
+      - 사건: 준비된 사건의 글이다. 장면에서 먼저 일으키거나 결말을 정하지 않는다.
+              사건 하나가 퀘스트 하나다. 시작 상태와 보상은 시나리오의 퀘스트 규칙(Scenario.quests),
+              진행(상태)은 테이블(엔진, DB)이 맡는다
+    장소는 맵의 장소다. 어디와 어디가 이어지는지는 시나리오의 길(Scenario.routes)이 정한다.
+    물건, 세력, 종족은 지금은 표시만 한다(물건은 시나리오의 아이템 규칙이 엔진에 잇는다).
+    """
+
+    # 이름 붙은 등장인물. 사람만이 아니라 이름이 있는 동물도 여기다
+    PERSON = 'person'
+    PLACE = 'place'
+    ITEM = 'item'
+    # 조직, 가문, 무리
+    FACTION = 'faction'
+    # 종족과 생물의 무리. 몬스터의 타입(인간형, 언데드 …)은 여기가 아니라 몬스터 자산의 규칙 데이터다
+    SPECIES = 'species'
+    # 세계관 속 떡밥. 사실인지 아닌지 애매한 이야기
+    LEGEND = 'legend'
+    # 미리 만들어 둔 사건(퀘스트)의 글
+    EVENT = 'event'
+    OTHER = 'other'
+
+
+class CharacterMode(enum.StrEnum):
+    """
+    테이블에 앉는 사람이 캐릭터를 얻는 방식.
+
+    시나리오의 제작자가 허용할 방식을 고른다. 방장은 그 안에서 테이블의 설정으로 더 좁힐 수 있다.
+    """
+
+    # 제작자가 만들어 둔 프리젠을 고른다. 시트는 그 프리젠의 것이다
+    PREGEN = 'pregen'
+    # 이름과 설명을 직접 쓴다. 시트는 시나리오의 기본 시트다
+    CUSTOM = 'custom'
+    # 이름과 설명에 더해 능력치의 점수도 직접 적는다. 기본 시트를 쓰지 않는다.
+    # 규칙의 점수 범위만 지키면 무엇이든 적을 수 있다. 균형은 그 플레이어와 테이블의 몫이다
+    MANUAL = 'manual'
+    # 정해진 총점 안에서 능력치의 점수를 산다. 기본 시트를 쓰지 않는다.
+    # 총점과 값표는 룰북의 규칙에 있다(Ruleset.point_buy). 같은 총점에서 시작하므로 캐릭터끼리 고르다
+    POINT_BUY = 'point_buy'
+    # 서버가 주사위를 굴려 점수들을 정하고, 플레이어가 그 점수를 원하는 능력치에 놓는다. 기본 시트를 쓰지 않는다.
+    # 굴리는 법은 룰북의 규칙에 있다(Ruleset.score_roll). 한 테이블에서 한 사람이 한 번 굴린다
+    ROLLED = 'rolled'
+
+
+# 제작자가 숫자를 적어 둔 방식들. 이 방식의 캐릭터는 판에 적힌 시트를 그대로 받는다.
+# 이 둘이 아닌 방식은 모두 플레이어가 능력치를 정하는 방식이다
+CREATOR_MADE_MODES = (CharacterMode.PREGEN, CharacterMode.CUSTOM)
+
+# 방식을 고르지 않았을 때 허용하는 것. 처음부터 있던 둘이다.
+# 플레이어가 숫자를 정하는 방식은 제작자가 직접 켜야 한다. 방식이 늘어도 이 목록은 그대로다
+DEFAULT_CHARACTER_MODES = [CharacterMode.PREGEN, CharacterMode.CUSTOM]
+
+# 플레이어가 능력치를 정하는 방식들. 제작자가 숫자를 적어 둔 방식이 아닌 것 모두다.
+# 이 중 하나라도 허용하면 최대 HP 를 구하는 값(기준값과 상한)이 있어야 한다
+PLAYER_MADE_MODES = frozenset(CharacterMode) - frozenset(CREATOR_MADE_MODES)
+
+# 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구할 때 쓰는 기준값과 상한이 가질 수 있는 가장 큰 값.
+# 시트의 최대 HP 의 한도(app/engine/sheet.py 의 SHEET_MAX_HP)와 같다
+PLAYER_MADE_HP_MAX = 999
+
+
+def one_of(column: str, values: type[enum.StrEnum]) -> str:
+    """컬럼의 값이 정해진 목록 안에 있어야 한다는 조건을 SQL 로 만든다."""
+    allowed = ', '.join(f"'{value}'" for value in values)
+    return f'{column} IN ({allowed})'
+
+
+def none_of(column: str, values: tuple[enum.StrEnum, ...]) -> str:
+    """컬럼의 값이 있고, 적은 목록의 어느 것도 아니어야 한다는 조건을 SQL 로 만든다."""
+    excluded = ', '.join(f"'{value}'" for value in values)
+    return f'({column} IS NOT NULL AND {column} NOT IN ({excluded}))'
+
+
+def all_of(column: str, values: type[enum.StrEnum]) -> str:
+    """배열 컬럼의 원소가 모두 정해진 목록 안에 있어야 한다는 조건을 SQL 로 만든다."""
+    allowed = ', '.join(f"'{value}'" for value in values)
+    return f'{column} <@ ARRAY[{allowed}]::varchar[]'
+
+
+def at_most(column: str, max_length: int) -> str:
+    """컬럼의 글자 수가 제한을 넘지 않아야 한다는 조건을 SQL 로 만든다."""
+    return f'char_length({column}) <= {max_length}'
+
+
+class Asset(Base):
+    """모든 자산의 공통 부분."""
+
+    __tablename__ = 'assets'
+    __table_args__ = (
+        # 값의 종류를 DB 의 enum 타입이 아니라 문자열과 CHECK 로 둔다.
+        # enum 타입은 값을 추가하는 마이그레이션이 까다롭고, 자산의 종류는 계속 늘어난다
+        CheckConstraint(one_of('type', AssetType), name='type_allowed'),
+        CheckConstraint(one_of('visibility', Visibility), name='visibility_allowed'),
+        CheckConstraint(one_of('rating', Rating), name='rating_allowed'),
+        CheckConstraint(at_most('description', DESCRIPTION_MAX_LENGTH), name='description_length'),
+    )
+
+    # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 남의 자산이 몇 개인지, 있는지를 추측할 수 있다.
+    # DB 가 아니라 파이썬에서 만든다. 저장하기 전에도 ID 를 알 수 있다
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    # 만든 사람. 인증 서버의 public_id(토큰의 sub)다.
+    # 사용자 테이블은 인증 서버에 있으므로 외래 키를 걸 수 없다. "내 자산" 조회를 위해 색인을 건다
+    owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+
+    type: Mapped[str] = mapped_column(String(20))
+    title: Mapped[str] = mapped_column(String(TITLE_MAX_LENGTH))
+
+    # 메모. 만든 사람이 자기 목록에서 알아보려고 적는다. AI 의 입력에는 넣지 않는다.
+    # 남에게 보이는 소개글은 소개 페이지(app/listings)에 따로 있다
+    description: Mapped[str] = mapped_column(Text, default='')
+
+    visibility: Mapped[str] = mapped_column(String(20), default=Visibility.PRIVATE)
+    rating: Mapped[str] = mapped_column(String(20), default=Rating.ALL)
+
+    # 시각은 DB 의 시계로 적는다. 서버가 여러 대여도 기준이 하나다
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # 지운 시각. 비어 있으면 지우지 않은 것이다.
+    # 행을 실제로 지우지 않는다. 진행 중인 방이 이 자산을 가리키고 있을 수 있다
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AssetContent(Base):
+    """
+    종류별 내용 테이블의 공통 부분. 세계관, 룰북처럼 자산의 내용을 담는 모델이 물려받는다.
+
+    이 클래스 자체는 테이블이 아니다(__abstract__). 물려받은 클래스마다 아래 두 가지가 똑같이 생긴다.
+    """
+
+    __abstract__ = True
+
+    # 기본 키이면서 assets 를 가리킨다. 자산 하나에 내용이 둘 붙을 수 없다(1:1).
+    # 자산의 행이 지워지면 내용도 함께 지워진다. 내용만 남아 떠도는 일이 없다
+    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id', ondelete='CASCADE'), primary_key=True)
+
+    # 내용을 읽을 때 공통 부분도 항상 함께 읽는다.
+    # 비동기에서는 나중에 따로 읽어 오는 방식(lazy)을 쓸 수 없어서, 한 번의 조회로 같이 가져오게 한다.
+    # 물려받는 클래스마다 관계를 따로 만들어야 해서 declared_attr 로 적는다
+    @declared_attr
+    def asset(cls) -> Mapped[Asset]:
+        return relationship(lazy='joined', innerjoin=True)
+
+
+class World(AssetContent):
+    """세계관의 내용."""
+
+    __tablename__ = 'worlds'
+    __table_args__ = (
+        CheckConstraint(at_most('setting', WORLD_SETTING_MAX_LENGTH), name='setting_length'),
+        CheckConstraint(at_most('gm_notes', WORLD_GM_NOTES_MAX_LENGTH), name='gm_notes_length'),
+    )
+
+    # 공개 설정. 플레이어와 AI 가 함께 본다
+    setting: Mapped[str] = mapped_column(Text, default='')
+
+    # GM 전용. AI 만 본다. 소유자가 아닌 사람에게 가는 응답에 실으면 안 된다
+    gm_notes: Mapped[str] = mapped_column(Text, default='')
+
+
+class Rulebook(AssetContent):
+    """
+    룰북의 내용. 시나리오를 만들 때 중심이 되는 자산이다.
+
+    룰북에는 두 가지가 들어간다.
+      - 진행 지침: 컨셉, 분위기, GM 의 진행 방식. AI 가 읽는 글이다.
+      - 게임 규칙: 능력치, 주사위, 판정. 엔진이 실행하는 데이터다.
+    규칙을 글로 적어 AI 에게 주지 않는다. 그러면 판정을 AI 가 하게 된다.
+    """
+
+    __tablename__ = 'rulebooks'
+    __table_args__ = (CheckConstraint(at_most('gm_guide', RULEBOOK_GM_GUIDE_MAX_LENGTH), name='gm_guide_length'),)
+
+    # 진행 지침. AI 만 본다. 턴마다 AI 의 입력에 들어간다
+    gm_guide: Mapped[str] = mapped_column(Text, default='')
+
+    # 게임 규칙. 문서 하나다. 모양은 app/engine/ruleset.py 의 Ruleset 이 정한다.
+    # DB 는 문서의 안을 검증하지 못한다. 쓸 때와 읽을 때 Ruleset 을 거친다.
+    # 만들 때 템플릿의 값을 복사해 넣는다. 그 뒤로는 템플릿을 다시 보지 않는다
+    rules: Mapped[dict] = mapped_column(JSONB)
+
+
+class Scenario(AssetContent):
+    """
+    시나리오의 내용. 테이블이 고르는 것이다.
+
+    시나리오는 다른 자산을 모아 만든 조립물이다. 룰북을 중심으로 세계관 등을 붙인다.
+    룰북과 세계관은 하나씩, 로어북과 몬스터 도감은 여러 개 가리킨다. NPC 는 로어북의 인물 항목이다.
+
+    초안일 때는 룰북과 스타팅을 비워 둘 수 있다(임시 저장). 게시할 때 둘 다 있는지 검사한다.
+    시트(프리젠의 시트, 기본 시트)도 초안일 때는 비워 둘 수 있다. 룰북의 규칙에 맞는지는 게시할 때 본다.
+    NPC 의 시트(인물 항목의 숫자)도 여기 있다. 게시할 때 항목과 규칙에 맞는지 본다.
+    """
+
+    __tablename__ = 'scenarios'
+    __table_args__ = (
+        CheckConstraint(f'cardinality(openings) <= {SCENARIO_MAX_OPENINGS}', name='openings_count'),
+        # 배열의 원소 하나하나의 길이는 CHECK 로 볼 수 없다. 전부 이은 길이로 위쪽만 막는다.
+        # 하나의 길이는 입력을 받을 때 검사한다(scenarios/schemas.py)
+        CheckConstraint(
+            f"char_length(array_to_string(openings, '')) <= {SCENARIO_MAX_OPENINGS * SCENARIO_OPENING_MAX_LENGTH}",
+            name='openings_length',
+        ),
+        CheckConstraint(
+            f'1 <= min_players AND min_players <= max_players AND max_players <= {TABLE_MAX_PLAYERS}',
+            name='players_range',
+        ),
+        # 문서 안의 모양(이름, 설명, 길이)은 입력을 받을 때 검사한다. DB 는 개수만 막는다
+        CheckConstraint(f'jsonb_array_length(pregens) <= {SCENARIO_MAX_PREGENS}', name='pregens_count'),
+        CheckConstraint(f'jsonb_array_length(npc_sheets) <= {SCENARIO_MAX_NPC_SHEETS}', name='npc_sheets_count'),
+        CheckConstraint(f'jsonb_array_length(items) <= {SCENARIO_MAX_ITEM_RULES}', name='items_count'),
+        CheckConstraint(
+            f'jsonb_array_length(starting_items) <= {SCENARIO_MAX_STARTING_ITEMS}', name='starting_items_count'
+        ),
+        CheckConstraint(f'jsonb_array_length(quests) <= {SCENARIO_MAX_QUEST_RULES}', name='quests_count'),
+        CheckConstraint(f'jsonb_array_length(routes) <= {SCENARIO_MAX_ROUTES}', name='routes_count'),
+        CheckConstraint(f'cardinality(landmarks) <= {SCENARIO_MAX_LANDMARKS}', name='landmarks_count'),
+        CheckConstraint(
+            f'jsonb_array_length(monster_sheets) <= {SCENARIO_MAX_MONSTER_SHEETS}', name='monster_sheets_count'
+        ),
+        CheckConstraint(f'jsonb_array_length(encounters) <= {SCENARIO_MAX_ENCOUNTERS}', name='encounters_count'),
+        CheckConstraint(f'jsonb_array_length(place_items) <= {SCENARIO_MAX_PLACE_ITEMS}', name='place_items_count'),
+        # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
+        CheckConstraint(
+            f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
+            name='character_modes_allowed',
+        ),
+        CheckConstraint(f'start_day BETWEEN 1 AND {CLOCK_MAX_DAY}', name='start_day_range'),
+        CheckConstraint('start_hour BETWEEN 0 AND 23', name='start_hour_range'),
+        CheckConstraint(f'round_minutes BETWEEN 1 AND {ROUND_MAX_MINUTES}', name='round_minutes_range'),
+        # 기준값과 상한은 함께 있거나 함께 없다. 있으면 1 이상이고, 기준값이 상한을 넘지 않는다
+        CheckConstraint(
+            '(hp_base IS NULL) = (hp_cap IS NULL) AND '
+            f'(hp_base IS NULL OR (hp_base >= 1 AND hp_base <= hp_cap AND hp_cap <= {PLAYER_MADE_HP_MAX}))',
+            name='player_made_hp',
+        ),
+        CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
+    )
+
+    # 가리키는 대상이 assets 가 아니라 rulebooks 다. 룰북 자리에 세계관을 넣는 일을 DB 가 막는다.
+    # 가리키는 쪽에서 찾는 일("이 룰북을 쓰는 시나리오가 있는가")이 있어서 색인을 건다.
+    # RESTRICT: 시나리오가 가리키는 동안에는 룰북의 행을 지울 수 없다
+    rulebook_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('rulebooks.asset_id', ondelete='RESTRICT'), index=True
+    )
+
+    # 세계관은 없어도 된다. 붙여도 하나만 붙인다
+    world_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('worlds.asset_id', ondelete='RESTRICT'), index=True)
+
+    # 스타팅들. 하나하나가 도입부다. 테이블이 시작될 때 AI 가 처음 읽어 주는 장면이고, 플레이어와 AI 가 함께 본다.
+    # 테이블을 만드는 사람이 이 중 하나를 고른다. 목록의 순서가 고르는 화면의 순서다.
+    # 시나리오 하나에 딸린 짧은 목록이라 테이블을 따로 두지 않고 배열로 둔다
+    openings: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+
+    # 추천 인원. 제작자가 몇 명을 생각하고 만들었는지 알려 준다. 강제하지 않는다.
+    # 테이블의 정원은 테이블을 만드는 사람이 정한다
+    min_players: Mapped[int] = mapped_column(SmallInteger, default=1)
+    max_players: Mapped[int] = mapped_column(SmallInteger, default=TABLE_MAX_PLAYERS)
+
+    # 프리젠들. 제작자가 미리 만들어 둔 캐릭터다. 하나하나가 {name, description, sheet} 다.
+    # sheet 는 그 캐릭터의 숫자다(app/engine/sheet.py 의 Sheet). 초안일 때는 비워 둘 수 있다.
+    # 플레이어가 테이블에 앉을 때 골라서 자기 캐릭터로 가져갈 수 있다.
+    # 시나리오 하나에 딸린 짧은 목록이고 통째로 바꾸므로, 테이블을 따로 두지 않고 문서로 둔다
+    pregens: Mapped[list[dict]] = mapped_column(JSONB, default=list)
+
+    # 허용하는 캐릭터 방식들. 하나 이상이다.
+    # 있던 시나리오는 둘 다 허용하는 것으로 채운다. 지금까지 프리젠을 고를 수도, 직접 만들 수도 있었다
+    character_modes: Mapped[list[str]] = mapped_column(
+        ARRAY(String(20)), default=lambda: list(DEFAULT_CHARACTER_MODES), server_default=text("'{pregen,custom}'")
+    )
+
+    # 주사위로 정한 점수를 다시 굴리게 해 줄 수 있는가. 제작자가 정한다. 기본은 안 된다.
+    # 켜면 방장이 테이블에서 특정한 사람에게 "한 번 더"를 줄 수 있다. 꺼져 있으면 방장도 주지 못한다.
+    # 나쁜 눈이 나와도 그대로 가는 것이 이 시나리오의 뜻일 수 있다. 그래서 방장이 아니라 제작자가 정한다
+    reroll_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+
+    # 추천 문체. 제작자가 이 시나리오에 어울린다고 고른 GM 의 문체다. 기본은 정통이다.
+    # 테이블의 방장이 문체를 고르지 않으면 이것을 쓴다. 판에 굳히므로 나중에 바꿔도 진행 중인 테이블은 그대로다
+    narration_style: Mapped[str] = mapped_column(
+        String(20), default=DEFAULT_NARRATION_STYLE, server_default=text("'classic'")
+    )
+
+    # 추천 서술 모델. 모델 목록(app/catalog)의 이름표다.
+    # 저장할 때 반드시 정한다(app/assets/scenarios/recommended_model.py).
+    # 테이블을 만들 때 테이블로 복사한다. 판에 굳히지 않는다. 모델을 쓸 수 있는지는 내용과 따로 바뀐다.
+    # 비어 있는 것은 이 규칙 전에 만든 시나리오뿐이다. 그 시나리오로 테이블을 만들면 방장이 모델을 고른다.
+    # 모델 목록을 외래키로 가리키지 않는다. 모델 목록은 다른 서비스로 옮겨 갈 수 있다(docs/architecture/shared-code.md)
+    narration_model: Mapped[str | None] = mapped_column(String(48))
+
+    # 기본 시트. 캐릭터를 직접 만든 사람이 받는 숫자다. 문서 하나이고 모양은 Sheet 다.
+    # 초안일 때는 비워 둘 수 있다. 직접 만들기를 허용했으면 게시할 때 있어야 한다
+    default_sheet: Mapped[dict | None] = mapped_column(JSONB)
+
+    # NPC 시트들. 하나하나가 {entry_id, sheet} 다. 붙인 로어북의 인물 항목 하나에 숫자를 준다.
+    # 시트를 로어북 항목에 두지 않고 여기 둔다. 로어북은 여러 시나리오가 함께 쓰고, 시나리오마다 룰북이 달라
+    # 능력치의 이름표와 범위가 다르다. 숫자는 룰북을 정하는 쪽(시나리오)의 것이다.
+    # 가리키는 항목이 있는지, 인물인지, 규칙에 맞는지는 게시할 때 본다(scenarios/publishing.py)
+    npc_sheets: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 아이템 규칙들. 하나하나가 {entry_id, kind, heals} 다. 붙인 로어북의 물건 항목 하나가 엔진에서 무엇인지 정한다.
+    # NPC 시트와 같은 까닭으로 로어북이 아니라 여기 둔다. 회복의 양(heals)은 룰북의 등급(magnitudes)의 이름이다.
+    # 규칙이 없는 물건 항목은 장비(gear)다. 가리키는 항목과 등급이 있는지는 게시할 때 본다(scenarios/publishing.py)
+    items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 시작 소지품. 하나하나가 {entry_id, count} 다. 캐릭터 모두가 테이블이 시작할 때 받는다.
+    # 프리젠을 고른 사람은 그 프리젠의 소지품(pregens[].items)도 더 받는다
+    starting_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 퀘스트 규칙들. 하나하나가 {entry_id, start, reward} 다. 붙인 로어북의 사건 항목 하나가 퀘스트로서 어떤지 정한다.
+    # 아이템 규칙과 같은 까닭으로 여기 둔다. 사건의 글은 로어북에, 시작 상태와 보상은 시나리오에 있다.
+    # 규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상이 없다. 가리키는 항목이 있는지는 게시할 때 본다
+    quests: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 맵의 시작 장소. 붙인 로어북의 장소 항목 하나다. 캐릭터 모두가 테이블이 시작할 때 여기에 선다.
+    # 비우면 맵이 없는 시나리오다(위치도 이동도 없다). 길을 적었으면 게시할 때 있어야 한다
+    start_place: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+    # 맵의 길들. 하나하나가 {from_place, to_place, two_way, visibility, find} 다. 장소는 붙인 로어북의 장소 항목이다.
+    # 장소의 묘사는 로어북에, 어디와 어디가 이어지는지는 여기에 둔다. 아이템 규칙과 같은 까닭이다.
+    # 플레이어가 길을 언제 아는지는 visibility 가 정한다(RouteVisibility).
+    # 숨긴 길은 플레이어도 방장도 모른다. 찾는 판정(find: 능력치와 난이도)으로 드러난다
+    routes: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 명소. 처음부터 아는 장소들이다(이름난 도시와 마을). 가는 길을 몰라도 이름은 안다.
+    # 명소가 아닌 장소는 가 보거나, 그리로 가는 길을 알게 되면 안다. 붙인 로어북의 장소 항목이다
+    landmarks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default=text("'{}'"))
+
+    # 몬스터 시트들. 하나하나가 {monster_id, sheet} 다. 붙인 도감의 몬스터 하나에 숫자를 준다.
+    # NPC 시트와 같은 까닭으로 도감이 아니라 여기 둔다. 시트를 적은 몬스터만 이 시나리오가 쓴다(판에 들어간다).
+    # 기본 몬스터 시트는 없다. 고블린과 용이 같은 숫자가 된다.
+    # 가리키는 몬스터가 붙인 도감에 있는지, 규칙에 맞는지는 게시할 때 본다(scenarios/publishing.py)
+    monster_sheets: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 조우들. 하나하나가 {place_id, monster_id, count} 다. "이 장소에 이 몬스터가 count 마리 있다"는 뜻이다.
+    # 장소는 붙인 로어북의 장소 항목, 몬스터는 시트를 적은 몬스터다. 맵의 길과 같은 까닭으로 여기 둔다.
+    # 테이블을 시작할 때 마리마다 상태를 만들어 그 장소에 둔다(app/tables/monsters.py). 맵이 있어야 한다
+    encounters: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 장소에 놓인 물건들. 하나하나가 {place_id, entry_id, count, visibility, find} 다.
+    # "이 장소에 이 물건이 count 개 있다"는 뜻이다. 장소는 맵의 장소, 물건은 붙인 로어북의 물건 항목이다.
+    # 숨긴 물건(hidden)은 찾는 판정(find)으로 드러난다. 테이블을 시작할 때 줄마다 남은 개수를 만든다
+    # (app/tables/place_items.py). 가져가면 그 테이블에서 줄어든다. 판은 그대로다
+    place_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
+    # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다
+    default_npc_sheet: Mapped[dict | None] = mapped_column(JSONB)
+
+    # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다. 둘은 함께 있거나 함께 없다.
+    # 최대 HP = 기준값 + 능력치의 보정, 상한을 넘지 않는다(app/engine/creation.py).
+    # 초안일 때는 비워 둘 수 있다. 플레이어가 숫자를 정하는 방식을 허용했으면 게시할 때 있어야 한다
+    hp_base: Mapped[int | None] = mapped_column(SmallInteger)
+    hp_cap: Mapped[int | None] = mapped_column(SmallInteger)
+
+    # 게임 안의 시계. 테이블이 시작할 때의 시각(며칠째, 몇 시)과 라운드 하나에 흐르는 기본 시간(분)이다.
+    # 셋을 한 묶음(clock)으로 다룬다. 테이블의 시계는 판에 굳힌 이 값에서 시작한다(app/calendar)
+    start_day: Mapped[int] = mapped_column(
+        SmallInteger, default=DEFAULT_START_DAY, server_default=text(str(DEFAULT_START_DAY))
+    )
+    start_hour: Mapped[int] = mapped_column(
+        SmallInteger, default=DEFAULT_START_HOUR, server_default=text(str(DEFAULT_START_HOUR))
+    )
+    round_minutes: Mapped[int] = mapped_column(
+        Integer, default=DEFAULT_ROUND_MINUTES, server_default=text(str(DEFAULT_ROUND_MINUTES))
+    )
+
+    # 붙인 로어북들. 여러 개라 칸 하나에 담지 못하고 연결 테이블(scenario_lorebooks)의 행으로 둔다.
+    # selectin: 시나리오를 읽을 때 함께 읽는다. 비동기에서는 나중에 따로 읽어 오는 방식을 쓸 수 없다.
+    # delete-orphan: 이 목록에서 빠진 행은 DB 에서도 지운다
+    lorebook_links: Mapped[list['ScenarioLorebook']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='ScenarioLorebook.lorebook_id'
+    )
+
+    # 붙인 몬스터 도감들. 로어북과 같은 까닭으로 연결 테이블(scenario_bestiaries)의 행으로 둔다
+    bestiary_links: Mapped[list['ScenarioBestiary']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='ScenarioBestiary.bestiary_id'
+    )
+
+    @property
+    def recommended_players(self) -> dict[str, int]:
+        """추천 인원. 최소와 최대를 한 묶음으로 다룬다."""
+        return {'min': self.min_players, 'max': self.max_players}
+
+    @recommended_players.setter
+    def recommended_players(self, players: dict[str, int]) -> None:
+        """추천 인원을 바꾼다. 둘을 늘 함께 바꿔서, 최소가 최대보다 큰 상태가 생기지 않게 한다."""
+        self.min_players = players['min']
+        self.max_players = players['max']
+
+    @property
+    def clock(self) -> dict[str, int]:
+        """게임 안의 시계. 시작 시각과 라운드 하나에 흐르는 기본 시간을 한 묶음으로 다룬다."""
+        return {'start_day': self.start_day, 'start_hour': self.start_hour, 'round_minutes': self.round_minutes}
+
+    @clock.setter
+    def clock(self, clock: dict[str, int]) -> None:
+        """시계를 바꾼다. 셋을 늘 함께 바꾼다."""
+        self.start_day = clock['start_day']
+        self.start_hour = clock['start_hour']
+        self.round_minutes = clock['round_minutes']
+
+    @property
+    def player_made_hp(self) -> dict[str, int] | None:
+        """플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한을 한 묶음으로 다룬다. 없으면 None."""
+        if self.hp_base is None or self.hp_cap is None:
+            return None
+        return {'base': self.hp_base, 'cap': self.hp_cap}
+
+    @player_made_hp.setter
+    def player_made_hp(self, hp: dict[str, int] | None) -> None:
+        """기준값과 상한을 바꾼다. 둘을 늘 함께 바꾼다. None 이면 둘 다 비운다."""
+        self.hp_base = hp['base'] if hp else None
+        self.hp_cap = hp['cap'] if hp else None
+
+    @property
+    def lorebook_ids(self) -> list[uuid.UUID]:
+        """붙인 로어북의 ID 목록."""
+        return [link.lorebook_id for link in self.lorebook_links]
+
+    @lorebook_ids.setter
+    def lorebook_ids(self, lorebook_ids: list[uuid.UUID]) -> None:
+        """
+        붙인 로어북을 이 목록으로 바꾼다. 목록에 없는 것은 떼고, 새로 생긴 것은 붙인다.
+
+        계속 붙어 있는 것은 행을 그대로 둔다. 지우고 다시 만들면 같은 키의 행을 한 번에 지우고 넣게 되어 부딪힌다.
+        """
+        kept = [link for link in self.lorebook_links if link.lorebook_id in lorebook_ids]
+        attached = {link.lorebook_id for link in kept}
+        added = [
+            ScenarioLorebook(lorebook_id=lorebook_id) for lorebook_id in lorebook_ids if lorebook_id not in attached
+        ]
+        self.lorebook_links = kept + added
+
+    @property
+    def bestiary_ids(self) -> list[uuid.UUID]:
+        """붙인 몬스터 도감의 ID 목록."""
+        return [link.bestiary_id for link in self.bestiary_links]
+
+    @bestiary_ids.setter
+    def bestiary_ids(self, bestiary_ids: list[uuid.UUID]) -> None:
+        """붙인 도감을 이 목록으로 바꾼다. 로어북(lorebook_ids)과 같은 법이다. 계속 붙어 있는 것은 행을 그대로 둔다."""
+        kept = [link for link in self.bestiary_links if link.bestiary_id in bestiary_ids]
+        attached = {link.bestiary_id for link in kept}
+        added = [
+            ScenarioBestiary(bestiary_id=bestiary_id) for bestiary_id in bestiary_ids if bestiary_id not in attached
+        ]
+        self.bestiary_links = kept + added
+
+
+class Lorebook(AssetContent):
+    """
+    로어북의 내용. 설정을 항목 단위로 쪼개 담은 사전이다.
+
+    세계관의 설정은 턴마다 통째로 AI 에게 간다. 로어북의 항목은 지금 장면에 관련된 것만 골라서 간다.
+    그래서 로어북 자신에게는 칸이 없다. 내용은 전부 항목(LoreEntry)에 있다.
+    """
+
+    __tablename__ = 'lorebooks'
+
+
+class LoreEntry(Base):
+    """
+    로어북의 항목 하나. 인물, 장소, 물건, 사건 같은 설정 한 토막이다.
+
+    항목은 자산이 아니다. 주인, 공개 범위, 지운 시각이 따로 없고 로어북의 것을 따른다.
+    지울 때는 행을 실제로 지운다.
+    """
+
+    __tablename__ = 'lore_entries'
+    __table_args__ = (
+        CheckConstraint(at_most('content', LORE_ENTRY_CONTENT_MAX_LENGTH), name='content_length'),
+        CheckConstraint(f'cardinality(keywords) <= {LORE_ENTRY_MAX_KEYWORDS}', name='keywords_count'),
+        CheckConstraint(one_of('kind', LoreKind), name='kind_allowed'),
+        CheckConstraint(f'cardinality(true_names) <= {LORE_ENTRY_MAX_TRUE_NAMES}', name='true_names_count'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    # 어느 로어북의 항목인가. 로어북의 행이 지워지면 항목도 함께 지워진다.
+    # "이 로어북의 항목들"을 찾는 일이 대부분이라 색인을 건다
+    lorebook_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('lorebooks.asset_id', ondelete='CASCADE'), index=True)
+
+    # 항목의 이름. 사람이 목록에서 찾을 때 본다. AI 에게도 내용과 함께 간다
+    name: Mapped[str] = mapped_column(String(LORE_ENTRY_NAME_MAX_LENGTH))
+
+    # 이 낱말이 대화에 나오면 항목을 AI 의 입력에 넣는다. 고유 명사처럼 글자가 정확히 맞아야 하는 것에 강하다.
+    # 뜻이 비슷한 것을 찾는 검색(임베딩)은 나중에 더한다. 그때도 키워드는 함께 쓴다.
+    # 항목 하나에 딸린 짧은 목록이라 테이블을 따로 두지 않고 배열로 둔다
+    keywords: Mapped[list[str]] = mapped_column(ARRAY(String(LORE_KEYWORD_MAX_LENGTH)), default=list)
+
+    # 내용. AI 가 읽는다. 항목 하나가 검색의 한 토막이 되므로, 한 가지 이야기만 담는다
+    content: Mapped[str] = mapped_column(Text, default='')
+
+    # 종류(LoreKind). 종류가 생기기 전의 항목은 기타다
+    kind: Mapped[str] = mapped_column(String(20), default=LoreKind.OTHER, server_default=LoreKind.OTHER.value)
+
+    # 인물을 지목할 때 맞다고 받는 이름들(app/rounds/naming.py). 비우면 항목의 이름 하나다.
+    # 플레이어가 장면의 호칭만 아는 인물의 진짜 이름을 맞히는 데 쓴다. 인물 항목에만 뜻이 있다.
+    # AI 의 입력에도, 벡터에도 들어가지 않는다. 정답이 새면 안 된다
+    true_names: Mapped[list[str]] = mapped_column(
+        ARRAY(String(LORE_TRUE_NAME_MAX_LENGTH)), default=list, server_default='{}'
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ScenarioLorebook(Base):
+    """
+    시나리오와 로어북의 연결. 행 하나가 "이 시나리오에 이 로어북이 붙어 있다"는 뜻이다.
+
+    시나리오 하나에 로어북이 여럿, 로어북 하나가 여러 시나리오에 붙을 수 있다(다대다).
+    """
+
+    __tablename__ = 'scenario_lorebooks'
+
+    # 두 칸을 합쳐 기본 키로 삼는다. 같은 로어북을 한 시나리오에 두 번 붙일 수 없다.
+    # 시나리오의 행이 지워지면 연결도 함께 지워진다
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('scenarios.asset_id', ondelete='CASCADE'), primary_key=True
+    )
+
+    # 붙어 있는 동안에는 로어북의 행을 지울 수 없다.
+    # 기본 키의 색인은 시나리오가 앞이라 "이 로어북을 쓰는 시나리오"를 찾는 데 못 쓴다. 따로 색인을 건다
+    lorebook_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('lorebooks.asset_id', ondelete='RESTRICT'), primary_key=True, index=True
+    )
+
+
+class ScenarioBestiary(Base):
+    """
+    시나리오와 몬스터 도감의 연결. 행 하나가 "이 시나리오에 이 도감이 붙어 있다"는 뜻이다. 로어북의 연결과 같다.
+
+    도감의 모델은 app/assets/bestiaries/models.py 에 있다. 이 연결은 시나리오가 갖는 것이라 시나리오 곁에 둔다.
+    """
+
+    __tablename__ = 'scenario_bestiaries'
+
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('scenarios.asset_id', ondelete='CASCADE'), primary_key=True
+    )
+
+    # 붙어 있는 동안에는 도감의 행을 지울 수 없다. "이 도감을 쓰는 시나리오"를 찾는 색인을 따로 건다
+    bestiary_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('bestiaries.asset_id', ondelete='RESTRICT'), primary_key=True, index=True
+    )
+
+
+class ScenarioVersion(Base):
+    """
+    시나리오의 판. 게시한 순간의 시나리오와, 그것이 가리키던 룰북, 세계관, 로어북을 통째로 굳힌 것이다.
+
+    테이블(같이 플레이하는 자리)은 만들 때 판 하나를 고르고, 그 내용을 복사해 간다.
+    그래서 판은 고치지 않는다. 고칠 것이 있으면 초안을 고치고 새 판을 낸다.
+    행을 고치거나 지우는 코드를 만들지 않는다.
+    """
+
+    __tablename__ = 'scenario_versions'
+    __table_args__ = (
+        # 한 시나리오에 같은 번호의 판이 둘 있을 수 없다. 동시에 게시해도 하나만 들어간다
+        UniqueConstraint('scenario_id', 'number'),
+        CheckConstraint('number >= 1', name='number_positive'),
+        CheckConstraint(at_most('note', VERSION_NOTE_MAX_LENGTH), name='note_length'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    # 어느 시나리오의 판인가. 판이 있는 시나리오의 행은 지울 수 없다.
+    # "이 시나리오의 판들"을 찾는 색인은 위의 UNIQUE 가 겸한다(시나리오가 앞에 있다)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('scenarios.asset_id', ondelete='RESTRICT'))
+
+    # 판의 번호. 시나리오마다 1 부터 하나씩 올라간다
+    number: Mapped[int] = mapped_column(Integer)
+
+    # 변경 내용. 제작자가 적는다. 새 판이 나왔다고 알릴 때 보여 준다
+    note: Mapped[str] = mapped_column(Text, default='')
+
+    # 굳힌 내용. 한 번 쓰고 고치지 않는 기록이라 문서 하나로 둔다.
+    # 모양은 app/assets/scenarios/snapshot.py 가 정한다. 그 모양을 거치지 않고 쓰지 않는다
+    snapshot: Mapped[dict] = mapped_column(JSONB)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

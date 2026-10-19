@@ -4,7 +4,7 @@
 # PR 에서 바뀐 파일을 보고 검사할 서버를 고른다. 관문 워크플로(.github/workflows/ci.yml)가 부른다.
 #
 #   사용: changed-servers.sh <기준 커밋> <PR 의 커밋>
-#   출력: GITHUB_OUTPUT 의 모양으로 서버마다 한 줄. auth=true, game=false, board=false, billing=true, notification=false
+#   출력: GITHUB_OUTPUT 의 모양으로 서버마다 한 줄. auth=true, trpg=false, board=false, billing=true, notification=false
 #
 # 고르는 규칙:
 #   - 서버의 폴더(auth-server/ 등)나 그 서버의 워크플로(.github/workflows/auth-server.yml)가 바뀌면 그 서버
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 # 검사하는 서버들. 출력의 이름과 폴더의 이름
-SERVERS=(auth game board billing notification)
+SERVERS=(auth trpg board billing notification)
 
 # 한 서버를 고르는 경로들인가. 서버 이름과 경로를 받는다.
 belongs_to() {
@@ -56,7 +56,7 @@ select_servers() {
     fi
     if python_shared "$path"; then
       picked[auth]=1
-      picked[game]=1
+      picked[trpg]=1
       picked[notification]=1
     fi
     for server in "${SERVERS[@]}"; do

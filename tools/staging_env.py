@@ -13,7 +13,7 @@ staging(VM)의 .env 여섯(루트와 서버 다섯)을 새로 만든다. VM 을 
      어느 비밀끼리 짝인지, DB 비밀번호가 어디에 들어가는지는 그 도구의 표(SECRETS)가 정한다. 여기에 다시 적지 않는다.
      서버끼리의 짝 비밀(# BILLING_SECRET= 등)은 그 도구가 주석을 풀어 둔다
   2. 그 표의 비밀 가운데 아직 주석으로 막힌 줄을 값 그대로 푼다. 남는 것은 한 파일만 아는 비밀이다
-     (game-server 의 SIGNAL_SECRET, AI_LOG_HMAC_KEY). fill_env.py 는 켜면 동작이 바뀌어 막아 두지만 staging 에서는 켠다:
+     (trpg-server 의 SIGNAL_SECRET, AI_LOG_HMAC_KEY). fill_env.py 는 켜면 동작이 바뀌어 막아 두지만 staging 에서는 켠다:
      SIGNAL_SECRET 은 서버를 다시 띄워도 같은 값이 되고, AI_LOG_HMAC_KEY 는 호출 기록에 입력의 지문을 남긴다
   3. staging 에서만 쓰는 값을 적는다(STAGING_VALUES 와 명령줄의 값). 주석으로 막힌 줄이면 풀어서 적는다
 
@@ -23,7 +23,7 @@ staging(VM)의 .env 여섯(루트와 서버 다섯)을 새로 만든다. VM 을 
 서버의 .env 에는 DEBUG, APP_ENVIRONMENT, DATABASE_URL 을 적지 않는다.
 docker-compose.yml 과 docker-compose.staging.yml 이 environment 로 덮는다(DB 주소의 비밀번호는 루트 .env 에서 가져간다).
 
-사람이 채울 것: 모델 창구의 키(game-server/.env 의 ZAI_API_KEY), S3 의 접근 키(루트 .env 의 BACKUP_AWS_*).
+사람이 채울 것: 모델 창구의 키(trpg-server/.env 의 ZAI_API_KEY), S3 의 접근 키(루트 .env 의 BACKUP_AWS_*).
 비워 두면 docker compose 가 뜨기를 거부하거나(S3 키) 그 창구의 모델을 부르지 않는다(모델 키).
 JWT 의 서명 키(auth-server/keys/)는 만들지 않는다. 문서의 openssl 명령으로 만든다.
 
@@ -57,7 +57,7 @@ STAGING_VALUES = {
         'BACKUP_AWS_ACCESS_KEY_ID': '',
         'BACKUP_AWS_SECRET_ACCESS_KEY': '',
     },
-    'game-server/.env': {
+    'trpg-server/.env': {
         'NARRATOR': 'llm',
         # 서술 모델. 모델 목록에 넣는 법은 docs/operations/staging-vm.md 의 "모델"
         'LLM_MODEL': 'glm-4-7-flash',
@@ -84,7 +84,7 @@ OPTIONAL_SECRETS = frozenset(
 )
 # 사람이 채울 것: (파일, 이름, 까닭)
 TO_FILL = (
-    ('game-server/.env', 'ZAI_API_KEY', 'Z.ai 의 API 키(GLM-4.7-Flash)'),
+    ('trpg-server/.env', 'ZAI_API_KEY', 'Z.ai 의 API 키(GLM-4.7-Flash)'),
     ('.env', 'BACKUP_AWS_ACCESS_KEY_ID', 'S3 의 접근 키(docker/backup-offsite/iam-policy.json 의 권한)'),
     ('.env', 'BACKUP_AWS_SECRET_ACCESS_KEY', 'S3 의 비밀 접근 키'),
 )
