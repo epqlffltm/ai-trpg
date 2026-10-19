@@ -14,9 +14,10 @@ from datetime import UTC, date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.ai.catalog_contract import Provider
 from app.billing.price_list import FreePriceList
 from app.billing.prices import narration_code
-from app.catalog.models import AiModel, Grade, Provider
+from app.catalog.models import AiModel, Grade
 from app.tables.model_picker import ModelPicker
 
 TEST_MODEL = 'test-narrator'

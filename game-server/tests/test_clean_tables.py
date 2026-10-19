@@ -21,9 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.call_log import DbCallLog
 from app.ai.calls import CallRecord, CallScope, Outcome
+from app.ai.catalog_contract import Provider
 from app.ai.provider import Reasoning
 from app.catalog import service as catalog
-from app.catalog.models import Grade, Provider
+from app.catalog.models import Grade
 from app.catalog.schemas import CostCreate, ModelCreate, SnapshotSwitch
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX

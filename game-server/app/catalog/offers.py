@@ -31,11 +31,11 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.catalog_contract import is_offered
 from app.billing.price_list import PriceList
 from app.billing.prices import Change, PriceBook, Tier, narration_code, price_at
 from app.catalog import repository
 from app.catalog.models import AiModel, Grade
-from app.catalog.rules import is_offered
 
 logger = logging.getLogger(__name__)
 

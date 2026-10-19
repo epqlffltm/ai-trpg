@@ -18,11 +18,12 @@ from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import FREE_BOOK, Change, Price, PriceBook, Sale, Tier, narration_code
 from app.billing.routing import utc_now
 from app.catalog import service as catalog
-from app.catalog.models import Grade, Provider, ReasoningStyle, TokenLimitField
+from app.catalog.models import Grade
 from app.catalog.offers import ModelCard, OfferedModel, grade_disagrees, offer, offered_models
 from app.catalog.schemas import CostCreate, ModelCreate
 from app.main import API_PREFIX

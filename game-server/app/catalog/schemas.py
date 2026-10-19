@@ -12,7 +12,8 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.catalog.models import Grade, Provider, ReasoningStyle, TokenLimitField
+from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField
+from app.catalog.models import Grade
 from app.catalog.rules import reasoning_style_problem, token_field_problem
 
 # 이름표. 영어 소문자와 숫자를 붙임표로 잇는다. 점은 쓰지 않는다. 결제 서버의 가격 코드에서 점이 칸을 나눈다.
