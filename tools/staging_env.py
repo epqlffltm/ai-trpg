@@ -8,14 +8,18 @@ staging(VM)의 .env 여섯(루트와 서버 다섯)을 새로 만든다. VM 을 
             --llm-base-url http://<집 PC 의 Tailscale 주소>:11434/v1 \\
             --s3-bucket <버킷> --age-recipients "<주 열쇠의 공개키> <확인 열쇠의 공개키>"
 
-하는 일:
-  - 저장소의 .env.example 을 바탕으로 만든다. 설명 줄은 그대로 두고 정할 값만 채운다
-    (주석으로 막힌 줄 "# 이름=" 은 풀어서 채운다. 예시에 없는 이름은 끝에 더한다)
-  - 비밀(DB 비밀번호, 서버끼리의 서명 비밀, Django 의 SECRET_KEY 등)은 이 자리에서 무작위로 만든다(64자).
-    로컬의 값을 옮기지 않는다(docs/architecture/deployment.md 의 "비밀과 설정")
-  - 서버끼리 같아야 하는 비밀은 같은 값을 넣는다. 짝은 아래의 PAIRS 다
-  - 파일은 주인만 읽게(600) 새로 만든다. 여섯 가운데 하나라도 이미 있으면 아무것도 만들지 않고 멈춘다(덮어쓰지 않는다)
-  - 비밀의 값은 찍지 않는다. 다 만들면 사람이 채울 것(외부의 키)만 찍는다
+하는 일(차례대로):
+  1. tools/fill_env.py 로 .env 여섯을 .env.example 에서 만들고 비밀을 난수로 채운다.
+     어느 비밀끼리 짝인지, DB 비밀번호가 어디에 들어가는지는 그 도구의 표(SECRETS)가 정한다. 여기에 다시 적지 않는다
+  2. 그 표의 비밀 가운데 .env.example 이 주석으로 막아 둔 줄(# BILLING_SECRET=<채운 값>)을 푼다.
+     staging 에서는 서버끼리의 요청(결제, 알림)을 모두 켜므로 짝의 양쪽이 다 켜져 있어야 한다
+  3. staging 에서만 쓰는 값을 적는다(STAGING_VALUES 와 명령줄의 값). 주석으로 막힌 줄이면 풀어서 적는다
+
+여섯 가운데 하나라도 이미 있으면 아무것도 만들지 않고 멈춘다. 두 번 돌려 staging 의 값을 덮는 일을 막는다.
+이미 있는 .env 의 빈 비밀만 채우려면 tools/fill_env.py 를 쓴다. 파일은 주인만 읽는다(600).
+
+서버의 .env 에는 DEBUG, APP_ENVIRONMENT, DATABASE_URL 을 적지 않는다.
+docker-compose.yml 과 docker-compose.staging.yml 이 environment 로 덮는다(DB 주소의 비밀번호는 루트 .env 에서 가져간다).
 
 사람이 채울 것: 모델 창구의 키(game-server/.env 의 ZAI_API_KEY), S3 의 접근 키(루트 .env 의 BACKUP_AWS_*).
 비워 두면 docker compose 가 뜨기를 거부하거나(S3 키) 그 창구의 모델을 부르지 않는다(모델 키).
@@ -26,51 +30,44 @@ VM 에는 uv 가 없어 Ubuntu 에 든 python3 로 돌린다. 표준 라이브�
 
 import argparse
 import os
-import re
-import secrets
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from fill_env import ENV_FILES, LINE, SECRETS, read_lines, report, run
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
-# 만드는 파일들. 저장소 루트에서의 경로다. 저마다 옆의 .env.example 을 바탕으로 한다
-TARGETS = (
-    '.env',
-    'auth-server/.env',
-    'game-server/.env',
-    'board-server/.env',
-    'billing-server/.env',
-    'notification-server/.env',
-)
-# 무작위로 만든 비밀의 길이(16진수 글자). 서버들이 요구하는 길이(32자 이상)를 넘는다
-SECRET_HEX_BYTES = 32
-# 주인만 읽고 쓴다(rw-------)
-PRIVATE_FILE_MODE = 0o600
-# DB 의 이름(루트 .env.example 의 POSTGRES_DB)
-DATABASE = 'trpg'
-# 서버끼리 같아야 하는 비밀: (이름표, [(파일, 이름), ...]). 이름표마다 값 하나를 만들어 모두에 넣는다
-PAIRS = {
-    'auth_billing': [('auth-server/.env', 'BILLING_SECRET'), ('billing-server/.env', 'AUTH_SERVER_SECRET')],
-    'game_billing': [('game-server/.env', 'BILLING_SECRET'), ('billing-server/.env', 'GAME_SERVER_SECRET')],
-    'game_notify': [('game-server/.env', 'NOTIFICATION_SECRET'), ('notification-server/.env', 'GAME_SERVER_SECRET')],
-    'billing_notify': [
-        ('billing-server/.env', 'NOTIFICATION_SECRET'),
-        ('notification-server/.env', 'BILLING_SERVER_SECRET'),
-    ],
-    'board_notify': [('board-server/.env', 'NOTIFICATION_SECRET'), ('notification-server/.env', 'BOARD_SERVER_SECRET')],
+# 새로 만드는 파일이 주인만 읽게 한다(fill_env.py 가 쓰는 순간부터 rw-------)
+PRIVATE_UMASK = 0o077
+# 예시에 없는 이름을 끝에 더할 때 그 앞에 붙이는 줄
+APPENDED_HEADER = '# --- tools/staging_env.py 가 더한 값 ---\n'
+
+# staging 에서 늘 같은 값. 파일마다 이름과 값이다
+STAGING_VALUES = {
+    '.env': {
+        'COMPOSE_FILE': 'docker-compose.yml:docker-compose.staging.yml',
+        'COMPOSE_PROFILES': 'app,observability',
+        'APP_ENVIRONMENT': 'staging',
+        # 인증 서버의 테스트용 DB 를 만들 권한. 운영에서는 주지 않는다(docker/postgres/init/01-auth-role.sql)
+        'AUTH_DB_ALLOW_TEST_DB': 'false',
+        'OTEL_EXPORTER_OTLP_ENDPOINT': 'http://alloy:4318',
+        # 사람이 채운다. 비워 두면 compose 가 뜨기를 거부한다(${...:?})
+        'BACKUP_AWS_ACCESS_KEY_ID': '',
+        'BACKUP_AWS_SECRET_ACCESS_KEY': '',
+    },
+    'game-server/.env': {
+        'NARRATOR': 'llm',
+        # 서술 모델. 모델 목록에 넣는 법은 docs/operations/staging-vm.md 의 "모델"
+        'LLM_MODEL': 'glm-4-7-flash',
+        'LLM_FALLBACK_MODELS': '',
+        # 사람이 채운다(Z.ai 의 API 키)
+        'ZAI_API_KEY': '',
+    },
+    # 진짜 결제 대행사는 아직 붙이지 않는다
+    'billing-server/.env': {'PAYMENT_PROVIDER': 'fake'},
 }
-# 서버마다 DB 의 계정. 루트 .env 의 비밀번호와 서버의 DATABASE_URL 이 같아야 한다
-DATABASE_ACCOUNTS = {
-    'auth-server/.env': ('AUTH_DB_PASSWORD', 'postgres://auth:{password}@db:5432/{database}'),
-    'game-server/.env': ('GAME_DB_PASSWORD', 'postgresql+asyncpg://game:{password}@db:5432/{database}'),
-    'board-server/.env': ('BOARD_DB_PASSWORD', 'postgresql://board:{password}@db:5432/{database}'),
-    'billing-server/.env': ('BILLING_DB_PASSWORD', 'postgres://billing:{password}@db:5432/{database}'),
-    'notification-server/.env': (
-        'NOTIFICATION_DB_PASSWORD',
-        'postgresql+asyncpg://notification:{password}@db:5432/{database}',
-    ),
-}
-# 비워 두어도 되는 비밀: 쓰지 않는 창구와 메일. 쓰게 되면 사람이 적는다.
+# 비워 두어도 되는 비밀: 쓰지 않는 창구와 메일, 경보를 받는 곳(README 의 "경보", 적은 것만 켜진다).
+# 쓰게 되면 사람이 적는다.
 # 이 밖의 비밀은 모두 채운다(test_staging_env.py 가 본다)
 OPTIONAL_SECRETS = frozenset(
     {
@@ -80,6 +77,7 @@ OPTIONAL_SECRETS = frozenset(
         'GEMINI_API_KEY',
         'TOSS_SECRET_KEY',
         'TOSS_CLIENT_KEY',
+        'ALERT_SMTP_PASSWORD',
     }
 )
 # 사람이 채울 것: (파일, 이름, 까닭)
@@ -88,11 +86,6 @@ TO_FILL = (
     ('.env', 'BACKUP_AWS_ACCESS_KEY_ID', 'S3 의 접근 키(docker/backup-offsite/iam-policy.json 의 권한)'),
     ('.env', 'BACKUP_AWS_SECRET_ACCESS_KEY', 'S3 의 비밀 접근 키'),
 )
-# 가장 앞에 오는 "이름=" 줄(주석이 아닌 것). 앞의 빈칸은 봐준다
-ASSIGNMENT = r'^[ \t]*{name}='
-# 주석으로 막힌 "# 이름=" 줄
-COMMENTED_ASSIGNMENT = r'^[ \t]*#[ \t]*{name}='
-APPENDED_HEADER = '\n# --- tools/staging_env.py 가 더한 값 ---\n'
 
 
 @dataclass(frozen=True)
@@ -107,121 +100,113 @@ class Options:
     s3_region: str = 'ap-northeast-2'
 
 
-def new_secret() -> str:
-    """무작위 비밀 하나(16진수 64자)."""
-    return secrets.token_hex(SECRET_HEX_BYTES)
+def secret_lines() -> dict[str, set[str]]:
+    """fill_env.py 가 채우는 비밀의 이름들. 파일마다다. DB 주소 안의 비밀번호는 줄이 아니라 뺀다."""
+    names: dict[str, set[str]] = {}
+    for secret in SECRETS:
+        for spot in secret.spots:
+            if not spot.url:
+                names.setdefault(spot.file, set()).add(spot.key)
+    return names
 
 
-def database_passwords() -> dict[str, str]:
-    """루트 .env 의 DB 비밀번호들. 관리 계정과 서버마다의 계정이다."""
-    names = ['POSTGRES_PASSWORD', *(name for name, _ in DATABASE_ACCOUNTS.values())]
-    return {name: new_secret() for name in names}
-
-
-def pair_values() -> dict[str, str]:
-    """서버끼리 같아야 하는 비밀. 이름표마다 하나다."""
-    return {label: new_secret() for label in PAIRS}
-
-
-def root_values(options: Options, passwords: dict[str, str]) -> dict[str, str]:
-    """루트 .env 에 넣을 값."""
+def option_values(options: Options) -> dict[str, str]:
+    """명령줄의 값을 루트 .env 의 이름으로."""
     return {
-        **passwords,
-        # 인증 서버의 테스트용 DB 를 만들 권한. 운영에서는 주지 않는다
-        'AUTH_DB_ALLOW_TEST_DB': 'false',
-        'GRAFANA_ADMIN_PASSWORD': new_secret(),
-        # DB 의 메트릭을 읽는 계정(monitor). 주소에 그대로 들어가므로 16진수(영문과 숫자)다
-        'MONITOR_DB_PASSWORD': new_secret(),
-        'OTEL_EXPORTER_OTLP_ENDPOINT': 'http://alloy:4318',
-        'COMPOSE_FILE': 'docker-compose.yml:docker-compose.staging.yml',
-        'COMPOSE_PROFILES': 'app,observability',
-        'APP_ENVIRONMENT': 'staging',
         'DOMAIN': options.domain,
         'ACME_EMAIL': options.acme_email,
         'GAME_LLM_BASE_URL': options.llm_base_url,
         'BACKUP_S3_BUCKET': options.s3_bucket,
         'BACKUP_S3_REGION': options.s3_region,
         'BACKUP_AGE_RECIPIENTS': options.age_recipients,
-        'BACKUP_AWS_ACCESS_KEY_ID': '',
-        'BACKUP_AWS_SECRET_ACCESS_KEY': '',
-    }
-
-
-def server_values() -> dict[str, dict[str, str]]:
-    """서버마다의 .env 에 넣을, 짝이 없는 값."""
-    common = {'APP_ENVIRONMENT': 'staging'}
-    debug_off = {**common, 'DEBUG': 'false'}
-    return {
-        'auth-server/.env': {**debug_off, 'SECRET_KEY': new_secret()},
-        'game-server/.env': {
-            **debug_off,
-            'NARRATOR': 'llm',
-            'LLM_MODEL': 'glm-4-7-flash',
-            'LLM_FALLBACK_MODELS': '',
-            'ZAI_API_KEY': '',
-            'AI_LOG_HMAC_KEY': new_secret(),
-            'SIGNAL_SECRET': new_secret(),
-        },
-        'board-server/.env': dict(common),
-        'billing-server/.env': {**debug_off, 'PG_WEBHOOK_SECRET': new_secret(), 'PAYMENT_PROVIDER': 'fake'},
-        'notification-server/.env': dict(debug_off),
     }
 
 
 def planned_values(options: Options) -> dict[str, dict[str, str]]:
-    """파일마다 넣을 이름과 값. 짝이 맞는 비밀과 DB 의 주소를 함께 넣는다."""
-    passwords = database_passwords()
-    plan = {'.env': root_values(options, passwords), **server_values()}
-    for label, value in pair_values().items():
-        for target, name in PAIRS[label]:
-            plan[target][name] = value
-    for target, (password_name, url) in DATABASE_ACCOUNTS.items():
-        plan[target]['DATABASE_URL'] = url.format(password=passwords[password_name], database=DATABASE)
+    """파일마다 적을 이름과 값."""
+    plan = {target: dict(STAGING_VALUES.get(target, {})) for target in ENV_FILES}
+    plan['.env'].update(option_values(options))
     return plan
 
 
-def set_value(text: str, name: str, value: str) -> str:
-    """
-    글에서 그 이름의 줄 하나를 "이름=값" 으로 바꾼다. 주석이 아닌 줄을 먼저 찾고, 없으면 "# 이름=" 줄을 푼다.
-    둘 다 없으면 끝에 더한다. 바꾸는 것은 처음 찾은 한 줄뿐이다(설명 속의 같은 이름은 그대로 둔다).
-    """
-    line = f'{name}={value}'
-    for pattern in (ASSIGNMENT, COMMENTED_ASSIGNMENT):
-        regex = re.compile(pattern.format(name=re.escape(name)) + r'.*$', re.MULTILINE)
-        if regex.search(text):
-            return regex.sub(lambda _: line, text, count=1)
-    if APPENDED_HEADER not in text:
-        text = text.rstrip('\n') + '\n' + APPENDED_HEADER
-    return text + line + '\n'
+def assignments(lines: list[str], key: str) -> tuple[int | None, list[int]]:
+    """그 이름의 줄들. (주석이 아닌 첫 줄, 주석으로 막힌 줄들)이다."""
+    active = None
+    commented = []
+    for index, line in enumerate(lines):
+        match = LINE.match(line)
+        if not match or match['key'] != key:
+            continue
+        if match['comment']:
+            commented.append(index)
+        elif active is None:
+            active = index
+    return active, commented
 
 
-def render(example: str, values: dict[str, str]) -> str:
-    """예시 파일의 글에 값들을 채운 글."""
-    for name, value in values.items():
-        example = set_value(example, name, value)
-    return example
+def uncomment(line: str) -> str:
+    """주석으로 막힌 줄의 # 을 뗀다. 값은 그대로다."""
+    return line[len(LINE.match(line)['comment']) :]
+
+
+def enable(lines: list[str], key: str) -> None:
+    """
+    주석으로 막힌 그 이름의 줄을 값 그대로 푼다. 이미 켜진 줄이 있으면 그대로 둔다.
+    fill_env.py 가 값을 넣는 곳과 같은, 처음 막힌 줄을 푼다(fill_env.find_line).
+    """
+    active, commented = assignments(lines, key)
+    if active is None and commented:
+        lines[commented[0]] = uncomment(lines[commented[0]])
+
+
+def set_value(lines: list[str], key: str, value: str) -> None:
+    """
+    그 이름의 줄을 "이름=값" 으로 바꾼다. 주석이 아닌 줄이 있으면 그 줄을, 없으면 주석으로 막힌 마지막 줄을 풀어서 쓴다
+    (루트 .env.example 은 같은 이름의 로컬용 줄 뒤에 staging 용 줄을 둔다). 둘 다 없으면 끝에 더한다.
+    """
+    active, commented = assignments(lines, key)
+    index = active if active is not None else (commented[-1] if commented else None)
+    if index is None:
+        if APPENDED_HEADER not in lines:
+            if lines and not lines[-1].endswith('\n'):
+                lines[-1] += '\n'
+            lines.extend(['\n', APPENDED_HEADER])
+        lines.append(f'{key}={value}\n')
+        return
+    newline = LINE.match(lines[index])['newline'] or '\n'
+    lines[index] = f'{key}={value}{newline}'
+
+
+def apply_staging(path: Path, enabled: set[str], values: dict[str, str]) -> None:
+    """만든 .env 하나에 비밀의 줄을 풀고 staging 의 값을 적는다."""
+    lines = read_lines(path)
+    for key in sorted(enabled):
+        enable(lines, key)
+    for key, value in values.items():
+        set_value(lines, key, value)
+    path.write_text(''.join(lines), encoding='utf-8', newline='')
 
 
 def existing_targets(root: Path) -> list[str]:
     """이미 있는 대상 파일들. 하나라도 있으면 만들지 않는다."""
-    return [target for target in TARGETS if (root / target).exists()]
+    return [target for target in ENV_FILES if (root / target).exists()]
 
 
-def write_private(path: Path, content: str) -> None:
-    """주인만 읽고 쓰는 파일을 새로 만든다. 이미 있으면 실패한다(만드는 순간에 권한을 정한다)."""
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, PRIVATE_FILE_MODE)
-    with os.fdopen(descriptor, 'w', encoding='utf-8', newline='\n') as file:
-        file.write(content)
-
-
-def write_all(root: Path, plan: dict[str, dict[str, str]]) -> None:
-    """예시 파일을 바탕으로 여섯을 만든다."""
-    for target in TARGETS:
-        example = (root / f'{target}.example').read_text(encoding='utf-8')
-        write_private(root / target, render(example, plan[target]))
+def create(root: Path, options: Options) -> str:
+    """여섯을 만들고 staging 의 값을 적는다. fill_env.py 가 한 일을 글로 돌려준다(비밀의 값은 없다)."""
+    previous = os.umask(PRIVATE_UMASK)
+    try:
+        files, outcomes, external = run(root, dry_run=False)
+        enabled = secret_lines()
+        for target, values in planned_values(options).items():
+            apply_staging(root / target, enabled.get(target, set()), values)
+    finally:
+        os.umask(previous)
+    return report(files, outcomes, external, dry_run=False)
 
 
 def parse_options(argv: list[str]) -> Options:
+    """명령줄을 읽는다. age 의 공개키는 둘이어야 한다(주 열쇠, 확인 열쇠)."""
     parser = argparse.ArgumentParser(description='staging(VM)의 .env 여섯을 새로 만든다')
     parser.add_argument('--domain', required=True, help='이 VM 의 도메인')
     parser.add_argument('--acme-email', required=True, help="Let's Encrypt 에 알리는 메일")
@@ -247,17 +232,20 @@ def parse_options(argv: list[str]) -> Options:
     )
 
 
+def to_fill_report() -> str:
+    """사람이 채울 것의 목록."""
+    return '\n'.join(['사람이 채울 것:', *(f'  {target} 의 {name}: {reason}' for target, name, reason in TO_FILL)])
+
+
 def main(argv: list[str], root: Path = REPO_ROOT) -> int:
+    """만들고 한 일과 사람이 채울 것을 찍는다. 이미 있는 파일이 있으면 1 로 끝난다."""
     options = parse_options(argv)
     existing = existing_targets(root)
     if existing:
         print(f'이미 있다: {", ".join(existing)}. 덮어쓰지 않는다. 아무것도 만들지 않았다', file=sys.stderr)
         return 1
-    write_all(root, planned_values(options))
-    print('만들었다(주인만 읽는다): ' + ', '.join(TARGETS))
-    print('사람이 채울 것:')
-    for target, name, reason in TO_FILL:
-        print(f'  {target} 의 {name}: {reason}')
+    print(create(root, options))
+    print(to_fill_report())
     return 0
 
 

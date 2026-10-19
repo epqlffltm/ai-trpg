@@ -2,7 +2,7 @@
 
 저장소의 서버들을 클라우드의 서버(VM) 한 대에 처음 올리는 일을 적는다. 어디에, 어떻게 올리고, 무엇으로 막고, 무엇을 아직 하지 않는지다.
 
-- 기준: `main` `87e4787` (2026-10-19)
+- 기준: `main` `36f679c` (2026-10-19)
 - **첫 배포의 목표는 운영자 혼자 쓰는 서버다**(2026-10-19 결정). 바깥 사람은 들어오지 못하게 막고, 실제 서버에서 띄우고 지키고 되살리는 일을 연습한다. 지인 베타와 정식 공개는 그다음이고 [정식 공개 전에 더 필요한 것](#정식-공개-전에-더-필요한-것)에 있다.
 - 로컬에서 바깥에 열 때 지킬 것(열린 포트, 프록시의 머리말, 보안 머리말, 로그 상한, TLS)은 루트 README 의 "외부에 열기 전"이 원본이다. 이 문서는 그것을 어느 서버에서 어떤 값으로 하는지를 적는다.
 - 운영 설정은 `docker-compose.staging.yml` 하나다(#451). 무엇을 덮어쓰는지는 그 파일의 머리에 있다.
@@ -180,7 +180,7 @@ CI(`stack`)가 운영 설정도 본다(`.github/scripts/stack-smoke.sh check-sta
 - 루트 `.env` 에 staging 의 값을 더 적는다(`.env.example` 의 "staging" 절): `COMPOSE_FILE`, `COMPOSE_PROFILES`, `DOMAIN`, `ACME_EMAIL`, `GAME_LLM_BASE_URL`, `GRAFANA_ADMIN_PASSWORD`, `OTEL_EXPORTER_OTLP_ENDPOINT`, 바깥 백업의 `BACKUP_S3_BUCKET`, `BACKUP_AWS_ACCESS_KEY_ID`, `BACKUP_AWS_SECRET_ACCESS_KEY`, `BACKUP_AGE_RECIPIENTS`.
 - 비밀번호 관리자에 둘 것: 각 `.env`, JWT 키, 바깥 백업의 주 열쇠와 확인 열쇠, S3 의 접근 키.
 - **로컬의 값을 그대로 옮기지 않는다.** DB 비밀번호, 서버끼리의 서명 비밀, JWT 키를 VM 에서 새로 만든다. 로컬의 값은 이 PC 의 여러 곳(작업 폴더 넷)에 퍼져 있다.
-- 서버끼리 같아야 하는 비밀은 짝을 맞춘다. 명령은 README 의 "모든 서버를 컨테이너로"에 있다.
+- 서버끼리 같아야 하는 비밀은 짝을 맞춘다. `tools/fill_env.py` 가 맞추고, 짝의 표는 그 도구의 `SECRETS` 하나다. staging 에서는 `tools/staging_env.py` 가 그 도구를 부른 뒤, 예시에서 주석으로 막힌 짝의 줄을 켠다.
 
 | 이쪽 | 저쪽(같은 값) |
 | --- | --- |
@@ -261,7 +261,7 @@ age -d -i master.key -o trpg-<시각>.dump trpg-<시각>.dump.age
 4. Docker 와 compose 를 공식 저장소에서 설치한다. `/etc/docker/daemon.json` 에 로그 상한을 적는다(README "외부에 열기 전").
 5. Tailscale 을 VM 과 집 PC 에 설치하고 같은 사설망에 넣는다. 접근 규칙(ACL)으로 VM 이 집 PC 의 11434 에만 닿게 한다. 집 PC 의 Ollama 를 사설망 주소에만 듣게 한다.
 6. 도메인을 사서 A 레코드를 고정 IP 로 가리킨다.
-7. 저장소를 받고, 비밀과 `.env` 를 새로 만든다. `tools/staging_env.py` 가 여섯을 한 번에 만들고 서버끼리 같아야 하는 비밀의 짝을 맞춘다([비밀과 설정](#비밀과-설정)).
+7. 저장소를 받고, 비밀과 `.env` 를 새로 만든다. `tools/staging_env.py` 가 여섯을 한 번에 만든다. 비밀과 짝은 `tools/fill_env.py` 가 채우고, 그 위에 staging 의 값을 적는다([비밀과 설정](#비밀과-설정)).
 8. 허용 주소를 적는다: `cp docker/nginx/allowlist/allow.conf.example docker/nginx/allowlist/allow.conf` 그다음 내 공인 IP 를 `allow` 줄로.
 9. 바깥 백업을 준비한다([백업](#백업)).
    - S3 에 버킷을 만들고(서울, 공개 접근 차단, 버전 관리, 수명 주기), IAM 사용자에 `docker/backup-offsite/iam-policy.json` 의 권한을 주고 접근 키를 만든다.
@@ -282,7 +282,7 @@ PR 하나에 한 가지다.
 1. **이 문서.** (#449)
 2. **운영 설정과 TLS.** (#451) `docker-compose.staging.yml`(프록시의 80/443, certbot, 허용 주소, 환경 이름, 인증 서버의 도메인과 쿠키, 모델의 주소, 임베딩의 Ollama), nginx 의 TLS 와 허용 주소와 HSTS, `port_scope.py --public`, 가동 확인 주소, CI 의 `check-staging`.
 3. **바깥 백업.** `backup-offsite`(age 로 잠가 S3 에 올리기, 주마다 풀어 보기), 버킷과 접근 키의 권한, 되살리는 순서, CI 의 `check-staging` 에서 S3 흉내(moto)로 보기.
-4. **VM 준비.** 위 순서의 명령([staging VM 준비](../operations/staging-vm.md)), staging 의 `.env` 여섯을 만드는 도구(`tools/staging_env.py`), CI 가 그 도구로 만든 설정을 읽어 보기.
+4. **VM 준비.** 위 순서의 명령([staging VM 준비](../operations/staging-vm.md)), staging 의 `.env` 여섯을 만드는 도구(`tools/staging_env.py`, 비밀은 `tools/fill_env.py` 에 맡긴다), CI 가 그 도구로 만든 설정을 읽어 보기.
 5. (나중) **GHCR 로 올리기.**
 
 ## 정식 공개 전에 더 필요한 것
