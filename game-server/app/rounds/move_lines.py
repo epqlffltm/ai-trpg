@@ -34,6 +34,7 @@ from app.rounds.narrator import (
     RestNote,
     RevivalNote,
     SearchNote,
+    StealNote,
     TakeNote,
     TargetGoneNote,
     TravelNote,
@@ -333,6 +334,21 @@ def describe_put_down(note: PutDownNote) -> str:
     return f'(내려놓기: {note.name} {note.count}개를 가지고 있지 않았다)'
 
 
+def describe_steal(note: StealNote) -> str:
+    """
+    훔친 결과를 한 줄로 적는다.
+
+    예: (훔치기: 수로 쥐 1 에게서 송곳니 1개를 몰래 빼냈다)
+        (훔치기: 수로 쥐 1 에게서 송곳니를 훔치다 들켰다. 수로 쥐 1 이 노린다)
+        (훔치기: 수로 쥐 1 은 송곳니를 이미 지니지 않았다)
+    """
+    if note.stolen:
+        return f'(훔치기: {note.monster} 에게서 {note.name} {note.count}개를 몰래 빼냈다)'
+    if note.caught:
+        return f'(훔치기: {note.monster} 에게서 {note.name}을(를) 훔치다 들켰다. {note.monster} 이(가) 노린다)'
+    return f'(훔치기: {note.monster} 은(는) {note.name}을(를) 이미 지니지 않았다)'
+
+
 def describe_handed_over(notes: list[HandOverNote]) -> str:
     """
     이룬 퀘스트에 넘긴 물건들을 한 줄로 적는다. 퀘스트의 차례, 그 안의 물건 차례다.
@@ -399,6 +415,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_take(move.take))
     if move.put_down is not None:
         parts.append(describe_put_down(move.put_down))
+    if move.steal is not None:
+        parts.append(describe_steal(move.steal))
     if move.handed_over:
         parts.append(describe_handed_over(move.handed_over))
     if move.rest is not None:

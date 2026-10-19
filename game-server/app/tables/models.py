@@ -626,6 +626,7 @@ class TableMonster(Base):
         CheckConstraint("jsonb_typeof(abilities) = 'object'", name='abilities_is_object'),
         CheckConstraint('number >= 1', name='number_positive'),
         CheckConstraint('engaged_round IS NULL OR engaged_round >= 1', name='engaged_round_positive'),
+        CheckConstraint('fought_round IS NULL OR fought_round >= 1', name='fought_round_positive'),
         # 한 테이블에서 같은 몬스터의 번호는 겹치지 않는다. "수로 쥐 2"가 둘일 수 없다
         UniqueConstraint('table_id', 'monster_id', 'number'),
     )
@@ -649,6 +650,9 @@ class TableMonster(Base):
     # 만난 첫 라운드. 살아 있는 캐릭터와 같은 장소에서 처음 차례를 받는 라운드다. 아직 안 만났으면 비어 있다.
     # 조우의 기습(surprise)은 이 라운드에만 쓴다. 적는 것은 라운드 닫기다(app/rounds, 3c)
     engaged_round: Mapped[int | None] = mapped_column(Integer)
+    # 처음 싸운 라운드. 누구를 쳤거나, 누가 쳤거나, 훔치다 들킨 라운드다. 아직 싸우지 않았으면 비어 있다.
+    # 싸우기 전인 마리에게서는 훔치기가 쉽다(app/rounds/steals.py). 적는 것은 라운드 닫기다
+    fought_round: Mapped[int | None] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

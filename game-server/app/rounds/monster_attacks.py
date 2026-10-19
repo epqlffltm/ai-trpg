@@ -11,6 +11,8 @@
 맞히면 그 공격의 양의 등급만큼 피해를 준다. 피해, 쓰러짐, 부상 표는 앉은 사람의 것과 같다(change_sheet).
 
 대상은 그 장소에 서 있는(쓰러지지 않은) 캐릭터다. 쓰러진 캐릭터는 동료가 일으킬 틈이 있어야 한다.
+이번 라운드에 이 마리에게서 훔치다 들킨 도둑이 있으면 대상을 고르지 않고 도둑을 친다(app/rounds/steals.py).
+도둑이 칠 수 있는 대상이 아니면(쓰러졌거나 떠났다) 평소처럼 고른다. 친 대상과는 싸운 것으로 적는다(mark_fight).
 DB 를 모른다. 시트를 고친다. 저장하지는 않는다.
 """
 
@@ -22,7 +24,7 @@ from app.engine.check import Check
 from app.engine.dice import choose
 from app.engine.health import ChangeKind
 from app.rounds.checks import change_sheet
-from app.rounds.effects import Judging
+from app.rounds.effects import Judging, mark_fight
 from app.rounds.monster_scene import SceneMonster
 from app.tables import sheets
 from app.tables.models import NpcStatus, TableMember
@@ -90,6 +92,13 @@ def attack_outcome(attack: AttackSnapshot, victim: TableMember, rolled: Check, e
     }
 
 
+def pick_victim(judging: Judging, monster: SceneMonster, victims: list[TableMember]) -> TableMember:
+    """칠 대상. 이 마리에게서 훔치다 들킨 도둑이 칠 수 있는 대상이면 그 사람, 아니면 서버의 주사위로 고른다."""
+    thief = judging.provoked.get(monster.state.id)
+    caught = next((victim for victim in victims if victim.user_id == thief), None)
+    return caught if caught is not None else choose(victims, judging.dice)
+
+
 def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     """
     몬스터 한 마리의 차례를 판정한다. 차례의 outcome 에 적을 문서를 돌려준다.
@@ -102,7 +111,8 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     victims = victims_of(judging, monster)
     if not victims:
         return {'skipped': Skipped.NO_TARGET}
-    victim = choose(victims, judging.dice)
+    victim = pick_victim(judging, monster, victims)
+    mark_fight(judging, monster.state, victim)
     attack = choose(monster.definition.attacks, judging.dice)
     rolled = roll_attack(judging, monster, attack)
     effect = change_sheet(judging, victim, ChangeKind.DAMAGE, attack.harm) if rolled.success else None

@@ -22,6 +22,7 @@ from app.engine.ruleset import (
     CalledShotMode,
     DeathSave,
     Difficulty,
+    DullKind,
     Effect,
     EffectKind,
     Healing,
@@ -41,6 +42,7 @@ from app.engine.ruleset import (
     Ruleset,
     ScoreRoll,
     ShortRest,
+    Steal,
     TableRow,
     Treatment,
 )
@@ -225,6 +227,20 @@ SRD5_REST = Rest(
     natural=None,
 )
 
+# 민첩으로 보통(15)에 훔친다. 대상의 지혜의 보정이 더해진다. 장비는 +5, 등급이 한 단계 오를 때마다 +2.
+# 생각이 없는 언데드와 구조물은 -3, 둔하다고 적은 대상은 -3, 싸움 전이면 -3, 다른 사람과 싸우는 중이면 -2
+SRD5_STEAL = Steal(
+    ability='dex',
+    difficulty='medium',
+    awareness='wis',
+    equipped=5,
+    rarity_step=2,
+    dull_kinds=(DullKind(kind='undead', amount=3), DullKind(kind='construct', amount=3)),
+    dull=3,
+    unwary=3,
+    distracted=2,
+)
+
 SRD5 = Ruleset(
     template=Template.SRD5,
     abilities=(
@@ -282,6 +298,7 @@ SRD5 = Ruleset(
     called_shot=CalledShot(mode=CalledShotMode.TARGET_PLUS, amount=5),
     treatment=SRD5_TREATMENT,
     rest=SRD5_REST,
+    steal=SRD5_STEAL,
 )
 
 TEMPLATES: dict[Template, Ruleset] = {Template.SRD5: SRD5}
