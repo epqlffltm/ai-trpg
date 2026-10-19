@@ -257,6 +257,36 @@ CarriedInventory = Annotated[
 ]
 
 
+class MonsterAttack(BaseModel):
+    """
+    몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.
+
+    이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
+    NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    # 공격의 이름. 서술과 기록에 쓴다(물어뜯기)
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ATTACK_NAME_MAX_LENGTH)]
+    ability: Key
+    difficulty: Key
+    harm: Key
+
+
+def reject_duplicate_attacks(attacks: list[MonsterAttack]) -> list[MonsterAttack]:
+    """같은 이름의 공격이 둘이면 거부한다. 기록에서 어느 공격인지 알 수 없다."""
+    names = [attack.name for attack in attacks]
+    if len(set(names)) != len(names):
+        raise ValueError('같은 이름의 공격이 두 번 있습니다.')
+    return attacks
+
+
+MonsterAttacks = Annotated[
+    list[MonsterAttack], Field(max_length=MONSTER_MAX_ATTACKS), AfterValidator(reject_duplicate_attacks)
+]
+
+
 class NpcSheet(BaseModel):
     """
     NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자와 처음 태도와 지닌 물건을 준다.
@@ -264,6 +294,7 @@ class NpcSheet(BaseModel):
     attitude 는 일행을 처음 어떻게 대하는가다(우호, 중립(기본), 적대). 테이블에서는 엔진이 바꾼다(#474).
     지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.
     on_caught 는 훔치다 들켰을 때다. 늘 적대가 되고, fight 면 싸움도 붙는다(기본 hostile, 적대만).
+    attacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).
 
     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
@@ -282,6 +313,8 @@ class NpcSheet(BaseModel):
     dull: bool = False
     # 훔치다 들켰을 때. 적대만(hostile) 하는가, 싸움도 붙는가(fight)
     on_caught: NpcCaught = NpcCaught.HOSTILE
+    # 공격들. 비우면 싸움이 붙어도 치지 않는다. 이름표가 룰북에 있는지는 게시할 때 본다(npc_attack_invalid)
+    attacks: MonsterAttacks = []
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'NpcSheet':
@@ -305,35 +338,6 @@ def reject_duplicate_entries(npc_sheets: list[NpcSheet]) -> list[NpcSheet]:
 
 NpcSheets = Annotated[
     list[NpcSheet], Field(max_length=SCENARIO_MAX_NPC_SHEETS), AfterValidator(reject_duplicate_entries)
-]
-
-
-class MonsterAttack(BaseModel):
-    """
-    몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.
-
-    이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
-    """
-
-    model_config = ConfigDict(extra='forbid')
-
-    # 공격의 이름. 서술과 기록에 쓴다(물어뜯기)
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ATTACK_NAME_MAX_LENGTH)]
-    ability: Key
-    difficulty: Key
-    harm: Key
-
-
-def reject_duplicate_attacks(attacks: list[MonsterAttack]) -> list[MonsterAttack]:
-    """같은 이름의 공격이 둘이면 거부한다. 기록에서 어느 공격인지 알 수 없다."""
-    names = [attack.name for attack in attacks]
-    if len(set(names)) != len(names):
-        raise ValueError('같은 이름의 공격이 두 번 있습니다.')
-    return attacks
-
-
-MonsterAttacks = Annotated[
-    list[MonsterAttack], Field(max_length=MONSTER_MAX_ATTACKS), AfterValidator(reject_duplicate_attacks)
 ]
 
 
