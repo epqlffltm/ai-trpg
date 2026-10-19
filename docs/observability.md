@@ -74,7 +74,7 @@
 - 게임 서버의 폴더를 `trpg-server/` 로 바꾸면 `service` 도 `trpg-server` 가 된다(폴더 이름과 같다). 로그를 모으기 시작한 뒤에 바뀌면 Grafana 에서 두 이름을 함께 찾는다. 토큰의 대상, 스키마, 환경 변수, 주소는 그대로 두는 제안이다([서비스 구조 명세](architecture/services.md#구현된-것)).
 - 서버의 워커와 주기 명령(`auth-mail`, `billing-sweeper` 등)은 그 서버의 `service` 를 쓴다. 어느 컨테이너인지는 수집기가 붙이는 `container` 로 안다([수집기](#수집기grafana-alloy를-붙일-자리)).
 
-프록시는 서버 넷 앞에 서는 nginx 다(`docker/nginx/templates/default.conf.template`). 요청이 끝난 줄만 남긴다. [프록시의 줄](#프록시의-줄)에 따로 적었다.
+프록시는 서버 넷 앞에 서는 nginx 다(`docker/nginx/templates/`, 줄의 모양은 `http.inc.template` 의 `log_format`). 요청이 끝난 줄만 남긴다. [프록시의 줄](#프록시의-줄)에 따로 적었다.
 
 환경과 버전은 네 서버가 같은 이름의 환경 변수로 받는다. 비밀값이 아니다.
 

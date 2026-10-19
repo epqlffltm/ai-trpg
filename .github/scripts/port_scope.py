@@ -11,10 +11,14 @@ ports 에서 127.0.0.1: 을 빼면 방화벽이 있어도 그 포트가 바로 �
   - 연 포트는 모두 루프백(127.0.0.1, ::1)에 묶여야 한다. 주소를 적지 않으면 모든 주소에 열린다
   - network_mode: host 는 쓰지 않는다. 컨테이너가 VM 의 네트워크를 그대로 쓰면 ports 와 상관없이 다 열린다
 
-외부에 열 때(프록시가 443 을 받을 때)는 그 포트만 PUBLIC_PORTS 에 적는다. 그 밖의 것은 그대로 루프백이다.
+바깥에 여는 포트는 staging 의 프록시의 둘(8080 ← VM 의 80, 8443 ← VM 의 443)뿐이다(#451, PUBLIC_PORTS).
+그 둘도 --public 을 줄 때(staging 의 설정을 볼 때)만 허용한다. 로컬의 설정은 모두 루프백이어야 한다.
+그 밖의 것은 staging 에서도 그대로 루프백이다.
 
     사용: docker compose --profile app config --no-interpolate --no-env-resolution --format json \
             | python3 .github/scripts/port_scope.py
+          docker compose -f docker-compose.yml -f docker-compose.staging.yml --profile app config ... \
+            | python3 .github/scripts/port_scope.py --public
 
 stack-smoke.sh 의 check 가 부른다. .env 가 없어도 돈다(${PORT:-8080} 같은 자리를 채우지 않고 읽는다).
 """
@@ -35,8 +39,9 @@ PUBLISHERS = {
     # 로그를 보는 화면(observability 프로필). SSH 터널로만 붙는다(README)
     'grafana': '로그를 보는 화면',
 }
-# 루프백이 아닌 곳에 열어도 되는 (서비스, 컨테이너 안의 포트). 외부에 열 때 프록시의 443 같은 것을 여기에 적는다
-PUBLIC_PORTS: frozenset[tuple[str, str]] = frozenset()
+# 루프백이 아닌 곳에 열어도 되는 (서비스, 컨테이너 안의 포트). staging 의 설정(--public)에서만 허용한다.
+# 프록시가 HTTP(8080)와 HTTPS(8443)를 듣는다. 그 밖의 서비스와 포트는 staging 에서도 루프백이다
+PUBLIC_PORTS: frozenset[tuple[str, str]] = frozenset({('proxy', '8080'), ('proxy', '8443')})
 # 이 PC 에서만 닿는 주소
 LOOPBACK = frozenset({'127.0.0.1', '::1', '[::1]'})
 
@@ -97,8 +102,8 @@ def bindings_of(service: dict) -> list[Binding]:
     return found
 
 
-def port_problems(name: str, service: dict) -> list[str]:
-    """한 서비스가 여는 포트의 문제들."""
+def port_problems(name: str, service: dict, public: frozenset[tuple[str, str]]) -> list[str]:
+    """한 서비스가 여는 포트의 문제들. public 은 모든 주소에 열어도 되는 (서비스, 포트)다."""
     if service.get('network_mode') == 'host':
         return [f'{name}: network_mode: host 를 쓴다. VM 의 네트워크를 그대로 쓰면 ports 와 상관없이 열린다']
     bindings = bindings_of(service)
@@ -107,27 +112,39 @@ def port_problems(name: str, service: dict) -> list[str]:
     return [
         f'{name}: {binding.target} 을 {binding.host_ip or "모든 주소"} 에 연다. 127.0.0.1 에 묶는다'
         for binding in bindings
-        if binding.host_ip not in LOOPBACK and (name, binding.target) not in PUBLIC_PORTS
+        if binding.host_ip not in LOOPBACK and (name, binding.target) not in public
     ]
 
 
-def check(config: dict) -> list[str]:
-    """모든 서비스의 문제들. 비어 있으면 통과다."""
+def check(config: dict, public: frozenset[tuple[str, str]] = frozenset()) -> list[str]:
+    """모든 서비스의 문제들. 비어 있으면 통과다. 기본(로컬)은 모든 포트가 루프백이어야 한다."""
     problems = []
     for name, service in sorted((config.get('services') or {}).items()):
-        problems.extend(port_problems(name, service))
+        problems.extend(port_problems(name, service, public))
     return problems
 
 
-def main() -> int:
-    problems = check(json.load(sys.stdin))
+def allowed_public_ports(argv: list[str]) -> frozenset[tuple[str, str]]:
+    """명령의 인자로 모든 주소에 열어도 되는 포트를 고른다. --public 이면 staging 의 프록시 둘, 없으면 하나도 없다."""
+    unknown = [arg for arg in argv if arg != '--public']
+    if unknown:
+        raise ValueError(f'모르는 인자: {" ".join(unknown)}. 쓸 수 있는 것은 --public 뿐이다')
+    return PUBLIC_PORTS if '--public' in argv else frozenset()
+
+
+def main(argv: list[str]) -> int:
+    public = allowed_public_ports(argv)
+    problems = check(json.load(sys.stdin), public)
     for problem in problems:
         print(problem, file=sys.stderr)
     if problems:
         return 1
-    print('바깥에 여는 포트는 정해 둔 것뿐이고 모두 이 PC 에만 열린다')
+    if public:
+        print('바깥에 여는 포트는 프록시의 HTTP 와 HTTPS 뿐이고 그 밖은 모두 이 PC 에만 열린다')
+    else:
+        print('바깥에 여는 포트는 정해 둔 것뿐이고 모두 이 PC 에만 열린다')
     return 0
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

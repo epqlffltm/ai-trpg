@@ -1,0 +1,208 @@
+# docker-compose.staging.yml
+# staging(VM 한 대, 운영자 혼자 쓰는 첫 배포)의 설정(#451). docker-compose.yml 위에 덮어쓴다. 로컬 설정은 고치지 않는다.
+# 무엇을 왜 이렇게 정했는지는 docs/architecture/deployment.md 에 있다.
+#
+# VM 의 루트 .env 에 아래를 적으면 docker compose 가 두 파일과 프로필을 저절로 읽는다(명령마다 -f 를 붙이지 않는다):
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.staging.yml
+#   COMPOSE_PROFILES=app,observability
+#
+# 처음 띄울 때(자세한 순서는 docs/architecture/deployment.md 의 "VM 준비"):
+#
+#   cp docker/nginx/allowlist/allow.conf.example docker/nginx/allowlist/allow.conf   # 내 공인 IP 를 적는다
+#   docker compose run --rm -p 80:80 certbot issue --dry-run    # 인증서를 받을 수 있는지 시험한다
+#   docker compose run --rm -p 80:80 certbot issue              # 처음 인증서를 받는다
+#   docker compose up -d --build
+#
+# 로컬과 다른 것:
+#   - 바깥에 여는 포트는 프록시의 80(→8080), 443(→8443) 둘뿐이다. 그 밖은 로컬처럼 127.0.0.1 이다(port_scope.py --public)
+#   - 프록시가 TLS 를 끝내고, HTTP 는 HTTPS 로 넘기고, HSTS 를 붙인다. 허용 주소에서 온 요청만 서버에 넘긴다
+#     (docker/nginx/staging/default.conf.template)
+#   - certbot 이 Let's Encrypt 의 인증서를 12시간마다 갱신한다(docker/certbot/). 남은 날짜가 14일보다 적으면 unhealthy 다
+#   - 모든 서버가 APP_ENVIRONMENT=staging, DEBUG=false 로 뜬다. 서버의 .env 에 무엇을 적었든 여기서 덮는다
+#   - 인증 서버가 도메인을 받고(ALLOWED_HOSTS), refresh 쿠키를 HTTPS 의 그 도메인에서만 쓴다
+#   - 게임 서버의 로컬 모델은 집 PC 의 Ollama 를 사설망(Tailscale)으로 부른다(GAME_LLM_BASE_URL).
+#     임베딩(bge-m3)은 이 VM 의 Ollama(CPU)가 한다. 집 PC 가 꺼져도 로어 검색은 돈다
+#
+# 이 파일에도 비밀을 적지 않는다. 비밀은 VM 에서 새로 만든 루트 .env 와 각 서버의 .env 에만 있다.
+# 컨테이너의 로그는 로컬과 같은 상한을 둔다(아래의 x-logging, logging_scope.py)
+
+# 컨테이너 로그의 상한. docker-compose.yml 의 x-logging 과 같다(앵커는 파일을 건너가지 못해 다시 적는다)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# 모든 서버의 프로세스가 함께 받는 값. 로그의 environment 가 staging 이 된다(docs/observability.md)
+x-staging: &staging
+  APP_ENVIRONMENT: staging
+
+# DEBUG 를 읽는 서버(인증, 게임, 결제, 알림)의 프로세스. 게시판 서버는 DEBUG 를 읽지 않는다
+x-staging-debug-off: &staging-debug-off
+  <<: *staging
+  DEBUG: "false"
+
+# 인증 서버의 프로세스. 설정을 읽을 때 바깥에 연 환경(staging)의 검사가 돈다(auth-server/config/security.py).
+# 마이그레이션과 워커도 같은 설정을 읽으므로 모두에게 준다
+x-auth-staging: &auth-staging
+  <<: *staging-debug-off
+  # nginx 가 Host 를 도메인으로 넘긴다. 도메인이 없으면 프록시를 거친 요청이 모두 400 이다.
+  # auth-server 는 지우지 않는다. 다른 서버가 공개키를 받으러 올 때의 Host 다
+  ALLOWED_HOSTS: localhost,127.0.0.1,auth-server,${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}
+  REFRESH_COOKIE_SECURE: "true"
+  REFRESH_COOKIE_ALLOWED_ORIGINS: https://${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}
+
+# 임베딩 모델. 이 VM 의 Ollama 가 받아 두고(ollama-pull), 게임 서버가 쓴다. 로어 검색의 기준(LORE_MAX_DISTANCE)이 이 모델로 잰 값이다.
+# 바꾸면 game-server 의 scripts.eval_lore 로 기준을 다시 재고 색인을 다시 만든다
+x-embedding-model: &embedding-model bge-m3
+
+services:
+  auth-migrate:
+    environment: *auth-staging
+  auth-server:
+    environment: *auth-staging
+  auth-mail:
+    environment: *auth-staging
+  auth-welcome-credits:
+    environment: *auth-staging
+  auth-cron:
+    environment: *auth-staging
+
+  game-migrate:
+    environment: *staging-debug-off
+  game-server:
+    environment:
+      <<: *staging-debug-off
+      # 로컬 모델(Ollama 창구)의 주소. 집 PC 의 사설망(Tailscale) 주소다: http://<집 PC 의 100.x 주소>:11434/v1
+      # VM 에는 GPU 가 없다. 로컬의 기본값(host.docker.internal)은 이 VM 자신이라 쓸 수 없어 적지 않으면 뜨지 않는다.
+      # Z.ai 같은 외부 창구는 이 주소를 쓰지 않는다(game-server/.env 의 키와 창구 주소)
+      LLM_BASE_URL: ${GAME_LLM_BASE_URL:?루트 .env 에 GAME_LLM_BASE_URL 을 적는다(집 PC 의 Ollama, 사설망 주소)}
+      # 임베딩은 이 VM 의 Ollama 다. 꼭 적는다. 비우면 LLM_BASE_URL(집 PC)로 간다
+      EMBEDDER: llm
+      EMBEDDING_MODEL: *embedding-model
+      EMBEDDING_BASE_URL: http://ollama:11434/v1
+      EMBEDDING_DIMENSIONS: "1024"
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+
+  board-migrate:
+    environment: *staging
+  board-server:
+    environment: *staging
+
+  billing-migrate:
+    environment: *staging-debug-off
+  billing-server:
+    environment: *staging-debug-off
+  billing-sweeper:
+    environment: *staging-debug-off
+  billing-cron:
+    environment: *staging-debug-off
+
+  notification-migrate:
+    environment: *staging-debug-off
+  notification-server:
+    environment: *staging-debug-off
+
+  # 프록시. 로컬의 틀(templates) 가운데 default.conf.template 만 staging 의 것으로 바꿔 붙인다.
+  # 시작 스크립트(start.sh)가 인증서와 허용 주소를 지켜보다가 바뀌면 다시 읽힌다. 그다음 이미지의 원래 시작 스크립트로 넘긴다
+  proxy:
+    entrypoint: ["sh", "/etc/nginx/staging/start.sh"]
+    # entrypoint 를 바꾸면 이미지의 기본 명령이 지워진다. 이미지의 것과 같은 명령을 다시 적는다
+    command: ["nginx", "-g", "daemon off;"]
+    environment:
+      APP_ENVIRONMENT: staging
+      DOMAIN: ${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}
+    volumes:
+      - ./docker/nginx/staging/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./docker/nginx/staging/start.sh:/etc/nginx/staging/start.sh:ro
+      # 허용 주소의 폴더. 파일이 아니라 폴더를 붙인다. 편집기가 파일을 새로 써도(새 inode) 컨테이너가 새 내용을 본다
+      - type: bind
+        source: ./docker/nginx/allowlist
+        target: /etc/nginx/allowlist
+        read_only: true
+        bind:
+          create_host_path: false
+      - tls:/etc/nginx/tls:ro
+      - acme:/var/www/certbot:ro
+    # 로컬의 127.0.0.1:8080 을 없애고 이 둘로 바꾼다(!override). 이 둘만 모든 주소에 연다.
+    # Docker 는 VM 의 방화벽(ufw)을 거치지 않으므로 Lightsail 의 방화벽에서 80, 443 만 연다(docs/architecture/deployment.md)
+    ports: !override
+      - "80:8080"
+      - "443:8443"
+
+  # 인증서(Let's Encrypt). 처음에는 손으로 한 번 받고(certbot issue), 그 뒤로는 이 컨테이너가 12시간마다 갱신한다.
+  # 포트를 열지 않는다. 갱신의 확인 파일은 nginx 가 80 에서 내준다(acme 볼륨). 처음 받을 때만 run -p 80:80 으로 직접 듣는다.
+  # 받은 것은 deploy-hook.sh 가 tls 볼륨에 옮기고, 프록시가 그것을 읽기 전용으로 붙인다.
+  # Docker 소켓을 받지 않는다. nginx 를 다시 읽히는 일은 프록시가 제 쪽에서 한다
+  certbot:
+    image: certbot/certbot:v5.8.0
+    profiles: [app]
+    logging: *logging
+    restart: unless-stopped
+    entrypoint: ["sh", "/opt/certbot/certbot.sh"]
+    command: ["loop"]
+    environment:
+      DOMAIN: ${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}
+      # Let's Encrypt 에 알리는 주소. 계정을 만들 때 쓴다
+      ACME_EMAIL: ${ACME_EMAIL:?루트 .env 에 ACME_EMAIL 을 적는다}
+    volumes:
+      - ./docker/certbot:/opt/certbot:ro
+      - letsencrypt:/etc/letsencrypt
+      - tls:/tls
+      - acme:/var/www/certbot
+    # 인증서가 14일보다 적게 남았거나 없으면 unhealthy 다. 갱신이 2주 넘게 실패하고 있다는 뜻이다(cert_check.py)
+    healthcheck:
+      test: ["CMD", "python3", "/opt/certbot/cert_check.py"]
+      interval: 10m
+      timeout: 10s
+      retries: 1
+      start_period: 1m
+
+  # 임베딩(bge-m3)을 CPU 로 돌리는 Ollama. 포트를 열지 않는다. 게임 서버가 컨테이너의 이름(ollama)으로 부른다.
+  # 모델을 한 번 올리면 내리지 않는다(OLLAMA_KEEP_ALIVE=-1). 매 라운드 다시 올리지 않는다.
+  # 메모리의 상한을 둔다. 넘으면 이 컨테이너만 죽고 DB 와 서버는 남는다. 임베딩이 실패하면 로어 검색은 키워드로만 돈다.
+  # 얼마나 쓰는지는 VM 에 올린 뒤 docker stats 로 재서 docs/architecture/deployment.md 에 적는다
+  ollama:
+    image: ollama/ollama:0.40.6
+    profiles: [app]
+    logging: *logging
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: "-1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+    volumes:
+      - ollama:/root/.ollama
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # 임베딩 모델을 받아 둔다. 이미 있으면 받지 않고 끝난다(Ollama 의 저장소에 닿지 않아도 다시 뜰 수 있다).
+  # 게임 서버는 이것이 성공해야 뜬다
+  ollama-pull:
+    image: ollama/ollama:0.40.6
+    profiles: [app]
+    logging: *logging
+    entrypoint: ["sh", "-c", "ollama show \"$$EMBEDDING_MODEL\" >/dev/null 2>&1 || ollama pull \"$$EMBEDDING_MODEL\""]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      EMBEDDING_MODEL: *embedding-model
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+volumes:
+  # certbot 의 것(계정 키, 인증서, 갱신 설정). 프록시에 붙이지 않는다
+  letsencrypt:
+  # nginx 가 읽는 인증서와 키 두 파일(deploy-hook.sh)
+  tls:
+  # Let's Encrypt 의 HTTP-01 확인 파일. certbot 이 쓰고 nginx 가 내준다
+  acme:
+  ollama:
