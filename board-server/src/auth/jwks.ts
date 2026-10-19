@@ -20,6 +20,7 @@
 
 import { Logger } from '@nestjs/common';
 import { importJWK } from 'jose';
+import { tracedFetch } from '../observability/http-spans.js';
 import { outgoingHeaders } from '../observability/request-context.js';
 
 /** 가져온 키를 기억하는 시간(초) */
@@ -120,10 +121,11 @@ function errorName(error: unknown): string {
  * 주소에서 JWKS 문서를 받아 온다. 어떤 이유로든 받지 못하면 JwksFetchError 를 낸다.
  *
  * 다른 주소로 가라는 응답(리다이렉트)은 따라가지 않는다. 적어 둔 주소가 내준 키만 믿는다.
+ * 요청 안에서 부르면 client span 을 건다(observability/http-spans.ts).
  */
 export async function fetchJwksDocument(
   url: string,
-  fetcher: Fetcher = fetch,
+  fetcher: Fetcher = tracedFetch,
 ): Promise<unknown> {
   try {
     const response = await fetcher(url, {
@@ -147,7 +149,7 @@ export async function fetchJwksDocument(
 /** 인증 서버에서 키 목록을 가져온다. 받지 못했거나 쓸 키가 없으면 JwksFetchError 를 낸다. */
 export async function loadKeys(
   url: string,
-  fetcher: Fetcher = fetch,
+  fetcher: Fetcher = tracedFetch,
 ): Promise<Keys> {
   return parseJwks(await fetchJwksDocument(url, fetcher));
 }

@@ -15,6 +15,7 @@
 
 import { createHash } from 'node:crypto';
 import { Logger } from '@nestjs/common';
+import { tracedFetch } from '../observability/http-spans.js';
 import { outgoingHeaders } from '../observability/request-context.js';
 
 /** 목록을 다시 받는 간격(초). 인증 서버가 정한 값(refresh_interval_seconds)과 같다 */
@@ -126,7 +127,7 @@ async function readLimited(response: Response, limit: number): Promise<string> {
  */
 export async function fetchRevocationsDocument(
   url: string,
-  fetcher: Fetcher = fetch,
+  fetcher: Fetcher = tracedFetch,
 ): Promise<unknown> {
   let response: Response;
   try {
@@ -153,7 +154,7 @@ export async function fetchRevocationsDocument(
 /** 인증 서버에서 목록을 받아 온다. 받지 못했거나 모양이 틀리면 RevocationsFetchError 를 낸다. */
 export async function loadRevocations(
   url: string,
-  fetcher: Fetcher = fetch,
+  fetcher: Fetcher = tracedFetch,
 ): Promise<RevocationList> {
   return parseRevocations(await fetchRevocationsDocument(url, fetcher));
 }

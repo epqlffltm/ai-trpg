@@ -199,6 +199,14 @@ describe('요청이 끝난 줄', () => {
     });
   });
 
+  it('API 주소 아래의 없는 주소도 틀 자리에 표시를 적는다(Nest 의 404 틀이 아니다)', async () => {
+    await request(app.getHttpServer()).get(`${API}/no/such/address`);
+
+    const line = finishedLine();
+    expect(line.route).toBe('(unmatched)');
+    expect(line.path).toBe(`${API}/no/such/address`);
+  });
+
   it('없는 주소는 틀 자리에 표시를 적고 실제 경로를 따로 싣는다', async () => {
     await request(app.getHttpServer()).get('/no/such/address?x=query-value');
 

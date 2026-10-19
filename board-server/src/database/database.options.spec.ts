@@ -5,6 +5,7 @@
  * 실제로 그 스키마에 붙는지는 test/database.e2e-spec.ts 가 본다.
  */
 
+import { TracedClient } from '../observability/db-spans.js';
 import {
   CONNECT_TIMEOUT_MS,
   databaseOptions,
@@ -27,7 +28,10 @@ describe('databaseOptions', () => {
   it('연결할 때마다 search_path 를 설정의 스키마로 맞춘다', () => {
     const options = databaseOptions(SETTINGS);
 
-    expect(options.extra).toEqual({ options: '-c search_path=board_test' });
+    expect(options.extra).toEqual({
+      options: '-c search_path=board_test',
+      Client: TracedClient,
+    });
   });
 
   it('스키마 이름을 옵션에 따로 적지 않는다', () => {

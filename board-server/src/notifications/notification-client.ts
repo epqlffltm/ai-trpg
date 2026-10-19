@@ -13,8 +13,13 @@
  *
  * 401 은 서명이 거절된 것이다. 두 서버의 비밀이 다르거나 시계가 5분 넘게 어긋났다. 설정을 고치면 낫는 일이라 다시 보낸다.
  * 다른 주소로 가라는 답(3xx)은 따라가지 않는다. 서명한 요청이 우리가 고르지 않은 곳으로 가면 안 된다.
+ *
+ * 보내는 작업 안에서 부르므로 client span 을 걸고 traceparent 로 추적을 잇는다(observability/http-spans.ts).
+ * 알림 서버의 span 이 그 아래에 붙는다. 서명은 메서드, 경로, 본문에 하므로 traceparent 는 서명에 들지 않는다.
  */
 
+import { tracedFetch } from '../observability/http-spans.js';
+import { outgoingHeaders } from '../observability/request-context.js';
 import { OutgoingNotification } from './outgoing-notification.entity.js';
 import { SIGNATURE_HEADER, sign } from './signing.js';
 
@@ -83,7 +88,7 @@ export class HttpNotificationSender implements NotificationSender {
   async send(notification: OutgoingNotification): Promise<Sent> {
     const body = encode(notification);
     try {
-      const response = await fetch(this.urlOf(), {
+      const response = await tracedFetch(this.urlOf(), {
         method: 'POST',
         headers: this.headersFor(body),
         body,
@@ -101,10 +106,11 @@ export class HttpNotificationSender implements NotificationSender {
     return this.baseUrl.replace(/\/+$/, '') + PUT_PATH;
   }
 
-  /** 보낼 머리말. 서명이다. */
+  /** 보낼 머리말. 서명과, 추적을 잇는 traceparent 다. */
   headersFor(body: string): Record<string, string> {
     const sentAt = Math.floor(this.now().getTime() / 1000);
     return {
+      ...outgoingHeaders(),
       'Content-Type': 'application/json',
       [SIGNATURE_HEADER]: sign(this.secret, sentAt, 'POST', PUT_PATH, body),
     };

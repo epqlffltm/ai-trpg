@@ -48,6 +48,8 @@ const DATABASE_URL_PREFIXES = ['postgresql://', 'postgres://'];
 const SCHEMA_NAME = /^[a-z][a-z0-9_]*$/;
 /** 공개키 주소가 쓸 수 있는 방식 */
 const JWKS_URL_PROTOCOLS = ['http:', 'https:'];
+/** span 을 받는 수집기의 주소가 쓸 수 있는 방식 */
+const OTLP_PROTOCOLS = ['http:', 'https:'];
 
 /** 이 서버의 설정. 이름은 환경 변수의 이름 그대로다. */
 export interface Environment {
@@ -66,6 +68,8 @@ export interface Environment {
   NOTIFICATION_URL: string;
   /** 알림 서버에 보내는 요청에 서명하는 비밀. 주소가 비어 있으면 빈 글자다 */
   NOTIFICATION_SECRET: string;
+  /** span 을 미는 수집기(Alloy)의 주소. 경로 없이 적는다. 비어 있으면 내보내지 않는다 */
+  OTEL_EXPORTER_OTLP_ENDPOINT: string;
 }
 
 /** DB 에 연결하는 데 필요한 설정. 마이그레이션 도구는 이것만 읽는다. */
@@ -306,6 +310,36 @@ export function readNotificationSettings(
   return { NOTIFICATION_URL: address, NOTIFICATION_SECRET: written };
 }
 
+/**
+ * span 을 미는 수집기의 주소를 읽는다(observability/tracing.ts). 적지 않았으면 빈 글자다(내보내지 않는다).
+ *
+ * http:// 나 https:// 로 시작하고 경로가 없어야 한다. 경로(/v1/traces)는 보내는 쪽이 붙인다.
+ * OpenTelemetry 의 OTEL_EXPORTER_OTLP_ENDPOINT 와 같은 뜻이고, 다른 서버의 같은 설정과 같은 규칙이다. 끝의 / 는 뗀다.
+ */
+export function readOtlpEndpoint(value: unknown): string {
+  if (!isSet(value)) {
+    return '';
+  }
+  const written = value.trim();
+  if (!URL.canParse(written)) {
+    throw new Error(
+      'OTEL_EXPORTER_OTLP_ENDPOINT 는 http:// 나 https:// 로 시작해야 합니다.',
+    );
+  }
+  const url = new URL(written);
+  if (!OTLP_PROTOCOLS.includes(url.protocol)) {
+    throw new Error(
+      'OTEL_EXPORTER_OTLP_ENDPOINT 는 http:// 나 https:// 로 시작해야 합니다.',
+    );
+  }
+  if (url.pathname !== '/' || url.search !== '' || url.hash !== '') {
+    throw new Error(
+      'OTEL_EXPORTER_OTLP_ENDPOINT 는 http://alloy:4318 처럼 경로 없이 적습니다. /v1/traces 는 붙이지 않습니다.',
+    );
+  }
+  return written.replace(/\/+$/, '');
+}
+
 /** 환경 변수에서 DB 에 관한 설정만 읽는다. 마이그레이션 도구가 쓴다. 틀린 값이 있으면 예외를 낸다. */
 export function readDatabaseSettings(
   variables: Record<string, unknown>,
@@ -341,6 +375,9 @@ export function readEnvironment(
     ...readNotificationSettings(
       variables.NOTIFICATION_URL,
       variables.NOTIFICATION_SECRET,
+    ),
+    OTEL_EXPORTER_OTLP_ENDPOINT: readOtlpEndpoint(
+      variables.OTEL_EXPORTER_OTLP_ENDPOINT,
     ),
   };
 }
