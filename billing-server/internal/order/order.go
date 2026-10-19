@@ -189,6 +189,8 @@ type Service struct {
 	ttl time.Duration
 	// operationTimeout 은 결제 작업 하나에 주는 시간이다. 기본은 OperationTimeout 이다.
 	operationTimeout time.Duration
+	// metrics 는 바꾼 상태를 센다(metrics.go). 처음에는 세지 않는다
+	metrics orderMetrics
 }
 
 // NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, providers 는 길마다 부를 결제 대행사(웹은 꼭 있어야 한다),
@@ -200,7 +202,10 @@ func NewService(pool *pgxpool.Pool, now func() time.Time, providers Providers, w
 	if err := checkProviders(providers); err != nil {
 		return nil, err
 	}
-	return &Service{pool: pool, now: now, providers: providers, wallet: wallet, ttl: ttl, operationTimeout: OperationTimeout}, nil
+	return &Service{
+		pool: pool, now: now, providers: providers, wallet: wallet, ttl: ttl,
+		operationTimeout: OperationTimeout, metrics: noOrderMetrics(),
+	}, nil
 }
 
 // WithOperationTimeout 은 결제 작업 하나에 주는 시간만 바꾼 Service 를 돌려준다. 테스트가 짧게 줄여 쓴다.

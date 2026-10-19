@@ -75,6 +75,9 @@ func (s *Service) startRefunding(ctx context.Context, userID uuid.UUID, orderID 
 	if errors.Is(err, wallet.ErrLotUsed) || errors.Is(err, wallet.ErrNoOrderLot) {
 		return Order{}, ErrCreditsUsed
 	}
+	if err == nil {
+		s.metrics.became(ctx, StatusRefunding, 1)
+	}
 	return started, err
 }
 
@@ -142,6 +145,9 @@ func (s *Service) markRefunded(ctx context.Context, current Order) (Order, error
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, err
 	}
+	if err == nil {
+		s.metrics.became(ctx, StatusRefunded, 1)
+	}
 	return s.reload(ctx, current.ID)
 }
 
@@ -162,6 +168,10 @@ func (s *Service) restorePaid(ctx context.Context, current Order, code string) (
 	})
 	if err != nil {
 		return Order{}, err
+	}
+	// 청약철회가 거절되어 paid 로 돌아온 것도 paid 로 센다. 커밋한 뒤에 센다
+	if restored {
+		s.metrics.became(ctx, StatusPaid, 1)
 	}
 	reloaded, err := s.reload(ctx, current.ID)
 	if err != nil || !restored {

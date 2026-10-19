@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/eligibility"
@@ -55,6 +56,29 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, providers order.Provide
 // 지금은 웹 하나다.
 func NewProviders(settings config.Payment) order.Providers {
 	return order.Providers{order.ChannelWeb: NewProvider(settings)}
+}
+
+// MeasureProviders 는 길마다의 결제 대행사를 부를 때마다 meter 로 세게 감싼다. name 은 label provider 다(PAYMENT_PROVIDER).
+// 결제 대행사를 부르는 프로세스(서버, 대사)가 쓴다. 빈 자리(nil)는 감싸지 않는다. 주문 서비스가 빈 웹 자리를 거절하게 둔다.
+func MeasureProviders(providers order.Providers, name string, meter metric.Meter) (order.Providers, error) {
+	measured := order.Providers{}
+	for channel, provider := range providers {
+		if provider == nil {
+			measured[channel] = nil
+			continue
+		}
+		wrapped, err := payment.Measured(provider, name, meter)
+		if err != nil {
+			return nil, err
+		}
+		measured[channel] = wrapped
+	}
+	return measured, nil
+}
+
+// MeasureServices 는 서비스들이 바꾼 것(주문의 상태)을 meter 로 세게 한다. 서비스를 쓰기 전에 한 번 부른다.
+func MeasureServices(services Services, meter metric.Meter) error {
+	return services.Orders.Measure(meter)
 }
 
 // NoProviders 는 결제 대행사를 부르지 않는 정리 작업의 것이다. 웹 자리에 부르면 오류를 내는 것(payment.None)을 둔다.
