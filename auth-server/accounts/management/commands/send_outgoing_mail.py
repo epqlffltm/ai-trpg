@@ -20,6 +20,7 @@ from django.db import OperationalError, close_old_connections
 from accounts.outbox import DeliveryReport, deliver_due_mail
 from observability.heartbeat import beat
 from observability.jobs import run_as_job
+from observability.spans import record_handled
 
 # 한 묶음을 처리하는 일의 이름. 로그의 operation 칸에 들어간다(docs/observability.md)
 DELIVER_OPERATION = 'mail.deliver_outgoing'
@@ -43,6 +44,7 @@ class Command(BaseCommand):
         if options['once']:
             with run_as_job(DELIVER_OPERATION):
                 report = deliver_due_mail()
+                record_handled(report.handled)
             self._report(report)
             return
 
@@ -72,6 +74,8 @@ class Command(BaseCommand):
             # 묶음마다 작업의 식별자(job_id)를 건다. 이 묶음이 남긴 로그가 그 식별자로 묶인다
             with run_as_job(DELIVER_OPERATION):
                 report = deliver_due_mail()
+                # 보낼 것이 없던 바퀴는 추적을 남기지 않는다(observability/idle_rounds.py)
+                record_handled(report.handled)
         except OperationalError as exc:
             # 오류의 종류만 적는다. 오류의 글에는 DB 의 주소와 계정 이름이 들어 있다. 자세한 것은 로그에 남았다
             self.stderr.write(f'DB 에 접속하지 못했습니다. 잠시 뒤 다시 시도합니다: {type(exc).__name__}')

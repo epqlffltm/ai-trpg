@@ -15,6 +15,7 @@ from contextlib import contextmanager
 
 from observability.context import job_scope
 from observability.identifiers import new_job_id
+from observability.spans import job_span
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +36,11 @@ def run_as_job(operation: str) -> Iterator[str]:
     operation 은 무슨 종류의 일인지다(mail.deliver_outgoing). 일마다 달라지는 값을 넣지 않는다.
     끝나면 한 줄을 남긴다. 잘 끝난 것은 debug 다. 메일 워커는 1초마다 돈다. info 로 적으면 로그를 메운다.
     예외로 끝난 것은 error 로 적고 예외를 그대로 올린다.
+    작업의 span(이름은 operation)도 건다. 그 안의 쿼리와 결제 서버를 부르는 것이 아래에 놓인다(spans.job_span).
+    할 일이 없던 바퀴는 처리한 수를 0 으로 적어 두면(spans.record_handled) 그 추적을 보내지 않는다.
     """
     job_id = new_job_id()
-    with job_scope(job_id):
+    with job_span(operation, job_id), job_scope(job_id):
         started = time.perf_counter()
         try:
             yield job_id

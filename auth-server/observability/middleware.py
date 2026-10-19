@@ -21,8 +21,9 @@ import time
 from http import HTTPStatus
 
 from observability.context import request_scope
-from observability.identifiers import REQUEST_ID_HEADER, TRACEPARENT_HEADER, request_id_from, trace_from
+from observability.identifiers import REQUEST_ID_HEADER, TRACEPARENT_HEADER, Trace, request_id_from, trace_from
 from observability.setup import LOGGED_UNHANDLED_ATTRIBUTE
+from observability.spans import ATTRIBUTE_REQUEST_ID, span_trace, tag_current_span
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,15 @@ def route_fields(request) -> dict[str, str]:
     return {'route': UNMATCHED_ROUTE, 'path': request.path}
 
 
+def trace_of_request(request) -> Trace:
+    """
+    요청이 속한 추적. 서버 span 이 걸려 있으면(request_spans.py) 그 span 의 것이라 로그와 추적이 같은 번호다.
+
+    없으면(상태 확인, span 을 내보내지 않는 PC) 받은 traceparent 를 이어 가거나 새로 시작한다.
+    """
+    return span_trace() or trace_from(request.headers.get(TRACEPARENT_HEADER))
+
+
 def request_fields(request, status_code: int, started: float) -> dict[str, object]:
     """요청이 끝난 줄에 싣는 칸들."""
     return {
@@ -104,7 +114,9 @@ class RequestLoggingMiddleware:
 
     def __call__(self, request):
         request_id = request_id_from(request.headers.get(REQUEST_ID_HEADER))
-        trace = trace_from(request.headers.get(TRACEPARENT_HEADER))
+        trace = trace_of_request(request)
+        # 서버 span 에 요청 식별자를 싣는다. 응답의 X-Request-ID 로 Tempo 에서 그 요청을 찾는다
+        tag_current_span(ATTRIBUTE_REQUEST_ID, request_id)
         started = time.perf_counter()
 
         with request_scope(request_id, trace):
