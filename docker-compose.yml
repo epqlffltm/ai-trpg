@@ -175,6 +175,9 @@ services:
       # 인증 서버 계정에 테스트용 DB 를 만들 권한(CREATEDB)을 줄지. 개발에서만 true 로 둔다.
       # 운영에서는 적지 않는다(false). 볼륨이 비어 있는 첫 기동 때만 반영된다(#20)
       AUTH_DB_ALLOW_TEST_DB: ${AUTH_DB_ALLOW_TEST_DB:-false}
+      # 메트릭을 읽는 계정(monitor)의 비밀번호. 초기화 스크립트(07-monitor-role.sql)가 읽는다.
+      # 프로필 observability 를 쓸 때만 적는다. 비어 있으면 계정을 만들지 않는다. 그래서 기본값을 빈 값으로 둔다
+      MONITOR_DB_PASSWORD: ${MONITOR_DB_PASSWORD:-}
     volumes:
       - pgdata:/var/lib/postgresql/data
       # 서버별 계정과 스키마를 만드는 초기화 스크립트.
@@ -191,6 +194,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    # 서버들은 기본 망(default)으로 붙는다. 메트릭을 읽는 Alloy 는 datastore-metrics 로만 붙는다
+    networks: [default, datastore-metrics]
 
   # DB 의 백업(#274). DB 하나를 통째로 한 파일로 뜬다. 지금 한 번, 그 뒤로 하루에 한 번이고 최근 14개를 남긴다.
   # DB 와 같은 이미지라 pg_dump 의 판이 서버와 같다. 스크립트는 docker/backup/db-backup.sh 에 있다.
@@ -245,6 +250,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    # 서버들은 기본 망(default)으로 붙는다. 메트릭을 읽는 Alloy 는 datastore-metrics 로만 붙는다
+    networks: [default, datastore-metrics]
 
   # ---------------------------------------------------------------------------
   # 서버들 (app 프로필)
@@ -639,10 +646,14 @@ services:
     environment:
       # 이 프로젝트의 컨테이너만 모으려고 프로젝트의 이름을 넘긴다
       COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME}
+      # DB 의 메트릭을 읽는 계정(monitor)의 비밀번호와 DB 의 이름(docker/alloy/metrics.alloy)
+      MONITOR_DB_PASSWORD: ${MONITOR_DB_PASSWORD:-}
+      MONITOR_DB_NAME: ${POSTGRES_DB:-trpg}
     volumes:
       - ./docker/alloy:/etc/alloy:ro
       - alloydata:/var/lib/alloy/data
-    networks: [docker-api, observability, telemetry]
+    # 서버들의 망(default)에는 넣지 않는다. 서버의 API 에 닿지 않고, DB 와 Redis 에는 datastore-metrics 로만 닿는다
+    networks: [docker-api, observability, telemetry, datastore-metrics]
     depends_on:
       - docker-socket-proxy
       - loki
@@ -740,6 +751,9 @@ networks:
   observability:
   # Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스. 바깥으로 나가지 못한다
   telemetry:
+    internal: true
+  # DB, Redis 와 그 메트릭을 읽는 Alloy. 바깥으로 나가지 못한다
+  datastore-metrics:
     internal: true
 
 volumes:
