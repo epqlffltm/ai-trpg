@@ -11,8 +11,9 @@
 한 번에 몇십만 줄을 지우면 그동안 그 줄들을 잠그고 트랜잭션이 길어진다. 밀린 것은 다음 바퀴에 마저 지운다.
 서버가 뜨자마자 첫 바퀴가 돈다. 서버가 여럿이어도 된다. 다른 서버가 잠근 줄은 건너뛴다.
 
-게임 서버의 AI 호출 기록 정리(trpg-server/app/ai/retention.py)와 같은 모양이다.
+게임 서버의 AI 호출 기록 정리(trpg-server/app/ai_log/retention.py)와 같은 모양이다.
 바퀴마다 job_id 를 걸고, operation 은 notification.prune 이다. 지운 것이 없으면 debug, 있으면 info 로 한 줄을 남긴다.
+바퀴마다 span 하나도 남긴다(이름은 operation, 새 추적). 그 안의 쿼리가 이 span 아래에 놓인다.
 """
 
 import asyncio
@@ -31,6 +32,7 @@ from app.core.loops import Running
 from app.notifications.models import Notification
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
+from app.observability.spans import JOB_FAILED_ERROR_CODE, job_span
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,6 @@ PRUNE_BATCH = 1000
 PRUNE_MAX_BATCHES = 20
 # 로그의 operation 과, 한 바퀴가 통째로 실패했을 때의 error_code(docs/observability.md)
 PRUNE_OPERATION = 'notification.prune'
-JOB_FAILED_ERROR_CODE = 'job.failed'
 
 
 def now_utc() -> datetime:
@@ -114,11 +115,13 @@ class NotificationPruner:
 
     async def tick(self) -> int:
         """
-        한 바퀴. 제 job_id 를 걸고 지운 뒤, 어떻게 끝났는지 한 줄을 남긴다. 지운 수를 돌려준다.
+        한 바퀴. 제 job_id 와 span 을 걸고 지운 뒤, 어떻게 끝났는지 한 줄을 남긴다. 지운 수를 돌려준다.
 
         지우는 일이 통째로 실패하면(DB 가 없다) 예외를 그대로 올린다. 그 줄은 도는 쪽(run)이 남긴다.
+        span 을 먼저 건다. job_scope 가 그 span 의 추적을 로그의 trace_id 로 쓴다.
         """
-        with job_scope(new_job_id()):
+        job_id = new_job_id()
+        with job_span(PRUNE_OPERATION, job_id), job_scope(job_id):
             started = time.perf_counter()
             deleted = await self.sweep()
             logger.log(

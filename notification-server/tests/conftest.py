@@ -9,7 +9,7 @@ pytest 는 이 파일의 fixture 를 모든 테스트 파일에서 이름만으�
 개발용 데이터는 notification 스키마에, 테스트는 notification_test 스키마에 있다.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
 from fastapi import FastAPI
@@ -21,6 +21,7 @@ from app.core.database import create_engine
 from app.main import create_app
 from tests.cleaning import clear_tables
 from tests.signing import TEST_SECRETS
+from tests.spans import SpanRecorder, recording
 from tests.tokens import FakeAuthServer, SigningKey, make_signing_key
 
 TEST_SCHEMA = 'notification_test'
@@ -47,6 +48,9 @@ def make_test_settings(**overrides) -> Settings:
         'game_server_secret': TEST_SECRETS['game'],
         'billing_server_secret': TEST_SECRETS['billing'],
         'board_server_secret': TEST_SECRETS['board'],
+        # span 을 내보내지 않는다. 개발자의 .env 에 수집기의 주소가 있어도 테스트는 보내지 않는다.
+        # span 을 보는 테스트는 메모리에 모으는 것을 끼운다(spans fixture)
+        'otel_exporter_otlp_endpoint': '',
     }
     values.update(overrides)
     return Settings(**values)
@@ -132,3 +136,14 @@ async def clean_tables(engine: AsyncEngine) -> None:
     앞의 테스트가 도중에 죽어 찌꺼기를 남겨도 영향을 받지 않는다.
     """
     await clear_tables(engine)
+
+
+@pytest.fixture
+def spans() -> Iterator[SpanRecorder]:
+    """
+    테스트가 남긴 span 을 메모리에 모은다. 끝나면 아무것도 하지 않는 것으로 되돌린다.
+
+    span 을 만드는 것은 서버에 하나라(app/observability/spans.py) 이것을 쓰는 테스트는 동시에 돌지 않는다.
+    """
+    with recording() as recorder:
+        yield recorder
