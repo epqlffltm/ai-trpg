@@ -29,7 +29,7 @@
 | 공통 모양의 JSON 로그 | 다섯 서버에 구현 |
 | 민감정보를 가리는 마지막 방어선 | 다섯 서버에 구현 |
 | 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
-| 메트릭 | 이름과 규칙, 보내는 길과 저장소를 정했다([아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)). 내보내는 코드는 없다 |
+| 메트릭 | billing-server 에 구현(HTTP 셋, DB 넷, 작업 넷. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)). 나머지 넷은 아직 내보내지 않는다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
 | 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
 | 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)). 서버의 메트릭은 아직 없다 |
@@ -296,7 +296,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 사용자가 볼 수 있는 것은 `X-Request-ID` 다. 그 번호로 로그를 찾는다.
 
 게임, 게시판, 결제 서버는 `DEBUG` 를 켜도 같다. 인증 서버만 다르다. Django 는 `DEBUG=true` 면 예외의 응답에 호출 기록과 설정값을 실은 개발용 화면을 보낸다.
-그래서 **`APP_ENVIRONMENT=production` 인데 `DEBUG=true` 면 인증 서버가 뜨지 않는다.**
+그래서 **`APP_ENVIRONMENT` 가 `staging` 이나 `production` 인데 `DEBUG=true` 면 인증 서버가 뜨지 않는다**(#466).
 
 ### 작업이 끝난 줄
 
@@ -579,7 +579,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `db_pool_connections_max` | gauge | 없음 | 풀이 가질 수 있는 가장 많은 연결 |
 | `db_pool_wait_seconds` | histogram | 없음 | 연결을 얻으려고 기다린 시간 |
 
-**백그라운드 작업 (game, auth)**
+**백그라운드 작업 (game, auth, billing)**
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
@@ -830,6 +830,28 @@ Prometheus 에 쓰는 것은 Alloy 하나, 읽는 것은 Grafana 하나다. 이 
 - **cron 처럼 짧게 도는 명령은 끝날 때 한 번 내보낸다**(SDK 의 `shutdown`/`force_flush`). 간격을 기다리기 전에 끝나면 아무것도 가지 않는다.
 - **Alloy 가 멈춰도 요청은 영향을 받지 않는다.** 내보내기는 뒤에서 돌고, 다시 보내다 안 되면 그 묶음을 버린다. 메모리에 쌓아 두지 않는다.
 - **테스트.** SDK 의 메모리 수집기(in-memory reader)로 계측기의 이름, 단위, label 을 본다. 끝에서 끝까지(Prometheus 에서 찾아지는가)는 CI 의 `stack` 이 본다.
+- **`service.instance.id` 는 `<프로세스>-<8자>` 다**(`server-3f2a9c1d`, `sweeper-…`). Prometheus 의 label `instance` 가 되어, 같은 `service` 안에서 서버와 워커를 가른다. 뒤의 글자는 띄울 때마다 새로 정한다.
+- **출처(resource)에는 정해 둔 넷만 싣는다**: `service.name`, `service.version`, `service.instance.id`, `deployment.environment.name`. SDK 가 스스로 붙이는 호스트 이름과 프로세스 번호는 싣지 않는다. Prometheus 에서는 `target_info` 에 있다.
+- **compose.** 메트릭을 미는 서비스는 `x-telemetry-environment` 를 environment 에 더하고, `networks: [default, telemetry]` 를 적는다. 주소는 루트 `.env` 의 `OTEL_EXPORTER_OTLP_ENDPOINT` 에서 온다. 프로필 observability 를 켤 때만 적는다.
+- **CI.** `.github/scripts/stack-smoke.sh` 의 `METRIC_SERVERS` 에 서버를 더하면 그 서버의 요청 수, 요청 시간, `db_up`, 연결 풀이 Prometheus 에 있는지 본다.
+
+#### 붙인 것 (결제 서버의 메트릭, 본보기)
+
+다른 서버가 따라 할 모양이다. 언어가 달라도 자리와 이름, 테스트하는 법이 같다.
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `internal/metrics/metrics.go` | MeterProvider 를 만든다. 주소가 비면 noop, 있으면 OTLP(HTTP, protobuf) + 15초 간격. 출처, 구간(`DurationBuckets`), 끌 때 한 번 보내기(`Shutdown`, 5초 안) |
+| `internal/metrics/metricstest/` | 테스트가 계측한 값을 이름과 label 로 읽는다(ManualReader) |
+| `internal/config/config.go` 의 `LoadMetrics` | `OTEL_EXPORTER_OTLP_ENDPOINT`(경로 없이), `OTEL_METRIC_EXPORT_INTERVAL`(밀리초, 1000 이상) |
+| `internal/httpapi/metrics.go` | HTTP 셋(맨 앞의 미들웨어)과 `db_up`(준비 상태 확인). 메서드는 정한 것만, 그 밖은 `_OTHER` |
+| `internal/database/metrics.go` | `NewMeteredPool`: 연결 수(Stat 을 읽는 관측 gauge)와 연결을 기다린 시간(pgxpool 의 AcquireTracer) |
+| `internal/jobs/metrics.go` | 작업 넷. 로그처럼 프로세스에 하나를 둔다(`jobs.Measure`) |
+| `cmd/server`, `cmd/sweeper`, `cmd/reconcile` | 메트릭을 켜고(`app.StartMetrics`) 끌 때 보낸다(`app.CloseMetrics`). 사람이 치는 명령은 켜지 않는다 |
+
+- **전역(otel.SetMeterProvider)에 두지 않는다.** 만든 쪽이 Meter 를 넘긴다. 테스트가 라우터마다 제 Meter 를 넣는다. 작업만 프로세스에 하나다(로그의 기본 로거와 같다).
+- **메트릭 때문에 서버가 뜨지 못하지 않는다.** 계측기를 만들지 못하면 까닭을 남기고 세지 않는다. 수집기가 죽어 있어도 뜬다.
+- **결제의 업무 메트릭**(`billing_ledger_operations_total` 등, 위의 목록)은 다음 PR 이다.
 
 ### 3. 추적 — 식별자를 다루는 코드를 SDK 로 바꾼다
 
@@ -884,7 +906,7 @@ Prometheus 에 쓰는 것은 Alloy 하나, 읽는 것은 Grafana 하나다. 이 
 
 ## 서버별 구현
 
-새 의존성은 없다. 언어마다 표준 기능과 이미 쓰던 것만 썼다.
+로그와 식별자에는 새 의존성이 없다. 언어마다 표준 기능과 이미 쓰던 것만 썼다. 메트릭은 OpenTelemetry 의 SDK 를 쓴다(아래 표의 마지막 줄).
 
 | | auth-server | game-server | board-server | billing-server |
 | --- | --- | --- | --- | --- |
@@ -894,6 +916,7 @@ Prometheus 에 쓰는 것은 Alloy 하나, 읽는 것은 Grafana 하나다. 이 
 | 처리하지 못한 예외 | 미들웨어의 `process_exception` | `Exception` 처리기 | 전역 예외 필터 | `recover` 미들웨어 |
 | 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | 없다 | `jobs.Run()` |
 | 코드의 자리 | `observability/` | `app/observability/` | `src/observability/` | `internal/obs/`, `internal/httpapi/observability.go` |
+| 메트릭 | 없다 | 없다 | 없다 | OpenTelemetry Go SDK(`internal/metrics/`, [본보기](#붙인-것-결제-서버의-메트릭-본보기)) |
 
 notification-server 는 game-server 의 것(`app/observability/`)을 그대로 가져왔다. 뒤에서 도는 작업이 정리 작업 하나라 `BackgroundJobs` 는 없고, 정리 작업이 바퀴마다 `job_scope` 를 건다.
 

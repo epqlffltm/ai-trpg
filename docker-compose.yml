@@ -134,6 +134,13 @@ x-notification-environment: &notification-environment
   DATABASE_URL: postgresql+asyncpg://notification:${NOTIFICATION_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
 
+# 메트릭을 OTLP 로 미는 프로세스가 함께 쓰는 설정(#25, docs/observability.md 의 "2. 메트릭"). 비밀은 없다.
+# 보낼 곳(Alloy)은 루트 .env 의 OTEL_EXPORTER_OTLP_ENDPOINT 로 받는다. 프로필 observability 를 켤 때만 적는다.
+# 비어 있으면 서버는 메트릭을 내보내지 않는다(계측은 그대로). app 프로필만 켰을 때 없는 Alloy 로 보내며 오류를 남기지 않는다.
+# 이것을 쓰는 서비스는 망 telemetry 에도 붙는다(networks 에 default 와 함께 적는다)
+x-telemetry-environment: &telemetry-environment
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+
 x-worker-heartbeat: &worker-heartbeat
   test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/heartbeat) )) -lt 120"]
   interval: 15s
@@ -459,8 +466,10 @@ services:
     env_file: ./billing-server/.env
     # 사용자의 알림은 정리 작업이 넣는다. 서버는 알림 서버를 부르지 않는다
     environment:
-      <<: *billing-environment
+      <<: [*billing-environment, *telemetry-environment]
       NOTIFICATION_SECRET: ""
+    # 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
+    networks: [default, telemetry]
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8003/health/ready"]
       interval: 10s
@@ -485,12 +494,13 @@ services:
     # AUTH_SERVER_SECRET 은 남긴다. 미성년자의 결제를 보호자에게 알리라고 인증 서버에 서명해 보낸다(#352).
     # NOTIFICATION_SECRET 도 남긴다. 사용자에게 알릴 일을 알림 서버에 서명해 넣는다(#385)
     environment:
-      <<: *billing-environment
+      <<: [*billing-environment, *telemetry-environment]
       PG_WEBHOOK_SECRET: ""
       GAME_SERVER_SECRET: ""
       TOSS_SECRET_KEY: ""
       HEARTBEAT_FILE: /tmp/heartbeat
       NOTIFICATION_URL: http://notification-server:8004
+    networks: [default, telemetry]
     healthcheck: *worker-heartbeat
     depends_on:
       billing-migrate:
@@ -505,9 +515,11 @@ services:
     command: ["supercronic", "-quiet", "-json", "-passthrough-logs", "/etc/supercronic/crontab"]
     env_file: ./billing-server/.env
     # 대사는 결제 대행사에 결과를 묻는다. TOSS_SECRET_KEY 는 남긴다
+    # 대사 한 번의 작업 메트릭을 끝날 때 Alloy 에 민다(telemetry)
     environment:
-      <<: [*billing-environment, *billing-without-request-secrets]
+      <<: [*billing-environment, *billing-without-request-secrets, *telemetry-environment]
       NOTIFICATION_SECRET: ""
+    networks: [default, telemetry]
     volumes:
       - ./docker/cron/billing.crontab:/etc/supercronic/crontab:ro
     depends_on:
@@ -585,8 +597,8 @@ services:
   # 망을 셋으로 나눈다. 서버들은 기본 망(default)에 있어서 Loki, Prometheus, Grafana, 소켓 프록시에 닿지 않는다.
   #   docker-api     소켓 프록시와 Alloy 만. 바깥으로 나가지 못한다(internal)
   #   observability  Alloy, Loki, Prometheus, Grafana. Grafana 의 포트를 열려고 internal 로 두지 않는다
-  #   telemetry      Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스. 서버는 여기서 Alloy 의 4318 에만 닿는다(internal).
-  #                  서버의 프로세스는 메트릭을 붙이는 PR 에서 이 망에 더한다(networks 에 default 도 함께 적는다)
+  #   telemetry      Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스(지금은 결제 서버의 셋). 서버는 여기서 Alloy 의 4318 에만 닿는다(internal).
+  #                  서버의 프로세스는 메트릭을 붙이는 PR 에서 이 망에 더한다(networks 에 default 도 함께 적고, x-telemetry-environment 를 붙인다)
   # 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "수집기(Grafana Alloy)를 붙일 자리"에 있다
   # ---------------------------------------------------------------------------
 

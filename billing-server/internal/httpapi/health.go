@@ -38,14 +38,17 @@ func health(c *gin.Context) {
 
 // readiness 는 요청을 받을 준비가 됐는지 답하는 핸들러를 만든다. DB 가 답하면 200, 아니면 503 이다.
 // 실패한 이유는 응답에 싣지 않는다. 접속 주소나 계정 이름이 밖으로 나가지 않게 한다. 로그에는 오류의 종류만 남긴다.
-func readiness(db database.Pinger, logger *slog.Logger) gin.HandlerFunc {
+// 본 결과를 메트릭 db_up 에도 적는다(1 이면 닿는다). compose 의 healthcheck 가 10초마다 부른다.
+func readiness(db database.Pinger, logger *slog.Logger, gauge dbGauge) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		if err := pingWithin(ctx, db); err != nil {
+			gauge.record(ctx, false)
 			logUnreachable(ctx, logger, err)
 			c.JSON(http.StatusServiceUnavailable, statusBody{Status: "unavailable"})
 			return
 		}
+		gauge.record(ctx, true)
 		c.JSON(http.StatusOK, statusBody{Status: "ok"})
 	}
 }
