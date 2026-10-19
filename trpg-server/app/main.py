@@ -59,9 +59,13 @@ from app.memory.indexing import MemoryIndexer
 from app.memory.retrieval import MemoryRetriever, MemoryThresholds
 from app.notifications import dispatcher
 from app.notifications.setup import build_notifications
+from app.observability.db_spans import instrument_engine
+from app.observability.http_spans import traced_client
 from app.observability.middleware import RequestLoggingMiddleware
+from app.observability.request_spans import RequestSpanMiddleware
 from app.observability.responses import handle_unexpected_error
 from app.observability.setup import configure_logging
+from app.observability.tracing import FASTAPI_TELEMETRY, configure_tracing, shutdown_tracing
 from app.operators import router as operators
 from app.operators.publishing import PublicationRefusedError
 from app.operators.sanctions import SanctionConflictError
@@ -107,6 +111,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     AI 호출 기록의 원문 정리(보관 기간이 지난 원문을 비우는 것), 서술 모델의 은퇴 지켜보기,
     알림 보내기(발송함의 알림을 알림 서버에 넣는 것), 끊긴 세션 목록 받기는 뜰 때 돌기 시작하고,
     꺼질 때 가장 먼저 멈춘다. 시계가 맡긴 서술이 뒤의 작업 마무리에 들어가도록 순서를 지킨다.
+    마지막으로 모아 둔 span 을 보낸다. 보내기를 기다리느라 막히므로 스레드에서 한다.
     """
     loop = asyncio.get_running_loop()
     running = clock.start(app.state.round_clock)
@@ -130,6 +135,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await app.state.http_client.aclose()
     if app.state.redis is not None:
         await app.state.redis.aclose()
+    await asyncio.to_thread(shutdown_tracing, app.state.tracing)
 
 
 def create_app(
@@ -150,6 +156,8 @@ def create_app(
 
     # 로그를 공통 규격의 JSON 으로 건다(docs/observability.md). 여러 번 불러도 처리기는 하나다
     configure_logging(settings)
+    # 보낼 곳(OTEL_EXPORTER_OTLP_ENDPOINT)이 있으면 span 을 수집기에 민다. 없으면 None 이고 span 이 생기지 않는다
+    tracing = configure_tracing(settings)
 
     app = FastAPI(
         title='AI TRPG 게임 서버',
@@ -158,13 +166,18 @@ def create_app(
         redoc_url=None,
         openapi_url=f'{API_PREFIX}/openapi.json' if settings.debug else None,
         lifespan=lifespan,
+        # FastAPI 가 스스로 span, 메트릭, 로그를 내보내지 않게 한다(app/observability/tracing.py)
+        telemetry=FASTAPI_TELEMETRY,
     )
 
     # 요청마다 식별자(request_id, trace_id)를 걸고, 끝나면 한 줄을 남긴다. 응답에 X-Request-ID 를 돌려준다
     app.add_middleware(RequestLoggingMiddleware)
+    # 요청마다 서버 span 을 건다. 나중에 붙인 것이 바깥이다. 로그(trace_id)와 쿼리의 span 이 이 span 을 따른다
+    app.add_middleware(RequestSpanMiddleware)
 
     # 요청을 처리하는 코드가 설정을 꺼내 쓸 수 있게 앱에 붙여 둔다
     app.state.settings = settings
+    app.state.tracing = tracing
 
     # 엔진과 세션 틀을 앱에 붙여 둔다. 전역 변수로 두지 않는다.
     # 앱마다 자기 엔진을 가지므로, 테스트가 다른 설정의 앱을 만들어도 서로 섞이지 않는다.
@@ -172,12 +185,15 @@ def create_app(
     # 세션은 신호의 서명자를 들고 다닌다. 테이블을 바꾸고 신호를 보낼 때 이것으로 서명한다(app/realtime/signals.py).
     # 신호를 듣는 쪽도 같은 것으로 맞춰 본다(아래의 PostgresListener)
     app.state.engine = engine or create_engine(settings)
+    # 쿼리마다 span 을 건다(요청이나 작업 안의 것만). 같은 엔진에 여러 번 불러도 한 번만 단다
+    instrument_engine(app.state.engine)
     app.state.signal_signer = signer_from(settings)
     app.state.session_factory = create_session_factory(app.state.engine, session_info(app.state.signal_signer))
 
     # 인증 서버의 공개키를 기억하는 곳. 앱에 하나만 두고 모든 요청이 함께 쓴다.
     # 만드는 것만으로는 인증 서버에 요청을 보내지 않는다. 처음 토큰을 검증할 때 가져온다
-    app.state.http_client = http_client or httpx.AsyncClient()
+    # 요청이나 작업 안에서 부르면 client span 을 건다. 우리 서버를 부를 때는 traceparent 를 그 span 으로 잇는다
+    app.state.http_client = http_client or traced_client()
     app.state.jwks = JwksCache(app.state.http_client, settings.auth_jwks_url)
     # 끊긴 세션의 목록(app/auth/revocations.py). 30초마다 받는다. lifespan 이 돌리고 멈춘다
     app.state.revocations = revocations.RevocationList(app.state.http_client, settings.session_revocations_url)
