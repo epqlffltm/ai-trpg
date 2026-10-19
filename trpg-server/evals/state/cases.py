@@ -7,7 +7,7 @@
 서버의 조립(app/rounds/prompt.py)을 그대로 거치므로 프롬프트의 틀이 바뀌면 이 장면들도 새 틀로 간다.
 부상의 이름과 사실은 내장 템플릿(srd5)의 것을 그대로 쓴다. 템플릿의 글이 바뀌어도 장면이 따라간다.
 
-보는 것은 일곱이다(#111 ④, 지목, 맵 #218, 몬스터 #231, 시각 #248, 이동 시간).
+보는 것은 여덟이다(#111 ④, 지목, 맵 #218, 몬스터 #231, 시각 #248, 이동 시간, 퀘스트의 기한 #268).
   - 쓰러진 NPC 와 죽은 NPC 는 말하거나 움직이지 않는다
   - 입은 부상이 서술에 나오고, 그 부상으로 실패한 일을 성공처럼 쓰지 않는다
   - 치료의 결과(다 나음과 후유증, 덧남)를 그대로 쓴다
@@ -19,6 +19,8 @@
     몬스터에게 쓰러진 캐릭터는 선언한 일을 하지 않는다. 맞은 공격은 나온다
   - 시각: 밤 장면에 햇빛을, 낮 장면에 한밤을 쓰지 않는다. 하룻밤을 건너뛴 장면은 새벽에서 맺는다.
     먼 길(3시간)을 간 장면은 금세 닿은 것처럼 쓰지 않고, 저녁에 떠나 밤에 닿는다
+  - 퀘스트의 기한: 다 된 퀘스트는 느긋하게 쓰지 않고 서두른다. 남은 시간을 숫자로 지어내지 않는다.
+    기한을 넘겨 실패한 퀘스트를 이룬 것처럼 쓰지 않는다
 모든 장면에서 숨긴 설정(경찰의 끄나풀)을 흘리지 않는지 본다. 진짜 이름은 맞은 지목의 장면에서만 나와도 된다.
 
 GM 메모에 진짜 이름을 적어 둔다. 제작자가 그렇게 쓸 수 있고, 그러면 모델은 진짜 이름을 안다.
@@ -50,6 +52,7 @@ from app.rounds.narrator import (
     PastRound,
     PersonState,
     PlaceNote,
+    QuestNote,
     RestNote,
     RevivalNote,
     SearchNote,
@@ -791,6 +794,55 @@ REST_BROKEN = StateCase(
     ),
 )
 
+# 퀘스트의 남은 시간을 숫자로 지어낸 것(30분 남았다, 두 시간 안에). [퀘스트]는 감각만 준다
+QUEST_DIGITS = Pattern('기한의 숫자', re.compile(r'\d+\s*(?:시간|분)\s*(?:남|안에|뒤|후|이내)'))
+# 도난당한 엔진 되찾기. 기한이 다 됐다. 이번 장면이 끝나면 다음 라운드가 마지막이다
+ENGINE_QUEST = '도난당한 엔진 되찾기'
+QUEST_LAST = StateCase(
+    name='quest_last',
+    about='기한이 다 된 퀘스트는 느긋하게 쓰지 않고, 남은 시간을 숫자로 지어내지 않는다',
+    request=replace(
+        request(
+            scene='우주 고속도로의 갓길. 리엔의 바이크 옆에 엔진 없는 빈 차체가 쓰러져 있다.',
+            moves=[Move('리엔', '도둑이 남긴 바퀴 자국을 따라 바이크를 몬다.')],
+            people=[],
+        ),
+        quests=[QuestNote(ENGINE_QUEST, 'active', pace='last')],
+        clock=clock_note(2, 15, 10),
+    ),
+    checks=(
+        Forbid('느긋함', ('느긋', '여유롭', '여유를 부', '천천히', '서두를 것 없')),
+        Require('서두름', ('서둘', '시간이 없', '늦기 전', '촉박', '다급', '조급', '마지막')),
+        Forbid('엔진을 되찾음', ('엔진을 되찾았', '엔진을 되찾아', '엔진을 손에 넣')),
+        QUEST_DIGITS,
+        CLOCK_DIGITS,
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+# 이번 라운드에 기한을 넘겨 실패했다. 엔진은 이미 다른 행성으로 실려 갔다
+QUEST_MISSED = StateCase(
+    name='quest_missed',
+    about='이번 라운드에 기한을 넘겨 실패한 퀘스트를 이룬 것처럼 쓰지 않는다',
+    request=replace(
+        request(
+            scene='우주 고속도로의 화물 터미널. 마지막 화물선의 불빛이 멀어진다.',
+            moves=[Move('리엔', '터미널 끝까지 바이크를 몰아 화물선을 쫓는다.')],
+            people=[],
+        ),
+        quests=[QuestNote(ENGINE_QUEST, 'failed', missed_deadline=True)],
+        clock=clock_note(2, 16, 10),
+    ),
+    checks=(
+        Forbid('엔진을 되찾음', ('엔진을 되찾았', '엔진을 되찾아', '엔진을 손에 넣', '엔진을 찾아냈', '따라잡았')),
+        Require('놓침', ('늦었', '놓쳤', '놓치', '멀어', '사라졌', '떠나')),
+        QUEST_DIGITS,
+        CLOCK_DIGITS,
+        HIDDEN_NAME,
+        SECRET,
+    ),
+)
+
 CASES = (
     DOWNED,
     DEAD,
@@ -813,5 +865,7 @@ CASES = (
     CLOCK_TRAVEL,
     REST_NIGHT,
     REST_BROKEN,
+    QUEST_LAST,
+    QUEST_MISSED,
 )
 CASE_NAMES = tuple(case.name for case in CASES)
