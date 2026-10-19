@@ -20,7 +20,9 @@
 #                  소켓 프록시가 쓰기를 막는가, 서버들이 소켓 프록시와 Loki 에 닿지 않는가.
 #                  메트릭도 본다: OTLP 로 민 시험 지표가 Prometheus 에 정한 이름과 label 로 들어오는가,
 #                  수집 쪽 자신의 메트릭이 들어오는가, Prometheus 가 아무것도 긁지 않는가, Grafana 가 Prometheus 에 닿는가.
-#                  대시보드도 본다: 규칙을 지키는가(dashboard_scope.py), Grafana 가 파일에서 읽었는가, 쿼리가 오류 없이 도는가
+#                  대시보드도 본다: 규칙을 지키는가(dashboard_scope.py), Grafana 가 파일에서 읽었는가, 쿼리가 오류 없이 도는가.
+#                  DB 와 Redis 의 메트릭이 들어오는가, 메트릭을 읽는 계정(monitor)이 표를 읽거나 쓰지 못하는가,
+#                  Alloy 가 서버들의 망에 없는가
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한,
 #                  모든 응답(서버의 응답, 404, 429)의 보안 머리말, HTTP 의 응답에 HSTS 가 없는가.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
@@ -138,6 +140,7 @@ BILLING_DB_PASSWORD=$(throwaway)
 BOARD_DB_PASSWORD=$(throwaway)
 NOTIFICATION_DB_PASSWORD=$(throwaway)
 GRAFANA_ADMIN_PASSWORD=$(throwaway)
+MONITOR_DB_PASSWORD=$(throwaway)
 OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
 EOF
   write_new auth-server/.env <<EOF
@@ -571,6 +574,41 @@ push_probe_metric() {
   fetch_on telemetry http://alloy:4318/v1/metrics --post-data "$body" --header 'Content-Type: application/json' >/dev/null
 }
 
+# DB 의 메트릭을 읽는 계정(monitor)의 비밀번호. prepare 가 루트 .env 에 적었다
+monitor_password() {
+  sed -n 's/^MONITOR_DB_PASSWORD=//p' .env
+}
+
+# monitor 계정으로 SQL 하나를 돌린다. 비밀번호로 붙도록 소켓이 아니라 127.0.0.1 로 붙는다.
+# DB 의 이름은 db 컨테이너 안의 환경 변수로 읽는다. 그래서 작은따옴표로 넘겨 그 안에서 펼친다
+monitor_query() {
+  # shellcheck disable=SC2016
+  compose exec -T -e PGPASSWORD="$(monitor_password)" -e SQL="$1" db \
+    sh -c 'psql -h 127.0.0.1 -U monitor -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atc "$SQL"'
+}
+
+# monitor 계정이 붙어서 통계를 읽는가
+monitor_reads_statistics() {
+  [[ "$(monitor_query 'SELECT count(*) > 0 FROM pg_stat_database')" == "t" ]]
+}
+
+# monitor 계정이 서버의 표를 읽지 못하는가. 붙지 못해서 실패한 것과 가르려고 먼저 통계를 읽는다
+monitor_cannot_read_tables() {
+  monitor_reads_statistics && ! monitor_query 'SELECT 1 FROM billing.wallets LIMIT 1'
+}
+
+# monitor 계정이 쓰지 못하는가(default_transaction_read_only)
+monitor_cannot_write() {
+  monitor_reads_statistics && ! monitor_query 'CREATE TABLE public.monitor_probe (id integer)'
+}
+
+# Alloy 가 서버들의 망(<프로젝트>_default)에 없는가. 있으면 모든 서버의 API 를 부를 수 있다
+alloy_off_server_network() {
+  local networks
+  networks="$(docker inspect -f '{{range $name, $network := .NetworkSettings.Networks}}{{$name}} {{end}}' "$(container_of alloy)")"
+  [[ -n "$networks" && " $networks" != *"_default "* ]]
+}
+
 # 메트릭을 본다
 check_metrics() {
   local instance job
@@ -585,6 +623,13 @@ check_metrics() {
   for job in alloy loki prometheus grafana; do
     report "Alloy 가 $job 의 메트릭을 긁어 보낸다" eventually prometheus_finds "up{job=\"$job\"} == 1"
   done
+  report "Alloy 가 DB 의 메트릭을 monitor 계정으로 읽는다(pg_up == 1)" \
+    eventually prometheus_finds 'pg_up{job="postgres", instance="db"} == 1'
+  report "Alloy 가 Redis 의 메트릭을 읽는다(redis_up == 1)" \
+    eventually prometheus_finds 'redis_up{job="redis", instance="redis"} == 1'
+  report "monitor 계정은 서버의 표를 읽지 못한다" monitor_cannot_read_tables
+  report "monitor 계정은 쓰지 못한다(읽기 전용)" monitor_cannot_write
+  report "Alloy 가 서버들의 망(default)에 없다. DB 와 Redis 에는 datastore-metrics 로만 닿는다" alloy_off_server_network
   report "게임 서버가 Prometheus 에 닿지 않는다" unreachable_from game-server http://prometheus:9090/-/ready
   report "결제 서버가 Prometheus 에 닿지 않는다(telemetry 망에서는 Alloy 에만 닿는다)" \
     unreachable_from billing-server http://prometheus:9090/-/ready

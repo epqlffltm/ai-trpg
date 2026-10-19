@@ -30,7 +30,8 @@
 | 민감정보를 가리는 마지막 방어선 | 다섯 서버에 구현 |
 | 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
 | 메트릭 | billing-server 에 구현(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)). 나머지 넷은 아직 내보내지 않는다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
-| 대시보드 | billing-server 하나(`docker/grafana/dashboards/billing-server.json`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
+| DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
+| 대시보드 | billing-server, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
 | 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
 | 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)) |
@@ -817,6 +818,21 @@ Prometheus 에 쓰는 것은 Alloy 하나, 읽는 것은 Grafana 하나다. 이 
   telemetry 망에서 OTLP(JSON)로 민 시험 지표 `stack_smoke_probe` 가 `stack_smoke_probe_total{service="stack-smoke", instance="<이 실행의 값>"}` 으로 들어온다(이름 바꾸기와 label 을 함께 본다).
   `up{job=…}` 이 alloy, loki, prometheus, grafana 모두 1 이다. 게임 서버가 Prometheus 에 닿지 않는다.
 
+#### 붙인 것 (DB 와 Redis)
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `docker/alloy/metrics.alloy` 의 `prometheus.exporter.postgres`, `prometheus.exporter.redis` | Alloy 안의 exporter(postgres_exporter, redis_exporter)가 15초마다 읽는다. 컨테이너를 늘리지 않는다. 이름표는 `job="postgres", instance="db"`, `job="redis", instance="redis"` 다 |
+| `docker/postgres/init/07-monitor-role.sql` | DB 의 메트릭을 읽는 계정 `monitor`. 내장 역할 `pg_monitor`(통계와 설정)만 받는다. 스키마의 권한이 없어 서버들의 표를 읽지 못하고, 읽기 전용(`default_transaction_read_only`)이라 쓰지 못한다. 연결은 셋까지, 문장 하나는 10초까지다 |
+| 루트 `.env` 의 `MONITOR_DB_PASSWORD` | 그 계정의 비밀번호. DB(계정을 만든다)와 Alloy(붙는다)만 받는다(`secret_scope.py` 의 `ROOT_SECRETS`). 비어 있으면 계정을 만들지 않는다. 주소에 그대로 들어가므로 영문과 숫자로만 짓는다 |
+| 망 `datastore-metrics` | DB, Redis, Alloy 만 있다(internal). Alloy 는 서버들의 망(`default`)에 없어서 서버의 API 에 닿지 않는다 |
+
+- **서버의 계정을 빌리지 않는다.** 슈퍼유저로 붙으면 Alloy 가 DB 를 통째로 지울 수 있는 비밀번호를 쥔다. Alloy 는 Docker 의 API 까지 닿는 컨테이너라 뚫리면 피해가 가장 크다. 서버의 계정은 그 스키마를 읽고 쓰고, 다른 스키마의 통계는 일부만 보인다.
+- **Alloy 를 기본 망에 넣지 않는다.** 넣으면 모든 서버의 API 를 부를 수 있다. 메트릭을 OTLP 로 밀게 한 까닭(서버 → Alloy 한쪽만)이 사라진다.
+- **DB 는 한 곳(`trpg`)만 읽는다**(`autodiscovery` 를 끈다). 서버들은 한 DB 의 스키마를 나눠 쓴다. 표마다의 통계(`pg_stat_user_tables_*`)는 스키마(`schemaname`)와 표(`relname`)를 label 로 단다. 표의 수만큼이라 끝이 있다. 사용자나 주문 번호처럼 끝없이 느는 값이 아니다.
+- **이미 있는 볼륨에서는 계정을 직접 만든다.** 초기화 스크립트는 볼륨이 비어 있는 첫 기동 때만 돈다. 루트 README 의 "로그와 메트릭 모으기"에 명령이 있다. 다시 돌려도 된다(있으면 비밀번호만 맞춘다).
+- **CI 가 보는 것.** `pg_up{job="postgres", instance="db"} == 1`, `redis_up{job="redis", instance="redis"} == 1` 이 들어온다. `monitor` 가 통계는 읽고, 결제 서버의 표(`billing.wallets`)는 읽지 못하고, 표를 만들지 못한다. Alloy 가 `default` 망에 없다.
+
 #### 대시보드
 
 Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-trpg` 에 붙인다(`docker/grafana/provisioning/dashboards/dashboards.yaml`).
@@ -825,14 +841,16 @@ Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-
 
 | 규칙 | 까닭 |
 | --- | --- |
-| 서버마다 파일 하나. 파일 이름과 uid 는 서비스 이름이다(`billing-server.json`, uid `billing-server`) | 주소(`/d/billing-server`)가 바뀌지 않는다. 관리 서버가 링크를 걸 수 있다 |
+| 서버마다 파일 하나. 파일 이름과 uid 는 서비스 이름이다(`billing-server.json`, uid `billing-server`). Alloy 가 긁는 인프라는 그 job 의 이름이다(`postgres.json`, `redis.json`) | 주소(`/d/billing-server`)가 바뀌지 않는다. 관리 서버가 링크를 걸 수 있다 |
 | 데이터 소스는 uid(`prometheus`, `loki`)로 부른다. `${DS_PROMETHEUS}` 같은 자리, `__inputs` 를 두지 않는다 | 저장소를 Mimir 로 바꿀 때 데이터 소스의 주소만 바뀐다(아래의 "Mimir 로 옮길 수 있게 지키는 것" 3) |
-| Prometheus 의 쿼리는 모든 선택자에 그 서버의 `service` 를 건다 | 다섯 서버가 같은 이름(`http_server_requests_total`, `db_up` …)을 쓴다. 빠뜨리면 다른 서버의 것이 섞인다 |
+| Prometheus 의 쿼리는 모든 선택자에 그 서버의 `service` 를 건다. 인프라는 그 `job` 을 건다 | 다섯 서버가 같은 이름(`http_server_requests_total`, `db_up` …)을 쓴다. 빠뜨리면 다른 서버의 것이 섞인다 |
 | 시간 창은 `$__rate_interval` 이다 | 수집 간격(15초)과 화면의 시간 범위에 맞춰 Grafana 가 고른다. 고정한 `[1m]` 은 넓은 범위에서 점을 건너뛴다 |
 | 짧게 돌고 끝나는 프로세스(대사)는 `last_over_time(…[1d])` 로 본다. `rate` 로 보지 않는다 | 끝날 때 한 번만 민다. 실행마다 `instance` 가 새것이라 시계열마다 점이 하나뿐이고, `rate`, `increase` 는 점 둘이 있어야 값이 난다. 그래서 `rate` 를 쓰는 패널은 `instance!~"reconcile-.+"` 로 대사를 빼고, 대사는 따로 둔다 |
 | 경보 규칙은 아직 두지 않는다 | 규칙을 돌릴 곳(Prometheus 의 rule, Alertmanager)이 아직 없다. 두게 되면 Prometheus 형식의 파일로 둔다(Mimir 의 ruler 가 같은 형식을 읽는다) |
 
 `billing-server` 의 대시보드는 한눈에(DB, 5xx 비율, 결과를 모르는 결제 대행사 호출, 되돌린 원장의 일), 요청, DB 연결, 결제, 원장, 정리 작업과 대사의 여섯 줄이다.
+`postgres` 는 한눈에(DB, 연결 / 최대, DB 의 크기, 교착), 연결과 트랜잭션, 읽기와 쓰기(캐시 적중률, 행, 임시 파일, 스키마마다의 크기), 표(큰 표, 죽은 행이 많은 표)다.
+`redis` 는 한눈에(Redis, 메모리, 연결된 클라이언트, AOF 의 마지막 쓰기), 명령(명령마다, 키 적중률, 오류와 거절), 메모리와 키(사라진 키, 내쫓긴 키)다.
 대시보드의 규칙은 `.github/scripts/dashboard_scope.py` 가 보고, 그 규칙 자체는 `test_dashboard_scope.py` 가 본다.
 CI(`stack`)는 거기에 더해 Grafana 가 파일의 대시보드를 모두 읽었는지, 모든 Prometheus 쿼리가 Grafana 의 데이터 소스 프록시를 거쳐 오류 없이 도는지 본다.
 값이 없는 것(CI 에 결제가 없어 생기지 않은 메트릭)은 오류가 아니다. 이름이나 PromQL 이 틀린 것을 잡는다.
