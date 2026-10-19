@@ -247,8 +247,16 @@ def to_steal(declaration: Declaration | None) -> StealNote | None:
     if steal is None:
         return None
     caught = not steal['stolen'] and steal['check'] is not None
+    npc = steal.get('npc_id') is not None
     return StealNote(
-        monster=steal['monster_name'], name=steal['name'], count=steal['count'], stolen=steal['stolen'], caught=caught
+        victim=steal['npc_name'] if npc else steal['monster_name'],
+        name=steal['name'],
+        count=steal['count'],
+        stolen=steal['stolen'],
+        caught=caught,
+        npc=npc,
+        hostile=steal.get('attitude_change') is not None,
+        fight=steal.get('fight', False),
     )
 
 

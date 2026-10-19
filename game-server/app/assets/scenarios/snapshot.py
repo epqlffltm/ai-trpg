@@ -30,6 +30,7 @@ from app.assets.models import (
     LoreKind,
     NarrationStyle,
     NpcAttitude,
+    NpcCaught,
     PlaceItemVisibility,
     QuestConditionKind,
     QuestMatch,
@@ -89,7 +90,8 @@ from app.engine.sheet import Sheet
 #  36: 규칙에 훔치기(steal)가, 몬스터에 둔한지(dull)가 있다
 #  37: 인물의 NPC 시트에 처음 태도(npc_sheets[].attitude: friendly, neutral, hostile)가 있다
 #  38: 인물의 NPC 시트에 지닌 물건(npc_sheets[].equipment, inventory)과 둔한지(dull)가 있다. 몬스터와 같은 모양이다
-SNAPSHOT_FORMAT = 38
+#  39: 인물의 NPC 시트에 훔치다 들켰을 때(npc_sheets[].on_caught: hostile, fight)가 있다
+SNAPSHOT_FORMAT = 39
 
 
 class EntrySnapshot(BaseModel):
@@ -267,6 +269,8 @@ class NpcSheetSnapshot(BaseModel):
     equipment: list[CarriedItemSnapshot] = []
     inventory: list[CarriedItemSnapshot] = []
     dull: bool = False
+    # 훔치다 들켰을 때. 형식 39 보다 옛 판의 인물은 적대만 한다
+    on_caught: NpcCaught = NpcCaught.HOSTILE
 
 
 class AttackSnapshot(BaseModel):

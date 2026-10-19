@@ -323,11 +323,14 @@ def record_steal(session: AsyncSession, table: GameTable, declaration: Declarati
     """
     훔치기의 결과를 이벤트로 적는다(steal_attempted). 그 행동의 이벤트(cause)에 잇는다. 들켰어도 적는다.
 
-    훔쳤으면 items_gained(source 는 steal, 그 마리)를 그 뒤에 잇는다. 행한 사람을 적지 않는다. 정한 것은 엔진이다.
+    NPC 에게 들켜 태도가 바뀌었으면 npc_attitude_changed 를 그 뒤에 잇는다.
+    훔쳤으면 items_gained(source 는 steal, 그 대상)를 그 뒤에 잇는다. 행한 사람을 적지 않는다. 정한 것은 엔진이다.
     """
     steal = steal_of(declaration)
     payload = {'round': cause.payload['round'], **steal}
     attempted = recorder.record(session, table, EventType.STEAL_ATTEMPTED, payload=payload, cause=cause)
+    if steal.get('attitude_change') is not None:
+        record_attitude_change(session, table, steal['attitude_change'], steal['npc_name'], cause=attempted)
     if not steal['count']:
         return
     gained = {
@@ -338,11 +341,16 @@ def record_steal(session: AsyncSession, table: GameTable, declaration: Declarati
         'name': steal['name'],
         'count': steal['count'],
         'total': steal['total'],
-        'source': STEAL_SOURCE,
-        'monster_id': steal['monster_id'],
-        'monster_name': steal['monster_name'],
+        **stolen_from(steal),
     }
     recorder.record(session, table, EventType.ITEMS_GAINED, payload=gained, cause=attempted)
+
+
+def stolen_from(steal: dict) -> dict:
+    """훔친 물건의 출처(source 는 steal)와 그 대상. 몬스터면 monster_id·monster_name, NPC 면 npc_id·npc_name."""
+    if steal.get('npc_id') is not None:
+        return {'source': STEAL_SOURCE, 'npc_id': steal['npc_id'], 'npc_name': steal['npc_name']}
+    return {'source': STEAL_SOURCE, 'monster_id': steal['monster_id'], 'monster_name': steal['monster_name']}
 
 
 def record_gained(

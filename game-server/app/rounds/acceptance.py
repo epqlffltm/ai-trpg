@@ -18,8 +18,8 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
   - 쉬기(RestAction). 규칙에 쉬기가 있어야 한다. 쉴 수 없는 곳은 없다(app/rounds/rests.py).
   - 줍기(TakeAction). 맵에 서 있고, 그 장소에 보이게 남은 물건이어야 한다(app/rounds/place_item_actions.py).
   - 내려놓기(PutDownAction). 맵에 서 있고, 판의 물건을 그만큼 가지고 있어야 한다.
-  - 훔치기(StealAction). 규칙에 훔치기가 있고, 자기가 선 장소의 죽지 않은 마리가 그 물건을 지금 지녀야 한다
-    (app/rounds/steals.py).
+  - 훔치기(StealAction). 규칙에 훔치기가 있고, 자기가 선 장소의 죽지 않은 마리나 이번 장면의 죽지 않은 인물이
+    그 물건을 지금 지녀야 한다(app/rounds/steals.py).
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
 비워 둔 칸(난이도, 회복과 치료의 대상)은 여기서 채워 저장한다. 읽는 쪽이 "비어 있으면"을 다시 따지지 않는다.
 """
@@ -53,7 +53,7 @@ from app.rounds.monster_scene import SceneMonster, find_scene_monster, stands_wi
 from app.rounds.place_item_actions import accept_take
 from app.rounds.rests import accept_rest
 from app.rounds.state import find_declaration, is_down, rules_of
-from app.rounds.steals import find_carried, require_steal
+from app.rounds.steals import find_monster_carried, find_npc_carried, require_steal
 from app.tables import items, npcs, sheets
 from app.tables import monsters as table_monsters
 from app.tables import state as table_state
@@ -287,18 +287,31 @@ def accept_put_down(table: GameTable, member: TableMember, action: PutDownAction
     return action.model_dump(mode='json')
 
 
-def accept_steal(ruleset: Ruleset, member: TableMember, monsters: list[SceneMonster], action: StealAction) -> dict:
+def require_carried_by_victim(scene: Scene, action: StealAction) -> None:
+    """훔칠 대상(몬스터나 NPC)이 그 물건을 지금 지녔는지 본다. 아니면 ActionTargetError(carried)."""
+    if action.monster is not None:
+        line = find_monster_carried(find_scene_monster(scene.monsters, action.monster), action.item)
+    else:
+        line = find_npc_carried(find_cast_member(scene.cast, action.npc), action.item)
+    if line is None:
+        raise ActionTargetError('carried')
+
+
+def accept_steal(ruleset: Ruleset, member: TableMember, scene: Scene, action: StealAction) -> dict:
     """
     훔치는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
 
       - 규칙에 훔치기가 없으면 ActionNotInRulesError(kind).
-      - 그 마리가 자기가 선 장소에 없거나 이미 죽었으면 칠 때와 같다(require_monster_target). 쓰러진 마리는 된다.
-      - 그 마리가 그 물건을 지금 지니지 않았으면 ActionTargetError(carried).
+      - 몬스터가 자기가 선 장소에 없거나 이미 죽었으면 칠 때와 같다(require_monster_target). 쓰러진 마리는 된다.
+      - NPC 가 이번 장면의 인물이 아니거나 이미 죽었으면 겨눌 때와 같다(require_npc_target). 쓰러진 인물은 된다.
+      - 그 대상이 그 물건을 지금 지니지 않았으면 ActionTargetError(carried).
     """
     require_steal(ruleset)
-    require_monster_target(monsters, member, action.monster)
-    if find_carried(find_scene_monster(monsters, action.monster), action.item) is None:
-        raise ActionTargetError('carried')
+    if action.monster is not None:
+        require_monster_target(scene.monsters, member, action.monster)
+    else:
+        require_npc_target(scene.cast, action.npc, None)
+    require_carried_by_victim(scene, action)
     return action.model_dump(mode='json')
 
 
@@ -336,7 +349,7 @@ def accept_action(
     if isinstance(action, PutDownAction):
         return accept_put_down(table, member, action)
     if isinstance(action, StealAction):
-        return accept_steal(ruleset, member, scene.monsters, action)
+        return accept_steal(ruleset, member, scene, action)
     if isinstance(action, RestAction):
         return accept_rest(ruleset, action)
     return accept_check(table, member, action, scene, ruleset)
