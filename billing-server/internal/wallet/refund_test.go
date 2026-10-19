@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
@@ -24,10 +25,10 @@ func (f fixture) paidOrder() uuid.UUID {
 	return orderID
 }
 
-// inTx 는 트랜잭션을 열어 run 을 부르고, run 의 오류에 따라 확정하거나 되돌린다.
+// inTx 는 트랜잭션을 열어 run 을 부르고, run 의 오류에 따라 확정하거나 되돌린다. 서버처럼 txn.Run 으로 연다.
 func (f fixture) inTx(run func(pgx.Tx) error) error {
 	f.t.Helper()
-	return pgx.BeginFunc(ctx(f.t), f.pool, run)
+	return txn.Run(ctx(f.t), f.pool, run)
 }
 
 func (f fixture) takeForRefund(orderID uuid.UUID) error {

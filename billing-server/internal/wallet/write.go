@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet/walletdb"
 )
 
@@ -32,7 +33,7 @@ func (s *Service) DepositForOrder(ctx context.Context, tx pgx.Tx, userID uuid.UU
 	if err := checkAmount(amount); err != nil {
 		return err
 	}
-	return lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
+	return s.lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
 		return c.openLot(ctx, cause{operationID: uuid.New(), reason: ReasonDeposit, orderID: &orderID}, amount)
 	})
 }
@@ -74,7 +75,7 @@ func (s *Service) GrantFreeOnceInTx(ctx context.Context, tx pgx.Tx, userID uuid.
 		return Grant{}, err
 	}
 	var grant Grant
-	err := lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
+	err := s.lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
 		var err error
 		grant, err = s.grantOnce(ctx, c, amount, key)
 		return err
@@ -139,7 +140,7 @@ func (s *Service) TakeForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, 
 	if err := checkAmount(amount); err != nil {
 		return err
 	}
-	return lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
+	return s.lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
 		plan, err := c.planFrom(ctx, amount, s.policy.FreeFirst, funds)
 		if err != nil {
 			return err
@@ -154,7 +155,7 @@ func (s *Service) TakeForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, 
 // 그사이에 기한이 지났으면 돌아온 크레딧은 곧바로 사라진 것으로 적힌다. 홀드로 기한을 피할 수 없다.
 // 같은 홀드로 두 번 부르면 둘째는 DB 가 거절한다(ledger_entries_hold_line_once).
 func (s *Service) ReturnForHold(ctx context.Context, tx pgx.Tx, userID uuid.UUID, holdID uuid.UUID) error {
-	return lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
+	return s.lockAndRun(ctx, tx, userID, s.clock(), func(ctx context.Context, c change) error {
 		if err := c.giveBack(ctx, cause{operationID: uuid.New(), reason: ReasonRelease, holdID: &holdID}); err != nil {
 			return err
 		}
@@ -169,24 +170,31 @@ type change struct {
 	userID  uuid.UUID
 	// now 는 이 변경이 일어난 시각이다. 이 트랜잭션이 적는 모든 줄이 같은 시각을 쓴다.
 	now time.Time
+	// tx 는 줄을 적는 트랜잭션이다. 적은 일을 커밋한 뒤에 세려고 들고 있다(metrics.go).
+	tx      pgx.Tx
+	metrics ledgerMetrics
+	// counted 는 이미 센 작업 번호다. 한 번의 변경이 여러 줄을 적어도 한 번만 센다.
+	counted map[uuid.UUID]bool
 }
 
 // withLockedWallet 은 트랜잭션을 열고, 지갑의 줄을 잠그고, 기한이 지난 무료 크레딧을 정리한 뒤 run 을 부른다.
 // run 이 오류를 돌려주면 정리한 것까지 모두 되돌린다. 정리는 다음 변경 때 다시 일어난다.
+// 트랜잭션은 txn.Run 으로 연다. 원장에 적은 일을 커밋한 뒤에 센다.
 func (s *Service) withLockedWallet(ctx context.Context, userID uuid.UUID, run func(context.Context, change) error) error {
 	now := s.clock()
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		return lockAndRun(ctx, tx, userID, now, run)
+	return txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
+		return s.lockAndRun(ctx, tx, userID, now, run)
 	})
 }
 
 // lockAndRun 은 주어진 트랜잭션 안에서 지갑의 줄을 잠그고, 기한이 지난 무료 크레딧을 정리한 뒤 run 을 부른다.
-// 트랜잭션을 열고 닫는 것은 부르는 쪽의 일이다.
-func lockAndRun(ctx context.Context, tx pgx.Tx, userID uuid.UUID, now time.Time, run func(context.Context, change) error) error {
+// 트랜잭션을 열고 닫는 것은 부르는 쪽의 일이다. 부르는 쪽이 txn.Run 으로 열어야 적은 일이 세어진다.
+func (s *Service) lockAndRun(ctx context.Context, tx pgx.Tx, userID uuid.UUID, now time.Time, run func(context.Context, change) error) error {
 	c, err := lockWallet(ctx, walletdb.New(tx), userID, now)
 	if err != nil {
 		return err
 	}
+	c.tx, c.metrics, c.counted = tx, s.metrics, map[uuid.UUID]bool{}
 	if err := c.expireDue(ctx); err != nil {
 		return err
 	}
@@ -436,7 +444,26 @@ func grantRef(id int64) pgtype.Int8 { return pgtype.Int8{Int64: id, Valid: true}
 func lotRef(id int64) pgtype.Int8   { return pgtype.Int8{Int64: id, Valid: true} }
 
 // record 는 원장에 한 줄을 덧붙인다. 무료 크레딧의 줄은 grant 에, 산 크레딧의 줄은 lot 에 묶음을 적는다.
+// 그 작업 번호의 첫 줄이면 일 하나로 센다(커밋한 뒤에).
 func (c change) record(ctx context.Context, why cause, kind Kind, amount credit.Amount, grant pgtype.Int8, lot pgtype.Int8) error {
+	if err := c.insert(ctx, why, kind, amount, grant, lot); err != nil {
+		return err
+	}
+	c.countOnce(why)
+	return nil
+}
+
+// countOnce 는 그 작업 번호를 아직 세지 않았으면 센다.
+func (c change) countOnce(why cause) {
+	if c.counted[why.operationID] {
+		return
+	}
+	c.counted[why.operationID] = true
+	c.metrics.afterCommit(c.tx, why.reason)
+}
+
+// insert 는 원장에 줄 하나를 적는다.
+func (c change) insert(ctx context.Context, why cause, kind Kind, amount credit.Amount, grant pgtype.Int8, lot pgtype.Int8) error {
 	return c.queries.InsertEntry(ctx, walletdb.InsertEntryParams{
 		UserID:      c.userID,
 		OperationID: why.operationID,
