@@ -12,6 +12,7 @@
 - [실행](#실행)
 - [API](#api)
 - [로그와 요청 식별자](#로그와-요청-식별자)
+- [추적](#추적)
 - [CI](#ci)
 - [설계 메모](#설계-메모)
 - [운영 메모](#운영-메모)
@@ -420,8 +421,9 @@ access 토큰에는 역할(`roles`, 글자의 목록)도 실린다(#389). 운영
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적)) |
 
-세 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+네 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
 
 개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
 
@@ -442,6 +444,25 @@ uv run python manage.py runserver 2>&1 | jq -rR 'fromjson? | [.timestamp, .level
 
 코드는 `observability/` 에 있다. `identifiers.py`(식별자의 규칙), `context.py`(요청과 작업 동안 식별자를 들고 있는 곳),
 `redaction.py`(가리는 규칙), `formatter.py`(JSON 한 줄), `setup.py`(Django 의 `LOGGING`), `middleware.py`(요청), `jobs.py`(작업).
+
+## 추적
+
+요청, 결제 서버를 부르는 것, 쿼리, 워커와 예약 명령을 span 으로 남겨 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 민다. 수집기가 Tempo 에 넘긴다.
+규칙과 까닭은 [관측 규격](../docs/observability.md)의 "3. 추적"에 있다. 알림 서버의 것을 옮겼고, 이 서버에서 다른 것은 "붙인 것 (인증 서버의 추적)"에 있다.
+주소가 비어 있으면 span 이 생기지 않고 로그는 지금과 같다. 테스트(`manage.py test`)는 주소가 있어도 내보내지 않는다.
+
+| span | 이름 | 코드 |
+| --- | --- | --- |
+| 요청 | `POST /api/v1/auth/login`(메서드와 경로의 틀). 상태 확인은 걸지 않는다 | `observability/request_spans.py` |
+| 결제 서버를 부르는 것 | `HTTP POST` | `observability/http_spans.py`, `accounts/billing_client.py` |
+| 쿼리 | `db SELECT accounts_user`(종류와 첫 테이블) | `observability/db_spans.py` |
+| 워커와 예약 명령 | `operation`(`mail.deliver_outgoing`, `account.delete_unverified`). 한 바퀴가 새 추적 하나다 | `observability/jobs.py` 의 `run_as_job` |
+
+- 로그의 `trace_id` 가 span 의 trace id 와 같다. 요청의 span 에는 `request_id`, 작업의 span 에는 `job_id` 를 싣는다
+- 싣지 않는 것: 주소의 경로와 뒤의 값, 머리말, 본문(비밀번호와 인증 코드), SQL 의 문장과 값(이메일, 비밀번호의 해시), 예외의 글. 쿼리가 실패하면 SQLSTATE 만 적는다
+- 요청이나 작업 밖의 쿼리(서버가 뜰 때의 확인)는 span 을 걸지 않는다
+- 워커가 할 일 없이 돈 바퀴(처리한 수 `handled` 가 0 이고 실패하지 않은 것)는 그 추적을 통째로 보내지 않는다(`observability/idle_rounds.py`)
+- 받은 `traceparent` 가 "기록하지 않음"(flags `00`)이어도 남긴다
 
 
 ## CI

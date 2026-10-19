@@ -9,6 +9,8 @@
 from django.http import HttpResponse, JsonResponse
 from django.urls import path
 
+from accounts.models import User
+
 # 예외의 글에 든, 응답과 로그에 실리면 안 되는 값
 SECRET_IN_ERROR = 'postgres://auth:super-secret@db.internal:5432/trpg'
 
@@ -23,7 +25,13 @@ def broken(request, thing_id: str) -> HttpResponse:
     raise RuntimeError(f'connect failed: {SECRET_IN_ERROR}')
 
 
+def users(request) -> HttpResponse:
+    """DB 를 읽는 뷰. 요청의 span 아래에 쿼리의 span 이 놓이는지 본다(test_tracing_requests.py)."""
+    return JsonResponse({'count': User.objects.count()})
+
+
 urlpatterns = [
     path('things/<str:thing_id>', ok, name='thing'),
     path('broken/<str:thing_id>', broken, name='broken'),
+    path('users', users, name='users'),
 ]

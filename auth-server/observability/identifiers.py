@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 # 요청 식별자를 주고받는 머리말. 응답에도 같은 이름으로 돌려준다
 REQUEST_ID_HEADER = 'X-Request-ID'
-# 추적 정보를 주고받는 머리말. W3C Trace Context 의 이름 그대로다. 나중에 OpenTelemetry 가 같은 머리말을 읽는다
+# 추적 정보를 주고받는 머리말. W3C Trace Context 의 이름 그대로다. OpenTelemetry 가 쓰는 것과 같다
 TRACEPARENT_HEADER = 'traceparent'
 
 # 밖에서 받는 요청 식별자의 모양. 영문, 숫자, 점, 밑줄, 붙임표로 8자에서 64자. UUID 가 여기에 든다
@@ -30,7 +30,7 @@ REQUEST_ID = re.compile(r'[A-Za-z0-9._-]{8,64}')
 TRACEPARENT = re.compile(r'00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})')
 # 머리말 값을 이보다 길게 주면 형식을 보지도 않고 버린다
 MAX_HEADER_LENGTH = 128
-# 새로 시작하는 추적의 표시. 아직 추적을 모으는 곳이 없어서 "모으지 않음"이다
+# 새로 시작하는 추적의 표시. span 을 내보내지 않을 때(PC) 새로 시작하는 추적은 "모으지 않음"이다
 NOT_SAMPLED = '00'
 
 
@@ -69,18 +69,32 @@ def is_all_zero(text: str) -> bool:
     return set(text) == {'0'}
 
 
-def parse_traceparent(value: str | None) -> Trace | None:
+def traceparent_parts(value: str | None) -> tuple[str, str, str] | None:
     """
-    traceparent 머리말에서 추적을 읽는다. 없거나 형식에 맞지 않으면 None 이다.
+    traceparent 머리말을 추적 식별자, 부모 식별자, 표시로 나눈다. 없거나 형식에 맞지 않으면 None 이다.
 
-    버전 00 만 읽는다. 추적 식별자와 표시만 쓰고, 부모 식별자는 버린다. 이 서버는 구간(span)을 기록하지 않는다.
+    버전 00 만 읽는다. 길거나, 모양이 틀리거나, 0 으로만 된 식별자면 받지 않는다.
+    parse_traceparent 와 span 의 부모를 정하는 쪽(observability/spans.py)이 같은 규칙을 쓴다.
     """
     if value is None or len(value) > MAX_HEADER_LENGTH:
         return None
     match = TRACEPARENT.fullmatch(value.strip())
     if match is None or is_all_zero(match[1]) or is_all_zero(match[2]):
         return None
-    return Trace(trace_id=match[1], flags=match[3])
+    return match[1], match[2], match[3]
+
+
+def parse_traceparent(value: str | None) -> Trace | None:
+    """
+    traceparent 머리말에서 추적을 읽는다. 없거나 형식에 맞지 않으면 None 이다.
+
+    추적 식별자와 표시만 쓴다. 부모 식별자는 span 을 거는 쪽이 따로 읽는다(observability/spans.py).
+    """
+    parts = traceparent_parts(value)
+    if parts is None:
+        return None
+    trace_id, _, flags = parts
+    return Trace(trace_id=trace_id, flags=flags)
 
 
 def new_trace() -> Trace:
