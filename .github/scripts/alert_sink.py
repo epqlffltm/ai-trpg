@@ -1,7 +1,7 @@
 # .github/scripts/alert_sink.py
 
 """
-경보를 받는 곳(Discord, Slack, Telegram)의 흉내. stack-smoke.sh 의 check 가 observability 망에 띄운다.
+경보를 받는 곳(Discord, Slack, Telegram, 바깥 감시)의 흉내. stack-smoke.sh 의 check 가 observability 망에 띄운다.
 
 Alertmanager 가 보낸 요청을 받아 그 경로를 적어 두고, 받는 곳이 답하는 모양으로 답한다.
 GET /received 는 지금까지 받은 경로를 JSON 목록으로 낸다. 본문(경보의 내용)은 적지 않는다.

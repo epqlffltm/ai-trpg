@@ -724,6 +724,8 @@ services:
       ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
       ALERT_SMTP_SMARTHOST: ${ALERT_SMTP_SMARTHOST:-}
       ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      # 바깥 감시의 주소. 늘 울리는 Watchdog 을 1~2분마다 그리로만 보낸다
+      ALERT_HEARTBEAT_WEBHOOK_URL: ${ALERT_HEARTBEAT_WEBHOOK_URL:-}
     volumes:
       - ./docker/alertmanager/entrypoint.sh:/etc/alertmanager/entrypoint.sh:ro
       - alertmanagerdata:/alertmanager

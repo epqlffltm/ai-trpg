@@ -8,10 +8,33 @@
 # label severity:
 #   critical  지금 사용자가 못 쓰거나 데이터를 잃을 수 있다. 바로 본다
 #   warning   곧 문제가 되거나 사람이 확인할 일이 있다. 그날 안에 본다
+#   none      사람에게 보내지 않는다. Watchdog 하나다(바깥 감시에만 간다)
 # annotation summary 는 한 줄, description 은 무엇을 볼지다. 둘 다 받는 곳(Discord 등)에 그대로 실린다.
 # 서버의 경보는 service, 인프라의 경보는 job 으로 거른다(대시보드와 같은 규칙. docs/observability.md 의 "대시보드").
 
 groups:
+  # 경보를 내는 쪽 자신. Watchdog 은 늘 울린다. Alertmanager 가 바깥 감시(ALERT_HEARTBEAT_WEBHOOK_URL)에만 1분마다 보낸다.
+  # 신호가 끊기면 바깥 감시가 알린다(Prometheus, Alertmanager, PC 나 VM, 인터넷 가운데 하나가 멈췄다). 운영자의 받는 곳에는 가지 않는다
+  - name: watchdog
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: 경보를 내는 길이 살아 있다(늘 울린다)
+          description: 바깥 감시에만 간다. 이 경보가 Grafana 에 없으면 Prometheus 가 규칙을 돌리지 못한다
+
+      - alert: AlertDeliveryFailing
+        # 받는 곳 가운데 하나로 보내지 못했다(웹후크를 지웠다, 메일의 비밀번호가 틀렸다). 나머지 받는 곳으로 이 경보가 간다.
+        # webhook 은 바깥 감시다. 끊기면 바깥 감시가 따로 알린다
+        expr: sum by (integration) (increase(alertmanager_notifications_failed_total{job="alertmanager", integration!="webhook"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: '경보를 {{ $labels.integration }} 로 보내지 못하고 있다'
+          description: docker compose --profile observability logs alertmanager 에서 그 받는 곳의 오류를 본다. 루트 .env 의 ALERT_* 를 고친 뒤 alertmanager 를 다시 만든다
+
   # 메트릭을 모으는 길 자체. 이것이 멈추면 다른 경보도 울리지 못한다
   - name: collectors
     rules:
