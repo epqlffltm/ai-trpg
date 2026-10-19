@@ -11,7 +11,8 @@
   - 차례가 왔을 때 앞사람이 그 물건을 먼저 가져갔으면 못 가져간다(reason gone).
   - 차례가 왔을 때 대상이 깨어 있으면(앞사람이 NPC 를 회복시켰다) 못 가져간다(reason awake). 그때는 훔치기다.
   - 한 사람이 한 라운드에 한 줄이다. 선언 하나에 행동 하나라서 따로 막지 않는다.
-  - NPC 의 태도는 바꾸지 않는다. 의식이 없어서다. 깨어날 때의 반응은 따로 다룬다.
+  - NPC 의 태도는 바꾸지 않는다. 의식이 없어서다. 쓰러져 있는(죽지 않은) 인물에게서 가져갔으면 그것을 적어 두고,
+    깨어날 때 반응을 굴린다(app/rounds/wakes.py, #494).
 
 DB 를 모른다. 대상이 지닌 것과 소지품을 고친다. 저장하지 않는다.
 """
@@ -23,7 +24,7 @@ from app.rounds.cast import find_cast_member
 from app.rounds.effects import Judging
 from app.rounds.monster_scene import Gone, find_scene_monster, stands_with
 from app.rounds.victims import Victim, monster_victim, npc_victim
-from app.tables import carried, items
+from app.tables import carried, items, npcs
 from app.tables.models import NpcStatus, TableMember
 
 # 빼앗아 얻은 물건의 출처. items_gained 이벤트의 source 에 적는다
@@ -109,7 +110,10 @@ def judge_npc_loot(judging: Judging, thief: TableMember, action: LootAction) -> 
     if person is None:
         return {'target_gone': {'npc_id': str(action.npc), 'name': None, 'reason': Gone.ELSEWHERE}}
     awake = person.npc.status == NpcStatus.ALIVE
-    return loot_from(judging, thief, npc_victim(person), awake, action.item)
+    result = loot_from(judging, thief, npc_victim(person), awake, action.item)
+    if result['loot']['looted']:
+        npcs.mark_robbed(person.npc, judging.round_number)
+    return result
 
 
 def judge_loot(judging: Judging, thief: TableMember, action: LootAction) -> dict:

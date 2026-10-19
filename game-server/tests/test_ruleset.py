@@ -64,6 +64,7 @@ def load_backfill_rules() -> dict:
     minutes = load_migration('injury_minutes')
     rest = load_migration('rulebook_rest')
     steal = load_migration('steal')
+    robbed_wake = load_migration('robbed_wake')
     treated = [
         {**injury, **treatment.TREATABLE.get(injury['key'], treatment.UNTREATABLE)} for injury in injuries['injuries']
     ]
@@ -80,9 +81,10 @@ def load_backfill_rules() -> dict:
         # SRD5 의 능력치에 민첩이 있으니 채운 값은 그것이다
         'initiative_ability': initiative,
     }
-    # 오래 가는 부상과 치료의 기간을 분으로 옮긴 것(판 형식 25), 쉬기(판 형식 28)와 훔치기(판 형식 36)를 더한 것
+    # 오래 가는 부상과 치료의 기간을 분으로 옮긴 것(판 형식 25), 쉬기(판 형식 28)와 훔치기(판 형식 36),
+    # 빼앗긴 인물이 깨어날 때의 반응(판 형식 40)을 더한 것
     converted = minutes.convert(filled, minutes.injury_to_minutes, minutes.row_to_minutes)
-    return steal.with_steal(rest.with_rest(converted))
+    return robbed_wake.with_robbed_wake(steal.with_steal(rest.with_rest(converted)))
 
 
 # --- 내장 템플릿 ---

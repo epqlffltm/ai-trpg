@@ -661,6 +661,20 @@ def upgrade_from_38(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_39(document: dict) -> dict:
+    """
+    형식 39 의 문서를 형식 40 으로 올린다. 그때는 빼앗긴 NPC 가 깨어날 때의 반응이 규칙에 없었다.
+
+    룰북은 템플릿에서만 만들므로 SRD5 템플릿의 것으로 읽는다. DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    """
+    robbed_wake = SRD5.model_dump(mode='json')['robbed_wake']
+    rulebook = document['rulebook']
+    upgraded = dict(document)
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'robbed_wake': robbed_wake}}
+    upgraded['format'] = 40
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -702,4 +716,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     36: upgrade_from_36,
     37: upgrade_from_37,
     38: upgrade_from_38,
+    39: upgrade_from_39,
 }

@@ -156,6 +156,8 @@ class NpcAttitude(enum.StrEnum):
 
     FRIENDLY = 'friendly'
     NEUTRAL = 'neutral'
+    # 경계한다. 적대하지는 않지만 의심한다(#494). 경계하는 인물에게서는 훔치기의 방심 보정이 없다
+    WARY = 'wary'
     HOSTILE = 'hostile'
 
 
