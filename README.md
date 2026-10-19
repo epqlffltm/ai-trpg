@@ -229,7 +229,7 @@ sum by (service) (rate(http_server_requests_total[5m])) # 서버마다 초당 �
 ## 외부에 열기 전
 
 로컬에서는 모두 이 PC(127.0.0.1)에서만 닿는다. VM 에 올려 바깥에 열 때 지킬 것이다(#274, #353).
-VM 의 설정은 로컬의 `docker-compose.yml` 위에 덮어쓰는 `docker-compose.staging.yml` 이다(#451). 어느 서버에 어떤 값으로 올리는지는 [배포 설계](docs/architecture/deployment.md)에 있다.
+VM 의 설정은 로컬의 `docker-compose.yml` 위에 덮어쓰는 `docker-compose.staging.yml` 이다(#451). 어느 서버에 어떤 값으로 올리는지는 [배포 설계](docs/architecture/deployment.md)에, VM 을 처음 준비하는 명령은 [staging VM 준비](docs/operations/staging-vm.md)에 있다.
 
 **바깥에서 닿는 길은 프록시 하나다.** 로컬의 compose 가 여는 포트는 모두 `127.0.0.1` 에 묶었다. staging 에서 모든 주소에 여는 것은 프록시의 80, 443 둘뿐이다.
 
@@ -410,6 +410,7 @@ docker/loki/              로그 저장소(Loki)의 설정
 docker/prometheus/        메트릭 저장소(Prometheus)의 설정
 docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki, Prometheus)
 docs/                     서버들이 함께 지키는 규격 (관측)
+tools/                    패치 zip 을 적용하는 도구(apply_ai_update.py), staging 의 .env 여섯을 만드는 도구(staging_env.py)
 docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 모든 서버와 워커, cron, 프록시(프로필 app), 로그와 메트릭 모으기(프로필 observability)
 docker-compose.staging.yml  staging(VM)에서 위의 파일에 덮어쓰는 설정. TLS, 허용 주소, certbot, 임베딩의 Ollama, 환경 이름
 .env.example              인프라 환경 변수 목록
