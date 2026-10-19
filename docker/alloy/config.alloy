@@ -1,5 +1,6 @@
 // docker/alloy/config.alloy
-// 수집기(Grafana Alloy)의 설정(#25). docker-compose.yml 의 alloy(프로필 observability)가 읽는다.
+// 수집기(Grafana Alloy)의 로그 설정과 Alloy 자신의 설정(#25). docker-compose.yml 의 alloy(프로필 observability)가 읽는다.
+// Alloy 는 이 폴더의 *.alloy 를 함께 읽는다. 메트릭은 metrics.alloy 에 있다.
 //
 // 이 compose 의 컨테이너를 Docker 에서 찾아 그 로그(json-file)를 읽고, 서버의 JSON 줄을 풀어 Loki 로 보낸다.
 //   찾기(discovery.docker) ─▶ 이름 붙이기(discovery.relabel) ─▶ 읽기(loki.source.docker) ─▶ 풀기(loki.process) ─▶ 보내기(loki.write)

@@ -5,7 +5,7 @@
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
 #     prepare      설정 파일(.env 여섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
-#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
+#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, Prometheus, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
 #                  Loki 가 준비될 때까지 기다린다.
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
@@ -17,7 +17,9 @@
 #                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다.
 #                  로그 모으기(observability 프로필, #25)도 본다: 서버의 줄이 Loki 에 label 과 줄의 값으로 들어오는가,
 #                  JSON 이 아닌 줄도 들어오는가, 식별자가 label 이 아닌가, Grafana 가 Loki 에 닿는가,
-#                  소켓 프록시가 쓰기를 막는가, 서버들이 소켓 프록시와 Loki 에 닿지 않는가
+#                  소켓 프록시가 쓰기를 막는가, 서버들이 소켓 프록시와 Loki 에 닿지 않는가.
+#                  메트릭도 본다: OTLP 로 민 시험 지표가 Prometheus 에 정한 이름과 label 로 들어오는가,
+#                  수집 쪽 자신의 메트릭이 들어오는가, Prometheus 가 아무것도 긁지 않는가, Grafana 가 Prometheus 에 닿는가
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한,
 #                  모든 응답(서버의 응답, 404, 429)의 보안 머리말.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
@@ -59,7 +61,7 @@ PROBE_IMAGE=redis:7-alpine
 # 컨테이너의 사용자. Dockerfile 에서 정한 번호다. 노드 이미지는 제 사용자(node, 1000)를 쓴다
 APP_UID=10001
 
-# 서버들(app)과 로그 모으기(observability)를 함께 띄운다
+# 서버들(app)과 로그와 메트릭 모으기(observability)를 함께 띄운다
 compose() {
   docker compose --profile app --profile observability "$@"
 }
@@ -165,12 +167,12 @@ running() {
   [[ "$(docker inspect -f '{{.State.Running}}' "$(container_of "$1")")" == "true" ]]
 }
 
-# 서버들과 프록시, Grafana, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
+# 서버들과 프록시, Prometheus, Grafana, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
 wait_healthy() {
   local deadline=$((SECONDS + WAIT_SECONDS)) service pending
   while ((SECONDS < deadline)); do
     pending=0
-    for service in "${SERVERS[@]/%/-server}" proxy grafana "${HEARTBEAT_WORKERS[@]}"; do
+    for service in "${SERVERS[@]/%/-server}" proxy prometheus grafana "${HEARTBEAT_WORKERS[@]}"; do
       if ! running "$service"; then
         echo "$service 가 죽었다" >&2
         return 1
@@ -178,7 +180,7 @@ wait_healthy() {
       [[ "$(health_of "$service")" == "healthy" ]] || pending=$((pending + 1))
     done
     if ((pending == 0)); then
-      echo "서버들과 프록시, Grafana, 상태 확인이 있는 워커가 healthy 다"
+      echo "서버들과 프록시, Prometheus, Grafana, 상태 확인이 있는 워커가 healthy 다"
       return 0
     fi
     sleep 3
@@ -456,9 +458,9 @@ grafana_password() {
   sed -n 's/^GRAFANA_ADMIN_PASSWORD=//p' .env
 }
 
-# Grafana 가 데이터 소스(uid loki)로 Loki 에 닿는가
-grafana_reaches_loki() {
-  status_is 200 "$GRAFANA/api/datasources/uid/loki/health" -u "admin:$(grafana_password)"
+# Grafana 가 그 데이터 소스(uid loki, prometheus)로 저장소에 닿는가
+grafana_reaches() {
+  status_is 200 "$GRAFANA/api/datasources/uid/$1/health" -u "admin:$(grafana_password)"
 }
 
 # 소켓 프록시가 이 주소를 넘기는가(200)
@@ -486,7 +488,7 @@ check_logs() {
   report "alloy 가 root 가 아니다" not_root alloy
   report "grafana 가 root 가 아니다" not_root grafana
   report "Alloy 와 Loki, 소켓 프록시가 다시 뜨지 않고 돈다" stays_up_all alloy loki docker-socket-proxy
-  report "Grafana 가 Loki 에 닿는다(데이터 소스 loki)" grafana_reaches_loki
+  report "Grafana 가 Loki 에 닿는다(데이터 소스 loki)" grafana_reaches loki
   report "추적 식별자를 실어 인증 서버를 부른다" call_auth_with_trace "$trace"
   report "서버의 줄을 service, container, level 의 label 로 찾는다" \
     eventually loki_finds '{service="auth-server", container="auth-server", level="info"}'
@@ -501,6 +503,48 @@ check_logs() {
   report "게임 서버가 소켓 프록시에 닿지 않는다" unreachable_from game-server http://docker-socket-proxy:2375/version
   report "게임 서버가 Loki 에 닿지 않는다" unreachable_from game-server http://loki:3100/ready
   report "결제 서버가 Loki 에 닿지 않는다" unreachable_from billing-server http://loki:3100/ready
+}
+
+# --- 메트릭(observability 프로필) ---
+
+# PromQL 의 지금 값에 맞는 시계열이 하나라도 있는가
+prometheus_finds() {
+  fetch_on observability "http://prometheus:9090/api/v1/query?query=$(urlencode "$1")" |
+    python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["data"]["result"] else 1)'
+}
+
+# Prometheus 가 긁는 대상이 하나도 없는가. 받기만 해야 저장소를 Mimir 로 바꿀 때 Alloy 의 주소만 바뀐다
+prometheus_scrapes_nothing() {
+  fetch_on observability http://prometheus:9090/api/v1/targets |
+    python3 -c 'import json, sys; sys.exit(0 if not json.load(sys.stdin)["data"]["activeTargets"] else 1)'
+}
+
+# 서버가 미는 것과 같은 길로 시험 지표 하나를 민다. telemetry 망에서 Alloy 의 OTLP(HTTP, JSON)로 보낸다.
+# 쌓이는 수(counter) stack_smoke_probe 하나다. 단위가 없어 Prometheus 에서는 stack_smoke_probe_total 이 된다
+push_probe_metric() {
+  local instance="$1" now body
+  now="$(date +%s%N)"
+  body="$(printf '{"resourceMetrics":[{"resource":{"attributes":[%s,%s]},"scopeMetrics":[{"scope":{"name":"stack-smoke"},"metrics":[{"name":"stack_smoke_probe","sum":{"aggregationTemporality":2,"isMonotonic":true,"dataPoints":[{"asInt":"1","startTimeUnixNano":"%s","timeUnixNano":"%s"}]}}]}]}]}' \
+    '{"key":"service.name","value":{"stringValue":"stack-smoke"}}' \
+    "{\"key\":\"service.instance.id\",\"value\":{\"stringValue\":\"$instance\"}}" "$now" "$now")"
+  fetch_on telemetry http://alloy:4318/v1/metrics --post-data "$body" --header 'Content-Type: application/json' >/dev/null
+}
+
+# 메트릭을 본다
+check_metrics() {
+  local instance job
+  instance="$(openssl rand -hex 8)"
+  report "prometheus 가 root 가 아니다" not_root prometheus
+  report "Prometheus 가 다시 뜨지 않고 돈다" stays_up prometheus
+  report "Grafana 가 Prometheus 에 닿는다(데이터 소스 prometheus)" grafana_reaches prometheus
+  report "Prometheus 는 아무것도 긁지 않는다(받기만 한다)" prometheus_scrapes_nothing
+  report "시험 지표를 OTLP 로 Alloy 에 민다(telemetry 망)" push_probe_metric "$instance"
+  report "민 지표가 정한 이름(_total)과 label service, instance 로 Prometheus 에 들어온다" \
+    eventually prometheus_finds "stack_smoke_probe_total{service=\"stack-smoke\", instance=\"$instance\"} == 1"
+  for job in alloy loki prometheus grafana; do
+    report "Alloy 가 $job 의 메트릭을 긁어 보낸다" eventually prometheus_finds "up{job=\"$job\"} == 1"
+  done
+  report "게임 서버가 Prometheus 에 닿지 않는다" unreachable_from game-server http://prometheus:9090/-/ready
 }
 
 # 모두 돌고 있고, 한 번도 다시 뜨지 않았는가
@@ -579,6 +623,7 @@ check() {
   report "백업 파일을 주인만 읽는다" backup_private
   check_workers
   check_logs
+  check_metrics
   finish
 }
 

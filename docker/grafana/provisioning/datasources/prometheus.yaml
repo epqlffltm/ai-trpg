@@ -1,0 +1,19 @@
+# docker/grafana/provisioning/datasources/prometheus.yaml
+# Grafana 가 뜰 때 Prometheus 를 데이터 소스로 붙인다(#25). docker-compose.yml 의 grafana(프로필 observability)가 읽는다.
+#
+# 화면에서 고치지 못하게 한다(editable: false). 바꿀 때는 이 파일을 고치고 Grafana 를 다시 띄운다.
+# uid 를 prometheus 로 고정한다. 대시보드와 경보, stack-smoke.sh 가 이 이름으로 찾는다.
+# 저장소를 Mimir 로 바꿀 때 uid 는 그대로 두고 url 만 Mimir 의 것(http://mimir:9009/prometheus)으로 바꾼다
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    # compose 의 망(observability)에서의 주소다. 바깥에는 열지 않는다
+    url: http://prometheus:9090
+    editable: false
+    jsonData:
+      # Alloy 가 15초마다 긁고 서버도 15초마다 민다. rate() 의 창을 고를 때 이 간격을 쓴다
+      timeInterval: 15s
