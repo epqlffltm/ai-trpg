@@ -1,7 +1,7 @@
 # game-server/tests/test_call_log.py
 
 """
-AI 호출의 기록을 DB 에 쓰는 기록장(app/ai/call_log.py)과 그 표(ai_invocations)를 검증한다.
+AI 호출의 기록을 DB 에 쓰는 기록장(app/ai_log/call_log.py)과 그 표(ai_invocations)를 검증한다.
 
 보는 것은 셋이다.
   - 기록의 칸이 빠짐없이 한 줄로 들어간다.
@@ -20,10 +20,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.call_log import DbCallLog, to_row
 from app.ai.calls import CallRecord, CallScope, Outcome, input_digest
-from app.ai.models import AiInvocation
 from app.ai.provider import ChatMessage, Reasoning, Role
+from app.ai_log.call_log import DbCallLog, to_row
+from app.ai_log.models import AiInvocation
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

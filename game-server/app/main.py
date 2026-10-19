@@ -14,7 +14,7 @@ import httpx
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.ai import retention
+from app.ai_log import retention
 from app.api import health, me, readiness
 from app.assets.bestiaries import router as bestiaries
 from app.assets.bestiaries.service import BestiaryFullError
@@ -208,7 +208,8 @@ def create_app(
     # 위의 httpx 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다
     app.state.model_router = build_router(settings, app.state.http_client, app.state.session_factory)
     # GM 의 서술을 만드는 것. 설정(NARRATOR)이 정한다. 기본은 AI 를 부르지 않는 가짜다.
-    # 언어 모델이면 위의 것으로 창구를 골라 부른다. 부를 때마다 위의 세션 틀로 DB 에 기록을 남긴다(app/ai/call_log.py)
+    # 언어 모델이면 위의 것으로 창구를 골라 부른다. 부를 때마다 위의 세션 틀로 DB 에 기록을 남긴다
+    # (app/ai_log/call_log.py)
     app.state.narrator = build_narrator(settings, app.state.model_router, app.state.session_factory)
 
     # 로어북 항목을 벡터로 바꾸는 것. 설정(EMBEDDER)이 정한다. 기본은 모델을 부르지 않는 가짜다.
@@ -265,7 +266,8 @@ def create_app(
         notifications=lambda: app.state.notifications,
     )
 
-    # AI 호출의 기록에 남은 원문을 보관 기간(AI_LOG_TEXT_RETENTION_DAYS)이 지나면 비우는 정리 작업(app/ai/retention.py).
+    # AI 호출의 기록에 남은 원문을 보관 기간(AI_LOG_TEXT_RETENTION_DAYS)이 지나면 비우는 정리 작업
+    # (app/ai_log/retention.py).
     # 한 시간마다 돈다. lifespan 이 돌리고 멈춘다
     app.state.ai_log_pruner = retention.AiLogPruner(
         session_factory=app.state.session_factory,

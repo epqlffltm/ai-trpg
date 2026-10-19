@@ -1,4 +1,4 @@
-# game-server/app/ai/retention.py
+# game-server/app/ai_log/retention.py
 
 """
 AI 호출의 기록에 남은 원문(모델이 쓴 글)을 보관 기간이 지나면 비우는 정리 작업(#274).
@@ -29,7 +29,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai import repository
+from app.ai_log import repository
 from app.core import loops
 from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
 from app.core.loops import Running

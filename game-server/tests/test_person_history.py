@@ -15,8 +15,8 @@ import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
 
-from app.ai.call_log import DbCallLog
 from app.ai.fake import FakeProvider
+from app.ai_log.call_log import DbCallLog
 from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.lore.retrieval import load_candidates
