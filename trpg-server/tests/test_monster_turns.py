@@ -570,9 +570,12 @@ def test_a_monster_with_nobody_standing_by_skips():
     rat = mob('쥐', 10)
     away = pc('엘프', 10, place=uuid.uuid4())
     away.sheet.died_at, away.sheet.hp = None, 10
+    # 같은 장소의 드워프 기사는 이번 라운드에 쓰러졌다. 다음 라운드부터 대상이다(#369)
     downed = pc('드워프 기사', 10, place=rat.state.place_id)
     downed.sheet.died_at, downed.sheet.hp = None, 0
-    judging = SimpleNamespace(table=SimpleNamespace(members=[away, downed]), dice=ScriptedDice([]))
+    judging = SimpleNamespace(
+        table=SimpleNamespace(members=[away, downed]), dice=ScriptedDice([]), ruleset=SRD5, downed_at_start=frozenset()
+    )
 
     assert take_monster_turn(judging, rat) == {'skipped': Skipped.NO_TARGET}
 

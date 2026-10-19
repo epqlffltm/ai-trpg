@@ -508,6 +508,7 @@ def record_attack_turn(
     몬스터 한 마리나 싸우는 인물 하나의 차례를 이벤트로 적는다.
 
     공격했으면 monster_attacked(인물이면 npc_attacked), 맞혔으면 그 뒤에 HP 의 변화와 부상이다.
+    쓰러진 캐릭터를 맞혀 죽었으면 그 뒤에 character_died(cause struck_down)다(#369).
     움직이지 못한 차례(skipped)는 적지 않는다. 굴린 것도 바뀐 것도 없다. 까닭은 라운드의 turns 에 있다.
     행한 사람(actor_id)을 적지 않는다. 몬스터와 인물을 움직인 것은 엔진이다.
     """
@@ -522,6 +523,9 @@ def record_attack_turn(
         **{key: value for key, value in outcome.items() if key != 'effect'},
     }
     attacked = recorder.record(session, table, event_type, payload=payload, group=group)
+    struck = outcome.get('downed_strike')
+    if struck is not None and struck['fate'] == death.Fate.DEAD:
+        record_death(session, table, outcome, round_number, cause=attacked, reason=DeathCause.STRUCK_DOWN)
     effect = outcome['effect']
     if effect is not None:
         changed = record_hp_change(session, table, effect, cause=attacked)
@@ -559,17 +563,19 @@ def record_death(
     save: dict,
     round_number: int,
     cause: TableEvent,
+    reason: DeathCause = DeathCause.DEATH_SAVE,
 ) -> None:
     """
-    죽음의 굴림으로 캐릭터가 죽은 것을 이벤트로 적는다. 그 굴림의 이벤트(cause)에 잇는다.
+    죽음의 굴림의 실패가 다 모여 캐릭터가 죽은 것을 이벤트로 적는다. 그렇게 만든 일의 이벤트(cause)에 잇는다.
 
-    행한 사람(actor_id)을 적지 않는다. 규칙이 정한 죽음이다.
+    reason 은 죽은 까닭이다. 라운드 끝의 굴림이면 death_save, 쓰러진 채 맞았으면 struck_down 이다.
+    save 에서는 누구인지(user_id, character_name)만 읽는다. 행한 사람(actor_id)을 적지 않는다. 규칙이 정한 죽음이다.
     """
     payload = {
         'round': round_number,
         'user_id': save['user_id'],
         'character_name': save['character_name'],
-        'cause': DeathCause.DEATH_SAVE,
+        'cause': reason,
     }
     recorder.record(session, table, EventType.CHARACTER_DIED, payload=payload, cause=cause)
 

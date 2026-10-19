@@ -186,7 +186,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'status',
     ),
     # 몬스터의 공격은 무엇으로 누구를 쳤고 맞혔는지만 보인다.
-    # 굴림의 보정과 합은 몬스터의 능력치를 드러내서 싣지 않는다. 맞은 캐릭터의 HP 는 뒤따르는 hp_changed 에 있다
+    # 굴림의 보정과 합은 몬스터의 능력치를 드러내서 싣지 않는다. 맞은 캐릭터의 HP 는 뒤따르는 hp_changed 에 있다.
+    # 쓰러진 캐릭터를 쳤으면 쌓인 죽음의 굴림 실패(downed_strike)가 있다. 죽음의 굴림처럼 공개다(#369)
     EventType.MONSTER_ATTACKED: (
         'round',
         'monster_id',
@@ -195,6 +196,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'user_id',
         'character_name',
         'success',
+        'downed_strike',
     ),
     # NPC 의 공격도 몬스터와 같다. 무엇으로 누구를 쳤고 맞혔는지만 보인다. 굴림과 부상의 영향은 싣지 않는다.
     # 이름은 장면에서 부르는 이름이다
@@ -206,6 +208,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'user_id',
         'character_name',
         'success',
+        'downed_strike',
     ),
     # 부상은 공개다. 누가 무엇을 입었고 언제 풀리는지(짧은 것은 라운드, 오래 가는 것은 게임 안의 시각).
     # 캐릭터면 user_id 와 이름, NPC 면 항목의 id 와 장면의 호칭이다

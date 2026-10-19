@@ -17,6 +17,7 @@ from dataclasses import asdict
 
 from app.engine import action as actions
 from app.engine import health
+from app.engine import injury as injury_rules
 from app.engine.action import CheckAction, Consequence, Recipient
 from app.engine.check import Check
 from app.engine.health import Change, ChangeKind
@@ -83,6 +84,9 @@ def change_sheet(judging: Judging, affected: TableMember | None, kind: ChangeKin
     # 일어났으면 죽음의 굴림에서 센 것은 처음으로 돌아간다. 다시 쓰러지면 처음부터 센다
     if not change.downed:
         sheets.clear_death_saves(sheet)
+    # 이 피해로 쓰러졌으면 어떻게 쓰러졌는지 적는다. 쓰러진 채 맞으면 큰 타격 뒤가 더 위험하다(#369)
+    if change.before > 0 and change.downed:
+        sheet.downed_by_big_hit = injury_rules.is_big_hit(judging.ruleset, change, sheet.max_hp)
     # 캐릭터는 피해로 바로 죽지 않는다(죽음의 굴림으로 죽는다)
     injury_roll = injury_after(judging, change, sheet.max_hp, False, sheet.injuries)
     return member_effect(affected, magnitude_key, change, injury_roll)

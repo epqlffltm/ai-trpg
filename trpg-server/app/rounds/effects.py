@@ -58,6 +58,9 @@ class Judging:
     # 훔치다 들킨 도둑(몬스터의 id 나 NPC 의 항목 id → user_id). 그 마리나 인물은 이번 라운드의 차례에 도둑을 노린다
     # (app/rounds/monster_attacks.py, app/rounds/npc_attacks.py)
     provoked: dict[uuid.UUID, uuid.UUID] = field(default_factory=dict)
+    # 라운드를 닫기 시작할 때 이미 쓰러져 있던(죽지 않은) 앉은 사람들(user_id).
+    # 몬스터와 NPC 는 이들도 칠 수 있다. 이번 라운드에 쓰러진 사람은 들지 않는다(app/rounds/downed_strikes.py)
+    downed_at_start: frozenset[uuid.UUID] = frozenset()
 
 
 def mark_fight(judging: Judging, monster: TableMonster, member: TableMember) -> None:

@@ -633,6 +633,20 @@ class MonsterNote:
 
 
 @dataclass(frozen=True)
+class DownedStrikeNote:
+    """
+    쓰러진 캐릭터를 친 결과(#369). 엔진이 정한 것이다. 피해 대신 죽음의 굴림 실패가 쌓인다.
+
+    added 는 이번에 쌓인 실패(빗나가면 0), failures 는 그 뒤의 실패, limit 는 죽는 수, fate 는 그 뒤의 갈림길이다.
+    """
+
+    added: int
+    failures: int
+    limit: int
+    fate: str
+
+
+@dataclass(frozen=True)
 class MonsterTurnNote:
     """
     몬스터 한 마리의 차례에 한 일. 엔진이 정한 것이다(app/rounds/monster_attacks.py).
@@ -649,6 +663,8 @@ class MonsterTurnNote:
     target: str
     hit: bool
     impact: Impact | None = None
+    # 쓰러진 캐릭터를 쳤으면 그 결과(#369). 서 있는 캐릭터를 쳤으면 None 이다
+    downed: DownedStrikeNote | None = None
 
 
 @dataclass(frozen=True)
