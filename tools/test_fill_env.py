@@ -22,7 +22,7 @@ from fill_env import ENV_FILES, PLACEHOLDERS, main, run
 EXAMPLES = {
     '.env': 'POSTGRES_USER=trpg\nPOSTGRES_PASSWORD=\nAUTH_DB_PASSWORD=\nGAME_DB_PASSWORD=\nBOARD_DB_PASSWORD=\n'
     'BILLING_DB_PASSWORD=\nNOTIFICATION_DB_PASSWORD=\nGRAFANA_ADMIN_PASSWORD=\nMONITOR_DB_PASSWORD=\n'
-    '# BACKUP_AWS_SECRET_ACCESS_KEY=\n',
+    '# BACKUP_AWS_SECRET_ACCESS_KEY=\n# ALERT_SLACK_WEBHOOK_URL=\n# ALERT_TELEGRAM_BOT_TOKEN=\n# ALERT_TELEGRAM_CHAT_ID=\n',
     'auth-server/.env': 'SECRET_KEY=\nDATABASE_URL=postgres://auth:여기에_비밀번호@127.0.0.1:5432/trpg\n'
     '# SMTP_PASSWORD=\n# BILLING_SECRET=\n# PASSWORD_RESET_URL=http://localhost:5173/reset-password\n',
     'game-server/.env': 'DATABASE_URL=postgresql+asyncpg://game:여기에비밀번호@127.0.0.1:5432/trpg\n'
@@ -130,6 +130,10 @@ class FillEnvTests(unittest.TestCase):
         self.assertEqual(self.env('billing-server/.env')['#TOSS_SECRET_KEY'], '')
         self.assertIn('game-server/.env 의 OPENAI_API_KEY', external)
         self.assertIn('.env 의 BACKUP_AWS_SECRET_ACCESS_KEY', external)
+        self.assertIn('.env 의 ALERT_SLACK_WEBHOOK_URL', external)
+        self.assertIn('.env 의 ALERT_TELEGRAM_BOT_TOKEN', external)
+        self.assertNotIn('.env 의 ALERT_TELEGRAM_CHAT_ID', external)
+        self.assertEqual(self.env('.env')['#ALERT_TELEGRAM_BOT_TOKEN'], '')
         # 비밀처럼 보이는 이름이지만 주소다
         self.assertNotIn('auth-server/.env 의 PASSWORD_RESET_URL', external)
 
