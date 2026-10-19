@@ -55,6 +55,9 @@ from tests.test_treatment import make_format_14
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
+# 판에 태도를 적지 않은 인물은 중립이다
+NEUTRAL = {'attitude': 'neutral'}
+
 LOREBOOKS_URL = f'{API_PREFIX}/lorebooks'
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 FRIEND = uuid.UUID('22222222-2222-4333-8444-555555555555')
@@ -309,7 +312,7 @@ async def test_the_named_person_is_listed_by_the_true_name(
 
     assert cast['round'] == 2
     assert cast['people'] == [
-        {'id': world['lady']['id'], 'name': '비올레타', 'status': 'alive', 'injuries': [], 'named': True}
+        {'id': world['lady']['id'], 'name': '비올레타', 'status': 'alive', 'injuries': [], 'named': True, **NEUTRAL}
     ]
 
 

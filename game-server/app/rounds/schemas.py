@@ -10,7 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from app.assets.models import ItemRarity
+from app.assets.models import ItemRarity, NpcAttitude
 from app.calendar.schemas import ClockTimeOut
 from app.engine.action import Action
 from app.engine.death import Fate
@@ -665,6 +665,8 @@ class PersonOut(BaseModel):
     status: NpcStatus
     # 입고 있는 부상들의 이름표. 생긴 순서다. 이름과 사실은 테이블의 rules.injuries 에 있다
     injuries: list[str]
+    # 일행을 대하는 태도(friendly 우호, neutral 중립, hostile 적대). 엔진이 정한다
+    attitude: NpcAttitude
 
 
 class CarriedOut(BaseModel):

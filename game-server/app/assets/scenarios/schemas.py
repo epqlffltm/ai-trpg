@@ -61,6 +61,7 @@ from app.assets.models import (
     ItemKind,
     ItemRarity,
     NarrationStyle,
+    NpcAttitude,
     PlaceItemVisibility,
     QuestConditionKind,
     QuestMatch,
@@ -213,7 +214,9 @@ Pregens = Annotated[list[Pregen], Field(max_length=SCENARIO_MAX_PREGENS), AfterV
 
 class NpcSheet(BaseModel):
     """
-    NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자를 준다.
+    NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자와 처음 태도를 준다.
+
+    attitude 는 일행을 처음 어떻게 대하는가다(우호, 중립(기본), 적대). 테이블에서는 엔진이 바꾼다(#474).
 
     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
@@ -224,6 +227,7 @@ class NpcSheet(BaseModel):
 
     entry_id: uuid.UUID
     sheet: Sheet
+    attitude: NpcAttitude = NpcAttitude.NEUTRAL
 
     @field_serializer('entry_id')
     def entry_id_as_text(self, entry_id: uuid.UUID) -> str:

@@ -152,6 +152,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     ),
     # NPC 의 변화는 주사위의 눈, 양, 바뀐 생사만 보인다. HP 의 숫자(before, after, max_hp)는 GM 만 안다.
     # 몸 상태(condition)도 서술자에게 주는 말이라 내보내지 않는다. 이름은 장면에서 부르는 이름이다
+    # 태도는 공개다. 이름은 장면의 호칭이다(진짜 이름이 드러나기 전이면 진짜 이름이 아니다)
+    EventType.NPC_ATTITUDE_CHANGED: ('round', 'entry_id', 'name', 'previous', 'attitude', 'reason'),
     EventType.NPC_CHANGED: (
         'round',
         'entry_id',
