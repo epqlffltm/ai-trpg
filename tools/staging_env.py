@@ -10,9 +10,11 @@ staging(VM)의 .env 여섯(루트와 서버 다섯)을 새로 만든다. VM 을 
 
 하는 일(차례대로):
   1. tools/fill_env.py 로 .env 여섯을 .env.example 에서 만들고 비밀을 난수로 채운다.
-     어느 비밀끼리 짝인지, DB 비밀번호가 어디에 들어가는지는 그 도구의 표(SECRETS)가 정한다. 여기에 다시 적지 않는다
-  2. 그 표의 비밀 가운데 .env.example 이 주석으로 막아 둔 줄(# BILLING_SECRET=<채운 값>)을 푼다.
-     staging 에서는 서버끼리의 요청(결제, 알림)을 모두 켜므로 짝의 양쪽이 다 켜져 있어야 한다
+     어느 비밀끼리 짝인지, DB 비밀번호가 어디에 들어가는지는 그 도구의 표(SECRETS)가 정한다. 여기에 다시 적지 않는다.
+     서버끼리의 짝 비밀(# BILLING_SECRET= 등)은 그 도구가 주석을 풀어 둔다
+  2. 그 표의 비밀 가운데 아직 주석으로 막힌 줄을 값 그대로 푼다. 남는 것은 한 파일만 아는 비밀이다
+     (game-server 의 SIGNAL_SECRET, AI_LOG_HMAC_KEY). fill_env.py 는 켜면 동작이 바뀌어 막아 두지만 staging 에서는 켠다:
+     SIGNAL_SECRET 은 서버를 다시 띄워도 같은 값이 되고, AI_LOG_HMAC_KEY 는 호출 기록에 입력의 지문을 남긴다
   3. staging 에서만 쓰는 값을 적는다(STAGING_VALUES 와 명령줄의 값). 주석으로 막힌 줄이면 풀어서 적는다
 
 여섯 가운데 하나라도 이미 있으면 아무것도 만들지 않고 멈춘다. 두 번 돌려 staging 의 값을 덮는 일을 막는다.
@@ -101,7 +103,10 @@ class Options:
 
 
 def secret_lines() -> dict[str, set[str]]:
-    """fill_env.py 가 채우는 비밀의 이름들. 파일마다다. DB 주소 안의 비밀번호는 줄이 아니라 뺀다."""
+    """
+    fill_env.py 가 채우는 비밀의 이름들. 파일마다다. staging 에서는 모두 켠다.
+    DB 주소 안의 비밀번호는 줄이 아니라 뺀다.
+    """
     names: dict[str, set[str]] = {}
     for secret in SECRETS:
         for spot in secret.spots:
