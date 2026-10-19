@@ -2,7 +2,7 @@
 
 [배포 설계](../architecture/deployment.md)의 "VM 준비 순서"를 실제 명령으로 적는다. 처음 한 번 하는 일이다. 무엇을 왜 그렇게 정했는지는 배포 설계에 있고, 여기에는 순서와 명령만 둔다.
 
-- 기준: `main` `87e4787` (2026-10-19). 명령은 VM 을 실제로 만들 때 한 번 따라 해 보고 고친다.
+- 기준: `main` `36f679c` (2026-10-19). 명령은 VM 을 실제로 만들 때 한 번 따라 해 보고 고친다.
 - 명령마다 어디서 치는지 붙인다: **[웹]** AWS·도메인·Tailscale 의 콘솔, **[집 PC]** Windows 의 PowerShell, **[VM]** VM 에 SSH 로 붙은 bash.
 - `<...>` 는 사람마다 다른 값이다. 처음 정할 때 비밀번호 관리자에 함께 적어 둔다: 도메인, VM 의 고정 IP, 집 PC 의 Tailscale 주소, S3 버킷의 이름.
 - 순서를 바꾸지 않는다. 특히 인증서는 프록시를 띄우기 전에 받는다(인증서 파일이 없으면 프록시가 뜨지 않는다).
@@ -165,7 +165,12 @@ sudo chown 10001 auth-server/keys/jwt-private.pem
 
 ## 6. .env
 
-**[VM]** 여섯(루트와 서버 다섯)을 `tools/staging_env.py` 로 만든다. 비밀은 모두 새로 만들고, 서버끼리 같아야 하는 비밀은 짝을 맞추고, 주인만 읽게 만든다. 이미 있으면 덮어쓰지 않고 멈춘다.
+**[VM]** 여섯(루트와 서버 다섯)을 `tools/staging_env.py` 로 만든다. 이 도구는 두 단계다.
+
+1. 로컬과 같은 `tools/fill_env.py` 를 불러 `.env.example` 에서 여섯을 만들고 비밀을 모두 난수로 채운다. 서버끼리 같아야 하는 비밀의 짝과 DB 비밀번호도 그 도구가 맞춘다(짝의 표는 그 도구의 `SECRETS` 하나다).
+2. staging 의 값(도메인, `COMPOSE_FILE`, 서술 모델, `PAYMENT_PROVIDER=fake` 등)을 적고, 예시에서 주석으로 막혀 있던 서버끼리의 비밀 줄(`# BILLING_SECRET=` 등)을 값 그대로 켠다. staging 에서는 결제와 알림의 요청을 모두 켜기 때문이다.
+
+파일은 주인만 읽는다(600). 여섯 가운데 하나라도 이미 있으면 덮어쓰지 않고 멈춘다. 이미 있는 `.env` 의 빈 비밀만 다시 채울 때는 `python3 tools/fill_env.py` 를 쓴다.
 VM 에는 uv 가 없어 Ubuntu 에 든 `python3` 로 돌린다(표준 라이브러리만 쓴다).
 
 ```bash
@@ -175,12 +180,14 @@ python3 tools/staging_env.py --domain <도메인> --acme-email <메일> \
   --age-recipients "<주 열쇠의 공개키> $(age-keygen -y backup-keys/check.key)"
 ```
 
-끝에 찍히는 "사람이 채울 것" 셋을 채운다. 비어 있으면 compose 가 뜨기를 거부하거나(S3 의 키), 그 창구의 모델을 부르지 않는다(Z.ai 의 키).
+`fill_env.py` 가 "밖에서 받는 키"를 여럿 알리지만, staging 에서 채울 것은 끝에 찍히는 "사람이 채울 것" 셋뿐이다(나머지는 쓰지 않는 창구와 메일). 비어 있으면 compose 가 뜨기를 거부하거나(S3 의 키), 그 창구의 모델을 부르지 않는다(Z.ai 의 키).
 
 ```bash
 nano .env                       # BACKUP_AWS_ACCESS_KEY_ID, BACKUP_AWS_SECRET_ACCESS_KEY (1번의 접근 키)
 nano game-server/.env           # ZAI_API_KEY
 ```
+
+경보를 휴대폰 등으로 받으려면 루트 `.env` 에 받는 곳(Discord, Slack, Telegram, 메일 가운데 적은 것만)을 적는다. 적는 이름과 만드는 법은 README 의 "경보"에 있다. 적지 않으면 Grafana 의 Alerting 화면에서만 본다.
 
 여섯 파일과 두 열쇠를 비밀번호 관리자에 둔다. VM 을 잃으면 거기서 되살린다. 백업 파일과 같은 곳에 두지 않는다.
 
