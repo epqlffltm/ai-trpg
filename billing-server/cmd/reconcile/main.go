@@ -115,6 +115,13 @@ func run(args []string, out io.Writer) int {
 		return exitFailed
 	}
 	defer app.CloseMetrics(meters)
+	// 대사 한 번을 span 으로 민다(같은 주소가 있을 때). 끝날 때 한 번 보낸다(CloseTracing)
+	tracer, err := app.StartTracing(ctx, os.LookupEnv, settings.Logging, metricsProcess)
+	if err != nil {
+		logStartFailed(err)
+		return exitFailed
+	}
+	defer app.CloseTracing(tracer)
 	if err := jobs.Measure(meters.Meter()); err != nil {
 		logStartFailed(err)
 		return exitFailed

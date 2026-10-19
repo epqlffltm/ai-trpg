@@ -30,6 +30,7 @@
 - [테스트](#테스트)
 - [로그와 요청 식별자](#로그와-요청-식별자)
 - [메트릭](#메트릭)
+- [추적](#추적)
 - [CI](#ci)
 - [구조](#구조)
 - [설계 메모](#설계-메모)
@@ -205,7 +206,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸에 적힌다. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸에 적힌다. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 로그를 남긴다. `debug`, `info`, `warning`, `error` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 없음(보내지 않음) | 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318`. 경로(`/v1/metrics`)는 붙이지 않는다. 비우면 내보내지 않는다([메트릭](#메트릭)) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 없음(보내지 않음) | 메트릭과 추적을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318`. 경로(`/v1/metrics`, `/v1/traces`)는 붙이지 않는다. 비우면 내보내지 않는다([메트릭](#메트릭), [추적](#추적)) |
 | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | 메트릭을 보내는 간격(밀리초). 1000 이상 |
 
 `FREE_CREDIT_TTL`, `HOLD_TTL`, `ORDER_TTL` 은 날 단위(`7d`)를 받지 않는다. Go 의 시간 표기에 날이 없다. 30일은 `720h`, 1주일은 `168h` 다.
@@ -1763,7 +1764,7 @@ go run ./cmd/server 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .r
   그 오류가 DB 의 시간 제한(`55P03`, `57014`)이면 503 으로 답하고 `error_code: database.timeout` 으로 남는다.
   요청의 마감(10초)에 걸린 것이면 503 으로 답하고 `error_code: request.timeout` 으로 남는다.
   클라이언트가 응답을 받기 전에 떠난 요청은 서버의 오류로 적지 않는다. 본문을 쓰지 않고, 요청이 끝난 줄에 `status_code` 499(`info`)로만 남는다.
-- 인증 서버에서 공개키를 받을 때 `traceparent` 머리말로 추적을 이어 준다. 결제 대행사에는 아무 식별자도 보내지 않는다.
+- 우리 서버(인증 서버의 공개키와 끊긴 세션, 보호자 알림, 알림 서버)를 부를 때 `traceparent` 머리말로 추적을 이어 준다. 결제 대행사에는 아무 식별자도 보내지 않는다.
 - 결제 대행사의 결제 번호(`payment_key`)와 알림의 서명은 로그에 남기지 않는다. 주문은 주문 번호(`order_id`)로 찾는다.
 - `DEBUG=true` 면 gin 이 뜰 때 등록한 주소의 목록을 글로 찍는다. JSON 이 아니다. 개발할 때만 켠다.
 - 사람이 치는 명령(`cmd/migrate`, `cmd/fakepg`)의 출력은 JSON 이 아니다. 화면으로 읽는 것이다.
@@ -1812,6 +1813,29 @@ Grafana 의 대시보드 "결제 서버"(`/d/billing-server`)에 위의 것이 �
 테스트는 `internal/metrics/metricstest` 로 메모리에 모아 이름, 단위, label 을 본다. 보내는 길은 `internal/metrics` 의 테스트가 가짜 수집기(HTTP 서버)로 본다.
 Prometheus 에 그 이름으로 들어오는지는 저장소의 CI(`stack`)가 본다.
 
+## 추적
+
+서버, 정리 작업, 대사가 span 을 메트릭과 같은 주소(`OTEL_EXPORTER_OTLP_ENDPOINT`)로 민다. 수집기가 Tempo 에 넘긴다.
+규칙과 까닭은 [docs/observability.md](../docs/observability.md)의 "결제 서버의 추적, 본보기"에 있다. 이 서버가 다른 서버의 본보기다.
+주소가 비어 있으면 span 이 생기지 않고 로그는 지금과 같다.
+
+| span | 이름 | 내는 프로세스 |
+| --- | --- | --- |
+| 요청 | `GET /api/v1/billing/orders/:id`(메서드와 주소의 틀). 상태 확인(`/health`, `/health/ready`)은 걸지 않는다 | 서버 |
+| 다른 곳을 부르는 것 | `HTTP POST`. 인증 서버, 알림 서버, 결제 대행사 | 서버, 정리 작업, 대사 |
+| 쿼리 | `db GetWallet`(sqlc 의 이름). 손으로 쓴 것은 `db query` | 서버, 정리 작업, 대사 |
+| 작업 | `sweep.run`, `reconcile.run`. 한 바퀴가 새 추적 하나다 | 정리 작업, 대사 |
+
+- 로그의 `trace_id` 가 span 의 trace id 와 같다. Grafana 에서 로그의 "추적 보기"로 건너간다
+- 요청의 span 에는 `request_id`, 작업의 span 에는 `job_id` 를 싣는다. 응답의 `X-Request-ID` 로 Tempo 에서 찾는다(`{span.request_id="…"}`)
+- 싣지 않는 것: 주소의 경로와 뒤의 값, 머리말, 본문, SQL 의 문장과 값, 오류의 글. 쿼리가 실패하면 SQLSTATE 만 적는다
+- 요청이나 작업 밖의 쿼리와 호출(끊긴 세션의 목록을 30초마다 받는 것)은 span 을 걸지 않는다
+- 받은 `traceparent` 가 "기록하지 않음"(flags `00`)이어도 남긴다. 다른 서버들은 아직 span 을 내보내지 않아 모두 `00` 을 보낸다
+- 대사처럼 짧게 도는 명령은 끝날 때 한 번 보낸다. 수집기가 답하지 않으면 5초 뒤에 버리고 끝난다
+
+테스트는 `internal/tracing/tracingtest` 로 메모리에 모아 이름, 부모, 속성을 본다(쿼리는 실제 DB 로). 전역을 바꾸므로 그 테스트는 `t.Parallel` 을 쓰지 않는다.
+Tempo 에 들어오는지는 저장소의 CI(`stack`)가 본다.
+
 ## CI
 
 `.github/workflows/billing-server.yml`. `billing-server/`나 DB 초기화 스크립트가 바뀐 PR 과 main 푸시에서 돈다.
@@ -1853,8 +1877,9 @@ billing-server/
   internal/
     config/               설정을 환경 변수에서 읽고 검사한다. 서버의 것(Load), 결제 대행사에 묻는 작업 명령의 것(LoadJobs), 정리 작업의 것(LoadSweeper)
     app/                  서버와 작업 명령이 같은 방법으로 서비스(지갑, 주문, 홀드, 결제 자격)와 로거, 메트릭을 만든다
-    database/             연결 풀을 만든다. search_path, 접속 제한, 풀의 크기. 풀의 메트릭(metrics.go)
+    database/             연결 풀을 만든다. search_path, 접속 제한, 풀의 크기. 풀의 메트릭(metrics.go), 쿼리의 span(tracing.go)
     metrics/              메트릭을 OTLP 로 미는 것(MeterProvider). 보낼 곳이 없으면 noop
+    tracing/              span 을 OTLP 로 미는 것(TracerProvider, 전역). 다른 곳을 부르는 요청의 span(transport.go). 보낼 곳이 없으면 noop
       metricstest/          테스트가 계측한 값을 이름과 label 로 읽는다
     migrate/              마이그레이션 파일을 적용하고 되돌린다. goose 를 부르는 얇은 층
     credit/               크레딧의 양(Amount). 단위와, 글자로 쓰고 읽는 규칙
@@ -1936,12 +1961,12 @@ billing-server/
       reconciledb/          sqlc 가 queries.sql 에서 만든 코드
     batch/                줄 여러 개를 하나씩 처리하는 규칙. 하나가 실패해도 나머지를 한다
     txn/                  커밋한 뒤에 할 일(원장의 메트릭)을 실어 나르는 트랜잭션. 크레딧을 바꾸는 트랜잭션은 이것으로 연다
-    jobs/                 요청과 따로 도는 일에 job_id 를 걸고 끝난 줄을 남긴다. 작업의 메트릭(metrics.go)
+    jobs/                 요청과 따로 도는 일에 job_id 를 걸고 끝난 줄을 남긴다. 작업의 메트릭(metrics.go)과 span
     jwks/                 인증 서버의 공개키. 읽기(keys.go), 가져오기(fetch.go), 기억하기(cache.go)
     auth/                 access 토큰 검증. 무엇을 받아들일지 정한다
     httpapi/              HTTP 주소. 라우터, 핸들러, 토큰을 확인하는 미들웨어(auth.go), 서버의 서명을 확인하는 미들웨어(service.go),
-                          요청을 기록하는 미들웨어(observability.go), 요청과 DB 의 메트릭(metrics.go), 개발용 결제 화면(checkout.go, checkout.html)
-    obs/                  로그의 공통 규격. 식별자(ids.go, context.go), 가리는 규칙(redact.go), JSON 한 줄(handler.go)
+                          요청을 기록하는 미들웨어(observability.go), 요청과 DB 의 메트릭(metrics.go), 요청의 span(tracing.go), 개발용 결제 화면(checkout.go, checkout.html)
+    obs/                  로그의 공통 규격. 식별자(ids.go, context.go), span 과 잇는 것(span.go), 가리는 규칙(redact.go), JSON 한 줄(handler.go)
     testenv/              테스트가 쓰는 것. 접속 주소, 테스트용 스키마의 풀, 가짜 인증 서버의 키와 토큰, 정리 작업 테스트의 시대와 잠금
 ```
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/serviceauth"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/tracing"
 )
 
 // SendTimeout 은 알림 서버의 답을 기다리는 가장 긴 시간이다.
@@ -45,7 +46,9 @@ type HTTPSender struct {
 // NewHTTPSender 는 HTTPSender 를 만든다. 다른 주소로 가라는 답은 따라가지 않는다. 서명한 요청이 우리가 고르지 않은 곳으로 가면 안 된다.
 func NewHTTPSender(baseURL string, secret string, now func() time.Time) *HTTPSender {
 	client := &http.Client{
-		Timeout: SendTimeout,
+		// 작업 안에서 보내면 span 을 걸고 traceparent 를 붙인다. 받는 서버도 우리 서버다
+		Transport: tracing.Transport(nil, true),
+		Timeout:   SendTimeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

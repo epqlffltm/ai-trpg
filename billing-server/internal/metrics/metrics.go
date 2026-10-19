@@ -106,6 +106,11 @@ func NewResource(identity Identity, instance string) *resource.Resource {
 	)
 }
 
+// InstanceID 는 프로세스마다 다른 이름을 새로 만든다(sweeper-3f2a9c1d). 추적(internal/tracing)도 같은 모양을 쓴다.
+func InstanceID(process string) (string, error) {
+	return instanceID(process)
+}
+
 // instanceID 는 프로세스마다 다른 이름이다(sweeper-3f2a9c1d). 같으면 두 프로세스의 수가 서로 덮어쓴다.
 // 앞의 이름으로 서버와 정리 작업을 가른다. 뒤의 글자는 띄울 때마다 새로 정한다.
 func instanceID(process string) (string, error) {
