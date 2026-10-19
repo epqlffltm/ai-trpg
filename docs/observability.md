@@ -31,8 +31,9 @@
 | 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
 | 메트릭 | 이름과 규칙, 보내는 길과 저장소를 정했다([아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)). 내보내는 코드는 없다 |
 | 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
-| 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그 모으기](../README.md#로그-모으기) |
-| Prometheus, Tempo | 없다. Prometheus 는 정했고(2026-10-19) 다음 PR 에서 붙인다. Tempo 는 자리만 정했다([아래](#수집기grafana-alloy를-붙일-자리)) |
+| 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
+| 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)). 서버의 메트릭은 아직 없다 |
+| Tempo | 없다. 자리만 정했다([아래](#수집기grafana-alloy를-붙일-자리)) |
 | 관리 서버, 관리 DB, 관리자 화면, Gemma 요약 | 없다 |
 
 ## 로그, 메트릭, 추적의 역할
@@ -717,7 +718,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 파일 | 하는 일 |
 | --- | --- |
-| `docker-compose.yml` 의 "로그 모으기" | `docker-socket-proxy`, `alloy`, `loki`, `grafana`. 모두 프로필 `observability` 이고 `logging: *logging` 을 쓴다 |
+| `docker-compose.yml` 의 "로그와 메트릭 모으기" | `docker-socket-proxy`, `alloy`, `loki`, `grafana`. 모두 프로필 `observability` 이고 `logging: *logging` 을 쓴다 |
 | `docker/alloy/config.alloy` | 컨테이너 찾기 → `container` 붙이기 → 로그 읽기 → JSON 풀기 → Loki 로 보내기 |
 | `docker/loki/config.yaml` | 한 프로세스, 볼륨에 파일로. 14일 뒤에 지운다 |
 | `docker/grafana/provisioning/datasources/loki.yaml` | Grafana 가 뜰 때 Loki 를 데이터 소스(uid `loki`)로 붙인다. 화면에서 고치지 못한다 |
@@ -785,8 +786,27 @@ Prometheus 에 쓰는 것은 Alloy 하나, 읽는 것은 Grafana 하나다. 이 
 4. **기록 규칙과 경보 규칙은 Prometheus 의 규칙 파일 형식으로 따로 둔다.** Mimir 의 ruler 가 같은 형식을 받는다. Prometheus 의 실행 인자에만 있는 기능에 기대지 않는다.
 5. **tenant 는 하나다.** Alloy 는 tenant 머리말(`X-Scope-OrgID`)을 보내지 않는다. Mimir 는 `multitenancy_enabled: false` 로 띄운다.
 6. **늦게 온 점을 받는다.** 미는 방식이라 점이 몇 초 늦거나 순서가 바뀔 수 있다. Prometheus 의 `out_of_order_time_window` 를 10분으로 둔다. Mimir 에도 같은 이름의 한도가 있다.
-7. **보관 기간은 한 값이다.** Prometheus 의 `--storage.tsdb.retention.time=14d` 가 Mimir 의 `compactor_blocks_retention_period: 14d` 가 된다. 볼륨은 따로(`prometheusdata`) 둔다.
+7. **보관 기간은 한 값이다.** Prometheus 의 설정 파일의 `storage.tsdb.retention.time: 14d` 가 Mimir 의 `compactor_blocks_retention_period: 14d` 가 된다. 실행 인자(`--storage.tsdb.retention.time`)는 3.15 에서 낡은 것이 되어 쓰지 않는다. 볼륨은 따로(`prometheusdata`) 둔다.
 8. **옮기는 법.** Alloy 의 `prometheus.remote_write` 에 보낼 곳을 둘(Prometheus, Mimir) 두고 14일 동안 함께 쓴다. 그다음 Grafana 의 데이터 소스를 Mimir 로 바꾸고 Prometheus 를 끈다. 지난 데이터를 옮기지 않아도 14일이면 같아진다. 옮겨야 하면 mimirtool 의 backfill 로 Prometheus 의 블록을 올린다.
+
+#### 붙인 것 (메트릭의 인프라)
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `docker-compose.yml` 의 `prometheus` | `prom/prometheus:v3.15.0-busybox`. 받기만 한다(`--web.enable-remote-write-receiver`). 포트를 열지 않는다. healthcheck 는 `/-/ready` |
+| `docker/prometheus/prometheus.yml` | 긁는 설정이 없다. 늦게 온 점 10분, 보관 14일 |
+| `docker/alloy/metrics.alloy` | OTLP 받기(HTTP 4318) → 묶기 → 이름 바꾸기 → label `service` 붙이기 → remote write. 수집 쪽 자신(alloy, loki, prometheus, grafana)을 15초마다 긁는다 |
+| `docker/grafana/provisioning/datasources/prometheus.yaml` | 데이터 소스 uid `prometheus`. 화면에서 고치지 못한다 |
+| 망 `telemetry` | Alloy 하나만 있다(internal). 서버의 프로세스는 그 서버에 메트릭을 붙이는 PR 에서 더한다 |
+| `.github/scripts/stack-smoke.sh` 의 `check_metrics` | CI(`stack`)가 PR 마다 아래를 본다 |
+
+- **Alloy 는 폴더를 읽는다.** `docker/alloy/` 를 통째로 붙이고 그 안의 `config.alloy`(로그)와 `metrics.alloy`(메트릭)를 함께 읽는다. 단계마다 파일이 하나씩이다.
+- **수집 쪽 자신의 메트릭은 `job` 으로 가른다.** `service` 는 서버의 메트릭에만 붙는다. `up{job="loki"}` 처럼 찾는다.
+- **라이브러리의 이름은 label 이 아니다**(`include_scope_labels = false`). OTLP 의 계측 범위(`otel_scope_name`)가 모든 메트릭에 붙지 않게 한다.
+- **Prometheus 가 멈추면.** Alloy 의 remote write 가 볼륨(`alloydata`)의 WAL 에 남겼다가 돌아오면 보낸다. Alloy 가 받은 OTLP 는 그 전에 묶음(batch)에 있어서, Alloy 가 죽는 순간의 묶음은 잃는다.
+- **CI 가 보는 것.** Prometheus 가 root 가 아니고 다시 뜨지 않는다. Grafana 가 Prometheus 에 닿는다. Prometheus 가 아무것도 긁지 않는다.
+  telemetry 망에서 OTLP(JSON)로 민 시험 지표 `stack_smoke_probe` 가 `stack_smoke_probe_total{service="stack-smoke", instance="<이 실행의 값>"}` 으로 들어온다(이름 바꾸기와 label 을 함께 본다).
+  `up{job=…}` 이 alloy, loki, prometheus, grafana 모두 1 이다. 게임 서버가 Prometheus 에 닿지 않는다.
 
 #### 계측기를 만드는 법
 

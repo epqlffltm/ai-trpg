@@ -15,7 +15,7 @@
 #   docker compose --profile app ps -a      # 마이그레이션은 Exited (0), 서버·프록시·워커 셋은 healthy, cron 은 Up 이면 된다
 #   docker compose --profile app down
 #
-# 로그를 모아 볼 때(#25)는 프로필 observability 를 더한다. Alloy, Loki, Grafana 가 뜬다(아래의 "로그 모으기").
+# 로그와 메트릭을 모아 볼 때(#25)는 프로필 observability 를 더한다. Alloy, Loki, Prometheus, Grafana 가 뜬다(아래의 "로그와 메트릭 모으기").
 #
 #   docker compose --profile app --profile observability up -d --build
 #
@@ -574,17 +574,19 @@ services:
     # 아직 없는 서버로 가는 요청은 502 다
 
   # ---------------------------------------------------------------------------
-  # 로그 모으기 (observability 프로필, #25)
+  # 로그와 메트릭 모으기 (observability 프로필, #25)
   #
-  # 이 compose 의 컨테이너 로그를 모아(Alloy) 저장하고(Loki) 본다(Grafana). 기본으로 꺼져 있다. staging 에서 켠다.
+  # 이 compose 의 컨테이너 로그와 메트릭을 모아(Alloy) 저장하고(Loki, Prometheus) 본다(Grafana). 기본으로 꺼져 있다. staging 에서 켠다.
   # 서버 코드와 서버의 설정은 그대로다. 서버는 stderr 에 쓰기만 하고, 이 넷이 멈춰도 요청은 영향을 받지 않는다.
   #
   #   docker compose --profile app --profile observability up -d --build
   #   그다음 http://127.0.0.1:3000 (VM 에서는 SSH 터널: ssh -L 3000:127.0.0.1:3000 <서버>)
   #
-  # 망을 둘로 나눈다. 서버들은 기본 망(default)에만 있어서 이 넷의 어느 것에도 닿지 않는다.
+  # 망을 셋으로 나눈다. 서버들은 기본 망(default)에 있어서 Loki, Prometheus, Grafana, 소켓 프록시에 닿지 않는다.
   #   docker-api     소켓 프록시와 Alloy 만. 바깥으로 나가지 못한다(internal)
-  #   observability  Alloy, Loki, Grafana. Grafana 의 포트를 열려고 internal 로 두지 않는다
+  #   observability  Alloy, Loki, Prometheus, Grafana. Grafana 의 포트를 열려고 internal 로 두지 않는다
+  #   telemetry      Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스. 서버는 여기서 Alloy 의 4318 에만 닿는다(internal).
+  #                  서버의 프로세스는 메트릭을 붙이는 PR 에서 이 망에 더한다(networks 에 default 도 함께 적는다)
   # 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "수집기(Grafana Alloy)를 붙일 자리"에 있다
   # ---------------------------------------------------------------------------
 
@@ -610,13 +612,15 @@ services:
     networks: [docker-api]
 
   # 수집기. 이 compose 의 컨테이너를 찾아 로그를 읽고, 서버의 JSON 줄을 풀어 Loki 로 보낸다(docker/alloy/config.alloy).
-  # 읽은 자리를 볼륨(alloydata)에 남겨서 다시 떠도 이어 읽는다
+  # 서버가 OTLP 로 민 메트릭과 수집 쪽 자신의 메트릭을 Prometheus 로 보낸다(docker/alloy/metrics.alloy).
+  # 읽은 자리와 아직 보내지 못한 메트릭(WAL)을 볼륨(alloydata)에 남겨서 다시 떠도 이어 간다
   alloy:
     image: grafana/alloy:v1.20.1
     profiles: [observability]
     logging: *logging
     restart: unless-stopped
-    command: ["run", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    # 설정 파일이 아니라 폴더를 준다. 그 안의 *.alloy(로그, 메트릭)를 함께 읽는다
+    command: ["run", "--storage.path=/var/lib/alloy/data", "/etc/alloy"]
     # 이미지는 root 로 뜬다. 로그는 파일이 아니라 Docker 의 API 로 읽으므로 root 가 필요 없다.
     # 이미지가 만들어 둔 사용자(alloy, 473)로 띄운다. 읽은 자리를 남기는 폴더는 이미지에서 그 사용자의 것이다
     user: "473:473"
@@ -624,12 +628,13 @@ services:
       # 이 프로젝트의 컨테이너만 모으려고 프로젝트의 이름을 넘긴다
       COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME}
     volumes:
-      - ./docker/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./docker/alloy:/etc/alloy:ro
       - alloydata:/var/lib/alloy/data
-    networks: [docker-api, observability]
+    networks: [docker-api, observability, telemetry]
     depends_on:
       - docker-socket-proxy
       - loki
+      - prometheus
 
   # 로그의 저장소. 14일 뒤에 지운다(docker/loki/config.yaml). 볼륨(lokidata)에 파일로 쌓는다.
   # 포트를 열지 않는다. Grafana 와 Alloy 만 내부망으로 닿는다
@@ -644,7 +649,31 @@ services:
       - lokidata:/loki
     networks: [observability]
 
-  # 로그를 보는 화면. Loki 는 뜰 때 데이터 소스로 붙는다(docker/grafana/provisioning).
+  # 메트릭의 저장소. 받기만 한다(remote write 수신). 긁는 설정을 두지 않는다(docker/prometheus/prometheus.yml).
+  # 쓰는 것은 Alloy 하나, 읽는 것은 Grafana 하나다. 저장소를 Mimir 로 바꿀 때 그 둘의 주소만 바뀐다(docs/observability.md).
+  # 14일 뒤에 지운다. 볼륨(prometheusdata)에 쌓는다. 포트를 열지 않는다
+  prometheus:
+    # 태그 끝의 -busybox 는 셸과 wget 이 든 이미지다(healthcheck 가 쓴다). -distroless 에는 없다
+    image: prom/prometheus:v3.15.0-busybox
+    profiles: [observability]
+    logging: *logging
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    networks: [observability]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # 로그와 메트릭을 보는 화면. Loki 와 Prometheus 는 뜰 때 데이터 소스로 붙는다(docker/grafana/provisioning).
   # 이 PC(127.0.0.1)에만 연다. 관리 서버가 생기기 전에는 SSH 터널로만 붙는다.
   # 관리자 비밀번호는 루트 .env 의 GRAFANA_ADMIN_PASSWORD 다. 볼륨(grafanadata)이 비어 있는 첫 기동 때만 반영된다
   grafana:
@@ -676,7 +705,7 @@ services:
     ports:
       - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     networks: [observability]
-    # Grafana 가 제 DB 를 열고 요청을 받으면 healthy 다. Loki 에 닿는지는 보지 않는다(stack-smoke.sh 가 본다).
+    # Grafana 가 제 DB 를 열고 요청을 받으면 healthy 다. Loki 와 Prometheus 에 닿는지는 보지 않는다(stack-smoke.sh 가 본다).
     # Loki 와 Alloy 의 이미지에는 상태를 물을 도구가 없어 healthcheck 를 두지 않는다
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:3000/api/health"]
@@ -686,17 +715,22 @@ services:
       start_period: 20s
     depends_on:
       - loki
+      - prometheus
 
 networks:
   # 소켓 프록시와 Alloy 만 있는 망. 바깥으로 나가지 못한다
   docker-api:
     internal: true
-  # Alloy, Loki, Grafana 의 망
+  # Alloy, Loki, Prometheus, Grafana 의 망
   observability:
+  # Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스. 바깥으로 나가지 못한다
+  telemetry:
+    internal: true
 
 volumes:
   pgdata:
   redisdata:
   alloydata:
   lokidata:
+  prometheusdata:
   grafanadata:

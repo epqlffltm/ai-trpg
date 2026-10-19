@@ -1,0 +1,68 @@
+// docker/alloy/metrics.alloy
+// 수집기(Grafana Alloy)의 메트릭 설정(#25). 로그는 config.alloy 에 있다. Alloy 는 이 폴더의 *.alloy 를 함께 읽는다.
+//
+// 서버가 OTLP 로 민 메트릭과 Alloy 가 긁은 인프라의 메트릭을 Prometheus 로 보낸다.
+//   서버(OTLP) ─▶ 받기(otelcol.receiver.otlp) ─▶ 묶기(otelcol.processor.batch) ─▶ 이름 바꾸기(otelcol.exporter.prometheus)
+//              ─▶ service 붙이기(prometheus.relabel) ─▶ 보내기(prometheus.remote_write)
+//   Alloy, Loki, Prometheus, Grafana 자신 ─▶ 긁기(prometheus.scrape) ─▶ 보내기(prometheus.remote_write)
+// Prometheus 에 쓰는 것은 여기의 prometheus.remote_write 하나다. 저장소를 Mimir 로 바꾸면 그 주소만 바뀐다.
+// 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "2. 메트릭"에 있다.
+
+// 서버가 미는 OTLP 를 받는다. HTTP(4318)만 연다. 서버와 Alloy 만 있는 망(telemetry)에서만 닿는다.
+// 메트릭만 받는다. 추적은 3단계에서 traces 를 더한다
+otelcol.receiver.otlp "servers" {
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		metrics = [otelcol.processor.batch.servers.input]
+	}
+}
+
+// 여러 서버의 점을 묶어 한 번에 보낸다
+otelcol.processor.batch "servers" {
+	output {
+		metrics = [otelcol.exporter.prometheus.servers.input]
+	}
+}
+
+// OTLP 의 이름을 Prometheus 의 이름으로 바꾼다. 바꾸는 곳은 여기 하나다(저장소의 OTLP 수신을 쓰지 않는다).
+// 단위와 _total 을 붙인다: 이름 http_server_request_duration, 단위 s → http_server_request_duration_seconds.
+// service.name 은 label job, service.instance.id 는 label instance 가 된다. 그 밖의 자원 속성은 target_info 에 남는다.
+// 계측기를 만든 라이브러리의 이름(otel_scope_*)은 label 로 붙이지 않는다. 정해 둔 label 만 쓴다
+otelcol.exporter.prometheus "servers" {
+	include_scope_labels = false
+	forward_to           = [prometheus.relabel.servers.receiver]
+}
+
+// 서버의 메트릭에 label service 를 붙인다. 값은 job(= service.name, 코드에 적힌 서비스 이름)과 같다.
+// 로그의 service 와 같은 이름으로 메트릭과 로그를 함께 찾는다
+prometheus.relabel "servers" {
+	forward_to = [prometheus.remote_write.local.receiver]
+
+	rule {
+		source_labels = ["job"]
+		target_label  = "service"
+	}
+}
+
+// 수집 쪽 자신의 메트릭을 15초마다 긁는다. label job 으로 가른다(서버가 아니라 service 는 붙이지 않는다).
+// Alloy 는 제 HTTP 서버(127.0.0.1:12345)에서 긁는다
+prometheus.scrape "infra" {
+	targets = [
+		{"__address__" = "127.0.0.1:12345", "job" = "alloy"},
+		{"__address__" = "loki:3100", "job" = "loki"},
+		{"__address__" = "prometheus:9090", "job" = "prometheus"},
+		{"__address__" = "grafana:3000", "job" = "grafana"},
+	]
+	scrape_interval = "15s"
+	forward_to      = [prometheus.remote_write.local.receiver]
+}
+
+// Prometheus 로 보낸다. 보내지 못한 것은 --storage.path(볼륨 alloydata)의 WAL 에 남았다가 Prometheus 가 돌아오면 보낸다
+prometheus.remote_write "local" {
+	endpoint {
+		url = "http://prometheus:9090/api/v1/write"
+	}
+}
