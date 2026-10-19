@@ -166,3 +166,42 @@ def test_the_quest_line(quest: QuestNote, line: str):
 
 def test_the_note_forbids_made_up_numbers():
     assert '숫자로 지어내지 마라' in prompt.QUEST_NOTE
+
+
+def test_a_deadline_that_is_up_or_missed_is_repeated_before_the_request():
+    quests = [
+        QuestNote('왕녀 구출', 'active', pace=Pace.LAST),
+        QuestNote('배달', 'active', pace=Pace.TIGHT),
+        QuestNote('광산의 비밀', 'failed', missed_deadline=True),
+        QuestNote('배신자', 'hidden'),
+    ]
+
+    assert prompt.deadline_reminders(quests) == [
+        "'왕녀 구출' 의 기한이 다 됐다. 남은 기회는 다음 라운드 하나뿐이다. 시간이 없다는 긴장을 장면에 드러내라.",
+        "'광산의 비밀' 은(는) 이번 라운드에 기한을 넘겨 실패했다. 때를 놓쳐 일이 틀어진 것을 장면에 드러내라.",
+    ]
+
+
+async def test_the_reminder_sits_just_before_the_request(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, narrator: RecordingNarrator, narrated
+):
+    table = await start_with_deadlines(client, me, friend, lore)
+    await step(client, me, table, HOUR)
+    await play(client, me, friend, table, narrated)
+
+    lines = prompt.round_text(narrator.requests[0]).splitlines()
+
+    assert lines[-1] == prompt.CLOSING_REQUEST
+    assert lines.index(prompt.THIS_ROUND_ONLY) + 1 == lines.index(prompt.QUEST_LAST_REMINDER.format(name='왕녀 구출'))
+
+
+async def test_a_tight_deadline_is_not_repeated(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, narrator: RecordingNarrator, narrated
+):
+    table = await start_with_deadlines(client, me, friend, lore)
+    await play(client, me, friend, table, narrated)
+
+    text = prompt.round_text(narrator.requests[0])
+
+    assert '기한이 다 됐다' not in text
+    assert '기한을 넘겨 실패했다' not in text
