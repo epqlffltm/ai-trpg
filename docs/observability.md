@@ -28,12 +28,12 @@
 | 요청 식별자(`X-Request-ID`)와 추적 식별자(`traceparent`) | 다섯 서버에 구현 |
 | 공통 모양의 JSON 로그 | 다섯 서버에 구현 |
 | 민감정보를 가리는 마지막 방어선 | 다섯 서버에 구현 |
-| 백그라운드 작업의 식별자(`job_id`) | trpg-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
+| 백그라운드 작업의 식별자(`job_id`) | 다섯 서버 모두 구현 |
 | 메트릭 | billing-server 에 구현(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)). 나머지 넷은 아직 내보내지 않는다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
 | DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
 | 대시보드 | billing-server, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
 | 경보 | 수집 쪽, DB 와 Redis, billing-server 의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
-| 추적(span) | auth-server, trpg-server, billing-server, notification-server 가 span 을 만든다(요청, 서버 사이의 호출, DB 의 쿼리, 작업. 본보기는 [Go](#붙인-것-결제-서버의-추적-본보기)와 [Python](#붙인-것-알림-서버의-추적-python-의-본보기), [TRPG 서버에서 다른 것](#붙인-것-trpg-서버의-추적), [인증 서버에서 다른 것](#붙인-것-인증-서버의-추적)). board-server 는 아직 trace_id 를 이어 주는 것까지만 한다. 받는 길과 저장소(Alloy → Tempo, Grafana 에서 로그와 오간다)는 [아래](#붙인-것-추적의-인프라) |
+| 추적(span) | 다섯 서버 모두 span 을 만든다(요청, 서버 사이의 호출, DB 의 쿼리, 작업. 본보기는 [Go](#붙인-것-결제-서버의-추적-본보기)와 [Python](#붙인-것-알림-서버의-추적-python-의-본보기), [TRPG 서버에서 다른 것](#붙인-것-trpg-서버의-추적), [인증 서버에서 다른 것](#붙인-것-인증-서버의-추적), [게시판 서버(Node)](#붙인-것-게시판-서버의-추적)). 받는 길과 저장소(Alloy → Tempo, Grafana 에서 로그와 오간다)는 [아래](#붙인-것-추적의-인프라) |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
 | 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)) |
 | Tempo | compose 의 프로필 `observability` 에 구현(`grafana/tempo:3.1.0`, 한 프로세스, 14일, [아래](#붙인-것-추적의-인프라)) |
@@ -144,8 +144,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 지금 구현하지 않은 것:
 
 - `tracestate` 머리말을 읽거나 넘기지 않는다.
-- board-server 는 span 을 만들지 않는다. 그 서버가 다른 서버를 부를 때 넣는 `parent-id` 는 부를 때마다 새로 만든 난수다. 실제 span 의 번호가 아니다.
-  span 을 만드는 서버는 span 안에서 부르면 그 호출의 span(client span)의 번호를 넣는다([결제 서버의 추적](#붙인-것-결제-서버의-추적-본보기)).
+- span 밖에서 다른 서버를 부를 때(보낼 곳을 비워 span 을 내보내지 않을 때) 넣는 `parent-id` 는 부를 때마다 새로 만든 난수다. 실제 span 의 번호가 아니다.
+  span 안에서 부르면 그 호출의 span(client span)의 번호를 넣는다([결제 서버의 추적](#붙인-것-결제-서버의-추적-본보기)).
 - 응답에 `traceparent` 를 돌려주지 않는다. 응답으로는 `X-Request-ID` 만 준다.
 
 ### 서버끼리 부를 때
@@ -187,6 +187,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | billing-server | 만료된 홀드·주문, 사라진 무료 크레딧 닫기, 보호자와 사용자에게 알릴 일 보내기(정리 작업이 30초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `user_notices_queued`, `_sent`, `_retried`, `_rejected`, `_expired`, `_purged`) | `sweep.run` |
 | billing-server | 장부 맞춰 보기와 오래된 결제 끝내기(하루 한 번 돌리는 명령) | `reconcile.run` |
 | auth-server | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기 | `account.delete_unverified` |
+| board-server | 발송함의 알림을 알림 서버에 보내기(5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `sent`, `retried`, `rejected`, `failed`, `dropped`) | `notification.send` |
 | notification-server | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업이 한 시간마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `deleted`, `retention_days`) | `notification.prune` |
 | auth-server | 보안 이벤트 요약 메일 | `security.send_digest` |
 
@@ -1008,7 +1009,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | `docker/prometheus/rules/ai-trpg.yml` | `ObservabilityComponentDown` 이 tempo 도 본다 |
 
 - **CI 가 보는 것.** Tempo 가 healthy 이고 root 가 아니며 다시 뜨지 않는다. Grafana 가 Tempo 에 닿는다. telemetry 망에서 OTLP(JSON)로 민 시험 span(`stack_smoke.probe`)이 Alloy 를 거쳐 Tempo 에서 그 추적 번호로 찾아진다. `up{job="tempo"}` 이 1 이다. 결제 서버가 Tempo 에 닿지 않는다.
-- **다음.** 게시판 서버(Nest). 알림 서버를 부르므로, 붙이면 그쪽 span 의 부모가 생긴다.
+- **다섯 서버가 모두 span 을 내보낸다.** 서버끼리 부른 추적은 끊기지 않고 한 그림이다(게시판 서버의 알림 보내기 → 알림 서버의 요청).
 
 #### 붙인 것 (결제 서버의 추적, 본보기)
 
@@ -1034,7 +1035,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 
 - **로그와 같은 번호.** span 이 있으면 로그의 `trace_id` 가 그 span 의 trace id 다(요청은 `requestLogging`, 작업은 `obs.WithJob`). span 이 없으면(PC, 상태 확인) 지금처럼 정한다. 그래서 주소를 비워도 로그는 그대로다.
 - **전역(otel.SetTracerProvider)에 둔다.** 메트릭과 다르다. span 은 요청, 호출, 쿼리, 작업에 두루 걸려 그 모든 곳에 Tracer 를 넘기면 함수마다 인자가 는다. 계측하는 곳은 `tracing.Tracer()` 로 가져다 쓴다.
-- **부른 쪽의 "기록하지 않음"을 따르지 않는다.** 다른 서버들은 아직 span 을 내보내지 않아 flags `00` 을 보낸다. 따르면 결제 서버의 span 이 다 버려진다. 다섯 서버가 모두 span 을 내보내면 따를지 다시 정한다.
+- **부른 쪽의 "기록하지 않음"을 따르지 않는다.** 보낼 곳을 비운 서버는 flags `00` 을 보낸다. 따르면 그 서버가 부른 요청의 span 이 다 버려진다. 다섯 서버가 모두 span 을 내보내게 되었으니, 표본을 줄일 때(꼬리 표본) 따를지 함께 정한다.
 - **부모 없는 것은 남기지 않는다.** 요청이나 작업 밖의 쿼리(풀이 연결을 확인하는 것)와 호출(끊긴 세션의 목록을 30초마다 받는 것)은 저마다 새 추적이 되어 Tempo 를 메운다.
 - **작업은 새 추적이다.** 정리 작업은 30초마다 돈다. 프로세스의 한 추적 아래에 두면 끝없이 길어진다.
 - **싣지 않는 것.** 주소의 경로와 뒤의 값(결제 대행사의 주소에는 결제 번호가 있다), 머리말, 본문, SQL 의 문장과 값, 오류의 글. [민감정보](#민감정보)의 규칙과 같다. 테스트가 이것을 본다.
@@ -1095,6 +1096,29 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 - **compose.** `auth-server`, `auth-mail`, `auth-welcome-credits`, `auth-cron` 이 `x-telemetry-environment` 와 망 `telemetry` 를 붙였다. 마이그레이션(`auth-migrate`)은 붙이지 않았다(요청도 작업도 없다).
 - **CI 의 스택 확인.** `TRACE_SERVERS` 에 auth 를 더했다. 부르는 주소는 `GET /api/v1/auth/jwks`, 작업은 주기 명령의 `security.send_digest` 다(워커와 주기 명령의 검사가 먼저 한 번 돌린다). 워커의 작업은 할 일이 없어 버려지므로 쓰지 않는다.
 
+#### 붙인 것 (게시판 서버의 추적)
+
+Node(Nest)라 SDK 가 다르지만 span 의 이름, 싣는 것과 싣지 않는 것, 테스트하는 법은 [결제 서버](#붙인-것-결제-서버의-추적-본보기)와 같다.
+의존성은 `@opentelemetry/api`, `@opentelemetry/sdk-trace`, `@opentelemetry/exporter-trace-otlp-proto`, `@opentelemetry/resources`, `@opentelemetry/context-async-hooks` 다.
+자동 계측(`@opentelemetry/auto-instrumentations-node`, instrumentation-express, -pg, -undici)은 쓰지 않았다. 이름과 싣는 것을 우리가 정해야 하고, 자동 계측은 모듈을 불러올 때 고쳐 쓰는(monkey patch) 방식이라 ESM 에서 불러오는 순서를 맞춰야 한다.
+
+| 파일(`src/observability/`) | 하는 일 |
+| --- | --- |
+| `spans.ts` | API 만 쓴다. span 을 만드는 것을 하나 둔다(`useProvider`, `tracer`). 지금의 span 을 들고 있는 것(AsyncLocalStorage 의 context manager)은 전역에 한 번 건다. 받은 traceparent 를 부모로(`remoteParent`), 작업 한 바퀴의 span(`inJobSpan`) |
+| `tracing.ts` | SDK. 주소가 있으면 TracerProvider(OTLP HTTP protobuf `/v1/traces`, 묶어 보내기, 모두 남기기 `SAMPLER`, `DropIdleRounds`)를 만들어 끼운다(`configureTracing`, `main.ts`) |
+| `observability.module.ts` | 앱이 닫힐 때 모아 둔 것을 보낸다(`shutdownTracing`). 서버는 SIGTERM 에 앱을 닫는다(`main.ts` 의 `enableShutdownHooks`) |
+| `request-spans.middleware.ts` | 서버 span 의 express 미들웨어. 요청 로그의 미들웨어보다 앞이다. 경로의 틀은 처리가 끝난 뒤에 알아 응답이 닫힐 때(`close`) 이름을 고친다 |
+| `http-spans.ts` | fetch 를 감싼 `tracedFetch`. 부모가 있을 때만 client span, 부르는 쪽이 traceparent 를 붙였으면 그 span 으로 바꾼다(TRPG 서버와 같은 규칙). 공개키, 끊긴 세션의 목록, 알림 서버를 부르는 곳이 쓴다 |
+| `db-spans.ts` | pg 의 `Client` 를 이은 `TracedClient`. TypeORM 의 풀이 이것으로 연결을 맺는다(`database.options.ts` 의 `extra.Client`). 이름은 `db SELECT posts` |
+| `jobs.ts`, `idle-rounds.ts` | 알림 보내기의 한 바퀴에 span 과 `job_id` 를 건다(`runAsJob`). 처리한 수가 0 인 바퀴의 추적은 보내지 않는다(인증 서버와 같은 `DropIdleRounds`) |
+
+- **pg 를 통째로 고쳐 쓰지 않는다.** 풀에 연결의 클래스를 넘기는 자리(`pg.Pool` 의 `Client`)를 쓴다. 이 서버의 풀이 맺은 연결에만 걸리고, 콜백이나 스트림으로 부른 것은 그대로 넘긴다.
+- **알림 보내기에 `job_id` 가 생겼다.** 전에는 그 바퀴의 줄에 식별자가 없었다. 이제 `job_id` 와 그 span 의 `trace_id` 가 붙는다. 알림 서버를 부를 때 `traceparent` 를 넣어 알림 서버의 span 이 그 아래에 붙는다. 서명은 메서드, 경로, 본문에 하므로 머리말을 더해도 그대로 맞는다.
+- **보낼 알림이 없던 바퀴는 보내지 않는다.** 5초마다 돌아 하루에 만칠천 개가 넘는다. 처리한 수(`handled`)에 보낸 것, 다시 보낼 것, 받지 않은 것, 예외, 오래되어 지운 것을 모두 센다.
+- **API 주소 아래의 없는 주소도 `(unmatched)` 다.** Nest 는 그 주소를 받으려고 `*path` 라는 틀을 건다. 요청 로그의 `route` 에도 이 틀이 적혀 있었다. 이제 span 과 로그 모두 `(unmatched)` 와 실제 경로(`path`, 로그만)다.
+- **compose.** `board-server` 가 `x-telemetry-environment` 와 망 `telemetry` 를 붙였다. 마이그레이션(`board-migrate`)은 붙이지 않았다.
+- **CI 의 스택 확인.** `TRACE_SERVERS` 에 board 를 더했다. 부르는 주소는 `GET /api/v1/board/me`(401), 작업은 `notification.send` 다. 보낼 것이 없는 바퀴는 버려지므로 확인 전에 발송함에 알림 하나를 적는다(`queue_board_notification`). 그 알림을 받은 알림 서버의 span 이 게시판 서버의 작업 span 아래에 있는지도 본다.
+
 ## 관리 서버의 경계
 
 관리 서버는 아직 없다. 만들 때 무엇을 맡고 무엇을 맡지 않는지를 먼저 정해 둔다.
@@ -1141,10 +1165,10 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | 식별자를 들고 있는 곳 | `contextvars` | `contextvars` | `AsyncLocalStorage` | `context.Context` |
 | 요청 미들웨어 | Django 미들웨어(맨 앞) | 순수 ASGI 미들웨어 | express 미들웨어 | gin 미들웨어(맨 앞) |
 | 처리하지 못한 예외 | 미들웨어의 `process_exception` | `Exception` 처리기 | 전역 예외 필터 | `recover` 미들웨어 |
-| 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | 없다 | `jobs.Run()` |
+| 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | `runAsJob()` | `jobs.Run()` |
 | 코드의 자리 | `observability/` | `app/observability/` | `src/observability/` | `internal/obs/`, `internal/httpapi/observability.go` |
 | 메트릭 | 없다 | 없다 | 없다 | OpenTelemetry Go SDK(`internal/metrics/`, [본보기](#붙인-것-결제-서버의-메트릭-본보기)) |
-| 추적(span) | OpenTelemetry Python SDK(`observability/`, [다른 것](#붙인-것-인증-서버의-추적)) | OpenTelemetry Python SDK(`app/observability/`, [다른 것](#붙인-것-trpg-서버의-추적)) | 없다 | OpenTelemetry Go SDK(`internal/tracing/`, [본보기](#붙인-것-결제-서버의-추적-본보기)) |
+| 추적(span) | OpenTelemetry Python SDK(`observability/`, [다른 것](#붙인-것-인증-서버의-추적)) | OpenTelemetry Python SDK(`app/observability/`, [다른 것](#붙인-것-trpg-서버의-추적)) | OpenTelemetry JS SDK(`src/observability/`, [다른 것](#붙인-것-게시판-서버의-추적)) | OpenTelemetry Go SDK(`internal/tracing/`, [본보기](#붙인-것-결제-서버의-추적-본보기)) |
 
 notification-server 는 trpg-server 의 것(`app/observability/`)을 그대로 가져왔다. 뒤에서 도는 작업이 정리 작업 하나라 `BackgroundJobs` 는 없고, 정리 작업이 바퀴마다 `job_scope` 를 건다.
 추적(span)은 notification-server 가 먼저 붙였다(OpenTelemetry Python SDK, [본보기](#붙인-것-알림-서버의-추적-python-의-본보기)).
@@ -1154,8 +1178,6 @@ notification-server 는 trpg-server 의 것(`app/observability/`)을 그대로 �
 
 ## 알려진 빈틈
 
-- **게시판 서버에는 span 이 없다.** `trace_id` 로 로그를 이을 수는 있지만 "어디서 얼마나 걸렸나"를 그림으로 볼 수는 없다.
-  그래서 게시판 서버가 부른 다른 서버의 span 은 Tempo 에 없는 부모 아래에 놓인다. Tempo 는 그 추적을 뿌리가 없다고(root span not yet received) 보인다. 부른 서버에 span 을 붙이면 풀린다.
 - **게임 서버의 AI 호출 기록(DB)에 `job_id` 와 `trace_id` 가 없다.** 로그의 서술 작업과 DB 의 호출 기록을 번호로 잇지 못한다. 열을 더하는 마이그레이션이 필요하다.
 - **사람이 치는 명령은 JSON 이 아니다.** billing-server 의 `cmd/migrate`, `cmd/fakepg`, `cmd/prices`, `cmd/orders`, auth-server 의 관리 명령이 화면에 찍는 안내(`self.stdout`)는 그대로 글이다.
   `cmd/orders decide` 가 남기는 결정의 기록(`order.decide`)은 로그라서 JSON 이다.

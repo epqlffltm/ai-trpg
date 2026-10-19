@@ -5,6 +5,7 @@
  *
  * 하는 일은 셋이다.
  *   1. 요청의 식별자(request_id)와 추적(trace_id)을 정해 건다. 밖에서 받은 값이 형식에 맞으면 이어 쓴다.
+ *      요청의 span(request-spans.middleware.ts)이 있으면 추적은 그 span 의 것이고, 요청 식별자를 그 span 에 싣는다.
  *   2. 응답에 X-Request-ID 머리말로 식별자를 돌려준다. 문제를 알릴 때 이 값을 함께 알려 주면 그 요청의 기록을 찾는다.
  *   3. 응답이 다 나가면 한 줄을 남긴다. 무엇을(메서드, 경로의 틀), 어떻게(상태 코드, 걸린 시간) 처리했는지다.
  *
@@ -22,15 +23,22 @@ import { Logger } from '@nestjs/common';
 import {
   REQUEST_ID_HEADER,
   requestIdFrom,
+  Trace,
   traceFrom,
   TRACEPARENT_HEADER,
 } from './identifiers.js';
 import { idsOf, RequestContext, runInRequest } from './request-context.js';
+import { ATTRIBUTE_REQUEST_ID, spanTrace, tagCurrentSpan } from './spans.js';
 
 /** 요청 하나를 처리한 일의 이름 */
 export const HTTP_OPERATION = 'http.request';
 /** 맞는 경로의 틀이 없을 때(404) 틀 자리에 적는 표시 */
 export const UNMATCHED_ROUTE = '(unmatched)';
+/**
+ * Nest 가 API 주소(API_PREFIX) 아래의 없는 주소를 받으려고 거는 틀. 이 틀에 맞았으면 맞는 틀이 없던 것이다.
+ * Nest 의 express 어댑터가 정한 이름이다(setNotFoundHandler 의 router.all('*path')). 이 서버의 주소는 이 틀을 쓰지 않는다
+ */
+export const NOT_FOUND_ROUTE = '*path';
 /** 이 미들웨어가 남기는 로그의 이름 */
 export const REQUEST_LOGGER = 'RequestLogging';
 
@@ -52,8 +60,10 @@ const CLIENT_ERROR = 400;
 /** 이 미들웨어가 읽는 요청의 부분. */
 export interface IncomingRequest {
   method: string;
-  /** 주소 뒤에 붙는 값(?a=b)을 뺀 경로 */
+  /** 주소 뒤에 붙는 값(?a=b)을 뺀 경로. 아래 라우터 안에서는 그 라우터가 걸린 앞부분이 빠진다 */
   path: string;
+  /** 받은 그대로의 주소(뒤의 값까지). 라우터가 바꾸지 않는다 */
+  originalUrl?: string;
   headers: Record<string, string | string[] | undefined>;
   /** 라우터가 맞은 경로를 여기에 적어 둔다. 맞은 것이 없으면 비어 있다 */
   route?: { path?: unknown };
@@ -89,13 +99,24 @@ export function resultOf(statusCode: number): string {
  * 요청이 맞은 경로의 틀. 맞은 것이 없으면(404) 틀 자리에 표시를 적고 실제 경로를 따로 싣는다.
  *
  * 라우터는 요청을 처리하면서 맞은 경로를 요청에 적어 둔다. 그래서 응답이 나간 뒤에 읽는다.
+ * API 주소 아래의 없는 주소는 Nest 의 404 틀(NOT_FOUND_ROUTE)에 맞는다. 이것도 맞은 것이 없는 것으로 본다.
  */
 export function routeFields(request: IncomingRequest): Record<string, string> {
   const template = request.route?.path;
-  if (typeof template === 'string') {
+  if (typeof template === 'string' && template !== NOT_FOUND_ROUTE) {
     return { route: template };
   }
-  return { route: UNMATCHED_ROUTE, path: request.path };
+  return { route: UNMATCHED_ROUTE, path: requestedPath(request) };
+}
+
+/**
+ * 받은 경로. 주소 뒤의 값(?a=b)은 뗀다.
+ *
+ * Nest 의 404 틀은 API 주소에 건 라우터 안에 있어서, 그 안에서는 path 의 앞부분(/api/v1/board)이 빠져 있다.
+ * 받은 그대로의 주소(originalUrl)가 있으면 그것을 쓴다.
+ */
+export function requestedPath(request: IncomingRequest): string {
+  return request.originalUrl?.split(/[?#]/, 1)[0] ?? request.path;
 }
 
 /** 요청이 끝난 줄에 싣는 칸들. */
@@ -156,6 +177,11 @@ export function logFinished(
   log[levelOf(fields.route, statusCode)](line);
 }
 
+/** 이 요청의 추적. 요청의 span 이 있으면 그 span 의 것, 없으면 받은 traceparent 를 잇거나 새로 시작한다. */
+export function traceOfRequest(request: IncomingRequest): Trace {
+  return spanTrace() ?? traceFrom(request.headers[TRACEPARENT_HEADER]);
+}
+
 /** 지금까지 걸린 시간(밀리초). started 는 performance.now() 의 값이다. */
 function elapsedMs(started: number): number {
   return Math.round(performance.now() - started);
@@ -176,8 +202,9 @@ export function requestLogging(
       requestId: requestIdFrom(
         request.headers[REQUEST_ID_HEADER.toLowerCase()],
       ),
-      trace: traceFrom(request.headers[TRACEPARENT_HEADER]),
+      trace: traceOfRequest(request),
     };
+    tagCurrentSpan(ATTRIBUTE_REQUEST_ID, context.requestId);
     const started = performance.now();
     response.setHeader(REQUEST_ID_HEADER, context.requestId);
     response.on('finish', () => {

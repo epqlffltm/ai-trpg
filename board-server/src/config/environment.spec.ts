@@ -25,6 +25,7 @@ import {
   readJwtIssuer,
   readLogLevel,
   readNotificationSettings,
+  readOtlpEndpoint,
   readPort,
   readSessionRevocationsUrl,
 } from './environment.js';
@@ -357,6 +358,7 @@ describe('readEnvironment', () => {
       LOG_LEVEL: DEFAULT_LOG_LEVEL,
       NOTIFICATION_URL: '',
       NOTIFICATION_SECRET: '',
+      OTEL_EXPORTER_OTLP_ENDPOINT: '',
     });
   });
 
@@ -374,6 +376,7 @@ describe('readEnvironment', () => {
       LOG_LEVEL: 'warning',
       NOTIFICATION_URL: 'http://notification:8004',
       NOTIFICATION_SECRET: SECRET,
+      OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318/',
       PATH: '/usr/bin',
     });
 
@@ -391,6 +394,7 @@ describe('readEnvironment', () => {
       LOG_LEVEL: 'warning',
       NOTIFICATION_URL: 'http://notification:8004',
       NOTIFICATION_SECRET: SECRET,
+      OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318',
     });
   });
 
@@ -447,4 +451,37 @@ describe('readNotificationSettings', () => {
       readNotificationSettings('http://notification:8004', 'short-secret'),
     ).toThrow(/^(?!.*short-secret)/);
   });
+});
+
+describe('readOtlpEndpoint', () => {
+  it('적지 않으면 빈 글자다. span 을 내보내지 않는다', () => {
+    expect(readOtlpEndpoint(undefined)).toBe('');
+    expect(readOtlpEndpoint('  ')).toBe('');
+  });
+
+  it.each([
+    ['http://alloy:4318', 'http://alloy:4318'],
+    ['https://otlp.example.com/', 'https://otlp.example.com'],
+    [' http://127.0.0.1:4318 ', 'http://127.0.0.1:4318'],
+  ])('%j 를 %j 로 읽는다. 끝의 / 는 뗀다', (value, expected) => {
+    expect(readOtlpEndpoint(value)).toBe(expected);
+  });
+
+  it.each(['alloy:4318', 'ftp://alloy:4318', 'not a url'])(
+    'http 나 https 주소가 아닌 %j 는 받지 않는다',
+    (value) => {
+      expect(() => readOtlpEndpoint(value)).toThrow('http://');
+    },
+  );
+
+  it.each([
+    'http://alloy:4318/v1/traces',
+    'http://alloy:4318/?a=b',
+    'http://alloy:4318/#x',
+  ])(
+    '경로가 있는 %j 는 받지 않는다. /v1/traces 는 보내는 쪽이 붙인다',
+    (value) => {
+      expect(() => readOtlpEndpoint(value)).toThrow('경로 없이');
+    },
+  );
 });

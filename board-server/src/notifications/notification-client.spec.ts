@@ -16,8 +16,12 @@ import {
   Sent,
   transportReason,
 } from './notification-client.js';
+import { recordSpans, spanIdOf, traceIdOf } from '../../test/spans.js';
+import { tracer } from '../observability/spans.js';
 import { OutgoingNotification } from './outgoing-notification.entity.js';
 import { SIGNATURE_HEADER, sign, signedContent } from './signing.js';
+
+const recorder = recordSpans();
 
 const SECRET = 'board-notification-test-secret-of-32';
 const SENT_AT = new Date('2026-10-19T03:00:00Z');
@@ -36,6 +40,7 @@ function sample(): OutgoingNotification {
 interface Received {
   path: string;
   signature: string;
+  traceparent: string | undefined;
   body: string;
 }
 
@@ -51,6 +56,7 @@ async function serve(
       received.push({
         path: request.url ?? '',
         signature: String(request.headers[SIGNATURE_HEADER.toLowerCase()]),
+        traceparent: request.headers.traceparent as string | undefined,
         body,
       });
       if (status === 302) {
@@ -147,6 +153,40 @@ describe('HttpNotificationSender', () => {
     const sentAt = SENT_AT.getTime() / 1000;
     expect(request.signature).toBe(
       sign(SECRET, sentAt, 'POST', PUT_PATH, request.body),
+    );
+  });
+
+  it('작업 밖에서 보내면 span 도 traceparent 도 없다', async () => {
+    const served = await serve(201);
+    server = served.server;
+
+    await new HttpNotificationSender(served.url, SECRET).send(sample());
+
+    expect(served.received[0].traceparent).toBeUndefined();
+    expect(recorder.spans()).toEqual([]);
+  });
+
+  it('작업 안에서 보내면 client span 을 걸고 traceparent 로 추적을 잇는다. 서명은 그대로 맞는다', async () => {
+    const served = await serve(201);
+    server = served.server;
+    const sender = new HttpNotificationSender(
+      served.url,
+      SECRET,
+      () => SENT_AT,
+    );
+
+    await tracer().startActiveSpan('notification.send', async (job) => {
+      await sender.send(sample());
+      job.end();
+    });
+
+    const client = recorder.only('HTTP POST');
+    const [request] = served.received;
+    expect(request.traceparent).toBe(
+      `00-${traceIdOf(client)}-${spanIdOf(client)}-01`,
+    );
+    expect(request.signature).toBe(
+      sign(SECRET, SENT_AT.getTime() / 1000, 'POST', PUT_PATH, request.body),
     );
   });
 
