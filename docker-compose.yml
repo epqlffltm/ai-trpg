@@ -593,7 +593,8 @@ services:
   # 소켓을 Alloy 에 직접 붙이면 Alloy 가 뚫릴 때 VM 의 관리자 권한이 넘어간다.
   # 넘기는 것에 컨테이너의 inspect 가 들어 있어 컨테이너의 환경 변수(비밀)도 읽힌다. 그래서 Alloy 만 닿는 망에 둔다
   docker-socket-proxy:
-    image: ghcr.io/tecnativa/docker-socket-proxy:0.5.0
+    # 이 이미지의 태그는 앞에 v 가 붙는다(v0.5.0). 0.5.0 은 없다
+    image: tecnativa/docker-socket-proxy:v0.5.0
     profiles: [observability]
     logging: *logging
     restart: unless-stopped
