@@ -15,7 +15,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 구성 요소 | 폴더 | 상태 |
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
-| 로그 모으기 (Grafana Alloy, Loki, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것까지 완료(compose 의 프로필 `observability`, [아래](#로그-모으기)). 메트릭과 추적은 예정 |
+| 로그와 메트릭 모으기 (Grafana Alloy, Loki, Prometheus, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것과 메트릭의 저장소(OTLP 로 받는 길)까지 완료(compose 의 프로필 `observability`, [아래](#로그와-메트릭-모으기)). 서버의 메트릭과 추적은 예정 |
 | 인증 서버 (Django) | [`auth-server/`](auth-server/README.md) | 회원가입(이메일 인증), 로그인(이메일 인증), 비밀번호 변경과 재설정, 메일 발송, 토큰 갱신, 로그아웃, JWKS, 시도 횟수 제한, 보안 이벤트 기록, 가입한 사용자의 환영 크레딧을 결제 서버에 맡기기, access 토큰에 닉네임 싣기까지 완료 |
 | 게임 서버 (FastAPI) | [`game-server/`](game-server/README.md) | 뼈대(서버 실행, DB, 인증 서버 토큰 검증, CI)와 자산 네 종류(세계관, 룰북, 시나리오, 로어북)의 만들기, 목록, 읽기, 고치기, 지우기와 시나리오 게시(판으로 굳히기, 스타팅 여러 개, 추천 인원과 프리젠), 공개와 소개 페이지, 공개 목록, 테이블 만들기와 참가(초대 코드, 로비와 비밀번호, 캐릭터, 방장), 라운드(선언 모으기, 가짜 서술자), 이벤트 기록, 채팅, 실시간 스트림(SSE, "입력 중" 표시), 룰북의 규칙 데이터(내장 템플릿 `srd5`), 시나리오의 캐릭터 시트와 캐릭터 방식, 테이블의 캐릭터 시트, 주사위와 판정(순수 함수), 선언에 붙이는 행동, 라운드를 닫을 때의 판정, 피해와 회복과 쓰러짐, 능력치를 직접 적는 캐릭터 방식, 점수제로 능력치를 사는 캐릭터 방식, 주사위로 능력치를 정하는 캐릭터 방식과 다시 굴리기, 죽음의 굴림과 캐릭터의 죽음, 죽은 뒤에 새 캐릭터 들이기, 캐릭터 보관함, 라운드의 서술 값 받기(결제 서버의 홀드), 시나리오의 추천 서술 모델과 테이블마다 고르는 서술 모델까지 완료 |
 | 게시판 서버 (NestJS) | [`board-server/`](board-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, CI), 인증 서버 토큰 검증, 게시판 넷과 글(쓰기, 목록, 읽기, 고치기, 지우기, 운영자), 댓글과 답글, 글마다의 댓글 수, 글 고정(기한이 지나면 저절로 내려감), 글 검색, 쓰기 횟수 제한, 글과 댓글의 신고(운영자가 묶어 읽고 처리), 글쓴이의 닉네임 표시까지 완료 |
@@ -157,10 +157,10 @@ docker compose run --rm --entrypoint pg_restore db-backup --clean --if-exists --
 `--dbname` 은 루트 `.env` 의 `POSTGRES_DB` 다(기본 `trpg`). 다 풀면 서버를 띄운다. 마이그레이션은 이미 백업에 든 상태라 할 일이 없다.
 풀기 전에는 `db` 만 띄운다. `docker compose up -d` 로 모두 띄우면 `db-backup` 이 곧바로 빈 DB 를 하나 떠서 쌓는다.
 
-## 로그 모으기
+## 로그와 메트릭 모으기
 
-compose 의 컨테이너 로그를 모아(Grafana Alloy) 저장하고(Loki) 본다(Grafana)(#25). 프로필 `observability` 로 켠다. 기본으로 꺼져 있다.
-서버 코드와 서버의 설정은 그대로다. 서버는 지금처럼 stderr 에 JSON 을 쓰고, 이 넷이 멈춰도 요청은 영향을 받지 않는다.
+compose 의 컨테이너 로그와 메트릭을 모아(Grafana Alloy) 저장하고(Loki, Prometheus) 본다(Grafana)(#25). 프로필 `observability` 로 켠다. 기본으로 꺼져 있다.
+서버는 지금처럼 stderr 에 JSON 을 쓰고, 메트릭은 OTLP 로 Alloy 에 민다(서버마다 붙이는 중이다). 이것들이 멈춰도 요청은 영향을 받지 않는다.
 정한 것과 까닭은 [관측 규격의 수집기](docs/observability.md#수집기grafana-alloy를-붙일-자리)에 있다.
 
 루트 `.env` 에 Grafana 의 관리자 비밀번호를 적고 띄운다. 비밀번호가 비어 있으면 Grafana 가 뜨지 않는다.
@@ -170,8 +170,8 @@ docker compose --profile app --profile observability up -d --build
 docker compose --profile app --profile observability ps
 ```
 
-`grafana` 가 `healthy`, `alloy`, `loki`, `docker-socket-proxy` 가 `Up` 이면 된다. `http://127.0.0.1:3000` 에서 `admin` 과 그 비밀번호로 들어가
-Explore 에서 데이터 소스 Loki 를 고른다. 서버(VM)에서는 SSH 터널로 붙는다. `ssh -L 3000:127.0.0.1:3000 <서버>` 를 띄워 두고 같은 주소를 연다.
+`prometheus` 와 `grafana` 가 `healthy`, `alloy`, `loki`, `docker-socket-proxy` 가 `Up` 이면 된다. `http://127.0.0.1:3000` 에서 `admin` 과 그 비밀번호로 들어가
+Explore 에서 데이터 소스 Loki(로그)나 Prometheus(메트릭)를 고른다. 서버(VM)에서는 SSH 터널로 붙는다. `ssh -L 3000:127.0.0.1:3000 <서버>` 를 띄워 두고 같은 주소를 연다.
 끌 때도 두 프로필을 붙인다. `docker compose --profile app --profile observability down`
 
 ```
@@ -180,6 +180,17 @@ Explore 에서 데이터 소스 Loki 를 고른다. 서버(VM)에서는 SSH 터�
 {service="auth-server"} | trace_id="4bf92f35..."        # 한 요청이나 작업의 줄
 {container="db"}                                        # PostgreSQL 의 줄(JSON 이 아니다)
 ```
+
+메트릭(Prometheus):
+
+```
+up                                                      # Alloy 가 긁는 것(alloy, loki, prometheus, grafana)이 살아 있는가
+sum by (service) (rate(http_server_requests_total[5m])) # 서버마다 초당 요청(서버에 메트릭을 붙인 뒤)
+```
+
+- 서버의 메트릭은 label `service` 로 가른다. 프로세스마다 `instance` 가 다르니 `sum by (service, …)` 로 합친다. 이름과 label 은 [관측 규격의 메트릭](docs/observability.md#메트릭)에 있다
+- Prometheus 는 받기만 하고 아무것도 긁지 않는다. 긁는 일과 서버의 OTLP 를 받는 일은 Alloy 가 한다. 그래서 저장소를 Mimir 로 바꿀 때 Alloy 와 Grafana 의 주소만 바뀐다
+- 메트릭도 14일 뒤에 지운다(`docker/prometheus/prometheus.yml`). Prometheus 가 멈춘 동안의 메트릭은 Alloy 가 볼륨(`alloydata`)에 두었다가 보낸다
 
 - label 은 `service`, `container`, `environment`, `level`, `mode` 뿐이다. 식별자(`request_id`, `trace_id`, `job_id`)와 `version` 은 줄의 값(structured metadata)이라 `|` 뒤에서 거른다.
   JSON 이 아닌 줄(DB, Redis, Loki 등)은 `log_format="other"` 이 붙는다
@@ -239,7 +250,7 @@ IP 를 쓰는 것은 인증 서버(시도 횟수)와 프록시(요청 수 제한
 
 - `docker-compose.yml` 의 `x-logging`(json-file, 파일 하나 10MB, 5개까지)을 모든 서비스가 `logging: *logging` 으로 쓴다. 서비스마다 최대 50MB, 17개면 850MB 쯤이다
 - 새 서비스가 이것을 빠뜨리면 CI(`stack`)가 실패한다(`.github/scripts/logging_scope.py`). 띄운 컨테이너에 상한이 실제로 붙었는지도 본다
-- 지난 로그는 상한을 넘으면 사라진다. 오래 남기고 찾아보는 일은 [로그 모으기](#로그-모으기)(Loki, 14일)가 한다
+- 지난 로그는 상한을 넘으면 사라진다. 오래 남기고 찾아보는 일은 [로그와 메트릭 모으기](#로그와-메트릭-모으기)(Loki, 14일)가 한다
 - VM 을 만들 때 Docker 의 기본값에도 같은 상한을 둔다. compose 밖에서 띄운 컨테이너(`docker run` 으로 잠깐 띄운 것)도 디스크를 채우지 않는다.
   `/etc/docker/daemon.json` 에 아래를 적고 Docker 를 다시 띄운다. 이미 만든 컨테이너에는 붙지 않는다
 
@@ -359,10 +370,11 @@ docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기�
 docker/nginx/templates/   프록시(nginx)의 설정
 docker/cron/              주기 명령의 crontab (인증, 결제)
 docker/backup/            DB 의 백업과 복원 확인 스크립트
-docker/alloy/             로그 수집기(Grafana Alloy)의 설정
+docker/alloy/             수집기(Grafana Alloy)의 설정. 로그(config.alloy)와 메트릭(metrics.alloy)
 docker/loki/              로그 저장소(Loki)의 설정
-docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki)
+docker/prometheus/        메트릭 저장소(Prometheus)의 설정
+docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki, Prometheus)
 docs/                     서버들이 함께 지키는 규격 (관측)
-docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 모든 서버와 워커, cron, 프록시(프로필 app), 로그 모으기(프로필 observability)
+docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 모든 서버와 워커, cron, 프록시(프로필 app), 로그와 메트릭 모으기(프로필 observability)
 .env.example              인프라 환경 변수 목록
 ```
