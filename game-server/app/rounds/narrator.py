@@ -89,12 +89,13 @@ class DroppedNote:
 @dataclass(frozen=True)
 class DropNote:
     """
-    몬스터를 쓰러뜨려 얻은 물건. 엔진이 굴리고 엔진이 줬다. 서술자는 이것을 사실로 받아 쓰기만 한다.
+    몬스터나 NPC 를 쓰러뜨려 얻은 물건. 엔진이 굴리고 엔진이 줬다. 서술자는 이것을 사실로 받아 쓰기만 한다.
 
-    receiver 는 받은 캐릭터의 이름이다. 받을 사람이 없어 사라진 드롭은 서술자에게 주지 않는다.
+    holder 는 지녔던 몬스터나 NPC 의 장면의 호칭, receiver 는 받은 캐릭터의 이름이다.
+    받을 사람이 없어 사라진 드롭은 서술자에게 주지 않는다.
     """
 
-    monster: str
+    holder: str
     receiver: str
     items: list[DroppedNote]
 

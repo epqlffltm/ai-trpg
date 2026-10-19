@@ -31,6 +31,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.LEDGER_DRAFTS_CHANGED: ('ledger_drafts',),
     # 소지품은 공개다. 누가 무엇을 몇 개 받거나 잃었고, 그 뒤에 몇 개인가.
     # 몬스터를 쓰러뜨려 얻었으면 라운드, 출처(source: monster, 그 마리와 장면의 호칭), 상한을 넘어 잃은 개수가 더 있다.
+    # NPC 를 쓰러뜨려 얻었으면 출처가 npc 이고 그 인물(npc_id)과 장면의 호칭(npc_name)이 있다.
     # 장소에서 주웠거나 찾았으면 라운드, 출처(source: place, search), 장소(place)가 더 있다
     EventType.ITEMS_GAINED: (
         'round',
@@ -44,6 +45,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'source',
         'monster_id',
         'monster_name',
+        'npc_id',
+        'npc_name',
         'place',
     ),
     EventType.ITEMS_LOST: ('user_id', 'character_name', 'entry_id', 'name', 'count', 'total'),

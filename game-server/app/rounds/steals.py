@@ -28,9 +28,9 @@ from app.rounds.effects import Judging, mark_fight
 from app.rounds.errors import ActionNotInRulesError
 from app.rounds.monster_scene import Gone, SceneMonster, find_scene_monster, gone_reason
 from app.tables import items, monster_items
+from app.tables.carried import Carried
 from app.tables.items import CatalogItem
 from app.tables.models import NpcStatus, TableMember
-from app.tables.monster_items import Carried
 
 # 훔쳐 얻은 물건의 출처. items_gained 이벤트의 source 에 적는다. 몬스터의 드롭은 monster 다
 STEAL_SOURCE = 'steal'
