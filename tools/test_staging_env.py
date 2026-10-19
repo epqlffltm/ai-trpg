@@ -2,7 +2,8 @@
 
 """
 staging 의 .env 를 만드는 도구(staging_env.py)를 본다. 저장소의 진짜 .env.example 을 빈 폴더에 옮겨 그 위에서 만든다.
-비밀을 채우는 규칙 자체는 tools/test_fill_env.py 가 본다. 여기서는 staging 에서 그 비밀이 켜져 있고 짝이 맞는지를 본다.
+비밀을 채우는 규칙 자체는 tools/test_fill_env.py 가 본다.
+여기서는 staging 에서 그 비밀이 모두(한 파일만 아는 것까지) 켜져 있고 짝이 맞는지를 본다.
 
     사용: python3 -m unittest discover -s tools -p 'test_staging_env.py'
 
