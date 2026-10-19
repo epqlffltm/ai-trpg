@@ -117,7 +117,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 다루는 법에 태도도 엔진이 정한 사실이라는 말이 더해진다(#474)
 #   narration-36: 훔치기의 줄에 NPC 가 대상인 것이 붙는다. 들켰으면 적대한다(이미 적대였으면 그대로)는 말과,
 #                 싸움이 붙었으면 그 말이 붙는다(#457)
-PROMPT_VERSION = 'narration-36'
+#   narration-37: 한 일의 줄에 빼앗기의 결과가 붙는다((빼앗기: 수로 쥐 1 에게서 송곳니 1개를 가져갔다)).
+#                 판정이 없다(#475)
+PROMPT_VERSION = 'narration-37'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3

@@ -109,6 +109,7 @@ def build_moves(
                 take=narration_request.to_take(declaration),
                 put_down=narration_request.to_put_down(declaration),
                 steal=narration_request.to_steal(declaration),
+                loot=narration_request.to_loot(declaration),
                 handed_over=narration_request.find_handed_over(quest_changes, member.user_id),
                 target_gone=narration_request.to_target_gone(declaration),
                 rest=narration_request.to_rest(declaration),

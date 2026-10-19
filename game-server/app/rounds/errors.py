@@ -54,6 +54,8 @@ class Conflict(enum.StrEnum):
     RECIPIENT_FULL = 'recipient_full'
     # 맵에서 가거나 찾으려는데 캐릭터가 맵에 서 있지 않다. 맵이 없는 판이거나, 맵이 생기기 전에 시작한 테이블이다
     NOT_ON_MAP = 'not_on_map'
+    # 빼앗으려는 대상이 쓰러지지 않았다(살아 있다). 그때는 훔치기다
+    TARGET_NOT_DOWN = 'target_not_down'
 
 
 class RoundConflictError(Exception):
