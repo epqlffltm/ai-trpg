@@ -127,7 +127,8 @@ from app.rounds.time_words import duration_text, time_text
 #                 (수로 쥐 2: 쓰러진 엘프에게 물기 (맞음) → 엘프 죽음의 굴림 실패 +1 (실패 2/3, 죽어 가는 중)) (#369)
 #   narration-41: [퀘스트]의 진행 중인 줄에 남은 기한의 감각(기한 넉넉함, 빠듯함, 다 됨)이,
 #                 이번 라운드에 기한을 넘겨 실패한 줄에 그것이 붙는다. 다루는 법에 기한을 다루는 말이 더해진다(#268)
-PROMPT_VERSION = 'narration-41'
+#   narration-42: 기한이 다 됐거나 이번 라운드에 넘긴 퀘스트를 마지막 부탁 앞에 한 줄씩 다시 적는다(#268 의 측정)
+PROMPT_VERSION = 'narration-42'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -370,6 +371,14 @@ QUEST_PACE_WORDS = {
 }
 # 이번 라운드에 기한을 넘겨 실패한 퀘스트에 붙이는 말
 QUEST_MISSED_WORDS = '이번 라운드에 기한을 넘김'
+# 마지막 부탁 앞에 다시 적는 기한의 말(narration-42). [퀘스트]는 멀리 있어 모델이 배경으로만 읽었다.
+# 첫 측정(narration-41, 10 번)에서 기한이 다 된 장면 중 서두르는 긴장을 쓴 것이 1 번뿐이었다. 다 됐거나 넘긴 것만 적는다
+QUEST_LAST_REMINDER = (
+    "'{name}' 의 기한이 다 됐다. 남은 기회는 다음 라운드 하나뿐이다. 시간이 없다는 긴장을 장면에 드러내라."
+)
+QUEST_MISSED_REMINDER = (
+    "'{name}' 은(는) 이번 라운드에 기한을 넘겨 실패했다. 때를 놓쳐 일이 틀어진 것을 장면에 드러내라."
+)
 # 캐릭터가 서 있는 곳과 아는 출구, 그리고 GM 만 아는 숨긴 길(#218). 위치는 엔진이 정한 사실이다.
 # 서술이 캐릭터를 다른 곳으로 옮기거나 모르는 길로 가게 하면 장면과 위치가 어긋난다.
 # 숨긴 길은 플레이어도 방장도 모른다. 이름을 드러내면 찾기(search)의 판정이 뜻을 잃는다. 실마리만 흘리게 한다.
@@ -475,6 +484,21 @@ def style_reminder(style: NarrationStyle) -> str | None:
     if rule is None:
         return None
     return f'문체는 {rule.name}이다. 시스템 지시의 문체와 예시를 따른다.'
+
+
+def deadline_reminders(quests: list[QuestNote]) -> list[str]:
+    """
+    마지막 부탁 앞에 다시 적는 기한의 줄들. 기한이 다 된 퀘스트와 이번 라운드에 기한을 넘긴 퀘스트마다 한 줄이다.
+
+    넉넉하거나 빠듯한 것은 적지 않는다. 모든 퀘스트를 다시 적으면 줄이 늘고 무게가 흐려진다. 판의 순서다.
+    """
+    lines = []
+    for quest in quests:
+        if quest.pace == 'last':
+            lines.append(QUEST_LAST_REMINDER.format(name=quest.name))
+        elif quest.missed_deadline:
+            lines.append(QUEST_MISSED_REMINDER.format(name=quest.name))
+    return lines
 
 
 def system_text(story: StoryContext, style: NarrationStyle) -> str:
@@ -761,7 +785,8 @@ def round_text(request: NarrationRequest) -> str:
     소지품이 있으면 그것을 다루는 법도 한 줄 붙인다.
     선언한 일을 하기 전에 쓰러지거나 죽은 인물이 있으면 그 일이 일어나지 않았다는 다루는 법도 한 줄 붙인다.
     쉬거나 되살아나기를 굴린 인물이 있으면 그것을 다루는 법도 한 줄 붙인다.
-    부탁 앞에 "이번 라운드에 한 일만"과 문체를 다시 적는다. 부탁이 늘 마지막 줄이다.
+    부탁 앞에 "이번 라운드에 한 일만"과 기한이 다 됐거나 넘긴 퀘스트(deadline_reminders)와 문체를 다시 적는다.
+    부탁이 늘 마지막 줄이다.
     """
     lines = lore_lines(request.lore, {move.character_name for move in request.moves})
     lines.extend(memory_lines(request.memories))
@@ -786,6 +811,7 @@ def round_text(request: NarrationRequest) -> str:
     if any(move.rest is not None or move.revival is not None for move in request.moves):
         lines.append(REST_NOTE)
     lines.append(THIS_ROUND_ONLY)
+    lines.extend(deadline_reminders(request.quests))
     reminder = style_reminder(request.style)
     if reminder is not None:
         lines.append(reminder)
