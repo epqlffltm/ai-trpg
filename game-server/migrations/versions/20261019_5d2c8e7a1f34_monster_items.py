@@ -38,7 +38,9 @@ def rewrite_monster_sheets(change) -> None:
         if not sheets:
             continue
         rewritten = [change(sheet) for sheet in sheets]
-        connection.execute(scenarios.update().where(scenarios.c.asset_id == scenario_id).values(monster_sheets=rewritten))
+        connection.execute(
+            scenarios.update().where(scenarios.c.asset_id == scenario_id).values(monster_sheets=rewritten)
+        )
 
 
 def upgrade() -> None:
