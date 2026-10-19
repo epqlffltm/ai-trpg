@@ -36,6 +36,7 @@ from config.security import (
 )
 from observability.formatter import ServiceInfo
 from observability.setup import SERVICE_NAME, logging_settings
+from observability.tracing import otlp_endpoint
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -78,6 +79,13 @@ APP_VERSION = env('APP_VERSION', default='dev')
 # 이 수준부터 로그를 남긴다. debug, info, warning, error 중 하나다
 LOG_LEVEL = env('LOG_LEVEL', default='info')
 
+# span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. 경로 없이 적는다(http://alloy:4318).
+# 비우면 span 을 내보내지 않는다. 로그는 그대로다(observability/tracing.py)
+try:
+    OTEL_EXPORTER_OTLP_ENDPOINT = otlp_endpoint(env('OTEL_EXPORTER_OTLP_ENDPOINT', default=''))
+except ValueError as error:
+    raise ImproperlyConfigured(str(error)) from None
+
 # 이 값들은 로그의 모든 줄에 실린다. 줄바꿈이나 빈칸이 든 값을 받지 않는다
 if not re.fullmatch(r'[a-z][a-z0-9_-]{0,31}', APP_ENVIRONMENT):
     raise ImproperlyConfigured('APP_ENVIRONMENT 는 영문 소문자로 시작하고 영문 소문자, 숫자, 밑줄, 붙임표만 씁니다.')
@@ -113,11 +121,16 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     # 이 프로젝트의 앱
     'accounts',
+    # 관측. 뜰 때 span 을 보내는 것과 쿼리의 span 을 건다(observability/apps.py)
+    'observability.apps.ObservabilityConfig',
 ]
 
 MIDDLEWARE = [
+    # 요청마다 서버 span 을 건다(observability/request_spans.py). 맨 앞에 둔다.
+    # 뒤의 로그(trace_id)와 쿼리가 이 span 을 따른다
+    'observability.request_spans.RequestSpanMiddleware',
     # 요청마다 식별자(request_id, trace_id)를 걸고, 끝나면 한 줄을 남긴다. 응답에 X-Request-ID 를 돌려준다.
-    # 맨 앞에 둔다. 다른 미들웨어가 남기는 로그에도 식별자가 붙는다
+    # span 다음에 둔다. 다른 미들웨어가 남기는 로그에도 식별자가 붙는다
     'observability.middleware.RequestLoggingMiddleware',
     'django.middleware.security.SecurityMiddleware',
     # 관리자 화면의 CSS 와 JS 를 이 서버가 직접 내준다(whitenoise). DEBUG 를 끈 운영에서는 Django 가 내주지 않는다.

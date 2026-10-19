@@ -266,7 +266,11 @@ class SettingsTests(SimpleTestCase):
         self.assertEqual(info.version, settings.APP_VERSION)
 
     def test_the_request_middleware_comes_first(self):
-        self.assertEqual(settings.MIDDLEWARE[0], 'observability.middleware.RequestLoggingMiddleware')
+        # 서버 span 이 맨 앞이고, 식별자를 거는 것이 그 바로 뒤다. 로그의 trace_id 가 span 의 것이 된다
+        self.assertEqual(
+            settings.MIDDLEWARE[:2],
+            ['observability.request_spans.RequestSpanMiddleware', 'observability.middleware.RequestLoggingMiddleware'],
+        )
 
     def test_the_development_server_request_line_is_silenced(self):
         # 그 줄에는 실제 주소가 주소 뒤에 붙은 값까지 그대로 적힌다

@@ -79,15 +79,23 @@ LOKI_LABELS=(container environment level mode service)
 # 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다
 METRIC_SERVERS=(billing)
 # span 을 내보내는 서버(docs/observability.md 의 "3. 추적"). 서버에 span 을 붙이면 여기와 아래 둘에 더한다
-TRACE_SERVERS=(trpg billing notification)
+TRACE_SERVERS=(auth trpg billing notification)
 # 추적 번호를 실어 한 번 부를 주소(메서드와 경로). 401 이어도 된다. 요청의 span 은 걸린다. 상태 확인은 span 이 없다
 declare -A TRACE_PROBES=(
+  [auth]="GET /api/v1/auth/jwks"
   [trpg]="GET /api/v1/game/me"
   [billing]="POST /api/v1/billing/webhooks/payment"
   [notification]="GET /api/v1/notification/me/notifications"
 )
-# 그 아래에 쿼리의 span 이 있는지 볼 작업(operation). 서버가 뜨면 곧 한 바퀴 돈다
-declare -A TRACE_JOBS=([trpg]=round.close_overdue [billing]=sweep.run [notification]=notification.prune)
+# 그 아래에 쿼리의 span 이 있는지 볼 작업(operation). 서버가 뜨면 곧 한 바퀴 돈다.
+# 인증 서버의 것은 주기 명령(send_security_digest)이다. 워커와 주기 명령의 검사(check_workers)가 먼저 한 번 돌린다.
+# 인증 서버의 워커는 할 일이 없던 바퀴를 보내지 않아 쓸 수 없다
+declare -A TRACE_JOBS=(
+  [auth]=security.send_digest
+  [trpg]=round.close_overdue
+  [billing]=sweep.run
+  [notification]=notification.prune
+)
 # 서버의 망 밖(소켓 프록시와 Loki 의 망)에서 주소를 부를 때 잠깐 띄우는 이미지. compose 의 redis 와 같아 이미 받아 두었다.
 # 그 안의 busybox wget 을 쓴다
 PROBE_IMAGE=redis:7-alpine
@@ -426,9 +434,10 @@ crontab_commands() {
   grep -vE '^[[:space:]]*(#|$)' "$1" | awk '{ $1 = $2 = $3 = $4 = $5 = ""; sub(/^ +/, ""); print }'
 }
 
-# 명령 하나를 그 컨테이너에서 지금 한 번 돌려 성공하는가. cron 이 부를 때와 같이 /bin/sh 로 돈다
+# 명령 하나를 그 컨테이너에서 지금 한 번 돌려 성공하는가. cron 이 부를 때와 같이 /bin/sh 로 돈다.
+# 입력을 막는다. exec 는 -T 여도 입력을 넘긴다. 막지 않으면 명령을 읽는 while 의 나머지 줄을 먹어 첫 명령만 돈다
 runs_once() {
-  compose exec -T "$1" sh -c "$2"
+  compose exec -T "$1" sh -c "$2" </dev/null
 }
 
 # 인증 서버의 DB 계정에 테스트용 DB 를 만들 권한(CREATEDB)이 없는가. compose 의 기본은 주지 않는 것이다(#20)
