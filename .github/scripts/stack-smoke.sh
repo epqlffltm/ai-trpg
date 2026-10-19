@@ -572,6 +572,16 @@ check_server_metrics() {
     eventually prometheus_finds 'background_jobs_finished_total{service="billing-server", operation="sweep.run", result="success", instance=~"sweeper-.+"}'
   report "결제 서버의 대사가 끝날 때 작업 메트릭을 민다(reconcile.run)" \
     eventually prometheus_finds 'background_jobs_finished_total{service="billing-server", operation="reconcile.run"}'
+  # 업무 메트릭. 주문과 결제 대행사는 CI 에 결제가 없어 값이 생기지 않는다. 알림은 서명 없는 것을 하나 보내 만든다
+  send_unsigned_webhook
+  report "결제 서버가 서명 없는 알림을 센다(payment_webhooks_total, result=bad_signature)" \
+    eventually prometheus_finds 'payment_webhooks_total{service="billing-server", provider="fake", result="bad_signature"}'
+}
+
+# 결제 서버에 서명 없는 알림을 하나 보낸다. 401 이 답이다(wget 이 실패로 끝난다). 센 것만 본다
+send_unsigned_webhook() {
+  fetch_on default http://billing-server:8003/api/v1/billing/webhooks/payment \
+    --post-data '{}' --header 'Content-Type: application/json' >/dev/null 2>&1 || true
 }
 
 # 모두 돌고 있고, 한 번도 다시 뜨지 않았는가

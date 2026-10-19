@@ -73,6 +73,7 @@ func (s *Service) startConfirming(ctx context.Context, userID uuid.UUID, orderID
 	if err != nil {
 		return Order{}, err
 	}
+	s.metrics.became(ctx, StatusConfirming, 1)
 	return toOrder(row), nil
 }
 
@@ -110,6 +111,7 @@ func (s *Service) refuseExpired(ctx context.Context, current Order) error {
 	if err != nil {
 		return err
 	}
+	s.metrics.became(ctx, StatusExpired, 1)
 	return ErrExpired
 }
 
@@ -154,6 +156,7 @@ func (s *Service) settle(ctx context.Context, current Order, result payment.Resu
 // pay 는 주문을 paid 로 바꾸고 크레딧을 넣는다. 둘은 한 트랜잭션이다.
 // 다른 요청이 먼저 끝냈으면 아무것도 하지 않는다. 어느 쪽이든 지금의 주문을 돌려준다.
 func (s *Service) pay(ctx context.Context, current Order) (Order, error) {
+	paid := false
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		_, err := orderdb.New(tx).MarkPaid(ctx, orderdb.MarkPaidParams{ID: current.ID, Now: s.clock()})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -162,10 +165,15 @@ func (s *Service) pay(ctx context.Context, current Order) (Order, error) {
 		if err != nil {
 			return err
 		}
+		paid = true
 		return s.wallet.DepositForOrder(ctx, tx, current.UserID, current.Credits, current.ID)
 	})
 	if err != nil {
 		return Order{}, err
+	}
+	// 커밋한 뒤에 센다. 크레딧을 넣지 못해 되돌린 것은 paid 가 아니다
+	if paid {
+		s.metrics.became(ctx, StatusPaid, 1)
 	}
 	return s.reload(ctx, current.ID)
 }
@@ -182,6 +190,9 @@ func (s *Service) fail(ctx context.Context, current Order, code string) (Order, 
 	})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, err
+	}
+	if err == nil {
+		s.metrics.became(ctx, StatusFailed, 1)
 	}
 	return s.reload(ctx, current.ID)
 }

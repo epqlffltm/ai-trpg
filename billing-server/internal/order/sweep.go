@@ -16,6 +16,9 @@ import (
 // confirming 주문은 건드리지 않는다. 돈이 나갔을 수 있다. 그것은 대사가 결제 대행사에 물어 끝낸다(ResolveStale).
 func (s *Service) ExpireDue(ctx context.Context, limit int) (int, error) {
 	expired, err := orderdb.New(s.pool).ExpireDueOrders(ctx, orderdb.ExpireDueOrdersParams{Now: s.clock(), RowLimit: int32(limit)})
+	if err == nil {
+		s.metrics.became(ctx, StatusExpired, expired)
+	}
 	return int(expired), err
 }
 

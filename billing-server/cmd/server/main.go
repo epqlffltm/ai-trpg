@@ -84,8 +84,16 @@ func run() error {
 	defer pool.Close()
 
 	httpapi.SetMode(settings.Debug)
-	services, err := app.NewServices(pool, settings.Rules(), app.NewProviders(settings.Payment), time.Now)
+	// 결제 대행사를 부른 수와 주문의 상태를 센다
+	providers, err := app.MeasureProviders(app.NewProviders(settings.Payment), settings.Payment.Provider, meters.Meter())
 	if err != nil {
+		return err
+	}
+	services, err := app.NewServices(pool, settings.Rules(), providers, time.Now)
+	if err != nil {
+		return err
+	}
+	if err := app.MeasureServices(services, meters.Meter()); err != nil {
 		return err
 	}
 	// 출석(#339). 하루 양이나 보물 상자의 확률표가 틀렸으면 서버가 뜨지 않는다
