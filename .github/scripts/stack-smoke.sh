@@ -5,7 +5,7 @@
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
 #     prepare      설정 파일(.env 여섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
-#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, Prometheus, Alertmanager, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
+#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, Prometheus, Alertmanager, Tempo, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
 #                  Loki 가 준비될 때까지 기다린다.
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
@@ -23,6 +23,8 @@
 #                  대시보드도 본다: 규칙을 지키는가(dashboard_scope.py), Grafana 가 파일에서 읽었는가, 쿼리가 오류 없이 도는가.
 #                  DB 와 Redis 의 메트릭이 들어오는가, 메트릭을 읽는 계정(monitor)이 표를 읽거나 쓰지 못하는가,
 #                  Alloy 가 서버들의 망에 없는가.
+#                  추적도 본다: OTLP 로 민 시험 span 이 Alloy 를 거쳐 Tempo 에 들어오는가, Grafana 가 Tempo 에 닿는가,
+#                  Tempo 가 root 가 아닌가, 결제 서버가 Tempo 에 닿지 않는가.
 #                  경보도 본다: 규칙의 시험(promtool)이 통과하는가, Prometheus 가 규칙을 읽고 Alertmanager 를 찾았는가,
 #                  건강한 스택에서 울리는 경보가 없는가, 받는 곳 넷을 모두 적은 설정이 맞는가, 반쯤 적으면 뜨지 않는가,
 #                  비밀이 설정 파일에 없는가. 받는 곳의 흉내(alert_sink.py)를 띄워 시험 경보가 Discord, Slack, Telegram 의
@@ -230,12 +232,12 @@ running() {
   [[ "$(docker inspect -f '{{.State.Running}}' "$(container_of "$1")")" == "true" ]]
 }
 
-# 서버들과 프록시, Prometheus, Alertmanager, Grafana, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
+# 서버들과 프록시, Prometheus, Alertmanager, Tempo, Grafana, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
 wait_healthy() {
   local deadline=$((SECONDS + WAIT_SECONDS)) service pending
   while ((SECONDS < deadline)); do
     pending=0
-    for service in "${SERVERS[@]/%/-server}" proxy prometheus alertmanager grafana "${HEARTBEAT_WORKERS[@]}"; do
+    for service in "${SERVERS[@]/%/-server}" proxy prometheus alertmanager tempo grafana "${HEARTBEAT_WORKERS[@]}"; do
       if ! running "$service"; then
         echo "$service 가 죽었다" >&2
         return 1
@@ -243,7 +245,7 @@ wait_healthy() {
       [[ "$(health_of "$service")" == "healthy" ]] || pending=$((pending + 1))
     done
     if ((pending == 0)); then
-      echo "서버들과 프록시, Prometheus, Alertmanager, Grafana, 상태 확인이 있는 워커가 healthy 다"
+      echo "서버들과 프록시, Prometheus, Alertmanager, Tempo, Grafana, 상태 확인이 있는 워커가 healthy 다"
       return 0
     fi
     sleep 3
@@ -427,6 +429,13 @@ auth_cannot_create_databases() {
 
 not_root() {
   [[ "$(compose exec -T "$1" id -u)" != "0" ]]
+}
+
+# 셸이 없는 이미지(distroless, Tempo)가 root 가 아닌가. 컨테이너 안에서 id 를 부를 수 없어 컨테이너의 사용자 설정을 본다
+not_root_distroless() {
+  local user
+  user="$(docker inspect -f '{{.Config.User}}' "$(container_of "$1")")"
+  [[ -n "$user" && "${user%%:*}" != "0" && "${user%%:*}" != "root" ]]
 }
 
 no_env_file_in_image() {
@@ -635,6 +644,36 @@ alloy_off_server_network() {
   [[ -n "$networks" && " $networks" != *"_default "* ]]
 }
 
+# --- 추적(observability 프로필) ---
+
+# 서버가 미는 것과 같은 길로 시험 span 하나를 민다. telemetry 망에서 Alloy 의 OTLP(HTTP, JSON)로 보낸다.
+# 추적 번호(32자)와 span 번호(16자)는 이 실행의 값이다
+push_probe_span() {
+  local trace="$1" now body
+  now="$(date +%s%N)"
+  body="$(printf '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"stack-smoke"}}]},"scopeSpans":[{"scope":{"name":"stack-smoke"},"spans":[{"traceId":"%s","spanId":"%s","name":"stack_smoke.probe","kind":1,"startTimeUnixNano":"%s","endTimeUnixNano":"%s"}]}]}]}' \
+    "$trace" "$(openssl rand -hex 8)" "$((now - 1000000))" "$now")"
+  fetch_on telemetry http://alloy:4318/v1/traces --post-data "$body" --header 'Content-Type: application/json' >/dev/null
+}
+
+# Tempo 가 그 추적을 번호로 찾는가. 찾으면 그 안에 민 span 의 이름이 있다
+tempo_finds_trace() {
+  fetch_on observability "http://tempo:3200/api/v2/traces/$1" | grep -q stack_smoke.probe
+}
+
+# 추적을 본다. 시험 span 이 Alloy 를 거쳐 Tempo 에 들어오는가, Grafana 가 Tempo 에 닿는가, 서버가 Tempo 에 닿지 않는가
+check_traces() {
+  local trace
+  trace="$(openssl rand -hex 16)"
+  report "tempo 가 root 가 아니다" not_root_distroless tempo
+  report "Tempo 가 다시 뜨지 않고 돈다" stays_up tempo
+  report "Grafana 가 Tempo 에 닿는다(데이터 소스 tempo)" grafana_reaches tempo
+  report "시험 span 을 OTLP 로 Alloy 에 민다(telemetry 망)" push_probe_span "$trace"
+  report "민 span 이 Alloy 를 거쳐 Tempo 에 들어온다(추적 번호로 찾는다)" eventually tempo_finds_trace "$trace"
+  report "결제 서버가 Tempo 에 닿지 않는다(telemetry 망에서는 Alloy 에만 닿는다)" \
+    unreachable_from billing-server http://tempo:3200/ready
+}
+
 # 메트릭을 본다
 check_metrics() {
   local instance job
@@ -646,7 +685,7 @@ check_metrics() {
   report "시험 지표를 OTLP 로 Alloy 에 민다(telemetry 망)" push_probe_metric "$instance"
   report "민 지표가 정한 이름(_total)과 label service, instance 로 Prometheus 에 들어온다" \
     eventually prometheus_finds "stack_smoke_probe_total{service=\"stack-smoke\", instance=\"$instance\"} == 1"
-  for job in alloy loki prometheus alertmanager grafana; do
+  for job in alloy loki prometheus alertmanager tempo grafana; do
     report "Alloy 가 $job 의 메트릭을 긁어 보낸다" eventually prometheus_finds "up{job=\"$job\"} == 1"
   done
   report "Alloy 가 DB 의 메트릭을 monitor 계정으로 읽는다(pg_up == 1)" \
@@ -939,6 +978,7 @@ check() {
   check_workers
   check_logs
   check_metrics
+  check_traces
   check_alerts
   finish
 }

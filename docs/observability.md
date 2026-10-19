@@ -33,10 +33,10 @@
 | DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
 | 대시보드 | billing-server, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
 | 경보 | 수집 쪽, DB 와 Redis, billing-server 의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
-| 추적(span) | trace_id 를 이어 주는 것까지만 있다. span 을 만들거나 내보내지 않는다 |
+| 추적(span) | 받는 길과 저장소(Alloy → Tempo, Grafana 에서 로그와 오간다)까지 있다([아래](#붙인-것-추적의-인프라)). 서버는 아직 span 을 만들지 않는다. trace_id 를 이어 주는 것까지만 한다 |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
 | 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)) |
-| Tempo | 없다. 자리만 정했다([아래](#수집기grafana-alloy를-붙일-자리)) |
+| Tempo | compose 의 프로필 `observability` 에 구현(`grafana/tempo:3.1.0`, 한 프로세스, 14일, [아래](#붙인-것-추적의-인프라)) |
 | 관리 서버, 관리 DB, 관리자 화면, Gemma 요약 | 없다 |
 
 ## 로그, 메트릭, 추적의 역할
@@ -686,7 +686,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 ```
 서버(stderr 의 JSON) ─▶ Docker(json-file) ─▶ Alloy ─▶ Loki        ─┐
 서버(OTLP)                              ─▶ Alloy ─▶ Prometheus   ─┼─▶ Grafana ◀─ 관리 서버(문)
-                                                 └▶ Tempo(나중) ─┘
+                                                 └▶ Tempo       ─┘
 ```
 
 ### 정한 것 (2026-10-19)
@@ -974,6 +974,40 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 
 "들고 있는 곳"이 로그에 `trace_id` 를 넘긴다. SDK 를 붙이면 여기서 지금의 span 에서 trace id 를 읽게만 바꾸면 로그의 모양은 그대로다.
 `request_id` 와 `job_id` 는 OpenTelemetry 에 없는 개념이라 지금의 코드가 그대로 남는다. span 의 속성으로도 싣는다.
+
+```
+서버, 워커, cron ─(OTLP, HTTP 4318, 메트릭과 같은 길)─▶ Alloy ─(OTLP gRPC 4317)─▶ Tempo ─▶ Grafana ◀─▶ Loki(trace_id)
+```
+
+#### 정한 것 (2026-10-19)
+
+| 항목 | 정한 것 | 까닭 |
+| --- | --- | --- |
+| 저장소 | **Tempo 3.1, 한 프로세스**(`-target=all`), 로컬 디스크(볼륨 `tempodata`), 보관 **14일** | 로그, 메트릭과 기간이 같아야 같은 시각을 함께 본다. Tempo 3 은 여럿으로 나누면 Kafka 가 들지만 한 프로세스는 들지 않는다. S3 가 필요해지면 `storage.trace.backend` 만 바꾼다 |
+| 보내는 길 | 메트릭과 같다. **서버 → Alloy(OTLP HTTP 4318) → Tempo(OTLP gRPC 4317)**. 서버의 설정은 이미 있는 `OTEL_EXPORTER_OTLP_ENDPOINT` 하나다 | 서버가 Tempo 로 바로 보내면 저장소를 바꿀 때 서버 다섯을 고친다. 서버는 telemetry 망에서 Alloy 에만 닿는다(Tempo 에 닿지 않는다) |
+| 표본 | **모두 남긴다** | 지금의 요청 수로는 넉넉하다. 많아지면 Alloy 에서 꼬리 표본(오류와 느린 것만 남기기, `otelcol.processor.tail_sampling`)을 더한다. 서버에서 비율로 줄이면 오류가 난 요청을 놓친다 |
+| 로그와 잇기 | 로그의 `trace_id`(Loki 의 줄의 값)와 span 의 trace id 가 같다. Grafana 에서 추적 → 로그(`tracesToLogsV2`), 로그 → 추적(`derivedFields`)으로 건너간다 | 한 건을 파고들 때 그래프(메트릭) → 추적 → 로그로 이어 간다([역할](#로그-메트릭-추적의-역할)) |
+| span 에서 만드는 메트릭 | 만들지 않는다(Tempo 의 metrics-generator 를 끈다) | 요청 수와 시간은 서버가 이미 메트릭으로 낸다. 같은 수를 두 곳에서 세지 않는다 |
+
+| 고르지 않은 것 | 까닭 |
+| --- | --- |
+| Jaeger | 화면이 따로 있어 Grafana 의 로그·메트릭과 오가기 어렵다. 저장소(Elasticsearch, Cassandra)가 따로 든다 |
+| Tempo 2.x | 3.0 이 나온 뒤라 옮겨야 할 일만 남는다. 한 프로세스로 띄우는 법은 같다 |
+| Grafana Cloud | 요청의 경로(서버 이름, 주소의 틀)가 바깥으로 나가고 계정에 묶인다 |
+
+#### 붙인 것 (추적의 인프라)
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `docker-compose.yml` 의 `tempo` | `grafana/tempo:3.1.0`. 셸이 없는 이미지라 상태 확인은 `/tempo -health` 다. 사용자 10001 로 돈다. 포트를 열지 않는다 |
+| `docker/tempo/config.yaml` | 받기는 OTLP gRPC 4317 하나, 저장은 로컬, 보관 14일(`backend_scheduler`, `backend_worker` 의 `block_retention: 336h`), 사용 통계를 보내지 않는다 |
+| `docker/alloy/traces.alloy` | 메트릭과 같은 OTLP 받기(`metrics.alloy` 의 `otelcol.receiver.otlp.servers`)에서 traces 를 받아 묶고 Tempo 로 보낸다. Tempo 의 메트릭(`job="tempo"`)도 긁는다 |
+| `docker/grafana/provisioning/datasources/tempo.yaml` | 데이터 소스 uid `tempo`. 추적에서 그 trace_id 의 로그로(`{service=~".+"} \| trace_id="…"`), 메트릭으로 건너간다 |
+| `docker/grafana/provisioning/datasources/loki.yaml` 의 `derivedFields` | 로그의 `trace_id` 를 "추적 보기" 링크로 바꾼다 |
+| `docker/prometheus/rules/ai-trpg.yml` | `ObservabilityComponentDown` 이 tempo 도 본다 |
+
+- **CI 가 보는 것.** Tempo 가 healthy 이고 root 가 아니며 다시 뜨지 않는다. Grafana 가 Tempo 에 닿는다. telemetry 망에서 OTLP(JSON)로 민 시험 span(`stack_smoke.probe`)이 Alloy 를 거쳐 Tempo 에서 그 추적 번호로 찾아진다. `up{job="tempo"}` 이 1 이다. 결제 서버가 Tempo 에 닿지 않는다.
+- **다음.** 결제 서버(본보기)에 SDK 를 붙여 HTTP 요청, 서버 사이의 호출, DB 의 문장을 span 으로 남긴다. 나머지 서버는 본보기대로 한다(게임 서버는 #496~#498 뒤에 게임 세션에 알리고).
 
 ## 관리 서버의 경계
 
