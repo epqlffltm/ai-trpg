@@ -2,7 +2,7 @@
 
 저장소의 서버들을 클라우드의 서버(VM) 한 대에 처음 올리는 일을 적는다. 어디에, 어떻게 올리고, 무엇으로 막고, 무엇을 아직 하지 않는지다.
 
-- 기준: `main` `67175b8` (2026-10-19)
+- 기준: `main` `89115d3` (2026-10-19)
 - **첫 배포의 목표는 운영자 혼자 쓰는 서버다**(2026-10-19 결정). 바깥 사람은 들어오지 못하게 막고, 실제 서버에서 띄우고 지키고 되살리는 일을 연습한다. 지인 베타와 정식 공개는 그다음이고 [정식 공개 전에 더 필요한 것](#정식-공개-전에-더-필요한-것)에 있다.
 - 로컬에서 바깥에 열 때 지킬 것(열린 포트, 프록시의 머리말, 보안 머리말, 로그 상한, TLS)은 루트 README 의 "외부에 열기 전"이 원본이다. 이 문서는 그것을 어느 서버에서 어떤 값으로 하는지를 적는다.
 - 운영 설정은 `docker-compose.staging.yml` 하나다(#451). 무엇을 덮어쓰는지는 그 파일의 머리에 있다.
@@ -32,7 +32,7 @@
 | 항목 | 정한 것 | 까닭 |
 | --- | --- | --- |
 | 목표 | 운영자 혼자 쓰는 서버(2026-11) | 화면(#290)과 실제 본인인증(#336)이 아직 없다. 실제 서버를 다루는 일부터 연습한다 |
-| 클라우드 | AWS Lightsail 서울 | 월 고정 요금, 서울 리전, 메일(SES)과 백업 저장소가 한 계정에 있다. 커지면 EC2 로 옮기기 쉽다 |
+| 클라우드 | AWS Lightsail 서울 | 월 고정 요금, 서울 리전, 메일(SES)과 백업 저장소(S3)가 한 계정에 있다. 커지면 EC2 로 옮기기 쉽다 |
 | 서버 수 | VM 한 대에 Docker Compose | `services.md` 의 배포 형태 그대로. 쿠버네티스는 쓰지 않는다 |
 | 크기 | 8GB 메모리(2 vCPU) | 서버와 워커, PostgreSQL, Redis, nginx 에 로그·메트릭 모으기(1~1.5GB)와 임베딩의 Ollama(1~1.5GB)가 더해진다(추정, [열린 질문](#열린-질문)). 4GB 는 빌드와 함께 돌리기에 빠듯하다 |
 | 환경 이름 | `staging` | `production` 은 가짜 본인인증으로 뜨지 않는다([환경 이름](#환경-이름)) |
@@ -42,6 +42,7 @@
 | 서술 모델 | Z.ai 의 GLM-4.7-Flash(무료, 이름표 `glm-4-7-flash`)와 집 PC 의 Ollama | 운영자 본인의 시험용이다. 집 PC 는 사설망(Tailscale)으로 부른다([모델](#모델)) |
 | 임베딩 | VM 의 Ollama(CPU)가 `bge-m3` 를 돌린다 | 로어 검색의 기준(`LORE_MAX_DISTANCE`)이 이 모델로 잰 값이다. 모델이 같아 다시 잴 필요가 없고, 바깥에 보내는 데이터가 늘지 않는다 |
 | 결제 | 가짜 결제 대행사(`PAYMENT_PROVIDER=fake`) | `staging` 에서 허용된다. 누구나 크레딧을 얻으므로 허용 주소가 꼭 있어야 한다. 토스의 웹훅 주소는 열지 않는다 |
+| 바깥 백업 | age 로 잠가 S3(서울)에 날마다. 일주일에 한 번 버킷의 것을 받아 실제로 풀어 본다 | 열쇠를 둘(주, 확인)로 잠근다. 주 열쇠는 VM 밖에만, 확인 열쇠는 VM 에 둔다. 버킷의 접근 키는 지우지 못한다([백업](#백업)) |
 | 올리는 법 | 처음은 VM 에서 빌드, 다음은 GHCR 의 이미지 | 처음에는 단계를 줄이고, 버전 추적이 필요해지면 옮긴다 |
 | 프런트 | 화면의 디자인은 Stitch, 아이콘 같은 그림은 나노 바나나가 만든다 | 화면 명세(`docs/product/screens.md`)를 의뢰서로 쓴다. 코드로 옮기는 것은 [열린 질문](#열린-질문) |
 
@@ -63,7 +64,8 @@
   db (PostgreSQL), redis (127.0.0.1 에만)
      │
   certbot ── 12시간마다 갱신, 받은 인증서를 프록시가 읽는 곳에 옮긴다
-  db-backup ── 날마다 덤프 → 암호화해 Lightsail 버킷으로(다음 PR)
+  db-backup ── 날마다 덤프(VM 의 디스크, 14개)
+  backup-offsite ── 덤프를 age 로 잠가 S3(서울)로. 일주일에 한 번 받아 풀어 본다
   Alloy, Loki, Prometheus, Grafana (프로필 observability. Grafana 는 127.0.0.1 에만)
 ```
 
@@ -175,7 +177,8 @@ CI(`stack`)가 운영 설정도 본다(`.github/scripts/stack-smoke.sh check-sta
 ## 비밀과 설정
 
 - VM 에 서버마다의 `.env` 와 루트 `.env`, JWT 키(`auth-server/keys/`)를 둔다. 저장소에는 넣지 않는다. 파일은 주인만 읽게(600) 한다.
-- 루트 `.env` 에 staging 의 값을 더 적는다(`.env.example` 의 "staging" 절): `COMPOSE_FILE`, `COMPOSE_PROFILES`, `DOMAIN`, `ACME_EMAIL`, `GAME_LLM_BASE_URL`, `GRAFANA_ADMIN_PASSWORD`, `OTEL_EXPORTER_OTLP_ENDPOINT`.
+- 루트 `.env` 에 staging 의 값을 더 적는다(`.env.example` 의 "staging" 절): `COMPOSE_FILE`, `COMPOSE_PROFILES`, `DOMAIN`, `ACME_EMAIL`, `GAME_LLM_BASE_URL`, `GRAFANA_ADMIN_PASSWORD`, `OTEL_EXPORTER_OTLP_ENDPOINT`, 바깥 백업의 `BACKUP_S3_BUCKET`, `BACKUP_AWS_ACCESS_KEY_ID`, `BACKUP_AWS_SECRET_ACCESS_KEY`, `BACKUP_AGE_RECIPIENTS`.
+- 비밀번호 관리자에 둘 것: 각 `.env`, JWT 키, 바깥 백업의 주 열쇠와 확인 열쇠, S3 의 접근 키.
 - **로컬의 값을 그대로 옮기지 않는다.** DB 비밀번호, 서버끼리의 서명 비밀, JWT 키를 VM 에서 새로 만든다. 로컬의 값은 이 PC 의 여러 곳(작업 폴더 넷)에 퍼져 있다.
 - 서버끼리 같아야 하는 비밀은 짝을 맞춘다. 명령은 README 의 "모든 서버를 컨테이너로"에 있다.
 
@@ -197,16 +200,43 @@ CI(`stack`)가 운영 설정도 본다(`.github/scripts/stack-smoke.sh check-sta
 | AI 모델 | Z.ai(GLM-4.7-Flash, 무료)와 집 PC 의 Ollama([모델](#모델)). 다른 회사의 키를 붙이면 각 콘솔에서 월 사용 한도를 낮게 걸어 둔다 | 같다 |
 | 메일 | 비워 두거나 Gmail SMTP 와 앱 비밀번호(이미 쓰는 것) | 하루 발송 한도가 있어 SES 로 바꾼다. SES 는 도메인 인증과 샌드박스를 나오는 신청이 필요하다 |
 | 본인인증 | 가짜 업체(`fake`) | 실제 업체와 계약(#336). 보통 사업자등록이 먼저다 |
+| 백업 저장소 | S3(서울), 이것만 쓰는 IAM 사용자 | 같다 |
 | 결제 | 가짜 결제 대행사(`fake`) | 사업자등록과 전자결제 계약. 토스 테스트 모드를 쓰면 웹훅 주소(`POST /api/v1/billing/webhooks/toss`)만 허용 주소 밖에 연다(서버가 결과를 토스에 다시 물어 믿는다) |
 | 사설망 | Tailscale(VM ↔ 집 PC) | 집 PC 를 쓰지 않으면 뺀다 |
 
 ## 백업
 
-- 지금의 `db-backup` 이 날마다 DB 를 한 파일로 뜨고 14개를 남긴다(README "백업과 복원").
-- **바깥 저장소에 한 벌 더 둔다.** 같은 디스크에만 있으면 디스크가 망가질 때 함께 사라진다. Lightsail 의 버킷(객체 저장소)에 올린다.
-  - 올리기 전에 암호화한다. 백업에는 이메일, 비밀번호 해시, 결제 원장이 있다. 열쇠는 VM 에 두지 않고 비밀번호 관리자에 둔다(공개키로 잠그는 방식이면 VM 에는 공개키만 둔다).
-  - 버킷의 열쇠는 그 버킷에 올리는 권한만 갖게 만든다. 지우는 권한은 주지 않는다. VM 을 빼앗겨도 백업을 지우지 못한다.
-- **되살려 본다.** 한 달에 한 번 버킷의 파일을 내려받아 로컬에서 푼다(README 의 `check` 와 복원 순서). 되살려 보지 않은 백업은 있는지 모르는 것과 같다.
+- 지금의 `db-backup` 이 날마다 DB 를 한 파일로 뜨고 14개를 남긴다(README "백업과 복원"). VM 의 디스크다.
+- **바깥에 한 벌 더 둔다(`backup-offsite`).** 같은 디스크에만 있으면 디스크가 망가질 때 함께 사라진다. 한 시간마다 로컬의 덤프 가운데 버킷에 없는 것을 암호화해 S3(서울)에 올린다. 늦어도 덤프를 뜬 지 한 시간 안에 올라간다.
+- **일주일에 한 번 실제로 풀어 본다.** 버킷의 가장 최근 것을 받아 확인 열쇠로 풀고, 올릴 때 적어 둔 원본의 SHA-256 과 맞추고, 같은 DB 서버의 빈 DB 에 풀어 서버마다의 스키마가 다 들어 있는지 본다. 다 보면 그 DB 와 푼 파일을 지운다(`docker/backup-offsite/offsite.sh verify`).
+  - 줄 수는 맞춰 보지 않는다. 지금의 DB 는 덤프를 뜬 뒤에도 바뀐다. 줄 수까지 맞추는 것은 CI 의 `db-backup check` 가 PR 마다 한다.
+  - 실패하면 컨테이너가 곧바로 `unhealthy` 가 되고, 한 시간마다 다시 풀어 본다. 26시간 넘게 올리지 못해도 `unhealthy` 다.
+
+**암호화(age).** 덤프마다 받는 쪽 열쇠 둘로 잠근다. 어느 열쇠로도 풀린다.
+
+| 열쇠 | 비밀키를 두는 곳 | 쓰는 때 |
+| --- | --- | --- |
+| 주 열쇠 | VM 에 두지 않는다. 비밀번호 관리자와 오프라인 사본(USB 등) 두 곳 | 손으로 되살릴 때. VM 을 잃어도 이것으로 푼다 |
+| 확인 열쇠 | VM 의 `backup-keys/check.key`(600, git 에 올리지 않는다). 비밀번호 관리자에도 한 벌 | 주마다 풀어 보는 데 |
+
+- 두 공개키를 루트 `.env` 의 `BACKUP_AGE_RECIPIENTS` 에 적는다. 하나만 적으면 올리지 않는다. 확인 열쇠의 공개키가 그 안에 없으면 풀어 보기가 실패한다.
+- **대가: VM 을 빼앗기면 확인 열쇠로 버킷의 지난 백업도 풀린다.** 그때는 지금의 DB 와 `.env` 도 이미 넘어간 뒤라, 더 새는 것은 지난 며칠의 지운 데이터다. 주마다 저절로 풀어 보는 것을 그것보다 앞에 두었다(2026-10-19 결정). 암호화가 막는 것은 버킷 쪽에서 새는 일(접근 키가 새거나 버킷의 설정을 잘못 여는 것)이다.
+- 열쇠를 잃으면 그 열쇠로 잠근 백업은 영영 풀지 못한다. 그래서 주 열쇠는 두 곳에 둔다. 처음 한 번은 주 열쇠로도 풀어 본다([VM 준비 순서](#vm-준비-순서)).
+- 열쇠를 바꿀 때: 새 열쇠를 만들어 `BACKUP_AGE_RECIPIENTS` 를 바꾼다. 이미 올린 것은 옛 열쇠로만 풀리므로, 옛 비밀키는 그 백업이 버킷에서 지워질 때(35일)까지 둔다.
+
+**버킷(S3, Lightsail 의 버킷이 아니다).** 처음에는 Lightsail 의 버킷을 쓰려 했다. Lightsail 버킷의 접근 키는 버킷에 대한 모든 권한(읽기, 쓰기, 지우기)을 주고 좁힐 수 없다. 지우지 못하는 키가 필요해서 같은 계정의 S3 를 쓴다. 덤프 몇 MB 라 요금은 거의 없다.
+
+- 버킷: 서울(`ap-northeast-2`), 공개 접근 차단을 켠다, **버전 관리를 켠다**(덮어써도 옛 판이 남는다).
+- 수명 주기: 지금의 판은 35일 뒤에 지우고, 지난 판은 그 뒤 30일에 지운다. 지우는 것은 S3 가 하고 VM 의 키는 하지 못한다.
+- 접근 키: 이것만 쓰는 IAM 사용자를 만든다. 권한은 `docker/backup-offsite/iam-policy.json`(올리기, 받기, 목록. `trpg-` 로 시작하는 이름만. `BUCKET_NAME` 을 버킷의 이름으로 바꾼다). 지우기(`DeleteObject`, `DeleteObjectVersion`)와 버킷의 설정을 바꾸는 권한이 없다. VM 을 빼앗겨도 버킷의 백업을 지우지 못하고, 덮어써도 옛 판이 남는다.
+- 키는 루트 `.env` 의 `BACKUP_AWS_ACCESS_KEY_ID`, `BACKUP_AWS_SECRET_ACCESS_KEY` 다. 버킷의 이름은 `BACKUP_S3_BUCKET`.
+
+**손으로 되살리기(VM 을 잃었을 때).** 새 VM 이나 PC 에서 버킷의 것을 받아 주 열쇠로 풀고 README 의 복원 순서대로 푼다.
+
+```
+aws s3 cp s3://<버킷>/trpg-<시각>.dump.age .
+age -d -i master.key -o trpg-<시각>.dump trpg-<시각>.dump.age
+```
 
 ## 지켜보기
 
@@ -217,6 +247,7 @@ CI(`stack`)가 운영 설정도 본다(`.github/scripts/stack-smoke.sh check-sta
 - **가동 확인.** 바깥의 무료 감시(UptimeRobot 등)가 몇 분마다 `https://<도메인>/healthz` 를 부르고, 죽으면 메일을 보낸다. 프록시 자신만 답한다(`{"status":"ok"}`). VM, nginx, TLS 가 살아 있는지를 본다. 감시가 인증서의 만료도 보면 켠다.
 - **인증서의 남은 날짜.** certbot 의 `healthy` 다([도메인과 TLS](#도메인과-tls)). 지금은 `docker compose ps` 로 본다. 컨테이너의 상태를 경보로 잇는 일은 #25 의 경보에서 한다.
 - **디스크.** 로그에는 상한이 있지만 백업과 이미지가 쌓인다. 남은 공간이 줄면 알린다(Lightsail 의 경보나 cron 한 줄).
+- **바깥 백업.** `backup-offsite` 의 `healthy` 다. 26시간 넘게 올리지 못했거나 주마다 풀어 보기가 실패하면 `unhealthy` 다([백업](#백업)).
 - **컨테이너의 상태**(`docker compose ps` 의 `healthy`).
 - 장애 판정은 이 수치와 조건이 한다. 관리 서버와 요약은 나중이다(`docs/observability.md`).
 
@@ -232,11 +263,17 @@ CI(`stack`)가 운영 설정도 본다(`.github/scripts/stack-smoke.sh check-sta
 6. 도메인을 사서 A 레코드를 고정 IP 로 가리킨다.
 7. 저장소를 받고, 비밀과 `.env` 를 새로 만들어 둔다. 루트 `.env` 에 staging 의 값을 적는다([비밀과 설정](#비밀과-설정)).
 8. 허용 주소를 적는다: `cp docker/nginx/allowlist/allow.conf.example docker/nginx/allowlist/allow.conf` 그다음 내 공인 IP 를 `allow` 줄로.
-9. 인증서를 처음 받는다: `docker compose run --rm -p 80:80 certbot issue --dry-run` 이 통과하면 `docker compose run --rm -p 80:80 certbot issue`.
-10. 띄운다: `docker compose up -d --build`. 처음에는 `ollama-pull` 이 `bge-m3`(1GB 남짓)를 받느라 게임 서버가 늦게 뜬다.
-11. 모델 목록을 넣는다([모델](#모델)). 결제 서버의 가격표에 쓸 모델이 있는지 본다.
-12. 확인: HTTPS 로 닿는지, 내 주소가 아니면 403 인지(휴대폰의 데이터망으로), `/healthz` 가 어디서나 답하는지, 서버들과 certbot 이 `healthy` 인지, 백업이 쌓이는지, 가동 확인이 메일을 보내는지. `docker stats` 로 메모리를 재서 [열린 질문](#열린-질문)에 적는다.
-13. 운영자 계정을 만들고 인증 서버 관리자 화면에서 `operators` 그룹에 넣는다(SSH 터널로 연다).
+9. 바깥 백업을 준비한다([백업](#백업)).
+   - S3 에 버킷을 만들고(서울, 공개 접근 차단, 버전 관리, 수명 주기), IAM 사용자에 `docker/backup-offsite/iam-policy.json` 의 권한을 주고 접근 키를 만든다.
+   - 주 열쇠는 VM 밖(집 PC)에서 만든다: `age-keygen -o master.key`(Windows 는 `winget install FiloSottile.age`). 비밀번호 관리자와 오프라인 사본에 둔다.
+   - 확인 열쇠는 VM 에서 만든다: `sudo apt install age` 그다음 `mkdir -m 700 backup-keys && age-keygen -o backup-keys/check.key && chmod 600 backup-keys/check.key`. 비밀번호 관리자에도 둔다.
+   - 두 공개키(`age1...`)를 빈칸으로 이어 루트 `.env` 의 `BACKUP_AGE_RECIPIENTS` 에 적는다.
+10. 인증서를 처음 받는다: `docker compose run --rm -p 80:80 certbot issue --dry-run` 이 통과하면 `docker compose run --rm -p 80:80 certbot issue`.
+11. 띄운다: `docker compose up -d --build`. 처음에는 `ollama-pull` 이 `bge-m3`(1GB 남짓)를 받느라 게임 서버가 늦게 뜬다.
+12. 모델 목록을 넣는다([모델](#모델)). 결제 서버의 가격표에 쓸 모델이 있는지 본다.
+13. 확인: HTTPS 로 닿는지, 내 주소가 아니면 403 인지(휴대폰의 데이터망으로), `/healthz` 가 어디서나 답하는지, 서버들과 certbot, `backup-offsite` 가 `healthy` 인지, 가동 확인이 메일을 보내는지. `docker stats` 로 메모리를 재서 [열린 질문](#열린-질문)에 적는다.
+14. 주 열쇠로 한 번 풀어 본다. 집 PC 에서 버킷의 가장 최근 것을 받아 `age -d -i master.key` 로 풀리는지 본다([백업](#백업)의 "손으로 되살리기"). 주마다 저절로 하는 것은 확인 열쇠뿐이다.
+15. 운영자 계정을 만들고 인증 서버 관리자 화면에서 `operators` 그룹에 넣는다(SSH 터널로 연다).
 
 ## 만드는 순서
 
@@ -244,7 +281,7 @@ PR 하나에 한 가지다.
 
 1. **이 문서.** (#449)
 2. **운영 설정과 TLS.** (#451) `docker-compose.staging.yml`(프록시의 80/443, certbot, 허용 주소, 환경 이름, 인증 서버의 도메인과 쿠키, 모델의 주소, 임베딩의 Ollama), nginx 의 TLS 와 허용 주소와 HSTS, `port_scope.py --public`, 가동 확인 주소, CI 의 `check-staging`.
-3. **바깥 백업.** 암호화하고 버킷에 올리는 단계, 그 열쇠의 권한, 되살리는 순서.
+3. **바깥 백업.** `backup-offsite`(age 로 잠가 S3 에 올리기, 주마다 풀어 보기), 버킷과 접근 키의 권한, 되살리는 순서, CI 의 `check-staging` 에서 S3 흉내(moto)로 보기.
 4. **VM 준비.** 위 순서의 명령과 README 의 배포 절.
 5. (나중) **GHCR 로 올리기.**
 
@@ -265,6 +302,5 @@ PR 하나에 한 가지다.
 - staging 의 가격표에 로컬 모델(집 PC 의 Ollama)의 이름표를 넣을지와 그 값. 결제 서버의 가격표에 없으면 그 모델을 고를 수 없다.
 - 화면의 코드는 누가 쓰는가. Stitch 가 내주는 것(디자인과 HTML)을 React 로 옮기는 일이 남는다.
 - 화면을 어디서 내주는가. 같은 nginx 가 정적 파일로 낼지, 따로 둘지. API 의 CSP 와 화면의 CSP 를 나눠야 한다(README "외부에 열기 전").
-- 바깥 백업의 암호화 방식(gpg, age)과 열쇠를 두는 곳.
 - 모델 회사마다의 월 사용 한도를 어디에 기록해 둘지.
 - 이름 바꾸기(`game-server` → `trpg-server`). 운영 설정과 nginx 의 틀에 `game-server` 가 들어 있다. 바꿀 때 함께 바꾸고, 로그의 `service` 가 바뀌는 날을 적어 둔다(Loki 와 Prometheus 에서 그 앞뒤로 두 이름을 함께 찾는다).

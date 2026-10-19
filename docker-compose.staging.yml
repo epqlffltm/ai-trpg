@@ -10,6 +10,7 @@
 # 처음 띄울 때(자세한 순서는 docs/architecture/deployment.md 의 "VM 준비"):
 #
 #   cp docker/nginx/allowlist/allow.conf.example docker/nginx/allowlist/allow.conf   # 내 공인 IP 를 적는다
+#   mkdir -m 700 backup-keys && age-keygen -o backup-keys/check.key                 # 바깥 백업의 확인 열쇠(주 열쇠는 VM 밖에서)
 #   docker compose run --rm -p 80:80 certbot issue --dry-run    # 인증서를 받을 수 있는지 시험한다
 #   docker compose run --rm -p 80:80 certbot issue              # 처음 인증서를 받는다
 #   docker compose up -d --build
@@ -23,6 +24,8 @@
 #   - 인증 서버가 도메인을 받고(ALLOWED_HOSTS), refresh 쿠키를 HTTPS 의 그 도메인에서만 쓴다
 #   - 게임 서버의 로컬 모델은 집 PC 의 Ollama 를 사설망(Tailscale)으로 부른다(GAME_LLM_BASE_URL).
 #     임베딩(bge-m3)은 이 VM 의 Ollama(CPU)가 한다. 집 PC 가 꺼져도 로어 검색은 돈다
+#   - db-backup 이 뜬 덤프를 암호화해(age) S3 에 한 벌 더 두고, 일주일에 한 번 버킷의 것을 실제로 풀어 본다
+#     (backup-offsite, docker/backup-offsite/)
 #
 # 이 파일에도 비밀을 적지 않는다. 비밀은 VM 에서 새로 만든 루트 .env 와 각 서버의 .env 에만 있다.
 # 컨테이너의 로그는 로컬과 같은 상한을 둔다(아래의 x-logging, logging_scope.py)
@@ -198,6 +201,58 @@ services:
       ollama:
         condition: service_healthy
 
+  # 바깥 백업. db-backup 이 날마다 뜬 덤프를 암호화해(age) S3 에 올리고, 일주일에 한 번 버킷의 것을 받아 실제로 풀어 본다
+  # (docker/backup-offsite/offsite.sh). 포트를 열지 않는다. 로컬의 백업은 읽기만 한다.
+  # 백업 파일(주인 root, 600)을 읽어야 해서 root 로 돈다. db-backup 과 같다.
+  # 26시간 안에 올렸고 일주일 하루 안에 풀어 보기에 성공했으면 healthy 다. 풀어 보기가 실패하면 곧바로 unhealthy 다
+  backup-offsite:
+    build: ./docker/backup-offsite
+    image: ai-trpg/backup-offsite:local
+    profiles: [app]
+    logging: *logging
+    restart: unless-stopped
+    command: ["loop"]
+    environment:
+      # 풀어 볼 때 같은 DB 서버의 빈 DB 를 만들고 지운다. db-backup 과 같은 관리 계정이다
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-trpg}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?.env 에 POSTGRES_PASSWORD 를 설정하세요}
+      PGDATABASE: ${POSTGRES_DB:-trpg}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:?루트 .env 에 BACKUP_S3_BUCKET 을 적는다}
+      # 비워 둔다(AWS 의 S3). CI 가 S3 흉내를 붙일 때만 적는다
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      AWS_DEFAULT_REGION: ${BACKUP_S3_REGION:-ap-northeast-2}
+      # 올리기, 받기, 목록만 할 수 있는 접근 키. 지우는 권한이 없다(docs/architecture/deployment.md 의 "백업")
+      AWS_ACCESS_KEY_ID: ${BACKUP_AWS_ACCESS_KEY_ID:?루트 .env 에 BACKUP_AWS_ACCESS_KEY_ID 를 적는다}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_AWS_SECRET_ACCESS_KEY:?루트 .env 에 BACKUP_AWS_SECRET_ACCESS_KEY 를 적는다}
+      # age 의 공개키 둘(주 열쇠, 확인 열쇠). 비밀이 아니다
+      BACKUP_AGE_RECIPIENTS: ${BACKUP_AGE_RECIPIENTS:?루트 .env 에 BACKUP_AGE_RECIPIENTS 를 적는다}
+    volumes:
+      # 긴 표기로 적는다. 줄임 표기(${BACKUP_DIR:-./backups}:/backups:ro)는 채우지 않고 읽을 때(--no-interpolate)
+      # 자리 안의 쌍점까지 나눠 compose 가 거부한다(too many colons)
+      - type: bind
+        source: ${BACKUP_DIR:-./backups}
+        target: /backups
+        read_only: true
+      # 확인 열쇠(check.key)가 든 폴더. git 에 올리지 않는다. 없으면 만들지 않고 실패한다
+      - type: bind
+        source: ./backup-keys
+        target: /run/backup-keys
+        read_only: true
+        bind:
+          create_host_path: false
+      - offsite-state:/state
+    healthcheck:
+      test: ["CMD", "sh", "/usr/local/bin/offsite.sh", "health"]
+      interval: 1m
+      timeout: 10s
+      retries: 1
+      # 처음 뜨면 곧바로 올리고 풀어 본다. 받고 푸는 데 걸리는 시간만큼 기다린다
+      start_period: 15m
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   # certbot 의 것(계정 키, 인증서, 갱신 설정). 프록시에 붙이지 않는다
   letsencrypt:
@@ -206,3 +261,5 @@ volumes:
   # Let's Encrypt 의 HTTP-01 확인 파일. certbot 이 쓰고 nginx 가 내준다
   acme:
   ollama:
+  # 바깥 백업이 마지막으로 올리고 풀어 본 때(상태 확인이 본다)
+  offsite-state:
