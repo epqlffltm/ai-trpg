@@ -13,7 +13,7 @@
 
 from django.core.exceptions import ImproperlyConfigured
 
-from config.security import is_production
+from config.environments import is_production
 
 FAKE = 'fake'
 DISABLED = 'disabled'
