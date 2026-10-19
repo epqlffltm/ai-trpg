@@ -16,10 +16,9 @@ import httpx
 from pydantic import SecretStr
 
 from app.ai.calls import chars_of
+from app.ai.catalog_contract import CatalogModel, Provider, TokenLimitField, UnitCost
 from app.ai.provider import ChatMessage, GenerationParams, Reasoning, Role
 from app.ai.routing import Endpoint, ModelRouter
-from app.catalog.lookup import CatalogModel, UnitCost
-from app.catalog.models import Provider, TokenLimitField
 from scripts.try_model import (
     DEFAULT_MAX_TOKENS,
     MESSAGES,

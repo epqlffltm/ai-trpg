@@ -24,12 +24,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.catalog_contract import Provider, TokenLimitField
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import FREE_BOOK, Tier
 from app.billing.routing import utc_now
 from app.catalog import service as catalog
 from app.catalog.errors import CatalogConflictError, Conflict
-from app.catalog.models import Grade, Provider, TokenLimitField
+from app.catalog.models import Grade
 from app.catalog.offers import OfferedModel, replacement_for
 from app.catalog.schemas import ModelCreate, ModelUpdate
 from scripts import models as script

@@ -26,11 +26,11 @@ from datetime import date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.catalog_contract import is_offered
 from app.billing.price_list import PriceList, PriceListUnavailable
 from app.catalog import offers
 from app.catalog import repository as catalog
 from app.catalog.models import AiModel
-from app.catalog.rules import is_offered
 
 
 class RecommendedModelError(Exception):

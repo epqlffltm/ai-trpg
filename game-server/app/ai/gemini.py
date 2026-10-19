@@ -31,12 +31,12 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
+from app.ai.catalog_contract import ReasoningStyle
 from app.ai.gemini_stream import read_gemini_stream
 from app.ai.http_stream import stream_completion
 from app.ai.openai_compat import THINKING_TOKENS
 from app.ai.provider import ChatMessage, Completion, GenerationParams, Reasoning, Role, TextSink, ignore_text
 from app.ai.thinking import thinking_budget
-from app.catalog.models import ReasoningStyle
 
 # 대화의 역할을 Gemini 의 이름으로. 어시스턴트는 model 이다
 ROLES = {Role.USER: 'user', Role.ASSISTANT: 'model'}

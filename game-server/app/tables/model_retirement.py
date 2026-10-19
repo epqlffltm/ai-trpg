@@ -37,12 +37,12 @@ from datetime import date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.catalog_contract import is_retired
 from app.billing.price_list import PriceList
 from app.catalog import offers
 from app.catalog import repository as catalog
 from app.catalog.models import AiModel
 from app.catalog.offers import OfferedModel
-from app.catalog.rules import is_retired
 from app.events import recorder
 from app.events.models import EventType
 from app.notifications import outbox

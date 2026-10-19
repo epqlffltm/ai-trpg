@@ -19,10 +19,10 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
+from app.ai.catalog_contract import ReasoningStyle
 from app.ai.gemini import GeminiProvider, build_body, stream_url
 from app.ai.openai_compat import THINKING_TOKENS
 from app.ai.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
-from app.catalog.models import ReasoningStyle
 
 BASE_URL = 'https://generativelanguage.googleapis.com'
 MODEL = 'gemini-4-argon'

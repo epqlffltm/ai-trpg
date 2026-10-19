@@ -22,10 +22,11 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField, always_thinks, is_offered, is_retired
 from app.catalog import repository, service
 from app.catalog.errors import CatalogConflictError, Conflict, InvalidModelError, ModelNotFoundError
-from app.catalog.models import AiModel, AiModelCost, Grade, Provider, ReasoningStyle, TokenLimitField
-from app.catalog.rules import always_thinks, is_offered, is_retired, round_cost_usd
+from app.catalog.models import AiModel, AiModelCost, Grade
+from app.catalog.rules import round_cost_usd
 from app.catalog.schemas import SLUG_MAX_LENGTH, CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 
 pytestmark = pytest.mark.usefixtures('empty_catalog')
