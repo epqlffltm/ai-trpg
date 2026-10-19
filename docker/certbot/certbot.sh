@@ -3,13 +3,15 @@
 #
 # staging 의 인증서(Let's Encrypt)를 받고 갱신한다(#451). docker-compose.staging.yml 의 certbot 이 entrypoint 로 부른다.
 #
-#   사용: certbot.sh issue [certbot 의 옵션...] | renew | loop
+#   사용: certbot.sh issue [certbot 의 옵션...] | renew [certbot 의 옵션...] | loop
 #     issue  처음 한 번 받는다. nginx 가 아직 없을 때라 certbot 이 직접 80 을 듣는다(standalone).
 #            VM 에서 프록시를 띄우기 전에 부른다. 뒤에 붙인 옵션은 certbot 에 그대로 넘긴다(먼저 --dry-run 으로 시험한다):
 #              docker compose run --rm -p 80:80 certbot issue --dry-run
 #              docker compose run --rm -p 80:80 certbot issue
 #     renew  한 번 갱신한다. 남은 날짜가 30일보다 많으면 아무것도 하지 않는다.
-#            nginx 가 확인 파일을 내준다(webroot, docker/nginx/staging/default.conf.template 의 /.well-known/acme-challenge/)
+#            nginx 가 확인 파일을 내준다(webroot, docker/nginx/staging/default.conf.template 의 /.well-known/acme-challenge/).
+#            뒤에 붙인 옵션은 certbot 에 넘긴다. 갱신이 되는지 시험(Let's Encrypt 의 시험 서버, 인증서는 그대로):
+#              docker compose run --rm certbot renew --dry-run
 #     loop   12시간마다 renew 를 부른다. compose 가 띄워 두는 모양이다(기본)
 #
 # 받거나 갱신하면 deploy-hook.sh 가 인증서를 nginx 가 읽는 곳(/tls)으로 옮긴다. nginx 는 파일이 바뀐 것을 보고 다시 읽는다
@@ -27,7 +29,7 @@ DEPLOY_HOOK="sh /opt/certbot/deploy-hook.sh"
 RENEW_SECONDS="${RENEW_SECONDS:-43200}"
 
 usage() {
-  echo "사용: $0 issue [certbot 의 옵션...] | renew | loop" >&2
+  echo "사용: $0 issue [certbot 의 옵션...] | renew [certbot 의 옵션...] | loop" >&2
 }
 
 # 처음 받기. 도메인 하나, 인증서의 이름도 도메인이다(/etc/letsencrypt/live/<도메인>/)
@@ -41,7 +43,7 @@ issue() {
 
 renew() {
   certbot renew --non-interactive --no-random-sleep-on-renew \
-    --webroot -w "$WEBROOT" --deploy-hook "$DEPLOY_HOOK"
+    --webroot -w "$WEBROOT" --deploy-hook "$DEPLOY_HOOK" "$@"
 }
 
 # 갱신이 실패해도 멈추지 않고 다음 바퀴에 다시 한다. 실패는 certbot 의 줄로 남고, 남은 날짜가 14일 아래로 내려가면
@@ -58,7 +60,7 @@ main() {
   [ "$#" -gt 0 ] && shift
   case "$command" in
     issue) issue "$@" ;;
-    renew) renew ;;
+    renew) renew "$@" ;;
     loop) loop ;;
     *)
       usage
