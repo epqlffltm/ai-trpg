@@ -328,6 +328,8 @@ class MonsterSheet(BaseModel):
     # 쓰러뜨렸을 때의 드롭은 여기서만 나온다(#372, #456). 비우면 아무것도 지니지 않고 드롭도 없다
     equipment: MonsterEquipment = []
     inventory: MonsterInventory = []
+    # 둔한가. 둔하면 훔치기가 쉽다(룰북 규칙의 steal.dull 만큼). 눈치 능력치와 타입과는 따로 더한다
+    dull: bool = False
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':

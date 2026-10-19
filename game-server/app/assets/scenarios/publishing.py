@@ -396,6 +396,7 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             [AttackSnapshot(**attack.model_dump()) for attack in monster_sheet.attacks],
             [MonsterItemSnapshot(**line.model_dump()) for line in monster_sheet.equipment],
             [MonsterItemSnapshot(**line.model_dump()) for line in monster_sheet.inventory],
+            monster_sheet.dull,
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]

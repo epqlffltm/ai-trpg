@@ -114,7 +114,8 @@ async def published(client: AsyncClient, headers: dict[str, str], scenario: dict
 
 
 def sheet_for(monster: dict, sheet: dict, attacks: list | None = None) -> dict:
-    return {'monster_id': monster['id'], 'sheet': sheet, 'attacks': attacks or [], 'equipment': [], 'inventory': []}
+    carried = {'equipment': [], 'inventory': [], 'dull': False}
+    return {'monster_id': monster['id'], 'sheet': sheet, 'attacks': attacks or [], **carried}
 
 
 # --- 시나리오: 적고 읽고 고친다 ---
@@ -240,6 +241,7 @@ async def test_only_monsters_with_a_sheet_go_into_the_version(client: AsyncClien
             'unique': False,
             'equipment': [],
             'inventory': [],
+            'dull': False,
         },
         {
             'id': beasts['rat']['id'],
@@ -251,6 +253,7 @@ async def test_only_monsters_with_a_sheet_go_into_the_version(client: AsyncClien
             'unique': False,
             'equipment': [],
             'inventory': [],
+            'dull': False,
         },
     ]
 

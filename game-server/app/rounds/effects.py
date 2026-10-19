@@ -20,7 +20,7 @@ from app.rounds.cast import CastMember, condition_of
 from app.rounds.monster_scene import SceneMonster
 from app.tables.injuries import Moment
 from app.tables.items import CatalogItem
-from app.tables.models import GameTable, TableMember, TableNpc
+from app.tables.models import GameTable, TableMember, TableMonster, TableNpc
 
 
 @dataclass(frozen=True)
@@ -51,6 +51,19 @@ class Judging:
     # 이번 라운드에 피해를 입은 앉은 사람들(user_id). 판정이 피해를 줄 때마다 더한다(mark_hurt).
     # 쉬는 사람이 다쳤으면 휴식이 깨진다(app/rounds/rests.py)
     hurt: set[uuid.UUID] = field(default_factory=set)
+    # 이번 라운드에 몬스터마다 싸운 앉은 사람들(몬스터의 id → user_id). 몬스터가 쳤거나, 쳤거나, 훔치다 들켰다.
+    # 차례대로 더한다. 도둑의 차례 전에 다른 사람과 싸웠으면 정신이 팔렸다(app/rounds/steals.py)
+    fights: dict[uuid.UUID, set[uuid.UUID]] = field(default_factory=dict)
+    # 훔치다 들킨 도둑(몬스터의 id → user_id). 그 마리는 이번 라운드의 차례에 도둑을 노린다
+    # (app/rounds/monster_attacks.py)
+    provoked: dict[uuid.UUID, uuid.UUID] = field(default_factory=dict)
+
+
+def mark_fight(judging: Judging, monster: TableMonster, member: TableMember) -> None:
+    """몬스터 한 마리와 앉은 사람 하나가 이번 라운드에 싸웠다고 적는다. 처음 싸운 라운드도 적는다."""
+    judging.fights.setdefault(monster.id, set()).add(member.user_id)
+    if monster.fought_round is None:
+        monster.fought_round = judging.round_number
 
 
 def mark_hurt(judging: Judging, member: TableMember) -> None:

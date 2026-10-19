@@ -85,7 +85,8 @@ from app.engine.sheet import Sheet
 #  34: 몬스터가 지닌 물건(monsters[].equipment, inventory: 물건 항목, 개수, 떨어질 확률)이 있다.
 #      드롭(drops)은 없어졌다. 드롭은 지닌 것에서만 나온다
 #  35: 아이템 규칙에 물건의 등급(items[].rarity: normal, rare, unique, epic, legendary)이 있다
-SNAPSHOT_FORMAT = 35
+#  36: 규칙에 훔치기(steal)가, 몬스터에 둔한지(dull)가 있다
+SNAPSHOT_FORMAT = 36
 
 
 class EntrySnapshot(BaseModel):
@@ -287,6 +288,8 @@ class MonsterSnapshot(BaseModel):
     # 줄의 번호는 장비 다음 소지품의 차례다(app/tables/monster_items.py). 형식 34 보다 옛 판의 드롭은 소지품이다
     equipment: list[MonsterItemSnapshot] = []
     inventory: list[MonsterItemSnapshot] = []
+    # 둔한가. 둔하면 훔치기가 쉽다(규칙의 steal.dull). 형식 36 보다 옛 판의 몬스터는 둔하지 않다
+    dull: bool = False
 
 
 class EncounterSnapshot(BaseModel):
@@ -577,8 +580,9 @@ def snapshot_monster(
     attacks: list[AttackSnapshot],
     equipment: list[MonsterItemSnapshot],
     inventory: list[MonsterItemSnapshot],
+    dull: bool = False,
 ) -> MonsterSnapshot:
-    """몬스터와 그 시트, 공격, 지닌 물건을 굳힌다."""
+    """몬스터와 그 시트, 공격, 지닌 물건, 둔한지를 굳힌다."""
     return MonsterSnapshot(
         id=monster.id,
         name=monster.name,
@@ -589,6 +593,7 @@ def snapshot_monster(
         unique=monster.unique,
         equipment=equipment,
         inventory=inventory,
+        dull=dull,
     )
 
 

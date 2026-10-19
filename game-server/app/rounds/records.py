@@ -34,8 +34,10 @@ from app.rounds.state import (
     put_down_of,
     rest_of,
     search_of,
+    steal_of,
     take_of,
 )
+from app.rounds.steals import STEAL_SOURCE
 from app.tables.models import DeathCause, GameTable, InjurySource, TableMember
 
 
@@ -298,6 +300,32 @@ def record_put_down(session: AsyncSession, table: GameTable, declaration: Declar
     recorder.record(session, table, EventType.ITEM_PUT_DOWN, payload=payload, cause=cause)
 
 
+def record_steal(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    훔치기의 결과를 이벤트로 적는다(steal_attempted). 그 행동의 이벤트(cause)에 잇는다. 들켰어도 적는다.
+
+    훔쳤으면 items_gained(source 는 steal, 그 마리)를 그 뒤에 잇는다. 행한 사람을 적지 않는다. 정한 것은 엔진이다.
+    """
+    steal = steal_of(declaration)
+    payload = {'round': cause.payload['round'], **steal}
+    attempted = recorder.record(session, table, EventType.STEAL_ATTEMPTED, payload=payload, cause=cause)
+    if not steal['count']:
+        return
+    gained = {
+        'round': cause.payload['round'],
+        'user_id': str(declaration.user_id),
+        'character_name': declaration.character_name,
+        'entry_id': steal['entry_id'],
+        'name': steal['name'],
+        'count': steal['count'],
+        'total': steal['total'],
+        'source': STEAL_SOURCE,
+        'monster_id': steal['monster_id'],
+        'monster_name': steal['monster_name'],
+    }
+    recorder.record(session, table, EventType.ITEMS_GAINED, payload=gained, cause=attempted)
+
+
 def record_gained(
     session: AsyncSession,
     table: GameTable,
@@ -358,7 +386,8 @@ def record_declaration(
 ) -> None:
     """
     한 사람의 선언을 이벤트로 적는다.
-    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기, 줍기와 내려놓기, 쉬기가 있었으면 행동 바로 뒤에 그 결과를 적는다.
+    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기, 줍기와 내려놓기, 훔치기, 쉬기가 있었으면
+    행동 바로 뒤에 그 결과를 적는다.
 
     선언을 내지 않았으면 적지 않는다. 판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
     차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면(turn_lost) 행동만 적는다. 굴린 것이 없다.
@@ -391,6 +420,8 @@ def record_declaration(
         record_take(session, table, declaration, cause=acted)
     elif put_down_of(declaration) is not None:
         record_put_down(session, table, declaration, cause=acted)
+    elif steal_of(declaration) is not None:
+        record_steal(session, table, declaration, cause=acted)
     elif rest_of(declaration) is not None:
         record_rest(session, table, member, declaration, cause=acted)
 

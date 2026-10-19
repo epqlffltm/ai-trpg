@@ -147,6 +147,13 @@ def put_down_of(declaration: Declaration | None) -> dict | None:
     return declaration.outcome.get('put_down')
 
 
+def steal_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 훔치기의 결과(app/rounds/steals.py). 아니었거나, 결과가 없거나, 겨눈 마리가 사라졌으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('steal')
+
+
 def rest_of(declaration: Declaration | None) -> dict | None:
     """이 선언에 적힌 쉬기의 결과(app/rounds/rests.py). 쉬는 행동이 아니었거나 결과가 없으면 None."""
     if declaration is None or declaration.outcome is None:
