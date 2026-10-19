@@ -621,6 +621,16 @@ class PersonOut(BaseModel):
     injuries: list[str]
 
 
+class CarriedOut(BaseModel):
+    """몬스터 한 마리가 지금 지닌 물건 한 가지(app/tables/monster_items.py). 무엇을 몇 개, 장비인지 소지품인지."""
+
+    entry_id: uuid.UUID
+    name: str
+    count: int
+    # 몸에 걸치거나 쥔 장비인가. 아니면 품에 넣은 소지품이다
+    equipped: bool
+
+
 class SceneMonsterOut(BaseModel):
     """
     이번 장면의 몬스터 한 마리. 자기가 선 장소의 죽지 않은 마리를 행동으로 칠 수 있다.
@@ -638,6 +648,9 @@ class SceneMonsterOut(BaseModel):
     status: NpcStatus
     # 멀쩡함, 다침, 크게 다침, 쓰러짐(의식 없음), 죽음
     condition: str
+    # 지금 지닌 물건들. 장비 다음 소지품의 차례다. 떨어뜨리거나 빼앗긴 것은 없다.
+    # 쓰러뜨리면 판에 적은 확률로 떨어진다. 떨어지지 않은 것은 그 마리가 그대로 지닌다
+    items: list[CarriedOut] = []
 
 
 class SceneCastOut(BaseModel):

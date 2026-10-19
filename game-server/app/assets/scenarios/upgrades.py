@@ -593,6 +593,24 @@ def upgrade_from_32(document: dict) -> dict:
     return upgraded
 
 
+def carried_from_drops(monster: dict) -> dict:
+    """그때의 몬스터 하나. 드롭이 소지품이 되고 장비는 없다."""
+    upgraded = {key: value for key, value in monster.items() if key != 'drops'}
+    return {**upgraded, 'equipment': [], 'inventory': monster.get('drops', [])}
+
+
+def upgrade_from_33(document: dict) -> dict:
+    """
+    형식 33 의 문서를 형식 34 로 올린다. 그때는 몬스터가 지닌 물건이 없었다. 드롭은 따로 적은 표였다.
+
+    드롭을 소지품으로 읽는다. 줄마다 같은 개수와 확률이라, 쓰러뜨렸을 때 나오는 것이 그때와 같다.
+    """
+    upgraded = dict(document)
+    upgraded['monsters'] = [carried_from_drops(monster) for monster in document.get('monsters', [])]
+    upgraded['format'] = 34
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -628,4 +646,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     30: upgrade_from_30,
     31: upgrade_from_31,
     32: upgrade_from_32,
+    33: upgrade_from_33,
 }

@@ -81,7 +81,9 @@ from app.engine.sheet import Sheet
 #      조건에 다른 퀘스트의 성공과 실패(quest_succeeded, quest_failed)가 있다
 #  32: 장소에 놓인 물건(place_items: 장소, 물건, 개수, 보이기 open·hidden, 숨긴 것의 찾는 판정)이 있다
 #  33: 퀘스트의 조건에 이룰 때 물건을 가져가는지(conditions[].consume)가 있다
-SNAPSHOT_FORMAT = 33
+#  34: 몬스터가 지닌 물건(monsters[].equipment, inventory: 물건 항목, 개수, 떨어질 확률)이 있다.
+#      드롭(drops)은 없어졌다. 드롭은 지닌 것에서만 나온다
+SNAPSHOT_FORMAT = 34
 
 
 class EntrySnapshot(BaseModel):
@@ -250,8 +252,12 @@ class AttackSnapshot(BaseModel):
     harm: str
 
 
-class DropSnapshot(BaseModel):
-    """몬스터의 드롭 한 줄. 판 안의 로어북 물건 항목 하나(entry_id)가 chance(%)로 count 개 나온다."""
+class MonsterItemSnapshot(BaseModel):
+    """
+    몬스터가 지닌 물건 한 줄. 판 안의 로어북 물건 항목 하나(entry_id)를 마리마다 count 개 지녔다.
+
+    chance(%)는 처음 쓰러졌을 때 이 줄이 떨어질 확률이다.
+    """
 
     entry_id: uuid.UUID
     count: int
@@ -274,8 +280,10 @@ class MonsterSnapshot(BaseModel):
     attacks: list[AttackSnapshot] = []
     # 네임드 몹인가. 판 전체에서 한 마리다(Snapshot.require_unique_once)
     unique: bool = False
-    # 쓰러뜨렸을 때 나오는 물건들. 비어 있으면 드롭이 없다. 형식 29 보다 옛 판은 모두 비어 있다
-    drops: list[DropSnapshot] = []
+    # 지닌 물건. 장비와 소지품이다. 쓰러뜨렸을 때의 드롭은 여기서만 나온다.
+    # 줄의 번호는 장비 다음 소지품의 차례다(app/tables/monster_items.py). 형식 34 보다 옛 판의 드롭은 소지품이다
+    equipment: list[MonsterItemSnapshot] = []
+    inventory: list[MonsterItemSnapshot] = []
 
 
 class EncounterSnapshot(BaseModel):
@@ -561,9 +569,13 @@ def snapshot_entry(entry: LoreEntry) -> EntrySnapshot:
 
 
 def snapshot_monster(
-    monster: Monster, sheet: Sheet, attacks: list[AttackSnapshot], drops: list[DropSnapshot]
+    monster: Monster,
+    sheet: Sheet,
+    attacks: list[AttackSnapshot],
+    equipment: list[MonsterItemSnapshot],
+    inventory: list[MonsterItemSnapshot],
 ) -> MonsterSnapshot:
-    """몬스터와 그 시트, 공격, 드롭을 굳힌다."""
+    """몬스터와 그 시트, 공격, 지닌 물건을 굳힌다."""
     return MonsterSnapshot(
         id=monster.id,
         name=monster.name,
@@ -572,7 +584,8 @@ def snapshot_monster(
         sheet=sheet,
         attacks=attacks,
         unique=monster.unique,
-        drops=drops,
+        equipment=equipment,
+        inventory=inventory,
     )
 
 
