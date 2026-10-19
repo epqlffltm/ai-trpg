@@ -25,6 +25,8 @@
 #                  Alloy 가 서버들의 망에 없는가.
 #                  추적도 본다: OTLP 로 민 시험 span 이 Alloy 를 거쳐 Tempo 에 들어오는가, Grafana 가 Tempo 에 닿는가,
 #                  Tempo 가 root 가 아닌가, 결제 서버가 Tempo 에 닿지 않는가.
+#                  결제 서버의 span 도 본다: 부른 쪽의 추적 아래에 요청의 span 이 놓이는가, 그 줄의 trace_id 가 같은가,
+#                  정리 작업의 span 아래에 쿼리의 span 이 놓이는가.
 #                  경보도 본다: 규칙의 시험(promtool)이 통과하는가, Prometheus 가 규칙을 읽고 Alertmanager 를 찾았는가,
 #                  건강한 스택에서 울리는 경보가 없는가, 받는 곳 넷을 모두 적은 설정이 맞는가, 반쯤 적으면 뜨지 않는가,
 #                  비밀이 설정 파일에 없는가. 받는 곳의 흉내(alert_sink.py)를 띄워 시험 경보가 Discord, Slack, Telegram 의
@@ -661,6 +663,38 @@ tempo_finds_trace() {
   fetch_on observability "http://tempo:3200/api/v2/traces/$1" | grep -q stack_smoke.probe
 }
 
+# 이 추적 번호를 실어 결제 서버를 한 번 부른다(서명 없는 알림이라 401, wget 이 실패로 끝난다).
+# 결제 서버는 받은 traceparent 의 아래에 요청의 span 을 건다. flags 00(기록하지 않음)이어도 남긴다
+call_billing_with_trace() {
+  fetch_on default http://billing-server:8003/api/v1/billing/webhooks/payment \
+    --post-data '{}' --header 'Content-Type: application/json' \
+    --header "traceparent: 00-$1-$(openssl rand -hex 8)-00" >/dev/null 2>&1 || true
+}
+
+# Tempo 의 그 추적에 이 이름의 span 이 있는가
+tempo_trace_has_span() {
+  fetch_on observability "http://tempo:3200/api/v2/traces/$1" | grep -qF "$2"
+}
+
+# TraceQL 에 맞는 추적이 Tempo 에 하나라도 있는가
+tempo_searches() {
+  fetch_on observability "http://tempo:3200/api/search?limit=1&q=$(urlencode "$1")" |
+    python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("traces") else 1)'
+}
+
+# 결제 서버(본보기)의 span 을 본다. 요청, 그 줄의 trace_id, 정리 작업과 그 안의 쿼리
+check_billing_spans() {
+  local trace
+  trace="$(openssl rand -hex 16)"
+  report "추적 번호를 실어 결제 서버를 부른다" call_billing_with_trace "$trace"
+  report "결제 서버의 요청 span 이 부른 쪽의 추적 아래에 들어온다(POST /api/v1/billing/webhooks/payment)" \
+    eventually tempo_trace_has_span "$trace" "POST /api/v1/billing/webhooks/payment"
+  report "결제 서버의 그 요청의 줄이 같은 trace_id 다(로그와 추적이 오간다)" \
+    eventually loki_finds "{service=\"billing-server\"} | trace_id=\"$trace\""
+  report "정리 작업의 span 아래에 쿼리의 span 이 들어온다(sweep.run >> db …)" \
+    eventually tempo_searches '{resource.service.name="billing-server" && name="sweep.run"} >> {span.db.system.name="postgresql"}'
+}
+
 # 추적을 본다. 시험 span 이 Alloy 를 거쳐 Tempo 에 들어오는가, Grafana 가 Tempo 에 닿는가, 서버가 Tempo 에 닿지 않는가
 check_traces() {
   local trace
@@ -672,6 +706,7 @@ check_traces() {
   report "민 span 이 Alloy 를 거쳐 Tempo 에 들어온다(추적 번호로 찾는다)" eventually tempo_finds_trace "$trace"
   report "결제 서버가 Tempo 에 닿지 않는다(telemetry 망에서는 Alloy 에만 닿는다)" \
     unreachable_from billing-server http://tempo:3200/ready
+  check_billing_spans
 }
 
 # 메트릭을 본다

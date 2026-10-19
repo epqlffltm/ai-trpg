@@ -88,10 +88,12 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	router := gin.New()
 	logger := loggerOf(deps)
 	meters := newRouterMetrics(deps.Meter, logger)
+	// 요청마다 서버 span 을 건다(tracing.go). 가장 먼저 붙인다. 뒤의 로그(trace_id)와 쿼리의 span 이 이 span 을 따른다
+	router.Use(requestSpan())
 	// 요청을 세고 걸린 시간을 잰다. 패닉으로 끝난 요청(500)과 마감에 걸린 요청도 센다
 	router.Use(measureRequests(meters.http))
 	// 요청마다 식별자를 걸고, 끝나면 공통 규격의 한 줄을 남긴다. 요청의 본문과 머리말은 적지 않는다.
-	// 가장 먼저 붙인다. 뒤에 오는 것들의 로그에 식별자가 붙는다
+	// span 다음에 붙인다. 뒤에 오는 것들의 로그에 식별자가 붙는다
 	router.Use(requestLogging(logger))
 	// 처리 중에 패닉이 나도 서버가 죽지 않고 500 으로 답한다
 	router.Use(recoverPanics(logger))
