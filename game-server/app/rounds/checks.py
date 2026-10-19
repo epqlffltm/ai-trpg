@@ -23,7 +23,15 @@ from app.engine.health import Change, ChangeKind
 from app.rounds import drops
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import find_cast_member
-from app.rounds.effects import Judging, injury_after, mark_hurt, member_effect, monster_effect, npc_effect
+from app.rounds.effects import (
+    Judging,
+    injury_after,
+    mark_fight,
+    mark_hurt,
+    member_effect,
+    monster_effect,
+    npc_effect,
+)
 from app.rounds.monster_scene import Gone, find_scene_monster, gone_reason
 from app.tables import monsters as table_monsters
 from app.tables import npcs, sheets
@@ -192,6 +200,8 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction) -> d
     gone = target_gone(judging, member, action)
     if gone is not None:
         return {'target_gone': gone}
+    if action.monster is not None:
+        mark_fight(judging, find_scene_monster(judging.monsters, action.monster).state, member)
     sheet = member.sheet
     hindrance = round_injuries.hindrance_for(judging.ruleset, sheet.injuries, action.ability)
     hindered = actions.attempt_hindered(judging.ruleset, action, sheet.abilities, judging.dice, hindrance)

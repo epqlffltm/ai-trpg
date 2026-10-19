@@ -47,6 +47,7 @@ from app.rounds.narrator import (
     RestNote,
     RevivalNote,
     SearchNote,
+    StealNote,
     StoryContext,
     TakeNote,
     TargetGoneNote,
@@ -56,7 +57,7 @@ from app.rounds.narrator import (
     Verdict,
     WhisperNote,
 )
-from app.rounds.state import move_of, put_down_of, rest_of, search_of, take_of
+from app.rounds.state import move_of, put_down_of, rest_of, search_of, steal_of, take_of
 from app.tables import quests
 from app.tables.models import GameTable
 from app.whispers.models import Whisper
@@ -237,6 +238,17 @@ def to_put_down(declaration: Declaration | None) -> PutDownNote | None:
     if put_down is None:
         return None
     return PutDownNote(name=put_down['name'], count=put_down['count'], put=put_down['put'])
+
+
+def to_steal(declaration: Declaration | None) -> StealNote | None:
+    """선언에 적힌 훔치기의 결과를 서술자에게 줄 모양으로 바꾼다. 훔치는 행동이 아니면 None."""
+    steal = steal_of(declaration)
+    if steal is None:
+        return None
+    caught = not steal['stolen'] and steal['check'] is not None
+    return StealNote(
+        monster=steal['monster_name'], name=steal['name'], count=steal['count'], stolen=steal['stolen'], caught=caught
+    )
 
 
 def to_npc_impact(effect: dict | None) -> NpcImpact | None:

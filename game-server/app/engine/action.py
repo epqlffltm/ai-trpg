@@ -11,8 +11,8 @@
   - 모양(CheckAction): 규칙을 몰라도 볼 수 있는 것. 입력을 받을 때 검사한다.
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
-종류는 열이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search),
-쉬기(rest), 줍기(take), 내려놓기(put_down).
+종류는 열하나다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search),
+쉬기(rest), 줍기(take), 내려놓기(put_down), 훔치기(steal).
 종류를 나타내는 칸(kind)으로 가른다(Action).
 치료는 능력과 난이도를 받지 않는다. 규칙이 정한다(app/engine/treatment.py).
 지목은 주사위를 굴리지 않는다. 짚은 이름이 정답인지만 본다(app/rounds/naming.py).
@@ -20,6 +20,7 @@
 가기는 판정이 없다. 이웃한 장소로 한 칸 간다. 찾기는 그 장소의 숨긴 길과 숨긴 물건마다 판의 판정을 굴린다
 (app/rounds/map_actions.py). 줍기는 판정이 없다. 그 장소에 보이게 놓인 물건을 가져간다
 (app/rounds/place_item_actions.py). 내려놓기도 판정이 없다. 가진 물건을 그 장소에 보이게 둔다.
+훔치기는 규칙이 정한 능력과 목표값으로 한 번 굴린다. 목표값은 물건과 대상에 따라 오르내린다(app/rounds/steals.py).
 쉬기는 판정이 없다. 쉬는 라운드가 그 휴식의 시간만큼 이어지고, 라운드가 닫힐 때 다치지 않았으면 회복한다
 (app/rounds/rests.py).
 
@@ -73,6 +74,8 @@ class ActionKind(enum.StrEnum):
     TAKE = 'take'
     # 가진 물건을 지금 장소에 내려놓는다. 누구나 주울 수 있게 보이게 놓인다
     PUT_DOWN = 'put_down'
+    # 같은 장소의 몬스터 한 마리가 지닌 물건 하나를 훔친다. 규칙이 정한 능력으로 한 번 굴린다
+    STEAL = 'steal'
 
 
 class RestLength(enum.StrEnum):
@@ -318,6 +321,23 @@ class PutDownAction(BaseModel):
     count: int = Field(default=1, ge=1, le=GIVE_MAX_COUNT)
 
 
+class StealAction(BaseModel):
+    """
+    같은 장소의 몬스터 한 마리(monster)가 지닌 물건 하나(item)를 훔치는 행동(app/rounds/steals.py).
+
+    능력과 난이도는 받지 않는다. 규칙(Ruleset.steal)이 정하고, 물건과 대상에 따라 목표값이 오르내린다.
+    성공하면 그 줄을 통째로 갖는다. 들키면 그 마리가 이번 라운드의 차례에 도둑을 노린다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.STEAL]
+    # 테이블의 몬스터 한 마리의 id 다(table_monsters.id). 자기가 선 장소의 마리만 고를 수 있다
+    monster: uuid.UUID
+    # 그 마리가 지닌 물건의 항목 id 다. 장면의 몬스터 목록의 items 에서 고른다
+    item: uuid.UUID
+
+
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
 AnyAction = (
     CheckAction
@@ -330,6 +350,7 @@ AnyAction = (
     | RestAction
     | TakeAction
     | PutDownAction
+    | StealAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

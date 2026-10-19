@@ -6,7 +6,7 @@
 DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면의 인물을 받는다.
 저장은 부른 쪽(app/rounds/service.py)이 한다.
 
-행동은 열이다(app/engine/action.py).
+행동은 열하나다(app/engine/action.py).
   - 판정(CheckAction). 이번 장면에 나온 NPC 를 겨눌 수 있다(app/rounds/cast.py). 노려 칠 수도 있다.
     자기가 선 장소의 몬스터 한 마리를 칠 수도 있다(app/rounds/monster_scene.py).
   - 치료(TreatAction). 능력과 난이도는 규칙이 정한다. 대상이 그 부상을 입고 있어야 한다.
@@ -18,6 +18,8 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
   - 쉬기(RestAction). 규칙에 쉬기가 있어야 한다. 쉴 수 없는 곳은 없다(app/rounds/rests.py).
   - 줍기(TakeAction). 맵에 서 있고, 그 장소에 보이게 남은 물건이어야 한다(app/rounds/place_item_actions.py).
   - 내려놓기(PutDownAction). 맵에 서 있고, 판의 물건을 그만큼 가지고 있어야 한다.
+  - 훔치기(StealAction). 규칙에 훔치기가 있고, 자기가 선 장소의 죽지 않은 마리가 그 물건을 지금 지녀야 한다
+    (app/rounds/steals.py).
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
 비워 둔 칸(난이도, 회복과 치료의 대상)은 여기서 채워 저장한다. 읽는 쪽이 "비어 있으면"을 다시 따지지 않는다.
 """
@@ -36,6 +38,7 @@ from app.engine.action import (
     PutDownAction,
     RestAction,
     SearchAction,
+    StealAction,
     TakeAction,
     TreatAction,
     UseAction,
@@ -50,6 +53,7 @@ from app.rounds.monster_scene import SceneMonster, find_scene_monster, stands_wi
 from app.rounds.place_item_actions import accept_take
 from app.rounds.rests import accept_rest
 from app.rounds.state import find_declaration, is_down, rules_of
+from app.rounds.steals import find_carried, require_steal
 from app.tables import items, npcs, sheets
 from app.tables import monsters as table_monsters
 from app.tables import state as table_state
@@ -283,6 +287,21 @@ def accept_put_down(table: GameTable, member: TableMember, action: PutDownAction
     return action.model_dump(mode='json')
 
 
+def accept_steal(ruleset: Ruleset, member: TableMember, monsters: list[SceneMonster], action: StealAction) -> dict:
+    """
+    훔치는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
+
+      - 규칙에 훔치기가 없으면 ActionNotInRulesError(kind).
+      - 그 마리가 자기가 선 장소에 없거나 이미 죽었으면 칠 때와 같다(require_monster_target). 쓰러진 마리는 된다.
+      - 그 마리가 그 물건을 지금 지니지 않았으면 ActionTargetError(carried).
+    """
+    require_steal(ruleset)
+    require_monster_target(monsters, member, action.monster)
+    if find_carried(find_scene_monster(monsters, action.monster), action.item) is None:
+        raise ActionTargetError('carried')
+    return action.model_dump(mode='json')
+
+
 def accept_action(
     table: GameTable,
     member: TableMember,
@@ -295,7 +314,7 @@ def accept_action(
     member 는 선언하는 사람이고, scene 은 이번 장면(인물과 몬스터)이다.
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
-    accept_move, accept_search, accept_rest, accept_take, accept_put_down).
+    accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal).
     """
     if action is None:
         return None
@@ -316,6 +335,8 @@ def accept_action(
         return accept_take(table, member, action)
     if isinstance(action, PutDownAction):
         return accept_put_down(table, member, action)
+    if isinstance(action, StealAction):
+        return accept_steal(ruleset, member, scene.monsters, action)
     if isinstance(action, RestAction):
         return accept_rest(ruleset, action)
     return accept_check(table, member, action, scene, ruleset)

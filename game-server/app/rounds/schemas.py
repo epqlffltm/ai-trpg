@@ -444,6 +444,50 @@ class PutDownOutcome(BaseModel):
     put_down: PutDownOut
 
 
+class RolledOut(BaseModel):
+    """굴린 판정 하나. 엔진이 정했다(app/engine/check.py 의 Check)."""
+
+    roll: int
+    modifier: int
+    total: int
+    # 목표값. 훔치기면 물건과 대상에 따라 오르내린 뒤의 값이다
+    target: int
+    success: bool
+
+
+class StealOut(BaseModel):
+    """
+    훔친 결과. 엔진이 정했다(app/rounds/steals.py).
+
+    stolen 이 참이면 훔쳤다(count 는 훔친 개수, left 는 그 마리에게 남은 개수, total 은 도둑이 가진 개수).
+    거짓이고 check 가 있으면 들켰다. 그 마리는 이번 라운드의 차례에 도둑을 친다.
+    check 가 없으면 굴리지 않았다(reason 이 gone: 앞사람이 먼저 훔쳤다). full 은 상한에 닿아 그만큼만 훔친 것이다.
+    factors 는 목표값을 오르내리게 한 것들이다(equipped, rarity, dull_kind, dull, unwary, distracted).
+    대상의 눈치(능력치의 보정)는 늘 보지만 몬스터의 숫자라 따로 적지 않는다. target 에 섞여 있다.
+    """
+
+    user_id: uuid.UUID
+    character_name: str
+    monster_id: uuid.UUID
+    monster_name: str
+    entry_id: uuid.UUID
+    name: str
+    check: RolledOut | None
+    hindrance: HindranceOut | None
+    factors: list[str]
+    stolen: bool
+    count: int
+    left: int
+    total: int
+    reason: str | None
+
+
+class StealOutcome(BaseModel):
+    """훔치는 행동의 결과."""
+
+    steal: StealOut
+
+
 class RestOut(BaseModel):
     """
     쉰 결과. 엔진이 정했다(app/rounds/rests.py). 판정이 없다.
@@ -507,7 +551,7 @@ class DeclarationOut(BaseModel):
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
     # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
-    # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 쉬었으면 RestOutcome 이다.
+    # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 훔쳤으면 StealOutcome, 쉬었으면 RestOutcome 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
     # 차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면 TurnLostOutcome 이다
     outcome: (
@@ -519,6 +563,7 @@ class DeclarationOut(BaseModel):
         | SearchOutcome
         | TakeOutcome
         | PutDownOutcome
+        | StealOutcome
         | RestOutcome
         | TargetGoneOutcome
         | TurnLostOutcome

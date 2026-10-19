@@ -619,6 +619,22 @@ def upgrade_from_34(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_35(document: dict) -> dict:
+    """
+    형식 35 의 문서를 형식 36 으로 올린다. 그때는 규칙에 훔치기가 없었고 몬스터에 둔한지가 없었다.
+
+    룰북은 템플릿에서만 만들므로 SRD5 템플릿의 훔치기로 읽는다. DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    이미 진행 중인 테이블도 다음 라운드부터 훔칠 수 있다. 몬스터는 둔하지 않은 것으로 읽는다.
+    """
+    steal = SRD5.model_dump(mode='json')['steal']
+    rulebook = document['rulebook']
+    upgraded = dict(document)
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'steal': steal}}
+    upgraded['monsters'] = [{**monster, 'dull': False} for monster in document.get('monsters', [])]
+    upgraded['format'] = 36
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -656,4 +672,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     32: upgrade_from_32,
     33: upgrade_from_33,
     34: upgrade_from_34,
+    35: upgrade_from_35,
 }
