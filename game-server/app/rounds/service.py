@@ -78,10 +78,11 @@ from app.rounds.state import (
     require_started,
     waiting_for,
 )
+from app.tables import items, sheets
 from app.tables import repository as table_repository
 from app.tables import service as tables
-from app.tables import sheets
 from app.tables import state as table_state
+from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember, TableStatus
 from app.whispers import repository as whisper_repository
 
@@ -171,14 +172,19 @@ async def get_current_round(session: AsyncSession, user_id: uuid.UUID, table_id:
     return table, round_
 
 
-async def get_scene_cast(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> tuple[Round, Scene]:
+async def get_scene_cast(
+    session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID
+) -> tuple[Round, Scene, dict[uuid.UUID, CatalogItem]]:
     """
     자기가 앉아 있는 테이블의 가장 최근 라운드와, 그 장면을 돌려준다. 행동으로 겨눌 수 있는 NPC 와 몬스터들이다.
 
+    판의 물건들(이름)도 돌려준다. 몬스터가 지닌 것의 이름이다. 장면에 몬스터가 없으면 판을 읽지 않고 비운다.
     앉지 않았으면 TableNotFoundError, 아직 시작하지 않았으면 RoundConflictError.
     """
     table, round_ = await get_current_round(session, user_id, table_id)
-    return round_, await load_scene(session, table, round_)
+    scene = await load_scene(session, table, round_)
+    things = items.catalog(read_snapshot(table.content)) if scene.monsters else {}
+    return round_, scene, things
 
 
 async def get_round(

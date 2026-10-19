@@ -5,7 +5,9 @@
 
   - 살아 있던 마리가 처음 쓰러졌을 때(제압이든 죽임이든) 한 번만 굴린다. 이미 쓰러진 마리를 죽여도 다시 굴리지 않는다.
     몬스터에게는 회복이 없어서 살아 있음에서 쓰러짐이나 죽음으로 바뀌는 일은 마리마다 한 번뿐이다.
-  - 나올 것은 판의 몬스터의 드롭을 줄마다 따로 굴려 정한다(app/engine/drops.py).
+  - 나올 것은 그 마리가 지금 지닌 것(장비와 소지품, app/tables/monster_items.py)뿐이다(#456).
+    줄마다 판에 적은 확률로 따로 굴려 정한다(app/engine/drops.py). 나온 줄은 그 마리에게서 빠진다.
+    나오지 않은 줄은 그 마리가 그대로 지닌다. 이미 빼앗긴 것은 나오지 않는다.
   - 받는 사람은 그 마리가 있던 장소의 죽지 않은 캐릭터 중 한 명이다. 서버의 주사위로 고른다.
     한 번 쓰러뜨리면 한 명을 고르고 나온 것을 모두 그 사람이 받는다. 쓰러져 있어도 죽지 않았으면 받는다.
     막타를 친 사람에게 주지 않는다. 막타를 노리게 된다.
@@ -20,10 +22,10 @@ DB 를 모른다. 소지품을 고친다. 저장하지는 않는다.
 import uuid
 
 from app.engine.dice import choose
-from app.engine.drops import Dropped, roll_drops
+from app.engine.drops import Dropped, comes_out
 from app.rounds.effects import Judging
 from app.rounds.monster_scene import SceneMonster, find_scene_monster
-from app.tables import items, sheets
+from app.tables import items, monster_items, sheets
 from app.tables.models import GameTable, NpcStatus, TableMember
 
 # 드롭의 출처. 이벤트의 source 에 적는다. 지금은 몬스터뿐이다
@@ -100,18 +102,32 @@ def hand_out(judging: Judging, monster: SceneMonster, dropped: list[Dropped]) ->
     return describe(monster, member, stow(judging, member, dropped))
 
 
+def fall_from(monster: SceneMonster, judging: Judging) -> list[Dropped]:
+    """
+    처음 쓰러진 마리가 지닌 것에서 떨어질 것을 줄마다 굴린다. 떨어진 줄은 그 마리에게서 뺀다. 줄의 차례다.
+
+    지닌 것이 없으면 굴리지 않는다. 나온 줄은 지금 지닌 개수 그대로 나온다.
+    """
+    fallen = []
+    for one in monster_items.carried(monster.state, monster.definition):
+        if comes_out(one.chance, judging.dice):
+            monster_items.set_count(monster.state, one.slot, 0)
+            fallen.append(Dropped(entry_id=one.entry_id, count=one.count))
+    return fallen
+
+
 def drop_after(judging: Judging, effect: dict | None) -> dict | None:
     """
     몬스터의 변화 뒤에 드롭을 굴리고 준다. 준(또는 사라진) 것을 문서로 돌려준다.
 
-    처음 쓰러진 것이 아니거나, 드롭이 없는 몬스터거나, 굴려서 아무것도 안 나왔으면 None 이다. 그때는 굴린 것만 있다.
+    처음 쓰러진 것이 아니거나, 지닌 것이 없는 마리거나, 굴려서 아무것도 안 나왔으면 None 이다. 그때는 굴린 것만 있다.
     """
     if effect is None or not downed_now(effect):
         return None
     monster = find_scene_monster(judging.monsters, uuid.UUID(effect['monster_id']))
-    if monster is None or not monster.definition.drops:
+    if monster is None:
         return None
-    dropped = roll_drops(monster.definition.drops, judging.dice)
+    dropped = fall_from(monster, judging)
     if not dropped:
         return None
     return hand_out(judging, monster, dropped)

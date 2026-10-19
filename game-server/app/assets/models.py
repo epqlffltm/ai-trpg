@@ -104,8 +104,10 @@ SCENARIO_MAX_PLACE_ITEMS = 100
 # 몬스터 하나의 공격(스킬)의 수와 이름의 길이. 공격이 여럿이면 차례마다 서버의 주사위로 하나를 고른다
 MONSTER_MAX_ATTACKS = 5
 ATTACK_NAME_MAX_LENGTH = 30
-# 몬스터 하나의 드롭 줄의 수와, 줄 하나가 나올 확률(%)의 범위. 줄마다 따로 굴린다(app/engine/drops.py)
-MONSTER_MAX_DROPS = 5
+# 몬스터 하나가 지닌 장비와 소지품의 줄 수, 쓰러졌을 때 줄 하나가 떨어질 확률(%)의 범위.
+# 드롭은 지닌 것에서만 나온다. 줄마다 따로 굴린다(app/engine/drops.py)
+MONSTER_MAX_EQUIPMENT = 5
+MONSTER_MAX_INVENTORY = 10
 DROP_CHANCE_MAX = 100
 # 판을 낼 때 적는 변경 내용. 사람이 읽는다
 VERSION_NOTE_MAX_LENGTH = 500

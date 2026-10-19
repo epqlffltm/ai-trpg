@@ -207,7 +207,7 @@ async def test_the_scene_lists_the_monsters_where_someone_stands(client: AsyncCl
     ]
     assert {(monster['status'], monster['condition']) for monster in listed['monsters']} == {('alive', '멀쩡함')}
     # 숫자도 도감의 글도 싣지 않는다
-    assert set(listed['monsters'][0]) == {'id', 'name', 'place_id', 'status', 'condition'}
+    assert set(listed['monsters'][0]) == {'id', 'name', 'place_id', 'status', 'condition', 'items'}
     assert '개만 한 쥐' not in str(listed)
 
 
