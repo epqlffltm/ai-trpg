@@ -22,6 +22,7 @@ from django.conf import settings
 
 from accounts.service_signature import SIGNATURE_HEADER, sign_request
 from observability.context import outgoing_headers
+from observability.http_spans import client_span, mark_unreachable, record_status
 
 # 환영 크레딧을 주라고 맡기는 주소. 호스트를 뺀 경로다. 서명에도 이 글자가 들어간다
 WELCOME_PATH = '/api/v1/billing/service/grants/welcome'
@@ -101,22 +102,27 @@ def report_payment_eligibility(
 
 
 def _post(path: str, body: bytes) -> tuple[int, bytes]:
-    """서명한 POST 를 결제 서버에 보내고 상태 코드와 본문을 돌려준다. 닿지 못하면 BillingUnavailableError 다."""
-    request = urllib.request.Request(
-        settings.BILLING_URL + path,
-        data=body,
-        method='POST',
-        headers=_headers(path, body),
-    )
-    try:
-        with _opener().open(request, timeout=TIMEOUT_SECONDS) as response:
-            return response.status, response.read()
-    except urllib.error.HTTPError as exc:
-        # 4xx 와 5xx 는 예외로 온다. 답은 받은 것이다
-        return exc.code, b''
-    except OSError as exc:
-        # 연결 실패와 시간 초과를 포함한다. 오류의 글에는 주소가 들어 있을 수 있어 종류만 적는다
-        raise BillingUnavailableError(f'결제 서버에 닿지 못했다: {type(exc).__name__}') from exc
+    """
+    서명한 POST 를 결제 서버에 보내고 상태 코드와 본문을 돌려준다. 닿지 못하면 BillingUnavailableError 다.
+
+    작업 안에서 부르면 client span 을 건다(observability/http_spans.py). 머리말을 그 안에서 만들어
+    traceparent 가 그 span 을 부모로 가리킨다. 결제 서버의 span 이 그 아래에 붙는다.
+    """
+    url = settings.BILLING_URL + path
+    with client_span('POST', url) as span:
+        request = urllib.request.Request(url, data=body, method='POST', headers=_headers(path, body))
+        try:
+            with _opener().open(request, timeout=TIMEOUT_SECONDS) as response:
+                record_status(span, response.status)
+                return response.status, response.read()
+        except urllib.error.HTTPError as exc:
+            # 4xx 와 5xx 는 예외로 온다. 답은 받은 것이다
+            record_status(span, exc.code)
+            return exc.code, b''
+        except OSError as exc:
+            # 연결 실패와 시간 초과를 포함한다. 오류의 글에는 주소가 들어 있을 수 있어 종류만 적는다
+            mark_unreachable(span)
+            raise BillingUnavailableError(f'결제 서버에 닿지 못했다: {type(exc).__name__}') from exc
 
 
 def _headers(path: str, body: bytes) -> dict[str, str]:

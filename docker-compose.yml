@@ -292,11 +292,13 @@ services:
     restart: unless-stopped
     env_file: ./auth-server/.env
     environment:
-      <<: *auth-environment
+      <<: [*auth-environment, *telemetry-environment]
       # 키 파일은 아래에서 붙인 폴더에 있다. .env 에 다른 경로를 적어 두었어도 컨테이너에서는 이 경로다
       JWT_PRIVATE_KEY_PATH: keys/jwt-private.pem
       # 서버는 결제 서버를 부르지 않는다(부르는 것은 환영 크레딧의 워커다). 다만 결제 서버가 보낸
       # 보호자 알림(/service/guardian-notices)의 서명을 이 비밀로 확인하므로 BILLING_SECRET 을 남긴다(#352)
+    # span 을 Alloy 에 민다(telemetry)
+    networks: [default, telemetry]
     # 토큰에 서명하는 것은 이 서버뿐이다. 키 폴더는 여기에만 붙인다
     volumes:
       - *auth-keys
@@ -322,10 +324,12 @@ services:
     restart: unless-stopped
     command: ["python", "manage.py", "send_outgoing_mail"]
     env_file: ./auth-server/.env
+    # 메일을 보낸 바퀴의 span 을 Alloy 에 민다(telemetry). 할 일이 없던 바퀴는 보내지 않는다
     environment:
-      <<: [*auth-environment, *auth-without-signing-key]
+      <<: [*auth-environment, *auth-without-signing-key, *telemetry-environment]
       HEARTBEAT_FILE: /tmp/heartbeat
       BILLING_SECRET: ""
+    networks: [default, telemetry]
     healthcheck: *worker-heartbeat
     depends_on:
       auth-migrate:
@@ -340,10 +344,12 @@ services:
     restart: unless-stopped
     command: ["python", "manage.py", "send_welcome_credits"]
     env_file: ./auth-server/.env
+    # 크레딧을 맡긴 바퀴의 span 을 Alloy 에 민다(telemetry). 할 일이 없던 바퀴는 보내지 않는다
     environment:
-      <<: [*auth-environment, *auth-without-signing-key]
+      <<: [*auth-environment, *auth-without-signing-key, *telemetry-environment]
       HEARTBEAT_FILE: /tmp/heartbeat
       SMTP_PASSWORD: ""
+    networks: [default, telemetry]
     healthcheck: *worker-heartbeat
     depends_on:
       auth-migrate:
@@ -359,9 +365,11 @@ services:
     command: ["supercronic", "-quiet", "-json", "-passthrough-logs", "/etc/supercronic/crontab"]
     env_file: ./auth-server/.env
     # 요약 메일을 발송함에 적지 않고 바로 보내는 설정(MAIL_DELIVERY=inline)도 있어 SMTP_PASSWORD 는 남긴다
+    # 명령 한 번의 span 을 끝날 때 Alloy 에 민다(telemetry)
     environment:
-      <<: [*auth-environment, *auth-without-signing-key]
+      <<: [*auth-environment, *auth-without-signing-key, *telemetry-environment]
       BILLING_SECRET: ""
+    networks: [default, telemetry]
     volumes:
       - ./docker/cron/auth.crontab:/etc/supercronic/crontab:ro
     depends_on:
@@ -610,8 +618,8 @@ services:
   # 망을 셋으로 나눈다. 서버들은 기본 망(default)에 있어서 Loki, Prometheus, Alertmanager, Tempo, Grafana, 소켓 프록시에 닿지 않는다.
   #   docker-api     소켓 프록시와 Alloy 만. 바깥으로 나가지 못한다(internal)
   #   observability  Alloy, Loki, Prometheus, Alertmanager, Tempo, Grafana. Grafana 의 포트를 열고 Alertmanager 가 바깥으로 보내려고 internal 로 두지 않는다
-  #   telemetry      Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스(지금은 결제 서버의 셋). 서버는 여기서 Alloy 의 4318 에만 닿는다(internal).
-  #                  서버의 프로세스는 메트릭을 붙이는 PR 에서 이 망에 더한다(networks 에 default 도 함께 적고, x-telemetry-environment 를 붙인다)
+  #   telemetry      Alloy 와, 메트릭이나 span 을 OTLP 로 미는 서버의 프로세스(결제, 알림, TRPG, 인증 서버). 서버는 여기서 Alloy 의 4318 에만 닿는다(internal).
+  #                  서버의 프로세스는 메트릭이나 span 을 붙이는 PR 에서 이 망에 더한다(networks 에 default 도 함께 적고, x-telemetry-environment 를 붙인다)
   # 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "수집기(Grafana Alloy)를 붙일 자리"에 있다
   # ---------------------------------------------------------------------------
 

@@ -7,6 +7,8 @@ contextvars 에 둔다. 함수마다 인자로 넘기지 않아도, 같은 요�
 요청을 처리하는 스레드마다(비동기로 돌면 작업마다) 이 값을 따로 들고 있어서, 동시에 처리되는 요청끼리 섞이지 않는다.
 
 요청과 따로 도는 일(관리 명령으로 띄우는 메일 워커, 정리 작업)은 request_id 가 아니라 job_id 를 건다(job_scope).
+
+span 이 걸려 있으면(spans.py) 추적은 그 span 의 것이다. 미들웨어가 요청의 추적을 정할 때 span 을 먼저 본다.
 """
 
 from collections.abc import Iterator
@@ -14,6 +16,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 from observability.identifiers import TRACEPARENT_HEADER, Trace, format_traceparent, new_trace
+from observability.spans import span_trace, span_traceparent
 
 _request_id: ContextVar[str | None] = ContextVar('request_id', default=None)
 _trace: ContextVar[Trace | None] = ContextVar('trace', default=None)
@@ -50,11 +53,12 @@ def job_scope(job_id: str) -> Iterator[None]:
     작업 하나가 도는 동안 그 식별자를 건다.
 
     걸려 있던 request_id 는 지운다. 작업은 요청이 아니다.
-    추적은 걸려 있던 것을 이어 쓰고, 없으면(요청 밖에서 시작한 작업) 새로 시작한다.
+    추적은 걸려 있던 것을 이어 쓴다. 없으면(요청 밖에서 시작한 작업) 작업의 span 의 것을(spans.job_span),
+    그것도 없으면 새로 시작한다.
     """
     job_token = _job_id.set(job_id)
     request_token = _request_id.set(None)
-    trace_token = _trace.set(_trace.get() or new_trace())
+    trace_token = _trace.set(_trace.get() or span_trace() or new_trace())
     try:
         yield
     finally:
@@ -70,6 +74,10 @@ def outgoing_headers() -> dict[str, str]:
     request_id 는 넘기지 않는다. 받는 서버가 제 요청의 식별자를 따로 만든다. 둘은 trace_id 로 이어진다.
     밖의 서비스(메일 서버)를 부를 때는 붙이지 않는다. 우리 안의 식별자를 밖에 내보낼 까닭이 없다.
     결제 서버를 부를 때 쓴다(accounts/billing_client.py).
+    span 이 걸려 있으면 그 span 을 부모로 붙인다. 받는 서버의 span 이 그 아래에 이어진다.
     """
+    traceparent = span_traceparent()
+    if traceparent is not None:
+        return {TRACEPARENT_HEADER: traceparent}
     trace = _trace.get()
     return {TRACEPARENT_HEADER: format_traceparent(trace)} if trace else {}
