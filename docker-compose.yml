@@ -15,6 +15,10 @@
 #   docker compose --profile app ps -a      # 마이그레이션은 Exited (0), 서버·프록시·워커 셋은 healthy, cron 은 Up 이면 된다
 #   docker compose --profile app down
 #
+# 로그를 모아 볼 때(#25)는 프로필 observability 를 더한다. Alloy, Loki, Grafana 가 뜬다(아래의 "로그 모으기").
+#
+#   docker compose --profile app --profile observability up -d --build
+#
 # 서버의 설정은 각 서버 폴더의 .env 를 그대로 넘긴다(env_file). 그 안의 주소는 PC 에서 직접 띄울 때의 것(127.0.0.1)이라
 # 컨테이너에서는 닿지 않는다. 주소만 아래의 environment 가 컨테이너의 이름(db, redis, auth-server 등)으로 덮어쓴다.
 # DB 주소는 이 파일이 읽는 루트 .env 의 비밀번호로 만든다. 비밀번호를 두 곳에 적지 않는다.
@@ -569,6 +573,129 @@ services:
     # 서버를 기다리지 않는다. 서버의 주소는 요청마다 찾으므로 늦게 뜬 서버도 따라간다.
     # 아직 없는 서버로 가는 요청은 502 다
 
+  # ---------------------------------------------------------------------------
+  # 로그 모으기 (observability 프로필, #25)
+  #
+  # 이 compose 의 컨테이너 로그를 모아(Alloy) 저장하고(Loki) 본다(Grafana). 기본으로 꺼져 있다. staging 에서 켠다.
+  # 서버 코드와 서버의 설정은 그대로다. 서버는 stderr 에 쓰기만 하고, 이 넷이 멈춰도 요청은 영향을 받지 않는다.
+  #
+  #   docker compose --profile app --profile observability up -d --build
+  #   그다음 http://127.0.0.1:3000 (VM 에서는 SSH 터널: ssh -L 3000:127.0.0.1:3000 <서버>)
+  #
+  # 망을 둘로 나눈다. 서버들은 기본 망(default)에만 있어서 이 넷의 어느 것에도 닿지 않는다.
+  #   docker-api     소켓 프록시와 Alloy 만. 바깥으로 나가지 못한다(internal)
+  #   observability  Alloy, Loki, Grafana. Grafana 의 포트를 열려고 internal 로 두지 않는다
+  # 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "수집기(Grafana Alloy)를 붙일 자리"에 있다
+  # ---------------------------------------------------------------------------
+
+  # Docker 의 API 앞에 서는 프록시. 컨테이너와 네트워크의 목록, 로그를 읽는 GET 만 넘긴다.
+  # 만들기, 지우기, exec 같은 쓰기(POST, DELETE)와 이미지, 볼륨, 비밀 등 그 밖의 API 는 403 이다.
+  # 소켓을 Alloy 에 직접 붙이면 Alloy 가 뚫릴 때 VM 의 관리자 권한이 넘어간다.
+  # 넘기는 것에 컨테이너의 inspect 가 들어 있어 컨테이너의 환경 변수(비밀)도 읽힌다. 그래서 Alloy 만 닿는 망에 둔다
+  docker-socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:0.5.0
+    profiles: [observability]
+    logging: *logging
+    restart: unless-stopped
+    environment:
+      CONTAINERS: "1"
+      NETWORKS: "1"
+      # 기본으로 꺼져 있지만 적어 둔다. 쓰기는 하나도 넘기지 않는다
+      POST: "0"
+      # 요청마다 남기는 줄을 끈다. 15초마다 컨테이너 목록을 묻고 그 줄을 다시 모으게 된다
+      LOG_LEVEL: warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [docker-api]
+
+  # 수집기. 이 compose 의 컨테이너를 찾아 로그를 읽고, 서버의 JSON 줄을 풀어 Loki 로 보낸다(docker/alloy/config.alloy).
+  # 읽은 자리를 볼륨(alloydata)에 남겨서 다시 떠도 이어 읽는다
+  alloy:
+    image: grafana/alloy:v1.20.1
+    profiles: [observability]
+    logging: *logging
+    restart: unless-stopped
+    command: ["run", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    # 이미지는 root 로 뜬다. 로그는 파일이 아니라 Docker 의 API 로 읽으므로 root 가 필요 없다.
+    # 이미지가 만들어 둔 사용자(alloy, 473)로 띄운다. 읽은 자리를 남기는 폴더는 이미지에서 그 사용자의 것이다
+    user: "473:473"
+    environment:
+      # 이 프로젝트의 컨테이너만 모으려고 프로젝트의 이름을 넘긴다
+      COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME}
+    volumes:
+      - ./docker/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloydata:/var/lib/alloy/data
+    networks: [docker-api, observability]
+    depends_on:
+      - docker-socket-proxy
+      - loki
+
+  # 로그의 저장소. 14일 뒤에 지운다(docker/loki/config.yaml). 볼륨(lokidata)에 파일로 쌓는다.
+  # 포트를 열지 않는다. Grafana 와 Alloy 만 내부망으로 닿는다
+  loki:
+    image: grafana/loki:3.7.8
+    profiles: [observability]
+    logging: *logging
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./docker/loki/config.yaml:/etc/loki/config.yaml:ro
+      - lokidata:/loki
+    networks: [observability]
+
+  # 로그를 보는 화면. Loki 는 뜰 때 데이터 소스로 붙는다(docker/grafana/provisioning).
+  # 이 PC(127.0.0.1)에만 연다. 관리 서버가 생기기 전에는 SSH 터널로만 붙는다.
+  # 관리자 비밀번호는 루트 .env 의 GRAFANA_ADMIN_PASSWORD 다. 볼륨(grafanadata)이 비어 있는 첫 기동 때만 반영된다
+  grafana:
+    image: grafana/grafana:13.2.3
+    profiles: [observability]
+    logging: *logging
+    restart: unless-stopped
+    # 관리자 비밀번호가 없으면 뜨지 않는다. 비어 있으면 Grafana 는 admin/admin 으로 뜬다.
+    # ${GRAFANA_ADMIN_PASSWORD:?} 로 막지 않는다. compose 는 켜지 않은 프로필의 서비스까지 채우므로
+    # 이 프로필을 쓰지 않는 사람의 docker compose up 까지 멈춘다. 이미지의 시작 명령은 /run.sh 다
+    entrypoint:
+      - sh
+      - -c
+      - test -n "$$GF_SECURITY_ADMIN_PASSWORD" || { echo '루트 .env 에 GRAFANA_ADMIN_PASSWORD 를 설정하세요' >&2; exit 1; }; exec /run.sh
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Grafana Labs 에 사용 통계를 보내지 않고, 새 판과 플러그인의 갱신을 묻지 않는다
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      # Grafana 자신의 로그. 경고 이상만, JSON 으로 남긴다
+      GF_LOG_LEVEL: warn
+      GF_LOG_CONSOLE_FORMAT: json
+    volumes:
+      - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    networks: [observability]
+    # Grafana 가 제 DB 를 열고 요청을 받으면 healthy 다. Loki 에 닿는지는 보지 않는다(stack-smoke.sh 가 본다).
+    # Loki 와 Alloy 의 이미지에는 상태를 물을 도구가 없어 healthcheck 를 두지 않는다
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    depends_on:
+      - loki
+
+networks:
+  # 소켓 프록시와 Alloy 만 있는 망. 바깥으로 나가지 못한다
+  docker-api:
+    internal: true
+  # Alloy, Loki, Grafana 의 망
+  observability:
+
 volumes:
   pgdata:
   redisdata:
+  alloydata:
+  lokidata:
+  grafanadata:

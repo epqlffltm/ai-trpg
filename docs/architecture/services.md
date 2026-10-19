@@ -196,7 +196,7 @@
 계획이며 바뀔 수 있다.
 
 1. 게임 서버를 끝까지 플레이할 수 있게 마무리하고, 프런트엔드의 공통 껍데기(로그인, 잔액, 충전)와 TRPG 플레이 화면을 붙인다.
-2. 배포(클라우드, 도메인, TLS)와 로그·메트릭 수집 스택(Alloy, Loki, Prometheus, Grafana). 정한 것은 [관측 규격](../observability.md#수집기grafana-alloy를-붙일-자리)에 있다.
+2. 배포(클라우드, 도메인, TLS)와 로그·메트릭 수집 스택(Alloy, Loki, Prometheus, Grafana). 정한 것은 [관측 규격](../observability.md#수집기grafana-alloy를-붙일-자리)에 있다. 로그(Alloy, Loki, Grafana)는 compose 의 프로필 `observability` 로 붙였다.
 3. `shared/` 의 AI 호출 코드를 게임 서버에서 뽑는다. 먼저 모델 목록을 서비스가 어떻게 나눠 가질지 정한다([공용 코드 규칙](shared-code.md#열린-질문)).
 4. `asset-server` 를 새로 만들고, 새 종류인 캐릭터를 처음부터 거기서 만든다. 같은 때에 game-server 가 세계관과 로어북의 게시된 판을, asset-server 가 나중에 줄 것과 같은 모양의 API 로 내준다.
 5. `chat-server` 의 첫 버전. 캐릭터를 쓴 대화(판 가져오기), 스트리밍 대화, 다시 생성, 자동 요약 기억, 모델 등급과 크레딧, 장소와 소지품. 자세한 순서는 [chat 서버 설계](chat-server.md#만드는-순서).

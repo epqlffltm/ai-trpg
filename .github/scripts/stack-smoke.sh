@@ -5,7 +5,8 @@
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
 #     prepare      설정 파일(.env 여섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
-#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, 상태 확인이 있는 워커가 healthy 가 될 때까지 기다린다.
+#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
+#                  Loki 가 준비될 때까지 기다린다.
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
 #                  DB 의 백업은 최근 백업 파일이 있으면 healthy 다
@@ -13,7 +14,10 @@
 #                  이미지에 .env 가 없는지 본다. 비밀이 그것을 쓰는 프로세스에만 가는지(secret_scope.py),
 #                  바깥에 여는 포트가 정해 둔 것뿐이고 127.0.0.1 에 묶였는지(port_scope.py),
 #                  모든 서비스의 로그에 상한이 있는지도 본다(logging_scope.py, 띄운 컨테이너의 설정).
-#                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다
+#                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다.
+#                  로그 모으기(observability 프로필, #25)도 본다: 서버의 줄이 Loki 에 label 과 줄의 값으로 들어오는가,
+#                  JSON 이 아닌 줄도 들어오는가, 식별자가 label 이 아닌가, Grafana 가 Loki 에 닿는가,
+#                  소켓 프록시가 쓰기를 막는가, 서버들이 소켓 프록시와 Loki 에 닿지 않는가
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한,
 #                  모든 응답(서버의 응답, 404, 429)의 보안 머리말.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
@@ -43,11 +47,21 @@ PROXY="${PROXY:-http://127.0.0.1:8080}"
 ADMIN="${ADMIN:-http://127.0.0.1:8000}"
 # 서버가 healthy 가 되기를 기다리는 시간(초)
 WAIT_SECONDS=180
+# 남긴 줄이 Loki 에서 찾아지기를 기다리는 시간(초). Alloy 는 15초마다 컨테이너를 찾고, 줄을 묶어 보낸다
+LOG_WAIT_SECONDS=60
+# Grafana 의 주소. 바깥(이 PC)에서 연 포트다
+GRAFANA="${GRAFANA:-http://127.0.0.1:3000}"
+# Loki 의 label 로 쓰는 것(docs/observability.md 의 "Loki 의 label"). 이것 말고는 label 이 없어야 한다
+LOKI_LABELS=(container environment level mode service)
+# 서버의 망 밖(소켓 프록시와 Loki 의 망)에서 주소를 부를 때 잠깐 띄우는 이미지. compose 의 redis 와 같아 이미 받아 두었다.
+# 그 안의 busybox wget 을 쓴다
+PROBE_IMAGE=redis:7-alpine
 # 컨테이너의 사용자. Dockerfile 에서 정한 번호다. 노드 이미지는 제 사용자(node, 1000)를 쓴다
 APP_UID=10001
 
+# 서버들(app)과 로그 모으기(observability)를 함께 띄운다
 compose() {
-  docker compose --profile app "$@"
+  docker compose --profile app --profile observability "$@"
 }
 
 # 이 실행에서만 쓰는 비밀. 48자라 서버들이 요구하는 길이(32자 이상)를 넘는다
@@ -82,6 +96,7 @@ GAME_DB_PASSWORD=$(throwaway)
 BILLING_DB_PASSWORD=$(throwaway)
 BOARD_DB_PASSWORD=$(throwaway)
 NOTIFICATION_DB_PASSWORD=$(throwaway)
+GRAFANA_ADMIN_PASSWORD=$(throwaway)
 EOF
   write_new auth-server/.env <<EOF
 SECRET_KEY=$(throwaway)
@@ -150,12 +165,12 @@ running() {
   [[ "$(docker inspect -f '{{.State.Running}}' "$(container_of "$1")")" == "true" ]]
 }
 
-# 서버들과 프록시, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
+# 서버들과 프록시, Grafana, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
 wait_healthy() {
   local deadline=$((SECONDS + WAIT_SECONDS)) service pending
   while ((SECONDS < deadline)); do
     pending=0
-    for service in "${SERVERS[@]/%/-server}" proxy "${HEARTBEAT_WORKERS[@]}"; do
+    for service in "${SERVERS[@]/%/-server}" proxy grafana "${HEARTBEAT_WORKERS[@]}"; do
       if ! running "$service"; then
         echo "$service 가 죽었다" >&2
         return 1
@@ -163,7 +178,7 @@ wait_healthy() {
       [[ "$(health_of "$service")" == "healthy" ]] || pending=$((pending + 1))
     done
     if ((pending == 0)); then
-      echo "서버들과 프록시, 상태 확인이 있는 워커가 healthy 다"
+      echo "서버들과 프록시, Grafana, 상태 확인이 있는 워커가 healthy 다"
       return 0
     fi
     sleep 3
@@ -172,9 +187,25 @@ wait_healthy() {
   return 1
 }
 
+# Loki 가 요청을 받을 때까지 기다린다. Loki 의 이미지에는 상태를 물을 도구가 없어 healthcheck 가 없다.
+# 뜬 뒤 15초쯤은 503 이다(받을 준비를 한다)
+wait_loki_ready() {
+  local deadline=$((SECONDS + WAIT_SECONDS))
+  while ((SECONDS < deadline)); do
+    if [[ "$(fetch_on observability http://loki:3100/ready 2>/dev/null)" == "ready" ]]; then
+      echo "Loki 가 준비됐다"
+      return 0
+    fi
+    sleep 3
+  done
+  echo "${WAIT_SECONDS}초 안에 Loki 가 준비되지 않았다" >&2
+  return 1
+}
+
 up() {
   compose up -d --build
   wait_healthy
+  wait_loki_ready
 }
 
 # 결과를 한 줄 찍고, 실패면 세어 둔다
@@ -354,6 +385,132 @@ backup_private() {
   [[ -z "$(compose exec -T db-backup find /backups -maxdepth 1 -name 'trpg-*.dump' ! -perm 600)" ]]
 }
 
+# --- 로그 모으기(observability 프로필) ---
+
+# compose 의 망의 이름. compose 는 망의 이름 앞에 프로젝트의 이름을 붙인다(<프로젝트>_observability)
+network_of() {
+  local project
+  project="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$(container_of loki)")"
+  echo "${project}_$1"
+}
+
+# 그 망에 잠깐 붙인 컨테이너에서 주소를 GET 하고 본문을 찍는다. 셋째 인자부터는 wget 에 넘긴다.
+# 소켓 프록시와 Loki 는 서버의 망에 없어서 서버의 컨테이너에서는 부를 수 없다
+fetch_on() {
+  local network="$1" url="$2"; shift 2
+  docker run --rm --network "$(network_of "$network")" "$PROBE_IMAGE" wget -q -O - "$@" "$url"
+}
+
+# LogQL 을 주소에 넣을 수 있게 바꾼다
+urlencode() {
+  python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+}
+
+# 지난 한 시간의 줄에서 이 LogQL 에 맞는 것이 하나라도 있는가
+loki_finds() {
+  fetch_on observability "http://loki:3100/loki/api/v1/query_range?limit=1&query=$(urlencode "$1")" |
+    python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["data"]["result"] else 1)'
+}
+
+# 될 때까지 몇 번 해 본다. 줄은 남긴 뒤 몇 초 지나야 Loki 에서 찾아진다
+eventually() {
+  local deadline=$((SECONDS + LOG_WAIT_SECONDS))
+  until "$@"; do
+    ((SECONDS < deadline)) || return 1
+    sleep 3
+  done
+}
+
+# Loki 의 label 이 정해 둔 것(LOKI_LABELS)뿐이고, service 와 container 가 있는가.
+# 식별자(request_id, trace_id, job_id)가 label 이 되면 줄마다 저장 단위가 생긴다.
+# 실패하면 Loki 에 있는 label 을 찍는다
+loki_labels_are_listed() {
+  fetch_on observability http://loki:3100/loki/api/v1/labels | python3 -c '
+import json, sys
+labels = set(json.load(sys.stdin)["data"])
+if not {"service", "container"} <= labels <= set(sys.argv[1:]):
+    print("Loki 의 label:", ", ".join(sorted(labels)))
+    sys.exit(1)
+' "${LOKI_LABELS[@]}"
+}
+
+# label 의 검사를 돌려 결과를 찍는다. 실패하면 무엇이 있었는지 함께 찍는다(check_config 와 같은 모양)
+check_loki_labels() {
+  local name="Loki 의 label 은 정해 둔 것뿐이다(식별자는 label 이 아니다)" problems
+  if problems="$(loki_labels_are_listed 2>&1)"; then
+    echo "ok   $name"
+  else
+    echo "FAIL $name"
+    sed 's/^/     /' <<<"$problems"
+    failures=$((failures + 1))
+  fi
+}
+
+# 이 추적 식별자를 실어 인증 서버를 한 번 부른다. 인증 서버는 받은 traceparent 를 이어 써서 그 줄에 trace_id 로 싣는다
+call_auth_with_trace() {
+  curl -fsS -o /dev/null --max-time 5 -H "traceparent: 00-$1-$(openssl rand -hex 8)-01" "$ADMIN/api/v1/auth/jwks"
+}
+
+# Grafana 의 관리자 비밀번호. prepare 가 루트 .env 에 적었다
+grafana_password() {
+  sed -n 's/^GRAFANA_ADMIN_PASSWORD=//p' .env
+}
+
+# Grafana 가 데이터 소스(uid loki)로 Loki 에 닿는가
+grafana_reaches_loki() {
+  status_is 200 "$GRAFANA/api/datasources/uid/loki/health" -u "admin:$(grafana_password)"
+}
+
+# 소켓 프록시가 이 주소를 넘기는가(200)
+socket_proxy_allows() {
+  fetch_on docker-api "http://docker-socket-proxy:2375$1" >/dev/null
+}
+
+# 소켓 프록시가 이 요청을 403 으로 막는가. 둘째 인자부터는 wget 에 넘긴다.
+# 닿지 않아서 실패한 것과 가르려고 403 인지까지 본다. wget 은 그 상태를 오류 출력에 찍고 실패로 끝난다
+socket_proxy_refuses() {
+  local path="$1" errors; shift
+  errors="$(fetch_on docker-api "http://docker-socket-proxy:2375$path" "$@" 2>&1 >/dev/null)" || true
+  [[ "$errors" == *" 403 "* ]]
+}
+
+# 한 컨테이너 안에서 다른 컨테이너의 주소로 닿지 않는가
+unreachable_from() {
+  ! reachable_from "$@"
+}
+
+# 로그 모으기를 본다. 앞의 확인들이 서버에 남긴 줄이 Loki 에 들어와 있다
+check_logs() {
+  local trace
+  trace="$(openssl rand -hex 16)"
+  report "alloy 가 root 가 아니다" not_root alloy
+  report "grafana 가 root 가 아니다" not_root grafana
+  report "Alloy 와 Loki, 소켓 프록시가 다시 뜨지 않고 돈다" stays_up_all alloy loki docker-socket-proxy
+  report "Grafana 가 Loki 에 닿는다(데이터 소스 loki)" grafana_reaches_loki
+  report "추적 식별자를 실어 인증 서버를 부른다" call_auth_with_trace "$trace"
+  report "서버의 줄을 service, container, level 의 label 로 찾는다" \
+    eventually loki_finds '{service="auth-server", container="auth-server", level="info"}'
+  report "서버의 줄을 줄의 값 trace_id 로 거른다" \
+    eventually loki_finds "{service=\"auth-server\"} | trace_id=\"$trace\""
+  report "JSON 이 아닌 줄(DB)도 들어온다" eventually loki_finds '{container="db"} | log_format="other"'
+  check_loki_labels
+  report "소켓 프록시가 컨테이너 목록을 넘긴다" socket_proxy_allows /containers/json
+  report "소켓 프록시가 컨테이너 만들기(POST)를 막는다" socket_proxy_refuses /containers/create \
+    --post-data '{}' --header 'Content-Type: application/json'
+  report "소켓 프록시가 이미지 목록을 막는다" socket_proxy_refuses /images/json
+  report "게임 서버가 소켓 프록시에 닿지 않는다" unreachable_from game-server http://docker-socket-proxy:2375/version
+  report "게임 서버가 Loki 에 닿지 않는다" unreachable_from game-server http://loki:3100/ready
+  report "결제 서버가 Loki 에 닿지 않는다" unreachable_from billing-server http://loki:3100/ready
+}
+
+# 모두 돌고 있고, 한 번도 다시 뜨지 않았는가
+stays_up_all() {
+  local service
+  for service in "$@"; do
+    stays_up "$service" || return 1
+  done
+}
+
 # 컨테이너에 서명 개인키의 폴더가 붙지 않았는가. 끝난 컨테이너(마이그레이션)도 본다
 no_signing_key_mounted() {
   ! docker inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$(container_of "$1")" | grep -qx /app/keys
@@ -421,6 +578,7 @@ check() {
   report "백업을 빈 DB 에 풀면 원본과 같다" backup_restores
   report "백업 파일을 주인만 읽는다" backup_private
   check_workers
+  check_logs
   finish
 }
 

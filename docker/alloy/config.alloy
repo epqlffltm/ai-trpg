@@ -1,0 +1,108 @@
+// docker/alloy/config.alloy
+// 수집기(Grafana Alloy)의 설정(#25). docker-compose.yml 의 alloy(프로필 observability)가 읽는다.
+//
+// 이 compose 의 컨테이너를 Docker 에서 찾아 그 로그(json-file)를 읽고, 서버의 JSON 줄을 풀어 Loki 로 보낸다.
+//   찾기(discovery.docker) ─▶ 이름 붙이기(discovery.relabel) ─▶ 읽기(loki.source.docker) ─▶ 풀기(loki.process) ─▶ 보내기(loki.write)
+// Docker 의 API 는 읽기만 허용하는 소켓 프록시(docker-socket-proxy)를 거친다. 소켓을 직접 붙이지 않는다.
+// 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "수집기(Grafana Alloy)를 붙일 자리"에 있다.
+
+// Alloy 자신의 로그. 경고 이상만, JSON 으로 남긴다. 이 줄도 Alloy 가 함께 모은다
+logging {
+	level  = "warn"
+	format = "json"
+}
+
+// 이 compose 프로젝트의 컨테이너만 찾는다. 같은 PC 의 다른 컨테이너(다른 프로젝트)는 모으지 않는다.
+// 프로젝트의 이름은 compose 가 COMPOSE_PROJECT 로 넘긴다(docker-compose.yml 의 alloy)
+discovery.docker "compose" {
+	host             = "tcp://docker-socket-proxy:2375"
+	refresh_interval = "15s"
+
+	filter {
+		name   = "label"
+		values = ["com.docker.compose.project=" + sys.env("COMPOSE_PROJECT")]
+	}
+}
+
+// compose 의 서비스 이름(auth-server, auth-mail, billing-sweeper …)을 label container 로 붙인다.
+// 서버의 줄에 있는 service 와 다를 수 있다. 워커와 주기 명령은 그 서버의 service 를 쓴다
+discovery.relabel "compose" {
+	targets = []
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "container"
+	}
+}
+
+// 컨테이너마다 로그를 읽는다. 읽은 자리는 --storage.path(볼륨 alloydata)에 남아서
+// Alloy 가 멈췄다 다시 떠도 그 자리부터 읽는다. 컨테이너 하나가 포트나 네트워크로 여럿 찾혀도 한 번만 읽는다
+loki.source.docker "compose" {
+	host          = "tcp://docker-socket-proxy:2375"
+	targets       = discovery.docker.compose.targets
+	relabel_rules = discovery.relabel.compose.rules
+	forward_to    = [loki.process.standard.receiver]
+}
+
+// 줄을 푼다. 서버의 줄은 한 줄에 JSON 하나다(docs/observability.md 의 "한 줄의 모양").
+// JSON 이 아닌 줄(PostgreSQL, Redis, Loki 등)은 그대로 보낸다. 버리지 않는다.
+// 시각은 Docker 가 그 줄을 받은 때를 쓴다. 서버의 timestamp 와 천분의 몇 초 차이고, JSON 이 아닌 줄과 같은 시계라서다
+loki.process "standard" {
+	forward_to = [loki.write.local.receiver]
+
+	stage.json {
+		expressions = {
+			service     = "",
+			environment = "",
+			version     = "",
+			level       = "",
+			mode        = "",
+			request_id  = "",
+			trace_id    = "",
+			job_id      = "",
+		}
+	}
+
+	// label 은 값의 종류가 정해진 것만이다. 값마다 저장 단위(스트림)가 생긴다
+	stage.labels {
+		values = {
+			service     = "",
+			environment = "",
+			level       = "",
+			mode        = "",
+		}
+	}
+
+	// 값이 끝없이 많은 것(식별자)과 배포마다 바뀌는 것(version)은 줄의 값(structured metadata)으로 둔다.
+	// label 이 아니어도 Grafana 에서 {service="game-server"} | trace_id="…" 처럼 거를 수 있다
+	stage.structured_metadata {
+		values = {
+			version    = "",
+			request_id = "",
+			trace_id   = "",
+			job_id     = "",
+		}
+	}
+
+	// 공통 모양의 줄(service 칸이 있다)인지 표시한다. standard 가 아니면 다른 프로그램의 줄이다
+	stage.template {
+		source   = "log_format"
+		template = "{{ if .service }}standard{{ else }}other{{ end }}"
+	}
+
+	stage.structured_metadata {
+		values = {
+			log_format = "",
+		}
+	}
+}
+
+// Loki 로 보낸다. Loki 가 멈춰도 줄을 버리지 않고 기다렸다 다시 보낸다(max_backoff_retries = 0 은 끝없이).
+// 기다리는 동안 읽기도 멈추고, 읽은 자리는 그대로라 Loki 가 돌아오면 이어서 보낸다.
+// Docker 의 로그(서비스마다 50MB)가 그 사이에 돌아 버리면 그 구간은 잃는다
+loki.write "local" {
+	endpoint {
+		url                 = "http://loki:3100/loki/api/v1/push"
+		max_backoff_retries = 0
+	}
+}
