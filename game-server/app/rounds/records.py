@@ -158,6 +158,19 @@ def record_npc_change(session: AsyncSession, table: GameTable, effect: dict, cau
     return recorder.record(session, table, EventType.NPC_CHANGED, payload=payload, cause=cause)
 
 
+def record_attitude_change(
+    session: AsyncSession, table: GameTable, change: dict, name: str, cause: TableEvent
+) -> TableEvent:
+    """
+    NPC 의 태도가 바뀐 것을 이벤트로 적는다(npc_attitude_changed). 그렇게 만든 일의 이벤트(cause)에 잇는다.
+
+    change 는 app/tables/npc_attitudes.py 의 change_attitude 가 돌려준 것이다. name 은 장면의 호칭이다.
+    행한 사람(actor_id)을 적지 않는다. 바꾼 것은 엔진이다.
+    """
+    payload = {'round': cause.payload['round'], **change, 'name': name}
+    return recorder.record(session, table, EventType.NPC_ATTITUDE_CHANGED, payload=payload, cause=cause)
+
+
 def record_monster_change(session: AsyncSession, table: GameTable, effect: dict, cause: TableEvent) -> TableEvent:
     """
     몬스터 한 마리의 상태가 바뀐 것을 이벤트로 적는다. 그 변화를 부른 판정의 이벤트(cause)에 잇는다.

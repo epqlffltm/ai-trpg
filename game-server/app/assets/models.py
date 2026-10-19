@@ -147,6 +147,18 @@ class ItemKind(enum.StrEnum):
     CONSUMABLE = 'consumable'
 
 
+class NpcAttitude(enum.StrEnum):
+    """
+    NPC 가 일행을 대하는 태도(#474). 판의 인물(npc_sheets)에 처음 태도를 적고, 테이블에서 엔진이 바꾼다.
+
+    정확해야 하는 값이라 서술(AI)에 맡기지 않는다. 서술에는 사실로 준다. 방장도 바꾸지 못한다.
+    """
+
+    FRIENDLY = 'friendly'
+    NEUTRAL = 'neutral'
+    HOSTILE = 'hostile'
+
+
 class ItemRarity(enum.StrEnum):
     """
     물건의 등급. 낮은 것부터 높은 것의 차례다. 규칙을 적지 않은 물건은 노말이다.
