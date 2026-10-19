@@ -75,7 +75,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     ),
     # 퀘스트의 이름과 상태, 보상, 기한, 서버가 바꾼 까닭(기한을 넘김)은 공개다. 사건의 글(로어북)은 적지 않는다.
     # 숨긴 퀘스트에는 기한을 적지 않는다(드러날 때 정한다). 숨김에서 바로 끝낸 것도 기한이 비어 있다
-    EventType.QUEST_CHANGED: ('entry_id', 'name', 'previous', 'status', 'rewards', 'due_at', 'reason'),
+    EventType.QUEST_CHANGED: ('entry_id', 'name', 'previous', 'status', 'rewards', 'consumed', 'due_at', 'reason'),
     EventType.CLOCK_STEP_CHANGED: ('previous', 'next_step_minutes', 'default'),
     # 캐릭터의 위치는 공개다. 아는 장소만 적히므로 숨긴 장소는 새지 않는다
     EventType.CHARACTER_MOVED: ('round', 'user_id', 'character_name', 'from', 'to', 'travel_minutes'),

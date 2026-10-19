@@ -56,6 +56,7 @@ def build_moves(
     round_: Round,
     ended: list[round_injuries.Ended] | None = None,
     recovered: Recovered = NOTHING,
+    quest_changes: list[dict] | None = None,
 ) -> list[Move]:
     """
     닫히는 라운드에서 각자 한 일을 서술자에게 줄 모양으로 만든다. 닫기 시작할 때 한 번 만들어 라운드에 굳힌다.
@@ -66,9 +67,11 @@ def build_moves(
     이 라운드에 새로 들어온 캐릭터는 라운드에 적힌 것(arrivals)으로 안다. 누구의 뒤를 잇는지를 함께 준다.
     ended 는 이 라운드가 닫힐 때 끝난 부상들이다(expire_injuries). 시간이 지나 나은 것을 함께 준다.
     recovered 는 이 라운드가 닫힐 때의 되살아나기와 저절로 회복이다(app/rounds/rests.py 의 settle).
+    quest_changes 는 이 라운드가 닫힐 때 엔진이 바꾼 퀘스트들이다(app/rounds/quest_goals.py). 가져간 물건을 함께 준다.
     쉬는 행동의 결과는 선언에 적혀 있다.
     """
     ended = ended or []
+    quest_changes = quest_changes or []
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
     wounded = any(member.sheet is not None and injuries.active(member.sheet.injuries) for member in table.members)
     needs_rules = wounded or bool(ended) or any(has_outcome(declaration) for declaration in declarations)
@@ -104,6 +107,7 @@ def build_moves(
                 search=narration_request.to_search(declaration),
                 take=narration_request.to_take(declaration),
                 put_down=narration_request.to_put_down(declaration),
+                handed_over=narration_request.find_handed_over(quest_changes, member.user_id),
                 target_gone=narration_request.to_target_gone(declaration),
                 rest=narration_request.to_rest(declaration),
                 revival=narration_request.find_revival(recovered.revivals, member.user_id),

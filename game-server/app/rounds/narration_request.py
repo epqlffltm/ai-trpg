@@ -32,6 +32,7 @@ from app.rounds.narrator import (
     DeathSaveNote,
     DropNote,
     DroppedNote,
+    HandOverNote,
     Impact,
     ItemActionNote,
     ItemNote,
@@ -181,6 +182,21 @@ def find_recovery(natural: list[dict], user_id: uuid.UUID) -> RecoveryNote | Non
     if found is None:
         return None
     return RecoveryNote(before=found['before'], after=found['after'], max_hp=found['max_hp'])
+
+
+def find_handed_over(changes: list[dict], user_id: uuid.UUID) -> list[HandOverNote]:
+    """
+    이 라운드가 닫힐 때 이룬 퀘스트들이 그 사람에게서 가져간 물건들(app/rounds/quest_goals.py). 없으면 빈 목록.
+
+    changes 는 엔진이 바꾼 퀘스트들(quest_changed 의 모양)이다. 바뀐 차례다.
+    """
+    return [
+        HandOverNote(quest=change['name'], name=thing['name'], count=thing['count'])
+        for change in changes
+        for giver in change.get('consumed', [])
+        if giver['user_id'] == str(user_id)
+        for thing in giver['items']
+    ]
 
 
 def other_end(route: dict, place: dict | None) -> str:

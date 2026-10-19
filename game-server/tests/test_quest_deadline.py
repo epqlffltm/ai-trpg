@@ -204,6 +204,7 @@ async def test_an_overdue_quest_fails_one_round_after_its_deadline(
         'previous': 'active',
         'status': 'failed',
         'rewards': [],
+        'consumed': [],
         'due_at': clock_at(EIGHT + 20),
         'reason': 'deadline',
     }
