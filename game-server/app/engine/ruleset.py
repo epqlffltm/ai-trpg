@@ -26,6 +26,8 @@ RULESET_MAX_DIFFICULTIES = 10
 RULESET_MAX_MAGNITUDES = 10
 # 능력치의 점수와 난이도의 목표값이 가질 수 있는 가장 큰 값
 RULESET_MAX_NUMBER = 1000
+# 훔치기가 쉬워지는 둔한 타입의 수. 몬스터의 타입(도감의 kind)이 다섯이다
+RULESET_MAX_DULL_KINDS = 10
 # 주사위의 면 수
 RULESET_MIN_DIE = 2
 RULESET_MAX_DIE = 100
@@ -246,6 +248,45 @@ class Rest(Part):
         """짧은 휴식은 긴 휴식보다 짧아야 한다. 같거나 길면 둘을 가를 까닭이 없다."""
         if self.short.minutes >= self.long.minutes:
             raise ValueError('짧은 휴식의 시간이 긴 휴식보다 짧지 않습니다.')
+        return self
+
+
+class DullKind(Part):
+    """훔치기가 쉬워지는 둔한 타입 하나. 대상의 타입(몬스터 도감의 kind)이 kind 이면 목표값이 amount 만큼 내려간다."""
+
+    kind: Key
+    amount: Number
+
+
+class Steal(Part):
+    """
+    훔치기(app/rounds/steals.py). 어느 능력으로 판정하고, 무엇이 목표값을 올리고 내리는가.
+
+    목표값은 difficulty 의 목표값에서 시작한다. 더하는 것과 빼는 것은 걸리는 만큼 모두 더한다. 1 보다 낮아지지 않는다.
+      - 대상의 눈치(awareness): 대상의 그 능력치의 보정만큼 더한다(둔하면 음수라 내려간다). None 이면 보지 않는다.
+      - 장비(equipped): 걸치거나 쥔 것을 훔치면 더한다.
+      - 등급(rarity_step): 물건의 등급이 노말에서 한 단계 오를 때마다 더한다.
+      - 둔한 타입(dull_kinds): 대상의 타입이 그것이면 뺀다. 둔함 표시(dull): 판에 둔하다고 적은 대상이면 뺀다.
+      - 싸움 전(unwary): 대상이 아직 아무와도 싸우지 않았으면(쓰러져 있어도) 뺀다.
+      - 정신이 팔림(distracted): 이번 라운드에 도둑의 차례 전에 대상이 다른 사람과 싸웠으면 뺀다.
+    """
+
+    ability: Key
+    difficulty: Key
+    awareness: Key | None
+    equipped: Number
+    rarity_step: Number
+    dull_kinds: Annotated[tuple[DullKind, ...], Field(max_length=RULESET_MAX_DULL_KINDS)]
+    dull: Number
+    unwary: Number
+    distracted: Number
+
+    @model_validator(mode='after')
+    def reject_duplicate_kinds(self) -> Self:
+        """같은 타입이 두 번 있으면 얼마를 뺄지 정할 수 없다."""
+        duplicates = find_duplicates([dull.kind for dull in self.dull_kinds])
+        if duplicates:
+            raise ValueError(f'훔치기의 둔한 타입이 두 번 있습니다: {", ".join(duplicates)}')
         return self
 
 
@@ -557,6 +598,8 @@ class Ruleset(Part):
     treatment: Treatment | None
     # 쉬기. None 이면 이 규칙에는 쉬는 행동이 없다. 칸 자체는 늘 있어야 한다
     rest: Rest | None
+    # 훔치기. None 이면 이 규칙에는 훔치는 행동이 없다. 칸 자체는 늘 있어야 한다
+    steal: Steal | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
@@ -620,6 +663,19 @@ class Ruleset(Part):
         lowest, highest = self.score_roll.keep, self.score_roll.keep * self.score_roll.sides
         if lowest < self.score_min or highest > self.score_max:
             raise ValueError(f'주사위로 나올 수 있는 점수({lowest}~{highest})가 점수의 범위를 벗어납니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_steal_setup(self) -> Self:
+        """훔치기의 능력과 눈치는 능력치에, 난이도는 난이도의 단계에 있어야 한다."""
+        if self.steal is None:
+            return self
+        abilities = {ability.key for ability in self.abilities}
+        used = {self.steal.ability, *([self.steal.awareness] if self.steal.awareness is not None else [])}
+        if used - abilities:
+            raise ValueError(f'훔치기의 능력치가 능력치에 없습니다: {", ".join(sorted(used - abilities))}')
+        if self.steal.difficulty not in {difficulty.key for difficulty in self.difficulties}:
+            raise ValueError(f'훔치기의 난이도가 난이도에 없습니다: {self.steal.difficulty}')
         return self
 
     @model_validator(mode='after')
