@@ -33,7 +33,8 @@ from app.assets.models import (
     ENCOUNTER_MAX_COUNT,
     ITEM_STACK_MAX,
     MONSTER_MAX_ATTACKS,
-    MONSTER_MAX_DROPS,
+    MONSTER_MAX_EQUIPMENT,
+    MONSTER_MAX_INVENTORY,
     PLAYER_MADE_HP_MAX,
     QUEST_CONDITION_MAX_COUNT,
     QUEST_LINK_CONDITIONS,
@@ -271,19 +272,20 @@ MonsterAttacks = Annotated[
 ]
 
 
-class MonsterDrop(BaseModel):
+class MonsterItem(BaseModel):
     """
-    몬스터의 드롭 한 줄. 살아 있던 마리가 처음 쓰러지면 chance(%)로 붙인 로어북의 물건 항목(entry_id)이 count 개 나온다.
+    몬스터가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 마리마다 count 개 지녔다.
 
-    줄마다 따로 굴린다. 항목이 붙인 로어북의 물건인지는 게시할 때 본다.
-    소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
+    chance 는 살아 있던 마리가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).
+    줄마다 따로 굴린다. 떨어지지 않은 것은 그 마리가 그대로 지닌다.
+    항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
     """
 
     model_config = ConfigDict(extra='forbid')
 
     entry_id: uuid.UUID
-    count: int = Field(ge=1, le=ITEM_STACK_MAX)
-    chance: int = Field(ge=1, le=DROP_CHANCE_MAX)
+    count: int = Field(default=1, ge=1, le=ITEM_STACK_MAX)
+    chance: int = Field(default=DROP_CHANCE_MAX, ge=1, le=DROP_CHANCE_MAX)
 
     @field_serializer('entry_id')
     def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
@@ -291,15 +293,20 @@ class MonsterDrop(BaseModel):
         return str(entry_id)
 
 
-def reject_duplicate_drops(drops: list[MonsterDrop]) -> list[MonsterDrop]:
+def reject_duplicate_items(lines: list[MonsterItem]) -> list[MonsterItem]:
     """같은 물건이 두 줄이면 거부한다. 한 줄에 개수와 확률로 적는다."""
-    entry_ids = [drop.entry_id for drop in drops]
+    entry_ids = [line.entry_id for line in lines]
     if len(set(entry_ids)) != len(entry_ids):
-        raise ValueError('같은 물건의 드롭이 두 번 있습니다. 한 줄에 개수와 확률로 적습니다.')
-    return drops
+        raise ValueError('같은 물건이 두 줄 있습니다. 한 줄에 개수와 확률로 적습니다.')
+    return lines
 
 
-MonsterDrops = Annotated[list[MonsterDrop], Field(max_length=MONSTER_MAX_DROPS), AfterValidator(reject_duplicate_drops)]
+MonsterEquipment = Annotated[
+    list[MonsterItem], Field(max_length=MONSTER_MAX_EQUIPMENT), AfterValidator(reject_duplicate_items)
+]
+MonsterInventory = Annotated[
+    list[MonsterItem], Field(max_length=MONSTER_MAX_INVENTORY), AfterValidator(reject_duplicate_items)
+]
 
 
 class MonsterSheet(BaseModel):
@@ -316,8 +323,18 @@ class MonsterSheet(BaseModel):
     sheet: Sheet
     # 공격들. 비우면 공격하지 않는 몬스터다(겁먹은 짐승). 숫자와 같은 까닭으로 시나리오에 적는다(룰북의 이름표다)
     attacks: MonsterAttacks = []
-    # 쓰러뜨렸을 때 나오는 물건들. 비우면 드롭이 없다. 엔진이 굴리고 엔진이 준다(#372)
-    drops: MonsterDrops = []
+    # 지닌 물건. 장비(equipment)는 몸에 걸치거나 쥔 것, 소지품(inventory)은 품에 넣은 것이다.
+    # 쓰러뜨렸을 때의 드롭은 여기서만 나온다(#372, #456). 비우면 아무것도 지니지 않고 드롭도 없다
+    equipment: MonsterEquipment = []
+    inventory: MonsterInventory = []
+
+    @model_validator(mode='after')
+    def one_line_per_item(self) -> 'MonsterSheet':
+        """같은 물건을 장비와 소지품에 함께 적지 않는다. 마리가 지닌 것을 셀 때 어느 줄인지 갈리지 않게."""
+        entry_ids = [line.entry_id for line in [*self.equipment, *self.inventory]]
+        if len(set(entry_ids)) != len(entry_ids):
+            raise ValueError('같은 물건을 장비와 소지품에 함께 적었습니다.')
+        return self
 
     @field_serializer('monster_id')
     def monster_id_as_text(self, monster_id: uuid.UUID) -> str:

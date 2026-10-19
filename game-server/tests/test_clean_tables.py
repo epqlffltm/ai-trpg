@@ -38,6 +38,7 @@ from app.tables.models import (
     TableFoundRoute,
     TableItem,
     TableMonster,
+    TableMonsterItem,
     TablePlaceItem,
     TableQuest,
     TableSheet,
@@ -180,7 +181,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         placed = {'slot': 0, 'place_id': uuid.uuid4(), 'entry_id': uuid.uuid4(), 'count': 1, 'hidden': False}
         session.add(TablePlaceItem(table_id=uuid.UUID(table['id']), **placed))
         monster = {'monster_id': uuid.uuid4(), 'number': 1, 'place_id': uuid.uuid4(), 'abilities': {}, 'max_hp': 1}
-        session.add(TableMonster(table_id=uuid.UUID(table['id']), hp=1, status='alive', **monster))
+        held = TableMonster(table_id=uuid.UUID(table['id']), hp=1, status='alive', **monster)
+        held.items = [TableMonsterItem(slot=0, count=0)]
+        session.add(held)
         # 덧붙이기만 하는 표. 트리거가 DELETE 를 막아 TRUNCATE 로 비워진다(tests/cleaning.py)
         session.add(build_read(ME, ReadKind.TABLE, uuid.UUID(table['id']), '신고', datetime.now(UTC)))
         session.add(build_action(ME, ActionKind.TABLE_END, uuid.UUID(table['id']), '신고', datetime.now(UTC)))

@@ -1,10 +1,11 @@
 # game-server/tests/test_monster_drops.py
 
 """
-몬스터를 쓰러뜨리면 엔진이 드롭을 주는 것(#372, app/rounds/drops.py)을 검증한다.
+몬스터를 쓰러뜨리면 엔진이 드롭을 주는 것(#372, app/rounds/drops.py)을 검증한다. 드롭은 지닌 것에서만 나온다(#456).
+지닌 것을 따로 다루는 것은 test_monster_items.py 에 있다.
 
 맵은 수로 입구(시작)와 깊은 수로다. 입구에 수로 쥐 둘(야수, 최대 HP 4), 깊은 수로에 해골 병사 하나(드롭 없음).
-쥐의 드롭은 늑대 가죽 2개(100%)와 송곳니 1개(50%)다. 주사위는 정해진 눈을 내는 것으로 바꿔 꽂는다.
+쥐의 소지품은 늑대 가죽 2개(100%)와 송곳니 1개(50%)다. 주사위는 정해진 눈을 내는 것으로 바꿔 꽂는다.
 눈은 판정, 피해의 양, 확률이 100 이 아닌 드롭 줄(백면체), 받을 사람이 둘 이상이면 고르는 눈의 차례다.
 
 보는 것.
@@ -26,11 +27,11 @@ from httpx import AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import DROP_CHANCE_MAX, ITEM_STACK_MAX, MONSTER_MAX_DROPS
-from app.assets.scenarios.snapshot import DropSnapshot, read_snapshot
+from app.assets.models import DROP_CHANCE_MAX, ITEM_STACK_MAX, MONSTER_MAX_INVENTORY
+from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_28
 from app.engine.dice import ScriptedDice
-from app.engine.drops import Dropped, comes_out, roll_drops
+from app.engine.drops import Dropped, comes_out
 from app.rounds import records
 from app.rounds.drops import hand_out, heirs
 from app.rounds.llm_narrator import NarrationError
@@ -113,12 +114,12 @@ async def make_world(client: AsyncClient, me: dict[str, str]) -> dict:
 
 
 def rat_drops(world: dict) -> list[dict]:
-    """쥐의 드롭. 늑대 가죽 2개(늘), 송곳니 1개(반)."""
+    """쥐의 소지품. 늑대 가죽 2개(늘 떨어짐), 송곳니 1개(반)."""
     return [drop(world['pelt'], 2), drop(world['tooth'], 1, 50)]
 
 
 async def make_scenario(client: AsyncClient, me: dict[str, str], world: dict, drops: list[dict], **fields) -> dict:
-    """쥐에 drops 를 단 시나리오. 해골은 드롭이 없다."""
+    """쥐가 drops 를 소지품으로 지닌 시나리오. 해골은 아무것도 지니지 않았다."""
     return await post(
         client,
         SCENARIOS_URL,
@@ -131,7 +132,7 @@ async def make_scenario(client: AsyncClient, me: dict[str, str], world: dict, dr
         default_sheet=SHEET,
         default_npc_sheet=SHEET,
         monster_sheets=[
-            {'monster_id': world['rat']['id'], 'sheet': RAT_SHEET, 'drops': drops},
+            {'monster_id': world['rat']['id'], 'sheet': RAT_SHEET, 'inventory': drops},
             {'monster_id': world['skeleton']['id'], 'sheet': SKELETON_SHEET},
         ],
         start_place=world['gate']['id'],
@@ -199,15 +200,15 @@ async def test_drops_are_saved_and_published(client: AsyncClient, me: dict[str, 
     response = await publish(client, me, scenario)
 
     sheet = next(sheet for sheet in scenario['monster_sheets'] if sheet['monster_id'] == world['rat']['id'])
-    assert sheet['drops'] == rat_drops(world)
+    assert (sheet['equipment'], sheet['inventory']) == ([], rat_drops(world))
     snapshot = read_snapshot(response.json()['snapshot'])
     rat = next(monster for monster in snapshot.monsters if monster.id == uuid.UUID(world['rat']['id']))
     skeleton = next(monster for monster in snapshot.monsters if monster.id == uuid.UUID(world['skeleton']['id']))
-    assert [(str(line.entry_id), line.count, line.chance) for line in rat.drops] == [
+    assert [(str(line.entry_id), line.count, line.chance) for line in rat.inventory] == [
         (world['pelt']['id'], 2, 100),
         (world['tooth']['id'], 1, 50),
     ]
-    assert skeleton.drops == []
+    assert (skeleton.equipment, skeleton.inventory) == ([], [])
 
 
 @pytest.mark.parametrize(
@@ -218,7 +219,7 @@ async def test_count_and_chance_have_ranges(client: AsyncClient, me: dict[str, s
     world = await make_world(client, me)
     body = {
         'monster_sheets': [
-            {'monster_id': world['rat']['id'], 'sheet': RAT_SHEET, 'drops': [drop(world['pelt'], count, chance)]}
+            {'monster_id': world['rat']['id'], 'sheet': RAT_SHEET, 'inventory': [drop(world['pelt'], count, chance)]}
         ]
     }
 
@@ -230,19 +231,25 @@ async def test_count_and_chance_have_ranges(client: AsyncClient, me: dict[str, s
 async def test_the_same_item_twice_is_refused(client: AsyncClient, me: dict[str, str]):
     world = await make_world(client, me)
     drops = [drop(world['pelt'], 1), drop(world['pelt'], 2, 30)]
-    body = {'title': '수로', 'monster_sheets': [{'monster_id': world['rat']['id'], 'sheet': RAT_SHEET, 'drops': drops}]}
+    body = {
+        'title': '수로',
+        'monster_sheets': [{'monster_id': world['rat']['id'], 'sheet': RAT_SHEET, 'inventory': drops}],
+    }
 
     response = await client.post(SCENARIOS_URL, json=asset_body(SCENARIOS_URL, body), headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
-async def test_a_monster_has_at_most_five_drop_lines(client: AsyncClient, me: dict[str, str]):
+async def test_a_monster_has_at_most_ten_inventory_lines(client: AsyncClient, me: dict[str, str]):
     world = await make_world(client, me)
     entries = f'{LOREBOOKS_URL}/{world["lorebook"]["id"]}/entries'
-    things = [await post(client, entries, me, name=f'조각 {n}', kind='item') for n in range(MONSTER_MAX_DROPS + 1)]
+    things = [await post(client, entries, me, name=f'조각 {n}', kind='item') for n in range(MONSTER_MAX_INVENTORY + 1)]
     drops = [drop(thing) for thing in things]
-    body = {'title': '수로', 'monster_sheets': [{'monster_id': world['rat']['id'], 'sheet': RAT_SHEET, 'drops': drops}]}
+    body = {
+        'title': '수로',
+        'monster_sheets': [{'monster_id': world['rat']['id'], 'sheet': RAT_SHEET, 'inventory': drops}],
+    }
 
     response = await client.post(SCENARIOS_URL, json=asset_body(SCENARIOS_URL, body), headers=me)
 
@@ -465,21 +472,12 @@ async def test_the_narration_is_told_what_was_gained(client: AsyncClient, app: F
 
 
 def test_a_sure_line_is_not_rolled():
-    lines = [DropSnapshot(entry_id=uuid.uuid4(), count=2, chance=100)]
-
-    assert roll_drops(lines, ScriptedDice([])) == [Dropped(entry_id=lines[0].entry_id, count=2)]
+    assert comes_out(100, ScriptedDice([])) is True
 
 
 @pytest.mark.parametrize(('roll', 'expected'), [(1, True), (30, True), (31, False), (100, False)])
 def test_a_line_comes_out_at_or_under_its_chance(roll: int, expected: bool):
     assert comes_out(30, ScriptedDice([roll])) is expected
-
-
-def test_lines_are_rolled_independently():
-    first, second = uuid.uuid4(), uuid.uuid4()
-    lines = [DropSnapshot(entry_id=first, count=1, chance=50), DropSnapshot(entry_id=second, count=3, chance=50)]
-
-    assert roll_drops(lines, ScriptedDice([51, 50])) == [Dropped(entry_id=second, count=3)]
 
 
 def person(place: uuid.UUID | None, dead: bool = False) -> SimpleNamespace:
