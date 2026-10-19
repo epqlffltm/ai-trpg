@@ -1,0 +1,23 @@
+# docker/grafana/provisioning/dashboards/dashboards.yaml
+# Grafana 가 뜰 때 docker/grafana/dashboards 의 대시보드(JSON)를 읽는다(#25).
+#
+# 대시보드는 저장소의 파일이 원본이다. 화면에서 고치지 못한다(allowUiUpdates: false).
+# 화면에서 고친 것은 다시 뜨면 사라지고, 누가 무엇을 바꿨는지 PR 에 남지 않는다.
+# 고치려면 화면에서 만든 뒤 JSON 을 내보내(Export) 그 파일을 바꾸는 PR 을 낸다.
+#
+# 서버마다 파일 하나다(<서비스 이름>.json, uid 도 서비스 이름). 규칙은 .github/scripts/dashboard_scope.py 가 본다.
+
+apiVersion: 1
+
+providers:
+  - name: ai-trpg
+    # 모두 한 폴더에 둔다. 서버가 다섯이라 폴더를 나눌 만큼 많지 않다
+    folder: ai-trpg
+    type: file
+    # 파일을 지우면 Grafana 에서도 지운다. 화면에서 지우지는 못한다
+    disableDeletion: true
+    allowUiUpdates: false
+    # 파일이 바뀌었는지 30초마다 본다. 다시 띄우지 않아도 PR 을 받은 뒤 git pull 로 바뀐다
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards
