@@ -115,7 +115,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 들켰으면 그 마리가 도둑을 노린다는 말). 판정은 엔진이 굴렸고 판정 줄은 없다
 #   narration-35: [인물의 상태] 의 줄에 태도가 붙는다(중립이 아니면, 태도: 적대).
 #                 다루는 법에 태도도 엔진이 정한 사실이라는 말이 더해진다(#474)
-PROMPT_VERSION = 'narration-35'
+#   narration-36: 훔치기의 줄에 NPC 가 대상인 것이 붙는다. 들켰으면 적대한다(이미 적대였으면 그대로)는 말과,
+#                 싸움이 붙었으면 그 말이 붙는다(#457)
+PROMPT_VERSION = 'narration-36'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3

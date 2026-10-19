@@ -340,13 +340,26 @@ def describe_steal(note: StealNote) -> str:
 
     예: (훔치기: 수로 쥐 1 에게서 송곳니 1개를 몰래 빼냈다)
         (훔치기: 수로 쥐 1 에게서 송곳니를 훔치다 들켰다. 수로 쥐 1 이 노린다)
+        (훔치기: 악역영애 에게서 부채를 훔치다 들켰다. 악역영애 이(가) 적대한다. 싸움이 붙었다)
         (훔치기: 수로 쥐 1 은 송곳니를 이미 지니지 않았다)
     """
     if note.stolen:
-        return f'(훔치기: {note.monster} 에게서 {note.name} {note.count}개를 몰래 빼냈다)'
+        return f'(훔치기: {note.victim} 에게서 {note.name} {note.count}개를 몰래 빼냈다)'
     if note.caught:
-        return f'(훔치기: {note.monster} 에게서 {note.name}을(를) 훔치다 들켰다. {note.monster} 이(가) 노린다)'
-    return f'(훔치기: {note.monster} 은(는) {note.name}을(를) 이미 지니지 않았다)'
+        return f'(훔치기: {note.victim} 에게서 {note.name}을(를) 훔치다 들켰다. {caught_consequence(note)})'
+    return f'(훔치기: {note.victim} 은(는) {note.name}을(를) 이미 지니지 않았다)'
+
+
+def caught_consequence(note: StealNote) -> str:
+    """
+    들킨 뒤에 일어난 일. 몬스터는 도둑을 노린다. NPC 는 적대하고(이미 적대였으면 그대로), 싸움이 붙었으면 그것도.
+
+    NPC 는 아직 공격하지 않는다. 싸움이 붙었다는 것은 엔진이 싸운 것으로 친다는 사실이다.
+    """
+    if not note.npc:
+        return f'{note.victim} 이(가) 노린다'
+    attitude = f'{note.victim} 이(가) 적대한다' if note.hostile else f'{note.victim} 은(는) 이미 적대하고 있다'
+    return f'{attitude}. 싸움이 붙었다' if note.fight else attitude
 
 
 def describe_handed_over(notes: list[HandOverNote]) -> str:

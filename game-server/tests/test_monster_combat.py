@@ -351,7 +351,8 @@ async def test_a_monster_killed_earlier_in_the_round_is_not_rolled_for(
     outcomes = {declaration['character_name']: declaration['outcome'] for declaration in closing['declarations']}
     assert outcomes['엘프']['monster_effect']['status'] == 'dead'
     # 앞사람이 죽였다. 굴리지 않았으니 실패의 대가도 없다
-    assert outcomes['드워프 기사'] == {'target_gone': {'monster_id': rat['id'], 'name': '수로 쥐 1', 'reason': 'dead'}}
+    gone = {'monster_id': rat['id'], 'npc_id': None, 'name': '수로 쥐 1', 'reason': 'dead'}
+    assert outcomes['드워프 기사'] == {'target_gone': gone}
 
 
 # --- 내보내는 것 ---

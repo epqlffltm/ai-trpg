@@ -347,17 +347,22 @@ class PutDownNote:
 @dataclass(frozen=True)
 class StealNote:
     """
-    몬스터가 지닌 물건을 훔친 결과(app/rounds/steals.py). 엔진이 정한 것이다.
+    몬스터나 NPC 가 지닌 물건을 훔친 결과(app/rounds/steals.py). 엔진이 정한 것이다.
 
-    stolen 이 참이면 훔쳤다(count 개). 거짓이고 caught 가 참이면 들켰다. 그 마리가 도둑을 노린다.
-    둘 다 거짓이면 차례가 왔을 때 그 물건이 이미 없었다(앞사람이 먼저 훔쳤다).
+    victim 은 대상의 장면의 호칭, npc 는 대상이 NPC 인지다.
+    stolen 이 참이면 훔쳤다(count 개). 거짓이고 caught 가 참이면 들켰다. 몬스터는 도둑을 노린다.
+    NPC 는 적대한다(hostile 은 이번에 적대로 바뀌었는지). fight 면 싸움이 붙었다.
+    stolen 과 caught 가 둘 다 거짓이면 차례가 왔을 때 그 물건이 이미 없었다(앞사람이 먼저 훔쳤다).
     """
 
-    monster: str
+    victim: str
     name: str
     count: int
     stolen: bool
     caught: bool
+    npc: bool = False
+    hostile: bool = False
+    fight: bool = False
 
 
 @dataclass(frozen=True)
