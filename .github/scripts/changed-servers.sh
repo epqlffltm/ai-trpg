@@ -8,8 +8,8 @@
 #
 # 고르는 규칙:
 #   - 서버의 폴더(auth-server/ 등)나 그 서버의 워크플로(.github/workflows/auth-server.yml)가 바뀌면 그 서버
-#   - docker/ 아래(DB 초기화 스크립트, 프록시의 설정, crontab)나 compose 파일(docker-compose.yml)이 바뀌면 모두.
-#     서버들의 DB 계정, 컨테이너로 띄우고 잇는 법, 주기 명령이 거기 있다
+#   - docker/ 아래(DB 초기화 스크립트, 프록시의 설정, crontab)나 compose 파일(docker-compose.yml, docker-compose.staging.yml)이
+#     바뀌면 모두. 서버들의 DB 계정, 컨테이너로 띄우고 잇는 법, 주기 명령, staging 의 설정이 거기 있다
 #   - 관문 자신(.github/workflows/ci.yml, .github/scripts/)이 바뀌면 모두. 관문이 맞는지 모두로 확인한다
 #   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증, 게임, 알림
 #   - 그 밖(문서, 루트 README 등)은 아무것도 고르지 않는다
@@ -36,7 +36,7 @@ python_shared() {
 # 모두 고르는 경로인가.
 affects_all() {
   local path="$1"
-  [[ "$path" == docker/* || "$path" == "docker-compose.yml" ||
+  [[ "$path" == docker/* || "$path" == "docker-compose.yml" || "$path" == "docker-compose.staging.yml" ||
     "$path" == ".github/workflows/ci.yml" || "$path" == .github/scripts/* ]]
 }
 

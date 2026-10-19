@@ -1,0 +1,68 @@
+# docker/nginx/templates/http.inc.template
+# 프록시(nginx)의 http 단계 설정: 주소 찾기, 요청 수 제한의 구역, 로그의 모양, HSTS 의 값.
+# 로컬(default.conf.template)과 staging(docker/nginx/staging/default.conf.template)이 맨 앞에서 include 한다.
+#
+# 이미지가 뜰 때 ${이름} 을 환경 변수로 바꿔 /etc/nginx/conf.d/http.inc 로 쓴다.
+# 끝이 .conf 가 아니라서 nginx 가 저절로 읽지 않는다. 한 번만 include 되어야 한다(구역과 map 을 두 번 정하면 뜨지 않는다).
+
+# 컨테이너의 주소를 Docker 의 DNS 에서 찾고 10초 기억한다. 서버가 다시 떠서 주소가 바뀌어도 따라간다.
+# (upstream 블록에 이름을 적으면 nginx 가 뜰 때 한 번만 찾는다. 그 서버가 아직 없으면 nginx 가 뜨지 못한다)
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+# --- 요청 수 제한. IP 마다 센다 ---
+# 인증의 민감한 요청(로그인, 인증 코드, 가입, 비밀번호). 1분에 10번
+limit_req_zone $binary_remote_addr zone=auth_sensitive:10m rate=10r/m;
+# 게시판 검색. 가장 무거운 읽기다. 1초에 2번
+limit_req_zone $binary_remote_addr zone=search:10m rate=2r/s;
+# 그 밖의 API. 한 IP 를 여럿이 쓰는 곳(PC방, 학교)도 있어서 넉넉하게 둔다. 홍수만 막는다
+limit_req_zone $binary_remote_addr zone=api:10m rate=20r/s;
+# 오래 열려 있는 연결(게임 서버의 SSE). 동시에 열린 수를 센다
+limit_conn_zone $binary_remote_addr zone=streams:10m;
+limit_req_status 429;
+limit_conn_status 429;
+# 막은 일은 nginx 의 오류 로그에 적지 않는다. 그 줄에는 주소 뒤의 값(?q=검색어)까지 적힌다.
+# 막은 요청은 아래의 JSON 로그에 429 로 남는다
+limit_req_log_level info;
+limit_conn_log_level info;
+
+# --- HSTS ---
+# HTTPS 로 온 응답에만 붙인다(security-headers.inc). 값이 빈 글자면 nginx 가 그 머리말을 보내지 않는다.
+# 로컬(HTTP)에서는 늘 비어 있다. 브라우저도 HTTP 로 받은 HSTS 는 버린다.
+# 하위 도메인(includeSubDomains)과 preload 는 붙이지 않는다. 같은 도메인의 다른 하위 도메인을 아직 정하지 않았다
+map $scheme $hsts {
+    https   "max-age=31536000";
+    default "";
+}
+
+# --- 로그 ---
+# 시각: RFC 3339, UTC, 밀리초까지. 컨테이너의 시간대가 UTC 라서 $time_iso8601 은 +00:00 으로 끝난다
+map $time_iso8601 $log_seconds {
+    "~^(?<head>.+)\+00:00$" $head;
+    default                 $time_iso8601;
+}
+map $msec $log_millis {
+    "~\.(?<millis>\d{3})$" $millis;
+    default                "000";
+}
+# 걸린 시간을 천분의 1초 정수로. $request_time 은 0.123 처럼 초 단위다
+map $request_time $log_duration_ms {
+    "~^0\.0*(?<millis>\d+)$"            $millis;
+    "~^(?<secs>[1-9]\d*)\.(?<millis>\d{3})$" $secs$millis;
+    default                             0;
+}
+map $status $log_result {
+    "~^[123]" success;
+    "~^4"     client_error;
+    default   server_error;
+}
+map $status $log_level {
+    "~^5"   error;
+    default info;
+}
+# 경로(주소)는 적지 않는다. 사용자와 테이블의 번호가 들어 있다. 서버의 줄에 주소의 틀(route)이 있다.
+# upstream 은 요청을 보낸 서버의 이름이다. nginx 가 직접 답한 것(404, 429)은 proxy 다
+log_format proxy_json escape=json
+    '{"timestamp":"$log_seconds.${log_millis}Z","level":"$log_level","service":"proxy","environment":"${APP_ENVIRONMENT}","version":"${APP_VERSION}",'
+    '"message":"요청을 처리했다","request_id":"$request_id","operation":"http.request",'
+    '"method":"$request_method","upstream":"$proxy_upstream","status_code":$status,'
+    '"duration_ms":$log_duration_ms,"result":"$log_result"}';
