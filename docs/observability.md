@@ -1093,7 +1093,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 - **로그의 `trace_id` 와 보내는 traceparent 가 span 을 먼저 본다**(`context.py`, `middleware.py`). 요청의 span 에 `request_id` 를 싣는다.
 - **span 의 부모가 생긴다.** 환영 크레딧의 워커가 부른 결제 서버의 span 이 그 워커의 작업 span 아래에 놓인다. 다른 서버가 공개키(`/api/v1/auth/jwks`)와 끊긴 세션의 목록을 받으러 온 요청도 그 서버의 span 아래에 놓인다.
 - **compose.** `auth-server`, `auth-mail`, `auth-welcome-credits`, `auth-cron` 이 `x-telemetry-environment` 와 망 `telemetry` 를 붙였다. 마이그레이션(`auth-migrate`)은 붙이지 않았다(요청도 작업도 없다).
-- **CI 의 스택 확인.** `TRACE_SERVERS` 에 auth 를 더했다. 부르는 주소는 `GET /api/v1/auth/jwks`, 작업은 주기 명령의 `account.delete_unverified` 다(워커와 주기 명령의 검사가 먼저 한 번 돌린다). 워커의 작업은 할 일이 없어 버려지므로 쓰지 않는다.
+- **CI 의 스택 확인.** `TRACE_SERVERS` 에 auth 를 더했다. 부르는 주소는 `GET /api/v1/auth/jwks`, 작업은 주기 명령의 `security.send_digest` 다(워커와 주기 명령의 검사가 먼저 한 번 돌린다). 워커의 작업은 할 일이 없어 버려지므로 쓰지 않는다.
 
 ## 관리 서버의 경계
 

@@ -88,10 +88,10 @@ declare -A TRACE_PROBES=(
   [notification]="GET /api/v1/notification/me/notifications"
 )
 # 그 아래에 쿼리의 span 이 있는지 볼 작업(operation). 서버가 뜨면 곧 한 바퀴 돈다.
-# 인증 서버의 것은 주기 명령이다. 워커와 주기 명령의 검사(check_workers)가 먼저 한 번 돌린다.
+# 인증 서버의 것은 주기 명령(send_security_digest)이다. 워커와 주기 명령의 검사(check_workers)가 먼저 한 번 돌린다.
 # 인증 서버의 워커는 할 일이 없던 바퀴를 보내지 않아 쓸 수 없다
 declare -A TRACE_JOBS=(
-  [auth]=account.delete_unverified
+  [auth]=security.send_digest
   [trpg]=round.close_overdue
   [billing]=sweep.run
   [notification]=notification.prune
@@ -434,9 +434,10 @@ crontab_commands() {
   grep -vE '^[[:space:]]*(#|$)' "$1" | awk '{ $1 = $2 = $3 = $4 = $5 = ""; sub(/^ +/, ""); print }'
 }
 
-# 명령 하나를 그 컨테이너에서 지금 한 번 돌려 성공하는가. cron 이 부를 때와 같이 /bin/sh 로 돈다
+# 명령 하나를 그 컨테이너에서 지금 한 번 돌려 성공하는가. cron 이 부를 때와 같이 /bin/sh 로 돈다.
+# 입력을 막는다. exec 는 -T 여도 입력을 넘긴다. 막지 않으면 명령을 읽는 while 의 나머지 줄을 먹어 첫 명령만 돈다
 runs_once() {
-  compose exec -T "$1" sh -c "$2"
+  compose exec -T "$1" sh -c "$2" </dev/null
 }
 
 # 인증 서버의 DB 계정에 테스트용 DB 를 만들 권한(CREATEDB)이 없는가. compose 의 기본은 주지 않는 것이다(#20)
