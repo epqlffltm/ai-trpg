@@ -504,10 +504,12 @@ def describe_target_gone(note: TargetGoneNote) -> str:
 
 def describe_monster_turn(note: MonsterTurnNote) -> str:
     """
-    몬스터 한 마리의 차례를 한 줄로 적는다. 굴림의 숫자는 싣지 않는다. 맞았으면 그 캐릭터의 HP 변화를 붙인다.
+    몬스터 한 마리나 싸우는 인물 하나의 차례를 한 줄로 적는다. 굴림의 숫자는 싣지 않는다.
+    맞았으면 그 캐릭터의 HP 변화를 붙인다.
 
     예: 수로 쥐 2: 엘프에게 물기 (맞음) → 엘프 피해 3 (HP 7/10)
         수로 쥐 2: 엘프에게 물기 (빗나감)
+        악역영애: 엘프에게 부채 후리기 (맞음) → 엘프 피해 2 (HP 8/10)
     도감의 글(생김새, 약점)은 싣지 않는다. 가짜 서술자는 이 줄을 장면으로 그대로 내보낸다.
     """
     result = '맞음' if note.hit else '빗나감'
@@ -528,9 +530,9 @@ def take_move(moves: list[Move], used: list[bool], name: str) -> Move | None:
 
 def round_lines(moves: list[Move], turns: list[TurnNote]) -> list[str]:
     """
-    이번 라운드에 한 일의 줄들. 차례가 있으면 차례 순서로 캐릭터와 몬스터의 줄을 섞는다.
+    이번 라운드에 한 일의 줄들. 차례가 있으면 차례 순서로 캐릭터와 몬스터와 인물의 줄을 섞는다.
 
-    차례가 없으면(맞붙은 몬스터가 없었으면) 한 일의 순서(앉은 순서) 그대로다.
+    차례가 없으면(맞붙은 몬스터도 싸우는 인물도 없었으면) 한 일의 순서(앉은 순서) 그대로다.
     차례가 없는 캐릭터(행동 없는 선언, 선언을 내지 않음, 쓰러져 있음)의 줄은 차례들 뒤에 앉은 순서로 놓는다.
     가짜 서술자와 프롬프트가 함께 쓴다.
     """
@@ -539,8 +541,9 @@ def round_lines(moves: list[Move], turns: list[TurnNote]) -> list[str]:
     used = [False] * len(moves)
     lines = []
     for turn in turns:
-        if turn.monster is not None:
-            lines.append(describe_monster_turn(turn.monster))
+        attack = turn.monster or turn.npc
+        if attack is not None:
+            lines.append(describe_monster_turn(attack))
             continue
         move = take_move(moves, used, turn.character_name)
         if move is not None:
