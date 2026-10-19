@@ -19,7 +19,8 @@
 #                  JSON 이 아닌 줄도 들어오는가, 식별자가 label 이 아닌가, Grafana 가 Loki 에 닿는가,
 #                  소켓 프록시가 쓰기를 막는가, 서버들이 소켓 프록시와 Loki 에 닿지 않는가.
 #                  메트릭도 본다: OTLP 로 민 시험 지표가 Prometheus 에 정한 이름과 label 로 들어오는가,
-#                  수집 쪽 자신의 메트릭이 들어오는가, Prometheus 가 아무것도 긁지 않는가, Grafana 가 Prometheus 에 닿는가
+#                  수집 쪽 자신의 메트릭이 들어오는가, Prometheus 가 아무것도 긁지 않는가, Grafana 가 Prometheus 에 닿는가.
+#                  대시보드도 본다: 규칙을 지키는가(dashboard_scope.py), Grafana 가 파일에서 읽었는가, 쿼리가 오류 없이 도는가
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한,
 #                  모든 응답(서버의 응답, 404, 429)의 보안 머리말, HTTP 의 응답에 HSTS 가 없는가.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
@@ -58,6 +59,8 @@ WAIT_SECONDS=180
 LOG_WAIT_SECONDS=60
 # Grafana 의 주소. 바깥(이 PC)에서 연 포트다
 GRAFANA="${GRAFANA:-http://127.0.0.1:3000}"
+# 서버마다의 대시보드(JSON)가 든 폴더. Grafana 가 파일로 읽는다(docker/grafana/provisioning/dashboards)
+DASHBOARDS=docker/grafana/dashboards
 # Loki 의 label 로 쓰는 것(docs/observability.md 의 "Loki 의 label"). 이것 말고는 label 이 없어야 한다
 LOKI_LABELS=(container environment level mode service)
 # 메트릭을 OTLP 로 미는 서버(docs/observability.md 의 "2. 메트릭"). 서버에 메트릭을 붙이면 여기에 더한다.
@@ -394,7 +397,8 @@ no_env_file_in_image() {
   compose exec -T "$1" test ! -e /app/.env
 }
 
-# 설정을 보는 검사(secret_scope.py, port_scope.py, logging_scope.py)의 규칙이 맞는가. 규칙이 틀리면 새는 것을 놓치고 초록이 된다
+# 설정을 보는 검사(secret_scope.py, port_scope.py, logging_scope.py, dashboard_scope.py)의 규칙이 맞는가.
+# 규칙이 틀리면 새는 것을 놓치고 초록이 된다
 scope_rules_hold() {
   PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts -p 'test_*_scope.py'
 }
@@ -572,6 +576,7 @@ check_metrics() {
   report "결제 서버가 Prometheus 에 닿지 않는다(telemetry 망에서는 Alloy 에만 닿는다)" \
     unreachable_from billing-server http://prometheus:9090/-/ready
   check_server_metrics
+  check_dashboards
 }
 
 # 서버가 민 메트릭이 정한 이름과 label 로 들어오는지 본다. 서버의 프로세스는 label instance 의 앞부분으로 가른다
@@ -596,6 +601,45 @@ check_server_metrics() {
   send_unsigned_webhook
   report "결제 서버가 서명 없는 알림을 센다(payment_webhooks_total, result=bad_signature)" \
     eventually prometheus_finds 'payment_webhooks_total{service="billing-server", provider="fake", result="bad_signature"}'
+}
+
+# --- 대시보드(observability 프로필) ---
+
+# 이름이 붙은 확인 하나를 부르고, 실패하면 그 명령이 찍은 것(무엇이 틀렸는지)을 함께 찍는다
+#   report_problems <이름> <명령...>
+report_problems() {
+  local name="$1" problems; shift
+  if problems="$("$@" 2>&1)"; then
+    echo "ok   $name"
+  else
+    echo "FAIL $name"
+    sed 's/^/     /' <<<"$problems"
+    failures=$((failures + 1))
+  fi
+}
+
+# Grafana 가 그 uid 의 대시보드를 파일에서 읽었는가
+grafana_has_dashboard() {
+  status_is 200 "$GRAFANA/api/dashboards/uid/$1" -u "admin:$(grafana_password)"
+}
+
+# 대시보드의 Prometheus 쿼리를 Grafana 의 데이터 소스 프록시로 하나씩 돌려 오류가 없는가.
+# 값이 없는 것(CI 에 결제가 없어 생기지 않은 메트릭)은 오류가 아니다. 이름이나 PromQL 이 틀린 것을 잡는다
+dashboard_queries_run() {
+  DASHBOARD_QUERY_AUTH="admin:$(grafana_password)" python3 .github/scripts/dashboard_scope.py "$DASHBOARDS" \
+    --query "$GRAFANA/api/datasources/proxy/uid/prometheus"
+}
+
+# 대시보드를 본다. 서버의 메트릭이 들어온 뒤에 부른다
+check_dashboards() {
+  local file uid
+  report_problems "대시보드가 규칙을 지킨다(uid 는 파일 이름, 데이터 소스는 uid 로, 쿼리마다 그 서버의 service)" \
+    python3 .github/scripts/dashboard_scope.py "$DASHBOARDS"
+  for file in "$DASHBOARDS"/*.json; do
+    uid="$(basename "$file" .json)"
+    report "Grafana 가 대시보드 $uid 를 파일에서 읽었다" eventually grafana_has_dashboard "$uid"
+  done
+  report_problems "대시보드의 쿼리가 Grafana 를 거쳐 Prometheus 에서 오류 없이 돈다" dashboard_queries_run
 }
 
 # 결제 서버에 서명 없는 알림을 하나 보낸다. 401 이 답이다(wget 이 실패로 끝난다). 센 것만 본다
@@ -668,7 +712,7 @@ check() {
   report "결제 서버의 정리 작업이 알림 서버에 닿는다" reachable_from billing-sweeper http://notification-server:8004/health
   report "게시판 서버가 알림 서버에 닿는다" reachable_from board-server http://notification-server:8004/health
   report "게시판 서버가 서명한 알림을 알림 서버가 받는다" board_notification_accepted
-  report "설정 검사(비밀, 열린 포트, 로그 상한)의 규칙이 맞다" scope_rules_hold
+  report "설정 검사(비밀, 열린 포트, 로그 상한, 대시보드)의 규칙이 맞다" scope_rules_hold
   check_config "비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" compose .github/scripts/secret_scope.py
   check_config "바깥에 여는 포트는 정해 둔 것뿐이고 모두 127.0.0.1 에 묶였다(port_scope.py)" compose .github/scripts/port_scope.py
   check_config "모든 서비스의 로그에 크기와 파일 수의 상한이 있다(logging_scope.py)" compose .github/scripts/logging_scope.py

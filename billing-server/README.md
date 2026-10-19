@@ -1806,6 +1806,8 @@ compose 로 띄울 때는 루트 `.env` 에 적는다(프로필 `observability` 
 
 로컬에서 보내 보려면 루트의 `docker compose --profile observability up -d` 로 Alloy 와 Prometheus 를 띄운다.
 Alloy 의 4318 은 바깥에 열지 않으므로, 서버도 compose 로(`--profile app`) 띄워 Grafana 의 Prometheus 에서 `{service="billing-server"}` 로 찾는다.
+Grafana 의 대시보드 "결제 서버"(`/d/billing-server`)에 위의 것이 모여 있다. 원본은 저장소의 `docker/grafana/dashboards/billing-server.json` 이다.
+메트릭을 더하거나 이름을 바꾸면 그 파일도 함께 고친다. 규칙(쿼리마다 `service="billing-server"`, 데이터 소스는 uid)은 루트의 docs/observability.md 의 "대시보드"에 있다.
 
 테스트는 `internal/metrics/metricstest` 로 메모리에 모아 이름, 단위, label 을 본다. 보내는 길은 `internal/metrics` 의 테스트가 가짜 수집기(HTTP 서버)로 본다.
 Prometheus 에 그 이름으로 들어오는지는 저장소의 CI(`stack`)가 본다.
