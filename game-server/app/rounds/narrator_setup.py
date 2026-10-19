@@ -16,11 +16,11 @@
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai.call_log import DbCallLog
 from app.ai.calls import CallLog
 from app.ai.openai_compat import WireOptions
 from app.ai.retry_budget import RetryBudget
 from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ZAI_KIND, Endpoint, ModelRouter
+from app.ai_log.call_log import DbCallLog
 from app.catalog.lookup import DbModelLookup
 from app.core.config import Settings
 from app.rounds.fake_narrator import FakeNarrator

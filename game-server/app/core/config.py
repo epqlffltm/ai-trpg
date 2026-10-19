@@ -159,7 +159,7 @@ class Settings(BaseSettings):
     # 색인(로어북, 기억)을 종류마다 동시에 몇 개까지 돌리나. 임베딩 모델을 서술과 함께 쓰므로 작게 둔다
     job_index_concurrency: int = Field(default=2, ge=1, le=16)
 
-    # AI 호출의 기록(ai_invocations)에 남은 원문(모델이 쓴 글)을 며칠 두나(app/ai/retention.py, #274).
+    # AI 호출의 기록(ai_invocations)에 남은 원문(모델이 쓴 글)을 며칠 두나(app/ai_log/retention.py, #274).
     # 지나면 원문만 비우고 모델, 토큰 수, 걸린 시간 같은 것은 남긴다
     ai_log_text_retention_days: int = Field(default=30, ge=1, le=3650)
 
