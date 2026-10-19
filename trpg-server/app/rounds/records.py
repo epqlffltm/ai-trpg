@@ -497,25 +497,31 @@ def record_declaration(
         record_rest(session, table, member, declaration, cause=acted)
 
 
-def record_monster_turn(
+# 몬스터나 인물의 차례를 적는 이벤트의 종류와, 누가 쳤는지 적는 칸. 차례의 kind 로 찾는다
+ATTACK_EVENTS = {'monster': (EventType.MONSTER_ATTACKED, 'monster_id'), 'npc': (EventType.NPC_ATTACKED, 'entry_id')}
+
+
+def record_attack_turn(
     session: AsyncSession, table: GameTable, round_number: int, turn: dict, group: uuid.UUID
 ) -> None:
     """
-    몬스터 한 마리의 차례를 이벤트로 적는다. 공격했으면 monster_attacked, 맞혔으면 그 뒤에 HP 의 변화와 부상이다.
+    몬스터 한 마리나 싸우는 인물 하나의 차례를 이벤트로 적는다.
 
+    공격했으면 monster_attacked(인물이면 npc_attacked), 맞혔으면 그 뒤에 HP 의 변화와 부상이다.
     움직이지 못한 차례(skipped)는 적지 않는다. 굴린 것도 바뀐 것도 없다. 까닭은 라운드의 turns 에 있다.
-    행한 사람(actor_id)을 적지 않는다. 몬스터를 움직인 것은 엔진이다.
+    행한 사람(actor_id)을 적지 않는다. 몬스터와 인물을 움직인 것은 엔진이다.
     """
     outcome = turn['outcome']
     if 'skipped' in outcome:
         return
+    event_type, attacker = ATTACK_EVENTS[turn['kind']]
     payload = {
         'round': round_number,
-        'monster_id': turn['monster_id'],
+        attacker: turn[attacker],
         'name': turn['name'],
         **{key: value for key, value in outcome.items() if key != 'effect'},
     }
-    attacked = recorder.record(session, table, EventType.MONSTER_ATTACKED, payload=payload, group=group)
+    attacked = recorder.record(session, table, event_type, payload=payload, group=group)
     effect = outcome['effect']
     if effect is not None:
         changed = record_hp_change(session, table, effect, cause=attacked)
@@ -525,18 +531,18 @@ def record_monster_turn(
 
 def record_actions(session: AsyncSession, table: GameTable, round_: Round, group: uuid.UUID) -> None:
     """
-    닫히는 라운드의 선언과 몬스터의 차례를 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다.
+    닫히는 라운드의 선언과 몬스터와 인물의 차례를 이벤트로 적는다. 지금 앉아 있는 사람이 낸 것만 적는다.
 
     차례가 있었으면(round_.turns) 차례 순서로 적는다. 다시 볼 때 일어난 순서대로 읽혀야 한다.
     행동이 없는 선언은 차례가 없다. 차례들 뒤에 앉은 순서로 적는다.
-    차례가 없었으면(맞붙은 몬스터가 없었으면) 앉은 순서로 적는다.
+    차례가 없었으면(맞붙은 몬스터도 싸우는 인물도 없었으면) 앉은 순서로 적는다.
     선언을 내지 않은 사람은 적지 않는다. 누가 안 냈는지는 라운드가 닫힌 이벤트에 적힌다.
     """
     members = {str(member.user_id): member for member in table.members}
     done: set[str] = set()
     for turn in round_.turns:
-        if turn['kind'] == 'monster':
-            record_monster_turn(session, table, round_.number, turn, group)
+        if turn['kind'] in ATTACK_EVENTS:
+            record_attack_turn(session, table, round_.number, turn, group)
             continue
         member = members.get(turn['user_id'])
         if member is not None:

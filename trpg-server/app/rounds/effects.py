@@ -55,8 +55,8 @@ class Judging:
     # 몬스터가 쳤거나, 쳤거나, 훔치다 들켰다. NPC 는 타격으로 겨눴거나, 훔치다 들켜 싸움이 붙었다.
     # 차례대로 더한다. 도둑의 차례 전에 다른 사람과 싸웠으면 정신이 팔렸다(app/rounds/steals.py)
     fights: dict[uuid.UUID, set[uuid.UUID]] = field(default_factory=dict)
-    # 훔치다 들킨 도둑(몬스터의 id → user_id). 그 마리는 이번 라운드의 차례에 도둑을 노린다
-    # (app/rounds/monster_attacks.py)
+    # 훔치다 들킨 도둑(몬스터의 id 나 NPC 의 항목 id → user_id). 그 마리나 인물은 이번 라운드의 차례에 도둑을 노린다
+    # (app/rounds/monster_attacks.py, app/rounds/npc_attacks.py)
     provoked: dict[uuid.UUID, uuid.UUID] = field(default_factory=dict)
 
 

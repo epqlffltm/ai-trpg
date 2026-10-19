@@ -13,7 +13,9 @@
   - 성공하면 그 줄을 통째로 갖는다. 한 가지의 상한(99)을 넘으면 넘은 것은 대상이 그대로 지닌다.
   - 실패하면 들켰다.
       몬스터: 그 마리와 싸운 것이 되고, 그 마리는 이번 라운드의 차례에 도둑을 친다(차례가 이미 지났으면 없다).
-      NPC: 적대가 된다. 그 인물의 시트가 on_caught: fight 면 싸운 것도 된다. NPC 는 아직 공격하지 않는다.
+      NPC: 적대가 된다. 그 인물의 시트가 on_caught: fight 면 싸운 것도 된다. 싸우는 인물은 차례에 친다(#487,
+        app/rounds/npc_attacks.py). 이미 싸우던 인물이면 이번 라운드의 차례에 도둑을 노린다(차례가 이미 지났으면 없다).
+        이번에 싸움이 붙은 인물은 다음 라운드부터 친다.
   - 차례가 왔을 때 대상이 죽었거나, 앞사람이 그 물건을 먼저 가져갔으면 굴리지 않고 까닭을 적는다.
 
 DB 를 모른다. 대상이 지닌 것, 소지품, NPC 의 태도를 고친다. 저장하지 않는다.
@@ -207,11 +209,13 @@ def caught_by_npc(judging: Judging, thief: TableMember, person: CastMember) -> d
     """
     NPC 에게 들켰다. 적대가 된다(이미 적대면 바뀐 것이 없다). 시트가 정했으면 싸운 것도 된다.
 
+    그 인물이 이번 라운드에 차례를 받았으면(이미 싸우던 인물) 그 차례에 도둑을 노린다. 몬스터와 같다.
     attitude_change 는 바뀐 태도(change_attitude 의 것)다. 이미 적대였으면 None 이다.
     """
     fight = fights_when_caught(person)
     if fight:
         mark_npc_fight(judging, person.npc, thief)
+    judging.provoked[person.entry_id] = thief.user_id
     change = change_attitude(person.npc, NpcAttitude.HOSTILE, CAUGHT_STEALING)
     return {'fight': fight, 'attitude_change': change}
 
