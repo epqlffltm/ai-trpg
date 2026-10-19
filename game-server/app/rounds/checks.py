@@ -20,7 +20,7 @@ from app.engine import health
 from app.engine.action import CheckAction, Consequence, Recipient
 from app.engine.check import Check
 from app.engine.health import Change, ChangeKind
-from app.rounds import drops
+from app.rounds import drops, wakes
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import find_cast_member
 from app.rounds.effects import (
@@ -173,15 +173,19 @@ def monster_outcome(judging: Judging, action: CheckAction, found: Consequence) -
 
 def npc_outcome(judging: Judging, actor: TableMember, action: CheckAction, found: Consequence) -> dict:
     """
-    NPC 를 겨눈 판정의 결과 칸들. NPC 의 변화(npc_effect)와, 처음 쓰러뜨려 무엇이 나왔으면 그 드롭(drop)이다.
+    NPC 를 겨눈 판정의 결과 칸들. NPC 의 변화(npc_effect)와, 처음 쓰러뜨려 무엇이 나왔으면 그 드롭(drop),
+    쓰러진 동안 빼앗겼던 인물을 일으켰으면 깨어날 때의 반응(wake)이다.
 
-    drop 은 나온 것이 있을 때만 적는다. 받는 곳은 친 사람이 선 장소다(app/rounds/drops.py).
+    drop 과 wake 는 있을 때만 적는다. 받는 곳은 친 사람이 선 장소다(app/rounds/drops.py, app/rounds/wakes.py).
     """
     effect = change_cast_member(judging, action, found)
     outcome = {'effect': None, 'npc_effect': effect}
     drop = drops.npc_drop_after(judging, actor, effect)
     if drop is not None:
         outcome['drop'] = drop
+    wake = wakes.wake_after(judging, effect)
+    if wake is not None:
+        outcome['wake'] = wake
     return outcome
 
 

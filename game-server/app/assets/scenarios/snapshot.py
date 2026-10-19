@@ -91,7 +91,8 @@ from app.engine.sheet import Sheet
 #  37: 인물의 NPC 시트에 처음 태도(npc_sheets[].attitude: friendly, neutral, hostile)가 있다
 #  38: 인물의 NPC 시트에 지닌 물건(npc_sheets[].equipment, inventory)과 둔한지(dull)가 있다. 몬스터와 같은 모양이다
 #  39: 인물의 NPC 시트에 훔치다 들켰을 때(npc_sheets[].on_caught: hostile, fight)가 있다
-SNAPSHOT_FORMAT = 39
+#  40: 규칙에 빼앗긴 NPC 가 깨어날 때의 반응(robbed_wake: hostile, wary)이 있다. 태도에 경계(wary)가 더해졌다
+SNAPSHOT_FORMAT = 40
 
 
 class EntrySnapshot(BaseModel):

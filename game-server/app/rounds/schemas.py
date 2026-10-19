@@ -177,6 +177,29 @@ class DropOut(BaseModel):
     items: list[DroppedItemOut]
 
 
+class AttitudeChangeOut(BaseModel):
+    """엔진이 바꾼 NPC 의 태도. 앞의 태도, 바뀐 태도, 까닭(caught_stealing 훔치다 들킴)."""
+
+    previous: NpcAttitude
+    attitude: NpcAttitude
+    reason: str
+
+
+class WakeOut(BaseModel):
+    """
+    쓰러진 동안 빼앗겼던 NPC 가 깨어날 때의 반응. 엔진이 굴렸다(app/rounds/wakes.py).
+
+    roll 은 백면체의 눈, reaction 은 그 눈이 정한 반응(hostile 적대, wary 경계, None 눈치채지 못함)이다.
+    attitude_change 는 실제로 바뀐 태도다. 이미 그만큼 날 서 있었으면 None 이다.
+    """
+
+    entry_id: uuid.UUID
+    name: str
+    roll: int
+    reaction: NpcAttitude | None
+    attitude_change: AttitudeChangeOut | None
+
+
 class MishapOut(BaseModel):
     """치료에 실패해 치료 실패 표를 굴린 것. 엔진이 굴렸다."""
 
@@ -246,6 +269,8 @@ class CheckOutcome(BaseModel):
     monster_effect: MonsterEffectOut | None = None
     # 이 판정으로 몬스터나 NPC 를 처음 쓰러뜨려 무엇이 나왔으면 그 드롭. 아니면 None 이다
     drop: DropOut | None = None
+    # 이 판정으로 쓰러진 동안 빼앗겼던 NPC 를 일으켰으면 깨어날 때의 반응. 아니면 None 이다
+    wake: WakeOut | None = None
     # 치료하는 행동이었으면 그 결과. 아니면 None 이다
     treatment: TreatmentOut | None = None
 
@@ -456,14 +481,6 @@ class RolledOut(BaseModel):
     # 목표값. 훔치기면 물건과 대상에 따라 오르내린 뒤의 값이다
     target: int
     success: bool
-
-
-class AttitudeChangeOut(BaseModel):
-    """엔진이 바꾼 NPC 의 태도. 앞의 태도, 바뀐 태도, 까닭(caught_stealing 훔치다 들킴)."""
-
-    previous: NpcAttitude
-    attitude: NpcAttitude
-    reason: str
 
 
 class StealOut(BaseModel):

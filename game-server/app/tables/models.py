@@ -580,6 +580,7 @@ class TableNpc(Base):
         CheckConstraint(one_of('attitude', NpcAttitude), name='attitude_allowed'),
         CheckConstraint('fell_round IS NULL OR fell_round >= 1', name='fell_round_positive'),
         CheckConstraint('fought_round IS NULL OR fought_round >= 1', name='fought_round_positive'),
+        CheckConstraint('robbed_round IS NULL OR robbed_round >= 1', name='robbed_round_positive'),
     )
 
     # 두 칸을 합쳐 기본 키로 삼는다. 한 테이블에서 인물 하나의 상태는 하나다.
@@ -607,6 +608,9 @@ class TableNpc(Base):
     # 처음 싸운 라운드. 누가 타격으로 겨눴거나, 훔치다 들켰는데 시트의 on_caught 가 fight 인 라운드다.
     # 아직 싸우지 않았으면 비어 있다. 싸우기 전인 인물에게서는 훔치기가 쉽다(app/rounds/steals.py)
     fought_round: Mapped[int | None] = mapped_column(Integer)
+    # 쓰러져 있는 동안 처음 빼앗긴 라운드(app/rounds/loots.py).
+    # 깨어날 때 반응을 한 번 굴리고 비운다(app/rounds/wakes.py). 비어 있으면 빼앗긴 것이 없다(또는 이미 굴렸다)
+    robbed_round: Mapped[int | None] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

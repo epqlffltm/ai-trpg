@@ -21,6 +21,7 @@ from dataclasses import asdict
 
 from pydantic import TypeAdapter
 
+from app.assets.models import NpcAttitude
 from app.assets.scenarios.snapshot import Snapshot
 from app.calendar import clock, state
 from app.engine.check import find_ability, find_difficulty
@@ -57,11 +58,13 @@ from app.rounds.narrator import (
     TreatmentNote,
     TurnNote,
     Verdict,
+    WakeNote,
     WhisperNote,
 )
 from app.rounds.state import loot_of, move_of, put_down_of, rest_of, search_of, steal_of, take_of
 from app.tables import quests
 from app.tables.models import GameTable
+from app.tables.npc_attitudes import ATTITUDE_WORDS
 from app.whispers.models import Whisper
 
 # 굳혀 둔 행동들을 읽는 법. 모양이 틀리면 ValidationError 를 낸다. 우리가 쓴 문서이니 틀렸으면 버그다
@@ -301,6 +304,17 @@ def to_drop(drop: dict | None) -> DropNote | None:
     return DropNote(holder=holder, receiver=drop['character_name'], items=things)
 
 
+def to_wake(wake: dict | None) -> WakeNote | None:
+    """
+    선언에 적힌 깨어날 때의 반응을 서술자에게 줄 모양으로 바꾼다. 태도가 바뀌지 않았으면 None.
+
+    눈치채지 못한 것은 주지 않는다. 그 인물이 모르는 것이라 장면에 쓸 것이 없다.
+    """
+    if wake is None or wake['attitude_change'] is None:
+        return None
+    return WakeNote(name=wake['name'], attitude=ATTITUDE_WORDS[NpcAttitude(wake['attitude_change']['attitude'])])
+
+
 def check_terms(declaration: Declaration) -> tuple[str, str]:
     """
     판정에 쓴 능력과 난이도의 key. 판정하는 행동은 행동에 적혀 있고, 치료는 규칙이 정해 결과에 적혀 있다.
@@ -366,6 +380,7 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
         npc_impact=to_npc_impact(outcome.get('npc_effect')),
         monster_impact=to_npc_impact(outcome.get('monster_effect')),
         drop=to_drop(outcome.get('drop')),
+        wake=to_wake(outcome.get('wake')),
         hindrances=hindrance_names(ruleset, outcome.get('hindrance')),
         aimed=aimed_name(ruleset, outcome.get('called_shot')),
         treatment=to_treatment(outcome.get('treatment')),
