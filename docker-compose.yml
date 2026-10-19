@@ -134,7 +134,7 @@ x-notification-environment: &notification-environment
   DATABASE_URL: postgresql+asyncpg://notification:${NOTIFICATION_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
 
-# 메트릭을 OTLP 로 미는 프로세스가 함께 쓰는 설정(#25, docs/observability.md 의 "2. 메트릭"). 비밀은 없다.
+# 메트릭이나 추적을 OTLP 로 미는 프로세스가 함께 쓰는 설정(#25, docs/observability.md 의 "2. 메트릭", "3. 추적"). 비밀은 없다.
 # 보낼 곳(Alloy)은 루트 .env 의 OTEL_EXPORTER_OTLP_ENDPOINT 로 받는다. 프로필 observability 를 켤 때만 적는다.
 # 비어 있으면 서버는 메트릭을 내보내지 않는다(계측은 그대로). app 프로필만 켰을 때 없는 Alloy 로 보내며 오류를 남기지 않는다.
 # 이것을 쓰는 서비스는 망 telemetry 에도 붙는다(networks 에 default 와 함께 적는다)
@@ -556,7 +556,10 @@ services:
     logging: *logging
     restart: unless-stopped
     env_file: ./notification-server/.env
-    environment: *notification-environment
+    environment:
+      <<: [*notification-environment, *telemetry-environment]
+    # span 을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
+    networks: [default, telemetry]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/health/ready', timeout=3)"]
       interval: 10s

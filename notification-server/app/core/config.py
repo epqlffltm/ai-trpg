@@ -9,8 +9,9 @@
 
 from functools import lru_cache
 from typing import Literal, Self
+from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.service_auth.signing import MIN_SECRET_LENGTH
@@ -18,6 +19,28 @@ from app.service_auth.signing import MIN_SECRET_LENGTH
 # 인증 서버의 두 주소의 끝. 둘은 같은 곳(/api/v1/auth)에 있다
 JWKS_PATH = '/jwks'
 SESSION_REVOCATIONS_PATH = '/session-revocations'
+# 수집기의 주소로 받는 앞부분
+OTLP_SCHEMES = ('http', 'https')
+
+
+def otlp_endpoint(value: str) -> str:
+    """
+    수집기의 주소를 읽는다. 비어 있으면 빈 글자다. 있으면 http:// 나 https:// 로 시작하고 경로가 없어야 한다.
+
+    경로(/v1/traces)는 보내는 쪽이 붙인다. OpenTelemetry 의 OTEL_EXPORTER_OTLP_ENDPOINT 와 같은 뜻이고,
+    결제 서버의 같은 설정과 같은 규칙이다. 끝의 / 는 뗀다.
+    """
+    written = value.strip()
+    if not written:
+        return ''
+    parts = urlsplit(written)
+    if parts.scheme not in OTLP_SCHEMES or not parts.netloc:
+        raise ValueError('OTEL_EXPORTER_OTLP_ENDPOINT 는 http:// 나 https:// 로 시작해야 한다')
+    if parts.path.strip('/') or parts.query or parts.fragment:
+        raise ValueError(
+            'OTEL_EXPORTER_OTLP_ENDPOINT 는 http://alloy:4318 처럼 경로 없이 적는다. /v1/traces 는 붙이지 않는다'
+        )
+    return written.rstrip('/')
 
 
 class Settings(BaseSettings):
@@ -77,6 +100,10 @@ class Settings(BaseSettings):
     # 다른 서버용으로 발급된 토큰을 이 서버에 쓰는 것을 막는다
     jwt_audience: str = 'ai-trpg-notification'
 
+    # span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. 경로 없이 적는다(http://alloy:4318).
+    # 비우면 span 을 내보내지 않는다. 로그는 그대로다(app/observability/tracing.py)
+    otel_exporter_otlp_endpoint: str = ''
+
     # 알림을 지우기 전까지 두는 날 수. 받은 시각부터 센다(app/notifications/retention.py)
     notification_retention_days: int = Field(default=30, ge=1)
 
@@ -86,6 +113,12 @@ class Settings(BaseSettings):
     game_server_secret: SecretStr = SecretStr('')
     billing_server_secret: SecretStr = SecretStr('')
     board_server_secret: SecretStr = SecretStr('')
+
+    @field_validator('otel_exporter_otlp_endpoint')
+    @classmethod
+    def check_otlp_endpoint(cls, value: str) -> str:
+        """수집기의 주소가 틀렸으면 뜨지 않는다. 틀린 주소로 보내며 경고를 쌓는 것보다 낫다."""
+        return otlp_endpoint(value)
 
     @model_validator(mode='after')
     def require_strong_distinct_secrets(self) -> Self:
