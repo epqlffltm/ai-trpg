@@ -28,7 +28,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # 비밀로 보는 이름. .env.example 에서 이 모양의 이름을 찾아 표에 있는지 본다.
-# 웹후크의 주소는 아는 사람이 누구나 글을 쓰므로 비밀이다(ALERT_DISCORD_WEBHOOK_URL 등). tools/fill_env.py 와 같은 규칙이다
+# 웹후크의 주소는 아는 사람이 누구나 글을 쓰므로 비밀이다(ALERT_DISCORD_WEBHOOK_URL 등).
+# tools/fill_env.py 와 같은 규칙이다
 SECRET_NAME = re.compile(r'SECRET|PASSWORD|API_KEY|HMAC_KEY|TOKEN|WEBHOOK_URL')
 # 이름이 비밀처럼 보이지만 비밀이 아닌 설정
 NOT_SECRETS = frozenset({'PASSWORD_RESET_URL'})
