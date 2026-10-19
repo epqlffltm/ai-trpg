@@ -42,7 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILES = (
     '.env',
     'auth-server/.env',
-    'game-server/.env',
+    'trpg-server/.env',
     'board-server/.env',
     'billing-server/.env',
     'notification-server/.env',
@@ -90,11 +90,13 @@ class Block:
     paragraph: bool
 
 
-def database(account: str, root_key: str) -> Secret:
-    """DB 계정 하나의 비밀번호. 루트 .env 와 그 서버의 DATABASE_URL 에 같은 값이다."""
-    return Secret(
-        f'DB 계정 {account}', (Spot('.env', root_key), Spot(f'{account}-server/.env', 'DATABASE_URL', url=True))
-    )
+def database(account: str, root_key: str, server: str = '') -> Secret:
+    """
+    DB 계정 하나의 비밀번호. 루트 .env 와 그 서버의 DATABASE_URL 에 같은 값이다.
+    서버의 폴더 이름이 계정과 다르면 server 에 적는다(게임 서버: 계정 game, 폴더 trpg-server).
+    """
+    folder = f'{server or account}-server'
+    return Secret(f'DB 계정 {account}', (Spot('.env', root_key), Spot(f'{folder}/.env', 'DATABASE_URL', url=True)))
 
 
 def shared(name: str, *spots: tuple[str, str]) -> Secret:
@@ -106,7 +108,7 @@ def shared(name: str, *spots: tuple[str, str]) -> Secret:
 SECRETS = (
     shared('DB 관리 계정', ('.env', 'POSTGRES_PASSWORD')),
     database('auth', 'AUTH_DB_PASSWORD'),
-    database('game', 'GAME_DB_PASSWORD'),
+    database('game', 'GAME_DB_PASSWORD', server='trpg'),
     database('board', 'BOARD_DB_PASSWORD'),
     database('billing', 'BILLING_DB_PASSWORD'),
     database('notification', 'NOTIFICATION_DB_PASSWORD'),
@@ -117,12 +119,12 @@ SECRETS = (
         '인증 서버 ↔ 결제 서버', ('auth-server/.env', 'BILLING_SECRET'), ('billing-server/.env', 'AUTH_SERVER_SECRET')
     ),
     shared(
-        '게임 서버 → 결제 서버', ('game-server/.env', 'BILLING_SECRET'), ('billing-server/.env', 'GAME_SERVER_SECRET')
+        '게임 서버 → 결제 서버', ('trpg-server/.env', 'BILLING_SECRET'), ('billing-server/.env', 'GAME_SERVER_SECRET')
     ),
     shared('결제 대행사의 알림', ('billing-server/.env', 'PG_WEBHOOK_SECRET')),
     shared(
         '게임 서버 → 알림 서버',
-        ('game-server/.env', 'NOTIFICATION_SECRET'),
+        ('trpg-server/.env', 'NOTIFICATION_SECRET'),
         ('notification-server/.env', 'GAME_SERVER_SECRET'),
     ),
     shared(
@@ -135,8 +137,8 @@ SECRETS = (
         ('board-server/.env', 'NOTIFICATION_SECRET'),
         ('notification-server/.env', 'BOARD_SERVER_SECRET'),
     ),
-    shared('게임 서버의 실시간 신호', ('game-server/.env', 'SIGNAL_SECRET')),
-    shared('게임 서버의 AI 기록 지문', ('game-server/.env', 'AI_LOG_HMAC_KEY')),
+    shared('게임 서버의 실시간 신호', ('trpg-server/.env', 'SIGNAL_SECRET')),
+    shared('게임 서버의 AI 기록 지문', ('trpg-server/.env', 'AI_LOG_HMAC_KEY')),
 )
 
 

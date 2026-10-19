@@ -32,7 +32,7 @@ const (
 	// everything 는 검사가 스키마의 어긋난 줄을 모두 돌려줄 만큼 큰 limit 이다.
 	everything = 10_000_000
 	staleAfter = 10 * time.Minute
-	source     = "game-server"
+	source     = "trpg-server"
 )
 
 var rules = config.Rules{SpendFreeFirst: true, FreeCreditTTL: 7 * 24 * time.Hour, HoldTTL: 24 * time.Hour, OrderTTL: 24 * time.Hour}

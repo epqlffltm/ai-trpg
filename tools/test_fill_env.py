@@ -26,7 +26,7 @@ EXAMPLES = {
     '# ALERT_TELEGRAM_BOT_TOKEN=\n# ALERT_TELEGRAM_CHAT_ID=\n',
     'auth-server/.env': 'SECRET_KEY=\nDATABASE_URL=postgres://auth:여기에_비밀번호@127.0.0.1:5432/trpg\n'
     '# SMTP_PASSWORD=\n# BILLING_SECRET=\n# PASSWORD_RESET_URL=http://localhost:5173/reset-password\n',
-    'game-server/.env': 'DATABASE_URL=postgresql+asyncpg://game:여기에비밀번호@127.0.0.1:5432/trpg\n'
+    'trpg-server/.env': 'DATABASE_URL=postgresql+asyncpg://game:여기에비밀번호@127.0.0.1:5432/trpg\n'
     '# SIGNAL_SECRET=\n# AI_LOG_HMAC_KEY=\n# BILLING_SECRET=\n# NOTIFICATION_SECRET=\n# OPENAI_API_KEY=\n',
     'board-server/.env': 'DATABASE_URL=postgresql://board:여기에비밀번호@127.0.0.1:5432/trpg\n# NOTIFICATION_SECRET=\n',
     'billing-server/.env': 'DATABASE_URL=postgres://billing:여기에비밀번호@127.0.0.1:5432/trpg\n'
@@ -95,20 +95,20 @@ class FillEnvTests(unittest.TestCase):
         self.fill()
 
         root = self.env('.env')
-        for account, key in (
-            ('auth', 'AUTH_DB_PASSWORD'),
-            ('game', 'GAME_DB_PASSWORD'),
-            ('billing', 'BILLING_DB_PASSWORD'),
+        for folder, key in (
+            ('auth-server', 'AUTH_DB_PASSWORD'),
+            ('trpg-server', 'GAME_DB_PASSWORD'),
+            ('billing-server', 'BILLING_DB_PASSWORD'),
         ):
-            url = self.env(f'{account}-server/.env')['DATABASE_URL']
-            self.assertEqual(password(url), root[key], account)
+            url = self.env(f'{folder}/.env')['DATABASE_URL']
+            self.assertEqual(password(url), root[key], folder)
             # 주소의 나머지는 그대로다
             self.assertTrue(url.endswith('@127.0.0.1:5432/trpg'), url)
 
     def test_secrets_two_servers_share_are_the_same(self):
         self.fill()
 
-        auth, game, board = self.env('auth-server/.env'), self.env('game-server/.env'), self.env('board-server/.env')
+        auth, game, board = self.env('auth-server/.env'), self.env('trpg-server/.env'), self.env('board-server/.env')
         billing, notification = self.env('billing-server/.env'), self.env('notification-server/.env')
         self.assertEqual(auth['BILLING_SECRET'], billing['AUTH_SERVER_SECRET'])
         self.assertEqual(game['BILLING_SECRET'], billing['GAME_SERVER_SECRET'])
@@ -122,8 +122,8 @@ class FillEnvTests(unittest.TestCase):
 
         for relative, key in (
             ('auth-server/.env', 'BILLING_SECRET'),
-            ('game-server/.env', 'BILLING_SECRET'),
-            ('game-server/.env', 'NOTIFICATION_SECRET'),
+            ('trpg-server/.env', 'BILLING_SECRET'),
+            ('trpg-server/.env', 'NOTIFICATION_SECRET'),
             ('board-server/.env', 'NOTIFICATION_SECRET'),
             ('billing-server/.env', 'NOTIFICATION_SECRET'),
         ):
@@ -134,39 +134,39 @@ class FillEnvTests(unittest.TestCase):
     def test_a_filled_but_commented_pair_is_uncommented_later(self):
         # 앞의 판이 주석인 채로 채워 둔 .env 다. 값은 그대로 두고 주석만 푼다
         shared = 'b' * 64
-        (self.root / 'game-server/.env').write_text(
+        (self.root / 'trpg-server/.env').write_text(
             f'DATABASE_URL=postgresql+asyncpg://game:pw@db/trpg\n# BILLING_SECRET={shared}\n', encoding='utf-8'
         )
         (self.root / 'billing-server/.env').write_text(f'GAME_SERVER_SECRET={shared}\n', encoding='utf-8')
 
         _, outcomes, _ = self.fill()
 
-        self.assertEqual(self.env('game-server/.env')['BILLING_SECRET'], shared)
+        self.assertEqual(self.env('trpg-server/.env')['BILLING_SECRET'], shared)
         action = next(o.action for o in outcomes if o.name == '게임 서버 → 결제 서버')
-        self.assertIn('주석을 풀었다: game-server/.env 의 BILLING_SECRET', action)
+        self.assertIn('주석을 풀었다: trpg-server/.env 의 BILLING_SECRET', action)
 
     def test_a_pair_with_two_different_values_stays_commented(self):
-        (self.root / 'game-server/.env').write_text('# BILLING_SECRET=one\n', encoding='utf-8')
+        (self.root / 'trpg-server/.env').write_text('# BILLING_SECRET=one\n', encoding='utf-8')
         (self.root / 'billing-server/.env').write_text('GAME_SERVER_SECRET=two\n', encoding='utf-8')
 
         self.fill()
 
-        self.assertEqual(self.env('game-server/.env')['#BILLING_SECRET'], 'one')
+        self.assertEqual(self.env('trpg-server/.env')['#BILLING_SECRET'], 'one')
 
     def test_commented_lines_stay_commented(self):
         # 한 파일만 아는 비밀은 값만 채운다. 켜면 동작이 바뀐다. 켜는 것은 사람이 # 를 지울 때다
         self.fill()
 
-        game = self.env('game-server/.env')
+        game = self.env('trpg-server/.env')
         self.assertNotIn('SIGNAL_SECRET', game)
         self.assertEqual(len(game['#SIGNAL_SECRET']), 64)
 
     def test_keys_from_outside_are_left_empty_and_reported(self):
         _, _, external = self.fill()
 
-        self.assertEqual(self.env('game-server/.env')['#OPENAI_API_KEY'], '')
+        self.assertEqual(self.env('trpg-server/.env')['#OPENAI_API_KEY'], '')
         self.assertEqual(self.env('billing-server/.env')['#TOSS_SECRET_KEY'], '')
-        self.assertIn('game-server/.env 의 OPENAI_API_KEY', external)
+        self.assertIn('trpg-server/.env 의 OPENAI_API_KEY', external)
         self.assertIn('.env 의 BACKUP_AWS_SECRET_ACCESS_KEY', external)
         self.assertIn('.env 의 ALERT_SLACK_WEBHOOK_URL', external)
         self.assertIn('.env 의 ALERT_TELEGRAM_BOT_TOKEN', external)
@@ -192,7 +192,7 @@ class FillEnvTests(unittest.TestCase):
         self.assertIn('맞췄다', next(o.action for o in outcomes if o.name == '인증 서버 ↔ 결제 서버'))
 
     def test_a_database_password_already_in_the_url_is_copied_to_the_root(self):
-        (self.root / 'game-server/.env').write_text(
+        (self.root / 'trpg-server/.env').write_text(
             'DATABASE_URL=postgresql+asyncpg://game:old-password@db:5432/trpg\n', encoding='utf-8'
         )
 
@@ -213,7 +213,7 @@ class FillEnvTests(unittest.TestCase):
     def test_a_line_missing_from_an_old_env_is_added_like_the_example(self):
         # .env.example 에 나중에 생긴 줄이다. 그 모양(주석인지)대로 끝에 더한다
         (self.root / '.env').write_text('POSTGRES_PASSWORD=mine', encoding='utf-8')
-        (self.root / 'game-server/.env').write_text(
+        (self.root / 'trpg-server/.env').write_text(
             'DATABASE_URL=postgresql+asyncpg://game:pw@db/trpg\n', encoding='utf-8'
         )
 
@@ -222,7 +222,7 @@ class FillEnvTests(unittest.TestCase):
         root = (self.root / '.env').read_text(encoding='utf-8')
         self.assertTrue(root.startswith('POSTGRES_PASSWORD=mine\n'), root)
         self.assertEqual(len(values(root)['MONITOR_DB_PASSWORD']), 64)
-        self.assertEqual(len(self.env('game-server/.env')['#SIGNAL_SECRET']), 64)
+        self.assertEqual(len(self.env('trpg-server/.env')['#SIGNAL_SECRET']), 64)
 
     def test_new_example_lines_are_added_commented_with_their_notes(self):
         # 경보처럼 .env 를 만든 뒤에 생긴 줄이다. 설명과 함께 주석으로 막아 더한다. 동작은 바뀌지 않는다
@@ -253,13 +253,13 @@ class FillEnvTests(unittest.TestCase):
 
     def test_a_secret_line_added_later_is_filled_and_uncommented(self):
         # 알림 서버보다 먼저 만든 게임 서버의 .env 다. 짝의 줄이 없다
-        (self.root / 'game-server/.env').write_text(
+        (self.root / 'trpg-server/.env').write_text(
             'DATABASE_URL=postgresql+asyncpg://game:pw@db/trpg\n', encoding='utf-8'
         )
 
         self.fill()
 
-        game = self.env('game-server/.env')
+        game = self.env('trpg-server/.env')
         self.assertEqual(game['NOTIFICATION_SECRET'], self.env('notification-server/.env')['GAME_SERVER_SECRET'])
         self.assertEqual(len(game['#SIGNAL_SECRET']), 64)
 

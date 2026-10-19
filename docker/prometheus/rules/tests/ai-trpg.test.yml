@@ -191,7 +191,7 @@ tests:
         values: '0+54x30'
       - series: 'http_server_requests_total{service="billing-server", route="/x", method="GET", status_code="500", instance="server-a"}'
         values: '0+6x30'
-      - series: 'http_server_requests_total{service="game-server", route="/x", method="GET", status_code="500", instance="server-b"}'
+      - series: 'http_server_requests_total{service="trpg-server", route="/x", method="GET", status_code="500", instance="server-b"}'
         values: '0+600x30'
     alert_rule_test:
       - eval_time: 8m
@@ -221,7 +221,7 @@ tests:
     input_series:
       - series: 'db_up{service="billing-server", instance="server-a"}'
         values: '1 1 0 0 0 0 0'
-      - series: 'db_up{service="game-server", instance="server-b"}'
+      - series: 'db_up{service="trpg-server", instance="server-b"}'
         values: '0x6'
     alert_rule_test:
       - eval_time: 3m

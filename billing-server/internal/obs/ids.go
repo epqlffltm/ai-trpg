@@ -5,7 +5,7 @@
 // 민감한 값을 가리고(redact.go), 한 줄의 JSON 으로 적는다(handler.go).
 //
 // 규격은 저장소 루트의 docs/observability.md 에 있다. 칸의 이름과 뜻을 바꾸려면 그 문서부터 고친다.
-// 다른 서버(auth-server, game-server, board-server)의 같은 이름의 코드가 같은 규칙을 따른다.
+// 다른 서버(auth-server, trpg-server, board-server)의 같은 이름의 코드가 같은 규칙을 따른다.
 //
 // 이 패키지는 gin 을 모른다. HTTP 요청에 붙이는 일은 internal/httpapi 가 한다.
 package obs

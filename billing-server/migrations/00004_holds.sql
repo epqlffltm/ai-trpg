@@ -10,7 +10,7 @@
 CREATE TABLE holds (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
-    -- 홀드를 건 서버의 이름(game-server)과, 그 서버가 붙인 이름표. 같은 이름표로 홀드를 둘 걸 수 없다
+    -- 홀드를 건 서버의 이름(trpg-server)과, 그 서버가 붙인 이름표. 같은 이름표로 홀드를 둘 걸 수 없다
     source TEXT NOT NULL,
     reference TEXT NOT NULL,
     -- 걸 때의 가격표 이름과 값을 적어 둔다. 나중에 가격표가 바뀌어도 이미 건 홀드는 그대로다

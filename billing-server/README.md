@@ -13,7 +13,7 @@
 크레딧을 쓰는 길은 홀드다. 게임 서버가 서술을 시작하기 전에 크레딧을 먼저 빼 두고, 끝나면 확정하거나 돌려준다.
 그 주소들은 사용자가 아니라 게임 서버가 부르고, 토큰이 아니라 요청의 서명으로 확인한다.
 홀드와 주문에는 만료가 있다. 끝이 열린 채로 남은 것은 서버와 따로 도는 정리 작업이 닫고, 하루 한 번 도는 대사가 장부를 맞춰 본다.
-게임 서버가 라운드의 서술 값을 이 주소들로 받는다([게임 서버의 설명서](../game-server/README.md)).
+게임 서버가 라운드의 서술 값을 이 주소들로 받는다([게임 서버의 설명서](../trpg-server/README.md)).
 회원가입과 로그인은 하지 않는다. [인증 서버](../auth-server/README.md)가 발급한 토큰을 공개키로 검증만 한다.
 
 ## 목차
@@ -116,8 +116,8 @@ $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create
 printf '\nGAME_SERVER_SECRET=%s\n' "$(openssl rand -hex 32)" >> .env
 ```
 
-게임 서버도 같은 값을 알아야 한다(`game-server/.env` 의 `BILLING_SECRET`). 값은 여기서 한 번 만들고 게임 서버로 **옮겨 적는다.**
-화면에 찍지 않고 옮기는 한 줄이 [게임 서버의 설명서](../game-server/README.md)의 "결제 서버와 붙여 보기"에 있다. 그 한 줄이 `BILLING_URL` 도 함께 적는다.
+게임 서버도 같은 값을 알아야 한다(`trpg-server/.env` 의 `BILLING_SECRET`). 값은 여기서 한 번 만들고 게임 서버로 **옮겨 적는다.**
+화면에 찍지 않고 옮기는 한 줄이 [게임 서버의 설명서](../trpg-server/README.md)의 "결제 서버와 붙여 보기"에 있다. 그 한 줄이 `BILLING_URL` 도 함께 적는다.
 만드는 명령을 두 설명서에 따로 두지 않는다. 두 곳에서 따로 만들면 값이 달라져 401 이 된다.
 
 `AUTH_SERVER_SECRET` 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다([크레딧](#크레딧)의 "환영 크레딧"). 이것도 32자 이상이고 위의 둘과 다른 값이어야 한다.
@@ -1507,7 +1507,7 @@ docker run --rm -v "${PWD}:/src" -w /src sqlc/sqlc:1.31.1 generate
 ## 토큰 검증
 
 인증 서버의 DB 를 보지 않는다. 공개키로 서명을 확인하고 토큰 안에 적힌 값만 본다.
-규칙은 [게임 서버](../game-server/README.md#토큰-검증)와 같다. 인증 서버가 죽었을 때 두 서버가 똑같이 굴어야 한다.
+규칙은 [게임 서버](../trpg-server/README.md#토큰-검증)와 같다. 인증 서버가 죽었을 때 두 서버가 똑같이 굴어야 한다.
 
 **확인하는 것**
 
@@ -2402,7 +2402,7 @@ DB 에서 읽을 때도 UTC 로 받는다(`internal/database` 의 `readTimesInUT
 4. ~~주문과 충전: 상품, 주문, 가짜 결제 대행사의 승인, 중복 방지 키, 알림(웹훅)~~
    - ~~환영 크레딧: 사용자가 한 번 받는 무료 크레딧~~
 5. ~~홀드, 확정, 반환: 게임 서버가 부를 API 와 서비스 간 인증~~ ([#147](https://github.com/epqlffltm/ai-trpg/issues/147), 여기까지 됐다)
-6. ~~게임 서버 연결: 라운드의 서술 값을 홀드로 받는다~~ ([#148](https://github.com/epqlffltm/ai-trpg/issues/148). 게임 서버 쪽의 일이다. 언제 걸고 누가 내는지는 [게임 서버의 설명서](../game-server/README.md)에 있다)
+6. ~~게임 서버 연결: 라운드의 서술 값을 홀드로 받는다~~ ([#148](https://github.com/epqlffltm/ai-trpg/issues/148). 게임 서버 쪽의 일이다. 언제 걸고 누가 내는지는 [게임 서버의 설명서](../trpg-server/README.md)에 있다)
 7. ~~대사와 정리: 홀드와 주문의 만료와 연장, 정리 작업, 하루 한 번의 대사~~ ([#149](https://github.com/epqlffltm/ai-trpg/issues/149). 게임 서버가 연장을 부르는 일은 게임 서버 쪽에 남았다)
 
 그 뒤의 것.

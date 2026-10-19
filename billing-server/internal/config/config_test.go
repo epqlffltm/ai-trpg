@@ -21,7 +21,7 @@ const (
 	// 알림의 서명에 쓰는 비밀. 이것도 오류에 새면 안 된다
 	webhookSecret = "do-not-print-this-webhook-secret-either"
 	// 게임 서버가 보낸 요청의 서명에 쓰는 비밀. 이것도 새면 안 된다
-	gameSecret = "do-not-print-this-game-server-secret"
+	gameSecret = "do-not-print-this-trpg-server-secret"
 	// 인증 서버가 보낸 요청의 서명에 쓰는 비밀. 이것도 새면 안 된다
 	authSecret = "do-not-print-this-auth-server-secret"
 	// 토스페이먼츠의 테스트 키 모양. 실제 키가 아니다. 시크릿 키는 오류에 새면 안 된다

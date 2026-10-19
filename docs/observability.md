@@ -1,6 +1,6 @@
 # 관측 규격
 
-서버들(`auth-server`, `game-server`, `board-server`, `billing-server`, `notification-server`)이 로그, 메트릭, 추적 정보를 같은 모양으로 남기기 위한 약속이다.
+서버들(`auth-server`, `trpg-server`, `board-server`, `billing-server`, `notification-server`)이 로그, 메트릭, 추적 정보를 같은 모양으로 남기기 위한 약속이다.
 언어와 프레임워크는 서버마다 다르지만, 밖에서 보이는 칸의 이름과 뜻은 같다.
 
 이 문서가 기준이다. 칸의 이름이나 뜻을 바꾸려면 이 문서부터 고치고 네 서버를 함께 고친다.
@@ -28,7 +28,7 @@
 | 요청 식별자(`X-Request-ID`)와 추적 식별자(`traceparent`) | 다섯 서버에 구현 |
 | 공통 모양의 JSON 로그 | 다섯 서버에 구현 |
 | 민감정보를 가리는 마지막 방어선 | 다섯 서버에 구현 |
-| 백그라운드 작업의 식별자(`job_id`) | game-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
+| 백그라운드 작업의 식별자(`job_id`) | trpg-server, auth-server, billing-server, notification-server 에 구현. board-server 는 아직 그런 작업이 없다 |
 | 메트릭 | billing-server 에 구현(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)). 나머지 넷은 아직 내보내지 않는다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
 | DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
 | 대시보드 | billing-server, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
@@ -60,7 +60,7 @@
 | 서버 | `service` |
 | --- | --- |
 | 인증 서버 | `auth-server` |
-| 게임 서버 | `game-server` |
+| 게임 서버 | `trpg-server` |
 | 게시판 서버 | `board-server` |
 | 결제 서버 | `billing-server` |
 | 알림 서버 | `notification-server` |
@@ -74,7 +74,7 @@
 | chat 서버 | `chat-server`. chat 과 story 두 모드를 한 프로세스가 맡는다. 모드는 `service` 가 아니라 `mode` 칸으로 가른다(아래) |
 | 관리 서버 | 이름을 정할 때 같은 규칙으로(`ops-server` 후보) |
 
-- 게임 서버의 폴더를 `trpg-server/` 로 바꾸면 `service` 도 `trpg-server` 가 된다(폴더 이름과 같다). 로그를 모으기 시작한 뒤에 바뀌면 Grafana 에서 두 이름을 함께 찾는다. 토큰의 대상, 스키마, 환경 변수, 주소는 그대로 두는 제안이다([서비스 구조 명세](architecture/services.md#구현된-것)).
+- 게임 서버의 `service` 는 2026-10-19 에 `game-server` 에서 `trpg-server` 로 바뀌었다(폴더 이름을 바꿈, #480). 그 앞의 로그와 메트릭까지 찾을 때는 두 이름을 함께 찾는다(`{service=~"game-server|trpg-server"}`). 토큰의 대상, 스키마, 환경 변수, 주소는 그대로다([서비스 구조 명세](architecture/services.md#구현된-것)).
 - 서버의 워커와 주기 명령(`auth-mail`, `billing-sweeper` 등)은 그 서버의 `service` 를 쓴다. 어느 컨테이너인지는 수집기가 붙이는 `container` 로 안다([수집기](#수집기grafana-alloy를-붙일-자리)).
 
 프록시는 서버 넷 앞에 서는 nginx 다(`docker/nginx/templates/`, 줄의 모양은 `http.inc.template` 의 `log_format`). 요청이 끝난 줄만 남긴다. [프록시의 줄](#프록시의-줄)에 따로 적었다.
@@ -174,13 +174,13 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 
 | 서버 | 작업 | `operation` |
 | --- | --- | --- |
-| game-server | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
-| game-server | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리, 서술이 사라진 라운드 다시 맡기기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `closed`, `credit_waits`, `recovered`, `gave_up`) | `round.close_overdue` |
-| game-server | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `charge.settle` |
-| game-server | 서술 모델의 은퇴를 알리고, 은퇴하면 같은 회사의 다른 모델로 바꾸기(지켜보기가 한 시간마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `noticed`, `replaced`, `stranded`, `failed`) | `model.retirement` |
-| game-server | 발송함의 알림을 알림 서버에 보내기(5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `sent`, `retried`, `rejected`, `failed`, `dropped`) | `notification.send` |
-| game-server | 로어북 항목의 벡터 만들기 | `lore.index` |
-| game-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
+| trpg-server | 라운드를 닫은 뒤의 AI 서술 | `round.narrate` |
+| trpg-server | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리, 서술이 사라진 라운드 다시 맡기기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `closed`, `credit_waits`, `recovered`, `gave_up`) | `round.close_overdue` |
+| trpg-server | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `charge.settle` |
+| trpg-server | 서술 모델의 은퇴를 알리고, 은퇴하면 같은 회사의 다른 모델로 바꾸기(지켜보기가 한 시간마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `noticed`, `replaced`, `stranded`, `failed`) | `model.retirement` |
+| trpg-server | 발송함의 알림을 알림 서버에 보내기(5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `sent`, `retried`, `rejected`, `failed`, `dropped`) | `notification.send` |
+| trpg-server | 로어북 항목의 벡터 만들기 | `lore.index` |
+| trpg-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
 | auth-server | 환영 크레딧을 결제 서버에 맡기기(워커가 한 번 훑는 것) | `welcome_credit.deliver` |
 | auth-server | 결제 자격(성년이 되는 날, 보호자 동의)을 결제 서버에 알리기(같은 워커가 한 번 훑는 것) | `payment_eligibility.deliver` |
@@ -197,7 +197,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 한 줄에 JSON 객체 하나다. 표준 오류(stderr)로 내보낸다. 파일에 쓰지 않는다. 모으는 일은 실행 환경(컨테이너 런타임, 수집기)이 한다.
 
 ```json
-{"timestamp":"2026-10-11T09:00:00.123Z","level":"info","service":"game-server","environment":"production","version":"3f2a9c1","logger":"app.observability.middleware","message":"요청을 처리했다","request_id":"0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","operation":"http.request","method":"POST","route":"/api/v1/game/tables/{table_id}/rounds/current/close","status_code":202,"duration_ms":38,"result":"success"}
+{"timestamp":"2026-10-11T09:00:00.123Z","level":"info","service":"trpg-server","environment":"production","version":"3f2a9c1","logger":"app.observability.middleware","message":"요청을 처리했다","request_id":"0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","operation":"http.request","method":"POST","route":"/api/v1/game/tables/{table_id}/rounds/current/close","status_code":202,"duration_ms":38,"result":"success"}
 ```
 
 ### 모든 줄에 있는 칸
@@ -486,7 +486,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 
 | 서버 | `/health` | `/health/ready` | DB 를 기다리는 시간 |
 | --- | --- | --- | --- |
-| game-server | 있다 | 있다(DB) | 연결 5초. 연결된 뒤 답하지 않는 DB 앞에서는 끝이 없다(#258) |
+| trpg-server | 있다 | 있다(DB) | 연결 5초. 연결된 뒤 답하지 않는 DB 앞에서는 끝이 없다(#258) |
 | board-server | 있다 | 있다(DB) | 3초 |
 | billing-server | 있다 | 있다(DB) | 3초 |
 | auth-server | 있다 | 있다(DB) | 연결 5초. 연결된 뒤 답하지 않는 DB 앞에서는 끝이 없다(아래) |
@@ -523,7 +523,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 | auth-server | 메일(`send_outgoing_mail`), 환영 크레딧(`send_welcome_credits`) | 있다(`observability/heartbeat.py`) |
 | billing-server | 정리 작업(`cmd/sweeper`) | 있다(`internal/jobs/heartbeat.go`) |
 | auth-server, billing-server | 주기 명령(supercronic) | 없다. 하루 한 번이라 심장박동으로 볼 것이 없다. 실패는 `job.failed` 로그가 알린다 |
-| game-server | 서버 안의 작업(라운드 시계, 청구 정리) | 없다. 서버 프로세스 안에서 돈다. 서술이 사라진 라운드는 시계가 찾아 다시 맡긴다(#275, `round.recover`) |
+| trpg-server | 서버 안의 작업(라운드 시계, 청구 정리) | 없다. 서버 프로세스 안에서 돈다. 서술이 사라진 라운드는 시계가 찾아 다시 맡긴다(#275, `round.recover`) |
 | notification-server | 서버 안의 작업(지난 알림 지우기, 끊긴 세션 목록 받기) | 없다. 서버 프로세스 안에서 돈다. 실패는 `job.failed`(지우기)와 `auth.revocations_unavailable`(목록) 로그가 알린다 |
 
 DB 에 닿으며 도는 것이 아니라 날짜로 상태를 보는 컨테이너도 있다. 심장박동 대신 그 일의 결과(파일과 그 시각)를 본다.
@@ -921,8 +921,8 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | 무엇 | 붙일 자리 |
 | --- | --- |
 | HTTP 요청 수, 시간, 처리 중인 수 | 요청이 끝난 줄을 남기는 미들웨어. 같은 값(`method`, `route`, `status_code`, 걸린 시간)을 이미 갖고 있다 |
-| 작업 | game-server `app/core/jobs.py`, auth-server `observability/jobs.py`, billing-server `internal/jobs/jobs.go` |
-| AI 호출 | game-server `app/ai/calls.py` 의 `CallLog`. 기록을 받는 것을 하나 더 꽂는다 |
+| 작업 | trpg-server `app/core/jobs.py`, auth-server `observability/jobs.py`, billing-server `internal/jobs/jobs.go` |
+| AI 호출 | trpg-server `app/ai/calls.py` 의 `CallLog`. 기록을 받는 것을 하나 더 꽂는다 |
 | DB 풀 | 서버마다 풀을 만드는 곳 |
 
 - **이름.** 계측기의 이름은 표의 이름에서 `_total` 과 단위(`_seconds`, `_bytes`)를 뗀 것이고, 단위는 계측기의 단위로 준다(초 `s`, 바이트 `By`). Alloy 가 단위와 `_total` 을 붙여 표의 이름이 된다.
@@ -968,7 +968,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | | 받는 곳(미들웨어) | 들고 있는 곳 | 보내는 곳 |
 | --- | --- | --- | --- |
 | auth-server | `observability/middleware.py` | `observability/context.py` | `accounts/billing_client.py` 의 `outgoing_headers()` |
-| game-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/auth/revocations.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
+| trpg-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/auth/revocations.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
 | board-server | `src/observability/request-logging.middleware.ts` | `src/observability/request-context.ts` | `src/auth/jwks.ts` 의 `outgoingHeaders()` |
 | billing-server | `internal/httpapi/observability.go` | `internal/obs/context.go` | `internal/jwks/fetch.go` 의 `obs.SetOutgoingHeaders()` |
 | notification-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/auth/revocations.py` 의 `outgoing_headers()` |
@@ -1082,7 +1082,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 
 로그와 식별자에는 새 의존성이 없다. 언어마다 표준 기능과 이미 쓰던 것만 썼다. 메트릭과 추적은 OpenTelemetry 의 SDK 를 쓴다(아래 표의 마지막 두 줄).
 
-| | auth-server | game-server | board-server | billing-server |
+| | auth-server | trpg-server | board-server | billing-server |
 | --- | --- | --- | --- | --- |
 | 로거 | 표준 `logging` + JSON formatter | 표준 `logging` + JSON formatter | Nest 의 `LoggerService` 를 구현한 `JsonLogger` | 표준 `log/slog` 의 `Handler` |
 | 식별자를 들고 있는 곳 | `contextvars` | `contextvars` | `AsyncLocalStorage` | `context.Context` |
@@ -1093,7 +1093,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | 메트릭 | 없다 | 없다 | 없다 | OpenTelemetry Go SDK(`internal/metrics/`, [본보기](#붙인-것-결제-서버의-메트릭-본보기)) |
 | 추적(span) | 없다 | 없다 | 없다 | OpenTelemetry Go SDK(`internal/tracing/`, [본보기](#붙인-것-결제-서버의-추적-본보기)) |
 
-notification-server 는 game-server 의 것(`app/observability/`)을 그대로 가져왔다. 뒤에서 도는 작업이 정리 작업 하나라 `BackgroundJobs` 는 없고, 정리 작업이 바퀴마다 `job_scope` 를 건다.
+notification-server 는 trpg-server 의 것(`app/observability/`)을 그대로 가져왔다. 뒤에서 도는 작업이 정리 작업 하나라 `BackgroundJobs` 는 없고, 정리 작업이 바퀴마다 `job_scope` 를 건다.
 
 기존 로그는 고쳐 쓰지 않았다. `logging.getLogger(__name__)`, Nest 의 `new Logger(...)`, Go 의 표준 `log` 로 남기던 줄이 그대로 같은 JSON 으로 나간다.
 프레임워크가 스스로 찍던 요청 줄(uvicorn 의 access log, Django 의 `django.server`, gin 의 `Logger`)은 껐다. 주소 뒤의 값까지 찍었고, 요청이 끝난 줄과 겹친다.
