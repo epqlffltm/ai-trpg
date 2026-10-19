@@ -28,6 +28,7 @@ from app.rounds.narrator import (
     Move,
     NamingNote,
     NpcImpact,
+    PutDownNote,
     RecoveryNote,
     RestNote,
     RevivalNote,
@@ -319,6 +320,18 @@ def describe_take(note: TakeNote) -> str:
     return f'(줍기: {taken}. {TAKE_SHORT_WORDS[note.reason]})'
 
 
+def describe_put_down(note: PutDownNote) -> str:
+    """
+    내려놓은 결과를 한 줄로 적는다.
+
+    예: (내려놓기: 밧줄 1개를 내려놓았다)
+        (내려놓기: 밧줄 2개를 가지고 있지 않았다)
+    """
+    if note.put:
+        return f'(내려놓기: {note.name} {note.count}개를 내려놓았다)'
+    return f'(내려놓기: {note.name} {note.count}개를 가지고 있지 않았다)'
+
+
 def lost_before_acting(move: Move) -> str | None:
     """
     선언을 냈지만 차례가 오기 전에 죽거나 쓰러져 하지 못했으면 그 말. 아니면 None.
@@ -373,6 +386,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_search(move.search))
     if move.take is not None:
         parts.append(describe_take(move.take))
+    if move.put_down is not None:
+        parts.append(describe_put_down(move.put_down))
     if move.rest is not None:
         parts.append(describe_rest(move.rest))
     if move.death_save is not None:

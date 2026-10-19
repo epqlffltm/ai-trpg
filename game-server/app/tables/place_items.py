@@ -12,6 +12,9 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 남은 개수(Tab
     상한을 넘어 남은 것은 그 자리에 보이는 물건으로 남는다.
   - 같은 장소의 같은 물건이 여러 줄이면(보이는 줄과 찾은 숨긴 줄) 합쳐 보인다. 가져갈 때는 줄 순서로 줄인다.
   - 0 이 된 줄은 지우지 않는다. 보이지 않을 뿐이다.
+  - 캐릭터가 내려놓은 물건(put_down)도 같은 표에 보이는 줄로 둔다.
+    그 장소의 같은 물건의 보이는 줄이 있으면 거기에 더하고, 없으면 판의 줄 뒤에 새 번호로 더한다.
+    새 줄은 판에 없으므로 숨기지 않는다(찾는 판정이 없다).
 """
 
 import uuid
@@ -86,6 +89,32 @@ def take_from(table: GameTable, place_id: uuid.UUID, entry_id: uuid.UUID, count:
         left -= used
         if left == 0:
             return
+
+
+def visible_row(table: GameTable, place_id: uuid.UUID, entry_id: uuid.UUID) -> TablePlaceItem | None:
+    """그 장소의 그 물건의 보이는 줄 하나. 다 가져가 0 이 된 줄도 된다. 없으면 None. 줄 순서로 처음 것이다."""
+    return next(
+        (row for row in table.place_items if row.place_id == place_id and row.entry_id == entry_id and not row.hidden),
+        None,
+    )
+
+
+def next_slot(table: GameTable) -> int:
+    """새 줄의 번호. 판의 줄과 앞서 더한 줄의 뒤다."""
+    return max((row.slot for row in table.place_items), default=-1) + 1
+
+
+def put_down(table: GameTable, place_id: uuid.UUID, entry_id: uuid.UUID, count: int) -> None:
+    """그 장소에 그 물건을 count 개 보이게 둔다. 같은 물건의 보이는 줄이 있으면 더하고, 없으면 새 줄을 만든다."""
+    row = visible_row(table, place_id, entry_id)
+    if row is not None:
+        row.count += count
+        return
+    table.place_items.append(
+        TablePlaceItem(
+            table_id=table.id, slot=next_slot(table), place_id=place_id, entry_id=entry_id, count=count, hidden=False
+        )
+    )
 
 
 def uncover(row: TablePlaceItem, kept: int) -> int:

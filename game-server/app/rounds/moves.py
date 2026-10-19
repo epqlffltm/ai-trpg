@@ -103,6 +103,7 @@ def build_moves(
                 travel=narration_request.to_travel(declaration),
                 search=narration_request.to_search(declaration),
                 take=narration_request.to_take(declaration),
+                put_down=narration_request.to_put_down(declaration),
                 target_gone=narration_request.to_target_gone(declaration),
                 rest=narration_request.to_rest(declaration),
                 revival=narration_request.find_revival(recovered.revivals, member.user_id),
