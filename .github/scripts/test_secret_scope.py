@@ -176,6 +176,22 @@ class RootSecretScopeTests(unittest.TestCase):
             ['.env.example 의 REDIS_PASSWORD 가 표에 없다. secret_scope.py 의 ROOT_SECRETS 에 적는다'],
         )
 
+    def test_tokens_and_webhook_urls_are_secrets(self):
+        # 웹후크의 주소와 봇의 토큰은 아는 사람이 누구나 쓴다
+        services = {
+            'grafana': using(
+                HOOK='${ALERT_DISCORD_WEBHOOK_URL:-}', BOT='${ALERT_TELEGRAM_BOT_TOKEN:-}', CHAT='${ALERT_TELEGRAM_CHAT_ID:-}'
+            )
+        }
+
+        self.assertEqual(
+            self.problems(services),
+            [
+                'grafana: 루트 .env 의 ALERT_DISCORD_WEBHOOK_URL 를 받는데 표에 없다. secret_scope.py 의 ROOT_SECRETS 에 적는다',
+                'grafana: 루트 .env 의 ALERT_TELEGRAM_BOT_TOKEN 를 받는데 표에 없다. secret_scope.py 의 ROOT_SECRETS 에 적는다',
+            ],
+        )
+
     def test_the_repository_root_example_is_fully_listed(self):
         repository = Path(__file__).resolve().parents[2]
 

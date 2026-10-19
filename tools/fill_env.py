@@ -55,7 +55,7 @@ LINE = re.compile(r'^(?P<comment>#\s*)?(?P<key>[A-Z][A-Z0-9_]*)=(?P<value>.*?)(?
 # 접속 주소의 비밀번호 자리. postgres://계정:<비밀번호>@호스트… 의 <비밀번호>다
 URL_PASSWORD = re.compile(r'^(?P<head>[a-z][a-z0-9+]*://[^:/@]+:)(?P<password>[^@]*)(?P<tail>@.*)$')
 # 비밀처럼 보이는 이름. 표에 없으면 밖에서 받는 키로 알린다(.github/scripts/secret_scope.py 와 같은 규칙)
-SECRET_NAME = re.compile(r'SECRET|PASSWORD|API_KEY|HMAC_KEY')
+SECRET_NAME = re.compile(r'SECRET|PASSWORD|API_KEY|HMAC_KEY|TOKEN|WEBHOOK_URL')
 # 이름이 비밀처럼 보이지만 비밀이 아닌 설정
 NOT_SECRETS = frozenset({'PASSWORD_RESET_URL'})
 

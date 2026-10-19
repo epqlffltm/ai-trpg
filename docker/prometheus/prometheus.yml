@@ -1,7 +1,7 @@
 # docker/prometheus/prometheus.yml
 # 메트릭 저장소(Prometheus)의 설정(#25). docker-compose.yml 의 prometheus(프로필 observability)가 읽는다.
 #
-# 받기만 한다. 긁는 설정(scrape_configs)을 두지 않는다. 긁는 일은 모두 Alloy 가 하고 remote write 로 보낸다.
+# 받기만 한다. 긁는 설정(scrape_configs)을 두지 않는다. 경보 규칙은 여기서 평가한다(아래의 rule_files). 긁는 일은 모두 Alloy 가 하고 remote write 로 보낸다.
 # 그래서 저장소를 Mimir 로 바꿀 때 Alloy 의 보낼 주소와 Grafana 의 데이터 소스만 바뀐다.
 # 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "2. 메트릭"과 "Mimir 로 옮길 수 있게 지키는 것"에 있다.
 #
@@ -14,3 +14,17 @@ storage:
     # 보관 기간. 로그(Loki)와 같은 14일이다. Mimir 의 compactor_blocks_retention_period 가 된다
     retention:
       time: 14d
+
+# 경보(#25). 규칙을 15초마다 평가한다. Alloy 가 긁는 간격(15s)과 같다
+global:
+  evaluation_interval: 15s
+
+# 경보 규칙. 규칙마다의 뜻과 시험은 docker/prometheus/rules 에 있다
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# 울린 경보를 넘기는 곳. Alertmanager 가 묶고, 되풀이를 줄이고, Discord 등으로 보낸다(docker/alertmanager)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alertmanager:9093]

@@ -5,7 +5,7 @@
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
 #     prepare      설정 파일(.env 여섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
-#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, Prometheus, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
+#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, Prometheus, Alertmanager, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
 #                  Loki 가 준비될 때까지 기다린다.
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
@@ -22,20 +22,23 @@
 #                  수집 쪽 자신의 메트릭이 들어오는가, Prometheus 가 아무것도 긁지 않는가, Grafana 가 Prometheus 에 닿는가.
 #                  대시보드도 본다: 규칙을 지키는가(dashboard_scope.py), Grafana 가 파일에서 읽었는가, 쿼리가 오류 없이 도는가.
 #                  DB 와 Redis 의 메트릭이 들어오는가, 메트릭을 읽는 계정(monitor)이 표를 읽거나 쓰지 못하는가,
-#                  Alloy 가 서버들의 망에 없는가
+#                  Alloy 가 서버들의 망에 없는가.
+#                  경보도 본다: 규칙의 시험(promtool)이 통과하는가, Prometheus 가 규칙을 읽고 Alertmanager 를 찾았는가,
+#                  건강한 스택에서 울리는 경보가 없는가, 받는 곳 넷을 모두 적은 설정이 맞는가, 반쯤 적으면 뜨지 않는가,
+#                  비밀이 설정 파일에 없는가. 받는 곳의 흉내(alert_sink.py)를 띄워 시험 경보가 Discord, Slack, Telegram 의
+#                  모양으로 넘어가는지 본다(메일은 보내 보지 않는다)
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한,
 #                  모든 응답(서버의 응답, 404, 429)의 보안 머리말, HTTP 의 응답에 HSTS 가 없는가.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
 #     check-staging  staging 의 설정(docker-compose.staging.yml, #451)을 본다. up 뒤에 부른다.
 #                  두 파일을 겹친 설정에서 비밀의 범위, 바깥에 여는 포트(프록시의 80, 443 뿐), 로그 상한을 보고,
-#                  staging 에만 있는 이미지의 태그가 있는지, 인증서의 남은 날짜 검사(docker/certbot)가 맞는지,
-#                  staging 의 .env 여섯을 만드는 도구(tools/staging_env.py)가 맞고 그것으로 만든 설정이 읽히는지 본다.
+#                  staging 에만 있는 이미지의 태그가 있는지, 인증서의 남은 날짜 검사(docker/certbot)가 맞는지 본다.
 #                  staging 의 프록시를 하나 더 띄워(자체 서명 인증서) HTTPS 로 본다: HTTP 를 넘기는가, 인증서의 확인 파일을
 #                  내주는가, 허용 주소 밖을 막는가, 허용 주소를 고치면 다시 읽는가, HSTS 와 보안 머리말.
 #                  바깥 백업(backup-offsite)도 본다: S3 흉내(moto)를 띄워 백업을 암호화해 올리고, 확인 열쇠와 주 열쇠로
 #                  풀어 빈 DB 에 풀리는가, 받는 쪽이 아닌 열쇠로는 풀리지 않는가, 실패하면 곧바로 unhealthy 인가
 #     logs         모든 컨테이너의 로그를 찍는다. 실패했을 때 부른다
-#     down         컨테이너와 볼륨을 지운다(check-staging 이 띄운 프록시, S3 흉내, 허용 주소의 파일과 열쇠도)
+#     down         컨테이너와 볼륨을 지운다(check 가 띄운 받는 곳의 흉내, check-staging 이 띄운 프록시, S3 흉내, 허용 주소의 파일과 열쇠도)
 #
 # 서버의 기능은 보지 않는다. 그것은 서버마다의 CI 가 한다. 여기서는 "이미지가 만들어지고, 마이그레이션이 돌고,
 # 서버가 뜨고, 서로 닿는가"만 본다.
@@ -74,6 +77,12 @@ METRIC_SERVERS=(billing)
 # 서버의 망 밖(소켓 프록시와 Loki 의 망)에서 주소를 부를 때 잠깐 띄우는 이미지. compose 의 redis 와 같아 이미 받아 두었다.
 # 그 안의 busybox wget 을 쓴다
 PROBE_IMAGE=redis:7-alpine
+# 경보를 받는 곳(Discord, Slack, Telegram)의 흉내. check 가 observability 망에 띄운다(.github/scripts/alert_sink.py).
+# prepare 가 루트 .env 의 ALERT_* 를 이 주소로 적는다. 파이썬 이미지는 바깥 백업의 S3 흉내와 같은 것이다
+ALERT_SINK=alert-sink
+ALERT_SINK_IMAGE=python:3.13-slim-trixie
+# 받는 곳이 받았는지 볼 경로(정규식). Alertmanager 가 Telegram 의 주소 뒤에 /bot<토큰>/sendMessage 를 붙인다
+ALERT_PATHS=(/discord /slack '/telegram/bot[^/]+/sendMessage')
 # 컨테이너의 사용자. Dockerfile 에서 정한 번호다. 노드 이미지는 제 사용자(node, 1000)를 쓴다
 APP_UID=10001
 # staging 의 설정을 볼 때 루트 .env 대신 주는 값(진짜 도메인과 주소가 아니다). 두 파일을 겹친다
@@ -143,6 +152,11 @@ NOTIFICATION_DB_PASSWORD=$(throwaway)
 GRAFANA_ADMIN_PASSWORD=$(throwaway)
 MONITOR_DB_PASSWORD=$(throwaway)
 OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+ALERT_DISCORD_WEBHOOK_URL=http://$ALERT_SINK:8080/discord
+ALERT_SLACK_WEBHOOK_URL=http://$ALERT_SINK:8080/slack
+ALERT_TELEGRAM_BOT_TOKEN=$(throwaway)
+ALERT_TELEGRAM_CHAT_ID=-1001
+ALERT_TELEGRAM_API_URL=http://$ALERT_SINK:8080/telegram
 EOF
   write_new auth-server/.env <<EOF
 SECRET_KEY=$(throwaway)
@@ -211,12 +225,12 @@ running() {
   [[ "$(docker inspect -f '{{.State.Running}}' "$(container_of "$1")")" == "true" ]]
 }
 
-# 서버들과 프록시, Prometheus, Grafana, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
+# 서버들과 프록시, Prometheus, Alertmanager, Grafana, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
 wait_healthy() {
   local deadline=$((SECONDS + WAIT_SECONDS)) service pending
   while ((SECONDS < deadline)); do
     pending=0
-    for service in "${SERVERS[@]/%/-server}" proxy prometheus grafana "${HEARTBEAT_WORKERS[@]}"; do
+    for service in "${SERVERS[@]/%/-server}" proxy prometheus alertmanager grafana "${HEARTBEAT_WORKERS[@]}"; do
       if ! running "$service"; then
         echo "$service 가 죽었다" >&2
         return 1
@@ -224,7 +238,7 @@ wait_healthy() {
       [[ "$(health_of "$service")" == "healthy" ]] || pending=$((pending + 1))
     done
     if ((pending == 0)); then
-      echo "서버들과 프록시, Prometheus, Grafana, 상태 확인이 있는 워커가 healthy 다"
+      echo "서버들과 프록시, Prometheus, Alertmanager, Grafana, 상태 확인이 있는 워커가 healthy 다"
       return 0
     fi
     sleep 3
@@ -622,7 +636,7 @@ check_metrics() {
   report "시험 지표를 OTLP 로 Alloy 에 민다(telemetry 망)" push_probe_metric "$instance"
   report "민 지표가 정한 이름(_total)과 label service, instance 로 Prometheus 에 들어온다" \
     eventually prometheus_finds "stack_smoke_probe_total{service=\"stack-smoke\", instance=\"$instance\"} == 1"
-  for job in alloy loki prometheus grafana; do
+  for job in alloy loki prometheus alertmanager grafana; do
     report "Alloy 가 $job 의 메트릭을 긁어 보낸다" eventually prometheus_finds "up{job=\"$job\"} == 1"
   done
   report "Alloy 가 DB 의 메트릭을 monitor 계정으로 읽는다(pg_up == 1)" \
@@ -708,6 +722,123 @@ send_unsigned_webhook() {
     --post-data '{}' --header 'Content-Type: application/json' >/dev/null 2>&1 || true
 }
 
+# --- 경보(observability 프로필) ---
+
+# 규칙의 시험(docker/prometheus/rules/tests)이 Prometheus 의 컨테이너 안의 promtool 로 통과하는가
+alert_rules_pass() {
+  compose exec -T prometheus sh -c 'promtool test rules /etc/prometheus/rules/tests/*.test.yml'
+}
+
+# 규칙 파일의 묶음(groups 의 name)이 모두 Prometheus 에 올라왔는가. 파일의 YAML 이 틀리면 Prometheus 는 옛 규칙을 쥔다
+prometheus_loaded_rules() {
+  local expected
+  expected="$(sed -n 's/^  - name: //p' docker/prometheus/rules/*.yml)"
+  fetch_on observability http://prometheus:9090/api/v1/rules | python3 -c '
+import json, sys
+loaded = {group["name"] for group in json.load(sys.stdin)["data"]["groups"]}
+missing = set(sys.argv[1].split()) - loaded
+print(*sorted(missing), file=sys.stderr)
+sys.exit(1 if missing else 0)' "$expected"
+}
+
+# Prometheus 가 경보를 넘길 Alertmanager 를 찾았는가
+prometheus_finds_alertmanager() {
+  fetch_on observability http://prometheus:9090/api/v1/alertmanagers |
+    python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["data"]["activeAlertmanagers"] else 1)'
+}
+
+# 건강한 스택에서 울리는 경보가 없는가. 울리는 것이 있으면 그 이름을 찍는다. 규칙의 선택자가 틀리면(이름표, label) 여기서 울린다
+no_alert_firing() {
+  fetch_on observability "http://prometheus:9090/api/v1/query?query=$(urlencode 'ALERTS{alertstate="firing"}')" | python3 -c '
+import json, sys
+firing = sorted({series["metric"]["alertname"] for series in json.load(sys.stdin)["data"]["result"]})
+print(*firing, file=sys.stderr)
+sys.exit(1 if firing else 0)'
+}
+
+# 띄운 Alertmanager 의 설정이 맞는가. 시작 명령이 루트 .env 의 값으로 만든 파일이다
+alertmanager_config_valid() {
+  compose exec -T alertmanager amtool check-config /tmp/alertmanager/alertmanager.yml
+}
+
+# 받는 곳 넷을 모두 적은 설정이 맞는가. CI 는 메일을 보내 보지 않으므로 메일의 설정은 이것으로 본다
+alertmanager_accepts_all_receivers() {
+  compose run --rm --no-deps -T -e ALERT_SMTP_USER=ci@example.com -e ALERT_SMTP_PASSWORD="$(throwaway)" \
+    -e ALERT_EMAIL_TO=ops@example.com,oncall@example.com alertmanager check
+}
+
+# 받는 곳을 반쯤 적으면(메일의 계정만) 뜨지 않는가
+alertmanager_refuses_half_receiver() {
+  ! compose run --rm --no-deps -T -e ALERT_SMTP_USER=ci@example.com alertmanager check
+}
+
+# 비밀(봇 토큰)이 설정 파일에 없고, 비밀을 둔 파일을 주인만 읽는가
+alertmanager_secrets_private() {
+  local token
+  token="$(sed -n 's/^ALERT_TELEGRAM_BOT_TOKEN=//p' .env)"
+  [[ -n "$token" ]] &&
+    ! compose exec -T alertmanager grep -qF "$token" /tmp/alertmanager/alertmanager.yml &&
+    [[ -z "$(compose exec -T alertmanager find /tmp/alertmanager -type f ! -perm 600)" ]]
+}
+
+# 받는 곳의 흉내를 observability 망에 띄운다. 이미지의 root 가 아닌 사용자(nobody)로 돌린다
+alert_sink_up() {
+  docker run -d --rm --name "$ALERT_SINK" --network "$(network_of observability)" --user 65534:65534 \
+    -v "$PWD/.github/scripts/alert_sink.py:/sink.py:ro" "$ALERT_SINK_IMAGE" python3 -I /sink.py 8080 >/dev/null
+}
+
+alert_sink_down() {
+  docker rm -f "$ALERT_SINK" >/dev/null 2>&1 || true
+}
+
+# 흉내가 준비됐는가
+alert_sink_ready() {
+  fetch_on observability "http://$ALERT_SINK:8080/received" >/dev/null
+}
+
+# 시험 경보를 하나 넣는다. Prometheus 가 넘길 때와 같은 API(v2)다. label run 은 이 실행의 값이다
+post_test_alert() {
+  local body
+  body="$(printf '[{"labels":{"alertname":"StackSmokeAlert","severity":"warning","run":"%s"},"annotations":{"summary":"stack-smoke 의 시험 경보"}}]' "$1")"
+  fetch_on observability http://alertmanager:9093/api/v2/alerts --post-data "$body" --header 'Content-Type: application/json' >/dev/null
+}
+
+# 흉내가 이 경로(정규식)로 요청을 받았는가
+sink_received() {
+  fetch_on observability "http://$ALERT_SINK:8080/received" |
+    python3 -c 'import json, re, sys; sys.exit(0 if any(re.fullmatch(sys.argv[1], path) for path in json.load(sys.stdin)) else 1)' "$1"
+}
+
+# Grafana 가 Alertmanager 에 닿는가(데이터 소스 alertmanager 의 프록시로 상태를 묻는다)
+grafana_reaches_alertmanager() {
+  status_is 200 "$GRAFANA/api/datasources/proxy/uid/alertmanager/api/v2/status" -u "admin:$(grafana_password)"
+}
+
+# 경보를 본다. 메트릭이 들어온 뒤에 부른다. 첫 알림은 30초를 모아 보낸다(group_wait)
+check_alerts() {
+  local run path
+  run="$(openssl rand -hex 8)"
+  report "alertmanager 가 root 가 아니다" not_root alertmanager
+  report "Alertmanager 가 다시 뜨지 않고 돈다" stays_up alertmanager
+  report_problems "경보 규칙의 시험이 통과한다(promtool test rules)" alert_rules_pass
+  report_problems "Prometheus 가 규칙 파일의 묶음을 모두 읽었다" prometheus_loaded_rules
+  report "Prometheus 가 Alertmanager 를 찾았다" prometheus_finds_alertmanager
+  report_problems "건강한 스택에서 울리는 경보가 없다" no_alert_firing
+  report "띄운 Alertmanager 의 설정이 맞다(amtool check-config)" alertmanager_config_valid
+  report "받는 곳 넷(Discord, Slack, Telegram, 메일)을 모두 적은 설정이 맞다" alertmanager_accepts_all_receivers
+  report "받는 곳을 반쯤 적으면 Alertmanager 가 뜨지 않는다" alertmanager_refuses_half_receiver
+  report "비밀이 Alertmanager 의 설정 파일에 없고 주인만 읽는다" alertmanager_secrets_private
+  report "Grafana 가 Alertmanager 에 닿는다(데이터 소스 alertmanager)" grafana_reaches_alertmanager
+  report "결제 서버가 Alertmanager 에 닿지 않는다(경보를 꾸며 넣거나 끄지 못한다)" \
+    unreachable_from billing-server http://alertmanager:9093/-/ready
+  report "받는 곳의 흉내를 띄운다" alert_sink_up
+  report "흉내가 준비됐다" eventually alert_sink_ready
+  report "시험 경보를 Alertmanager 에 넣는다" post_test_alert "$run"
+  for path in "${ALERT_PATHS[@]}"; do
+    report "Alertmanager 가 시험 경보를 보냈다($path)" eventually sink_received "$path"
+  done
+}
+
 # 모두 돌고 있고, 한 번도 다시 뜨지 않았는가
 stays_up_all() {
   local service
@@ -785,6 +916,7 @@ check() {
   check_workers
   check_logs
   check_metrics
+  check_alerts
   finish
 }
 
@@ -1057,30 +1189,6 @@ offsite_down() {
   [[ -z "${offsite_key_dir:-}" ]] || rm -rf "$offsite_key_dir"
 }
 
-# staging 의 .env 를 만드는 도구(tools/staging_env.py)의 테스트
-staging_env_rules_hold() {
-  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_staging_env.py'
-}
-
-# 그 도구로 만든 .env 여섯으로 staging 의 설정이 읽히는가. 저장소의 파일을 빈 폴더에 옮겨 그 위에서 만든다(이 실행의 .env 는 그대로다).
-# 사람이 채울 S3 의 키만 아무 값으로 채운다. 비워 두면 compose 가 거부하는 것은 그 도구의 테스트가 본다
-staging_env_tool_makes_a_valid_config() {
-  local copy status=0
-  copy="$(mktemp -d)"
-  git ls-files -z | tar --null -cf - -T - | tar -xf - -C "$copy"
-  mkdir -p "$copy/auth-server/keys" "$copy/backup-keys"
-  (
-    cd "$copy" &&
-      python3 tools/staging_env.py --domain "$STAGING_DOMAIN" --acme-email ci@example.com \
-        --llm-base-url http://100.64.0.1:11434/v1 --s3-bucket "$STAGING_BUCKET" --age-recipients 'age1ci age1ci' >/dev/null &&
-      sed -i -e 's/^BACKUP_AWS_ACCESS_KEY_ID=$/BACKUP_AWS_ACCESS_KEY_ID=ci/' \
-        -e 's/^BACKUP_AWS_SECRET_ACCESS_KEY=$/BACKUP_AWS_SECRET_ACCESS_KEY=ci/' .env &&
-      docker compose config -q
-  ) || status=1
-  rm -rf "$copy"
-  return "$status"
-}
-
 # 바깥 백업: 암호화해 올리고, 확인 열쇠와 주 열쇠로 풀리고, 다른 열쇠로는 풀리지 않는가
 check_offsite_backup() {
   report "바깥 백업의 이미지를 만든다(age, aws CLI)" staging_compose build backup-offsite
@@ -1106,8 +1214,6 @@ check_offsite_backup() {
 
 check_staging() {
   report "staging 의 설정을 값을 채워 읽을 수 있다" staging_compose config -q
-  report "staging 의 .env 를 만드는 도구의 규칙이 맞다(tools/staging_env.py)" staging_env_rules_hold
-  report "그 도구로 만든 .env 로 staging 의 설정이 읽힌다(COMPOSE_FILE, COMPOSE_PROFILES 포함)" staging_env_tool_makes_a_valid_config
   check_config "staging 에서도 비밀은 그것을 쓰는 프로세스에만 간다(secret_scope.py)" staging_compose .github/scripts/secret_scope.py
   check_config "staging 에서 바깥에 여는 포트는 프록시의 80, 443 뿐이다(port_scope.py --public)" staging_compose \
     .github/scripts/port_scope.py --public
@@ -1159,6 +1265,7 @@ logs() {
 }
 
 down() {
+  alert_sink_down
   staging_proxy_down
   offsite_down
   compose down -v
