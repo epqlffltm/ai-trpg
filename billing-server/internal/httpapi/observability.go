@@ -42,13 +42,13 @@ const (
 )
 
 // requestLogging 은 요청에 식별자를 걸고, 응답에 돌려주고, 끝나면 한 줄을 남기는 미들웨어다.
-// 가장 먼저 붙인다. 뒤에 오는 모든 미들웨어와 핸들러의 로그에 식별자가 붙는다.
+// 서버 span(requestSpan) 다음, 나머지보다 먼저 붙인다. 뒤에 오는 모든 미들웨어와 핸들러의 로그에 식별자가 붙는다.
 func requestLogging(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		started := time.Now()
 		requestID := obs.RequestIDFrom(singleHeader(c.Request, obs.RequestIDHeader))
-		trace := obs.TraceFrom(singleHeader(c.Request, obs.TraceparentHeader))
-		c.Request = c.Request.WithContext(obs.WithRequest(c.Request.Context(), requestID, trace))
+		c.Request = c.Request.WithContext(obs.WithRequest(c.Request.Context(), requestID, traceOfRequest(c.Request)))
+		tagRequestSpan(c.Request.Context(), requestID)
 		// 핸들러가 돌기 전에 붙인다. 어떤 응답(401, 404, 500)에도 식별자가 실린다
 		c.Header(obs.RequestIDHeader, requestID)
 
@@ -57,6 +57,15 @@ func requestLogging(logger *slog.Logger) gin.HandlerFunc {
 		logHandledErrors(logger, c)
 		logFinished(logger, c, time.Since(started))
 	}
+}
+
+// traceOfRequest 는 요청이 속한 추적이다. 서버 span 이 걸려 있으면(tracing.go) 그 span 의 것이라 로그와 추적이 같은 번호다.
+// 없으면(상태 확인, span 을 내보내지 않는 PC) 받은 traceparent 를 이어 가거나 새로 시작한다.
+func traceOfRequest(request *http.Request) obs.Trace {
+	if spanned, ok := obs.TraceOf(request.Context()); ok {
+		return spanned
+	}
+	return obs.TraceFrom(singleHeader(request, obs.TraceparentHeader))
 }
 
 // singleHeader 는 머리말의 값을 돌려준다. 같은 머리말이 여러 번 왔으면 빈 글자다. 어느 것을 믿을지 정할 수 없다.

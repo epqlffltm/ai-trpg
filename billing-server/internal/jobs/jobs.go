@@ -11,8 +11,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/tracing"
 )
 
 // 작업이 끝난 모양(result)과 실패한 작업의 오류 코드.
@@ -30,9 +34,14 @@ const (
 // 잘 끝난 것은 debug 다. 정리 작업은 몇십 초마다 돈다. info 로 적으면 로그를 메운다. 한 일이 있으면 do 가 따로 info 로 적는다.
 // 끄느라 취소된 것은 warning, 오류로 끝난 것은 error 다.
 //
-// 시작과 끝, 걸린 시간을 메트릭으로도 센다(metrics.go, Measure).
+// 시작과 끝, 걸린 시간을 메트릭으로도 센다(metrics.go, Measure). 한 번 도는 것을 span 하나로도 남긴다(이름은 operation).
+// 그 안의 쿼리와 다른 서버를 부르는 것이 이 span 아래에 놓이고, 로그의 trace_id 가 이 span 의 것이 된다.
 func Run(ctx context.Context, operation string, do func(context.Context) error) error {
-	ctx = obs.WithJob(ctx, uuid.NewString())
+	ctx, span := startSpan(ctx, operation)
+	defer span.End()
+	jobID := uuid.NewString()
+	ctx = obs.WithJob(ctx, jobID)
+	span.SetAttributes(attribute.String(tracing.AttributeJobID, jobID))
 	measured := current.Load()
 	measured.begin(ctx, operation)
 	started := time.Now()
@@ -41,7 +50,21 @@ func Run(ctx context.Context, operation string, do func(context.Context) error) 
 	result := resultOf(ctx, err)
 	finish(ctx, operation, took, result, err)
 	measured.end(ctx, operation, result, took)
+	markSpan(span, result)
 	return err
+}
+
+// startSpan 은 작업 한 번의 span 을 새 추적으로 건다. 추적을 내보내지 않으면 아무것도 걸리지 않는다.
+func startSpan(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return tracing.Tracer().Start(ctx, operation, trace.WithNewRoot())
+}
+
+// markSpan 은 끝난 모양을 span 에 적는다. 실패만 오류로 표시한다. 오류의 글은 로그에 있다(finish).
+func markSpan(span trace.Span, result string) {
+	span.SetAttributes(attribute.String(obs.FieldResult, result))
+	if result == ResultServerError {
+		span.SetStatus(codes.Error, ErrorCodeFailed)
+	}
 }
 
 // resultOf 는 작업이 끝난 모양이다. 끄느라 취소된 것은 cancelled, 그 밖의 오류는 server_error 다.

@@ -76,14 +76,24 @@ func RequestIDFrom(value string) string {
 
 // ParseTraceparent 는 traceparent 머리말에서 추적을 읽는다. 형식에 맞지 않으면 false 다.
 func ParseTraceparent(value string) (Trace, bool) {
-	if len(value) > maxHeaderLength {
-		return Trace{}, false
-	}
-	parts := traceparentPattern.FindStringSubmatch(value)
-	if parts == nil || parts[1] == zeroTraceID || parts[2] == zeroParentID {
+	parts, ok := traceparentParts(value)
+	if !ok {
 		return Trace{}, false
 	}
 	return Trace{ID: parts[1], Flags: parts[3]}, true
+}
+
+// traceparentParts 는 traceparent 를 버전, trace-id, parent-id, flags 로 나눈다(parts[1:4]). 받지 않는 모양이면 false 다.
+// 길거나, 모양이 틀리거나, 0 으로만 된 식별자면 받지 않는다. ParseTraceparent 와 RemoteParent(span.go)가 같은 규칙을 쓴다.
+func traceparentParts(value string) ([]string, bool) {
+	if len(value) > maxHeaderLength {
+		return nil, false
+	}
+	parts := traceparentPattern.FindStringSubmatch(value)
+	if parts == nil || parts[1] == zeroTraceID || parts[2] == zeroParentID {
+		return nil, false
+	}
+	return parts, true
 }
 
 // NewTrace 는 새 추적을 시작한다.

@@ -6,7 +6,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -30,6 +29,7 @@ const (
 )
 
 // NewMeteredPool 은 NewPool 과 같고, 연결 풀의 상태(연결 수, 연결을 기다린 시간)를 meter 로 센다.
+// 쿼리마다 span 도 건다(tracing.go). 부모 span 이 없거나 추적을 내보내지 않으면 걸리지 않는다.
 // 메트릭을 내는 프로세스(서버, 정리 작업, 대사)가 쓴다. 사람이 치는 명령은 NewPool 을 쓴다.
 func NewMeteredPool(ctx context.Context, databaseURL string, schema string, limits Limits, meter metric.Meter) (*pgxpool.Pool, error) {
 	poolConfig, err := NewPoolConfig(databaseURL, schema, limits)
@@ -40,7 +40,7 @@ func NewMeteredPool(ctx context.Context, databaseURL string, schema string, limi
 	if err != nil {
 		return nil, err
 	}
-	poolConfig.ConnConfig.Tracer = timer
+	poolConfig.ConnConfig.Tracer = poolTracer{acquire: timer}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, err
@@ -85,8 +85,8 @@ func observePool(observer metric.Observer, stat poolStat, connections, maxConnec
 	observer.ObserveInt64(maxConnections, int64(stat.MaxConns()))
 }
 
-// acquireTimer 는 풀에서 연결을 얻으려고 기다린 시간을 잰다. pgxpool 은 연결의 Tracer 가 AcquireTracer 이기도 하면 부른다.
-// 쿼리마다 부르는 것(QueryTracer)은 아무것도 하지 않는다. 쿼리의 시간은 재지 않는다.
+// acquireTimer 는 풀에서 연결을 얻으려고 기다린 시간을 잰다. 풀의 tracer(poolTracer, tracing.go)가 부른다.
+// 쿼리의 시간은 메트릭으로 재지 않는다. 쿼리는 span 으로 본다.
 type acquireTimer struct {
 	wait metric.Float64Histogram
 }
@@ -119,11 +119,3 @@ func (a acquireTimer) TraceAcquireEnd(ctx context.Context, _ *pgxpool.Pool, _ pg
 	}
 	a.wait.Record(ctx, time.Since(started).Seconds())
 }
-
-// TraceQueryStart 는 쿼리가 시작할 때 불린다. 아무것도 하지 않는다.
-func (a acquireTimer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
-	return ctx
-}
-
-// TraceQueryEnd 는 쿼리가 끝날 때 불린다. 아무것도 하지 않는다.
-func (a acquireTimer) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}

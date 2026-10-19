@@ -31,6 +31,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/revocations"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/tracing"
 )
 
 const (
@@ -76,6 +77,12 @@ func run() error {
 		return err
 	}
 	defer app.CloseMetrics(meters)
+	// 요청, 다른 서버를 부르는 것, 쿼리를 span 으로 수집기에 민다(같은 주소가 있을 때). 끌 때 남은 것을 보낸다
+	tracer, err := app.StartTracing(ctx, os.LookupEnv, settings.Logging(), metricsProcess)
+	if err != nil {
+		return err
+	}
+	defer app.CloseTracing(tracer)
 
 	pool, err := database.NewMeteredPool(ctx, settings.DatabaseURL, settings.DBSchema, database.ServerLimits, meters.Meter())
 	if err != nil {
@@ -129,8 +136,9 @@ func run() error {
 // 처음 토큰을 검증할 때 공개키를 가져온다. 그래서 인증 서버가 죽어 있어도 이 서버는 뜬다.
 // 끊긴 세션의 목록은 ctx 가 끝날 때까지 따로 30초마다 받는다(#274). 요청이 그것을 기다리지 않는다.
 func newVerifier(ctx context.Context, settings config.Settings) *auth.Verifier {
-	// 다른 서버에 요청을 보내는 클라이언트. 시간 제한은 요청마다 부르는 쪽이 건다(jwks.FetchTimeout)
-	client := &http.Client{}
+	// 다른 서버에 요청을 보내는 클라이언트. 시간 제한은 요청마다 부르는 쪽이 건다(jwks.FetchTimeout).
+	// 요청 안에서 부르면 span 을 걸고 traceparent 를 그 span 으로 붙인다(인증 서버는 우리 서버다)
+	client := &http.Client{Transport: tracing.Transport(nil, true)}
 	keys := jwks.NewCache(jwks.HTTPFetcher{Client: client, URL: settings.AuthJWKSURL}, time.Now)
 	sessions := revocations.NewCache(revocations.HTTPFetcher{Client: client, URL: settings.AuthRevocationsURL})
 	go sessions.Run(ctx, revocations.RefreshInterval)
