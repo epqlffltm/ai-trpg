@@ -24,6 +24,7 @@ from app.assets.models import (
     DEFAULT_START_HOUR,
     CharacterMode,
     ItemKind,
+    ItemRarity,
     Lorebook,
     LoreEntry,
     LoreKind,
@@ -83,7 +84,8 @@ from app.engine.sheet import Sheet
 #  33: 퀘스트의 조건에 이룰 때 물건을 가져가는지(conditions[].consume)가 있다
 #  34: 몬스터가 지닌 물건(monsters[].equipment, inventory: 물건 항목, 개수, 떨어질 확률)이 있다.
 #      드롭(drops)은 없어졌다. 드롭은 지닌 것에서만 나온다
-SNAPSHOT_FORMAT = 34
+#  35: 아이템 규칙에 물건의 등급(items[].rarity: normal, rare, unique, epic, legendary)이 있다
+SNAPSHOT_FORMAT = 35
 
 
 class EntrySnapshot(BaseModel):
@@ -158,12 +160,13 @@ class ItemRuleSnapshot(BaseModel):
     """
     아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.
 
-    heals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다.
+    heals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.
     """
 
     entry_id: uuid.UUID
     kind: ItemKind
     heals: str | None = None
+    rarity: ItemRarity = ItemRarity.NORMAL
 
 
 class QuestConditionSnapshot(BaseModel):
@@ -532,7 +535,7 @@ def quest_rule_of(snapshot: Snapshot, entry_id: uuid.UUID) -> QuestRuleSnapshot:
 
 
 def item_rule_of(snapshot: Snapshot, entry_id: uuid.UUID) -> ItemRuleSnapshot:
-    """물건 항목 하나의 규칙. 적어 둔 규칙이 있으면 그것, 없으면 장비다(쓰지 않는 물건)."""
+    """물건 항목 하나의 규칙. 적어 둔 규칙이 있으면 그것, 없으면 노말 장비다(쓰지 않는 물건)."""
     own = next((rule for rule in snapshot.items if rule.entry_id == entry_id), None)
     return own or ItemRuleSnapshot(entry_id=entry_id, kind=ItemKind.GEAR)
 

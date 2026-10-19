@@ -10,6 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.assets.models import ItemRarity
 from app.calendar.schemas import ClockTimeOut
 from app.engine.action import Action
 from app.engine.death import Fate
@@ -626,6 +627,8 @@ class CarriedOut(BaseModel):
 
     entry_id: uuid.UUID
     name: str
+    # 물건의 등급(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다
+    rarity: ItemRarity
     count: int
     # 몸에 걸치거나 쥔 장비인가. 아니면 품에 넣은 소지품이다
     equipped: bool

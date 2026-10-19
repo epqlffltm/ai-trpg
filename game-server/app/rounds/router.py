@@ -119,7 +119,13 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
 def to_carried(monster: SceneMonster, things: dict[uuid.UUID, CatalogItem]) -> list[CarriedOut]:
     """그 마리가 지금 지닌 것을 응답으로 바꾼다. 장비 다음 소지품의 차례다."""
     return [
-        CarriedOut(entry_id=one.entry_id, name=things[one.entry_id].name, count=one.count, equipped=one.equipped)
+        CarriedOut(
+            entry_id=one.entry_id,
+            name=things[one.entry_id].name,
+            rarity=things[one.entry_id].rarity,
+            count=one.count,
+            equipped=one.equipped,
+        )
         for one in monster_items.carried(monster.state, monster.definition)
     ]
 

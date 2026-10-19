@@ -19,6 +19,7 @@ from app.assets.models import (
     TABLE_MAX_PLAYERS,
     CharacterMode,
     ItemKind,
+    ItemRarity,
     NarrationStyle,
     Rating,
 )
@@ -300,6 +301,8 @@ class ItemOut(BaseModel):
     entry_id: uuid.UUID
     name: str
     kind: ItemKind
+    # 물건의 등급(노말, 레어, 유니크, 에픽, 레전드)
+    rarity: ItemRarity
     count: int
 
 
@@ -314,6 +317,8 @@ class CatalogItemOut(BaseModel):
     name: str
     kind: ItemKind
     heals: str | None
+    # 물건의 등급(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다
+    rarity: ItemRarity
 
 
 class ItemChange(BaseModel):
