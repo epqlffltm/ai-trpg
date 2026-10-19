@@ -30,6 +30,7 @@ from dataclasses import dataclass
 
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
+from app.observability.spans import job_span
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +96,9 @@ async def run_tracked(job: Coroutine, name: str, operation: str, job_id: str, ga
     기다린 시간(queue_ms)과 돈 시간(duration_ms)을 따로 적는다. 서술이 늦을 때 모델이 느린지 줄이 긴지 가른다.
 
     기다리는 동안에도 작업의 식별자(job_id)를 건다. 작업 안에서 남기는 모든 로그에 그 식별자가 붙는다.
+    작업의 span(이름은 operation)도 건다. 맡긴 요청이나 바퀴의 span 아래에 놓인다. 기다린 시간도 그 안에 든다.
     """
-    with job_scope(job_id):
+    with job_span(operation, job_id), job_scope(job_id):
         queued = time.perf_counter()
         fields = {'operation': operation, 'job_name': name}
         await wait_turn(gate, job, name, fields, queued)

@@ -10,7 +10,7 @@ pytest 는 이 파일의 fixture 를 모든 테스트 파일에서 이름만으�
 """
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
 from fastapi import FastAPI
@@ -26,6 +26,7 @@ from app.realtime.service import Cursor
 from tests.cleaning import clear_tables
 from tests.narration_model import add_test_model
 from tests.signing import FakeAuthServer, SigningKey, make_signing_key, make_viewer
+from tests.spans import SpanRecorder, recording
 from tests.streaming import LONG_HEARTBEAT, Reader
 
 TEST_SCHEMA = 'game_test'
@@ -80,6 +81,9 @@ def make_test_settings(**overrides) -> Settings:
         'zai_base_url': 'https://api.z.ai/api/paas/v4',
         'redis_url': '',
         'limits_enabled': False,
+        # span 을 내보내지 않는다. 개발자의 .env 에 수집기의 주소가 있어도 테스트는 보내지 않는다.
+        # span 을 보는 테스트는 메모리에 모으는 것을 끼운다(spans fixture)
+        'otel_exporter_otlp_endpoint': '',
     }
     values.update(overrides)
     return Settings(**values)
@@ -230,3 +234,14 @@ def connect(app: FastAPI, readers: list[Reader]):
         return reader
 
     return open_stream
+
+
+@pytest.fixture
+def spans() -> Iterator[SpanRecorder]:
+    """
+    테스트가 남긴 span 을 메모리에 모은다. 끝나면 아무것도 하지 않는 것으로 되돌린다.
+
+    span 을 만드는 것은 서버에 하나라(app/observability/spans.py) 이것을 쓰는 테스트는 동시에 돌지 않는다.
+    """
+    with recording() as recorder:
+        yield recorder

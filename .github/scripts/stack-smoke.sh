@@ -79,14 +79,15 @@ LOKI_LABELS=(container environment level mode service)
 # 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다
 METRIC_SERVERS=(billing)
 # span 을 내보내는 서버(docs/observability.md 의 "3. 추적"). 서버에 span 을 붙이면 여기와 아래 둘에 더한다
-TRACE_SERVERS=(billing notification)
+TRACE_SERVERS=(trpg billing notification)
 # 추적 번호를 실어 한 번 부를 주소(메서드와 경로). 401 이어도 된다. 요청의 span 은 걸린다. 상태 확인은 span 이 없다
 declare -A TRACE_PROBES=(
+  [trpg]="GET /api/v1/game/me"
   [billing]="POST /api/v1/billing/webhooks/payment"
   [notification]="GET /api/v1/notification/me/notifications"
 )
 # 그 아래에 쿼리의 span 이 있는지 볼 작업(operation). 서버가 뜨면 곧 한 바퀴 돈다
-declare -A TRACE_JOBS=([billing]=sweep.run [notification]=notification.prune)
+declare -A TRACE_JOBS=([trpg]=round.close_overdue [billing]=sweep.run [notification]=notification.prune)
 # 서버의 망 밖(소켓 프록시와 Loki 의 망)에서 주소를 부를 때 잠깐 띄우는 이미지. compose 의 redis 와 같아 이미 받아 두었다.
 # 그 안의 busybox wget 을 쓴다
 PROBE_IMAGE=redis:7-alpine

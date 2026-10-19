@@ -9,8 +9,9 @@
 
 from functools import lru_cache
 from typing import Literal, Self
+from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 서술 하나에 쓰는 시간의 상한(초). 다시 시도하기와 다음 모델로 넘어가기를 모두 이 안에서 한다
@@ -34,6 +35,29 @@ SIGNAL_SECRET_MIN_LENGTH = 32
 # 인증 서버의 두 주소의 끝. 둘은 같은 곳(/api/v1/auth)에 있다
 JWKS_PATH = '/jwks'
 SESSION_REVOCATIONS_PATH = '/session-revocations'
+
+# 수집기의 주소로 받는 앞부분
+OTLP_SCHEMES = ('http', 'https')
+
+
+def otlp_endpoint(value: str) -> str:
+    """
+    수집기의 주소를 읽는다. 비어 있으면 빈 글자다. 있으면 http:// 나 https:// 로 시작하고 경로가 없어야 한다.
+
+    경로(/v1/traces)는 보내는 쪽이 붙인다. OpenTelemetry 의 OTEL_EXPORTER_OTLP_ENDPOINT 와 같은 뜻이고,
+    결제 서버, 알림 서버의 같은 설정과 같은 규칙이다. 끝의 / 는 뗀다.
+    """
+    written = value.strip()
+    if not written:
+        return ''
+    parts = urlsplit(written)
+    if parts.scheme not in OTLP_SCHEMES or not parts.netloc:
+        raise ValueError('OTEL_EXPORTER_OTLP_ENDPOINT 는 http:// 나 https:// 로 시작해야 한다')
+    if parts.path.strip('/') or parts.query or parts.fragment:
+        raise ValueError(
+            'OTEL_EXPORTER_OTLP_ENDPOINT 는 http://alloy:4318 처럼 경로 없이 적는다. /v1/traces 는 붙이지 않는다'
+        )
+    return written.rstrip('/')
 
 
 def model_chain(first: str, fallbacks: str) -> list[str]:
@@ -70,6 +94,10 @@ class Settings(BaseSettings):
 
     # 이 수준부터 로그를 남긴다. debug, info, warning, error 중 하나다
     log_level: Literal['debug', 'info', 'warning', 'error'] = 'info'
+
+    # span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. 경로 없이 적는다(http://alloy:4318).
+    # 비우면 span 을 내보내지 않는다. 로그는 그대로다(app/observability/tracing.py)
+    otel_exporter_otlp_endpoint: str = ''
 
     # 개발용 기능(API 문서 화면)을 켠다. 기본은 꺼짐이다.
     # 켜는 것을 잊으면 불편할 뿐이지만, 끄는 것을 잊으면 운영 서버의 API 구조가 드러난다
@@ -252,6 +280,12 @@ class Settings(BaseSettings):
     # 공개 금지(블랙리스트, #392). 한 사람의 시나리오가 운영자에게 이만큼 제재되면 저절로 공개를 막는다.
     # 운영자가 풀면 그 뒤의 제재부터 다시 센다. 자기 시나리오와 남의 시나리오로 플레이하는 것은 막지 않는다
     publishing_ban_threshold: int = Field(default=3, ge=1)
+
+    @field_validator('otel_exporter_otlp_endpoint')
+    @classmethod
+    def check_otlp_endpoint(cls, value: str) -> str:
+        """수집기의 주소가 틀렸으면 뜨지 않는다. 틀린 주소로 보내며 경고를 쌓는 것보다 낫다."""
+        return otlp_endpoint(value)
 
     @model_validator(mode='after')
     def require_a_revocations_url(self) -> Self:
