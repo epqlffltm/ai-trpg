@@ -125,7 +125,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 [인물의 상태] 의 다루는 법에 인물의 공격은 결과 줄에 있을 때뿐이라는 말이 더해진다(#487)
 #   narration-40: 몬스터와 인물이 쓰러진 캐릭터를 친 줄이 붙는다
 #                 (수로 쥐 2: 쓰러진 엘프에게 물기 (맞음) → 엘프 죽음의 굴림 실패 +1 (실패 2/3, 죽어 가는 중)) (#369)
-PROMPT_VERSION = 'narration-40'
+#   narration-41: [퀘스트]의 진행 중인 줄에 남은 기한의 감각(기한 넉넉함, 빠듯함, 다 됨)이,
+#                 이번 라운드에 기한을 넘겨 실패한 줄에 그것이 붙는다. 다루는 법에 기한을 다루는 말이 더해진다(#268)
+PROMPT_VERSION = 'narration-41'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -348,7 +350,10 @@ QUEST_TITLE = '[퀘스트]'
 QUEST_NOTE = (
     '게임이 정한 퀘스트의 지금 상태다. 성공과 실패는 정해진 결말이니 그대로 따른다. '
     '진행 중인 퀘스트의 결말(이루었다, 놓쳤다)을 서술이 먼저 정하지 마라. '
-    '숨긴 퀘스트는 플레이어가 아직 모르는 일이다. 그 이름이나 내용을 드러내지 말고, 장면에 실마리로만 흘려라.'
+    '숨긴 퀘스트는 플레이어가 아직 모르는 일이다. 그 이름이나 내용을 드러내지 말고, 장면에 실마리로만 흘려라. '
+    '기한은 남은 시간의 느낌으로만 준다. 남은 시간이나 시각을 숫자로 지어내지 마라. '
+    '기한이 빠듯하거나 다 된 퀘스트는 서두르는 긴장으로, '
+    '이번 라운드에 기한을 넘긴 퀘스트는 때를 놓쳐 일이 틀어진 것으로 그려라.'
 )
 # 퀘스트의 상태를 서술자에게 보일 말
 QUEST_STATUS_WORDS = {
@@ -357,6 +362,14 @@ QUEST_STATUS_WORDS = {
     'succeeded': '성공',
     'failed': '실패',
 }
+# 진행 중인 퀘스트의 남은 기한을 서술자에게 보일 말(#268). 숫자를 주지 않는다(app/rounds/narration_request.py 의 Pace)
+QUEST_PACE_WORDS = {
+    'ample': '기한 넉넉함',
+    'tight': '기한 빠듯함',
+    'last': '기한이 다 됨(다음 라운드가 마지막)',
+}
+# 이번 라운드에 기한을 넘겨 실패한 퀘스트에 붙이는 말
+QUEST_MISSED_WORDS = '이번 라운드에 기한을 넘김'
 # 캐릭터가 서 있는 곳과 아는 출구, 그리고 GM 만 아는 숨긴 길(#218). 위치는 엔진이 정한 사실이다.
 # 서술이 캐릭터를 다른 곳으로 옮기거나 모르는 길로 가게 하면 장면과 위치가 어긋난다.
 # 숨긴 길은 플레이어도 방장도 모른다. 이름을 드러내면 찾기(search)의 판정이 뜻을 잃는다. 실마리만 흘리게 한다.
@@ -611,8 +624,19 @@ def whisper_lines(whispers: list[WhisperNote]) -> list[str]:
 
 
 def quest_line(quest: QuestNote) -> str:
-    """퀘스트 한 줄. 예: - 왕녀 구출: 진행 중"""
-    return f'- {quest.name}: {QUEST_STATUS_WORDS[quest.status]}'
+    """
+    퀘스트 한 줄. 진행 중이면 남은 기한의 감각을, 이번 라운드에 기한을 넘겼으면 그것을 괄호 안에 붙인다.
+
+    예: - 왕녀 구출: 진행 중
+        - 왕녀 구출: 진행 중(기한 빠듯함)
+        - 왕녀 구출: 실패(이번 라운드에 기한을 넘김)
+    """
+    status = QUEST_STATUS_WORDS[quest.status]
+    if quest.pace is not None:
+        return f'- {quest.name}: {status}({QUEST_PACE_WORDS[quest.pace]})'
+    if quest.missed_deadline:
+        return f'- {quest.name}: {status}({QUEST_MISSED_WORDS})'
+    return f'- {quest.name}: {status}'
 
 
 def quest_lines(quests: list[QuestNote]) -> list[str]:
