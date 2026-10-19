@@ -636,9 +636,10 @@ class MonsterNote:
 class MonsterTurnNote:
     """
     몬스터 한 마리의 차례에 한 일. 엔진이 정한 것이다(app/rounds/monster_attacks.py).
+    싸우는 인물(NPC)의 차례도 이 모양이다(app/rounds/npc_attacks.py, #487). 이름은 장면에서 부르는 이름이다.
 
     굴림의 숫자는 주지 않는다. 몬스터의 능력치를 드러낸다. 맞았으면 그 캐릭터의 HP 변화(impact)를 준다.
-    움직이지 못한 차례(쓰러짐, 죽음, 칠 캐릭터가 없음)는 넣지 않는다. 한 일이 없다.
+    움직이지 못한 차례(쓰러짐, 죽음, 부상으로 못 움직임, 칠 캐릭터가 없음)는 넣지 않는다. 한 일이 없다.
     """
 
     # 부르는 이름(수로 쥐 2)
@@ -653,13 +654,14 @@ class MonsterTurnNote:
 @dataclass(frozen=True)
 class TurnNote:
     """
-    차례 하나. 캐릭터의 차례면 character_name, 몬스터의 차례면 monster 가 있다.
+    차례 하나. 캐릭터의 차례면 character_name, 몬스터의 차례면 monster, 인물의 차례면 npc 가 있다.
 
     이 순서대로 한 일의 줄을 놓는다(app/rounds/move_lines.py 의 round_lines).
     """
 
     character_name: str | None = None
     monster: MonsterTurnNote | None = None
+    npc: MonsterTurnNote | None = None
 
 
 @dataclass(frozen=True)

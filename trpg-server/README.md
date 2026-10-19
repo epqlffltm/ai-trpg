@@ -466,7 +466,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 | `pregens` (프리젠, 8개) | 제작자가 미리 만들어 둔 캐릭터. 하나하나가 `{"name", "description", "sheet", "items"}` 이다(이름 50자, 설명 1,000자). 플레이어가 테이블에 앉을 때 골라서 자기 캐릭터로 가져갈 수 있다. 같은 이름은 거부한다. `items` 는 그 프리젠을 고른 사람이 더 받는 소지품이다(시작 소지품과 모양이 같다) |
 | `character_modes` (캐릭터 방식) | 테이블에 앉는 사람이 캐릭터를 얻는 방식 중 허용하는 것. 아래 표의 값들이다. 하나는 있어야 한다. 적지 않으면 `pregen` 과 `custom` 이다. 응답에는 늘 같은 순서로 싣는다 |
 | `default_sheet` (기본 시트) | `custom` 으로 만든 캐릭터가 받는 시트. 초안일 때는 비워 둘 수 있다 |
-| `npc_sheets` (NPC 시트, 100개) | 붙인 로어북의 인물 항목에 주는 숫자와 처음 태도, 지닌 물건. 하나하나가 `{"entry_id", "sheet", "attitude", "equipment", "inventory", "dull", "on_caught", "attacks"}` 이다. `attitude` 는 `friendly`(우호), `neutral`(중립, 기본), `wary`(경계, #494), `hostile`(적대)이다. 시트가 없는 인물은 중립이다(#474). `equipment`(장비, 5줄), `inventory`(소지품, 10줄), `dull`(둔한지)은 몬스터 시트와 같은 모양이다(#457). 처음 쓰러졌을 때의 드롭은 여기서만 나온다. 시트가 없는 인물은 아무것도 지니지 않는다. `on_caught` 는 훔치다 들켰을 때다. 늘 적대가 되고, `hostile`(기본)은 적대만, `fight` 는 싸움도 붙는다(#457). `attacks`(공격, 5개까지)는 몬스터 시트의 공격과 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(차례는 #487 의 다음 일에서 붙는다). 비우면 공격하지 않는다. 시트는 비워 둘 수 없다. 같은 항목이 두 번 있으면 거부한다 |
+| `npc_sheets` (NPC 시트, 100개) | 붙인 로어북의 인물 항목에 주는 숫자와 처음 태도, 지닌 물건. 하나하나가 `{"entry_id", "sheet", "attitude", "equipment", "inventory", "dull", "on_caught", "attacks"}` 이다. `attitude` 는 `friendly`(우호), `neutral`(중립, 기본), `wary`(경계, #494), `hostile`(적대)이다. 시트가 없는 인물은 중립이다(#474). `equipment`(장비, 5줄), `inventory`(소지품, 10줄), `dull`(둔한지)은 몬스터 시트와 같은 모양이다(#457). 처음 쓰러졌을 때의 드롭은 여기서만 나온다. 시트가 없는 인물은 아무것도 지니지 않는다. `on_caught` 는 훔치다 들켰을 때다. 늘 적대가 되고, `hostile`(기본)은 적대만, `fight` 는 싸움도 붙는다(#457). `attacks`(공격, 5개까지)는 몬스터 시트의 공격과 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다([NPC 의 공격](#라운드)). 비우면 공격하지 않는다. 시트는 비워 둘 수 없다. 같은 항목이 두 번 있으면 거부한다 |
 | `default_npc_sheet` (기본 NPC 시트) | 시트가 없는 인물이 받는 숫자. 초안일 때는 비워 둘 수 있다 |
 | `encounters` (조우, 50개) | 맵의 장소에 있는 몬스터. 하나하나가 `{"place_id", "monster_id", "count", "surprise"}` 이다(1~10마리). `surprise` 는 누가 기습하는가다: `none`(기본, 기습 없음), `monsters`(몬스터가 매복), `party`(일행이 기습, 잠든 무리). 장소는 붙인 로어북의 장소 항목, 몬스터는 시트를 적은 몬스터다. 같은 장소의 같은 몬스터는 한 줄에 마리 수로 적는다(두 줄이면 거부한다). 맵이 있어야 한다(`start_place`) |
 | `monster_sheets` (몬스터 시트, 100개) | 붙인 도감의 몬스터에 주는 숫자와 공격, 지닌 물건. 하나하나가 `{"monster_id", "sheet", "attacks", "equipment", "inventory", "dull"}` 이다. `attacks`(5개)는 공격(스킬) 하나하나가 `{"name", "ability", "difficulty", "harm"}` 이다(이름 30자, 나머지는 룰북의 이름표). 비우면 공격하지 않는 몬스터다. 같은 이름의 공격이 둘이면 거부한다. `equipment`(장비, 5개)와 `inventory`(소지품, 10개)는 마리마다 지닌 물건 하나하나가 `{"entry_id", "count", "chance"}` 이다(붙인 로어북의 물건 항목, 1~99개(기본 1), 쓰러졌을 때 떨어질 확률 1~100%(기본 100)). 장비는 몸에 걸치거나 쥔 것, 소지품은 품에 넣은 것이다. 비우면 아무것도 지니지 않는다. 드롭은 지닌 것에서만 나온다([몬스터의 드롭](#라운드)). 같은 물건이 두 줄이면(장비와 소지품에 걸쳐서도) 거부한다. 예전의 `drops` 는 없어졌다(`inventory` 로 옮겼다, 마이그레이션 `5d2c8e7a1f34`). `dull`(기본 `false`)은 둔한 몬스터다. 훔치기가 룰북의 `steal.dull` 만큼 쉽다. 시트를 적은 몬스터만 이 시나리오가 쓴다(판에 들어간다). 시트는 비워 둘 수 없다. 같은 몬스터가 두 번 있으면 거부한다 |
@@ -1372,7 +1372,7 @@ records.py      일어난 일을 이벤트로 적기
 - 성공하면 그 줄을 통째로 갖는다. 한 가지의 상한(99)을 넘은 것은 그 대상이 그대로 지닌다(`reason: full`).
 - 실패하면 들켰다.
   - 몬스터: 그 마리는 이번 라운드의 차례에 대상을 고르지 않고 도둑을 친다(도둑이 쓰러졌거나 떠났으면 평소대로, 차례가 이미 지났으면 없다).
-  - NPC: 늘 적대가 된다(이미 적대였으면 그대로). 시트의 `on_caught` 가 `fight` 면 싸운 것도 된다. 누가 어떻게 나올지는 엔진이 시트를 보고 정한다. NPC 는 아직 공격하지 않는다(싸움이 붙었다는 것은 싸운 것으로 친다는 사실이다).
+  - NPC: 늘 적대가 된다(이미 적대였으면 그대로). 시트의 `on_caught` 가 `fight` 면 싸운 것도 된다. 누가 어떻게 나올지는 엔진이 시트를 보고 정한다. 싸움이 붙은 적대 인물은 다음 라운드부터 차례에 친다. 이미 싸우던 인물이면 이번 라운드의 차례에 도둑을 노린다([NPC 의 공격](#라운드)).
 - 차례가 왔을 때 앞사람이 그 물건을 먼저 훔쳤으면 굴리지 않는다(`reason: gone`). 그 대상이 앞 차례에 죽었으면 판정처럼 `target_gone` 이다(NPC 면 `monster_id` 대신 `npc_id`).
 - 결과는 `outcome.steal`(`user_id`, `character_name`, `monster_id`, `monster_name`, `npc_id`, `npc_name`, `entry_id`, `name`, `check`(`roll`, `modifier`, `total`, `target`, `success`, 굴리지 않았으면 `null`), `hindrance`, `factors`(걸린 것: `equipped`, `rarity`, `dull_kind`, `dull`, `unwary`, `distracted`), `stolen`, `count`(훔친 개수), `left`(대상에게 남은 개수), `total`(도둑이 가진 개수), `reason`, `fight`(들켜 싸움이 붙었는가. 몬스터에게 들키면 늘 참), `attitude_change`(들켜 바뀐 NPC 의 태도 `previous`, `attitude`, `reason: caught_stealing`. 몬스터이거나 이미 적대였으면 `null`))이다. 대상이 몬스터면 `npc_*` 가, NPC 면 `monster_*` 가 `null` 이다. 대상의 눈치는 대상의 숫자라 따로 적지 않는다(목표값에 섞여 있다).
 - 이벤트: `steal_attempted` 가 행동에 이어 적힌다(들켰어도). NPC 의 태도가 바뀌었으면 `npc_attitude_changed` 가, 훔쳤으면 `items_gained`(`source: steal`, 몬스터면 `monster_id`·`monster_name`, NPC 면 `npc_id`·`npc_name`)가 그 뒤에 잇는다. 행한 사람은 없다.
@@ -1433,7 +1433,7 @@ records.py      일어난 일을 이벤트로 적기
 
 - 낼 때가 아니라 마감할 때 굴린다. 다시 낼 수 있는 동안에 굴리면 마음에 드는 눈이 나올 때까지 다시 낼 수 있다.
 - 굴림은 공개다. 눈, 보정, 합, 목표값이 모두에게 보인다.
-- 앉은 순서로 굴린다. 낸 순서가 아니다. 장면에 맞붙은 몬스터가 있으면 차례의 순서로 굴린다(아래 **차례와 몬스터의 공격**).
+- 앉은 순서로 굴린다. 낸 순서가 아니다. 장면에 맞붙은 몬스터나 싸우는 NPC 가 있으면 차례의 순서로 굴린다(아래 **차례와 몬스터의 공격**, **NPC 의 공격**).
 - 지금 앉아 있고 행동을 붙인 사람만 굴린다. 내지 않은 사람, 행동이 없는 선언, 떠난 사람의 선언은 굴리지 않는다.
 - 한 번만 굴린다. 서술을 다시 맡겨도 선언에 적어 둔 결과를 읽는다. 다시 굴리면 서술을 실패시켜 결과를 바꿀 수 있다.
 - 결과는 이벤트(`check_rolled`)로도 적힌다. 같은 트랜잭션에서 한 번 쓰고 고치지 않는다.
@@ -1513,7 +1513,7 @@ records.py      일어난 일을 이벤트로 적기
 - 차례는 셋으로 정한다. 앞의 것이 같을 때만 뒤의 것을 본다.
   1. 기습한 쪽이 먼저다. 조우의 `surprise` 가 `monsters` 면 그 조우의 마리가, `party` 면 그 장소에 서 있는 캐릭터가 먼저다. **만난 첫 라운드**에만 쓴다.
   2. 규칙의 차례 능력치(`initiative_ability`, SRD5 는 민첩)의 점수가 높은 쪽이 먼저다. 규칙에 없으면 모두 같다.
-  3. 그래도 같으면 서버의 주사위(규칙의 `die`)다. 같은 무리만 굴리고, 높은 눈이 먼저다. 눈도 같으면 앉은 사람, 그다음 장면의 몬스터 순서다.
+  3. 그래도 같으면 서버의 주사위(규칙의 `die`)다. 같은 무리만 굴리고, 높은 눈이 먼저다. 눈도 같으면 앉은 사람, 그다음 장면의 몬스터, 그다음 장면의 인물 순서다.
 - 만난 첫 라운드는 마리가 처음 장면에 든(살아 있는 캐릭터와 같은 장소에 있는) 라운드다. 선언을 마감할 때 `table_monsters.engaged_round` 에 적고 고치지 않는다.
 - 행동이 없는 선언은 차례가 없다. 몬스터는 그래도 그 캐릭터를 칠 수 있다.
 - 몬스터의 차례에는 같은 장소에 서 있는(쓰러지지 않은) 캐릭터 하나를 공격 하나로 친다. 대상과 공격은 서버의 주사위로 고른다(하나뿐이면 굴리지 않는다). 판정은 앉은 사람의 것과 같은 계산이다(몬스터의 그 능력치 점수, 공격의 난이도). 맞히면 공격의 양의 등급만큼 피해를 주고, 쓰러짐과 부상 표도 앉은 사람의 것과 같다.
@@ -1528,6 +1528,21 @@ records.py      일어난 일을 이벤트로 적기
 - 차례와 몬스터의 결과는 라운드의 `turns` 에 적힌다. 하나하나가 `{kind, first, score, tiebreak}` 에 캐릭터면 `user_id`, `character_name`, 몬스터면 `monster_id`, `name`, `outcome` 이다. 몬스터의 `outcome` 은 `{"skipped": …}` 이거나 `{attack, user_id, character_name, roll, modifier, total, target, success, effect}` 다. 몬스터의 점수와 HP 의 숫자가 들어 있어 응답으로 내보내지 않는다. 앉은 사람은 이벤트(`monster_attacked`, `hp_changed`)로 본다.
 - 판정과 같이 닫기 시작할 때 한 번만 굴린다. 서술을 다시 맡겨도 다시 굴리지 않는다.
 - 이벤트도 차례 순서로 적힌다. 행동이 없는 선언은 차례들 뒤에 앉은 순서로 적힌다.
+
+**NPC 의 공격.** 싸우는 NPC 도 몬스터처럼 차례를 받아 캐릭터를 친다(#487). 맞붙은 몬스터가 없어도 싸우는 NPC 가 있으면 차례를 정한다.
+
+- 싸우는 NPC 는 이번 장면에 나왔고, 살아 있고, 적대(`hostile`)이고, 싸움이 붙었고(`table_npcs.fought_round`), 시트에 공격(`npc_sheets[].attacks`)이 있는 인물이다. 선언을 마감할 때 고른다. 엔진의 상태만 본다.
+  - 적대이기만 한 인물(들켰는데 `on_caught` 가 `hostile`, 깨어나 적대가 된 인물)은 치지 않는다. 시트가 없거나 공격을 적지 않은 인물도 치지 않는다.
+  - 이번 라운드에 싸움이 붙은 인물은 다음 라운드부터 친다. 차례는 판정을 시작하기 전에 정하기 때문이다.
+  - 싸움은 끝나지 않는다(`fought_round` 를 비우지 않는다). 장면에 나오지 않거나 쓰러지거나 죽으면 치지 않는다.
+- 인물은 기습하지 않는다. 차례 능력치의 점수는 테이블의 그 인물의 것이다.
+- NPC 는 장소가 없다(#282). 앉은 사람의 서 있는 캐릭터가 모두 대상이 될 수 있다. 고르는 차례는 이렇다. 앞의 것이 칠 수 없는 대상이면(쓰러졌다) 다음으로 간다.
+  1. 이번 라운드에 이 인물에게서 훔치다 들킨 도둑
+  2. 이번 라운드에 이 인물을 타격으로 겨눈 사람 중에서 서버의 주사위로
+  3. 그 밖의 서 있는 캐릭터 중에서 서버의 주사위로
+- 판정은 몬스터의 것과 같은 계산(인물의 그 능력치 점수, 공격의 난이도)에 인물이 입은 부상의 영향을 더한다. 친 대상과는 싸운 것으로 적는다.
+- 차례가 오기 전에 쓰러지거나 죽었거나, 입은 부상 때문에 움직이지 못하거나(기절 같은 것), 칠 캐릭터가 없으면 치지 않는다(`skipped`: `downed`, `dead`, `incapacitated`, `no_target`).
+- 라운드의 `turns` 에서 인물의 차례는 `kind` 가 `npc` 이고 `entry_id`, `name`(장면의 호칭), `outcome` 이 있다. `outcome` 은 몬스터의 것에 `hindrance`(부상의 영향, 없으면 `null`)가 더해진 모양이다. 앉은 사람은 이벤트(`npc_attacked`, `hp_changed`)로 본다.
 
 **쓰러짐.** HP 가 0 이면 쓰러진 것이다. 아직 죽은 것이 아니다. 동료가 회복시키면 일어난다.
 
@@ -2367,6 +2382,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `npc_changed` | 엔진이 NPC 의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`. HP 의 숫자는 내보내지 않는다 |
 | `monster_changed` | 엔진이 몬스터 한 마리의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `monster_id`, `name`(부르는 이름), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`. HP 의 숫자는 내보내지 않는다 |
 | `monster_attacked` | 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 쳤다. 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `monster_id`, `name`(부르는 이름), `attack`(`name`, `ability`, `difficulty`, `harm`), `user_id`, `character_name`, `success`. 굴림의 보정과 합은 몬스터의 능력치를 드러내서 내보내지 않는다 |
+| `npc_attacked` | 엔진이 싸우는 NPC 의 차례에 캐릭터 하나를 쳤다(#487). 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `entry_id`, `name`(장면의 호칭), `attack`, `user_id`, `character_name`, `success`. 굴림과 부상의 영향은 내보내지 않는다 |
 | `injury_gained` | 캐릭터나 NPC 가 부상을 입었다. 그 HP 의 변화 바로 뒤에 적힌다 | `round`, 캐릭터면 `user_id`, `character_name`, NPC 면 `entry_id`, `name`, 그리고 `injury`, `source`, `ends_after_round`(짧은 것), `heals_at`(오래 가는 것의 나을 시각: `day`, `hour`, `minute`, `time_of_day`) |
 | `injury_ended` | 부상이 끝났다. 정한 라운드가 지나 풀렸거나 나을 시각이 지나 나았으면 그 라운드의 죽음의 굴림들 뒤, 닫힘 앞에 적힌다. 치료로 나았으면 그 치료 바로 뒤에 적힌다 | `round`, 누구인지(위와 같다), `injury`, `reason`(`expired` 짧은 것이 풀림, `healed` 오래 가는 것이 나음, `treated` 치료로 나음). 후유증이 생겼으면 바로 뒤에 `injury_gained`(`source`: `aftermath`) |
 | `injury_treated` | 엔진이 치료의 결과를 정했다. 그 판정 바로 뒤에 적힌다 | `round`, 누구인지(위와 같다), `injury`, `treated`, `heals_at`, `healed`, `mishap`(실패 표를 굴렸으면 `roll`, `kind`, `rounds`, `delay_minutes`, `magnitude`), `died` |
@@ -2403,7 +2419,7 @@ AI 호출은 AI 를 붙일 때 더한다.
 잠금을 빠뜨린 코드가 생겨도 `UNIQUE(table_id, sequence)` 가 같은 번호를 거부한다.
 
 **누가 했나(`actor_id`).** 사람이 한 일이면 그 사람이다. GM 의 서술, 저절로 닫힌 라운드, 방장이 나가서 바뀐 방장처럼
-사람이 한 일이 아니면 비어 있다. 판정(`check_rolled`)과 HP 의 변화(`hp_changed`, `npc_changed`, `monster_changed`), 몬스터의 공격(`monster_attacked`)도 비어 있다. 주사위를 굴리고 HP 를 바꾼 것은 플레이어가 아니라 엔진이다.
+사람이 한 일이 아니면 비어 있다. 판정(`check_rolled`)과 HP 의 변화(`hp_changed`, `npc_changed`, `monster_changed`), 몬스터와 NPC 의 공격(`monster_attacked`, `npc_attacked`)도 비어 있다. 주사위를 굴리고 HP 를 바꾼 것은 플레이어가 아니라 엔진이다.
 능력치의 굴림(`abilities_rolled`)은 굴려 달라고 한 사람이 적힌다. 라운드의 판정과 달리, 그 사람이 직접 누른 일이다.
 죽음의 굴림(`death_save_rolled`)과 그 굴림으로 죽은 것(`character_died`)은 비어 있다. 치료의 결과(`injury_treated`)와 치료 실패로 죽은 것, 지목의 결과(`naming_resolved`)도 비어 있다. 쉰 것(`character_rested`)과 되살아나기(`character_revived`)도 비어 있다. 스스로 보내서 죽은 것은 보낸 사람이 적힌다.
 새 캐릭터를 들인 것(`character_joined`)은 들인 사람이 적힌다.
