@@ -159,6 +159,18 @@ class NpcAttitude(enum.StrEnum):
     HOSTILE = 'hostile'
 
 
+class NpcCaught(enum.StrEnum):
+    """
+    NPC 에게서 훔치다 들켰을 때 그 NPC 가 어떻게 나오는가(#457). 판의 인물(npc_sheets)마다 작성자가 정한다.
+
+    들키면 늘 적대가 된다. hostile 은 적대만, fight 는 적대하고 싸움이 붙는다(싸운 것으로 친다).
+    누가 어떻게 나올지는 엔진이 시트를 보고 정한다. 서술(AI)이 정하지 않는다.
+    """
+
+    HOSTILE = 'hostile'
+    FIGHT = 'fight'
+
+
 class ItemRarity(enum.StrEnum):
     """
     물건의 등급. 낮은 것부터 높은 것의 차례다. 규칙을 적지 않은 물건은 노말이다.

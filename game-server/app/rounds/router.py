@@ -193,7 +193,7 @@ TARGET_ERRORS = {
     'place': 'action.place 가 지금 장소에서 아는 길로 이어진 장소가 아닙니다.',
     'monster': 'action.monster 가 지금 장소의 몬스터가 아닙니다.',
     'item': 'action.item 이 지금 장소에 보이게 놓인 물건이 아닙니다.',
-    'carried': 'action.item 이 그 몬스터가 지금 지닌 물건이 아닙니다.',
+    'carried': 'action.item 이 그 몬스터나 인물이 지금 지닌 물건이 아닙니다.',
 }
 
 

@@ -28,6 +28,7 @@ from app.rounds.effects import (
     injury_after,
     mark_fight,
     mark_hurt,
+    mark_npc_fight,
     member_effect,
     monster_effect,
     npc_effect,
@@ -204,6 +205,19 @@ def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction,
     return {'effect': change_member(judging, actor, action, found), 'npc_effect': None}
 
 
+def mark_npc_attack(judging: Judging, member: TableMember, action: CheckAction) -> None:
+    """
+    NPC 를 타격(harm)으로 겨눴으면 그 NPC 와 싸운 것으로 적는다. 맞든 빗나가든 싸움이다. 몬스터와 같다.
+
+    회복이나 타격 없는 판정(설득 같은)은 싸움이 아니다. 이미 죽은 NPC 는 적지 않는다.
+    """
+    if action.npc is None or action.harm is None:
+        return
+    person = find_cast_member(judging.cast, action.npc)
+    if person is not None and not npcs.is_dead(person.npc):
+        mark_npc_fight(judging, person.npc, member)
+
+
 def judge_check(judging: Judging, member: TableMember, action: CheckAction) -> dict:
     """
     한 사람의 판정하는 행동을 판정하고 그 결과를 정한다. 선언의 outcome 에 적을 문서를 돌려준다.
@@ -216,6 +230,7 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction) -> d
         return {'target_gone': gone}
     if action.monster is not None:
         mark_fight(judging, find_scene_monster(judging.monsters, action.monster).state, member)
+    mark_npc_attack(judging, member, action)
     sheet = member.sheet
     hindrance = round_injuries.hindrance_for(judging.ruleset, sheet.injuries, action.ability)
     hindered = actions.attempt_hindered(judging.ruleset, action, sheet.abilities, judging.dice, hindrance)
