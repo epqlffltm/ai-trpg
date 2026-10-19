@@ -29,6 +29,7 @@
 - [토큰 검증](#토큰-검증)
 - [테스트](#테스트)
 - [로그와 요청 식별자](#로그와-요청-식별자)
+- [메트릭](#메트릭)
 - [CI](#ci)
 - [구조](#구조)
 - [설계 메모](#설계-메모)
@@ -204,11 +205,13 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸에 적힌다. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸에 적힌다. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 로그를 남긴다. `debug`, `info`, `warning`, `error` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 없음(보내지 않음) | 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318`. 경로(`/v1/metrics`)는 붙이지 않는다. 비우면 내보내지 않는다([메트릭](#메트릭)) |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | 메트릭을 보내는 간격(밀리초). 1000 이상 |
 
 `FREE_CREDIT_TTL`, `HOLD_TTL`, `ORDER_TTL` 은 날 단위(`7d`)를 받지 않는다. Go 의 시간 표기에 날이 없다. 30일은 `720h`, 1주일은 `168h` 다.
 크레딧의 규칙(`SPEND_FREE_FIRST` 와 기한 셋)은 서버를 다시 띄워야 바뀐다. 바꾸면 그 뒤의 일에만 적용된다([크레딧](#크레딧)).
 마이그레이션 명령(`cmd/migrate`)은 `DATABASE_URL` 과 `DB_SCHEMA` 만 읽는다.
-정리 작업과 대사(`cmd/sweeper`, `cmd/reconcile`)는 DB 설정, 크레딧의 규칙, 로그 설정, 결제 대행사의 설정만 읽는다. 포트, 공개키 주소, 서명의 비밀은 없어도 돈다.
+정리 작업과 대사(`cmd/sweeper`, `cmd/reconcile`)는 DB 설정, 크레딧의 규칙, 로그 설정, 결제 대행사의 설정, 메트릭의 설정만 읽는다. 포트, 공개키 주소, 서명의 비밀은 없어도 돈다.
 크레딧의 규칙과 결제 대행사는 서버와 같은 값이어야 한다. 대사는 서버와 같은 결제 대행사에 결과를 묻는다. 같은 `.env` 를 쓰면 된다.
 
 잘못된 설정이면 서버가 뜨기 전에 오류로 끝난다. 틀린 것이 여럿이면 한 번에 모두 알려 준다.
@@ -1768,6 +1771,38 @@ go run ./cmd/server 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .r
   작업이 끝난 줄은 `operation` 이 `sweep.run`, `reconcile.run` 이다. 정리 작업의 `-once` 와 대사가 화면(stdout)에 찍는 요약은 글이다.
 
 
+## 메트릭
+
+서버, 정리 작업, 대사가 메트릭을 OTLP(HTTP)로 수집기(Alloy)에 민다. 수집기가 Prometheus 에 넘긴다.
+이름과 label 의 규칙, 보내는 길은 [docs/observability.md](../docs/observability.md)의 "메트릭"과 "2. 메트릭"에 있다. 이 서버가 다른 서버의 본보기다.
+
+`OTEL_EXPORTER_OTLP_ENDPOINT` 가 비어 있으면 **내보내지 않는다.** 계측은 그대로 돌고 보내기만 없다. PC 에서 띄울 때는 적지 않는다.
+compose 로 띄울 때는 루트 `.env` 에 적는다(프로필 `observability` 를 켤 때, 루트 README 의 "로그와 메트릭 모으기").
+
+| Prometheus 의 이름 | 내는 프로세스 | label |
+| --- | --- | --- |
+| `http_server_requests_total` | 서버 | `method`, `route`(주소의 틀. 맞은 것이 없으면 `(unmatched)`), `status_code` |
+| `http_server_request_duration_seconds` | 서버 | `method`, `route` |
+| `http_server_active_requests` | 서버 | 없음 |
+| `db_up` | 서버 | 없음. 준비 상태 확인(`/health/ready`)이 마지막으로 본 DB. 확인하기 전에는 없다 |
+| `db_pool_connections` | 서버, 정리 작업, 대사 | `state`(`idle`, `in_use`) |
+| `db_pool_connections_max` | 서버, 정리 작업, 대사 | 없음 |
+| `db_pool_wait_seconds` | 서버, 정리 작업, 대사 | 없음. 풀에서 연결을 얻으려고 기다린 시간 |
+| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | 정리 작업(`sweep.run`), 대사(`reconcile.run`) | `operation`. 끝난 수에는 `result`(`success`, `server_error`, `cancelled`) |
+
+- 모든 메트릭에 `service="billing-server"` 가 붙는다(수집기가 붙인다). 프로세스는 `instance` 의 앞부분으로 가른다: `server-…`, `sweeper-…`, `reconcile-…`
+- 메서드는 HTTP 가 정한 것만 그대로 적고, 그 밖은 `_OTHER` 다. 실제 주소, 사용자, 주문 번호는 label 로 쓰지 않는다
+- 대사는 하루 한 번 짧게 돌고 끝난다. 보내는 간격(15초)을 기다리지 않고 끝날 때 한 번 보낸다. 수집기가 답하지 않으면 5초 뒤에 버리고 끝난다
+- 수집기가 죽어 있어도 서버는 뜨고 요청은 영향을 받지 않는다. 보내지 못한 묶음은 버린다
+- 사람이 치는 명령(`cmd/migrate`, `cmd/orders`, `cmd/prices`, `cmd/pricereviews`, `cmd/fakepg`, `cmd/fakegame`)은 메트릭을 내지 않는다
+- 결제의 업무 메트릭(원장, 중복 방지 키, 주문, 결제 대행사, 알림)은 아직이다(docs/observability.md 의 "결제 (billing)" 표)
+
+로컬에서 보내 보려면 루트의 `docker compose --profile observability up -d` 로 Alloy 와 Prometheus 를 띄운다.
+Alloy 의 4318 은 바깥에 열지 않으므로, 서버도 compose 로(`--profile app`) 띄워 Grafana 의 Prometheus 에서 `{service="billing-server"}` 로 찾는다.
+
+테스트는 `internal/metrics/metricstest` 로 메모리에 모아 이름, 단위, label 을 본다. 보내는 길은 `internal/metrics` 의 테스트가 가짜 수집기(HTTP 서버)로 본다.
+Prometheus 에 그 이름으로 들어오는지는 저장소의 CI(`stack`)가 본다.
+
 ## CI
 
 `.github/workflows/billing-server.yml`. `billing-server/`나 DB 초기화 스크립트가 바뀐 PR 과 main 푸시에서 돈다.
@@ -1808,8 +1843,10 @@ billing-server/
   migrations/             테이블을 만들고 바꾸는 SQL. 실행 파일에 담긴다(embed.go)
   internal/
     config/               설정을 환경 변수에서 읽고 검사한다. 서버의 것(Load), 결제 대행사에 묻는 작업 명령의 것(LoadJobs), 정리 작업의 것(LoadSweeper)
-    app/                  서버와 작업 명령이 같은 방법으로 서비스(지갑, 주문, 홀드, 결제 자격)와 로거를 만든다
-    database/             연결 풀을 만든다. search_path, 접속 제한, 풀의 크기
+    app/                  서버와 작업 명령이 같은 방법으로 서비스(지갑, 주문, 홀드, 결제 자격)와 로거, 메트릭을 만든다
+    database/             연결 풀을 만든다. search_path, 접속 제한, 풀의 크기. 풀의 메트릭(metrics.go)
+    metrics/              메트릭을 OTLP 로 미는 것(MeterProvider). 보낼 곳이 없으면 noop
+      metricstest/          테스트가 계측한 값을 이름과 label 로 읽는다
     migrate/              마이그레이션 파일을 적용하고 되돌린다. goose 를 부르는 얇은 층
     credit/               크레딧의 양(Amount). 단위와, 글자로 쓰고 읽는 규칙
     wallet/               크레딧을 넣고, 쓰고, 읽는다
@@ -1889,11 +1926,11 @@ billing-server/
       queries.sql           검사의 SQL 전부. 모두 읽기만 한다
       reconciledb/          sqlc 가 queries.sql 에서 만든 코드
     batch/                줄 여러 개를 하나씩 처리하는 규칙. 하나가 실패해도 나머지를 한다
-    jobs/                 요청과 따로 도는 일에 job_id 를 걸고 끝난 줄을 남긴다
+    jobs/                 요청과 따로 도는 일에 job_id 를 걸고 끝난 줄을 남긴다. 작업의 메트릭(metrics.go)
     jwks/                 인증 서버의 공개키. 읽기(keys.go), 가져오기(fetch.go), 기억하기(cache.go)
     auth/                 access 토큰 검증. 무엇을 받아들일지 정한다
     httpapi/              HTTP 주소. 라우터, 핸들러, 토큰을 확인하는 미들웨어(auth.go), 서버의 서명을 확인하는 미들웨어(service.go),
-                          요청을 기록하는 미들웨어(observability.go), 개발용 결제 화면(checkout.go, checkout.html)
+                          요청을 기록하는 미들웨어(observability.go), 요청과 DB 의 메트릭(metrics.go), 개발용 결제 화면(checkout.go, checkout.html)
     obs/                  로그의 공통 규격. 식별자(ids.go, context.go), 가리는 규칙(redact.go), JSON 한 줄(handler.go)
     testenv/              테스트가 쓰는 것. 접속 주소, 테스트용 스키마의 풀, 가짜 인증 서버의 키와 토큰, 정리 작업 테스트의 시대와 잠금
 ```

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
@@ -59,6 +60,8 @@ type Dependencies struct {
 	Logger *slog.Logger
 	// RequestTimeout 은 요청 하나를 처리하는 가장 긴 시간이다. 넣지 않으면 RequestTimeout(10초)이다. 테스트가 짧게 줄여 쓴다.
 	RequestTimeout time.Duration
+	// Meter 는 요청과 DB 의 상태를 세는 계측기를 만든다(metrics.go). 넣지 않으면 세지 않는다.
+	Meter metric.Meter
 }
 
 // SetMode 는 gin 의 동작 방식을 정한다. debug 가 아니면 등록한 주소 목록 같은 개발용 출력을 끈다.
@@ -84,6 +87,9 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	// gin.Default 를 쓰지 않고 미들웨어를 직접 고른다. 무엇이 붙었는지 여기서 보인다
 	router := gin.New()
 	logger := loggerOf(deps)
+	meters := newRouterMetrics(deps.Meter, logger)
+	// 요청을 세고 걸린 시간을 잰다. 패닉으로 끝난 요청(500)과 마감에 걸린 요청도 센다
+	router.Use(measureRequests(meters.http))
 	// 요청마다 식별자를 걸고, 끝나면 공통 규격의 한 줄을 남긴다. 요청의 본문과 머리말은 적지 않는다.
 	// 가장 먼저 붙인다. 뒤에 오는 것들의 로그에 식별자가 붙는다
 	router.Use(requestLogging(logger))
@@ -94,7 +100,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 
 	// 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다.
 	// HEAD 도 받는다. 같은 핸들러가 돌고, 본문은 net/http 가 버린다. HEAD 로 확인하는 도구가 있다
-	ready := readiness(deps.DB, logger)
+	ready := readiness(deps.DB, logger, meters.db)
 	router.GET(HealthPath, health)
 	router.HEAD(HealthPath, health)
 	router.GET(ReadyPath, ready)
