@@ -28,7 +28,8 @@
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
 #     check-staging  staging 의 설정(docker-compose.staging.yml, #451)을 본다. up 뒤에 부른다.
 #                  두 파일을 겹친 설정에서 비밀의 범위, 바깥에 여는 포트(프록시의 80, 443 뿐), 로그 상한을 보고,
-#                  staging 에만 있는 이미지의 태그가 있는지, 인증서의 남은 날짜 검사(docker/certbot)가 맞는지 본다.
+#                  staging 에만 있는 이미지의 태그가 있는지, 인증서의 남은 날짜 검사(docker/certbot)가 맞는지,
+#                  staging 의 .env 여섯을 만드는 도구(tools/staging_env.py)가 맞고 그것으로 만든 설정이 읽히는지 본다.
 #                  staging 의 프록시를 하나 더 띄워(자체 서명 인증서) HTTPS 로 본다: HTTP 를 넘기는가, 인증서의 확인 파일을
 #                  내주는가, 허용 주소 밖을 막는가, 허용 주소를 고치면 다시 읽는가, HSTS 와 보안 머리말.
 #                  바깥 백업(backup-offsite)도 본다: S3 흉내(moto)를 띄워 백업을 암호화해 올리고, 확인 열쇠와 주 열쇠로
@@ -1056,6 +1057,30 @@ offsite_down() {
   [[ -z "${offsite_key_dir:-}" ]] || rm -rf "$offsite_key_dir"
 }
 
+# staging 의 .env 를 만드는 도구(tools/staging_env.py)의 테스트
+staging_env_rules_hold() {
+  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_staging_env.py'
+}
+
+# 그 도구로 만든 .env 여섯으로 staging 의 설정이 읽히는가. 저장소의 파일을 빈 폴더에 옮겨 그 위에서 만든다(이 실행의 .env 는 그대로다).
+# 사람이 채울 S3 의 키만 아무 값으로 채운다. 비워 두면 compose 가 거부하는 것은 그 도구의 테스트가 본다
+staging_env_tool_makes_a_valid_config() {
+  local copy status=0
+  copy="$(mktemp -d)"
+  git ls-files -z | tar --null -cf - -T - | tar -xf - -C "$copy"
+  mkdir -p "$copy/auth-server/keys" "$copy/backup-keys"
+  (
+    cd "$copy" &&
+      python3 tools/staging_env.py --domain "$STAGING_DOMAIN" --acme-email ci@example.com \
+        --llm-base-url http://100.64.0.1:11434/v1 --s3-bucket "$STAGING_BUCKET" --age-recipients 'age1ci age1ci' >/dev/null &&
+      sed -i -e 's/^BACKUP_AWS_ACCESS_KEY_ID=$/BACKUP_AWS_ACCESS_KEY_ID=ci/' \
+        -e 's/^BACKUP_AWS_SECRET_ACCESS_KEY=$/BACKUP_AWS_SECRET_ACCESS_KEY=ci/' .env &&
+      docker compose config -q
+  ) || status=1
+  rm -rf "$copy"
+  return "$status"
+}
+
 # 바깥 백업: 암호화해 올리고, 확인 열쇠와 주 열쇠로 풀리고, 다른 열쇠로는 풀리지 않는가
 check_offsite_backup() {
   report "바깥 백업의 이미지를 만든다(age, aws CLI)" staging_compose build backup-offsite
@@ -1081,6 +1106,8 @@ check_offsite_backup() {
 
 check_staging() {
   report "staging 의 설정을 값을 채워 읽을 수 있다" staging_compose config -q
+  report "staging 의 .env 를 만드는 도구의 규칙이 맞다(tools/staging_env.py)" staging_env_rules_hold
+  report "그 도구로 만든 .env 로 staging 의 설정이 읽힌다(COMPOSE_FILE, COMPOSE_PROFILES 포함)" staging_env_tool_makes_a_valid_config
   check_config "staging 에서도 비밀은 그것을 쓰는 프로세스에만 간다(secret_scope.py)" staging_compose .github/scripts/secret_scope.py
   check_config "staging 에서 바깥에 여는 포트는 프록시의 80, 443 뿐이다(port_scope.py --public)" staging_compose \
     .github/scripts/port_scope.py --public
