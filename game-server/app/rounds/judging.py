@@ -27,6 +27,7 @@ from app.engine import death
 from app.engine.action import (
     AnyAction,
     GiveAction,
+    LootAction,
     MoveAction,
     NameAction,
     PutDownAction,
@@ -45,6 +46,7 @@ from app.rounds.checks import judge_check
 from app.rounds.effects import Judging
 from app.rounds.initiative import Turn
 from app.rounds.item_actions import judge_give, judge_use
+from app.rounds.loots import judge_loot
 from app.rounds.map_actions import judge_move, judge_search
 from app.rounds.models import Declaration, Round
 from app.rounds.monster_attacks import can_act, take_monster_turn
@@ -64,7 +66,7 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     한 사람의 행동을 판정하고 그 결과를 정한다.
     행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming),
     물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(search_place), 줍기(judge_take),
-    내려놓기(judge_put_down), 훔치기(judge_steal)다.
+    내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot)다.
     """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
@@ -84,6 +86,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_put_down(judging, member, action)
     if isinstance(action, StealAction):
         return judge_steal(judging, member, action)
+    if isinstance(action, LootAction):
+        return judge_loot(judging, member, action)
     if isinstance(action, RestAction):
         return judge_rest(judging, action)
     return judge_check(judging, member, action)
