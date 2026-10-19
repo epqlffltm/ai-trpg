@@ -6,6 +6,9 @@
 APP_ENVIRONMENT=production 이면 안전한 값이 저절로 켜진다. 하나씩 켜는 환경 변수를 두지 않았다.
 운영에서 하나라도 켜기를 잊으면 그 빈틈이 그대로 남기 때문이다. 안전하지 않은 값을 운영에서 고르면 서버가 뜨지 않는다.
 
+refresh 쿠키의 Secure 와 쿠키의 출처는 staging 에서도 같이 검사한다. staging 도 도메인과 HTTPS 뒤에 있다
+(바깥에 연 환경, config/environments.py). 관리자 화면의 쿠키는 운영에서만 Secure 다. 둘 다 SSH 터널(localhost)로 연다.
+
 HTTPS 로 넘기기(SECURE_SSL_REDIRECT)와 HSTS 는 여기서 하지 않는다. 서버 넷 앞의 nginx 가 TLS 와 함께 맡는다.
   - HSTS 는 도메인 전체에 거는 약속이다. 인증 서버가 내면 인증 서버의 응답에만 붙는다.
   - 인증 서버가 HTTPS 로 넘기면, 컨테이너끼리 HTTP 로 부르는 것(다른 서버가 공개키를 받는 것, 상태 확인)이
@@ -17,7 +20,7 @@ import re
 
 from django.core.exceptions import ImproperlyConfigured
 
-from config.mail_backends import PRODUCTION
+from config.environments import is_deployed, is_production
 
 # 프록시가 넘기는 "원래 요청이 HTTPS 였다"는 머리말. nginx 가 X-Forwarded-Proto 로 넘긴다(docker/nginx/)
 FORWARDED_PROTO_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -29,11 +32,6 @@ SILENCED_DEPLOY_CHECKS = [
     # HTTPS 로 넘기기(SECURE_SSL_REDIRECT)
     'security.W008',
 ]
-
-
-def is_production(environment: str) -> bool:
-    """이 환경이 운영인가."""
-    return environment == PRODUCTION
 
 
 def secure_cookies(environment: str) -> bool:
@@ -49,18 +47,19 @@ def secure_cookies(environment: str) -> bool:
 
 def require_secure_refresh_cookie(secure: bool, environment: str) -> None:
     """
-    운영 환경인데 refresh 토큰 쿠키의 Secure 를 껐으면 서버가 뜨지 않게 한다.
+    바깥에 연 환경(staging, production)인데 refresh 토큰 쿠키의 Secure 를 껐으면 서버가 뜨지 않게 한다.
 
     Secure 가 없으면 브라우저가 HTTP 로도 쿠키를 보낸다. refresh 토큰이 평문으로 지나간다.
+    .env.example 은 로컬 개발에 맞춰 false 라서, 옮겨 적으면 틀린 채로 뜨지 않게 staging 도 막는다.
     """
-    if not secure and is_production(environment):
+    if not secure and is_deployed(environment):
         raise ImproperlyConfigured(
-            '운영 환경(APP_ENVIRONMENT=production)에서는 REFRESH_COOKIE_SECURE 를 끌 수 없습니다.'
+            f'바깥에 연 환경(APP_ENVIRONMENT={environment})에서는 REFRESH_COOKIE_SECURE 를 끌 수 없습니다.'
         )
 
 
 # 개발 환경에서 REFRESH_COOKIE_ALLOWED_ORIGINS 를 적지 않았을 때 허용하는 출처.
-# docker compose 의 nginx 주소(PROXY_PORT 의 기본값 8080)다. 운영에는 기본값이 없다
+# docker compose 의 nginx 주소(PROXY_PORT 의 기본값 8080)다. 바깥에 연 환경(staging, production)에는 기본값이 없다
 DEVELOPMENT_COOKIE_ORIGINS = ('http://localhost:8080', 'http://127.0.0.1:8080')
 
 # 출처는 "scheme://host[:port]" 다. 경로, 물음표, 사용자 정보는 들어가지 않는다(브라우저의 Origin 머리말과 같은 모양).
@@ -69,8 +68,12 @@ ORIGIN_PATTERN = re.compile(r'https?://(?:[a-z0-9.-]+|\[[0-9a-f:.]+\])(?::[0-9]{
 
 
 def default_cookie_origins(environment: str) -> list[str]:
-    """REFRESH_COOKIE_ALLOWED_ORIGINS 를 적지 않았을 때의 값. 운영이면 비어 있다(그러면 뜨지 않는다)."""
-    if is_production(environment):
+    """
+    REFRESH_COOKIE_ALLOWED_ORIGINS 를 적지 않았을 때의 값. 바깥에 연 환경이면 비어 있다(그러면 뜨지 않는다).
+
+    개발의 기본값(http://localhost:8080)이 staging 에 들어가면 화면의 도메인과 맞지 않아 refresh 가 늘 거절된다.
+    """
+    if is_deployed(environment):
         return []
     return list(DEVELOPMENT_COOKIE_ORIGINS)
 
@@ -92,18 +95,19 @@ def parse_cookie_origin(value: str) -> str:
 
 def require_cookie_origins(origins: list[str], environment: str) -> None:
     """
-    refresh 쿠키를 받을 출처의 목록을 확인한다. 비어 있거나 운영인데 https 가 아닌 것이 있으면 뜨지 않는다.
+    refresh 쿠키를 받을 출처의 목록을 확인한다. 비어 있거나, 바깥에 연 환경인데 https 가 아닌 것이 있으면 뜨지 않는다.
 
     비어 있으면 refresh 와 logout 이 늘 거부된다. 운영에서 http 출처를 허용하면 쿠키를 쓰는 요청을
     평문 페이지가 보낼 수 있다.
     """
     if not origins:
         raise ImproperlyConfigured('REFRESH_COOKIE_ALLOWED_ORIGINS 가 비어 있습니다. 화면을 여는 주소를 적습니다.')
-    if is_production(environment):
+    if is_deployed(environment):
         insecure = [origin for origin in origins if not origin.startswith('https://')]
         if insecure:
             raise ImproperlyConfigured(
-                f'운영 환경에서는 REFRESH_COOKIE_ALLOWED_ORIGINS 에 https 출처만 적습니다: {", ".join(insecure)}'
+                f'바깥에 연 환경(APP_ENVIRONMENT={environment})에서는 REFRESH_COOKIE_ALLOWED_ORIGINS 에 '
+                f'https 출처만 적습니다: {", ".join(insecure)}'
             )
 
 

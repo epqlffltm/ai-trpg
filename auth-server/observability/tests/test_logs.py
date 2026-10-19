@@ -13,7 +13,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
-from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
+from config.mail_backends import forbid_debug_when_deployed, require_real_mailer_in_production
 from observability.context import job_scope, request_scope
 from observability.formatter import JsonFormatter
 from observability.identifiers import new_trace
@@ -288,16 +288,19 @@ class ConsoleMailInProductionTests(SimpleTestCase):
     def test_production_with_a_mail_server_starts(self):
         require_real_mailer_in_production('smtp.example.com', 'production')
 
-    def test_production_with_debug_refuses_to_start(self):
-        # DEBUG 가 켜져 있으면 예외의 응답에 호출 기록과 설정값이 실린다
-        with self.assertRaisesMessage(ImproperlyConfigured, 'DEBUG'):
-            forbid_debug_in_production(True, 'production')
+    def test_deployed_environments_with_debug_refuse_to_start(self):
+        # DEBUG 가 켜져 있으면 예외의 응답에 호출 기록과 설정값이 실린다. staging 도 도메인 뒤에 있다
+        for environment in ('staging', 'production'):
+            with self.subTest(environment=environment), self.assertRaisesMessage(ImproperlyConfigured, 'DEBUG'):
+                forbid_debug_when_deployed(True, environment)
 
-    def test_debug_is_allowed_outside_production(self):
-        forbid_debug_in_production(False, 'production')
-        for environment in ('development', 'test', 'staging'):
+    def test_debug_is_allowed_only_on_this_pc(self):
+        for environment in ('staging', 'production'):
             with self.subTest(environment=environment):
-                forbid_debug_in_production(True, environment)
+                forbid_debug_when_deployed(False, environment)
+        for environment in ('development', 'test'):
+            with self.subTest(environment=environment):
+                forbid_debug_when_deployed(True, environment)
 
     def test_other_environments_may_print_mail_to_the_terminal(self):
         for environment in ('development', 'test', 'staging'):

@@ -24,7 +24,7 @@ from django.core.exceptions import ImproperlyConfigured
 from config.billing import validate_billing_url, validate_service_secret
 from config.identity import default_identity_provider, validate_identity_provider
 from config.jwt_keys import load_key_material, private_key_path
-from config.mail_backends import forbid_debug_in_production, require_real_mailer_in_production
+from config.mail_backends import forbid_debug_when_deployed, require_real_mailer_in_production
 from config.security import (
     SILENCED_DEPLOY_CHECKS,
     default_cookie_origins,
@@ -86,8 +86,9 @@ if not re.fullmatch(r'[A-Za-z0-9._+-]{1,64}', APP_VERSION):
 if LOG_LEVEL not in ('debug', 'info', 'warning', 'error'):
     raise ImproperlyConfigured("LOG_LEVEL 은 'debug', 'info', 'warning', 'error' 중 하나여야 합니다.")
 
-# DEBUG 가 켜져 있으면 예외의 응답에 호출 기록과 설정값이 실린다. 운영에서는 뜨지 않게 한다
-forbid_debug_in_production(DEBUG, APP_ENVIRONMENT)
+# DEBUG 가 켜져 있으면 예외의 응답에 호출 기록과 설정값이 실린다.
+# 바깥에 연 환경(staging, production)에서는 뜨지 않게 한다
+forbid_debug_when_deployed(DEBUG, APP_ENVIRONMENT)
 
 # 로그를 공통 규격의 JSON 으로 건다. Django 의 기본 함수 대신 식별자를 붙이는 일까지 하는 함수를 쓴다
 LOGGING_CONFIG = 'observability.setup.configure'
@@ -245,12 +246,12 @@ SIMPLE_JWT = {
 # refresh 토큰 쿠키를 HTTPS 에서만 보낼지.
 # 적지 않으면 True. 로컬 개발은 HTTP 라서 .env 에서 false 로 둔다
 REFRESH_COOKIE_SECURE = env.bool('REFRESH_COOKIE_SECURE', default=True)
-# 운영에서는 끌 수 없다. 끄면 서버가 뜨지 않는다
+# 바깥에 연 환경(staging, production)에서는 끌 수 없다. 끄면 서버가 뜨지 않는다
 require_secure_refresh_cookie(REFRESH_COOKIE_SECURE, APP_ENVIRONMENT)
 
 # refresh 쿠키를 쓰는 주소(refresh, logout)를 부를 수 있는 출처.
 # 요청의 Origin 머리말과 비교한다(accounts/origin_check.py).
-# 화면을 여는 주소를 적는다. 개발에서 적지 않으면 compose 의 nginx 주소다. 운영에서는 꼭 적고 https 여야 한다
+# 화면을 여는 주소를 적는다. 개발에서 적지 않으면 compose 의 nginx 주소다. staging 과 운영에서는 꼭 적고 https 여야 한다
 REFRESH_COOKIE_ALLOWED_ORIGINS = [
     parse_cookie_origin(value)
     for value in env.list('REFRESH_COOKIE_ALLOWED_ORIGINS', default=default_cookie_origins(APP_ENVIRONMENT))
