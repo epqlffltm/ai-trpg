@@ -331,6 +331,19 @@ class TakeNote:
 
 
 @dataclass(frozen=True)
+class PutDownNote:
+    """
+    가진 물건을 서 있는 장소에 내려놓은 결과(app/rounds/place_item_actions.py). 엔진이 정한 것이다. 판정이 없다.
+
+    put 이 참이면 그 자리에 보이게 놓였다. 거짓이면 차례가 왔을 때 그만큼 가지고 있지 않아 놓지 못했다.
+    """
+
+    name: str
+    count: int
+    put: bool
+
+
+@dataclass(frozen=True)
 class TargetGoneNote:
     """
     겨눈 몬스터를 판정할 때 칠 수 없어 굴리지 않은 것(app/rounds/checks.py 의 target_gone).
@@ -381,6 +394,8 @@ class Move:
     search: SearchNote | None = None
     # 놓인 물건을 줍는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     take: TakeNote | None = None
+    # 가진 물건을 내려놓는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
+    put_down: PutDownNote | None = None
     # 겨눈 몬스터를 칠 수 없어 굴리지 않았으면 그 까닭. 아니면 None 이다. verdict 와 함께 있지 않다
     target_gone: TargetGoneNote | None = None
     # 쉬는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다

@@ -61,6 +61,18 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'remaining',
         'target_total',
     ),
+    # 내려놓은 것도 공개다. 놓은 곳이 있고, 못 했으면 까닭(reason)이 있다
+    EventType.ITEM_PUT_DOWN: (
+        'round',
+        'character_name',
+        'place',
+        'entry_id',
+        'name',
+        'count',
+        'put',
+        'reason',
+        'remaining',
+    ),
     # 퀘스트의 이름과 상태, 보상, 기한, 서버가 바꾼 까닭(기한을 넘김)은 공개다. 사건의 글(로어북)은 적지 않는다.
     # 숨긴 퀘스트에는 기한을 적지 않는다(드러날 때 정한다). 숨김에서 바로 끝낸 것도 기한이 비어 있다
     EventType.QUEST_CHANGED: ('entry_id', 'name', 'previous', 'status', 'rewards', 'due_at', 'reason'),

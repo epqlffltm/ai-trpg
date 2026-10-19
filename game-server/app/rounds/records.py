@@ -31,6 +31,7 @@ from app.rounds.state import (
     item_use_of,
     move_of,
     naming_of,
+    put_down_of,
     rest_of,
     search_of,
     take_of,
@@ -283,6 +284,20 @@ def record_take(session: AsyncSession, table: GameTable, declaration: Declaratio
     record_gained(session, table, declaration, thing, Source.PLACE, take['place'], cause)
 
 
+def record_put_down(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    내려놓은 결과를 이벤트로 적는다(item_put_down). 그 행동의 이벤트(cause)에 잇는다. 행한 사람을 적지 않는다.
+
+    못 놓았어도 적는다. 건네기와 같다. 까닭(reason)이 있다.
+    """
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': declaration.character_name,
+        **put_down_of(declaration),
+    }
+    recorder.record(session, table, EventType.ITEM_PUT_DOWN, payload=payload, cause=cause)
+
+
 def record_gained(
     session: AsyncSession,
     table: GameTable,
@@ -343,7 +358,7 @@ def record_declaration(
 ) -> None:
     """
     한 사람의 선언을 이벤트로 적는다.
-    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기, 쉬기가 있었으면 행동 바로 뒤에 그 결과를 적는다.
+    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기, 줍기와 내려놓기, 쉬기가 있었으면 행동 바로 뒤에 그 결과를 적는다.
 
     선언을 내지 않았으면 적지 않는다. 판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
     차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면(turn_lost) 행동만 적는다. 굴린 것이 없다.
@@ -374,6 +389,8 @@ def record_declaration(
         record_search(session, table, declaration, cause=acted)
     elif take_of(declaration) is not None:
         record_take(session, table, declaration, cause=acted)
+    elif put_down_of(declaration) is not None:
+        record_put_down(session, table, declaration, cause=acted)
     elif rest_of(declaration) is not None:
         record_rest(session, table, member, declaration, cause=acted)
 

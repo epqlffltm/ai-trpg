@@ -40,6 +40,7 @@ from app.rounds.narrator import (
     NamingNote,
     NpcImpact,
     PastRound,
+    PutDownNote,
     QuestNote,
     RecoveryNote,
     RestNote,
@@ -54,7 +55,7 @@ from app.rounds.narrator import (
     Verdict,
     WhisperNote,
 )
-from app.rounds.state import move_of, rest_of, search_of, take_of
+from app.rounds.state import move_of, put_down_of, rest_of, search_of, take_of
 from app.tables import quests
 from app.tables.models import GameTable
 from app.whispers.models import Whisper
@@ -212,6 +213,14 @@ def to_take(declaration: Declaration | None) -> TakeNote | None:
     if take is None:
         return None
     return TakeNote(name=take['name'], count=take['count'], taken=take['taken'], reason=take['reason'])
+
+
+def to_put_down(declaration: Declaration | None) -> PutDownNote | None:
+    """선언에 적힌 내려놓기의 결과를 서술자에게 줄 모양으로 바꾼다. 내려놓는 행동이 아니면 None."""
+    put_down = put_down_of(declaration)
+    if put_down is None:
+        return None
+    return PutDownNote(name=put_down['name'], count=put_down['count'], put=put_down['put'])
 
 
 def to_npc_impact(effect: dict | None) -> NpcImpact | None:
