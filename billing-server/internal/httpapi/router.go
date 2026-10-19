@@ -131,10 +131,10 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	}
 
 	// 결제 대행사가 부르는 주소다. 로그인 묶음 밖에 둔다. 토큰 대신 본문의 서명을 확인한다
-	router.POST(APIPrefix+"/webhooks/payment", paymentWebhook(deps.Notifier, deps.WebhookSecret, deps.Now))
+	router.POST(APIPrefix+"/webhooks/payment", paymentWebhook(deps.Notifier, deps.WebhookSecret, deps.Now, meters.webhooks))
 	// 토스페이먼츠의 알림. 서명이 없다. 주문 번호와 결제 번호만 읽고 결과는 토스페이먼츠에 다시 묻는다
 	if deps.TossWebhook {
-		router.POST(TossWebhookPath, tossWebhook(deps.Notifier))
+		router.POST(TossWebhookPath, tossWebhook(deps.Notifier, meters.webhooks))
 	}
 
 	// 우리 서버들이 부르는 주소들이다. 로그인 묶음 밖에 둔다. 사용자의 토큰이 아니라 요청의 서명을 확인한다.

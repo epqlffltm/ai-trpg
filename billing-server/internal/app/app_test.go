@@ -13,10 +13,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/app"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/metrics/metricstest"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
@@ -161,6 +163,38 @@ func TestNoProvidersPutsTheRefusingOneOnTheWeb(t *testing.T) {
 	providers := app.NoProviders()
 	if len(providers) != 1 || providers[order.ChannelWeb] != (payment.None{}) {
 		t.Errorf("길마다의 결제 대행사 = %v", providers)
+	}
+}
+
+func TestMeasuredProvidersAreCountedUnderTheConfiguredName(t *testing.T) {
+	recorder := metricstest.New(t)
+	providers, err := app.MeasureProviders(order.Providers{order.ChannelWeb: approveAll{}}, config.ProviderToss, recorder.Meter())
+	if err != nil {
+		t.Fatalf("결제 대행사를 감싸지 못했다: %v", err)
+	}
+
+	result, err := providers[order.ChannelWeb].Confirm(context.Background(), payment.Request{})
+
+	if err != nil || result.Status != payment.StatusApproved {
+		t.Fatalf("감싼 결제 대행사의 답 = %+v, %v", result, err)
+	}
+	labels := []attribute.KeyValue{
+		attribute.String("provider", "toss"), attribute.String("operation", "confirm"), attribute.String("outcome", "approved"),
+	}
+	if got := recorder.Int64("payment_provider_calls", labels...); got != 1 {
+		t.Errorf("부른 수 = %d. 1 이어야 한다", got)
+	}
+}
+
+func TestMeasuringKeepsAnEmptyWebSeatEmpty(t *testing.T) {
+	// 빈 자리를 감싸면 nil 이 아니게 되어 주문 서비스가 거절하지 못한다. 부르는 순간 패닉이다
+	providers, err := app.MeasureProviders(order.Providers{order.ChannelWeb: nil}, config.ProviderFake, metricstest.New(t).Meter())
+	if err != nil {
+		t.Fatalf("결제 대행사를 감싸지 못했다: %v", err)
+	}
+	rules := config.Rules{FreeCreditTTL: time.Hour, HoldTTL: time.Hour, OrderTTL: time.Hour}
+	if _, err := app.NewServices(testenv.Pool(t), rules, providers, func() time.Time { return now }); !errors.Is(err, order.ErrNoWebProvider) {
+		t.Errorf("오류 = %v. ErrNoWebProvider 여야 한다", err)
 	}
 }
 

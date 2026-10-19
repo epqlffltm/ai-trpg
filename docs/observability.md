@@ -645,9 +645,9 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | --- | --- | --- | --- |
 | `billing_ledger_operations_total` | counter | `kind`(원장의 이유: `grant`, `deposit`, `spend`, `expire`, `hold`, `release`, `regroup`, `refund`, `unrefund`), `result`(`success`, `failure`) | 원장에 줄을 적은 수 |
 | `billing_idempotency_total` | counter | `kind`, `outcome`(`first`, `replayed`) | 중복 방지 키의 결과. `replayed` 는 같은 키로 다시 온 것이다. 원장에 다시 적지 않았다 |
-| `billing_orders_total` | counter | `status`(`paid`, `failed`, `confirming`, `expired`, `refunding`, `refunded`) | 주문이 그 상태가 된 수. 운영자가 정한 것(`cmd/orders decide`)도 센다 |
-| `payment_provider_calls_total` | counter | `provider`(`fake`, `toss`), `operation`(`confirm`, `lookup`, `cancel`), `outcome`(`approved`, `declined`, `canceled`, `unknown`, `unavailable`) | 결제 대행사를 부른 수. `cancel` 은 청약철회의 취소다 |
-| `payment_webhooks_total` | counter | `provider`(`fake`, `toss`), `result`(`accepted`, `ignored`, `bad_signature`, `bad_request`, `unavailable`) | 받은 알림의 수. `ignored` 는 다루지 않는 종류의 알림(토스의 입금 알림 등)이다. 토스의 알림에는 서명이 없어서 `bad_signature` 가 없다 |
+| `billing_orders_total` | counter | `status`(`paid`, `failed`, `confirming`, `expired`, `refunding`, `refunded`) | 주문이 그 상태가 된 수. 상태를 바꾼 프로세스(서버, 정리 작업, 대사)가 커밋한 뒤에 센다. 다른 요청이 먼저 바꿔 이번에 바꾸지 않은 것은 세지 않는다. 청약철회가 거절되어 `paid` 로 돌아온 것도 `paid` 로 센다. 운영자가 정한 것(`cmd/orders decide`)은 세지 않는다(사람이 치는 명령은 메트릭을 내지 않는다. 로그의 `order.decide` 로 본다) |
+| `payment_provider_calls_total` | counter | `provider`(`fake`, `toss`), `operation`(`confirm`, `lookup`, `cancel`), `outcome`(받은 상태: `approved`, `declined`, `pending`, `canceled`, `awaiting_deposit`. 답을 받지 못했으면 `unknown`(돈이 나갔을 수 있다), 그 밖의 오류로 묻지 못했으면 `unavailable`) | 결제 대행사를 부른 수. `cancel` 은 청약철회와 가상계좌의 취소다. 거절의 이유(코드)는 label 이 아니다. 결제 대행사가 정하는 값이라 종류가 끝이 없다 |
+| `payment_webhooks_total` | counter | `provider`(`fake`, `toss`), `result`(`accepted`, `ignored`, `bad_signature`, `bad_request`, `unavailable`) | 받은 알림의 수. `ignored` 는 200 으로 받았지만 다루지 않는 알림(토스의 입금 알림, 다른 종류의 알림, 이 서버의 주문 번호가 아닌 것)이다. 토스의 알림에는 서명이 없어서 `bad_signature` 가 없다 |
 
 ## 개발 환경과 운영 환경
 

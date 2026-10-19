@@ -25,6 +25,22 @@ const (
 	metricRequestSeconds = "http_server_request_duration"
 	metricActiveRequests = "http_server_active_requests"
 	metricDBUp           = "db_up"
+	metricWebhooks       = "payment_webhooks"
+)
+
+// 결제 대행사의 알림을 어떻게 끝냈는지(label result).
+const (
+	webhookAccepted     = "accepted"
+	webhookIgnored      = "ignored"
+	webhookBadSignature = "bad_signature"
+	webhookBadRequest   = "bad_request"
+	webhookUnavailable  = "unavailable"
+)
+
+// 알림을 보낸 결제 대행사(label provider). 서명한 알림(/webhooks/payment)은 가짜의 것이다(cmd/fakepg).
+const (
+	webhookFake = "fake"
+	webhookToss = "toss"
 )
 
 // otherMethod 는 HTTP 가 정한 메서드가 아닌 것을 적는 값이다(OpenTelemetry 의 규칙과 같다).
@@ -134,10 +150,31 @@ func (g dbGauge) record(ctx context.Context, reachable bool) {
 	g.up.Record(ctx, value)
 }
 
+// webhookCounter 는 받은 결제 대행사의 알림을 센다.
+type webhookCounter struct {
+	received metric.Int64Counter
+}
+
+// newWebhookCounter 는 알림의 계측기를 만든다.
+func newWebhookCounter(meter metric.Meter) (webhookCounter, error) {
+	received, err := meter.Int64Counter(metricWebhooks,
+		metric.WithDescription("받은 결제 대행사의 알림. result 는 accepted, ignored, bad_signature, bad_request, unavailable 이다"))
+	if err != nil {
+		return webhookCounter{}, err
+	}
+	return webhookCounter{received: received}, nil
+}
+
+// count 는 알림 하나를 그 결과로 센다.
+func (w webhookCounter) count(ctx context.Context, provider string, result string) {
+	w.received.Add(ctx, 1, metric.WithAttributes(attribute.String("provider", provider), attribute.String("result", result)))
+}
+
 // routerMetrics 는 라우터가 쓰는 계측기들이다.
 type routerMetrics struct {
-	http httpMetrics
-	db   dbGauge
+	http     httpMetrics
+	db       dbGauge
+	webhooks webhookCounter
 }
 
 // newRouterMetrics 는 라우터의 계측기를 만든다. 만들지 못하면(이름이 틀렸다) 그 까닭을 남기고 세지 않는 것으로 바꾼다.
@@ -145,13 +182,15 @@ type routerMetrics struct {
 func newRouterMetrics(meter metric.Meter, logger *slog.Logger) routerMetrics {
 	httpm, httpErr := newHTTPMetrics(metrics.MeterOrNoop(meter))
 	db, dbErr := newDBGauge(metrics.MeterOrNoop(meter))
-	if err := firstError(httpErr, dbErr); err != nil {
+	webhooks, webhooksErr := newWebhookCounter(metrics.MeterOrNoop(meter))
+	if err := firstError(httpErr, dbErr, webhooksErr); err != nil {
 		logger.Error("요청의 메트릭을 만들지 못했습니다. 세지 않고 진행합니다",
 			slog.String(obs.FieldOperation, "metrics.setup"),
 			slog.String(obs.FieldErrorMessage, err.Error()),
 		)
 		httpm, _ = newHTTPMetrics(metrics.MeterOrNoop(nil))
 		db, _ = newDBGauge(metrics.MeterOrNoop(nil))
+		webhooks, _ = newWebhookCounter(metrics.MeterOrNoop(nil))
 	}
-	return routerMetrics{http: httpm, db: db}
+	return routerMetrics{http: httpm, db: db, webhooks: webhooks}
 }
