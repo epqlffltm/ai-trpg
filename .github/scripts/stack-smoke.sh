@@ -26,7 +26,7 @@
 #                  경보도 본다: 규칙의 시험(promtool)이 통과하는가, Prometheus 가 규칙을 읽고 Alertmanager 를 찾았는가,
 #                  건강한 스택에서 울리는 경보가 없는가, 받는 곳 넷을 모두 적은 설정이 맞는가, 반쯤 적으면 뜨지 않는가,
 #                  비밀이 설정 파일에 없는가. 받는 곳의 흉내(alert_sink.py)를 띄워 시험 경보가 Discord, Slack, Telegram 의
-#                  모양으로 넘어가는지 본다(메일은 보내 보지 않는다)
+#                  모양으로 넘어가는지 본다(메일은 보내 보지 않는다). 늘 울리는 Watchdog 이 바깥 감시로만 가는지도 본다
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한,
 #                  모든 응답(서버의 응답, 404, 429)의 보안 머리말, HTTP 의 응답에 HSTS 가 없는가.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
@@ -83,6 +83,10 @@ ALERT_SINK=alert-sink
 ALERT_SINK_IMAGE=python:3.13-slim-trixie
 # 받는 곳이 받았는지 볼 경로(정규식). Alertmanager 가 Telegram 의 주소 뒤에 /bot<토큰>/sendMessage 를 붙인다
 ALERT_PATHS=(/discord /slack '/telegram/bot[^/]+/sendMessage')
+# 바깥 감시의 흉내가 받는 경로와, Watchdog 이 그리로 오기를 기다리는 시간(초).
+# 흉내는 Alertmanager 보다 늦게 뜬다. 그동안 실패한 것은 다음 묶음(1분)에 다시 보낸다
+HEARTBEAT_PATH=/heartbeat
+HEARTBEAT_WAIT_SECONDS=150
 # 컨테이너의 사용자. Dockerfile 에서 정한 번호다. 노드 이미지는 제 사용자(node, 1000)를 쓴다
 APP_UID=10001
 # staging 의 설정을 볼 때 루트 .env 대신 주는 값(진짜 도메인과 주소가 아니다). 두 파일을 겹친다
@@ -157,6 +161,7 @@ ALERT_SLACK_WEBHOOK_URL=http://$ALERT_SINK:8080/slack
 ALERT_TELEGRAM_BOT_TOKEN=$(throwaway)
 ALERT_TELEGRAM_CHAT_ID=-1001
 ALERT_TELEGRAM_API_URL=http://$ALERT_SINK:8080/telegram
+ALERT_HEARTBEAT_WEBHOOK_URL=http://$ALERT_SINK:8080$HEARTBEAT_PATH
 EOF
   write_new auth-server/.env <<EOF
 SECRET_KEY=$(throwaway)
@@ -476,7 +481,12 @@ loki_finds() {
 
 # 될 때까지 몇 번 해 본다. 줄은 남긴 뒤 몇 초 지나야 Loki 에서 찾아진다
 eventually() {
-  local deadline=$((SECONDS + LOG_WAIT_SECONDS))
+  eventually_within "$LOG_WAIT_SECONDS" "$@"
+}
+
+# eventually 와 같고, 기다리는 시간(초)을 첫 인자로 받는다
+eventually_within() {
+  local deadline=$((SECONDS + $1)); shift
   until "$@"; do
     ((SECONDS < deadline)) || return 1
     sleep 3
@@ -747,9 +757,10 @@ prometheus_finds_alertmanager() {
     python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["data"]["activeAlertmanagers"] else 1)'
 }
 
-# 건강한 스택에서 울리는 경보가 없는가. 울리는 것이 있으면 그 이름을 찍는다. 규칙의 선택자가 틀리면(이름표, label) 여기서 울린다
+# 건강한 스택에서 울리는 경보가 없는가. 울리는 것이 있으면 그 이름을 찍는다. 규칙의 선택자가 틀리면(이름표, label) 여기서 울린다.
+# 늘 울리는 Watchdog 은 뺀다
 no_alert_firing() {
-  fetch_on observability "http://prometheus:9090/api/v1/query?query=$(urlencode 'ALERTS{alertstate="firing"}')" | python3 -c '
+  fetch_on observability "http://prometheus:9090/api/v1/query?query=$(urlencode 'ALERTS{alertstate="firing", alertname!="Watchdog"}')" | python3 -c '
 import json, sys
 firing = sorted({series["metric"]["alertname"] for series in json.load(sys.stdin)["data"]["result"]})
 print(*firing, file=sys.stderr)
@@ -809,6 +820,15 @@ sink_received() {
     python3 -c 'import json, re, sys; sys.exit(0 if any(re.fullmatch(sys.argv[1], path) for path in json.load(sys.stdin)) else 1)' "$1"
 }
 
+# 운영자의 받는 곳(Discord, Slack, Telegram)이 아직 아무것도 받지 않았는가. 시험 경보를 넣기 전에 부른다.
+# Watchdog 이 바깥 감시로만 가고 운영자에게는 가지 않는 것을 본다
+operator_got_nothing() {
+  local path
+  for path in "${ALERT_PATHS[@]}"; do
+    ! sink_received "$path" || return 1
+  done
+}
+
 # Grafana 가 Alertmanager 에 닿는가(데이터 소스 alertmanager 의 프록시로 상태를 묻는다)
 grafana_reaches_alertmanager() {
   status_is 200 "$GRAFANA/api/datasources/proxy/uid/alertmanager/api/v2/status" -u "admin:$(grafana_password)"
@@ -823,6 +843,7 @@ check_alerts() {
   report_problems "경보 규칙의 시험이 통과한다(promtool test rules)" alert_rules_pass
   report_problems "Prometheus 가 규칙 파일의 묶음을 모두 읽었다" prometheus_loaded_rules
   report "Prometheus 가 Alertmanager 를 찾았다" prometheus_finds_alertmanager
+  report "늘 울리는 경보(Watchdog)가 울린다" eventually prometheus_finds 'ALERTS{alertname="Watchdog", alertstate="firing"}'
   report_problems "건강한 스택에서 울리는 경보가 없다" no_alert_firing
   report "띄운 Alertmanager 의 설정이 맞다(amtool check-config)" alertmanager_config_valid
   report "받는 곳 넷(Discord, Slack, Telegram, 메일)을 모두 적은 설정이 맞다" alertmanager_accepts_all_receivers
@@ -833,6 +854,8 @@ check_alerts() {
     unreachable_from billing-server http://alertmanager:9093/-/ready
   report "받는 곳의 흉내를 띄운다" alert_sink_up
   report "흉내가 준비됐다" eventually alert_sink_ready
+  report "Watchdog 이 바깥 감시로 간다($HEARTBEAT_PATH)" eventually_within "$HEARTBEAT_WAIT_SECONDS" sink_received "$HEARTBEAT_PATH"
+  report "Watchdog 은 운영자의 받는 곳(Discord, Slack, Telegram)에 가지 않는다" operator_got_nothing
   report "시험 경보를 Alertmanager 에 넣는다" post_test_alert "$run"
   for path in "${ALERT_PATHS[@]}"; do
     report "Alertmanager 가 시험 경보를 보냈다($path)" eventually sink_received "$path"

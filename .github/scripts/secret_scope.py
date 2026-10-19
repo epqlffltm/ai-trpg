@@ -128,6 +128,8 @@ ROOT_SECRETS: dict[str, frozenset[str]] = {
     'ALERT_SLACK_WEBHOOK_URL': frozenset({'alertmanager'}),
     'ALERT_TELEGRAM_BOT_TOKEN': frozenset({'alertmanager'}),
     'ALERT_SMTP_PASSWORD': frozenset({'alertmanager'}),
+    # 바깥 감시의 주소. 아는 사람은 누구나 "살아 있다"고 거짓으로 알릴 수 있다
+    'ALERT_HEARTBEAT_WEBHOOK_URL': frozenset({'alertmanager'}),
 }
 
 

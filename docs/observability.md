@@ -873,6 +873,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | 메일 | Gmail 의 SMTP 를 그대로 쓴다. 앱 비밀번호는 서버들이 사용자에게 보내는 메일(인증 서버의 `SMTP_PASSWORD`)과 따로 만든다 | 운영자 한 사람만 받는다. 사용자에게 보내는 메일은 운영에서 다른 메일 서비스로 바꾼다. 나눠 두면 하나가 새도 그것만 지운다 |
 | 묶기 | `alertname`, `service`, `job` 으로 묶는다. 처음 30초를 모아 보내고, 묶음이 바뀌면 5분, 그대로면 4시간마다 다시 보낸다. 풀리면 풀렸다고 보낸다 | 한 서버의 프로세스 여럿(`instance`)이 함께 울려도 알림은 하나다 |
 | 누르기 | `PostgresDown` 이 울리는 동안 `…DatabaseUnreachable` 은 보내지 않는다 | 원인 하나에 알림 하나다. 서버마다 DB 경보를 붙이면 이름을 `<서버>DatabaseUnreachable` 로 짓는다 |
+| 바깥 감시 | 늘 울리는 `Watchdog` 을 바깥 감시의 주소(`ALERT_HEARTBEAT_WEBHOOK_URL`, healthchecks.io 의 ping 주소 등)로만 1~2분마다 보낸다. 신호가 끊기면 그 서비스가 제 알림으로 알린다. 적지 않으면 `Watchdog` 은 버린다 | 위의 받는 곳은 Prometheus, Alertmanager, PC 나 VM, 인터넷이 살아 있어야 간다. 그것들이 죽은 것은 바깥에서만 알 수 있다. 주소 하나만 받으므로 서비스를 바꿔도(Better Stack, Uptime Kuma) 코드는 그대로다 |
 | 보는 곳 | 포트를 열지 않는다. 울리는 것과 잠시 끄기(silence)는 Grafana 의 Alerting 화면에서 데이터 소스 `alertmanager` 를 골라 본다 | Alertmanager 의 화면에는 로그인이 없다. 열면 누구나 경보를 끈다 |
 
 | 고르지 않은 것 | 까닭 |
@@ -885,6 +886,8 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 
 | 묶음 | 경보 | severity | 조건 |
 | --- | --- | --- | --- |
+| watchdog | `Watchdog` | none | 늘 울린다. 바깥 감시에만 간다. Prometheus 가 멈추면 4분쯤 뒤 Alertmanager 에서 사라지고, 바깥 감시의 기다림(5분 + 여유 5분을 권한다)이 지나면 그쪽이 알린다 |
+| watchdog | `AlertDeliveryFailing` | warning | 지난 15분에 받는 곳(Discord, Slack, Telegram, 메일) 가운데 하나로 보내지 못했다. 나머지 받는 곳으로 간다. 바깥 감시(webhook)의 실패는 세지 않는다 |
 | collectors | `MetricsCollectorDown` | critical | Alloy 의 `up` 이 끊겼다(10분쯤 뒤에 울린다, 아래). 다른 경보가 모두 멈춘다 |
 | collectors | `ObservabilityComponentDown` | warning | loki, grafana, alertmanager 의 `up` 이 5분 동안 0 이다 |
 | datastores | `PostgresDown`, `RedisDown` | critical | exporter 가 1분 동안 붙지 못한다 |
@@ -905,9 +908,10 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 - **"없어졌다"는 5분 늦다.** 받기만 하는 Prometheus 는 마지막 값을 5분 동안 살아 있는 것으로 본다(긁을 때처럼 끊긴 표시가 오지 않는다). 그래서 `MetricsCollectorDown` 은 그 5분과 `for: 5m` 뒤에 울린다.
 - **짧게 도는 대사는 `last_over_time` 으로 본다.** 끝날 때 한 번만 밀어서 `increase` 로는 값이 나지 않는다(대시보드의 규칙과 같은 까닭).
 - **서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다.** 묶음의 이름은 서비스 이름(`billing-server`)이고 경보의 이름은 서버의 이름으로 시작한다(`Billing…`). 시험도 함께 더한다.
-- **CI 가 보는 것.** 규칙의 시험이 통과한다. Prometheus 가 규칙 파일의 묶음을 모두 읽었고 Alertmanager 를 찾았다. 건강한 스택에서 울리는 경보가 없다(선택자가 틀린 규칙이 여기서 울린다).
+- **CI 가 보는 것.** 규칙의 시험이 통과한다. Prometheus 가 규칙 파일의 묶음을 모두 읽었고 Alertmanager 를 찾았다. `Watchdog` 이 울린다. 건강한 스택에서 그 밖에 울리는 경보가 없다(선택자가 틀린 규칙이 여기서 울린다).
   Alertmanager 가 root 가 아니고, 받는 곳 넷을 모두 적은 설정이 맞고(`amtool check-config`), 반쯤 적으면 뜨지 않고, 봇 토큰이 설정 파일에 없다. Grafana 가 Alertmanager 에 닿는다.
   받는 곳의 흉내(`.github/scripts/alert_sink.py`)를 띄우고 시험 경보를 넣어, Discord, Slack, Telegram 의 주소로 넘어가는지 본다. 메일은 보내 보지 않는다(설정만 본다).
+  `Watchdog` 이 바깥 감시의 흉내(`/heartbeat`)로 가고, 운영자의 받는 곳에는 가지 않는다.
 
 #### 계측기를 만드는 법
 
@@ -1038,7 +1042,7 @@ notification-server 는 game-server 의 것(`app/observability/`)을 그대로 �
   명령 자신이 남기는 로그는 규격의 JSON 이다. 명령이 끝에 화면에 찍는 요약(`self.stdout`, 결제의 `cmd/reconcile`)은 위의 "사람이 치는 명령"처럼 글이다.
 - **nginx 가 뜨고 꺼지는 줄.** 프록시의 요청 줄은 JSON 이지만, nginx 가 뜰 때와 설정을 다시 읽을 때 남기는 줄은 nginx 의 글 모양이다.
 - **마지막 방어선은 어림이다.** [민감정보](#마지막-방어선)의 끝에 적은 대로다.
-- **경보를 보내는 쪽이 죽은 것은 알리지 못한다.** Prometheus 나 Alertmanager, VM 이 통째로 죽으면 알릴 곳이 없다. 늘 울리는 경보를 바깥의 감시(healthchecks.io 같은 것)에 보내고 끊기면 그쪽이 알리게 하는 것은 나중이다(#25)
+- **바깥 감시를 적지 않으면 경보를 보내는 쪽이 죽은 것을 알리지 못한다.** Prometheus 나 Alertmanager, VM 이 통째로 죽으면 알릴 곳이 없다. 루트 `.env` 의 `ALERT_HEARTBEAT_WEBHOOK_URL` 을 적으면 바깥 감시가 알린다([경보](#경보)). 모든 받는 곳이 한꺼번에 막힌 것(`AlertDeliveryFailing` 도 갈 곳이 없다)도 바깥 감시는 알지 못한다
 - **주기 명령과 게임 서버 안의 작업에 상태 신호가 없다.** 계속 도는 워커 셋만 심장박동이 있다. DB 의 백업, 인증서, 바깥 백업은 결과의 날짜로 본다([워커의 상태](#워커의-상태)). 컨테이너의 `unhealthy` 를 경보로 잇는 일은 아직 없다(#25)
 - **끝나고 바로 사라지는 컨테이너의 로그는 모이지 않을 수 있다.** Alloy 는 도는 컨테이너만 15초마다 찾는다. 그 전에 끝나는 마이그레이션(`*-migrate`)의 줄은 Loki 에 없을 수 있다. `docker compose logs <서비스>` 로 본다.
 - **Alloy 가 읽고 아직 보내지 못한 줄.** Alloy 가 그 순간에 죽으면 메모리에 있던 줄(Loki 로 보내려고 모은 묶음)은 잃는다. 읽은 자리는 이미 넘어갔다.

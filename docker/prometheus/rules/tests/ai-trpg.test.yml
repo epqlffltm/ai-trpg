@@ -11,6 +11,39 @@ rule_files:
 evaluation_interval: 15s
 
 tests:
+  # Watchdog 은 시계열이 없어도 늘 울린다
+  - interval: 1m
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels:
+              severity: none
+            exp_annotations:
+              summary: 경보를 내는 길이 살아 있다(늘 울린다)
+              description: 바깥 감시에만 간다. 이 경보가 Grafana 에 없으면 Prometheus 가 규칙을 돌리지 못한다
+
+  # 받는 곳(slack)으로 보내지 못하면 울린다. 바깥 감시(webhook)의 실패는 세지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'alertmanager_notifications_failed_total{job="alertmanager", instance="alertmanager:9093", integration="slack", reason="serverError"}'
+        values: '0 0 1 2 2'
+      - series: 'alertmanager_notifications_failed_total{job="alertmanager", instance="alertmanager:9093", integration="webhook", reason="other"}'
+        values: '0 5 9 12 15'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: AlertDeliveryFailing
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: AlertDeliveryFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              integration: slack
+            exp_annotations:
+              summary: 경보를 slack 로 보내지 못하고 있다
+              description: docker compose --profile observability logs alertmanager 에서 그 받는 곳의 오류를 본다. 루트 .env 의 ALERT_* 를 고친 뒤 alertmanager 를 다시 만든다
+
   # 수집기가 멈추면(2분부터 값이 없다) 마지막 값이 보이는 5분과 for 의 5분 뒤에 울린다
   - interval: 1m
     input_series:
