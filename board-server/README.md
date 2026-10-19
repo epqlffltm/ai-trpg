@@ -16,6 +16,7 @@
 - [알림 보내기](#알림-보내기)
 - [구조](#구조)
 - [로그와 요청 식별자](#로그와-요청-식별자)
+- [추적](#추적)
 - [CI](#ci)
 - [설계 메모](#설계-메모)
 
@@ -511,12 +512,20 @@ src/
     reports.errors.ts            신고를 다루다 거절할 때의 응답들
   ids/record-id.ts               순번으로 매긴 번호의 모양
   observability/
-    identifiers.ts               요청과 추적의 식별자를 받아들이고 만드는 규칙
-    request-context.ts           요청이 처리되는 동안 식별자를 들고 있는 곳
+    identifiers.ts               요청, 작업, 추적의 식별자를 받아들이고 만드는 규칙
+    request-context.ts           요청이나 작업이 도는 동안 식별자를 들고 있는 곳
     redaction.ts                 로그에 적히기 직전에 민감한 값을 가린다
     json-logger.ts               Nest 의 로그를 공통 규격의 JSON 한 줄로 내보낸다
     logger.factory.ts            설정으로 로거를 만든다
     request-logging.middleware.ts  요청마다 식별자를 걸고, 끝나면 한 줄을 남긴다
+    spans.ts                     span 을 만들고 읽는 곳(OpenTelemetry 의 API)
+    tracing.ts                   span 을 수집기에 미는 것(SDK)을 만들고 끈다
+    request-spans.middleware.ts  요청마다 서버 span 을 건다
+    http-spans.ts                다른 서버를 부르는 fetch 에 client span 을 건다
+    db-spans.ts                  쿼리마다 span 을 거는 pg 의 연결
+    jobs.ts                      작업 한 바퀴에 span 과 job_id 를 건다
+    idle-rounds.ts               할 일이 없던 작업의 추적을 보내지 않는다
+    observability.module.ts      앱이 닫힐 때 모아 둔 span 을 보낸다
   database/
     database.options.ts          설정을 연결 옵션으로 바꾼다. 서버와 마이그레이션 도구가 함께 쓴다
     database.module.ts           서버의 DB 연결
@@ -575,8 +584,9 @@ Nest 의 말을 다른 서버의 말로 옮기면 이렇다.
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적)) |
 
-세 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+네 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
 
 개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
 
@@ -588,9 +598,30 @@ npm run start:dev 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .rou
 
 - Nest 의 로거(`new Logger('이름')`)로 남긴 줄이 그대로 이 모양으로 나간다. `log` 는 `info`, `warn` 은 `warning`, `fatal` 은 `critical`, `verbose` 는 `debug` 다.
   칸을 더 실으려면 글 대신 객체를 넘긴다: `logger.warn({ message: '…', operation: 'post.create', post_id: id })`.
-- 인증 서버에서 공개키를 받을 때 `traceparent` 머리말로 추적을 이어 준다. 두 서버의 로그가 같은 `trace_id` 로 묶인다.
+- 인증 서버에서 공개키를 받을 때와 알림 서버에 알림을 보낼 때 `traceparent` 머리말로 추적을 이어 준다. 두 서버의 로그가 같은 `trace_id` 로 묶인다.
+- 발송함의 알림을 보내는 한 바퀴는 작업이다. 그 바퀴의 줄에는 `request_id` 대신 `job_id` 가 붙는다. 바퀴마다 새 값이다.
 - 설정이 틀려 서버가 뜨지 못할 때의 줄은 Nest 의 기본 모양(글)으로 나온다. 로거는 설정을 읽은 뒤에 만들어진다.
 - 테스트는 `warn` 이상만 Nest 의 기본 모양으로 찍는다(`test/app.ts`). 로그의 모양을 보는 테스트(`test/observability.e2e-spec.ts`)는 서버와 같은 로거를 꽂아 나간 줄을 모은다.
+
+## 추적
+
+요청, 다른 서버를 부르는 것, 쿼리, 알림을 보내는 작업을 span 으로 남겨 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 민다. 수집기가 Tempo 에 넘긴다.
+규칙과 까닭은 [관측 규격](../docs/observability.md)의 "3. 추적"에 있다. 이 서버에서 다른 것은 "붙인 것 (게시판 서버의 추적)"에 있다.
+주소가 비어 있으면 span 이 생기지 않고 로그는 지금과 같다. 테스트는 span 을 메모리에 모은다(`test/spans.ts`).
+
+| span | 이름 | 코드 |
+| --- | --- | --- |
+| 요청 | `GET /api/v1/board/posts/:id`(메서드와 경로의 틀). 상태 확인은 걸지 않는다 | `src/observability/request-spans.middleware.ts` |
+| 다른 서버를 부르는 것 | `HTTP GET`(공개키), `HTTP POST`(알림 서버) | `src/observability/http-spans.ts` |
+| 쿼리 | `db SELECT posts`(종류와 첫 테이블) | `src/observability/db-spans.ts` |
+| 알림을 보내는 작업 | `notification.send`. 한 바퀴가 새 추적 하나다 | `src/observability/jobs.ts` |
+
+- 로그의 `trace_id` 가 span 의 trace id 와 같다. 요청의 span 에는 `request_id`, 작업의 span 에는 `job_id` 를 싣는다
+- 싣지 않는 것: 주소의 경로와 뒤의 값, 머리말, 본문, SQL 의 문장과 값, 예외의 글. 쿼리가 실패하면 SQLSTATE 만 적는다
+- 요청이나 작업 밖의 쿼리와 호출(끊긴 세션의 목록을 30초마다 받는 것)은 span 을 걸지 않는다
+- 보낼 알림이 없던 바퀴(처리한 수 `handled` 가 0 이고 실패하지 않은 것)는 그 추적을 통째로 보내지 않는다(`src/observability/idle-rounds.ts`)
+- 받은 `traceparent` 가 "기록하지 않음"(flags `00`)이어도 남긴다
+- 끄라는 신호(SIGTERM)를 받으면 앱을 닫으며 모아 둔 span 을 보낸다(`main.ts` 의 `enableShutdownHooks`, 5초 안)
 
 
 ## CI

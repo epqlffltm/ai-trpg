@@ -236,4 +236,17 @@ describe('routeFields', () => {
       path: '/no/such/address',
     });
   });
+
+  it('Nest 의 404 틀(*path)에 맞은 것도 맞은 틀이 없는 것이다', () => {
+    const request = makeRequest({
+      path: '/no/such',
+      originalUrl: '/api/v1/board/no/such?x=secret',
+      route: { path: '*path' },
+    });
+
+    expect(routeFields(request)).toEqual({
+      route: '(unmatched)',
+      path: '/api/v1/board/no/such',
+    });
+  });
 });

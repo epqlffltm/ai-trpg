@@ -31,6 +31,7 @@ import { validationPipe } from './errors/validation.js';
 import { HealthModule } from './health/health.module.js';
 import { MeModule } from './me/me.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { ObservabilityModule } from './observability/observability.module.js';
 import { PostsModule } from './posts/posts.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 
@@ -51,6 +52,7 @@ import { ReportsModule } from './reports/reports.module.js';
     CommentsModule,
     ReportsModule,
     NotificationsModule,
+    ObservabilityModule,
   ],
   providers: [
     { provide: APP_PIPE, useFactory: validationPipe },
