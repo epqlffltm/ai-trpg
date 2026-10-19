@@ -595,15 +595,15 @@ services:
   # ---------------------------------------------------------------------------
   # 로그와 메트릭 모으기 (observability 프로필, #25)
   #
-  # 이 compose 의 컨테이너 로그와 메트릭을 모아(Alloy) 저장하고(Loki, Prometheus) 본다(Grafana). 규칙에 걸리면 경보를 보낸다(Alertmanager). 기본으로 꺼져 있다. staging 에서 켠다.
+  # 이 compose 의 컨테이너 로그와 메트릭, 추적을 모아(Alloy) 저장하고(Loki, Prometheus, Tempo) 본다(Grafana). 규칙에 걸리면 경보를 보낸다(Alertmanager). 기본으로 꺼져 있다. staging 에서 켠다.
   # 서버 코드와 서버의 설정은 그대로다. 서버는 stderr 에 쓰기만 하고, 이 넷이 멈춰도 요청은 영향을 받지 않는다.
   #
   #   docker compose --profile app --profile observability up -d --build
   #   그다음 http://127.0.0.1:3000 (VM 에서는 SSH 터널: ssh -L 3000:127.0.0.1:3000 <서버>)
   #
-  # 망을 셋으로 나눈다. 서버들은 기본 망(default)에 있어서 Loki, Prometheus, Alertmanager, Grafana, 소켓 프록시에 닿지 않는다.
+  # 망을 셋으로 나눈다. 서버들은 기본 망(default)에 있어서 Loki, Prometheus, Alertmanager, Tempo, Grafana, 소켓 프록시에 닿지 않는다.
   #   docker-api     소켓 프록시와 Alloy 만. 바깥으로 나가지 못한다(internal)
-  #   observability  Alloy, Loki, Prometheus, Alertmanager, Grafana. Grafana 의 포트를 열고 Alertmanager 가 바깥으로 보내려고 internal 로 두지 않는다
+  #   observability  Alloy, Loki, Prometheus, Alertmanager, Tempo, Grafana. Grafana 의 포트를 열고 Alertmanager 가 바깥으로 보내려고 internal 로 두지 않는다
   #   telemetry      Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스(지금은 결제 서버의 셋). 서버는 여기서 Alloy 의 4318 에만 닿는다(internal).
   #                  서버의 프로세스는 메트릭을 붙이는 PR 에서 이 망에 더한다(networks 에 default 도 함께 적고, x-telemetry-environment 를 붙인다)
   # 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "수집기(Grafana Alloy)를 붙일 자리"에 있다
@@ -658,6 +658,7 @@ services:
       - docker-socket-proxy
       - loki
       - prometheus
+      - tempo
 
   # 로그의 저장소. 14일 뒤에 지운다(docker/loki/config.yaml). 볼륨(lokidata)에 파일로 쌓는다.
   # 포트를 열지 않는다. Grafana 와 Alloy 만 내부망으로 닿는다
@@ -697,6 +698,28 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+
+  # 추적(span)의 저장소. 서버가 OTLP 로 Alloy 에 민 추적을 Alloy 가 넘긴다(docker/alloy/traces.alloy).
+  # 한 프로세스로 띄운다(docker/tempo/config.yaml). 14일 뒤에 지운다. 볼륨(tempodata)에 쌓는다.
+  # 포트를 열지 않는다. 쓰는 것은 Alloy, 읽는 것은 Grafana 하나다
+  tempo:
+    image: grafana/tempo:3.1.0
+    profiles: [observability]
+    logging: *logging
+    restart: unless-stopped
+    # 이미지는 사용자 10001 로 돈다. /var/tempo 는 이미지에서 그 사용자의 것이다
+    command: ["-config.file=/etc/tempo/config.yaml", "-target=all"]
+    volumes:
+      - ./docker/tempo/config.yaml:/etc/tempo/config.yaml:ro
+      - tempodata:/var/tempo
+    networks: [observability]
+    # 셸이 없는 이미지(distroless)다. Tempo 의 상태 확인(/tempo -health)이 /ready 를 묻는다
+    healthcheck:
+      test: ["CMD", "/tempo", "-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
 
   # 경보를 보내는 곳. Prometheus 가 규칙(docker/prometheus/rules)으로 울린 경보를 묶어 Discord, Slack, Telegram, 메일로 보낸다.
   # 받는 곳은 루트 .env 의 ALERT_* 에 적은 것만 켠다. 설정 파일은 시작 명령(docker/alertmanager/entrypoint.sh)이 그 값으로 만든다.
@@ -785,12 +808,13 @@ services:
       - loki
       - prometheus
       - alertmanager
+      - tempo
 
 networks:
   # 소켓 프록시와 Alloy 만 있는 망. 바깥으로 나가지 못한다
   docker-api:
     internal: true
-  # Alloy, Loki, Prometheus, Alertmanager, Grafana 의 망
+  # Alloy, Loki, Prometheus, Alertmanager, Tempo, Grafana 의 망
   observability:
   # Alloy 와, 메트릭을 OTLP 로 미는 서버의 프로세스. 바깥으로 나가지 못한다
   telemetry:
@@ -806,4 +830,5 @@ volumes:
   lokidata:
   prometheusdata:
   alertmanagerdata:
+  tempodata:
   grafanadata:

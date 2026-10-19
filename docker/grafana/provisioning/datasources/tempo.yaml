@@ -1,0 +1,30 @@
+# docker/grafana/provisioning/datasources/tempo.yaml
+# Grafana 가 뜰 때 Tempo 를 데이터 소스로 붙인다(#25). docker-compose.yml 의 grafana(프로필 observability)가 읽는다.
+#
+# 화면에서 고치지 못하게 한다(editable: false). uid 를 tempo 로 고정한다. stack-smoke.sh 와 Loki 의 데이터 소스가 이 이름으로 찾는다.
+# 추적에서 그 요청의 로그로 건너간다(tracesToLogsV2). 로그의 trace_id 는 Loki 의 줄의 값(structured metadata)이다.
+# 반대로 로그에서 추적으로 건너가는 것은 loki.yaml 의 derivedFields 다.
+# 이 파일의 $$ 는 Grafana 가 환경 변수로 읽지 않게 $ 를 적은 것이다
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    # compose 의 망(observability)에서의 주소다. 바깥에는 열지 않는다
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        # span 의 앞뒤 몇 분의 로그를 찾는다. 작업(job)은 요청보다 길게 돈다
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        customQuery: true
+        query: '{service=~".+"} | trace_id="$${__trace.traceId}"'
+      # 추적에서 그 서버의 메트릭으로 건너간다
+      tracesToMetrics:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true

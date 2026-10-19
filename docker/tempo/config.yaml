@@ -1,0 +1,46 @@
+# docker/tempo/config.yaml
+# 추적의 저장소(Tempo)의 설정(#25). docker-compose.yml 의 tempo(프로필 observability)가 읽는다.
+#
+# 한 프로세스(monolithic, -target=all)로 띄운다. Tempo 3 은 여럿으로 나누면 Kafka 가 드는데, 한 프로세스는 들지 않는다.
+# 받는 것은 Alloy 하나다(OTLP gRPC 4317). 서버는 Tempo 에 닿지 않고 Alloy 로만 민다(docker/alloy/traces.alloy).
+# 읽는 것은 Grafana 하나다(HTTP 3200, 데이터 소스 uid tempo). 포트는 바깥에 열지 않는다.
+# 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "3. 추적"에 있다.
+
+# Grafana 가 검색 결과를 끊어 받는다(TraceQL 의 스트리밍)
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  # 요청마다의 줄을 남기지 않는다. 경고와 오류만 Loki 로 간다
+  log_level: warn
+
+# 추적을 받는 곳. Alloy 가 observability 망에서 gRPC 로 민다. HTTP(4318)는 열지 않는다
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+
+# 블록을 이 컨테이너의 볼륨(tempodata)에 쌓는다. 나중에 S3 로 옮길 때는 backend 와 그 칸만 바뀐다
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+# 보관 기간. 로그(Loki), 메트릭(Prometheus)과 같은 14일이다. Tempo 3 은 정리를 맡는 둘(scheduler, worker)에 같은 값을 준다
+backend_scheduler:
+  provider:
+    compaction:
+      compaction:
+        block_retention: 336h
+backend_worker:
+  compaction:
+    block_retention: 336h
+
+# Grafana Labs 에 사용 통계를 보내지 않는다
+usage_report:
+  reporting_enabled: false

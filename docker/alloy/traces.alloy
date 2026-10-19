@@ -1,0 +1,27 @@
+// docker/alloy/traces.alloy
+// 수집기(Grafana Alloy)의 추적 설정(#25). 메트릭은 metrics.alloy, 로그는 config.alloy 에 있다.
+//
+// 서버가 OTLP 로 민 추적(span)을 Tempo 로 보낸다. 받는 곳은 메트릭과 같다(metrics.alloy 의 otelcol.receiver.otlp, HTTP 4318).
+//   서버(OTLP) ─▶ 받기(otelcol.receiver.otlp.servers) ─▶ 묶기(otelcol.processor.batch.traces) ─▶ 보내기(otelcol.exporter.otlp.tempo)
+// 서버는 Tempo 에 닿지 않는다(Tempo 는 observability 망에만 있다). 저장소를 바꾸면 여기의 보낼 곳만 바뀐다.
+// 지금은 모두 남긴다(표본을 고르지 않는다). 줄여야 하면 여기에 꼬리 표본(otelcol.processor.tail_sampling)을 더한다.
+// 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "3. 추적"에 있다.
+
+// 여러 서버의 span 을 묶어 한 번에 보낸다
+otelcol.processor.batch "traces" {
+	output {
+		traces = [otelcol.exporter.otlp.tempo.input]
+	}
+}
+
+// Tempo 로 보낸다. 같은 망(observability) 안이라 TLS 를 쓰지 않는다.
+// Tempo 가 멈추면 Alloy 가 잠시 붙들고 다시 보낸다(sending_queue). 오래 멈추면 그 사이의 span 은 버린다
+otelcol.exporter.otlp "tempo" {
+	client {
+		endpoint = "tempo:4317"
+
+		tls {
+			insecure = true
+		}
+	}
+}

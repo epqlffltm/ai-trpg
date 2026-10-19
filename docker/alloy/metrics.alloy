@@ -4,13 +4,13 @@
 // 서버가 OTLP 로 민 메트릭과 Alloy 가 긁은 인프라의 메트릭을 Prometheus 로 보낸다.
 //   서버(OTLP) ─▶ 받기(otelcol.receiver.otlp) ─▶ 묶기(otelcol.processor.batch) ─▶ 이름 바꾸기(otelcol.exporter.prometheus)
 //              ─▶ service 붙이기(prometheus.relabel) ─▶ 보내기(prometheus.remote_write)
-//   Alloy, Loki, Prometheus, Grafana 자신 ─▶ 긁기(prometheus.scrape) ─▶ 보내기(prometheus.remote_write)
+//   Alloy, Loki, Prometheus, Alertmanager, Tempo, Grafana 자신 ─▶ 긁기(prometheus.scrape) ─▶ 보내기(prometheus.remote_write)
 //   PostgreSQL, Redis ─▶ Alloy 안의 exporter ─▶ 이름표 붙이기(discovery.relabel) ─▶ 긁기 ─▶ 보내기
 // Prometheus 에 쓰는 것은 여기의 prometheus.remote_write 하나다. 저장소를 Mimir 로 바꾸면 그 주소만 바뀐다.
 // 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "2. 메트릭"에 있다.
 
 // 서버가 미는 OTLP 를 받는다. HTTP(4318)만 연다. 서버와 Alloy 만 있는 망(telemetry)에서만 닿는다.
-// 메트릭만 받는다. 추적은 3단계에서 traces 를 더한다
+// 메트릭은 아래로, 추적(span)은 traces.alloy 로 보낸다
 otelcol.receiver.otlp "servers" {
 	http {
 		endpoint = "0.0.0.0:4318"
@@ -18,6 +18,7 @@ otelcol.receiver.otlp "servers" {
 
 	output {
 		metrics = [otelcol.processor.batch.servers.input]
+		traces  = [otelcol.processor.batch.traces.input]
 	}
 }
 
@@ -57,6 +58,7 @@ prometheus.scrape "infra" {
 		{"__address__" = "prometheus:9090", "job" = "prometheus"},
 		{"__address__" = "grafana:3000", "job" = "grafana"},
 		{"__address__" = "alertmanager:9093", "job" = "alertmanager"},
+		{"__address__" = "tempo:3200", "job" = "tempo"},
 	]
 	scrape_interval = "15s"
 	forward_to      = [prometheus.remote_write.local.receiver]
