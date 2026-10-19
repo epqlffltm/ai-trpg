@@ -255,7 +255,8 @@ def begin_closing(
     settled = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs)
     overdue = deadlines.expire_quests(table)
     after_overdue = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs) if overdue else []
-    round_.moves = narration_request.dump_moves(build_moves(table, round_, ended, recovered))
+    moves = build_moves(table, round_, ended, recovered, [*settled, *after_overdue])
+    round_.moves = narration_request.dump_moves(moves)
     round_.narration_style = table.narration_style
     record_actions(session, table, round_, group)
     record_death_saves(session, table, round_, group)

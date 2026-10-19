@@ -80,7 +80,8 @@ from app.engine.sheet import Sheet
 #  31: 퀘스트 규칙에 드러나는 조건(quests[].reveal)과 그 조건을 맞추는 법(quests[].reveal_match)이 있다.
 #      조건에 다른 퀘스트의 성공과 실패(quest_succeeded, quest_failed)가 있다
 #  32: 장소에 놓인 물건(place_items: 장소, 물건, 개수, 보이기 open·hidden, 숨긴 것의 찾는 판정)이 있다
-SNAPSHOT_FORMAT = 32
+#  33: 퀘스트의 조건에 이룰 때 물건을 가져가는지(conditions[].consume)가 있다
+SNAPSHOT_FORMAT = 33
 
 
 class EntrySnapshot(BaseModel):
@@ -164,11 +165,16 @@ class ItemRuleSnapshot(BaseModel):
 
 
 class QuestConditionSnapshot(BaseModel):
-    """퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목, 사건 항목(퀘스트)이다."""
+    """
+    퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목, 사건 항목(퀘스트)이다.
+
+    consume 은 물건 갖기(hold_item)를 이룰 때 그 물건을 가져가는지다(배달). 이루는 조건에만 있다.
+    """
 
     kind: QuestConditionKind
     target: uuid.UUID
     count: int = 1
+    consume: bool = False
 
 
 class QuestRuleSnapshot(BaseModel):
