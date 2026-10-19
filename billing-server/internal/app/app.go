@@ -76,9 +76,14 @@ func MeasureProviders(providers order.Providers, name string, meter metric.Meter
 	return measured, nil
 }
 
-// MeasureServices 는 서비스들이 바꾼 것(주문의 상태)을 meter 로 세게 한다. 서비스를 쓰기 전에 한 번 부른다.
+// MeasureServices 는 서비스들이 바꾼 것(원장, 주문의 상태, 중복 방지 키)을 meter 로 세게 한다. 서비스를 쓰기 전에 한 번 부른다.
 func MeasureServices(services Services, meter metric.Meter) error {
-	return services.Orders.Measure(meter)
+	for _, measure := range []func(metric.Meter) error{services.Wallet.Measure, services.Orders.Measure, services.Holds.Measure} {
+		if err := measure(meter); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NoProviders 는 결제 대행사를 부르지 않는 정리 작업의 것이다. 웹 자리에 부르면 오류를 내는 것(payment.None)을 둔다.

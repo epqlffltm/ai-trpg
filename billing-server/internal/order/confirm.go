@@ -13,6 +13,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order/orderdb"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 )
 
 // uniqueViolation 은 PostgreSQL 이 "이미 있는 값"이라고 알리는 오류의 번호(SQLSTATE)다.
@@ -157,7 +158,8 @@ func (s *Service) settle(ctx context.Context, current Order, result payment.Resu
 // 다른 요청이 먼저 끝냈으면 아무것도 하지 않는다. 어느 쪽이든 지금의 주문을 돌려준다.
 func (s *Service) pay(ctx context.Context, current Order) (Order, error) {
 	paid := false
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	// 지갑이 원장에 적은 일은 커밋한 뒤에 세어진다(txn.Run)
+	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		_, err := orderdb.New(tx).MarkPaid(ctx, orderdb.MarkPaidParams{ID: current.ID, Now: s.clock()})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil

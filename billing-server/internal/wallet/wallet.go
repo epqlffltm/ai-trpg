@@ -178,12 +178,14 @@ type Service struct {
 	pool   *pgxpool.Pool
 	now    func() time.Time
 	policy Policy
+	// metrics 는 원장에 적은 일을 센다(metrics.go). 처음에는 세지 않는다
+	metrics ledgerMetrics
 }
 
 // NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수다.
 // 실제 서버는 time.Now 를 넘기고, 테스트는 마음대로 돌릴 수 있는 시계를 넘긴다.
 func NewService(pool *pgxpool.Pool, now func() time.Time, policy Policy) *Service {
-	return &Service{pool: pool, now: now, policy: policy}
+	return &Service{pool: pool, now: now, policy: policy, metrics: noLedgerMetrics()}
 }
 
 // clock 은 지금 시각을 DB 가 적는 모양(UTC, 백만분의 1초)으로 맞춰 돌려준다.

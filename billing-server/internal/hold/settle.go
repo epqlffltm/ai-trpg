@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold/holddb"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 )
 
 // Capture 는 홀드를 확정한다. 빼 둔 크레딧은 돌아오지 않는다. 크레딧은 홀드를 걸 때 이미 빠졌으므로 잔액은 바뀌지 않는다.
@@ -65,7 +66,8 @@ func (s *Service) Extend(ctx context.Context, source string, reference string) (
 func (s *Service) giveBack(ctx context.Context, change func(*holddb.Queries) (holddb.Hold, error)) (Hold, bool, error) {
 	var released Hold
 	var changed bool
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	// 지갑이 원장에 적은 일은 커밋한 뒤에 세어진다(txn.Run)
+	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		row, err := change(holddb.New(tx))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
