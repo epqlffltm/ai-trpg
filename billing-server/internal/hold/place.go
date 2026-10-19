@@ -12,6 +12,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold/holddb"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
@@ -22,7 +23,15 @@ import (
 // 새 홀드의 만료 시각은 지금부터 ttl 뒤다.
 // 두 번째 값은 이번에 새로 걸었으면 true 다. 크레딧이 모자라면 wallet.ErrInsufficient 이고 홀드도 남지 않는다.
 // 프리미엄인데 골드가 모자라면 wallet.ErrPaidInsufficient 다(ErrInsufficient 도 참이다).
+// 이름표의 결과(처음, 다시 보냄, 다른 내용)를 센다(metrics.go). 돌아오면 트랜잭션은 이미 끝났다.
 func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, reference string, priceCode string) (Hold, bool, error) {
+	placed, created, err := s.place(ctx, source, userID, reference, priceCode)
+	s.keys.Count(ctx, idempotencyKind, created, err, ErrReferenceReused)
+	return placed, created, err
+}
+
+// place 는 Place 의 본문이다.
+func (s *Service) place(ctx context.Context, source string, userID uuid.UUID, reference string, priceCode string) (Hold, bool, error) {
 	if !referencePattern.MatchString(reference) {
 		return Hold{}, false, ErrInvalidReference
 	}
@@ -34,7 +43,8 @@ func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, re
 
 	var placed Hold
 	var created bool
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	// 지갑이 원장에 적은 일은 커밋한 뒤에 세어진다(txn.Run)
+	err = txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		queries := holddb.New(tx)
 		row, err := queries.InsertHold(ctx, holddb.InsertHoldParams{
 			ID:        uuid.New(),

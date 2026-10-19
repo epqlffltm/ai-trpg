@@ -38,6 +38,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold/holddb"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/metrics"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
@@ -124,6 +125,8 @@ type Service struct {
 	prices Prices
 	// ttl 은 홀드를 걸거나 연장한 때부터 만료까지의 시간이다.
 	ttl time.Duration
+	// keys 는 홀드를 걸 때의 이름표(중복 방지 키)의 결과를 센다(metrics.go). 처음에는 세지 않는다
+	keys metrics.Idempotency
 }
 
 // NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, prices 는 가격표, ttl 은 만료까지의 시간이다.
@@ -131,7 +134,7 @@ func NewService(pool *pgxpool.Pool, now func() time.Time, wallet Wallet, prices 
 	if ttl <= 0 {
 		return nil, ErrInvalidTTL
 	}
-	return &Service{pool: pool, now: now, wallet: wallet, prices: prices, ttl: ttl}, nil
+	return &Service{pool: pool, now: now, wallet: wallet, prices: prices, ttl: ttl, keys: metrics.NoIdempotency()}, nil
 }
 
 // clock 은 지금 시각을 DB 가 적는 모양(UTC, 백만분의 1초)으로 맞춰 돌려준다.

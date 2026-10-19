@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
@@ -34,7 +35,7 @@ func (f fixture) takeForHold(service *wallet.Service, holdID uuid.UUID, amount c
 	if service == nil {
 		service = f.service
 	}
-	return pgx.BeginFunc(ctx(f.t), f.pool, func(tx pgx.Tx) error {
+	return txn.Run(ctx(f.t), f.pool, func(tx pgx.Tx) error {
 		return service.TakeForHold(ctx(f.t), tx, f.user, amount, holdID, wallet.AnyCredits)
 	})
 }
@@ -42,7 +43,7 @@ func (f fixture) takeForHold(service *wallet.Service, holdID uuid.UUID, amount c
 // returnForHold 는 트랜잭션을 열어 홀드로 뺀 크레딧을 돌려놓는다.
 func (f fixture) returnForHold(holdID uuid.UUID) error {
 	f.t.Helper()
-	return pgx.BeginFunc(ctx(f.t), f.pool, func(tx pgx.Tx) error {
+	return txn.Run(ctx(f.t), f.pool, func(tx pgx.Tx) error {
 		return f.service.ReturnForHold(ctx(f.t), tx, f.user, holdID)
 	})
 }
@@ -284,7 +285,7 @@ func TestReturnForHoldOfAnotherUsersHoldGivesNothing(t *testing.T) {
 	other := setUp(t, freeFirst)
 
 	// 다른 사용자의 지갑으로 그 홀드를 돌려 달라고 한다
-	err := pgx.BeginFunc(ctx(t), other.pool, func(tx pgx.Tx) error {
+	err := txn.Run(ctx(t), other.pool, func(tx pgx.Tx) error {
 		return other.service.ReturnForHold(ctx(t), tx, other.user, holdID)
 	})
 
