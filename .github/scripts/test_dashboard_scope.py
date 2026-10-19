@@ -59,6 +59,17 @@ class DashboardScopeTests(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn('{route="/health"}', problems[0])
 
+    def test_infrastructure_dashboards_name_their_job(self):
+        # Alloy 가 긁는 인프라에는 service 가 없다. 그 job 으로 가른다
+        board = dashboard(panel('pg_up{job="postgres"}'), uid='postgres')
+
+        self.assertEqual(check({'postgres': board}), [])
+
+    def test_another_job_does_not_count(self):
+        board = dashboard(panel('redis_up{job="redis"}'), uid='postgres')
+
+        self.assertEqual(len(check({'postgres': board})), 1)
+
     def test_a_query_without_any_selector_is_refused(self):
         problems = check({'billing-server': dashboard(panel('sum(rate(http_server_requests_total[5m]))'))})
 

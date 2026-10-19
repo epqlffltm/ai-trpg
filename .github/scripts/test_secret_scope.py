@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from secret_scope import Secret, check
+from secret_scope import SECRETS, Secret, check
 
 TABLE = [
     Secret('auth-server', 'BILLING_SECRET', frozenset({'auth-welcome-credits'})),
@@ -112,6 +112,74 @@ class SecretScopeTests(unittest.TestCase):
             self.problems({}),
             ['auth-server/.env.example 의 NEW_PROVIDER_API_KEY 가 표에 없다. secret_scope.py 의 SECRETS 에 적는다'],
         )
+
+
+# 루트 .env 의 비밀의 작은 표. DB 와 수집기만 monitor 의 비밀번호를 받는다
+ROOT_TABLE = {
+    'POSTGRES_PASSWORD': frozenset({'db'}),
+    'MONITOR_DB_PASSWORD': frozenset({'db', 'alloy'}),
+}
+
+
+def using(**environment: str) -> dict:
+    """루트 .env 를 environment 의 값으로 부르는 프로세스 하나. .env 를 통째로 받지 않는다."""
+    return {'environment': environment}
+
+
+class RootSecretScopeTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.root = Path(folder.name)
+
+    def problems(self, services: dict) -> list[str]:
+        return check({'services': services}, self.root, [], ROOT_TABLE)
+
+    def test_passes_when_root_secrets_go_only_where_they_are_used(self):
+        services = {
+            'db': using(
+                POSTGRES_PASSWORD='${POSTGRES_PASSWORD:?설정하세요}', MONITOR_DB_PASSWORD='${MONITOR_DB_PASSWORD:-}'
+            ),
+            'alloy': using(MONITOR_DB_PASSWORD='${MONITOR_DB_PASSWORD:-}', COMPOSE_PROJECT='${COMPOSE_PROJECT_NAME}'),
+        }
+
+        self.assertEqual(self.problems(services), [])
+
+    def test_a_root_secret_inside_another_value_counts(self):
+        # 주소 안에 비밀번호를 넣어 넘겨도 받은 것이다
+        services = {'grafana': using(GF_DATABASE_URL='postgres://monitor:${MONITOR_DB_PASSWORD}@db/trpg')}
+
+        self.assertEqual(
+            self.problems(services), ['grafana: 루트 .env 의 MONITOR_DB_PASSWORD 를 받는다. 받을 프로세스가 아니다']
+        )
+
+    def test_a_root_secret_missing_from_the_table_is_reported(self):
+        services = {'alloy': using(TOKEN='${NEW_EXPORTER_API_KEY:-}')}
+
+        self.assertEqual(
+            self.problems(services),
+            ['alloy: 루트 .env 의 NEW_EXPORTER_API_KEY 를 받는데 표에 없다. secret_scope.py 의 ROOT_SECRETS 에 적는다'],
+        )
+
+    def test_settings_that_are_not_secrets_are_not_counted(self):
+        services = {'alloy': using(MONITOR_DB_NAME='${POSTGRES_DB:-trpg}', PORT='${GRAFANA_PORT:-3000}')}
+
+        self.assertEqual(self.problems(services), [])
+
+    def test_a_new_secret_in_the_root_example_must_be_listed(self):
+        (self.root / '.env.example').write_text(
+            'POSTGRES_PASSWORD=\nMONITOR_DB_PASSWORD=\n# REDIS_PASSWORD=\nPOSTGRES_PORT=5432\n', encoding='utf-8'
+        )
+
+        self.assertEqual(
+            self.problems({}),
+            ['.env.example 의 REDIS_PASSWORD 가 표에 없다. secret_scope.py 의 ROOT_SECRETS 에 적는다'],
+        )
+
+    def test_the_repository_root_example_is_fully_listed(self):
+        repository = Path(__file__).resolve().parents[2]
+
+        self.assertEqual(check({'services': {}}, repository, SECRETS), [])
 
 
 if __name__ == '__main__':

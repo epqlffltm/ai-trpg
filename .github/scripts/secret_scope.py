@@ -8,6 +8,8 @@ docker-compose.yml 의 environment 에서 빈 값으로 덮어야 한다. 이 �
   - 비밀을 받으면 안 되는 프로세스가 그 비밀을 빈 값으로 덮었는가
   - 서명 개인키의 폴더(auth-server/keys)를 auth-server 만 붙였는가, 나머지는 키의 경로를 비웠는가
   - 서버 폴더의 .env.example 에 적힌 비밀이 모두 표에 있는가(새 비밀이 표 없이 퍼지지 않게)
+  - 루트 .env 의 비밀(${POSTGRES_PASSWORD} 처럼 compose 가 채우는 것)을 표(ROOT_SECRETS)에 적힌 프로세스만 받는가,
+    루트 .env.example 의 비밀이 모두 그 표에 있는가
 를 본다. 비밀의 값은 읽지도 찍지도 않는다. .env 를 읽지 않는 설정(--no-env-resolution)만 본다.
 
     사용: docker compose --profile app config --no-interpolate --no-env-resolution --format json \
@@ -31,6 +33,8 @@ SECRET_NAME = re.compile(r'SECRET|PASSWORD|API_KEY|HMAC_KEY')
 NOT_SECRETS = frozenset({'PASSWORD_RESET_URL'})
 # .env.example 의 한 줄. 주석으로 막아 둔 것(# NAME=)도 센다. 켜는 법을 알리는 줄이다
 EXAMPLE_LINE = re.compile(r'^#?\s*([A-Z][A-Z0-9_]*)=')
+# compose 의 값 안에서 루트 .env 를 부르는 자리(${NAME}, ${NAME:-기본}, ${NAME:?알림})
+ROOT_REFERENCE = re.compile(r'\$\{([A-Z][A-Z0-9_]*)')
 
 # 서명 개인키가 든 폴더와, 그 경로를 알리는 설정의 이름. 키를 붙여도 되는 프로세스
 SIGNING_KEY_FOLDER = 'auth-server/keys'
@@ -98,6 +102,26 @@ SECRETS = [
         'BOARD_SERVER_SECRET',
     ),
 ]
+
+
+# 루트 .env 의 비밀마다 받아도 되는 프로세스. compose 가 environment 의 값에 채워 넘긴다.
+# DB 의 계정마다의 비밀번호는 DB(초기화 스크립트가 계정을 만든다)와 그 서버의 프로세스만 받는다
+ROOT_SECRETS: dict[str, frozenset[str]] = {
+    # DB 의 관리용 슈퍼유저. DB 와 백업만 쓴다. 바깥 백업(staging 의 backup-offsite)도 풀어 볼 빈 DB 를 만들고 지운다
+    'POSTGRES_PASSWORD': frozenset({'db', 'db-backup', 'backup-offsite'}),
+    'AUTH_DB_PASSWORD': frozenset(
+        {'db', 'auth-migrate', 'auth-server', 'auth-mail', 'auth-welcome-credits', 'auth-cron'}
+    ),
+    'GAME_DB_PASSWORD': frozenset({'db', 'game-migrate', 'game-server'}),
+    'BILLING_DB_PASSWORD': frozenset({'db', 'billing-migrate', 'billing-server', 'billing-sweeper', 'billing-cron'}),
+    'BOARD_DB_PASSWORD': frozenset({'db', 'board-migrate', 'board-server'}),
+    'NOTIFICATION_DB_PASSWORD': frozenset({'db', 'notification-migrate', 'notification-server'}),
+    # DB 의 메트릭을 읽는 계정(monitor). DB 가 계정을 만들고, 수집기(Alloy)가 그 계정으로 붙는다
+    'MONITOR_DB_PASSWORD': frozenset({'db', 'alloy'}),
+    'GRAFANA_ADMIN_PASSWORD': frozenset({'grafana'}),
+    # 바깥 백업이 S3 에 올리고 받는 접근 키(staging). 그 컨테이너만 쓴다
+    'BACKUP_AWS_SECRET_ACCESS_KEY': frozenset({'backup-offsite'}),
+}
 
 
 def env_file_servers(service: dict) -> set[str]:
@@ -169,6 +193,42 @@ def example_secret_names(example: Path) -> set[str]:
     return names
 
 
+def root_references(service: dict) -> set[str]:
+    """그 프로세스의 environment 가 부르는 루트 .env 의 이름들. 비밀처럼 보이는 것만 센다."""
+    names = set()
+    for value in environment_of(service).values():
+        for name in ROOT_REFERENCE.findall(str(value or '')):
+            if SECRET_NAME.search(name) and name not in NOT_SECRETS:
+                names.add(name)
+    return names
+
+
+def leaked_root_secrets(services: dict[str, dict], table: dict[str, frozenset[str]]) -> list[str]:
+    """루트 .env 의 비밀을 받으면 안 되는 프로세스가 받는 것과, 표에 없는 루트의 비밀을 부르는 것."""
+    problems = []
+    for name, service in sorted(services.items()):
+        for secret in sorted(root_references(service)):
+            if secret not in table:
+                problems.append(
+                    f'{name}: 루트 .env 의 {secret} 를 받는데 표에 없다. secret_scope.py 의 ROOT_SECRETS 에 적는다'
+                )
+            elif name not in table[secret]:
+                problems.append(f'{name}: 루트 .env 의 {secret} 를 받는다. 받을 프로세스가 아니다')
+    return problems
+
+
+def unlisted_root_secrets(repo_root: Path, table: dict[str, frozenset[str]]) -> list[str]:
+    """루트 .env.example 에 있는데 표에 없는 비밀들. 파일이 없으면(작은 시험) 보지 않는다."""
+    example = repo_root / '.env.example'
+    if not example.exists():
+        return []
+    return [
+        f'.env.example 의 {name} 가 표에 없다. secret_scope.py 의 ROOT_SECRETS 에 적는다'
+        for name in sorted(example_secret_names(example))
+        if name not in table
+    ]
+
+
 def unlisted_secrets(repo_root: Path, table: list[Secret]) -> list[str]:
     """서버 폴더의 .env.example 에 있는데 표에 없는 비밀들."""
     listed = {(secret.server, secret.name) for secret in table}
@@ -181,13 +241,20 @@ def unlisted_secrets(repo_root: Path, table: list[Secret]) -> list[str]:
     return problems
 
 
-def check(config: dict, repo_root: Path, table: list[Secret]) -> list[str]:
+def check(
+    config: dict,
+    repo_root: Path,
+    table: list[Secret],
+    root_table: dict[str, frozenset[str]] = ROOT_SECRETS,
+) -> list[str]:
     """모든 검사의 문제들. 비어 있으면 통과다."""
     services = config.get('services') or {}
     return [
         *leaked_secrets(services, table),
         *misplaced_signing_keys(services),
         *unlisted_secrets(repo_root, table),
+        *leaked_root_secrets(services, root_table),
+        *unlisted_root_secrets(repo_root, root_table),
     ]
 
 

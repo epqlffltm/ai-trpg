@@ -15,7 +15,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 구성 요소 | 폴더 | 상태 |
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
-| 로그와 메트릭 모으기 (Grafana Alloy, Loki, Prometheus, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것, 메트릭의 저장소(OTLP 로 받는 길), 결제 서버의 메트릭(HTTP, DB 풀, 작업, 주문, 결제 대행사, 알림, 원장, 중복 방지 키)과 대시보드까지 완료(compose 의 프로필 `observability`, [아래](#로그와-메트릭-모으기)). 나머지 서버의 메트릭과 추적은 예정 |
+| 로그와 메트릭 모으기 (Grafana Alloy, Loki, Prometheus, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것, 메트릭의 저장소(OTLP 로 받는 길), 결제 서버의 메트릭(HTTP, DB 풀, 작업, 주문, 결제 대행사, 알림, 원장, 중복 방지 키), PostgreSQL 과 Redis 의 메트릭, 대시보드까지 완료(compose 의 프로필 `observability`, [아래](#로그와-메트릭-모으기)). 나머지 서버의 메트릭과 추적은 예정 |
 | 인증 서버 (Django) | [`auth-server/`](auth-server/README.md) | 회원가입(이메일 인증), 로그인(이메일 인증), 비밀번호 변경과 재설정, 메일 발송, 토큰 갱신, 로그아웃, JWKS, 시도 횟수 제한, 보안 이벤트 기록, 가입한 사용자의 환영 크레딧을 결제 서버에 맡기기, access 토큰에 닉네임 싣기까지 완료 |
 | 게임 서버 (FastAPI) | [`game-server/`](game-server/README.md) | 뼈대(서버 실행, DB, 인증 서버 토큰 검증, CI)와 자산 네 종류(세계관, 룰북, 시나리오, 로어북)의 만들기, 목록, 읽기, 고치기, 지우기와 시나리오 게시(판으로 굳히기, 스타팅 여러 개, 추천 인원과 프리젠), 공개와 소개 페이지, 공개 목록, 테이블 만들기와 참가(초대 코드, 로비와 비밀번호, 캐릭터, 방장), 라운드(선언 모으기, 가짜 서술자), 이벤트 기록, 채팅, 실시간 스트림(SSE, "입력 중" 표시), 룰북의 규칙 데이터(내장 템플릿 `srd5`), 시나리오의 캐릭터 시트와 캐릭터 방식, 테이블의 캐릭터 시트, 주사위와 판정(순수 함수), 선언에 붙이는 행동, 라운드를 닫을 때의 판정, 피해와 회복과 쓰러짐, 능력치를 직접 적는 캐릭터 방식, 점수제로 능력치를 사는 캐릭터 방식, 주사위로 능력치를 정하는 캐릭터 방식과 다시 굴리기, 죽음의 굴림과 캐릭터의 죽음, 죽은 뒤에 새 캐릭터 들이기, 캐릭터 보관함, 라운드의 서술 값 받기(결제 서버의 홀드), 시나리오의 추천 서술 모델과 테이블마다 고르는 서술 모델까지 완료 |
 | 게시판 서버 (NestJS) | [`board-server/`](board-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, CI), 인증 서버 토큰 검증, 게시판 넷과 글(쓰기, 목록, 읽기, 고치기, 지우기, 운영자), 댓글과 답글, 글마다의 댓글 수, 글 고정(기한이 지나면 저절로 내려감), 글 검색, 쓰기 횟수 제한, 글과 댓글의 신고(운영자가 묶어 읽고 처리), 글쓴이의 닉네임 표시까지 완료 |
@@ -166,6 +166,14 @@ compose 의 컨테이너 로그와 메트릭을 모아(Grafana Alloy) 저장하�
 
 루트 `.env` 에 Grafana 의 관리자 비밀번호를 적고 띄운다. 비밀번호가 비어 있으면 Grafana 가 뜨지 않는다.
 서버가 메트릭을 밀게 하려면 같은 `.env` 에 `OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318` 도 적는다. 이 프로필을 켜지 않을 때는 적지 않는다(없는 Alloy 로 보내며 경고를 남긴다).
+DB 의 메트릭을 보려면 `MONITOR_DB_PASSWORD` 도 적는다(영문과 숫자만). 그 비밀번호로 통계만 읽는 계정(`monitor`)이 만들어지고 Alloy 가 그 계정으로 붙는다.
+
+계정은 DB 의 볼륨이 비어 있는 첫 기동 때만 만들어진다. 이미 쓰던 볼륨이면 `.env` 에 적은 뒤 DB 를 새 설정으로 다시 만들고(`docker compose up -d db`, 데이터는 남고 DB 가 잠깐 내려간다), 저장소 루트에서 한 번 실행한다.
+`trpg` 는 루트 `.env` 의 `POSTGRES_USER` 와 `POSTGRES_DB` 값이다. 다시 돌려도 된다(계정이 있으면 비밀번호만 맞춘다).
+
+```
+docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -f /docker-entrypoint-initdb.d/07-monitor-role.sql
+```
 
 ```
 docker compose --profile app --profile observability up -d --build
@@ -174,7 +182,7 @@ docker compose --profile app --profile observability ps
 
 `prometheus` 와 `grafana` 가 `healthy`, `alloy`, `loki`, `docker-socket-proxy` 가 `Up` 이면 된다. `http://127.0.0.1:3000` 에서 `admin` 과 그 비밀번호로 들어가
 Explore 에서 데이터 소스 Loki(로그)나 Prometheus(메트릭)를 고른다. 서버(VM)에서는 SSH 터널로 붙는다. `ssh -L 3000:127.0.0.1:3000 <서버>` 를 띄워 두고 같은 주소를 연다.
-서버마다의 대시보드는 Dashboards 의 폴더 `ai-trpg` 에 있다(지금은 결제 서버, `http://127.0.0.1:3000/d/billing-server`). 저장소의 `docker/grafana/dashboards/` 가 원본이라 화면에서 고치지 못한다.
+대시보드는 Dashboards 의 폴더 `ai-trpg` 에 있다. 지금은 결제 서버(`/d/billing-server`), PostgreSQL(`/d/postgres`), Redis(`/d/redis`)다. 저장소의 `docker/grafana/dashboards/` 가 원본이라 화면에서 고치지 못한다.
 고치는 법은 [관측 규격의 대시보드](docs/observability.md#대시보드)에 있다.
 끌 때도 두 프로필을 붙인다. `docker compose --profile app --profile observability down`
 
