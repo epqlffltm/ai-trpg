@@ -1,0 +1,16 @@
+# docker/prometheus/prometheus.yml
+# 메트릭 저장소(Prometheus)의 설정(#25). docker-compose.yml 의 prometheus(프로필 observability)가 읽는다.
+#
+# 받기만 한다. 긁는 설정(scrape_configs)을 두지 않는다. 긁는 일은 모두 Alloy 가 하고 remote write 로 보낸다.
+# 그래서 저장소를 Mimir 로 바꿀 때 Alloy 의 보낼 주소와 Grafana 의 데이터 소스만 바뀐다.
+# 무엇을 왜 이렇게 정했는지는 docs/observability.md 의 "2. 메트릭"과 "Mimir 로 옮길 수 있게 지키는 것"에 있다.
+#
+# 받는 길(remote write 수신)은 실행 인자(--web.enable-remote-write-receiver)로 켠다. docker-compose.yml 에 있다.
+
+storage:
+  tsdb:
+    # 미는 방식이라 점이 몇 초 늦거나 순서가 바뀌어 올 수 있다. 10분 안의 것은 받는다. Mimir 에도 같은 이름의 한도가 있다
+    out_of_order_time_window: 10m
+    # 보관 기간. 로그(Loki)와 같은 14일이다. Mimir 의 compactor_blocks_retention_period 가 된다
+    retention:
+      time: 14d

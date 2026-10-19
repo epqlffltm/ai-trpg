@@ -159,7 +159,7 @@
 
 ## 지켜보기
 
-혼자 쓰는 동안은 가볍게 간다. 로그를 모으는 것(Alloy, Loki, Grafana)은 compose 의 프로필 `observability` 로 붙였다(#25, [README 의 로그 모으기](../README.md#로그-모으기)). `staging` 에서 켠다. 메트릭은 그다음이다.
+혼자 쓰는 동안은 가볍게 간다. 로그를 모으는 것(Alloy, Loki, Grafana)과 메트릭의 저장소(Prometheus)는 compose 의 프로필 `observability` 로 붙였다(#25, [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기)). `staging` 에서 켠다. 서버의 메트릭은 서버마다 붙이는 중이다.
 수집기, 보관 기간, Grafana 를 여는 곳은 [관측 규격](../observability.md#수집기grafana-alloy를-붙일-자리)에 정했다.
 같은 VM 에 올리므로 메모리를 다시 잰다(아래 [열린 질문](#열린-질문)). 문제가 생기면 로그와 메트릭을 S3 에 따로 두고 VM 을 나눈다.
 
