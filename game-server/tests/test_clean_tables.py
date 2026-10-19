@@ -39,6 +39,8 @@ from app.tables.models import (
     TableItem,
     TableMonster,
     TableMonsterItem,
+    TableNpc,
+    TableNpcItem,
     TablePlaceItem,
     TableQuest,
     TableSheet,
@@ -107,7 +109,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     쪽지도 직접 넣는다. 받을 사람이 있어야 하는데 혼자 앉은 테이블이다.
     소지품도 직접 넣는다. 판에 물건이 있어야 하는데, 물건 항목을 더하면 위의 판과 서술이 달라진다.
     퀘스트도 같은 까닭으로 직접 넣는다(사건 항목). 서 본 곳과 찾은 길, 장소에 남은 물건도 같다(장소 항목).
-    몬스터의 상태도 같다. 조우를 적으려면 장소 항목과 시작 장소가 있어야 한다.
+    몬스터의 상태도 같다. 조우를 적으려면 장소 항목과 시작 장소가 있어야 한다. NPC 가 지닌 물건의 줄도 같다.
     모델 목록과 원가, 날짜판을 바꾼 기록도 직접 넣는다. API 가 없고 관리 명령(scripts/models.py)으로만 생긴다.
     발송함도 직접 넣는다. 알림은 모델이 은퇴할 때만 생긴다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
@@ -184,6 +186,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         held = TableMonster(table_id=uuid.UUID(table['id']), hp=1, status='alive', **monster)
         held.items = [TableMonsterItem(slot=0, count=0)]
         session.add(held)
+        npc = await session.scalar(select(TableNpc).where(TableNpc.table_id == uuid.UUID(table['id'])))
+        session.add(TableNpcItem(table_id=npc.table_id, entry_id=npc.entry_id, slot=0, count=0))
         # 덧붙이기만 하는 표. 트리거가 DELETE 를 막아 TRUNCATE 로 비워진다(tests/cleaning.py)
         session.add(build_read(ME, ReadKind.TABLE, uuid.UUID(table['id']), '신고', datetime.now(UTC)))
         session.add(build_action(ME, ActionKind.TABLE_END, uuid.UUID(table['id']), '신고', datetime.now(UTC)))

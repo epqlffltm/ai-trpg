@@ -578,6 +578,7 @@ class TableNpc(Base):
         CheckConstraint("jsonb_typeof(abilities) = 'object'", name='abilities_is_object'),
         CheckConstraint('named_round IS NULL OR named_round >= 1', name='named_round_positive'),
         CheckConstraint(one_of('attitude', NpcAttitude), name='attitude_allowed'),
+        CheckConstraint('fell_round IS NULL OR fell_round >= 1', name='fell_round_positive'),
     )
 
     # 두 칸을 합쳐 기본 키로 삼는다. 한 테이블에서 인물 하나의 상태는 하나다.
@@ -599,6 +600,9 @@ class TableNpc(Base):
     attitude: Mapped[str] = mapped_column(
         String(20), default=NpcAttitude.NEUTRAL, server_default=text(f"'{NpcAttitude.NEUTRAL}'")
     )
+    # 살아 있다가 처음 쓰러진(또는 죽은) 라운드. 판정에 맞아서다. 아직 쓰러진 적이 없으면 비어 있다.
+    # 드롭은 이때 한 번만 굴린다(app/rounds/drops.py). 회복해 일어났다가 또 쓰러져도 다시 굴리지 않는다
+    fell_round: Mapped[int | None] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -606,6 +610,38 @@ class TableNpc(Base):
     injuries: Mapped[list['TableInjury']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='TableInjury.created_at, TableInjury.id'
     )
+    # 이 인물이 지닌 물건 중 판에 적은 개수에서 바뀐 줄들(app/tables/npc_items.py). 줄이 없으면 판의 개수 그대로다.
+    # 많아야 판의 줄의 수(장비 5, 소지품 10)라 상태를 읽을 때 함께 읽는다
+    items: Mapped[list['TableNpcItem']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='TableNpcItem.slot'
+    )
+
+
+class TableNpcItem(Base):
+    """
+    NPC 하나가 지닌 물건 한 줄(slot)이 지금 몇 개인가(#457). 몬스터의 것(TableMonsterItem)과 같은 규칙이다.
+
+    판의 NPC 시트에 적은 줄(장비 다음 소지품의 차례)의 번호가 slot 이다. 처음에는 판의 개수 그대로라 행이 없다.
+    떨어뜨리거나 빼앗겨 개수가 바뀐 줄만 행이 생긴다. 0 이 되어도 지우지 않는다. 지우면 판의 개수로 돌아간다.
+    바꾸는 것은 엔진뿐이다(app/rounds/drops.py). 방장도 AI 도 바꾸지 못한다.
+    """
+
+    __tablename__ = 'table_npc_items'
+    __table_args__ = (
+        CheckConstraint('count >= 0', name='count_not_negative'),
+        CheckConstraint('slot >= 0', name='slot_not_negative'),
+        # NPC 의 기본 키가 두 칸(table_id, entry_id)이라 두 칸으로 가리킨다. NPC 의 행이 지워지면 함께 지워진다
+        ForeignKeyConstraint(
+            ['table_id', 'entry_id'], ['table_npcs.table_id', 'table_npcs.entry_id'], ondelete='CASCADE'
+        ),
+    )
+
+    # 세 칸을 합쳐 기본 키로 삼는다
+    table_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    entry_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    slot: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    # 지금 지닌 개수
+    count: Mapped[int] = mapped_column(SmallInteger)
 
 
 class TableMonster(Base):

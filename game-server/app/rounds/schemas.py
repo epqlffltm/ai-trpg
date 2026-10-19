@@ -160,15 +160,18 @@ class DroppedItemOut(BaseModel):
 
 class DropOut(BaseModel):
     """
-    몬스터를 처음 쓰러뜨려 나온 물건들. 엔진이 굴리고 엔진이 줬다(app/rounds/drops.py).
+    몬스터나 NPC 를 처음 쓰러뜨려 나온 물건들. 엔진이 굴리고 엔진이 줬다(app/rounds/drops.py).
 
-    받는 사람은 그 마리가 있던 장소의 죽지 않은 캐릭터 중 서버의 주사위로 고른 한 명이다.
-    그 장소에 받을 사람이 없었으면 user_id 가 None 이고 나온 것은 모두 사라졌다(lost).
+    source 가 monster 면 monster_id 와 monster_name 이, npc 면 npc_id(인물 항목의 id)와 npc_name(장면의 호칭)이 있다.
+    받는 사람은 그 장소(몬스터는 그 마리가 있던 곳, NPC 는 친 사람이 선 곳)의 죽지 않은 캐릭터 중
+    서버의 주사위로 고른 한 명이다. 받을 사람이 없었으면 user_id 가 None 이고 나온 것은 모두 사라졌다(lost).
     """
 
     source: str
-    monster_id: uuid.UUID
-    monster_name: str
+    monster_id: uuid.UUID | None = None
+    monster_name: str | None = None
+    npc_id: uuid.UUID | None = None
+    npc_name: str | None = None
     user_id: uuid.UUID | None
     character_name: str | None
     items: list[DroppedItemOut]
@@ -241,7 +244,7 @@ class CheckOutcome(BaseModel):
     npc_effect: NpcEffectOut | None = None
     # 이 판정으로 몬스터 한 마리의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. 위의 둘과 함께 있지 않다
     monster_effect: MonsterEffectOut | None = None
-    # 이 판정으로 몬스터를 처음 쓰러뜨려 무엇이 나왔으면 그 드롭. 아니면 None 이다
+    # 이 판정으로 몬스터나 NPC 를 처음 쓰러뜨려 무엇이 나왔으면 그 드롭. 아니면 None 이다
     drop: DropOut | None = None
     # 치료하는 행동이었으면 그 결과. 아니면 None 이다
     treatment: TreatmentOut | None = None
@@ -652,6 +655,18 @@ class RoundOut(BaseModel):
     narration_failures: int
 
 
+class CarriedOut(BaseModel):
+    """몬스터 한 마리나 NPC 하나가 지금 지닌 물건 한 가지(app/tables/carried.py). 무엇을 몇 개, 장비인지 소지품인지."""
+
+    entry_id: uuid.UUID
+    name: str
+    # 물건의 등급(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다
+    rarity: ItemRarity
+    count: int
+    # 몸에 걸치거나 쥔 장비인가. 아니면 품에 넣은 소지품이다
+    equipped: bool
+
+
 class PersonOut(BaseModel):
     """이번 장면의 인물 하나. 행동으로 겨눌 수 있는 NPC 다(죽은 인물은 겨누지 못한다)."""
 
@@ -667,18 +682,8 @@ class PersonOut(BaseModel):
     injuries: list[str]
     # 일행을 대하는 태도(friendly 우호, neutral 중립, hostile 적대). 엔진이 정한다
     attitude: NpcAttitude
-
-
-class CarriedOut(BaseModel):
-    """몬스터 한 마리가 지금 지닌 물건 한 가지(app/tables/monster_items.py). 무엇을 몇 개, 장비인지 소지품인지."""
-
-    entry_id: uuid.UUID
-    name: str
-    # 물건의 등급(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다
-    rarity: ItemRarity
-    count: int
-    # 몸에 걸치거나 쥔 장비인가. 아니면 품에 넣은 소지품이다
-    equipped: bool
+    # 지금 지닌 물건. 판의 NPC 시트에 적은 것에서 떨어뜨리거나 빼앗긴 것을 뺀 것이다. 장비 다음 소지품의 차례다
+    items: list[CarriedOut] = []
 
 
 class SceneMonsterOut(BaseModel):

@@ -210,9 +210,9 @@ async def test_only_the_people_in_the_scene_are_listed(client: AsyncClient, me: 
     cast = await people(client, me, world['table'])
 
     # 드워프는 장면에 나오지 않았고, 고속도로는 인물이 아니다. 이름은 장면의 호칭이다. 진짜 이름은 아직 드러나지 않았다
-    # 태도는 판에 적지 않아 중립이다
+    # 태도는 판에 적지 않아 중립이다. 지닌 물건도 적지 않았다
     lady = {'id': world['lady']['id'], 'name': '악역영애', 'status': 'alive', 'injuries': [], 'named': False}
-    lady['attitude'] = 'neutral'
+    lady.update(attitude='neutral', items=[])
     # 몬스터가 없는 판이다
     assert cast == {'round': 1, 'people': [lady], 'monsters': []}
 

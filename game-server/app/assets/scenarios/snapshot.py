@@ -88,7 +88,8 @@ from app.engine.sheet import Sheet
 #  35: 아이템 규칙에 물건의 등급(items[].rarity: normal, rare, unique, epic, legendary)이 있다
 #  36: 규칙에 훔치기(steal)가, 몬스터에 둔한지(dull)가 있다
 #  37: 인물의 NPC 시트에 처음 태도(npc_sheets[].attitude: friendly, neutral, hostile)가 있다
-SNAPSHOT_FORMAT = 37
+#  38: 인물의 NPC 시트에 지닌 물건(npc_sheets[].equipment, inventory)과 둔한지(dull)가 있다. 몬스터와 같은 모양이다
+SNAPSHOT_FORMAT = 38
 
 
 class EntrySnapshot(BaseModel):
@@ -242,13 +243,30 @@ class PregenSnapshot(BaseModel):
     items: list[ItemStackSnapshot] = []
 
 
+class CarriedItemSnapshot(BaseModel):
+    """
+    몬스터나 NPC 가 지닌 물건 한 줄. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개 지녔다. 몬스터는 마리마다다.
+
+    chance(%)는 처음 쓰러졌을 때 이 줄이 떨어질 확률이다.
+    """
+
+    entry_id: uuid.UUID
+    count: int
+    chance: int
+
+
 class NpcSheetSnapshot(BaseModel):
-    """NPC 시트 하나. 판 안의 로어북 인물 항목 하나(entry_id)의 숫자와 처음 태도다."""
+    """NPC 시트 하나. 판 안의 로어북 인물 항목 하나(entry_id)의 숫자와 처음 태도와 지닌 물건이다."""
 
     entry_id: uuid.UUID
     sheet: Sheet
     # 처음 태도. 형식 37 보다 옛 판의 인물은 중립이다
     attitude: NpcAttitude = NpcAttitude.NEUTRAL
+    # 지닌 물건. 줄의 번호는 장비 다음 소지품의 차례다(app/tables/npc_items.py).
+    # 형식 38 보다 옛 판의 인물은 아무것도 지니지 않고 둔하지 않다
+    equipment: list[CarriedItemSnapshot] = []
+    inventory: list[CarriedItemSnapshot] = []
+    dull: bool = False
 
 
 class AttackSnapshot(BaseModel):
@@ -258,18 +276,6 @@ class AttackSnapshot(BaseModel):
     ability: str
     difficulty: str
     harm: str
-
-
-class MonsterItemSnapshot(BaseModel):
-    """
-    몬스터가 지닌 물건 한 줄. 판 안의 로어북 물건 항목 하나(entry_id)를 마리마다 count 개 지녔다.
-
-    chance(%)는 처음 쓰러졌을 때 이 줄이 떨어질 확률이다.
-    """
-
-    entry_id: uuid.UUID
-    count: int
-    chance: int
 
 
 class MonsterSnapshot(BaseModel):
@@ -290,8 +296,8 @@ class MonsterSnapshot(BaseModel):
     unique: bool = False
     # 지닌 물건. 장비와 소지품이다. 쓰러뜨렸을 때의 드롭은 여기서만 나온다.
     # 줄의 번호는 장비 다음 소지품의 차례다(app/tables/monster_items.py). 형식 34 보다 옛 판의 드롭은 소지품이다
-    equipment: list[MonsterItemSnapshot] = []
-    inventory: list[MonsterItemSnapshot] = []
+    equipment: list[CarriedItemSnapshot] = []
+    inventory: list[CarriedItemSnapshot] = []
     # 둔한가. 둔하면 훔치기가 쉽다(규칙의 steal.dull). 형식 36 보다 옛 판의 몬스터는 둔하지 않다
     dull: bool = False
 
@@ -566,9 +572,14 @@ def npc_sheet_of(snapshot: Snapshot, entry_id: uuid.UUID) -> Sheet:
     return own or snapshot.default_npc_sheet
 
 
+def own_npc_sheet(snapshot: Snapshot, entry_id: uuid.UUID) -> NpcSheetSnapshot | None:
+    """인물 항목 하나에 적은 NPC 시트. 적지 않았으면(기본 NPC 시트를 받는 인물) None 이다."""
+    return next((npc_sheet for npc_sheet in snapshot.npc_sheets if npc_sheet.entry_id == entry_id), None)
+
+
 def npc_attitude_of(snapshot: Snapshot, entry_id: uuid.UUID) -> NpcAttitude:
     """인물 항목 하나의 처음 태도. 그 인물의 NPC 시트가 있으면 그 태도, 없으면 중립이다."""
-    own = next((npc_sheet for npc_sheet in snapshot.npc_sheets if npc_sheet.entry_id == entry_id), None)
+    own = own_npc_sheet(snapshot, entry_id)
     return own.attitude if own else NpcAttitude.NEUTRAL
 
 
@@ -588,8 +599,8 @@ def snapshot_monster(
     monster: Monster,
     sheet: Sheet,
     attacks: list[AttackSnapshot],
-    equipment: list[MonsterItemSnapshot],
-    inventory: list[MonsterItemSnapshot],
+    equipment: list[CarriedItemSnapshot],
+    inventory: list[CarriedItemSnapshot],
     dull: bool = False,
 ) -> MonsterSnapshot:
     """몬스터와 그 시트, 공격, 지닌 물건, 둔한지를 굳힌다."""

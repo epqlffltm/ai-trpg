@@ -20,6 +20,8 @@ from pydantic import (
 
 from app.assets.models import (
     ATTACK_NAME_MAX_LENGTH,
+    CARRIED_MAX_EQUIPMENT,
+    CARRIED_MAX_INVENTORY,
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
     CLOCK_MAX_DAY,
@@ -33,8 +35,6 @@ from app.assets.models import (
     ENCOUNTER_MAX_COUNT,
     ITEM_STACK_MAX,
     MONSTER_MAX_ATTACKS,
-    MONSTER_MAX_EQUIPMENT,
-    MONSTER_MAX_INVENTORY,
     PLAYER_MADE_HP_MAX,
     QUEST_CONDITION_MAX_COUNT,
     QUEST_LINK_CONDITIONS,
@@ -212,11 +212,56 @@ def reject_duplicate_names(pregens: list[Pregen]) -> list[Pregen]:
 Pregens = Annotated[list[Pregen], Field(max_length=SCENARIO_MAX_PREGENS), AfterValidator(reject_duplicate_names)]
 
 
+class CarriedItem(BaseModel):
+    """
+    몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.
+
+    chance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).
+    줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.
+    항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    count: int = Field(default=1, ge=1, le=ITEM_STACK_MAX)
+    chance: int = Field(default=DROP_CHANCE_MAX, ge=1, le=DROP_CHANCE_MAX)
+
+    @field_serializer('entry_id')
+    def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
+        """항목의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(entry_id)
+
+
+def reject_duplicate_items(lines: list[CarriedItem]) -> list[CarriedItem]:
+    """같은 물건이 두 줄이면 거부한다. 한 줄에 개수와 확률로 적는다."""
+    entry_ids = [line.entry_id for line in lines]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 물건이 두 줄 있습니다. 한 줄에 개수와 확률로 적습니다.')
+    return lines
+
+
+def reject_items_in_both(equipment: list[CarriedItem], inventory: list[CarriedItem]) -> None:
+    """같은 물건을 장비와 소지품에 함께 적었으면 거부한다. 지닌 것을 셀 때 어느 줄인지 갈리지 않게."""
+    entry_ids = [line.entry_id for line in [*equipment, *inventory]]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 물건을 장비와 소지품에 함께 적었습니다.')
+
+
+CarriedEquipment = Annotated[
+    list[CarriedItem], Field(max_length=CARRIED_MAX_EQUIPMENT), AfterValidator(reject_duplicate_items)
+]
+CarriedInventory = Annotated[
+    list[CarriedItem], Field(max_length=CARRIED_MAX_INVENTORY), AfterValidator(reject_duplicate_items)
+]
+
+
 class NpcSheet(BaseModel):
     """
-    NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자와 처음 태도를 준다.
+    NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자와 처음 태도와 지닌 물건을 준다.
 
     attitude 는 일행을 처음 어떻게 대하는가다(우호, 중립(기본), 적대). 테이블에서는 엔진이 바꾼다(#474).
+    지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.
 
     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
@@ -228,6 +273,17 @@ class NpcSheet(BaseModel):
     entry_id: uuid.UUID
     sheet: Sheet
     attitude: NpcAttitude = NpcAttitude.NEUTRAL
+    # 지닌 물건. 처음 쓰러졌을 때의 드롭은 여기서만 나온다. 비우면 아무것도 지니지 않는다
+    equipment: CarriedEquipment = []
+    inventory: CarriedInventory = []
+    # 둔한가. 둔하면 훔치기가 쉽다(룰북 규칙의 steal.dull 만큼). 눈치 능력치와는 따로 더한다
+    dull: bool = False
+
+    @model_validator(mode='after')
+    def one_line_per_item(self) -> 'NpcSheet':
+        """같은 물건을 장비와 소지품에 함께 적지 않는다."""
+        reject_items_in_both(self.equipment, self.inventory)
+        return self
 
     @field_serializer('entry_id')
     def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
@@ -277,43 +333,6 @@ MonsterAttacks = Annotated[
 ]
 
 
-class MonsterItem(BaseModel):
-    """
-    몬스터가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 마리마다 count 개 지녔다.
-
-    chance 는 살아 있던 마리가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).
-    줄마다 따로 굴린다. 떨어지지 않은 것은 그 마리가 그대로 지닌다.
-    항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
-    """
-
-    model_config = ConfigDict(extra='forbid')
-
-    entry_id: uuid.UUID
-    count: int = Field(default=1, ge=1, le=ITEM_STACK_MAX)
-    chance: int = Field(default=DROP_CHANCE_MAX, ge=1, le=DROP_CHANCE_MAX)
-
-    @field_serializer('entry_id')
-    def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
-        """항목의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
-        return str(entry_id)
-
-
-def reject_duplicate_items(lines: list[MonsterItem]) -> list[MonsterItem]:
-    """같은 물건이 두 줄이면 거부한다. 한 줄에 개수와 확률로 적는다."""
-    entry_ids = [line.entry_id for line in lines]
-    if len(set(entry_ids)) != len(entry_ids):
-        raise ValueError('같은 물건이 두 줄 있습니다. 한 줄에 개수와 확률로 적습니다.')
-    return lines
-
-
-MonsterEquipment = Annotated[
-    list[MonsterItem], Field(max_length=MONSTER_MAX_EQUIPMENT), AfterValidator(reject_duplicate_items)
-]
-MonsterInventory = Annotated[
-    list[MonsterItem], Field(max_length=MONSTER_MAX_INVENTORY), AfterValidator(reject_duplicate_items)
-]
-
-
 class MonsterSheet(BaseModel):
     """
     몬스터 시트 하나. 붙인 도감의 몬스터 하나(monster_id)에 숫자를 준다.
@@ -330,17 +349,15 @@ class MonsterSheet(BaseModel):
     attacks: MonsterAttacks = []
     # 지닌 물건. 장비(equipment)는 몸에 걸치거나 쥔 것, 소지품(inventory)은 품에 넣은 것이다.
     # 쓰러뜨렸을 때의 드롭은 여기서만 나온다(#372, #456). 비우면 아무것도 지니지 않고 드롭도 없다
-    equipment: MonsterEquipment = []
-    inventory: MonsterInventory = []
+    equipment: CarriedEquipment = []
+    inventory: CarriedInventory = []
     # 둔한가. 둔하면 훔치기가 쉽다(룰북 규칙의 steal.dull 만큼). 눈치 능력치와 타입과는 따로 더한다
     dull: bool = False
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':
         """같은 물건을 장비와 소지품에 함께 적지 않는다. 마리가 지닌 것을 셀 때 어느 줄인지 갈리지 않게."""
-        entry_ids = [line.entry_id for line in [*self.equipment, *self.inventory]]
-        if len(set(entry_ids)) != len(entry_ids):
-            raise ValueError('같은 물건을 장비와 소지품에 함께 적었습니다.')
+        reject_items_in_both(self.equipment, self.inventory)
         return self
 
     @field_serializer('monster_id')

@@ -55,8 +55,8 @@ from tests.test_treatment import make_format_14
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
-# 판에 태도를 적지 않은 인물은 중립이다
-NEUTRAL = {'attitude': 'neutral'}
+# 판에 태도도 지닌 물건도 적지 않은 인물은 중립이고 아무것도 지니지 않았다
+NEUTRAL = {'attitude': 'neutral', 'items': []}
 
 LOREBOOKS_URL = f'{API_PREFIX}/lorebooks'
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')

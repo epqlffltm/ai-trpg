@@ -21,6 +21,7 @@ from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
+from app.rounds.drops import NPC_SOURCE
 from app.rounds.models import Declaration, Round
 from app.rounds.place_item_actions import Source
 from app.rounds.rests import Cause, Recovered
@@ -78,6 +79,7 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
         changed = record_npc_change(session, table, npc_effect_, cause=after)
         holder = {'entry_id': npc_effect_['entry_id'], 'name': npc_effect_['name']}
         record_injury(session, table, npc_effect_.get('injury_roll'), holder, cause=changed)
+        record_drop(session, table, outcome.get('drop'), cause=changed)
     monster_effect = outcome.get('monster_effect')
     if monster_effect is not None:
         changed = record_monster_change(session, table, monster_effect, cause=after)
@@ -181,11 +183,17 @@ def record_monster_change(session: AsyncSession, table: GameTable, effect: dict,
     return recorder.record(session, table, EventType.MONSTER_CHANGED, payload=payload, cause=cause)
 
 
+def drop_origin(drop: dict) -> dict:
+    """드롭이 나온 곳. 출처(source)와, 몬스터면 그 마리(monster_id, monster_name), NPC 면 그 인물(npc_id, npc_name)."""
+    keys = ('npc_id', 'npc_name') if drop['source'] == NPC_SOURCE else ('monster_id', 'monster_name')
+    return {'source': drop['source'], **{key: drop[key] for key in keys}}
+
+
 def record_drop(session: AsyncSession, table: GameTable, drop: dict | None, cause: TableEvent) -> None:
     """
-    몬스터를 쓰러뜨려 얻은 물건을 이벤트로 적는다. 그 마리가 쓰러진 변화의 이벤트(cause)에 잇는다.
+    몬스터나 NPC 를 쓰러뜨려 얻은 물건을 이벤트로 적는다. 그 대상이 쓰러진 변화의 이벤트(cause)에 잇는다.
 
-    방장이 줄 때와 같은 종류(items_gained)를 물건마다 하나씩 적는다. 출처(source, monster_id, monster_name)와
+    방장이 줄 때와 같은 종류(items_gained)를 물건마다 하나씩 적는다. 나온 곳(drop_origin)과
     상한을 넘어 잃은 개수(lost)가 더 붙는다. 받을 사람이 없어 사라졌으면 아무도 얻지 않아 적지 않는다.
     행한 사람(actor_id)을 적지 않는다. 굴리고 준 것은 엔진이다.
     """
@@ -197,9 +205,7 @@ def record_drop(session: AsyncSession, table: GameTable, drop: dict | None, caus
             'user_id': drop['user_id'],
             'character_name': drop['character_name'],
             **thing,
-            'source': drop['source'],
-            'monster_id': drop['monster_id'],
-            'monster_name': drop['monster_name'],
+            **drop_origin(drop),
         }
         recorder.record(session, table, EventType.ITEMS_GAINED, payload=payload, cause=cause)
 

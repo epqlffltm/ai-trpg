@@ -53,7 +53,7 @@ from app.assets.scenarios.schemas import (
 )
 from app.assets.scenarios.snapshot import (
     AttackSnapshot,
-    MonsterItemSnapshot,
+    CarriedItemSnapshot,
     MonsterSnapshot,
     build_snapshot,
     snapshot_monster,
@@ -394,8 +394,8 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             known[monster_sheet.monster_id],
             monster_sheet.sheet,
             [AttackSnapshot(**attack.model_dump()) for attack in monster_sheet.attacks],
-            [MonsterItemSnapshot(**line.model_dump()) for line in monster_sheet.equipment],
-            [MonsterItemSnapshot(**line.model_dump()) for line in monster_sheet.inventory],
+            [CarriedItemSnapshot(**line.model_dump()) for line in monster_sheet.equipment],
+            [CarriedItemSnapshot(**line.model_dump()) for line in monster_sheet.inventory],
             monster_sheet.dull,
         )
         for monster_sheet in read_monster_sheets(scenario)
@@ -444,16 +444,15 @@ def read_quest_rules(scenario: Scenario) -> list[QuestRule]:
 def item_references(scenario: Scenario) -> list[uuid.UUID]:
     """
     물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품, 퀘스트마다의 보상,
-    몬스터마다 지닌 물건(장비와 소지품), 장소에 놓인 물건.
+    몬스터와 NPC 마다 지닌 물건(장비와 소지품), 장소에 놓인 물건.
     """
     stacks = [ItemStack.model_validate(document) for document in scenario.starting_items]
     for document in scenario.pregens:
         stacks.extend(Pregen.model_validate(document).items)
     for quest in read_quest_rules(scenario):
         stacks.extend(quest.reward)
-    carried = [
-        line.entry_id for sheet in read_monster_sheets(scenario) for line in [*sheet.equipment, *sheet.inventory]
-    ]
+    sheets = [*read_monster_sheets(scenario), *read_npc_sheets(scenario)]
+    carried = [line.entry_id for sheet in sheets for line in [*sheet.equipment, *sheet.inventory]]
     placed = [rule.entry_id for rule in read_place_items(scenario)]
     rules = [rule.entry_id for rule in read_item_rules(scenario)]
     return rules + [stack.entry_id for stack in stacks] + carried + placed
