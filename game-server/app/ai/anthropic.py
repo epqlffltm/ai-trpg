@@ -26,11 +26,11 @@ import httpx
 from pydantic import SecretStr
 
 from app.ai.anthropic_stream import read_claude_stream
+from app.ai.catalog_contract import ReasoningStyle
 from app.ai.http_stream import bearer_headers, stream_completion
 from app.ai.openai_compat import THINKING_TOKENS
 from app.ai.provider import ChatMessage, Completion, GenerationParams, Reasoning, Role, TextSink, ignore_text
 from app.ai.thinking import LOWEST_EFFORT, thinking_budget
-from app.catalog.models import ReasoningStyle
 
 # 머리에 싣는 API 의 판
 ANTHROPIC_VERSION = '2023-06-01'

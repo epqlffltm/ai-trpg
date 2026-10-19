@@ -25,6 +25,7 @@ from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.anthropic import AnthropicProvider
+from app.ai.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField
 from app.ai.fake import FakeCallLog
 from app.ai.gemini import GeminiProvider
 from app.ai.openai_compat import WireOptions
@@ -36,8 +37,8 @@ from app.ai.routing import (
     ModelRouter,
 )
 from app.catalog import service
-from app.catalog.lookup import CatalogModel, DbModelLookup
-from app.catalog.models import Grade, Provider, ReasoningStyle, TokenLimitField
+from app.catalog.lookup import DbModelLookup
+from app.catalog.models import Grade
 from app.catalog.schemas import ModelCreate, ModelUpdate
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 from app.rounds.retrying_narrator import NarrationFailed, RetryingNarrator

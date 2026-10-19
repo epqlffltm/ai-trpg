@@ -41,10 +41,11 @@ from decimal import Decimal
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField, is_offered, is_retired
 from app.catalog import service
 from app.catalog.errors import CatalogConflictError, InvalidModelError, ModelNotFoundError
-from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot, Grade, Provider, ReasoningStyle, TokenLimitField
-from app.catalog.rules import is_offered, is_retired, round_cost_usd
+from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot, Grade
+from app.catalog.rules import round_cost_usd
 from app.catalog.schemas import CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 from app.core.config import get_settings
 from app.core.database import create_engine, create_session_factory

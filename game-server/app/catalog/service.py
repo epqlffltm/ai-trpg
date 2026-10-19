@@ -10,7 +10,8 @@ HTTP 를 모른다. SQL 을 모른다. 일마다 commit 하나로 저장한다.
 날짜판 바꾸기만 모델의 줄을 잠근다. 둘이 동시에 바꾸면 둘 다 같은 "앞의 이름"을 적어 기록의 사슬이 끊긴다.
 나머지는 잠그지 않는다. 부딪혀도 망가지는 것이 없다.
   - 원가는 덧붙이기만 하므로, 켤 때 본 "오늘의 단가가 있다"는 그 뒤에도 참이다.
-  - 켜는 것과 은퇴일 적기가 겹쳐 켜진 채 은퇴해도, 쓸 수 있나는 둘을 함께 본다(app/catalog/rules.py 의 is_offered).
+  - 켜는 것과 은퇴일 적기가 겹쳐 켜진 채 은퇴해도, 쓸 수 있나는 둘을 함께 본다
+    (app/ai/catalog_contract.py 의 is_offered).
   - 같은 이름표나 같은 API 모델을 동시에 넣으면 DB 의 제약이 하나를 막는다(먼저 본 것은 친절한 안내일 뿐이다).
 """
 
@@ -19,10 +20,11 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField, is_retired
 from app.catalog import repository
 from app.catalog.errors import CatalogConflictError, Conflict, InvalidModelError, ModelNotFoundError
-from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot, Provider, ReasoningStyle, TokenLimitField
-from app.catalog.rules import is_retired, reasoning_style_problem, token_field_problem
+from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot
+from app.catalog.rules import reasoning_style_problem, token_field_problem
 from app.catalog.schemas import CostCreate, ModelCreate, ModelUpdate, SnapshotSwitch
 
 

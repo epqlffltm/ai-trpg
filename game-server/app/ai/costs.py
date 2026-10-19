@@ -1,7 +1,8 @@
 # game-server/app/ai/costs.py
 
 """
-AI 호출 한 번의 원가를 센다. 모델 목록의 그날의 단가(app/catalog/lookup.py 의 UnitCost)와 provider 가 알려 준 토큰 수로.
+AI 호출 한 번의 원가를 센다. 모델 목록의 그날의 단가(app/ai/catalog_contract.py 의 UnitCost)와
+provider 가 알려 준 토큰 수로.
 
 센 원가는 호출의 기록(ai_invocations.cost_usd)에 남는다. 모델마다 실제로 얼마가 드는지, 판매가가 맞는지 볼 근거다.
 사용자의 크레딧과는 상관없다. 크레딧은 라운드를 열 때 정한 값(결제 서버의 가격표)으로만 받는다.
@@ -20,8 +21,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.ai.calls import NO_USAGE, CallUsage
+from app.ai.catalog_contract import UnitCost
 from app.ai.provider import Completion
-from app.catalog.lookup import UnitCost
 
 MILLION = Decimal(1_000_000)
 # 원가를 적는 자릿수
