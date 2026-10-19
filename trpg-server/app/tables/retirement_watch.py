@@ -35,6 +35,7 @@ from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
 from app.core.loops import Running
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
+from app.observability.spans import job_span
 from app.tables import model_retirement
 from app.tables import repository as table_repository
 from app.tables.model_retirement import NOTHING, Checked
@@ -145,7 +146,8 @@ class RetirementWatch:
 
         찾는 일이 통째로 실패하면(DB 가 없다) 예외를 그대로 올린다. 그 줄은 도는 쪽(run)이 남긴다.
         """
-        with job_scope(new_job_id()):
+        job_id = new_job_id()
+        with job_span(WATCH_OPERATION, job_id), job_scope(job_id):
             started = time.perf_counter()
             watched = await self.sweep()
             logger.log(

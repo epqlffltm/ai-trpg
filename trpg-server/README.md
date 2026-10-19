@@ -3037,8 +3037,9 @@ uv run python -m scripts.eval_memory --fake
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다(아래의 "추적") |
 
-세 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+네 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
 
 개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
 
@@ -3067,7 +3068,7 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 - 서버의 시계(`app/rounds/clock.py`)는 바퀴마다 `job_id` 를 새로 걸고 한 줄을 남긴다. 한 일이 없으면 `debug`, 있으면 `info` 다.
   `closed`(닫은 수), `credit_waits`(크레딧 기다리기를 마무리한 수), `recovered`(사라진 서술을 다시 맡긴 수), `gave_up`(다시 맡기기를 그만둔 수)을 싣는다.
   다시 맡긴 라운드마다 `info`(`round.recover`, `table_id`, `round`, `auto_retries`), 그만둔 라운드마다 `warning`(`error_code: round.stalled`)이 따로 남는다. 한 테이블을 닫다 실패하면 `error`(`table_id`, `error_code: job.failed`)를 남기고 다른 테이블을 계속 닫는다. 요청 밖에서 혼자 시작하므로 추적도 바퀴마다 새로 시작한다.
-- 인증 서버에서 공개키를 받을 때 `traceparent` 머리말로 추적을 이어 준다. 두 서버의 로그가 같은 `trace_id` 로 묶인다. AI provider 에는 아무 식별자도 보내지 않는다.
+- 우리 서버(인증 서버의 공개키와 끊긴 세션, 결제 서버, 알림 서버)를 부를 때 `traceparent` 머리말로 추적을 이어 준다. 두 서버의 로그가 같은 `trace_id` 로 묶인다. span 을 내보내면 그 호출의 span 이 받는 서버의 부모가 된다. AI provider 에는 아무 식별자도 보내지 않는다.
 - 스트림(SSE)의 요청은 연결이 끊길 때 한 줄이 남는다. `duration_ms` 는 연결이 이어진 시간이다.
 - 처리하지 못한 예외의 응답은 `500 {"detail": "서버에서 오류가 났습니다. 잠시 후 다시 시도해 주세요."}` 다.
 - uvicorn 이 스스로 찍던 요청 줄(access log)은 껐다. 주소 뒤에 붙은 값까지 찍었고, 요청이 끝난 줄과 겹친다. uvicorn 의 나머지 줄(뜨고 꺼지는 것)은 같은 JSON 으로 나간다.
@@ -3075,6 +3076,28 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 
 코드는 `app/observability/` 에 있다. `identifiers.py`(식별자의 규칙), `context.py`(요청과 작업 동안 식별자를 들고 있는 곳),
 `redaction.py`(가리는 규칙), `formatter.py`(JSON 한 줄), `setup.py`(로그를 거는 일), `middleware.py`(요청), `responses.py`(처리하지 못한 예외의 응답).
+
+### 추적
+
+요청, 다른 곳을 부르는 것, 쿼리, 작업을 span 으로 남겨 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 민다. 수집기가 Tempo 에 넘긴다.
+규칙과 까닭은 [docs/observability.md](../docs/observability.md)의 "3. 추적"에 있다. 알림 서버(Python 의 본보기)와 같은 코드다.
+주소가 비어 있으면 span 이 생기지 않고 로그는 지금과 같다.
+
+| span | 이름 | 코드 |
+| --- | --- | --- |
+| 요청 | `POST /api/v1/game/tables/{table_id}/rounds`(메서드와 경로의 틀). 상태 확인과 테이블의 스트림은 걸지 않는다 | `app/observability/request_spans.py` |
+| 다른 곳을 부르는 것 | `HTTP POST`. 인증, 결제, 알림 서버와 AI 모델의 창구 | `app/observability/http_spans.py` |
+| 쿼리 | `db SELECT game_tables`(종류와 테이블). 손으로 쓴 것은 `db SELECT` | `app/observability/db_spans.py` |
+| 작업 | `operation`(`round.narrate`, `round.close_overdue`, `charge.settle`, …) | `app/observability/spans.py` 의 `job_span` |
+
+- 로그의 `trace_id` 가 span 의 trace id 와 같다. 요청의 span 에는 `request_id`, 작업의 span 에는 `job_id` 를 싣는다
+- 요청이 맡긴 서술의 span 은 그 요청의 span 아래에 놓인다. 서버가 뜰 때 시작한 정리 작업은 바퀴마다 새 추적이다
+- `traceparent` 는 부르는 쪽이 붙였을 때만(우리 서버) 그 호출의 span 으로 바꾼다. AI 모델의 창구에는 붙이지 않는다
+- 싣지 않는 것: 주소의 경로와 뒤의 값, 머리말, 본문, SQL 의 문장과 값, 예외의 글, AI 에 보낸 글과 받은 글. 쿼리가 실패하면 SQLSTATE 만 적는다
+- 요청이나 작업 밖의 쿼리와 호출(끊긴 세션의 목록을 30초마다 받는 것)은 span 을 걸지 않는다
+- `app/ai` 는 span 의 코드를 가져오지 않는다(`tests/test_ai_boundary.py`). 모델을 부르는 클라이언트를 밖에서 넘기므로 그 클라이언트가 span 을 건다
+
+테스트는 `tests/spans.py` 로 메모리에 모아 이름, 부모, 속성을 본다(`spans` fixture).
 
 
 ## CI

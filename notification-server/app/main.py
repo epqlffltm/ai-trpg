@@ -28,7 +28,7 @@ from app.observability.middleware import RequestLoggingMiddleware
 from app.observability.request_spans import RequestSpanMiddleware
 from app.observability.responses import handle_unexpected_error
 from app.observability.setup import configure_logging
-from app.observability.tracing import configure_tracing, shutdown_tracing
+from app.observability.tracing import FASTAPI_TELEMETRY, configure_tracing, shutdown_tracing
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/notification'
@@ -79,6 +79,8 @@ def create_app(
         redoc_url=None,
         openapi_url=f'{API_PREFIX}/openapi.json' if settings.debug else None,
         lifespan=lifespan,
+        # FastAPI 가 스스로 span, 메트릭, 로그를 내보내지 않게 한다(app/observability/tracing.py)
+        telemetry=FASTAPI_TELEMETRY,
     )
 
     # 요청마다 식별자(request_id, trace_id)를 걸고, 끝나면 한 줄을 남긴다. 응답에 X-Request-ID 를 돌려준다

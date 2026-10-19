@@ -23,6 +23,12 @@ from app.core.config import Settings
 from app.observability.setup import SERVICE_NAME
 from app.observability.spans import use_provider
 
+# FastAPI 가 스스로 하는 관측(FastAPI(telemetry=...))을 끈다.
+# FastAPI 는 OTEL_EXPORTER_OTLP_ENDPOINT 가 있고 SDK 가 깔려 있으면 OpenTelemetry 의 전역을 스스로 채워
+# span, 메트릭, 로그를 그 주소로 민다(0.142 는 기본으로 켜져 있고, 0.143 부터는 FASTAPI_OTEL_AUTO_CONFIGURE 로 켠다).
+# 그 span 은 우리가 정한 이름과 싣는 것을 따르지 않고, 메트릭은 정하지 않은 이름으로, 로그는 Loki 와 겹쳐 나간다.
+# span 은 이 패키지가 걸고, 로그는 stderr 의 JSON 을 Alloy 가 모은다
+FASTAPI_TELEMETRY = {'auto_configure': False, 'tracing': False, 'metrics': False, 'logs': False}
 # OTLP(HTTP)로 추적을 받는 주소의 끝. 보내는 주소 뒤에 붙인다
 TRACES_PATH = '/v1/traces'
 # 수집기의 답을 기다리는 가장 긴 시간(초). 끌 때 남은 것을 보내는 것도 이만큼에서 포기한다
