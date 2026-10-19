@@ -28,9 +28,11 @@
 #                  두 파일을 겹친 설정에서 비밀의 범위, 바깥에 여는 포트(프록시의 80, 443 뿐), 로그 상한을 보고,
 #                  staging 에만 있는 이미지의 태그가 있는지, 인증서의 남은 날짜 검사(docker/certbot)가 맞는지 본다.
 #                  staging 의 프록시를 하나 더 띄워(자체 서명 인증서) HTTPS 로 본다: HTTP 를 넘기는가, 인증서의 확인 파일을
-#                  내주는가, 허용 주소 밖을 막는가, 허용 주소를 고치면 다시 읽는가, HSTS 와 보안 머리말
+#                  내주는가, 허용 주소 밖을 막는가, 허용 주소를 고치면 다시 읽는가, HSTS 와 보안 머리말.
+#                  바깥 백업(backup-offsite)도 본다: S3 흉내(moto)를 띄워 백업을 암호화해 올리고, 확인 열쇠와 주 열쇠로
+#                  풀어 빈 DB 에 풀리는가, 받는 쪽이 아닌 열쇠로는 풀리지 않는가, 실패하면 곧바로 unhealthy 인가
 #     logs         모든 컨테이너의 로그를 찍는다. 실패했을 때 부른다
-#     down         컨테이너와 볼륨을 지운다(check-staging 이 띄운 프록시와 허용 주소의 파일도)
+#     down         컨테이너와 볼륨을 지운다(check-staging 이 띄운 프록시, S3 흉내, 허용 주소의 파일과 열쇠도)
 #
 # 서버의 기능은 보지 않는다. 그것은 서버마다의 CI 가 한다. 여기서는 "이미지가 만들어지고, 마이그레이션이 돌고,
 # 서버가 뜨고, 서로 닿는가"만 본다.
@@ -80,6 +82,15 @@ STAGING_HTTP=http://127.0.0.1:18080
 STAGING_HTTPS="https://$STAGING_DOMAIN:18443"
 # 그 프록시에 CI 가 잠깐 두는 허용 주소. 이름이 *.conf 라 git 에 올라가지 않는다(.gitignore)
 STAGING_ALLOWLIST=docker/nginx/allowlist/ci-stack-smoke.conf
+# 바깥 백업(backup-offsite)을 볼 때 띄우는 S3 흉내(moto). 서버의 이미지와 같은 파이썬 이미지에 설치해 띄운다
+STAGING_S3=staging-s3
+STAGING_S3_IMAGE=python:3.13-slim-trixie
+MOTO_VERSION=5.2.4
+STAGING_BUCKET=ci-backups
+# 바깥 백업의 확인 열쇠를 두는 폴더(docker-compose.staging.yml 이 붙인다). git 에 올라가지 않는다(.gitignore)
+STAGING_KEYS=backup-keys
+# 바깥 백업의 받는 쪽 열쇠(age 의 공개키 둘). 설정을 읽기만 할 때는 아무 값이나 되고, 바깥 백업을 볼 때 실제 열쇠로 바꾼다
+staging_recipients="age1ci age1ci"
 
 # 서버들(app)과 로그와 메트릭 모으기(observability)를 함께 띄운다
 compose() {
@@ -89,6 +100,8 @@ compose() {
 # staging 의 설정(두 파일을 겹친 것). VM 의 루트 .env 에 적을 값을 이 실행에서만 준다
 staging_compose() {
   DOMAIN="$STAGING_DOMAIN" ACME_EMAIL=ci@example.com GAME_LLM_BASE_URL=http://100.64.0.1:11434/v1 \
+    BACKUP_S3_BUCKET="$STAGING_BUCKET" BACKUP_S3_ENDPOINT="http://$STAGING_S3:5000" \
+    BACKUP_AWS_ACCESS_KEY_ID=ci BACKUP_AWS_SECRET_ACCESS_KEY=ci BACKUP_AGE_RECIPIENTS="$staging_recipients" \
     docker compose "${STAGING_FILES[@]}" --profile app --profile observability "$@"
 }
 
@@ -837,12 +850,12 @@ eventually_status_is() {
 }
 
 # staging 에만 있는 이미지(certbot, ollama)의 태그가 저장소에 있는가. 받지 않고 목록만 묻는다(ollama 는 크다).
-# 로컬에도 있는 이미지는 up 이 이미 받았다
+# 로컬에도 있는 이미지는 up 이 이미 받았다. 이 저장소에서 만드는 이미지(ai-trpg/...)는 빼고 본다
 staging_images_exist() {
   local image
   while IFS= read -r image; do
     docker manifest inspect "$image" >/dev/null || { echo "$image 이 없다" >&2; return 1; }
-  done < <(comm -13 <(compose config --images | sort -u) <(staging_compose config --images | sort -u))
+  done < <(comm -13 <(compose config --images | sort -u) <(staging_compose config --images | sort -u) | grep -v '^ai-trpg/')
 }
 
 # 인증서의 남은 날짜 검사(docker/certbot/cert_check.py)의 테스트를 certbot 이미지 안에서 돌린다(cryptography 가 있다)
@@ -902,6 +915,124 @@ allow_everyone() {
   echo 'allow all;' >"$STAGING_ALLOWLIST"
 }
 
+# --- 바깥 백업(backup-offsite) ---
+
+# 바깥 백업의 컨테이너에서 명령 하나를 돌린다. 둘째 인자부터는 그 명령의 인자다
+#   offsite <offsite.sh 의 명령> [docker compose run 의 옵션...]
+offsite() {
+  local command="$1"; shift
+  staging_compose run --rm --no-deps -T "$@" backup-offsite "$command"
+}
+
+# S3 흉내에 aws CLI 를 부른다. 바깥 백업의 이미지에 든 것을 쓴다
+offsite_aws() {
+  staging_compose run --rm --no-deps -T --entrypoint aws backup-offsite --endpoint-url "http://$STAGING_S3:5000" "$@"
+}
+
+# age 의 열쇠를 하나 만들어 그 파일에 쓴다. 공개키를 찍는다
+#   new_age_key <파일>
+new_age_key() {
+  staging_compose run --rm --no-deps -T --entrypoint age-keygen backup-offsite >"$1" 2>/dev/null
+  grep -o 'age1[0-9a-z]*' "$1"
+}
+
+# S3 흉내(moto)를 서버의 망에 띄우고 버킷을 만든다. 설치하는 데 1~2분 걸린다
+offsite_s3_up() {
+  docker rm -f "$STAGING_S3" >/dev/null 2>&1 || true
+  docker run -d --name "$STAGING_S3" --network "$(network_of default)" "$STAGING_S3_IMAGE" \
+    sh -c "pip install --quiet --disable-pip-version-check 'moto[server]==$MOTO_VERSION' && exec moto_server -H 0.0.0.0 -p 5000" \
+    >/dev/null
+  local deadline=$((SECONDS + 240))
+  while ((SECONDS < deadline)); do
+    if offsite_aws s3 ls >/dev/null 2>&1; then
+      offsite_aws s3 mb "s3://$STAGING_BUCKET" >/dev/null
+      return
+    fi
+    sleep 5
+  done
+  docker logs "$STAGING_S3" >&2 || true
+  return 1
+}
+
+# 확인 열쇠(VM 에 두는 것)와 주 열쇠(VM 밖에 두는 것)를 만들고, 받는 쪽 열쇠를 그 둘로 바꾼다.
+# 셋째 열쇠(stranger)는 받는 쪽이 아니다. 그것으로는 풀리지 않아야 한다
+offsite_keys() {
+  local check master
+  rm -rf "$STAGING_KEYS" && mkdir -m 700 "$STAGING_KEYS"
+  offsite_key_dir="$(mktemp -d)"
+  check="$(new_age_key "$STAGING_KEYS/check.key")" || return 1
+  master="$(new_age_key "$offsite_key_dir/master.key")" || return 1
+  stranger="$(new_age_key "$offsite_key_dir/stranger.key")" || return 1
+  [[ -n "$check" && -n "$master" && -n "$stranger" ]] || return 1
+  chmod a+r "$offsite_key_dir"/*.key
+  staging_recipients="$master $check"
+}
+
+# 버킷에 올라간 것이 age 로 잠긴 파일인가(맨 앞이 age 의 머리말인가). 덤프가 그대로 올라가면 안 된다
+uploaded_encrypted() {
+  local key
+  key="$(offsite_aws s3 ls "s3://$STAGING_BUCKET/" | awk '{print $4}' | tr -d '\r' | sort | tail -n 1)"
+  [[ "$key" == trpg-*.dump.age ]] || return 1
+  [[ "$(offsite_aws s3 cp "s3://$STAGING_BUCKET/$key" - | head -c 21)" == "age-encryption.org/v1" ]]
+}
+
+# 주 열쇠(VM 밖의 것)로 풀어 본다. 손으로 되살릴 때의 열쇠도 받는 쪽인가
+master_key_restores() {
+  offsite verify -v "$offsite_key_dir:/run/master-keys:ro" -e OFFSITE_CHECK_KEY=/run/master-keys/master.key
+}
+
+# 받는 쪽이 아닌 열쇠로는 풀리지 않는가. 받는 쪽 열쇠의 검사를 지나도록 그 열쇠를 받는 쪽인 척 적는다(파일은 그 열쇠로 잠기지 않았다)
+stranger_key_fails() {
+  local real="$staging_recipients" status=0
+  staging_recipients="${real%% *} $stranger"
+  if offsite verify -v "$offsite_key_dir:/run/master-keys:ro" -e OFFSITE_CHECK_KEY=/run/master-keys/stranger.key; then
+    status=1
+  fi
+  staging_recipients="$real"
+  return "$status"
+}
+
+# 풀어 본 뒤 확인용 DB 가 남지 않았는가
+no_offsite_check_db() {
+  local sql="SELECT count(*) FROM pg_database WHERE datname LIKE '%\_offsite\_check'"
+  # shellcheck disable=SC2016
+  [[ "$(compose exec -T -e SQL="$sql" db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "$SQL"')" == "0" ]]
+}
+
+# 풀어 보기가 실패한 뒤 상태 확인이 곧바로 실패하는가(마지막으로 풀어 본 시각을 지운다)
+unhealthy_after_failed_verify() {
+  ! offsite health
+}
+
+offsite_down() {
+  docker rm -f "$STAGING_S3" >/dev/null 2>&1 || true
+  rm -rf "$STAGING_KEYS"
+  [[ -z "${offsite_key_dir:-}" ]] || rm -rf "$offsite_key_dir"
+}
+
+# 바깥 백업: 암호화해 올리고, 확인 열쇠와 주 열쇠로 풀리고, 다른 열쇠로는 풀리지 않는가
+check_offsite_backup() {
+  report "바깥 백업의 이미지를 만든다(age, aws CLI)" staging_compose build backup-offsite
+  report "바깥 백업의 열쇠(확인, 주)를 만든다" offsite_keys
+  if ! offsite_s3_up; then
+    echo "FAIL S3 흉내(moto)가 뜬다"
+    failures=$((failures + 1))
+    offsite_down
+    return
+  fi
+  echo "ok   S3 흉내(moto)가 뜬다"
+  report "로컬의 백업을 암호화해 버킷에 올린다" offsite upload
+  report "버킷의 것은 age 로 잠겨 있다(덤프가 그대로 올라가지 않는다)" uploaded_encrypted
+  report "다시 올려도 이미 올린 것은 건너뛴다" offsite upload
+  report "버킷의 백업을 확인 열쇠로 풀어 원본과 맞추고 빈 DB 에 푼다" offsite verify
+  report "올리고 풀어 본 뒤에는 healthy 다" offsite health
+  report "주 열쇠(VM 밖에 두는 것)로도 풀린다" master_key_restores
+  report "받는 쪽이 아닌 열쇠로는 풀리지 않는다" stranger_key_fails
+  report "풀어 보기가 실패하면 곧바로 unhealthy 다" unhealthy_after_failed_verify
+  report "풀어 본 뒤 확인용 DB 가 남지 않는다" no_offsite_check_db
+  offsite_down
+}
+
 check_staging() {
   report "staging 의 설정을 값을 채워 읽을 수 있다" staging_compose config -q
   check_config "staging 에서도 비밀은 그것을 쓰는 프로세스에만 간다(secret_scope.py)" staging_compose .github/scripts/secret_scope.py
@@ -936,6 +1067,7 @@ check_staging() {
   report "허용 주소 안에서도 관리자 화면은 막는다" staging_status_is 404 "$STAGING_HTTPS/admin/login/"
   report "허용 주소 안에서도 서버끼리만 부르는 주소는 막는다" staging_status_is 404 "$STAGING_HTTPS/api/v1/billing/service/holds" -X POST
   staging_proxy_down
+  check_offsite_backup
   finish
 }
 
@@ -955,6 +1087,7 @@ logs() {
 
 down() {
   staging_proxy_down
+  offsite_down
   compose down -v
 }
 
