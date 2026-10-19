@@ -1,7 +1,7 @@
 # game-server/tests/test_ai_log_retention.py
 
 """
-AI 호출의 기록에 남은 원문을 보관 기간이 지나면 비우는 것(app/ai/retention.py, #274)을 검증한다.
+AI 호출의 기록에 남은 원문을 보관 기간이 지나면 비우는 것(app/ai_log/retention.py, #274)을 검증한다.
 
 정리 작업의 "지금"은 테스트가 정한다. 기록의 남긴 시각도 테스트가 적는다.
 
@@ -21,9 +21,9 @@ from fastapi import FastAPI
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai import repository, retention
-from app.ai.models import AiInvocation
-from app.ai.retention import PRUNE_OPERATION, AiLogPruner, cutoff
+from app.ai_log import repository, retention
+from app.ai_log.models import AiInvocation
+from app.ai_log.retention import PRUNE_OPERATION, AiLogPruner, cutoff
 from app.core.config import Settings
 from tests.logs import rendered
 
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 # 이 테스트들의 "지금". 실제 시계를 읽지 않는다
 NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
 RETENTION_DAYS = 30
-RETENTION_LOGGER = 'app.ai.retention'
+RETENTION_LOGGER = 'app.ai_log.retention'
 
 
 def pruner_of(app: FastAPI) -> AiLogPruner:

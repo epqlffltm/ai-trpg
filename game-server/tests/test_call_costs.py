@@ -24,14 +24,14 @@ from pydantic import SecretStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.call_log import DbCallLog
 from app.ai.calls import NO_USAGE, CallRecord, CallScope, CallUsage, Outcome
 from app.ai.catalog_contract import CatalogModel, Provider, TokenLimitField, UnitCost
 from app.ai.costs import PriceTag, cost_usd, usage_of
 from app.ai.fake import FakeCallLog
-from app.ai.models import AiInvocation
 from app.ai.provider import Completion, Reasoning
 from app.ai.routing import Endpoint, ModelRouter
+from app.ai_log.call_log import DbCallLog
+from app.ai_log.models import AiInvocation
 from app.catalog import service
 from app.catalog.lookup import DbModelLookup
 from app.catalog.models import Grade
