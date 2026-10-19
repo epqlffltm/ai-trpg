@@ -90,3 +90,15 @@ def kill(npc: TableNpc) -> None:
     """
     npc.hp = 0
     npc.status = NpcStatus.DEAD
+
+
+def mark_first_fall(npc: TableNpc, round_number: int) -> bool:
+    """
+    판정에 맞아 쓰러진 NPC 가 처음 쓰러진 것인가. 처음이면 그 라운드를 적고 참이다(드롭을 굴린다).
+
+    회복해 일어났다가 또 쓰러지면 이미 적혀 있어 거짓이다. 상태를 고친다. 저장하지는 않는다.
+    """
+    if npc.fell_round is not None:
+        return False
+    npc.fell_round = round_number
+    return True

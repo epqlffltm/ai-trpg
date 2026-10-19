@@ -431,7 +431,16 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'character_modes': ['pregen', 'custom'],
         'default_sheet': SHEET,
         # 인물 항목이 모두 시트를 가졌다. 기본 NPC 시트는 없어도 된다
-        'npc_sheets': [{'entry_id': entry['id'], 'sheet': NPC_SHEET, 'attitude': 'neutral'}],
+        'npc_sheets': [
+            {
+                'entry_id': entry['id'],
+                'sheet': NPC_SHEET,
+                'attitude': 'neutral',
+                'equipment': [],
+                'inventory': [],
+                'dull': False,
+            }
+        ],
         'default_npc_sheet': None,
         # 몬스터 시트를 적지 않았다. 몬스터가 없는 판이다
         'monsters': [],

@@ -24,8 +24,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import MONSTER_MAX_EQUIPMENT
-from app.assets.scenarios.snapshot import MonsterItemSnapshot, MonsterSnapshot, read_snapshot
+from app.assets.models import CARRIED_MAX_EQUIPMENT
+from app.assets.scenarios.snapshot import CarriedItemSnapshot, MonsterSnapshot, read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_33
 from app.engine.dice import ScriptedDice
 from app.rounds.drops import fall_from
@@ -159,7 +159,7 @@ async def test_bad_carried_items_are_refused(client: AsyncClient, me: dict[str, 
     else:
         entries = f'{LOREBOOKS_URL}/{world["lorebook"]["id"]}/entries'
         things = [
-            await post(client, entries, me, name=f'갑옷 {n}', kind='item') for n in range(MONSTER_MAX_EQUIPMENT + 1)
+            await post(client, entries, me, name=f'갑옷 {n}', kind='item') for n in range(CARRIED_MAX_EQUIPMENT + 1)
         ]
         sheet = rat_sheet(world, equipment=[drop(thing) for thing in things], inventory=[])
     body = {'title': '수로', 'monster_sheets': [sheet]}
@@ -250,12 +250,12 @@ async def test_all_that_falls_leaves_the_monster(
 # --- DB 를 쓰지 않는 작은 함수들 ---
 
 
-def definition(equipment: list[MonsterItemSnapshot], inventory: list[MonsterItemSnapshot]) -> MonsterSnapshot:
+def definition(equipment: list[CarriedItemSnapshot], inventory: list[CarriedItemSnapshot]) -> MonsterSnapshot:
     return MonsterSnapshot.model_construct(equipment=equipment, inventory=inventory)
 
 
-def line(count: int, chance: int = 100) -> MonsterItemSnapshot:
-    return MonsterItemSnapshot(entry_id=uuid.uuid4(), count=count, chance=chance)
+def line(count: int, chance: int = 100) -> CarriedItemSnapshot:
+    return CarriedItemSnapshot(entry_id=uuid.uuid4(), count=count, chance=chance)
 
 
 def test_untouched_lines_are_read_from_the_snapshot():

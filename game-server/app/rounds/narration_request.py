@@ -26,6 +26,7 @@ from app.calendar import clock, state
 from app.engine.check import find_ability, find_difficulty
 from app.engine.injury import known_injuries
 from app.engine.ruleset import Ruleset
+from app.rounds.drops import NPC_SOURCE
 from app.rounds.models import Declaration, Round
 from app.rounds.narrator import (
     ClockNote,
@@ -278,7 +279,8 @@ def to_drop(drop: dict | None) -> DropNote | None:
     if drop is None or drop['user_id'] is None:
         return None
     things = [DroppedNote(name=one['name'], count=one['count'], lost=one['lost']) for one in drop['items']]
-    return DropNote(monster=drop['monster_name'], receiver=drop['character_name'], items=things)
+    holder = drop['npc_name'] if drop['source'] == NPC_SOURCE else drop['monster_name']
+    return DropNote(holder=holder, receiver=drop['character_name'], items=things)
 
 
 def check_terms(declaration: Declaration) -> tuple[str, str]:
