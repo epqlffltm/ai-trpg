@@ -74,8 +74,10 @@ class ActionKind(enum.StrEnum):
     TAKE = 'take'
     # 가진 물건을 지금 장소에 내려놓는다. 누구나 주울 수 있게 보이게 놓인다
     PUT_DOWN = 'put_down'
-    # 같은 장소의 몬스터 한 마리가 지닌 물건 하나를 훔친다. 규칙이 정한 능력으로 한 번 굴린다
+    # 같은 장소의 몬스터 한 마리나 장면의 인물이 지닌 물건 하나를 훔친다. 규칙이 정한 능력으로 한 번 굴린다
     STEAL = 'steal'
+    # 쓰러졌거나 죽은 몬스터나 인물이 지닌 물건 하나를 가져간다. 굴리지 않는다
+    LOOT = 'loot'
 
 
 class RestLength(enum.StrEnum):
@@ -349,6 +351,32 @@ class StealAction(BaseModel):
         return self
 
 
+class LootAction(BaseModel):
+    """
+    쓰러졌거나 죽은 대상이 지닌 물건 하나(item)를 가져가는 행동(app/rounds/loots.py, #475).
+
+    대상은 같은 장소의 몬스터 한 마리(monster)나 이번 장면의 인물(npc)이다. 둘 중 하나만 적는다.
+    판정이 없다. 그 줄을 통째로 갖는다. 살아 있는(쓰러지지 않은) 대상에게서는 가져가지 못한다. 그때는 훔치기다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.LOOT]
+    # 테이블의 몬스터 한 마리의 id 다(table_monsters.id). 자기가 선 장소의 마리만 고를 수 있다. 죽었어도 된다
+    monster: uuid.UUID | None = None
+    # 판의 로어북 인물 항목의 id 다. 이번 장면의 인물만 고를 수 있다. 죽었어도 된다
+    npc: uuid.UUID | None = None
+    # 그 대상이 지닌 물건의 항목 id 다. 장면의 인물이나 몬스터 목록의 items 에서 고른다
+    item: uuid.UUID
+
+    @model_validator(mode='after')
+    def require_one_victim(self) -> Self:
+        """가져올 대상은 하나다. monster 와 npc 중 하나만 적는다."""
+        if (self.monster is None) == (self.npc is None):
+            raise ValueError('monster 와 npc 중 하나만 적습니다.')
+        return self
+
+
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
 AnyAction = (
     CheckAction
@@ -362,6 +390,7 @@ AnyAction = (
     | TakeAction
     | PutDownAction
     | StealAction
+    | LootAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

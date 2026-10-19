@@ -25,6 +25,7 @@ from app.rounds.narrator import (
     InjuryNote,
     ItemActionNote,
     ItemNote,
+    LootNote,
     MonsterTurnNote,
     Move,
     NamingNote,
@@ -362,6 +363,26 @@ def caught_consequence(note: StealNote) -> str:
     return f'{attitude}. 싸움이 붙었다' if note.fight else attitude
 
 
+def describe_loot(note: LootNote) -> str:
+    """
+    빼앗은 결과를 한 줄로 적는다.
+
+    예: (빼앗기: 수로 쥐 1 에게서 송곳니 1개를 가져갔다)
+        (빼앗기: 수로 쥐 1 에게서 금화 3개를 가져갔다. 더 들 수 없어 남은 것은 두었다)
+        (빼앗기: 수로 쥐 1 은(는) 송곳니를 이미 지니지 않았다)
+        (빼앗기: 악역영애 이(가) 깨어 있어 가져가지 못했다)
+        (빼앗기: 금화을(를) 더 들 수 없어 가져가지 못했다)
+    """
+    if note.looted:
+        line = f'(빼앗기: {note.victim} 에게서 {note.name} {note.count}개를 가져갔다'
+        return line + ('. 더 들 수 없어 남은 것은 두었다)' if note.reason == 'full' else ')')
+    if note.reason == 'awake':
+        return f'(빼앗기: {note.victim} 이(가) 깨어 있어 가져가지 못했다)'
+    if note.reason == 'gone':
+        return f'(빼앗기: {note.victim} 은(는) {note.name}을(를) 이미 지니지 않았다)'
+    return f'(빼앗기: {note.name}을(를) 더 들 수 없어 가져가지 못했다)'
+
+
 def describe_handed_over(notes: list[HandOverNote]) -> str:
     """
     이룬 퀘스트에 넘긴 물건들을 한 줄로 적는다. 퀘스트의 차례, 그 안의 물건 차례다.
@@ -430,6 +451,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_put_down(move.put_down))
     if move.steal is not None:
         parts.append(describe_steal(move.steal))
+    if move.loot is not None:
+        parts.append(describe_loot(move.loot))
     if move.handed_over:
         parts.append(describe_handed_over(move.handed_over))
     if move.rest is not None:

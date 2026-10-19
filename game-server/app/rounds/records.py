@@ -22,6 +22,7 @@ from app.events.models import EventType, TableEvent
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.drops import NPC_SOURCE
+from app.rounds.loots import LOOT_SOURCE
 from app.rounds.models import Declaration, Round
 from app.rounds.place_item_actions import Source
 from app.rounds.rests import Cause, Recovered
@@ -30,6 +31,7 @@ from app.rounds.state import (
     has_outcome,
     item_give_of,
     item_use_of,
+    loot_of,
     move_of,
     naming_of,
     put_down_of,
@@ -346,11 +348,39 @@ def record_steal(session: AsyncSession, table: GameTable, declaration: Declarati
     recorder.record(session, table, EventType.ITEMS_GAINED, payload=gained, cause=attempted)
 
 
+def record_loot(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    빼앗은 결과를 이벤트로 적는다. 하나라도 가져갔으면 items_gained 하나다(source 는 loot, 그 대상). 행동에 잇는다.
+
+    못 가져갔으면(gone, awake, 가득) 적지 않는다. 줍기와 같다. 까닭은 라운드의 선언 결과에 있다.
+    행한 사람을 적지 않는다. 판의 물건을 준 것은 엔진이다.
+    """
+    loot = loot_of(declaration)
+    if not loot['looted']:
+        return
+    gained = {
+        'round': cause.payload['round'],
+        'user_id': str(declaration.user_id),
+        'character_name': declaration.character_name,
+        'entry_id': loot['entry_id'],
+        'name': loot['name'],
+        'count': loot['count'],
+        'total': loot['total'],
+        **taken_from(LOOT_SOURCE, loot),
+    }
+    recorder.record(session, table, EventType.ITEMS_GAINED, payload=gained, cause=cause)
+
+
+def taken_from(source: str, result: dict) -> dict:
+    """가져간 물건의 출처와 그 대상. 몬스터면 monster_id·monster_name, NPC 면 npc_id·npc_name."""
+    if result.get('npc_id') is not None:
+        return {'source': source, 'npc_id': result['npc_id'], 'npc_name': result['npc_name']}
+    return {'source': source, 'monster_id': result['monster_id'], 'monster_name': result['monster_name']}
+
+
 def stolen_from(steal: dict) -> dict:
-    """훔친 물건의 출처(source 는 steal)와 그 대상. 몬스터면 monster_id·monster_name, NPC 면 npc_id·npc_name."""
-    if steal.get('npc_id') is not None:
-        return {'source': STEAL_SOURCE, 'npc_id': steal['npc_id'], 'npc_name': steal['npc_name']}
-    return {'source': STEAL_SOURCE, 'monster_id': steal['monster_id'], 'monster_name': steal['monster_name']}
+    """훔친 물건의 출처(source 는 steal)와 그 대상."""
+    return taken_from(STEAL_SOURCE, steal)
 
 
 def record_gained(
@@ -449,6 +479,8 @@ def record_declaration(
         record_put_down(session, table, declaration, cause=acted)
     elif steal_of(declaration) is not None:
         record_steal(session, table, declaration, cause=acted)
+    elif loot_of(declaration) is not None:
+        record_loot(session, table, declaration, cause=acted)
     elif rest_of(declaration) is not None:
         record_rest(session, table, member, declaration, cause=acted)
 

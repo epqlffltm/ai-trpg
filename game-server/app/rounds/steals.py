@@ -20,7 +20,6 @@ DB 를 모른다. 대상이 지닌 것, 소지품, NPC 의 태도를 고친다. 
 """
 
 import uuid
-from collections.abc import Callable
 from dataclasses import asdict, dataclass
 
 from app.assets.models import RARITY_ORDER, NpcAttitude, NpcCaught
@@ -32,10 +31,11 @@ from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.effects import Judging, mark_fight, mark_npc_fight
 from app.rounds.errors import ActionNotInRulesError
 from app.rounds.monster_scene import Gone, SceneMonster, find_scene_monster, gone_reason
-from app.tables import carried, items, monster_items, npc_items, npcs
+from app.rounds.victims import Victim, monster_victim, npc_victim
+from app.tables import carried, items, npcs
 from app.tables.carried import Carried
 from app.tables.items import CatalogItem
-from app.tables.models import NpcStatus, TableMember, TableMonster, TableNpc
+from app.tables.models import TableMember
 from app.tables.npc_attitudes import change_attitude
 
 # 훔쳐 얻은 물건의 출처. items_gained 이벤트의 source 에 적는다. 몬스터의 드롭은 monster 다
@@ -65,28 +65,6 @@ class Factor:
 
 
 @dataclass(frozen=True)
-class Victim:
-    """
-    훔칠 대상 하나. 몬스터 한 마리나 NPC 하나를 같은 모양으로 본다.
-
-    key 는 이번 라운드에 누구와 싸웠는지 찾는 키(몬스터의 id, NPC 의 항목 id)다(Judging.fights).
-    kind 는 몬스터의 타입이다. NPC 는 타입이 없어 None 이다(둔한 타입이 걸리지 않는다).
-    origin 은 결과에 적을 대상의 칸들이다(monster_id·monster_name 이나 npc_id·npc_name).
-    set_count 는 줄의 번호와 개수를 받아 대상이 지닌 개수를 고친다.
-    """
-
-    key: uuid.UUID
-    name: str
-    abilities: dict
-    kind: str | None
-    dull: bool
-    unwary: bool
-    held: list[Carried]
-    set_count: Callable[[int, int], None]
-    origin: dict
-
-
-@dataclass(frozen=True)
 class StealOdds:
     """훔치기의 목표값과 그것을 이룬 것들. amounts 는 걸린 것마다 오르내린 양(오르면 +, 내리면 -)이다."""
 
@@ -99,63 +77,6 @@ def require_steal(ruleset: Ruleset) -> Steal:
     if ruleset.steal is None:
         raise ActionNotInRulesError('kind')
     return ruleset.steal
-
-
-def is_unwary(state: TableMonster | TableNpc) -> bool:
-    """싸움 전인가. 아직 아무와도 싸우지 않았거나, 쓰러져 있다. 몬스터와 NPC 가 같다."""
-    return state.fought_round is None or state.status == NpcStatus.DOWNED
-
-
-def monster_origin(monster: SceneMonster) -> dict:
-    """결과에 적을 대상의 칸들. 몬스터면 npc 칸이 비어 있다."""
-    return {'monster_id': str(monster.state.id), 'monster_name': monster.name, 'npc_id': None, 'npc_name': None}
-
-
-def npc_origin(person: CastMember) -> dict:
-    """결과에 적을 대상의 칸들. NPC 면 monster 칸이 비어 있다."""
-    return {'monster_id': None, 'monster_name': None, 'npc_id': str(person.entry_id), 'npc_name': person.name}
-
-
-def monster_victim(monster: SceneMonster) -> Victim:
-    """몬스터 한 마리를 훔칠 대상으로 본다."""
-    state = monster.state
-    return Victim(
-        key=state.id,
-        name=monster.name,
-        abilities=state.abilities,
-        kind=monster.definition.kind,
-        dull=monster.definition.dull,
-        unwary=is_unwary(state),
-        held=monster_items.carried(state, monster.definition),
-        set_count=lambda slot, count: monster_items.set_count(state, slot, count),
-        origin=monster_origin(monster),
-    )
-
-
-def npc_victim(person: CastMember) -> Victim:
-    """NPC 하나를 훔칠 대상으로 본다. 시트를 적지 않은 인물은 아무것도 지니지 않고 둔하지 않다."""
-    npc = person.npc
-    return Victim(
-        key=person.entry_id,
-        name=person.name,
-        abilities=npc.abilities,
-        kind=None,
-        dull=person.definition.dull if person.definition else False,
-        unwary=is_unwary(npc),
-        held=npc_items.carried(npc, person.definition),
-        set_count=lambda slot, count: npc_items.set_count(npc, slot, count),
-        origin=npc_origin(person),
-    )
-
-
-def find_monster_carried(monster: SceneMonster, entry_id: uuid.UUID) -> Carried | None:
-    """그 마리가 지금 지닌 그 물건의 줄. 지니지 않았으면 None."""
-    return carried.find_carried(monster_items.carried(monster.state, monster.definition), entry_id)
-
-
-def find_npc_carried(person: CastMember, entry_id: uuid.UUID) -> Carried | None:
-    """그 인물이 지금 지닌 그 물건의 줄. 지니지 않았으면 None."""
-    return carried.find_carried(npc_items.carried(person.npc, person.definition), entry_id)
 
 
 def awareness_of(ruleset: Ruleset, rule: Steal, victim: Victim) -> int:

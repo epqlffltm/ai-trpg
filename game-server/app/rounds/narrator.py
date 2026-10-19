@@ -366,6 +366,22 @@ class StealNote:
 
 
 @dataclass(frozen=True)
+class LootNote:
+    """
+    쓰러졌거나 죽은 대상에게서 물건을 빼앗은 결과(app/rounds/loots.py). 엔진이 정한 것이다. 판정이 없다.
+
+    victim 은 대상의 장면의 호칭이다. looted 가 참이면 count 개를 가져갔다.
+    reason 은 다 가져가지 못한 까닭이다(gone: 이미 없었다, full: 더 들 수 없다, awake: 대상이 깨어 있었다).
+    """
+
+    victim: str
+    name: str
+    count: int
+    looted: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
 class HandOverNote:
     """
     이룬 퀘스트가 이 캐릭터에게서 가져간 물건 한 가지(app/rounds/quest_handover.py). 엔진이 정한 것이다.
@@ -431,8 +447,10 @@ class Move:
     take: TakeNote | None = None
     # 가진 물건을 내려놓는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     put_down: PutDownNote | None = None
-    # 몬스터가 지닌 물건을 훔치는 행동이면 그 결과. verdict 와 함께 있지 않다(판정은 엔진이 따로 굴렸다)
+    # 몬스터나 NPC 가 지닌 물건을 훔치는 행동이면 그 결과. verdict 와 함께 있지 않다(판정은 엔진이 따로 굴렸다)
     steal: StealNote | None = None
+    # 쓰러졌거나 죽은 대상에게서 빼앗는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
+    loot: LootNote | None = None
     # 이 라운드가 닫힐 때 이룬 퀘스트가 이 캐릭터에게서 가져간 물건들. 퀘스트마다, 물건마다 한 줄이다
     handed_over: list[HandOverNote] = field(default_factory=list)
     # 겨눈 몬스터를 칠 수 없어 굴리지 않았으면 그 까닭. 아니면 None 이다. verdict 와 함께 있지 않다

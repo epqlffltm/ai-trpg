@@ -20,6 +20,8 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
   - 내려놓기(PutDownAction). 맵에 서 있고, 판의 물건을 그만큼 가지고 있어야 한다.
   - 훔치기(StealAction). 규칙에 훔치기가 있고, 자기가 선 장소의 죽지 않은 마리나 이번 장면의 죽지 않은 인물이
     그 물건을 지금 지녀야 한다(app/rounds/steals.py).
+  - 빼앗기(LootAction). 자기가 선 장소의 마리나 이번 장면의 인물이 쓰러졌거나 죽어 있고, 그 물건을 지금 지녀야 한다
+    (app/rounds/loots.py). 판정이 없어 규칙을 보지 않는다.
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
 비워 둔 칸(난이도, 회복과 치료의 대상)은 여기서 채워 저장한다. 읽는 쪽이 "비어 있으면"을 다시 따지지 않는다.
 """
@@ -33,6 +35,7 @@ from app.engine.action import (
     AnyAction,
     CheckAction,
     GiveAction,
+    LootAction,
     MoveAction,
     NameAction,
     PutDownAction,
@@ -53,12 +56,13 @@ from app.rounds.monster_scene import SceneMonster, find_scene_monster, stands_wi
 from app.rounds.place_item_actions import accept_take
 from app.rounds.rests import accept_rest
 from app.rounds.state import find_declaration, is_down, rules_of
-from app.rounds.steals import find_monster_carried, find_npc_carried, require_steal
+from app.rounds.steals import require_steal
+from app.rounds.victims import find_monster_carried, find_npc_carried
 from app.tables import items, npcs, sheets
 from app.tables import monsters as table_monsters
 from app.tables import state as table_state
 from app.tables.items import CatalogItem
-from app.tables.models import GameTable, TableMember
+from app.tables.models import GameTable, NpcStatus, TableMember
 
 
 def aim(action: CheckAction, actor_id: uuid.UUID) -> CheckAction:
@@ -287,7 +291,7 @@ def accept_put_down(table: GameTable, member: TableMember, action: PutDownAction
     return action.model_dump(mode='json')
 
 
-def require_carried_by_victim(scene: Scene, action: StealAction) -> None:
+def require_carried_by_victim(scene: Scene, action: StealAction | LootAction) -> None:
     """훔칠 대상(몬스터나 NPC)이 그 물건을 지금 지녔는지 본다. 아니면 ActionTargetError(carried)."""
     if action.monster is not None:
         line = find_monster_carried(find_scene_monster(scene.monsters, action.monster), action.item)
@@ -315,6 +319,38 @@ def accept_steal(ruleset: Ruleset, member: TableMember, scene: Scene, action: St
     return action.model_dump(mode='json')
 
 
+def require_downed_victim(scene: Scene, member: TableMember, action: LootAction) -> None:
+    """
+    빼앗을 대상이 쓰러졌거나 죽어 있는지 본다. 몬스터는 자기가 선 장소의 마리여야 한다.
+
+    장면에 없거나 다른 장소에 있으면 ActionTargetError(monster, npc), 살아 있으면 RoundConflictError(target_not_down).
+    """
+    if action.monster is not None:
+        monster = find_scene_monster(scene.monsters, action.monster)
+        if monster is None or not stands_with(member, monster):
+            raise ActionTargetError('monster')
+        status = monster.state.status
+    else:
+        person = find_cast_member(scene.cast, action.npc)
+        if person is None:
+            raise ActionTargetError('npc')
+        status = person.npc.status
+    if status == NpcStatus.ALIVE:
+        raise RoundConflictError(Conflict.TARGET_NOT_DOWN)
+
+
+def accept_loot(member: TableMember, scene: Scene, action: LootAction) -> dict:
+    """
+    빼앗는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
+
+      - 대상이 쓰러졌거나 죽어 있어야 한다(require_downed_victim). 살아 있는 대상에게서는 훔친다.
+      - 그 대상이 그 물건을 지금 지니지 않았으면 ActionTargetError(carried).
+    """
+    require_downed_victim(scene, member, action)
+    require_carried_by_victim(scene, action)
+    return action.model_dump(mode='json')
+
+
 def accept_action(
     table: GameTable,
     member: TableMember,
@@ -327,7 +363,7 @@ def accept_action(
     member 는 선언하는 사람이고, scene 은 이번 장면(인물과 몬스터)이다.
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
-    accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal).
+    accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal, accept_loot).
     """
     if action is None:
         return None
@@ -350,6 +386,8 @@ def accept_action(
         return accept_put_down(table, member, action)
     if isinstance(action, StealAction):
         return accept_steal(ruleset, member, scene, action)
+    if isinstance(action, LootAction):
+        return accept_loot(member, scene, action)
     if isinstance(action, RestAction):
         return accept_rest(ruleset, action)
     return accept_check(table, member, action, scene, ruleset)

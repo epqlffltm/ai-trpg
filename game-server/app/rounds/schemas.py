@@ -507,6 +507,36 @@ class StealOutcome(BaseModel):
     steal: StealOut
 
 
+class LootOut(BaseModel):
+    """
+    빼앗은 결과. 엔진이 정했다(app/rounds/loots.py). 판정이 없다.
+
+    대상이 몬스터면 monster_id 와 monster_name 이, NPC 면 npc_id(인물 항목의 id)와 npc_name(장면의 호칭)이 있다.
+    looted 가 참이면 가져갔다(count 는 가져간 개수, left 는 대상에게 남은 개수, total 은 도둑이 가진 개수).
+    reason: gone(앞사람이 먼저 가져갔다), full(상한에 닿아 그만큼만, 또는 하나도), awake(대상이 깨어 있었다).
+    """
+
+    user_id: uuid.UUID
+    character_name: str
+    monster_id: uuid.UUID | None = None
+    monster_name: str | None = None
+    npc_id: uuid.UUID | None = None
+    npc_name: str | None = None
+    entry_id: uuid.UUID
+    name: str
+    looted: bool
+    count: int
+    left: int
+    total: int
+    reason: str | None
+
+
+class LootOutcome(BaseModel):
+    """빼앗는 행동의 결과."""
+
+    loot: LootOut
+
+
 class RestOut(BaseModel):
     """
     쉰 결과. 엔진이 정했다(app/rounds/rests.py). 판정이 없다.
@@ -572,7 +602,8 @@ class DeclarationOut(BaseModel):
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
     # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
-    # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 훔쳤으면 StealOutcome, 쉬었으면 RestOutcome 이다.
+    # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 훔쳤으면 StealOutcome, 빼앗았으면 LootOutcome,
+    # 쉬었으면 RestOutcome 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
     # 차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면 TurnLostOutcome 이다
     outcome: (
@@ -585,6 +616,7 @@ class DeclarationOut(BaseModel):
         | TakeOutcome
         | PutDownOutcome
         | StealOutcome
+        | LootOutcome
         | RestOutcome
         | TargetGoneOutcome
         | TurnLostOutcome

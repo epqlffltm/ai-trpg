@@ -865,7 +865,7 @@ app/personas/
 
 | 권한 | 지금 남은 것 | 대체 |
 | --- | --- | --- |
-| 물건 주기·빼앗기 | 전부 | 몬스터 드롭(#372), 장소에 놓인 물건의 줍기와 찾기(#279), 선언한 쓰기·건네기·내려놓기(#454)는 있다. 퀘스트에 넘기기(#455), 몬스터와 NPC 에게서 훔치기(#456, #457)도 있다. 사고팔기(#278), 빼앗기(#475)가 들어오면 지운다 |
+| 물건 주기·빼앗기 | 전부 | 몬스터 드롭(#372), 장소에 놓인 물건의 줍기와 찾기(#279), 선언한 쓰기·건네기·내려놓기(#454)는 있다. 퀘스트에 넘기기(#455), 몬스터와 NPC 에게서 훔치기(#456, #457), 쓰러진 상대에게서 빼앗기(#475)도 있다. 사고팔기(#278)가 들어오면 지운다 |
 | 퀘스트 바꾸기 | 진행 중인 것의 실패로만. 드러내기와 성공은 엔진이 조건으로 정한다(#412) | 기한을 넘긴 실패는 엔진이 한다. 그 밖의 실패는 대체가 없다 |
 | 캐릭터 옮기기 | 아는 장소 어디로든 | 선언한 이동은 있다. 길로 이어지지 않은 이동(순간이동 같은 사건)과 조우(#283)는 대체가 없다 |
 | 시간 흘리기 | 다음 라운드에 흐를 시간, 0분~일주일([시계](#시계)) | 길을 가는 시간과 쉬는 시간은 엔진이 늘린다. 기한이 있는 퀘스트가 있어 결과에 닿는다. 장면을 건너뛰는 시간("사흘 뒤")은 대체가 없다 |
@@ -1237,7 +1237,7 @@ records.py      일어난 일을 이벤트로 적기
 
 | 칸 | 뜻 |
 | --- | --- |
-| `kind` | 행동의 종류. `check`(판정), `treat`(치료, 아래 "치료"), `name`(지목), `use`(물건 쓰기), `give`(물건 건네기), `move`(맵에서 한 칸 가기), `search`(숨긴 길과 숨긴 물건 찾기), `rest`(쉬기), `take`(놓인 물건 줍기), `put_down`(가진 물건 내려놓기), `steal`(몬스터가 지닌 물건 훔치기)이 있다. 이 표의 칸들은 `check` 의 것이다 |
+| `kind` | 행동의 종류. `check`(판정), `treat`(치료, 아래 "치료"), `name`(지목), `use`(물건 쓰기), `give`(물건 건네기), `move`(맵에서 한 칸 가기), `search`(숨긴 길과 숨긴 물건 찾기), `rest`(쉬기), `take`(놓인 물건 줍기), `put_down`(가진 물건 내려놓기), `steal`(몬스터나 NPC 가 지닌 물건 훔치기), `loot`(쓰러졌거나 죽은 상대의 물건 빼앗기)이 있다. 이 표의 칸들은 `check` 의 것이다 |
 | `ability` | 판정에 쓰는 능력. 그 테이블의 규칙에 있는 능력의 `key` |
 | `difficulty` | 난이도의 단계. 규칙에 있는 단계의 `key`. 숫자를 직접 받지 않는다. 비우면 규칙의 기본 난이도로 채워 저장한다 |
 | `risk` | 실패의 대가. 실패하면 행동한 캐릭터가 이 등급만큼 피해를 입는다. 규칙에 있는 양의 등급의 `key`. 없어도 된다 |
@@ -1372,6 +1372,20 @@ records.py      일어난 일을 이벤트로 적기
 - 차례가 왔을 때 앞사람이 그 물건을 먼저 훔쳤으면 굴리지 않는다(`reason: gone`). 그 대상이 앞 차례에 죽었으면 판정처럼 `target_gone` 이다(NPC 면 `monster_id` 대신 `npc_id`).
 - 결과는 `outcome.steal`(`user_id`, `character_name`, `monster_id`, `monster_name`, `npc_id`, `npc_name`, `entry_id`, `name`, `check`(`roll`, `modifier`, `total`, `target`, `success`, 굴리지 않았으면 `null`), `hindrance`, `factors`(걸린 것: `equipped`, `rarity`, `dull_kind`, `dull`, `unwary`, `distracted`), `stolen`, `count`(훔친 개수), `left`(대상에게 남은 개수), `total`(도둑이 가진 개수), `reason`, `fight`(들켜 싸움이 붙었는가. 몬스터에게 들키면 늘 참), `attitude_change`(들켜 바뀐 NPC 의 태도 `previous`, `attitude`, `reason: caught_stealing`. 몬스터이거나 이미 적대였으면 `null`))이다. 대상이 몬스터면 `npc_*` 가, NPC 면 `monster_*` 가 `null` 이다. 대상의 눈치는 대상의 숫자라 따로 적지 않는다(목표값에 섞여 있다).
 - 이벤트: `steal_attempted` 가 행동에 이어 적힌다(들켰어도). NPC 의 태도가 바뀌었으면 `npc_attitude_changed` 가, 훔쳤으면 `items_gained`(`source: steal`, 몬스터면 `monster_id`·`monster_name`, NPC 면 `npc_id`·`npc_name`)가 그 뒤에 잇는다. 행한 사람은 없다.
+
+**빼앗기(#475).** 쓰러졌거나 죽은 상대가 지닌 물건 하나를 가져간다(`app/rounds/loots.py`). 상대는 같은 장소의 몬스터 한 마리나 이번 장면의 인물이고, 무엇을 지녔는지는 장면의 인물과 몬스터 목록의 `items` 에서 고른다. `monster` 와 `npc` 중 하나만 적는다.
+
+```json
+{"content": "쓰러진 쥐의 품을 뒤진다.", "action": {"kind": "loot", "monster": "…", "item": "…"}}
+```
+
+- 받을 때: 몬스터면 자기가 선 장소의 마리여야 하고(422 `action.monster`), NPC 면 이번 장면의 인물이어야 한다(422 `action.npc`). 둘 다 죽었어도 된다. 살아 있는(쓰러지지 않은) 상대면 409 `target_not_down` 이다. 그때는 훔치기다. 그 상대가 그 물건을 지금 지녀야 한다(422 `action.item`).
+- 판정이 없다. 의식이 없는 상대의 물건을 가져가는 데에 훔치기 판정은 맞지 않다. 규칙에 훔치기가 없어도 된다.
+- 그 줄을 통째로 갖는다. 한 가지의 상한(99)을 넘은 것은 상대가 그대로 지닌다(`reason: full`). 이미 가득이면 하나도 못 가져간다.
+- 차례가 왔을 때 앞사람이 그 물건을 먼저 가져갔으면 `reason: gone`, 앞사람이 그 인물을 회복시켜 깨어 있으면 `reason: awake` 다.
+- NPC 의 태도는 바꾸지 않는다(의식이 없다). 깨어날 때의 반응은 따로 다룬다.
+- 결과는 `outcome.loot`(`user_id`, `character_name`, `monster_id`, `monster_name`, `npc_id`, `npc_name`, `entry_id`, `name`, `looted`, `count`(가져간 개수), `left`(상대에게 남은 개수), `total`(가진 개수), `reason`)이다.
+- 이벤트: 가져갔으면 `items_gained`(`source: loot`, 상대의 칸)가 행동에 이어 적힌다. 못 가져갔으면 적지 않는다(줍기와 같다). 행한 사람은 없다.
 
 **쉬기.** 캐릭터가 선언한다. 방장만 정하는 일이 아니다. 방장도 GM 이 아니라 플레이어 하나다.
 
@@ -1659,6 +1673,7 @@ app/rounds/
   - `narration-33`: 한 일의 줄에 이룬 퀘스트에 넘긴 물건(`(넘긴 물건: 약초 배달에 약초 2개)`)
   - `narration-34`: 한 일의 줄에 훔치기(`(훔치기: 수로 쥐 1 에게서 송곳니 1개를 몰래 빼냈다)`, 들켰으면 그 마리가 노린다는 말)
   - `narration-35`: `[인물의 상태]` 의 줄에 태도(중립이 아니면 `태도: 적대`)와, 태도도 엔진이 정한 사실이라는 다루는 법
+  - `narration-37`: 한 일의 줄에 빼앗기(`(빼앗기: 수로 쥐 1 에게서 송곳니 1개를 가져갔다)`, 못 가져갔으면 그 까닭)
   - `narration-36`: 훔치기의 줄에 NPC 가 대상인 것(`(훔치기: 악역영애 에게서 부채을(를) 훔치다 들켰다. 악역영애 이(가) 적대한다. 싸움이 붙었다)`, 이미 적대였으면 `이미 적대하고 있다`)
 - **부상은 사실로 준다.** 시스템 지시에 "부상도 엔진이 정했다", "인물이 입은 부상은 사실이다. 그 부상으로 못 하는 일을 하게 쓰지 마라. 엔진이 정하지 않은 부상을 새로 만들지 마라", "이번 라운드에 생긴 부상은 결과 줄에 '새 부상'으로 적힌 것뿐이다. 나머지는 전부터 입고 있던 부상이다. 그 부상 때문에 힘겨워하는 모습으로 쓴다"가 들어간다. 판정 줄에 그냥 "부상의 영향"이라고 적었을 때는 모델이 실패의 이유를 지금 팔이 부러지는 장면으로 썼다(상태 지키기 평가에서 3 번 중 3 번). 인물의 상태 줄 뒤에 입은 부상의 이름과 사실이, PC 의 결과 줄 뒤에 "[입은 부상: 팔 골절(…)]"이, 새로 입은 부상이 "새 부상: 팔 골절"로, 판정에 영향을 준 부상이 "전부터 입은 부상의 영향: 팔 골절"로, 노려 친 것이 "노려 치기: 한쪽 눈 잃음"으로 붙는다.
 - **치료도 엔진이 정했다.** 치료의 결과가 "→ 엘프의 팔 골절 치료: 앞당겨짐, 낫기까지 20 라운드", "… 다 나음. 후유증: 굽은 팔", "… 치료 실패: 상처가 덧남, 5 라운드 늦어짐" 같은 줄로 붙는다. 시간이 지나 나은 것은 "[나은 부상: 팔 골절(후유증: 굽은 팔)]"로 붙는다.
@@ -2346,7 +2361,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `naming_resolved` | 엔진이 지목의 결과를 정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `guess`, `correct`, `entry_id`, `name`(맞았으면 진짜 이름, 아니면 `null`), `label`, `newly` |
 | `death_save_rolled` | 엔진이 쓰러진 캐릭터의 죽음의 굴림을 굴렸다. 그 라운드의 행동들 뒤, 닫힘 앞에 적힌다 | `round`, `user_id`, `character_name`, `roll`, `target`, `success`, `successes`, `failures`, `fate`(`dying`, `stable`, `dead`) |
 | `character_died` | 캐릭터가 죽었다. 죽음의 굴림으로 죽었으면 그 굴림 바로 뒤에, 치료 실패의 즉사면 그 치료 바로 뒤에 적힌다 | `user_id`, `character_name`, `cause`(`death_save`, `gave_up`, `treatment`). 죽음의 굴림이나 치료로 죽었으면 `round` 도 |
-| `items_gained` | 캐릭터가 물건을 얻었다. 방장이 줬거나(행한 사람이 방장), 몬스터를 쓰러뜨려 엔진이 줬거나(행한 사람이 없고 `monster_changed` 에 잇는다), 장소에서 줍거나 찾았다(행한 사람이 없고 그 행동이나 `place_searched` 에 잇는다) | `user_id`, `character_name`, `entry_id`, `name`(물건의 이름), `count`(받은 개수), `total`(그 뒤의 개수). 몬스터의 드롭이면 `round`, `source`(`monster`), `monster_id`, `monster_name`(장면의 호칭), `lost`(상한을 넘어 잃은 개수)가 더 있다. NPC 의 드롭이면 `source` 가 `npc` 이고 `monster_id`, `monster_name` 대신 `npc_id`, `npc_name` 이 있다(`npc_changed` 에 잇는다). 장소에서 얻었으면 `round`, `source`(`place` 주움, `search` 찾음), `place`(`entry_id`, `name`)가 더 있다. 훔쳤으면 `round`, `source`(`steal`), 몬스터면 `monster_id`, `monster_name`, NPC 면 `npc_id`, `npc_name` 이 더 있다(`steal_attempted` 에 잇는다) |
+| `items_gained` | 캐릭터가 물건을 얻었다. 방장이 줬거나(행한 사람이 방장), 몬스터를 쓰러뜨려 엔진이 줬거나(행한 사람이 없고 `monster_changed` 에 잇는다), 장소에서 줍거나 찾았다(행한 사람이 없고 그 행동이나 `place_searched` 에 잇는다) | `user_id`, `character_name`, `entry_id`, `name`(물건의 이름), `count`(받은 개수), `total`(그 뒤의 개수). 몬스터의 드롭이면 `round`, `source`(`monster`), `monster_id`, `monster_name`(장면의 호칭), `lost`(상한을 넘어 잃은 개수)가 더 있다. NPC 의 드롭이면 `source` 가 `npc` 이고 `monster_id`, `monster_name` 대신 `npc_id`, `npc_name` 이 있다(`npc_changed` 에 잇는다). 장소에서 얻었으면 `round`, `source`(`place` 주움, `search` 찾음), `place`(`entry_id`, `name`)가 더 있다. 훔쳤으면 `round`, `source`(`steal`), 몬스터면 `monster_id`, `monster_name`, NPC 면 `npc_id`, `npc_name` 이 더 있다(`steal_attempted` 에 잇는다). 빼앗았으면 `source` 가 `loot` 이고 대상의 칸은 훔친 것과 같다(그 행동의 이벤트에 잇는다) |
 | `items_lost` | 방장이 캐릭터에게서 물건을 빼앗았다 | `items_gained` 와 같다. `total` 이 0 이면 다 잃었다 |
 | `item_used` | 캐릭터가 소모품을 썼다(또는 못 했다). 그 행동 바로 뒤에 적힌다. 회복했으면 바로 뒤에 `hp_changed` | `round`, `character_name`, `entry_id`, `name`, `used`, `reason`, `target`(회복받은 사람), `remaining` |
 | `item_given` | 캐릭터가 물건을 건넸다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `entry_id`, `name`, `count`, `given`, `reason`, `target`(받은 사람), `remaining`, `target_total` |
