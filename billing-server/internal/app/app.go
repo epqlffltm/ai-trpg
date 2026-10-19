@@ -7,6 +7,8 @@
 package app
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/eligibility"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/metrics"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
@@ -66,6 +69,40 @@ func NewProvider(settings config.Payment) payment.Provider {
 		return payment.NewToss(settings.TossSecretKey, payment.TossAPIURL, nil)
 	}
 	return payment.Fake{}
+}
+
+// NewMetrics 는 메트릭을 수집기에 미는 것을 만든다. process 는 이 서버의 어느 프로세스인지다(server, sweeper, reconcile).
+// 보낼 곳이 없으면 아무것도 보내지 않는 것이다. 끌 때 Shutdown 을 불러 남은 것을 보낸다.
+func NewMetrics(ctx context.Context, settings config.Metrics, logging config.Logging, process string) (*metrics.Provider, error) {
+	return metrics.NewProvider(ctx,
+		metrics.Exporting{Endpoint: settings.Endpoint, Interval: settings.Interval},
+		metrics.Identity{
+			Service:     obs.ServiceName,
+			Version:     logging.AppVersion,
+			Environment: logging.AppEnvironment,
+			Process:     process,
+		},
+	)
+}
+
+// StartMetrics 는 메트릭의 설정을 읽고(config.LoadMetrics) 미는 것을 만든다. 설정이 틀렸으면 프로세스가 뜨지 않는다.
+func StartMetrics(ctx context.Context, lookup config.Lookup, logging config.Logging, process string) (*metrics.Provider, error) {
+	settings, err := config.LoadMetrics(lookup)
+	if err != nil {
+		return nil, err
+	}
+	return NewMetrics(ctx, settings, logging, process)
+}
+
+// CloseMetrics 는 남은 메트릭을 보내고 끈다. 보내지 못해도 끄는 일은 멈추지 않는다. 까닭은 경고로 남긴다.
+// 오류의 글은 싣지 않고 종류만 남긴다. 다른 서버에 닿지 못한 줄과 같은 모양이다.
+func CloseMetrics(provider *metrics.Provider) {
+	if err := provider.Shutdown(); err != nil {
+		slog.Warn("남은 메트릭을 수집기에 보내지 못했습니다",
+			slog.String(obs.FieldOperation, "metrics.shutdown"),
+			slog.String(obs.FieldErrorType, fmt.Sprintf("%T", err)),
+		)
+	}
 }
 
 // NewLogger 는 공통 규격(docs/observability.md)의 JSON 으로 out 에 적는 로거를 만든다.

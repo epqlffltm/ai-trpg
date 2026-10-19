@@ -48,6 +48,8 @@ const (
 	defaultInterval = 30 * time.Second
 	// minInterval 은 받는 가장 짧은 간격이다. 더 짧으면 할 일이 없을 때도 DB 를 쉬지 않고 두드린다.
 	minInterval = time.Second
+	// metricsProcess 는 메트릭의 label instance 앞에 붙는 이 프로세스의 이름이다.
+	metricsProcess = "sweeper"
 )
 
 // options 는 명령 줄에서 받는 것이다.
@@ -89,7 +91,16 @@ func run(args []string, out io.Writer) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	pool, err := database.NewPool(ctx, settings.Database.URL, settings.Database.Schema, database.JobLimits)
+	// 바퀴마다의 작업과 연결 풀을 메트릭으로 센다(OTEL_EXPORTER_OTLP_ENDPOINT 가 있을 때). 끌 때 남은 것을 보낸다
+	meters, err := app.StartMetrics(ctx, os.LookupEnv, settings.Logging, metricsProcess)
+	if err != nil {
+		return err
+	}
+	defer app.CloseMetrics(meters)
+	if err := jobs.Measure(meters.Meter()); err != nil {
+		return err
+	}
+	pool, err := database.NewMeteredPool(ctx, settings.Database.URL, settings.Database.Schema, database.JobLimits, meters.Meter())
 	if err != nil {
 		return err
 	}

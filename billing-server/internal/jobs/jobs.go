@@ -29,28 +29,47 @@ const (
 // 끝나면 한 줄을 남기고 do 의 오류를 그대로 돌려준다.
 // 잘 끝난 것은 debug 다. 정리 작업은 몇십 초마다 돈다. info 로 적으면 로그를 메운다. 한 일이 있으면 do 가 따로 info 로 적는다.
 // 끄느라 취소된 것은 warning, 오류로 끝난 것은 error 다.
+//
+// 시작과 끝, 걸린 시간을 메트릭으로도 센다(metrics.go, Measure).
 func Run(ctx context.Context, operation string, do func(context.Context) error) error {
 	ctx = obs.WithJob(ctx, uuid.NewString())
+	measured := current.Load()
+	measured.begin(ctx, operation)
 	started := time.Now()
 	err := do(ctx)
-	finish(ctx, operation, time.Since(started), err)
+	took := time.Since(started)
+	result := resultOf(ctx, err)
+	finish(ctx, operation, took, result, err)
+	measured.end(ctx, operation, result, took)
 	return err
 }
 
+// resultOf 는 작업이 끝난 모양이다. 끄느라 취소된 것은 cancelled, 그 밖의 오류는 server_error 다.
+func resultOf(ctx context.Context, err error) string {
+	switch {
+	case err == nil:
+		return ResultSuccess
+	case errors.Is(err, context.Canceled) && ctx.Err() != nil:
+		return ResultCancelled
+	default:
+		return ResultServerError
+	}
+}
+
 // finish 는 작업이 끝난 줄을 남긴다.
-func finish(ctx context.Context, operation string, took time.Duration, err error) {
+func finish(ctx context.Context, operation string, took time.Duration, result string, err error) {
 	attrs := []slog.Attr{
 		slog.String(obs.FieldOperation, operation),
 		slog.Int64(obs.FieldDurationMS, took.Milliseconds()),
+		slog.String(obs.FieldResult, result),
 	}
-	switch {
-	case err == nil:
-		slog.LogAttrs(ctx, slog.LevelDebug, "작업이 끝났다", append(attrs, slog.String(obs.FieldResult, ResultSuccess))...)
-	case errors.Is(err, context.Canceled) && ctx.Err() != nil:
-		slog.LogAttrs(ctx, slog.LevelWarn, "작업이 취소되었다", append(attrs, slog.String(obs.FieldResult, ResultCancelled))...)
+	switch result {
+	case ResultSuccess:
+		slog.LogAttrs(ctx, slog.LevelDebug, "작업이 끝났다", attrs...)
+	case ResultCancelled:
+		slog.LogAttrs(ctx, slog.LevelWarn, "작업이 취소되었다", attrs...)
 	default:
 		slog.LogAttrs(ctx, slog.LevelError, "작업이 실패했다", append(attrs,
-			slog.String(obs.FieldResult, ResultServerError),
 			slog.String(obs.FieldErrorCode, ErrorCodeFailed),
 			slog.String(obs.FieldErrorMessage, err.Error()),
 		)...)

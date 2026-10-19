@@ -181,6 +181,15 @@ type Logging struct {
 	LogLevel string
 }
 
+// Metrics 는 메트릭을 어디로, 얼마나 자주 보낼지다(docs/observability.md 의 "2. 메트릭").
+// 서버와 작업 명령(cmd/sweeper, cmd/reconcile)이 함께 읽는다(LoadMetrics). Endpoint 가 비면 보내지 않는다.
+type Metrics struct {
+	// Endpoint 는 수집기의 OTLP(HTTP) 주소다(OTEL_EXPORTER_OTLP_ENDPOINT, http://alloy:4318). 끝의 / 는 뗀다.
+	Endpoint string
+	// Interval 은 모은 값을 보내는 간격이다(OTEL_METRIC_EXPORT_INTERVAL, 밀리초).
+	Interval time.Duration
+}
+
 // Rules 는 크레딧을 다루는 규칙이다. 서버와 작업 명령이 같은 값을 써야 한다.
 // 정리 작업도 사라질 무료 크레딧을 지우고 홀드를 돌려주므로, 서버와 규칙이 다르면 결과가 어긋난다.
 type Rules struct {
@@ -429,6 +438,57 @@ func readTossKey(lookup Lookup, name string, pattern *regexp.Regexp, prefixes st
 // 종류가 다르면 결제창이 뜨지 않거나 승인이 거절된다. 서버가 뜨기 전에 알린다.
 func sameTossFamily(secretKey string, clientKey string) bool {
 	return tossSecretKeyPattern.FindStringSubmatch(secretKey)[1] == tossClientKeyPattern.FindStringSubmatch(clientKey)[1]
+}
+
+// 메트릭을 보내는 간격. OpenTelemetry 의 이름(OTEL_METRIC_EXPORT_INTERVAL)과 단위(밀리초)를 따른다.
+// SDK 의 기본(60초)이면 rate(…[1m]) 에 점이 하나뿐이라 15초로 둔다.
+const (
+	DefaultMetricInterval = 15 * time.Second
+	MinMetricInterval     = time.Second
+)
+
+// LoadMetrics 는 메트릭을 보낼 곳과 간격을 읽는다. 보낼 곳은 없어도 된다(그러면 보내지 않는다).
+// 다른 설정과 따로 읽는다. 메트릭을 내는 프로세스만 부른다.
+func LoadMetrics(lookup Lookup) (Metrics, error) {
+	endpoint, endpointErr := readOTLPEndpoint(lookup)
+	interval, intervalErr := readMilliseconds(lookup, "OTEL_METRIC_EXPORT_INTERVAL", DefaultMetricInterval, MinMetricInterval)
+	if err := errors.Join(endpointErr, intervalErr); err != nil {
+		return Metrics{}, err
+	}
+	return Metrics{Endpoint: endpoint, Interval: interval}, nil
+}
+
+// readOTLPEndpoint 는 수집기의 주소를 읽는다. 비어 있으면 빈 글자다. 있으면 http:// 나 https:// 로 시작해야 하고 경로가 없어야 한다.
+// 경로(/v1/metrics)는 보내는 쪽이 붙인다. OpenTelemetry 의 OTEL_EXPORTER_OTLP_ENDPOINT 와 같은 뜻이다.
+func readOTLPEndpoint(lookup Lookup) (string, error) {
+	const name = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	value, ok := lookup(name)
+	if !ok || value == "" {
+		return "", nil
+	}
+	endpoint, err := readHTTPURL(lookup, name)
+	if err != nil {
+		return "", err
+	}
+	parsed, _ := url.Parse(endpoint)
+	if strings.Trim(parsed.Path, "/") != "" || parsed.RawQuery != "" {
+		return "", fmt.Errorf("%s 는 http://alloy:4318 처럼 경로 없이 적습니다. /v1/metrics 는 붙이지 않습니다", name)
+	}
+	return strings.TrimSuffix(endpoint, "/"), nil
+}
+
+// readMilliseconds 는 밀리초로 적은 시간을 읽는다. minimum 보다 짧으면 받지 않는다.
+func readMilliseconds(lookup Lookup, name string, fallback time.Duration, minimum time.Duration) (time.Duration, error) {
+	value, ok := lookup(name)
+	if !ok || value == "" {
+		return fallback, nil
+	}
+	milliseconds, err := strconv.ParseInt(value, 10, 64)
+	duration := time.Duration(milliseconds) * time.Millisecond
+	if err != nil || duration < minimum {
+		return 0, fmt.Errorf("%s 는 15000 처럼 밀리초로 적고 %d 이상이어야 합니다", name, minimum.Milliseconds())
+	}
+	return duration, nil
 }
 
 // loadLogging 은 로그에 관한 설정을 읽는다.
