@@ -10,7 +10,7 @@ stack-smoke.sh 의 check 가 실제 설정을 검사하기 전에 부른다. 규
 
 import unittest
 
-from port_scope import Binding, check, parse_short
+from port_scope import PUBLIC_PORTS, Binding, allowed_public_ports, check, parse_short
 
 
 def config(**services: dict) -> dict:
@@ -74,6 +74,38 @@ class CheckTests(unittest.TestCase):
 
         self.assertEqual(len(problems), 1)
         self.assertIn('network_mode: host', problems[0])
+
+
+class PublicPortTests(unittest.TestCase):
+    """staging 의 설정(--public)에서만 프록시의 HTTP, HTTPS 를 모든 주소에 연다(#451)."""
+
+    staging_proxy = {'ports': [{'target': 8080, 'published': '80'}, {'target': 8443, 'published': '443'}]}
+
+    def test_the_proxy_may_open_http_and_https_to_everyone_in_staging(self):
+        self.assertEqual(check(config(proxy=self.staging_proxy), PUBLIC_PORTS), [])
+
+    def test_the_same_ports_are_refused_in_the_local_config(self):
+        # 로컬의 docker-compose.yml 이 모든 주소에 열면 PC 가 같은 와이파이의 기기에 열린다
+        problems = check(config(proxy=self.staging_proxy))
+
+        self.assertEqual(len(problems), 2)
+
+    def test_other_proxy_ports_stay_on_loopback_in_staging(self):
+        problems = check(config(proxy={'ports': ['8081:8081']}), PUBLIC_PORTS)
+
+        self.assertEqual(problems, ['proxy: 8081 을 모든 주소 에 연다. 127.0.0.1 에 묶는다'])
+
+    def test_other_services_stay_on_loopback_in_staging(self):
+        # 같은 포트 번호여도 프록시가 아니면 안 된다
+        problems = check(config(grafana={'ports': ['3000:8443']}, db={'ports': ['5432:5432']}), PUBLIC_PORTS)
+
+        self.assertEqual(len(problems), 2)
+
+    def test_only_the_public_flag_opens_them(self):
+        self.assertEqual(allowed_public_ports([]), frozenset())
+        self.assertEqual(allowed_public_ports(['--public']), PUBLIC_PORTS)
+        with self.assertRaises(ValueError):
+            allowed_public_ports(['--everything'])
 
 
 if __name__ == '__main__':

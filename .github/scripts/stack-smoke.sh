@@ -21,10 +21,15 @@
 #                  메트릭도 본다: OTLP 로 민 시험 지표가 Prometheus 에 정한 이름과 label 로 들어오는가,
 #                  수집 쪽 자신의 메트릭이 들어오는가, Prometheus 가 아무것도 긁지 않는가, Grafana 가 Prometheus 에 닿는가
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한,
-#                  모든 응답(서버의 응답, 404, 429)의 보안 머리말.
+#                  모든 응답(서버의 응답, 404, 429)의 보안 머리말, HTTP 의 응답에 HSTS 가 없는가.
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
+#     check-staging  staging 의 설정(docker-compose.staging.yml, #451)을 본다. up 뒤에 부른다.
+#                  두 파일을 겹친 설정에서 비밀의 범위, 바깥에 여는 포트(프록시의 80, 443 뿐), 로그 상한을 보고,
+#                  staging 에만 있는 이미지의 태그가 있는지, 인증서의 남은 날짜 검사(docker/certbot)가 맞는지 본다.
+#                  staging 의 프록시를 하나 더 띄워(자체 서명 인증서) HTTPS 로 본다: HTTP 를 넘기는가, 인증서의 확인 파일을
+#                  내주는가, 허용 주소 밖을 막는가, 허용 주소를 고치면 다시 읽는가, HSTS 와 보안 머리말
 #     logs         모든 컨테이너의 로그를 찍는다. 실패했을 때 부른다
-#     down         컨테이너와 볼륨을 지운다
+#     down         컨테이너와 볼륨을 지운다(check-staging 이 띄운 프록시와 허용 주소의 파일도)
 #
 # 서버의 기능은 보지 않는다. 그것은 서버마다의 CI 가 한다. 여기서는 "이미지가 만들어지고, 마이그레이션이 돌고,
 # 서버가 뜨고, 서로 닿는가"만 본다.
@@ -63,10 +68,25 @@ METRIC_SERVERS=(billing)
 PROBE_IMAGE=redis:7-alpine
 # 컨테이너의 사용자. Dockerfile 에서 정한 번호다. 노드 이미지는 제 사용자(node, 1000)를 쓴다
 APP_UID=10001
+# staging 의 설정을 볼 때 루트 .env 대신 주는 값(진짜 도메인과 주소가 아니다). 두 파일을 겹친다
+STAGING_DOMAIN=staging.test
+STAGING_FILES=(-f docker-compose.yml -f docker-compose.staging.yml)
+# check-staging 이 띄우는 staging 의 프록시. 로컬의 프록시(8080)와 겹치지 않는 포트로 이 PC 에만 연다
+STAGING_PROXY=staging-proxy
+STAGING_HTTP=http://127.0.0.1:18080
+STAGING_HTTPS="https://$STAGING_DOMAIN:18443"
+# 그 프록시에 CI 가 잠깐 두는 허용 주소. 이름이 *.conf 라 git 에 올라가지 않는다(.gitignore)
+STAGING_ALLOWLIST=docker/nginx/allowlist/ci-stack-smoke.conf
 
 # 서버들(app)과 로그와 메트릭 모으기(observability)를 함께 띄운다
 compose() {
   docker compose --profile app --profile observability "$@"
+}
+
+# staging 의 설정(두 파일을 겹친 것). VM 의 루트 .env 에 적을 값을 이 실행에서만 준다
+staging_compose() {
+  DOMAIN="$STAGING_DOMAIN" ACME_EMAIL=ci@example.com GAME_LLM_BASE_URL=http://100.64.0.1:11434/v1 \
+    docker compose "${STAGING_FILES[@]}" --profile app --profile observability "$@"
 }
 
 # 이 실행에서만 쓰는 비밀. 48자라 서버들이 요구하는 길이(32자 이상)를 넘는다
@@ -610,10 +630,10 @@ logs_limited() {
 
 # compose 의 설정을 검사 스크립트에 넘겨 본다. .env 는 읽지 않는다(--no-interpolate, --no-env-resolution).
 # 실패하면 무엇이 틀렸는지(서비스와 이름)를 함께 찍는다. 비밀의 값은 찍지 않는다
-#   check_config <이름> <스크립트>
+#   check_config <이름> <설정을 내는 함수(compose, staging_compose)> <스크립트> [스크립트의 인자...]
 check_config() {
-  local name="$1" script="$2" problems
-  if problems="$(compose config --no-interpolate --no-env-resolution --format json | python3 "$script" 2>&1)"; then
+  local name="$1" config_of="$2" script="$3" problems; shift 3
+  if problems="$("$config_of" config --no-interpolate --no-env-resolution --format json | python3 "$script" "$@" 2>&1)"; then
     echo "ok   $name"
   else
     echo "FAIL $name"
@@ -649,9 +669,9 @@ check() {
   report "게시판 서버가 알림 서버에 닿는다" reachable_from board-server http://notification-server:8004/health
   report "게시판 서버가 서명한 알림을 알림 서버가 받는다" board_notification_accepted
   report "설정 검사(비밀, 열린 포트, 로그 상한)의 규칙이 맞다" scope_rules_hold
-  check_config "비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" .github/scripts/secret_scope.py
-  check_config "바깥에 여는 포트는 정해 둔 것뿐이고 모두 127.0.0.1 에 묶였다(port_scope.py)" .github/scripts/port_scope.py
-  check_config "모든 서비스의 로그에 크기와 파일 수의 상한이 있다(logging_scope.py)" .github/scripts/logging_scope.py
+  check_config "비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" compose .github/scripts/secret_scope.py
+  check_config "바깥에 여는 포트는 정해 둔 것뿐이고 모두 127.0.0.1 에 묶였다(port_scope.py)" compose .github/scripts/port_scope.py
+  check_config "모든 서비스의 로그에 크기와 파일 수의 상한이 있다(logging_scope.py)" compose .github/scripts/logging_scope.py
   report "띄운 컨테이너마다 로그에 상한이 붙었다" logs_limited
   for service in "${KEYLESS[@]}"; do
     report "$service 에 서명 개인키가 붙지 않았다" no_signing_key_mounted "$service"
@@ -705,6 +725,7 @@ check_proxy() {
   report "프록시가 요청 식별자를 하나 정해 돌려준다" one_request_id_from_proxy
   report "서버의 응답에 보안 머리말이 하나씩 붙는다" security_headers "$PROXY/api/v1/auth/jwks"
   report "막은 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/"
+  report "HTTP 의 응답에는 HSTS 가 없다" no_header Strict-Transport-Security "$PROXY/api/v1/auth/jwks"
   report "서버끼리만 부르는 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/api/v1/billing/service/holds" -X POST
   report "인증의 민감한 요청을 IP 마다 막는다" limited_after 12 "$PROXY/api/v1/auth/login" 6 \
     -X POST -H 'Content-Type: application/json' -d '{}'
@@ -712,6 +733,165 @@ check_proxy() {
   report "요청 수 제한의 429 에도 보안 머리말이 붙는다" security_headers "$PROXY/api/v1/auth/login" \
     -X POST -H 'Content-Type: application/json' -d '{}'
   report "게시판 검색을 IP 마다 막는다" limited_after 10 "$PROXY/api/v1/board/posts?q=smoke" 1
+  finish
+}
+
+# --- staging 의 설정(#451) ---
+
+# 그 머리말이 없는가. 둘째 인자부터는 curl 에 넘긴다
+no_header() {
+  local name="$1" url="$2" headers; shift 2
+  headers="$(curl -s -D - -o /dev/null --max-time 5 "$@" "$url")"
+  [[ -n "$headers" ]] && ! grep -qi "^$name:" <<<"$headers"
+}
+
+# staging 의 프록시에 HTTPS 로 부른다. 도메인을 이 PC 로 돌리고, 자체 서명 인증서라 확인을 끈다
+staging_curl() {
+  curl -s --max-time 5 -k --resolve "$STAGING_DOMAIN:18443:127.0.0.1" "$@"
+}
+
+# staging 의 프록시의 답이 이 상태 코드인가. 셋째 인자부터는 curl 에 넘긴다
+staging_status_is() {
+  local expected="$1" url="$2"; shift 2
+  [[ "$(staging_curl -o /dev/null -w '%{http_code}' "$@" "$url")" == "$expected" ]]
+}
+
+# staging 의 프록시의 응답에 보안 머리말 넷(HSTS 포함)이 하나씩 붙었는가. 둘째 인자부터는 curl 에 넘긴다
+staging_security_headers() {
+  local url="$1" headers; shift
+  headers="$(staging_curl -D - -o /dev/null "$@" "$url" | tr -d '\r')"
+  one_header "$headers" X-Content-Type-Options nosniff &&
+    one_header "$headers" Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" &&
+    one_header "$headers" Referrer-Policy no-referrer &&
+    one_header "$headers" Strict-Transport-Security "max-age=31536000"
+}
+
+# HTTP 로 부르면 정한 도메인의 HTTPS 로 넘기는가(받은 Host 가 아니라)
+redirects_to_https() {
+  [[ "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 5 -H 'Host: evil.example' \
+    "$STAGING_HTTP/api/v1/game/me?x=1")" == "301 https://$STAGING_DOMAIN/api/v1/game/me?x=1" ]]
+}
+
+# 인증서의 확인 파일(HTTP-01)을 HTTP 로 내주는가
+serves_acme_challenge() {
+  [[ "$(curl -s --max-time 5 "$STAGING_HTTP/.well-known/acme-challenge/stack-smoke")" == "stack-smoke-token" ]]
+}
+
+# 이 TLS 판으로 붙는가
+tls_version_works() {
+  staging_curl -o /dev/null "--tlsv$1" --tls-max "$1" "$STAGING_HTTPS/healthz"
+}
+
+# 그 주소가 기다리는 동안 이 상태 코드가 되는가(허용 주소를 고친 뒤 nginx 가 다시 읽기를 기다린다)
+eventually_status_is() {
+  local expected="$1" url="$2" deadline=$((SECONDS + 15))
+  while ((SECONDS < deadline)); do
+    staging_status_is "$expected" "$url" && return 0
+    sleep 1
+  done
+  return 1
+}
+
+# staging 에만 있는 이미지(certbot, ollama)의 태그가 저장소에 있는가. 받지 않고 목록만 묻는다(ollama 는 크다).
+# 로컬에도 있는 이미지는 up 이 이미 받았다
+staging_images_exist() {
+  local image
+  while IFS= read -r image; do
+    docker manifest inspect "$image" >/dev/null || { echo "$image 이 없다" >&2; return 1; }
+  done < <(comm -13 <(compose config --images | sort -u) <(staging_compose config --images | sort -u))
+}
+
+# 인증서의 남은 날짜 검사(docker/certbot/cert_check.py)의 테스트를 certbot 이미지 안에서 돌린다(cryptography 가 있다)
+cert_check_rules_hold() {
+  staging_compose run --rm --no-deps -e PYTHONDONTWRITEBYTECODE=1 --entrypoint python3 certbot \
+    -m unittest discover -s /opt/certbot -p 'test_*.py'
+}
+
+# 자체 서명 인증서를 만들어 deploy-hook.sh 로 tls 볼륨에 옮긴다. certbot 이 갱신한 뒤와 같은 길이다.
+# 인증서의 확인 파일 하나도 acme 볼륨에 둔다
+staging_certificate() {
+  local lineage
+  lineage="$(mktemp -d)"
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 30 \
+    -subj "/CN=$STAGING_DOMAIN" -addext "subjectAltName=DNS:$STAGING_DOMAIN" \
+    -keyout "$lineage/privkey.pem" -out "$lineage/fullchain.pem" 2>/dev/null
+  chmod a+r "$lineage"/*.pem
+  staging_compose run --rm --no-deps -v "$lineage:/lineage:ro" -e RENEWED_LINEAGE=/lineage \
+    --entrypoint sh certbot /opt/certbot/deploy-hook.sh
+  staging_compose run --rm --no-deps --entrypoint sh certbot -c \
+    'mkdir -p /var/www/certbot/.well-known/acme-challenge && echo stack-smoke-token > /var/www/certbot/.well-known/acme-challenge/stack-smoke'
+  rm -rf "$lineage"
+}
+
+# 옮긴 키를 프록시의 사용자(101)만 읽는가
+private_key_private() {
+  [[ "$(staging_compose run --rm --no-deps --entrypoint stat certbot -c '%u %a' /tls/privkey.pem | tr -d '\r')" == "101 600" ]]
+}
+
+# 인증서가 30일 남았으니 certbot 의 상태 확인이 통과하는가
+cert_check_passes() {
+  staging_compose run --rm --no-deps --entrypoint python3 certbot /opt/certbot/cert_check.py
+}
+
+# staging 의 프록시를 compose 의 정의 그대로 하나 더 띄운다(시작 스크립트, 틀, 볼륨). 포트만 이 PC 의 다른 곳에 연다.
+# 허용 주소를 지켜보는 간격을 1초로 줄인다
+staging_proxy_up() {
+  staging_proxy_down
+  staging_compose run -d --no-deps --name "$STAGING_PROXY" -e WATCH_SECONDS=1 \
+    -p 127.0.0.1:18080:8080 -p 127.0.0.1:18443:8443 proxy >/dev/null
+  local deadline=$((SECONDS + 30))
+  while ((SECONDS < deadline)); do
+    staging_status_is 200 "$STAGING_HTTPS/healthz" && return 0
+    sleep 1
+  done
+  docker logs "$STAGING_PROXY" >&2 || true
+  return 1
+}
+
+staging_proxy_down() {
+  docker rm -f "$STAGING_PROXY" >/dev/null 2>&1 || true
+  rm -f "$STAGING_ALLOWLIST"
+}
+
+# 허용 주소에 모든 주소를 적는다. CI 의 요청이 어느 주소로 오는지(Docker 의 게이트웨이) 몰라서다
+allow_everyone() {
+  echo 'allow all;' >"$STAGING_ALLOWLIST"
+}
+
+check_staging() {
+  report "staging 의 설정을 값을 채워 읽을 수 있다" staging_compose config -q
+  check_config "staging 에서도 비밀은 그것을 쓰는 프로세스에만 간다(secret_scope.py)" staging_compose .github/scripts/secret_scope.py
+  check_config "staging 에서 바깥에 여는 포트는 프록시의 80, 443 뿐이다(port_scope.py --public)" staging_compose \
+    .github/scripts/port_scope.py --public
+  check_config "staging 에만 있는 서비스에도 로그의 상한이 있다(logging_scope.py)" staging_compose .github/scripts/logging_scope.py
+  report "staging 에만 있는 이미지의 태그가 있다" staging_images_exist
+  report "인증서의 남은 날짜 검사의 규칙이 맞다(docker/certbot)" cert_check_rules_hold
+  report "받은 인증서를 프록시가 읽는 곳에 옮긴다(deploy-hook.sh)" staging_certificate
+  report "옮긴 키를 프록시의 사용자만 읽는다" private_key_private
+  report "남은 날이 넉넉한 인증서는 certbot 의 상태 확인을 통과한다" cert_check_passes
+  if ! staging_proxy_up; then
+    echo "FAIL staging 의 프록시가 HTTPS 로 뜬다"
+    failures=$((failures + 1))
+    staging_proxy_down
+    finish
+    return
+  fi
+  echo "ok   staging 의 프록시가 HTTPS 로 뜬다"
+  report "HTTP 는 정한 도메인의 HTTPS 로 넘긴다(받은 Host 가 아니다)" redirects_to_https
+  report "인증서의 확인 파일은 HTTP 로 내준다" serves_acme_challenge
+  report "HTTP 의 넘기기에는 HSTS 가 없다" no_header Strict-Transport-Security "$STAGING_HTTP/"
+  report "TLS 1.2 로 붙는다" tls_version_works 1.2
+  report "TLS 1.3 으로 붙는다" tls_version_works 1.3
+  report "가동 확인은 허용 주소 밖에서도 답한다" staging_status_is 200 "$STAGING_HTTPS/healthz"
+  report "가동 확인에도 보안 머리말과 HSTS 가 붙는다" staging_security_headers "$STAGING_HTTPS/healthz"
+  report "허용 주소 밖에서는 서버에 닿지 못한다(403)" staging_status_is 403 "$STAGING_HTTPS/api/v1/game/me"
+  report "막은 403 에도 보안 머리말과 HSTS 가 붙는다" staging_security_headers "$STAGING_HTTPS/api/v1/game/me"
+  allow_everyone
+  report "허용 주소를 고치면 다시 읽어 서버에 닿는다" eventually_status_is 401 "$STAGING_HTTPS/api/v1/game/me"
+  report "서버의 응답에도 보안 머리말과 HSTS 가 하나씩 붙는다" staging_security_headers "$STAGING_HTTPS/api/v1/game/me"
+  report "허용 주소 안에서도 관리자 화면은 막는다" staging_status_is 404 "$STAGING_HTTPS/admin/login/"
+  report "허용 주소 안에서도 서버끼리만 부르는 주소는 막는다" staging_status_is 404 "$STAGING_HTTPS/api/v1/billing/service/holds" -X POST
+  staging_proxy_down
   finish
 }
 
@@ -730,6 +910,7 @@ logs() {
 }
 
 down() {
+  staging_proxy_down
   compose down -v
 }
 
@@ -737,8 +918,9 @@ main() {
   case "${1:-}" in
     prepare | up | check | logs | down) "$1" ;;
     check-proxy) check_proxy ;;
+    check-staging) check_staging ;;
     *)
-      echo "사용: $0 prepare | up | check | check-proxy | logs | down" >&2
+      echo "사용: $0 prepare | up | check | check-proxy | check-staging | logs | down" >&2
       return 2 ;;
   esac
 }

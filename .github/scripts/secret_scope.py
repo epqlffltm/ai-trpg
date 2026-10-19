@@ -109,6 +109,21 @@ def env_file_servers(service: dict) -> set[str]:
     return servers
 
 
+def environment_of(service: dict) -> dict[str, str | None]:
+    """
+    그 프로세스의 environment 를 이름과 값의 표로. compose 는 이것을 표로도, "이름=값"의 목록으로도 낸다.
+    파일을 둘 겹치면(docker-compose.staging.yml) 목록으로 낸다. 목록에서 "=" 가 없는 줄은 값이 없는 것(None)이다
+    """
+    environment = service.get('environment') or {}
+    if isinstance(environment, dict):
+        return environment
+    pairs = {}
+    for entry in environment:
+        name, separator, value = str(entry).partition('=')
+        pairs[name] = value if separator else None
+    return pairs
+
+
 def mounts_signing_keys(service: dict) -> bool:
     """그 프로세스가 서명 개인키의 폴더를 붙였는가."""
     return any(
@@ -121,7 +136,7 @@ def leaked_secrets(services: dict[str, dict], table: list[Secret]) -> list[str]:
     """받으면 안 되는 비밀을 빈 값으로 덮지 않은 프로세스들. "프로세스: 비밀" 모양의 글이다."""
     problems = []
     for name, service in sorted(services.items()):
-        environment = service.get('environment') or {}
+        environment = environment_of(service)
         servers = env_file_servers(service)
         for secret in table:
             if secret.server not in servers or name in secret.allowed:
@@ -139,10 +154,7 @@ def misplaced_signing_keys(services: dict[str, dict]) -> list[str]:
             continue
         if mounts_signing_keys(service):
             problems.append(f'{name}: 서명 개인키의 폴더({SIGNING_KEY_FOLDER})를 붙였다')
-        if (
-            'auth-server' in env_file_servers(service)
-            and (service.get('environment') or {}).get(SIGNING_KEY_PATH) != ''
-        ):
+        if 'auth-server' in env_file_servers(service) and environment_of(service).get(SIGNING_KEY_PATH) != '':
             problems.append(f'{name}: {SIGNING_KEY_PATH} 를 비우지 않았다')
     return problems
 

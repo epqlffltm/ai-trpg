@@ -1,0 +1,17 @@
+# docker/nginx/allowlist/allow.conf.example
+# staging 의 허용 주소(#451). VM 에서 이 파일을 allow.conf 로 복사해서 주소를 적는다.
+# 이 폴더의 *.conf 는 git 에 올리지 않는다(.gitignore). 운영자 집의 공인 IP 가 저장소에 남지 않게 한다.
+#
+#   cp docker/nginx/allowlist/allow.conf.example docker/nginx/allowlist/allow.conf
+#
+# 한 줄에 하나, nginx 의 allow 문법이다. 주소 하나 또는 대역(CIDR)을 적는다. 줄 끝에 ; 를 붙인다.
+# 고치면 1분 안에 nginx 가 다시 읽는다. 바로 읽히려면: docker compose exec proxy nginx -s reload
+# 줄이 하나도 없으면 아무도 서버에 닿지 못한다(가동 확인 /healthz 와 HTTPS 로 넘기기만 답한다).
+#
+# 집의 공인 주소는 바뀔 수 있다(통신사가 다시 줄 때). 바뀌면 403 이 난다. 그때 이 파일을 고친다.
+# 내 공인 주소는 집에서 https://api.ipify.org 등으로 본다.
+#
+# 예:
+# allow 203.0.113.7;
+# allow 198.51.100.0/24;
+# allow 2001:db8::/32;
