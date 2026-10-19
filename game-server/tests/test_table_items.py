@@ -200,9 +200,15 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
 
     # 물건 항목만 나온다. 규칙이 없는 등불은 장비다
     assert read['items'] == [
-        {'entry_id': lore['potion']['id'], 'name': '치유 물약', 'kind': 'consumable', 'heals': 'light'},
-        {'entry_id': lore['rope']['id'], 'name': '밧줄', 'kind': 'gear', 'heals': None},
-        {'entry_id': lore['lamp']['id'], 'name': '등불', 'kind': 'gear', 'heals': None},
+        {
+            'entry_id': lore['potion']['id'],
+            'name': '치유 물약',
+            'kind': 'consumable',
+            'heals': 'light',
+            'rarity': 'normal',
+        },
+        {'entry_id': lore['rope']['id'], 'name': '밧줄', 'kind': 'gear', 'heals': None, 'rarity': 'normal'},
+        {'entry_id': lore['lamp']['id'], 'name': '등불', 'kind': 'gear', 'heals': None, 'rarity': 'normal'},
     ]
 
 
