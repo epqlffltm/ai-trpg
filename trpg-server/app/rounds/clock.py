@@ -22,6 +22,8 @@ operation 은 round.close_overdue 다. 요청 밖에서 혼자 시작한 작업�
 줄에 닫은 수(closed), 크레딧 기다리기를 마무리한 수(credit_waits), 사라진 서술을 다시 맡긴 수(recovered),
 다시 맡기기를 그만둔 수(gave_up)를 싣는다. 실패는 error 와 job.failed 다.
 닫은 라운드의 서술은 따로 맡긴 작업(round.narrate)이 하고, 그 맡긴 줄의 spawned_job_id 로 이어진다.
+찾아낸 테이블의 수를 바퀴의 span 에 싣는다(add_handled). 찾아낸 것이 없던 바퀴의 추적은 보내지 않는다
+(app/observability/idle_rounds.py). 하다가 실패한 테이블도 찾아낸 것에 들어 그 추적은 남는다.
 """
 
 import asyncio
@@ -44,7 +46,7 @@ from app.core.loops import Running
 from app.engine.dice import Dice
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
-from app.observability.spans import job_span
+from app.observability.spans import add_handled, job_span
 from app.rounds import credit_waits, recovery, repository, service
 from app.rounds.recovery import Recovery
 from app.rounds.service import NarrationScheduler
@@ -106,7 +108,9 @@ class RoundClock:
         """마감이 지난 라운드를 찾아 하나씩 닫는다. 닫은 수를 돌려준다."""
         now = self.clock()
         closed = 0
-        for table_id in await self.overdue(now):
+        table_ids = await self.overdue(now)
+        add_handled(len(table_ids))
+        for table_id in table_ids:
             closed += await self.close_one(table_id, now)
         return closed
 
@@ -138,7 +142,9 @@ class RoundClock:
         """크레딧을 기다리는 시간이 지난 라운드를 찾아 하나씩 마무리한다. 마무리한 수를 돌려준다."""
         now = self.clock()
         settled = 0
-        for table_id in await self.waiting(now):
+        table_ids = await self.waiting(now)
+        add_handled(len(table_ids))
+        for table_id in table_ids:
             settled += await self.settle_wait(table_id, now)
         return settled
 
@@ -168,7 +174,9 @@ class RoundClock:
         """서술을 맡은 작업이 사라진 라운드를 찾아 하나씩 다시 맡긴다. 한 일마다의 수를 돌려준다."""
         now = self.clock()
         done: Counter[Recovery] = Counter()
-        for table_id in await self.vanished(now):
+        table_ids = await self.vanished(now)
+        add_handled(len(table_ids))
+        for table_id in table_ids:
             done[await self.recover_one(table_id, now)] += 1
         return done
 

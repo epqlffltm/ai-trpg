@@ -90,11 +90,12 @@ declare -A TRACE_PROBES=(
 )
 # 그 아래에 쿼리의 span 이 있는지 볼 작업(operation). 서버가 뜨면 곧 한 바퀴 돈다.
 # 인증 서버의 것은 주기 명령(send_security_digest)이다. 워커와 주기 명령의 검사(check_workers)가 먼저 한 번 돌린다.
-# 인증 서버의 워커는 할 일이 없던 바퀴를 보내지 않아 쓸 수 없다.
+# 인증 서버의 워커는 할 일이 없던 바퀴를 보내지 않아 쓸 수 없다. TRPG 서버의 5초 바퀴(시계, 청구 정리, 알림 보내기)도 같다.
+# TRPG 서버의 것은 서버가 뜨면 바로 한 바퀴 도는 AI 호출 기록의 정리(ai_log.prune)다. 맡은 수를 싣지 않아 늘 남는다.
 # 게시판 서버의 알림 보내기도 보낼 것이 없던 바퀴는 보내지 않는다. 추적을 보기 전에 발송함에 알림 하나를 적는다(queue_board_notification)
 declare -A TRACE_JOBS=(
   [auth]=security.send_digest
-  [trpg]=round.close_overdue
+  [trpg]=ai_log.prune
   [board]=notification.send
   [billing]=sweep.run
   [notification]=notification.prune

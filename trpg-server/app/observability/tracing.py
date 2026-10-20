@@ -8,6 +8,7 @@ span 을 OTLP(HTTP)로 수집기(Alloy)에 미는 것을 만든다. 서버가 �
 규격은 저장소 루트의 docs/observability.md 의 "3. 추적"에 있다. 결제 서버(Go)가 본보기다.
 
 모은 span 은 묶어서 보낸다(BatchSpanProcessor, 따로 도는 스레드). 요청은 보내기를 기다리지 않는다.
+할 일이 없던 바퀴(5초마다 도는 시계, 청구 정리, 알림 보내기)의 추적은 보내지 않는다(idle_rounds.py).
 수집기가 죽어 있어도 서버는 뜨고 요청은 영향을 받지 않는다. 보내지 못한 묶음은 버린다.
 """
 
@@ -20,6 +21,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON, Sampler
 
 from app.core.config import Settings
+from app.observability.idle_rounds import DropIdleRounds
 from app.observability.setup import SERVICE_NAME
 from app.observability.spans import use_provider
 
@@ -69,7 +71,8 @@ def build_provider(settings: Settings, process: str = SERVER_PROCESS) -> TracerP
         return None
     provider = TracerProvider(resource=build_resource(settings, process), sampler=SAMPLER)
     exporter = OTLPSpanExporter(endpoint=endpoint + TRACES_PATH, timeout=EXPORT_TIMEOUT_SECONDS)
-    provider.add_span_processor(BatchSpanProcessor(exporter, export_timeout_millis=EXPORT_TIMEOUT_SECONDS * 1000))
+    batch = BatchSpanProcessor(exporter, export_timeout_millis=EXPORT_TIMEOUT_SECONDS * 1000)
+    provider.add_span_processor(DropIdleRounds(batch))
     return provider
 
 
