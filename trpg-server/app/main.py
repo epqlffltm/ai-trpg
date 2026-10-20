@@ -96,6 +96,7 @@ from app.tables.errors import (
     TableOptionError,
     WrongPasswordError,
 )
+from app.transcripts import router as transcripts
 from app.whispers import router as whispers
 
 # 이 서버의 API 가 놓이는 주소. 인증 서버는 /api/v1/auth 를 쓴다
@@ -327,6 +328,8 @@ def create_app(
     app.include_router(personas.router, prefix=API_PREFIX)
     # /tables/past 는 /tables/{table_id} 보다 먼저다. 먼저 등록한 주소가 먼저 맞춰진다
     app.include_router(past_tables.router, prefix=API_PREFIX)
+    # 기록 내려받기(/tables/{table_id}/transcript, /tables/past/{table_id}/transcript)도 테이블의 길보다 먼저다
+    app.include_router(transcripts.router, prefix=API_PREFIX)
     app.include_router(tables.router, prefix=API_PREFIX)
     app.include_router(rounds.router, prefix=API_PREFIX)
     app.include_router(calendar.router, prefix=API_PREFIX)
