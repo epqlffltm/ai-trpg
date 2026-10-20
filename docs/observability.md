@@ -29,10 +29,10 @@
 | 공통 모양의 JSON 로그 | 다섯 서버에 구현 |
 | 민감정보를 가리는 마지막 방어선 | 다섯 서버에 구현 |
 | 백그라운드 작업의 식별자(`job_id`) | 다섯 서버 모두 구현 |
-| 메트릭 | billing-server(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)), notification-server(Python 의 본보기, [아래](#붙인-것-알림-서버의-메트릭-python-의-본보기)), trpg-server(실시간 스트림, AI 호출, 라운드와 서술, 서술 값, [아래](#붙인-것-trpg-서버의-메트릭)), auth-server(메일, 시도 횟수 제한, 워커와 예약 명령, [아래](#붙인-것-인증-서버의-메트릭))에 구현. 남은 board-server 는 아직 내보내지 않는다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
+| 메트릭 | billing-server(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)), notification-server(Python 의 본보기, [아래](#붙인-것-알림-서버의-메트릭-python-의-본보기)), trpg-server(실시간 스트림, AI 호출, 라운드와 서술, 서술 값, [아래](#붙인-것-trpg-서버의-메트릭)), auth-server(메일, 시도 횟수 제한, 워커와 예약 명령, [아래](#붙인-것-인증-서버의-메트릭)), board-server(쓰기와 신고, 검색, [아래](#붙인-것-게시판-서버의-메트릭))에 구현. 다섯 서버가 모두 내보낸다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
 | DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
-| 대시보드 | billing-server, notification-server, trpg-server, auth-server, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
-| 경보 | 수집 쪽, DB 와 Redis, billing-server, notification-server, trpg-server, auth-server 의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
+| 대시보드 | 다섯 서버, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
+| 경보 | 수집 쪽, DB 와 Redis, 다섯 서버의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
 | 추적(span) | 다섯 서버 모두 span 을 만든다(요청, 서버 사이의 호출, DB 의 쿼리, 작업. 본보기는 [Go](#붙인-것-결제-서버의-추적-본보기)와 [Python](#붙인-것-알림-서버의-추적-python-의-본보기), [TRPG 서버에서 다른 것](#붙인-것-trpg-서버의-추적), [인증 서버에서 다른 것](#붙인-것-인증-서버의-추적), [게시판 서버(Node)](#붙인-것-게시판-서버의-추적)). 받는 길과 저장소(Alloy → Tempo, Grafana 에서 로그와 오간다)는 [아래](#붙인-것-추적의-인프라) |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
 | 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)) |
@@ -541,7 +541,7 @@ DB 에 닿으며 도는 것이 아니라 날짜로 상태를 보는 컨테이너
 
 ## 메트릭
 
-**결제 서버, 알림 서버, TRPG 서버, 인증 서버가 내보낸다. 게시판 서버는 붙일 때 이 표를 따른다.**
+**다섯 서버가 내보낸다. 새 서버(asset, chat, 관리)는 붙일 때 이 표를 따른다.**
 보내는 길(OTLP → Alloy → Prometheus)과 계측기를 만드는 법은 [수집기의 2. 메트릭](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)에 있다.
 
 ### 규칙
@@ -592,7 +592,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `db_pool_connections_max` | gauge | 없음 | 풀이 가질 수 있는 가장 많은 연결 |
 | `db_pool_wait_seconds` | histogram | 없음 | 연결을 얻으려고 기다린 시간 |
 
-**백그라운드 작업 (game, auth, billing, notification)**
+**백그라운드 작업 (game, auth, board, billing, notification)**
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
@@ -691,7 +691,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 ## 수집기(Grafana Alloy)를 붙일 자리
 
 수집기를 붙일 때 정한 것과 바꿀 곳을 적어 둔다(#25). 순서는 로그, 메트릭, 추적이다. 뒤로 갈수록 서버 코드를 많이 고친다.
-로그는 붙였다([붙인 것](#붙인-것-로그)). 메트릭은 정한 것만 있고([2. 메트릭](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)), 추적은 아직이다.
+셋 모두 다섯 서버에 붙였다. 로그([붙인 것](#붙인-것-로그)), 메트릭([2. 메트릭](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)), 추적([3. 추적](#3-추적--식별자를-다루는-코드를-sdk-로-바꾼다))이다.
 
 ```
 서버(stderr 의 JSON) ─▶ Docker(json-file) ─▶ Alloy ─▶ Loki        ─┐
@@ -862,6 +862,7 @@ Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-
 `notification-server` 는 한눈에(DB, 5xx 비율, 넣은 알림, 받지 않은 알림), 요청, DB 연결, 알림, 정리 작업의 다섯 줄이다.
 `trpg-server` 는 한눈에(DB, 5xx 비율, 열린 스트림, 서술 실패), 요청, DB 연결, 실시간 스트림, 라운드와 서술, AI 호출, 서술 값, 뒤에서 도는 작업의 여덟 줄이다.
 `auth-server` 는 한눈에(DB, 5xx 비율, 버린 메일, 세지 못한 시도 제한), 요청, 메일, 시도 횟수 제한, 워커와 예약 명령의 다섯 줄이다. 연결 풀이 없어 DB 연결의 줄이 없다.
+`board-server` 는 한눈에(DB, 5xx 비율, 횟수 제한에 걸린 쓰기, 멈춘 검색), 요청, DB 연결, 쓰기와 신고, 검색, 알림 보내기의 여섯 줄이다.
 `billing-server` 의 대시보드는 한눈에(DB, 5xx 비율, 결과를 모르는 결제 대행사 호출, 되돌린 원장의 일), 요청, DB 연결, 결제, 원장, 정리 작업과 대사의 여섯 줄이다.
 `postgres` 는 한눈에(DB, 연결 / 최대, DB 의 크기, 교착), 연결과 트랜잭션, 읽기와 쓰기(캐시 적중률, 행, 임시 파일, 스키마마다의 크기), 표(큰 표, 죽은 행이 많은 표)다.
 `redis` 는 한눈에(Redis, 메모리, 연결된 클라이언트, AOF 의 마지막 쓰기), 명령(명령마다, 키 적중률, 오류와 거절), 메모리와 키(사라진 키, 내쫓긴 키)다.
@@ -930,6 +931,10 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | auth-server | `AuthMailBacklog` | warning | 발송함에 메일이 15분 동안 남아 있다. 메일 서버가 받지 않는다 |
 | auth-server | `AuthMailDiscarded` | warning | 지난 15분에 버린 메일이 있다. 종류(`kind`)마다 울린다 |
 | auth-server | `AuthRateLimitsUnavailable` | warning | 지난 5분에 시도 횟수를 세지 못하고 통과시킨 것이 있다. 제한(`limit`)마다 울린다 |
+| board-server | `BoardDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
+| board-server | `BoardServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 멈춘 검색(503)도 든다 |
+| board-server | `BoardSearchTimeouts` | warning | 지난 15분에 멈춘 검색이 셋을 넘는다 |
+| board-server | `BoardNotificationRoundsFailing` | warning | 지난 15분에 알림 보내기의 바퀴가 통째로 실패했다 |
 
 - **규칙마다 시험이 있다**(`docker/prometheus/rules/tests/ai-trpg.test.yml`). 지어낸 시계열을 넣고 정한 때에 울리는지, 울리지 않을 때(요청이 아주 적다, 다른 서버의 것이다) 조용한지 본다. 규칙을 고치면 시험도 고친다.
   `docker compose --profile observability exec prometheus promtool test rules /etc/prometheus/rules/tests/ai-trpg.test.yml`
@@ -1057,6 +1062,26 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 - **메일의 종류는 발송함에 적는다.** 보내는 것은 워커라 문구를 만든 곳(`accounts/mail.py`)을 모른다. 그래서 줄에 칸 하나를 더했다. 종류를 더하면 `MailKind` 와 위의 표에 함께 더한다.
 - **인증 시도는 따로 세지 않는다.** 주소와 상태 코드로 같은 것을 본다. 처음 목록의 `auth_attempts_total` 은 빼고 그 대신 Redis 에 묻지 못한 것(`auth_rate_limits_unavailable_total`)을 더했다. 제한이 꺼진 것을 아는 길이 그것뿐이다.
 - **CI.** `METRIC_SERVERS` 에 auth 를 더하고, 연결 풀이 없는 서버(`POOLLESS_SERVERS`)는 풀을 보지 않는다. 메일 워커의 작업 메트릭과 남은 메일, 예약 명령(`account.delete_unverified`)이 끝날 때 민 것도 본다.
+
+#### 붙인 것 (게시판 서버의 메트릭)
+
+알림 서버의 모양을 Node 로 옮겼다. 새 의존성은 `@opentelemetry/sdk-metrics`, `@opentelemetry/exporter-metrics-otlp-proto`(추적과 같은 판)다.
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `src/observability/metrics.ts` | 계측기 한 묶음과 MeterProvider. 간격은 `OTEL_METRIC_EXPORT_INTERVAL`(1000 이상). 앱이 닫힐 때 한 번 보낸다(`shutdownMetrics`) |
+| `src/observability/request-metrics.middleware.ts` | HTTP 셋. 미들웨어의 맨 앞이다. 응답이 닫힐 때(close) 센다 |
+| `src/observability/pool-metrics.ts`, `src/database/pool-watch.ts` | 연결을 기다린 시간을 재는 pg 의 풀(`MeteredPool`)과 앱이 뜬 뒤 풀을 거는 것 |
+| `src/health/readiness.controller.ts` | `db_up` |
+| `src/observability/jobs.ts` | `runAsJob` 이 작업의 메트릭도 센다 |
+| `src/observability/counted.interceptor.ts` | 글과 댓글을 쓴 것, 신고한 것. 컨트롤러의 핸들러에 붙인다(`countWrite`, `countReport`) |
+| `src/posts/posts-search.service.ts` | 검색의 결과와 걸린 시간 |
+
+- **쓰기의 결과는 핸들러가 끝난 모양으로 정한다.** 인터셉터는 본문을 보는 파이프까지 감싸므로 모양이 틀린 쓰기(400)도 `rejected` 다. 5xx 는 세지 않는다. 로그인하지 않은 쓰기(401)는 가드에서 끝나 세지 않는다.
+- **TypeORM 에는 Pool 만 바꾼 pg 를 넘긴다**(`driver: meteredPg()`). pg 를 펼쳐 복사하지 않고 물려받는다. 펼치면 pg-native 를 불러오는 getter 를 읽는다.
+- **풀은 TypeORM 의 안쪽 이름(`driver.master`)으로 찾는다.** 사라지면 풀의 메트릭만 빠지고 앱은 뜬다. 앱의 테스트가 풀이 걸렸는지 본다.
+- **JS SDK 는 보내는 간격보다 답을 오래 기다리지 못한다.** 간격을 5초보다 짧게 적으면 답을 기다리는 시간도 간격만큼으로 줄인다. 그러지 않으면 SDK 가 예외를 내 서버가 뜨지 못한다.
+- **CI.** `METRIC_SERVERS` 에 board 를 더하고, 알림 보내기의 작업 메트릭(`notification.send`)을 본다.
 
 ### 3. 추적 — 식별자를 다루는 코드를 SDK 로 바꾼다
 
@@ -1269,7 +1294,7 @@ Node(Nest)라 SDK 가 다르지만 span 의 이름, 싣는 것과 싣지 않는 
 | 처리하지 못한 예외 | 미들웨어의 `process_exception` | `Exception` 처리기 | 전역 예외 필터 | `recover` 미들웨어 |
 | 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | `runAsJob()` | `jobs.Run()` |
 | 코드의 자리 | `observability/` | `app/observability/` | `src/observability/` | `internal/obs/`, `internal/httpapi/observability.go` |
-| 메트릭 | OpenTelemetry Python SDK(`observability/metrics.py`, [다른 것](#붙인-것-인증-서버의-메트릭)) | OpenTelemetry Python SDK(`app/observability/metrics.py`, [다른 것](#붙인-것-trpg-서버의-메트릭)) | 없다 | OpenTelemetry Go SDK(`internal/metrics/`, [본보기](#붙인-것-결제-서버의-메트릭-본보기)) |
+| 메트릭 | OpenTelemetry Python SDK(`observability/metrics.py`, [다른 것](#붙인-것-인증-서버의-메트릭)) | OpenTelemetry Python SDK(`app/observability/metrics.py`, [다른 것](#붙인-것-trpg-서버의-메트릭)) | OpenTelemetry JS SDK(`src/observability/metrics.ts`, [다른 것](#붙인-것-게시판-서버의-메트릭)) | OpenTelemetry Go SDK(`internal/metrics/`, [본보기](#붙인-것-결제-서버의-메트릭-본보기)) |
 | 추적(span) | OpenTelemetry Python SDK(`observability/`, [다른 것](#붙인-것-인증-서버의-추적)) | OpenTelemetry Python SDK(`app/observability/`, [다른 것](#붙인-것-trpg-서버의-추적)) | OpenTelemetry JS SDK(`src/observability/`, [다른 것](#붙인-것-게시판-서버의-추적)) | OpenTelemetry Go SDK(`internal/tracing/`, [본보기](#붙인-것-결제-서버의-추적-본보기)) |
 
 notification-server 는 trpg-server 의 것(`app/observability/`)을 그대로 가져왔다. 뒤에서 도는 작업이 정리 작업 하나라 `BackgroundJobs` 는 없고, 정리 작업이 바퀴마다 `job_scope` 를 건다.

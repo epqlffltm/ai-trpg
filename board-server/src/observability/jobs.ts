@@ -6,9 +6,11 @@
  *
  * 바퀴마다 새 job_id 다. span 이 있으면 로그의 trace_id 는 그 span 의 것이고, 없으면(내보내지 않는다) 새로 정한다.
  * 작업 안의 로그에는 job_id 와 trace_id 가 붙고 request_id 는 붙지 않는다.
+ * 바퀴마다 작업의 메트릭(background_jobs_*)도 센다(metrics.ts 의 measuredJob). 할 일이 없던 바퀴도 센다.
  */
 
 import { newJobId, newTrace } from './identifiers.js';
+import { measuredJob } from './metrics.js';
 import { runInJob } from './request-context.js';
 import { inJobSpan, spanTrace } from './spans.js';
 
@@ -23,6 +25,8 @@ export function runAsJob<Result>(
 ): Promise<Result> {
   const jobId = newJobId();
   return inJobSpan(operation, jobId, () =>
-    runInJob({ jobId, trace: spanTrace() ?? newTrace() }, work),
+    runInJob({ jobId, trace: spanTrace() ?? newTrace() }, () =>
+      measuredJob(operation, work),
+    ),
   );
 }

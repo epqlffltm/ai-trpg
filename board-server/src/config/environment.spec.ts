@@ -12,6 +12,7 @@ import {
   DEFAULT_JWT_AUDIENCE,
   DEFAULT_JWT_ISSUER,
   DEFAULT_LOG_LEVEL,
+  DEFAULT_METRIC_EXPORT_INTERVAL,
   DEFAULT_PORT,
   readAppEnvironment,
   readAppVersion,
@@ -24,6 +25,7 @@ import {
   readJwtAudience,
   readJwtIssuer,
   readLogLevel,
+  readMetricExportInterval,
   readNotificationSettings,
   readOtlpEndpoint,
   readPort,
@@ -359,6 +361,7 @@ describe('readEnvironment', () => {
       NOTIFICATION_URL: '',
       NOTIFICATION_SECRET: '',
       OTEL_EXPORTER_OTLP_ENDPOINT: '',
+      OTEL_METRIC_EXPORT_INTERVAL: DEFAULT_METRIC_EXPORT_INTERVAL,
     });
   });
 
@@ -377,6 +380,7 @@ describe('readEnvironment', () => {
       NOTIFICATION_URL: 'http://notification:8004',
       NOTIFICATION_SECRET: SECRET,
       OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318/',
+      OTEL_METRIC_EXPORT_INTERVAL: '5000',
       PATH: '/usr/bin',
     });
 
@@ -395,6 +399,7 @@ describe('readEnvironment', () => {
       NOTIFICATION_URL: 'http://notification:8004',
       NOTIFICATION_SECRET: SECRET,
       OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318',
+      OTEL_METRIC_EXPORT_INTERVAL: 5000,
     });
   });
 
@@ -451,6 +456,25 @@ describe('readNotificationSettings', () => {
       readNotificationSettings('http://notification:8004', 'short-secret'),
     ).toThrow(/^(?!.*short-secret)/);
   });
+});
+
+describe('readMetricExportInterval', () => {
+  it('적지 않으면 15초다', () => {
+    expect(readMetricExportInterval(undefined)).toBe(15000);
+    expect(readMetricExportInterval(' ')).toBe(15000);
+  });
+
+  it('1000 이상의 숫자를 받는다', () => {
+    expect(readMetricExportInterval('1000')).toBe(1000);
+    expect(readMetricExportInterval(' 60000 ')).toBe(60000);
+  });
+
+  it.each(['999', '0', '-1000', '15s', '1e4', '1500.5'])(
+    '%s 는 받지 않는다',
+    (value) => {
+      expect(() => readMetricExportInterval(value)).toThrow('1000(밀리초)');
+    },
+  );
 });
 
 describe('readOtlpEndpoint', () => {

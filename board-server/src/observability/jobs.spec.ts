@@ -1,9 +1,10 @@
 // board-server/src/observability/jobs.spec.ts
 
 /**
- * 작업 한 바퀴를 거는 것(jobs.ts)과, 작업과 span 이 걸렸을 때 로그의 식별자와 보내는 머리말(request-context.ts)을 검증한다.
+ * 작업 한 바퀴를 거는 것(jobs.ts)과 그 바퀴의 작업 메트릭, 작업과 span 이 걸렸을 때 로그의 식별자와 보내는 머리말(request-context.ts)을 검증한다.
  */
 
+import { recordMetrics } from '../../test/metrics.js';
 import { recordSpans, spanIdOf, traceIdOf } from '../../test/spans.js';
 import { runAsJob } from './jobs.js';
 import {
@@ -18,8 +19,33 @@ const UUID =
 const TRACE = { traceId: '4bf92f3577b34da6a3ce929d0e0e4736', flags: '00' };
 
 const recorder = recordSpans();
+const metrics = recordMetrics();
 
 describe('runAsJob', () => {
+  it('바퀴마다 작업의 메트릭을 센다. 실패한 바퀴는 server_error 다', async () => {
+    await runAsJob('notification.send', () => Promise.resolve());
+    await expect(
+      runAsJob('notification.send', () => Promise.reject(new Error('없다'))),
+    ).rejects.toThrow('없다');
+
+    const labels = { operation: 'notification.send' };
+    expect(await metrics.current.value('background_jobs_started', labels)).toBe(
+      2,
+    );
+    expect(
+      await metrics.current.value('background_jobs_finished', {
+        ...labels,
+        result: 'success',
+      }),
+    ).toBe(1);
+    expect(
+      await metrics.current.value('background_jobs_finished', {
+        ...labels,
+        result: 'server_error',
+      }),
+    ).toBe(1);
+  });
+
   it('바퀴 안의 로그에 job_id 와 그 span 의 trace_id 가 붙고 request_id 는 없다', async () => {
     const ids = await runAsJob('notification.send', () =>
       Promise.resolve(currentIds()),

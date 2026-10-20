@@ -6,11 +6,13 @@
  * 프로세스가 살아 있는지(health.controller.ts)와는 묻는 것이 다르다.
  * 여기는 서버가 기대는 것들(지금은 DB)에 닿는지를 본다.
  * 실패해도 관리 도구는 서버를 재시작하지 않는다. 요청을 잠시 보내지 않을 뿐이다.
+ * 확인한 결과를 메트릭 db_up 으로 적는다(1 이면 닿는다). compose 의 healthcheck 가 10초마다 부른다.
  */
 
 import { Controller, Get, HttpStatus, Logger, Res } from '@nestjs/common';
 import { Public } from '../auth/public.decorator.js';
 import { DatabaseHealth } from '../database/database.health.js';
+import { recordDbUp } from '../observability/metrics.js';
 
 /** 이 API 가 쓰는 응답의 부분. 상태 코드를 정한다. */
 export interface StatusSetter {
@@ -45,10 +47,12 @@ export class ReadinessController {
     try {
       await this.database.ping();
     } catch (error) {
+      recordDbUp(false);
       this.logger.warn(`DB 에 닿지 않는다: ${errorName(error)}`);
       response.status(HttpStatus.SERVICE_UNAVAILABLE);
       return { status: 'unavailable' };
     }
+    recordDbUp(true);
     response.status(HttpStatus.OK);
     return { status: 'ok' };
   }
