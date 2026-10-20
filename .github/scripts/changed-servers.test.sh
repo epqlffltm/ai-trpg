@@ -46,6 +46,9 @@ expect "문서만 바뀌면 아무것도" "" "README.md" "docs/observability.md"
 expect "아무것도 안 바뀌면 아무것도" ""
 expect "이름이 비슷한 다른 폴더는 고르지 않는다" "" "board-server-old/x" "authserver/x" "notification-server-old/x"
 expect "폴더 이름만 같은 다른 경로는 고르지 않는다" "" "docs/board-server/x.md"
+expect "서버의 API 목록은 그 서버" "trpg" "docs/api/trpg.openapi.json"
+expect "API 목록의 안내는 아무것도" "" "docs/api/README.md"
+expect "API 목록을 뽑는 도구는 목록을 내는 서버" "trpg notification" "tools/export_openapi.py"
 
 all="$(select_all | tr '\n' ' ')"
 if [[ "$all" == "auth=true trpg=true board=true billing=true notification=true " ]]; then

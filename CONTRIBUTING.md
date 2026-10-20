@@ -43,6 +43,7 @@
 | 게시판 | `npm run lint`, `npm run format:check`, `npm run build`, `npm test`, `npm run test:e2e` |
 | 결제 | `go test ./...`, `go vet ./...`, `gofmt -l .` |
 | 서버 폴더 밖의 파이썬(`tools/`, `.github/scripts/`, `docker/`), 저장소 루트에서 | `uvx ruff@0.17.1 check $(git ls-files '*.py' ':(exclude)*-server/*')`, 같은 것을 `format --check` 로. PowerShell 에서도 그대로 된다 |
+| 서버의 API 를 바꿨을 때(게임, 알림), 저장소 루트에서 | `uv run --no-project python tools/export_openapi.py` 로 API 목록(`docs/api/`)을 다시 뽑아 함께 커밋한다. 빠뜨리면 CI 의 `api-docs` 가 실패한다 |
 
 **기준은 CI 다.** CI 는 이보다 더 본다(커버리지 기준, 경합 검사, 마이그레이션의 누락). 무엇을 보는지는 `.github/workflows/`와
 서버별 README 의 테스트 절에 있다. 버그를 고쳤으면 그 버그를 다시 만드는 테스트를 더한다.
