@@ -119,9 +119,14 @@ func run(args []string, out io.Writer) error {
 	if err := app.MeasureServices(services, meters.Meter()); err != nil {
 		return err
 	}
+	// 사용자의 알림을 적고 보낸 것을 센다(billing_user_notices_total)
+	userNotices := usernotice.NewService(pool, time.Now, userNoticeSender(settings.UserNotices))
+	if err := userNotices.Measure(meters.Meter()); err != nil {
+		return err
+	}
 	sweeper := sweep.New(services.Holds, services.Wallet, services.Orders, opts.limit).
 		WithNotices(guardiannotice.NewService(pool, time.Now, noticeSender(settings.GuardianNotices))).
-		WithUserNotices(usernotice.NewService(pool, time.Now, userNoticeSender(settings.UserNotices)))
+		WithUserNotices(userNotices)
 
 	if opts.once {
 		result, err := round(ctx, sweeper)
