@@ -23,9 +23,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Asset, AssetType, Scenario, ScenarioVersion
+from app.engine.templates import SRD5
 from app.listings.models import LISTING_MAX_GENRES, LISTING_MAX_TAGS, TAG_MAX_LENGTH, TAGLINE_MAX_LENGTH, Listing
 from app.main import API_PREFIX
-from tests.narration_model import with_model
+from tests.narration_model import TEST_MODEL, with_model
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -443,10 +444,16 @@ async def test_others_see_a_public_scenario(
         'recommended_players': {'min': 1, 'max': 4},
         'version': 1,
         'version_note': '',
+        # 테이블을 만들기 전에 고를 것들(#428). 공개 중인 판의 것이다
+        'openings': [OPENING],
+        # 시나리오의 기본값이다. 프리젠은 적지 않았다
+        'character_modes': ['pregen', 'custom'],
+        'pregens': [],
+        'abilities': [{'key': ability.key, 'name': ability.name} for ability in SRD5.abilities],
+        'recommended_narration_model': TEST_MODEL,
     }
-    # 판의 굳힌 내용은 나가지 않는다
+    # 판의 나머지(GM 전용 글)는 나가지 않는다
     assert GM_GUIDE not in response.text
-    assert OPENING not in response.text
 
 
 async def test_the_list_shows_only_public_scenarios(
