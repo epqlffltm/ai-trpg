@@ -360,7 +360,9 @@ async def make_table(session: AsyncSession) -> GameTable:
     version = ScenarioVersion(scenario_id=scenario.asset_id, number=1, snapshot={})
     session.add(version)
     await session.flush()
-    table = GameTable(host_id=ME, version_id=version.id, title='테이블', content={}, opening_index=0)
+    table = GameTable(
+        host_id=ME, version_id=version.id, scenario_id=version.scenario_id, title='테이블', content={}, opening_index=0
+    )
     table.capacity, table.rating, table.invite_code = 2, 'all', 'test-code-01'
     session.add(table)
     await session.commit()

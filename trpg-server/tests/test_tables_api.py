@@ -237,6 +237,7 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
 
     assert set(table) == {
         'id',
+        'scenario_id',
         'title',
         'status',
         'rating',
@@ -572,6 +573,7 @@ async def test_lists_only_the_tables_i_sit_at(client: AsyncClient, me: dict[str,
     # 목록에는 초대 코드와 앉은 사람을 싣지 않는다
     assert set(mine['items'][0]) == {
         'id',
+        'scenario_id',
         'title',
         'status',
         'rating',
@@ -884,7 +886,8 @@ async def make_table(session: AsyncSession, **fields) -> GameTable:
     version = ScenarioVersion(scenario_id=scenario.asset_id, number=1, snapshot={})
     session.add(version)
     await session.flush()
-    values = {'host_id': ME, 'version_id': version.id, 'title': '테이블', 'content': {}, 'opening_index': 0}
+    values = {'host_id': ME, 'version_id': version.id, 'scenario_id': scenario.asset_id, 'title': '테이블'}
+    values.update(content={}, opening_index=0)
     values.update(capacity=2, rating='all', invite_code='test-code-01')
     values.update(fields)
     table = GameTable(**values)

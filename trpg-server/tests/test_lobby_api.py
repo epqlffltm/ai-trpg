@@ -201,6 +201,7 @@ async def test_the_lobby_lists_the_newest_table_first(client: AsyncClient, me: d
     # 목록에는 초대 코드와 앉은 사람을 싣지 않는다
     assert set(page['items'][0]) == {
         'id',
+        'scenario_id',
         'title',
         'status',
         'rating',
@@ -282,7 +283,9 @@ async def make_adult_table(session: AsyncSession) -> GameTable:
     version = ScenarioVersion(scenario_id=scenario.asset_id, number=1, snapshot={})
     session.add(version)
     await session.flush()
-    table = GameTable(host_id=ME, version_id=version.id, title='성인용', content={}, opening_index=0)
+    table = GameTable(
+        host_id=ME, version_id=version.id, scenario_id=version.scenario_id, title='성인용', content={}, opening_index=0
+    )
     table.capacity, table.rating, table.invite_code, table.is_public = TABLE_MAX_PLAYERS, 'adult', 'adult-code-1', True
     table.members = [TableMember(user_id=ME)]
     session.add(table)
