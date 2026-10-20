@@ -19,10 +19,19 @@ from app.assets.models import Asset, Rating, ScenarioVersion
 from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import RecommendedPlayers
+from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.listings import service
 from app.listings.models import TAG_MAX_LENGTH, Genre, Listing
-from app.listings.schemas import ListingDetail, ListingUpdate, PublicationUpdate, PublicListing, PublicListingPage
+from app.listings.schemas import (
+    ListingDetail,
+    ListingPregen,
+    ListingUpdate,
+    PublicationUpdate,
+    PublicListing,
+    PublicListingDetail,
+    PublicListingPage,
+)
 from app.listings.service import ListingNotReadyError
 
 owner_router = APIRouter(prefix='/scenarios', tags=['listings'])
@@ -41,6 +50,30 @@ def to_detail(listing: Listing, version: ScenarioVersion | None) -> ListingDetai
         rating=Rating(listing.rating) if version else None,
         published_at=listing.published_at,
         updated_at=listing.updated_at,
+    )
+
+
+def to_listing_pregens(snapshot: Snapshot) -> list[ListingPregen]:
+    """판의 프리젠들을 공개 응답으로. 이름, 설명, 숫자만이다. 판의 순서다."""
+    return [
+        ListingPregen(name=pregen.name, description=pregen.description, sheet=pregen.sheet)
+        for pregen in snapshot.pregens
+    ]
+
+
+def to_public_detail(public: PublicListing, snapshot: Snapshot, recommended: str | None) -> PublicListingDetail:
+    """
+    공개된 시나리오 하나의 응답. 목록의 칸에 공개 중인 판의 고를 거리를 더한다. 여기 적은 칸만 나간다.
+
+    판에는 GM 전용 글이 들어 있다. 판을 통째로 내주지 않고 칸을 하나씩 옮긴다.
+    """
+    return PublicListingDetail(
+        **public.model_dump(),
+        openings=snapshot.openings,
+        character_modes=snapshot.character_modes,
+        pregens=to_listing_pregens(snapshot),
+        abilities=snapshot.rulebook.rules.abilities,
+        recommended_narration_model=recommended,
     )
 
 
@@ -120,8 +153,10 @@ async def list_listings(
     return PublicListingPage(items=[to_public(*row) for row in rows], total=total)
 
 
-@public_router.get('/{scenario_id}', response_model=PublicListing, status_code=status.HTTP_200_OK)
-async def read_public_listing(scenario_id: uuid.UUID, user: CurrentUser, session: Session) -> PublicListing:
-    """공개된 시나리오 하나를 돌려준다."""
-    listing, asset, version = await service.get_public(session, user, scenario_id)
-    return to_public(listing, asset, version)
+@public_router.get('/{scenario_id}', response_model=PublicListingDetail, status_code=status.HTTP_200_OK)
+async def read_public_listing(scenario_id: uuid.UUID, user: CurrentUser, session: Session) -> PublicListingDetail:
+    """
+    공개된 시나리오 하나를 돌려준다. 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 추천 모델)이 함께 있다.
+    """
+    (listing, asset, version), recommended = await service.get_public_detail(session, user, scenario_id)
+    return to_public_detail(to_public(listing, asset, version), read_snapshot(version.snapshot), recommended)
