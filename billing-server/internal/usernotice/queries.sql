@@ -62,6 +62,23 @@ WHERE g.remaining > 0
 GROUP BY g.user_id
 ON CONFLICT (source_key) DO NOTHING;
 
+-- name: QueueShortNotice :execrows
+-- 크레딧이 모자라 홀드를 걸지 못한 사람을 적는다. 홀드를 걸지 못한 그 자리에서 부른다(정리 작업이 찾지 않는다).
+-- 열쇠는 사람과 적는 날(한국 날짜)이다. 그날 이미 적었으면 적지 않는다. 라운드마다 모자라도 하루에 한 번만 알린다.
+-- 그날 처음 모자란 것의 가격표 이름과 값을 싣는다. 크레딧의 양은 글자다.
+INSERT INTO user_notices (source_key, user_id, kind, payload, next_attempt_at, created_at)
+VALUES (
+    'credit.short:' || sqlc.arg(user_id)::uuid::text || ':' || to_char(sqlc.arg(now)::timestamptz AT TIME ZONE 'Asia/Seoul', 'YYYYMMDD'),
+    sqlc.arg(user_id)::uuid, 'credit.short',
+    jsonb_build_object(
+        'price_code', sqlc.arg(price_code)::text,
+        'amount', sqlc.arg(amount)::bigint::text,
+        'gold_required', sqlc.arg(gold_required)::boolean
+    ),
+    sqlc.arg(now), sqlc.arg(now)
+)
+ON CONFLICT (source_key) DO NOTHING;
+
 -- name: ExpireStaleNotices :execrows
 -- before 전에 적고 아직 보내지 못한 것을 보내지 않기로 한다. 그만큼 지난 알림은 쓸모가 없다.
 UPDATE user_notices SET status = 'expired'

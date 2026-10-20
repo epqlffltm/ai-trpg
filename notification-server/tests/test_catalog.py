@@ -26,7 +26,7 @@ SENT_BY = {
         'publishing.banned',
         'publishing.unbanned',
     },
-    BILLING: {'order.paid', 'order.refunded', 'credit.welcome', 'credit.expiring'},
+    BILLING: {'order.paid', 'order.refunded', 'credit.welcome', 'credit.expiring', 'credit.short'},
     BOARD: {'post.commented', 'comment.replied'},
 }
 

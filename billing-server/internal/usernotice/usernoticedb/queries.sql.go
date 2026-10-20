@@ -8,6 +8,8 @@ package usernoticedb
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const delayNotice = `-- name: DelayNotice :exec
@@ -218,6 +220,46 @@ type QueueRefundedNoticesParams struct {
 // since 뒤에 청약철회가 끝난 주문을 적는다.
 func (q *Queries) QueueRefundedNotices(ctx context.Context, arg QueueRefundedNoticesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, queueRefundedNotices, arg.Now, arg.Since)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const queueShortNotice = `-- name: QueueShortNotice :execrows
+INSERT INTO user_notices (source_key, user_id, kind, payload, next_attempt_at, created_at)
+VALUES (
+    'credit.short:' || $1::uuid::text || ':' || to_char($2::timestamptz AT TIME ZONE 'Asia/Seoul', 'YYYYMMDD'),
+    $1::uuid, 'credit.short',
+    jsonb_build_object(
+        'price_code', $3::text,
+        'amount', $4::bigint::text,
+        'gold_required', $5::boolean
+    ),
+    $2, $2
+)
+ON CONFLICT (source_key) DO NOTHING
+`
+
+type QueueShortNoticeParams struct {
+	UserID       uuid.UUID
+	Now          time.Time
+	PriceCode    string
+	Amount       int64
+	GoldRequired bool
+}
+
+// 크레딧이 모자라 홀드를 걸지 못한 사람을 적는다. 홀드를 걸지 못한 그 자리에서 부른다(정리 작업이 찾지 않는다).
+// 열쇠는 사람과 적는 날(한국 날짜)이다. 그날 이미 적었으면 적지 않는다. 라운드마다 모자라도 하루에 한 번만 알린다.
+// 그날 처음 모자란 것의 가격표 이름과 값을 싣는다. 크레딧의 양은 글자다.
+func (q *Queries) QueueShortNotice(ctx context.Context, arg QueueShortNoticeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, queueShortNotice,
+		arg.UserID,
+		arg.Now,
+		arg.PriceCode,
+		arg.Amount,
+		arg.GoldRequired,
+	)
 	if err != nil {
 		return 0, err
 	}
