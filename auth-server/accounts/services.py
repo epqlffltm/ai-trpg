@@ -7,6 +7,7 @@ HTTP 를 모른다. 요청과 응답 객체를 받지 않고, 검증이 끝난 �
 그래서 뷰 없이도 테스트하고 다른 곳(관리 명령 등)에서 다시 쓸 수 있다.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -17,6 +18,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from accounts.consents import record_signup_consents
 from accounts.email_codes import (
     ISSUE_WINDOW,
     EmailCodeCooldownError,
@@ -162,11 +164,14 @@ def verify_signup(*, email: str, code: str) -> str:
     return issue_signup_ticket(email)
 
 
-def complete_signup(*, signup_ticket: str, username: str, nickname: str, password: str) -> User:
+def complete_signup(
+    *, signup_ticket: str, username: str, nickname: str, password: str, consents: Mapping[str, int]
+) -> User:
     """
     가입의 3단계. 티켓의 이메일로 인증된 계정을 만든다.
 
     환영 크레딧은 여기서 적지 않는다. 본인인증 때 적는다(identity.py, #336). 이메일은 얼마든지 만들 수 있다.
+    동의(consents, 항목 → 판)는 검증을 지난 것을 받아 계정과 한 트랜잭션에 적는다(consents.py, #450).
 
     티켓이 틀렸거나 만료됐으면 InvalidSignupTicketError, 아이디나 비밀번호가 규칙에 맞지 않거나
     아이디나 닉네임을 다른 계정이 쓰면 InvalidSignupFieldError, 이미 그 이메일로 가입했으면
@@ -182,6 +187,7 @@ def complete_signup(*, signup_ticket: str, username: str, nickname: str, passwor
         # 유일 제약에 걸리면 이 안쪽만 되돌린다. 바깥에 트랜잭션이 있어도 그대로 쓸 수 있다
         with transaction.atomic():
             user = _create_verified_user(username=username, email=email, nickname=nickname, password=password)
+            record_signup_consents(user, consents, timezone.now())
     except IntegrityError as exc:
         # 사전 조회를 통과한 뒤 다른 요청이 같은 값으로 먼저 저장한 경우.
         # 같은 티켓을 동시에 두 번 보낸 것도 여기다(이메일의 유일 제약)

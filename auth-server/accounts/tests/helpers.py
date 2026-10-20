@@ -15,6 +15,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from accounts.consents import POLICIES
 from accounts.tokens import issue_token_pair
 from config.redis_client import get_redis, redis_breaker
 
@@ -84,14 +85,20 @@ def request_signup_ticket(client, email: str) -> str:
     return verified.data['signup_ticket']
 
 
+def required_consents() -> dict[str, int]:
+    """가입에 꼭 있어야 하는 동의(필수 항목 → 지금의 판). 판이 올라도 테스트를 고치지 않게 표에서 읽는다."""
+    return {item: policy.version for item, policy in POLICIES.items() if policy.required}
+
+
 def complete_signup(client, ticket: str, *, username: str, nickname: str, password: str):
-    """가입의 3단계만 보낸다. 만 14세 이상이라고 확인한다."""
+    """가입의 3단계만 보낸다. 만 14세 이상이라고 확인하고 필수 항목에 동의한다."""
     payload = {
         'signup_ticket': ticket,
         'username': username,
         'nickname': nickname,
         'password': password,
         'age_over_14': True,
+        'consents': required_consents(),
     }
     return client.post(SIGNUP_COMPLETE_URL, payload, format='json')
 

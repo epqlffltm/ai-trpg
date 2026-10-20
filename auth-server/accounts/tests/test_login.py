@@ -500,7 +500,8 @@ class MeTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['username'], 'player_01')
         self.assertEqual(
-            set(response.data), {'public_id', 'username', 'email', 'nickname', 'identity', 'guardian_consent'}
+            set(response.data),
+            {'public_id', 'username', 'email', 'nickname', 'identity', 'guardian_consent', 'consents_pending'},
         )
 
     def test_requires_token(self):
