@@ -21,6 +21,8 @@
   - 서술 하나에 쓰는 시간에 상한이 있다(NARRATION_BUDGET_SECONDS). 남은 시간이 한 번 부르는 시간보다 짧으면
     새로 부르지 않는다. 부르는 도중에 끊지 않으므로 시작한 호출은 모두 끝나고 기록된다.
 끝내 실패하면 NarrationFailed 를 올린다. 이유는 마지막 실패의 것이다.
+다만 어느 시도가 숨긴 진짜 이름을 써서 버려졌으면(secret_leaked), 끝내 실패할 때 그 이름을 호칭으로 가린 장면을 쓴다.
+다시 불러 깨끗한 장면을 먼저 바라고, 안 되면 가린 것으로 이야기를 잇는다. 비밀은 어느 쪽이든 새지 않는다.
 미리 보기는 안의 서술자에게 그대로 넘긴다. 시도마다 안의 서술자가 새로 시작한다.
 
 서술자의 실패(ProviderError, NarrationError)만 다룬다. 그 밖의 예외는 버그다. 다시 시도하지 않고 그대로 올린다.
@@ -41,7 +43,7 @@ from app.ai.retry_budget import RetryBudget
 from app.ai.routing import UNROUTABLE
 from app.core.config import NARRATION_BUDGET_SECONDS
 from app.observability.metrics import record_ai_fallback, record_narration_retry
-from app.rounds.llm_narrator import PURPOSE, NarrationError
+from app.rounds.llm_narrator import PURPOSE, NarrationError, SecretLeaked
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Narrator, Preview
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,18 @@ def can_retry(reason: str) -> bool:
 def can_fall_back(reason: str) -> bool:
     """이 이유로 실패했을 때 다음 모델로 넘어가 볼 만한가."""
     return reason not in NOT_FOR_ANY_MODEL
+
+
+def settle(reason: str, redacted: str | None) -> str:
+    """
+    끝내 깨끗한 장면을 받지 못했을 때. 숨긴 이름을 가린 장면이 있으면 그것을 쓰고, 없으면 NarrationFailed.
+    """
+    if redacted is None:
+        raise NarrationFailed(reason)
+    logger.warning(
+        '숨긴 이름을 가린 장면을 쓴다', extra={'result': 'secret_redacted', 'error_code': 'narration.secret_redacted'}
+    )
+    return redacted
 
 
 def budget_key(narrator: Narrator) -> str:
@@ -142,9 +156,10 @@ class RetryingNarrator:
         return self.clock() - started + self.attempt_timeout <= self.budget
 
     async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
-        """차례대로 부른다. 처음 받은 장면을 돌려준다. 끝내 못 받으면 NarrationFailed."""
+        """차례대로 부른다. 처음 받은 장면을 돌려준다. 끝내 못 받으면 가린 장면을, 그것도 없으면 NarrationFailed."""
         started = self.clock()
         reason = 'no_model'
+        redacted: str | None = None
         left: Narrator | None = None
         for narrator in self.narrators:
             if left is not None:
@@ -157,7 +172,7 @@ class RetryingNarrator:
                         break
                     await self.sleep(wait)
                 if not self.has_time(started):
-                    raise NarrationFailed(reason)
+                    return settle(reason, redacted)
                 if number > 0:
                     record_narration_retry()
                 try:
@@ -165,9 +180,11 @@ class RetryingNarrator:
                 except (ProviderError, NarrationError) as error:
                     reason = str(error)
                     wait = self.wait_before_retry(error)
+                    if isinstance(error, SecretLeaked):
+                        redacted = error.redacted
                 if not can_retry(reason) or wait is None:
                     break
             if not can_fall_back(reason):
                 break
             left = narrator
-        raise NarrationFailed(reason)
+        return settle(reason, redacted)
