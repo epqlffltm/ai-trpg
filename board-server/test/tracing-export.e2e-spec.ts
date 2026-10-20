@@ -1,8 +1,10 @@
 // board-server/test/tracing-export.e2e-spec.ts
 
 /**
- * 서버가 뜰 때처럼 추적을 켜고(configureTracing) 앱을 닫으면, 모아 둔 span 을 수집기에 보내는지 본다.
- * 이 컴퓨터 안에 가짜 수집기를 띄운다. 묶어 보내기는 5초마다라, 닫을 때 보내지 않으면 수집기에 아무것도 오지 않는다.
+ * 서버가 뜰 때처럼 추적과 메트릭을 켜고(configureTracing, configureMetrics) 앱을 닫으면,
+ * 모아 둔 span 과 메트릭을 수집기에 보내는지 본다.
+ * 이 컴퓨터 안에 가짜 수집기를 띄운다. 묶어 보내기는 5초마다, 메트릭은 15초마다라, 닫을 때 보내지 않으면
+ * 수집기에 아무것도 오지 않는다.
  */
 
 import { createServer, Server } from 'node:http';
@@ -10,8 +12,17 @@ import { AddressInfo } from 'node:net';
 import { trace } from '@opentelemetry/api';
 import request from 'supertest';
 import { API_PREFIX } from '../src/app.setup.js';
+import {
+  configureMetrics,
+  METRICS_PATH,
+  useNoopMeter,
+} from '../src/observability/metrics.js';
 import { useProvider } from '../src/observability/spans.js';
-import { configureTracing, TRACES_PATH } from '../src/observability/tracing.js';
+import {
+  buildResource,
+  configureTracing,
+  TRACES_PATH,
+} from '../src/observability/tracing.js';
 import { createTestApp } from './app.js';
 
 /** 받은 요청의 주소들. */
@@ -36,20 +47,23 @@ beforeAll(async () => {
 
 afterAll(async () => {
   useProvider(trace.getTracerProvider());
+  useNoopMeter();
   await new Promise((resolve) => collector.close(resolve));
 });
 
-it('앱을 닫으면 모아 둔 span 을 수집기의 /v1/traces 로 보낸다', async () => {
+it('앱을 닫으면 모아 둔 span 과 메트릭을 수집기의 /v1/traces, /v1/metrics 로 보낸다', async () => {
   const app = await createTestApp();
-  configureTracing(endpoint, {
+  const resource = buildResource({
     service: 'board-server',
     environment: 'test',
     version: 'test',
   });
+  configureTracing(endpoint, resource);
+  configureMetrics(endpoint, 60_000, resource);
 
   await request(app.getHttpServer()).get(`/${API_PREFIX}/boards`).expect(200);
   expect(received).toEqual([]);
   await app.close();
 
-  expect(received).toEqual([TRACES_PATH]);
+  expect([...received].sort()).toEqual([METRICS_PATH, TRACES_PATH]);
 });

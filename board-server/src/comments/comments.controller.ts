@@ -10,6 +10,7 @@
  *
  * 쓰기는 글 아래에 둔다. 댓글은 글에 다는 것이다. 답글도 같은 주소로 쓰고, 어느 댓글에 다는지를
  * 본문(parent_id)으로 알린다. 고치고 지울 때는 댓글 번호만으로 가리킨다.
+ * 쓰기, 고치기, 지우기는 결과마다 센다(board_writes_total, observability/counted.interceptor.ts).
  */
 
 import {
@@ -23,6 +24,7 @@ import {
   Patch,
   Post,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Public } from '../auth/public.decorator.js';
@@ -30,6 +32,7 @@ import { Public } from '../auth/public.decorator.js';
 import type { AccessClaims } from '../auth/tokens.js';
 import { AuthorsService } from '../authors/authors.service.js';
 import { PostIdPipe } from '../posts/post-id.pipe.js';
+import { countWrite } from '../observability/counted.interceptor.js';
 import { CommentIdPipe } from './comment-id.pipe.js';
 import { Comment } from './comment.entity.js';
 import {
@@ -73,6 +76,7 @@ export class CommentsController {
   /** 글에 댓글을 단다. parent_id 를 적으면 그 댓글에 답글을 단다. 쓴 댓글을 돌려준다. */
   @Post('posts/:postId/comments')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(countWrite('comment', 'create'))
   async create(
     @Param('postId', PostIdPipe) postId: string,
     @Body() input: CreateCommentDto,
@@ -88,6 +92,7 @@ export class CommentsController {
   /** 댓글의 내용을 고친다. 고친 댓글을 돌려준다. */
   @Patch('comments/:id')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(countWrite('comment', 'update'))
   async update(
     @Param('id', CommentIdPipe) id: string,
     @Body() input: UpdateCommentDto,
@@ -100,6 +105,7 @@ export class CommentsController {
   /** 댓글을 지운다. 돌려줄 내용이 없다. */
   @Delete('comments/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(countWrite('comment', 'delete'))
   async remove(
     @Param('id', CommentIdPipe) id: string,
     @CurrentUser() user: AccessClaims,

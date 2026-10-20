@@ -14,6 +14,7 @@ import { SEARCH_TIMEOUT } from '../src/posts/posts-search.service.js';
 import { createTestApp } from './app.js';
 import { clearData, insertManyPosts } from './data.js';
 import { CapturedLogs, captureLogs } from './logs.js';
+import { recordMetrics } from './metrics.js';
 
 const API = `/${API_PREFIX}`;
 const WRITER = '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b';
@@ -25,6 +26,7 @@ const MANY_POSTS = 20_000;
 let app: NestExpressApplication;
 /** 서버의 로그. 멈춘 검색(503)의 오류 줄을 화면 대신 여기에 모은다 */
 let logs: CapturedLogs;
+const metrics = recordMetrics();
 
 beforeAll(async () => {
   app = await createTestApp((builder) =>
@@ -73,6 +75,19 @@ describe('검색의 시간 제한', () => {
     const [line] = logs.finishedWith(503);
     expect(line).toMatchObject({ level: 'error', result: 'server_error' });
     expect(logs.lines.join('\n')).not.toContain('SELECT');
+  });
+
+  it('멈춘 검색을 timeout 으로 센다(board_searches_total)', async () => {
+    await insertManyPosts(app, MANY_POSTS, WRITER);
+
+    await search();
+
+    expect(
+      await metrics.current.value('board_searches', { result: 'timeout' }),
+    ).toBe(1);
+    expect(
+      await metrics.current.value('board_searches', { result: 'success' }),
+    ).toBeUndefined();
   });
 
   it('멈춘 뒤에도 서버는 다른 요청에 답한다', async () => {

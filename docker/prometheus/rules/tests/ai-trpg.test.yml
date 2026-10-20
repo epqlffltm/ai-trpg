@@ -667,3 +667,83 @@ tests:
             exp_annotations:
               summary: 시도 횟수 제한 login-ip 을 세지 못하고 통과시켰다
               description: RedisDown 이 함께 울렸으면 Redis 쪽부터 본다. 아니면 인증 서버의 로그("시도 횟수를 셀 수 없어")를 본다
+
+  # 게시판 서버의 DB
+  - interval: 1m
+    input_series:
+      - series: 'db_up{service="board-server", instance="server-a"}'
+        values: '1 1 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BoardDatabaseUnreachable
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: BoardDatabaseUnreachable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: board-server
+              instance: server-a
+            exp_annotations:
+              summary: 게시판 서버가 DB 에 닿지 못한다
+              description: 글을 읽지도 쓰지도 못한다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+  # 게시판 서버의 5xx: 요청이 많고 5xx 가 10% 면 10분 뒤에 울린다
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="board-server", route="/x", method="GET", status_code="200", instance="server-a"}'
+        values: '0+54x30'
+      - series: 'http_server_requests_total{service="board-server", route="/x", method="GET", status_code="503", instance="server-a"}'
+        values: '0+6x30'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: BoardServerErrors
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: BoardServerErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 게시판 서버의 5xx 가 10% 다
+              description: 대시보드 board-server 의 "상태 코드"와 로그의 error_code 를 본다. 멈춘 검색(503)도 여기에 든다
+
+  # 멈춘 검색: 15분에 셋까지는 울리지 않고, 넘으면 울린다
+  - interval: 1m
+    input_series:
+      - series: 'board_searches_total{service="board-server", result="timeout", instance="server-a"}'
+        values: '0 1 2 3 3 3 3 3 3 3 6 6 6'
+      - series: 'board_searches_total{service="board-server", result="success", instance="server-a"}'
+        values: '0+20x12'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BoardSearchTimeouts
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: BoardSearchTimeouts
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 지난 15분에 검색이 6 번 멈췄다
+              description: 대시보드 board-server 의 "검색이 걸린 시간"을 본다. 늘면 색인이나 검색 엔진이 필요하다(board-server/README.md 의 설계 메모)
+
+  # 알림 보내기의 바퀴가 실패하면 울린다. 성공한 바퀴는 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'background_jobs_finished_total{service="board-server", operation="notification.send", result="success", instance="server-a"}'
+        values: '0+12x5'
+      - series: 'background_jobs_finished_total{service="board-server", operation="notification.send", result="server_error", instance="server-a"}'
+        values: '0 0 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: BoardNotificationRoundsFailing
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: BoardNotificationRoundsFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 게시판 서버의 알림 보내기가 실패하고 있다
+              description: 댓글과 답글의 알림이 발송함에 쌓인다. 게시판 서버의 로그(operation=notification.send, error_code=job.failed)를 본다

@@ -8,8 +8,9 @@
  * 로그는 공통 규격의 JSON 으로 내보낸다(observability/json-logger.ts). Nest 의 로거 자리에 꽂는다.
  * 그래서 이 서버의 코드든 Nest 든, Nest 의 Logger 로 남긴 것은 모두 같은 모양으로 나간다.
  *
- * 수집기의 주소(OTEL_EXPORTER_OTLP_ENDPOINT)가 있으면 span 을 내보낸다(observability/tracing.ts). 요청을 받기 전에 켠다.
- * 끄라는 신호(SIGTERM, SIGINT)를 받으면 앱을 닫는다(enableShutdownHooks). 닫으며 모아 둔 span 을 보낸다
+ * 수집기의 주소(OTEL_EXPORTER_OTLP_ENDPOINT)가 있으면 span 과 메트릭을 내보낸다(observability/tracing.ts, metrics.ts).
+ * 요청을 받기 전에 켠다. 둘이 같은 출처(같은 service.instance.id)를 쓴다.
+ * 끄라는 신호(SIGTERM, SIGINT)를 받으면 앱을 닫는다(enableShutdownHooks). 닫으며 모아 둔 span 과 메트릭을 보낸다
  * (observability/observability.module.ts). 받는 중이던 요청은 마저 답하고, DB 의 연결을 닫는다.
  */
 
@@ -20,7 +21,8 @@ import { AppModule } from './app.module.js';
 import { setupApp } from './app.setup.js';
 import { Environment } from './config/environment.js';
 import { createLogger, serviceInfo } from './observability/logger.factory.js';
-import { configureTracing } from './observability/tracing.js';
+import { configureMetrics } from './observability/metrics.js';
+import { buildResource, configureTracing } from './observability/tracing.js';
 
 async function bootstrap(): Promise<void> {
   // 로거를 꽂기 전에 남은 로그는 모아 두었다가(bufferLogs) 꽂은 뒤에 내보낸다.
@@ -30,9 +32,13 @@ async function bootstrap(): Promise<void> {
   });
   const config = app.get<ConfigService<Environment, true>>(ConfigService);
   app.useLogger(createLogger(config));
-  configureTracing(
-    config.get('OTEL_EXPORTER_OTLP_ENDPOINT', { infer: true }),
-    serviceInfo(config),
+  const endpoint = config.get('OTEL_EXPORTER_OTLP_ENDPOINT', { infer: true });
+  const resource = buildResource(serviceInfo(config));
+  configureTracing(endpoint, resource);
+  configureMetrics(
+    endpoint,
+    config.get('OTEL_METRIC_EXPORT_INTERVAL', { infer: true }),
+    resource,
   );
   app.enableShutdownHooks();
   setupApp(app);

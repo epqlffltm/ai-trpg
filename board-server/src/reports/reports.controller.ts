@@ -8,6 +8,7 @@
  *
  * 신고를 읽고 처리하는 운영자의 API 는 report-reviews.controller.ts 다. 부를 수 있는 사람이 다르다.
  * 신고한 사람에게는 접수했다는 것만 돌려준다.
+ * 신고는 결과마다 센다(board_reports_total, observability/counted.interceptor.ts).
  */
 
 import {
@@ -17,12 +18,14 @@ import {
   HttpStatus,
   Param,
   Post,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 // 타입만 가져온다(import type). 데코레이터가 붙은 인자의 타입이 인터페이스면 이렇게 적어야 빌드된다
 import type { AccessClaims } from '../auth/tokens.js';
 import { CommentIdPipe } from '../comments/comment-id.pipe.js';
 import { PostIdPipe } from '../posts/post-id.pipe.js';
+import { countReport } from '../observability/counted.interceptor.js';
 import { CreateReportDto } from './create-report.dto.js';
 import {
   ReportReceiptResponse,
@@ -38,6 +41,7 @@ export class ReportsController {
   /** 글을 신고한다. */
   @Post('posts/:id/reports')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(countReport('post'))
   async reportPost(
     @Param('id', PostIdPipe) id: string,
     @Body() input: CreateReportDto,
@@ -50,6 +54,7 @@ export class ReportsController {
   /** 댓글을 신고한다. 답글도 같다. */
   @Post('comments/:id/reports')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(countReport('comment'))
   async reportComment(
     @Param('id', CommentIdPipe) id: string,
     @Body() input: CreateReportDto,
