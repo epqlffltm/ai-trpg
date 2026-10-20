@@ -8,6 +8,7 @@ Serializer 는 검증과 변환만 한다. 계정을 만드는 일은 services.p
 
 from rest_framework import serializers
 
+from accounts.consents import signup_consent_problems
 from accounts.email_codes import CODE_LENGTH
 from accounts.models import GuardianNoticeKind, User
 from accounts.validators import (
@@ -79,6 +80,15 @@ class SignupCompleteSerializer(serializers.Serializer):
     # "만 14세 이상입니다" 확인(#336). 참이어야 가입된다. 자기 신고라 거짓말을 막지는 못한다.
     # 실제 나이는 본인인증에서 알고, 그때 만 14세 미만이면 계정을 막는다(identity.py)
     age_over_14 = serializers.BooleanField()
+    # 동의한 항목과 그 판(#450). {"terms": 1, "privacy": 1, "marketing": 1}. 넣지 않은 선택 항목은 동의하지 않은 것이다.
+    # 판을 받는 까닭은 화면이 보인 문서가 지금의 판인지 보려는 것이다. 옛 판이면 400 이다
+    consents = serializers.DictField(child=serializers.IntegerField(min_value=1), allow_empty=True)
+
+    def validate_consents(self, consents: dict[str, int]) -> dict[str, int]:
+        problems = signup_consent_problems(consents)
+        if problems:
+            raise serializers.ValidationError(problems, code='consent_invalid')
+        return consents
 
     def validate_age_over_14(self, confirmed: bool) -> bool:
         if not confirmed:
@@ -224,3 +234,29 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ('public_id', 'username', 'email', 'nickname')
         read_only_fields = fields
+
+
+class ConsentDocumentSerializer(serializers.Serializer):
+    """동의를 받는 항목 하나의 지금의 판. 화면이 가입과 설정에서 보일 문서를 고른다."""
+
+    item = serializers.CharField()
+    version = serializers.IntegerField()
+    effective_on = serializers.DateField()
+    required = serializers.BooleanField()
+
+
+class ConsentStateSerializer(serializers.Serializer):
+    """본인의 항목 하나의 동의 상태. 동의하지 않았거나 철회했으면 agreed_version 과 agreed_at 이 null 이다."""
+
+    item = serializers.CharField()
+    required = serializers.BooleanField()
+    version = serializers.IntegerField()
+    agreed_version = serializers.IntegerField(allow_null=True)
+    agreed_at = serializers.DateTimeField(allow_null=True)
+    pending = serializers.BooleanField()
+
+
+class ConsentAgreeSerializer(serializers.Serializer):
+    """항목 하나에 동의한다. 화면이 보인 문서의 판을 보낸다."""
+
+    version = serializers.IntegerField(min_value=1)

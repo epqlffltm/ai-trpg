@@ -647,3 +647,54 @@ class GuardianNotice(models.Model):
 
     def __str__(self) -> str:
         return f'{self.order_id} / {self.get_kind_display()} / {self.get_outcome_display()}'
+
+
+class ConsentItem(models.TextChoices):
+    """
+    동의를 받는 항목(#450). 판과 필수 여부는 코드의 표(consents.py 의 POLICIES)에 있다.
+
+    개인정보 처리방침은 동의를 받는 문서가 아니라 알리는 문서라 항목이 아니다. 수집·이용의 동의(privacy)를 따로 받는다.
+    """
+
+    TERMS = 'terms', '이용약관'
+    PRIVACY = 'privacy', '개인정보 수집·이용'
+    MARKETING = 'marketing', '마케팅 정보 수신'
+    AI_TRAINING = 'ai_training', '대화 기록의 AI 학습 이용'
+
+
+class ConsentAction(models.TextChoices):
+    AGREED = 'agreed', '동의함'
+    WITHDRAWN = 'withdrawn', '철회함'
+
+
+class ConsentRecord(models.Model):
+    """
+    동의와 철회 하나(#450). 덮어쓰지 않고 쌓는다. 항목마다 마지막 줄이 지금의 상태다.
+
+    언제 어느 판에 동의했고 언제 철회했는지를 보일 수 있게 한다. 줄을 고치는 코드는 없다(consents.py 는 넣기만 한다).
+    IP 와 기기는 적지 않는다. 동의를 보이는 데는 계정, 항목, 판, 시각으로 충분하고, 모으는 개인정보를 늘리지 않는다.
+    계정의 줄을 지우면 함께 지워진다. 만 14세 미만으로 막은 계정의 것은 막을 때 지운다(identity.py).
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='consent_records',
+        verbose_name='계정',
+    )
+    item = models.CharField('항목', max_length=32, choices=ConsentItem.choices)
+    # 동의했으면 동의한 판, 철회했으면 철회한 그 동의의 판이다
+    version = models.PositiveIntegerField('판')
+    action = models.CharField('무엇을', max_length=16, choices=ConsentAction.choices)
+    at = models.DateTimeField('시각')
+
+    class Meta:
+        verbose_name = '동의 기록'
+        verbose_name_plural = '동의 기록'
+        indexes = [
+            # 한 사람의 동의를 읽는다. 사람마다 몇 줄뿐이다
+            models.Index(fields=['user', 'item', 'at'], name='accounts_consent_user_item'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.get_item_display()} {self.version}판 / {self.get_action_display()}'

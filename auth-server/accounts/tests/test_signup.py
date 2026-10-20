@@ -38,7 +38,7 @@ from accounts.services import (
     verify_signup,
 )
 from accounts.signup_tickets import SIGNUP_TICKET_LIFETIME, issue_signup_ticket
-from accounts.tests.helpers import code_from, wrong_code_for
+from accounts.tests.helpers import code_from, required_consents, wrong_code_for
 
 SIGNUP_URL = reverse('accounts:signup')
 VERIFY_URL = reverse('accounts:signup-verify')
@@ -51,7 +51,13 @@ EMAIL = 'someone@example.com'
 
 def account(**overrides) -> dict:
     """가입 내용(3단계). 테스트마다 달라지는 값만 넘기고 나머지는 기본값을 쓴다."""
-    payload = {'username': 'player_01', 'nickname': '플레이어', 'password': PASSWORD, 'age_over_14': True}
+    payload = {
+        'username': 'player_01',
+        'nickname': '플레이어',
+        'password': PASSWORD,
+        'age_over_14': True,
+        'consents': required_consents(),
+    }
     payload.update(overrides)
     return payload
 
@@ -625,6 +631,7 @@ class TwoConnectionsTests(TransactionTestCase):
                 username=f'player_0{index + 1}',
                 nickname=f'플레이어{index + 1}',
                 password=PASSWORD,
+                consents=required_consents(),
             )
 
         results = self.run_twice_at_once(complete)

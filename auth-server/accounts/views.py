@@ -30,6 +30,16 @@ from accounts.attempt_policies import (
     is_login_blocked_ip,
 )
 from accounts.client_ip import get_attempt_subject
+from accounts.consents import (
+    POLICIES,
+    ConsentOutdatedError,
+    ConsentRequiredError,
+    UnknownConsentItemError,
+    agree,
+    consent_states,
+    pending_items,
+    withdraw,
+)
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
 from accounts.email_codes import InvalidEmailCodeError
 from accounts.guardian import (
@@ -60,6 +70,9 @@ from accounts.login_tickets import InvalidLoginTicketError
 from accounts.models import User
 from accounts.origin_check import is_allowed_origin, log_refused_origin, read_origin
 from accounts.serializers import (
+    ConsentAgreeSerializer,
+    ConsentDocumentSerializer,
+    ConsentStateSerializer,
     EmailSerializer,
     GuardianConsentSerializer,
     GuardianNoticeSerializer,
@@ -806,5 +819,71 @@ class MeView(APIView):
             **UserSerializer(request.user).data,
             'identity': build_identity_body(request.user),
             'guardian_consent': guardian_status_of(request.user),
+            # 다시 동의를 받아야 하는 필수 항목(#450). 비어 있지 않으면 화면이 동의를 받는다
+            'consents_pending': pending_items(request.user),
         }
         return Response(body, status=status.HTTP_200_OK)
+
+
+class ConsentDocumentsView(APIView):
+    """GET /api/v1/auth/consents. 동의를 받는 항목마다 지금의 판(#450). 가입 화면이 쓰므로 로그인 없이 읽는다."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request: Request) -> Response:
+        items = ConsentDocumentSerializer(POLICIES.values(), many=True).data
+        return Response({'items': items}, status=status.HTTP_200_OK)
+
+
+def build_consents_response(user: User) -> Response:
+    """본인의 항목마다의 동의 상태. 읽기, 동의, 철회가 같은 모양으로 답한다."""
+    items = ConsentStateSerializer(consent_states(user), many=True).data
+    return Response({'items': items}, status=status.HTTP_200_OK)
+
+
+def build_unknown_consent_response() -> Response:
+    """표에 없는 항목의 응답."""
+    return build_coded_error_response('그런 동의 항목이 없습니다.', 'consent_item_unknown', status.HTTP_404_NOT_FOUND)
+
+
+class MyConsentsView(APIView):
+    """GET /api/v1/auth/me/consents. 본인의 항목마다의 동의 상태(#450)."""
+
+    # 로그인한 본인만 읽는다. 기본 권한(IsAuthenticated)을 쓴다
+
+    def get(self, request: Request) -> Response:
+        return build_consents_response(request.user)
+
+
+class MyConsentView(APIView):
+    """
+    PUT /api/v1/auth/me/consents/{item}: 그 항목에 동의한다(본문의 판으로).
+    DELETE /api/v1/auth/me/consents/{item}: 그 항목의 동의를 철회한다. 필수 항목은 철회하지 못한다.
+    """
+
+    def put(self, request: Request, item: str) -> Response:
+        serializer = ConsentAgreeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            agree(request.user, item, serializer.validated_data['version'], timezone.now())
+        except UnknownConsentItemError:
+            return build_unknown_consent_response()
+        except ConsentOutdatedError:
+            return build_coded_error_response(
+                '문서의 판이 바뀌었습니다. 다시 읽고 동의해 주세요.', 'consent_outdated', status.HTTP_409_CONFLICT
+            )
+        return build_consents_response(request.user)
+
+    def delete(self, request: Request, item: str) -> Response:
+        try:
+            withdraw(request.user, item, timezone.now())
+        except UnknownConsentItemError:
+            return build_unknown_consent_response()
+        except ConsentRequiredError:
+            return build_coded_error_response(
+                '필수 동의는 철회할 수 없습니다. 탈퇴로 할 수 있습니다.',
+                'consent_required',
+                status.HTTP_400_BAD_REQUEST,
+            )
+        return build_consents_response(request.user)
