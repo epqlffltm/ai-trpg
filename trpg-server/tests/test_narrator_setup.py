@@ -218,11 +218,18 @@ def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-ant-real')
     monkeypatch.setenv('GEMINI_API_KEY', 'g-real')
     monkeypatch.setenv('ZAI_API_KEY', 'z-real')
+    monkeypatch.setenv('DEEPINFRA_API_KEY', 'di-real')
 
     # 개발자의 .env 에 진짜 키가 있어도 테스트는 실제 API 를 부르지 않는다
     settings = make_test_settings()
-    keys = (settings.openai_api_key, settings.anthropic_api_key, settings.gemini_api_key, settings.zai_api_key)
-    assert [key.get_secret_value() for key in keys] == ['', '', '', '']
+    keys = (
+        settings.openai_api_key,
+        settings.anthropic_api_key,
+        settings.gemini_api_key,
+        settings.zai_api_key,
+        settings.deepinfra_api_key,
+    )
+    assert [key.get_secret_value() for key in keys] == ['', '', '', '', '']
 
 
 def test_every_chain_shares_one_retry_budget():

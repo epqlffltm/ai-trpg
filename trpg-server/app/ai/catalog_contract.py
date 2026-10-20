@@ -36,6 +36,9 @@ class Provider(enum.StrEnum):
     LOCAL = 'local'
     # Z.ai 의 API(GLM). OpenAI 와 같은 모양이다. 출력 상한의 칸은 max_tokens 로 정해져 있다
     ZAI = 'zai'
+    # DeepInfra 의 API(#398). 공개 가중치 모델(DeepSeek)을 미국에서 띄운 호스팅이다. OpenAI 와 같은 모양이다.
+    # 출력 상한의 칸은 max_tokens 로 정해져 있고, 생각은 OpenAI 처럼 reasoning_effort 로 켜고 끈다(none 이면 꺼진다)
+    DEEPINFRA = 'deepinfra'
 
 
 class TokenLimitField(enum.StrEnum):

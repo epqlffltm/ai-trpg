@@ -81,6 +81,7 @@ SECRETS = [
         'ANTHROPIC_API_KEY',
         'GEMINI_API_KEY',
         'ZAI_API_KEY',
+        'DEEPINFRA_API_KEY',
         'SIGNAL_SECRET',
         'AI_LOG_HMAC_KEY',
     ),
