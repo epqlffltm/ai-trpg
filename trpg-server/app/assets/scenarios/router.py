@@ -26,6 +26,7 @@ from app.assets.scenarios.publishing import ScenarioNotReadyError
 from app.assets.scenarios.recommended_model import MISSING, ModelStatus, RecommendedModelError, model_status
 from app.assets.scenarios.schemas import (
     ModelStatusOut,
+    PublishCheck,
     ScenarioCreate,
     ScenarioDetail,
     ScenarioPage,
@@ -193,6 +194,17 @@ async def publish_scenario(
     """
     version = await publishing.publish(session, user.user_id, scenario_id, data, indexer, allowed_ratings(user))
     return to_version_detail(version)
+
+
+@router.get('/{scenario_id}/publish-check', response_model=PublishCheck, status_code=status.HTTP_200_OK)
+async def check_publishable(scenario_id: uuid.UUID, user: CurrentUser, session: Session) -> PublishCheck:
+    """
+    자기 시나리오를 지금 게시하면 막히는 이유를 미리 본다(#428). 판을 만들지 않는다.
+
+    게시(POST /versions)와 같은 검사다. 게시가 409 의 problems 로 돌려줄 것을 200 으로 돌려준다.
+    """
+    problems = await publishing.check_publishable(session, user.user_id, scenario_id, allowed_ratings(user))
+    return PublishCheck(ready=not problems, problems=list(problems))
 
 
 @router.get('/{scenario_id}/versions', response_model=list[VersionSummary], status_code=status.HTTP_200_OK)
