@@ -389,6 +389,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `signals.bad_signature` | 게임 서버가 서명이 맞지 않는 실시간 신호(NOTIFY)를 받아 버렸다. 같은 DB 의 다른 계정이 꾸며 보냈거나, 게임 서버들의 `SIGNAL_SECRET` 이 서로 다르다. `sender_pid` 에 보낸 연결의 프로세스 번호를 싣는다(`pg_stat_activity` 에서 계정을 찾는다). 받은 글자는 싣지 않는다. `warning` |
 | `limits.unavailable` | 게임 서버가 시도 횟수를 세는 곳(Redis)에 닿지 못했다. `limit` 에 어느 제한인지, `blocked` 에 막았는지(로비의 비밀번호) 통과시켰는지(채팅) 싣는다. `warning` |
 | `server.start_failed` | 서버가 뜨지 못했다 |
+| `security.event` | 인증 서버가 보안 이벤트(시도 제한에 막히기 시작함, 계정 정지와 풀기, 버린 메일, 본인인증의 막힘)를 DB 에 적었다. 저장한 뒤에 한 줄. `security_event` 에 종류, `security_event_id` 에 그 줄의 번호, 계정이 있으면 `user_id`(공개 ID). IP 와 운영자의 사유는 싣지 않는다(DB 가 원본이다). `warning` |
 | `ledger.mismatch` | 결제 서버가 남긴다. 대사에서 지금의 값(지갑, 지급 묶음, 주문, 홀드)이 원장과 맞지 않는 줄을 찾았다. 줄마다 `error` 한 줄. `check` 에 검사의 이름, `record_id` 에 그 줄의 번호. 사람이 봐야 한다 |
 | `order.stuck` | 결제 서버가 남긴다. 대사가 결제 대행사에 다시 묻고도, 결과를 모르는 채(`confirming`, `refunding`)로 하루가 지난 주문이 있다. 주문마다 `warning` 한 줄. `order_id`, `status`, `since`. 사람이 상점관리자에서 확인하고 `cmd/orders decide` 로 정한다 |
 | `pricing.review_due` | 결제 서버가 남긴다. 대사가 셀 때, 공급사 가격 변경의 할 일(`announce` D-30, `notice` D-14, `final` D-1) 가운데 때가 되었는데 끝내지 않은 것이 있다. 할 일마다 `warning` 한 줄. `review_id`, `subject`, `step`, `stage`(`d30`·`d14`·`d1`·`overdue`), `days_left`, `changes_at`. 끝냈다고 적을 때까지(`cmd/pricereviews done`) 날마다 나온다 |
