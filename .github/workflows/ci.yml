@@ -102,6 +102,32 @@ jobs:
       - name: 모양 검사
         run: git ls-files -z '*.py' ':(exclude)*-server/*' | xargs -0 --no-run-if-empty uvx "ruff@$RUFF_VERSION" format --check
 
+      # 서버 폴더 밖의 도구(tools/)와 설정 검사(.github/scripts/)의 시험. 표준 라이브러리만 써서 몇 초면 끝난다.
+      # 도구만 고친 PR 은 서버를 고르지 않아 stack 이 돌지 않으므로 여기서 늘 돌린다
+      - name: 도구와 설정 검사의 시험
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 -m unittest discover -s tools -p 'test_*.py'
+          python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
+  # 서버마다의 API 목록(docs/api/<서버>.openapi.json, #557)이 지금의 서버와 같은지 본다.
+  # 화면의 타입과 디자인 도구에 넘길 목록이라, 서버의 API 를 바꾸고 목록을 새로 뽑지 않으면 실패한다.
+  # 목록을 내는 서버(tools/export_openapi.py 의 SOURCES) 가운데 하나라도 고르면 돈다. 서버마다 uv 의 환경을 만들어 앱을 불러온다
+  api-docs:
+    needs: changes
+    if: needs.changes.outputs.trpg == 'true' || needs.changes.outputs.notification == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v9.0.0
+
+      - name: API 목록이 서버와 같은가
+        run: uv run --no-project python tools/export_openapi.py --check
+
   # 모든 서버의 이미지를 만들어 compose 로 함께 띄워 본다. 서버의 기능은 위의 작업들이 보고, 이것은
   # "이미지가 만들어지고, 마이그레이션이 돌고, 서버가 뜨고, 서로 닿고, 프록시가 주소를 나누고 막는가"만 본다.
   # 한 서버만 바뀌어도 모두 띄운다. 한 서버만 띄워서는 서로 닿는지 볼 수 없다.
@@ -146,7 +172,7 @@ jobs:
   # always(): 앞의 작업이 실패해도 이 작업은 돈다. 돌지 않으면 GitHub 이 "기다리는 중"으로 둔다
   ci-ok:
     if: always()
-    needs: [changes, repo-python, auth-server, trpg-server, board-server, billing-server, notification-server, stack]
+    needs: [changes, repo-python, api-docs, auth-server, trpg-server, board-server, billing-server, notification-server, stack]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
