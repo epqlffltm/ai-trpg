@@ -525,6 +525,7 @@ async def load_closing_request(
         monsters=to_monster_notes(snapshot, scene.monsters),
         turns=narration_request.to_turn_notes(round_.turns),
         clock=narration_request.to_clock_note(table),
+        secrets=narration_request.to_secret_names(snapshot, scene.npcs, round_.scene),
     )
 
 
