@@ -14,7 +14,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from app.assets.models import Rating, ScenarioVersion
+from app.assets.models import Rating
 from app.catalog.models import AiModel
 from app.tables.models import GameTable, TableMember, TableMonster, TableNpc, TableStatus
 
@@ -137,9 +137,7 @@ def open_to(allowed_ratings: list[Rating], scenario_id: uuid.UUID | None) -> Sel
         seats_taken < GameTable.capacity,
     )
     if scenario_id is not None:
-        query = query.join(ScenarioVersion, ScenarioVersion.id == GameTable.version_id).where(
-            ScenarioVersion.scenario_id == scenario_id
-        )
+        query = query.where(GameTable.scenario_id == scenario_id)
     return query
 
 
