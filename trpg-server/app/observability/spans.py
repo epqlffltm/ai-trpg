@@ -13,6 +13,7 @@ span 이 없으면(보낼 곳이 없는 PC) 지금처럼 context.py 가 정한 �
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 
 from opentelemetry import trace
 from opentelemetry.context import Context
@@ -27,10 +28,14 @@ SCOPE_NAME = 'trpg-server'
 ATTRIBUTE_REQUEST_ID = 'request_id'
 ATTRIBUTE_JOB_ID = 'job_id'
 ATTRIBUTE_RESULT = 'result'
+# 작업 한 바퀴가 맡은 수. 0 이면 할 일이 없던 바퀴라 그 추적을 보내지 않는다(idle_rounds.py)
+ATTRIBUTE_HANDLED = 'handled'
 # 작업이 실패했을 때 span 의 설명. 로그의 error_code 와 같다. 오류의 글은 로그에만 있다
 JOB_FAILED_ERROR_CODE = 'job.failed'
 
 _provider: TracerProvider = trace.NoOpTracerProvider()
+# 지금 도는 작업 한 바퀴가 맡은 수들(add_handled). job_span 이 바퀴마다 새로 건다. 작업 밖이면 None 이다
+_handled: ContextVar[list[int] | None] = ContextVar('handled', default=None)
 
 
 def use_provider(provider: TracerProvider) -> None:
@@ -97,6 +102,24 @@ def mark_job(span: Span, result: str) -> None:
         span.set_status(StatusCode.ERROR, JOB_FAILED_ERROR_CODE)
 
 
+def add_handled(count: int) -> None:
+    """
+    지금 도는 작업 한 바퀴가 맡은 것의 수를 더한다. 작업 밖이면 아무것도 하지 않는다.
+
+    맡은 것은 그 바퀴가 찾아낸 것이다(마감이 지난 테이블, 차례가 된 청구, 보낼 알림). 하다가 실패한 것도 든다.
+    바퀴가 끝날 때 job_span 이 합을 span 에 싣는다. 부르지 않은 작업(서술 하나)은 싣지 않는다. 그 추적은 늘 남는다.
+    """
+    tally = _handled.get()
+    if tally is not None:
+        tally.append(count)
+
+
+def record_handled(span: Span, tally: list[int]) -> None:
+    """바퀴가 맡은 수의 합을 span 에 싣는다. 한 번도 더하지 않았으면 싣지 않는다."""
+    if tally:
+        span.set_attribute(ATTRIBUTE_HANDLED, sum(tally))
+
+
 @contextmanager
 def job_span(operation: str, job_id: str) -> Iterator[Span]:
     """
@@ -107,21 +130,31 @@ def job_span(operation: str, job_id: str) -> Iterator[Span]:
     걸린 span 이 없으면(서버가 뜰 때 시작한 정리 작업의 바퀴) 새 추적으로 시작한다. 바퀴마다 추적 하나다.
     그 안의 쿼리와 다른 서버를 부르는 것이 이 span 아래에 놓인다.
     예외의 글은 span 에 싣지 않는다(DB 주소가 섞일 수 있다). 끝난 모양(result)과 오류 표시만 남긴다.
+    안에서 add_handled 로 더한 수의 합을 handled 로 싣는다.
+    0 이고 실패하지 않은 바퀴의 추적은 보내지 않는다(idle_rounds.py).
     """
-    with tracer().start_as_current_span(
-        operation,
-        kind=SpanKind.INTERNAL,
-        attributes={ATTRIBUTE_JOB_ID: job_id},
-        record_exception=False,
-        set_status_on_exception=False,
-    ) as span:
-        try:
-            yield span
-        except Exception:
-            mark_job(span, 'server_error')
-            raise
-        except BaseException:
-            # 끄느라 멈춘 것(CancelledError)은 실패가 아니다
-            mark_job(span, 'cancelled')
-            raise
-        mark_job(span, 'success')
+    tally: list[int] = []
+    token = _handled.set(tally)
+    try:
+        with tracer().start_as_current_span(
+            operation,
+            kind=SpanKind.INTERNAL,
+            attributes={ATTRIBUTE_JOB_ID: job_id},
+            record_exception=False,
+            set_status_on_exception=False,
+        ) as span:
+            try:
+                yield span
+            except Exception:
+                mark_job(span, 'server_error')
+                raise
+            except BaseException:
+                # 끄느라 멈춘 것(CancelledError)은 실패가 아니다
+                mark_job(span, 'cancelled')
+                raise
+            else:
+                mark_job(span, 'success')
+            finally:
+                record_handled(span, tally)
+    finally:
+        _handled.reset(token)
