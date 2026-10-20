@@ -11,6 +11,10 @@ Redis 명령은 모두 차단기(config/redis_client.py 의 redis_breaker)를 �
 한동안 Redis 에 묻지 않고 바로 통과시킨다. 멈춘 Redis 를 요청마다 기다리지 않는다.
 
 HTTP 를 모른다. 무엇을 기준으로 셀지(IP, 계정)는 부르는 쪽이 정해 문자열로 넘긴다.
+
+막은 것(auth_rate_limited_total)과 Redis 에 묻지 못해 세지 않고 통과시킨 것(auth_rate_limits_unavailable_total)을
+제한의 이름(limit)마다 센다. 뒤의 것이 늘면 시도 제한이 꺼져 있다.
+지우기(clear_attempts)의 실패는 통과가 아니라 세지 않는다.
 """
 
 import hashlib
@@ -23,6 +27,7 @@ import redis
 from django.conf import settings
 
 from config.redis_client import get_redis, redis_breaker
+from observability.metrics import record_rate_limited, record_rate_limits_unavailable
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +86,10 @@ def count_attempt(limit: AttemptLimit, subject: str) -> None:
         count, seconds_left = redis_breaker.call(_increment, limit, subject)
     except REDIS_UNAVAILABLE as exc:
         _log_redis_failure(exc)
+        record_rate_limits_unavailable(limit.name)
         return
     if count > limit.max_attempts:
+        record_rate_limited(limit.name)
         raise TooManyAttemptsError(
             _retry_after(limit, seconds_left),
             first_block=count == limit.max_attempts + 1,
@@ -101,8 +108,10 @@ def ensure_not_blocked(limit: AttemptLimit, subject: str) -> None:
         count, seconds_left = redis_breaker.call(_read, limit, subject)
     except REDIS_UNAVAILABLE as exc:
         _log_redis_failure(exc)
+        record_rate_limits_unavailable(limit.name)
         return
     if count >= limit.max_attempts:
+        record_rate_limited(limit.name)
         raise TooManyAttemptsError(_retry_after(limit, seconds_left))
 
 
@@ -118,6 +127,7 @@ def count_failure(limit: AttemptLimit, subject: str) -> bool:
         count, _ = redis_breaker.call(_increment, limit, subject)
     except REDIS_UNAVAILABLE as exc:
         _log_redis_failure(exc)
+        record_rate_limits_unavailable(limit.name)
         return False
     return count == limit.max_attempts
 

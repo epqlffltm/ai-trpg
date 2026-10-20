@@ -29,10 +29,10 @@
 | 공통 모양의 JSON 로그 | 다섯 서버에 구현 |
 | 민감정보를 가리는 마지막 방어선 | 다섯 서버에 구현 |
 | 백그라운드 작업의 식별자(`job_id`) | 다섯 서버 모두 구현 |
-| 메트릭 | billing-server(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)), notification-server(Python 의 본보기, [아래](#붙인-것-알림-서버의-메트릭-python-의-본보기)), trpg-server(실시간 스트림, AI 호출, 라운드와 서술, 서술 값, [아래](#붙인-것-trpg-서버의-메트릭))에 구현. 나머지 둘(auth, board)은 아직 내보내지 않는다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
+| 메트릭 | billing-server(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)), notification-server(Python 의 본보기, [아래](#붙인-것-알림-서버의-메트릭-python-의-본보기)), trpg-server(실시간 스트림, AI 호출, 라운드와 서술, 서술 값, [아래](#붙인-것-trpg-서버의-메트릭)), auth-server(메일, 시도 횟수 제한, 워커와 예약 명령, [아래](#붙인-것-인증-서버의-메트릭))에 구현. 남은 board-server 는 아직 내보내지 않는다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
 | DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
-| 대시보드 | billing-server, notification-server, trpg-server, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
-| 경보 | 수집 쪽, DB 와 Redis, billing-server, notification-server, trpg-server 의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
+| 대시보드 | billing-server, notification-server, trpg-server, auth-server, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
+| 경보 | 수집 쪽, DB 와 Redis, billing-server, notification-server, trpg-server, auth-server 의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
 | 추적(span) | 다섯 서버 모두 span 을 만든다(요청, 서버 사이의 호출, DB 의 쿼리, 작업. 본보기는 [Go](#붙인-것-결제-서버의-추적-본보기)와 [Python](#붙인-것-알림-서버의-추적-python-의-본보기), [TRPG 서버에서 다른 것](#붙인-것-trpg-서버의-추적), [인증 서버에서 다른 것](#붙인-것-인증-서버의-추적), [게시판 서버(Node)](#붙인-것-게시판-서버의-추적)). 받는 길과 저장소(Alloy → Tempo, Grafana 에서 로그와 오간다)는 [아래](#붙인-것-추적의-인프라) |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
 | 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)) |
@@ -541,7 +541,7 @@ DB 에 닿으며 도는 것이 아니라 날짜로 상태를 보는 컨테이너
 
 ## 메트릭
 
-**결제 서버, 알림 서버, TRPG 서버가 내보낸다. 나머지 서버는 붙일 때 이 표를 따른다.**
+**결제 서버, 알림 서버, TRPG 서버, 인증 서버가 내보낸다. 게시판 서버는 붙일 때 이 표를 따른다.**
 보내는 길(OTLP → Alloy → Prometheus)과 계측기를 만드는 법은 [수집기의 2. 메트릭](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)에 있다.
 
 ### 규칙
@@ -583,7 +583,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `http_server_request_duration_seconds` | histogram | `method`, `route` | 요청을 받아 응답을 끝낼 때까지. SSE 스트림은 뺀다(요청 수에는 끊길 때 든다) |
 | `http_server_active_requests` | gauge | 없음 | 지금 처리 중인 요청의 수. SSE 스트림은 뺀다(`sse_connections` 가 센다) |
 
-**DB (다섯 서버)**
+**DB (다섯 서버)** — 인증 서버에는 연결 풀이 없다(요청마다 연결을 맺고 닫는 Django 의 기본). 그래서 `db_up` 만 낸다
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
@@ -639,9 +639,11 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
-| `emails_sent_total` | counter | `kind`(인증 코드, 로그인 코드, 재설정, 요약), `result`(`success`, `failure`) | 보낸 메일의 수 |
-| `auth_attempts_total` | counter | `action`(`login`, `signup`, `verify`, `reset`, `refresh`), `result`(`success`, `failure`) | 인증 시도의 수 |
-| `auth_rate_limited_total` | counter | `action` | 시도 횟수 제한에 걸린 수 |
+| `emails_sent_total` | counter | `kind`(메일의 종류: `signup_code`, `login_code`, `already_registered`, `password_reset`, `password_changed`, `security_digest`, `guardian_consent`, `guardian_consented`, `guardian_revoked`, `minor_guardian`, `guardian_payment`, `other`), `result`(`sent`, `retried`, `discarded`) | 메일 한 통을 보내 본 결과의 수. 시도마다 센다. `retried` 는 메일 서버가 받지 않아 다시 보낼 것, `discarded` 는 버린 것(받는 사람이 받지 못했다)이다. 종류는 발송함의 칸 `kind` 다(`accounts.models.MailKind`). 메일 서버 없이 바로 찍는 것(inline)은 `sent` 만 센다 |
+| `auth_rate_limited_total` | counter | `limit`(제한의 이름: `login-ip`, `login-fail-account-ip`, `login-ip-block`, `signup-ip`, `password-reset-ip`, `password-change-fail-user`) | 시도 횟수 제한에 걸린 수 |
+| `auth_rate_limits_unavailable_total` | counter | `limit` | Redis 에 묻지 못해 세지 않고 통과시킨 수. 0 이 아니면 그동안 시도 제한이 꺼져 있었다 |
+
+인증 시도의 성공과 실패는 따로 세지 않는다. 주소마다 상태 코드로 본다(`http_server_requests_total{service="auth-server", route="/api/v1/auth/login"}` 의 `status_code`). 같은 수를 두 번 세지 않는다.
 
 **게시판 (board)**
 
@@ -859,6 +861,7 @@ Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-
 
 `notification-server` 는 한눈에(DB, 5xx 비율, 넣은 알림, 받지 않은 알림), 요청, DB 연결, 알림, 정리 작업의 다섯 줄이다.
 `trpg-server` 는 한눈에(DB, 5xx 비율, 열린 스트림, 서술 실패), 요청, DB 연결, 실시간 스트림, 라운드와 서술, AI 호출, 서술 값, 뒤에서 도는 작업의 여덟 줄이다.
+`auth-server` 는 한눈에(DB, 5xx 비율, 버린 메일, 세지 못한 시도 제한), 요청, 메일, 시도 횟수 제한, 워커와 예약 명령의 다섯 줄이다. 연결 풀이 없어 DB 연결의 줄이 없다.
 `billing-server` 의 대시보드는 한눈에(DB, 5xx 비율, 결과를 모르는 결제 대행사 호출, 되돌린 원장의 일), 요청, DB 연결, 결제, 원장, 정리 작업과 대사의 여섯 줄이다.
 `postgres` 는 한눈에(DB, 연결 / 최대, DB 의 크기, 교착), 연결과 트랜잭션, 읽기와 쓰기(캐시 적중률, 행, 임시 파일, 스키마마다의 크기), 표(큰 표, 죽은 행이 많은 표)다.
 `redis` 는 한눈에(Redis, 메모리, 연결된 클라이언트, AOF 의 마지막 쓰기), 명령(명령마다, 키 적중률, 오류와 거절), 메모리와 키(사라진 키, 내쫓긴 키)다.
@@ -921,6 +924,12 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | trpg-server | `TrpgNarrationsFailing` | warning | 지난 30분의 서술이 셋 이상이고 20% 넘게 실패한 것이 5분 이어진다 |
 | trpg-server | `TrpgChargesNotCaptured` | warning | 확정할 청구(`capture_due`)가 30분 동안 남아 있다. 결제 서버가 죽어 있다 |
 | trpg-server | `TrpgBillingRejected` | warning | 지난 15분에 결제 서버가 받아들이지 않은 부르기가 있다. 일(`operation`)마다 울린다 |
+| auth-server | `AuthDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
+| auth-server | `AuthServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다 |
+| auth-server | `AuthMailWorkerStalled` | warning | 인증 서버가 떠 있는데 메일 워커가 10분 넘게 한 바퀴도 성공하지 않았다 |
+| auth-server | `AuthMailBacklog` | warning | 발송함에 메일이 15분 동안 남아 있다. 메일 서버가 받지 않는다 |
+| auth-server | `AuthMailDiscarded` | warning | 지난 15분에 버린 메일이 있다. 종류(`kind`)마다 울린다 |
+| auth-server | `AuthRateLimitsUnavailable` | warning | 지난 5분에 시도 횟수를 세지 못하고 통과시킨 것이 있다. 제한(`limit`)마다 울린다 |
 
 - **규칙마다 시험이 있다**(`docker/prometheus/rules/tests/ai-trpg.test.yml`). 지어낸 시계열을 넣고 정한 때에 울리는지, 울리지 않을 때(요청이 아주 적다, 다른 서버의 것이다) 조용한지 본다. 규칙을 고치면 시험도 고친다.
   `docker compose --profile observability exec prometheus promtool test rules /etc/prometheus/rules/tests/ai-trpg.test.yml`
@@ -950,7 +959,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 - **히스토그램의 구간을 정한다.** SDK 의 기본 구간은 밀리초를 가정한 숫자라 초로 재면 거의 모두 첫 칸에 든다. 시간은 `0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10` 초다. 서술과 AI 호출처럼 긴 것은 그 계측기만 `… 30, 60, 120` 을 더한다.
 - **주소.** `OTEL_EXPORTER_OTLP_ENDPOINT`(compose 에서 `http://alloy:4318`)로 받는다. **비어 있으면 내보내지 않는다.** 계측은 그대로 돌고 보내기만 없다. PC 에서 띄운 서버가 없는 주소로 보내며 오류를 남기지 않는다.
 - **간격은 15초다**(`OTEL_METRIC_EXPORT_INTERVAL=15000`). SDK 의 기본(60초)이면 `rate(…[1m])` 에 점이 하나뿐이다.
-- **gunicorn 은 워커가 갈라진 뒤에 켠다**(`post_fork`). 갈라지기 전에 켜면 내보내는 스레드가 워커에 따라오지 않아 조용히 아무것도 가지 않는다.
+- **gunicorn 은 워커가 갈라진 뒤에 켠다.** 인증 서버는 앱을 워커가 갈라진 뒤에 불러오고(`preload_app = False`) 앱이 뜰 때 켠다(`observability/apps.py`). 갈라지기 전에 켜면 내보내는 스레드가 워커에 따라오지 않아 조용히 아무것도 가지 않는다.
 - **cron 처럼 짧게 도는 명령은 끝날 때 한 번 내보낸다**(SDK 의 `shutdown`/`force_flush`). 간격을 기다리기 전에 끝나면 아무것도 가지 않는다.
 - **Alloy 가 멈춰도 요청은 영향을 받지 않는다.** 내보내기는 뒤에서 돌고, 다시 보내다 안 되면 그 묶음을 버린다. 메모리에 쌓아 두지 않는다.
 - **테스트.** SDK 의 메모리 수집기(in-memory reader)로 계측기의 이름, 단위, label 을 본다. 끝에서 끝까지(Prometheus 에서 찾아지는가)는 CI 의 `stack` 이 본다.
@@ -1026,6 +1035,28 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 - **서버가 여럿이면 `narration_charges` 를 모두 같은 수로 낸다.** 대시보드와 경보는 `max` 로 본다. 더하면(`sum`) 서버의 수만큼 부풀려진다.
 - **라운드는 커밋한 뒤에 센다.** 결제 서버의 규칙과 같다. 서술은 작업 안에서 끝난 모양(마무리, 실패를 적음)으로 센다.
 - **CI.** `METRIC_SERVERS` 에 trpg 를 더했다. 청구 정리의 작업 메트릭(`charge.settle`)과 끝나지 않은 청구(`narration_charges`, 청구가 없어 0)가 Prometheus 에 있는지도 본다. 서술과 AI 호출은 CI 에 모델이 없어 값이 생기지 않는다(대시보드의 쿼리는 오류 없이 도는지만 본다).
+
+#### 붙인 것 (인증 서버의 메트릭)
+
+[알림 서버](#붙인-것-알림-서버의-메트릭-python-의-본보기)와 같은 모양을 Django 에 맞춰 옮겼다. 새 의존성은 없다.
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `observability/metrics.py` | 계측기 한 묶음과 MeterProvider. 간격은 `OTEL_METRIC_EXPORT_INTERVAL`(설정 파일이 1000 이상을 지킨다). 프로세스가 끝날 때 남은 것을 한 번 보낸다(SDK 의 `shutdown_on_exit`) |
+| `observability/request_metrics.py` | HTTP 셋. `MIDDLEWARE` 의 맨 앞이다(span 보다 앞) |
+| `observability/apps.py` | 프로세스가 뜰 때 span 과 메트릭을 한 출처로 켠다(`start_telemetry`). 테스트에서는 켜지 않는다 |
+| `observability/jobs.py` | `run_as_job` 이 작업의 메트릭도 센다. 워커의 바퀴와 예약 명령 한 번이 작업 하나다 |
+| `config/health.py` | `db_up` |
+| `accounts/outbox.py` | 보내 본 결과(`emails_sent_total`)와 발송함에 남은 메일의 수(`count_waiting_mail`) |
+| `accounts/management/commands/send_outgoing_mail.py` | 바퀴마다 남은 메일을 `background_jobs_queued{operation="mail.deliver_outgoing"}` 로 적는다 |
+| `accounts/attempt_limits.py` | 막은 시도와 세지 못하고 통과시킨 시도 |
+| `accounts/models.py` 의 `MailKind`, 마이그레이션 `0020` | 발송함의 줄에 메일의 종류를 적는다. 이미 있던 줄은 `other` 다 |
+
+- **프로세스마다 출처가 다르다.** `service.instance.id` 의 앞부분이 프로세스다(`server-…`, `send_outgoing_mail-…`, `send_welcome_credits-…`, 예약 명령은 `send_security_digest-…`, `delete_unverified_users-…`). gunicorn 의 워커도 저마다 다르다.
+- **예약 명령은 끝날 때 한 번 민다.** 간격(15초)을 기다리기 전에 끝나므로 SDK 가 프로세스가 끝날 때 보낸다. `rate` 로는 값이 나지 않아 대시보드는 `last_over_time` 으로 본다(결제 서버의 대사와 같다).
+- **메일의 종류는 발송함에 적는다.** 보내는 것은 워커라 문구를 만든 곳(`accounts/mail.py`)을 모른다. 그래서 줄에 칸 하나를 더했다. 종류를 더하면 `MailKind` 와 위의 표에 함께 더한다.
+- **인증 시도는 따로 세지 않는다.** 주소와 상태 코드로 같은 것을 본다. 처음 목록의 `auth_attempts_total` 은 빼고 그 대신 Redis 에 묻지 못한 것(`auth_rate_limits_unavailable_total`)을 더했다. 제한이 꺼진 것을 아는 길이 그것뿐이다.
+- **CI.** `METRIC_SERVERS` 에 auth 를 더하고, 연결 풀이 없는 서버(`POOLLESS_SERVERS`)는 풀을 보지 않는다. 메일 워커의 작업 메트릭과 남은 메일, 예약 명령(`account.delete_unverified`)이 끝날 때 민 것도 본다.
 
 ### 3. 추적 — 식별자를 다루는 코드를 SDK 로 바꾼다
 
@@ -1238,7 +1269,7 @@ Node(Nest)라 SDK 가 다르지만 span 의 이름, 싣는 것과 싣지 않는 
 | 처리하지 못한 예외 | 미들웨어의 `process_exception` | `Exception` 처리기 | 전역 예외 필터 | `recover` 미들웨어 |
 | 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | `runAsJob()` | `jobs.Run()` |
 | 코드의 자리 | `observability/` | `app/observability/` | `src/observability/` | `internal/obs/`, `internal/httpapi/observability.go` |
-| 메트릭 | 없다 | OpenTelemetry Python SDK(`app/observability/metrics.py`, [다른 것](#붙인-것-trpg-서버의-메트릭)) | 없다 | OpenTelemetry Go SDK(`internal/metrics/`, [본보기](#붙인-것-결제-서버의-메트릭-본보기)) |
+| 메트릭 | OpenTelemetry Python SDK(`observability/metrics.py`, [다른 것](#붙인-것-인증-서버의-메트릭)) | OpenTelemetry Python SDK(`app/observability/metrics.py`, [다른 것](#붙인-것-trpg-서버의-메트릭)) | 없다 | OpenTelemetry Go SDK(`internal/metrics/`, [본보기](#붙인-것-결제-서버의-메트릭-본보기)) |
 | 추적(span) | OpenTelemetry Python SDK(`observability/`, [다른 것](#붙인-것-인증-서버의-추적)) | OpenTelemetry Python SDK(`app/observability/`, [다른 것](#붙인-것-trpg-서버의-추적)) | OpenTelemetry JS SDK(`src/observability/`, [다른 것](#붙인-것-게시판-서버의-추적)) | OpenTelemetry Go SDK(`internal/tracing/`, [본보기](#붙인-것-결제-서버의-추적-본보기)) |
 
 notification-server 는 trpg-server 의 것(`app/observability/`)을 그대로 가져왔다. 뒤에서 도는 작업이 정리 작업 하나라 `BackgroundJobs` 는 없고, 정리 작업이 바퀴마다 `job_scope` 를 건다.

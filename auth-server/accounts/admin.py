@@ -125,8 +125,8 @@ class OutgoingMailAdmin(admin.ModelAdmin):
     상태를 "버림" 으로 걸러 보면 끝내 보내지 못한 메일과 그 이유가 나온다.
     """
 
-    list_display = ('to_email', 'subject', 'status', 'attempts', 'last_error', 'created_at', 'discarded_at')
-    list_filter = ('status',)
+    list_display = ('to_email', 'subject', 'kind', 'status', 'attempts', 'last_error', 'created_at', 'discarded_at')
+    list_filter = ('status', 'kind')
     search_fields = ('to_email',)
     ordering = ('-created_at',)
     # 대기 중인 메일의 본문에는 인증 코드가 들어 있다. 화면에 보여 주지 않는다
