@@ -11,7 +11,7 @@
 | [operations/staging-vm.md](operations/staging-vm.md) | staging VM 준비. 배포 설계의 "VM 준비 순서"를 실제 명령으로. AWS, VM 의 기본, Docker, Tailscale, 열쇠, `.env`(`tools/staging_env.py`), 첫 인증서, 띄우기, 확인 |
 | [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. 공유 후보, 언제 뽑는지, 버전과 CI, `app/ai` 를 뽑는 방식의 결정(#380) |
 | [product/platform.md](product/platform.md) | 플랫폼과 제품 방향. 제품 셋(TRPG, chat, story), 원칙, 화면과 모바일의 방향, 정하지 않은 것 |
-| [product/screens.md](product/screens.md) | 화면 명세. 흐름, 화면 목록, 화면별 명세(A1~A12, B1~B10), 공통 상태, 프런트 구조, 첫 출시의 범위(세 단계) |
+| [product/screens.md](product/screens.md) | 화면 명세. 흐름, 화면 목록, 화면별 명세(A1~A12, B1~B10, C1~C7), 공통 상태, 프런트 구조, 첫 출시의 범위(세 단계) |
 | [product/market-research.md](product/market-research.md) | 다른 AI 캐릭터 챗 서비스를 본 조사. 만드는 구조, 돈을 받는 방식, 반복되는 문제 |
 
 ## 쓰는 법
