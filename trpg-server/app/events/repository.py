@@ -31,17 +31,18 @@ async def find_latest(session: AsyncSession, table_id: uuid.UUID, type_: EventTy
     return await session.scalar(query)
 
 
-async def list_after(session: AsyncSession, table_id: uuid.UUID, after: int, limit: int) -> list[TableEvent]:
+async def list_after(
+    session: AsyncSession, table_id: uuid.UUID, after: int, limit: int, until: int | None = None
+) -> list[TableEvent]:
     """
     테이블의 이벤트 중 after 번 뒤의 것을 순서대로 돌려준다. limit 개까지다.
 
     몇 번째부터(offset)가 아니라 어느 번호 뒤(after)로 자른다.
     읽는 사이에 새 이벤트가 생겨도 같은 것이 두 번 나오거나 빠지지 않는다. 뒤쪽을 읽을 때도 느려지지 않는다.
+    until 을 주면 그 번호까지만 준다. 떠난 사람이 떠난 때까지만 읽는다(app/tables/past.py).
     """
-    query = (
-        select(TableEvent)
-        .where(TableEvent.table_id == table_id, TableEvent.sequence > after)
-        .order_by(TableEvent.sequence)
-        .limit(limit)
-    )
+    query = select(TableEvent).where(TableEvent.table_id == table_id, TableEvent.sequence > after)
+    if until is not None:
+        query = query.where(TableEvent.sequence <= until)
+    query = query.order_by(TableEvent.sequence).limit(limit)
     return list(await session.scalars(query))

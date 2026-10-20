@@ -16,12 +16,9 @@ from app.assets.routing import MAX_PAGE_SIZE, Session
 from app.auth.dependencies import CurrentUser
 from app.events import service
 from app.events.responses import to_event
-from app.events.schemas import EventPage
+from app.events.schemas import DEFAULT_EVENT_LIMIT, EventPage
 
 router = APIRouter(prefix='/tables/{table_id}/events', tags=['events'])
-
-# 한 번에 읽는 이벤트의 개수
-DEFAULT_EVENT_LIMIT = 50
 
 
 @router.get('', response_model=EventPage, status_code=status.HTTP_200_OK)
