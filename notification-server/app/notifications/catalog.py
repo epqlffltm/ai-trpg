@@ -14,6 +14,10 @@
   - 표에 없는 칸이 더 있는 것은 받는다. 넣는 서버가 칸을 먼저 더하고 화면이 나중에 쓰는 순서를 막지 않는다.
     칸의 값의 모양(글자인지 숫자인지)은 보지 않는다. 그건 넣는 서버의 테스트가 지킨다
 
+사용자가 끌 수 있는 종류(mutable)도 이 표가 정한다(#525, app/mutes).
+돈이 오간 일(결제, 청약철회)과 제재, 내 테이블의 모델이 이미 바뀐 일처럼 꼭 알아야 하는 것은 끌 수 없다.
+한 번뿐인 일(환영 크레딧)도 끌 까닭이 없어 두지 않는다.
+
 새 kind 를 더하는 PR 은 넣는 서버와 함께 이 표, README 의 "알림의 종류",
 화면 명세(docs/product/screens.md 의 A10)를 고친다. 알림 서버를 먼저 배포한다. 거꾸로면 새 kind 가 422 로 버려진다.
 DB 와 HTTP 를 모른다. 부르는 쪽(router.py)이 거절을 응답으로 바꾼다.
@@ -37,11 +41,13 @@ class KindRule:
 
     source: str
     required: frozenset[str]
+    # 사용자가 이 종류를 끌 수 있는가. 끈 종류는 넣을 때 거른다(app/mutes)
+    mutable: bool = False
 
 
-def rule(source: str, *required: str) -> KindRule:
+def rule(source: str, *required: str, mutable: bool = False) -> KindRule:
     """규칙을 만든다. 표를 짧게 적으려는 것이다."""
-    return KindRule(source=source, required=frozenset(required))
+    return KindRule(source=source, required=frozenset(required), mutable=mutable)
 
 
 # 받는 알림의 표. 넣는 서버의 코드가 원본이다
@@ -49,7 +55,9 @@ def rule(source: str, *required: str) -> KindRule:
 KINDS: Mapping[str, KindRule] = MappingProxyType(
     {
         # 게임: 서술 모델의 은퇴를 방장에게
-        'narration_model.retiring': rule(GAME, 'table_id', 'title', 'narration_model', 'retires_on', 'days_left'),
+        'narration_model.retiring': rule(
+            GAME, 'table_id', 'title', 'narration_model', 'retires_on', 'days_left', mutable=True
+        ),
         'narration_model.replaced': rule(
             GAME, 'table_id', 'title', 'from', 'narration_model', 'reason', 'round', 'price'
         ),
@@ -62,11 +70,11 @@ KINDS: Mapping[str, KindRule] = MappingProxyType(
         'order.paid': rule(BILLING, 'order_id', 'product_id', 'price', 'credits'),
         'order.refunded': rule(BILLING, 'order_id', 'product_id', 'price', 'credits'),
         'credit.welcome': rule(BILLING, 'amount', 'expires_at'),
-        'credit.expiring': rule(BILLING, 'amount', 'first_expires_at'),
-        'credit.short': rule(BILLING, 'price_code', 'amount', 'gold_required'),
+        'credit.expiring': rule(BILLING, 'amount', 'first_expires_at', mutable=True),
+        'credit.short': rule(BILLING, 'price_code', 'amount', 'gold_required', mutable=True),
         # 게시판: 댓글과 답글
-        'post.commented': rule(BOARD, 'board_slug', 'post_id', 'post_title', 'comment_id'),
-        'comment.replied': rule(BOARD, 'board_slug', 'post_id', 'post_title', 'comment_id', 'parent_id'),
+        'post.commented': rule(BOARD, 'board_slug', 'post_id', 'post_title', 'comment_id', mutable=True),
+        'comment.replied': rule(BOARD, 'board_slug', 'post_id', 'post_title', 'comment_id', 'parent_id', mutable=True),
     }
 )
 
@@ -85,6 +93,17 @@ class Refusal:
 
     code: RefusalCode
     missing: tuple[str, ...] = ()
+
+
+def mutable_kinds() -> tuple[str, ...]:
+    """사용자가 끌 수 있는 종류들. 이름 차례다."""
+    return tuple(sorted(kind for kind, kind_rule in KINDS.items() if kind_rule.mutable))
+
+
+def is_mutable(kind: str) -> bool:
+    """사용자가 끌 수 있는 종류인가. 표에 없는 종류는 끌 수 없다."""
+    kind_rule = KINDS.get(kind)
+    return kind_rule is not None and kind_rule.mutable
 
 
 def missing_fields(kind_rule: KindRule, payload: Mapping[str, Any]) -> tuple[str, ...]:
