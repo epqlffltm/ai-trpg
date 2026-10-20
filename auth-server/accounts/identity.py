@@ -136,6 +136,11 @@ def _future_or_none(day: date, today: date) -> date | None:
     return day
 
 
+def is_removed_account(user: User) -> bool:
+    """만 14세 미만으로 막아 이름을 비운 계정인가. 닉네임이 REMOVED_NAME 이다(사용자가 고를 수 없는 이름)."""
+    return user.nickname == REMOVED_NAME.format(pk=user.pk)
+
+
 @transaction.atomic
 def close_under_age_account(user: User) -> None:
     """
