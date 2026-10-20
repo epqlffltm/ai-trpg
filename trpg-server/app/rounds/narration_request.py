@@ -17,12 +17,13 @@ DB 에 적힌 라운드를 서술자에게 줄 모양(app/rounds/narrator.py)으
 """
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import asdict
 
 from pydantic import TypeAdapter
 
 from app.assets.models import NpcAttitude
-from app.assets.scenarios.snapshot import Snapshot
+from app.assets.scenarios.snapshot import Snapshot, person_entries
 from app.calendar import clock, state
 from app.engine.check import find_ability, find_difficulty
 from app.engine.injury import known_injuries
@@ -62,9 +63,10 @@ from app.rounds.narrator import (
     WakeNote,
     WhisperNote,
 )
+from app.rounds.secret_names import secret_names
 from app.rounds.state import loot_of, move_of, put_down_of, rest_of, search_of, steal_of, take_of
 from app.tables import quests
-from app.tables.models import GameTable, QuestStatus, TableQuest
+from app.tables.models import GameTable, QuestStatus, TableNpc, TableQuest
 from app.tables.npc_attitudes import ATTITUDE_WORDS
 from app.tables.quests import CatalogQuest
 from app.whispers.models import Whisper
@@ -623,3 +625,14 @@ def to_turn_notes(turns: list[dict]) -> list[TurnNote]:
     """
     notes = [to_turn_note(turn) for turn in turns]
     return [note for note in notes if note is not None]
+
+
+def to_secret_names(snapshot: Snapshot, npcs: Iterable[TableNpc], scene: str) -> dict[str, str]:
+    """
+    아직 맞히지 않은 인물의 숨길 이름과 대신 부를 호칭(app/rounds/secret_names.py).
+
+    맞힌 인물(named_round 가 있는 NPC 상태)의 이름은 숨기지 않는다. 판의 인물 항목 전부를 본다.
+    scene 은 이번 라운드를 연 장면이다. 이미 나온 이름은 숨기지 않는다.
+    """
+    named = {npc.entry_id for npc in npcs if npc.named_round is not None}
+    return secret_names(person_entries(snapshot), named, scene)

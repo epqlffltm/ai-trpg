@@ -13,7 +13,9 @@
 모델이 쓰는 대로 받은 조각은 미리 보기에 그대로 넘긴다. 검사하기 전의 글이다. 받지 않으면 버려지는 글이 된다.
 
 모델의 글은 장면이 될 뿐이다. 상태를 바꾸지 않는다. 결과(판정, HP, 죽음)는 엔진이 이미 정해 DB 에 적었다.
-그래서 검사는 "장면으로 쓸 수 있는가"만 본다. 비어 있지 않고, 너무 길지 않은가.
+그래서 검사는 "장면으로 쓸 수 있는가"만 본다. 비어 있지 않고, 너무 길지 않고, 숨긴 진짜 이름을 쓰지 않았는가.
+진짜 이름을 썼으면 받지 않는다(secret_leaked). 미리 보기에는 그 이름을 호칭으로 가려서 넘긴다
+(app/rounds/secret_names.py).
 출력 상한에 걸려 끊긴 글은 마지막 문장까지 잘라 받는다. 그렇게 남은 글이 너무 짧을 때만 받지 않는다.
 
 한 번만 부른다. 실패하면 예외를 그대로 올린다.
@@ -32,6 +34,7 @@ from app.catalog.rules import ROUND_OUTPUT_TOKENS
 from app.rounds.budget import INPUT_BUDGET, estimate_messages, fit_request
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.prompt import PROMPT_VERSION, build_messages
+from app.rounds.secret_names import SecretNames, guarded, leaked, redact
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +57,23 @@ SENTENCE_END = re.compile(r'[.!?…。]["\'”’」』)\]]*')
 
 class NarrationError(Exception):
     """서술자가 장면으로 쓸 글을 만들지 못했다. 글이 끊겼거나, 비었거나, 너무 길거나, 요청에 이야기의 바탕이 없다."""
+
+
+# 서술이 아직 드러나지 않은 진짜 이름을 썼다
+SECRET_LEAKED = 'secret_leaked'
+
+
+class SecretLeaked(NarrationError):
+    """
+    서술이 아직 맞히지 않은 인물의 진짜 이름을 썼다(app/rounds/secret_names.py). 그 글은 장면으로 받지 않는다.
+
+    redacted 는 그 이름을 장면의 호칭으로 바꾼 장면이다. 다시 불러도 끝내 새면 이것을 쓴다
+    (app/rounds/retrying_narrator.py).
+    """
+
+    def __init__(self, redacted: str) -> None:
+        super().__init__(SECRET_LEAKED)
+        self.redacted = redacted
 
 
 def accept_scene(text: str) -> str:
@@ -88,6 +108,18 @@ def accept_truncated(text: str) -> str:
         raise NarrationError('cut_off')
     logger.warning('잘린 서술을 마지막 문장까지 받았다', extra={'result': 'truncated', 'kept_chars': len(scene)})
     return accept_scene(scene)
+
+
+def keep_secrets(scene: str, secrets: SecretNames) -> str:
+    """
+    장면에 숨길 이름이 없으면 그대로 돌려준다. 있으면 SecretLeaked(가린 장면을 든다).
+
+    가린 장면도 장면의 검사(길이)를 거친다. 호칭이 이름보다 길어 상한을 넘으면 too_long 이다.
+    """
+    if not leaked(scene, secrets):
+        return scene
+    logger.warning('서술이 숨긴 이름을 썼다', extra={'result': SECRET_LEAKED, 'error_code': 'narration.secret_leaked'})
+    raise SecretLeaked(accept_scene(redact(scene, secrets)))
 
 
 def accept_completion(completion: Completion) -> str:
@@ -212,10 +244,12 @@ class LLMNarrator:
         warn_if_over_budget(sent, messages)
         digest = input_digest(messages, self.digest_key)
         chars = chars_of(messages)
-        preview.begin()
+        # 미리 보기도 숨길 이름을 가려서 넘긴다. 장면을 받기 전의 글이라 검사보다 먼저 사람에게 간다
+        shown = guarded(preview, sent.secrets)
+        shown.begin()
         started = time.perf_counter()
         try:
-            completion = await self.provider.complete(messages, self.params, preview.text)
+            completion = await self.provider.complete(messages, self.params, shown.text)
         except ProviderError as error:
             await self.log.write(
                 self.describe(sent, elapsed_ms(started), error=str(error), digest=digest, input_chars=chars)
@@ -223,7 +257,7 @@ class LLMNarrator:
             raise
         latency_ms = elapsed_ms(started)
         try:
-            scene = accept_completion(completion)
+            scene = keep_secrets(accept_completion(completion), sent.secrets)
         except NarrationError as error:
             await self.log.write(
                 self.describe(sent, latency_ms, completion, error=str(error), digest=digest, input_chars=chars)

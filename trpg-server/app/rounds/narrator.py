@@ -743,6 +743,9 @@ class NarrationRequest:
     turns: list[TurnNote] = field(default_factory=list)
     # 게임 안의 시각. 서술을 맡길 때 테이블의 시계에서 채운다. 시계가 없으면 None. 가짜 서술자는 읽지 않는다
     clock: ClockNote | None = None
+    # 아직 맞히지 않은 인물의 진짜 이름에서 장면의 호칭으로(app/rounds/secret_names.py). 프롬프트에는 싣지 않는다.
+    # 언어 모델의 서술자가 받은 글과 미리 보기에서 이 이름들을 찾는다. 가짜 서술자는 읽지 않는다
+    secrets: dict[str, str] = field(default_factory=dict)
 
 
 class Preview(Protocol):
