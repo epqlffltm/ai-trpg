@@ -260,3 +260,10 @@ class ConsentAgreeSerializer(serializers.Serializer):
     """항목 하나에 동의한다. 화면이 보인 문서의 판을 보낸다."""
 
     version = serializers.IntegerField(min_value=1)
+
+
+class PublicNameSerializer(serializers.Serializer):
+    """다른 사람의 공개 ID 와 이름. 없거나 막은 계정이면 nickname 이 null 이다."""
+
+    public_id = serializers.UUIDField()
+    nickname = serializers.CharField(allow_null=True)
