@@ -196,6 +196,7 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | GET | `/api/v1/auth/jwks` | 토큰 검증용 공개키 목록 | 불필요 |
 | GET | `/api/v1/auth/session-revocations` | 끊긴 세션의 목록. 다른 서버가 만료 전의 토큰을 거부하는 데 쓴다 | 불필요 |
 | GET | `/api/v1/auth/me` | 내 계정 정보와 본인인증 상태 | 필요 |
+| GET | `/api/v1/auth/public-names?ids=` | 다른 사람의 닉네임을 공개 ID 로 한꺼번에 찾음(100개까지) | 불필요 |
 | GET | `/api/v1/auth/consents` | 동의를 받는 항목마다 지금의 판(이용약관, 개인정보 수집·이용, 선택 동의) | 불필요 |
 | GET | `/api/v1/auth/me/consents` | 내 동의 상태(항목마다) | 필요 |
 | PUT | `/api/v1/auth/me/consents/{item}` | 그 항목에 동의한다. 본문 `{"version": 1}` | 필요 |
@@ -316,6 +317,22 @@ API 밖에 상태 확인 주소가 둘 있다. 다른 세 서버와 같은 뜻�
 | `403` `code: guardian_not_adult` | (동의) 보호자가 성년이 아니다 |
 | `409` `code: guardian_is_minor` | (동의) 미성년자 본인의 휴대폰으로 인증했다 |
 | `400` `code: identity_token_invalid`, `503` `code: identity_unavailable` | (동의) 본인인증과 같다 |
+
+### 다른 사람의 이름
+
+목록과 소개 화면은 다른 서버에서 만든 사람의 공개 ID(`creator_id`)만 받는다. 이름은 화면이 이 서버에 한꺼번에 묻는다(#532, `accounts/public_names.py`).
+
+```
+GET /api/v1/auth/public-names?ids=<공개 ID>,<공개 ID>
+→ 200 {"names": [{"public_id": "…", "nickname": "플레이어1"}, {"public_id": "…", "nickname": null}]}
+```
+
+- **닉네임만 내준다.** 이메일, 아이디, 나이, 본인인증 여부는 내주지 않는다. 닉네임은 원래 남에게 보이는 이름이다
+- **로그인 없이 읽는다.** 공개 목록을 로그인 없이 읽기 때문이다(#530). 토큰을 붙여도 보지 않는다. 공개 ID 는 난수(UUID 4)라 차례로 넣어 계정을 찾을 수 없다
+- 받은 차례대로 답한다. 같은 ID 는 한 번만이다. 한 번의 쿼리다
+- **없는 ID 와 만 14세 미만으로 막은 계정은 `nickname` 이 `null` 이다.** 둘을 나누지 않는다. 화면은 "탈퇴한 사용자"로 보인다. 정지된 계정은 이름이 그대로 보인다
+- 목록이 비었거나, UUID 가 아닌 것이 있거나, 100개를 넘으면 `400` `code: public_ids_invalid` 다
+- 브라우저가 60초 기억한다(`Cache-Control: public, max-age=60`). 다른 서버는 이름을 적어 두지 않으므로 이름이 바뀌면 그 뒤로 바로 보인다
 
 ### 동의
 
