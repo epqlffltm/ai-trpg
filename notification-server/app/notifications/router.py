@@ -10,6 +10,9 @@
   - 본문은 서명을 확인한 뒤에 읽는다. 서명을 확인하기 전에는 받은 바이트를 해석하지 않는다
   - 그 서버가 넣을 수 없는 kind 이거나 payload 에 꼭 있어야 하는 칸이 없으면 422 다(app/notifications/catalog.py)
   - 새로 넣었으면 201, 같은 알림을 다시 보냈으면 200(같은 id), 같은 열쇠의 다른 알림이면 409 다
+  - 서명을 확인한 알림을 메트릭 notifications_received_total{source, outcome} 으로 센다.
+    outcome 은 created, existing, refused(422 의 kind), conflict(409) 다.
+    서명이 틀린 것은 source 를 믿을 수 없어 세지 않는다(label 의 값이 끝없이 늘 수 있다)
 """
 
 import logging
@@ -25,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.notifications import catalog, service
 from app.notifications.schemas import NotificationIn, NotificationPut, PutStatus
+from app.observability.metrics import record_notification
 from app.service_auth.signing import SIGNATURE_HEADER, is_valid
 
 logger = logging.getLogger(__name__)
@@ -36,6 +40,9 @@ BODY_MAX_BYTES = 16 * 1024
 # 넣기의 로그의 operation 과, kind 의 표에 맞지 않아 받지 않았을 때의 error_code(docs/observability.md)
 PUT_OPERATION = 'notification.put'
 KIND_REFUSED_ERROR_CODE = 'notification.kind_refused'
+# 메트릭의 outcome 가운데 넣지 않은 둘. 넣은 것은 PutStatus 의 값(created, existing)이다
+REFUSED_OUTCOME = 'refused'
+CONFLICT_OUTCOME = 'conflict'
 
 router = APIRouter(tags=['service'])
 
@@ -120,6 +127,7 @@ def ensure_listed(source: str, incoming: NotificationIn) -> None:
     if refusal is None:
         return
     log_refusal(source, incoming.kind, refusal)
+    record_notification(source, REFUSED_OUTCOME)
     raise refused(incoming.kind, refusal)
 
 
@@ -146,11 +154,13 @@ async def put_notification(
     try:
         result = await service.put_notification(session, source, incoming, datetime.now(UTC))
     except service.KeyReusedError as error:
+        record_notification(source, CONFLICT_OUTCOME)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail={'code': 'key_reused', 'source_key': incoming.source_key}
         ) from error
     if result.status is PutStatus.EXISTING:
         response.status_code = status.HTTP_200_OK
+    record_notification(source, result.status.value)
     # 받는 사람과 값은 남기지 않는다. 무엇이 들어왔는지만 남긴다
     logger.info(
         '알림을 넣었다',

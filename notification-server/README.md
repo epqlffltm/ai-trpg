@@ -62,7 +62,8 @@ uv run uvicorn app.main:app --port 8004 --reload
 | `APP_ENVIRONMENT` | `development` | 로그의 `environment` 칸. 동작은 바꾸지 않는다 |
 | `APP_VERSION` | `dev` | 로그의 `version` 칸. 배포할 때 git SHA 나 이미지의 버전을 넣는다 |
 | `LOG_LEVEL` | `info` | 이 수준부터 로그를 남긴다(`debug`, `info`, `warning`, `error`) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적)) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 과 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적), [메트릭](#메트릭)) |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | 메트릭을 보내는 간격(밀리초, 1000 이상). 결제 서버와 같은 이름이다 |
 | `NOTIFICATION_RETENTION_DAYS` | `30` | 알림을 지우기 전까지 두는 날 수. 받은 시각부터 센다 |
 | `AUTH_JWKS_URL` | 없음(필수) | 인증 서버가 공개키를 내주는 주소. 여기서 받은 키로 서명된 토큰을 믿는다 |
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
@@ -242,6 +243,24 @@ Content-Type: application/json
 
 테스트는 `tests/spans.py` 로 메모리에 모아 이름, 부모, 속성을 본다(`spans` fixture). 보내는 길은 `tests/test_tracing_setup.py` 가 가짜 수집기로 본다.
 Tempo 에 들어오는지는 저장소의 CI(`stack`)가 본다.
+
+## 메트릭
+
+요청, DB, 정리 작업, 넣은 알림을 세어 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 15초마다 민다. 수집기가 Prometheus 에 넘긴다.
+이름과 label 은 [관측 규격](../docs/observability.md)의 "메트릭"에 있다. 결제 서버(Go)가 본보기이고, 이 서버가 Python 의 본보기다.
+주소가 비어 있으면 세기만 하고 보내지 않는다.
+
+| 메트릭 | label | 세는 곳 |
+| --- | --- | --- |
+| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `app/observability/request_metrics.py`. 미들웨어의 맨 바깥이다 |
+| `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB |
+| `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `app/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
+| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`(`notification.prune`), `result` | `app/notifications/retention.py` 의 한 바퀴 |
+| `notifications_received_total` | `source`(`game`, `billing`, `board`), `outcome`(`created`, `existing`, `refused`, `conflict`) | `app/notifications/router.py`. 서명을 확인한 것만 센다 |
+
+- 대시보드는 Grafana 의 `notification-server`(`docker/grafana/dashboards/notification-server.json`), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `notification-server` 묶음이다
+- 계측기는 `app/observability/metrics.py` 에 한 묶음으로 둔다. 테스트는 `tests/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
+- 보내는 길은 `tests/test_metrics_setup.py` 가 가짜 수집기로 본다. Prometheus 에 들어오는지는 저장소의 CI(`stack`)가 본다
 
 ## DB
 

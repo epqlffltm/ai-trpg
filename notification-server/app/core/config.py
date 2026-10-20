@@ -100,9 +100,13 @@ class Settings(BaseSettings):
     # 다른 서버용으로 발급된 토큰을 이 서버에 쓰는 것을 막는다
     jwt_audience: str = 'ai-trpg-notification'
 
-    # span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. 경로 없이 적는다(http://alloy:4318).
-    # 비우면 span 을 내보내지 않는다. 로그는 그대로다(app/observability/tracing.py)
+    # span 과 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. 경로 없이 적는다(http://alloy:4318).
+    # 비우면 내보내지 않는다. 로그는 그대로다(app/observability/tracing.py, metrics.py)
     otel_exporter_otlp_endpoint: str = ''
+
+    # 메트릭을 보내는 간격(밀리초). 결제 서버와 같은 이름과 기본값이다.
+    # SDK 의 기본(60초)이면 rate(…[1m]) 에 점이 하나뿐이다
+    otel_metric_export_interval: int = Field(default=15000, ge=1000)
 
     # 알림을 지우기 전까지 두는 날 수. 받은 시각부터 센다(app/notifications/retention.py)
     notification_retention_days: int = Field(default=30, ge=1)
