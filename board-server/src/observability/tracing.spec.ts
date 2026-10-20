@@ -4,8 +4,6 @@
  * span 을 보내는 것(tracing.ts)을 검증한다. 이 컴퓨터 안에 가짜 수집기를 띄워 실제로 보내 본다.
  */
 
-import { createServer, Server } from 'node:http';
-import { AddressInfo } from 'node:net';
 import { trace } from '@opentelemetry/api';
 import {
   buildProvider,
@@ -15,50 +13,11 @@ import {
   shutdownTracing,
   TRACES_PATH,
 } from './tracing.js';
+import { Collector } from '../../test/collector.js';
 import { SpanRecorder } from '../../test/spans.js';
 import { tracer, useProvider } from './spans.js';
 
 const INFO = { service: 'board-server', environment: 'test', version: '1.2.3' };
-
-/** 받은 요청. 주소와 본문의 형식만 본다 */
-interface Received {
-  path: string | undefined;
-  contentType: string | undefined;
-  bytes: number;
-}
-
-/** OTLP(HTTP)를 받는 척하는 수집기. */
-class Collector {
-  readonly received: Received[] = [];
-  private server: Server | undefined;
-
-  /** 띄우고 주소(경로 없이)를 돌려준다. */
-  async start(): Promise<string> {
-    this.server = createServer((request, response) => {
-      const chunks: Buffer[] = [];
-      request.on('data', (chunk: Buffer) => chunks.push(chunk));
-      request.on('end', () => {
-        this.received.push({
-          path: request.url,
-          contentType: request.headers['content-type'],
-          bytes: Buffer.concat(chunks).length,
-        });
-        response.statusCode = 200;
-        response.end();
-      });
-    });
-    await new Promise<void>((resolve) =>
-      this.server?.listen(0, '127.0.0.1', resolve),
-    );
-    const { port } = this.server.address() as AddressInfo;
-    return `http://127.0.0.1:${port}`;
-  }
-
-  /** 끈다. */
-  stop(): Promise<void> {
-    return new Promise((resolve) => this.server?.close(() => resolve()));
-  }
-}
 
 describe('출처', () => {
   it('프로세스마다 다른 이름을 붙인다', () => {
@@ -91,8 +50,8 @@ describe('buildProvider, configureTracing', () => {
     const recorder = new SpanRecorder();
     recorder.start();
     try {
-      expect(buildProvider('', INFO)).toBeUndefined();
-      expect(configureTracing('', INFO)).toBeUndefined();
+      expect(buildProvider('', buildResource(INFO))).toBeUndefined();
+      expect(configureTracing('', buildResource(INFO))).toBeUndefined();
       tracer().startSpan('still-recorded').end();
 
       expect(recorder.named('still-recorded')).toHaveLength(1);
@@ -106,7 +65,7 @@ describe('buildProvider, configureTracing', () => {
     const endpoint = await collector.start();
     const previous = trace.getTracerProvider();
     try {
-      expect(configureTracing(endpoint, INFO)).toBeDefined();
+      expect(configureTracing(endpoint, buildResource(INFO))).toBeDefined();
       tracer().startSpan('GET /api/v1/board/boards').end();
 
       await shutdownTracing();

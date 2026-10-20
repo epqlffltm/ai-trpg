@@ -19,6 +19,7 @@
  *
  * 목록의 첫 쪽에는 고정한 글(pinned)을 따로 싣는다. 고정한 글은 items 와 total 에 들지 않는다.
  * 고정하고 풀어도 다른 글의 쪽이 밀리지 않는다. 고정하고 푸는 주소는 pins.controller.ts 에 있다.
+ * 쓰기, 고치기, 지우기는 결과마다 센다(board_writes_total, observability/counted.interceptor.ts).
  */
 
 import {
@@ -32,6 +33,7 @@ import {
   Patch,
   Post,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Public } from '../auth/public.decorator.js';
@@ -43,6 +45,7 @@ import { BoardSlugPipe } from '../boards/board-slug.pipe.js';
 import { BoardsService } from '../boards/boards.service.js';
 import { CommentCountsService } from '../comment-counts/comment-counts.service.js';
 import { countOf } from '../comment-counts/counts.js';
+import { countWrite } from '../observability/counted.interceptor.js';
 import { CreatePostDto } from './create-post.dto.js';
 import { ListPostsQuery } from './list-posts.query.js';
 import { DEFAULT_PAGE } from './page.js';
@@ -106,6 +109,7 @@ export class PostsController {
   /** 게시판에 글을 쓴다. 쓴 글을 돌려준다. */
   @Post('boards/:slug/posts')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(countWrite('post', 'create'))
   async create(
     @Param('slug', BoardSlugPipe) slug: string,
     @Body() input: CreatePostDto,
@@ -133,6 +137,7 @@ export class PostsController {
   /** 글을 고친다. 보낸 칸만 고친다. 고친 글을 돌려준다. */
   @Patch('posts/:id')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(countWrite('post', 'update'))
   async update(
     @Param('id', PostIdPipe) id: string,
     @Body() changes: UpdatePostDto,
@@ -145,6 +150,7 @@ export class PostsController {
   /** 글을 지운다. 돌려줄 내용이 없다. */
   @Delete('posts/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(countWrite('post', 'delete'))
   async remove(
     @Param('id', PostIdPipe) id: string,
     @CurrentUser() user: AccessClaims,

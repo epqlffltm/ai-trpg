@@ -77,7 +77,7 @@ DASHBOARDS=docker/grafana/dashboards
 LOKI_LABELS=(container environment level mode service)
 # 메트릭을 OTLP 로 미는 서버(docs/observability.md 의 "2. 메트릭"). 서버에 메트릭을 붙이면 여기에 더한다.
 # 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다. 연결 풀이 없는 서버는 아래에 적는다
-METRIC_SERVERS=(auth trpg billing notification)
+METRIC_SERVERS=(auth trpg board billing notification)
 # 연결 풀이 없는 서버. 인증 서버(Django)는 요청마다 연결을 맺고 닫는다. db_pool_* 를 내지 않는다
 POOLLESS_SERVERS=(auth)
 # span 을 내보내는 서버(docs/observability.md 의 "3. 추적"). 서버에 span 을 붙이면 여기와 아래 둘에 더한다
@@ -822,6 +822,9 @@ check_server_metrics() {
     eventually prometheus_finds 'background_jobs_queued{service="auth-server", operation="mail.deliver_outgoing"}'
   report "인증 서버의 예약 명령이 끝날 때 작업 메트릭을 민다(account.delete_unverified)" \
     eventually prometheus_finds 'background_jobs_finished_total{service="auth-server", operation="account.delete_unverified", instance=~"delete_unverified_users-.+"}'
+  # 게시판 서버. 알림 보내기는 5초마다 한 바퀴 돈다(보낼 것이 없어도 센다)
+  report "게시판 서버의 알림 보내기가 작업 메트릭을 민다(notification.send)" \
+    eventually prometheus_finds 'background_jobs_finished_total{service="board-server", operation="notification.send", result="success"}'
   # TRPG 서버. 청구 정리는 5초마다 돌고 바퀴마다 끝나지 않은 청구를 센다(청구가 없어도 0 을 낸다)
   report "TRPG 서버의 청구 정리가 작업 메트릭을 민다(charge.settle)" \
     eventually prometheus_finds 'background_jobs_finished_total{service="trpg-server", operation="charge.settle", result="success"}'

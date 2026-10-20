@@ -11,6 +11,9 @@
  *
  * 검색 하나가 DB 를 오래 붙잡지 못하게 시간 제한을 건다. 넘으면 DB 가 쿼리를 멈추고, 503 으로 답한다.
  * 검색은 로그인 없이 부른다. 누가 얼마나 부르는지를 세는 것은 프록시의 일이다. 여기서는 한 번의 값만 묶어 둔다.
+ *
+ * 검색마다 결과(success, timeout)와 걸린 시간을 센다(board_searches_total, board_search_duration_seconds).
+ * timeout 이 늘면 색인이나 검색 엔진이 필요하다. 그 밖의 실패(DB 가 없다)는 세지 않는다. 요청의 5xx 로 보인다.
  */
 
 import {
@@ -26,6 +29,7 @@ import {
   Repository,
   SelectQueryBuilder,
 } from 'typeorm';
+import { recordSearch, secondsSince } from '../observability/metrics.js';
 import { offsetOf, Page, pageOf } from './page.js';
 import { Post } from './post.entity.js';
 import { containsPattern } from './search.js';
@@ -103,6 +107,7 @@ export class PostsSearchService {
     page: number,
     size: number,
   ): Promise<Page<Post>> {
+    const started = performance.now();
     try {
       const [items, total] = await this.withTimeout((manager) =>
         this.matching(manager, search)
@@ -111,9 +116,14 @@ export class PostsSearchService {
           .take(size)
           .getManyAndCount(),
       );
+      recordSearch('success', secondsSince(started));
       return pageOf(items, page, size, total);
     } catch (error) {
-      throw isStatementTimeout(error) ? searchTookTooLong() : error;
+      if (!isStatementTimeout(error)) {
+        throw error;
+      }
+      recordSearch('timeout', secondsSince(started));
+      throw searchTookTooLong();
     }
   }
 

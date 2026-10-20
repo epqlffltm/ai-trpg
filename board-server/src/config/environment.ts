@@ -29,6 +29,10 @@ export const DEFAULT_APP_ENVIRONMENT = 'development';
 export const DEFAULT_APP_VERSION = 'dev';
 /** 적지 않았을 때 이 수준부터 로그를 남긴다 */
 export const DEFAULT_LOG_LEVEL = 'info';
+/** 적지 않았을 때 메트릭을 보내는 간격(밀리초). 다른 서버와 같다. SDK 의 기본(60초)이면 rate(…[1m]) 에 점이 하나뿐이다 */
+export const DEFAULT_METRIC_EXPORT_INTERVAL = 15000;
+/** 메트릭을 보내는 간격의 가장 짧은 값(밀리초) */
+export const MIN_METRIC_EXPORT_INTERVAL = 1000;
 /** LOG_LEVEL 에 적을 수 있는 값. 규격(저장소 루트의 docs/observability.md)의 수준 이름이다 */
 export const LOG_LEVEL_CHOICES = ['debug', 'info', 'warning', 'error'] as const;
 export type LogLevelChoice = (typeof LOG_LEVEL_CHOICES)[number];
@@ -68,8 +72,10 @@ export interface Environment {
   NOTIFICATION_URL: string;
   /** 알림 서버에 보내는 요청에 서명하는 비밀. 주소가 비어 있으면 빈 글자다 */
   NOTIFICATION_SECRET: string;
-  /** span 을 미는 수집기(Alloy)의 주소. 경로 없이 적는다. 비어 있으면 내보내지 않는다 */
+  /** span 과 메트릭을 미는 수집기(Alloy)의 주소. 경로 없이 적는다. 비어 있으면 내보내지 않는다 */
   OTEL_EXPORTER_OTLP_ENDPOINT: string;
+  /** 메트릭을 보내는 간격(밀리초). 1000 이상 */
+  OTEL_METRIC_EXPORT_INTERVAL: number;
 }
 
 /** DB 에 연결하는 데 필요한 설정. 마이그레이션 도구는 이것만 읽는다. */
@@ -340,6 +346,25 @@ export function readOtlpEndpoint(value: unknown): string {
   return written.replace(/\/+$/, '');
 }
 
+/**
+ * 메트릭을 보내는 간격(밀리초)을 읽는다. 적지 않았으면 15000 이다(observability/metrics.ts).
+ *
+ * 숫자로만 된 글자여야 하고 1000 이상이어야 한다. 너무 짧으면 수집기를 쉬지 않고 두드린다.
+ */
+export function readMetricExportInterval(value: unknown): number {
+  if (!isSet(value)) {
+    return DEFAULT_METRIC_EXPORT_INTERVAL;
+  }
+  const text = value.trim();
+  const interval = Number(text);
+  if (!/^\d+$/.test(text) || interval < MIN_METRIC_EXPORT_INTERVAL) {
+    throw new Error(
+      `OTEL_METRIC_EXPORT_INTERVAL 은 ${MIN_METRIC_EXPORT_INTERVAL}(밀리초) 이상의 숫자여야 합니다.`,
+    );
+  }
+  return interval;
+}
+
 /** 환경 변수에서 DB 에 관한 설정만 읽는다. 마이그레이션 도구가 쓴다. 틀린 값이 있으면 예외를 낸다. */
 export function readDatabaseSettings(
   variables: Record<string, unknown>,
@@ -378,6 +403,9 @@ export function readEnvironment(
     ),
     OTEL_EXPORTER_OTLP_ENDPOINT: readOtlpEndpoint(
       variables.OTEL_EXPORTER_OTLP_ENDPOINT,
+    ),
+    OTEL_METRIC_EXPORT_INTERVAL: readMetricExportInterval(
+      variables.OTEL_METRIC_EXPORT_INTERVAL,
     ),
   };
 }

@@ -19,6 +19,7 @@ import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { Environment } from '../config/environment.js';
 import { DatabaseHealth } from './database.health.js';
 import { databaseOptions } from './database.options.js';
+import { PoolWatch } from './pool-watch.js';
 
 /** 뜰 때 DB 에 연결을 몇 번까지 다시 해 보나 */
 const RETRY_ATTEMPTS = 3;
@@ -47,7 +48,7 @@ export function typeOrmOptions(
       useFactory: typeOrmOptions,
     }),
   ],
-  providers: [DatabaseHealth],
+  providers: [DatabaseHealth, PoolWatch],
   exports: [DatabaseHealth],
 })
 export class DatabaseModule {}
