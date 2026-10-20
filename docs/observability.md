@@ -344,7 +344,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `model.retirement` | game | 서술 모델의 은퇴를 알리고 바꾸기(지켜보기의 한 바퀴, 한 시간마다. 라운드가 열린 뒤 그 테이블 하나도 본다) |
 | `notification.send` | game, billing, board | 알림 서버에 알림을 보내기. 게임·게시판 서버는 발송함 작업의 한 바퀴(5초마다), 결제 서버는 정리 작업(`sweep.run`) 안에서 못 보낸 알림마다 한 줄이다. 못 보낸 알림마다 발송함의 번호(게임 `notification_id`, 결제 `notice_id`), `kind`, `reason` 을 싣는다. 받는 사람과 `payload` 는 싣지 않는다 |
 | `ai_log.prune` | game | AI 호출 기록에서 보관 기간(기본 30일)이 지난 원문 비우기(정리 작업의 한 바퀴, 한 시간마다. `cleared`, `retention_days`) |
-| `notification.put` | notification | 다른 서버가 서명한 요청으로 알림을 넣기. `source`, `kind`, `notification_id`, `outcome`(`created`, `existing`). 표에 맞지 않아 받지 않았으면 `notification.kind_refused` 다. 받는 사람과 `payload` 는 싣지 않는다 |
+| `notification.put` | notification | 다른 서버가 서명한 요청으로 알림을 넣기. `source`, `kind`, `notification_id`, `outcome`(`created`, `existing`, `muted`). 표에 맞지 않아 받지 않았으면 `notification.kind_refused` 다. 받는 사람과 `payload` 는 싣지 않는다 |
 | `notification.prune` | notification | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업의 한 바퀴, 한 시간마다. `deleted`, `retention_days`) |
 | `billing.hold` | game | 결제 서버에 서술 값의 홀드를 걸기 |
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
@@ -659,7 +659,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
-| `notifications_received_total` | counter | `source`(`game`, `billing`, `board`), `outcome`(`created`, `existing`, `refused`, `conflict`) | 다른 서버가 넣은 알림의 수. `existing` 은 같은 알림을 다시 보낸 것(200), `refused` 는 그 서버가 넣을 수 없는 종류이거나 칸이 빠진 것(422), `conflict` 는 같은 열쇠의 다른 알림(409)이다. 둘은 넣은 서버의 버그다. 서명을 확인한 것만 센다. 서명이 틀린 요청의 `source` 는 믿을 수 없어 label 로 쓰지 않는다 |
+| `notifications_received_total` | counter | `source`(`game`, `billing`, `board`), `outcome`(`created`, `existing`, `muted`, `refused`, `conflict`) | 다른 서버가 넣은 알림의 수. `existing` 은 같은 알림을 다시 보낸 것(200), `muted` 는 받는 사람이 그 종류를 꺼서 적지 않은 것(200), `refused` 는 그 서버가 넣을 수 없는 종류이거나 칸이 빠진 것(422), `conflict` 는 같은 열쇠의 다른 알림(409)이다. 둘은 넣은 서버의 버그다. 서명을 확인한 것만 센다. 서명이 틀린 요청의 `source` 는 믿을 수 없어 label 로 쓰지 않는다 |
 
 **결제 (billing)**
 

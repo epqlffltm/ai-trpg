@@ -57,10 +57,13 @@ class PutStatus(enum.StrEnum):
     CREATED = 'created'
     # 같은 열쇠의 같은 알림이 이미 있었다(200). 다시 보낸 것이다
     EXISTING = 'existing'
+    # 받는 사람이 이 종류를 껐다(200). 적지 않았다. 넣는 서버는 보낸 것으로 친다(#525)
+    MUTED = 'muted'
 
 
 class NotificationPut(BaseModel):
     """넣기의 답. 넣는 서버는 이것을 받으면 발송함에서 그 줄을 지운다."""
 
-    id: int
+    # 적은 줄의 번호. 받는 사람이 꺼서 적지 않았으면(muted) 없다
+    id: int | None
     status: PutStatus

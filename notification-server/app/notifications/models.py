@@ -8,6 +8,8 @@
   - 문구를 고치거나 다른 말로 보일 때 저장된 알림을 고치지 않아도 된다
   - 넣는 서버가 사람에게 보일 문장을 만들지 않는다. 사용자의 글(시나리오 제목 등)이 문장에 섞여 깨지는 일이 없다
 
+사용자가 끈 알림의 종류도 여기 둔다(NotificationMute, #525). 끈 종류의 알림은 넣을 때 걸러 적지 않는다.
+
 같은 알림이 두 번 들어오지 않는다. 넣는 서버(source)가 알림마다 붙인 열쇠(source_key)가 같으면 한 줄이다.
 넣는 서버는 받았다는 답을 못 받으면 같은 열쇠로 다시 보낸다(발송함과 재시도).
 """
@@ -67,3 +69,22 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # 읽은 시각. 읽지 않았으면 비어 있다
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class NotificationMute(Base):
+    """
+    사람 하나가 끈 알림의 종류 하나(#525). 줄이 있으면 꺼져 있고, 없으면 켜져 있다.
+
+    끌 수 있는 종류는 표(app/notifications/catalog.py 의 mutable)가 정한다. DB 는 모른다.
+    표에서 끌 수 없게 바뀐 종류의 줄이 남아 있어도 거르지 않는다(app/mutes/service.py 의 is_muted).
+    """
+
+    __tablename__ = 'notification_mutes'
+    __table_args__ = (CheckConstraint(r"kind ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'", name='kind_format'),)
+
+    # 끈 사람. 인증 서버의 public_id(토큰의 sub)다
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    # 끈 종류
+    kind: Mapped[str] = mapped_column(String(KIND_MAX_LENGTH), primary_key=True)
+    # 끈 시각
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

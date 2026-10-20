@@ -109,6 +109,27 @@ uv run uvicorn app.main:app --port 8004 --reload
 - **모두 읽음은 화면이 받은 번호까지만이다.** "지금까지 전부"로 하면, 목록을 받은 뒤에 막 들어와 화면에 보이지도 않은 알림까지 읽음이 된다.
 - **남의 알림 번호는 404 다.** 없는 알림과 같은 답이다. 남의 알림이 있는지 알리지 않는다.
 - 토큰이 없거나 틀렸거나 끊긴 세션의 것이면 401, 인증 서버의 공개키를 구할 수 없으면 503(`Retry-After`)이다.
+- **새 알림은 화면이 읽지 않은 수를 주기적으로 물어 안다.** 실시간 스트림(SSE)은 두지 않았다(#525). 알림은 몇 초 늦어도 되는 일이고,
+  스트림을 두면 연결을 오래 쥐고 프록시의 시간 제한과 다시 잇기를 다뤄야 한다. 화면을 만들 때(#290) 다시 본다.
+
+### 알림 끄기
+
+사용자가 알림의 종류마다 끄고 켠다(#525). 알림함과 같은 토큰으로 부른다.
+
+| 메서드 | 주소 | 무엇을 | 답 |
+| --- | --- | --- | --- |
+| GET | `/api/v1/notification/me/notifications/mutes` | 끌 수 있는 종류마다 껐는지 | 200 `{"kinds": [{"kind": "credit.expiring", "muted": false}, ...]}` |
+| PUT | `/api/v1/notification/me/notifications/mutes/{kind}` | 그 종류를 끈다 | 200 바뀐 뒤의 설정 전체. 끌 수 없는 종류면 422 `{"detail": {"code": "kind_not_mutable", "kind": "…"}}` |
+| DELETE | `/api/v1/notification/me/notifications/mutes/{kind}` | 그 종류를 다시 켠다 | 위와 같다 |
+
+- **끌 수 있는 종류는 다섯이다.** `narration_model.retiring`, `credit.expiring`, `credit.short`, `post.commented`, `comment.replied`.
+  [알림의 종류](#알림의-종류) 표(`app/notifications/catalog.py` 의 `mutable`)가 정한다. 답은 이 다섯을 이름 차례로 싣는다.
+- **꼭 알아야 하는 것은 끌 수 없다.** 돈이 오간 일(`order.paid`, `order.refunded`), 제재(`scenario.sanctioned`, `publishing.*`),
+  내 테이블의 모델이 이미 바뀐 일(`narration_model.replaced`, `narration_model.unavailable`)이다. 한 번뿐인 환영 크레딧(`credit.welcome`)도 끌 까닭이 없어 두지 않았다.
+- **끈 종류는 넣을 때 거른다.** 적지 않으므로 다시 켜도 꺼 둔 동안의 알림은 없다. 읽을 때 거르면 다시 켰을 때 지난 것이 한꺼번에 보이고,
+  끈 알림도 줄이 쌓여 보관 기간까지 남는다. 넣는 서버에는 받은 것과 같은 200 으로 답한다([알림 넣기](#알림-넣기서버끼리)의 `muted`).
+- **이미 받은 알림은 그대로다.** 끄기 전에 들어온 그 종류의 알림은 지우지 않는다. 읽지 않은 수에도 남는다.
+- 끄기와 켜기는 몇 번 해도 같다. 이미 꺼진 것을 꺼도, 켜진 것을 켜도 200 이다.
 
 ### 토큰 검증
 
@@ -137,6 +158,7 @@ Content-Type: application/json
 | --- | --- |
 | 201 `{"id": 7, "status": "created"}` | 새로 넣었다 |
 | 200 `{"id": 7, "status": "existing"}` | 같은 알림이 이미 있다(다시 보낸 것). 같은 `id` 다 |
+| 200 `{"id": null, "status": "muted"}` | 받는 사람이 그 종류를 껐다([알림 끄기](#알림-끄기)). 적지 않았다. 넣는 서버는 보낸 것으로 친다(다시 보내지 않는다) |
 | 401 | 서명이 없거나, 틀렸거나, 5분을 넘겼거나, 남의 주소의 것이거나, 그 서버의 비밀이 설정에 없다. 이유는 나누지 않는다 |
 | 409 `{"detail": {"code": "key_reused", "source_key": "…"}}` | 같은 열쇠로 다른 알림(받는 사람, `kind`, `payload` 중 하나가 다르다)을 넣으려 했다 |
 | 413 | 본문이 16KB 를 넘는다 |
@@ -147,7 +169,7 @@ Content-Type: application/json
 
 - `source` 는 넣는 서버의 이름이다: `game`, `billing`, `board`. 모르는 이름도 401 이다(404 가 아니다. 어느 이름이 있는지 알리지 않는다).
   지금 넣는 서버는 게임 서버(서술 모델의 은퇴를 방장에게, 운영자의 제재를 당사자에게, [게임 서버의 알림 보내기](../trpg-server/README.md#알림-보내기))와
-  결제 서버(결제, 청약철회, 환영 크레딧, 곧 사라질 무료 크레딧을 그 사람에게, [결제 서버의 정리 작업과 대사](../billing-server/README.md#정리-작업과-대사)의 "사용자의 알림함"),
+  결제 서버(결제, 청약철회, 환영 크레딧, 곧 사라질 무료 크레딧, 크레딧 부족을 그 사람에게, [결제 서버의 정리 작업과 대사](../billing-server/README.md#정리-작업과-대사)의 "사용자의 알림함"),
   게시판 서버(내 글의 댓글, 내 댓글의 답글을 그 글쓴이에게, [게시판 서버의 알림 보내기](../board-server/README.md#알림-보내기))다.
 - **서명은 결제 서버와 같은 모양이다.** `HMAC-SHA256(비밀, "<시각>.<메서드>\n<주소>\n<본문>")` 의 16진수. 주소는 호스트를 뺀 경로다.
   주소까지 서명하므로 한 서버의 서명을 다른 서버의 주소에 붙여 쓸 수 없다. 시각이 앞뒤 5분을 넘긴 서명은 받지 않는다.
@@ -160,7 +182,9 @@ Content-Type: application/json
   DB 가 하나만 넣는다(`INSERT … ON CONFLICT DO NOTHING`). 먼저 찾아보고 없으면 넣는 방식은 동시에 온 둘이 모두 "없다"를 본다.
 - **받은 시각은 이 서버의 시계다.** 넣는 서버가 적은 시각을 믿지 않는다.
 - **`kind` 는 서명을 확인하고 모양을 본 뒤, DB 에 닿기 전에 표와 견준다.** 같은 열쇠의 줄이 있어도 표에 맞지 않으면 409 가 아니라 422 다.
-- 로그에는 넣은 서버, `kind`, 알림의 `id`, 결과(`created`, `existing`)만 남긴다(`operation`: `notification.put`). 받는 사람과 `payload` 는 남기지 않는다.
+- **받는 사람이 끈 종류면 적지 않는다.** 표와 견준 뒤, 넣기 전에 본다. 끌 수 있는 종류일 때만 DB 를 본다(기본 키로 한 줄).
+  넣는 서버의 발송함은 200 을 보낸 것으로 친다. 세 서버 모두 200 과 201 의 본문을 읽지 않는다.
+- 로그에는 넣은 서버, `kind`, 알림의 `id`, 결과(`created`, `existing`, `muted`)만 남긴다(`operation`: `notification.put`). 받는 사람과 `payload` 는 남기지 않는다.
   표에 맞지 않아 받지 않은 것은 `warning`(`notification.kind_refused`)으로 넣은 서버, `kind`, 까닭(`refusal`), 빠진 칸의 이름(`missing_fields`)을 남긴다.
 
 ### 알림의 종류
@@ -257,7 +281,7 @@ Tempo 에 들어오는지는 저장소의 CI(`stack`)가 본다.
 | `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB |
 | `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `app/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
 | `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`(`notification.prune`), `result` | `app/notifications/retention.py` 의 한 바퀴 |
-| `notifications_received_total` | `source`(`game`, `billing`, `board`), `outcome`(`created`, `existing`, `refused`, `conflict`) | `app/notifications/router.py`. 서명을 확인한 것만 센다 |
+| `notifications_received_total` | `source`(`game`, `billing`, `board`), `outcome`(`created`, `existing`, `muted`, `refused`, `conflict`) | `app/notifications/router.py`. 서명을 확인한 것만 센다 |
 
 - 대시보드는 Grafana 의 `notification-server`(`docker/grafana/dashboards/notification-server.json`), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `notification-server` 묶음이다
 - 계측기는 `app/observability/metrics.py` 에 한 묶음으로 둔다. 테스트는 `tests/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
@@ -273,6 +297,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. �
 | 테이블 | 한 줄은 | 마이그레이션 |
 | --- | --- | --- |
 | `notifications` | 사람 하나에게 간 알림 하나(#385) | `20261018_3f9a1c7e5b2d_notifications.py` |
+| `notification_mutes` | 사람 하나가 끈 알림의 종류 하나(#525). 줄이 있으면 꺼져 있다. 기본 키가 (`user_id`, `kind`)다 | `20261020_7c2e4a9d1b6f_notification_mutes.py` |
 
 `notifications` 의 칸과 규칙(`app/notifications/models.py`):
 

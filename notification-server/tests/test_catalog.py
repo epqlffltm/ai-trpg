@@ -6,6 +6,7 @@
   - 그 서버가 넣는 kind 이고 꼭 있어야 하는 칸이 있으면 받는다
   - 표에 없는 kind, 남의 kind, 칸이 빠진 payload 는 받지 않는다
   - 표의 kind 는 DB 의 모양 규칙에 맞고, 넣는 서버의 이름은 서명 비밀이 있는 서버다
+  - 사용자가 끌 수 있는 kind 는 정해 둔 것뿐이다. 돈과 제재처럼 꼭 알아야 하는 것은 끌 수 없다
 """
 
 import re
@@ -13,7 +14,17 @@ import re
 import pytest
 
 from app.core.config import Settings
-from app.notifications.catalog import BILLING, BOARD, GAME, KINDS, Refusal, RefusalCode, refusal_for
+from app.notifications.catalog import (
+    BILLING,
+    BOARD,
+    GAME,
+    KINDS,
+    Refusal,
+    RefusalCode,
+    is_mutable,
+    mutable_kinds,
+    refusal_for,
+)
 from app.notifications.schemas import KIND_PATTERN
 
 # 넣는 서버마다 지금 넣는 kind. 넣는 서버의 코드에서 옮겨 적었다. 표가 이것과 다르면 그 서버의 알림이 422 로 버려진다
@@ -104,3 +115,23 @@ def test_a_null_value_counts_as_there():
 def test_the_table_cannot_be_changed_at_run_time():
     with pytest.raises(TypeError):
         KINDS['order.paid'] = KINDS['post.commented']  # type: ignore[index]
+
+
+def test_only_the_chosen_kinds_can_be_muted():
+    # 이 목록을 바꾸는 PR 은 화면 명세(A10)와 README 의 "알림 끄기"도 고친다
+    assert mutable_kinds() == (
+        'comment.replied',
+        'credit.expiring',
+        'credit.short',
+        'narration_model.retiring',
+        'post.commented',
+    )
+
+
+@pytest.mark.parametrize('kind', ['order.paid', 'order.refunded', 'scenario.sanctioned', 'publishing.banned'])
+def test_money_and_sanctions_cannot_be_muted(kind: str):
+    assert not is_mutable(kind)
+
+
+def test_a_kind_that_is_not_listed_cannot_be_muted():
+    assert not is_mutable('stack.smoke')
