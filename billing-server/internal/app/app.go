@@ -38,6 +38,8 @@ type Services struct {
 	Holds       *hold.Service
 	Prices      *pricing.Service
 	Eligibility *eligibility.Service
+	// UserNotices 는 서버가 적는 사용자의 알림(크레딧 부족)이다. 보내는 것을 붙이지 않는다. 보내기는 정리 작업이 한다
+	UserNotices *usernotice.Service
 }
 
 // NewServices 는 규칙에 따라 서비스들을 만든다. providers 는 주문이 길마다 부를 결제 대행사(NewProviders),
@@ -54,8 +56,12 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, providers order.Provide
 		return Services{}, err
 	}
 	// 크레딧이 모자라 걸지 못한 일을 사용자의 알림함에 보낼 것으로 적는다. 보내기는 정리 작업이 한다(보내는 것을 붙이지 않는다)
-	holds.WithShortfalls(usernotice.NewService(pool, now, nil))
-	return Services{Wallet: wallets, Orders: orders, Holds: holds, Prices: prices, Eligibility: eligibility.NewService(pool, now)}, nil
+	notices := usernotice.NewService(pool, now, nil)
+	holds.WithShortfalls(notices)
+	return Services{
+		Wallet: wallets, Orders: orders, Holds: holds, Prices: prices,
+		Eligibility: eligibility.NewService(pool, now), UserNotices: notices,
+	}, nil
 }
 
 // NewProviders 는 주문의 길마다 부를 결제 대행사를 만든다. 서버와 작업 명령이 이것으로 만들어 같은 결제 대행사에 묻는다.
@@ -82,9 +88,13 @@ func MeasureProviders(providers order.Providers, name string, meter metric.Meter
 	return measured, nil
 }
 
-// MeasureServices 는 서비스들이 바꾼 것(원장, 주문의 상태, 중복 방지 키)을 meter 로 세게 한다. 서비스를 쓰기 전에 한 번 부른다.
+// MeasureServices 는 서비스들이 바꾼 것(원장, 주문의 상태, 중복 방지 키, 서버가 적은 알림)을 meter 로 세게 한다.
+// 서비스를 쓰기 전에 한 번 부른다.
 func MeasureServices(services Services, meter metric.Meter) error {
-	for _, measure := range []func(metric.Meter) error{services.Wallet.Measure, services.Orders.Measure, services.Holds.Measure} {
+	measures := []func(metric.Meter) error{
+		services.Wallet.Measure, services.Orders.Measure, services.Holds.Measure, services.UserNotices.Measure,
+	}
+	for _, measure := range measures {
 		if err := measure(meter); err != nil {
 			return err
 		}

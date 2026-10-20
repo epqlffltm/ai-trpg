@@ -1331,7 +1331,8 @@ POST /api/v1/auth/service/guardian-notices        (인증 서버의 주소. AUTH
   알린 지 7일이 지났는데 7일 안에 사라질 것이 또 남았으면 다시 알린다. 시각은 UTC 의 RFC 3339 글자다(`2026-04-09T09:00:00Z`)
 - **크레딧 부족은 사람마다 하루(한국 날짜) 한 번이다.** 라운드마다 모자란 사람에게 라운드마다 알리지 않는다. 그날 처음 모자란 것의 가격표 이름과 값을 싣는다.
   다른 종류와 달리 정리 작업이 찾지 않는다. 걸지 못한 홀드는 트랜잭션이 되돌려져 줄이 남지 않으므로 **서버가 402 를 답하는 자리에서 적는다**(`internal/hold/shortfall.go`).
-  적지 못해도(DB 오류) 402 는 그대로 나간다. warning 한 줄만 남는다. 바퀴의 `user_notices_queued` 에는 세지 않는다(서버가 적었다). 보내기는 다른 종류와 같다
+  적지 못해도(DB 오류) 402 는 그대로 나간다. warning 한 줄만 남는다. 바퀴의 `user_notices_queued` 에는 세지 않는다(서버가 적었다). 보내기는 다른 종류와 같다.
+  몇 번 적고(`queued`) 같은 날이라 적지 않았는지(`duplicate`)는 메트릭 `billing_user_notices_total{kind="credit.short"}` 로 본다
 - 받는 사람, 금액, 상품만 싣는다. 결제 대행사의 번호와 오류의 글은 싣지 않는다
 - 보내기는 줄을 30초 차지하고 잠금 밖에서 한다. 닿지 못하면(연결 실패, 시간 초과, 401, 408, 429, 5xx) 5초부터 두 배씩 늘려(1시간까지) 다시 보낸다.
   401 은 두 서버의 비밀이 다르거나 시계가 어긋난 것이라 오류로 남긴다
@@ -1798,6 +1799,7 @@ compose 로 띄울 때는 루트 `.env` 에 적는다(프로필 `observability` 
 | `billing_ledger_operations_total` | 서버, 정리 작업, 대사 | `reason`(원장의 이유), `result`(`success`, `failure`). 원장에 적은 일(작업 번호 하나)의 수 |
 | `billing_idempotency_total` | 서버 | `kind`(`order`, `hold`), `outcome`(`first`, `replayed`, `conflict`) |
 | `billing_orders_total` | 서버, 정리 작업(`expired`), 대사 | `status`. 그 상태가 된 주문의 수 |
+| `billing_user_notices_total` | 서버(`credit.short` 를 적은 것), 정리 작업 | `kind`(알림의 종류), `outcome`(`queued`, `duplicate`, `sent`, `retried`, `rejected`). 사용자의 알림함에 보낼 일 |
 | `payment_provider_calls_total` | 서버, 대사 | `provider`(`PAYMENT_PROVIDER`), `operation`(`confirm`, `lookup`, `cancel`), `outcome` |
 | `payment_webhooks_total` | 서버 | `provider`(서명한 알림은 `fake`, 토스의 알림은 `toss`), `result`(`accepted`, `ignored`, `bad_signature`, `bad_request`, `unavailable`) |
 
