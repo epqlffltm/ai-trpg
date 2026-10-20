@@ -77,7 +77,7 @@ DASHBOARDS=docker/grafana/dashboards
 LOKI_LABELS=(container environment level mode service)
 # 메트릭을 OTLP 로 미는 서버(docs/observability.md 의 "2. 메트릭"). 서버에 메트릭을 붙이면 여기에 더한다.
 # 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다
-METRIC_SERVERS=(billing notification)
+METRIC_SERVERS=(trpg billing notification)
 # span 을 내보내는 서버(docs/observability.md 의 "3. 추적"). 서버에 span 을 붙이면 여기와 아래 둘에 더한다
 TRACE_SERVERS=(auth trpg board billing notification)
 # 추적 번호를 실어 한 번 부를 주소(메서드와 경로). 401 이어도 된다. 요청의 span 은 걸린다. 상태 확인은 span 이 없다
@@ -810,6 +810,11 @@ check_server_metrics() {
     eventually prometheus_finds 'background_jobs_finished_total{service="notification-server", operation="notification.prune", result="success"}'
   report "알림 서버가 넣은 알림을 서버마다 센다(notifications_received_total, outcome=created)" \
     eventually prometheus_finds 'notifications_received_total{service="notification-server", source="board", outcome="created"}'
+  # TRPG 서버. 청구 정리는 5초마다 돌고 바퀴마다 끝나지 않은 청구를 센다(청구가 없어도 0 을 낸다)
+  report "TRPG 서버의 청구 정리가 작업 메트릭을 민다(charge.settle)" \
+    eventually prometheus_finds 'background_jobs_finished_total{service="trpg-server", operation="charge.settle", result="success"}'
+  report "TRPG 서버가 끝나지 않은 청구를 센다(narration_charges, status=capture_due)" \
+    eventually prometheus_finds 'narration_charges{service="trpg-server", status="capture_due"}'
 }
 
 # --- 대시보드(observability 프로필) ---

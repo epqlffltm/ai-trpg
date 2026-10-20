@@ -25,6 +25,7 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
   2. 서술: 잠금도 DB 연결도 없이, 요청과 따로 도는 작업이 서술자를 부른다(app/rounds/closing.py).
   3. 닫기 마무리(finish_closing): 다시 잠그고, 서술을 장면으로 하는 다음 라운드를 열고, 저장한다.
 잠금을 쥔 채로 서술을 기다리지 않는다. 기다리면 그동안 이 테이블의 채팅과 나가기가 전부 멈춘다.
+닫기 시작한 라운드는 저장한 뒤에 까닭(reason)마다 센다(rounds_closed_total). 되돌린 것은 세지 않는다.
 
 서술을 맡은 작업은 사라질 수 있다(서버가 꺼짐, 서술자가 실패함). 그러면 라운드가 닫는 중에 머문다.
 맡긴 지 한참 지난 라운드는 방장이 닫기를 다시 눌러 서술을 다시 맡긴다(is_stalled).
@@ -55,6 +56,7 @@ from app.engine.dice import Dice
 from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
+from app.observability.metrics import record_round_closed
 from app.rounds import deadlines, narration_request, opener, quest_goals, repository, rests
 from app.rounds.acceptance import accept_action, put_declaration
 from app.rounds.cast import Scene, cast_of
@@ -368,9 +370,10 @@ async def declare(
     if everyone_declared:
         begin_closing(session, table, round_, dice, scene, CloseReason.ALL_DECLARED)
     saved = await save(session, table)
-    # 저장한 뒤에 맡긴다. 먼저 맡기면 서술을 맡은 작업이 아직 저장되지 않은 것을 읽는다
+    # 저장한 뒤에 맡기고 센다. 먼저 맡기면 서술을 맡은 작업이 아직 저장되지 않은 것을 읽는다
     if everyone_declared:
         hand_over(scheduler, saved)
+        record_round_closed(CloseReason.ALL_DECLARED)
     return saved
 
 
@@ -393,7 +396,8 @@ async def force_close(
     table, _, round_ = await lock_current_round(session, host_id, table_id)
     table_state.require_host(table, host_id)
 
-    if round_.status == RoundStatus.OPEN:
+    closing = round_.status == RoundStatus.OPEN
+    if closing:
         scene = await load_scene(session, table, round_)
         begin_closing(session, table, round_, dice, scene, CloseReason.HOST, closer_id=host_id)
     elif is_stalled(round_, datetime.now(UTC)):
@@ -405,6 +409,9 @@ async def force_close(
 
     saved = await save(session, table)
     hand_over(scheduler, saved)
+    # 다시 맡긴 것은 새로 닫은 것이 아니다. 세지 않는다
+    if closing:
+        record_round_closed(CloseReason.HOST)
     return saved
 
 
@@ -443,6 +450,7 @@ async def close_on_time(
     table, round_ = found
     begin_closing(session, table, round_, dice, await load_scene(session, table, round_), CloseReason.TIMEOUT)
     hand_over(scheduler, await save(session, table))
+    record_round_closed(CloseReason.TIMEOUT)
     return True
 
 
@@ -464,6 +472,7 @@ async def close_when_ready(
     table, round_ = found
     begin_closing(session, table, round_, dice, await load_scene(session, table, round_), CloseReason.ALL_DECLARED)
     hand_over(scheduler, await save(session, table))
+    record_round_closed(CloseReason.ALL_DECLARED)
     return True
 
 
