@@ -432,3 +432,112 @@ tests:
       - eval_time: 6h
         alertname: NotificationPruneFailing
         exp_alerts: []
+
+  # TRPG 서버의 DB: 닿지 않는 프로세스만 울린다
+  - interval: 1m
+    input_series:
+      - series: 'db_up{service="trpg-server", instance="server-a"}'
+        values: '1 1 0 0 0 0'
+      - series: 'db_up{service="trpg-server", instance="server-b"}'
+        values: '1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: TrpgDatabaseUnreachable
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: TrpgDatabaseUnreachable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: trpg-server
+              instance: server-a
+            exp_annotations:
+              summary: TRPG 서버가 DB 에 닿지 못한다
+              description: 게임을 할 수 없다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+  # TRPG 서버의 5xx: 요청이 많고 5xx 가 10% 면 10분 뒤에 울린다
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="trpg-server", route="/x", method="GET", status_code="200", instance="server-a"}'
+        values: '0+54x30'
+      - series: 'http_server_requests_total{service="trpg-server", route="/x", method="GET", status_code="500", instance="server-a"}'
+        values: '0+6x30'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: TrpgServerErrors
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: TrpgServerErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: TRPG 서버의 5xx 가 10% 다
+              description: 대시보드 trpg-server 의 "상태 코드"와 로그의 error_code 를 본다
+
+  # 서술의 절반이 실패하면 울린다
+  - interval: 1m
+    input_series:
+      - series: 'round_narrations_total{service="trpg-server", result="success", instance="server-a"}'
+        values: '0+1x40'
+      - series: 'round_narrations_total{service="trpg-server", result="failure", instance="server-a"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: TrpgNarrationsFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 서술의 50% 가 실패한다
+              description: 대시보드 trpg-server 의 "AI 호출"에서 실패하는 모델을 찾는다. 로그의 round.narrate 와 AI 호출 기록(ai_invocations)의 error 를 본다
+
+  # 서술이 드물면(30분에 셋 미만) 하나가 실패해도 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'round_narrations_total{service="trpg-server", result="failure", instance="server-a"}'
+        values: '0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: TrpgNarrationsFailing
+        exp_alerts: []
+
+  # 확정할 것이 30분 넘게 남으면 울린다. 서버들이 같은 수를 내도 한 번이다
+  - interval: 1m
+    input_series:
+      - series: 'narration_charges{service="trpg-server", status="capture_due", instance="server-a"}'
+        values: '2x40'
+      - series: 'narration_charges{service="trpg-server", status="capture_due", instance="server-b"}'
+        values: '2x40'
+      - series: 'narration_charges{service="trpg-server", status="held", instance="server-a"}'
+        values: '5x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: TrpgChargesNotCaptured
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: TrpgChargesNotCaptured
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 확정하지 못한 서술 값이 2 건 있다
+              description: 결제 서버가 죽어 있거나 서명이 거절된다. BillingDatabaseUnreachable 과 대시보드 trpg-server 의 "결제 서버를 부른 것"을 본다
+
+  # 결제 서버가 받아들이지 않은 것은 일마다 울린다. 다시 부를 것(unavailable)은 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'billing_calls_total{service="trpg-server", operation="capture", outcome="rejected", instance="server-a"}'
+        values: '0 0 1 1 1'
+      - series: 'billing_calls_total{service="trpg-server", operation="hold", outcome="unavailable", instance="server-a"}'
+        values: '0+3x4'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TrpgBillingRejected
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              operation: capture
+            exp_annotations:
+              summary: 결제 서버가 capture 를 받아들이지 않았다
+              description: TRPG 서버의 로그(operation=billing.capture, error_code)와 narration_charges 의 failed 청구를 본다

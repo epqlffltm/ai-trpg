@@ -42,6 +42,10 @@
 
 서술자가 쓰는 동안의 글은 미리 보기로 앉은 사람들에게 흘려보낸다(app/rounds/preview.py).
 미리 보기를 닫은 뒤에 마무리하거나 실패를 적는다. 그래야 이벤트가 미리 보기의 마지막 조각보다 늦게 간다.
+
+끝난 서술을 센다(round_narrations_total). 닫기를 마무리했으면 success, 실패를 적는 길로 갔으면 failure 다.
+서술 값을 잡지 못한 것도 failure 다. 할 일이 없던 것(이미 닫힘)과 서버가 꺼져 멈춘 것은 세지 않는다.
+success 는 닫기 시작한 시각부터 걸린 시간도 잰다(round_narration_duration_seconds). 차례를 기다린 시간도 든다.
 """
 
 import asyncio
@@ -60,6 +64,7 @@ from app.billing.client import Billing
 from app.billing.free_billing import FreeBilling
 from app.billing.price_list import FREE_PRICES, PriceList
 from app.core.jobs import BackgroundJobs
+from app.observability.metrics import NARRATION_FAILURE, NARRATION_SUCCESS, record_narration
 from app.rounds import service
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import LoreNote, MemoryNote, NarrationRequest, Narrator, PersonHistory
@@ -218,6 +223,11 @@ def failure_reason(error: Exception) -> str:
 def seconds_left(started: datetime, now: datetime, budget: float) -> float:
     """started 부터 budget 초를 쓸 수 있을 때 now 에 남은 시간(초). 이미 다 썼으면 0 이다."""
     return max(budget - (now - started).total_seconds(), 0.0)
+
+
+def seconds_since(started: datetime) -> float:
+    """started 부터 지금까지 걸린 시간(초)."""
+    return (datetime.now(UTC) - started).total_seconds()
 
 
 async def find_or_nothing[Found](find: Callable[[], Awaitable[list[Found]]], deadline: float, what: str) -> list[Found]:
@@ -390,10 +400,13 @@ async def narrate_round(
         async with asyncio.timeout(seconds_left(started, datetime.now(UTC), budgets.job)):
             scene = await close_run(session_factory, narrator, run, finders, billing, budgets, prices)
     except Exception as error:
+        record_narration(NARRATION_FAILURE)
         reason, counted = failure_reason(error), counts_as_failure(error)
         await record_failure(session_factory, run, reason, counted, budgets.failure, prices)
         await after_open(table_id)
         raise
+    if scene is not None:
+        record_narration(NARRATION_SUCCESS, seconds_since(started))
     await settle_payment(session_factory, billing, run, budgets.billing)
     if scene is not None:
         await after_open(table_id)

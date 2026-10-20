@@ -24,6 +24,7 @@ operation 은 round.close_overdue 다. 요청 밖에서 혼자 시작한 작업�
 닫은 라운드의 서술은 따로 맡긴 작업(round.narrate)이 하고, 그 맡긴 줄의 spawned_job_id 로 이어진다.
 찾아낸 테이블의 수를 바퀴의 span 에 싣는다(add_handled). 찾아낸 것이 없던 바퀴의 추적은 보내지 않는다
 (app/observability/idle_rounds.py). 하다가 실패한 테이블도 찾아낸 것에 들어 그 추적은 남는다.
+바퀴마다 작업의 메트릭(background_jobs_*)을 센다(app/observability/metrics.py 의 measured_job).
 """
 
 import asyncio
@@ -46,6 +47,7 @@ from app.core.loops import Running
 from app.engine.dice import Dice
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
+from app.observability.metrics import measured_job
 from app.observability.spans import add_handled, job_span
 from app.rounds import credit_waits, recovery, repository, service
 from app.rounds.recovery import Recovery
@@ -189,7 +191,7 @@ class RoundClock:
         찾는 일이 통째로 실패하면(DB 가 없다) 예외를 그대로 올린다. 그 줄은 도는 쪽(run)이 남긴다.
         """
         job_id = new_job_id()
-        with job_span(CLOCK_OPERATION, job_id), job_scope(job_id):
+        with job_span(CLOCK_OPERATION, job_id), job_scope(job_id), measured_job(CLOCK_OPERATION):
             started = time.perf_counter()
             recovered = await self.sweep_vanished()
             closed = await self.sweep()

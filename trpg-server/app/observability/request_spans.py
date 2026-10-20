@@ -29,10 +29,14 @@ from app.observability.spans import remote_parent, tracer
 STREAM_PATH = re.compile(r'/api/v1/game/tables/[^/]+/stream')
 
 
+def is_stream(scope: Scope) -> bool:
+    """테이블의 스트림(SSE)을 여는 요청인가. 실제 경로로 본다. 요청의 메트릭(request_metrics.py)도 쓴다."""
+    return STREAM_PATH.fullmatch(str(scope.get('path', ''))) is not None
+
+
 def is_untraced(scope: Scope) -> bool:
     """span 을 걸지 않는 주소인가. 상태 확인과 테이블의 스트림이다. 둘 다 실제 경로로 본다."""
-    path = str(scope.get('path', ''))
-    return path in PROBE_ROUTES or STREAM_PATH.fullmatch(path) is not None
+    return str(scope.get('path', '')) in PROBE_ROUTES or is_stream(scope)
 
 
 def finish_server_span(span: Span, scope: Scope, status_code: int) -> None:

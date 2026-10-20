@@ -3068,9 +3068,10 @@ uv run python -m scripts.eval_memory --fake
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다(아래의 "추적") |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 과 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다(아래의 "추적", "메트릭") |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | 메트릭을 보내는 간격(밀리초, 1000 이상). 결제 서버와 같은 이름이다 |
 
-네 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+다섯 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
 
 개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
 
@@ -3130,6 +3131,31 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 - `app/ai` 는 span 의 코드를 가져오지 않는다(`tests/test_ai_boundary.py`). 모델을 부르는 클라이언트를 밖에서 넘기므로 그 클라이언트가 span 을 건다
 
 테스트는 `tests/spans.py` 로 메모리에 모아 이름, 부모, 속성을 본다(`spans` fixture).
+
+### 메트릭
+
+요청, DB, 작업, 실시간 스트림, AI 호출, 라운드와 서술, 서술 값을 세어 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 15초마다 민다. 수집기가 Prometheus 에 넘긴다.
+이름과 label 은 [docs/observability.md](../docs/observability.md)의 "메트릭"에 있다. 알림 서버(Python 의 본보기)와 같은 코드에 이 서버의 것을 더했다.
+주소가 비어 있으면 세기만 하고 보내지 않는다.
+
+| 메트릭 | label | 세는 곳 |
+| --- | --- | --- |
+| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `app/observability/request_metrics.py`. 미들웨어의 맨 바깥이다. 테이블의 스트림은 요청 수에만 든다 |
+| `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB. Redis 만 닿지 않으면 1 이다 |
+| `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `app/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
+| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`, `result` | 맡긴 작업(`app/core/jobs.py`)과 도는 작업의 한 바퀴(시계, 청구 정리, 알림 보내기, 원문 정리, 은퇴 지켜보기) |
+| `sse_connections`, `sse_connections_opened_total`, `sse_connection_duration_seconds` | 없음 | `app/realtime/router.py`. 응답을 시작한 뒤부터 끊길 때까지 |
+| `ai_calls_total`, `ai_call_duration_seconds`, `ai_tokens_total` | `operation`(`narration`), `provider`, `model`, `outcome`, `direction` | `app/ai_log/metered.py`. 호출 기록장을 감싼다. 값은 `ai_invocations` 와 같다 |
+| `ai_fallbacks_total`, `round_narration_retries_total` | `operation`, `model`(실패한 모델) | `app/rounds/retrying_narrator.py` |
+| `rounds_closed_total` | `reason`(`all_declared`, `host`, `timeout`) | `app/rounds/service.py`. 저장한 뒤에 센다 |
+| `round_narrations_total`, `round_narration_duration_seconds` | `result`(`success`, `failure`) | `app/rounds/closing.py`. 시간은 닫기 시작한 때부터, 성공한 것만 |
+| `billing_calls_total` | `operation`(`hold`, `capture`, `release`, `extend`), `outcome` | `app/billing/metered.py`. 결제 서버를 쓸 때만 감싼다 |
+| `narration_charges` | `status`(`pending`, `held`, `short`, `capture_due`, `release_due`) | `app/billing/settler.py` 의 바퀴마다. 서버들이 같은 수를 낸다(`max` 로 본다) |
+
+- 대시보드는 Grafana 의 `trpg-server`(`docker/grafana/dashboards/trpg-server.json`), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `trpg-server` 묶음이다
+- `app/ai` 는 메트릭의 코드를 가져오지 않는다(`tests/test_ai_boundary.py`). 기록장과 결제 서버를 부르는 것을 밖에서 감싸 센다
+- 계측기는 `app/observability/metrics.py` 에 한 묶음으로 둔다. 테스트는 `tests/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
+- 보내는 길은 `tests/test_metrics_setup.py` 가 가짜 수집기로 본다. Prometheus 에 들어오는지는 저장소의 CI(`stack`)가 본다
 
 
 ## CI

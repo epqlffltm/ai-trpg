@@ -2,102 +2,33 @@
 
 """
 span 을 OTLP(HTTP)로 미는 것(app/observability/tracing.py)과 그 설정(OTEL_EXPORTER_OTLP_ENDPOINT)을 검증한다.
-수집기 대신 이 테스트의 HTTP 서버가 받는다.
+수집기 대신 이 테스트의 HTTP 서버가 받는다(tests/collector.py).
 """
 
-import threading
 from collections.abc import Iterator
-from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 from opentelemetry import trace
-from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
+from opentelemetry.metrics import NoOpMeterProvider
 from pydantic import ValidationError
 
 from app.core.database import create_engine
 from app.main import create_app
+from app.observability.metrics import use_meter_provider
 from app.observability.request_spans import RequestSpanMiddleware
 from app.observability.spans import tracer, use_provider
 from app.observability.tracing import build_provider, configure_tracing, shutdown_tracing
+from tests.collector import Collector
 from tests.conftest import make_client, make_test_settings
 from tests.signing import FakeAuthServer
 
 
-class Collector:
-    """OTLP 로 온 span 을 모으는 가짜 수집기. 따로 도는 스레드에서 받는다."""
-
-    def __init__(self) -> None:
-        self.paths: list[str] = []
-        self.requests: list[ExportTraceServiceRequest] = []
-        self.lock = threading.Lock()
-
-    def handler(self) -> type[BaseHTTPRequestHandler]:
-        collector = self
-
-        class Handler(BaseHTTPRequestHandler):
-            def do_POST(self) -> None:
-                body = self.rfile.read(int(self.headers['Content-Length']))
-                with collector.lock:
-                    collector.paths.append(self.path)
-                if self.path == '/v1/traces':
-                    request = ExportTraceServiceRequest()
-                    request.ParseFromString(body)
-                    with collector.lock:
-                        collector.requests.append(request)
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/x-protobuf')
-                self.end_headers()
-
-            def log_message(self, *_args: object) -> None:
-                return
-
-        return Handler
-
-    def span_names(self) -> list[str]:
-        """받은 span 의 이름들."""
-        with self.lock:
-            return [
-                span.name
-                for request in self.requests
-                for resource in request.resource_spans
-                for scope in resource.scope_spans
-                for span in scope.spans
-            ]
-
-    def scopes(self) -> list:
-        """받은 span 의 묶음(만든 쪽의 이름마다)."""
-        with self.lock:
-            return [
-                scope
-                for request in self.requests
-                for resource in request.resource_spans
-                for scope in resource.scope_spans
-            ]
-
-    def resource(self) -> dict[str, str]:
-        """처음 받은 span 의 출처."""
-        with self.lock:
-            attributes = self.requests[0].resource_spans[0].resource.attributes
-        return {attribute.key: attribute.value.string_value for attribute in attributes}
-
-
-@pytest.fixture
-def collector() -> Iterator[tuple[Collector, str]]:
-    """가짜 수집기와 그 주소(경로 없이)."""
-    received = Collector()
-    server = HTTPServer(('127.0.0.1', 0), received.handler())
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield received, f'http://127.0.0.1:{server.server_port}'
-    server.shutdown()
-    server.server_close()
-
-
 @pytest.fixture
 def restore_provider() -> Iterator[None]:
-    """끼운 TracerProvider 를 테스트가 끝나면 아무것도 하지 않는 것으로 되돌린다."""
+    """끼운 TracerProvider 와 MeterProvider 를 테스트가 끝나면 아무것도 하지 않는 것으로 되돌린다."""
     yield
     use_provider(trace.NoOpTracerProvider())
+    use_meter_provider(NoOpMeterProvider())
 
 
 @pytest.mark.parametrize(
@@ -168,9 +99,13 @@ async def test_shutting_down_the_server_sends_what_is_left(
         await client.get('/api/v1/game/me')
 
     assert 'GET /api/v1/game/me' in received.span_names()
-    # FastAPI 가 스스로 내보내는 것(span, 메트릭, 로그)은 없다
-    assert set(received.paths) == {'/v1/traces'}
+    assert 'http_server_requests' in received.metric_names()
+    # FastAPI 가 스스로 내보내는 것(span, 메트릭, 로그)은 없다. 우리가 만든 것만 간다
+    assert set(received.paths) == {'/v1/traces', '/v1/metrics'}
     assert all(scope.scope.name == 'trpg-server' for scope in received.scopes())
+    assert all(scope.scope.name == 'trpg-server' for scope in received.metric_scopes())
+    # span 과 메트릭이 한 출처다(같은 service.instance.id)
+    assert received.resource() == received.metric_resource()
 
 
 async def test_a_scope_that_is_not_http_gets_no_span():

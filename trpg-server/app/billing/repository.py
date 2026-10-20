@@ -11,11 +11,11 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import and_, exists, func, or_, select, update
+from sqlalchemy import Select, and_, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
-from app.billing.models import DUE_STATUSES, OPEN_STATUSES, ChargeStatus, NarrationCharge
+from app.billing.models import DUE_STATUSES, OPEN_STATUSES, UNFINISHED_STATUSES, ChargeStatus, NarrationCharge
 from app.rounds.models import Round
 from app.tables.models import GameTable, TableMember, TableStatus
 
@@ -238,3 +238,24 @@ async def reprice_round(
         .execution_options(synchronize_session=False)
     )
     return (await session.execute(statement)).rowcount
+
+
+def unfinished_by_status() -> Select:
+    """
+    끝나지 않은 청구의 수를 상태마다 세는 쿼리.
+
+    조건을 두 부분 색인의 조건(DUE_STATUSES 또는 OPEN_STATUSES)으로 나눠 적는다. 그래야 PostgreSQL 이 두 색인
+    (ix_narration_charges_due, ix_narration_charges_open)을 합쳐 읽는다(BitmapOr). 다섯 상태를 IN 하나로 적으면
+    어느 색인의 조건에도 들지 않아 표 전체를 읽는다. 끝난 청구는 쌓이기만 하므로 표가 커진다(tests/test_metrics.py).
+    """
+    return (
+        select(NarrationCharge.status, func.count())
+        .where(or_(NarrationCharge.status.in_(DUE_STATUSES), NarrationCharge.status.in_(OPEN_STATUSES)))
+        .group_by(NarrationCharge.status)
+    )
+
+
+async def count_unfinished(session: AsyncSession) -> dict[str, int]:
+    """끝나지 않은 청구의 수를 상태마다 센다(UNFINISHED_STATUSES). 없는 상태도 0 으로 넣는다."""
+    counted = {status: count for status, count in (await session.execute(unfinished_by_status())).all()}
+    return {status.value: counted.get(status, 0) for status in UNFINISHED_STATUSES}

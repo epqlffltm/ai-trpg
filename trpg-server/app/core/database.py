@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import Settings
+from app.observability.pool_metrics import MeteredPool
 
 # 제약과 색인의 이름을 짓는 규칙.
 # 정해 두지 않으면 DB 가 제멋대로 이름을 붙이거나(색인, 외래 키) 이름 없이 만든다(CHECK).
@@ -43,6 +44,11 @@ class Base(DeclarativeBase):
 # DB 에 연결을 맺을 때 기다리는 최대 시간(초).
 # DB 가 응답하지 않을 때 요청이 오래 매달리지 않게 한다
 CONNECT_TIMEOUT_SECONDS = 5
+# 풀이 늘 들고 있는 연결과, 붐빌 때 더 맺는 연결. SQLAlchemy 의 기본값을 적어 둔다.
+# 둘의 합이 메트릭의 db_pool_connections_max 다(app/observability/pool_metrics.py)
+POOL_SIZE = 5
+MAX_OVERFLOW = 10
+POOL_MAX_CONNECTIONS = POOL_SIZE + MAX_OVERFLOW
 
 # 확장(pgvector)이 놓인 스키마. 슈퍼유저가 만들어 두고 게임 계정에게 읽기만 준다
 # (docker/postgres/init/03-extensions.sql).
@@ -66,6 +72,7 @@ def create_engine(settings: Settings) -> AsyncEngine:
     search_path 는 "스키마 이름 없이 테이블을 부르면 어느 스키마에서 찾는가" 다.
     연결할 때마다 설정의 스키마로 맞춘다. 그래서 코드에 스키마 이름을 적지 않아도 되고,
     테스트는 설정만 바꿔서 테스트용 스키마를 쓴다. 확장의 스키마도 함께 둔다(search_path).
+    풀은 연결을 기다린 시간을 재는 것이다(MeteredPool). 그 밖은 SQLAlchemy 의 기본 풀과 같다.
     """
     return create_async_engine(
         settings.database_url,
@@ -76,6 +83,9 @@ def create_engine(settings: Settings) -> AsyncEngine:
         # 풀에서 꺼낸 연결이 살아 있는지 먼저 확인한다.
         # DB 가 재시작된 뒤에 끊긴 연결을 그대로 쓰다가 실패하는 것을 막는다
         pool_pre_ping=True,
+        poolclass=MeteredPool,
+        pool_size=POOL_SIZE,
+        max_overflow=MAX_OVERFLOW,
     )
 
 
