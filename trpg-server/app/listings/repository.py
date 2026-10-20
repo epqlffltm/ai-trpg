@@ -13,6 +13,7 @@ import uuid
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.assets.models import Asset, Rating, ScenarioVersion
 from app.listings.models import Genre, Listing
@@ -74,8 +75,12 @@ async def list_public(
     limit: int,
     offset: int,
 ) -> list[PublicRow]:
-    """공개된 시나리오를 최근에 공개한 것부터 돌려준다."""
-    query = filtered(visible(allowed_ratings), genre, tag)
+    """
+    공개된 시나리오를 최근에 공개한 것부터 돌려준다.
+
+    판의 굳힌 내용(snapshot)은 읽지 않는다. 목록에는 싣지 않는 큰 문서다(하나를 볼 때만 읽는다, #428).
+    """
+    query = filtered(visible(allowed_ratings), genre, tag).options(defer(ScenarioVersion.snapshot))
     # 공개한 시각이 같은 것끼리의 순서도 정해 둔다. 정하지 않으면 쪽을 넘길 때 같은 것이 두 번 나오거나 빠진다
     query = query.order_by(Listing.published_at.desc(), Listing.scenario_id).limit(limit).offset(offset)
     result = await session.execute(query)

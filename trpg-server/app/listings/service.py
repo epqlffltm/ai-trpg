@@ -206,6 +206,18 @@ async def get_public(session: AsyncSession, viewer: AccessClaims, scenario_id: u
     return row
 
 
+async def get_public_detail(
+    session: AsyncSession, viewer: AccessClaims, scenario_id: uuid.UUID
+) -> tuple[PublicRow, str | None]:
+    """
+    공개된 시나리오 하나와 그 시나리오의 추천 서술 모델을 돌려준다(#428). 없으면 AssetNotFoundError.
+
+    추천 모델은 시나리오의 지금 값이다. 판에 굳히지 않는다(app/assets/scenarios/repository.py 의 recommended_model).
+    """
+    row = await get_public(session, viewer, scenario_id)
+    return row, await versions.recommended_model(session, scenario_id)
+
+
 async def list_public(
     session: AsyncSession, viewer: AccessClaims, genre: Genre | None, tag: str | None, limit: int, offset: int
 ) -> tuple[list[PublicRow], int]:
