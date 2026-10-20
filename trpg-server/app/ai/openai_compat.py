@@ -3,7 +3,7 @@
 """
 OpenAI 와 같은 모양의 주소(/chat/completions)를 부르는 provider.
 
-Ollama, LM Studio, vLLM, 그리고 같은 모양을 받는 클라우드 API(OpenAI, Z.ai)를 이 하나로 부른다.
+Ollama, LM Studio, vLLM, 그리고 같은 모양을 받는 클라우드 API(OpenAI, Z.ai, DeepInfra)를 이 하나로 부른다.
 주소, 모델 이름, 키, 모델이 받는 칸만 다르다. 어느 모델을 어떤 값으로 부를지는 app/ai/routing.py 가 정한다.
 SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되고, 앱이 이미 httpx 클라이언트를 하나 들고 있다.
 
@@ -146,7 +146,8 @@ class OpenAICompatProvider:
 
     client 는 앱이 들고 있는 httpx 클라이언트다. 닫는 것은 앱이 한다.
     base_url 은 /chat/completions 앞까지다(Ollama 면 http://127.0.0.1:11434/v1, OpenAI 면 https://api.openai.com/v1).
-    kind 는 호출의 기록에 적는 창구의 이름이다. 서버 곁의 모델이면 openai_compat, OpenAI 면 openai, Z.ai 면 zai 다.
+    kind 는 호출의 기록에 적는 창구의 이름이다. 서버 곁의 모델이면 openai_compat, OpenAI 면 openai, Z.ai 면 zai,
+    DeepInfra 면 deepinfra 다.
     api_key 는 repr 에 나오지 않는다(SecretStr).
     """
 

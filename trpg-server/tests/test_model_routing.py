@@ -103,6 +103,7 @@ GLM_ALWAYS = replace(GLM, slug='glm-5-3', api_model_id='glm-5.3', reasoning_styl
 GEMINI_URL = 'https://generativelanguage.googleapis.com'
 ANTHROPIC_URL = 'https://api.anthropic.com'
 ZAI_URL = 'https://api.z.ai/api/paas/v4'
+DEEPINFRA_URL = 'https://api.deepinfra.com/v1/openai'
 
 
 @dataclass
@@ -152,6 +153,7 @@ def make_router(
     anthropic = Endpoint(ANTHROPIC_URL, SecretStr(KEY), 'anthropic') if with_key else None
     gemini = Endpoint(GEMINI_URL, SecretStr(KEY), 'gemini') if with_key else None
     zai = Endpoint(ZAI_URL, SecretStr(KEY), 'zai') if with_key else None
+    deepinfra = Endpoint(DEEPINFRA_URL, SecretStr(KEY), 'deepinfra') if with_key else None
     return ModelRouter(
         lookup=lookup or FakeLookup({model.slug: model for model in models}),
         client=client,
@@ -163,6 +165,7 @@ def make_router(
         anthropic=anthropic,
         gemini=gemini,
         zai=zai,
+        deepinfra=deepinfra,
     )
 
 
