@@ -10,7 +10,8 @@
 
 목록의 모델을 부를 수 없으면 ProviderError 다. 다른 모델로 바꿔 부르지 않는다. 값이 다른 모델로 몰래 넘어가지 않는다.
   - model_unavailable: 꺼졌거나 은퇴했다. 관리 명령으로 켜야 한다(scripts/models.py).
-  - provider_not_configured: 그 창구의 키가 없다(OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, ZAI_API_KEY).
+  - provider_not_configured: 그 창구의 키가 없다(OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, ZAI_API_KEY,
+    DEEPINFRA_API_KEY).
   - provider_unsupported: 그 창구를 부르는 코드가 아직 없다. 지금은 모든 창구에 코드가 있다. 새 창구를 더할 때 쓴다.
 이때는 부르지 않았으므로 호출의 기록(ai_invocations)이 없다. 대신 warning 한 줄을 남긴다.
 
@@ -58,6 +59,7 @@ OPENAI_KIND = 'openai'
 ANTHROPIC_KIND = 'anthropic'
 GEMINI_KIND = 'gemini'
 ZAI_KIND = 'zai'
+DEEPINFRA_KIND = 'deepinfra'
 
 
 def today_utc() -> date:
@@ -113,8 +115,9 @@ class ModelRouter:
     이름으로 provider 를 고른다. 앱에 하나 둔다(app/rounds/narrator_setup.py 의 build_router).
 
     lookup: 모델 목록에서 찾는 것(ModelLookup). 게임 서버는 부를 때마다 DB 에서 읽는다(app/catalog/lookup.py).
-    local: 서버 곁의 모델의 창구(LLM_BASE_URL). openai, anthropic, gemini, zai: 외부 API 의 창구. 키가 없으면 None 이다.
-    OpenAI 와 같은 모양의 창구(openai, zai)는 같은 provider 로 부른다. 주소와 키와 받는 칸만 다르다.
+    local: 서버 곁의 모델의 창구(LLM_BASE_URL). openai, anthropic, gemini, zai, deepinfra: 외부 API 의 창구.
+    키가 없으면 None 이다.
+    OpenAI 와 같은 모양의 창구(openai, zai, deepinfra)는 같은 provider 로 부른다. 주소와 키와 받는 칸만 다르다.
     같은 모양의 창구를 더할 때는 여기에 칸을 하나, endpoint_for 의 표에 줄을 하나 더한다.
     local_options: 서버 곁의 모델이 받는 칸(LLM_SUPPORTS_REASONING). 목록에 없는 이름에 쓴다.
     today 는 테스트가 바꿔 꽂는다.
@@ -130,6 +133,7 @@ class ModelRouter:
     anthropic: Endpoint | None = None
     gemini: Endpoint | None = None
     zai: Endpoint | None = None
+    deepinfra: Endpoint | None = None
 
     def endpoint_for(self, provider: Provider) -> Endpoint:
         """창구의 이름으로 창구를 고른다. 키가 없거나 코드가 없으면 ProviderError."""
@@ -140,6 +144,7 @@ class ModelRouter:
             Provider.ANTHROPIC: self.anthropic,
             Provider.GEMINI: self.gemini,
             Provider.ZAI: self.zai,
+            Provider.DEEPINFRA: self.deepinfra,
         }
         if provider not in external:
             raise ProviderError(PROVIDER_UNSUPPORTED)

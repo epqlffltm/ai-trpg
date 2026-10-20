@@ -19,7 +19,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.ai.calls import CallLog
 from app.ai.openai_compat import WireOptions
 from app.ai.retry_budget import RetryBudget
-from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ZAI_KIND, Endpoint, ModelRouter
+from app.ai.routing import (
+    ANTHROPIC_KIND,
+    DEEPINFRA_KIND,
+    GEMINI_KIND,
+    LOCAL_KIND,
+    OPENAI_KIND,
+    ZAI_KIND,
+    Endpoint,
+    ModelRouter,
+)
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.metered import MeteredCallLog
 from app.catalog.lookup import DbModelLookup
@@ -64,6 +73,13 @@ def zai_endpoint(settings: Settings) -> Endpoint | None:
     return Endpoint(base_url=settings.zai_base_url, api_key=settings.zai_api_key, kind=ZAI_KIND)
 
 
+def deepinfra_endpoint(settings: Settings) -> Endpoint | None:
+    """DeepInfra 의 창구(#398, DeepSeek). OpenAI 와 같은 모양이다. 키를 적지 않았으면 None 이다."""
+    if not settings.deepinfra_api_key.get_secret_value():
+        return None
+    return Endpoint(base_url=settings.deepinfra_base_url, api_key=settings.deepinfra_api_key, kind=DEEPINFRA_KIND)
+
+
 def build_router(
     settings: Settings, client: httpx.AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> ModelRouter:
@@ -76,6 +92,7 @@ def build_router(
         anthropic=anthropic_endpoint(settings),
         gemini=gemini_endpoint(settings),
         zai=zai_endpoint(settings),
+        deepinfra=deepinfra_endpoint(settings),
         timeout=settings.llm_timeout_seconds,
         local_options=WireOptions(supports_reasoning=settings.llm_supports_reasoning),
     )
