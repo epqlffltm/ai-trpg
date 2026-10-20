@@ -5,7 +5,8 @@
 // 보호자 알림(internal/guardiannotice)과 같은 방식이다. 정리 작업(cmd/sweeper)이 한 바퀴마다 차례로 한다(Round).
 //
 //  1. 적기: 최근에 끝난 결제와 청약철회(주문), 준 환영 크레딧(지급 묶음)을 찾아 적는다(user_notices).
-//     7일 안에 사라질 무료 크레딧이 남은 사람도 적는다. 사람마다 7일에 한 번이다
+//     7일 안에 사라질 무료 크레딧이 남은 사람도 적는다. 사람마다 7일에 한 번이다.
+//     크레딧이 모자라 홀드를 걸지 못한 일은 여기서 찾지 않는다. 걸지 못한 그 자리(서버)가 적는다(RecordShort)
 //  2. 정리: 오래(StaleAfter, 7일) 보내지 못한 것은 보내지 않기로 하고, 끝난 지 30일(Retention)이 지난 것은 지운다
 //  3. 보내기: 적힌 것을 알림 서버에 보낸다. 닿지 못하면 간격을 늘려 다시 보내고, 알림 서버가 받지 않으면(버그) 실패로 둔다
 //
@@ -33,6 +34,8 @@ const (
 	KindWelcomeCredits Kind = "credit.welcome"
 	// KindCreditsExpiring 은 곧 사라질 무료 크레딧이 남았다는 것이다.
 	KindCreditsExpiring Kind = "credit.expiring"
+	// KindCreditsShort 는 크레딧이 모자라 홀드를 걸지 못했다는 것이다. 사람마다 하루(한국 날짜)에 한 번이다.
+	KindCreditsShort Kind = "credit.short"
 )
 
 const (
