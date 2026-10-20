@@ -265,6 +265,7 @@ def begin_closing(
     recovered = rests.settle(table, round_, hurt, dice)
     settled = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs)
     overdue = deadlines.expire_quests(table)
+    round_.expired_quests = [failure['entry_id'] for failure in overdue]
     after_overdue = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs) if overdue else []
     moves = build_moves(table, round_, ended, recovered, [*settled, *after_overdue])
     round_.moves = narration_request.dump_moves(moves)
@@ -485,7 +486,8 @@ async def load_closing_request(
       - GM 에게 보인 쪽지는 라운드가 열려 있는 동안 보낸 것이다. 닫기 시작한 뒤에 보낸 것은 다음 라운드로 간다.
       - 몬스터의 상태도 NPC 와 같다. 차례와 몬스터가 한 일은 닫기 시작할 때 라운드에 굳혀 둔 것(turns)이다.
     그래서 서술을 몇 번 다시 맡겨도 서술자는 같은 것을 받는다.
-    퀘스트의 상태만은 예외다. 방장이 언제든 바꾸고, 서술을 맡길 때의 것을 읽는다. 굳히지 않는 까닭:
+    퀘스트의 상태만은 예외다(이번 라운드에 기한을 넘긴 것만 굳힌다). 방장이 언제든 바꾸고, 서술을 맡길 때의 것을 읽는다.
+    남은 기한의 감각도 그때의 시계로 잰다. 굳히지 않는 까닭:
     결정적인 라운드가 닫힌 뒤 방장이 성공을 적으면, 그 라운드의 서술이 성공을 그릴 수 있어야 한다. 지금의 사실이 맞다.
     게임 안의 시각도 같다. 닫은 뒤에 방장이 "하룻밤 쉰다"를 정하면 그 라운드의 서술이 새벽에서 맺어야 한다.
     이야기의 바탕과 지난 라운드 몇 개는 가짜 서술자는 읽지 않고, 언어 모델의 서술자가 읽는다.
@@ -510,7 +512,7 @@ async def load_closing_request(
         host_id=table.host_id,
         people=to_people(scene.cast, snapshot.rulebook.rules),
         whispers=[narration_request.to_whisper_note(whisper) for whisper in whispers],
-        quests=narration_request.to_quest_notes(table, snapshot),
+        quests=narration_request.to_quest_notes(table, snapshot, round_.expired_quests),
         monsters=to_monster_notes(snapshot, scene.monsters),
         turns=narration_request.to_turn_notes(round_.turns),
         clock=narration_request.to_clock_note(table),

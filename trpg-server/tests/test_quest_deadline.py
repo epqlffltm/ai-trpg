@@ -266,8 +266,9 @@ async def test_the_narrator_hears_that_the_quest_failed(
     await play(client, me, friend, table, narrated)
 
     first, second = narrator.requests
-    assert QuestNote(name='왕녀 구출', status='active') in first.quests
-    assert QuestNote(name='왕녀 구출', status='failed') in second.quests
+    # 첫 장면이 끝나는 9시에 기한(8시 20분)이 지난다. 다음 라운드가 마지막이다(#268)
+    assert QuestNote(name='왕녀 구출', status='active', pace='last') in first.quests
+    assert QuestNote(name='왕녀 구출', status='failed', missed_deadline=True) in second.quests
 
 
 # --- 작은 함수들 ---
