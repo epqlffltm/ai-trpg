@@ -194,7 +194,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PATCH | `/api/v1/game/scenarios/{id}/listing` | 소개 페이지 고치기. 보낸 칸만 바뀐다. 공개 중인데 조건을 못 갖추게 되면 409 | access 토큰 |
 | PUT | `/api/v1/game/scenarios/{id}/listing/publication` | 공개할 판 정하기. `version` 을 `null` 로 보내면 공개를 내린다. 조건을 못 갖췄으면 409 | access 토큰 |
 | GET | `/api/v1/game/listings` | 공개된 시나리오 목록. 최근에 공개한 것부터. `genre`, `tag`, `limit`, `offset` | access 토큰 |
-| GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다 | access 토큰 |
+| GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다. 목록의 칸에 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 능력치의 이름, 추천 서술 모델)이 더 있다(#428) | access 토큰 |
 | POST | `/api/v1/game/personas` | 보관함에 캐릭터 만들기. 201. 이름, 설명, 참고로 적어 두는 능력치(없어도 된다) | access 토큰 |
 | GET | `/api/v1/game/personas` | 내 보관함. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/personas/{id}` | 보관한 캐릭터 하나 | access 토큰 |
