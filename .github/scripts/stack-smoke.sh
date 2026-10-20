@@ -77,7 +77,7 @@ DASHBOARDS=docker/grafana/dashboards
 LOKI_LABELS=(container environment level mode service)
 # 메트릭을 OTLP 로 미는 서버(docs/observability.md 의 "2. 메트릭"). 서버에 메트릭을 붙이면 여기에 더한다.
 # 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다
-METRIC_SERVERS=(billing)
+METRIC_SERVERS=(billing notification)
 # span 을 내보내는 서버(docs/observability.md 의 "3. 추적"). 서버에 span 을 붙이면 여기와 아래 둘에 더한다
 TRACE_SERVERS=(auth trpg board billing notification)
 # 추적 번호를 실어 한 번 부를 주소(메서드와 경로). 401 이어도 된다. 요청의 span 은 걸린다. 상태 확인은 span 이 없다
@@ -805,6 +805,11 @@ check_server_metrics() {
   send_unsigned_webhook
   report "결제 서버가 서명 없는 알림을 센다(payment_webhooks_total, result=bad_signature)" \
     eventually prometheus_finds 'payment_webhooks_total{service="billing-server", provider="fake", result="bad_signature"}'
+  # 알림 서버. 정리 작업은 뜨면 바로 한 바퀴 돈다. 알림은 check 의 앞에서 게임 서버와 게시판 서버가 하나씩 넣었다
+  report "알림 서버의 정리 작업이 작업 메트릭을 민다(notification.prune)" \
+    eventually prometheus_finds 'background_jobs_finished_total{service="notification-server", operation="notification.prune", result="success"}'
+  report "알림 서버가 넣은 알림을 서버마다 센다(notifications_received_total, outcome=created)" \
+    eventually prometheus_finds 'notifications_received_total{service="notification-server", source="board", outcome="created"}'
 }
 
 # --- 대시보드(observability 프로필) ---

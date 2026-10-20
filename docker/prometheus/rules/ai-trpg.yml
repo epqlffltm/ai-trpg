@@ -189,3 +189,46 @@ groups:
         annotations:
           summary: 지난 하루의 대사가 성공하지 못했다
           description: 장부의 검사가 어긋났거나 DB 에 닿지 못했다. billing-cron 의 로그(operation=reconcile.run)를 본다
+
+  - name: notification-server
+    rules:
+      - alert: NotificationDatabaseUnreachable
+        # 준비 상태 확인(/health/ready)이 마지막으로 본 DB. compose 의 healthcheck 가 10초마다 부른다
+        expr: db_up{service="notification-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 알림 서버가 DB 에 닿지 못한다
+          description: 알림을 넣지도 읽지도 못한다. 넣는 서버들은 발송함에 쌓아 두고 다시 보낸다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+      - alert: NotificationServerErrors
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        expr: |
+          sum(rate(http_server_requests_total{service="notification-server", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="notification-server"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="notification-server"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: '알림 서버의 5xx 가 {{ $value | humanizePercentage }} 다'
+          description: 대시보드 notification-server 의 "상태 코드"와 로그의 error_code 를 본다
+
+      - alert: NotificationsRejected
+        # 표에 없는 종류(refused)이거나 같은 열쇠의 다른 알림(conflict)이다. 넣은 서버의 버그라 다시 보내도 받지 않는다
+        expr: sum by (source, outcome) (increase(notifications_received_total{service="notification-server", outcome=~"refused|conflict"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $labels.source }} 서버가 넣은 알림을 받지 않았다({{ $labels.outcome }})'
+          description: 넣은 서버의 로그(notification.rejected)와 알림 서버의 로그(notification.kind_refused)를 본다. 그 알림은 넣은 서버의 발송함에 failed 로 남는다
+
+      - alert: NotificationPruneFailing
+        # 정리 작업은 한 시간마다 돈다. 지난 세 시간의 바퀴가 실패했으면 오래된 알림이 쌓인다
+        expr: sum(increase(background_jobs_finished_total{service="notification-server", operation="notification.prune", result="server_error"}[3h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: 알림 서버의 정리 작업이 실패했다
+          description: 보관 기간이 지난 알림이 지워지지 않는다. 알림 서버의 로그(operation=notification.prune)를 본다
