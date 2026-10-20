@@ -605,10 +605,16 @@ class QuestNote:
 
     status 는 hidden, active, succeeded, failed 다. 숨긴(hidden) 것은 플레이어가 아직 모르는 일이다.
     서술자는 숨긴 것을 드러내지 않고, 진행 중인 것의 결말을 먼저 정하지 않는다.
+
+    기한(#268). 숫자를 주지 않는다. 숫자를 주면 모델이 그것을 장면에 쓴다.
+    pace 는 진행 중이고 기한이 있는 것의 남은 시간의 감각이다(ample 넉넉함, tight 빠듯함, last 다 됨). 아니면 None.
+    missed_deadline 은 이번 라운드에 기한을 넘겨 실패했는가다. 숨긴 것에는 기한이 없다(드러날 때부터 센다).
     """
 
     name: str
     status: str
+    pace: str | None = None
+    missed_deadline: bool = False
 
 
 @dataclass(frozen=True)

@@ -64,8 +64,9 @@ from app.rounds.narrator import (
 )
 from app.rounds.state import loot_of, move_of, put_down_of, rest_of, search_of, steal_of, take_of
 from app.tables import quests
-from app.tables.models import GameTable
+from app.tables.models import GameTable, QuestStatus, TableQuest
 from app.tables.npc_attitudes import ATTITUDE_WORDS
+from app.tables.quests import CatalogQuest
 from app.whispers.models import Whisper
 
 # 굳혀 둔 행동들을 읽는 법. 모양이 틀리면 ValidationError 를 낸다. 우리가 쓴 문서이니 틀렸으면 버그다
@@ -474,15 +475,67 @@ def to_whisper_note(whisper: Whisper) -> WhisperNote:
     )
 
 
-def to_quest_notes(table: GameTable, snapshot: Snapshot) -> list[QuestNote]:
+class Pace:
     """
-    테이블의 퀘스트들을 서술자에게 줄 모양으로 바꾼다. 판의 순서다. 이름과 지금 상태뿐이다.
+    진행 중인 퀘스트의 남은 시간의 감각(#268). 서술자에게 숫자 대신 준다.
+
+    재는 때는 이번 장면이 끝나는 시각(다음 라운드가 열리는 때)이다. 기한이 그 시각에 닿았으면 다음 라운드가 마지막이다.
+    다음 라운드가 닫힐 때 실패로 바뀌고(app/tables/quests.py 의 is_overdue), 그 라운드에 이루면 성공이다.
+    """
+
+    # 기한의 절반보다 많이 남았다
+    AMPLE = 'ample'
+    # 절반 이하가 남았다
+    TIGHT = 'tight'
+    # 이번 장면이 끝날 때 기한이 지난다. 다음 라운드가 마지막이다
+    LAST = 'last'
+
+
+def pace_of(limit_minutes: int | None, due_at: int | None, scene_end: int) -> str | None:
+    """남은 시간의 감각. 기한이 없으면 None 이다. scene_end 는 이번 장면이 끝나는 게임 안의 시각(분)이다."""
+    if limit_minutes is None or due_at is None:
+        return None
+    left = due_at - scene_end
+    if left <= 0:
+        return Pace.LAST
+    return Pace.AMPLE if left * 2 > limit_minutes else Pace.TIGHT
+
+
+def scene_end_of(table: GameTable) -> int | None:
+    """이번 장면이 끝나는 게임 안의 시각(분). 지금 시각에 다음 라운드까지 흐를 시간을 더한다. 시계가 없으면 None."""
+    if table.clock is None:
+        return None
+    return table.clock.minutes + state.next_step(table)
+
+
+def to_quest_note(row: TableQuest, quest: CatalogQuest, scene_end: int | None, expired: set[str]) -> QuestNote:
+    """
+    퀘스트 하나를 서술자에게 줄 모양으로. 진행 중이면 남은 시간의 감각을, 이번 라운드에 기한을 넘겼으면 그것을 붙인다.
+
+    기한을 넘긴 것은 실패로 끝나 더 바뀌지 않는다(방장도 끝난 퀘스트를 바꾸지 못한다). 그래서 라운드에 적힌 것만 본다.
+    """
+    active = row.status == QuestStatus.ACTIVE and scene_end is not None
+    return QuestNote(
+        name=quest.name,
+        status=row.status,
+        pace=pace_of(quest.time_limit_minutes, row.due_at, scene_end) if active else None,
+        missed_deadline=str(row.entry_id) in expired,
+    )
+
+
+def to_quest_notes(table: GameTable, snapshot: Snapshot, expired: list[str] | None = None) -> list[QuestNote]:
+    """
+    테이블의 퀘스트들을 서술자에게 줄 모양으로 바꾼다. 판의 순서다. 이름과 지금 상태와 기한의 감각이다.
+
+    expired 는 이번 라운드에 기한을 넘겨 실패한 퀘스트들이다(Round.expired_quests).
 
     끝난 것도 준다. 이미 정해진 결말이라 서술이 그와 어긋나지 않게 한다. 사건의 글은 로어북 검색이 따로 준다.
     """
     catalog = quests.catalog(snapshot)
+    scene_end = scene_end_of(table)
+    missed = set(expired or [])
     return [
-        QuestNote(name=catalog[row.entry_id].name, status=row.status)
+        to_quest_note(row, catalog[row.entry_id], scene_end, missed)
         for row in quests.in_catalog_order(table.quests, catalog)
     ]
 

@@ -154,6 +154,12 @@ class Round(Base):
     # 선언이 아니라 라운드에 적는다. 쓰러진 사람은 선언을 내지 않아도 되기 때문이다
     death_saves: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'"))
 
+    # 이 라운드가 닫힐 때 기한을 넘겨 실패한 퀘스트들(app/rounds/deadlines.py, #268). 판의 순서다. 없으면 빈 목록이다.
+    # 하나하나가 사건 항목의 id(글)다. 서술이 "이번 라운드에 기한을 넘겼다"를 그리게 한다.
+    # 죽음의 굴림처럼 닫기 시작할 때 한 번 적고, 서술을 다시 맡겨도 같은 것을 읽는다.
+    # 이 칸이 생기기 전의 라운드는 빈 목록이다
+    expired_quests: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'"))
+
     # 이 라운드의 차례(app/rounds/initiative.py). 판정한 순서다. 장면에 맞붙은 몬스터가 없었으면 빈 목록이다.
     # 그때는 앉은 순서로 판정했다. 이 칸이 생기기 전에 닫은 라운드도 빈 목록이다.
     # 하나하나가 {kind, first, score, tiebreak} 에 앉은 사람이면 {user_id, character_name},
