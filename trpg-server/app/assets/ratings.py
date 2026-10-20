@@ -27,15 +27,16 @@ class AdultContentRequiredError(Exception):
 ALL_AGES_ONLY: tuple[Rating, ...] = (Rating.ALL,)
 
 
-def allowed_ratings(viewer: AccessClaims) -> list[Rating]:
+def allowed_ratings(viewer: AccessClaims | None) -> list[Rating]:
     """
     이 사람이 보고 쓸 수 있는 등급. 등급을 가르는 곳은 이 함수 하나다(#59, #390).
 
     토큰이 성인용 내용을 볼 수 있다고 하거나(adult_content) 운영자면 전체 이용가와 성인용, 아니면 전체 이용가만이다.
+    로그인하지 않은 사람(None, 공개 목록과 소개만, #530)은 전체 이용가만이다.
     목록, 상세, 로비, 테이블 만들기와 들어오기, 시나리오 쓰기와 공개가 모두 이것을 본다. 들어온 뒤에는 다시 보지 않는다.
     인증 서버가 생년월일로 정하는 값이라, 한 번 볼 수 있게 되면 그 뒤로 계속 볼 수 있기 때문이다.
     """
-    if viewer.adult_content or viewer.is_operator:
+    if viewer is not None and (viewer.adult_content or viewer.is_operator):
         return [Rating.ALL, Rating.ADULT]
     return [Rating.ALL]
 

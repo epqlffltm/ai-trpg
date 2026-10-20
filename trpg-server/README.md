@@ -194,8 +194,8 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/scenarios/{id}/listing` | 내 시나리오의 공개 정보(소개 페이지와 공개 중인 판). 아직 쓰지 않았으면 빈 것 | access 토큰 |
 | PATCH | `/api/v1/game/scenarios/{id}/listing` | 소개 페이지 고치기. 보낸 칸만 바뀐다. 공개 중인데 조건을 못 갖추게 되면 409 | access 토큰 |
 | PUT | `/api/v1/game/scenarios/{id}/listing/publication` | 공개할 판 정하기. `version` 을 `null` 로 보내면 공개를 내린다. 조건을 못 갖췄으면 409 | access 토큰 |
-| GET | `/api/v1/game/listings` | 공개된 시나리오 목록. 최근에 공개한 것부터. `genre`, `tag`, `players`, `limit`, `offset` | access 토큰 |
-| GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다. 목록의 칸에 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 능력치의 이름, 추천 서술 모델)이 더 있다(#428) | access 토큰 |
+| GET | `/api/v1/game/listings` | 공개된 시나리오 목록. 최근에 공개한 것부터. `genre`, `tag`, `players`, `limit`, `offset` | 없어도 된다(전체 이용가만, #530) |
+| GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다. 목록의 칸에 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 능력치의 이름, 추천 서술 모델)이 더 있다(#428) | 없어도 된다(전체 이용가만, #530) |
 | POST | `/api/v1/game/personas` | 보관함에 캐릭터 만들기. 201. 이름, 설명, 참고로 적어 두는 능력치(없어도 된다) | access 토큰 |
 | GET | `/api/v1/game/personas` | 내 보관함. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/personas/{id}` | 보관한 캐릭터 하나 | access 토큰 |
@@ -295,6 +295,14 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
    버릴 때 `error` 한 줄을 남긴다(`error_code: auth.jwks_unavailable`).
 
 그래서 인증 서버가 잠깐(30분 안) 죽어도, 키를 가져온 게임 서버는 이미 로그인한 사용자의 요청을 계속 처리한다.
+
+**로그인 없이 읽는 길(#530).** 공개 목록(`GET /listings`)과 시나리오 소개(`GET /listings/{id}`)만 토큰 없이 받는다(`app/auth/dependencies.py` 의 `OptionalUser`).
+- `Authorization` 머리말이 없으면 로그인하지 않은 사람이다. 등급은 전체 이용가만이다(`app/assets/ratings.py` 의 `allowed_ratings(None)`).
+- 머리말이 있으면 다른 길과 똑같이 검증한다. 틀렸거나 만료됐으면 401, 키가 없으면 503 이다. 로그인하지 않은 것으로 넘기지 않는다.
+  넘기면 만료된 토큰을 가진 화면이 갱신할 때를 모르고, 성인 등급이 말없이 빠진 목록을 받는다. `Basic` 처럼 Bearer 가 아닌 값도 401 이다.
+- 로그인하지 않은 요청의 수는 프록시가 IP 마다 센다(`docker/nginx/templates/http.inc.template` 의 `anonymous`, 1초에 5번, 한꺼번에 10번).
+  머리말이 있는 요청은 이 구역에서 세지 않는다. 아무 값이나 넣어 피하면 위의 401 을 받는다. 게임 서버는 IP 를 쓰지 않는다.
+- 그 밖의 길은 모두 그대로 로그인이 필요하다.
 
 **왜 30분에서 끊나.** 4 만 있으면 인증 서버에 닿지 못하는 동안 옛 키를 끝없이 믿는다.
 서명 키가 새서 인증 서버가 그 키를 빼도(긴급 폐기) 게임 서버는 그 키로 만든 토큰을 계속 받고, 인증 서버를 쓰러뜨리면 그 기간을 원하는 만큼 늘릴 수 있다.

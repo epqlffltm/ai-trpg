@@ -16,6 +16,14 @@ limit_req_zone $binary_remote_addr zone=auth_sensitive:10m rate=10r/m;
 limit_req_zone $binary_remote_addr zone=search:10m rate=2r/s;
 # 그 밖의 API. 한 IP 를 여럿이 쓰는 곳(PC방, 학교)도 있어서 넉넉하게 둔다. 홍수만 막는다
 limit_req_zone $binary_remote_addr zone=api:10m rate=20r/s;
+# 로그인하지 않은 요청(#530). 게임 서버의 공개 목록과 시나리오 소개만 로그인 없이 열린다. 1초에 5번.
+# Authorization 머리말이 없을 때만 IP 로 센다. 키가 빈 글자면 nginx 는 세지 않는다(로그인한 사람은 api 구역만 센다).
+# 아무 값이나 머리말에 넣어 이 구역을 피하면 서버가 토큰을 검증해 401 로 막는다. 목록은 나가지 않는다
+map $http_authorization $anonymous_key {
+    ""      $binary_remote_addr;
+    default "";
+}
+limit_req_zone $anonymous_key zone=anonymous:10m rate=5r/s;
 # 오래 열려 있는 연결(게임 서버의 SSE). 동시에 열린 수를 센다
 limit_conn_zone $binary_remote_addr zone=streams:10m;
 limit_req_status 429;
