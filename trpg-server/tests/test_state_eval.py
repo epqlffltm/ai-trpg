@@ -5,6 +5,7 @@
 
 보는 것은 넷이다.
   - 검사: 금지한 낱말, 꼭 나올 낱말, 따옴표 속 글(짧은 소리까지 센다), 어느 장면에나 보는 의심거리.
+    퀘스트의 기한의 낱말(서두름, 놓침)은 기한이 다 됐거나 끝을 맺은 표현만 센다(측정의 장면을 읽고 정했다).
   - 장면: 서버의 조립을 거쳐 프롬프트가 만들어진다. 금지한 낱말이 프롬프트에 먼저 있지 않다(있으면 검사가 뜻이 없다).
     진짜 이름은 GM 메모에만 있다. 말을 못 하게 한 장면에는 말할 수 있는 NPC 가 없다. 판정의 성패가 장면의 뜻과 맞다.
   - 돌리기: 가짜 provider 로 서술하고 검사한다. provider 의 실패와 잘린 답도 결과에 적고 멈추지 않는다.
@@ -104,6 +105,41 @@ def test_a_pattern_is_caught_once_per_text():
 )
 def test_clock_digits_are_caught(scene: str, caught: list[str]):
     assert cases.CLOCK_DIGITS.violations(scene) == caught
+
+
+@pytest.mark.parametrize(
+    ('scene', 'passed'),
+    [
+        # narration-41, 42 를 재 본 장면에서 옮겼다. 기한이나 기회가 다 됐다는 표현은 센다
+        ('도난당한 엔진의 행방을 쫓는 시간은 이제 얼마 남지 않았다.', True),
+        ('도주하는 불빛이 멀어지는 만큼 시간의 끝이 코앞까지 다가오고 있었다.', True),
+        ('놓치면 다시는 기회가 오지 않을 것 같은 예감이 심장을 두드렸다.', True),
+        # 기한과 상관없는 압박감과 그냥 쫓는 장면은 세지 않는다
+        ('길 위로 드리워진 그림자는 조금씩 길을 가로막으며 기묘한 압박감을 더했다.', False),
+        ('리엔은 앞선 바이크가 남긴 자국을 놓치지 않으려 시선을 고정했다.', False),
+    ],
+)
+def test_hurry_counts_only_a_deadline_running_out(scene: str, passed: bool):
+    (finding,) = run_checks(scene, (Require('서두름', cases.HURRY_WORDS),))
+
+    assert finding.passed is passed
+
+
+@pytest.mark.parametrize(
+    ('scene', 'passed'),
+    [
+        # 일이 틀어졌다고 맺은 장면은 센다
+        ('리엔의 시선이 닿는 곳에는 더 이상 되찾을 수 없는 빈자리만이 남겨져 있었다.', True),
+        ('잡아야 했던 기회는 이미 저 멀리 은하의 너머로 흘러가 버렸다.', True),
+        # 아직 쫓는 장면은 세지 않는다
+        ('멀어지는 화물선의 거대한 실루엣을 향해 바이크는 궤적을 그리며 질주했다.', False),
+        ('잡을 수 있을 것 같으면서도 결코 닿지 않을 듯한 거리였다.', False),
+    ],
+)
+def test_lost_counts_only_an_ending(scene: str, passed: bool):
+    (finding,) = run_checks(scene, (Require('놓침', cases.LOST_WORDS),))
+
+    assert finding.passed is passed
 
 
 def test_checks_run_in_order_and_report_passing():
