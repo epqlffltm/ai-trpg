@@ -5,7 +5,8 @@
 
 주소가 두 갈래다.
   - /scenarios/{id}/listing: 제작자가 자기 시나리오의 소개 페이지를 고치고 공개할 판을 정한다.
-  - /listings: 누구나(로그인한 사람) 공개된 시나리오를 본다.
+  - /listings: 누구나 공개된 시나리오를 본다. 로그인하지 않아도 전체 이용가는 본다(#530).
+    로그인하지 않은 요청의 수는 프록시가 IP 마다 따로 센다(docker/nginx/templates/http.inc.template 의 anonymous).
 """
 
 import uuid
@@ -20,7 +21,7 @@ from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
-from app.auth.dependencies import CurrentUser
+from app.auth.dependencies import CurrentUser, OptionalUser
 from app.listings import service
 from app.listings.models import TAG_MAX_LENGTH, Genre, Listing
 from app.listings.repository import ListingFilter
@@ -156,16 +157,22 @@ Filter = Annotated[ListingFilter, Depends(to_filter)]
 
 
 @public_router.get('', response_model=PublicListingPage, status_code=status.HTTP_200_OK)
-async def list_listings(user: CurrentUser, session: Session, paging: Paging, where: Filter) -> PublicListingPage:
-    """공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원으로 거를 수 있다."""
+async def list_listings(user: OptionalUser, session: Session, paging: Paging, where: Filter) -> PublicListingPage:
+    """
+    공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원으로 거를 수 있다.
+
+    로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.
+    """
     rows, total = await service.list_public(session, user, where, paging.limit, paging.offset)
     return PublicListingPage(items=[to_public(*row) for row in rows], total=total)
 
 
 @public_router.get('/{scenario_id}', response_model=PublicListingDetail, status_code=status.HTTP_200_OK)
-async def read_public_listing(scenario_id: uuid.UUID, user: CurrentUser, session: Session) -> PublicListingDetail:
+async def read_public_listing(scenario_id: uuid.UUID, user: OptionalUser, session: Session) -> PublicListingDetail:
     """
     공개된 시나리오 하나를 돌려준다. 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 추천 모델)이 함께 있다.
+
+    로그인하지 않아도 읽는다(#530). 그때 성인용은 없는 것(404)이다.
     """
     (listing, asset, version), recommended = await service.get_public_detail(session, user, scenario_id)
     return to_public_detail(to_public(listing, asset, version), read_snapshot(version.snapshot), recommended)

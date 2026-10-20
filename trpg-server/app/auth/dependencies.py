@@ -7,6 +7,10 @@
 
     async def read_me(user: CurrentUser) -> ...
 
+로그인 없이도 읽는 API(공개 목록, #530)는 OptionalUser 를 적는다. 토큰을 보내지 않았으면 None 이다.
+토큰을 보냈는데 틀렸으면 로그인이 필요한 API 와 같이 401 이다. 로그인하지 않은 것으로 넘기지 않는다.
+넘기면 만료된 토큰을 가진 화면이 갱신할 때를 모르고, 성인 등급이 말없이 사라진 목록을 본다.
+
 검증의 결과를 HTTP 응답으로 바꾸는 일도 여기서 한다.
   - 토큰이 없거나 틀렸거나 끊긴 세션의 것이다 -> 401. 클라이언트는 토큰을 갱신하거나 다시 로그인한다.
   - 키를 구할 수 없어 확인하지 못했다 -> 503. 클라이언트의 잘못이 아니다. 로그아웃시키면 안 된다.
@@ -73,5 +77,22 @@ async def get_current_user(
         raise verification_unavailable() from error
 
 
+def sent_token(request: Request) -> bool:
+    """요청에 Authorization 머리말이 있는가. 값이 Bearer 가 아니어도 보낸 것으로 본다(검증에서 401)."""
+    return 'authorization' in request.headers
+
+
+async def get_optional_user(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> AccessClaims | None:
+    """토큰을 보내지 않았으면 None, 보냈으면 검증해 토큰의 주인을 돌려준다(틀렸으면 401, 키가 없으면 503)."""
+    if not sent_token(request):
+        return None
+    return await get_current_user(request, credentials)
+
+
 # 로그인이 필요한 API 가 인자의 형식으로 쓴다
 CurrentUser = Annotated[AccessClaims, Depends(get_current_user)]
+# 로그인 없이도 읽는 API 가 인자의 형식으로 쓴다. 로그인하지 않았으면 None 이다
+OptionalUser = Annotated[AccessClaims | None, Depends(get_optional_user)]
