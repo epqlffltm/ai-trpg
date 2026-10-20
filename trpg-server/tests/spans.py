@@ -4,7 +4,8 @@
 테스트가 남긴 span 을 읽는 도구.
 메모리에 모으는 것을 끼우고(spans.use_provider), 끝나면 아무것도 하지 않는 것으로 되돌린다.
 
-남기는 규칙은 서버와 같다(tracing.SAMPLER). 보내는 일(OTLP)은 하지 않는다. 보내는 길은 test_tracing_setup.py 가 본다.
+남기는 규칙은 서버와 같다(tracing.SAMPLER, 할 일이 없던 바퀴를 버리는 idle_rounds.DropIdleRounds).
+보내는 일(OTLP)은 하지 않는다. 보내는 길은 test_tracing_setup.py 가 본다.
 """
 
 from collections.abc import Iterator
@@ -15,6 +16,7 @@ from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from app.observability.idle_rounds import DropIdleRounds
 from app.observability.spans import tracer, use_provider
 from app.observability.tracing import SAMPLER
 
@@ -28,7 +30,7 @@ class SpanRecorder:
     def __init__(self) -> None:
         self.exporter = InMemorySpanExporter()
         self.provider = TracerProvider(sampler=SAMPLER)
-        self.provider.add_span_processor(SimpleSpanProcessor(self.exporter))
+        self.provider.add_span_processor(DropIdleRounds(SimpleSpanProcessor(self.exporter)))
 
     def ended(self) -> list[ReadableSpan]:
         """끝난 span 들. parent 가 건 것은 뺀다."""
