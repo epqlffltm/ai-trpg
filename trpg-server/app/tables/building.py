@@ -63,6 +63,7 @@ def build_table(
     return GameTable(
         host_id=host_id,
         version_id=version.id,
+        scenario_id=version.scenario_id,
         title=snapshot.title,
         # mode='json': UUID 같은 값을 JSON 에 넣을 수 있는 글자로 바꾼다
         content=snapshot.model_dump(mode='json'),

@@ -159,6 +159,7 @@ def to_summary(table: GameTable) -> TableSummary:
     """테이블을 목록용 응답으로 바꾼다."""
     return TableSummary(
         id=table.id,
+        scenario_id=table.scenario_id,
         title=table.title,
         status=table.status,
         rating=table.rating,

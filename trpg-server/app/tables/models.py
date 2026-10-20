@@ -182,6 +182,11 @@ class GameTable(Base):
     # 제작자에게 수익을 나눌 때, 판이 바뀌었다고 알려 줄 때 쓴다.
     # RESTRICT: 테이블이 가리키는 판의 행은 지울 수 없다
     version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('scenario_versions.id', ondelete='RESTRICT'), index=True)
+    # 그 판의 시나리오(#428). 판(version_id)으로도 찾을 수 있지만, 테이블을 읽을 때마다 판의 행을 함께 읽지 않으려고
+    # 따로 둔다(제목과 같은 까닭). 화면이 시나리오 소개(GET /listings/{scenario_id})로 돌아갈 때 쓴다.
+    # 판은 바뀌지 않으므로 어긋나지 않는다
+    # 로비가 시나리오로 거를 때도 쓴다(색인)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('scenarios.asset_id', ondelete='RESTRICT'), index=True)
 
     # 시나리오의 제목. content 안에도 있지만, 목록을 보여 줄 때 큰 문서를 열지 않으려고 따로 둔다
     title: Mapped[str] = mapped_column(String(TITLE_MAX_LENGTH))
