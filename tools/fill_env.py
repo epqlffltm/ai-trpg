@@ -114,6 +114,7 @@ SECRETS = (
     database('notification', 'NOTIFICATION_DB_PASSWORD'),
     shared('DB 메트릭 계정(monitor)', ('.env', 'MONITOR_DB_PASSWORD')),
     shared('Grafana 관리자', ('.env', 'GRAFANA_ADMIN_PASSWORD')),
+    shared('그림 저장소의 로컬 흉내', ('.env', 'IMAGE_STORE_SECRET_ACCESS_KEY')),
     shared('인증 서버의 비밀키', ('auth-server/.env', 'SECRET_KEY')),
     shared(
         '인증 서버 ↔ 결제 서버', ('auth-server/.env', 'BILLING_SECRET'), ('billing-server/.env', 'AUTH_SERVER_SECRET')

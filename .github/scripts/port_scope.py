@@ -36,6 +36,7 @@ PUBLISHERS = {
     # PC 에서 직접 띄운 서버가 붙는다
     'db': 'PC 에서 띄운 서버가 붙는 DB',
     'redis': 'PC 에서 띄운 서버가 붙는 Redis',
+    'object-store': 'PC 에서 띄운 서버가 붙는 그림 저장소(S3 의 로컬 흉내)',
     # 로그를 보는 화면(observability 프로필). SSH 터널로만 붙는다(README)
     'grafana': '로그를 보는 화면',
 }

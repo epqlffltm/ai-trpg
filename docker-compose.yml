@@ -1,9 +1,9 @@
 # docker-compose.yml
-# 공용 인프라(PostgreSQL, Redis)와 서버들. 서버마다 폴더가 따로라 어느 서버 폴더에도 두지 않고 루트에 둔다.
+# 공용 인프라(PostgreSQL, Redis, 그림 저장소)와 서버들. 서버마다 폴더가 따로라 어느 서버 폴더에도 두지 않고 루트에 둔다.
 #
 # 개발 중에는 인프라만 띄우고 서버는 PC 에서 직접 실행한다. 서버들은 app 프로필에 묶여 있어서 이 명령으로는 뜨지 않는다.
 #
-#   docker compose up -d          # DB 와 Redis, DB 의 백업만 시작
+#   docker compose up -d          # DB 와 Redis, DB 의 백업, 그림 저장소만 시작
 #   docker compose ps             # healthy 가 될 때까지 확인
 #   docker compose down           # 정지 (-v 를 붙이면 볼륨까지 지워져 데이터가 날아간다)
 #
@@ -252,6 +252,50 @@ services:
       retries: 10
     # 서버들은 기본 망(default)으로 붙는다. 메트릭을 읽는 Alloy 는 datastore-metrics 로만 붙는다
     networks: [default, datastore-metrics]
+
+  # 그림 파일(배경, 캐릭터, 일러스트)을 두는 저장소의 로컬 흉내(#540). S3 와 같은 API 다.
+  # staging 은 진짜 S3(서울)를 쓰고 이것을 띄우지 않는다(docker-compose.staging.yml). 무엇을 왜 정했는지는
+  # docs/architecture/deployment.md 의 "그림 저장소"에 있다.
+  #
+  # SeaweedFS 를 한 프로세스(mini: master, volume, filer, S3)로 띄운다. MinIO 는 2025년 10월부터 이미지를 내지 않아 쓰지 않는다.
+  # 서명한 요청만 받는다(익명은 403). 진짜 S3 처럼 서명하는 코드를 로컬에서도 거치게 하려고다.
+  # 버킷은 뜰 때 만든다(이미 있으면 그대로). 없는 버킷에 올리면 진짜 S3 처럼 404 다(autoCreateBucket=false).
+  # 그림은 볼륨 objectdata 에 남는다. docker compose down -v 로 볼륨을 지우면 사라진다.
+  # 이미지는 root 로 떠서 /data 의 주인을 맞춘 뒤 seaweed(1000)로 내려가 돈다(이미지의 entrypoint.sh)
+  object-store:
+    image: chrislusf/seaweedfs:4.48
+    logging: *logging
+    restart: unless-stopped
+    command:
+      - mini
+      # 안의 구성 요소끼리 부르는 주소. 컨테이너의 IP 는 다시 뜰 때 바뀌어서 고정한 주소를 쓴다
+      - -ip=127.0.0.1
+      - -bucket=${IMAGE_STORE_BUCKET:-ai-trpg-images}
+      - -s3.autoCreateBucket=false
+      - -s3.allowDeleteBucketNotEmpty=false
+      # S3 말고는 쓰지 않는다
+      - -webdav=false
+      - -admin.ui=false
+      - -s3.port.iceberg=0
+      - -s3.port.lance=0
+      # 10GiB 를 넘으면 사용 통계를 바깥(telemetry.seaweedfs.com)으로 보낸다. 끈다
+      - -master.telemetry=false
+    environment:
+      # 이 키 하나만 모든 권한을 갖는다. 접근 키의 이름은 비밀이 아니다. 비밀 키는 루트 .env 에서 온다(tools/fill_env.py 가 만든다)
+      AWS_ACCESS_KEY_ID: ${IMAGE_STORE_ACCESS_KEY_ID:-ai-trpg-local}
+      AWS_SECRET_ACCESS_KEY: ${IMAGE_STORE_SECRET_ACCESS_KEY:?.env 에 IMAGE_STORE_SECRET_ACCESS_KEY 를 설정하세요(tools/fill_env.py)}
+    volumes:
+      - objectdata:/data
+    # PC 에서 직접 띄운 서버(나중의 asset-server)가 붙도록 S3 의 포트만 연다. 127.0.0.1 로 묶는다
+    ports:
+      - "127.0.0.1:${IMAGE_STORE_PORT:-8333}:8333"
+    # S3 가 요청을 받으면 healthy 다. 버킷은 그 뒤 1초 안에 만들어진다
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   # ---------------------------------------------------------------------------
   # 서버들 (app 프로필)
@@ -842,6 +886,7 @@ networks:
 volumes:
   pgdata:
   redisdata:
+  objectdata:
   alloydata:
   lokidata:
   prometheusdata:

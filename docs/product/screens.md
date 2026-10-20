@@ -1851,7 +1851,7 @@ PC 전용. 1단계에는 운영자가 쓸 만큼(위 표의 칸 전부, 꾸밈�
 **확인할 것**
 
 - 캐릭터의 원본은 asset-server 다([서비스 구조 명세](../architecture/services.md)). C6 은 asset-server 의 API 를 부른다.
-- 그림은 객체 저장소(S3)에 둔다. 로컬은 MinIO 로 흉내 낸다. 올릴 때 서버가 크기와 형식을 검사하고 디코딩은 격리한다([배포 설계](../architecture/deployment.md)).
+- 그림은 객체 저장소(S3)에 둔다. 로컬은 SeaweedFS 로 흉내 낸다. 올릴 때 서버가 크기와 형식을 검사하고 디코딩은 격리한다([배포 설계](../architecture/deployment.md)).
 
 ### C7 갤러리
 
