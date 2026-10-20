@@ -77,6 +77,7 @@ OPTIONAL_SECRETS = frozenset(
         'OPENAI_API_KEY',
         'ANTHROPIC_API_KEY',
         'GEMINI_API_KEY',
+        'DEEPINFRA_API_KEY',
         'TOSS_SECRET_KEY',
         'TOSS_CLIENT_KEY',
         'ALERT_SMTP_PASSWORD',
