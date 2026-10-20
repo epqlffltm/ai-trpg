@@ -11,11 +11,11 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import Asset, Rating, ScenarioVersion
+from app.assets.models import TABLE_MAX_PLAYERS, Asset, Rating, ScenarioVersion
 from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import RecommendedPlayers
@@ -23,6 +23,7 @@ from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.listings import service
 from app.listings.models import TAG_MAX_LENGTH, Genre, Listing
+from app.listings.repository import ListingFilter
 from app.listings.schemas import (
     ListingDetail,
     ListingPregen,
@@ -139,17 +140,25 @@ async def set_publication(
 
 # --- 다른 사용자 ---
 
-# 목록을 거르는 값. 주소의 ?genre=..&tag=.. 에서 읽는다
+# 목록을 거르는 값. 주소의 ?genre=..&tag=..&players=.. 에서 읽는다
 GenreFilter = Annotated[Genre | None, Query()]
 TagFilter = Annotated[str | None, Query(min_length=1, max_length=TAG_MAX_LENGTH)]
+# 테이블의 정원보다 많은 수는 어떤 시나리오에도 맞지 않는다. 빈 목록 대신 422 로 화면의 잘못을 알린다
+PlayersFilter = Annotated[int | None, Query(ge=1, le=TABLE_MAX_PLAYERS)]
+
+
+def to_filter(genre: GenreFilter = None, tag: TagFilter = None, players: PlayersFilter = None) -> ListingFilter:
+    """주소의 거르는 값을 하나로 묶는다."""
+    return ListingFilter(genre=genre, tag=tag, players=players)
+
+
+Filter = Annotated[ListingFilter, Depends(to_filter)]
 
 
 @public_router.get('', response_model=PublicListingPage, status_code=status.HTTP_200_OK)
-async def list_listings(
-    user: CurrentUser, session: Session, paging: Paging, genre: GenreFilter = None, tag: TagFilter = None
-) -> PublicListingPage:
-    """공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르와 태그로 거를 수 있다."""
-    rows, total = await service.list_public(session, user, genre, tag, paging.limit, paging.offset)
+async def list_listings(user: CurrentUser, session: Session, paging: Paging, where: Filter) -> PublicListingPage:
+    """공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원으로 거를 수 있다."""
+    rows, total = await service.list_public(session, user, where, paging.limit, paging.offset)
     return PublicListingPage(items=[to_public(*row) for row in rows], total=total)
 
 
