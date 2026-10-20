@@ -737,6 +737,34 @@ class VersionIndexer(Protocol):
         ...
 
 
+async def readiness(
+    session: AsyncSession, owner_id: uuid.UUID, scenario: Scenario, allowed: Sequence[Rating]
+) -> tuple[Parts, list[Problem]]:
+    """
+    게시해도 되는지 본다. 붙인 자산들과 게시할 수 없는 이유(없으면 빈 목록)를 돌려준다.
+
+    성인용 초안인데 allowed 에 성인용이 없으면 AdultContentRequiredError 다(이유의 목록이 아니라 거절이다).
+    게시(publish)와 미리 보기(check_publishable)가 함께 쓴다. 둘이 같은 답을 내야 한다.
+    """
+    require_rating(scenario.asset.rating, allowed)
+    parts = await load_parts(session, owner_id, scenario)
+    return parts, find_problems(scenario, parts)
+
+
+async def check_publishable(
+    session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, allowed: Sequence[Rating] = ALL_AGES_ONLY
+) -> list[Problem]:
+    """
+    자기 시나리오를 지금 게시하면 막히는 이유를 전부 돌려준다(#428). 없으면 빈 목록이다. 판을 만들지 않는다.
+
+    게시(publish)와 같은 검사(readiness)다. 잠그지 않는다. 읽기만 하고, 답한 뒤에 초안이 바뀔 수 있다.
+    시나리오가 없으면 AssetNotFoundError, 볼 수 없는 등급이면 AdultContentRequiredError 다. 게시와 같다.
+    """
+    scenario = await assets.get_owned(session, Scenario, owner_id, scenario_id)
+    _, problems = await readiness(session, owner_id, scenario, allowed)
+    return problems
+
+
 async def publish(
     session: AsyncSession,
     owner_id: uuid.UUID,
@@ -755,10 +783,7 @@ async def publish(
     커밋 전에 맡기면, 커밋이 실패했을 때 없는 판을 색인하려 한다.
     """
     scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
-    require_rating(scenario.asset.rating, allowed)
-    parts = await load_parts(session, owner_id, scenario)
-
-    problems = find_problems(scenario, parts)
+    parts, problems = await readiness(session, owner_id, scenario, allowed)
     if problems or parts.rulebook is None:
         raise ScenarioNotReadyError(problems)
 
