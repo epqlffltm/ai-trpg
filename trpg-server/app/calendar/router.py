@@ -13,26 +13,12 @@ from fastapi import APIRouter, status
 
 from app.assets.routing import Session
 from app.auth.dependencies import CurrentUser
-from app.calendar import clock, service, state
+from app.calendar import service
+from app.calendar.responses import to_clock
 from app.calendar.schemas import ClockOut, StepChange
 from app.tables import service as table_service
-from app.tables.models import GameTable
 
 router = APIRouter(prefix='/tables', tags=['calendar'])
-
-
-def to_clock(table: GameTable) -> ClockOut:
-    """테이블의 시계를 응답으로 바꾼다."""
-    now = clock.read_time(table.clock.minutes)
-    return ClockOut(
-        day=now.day,
-        hour=now.hour,
-        minute=now.minute,
-        time_of_day=now.time_of_day,
-        next_step_minutes=state.next_step(table),
-        default_step_minutes=state.default_step(table),
-        step_changed=table.clock.next_step_minutes is not None,
-    )
 
 
 @router.get('/{table_id}/clock', response_model=ClockOut, status_code=status.HTTP_200_OK)

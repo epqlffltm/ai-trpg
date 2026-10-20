@@ -21,6 +21,7 @@ from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import Change
 from app.billing.routing import Now, Prices
 from app.calendar import clock
+from app.calendar.responses import to_clock
 from app.catalog import offers
 from app.catalog.offers import OfferedModel
 from app.core.dice import Rolling
@@ -377,6 +378,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         items=to_catalog(catalog),
         quests=[to_quest(quest, quest_catalog) for quest in quests.visible_quests(table, quest_catalog)],
         map=to_map(table, snapshot, catalog),
+        clock=to_clock(table),
         members=[to_member(table, member, catalog) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
         started_at=table.started_at,

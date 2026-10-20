@@ -31,7 +31,7 @@ from app.assets.scenarios.schemas import (
     RecommendedPlayers,
 )
 from app.billing.prices import Tier
-from app.calendar.schemas import ClockTimeOut
+from app.calendar.schemas import ClockOut, ClockTimeOut
 from app.catalog.models import Grade
 from app.catalog.schemas import Slug
 from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
@@ -567,6 +567,8 @@ class TableDetail(TableSummary):
     quests: list[QuestOut]
     # 이 테이블이 아는 맵. 맵이 없는 판이면 None 이다. 시작 전에도 처음부터 아는 것(열린 길, 명소)이 보인다
     map: MapOut | None
+    # 게임 안의 지금 시각과 다음 라운드에 흐를 시간. GET .../clock 과 같은 값이다. 시작 전에는 판의 시작 시각이다
+    clock: ClockOut
     members: list[MemberOut]
     # 초대 코드. 방장에게만 보인다
     invite_code: str | None
