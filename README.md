@@ -15,7 +15,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 구성 요소 | 폴더 | 상태 |
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
-| 로그와 메트릭 모으기 (Grafana Alloy, Loki, Prometheus, Tempo, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것, 메트릭의 저장소(OTLP 로 받는 길), 결제 서버의 메트릭(HTTP, DB 풀, 작업, 주문, 결제 대행사, 알림, 원장, 중복 방지 키), 알림 서버의 메트릭(HTTP, DB 풀, 작업, 넣은 알림), TRPG 서버의 메트릭(HTTP, DB 풀, 작업, 실시간 스트림, AI 호출, 라운드와 서술, 서술 값), 인증 서버의 메트릭(HTTP, DB, 작업, 메일, 시도 횟수 제한), PostgreSQL 과 Redis 의 메트릭, 대시보드, 경보, 추적의 저장소(Tempo), 다섯 서버의 span(요청, 서버 사이의 호출, 쿼리, 작업)까지 완료(compose 의 프로필 `observability`, [아래](#로그와-메트릭-모으기)). 나머지 서버의 메트릭은 예정 |
+| 로그와 메트릭 모으기 (Grafana Alloy, Loki, Prometheus, Tempo, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것, 메트릭의 저장소(OTLP 로 받는 길), 결제 서버의 메트릭(HTTP, DB 풀, 작업, 주문, 결제 대행사, 알림, 원장, 중복 방지 키), 알림 서버의 메트릭(HTTP, DB 풀, 작업, 넣은 알림), TRPG 서버의 메트릭(HTTP, DB 풀, 작업, 실시간 스트림, AI 호출, 라운드와 서술, 서술 값), 인증 서버의 메트릭(HTTP, DB, 작업, 메일, 시도 횟수 제한), 게시판 서버의 메트릭(HTTP, DB 풀, 작업, 쓰기와 신고, 검색), PostgreSQL 과 Redis 의 메트릭, 대시보드, 경보, 추적의 저장소(Tempo), 다섯 서버의 span(요청, 서버 사이의 호출, 쿼리, 작업)까지 완료(compose 의 프로필 `observability`, [아래](#로그와-메트릭-모으기)) |
 | 인증 서버 (Django) | [`auth-server/`](auth-server/README.md) | 회원가입(이메일 인증), 로그인(이메일 인증), 비밀번호 변경과 재설정, 메일 발송, 토큰 갱신, 로그아웃, JWKS, 시도 횟수 제한, 보안 이벤트 기록, 가입한 사용자의 환영 크레딧을 결제 서버에 맡기기, access 토큰에 닉네임 싣기까지 완료 |
 | 게임 서버 (FastAPI) | [`trpg-server/`](trpg-server/README.md) | 뼈대(서버 실행, DB, 인증 서버 토큰 검증, CI)와 자산 네 종류(세계관, 룰북, 시나리오, 로어북)의 만들기, 목록, 읽기, 고치기, 지우기와 시나리오 게시(판으로 굳히기, 스타팅 여러 개, 추천 인원과 프리젠), 공개와 소개 페이지, 공개 목록, 테이블 만들기와 참가(초대 코드, 로비와 비밀번호, 캐릭터, 방장), 라운드(선언 모으기, 가짜 서술자), 이벤트 기록, 채팅, 실시간 스트림(SSE, "입력 중" 표시), 룰북의 규칙 데이터(내장 템플릿 `srd5`), 시나리오의 캐릭터 시트와 캐릭터 방식, 테이블의 캐릭터 시트, 주사위와 판정(순수 함수), 선언에 붙이는 행동, 라운드를 닫을 때의 판정, 피해와 회복과 쓰러짐, 능력치를 직접 적는 캐릭터 방식, 점수제로 능력치를 사는 캐릭터 방식, 주사위로 능력치를 정하는 캐릭터 방식과 다시 굴리기, 죽음의 굴림과 캐릭터의 죽음, 죽은 뒤에 새 캐릭터 들이기, 캐릭터 보관함, 라운드의 서술 값 받기(결제 서버의 홀드), 시나리오의 추천 서술 모델과 테이블마다 고르는 서술 모델까지 완료 |
 | 게시판 서버 (NestJS) | [`board-server/`](board-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, CI), 인증 서버 토큰 검증, 게시판 넷과 글(쓰기, 목록, 읽기, 고치기, 지우기, 운영자), 댓글과 답글, 글마다의 댓글 수, 글 고정(기한이 지나면 저절로 내려감), 글 검색, 쓰기 횟수 제한, 글과 댓글의 신고(운영자가 묶어 읽고 처리), 글쓴이의 닉네임 표시까지 완료 |
@@ -177,7 +177,7 @@ docker compose run --rm --entrypoint pg_restore db-backup --clean --if-exists --
 ## 로그와 메트릭 모으기
 
 compose 의 컨테이너 로그와 메트릭, 추적을 모아(Grafana Alloy) 저장하고(Loki, Prometheus, Tempo) 본다(Grafana)(#25). 규칙에 걸리면 경보를 보낸다(Alertmanager). 프로필 `observability` 로 켠다. 기본으로 꺼져 있다.
-서버는 지금처럼 stderr 에 JSON 을 쓰고, 메트릭과 추적은 OTLP 로 Alloy 에 민다(메트릭은 게시판 서버를 뺀 넷, 추적은 다섯 서버 모두. 게시판 서버의 메트릭은 붙이는 중이다). 이것들이 멈춰도 요청은 영향을 받지 않는다.
+서버는 지금처럼 stderr 에 JSON 을 쓰고, 메트릭과 추적은 OTLP 로 Alloy 에 민다(메트릭과 추적 모두 다섯 서버). 이것들이 멈춰도 요청은 영향을 받지 않는다.
 정한 것과 까닭은 [관측 규격의 수집기](docs/observability.md#수집기grafana-alloy를-붙일-자리)에 있다.
 
 루트 `.env` 에 Grafana 의 관리자 비밀번호를 적고 띄운다. 비밀번호가 비어 있으면 Grafana 가 뜨지 않는다.
@@ -198,7 +198,7 @@ docker compose --profile app --profile observability ps
 
 `prometheus`, `alertmanager`, `tempo`, `grafana` 가 `healthy`, `alloy`, `loki`, `docker-socket-proxy` 가 `Up` 이면 된다. `http://127.0.0.1:3000` 에서 `admin` 과 그 비밀번호로 들어가
 Explore 에서 데이터 소스 Loki(로그), Prometheus(메트릭), Tempo(추적)를 고른다. 로그의 `trace_id` 옆 "추적 보기"를 누르면 그 추적으로, 추적의 span 에서 "Logs for this span"을 누르면 그 로그로 건너간다(서버가 span 을 내보낸 뒤부터). 서버(VM)에서는 SSH 터널로 붙는다. `ssh -L 3000:127.0.0.1:3000 <서버>` 를 띄워 두고 같은 주소를 연다.
-대시보드는 Dashboards 의 폴더 `ai-trpg` 에 있다. 지금은 결제 서버(`/d/billing-server`), 알림 서버(`/d/notification-server`), TRPG 서버(`/d/trpg-server`), 인증 서버(`/d/auth-server`), PostgreSQL(`/d/postgres`), Redis(`/d/redis`)다. 저장소의 `docker/grafana/dashboards/` 가 원본이라 화면에서 고치지 못한다.
+대시보드는 Dashboards 의 폴더 `ai-trpg` 에 있다. 지금은 결제 서버(`/d/billing-server`), 알림 서버(`/d/notification-server`), TRPG 서버(`/d/trpg-server`), 인증 서버(`/d/auth-server`), 게시판 서버(`/d/board-server`), PostgreSQL(`/d/postgres`), Redis(`/d/redis`)다. 저장소의 `docker/grafana/dashboards/` 가 원본이라 화면에서 고치지 못한다.
 고치는 법은 [관측 규격의 대시보드](docs/observability.md#대시보드)에 있다.
 끌 때도 두 프로필을 붙인다. `docker compose --profile app --profile observability down`
 

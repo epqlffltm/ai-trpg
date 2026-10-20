@@ -17,6 +17,7 @@
 - [구조](#구조)
 - [로그와 요청 식별자](#로그와-요청-식별자)
 - [추적](#추적)
+- [메트릭](#메트릭)
 - [CI](#ci)
 - [설계 메모](#설계-메모)
 
@@ -525,11 +526,16 @@ src/
     db-spans.ts                  쿼리마다 span 을 거는 pg 의 연결
     jobs.ts                      작업 한 바퀴에 span 과 job_id 를 건다
     idle-rounds.ts               할 일이 없던 작업의 추적을 보내지 않는다
-    observability.module.ts      앱이 닫힐 때 모아 둔 span 을 보낸다
+    metrics.ts                   메트릭의 계측기와, 수집기에 미는 것(SDK)을 만들고 끈다
+    request-metrics.middleware.ts  요청마다 HTTP 메트릭 셋을 센다
+    pool-metrics.ts              연결을 기다린 시간을 재는 pg 의 풀
+    counted.interceptor.ts       글과 댓글을 쓴 것, 신고한 것을 결과마다 센다
+    observability.module.ts      앱이 닫힐 때 모아 둔 span 과 메트릭을 보낸다
   database/
     database.options.ts          설정을 연결 옵션으로 바꾼다. 서버와 마이그레이션 도구가 함께 쓴다
     database.module.ts           서버의 DB 연결
     database.health.ts           DB 에 닿는지 확인한다
+    pool-watch.ts                앱이 뜨면 연결 풀을 메트릭으로 내보내기 시작한다
     data-source.ts               마이그레이션 도구가 읽는 연결
   notifications/                 사용자의 알림함(알림 서버)에 넣기(#385)
     notices.ts                   새 댓글을 누구에게 무슨 알림으로 보낼지 정한다. DB 를 모른다
@@ -584,9 +590,10 @@ Nest 의 말을 다른 서버의 말로 옮기면 이렇다.
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적)) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 과 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적), [메트릭](#메트릭)) |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | 메트릭을 보내는 간격(밀리초, 1000 이상). 다른 서버와 같은 이름이다 |
 
-네 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+다섯 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
 
 개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
 
@@ -622,6 +629,28 @@ npm run start:dev 2>&1 | jq -rR 'fromjson? | [.timestamp, .level, .message, .rou
 - 보낼 알림이 없던 바퀴(처리한 수 `handled` 가 0 이고 실패하지 않은 것)는 그 추적을 통째로 보내지 않는다(`src/observability/idle-rounds.ts`)
 - 받은 `traceparent` 가 "기록하지 않음"(flags `00`)이어도 남긴다
 - 끄라는 신호(SIGTERM)를 받으면 앱을 닫으며 모아 둔 span 을 보낸다(`main.ts` 의 `enableShutdownHooks`, 5초 안)
+
+## 메트릭
+
+요청, DB, 쓰기와 신고, 검색, 알림을 보내는 작업을 세어 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 15초마다 민다. 수집기가 Prometheus 에 넘긴다.
+이름과 label 은 [관측 규격](../docs/observability.md)의 "메트릭"에 있다. 이 서버에서 다른 것은 "붙인 것 (게시판 서버의 메트릭)"에 있다.
+주소가 비어 있으면 세기만 하고 보내지 않는다. 테스트는 메모리에 모은다(`test/metrics.ts`).
+
+| 메트릭 | label | 세는 곳 |
+| --- | --- | --- |
+| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `src/observability/request-metrics.middleware.ts`. 미들웨어의 맨 앞이다 |
+| `db_up` | 없음 | `src/health/readiness.controller.ts`. 준비 상태 확인이 본 DB |
+| `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `src/observability/pool-metrics.ts`, `src/database/pool-watch.ts`. 풀은 10 이다 |
+| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`(`notification.send`), `result` | `src/observability/jobs.ts` 의 `runAsJob`. 할 일이 없던 바퀴도 센다 |
+| `board_writes_total` | `resource`(`post`, `comment`), `action`(`create`, `update`, `delete`), `result`(`success`, `rejected`, `rate_limited`) | `src/observability/counted.interceptor.ts`. 컨트롤러의 핸들러에 붙인다 |
+| `board_reports_total` | `target`(`post`, `comment`), `result` | 같은 인터셉터 |
+| `board_searches_total`, `board_search_duration_seconds` | `result`(`success`, `timeout`) | `src/posts/posts-search.service.ts` |
+
+- 결과는 핸들러가 끝난 모양이다. 답을 돌려줬으면 `success`, 429 면 `rate_limited`, 그 밖의 4xx(모양, 권한, 없는 것, 이미 신고함)면 `rejected` 다. 5xx 는 세지 않는다(요청 수의 5xx 로 본다)
+- 로그인하지 않은 쓰기(401)는 가드에서 끝나 쓰기로 세지 않는다
+- 연결을 기다린 시간은 pg 의 풀이 꺼내는 자리(`connect`)를 감싸 잰다. TypeORM 에 Pool 만 바꾼 pg 를 넘긴다(`driver`)
+- 대시보드는 Grafana 의 `board-server`(`docker/grafana/dashboards/board-server.json`), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `board-server` 묶음이다
+- 끄라는 신호(SIGTERM)를 받으면 앱을 닫으며 모아 둔 값을 한 번 보낸다(span 과 함께)
 
 
 ## CI

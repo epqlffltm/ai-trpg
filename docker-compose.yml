@@ -451,7 +451,7 @@ services:
     environment:
       <<: [*board-environment, *telemetry-environment]
       NOTIFICATION_URL: http://notification-server:8004
-    # span 을 Alloy 에 민다(telemetry). 인증 서버와 알림 서버에는 default 로 닿는다
+    # span 과 메트릭을 Alloy 에 민다(telemetry). 인증 서버와 알림 서버에는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8002/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]

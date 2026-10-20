@@ -48,13 +48,14 @@ export function instanceId(processName: string): string {
 }
 
 /**
- * span 의 출처. 서비스, 버전, 환경, 프로세스다. 다른 서버와 같은 이름이다.
+ * span 과 메트릭의 출처. 서비스, 버전, 환경, 프로세스다. 다른 서버와 같은 이름이다.
+ * 서버가 뜰 때 한 번 만들어 둘이 함께 쓴다(main.ts). 그래야 service.instance.id 가 같다.
  *
  * 정한 넷만 싣는다. 환경 변수(OTEL_RESOURCE_ATTRIBUTES)와 호스트의 정보는 읽지 않는다.
  */
 export function buildResource(
   info: ServiceInfo,
-  processName: string,
+  processName: string = SERVER_PROCESS,
 ): Resource {
   return resourceFromAttributes({
     'service.name': info.service,
@@ -67,8 +68,7 @@ export function buildResource(
 /** span 을 보내는 TracerProvider 를 만든다. 보낼 곳이 없으면 undefined 다. 만드는 것만으로는 수집기에 닿지 않는다. */
 export function buildProvider(
   endpoint: string,
-  info: ServiceInfo,
-  processName: string = SERVER_PROCESS,
+  resource: Resource,
 ): TracerProvider | undefined {
   if (endpoint === '') {
     return undefined;
@@ -82,7 +82,7 @@ export function buildProvider(
     exportTimeoutMillis: EXPORT_TIMEOUT_MS,
   });
   return new TracerProvider({
-    resource: buildResource(info, processName),
+    resource,
     sampler: SAMPLER,
     spanProcessors: [new DropIdleRounds(batch)],
   });
@@ -95,10 +95,9 @@ export function buildProvider(
  */
 export function configureTracing(
   endpoint: string,
-  info: ServiceInfo,
-  processName: string = SERVER_PROCESS,
+  resource: Resource,
 ): TracerProvider | undefined {
-  const provider = buildProvider(endpoint, info, processName);
+  const provider = buildProvider(endpoint, resource);
   if (provider !== undefined) {
     useProvider(provider);
     configured = provider;

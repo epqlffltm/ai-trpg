@@ -10,12 +10,19 @@
 import { DataSourceOptions } from 'typeorm';
 import { DatabaseSettings } from '../config/environment.js';
 import { TracedClient } from '../observability/db-spans.js';
+import { meteredPg } from '../observability/pool-metrics.js';
 
 /**
  * DB 에 연결을 맺을 때 기다리는 최대 시간(밀리초).
  * DB 가 응답하지 않을 때 요청이 오래 매달리지 않게 한다
  */
 export const CONNECT_TIMEOUT_MS = 5000;
+
+/**
+ * 풀이 가질 수 있는 가장 많은 연결. pg 의 기본값을 적어 둔다. 메트릭의 db_pool_connections_max 다
+ * (observability/pool-metrics.ts)
+ */
+export const POOL_MAX_CONNECTIONS = 10;
 
 /** PostgreSQL 에 붙는 연결 옵션. TypeORM 의 옵션은 DB 종류마다 모양이 달라서 그중 하나를 고른다 */
 export type PostgresOptions = Extract<DataSourceOptions, { type: 'postgres' }>;
@@ -46,6 +53,9 @@ export function databaseOptions(settings: DatabaseSettings): PostgresOptions {
     type: 'postgres',
     url: settings.DATABASE_URL,
     connectTimeoutMS: CONNECT_TIMEOUT_MS,
+    poolSize: POOL_MAX_CONNECTIONS,
+    // 연결을 기다린 시간을 재는 풀(MeteredPool)로 만들게 한다. 그 밖은 pg 그대로다
+    driver: meteredPg(),
     extra: {
       options: searchPathOption(settings.DB_SCHEMA),
       Client: TracedClient,
