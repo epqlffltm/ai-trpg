@@ -16,7 +16,10 @@ from sqlalchemy.orm import defer
 
 from app.assets.models import Rating
 from app.catalog.models import AiModel
-from app.tables.models import GameTable, TableMember, TableMonster, TableNpc, TableStatus
+from app.tables.models import GameTable, TableDeparture, TableMember, TableMonster, TableNpc, TableStatus
+
+# 떠난 테이블 하나를 보여 주는 데 필요한 것: 떠난 줄, 테이블의 제목, 테이블의 시나리오
+DepartureRow = tuple[TableDeparture, str, uuid.UUID]
 
 
 def add_table(session: AsyncSession, table: GameTable) -> None:
@@ -172,3 +175,35 @@ async def find_tables_near_retirement(session: AsyncSession, today: date, within
         .order_by(GameTable.id)
     )
     return list(await session.scalars(query))
+
+
+# --- 떠난 사람(#428) ---
+
+
+async def find_departure(session: AsyncSession, table_id: uuid.UUID, user_id: uuid.UUID) -> TableDeparture | None:
+    """이 사람이 이 테이블을 떠난 줄. 떠난 적이 없으면 None."""
+    return await session.get(TableDeparture, (table_id, user_id))
+
+
+async def list_departures(session: AsyncSession, user_id: uuid.UUID, limit: int, offset: int) -> list[DepartureRow]:
+    """
+    이 사람이 떠난 테이블들을 최근에 떠난 것부터 돌려준다.
+
+    테이블은 제목과 시나리오만 읽는다. 테이블을 통째로 읽으면 함께 읽히는 것(자리, 퀘스트 …)이 많다.
+    """
+    query = (
+        select(TableDeparture, GameTable.title, GameTable.scenario_id)
+        .join(GameTable, GameTable.id == TableDeparture.table_id)
+        .where(TableDeparture.user_id == user_id)
+        # 떠난 시각이 같은 것끼리의 순서도 정해 둔다. 쪽을 넘길 때 같은 것이 두 번 나오거나 빠지지 않게 한다
+        .order_by(TableDeparture.left_at.desc(), TableDeparture.table_id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return [tuple(row) for row in await session.execute(query)]
+
+
+async def count_departures(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """이 사람이 떠난 테이블이 몇 개인지 센다."""
+    query = select(func.count()).select_from(TableDeparture).where(TableDeparture.user_id == user_id)
+    return await session.scalar(query) or 0

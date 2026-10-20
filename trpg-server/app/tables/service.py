@@ -47,13 +47,13 @@ from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds import opener
 from app.rounds.round_price import price_of
-from app.tables import monsters, npcs, place_items, places, quests, repository, sheets
+from app.tables import departures, monsters, npcs, place_items, places, quests, repository, sheets
 from app.tables.building import build_table, hash_table_password, new_invite_code, require_rating
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
 from app.tables.model_choice import ModelChoice, choose_model
 from app.tables.model_picker import ModelPicker
-from app.tables.models import GameTable, TableMember, TableStatus
+from app.tables.models import DepartureKind, GameTable, TableMember, TableStatus
 from app.tables.password_attempts import guarded_password_check
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
 from app.tables.seating import end, hand_over, record_hand_over, take_seat
@@ -280,6 +280,7 @@ async def leave_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.
     await charges.release_departed(session, table.id, user_id, datetime.now(UTC))
     payload = {'character_name': member.character_name}
     left = recorder.record(session, table, EventType.MEMBER_LEFT, actor_id=user_id, payload=payload)
+    departures.record_departure(session, table, member, DepartureKind.LEFT, left)
     if table.host_id == user_id:
         record_hand_over(session, table, hand_over(table), left)
     await commit(session, table)
@@ -309,7 +310,8 @@ async def kick_member(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.
     table.invite_code = new_invite_code()
     # 새 초대 코드는 적지 않는다. 이벤트는 앉은 사람 모두가 읽는다
     payload = {'user_id': str(user_id), 'character_name': member.character_name}
-    recorder.record(session, table, EventType.MEMBER_KICKED, actor_id=host_id, payload=payload)
+    kicked = recorder.record(session, table, EventType.MEMBER_KICKED, actor_id=host_id, payload=payload)
+    departures.record_departure(session, table, member, DepartureKind.KICKED, kicked)
     return await save(session, table)
 
 

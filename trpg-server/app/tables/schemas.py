@@ -45,6 +45,7 @@ from app.tables.models import (
     ROUND_TIME_LIMIT_MIN,
     TABLE_PASSWORD_MAX_LENGTH,
     TABLE_PASSWORD_MIN_LENGTH,
+    DepartureKind,
     QuestStatus,
     TableStatus,
 )
@@ -574,3 +575,29 @@ class TableDetail(TableSummary):
     invite_code: str | None
     started_at: datetime | None
     ended_at: datetime | None
+
+
+class PastTableOut(BaseModel):
+    """
+    내가 떠난 테이블 하나(#428). 떠난 때까지의 기록을 읽는 길(GET /tables/past/{table_id}/events)로 간다.
+
+    떠난 뒤의 일은 싣지 않는다. 테이블이 지금 어떤 상태인지, 누가 남았는지도 싣지 않는다.
+    """
+
+    table_id: uuid.UUID
+    scenario_id: uuid.UUID
+    title: str
+    # 떠날 때의 캐릭터 이름. 캐릭터를 만들기 전에 떠났으면 None 이다
+    character_name: str | None
+    # 떠난 길. left(스스로), kicked(방장이 내보냄), dropped(크레딧이 모자라 서버가 뺌)
+    kind: DepartureKind
+    # 읽을 수 있는 마지막 이벤트의 번호. 떠났다는 이벤트의 번호다
+    last_sequence: int = Field(ge=1)
+    left_at: datetime
+
+
+class PastTablePage(BaseModel):
+    """내가 떠난 테이블 목록의 한 쪽. 최근에 떠난 것부터다."""
+
+    items: list[PastTableOut]
+    total: int = Field(ge=0)

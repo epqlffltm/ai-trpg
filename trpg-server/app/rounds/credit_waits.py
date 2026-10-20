@@ -34,9 +34,10 @@ from app.events.models import EventType
 from app.rounds import repository
 from app.rounds.models import Round, RoundStatus
 from app.rounds.service import NarrationScheduler, hand_over, save
+from app.tables import departures
 from app.tables import repository as table_repository
 from app.tables import service as tables
-from app.tables.models import GameTable, TableMember, TableStatus
+from app.tables.models import DepartureKind, GameTable, TableMember, TableStatus
 from app.tables.seating import hand_over as hand_over_host
 from app.tables.seating import record_hand_over
 
@@ -92,6 +93,7 @@ async def drop_member(session: AsyncSession, table: GameTable, round_: Round, me
     await charges.release_departed(session, table.id, member.user_id, datetime.now(UTC))
     payload = {'round': round_.number, 'user_id': str(member.user_id), 'character_name': member.character_name}
     dropped = recorder.record(session, table, EventType.MEMBER_DROPPED, payload=payload)
+    departures.record_departure(session, table, member, DepartureKind.DROPPED, dropped)
     if table.host_id == member.user_id:
         record_hand_over(session, table, hand_over_host(table), dropped)
 
