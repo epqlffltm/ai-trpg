@@ -5,7 +5,7 @@
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
 #     prepare      설정 파일(.env 여섯)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
-#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, Prometheus, Alertmanager, Tempo, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
+#     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, 그림 저장소, Prometheus, Alertmanager, Tempo, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
 #                  Loki 가 준비될 때까지 기다린다.
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
@@ -15,6 +15,8 @@
 #                  바깥에 여는 포트가 정해 둔 것뿐이고 127.0.0.1 에 묶였는지(port_scope.py),
 #                  모든 서비스의 로그에 상한이 있는지도 본다(logging_scope.py, 띄운 컨테이너의 설정).
 #                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다.
+#                  그림 저장소(object-store, #540)도 본다: root 가 아닌가, 서명 없는 요청과 틀린 키를 막는가,
+#                  서명해 올린 것을 그대로 받는가, 없는 버킷에는 올리지 못하는가.
 #                  로그 모으기(observability 프로필, #25)도 본다: 서버의 줄이 Loki 에 label 과 줄의 값으로 들어오는가,
 #                  JSON 이 아닌 줄도 들어오는가, 식별자가 label 이 아닌가, Grafana 가 Loki 에 닿는가,
 #                  소켓 프록시가 쓰기를 막는가, 서버들이 소켓 프록시와 Loki 에 닿지 않는가.
@@ -65,6 +67,12 @@ CRONTABS=(auth-cron:docker/cron/auth.crontab billing-cron:docker/cron/billing.cr
 # 프록시의 주소와, 관리자 화면 때문에 따로 연 인증 서버의 주소
 PROXY="${PROXY:-http://127.0.0.1:8080}"
 ADMIN="${ADMIN:-http://127.0.0.1:8000}"
+# 그림 저장소(object-store)의 주소와 버킷, 접근 키의 이름. 이 PC 에서 연 포트다. 버킷과 키의 이름은 compose 의 기본값이다.
+# 서명(SigV4)은 curl 이 한다(--aws-sigv4). 지역은 S3 의 서울과 같게 둔다. 흉내는 지역을 가리지 않는다
+IMAGE_STORE="${IMAGE_STORE:-http://127.0.0.1:8333}"
+IMAGE_STORE_BUCKET=ai-trpg-images
+IMAGE_STORE_ACCESS_KEY=ai-trpg-local
+IMAGE_STORE_SIGV4=aws:amz:ap-northeast-2:s3
 # 서버가 healthy 가 되기를 기다리는 시간(초)
 WAIT_SECONDS=180
 # 남긴 줄이 Loki 에서 찾아지기를 기다리는 시간(초). Alloy 는 15초마다 컨테이너를 찾고, 줄을 묶어 보낸다
@@ -183,6 +191,7 @@ BOARD_DB_PASSWORD=$(throwaway)
 NOTIFICATION_DB_PASSWORD=$(throwaway)
 GRAFANA_ADMIN_PASSWORD=$(throwaway)
 MONITOR_DB_PASSWORD=$(throwaway)
+IMAGE_STORE_SECRET_ACCESS_KEY=$(throwaway)
 OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
 ALERT_DISCORD_WEBHOOK_URL=http://$ALERT_SINK:8080/discord
 ALERT_SLACK_WEBHOOK_URL=http://$ALERT_SINK:8080/slack
@@ -258,12 +267,12 @@ running() {
   [[ "$(docker inspect -f '{{.State.Running}}' "$(container_of "$1")")" == "true" ]]
 }
 
-# 서버들과 프록시, Prometheus, Alertmanager, Tempo, Grafana, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
+# 서버들과 프록시, 그림 저장소, Prometheus, Alertmanager, Tempo, Grafana, 심장박동을 알리는 워커가 모두 healthy 가 될 때까지 기다린다. 하나라도 죽거나 시간이 지나면 실패한다.
 wait_healthy() {
   local deadline=$((SECONDS + WAIT_SECONDS)) service pending
   while ((SECONDS < deadline)); do
     pending=0
-    for service in "${SERVERS[@]/%/-server}" proxy prometheus alertmanager tempo grafana "${HEARTBEAT_WORKERS[@]}"; do
+    for service in "${SERVERS[@]/%/-server}" proxy object-store prometheus alertmanager tempo grafana "${HEARTBEAT_WORKERS[@]}"; do
       if ! running "$service"; then
         echo "$service 가 죽었다" >&2
         return 1
@@ -271,7 +280,7 @@ wait_healthy() {
       [[ "$(health_of "$service")" == "healthy" ]] || pending=$((pending + 1))
     done
     if ((pending == 0)); then
-      echo "서버들과 프록시, Prometheus, Alertmanager, Tempo, Grafana, 상태 확인이 있는 워커가 healthy 다"
+      echo "서버들과 프록시, 그림 저장소, Prometheus, Alertmanager, Tempo, Grafana, 상태 확인이 있는 워커가 healthy 다"
       return 0
     fi
     sleep 3
@@ -486,6 +495,71 @@ backup_restores() {
 # 백업 파일을 주인만 읽는가. 이메일, 비밀번호 해시, 결제 원장이 들어 있다
 backup_private() {
   [[ -z "$(compose exec -T db-backup find /backups -maxdepth 1 -name 'trpg-*.dump' ! -perm 600)" ]]
+}
+
+# --- 그림 저장소(object-store, #540) ---
+
+# 그림 저장소의 비밀 키. prepare 가 루트 .env 에 적었다
+image_store_secret() {
+  sed -n 's/^IMAGE_STORE_SECRET_ACCESS_KEY=//p' .env
+}
+
+# 그림 저장소에 서명한 요청을 보내고 상태 코드가 이것인가. 셋째 인자부터는 curl 에 넘긴다(-T 파일, -X DELETE 등).
+# 받은 본문은 버린다
+#   image_store_status <코드> <경로> [curl 인자...]
+image_store_status() {
+  local expected="$1" path="$2"; shift 2
+  status_is "$expected" "$IMAGE_STORE$path" --aws-sigv4 "$IMAGE_STORE_SIGV4" \
+    --user "$IMAGE_STORE_ACCESS_KEY:$(image_store_secret)" "$@"
+}
+
+# 프로세스(PID 1)가 root 가 아닌가. 이미지는 root 로 떠서 /data 의 주인을 맞춘 뒤 seaweed 로 내려간다.
+# exec 는 root 로 들어가므로 not_root(id -u)로는 볼 수 없다
+object_store_not_root() {
+  [[ "$(compose exec -T object-store stat -c %u /proc/1)" != "0" ]]
+}
+
+# 무작위 바이트를 서명해 올리고, 받아 같은지 보고, 지운다. 지운 뒤에는 404 다
+object_store_round_trip() {
+  local work key secret ok=1
+  work="$(mktemp -d)"
+  key="ci/$(openssl rand -hex 8).png"
+  secret="$(image_store_secret)"
+  openssl rand 4096 >"$work/sent"
+  if image_store_status 200 "/$IMAGE_STORE_BUCKET/$key" -T "$work/sent" -H 'Content-Type: image/png' &&
+    curl -fsS --max-time 10 --aws-sigv4 "$IMAGE_STORE_SIGV4" --user "$IMAGE_STORE_ACCESS_KEY:$secret" \
+      -o "$work/received" "$IMAGE_STORE/$IMAGE_STORE_BUCKET/$key" &&
+    cmp -s "$work/sent" "$work/received" &&
+    image_store_status 204 "/$IMAGE_STORE_BUCKET/$key" -X DELETE &&
+    image_store_status 404 "/$IMAGE_STORE_BUCKET/$key"; then
+    ok=0
+  fi
+  rm -rf "$work"
+  return "$ok"
+}
+
+# 틀린 비밀 키로 서명한 요청을 막는가(403)
+object_store_refuses_wrong_key() {
+  status_is 403 "$IMAGE_STORE/$IMAGE_STORE_BUCKET/" --aws-sigv4 "$IMAGE_STORE_SIGV4" \
+    --user "$IMAGE_STORE_ACCESS_KEY:$(throwaway)"
+}
+
+# 없는 버킷에 올리면 만들지 않고 거절하는가(404). 진짜 S3 와 같다. 이름을 잘못 적은 것이 로컬에서 드러난다
+object_store_refuses_unknown_bucket() {
+  local work ok=1
+  work="$(mktemp -d)"
+  echo probe >"$work/sent"
+  image_store_status 404 "/ci-unknown-bucket/probe.png" -T "$work/sent" && ok=0
+  rm -rf "$work"
+  return "$ok"
+}
+
+check_object_store() {
+  report "그림 저장소가 root 가 아닌 사용자로 돈다" object_store_not_root
+  report "그림 저장소는 서명 없는 요청을 막는다(403)" status_is 403 "$IMAGE_STORE/$IMAGE_STORE_BUCKET/"
+  report "그림 저장소는 틀린 비밀 키를 막는다(403)" object_store_refuses_wrong_key
+  report "그림 저장소에 서명해 올린 것을 그대로 받고 지울 수 있다(뜰 때 버킷을 만들었다)" object_store_round_trip
+  report "그림 저장소는 없는 버킷에 올리면 만들지 않고 거절한다(404)" object_store_refuses_unknown_bucket
 }
 
 # --- 로그 모으기(observability 프로필) ---
@@ -1081,6 +1155,7 @@ check() {
   done
   report "백업을 빈 DB 에 풀면 원본과 같다" backup_restores
   report "백업 파일을 주인만 읽는다" backup_private
+  check_object_store
   check_workers
   check_logs
   check_metrics
