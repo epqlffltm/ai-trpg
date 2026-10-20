@@ -8,6 +8,8 @@
 #
 # 고르는 규칙:
 #   - 서버의 폴더(auth-server/ 등)나 그 서버의 워크플로(.github/workflows/auth-server.yml)가 바뀌면 그 서버
+#     그 서버의 API 목록(docs/api/<서버>.openapi.json)도 그 서버다. 손으로 고친 목록을 api-docs 가 잡는다
+#   - API 목록을 뽑는 도구(tools/export_openapi.py)가 바뀌면 목록을 내는 서버(지금은 게임, 알림)
 #   - docker/ 아래(DB 초기화 스크립트, 프록시의 설정, crontab)나 compose 파일(docker-compose.yml, docker-compose.staging.yml)이
 #     바뀌면 모두. 서버들의 DB 계정, 컨테이너로 띄우고 잇는 법, 주기 명령, staging 의 설정이 거기 있다.
 #     .env 를 만드는 도구(tools/fill_env.py, tools/staging_env.py)도 모두다. CI(stack)가 그 도구들의 테스트를 돌리고
@@ -27,7 +29,13 @@ SERVERS=(auth trpg board billing notification)
 # 한 서버를 고르는 경로들인가. 서버 이름과 경로를 받는다.
 belongs_to() {
   local server="$1" path="$2"
-  [[ "$path" == "${server}-server/"* || "$path" == ".github/workflows/${server}-server.yml" ]]
+  [[ "$path" == "${server}-server/"* || "$path" == ".github/workflows/${server}-server.yml" ||
+    "$path" == "docs/api/${server}.openapi.json" ]]
+}
+
+# API 목록을 뽑는 도구인가. 바뀌면 목록을 내는 서버들의 api-docs 를 다시 돌린다(tools/export_openapi.py 의 SOURCES)
+openapi_tool() {
+  [[ "$1" == tools/export_openapi.py || "$1" == tools/test_export_openapi.py ]]
 }
 
 # 파이썬 서버들(인증, 게임, 알림)이 함께 쓰는 설정인가. 바뀌면 그 서버들의 린트와 모양 검사를 다시 돌려야 한다.
@@ -53,6 +61,10 @@ select_servers() {
     if affects_all "$path"; then
       for server in "${SERVERS[@]}"; do picked[$server]=1; done
       continue
+    fi
+    if openapi_tool "$path"; then
+      picked[trpg]=1
+      picked[notification]=1
     fi
     if python_shared "$path"; then
       picked[auth]=1

@@ -13,6 +13,7 @@
 | [architecture/asset-server.md](architecture/asset-server.md) | asset 서버 설계. 맡는 것, 계정 페르소나(TRPG 의 시트와 나누기), 게시와 판, 그림(올리기의 격리, 권한을 보고 nginx 가 내주기), 쓰는 서비스에 내주기, 만드는 순서 |
 | [architecture/story.md](architecture/story.md) | story 모드 설계. 열린 세계와 기한, 시각, 인물의 위치와 여러 인물의 말, 이벤트와 선택지, 조건과 효과, 호감도, 고백과 엔딩, 세션과 기록 |
 | [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. 공유 후보, 언제 뽑는지, 버전과 CI, `app/ai` 를 뽑는 방식의 결정(#380) |
+| [api/README.md](api/README.md) | 서버마다의 API 목록(OpenAPI). 파일, 뽑는 법, 누가 부르는가(`x-audience`), CI |
 | [product/platform.md](product/platform.md) | 플랫폼과 제품 방향. 제품 셋(TRPG, chat, story), 원칙, 화면과 모바일의 방향, 정하지 않은 것 |
 | [product/screens.md](product/screens.md) | 화면 명세. 흐름, 화면 목록, 화면별 명세(A1~A12, B1~B10, C1~C7, D1~D7), 공통 상태, 프런트 구조, 첫 출시의 범위(세 단계) |
 | [product/market-research.md](product/market-research.md) | 다른 AI 캐릭터 챗 서비스를 본 조사. 만드는 구조, 돈을 받는 방식, 반복되는 문제 |
