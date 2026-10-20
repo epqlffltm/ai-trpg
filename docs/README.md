@@ -10,6 +10,7 @@
 | [architecture/deployment.md](architecture/deployment.md) | 배포 설계. 첫 배포(운영자 혼자 쓰는 서버)의 클라우드, 막는 법, 환경 이름, TLS 와 인증서, 모델, 올리는 방식, 비밀, 백업(age 로 잠가 S3 에, 주마다 풀어 보기), 지켜보기, VM 준비 순서 |
 | [operations/staging-vm.md](operations/staging-vm.md) | staging VM 준비. 배포 설계의 "VM 준비 순서"를 실제 명령으로. AWS, VM 의 기본, Docker, Tailscale, 열쇠, `.env`(`tools/staging_env.py`), 첫 인증서, 띄우기, 확인 |
 | [architecture/chat-server.md](architecture/chat-server.md) | chat 서버 설계. chat 과 story 두 모드, 권한의 선, 자산 가져오기, 데이터의 모양, 장소와 소지품, 그림, 과금, 기억, 성인 콘텐츠, 만드는 순서 |
+| [architecture/asset-server.md](architecture/asset-server.md) | asset 서버 설계. 맡는 것, 계정 페르소나(TRPG 의 시트와 나누기), 게시와 판, 그림(올리기의 격리, 권한을 보고 nginx 가 내주기), 쓰는 서비스에 내주기, 만드는 순서 |
 | [architecture/story.md](architecture/story.md) | story 모드 설계. 열린 세계와 기한, 시각, 인물의 위치와 여러 인물의 말, 이벤트와 선택지, 조건과 효과, 호감도, 고백과 엔딩, 세션과 기록 |
 | [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. 공유 후보, 언제 뽑는지, 버전과 CI, `app/ai` 를 뽑는 방식의 결정(#380) |
 | [product/platform.md](product/platform.md) | 플랫폼과 제품 방향. 제품 셋(TRPG, chat, story), 원칙, 화면과 모바일의 방향, 정하지 않은 것 |
