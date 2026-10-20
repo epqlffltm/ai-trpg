@@ -24,6 +24,9 @@ from app.main import create_app
 from app.realtime import service as stream_service
 from app.realtime.service import Cursor
 from tests.cleaning import clear_tables
+from tests.collector import Collector, serving
+from tests.metrics import MetricsRecorder
+from tests.metrics import recording as recording_metrics
 from tests.narration_model import add_test_model
 from tests.signing import FakeAuthServer, SigningKey, make_signing_key, make_viewer
 from tests.spans import SpanRecorder, recording
@@ -245,3 +248,21 @@ def spans() -> Iterator[SpanRecorder]:
     """
     with recording() as recorder:
         yield recorder
+
+
+@pytest.fixture
+def metrics() -> Iterator[MetricsRecorder]:
+    """
+    테스트가 센 메트릭을 메모리에 모은다. 끝나면 아무것도 하지 않는 것으로 되돌린다.
+
+    계측기는 서버에 한 묶음이라(app/observability/metrics.py) 이것을 쓰는 테스트는 동시에 돌지 않는다.
+    """
+    with recording_metrics() as recorder:
+        yield recorder
+
+
+@pytest.fixture
+def collector() -> Iterator[tuple[Collector, str]]:
+    """OTLP 를 받는 가짜 수집기와 그 주소(경로 없이). 보내는 길을 보는 테스트가 쓴다."""
+    with serving() as served:
+        yield served

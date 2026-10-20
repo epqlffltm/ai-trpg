@@ -8,6 +8,9 @@
 
 인증은 다른 API 와 같다(Authorization 머리말). 브라우저의 EventSource 는 머리말을 붙이지 못하므로,
 화면은 fetch 로 이 주소를 읽는다.
+
+연결마다 메트릭(sse_connections, sse_connections_opened_total, sse_connection_duration_seconds)을 센다.
+응답을 시작한 뒤부터 끊길 때까지다. 응답 전에 거절한 것(404, 422)은 연결이 아니다.
 """
 
 import re
@@ -19,6 +22,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.auth.dependencies import CurrentUser
+from app.observability.metrics import measured_stream
 from app.realtime import service, sse
 from app.realtime.service import Cursor
 from app.realtime.sse import Comment, Frame
@@ -57,9 +61,10 @@ def read_cursor(last_event_id: str | None, events_after: int, messages_after: in
 
 
 async def encode_all(items: AsyncIterator[Frame | Comment]) -> AsyncIterator[str]:
-    """서비스가 내놓는 메시지를 하나씩 SSE 의 글자로 바꾼다."""
-    async for item in items:
-        yield sse.encode(item)
+    """서비스가 내놓는 메시지를 하나씩 SSE 의 글자로 바꾼다. 연결 하나로 센다(끊겨 멈춰도 센다)."""
+    with measured_stream():
+        async for item in items:
+            yield sse.encode(item)
 
 
 @router.get('', status_code=status.HTTP_200_OK, response_class=StreamingResponse)

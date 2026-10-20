@@ -30,6 +30,7 @@ from dataclasses import dataclass
 
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
+from app.observability.metrics import measured_job
 from app.observability.spans import job_span
 
 logger = logging.getLogger(__name__)
@@ -97,13 +98,16 @@ async def run_tracked(job: Coroutine, name: str, operation: str, job_id: str, ga
 
     기다리는 동안에도 작업의 식별자(job_id)를 건다. 작업 안에서 남기는 모든 로그에 그 식별자가 붙는다.
     작업의 span(이름은 operation)도 건다. 맡긴 요청이나 바퀴의 span 아래에 놓인다. 기다린 시간도 그 안에 든다.
+    작업의 메트릭(background_jobs_*)은 차례가 온 뒤부터 센다. 도는 수와 걸린 시간에 기다린 시간이 들지 않는다.
+    기다리다 취소된 작업은 시작하지 않았으니 세지 않는다.
     """
     with job_span(operation, job_id), job_scope(job_id):
         queued = time.perf_counter()
         fields = {'operation': operation, 'job_name': name}
         await wait_turn(gate, job, name, fields, queued)
         try:
-            await run_logged(job, name, {**fields, 'queue_ms': elapsed_ms(queued)})
+            with measured_job(operation):
+                await run_logged(job, name, {**fields, 'queue_ms': elapsed_ms(queued)})
         finally:
             gate.release()
 

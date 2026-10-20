@@ -24,6 +24,9 @@
 미리 보기는 안의 서술자에게 그대로 넘긴다. 시도마다 안의 서술자가 새로 시작한다.
 
 서술자의 실패(ProviderError, NarrationError)만 다룬다. 그 밖의 예외는 버그다. 다시 시도하지 않고 그대로 올린다.
+
+같은 모델로 다시 부른 것(round_narration_retries_total)과 다음 모델로 넘어간 것(ai_fallbacks_total)을 센다.
+넘어간 것의 model 은 실패해 떠난 모델이다. 호출 하나하나는 기록장이 센다(app/ai_log/metered.py).
 """
 
 import asyncio
@@ -37,7 +40,8 @@ from app.ai.provider import ProviderError
 from app.ai.retry_budget import RetryBudget
 from app.ai.routing import UNROUTABLE
 from app.core.config import NARRATION_BUDGET_SECONDS
-from app.rounds.llm_narrator import NarrationError
+from app.observability.metrics import record_ai_fallback, record_narration_retry
+from app.rounds.llm_narrator import PURPOSE, NarrationError
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Narrator, Preview
 
 logger = logging.getLogger(__name__)
@@ -141,7 +145,10 @@ class RetryingNarrator:
         """차례대로 부른다. 처음 받은 장면을 돌려준다. 끝내 못 받으면 NarrationFailed."""
         started = self.clock()
         reason = 'no_model'
+        left: Narrator | None = None
         for narrator in self.narrators:
+            if left is not None:
+                record_ai_fallback(PURPOSE, budget_key(left))
             wait: float | None = None
             self.note_first(narrator)
             for number in range(self.attempts):
@@ -151,6 +158,8 @@ class RetryingNarrator:
                     await self.sleep(wait)
                 if not self.has_time(started):
                     raise NarrationFailed(reason)
+                if number > 0:
+                    record_narration_retry()
                 try:
                     return await narrator.narrate(request, preview)
                 except (ProviderError, NarrationError) as error:
@@ -160,4 +169,5 @@ class RetryingNarrator:
                     break
             if not can_fall_back(reason):
                 break
+            left = narrator
         raise NarrationFailed(reason)

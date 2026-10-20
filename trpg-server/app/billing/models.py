@@ -63,6 +63,16 @@ DUE_STATUSES = (ChargeStatus.PENDING, ChargeStatus.HELD, ChargeStatus.CAPTURE_DU
 OPEN_STATUSES = (ChargeStatus.PENDING, ChargeStatus.HELD, ChargeStatus.SHORT)
 # 서술해도 되는 상태들. 값을 잡아 두었다
 SECURED_STATUSES = (ChargeStatus.HELD, ChargeStatus.CAPTURE_DUE, ChargeStatus.CAPTURED)
+# 끝나지 않은 상태. 메트릭 narration_charges 가 센다(app/billing/settler.py).
+# 끝난 것(captured, released)과 사람이 볼 것(failed)은 세지 않는다. failed 는 한 번 되면 남아 쌓이고 색인이 없다.
+# failed 가 되는 것은 결제 서버의 거절(billing_calls_total 의 rejected)로 본다
+UNFINISHED_STATUSES = (
+    ChargeStatus.PENDING,
+    ChargeStatus.HELD,
+    ChargeStatus.SHORT,
+    ChargeStatus.CAPTURE_DUE,
+    ChargeStatus.RELEASE_DUE,
+)
 
 
 def status_in(statuses: tuple[ChargeStatus, ...]) -> str:
