@@ -207,6 +207,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/tables/narration-models` | 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값(`{"free": false, "models": [{"slug", "display_name", "vendor", "grade", "credits", "tier", "promo", "next", "retires_on"}]}`). 가격 목록을 받지 못했으면 503 ([고를 수 있는 모델](#고를-수-있는-모델)) | access 토큰 |
 | GET | `/api/v1/game/tables/past` | 내가 떠난 테이블 목록. 최근에 떠난 것부터. `limit`, `offset`([떠난 테이블](#떠난-테이블)) | access 토큰 |
 | GET | `/api/v1/game/tables/past/{id}/events` | 떠난 테이블의 이벤트. 떠난 때까지만. `after`, `limit` 은 앉은 사람의 것과 같다 | access 토큰 |
+| GET | `/api/v1/game/tables/past/{id}/transcript` | 떠난 테이블의 기록을 마크다운 파일로. 떠난 때까지만([기록 내려받기](#기록-내려받기)) | access 토큰 |
 | GET | `/api/v1/game/tables/lobby` | 로비. 들어갈 수 있는 테이블 목록. 최근에 만든 것부터. `scenario_id`, `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/join` | 로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 `password` 를 보낸다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}` | 내가 앉아 있는 테이블 하나 | access 토큰 |
@@ -239,6 +240,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/rounds/current/declaration` | 선언 내기. 다시 내면 바뀐다. `action` 으로 행동(판정)을 하나 붙일 수 있다. 모두 냈으면 라운드가 닫기 시작한다(`closing`). 다음 라운드는 스트림으로 온다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/close` | 라운드 닫기. 202. 방장만. 선언을 기다리지 않고 넘어간다. 오래 멈춘 라운드에 다시 부르면 서술을 다시 맡긴다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/events` | 테이블의 이벤트. 일어난 순서대로. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/transcript` | 한 판의 기록을 마크다운 파일로([기록 내려받기](#기록-내려받기)) | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/messages` | 채팅 쓰기. 201. 끝난 테이블에는 쓸 수 없다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/messages` | 테이블의 채팅. 쓴 순서대로. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/messages/typing` | "입력 중"이라고 알리기. 204. 저장하지 않는다. 다른 사람들의 스트림에 `typing` 이 간다 | access 토큰 |
@@ -1062,6 +1064,29 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 - **목록.** `GET /tables/past` 는 테이블의 id, 시나리오, 제목, 떠날 때의 캐릭터 이름, 떠난 길, `last_sequence`, 떠난 시각을 준다. 테이블의 지금 상태와 남은 사람은 싣지 않는다.
 - **떠난 적 없는 테이블은 404 다.** 지금 앉아 있는 사람도 여기서는 404 다(앉은 사람의 길로 읽는다). 시작한 테이블에는 새로 들어올 수 없으므로 한 사람이 같은 테이블을 두 번 떠나지 않는다.
 - 이 길이 생기기 전에 떠난 사람은 읽지 못한다. 누가 앉았었는지 남아 있지 않다.
+
+### 기록 내려받기
+
+한 판의 공개된 기록을 마크다운 파일 하나로 내려받는다(#403, `app/transcripts/`). 읽기만 하고 테이블을 바꾸지 않는다.
+
+| 받는 사람 | 길 | 어디까지 |
+| --- | --- | --- |
+| 앉은 사람 | `GET /tables/{id}/transcript` | 받기 시작한 때의 마지막 이벤트까지. 받는 동안 판이 이어져도 파일의 끝은 그대로다 |
+| 떠난 사람 | `GET /tables/past/{id}/transcript` | 떠났다는 이벤트까지([떠난 테이블](#떠난-테이블)과 같다) |
+
+둘 다 아니면 404 다. 응답은 `text/markdown; charset=utf-8` 이고 `Content-Disposition` 의 `filename*` 이 테이블의 제목이다.
+
+**넣는 것과 빼는 것.** 이벤트를 읽어 글로 바꾼다. 앉은 사람에게 내보내는 칸(`app/events/responses.py` 의 `VISIBLE`)만 본다. 기록이 화면보다 더 많이 알지 않는다.
+- 넣는 것: 시작과 함께한 캐릭터, 라운드(번호와 게임 안의 시각), GM 의 서술, 선언, 판정의 눈과 성패, 죽음의 굴림, HP, 몬스터와 NPC 의 공격과 몸(양과 생사만), 부상, 물건, 훔치기, 드러난 퀘스트, 이동, 찾기, 쉬기, 이름 맞히기, NPC 의 태도, 자리를 떠남, 끝
+- 빼는 것: 쪽지(누가 누구에게 보냈는지도), 숨긴 퀘스트, 설정과 운영(모델, 문체, 시간 제한, 크레딧, 서술 실패), 내부 식별자(사람, 항목, 몬스터의 id). 비공개 로어, 모델의 추론, 프롬프트는 처음부터 이벤트에 없다
+- 쓰는 종류는 `app/transcripts/markdown.py` 의 `RENDERERS` 에 적은 것뿐이다. 이벤트의 종류가 늘어도 거기 올리기 전에는 기록에 나가지 않는다
+- 능력치, 난이도, 부상은 이 판의 규칙에 적힌 이름으로 쓴다. 서술과 선언의 글이 맨 앞에 `#` 을 써도 제목이 되지 않게 글자로 남긴다(`\#`)
+- 이벤트에는 서술이 먼저, 그 서술로 여는 라운드가 뒤에 적힌다. 기록에는 라운드의 구분을 그 장면 앞에 쓴다
+
+**흘려 보낸다.** 다 모으지 않는다. 이벤트를 200 개씩 새 세션으로 읽어 글로 바꾸는 대로 보낸다. 보내는 동안 DB 연결을 붙잡지 않는다.
+받을 수 있는지는 응답을 시작하기 전에 짧은 세션으로 본다(시작한 뒤에는 404 를 줄 수 없다). 실시간 스트림(`app/realtime/router.py`)과 같은 방식이다.
+
+나중: HTML 로 내보내기, 공유 링크.
 
 **동시에 오는 요청.** 테이블을 바꾸는 일은 모두 테이블의 행을 잠그고 한다(`SELECT ... FOR UPDATE`).
 한 자리가 남았을 때 두 사람이 동시에 들어와도 한 사람만 앉고, 두 사람이 같은 프리젠을 동시에 골라도 한 사람만 가져간다.
@@ -3219,7 +3244,7 @@ PR과 `main` 푸시마다 GitHub Actions가 게임 서버를 검사한다. `trpg
 | `models` | 모델과 값: 모델 호출과 창구, 모델 목록, 서술의 값과 크레딧 기다림 |
 | `narration` | 서술: 프롬프트, 서술자, 로어와 기억의 검색, 장부 초안 |
 | `tables` | 테이블: 방, 자리, 캐릭터의 교체, 테이블의 시트·물건·맵·퀘스트·시계 |
-| `realtime` | 실시간: 대화, 귓속말, 기록, 스트림, 신호 |
+| `realtime` | 실시간: 대화, 귓속말, 기록(내려받기 포함), 스트림, 신호 |
 | `platform` | 기반과 나머지: 앱, 설정, DB, 인증, 관측, 작업, 알림, 운영자. 어느 묶음에도 맞지 않는 파일도 여기 든다 |
 
 - 파일은 이름의 머리(`test_` 뒤)로 묶음을 정한다. 위의 묶음부터 보고 처음 맞는 묶음에 든다.

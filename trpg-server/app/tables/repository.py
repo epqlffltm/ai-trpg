@@ -60,6 +60,16 @@ async def find_table(session: AsyncSession, table_id: uuid.UUID) -> GameTable | 
     return await session.scalar(select(GameTable).where(GameTable.id == table_id))
 
 
+async def find_heading(session: AsyncSession, table_id: uuid.UUID) -> tuple[str, dict] | None:
+    """
+    테이블의 제목과 판의 복사본(content)만 읽는다. 없으면 None.
+
+    테이블을 통째로 읽으면 함께 읽히는 것(자리, 퀘스트 …)이 많다. 떠난 사람의 기록(app/transcripts)이 쓴다.
+    """
+    row = (await session.execute(select(GameTable.title, GameTable.content).where(GameTable.id == table_id))).first()
+    return None if row is None else (row.title, row.content)
+
+
 def locked(query: Select[tuple[GameTable]]) -> Select[tuple[GameTable]]:
     """
     찾은 테이블을 이 트랜잭션이 끝날 때까지 혼자 잠근다.
