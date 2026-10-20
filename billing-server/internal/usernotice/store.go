@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice/usernoticedb"
@@ -37,12 +38,14 @@ type Service struct {
 	pool   *pgxpool.Pool
 	clock  func() time.Time
 	sender Sender
+	// notices 는 적고 보낸 일을 센다(metrics.go). 처음에는 세지 않는다
+	notices metric.Int64Counter
 }
 
 // NewService 는 Service 를 만든다. sender 가 nil 이면 적기만 하고 보내지 않는다(알림 서버의 주소나 비밀이 없을 때).
 // 적어 둔 것은 StaleAfter 안에 설정하면 나간다.
 func NewService(pool *pgxpool.Pool, now func() time.Time, sender Sender) *Service {
-	return &Service{pool: pool, clock: now, sender: sender}
+	return &Service{pool: pool, clock: now, sender: sender, notices: noNoticeCounter()}
 }
 
 // Round 는 한 바퀴를 돈다. 적고, 정리하고, limit 개까지 보낸다. 하나가 실패해도 나머지는 한다.
@@ -68,6 +71,10 @@ func (s *Service) queue(ctx context.Context) (int, error) {
 	expiring, expiringErr := queries.QueueExpiringNotices(ctx, usernoticedb.QueueExpiringNoticesParams{
 		Now: now, UpTo: now.Add(ExpiringWithin), NoticedSince: now.Add(-ExpiringWithin),
 	})
+	s.count(ctx, KindOrderPaid, OutcomeQueued, paid)
+	s.count(ctx, KindOrderRefunded, OutcomeQueued, refunded)
+	s.count(ctx, KindWelcomeCredits, OutcomeQueued, welcome)
+	s.count(ctx, KindCreditsExpiring, OutcomeQueued, expiring)
 	return int(paid + refunded + welcome + expiring), errors.Join(paidErr, refundedErr, welcomeErr, expiringErr)
 }
 
@@ -105,6 +112,7 @@ func (s *Service) deliverNext(ctx context.Context) (Delivery, bool, error) {
 	notice := toNotice(row)
 	sent := s.sender.Send(ctx, notice)
 	logUnsent(ctx, notice, sent)
+	s.count(ctx, notice.Kind, deliveryOutcome(sent.Delivery), 1)
 	return sent.Delivery, true, s.record(ctx, row, sent, now)
 }
 
