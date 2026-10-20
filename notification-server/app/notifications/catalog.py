@@ -63,6 +63,7 @@ KINDS: Mapping[str, KindRule] = MappingProxyType(
         'order.refunded': rule(BILLING, 'order_id', 'product_id', 'price', 'credits'),
         'credit.welcome': rule(BILLING, 'amount', 'expires_at'),
         'credit.expiring': rule(BILLING, 'amount', 'first_expires_at'),
+        'credit.short': rule(BILLING, 'price_code', 'amount', 'gold_required'),
         # 게시판: 댓글과 답글
         'post.commented': rule(BOARD, 'board_slug', 'post_id', 'post_title', 'comment_id'),
         'comment.replied': rule(BOARD, 'board_slug', 'post_id', 'post_title', 'comment_id', 'parent_id'),

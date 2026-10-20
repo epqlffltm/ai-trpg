@@ -23,6 +23,7 @@ import (
 // 새 홀드의 만료 시각은 지금부터 ttl 뒤다.
 // 두 번째 값은 이번에 새로 걸었으면 true 다. 크레딧이 모자라면 wallet.ErrInsufficient 이고 홀드도 남지 않는다.
 // 프리미엄인데 골드가 모자라면 wallet.ErrPaidInsufficient 다(ErrInsufficient 도 참이다).
+// 모자라 걸지 못했으면 붙여 둔 것(WithShortfalls)에 알린다. 알리지 못해도 답은 같다.
 // 이름표의 결과(처음, 다시 보냄, 다른 내용)를 센다(metrics.go). 돌아오면 트랜잭션은 이미 끝났다.
 func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, reference string, priceCode string) (Hold, bool, error) {
 	placed, created, err := s.place(ctx, source, userID, reference, priceCode)
@@ -30,7 +31,7 @@ func (s *Service) Place(ctx context.Context, source string, userID uuid.UUID, re
 	return placed, created, err
 }
 
-// place 는 Place 의 본문이다.
+// place 는 Place 의 본문이다. 이름표를 보고, 가격표에서 값을 찾고, 건다. 크레딧이 모자라 걸지 못했으면 그 일을 알린다.
 func (s *Service) place(ctx context.Context, source string, userID uuid.UUID, reference string, priceCode string) (Hold, bool, error) {
 	if !referencePattern.MatchString(reference) {
 		return Hold{}, false, ErrInvalidReference
@@ -40,11 +41,20 @@ func (s *Service) place(ctx context.Context, source string, userID uuid.UUID, re
 	if err != nil {
 		return Hold{}, false, err
 	}
+	placed, created, err := s.take(ctx, source, userID, reference, price, now)
+	if errors.Is(err, wallet.ErrInsufficient) {
+		s.noteShort(ctx, userID, price, err)
+	}
+	return placed, created, err
+}
 
+// take 는 한 트랜잭션 안에서 홀드의 줄을 만들고 지갑에서 price 만큼 뺀다. 같은 이름표의 홀드가 이미 있으면 그것을 돌려준다.
+// 두 번째 값은 이번에 새로 걸었으면 true 다. 크레딧이 모자라면 홀드의 줄도 함께 되돌려진다.
+func (s *Service) take(ctx context.Context, source string, userID uuid.UUID, reference string, price pricing.Price, now time.Time) (Hold, bool, error) {
 	var placed Hold
 	var created bool
 	// 지갑이 원장에 적은 일은 커밋한 뒤에 세어진다(txn.Run)
-	err = txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
+	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		queries := holddb.New(tx)
 		row, err := queries.InsertHold(ctx, holddb.InsertHoldParams{
 			ID:        uuid.New(),

@@ -27,6 +27,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/tracing"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
 )
 
@@ -52,6 +53,8 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, providers order.Provide
 	if err != nil {
 		return Services{}, err
 	}
+	// 크레딧이 모자라 걸지 못한 일을 사용자의 알림함에 보낼 것으로 적는다. 보내기는 정리 작업이 한다(보내는 것을 붙이지 않는다)
+	holds.WithShortfalls(usernotice.NewService(pool, now, nil))
 	return Services{Wallet: wallets, Orders: orders, Holds: holds, Prices: prices, Eligibility: eligibility.NewService(pool, now)}, nil
 }
 

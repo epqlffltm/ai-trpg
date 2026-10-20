@@ -127,6 +127,8 @@ type Service struct {
 	ttl time.Duration
 	// keys 는 홀드를 걸 때의 이름표(중복 방지 키)의 결과를 센다(metrics.go). 처음에는 세지 않는다
 	keys metrics.Idempotency
+	// shortfalls 는 크레딧이 모자라 걸지 못한 일을 받는다(shortfall.go). 처음에는 없다(nil). 아무에게도 알리지 않는다
+	shortfalls Shortfalls
 }
 
 // NewService 는 Service 를 만든다. now 는 지금 시각을 돌려주는 함수, prices 는 가격표, ttl 은 만료까지의 시간이다.
