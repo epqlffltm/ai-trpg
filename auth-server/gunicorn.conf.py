@@ -25,6 +25,10 @@ GUNICORN_ACCESS_LOGGER = 'gunicorn.access'
 # 컨테이너 안에서 모든 주소로 받는다. 밖에 여는 포트는 compose 가 정한다
 bind = '0.0.0.0:8000'
 
+# 앱(Django)을 워커가 갈라진 뒤에 불러온다. 앱이 뜰 때 span 과 메트릭을 보내는 스레드를 띄운다(observability/apps.py).
+# 갈라지기 전에 불러오면(True) 그 스레드가 워커에 따라오지 않아 워커의 span 과 메트릭이 조용히 아무 데도 가지 않는다
+preload_app = False
+
 # 요청마다 한 줄은 남기지 않는다. 같은 일을 이 서버의 미들웨어가 공통 규격으로 한다.
 # gunicorn 의 줄에는 실제 주소가 주소 뒤에 붙은 값까지 그대로 적힌다
 accesslog = None

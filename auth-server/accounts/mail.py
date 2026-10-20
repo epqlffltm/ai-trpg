@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from accounts.email_codes import CODE_LIFETIME, TOKEN_LIFETIME
 from accounts.guardian_links import CONSENT_LINK_LIFETIME
-from accounts.models import EmailCodePurpose, GuardianNoticeKind, MailReceipt, SecurityEvent, User
+from accounts.models import EmailCodePurpose, GuardianNoticeKind, MailKind, MailReceipt, SecurityEvent, User
 from accounts.outbox import enqueue_mail
 
 # 보안 이벤트 요약 메일에 한 줄씩 적는 사건의 최대 수. 넘는 만큼은 건수만 알린다.
@@ -28,6 +28,10 @@ EMAIL_CODE_MESSAGES = {
     EmailCodePurpose.SIGNUP: ('가입 인증 코드', '회원가입을 이어 가려면 아래 코드를 입력해 주세요.'),
     EmailCodePurpose.LOGIN: ('로그인 인증 코드', '로그인을 마치려면 아래 코드를 입력해 주세요.'),
 }
+
+
+# 인증 코드 메일의 종류(메트릭 emails_sent_total 의 kind)
+EMAIL_CODE_KINDS = {EmailCodePurpose.SIGNUP: MailKind.SIGNUP_CODE, EmailCodePurpose.LOGIN: MailKind.LOGIN_CODE}
 
 
 def build_email_code_message(*, purpose: str, code: str) -> tuple[str, str]:
@@ -50,7 +54,7 @@ def send_email_code(*, user: User, purpose: str, code: str) -> None:
     보내는 주소는 settings 의 DEFAULT_FROM_EMAIL 이다.
     """
     subject, body = build_email_code_message(purpose=purpose, code=code)
-    enqueue_mail(to_email=user.email, subject=subject, body=body)
+    enqueue_mail(to_email=user.email, subject=subject, body=body, kind=EMAIL_CODE_KINDS[EmailCodePurpose(purpose)])
 
 
 def send_signup_code(*, email: str, code: str) -> None:
@@ -60,7 +64,7 @@ def send_signup_code(*, email: str, code: str) -> None:
     문구에 아이디나 닉네임이 없다. 가입 내용은 이 코드를 맞힌 뒤에 정한다.
     """
     subject, body = build_email_code_message(purpose=EmailCodePurpose.SIGNUP, code=code)
-    enqueue_mail(to_email=email, subject=subject, body=body)
+    enqueue_mail(to_email=email, subject=subject, body=body, kind=MailKind.SIGNUP_CODE)
 
 
 def send_already_registered_notice(*, user: User) -> None:
@@ -79,6 +83,7 @@ def send_already_registered_notice(*, user: User) -> None:
             '본인이 요청했다면 기존 계정으로 로그인해 주세요.\n'
             '요청한 적이 없다면 이 메일을 무시해 주세요. 계정에는 아무 변화가 없습니다.'
         ),
+        kind=MailKind.ALREADY_REGISTERED,
     )
 
 
@@ -111,6 +116,7 @@ def send_password_reset_link(*, user: User, token: str) -> None:
             f'이 링크는 {minutes}분 동안, 한 번만 쓸 수 있습니다.\n'
             '요청한 적이 없다면 이 메일을 무시해 주세요. 비밀번호는 바뀌지 않습니다.'
         ),
+        kind=MailKind.PASSWORD_RESET,
     )
 
 
@@ -128,6 +134,7 @@ def send_password_changed_notice(*, user: User) -> None:
             '본인이 변경했다면 이 메일을 무시해 주세요.\n'
             '변경한 적이 없다면 로그인 화면의 "비밀번호 찾기" 로 비밀번호를 즉시 다시 설정해 주세요.'
         ),
+        kind=MailKind.PASSWORD_CHANGED,
     )
 
 
@@ -168,7 +175,7 @@ def send_security_digest(*, recipients: list[str], events: list[SecurityEvent]) 
     """보안 이벤트 요약을 운영자들에게 보낸다."""
     subject, body = build_security_digest_message(events=events)
     for recipient in recipients:
-        enqueue_mail(to_email=recipient, subject=subject, body=body)
+        enqueue_mail(to_email=recipient, subject=subject, body=body, kind=MailKind.SECURITY_DIGEST)
 
 
 def _describe_security_event(event: SecurityEvent) -> str:
@@ -211,6 +218,7 @@ def send_guardian_consent_request(*, minor: User, guardian_email: str, token: st
             f'이 링크는 {days}일 동안 쓸 수 있습니다.\n'
             '모르는 요청이라면 이 메일을 무시해 주세요. 동의하지 않으면 아무 일도 일어나지 않습니다.'
         ),
+        kind=MailKind.GUARDIAN_CONSENT,
     )
 
 
@@ -228,6 +236,7 @@ def send_guardian_consented_notice(*, minor: User, guardian_email: str, revoke_t
             f'{link}\n\n'
             '이 메일을 지우지 말고 보관해 주세요. 결제 알림 메일에도 같은 링크가 들어 있습니다.'
         ),
+        kind=MailKind.GUARDIAN_CONSENTED,
     )
 
 
@@ -240,6 +249,7 @@ def send_guardian_revoked_notice(*, minor: User, guardian_email: str) -> None:
             f'회원 {minor.nickname} 님의 결제에 대한 동의를 철회하셨습니다. 이제 그 회원은 결제할 수 없습니다.\n'
             '이 주소로 더 메일을 보내지 않습니다.'
         ),
+        kind=MailKind.GUARDIAN_REVOKED,
     )
 
 
@@ -254,7 +264,7 @@ def send_minor_guardian_notice(*, minor: User, consented: bool) -> None:
             '보호자가 결제에 대한 동의를 철회했습니다. 이제 결제할 수 없습니다.\n'
             '다시 결제하려면 보호자에게 다시 동의를 받아 주세요.'
         )
-    enqueue_mail(to_email=minor.email, subject=subject, body=body)
+    enqueue_mail(to_email=minor.email, subject=subject, body=body, kind=MailKind.MINOR_GUARDIAN)
 
 
 # 결제 알림에 적는 시각의 시간대. 보호자가 사는 곳이다
@@ -303,4 +313,5 @@ def send_guardian_payment_notice(
         ),
         receipt=receipt,
         deadline=deadline,
+        kind=MailKind.GUARDIAN_PAYMENT,
     )
