@@ -69,6 +69,7 @@ from accounts.jwks import build_jwks
 from accounts.login_tickets import InvalidLoginTicketError
 from accounts.models import User
 from accounts.origin_check import is_allowed_origin, log_refused_origin, read_origin
+from accounts.public_names import InvalidPublicIdsError, find_names, parse_ids
 from accounts.serializers import (
     ConsentAgreeSerializer,
     ConsentDocumentSerializer,
@@ -87,6 +88,7 @@ from accounts.serializers import (
     LoginVerifySerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
+    PublicNameSerializer,
     SignupCompleteSerializer,
     SignupSerializer,
     SignupVerifiedSerializer,
@@ -887,3 +889,28 @@ class MyConsentView(APIView):
                 status.HTTP_400_BAD_REQUEST,
             )
         return build_consents_response(request.user)
+
+
+# 공개 이름의 응답을 브라우저가 기억하는 시간(초). 이름은 드물게 바뀐다. 같은 쪽을 다시 그릴 때 다시 묻지 않는다
+PUBLIC_NAMES_CACHE_SECONDS = 60
+
+
+class PublicNamesView(APIView):
+    """
+    GET /api/v1/auth/public-names?ids=<공개 ID>,<공개 ID>,... 다른 사람의 이름을 한꺼번에 찾는다(#532).
+
+    공개 목록은 로그인 없이 읽으므로(#530) 이것도 로그인 없이 연다. 닉네임만 나간다(accounts/public_names.py).
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request: Request) -> Response:
+        try:
+            ids = parse_ids(request.query_params.get('ids', ''))
+        except InvalidPublicIdsError as exc:
+            return build_coded_error_response(str(exc), 'public_ids_invalid', status.HTTP_400_BAD_REQUEST)
+        names = PublicNameSerializer(find_names(ids), many=True).data
+        response = Response({'names': names}, status=status.HTTP_200_OK)
+        response['Cache-Control'] = f'public, max-age={PUBLIC_NAMES_CACHE_SECONDS}'
+        return response
