@@ -12,6 +12,9 @@
 보낸 메일의 줄은 지운다. 보냈다는 사실을 남겨야 하는 메일은 기록(MailReceipt)을 붙여 적는다(#352).
 보내면 그 기록에 보낸 시각을, 버리면 버린 시각을 적는다.
 
+보내 본 결과를 메일의 종류(kind)마다 센다(메트릭 emails_sent_total). 보냄(sent), 다시 시도할 것(retried),
+버림(discarded)이다. 메일 서버와의 통신과 마무리가 끝난 뒤에 센다. inline 은 보낸 것만 센다(실패는 요청의 오류다).
+
 적는 일이 계정 생성이나 코드 발급과 같은 트랜잭션에 들어간다. 그래서
 "계정은 만들어졌는데 보낼 메일은 적히지 않은" 상태나 그 반대가 생기지 않는다.
 """
@@ -27,8 +30,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.mail_crypto import UnreadableMailBodyError, decrypt_mail_body, encrypt_mail_body
-from accounts.models import MailReceipt, OutgoingMail, OutgoingMailStatus, SecurityEventKind
+from accounts.models import MailKind, MailReceipt, OutgoingMail, OutgoingMailStatus, SecurityEventKind
 from accounts.security_events import record_security_event
+from observability.metrics import record_email
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +50,11 @@ DEFAULT_BATCH_SIZE = 20
 # 메일 서버의 시간 제한(SMTP_TIMEOUT, 10초)은 연결, 인사, 암호화, 인증, 보내기의 단계마다 따로 걸린다.
 # 그 여러 단계보다 넉넉하고, 버리는 시각(5분) 안에 한 번 더 차지할 여유가 남는 길이다
 MAIL_CLAIM_LEASE = timedelta(minutes=2)
+
+# 보내 본 결과(메트릭 emails_sent_total 의 result). DeliveryReport 의 칸과 같은 이름이다
+SENT = 'sent'
+RETRIED = 'retried'
+DISCARDED = 'discarded'
 
 # 임대가 끝난 메일을 다시 가져갈 때 마지막 오류 칸에 적는 글
 LEASE_EXPIRED_ERROR = '이전 시도가 정한 시간 안에 끝나지 않았다(워커가 멈췄거나 죽었다)'
@@ -81,6 +90,14 @@ class ClaimedMail:
     body: str
     # 보냈다는 것을 남길 기록. 없으면 None 이다
     receipt_id: int | None = None
+    kind: str = MailKind.OTHER
+
+
+@dataclass(frozen=True)
+class Discarded:
+    """차지하려던 메일을 그 자리에서 버렸다(버리는 시각이 지났거나 본문을 읽을 수 없다). 그 메일의 종류."""
+
+    kind: str
 
 
 def enqueue_mail(
@@ -90,6 +107,7 @@ def enqueue_mail(
     body: str,
     receipt: MailReceipt | None = None,
     deadline: timedelta = MAIL_SEND_DEADLINE,
+    kind: str = MailKind.OTHER,
 ) -> None:
     """
     메일을 보내 달라고 맡긴다.
@@ -100,10 +118,12 @@ def enqueue_mail(
 
     receipt 를 주면 보냈거나 버렸을 때 그 기록에 적는다. deadline 은 버리기까지의 시간이다.
     인증 코드는 5분이 지나면 쓸모가 없지만, 결제 알림은 하루 늦어도 쓸모가 있다.
+    kind 는 메일의 종류다(MailKind). 보낸 결과를 종류마다 센다.
     """
     if settings.MAIL_DELIVERY == 'inline':
         _send(to_email=to_email, subject=subject, body=body)
         _mark_receipt(receipt.pk if receipt else None, sent_at=timezone.now())
+        record_email(kind, SENT)
         return
 
     now = timezone.now()
@@ -115,6 +135,7 @@ def enqueue_mail(
         next_attempt_at=now,
         expires_at=now + deadline,
         receipt=receipt,
+        kind=kind,
     )
 
 
@@ -137,23 +158,28 @@ def _deliver_next() -> str | None:
     보내는 도중 워커가 죽으면 임대(MAIL_CLAIM_LEASE)가 끝난 뒤 다른 워커가 다시 가져간다.
     """
     claimed = _claim_next_due_mail(timezone.now())
-    if claimed is None or claimed == 'discarded':
-        return claimed
+    if claimed is None:
+        return None
+    if isinstance(claimed, Discarded):
+        record_email(claimed.kind, DISCARDED)
+        return DISCARDED
     try:
         _send(to_email=claimed.to_email, subject=claimed.subject, body=claimed.body)
     except (smtplib.SMTPException, OSError) as exc:
         # OSError 는 연결 실패와 시간 초과를 포함한다
         _schedule_retry(claimed, exc, timezone.now())
-        return 'retried'
+        record_email(claimed.kind, RETRIED)
+        return RETRIED
     _finish_sent(claimed)
-    return 'sent'
+    record_email(claimed.kind, SENT)
+    return SENT
 
 
-def _claim_next_due_mail(now) -> ClaimedMail | str | None:
+def _claim_next_due_mail(now) -> ClaimedMail | Discarded | None:
     """
     보낼 차례가 된 메일 하나를 차지한다. 짧은 트랜잭션 하나다.
 
-    버릴 메일이면 그 자리에서 버리고 'discarded' 를, 보낼 메일이 없으면 None 을 돌려준다.
+    버릴 메일이면 그 자리에서 버리고 Discarded 를, 보낼 메일이 없으면 None 을 돌려준다.
     차지하면 상태를 '보내는 중' 으로, 다음 시도 시각을 임대가 끝나는 시각으로 바꾸고 커밋한다.
     """
     with transaction.atomic():
@@ -164,14 +190,14 @@ def _claim_next_due_mail(now) -> ClaimedMail | str | None:
             _note_expired_lease(mail)
         if now >= mail.expires_at:
             _discard(mail, now)
-            return 'discarded'
+            return Discarded(mail.kind)
         try:
             body = decrypt_mail_body(mail.body)
         except UnreadableMailBodyError as exc:
             # 다시 시도해도 읽을 수 없다. 바로 버린다
             mail.last_error = _describe(exc)
             _discard(mail, now)
-            return 'discarded'
+            return Discarded(mail.kind)
         _mark_sending(mail, now)
     return ClaimedMail(
         pk=mail.pk,
@@ -181,6 +207,7 @@ def _claim_next_due_mail(now) -> ClaimedMail | str | None:
         subject=mail.subject,
         body=body,
         receipt_id=mail.receipt_id,
+        kind=mail.kind,
     )
 
 
@@ -301,3 +328,12 @@ def _describe(error: Exception) -> str:
     """오류를 한 줄로 적는다. 저장 칸의 길이에 맞춰 자른다."""
     text = f'{type(error).__name__}: {error}'
     return text[: OutgoingMail._meta.get_field('last_error').max_length]
+
+
+def count_waiting_mail() -> int:
+    """
+    발송함에 남은 메일의 수. 대기 중이거나 보내는 중인 것이다(버린 것은 뺀다).
+
+    메일 워커가 바퀴마다 메트릭(background_jobs_queued)으로 적는다. 상태의 색인(accounts_mail_due_idx)으로 센다.
+    """
+    return OutgoingMail.objects.filter(status__in=[OutgoingMailStatus.PENDING, OutgoingMailStatus.SENDING]).count()

@@ -35,6 +35,7 @@ from config.security import (
     secure_cookies,
 )
 from observability.formatter import ServiceInfo
+from observability.metrics import MIN_METRIC_EXPORT_INTERVAL
 from observability.setup import SERVICE_NAME, logging_settings
 from observability.tracing import otlp_endpoint
 
@@ -79,12 +80,18 @@ APP_VERSION = env('APP_VERSION', default='dev')
 # 이 수준부터 로그를 남긴다. debug, info, warning, error 중 하나다
 LOG_LEVEL = env('LOG_LEVEL', default='info')
 
-# span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. 경로 없이 적는다(http://alloy:4318).
-# 비우면 span 을 내보내지 않는다. 로그는 그대로다(observability/tracing.py)
+# span 과 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. 경로 없이 적는다(http://alloy:4318).
+# 비우면 내보내지 않는다. 로그는 그대로다(observability/tracing.py, metrics.py)
 try:
     OTEL_EXPORTER_OTLP_ENDPOINT = otlp_endpoint(env('OTEL_EXPORTER_OTLP_ENDPOINT', default=''))
 except ValueError as error:
     raise ImproperlyConfigured(str(error)) from None
+
+# 메트릭을 보내는 간격(밀리초). 다른 서버와 같은 이름과 기본값이다.
+# SDK 의 기본(60초)이면 rate(…[1m]) 에 점이 하나뿐이다
+OTEL_METRIC_EXPORT_INTERVAL = env.int('OTEL_METRIC_EXPORT_INTERVAL', default=15000)
+if OTEL_METRIC_EXPORT_INTERVAL < MIN_METRIC_EXPORT_INTERVAL:
+    raise ImproperlyConfigured('OTEL_METRIC_EXPORT_INTERVAL 은 1000(밀리초) 이상이어야 합니다.')
 
 # 이 값들은 로그의 모든 줄에 실린다. 줄바꿈이나 빈칸이 든 값을 받지 않는다
 if not re.fullmatch(r'[a-z][a-z0-9_-]{0,31}', APP_ENVIRONMENT):
@@ -126,7 +133,10 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    # 요청마다 서버 span 을 건다(observability/request_spans.py). 맨 앞에 둔다.
+    # 요청마다 HTTP 메트릭 셋을 센다(observability/request_metrics.py).
+    # 맨 앞이라 요청 전체(span 과 로그를 거는 시간까지)를 잰다
+    'observability.request_metrics.RequestMetricsMiddleware',
+    # 요청마다 서버 span 을 건다(observability/request_spans.py). 메트릭 다음에 둔다.
     # 뒤의 로그(trace_id)와 쿼리가 이 span 을 따른다
     'observability.request_spans.RequestSpanMiddleware',
     # 요청마다 식별자(request_id, trace_id)를 걸고, 끝나면 한 줄을 남긴다. 응답에 X-Request-ID 를 돌려준다.

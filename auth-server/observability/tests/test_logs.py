@@ -266,10 +266,15 @@ class SettingsTests(SimpleTestCase):
         self.assertEqual(info.version, settings.APP_VERSION)
 
     def test_the_request_middleware_comes_first(self):
-        # 서버 span 이 맨 앞이고, 식별자를 거는 것이 그 바로 뒤다. 로그의 trace_id 가 span 의 것이 된다
+        # 메트릭이 맨 앞이라 요청 전체를 잰다. 서버 span 이 그 뒤고, 식별자를 거는 것이 그 바로 뒤다.
+        # 로그의 trace_id 가 span 의 것이 된다
         self.assertEqual(
-            settings.MIDDLEWARE[:2],
-            ['observability.request_spans.RequestSpanMiddleware', 'observability.middleware.RequestLoggingMiddleware'],
+            settings.MIDDLEWARE[:3],
+            [
+                'observability.request_metrics.RequestMetricsMiddleware',
+                'observability.request_spans.RequestSpanMiddleware',
+                'observability.middleware.RequestLoggingMiddleware',
+            ],
         )
 
     def test_the_development_server_request_line_is_silenced(self):

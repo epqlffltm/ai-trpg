@@ -66,7 +66,8 @@ def instance_id(process: str) -> str:
 
 def build_resource(info: ServiceInfo, process: str) -> Resource:
     """
-    span 의 출처. 서비스, 버전, 환경, 프로세스다. 다른 서버와 같은 이름이다.
+    span 과 메트릭의 출처. 서비스, 버전, 환경, 프로세스다. 다른 서버와 같은 이름이다.
+    프로세스가 뜰 때 한 번 만들어 둘이 함께 쓴다(observability/apps.py). 그래야 service.instance.id 가 같다.
 
     정한 넷만 싣는다. Resource.create 는 환경 변수(OTEL_RESOURCE_ATTRIBUTES)와 SDK 의 정보까지 붙인다.
     """
@@ -80,24 +81,24 @@ def build_resource(info: ServiceInfo, process: str) -> Resource:
     )
 
 
-def build_provider(endpoint: str, info: ServiceInfo, process: str) -> TracerProvider | None:
+def build_provider(endpoint: str, resource: Resource) -> TracerProvider | None:
     """span 을 보내는 TracerProvider 를 만든다. 보낼 곳이 없으면 None 이다. 만드는 것만으로는 수집기에 닿지 않는다."""
     if not endpoint:
         return None
-    provider = TracerProvider(resource=build_resource(info, process), sampler=SAMPLER)
+    provider = TracerProvider(resource=resource, sampler=SAMPLER)
     exporter = OTLPSpanExporter(endpoint=endpoint + TRACES_PATH, timeout=EXPORT_TIMEOUT_SECONDS)
     batch = BatchSpanProcessor(exporter, export_timeout_millis=EXPORT_TIMEOUT_SECONDS * 1000)
     provider.add_span_processor(DropIdleRounds(batch))
     return provider
 
 
-def configure_tracing(endpoint: str, info: ServiceInfo, process: str) -> TracerProvider | None:
+def configure_tracing(endpoint: str, resource: Resource) -> TracerProvider | None:
     """
     보낼 곳이 있으면 span 을 보내는 것을 만들어 끼운다(spans.use_provider). 만든 것을 돌려준다. 없으면 None 이다.
 
     보낼 곳이 없으면 끼워 둔 것을 건드리지 않는다. 테스트가 끼운 것(메모리에 모으는 것)이 그대로 남는다.
     """
-    provider = build_provider(endpoint, info, process)
+    provider = build_provider(endpoint, resource)
     if provider is not None:
         use_provider(provider)
     return provider

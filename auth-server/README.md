@@ -13,6 +13,7 @@
 - [API](#api)
 - [로그와 요청 식별자](#로그와-요청-식별자)
 - [추적](#추적)
+- [메트릭](#메트릭)
 - [CI](#ci)
 - [설계 메모](#설계-메모)
 - [운영 메모](#운영-메모)
@@ -421,9 +422,10 @@ access 토큰에는 역할(`roles`, 글자의 목록)도 실린다(#389). 운영
 | `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적)) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 과 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적), [메트릭](#메트릭)) |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | 메트릭을 보내는 간격(밀리초, 1000 이상). 다른 서버와 같은 이름이다 |
 
-네 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
+다섯 값 모두 비밀이 아니다. 모양이 틀리면 서버가 뜨지 않는다. 모든 로그 줄에 실리는 값이라 줄바꿈이나 따옴표가 든 값을 받지 않는다.
 
 개발할 때 줄이 읽기 불편하면 `jq` 로 본다. JSON 이 아닌 줄(프레임워크가 뜰 때 찍는 안내)은 건너뛴다.
 
@@ -463,6 +465,27 @@ uv run python manage.py runserver 2>&1 | jq -rR 'fromjson? | [.timestamp, .level
 - 요청이나 작업 밖의 쿼리(서버가 뜰 때의 확인)는 span 을 걸지 않는다
 - 워커가 할 일 없이 돈 바퀴(처리한 수 `handled` 가 0 이고 실패하지 않은 것)는 그 추적을 통째로 보내지 않는다(`observability/idle_rounds.py`)
 - 받은 `traceparent` 가 "기록하지 않음"(flags `00`)이어도 남긴다
+
+## 메트릭
+
+요청, DB, 메일, 시도 횟수 제한, 워커와 예약 명령을 세어 `OTEL_EXPORTER_OTLP_ENDPOINT` 로 15초마다 민다. 수집기가 Prometheus 에 넘긴다.
+이름과 label 은 [관측 규격](../docs/observability.md)의 "메트릭"에 있다. 알림 서버의 것을 옮겼고, 이 서버에서 다른 것은 "붙인 것 (인증 서버의 메트릭)"에 있다.
+주소가 비어 있으면 세기만 하고 보내지 않는다. 테스트(`manage.py test`)는 주소가 있어도 내보내지 않는다.
+
+| 메트릭 | label | 세는 곳 |
+| --- | --- | --- |
+| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `observability/request_metrics.py`. `MIDDLEWARE` 의 맨 앞이다 |
+| `db_up` | 없음 | `config/health.py`. 준비 상태 확인이 본 DB. 연결 풀이 없어 `db_pool_*` 는 내지 않는다 |
+| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`, `result` | `observability/jobs.py` 의 `run_as_job`. 워커의 한 바퀴와 예약 명령 한 번 |
+| `background_jobs_queued` | `operation`(`mail.deliver_outgoing`) | 메일 워커가 바퀴마다 발송함에 남은 메일을 센다 |
+| `emails_sent_total` | `kind`(메일의 종류), `result`(`sent`, `retried`, `discarded`) | `accounts/outbox.py`. 한 통을 보내 본 시도마다 |
+| `auth_rate_limited_total`, `auth_rate_limits_unavailable_total` | `limit`(제한의 이름) | `accounts/attempt_limits.py`. 막은 것과, Redis 에 묻지 못해 세지 않고 통과시킨 것 |
+
+- gunicorn 은 앱을 워커가 갈라진 뒤에 불러온다(`gunicorn.conf.py` 의 `preload_app = False`). 보내는 스레드가 워커마다 뜨고, 워커마다 `service.instance.id` 가 다르다
+- 예약 명령은 끝날 때 한 번 민다. 간격을 기다리기 전에 끝나서다
+- 메일의 종류는 발송함의 칸 `kind`(`accounts.models.MailKind`)다. 종류를 더하면 관측 규격의 표에도 더한다
+- 대시보드는 Grafana 의 `auth-server`(`docker/grafana/dashboards/auth-server.json`), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `auth-server` 묶음이다
+- 테스트는 `observability/tests/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다. 보내는 길은 `observability/tests/test_metrics_setup.py` 가 가짜 수집기로 본다
 
 
 ## CI
