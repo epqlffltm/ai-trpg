@@ -136,14 +136,12 @@ async def make_public(client: AsyncClient, headers: dict[str, str], **fields) ->
         ('GET', f'{SCENARIOS_URL}/11111111-2222-4333-8444-555555555555/listing'),
         ('PATCH', f'{SCENARIOS_URL}/11111111-2222-4333-8444-555555555555/listing'),
         ('PUT', f'{SCENARIOS_URL}/11111111-2222-4333-8444-555555555555/listing/publication'),
-        ('GET', LISTINGS_URL),
-        ('GET', f'{LISTINGS_URL}/11111111-2222-4333-8444-555555555555'),
     ],
 )
-async def test_every_address_requires_login(client: AsyncClient, method: str, url: str):
+async def test_every_owner_address_requires_login(client: AsyncClient, method: str, url: str):
     response = await client.request(method, url, json={})
 
-    # 공개된 것을 보는 데도 로그인이 필요하다
+    # 제작자의 길은 로그인이 필요하다. 공개된 것을 보는 길(/listings)은 로그인 없이 열린다(test_public_listings)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 

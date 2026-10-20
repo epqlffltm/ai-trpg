@@ -194,11 +194,12 @@ async def get_published_version(session: AsyncSession, listing: Listing) -> Scen
 # --- 다른 사용자 ---
 
 
-async def get_public(session: AsyncSession, viewer: AccessClaims, scenario_id: uuid.UUID) -> PublicRow:
+async def get_public(session: AsyncSession, viewer: AccessClaims | None, scenario_id: uuid.UUID) -> PublicRow:
     """
     공개된 시나리오 하나를 돌려준다. 없으면 AssetNotFoundError.
 
     공개하지 않은 것, 지운 것, 볼 수 없는 등급인 것도 "없다"로 답한다. 있다는 것을 알려 주지 않는다.
+    viewer 가 None 이면 로그인하지 않은 사람이다. 전체 이용가만 본다(#530).
     """
     row = await repository.find_public(session, scenario_id, allowed_ratings(viewer))
     if row is None:
@@ -207,7 +208,7 @@ async def get_public(session: AsyncSession, viewer: AccessClaims, scenario_id: u
 
 
 async def get_public_detail(
-    session: AsyncSession, viewer: AccessClaims, scenario_id: uuid.UUID
+    session: AsyncSession, viewer: AccessClaims | None, scenario_id: uuid.UUID
 ) -> tuple[PublicRow, str | None]:
     """
     공개된 시나리오 하나와 그 시나리오의 추천 서술 모델을 돌려준다(#428). 없으면 AssetNotFoundError.
@@ -219,9 +220,13 @@ async def get_public_detail(
 
 
 async def list_public(
-    session: AsyncSession, viewer: AccessClaims, where: ListingFilter, limit: int, offset: int
+    session: AsyncSession, viewer: AccessClaims | None, where: ListingFilter, limit: int, offset: int
 ) -> tuple[list[PublicRow], int]:
-    """공개된 시나리오의 한 쪽과 전체 개수를 돌려준다. 보는 사람이 볼 수 있는 등급만 나온다."""
+    """
+    공개된 시나리오의 한 쪽과 전체 개수를 돌려준다. 보는 사람이 볼 수 있는 등급만 나온다.
+
+    viewer 가 None 이면 로그인하지 않은 사람이다. 전체 이용가만 본다(#530).
+    """
     ratings = allowed_ratings(viewer)
     rows = await repository.list_public(session, ratings, where, limit, offset)
     total = await repository.count_public(session, ratings, where)
