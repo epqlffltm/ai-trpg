@@ -194,7 +194,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/scenarios/{id}/listing` | 내 시나리오의 공개 정보(소개 페이지와 공개 중인 판). 아직 쓰지 않았으면 빈 것 | access 토큰 |
 | PATCH | `/api/v1/game/scenarios/{id}/listing` | 소개 페이지 고치기. 보낸 칸만 바뀐다. 공개 중인데 조건을 못 갖추게 되면 409 | access 토큰 |
 | PUT | `/api/v1/game/scenarios/{id}/listing/publication` | 공개할 판 정하기. `version` 을 `null` 로 보내면 공개를 내린다. 조건을 못 갖췄으면 409 | access 토큰 |
-| GET | `/api/v1/game/listings` | 공개된 시나리오 목록. 최근에 공개한 것부터. `genre`, `tag`, `limit`, `offset` | access 토큰 |
+| GET | `/api/v1/game/listings` | 공개된 시나리오 목록. 최근에 공개한 것부터. `genre`, `tag`, `players`, `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다. 목록의 칸에 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 능력치의 이름, 추천 서술 모델)이 더 있다(#428) | access 토큰 |
 | POST | `/api/v1/game/personas` | 보관함에 캐릭터 만들기. 201. 이름, 설명, 참고로 적어 두는 능력치(없어도 된다) | access 토큰 |
 | GET | `/api/v1/game/personas` | 내 보관함. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
@@ -820,6 +820,9 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 판에 굳힌 내용(GM 전용 설정 포함)은 나가지 않는다.
 
 등급과 추천 인원은 공개한 판에 굳어 있는 것을 따른다. 공개한 뒤에 초안의 것을 바꿔도 공개된 것은 그대로다.
+목록은 함께 할 인원(`?players=N`)으로도 거른다. 추천 인원의 최소와 최대 사이(양 끝 포함)에 N 이 드는 것만 나온다(#428).
+N 은 1 부터 테이블의 정원(`TABLE_MAX_PLAYERS`, 4)까지다. 그 밖의 수는 어떤 시나리오에도 맞지 않으므로 빈 목록 대신 422 로 알린다.
+추천일 뿐이라 테이블의 정원을 막지는 않는다. 거르는 값도 찾기를 돕는 데만 쓴다.
 성인용 시나리오도 공개할 수 있다. 성인용 내용을 볼 수 있는 사람(토큰의 `adult_content`)에게만 보인다([등급](#등급)).
 
 ## 보관함
