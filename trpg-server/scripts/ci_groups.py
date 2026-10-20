@@ -128,7 +128,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'character_mode',
         'npc_sheets',
     ),
-    # 실시간: 대화, 귓속말, 기록, 스트림, 신호
+    # 실시간: 대화, 귓속말, 기록(내려받기 포함), 스트림, 신호
     'realtime': (
         'chat_',
         'whisper',
@@ -138,6 +138,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'signed_signals',
         'shutdown',
         'typing',
+        'transcript',
     ),
     # 기반과 나머지: 앱, 설정, DB, 인증, 관측, 작업, 알림, 운영자. 어느 머리에도 맞지 않는 파일도 여기다
     CATCH_ALL: (),
