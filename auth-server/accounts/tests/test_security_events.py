@@ -5,10 +5,12 @@
 
 이벤트는 "막히기 시작한 순간" 에 한 번만 남아야 한다.
 막힌 뒤에도 계속 들어오는 요청마다 남으면, 공격자가 요청 수만큼 DB 에 행을 쌓을 수 있다.
+남긴 이벤트마다 저장한 뒤에 로그 한 줄이 남는 것도 본다(SecurityEventLogTests).
 """
 
 from django.contrib import admin
-from django.test import RequestFactory, SimpleTestCase
+from django.db import transaction
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from rest_framework import status
 
 from accounts.attempt_policies import (
@@ -19,6 +21,7 @@ from accounts.attempt_policies import (
     SIGNUP_PER_IP,
 )
 from accounts.models import SecurityEvent, SecurityEventKind
+from accounts.security_events import SECURITY_EVENT_CODE, record_security_event
 from accounts.tests.helpers import LOGIN_URL, log_in
 from accounts.tests.test_attempt_policies import (
     CHANGE_URL,
@@ -170,3 +173,60 @@ class SecurityEventAdminTests(SimpleTestCase):
 
     def test_cannot_delete(self):
         self.assertFalse(self.model_admin.has_delete_permission(self.request))
+
+
+class SecurityEventLogTests(TestCase):
+    """남긴 이벤트마다 로그 한 줄. 저장한 뒤에, 종류와 번호와 계정의 공개 ID 만 싣는다."""
+
+    LOGGER = 'accounts.security_events'
+
+    def test_a_stored_event_leaves_one_warning_line(self):
+        user = create_user()
+
+        with self.assertLogs(self.LOGGER, level='WARNING') as logs, self.captureOnCommitCallbacks(execute=True):
+            record_security_event(kind=SecurityEventKind.ACCOUNT_SUSPENDED, user=user, ip=IP, note='광고를 올렸다')
+
+        (record,) = logs.records
+        event = SecurityEvent.objects.get()
+        self.assertEqual(record.levelname, 'WARNING')
+        self.assertEqual(record.error_code, SECURITY_EVENT_CODE)
+        self.assertEqual(record.security_event, SecurityEventKind.ACCOUNT_SUSPENDED)
+        self.assertEqual(record.security_event_id, event.pk)
+        self.assertEqual(record.user_id, str(user.public_id))
+
+    def test_the_ip_and_the_note_stay_in_the_database(self):
+        user = create_user()
+
+        with self.assertLogs(self.LOGGER, level='WARNING') as logs, self.captureOnCommitCallbacks(execute=True):
+            record_security_event(kind=SecurityEventKind.ACCOUNT_SUSPENDED, user=user, ip=IP, note='광고를 올렸다')
+
+        (record,) = logs.records
+        self.assertFalse(hasattr(record, 'ip'))
+        self.assertFalse(hasattr(record, 'note'))
+        self.assertNotIn(IP, record.getMessage())
+        self.assertNotIn('광고', record.getMessage())
+
+    def test_an_event_without_an_account_has_no_user_id(self):
+        with self.assertLogs(self.LOGGER, level='WARNING') as logs, self.captureOnCommitCallbacks(execute=True):
+            record_security_event(kind=SecurityEventKind.MAIL_DISCARDED)
+
+        (record,) = logs.records
+        self.assertFalse(hasattr(record, 'user_id'))
+
+    def test_a_rolled_back_event_leaves_no_line(self):
+        with (
+            self.assertNoLogs(self.LOGGER),
+            self.captureOnCommitCallbacks(execute=True),
+            self.assertRaises(RuntimeError),
+            transaction.atomic(),
+        ):
+            record_security_event(kind=SecurityEventKind.MAIL_DISCARDED)
+            raise RuntimeError('되돌린다')
+
+        self.assertFalse(SecurityEvent.objects.exists())
+
+    def test_nothing_is_logged_before_the_commit(self):
+        with self.assertNoLogs(self.LOGGER), self.captureOnCommitCallbacks(execute=False) as callbacks:
+            record_security_event(kind=SecurityEventKind.MAIL_DISCARDED)
+
+        self.assertEqual(len(callbacks), 1)
