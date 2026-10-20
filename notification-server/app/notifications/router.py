@@ -10,8 +10,9 @@
   - 본문은 서명을 확인한 뒤에 읽는다. 서명을 확인하기 전에는 받은 바이트를 해석하지 않는다
   - 그 서버가 넣을 수 없는 kind 이거나 payload 에 꼭 있어야 하는 칸이 없으면 422 다(app/notifications/catalog.py)
   - 새로 넣었으면 201, 같은 알림을 다시 보냈으면 200(같은 id), 같은 열쇠의 다른 알림이면 409 다
+  - 받는 사람이 그 종류를 껐으면 적지 않고 200 이다(status: muted, id: null). 넣는 서버는 보낸 것으로 친다(#525)
   - 서명을 확인한 알림을 메트릭 notifications_received_total{source, outcome} 으로 센다.
-    outcome 은 created, existing, refused(422 의 kind), conflict(409) 다.
+    outcome 은 created, existing, muted, refused(422 의 kind), conflict(409) 다.
     서명이 틀린 것은 source 를 믿을 수 없어 세지 않는다(label 의 값이 끝없이 늘 수 있다)
 """
 
@@ -136,7 +137,10 @@ def ensure_listed(source: str, incoming: NotificationIn) -> None:
     response_model=NotificationPut,
     status_code=status.HTTP_201_CREATED,
     responses={
-        status.HTTP_200_OK: {'model': NotificationPut, 'description': '같은 알림을 다시 보냈다'},
+        status.HTTP_200_OK: {
+            'model': NotificationPut,
+            'description': '같은 알림을 다시 보냈다(existing). 받는 사람이 그 종류를 꺼서 적지 않았다(muted)',
+        },
         status.HTTP_401_UNAUTHORIZED: {'description': '서명이 없거나 맞지 않다'},
         status.HTTP_409_CONFLICT: {'description': '같은 열쇠의 다른 알림이다'},
         status.HTTP_413_CONTENT_TOO_LARGE: {'description': '본문이 16KB 를 넘는다'},
@@ -148,7 +152,7 @@ async def put_notification(
     body: Annotated[bytes, Depends(verified_body)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> NotificationPut:
-    """알림 하나를 넣는다. 같은 알림을 다시 보내면 같은 id 로 200 이다."""
+    """알림 하나를 넣는다. 같은 알림을 다시 보내면 같은 id 로 200 이다. 받는 사람이 껐으면 적지 않고 200 이다."""
     incoming = parse_notification(body)
     ensure_listed(source, incoming)
     try:
@@ -158,7 +162,7 @@ async def put_notification(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail={'code': 'key_reused', 'source_key': incoming.source_key}
         ) from error
-    if result.status is PutStatus.EXISTING:
+    if result.status is not PutStatus.CREATED:
         response.status_code = status.HTTP_200_OK
     record_notification(source, result.status.value)
     # 받는 사람과 값은 남기지 않는다. 무엇이 들어왔는지만 남긴다

@@ -20,6 +20,7 @@ from app.auth.jwks import JwksCache
 from app.core.config import Settings, get_settings
 from app.core.database import POOL_MAX_CONNECTIONS, create_engine, create_session_factory
 from app.inbox import router as inbox
+from app.mutes import router as mutes
 from app.notifications import retention
 from app.notifications import router as notifications
 from app.observability.db_spans import instrument_engine
@@ -131,6 +132,8 @@ def create_app(
     app.include_router(notifications.router, prefix=API_PREFIX)
     # 사용자가 자기 알림함을 읽는 주소. 인증 서버의 access 토큰으로 확인한다
     app.include_router(inbox.router, prefix=API_PREFIX)
+    # 사용자가 알림의 종류별로 끄고 켜는 주소. 알림함과 같은 토큰으로 확인한다
+    app.include_router(mutes.router, prefix=API_PREFIX)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다. 원인은 로그에 남긴다(app/observability/responses.py)
     app.add_exception_handler(Exception, handle_unexpected_error)
