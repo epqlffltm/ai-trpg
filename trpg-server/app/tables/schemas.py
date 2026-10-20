@@ -502,6 +502,9 @@ class TableSummary(BaseModel):
     """테이블의 목록에 싣는 값."""
 
     id: uuid.UUID
+    # 이 테이블의 시나리오(#428). 시나리오 소개(GET /listings/{scenario_id})로 돌아갈 때 쓴다.
+    # 공개를 내렸거나 남의 비공개 시나리오면 그 주소는 404 다. 그래도 값은 싣는다(어느 시나리오였는지는 참가자가 안다)
+    scenario_id: uuid.UUID
     title: str
     status: TableStatus
     rating: Rating
