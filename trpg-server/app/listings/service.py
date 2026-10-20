@@ -27,8 +27,8 @@ from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.auth.tokens import AccessClaims
 from app.listings import repository
-from app.listings.models import Genre, Listing
-from app.listings.repository import PublicRow
+from app.listings.models import Listing
+from app.listings.repository import ListingFilter, PublicRow
 from app.listings.schemas import ListingUpdate, PublicationUpdate
 from app.operators.publishing import require_publishable
 
@@ -219,10 +219,10 @@ async def get_public_detail(
 
 
 async def list_public(
-    session: AsyncSession, viewer: AccessClaims, genre: Genre | None, tag: str | None, limit: int, offset: int
+    session: AsyncSession, viewer: AccessClaims, where: ListingFilter, limit: int, offset: int
 ) -> tuple[list[PublicRow], int]:
     """공개된 시나리오의 한 쪽과 전체 개수를 돌려준다. 보는 사람이 볼 수 있는 등급만 나온다."""
     ratings = allowed_ratings(viewer)
-    rows = await repository.list_public(session, ratings, genre, tag, limit, offset)
-    total = await repository.count_public(session, ratings, genre, tag)
+    rows = await repository.list_public(session, ratings, where, limit, offset)
+    total = await repository.count_public(session, ratings, where)
     return rows, total

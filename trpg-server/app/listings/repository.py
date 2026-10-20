@@ -10,6 +10,7 @@
 """
 
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,19 @@ from app.listings.models import Genre, Listing
 
 # 공개된 것 하나를 보여 주는 데 필요한 것들: 공개 정보, 시나리오의 공통 부분(제목, 만든 사람), 공개 중인 판
 PublicRow = tuple[Listing, Asset, ScenarioVersion]
+
+
+@dataclass(frozen=True)
+class ListingFilter:
+    """
+    목록을 거르는 조건. 비워 둔 것(None)은 거르지 않는다.
+
+    players 는 함께 할 사람의 수다. 추천 인원(min_players ~ max_players) 안에 드는 시나리오만 고른다(#428).
+    """
+
+    genre: Genre | None = None
+    tag: str | None = None
+    players: int | None = None
 
 
 async def find_listing(session: AsyncSession, scenario_id: uuid.UUID) -> Listing | None:
@@ -51,12 +65,14 @@ def visible(allowed_ratings: list[Rating]) -> Select[PublicRow]:
     )
 
 
-def filtered(query: Select[PublicRow], genre: Genre | None, tag: str | None) -> Select[PublicRow]:
-    """장르와 태그로 거른다. 비워 두면 거르지 않는다."""
-    if genre is not None:
-        query = query.where(Listing.genres.contains([genre]))
-    if tag is not None:
-        query = query.where(Listing.tags.contains([tag]))
+def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow]:
+    """장르, 태그, 인원으로 거른다. 비워 둔 조건은 거르지 않는다."""
+    if where.genre is not None:
+        query = query.where(Listing.genres.contains([where.genre]))
+    if where.tag is not None:
+        query = query.where(Listing.tags.contains([where.tag]))
+    if where.players is not None:
+        query = query.where(Listing.min_players <= where.players, Listing.max_players >= where.players)
     return query
 
 
@@ -70,8 +86,7 @@ async def find_public(session: AsyncSession, scenario_id: uuid.UUID, allowed_rat
 async def list_public(
     session: AsyncSession,
     allowed_ratings: list[Rating],
-    genre: Genre | None,
-    tag: str | None,
+    where: ListingFilter,
     limit: int,
     offset: int,
 ) -> list[PublicRow]:
@@ -80,16 +95,14 @@ async def list_public(
 
     판의 굳힌 내용(snapshot)은 읽지 않는다. 목록에는 싣지 않는 큰 문서다(하나를 볼 때만 읽는다, #428).
     """
-    query = filtered(visible(allowed_ratings), genre, tag).options(defer(ScenarioVersion.snapshot))
+    query = filtered(visible(allowed_ratings), where).options(defer(ScenarioVersion.snapshot))
     # 공개한 시각이 같은 것끼리의 순서도 정해 둔다. 정하지 않으면 쪽을 넘길 때 같은 것이 두 번 나오거나 빠진다
     query = query.order_by(Listing.published_at.desc(), Listing.scenario_id).limit(limit).offset(offset)
     result = await session.execute(query)
     return [tuple(row) for row in result]
 
 
-async def count_public(
-    session: AsyncSession, allowed_ratings: list[Rating], genre: Genre | None, tag: str | None
-) -> int:
+async def count_public(session: AsyncSession, allowed_ratings: list[Rating], where: ListingFilter) -> int:
     """공개된 시나리오가 몇 개인지 센다."""
-    query = filtered(visible(allowed_ratings), genre, tag)
+    query = filtered(visible(allowed_ratings), where)
     return await session.scalar(select(func.count()).select_from(query.subquery())) or 0
