@@ -916,6 +916,17 @@ class VersionCreate(BaseModel):
     note: VersionNote = ''
 
 
+class PublishCheck(BaseModel):
+    """
+    지금 게시하면 막히는 이유(#428). 게시하지 않고 미리 본다. 판을 만들지 않는다.
+
+    problems 는 게시가 409 로 돌려주는 것과 같은 이름들이다. 비어 있으면 지금 게시할 수 있다(ready).
+    """
+
+    ready: bool
+    problems: list[str]
+
+
 class VersionSummary(BaseModel):
     """판의 목록에 싣는 값. 굳힌 내용은 싣지 않는다."""
 
