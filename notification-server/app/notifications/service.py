@@ -6,12 +6,15 @@
   - 같은 (source, source_key) 는 한 줄이다. 같은 알림을 다시 보내면 이미 있는 줄로 답한다(EXISTING)
   - 같은 열쇠인데 내용(받는 사람, 무슨 일, 값)이 다르면 거절한다(KeyReusedError). 넣는 서버의 실수다.
     조용히 먼저 것을 돌려주면 넣는 서버는 새 알림이 들어간 줄 안다
+  - 받는 사람이 그 종류를 껐으면 적지 않는다(MUTED, #525). 넣는 서버에는 받은 것과 같은 답이다(다시 보내지 않게).
+    읽을 때 거르지 않고 넣을 때 거른다. 꺼 둔 동안의 알림은 다시 켜도 없다
 """
 
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mutes import service as mutes
 from app.notifications import repository
 from app.notifications.models import Notification
 from app.notifications.schemas import NotificationIn, NotificationPut, PutStatus
@@ -44,8 +47,10 @@ async def put_notification(
     """
     알림 하나를 넣고 커밋한다. 이미 있으면 그 줄로 답한다.
 
-    같은 열쇠의 다른 알림이면 KeyReusedError.
+    같은 열쇠의 다른 알림이면 KeyReusedError. 받는 사람이 그 종류를 껐으면 적지 않고 MUTED 다.
     """
+    if await mutes.is_muted(session, incoming.user_id, incoming.kind):
+        return NotificationPut(id=None, status=PutStatus.MUTED)
     new_id = await repository.insert_if_absent(session, build_values(source, incoming, now))
     if new_id is not None:
         await session.commit()
