@@ -46,9 +46,10 @@ def instance_id(process: str) -> str:
     return f'{process}-{secrets.token_hex(4)}'
 
 
-def build_resource(settings: Settings, process: str) -> Resource:
+def build_resource(settings: Settings, process: str = SERVER_PROCESS) -> Resource:
     """
-    span 의 출처. 서비스, 버전, 환경, 프로세스다. 결제 서버의 메트릭과 추적이 쓰는 이름과 같다.
+    span 과 메트릭의 출처. 서비스, 버전, 환경, 프로세스다. 결제 서버의 메트릭과 추적이 쓰는 이름과 같다.
+    한 프로세스에서 한 번 만들어 둘이 함께 쓴다(app/main.py). 그래야 service.instance.id 가 같다.
 
     정한 넷만 싣는다. Resource.create 는 환경 변수(OTEL_RESOURCE_ATTRIBUTES)와 SDK 의 정보까지 붙인다.
     """
@@ -62,24 +63,28 @@ def build_resource(settings: Settings, process: str) -> Resource:
     )
 
 
-def build_provider(settings: Settings, process: str = SERVER_PROCESS) -> TracerProvider | None:
-    """span 을 보내는 TracerProvider 를 만든다. 보낼 곳이 없으면 None 이다. 만드는 것만으로는 수집기에 닿지 않는다."""
+def build_provider(settings: Settings, resource: Resource | None = None) -> TracerProvider | None:
+    """
+    span 을 보내는 TracerProvider 를 만든다. 보낼 곳이 없으면 None 이다. 만드는 것만으로는 수집기에 닿지 않는다.
+
+    resource 를 주지 않으면 이 서버의 출처를 새로 만든다.
+    """
     endpoint = settings.otel_exporter_otlp_endpoint
     if not endpoint:
         return None
-    provider = TracerProvider(resource=build_resource(settings, process), sampler=SAMPLER)
+    provider = TracerProvider(resource=resource or build_resource(settings), sampler=SAMPLER)
     exporter = OTLPSpanExporter(endpoint=endpoint + TRACES_PATH, timeout=EXPORT_TIMEOUT_SECONDS)
     provider.add_span_processor(BatchSpanProcessor(exporter, export_timeout_millis=EXPORT_TIMEOUT_SECONDS * 1000))
     return provider
 
 
-def configure_tracing(settings: Settings) -> TracerProvider | None:
+def configure_tracing(settings: Settings, resource: Resource | None = None) -> TracerProvider | None:
     """
     보낼 곳이 있으면 span 을 보내는 것을 만들어 끼운다(spans.use_provider). 만든 것을 돌려준다. 없으면 None 이다.
 
     보낼 곳이 없으면 끼워 둔 것을 건드리지 않는다. 테스트가 끼운 것(메모리에 모으는 것)이 그대로 남는다.
     """
-    provider = build_provider(settings)
+    provider = build_provider(settings, resource)
     if provider is not None:
         use_provider(provider)
     return provider

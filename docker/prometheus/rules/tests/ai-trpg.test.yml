@@ -349,3 +349,86 @@ tests:
       - eval_time: 30h
         alertname: BillingReconcileFailed
         exp_alerts: []
+
+  # 알림 서버: 인스턴스마다 울린다. 다른 서버의 db_up 은 보지 않는다
+  - interval: 30s
+    input_series:
+      - series: 'db_up{service="notification-server", instance="server-a"}'
+        values: '1 1 0 0 0 0 0'
+      - series: 'db_up{service="board-server", instance="server-b"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: NotificationDatabaseUnreachable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: notification-server
+              instance: server-a
+            exp_annotations:
+              summary: 알림 서버가 DB 에 닿지 못한다
+              description: 알림을 넣지도 읽지도 못한다. 넣는 서버들은 발송함에 쌓아 두고 다시 보낸다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+  # 알림 서버의 5xx: 요청이 많고 5xx 가 10% 면 10분 뒤에 울린다. 다른 서버의 5xx 는 섞이지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="notification-server", route="/x", method="GET", status_code="200", instance="server-a"}'
+        values: '0+54x30'
+      - series: 'http_server_requests_total{service="notification-server", route="/x", method="GET", status_code="500", instance="server-a"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="billing-server", route="/x", method="GET", status_code="500", instance="server-b"}'
+        values: '0+600x30'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: NotificationServerErrors
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: NotificationServerErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 알림 서버의 5xx 가 10% 다
+              description: 대시보드 notification-server 의 "상태 코드"와 로그의 error_code 를 본다
+
+  # 받지 않은 알림: 넣은 서버와 결과마다 울린다. 새로 넣은 것(created)은 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'notifications_received_total{service="notification-server", source="board", outcome="refused", instance="server-a"}'
+        values: '0 0 1 1 1'
+      - series: 'notifications_received_total{service="notification-server", source="game", outcome="created", instance="server-a"}'
+        values: '0+5x4'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: NotificationsRejected
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              source: board
+              outcome: refused
+            exp_annotations:
+              summary: board 서버가 넣은 알림을 받지 않았다(refused)
+              description: 넣은 서버의 로그(notification.rejected)와 알림 서버의 로그(notification.kind_refused)를 본다. 그 알림은 넣은 서버의 발송함에 failed 로 남는다
+
+  # 정리 작업이 실패하면 세 시간 동안 울린다. 성공한 바퀴는 울리지 않는다
+  - interval: 1h
+    input_series:
+      - series: 'background_jobs_finished_total{service="notification-server", operation="notification.prune", result="success", instance="server-a"}'
+        values: '0+1x6'
+      - series: 'background_jobs_finished_total{service="notification-server", operation="notification.prune", result="server_error", instance="server-a"}'
+        values: '0 0 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: NotificationPruneFailing
+        exp_alerts: []
+      - eval_time: 3h
+        alertname: NotificationPruneFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 알림 서버의 정리 작업이 실패했다
+              description: 보관 기간이 지난 알림이 지워지지 않는다. 알림 서버의 로그(operation=notification.prune)를 본다
+      - eval_time: 6h
+        alertname: NotificationPruneFailing
+        exp_alerts: []

@@ -18,17 +18,20 @@ from app.api import health, readiness
 from app.auth import revocations
 from app.auth.jwks import JwksCache
 from app.core.config import Settings, get_settings
-from app.core.database import create_engine, create_session_factory
+from app.core.database import POOL_MAX_CONNECTIONS, create_engine, create_session_factory
 from app.inbox import router as inbox
 from app.notifications import retention
 from app.notifications import router as notifications
 from app.observability.db_spans import instrument_engine
 from app.observability.http_spans import traced_client
+from app.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
 from app.observability.middleware import RequestLoggingMiddleware
+from app.observability.pool_metrics import pool_stats
+from app.observability.request_metrics import RequestMetricsMiddleware
 from app.observability.request_spans import RequestSpanMiddleware
 from app.observability.responses import handle_unexpected_error
 from app.observability.setup import configure_logging
-from app.observability.tracing import FASTAPI_TELEMETRY, configure_tracing, shutdown_tracing
+from app.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/notification'
@@ -42,7 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     뜰 때 끊긴 세션의 목록 받기(30초마다)와 보관 기간이 지난 알림 지우기(한 시간마다)를 시작한다.
     꺼질 때 그 둘을 가장 먼저 멈추고,
     DB 연결과 인증 서버로 가는 연결을 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
-    마지막으로 모아 둔 span 을 보낸다. 보내기를 기다리느라 막히므로 스레드에서 한다.
+    마지막으로 모아 둔 span 과 메트릭을 보낸다. 보내기를 기다리느라 막히므로 스레드에서 한다.
     """
     revoking = revocations.start(app.state.revocations)
     pruning = retention.start(app.state.notification_pruner)
@@ -52,6 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
     await asyncio.to_thread(shutdown_tracing, app.state.tracing)
+    await asyncio.to_thread(shutdown_metrics, app.state.metrics)
 
 
 def create_app(
@@ -69,8 +73,11 @@ def create_app(
 
     # 로그를 공통 규격의 JSON 으로 건다(docs/observability.md). 여러 번 불러도 처리기는 하나다
     configure_logging(settings)
-    # 보낼 곳(OTEL_EXPORTER_OTLP_ENDPOINT)이 있으면 span 을 수집기에 민다. 없으면 None 이고 span 이 생기지 않는다
-    tracing = configure_tracing(settings)
+    # 보낼 곳(OTEL_EXPORTER_OTLP_ENDPOINT)이 있으면 span 과 메트릭을 수집기에 민다. 없으면 None 이고 나가는 것이 없다.
+    # 둘이 같은 출처(같은 service.instance.id)를 쓴다
+    resource = build_resource(settings)
+    tracing = configure_tracing(settings, resource)
+    metrics = configure_metrics(settings, resource)
 
     app = FastAPI(
         title='AI TRPG 알림 서버',
@@ -87,16 +94,20 @@ def create_app(
     app.add_middleware(RequestLoggingMiddleware)
     # 요청마다 서버 span 을 건다. 나중에 붙인 것이 바깥이다. 로그(trace_id)와 쿼리의 span 이 이 span 을 따른다
     app.add_middleware(RequestSpanMiddleware)
+    # 요청마다 HTTP 메트릭 셋을 센다. 맨 바깥이라 요청 전체(span 과 로그를 거는 시간까지)를 잰다
+    app.add_middleware(RequestMetricsMiddleware)
 
     # 요청을 처리하는 코드가 설정을 꺼내 쓸 수 있게 앱에 붙여 둔다. 전역 변수로 두지 않는다
     app.state.settings = settings
     app.state.tracing = tracing
+    app.state.metrics = metrics
 
     # 엔진과 세션 틀을 앱에 붙여 둔다. 앱마다 자기 엔진을 가지므로 테스트끼리 섞이지 않는다.
     # 엔진을 만드는 것만으로는 DB 에 연결하지 않는다. DB 가 꺼져 있어도 서버는 뜬다(/health/ready 가 503 이다)
     app.state.engine = engine or create_engine(settings)
     # 쿼리마다 span 을 건다(요청이나 작업 안의 것만). 같은 엔진에 여러 번 불러도 한 번만 단다
     instrument_engine(app.state.engine)
+    watch_pool(pool_stats(app.state.engine, POOL_MAX_CONNECTIONS))
     app.state.session_factory = create_session_factory(app.state.engine)
 
     # 인증 서버의 공개키(app/auth/jwks.py)와 끊긴 세션의 목록(app/auth/revocations.py).

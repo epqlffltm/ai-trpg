@@ -7,6 +7,7 @@
 실패해도 관리 도구는 서버를 재시작하지 않는다. 요청을 잠시 보내지 않을 뿐이다.
 
 확인 전체를 3초(READINESS_TIMEOUT_SECONDS)로 묶는다. 다른 네 서버와 같다.
+확인한 결과를 메트릭 db_up 으로 적는다(1 이면 닿는다). compose 의 healthcheck 가 10초마다 부른다.
 연결된 채 멈춘 DB 나, 풀이 가득 차 연결을 기다리는 동안(최대 30초)에도 확인 요청이 멈추지 않는다.
 
 HEAD 도 받는다(본문 없이 같은 상태 코드).
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.health import HealthResponse
 from app.core.database import get_session, ping_database
+from app.observability.metrics import record_db_up
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ async def check_readiness(
     원인은 서버의 로그에 남긴다. 오류의 종류만 적는다.
     """
     problem = await find_problem_within(session, READINESS_TIMEOUT_SECONDS)
+    record_db_up(problem is None)
     if problem is None:
         return HealthResponse(status='ok')
     logger.warning('준비되지 않았다: %s', problem)
