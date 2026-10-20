@@ -82,6 +82,8 @@ def make_test_settings(**overrides) -> Settings:
         'gemini_base_url': 'https://generativelanguage.googleapis.com',
         'zai_api_key': '',
         'zai_base_url': 'https://api.z.ai/api/paas/v4',
+        'deepinfra_api_key': '',
+        'deepinfra_base_url': 'https://api.deepinfra.com/v1/openai',
         'redis_url': '',
         'limits_enabled': False,
         # span 을 내보내지 않는다. 개발자의 .env 에 수집기의 주소가 있어도 테스트는 보내지 않는다.
