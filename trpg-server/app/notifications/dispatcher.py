@@ -18,6 +18,7 @@
 
 로그는 청구 정리와 같은 규칙이다(app/billing/settler.py). 바퀴마다 job_id 를 걸고, operation 은 notification.send 다.
 받는 사람과 알림의 내용은 남기지 않는다. 알림의 종류(kind)와 발송함의 번호만 남긴다.
+지운 수와 찾아낸 알림의 수를 바퀴의 span 에 싣는다(add_handled). 둘 다 없던 바퀴의 추적은 보내지 않는다.
 """
 
 import asyncio
@@ -38,7 +39,7 @@ from app.notifications.client import Delivery, Notifications, Sent
 from app.notifications.models import OutgoingNotification
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
-from app.observability.spans import job_span
+from app.observability.spans import add_handled, job_span
 
 logger = logging.getLogger(__name__)
 
@@ -188,10 +189,13 @@ class NotificationDispatcher:
         """한 바퀴의 일. 오래된 알림을 지우고, 보낼 곳이 있으면 차례가 된 알림을 보낸다."""
         now = self.clock()
         dispatched = Dispatched(dropped=await self.drop_stale(now))
+        add_handled(dispatched.dropped)
         notifications = self.notifications()
         if notifications is None:
             return dispatched
-        for notification in await self.due(now):
+        due = await self.due(now)
+        add_handled(len(due))
+        for notification in due:
             dispatched = add(dispatched, await self.deliver_safely(notifications, notification, now))
         return dispatched
 

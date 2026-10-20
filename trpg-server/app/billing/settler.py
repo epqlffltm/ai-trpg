@@ -20,6 +20,7 @@
 
 로그는 라운드의 시계와 같은 규칙이다(app/rounds/clock.py). 바퀴마다 job_id 를 걸고, operation 은 charge.settle 이다.
 한 일이 없으면 debug, 있으면 info 로 한 줄을 남긴다. 한 청구가 실패해도 다른 청구는 맡긴다.
+돌려줄 것으로 바꾼 수와 찾아낸 청구의 수를 바퀴의 span 에 싣는다(add_handled). 둘 다 없던 바퀴의 추적은 보내지 않는다.
 """
 
 import asyncio
@@ -40,7 +41,7 @@ from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
 from app.core.loops import Running
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
-from app.observability.spans import job_span
+from app.observability.spans import add_handled, job_span
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +111,10 @@ class ChargeSettler:
         """한 바퀴의 일. 끝난 테이블의 청구를 돌려줄 것으로 바꾸고, 차례가 된 청구를 맡긴다."""
         now = self.clock()
         abandoned = await self.abandon(now)
+        charges = await self.due(now)
+        add_handled(abandoned + len(charges))
         settled = 0
-        for charge in await self.due(now):
+        for charge in charges:
             settled += await self.settle_one(charge, now)
         return Swept(abandoned, settled)
 
