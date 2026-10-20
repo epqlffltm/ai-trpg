@@ -14,6 +14,7 @@
 게임 서버의 AI 호출 기록 정리(trpg-server/app/ai_log/retention.py)와 같은 모양이다.
 바퀴마다 job_id 를 걸고, operation 은 notification.prune 이다. 지운 것이 없으면 debug, 있으면 info 로 한 줄을 남긴다.
 바퀴마다 span 하나도 남긴다(이름은 operation, 새 추적). 그 안의 쿼리가 이 span 아래에 놓인다.
+바퀴마다 작업의 메트릭(background_jobs_*{operation="notification.prune"})을 센다(app/observability/metrics.py).
 """
 
 import asyncio
@@ -32,6 +33,7 @@ from app.core.loops import Running
 from app.notifications.models import Notification
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
+from app.observability.metrics import measured_job
 from app.observability.spans import JOB_FAILED_ERROR_CODE, job_span
 
 logger = logging.getLogger(__name__)
@@ -121,7 +123,7 @@ class NotificationPruner:
         span 을 먼저 건다. job_scope 가 그 span 의 추적을 로그의 trace_id 로 쓴다.
         """
         job_id = new_job_id()
-        with job_span(PRUNE_OPERATION, job_id), job_scope(job_id):
+        with job_span(PRUNE_OPERATION, job_id), job_scope(job_id), measured_job(PRUNE_OPERATION):
             started = time.perf_counter()
             deleted = await self.sweep()
             logger.log(
