@@ -34,8 +34,10 @@ from app.operators.models import ActionKind, PublishingBan, ReadKind, ScenarioSa
 from app.operators.sanctions import build_action
 from app.operators.service import build_read
 from app.tables.models import (
+    DepartureKind,
     GameTable,
     QuestStatus,
+    TableDeparture,
     TableFoundRoute,
     TableItem,
     TableMonster,
@@ -113,6 +115,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     몬스터의 상태도 같다. 조우를 적으려면 장소 항목과 시작 장소가 있어야 한다. NPC 가 지닌 물건의 줄도 같다.
     모델 목록과 원가, 날짜판을 바꾼 기록도 직접 넣는다. API 가 없고 관리 명령(scripts/models.py)으로만 생긴다.
     발송함도 직접 넣는다. 알림은 모델이 은퇴할 때만 생긴다.
+    떠난 사람도 직접 넣는다. 혼자 앉은 테이블이라 나가면 테이블이 끝나 뒤의 일을 할 수 없다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
     지난 라운드의 벡터는 다음 서술을 맡길 때 생긴다. 혼자 앉은 테이블이라 선언하면 라운드가 닫히고 서술된다.
     서술을 기다린 뒤 색인을 직접 돌린다.
@@ -180,6 +183,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         session.add(TableItem(table_id=uuid.UUID(table['id']), sheet_id=sheet_id, entry_id=uuid.uuid4(), count=1))
         session.add(TableQuest(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4(), status=QuestStatus.HIDDEN))
         session.add(TableVisit(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4()))
+        session.add(
+            TableDeparture(table_id=uuid.UUID(table['id']), user_id=OTHER, kind=DepartureKind.LEFT, last_sequence=1)
+        )
         session.add(TableFoundRoute(table_id=uuid.UUID(table['id']), from_place=uuid.uuid4(), to_place=uuid.uuid4()))
         placed = {'slot': 0, 'place_id': uuid.uuid4(), 'entry_id': uuid.uuid4(), 'count': 1, 'hidden': False}
         session.add(TablePlaceItem(table_id=uuid.UUID(table['id']), **placed))
