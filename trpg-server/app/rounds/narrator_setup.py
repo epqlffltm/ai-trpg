@@ -21,6 +21,7 @@ from app.ai.openai_compat import WireOptions
 from app.ai.retry_budget import RetryBudget
 from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ZAI_KIND, Endpoint, ModelRouter
 from app.ai_log.call_log import DbCallLog
+from app.ai_log.metered import MeteredCallLog
 from app.catalog.lookup import DbModelLookup
 from app.core.config import Settings
 from app.rounds.fake_narrator import FakeNarrator
@@ -101,11 +102,12 @@ def build_narrator(
 
     언어 모델이면 라운드의 모델 하나만 다시 시도하는 서술자로 서술한다(PickedNarrator). 넘어갈 모델이 없다.
     모델이 없는 옛 라운드는 설정의 기본 모델들을 차례로 다시 시도하는 서술자로 서술한다.
-    모두 같은 기록장에 쓴다(ai_invocations). 가짜는 모델을 부르지 않으니 남길 것이 없다. 모델도 읽지 않는다.
+    모두 같은 기록장에 쓴다(ai_invocations). 기록할 때마다 메트릭(ai_calls_total …)도 센다(MeteredCallLog).
+    가짜는 모델을 부르지 않으니 남길 것이 없다. 모델도 읽지 않는다.
     """
     if settings.narrator != 'llm':
         return FakeNarrator()
-    log = DbCallLog(session_factory)
+    log = MeteredCallLog(DbCallLog(session_factory))
     budget = RetryBudget()
     default = build_chain(settings, router, log, settings.llm_models(), budget)
     return PickedNarrator(chain_for=lambda model: build_chain(settings, router, log, [model], budget), default=default)

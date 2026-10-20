@@ -17,6 +17,7 @@ AI 호출의 기록에 남은 원문(모델이 쓴 글)을 보관 기간이 지�
 
 로그는 라운드의 시계와 같은 규칙이다(app/rounds/clock.py). 바퀴마다 job_id 를 걸고, operation 은 ai_log.prune 이다.
 비운 것이 없으면 debug, 있으면 info 로 한 줄을 남긴다(cleared: 비운 수).
+바퀴마다 작업의 메트릭(background_jobs_*)을 센다(app/observability/metrics.py 의 measured_job).
 """
 
 import asyncio
@@ -35,6 +36,7 @@ from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
 from app.core.loops import Running
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
+from app.observability.metrics import measured_job
 from app.observability.spans import job_span
 
 logger = logging.getLogger(__name__)
@@ -93,7 +95,7 @@ class AiLogPruner:
         비우는 일이 통째로 실패하면(DB 가 없다) 예외를 그대로 올린다. 그 줄은 도는 쪽(run)이 남긴다.
         """
         job_id = new_job_id()
-        with job_span(PRUNE_OPERATION, job_id), job_scope(job_id):
+        with job_span(PRUNE_OPERATION, job_id), job_scope(job_id), measured_job(PRUNE_OPERATION):
             started = time.perf_counter()
             cleared = await self.sweep()
             logger.log(

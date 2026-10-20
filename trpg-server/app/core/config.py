@@ -95,9 +95,13 @@ class Settings(BaseSettings):
     # 이 수준부터 로그를 남긴다. debug, info, warning, error 중 하나다
     log_level: Literal['debug', 'info', 'warning', 'error'] = 'info'
 
-    # span 을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. 경로 없이 적는다(http://alloy:4318).
-    # 비우면 span 을 내보내지 않는다. 로그는 그대로다(app/observability/tracing.py)
+    # span 과 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. 경로 없이 적는다(http://alloy:4318).
+    # 비우면 내보내지 않는다. 로그는 그대로다(app/observability/tracing.py, metrics.py)
     otel_exporter_otlp_endpoint: str = ''
+
+    # 메트릭을 보내는 간격(밀리초). 결제 서버와 같은 이름과 기본값이다.
+    # SDK 의 기본(60초)이면 rate(…[1m]) 에 점이 하나뿐이다
+    otel_metric_export_interval: int = Field(default=15000, ge=1000)
 
     # 개발용 기능(API 문서 화면)을 켠다. 기본은 꺼짐이다.
     # 켜는 것을 잊으면 불편할 뿐이지만, 끄는 것을 잊으면 운영 서버의 API 구조가 드러난다

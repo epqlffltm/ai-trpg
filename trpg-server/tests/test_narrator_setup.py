@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.ai.retry_budget import RetryBudget
 from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ZAI_KIND, ModelRouter
 from app.ai_log.call_log import DbCallLog
+from app.ai_log.metered import MeteredCallLog
 from app.catalog.lookup import DbModelLookup
 from app.main import create_app
 from app.rounds.fake_narrator import FakeNarrator
@@ -171,10 +172,12 @@ def test_every_model_is_routed_by_the_router_of_the_app():
 def test_every_model_call_is_recorded_in_the_database_of_the_app():
     app = create_app(make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat'))
 
-    # 기록 없이 모델을 부르는 길이 없다. 넘어간 모델의 호출도 앱의 세션 틀로 ai_invocations 에 쓴다
+    # 기록 없이 모델을 부르는 길이 없다. 넘어간 모델의 호출도 앱의 세션 틀로 ai_invocations 에 쓴다.
+    # 쓸 때마다 메트릭도 센다(app/ai_log/metered.py)
     for inner in standard(app.state.narrator).narrators:
-        assert isinstance(inner.log, DbCallLog)
-        assert inner.log.session_factory is app.state.session_factory
+        assert isinstance(inner.log, MeteredCallLog)
+        assert isinstance(inner.log.inner, DbCallLog)
+        assert inner.log.inner.session_factory is app.state.session_factory
 
 
 def test_every_model_signs_its_input_with_the_key_of_the_settings():
@@ -207,7 +210,7 @@ def test_a_picked_model_is_routed_and_recorded_by_the_app():
     (inner,) = app.state.narrator.chain_for('gpt-6-luna').narrators
 
     assert inner.router is app.state.model_router
-    assert inner.log.session_factory is app.state.session_factory
+    assert inner.log.inner.session_factory is app.state.session_factory
 
 
 def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatch):

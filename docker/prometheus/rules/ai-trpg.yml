@@ -232,3 +232,60 @@ groups:
         annotations:
           summary: 알림 서버의 정리 작업이 실패했다
           description: 보관 기간이 지난 알림이 지워지지 않는다. 알림 서버의 로그(operation=notification.prune)를 본다
+
+  - name: trpg-server
+    rules:
+      - alert: TrpgDatabaseUnreachable
+        # 준비 상태 확인(/health/ready)이 마지막으로 본 DB. Redis 만 닿지 않을 때는 울리지 않는다
+        expr: db_up{service="trpg-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: TRPG 서버가 DB 에 닿지 못한다
+          description: 게임을 할 수 없다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+      - alert: TrpgServerErrors
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        expr: |
+          sum(rate(http_server_requests_total{service="trpg-server", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="trpg-server"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="trpg-server"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'TRPG 서버의 5xx 가 {{ $value | humanizePercentage }} 다'
+          description: 대시보드 trpg-server 의 "상태 코드"와 로그의 error_code 를 본다
+
+      - alert: TrpgNarrationsFailing
+        # 지난 30분의 서술이 셋 이상이고 그 가운데 20% 넘게 실패했다. 테이블이 닫는 중에 멈춰 방장이 다시 맡겨야 한다
+        expr: |
+          sum(increase(round_narrations_total{service="trpg-server", result="failure"}[30m]))
+            / sum(increase(round_narrations_total{service="trpg-server"}[30m])) > 0.2
+          and sum(increase(round_narrations_total{service="trpg-server"}[30m])) >= 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: '서술의 {{ $value | humanizePercentage }} 가 실패한다'
+          description: 대시보드 trpg-server 의 "AI 호출"에서 실패하는 모델을 찾는다. 로그의 round.narrate 와 AI 호출 기록(ai_invocations)의 error 를 본다
+
+      - alert: TrpgChargesNotCaptured
+        # 서술한 라운드의 값을 30분 넘게 확정하지 못했다. 청구 정리가 5초마다 다시 부른다. 서버들이 같은 수를 내므로 큰 값을 본다
+        expr: max(narration_charges{service="trpg-server", status="capture_due"}) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: '확정하지 못한 서술 값이 {{ $value }} 건 있다'
+          description: 결제 서버가 죽어 있거나 서명이 거절된다. BillingDatabaseUnreachable 과 대시보드 trpg-server 의 "결제 서버를 부른 것"을 본다
+
+      - alert: TrpgBillingRejected
+        # 결제 서버가 받아들이지 않았다. 그 청구는 failed 가 되어 다시 부르지 않는다. 사람이 봐야 한다
+        expr: sum by (operation) (increase(billing_calls_total{service="trpg-server", outcome="rejected"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: '결제 서버가 {{ $labels.operation }} 를 받아들이지 않았다'
+          description: TRPG 서버의 로그(operation=billing.{{ $labels.operation }}, error_code)와 narration_charges 의 failed 청구를 본다

@@ -150,6 +150,9 @@ class QuietSettler(ChargeSettler):
     async def due(self, now: datetime) -> list:
         return []
 
+    async def count_unfinished(self) -> dict[str, int]:
+        return {}
+
 
 async def test_the_settler_counts_what_it_released(spans: SpanRecorder):
     await QuietSettler(session_factory=None, billing=lambda: None).tick()  # type: ignore[arg-type]

@@ -21,6 +21,9 @@
 로그는 라운드의 시계와 같은 규칙이다(app/rounds/clock.py). 바퀴마다 job_id 를 걸고, operation 은 charge.settle 이다.
 한 일이 없으면 debug, 있으면 info 로 한 줄을 남긴다. 한 청구가 실패해도 다른 청구는 맡긴다.
 돌려줄 것으로 바꾼 수와 찾아낸 청구의 수를 바퀴의 span 에 싣는다(add_handled). 둘 다 없던 바퀴의 추적은 보내지 않는다.
+바퀴마다 작업의 메트릭(background_jobs_*)을 센다(app/observability/metrics.py 의 measured_job).
+바퀴의 끝에 끝나지 않은 청구의 수를 상태마다 센다(narration_charges). capture_due 가 쌓이면 결제 서버가 죽어 있다.
+서버가 여럿이면 모두 같은 수를 낸다. 대시보드와 경보는 서버들 중 큰 값(max)을 쓴다.
 """
 
 import asyncio
@@ -41,6 +44,7 @@ from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
 from app.core.loops import Running
 from app.observability.context import job_scope
 from app.observability.identifiers import new_job_id
+from app.observability.metrics import measured_job, record_charges
 from app.observability.spans import add_handled, job_span
 
 logger = logging.getLogger(__name__)
@@ -107,6 +111,11 @@ class ChargeSettler:
             return False
         return True
 
+    async def count_unfinished(self) -> dict[str, int]:
+        """끝나지 않은 청구의 수. 상태마다다."""
+        async with self.session_factory() as session:
+            return await repository.count_unfinished(session)
+
     async def sweep(self) -> Swept:
         """한 바퀴의 일. 끝난 테이블의 청구를 돌려줄 것으로 바꾸고, 차례가 된 청구를 맡긴다."""
         now = self.clock()
@@ -120,14 +129,15 @@ class ChargeSettler:
 
     async def tick(self) -> Swept:
         """
-        한 바퀴. 제 job_id 를 걸고 쓸어 담은 뒤, 어떻게 끝났는지 한 줄을 남긴다.
+        한 바퀴. 제 job_id 를 걸고 쓸어 담은 뒤, 끝나지 않은 청구의 수를 세고, 어떻게 끝났는지 한 줄을 남긴다.
 
         찾는 일이 통째로 실패하면(DB 가 없다) 예외를 그대로 올린다. 그 줄은 도는 쪽(run)이 남긴다.
         """
         job_id = new_job_id()
-        with job_span(SETTLE_OPERATION, job_id), job_scope(job_id):
+        with job_span(SETTLE_OPERATION, job_id), job_scope(job_id), measured_job(SETTLE_OPERATION):
             started = time.perf_counter()
             swept = await self.sweep()
+            record_charges(await self.count_unfinished())
             logger.log(
                 logging.INFO if swept.busy() else logging.DEBUG,
                 '청구 정리가 한 바퀴를 돌았습니다',

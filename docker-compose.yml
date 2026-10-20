@@ -411,7 +411,7 @@ services:
     env_file: ./trpg-server/.env
     environment:
       <<: [*game-environment, *telemetry-environment]
-    # span 을 Alloy 에 민다(telemetry). 다른 서버와 AI 모델의 창구에는 default 로 닿는다
+    # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와 AI 모델의 창구에는 default 로 닿는다
     networks: [default, telemetry]
     extra_hosts: *host-gateway
     healthcheck:
@@ -571,7 +571,7 @@ services:
     env_file: ./notification-server/.env
     environment:
       <<: [*notification-environment, *telemetry-environment]
-    # span 을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
+    # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/health/ready', timeout=3)"]

@@ -26,6 +26,7 @@ from app.billing.client import (
 )
 from app.billing.free_billing import FreeBilling
 from app.billing.http_billing import CAPTURE_PATH, EXTEND_PATH, HOLDS_PATH, RELEASE_PATH, HttpBilling
+from app.billing.metered import MeteredBilling
 from app.billing.setup import build_billing
 from app.billing.signing import SIGNATURE_HEADER, sign
 from app.observability.context import job_scope
@@ -302,8 +303,10 @@ def test_with_an_address_the_billing_server_is_called():
 
     billing = build_billing(settings, httpx.AsyncClient())
 
-    assert isinstance(billing, HttpBilling)
-    assert billing.base_url == BILLING_URL
+    # 부를 때마다 센다(app/billing/metered.py)
+    assert isinstance(billing, MeteredBilling)
+    assert isinstance(billing.inner, HttpBilling)
+    assert billing.inner.base_url == BILLING_URL
 
 
 @pytest.mark.parametrize('secret', ['', 'short-secret'])
