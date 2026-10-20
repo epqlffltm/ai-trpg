@@ -84,10 +84,13 @@ docker compose up -d
 docker compose ps
 ```
 
-`db`, `redis`, `db-backup`이 모두 `healthy`이면 정상이다. `db-backup`은 첫 백업을 뜬 뒤에 `healthy`가 된다([백업과 복원](#백업과-복원)).
+`db`, `redis`, `db-backup`, `object-store`가 모두 `healthy`이면 정상이다. `db-backup`은 첫 백업을 뜬 뒤에 `healthy`가 된다([백업과 복원](#백업과-복원)).
 
 첫 기동 때 `docker/postgres/init/`의 스크립트가 서버별 DB 계정과 스키마를 만든다.
 이 스크립트는 데이터 볼륨이 비어 있을 때만 실행된다.
+
+`object-store`는 그림 파일을 두는 S3 의 로컬 흉내(SeaweedFS)다. `127.0.0.1:8333`에 열고 서명한 요청만 받는다.
+버킷 `ai-trpg-images`를 뜰 때 만든다. 쓰는 서버(asset-server)는 아직 없다([그림 저장소](docs/architecture/deployment.md#그림-저장소)).
 
 ### 3. 서버
 
@@ -413,6 +416,11 @@ netsh interface ipv4 show excludedportrange protocol=tcp
 docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "ALTER ROLE auth CREATEDB"'
 ```
 
+**`required variable IMAGE_STORE_SECRET_ACCESS_KEY is missing a value`**
+
+그림 저장소가 생기기 전에 만든 루트 `.env` 다. `uv run --no-project python tools/fill_env.py` 를 한 번 돌리면 그 줄을 더하고 채운다.
+이미 적힌 값은 바꾸지 않는다.
+
 **`password authentication failed for user "auth"`**
 
 `auth` 계정이 없거나 비밀번호가 다르다. 초기화 스크립트는 볼륨이 비어 있을 때만
@@ -448,7 +456,7 @@ docker/prometheus/        메트릭 저장소(Prometheus)의 설정
 docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki, Prometheus)
 docs/                     서버들이 함께 지키는 규격 (관측)
 tools/                    패치 zip 을 적용하는 도구(apply_ai_update.py), .env 여섯을 만들고 비밀을 채우는 도구(fill_env.py), 그 위에 staging 의 값을 적는 도구(staging_env.py)
-docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 모든 서버와 워커, cron, 프록시(프로필 app), 로그와 메트릭 모으기(프로필 observability)
+docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 그림 저장소(SeaweedFS), 모든 서버와 워커, cron, 프록시(프로필 app), 로그와 메트릭 모으기(프로필 observability)
 docker-compose.staging.yml  staging(VM)에서 위의 파일에 덮어쓰는 설정. TLS, 허용 주소, certbot, 임베딩의 Ollama, 환경 이름
 .env.example              인프라 환경 변수 목록
 ```
