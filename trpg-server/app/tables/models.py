@@ -905,3 +905,47 @@ class TableInjury(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DepartureKind(enum.StrEnum):
+    """앉았던 사람이 자리를 떠난 길."""
+
+    # 스스로 나갔다(DELETE .../members/me)
+    LEFT = 'left'
+    # 방장이 내보냈다
+    KICKED = 'kicked'
+    # 크레딧이 모자라 기다리는 시간이 지나 서버가 뺐다(app/rounds/credit_waits.py)
+    DROPPED = 'dropped'
+
+
+class TableDeparture(Base):
+    """
+    시작한 테이블에서 자리를 떠난 사람 하나(#428). 떠난 뒤에도 자기가 함께한 데까지의 기록을 읽게 한다.
+
+    자리(table_members)는 떠날 때 지운다. 앉은 사람만 보는 길들(테이블, 라운드, 이벤트)은 그대로 둔다.
+    떠난 사람은 이 줄로 따로 연 길(app/tables/past.py)에서 last_sequence 번까지의 이벤트만 읽는다.
+    그 번호는 떠났다는 이벤트(member_left, member_kicked, member_dropped)의 번호다. 그 뒤의 일은 보지 않는다.
+
+    모집 중에 떠난 사람은 적지 않는다. 아직 이야기가 없고, 다시 들어올 수도 있다.
+    시작한 테이블에는 새로 들어올 수 없으므로 한 사람이 한 테이블을 두 번 떠나지 않는다.
+    """
+
+    __tablename__ = 'table_departures'
+    __table_args__ = (
+        CheckConstraint(one_of('kind', DepartureKind), name='kind_allowed'),
+        CheckConstraint('last_sequence >= 1', name='last_sequence_positive'),
+        # "내가 떠난 테이블"을 최근 것부터 읽는다
+        Index('ix_table_departures_user_id_left_at', 'user_id', 'left_at'),
+    )
+
+    # 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 인증 서버의 public_id
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    # 떠날 때의 캐릭터 이름. 캐릭터를 만들기 전에 떠났으면 비어 있다
+    character_name: Mapped[str | None] = mapped_column(String(CHARACTER_NAME_MAX_LENGTH))
+    # 떠난 길(DepartureKind)
+    kind: Mapped[str] = mapped_column(String(20))
+    # 읽을 수 있는 마지막 이벤트의 번호. 떠났다는 이벤트의 번호다
+    last_sequence: Mapped[int] = mapped_column(Integer)
+    left_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -85,6 +85,7 @@ from app.rounds import router as rounds
 from app.rounds.closing import closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.narrator_setup import build_narrator, build_router
+from app.tables import past_router as past_tables
 from app.tables import retirement_watch
 from app.tables import router as tables
 from app.tables.errors import (
@@ -324,6 +325,8 @@ def create_app(
     app.include_router(listings.owner_router, prefix=API_PREFIX)
     app.include_router(listings.public_router, prefix=API_PREFIX)
     app.include_router(personas.router, prefix=API_PREFIX)
+    # /tables/past 는 /tables/{table_id} 보다 먼저다. 먼저 등록한 주소가 먼저 맞춰진다
+    app.include_router(past_tables.router, prefix=API_PREFIX)
     app.include_router(tables.router, prefix=API_PREFIX)
     app.include_router(rounds.router, prefix=API_PREFIX)
     app.include_router(calendar.router, prefix=API_PREFIX)

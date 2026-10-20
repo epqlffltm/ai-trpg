@@ -29,6 +29,10 @@ class EventOut(BaseModel):
     created_at: datetime
 
 
+# 한 번에 읽는 이벤트의 개수. 앉은 사람의 길과 떠난 사람의 길이 같이 쓴다
+DEFAULT_EVENT_LIMIT = 50
+
+
 class EventPage(BaseModel):
     """이벤트 목록의 한 쪽."""
 
