@@ -15,6 +15,8 @@ API 주소(/api/v1/...) 밖에 두고 로그인 없이 부른다. 컨테이너 �
 readiness 에 Redis 는 넣지 않는다. 시도 횟수 제한만 쓰고, 죽어 있으면 제한 없이 통과시키도록 만들었다.
 없어도 일을 하는 것은 readiness 에 넣지 않는다.
 
+확인한 결과를 메트릭 db_up 으로 적는다(1 이면 닿는다). compose 의 healthcheck 가 10초마다 부른다.
+
 응답에는 status 하나만 싣는다. 왜 DB 에 닿지 않는지(오류의 글에는 DB 주소와 계정이 들어 있다)는 로그에만 남긴다.
 
 결제·게시판 서버와 달리 readiness 전체에 시간 제한(3초)을 걸지 않는다. 연결 시간(settings 의
@@ -30,6 +32,8 @@ import logging
 from django.db import DatabaseError, connection
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_safe
+
+from observability.metrics import record_db_up
 
 logger = logging.getLogger(__name__)
 
@@ -65,5 +69,7 @@ def ready(request: HttpRequest) -> JsonResponse:
     except DatabaseError as exc:
         # 예외의 글은 남기지 않는다. 접속 실패의 글에는 DB 주소와 계정 이름이 들어 있다
         logger.warning('DB 에 닿지 않는다: %s', type(exc).__name__)
+        record_db_up(False)
         return status_response(UNAVAILABLE, status=503)
+    record_db_up(True)
     return status_response(OK)

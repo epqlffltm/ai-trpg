@@ -15,6 +15,7 @@ from contextlib import contextmanager
 
 from observability.context import job_scope
 from observability.identifiers import new_job_id
+from observability.metrics import measured_job
 from observability.spans import job_span
 
 logger = logging.getLogger(__name__)
@@ -38,9 +39,10 @@ def run_as_job(operation: str) -> Iterator[str]:
     예외로 끝난 것은 error 로 적고 예외를 그대로 올린다.
     작업의 span(이름은 operation)도 건다. 그 안의 쿼리와 결제 서버를 부르는 것이 아래에 놓인다(spans.job_span).
     할 일이 없던 바퀴는 처리한 수를 0 으로 적어 두면(spans.record_handled) 그 추적을 보내지 않는다.
+    작업의 메트릭(background_jobs_*)도 센다(metrics.measured_job). 할 일이 없던 바퀴도 센다.
     """
     job_id = new_job_id()
-    with job_span(operation, job_id), job_scope(job_id):
+    with job_span(operation, job_id), job_scope(job_id), measured_job(operation):
         started = time.perf_counter()
         try:
             yield job_id

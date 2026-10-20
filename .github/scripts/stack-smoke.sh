@@ -76,8 +76,10 @@ DASHBOARDS=docker/grafana/dashboards
 # Loki 의 label 로 쓰는 것(docs/observability.md 의 "Loki 의 label"). 이것 말고는 label 이 없어야 한다
 LOKI_LABELS=(container environment level mode service)
 # 메트릭을 OTLP 로 미는 서버(docs/observability.md 의 "2. 메트릭"). 서버에 메트릭을 붙이면 여기에 더한다.
-# 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다
-METRIC_SERVERS=(trpg billing notification)
+# 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다. 연결 풀이 없는 서버는 아래에 적는다
+METRIC_SERVERS=(auth trpg billing notification)
+# 연결 풀이 없는 서버. 인증 서버(Django)는 요청마다 연결을 맺고 닫는다. db_pool_* 를 내지 않는다
+POOLLESS_SERVERS=(auth)
 # span 을 내보내는 서버(docs/observability.md 의 "3. 추적"). 서버에 span 을 붙이면 여기와 아래 둘에 더한다
 TRACE_SERVERS=(auth trpg board billing notification)
 # 추적 번호를 실어 한 번 부를 주소(메서드와 경로). 401 이어도 된다. 요청의 span 은 걸린다. 상태 확인은 span 이 없다
@@ -793,8 +795,10 @@ check_server_metrics() {
     report "$service 의 요청 시간이 초로 들어온다(http_server_request_duration_seconds)" \
       eventually prometheus_finds "http_server_request_duration_seconds_count{service=\"$service\"}"
     report "$service 가 DB 에 닿는다고 적었다(db_up == 1)" eventually prometheus_finds "db_up{service=\"$service\"} == 1"
-    report "$service 의 연결 풀이 들어온다(db_pool_connections, db_pool_connections_max)" \
-      eventually prometheus_finds "db_pool_connections{service=\"$service\", state=\"idle\"} and on(instance) db_pool_connections_max"
+    if [[ " ${POOLLESS_SERVERS[*]} " != *" $server "* ]]; then
+      report "$service 의 연결 풀이 들어온다(db_pool_connections, db_pool_connections_max)" \
+        eventually prometheus_finds "db_pool_connections{service=\"$service\", state=\"idle\"} and on(instance) db_pool_connections_max"
+    fi
   done
   # 결제 서버의 작업. 정리 작업은 30초마다 돌고, 대사는 check_workers 가 한 번 돌렸다(끝날 때 한 번 민다)
   report "결제 서버의 정리 작업이 작업 메트릭을 민다(sweep.run, instance=sweeper-…)" \
@@ -810,6 +814,14 @@ check_server_metrics() {
     eventually prometheus_finds 'background_jobs_finished_total{service="notification-server", operation="notification.prune", result="success"}'
   report "알림 서버가 넣은 알림을 서버마다 센다(notifications_received_total, outcome=created)" \
     eventually prometheus_finds 'notifications_received_total{service="notification-server", source="board", outcome="created"}'
+  # 인증 서버. 메일 워커는 1초마다 돌고 바퀴마다 발송함에 남은 메일을 센다.
+  # 미인증 계정 정리는 check_workers 가 한 번 돌렸다(끝날 때 한 번 민다)
+  report "인증 서버의 메일 워커가 작업 메트릭을 민다(mail.deliver_outgoing, instance=send_outgoing_mail-…)" \
+    eventually prometheus_finds 'background_jobs_finished_total{service="auth-server", operation="mail.deliver_outgoing", result="success", instance=~"send_outgoing_mail-.+"}'
+  report "인증 서버의 메일 워커가 발송함에 남은 메일을 센다(background_jobs_queued)" \
+    eventually prometheus_finds 'background_jobs_queued{service="auth-server", operation="mail.deliver_outgoing"}'
+  report "인증 서버의 예약 명령이 끝날 때 작업 메트릭을 민다(account.delete_unverified)" \
+    eventually prometheus_finds 'background_jobs_finished_total{service="auth-server", operation="account.delete_unverified", instance=~"delete_unverified_users-.+"}'
   # TRPG 서버. 청구 정리는 5초마다 돌고 바퀴마다 끝나지 않은 청구를 센다(청구가 없어도 0 을 낸다)
   report "TRPG 서버의 청구 정리가 작업 메트릭을 민다(charge.settle)" \
     eventually prometheus_finds 'background_jobs_finished_total{service="trpg-server", operation="charge.settle", result="success"}'

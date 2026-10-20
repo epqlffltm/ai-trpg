@@ -1,12 +1,14 @@
 # auth-server/observability/apps.py
 
 """
-관측(로그, 추적)을 프로세스가 뜰 때 건다. Django 가 앱을 불러온 뒤 한 번 부른다(ready).
+관측(로그, 추적, 메트릭)을 프로세스가 뜰 때 건다. Django 가 앱을 불러온 뒤 한 번 부른다(ready).
 
-서버(gunicorn), 워커(관리 명령), 예약 명령이 모두 이 길로 뜬다. 하는 일은 둘이다.
+서버(gunicorn), 워커(관리 명령), 예약 명령이 모두 이 길로 뜬다. 하는 일은 셋이다.
   - 보낼 곳(OTEL_EXPORTER_OTLP_ENDPOINT)이 있으면 span 을 수집기에 민다(tracing.py)
+  - 같은 곳에 메트릭을 민다(metrics.py). span 과 같은 출처(같은 service.instance.id)를 쓴다
   - DB 연결을 맺을 때마다 쿼리 span 을 단다(db_spans.py)
-테스트(manage.py test)는 내보내지 않는다. 개발자의 .env 에 주소가 있어도 그렇다. span 을 보는 테스트는 메모리에 모은다.
+gunicorn 은 워커가 갈라진 뒤에 앱을 불러온다. 그래서 워커마다 여기를 지나고, 보내는 스레드도 워커마다 뜬다.
+테스트(manage.py test)는 내보내지 않는다. 개발자의 .env 에 주소가 있어도 그렇다. 보는 테스트는 메모리에 모은다.
 """
 
 import sys
@@ -18,12 +20,13 @@ from django.db.backends.signals import connection_created
 
 from observability.db_spans import on_connection_created
 from observability.formatter import ServiceInfo
+from observability.metrics import configure_metrics
 from observability.setup import SERVICE_NAME
-from observability.tracing import configure_tracing
+from observability.tracing import build_resource, configure_tracing
 
 # 서버(gunicorn)의 프로세스 이름. service.instance.id 의 앞부분이 된다(server-3f2a9c1d)
 SERVER_PROCESS = 'server'
-# 테스트를 돌리는 명령. 이 명령에서는 span 을 내보내지 않는다
+# 테스트를 돌리는 명령. 이 명령에서는 span 과 메트릭을 내보내지 않는다
 TEST_COMMAND = 'test'
 
 
@@ -39,12 +42,14 @@ def service_info() -> ServiceInfo:
     return ServiceInfo(service=SERVICE_NAME, environment=settings.APP_ENVIRONMENT, version=settings.APP_VERSION)
 
 
-def start_tracing(argv: list[str]) -> None:
-    """보낼 곳이 있으면 span 을 수집기에 밀기 시작한다. 테스트에서는 하지 않는다."""
+def start_telemetry(argv: list[str]) -> None:
+    """보낼 곳이 있으면 span 과 메트릭을 수집기에 밀기 시작한다. 둘이 한 출처를 쓴다. 테스트에서는 하지 않는다."""
     process = process_name(argv)
     if process == TEST_COMMAND:
         return
-    configure_tracing(settings.OTEL_EXPORTER_OTLP_ENDPOINT, service_info(), process)
+    resource = build_resource(service_info(), process)
+    configure_tracing(settings.OTEL_EXPORTER_OTLP_ENDPOINT, resource)
+    configure_metrics(settings.OTEL_EXPORTER_OTLP_ENDPOINT, settings.OTEL_METRIC_EXPORT_INTERVAL, resource)
 
 
 class ObservabilityConfig(AppConfig):
@@ -52,4 +57,4 @@ class ObservabilityConfig(AppConfig):
 
     def ready(self) -> None:
         connection_created.connect(on_connection_created, dispatch_uid='observability.db_spans')
-        start_tracing(sys.argv)
+        start_telemetry(sys.argv)

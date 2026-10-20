@@ -2,82 +2,26 @@
 
 """
 span 을 OTLP(HTTP)로 미는 것(observability/tracing.py)과 그 설정(OTEL_EXPORTER_OTLP_ENDPOINT),
-프로세스가 뜰 때 거는 일(observability/apps.py)을 검증한다. 수집기 대신 이 테스트의 HTTP 서버가 받는다.
+프로세스가 뜰 때 거는 일(observability/apps.py)을 검증한다.
+수집기 대신 가짜 수집기(observability/tests/collector.py)가 받는다.
 """
 
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import patch
 
 from django.conf import settings
 from django.test import SimpleTestCase, override_settings
 from opentelemetry import trace
-from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
+from opentelemetry.metrics import NoOpMeterProvider
 
 from observability import apps
 from observability.formatter import ServiceInfo
+from observability.metrics import use_meter_provider
 from observability.spans import record_handled, tracer, use_provider
-from observability.tracing import build_provider, configure_tracing, otlp_endpoint
+from observability.tests.collector import Collector
+from observability.tracing import build_provider, build_resource, configure_tracing, otlp_endpoint
 
 INFO = ServiceInfo(service='auth-server', environment='test', version='3f2a9c1')
-
-
-class Collector:
-    """OTLP 로 온 span 을 모으는 가짜 수집기. 따로 도는 스레드에서 받는다."""
-
-    def __init__(self) -> None:
-        self.paths: list[str] = []
-        self.requests: list[ExportTraceServiceRequest] = []
-        self.lock = threading.Lock()
-        self.server = HTTPServer(('127.0.0.1', 0), self.handler())
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-
-    def __enter__(self) -> 'Collector':
-        self.thread.start()
-        return self
-
-    def __exit__(self, *exc_info) -> None:
-        self.server.shutdown()
-        self.server.server_close()
-
-    @property
-    def url(self) -> str:
-        return f'http://127.0.0.1:{self.server.server_port}'
-
-    def handler(self) -> type[BaseHTTPRequestHandler]:
-        collector = self
-
-        class Handler(BaseHTTPRequestHandler):
-            def do_POST(self) -> None:
-                body = self.rfile.read(int(self.headers['Content-Length']))
-                request = ExportTraceServiceRequest()
-                request.ParseFromString(body)
-                with collector.lock:
-                    collector.paths.append(self.path)
-                    collector.requests.append(request)
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/x-protobuf')
-                self.end_headers()
-
-            def log_message(self, *_args: object) -> None:
-                return
-
-        return Handler
-
-    def span_names(self) -> list[str]:
-        with self.lock:
-            return [
-                span.name
-                for request in self.requests
-                for resource in request.resource_spans
-                for scope in resource.scope_spans
-                for span in scope.spans
-            ]
-
-    def resource(self) -> dict[str, str]:
-        with self.lock:
-            attributes = self.requests[0].resource_spans[0].resource.attributes
-        return {attribute.key: attribute.value.string_value for attribute in attributes}
+MAIL_WORKER = build_resource(INFO, 'send_outgoing_mail')
 
 
 class EndpointTests(SimpleTestCase):
@@ -104,12 +48,12 @@ class ExportTests(SimpleTestCase):
         self.addCleanup(use_provider, trace.NoOpTracerProvider())
 
     def test_without_an_endpoint_nothing_is_made(self):
-        self.assertIsNone(build_provider('', INFO, 'server'))
-        self.assertIsNone(configure_tracing('', INFO, 'server'))
+        self.assertIsNone(build_provider('', MAIL_WORKER))
+        self.assertIsNone(configure_tracing('', MAIL_WORKER))
 
     def test_shutdown_sends_the_spans_with_the_resource(self):
         with Collector() as collector:
-            provider = configure_tracing(collector.url, INFO, 'send_outgoing_mail')
+            provider = configure_tracing(collector.url, MAIL_WORKER)
             with tracer().start_as_current_span('GET /api/v1/auth/jwks'):
                 pass
             provider.shutdown()
@@ -127,7 +71,7 @@ class ExportTests(SimpleTestCase):
 
     def test_idle_rounds_are_not_sent_by_the_server_either(self):
         with Collector() as collector:
-            provider = configure_tracing(collector.url, INFO, 'send_outgoing_mail')
+            provider = configure_tracing(collector.url, MAIL_WORKER)
             with tracer().start_as_current_span('mail.deliver_outgoing', attributes={'job_id': 'job-1'}):
                 record_handled(0)
             provider.shutdown()
@@ -138,6 +82,7 @@ class ExportTests(SimpleTestCase):
 class StartTests(SimpleTestCase):
     def setUp(self) -> None:
         self.addCleanup(use_provider, trace.NoOpTracerProvider())
+        self.addCleanup(use_meter_provider, NoOpMeterProvider())
 
     def test_the_process_is_named_by_its_command(self):
         self.assertEqual(
@@ -147,18 +92,21 @@ class StartTests(SimpleTestCase):
         self.assertEqual(apps.process_name(['/usr/local/bin/gunicorn', 'config.wsgi']), 'server')
 
     def test_tests_never_send(self):
-        with patch.object(apps, 'configure_tracing') as configure:
-            apps.start_tracing(['manage.py', 'test'])
+        with patch.object(apps, 'configure_tracing') as tracing, patch.object(apps, 'configure_metrics') as metrics:
+            apps.start_telemetry(['manage.py', 'test'])
 
-        configure.assert_not_called()
+        tracing.assert_not_called()
+        metrics.assert_not_called()
 
-    @override_settings(OTEL_EXPORTER_OTLP_ENDPOINT='http://alloy:4318')
-    def test_other_processes_send_to_the_endpoint(self):
-        with patch.object(apps, 'configure_tracing') as configure:
-            apps.start_tracing(['/app/manage.py', 'send_welcome_credits'])
+    @override_settings(OTEL_EXPORTER_OTLP_ENDPOINT='http://alloy:4318', OTEL_METRIC_EXPORT_INTERVAL=5000)
+    def test_other_processes_send_spans_and_metrics_from_one_resource(self):
+        with patch.object(apps, 'configure_tracing') as tracing, patch.object(apps, 'configure_metrics') as metrics:
+            apps.start_telemetry(['/app/manage.py', 'send_welcome_credits'])
 
-        endpoint, info, process = configure.call_args.args
+        endpoint, resource = tracing.call_args.args
         self.assertEqual(endpoint, 'http://alloy:4318')
-        self.assertEqual(info.service, 'auth-server')
-        self.assertEqual(info.environment, settings.APP_ENVIRONMENT)
-        self.assertEqual(process, 'send_welcome_credits')
+        self.assertEqual(resource.attributes['service.name'], 'auth-server')
+        self.assertEqual(resource.attributes['deployment.environment.name'], settings.APP_ENVIRONMENT)
+        self.assertTrue(resource.attributes['service.instance.id'].startswith('send_welcome_credits-'))
+        # 메트릭도 같은 출처다(같은 service.instance.id)
+        self.assertEqual(metrics.call_args.args, ('http://alloy:4318', 5000, resource))

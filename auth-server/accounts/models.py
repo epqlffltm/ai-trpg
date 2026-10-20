@@ -297,6 +297,29 @@ class OutgoingMailStatus(models.TextChoices):
     DISCARDED = 'discarded', '버림'
 
 
+class MailKind(models.TextChoices):
+    """
+    메일의 종류. 메트릭 emails_sent_total 의 kind 다(docs/observability.md).
+    문구를 만드는 쪽(accounts/mail.py)이 정한다.
+
+    종류를 더하면 이 목록과 문서의 표에 함께 더한다. 메트릭의 label 이라 값의 종류가 정해져 있어야 한다.
+    """
+
+    SIGNUP_CODE = 'signup_code', '가입 인증 코드'
+    LOGIN_CODE = 'login_code', '로그인 인증 코드'
+    ALREADY_REGISTERED = 'already_registered', '이미 가입된 이메일'
+    PASSWORD_RESET = 'password_reset', '비밀번호 재설정'
+    PASSWORD_CHANGED = 'password_changed', '비밀번호 변경 알림'
+    SECURITY_DIGEST = 'security_digest', '보안 이벤트 요약'
+    GUARDIAN_CONSENT = 'guardian_consent', '보호자 동의 요청'
+    GUARDIAN_CONSENTED = 'guardian_consented', '보호자 동의 확인'
+    GUARDIAN_REVOKED = 'guardian_revoked', '보호자 동의 철회 확인'
+    MINOR_GUARDIAN = 'minor_guardian', '미성년자에게 보호자 동의 알림'
+    GUARDIAN_PAYMENT = 'guardian_payment', '보호자에게 결제 알림'
+    # 종류를 적지 않은 메일. 이 칸이 생기기 전에 적힌 것도 이것이다
+    OTHER = 'other', '그 밖'
+
+
 class MailReceipt(models.Model):
     """
     보낸 메일의 기록(#352). 발송함의 줄은 보내면 지우므로(본문에 인증 코드가 있어서) 보냈다는 사실이 남지 않는다.
@@ -336,6 +359,8 @@ class OutgoingMail(models.Model):
 
     to_email = models.EmailField('받는 사람')
     subject = models.CharField('제목', max_length=200)
+    # 메일의 종류. 보낸 결과를 종류마다 센다(메트릭 emails_sent_total)
+    kind = models.CharField('종류', max_length=40, choices=MailKind.choices, default=MailKind.OTHER)
     # 암호화된 본문이다(mail_crypto.py). 버린 메일은 본문을 비운다
     body = models.TextField('본문', blank=True)
 
