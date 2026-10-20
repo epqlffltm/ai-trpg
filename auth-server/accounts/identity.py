@@ -21,6 +21,7 @@ from django.utils import timezone
 from django.utils.crypto import salted_hmac
 
 from accounts.age import adult_content_from, has_reached, is_under_min_age, korean_today, legal_adult_from
+from accounts.consents import erase_consents
 from accounts.identity_providers import IdentityResult, get_identity_provider
 from accounts.models import (
     EmailCode,
@@ -143,6 +144,7 @@ def close_under_age_account(user: User) -> None:
     계정의 줄은 지우지 않는다. 지우면 세션 버전이 함께 사라져, 다른 서버가 끊긴 세션을 알 길이 없다.
     이미 발급된 access 토큰이 만료(15분)까지 통한다. 그래서 정지처럼 막고 세션을 끊은 뒤 내용을 비운다.
     공개 ID 는 남는다. 다른 서버가 그 사용자의 것을 가려 지울 때 쓴다.
+    가입 때 받은 동의의 기록도 지운다(#450). 그 나이의 본인 동의는 쓸 수 없다.
     보안 이벤트에 남은 IP 는 지우지 않는다. 보관 기간이 지나면 함께 지워진다(security_digest.py).
     """
     locked = _lock(user)
@@ -150,6 +152,7 @@ def close_under_age_account(user: User) -> None:
     _blank_account(locked)
     revoke_all_sessions(locked)
     _erase_mail_records(locked, email)
+    erase_consents(locked)
     record_security_event(kind=SecurityEventKind.IDENTITY_UNDER_AGE, user=locked)
 
 

@@ -5,13 +5,14 @@
 
 User 는 Django 의 UserAdmin 을 상속해 비밀번호 해싱과 변경 화면을 그대로 쓰고,
 화면에 보이는 필드 구성만 이 프로젝트의 User 모델에 맞춘다.
-인증 코드, 보낼 메일, 보안 이벤트, 환영 크레딧은 조회만 한다.
+인증 코드, 보낼 메일, 보안 이벤트, 환영 크레딧, 동의 기록은 조회만 한다.
 """
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from accounts.models import (
+    ConsentRecord,
     EmailCode,
     GuardianConsent,
     GuardianNotice,
@@ -253,6 +254,22 @@ class GuardianConsentAdmin(ReadOnlyAdmin):
     ordering = ('-requested_at',)
     # 링크의 일회 값과 사람 열쇠는 보여 주지 않는다. 일회 값이 보이면 링크를 만들 수 있다
     exclude = ('link_nonce', 'guardian_person_key')
+
+
+@admin.register(ConsentRecord)
+class ConsentRecordAdmin(ReadOnlyAdmin):
+    """
+    이용약관과 개인정보 수집·이용 같은 동의의 기록을 조회만 한다(#450).
+    다툼이 생기면 "언제 어느 판에 동의했는가"를 여기서 본다.
+
+    기록이다. 고치거나 지울 수 있으면 동의를 받았다는 증거가 되지 못한다.
+    """
+
+    list_display = ('at', 'user', 'item', 'version', 'action')
+    list_filter = ('item', 'action')
+    search_fields = ('user__username',)
+    ordering = ('-at',)
+    list_select_related = ('user',)
 
 
 @admin.register(PaymentEligibility)
