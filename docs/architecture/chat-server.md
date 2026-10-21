@@ -121,14 +121,14 @@
 
 ## 데이터의 모양
 
-초안이다. 스키마는 `chat`, 다른 서비스의 테이블을 직접 읽지 않는다.
+스키마는 `chat`, 다른 서비스의 테이블을 직접 읽지 않는다. 앞의 넷(`characters`, `conversations`, `conversation_personas`, `messages`)은
+만들었다(`chat-server/app/conversations/models.py`, chat-server README 의 "대화"). 나머지는 초안이다.
 
 | 테이블 | 주요 칸 | 비고 |
 | --- | --- | --- |
-| `characters` | `id`, `owner_id`, `source`(서비스, 자산 id, 판), 이름, 소개, 인사말, 말투 예시, 나이, `rating`, 버전 | asset-server 에서 가져온 복사본. 나이는 고르는 칸 |
-| `conversation_personas` | `conversation_id`, `persona_id`, `revision`, 이름, 설명, 그림 id, 나이, 성별, 호칭, 말투 예시, 성격, 가져온 때 | asset-server 의 계정 페르소나를 대화마다 복사한 것. 지금 것의 `revision` 과 다르면 "새 설정으로 바꾸기" |
-| `conversations` | `id`, `owner_id`, `persona_id`, 제목, `model`, `active_leaf_id`, 생성·수정 시각, 지운 시각 | 새로 시작할 때마다 하나. 한 캐릭터에 쌓인다. 기억과 모델은 대화마다 |
-| `conversation_characters` | `conversation_id`, `character_id`, 순서 | 대화의 참가자. chat 은 정확히 하나다. 표를 story 와 같은 모양으로 두려고 목록으로 둔다 |
+| `characters` | `id`, `owner_id`, `source_id`(asset 의 캐릭터 id), `version`, `name`, `rating`, `document`(판의 문서 그대로), 가져온 때 | asset-server 에서 가져온 판의 사본. **사람마다, 판마다 하나**(`owner_id`, `source_id`, `version` 이 고유)라 같은 판으로 여러 번 시작해도 함께 쓴다. 동시에 가져와도 하나만 남는다(`ON CONFLICT DO NOTHING`). 사람마다 두는 것은 탈퇴 때 그 사람의 것만 지우기 위해서다. 목록이 될 수 없다(캐릭터 탐색은 asset 의 공개 목록이다) |
+| `conversation_personas` | `conversation_id`, `source_id`(asset 의 페르소나 id), `revision`, 이름, 설명, 그림 id, 나이, 성별, 호칭, 말투 예시, 성격, 가져온 때 | asset-server 의 계정 페르소나를 대화마다 복사한 것. 페르소나 없이 시작한 대화에는 없다. 지금 것의 `revision` 과 다르면 "새 설정으로 바꾸기" |
+| `conversations` | `id`, `owner_id`, `character_id`(위의 사본), 제목, `start_title`, `start_situation`, `active_leaf_id`, 생성·수정 시각, 지운 시각 | 새로 시작할 때마다 하나. 한 캐릭터에 쌓인다. 기억과 모델은 대화마다. 시작 상황은 판의 것을 복사해 둔다(제목은 목록에, 상황은 모델에). 모델(`model`)과 생성 중 표시(`generating_since`)는 "한 번의 말"에서 더한다 |
 | `message_states` | `message_id`, `place_id`, 시각(시간대), 소지품, 가 본 곳, 상대의 차림, 호감도 | 상태가 바뀐 말에만 둔다. [장소와 소지품](#장소와-소지품). 호감도와 차림도 가지마다 다르므로 같은 행에 둔다 |
 | `illustration_unlocks` | `owner_id`, `character_source`(서비스, 자산 id), `illustration_id`, 처음 연 시각 | 계정마다의 기록. 가지를 바꾸거나 대화를 지워도 남는다. 갤러리(C7)가 읽는다 |
 | `messages` | `id`, `conversation_id`, `parent_id`, `role`, `content`, `status`, `suggestions`, `edited`, 시각 | `status`: `complete`, `partial`, `failed`. `parent_id` 가 같은 것이 서로 대안 |
@@ -137,6 +137,7 @@
 | `memory_notes` | `id`, `conversation_id`, 글, 출처(`user` 또는 `summary`) | 사용자가 보고 고친다 |
 | `lorebooks`, `lore_entries` | `source`, 이름, 항목: 글, 종류(장소·물건 등), 상시 여부, 임베딩 | asset-server 에서 가져온 복사본. 임베딩은 가져올 때 만드는 색인 |
 
+- 대화가 무엇을 가리키는지는 서버마다의 칸이다. chat 은 캐릭터의 사본(`character_id`), story 는 세계관이다. 대화의 핵심을 `shared/conversation-core` 로 뽑을 때(#591) 공용 쪽은 그 칸을 모른다.
 - `messages` 를 처음부터 트리로 둔다. 칸 하나 값이라 지금은 싸고, 선형에서 옮기는 일은 나중에 이관이 필요한 큰 일이다. 화면은 처음에 다시 생성의 대안만 보여도 된다.
 - 대화 목록(`GET /api/v1/chat/conversations`)은 `?limit=&offset=` 이고, 마지막 말이 최근인 것부터다(`conversations` 의 수정 시각). 캐릭터로 거를 수 있다. 첫 화면의 이어하기(A1, 거르지 않고 `limit=5`)와 C2 의 이 캐릭터와의 대화가 같은 주소를 쓴다. 화면이 서비스마다 부르고 화면에서 놓으므로 trpg 의 `GET /tables`, story 의 세션 목록과 모양을 맞춘다(#593).
 - 선택지는 `suggestions` 칸에만 둔다. 본문(`content`)에 섞으면 다음 호출의 프롬프트에 다시 들어가 모델이 선택지를 흉내 낸다.
