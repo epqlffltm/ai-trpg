@@ -43,3 +43,12 @@ async def count_monsters(session: AsyncSession, bestiary_id: uuid.UUID) -> int:
 async def delete_monster(session: AsyncSession, monster: Monster) -> None:
     """몬스터의 행을 지운다."""
     await session.delete(monster)
+
+
+async def copied_keys(session: AsyncSession, bestiary_id: uuid.UUID) -> set[tuple[str, str]]:
+    """도감에 이미 복사해 둔 출처(자료, key)들. 직접 쓴 몬스터는 없다."""
+    query = select(Monster.copied_source, Monster.copied_key).where(
+        Monster.bestiary_id == bestiary_id, Monster.copied_source.is_not(None)
+    )
+    rows = await session.execute(query)
+    return {(source, key) for source, key in rows.all()}

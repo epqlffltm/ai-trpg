@@ -13,6 +13,7 @@ import uuid
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
+from app.assets.copies import copied_from
 from app.assets.lorebooks import service
 from app.assets.lorebooks.schemas import EntryCreate, EntryDetail, EntryUpdate, LorebookCreate, LorebookUpdate
 from app.assets.lorebooks.service import LorebookFullError
@@ -33,6 +34,7 @@ def to_entry_detail(entry: LoreEntry) -> EntryDetail:
         content=entry.content,
         kind=LoreKind(entry.kind),
         true_names=entry.true_names,
+        copied_from=copied_from(entry.copied_source, entry.copied_key),
         created_at=entry.created_at,
         updated_at=entry.updated_at,
     )

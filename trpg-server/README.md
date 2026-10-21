@@ -255,6 +255,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PATCH | `/api/v1/game/lorebooks/{id}` | 내 로어북 고치기 | access 토큰 |
 | DELETE | `/api/v1/game/lorebooks/{id}` | 내 로어북 지우기. 204 | access 토큰 |
 | POST | `/api/v1/game/lorebooks/{id}/entries` | 항목 더하기. 201. 가득 찼으면 409 | access 토큰 |
+| POST | `/api/v1/game/lorebooks/{id}/entries/copies` | 고른 [참고 자료](#참고-자료)를 항목으로 복사(`reference_ids`, 20개까지). 201. 이미 복사한 줄은 건너뛴다(`skipped`). 넘치면 하나도 넣지 않고 409, 없는 줄이 있으면 404 `reference_not_found` | access 토큰 |
 | GET | `/api/v1/game/lorebooks/{id}/entries` | 항목 전부. 만든 순서 | access 토큰 |
 | PATCH | `/api/v1/game/lorebooks/{id}/entries/{entry_id}` | 항목 고치기. 보낸 칸만 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/lorebooks/{id}/entries/{entry_id}` | 항목 지우기. 204 | access 토큰 |
@@ -264,6 +265,8 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PATCH | `/api/v1/game/bestiaries/{id}` | 내 도감 고치기 | access 토큰 |
 | DELETE | `/api/v1/game/bestiaries/{id}` | 내 도감 지우기. 204 | access 토큰 |
 | POST | `/api/v1/game/bestiaries/{id}/monsters` | 몬스터 더하기. 201. 가득 찼으면 409 | access 토큰 |
+| POST | `/api/v1/game/bestiaries/{id}/monsters/copies` | 고른 [참고 자료](#참고-자료)(몬스터)를 몬스터로 복사. 로어북의 복사와 같다. 몬스터가 아닌 줄이 있으면 422 `not_a_monster` | access 토큰 |
+| GET | `/api/v1/game/references` | [참고 자료](#참고-자료) 찾기. `q`(이름, 50자), `kind`(`monster`, `item`), `limit`, `offset`. 쪽의 출처 표시(`attributions`)가 함께 온다 | access 토큰 |
 | GET | `/api/v1/game/bestiaries/{id}/monsters` | 몬스터 전부. 만든 순서 | access 토큰 |
 | PATCH | `/api/v1/game/bestiaries/{id}/monsters/{monster_id}` | 몬스터 고치기. 보낸 칸만 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/bestiaries/{id}/monsters/{monster_id}` | 몬스터 지우기. 204 | access 토큰 |
@@ -590,6 +593,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `kind` | 정한 값 중 하나 | 항목의 종류. 적지 않으면 `other`(기타) |
 | `keywords` | 5개, 각 30자 | 이 낱말이 대화에 나오면 항목을 AI 에게 넣는다. 중복은 거부한다(대소문자만 달라도 같은 것) |
 | `content` | 500자 | 내용. AI 가 읽는다 |
+| `copied_from` | 응답에만 | [참고 자료](#참고-자료)에서 복사한 항목이면 그 출처(`{"source", "key"}`), 직접 쓴 항목은 `null`. 고쳐도 남는다 |
 | `true_names` | 5개, 각 50자 | 인물을 지목할 때 맞다고 받는 이름들. 비우면 `name` 하나가 정답이다. AI 에게 가지 않고 검색에도 쓰지 않는다. 인물 항목에만 뜻이 있다. 중복은 거부한다. 적은 이름은 맞히기 전까지 서술에 나오지 않는다([지목](#라운드)의 숨긴 이름) |
 
 항목의 종류(`kind`)는 여덟이다. 종류마다 서술할 때 다루는 법이 다르다.
@@ -625,6 +629,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `kind` | 정한 값 중 하나 | 타입. 적지 않으면 `other` |
 | `unique` | 참, 거짓 | 네임드 몹(보스, 특별한 몹)인가. 적지 않으면 `false`(일반 몹). 판 전체에서 한 마리만 둘 수 있고, 번호 없이 이름으로 부른다 |
 | `content` | 500자 | 생김새, 버릇, 싸우는 방식. AI 가 읽는다. 수치는 적지 않는다 |
+| `copied_from` | 응답에만 | [참고 자료](#참고-자료)에서 복사한 몬스터면 그 출처, 직접 쓴 몬스터는 `null` |
 
 타입(`kind`)은 `humanoid`(인간형), `beast`(야수), `undead`(언데드), `construct`(구조물), `other`(기타)다.
 엔진이 다르게 다룰 것만 나눈다. 고정된 목록이다(DB 의 CHECK 제약). 세세한 생물 분류는 로어북의 종족 항목이 글로 맡는다.
@@ -2976,7 +2981,7 @@ uv run python -m scripts.eval_lore --fake
 | 1 | 저장과 넣기. 데이터 파일, 테이블, 넣는 명령, 벡터를 만드는 명령(#568) |
 | 2 | 서술에 섞기. 세계관이 허용하고 방장이 방 설정으로 켜면, 제작자의 로어북을 고르고 남은 자리에 참고 자료를 넣는다([서술에 섞기](#서술에-섞기)) |
 | 3 | 켠 것과 끈 것을 견주는 평가(서술의 품질, 늘어난 토큰). 도구는 있다([평가](#참고-자료의-평가)). 잰 결과로 거리 기준을 고친다 |
-| 4 | 기본 자산. 이름과 글을 한국어로 옮겨 둔다([한국어 번역](#한국어-번역)). 참고 자료를 골라 내 로어북과 도감으로 복사해 쓴다. srd5 룰북이면 몬스터 시트를 제안한다 |
+| 4 | 기본 자산. 이름과 글을 한국어로 옮겨 둔다([한국어 번역](#한국어-번역)). 참고 자료를 골라 내 로어북과 도감으로 복사해 쓴다([복사](#참고-자료의-복사)). srd5 룰북이면 몬스터 시트를 제안한다 |
 
 정한 것.
 - **게임 중에 웹을 찾지 않는다.** 미리 넣은 것에서만 찾는다(권한, 주입 공격, 재현성, 속도와 값). 그래서 이름도 "웹 검색"이 아니라 "참고 자료"다.
@@ -3070,6 +3075,24 @@ uv run python -m scripts.references index --model qwen3-embedding:0.6b
 REFERENCE_MAX_DISTANCE=0.45
 REFERENCE_KEYWORD_MAX_DISTANCE=0.50
 ```
+
+### 참고 자료의 복사
+
+제작자가 참고 자료를 찾아 골라 내 로어북의 항목, 내 도감의 몬스터로 복사한다(2026-10-21 유저 결정, `app/references/copying.py`).
+복사한 뒤로는 제작자의 것이다. 고치고, 시나리오에 붙이고, 게시한다. 테이블의 서술 설정(`references_enabled`)과 상관없다.
+
+**찾기**(`GET /references`). 이름으로 찾는다. 한국어 이름, 원본의 이름, 다른 이름에 글이 들어 있는 줄이다(대소문자를 가리지 않는다).
+벡터로 찾지 않는다. 제작자는 이름을 알고 고르고, 임베딩 모델이 없어도 돈다. 응답의 이름과 글은 보이는 것(한국어, 없으면 원본)이고 원본의 수치(`data`)는 싣지 않는다.
+
+**옮기는 규칙.**
+- 이름과 글은 한국어로 옮긴 것이다. 로어북의 글과 도감의 글은 500자까지라, 넘으면 500자 안의 마지막 문장 끝에서 자른다(특성을 나누는 쌍반점에서 잘리면 마침표로 맺는다). 도감의 이름은 50자까지다.
+- 로어북: 물건은 `item`, 몬스터는 `species`(종족) 항목이다. 몬스터 한 마리가 아니라 그 무리의 설명이다. 다른 이름을 키워드로 단다(두 글자 이상, 5개까지).
+- 도감: 몬스터만 받는다(아니면 422 `not_a_monster`). 원본의 생물 분류를 타입으로 바꾼다. `humanoid`, `beast`(작은 야수의 무리도), `undead`, `construct` 는 그대로, 나머지(용, 괴물, 악마 …)는 `other` 다. 네임드 몹이 아니다. 시트(수치)는 옮기지 않는다. 시나리오가 적는다.
+- 출처(`copied_from`)를 행에 남긴다(`lore_entries`, `monsters` 의 `copied_source`, `copied_key`). 출처 표시를 하고, 같은 줄을 한 로어북(도감)에 두 번 넣지 않는 데 쓴다. 두 번 누른 요청은 건너뛰고(`skipped`) 201 이다.
+- 한 번에 하나도 빠짐없이 넣거나 하나도 넣지 않는다. 없는 줄, 몬스터가 아닌 줄, 상한(100개)을 넘는 수면 아무것도 넣지 않는다. 항목 하나를 더할 때처럼 세기 전에 로어북(도감)을 잠근다.
+
+**출처 표시.** SRD 5.1 은 CC BY 4.0 이다. 찾기의 응답(`attributions`)에 출처 표시와 원본을 바꾼 것(수치를 빼고 줄이고 한국어로 옮김)을 싣는다.
+복사한 항목이 든 판을 게시했을 때 소개 화면에 출처를 보이는 것은 아직 없다. 행에 남긴 출처로 화면에서 붙인다.
 
 ### 참고 자료의 평가
 

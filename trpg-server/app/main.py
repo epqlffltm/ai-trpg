@@ -80,7 +80,10 @@ from app.realtime.listener import PostgresListener
 from app.realtime.shutdown import closing_on_exit
 from app.realtime.signals import session_info
 from app.realtime.signing import signer_from
+from app.references import router as references
+from app.references.copying import NotAMonsterError
 from app.references.retrieval import ReferenceRetriever, ReferenceThresholds
+from app.references.service import ReferenceNotFoundError
 from app.rounds import clock
 from app.rounds import router as rounds
 from app.rounds.closing import closer_of
@@ -327,6 +330,7 @@ def create_app(
     app.include_router(scenarios.router, prefix=API_PREFIX)
     app.include_router(lorebooks.router, prefix=API_PREFIX)
     app.include_router(bestiaries.router, prefix=API_PREFIX)
+    app.include_router(references.router, prefix=API_PREFIX)
     app.include_router(listings.owner_router, prefix=API_PREFIX)
     app.include_router(listings.public_router, prefix=API_PREFIX)
     app.include_router(personas.router, prefix=API_PREFIX)
@@ -350,6 +354,8 @@ def create_app(
     app.add_exception_handler(RecommendedModelError, scenarios.handle_recommended_model)
     app.add_exception_handler(LorebookFullError, lorebooks.handle_lorebook_full)
     app.add_exception_handler(BestiaryFullError, bestiaries.handle_bestiary_full)
+    app.add_exception_handler(ReferenceNotFoundError, references.handle_reference_not_found)
+    app.add_exception_handler(NotAMonsterError, references.handle_not_a_monster)
     app.add_exception_handler(ScenarioNotReadyError, scenarios.handle_scenario_not_ready)
     app.add_exception_handler(ListingNotReadyError, listings.handle_listing_not_ready)
     app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)
