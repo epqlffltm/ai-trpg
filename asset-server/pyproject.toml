@@ -1,0 +1,55 @@
+[project]
+name = "asset-server"
+version = "0.1.0"
+description = "Asset service (characters, personas, images) for an AI-driven TRPG platform"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.0",
+    "asyncpg>=0.32.0",
+    "fastapi>=0.143.5",
+    "httpx>=0.28.1",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.1",
+    "opentelemetry-sdk>=1.45.1",
+    "pydantic-settings>=2.16.0",
+    "pyjwt[crypto]>=2.15.1",
+    "sqlalchemy[asyncio]>=2.1.5",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# async def 로 쓴 테스트를 표시 없이 그대로 실행한다
+asyncio_mode = "auto"
+# 테스트 전체가 이벤트 루프 하나에서 돈다. DB 연결은 만든 루프에 묶이므로,
+# 연결 풀(엔진)을 테스트끼리 함께 쓰려면 루프도 하나여야 한다. 테스트마다 새 연결을 맺지 않는다
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+# 실패한 테스트의 기록을 짧게 찍는다. 기본(long)은 실패한 함수가 받은 인자의 값까지 찍는다.
+# DB 에 연결하다 실패하면 그 인자가 비밀번호가 든 접속 주소다
+addopts = "--tb=short"
+
+[tool.coverage.run]
+# 서버의 코드만 잰다. 테스트는 뺀다
+source = ["app"]
+# SQLAlchemy 의 비동기는 안에서 greenlet 으로 갈아탄다. 알려 주지 않으면 DB 를 기다린 뒤의 줄이 지나가지 않은 것으로 잡힌다
+concurrency = ["greenlet", "thread"]
+
+[tool.coverage.report]
+# 한 줄도 없는 파일(__init__.py)은 표에서 뺀다
+skip_empty = true
+
+[tool.ruff]
+# 규칙과 모양은 저장소 루트의 ruff.toml 을 따른다. 인증 서버, 게임 서버와 같다
+extend = "../ruff.toml"
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
