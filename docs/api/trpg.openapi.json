@@ -2331,7 +2331,7 @@
         "type": "object"
       },
       "Grade": {
-        "description": "보이는 분류. 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 따로 정한다.",
+        "description": "보이는 분류. 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 모델 목록의 파일에 적는다.",
         "enum": [
           "basic",
           "standard",
