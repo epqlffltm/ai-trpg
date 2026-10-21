@@ -220,11 +220,20 @@ class PasswordResetConfirmSerializer(EmailSerializer):
 
 
 class LoginResponseSerializer(serializers.Serializer):
-    """토큰을 발급하는 응답. 로그인 2단계와 토큰 갱신이 쓴다."""
+    """
+    토큰을 발급하는 응답. 로그인 2단계, 토큰 갱신, 비밀번호 변경이 쓴다.
+
+    consents_pending 이 비어 있지 않으면 다시 동의할 필수 항목이 남았다(#450). 그 access 토큰은 인증 서버에만 통한다.
+    화면은 동의를 받은 뒤(PUT /me/consents/<항목>) /refresh 로 모든 서버에 통하는 토큰을 받는다.
+    """
 
     access_token = serializers.CharField()
     token_type = serializers.CharField()
     expires_in = serializers.IntegerField()
+    consents_pending = serializers.ListField(
+        child=serializers.CharField(),
+        help_text='다시 동의할 필수 항목. 비어 있지 않으면 access 토큰이 인증 서버에만 통한다',
+    )
 
 
 class UserSerializer(serializers.ModelSerializer):

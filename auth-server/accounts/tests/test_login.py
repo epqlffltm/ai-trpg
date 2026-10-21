@@ -37,6 +37,7 @@ from accounts.models import EmailCodePurpose, User
 from accounts.tests.helpers import (
     LOGIN_URL,
     LOGIN_VERIFY_URL,
+    agree_to_required,
     code_from,
     log_in,
     start_login,
@@ -71,7 +72,10 @@ def create_user(**overrides) -> User:
         'email_verified_at': timezone.now(),
     }
     fields.update(overrides)
-    return User.objects.create_user(**fields)
+    user = User.objects.create_user(**fields)
+    # 필수 항목에 동의한 계정이다. 동의가 없으면 토큰이 인증 서버에만 통한다(#450, test_consent_gate.py)
+    agree_to_required(user)
+    return user
 
 
 def issue_access_token(user: User) -> str:
@@ -198,7 +202,8 @@ class LoginVerifyTests(LoginTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # refresh 토큰은 본문에 싣지 않는다
-        self.assertEqual(set(response.data), {'access_token', 'token_type', 'expires_in'})
+        self.assertEqual(set(response.data), {'access_token', 'token_type', 'expires_in', 'consents_pending'})
+        self.assertEqual(response.data['consents_pending'], [])
         self.assertEqual(response.data['token_type'], 'Bearer')
         self.assertEqual(response.data['expires_in'], 15 * 60)
         self.assertIn(REFRESH_COOKIE_NAME, response.cookies)

@@ -12,10 +12,12 @@ from datetime import date
 from django.conf import settings
 from django.core import mail
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from accounts.consents import POLICIES
+from accounts.models import ConsentAction, ConsentRecord, User
 from accounts.tokens import issue_token_pair
 from config.redis_client import get_redis, redis_breaker
 
@@ -88,6 +90,18 @@ def request_signup_ticket(client, email: str) -> str:
 def required_consents() -> dict[str, int]:
     """가입에 꼭 있어야 하는 동의(필수 항목 → 지금의 판). 판이 올라도 테스트를 고치지 않게 표에서 읽는다."""
     return {item: policy.version for item, policy in POLICIES.items() if policy.required}
+
+
+def agree_to_required(user: User) -> None:
+    """
+    그 계정이 필수 항목에 지금의 판으로 동의해 둔 것으로 적는다. 가입을 거쳐 만든 계정과 같은 상태다.
+
+    동의가 없는 계정의 access 토큰은 인증 서버에만 통한다(#450). 다른 서버가 받는 토큰을 보는 테스트가 부른다.
+    """
+    ConsentRecord.objects.bulk_create(
+        ConsentRecord(user=user, item=item, version=version, action=ConsentAction.AGREED, at=timezone.now())
+        for item, version in required_consents().items()
+    )
 
 
 def complete_signup(client, ticket: str, *, username: str, nickname: str, password: str):
