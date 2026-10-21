@@ -49,6 +49,8 @@ def make_test_settings(**overrides) -> Settings:
         # span 을 내보내지 않는다. 개발자의 .env 에 수집기의 주소가 있어도 테스트는 보내지 않는다.
         # span 을 보는 테스트는 메모리에 모으는 것을 끼운다(spans fixture)
         'otel_exporter_otlp_endpoint': '',
+        # asset 서버를 부르지 않는다. 개발자의 .env 에 주소가 있어도 테스트는 가짜를 끼운다
+        'asset_url': '',
     }
     values.update(overrides)
     return Settings(**values)

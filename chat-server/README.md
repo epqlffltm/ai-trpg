@@ -67,8 +67,10 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰의 발급자(`iss`). 인증 서버의 `JWT_ISSUER`와 같아야 한다 |
 | `JWT_AUDIENCE` | `ai-trpg-chat` | 이 서버의 이름. 토큰의 대상(`aud`)에 이 이름이 있어야 받는다 |
+| `ASSET_URL` | 비어 있음(부르지 않음) | asset 서버의 주소(`http://127.0.0.1:8006`). 대화를 시작할 때 캐릭터의 판과 페르소나의 사본을 가져온다([asset 서버의 다른 서버에 내주기](../asset-server/README.md#다른-서버에-내주기)). 부르는 코드는 대화의 PR 이 더한다 |
+| `ASSET_SECRET` | 비어 있음 | asset 서버에 보내는 요청에 서명하는 비밀. `asset-server/.env` 의 `CHAT_SERVER_SECRET` 과 같은 값. `ASSET_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 
-결제 서버를 부를 때의 비밀(`CHAT_SERVER_SECRET`, 결제 쪽은 #578)과 asset 서버에서 판을 가져올 때의 비밀은 그 길을 만들 때 더한다.
+결제 서버를 부를 때의 비밀(`BILLING_SECRET`, 결제 쪽은 #578)은 그 길을 만들 때 더한다.
 환경 변수는 다른 서버와 같은 이름을 쓰고 머리(`CHAT_`)를 붙이지 않는다. 머리는 다른 서버의 설정에 들어가는 값(`CHAT_SERVER_SECRET`)에만 붙인다.
 
 ## 상태 확인

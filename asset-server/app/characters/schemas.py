@@ -250,3 +250,25 @@ class PublicCharacterDetail(BaseModel):
     version: int
     published_at: datetime
     document: CharacterDocument
+
+
+class CharacterCopy(BaseModel):
+    """
+    다른 서버(chat, story)에 내주는 판. 대화를 시작할 때 가져가 고정한다.
+
+    마지막 판의 번호와 문서다. 가져간 쪽은 번호를 적어 두고,
+    지금의 번호(CharacterVersionNumber)가 크면 "새 판이 있다"를 알린다.
+    """
+
+    id: uuid.UUID
+    version: int
+    rating: Rating
+    published_at: datetime
+    document: CharacterDocument
+
+
+class CharacterVersionNumber(BaseModel):
+    """캐릭터의 지금 판 번호. 화면을 열 때 한 번 묻는다. 문서는 싣지 않는다."""
+
+    id: uuid.UUID
+    version: int

@@ -680,8 +680,10 @@ services:
     logging: *logging
     command: ["alembic", "upgrade", "heads"]
     env_file: ./asset-server/.env
+    # 마이그레이션은 DB 만 쓴다. 페르소나와 판을 가져가는 서버마다의 서명 비밀을 비운다
     environment:
       <<: *asset-environment
+      CHAT_SERVER_SECRET: ""
     depends_on:
       db:
         condition: service_healthy
@@ -713,8 +715,10 @@ services:
     logging: *logging
     command: ["alembic", "upgrade", "heads"]
     env_file: ./chat-server/.env
+    # 마이그레이션은 DB 만 쓴다. asset 서버를 부를 때의 서명 비밀을 비운다
     environment:
       <<: *chat-environment
+      ASSET_SECRET: ""
     depends_on:
       db:
         condition: service_healthy

@@ -5,6 +5,8 @@ asset 서버의 시작점. 앱을 만들고 라우터를 붙인다.
 
 asset 서버는 캐릭터, 계정 페르소나, 그림의 원본을 맡는다(docs/architecture/asset-server.md).
 상태 확인, 토큰의 주인, 계정 페르소나(#565), 캐릭터와 게시와 공개 목록(#567)이 있다. 그림(#566)이 붙는다.
+다른 서버(chat)가 페르소나의 사본과 판을 가져가는 주소(/service/{caller}/...)는
+그 서버의 서명과 사용자의 토큰을 함께 본다.
 
 띄우는 법: uv run uvicorn app.main:app --port 8006 --reload
 """
@@ -33,10 +35,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.api import health, me, readiness
 from app.characters import listings as character_listings
 from app.characters import router as characters
+from app.characters import supply as character_supply
 from app.characters.publishing import CharacterNotReadyError
 from app.characters.service import CharacterNotFoundError, OperatorOnlyError
 from app.core.config import Settings, get_settings
 from app.personas import router as personas
+from app.personas import supply as persona_supply
 from app.personas.service import PersonaLimitError, PersonaNotFoundError
 from app.ratings import AdultContentRequiredError, handle_adult_content_required
 
@@ -140,6 +144,11 @@ def create_app(
     app.add_exception_handler(OperatorOnlyError, characters.handle_operator_only)
     app.add_exception_handler(CharacterNotReadyError, characters.handle_character_not_ready)
     app.add_exception_handler(AdultContentRequiredError, handle_adult_content_required)
+    # 다른 서버가 페르소나의 사본과 판을 가져가는 주소.
+    # 그 서버의 서명(app/core/service_auth.py)과 사용자의 토큰을 함께 본다.
+    # 프록시가 바깥에 열지 않는다(docker/nginx/templates/api.inc.template)
+    app.include_router(persona_supply.router, prefix=API_PREFIX)
+    app.include_router(character_supply.router, prefix=API_PREFIX)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.
     # 원인은 로그에 남긴다(server_core/observability/responses.py)
