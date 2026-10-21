@@ -30,7 +30,7 @@ import {
 } from '../src/notifications/notification-dispatcher.js';
 import { NotificationDispatchRunner } from '../src/notifications/notification-dispatcher.runner.js';
 import { OutgoingNotification } from '../src/notifications/outgoing-notification.entity.js';
-import { SIGNATURE_HEADER, sign } from '../src/notifications/signing.js';
+import { SIGNATURE_HEADER, sign } from '../src/service-auth/signing.js';
 import { both, createTestApp, Customize, useKeys } from './app.js';
 import { clearData } from './data.js';
 import { makeSigningKey, publicKeys, SigningKey, signToken } from './tokens.js';

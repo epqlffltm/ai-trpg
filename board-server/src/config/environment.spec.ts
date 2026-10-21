@@ -26,6 +26,7 @@ import {
   readJwtIssuer,
   readLogLevel,
   readMetricExportInterval,
+  readAuthServerSecret,
   readNotificationSettings,
   readOtlpEndpoint,
   readPort,
@@ -360,6 +361,7 @@ describe('readEnvironment', () => {
       LOG_LEVEL: DEFAULT_LOG_LEVEL,
       NOTIFICATION_URL: '',
       NOTIFICATION_SECRET: '',
+      AUTH_SERVER_SECRET: '',
       OTEL_EXPORTER_OTLP_ENDPOINT: '',
       OTEL_METRIC_EXPORT_INTERVAL: DEFAULT_METRIC_EXPORT_INTERVAL,
     });
@@ -379,6 +381,7 @@ describe('readEnvironment', () => {
       LOG_LEVEL: 'warning',
       NOTIFICATION_URL: 'http://notification:8004',
       NOTIFICATION_SECRET: SECRET,
+      AUTH_SERVER_SECRET: 'board-auth-server-test-secret-of-32',
       OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318/',
       OTEL_METRIC_EXPORT_INTERVAL: '5000',
       PATH: '/usr/bin',
@@ -398,6 +401,7 @@ describe('readEnvironment', () => {
       LOG_LEVEL: 'warning',
       NOTIFICATION_URL: 'http://notification:8004',
       NOTIFICATION_SECRET: SECRET,
+      AUTH_SERVER_SECRET: 'board-auth-server-test-secret-of-32',
       OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318',
       OTEL_METRIC_EXPORT_INTERVAL: 5000,
     });
@@ -508,4 +512,36 @@ describe('readOtlpEndpoint', () => {
       expect(() => readOtlpEndpoint(value)).toThrow('경로 없이');
     },
   );
+});
+
+describe('readAuthServerSecret', () => {
+  /** 32자. 가장 짧게 받는 길이다 */
+  const AUTH_SECRET = 'board-auth-server-test-secret-32';
+
+  it.each([undefined, '', '   '])(
+    '적지 않으면(%j) 빈 글자다. 탈퇴의 알림을 받지 않는다',
+    (value) => {
+      expect(readAuthServerSecret(value)).toBe('');
+    },
+  );
+
+  it('앞뒤 빈칸 없이 읽는다', () => {
+    expect(readAuthServerSecret(` ${AUTH_SECRET} `)).toBe(AUTH_SECRET);
+  });
+
+  it('32자보다 짧으면 예외를 낸다. 예외의 글에 비밀을 싣지 않는다', () => {
+    const short = AUTH_SECRET.slice(1);
+    expect(() => readAuthServerSecret(short)).toThrow('32자 이상');
+    expect(() => readAuthServerSecret(short)).not.toThrow(short);
+  });
+
+  it('readEnvironment 가 읽는다', () => {
+    expect(
+      readEnvironment({
+        DATABASE_URL,
+        AUTH_JWKS_URL,
+        AUTH_SERVER_SECRET: AUTH_SECRET,
+      }).AUTH_SERVER_SECRET,
+    ).toBe(AUTH_SECRET);
+  });
 });

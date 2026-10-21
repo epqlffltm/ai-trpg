@@ -6,7 +6,7 @@
  *   - parent_id 가 비어 있으면 글에 단 댓글이고, 있으면 그 댓글에 단 답글이다.
  *     답글에는 답글을 달지 못한다. 깊이는 두 단까지다(comments.service.ts 가 지킨다).
  *   - 번호는 순번이다(bigint). 번호의 차례가 곧 쓴 차례다. 댓글은 번호가 작은 것(먼저 쓴 것)부터 보여 준다.
- *   - 글쓴이는 인증 서버의 public_id 로만 가리킨다.
+ *   - 글쓴이는 인증 서버의 public_id 로만 가리킨다. 글쓴이가 탈퇴하면 비운다(null, withdrawals/).
  *   - 지운 댓글은 행을 없애지 않고 지운 시각을 적는다(deleted_at). 답글이 달린 댓글을 지워도 답글은 남는다.
  *     그 댓글의 자리는 "지운 댓글"로 보여 준다.
  */
@@ -60,9 +60,9 @@ export class Comment {
   })
   parent: Comment | null;
 
-  /** 글쓴이. 인증 서버의 public_id */
-  @Column({ name: 'author_id', type: 'uuid' })
-  authorId: string;
+  /** 글쓴이. 인증 서버의 public_id. 탈퇴한 사람이면 null 이다 */
+  @Column({ name: 'author_id', type: 'uuid', nullable: true })
+  authorId: string | null;
 
   @Column({ type: 'text' })
   content: string;

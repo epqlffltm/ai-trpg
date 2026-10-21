@@ -147,6 +147,11 @@ SECRETS = (
         ('auth-server/.env', 'NOTIFICATION_SECRET'),
         ('notification-server/.env', 'AUTH_SERVER_SECRET'),
     ),
+    shared(
+        '인증 서버 → 게시판 서버(탈퇴)',
+        ('auth-server/.env', 'BOARD_SECRET'),
+        ('board-server/.env', 'AUTH_SERVER_SECRET'),
+    ),
     shared('chat 서버 → asset 서버', ('chat-server/.env', 'ASSET_SECRET'), ('asset-server/.env', 'CHAT_SERVER_SECRET')),
     shared('인증 서버 → asset 서버', ('auth-server/.env', 'ASSET_SECRET'), ('asset-server/.env', 'AUTH_SERVER_SECRET')),
     shared('인증 서버 → 게임 서버', ('auth-server/.env', 'GAME_SECRET'), ('trpg-server/.env', 'AUTH_SERVER_SECRET')),

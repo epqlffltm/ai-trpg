@@ -28,7 +28,7 @@ export function canWrite(
   return !isOperatorOnly(board) || isOperator;
 }
 
-/** 이 사람이 이 글의 글쓴이인가. */
+/** 이 사람이 이 글의 글쓴이인가. 글쓴이가 탈퇴한 글(null)은 누구의 글도 아니다. 고칠 수 없고 운영자만 지운다. */
 export function isAuthor(
   post: Pick<Post, 'authorId'>,
   userId: string,

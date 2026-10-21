@@ -120,6 +120,10 @@ SECRETS = [
     *secrets('auth-server', ['auth-welcome-credits'], 'GAME_SECRET'),
     # 인증 서버가 알림 서버에 탈퇴를 알릴 때 서명하는 비밀. 알리는 것은 결제 서버에 맡기는 워커(auth-welcome-credits)다
     *secrets('auth-server', ['auth-welcome-credits'], 'NOTIFICATION_SECRET'),
+    # 인증 서버가 탈퇴를 알리는 요청의 서명을 게시판 서버가 확인하는 비밀. 요청을 받는 서버만 쓴다
+    *secrets('board-server', ['board-server'], 'AUTH_SERVER_SECRET'),
+    # 인증 서버가 게시판 서버에 탈퇴를 알릴 때 서명하는 비밀. 알리는 것은 환영 크레딧의 워커(auth-welcome-credits)다
+    *secrets('auth-server', ['auth-welcome-credits'], 'BOARD_SECRET'),
 ]
 
 

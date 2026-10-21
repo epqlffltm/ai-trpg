@@ -82,9 +82,9 @@ export class Report {
   })
   comment: Comment | null;
 
-  /** 신고한 사람. 인증 서버의 public_id */
-  @Column({ name: 'reporter_id', type: 'uuid' })
-  reporterId: string;
+  /** 신고한 사람. 인증 서버의 public_id. 탈퇴한 사람이면 null 이다(withdrawals/). 신고는 남는다 */
+  @Column({ name: 'reporter_id', type: 'uuid', nullable: true })
+  reporterId: string | null;
 
   @Column({ type: 'varchar', length: 20 })
   reason: ReportReason;

@@ -35,6 +35,7 @@ describe('toCommentResponse', () => {
       parent_id: null,
       author_id: '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b',
       author_nickname: '모험가',
+      author_withdrawn: false,
       content: '댓글입니다.',
       deleted: false,
       created_at: '2026-10-11T09:00:00.000Z',
@@ -58,9 +59,32 @@ describe('toCommentResponse', () => {
       id: '57',
       author_id: null,
       author_nickname: null,
+      author_withdrawn: false,
       content: null,
       deleted: true,
     });
+  });
+
+  it('글쓴이가 탈퇴한 댓글은 내용을 내보내고 글쓴이를 비운다', () => {
+    const withdrawn = { ...COMMENT, authorId: null };
+
+    expect(toCommentResponse(withdrawn, NICKNAMES)).toMatchObject({
+      author_id: null,
+      author_nickname: null,
+      author_withdrawn: true,
+      content: '댓글입니다.',
+      deleted: false,
+    });
+  });
+
+  it('탈퇴한 사람의 지운 댓글은 누가 썼는지 보이지 않으므로 author_withdrawn 이 false 다', () => {
+    const both = {
+      ...COMMENT,
+      authorId: null,
+      deletedAt: new Date('2026-10-11T10:00:00.000Z'),
+    };
+
+    expect(toCommentResponse(both, NICKNAMES).author_withdrawn).toBe(false);
   });
 });
 
@@ -118,5 +142,13 @@ describe('authorsOf', () => {
         },
       ]),
     ).toEqual([WRITER, REPLIER]);
+  });
+
+  it('글쓴이가 탈퇴한 댓글은 빈 자리(null)로 낸다. 이름을 찾을 때 뺀다(authors/nicknames.ts)', () => {
+    const withdrawn = { ...COMMENT, authorId: null };
+
+    expect(authorsOf([{ comment: withdrawn as Comment, replies: [] }])).toEqual(
+      [null],
+    );
   });
 });
