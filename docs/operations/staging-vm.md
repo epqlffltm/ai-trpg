@@ -37,6 +37,12 @@
 3. IAM 사용자 `ai-trpg-backup` 을 만든다(콘솔 로그인 없음). 인라인 정책에 `docker/backup-offsite/iam-policy.json` 을 붙이고 `BUCKET_NAME` 을 `<버킷>` 으로 바꾼다.
 4. 그 사용자의 접근 키를 만든다(용도: 그 밖). 두 값을 비밀번호 관리자에 둔다. 6번에서 `.env` 에 적는다.
 
+**[웹] S3 와 IAM (그림)**. 백업과 다른 버킷, 다른 사용자다. 백업의 키는 지우지 못하고 그림의 키는 지운다(배포 설계의 "그림 저장소").
+
+1. S3 에 버킷을 만든다: 서울, "모든 퍼블릭 액세스 차단" 켬, 버전 관리는 끔(지운 그림이 남지 않게). 이름이 `<그림 버킷>` 이다. 모든 그림은 nginx 를 거쳐 나가므로 공개할 일이 없다.
+2. IAM 사용자 `ai-trpg-images` 를 만든다(콘솔 로그인 없음). 인라인 정책에 `docker/object-store/iam-policy.json` 을 붙이고 `BUCKET_NAME` 을 `<그림 버킷>` 으로 바꾼다.
+3. 그 사용자의 접근 키를 만든다(용도: 그 밖). 두 값을 비밀번호 관리자에 둔다. 6번에서 `.env` 에 적는다.
+
 **[웹] 도메인**: `<도메인>` 의 A 레코드를 VM 의 고정 IP 로 둔다. 프록시(Cloudflare 의 주황 구름 등)는 켜지 않는다.
 
 ## 2. VM 의 기본
@@ -176,14 +182,16 @@ VM 에는 uv 가 없어 Ubuntu 에 든 `python3` 로 돌린다(표준 라이브�
 ```bash
 cd /srv/ai-trpg
 python3 tools/staging_env.py --domain <도메인> --acme-email <메일> \
-  --llm-base-url http://<집 PC 의 Tailscale 주소>:11434/v1 --s3-bucket <버킷> \
+  --llm-base-url http://<집 PC 의 Tailscale 주소>:11434/v1 --s3-bucket <버킷> --image-bucket <그림 버킷> \
   --age-recipients "<주 열쇠의 공개키> $(age-keygen -y backup-keys/check.key)"
 ```
 
-`fill_env.py` 가 "밖에서 받는 키"를 여럿 알리지만, staging 에서 채울 것은 끝에 찍히는 "사람이 채울 것" 셋뿐이다(나머지는 쓰지 않는 창구와 메일). 비어 있으면 compose 가 뜨기를 거부하거나(S3 의 키), 그 창구의 모델을 부르지 않는다(Z.ai 의 키).
+`fill_env.py` 가 "밖에서 받는 키"를 여럿 알리지만, staging 에서 채울 것은 끝에 찍히는 "사람이 채울 것" 다섯뿐이다(나머지는 쓰지 않는 창구와 메일). 비어 있으면 compose 가 뜨기를 거부하거나(S3 의 키), 그 창구의 모델을 부르지 않는다(Z.ai 의 키).
+그림 저장소의 비밀 키(`IMAGE_STORE_SECRET_ACCESS_KEY`)는 로컬에서는 `fill_env.py` 가 난수로 채우지만 staging 에서는 IAM 사용자의 키라서 이 도구가 비워 둔다.
 
 ```bash
-nano .env                       # BACKUP_AWS_ACCESS_KEY_ID, BACKUP_AWS_SECRET_ACCESS_KEY (1번의 접근 키)
+nano .env                       # BACKUP_AWS_ACCESS_KEY_ID, BACKUP_AWS_SECRET_ACCESS_KEY (1번의 백업 접근 키)
+                                # IMAGE_STORE_ACCESS_KEY_ID, IMAGE_STORE_SECRET_ACCESS_KEY (1번의 그림 접근 키)
 nano trpg-server/.env           # ZAI_API_KEY
 ```
 
