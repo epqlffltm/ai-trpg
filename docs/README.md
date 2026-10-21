@@ -16,6 +16,7 @@
 | [api/README.md](api/README.md) | 서버마다의 API 목록(OpenAPI). 파일, 뽑는 법, 누가 부르는가(`x-audience`), CI |
 | [product/platform.md](product/platform.md) | 플랫폼과 제품 방향. 제품 셋(TRPG, chat, story), 원칙, 화면과 모바일의 방향, 정하지 않은 것 |
 | [product/screens.md](product/screens.md) | 화면 명세. 흐름, 화면 목록, 화면별 명세(A1~A12, B1~B10, C1~C7, D1~D7), 공통 상태, 프런트 구조, 첫 출시의 범위(세 단계) |
+| [legal/terms.md](legal/terms.md), [legal/privacy.md](legal/privacy.md) | 이용약관과 개인정보 처리방침의 초안(#450). 변호사 검토 전이다. 정할 것과 검토할 것, 본문의 근거(저장소의 어디인지) |
 | [product/market-research.md](product/market-research.md) | 다른 AI 캐릭터 챗 서비스를 본 조사. 만드는 구조, 돈을 받는 방식, 반복되는 문제 |
 
 ## 쓰는 법
