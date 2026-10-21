@@ -28,9 +28,9 @@ import asyncio
 from pathlib import Path
 
 import httpx
+from ai_core.fake import FakeProvider
+from ai_core.provider import LLMProvider, Reasoning
 
-from app.ai.fake import FakeProvider
-from app.ai.provider import LLMProvider, Reasoning
 from evals.state.cases import CASE_NAMES, CASES, StateCase
 from evals.state.report import describe, full_report, read_report, tally_lines, total_line
 from evals.state.runner import Trial, rescore, run_cases

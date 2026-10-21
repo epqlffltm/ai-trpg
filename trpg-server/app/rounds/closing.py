@@ -56,9 +56,9 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from ai_core.provider import ProviderError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai.provider import ProviderError
 from app.billing import settling
 from app.billing.client import Billing
 from app.billing.free_billing import FreeBilling

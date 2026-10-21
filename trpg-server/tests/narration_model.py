@@ -12,9 +12,9 @@ clean_tables 가 테이블을 비운 뒤 모델 목록에 이 모델 하나를 �
 
 from datetime import UTC, date, datetime
 
+from ai_core.catalog_contract import Provider
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.ai.catalog_contract import Provider
 from app.billing.price_list import FreePriceList
 from app.billing.prices import narration_code
 from app.catalog.models import AiModel, Grade

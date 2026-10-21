@@ -13,12 +13,12 @@ from datetime import date
 from decimal import Decimal
 
 import httpx
+from ai_core.calls import chars_of
+from ai_core.catalog_contract import CatalogModel, Provider, TokenLimitField, UnitCost
+from ai_core.provider import ChatMessage, GenerationParams, Reasoning, Role
+from ai_core.routing import Endpoint, ModelRouter
 from pydantic import SecretStr
 
-from app.ai.calls import chars_of
-from app.ai.catalog_contract import CatalogModel, Provider, TokenLimitField, UnitCost
-from app.ai.provider import ChatMessage, GenerationParams, Reasoning, Role
-from app.ai.routing import Endpoint, ModelRouter
 from scripts.try_model import (
     DEFAULT_MAX_TOKENS,
     MESSAGES,

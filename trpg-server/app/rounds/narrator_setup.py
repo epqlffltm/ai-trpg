@@ -8,18 +8,16 @@
 라운드는 테이블의 서술 모델로 서술한다(app/rounds/picked_narrator.py). 모델 하나만 같은 모델로 다시 시도한다.
 모델이 없는 옛 라운드는 설정의 기본 모델들(LLM_MODEL, LLM_FALLBACK_MODELS)로 서술한다.
 
-모델마다 어느 창구로 부를지는 서술할 때 고른다(app/ai/routing.py 의 ModelRouter, app/rounds/routed_narrator.py).
+모델마다 어느 창구로 부를지는 서술할 때 고른다(ai_core/routing.py 의 ModelRouter, app/rounds/routed_narrator.py).
 설정에 적은 이름이 모델 목록의 이름표면 목록대로, 아니면 서버 곁의 모델(LLM_BASE_URL)이다.
 고르는 것(build_router)도 앱에 하나만 만든다.
 """
 
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from app.ai.calls import CallLog
-from app.ai.openai_compat import WireOptions
-from app.ai.retry_budget import RetryBudget
-from app.ai.routing import (
+from ai_core.calls import CallLog
+from ai_core.openai_compat import WireOptions
+from ai_core.retry_budget import RetryBudget
+from ai_core.routing import (
     ANTHROPIC_KIND,
     DEEPINFRA_KIND,
     GEMINI_KIND,
@@ -29,6 +27,8 @@ from app.ai.routing import (
     Endpoint,
     ModelRouter,
 )
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.metered import MeteredCallLog
 from app.catalog.lookup import DbModelLookup
@@ -104,7 +104,7 @@ def build_chain(
     """
     모델마다 서술자를 하나씩 만들어(첫 모델, 넘어갈 모델들 차례로) 다시 시도하는 서술자로 감싼다.
 
-    재시도 예산(retry_budget)은 앱에 하나다. 모든 서술자가 함께 쓴다(app/ai/retry_budget.py).
+    재시도 예산(retry_budget)은 앱에 하나다. 모든 서술자가 함께 쓴다(ai_core/retry_budget.py).
     """
     key = settings.digest_key()
     narrators = [RoutedNarrator(model, router, log, digest_key=key) for model in models]

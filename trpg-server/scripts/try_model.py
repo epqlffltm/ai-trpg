@@ -17,7 +17,7 @@
     uv run python -m scripts.try_model gpt-6-luna --text-file ../long.txt
 
 trpg-server 폴더에서 -m 으로 돌린다. 설정(.env)의 DB, 키(OPENAI_API_KEY), 서버 곁의 모델의 주소를 쓴다.
-서버와 같은 것(app/ai/routing.py)으로 창구를 고른다. 이름표면 모델 목록대로, 아니면 서버 곁의 모델이다.
+서버와 같은 것(ai_core/routing.py)으로 창구를 고른다. 이름표면 모델 목록대로, 아니면 서버 곁의 모델이다.
 꺼진 모델도 부른다. 켜기 전에 불러 보려는 것이다. 은퇴한 모델은 부르지 않는다.
 
 실제로 부르므로 값이 든다(장면 하나, 몇 원). 서술의 품질을 보는 것은 scripts/try_narration.py 와 평가 장면(evals/)이다.
@@ -34,11 +34,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
+from ai_core.calls import chars_of
+from ai_core.costs import PriceTag, cost_usd
+from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
+from ai_core.routing import ModelRouter
 
-from app.ai.calls import chars_of
-from app.ai.costs import PriceTag, cost_usd
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
-from app.ai.routing import ModelRouter
 from app.core.config import get_settings
 from app.core.database import create_engine, create_session_factory
 from app.rounds.narrator_setup import build_router

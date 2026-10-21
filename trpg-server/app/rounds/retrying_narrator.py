@@ -4,7 +4,7 @@
 서술이 실패하면 다시 시도하고, 그래도 안 되면 다음 모델로 넘어가는 서술자. Narrator 모양을 따른다.
 
 안에 모델마다 서술자(LLMNarrator)를 하나씩 들고, 부를 차례대로 부른다.
-부르는 것과 기록하는 것은 안의 서술자가 한다. 시도 하나하나가 따로 기록된다(app/ai/calls.py).
+부르는 것과 기록하는 것은 안의 서술자가 한다. 시도 하나하나가 따로 기록된다(ai_core/calls.py).
 여기는 "언제 다시, 언제 넘어가고, 언제 그만두나"만 정한다.
 
 정책.
@@ -16,7 +16,7 @@
   - 같은 요청을 다시 보내 봐야 소용없는 실패(요청이나 설정이 틀림)는 그 모델로 다시 부르지 않는다.
   - 다른 모델로 가도 소용없는 실패(서버가 꺼짐, 권한 없음)면 넘어가지 않고 그만둔다. 모델들은 같은 서버에 있다고 본다.
     한 등급에 창구가 다른 모델을 섞어 적으면 이 가정이 맞지 않는다. 섞어 적지 않는다(넘어가기는 모델 고르기에서 없앤다).
-  - 같은 모델로 다시 부르는 것에는 예산이 있다(app/ai/retry_budget.py). 최근 1분의 첫 시도의 10%(적어도 3번)까지다.
+  - 같은 모델로 다시 부르는 것에는 예산이 있다(ai_core/retry_budget.py). 최근 1분의 첫 시도의 10%(적어도 3번)까지다.
     예산이 없으면 다시 부르지 않는다. 공급자가 내려가 모두가 실패할 때 재시도가 일을 두 배로 키우지 않게 한다.
   - 서술 하나에 쓰는 시간에 상한이 있다(NARRATION_BUDGET_SECONDS). 남은 시간이 한 번 부르는 시간보다 짧으면
     새로 부르지 않는다. 부르는 도중에 끊지 않으므로 시작한 호출은 모두 끝나고 기록된다.
@@ -38,9 +38,10 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from app.ai.provider import ProviderError
-from app.ai.retry_budget import RetryBudget
-from app.ai.routing import UNROUTABLE
+from ai_core.provider import ProviderError
+from ai_core.retry_budget import RetryBudget
+from ai_core.routing import UNROUTABLE
+
 from app.core.config import NARRATION_BUDGET_SECONDS
 from app.observability.metrics import record_ai_fallback, record_narration_retry
 from app.rounds.llm_narrator import PURPOSE, NarrationError, SecretLeaked
@@ -56,7 +57,7 @@ PAUSE_SECONDS = (1.0, 2.0)
 MAX_RETRY_AFTER_SECONDS = 20.0
 
 # 같은 모델로 다시 불러도 소용없는 실패. 요청이나 설정이 틀렸다(404 는 그 이름의 모델이 없다).
-# 모델 목록의 모델을 부를 수 없는 것(꺼짐, 키 없음, 창구의 코드 없음)도 같다(app/ai/routing.py)
+# 모델 목록의 모델을 부를 수 없는 것(꺼짐, 키 없음, 창구의 코드 없음)도 같다(ai_core/routing.py)
 NOT_FOR_THIS_MODEL = (
     frozenset({'status_400', 'status_401', 'status_403', 'status_404', 'status_422', 'no_story'}) | UNROUTABLE
 )

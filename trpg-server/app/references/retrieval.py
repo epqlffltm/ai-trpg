@@ -26,10 +26,10 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from ai_core.embedder import Embedder
+from ai_core.provider import ProviderError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai.embedder import Embedder
-from app.ai.provider import ProviderError
 from app.lore.retrieval import LORE_MAX_CHARS, query_text
 from app.references import repository
 from app.references.records import StoredReference

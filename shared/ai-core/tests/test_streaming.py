@@ -1,7 +1,7 @@
-# trpg-server/tests/test_streaming.py
+# shared/ai-core/tests/test_streaming.py
 
 """
-흘려 받는 답을 읽는 도구(app/ai/streaming.py)와 가짜 provider 의 조각을 검증한다.
+흘려 받는 답을 읽는 도구(ai_core/streaming.py)와 가짜 provider 의 조각을 검증한다.
 
 네트워크를 쓰지 않는다. 줄들을 직접 넣는다.
 생각 글 걸러 내기는 조각이 어디서 잘리든 같은 글이 나와야 한다. 자를 수 있는 모든 자리에서 잘라 본다.
@@ -11,9 +11,9 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from app.ai.fake import FakeProvider, split_text
-from app.ai.provider import GenerationParams, ProviderError
-from app.ai.streaming import (
+from ai_core.fake import FakeProvider, split_text
+from ai_core.provider import GenerationParams, ProviderError
+from ai_core.streaming import (
     Chunk,
     StreamState,
     ThinkingFilter,

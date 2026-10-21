@@ -2,16 +2,17 @@
 
 """
 AI 호출을 세는 기록장. 기록 하나를 받을 때마다 메트릭(ai_calls_total, ai_call_duration_seconds, ai_tokens_total)을
-세고, 기록은 안의 기록장(DbCallLog)에 넘긴다. app/ai/calls.py 의 CallLog 모양을 따른다.
+세고, 기록은 안의 기록장(DbCallLog)에 넘긴다. ai_core/calls.py 의 CallLog 모양을 따른다.
 
-AI 를 부르는 코드(app/ai)는 메트릭을 모른다(tests/test_ai_boundary.py). 기록장을 하나 더 꽂아 밖에서 센다.
+AI 를 부르는 코드(ai_core)는 메트릭을 모른다(shared/ai-core/tests/test_boundary.py). 기록장을 하나 더 꽂아 밖에서 센다.
 그래서 메트릭의 값은 호출 기록(ai_invocations)의 값과 같다. operation 은 기록의 purpose(narration)다.
 안의 기록장이 실패해도(DB 가 내려감) 센다. 호출은 이미 시간과 토큰을 썼다.
 """
 
 from dataclasses import dataclass
 
-from app.ai.calls import CallLog, CallRecord
+from ai_core.calls import CallLog, CallRecord
+
 from app.observability.metrics import AiCall, record_ai_call
 
 

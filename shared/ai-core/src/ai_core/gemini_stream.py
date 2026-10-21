@@ -1,4 +1,4 @@
-# trpg-server/app/ai/gemini_stream.py
+# shared/ai-core/src/ai_core/gemini_stream.py
 
 """
 Gemini(generateContent)의 흘려 받는 답을 읽는다. 네트워크를 모른다.
@@ -13,7 +13,7 @@ SSE 다(streamGenerateContent?alt=sse). 줄마다 'data: {...}' 에 응답 하�
   - {"error": …}: 도중의 오류. ProviderError('stream_error'). 내용은 싣지 않는다.
 [DONE] 같은 끝 표시가 없다. 멈춘 이유가 오지 않고 끝나면 도중에 끊긴 것이다(interrupted).
 
-토큰 수는 OpenAI 의 뜻으로 바꿔 채운다(app/ai/provider.py 의 Completion).
+토큰 수는 OpenAI 의 뜻으로 바꿔 채운다(ai_core/provider.py 의 Completion).
   promptTokenCount 에는 캐시에서 읽은 것(cachedContentTokenCount)이 들어 있다. 그대로 쓴다.
   candidatesTokenCount 에는 생각(thoughtsTokenCount)이 빠져 있다.
   둘을 더한 것이 출력 전부다(생각도 출력으로 값이 매겨진다).
@@ -25,8 +25,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
-from app.ai.provider import Completion, ProviderError, TextSink
-from app.ai.streaming import data_of
+from ai_core.provider import Completion, ProviderError, TextSink
+from ai_core.streaming import data_of
 
 # Gemini 에서 "길이 상한에 걸려 멈췄다"는 뜻의 멈춘 이유
 MAX_TOKENS_FINISH = 'MAX_TOKENS'

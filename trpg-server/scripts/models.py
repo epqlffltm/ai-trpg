@@ -38,10 +38,10 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField, is_offered, is_retired
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField, is_offered, is_retired
 from app.catalog import service
 from app.catalog.errors import CatalogConflictError, InvalidModelError, ModelNotFoundError
 from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot, Grade

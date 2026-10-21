@@ -35,9 +35,9 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
 
+from ai_core.catalog_contract import is_retired
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.catalog_contract import is_retired
 from app.billing.price_list import PriceList
 from app.catalog import offers
 from app.catalog import repository as catalog

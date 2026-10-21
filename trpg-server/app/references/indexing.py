@@ -14,10 +14,10 @@
 import logging
 from dataclasses import dataclass
 
+from ai_core.embedder import Embedder
+from ai_core.provider import ProviderError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai.embedder import Embedder
-from app.ai.provider import ProviderError
 from app.lore.texts import batched
 from app.references import repository
 from app.references.records import StoredReference

@@ -1727,8 +1727,11 @@ AI 를 부르지 않는 가짜 서술자(`app/rounds/fake_narrator.py`)는 선�
 
 언어 모델로 쓰는 서술자(`LLMNarrator`, `app/rounds/llm_narrator.py`)는 세 부분으로 나뉜다. 모델을 바꿀 때는 provider 만 바꿔 끼운다.
 
+AI 를 부르는 코드는 공용 코드(`shared/ai-core`, 패키지 `ai_core`)에 있다. 게임 서버는 경로 의존으로 받는다(#499, [공용 코드 규칙](../docs/architecture/shared-code.md#ai-호출-sharedai-core)).
+호출 기록을 DB 에 쓰는 기록장과 원문의 보관은 게임 서버의 `app/ai_log/` 에 있다.
+
 ```
-app/ai/
+shared/ai-core/src/ai_core/
   provider.py         provider 의 모양(LLMProvider)과 메시지, 생성 설정, 결과의 타입. 어느 회사의 SDK 타입도 쓰지 않는다
   fake.py             가짜 provider. 정해 둔 글을 돌려주고 받은 것을 적어 둔다. 자동 테스트는 이것만 쓴다
   openai_compat.py    OpenAI 와 같은 모양의 주소를 부르는 provider. Ollama, LM Studio, vLLM, OpenAI 를 이것 하나로 부른다
@@ -1738,8 +1741,9 @@ app/ai/
   http_stream.py      보내고 흘려 받는 HTTP 의 일. 시간의 상한, 실패의 이름, Retry-After. provider 들이 함께 쓴다
   routing.py          모델의 이름으로 창구를 고른다(ModelRouter). 모델 목록의 이름표면 목록대로, 아니면 서버 곁의 모델
   calls.py            AI 호출 한 번의 기록(CallRecord)과 기록을 받는 곳의 모양(CallLog)
-  call_log.py         기록을 DB(ai_invocations)에 쓰는 기록장
   costs.py            호출 한 번의 원가를 그날의 단가로 센다(PriceTag, usage_of)
+app/ai_log/
+  call_log.py         기록을 DB(ai_invocations)에 쓰는 기록장
   models.py           ai_invocations 표
   repository.py       보관 기간이 지난 원문을 비우는 SQL
   retention.py        원문을 비우는 정리 작업(한 시간마다)
@@ -1826,7 +1830,7 @@ app/rounds/
 - 플레이어의 선언에 "지시를 무시하라" 같은 글이 있어도 결과는 바뀌지 않는다. 결과는 엔진이 이미 정해 DB 에 적었고, 모델의 글은 장면이 될 뿐이다.
 - **추론(생각 모드)은 기본으로 끈다.** 추론하는 모델은 답하기 전에 속으로 따져 보는 글을 쓴다. Ollama 0.40 에서 `gemma4:26b` 로 확인해 보니, 추론을 끄지 않으면 생각만 하다가 길이 상한에 닿아 답이 비어 왔다. 그래서 추론 수준(`reasoning_effort`)을 늘 보낸다. 끌 때는 `none` 이다. 추론 수준은 호출마다 정하는 값(`GenerationParams.reasoning`)이라 테이블마다 다르게 할 자리가 있다. 켜면 생각에 쓸 토큰을 상한에 따로 더한다.
 - 생각 글은 장면에 들어가지 않는다. Ollama 가 따로 담아 주는 `reasoning` 칸은 읽지 않고, `content` 에 `<think>…</think>` 가 섞여 오면 떼어 낸다. 생각 글에는 모델이 GM 메모를 따져 본 내용이 들어 있을 수 있다.
-- **답은 흘려 받는다(스트리밍).** 모델이 쓰는 대로 조각을 받는다(`app/ai/streaming.py`). 흘려 받지 않는 길은 따로 두지 않는다(Ollama, LM Studio, vLLM, OpenAI 가 모두 흘려 보낸다). 토큰 수는 흘려 받을 때 따로 달라고 해야 와서 `stream_options.include_usage` 를 싣는다. 모르는 서버면 토큰 수가 비어 있다.
+- **답은 흘려 받는다(스트리밍).** 모델이 쓰는 대로 조각을 받는다(`ai_core/streaming.py`). 흘려 받지 않는 길은 따로 두지 않는다(Ollama, LM Studio, vLLM, OpenAI 가 모두 흘려 보낸다). 토큰 수는 흘려 받을 때 따로 달라고 해야 와서 `stream_options.include_usage` 를 싣는다. 모르는 서버면 토큰 수가 비어 있다.
 - 흘려 받는 조각에서도 생각 글을 걸러 낸다. 조각이 `<thi` 처럼 태그의 중간에서 끊길 수 있어서, 끝에 걸친 태그의 앞부분은 다음 조각을 볼 때까지 붙잡아 둔다. 넘긴 조각을 모두 이어 붙이면 다 받은 뒤에 떼어 낸 글과 같다(테스트가 자를 수 있는 모든 자리에서 잘라 본다).
 - `LLM_TIMEOUT_SECONDS` 는 호출 전체의 상한이다. httpx 의 시간 제한은 "다음 바이트까지"라서 조각이 계속 오면 끝없이 길어질 수 있다. 그래서 호출 전체에 따로 상한을 건다.
 - provider 의 실패는 모두 `ProviderError` 다. 오류에는 응답의 본문을 싣지 않는다. 본문에 보낸 프롬프트가 되돌아와 있을 수 있다. 연결이 안 됨(`unreachable`)과 받는 도중에 끊김(`interrupted`)을 나눈다. 서버가 꺼진 것과 한 번 끊긴 것은 다르다. 그 밖에 `timeout`, `status_코드`, 도중에 온 오류 조각(`stream_error`), 모양이 다른 조각(`malformed`)이 있다.
@@ -1852,7 +1856,7 @@ LM Studio 면 `LLM_BASE_URL=http://127.0.0.1:1234/v1` 이다. `NARRATOR=llm` 인
 **기본 모델.** 라운드는 테이블의 서술 모델로 서술한다([모델 고르기](#모델-고르기)). `LLM_MODEL` 과 `LLM_FALLBACK_MODELS` 는 서술 모델이 없는 옛 라운드(모델을 고르는 규칙 전에 연 라운드)의 기본이다.
 - 적은 이름이 [모델 목록](#모델-목록)의 이름표면 목록의 창구로 부른다(아래 "외부 API 모델"). 아니면 `LLM_BASE_URL` 의 그 모델이다. 창구가 다른 모델을 섞어 적지 않는다. 넘어가기 규칙은 모델들이 같은 서버에 있다고 본다.
 
-**외부 API 모델(OpenAI, Claude, Gemini, Z.ai, DeepInfra).** [모델 목록](#모델-목록)에 넣은 모델은 설정에 이름표를 적어 부른다(`app/ai/routing.py`).
+**외부 API 모델(OpenAI, Claude, Gemini, Z.ai, DeepInfra).** [모델 목록](#모델-목록)에 넣은 모델은 설정에 이름표를 적어 부른다(`ai_core/routing.py`).
 
 ```
 NARRATOR=llm
@@ -1879,7 +1883,7 @@ DEEPINFRA_BASE_URL=https://api.deepinfra.com/v1/openai
 - 목록의 창구, 날짜판(API 모델 이름), 받는 칸(출력 상한의 칸, 온도, 생각의 깊이)대로 보낸다. 키는 머리(`Authorization`, Gemini 는 `x-goog-api-key`)에만 싣고 주소, 로그, 오류, 기록에 싣지 않는다.
 - 부를 수 없으면 다른 모델로 바꿔 부르지 않고 그 서술이 실패한다: 꺼졌거나 은퇴함(`model_unavailable`), 키가 없음(`provider_not_configured`), 그 창구의 코드가 아직 없음(`provider_unsupported`, 지금은 없다. 새 창구를 더할 때).
 - 기록(`ai_invocations.provider`)에는 서버 곁의 모델이면 `openai_compat`, OpenAI 면 `openai`, Claude 면 `anthropic`, Gemini 면 `gemini`, Z.ai 면 `zai`, DeepInfra 면 `deepinfra` 가 남는다.
-- **Claude**(`app/ai/anthropic.py`, Anthropic Messages API 를 SDK 없이 부른다). 시스템 지시는 맨 위의 `system` 칸에 이어 붙여 싣는다. 머리는 `Authorization: Bearer`, `anthropic-version: 2023-06-01`.
+- **Claude**(`ai_core/anthropic.py`, Anthropic Messages API 를 SDK 없이 부른다). 시스템 지시는 맨 위의 `system` 칸에 이어 붙여 싣는다. 머리는 `Authorization: Bearer`, `anthropic-version: 2023-06-01`.
   - 생각을 켜고 끄는 법이 모델마다 달라 모델 목록의 `reasoning_style` 대로 보낸다. 서술은 생각을 꺼서 부른다.
 
     | 방식 | 모델(2026-10 문서) | 끌 때 | 켤 때 |
@@ -1893,7 +1897,7 @@ DEEPINFRA_BASE_URL=https://api.deepinfra.com/v1/openai
   - 생각을 끌 수 없는 모델은 판매가를 출력 2,224 토큰(장면 1,200 + 생각 1,024)으로 계산한다(유저 결정). 출력 상한도 같아서 원가가 그 계산을 넘지 않는다.
   - 온도는 받는 모델에만 싣는다(5 세대와 Opus 4.7·4.8 은 기본값이 아닌 온도에 400). 모델 목록의 `--no-temperature`.
   - 토큰 수는 OpenAI 의 뜻으로 바꿔 채운다. Claude 의 `input_tokens` 에는 캐시 읽기·쓰기가 빠져 있어 셋을 더한다. 생각만의 토큰 수는 따로 오지 않아 비어 있다. 멈춘 이유가 `max_tokens` 면 잘린 것이다. 과부하는 `status_529` 이고 다시 부른다.
-- **Gemini**(`app/ai/gemini.py`, generateContent 의 흘려 받기를 SDK 없이 부른다). 주소는 `/v1beta/models/<모델>:streamGenerateContent?alt=sse`, 키는 `x-goog-api-key` 머리.
+- **Gemini**(`ai_core/gemini.py`, generateContent 의 흘려 받기를 SDK 없이 부른다). 주소는 `/v1beta/models/<모델>:streamGenerateContent?alt=sse`, 키는 `x-goog-api-key` 머리.
   - Interactions API 는 쓰지 않는다. 대화를 Google 쪽에 저장하는 것이 기본이다. generateContent 도 계속 지원된다고 문서에 적혀 있다(2026-10). 그래도 `store: false` 를 싣는다.
   - 시스템 지시는 `systemInstruction`, 대화의 역할은 `user` 와 `model` 이다.
   - 생각을 켜고 끄는 방식(`reasoning_style`):
@@ -1909,7 +1913,7 @@ DEEPINFRA_BASE_URL=https://api.deepinfra.com/v1/openai
   - 생각의 요약은 달라고 하지 않는다. 생각의 조각(`thought: true`)이 와도 읽지 않는다.
   - 토큰 수: `promptTokenCount` 에는 캐시(`cachedContentTokenCount`)가 들어 있어 그대로 쓴다. `candidatesTokenCount` 에는 생각(`thoughtsTokenCount`)이 빠져 있어 더한다. 생각의 수는 `reasoning_tokens` 에 남는다. `MAX_TOKENS` 면 잘린 것이다. 보낸 글이 막히면(`promptFeedback.blockReason`) 글 없이 끝나고 그 까닭이 멈춘 이유로 남는다.
   - 온도: Gemini 3 부터는 기본값을 바꾸지 말라고 권한다. 모델 목록의 `--no-temperature`.
-- **Z.ai**(GLM). OpenAI 와 같은 모양이라 OpenAI 의 provider(`app/ai/openai_compat.py`)로 부른다. 주소와 키와 받는 칸만 다르다. 출력 상한의 칸은 `max_tokens` 로 정해져 있어 적지 않는다.
+- **Z.ai**(GLM). OpenAI 와 같은 모양이라 OpenAI 의 provider(`ai_core/openai_compat.py`)로 부른다. 주소와 키와 받는 칸만 다르다. 출력 상한의 칸은 `max_tokens` 로 정해져 있어 적지 않는다.
   - 생각은 `reasoning_effort` 가 아니라 `thinking` 칸으로 켜고 끈다. 모델 목록의 `reasoning_style`:
 
     | 방식 | 모델(2026-10 문서) | 끌 때 | 켤 때 |
@@ -1921,7 +1925,7 @@ DEEPINFRA_BASE_URL=https://api.deepinfra.com/v1/openai
   - 무료 모델(`glm-4-7-flash`, 동시에 1개만 부른다)은 시험용이다. 모델 목록에만 넣고 결제 서버의 가격표에는 올리지 않는다. 결제 서버가 있는 서버에서는 고를 수 있는 모델에 나오지 않고, 결제 서버 없이 도는 로컬에서만 고를 수 있다.
   - 같은 모양의 창구(Kimi, 다른 나라에서 띄운 공개 모델 등)를 더할 때는 창구의 이름(마이그레이션), 주소와 키의 설정, 라우터의 칸 하나, 생각의 방식만 더하면 된다.
 - **DeepInfra**(DeepSeek, #398). DeepSeek 의 정식 API 는 처리 서버가 중국 본토라 쓰지 않는다. 공개 가중치를 미국에서 띄운 DeepInfra 로 부른다.
-  - OpenAI 와 같은 모양이라 OpenAI 의 provider(`app/ai/openai_compat.py`)로 부른다. 주소는 `https://api.deepinfra.com/v1/openai`, 키는 `Authorization: Bearer`.
+  - OpenAI 와 같은 모양이라 OpenAI 의 provider(`ai_core/openai_compat.py`)로 부른다. 주소는 `https://api.deepinfra.com/v1/openai`, 키는 `Authorization: Bearer`.
   - 생각은 OpenAI 처럼 `reasoning_effort`(`none`, `low`, `medium`, `high`)로 켜고 끈다. 모델 목록에 `--reasoning` 을 적는다. 서술은 `none` 으로 끈다. 생각의 방식(`reasoning_style`)은 적지 않는다. 출력 상한의 칸은 `max_tokens` 로 정해져 있어 적지 않는다.
   - 고른 까닭(2026-10-21, 회사의 문서): 미국 회사(DeepInfra, Inc.)이고 데이터를 미국에서 처리한다고 적혀 있다. 보낸 글을 디스크에 저장하지 않고 학습에 쓰지 않는다고 적혀 있다(Google, Anthropic 의 모델은 예외인데 쓰지 않는다). 날짜가 붙은 모델 이름이 있다(`deepseek-ai/DeepSeek-V4-Pro-0813`, `deepseek-ai/DeepSeek-V4-Flash-0731`). 모델마다 동시에 200 개까지 받고 넘으면 429 다(다시 부르는 규칙과 같다).
   - **API 모델 이름에는 날짜가 붙은 이름을 적는다.** 날짜가 없는 이름(`deepseek-ai/DeepSeek-V4-Pro`)은 호스팅이 말없이 다른 판으로 돌릴 수 있다.
@@ -1942,7 +1946,7 @@ uv run python -m scripts.try_model gpt-6-luna --text-file ..\long.txt
 
 **다시 시도하기와 넘어가기.** 서술이 실패하면 같은 모델로 한 번 더 부르고, 그래도 안 되면 `LLM_FALLBACK_MODELS` 의 모델로 차례로 넘어간다(`app/rounds/retrying_narrator.py`).
 - 모델마다 두 번까지 부른다. 다시 부르기 전에 1~2초를 무작위로 쉰다. 여러 테이블이 함께 실패해도 다시 부르는 때가 흩어진다.
-- **재시도 예산**(`app/ai/retry_budget.py`). 같은 모델로 다시 부르는 것은 최근 1분 동안 그 모델에 보낸 첫 시도의 10% 까지다. 손님이 적을 때 한 번의 실패로 막히지 않게 1분에 3번은 늘 된다. 예산이 없으면 다시 부르지 않고 그 시도의 실패로 끝낸다(warning `재시도 예산이 다 되어 같은 모델로 다시 부르지 않는다`). 공급자가 내려가 모든 테이블이 실패할 때 재시도가 일과 원가를 두 배로 키우지 않게 하는 것이다(Google SRE 의 과부하 지침과 같은 생각). 모델마다 따로, 서버(프로세스)마다 따로 센다.
+- **재시도 예산**(`ai_core/retry_budget.py`). 같은 모델로 다시 부르는 것은 최근 1분 동안 그 모델에 보낸 첫 시도의 10% 까지다. 손님이 적을 때 한 번의 실패로 막히지 않게 1분에 3번은 늘 된다. 예산이 없으면 다시 부르지 않고 그 시도의 실패로 끝낸다(warning `재시도 예산이 다 되어 같은 모델로 다시 부르지 않는다`). 공급자가 내려가 모든 테이블이 실패할 때 재시도가 일과 원가를 두 배로 키우지 않게 하는 것이다(Google SRE 의 과부하 지침과 같은 생각). 모델마다 따로, 서버(프로세스)마다 따로 센다.
 - **잘린 글**(`cut_off`). 출력 상한(1,200 토큰)에 걸려 끊긴 글은 버리지 않고 마지막으로 끝난 문장까지 잘라 받는다(warning `잘린 서술을 마지막 문장까지 받았다`). 버리고 다시 부르면 같은 값을 한 번 더 내고 또 잘리기 쉽고, 이어 쓰게 하면 출력이 판매가가 가정한 양을 넘는다. 남은 글이 300자보다 짧으면(생각을 끌 수 없는 모델이 생각에 출력을 다 쓴 경우) 받지 않고 다시 부른다. 서술의 틀(`narration-28` 부터)이 600~900자, 길어도 1,200자로 쓰라고 해서 잘리는 일 자체를 줄인다.
 - 공급자가 "이만큼 뒤에 다시 하라"고 알려 주면(`retry-after-ms`, `Retry-After`, 429·503) 적어도 그만큼 쉬고 같은 모델로 다시 부른다. 20초(`MAX_RETRY_AFTER_SECONDS`)보다 길면 기다리지 않고 그 모델은 그만 부른다. 오래 기다리면 서술 하나의 시간 안에 다시 부를 수 없다.
 - 다시 부르는 실패: `timeout`, `unreachable`, `interrupted`, `stream_error`, `status_429`, `status_5xx`, `malformed`, 그리고 답은 왔지만 쓰지 않은 것(너무 짧게 잘린 `cut_off`, `empty`, `too_long`, 숨긴 이름을 쓴 `secret_leaked`. 모델의 글은 매번 다르다).
@@ -2027,7 +2031,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - 적는 것: 쓰임새(`narration`), 테이블, 라운드 번호, 그때의 방장, provider 의 종류와 모델(답에 적힌 이름, 없으면 부른 이름), 틀의 버전, 추론, 문체, 생성 설정(`temperature`, `max_tokens`), 넣은 로어북 항목(`lore_entry_ids`), 넣은 지난 일(`memory_rounds`), 넣은 참고 자료의 줄(`reference_ids`), 보낸 글자 수(`input_chars`), 걸린 시간, 토큰 수, 멈춘 이유, 모델이 쓴 글(쓰지 않은 글도).
   로어북 항목과 지난 일은 입력 예산에 맞게 줄인 뒤 실제로 보낸 것이다.
 - 생성 설정은 코드의 상수라 틀의 버전과 따로 바뀔 수 있어 함께 적는다. 넣은 로어북 항목은 검색이 맞는 것을 골랐는지 볼 근거다.
-- **자세한 사용량과 원가**(#332, `app/ai/costs.py`). 캐시에서 읽은 입력(`cached_input_tokens`), 캐시에 쓴 입력(`cache_write_tokens`), 생각에 쓴 출력(`reasoning_tokens`)을 적는다. 모두 입력·출력 수에 들어 있다(OpenAI 의 뜻. 다른 provider 는 이 뜻으로 바꿔 채운다).
+- **자세한 사용량과 원가**(#332, `ai_core/costs.py`). 캐시에서 읽은 입력(`cached_input_tokens`), 캐시에 쓴 입력(`cache_write_tokens`), 생각에 쓴 출력(`reasoning_tokens`)을 적는다. 모두 입력·출력 수에 들어 있다(OpenAI 의 뜻. 다른 provider 는 이 뜻으로 바꿔 채운다).
   [모델 목록](#모델-목록)의 모델이면 이름표(`model_slug`), 그날의 단가로 센 원가(`cost_usd`, USD 소수 여덟째 자리), 그 단가의 줄(`cost_id`)도 적는다.
   캐시 읽기·쓰기·나머지 입력·출력을 각자의 단가로 센다(캐시 단가가 없으면 입력 단가). 토큰 수를 모르면 원가를 적지 않는다. 받지 못한 호출에는 원가가 없다. 목록에 없는 모델(서버 곁의 모델)은 이름표와 원가가 비어 있다.
   사용자의 크레딧과는 상관없다. 크레딧은 라운드를 열 때 정한 값으로만 받는다. 원가는 판매가가 맞는지, 실제 청구서와 맞는지 볼 근거다.
@@ -2773,7 +2777,7 @@ data: {"sequence": 21, "type": "gm_narration", "payload": {"text": "엔진 소�
   `narration_failed` 가 와도 미리 보기를 지운다. 서버는 마지막 조각을 보낸 뒤에 이벤트를 적는다.
 
 어떻게 도는가.
-- provider 는 답을 흘려 받는다(`app/ai/streaming.py`). 생각 글은 조각에서도 걸러진다(위의 서술 항목).
+- provider 는 답을 흘려 받는다(`ai_core/streaming.py`). 생각 글은 조각에서도 걸러진다(위의 서술 항목).
 - 서술자는 시도마다 미리 보기를 새로 시작하고(`begin`) 받은 조각을 넘긴다(`text`). 다시 시도하는 서술자는 미리 보기를 그대로 안으로 넘긴다.
 - 미리 보기(`app/rounds/preview.py`)는 조각을 모아 두었다가 0.3초마다 신호(`NOTIFY`)로 보낸다. 조각마다 보내면 서술 하나에 DB 를 수백 번 들른다.
   모으는 쪽과 보내는 쪽을 나눠서, 보내기가 느려도 모델의 답을 읽는 일은 기다리지 않는다. 보내기가 실패해도 서술은 계속한다.
@@ -2866,10 +2870,10 @@ Redis 가 느리면 요청이 그만큼 기다리므로 연결과 명령에 짧�
   게임 서버는 연결의 `search_path` 를 `game, extensions` 로 둔다. 테이블은 앞의 스키마에 놓이고, `vector` 타입은 뒤에서 찾는다. 인증 서버 계정은 이 스키마를 쓸 수 없다.
 
 **임베딩 모델.** 기본은 로컬 Ollama 의 `bge-m3` 다. 한국어를 포함한 여러 언어를 다루고, 1.2GB 쯤이라 서술 모델과 함께 3090 에 올라간다.
-서술의 provider 처럼 모양(`app/ai/embedder.py`)과 구현을 나눈다. OpenAI 모양의 `/embeddings` 를 부르므로 LM Studio, vLLM, 클라우드 API 로 바꿀 수 있다.
-테스트는 가짜 임베더를 쓴다. 낱말이 겹치는 글끼리 가까운 벡터를 낸다(`app/ai/fake.py`).
+서술의 provider 처럼 모양(`ai_core/embedder.py`)과 구현을 나눈다. OpenAI 모양의 `/embeddings` 를 부르므로 LM Studio, vLLM, 클라우드 API 로 바꿀 수 있다.
+테스트는 가짜 임베더를 쓴다. 낱말이 겹치는 글끼리 가까운 벡터를 낸다(`ai_core/fake.py`).
 
-받은 답은 검사하고 받는다(`app/ai/openai_embedder.py` 의 `read_vectors`). 벡터는 저장되어 오래 남고, 어느 글의 벡터인지는 차례로만 안다.
+받은 답은 검사하고 받는다(`ai_core/openai_embedder.py` 의 `read_vectors`). 벡터는 저장되어 오래 남고, 어느 글의 벡터인지는 차례로만 안다.
 - 답의 `index` 가 0 부터 보낸 글의 수 - 1 까지를 한 번씩 가리켜야 한다. 차례만 섞인 답은 맞춰서 받는다. 겹치거나, 빠지거나, 범위 밖이거나, 정수가 아니면 받지 않는다. 전에는 개수만 맞으면 받아서 글과 벡터의 짝이 어긋난 채로 저장될 수 있었다.
 - 숫자는 모두 유한해야 한다(NaN, Infinity 가 아님). 모두 0 인 벡터도 받지 않는다. 코사인 거리를 잴 수 없다.
 - 벡터마다 길이가 같아야 하고, `EMBEDDING_DIMENSIONS` 를 적었으면 그 길이여야 한다. 벡터의 칸은 차원을 정해 두지 않아서 길이가 다른 벡터도 저장은 되고, 거리를 잴 때에야 DB 가 오류를 낸다. 그 오류는 검색에서 나고, 서술을 맡은 작업은 로그에 남긴 뒤 고른 것 없이 서술한다("서술이 끝나지 못하면").
@@ -3357,7 +3361,7 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 - 스트림(SSE)의 요청은 연결이 끊길 때 한 줄이 남는다. `duration_ms` 는 연결이 이어진 시간이다.
 - 처리하지 못한 예외의 응답은 `500 {"detail": "서버에서 오류가 났습니다. 잠시 후 다시 시도해 주세요."}` 다.
 - uvicorn 이 스스로 찍던 요청 줄(access log)은 껐다. 주소 뒤에 붙은 값까지 찍었고, 요청이 끝난 줄과 겹친다. uvicorn 의 나머지 줄(뜨고 꺼지는 것)은 같은 JSON 으로 나간다.
-- AI 에 보낸 글과 받은 글은 로그에 남기지 않는다. AI 호출의 기록은 따로 DB 에 남는다(`app/ai/calls.py`). 거기에도 보낸 글은 없고 지문만 있다.
+- AI 에 보낸 글과 받은 글은 로그에 남기지 않는다. AI 호출의 기록은 따로 DB 에 남는다(`ai_core/calls.py`). 거기에도 보낸 글은 없고 지문만 있다.
 
 코드는 `app/observability/` 에 있다. `identifiers.py`(식별자의 규칙), `context.py`(요청과 작업 동안 식별자를 들고 있는 곳),
 `redaction.py`(가리는 규칙), `formatter.py`(JSON 한 줄), `setup.py`(로그를 거는 일), `middleware.py`(요청), `responses.py`(처리하지 못한 예외의 응답).
@@ -3381,7 +3385,7 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 - `traceparent` 는 부르는 쪽이 붙였을 때만(우리 서버) 그 호출의 span 으로 바꾼다. AI 모델의 창구에는 붙이지 않는다
 - 싣지 않는 것: 주소의 경로와 뒤의 값, 머리말, 본문, SQL 의 문장과 값, 예외의 글, AI 에 보낸 글과 받은 글. 쿼리가 실패하면 SQLSTATE 만 적는다
 - 요청이나 작업 밖의 쿼리와 호출(끊긴 세션의 목록을 30초마다 받는 것)은 span 을 걸지 않는다
-- `app/ai` 는 span 의 코드를 가져오지 않는다(`tests/test_ai_boundary.py`). 모델을 부르는 클라이언트를 밖에서 넘기므로 그 클라이언트가 span 을 건다
+- `ai_core` 는 span 의 코드를 가져오지 않는다(`shared/ai-core/tests/test_boundary.py`). 모델을 부르는 클라이언트를 밖에서 넘기므로 그 클라이언트가 span 을 건다
 
 테스트는 `tests/spans.py` 로 메모리에 모아 이름, 부모, 속성을 본다(`spans` fixture).
 
@@ -3406,7 +3410,7 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 | `narration_charges` | `status`(`pending`, `held`, `short`, `capture_due`, `release_due`) | `app/billing/settler.py` 의 바퀴마다. 서버들이 같은 수를 낸다(`max` 로 본다) |
 
 - 대시보드는 Grafana 의 `trpg-server`(`docker/grafana/dashboards/trpg-server.json`), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `trpg-server` 묶음이다
-- `app/ai` 는 메트릭의 코드를 가져오지 않는다(`tests/test_ai_boundary.py`). 기록장과 결제 서버를 부르는 것을 밖에서 감싸 센다
+- `ai_core` 는 메트릭의 코드를 가져오지 않는다(`shared/ai-core/tests/test_boundary.py`). 기록장과 결제 서버를 부르는 것을 밖에서 감싸 센다
 - 계측기는 `app/observability/metrics.py` 에 한 묶음으로 둔다. 테스트는 `tests/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
 - 보내는 길은 `tests/test_metrics_setup.py` 가 가짜 수집기로 본다. Prometheus 에 들어오는지는 저장소의 CI(`stack`)가 본다
 

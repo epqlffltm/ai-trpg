@@ -14,7 +14,8 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from app.ai.embedder import Embedder
+from ai_core.embedder import Embedder
+
 from app.lore.retrieval import mentions, query_text
 from app.lore.texts import batched
 from app.memory.history import history_of, scene_lines

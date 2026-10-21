@@ -1,4 +1,4 @@
-# trpg-server/app/ai/anthropic_stream.py
+# shared/ai-core/src/ai_core/anthropic_stream.py
 
 """
 Claude(Anthropic Messages)의 흘려 받는 답을 읽는다. 네트워크를 모른다.
@@ -15,7 +15,7 @@ SSE 다. 'event: …' 줄과 'data: {...}' 줄이 온다. data 의 type 이 even
   - ping, content_block_start, content_block_stop, 모르는 type: 넘어간다. 공급자가 새 type 을 더할 수 있다.
 message_stop 도 멈춘 이유도 오지 않고 끝나면 도중에 끊긴 것이다(interrupted).
 
-토큰 수는 OpenAI 의 뜻으로 바꿔 채운다(app/ai/provider.py 의 Completion).
+토큰 수는 OpenAI 의 뜻으로 바꿔 채운다(ai_core/provider.py 의 Completion).
   Claude 의 input_tokens 에는 캐시에서 읽은 것과 캐시에 쓴 것이 빠져 있다. 셋을 더한 것이 보낸 입력 전부다.
   출력(output_tokens)에는 생각에 쓴 것이 들어 있다. 생각만 따로 세어 주지 않아서 reasoning_tokens 는 비워 둔다.
 멈춘 이유가 max_tokens 면 길이 상한에 걸려 끊긴 것이다(truncated).
@@ -26,8 +26,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
-from app.ai.provider import Completion, ProviderError, TextSink
-from app.ai.streaming import data_of
+from ai_core.provider import Completion, ProviderError, TextSink
+from ai_core.streaming import data_of
 
 # Claude 에서 "길이 상한에 걸려 멈췄다"는 뜻의 멈춘 이유
 MAX_TOKENS_STOP = 'max_tokens'

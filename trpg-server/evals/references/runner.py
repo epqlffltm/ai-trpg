@@ -25,7 +25,8 @@ import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from app.ai.embedder import Embedder
+from ai_core.embedder import Embedder
+
 from app.lore.retrieval import query_text
 from app.lore.texts import batched
 from app.references.records import StoredReference

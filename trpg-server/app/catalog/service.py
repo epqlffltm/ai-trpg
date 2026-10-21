@@ -11,16 +11,16 @@ HTTP 를 모른다. SQL 을 모른다. 일마다 commit 하나로 저장한다.
 나머지는 잠그지 않는다. 부딪혀도 망가지는 것이 없다.
   - 원가는 덧붙이기만 하므로, 켤 때 본 "오늘의 단가가 있다"는 그 뒤에도 참이다.
   - 켜는 것과 은퇴일 적기가 겹쳐 켜진 채 은퇴해도, 쓸 수 있나는 둘을 함께 본다
-    (app/ai/catalog_contract.py 의 is_offered).
+    (ai_core/catalog_contract.py 의 is_offered).
   - 같은 이름표나 같은 API 모델을 동시에 넣으면 DB 의 제약이 하나를 막는다(먼저 본 것은 친절한 안내일 뿐이다).
 """
 
 from dataclasses import dataclass
 from datetime import date
 
+from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField, is_retired
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField, is_retired
 from app.catalog import repository
 from app.catalog.errors import CatalogConflictError, Conflict, InvalidModelError, ModelNotFoundError
 from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot

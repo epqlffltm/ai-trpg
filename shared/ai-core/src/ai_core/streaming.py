@@ -1,4 +1,4 @@
-# trpg-server/app/ai/streaming.py
+# shared/ai-core/src/ai_core/streaming.py
 
 """
 흘려 받는 답(스트리밍)을 읽는다. 네트워크를 모른다. 받은 줄들을 넣으면 답을 모으고, 새 글을 조각마다 넘긴다.
@@ -25,7 +25,7 @@ import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
-from app.ai.provider import Completion, ProviderError, TextSink
+from ai_core.provider import Completion, ProviderError, TextSink
 
 # content 에 섞여 온 생각 글. 닫힌 것, 그리고 닫히지 않은 채 끝까지 간 것
 THINKING_PATTERN = re.compile(r'<think>.*?(?:</think>|$)', re.DOTALL)

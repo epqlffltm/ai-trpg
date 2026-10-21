@@ -1,4 +1,4 @@
-# trpg-server/app/ai/routing.py
+# shared/ai-core/src/ai_core/routing.py
 
 """
 모델의 이름으로 그 모델을 부를 provider 를 고른다. 서술이 부를 때마다 쓴다.
@@ -29,8 +29,8 @@ from datetime import UTC, date, datetime
 import httpx
 from pydantic import SecretStr
 
-from app.ai.anthropic import AnthropicProvider
-from app.ai.catalog_contract import (
+from ai_core.anthropic import AnthropicProvider
+from ai_core.catalog_contract import (
     CatalogModel,
     ModelLookup,
     Provider,
@@ -39,10 +39,10 @@ from app.ai.catalog_contract import (
     is_offered,
     is_retired,
 )
-from app.ai.costs import PriceTag
-from app.ai.gemini import GeminiProvider
-from app.ai.openai_compat import DEFAULT_TOKEN_FIELD, LOCAL_OPTIONS, OpenAICompatProvider, WireOptions
-from app.ai.provider import LLMProvider, ProviderError
+from ai_core.costs import PriceTag
+from ai_core.gemini import GeminiProvider
+from ai_core.openai_compat import DEFAULT_TOKEN_FIELD, LOCAL_OPTIONS, OpenAICompatProvider, WireOptions
+from ai_core.provider import LLMProvider, ProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ def options_of(model: CatalogModel) -> WireOptions:
     목록의 모델이 받는 칸. OpenAI 모양으로 부르는 창구(openai, local, zai)의 모델에 쓴다.
 
     생각의 방식(reasoning_style)이 있으면 그것을 따른다. thinking 칸으로 켜고 끄거나(thinking_type), 끌 수 없다(always).
-    그런 모델에는 reasoning_effort 를 보내지 않는다(app/ai/openai_compat.py 의 build_body).
+    그런 모델에는 reasoning_effort 를 보내지 않는다(ai_core/openai_compat.py 의 build_body).
     """
     style = model.reasoning_style
     return WireOptions(
@@ -114,7 +114,8 @@ class ModelRouter:
     """
     이름으로 provider 를 고른다. 앱에 하나 둔다(app/rounds/narrator_setup.py 의 build_router).
 
-    lookup: 모델 목록에서 찾는 것(ModelLookup). 게임 서버는 부를 때마다 DB 에서 읽는다(app/catalog/lookup.py).
+    lookup: 모델 목록에서 찾는 것(ModelLookup). 게임 서버는 부를 때마다 DB 에서 읽는다
+    (trpg-server/app/catalog/lookup.py).
     local: 서버 곁의 모델의 창구(LLM_BASE_URL). openai, anthropic, gemini, zai, deepinfra: 외부 API 의 창구.
     키가 없으면 None 이다.
     OpenAI 와 같은 모양의 창구(openai, zai, deepinfra)는 같은 provider 로 부른다. 주소와 키와 받는 칸만 다르다.

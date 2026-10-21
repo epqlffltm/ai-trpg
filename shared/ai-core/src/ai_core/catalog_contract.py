@@ -1,7 +1,7 @@
-# trpg-server/app/ai/catalog_contract.py
+# shared/ai-core/src/ai_core/catalog_contract.py
 
 """
-모델 목록의 계약. AI 를 부르는 코드(app/ai)가 모델 목록에서 알아야 하는 것만 둔다(#380, #496).
+모델 목록의 계약. AI 를 부르는 코드(ai_core)가 모델 목록에서 알아야 하는 것만 둔다(#380, #496).
 
   - 열거형: 모델을 부르는 창구(Provider), 생각을 켜고 끄는 방식(ReasoningStyle), 출력 상한의 칸(TokenLimitField).
     문자열 값은 DB 에 적힌 값과 같다. 바꾸지 않는다(마이그레이션과 표의 CHECK 가 이 값을 쓴다).
@@ -9,9 +9,9 @@
   - 읽는 쪽의 약속: 이름표로 모델을 찾는 것(ModelLookup). 어떻게 찾는지(DB, 캐시, 파일)는 모른다.
   - 순수 규칙: 생각을 끌 수 없는 모델인가(always_thinks), 그날 은퇴했나(is_retired), 그날 쓸 수 있나(is_offered).
 
-모델 목록을 실제로 읽고 고치는 것은 서비스의 몫이다(게임 서버는 app/catalog: 표, DbModelLookup, 관리 명령).
+모델 목록을 실제로 읽고 고치는 것은 서비스의 몫이다(게임 서버는 trpg-server/app/catalog: 표, DbModelLookup, 관리 명령).
 판매가와 고를 수 있는 모델(offers), 보이는 분류(Grade)도 서비스의 몫이라 여기 두지 않는다.
-이 파일은 app.ai 밖의 app.* 를 가져오지 않는다. 나중에 공용 코드(shared/ai-core)로 옮길 후보다
+이 파일은 ai_core 밖의 app.* 를 가져오지 않는다. 나중에 공용 코드(shared/ai-core)로 옮길 후보다
 (docs/architecture/shared-code.md).
 DB 를 모른다.
 """
@@ -58,7 +58,7 @@ class ReasoningStyle(enum.StrEnum):
     모델이 생각(thinking)을 켜고 끄는 방식. Claude 와 Gemini 의 모델마다 다르다(각 회사의 문서, 2026-10).
 
     서술은 생각을 꺼서 부른다(app/rounds/llm_narrator.py). 끄는 법과, 끌 수 없으면 어떻게 하는지가 모델마다 다르다.
-    부르는 쪽(app/ai/anthropic.py, app/ai/gemini.py, app/ai/openai_compat.py)이 이 값을 보고 요청의 생각 칸을 만든다.
+    부르는 쪽(ai_core/anthropic.py, ai_core/gemini.py, ai_core/openai_compat.py)이 이 값을 보고 요청의 생각 칸을 만든다.
     창구마다 받는 값이 다르다(모델을 넣을 때 app/catalog/rules.py 의 STYLES_BY_PROVIDER 가 본다).
     budget 은 두 창구가 함께 쓴다.
     OpenAI 와 서버 곁의 모델은 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다).

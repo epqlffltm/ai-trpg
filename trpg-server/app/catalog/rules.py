@@ -8,12 +8,13 @@
   - round_cost_usd: 단가로 어림한 1인 1라운드의 원가
 
 AI 를 부르는 코드도 쓰는 판단(always_thinks, is_retired, is_offered)은 모델 목록의 계약에 있다
-(app/ai/catalog_contract.py, #496).
+(ai_core/catalog_contract.py, #496).
 """
 
 from decimal import Decimal
 
-from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField
+from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField
+
 from app.catalog.models import AiModelCost
 
 # 출력 상한의 칸을 적어야 하는 창구. OpenAI 모양의 API 다. 나머지 창구는 칸이 정해져 있어 적지 않는다

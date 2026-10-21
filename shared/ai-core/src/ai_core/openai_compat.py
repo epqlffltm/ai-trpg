@@ -1,10 +1,10 @@
-# trpg-server/app/ai/openai_compat.py
+# shared/ai-core/src/ai_core/openai_compat.py
 
 """
 OpenAI 와 같은 모양의 주소(/chat/completions)를 부르는 provider.
 
 Ollama, LM Studio, vLLM, 그리고 같은 모양을 받는 클라우드 API(OpenAI, Z.ai, DeepInfra)를 이 하나로 부른다.
-주소, 모델 이름, 키, 모델이 받는 칸만 다르다. 어느 모델을 어떤 값으로 부를지는 app/ai/routing.py 가 정한다.
+주소, 모델 이름, 키, 모델이 받는 칸만 다르다. 어느 모델을 어떤 값으로 부를지는 ai_core/routing.py 가 정한다.
 SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되고, 앱이 이미 httpx 클라이언트를 하나 들고 있다.
 
 키(api_key)가 있으면 Authorization 머리에 싣는다. 서버 곁의 모델(Ollama)은 키가 없다.
@@ -22,15 +22,15 @@ SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되�
   추론을 모르는 모델이면(supports_reasoning=False) 보내지 않는다.
   생각을 다른 칸으로 켜고 끄는 창구도 있다(Z.ai 의 thinking: {"type": "disabled"}). 그런 모델은 thinking_switch 다.
   끌 수 없는 모델(always_thinks)에는 끄라는 칸을 보내지 않고, 끄라고 해도 가장 낮은 깊이의 몫을 상한에 더한다.
-  생각이 장면의 몫을 먹어 장면이 잘리지 않게 한다(app/ai/thinking.py 와 같은 규칙).
+  생각이 장면의 몫을 먹어 장면이 잘리지 않게 한다(ai_core/thinking.py 와 같은 규칙).
   content 에 생각 글(<think>...</think>)이 섞여 오면 떼어 낸다. 실행기나 모델에 따라 그렇게 오는 경우가 있다.
 
-답은 늘 흘려 받는다(stream). 쓰는 대로 조각을 받아 앉은 사람에게 미리 보여 줄 수 있다(app/ai/streaming.py).
+답은 늘 흘려 받는다(stream). 쓰는 대로 조각을 받아 앉은 사람에게 미리 보여 줄 수 있다(ai_core/streaming.py).
 흘려 받지 않는 길을 따로 두지 않는다. Ollama, LM Studio, vLLM, OpenAI 가 모두 흘려 보낸다. 길이 둘이면 검증도 둘이다.
 
-보내고 받는 HTTP 의 일(시간의 상한, 실패의 이름, Retry-After)은 app/ai/http_stream.py 가 한다.
+보내고 받는 HTTP 의 일(시간의 상한, 실패의 이름, Retry-After)은 ai_core/http_stream.py 가 한다.
 Claude 의 provider 와 같다.
-흘러온 줄을 읽는 것은 app/ai/streaming.py 다. 도중의 오류 조각은 stream_error, 모양이 다르면 malformed 다.
+흘러온 줄을 읽는 것은 ai_core/streaming.py 다. 도중의 오류 조각은 stream_error, 모양이 다르면 malformed 다.
 """
 
 from dataclasses import dataclass
@@ -40,8 +40,8 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
-from app.ai.http_stream import bearer_headers, stream_completion
-from app.ai.provider import (
+from ai_core.http_stream import bearer_headers, stream_completion
+from ai_core.provider import (
     ChatMessage,
     Completion,
     GenerationParams,
@@ -49,7 +49,7 @@ from app.ai.provider import (
     TextSink,
     ignore_text,
 )
-from app.ai.streaming import read_stream
+from ai_core.streaming import read_stream
 
 # 추론을 켰을 때 생각에 더 주는 토큰. 답에 쓰는 상한(max_tokens)은 그대로 두고 이만큼을 더한다
 THINKING_TOKENS = {Reasoning.LOW: 1024, Reasoning.MEDIUM: 4096, Reasoning.HIGH: 8192}

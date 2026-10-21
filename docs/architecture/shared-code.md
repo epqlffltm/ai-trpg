@@ -3,13 +3,14 @@
 여러 서비스가 같은 코드나 형식을 쓸 때 지킬 것을 적는다. 서비스의 구조는 [서비스 구조 명세](services.md)에 있다.
 
 - 기준: `main` `4b383c2` (2026-10-18)
-- 첫 패키지 `shared/server-core` 가 있다(#588, [서버의 공통부](#서버의-공통부-sharedserver-core)). 알림 서버와 asset 서버가 쓴다. 나머지 패키지는 아직 없다.
+- 패키지는 둘이다. `shared/server-core`(#588, [서버의 공통부](#서버의-공통부-sharedserver-core))는 알림 서버, asset 서버, chat 서버가 쓴다. `shared/ai-core`(#499, [AI 호출](#ai-호출-sharedai-core))는 게임 서버가 쓴다. `shared/conversation-core` 는 아직 없다.
 - 2026-10-19: 자산은 asset-server 가 원본을 갖는다는 결정을 반영했다(원칙 1·2, 공유 표, 템플릿, 열린 질문).
 - 2026-10-19: `app/ai` 를 뽑는 방식을 정했다(#380). 모델 목록, `shared/` 를 가져오는 법, CI, 뽑는 때다([정한 것](#정한-것)). "AI 호출"의 `app/ai` 표는 `main` `0930cf9` 기준이다.
 - 2026-10-20: 제작자가 쓰는 소개 글(HTML 과 인라인 CSS)을 거르는 규칙을 세 서비스에 하나로 정했다([소개 글의 HTML](#소개-글의-html)).
 - 2026-10-19: `app/ai` 의 경계 정리가 끝났다(#506, #508, #509). `app/ai` 는 이제 `app.ai` 밖의 `app.*` 를 가져오지 않는다. "AI 호출"의 표에 옮긴 곳을 적었다(기준 `main` `1cda0ba`).
 - 2026-10-21: TRPG, chat, story 를 서버 셋으로 나누기로 하면서(services.md) FastAPI 서버의 공통부(`shared/server-core`)를 먼저 뽑기로 했다. 재정의하는 법, 뽑는 순서와 주도권, 패키지 이름을 정했다([정한 것](#정한-것)).
 - 2026-10-21: `shared/server-core` 를 만들고 알림 서버와 asset 서버를 옮겼다(#588). 소개 글의 HTML 을 거르는 코드는 쓰는 곳이 둘이 될 때 옮기기로 했다([소개 글의 HTML](#소개-글의-html)).
+- 2026-10-22: 게임 서버의 `app/ai` 를 `shared/ai-core` 로 옮겼다(#499 의 1단계). 모델 목록을 파일 원본으로 바꾸는 것은 2단계로 남았다.
 
 ## 목차
 
@@ -83,11 +84,12 @@ FastAPI 서버들이 함께 쓰는 공통부다(#588). 알림 서버와 asset �
 
 ### AI 호출 (`shared/ai-core`)
 
-게임 서버의 `app/ai` 에서 뽑는다. 창구(OpenAI 호환, Claude, Gemini), 스트리밍, 토큰 예산, 원가 기록, 재시도 예산이 이미 있다.
-`app/ai` 가 다른 폴더에 기대던 곳(기준 `0930cf9`. 21개 파일 가운데 7개)은 trpg-server 안에서 정리했다. 지금은 폴더째 옮길 수 있는 상태다.
-`trpg-server/tests/test_ai_boundary.py` 가 `app/ai` 에서 `app.ai` 밖의 `app.*` 를 가져오면 실패한다. 예외는 없다.
+게임 서버의 `app/ai` 를 폴더째 옮겼다(2026-10-22, #499 의 1단계). 패키지 이름은 `ai_core` 다. 창구(OpenAI 호환, Claude, Gemini, Z.ai, DeepInfra), 스트리밍, 토큰 예산, 원가, 재시도 예산, 임베더, 호출 기록의 모양이 있다. 쓰는 법은 [shared/ai-core/README.md](../../shared/ai-core/README.md) 에 있다.
+옮기기 전에 `app/ai` 가 다른 폴더에 기대던 곳(기준 `0930cf9`. 21개 파일 가운데 7개)을 trpg-server 안에서 정리했다(아래 표).
+`shared/ai-core/tests/test_boundary.py` 가 `ai_core` 에서 서버의 모듈(`app.*`), 다른 공용 패키지(`server_core` 등), 관측의 코드(`opentelemetry`)를 가져오면 실패한다. 예외는 없다.
+2단계(모델 목록을 버전 붙인 파일 원본으로 바꾸고 서비스마다 들여오기)는 chat 이 모델을 부르기 시작할 때 한다.
 
-| `app/ai` 가 기대던 곳 | 무엇을 가져왔나 | 정리한 것 |
+| `app/ai` 가 기대던 곳(옮기기 전) | 무엇을 가져왔나 | 정리한 것 |
 | --- | --- | --- |
 | `app/catalog` (`lookup`, `models`, `rules`) | 모델 목록의 계약: 열거형(`Provider`, `ReasoningStyle`, `TokenLimitField`), 값 모양(`CatalogModel`, `UnitCost`), 읽는 쪽의 약속(`ModelLookup`), 순수 규칙(`always_thinks`, `is_offered`, `is_retired`). `routing`, `anthropic`, `gemini`, `thinking`, `costs` 가 가져온다. DB 는 가져오지 않는다 | 계약을 `app/ai/catalog_contract.py` 로 옮겼다. `app/catalog` 가 거기서 가져온다(#496, #506). DB 를 읽는 `DbModelLookup` 과 표(`ai_models` 등), `offers`, 원가 반올림(`round_cost_usd`)은 `app/catalog` 에 남았다 |
 | `app/core` (`loops`, `jobs`, `database`) | 뒤에서 도는 작업의 틀, DB 기반. `retention`(글 보관 기한 지우기)과 `models`(호출 기록의 표)가 가져온다 | `models`, `repository`, `call_log`(`DbCallLog`), `retention` 을 `app/ai_log` 로 옮겼다(#497, #508). 기록을 받는 곳의 모양(`CallLog`)과 기록 한 줄(`CallRecord`)은 `app/ai/calls.py` 에 남았다 |
@@ -181,7 +183,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
   1. notification 과 asset 에서 뽑아 `shared/server-core` 를 만들고 두 서버를 옮긴다. 두 서버의 코드가 거의 같아 차이가 적다. 같은 PR 에서 compose 의 `additional_contexts`, 두 서버의 Dockerfile, `changed-servers.sh` 가 경로 의존을 읽게 하는 일, CI 를 함께 바꾼다(#588. 끝).
   2. chat-server 와 story-server 는 처음부터 `server-core` 를 쓴다.
   3. trpg-server 는 그 뒤에 한 폴더씩 옮긴다(인증, 관측, 서명 순). 지표와 구간이 다른 곳은 [정해 둔 자리](#재정의하는-법)로 넘긴다.
-- AI 호출 코드는 두 단계로 뽑는다. 첫 단계로 trpg-server 안에서 `app/ai` 가 다른 폴더를 가져오지 않게 경계를 정리했다(#496, #497, #498. 끝). `shared/ai-core` 로 실제로 옮기는 일은 두 번째로 쓰는 곳인 chat-server 를 만드는 PR 에서 한다(#499). 쓰는 곳이 하나뿐인 공용 패키지를 먼저 만들지 않는다(원칙 4).
+- AI 호출 코드는 단계로 뽑는다. 먼저 trpg-server 안에서 `app/ai` 가 다른 폴더를 가져오지 않게 경계를 정리했다(#496, #497, #498. 끝). 다음으로 `shared/ai-core` 로 폴더째 옮겼다(#499 의 1단계, 2026-10-22. 끝). 두 번째로 쓰는 곳인 chat 의 "한 번의 말"이 바로 뒤라, 그 PR 이 커지지 않게 옮기는 일만 먼저 했다. 모델 목록을 파일 원본으로 바꾸는 것(2단계)은 chat 이 모델을 부를 때 한다.
 - 템플릿은 asset-server 를 만들 때 정한다. 캐릭터는 처음부터 asset-server 에서 만들고, 세계관과 로어북은 trpg-server 에서 옮겨 온다. chat 이라는 두 번째 사용자가 확실하므로 일찍 정한다.
   그 밖의 템플릿(지도, 물건, 인물)은 chat 이 실제로 쓰려고 할 때 뽑는다. 처음부터 공용 패키지로 만들지 않는다.
   두 서비스에 맞는 모양인지 쓰임을 보기 전에 공용으로 만들면 둘 다에 맞지 않는 모양이 되기 쉽다.
@@ -191,7 +193,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 
 - 템플릿마다 형식 번호를 둔다. 게임 서버의 판 형식이 이미 번호를 올리며 옛 형식을 읽을 때 지금 모양으로 바꿔 읽는다. 같은 방식을 쓴다.
 - 공용 코드가 바뀐 PR 은, 그것을 쓰는 모든 서비스의 CI 를 돌린다. 쓰는 서비스는 `changed-servers.sh` 가 서버마다 `pyproject.toml` 의 경로 의존(`path = "../shared/<이름>"`)을 읽어 고른다. 따로 표를 두지 않는다. 새 서버가 공용 코드를 쓰기 시작하면 저절로 잡힌다.
-- 공용 코드 자체는 `.github/workflows/shared.yml` 이 본다(린트, 모양, 의존성 취약점, 테스트, 커버리지 95). 패키지가 늘면 작업을 하나 더한다.
+- 공용 코드 자체는 `.github/workflows/shared.yml` 이 본다(린트, 모양, 의존성 취약점, 테스트, 커버리지 95). 패키지마다 작업이 하나다(`server-core`, `ai-core`). 패키지가 늘면 작업을 하나 더한다.
 - 서버는 경로 의존을 editable 로 받는다. 이미지에는 `uv sync --no-editable` 로 설치된 모양을 담아, 실행 단계에 `shared/` 가 없다.
 - 형식을 바꾸는 변경은 옛 형식을 읽을 수 있게 하고, 서비스마다 한 번에 따라가지 않아도 되게 한다.
 - 공용 코드에는 그것을 쓰는 서비스 중 어느 한 곳에만 있는 개념(전투 판정, 호감도 등)을 넣지 않는다.
@@ -199,10 +201,10 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 ## 주도권
 
 - `shared/server-core` 는 인프라와 문서를 맡는 쪽이 만들고 고친다. notification 과 asset 을 옮기는 일도 그쪽이 한다. trpg-server 를 옮기는 일은 게임 서버를 만드는 쪽이 한다(2026-10-21).
-- `shared/ai-core` 와 `shared/conversation-core` 는 게임 서버와 chat, story 를 만드는 쪽이 주도하고, 나중에 쓰는 서비스가 따라간다. 공용 코드 때문에 한 서비스의 진행이 다른 서비스에 막히는 일을 줄이려는 것이다.
+- `shared/ai-core` 와 `shared/conversation-core` 는 게임 서버와 chat, story 를 만드는 쪽이 주도하고, 나중에 쓰는 서비스가 따라간다. 공용 코드 때문에 한 서비스의 진행이 다른 서비스에 막히는 일을 줄이려는 것이다. `app/ai` 를 `shared/ai-core` 로 옮기는 일(#499 의 1단계)만 인프라와 문서를 맡는 쪽이 했다(2026-10-22).
 - 공용으로 올라간 뒤에 형식을 바꿀 때는, 쓰는 서비스를 모두 확인하고 한 PR 에서 맞춘다.
-- 게임 서버의 `app/ai`, `app/lore`, `app/memory`, `app/assets`, 그리고 FastAPI 서버들의 `app/auth`, `app/observability` 는 공용 후보이므로 고칠 때는 이 문서를 읽고 쓰임을 확인한다. `server-core` 로 옮기는 동안 그 폴더를 다른 PR 이 고치면 알린다.
-- `app/ai` 가 `app.ai` 밖의 `app.*` 를 가져오면 테스트가 실패한다(`trpg-server/tests/test_ai_boundary.py`, #498). 예외를 두지 않는다. 필요하면 경계를 다시 의논한다.
+- 게임 서버의 `app/lore`, `app/memory`, `app/assets`, 그리고 게임 서버의 `app/auth`, `app/observability` 는 공용 후보이므로 고칠 때는 이 문서를 읽고 쓰임을 확인한다. `server-core` 로 옮기는 동안 그 폴더를 다른 PR 이 고치면 알린다.
+- `ai_core` 가 서버의 모듈, 다른 공용 패키지, 관측의 코드를 가져오면 테스트가 실패한다(`shared/ai-core/tests/test_boundary.py`, #498). 예외를 두지 않는다. 필요하면 경계를 다시 의논한다.
 
 ## 정한 것
 

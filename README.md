@@ -447,7 +447,7 @@ billing-server/           Go 결제 서버 (독립된 Go 모듈). 연습용이�
 notification-server/      FastAPI 알림 서버 (독립된 uv 프로젝트)
 asset-server/             FastAPI asset 서버. 계정 페르소나, 캐릭터, 그림 (독립된 uv 프로젝트, 만드는 중 #564)
 chat-server/              FastAPI chat 서버. 캐릭터 하나와 1:1 대화 (독립된 uv 프로젝트, 만드는 중 #590)
-shared/                   FastAPI 서버들이 함께 쓰는 코드(server-core). 서버의 이미지에 빌드할 때 넣는다
+shared/                   FastAPI 서버들이 함께 쓰는 코드(server-core, ai-core). 서버의 이미지에 빌드할 때 넣는다
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
 docker/nginx/templates/   프록시(nginx)의 설정. 로컬과 staging 이 함께 쓰는 몸통(api.inc), http 단계(http.inc), 보안 머리말
 docker/nginx/staging/     staging 의 프록시: 듣는 포트와 TLS, 허용 주소, 인증서를 지켜보다 다시 읽히는 시작 스크립트

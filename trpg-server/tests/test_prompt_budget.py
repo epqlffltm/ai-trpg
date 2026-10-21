@@ -11,7 +11,8 @@
 import uuid
 from dataclasses import replace
 
-from app.ai.provider import ChatMessage, Role
+from ai_core.provider import ChatMessage, Role
+
 from app.assets.models import NarrationStyle
 from app.catalog.rules import ROUND_INPUT_TOKENS
 from app.rounds import budget

@@ -16,7 +16,8 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from app.ai.embedder import Embedder
+from ai_core.embedder import Embedder
+
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.lore.retrieval import KEYWORD_MAX_DISTANCE, MAX_DISTANCE, keyword_hits, query_text
 from app.lore.texts import batched, entry_text

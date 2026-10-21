@@ -16,13 +16,13 @@ import uuid
 from dataclasses import dataclass, field
 
 import pytest
+from ai_core.fake import FakeEmbedder, word_vector
+from ai_core.provider import ProviderError
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.fake import FakeEmbedder, word_vector
-from app.ai.provider import ProviderError
 from app.assets.models import ScenarioVersion
 from app.assets.scenarios.router import get_indexer
 from app.assets.scenarios.snapshot import EntrySnapshot, LorebookSnapshot, read_snapshot

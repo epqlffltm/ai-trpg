@@ -42,10 +42,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 import httpx
+from ai_core.openai_compat import OpenAICompatProvider, WireOptions
+from ai_core.openai_embedder import OpenAICompatEmbedder
+from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
 
-from app.ai.openai_compat import OpenAICompatProvider, WireOptions
-from app.ai.openai_embedder import OpenAICompatEmbedder
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
 from app.assets.models import LoreKind, NarrationStyle
 from app.rounds.llm_narrator import NARRATION_PARAMS, NarrationError, accept_completion
 from app.rounds.narrator import Impact, Move, NarrationRequest, PastRound, StoryContext, Verdict

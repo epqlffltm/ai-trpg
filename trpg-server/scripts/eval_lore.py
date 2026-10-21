@@ -22,11 +22,11 @@ import sys
 from pathlib import Path
 
 import httpx
+from ai_core.embedder import Embedder
+from ai_core.fake import FakeEmbedder
+from ai_core.openai_embedder import OpenAICompatEmbedder
+from ai_core.provider import ProviderError
 
-from app.ai.embedder import Embedder
-from app.ai.fake import FakeEmbedder
-from app.ai.openai_embedder import OpenAICompatEmbedder
-from app.ai.provider import ProviderError
 from app.core.config import get_settings
 from evals.lore.dataset import DEFAULT_PATH, Dataset, DatasetError, load_dataset, only_set
 from evals.lore.report import ModelResult, best, full_report

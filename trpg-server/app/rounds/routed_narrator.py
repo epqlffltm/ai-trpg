@@ -1,7 +1,7 @@
 # trpg-server/app/rounds/routed_narrator.py
 
 """
-부를 때마다 모델의 이름으로 provider 를 골라(app/ai/routing.py) 서술하는 서술자. Narrator 모양을 따른다.
+부를 때마다 모델의 이름으로 provider 를 골라(ai_core/routing.py) 서술하는 서술자. Narrator 모양을 따른다.
 
 서술자를 앱이 뜰 때 한 번 만들면, 모델 목록에서 끄거나 날짜판을 바꾼 것이 서버를 다시 띄울 때까지 맞지 않는다.
 그래서 고르는 일을 서술할 때로 미룬다. 고른 provider 로 언어 모델 서술자(LLMNarrator)를 그때 만들어 부른다.
@@ -14,8 +14,9 @@ LLMNarrator 는 값 몇 개를 담은 것이라 만드는 데 드는 것이 없�
 
 from dataclasses import dataclass
 
-from app.ai.calls import CallLog
-from app.ai.routing import ModelRouter
+from ai_core.calls import CallLog
+from ai_core.routing import ModelRouter
+
 from app.rounds.llm_narrator import LLMNarrator
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 

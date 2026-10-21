@@ -21,8 +21,9 @@ import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
-from app.ai.embedder import Embedder
-from app.ai.provider import ChatMessage, ProviderError
+from ai_core.embedder import Embedder
+from ai_core.provider import ChatMessage, ProviderError
+
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.lore.retrieval import Thresholds, choose, query_text, scene_labels, to_note
 from app.lore.texts import batched, entry_text

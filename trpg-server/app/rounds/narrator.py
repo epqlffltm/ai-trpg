@@ -736,7 +736,7 @@ class NarrationRequest:
     # 있으면 그 모델로만 서술한다(app/rounds/picked_narrator.py). 없으면 서버의 기본 모델이다(옛 라운드).
     # 언어 모델의 서술자 하나하나는 읽지 않는다. 가짜 서술자도 읽지 않는다
     model: str | None = None
-    # 어느 테이블의 라운드인가, 서술을 맡길 때 방장이 누구인가. AI 호출을 기록할 때 쓴다(app/ai/calls.py).
+    # 어느 테이블의 라운드인가, 서술을 맡길 때 방장이 누구인가. AI 호출을 기록할 때 쓴다(ai_core/calls.py).
     # 가짜 서술자는 읽지 않는다
     table_id: uuid.UUID | None = None
     host_id: uuid.UUID | None = None
