@@ -22,9 +22,10 @@ from server_core.testing.logs import rendered
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.core.signed_requests import BODY_MAX_BYTES
 from app.main import create_app
 from app.notifications.models import Notification
-from app.notifications.router import BODY_MAX_BYTES, KIND_REFUSED_ERROR_CODE
+from app.notifications.router import KIND_REFUSED_ERROR_CODE
 from app.notifications.schemas import PAYLOAD_INPUT_MAX_BYTES, compact_size
 from tests.conftest import make_client, make_test_settings
 from tests.signing import TEST_SECRETS, put_path, signed_put

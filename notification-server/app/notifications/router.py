@@ -17,7 +17,6 @@
 """
 
 import logging
-import time
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -25,18 +24,17 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, 
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from server_core.database import get_session
-from server_core.service_auth.signing import SIGNATURE_HEADER, is_valid
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.signed_requests import body_signed_with
 from app.notifications import catalog, service
 from app.notifications.metrics import record_notification
 from app.notifications.schemas import NotificationIn, NotificationPut, PutStatus
 
 logger = logging.getLogger(__name__)
 
-# 받는 본문의 상한(바이트). 알림 하나에는 이만큼이면 넉넉하다(값은 2048바이트까지).
-# 서명을 확인하려면 본문 전체를 읽어야 하므로, 서명을 확인하기 전에 크기부터 자른다
-BODY_MAX_BYTES = 16 * 1024
+# 본문의 상한과 서명을 확인하는 법은 app/core/signed_requests.py 에 있다.
+# 탈퇴를 받는 주소(app/withdrawals/router.py)와 함께 쓴다
 
 # 넣기의 로그의 operation 과, kind 의 표에 맞지 않아 받지 않았을 때의 error_code(docs/observability.md)
 PUT_OPERATION = 'notification.put'
@@ -48,42 +46,14 @@ CONFLICT_OUTCOME = 'conflict'
 router = APIRouter(tags=['service'])
 
 
-def unauthorized() -> HTTPException:
-    """서명을 받아들일 수 없을 때의 응답. 이유를 싣지 않는다. 무엇이 틀렸는지 알려 주면 꾸며 내는 쪽에 도움이 된다."""
-    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='요청의 서명이 맞지 않습니다.')
-
-
-def signed_path(request: Request) -> str:
-    """서명하는 주소. 호스트를 뺀 경로와, 있으면 쿼리다."""
-    query = request.url.query
-    return f'{request.url.path}?{query}' if query else request.url.path
-
-
-async def read_body(request: Request) -> bytes:
-    """본문을 읽는다. 상한을 넘으면 413 이다. 서명을 확인하기 전에 큰 본문을 끝까지 읽지 않는다."""
-    declared = request.headers.get('content-length')
-    if declared is not None and declared.isdigit() and int(declared) > BODY_MAX_BYTES:
-        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail='본문이 너무 큽니다.')
-    body = b''
-    async for chunk in request.stream():
-        body += chunk
-        if len(body) > BODY_MAX_BYTES:
-            raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail='본문이 너무 큽니다.')
-    return body
-
-
 async def verified_body(request: Request, source: Annotated[str, Path(pattern=r'^[a-z][a-z0-9_-]{0,31}$')]) -> bytes:
     """
     넣는 서버의 서명을 확인하고 본문을 돌려준다. FastAPI 의 의존성으로 쓴다.
 
     모르는 서버이거나 그 서버의 비밀이 비어 있으면 401 이다. 404 로 나누지 않는다(어느 이름이 있는지 알리지 않는다).
     """
-    body = await read_body(request)
     secret = request.app.state.settings.service_secrets().get(source, '')
-    header = request.headers.get(SIGNATURE_HEADER)
-    if not is_valid(secret, header, request.method, signed_path(request), body, time.time()):
-        raise unauthorized()
-    return body
+    return await body_signed_with(request, secret)
 
 
 def parse_notification(body: bytes) -> NotificationIn:
