@@ -4,16 +4,17 @@
 asset 서버의 설정. 환경 변수와 asset-server/.env 에서 읽는다.
 
 FastAPI 서버들이 함께 쓰는 칸(DB, 인증 서버, 로그, 수집기)은 공용 코드의 설정(server_core.settings.CoreSettings)에 있다.
-여기에는 이 서버의 이름과 기본값, 이 서버만의 칸을 둔다.
+여기에는 이 서버의 이름과 기본값, 이 서버만의 칸(페르소나의 상한, 캐릭터를 만드는 사람, 부르는 서버의 서명 비밀)을 둔다.
 
 비밀값과 환경마다 달라지는 값은 코드에 적지 않는다.
 다른 서버의 .env 와 따로 둔다. 한 서버가 다른 서버의 비밀값을 읽을 수 없게 하기 위해서다.
 """
 
 from functools import lru_cache
-from typing import ClassVar
+from typing import ClassVar, Self
 
-from pydantic import Field
+from pydantic import Field, SecretStr, model_validator
+from server_core.service_auth.signing import MIN_SECRET_LENGTH
 from server_core.settings import SCHEMA_PATTERN, CoreSettings
 
 
@@ -42,6 +43,27 @@ class Settings(CoreSettings):
     # 3단계에서 일반 사용자에게 열 때 참으로 둔다.
     # 참이어도 공개로 두는 것은 운영자만이다(신고와 관리자 화면이 생긴 뒤에 연다)
     characters_for_everyone: bool = False
+
+    # 페르소나와 판을 가져가는 서버마다의 서명 비밀(server_core/service_auth/signing.py, app/core/service_auth.py).
+    # 그 서버의 설정에 같은 값을 적는다(chat 은 ASSET_SECRET). 서버마다 따로 둔다.
+    # 하나가 새도 다른 서버인 척 부를 수 없다. 비워 두면 그 서버의 요청은 하나도 받지 않는다(401). 적으면 32자 이상이다.
+    # story 와 TRPG 는 그 서버가 가져가기 시작할 때 더한다.
+    # 둘째가 생기면 "서로 달라야 한다"도 본다(알림 서버의 설정과 같다)
+    chat_server_secret: SecretStr = SecretStr('')
+
+    @model_validator(mode='after')
+    def require_strong_secrets(self) -> Self:
+        """적은 서명 비밀이 짧으면 뜨지 않는다. 받기 시작한 뒤에 모든 요청이 401 인 것보다 낫다."""
+        written = [secret for secret in self.service_secrets().values() if secret]
+        if any(len(secret) < MIN_SECRET_LENGTH for secret in written):
+            raise ValueError(f'서명 비밀(*_SERVER_SECRET)은 {MIN_SECRET_LENGTH}자 이상이어야 한다')
+        return self
+
+    def service_secrets(self) -> dict[str, str]:
+        """부르는 서버의 이름과 그 서버의 서명 비밀. 비어 있으면 그 서버의 요청을 받지 않는다."""
+        return {
+            'chat': self.chat_server_secret.get_secret_value(),
+        }
 
 
 @lru_cache

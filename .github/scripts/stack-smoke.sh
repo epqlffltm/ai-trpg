@@ -1298,6 +1298,8 @@ check_proxy() {
   report "프록시는 서버끼리만 부르는 인증 주소를 막는다" status_is 404 "$PROXY/api/v1/auth/service/guardian-notices" -X POST
   # 알림 서버에 닿으면 서명이 없어 401 이다
   report "프록시는 서버끼리만 부르는 알림 주소를 막는다" status_is 404 "$PROXY/api/v1/notification/service/game/notifications" -X POST
+  # asset 서버에 닿으면 서명이 없어 401 이다
+  report "프록시는 서버끼리만 부르는 asset 주소를 막는다" status_is 404 "$PROXY/api/v1/asset/service/chat/personas/00000000-0000-4000-8000-000000000000"
   report "프록시는 서버의 상태 확인 주소를 막는다" status_is 404 "$PROXY/health"
   # asset-server 가 X-Accel-Redirect 로만 넘기는 내부 위치다(#566). 바깥에서 부르면 404 다
   report "프록시는 그림의 내부 위치를 바깥에 열지 않는다" status_is 404 "$PROXY/_images/$NO_IMAGE"
