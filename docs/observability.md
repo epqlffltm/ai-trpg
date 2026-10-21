@@ -71,7 +71,8 @@
 | 서버 | `service` |
 | --- | --- |
 | 자산 서버 | `asset-server` |
-| chat 서버 | `chat-server`. chat 과 story 두 모드를 한 프로세스가 맡는다. 모드는 `service` 가 아니라 `mode` 칸으로 가른다(아래) |
+| chat 서버 | `chat-server` |
+| story 서버 | `story-server`. 2026-10-21 에 chat 서버의 모드에서 서버로 나뉘었다. chat 과 story 는 `service` 로 가른다 |
 | 관리 서버 | 이름을 정할 때 같은 규칙으로(`ops-server` 후보) |
 
 - 게임 서버의 `service` 는 2026-10-19 에 `game-server` 에서 `trpg-server` 로 바뀌었다(폴더 이름을 바꿈, #480). 그 앞의 로그와 메트릭까지 찾을 때는 두 이름을 함께 찾는다(`{service=~"game-server|trpg-server"}`). 토큰의 대상, 스키마, 환경 변수, 주소는 그대로다([서비스 구조 명세](architecture/services.md#구현된-것)).
@@ -237,7 +238,6 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | `status_code` | 정수 | HTTP 상태 코드 |
 | `job_name` | 글자 | 작업에 붙인 사람이 읽는 이름 |
 | `spawned_job_id` | 글자 | 이 줄에서 띄운 작업의 `job_id` |
-| `mode` | 글자 | chat 서버의 모드. `chat`, `story`(대화의 `mode` 와 같은 값). 대화 안에서 남긴 줄에 싣는다. 다른 서버에는 없다 |
 
 이 밖의 칸을 서버가 더 실을 수 있다(`order_id`, `key_count` 등). 지킬 것은 셋이다.
 
@@ -732,7 +732,6 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `container` | compose 의 서비스 이름 |
 | `environment` | `development`, `staging`, `production` |
 | `level` | `debug`, `info`, `warning`, `error`, `critical` |
-| `mode` | `chat`, `story`. chat 서버의 줄에만 있다. story 만 따로 볼 수 있게 한다 |
 
 - `request_id`, `trace_id`, `job_id`, `user_id`, `table_id`, `order_id`, 대화방 번호는 **label 로 쓰지 않는다.** 줄의 값(structured metadata)이나 본문으로 둔다. Grafana 에서 `trace_id` 로 찾는 것은 그래도 된다.
 - 민감정보의 규칙([민감정보](#민감정보))은 그대로다. 로그에 적지 않는 것은 모은 뒤에도 없다. 대화의 원문, 캐릭터 설정, prompt 는 서버가 싣지 않는다.
@@ -748,7 +747,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `docker/grafana/provisioning/datasources/loki.yaml` | Grafana 가 뜰 때 Loki 를 데이터 소스(uid `loki`)로 붙인다. 화면에서 고치지 못한다 |
 | `.github/scripts/stack-smoke.sh` 의 `check_logs` | CI(`stack`)가 PR 마다 아래를 본다 |
 
-- **줄을 어떻게 옮기는가.** `service`, `environment`, `level`, `mode` 는 label 이다. `request_id`, `trace_id`, `job_id`, `version` 은 줄의 값이다.
+- **줄을 어떻게 옮기는가.** `service`, `environment`, `level` 은 label 이다. `request_id`, `trace_id`, `job_id`, `version` 은 줄의 값이다.
   `version` 은 값의 종류가 적지만 배포할 때마다 스트림이 새로 생기므로 label 로 두지 않았다. 칸의 이름은 바꾸지 않았다. 서버의 칸 이름이 그대로 Loki 의 이름이다.
 - **시각은 Docker 의 것이다.** 서버의 `timestamp` 로 바꾸지 않았다. Docker 가 그 줄을 받은 때라 서버의 값과 천분의 몇 초 차이다.
   JSON 이 아닌 줄과 같은 시계로 줄을 세워야 DB 가 죽은 순간과 서버의 오류가 같은 순서로 보인다. 서버의 `timestamp` 는 본문에 그대로 있다.

@@ -84,7 +84,7 @@ GRAFANA="${GRAFANA:-http://127.0.0.1:3000}"
 # 서버마다의 대시보드(JSON)가 든 폴더. Grafana 가 파일로 읽는다(docker/grafana/provisioning/dashboards)
 DASHBOARDS=docker/grafana/dashboards
 # Loki 의 label 로 쓰는 것(docs/observability.md 의 "Loki 의 label"). 이것 말고는 label 이 없어야 한다
-LOKI_LABELS=(container environment level mode service)
+LOKI_LABELS=(container environment level service)
 # 메트릭을 OTLP 로 미는 서버(docs/observability.md 의 "2. 메트릭"). 서버에 메트릭을 붙이면 여기에 더한다.
 # 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다. 연결 풀이 없는 서버는 아래에 적는다
 METRIC_SERVERS=(auth trpg board billing notification asset)
