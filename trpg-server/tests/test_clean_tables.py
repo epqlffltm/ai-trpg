@@ -33,6 +33,9 @@ from app.notifications import outbox
 from app.operators.models import ActionKind, PublishingBan, ReadKind, ScenarioSanction
 from app.operators.sanctions import build_action
 from app.operators.service import build_read
+from app.references.indexing import index_references
+from app.references.loading import load_document
+from app.references.records import ReferenceDocument, ReferenceOrigin, ReferenceRecord, ReferenceSource
 from app.tables.models import (
     DepartureKind,
     GameTable,
@@ -74,6 +77,13 @@ CATALOG_MODEL = ModelCreate(
     grade=Grade.BASIC,
     token_limit_field='max_tokens',
 )
+# 참고 자료 한 줄
+REFERENCES = ReferenceDocument(
+    format=1,
+    source=ReferenceSource.SRD51,
+    origin=ReferenceOrigin(dataset='test', revision='abc', license='CC-BY-4.0', attribution='SRD 5.1'),
+    entries=[ReferenceRecord(key='items/torch', kind='item', name='Torch', content='A torch burns.')],
+)
 CATALOG_COST = CostCreate(input_per_mtok=0, output_per_mtok=0, effective_from='2026-10-17', checked_on='2026-10-17')
 
 
@@ -114,6 +124,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     퀘스트도 같은 까닭으로 직접 넣는다(사건 항목). 서 본 곳과 찾은 길, 장소에 남은 물건도 같다(장소 항목).
     몬스터의 상태도 같다. 조우를 적으려면 장소 항목과 시작 장소가 있어야 한다. NPC 가 지닌 물건의 줄도 같다.
     모델 목록과 원가, 날짜판을 바꾼 기록도 직접 넣는다. API 가 없고 관리 명령(scripts/models.py)으로만 생긴다.
+    참고 자료와 그 벡터도 같은 까닭으로 직접 넣는다(scripts/references.py).
     발송함도 직접 넣는다. 알림은 모델이 은퇴할 때만 생긴다.
     떠난 사람도 직접 넣는다. 혼자 앉은 테이블이라 나가면 테이블이 끝나 뒤의 일을 할 수 없다.
     로어북 항목의 벡터는 게시한 뒤 뒤에서 생긴다. 그 작업이 끝나기를 기다린다.
@@ -209,6 +220,11 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         await catalog.add_model(session, CATALOG_MODEL)
         await catalog.add_cost(session, CATALOG_MODEL.slug, CATALOG_COST)
         await catalog.switch_snapshot(session, CATALOG_MODEL.slug, SnapshotSwitch(api_model_id='gemma4:31b'))
+
+    # 참고 자료는 관리 명령으로만 생긴다(scripts/references.py). 넣고 벡터를 만든다
+    async with app.state.session_factory() as session:
+        await load_document(session, REFERENCES)
+    await index_references(app.state.session_factory, app.state.embedder)
 
 
 def test_tables_that_point_are_cleared_before_the_tables_they_point_to():
