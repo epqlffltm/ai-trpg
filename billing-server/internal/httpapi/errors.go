@@ -44,6 +44,8 @@ const (
 	codeHoldAlreadyReleased = "hold.already_released"
 	// codeEligibilityInvalidRequest 는 결제 자격의 본문이 틀렸다는 것이다(칸이 빠졌다, 날짜의 모양이 틀렸다, 버전이 0 이하다).
 	codeEligibilityInvalidRequest = "eligibility.invalid_request"
+	// codeWithdrawalInvalidRequest 는 (인증 서버) 탈퇴의 알림이 틀렸다는 것이다. 주소의 사용자 번호나 탈퇴한 시각이 틀렸다.
+	codeWithdrawalInvalidRequest = "withdrawal.invalid_request"
 	// codePaymentVerificationRequired 는 본인인증을 하지 않아 결제할 수 없다는 것이다(403). 화면은 본인인증으로 보낸다.
 	codePaymentVerificationRequired = "payment.verification_required"
 	// codePaymentGuardianConsentRequired 는 미성년자인데 보호자가 동의하지 않았다는 것이다(403). 화면은 보호자 동의로 보낸다.

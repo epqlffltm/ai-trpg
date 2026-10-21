@@ -50,6 +50,19 @@ func (q *Queries) ApplyEligibility(ctx context.Context, arg ApplyEligibilityPara
 	return result.RowsAffected(), nil
 }
 
+const deleteEligibility = `-- name: DeleteEligibility :execrows
+DELETE FROM payment_eligibility WHERE user_id = $1
+`
+
+// 그 사람의 결제 자격을 지운다(탈퇴). 없으면 지운 줄이 0 이다.
+func (q *Queries) DeleteEligibility(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteEligibility, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getEligibility = `-- name: GetEligibility :one
 SELECT user_id, version, legal_adult_from, guardian_consent, updated_at FROM payment_eligibility WHERE user_id = $1
 `

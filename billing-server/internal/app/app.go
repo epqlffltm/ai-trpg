@@ -30,6 +30,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/tracing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/withdrawal"
 )
 
 // Services 는 크레딧을 다루는 서비스들이다. 가격표(Prices)는 홀드가 쓰고, 값을 바꾸는 명령(cmd/prices)도 쓴다.
@@ -41,6 +42,8 @@ type Services struct {
 	Eligibility *eligibility.Service
 	// UserNotices 는 서버가 적는 사용자의 알림(크레딧 부족)이다. 보내는 것을 붙이지 않는다. 보내기는 정리 작업이 한다
 	UserNotices *usernotice.Service
+	// Withdrawals 는 인증 서버가 알린 탈퇴를 반영한다(#603). 위의 서비스들을 묶어 쓴다
+	Withdrawals *withdrawal.Service
 }
 
 // NewServices 는 규칙에 따라 서비스들을 만든다. providers 는 주문이 길마다 부를 결제 대행사(NewProviders),
@@ -66,9 +69,11 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, providers order.Provide
 	// 크레딧이 모자라 걸지 못한 일을 사용자의 알림함에 보낼 것으로 적는다. 보내기는 정리 작업이 한다(보내는 것을 붙이지 않는다)
 	notices := usernotice.NewService(pool, now, nil)
 	holds.WithShortfalls(notices)
+	eligibilities := eligibility.NewService(pool, now)
 	return Services{
 		Wallet: wallets, Orders: orders, Holds: holds, Prices: prices,
-		Eligibility: eligibility.NewService(pool, now), UserNotices: notices,
+		Eligibility: eligibilities, UserNotices: notices,
+		Withdrawals: withdrawal.NewService(pool, wallets, holds, eligibilities, notices),
 	}, nil
 }
 
