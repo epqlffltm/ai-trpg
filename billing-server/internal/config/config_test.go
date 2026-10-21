@@ -234,6 +234,9 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"인증 서버의 비밀이 짧다", required(map[string]string{"AUTH_SERVER_SECRET": "0123456789abcdef0123456789abcde"}), "AUTH_SERVER_SECRET"},
 		{"인증 서버의 비밀이 알림의 것과 같다", required(map[string]string{"AUTH_SERVER_SECRET": webhookSecret}), "서로 다른 값"},
 		{"인증 서버의 비밀이 게임 서버의 것과 같다", required(map[string]string{"AUTH_SERVER_SECRET": gameSecret}), "서로 다른 값"},
+		{"chat 서버의 비밀이 짧다", required(map[string]string{"CHAT_SERVER_SECRET": "0123456789abcdef0123456789abcde"}), "CHAT_SERVER_SECRET"},
+		{"chat 서버의 비밀이 게임 서버의 것과 같다", required(map[string]string{"CHAT_SERVER_SECRET": gameSecret}), "서로 다른 값"},
+		{"chat 서버의 비밀이 인증 서버의 것과 같다", required(map[string]string{"CHAT_SERVER_SECRET": authSecret}), "서로 다른 값"},
 		{"알림의 비밀이 비었다", required(map[string]string{"PG_WEBHOOK_SECRET": ""}), "PG_WEBHOOK_SECRET"},
 		{"환영 크레딧이 숫자가 아니다", required(map[string]string{"WELCOME_CREDITS": "many"}), "WELCOME_CREDITS"},
 		{"환영 크레딧이 음수다", required(map[string]string{"WELCOME_CREDITS": "-1"}), "WELCOME_CREDITS"},
@@ -808,5 +811,26 @@ func TestLoadSweeperRefusesABadNotificationSetting(t *testing.T) {
 		if _, err := config.LoadSweeper(from(values)); err == nil {
 			t.Errorf("%s: 오류가 나야 한다", name)
 		}
+	}
+}
+
+func TestTheChatSecretIsOptional(t *testing.T) {
+	// chat 서버를 띄우지 않는 동안은 적지 않는다. 비어 있으면 chat 서버의 요청을 하나도 받지 않는다(httpapi)
+	for _, values := range []map[string]string{required(nil), required(map[string]string{"CHAT_SERVER_SECRET": ""})} {
+		settings, err := config.Load(from(values))
+
+		if err != nil || settings.ChatServerSecret != "" {
+			t.Errorf("오류 = %v, 비밀 = %q", err, settings.ChatServerSecret)
+		}
+	}
+}
+
+func TestTheChatSecretIsRead(t *testing.T) {
+	secret := "chat-server-secret-0123456789abcdef"
+
+	settings, err := config.Load(from(required(map[string]string{"CHAT_SERVER_SECRET": secret})))
+
+	if err != nil || settings.ChatServerSecret != secret {
+		t.Errorf("오류 = %v, 비밀이 읽히지 않았다", err)
 	}
 }
