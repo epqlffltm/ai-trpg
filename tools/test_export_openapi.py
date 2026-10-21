@@ -24,8 +24,10 @@ from export_openapi import (
     fastapi_source,
     go_source,
     mark_audience,
+    nest_source,
     parse_args,
     render,
+    resolve_command,
     run,
     target_path,
 )
@@ -63,6 +65,15 @@ class AudienceTests(unittest.TestCase):
         self.assertEqual(spec['paths']['/api/v1/x/admin/users/{id}']['get']['x-audience'], 'operator')
         self.assertIsInstance(spec['paths']['/api/v1/x/admin/users/{id}']['parameters'], list)
 
+    def test_a_mark_the_server_wrote_is_kept(self):
+        # 게시판의 운영자 API 는 주소에 /admin/ 이 없다. 서버가 적은 operator 를 주소의 모양(user)으로 덮으면 안 된다
+        spec = fake_spec()
+        spec['paths']['/api/v1/x/me']['get']['x-audience'] = 'operator'
+
+        marked = mark_audience(spec)
+
+        self.assertEqual(marked['paths']['/api/v1/x/me']['get']['x-audience'], 'operator')
+
 
 class RenderTests(unittest.TestCase):
     def test_same_content_gives_the_same_text_whatever_the_key_order(self):
@@ -90,6 +101,17 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(SOURCES['billing'], go_source('billing-server'))
         self.assertEqual(SOURCES['billing'].command, ('go', 'run', './cmd/openapi'))
         self.assertEqual(SOURCES['billing'].env, ())
+
+    def test_the_board_server_builds_and_prints_its_spec(self):
+        self.assertEqual(SOURCES['board'], nest_source('board-server'))
+        self.assertEqual(SOURCES['board'].command, ('npm', 'run', '--silent', 'openapi'))
+
+    def test_the_board_server_gets_a_database_address_node_can_read(self):
+        # Node 의 pg 는 postgresql+asyncpg:// 를 읽지 못한다. FastAPI 의 값을 그대로 쓰면 설정을 읽다가 멈춘다
+        env = dict(SOURCES['board'].env)
+
+        self.assertTrue(env['DATABASE_URL'].startswith('postgresql://'))
+        self.assertTrue(env['AUTH_JWKS_URL'])
 
     def test_required_settings_are_filled_only_when_missing(self):
         source = fastapi_source('x-server')
@@ -153,6 +175,25 @@ class FetchTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as caught:
             export_openapi.fetch_spec(source, Path(tempfile.gettempdir()))
         self.assertIn('설정이 틀렸다', str(caught.exception))
+
+    def test_what_a_failing_build_printed_is_shown_too(self):
+        # tsc 는 타입 오류를 표준 출력에 낸다. 표준 에러가 비어도 까닭이 보여야 한다
+        source = Source(folder='.', command=('python3', '-c', 'import sys; print("타입이 틀렸다"); sys.exit(2)'))
+
+        with self.assertRaises(RuntimeError) as caught:
+            export_openapi.fetch_spec(source, Path(tempfile.gettempdir()))
+        self.assertIn('타입이 틀렸다', str(caught.exception))
+
+
+class ResolveCommandTests(unittest.TestCase):
+    def test_the_program_becomes_its_path(self):
+        # Windows 의 npm 은 npm.cmd 라서 경로로 바꾸어 넘겨야 subprocess 가 찾는다
+        with mock.patch('shutil.which', return_value='C:/node/npm.CMD'):
+            self.assertEqual(resolve_command(('npm', 'run', 'x')), ('C:/node/npm.CMD', 'run', 'x'))
+
+    def test_an_unknown_program_is_left_as_it_is(self):
+        with mock.patch('shutil.which', return_value=None):
+            self.assertEqual(resolve_command(('nope', '-v')), ('nope', '-v'))
 
 
 if __name__ == '__main__':

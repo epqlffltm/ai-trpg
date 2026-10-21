@@ -5,8 +5,12 @@
  *
  * 칸 이름은 밑줄로 잇고, 번호는 글자로 내보낸다. 글, 댓글과 같다.
  * 신고한 사람에게는 접수했다는 것만 돌려준다. 누가 무엇을 신고했는지(설명, 신고한 사람)는 운영자의 응답에만 싣는다.
+ *
+ * 응답의 모양은 인터페이스가 아니라 클래스로 적는다. API 목록(docs/api/board.openapi.json)이 빌드할 때 클래스의 칸과 주석을 읽는다.
  */
 
+import { Page } from '../posts/page.js';
+import { PageFields } from '../posts/page.response.js';
 import { OpenReportGroup, ReasonCounts } from './open-groups.js';
 import { Report } from './report.entity.js';
 import { ReportTarget, ReportTargetType } from './report-target.js';
@@ -14,14 +18,14 @@ import { ReportTarget, ReportTargetType } from './report-target.js';
 import type { ReportOutcome, ReportReason } from './reports.policy.js';
 
 /** 신고한 사람에게 돌려주는 것. 접수했다는 표시다. */
-export interface ReportReceiptResponse {
+export class ReportReceiptResponse {
   id: string;
   reason: ReportReason;
   created_at: string;
 }
 
 /** 운영자가 읽는 신고 한 건. */
-export interface ReportResponse {
+export class ReportResponse {
   id: string;
   reason: ReportReason;
   /** 신고한 사람이 붙인 설명. 적지 않았으면 null */
@@ -38,7 +42,7 @@ export interface ReportResponse {
 }
 
 /** 신고당한 것. 운영자의 목록에서 무엇에 걸린 신고인지 보여 준다. */
-export interface ReportTargetResponse {
+export class ReportTargetResponse {
   type: ReportTargetType;
   id: string;
   /** 글이면 그 글의 번호, 댓글이면 그 댓글이 달린 글의 번호 */
@@ -47,13 +51,43 @@ export interface ReportTargetResponse {
   deleted: boolean;
 }
 
+/**
+ * 사유마다의 건수. 사유가 없었던 것도 0 으로 실린다.
+ *
+ * open-groups.ts 의 ReasonCounts 를 목록 도구가 읽을 수 있게 칸마다 적은 것이다.
+ * implements 로 묶어 두어 사유(REPORT_REASONS)가 늘었는데 여기에 적지 않으면 빌드가 실패한다.
+ */
+export class ReasonCountsResponse implements ReasonCounts {
+  spam: number;
+  abuse: number;
+  sexual: number;
+  illegal: number;
+  other: number;
+}
+
 /** 운영자의 목록 한 줄. 신고당한 것 하나에 걸린 열린 신고들이다. */
-export interface OpenReportGroupResponse {
+export class OpenReportGroupResponse {
   target: ReportTargetResponse;
   open_count: number;
-  reasons: ReasonCounts;
+  reasons: ReasonCountsResponse;
   first_reported_at: string;
   last_reported_at: string;
+}
+
+/** 한 글이나 댓글에 걸린 신고 목록의 한 쪽. */
+export class ReportPageResponse
+  extends PageFields
+  implements Page<ReportResponse>
+{
+  items: ReportResponse[];
+}
+
+/** 열린 신고 목록의 한 쪽. */
+export class OpenReportGroupPageResponse
+  extends PageFields
+  implements Page<OpenReportGroupResponse>
+{
+  items: OpenReportGroupResponse[];
 }
 
 /** 신고당한 것의 지금 상태. 신고의 칸이 아니어서 따로 읽어 넘긴다. */

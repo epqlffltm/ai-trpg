@@ -13,15 +13,11 @@ import { Controller, Get, HttpStatus, Logger, Res } from '@nestjs/common';
 import { Public } from '../auth/public.decorator.js';
 import { DatabaseHealth } from '../database/database.health.js';
 import { recordDbUp } from '../observability/metrics.js';
+import { ReadinessResponse } from './health.response.js';
 
 /** 이 API 가 쓰는 응답의 부분. 상태 코드를 정한다. */
 export interface StatusSetter {
   status(code: number): unknown;
-}
-
-/** 준비됐는지의 답의 모양. */
-export interface ReadinessResponse {
-  status: 'ok' | 'unavailable';
 }
 
 @Public()
