@@ -12,9 +12,9 @@ import logging
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.database import create_engine
 
 from app.api import readiness
-from app.core.database import create_engine
 from app.main import create_app
 from tests.conftest import make_client, make_test_settings
 

@@ -2,8 +2,10 @@
 
 """
 메트릭을 세는 곳을 검증한다. 이름, 단위, label 이 docs/observability.md 의 "메트릭"의 표와 같은지 본다.
-app/observability/metrics.py, request_metrics.py, pool_metrics.py 와, 그것을 부르는 readiness, 뒤의 작업(tests/jobs.py).
-메모리에 모으는 것(tests/metrics.py)으로 읽는다. 끝에서 끝까지(Prometheus 에 들어오는가)는 CI 의 stack 이 본다.
+server_core/observability/metrics.py, request_metrics.py, pool_metrics.py 와,
+그것을 부르는 readiness, 뒤의 작업(tests/jobs.py).
+메모리에 모으는 것(server_core/testing/metrics.py)으로 읽는다.
+끝에서 끝까지(Prometheus 에 들어오는가)는 CI 의 stack 이 본다.
 """
 
 import asyncio
@@ -11,22 +13,22 @@ import asyncio
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
-from sqlalchemy import text
-
-from app.api import readiness
-from app.core.database import POOL_MAX_CONNECTIONS
-from app.observability import metrics as metrics_module
-from app.observability.metrics import (
+from server_core.database import POOL_MAX_CONNECTIONS
+from server_core.observability import metrics as metrics_module
+from server_core.observability.metrics import (
     DURATION_BUCKETS,
     OTHER_METHOD,
     method_label,
     observe_pool_connections,
     record_request,
 )
-from app.observability.pool_metrics import MeteredPool
-from app.observability.request_metrics import RequestMetricsMiddleware
+from server_core.observability.pool_metrics import MeteredPool
+from server_core.observability.request_metrics import RequestMetricsMiddleware
+from server_core.testing.metrics import MetricsRecorder
+from sqlalchemy import text
+
+from app.api import readiness
 from tests.jobs import PROBE_OPERATION, run_round
-from tests.metrics import MetricsRecorder
 from tests.probes import PROBE_ROUTE, add_probe_route
 
 # 토큰이 있어야 하는 주소. 토큰 없이 부르면 401 이다

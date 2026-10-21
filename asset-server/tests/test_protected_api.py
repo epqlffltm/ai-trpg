@@ -10,10 +10,10 @@ import time
 
 from fastapi import status
 from httpx import AsyncClient
+from server_core.auth.jwks import REFETCH_INTERVAL_SECONDS
+from server_core.testing.tokens import TEST_USER_ID, FakeAuthServer, SigningKey, make_access_claims, make_token
 
-from app.auth.jwks import REFETCH_INTERVAL_SECONDS
 from app.main import API_PREFIX
-from tests.tokens import TEST_USER_ID, FakeAuthServer, SigningKey, make_access_claims, make_token
 
 # 토큰으로 보호되는 주소 하나. 앞으로 붙는 주소도 같은 의존성(CurrentUser)을 쓴다
 ME_URL = f'{API_PREFIX}/me'

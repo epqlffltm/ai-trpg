@@ -3,12 +3,13 @@
 여러 서비스가 같은 코드나 형식을 쓸 때 지킬 것을 적는다. 서비스의 구조는 [서비스 구조 명세](services.md)에 있다.
 
 - 기준: `main` `4b383c2` (2026-10-18)
-- `shared/` 는 아직 없다. 이 문서는 만들기 전에 정해 두는 규칙이다. 첫 패키지는 `shared/server-core` 다([서버의 공통부](#서버의-공통부-sharedserver-core)).
+- 첫 패키지 `shared/server-core` 가 있다(#588, [서버의 공통부](#서버의-공통부-sharedserver-core)). 알림 서버와 asset 서버가 쓴다. 나머지 패키지는 아직 없다.
 - 2026-10-19: 자산은 asset-server 가 원본을 갖는다는 결정을 반영했다(원칙 1·2, 공유 표, 템플릿, 열린 질문).
 - 2026-10-19: `app/ai` 를 뽑는 방식을 정했다(#380). 모델 목록, `shared/` 를 가져오는 법, CI, 뽑는 때다([정한 것](#정한-것)). "AI 호출"의 `app/ai` 표는 `main` `0930cf9` 기준이다.
 - 2026-10-20: 제작자가 쓰는 소개 글(HTML 과 인라인 CSS)을 거르는 규칙을 세 서비스에 하나로 정했다([소개 글의 HTML](#소개-글의-html)).
 - 2026-10-19: `app/ai` 의 경계 정리가 끝났다(#506, #508, #509). `app/ai` 는 이제 `app.ai` 밖의 `app.*` 를 가져오지 않는다. "AI 호출"의 표에 옮긴 곳을 적었다(기준 `main` `1cda0ba`).
 - 2026-10-21: TRPG, chat, story 를 서버 셋으로 나누기로 하면서(services.md) FastAPI 서버의 공통부(`shared/server-core`)를 먼저 뽑기로 했다. 재정의하는 법, 뽑는 순서와 주도권, 패키지 이름을 정했다([정한 것](#정한-것)).
+- 2026-10-21: `shared/server-core` 를 만들고 알림 서버와 asset 서버를 옮겼다(#588). 소개 글의 HTML 을 거르는 코드는 쓰는 곳이 둘이 될 때 옮기기로 했다([소개 글의 HTML](#소개-글의-html)).
 
 ## 목차
 
@@ -60,28 +61,25 @@
 
 ### 서버의 공통부 (`shared/server-core`)
 
-FastAPI 서버 넷(trpg, notification, asset, 그리고 만들 chat 과 story)은 아래 폴더를 거의 같은 모양으로 한 벌씩 갖고 있다. asset 과 notification 은 두 폴더가 거의 같고(합쳐 2천 줄쯤), trpg 는 지표(`metrics.py`), 구간(`spans.py`), 토큰의 칸(`tokens.py`)이 조금 다르다(2026-10-21 에 비교했다).
+FastAPI 서버들이 함께 쓰는 공통부다(#588). 알림 서버와 asset 서버가 쓰고, chat 과 story 는 처음부터 쓰고, trpg 는 나중에 옮긴다(#589).
+쓰는 법과 열어 둔 자리의 예는 [shared/server-core/README.md](../../shared/server-core/README.md)에 있다.
 
-| 지금 자리 | 담는 것 | `server_core` 의 자리 | 서버마다 다른 것(재정의) |
-| --- | --- | --- | --- |
-| `app/auth/` (`jwks`, `revocations`, `tokens`, `dependencies`) | 인증 서버의 공개 키를 받아 토큰을 검증, 끊긴 세션의 목록, FastAPI 의존성(`current_user` 등) | `server_core.auth` | 토큰의 대상(`aud`), 토큰에서 꺼내는 칸 |
-| `app/observability/` | 로그의 모양과 가리기, 요청과 작업의 식별자, 미들웨어, 추적, 지표의 기본(요청, DB 풀) | `server_core.observability` | 서비스 이름, 서버만의 지표와 구간(TRPG 의 라운드 등) |
-| `notification-server/app/service_auth/`, trpg 의 서명(`billing/http_billing.py`, `notifications/client.py`) | 서버끼리 부를 때의 서명 만들기와 검증 | `server_core.service_auth` | 비밀의 이름과 받는 쪽의 목록 |
-| `app/core/database.py`, `loops.py` | 비동기 DB 연결과 세션, 뒤에서 일정하게 도는 일의 틀 | `server_core.database`, `server_core.loops` | 접속 주소, 풀 크기 |
-
-- 각 서버의 `app/core/config.py` 는 서버에 남는다. 공용 코드는 설정 파일을 읽지 않고, 서버가 설정의 값을 넘겨준다([재정의하는 법](#재정의하는-법)).
-- 서버만의 일(TRPG 의 `jobs.py`, `dice.py`, 라운드의 지표 등)은 서버에 남는다. 할 일이 없던 바퀴의 추적을 버리는 `DropIdleRounds`(`idle_rounds.py`)와 바퀴가 처리한 수를 세는 것(`add_handled`)은 `loops` 와 함께 쓰므로 공용으로 올린다.
-
-trpg 가 바라는 자리(2026-10-21). asset, notification 과 다른 곳이다. chat 과 story 도 쓰므로 처음부터 연다.
-
-| 자리 | 하는 일 | 쓰는 서버 |
+| `server_core` 의 자리 | 담는 것 | 서버마다 다른 것과 넘기는 법 |
 | --- | --- | --- |
-| 토큰의 기본 칸 | `AccessClaims` 에 `adult_content`(참일 때만 실린다), `is_operator`(`roles` 에 `operator`). 토큰이 없으면 `None`, 틀리면 401 인 `OptionalUser` | trpg(공개 목록), chat, story(보이는 등급) |
-| 스트림인 경로 | 설정의 정규식 목록. 스트림은 span 을 걸지 않고, 걸린 시간과 처리 중인 수에 넣지 않고, 끝난 요청의 수에만 넣는다. SSE 연결의 지표(`sse_connections`, `sse_connections_opened`, `sse_connection_duration`, `measured_stream`) | trpg, chat, story |
-| 다른 서버를 부르는 클라이언트 | 부르는 쪽이 붙일 머리(`outgoing_headers`)를 받을 때만 지금 span 으로 잇는다. 바깥(AI 모델의 창구)에는 traceparent 를 붙이지 않는다 | 모두 |
-| 서버의 지표 | 공용 코드는 요청과 연결 풀의 지표, 서버가 자기 지표를 더할 meter 만 둔다. AI 호출의 지표(`ai_*`)는 `ai-core` 로, 라운드와 청구의 지표는 trpg 에 남는다. 지표의 이름은 바꾸지 않는다 | 모두 |
-| span processor 를 끼우는 자리 | 추적 설정이 processor 를 받는다. `DropIdleRounds` 가 기본으로 들어간다 | 모두 |
-| 설정으로 받는 것 | 서비스 이름(`SERVICE_NAME`, `SCOPE_NAME`), 지금의 추적(`context.current_trace()`), 로그 처리기가 JSON 인지(`has_json_handler`) | 모두 |
+| `settings` | 설정의 공통 칸(DB, 인증 서버, 로그, 수집기)과 그 검사(`CoreSettings`) | 서버의 설정이 물려받아 이름(`service_name`)과 기본값(`db_schema`, `jwt_audience`)을 주고 제 칸을 더한다 |
+| `auth` | 공개 키(`jwks`), 끊긴 세션(`revocations`), 토큰 검증(`tokens`), FastAPI 의존성(`CurrentUser`, `OptionalUser`) | 토큰의 대상은 설정. 앱은 `app.state` 에 설정, 공개 키, 끊긴 세션을 붙인다 |
+| `observability` | 로그의 모양과 가리기, 식별자, 요청의 미들웨어 셋, 추적, 메트릭(요청, DB, 작업, SSE), 할 일 없던 바퀴 버리기 | 서비스 이름은 설정. 스트림인 주소는 `StreamRoutes` 로 미들웨어에 넘긴다. 서버만의 계측기는 `InstrumentSet` 으로 더한다. span 을 보내기 전에 끼우는 것은 `configure_tracing(wrap=)` |
+| `service_auth` | 서버끼리의 서명 만들기와 확인 | 비밀의 이름과 받는 쪽의 목록은 서버의 설정 |
+| `database` | 엔진, 세션의 틀, 요청마다의 세션, 이름 짓는 규칙 | search_path 에 더할 스키마, 풀의 크기는 `create_engine` 에 넘긴다. 표의 부모(`Base`)는 서버마다 둔다 |
+| `loops` | 뒤에서 일정하게 도는 일의 틀 | 바퀴의 일은 서버의 것 |
+| `testing` | 서버들의 테스트가 함께 쓰는 도구(가짜 인증 서버, span 과 메트릭을 모으는 것, 가짜 수집기, 로그 읽기) | 운영 코드는 가져오지 않는다 |
+
+- 각 서버의 `app/core/config.py` 는 서버에 남는다. 공용 코드는 설정 파일을 읽지 않고, 서버가 만든 설정을 받는다([재정의하는 법](#재정의하는-법)).
+- 서버만의 일(TRPG 의 `jobs.py`, `dice.py`, 라운드와 AI 호출의 지표 등)은 서버에 남는다. AI 호출의 지표(`ai_*`)는 `ai-core` 로 간다(#499).
+- 옮길 때 trpg 의 모양을 기본으로 올렸다(trpg 가 바란 자리, 2026-10-21). 알림 서버와 asset 서버에 생긴 차이는 둘이다.
+  - 작업의 span(`job_span`)은 걸린 span 이 있으면 그 아래에 놓인다. 두 서버의 작업은 서버가 뜰 때 시작해 걸린 span 이 없으므로 지금처럼 바퀴마다 새 추적이다.
+  - 공용 코드가 남긴 로그 줄의 `logger` 가 `app.observability.*` 에서 `server_core.observability.*` 로 바뀌었다. 칸의 모양과 `service` 는 그대로다.
+- 공용 코드의 테스트는 DB 없이 돈다. DB 에 닿는 것(쿼리의 span, 연결을 기다린 시간)은 쓰는 서버의 테스트가 실제 DB 로 본다.
 
 ### AI 호출 (`shared/ai-core`)
 
@@ -118,6 +116,9 @@ TRPG, chat, story 가 비슷한 모양으로 쓰는 것들이다. 같은 필드�
 | 물건과 소지품 | 물건의 정의, 소지품 표, 얻고 잃는 규칙과 개수 상한 | TRPG 는 장비와 소모품의 효과, story 는 선물과 호감도 |
 | 인물(NPC) | 프로필, 말투, 위치, 일과 | TRPG 는 전투 성질, chat 과 story 는 호감도 단계와 해금 |
 
+- 지도, 물건, 인물은 TRPG 에서 쓰는 중인 것이 먼저 완성되어야 한다. 그 설계를 할 때 story 의 쓰임(이동과 선물)도 함께 놓고 본다.
+- 하나의 공통 층으로 묶어 보면, 이들은 **세계의 상태**(장소, 물건, 인물, 관계 변수)와 **서버가 검증해서 바꾸는 규칙**이다. 이 층은 TRPG 엔진 전체가 아니다.
+
 ### 대화의 핵심 (`shared/conversation-core`)
 
 chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. 대화 트리(다시 생성, 분기), 요약, 기억, 로어북 검색을 프롬프트에 붙이는 순서, 스트리밍한 답을 저장하는 흐름이 같다. 다른 것은 참가자 수, 로어북이 붙는 곳(캐릭터 대 세계관), 이벤트와 엔딩이다.
@@ -128,7 +129,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 
 ## 재정의하는 법
 
-서버가 공용 코드를 그대로 쓰거나 일부를 바꿔 쓰는 방법은 셋뿐이다(2026-10-21).
+서버가 공용 코드를 그대로 쓰거나 일부를 바꿔 쓰는 방법은 셋뿐이다(2026-10-21). 설정의 클래스(`CoreSettings`)만은 서버의 설정이 물려받는다. 칸을 더하고 기본값을 주는 것이라 "설정 값"의 한 모양이다.
 
 | 방법 | 언제 | 예 |
 | --- | --- | --- |
@@ -142,10 +143,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 - **공용 코드를 복사해 고쳐 쓰지 않는다.** 같은 코드가 두 벌이 되는 것을 막으려고 뽑는 것이다. 서버의 사정이 정말 다르면 공용으로 올리지 않고 서버에 둔다(원칙 5).
 - 공용 코드가 서버의 모듈(`app.*`)을 가져오지 않는다. 공용 코드의 테스트가 이를 확인한다.
 
-`shared/` 의 패키지는 공개하는 것(`__all__`)만 서버가 쓴다. 이름이 `_` 로 시작하는 것은 서버가 가져오지 않는다.
-
-- 지도, 물건, 인물은 TRPG 에서 쓰는 중인 것이 먼저 완성되어야 한다. 그 설계를 할 때 story 의 쓰임(이동과 선물)도 함께 놓고 본다.
-- 하나의 공통 층으로 묶어 보면, 이들은 **세계의 상태**(장소, 물건, 인물, 관계 변수)와 **서버가 검증해서 바꾸는 규칙**이다. 이 층은 TRPG 엔진 전체가 아니다.
+이름이 `_` 로 시작하는 것은 서버가 가져오지 않는다. 공용 코드의 안쪽이라 말없이 바뀔 수 있다.
 
 ## 소개 글의 HTML
 
@@ -168,7 +166,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 
 **두 겹으로 거른다**(2026-10-20 결정).
 
-1. **게시할 때 서버가 거른다.** asset-server 가 게시할 때 위의 허용 목록으로 걸러 거른 것만 저장한다. 거른 것(빠진 태그와 속성)은 게시 결과의 `problems[]` 로 제작자에게 보인다. 파이썬의 `nh3` 를 쓴다. 태그, 태그마다의 속성, CSS 속성 하나하나를 허용 목록으로 거른다(`filter_style_properties`). 그림의 주소는 속성 거르기 함수(`attribute_filter`)로 우리 저장소의 것만 남긴다. 거르는 함수와 허용 목록은 `shared/` 에 하나 두고 세 서비스가 함께 쓴다.
+1. **게시할 때 서버가 거른다.** asset-server 가 게시할 때 위의 허용 목록으로 걸러 거른 것만 저장한다. 거른 것(빠진 태그와 속성)은 게시 결과의 `problems[]` 로 제작자에게 보인다. 파이썬의 `nh3` 를 쓴다. 태그, 태그마다의 속성, CSS 속성 하나하나를 허용 목록으로 거른다(`filter_style_properties`). 그림의 주소는 속성 거르기 함수(`attribute_filter`)로 우리 저장소의 것만 남긴다. 거르는 함수와 허용 목록은 한곳에 두고 함께 쓴다. 처음에는 쓰는 곳이 asset-server 하나라서 그 안(`app/content/html.py`)에 `app.*` 를 가져오지 않는 모듈로 둔다(#567). 두 번째로 쓰는 곳(TRPG 의 시나리오 소개를 asset-server 로 옮기는 PR)에서 `shared/` 로 옮긴다(원칙 4, 2026-10-21).
 2. **화면이 그릴 때 한 번 더 거른다.** 같은 허용 목록으로 DOMPurify 를 거친다. 서버의 거르기에 빈틈이 있어도 여기서 막는다.
 
 - 소개는 넘치면 잘리는 상자(`overflow: hidden`, `contain: content`) 안에만 그린다. `position` 을 막았으므로 상자 밖에 닿지 못한다.
@@ -180,7 +178,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 ## 언제 뽑는가
 
 - **서버의 공통부(`server-core`)는 지금 뽑는다(2026-10-21).** 쓰는 서버가 이미 셋이고(trpg, notification, asset), chat 과 story 가 더해진다. 순서는 아래와 같다.
-  1. notification 과 asset 에서 뽑아 `shared/server-core` 를 만들고 두 서버를 옮긴다. 두 서버의 코드가 거의 같아 차이가 적다. 같은 PR 에서 compose 의 `additional_contexts`, 두 서버의 Dockerfile, `changed-servers.sh` 가 경로 의존을 읽게 하는 일, CI 를 함께 바꾼다.
+  1. notification 과 asset 에서 뽑아 `shared/server-core` 를 만들고 두 서버를 옮긴다. 두 서버의 코드가 거의 같아 차이가 적다. 같은 PR 에서 compose 의 `additional_contexts`, 두 서버의 Dockerfile, `changed-servers.sh` 가 경로 의존을 읽게 하는 일, CI 를 함께 바꾼다(#588. 끝).
   2. chat-server 와 story-server 는 처음부터 `server-core` 를 쓴다.
   3. trpg-server 는 그 뒤에 한 폴더씩 옮긴다(인증, 관측, 서명 순). 지표와 구간이 다른 곳은 [정해 둔 자리](#재정의하는-법)로 넘긴다.
 - AI 호출 코드는 두 단계로 뽑는다. 첫 단계로 trpg-server 안에서 `app/ai` 가 다른 폴더를 가져오지 않게 경계를 정리했다(#496, #497, #498. 끝). `shared/ai-core` 로 실제로 옮기는 일은 두 번째로 쓰는 곳인 chat-server 를 만드는 PR 에서 한다(#499). 쓰는 곳이 하나뿐인 공용 패키지를 먼저 만들지 않는다(원칙 4).
@@ -193,6 +191,8 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 
 - 템플릿마다 형식 번호를 둔다. 게임 서버의 판 형식이 이미 번호를 올리며 옛 형식을 읽을 때 지금 모양으로 바꿔 읽는다. 같은 방식을 쓴다.
 - 공용 코드가 바뀐 PR 은, 그것을 쓰는 모든 서비스의 CI 를 돌린다. 쓰는 서비스는 `changed-servers.sh` 가 서버마다 `pyproject.toml` 의 경로 의존(`path = "../shared/<이름>"`)을 읽어 고른다. 따로 표를 두지 않는다. 새 서버가 공용 코드를 쓰기 시작하면 저절로 잡힌다.
+- 공용 코드 자체는 `.github/workflows/shared.yml` 이 본다(린트, 모양, 의존성 취약점, 테스트, 커버리지 95). 패키지가 늘면 작업을 하나 더한다.
+- 서버는 경로 의존을 editable 로 받는다. 이미지에는 `uv sync --no-editable` 로 설치된 모양을 담아, 실행 단계에 `shared/` 가 없다.
 - 형식을 바꾸는 변경은 옛 형식을 읽을 수 있게 하고, 서비스마다 한 번에 따라가지 않아도 되게 한다.
 - 공용 코드에는 그것을 쓰는 서비스 중 어느 한 곳에만 있는 개념(전투 판정, 호감도 등)을 넣지 않는다.
 

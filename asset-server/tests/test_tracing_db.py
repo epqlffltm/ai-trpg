@@ -1,7 +1,7 @@
 # asset-server/tests/test_tracing_db.py
 
 """
-쿼리마다 span 이 걸리는지 실제 DB 로 검증한다(app/observability/db_spans.py).
+쿼리마다 span 이 걸리는지 실제 DB 로 검증한다(server_core/observability/db_spans.py).
 """
 
 import uuid
@@ -9,12 +9,11 @@ import uuid
 import pytest
 from fastapi import FastAPI
 from opentelemetry.trace import SpanKind, StatusCode
+from server_core.observability.db_spans import instrument_engine, operation_of, query_span_name, sql_state, table_of
+from server_core.testing.spans import SpanRecorder
 from sqlalchemy import column, delete, select, table, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.observability.db_spans import instrument_engine, operation_of, query_span_name, sql_state, table_of
-from tests.spans import SpanRecorder
 
 # 값을 흉내 낸다. span 에 실리면 안 된다
 SECRET_USER = uuid.UUID('0b5e7c1a-3d2f-4e8a-9c6b-1f2e3d4c5b6a')

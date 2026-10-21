@@ -1,7 +1,7 @@
 # notification-server/tests/test_observability_requests.py
 
 """
-요청마다 식별자가 걸리고 끝나면 한 줄이 남는지 검증한다(app/observability/middleware.py).
+요청마다 식별자가 걸리고 끝나면 한 줄이 남는지 검증한다(server_core/observability/middleware.py).
 앱을 통째로 만들어 요청을 보내고, 응답의 머리말과 남은 로그를 본다. 규격은 docs/observability.md 에 있다.
 """
 
@@ -13,14 +13,14 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi import FastAPI, status
 from httpx import ASGITransport, AsyncClient
+from server_core.observability.middleware import level_of
+from server_core.testing.logs import rendered
+from server_core.testing.tokens import FakeAuthServer, SigningKey, make_access_claims, make_token
 
 from app.core.config import Settings
 from app.main import API_PREFIX, create_app
-from app.observability.middleware import level_of
-from tests.logs import rendered
-from tests.tokens import FakeAuthServer, SigningKey, make_access_claims, make_token
 
-REQUEST_LOGGER = 'app.observability.middleware'
+REQUEST_LOGGER = 'server_core.observability.middleware'
 TRACE_ID = '4bf92f3577b34da6a3ce929d0e0e4736'
 TRACEPARENT = f'00-{TRACE_ID}-00f067aa0ba902b7-01'
 # 서명까지 갖춘 토큰의 모양. 실제 키로 만든 것이 아니다

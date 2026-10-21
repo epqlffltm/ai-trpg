@@ -1,7 +1,7 @@
 # notification-server/app/inbox/router.py
 
 """
-사용자가 자기 알림함을 읽는 API. 인증 서버가 발급한 access 토큰으로 누구인지 안다(app/auth).
+사용자가 자기 알림함을 읽는 API. 인증 서버가 발급한 access 토큰으로 누구인지 안다(server_core/auth).
 
     GET  /api/v1/notification/me/notifications                 알림함의 한 쪽(최근 것부터, ?before=&limit=)
     GET  /api/v1/notification/me/notifications/unread-count    읽지 않은 알림의 수
@@ -16,10 +16,10 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from server_core.auth.dependencies import CurrentUser
+from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import CurrentUser
-from app.core.database import get_session
 from app.inbox import service
 from app.inbox.schemas import (
     PAGE_SIZE_DEFAULT,

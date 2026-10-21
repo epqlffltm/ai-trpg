@@ -14,7 +14,7 @@
 게임 서버의 AI 호출 기록 정리(trpg-server/app/ai_log/retention.py)와 같은 모양이다.
 바퀴마다 job_id 를 걸고, operation 은 notification.prune 이다. 지운 것이 없으면 debug, 있으면 info 로 한 줄을 남긴다.
 바퀴마다 span 하나도 남긴다(이름은 operation, 새 추적). 그 안의 쿼리가 이 span 아래에 놓인다.
-바퀴마다 작업의 메트릭(background_jobs_*{operation="notification.prune"})을 센다(app/observability/metrics.py).
+바퀴마다 작업의 메트릭(background_jobs_*{operation="notification.prune"})을 센다(server_core/observability/metrics.py).
 """
 
 import asyncio
@@ -25,16 +25,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from server_core import loops
+from server_core.loops import Running
+from server_core.observability.context import job_scope
+from server_core.observability.identifiers import new_job_id
+from server_core.observability.metrics import measured_job
+from server_core.observability.spans import JOB_FAILED_ERROR_CODE, job_span
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core import loops
-from app.core.loops import Running
 from app.notifications.models import Notification
-from app.observability.context import job_scope
-from app.observability.identifiers import new_job_id
-from app.observability.metrics import measured_job
-from app.observability.spans import JOB_FAILED_ERROR_CODE, job_span
 
 logger = logging.getLogger(__name__)
 

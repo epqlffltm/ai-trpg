@@ -15,23 +15,23 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from server_core.auth import revocations
+from server_core.auth.jwks import JwksCache
+from server_core.database import POOL_MAX_CONNECTIONS, create_engine, create_session_factory
+from server_core.observability.db_spans import instrument_engine
+from server_core.observability.http_spans import traced_client
+from server_core.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
+from server_core.observability.middleware import RequestLoggingMiddleware
+from server_core.observability.pool_metrics import pool_stats
+from server_core.observability.request_metrics import RequestMetricsMiddleware
+from server_core.observability.request_spans import RequestSpanMiddleware
+from server_core.observability.responses import handle_unexpected_error
+from server_core.observability.setup import configure_logging
+from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
-from app.auth import revocations
-from app.auth.jwks import JwksCache
 from app.core.config import Settings, get_settings
-from app.core.database import POOL_MAX_CONNECTIONS, create_engine, create_session_factory
-from app.observability.db_spans import instrument_engine
-from app.observability.http_spans import traced_client
-from app.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
-from app.observability.middleware import RequestLoggingMiddleware
-from app.observability.pool_metrics import pool_stats
-from app.observability.request_metrics import RequestMetricsMiddleware
-from app.observability.request_spans import RequestSpanMiddleware
-from app.observability.responses import handle_unexpected_error
-from app.observability.setup import configure_logging
-from app.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 from app.personas import router as personas
 from app.personas.service import PersonaLimitError, PersonaNotFoundError
 
@@ -85,7 +85,7 @@ def create_app(
         redoc_url=None,
         openapi_url=f'{API_PREFIX}/openapi.json' if settings.debug else None,
         lifespan=lifespan,
-        # FastAPI 가 스스로 span, 메트릭, 로그를 내보내지 않게 한다(app/observability/tracing.py)
+        # FastAPI 가 스스로 span, 메트릭, 로그를 내보내지 않게 한다(server_core/observability/tracing.py)
         telemetry=FASTAPI_TELEMETRY,
     )
 
@@ -109,7 +109,7 @@ def create_app(
     watch_pool(pool_stats(app.state.engine, POOL_MAX_CONNECTIONS))
     app.state.session_factory = create_session_factory(app.state.engine)
 
-    # 인증 서버의 공개키(app/auth/jwks.py)와 끊긴 세션의 목록(app/auth/revocations.py).
+    # 인증 서버의 공개키(server_core/auth/jwks.py)와 끊긴 세션의 목록(server_core/auth/revocations.py).
     # 공개키는 처음 필요할 때 가져온다. 인증 서버가 죽어 있어도 이 서버는 뜬다.
     # 요청 안에서 부르면 client span 을 걸고 traceparent 를 그 span 으로 잇는다(인증 서버는 우리 서버다)
     app.state.http_client = http_client or traced_client()
@@ -128,7 +128,8 @@ def create_app(
     app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)
     app.add_exception_handler(PersonaLimitError, personas.handle_persona_limit)
 
-    # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다. 원인은 로그에 남긴다(app/observability/responses.py)
+    # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.
+    # 원인은 로그에 남긴다(server_core/observability/responses.py)
     app.add_exception_handler(Exception, handle_unexpected_error)
 
     return app
