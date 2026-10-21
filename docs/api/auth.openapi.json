@@ -1,0 +1,2825 @@
+{
+  "components": {
+    "schemas": {
+      "AuthError": {
+        "additionalProperties": false,
+        "description": "access 토큰이 없거나 받아들일 수 없을 때(401). DRF 와 simplejwt 가 만든다.\n\n토큰이 틀렸으면 code(token_not_valid)와 messages 가 붙는다. 화면은 이유를 가르지 않고 갱신하거나 다시 로그인한다.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "CodedError": {
+        "additionalProperties": false,
+        "description": "화면이 가를 수 있게 오류의 이름(code)을 싣는 거절.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "ConsentAgreeRequest": {
+        "additionalProperties": false,
+        "description": "항목 하나에 동의한다. 화면이 보인 문서의 판을 보낸다.",
+        "properties": {
+          "version": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "type": "object"
+      },
+      "ConsentDocument": {
+        "additionalProperties": false,
+        "description": "동의를 받는 항목 하나의 지금의 판. 화면이 가입과 설정에서 보일 문서를 고른다.",
+        "properties": {
+          "effective_on": {
+            "format": "date",
+            "type": "string"
+          },
+          "item": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "effective_on",
+          "item",
+          "required",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ConsentDocuments": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentDocument"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ConsentState": {
+        "additionalProperties": false,
+        "description": "본인의 항목 하나의 동의 상태. 동의하지 않았거나 철회했으면 agreed_version 과 agreed_at 이 null 이다.",
+        "properties": {
+          "agreed_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "agreed_version": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "item": {
+            "type": "string"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agreed_at",
+          "agreed_version",
+          "item",
+          "pending",
+          "required",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ConsentStates": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentState"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "Detail": {
+        "additionalProperties": false,
+        "description": "글 하나만 싣는 응답. 성공의 안내도, 이유를 가르지 않는 거절도 이 모양이다.",
+        "properties": {
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "EmailRequest": {
+        "additionalProperties": false,
+        "description": "이메일 주소 하나만 받는 요청. 가입의 1단계(코드 보내기와 다시 보내기)와 비밀번호 재설정 요청에 쓴다.",
+        "properties": {
+          "email": {
+            "format": "email",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "GuardianConsentRequest": {
+        "additionalProperties": false,
+        "description": "보호자의 동의. 메일의 동의 링크에서 꺼낸 글자와, 보호자가 본인확인 업체에서 받은 글자를 받는다.",
+        "properties": {
+          "consent_token": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "identity_token": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "consent_token",
+          "identity_token"
+        ],
+        "type": "object"
+      },
+      "GuardianNoticeAnswer": {
+        "additionalProperties": false,
+        "description": "결제 서버에 주는 답. queued(메일을 적었다), skipped(알릴 보호자가 없다), duplicate(이미 받았다).",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/StatusEnum"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "GuardianNoticeRequest": {
+        "additionalProperties": false,
+        "description": "결제 서버가 보낸 보호자 알림(#352). 본문의 모양만 본다. 서명은 뷰가 먼저 본다.",
+        "properties": {
+          "credits": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/KindEnum"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "order_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "price": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "product_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "credits",
+          "kind",
+          "occurred_at",
+          "order_id",
+          "price",
+          "product_id",
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "GuardianRequestRequest": {
+        "additionalProperties": false,
+        "description": "보호자에게 동의를 부탁한다. 보호자의 이메일 하나를 받는다.",
+        "properties": {
+          "guardian_email": {
+            "format": "email",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "guardian_email"
+        ],
+        "type": "object"
+      },
+      "GuardianRequested": {
+        "additionalProperties": false,
+        "description": "보호자에게 동의 요청 메일을 보냈다.",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "guardian_consent": {
+            "$ref": "#/components/schemas/GuardianRequestedGuardianConsentEnum"
+          }
+        },
+        "required": [
+          "detail",
+          "guardian_consent"
+        ],
+        "type": "object"
+      },
+      "GuardianRequestedGuardianConsentEnum": {
+        "description": "* `requested` - requested",
+        "enum": [
+          "requested"
+        ],
+        "type": "string"
+      },
+      "GuardianRevokeRequest": {
+        "additionalProperties": false,
+        "description": "보호자의 철회. 메일의 철회 링크에서 꺼낸 글자를 받는다.",
+        "properties": {
+          "revoke_token": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "revoke_token"
+        ],
+        "type": "object"
+      },
+      "GuardianRevoked": {
+        "additionalProperties": false,
+        "description": "보호자가 철회했다. revoked 는 이번 요청이 철회했는지다(이미 철회된 링크면 false).",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "detail",
+          "revoked"
+        ],
+        "type": "object"
+      },
+      "IdentityAnswer": {
+        "additionalProperties": false,
+        "description": "본인인증을 마친 뒤의 상태.",
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/IdentityStatus"
+          }
+        },
+        "required": [
+          "identity"
+        ],
+        "type": "object"
+      },
+      "IdentityStatus": {
+        "additionalProperties": false,
+        "description": "본인인증 상태(identity_status.IdentityStatus). 내 정보와 본인인증의 응답에 실린다.",
+        "properties": {
+          "adult_content": {
+            "type": "boolean"
+          },
+          "legal_adult": {
+            "type": "boolean"
+          },
+          "verified": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "adult_content",
+          "legal_adult",
+          "verified"
+        ],
+        "type": "object"
+      },
+      "IdentityVerifyRequest": {
+        "additionalProperties": false,
+        "description": "본인인증. 본인확인 업체의 화면에서 받은 글자 하나를 받는다. 모양은 업체가 정한다(identity_providers.py).",
+        "properties": {
+          "token": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
+      "Jwk": {
+        "additionalProperties": false,
+        "description": "공개키 하나(RFC 7517). 토큰 머리말의 kid 로 고른다.",
+        "properties": {
+          "alg": {
+            "type": "string"
+          },
+          "e": {
+            "type": "string"
+          },
+          "key_ops": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "kid": {
+            "type": "string"
+          },
+          "kty": {
+            "type": "string"
+          },
+          "n": {
+            "type": "string"
+          },
+          "use": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "e",
+          "key_ops",
+          "kid",
+          "kty",
+          "n",
+          "use"
+        ],
+        "type": "object"
+      },
+      "Jwks": {
+        "additionalProperties": false,
+        "description": "검증할 수 있는 공개키 모두. 서명 키가 맨 앞이다. 키를 바꾸는 동안에는 옛 키도 실린다.",
+        "properties": {
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/Jwk"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "type": "object"
+      },
+      "KindEnum": {
+        "description": "* `paid` - 결제\n* `refunded` - 청약철회",
+        "enum": [
+          "paid",
+          "refunded"
+        ],
+        "type": "string"
+      },
+      "LoginChallenge": {
+        "additionalProperties": false,
+        "description": "로그인 1단계 응답. 토큰이 아니라 다음 단계에 쓸 티켓을 준다.",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "login_ticket": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail",
+          "login_ticket"
+        ],
+        "type": "object"
+      },
+      "LoginRequest": {
+        "additionalProperties": false,
+        "description": "로그인 요청을 검증한다.\n\n형식만 본다. 아이디 규칙이나 비밀번호 강도는 검사하지 않는다.\n규칙에 어긋난 입력에 다른 오류를 주면 \"이런 아이디는 존재할 수 없다\" 를 알려 주게 된다.",
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          },
+          "username": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "username"
+        ],
+        "type": "object"
+      },
+      "LoginResponse": {
+        "additionalProperties": false,
+        "description": "토큰을 발급하는 응답. 로그인 2단계와 토큰 갱신이 쓴다.",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer"
+          },
+          "token_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "token_type"
+        ],
+        "type": "object"
+      },
+      "LoginTicketRequest": {
+        "additionalProperties": false,
+        "description": "로그인 티켓 하나만 받는 요청. 로그인 코드 재발송에 쓴다.",
+        "properties": {
+          "login_ticket": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "login_ticket"
+        ],
+        "type": "object"
+      },
+      "LoginVerifyRequest": {
+        "additionalProperties": false,
+        "description": "로그인 2단계 요청을 검증한다.",
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "pattern": "^[0-9]{6}$",
+            "type": "string"
+          },
+          "login_ticket": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "login_ticket"
+        ],
+        "type": "object"
+      },
+      "Me": {
+        "additionalProperties": false,
+        "description": "GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의를 더한다.",
+        "properties": {
+          "consents_pending": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "email": {
+            "format": "email",
+            "readOnly": true,
+            "title": "이메일",
+            "type": "string"
+          },
+          "guardian_consent": {
+            "$ref": "#/components/schemas/MeGuardianConsentEnum"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/IdentityStatus"
+          },
+          "nickname": {
+            "readOnly": true,
+            "title": "닉네임",
+            "type": "string"
+          },
+          "public_id": {
+            "format": "uuid",
+            "readOnly": true,
+            "title": "공개 ID",
+            "type": "string"
+          },
+          "username": {
+            "readOnly": true,
+            "title": "아이디",
+            "type": "string"
+          }
+        },
+        "required": [
+          "consents_pending",
+          "email",
+          "guardian_consent",
+          "identity",
+          "nickname",
+          "public_id",
+          "username"
+        ],
+        "type": "object"
+      },
+      "MeGuardianConsentEnum": {
+        "description": "* `none` - none\n* `requested` - requested\n* `consented` - consented\n* `revoked` - revoked",
+        "enum": [
+          "none",
+          "requested",
+          "consented",
+          "revoked"
+        ],
+        "type": "string"
+      },
+      "PasswordChangeRequest": {
+        "additionalProperties": false,
+        "description": "비밀번호 변경 요청의 형식을 검증한다.\n\n새 비밀번호의 강도는 여기서 보지 않는다. services.py 가 사용자와 함께 검사한다.",
+        "properties": {
+          "current_password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          },
+          "new_password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "type": "object"
+      },
+      "PasswordResetConfirmRequest": {
+        "additionalProperties": false,
+        "description": "비밀번호 재설정 요청의 형식을 검증한다.",
+        "properties": {
+          "email": {
+            "format": "email",
+            "minLength": 1,
+            "type": "string"
+          },
+          "new_password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          },
+          "token": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "new_password",
+          "token"
+        ],
+        "type": "object"
+      },
+      "PublicName": {
+        "additionalProperties": false,
+        "description": "다른 사람의 공개 ID 와 이름. 없거나 막은 계정이면 nickname 이 null 이다.",
+        "properties": {
+          "nickname": {
+            "nullable": true,
+            "type": "string"
+          },
+          "public_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nickname",
+          "public_id"
+        ],
+        "type": "object"
+      },
+      "PublicNames": {
+        "additionalProperties": false,
+        "properties": {
+          "names": {
+            "items": {
+              "$ref": "#/components/schemas/PublicName"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "type": "object"
+      },
+      "RetryLater": {
+        "additionalProperties": false,
+        "description": "시도가 너무 많거나 메일을 지금은 보낼 수 없을 때(429). retry_after 초 뒤에는 된다. Retry-After 머리말도 같다.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "retry_after": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "detail",
+          "retry_after"
+        ],
+        "type": "object"
+      },
+      "Revocation": {
+        "additionalProperties": false,
+        "description": "끊긴 세션 하나. sub 의 SHA-256(16진수)과, 그보다 낮으면 거부할 세션 버전.",
+        "properties": {
+          "min_ver": {
+            "type": "integer"
+          },
+          "sub_sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "min_ver",
+          "sub_sha256"
+        ],
+        "type": "object"
+      },
+      "RevocationDocument": {
+        "additionalProperties": false,
+        "description": "끊긴 세션의 목록(#274). 받는 서버는 refresh_interval_seconds 마다 다시 받는다.",
+        "properties": {
+          "refresh_interval_seconds": {
+            "type": "integer"
+          },
+          "revocations": {
+            "items": {
+              "$ref": "#/components/schemas/Revocation"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "refresh_interval_seconds",
+          "revocations"
+        ],
+        "type": "object"
+      },
+      "SignupCompleteRequest": {
+        "additionalProperties": false,
+        "description": "가입의 3단계. 가입 티켓과 가입 내용의 형식을 검증한다.\n\n티켓이 맞는지, 아이디가 이메일과 겹치는지, 비밀번호가 강한지는 여기서 보지 않는다.\n셋 다 티켓 속의 이메일이 있어야 판단할 수 있어서 services.py 가 티켓을 읽은 뒤에 본다.\n중복도 services.py 가 본다.",
+        "properties": {
+          "age_over_14": {
+            "type": "boolean"
+          },
+          "consents": {
+            "additionalProperties": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "nickname": {
+            "minLength": 1,
+            "pattern": "^[\\uac00-\\ud7a3a-zA-Z0-9_]{2,20}$",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          },
+          "signup_ticket": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "username": {
+            "minLength": 1,
+            "pattern": "^[a-z0-9_]{4,20}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "age_over_14",
+          "consents",
+          "nickname",
+          "password",
+          "signup_ticket",
+          "username"
+        ],
+        "type": "object"
+      },
+      "SignupRequest": {
+        "additionalProperties": false,
+        "description": "가입의 1단계. 이메일만 받는다. 아이디와 비밀번호는 코드를 맞힌 뒤에 받는다(#271).",
+        "properties": {
+          "email": {
+            "format": "email",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "SignupVerified": {
+        "additionalProperties": false,
+        "description": "가입 2단계의 응답. 3단계에 쓸 가입 티켓을 준다.",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "signup_ticket": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail",
+          "signup_ticket"
+        ],
+        "type": "object"
+      },
+      "SignupVerifyRequest": {
+        "additionalProperties": false,
+        "description": "가입 인증 요청을 검증한다.",
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "pattern": "^[0-9]{6}$",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "email"
+        ],
+        "type": "object"
+      },
+      "StatusEnum": {
+        "description": "* `queued` - queued\n* `skipped` - skipped\n* `duplicate` - duplicate",
+        "enum": [
+          "queued",
+          "skipped",
+          "duplicate"
+        ],
+        "type": "string"
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "가입, 로그인, 토큰 발급과 공개키, 본인인증과 보호자 동의, 동의 기록.",
+    "title": "AI TRPG 인증 서버",
+    "version": "0.1.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/v1/auth/consents": {
+      "get": {
+        "description": "GET /api/v1/auth/consents. 동의를 받는 항목마다 지금의 판(#450). 가입 화면이 쓰므로 로그인 없이 읽는다.",
+        "operationId": "consents_retrieve",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentDocuments"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "동의를 받는 항목마다 지금의 판. 로그인 없이 읽는다",
+        "tags": [
+          "consents"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/guardian/consent": {
+      "post": {
+        "description": "POST /api/v1/auth/guardian/consent. 보호자가 메일의 링크에서 본인인증을 하고 동의한다.",
+        "operationId": "guardian_consent_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuardianConsentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "동의를 적었다"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "링크를 쓸 수 없다(guardian_link_invalid) 또는 본인인증의 글자를 쓸 수 없다(identity_token_invalid)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "보호자가 성년이 아니다(guardian_not_adult)"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "회원이 이미 성년이다(guardian_not_needed) 또는 회원 본인이다(guardian_is_minor)"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "본인확인 업체에 닿지 않는다(identity_unavailable)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "보호자가 메일의 링크에서 본인인증을 하고 동의한다",
+        "tags": [
+          "guardian"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/guardian/request": {
+      "post": {
+        "description": "POST /api/v1/auth/guardian/request. 미성년자가 보호자에게 결제 동의를 부탁한다(#336).",
+        "operationId": "guardian_request_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuardianRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuardianRequested"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "형식이 틀렸거나 내 이메일을 적었다(guardian_email)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "본인인증을 먼저 한다(identity_verification_required)"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "성년이다(guardian_not_needed) 또는 보호자가 이미 동의했다(guardian_consent_active)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "보호자에게 너무 자주 요청했다(guardian_request_unavailable)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "미성년자가 보호자에게 결제 동의를 부탁한다",
+        "tags": [
+          "guardian"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/guardian/revoke": {
+      "post": {
+        "description": "POST /api/v1/auth/guardian/revoke. 보호자가 메일의 링크로 동의를 철회한다.",
+        "operationId": "guardian_revoke_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuardianRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuardianRevoked"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "링크를 쓸 수 없다(guardian_link_invalid)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "보호자가 메일의 링크로 동의를 철회한다",
+        "tags": [
+          "guardian"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/identity/verify": {
+      "post": {
+        "description": "POST /api/v1/auth/identity/verify. 휴대폰 본인인증(#336).",
+        "operationId": "identity_verify_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityAnswer"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "형식이 틀렸거나 본인인증의 글자를 쓸 수 없다(identity_token_invalid)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "만 14세 미만이라 계정을 막았다(identity_under_age). refresh 쿠키도 지운다"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "이미 본인인증을 마쳤다(identity_already_verified) 또는 다른 계정이 쓴 사람이다(identity_in_use)"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "본인확인 업체에 닿지 않는다(identity_unavailable)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "휴대폰 본인인증을 적는다",
+        "tags": [
+          "identity"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/jwks": {
+      "get": {
+        "description": "GET /api/v1/auth/jwks",
+        "operationId": "jwks_retrieve",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Jwks"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "토큰을 검증할 공개키(JWKS). 다른 서버가 받아 간다",
+        "tags": [
+          "jwks"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "POST /api/v1/auth/login",
+        "operationId": "login_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginChallenge"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "아이디 또는 비밀번호가 틀렸다. 막힌 IP 에도 같은 답이다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "이메일 인증을 마치지 않았다(email_not_verified)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "시도가 너무 많다(too_many_attempts) 또는 코드를 자주 요청했다(login_code_unavailable)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "로그인 1단계: 아이디와 비밀번호가 맞으면 메일로 코드를 보내고 티켓을 준다",
+        "tags": [
+          "login"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/login/resend": {
+      "post": {
+        "description": "POST /api/v1/auth/login/resend",
+        "operationId": "login_resend_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginTicketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "다시 보냈다"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "로그인 티켓을 쓸 수 없다(login_ticket_invalid)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "코드를 너무 자주 요청했다(login_code_unavailable)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "로그인 코드를 다시 보낸다",
+        "tags": [
+          "login"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/login/verify": {
+      "post": {
+        "description": "POST /api/v1/auth/login/verify",
+        "operationId": "login_verify_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "access 토큰. refresh 토큰은 쿠키다"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "형식이 틀렸거나 코드가 맞지 않거나 만료됐다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "로그인 티켓을 쓸 수 없다(login_ticket_invalid). 처음부터 다시 한다"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "로그인 2단계: 코드를 맞히면 토큰을 준다",
+        "tags": [
+          "login"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "POST /api/v1/auth/logout",
+        "operationId": "logout_create",
+        "responses": {
+          "204": {
+            "description": "로그아웃했다. 토큰이 없었어도 같다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "허용하지 않은 출처에서 온 쿠키 요청(origin_not_allowed)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "이 기기에서 로그아웃한다. refresh 토큰을 폐기하고 쿠키를 지운다",
+        "tags": [
+          "logout"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "description": "POST /api/v1/auth/logout-all",
+        "operationId": "logout_all_create",
+        "responses": {
+          "204": {
+            "description": "모든 세션을 끊었다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "모든 기기에서 로그아웃한다(세션 버전을 올린다)",
+        "tags": [
+          "logout-all"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "description": "GET /api/v1/auth/me",
+        "operationId": "me_retrieve",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "로그인한 본인의 계정",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me/consents": {
+      "get": {
+        "description": "GET /api/v1/auth/me/consents. 본인의 항목마다의 동의 상태(#450).",
+        "operationId": "me_consents_retrieve",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentStates"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "본인의 항목마다의 동의 상태",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me/consents/{item}": {
+      "delete": {
+        "description": "PUT /api/v1/auth/me/consents/{item}: 그 항목에 동의한다(본문의 판으로).\nDELETE /api/v1/auth/me/consents/{item}: 그 항목의 동의를 철회한다. 필수 항목은 철회하지 못한다.",
+        "operationId": "me_consents_destroy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentStates"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "필수 항목이다(consent_required). 탈퇴로 한다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "그런 항목이 없다(consent_item_unknown)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "그 항목의 동의를 철회한다. 필수 항목은 철회하지 못한다",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      },
+      "put": {
+        "description": "PUT /api/v1/auth/me/consents/{item}: 그 항목에 동의한다(본문의 판으로).\nDELETE /api/v1/auth/me/consents/{item}: 그 항목의 동의를 철회한다. 필수 항목은 철회하지 못한다.",
+        "operationId": "me_consents_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentAgreeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentStates"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "그런 항목이 없다(consent_item_unknown)"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "문서의 판이 바뀌었다(consent_outdated)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "그 항목에 동의한다(본문의 판으로)",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/password/change": {
+      "post": {
+        "description": "POST /api/v1/auth/password/change",
+        "operationId": "password_change_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "현재 비밀번호가 틀렸거나(current_password) 새 비밀번호가 규칙에 어긋났다(new_password)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "시도가 너무 많다(too_many_attempts)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "비밀번호를 바꾼다. 다른 기기는 로그아웃되고 이 기기는 새 토큰을 받는다",
+        "tags": [
+          "password"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/password/reset": {
+      "post": {
+        "description": "POST /api/v1/auth/password/reset",
+        "operationId": "password_reset_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "가입된 주소면 보냈다. 아니어도 같은 답이다"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "시도가 너무 많다(too_many_attempts)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "비밀번호 재설정 메일을 보낸다",
+        "tags": [
+          "password"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/password/reset/confirm": {
+      "post": {
+        "description": "POST /api/v1/auth/password/reset/confirm",
+        "operationId": "password_reset_confirm_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "바꿨다. 새 비밀번호로 로그인한다"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "링크가 틀렸거나 만료됐거나 새 비밀번호가 규칙에 어긋났다(new_password)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "메일의 링크로 비밀번호를 새로 정한다",
+        "tags": [
+          "password"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/public-names": {
+      "get": {
+        "description": "GET /api/v1/auth/public-names?ids=<공개 ID>,<공개 ID>,... 다른 사람의 이름을 한꺼번에 찾는다(#532).\n\n공개 목록은 로그인 없이 읽으므로(#530) 이것도 로그인 없이 연다. 닉네임만 나간다(accounts/public_names.py).",
+        "operationId": "public_names_retrieve",
+        "parameters": [
+          {
+            "description": "공개 ID 를 쉼표로 이은 것(100개까지)",
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicNames"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "공개 ID 의 목록이 틀렸다(public_ids_invalid)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "다른 사람의 공개 ID 로 이름을 한꺼번에 찾는다. 로그인 없이 읽는다",
+        "tags": [
+          "public-names"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "description": "POST /api/v1/auth/refresh",
+        "operationId": "refresh_create",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "refresh 쿠키가 없거나 쓸 수 없다. 다시 로그인한다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "허용하지 않은 출처에서 온 쿠키 요청(origin_not_allowed)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "refresh 쿠키로 새 access 토큰을 받는다. refresh 토큰도 새것으로 바뀐다",
+        "tags": [
+          "refresh"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/service/guardian-notices": {
+      "post": {
+        "description": "POST /api/v1/auth/service/guardian-notices. 결제 서버가 미성년자의 결제와 청약철회를 알린다(#352).",
+        "operationId": "service_guardian_notices_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuardianNoticeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuardianNoticeAnswer"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "결제 서버의 서명이 맞지 않다(service_bad_signature)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "결제 서버가 미성년자의 결제와 청약철회를 알린다(서버끼리)",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/auth/session-revocations": {
+      "get": {
+        "description": "GET /api/v1/auth/session-revocations",
+        "operationId": "session_revocations_retrieve",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationDocument"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "끊긴 세션의 목록. 다른 서버가 30초마다 받아 간다",
+        "tags": [
+          "session-revocations"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/signup": {
+      "post": {
+        "description": "POST /api/v1/auth/signup. 가입의 1단계: 이메일로 코드를 보낸다. 다시 보낼 때도 이것이다.",
+        "operationId": "signup_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "코드를 보냈다. 이미 가입된 주소여도 같은 답이다"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "시도가 너무 많다(too_many_attempts)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "가입 1단계: 이메일로 코드를 보낸다",
+        "tags": [
+          "signup"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/signup/complete": {
+      "post": {
+        "description": "POST /api/v1/auth/signup/complete. 가입의 3단계: 티켓과 가입 내용으로 계정을 만든다.",
+        "operationId": "signup_complete_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "가입했다. 로그인은 따로 한다"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "칸의 오류이거나 티켓을 쓸 수 없다(signup_ticket_invalid)"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "이미 가입한 이메일(email_registered)이거나, 다른 가입이 같은 이름을 방금 가져갔다"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "가입 3단계: 티켓과 가입 내용으로 계정을 만든다",
+        "tags": [
+          "signup"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/signup/verify": {
+      "post": {
+        "description": "POST /api/v1/auth/signup/verify. 가입의 2단계: 코드를 확인하고 가입 티켓을 준다.",
+        "operationId": "signup_verify_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignupVerified"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "형식이 틀렸거나 코드가 맞지 않거나 만료됐다"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "가입 2단계: 코드를 맞히면 가입 티켓을 준다",
+        "tags": [
+          "signup"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "unavailable"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "살아 있다"
+          }
+        },
+        "security": [],
+        "summary": "프로세스가 살아 있다. DB 를 보지 않는다",
+        "tags": [
+          "health"
+        ],
+        "x-audience": "infra"
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "ready",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "unavailable"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "요청을 받을 수 있다"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "unavailable"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "DB 에 닿지 않는다"
+          }
+        },
+        "security": [],
+        "summary": "DB 에 닿으면 200, 아니면 503",
+        "tags": [
+          "health"
+        ],
+        "x-audience": "infra"
+      }
+    }
+  }
+}
