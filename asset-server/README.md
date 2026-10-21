@@ -2,13 +2,12 @@
 
 캐릭터, 계정 페르소나, 그림의 원본을 맡는 서버다(#290). 설계는 [docs/architecture/asset-server.md](../docs/architecture/asset-server.md)에 있다.
 
-**지금은 뼈대다(#564).** 다른 FastAPI 서버(게임, 알림)와 같은 구성(설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic, 테스트)만 있다.
-기능은 차례로 붙는다.
+다른 FastAPI 서버(게임, 알림)와 같은 구성(설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic, 테스트) 위에 기능이 차례로 붙는다.
 
 | 이슈 | 내용 |
 | --- | --- |
-| #564 | 뼈대(지금) |
-| #565 | 계정 페르소나. 만들기와 고치기, 서버끼리 사본 내주기 |
+| #564 | 뼈대 |
+| #565 | 계정 페르소나. 사용자 API(지금). 서버끼리 사본 내주기는 server-core(#588) 뒤 |
 | #566 | 그림. 올리기, 디코딩 격리, 내주기(nginx 의 `X-Accel-Redirect`) |
 | #567 | 캐릭터와 게시. 판, 소개 HTML 거르기, 서버끼리 판 내주기 |
 
@@ -71,8 +70,9 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰의 발급자(`iss`). 인증 서버의 `JWT_ISSUER`와 같아야 한다 |
 | `JWT_AUDIENCE` | `ai-trpg-asset` | 이 서버의 이름. 토큰의 대상(`aud`)에 이 이름이 있어야 받는다 |
+| `PERSONA_MAX_PER_OWNER` | `50` | 한 사람이 가질 수 있는 계정 페르소나의 수(1~500). TRPG 의 보관함과 같다 |
 
-서버끼리 부를 때의 비밀(계정 페르소나와 판을 가져가는 서버마다의 비밀)은 #565 에서 더한다.
+서버끼리 부를 때의 비밀(계정 페르소나와 판을 가져가는 서버마다의 비밀)은 server-core 의 서명(#588)이 들어온 뒤에 더한다.
 
 ## 상태 확인
 
@@ -89,6 +89,36 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | 방법 | 주소 | 하는 일 | 인증 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/asset/me` | 토큰의 주인(`{"user_id"}`, 인증 서버의 `public_id`). 토큰 검증이 이어졌는지 보는 가장 작은 주소다(게임 서버의 `GET /me` 와 같다) | access 토큰 |
+| POST | `/api/v1/asset/personas` | [계정 페르소나](#계정-페르소나) 만들기. 201. 처음 만든 것이 기본이다. 상한이면 409 `persona_limit` | access 토큰 |
+| GET | `/api/v1/asset/personas` | 자기 페르소나 전부. 기본이 먼저, 그다음 만든 차례 | access 토큰 |
+| GET | `/api/v1/asset/personas/{id}` | 하나 읽기. 남의 것과 없는 것은 404 | access 토큰 |
+| PATCH | `/api/v1/asset/personas/{id}` | 고치기. 보낸 칸만 바뀐다. 내용이 바뀌면 `revision` 이 오른다 | access 토큰 |
+| PUT | `/api/v1/asset/personas/{id}/default` | 기본으로 두기. 다른 것은 기본에서 내린다. `revision` 은 그대로 | access 토큰 |
+| DELETE | `/api/v1/asset/personas/{id}` | 지우기. 204. 기본이었으면 가장 먼저 만든 것이 기본이 된다 | access 토큰 |
+
+### 계정 페르소나
+
+TRPG, chat, story 가 함께 쓰는 "나"의 설정이다(#565, [설계](../docs/architecture/asset-server.md#계정-페르소나)). `app/personas/`.
+
+| 칸 | 제한 | 내용 |
+| --- | --- | --- |
+| `name` | 1~50자(필수) | 이름. 앞뒤 공백을 뗀다 |
+| `description` | 1,000자 | 설명 |
+| `image_id` | 그림의 id 또는 `null` | 프로필 그림. 그림(#566)이 생기기 전이라 지금은 적어 두기만 한다. 그림이 생기면 자기 그림인지 본다 |
+| `age`, `gender` | 각 20자 | 적어 두는 글이다("스물일곱", "알 수 없음"). 서버는 이것으로 거르거나 막지 않는다 |
+| `form_of_address` | 30자 | 호칭. 모델이 나를 부르는 말 |
+| `speech_examples`, `personality` | 각 1,000자 | 말투 예시, 성격. 모델이 읽는다 |
+| `is_default` | 응답에만 | 기본인가. 페르소나가 있으면 늘 하나가 기본이다 |
+| `revision` | 응답에만 | 1 부터. 내용이 바뀔 때만 오른다(같은 값을 보내거나 기본으로 두는 것은 오르지 않는다) |
+
+- **판이 없다.** 주인만 보고 고친다. 쓰는 서비스는 세션을 시작할 때 사본을 뜨고 `revision` 을 적어 둔다. 지금 것과 다르면 "새 설정으로 바꾸기"를 보인다.
+- **고치기.** 보낸 칸만 바뀐다. 글의 칸은 빈 글로 비운다. `null` 은 `image_id` 만 받는다(그림을 뗀다). 글의 칸에 `null` 은 422 다.
+- **지우기.** 행을 지운다. 가져간 세션은 사본으로 돈다.
+- **상한과 동시성.** 한 사람마다 `PERSONA_MAX_PER_OWNER`(기본 50)까지다. 세거나 기본을 바꾸기 전에 그 사람에 거는 잠금(advisory lock)을 잡는다.
+  동시에 만들어도 넘지 않고, 동시에 기본을 바꿔도 기본은 하나다(DB 의 부분 고유 색인 `uq_personas_default_per_owner` 도 막는다).
+  고칠 때는 행을 잠근다(`FOR UPDATE`). 두 요청이 같은 `revision` 을 읽고 하나만 올리는 일이 없다.
+- 서버끼리 사본과 `revision` 을 내주는 길은 server-core 의 서명(#588)이 들어온 뒤에 더한다.
+- TRPG 의 보관함을 나누는 이관(이름과 설명은 계정 페르소나로, 능력치는 TRPG 의 시트로)은 따로 한다.
 
 ### 토큰 검증
 
@@ -155,7 +185,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. asset 서버는 `asset` 계정으로 `asset`
 스키마(테스트는 `asset_test`)만 쓴다. 다른 서버의 스키마에 닿지 못하는 것을 테스트(`tests/test_schema_isolation.py`)가 확인한다.
 
-아직 테이블이 없다. 첫 테이블(`personas`)은 #565 에서 생긴다. 모델을 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
+테이블은 `personas`(#565) 하나다. 모델을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
 ### 마이그레이션
 
