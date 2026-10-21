@@ -11,6 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.database import Base
 
+# 서버가 아직 읽지 않는 모델도 등록한다. 관리 명령만 쓰는 테이블(참고 자료)도 비울 목록에 들어가야 한다
+from app.references import models as reference_models  # noqa: F401
+
 
 def clearing_statement(table: Table) -> Executable:
     """
