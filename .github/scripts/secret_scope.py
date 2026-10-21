@@ -104,6 +104,11 @@ SECRETS = [
         'BILLING_SERVER_SECRET',
         'BOARD_SERVER_SECRET',
     ),
+    # asset 서버가 페르소나와 판을 가져가는 요청의 서명을 확인하는 비밀. 가져가는 서버마다 하나다.
+    # 요청을 받는 서버만 쓴다. 마이그레이션(asset-migrate)에는 주지 않는다
+    *secrets('asset-server', ['asset-server'], 'CHAT_SERVER_SECRET'),
+    # chat 서버가 asset 서버를 부를 때 서명하는 비밀. 서버만 쓴다. 마이그레이션(chat-migrate)에는 주지 않는다
+    *secrets('chat-server', ['chat-server'], 'ASSET_SECRET'),
 ]
 
 

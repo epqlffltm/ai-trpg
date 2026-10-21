@@ -72,8 +72,9 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `JWT_AUDIENCE` | `ai-trpg-asset` | 이 서버의 이름. 토큰의 대상(`aud`)에 이 이름이 있어야 받는다 |
 | `PERSONA_MAX_PER_OWNER` | `50` | 한 사람이 가질 수 있는 계정 페르소나의 수(1~500). TRPG 의 보관함과 같다 |
 | `CHARACTERS_FOR_EVERYONE` | `false` | 캐릭터를 누구나 만들 수 있는가. 1~2단계에는 운영자만 만든다(거짓). 참이어도 공개로 두는 것은 운영자만이다 |
+| `CHAT_SERVER_SECRET` | 비어 있음(받지 않음) | chat 서버가 페르소나와 판을 가져갈 때 서명하는 비밀([다른 서버에 내주기](#다른-서버에-내주기)). `chat-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상. 비밀값이다 |
 
-서버끼리 부를 때의 비밀(계정 페르소나와 판을 가져가는 서버마다의 비밀)은 server-core 의 서명(#588)이 들어온 뒤에 더한다.
+부르는 서버마다 비밀을 따로 둔다. story 와 TRPG 는 그 서버가 가져가기 시작할 때 `STORY_SERVER_SECRET`, `TRPG_SERVER_SECRET` 으로 더한다.
 
 ## 상태 확인
 
@@ -107,6 +108,10 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/characters/{id}/versions/{number}` | 판 하나(굳힌 문서까지) | access 토큰 |
 | GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서). 볼 수 없으면 404 | 없어도 된다 |
+| GET | `/api/v1/asset/service/{caller}/personas/{id}` | [다른 서버에](#다른-서버에-내주기) 페르소나의 사본과 `revision`. 토큰의 주인의 것만(아니면 404) | 서버의 서명 + access 토큰 |
+| GET | `/api/v1/asset/service/{caller}/personas/{id}/revision` | 페르소나의 지금 `revision`(`{id, revision}`) | 서버의 서명 + access 토큰 |
+| GET | `/api/v1/asset/service/{caller}/characters/{id}/latest` | 쓸 수 있는 캐릭터의 마지막 판(`{id, version, rating, published_at, document}`) | 서버의 서명 + access 토큰 |
+| GET | `/api/v1/asset/service/{caller}/characters/{id}/latest/number` | 마지막 판의 번호(`{id, version}`). 같은 규칙 | 서버의 서명 + access 토큰 |
 
 ### 계정 페르소나
 
@@ -129,7 +134,7 @@ TRPG, chat, story 가 함께 쓰는 "나"의 설정이다(#565, [설계](../docs
 - **상한과 동시성.** 한 사람마다 `PERSONA_MAX_PER_OWNER`(기본 50)까지다. 세거나 기본을 바꾸기 전에 그 사람에 거는 잠금(advisory lock)을 잡는다.
   동시에 만들어도 넘지 않고, 동시에 기본을 바꿔도 기본은 하나다(DB 의 부분 고유 색인 `uq_personas_default_per_owner` 도 막는다).
   고칠 때는 행을 잠근다(`FOR UPDATE`). 두 요청이 같은 `revision` 을 읽고 하나만 올리는 일이 없다.
-- 서버끼리 사본과 `revision` 을 내주는 길은 server-core 의 서명(#588)이 들어온 뒤에 더한다.
+- 다른 서버(chat, story, TRPG)는 [다른 서버에 내주기](#다른-서버에-내주기)의 주소로 사본과 `revision` 을 가져간다.
 - TRPG 의 보관함을 나누는 이관(이름과 설명은 계정 페르소나로, 능력치는 TRPG 의 시트로)은 따로 한다.
 
 ### 소개 글의 HTML
@@ -177,7 +182,32 @@ chat 의 상대가 되는 캐릭터다(#567, [설계](../docs/architecture/asset
 - **공개 목록.** 공개이고 게시한 판이 있는 캐릭터의 **마지막 판**을 낸다(초안이 아니다). 등급은 **판의 등급**으로 거른다. 초안의 등급을 바꿔도 다음 판까지는 게시한 판이 나간다.
   로그인하지 않은 사람과 성인 확인을 하지 않은 사람에게 성인 캐릭터는 없는 것이다(404). 토큰을 보냈는데 틀렸으면 401 이다.
 - 지우면 판도 함께 지워진다. 이미 가져간 대화는 사본으로 돈다.
-- 서버끼리 판을 가져가는 길과 지금의 판 번호를 묻는 길은 다음 조각이다(서명은 `server_core.service_auth`).
+- chat(나중에 story)은 [다른 서버에 내주기](#다른-서버에-내주기)의 주소로 마지막 판을 가져가고, 지금의 번호를 묻는다.
+
+### 다른 서버에 내주기
+
+chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본과 캐릭터의 판을 가져가는 주소다(#565, #567,
+[설계](../docs/architecture/asset-server.md#쓰는-서비스에-내주기)). `app/personas/supply.py`, `app/characters/supply.py`.
+
+    GET /api/v1/asset/service/{caller}/...
+    X-Service-Signature: t=<보낸 시각>,v1=<HMAC-SHA256>      그 서버의 비밀로 서명(server_core/service_auth/signing.py)
+    Authorization: Bearer <사용자의 access 토큰>             그 서버가 받은 토큰을 그대로 넘긴다
+
+- **두 가지를 함께 본다.** 서명은 "어느 서버가 부르나"를, 토큰은 "누구를 위해 가져가나"를 증명한다.
+  서버의 비밀이 새도 그것만으로는 아무의 페르소나도 가져가지 못한다(그 사람의 토큰이 있어야 한다).
+  토큰만으로는 이 주소를 부르지 못한다. 프록시가 `/api/v1/asset/service/` 를 바깥에 열지 않고(404), 서명이 없으면 401 이다.
+- **서명.** 알림 서버의 것과 같다(`app/core/service_auth.py`). `caller` 는 주소에 있고 주소까지 서명하므로 남의 이름으로 부를 수 없다.
+  비밀은 부르는 서버마다 따로다(`CHAT_SERVER_SECRET`). 서명이 없거나, 틀렸거나, 앞뒤 5분을 넘겼거나, 남의 주소의 것이거나,
+  모르는 서버이거나, 그 서버의 비밀이 비었으면 모두 같은 401 이다. 토큰보다 서명을 먼저 본다. 본문은 16KB 까지(넘으면 413).
+- **페르소나.** 토큰의 주인의 것만 내준다. 남의 것과 없는 것은 404 다. 사본은 모델에 넣을 내용과 `revision` 이다(기본인지와 시각은 싣지 않는다).
+- **판.** 마지막 판을 내준다. 쓸 수 있는 사람인지는 asset 서버가 판단한다.
+  - 주인이면 비공개여도 쓴다. 남은 공개이고 **판의 등급**을 볼 수 있어야 한다. 아니면 404 다(공개 목록과 같다).
+  - 주인인데 판의 등급을 쓸 수 없으면(성인 확인을 잃었다) 403 `adult_content_required` 다. 자기 것이라 있는 것을 안다.
+  - 게시한 적이 없으면 주인에게도 404 다.
+- **지금의 번호와 revision.** 화면을 열 때 한 번 묻는다(턴마다 묻지 않는다). 가져간 것보다 크면 "새 판이 있다", 다르면 "새 설정으로 바꾸기"를 보인다.
+  같은 규칙을 거친다. 비공개로 돌렸거나 볼 수 없게 된 캐릭터는 "새 판이 있다"도 알리지 않는다.
+- 가져간 쪽은 사본으로 돈다. asset 서버가 죽어도 진행 중인 대화는 계속되고, 새 세션만 시작하지 못한다.
+- 지금은 마지막 판만 내준다. 옛 판은 가져간 쪽이 사본으로 갖고 있다. 번호를 골라 가져올 일이 생기면 그때 더한다.
 
 ### 토큰 검증
 

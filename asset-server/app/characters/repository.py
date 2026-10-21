@@ -109,6 +109,19 @@ async def list_public(
     return [(character, version) for character, version in rows.all()], await session.scalar(count) or 0
 
 
+async def find_latest(session: AsyncSession, character_id: uuid.UUID) -> tuple[Character, CharacterVersion] | None:
+    """
+    캐릭터 하나와 그 마지막 판. 주인과 공개 범위를 가리지 않는다. 없거나 게시한 적이 없으면 None.
+
+    다른 서버에 판을 내줄 때 쓴다. 쓸 수 있는 사람인지는 서비스가 본다(주인이거나, 공개이고 볼 수 있는 등급).
+    """
+    query = (
+        select(Character, CharacterVersion).join(CharacterVersion, latest_join()).where(Character.id == character_id)
+    )
+    row = (await session.execute(query)).first()
+    return None if row is None else (row[0], row[1])
+
+
 async def find_public(
     session: AsyncSession, character_id: uuid.UUID, ratings: Sequence[Rating]
 ) -> tuple[Character, CharacterVersion] | None:

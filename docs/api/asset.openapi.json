@@ -1,6 +1,40 @@
 {
   "components": {
     "schemas": {
+      "CharacterCopy": {
+        "description": "다른 서버(chat, story)에 내주는 판. 대화를 시작할 때 가져가 고정한다.\n\n마지막 판의 번호와 문서다. 가져간 쪽은 번호를 적어 두고,\n지금의 번호(CharacterVersionNumber)가 크면 \"새 판이 있다\"를 알린다.",
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/CharacterDocument"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "rating",
+          "published_at",
+          "document"
+        ],
+        "title": "CharacterCopy",
+        "type": "object"
+      },
       "CharacterCreate": {
         "additionalProperties": false,
         "description": "캐릭터를 만들 때 받는 값. 이름만 필수다. 처음에는 비공개다.",
@@ -492,6 +526,26 @@
         "title": "CharacterUpdate",
         "type": "object"
       },
+      "CharacterVersionNumber": {
+        "description": "캐릭터의 지금 판 번호. 화면을 열 때 한 번 묻는다. 문서는 싣지 않는다.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "CharacterVersionNumber",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -531,6 +585,74 @@
           "user_id"
         ],
         "title": "MeResponse",
+        "type": "object"
+      },
+      "PersonaCopy": {
+        "description": "다른 서버(chat, story, TRPG)에 내주는 페르소나의 사본. 세션을 시작하거나 바꿀 때 가져가 고정한다.\n\n모델에 넣을 내용과 revision 만 싣는다. 기본인지와 시각은 그 서버가 쓰지 않는다.\n가져간 쪽은 revision 을 적어 두고, 지금의 revision(PersonaRevision)과 다르면 \"새 설정으로 바꾸기\"를 보인다.",
+        "properties": {
+          "age": {
+            "title": "Age",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "form_of_address": {
+            "title": "Form Of Address",
+            "type": "string"
+          },
+          "gender": {
+            "title": "Gender",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "personality": {
+            "title": "Personality",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "speech_examples": {
+            "title": "Speech Examples",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "name",
+          "description",
+          "image_id",
+          "age",
+          "gender",
+          "form_of_address",
+          "speech_examples",
+          "personality"
+        ],
+        "title": "PersonaCopy",
         "type": "object"
       },
       "PersonaCreate": {
@@ -681,6 +803,26 @@
           "updated_at"
         ],
         "title": "PersonaDetail",
+        "type": "object"
+      },
+      "PersonaRevision": {
+        "description": "페르소나의 지금 revision. 화면을 열 때 한 번 묻는다. 내용은 싣지 않는다.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "revision"
+        ],
+        "title": "PersonaRevision",
         "type": "object"
       },
       "PersonaUpdate": {
@@ -2090,6 +2232,246 @@
           "personas"
         ],
         "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/service/{caller}/characters/{character_id}/latest": {
+      "get": {
+        "description": "토큰의 주인이 쓸 수 있는 캐릭터의 마지막 판.",
+        "operationId": "copy_latest_api_v1_asset_service__caller__characters__character_id__latest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterCopy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Copy Latest",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/asset/service/{caller}/characters/{character_id}/latest/number": {
+      "get": {
+        "description": "토큰의 주인이 쓸 수 있는 캐릭터의 마지막 판의 번호.",
+        "operationId": "read_latest_number_api_v1_asset_service__caller__characters__character_id__latest_number_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterVersionNumber"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Latest Number",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/asset/service/{caller}/personas/{persona_id}": {
+      "get": {
+        "description": "토큰의 주인의 페르소나 하나의 사본.",
+        "operationId": "copy_persona_api_v1_asset_service__caller__personas__persona_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "persona_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Persona Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonaCopy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Copy Persona",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/asset/service/{caller}/personas/{persona_id}/revision": {
+      "get": {
+        "description": "토큰의 주인의 페르소나 하나의 지금 revision.",
+        "operationId": "read_revision_api_v1_asset_service__caller__personas__persona_id__revision_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "persona_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Persona Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonaRevision"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Revision",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
       }
     },
     "/health": {

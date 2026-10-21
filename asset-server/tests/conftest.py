@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core.config import Settings
 from app.main import create_app
 from tests.cleaning import clear_tables
+from tests.signing import TEST_SECRETS
 
 TEST_SCHEMA = 'asset_test'
 
@@ -49,6 +50,8 @@ def make_test_settings(**overrides) -> Settings:
         # span 을 내보내지 않는다. 개발자의 .env 에 수집기의 주소가 있어도 테스트는 보내지 않는다.
         # span 을 보는 테스트는 메모리에 모으는 것을 끼운다(spans fixture)
         'otel_exporter_otlp_endpoint': '',
+        # 부르는 서버의 서명 비밀(tests/signing.py). 개발자의 .env 의 값과 상관없이 같다
+        'chat_server_secret': TEST_SECRETS['chat'],
     }
     values.update(overrides)
     return Settings(**values)

@@ -4,16 +4,17 @@
 chat 서버의 설정. 환경 변수와 chat-server/.env 에서 읽는다.
 
 FastAPI 서버들이 함께 쓰는 칸(DB, 인증 서버, 로그, 수집기)은 공용 코드의 설정(server_core.settings.CoreSettings)에 있다.
-여기에는 이 서버의 이름과 기본값, 이 서버만의 칸을 둔다.
+여기에는 이 서버의 이름과 기본값, 이 서버만의 칸(asset 서버의 주소와 서명 비밀)을 둔다.
 
 비밀값과 환경마다 달라지는 값은 코드에 적지 않는다.
 다른 서버의 .env 와 따로 둔다. 한 서버가 다른 서버의 비밀값을 읽을 수 없게 하기 위해서다.
 """
 
 from functools import lru_cache
-from typing import ClassVar
+from typing import ClassVar, Self
 
-from pydantic import Field
+from pydantic import Field, SecretStr, model_validator
+from server_core.service_auth.signing import MIN_SECRET_LENGTH
 from server_core.settings import SCHEMA_PATTERN, CoreSettings
 
 
@@ -34,6 +35,22 @@ class Settings(CoreSettings):
     # 이 서버의 이름. 토큰의 대상 목록(aud)에 이 이름이 있어야 받는다.
     # 다른 서버용으로 발급된 토큰을 이 서버에 쓰는 것을 막는다
     jwt_audience: str = 'ai-trpg-chat'
+
+    # asset 서버의 주소. 대화를 시작할 때 캐릭터의 판과 페르소나의 사본을 여기서 가져온다
+    # (asset-server 의 /api/v1/asset/service/chat/...). 비우면 부르지 않는다. 예: http://127.0.0.1:8006
+    # 부르는 코드는 대화의 PR 이 더한다. 지금은 설정만 있다
+    asset_url: str = ''
+
+    # asset 서버에 보내는 요청에 서명하는 비밀(server_core/service_auth/signing.py).
+    # asset 서버의 CHAT_SERVER_SECRET 과 같은 값이어야 한다. 32자 이상. 비밀값이다. 로그와 오류에 싣지 않는다
+    asset_secret: SecretStr = SecretStr('')
+
+    @model_validator(mode='after')
+    def require_an_asset_secret(self) -> Self:
+        """asset 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. asset 서버가 모든 요청을 401 로 거절한다."""
+        if self.asset_url.strip() and len(self.asset_secret.get_secret_value()) < MIN_SECRET_LENGTH:
+            raise ValueError(f'ASSET_URL 을 적었으면 ASSET_SECRET 을 {MIN_SECRET_LENGTH}자 이상 적어야 합니다')
+        return self
 
 
 @lru_cache
