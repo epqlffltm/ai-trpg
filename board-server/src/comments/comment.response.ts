@@ -7,13 +7,16 @@
  * 지운 댓글은 답글이 달려 있을 때만 목록에 나온다. 그때는 자리만 보여 준다.
  * 누가 무엇을 썼는지(author_id, author_nickname, content)는 비우고 deleted 를 true 로 둔다.
  * 글쓴이의 닉네임은 댓글의 칸이 아니다. 따로 읽은 표(authors/)에서 찾는다.
+ *
+ * 응답의 모양은 인터페이스가 아니라 클래스로 적는다. API 목록(docs/api/board.openapi.json)이 빌드할 때 클래스의 칸과 주석을 읽는다.
  */
 
 import { nicknameOf, Nicknames } from '../authors/nicknames.js';
 import { Comment } from './comment.entity.js';
+import { Slice } from './slice.js';
 
 /** 댓글 하나. */
-export interface CommentResponse {
+export class CommentResponse {
   id: string;
   post_id: string;
   /** 답글이면 어느 댓글에 단 것인가. 글에 단 댓글이면 null */
@@ -31,8 +34,15 @@ export interface CommentResponse {
 }
 
 /** 목록의 한 줄. 글에 단 댓글 하나와 거기 달린 답글들이다. */
-export interface CommentThreadResponse extends CommentResponse {
+export class CommentThreadResponse extends CommentResponse {
   replies: CommentResponse[];
+}
+
+/** 댓글 목록의 한 토막. 셈과 모양은 slice.ts 의 Slice<Item> 이 정한다. 목록 도구가 제네릭을 읽지 못해 클래스로 적는다. */
+export class CommentListResponse implements Slice<CommentThreadResponse> {
+  items: CommentThreadResponse[];
+  /** 다음 토막을 부를 때 after 에 넣을 값. 뒤에 더 없으면 null 이다 */
+  next: string | null;
 }
 
 /** 글에 단 댓글 하나와 거기 달린 답글들. */

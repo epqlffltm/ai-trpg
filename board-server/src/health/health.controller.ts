@@ -9,11 +9,7 @@
 
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { Public } from '../auth/public.decorator.js';
-
-/** 살아 있다는 답의 모양. */
-export interface HealthResponse {
-  status: 'ok';
-}
+import { HealthResponse } from './health.response.js';
 
 @Public()
 @Controller('health')

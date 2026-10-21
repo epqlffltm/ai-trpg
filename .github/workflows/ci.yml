@@ -125,7 +125,8 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.trpg == 'true' || needs.changes.outputs.notification == 'true' ||
-      needs.changes.outputs.billing == 'true' || needs.changes.outputs.asset == 'true'
+      needs.changes.outputs.billing == 'true' || needs.changes.outputs.asset == 'true' ||
+      needs.changes.outputs.board == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -140,6 +141,18 @@ jobs:
         with:
           go-version-file: billing-server/go.mod
           cache-dependency-path: billing-server/go.sum
+
+      # 게시판 서버의 목록은 빌드한 코드에서 뽑는다(npm run openapi). 게시판 서버의 CI 와 같은 Node 다
+      - name: Node.js 설치
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: board-server/.nvmrc
+          cache: npm
+          cache-dependency-path: board-server/package-lock.json
+
+      - name: 게시판 서버의 의존성 설치
+        working-directory: board-server
+        run: npm ci
 
       - name: API 목록이 서버와 같은가
         run: uv run --no-project python tools/export_openapi.py --check

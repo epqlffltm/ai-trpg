@@ -11,8 +11,11 @@
   1. 서버마다 OpenAPI 를 JSON 으로 받는다. 서버를 띄우지 않고 DB 에도 닿지 않는다.
      FastAPI 서버는 그 서버의 환경(uv 의 가상 환경)에서 앱을 불러 받는다.
      결제 서버(Go)는 손으로 쓴 목록(billing-server/api/openapi.yaml)을 그 서버의 명령이 읽고 검사해 JSON 으로 낸다.
+     게시판 서버(NestJS)는 빌드한 뒤 앱을 미리 보기로 만들어 낸다(npm run openapi). npm ci 를 먼저 해 두어야 한다.
   2. 주소마다 누가 부르는 것인지를 적는다(x-audience: user, service, operator, webhook, infra).
      화면은 user 만 부른다. 서버끼리만 부르는 주소(/service/)를 화면이 부르지 않게 하려고다.
+     서버가 이미 적은 표시는 그대로 둔다.
+     게시판의 운영자 API(신고 처리, 글 고정)는 주소에 /admin/ 이 없어서 서버가 적는다.
   3. 키의 차례를 정해 같은 내용이면 늘 같은 글이 되게 쓴다. CI 가 글을 견주어 본다.
 
 쓰는 법(저장소 루트에서):
@@ -26,6 +29,7 @@
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable
@@ -51,6 +55,17 @@ FASTAPI_REQUIRED_ENV = {
 # 결제 서버가 손으로 쓴 목록을 읽고 검사해 OpenAPI 를 표준 출력에 내는 명령(billing-server/cmd/openapi).
 # 파이썬의 표준 라이브러리로는 YAML 을 읽지 못해서 서버의 Go 로 읽는다. 목록의 검사도 서버의 테스트와 같은 것을 쓴다
 GO_COMMAND = ('go', 'run', './cmd/openapi')
+
+# 게시판 서버를 빌드하고 OpenAPI 를 표준 출력에 내는 명령(board-server/src/openapi/export.ts).
+# 응답의 칸은 빌드할 때 @nestjs/swagger 의 플러그인이 읽어 두므로 빌드가 먼저다.
+# --silent 는 npm 의 머리글이 표준 출력에 섞이지 않게 한다
+NEST_COMMAND = ('npm', 'run', '--silent', 'openapi')
+
+# 게시판 서버가 설정을 읽는 데 꼭 있어야 하는 값. FastAPI 와 같은 생각이다. 주소의 모양만 Node 의 pg 에 맞다
+NEST_REQUIRED_ENV = {
+    'DATABASE_URL': 'postgresql://openapi:openapi@127.0.0.1:1/openapi',
+    'AUTH_JWKS_URL': 'http://127.0.0.1:1/api/v1/auth/jwks',
+}
 
 # 주소의 모양으로 누가 부르는지를 정한다. 위에서부터 맞춰 보고, 맞는 것이 없으면 사용자(화면)다
 AUDIENCE_RULES = (
@@ -88,12 +103,18 @@ def go_source(folder: str) -> Source:
     return Source(folder=folder, command=GO_COMMAND)
 
 
-# OpenAPI 를 내는 서버들. 인증(#558), 게시판(#559)은 OpenAPI 를 내게 되면 여기에 더한다
+def nest_source(folder: str) -> Source:
+    """NestJS 서버의 Source. 그 서버의 npm 명령으로 빌드하고 목록을 낸다. 의존성(npm ci)은 받아 두었어야 한다."""
+    return Source(folder=folder, command=NEST_COMMAND, env=tuple(NEST_REQUIRED_ENV.items()))
+
+
+# OpenAPI 를 내는 서버들. 인증(#558)은 OpenAPI 를 내게 되면 여기에 더한다
 SOURCES: dict[str, Source] = {
     'trpg': fastapi_source('trpg-server'),
     'notification': fastapi_source('notification-server'),
     'billing': go_source('billing-server'),
     'asset': fastapi_source('asset-server'),
+    'board': nest_source('board-server'),
 }
 
 
@@ -106,12 +127,12 @@ def audience_of(path: str) -> str:
 
 
 def mark_audience(spec: dict) -> dict:
-    """주소마다의 요청 방식에 x-audience 를 적는다. 받은 것을 고치고 그대로 돌려준다."""
+    """주소마다의 요청 방식에 x-audience 를 적는다. 서버가 적어 둔 것은 그대로 둔다. 받은 것을 고쳐 돌려준다."""
     for path, operations in spec.get('paths', {}).items():
         audience = audience_of(path)
         for method, operation in operations.items():
             if method in HTTP_METHODS:
-                operation['x-audience'] = audience
+                operation.setdefault('x-audience', audience)
     return spec
 
 
@@ -128,10 +149,28 @@ def command_env(source: Source) -> dict[str, str]:
     return env
 
 
+def resolve_command(command: tuple[str, ...]) -> tuple[str, ...]:
+    """명령의 첫 이름을 실행 파일의 경로로 바꾼다. 찾지 못하면 그대로 둔다.
+
+    Windows 의 npm 은 npm.cmd 다. 경로 없이 'npm' 만 주면 subprocess 가 찾지 못한다.
+    """
+    program, *rest = command
+    return (shutil.which(program) or program, *rest)
+
+
+def failure_output(result: subprocess.CompletedProcess) -> str:
+    """실패한 명령이 남긴 글. 표준 에러를 먼저, 그다음 표준 출력이다.
+
+    게시판 서버의 빌드(tsc)는 타입 오류를 표준 출력에 낸다. 표준 에러만 실으면 까닭이 빠진다.
+    """
+    parts = (result.stderr.strip(), result.stdout.strip())
+    return '\n'.join(part for part in parts if part)
+
+
 def fetch_spec(source: Source, root: Path) -> dict:
-    """서버의 환경에서 명령을 돌려 OpenAPI 를 받는다. 실패하면 그 서버의 표준 에러를 실어 멈춘다."""
+    """서버의 환경에서 명령을 돌려 OpenAPI 를 받는다. 실패하면 그 서버가 남긴 글을 실어 멈춘다."""
     result = subprocess.run(
-        source.command,
+        resolve_command(source.command),
         cwd=root / source.folder,
         env=command_env(source),
         capture_output=True,
@@ -140,7 +179,7 @@ def fetch_spec(source: Source, root: Path) -> dict:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(f'{source.folder} 의 OpenAPI 를 뽑지 못했다:\n{result.stderr.strip()}')
+        raise RuntimeError(f'{source.folder} 의 OpenAPI 를 뽑지 못했다:\n{failure_output(result)}')
     return json.loads(result.stdout)
 
 
