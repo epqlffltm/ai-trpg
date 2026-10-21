@@ -35,6 +35,7 @@ from app.memory import models as memory_models  # noqa: F401
 from app.notifications import models as notification_models  # noqa: F401
 from app.operators import models as operator_models  # noqa: F401
 from app.personas import models as persona_models  # noqa: F401
+from app.references import models as reference_models  # noqa: F401
 from app.rounds import models as round_models  # noqa: F401
 from app.tables import models as table_models  # noqa: F401
 from app.whispers import models as whisper_models  # noqa: F401
