@@ -764,6 +764,9 @@ services:
     env_file: ./chat-server/.env
     environment:
       <<: [*chat-environment, *telemetry-environment]
+      # 대화를 시작할 때 캐릭터의 판과 페르소나를 가져온다(chat-server/README.md 의 "대화").
+      # chat-server/.env 에 ASSET_SECRET 이 있어야 뜬다(asset 서버의 CHAT_SERVER_SECRET 과 같은 값)
+      ASSET_URL: http://asset-server:8006
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:
