@@ -9,6 +9,7 @@
 | [auth.openapi.json](auth.openapi.json) | auth-server (Django REST framework) | 뷰에 적은 모양에서(drf-spectacular). 테스트가 받은 응답을 견준다 |
 | [board.openapi.json](board.openapi.json) | board-server (NestJS) | 빌드한 앱이 내는 것을 그대로(`npm run openapi`). 응답의 칸은 `*.response.ts` 의 클래스에서 읽는다([게시판 서버의 API 목록](../../board-server/README.md#api-목록openapi)) |
 | [asset.openapi.json](asset.openapi.json) | asset-server (FastAPI) | 앱이 내는 것을 그대로 |
+| [chat.openapi.json](chat.openapi.json) | chat-server (FastAPI) | 앱이 내는 것을 그대로 |
 | [billing.openapi.json](billing.openapi.json) | billing-server (Go, Gin) | 손으로 쓴 목록(`billing-server/api/openapi.yaml`). 테스트가 라우터와 응답을 견준다 |
 
 ## 쓰는 법

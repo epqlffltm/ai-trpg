@@ -1,0 +1,14 @@
+# chat-server/.dockerignore
+# 이미지를 만들 때 보내지 않는 것. 비밀(.env)과 이 PC 에서만 쓰는 것, 테스트다.
+# 비밀은 이미지에 넣지 않는다. 이미지를 받은 누구나 꺼내 볼 수 있다. 컨테이너를 띄울 때 compose 가 넘긴다
+.env
+.env.*
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.coverage
+tests/
+Dockerfile
+.dockerignore
