@@ -362,6 +362,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `order.confirm` | billing | 주문의 결제 승인 |
 | `order.refund` | billing | 주문의 청약철회(결제 취소) |
 | `order.decide` | billing | 운영자가 결과를 모르던 주문의 결과를 정하기(`cmd/orders decide`). `from_status`, `outcome`, `decided_by`, `reason` 을 남긴다 |
+| `grant.event` | billing | 운영자가 명단에 이벤트 실버를 주기(`cmd/grants give -apply`). `grant_key`, `silver`, `listed`, `given`, `already`, `granted_by`, `reason` 을 남긴다. 중간에 멈추면 `warn` 과 `error` |
 | `server.start` | billing | 서버를 띄우기 |
 | `sweep.run` | billing | 정리 작업의 한 바퀴. 만료된 홀드를 돌려주고, 사라진 무료 크레딧을 원장에 적고, 만료된 주문을 끝낸다 |
 | `reconcile.run` | billing | 대사 한 번. 오래된 `confirming`·`refunding` 주문을 결제 대행사에 물어 끝내고, 장부를 맞춰 본다 |
@@ -1308,8 +1309,8 @@ notification-server 는 trpg-server 의 것(`app/observability/`)을 그대로 �
 ## 알려진 빈틈
 
 - **게임 서버의 AI 호출 기록(DB)에 `job_id` 와 `trace_id` 가 없다.** 로그의 서술 작업과 DB 의 호출 기록을 번호로 잇지 못한다. 열을 더하는 마이그레이션이 필요하다.
-- **사람이 치는 명령은 JSON 이 아니다.** billing-server 의 `cmd/migrate`, `cmd/fakepg`, `cmd/prices`, `cmd/orders`, auth-server 의 관리 명령이 화면에 찍는 안내(`self.stdout`)는 그대로 글이다.
-  `cmd/orders decide` 가 남기는 결정의 기록(`order.decide`)은 로그라서 JSON 이다.
+- **사람이 치는 명령은 JSON 이 아니다.** billing-server 의 `cmd/migrate`, `cmd/fakepg`, `cmd/prices`, `cmd/orders`, `cmd/grants`, auth-server 의 관리 명령이 화면에 찍는 안내(`self.stdout`)는 그대로 글이다.
+  `cmd/orders decide` 가 남기는 결정의 기록(`order.decide`)과 `cmd/grants` 의 지급 기록(`grant.event`)은 로그라서 JSON 이다.
   auth-server 의 워커와 예약 명령이 남기는 **로그**는 JSON 이다.
 - **로거가 생기기 전의 줄.** board-server 는 설정이 틀려 뜨지 못할 때 Nest 의 기본 모양으로 찍는다. billing-server 는 `DEBUG=true` 면 gin 이 주소 목록을 글로 찍는다.
 - **주기 명령을 부르는 supercronic 의 줄.** 실패한 실행만 한 줄 남긴다(`-quiet`). JSON 이지만 칸이 공통 규격과 다르다(`level`, `msg`, `time`, `job.command`).

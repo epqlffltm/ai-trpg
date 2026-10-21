@@ -74,6 +74,17 @@ SELECT EXISTS (
     WHERE user_id = sqlc.arg(user_id) AND grant_key = sqlc.arg(grant_key)::TEXT
 );
 
+-- name: CountFreeGrantsWithKey :one
+-- 그 이름의 지급을 받은 사람이 users 가운데 몇인지 센다. 한 사람은 같은 이름을 한 번만 받는다(free_grants_key_once).
+-- 운영자가 지급하기 전에 미리 보는 것이다. 잠그지 않는다.
+SELECT count(*) FROM free_grants
+WHERE grant_key = sqlc.arg(grant_key)::TEXT AND user_id = ANY(sqlc.arg(user_ids)::UUID[]);
+
+-- name: CountWallets :one
+-- users 가운데 지갑이 있는 사람이 몇인지 센다. 잠그지 않는다.
+SELECT count(*) FROM wallets
+WHERE user_id = ANY(sqlc.arg(user_ids)::UUID[]);
+
 -- name: ListLiveFreeGrants :many
 -- 아직 사라지지 않았고 남은 것이 있는 지급 묶음을, 먼저 사라지는 것부터 읽는다.
 -- 지갑의 줄을 잠근 뒤에 부른다. 지급 묶음은 따로 잠그지 않는다.
