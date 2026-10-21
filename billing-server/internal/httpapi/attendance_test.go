@@ -70,9 +70,7 @@ func attendanceCallAs(t *testing.T, service httpapi.AttendanceService, method st
 	if token {
 		request.Header.Set("Authorization", "Bearer the-token")
 	}
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-	return response
+	return serve(t, router, request)
 }
 
 var koreanToday = time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
@@ -224,8 +222,7 @@ func TestAttendanceIsClosedWithoutTheService(t *testing.T) {
 	for _, path := range []string{attendanceURL, rewardsURL} {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		request.Header.Set("Authorization", "Bearer the-token")
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
+		response := serve(t, router, request)
 		if response.Code != http.StatusNotFound {
 			t.Errorf("%s 는 404 여야 하는데 %d 다", path, response.Code)
 		}

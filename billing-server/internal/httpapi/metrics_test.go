@@ -28,9 +28,7 @@ func measured(t *testing.T, db database.Pinger) (*metricstest.Recorder, func(met
 	recorder := metricstest.New(t)
 	router := httpapi.NewRouter(httpapi.Dependencies{DB: db, Meter: recorder.Meter()})
 	send := func(method, path string) int {
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, httptest.NewRequest(method, path, nil))
-		return response.Code
+		return serve(t, router, httptest.NewRequest(method, path, nil)).Code
 	}
 	return recorder, send
 }

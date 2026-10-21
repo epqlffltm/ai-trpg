@@ -54,9 +54,7 @@ func (f *fakeDB) Ping(ctx context.Context) error {
 func get(t *testing.T, db database.Pinger, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	router := httpapi.NewRouter(httpapi.Dependencies{DB: db})
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
-	return response
+	return serve(t, router, httptest.NewRequest(http.MethodGet, path, nil))
 }
 
 func TestHealthAnswersWithoutTheDatabase(t *testing.T) {
@@ -113,7 +111,7 @@ func TestReadinessLogsOnlyTheKindOfFailure(t *testing.T) {
 	var logs bytes.Buffer
 	router := httpapi.NewRouter(httpapi.Dependencies{DB: db, Logger: slog.New(slog.NewJSONHandler(&logs, nil))})
 
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+	serve(t, router, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
 
 	// 까닭은 로그에서 찾는다. 오류의 종류는 남기고, 오류의 글(주소, 계정)은 남기지 않는다
 	if !strings.Contains(logs.String(), `"msg":"DB 에 닿지 않는다"`) {
@@ -131,7 +129,7 @@ func TestReadinessDoesNotLogWhenTheDatabaseAnswers(t *testing.T) {
 	var logs bytes.Buffer
 	router := httpapi.NewRouter(httpapi.Dependencies{DB: &fakeDB{}, Logger: slog.New(slog.NewJSONHandler(&logs, nil))})
 
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+	serve(t, router, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
 
 	if strings.Contains(logs.String(), "DB 에 닿지 않는다") {
 		t.Errorf("DB 가 답했는데 닿지 않는다고 남겼다: %s", logs.String())
