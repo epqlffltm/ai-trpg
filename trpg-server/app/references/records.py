@@ -138,6 +138,8 @@ class StoredReference:
     data: dict[str, Any] = field(default_factory=dict)
     name_ko: str = ''
     content_ko: str = ''
+    # 어느 자료의 줄인가(ReferenceSource). 복사할 때 출처로 적는다
+    source: str = ''
 
     @property
     def shown_name(self) -> str:

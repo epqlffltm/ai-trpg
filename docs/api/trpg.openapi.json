@@ -966,6 +966,25 @@
         "title": "ClockTimeOut",
         "type": "object"
       },
+      "CopiedFrom": {
+        "description": "복사한 줄의 출처. 응답에 싣는다. 화면이 출처 표시(SRD 는 CC BY 4.0)를 한다.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "key"
+        ],
+        "title": "CopiedFrom",
+        "type": "object"
+      },
       "CreditWaitUpdate": {
         "additionalProperties": false,
         "description": "크레딧이 모자란 사람을 기다리는 규칙을 바꿀 때 받는 값. 둘 다 적는다. 칸을 빼먹으면 거부한다.",
@@ -1759,6 +1778,16 @@
           "content": {
             "title": "Content",
             "type": "string"
+          },
+          "copied_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CopiedFrom"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "format": "date-time",
@@ -3498,6 +3527,32 @@
         "title": "LootOutcome",
         "type": "object"
       },
+      "LoreCopyResult": {
+        "description": "로어북으로 복사한 결과. skipped 는 이미 복사해 두어 건너뛴 줄의 id 다.",
+        "properties": {
+          "created": {
+            "items": {
+              "$ref": "#/components/schemas/EntryDetail"
+            },
+            "title": "Created",
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "created",
+          "skipped"
+        ],
+        "title": "LoreCopyResult",
+        "type": "object"
+      },
       "LoreKind": {
         "description": "로어북 항목의 종류. 시스템이 다르게 다루는 것만 나눈다. 더 촘촘한 분류는 나중에 자유 태그로 받는다.\n\n종류마다 하는 일(app/lore/retrieval.py, app/rounds/prompt.py):\n  - 인물: 이름이 장면에 아직 안 나왔으면 장면의 호칭으로 이름표를 바꾸고 진짜 이름을 뺀다\n  - 전설: 사실로 단정하지 않고 흘릴 수 있는 이야기로 다룬다\n  - 사건: 준비된 사건의 글이다. 장면에서 먼저 일으키거나 결말을 정하지 않는다.\n          사건 하나가 퀘스트 하나다. 시작 상태와 보상은 시나리오의 퀘스트 규칙(Scenario.quests),\n          진행(상태)은 테이블(엔진, DB)이 맡는다\n장소는 맵의 장소다. 어디와 어디가 이어지는지는 시나리오의 길(Scenario.routes)이 정한다.\n물건, 세력, 종족은 지금은 표시만 한다(물건은 시나리오의 아이템 규칙이 엔진에 잇는다).",
         "enum": [
@@ -4106,6 +4161,32 @@
         "title": "MonsterAttack",
         "type": "object"
       },
+      "MonsterCopyResult": {
+        "description": "도감으로 복사한 결과. skipped 는 이미 복사해 두어 건너뛴 줄의 id 다.",
+        "properties": {
+          "created": {
+            "items": {
+              "$ref": "#/components/schemas/MonsterDetail"
+            },
+            "title": "Created",
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "created",
+          "skipped"
+        ],
+        "title": "MonsterCopyResult",
+        "type": "object"
+      },
       "MonsterCreate": {
         "additionalProperties": false,
         "description": "몬스터를 만들 때 받는 값. 이름만 필수다. 타입을 적지 않으면 기타다.",
@@ -4144,6 +4225,16 @@
           "content": {
             "title": "Content",
             "type": "string"
+          },
+          "copied_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CopiedFrom"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "format": "date-time",
@@ -6935,6 +7026,110 @@
           "max"
         ],
         "title": "RecommendedPlayers",
+        "type": "object"
+      },
+      "ReferenceCopy": {
+        "additionalProperties": false,
+        "description": "복사할 줄들. 고른 차례대로 넣는다.",
+        "properties": {
+          "reference_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Reference Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reference_ids"
+        ],
+        "title": "ReferenceCopy",
+        "type": "object"
+      },
+      "ReferenceItem": {
+        "description": "참고 자료 한 줄. 고르는 화면이 보인다.\n\nname 과 content 는 보이는 것(한국어로 옮긴 것, 없으면 원본)이다. original_name 은 원본의 이름이다.\n원본의 수치(data)는 싣지 않는다.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReferenceKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "original_name": {
+            "title": "Original Name",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "key",
+          "kind",
+          "name",
+          "original_name",
+          "content"
+        ],
+        "title": "ReferenceItem",
+        "type": "object"
+      },
+      "ReferenceKind": {
+        "description": "참고 자료 한 줄의 종류. 서술의 프롬프트가 종류를 붙여 보인다.",
+        "enum": [
+          "monster",
+          "item"
+        ],
+        "title": "ReferenceKind",
+        "type": "string"
+      },
+      "ReferencePage": {
+        "description": "찾은 줄들의 한 쪽.\n\nattributions 는 이 쪽의 줄들이 나온 자료의 출처 표시다. 화면이 함께 보인다(SRD 5.1 은 CC BY 4.0 이다).",
+        "properties": {
+          "attributions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Attributions",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReferenceItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "attributions"
+        ],
+        "title": "ReferencePage",
         "type": "object"
       },
       "ReferencesUpdate": {
@@ -12439,6 +12634,66 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/game/bestiaries/{bestiary_id}/monsters/copies": {
+      "post": {
+        "description": "고른 참고 자료(몬스터)를 자기 도감의 몬스터로 복사한다. 원본의 생물 분류를 도감의 타입으로 바꾼다.\n\n몬스터가 아닌 줄이 있으면 422(not_a_monster)다. 건너뛰기와 상한은 로어북과 같다.",
+        "operationId": "copy_to_bestiary_api_v1_game_bestiaries__bestiary_id__monsters_copies_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bestiary_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bestiary Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceCopy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonsterCopyResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Copy To Bestiary",
+        "tags": [
+          "bestiaries"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/game/bestiaries/{bestiary_id}/monsters/{monster_id}": {
       "delete": {
         "description": "자기 도감의 몬스터를 지운다.",
@@ -13095,6 +13350,66 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/game/lorebooks/{lorebook_id}/entries/copies": {
+      "post": {
+        "description": "고른 참고 자료를 자기 로어북의 항목으로 복사한다. 물건은 물건, 몬스터는 종족 항목이다.\n\n이미 복사해 둔 줄은 건너뛴다(skipped). 다 넣으면 상한을 넘으면 하나도 넣지 않고 409 다.\n없는 줄이 있으면 404(reference_not_found)다.",
+        "operationId": "copy_to_lorebook_api_v1_game_lorebooks__lorebook_id__entries_copies_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lorebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lorebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceCopy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoreCopyResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Copy To Lorebook",
+        "tags": [
+          "lorebooks"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/game/lorebooks/{lorebook_id}/entries/{entry_id}": {
       "delete": {
         "description": "자기 로어북의 항목을 지운다.",
@@ -13498,6 +13813,96 @@
         "summary": "Update Persona",
         "tags": [
           "personas"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/references": {
+      "get": {
+        "description": "참고 자료를 이름(한국어 이름, 원본의 이름, 다른 이름)으로 찾는다. q 가 비면 전부다. kind 로 종류를 거른다.\n\n보이는 이름의 차례다. 쪽마다 출처 표시(attributions)가 함께 온다.",
+        "operationId": "search_references_api_v1_game_references_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 50,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ReferenceKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferencePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search References",
+        "tags": [
+          "references"
         ],
         "x-audience": "user"
       }

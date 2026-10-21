@@ -17,6 +17,7 @@ from app.assets.bestiaries import service
 from app.assets.bestiaries.models import BESTIARY_MAX_MONSTERS, Monster, MonsterKind
 from app.assets.bestiaries.schemas import BestiaryCreate, BestiaryUpdate, MonsterCreate, MonsterDetail, MonsterUpdate
 from app.assets.bestiaries.service import BestiaryFullError
+from app.assets.copies import copied_from
 from app.assets.routing import Paging, Session, to_page, to_summary
 from app.assets.schemas import AssetPage, AssetSummary
 from app.auth.dependencies import CurrentUser
@@ -32,6 +33,7 @@ def to_monster_detail(monster: Monster) -> MonsterDetail:
         content=monster.content,
         kind=MonsterKind(monster.kind),
         unique=monster.unique,
+        copied_from=copied_from(monster.copied_source, monster.copied_key),
         created_at=monster.created_at,
         updated_at=monster.updated_at,
     )
