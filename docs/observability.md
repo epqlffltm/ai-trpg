@@ -975,7 +975,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | 무엇 | 붙일 자리 |
 | --- | --- |
 | HTTP 요청 수, 시간, 처리 중인 수 | 요청이 끝난 줄을 남기는 미들웨어. 같은 값(`method`, `route`, `status_code`, 걸린 시간)을 이미 갖고 있다 |
-| 작업 | trpg-server `app/core/jobs.py`, auth-server `observability/jobs.py`, billing-server `internal/jobs/jobs.go`, notification-server `app/observability/metrics.py` 의 `measured_job` |
+| 작업 | trpg-server `app/core/jobs.py`, auth-server `observability/jobs.py`, billing-server `internal/jobs/jobs.go`, notification-server 와 asset-server `server_core/observability/metrics.py` 의 `measured_job` |
 | AI 호출 | trpg-server `app/ai/calls.py` 의 `CallLog`. 기록장을 감싸 센다(`app/ai_log/metered.py`) |
 | DB 풀 | 서버마다 풀을 만드는 곳 |
 
@@ -1019,16 +1019,18 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 
 TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 구간은 [결제 서버](#붙인-것-결제-서버의-메트릭-본보기)와 같다.
 새 의존성은 없다. 추적과 같은 `opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-http` 를 쓴다.
+2026-10-21 부터 이 파일들은 공용 코드 `shared/server-core` 에 있고 알림 서버와 asset 서버가 함께 쓴다(#588, [공용 코드 규칙](architecture/shared-code.md#서버의-공통부-sharedserver-core)).
+서버만의 계측기는 공용 코드가 열어 둔 자리(`InstrumentSet`)에 서버가 더한다(알림 서버의 `app/notifications/metrics.py`).
 
 | 파일 | 하는 일 |
 | --- | --- |
-| `app/observability/metrics.py` | 계측기 한 묶음(`Instruments`)과 MeterProvider. 주소가 있으면 OTLP(HTTP, protobuf, `/v1/metrics`) + `OTEL_METRIC_EXPORT_INTERVAL`(15초) 간격으로 민다. 끌 때 한 번 보낸다(`shutdown_metrics`, 5초 안). 구간은 `DURATION_BUCKETS`(계측기의 advisory) |
-| `app/observability/request_metrics.py` | HTTP 셋의 ASGI 미들웨어. 맨 바깥이다(span 과 로그를 거는 시간까지 잰다). 메서드는 정한 것만, 그 밖은 `_OTHER` |
-| `app/observability/pool_metrics.py` | 연결을 기다린 시간을 재는 풀(`MeteredPool`)과 풀의 지금 값(`pool_stats`) |
+| `shared/server-core/src/server_core/observability/metrics.py` | 계측기 한 묶음(`Instruments`)과 MeterProvider. 주소가 있으면 OTLP(HTTP, protobuf, `/v1/metrics`) + `OTEL_METRIC_EXPORT_INTERVAL`(15초) 간격으로 민다. 끌 때 한 번 보낸다(`shutdown_metrics`, 5초 안). 구간은 `DURATION_BUCKETS`(계측기의 advisory) |
+| `shared/server-core/src/server_core/observability/request_metrics.py` | HTTP 셋의 ASGI 미들웨어. 맨 바깥이다(span 과 로그를 거는 시간까지 잰다). 메서드는 정한 것만, 그 밖은 `_OTHER`. 서버가 넘긴 스트림(`streams.py`)은 끝난 수에만 든다 |
+| `shared/server-core/src/server_core/observability/pool_metrics.py` | 연결을 기다린 시간을 재는 풀(`MeteredPool`)과 풀의 지금 값(`pool_stats`) |
 | `app/api/readiness.py` | `db_up` |
 | `app/notifications/retention.py` | 정리 작업의 한 바퀴를 `measured_job` 으로 감싼다 |
-| `app/notifications/router.py` | 넣은 알림(`notifications_received_total`) |
-| `tests/metrics.py`, `tests/collector.py` | 메모리에 모으는 것(InMemoryMetricReader)과, span 과 메트릭을 함께 받는 가짜 수집기 |
+| `app/notifications/metrics.py`, `app/notifications/router.py` | 넣은 알림(`notifications_received_total`). 계측기는 공용 코드의 `InstrumentSet` 에 더한다 |
+| `server_core/testing/metrics.py`, `server_core/testing/collector.py` | 메모리에 모으는 것(InMemoryMetricReader)과, span 과 메트릭을 함께 받는 가짜 수집기. 서버들의 테스트가 함께 쓴다 |
 
 - **OpenTelemetry 의 전역에 두지 않는다.** 추적과 같은 까닭이다. 바꿔 끼우면(`use_meter_provider`) 계측기를 그것으로 다시 만든다. 세는 곳은 `instruments()` 나 `record_*` 로 그때의 것을 꺼낸다.
 - **span 과 메트릭이 한 출처다.** 앱이 뜰 때 출처를 한 번 만들어 둘에 준다(`app/main.py`). 같은 프로세스의 span 과 메트릭이 같은 `service.instance.id` 다.
@@ -1115,7 +1117,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | trpg-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/auth/revocations.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
 | board-server | `src/observability/request-logging.middleware.ts` | `src/observability/request-context.ts` | `src/auth/jwks.ts` 의 `outgoingHeaders()` |
 | billing-server | `internal/httpapi/observability.go` | `internal/obs/context.go` | `internal/jwks/fetch.go` 의 `obs.SetOutgoingHeaders()` |
-| notification-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/auth/revocations.py` 의 `outgoing_headers()` |
+| notification-server, asset-server | `server_core/observability/middleware.py` | `server_core/observability/context.py` | `server_core/auth/jwks.py`, `server_core/auth/revocations.py` 의 `outgoing_headers()` |
 
 "들고 있는 곳"이 로그에 `trace_id` 를 넘긴다. SDK 를 붙이면 여기서 지금의 span 에서 trace id 를 읽게만 바꾸면 로그의 모양은 그대로다.
 `request_id` 와 `job_id` 는 OpenTelemetry 에 없는 개념이라 지금의 코드가 그대로 남는다. span 의 속성으로도 싣는다.
@@ -1190,8 +1192,10 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 
 게임 서버와 인증 서버가 따라 할 모양이다. span 의 이름과 싣는 것, 싣지 않는 것은 [결제 서버](#붙인-것-결제-서버의-추적-본보기)와 같다.
 의존성은 `opentelemetry-sdk` 와 `opentelemetry-exporter-otlp-proto-http` 둘이다. 계측 패키지(opentelemetry-instrumentation-fastapi, -httpx, -sqlalchemy)는 쓰지 않았다. 결제 서버와 까닭이 같다.
+2026-10-21 부터 이 파일들은 공용 코드 `shared/server-core/src/server_core/observability/` 에 있고 알림 서버와 asset 서버가 함께 쓴다(#588).
+그때 게임 서버의 것에 있던 것(할 일 없던 바퀴 버리기, 스트림인 주소, 부르는 쪽이 붙인 traceparent 만 잇기, 걸린 span 아래의 작업)을 함께 올렸다.
 
-| 파일(`app/observability/`) | 하는 일 |
+| 파일(`server_core/observability/`) | 하는 일 |
 | --- | --- |
 | `spans.py` | OpenTelemetry 의 API 만 쓴다. span 을 만드는 것을 하나 둔다(`use_provider`, `tracer`). 받은 traceparent 를 부모로(`remote_parent`, 받는 규칙은 `identifiers.traceparent_parts`), span 에서 로그의 추적과 보낼 traceparent 를 읽는다. 작업 한 바퀴의 span(`job_span`) |
 | `tracing.py` | SDK. 주소가 있으면 TracerProvider(OTLP HTTP `/v1/traces`, 묶어 보내기, 모두 남기기 `SAMPLER`)를 만들어 끼운다(`configure_tracing`). 끌 때 보낸다(`shutdown_tracing`, 5초) |
@@ -1320,6 +1324,7 @@ Node(Nest)라 SDK 가 다르지만 span 의 이름, 싣는 것과 싣지 않는 
 | 추적(span) | OpenTelemetry Python SDK(`observability/`, [다른 것](#붙인-것-인증-서버의-추적)) | OpenTelemetry Python SDK(`app/observability/`, [다른 것](#붙인-것-trpg-서버의-추적)) | OpenTelemetry JS SDK(`src/observability/`, [다른 것](#붙인-것-게시판-서버의-추적)) | OpenTelemetry Go SDK(`internal/tracing/`, [본보기](#붙인-것-결제-서버의-추적-본보기)) |
 
 notification-server 는 trpg-server 의 것(`app/observability/`)을 그대로 가져왔다. 뒤에서 도는 작업이 정리 작업 하나라 `BackgroundJobs` 는 없고, 정리 작업이 바퀴마다 `job_scope` 를 건다.
+2026-10-21 에 알림 서버와 asset 서버의 것을 공용 코드 `shared/server-core` 로 옮겼다(#588). 공용 코드가 남긴 줄의 `logger` 는 `server_core.*` 다(예: `server_core.observability.middleware`, 전에는 `app.observability.middleware`). 칸의 모양과 `service` 는 그대로다. 게임 서버는 나중에 옮긴다(#589).
 추적(span)과 메트릭은 notification-server 가 먼저 붙였다(OpenTelemetry Python SDK, 본보기는 [추적](#붙인-것-알림-서버의-추적-python-의-본보기)과 [메트릭](#붙인-것-알림-서버의-메트릭-python-의-본보기)).
 
 기존 로그는 고쳐 쓰지 않았다. `logging.getLogger(__name__)`, Nest 의 `new Logger(...)`, Go 의 표준 `log` 로 남기던 줄이 그대로 같은 JSON 으로 나간다.

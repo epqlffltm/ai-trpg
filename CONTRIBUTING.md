@@ -17,6 +17,9 @@
 | `trpg-server/` | 게임 엔진, 라운드, AI 서술 | FastAPI |
 | `board-server/` | 게시판, 댓글, 신고 | NestJS |
 | `billing-server/` | 연습용 결제, 크레딧, 원장 | Go |
+| `notification-server/` | 사람에게 보내는 알림함 | FastAPI |
+| `asset-server/` | 제작자의 자산(캐릭터, 페르소나, 그림)의 원본 | FastAPI |
+| `shared/` | FastAPI 서버들이 함께 쓰는 코드(`server-core`). 빌드할 때 이미지에 넣는다([공용 코드 규칙](docs/architecture/shared-code.md)) | Python 패키지 |
 | `docker/`, `docker-compose.yml` | 공용 인프라, 프록시, 컨테이너 | Docker |
 | `docs/` | 서버들이 함께 지키는 규격 | Markdown |
 
@@ -59,6 +62,7 @@
 4. `main`에는 PR 로만 들어간다. 필수 검사 `ci-ok`가 통과해야 한다.
 
 `ci-ok`는 바뀐 파일을 보고 그 서버의 검사만 고른다. 공용 인프라(`docker/`, `docker-compose.yml`)가 바뀌면 넷 다 돈다.
+공용 코드(`shared/`)가 바뀌면 공용 코드의 검사와, 그것을 쓰는 서버(서버의 `pyproject.toml` 의 경로 의존)의 검사가 돈다.
 서버가 하나라도 바뀌면 네 서버를 함께 띄워 확인한다. 문서만 바꾼 PR 은 서버 검사를 건너뛴다.
 
 ## Issue

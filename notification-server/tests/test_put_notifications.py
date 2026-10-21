@@ -17,6 +17,8 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.service_auth.signing import SIGNATURE_HEADER, TOLERANCE_SECONDS
+from server_core.testing.logs import rendered
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -24,9 +26,7 @@ from app.main import create_app
 from app.notifications.models import Notification
 from app.notifications.router import BODY_MAX_BYTES, KIND_REFUSED_ERROR_CODE
 from app.notifications.schemas import PAYLOAD_INPUT_MAX_BYTES, compact_size
-from app.service_auth.signing import SIGNATURE_HEADER, TOLERANCE_SECONDS
 from tests.conftest import make_client, make_test_settings
-from tests.logs import rendered
 from tests.signing import TEST_SECRETS, put_path, signed_put
 
 pytestmark = pytest.mark.usefixtures('clean_tables')

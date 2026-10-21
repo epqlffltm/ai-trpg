@@ -8,12 +8,12 @@ import asyncio
 
 from fastapi import status
 from httpx import AsyncClient
+from server_core.database import create_engine
+from server_core.testing.tokens import TEST_USER_ID, FakeAuthServer, revoked_entry
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.core.database import create_engine
 from app.main import API_PREFIX, create_app
 from tests.conftest import make_client, make_test_settings
-from tests.tokens import TEST_USER_ID, FakeAuthServer, revoked_entry
 
 
 async def test_health_answers_ok(client: AsyncClient):

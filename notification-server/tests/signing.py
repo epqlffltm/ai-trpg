@@ -8,9 +8,9 @@ import json
 import time
 
 from httpx import AsyncClient, Response
+from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
 from app.main import API_PREFIX
-from app.service_auth.signing import SIGNATURE_HEADER, sign
 
 # 서버마다의 테스트용 서명 비밀. 32자 이상이고 서로 다르다(설정의 규칙)
 TEST_SECRETS = {

@@ -133,9 +133,9 @@ uv run uvicorn app.main:app --port 8004 --reload
 
 ### 토큰 검증
 
-게임 서버의 것(`app/auth/jwks.py`, `tokens.py`, `revocations.py`, `dependencies.py`)을 그대로 가져왔다. 규칙의 설명은
-[게임 서버의 토큰 검증](../trpg-server/README.md#토큰-검증)에 있다. 다른 점은 알림 서버가 누구인지(`sub`)만 읽는다는 것이다
-(성인 등급과 역할은 읽지 않는다).
+공용 코드 `shared/server-core` 의 것(`server_core/auth/`)을 쓴다(#588). asset 서버와 같다. 규칙의 설명은
+[게임 서버의 토큰 검증](../trpg-server/README.md#토큰-검증)에 있다. 알림 서버는 누구인지(`sub`)만 쓴다
+(토큰의 주인에 실리는 성인 등급과 역할은 쓰지 않는다).
 
 - 공개키: 처음 필요할 때 가져와 5분 기억한다. 모르는 `kid` 면 다시 가져오되 60초에 한 번만. 30분 넘게 못 가져오면 버리고 503.
 - 끊긴 세션: 서버가 뜨자마자, 그 뒤 30초마다 인증 서버의 목록을 받는다. `ver` 가 그 사람의 `min_ver` 보다 낮은 토큰은 401.
@@ -172,6 +172,7 @@ Content-Type: application/json
   결제 서버(결제, 청약철회, 환영 크레딧, 곧 사라질 무료 크레딧, 크레딧 부족을 그 사람에게, [결제 서버의 정리 작업과 대사](../billing-server/README.md#정리-작업과-대사)의 "사용자의 알림함"),
   게시판 서버(내 글의 댓글, 내 댓글의 답글을 그 글쓴이에게, [게시판 서버의 알림 보내기](../board-server/README.md#알림-보내기))다.
 - **서명은 결제 서버와 같은 모양이다.** `HMAC-SHA256(비밀, "<시각>.<메서드>\n<주소>\n<본문>")` 의 16진수. 주소는 호스트를 뺀 경로다.
+  서명을 만들고 확인하는 코드는 공용 코드 `server_core/service_auth/signing.py` 에 있다(#588).
   주소까지 서명하므로 한 서버의 서명을 다른 서버의 주소에 붙여 쓸 수 없다. 시각이 앞뒤 5분을 넘긴 서명은 받지 않는다.
   본문은 보내는 바이트 그대로에 서명한다. JSON 을 한 번 만들어 서명하고 그것을 보낸다.
 - **본문은 서명을 확인한 뒤에 읽는다.** 서명을 확인하려면 본문 전체가 있어야 해서, 그 전에 크기(16KB)부터 자른다.
@@ -233,7 +234,8 @@ Content-Type: application/json
 
 ## 로그
 
-[관측 규격](../docs/observability.md)을 따른다. 게임 서버의 `app/observability/` 를 그대로 가져왔다.
+[관측 규격](../docs/observability.md)을 따른다. 공용 코드 `shared/server-core` 의 `server_core/observability/` 를 쓴다(#588).
+이 서버의 이름(`notification-server`)은 설정(`app/core/config.py` 의 `service_name`)이 넘긴다. 공용 코드가 남긴 줄의 `logger` 는 `server_core.*` 다.
 
 - 로그는 한 줄에 하나의 JSON 이다(`service`: `notification-server`). 표준 오류로 나간다.
 - 요청마다 `X-Request-ID` 를 걸고 응답에 돌려준다. 요청이 끝나면 한 줄(`http.request`)을 남긴다. 주소는 틀(`/api/v1/notification/me/notifications/{notification_id}/read`)로 적고 실제 번호와 쿼리는 적지 않는다.
@@ -255,10 +257,10 @@ Content-Type: application/json
 
 | span | 이름 | 코드 |
 | --- | --- | --- |
-| 요청 | `GET /api/v1/notification/me/notifications`(메서드와 경로의 틀). 상태 확인은 걸지 않는다 | `app/observability/request_spans.py` |
-| 인증 서버를 부르는 것 | `HTTP GET` | `app/observability/http_spans.py` |
-| 쿼리 | `db SELECT notifications`(종류와 테이블). 손으로 쓴 것은 `db SELECT` | `app/observability/db_spans.py` |
-| 정리 작업 | `notification.prune`. 한 바퀴가 새 추적 하나다 | `app/observability/spans.py` 의 `job_span` |
+| 요청 | `GET /api/v1/notification/me/notifications`(메서드와 경로의 틀). 상태 확인은 걸지 않는다 | `server_core/observability/request_spans.py` |
+| 인증 서버를 부르는 것 | `HTTP GET` | `server_core/observability/http_spans.py` |
+| 쿼리 | `db SELECT notifications`(종류와 테이블). 손으로 쓴 것은 `db SELECT` | `server_core/observability/db_spans.py` |
+| 정리 작업 | `notification.prune`. 한 바퀴가 새 추적 하나다 | `server_core/observability/spans.py` 의 `job_span` |
 
 - 로그의 `trace_id` 가 span 의 trace id 와 같다. 요청의 span 에는 `request_id`, 작업의 span 에는 `job_id` 를 싣는다
 - 싣지 않는 것: 주소의 경로와 뒤의 값, 머리말, 본문, SQL 의 문장과 값, 예외의 글. 쿼리가 실패하면 SQLSTATE 만 적는다
@@ -266,7 +268,8 @@ Content-Type: application/json
 - 받은 `traceparent` 가 "기록하지 않음"(flags `00`)이어도 남긴다
 - span 은 따로 도는 스레드가 묶어서 보낸다. 서버가 꺼질 때 남은 것을 보낸다(5초 안). 수집기가 죽어 있어도 요청은 영향을 받지 않는다
 
-테스트는 `tests/spans.py` 로 메모리에 모아 이름, 부모, 속성을 본다(`spans` fixture). 보내는 길은 `tests/test_tracing_setup.py` 가 가짜 수집기로 본다.
+테스트는 `server_core/testing/spans.py` 로 메모리에 모아 이름, 부모, 속성을 본다(`spans` fixture). 보내는 길은 공용 코드의 테스트가,
+이 서버가 꺼질 때 이 서버의 이름으로 보내는지는 `tests/test_tracing_setup.py` 가 가짜 수집기로 본다.
 Tempo 에 들어오는지는 저장소의 CI(`stack`)가 본다.
 
 ## 메트릭
@@ -277,15 +280,17 @@ Tempo 에 들어오는지는 저장소의 CI(`stack`)가 본다.
 
 | 메트릭 | label | 세는 곳 |
 | --- | --- | --- |
-| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `app/observability/request_metrics.py`. 미들웨어의 맨 바깥이다 |
+| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `server_core/observability/request_metrics.py`. 미들웨어의 맨 바깥이다 |
 | `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB |
-| `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `app/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
+| `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `server_core/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
 | `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`(`notification.prune`), `result` | `app/notifications/retention.py` 의 한 바퀴 |
-| `notifications_received_total` | `source`(`game`, `billing`, `board`), `outcome`(`created`, `existing`, `muted`, `refused`, `conflict`) | `app/notifications/router.py`. 서명을 확인한 것만 센다 |
+| `notifications_received_total` | `source`(`game`, `billing`, `board`), `outcome`(`created`, `existing`, `muted`, `refused`, `conflict`) | `app/notifications/router.py`. 서명을 확인한 것만 센다. 계측기는 `app/notifications/metrics.py` |
 
 - 대시보드는 Grafana 의 `notification-server`(`docker/grafana/dashboards/notification-server.json`), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `notification-server` 묶음이다
-- 계측기는 `app/observability/metrics.py` 에 한 묶음으로 둔다. 테스트는 `tests/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
-- 보내는 길은 `tests/test_metrics_setup.py` 가 가짜 수집기로 본다. Prometheus 에 들어오는지는 저장소의 CI(`stack`)가 본다
+- 모든 서버가 세는 계측기는 공용 코드(`server_core/observability/metrics.py`)에 있다. 알림만의 계측기(`notifications_received`)는
+  공용 코드가 열어 둔 자리(`InstrumentSet`)에 더한다(`app/notifications/metrics.py`).
+  테스트는 `server_core/testing/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
+- 보내는 길은 공용 코드의 테스트가 가짜 수집기로 본다. Prometheus 에 들어오는지는 저장소의 CI(`stack`)가 본다
 
 ## DB
 

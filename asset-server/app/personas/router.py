@@ -12,11 +12,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser
+from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import CurrentUser
 from app.core.config import Settings
-from app.core.database import get_session
 from app.personas import service
 from app.personas.models import Persona
 from app.personas.schemas import PersonaCreate, PersonaDetail, PersonaUpdate
