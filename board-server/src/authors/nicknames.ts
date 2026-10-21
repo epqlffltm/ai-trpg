@@ -21,10 +21,20 @@ export function nicknamesFrom(rows: readonly NicknameRow[]): Nicknames {
   return new Map(rows.map((row) => [row.userId, row.nickname]));
 }
 
-/** 이 사람의 닉네임. 모르는 사람이면 null 이다. 화면은 "알 수 없음"으로 그린다. */
+/**
+ * 이 사람의 닉네임. 모르는 사람이면 null 이다. 화면은 "알 수 없음"으로 그린다.
+ * 탈퇴한 사람(번호가 비었다)도 null 이다. 화면은 author_withdrawn 을 보고 "탈퇴한 사용자"로 그린다.
+ */
 export function nicknameOf(
   nicknames: Nicknames,
-  userId: string,
+  userId: string | null,
 ): string | null {
-  return nicknames.get(userId) ?? null;
+  return userId === null ? null : (nicknames.get(userId) ?? null);
+}
+
+/** 이름을 찾을 사람들. 탈퇴해 번호가 빈 자리와 겹친 번호를 뺀다. */
+export function knownAuthors(userIds: readonly (string | null)[]): string[] {
+  return [
+    ...new Set(userIds.filter((userId): userId is string => userId !== null)),
+  ];
 }

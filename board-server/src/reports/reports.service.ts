@@ -67,15 +67,15 @@ export class ReportsService {
     return this.save(target, reporter.userId, input);
   }
 
-  /** 신고하는 것을 쓴 사람. 없거나 지운 것이면 404 를 낸다. */
-  private authorOf(target: ReportTarget): Promise<string> {
+  /** 신고하는 것을 쓴 사람. 없거나 지운 것이면 404 를 낸다. 글쓴이가 탈퇴했으면 null 이다. */
+  private authorOf(target: ReportTarget): Promise<string | null> {
     return target.type === 'post'
       ? this.postAuthor(target.id)
       : this.commentAuthor(target.id);
   }
 
   /** 글을 쓴 사람. 없거나 지운 글이면 404 다. */
-  private async postAuthor(id: string): Promise<string> {
+  private async postAuthor(id: string): Promise<string | null> {
     const post = await this.posts.findOneBy({ id });
     if (post === null) {
       throw postNotFound();
@@ -84,7 +84,7 @@ export class ReportsService {
   }
 
   /** 댓글을 쓴 사람. 없거나 지운 댓글, 지운 글에 달린 댓글이면 404 다. */
-  private async commentAuthor(id: string): Promise<string> {
+  private async commentAuthor(id: string): Promise<string | null> {
     const comment = await this.comments.findOneBy({ id });
     if (comment === null || !(await this.isLivePost(comment.postId))) {
       throw commentNotFound();

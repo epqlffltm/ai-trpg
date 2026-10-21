@@ -7,6 +7,7 @@
  * 지운 댓글은 답글이 달려 있을 때만 목록에 나온다. 그때는 자리만 보여 준다.
  * 누가 무엇을 썼는지(author_id, author_nickname, content)는 비우고 deleted 를 true 로 둔다.
  * 글쓴이의 닉네임은 댓글의 칸이 아니다. 따로 읽은 표(authors/)에서 찾는다.
+ * 글쓴이가 탈퇴했으면 ID 와 닉네임이 null 이고 author_withdrawn 이 true 다. 지운 댓글은 누가 썼는지 보이지 않으므로 false 다.
  *
  * 응답의 모양은 인터페이스가 아니라 클래스로 적는다. API 목록(docs/api/board.openapi.json)이 빌드할 때 클래스의 칸과 주석을 읽는다.
  */
@@ -21,10 +22,12 @@ export class CommentResponse {
   post_id: string;
   /** 답글이면 어느 댓글에 단 것인가. 글에 단 댓글이면 null */
   parent_id: string | null;
-  /** 글쓴이. 지운 댓글이면 null */
+  /** 글쓴이. 지운 댓글이거나 탈퇴한 사람이면 null */
   author_id: string | null;
-  /** 글쓴이의 닉네임. 지운 댓글이거나 이 서버가 이름을 모르는 사람이면 null */
+  /** 글쓴이의 닉네임. 지운 댓글이거나, 이 서버가 이름을 모르는 사람이거나, 탈퇴한 사람이면 null */
   author_nickname: string | null;
+  /** 글쓴이가 탈퇴했는가. 지운 댓글이면 false 다 */
+  author_withdrawn: boolean;
   /** 내용. 지운 댓글이면 null */
   content: string | null;
   /** 지운 댓글인가. 답글이 달려 있어 자리만 남은 것이다 */
@@ -75,6 +78,7 @@ export function toCommentResponse(
     parent_id: comment.parentId,
     author_id: deleted ? null : comment.authorId,
     author_nickname: deleted ? null : nicknameOf(nicknames, comment.authorId),
+    author_withdrawn: !deleted && comment.authorId === null,
     content: deleted ? null : comment.content,
     deleted,
     created_at: comment.createdAt.toISOString(),
@@ -92,8 +96,10 @@ export function toCommentThreadResponse(
   };
 }
 
-/** 댓글들(답글 포함)을 쓴 사람들의 번호. 지운 댓글은 뺀다. 이름을 읽을 사람들이다. */
-export function authorsOf(threads: readonly CommentThread[]): string[] {
+/** 댓글들(답글 포함)을 쓴 사람들의 번호. 지운 댓글은 뺀다. 이름을 읽을 사람들이다. 탈퇴한 사람은 null 이다. */
+export function authorsOf(
+  threads: readonly CommentThread[],
+): (string | null)[] {
   return threads
     .flatMap((thread) => [thread.comment, ...thread.replies])
     .filter((comment) => comment.deletedAt === null)

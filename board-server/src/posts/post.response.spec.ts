@@ -30,6 +30,7 @@ describe('toPostSummaryResponse', () => {
       board: 'free',
       author_id: '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b',
       author_nickname: '모험가',
+      author_withdrawn: false,
       title: '첫 글',
       comment_count: 3,
       pinned: false,
@@ -68,6 +69,24 @@ describe('글쓴이의 닉네임', () => {
   });
 });
 
+describe('탈퇴한 글쓴이', () => {
+  it('글쓴이가 비었으면 author_withdrawn 이 true 다. 이름을 모르는 사람과 가른다', () => {
+    const withdrawn = { ...POST, authorId: null };
+
+    expect(
+      toPostSummaryResponse(withdrawn, { ...CONTEXT, authorNickname: null }),
+    ).toMatchObject({
+      author_id: null,
+      author_nickname: null,
+      author_withdrawn: true,
+    });
+    expect(
+      toPostSummaryResponse(POST, { ...CONTEXT, authorNickname: null })
+        .author_withdrawn,
+    ).toBe(false);
+  });
+});
+
 describe('toPostResponse', () => {
   it('글 하나에는 본문이 있다', () => {
     expect(toPostResponse(POST, CONTEXT)).toEqual({
@@ -75,6 +94,7 @@ describe('toPostResponse', () => {
       board: 'free',
       author_id: '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b',
       author_nickname: '모험가',
+      author_withdrawn: false,
       title: '첫 글',
       comment_count: 3,
       pinned: false,

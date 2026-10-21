@@ -21,7 +21,7 @@
 import { tracedFetch } from '../observability/http-spans.js';
 import { outgoingHeaders } from '../observability/request-context.js';
 import { OutgoingNotification } from './outgoing-notification.entity.js';
-import { SIGNATURE_HEADER, sign } from './signing.js';
+import { SIGNATURE_HEADER, sign } from '../service-auth/signing.js';
 
 /** 게시판 서버가 알림을 넣는 주소. 주소에 넣는 서버의 이름(board)이 들어간다 */
 export const PUT_PATH = '/api/v1/notification/service/board/notifications';

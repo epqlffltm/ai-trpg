@@ -30,8 +30,8 @@ export class ReportResponse {
   reason: ReportReason;
   /** 신고한 사람이 붙인 설명. 적지 않았으면 null */
   description: string | null;
-  /** 신고한 사람. 인증 서버의 public_id */
-  reporter_id: string;
+  /** 신고한 사람. 인증 서버의 public_id. 탈퇴한 사람이면 null 이다 */
+  reporter_id: string | null;
   created_at: string;
   /** 처리한 시각. 열린 신고면 null */
   handled_at: string | null;

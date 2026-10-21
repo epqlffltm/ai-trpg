@@ -14,6 +14,7 @@
 - [DB와 마이그레이션](#db와-마이그레이션)
 - [API](#api)
 - [알림 보내기](#알림-보내기)
+- [탈퇴 받기](#탈퇴-받기)
 - [구조](#구조)
 - [로그와 요청 식별자](#로그와-요청-식별자)
 - [추적](#추적)
@@ -167,10 +168,12 @@ npm run migration:revert                                     # 마지막 하나 
 | 테이블 | 내용 |
 | --- | --- |
 | `boards` | 게시판. 주소의 이름(`slug`), 보이는 이름, 누가 쓰는가(`write_policy`), 차례 |
-| `posts` | 글. 번호(순번), 게시판, 글쓴이의 ID, 제목, 본문, 쓴 시각, 고친 시각, 지운 시각 |
-| `comments` | 댓글과 답글. 번호(순번), 글, 어느 댓글의 답글인가(`parent_id`), 글쓴이의 ID, 내용, 쓴 시각, 고친 시각, 지운 시각 |
+| `posts` | 글. 번호(순번), 게시판, 글쓴이의 ID(탈퇴했으면 비었다), 제목, 본문, 쓴 시각, 고친 시각, 지운 시각 |
+| `comments` | 댓글과 답글. 번호(순번), 글, 어느 댓글의 답글인가(`parent_id`), 글쓴이의 ID(탈퇴했으면 비었다), 내용, 쓴 시각, 고친 시각, 지운 시각 |
 | `authors` | 글쓴이의 닉네임. 사람마다 한 줄. 사람의 ID, 닉네임, 이름을 바꿔 적은 시각 |
-| `reports` | 글과 댓글의 신고. 번호(순번), 글이나 댓글(둘 가운데 하나), 신고한 사람의 ID, 사유, 설명, 신고한 시각, 처리한 시각·운영자·결과 |
+| `reports` | 글과 댓글의 신고. 번호(순번), 글이나 댓글(둘 가운데 하나), 신고한 사람의 ID(탈퇴했으면 비었다), 사유, 설명, 신고한 시각, 처리한 시각·운영자·결과 |
+
+`AllowWithdrawnAuthors`(탈퇴, #603)는 비운 글쓴이나 신고한 사람이 하나라도 있으면 되돌려지지 않는다. 그 자리에 넣을 번호를 이 서버는 모른다.
 
 게시판은 마이그레이션이 넣는다(`SeedBoards`). 게시판을 더하려면 행을 넣는 새 마이그레이션을 만든다. 이미 적용된 마이그레이션 파일은 고치지 않는다.
 
@@ -203,6 +206,7 @@ npm run migration:revert                                     # 마지막 하나 
 | GET | `/comments/{id}/reports` | 한 댓글에 걸린 신고 모두. 운영자만 | 필요 |
 | PUT | `/posts/{id}/reports/outcome` | 한 글에 걸린 열린 신고를 모두 닫기. `{"outcome": "actioned"}`. 운영자만. 204 | 필요 |
 | PUT | `/comments/{id}/reports/outcome` | 한 댓글에 걸린 열린 신고를 모두 닫기. 운영자만. 204 | 필요 |
+| POST | `/service/users/{userId}/withdrawal` | 탈퇴를 받는다. `{"withdrawn_at"}`. 200 `{"status": "processed"}`. 인증 서버만([탈퇴 받기](#탈퇴-받기)) | 인증 서버의 서명 |
 
 `/health` 둘은 API 주소 밖에 둔다. 프록시와 컨테이너 관리 도구가 부르는 주소라 버전이 없다.
 
@@ -214,6 +218,7 @@ npm run migration:revert                                     # 마지막 하나 
   "board": "free",
   "author_id": "0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b",
   "author_nickname": "모험가",
+  "author_withdrawn": false,
   "title": "제목",
   "comment_count": 3,
   "pinned": false,
@@ -227,6 +232,9 @@ npm run migration:revert                                     # 마지막 하나 
 `author_nickname`은 글쓴이의 닉네임이다. 인증 서버가 access 토큰에 실어 보낸 이름을 이 서버가 적어 둔 것이다.
 이 서버가 이름을 모르는 사람(이 기능 전에 쓰고 그 뒤로 로그인한 채 들어온 적이 없는 사람)이면 `null`이다. 화면은 "알 수 없음"으로 그리면 된다.
 닉네임을 바꾸면 그 사람이 로그인한 채로 이 서버를 처음 부를 때(글을 쓰지 않아도, `GET /me`만 불러도) 예전 글과 댓글에도 새 이름이 나온다. 로그인 없이 부르는 주소(목록, 읽기)는 토큰을 보지 않는다.
+
+`author_withdrawn`은 글쓴이가 탈퇴했는지다. 탈퇴했으면 `author_id`와 `author_nickname`이 `null`이다. 화면은 "탈퇴한 사용자"로 그리면 된다([탈퇴 받기](#탈퇴-받기)).
+이름을 모르는 사람(`author_nickname`만 `null`)과 가른다. 댓글도 같다. 지운 댓글은 누가 썼는지 보이지 않으므로 `false`다.
 
 `comment_count`는 그 글의 살아 있는 댓글과 답글의 수다. 지운 것은 세지 않는다. 답글이 남아 "삭제된 댓글입니다"로 보이는 자리도 세지 않는다.
 글 목록의 줄에도 실린다. 목록의 줄은 글 하나에서 `content`만 뺀 모양이다.
@@ -266,12 +274,13 @@ npm run migration:revert                                     # 마지막 하나 
       "parent_id": null,
       "author_id": "0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b",
       "author_nickname": "모험가",
+      "author_withdrawn": false,
       "content": "댓글",
       "deleted": false,
       "created_at": "2026-10-11T09:10:00.000Z",
       "updated_at": "2026-10-11T09:10:00.000Z",
       "replies": [
-        { "id": "58", "post_id": "1234", "parent_id": "57", "author_id": "...", "author_nickname": "...", "content": "답글", "deleted": false, "created_at": "...", "updated_at": "..." }
+        { "id": "58", "post_id": "1234", "parent_id": "57", "author_id": "...", "author_nickname": "...", "author_withdrawn": false, "content": "답글", "deleted": false, "created_at": "...", "updated_at": "..." }
       ]
     }
   ],
@@ -282,7 +291,7 @@ npm run migration:revert                                     # 마지막 하나 
 댓글 목록은 쪽 번호가 아니라 "이것 다음 몇 개"로 이어 읽는다. `next`가 있으면 뒤에 더 있는 것이다. 그 값을 `after`에 넣어 다시 부른다. 없으면(`null`) 끝이다.
 `size`는 글에 단 댓글의 수다(1 부터 50 까지). 답글은 세지 않는다.
 
-지운 댓글은 목록에서 빠진다. 답글이 달린 댓글은 지워도 자리가 남는다. 그때는 `deleted`가 `true`고 `author_id`, `author_nickname`, `content`가 `null`이다. 화면은 "삭제된 댓글입니다"로 그리면 된다.
+지운 댓글은 목록에서 빠진다. 답글이 달린 댓글은 지워도 자리가 남는다. 그때는 `deleted`가 `true`고 `author_id`, `author_nickname`, `content`가 `null`이다(`author_withdrawn`은 `false`). 화면은 "삭제된 댓글입니다"로 그리면 된다.
 
 댓글은 2000자까지다. 한 댓글에 답글은 100개까지 단다.
 
@@ -416,7 +425,7 @@ uv run --no-project python tools/export_openapi.py board
 - 열쇠(`source_key`)는 `<kind>:<댓글 번호>` 다. 다시 보내도, 서버가 여럿이어도 알림 서버에는 한 줄이다.
 - 보내면 줄을 지운다. 닿지 못하면(연결 실패, 시간 초과, 401, 408, 429, 5xx) 10초부터 두 배씩 1시간까지 늘려 다시 보낸다.
   알림 서버가 받지 않으면(409, 413, 422 등) 버그라 `failed` 로 두고 다시 보내지 않는다. 7일 넘게 못 보낸 것은 지운다. 게임 서버의 발송함과 같은 규칙이다.
-- 서명은 결제 서버를 부를 때와 같은 모양이다(`src/notifications/signing.ts`). 주소는 `POST /api/v1/notification/service/board/notifications` 다.
+- 서명은 결제 서버를 부를 때와 같은 모양이다(`src/service-auth/signing.ts`). 주소는 `POST /api/v1/notification/service/board/notifications` 다.
 
 | 환경 변수 | 기본값 | 뜻 |
 | --- | --- | --- |
@@ -439,6 +448,46 @@ s=$(openssl rand -hex 32); printf '\nBOARD_SERVER_SECRET=%s\n' "$s" >> notificat
 **알려진 한계**
 - 신고의 처리(운영자가 글이나 댓글을 내린 것)는 알리지 않는다.
 - 실패로 남긴 알림을 다시 보내는 명령이 없다. 로그(`notification.rejected`)를 보고 고친 뒤 DB 에서 지운다.
+- 글쓴이가 탈퇴한 글과 댓글에 달린 것은 알리지 않는다. 받을 사람이 없다([탈퇴 받기](#탈퇴-받기)).
+
+## 탈퇴 받기
+
+인증 서버는 탈퇴를 요청하고 7일(유예)이 지난 계정을 비운 뒤 서버마다 알린다(#603, [탈퇴 설계](../docs/architecture/withdrawal.md)). 이 서버는 그 사람의 것을 정리한다(`src/withdrawals/`).
+
+```
+POST /api/v1/board/service/users/{userId}/withdrawal
+X-Service-Signature: t=<보낸 시각(초)>,v1=<서명>        (AUTH_SERVER_SECRET)
+Content-Type: application/json
+
+{"withdrawn_at": "2026-10-28T03:00:00+00:00"}
+```
+
+| 무엇 | 처리 |
+| --- | --- |
+| 글, 댓글(지운 것도) | 남긴다. 함께한 사람의 대화다. 글쓴이(`author_id`)만 비운다. 고친 시각(`updated_at`)은 그대로다 |
+| 신고 | 남긴다. 운영의 기록이다. 신고한 사람(`reporter_id`)만 비운다. 처리한 운영자(`handled_by`)는 남긴다 |
+| 닉네임(`authors`) | 지운다 |
+| 그 사람에게 보낼 알림(발송함) | 지운다 |
+
+| 답 | 뜻 |
+| --- | --- |
+| 200 `{"status": "processed"}` | 정리했다. 이미 했거나 이 서버가 모르는 사람이어도 같다 |
+| 400 | 주소의 `userId` 가 UUID 가 아니다, `withdrawn_at` 이 없거나 시간대가 있는 ISO 8601 시각이 아니다, 모르는 칸이 있다 |
+| 401 | 서명이 없거나 맞지 않다. 사용자의 토큰으로는 부를 수 없다. `AUTH_SERVER_SECRET` 이 비어 있으면 모두 401 이다 |
+
+- **번호를 남기지 않는 까닭.** 응답의 `author_id` 는 누구나 본다. 남기면 탈퇴한 사람의 글을 한데 모을 수 있다. 그래서 비운다
+- **비운 뒤.** 그 글과 댓글은 누구의 것도 아니다. 고칠 사람이 없고 운영자만 지운다. 누구나 신고한다. 달린 댓글과 답글은 알리지 않는다
+- **한 트랜잭션이다.** 몇 번을 받아도 같다. 인증 서버는 200 과 `processed` 를 받을 때까지 다시 보낸다
+- **서명은 받은 바이트 그대로에 확인한다.** 그래서 앱이 본문의 바이트를 남긴다(`main.ts` 의 `rawBody`). 경로는 앞부분(`/api/v1/board`)을 포함한다.
+  확인하는 코드는 알림 서버에 보낼 때 서명하는 코드와 같은 파일이다(`src/service-auth/signing.ts`). 시각이 앞뒤 5분을 넘긴 서명은 받지 않는다
+- SQL 을 직접 적는다(`withdrawals.service.ts`). TypeORM 의 `update` 는 고친 시각을 함께 바꾼다. 글쓴이를 비운 것은 글을 고친 것이 아니다
+- 로그에는 정리한 수만 남긴다(`operation`: `board.withdrawal`, `blanked_posts`, `blanked_comments`, `blanked_reports`, `deleted_authors`, `deleted_notifications`). 사람은 남기지 않는다
+
+| 환경 변수 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `AUTH_SERVER_SECRET` | 없음(받지 않음) | 인증 서버의 서명을 확인하는 비밀. 인증 서버의 `BOARD_SECRET` 과 같은 값, 32자 이상. 짧으면 서버가 뜨지 않는다. 비우면 탈퇴의 알림을 401 로 거절한다(인증 서버는 쌓아 두었다가 적은 뒤에 다시 보낸다). 비밀값이다 |
+
+`tools/fill_env.py` 가 두 파일(`auth-server/.env` 의 `BOARD_SECRET`, `board-server/.env` 의 `AUTH_SERVER_SECRET`)에 같은 값을 채운다.
 
 ## 구조
 
@@ -567,11 +616,17 @@ src/
     notices.ts                   새 댓글을 누구에게 무슨 알림으로 보낼지 정한다. DB 를 모른다
     outgoing-notification.entity.ts  발송함의 한 줄
     outbox.ts                    부른 쪽의 트랜잭션에서 발송함에 적는다
-    signing.ts                   알림 서버에 보내는 요청에 서명한다
     notification-client.ts       알림 서버를 부르고 답을 보냈다·다시 보낸다·받지 않았다로 가른다
     notification-dispatcher.ts   한 바퀴: 오래된 것을 지우고, 차례가 된 것을 보내고, 결과를 적는다
     notification-dispatcher.runner.ts  그 바퀴를 5초마다 돌린다. 앱이 뜨면 시작하고 닫히면 멈춘다
     notifications.module.ts      위의 것들을 묶는다. 주소가 없으면 보내는 것이 없다
+  service-auth/
+    signing.ts                   우리 서버끼리의 요청에 서명한다(알림 서버에 보낼 때). 받은 요청의 서명을 확인한다(탈퇴)
+  withdrawals/                   인증 서버가 알린 탈퇴를 받는다(#603)
+    auth-server.guard.ts         인증 서버가 서명한 요청만 들여보낸다(AUTH_SERVER_SECRET)
+    withdrawal.dto.ts            본문(withdrawn_at)
+    withdrawals.service.ts       한 트랜잭션: 글과 댓글의 글쓴이, 신고한 사람을 비우고 닉네임과 발송함을 지운다
+    withdrawals.controller.ts    POST /service/users/:userId/withdrawal
   health/                        살아 있는지, 준비됐는지 확인하는 API
   openapi/                       API 목록(OpenAPI, #559)
     document.ts                  목록을 만든다. 기본값이 있는 입력과 오류의 모양을 더한다
@@ -885,8 +940,8 @@ Nest 에는 그런 고리를 푸는 장치(`forwardRef`)가 있지만, 고리가
 인증 서버의 규칙(한글·영문·숫자·밑줄, 20자)보다 넓게 받는다. 인증 서버가 규칙을 넓혔는데 여기만 그대로면 새 이름이 조용히 버려진다.
 받아들일 수 없는 이름이어도 토큰은 받는다. 이름 때문에 로그인을 막지 않는다. 이름이 없는 토큰(이 클레임이 생기기 전에 발급한 것)도 같다. 적어 둔 이름을 지우지 않는다.
 
-**이름을 바꾸는 기능과 탈퇴가 생기면 인증 서버가 이 서버에 알리게 한다(#146).** 이름을 바꾸면 옛 이름이 풀린다. 다른 사람이 그 이름을 가져갔는데 바꾼 사람이 이 서버에 오지 않았다면 잠시 둘이 같은 이름으로 보인다.
-탈퇴한 사람의 글은 남기고, `author_id`와 `author_nickname`을 비운 채 "탈퇴한 사용자"로 보이게 한다(`author_withdrawn`). 둘 다 그 기능을 만들 때 한다.
+**이름을 바꾸는 기능이 생기면 인증 서버가 이 서버에 알리게 한다(#146).** 이름을 바꾸면 옛 이름이 풀린다. 다른 사람이 그 이름을 가져갔는데 바꾼 사람이 이 서버에 오지 않았다면 잠시 둘이 같은 이름으로 보인다.
+탈퇴는 인증 서버가 알린다([탈퇴 받기](#탈퇴-받기), #603). 탈퇴한 사람의 글은 남기고, `author_id`와 `author_nickname`을 비운 채 "탈퇴한 사용자"로 보인다(`author_withdrawn`).
 닉네임은 로그에 남기지 않는다. 사람은 ID 로만 적는다.
 
 **제목과 본문은 받은 글자 그대로 저장한다.** HTML 로 해석하지도 태그를 지우지도 않는다. 화면이 글자로 그리면 된다.

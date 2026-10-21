@@ -13,6 +13,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Author } from './author.entity.js';
 import {
+  knownAuthors,
   nicknameOf,
   nicknamesFrom,
   Nicknames,
@@ -59,9 +60,9 @@ export class AuthorsService {
     this.recent.clear();
   }
 
-  /** 사람들의 이름을 한 번에 읽는다. 이름을 모르는 사람은 표에 없다. */
-  async nicknamesOf(userIds: readonly string[]): Promise<Nicknames> {
-    const unique = [...new Set(userIds)];
+  /** 사람들의 이름을 한 번에 읽는다. 이름을 모르는 사람과 탈퇴한 사람(null)은 표에 없다. */
+  async nicknamesOf(userIds: readonly (string | null)[]): Promise<Nicknames> {
+    const unique = knownAuthors(userIds);
     if (unique.length === 0) {
       return NO_NICKNAMES;
     }
@@ -72,8 +73,8 @@ export class AuthorsService {
     return nicknamesFrom(rows);
   }
 
-  /** 한 사람의 이름. 모르면 null 이다. */
-  async nicknameOf(userId: string): Promise<string | null> {
+  /** 한 사람의 이름. 모르거나 탈퇴한 사람(null)이면 null 이다. */
+  async nicknameOf(userId: string | null): Promise<string | null> {
     return nicknameOf(await this.nicknamesOf([userId]), userId);
   }
 }

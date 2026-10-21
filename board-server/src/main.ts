@@ -27,8 +27,10 @@ import { buildResource, configureTracing } from './observability/tracing.js';
 async function bootstrap(): Promise<void> {
   // 로거를 꽂기 전에 남은 로그는 모아 두었다가(bufferLogs) 꽂은 뒤에 내보낸다.
   // 로거를 만들려면 설정이 필요하고, 설정은 앱이 만들어져야 읽힌다
+  // 받은 본문의 바이트를 남겨 둔다(rawBody). 다른 서버가 서명한 요청(탈퇴의 알림)을 바이트 그대로 확인한다
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
+    rawBody: true,
   });
   const config = app.get<ConfigService<Environment, true>>(ConfigService);
   app.useLogger(createLogger(config));

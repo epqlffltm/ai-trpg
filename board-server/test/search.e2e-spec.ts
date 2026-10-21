@@ -93,6 +93,7 @@ describe('글 검색', () => {
           board: 'free',
           author_id: WRITER,
           author_nickname: null,
+          author_withdrawn: false,
           title: '고정 버그를 찾았습니다',
           comment_count: 0,
           pinned: false,
