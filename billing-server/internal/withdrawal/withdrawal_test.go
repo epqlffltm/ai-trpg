@@ -42,11 +42,16 @@ type fixture struct {
 	user uuid.UUID
 }
 
+// testNow 는 이 테스트의 시계다. 사용자의 알림의 테스트(internal/usernotice)보다 뒤여야 한다.
+// 그 테스트는 2026-04 의 시계로 알림을 정리한다(오래 보내지 못한 것은 expired, 끝난 지 30일이면 지운다).
+// 사용자를 가리지 않으므로, 이 테스트가 그보다 앞선 시각에 적은 알림은 패키지가 함께 돌 때 그 정리에 지워진다.
+var testNow = time.Date(2027, 3, 2, 9, 0, 0, 0, time.UTC)
+
 // setUp 은 진짜 서비스들로 탈퇴를 반영하는 것을 만든다.
 func setUp(t *testing.T) fixture {
 	t.Helper()
 	pool := testenv.Pool(t)
-	now := func() time.Time { return time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC) }
+	now := func() time.Time { return testNow }
 	wallets := wallet.NewService(pool, now, wallet.Policy{FreeFirst: true, FreeTTL: 7 * 24 * time.Hour})
 	holds, err := hold.NewService(pool, now, wallets, pricing.NewService(pool, now), 24*time.Hour)
 	if err != nil {
