@@ -29,7 +29,9 @@ from evals.references.dataset import Dataset, Scene
 from evals.references.runner import Measurement, pick_for
 
 # 서술에 나오면 안 되는 판정의 수치. 참고 자료의 글을 거르는 것(app/references/srd.py)과 같은 뜻이다
-LEAKED_NUMBERS = re.compile(r'\bDC\s*\d+|\d+d\d+|[+-]\d+\b|난이도\s*\d+|명중\s*[+-]?\d+', re.IGNORECASE)
+LEAKED_NUMBERS = re.compile(
+    r'\bDC\s*\d+|\b\d*d\d+\b|[+-]\d+\b|난이도\s*\d+|명중\s*[+-]?\d+|면체 주사위|\d+\s*[이가]\s*나오면', re.IGNORECASE
+)
 
 
 class Mode(enum.StrEnum):

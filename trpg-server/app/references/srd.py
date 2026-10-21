@@ -30,9 +30,12 @@ from app.references.records import (
     ReferenceSource,
 )
 
-# 서술자에게 주지 않는 문장의 표시. 판정의 수치나 규칙의 낱말이다
+# 서술자에게 주지 않는 문장의 표시. 판정의 수치나 규칙의 낱말이다.
+# 주사위는 "2d6" 뿐 아니라 "a d6" 도, 난이도는 "DC 15" 뿐 아니라 "save DC is 15" 도 뺀다.
+# 주사위의 눈("On a 6", "roll a 20")도 뺀다
 MECHANICS = re.compile(
-    r'\bDC\s*\d+|\d+d\d+|[+-]\d+\b|\bto hit\b|saving throw|\bdamage\b|\barmor class\b|\bAC\b'
+    r'\bDC\b|\b\d*d\d+\b|\bon an? \d+\b|\broll(?:s|ed)? an? \d+\b|[+-]\d+\b|\bto hit\b|saving throw|\bdamage\b'
+    r'|\barmor class\b|\bAC\b'
     r'|\bproficiency bonus\b|\bmodifier\b|\badvantage\b|\bdisadvantage\b|\bcharges?\b|\bhit dice\b|\bspell slots?\b',
     re.IGNORECASE,
 )
@@ -360,11 +363,24 @@ SRD51_ATTRIBUTION = (
 )
 # 원본의 이름. SRD 5.1 을 JSON 으로 옮긴 저장소다
 SRD51_DATASET = '5e-bits/5e-database src/2014/en'
+# 원본을 바꾼 것. 출처 표시와 함께 보인다(CC BY 4.0)
+SRD51_CHANGES = 'Rules numbers and game mechanics were removed and the text was shortened.'
+SRD51_TRANSLATED = ' Names and text were translated into Korean.'
+
+
+def srd_changes(records: list[ReferenceRecord]) -> str:
+    """원본을 바꾼 것. 한국어로 옮긴 줄이 하나라도 있으면 그것도 적는다."""
+    translated = any(record.name_ko for record in records)
+    return SRD51_CHANGES + (SRD51_TRANSLATED if translated else '')
 
 
 def srd_document(records: list[ReferenceRecord], revision: str) -> ReferenceDocument:
     """SRD 5.1 의 줄들을 데이터 파일 하나로. revision 은 원본 저장소의 커밋이다."""
     origin = ReferenceOrigin(
-        dataset=SRD51_DATASET, revision=revision, license='CC-BY-4.0', attribution=SRD51_ATTRIBUTION
+        dataset=SRD51_DATASET,
+        revision=revision,
+        license='CC-BY-4.0',
+        attribution=SRD51_ATTRIBUTION,
+        changes=srd_changes(records),
     )
     return ReferenceDocument(format=DOCUMENT_FORMAT, source=ReferenceSource.SRD51, origin=origin, entries=records)

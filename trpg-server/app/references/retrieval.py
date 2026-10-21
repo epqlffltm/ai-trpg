@@ -42,6 +42,8 @@ logger = logging.getLogger(__name__)
 REFERENCE_MAX_CHARS = 1500
 # 넣는 참고 자료의 수의 상한
 REFERENCE_LIMIT = 3
+# 이보다 짧은 다른 이름으로는 고르지 않는다
+MIN_ALIAS_LENGTH = 2
 # 이보다 먼 줄은 벡터로 고르지 않는다. 설정 REFERENCE_MAX_DISTANCE 의 기본값. 로어북의 것(bge-m3)과 같게 두었다.
 # 자료가 영어라 한국어 장면과의 거리는 로어북보다 멀 수 있다. 켠 것과 끈 것을 견주는 평가(#482 3단계)로 다시 잰다
 MAX_DISTANCE = 0.45
@@ -66,9 +68,14 @@ def room_for(request: NarrationRequest, max_chars: int = REFERENCE_MAX_CHARS) ->
 
 
 def mentions_alias(reference: StoredReference, text: str) -> bool:
-    """줄의 다른 이름 중 하나가 글에 그대로 들어 있는가. 대소문자는 가리지 않는다."""
+    """
+    줄의 다른 이름 중 하나가 글에 그대로 들어 있는가. 대소문자는 가리지 않는다.
+
+    한 글자 이름("쥐")은 보지 않는다. 낱말 속("쥐었다")에서 잘못 걸린다. 그런 줄은 뜻(벡터)으로 고른다.
+    """
     folded = text.casefold()
-    return any(alias.casefold() in folded for alias in reference.aliases if alias.strip())
+    names = [alias.strip() for alias in reference.aliases]
+    return any(name.casefold() in folded for name in names if len(name) >= MIN_ALIAS_LENGTH)
 
 
 def alias_hits(references: Sequence[StoredReference], text: str) -> list[StoredReference]:
@@ -82,8 +89,8 @@ def near_enough(reference: StoredReference, distances: Mapping[uuid.UUID, float]
 
 
 def reference_size(reference: StoredReference) -> int:
-    """줄 하나가 차지하는 글자 수(이름 + 글). 로어북 항목과 같은 셈이다(app/lore/retrieval.py 의 note_size)."""
-    return len(reference.name) + len(reference.content)
+    """줄 하나가 서술에 차지하는 글자 수(이름 + 글). 로어북 항목과 같은 셈이다(app/lore/retrieval.py 의 note_size)."""
+    return len(reference.shown_name) + len(reference.shown_content)
 
 
 def pick(ordered: Sequence[StoredReference], room: int, limit: int) -> list[StoredReference]:
@@ -124,8 +131,10 @@ def choose(
 
 
 def to_reference_note(reference: StoredReference) -> ReferenceNote:
-    """고른 줄을 서술자에게 줄 모양으로."""
-    return ReferenceNote(reference_id=reference.id, name=reference.name, content=reference.content, kind=reference.kind)
+    """고른 줄을 서술자에게 줄 모양으로. 한국어로 옮긴 이름과 글이 있으면 그것이다."""
+    return ReferenceNote(
+        reference_id=reference.id, name=reference.shown_name, content=reference.shown_content, kind=reference.kind
+    )
 
 
 @dataclass(frozen=True)

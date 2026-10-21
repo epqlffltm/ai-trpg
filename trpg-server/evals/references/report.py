@@ -146,7 +146,8 @@ def full_report(
         '# 참고 자료 평가',
         '',
         f'장면 {len(dataset.scenes)}개(evals/references/scenes.yaml), 자료 {len(dataset.references)}줄(SRD 5.1).',
-        '자료가 영어라 한국어 장면과의 거리를 잰다. 다른 이름(한국어 이름)이 비어 있으면 벡터로만 고른다.',
+        '자료의 벡터는 이름, 다른 이름(한국어 이름), 한국어로 옮긴 글로 만든다.',
+        '한국어 이름이 장면에 나오면 다른 이름으로도 고른다.',
         '',
     ]
     for result in results:
