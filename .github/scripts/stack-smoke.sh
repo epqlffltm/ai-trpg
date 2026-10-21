@@ -53,9 +53,9 @@
 
 set -euo pipefail
 
-SERVERS=(auth trpg board billing notification)
+SERVERS=(auth trpg board billing notification asset)
 # 서버마다 컨테이너 안에서 듣는 포트
-declare -A PORTS=([auth]=8000 [trpg]=8001 [board]=8002 [billing]=8003 [notification]=8004)
+declare -A PORTS=([auth]=8000 [trpg]=8001 [board]=8002 [billing]=8003 [notification]=8004 [asset]=8006)
 # 계속 도는 워커와 주기 명령의 컨테이너
 WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron db-backup)
 # 그 가운데 상태 확인이 있는 워커. 심장박동(docker-compose.yml 의 x-worker-heartbeat)을 보거나, DB 의 백업은 최근 백업 파일을 본다
@@ -85,11 +85,11 @@ DASHBOARDS=docker/grafana/dashboards
 LOKI_LABELS=(container environment level mode service)
 # 메트릭을 OTLP 로 미는 서버(docs/observability.md 의 "2. 메트릭"). 서버에 메트릭을 붙이면 여기에 더한다.
 # 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다. 연결 풀이 없는 서버는 아래에 적는다
-METRIC_SERVERS=(auth trpg board billing notification)
+METRIC_SERVERS=(auth trpg board billing notification asset)
 # 연결 풀이 없는 서버. 인증 서버(Django)는 요청마다 연결을 맺고 닫는다. db_pool_* 를 내지 않는다
 POOLLESS_SERVERS=(auth)
 # span 을 내보내는 서버(docs/observability.md 의 "3. 추적"). 서버에 span 을 붙이면 여기와 아래 둘에 더한다
-TRACE_SERVERS=(auth trpg board billing notification)
+TRACE_SERVERS=(auth trpg board billing notification asset)
 # 추적 번호를 실어 한 번 부를 주소(메서드와 경로). 401 이어도 된다. 요청의 span 은 걸린다. 상태 확인은 span 이 없다
 declare -A TRACE_PROBES=(
   [auth]="GET /api/v1/auth/jwks"
@@ -97,12 +97,14 @@ declare -A TRACE_PROBES=(
   [board]="GET /api/v1/board/me"
   [billing]="POST /api/v1/billing/webhooks/payment"
   [notification]="GET /api/v1/notification/me/notifications"
+  [asset]="GET /api/v1/asset/me"
 )
 # 그 아래에 쿼리의 span 이 있는지 볼 작업(operation). 서버가 뜨면 곧 한 바퀴 돈다.
 # 인증 서버의 것은 주기 명령(send_security_digest)이다. 워커와 주기 명령의 검사(check_workers)가 먼저 한 번 돌린다.
 # 인증 서버의 워커는 할 일이 없던 바퀴를 보내지 않아 쓸 수 없다. TRPG 서버의 5초 바퀴(시계, 청구 정리, 알림 보내기)도 같다.
 # TRPG 서버의 것은 서버가 뜨면 바로 한 바퀴 도는 AI 호출 기록의 정리(ai_log.prune)다. 맡은 수를 싣지 않아 늘 남는다.
 # 게시판 서버의 알림 보내기도 보낼 것이 없던 바퀴는 보내지 않는다. 추적을 보기 전에 발송함에 알림 하나를 적는다(queue_board_notification)
+# asset 서버는 아직 DB 를 쓰는 작업이 없어 적지 않는다(끊긴 세션 목록 받기는 HTTP 만 쓴다). 적지 않은 서버는 작업의 검사를 건너뛴다
 declare -A TRACE_JOBS=(
   [auth]=security.send_digest
   [trpg]=ai_log.prune
@@ -221,6 +223,10 @@ EOF
 GAME_SERVER_SECRET=$notify_secret
 BILLING_SERVER_SECRET=$billing_notify_secret
 BOARD_SERVER_SECRET=$board_notify_secret
+EOF
+  # asset 서버의 비밀은 DB 비밀번호뿐이고 compose 가 루트 .env 의 것으로 주소를 만든다. env_file 이 있어야 해서 빈 파일을 둔다
+  write_new asset-server/.env <<EOF
+# CI 에서만 쓰는 빈 설정. 값은 docker-compose.yml 이 준다
 EOF
 }
 
@@ -374,7 +380,7 @@ limited_after() {
 reachable_from() {
   local service="$1" url="$2"
   case "$service" in
-    auth-server | trpg-server | notification-server)
+    auth-server | trpg-server | notification-server | asset-server)
       compose exec -T "$service" python -c "import urllib.request; urllib.request.urlopen('$url', timeout=5)" ;;
     board-server)
       compose exec -T "$service" node -e "fetch('$url').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" ;;
@@ -809,8 +815,10 @@ check_server_spans() {
       eventually tempo_trace_has_span "$trace" "${TRACE_PROBES[$server]}"
     report "$service 의 그 요청의 줄이 같은 trace_id 다(로그와 추적이 오간다)" \
       eventually loki_finds "{service=\"$service\"} | trace_id=\"$trace\""
-    report "$service 의 작업 span 아래에 쿼리의 span 이 들어온다(${TRACE_JOBS[$server]} >> db …)" \
-      eventually tempo_searches "{resource.service.name=\"$service\" && name=\"${TRACE_JOBS[$server]}\"} >> {span.db.system.name=\"postgresql\"}"
+    if [[ -n "${TRACE_JOBS[$server]:-}" ]]; then
+      report "$service 의 작업 span 아래에 쿼리의 span 이 들어온다(${TRACE_JOBS[$server]} >> db …)" \
+        eventually tempo_searches "{resource.service.name=\"$service\" && name=\"${TRACE_JOBS[$server]}\"} >> {span.db.system.name=\"postgresql\"}"
+    fi
     report "$service 가 Tempo 에 닿지 않는다(telemetry 망에서는 Alloy 에만 닿는다)" \
       unreachable_from "$service" http://tempo:3200/ready
   done
@@ -1138,6 +1146,9 @@ check() {
   report "알림 서버가 인증 서버의 공개키를 받는다" reachable_from notification-server "$jwks"
   report "알림 서버가 인증 서버의 끊긴 세션 목록을 받는다" reachable_from notification-server \
     http://auth-server:8000/api/v1/auth/session-revocations
+  report "asset 서버가 인증 서버의 공개키를 받는다" reachable_from asset-server "$jwks"
+  report "asset 서버가 인증 서버의 끊긴 세션 목록을 받는다" reachable_from asset-server \
+    http://auth-server:8000/api/v1/auth/session-revocations
   report "인증 서버가 결제 서버에 닿는다" reachable_from auth-server http://billing-server:8003/health
   report "게임 서버가 결제 서버에 닿는다" reachable_from trpg-server http://billing-server:8003/health
   report "게임 서버가 알림 서버에 닿는다" reachable_from trpg-server http://notification-server:8004/health
@@ -1191,6 +1202,7 @@ check_proxy() {
   report "프록시로 게시판 서버에 닿는다" status_is 401 "$PROXY/api/v1/board/me"
   report "프록시로 결제 서버에 닿는다" status_is 401 "$PROXY/api/v1/billing/me"
   report "프록시로 알림 서버에 닿는다" status_is 401 "$PROXY/api/v1/notification/me/notifications"
+  report "프록시로 asset 서버에 닿는다" status_is 401 "$PROXY/api/v1/asset/me"
   report "프록시는 관리자 화면을 막는다" status_is 404 "$PROXY/admin/login/"
   report "프록시는 관리자 화면의 CSS 를 막는다" status_is 404 "$PROXY/static/admin/css/base.css"
   report "프록시는 점 두 개로 돌아가는 주소도 막는다" status_is 404 "$PROXY/api/v1/auth/%2e%2e/%2e%2e/admin/login/" --path-as-is

@@ -4,18 +4,18 @@
 # PR 에서 바뀐 파일을 보고 검사할 서버를 고른다. 관문 워크플로(.github/workflows/ci.yml)가 부른다.
 #
 #   사용: changed-servers.sh <기준 커밋> <PR 의 커밋>
-#   출력: GITHUB_OUTPUT 의 모양으로 서버마다 한 줄. auth=true, trpg=false, board=false, billing=true, notification=false
+#   출력: GITHUB_OUTPUT 의 모양으로 서버마다 한 줄. auth=true, trpg=false, board=false, billing=true, notification=false, asset=false
 #
 # 고르는 규칙:
 #   - 서버의 폴더(auth-server/ 등)나 그 서버의 워크플로(.github/workflows/auth-server.yml)가 바뀌면 그 서버
 #     그 서버의 API 목록(docs/api/<서버>.openapi.json)도 그 서버다. 손으로 고친 목록을 api-docs 가 잡는다
-#   - API 목록을 뽑는 도구(tools/export_openapi.py)가 바뀌면 목록을 내는 서버(지금은 게임, 알림, 결제)
+#   - API 목록을 뽑는 도구(tools/export_openapi.py)가 바뀌면 목록을 내는 서버(지금은 게임, 알림, 결제, asset)
 #   - docker/ 아래(DB 초기화 스크립트, 프록시의 설정, crontab)나 compose 파일(docker-compose.yml, docker-compose.staging.yml)이
 #     바뀌면 모두. 서버들의 DB 계정, 컨테이너로 띄우고 잇는 법, 주기 명령, staging 의 설정이 거기 있다.
 #     .env 를 만드는 도구(tools/fill_env.py, tools/staging_env.py)도 모두다. CI(stack)가 그 도구들의 테스트를 돌리고
 #     staging_env.py 로 만든 설정을 읽어 본다
 #   - 관문 자신(.github/workflows/ci.yml, .github/scripts/)이 바뀌면 모두. 관문이 맞는지 모두로 확인한다
-#   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증, 게임, 알림
+#   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증, 게임, 알림, asset
 #   - 그 밖(문서, 루트 README 등)은 아무것도 고르지 않는다
 #   - 바뀐 파일을 알 수 없으면(커밋을 찾지 못함) 모두. 모르면 검사하는 쪽으로 기운다
 #
@@ -24,7 +24,7 @@
 set -euo pipefail
 
 # 검사하는 서버들. 출력의 이름과 폴더의 이름
-SERVERS=(auth trpg board billing notification)
+SERVERS=(auth trpg board billing notification asset)
 
 # 한 서버를 고르는 경로들인가. 서버 이름과 경로를 받는다.
 belongs_to() {
@@ -38,7 +38,7 @@ openapi_tool() {
   [[ "$1" == tools/export_openapi.py || "$1" == tools/test_export_openapi.py ]]
 }
 
-# 파이썬 서버들(인증, 게임, 알림)이 함께 쓰는 설정인가. 바뀌면 그 서버들의 린트와 모양 검사를 다시 돌려야 한다.
+# 파이썬 서버들(인증, 게임, 알림, asset)이 함께 쓰는 설정인가. 바뀌면 그 서버들의 린트와 모양 검사를 다시 돌려야 한다.
 python_shared() {
   [[ "$1" == "ruff.toml" ]]
 }
@@ -66,11 +66,13 @@ select_servers() {
       picked[trpg]=1
       picked[notification]=1
       picked[billing]=1
+      picked[asset]=1
     fi
     if python_shared "$path"; then
       picked[auth]=1
       picked[trpg]=1
       picked[notification]=1
+      picked[asset]=1
     fi
     for server in "${SERVERS[@]}"; do
       if belongs_to "$server" "$path"; then picked[$server]=1; fi

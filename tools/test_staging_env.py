@@ -69,7 +69,7 @@ class StagingEnvTests(unittest.TestCase):
 
     # Windows 에는 리눅스의 파일 권한이 없어 늘 666 으로 읽힌다. VM(리눅스)과 CI 에서만 본다
     @unittest.skipUnless(os.name == 'posix', '파일 권한(600)은 리눅스에서만 뜻이 있다')
-    def test_writes_all_six_files_for_the_owner_only(self):
+    def test_writes_every_file_for_the_owner_only(self):
         self.assertEqual(self.run_tool(), 0)
 
         for target in ENV_FILES:
@@ -96,7 +96,7 @@ class StagingEnvTests(unittest.TestCase):
 
         for name in ('POSTGRES_PASSWORD', 'AUTH_DB_PASSWORD', 'GAME_DB_PASSWORD', 'BOARD_DB_PASSWORD'):
             self.assertGreaterEqual(len(root[name]), 32, name)
-        for name in ('BILLING_DB_PASSWORD', 'NOTIFICATION_DB_PASSWORD', 'MONITOR_DB_PASSWORD'):
+        for name in ('BILLING_DB_PASSWORD', 'NOTIFICATION_DB_PASSWORD', 'ASSET_DB_PASSWORD', 'MONITOR_DB_PASSWORD'):
             self.assertGreaterEqual(len(root[name]), 32, name)
 
     def test_every_secret_is_different_from_the_others(self):
