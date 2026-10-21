@@ -2032,6 +2032,7 @@
           "narration_model_changed",
           "credit_wait_changed",
           "whisper_notice_changed",
+          "references_changed",
           "ledger_drafts_changed",
           "whisper_sent",
           "table_started",
@@ -6231,6 +6232,10 @@
           "recommended_players": {
             "$ref": "#/components/schemas/RecommendedPlayers"
           },
+          "references_allowed": {
+            "title": "References Allowed",
+            "type": "boolean"
+          },
           "scenario_id": {
             "format": "uuid",
             "title": "Scenario Id",
@@ -6277,7 +6282,8 @@
           "character_modes",
           "pregens",
           "abilities",
-          "recommended_narration_model"
+          "recommended_narration_model",
+          "references_allowed"
         ],
         "title": "PublicListingDetail",
         "type": "object"
@@ -6929,6 +6935,21 @@
           "max"
         ],
         "title": "RecommendedPlayers",
+        "type": "object"
+      },
+      "ReferencesUpdate": {
+        "additionalProperties": false,
+        "description": "참고 자료를 서술에 넣을지 바꿀 때 받는 값. 칸을 빼먹으면 거부한다.",
+        "properties": {
+          "references_enabled": {
+            "title": "References Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "references_enabled"
+        ],
+        "title": "ReferencesUpdate",
         "type": "object"
       },
       "Rest": {
@@ -9361,7 +9382,7 @@
             "type": "array"
           },
           "format": {
-            "default": 41,
+            "default": 42,
             "title": "Format",
             "type": "integer"
           },
@@ -9932,6 +9953,11 @@
             ],
             "title": "Password"
           },
+          "references_enabled": {
+            "default": false,
+            "title": "References Enabled",
+            "type": "boolean"
+          },
           "remove_short_payers": {
             "default": true,
             "title": "Remove Short Payers",
@@ -10137,6 +10163,10 @@
           "recommended_players": {
             "$ref": "#/components/schemas/RecommendedPlayers"
           },
+          "references_enabled": {
+            "title": "References Enabled",
+            "type": "boolean"
+          },
           "remove_short_payers": {
             "title": "Remove Short Payers",
             "type": "boolean"
@@ -10205,6 +10235,7 @@
           "credit_wait_seconds",
           "remove_short_payers",
           "whisper_notice",
+          "references_enabled",
           "created_at",
           "opening",
           "recommended_players",
@@ -10353,6 +10384,10 @@
           "rating": {
             "$ref": "#/components/schemas/Rating"
           },
+          "references_enabled": {
+            "title": "References Enabled",
+            "type": "boolean"
+          },
           "remove_short_payers": {
             "title": "Remove Short Payers",
             "type": "boolean"
@@ -10402,6 +10437,7 @@
           "credit_wait_seconds",
           "remove_short_payers",
           "whisper_notice",
+          "references_enabled",
           "created_at"
         ],
         "title": "TableSummary",
@@ -11146,6 +11182,11 @@
             "title": "Gm Notes",
             "type": "string"
           },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
+          },
           "setting": {
             "default": "",
             "maxLength": 8000,
@@ -11186,6 +11227,10 @@
             "title": "Id",
             "type": "string"
           },
+          "references_allowed": {
+            "title": "References Allowed",
+            "type": "boolean"
+          },
           "setting": {
             "title": "Setting",
             "type": "string"
@@ -11211,7 +11256,8 @@
           "created_at",
           "updated_at",
           "setting",
-          "gm_notes"
+          "gm_notes",
+          "references_allowed"
         ],
         "title": "WorldDetail",
         "type": "object"
@@ -11227,6 +11273,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
           },
           "setting": {
             "title": "Setting",
@@ -11273,6 +11324,17 @@
               }
             ],
             "title": "Gm Notes"
+          },
+          "references_allowed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "References Allowed"
           },
           "setting": {
             "anyOf": [
@@ -16261,6 +16323,66 @@
           }
         ],
         "summary": "Change Quest",
+        "tags": [
+          "tables"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/references": {
+      "put": {
+        "description": "서술에 참고 자료(SRD 같은 바깥 자료)를 넣을지 바꾼다. 방장만 한다. 모집 중에만 된다(시작하면 고정이다).\n\n켜려면 판의 세계관이 허용해야 한다. 아니면 422 다.",
+        "operationId": "change_references_api_v1_game_tables__table_id__references_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change References",
         "tags": [
           "tables"
         ],

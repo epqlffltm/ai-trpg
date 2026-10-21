@@ -20,7 +20,7 @@ from app.assets.worlds.schemas import WorldCreate, WorldUpdate
 def build_world(owner_id: uuid.UUID, data: WorldCreate) -> World:
     """입력에서 세계관 객체를 만든다. 아직 저장하지 않는다."""
     asset = assets.build_asset(owner_id, AssetType.WORLD, data)
-    return World(asset=asset, setting=data.setting, gm_notes=data.gm_notes)
+    return World(asset=asset, setting=data.setting, gm_notes=data.gm_notes, references_allowed=data.references_allowed)
 
 
 async def create_world(session: AsyncSession, owner_id: uuid.UUID, data: WorldCreate) -> World:

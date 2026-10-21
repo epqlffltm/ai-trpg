@@ -532,6 +532,22 @@ class LoreNote:
 
 
 @dataclass(frozen=True)
+class ReferenceNote:
+    """
+    서술에 참고로 넣는 바깥 자료 한 줄(#482). 검색이 골랐다(app/references/retrieval.py).
+
+    AI 가 읽는 글이다. 플레이어에게 내보내지 않는다. 글에는 수치가 없다(app/references/srd.py).
+    reference_id 는 참고 자료의 줄(reference_entries)의 id 로, 무엇을 넣었는지 기록할 때 쓴다.
+    kind 는 종류(monster, item)다. 프롬프트가 앞에 붙여 보인다.
+    """
+
+    reference_id: uuid.UUID
+    name: str
+    content: str
+    kind: str
+
+
+@dataclass(frozen=True)
 class MemoryNote:
     """
     서술에 넣는 지난 일 하나. 검색이 골랐다(app/memory/retrieval.py).
@@ -726,6 +742,9 @@ class NarrationRequest:
     host_id: uuid.UUID | None = None
     # 이번 장면에 맞는 로어북 항목. 서술을 맡기기 직전에 검색이 채운다. 가짜 서술자는 읽지 않는다
     lore: list[LoreNote] = field(default_factory=list)
+    # 이번 장면에 맞는 참고 자료(SRD 같은 바깥 자료). 테이블이 켰을 때만, 로어북을 고른 뒤 남은 자리에 검색이 채운다.
+    # 가짜 서술자는 읽지 않는다
+    references: list[ReferenceNote] = field(default_factory=list)
     # 이번 장면에 맞는 지난 일(지난 기록보다 앞의 라운드). 서술을 맡기기 직전에 검색이 채운다. 가짜 서술자는 읽지 않는다
     memories: list[MemoryNote] = field(default_factory=list)
     # 이번 장면에 나온 인물(로어북이 고른 인물 항목)의 이력. 서술을 맡기기 직전에 채운다. 가짜 서술자는 읽지 않는다

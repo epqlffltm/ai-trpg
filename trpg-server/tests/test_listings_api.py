@@ -449,6 +449,8 @@ async def test_others_see_a_public_scenario(
         'pregens': [],
         'abilities': [{'key': ability.key, 'name': ability.name} for ability in SRD5.abilities],
         'recommended_narration_model': TEST_MODEL,
+        # 세계관이 없는 판이라 방장이 참고 자료를 켤 수 있다
+        'references_allowed': True,
     }
     # 판의 나머지(GM 전용 글)는 나가지 않는다
     assert GM_GUIDE not in response.text

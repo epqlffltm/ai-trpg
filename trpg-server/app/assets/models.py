@@ -498,6 +498,10 @@ class World(AssetContent):
     # GM 전용. AI 만 본다. 소유자가 아닌 사람에게 가는 응답에 실으면 안 된다
     gm_notes: Mapped[str] = mapped_column(Text, default='')
 
+    # 이 세계관의 판에서 방장이 참고 자료(#482, SRD 같은 바깥 자료)를 켤 수 있는가. 기본은 꺼짐이다.
+    # 바깥 자료가 세계관에 맞지 않을 수 있다(SF 세계에 D&D 의 몬스터). 제작자가 고른다
+    references_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+
 
 class Rulebook(AssetContent):
     """

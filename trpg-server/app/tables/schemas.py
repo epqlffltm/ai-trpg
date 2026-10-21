@@ -95,6 +95,8 @@ class TableCreate(BaseModel):
     remove_short_payers: bool = True
     # 쪽지를 보낸 사실을 모두에게 알리는가. 적지 않으면 알리지 않는다. 만든 뒤에도 방장이 바꿀 수 있다
     whisper_notice: bool = False
+    # 서술에 참고 자료(SRD 같은 바깥 자료)를 넣는가. 판의 세계관이 허용해야 켤 수 있다. 모집 중에만 바꿀 수 있다
+    references_enabled: bool = False
 
     @model_validator(mode='after')
     def require_public_for_password(self) -> 'TableCreate':
@@ -215,6 +217,14 @@ class WhisperNoticeUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     whisper_notice: bool
+
+
+class ReferencesUpdate(BaseModel):
+    """참고 자료를 서술에 넣을지 바꿀 때 받는 값. 칸을 빼먹으면 거부한다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    references_enabled: bool
 
 
 class NarrationModelUpdate(BaseModel):
@@ -527,6 +537,8 @@ class TableSummary(BaseModel):
     remove_short_payers: bool
     # 쪽지를 보낸 사실을 모두에게 알리는가. 들어가기 전에 안다
     whisper_notice: bool
+    # 서술에 참고 자료(SRD 같은 바깥 자료)를 넣는가. 들어가기 전에 안다. 시작하면 바뀌지 않는다
+    references_enabled: bool
     created_at: datetime
 
 

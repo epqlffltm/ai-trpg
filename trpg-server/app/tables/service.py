@@ -45,6 +45,7 @@ from app.limits.setup import Limiting
 from app.listings import service as listings
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
+from app.references.policy import references_allowed
 from app.rounds import opener
 from app.rounds.round_price import price_of
 from app.tables import departures, monsters, npcs, place_items, places, quests, repository, sheets
@@ -105,6 +106,7 @@ async def create_table(
     성인용 판인데 성인용 내용을 볼 수 없는 사람이면 AdultContentRequiredError,
     그 판으로는 둘 수 없는 정원이면 TableConflictError.
     서술 모델을 정하지 못하면 TableOptionError(narration_model).
+    판의 세계관이 허용하지 않는데 참고 자료를 켜려 했으면 TableOptionError(references_enabled).
     """
     version = await resolve_version(session, viewer, data)
     snapshot = read_snapshot(version.snapshot)
@@ -115,6 +117,8 @@ async def create_table(
     modes = sheets.narrow_modes(snapshot.character_modes, data.character_modes)
     if modes is None:
         raise TableOptionError('character_modes')
+    if data.references_enabled and not references_allowed(snapshot):
+        raise TableOptionError('references_enabled')
     by_pregens = sheets.seats_by_pregens(snapshot, modes)
     if by_pregens is not None and data.capacity > by_pregens:
         raise TableConflictError(Conflict.PREGENS_TOO_FEW)
@@ -124,6 +128,7 @@ async def create_table(
     password_hash = await hash_table_password(data.password)
     table = build_table(viewer.user_id, version, snapshot, data, modes, password_hash)
     table.narration_model = choice.slug
+    table.references_enabled = data.references_enabled
     calendar.start_clock(table, snapshot)
     repository.add_table(session, table)
     # 테이블을 먼저 DB 에 보낸다. 테이블의 ID 는 그때 정해지고, 이벤트는 그 ID 를 가리킨다
