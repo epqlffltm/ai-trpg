@@ -199,6 +199,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `ATTENDANCE_SILVER` | `140,160,180,200,220,240,260` | 출석의 하루 양(실버). 쉼표로 나눈 목록이고 첫째가 1일째다. 길이가 주기의 날 수이고(1~14일), 마지막 날에 보물 상자를 연다. 하루에 1~10만 실버([크레딧](#크레딧)의 "출석과 보물 상자") |
 | `PG_WEBHOOK_SECRET` | 없음(필수) | 결제 대행사의 알림에 붙은 서명을 확인하는 비밀. 32자 이상. 로그와 오류에 싣지 않는다 |
 | `GAME_SERVER_SECRET` | 없음(필수) | 게임 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. `PG_WEBHOOK_SECRET` 과 달라야 한다. 로그와 오류에 싣지 않는다 |
+| `CHAT_SERVER_SECRET` | 비어 있음 | chat 서버가 보낸 요청의 서명을 확인하는 비밀. 비어 있으면 chat 서버의 요청을 하나도 받지 않는다(chat 서버를 띄우지 않는 동안). 적으면 32자 이상이고 다른 비밀과 달라야 한다. 로그와 오류에 싣지 않는다. chat 서버를 compose 에 붙일 때 `.env.example` 과 `.env` 를 채우는 도구에 더한다 |
 | `AUTH_SERVER_SECRET` | 없음(필수) | 인증 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. 위의 두 비밀과 달라야 한다. 인증 서버의 `BILLING_SECRET` 과 같은 값이다. 정리 작업은 이것으로 보호자 결제 알림에 서명한다(정리 작업에는 없어도 된다. 그러면 알릴 일을 적기만 한다). 로그와 오류에 싣지 않는다 |
 | `PAYMENT_PROVIDER` | `fake` | 꽂을 결제 대행사. `fake`(정해 둔 대로 답하는 가짜) 나 `toss`(토스페이먼츠의 테스트 모드). `APP_ENVIRONMENT=production` 이면 `fake` 로 뜨지 않는다 |
 | `TOSS_SECRET_KEY` | 없음(`toss` 면 필수) | 토스페이먼츠의 시크릿 키. 승인과 조회에 쓴다. `test_gsk_` 나 `test_sk_` 로 시작하는 테스트 키만 받는다. 로그와 오류에 싣지 않는다 |
@@ -261,6 +262,7 @@ uv run --no-project python tools/export_openapi.py billing
 | 결제 대행사 | `/webhooks/payment` | 본문의 서명(`PG_WEBHOOK_SECRET`) |
 | 토스페이먼츠 | `/webhooks/toss` | 없다(서명이 없는 알림이다). 결과는 토스페이먼츠에 다시 묻는다 |
 | 게임 서버 | `/service/holds...`, `/service/prices` | 요청(메서드, 주소, 본문)의 서명(`GAME_SERVER_SECRET`) |
+| chat 서버 | `/service/holds...`, `/service/prices` | 요청의 서명(`CHAT_SERVER_SECRET`). 게임 서버와 같은 주소다. 쓸 수 있는 가격표는 다르다([홀드](#홀드)의 "서버마다의 가격표") |
 | 인증 서버 | `/service/grants/welcome`, `/service/eligibility` | 요청(메서드, 주소, 본문)의 서명(`AUTH_SERVER_SECRET`) |
 
 사용자가 부르는 주소는 모두 로그인이 필요하다. `Authorization: Bearer <access 토큰>` 머리말을 싣는다.
@@ -750,7 +752,7 @@ go run ./cmd/fakepg toss-notify <주문 번호> <결제 번호>
 ## 홀드
 
 크레딧을 쓰는 길이다. 값을 치르기 **전에** 크레딧을 먼저 빼 두고(홀드), 일이 끝나면 확정하거나 돌려준다.
-게임 서버가 라운드의 AI 서술에 쓴다. 사용자는 이 주소들을 부를 수 없다.
+게임 서버가 라운드의 AI 서술에 쓰고, chat 서버가 말 한 번에 쓴다. 사용자는 이 주소들을 부를 수 없다.
 
 ```
 게임 서버                              결제 서버
@@ -779,6 +781,18 @@ go run ./cmd/fakepg toss-notify <주문 번호> <결제 번호>
 - `reference` 는 부르는 서버가 이 홀드에 붙이는 **이름표**다. 영문자, 숫자, `.` `_` `:` `-` 로 된 8자에서 200자.
   확정과 반환도 이 이름표로 가리킨다. 한 번의 값 치르기에 하나를 짓는다(테이블과 라운드로 짓는 것처럼)
 - `price_code` 는 가격표의 이름이다. **금액은 받지 않는다.** 값은 이 서버의 가격표가 정한다(아래 "가격표")
+
+**서버마다의 가격표.** 부르는 서버마다 쓸 수 있는 가격표 이름의 머리(첫 점의 앞)가 있다(`internal/httpapi/price_scope.go`).
+
+| 서버 | 머리 | 예 |
+| --- | --- | --- |
+| 게임 서버 | `narration` | `narration.claude-sonnet-5-5.i0.o0` |
+| chat 서버 | `chat`, `story` | `chat.<모델>.i0.o0`(docs/architecture/chat-server.md 의 "가격 이름") |
+
+- 다른 머리의 이름으로 홀드를 걸면 **없는 가격표와 같은 답**이다(400 `price.unknown`). 그런 가격표가 있다는 것도 알리지 않는다. 홀드를 걸어 보지도 않는다
+- 가격 목록(`/service/prices`)도 그 서버의 머리의 줄만 낸다. ETag 도 그 목록의 것이다
+- 홀드는 건 서버의 것이다. 이름표(`reference`)는 서버마다 따로라서, 한 서버가 다른 서버의 홀드를 확정하거나 돌려주지 못한다
+- 까닭: 한 서버의 비밀이 새도 다른 서버의 값으로 크레딧을 빼지 못하게 한다. 머리를 더하거나 서버를 더하면 그 표를 고친다
 
 **가격표.** DB 의 표(`price_versions`)에 있다. 서술 한 번에 고정값을 받는다. 마이그레이션이 처음 값을 넣는다.
 
@@ -998,6 +1012,7 @@ narration.old-model.i0.o0,stop,,,
 - 확정은 원장에 줄을 더하지 않는다. 크레딧은 홀드를 걸 때 이미 빠졌다(`hold` 줄). 확정은 "그것을 돌려주지 않는다"를 정할 뿐이다
 
 **서명.** 게임 서버는 사용자의 토큰을 싣지 않는다. 두 서버만 아는 비밀(`GAME_SERVER_SECRET`)로 요청에 서명해 머리말에 싣는다.
+chat 서버는 자기 비밀(`CHAT_SERVER_SECRET`)로 같은 방식으로 서명한다. 결제 서버는 두 비밀로 차례로 확인해 맞는 쪽을 부른 서버로 본다.
 
 ```
 X-Service-Signature: t=<보낸 시각(초)>,v1=<서명>
@@ -1988,7 +2003,7 @@ billing-server/
     jobs/                 요청과 따로 도는 일에 job_id 를 걸고 끝난 줄을 남긴다. 작업의 메트릭(metrics.go)과 span
     jwks/                 인증 서버의 공개키. 읽기(keys.go), 가져오기(fetch.go), 기억하기(cache.go)
     auth/                 access 토큰 검증. 무엇을 받아들일지 정한다
-    httpapi/              HTTP 주소. 라우터, 핸들러, 토큰을 확인하는 미들웨어(auth.go), 서버의 서명을 확인하는 미들웨어(service.go),
+    httpapi/              HTTP 주소. 라우터, 핸들러, 토큰을 확인하는 미들웨어(auth.go), 서버의 서명을 확인하는 미들웨어(service.go), 서버마다의 가격표(price_scope.go),
                           요청을 기록하는 미들웨어(observability.go), 요청과 DB 의 메트릭(metrics.go), 요청의 span(tracing.go), 개발용 결제 화면(checkout.go, checkout.html).
                           API 목록과 라우터, 응답을 견주는 테스트(spec_test.go)
     obs/                  로그의 공통 규격. 식별자(ids.go, context.go), span 과 잇는 것(span.go), 가리는 규칙(redact.go), JSON 한 줄(handler.go)

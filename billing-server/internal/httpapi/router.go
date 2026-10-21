@@ -51,6 +51,8 @@ type Dependencies struct {
 	GameServerSecret string
 	// AuthServerSecret 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다.
 	AuthServerSecret string
+	// ChatServerSecret 은 chat 서버가 보낸 요청의 서명을 확인하는 비밀이다. 비어 있으면 chat 서버의 요청을 받지 않는다.
+	ChatServerSecret string
 	// CheckoutClientKey 는 개발용 결제 화면(CheckoutPath)에 실을 토스페이먼츠의 클라이언트 키다.
 	// 비어 있으면 그 화면을 열지 않는다.
 	CheckoutClientKey string
@@ -144,16 +146,26 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	// 서버마다 비밀이 다르고, 부를 수 있는 주소도 다르다. 게임 서버의 비밀로 환영 크레딧을 줄 수 없다
 	service := router.Group(APIPrefix + "/service")
 
-	game := service.Group("", requireService(GameServer, deps.GameServerSecret, deps.Now))
-	game.POST("/holds", placeHold(deps.Holds))
-	game.POST("/holds/capture", captureHold(deps.Holds))
-	game.POST("/holds/release", releaseHold(deps.Holds))
-	game.POST("/holds/extend", extendHold(deps.Holds))
-	game.GET("/prices", listPrices(deps.Prices))
+	// 홀드와 가격 목록은 크레딧을 쓰는 서버들(게임, chat)이 부른다. 홀드는 건 서버의 것이라 다른 서버가 확정하거나 돌려주지 못하고,
+	// 가격표는 서버마다 쓸 수 있는 머리가 정해져 있다(price_scope.go)
+	spenders := service.Group("", requireAnyService(spenderCallers(deps), deps.Now))
+	spenders.POST("/holds", placeHold(deps.Holds))
+	spenders.POST("/holds/capture", captureHold(deps.Holds))
+	spenders.POST("/holds/release", releaseHold(deps.Holds))
+	spenders.POST("/holds/extend", extendHold(deps.Holds))
+	spenders.GET("/prices", listPrices(deps.Prices))
 
 	authServer := service.Group("", requireService(AuthServer, deps.AuthServerSecret, deps.Now))
 	authServer.POST("/grants/welcome", grantWelcome(deps.Welcome, deps.WelcomeCredits))
 	authServer.POST("/eligibility", recordEligibility(deps.Eligibility))
 
 	return router
+}
+
+// spenderCallers 는 홀드와 가격 목록을 부를 수 있는 서버들과 그 비밀이다.
+func spenderCallers(deps Dependencies) []serviceCaller {
+	return []serviceCaller{
+		{name: GameServer, secret: deps.GameServerSecret},
+		{name: ChatServer, secret: deps.ChatServerSecret},
+	}
 }
