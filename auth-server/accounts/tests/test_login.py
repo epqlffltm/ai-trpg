@@ -203,8 +203,12 @@ class LoginVerifyTests(LoginTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # refresh 토큰은 본문에 싣지 않는다
-        self.assertEqual(set(response.data), {'access_token', 'token_type', 'expires_in', 'consents_pending'})
+        self.assertEqual(
+            set(response.data),
+            {'access_token', 'token_type', 'expires_in', 'consents_pending', 'withdrawal_scheduled_at'},
+        )
         self.assertEqual(response.data['consents_pending'], [])
+        self.assertIsNone(response.data['withdrawal_scheduled_at'])
         self.assertEqual(response.data['token_type'], 'Bearer')
         self.assertEqual(response.data['expires_in'], 15 * 60)
         self.assertIn(REFRESH_COOKIE_NAME, response.cookies)
@@ -514,7 +518,16 @@ class MeTests(APITestCase):
         self.assertEqual(response.data['username'], 'player_01')
         self.assertEqual(
             set(response.data),
-            {'public_id', 'username', 'email', 'nickname', 'identity', 'guardian_consent', 'consents_pending'},
+            {
+                'public_id',
+                'username',
+                'email',
+                'nickname',
+                'identity',
+                'guardian_consent',
+                'consents_pending',
+                'withdrawal_scheduled_at',
+            },
         )
 
     def test_requires_token(self):

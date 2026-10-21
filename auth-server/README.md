@@ -114,6 +114,7 @@ s=$(sed -n 's/^BILLING_SERVICE_SECRET=//p' auth-server/.env); printf '\nBILLING_
 
 맡기는 것은 워커다. 서버와 따로 띄운다. 결제 서버도 떠 있어야 한다.
 같은 워커가 결제 자격(성년이 되는 날, 보호자 동의)도 결제 서버에 알린다(설계 메모의 "결제 자격 알림").
+유예가 지난 탈퇴를 마치고 결제 서버에 알리는 것도 이 워커다(아래 [탈퇴](#탈퇴)).
 
 ```
 uv run python manage.py send_welcome_credits
@@ -202,6 +203,8 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | GET | `/api/v1/auth/me/consents` | 내 동의 상태(항목마다) | 필요 |
 | PUT | `/api/v1/auth/me/consents/{item}` | 그 항목에 동의한다. 본문 `{"version": 1}` | 필요 |
 | DELETE | `/api/v1/auth/me/consents/{item}` | 선택 항목의 동의를 철회한다 | 필요 |
+| POST | `/api/v1/auth/me/withdrawal` | 탈퇴를 요청한다. 본문 `{"password": "..."}`. 모든 세션이 끊기고 7일 뒤에 계정을 비운다 | 필요 |
+| DELETE | `/api/v1/auth/me/withdrawal` | 유예 중인 탈퇴를 취소한다 | 필요 |
 | POST | `/api/v1/auth/identity/verify` | 휴대폰 본인인증. 본인확인 업체에서 받은 `token` 을 낸다 | 필요 |
 | POST | `/api/v1/auth/guardian/request` | 미성년자가 보호자에게 결제 동의를 부탁한다. 보호자의 메일로 동의 링크가 간다 | 필요 |
 | POST | `/api/v1/auth/guardian/consent` | 보호자가 동의한다. 메일의 동의 링크와 보호자의 본인인증 | 동의 링크 |
@@ -389,6 +392,39 @@ GET /api/v1/auth/public-names?ids=<공개 ID>,<공개 ID>
 | `400` `code: consent_required` | (철회) 필수 항목이다 |
 | `404` `code: consent_item_unknown` | 그런 항목이 없다 |
 
+### 탈퇴
+
+회원이 스스로 계정을 지운다(#603). 서버마다 지우는 것과 남기는 것, 다른 서버에 알리는 길은 [탈퇴 설계](../docs/architecture/withdrawal.md)에 있다.
+이 서버의 일은 요청, 유예, 취소, 계정 비우기, 다른 서버에 알리기다(`accounts/withdrawal.py`).
+
+1. `POST /me/withdrawal` 에 `{"password": "..."}` 를 보낸다. `202` 와 계정을 비울 시각(`withdrawal_scheduled_at`, 7일 뒤)이 온다.
+   **이 기기를 포함한 모든 세션이 끊긴다.** refresh 쿠키도 지운다. 화면은 로그인 화면으로 간다. 요청을 알리는 메일이 간다
+2. 유예 동안 다시 로그인하면 토큰을 주는 응답과 `/me` 에 `withdrawal_scheduled_at` 이 실린다. 그 토큰은 인증 서버에만 통한다
+   (다시 동의할 것이 남은 사람과 같다, [동의](#동의)). 화면은 "탈퇴를 취소할까" 화면만 연다
+3. 취소는 `DELETE /me/withdrawal` 이다. `200` 과 `{"withdrawal_scheduled_at": null}` 이 온다. 그 뒤 `/refresh` 부터 모든 서버에 통한다
+4. 7일이 지나면 워커(`send_welcome_credits`)가 계정을 비운다. 그리고 결제 서버에 알린다
+
+| 응답 | 뜻 |
+| --- | --- |
+| `202` | (요청) 받았다. 이미 요청한 계정이면 그때 정한 시각을 그대로 준다(다시 눌러도 유예가 늘지 않는다). 메일도 다시 보내지 않는다 |
+| `400` `password` 필드 오류 | (요청) 비밀번호가 틀렸다. 아무것도 바뀌지 않는다 |
+| `429` `code: too_many_attempts` | (요청) 비밀번호 변경과 같은 한도다. 빼앗긴 access 토큰으로 비밀번호를 맞혀 보지 못한다 |
+| `200` | (취소) 취소했다. 요청하지 않은 계정이어도 `200` 이다 |
+
+**계정을 비울 때.** 줄은 지우지 않는다. 만 14세 미만 계정을 닫는 것과 같은 방법이다(`accounts/erasure.py`).
+
+- 지우는 것: 아이디·닉네임·이메일·비밀번호(`removed-<번호>` 로 바꾸고 막는다), 이메일 코드, 가입 코드, 보낼 메일, 동의 기록,
+  본인인증의 기록, 보호자 동의(보호자의 이메일), 결제 자격의 알림
+- 남기는 것: 공개 ID(다른 서버가 그 사람의 것을 찾는 열쇠), 환영 크레딧을 받은 사람의 구별 값(같은 사람이 계정을 바꿔 다시 받지 못하게),
+  보안 기록(30일 뒤 함께 지워진다), 보호자 결제 알림의 기록(결제의 법정 보존과 함께 정한다)
+- 지우기 전의 주소로 "탈퇴를 마쳤다" 메일을 보낸다. 다른 사람이 이름을 물으면 `null` 이다(`/public-names`)
+
+**다른 서버에 알리기.** 비우는 트랜잭션에서 알릴 서버마다 한 줄(`WithdrawalNotice`)을 적는다. 워커가 서명해
+`POST /api/v1/<서버>/service/users/{public_id}/withdrawal`(본문 `{"withdrawn_at": "..."}`)로 보내고, `200` 과 `{"status": "processed"}` 를 받을 때까지
+5초, 10초, ... 1시간까지 늘려 가며 다시 보낸다. 버리지 않는다. 지금 알릴 곳은 결제 서버뿐이다(`accounts/models.py` 의 `WithdrawalTarget`).
+결제 서버가 받는 주소를 만들기 전에는 `404` 라 다시 보내며 기다린다. 알리지 못하면 로그에 `warning`(`error_code: withdrawal.undelivered`)이 남고,
+관리자 화면의 "탈퇴 알림"에 시도 횟수와 마지막 오류가 남는다.
+
 ### 시도 횟수 제한
 
 정해진 시간 안에 허용된 횟수를 넘으면 `429`와 `code: too_many_attempts`가 온다.
@@ -542,7 +578,7 @@ uv run python manage.py runserver 2>&1 | jq -rR 'fromjson? | [.timestamp, .level
 
 **이 서버에서 다른 것.**
 
-- 워커와 예약 명령(`send_outgoing_mail`, `send_welcome_credits`, `delete_unverified_users`, `send_security_digest`)은 요청이 아니라 작업이다. 로그에 `request_id` 대신 `job_id` 가 붙는다.
+- 워커와 예약 명령(`send_outgoing_mail`, `send_welcome_credits`, `delete_unverified_users`, `send_security_digest`)은 요청이 아니라 작업이다. 탈퇴를 마치는 일(`withdrawal.complete`)과 알리는 일(`withdrawal.deliver`)도 `send_welcome_credits` 의 작업이다. 로그에 `request_id` 대신 `job_id` 가 붙는다.
   메일 워커는 1초마다 돌아서, 잘 끝난 것은 `debug` 로 남긴다. 실패만 `error`(`error_code: job.failed`)로 남는다.
 - **`APP_ENVIRONMENT=production` 이면 `SMTP_HOST` 를 꼭 적어야 한다.** 적지 않으면 서버가 뜨지 않는다.
   `SMTP_HOST` 가 없으면 메일을 보내지 않고 터미널에 찍는데, 거기에는 받는 사람의 주소와 인증 코드가 그대로 나온다. 운영에서는 그것이 로그에 남는다.
@@ -1203,6 +1239,7 @@ uv run python manage.py send_outgoing_mail
 
 **환영 크레딧 워커.** 결제 서버를 함께 띄운다면 서버와 함께 떠 있어야 한다. 멈춰 있어도 잃는 것은 없다. 맡길 일이 쌓였다가 다시 뜨면 나간다.
 여러 개 띄워도 된다. `BILLING_SECRET`이 없으면 시작하지 않고 오류로 끝난다.
+유예가 지난 탈퇴를 마치는 것도 이 워커다. 멈춰 있으면 7일이 지나도 계정을 비우지 않는다. 다시 뜨면 밀린 것부터 비운다.
 
 ```
 uv run python manage.py send_welcome_credits

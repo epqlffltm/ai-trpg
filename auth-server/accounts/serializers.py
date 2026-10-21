@@ -188,6 +188,12 @@ class LoginChallengeSerializer(serializers.Serializer):
     login_ticket = serializers.CharField()
 
 
+class WithdrawalRequestSerializer(serializers.Serializer):
+    """탈퇴 요청(#603). 열린 채 둔 기기에서 남이 누르지 못하게 비밀번호를 다시 받는다."""
+
+    password = serializers.CharField(max_length=PASSWORD_MAX_LENGTH, write_only=True, trim_whitespace=False)
+
+
 class PasswordChangeSerializer(serializers.Serializer):
     """
     비밀번호 변경 요청의 형식을 검증한다.
@@ -233,6 +239,10 @@ class LoginResponseSerializer(serializers.Serializer):
     consents_pending = serializers.ListField(
         child=serializers.CharField(),
         help_text='다시 동의할 필수 항목. 비어 있지 않으면 access 토큰이 인증 서버에만 통한다',
+    )
+    withdrawal_scheduled_at = serializers.DateTimeField(
+        allow_null=True,
+        help_text='탈퇴를 요청했으면 계정을 비울 시각(#603). 있으면 access 토큰이 인증 서버에만 통한다. 취소하면 null',
     )
 
 
