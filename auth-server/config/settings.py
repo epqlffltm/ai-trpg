@@ -251,7 +251,16 @@ SIMPLE_JWT = {
     'ISSUER': env('JWT_ISSUER', default='ai-trpg-auth'),
     'AUDIENCE': env.list(
         'JWT_AUDIENCE',
-        default=['ai-trpg-auth', 'ai-trpg-game', 'ai-trpg-board', 'ai-trpg-billing', 'ai-trpg-notification'],
+        default=[
+            'ai-trpg-auth',
+            'ai-trpg-game',
+            'ai-trpg-board',
+            'ai-trpg-billing',
+            'ai-trpg-notification',
+            'ai-trpg-asset',
+            # chat-server 는 아직 없다. 만들기 전에 이름을 넣어 둔다(docs/architecture/services.md 의 계획인 것)
+            'ai-trpg-chat',
+        ],
     ),
     # 다른 서버는 블랙리스트를 보지 않고 서명과 만료만 확인한다.
     # 그래서 탈취됐을 때 쓸 수 있는 시간을 짧게 잡는다
