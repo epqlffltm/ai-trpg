@@ -97,6 +97,7 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(SOURCES['trpg'].folder, 'trpg-server')
         self.assertEqual(SOURCES['notification'].folder, 'notification-server')
         self.assertEqual(SOURCES['asset'], fastapi_source('asset-server'))
+        self.assertEqual(SOURCES['chat'], fastapi_source('chat-server'))
 
     def test_the_billing_server_reads_its_written_spec(self):
         self.assertEqual(SOURCES['billing'], go_source('billing-server'))
