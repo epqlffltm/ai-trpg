@@ -9,6 +9,7 @@ conftest.py 에 두지 않고 따로 둔다. 테스트 파일이 conftest.py 를
 from sqlalchemy import Table
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+import app.characters.models  # noqa: F401
 import app.personas.models  # noqa: F401  # 모델을 불러와야 Base.metadata 에 테이블이 들어간다
 from app.core.database import Base
 

@@ -8,32 +8,18 @@
 """
 
 import uuid
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 from server_core.auth.dependencies import CurrentUser
-from server_core.database import get_session
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings
+from app.core.dependencies import AppSettings, Session
 from app.personas import service
 from app.personas.models import Persona
 from app.personas.schemas import PersonaCreate, PersonaDetail, PersonaUpdate
 from app.personas.service import PersonaLimitError, PersonaNotFoundError
 
 router = APIRouter(prefix='/personas', tags=['personas'])
-
-# 요청 하나가 쓰는 DB 세션
-Session = Annotated[AsyncSession, Depends(get_session)]
-
-
-def get_app_settings(request: Request) -> Settings:
-    """앱의 설정. 앱을 만들 때 붙여 둔 것이다(테스트가 바꾼 설정도 이것이다)."""
-    return request.app.state.settings
-
-
-AppSettings = Annotated[Settings, Depends(get_app_settings)]
 
 
 def to_detail(persona: Persona) -> PersonaDetail:

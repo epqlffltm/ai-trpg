@@ -1,6 +1,497 @@
 {
   "components": {
     "schemas": {
+      "CharacterCreate": {
+        "additionalProperties": false,
+        "description": "캐릭터를 만들 때 받는 값. 이름만 필수다. 처음에는 비공개다.",
+        "properties": {
+          "age": {
+            "default": "",
+            "maxLength": 20,
+            "title": "Age",
+            "type": "string"
+          },
+          "gender": {
+            "default": "",
+            "maxLength": 20,
+            "title": "Gender",
+            "type": "string"
+          },
+          "greeting": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Greeting",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "default": "",
+            "title": "Intro Html",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating",
+            "default": "all"
+          },
+          "speech_examples": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Speech Examples",
+            "type": "string"
+          },
+          "starts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Start"
+            },
+            "maxItems": 5,
+            "title": "Starts",
+            "type": "array"
+          },
+          "tags": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CharacterCreate",
+        "type": "object"
+      },
+      "CharacterDetail": {
+        "description": "캐릭터의 초안 하나. 만든 사람만 본다. latest_version 은 마지막으로 게시한 판의 번호다(없으면 null).",
+        "properties": {
+          "age": {
+            "title": "Age",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "gender": {
+            "title": "Gender",
+            "type": "string"
+          },
+          "greeting": {
+            "title": "Greeting",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "title": "Intro Html",
+            "type": "string"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "speech_examples": {
+            "title": "Speech Examples",
+            "type": "string"
+          },
+          "starts": {
+            "items": {
+              "$ref": "#/components/schemas/Start"
+            },
+            "title": "Starts",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "intro_html",
+          "greeting",
+          "speech_examples",
+          "age",
+          "gender",
+          "tags",
+          "starts",
+          "image_id",
+          "rating",
+          "visibility",
+          "latest_version",
+          "published_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CharacterDetail",
+        "type": "object"
+      },
+      "CharacterDocument": {
+        "additionalProperties": false,
+        "description": "판에 굳힌 캐릭터. intro_html 은 허용 목록으로 거른 소개다.",
+        "properties": {
+          "age": {
+            "title": "Age",
+            "type": "string"
+          },
+          "format": {
+            "title": "Format",
+            "type": "integer"
+          },
+          "gender": {
+            "title": "Gender",
+            "type": "string"
+          },
+          "greeting": {
+            "title": "Greeting",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "title": "Intro Html",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "speech_examples": {
+            "title": "Speech Examples",
+            "type": "string"
+          },
+          "starts": {
+            "items": {
+              "$ref": "#/components/schemas/StartDocument"
+            },
+            "title": "Starts",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "name",
+          "intro_html",
+          "greeting",
+          "speech_examples",
+          "age",
+          "gender",
+          "tags",
+          "starts",
+          "image_id",
+          "rating"
+        ],
+        "title": "CharacterDocument",
+        "type": "object"
+      },
+      "CharacterPage": {
+        "description": "목록의 한 쪽과 전체 개수.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "CharacterPage",
+        "type": "object"
+      },
+      "CharacterSummary": {
+        "description": "내 캐릭터 목록의 한 줄.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "rating",
+          "visibility",
+          "latest_version",
+          "updated_at"
+        ],
+        "title": "CharacterSummary",
+        "type": "object"
+      },
+      "CharacterUpdate": {
+        "additionalProperties": false,
+        "description": "캐릭터를 고칠 때 받는 값. 보낸 칸만 바꾼다. 초안만 바뀐다. 게시한 판은 그대로다.\n\nnull 은 그림(image_id)만 받는다. 공개 범위(visibility)도 여기서 바꾼다(공개는 운영자만, 1~2단계).",
+        "properties": {
+          "age": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gender"
+          },
+          "greeting": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Greeting"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro Html"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Rating"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "speech_examples": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speech Examples"
+          },
+          "starts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Start"
+                },
+                "maxItems": 5,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 20,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Visibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "CharacterUpdate",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -297,6 +788,270 @@
         "title": "PersonaUpdate",
         "type": "object"
       },
+      "PublicCharacterDetail": {
+        "description": "공개 캐릭터 하나. 마지막 판의 문서다.",
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/CharacterDocument"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "published_at",
+          "document"
+        ],
+        "title": "PublicCharacterDetail",
+        "type": "object"
+      },
+      "PublicCharacterPage": {
+        "description": "공개 목록의 한 쪽과 전체 개수.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicCharacterSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PublicCharacterPage",
+        "type": "object"
+      },
+      "PublicCharacterSummary": {
+        "description": "공개 목록의 한 줄. 마지막 판의 값이다.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "name",
+          "tags",
+          "rating",
+          "image_id",
+          "published_at"
+        ],
+        "title": "PublicCharacterSummary",
+        "type": "object"
+      },
+      "PublishCheck": {
+        "description": "지금 게시하면 막히는 이유와 걸러질 것. 판을 만들지 않는다.\n\nproblems 는 게시가 409 로 돌려주는 것과 같은 이름이다. 비어 있으면 게시할 수 있다(ready).",
+        "properties": {
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/RemovedItem"
+            },
+            "title": "Removed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ready",
+          "problems",
+          "removed"
+        ],
+        "title": "PublishCheck",
+        "type": "object"
+      },
+      "PublishResult": {
+        "description": "게시한 결과. 새 판과, 소개에서 걸러 낸 것들(removed)이다.\n\n걸러 낸 것이 있어도 게시는 된다. 거른 소개가 판에 들어간다. 화면이 removed 를 제작자에게 보인다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/CharacterDocument"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/RemovedItem"
+            },
+            "title": "Removed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at",
+          "document",
+          "removed"
+        ],
+        "title": "PublishResult",
+        "type": "object"
+      },
+      "Rating": {
+        "description": "이용 등급. 게임 서버와 같은 값이다.",
+        "enum": [
+          "all",
+          "adult"
+        ],
+        "title": "Rating",
+        "type": "string"
+      },
+      "RemovedItem": {
+        "description": "게시할 때 소개에서 걸러 낸 것 하나(app/content/html.py).",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RemovedKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "title": "RemovedItem",
+        "type": "object"
+      },
+      "RemovedKind": {
+        "description": "걸러 낸 것의 종류.",
+        "enum": [
+          "tag",
+          "attribute",
+          "style",
+          "link",
+          "image"
+        ],
+        "title": "RemovedKind",
+        "type": "string"
+      },
+      "Start": {
+        "additionalProperties": false,
+        "description": "시작 상황 하나. 대화를 열 때 사용자가 고른다. 제목은 목록에, 상황은 모델에 간다.",
+        "properties": {
+          "situation": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Situation",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "situation"
+        ],
+        "title": "Start",
+        "type": "object"
+      },
+      "StartDocument": {
+        "additionalProperties": false,
+        "description": "시작 상황 하나.",
+        "properties": {
+          "situation": {
+            "title": "Situation",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "situation"
+        ],
+        "title": "StartDocument",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -336,6 +1091,95 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VersionCreate": {
+        "additionalProperties": false,
+        "description": "게시할 때 받는 값. 이번 판에서 무엇이 바뀌었는지 적는다(비워도 된다).",
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "title": "VersionCreate",
+        "type": "object"
+      },
+      "VersionDetail": {
+        "description": "판 하나. 굳힌 문서까지 싣는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/CharacterDocument"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at",
+          "document"
+        ],
+        "title": "VersionDetail",
+        "type": "object"
+      },
+      "VersionSummary": {
+        "description": "판의 목록에 싣는 값. 굳힌 문서는 싣지 않는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at"
+        ],
+        "title": "VersionSummary",
+        "type": "object"
+      },
+      "Visibility": {
+        "description": "누구에게 보이는가. 비공개는 만든 사람만, 공개는 게시한 판이 있으면 목록에 나온다.",
+        "enum": [
+          "private",
+          "public"
+        ],
+        "title": "Visibility",
+        "type": "string"
       }
     },
     "securitySchemes": {
@@ -351,6 +1195,598 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/asset/characters": {
+      "get": {
+        "description": "자기 캐릭터의 목록. 최근에 고친 것부터다.",
+        "operationId": "list_characters_api_v1_asset_characters_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Characters",
+        "tags": [
+          "characters"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "캐릭터를 만든다. 처음에는 비공개다. 1~2단계에는 운영자만 만든다(403 operator_only).",
+        "operationId": "create_character_api_v1_asset_characters_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Character",
+        "tags": [
+          "characters"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/characters/{character_id}": {
+      "delete": {
+        "description": "자기 캐릭터를 지운다. 판도 함께 지워진다.",
+        "operationId": "delete_character_api_v1_asset_characters__character_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Character",
+        "tags": [
+          "characters"
+        ],
+        "x-audience": "user"
+      },
+      "get": {
+        "description": "자기 캐릭터의 초안 하나.",
+        "operationId": "read_character_api_v1_asset_characters__character_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Character",
+        "tags": [
+          "characters"
+        ],
+        "x-audience": "user"
+      },
+      "patch": {
+        "description": "자기 캐릭터의 초안을 고친다. 보낸 칸만 바뀐다. 공개로 두는 것은 운영자만이다.",
+        "operationId": "update_character_api_v1_asset_characters__character_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Character",
+        "tags": [
+          "characters"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/characters/{character_id}/publish-check": {
+      "get": {
+        "description": "게시해 보기. 막히는 이유와 소개에서 걸러질 것을 본다. 판은 생기지 않는다.",
+        "operationId": "check_publish_api_v1_asset_characters__character_id__publish_check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Publish",
+        "tags": [
+          "characters"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/characters/{character_id}/versions": {
+      "get": {
+        "description": "자기 캐릭터의 판들. 최근 것부터다.",
+        "operationId": "list_versions_api_v1_asset_characters__character_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VersionSummary"
+                  },
+                  "title": "Response List Versions Api V1 Asset Characters  Character Id  Versions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Versions",
+        "tags": [
+          "characters"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "게시한다. 새 판과 소개에서 걸러 낸 것들을 돌려준다. 막는 것이 있으면 409 다.",
+        "operationId": "publish_api_v1_asset_characters__character_id__versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish",
+        "tags": [
+          "characters"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/characters/{character_id}/versions/{number}": {
+      "get": {
+        "description": "자기 캐릭터의 판 하나. 굳힌 문서까지다.",
+        "operationId": "read_version_api_v1_asset_characters__character_id__versions__number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Version",
+        "tags": [
+          "characters"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/listings/characters": {
+      "get": {
+        "description": "공개 캐릭터의 목록. 최근에 게시한 것부터다.",
+        "operationId": "list_public_api_v1_asset_listings_characters_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicCharacterPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Public",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/listings/characters/{character_id}": {
+      "get": {
+        "description": "공개 캐릭터 하나. 마지막 판의 문서다.",
+        "operationId": "read_public_api_v1_asset_listings_characters__character_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicCharacterDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Public",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/asset/me": {
       "get": {
         "description": "토큰이 유효하면 그 주인의 ID 를 돌려준다.",
