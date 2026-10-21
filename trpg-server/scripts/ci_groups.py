@@ -105,7 +105,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'narration_model_pick',
         'credit_waits',
     ),
-    # 서술: 프롬프트, 서술자, 로어와 기억의 검색
+    # 서술: 프롬프트, 서술자, 로어와 기억의 검색, 참고 자료
     'narration': (
         'narrat',
         'clock_narration',
@@ -116,6 +116,8 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'preview',
         'naming',
         'lore_',
+        'references',
+        'srd_',
         'memory',
         'person_history',
         'state_eval',
