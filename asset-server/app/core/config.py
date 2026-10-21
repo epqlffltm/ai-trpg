@@ -38,6 +38,11 @@ class Settings(CoreSettings):
     # 한 사람이 가질 수 있는 계정 페르소나의 수(#565). TRPG 의 보관함과 같은 50 이 기본이다
     persona_max_per_owner: int = Field(default=50, ge=1, le=500)
 
+    # 캐릭터를 누구나 만들 수 있는가(#567). 1~2단계에는 운영자만 만든다(거짓).
+    # 3단계에서 일반 사용자에게 열 때 참으로 둔다.
+    # 참이어도 공개로 두는 것은 운영자만이다(신고와 관리자 화면이 생긴 뒤에 연다)
+    characters_for_everyone: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

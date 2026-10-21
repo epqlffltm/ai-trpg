@@ -1,0 +1,192 @@
+# asset-server/app/characters/service.py
+
+"""
+캐릭터를 만들고, 고치고, 지우고, 게시하고, 공개 목록으로 내준다(#567).
+
+지키는 것.
+  - 초안은 만든 사람만 보고 고친다. 남의 것은 없는 것과 같다(CharacterNotFoundError, 404).
+  - 1~2단계에는 운영자만 만든다(설정 CHARACTERS_FOR_EVERYONE 이 거짓). 공개로 두는 것은 늘 운영자만이다.
+    일반 사용자의 공개는 신고와 관리자 화면(E4)이 생긴 뒤에 연다.
+  - 성인 등급은 성인용 내용을 볼 수 있는 사람(또는 운영자)만 쓴다(app/ratings.py).
+  - 판은 바뀌지 않는다. 게시할 때마다 번호가 하나씩 오른다.
+    같은 캐릭터를 동시에 게시해도 번호가 겹치지 않게 행을 잠근다.
+  - 공개 목록은 공개이고 게시한 판이 있고, 보는 사람이 볼 수 있는 등급(판의 등급)인 것만 낸다. 나머지는 404 다.
+  - 나이와 성별로 거르거나 막지 않는다.
+"""
+
+import uuid
+
+from server_core.auth.tokens import AccessClaims
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.characters import repository
+from app.characters.documents import build_document
+from app.characters.models import Character, CharacterVersion, Visibility
+from app.characters.publishing import CharacterNotReadyError, cleaned_intro, find_problems
+from app.characters.schemas import CharacterCreate, CharacterUpdate
+from app.content.html import Removed
+from app.ratings import allowed_ratings, require_rating
+
+
+class CharacterNotFoundError(Exception):
+    """그런 캐릭터(또는 판)가 없다. 남의 초안과 볼 수 없는 공개 캐릭터도 이것이다."""
+
+
+class OperatorOnlyError(Exception):
+    """운영자만 할 수 있는 일이다(1~2단계의 캐릭터 만들기, 공개로 두기). 403 이다."""
+
+
+def require_maker(viewer: AccessClaims, for_everyone: bool) -> None:
+    """캐릭터를 만들 수 있는 사람인지 본다. 모두에게 열지 않았으면 운영자만이다."""
+    if not for_everyone and not viewer.is_operator:
+        raise OperatorOnlyError
+
+
+def require_visibility(viewer: AccessClaims, visibility: Visibility | None) -> None:
+    """공개로 두려면 운영자여야 한다. 비공개로 두거나 바꾸지 않으면 누구나 된다."""
+    if visibility == Visibility.PUBLIC and not viewer.is_operator:
+        raise OperatorOnlyError
+
+
+def build_character(owner_id: uuid.UUID, data: CharacterCreate) -> Character:
+    """입력에서 캐릭터 객체를 만든다. 아직 저장하지 않는다. 처음에는 비공개다."""
+    values = data.model_dump()
+    values['starts'] = [start.model_dump() for start in data.starts]
+    return Character(owner_id=owner_id, visibility=Visibility.PRIVATE, **values)
+
+
+def apply_changes(character: Character, changes: dict) -> None:
+    """보낸 칸을 초안에 반영한다."""
+    for name, value in changes.items():
+        setattr(character, name, value)
+
+
+async def get_mine(session: AsyncSession, owner_id: uuid.UUID, character_id: uuid.UUID) -> Character:
+    """자기 캐릭터 하나. 없으면 CharacterNotFoundError."""
+    character = await repository.find_owned(session, owner_id, character_id)
+    if character is None:
+        raise CharacterNotFoundError
+    return character
+
+
+async def list_mine(session: AsyncSession, owner_id: uuid.UUID, limit: int, offset: int) -> tuple[list[Character], int]:
+    """자기 캐릭터의 한 쪽과 전체 개수."""
+    return await repository.list_owned(session, owner_id, limit, offset)
+
+
+async def create_character(
+    session: AsyncSession, viewer: AccessClaims, data: CharacterCreate, for_everyone: bool
+) -> Character:
+    """캐릭터를 만든다. 만들 수 없는 사람이면 OperatorOnlyError, 쓸 수 없는 등급이면 AdultContentRequiredError."""
+    require_maker(viewer, for_everyone)
+    require_rating(data.rating, allowed_ratings(viewer))
+    character = build_character(viewer.user_id, data)
+    repository.add(session, character)
+    await session.commit()
+    await session.refresh(character)
+    return character
+
+
+async def update_character(
+    session: AsyncSession, viewer: AccessClaims, character_id: uuid.UUID, data: CharacterUpdate
+) -> Character:
+    """자기 캐릭터의 초안을 고친다. 게시한 판은 그대로다."""
+    character = await get_mine(session, viewer.user_id, character_id)
+    require_visibility(viewer, data.visibility)
+    if data.rating is not None:
+        require_rating(data.rating, allowed_ratings(viewer))
+    apply_changes(character, data.changes())
+    await session.commit()
+    await session.refresh(character)
+    return character
+
+
+async def delete_character(session: AsyncSession, owner_id: uuid.UUID, character_id: uuid.UUID) -> None:
+    """자기 캐릭터를 지운다(판도 함께). 이미 가져간 대화는 사본으로 돈다."""
+    character = await get_mine(session, owner_id, character_id)
+    await repository.delete(session, character)
+    await session.commit()
+
+
+async def check_publish(
+    session: AsyncSession, owner_id: uuid.UUID, character_id: uuid.UUID
+) -> tuple[list[str], list[Removed]]:
+    """지금 게시하면 막히는 이유와 소개에서 걸러질 것. 판을 만들지 않는다."""
+    character = await get_mine(session, owner_id, character_id)
+    return [str(problem) for problem in find_problems(character)], cleaned_intro(character).removed
+
+
+def next_number(character: Character) -> int:
+    """다음 판의 번호. 처음이면 1 이다."""
+    return (character.latest_version or 0) + 1
+
+
+def build_version(character: Character, number: int, note: str, intro: str) -> CharacterVersion:
+    """초안과 거른 소개로 판을 만든다. 아직 저장하지 않는다."""
+    document = build_document(character, intro)
+    return CharacterVersion(
+        character_id=character.id,
+        number=number,
+        note=note,
+        rating=document.rating,
+        document=document.model_dump(mode='json'),
+    )
+
+
+async def publish(
+    session: AsyncSession, owner_id: uuid.UUID, character_id: uuid.UUID, note: str
+) -> tuple[CharacterVersion, list[Removed]]:
+    """
+    자기 캐릭터를 게시한다. 새 판과 소개에서 걸러 낸 것들을 돌려준다.
+
+    막는 것이 있으면 CharacterNotReadyError(판을 만들지 않는다). 행을 잠그고 번호를 정한다.
+    """
+    character = await repository.find_owned(session, owner_id, character_id, for_update=True)
+    if character is None:
+        raise CharacterNotFoundError
+    problems = find_problems(character)
+    if problems:
+        raise CharacterNotReadyError(problems)
+    cleaned = cleaned_intro(character)
+    version = build_version(character, next_number(character), note, cleaned.html)
+    repository.add(session, version)
+    character.latest_version = version.number
+    character.published_at = func.now()
+    await session.commit()
+    await session.refresh(version)
+    return version, cleaned.removed
+
+
+async def list_versions(session: AsyncSession, owner_id: uuid.UUID, character_id: uuid.UUID) -> list[CharacterVersion]:
+    """자기 캐릭터의 판들. 최근 것부터다."""
+    await get_mine(session, owner_id, character_id)
+    return await repository.list_versions(session, character_id)
+
+
+async def get_version(
+    session: AsyncSession, owner_id: uuid.UUID, character_id: uuid.UUID, number: int
+) -> CharacterVersion:
+    """자기 캐릭터의 판 하나. 없으면 CharacterNotFoundError."""
+    await get_mine(session, owner_id, character_id)
+    version = await repository.find_version(session, character_id, number)
+    if version is None:
+        raise CharacterNotFoundError
+    return version
+
+
+async def list_public(
+    session: AsyncSession, viewer: AccessClaims | None, limit: int, offset: int
+) -> tuple[list[tuple[Character, CharacterVersion]], int]:
+    """공개 목록의 한 쪽과 전체 개수. 보는 사람이 볼 수 있는 등급만이다."""
+    return await repository.list_public(session, allowed_ratings(viewer), limit, offset)
+
+
+async def get_public(
+    session: AsyncSession, viewer: AccessClaims | None, character_id: uuid.UUID
+) -> tuple[Character, CharacterVersion]:
+    """공개 캐릭터 하나와 그 마지막 판. 볼 수 없으면 CharacterNotFoundError(있는지도 드러내지 않는다)."""
+    found = await repository.find_public(session, character_id, allowed_ratings(viewer))
+    if found is None:
+        raise CharacterNotFoundError
+    return found
