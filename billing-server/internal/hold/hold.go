@@ -123,8 +123,10 @@ type Service struct {
 	now    func() time.Time
 	wallet Wallet
 	prices Prices
-	// ttl 은 홀드를 걸거나 연장한 때부터 만료까지의 시간이다.
+	// ttl 은 홀드를 걸거나 연장한 때부터 만료까지의 시간이다. 서버마다 따로 정한 것(sourceTTLs)이 없으면 이것이다.
 	ttl time.Duration
+	// sourceTTLs 는 부른 서버마다 따로 정한 만료까지의 시간이다(WithSourceTTL). 처음에는 비어 있다
+	sourceTTLs map[string]time.Duration
 	// keys 는 홀드를 걸 때의 이름표(중복 방지 키)의 결과를 센다(metrics.go). 처음에는 세지 않는다
 	keys metrics.Idempotency
 	// shortfalls 는 크레딧이 모자라 걸지 못한 일을 받는다(shortfall.go). 처음에는 없다(nil). 아무에게도 알리지 않는다
@@ -136,7 +138,31 @@ func NewService(pool *pgxpool.Pool, now func() time.Time, wallet Wallet, prices 
 	if ttl <= 0 {
 		return nil, ErrInvalidTTL
 	}
-	return &Service{pool: pool, now: now, wallet: wallet, prices: prices, ttl: ttl, keys: metrics.NoIdempotency()}, nil
+	return &Service{
+		pool: pool, now: now, wallet: wallet, prices: prices, ttl: ttl, sourceTTLs: map[string]time.Duration{},
+		keys: metrics.NoIdempotency(),
+	}, nil
+}
+
+// WithSourceTTL 은 그 서버(source)가 건 홀드의 만료까지의 시간을 따로 정한다. 걸 때와 연장할 때 쓴다.
+// 서버를 만들 때 한 번 부른다(요청과 함께 부르지 않는다). ttl 이 0 이하면 ErrInvalidTTL 이다.
+//
+// 까닭: chat 의 말 한 번은 몇 초면 끝난다. 홀드를 건 chat 서버가 죽으면 그 크레딧이 HOLD_TTL(하루) 동안 묶인다.
+// 짧게 두면 정리 작업이 곧 돌려준다. 게임 서버의 라운드는 길게 열려 있어 HOLD_TTL 그대로다.
+func (s *Service) WithSourceTTL(source string, ttl time.Duration) error {
+	if ttl <= 0 {
+		return ErrInvalidTTL
+	}
+	s.sourceTTLs[source] = ttl
+	return nil
+}
+
+// ttlFor 는 그 서버가 건 홀드의 만료까지의 시간이다. 따로 정한 것이 없으면 기본(ttl)이다.
+func (s *Service) ttlFor(source string) time.Duration {
+	if ttl, ok := s.sourceTTLs[source]; ok {
+		return ttl
+	}
+	return s.ttl
 }
 
 // clock 은 지금 시각을 DB 가 적는 모양(UTC, 백만분의 1초)으로 맞춰 돌려준다.

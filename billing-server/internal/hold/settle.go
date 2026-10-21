@@ -43,13 +43,13 @@ func (s *Service) Release(ctx context.Context, source string, reference string) 
 	return released, nil
 }
 
-// Extend 는 held 인 홀드의 만료 시각을 지금부터 ttl 뒤로 민다. 연장한 홀드를 돌려준다.
+// Extend 는 held 인 홀드의 만료 시각을 지금부터 그 서버의 ttl(ttlFor) 뒤로 민다. 연장한 홀드를 돌려준다.
 // 만료 시각이 지났어도 정리 작업이 아직 돌려주지 않았으면 연장된다. 앞으로 당기지는 않는다.
 // 이미 확정했으면 ErrAlreadyCaptured, 이미 돌려줬으면(만료되어 돌려준 것도) ErrAlreadyReleased, 없으면 ErrNotFound 다.
 func (s *Service) Extend(ctx context.Context, source string, reference string) (Hold, error) {
 	now := s.clock()
 	row, err := holddb.New(s.pool).ExtendHold(ctx, holddb.ExtendHoldParams{
-		Source: source, Reference: reference, ExpiresAt: now.Add(s.ttl), Now: now,
+		Source: source, Reference: reference, ExpiresAt: now.Add(s.ttlFor(source)), Now: now,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		// 바라던 상태가 없다. 끝난 홀드는 어느 쪽이든 오류다

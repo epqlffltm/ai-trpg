@@ -64,7 +64,7 @@ func (s *Service) take(ctx context.Context, source string, userID uuid.UUID, ref
 			PriceCode: price.Code,
 			Amount:    price.Credits,
 			Now:       now,
-			ExpiresAt: now.Add(s.ttl),
+			ExpiresAt: now.Add(s.ttlFor(source)),
 		})
 		// 줄을 돌려받지 못했으면 같은 이름표의 홀드가 이미 있다는 뜻이다
 		if errors.Is(err, pgx.ErrNoRows) {
