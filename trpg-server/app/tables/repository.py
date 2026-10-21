@@ -124,6 +124,17 @@ async def list_seated(session: AsyncSession, user_id: uuid.UUID, limit: int, off
     return list(await session.scalars(query))
 
 
+async def list_unfinished_seated_ids(session: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
+    """이 사람이 앉아 있는, 끝나지 않은(모집 중, 진행 중) 테이블의 ID 들. 탈퇴할 때 차례로 나간다."""
+    query = (
+        select(GameTable.id)
+        .join(TableMember, TableMember.table_id == GameTable.id)
+        .where(TableMember.user_id == user_id, GameTable.status != TableStatus.ENDED)
+        .order_by(GameTable.created_at, GameTable.id)
+    )
+    return list(await session.scalars(query))
+
+
 async def count_seated(session: AsyncSession, user_id: uuid.UUID) -> int:
     """이 사람이 앉아 있는 테이블이 몇 개인지 센다."""
     return await session.scalar(select(func.count()).select_from(seated(user_id).subquery())) or 0

@@ -4,7 +4,8 @@
 asset 서버의 설정. 환경 변수와 asset-server/.env 에서 읽는다.
 
 FastAPI 서버들이 함께 쓰는 칸(DB, 인증 서버, 로그, 수집기)은 공용 코드의 설정(server_core.settings.CoreSettings)에 있다.
-여기에는 이 서버의 이름과 기본값, 이 서버만의 칸(페르소나의 상한, 캐릭터를 만드는 사람, 부르는 서버의 서명 비밀)을 둔다.
+여기에는 이 서버의 이름과 기본값, 이 서버만의 칸(페르소나의 상한, 캐릭터를 만드는 사람,
+부르는 서버와 인증 서버의 서명 비밀)을 둔다.
 
 비밀값과 환경마다 달라지는 값은 코드에 적지 않는다.
 다른 서버의 .env 와 따로 둔다. 한 서버가 다른 서버의 비밀값을 읽을 수 없게 하기 위해서다.
@@ -47,17 +48,27 @@ class Settings(CoreSettings):
     # 페르소나와 판을 가져가는 서버마다의 서명 비밀(server_core/service_auth/signing.py, app/core/service_auth.py).
     # 그 서버의 설정에 같은 값을 적는다(chat 은 ASSET_SECRET). 서버마다 따로 둔다.
     # 하나가 새도 다른 서버인 척 부를 수 없다. 비워 두면 그 서버의 요청은 하나도 받지 않는다(401). 적으면 32자 이상이다.
-    # story 와 TRPG 는 그 서버가 가져가기 시작할 때 더한다.
-    # 둘째가 생기면 "서로 달라야 한다"도 본다(알림 서버의 설정과 같다)
+    # story 와 TRPG 는 그 서버가 가져가기 시작할 때 더한다
     chat_server_secret: SecretStr = SecretStr('')
 
+    # 인증 서버가 탈퇴를 알리는 요청(app/withdrawal/)의 서명 비밀. 인증 서버의 ASSET_SECRET 과 같은 값이다.
+    # 부르는 서버의 표(service_secrets)에 넣지 않는다. 인증 서버는 페르소나와 판을 가져가는 서버가 아니다.
+    # 비워 두면 탈퇴 알림을 받지 않는다(401). 인증 서버는 받을 때까지 다시 보낸다
+    auth_server_secret: SecretStr = SecretStr('')
+
     @model_validator(mode='after')
-    def require_strong_secrets(self) -> Self:
-        """적은 서명 비밀이 짧으면 뜨지 않는다. 받기 시작한 뒤에 모든 요청이 401 인 것보다 낫다."""
-        written = [secret for secret in self.service_secrets().values() if secret]
+    def require_strong_distinct_secrets(self) -> Self:
+        """적은 서명 비밀이 짧거나 서로 같으면 뜨지 않는다. 받기 시작한 뒤에 모든 요청이 401 인 것보다 낫다."""
+        written = [secret for secret in self.all_secrets() if secret]
         if any(len(secret) < MIN_SECRET_LENGTH for secret in written):
             raise ValueError(f'서명 비밀(*_SERVER_SECRET)은 {MIN_SECRET_LENGTH}자 이상이어야 한다')
+        if len(set(written)) != len(written):
+            raise ValueError('서명 비밀(*_SERVER_SECRET)은 서버마다 달라야 한다')
         return self
+
+    def all_secrets(self) -> list[str]:
+        """이 서버가 받는 모든 서명 비밀. 비어 있는 것도 든다."""
+        return [*self.service_secrets().values(), self.auth_server_secret.get_secret_value()]
 
     def service_secrets(self) -> dict[str, str]:
         """부르는 서버의 이름과 그 서버의 서명 비밀. 비어 있으면 그 서버의 요청을 받지 않는다."""

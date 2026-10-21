@@ -8,7 +8,7 @@
 
 import uuid
 
-from sqlalchemy import Select, func, select, text
+from sqlalchemy import Select, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.personas.models import Persona
@@ -62,3 +62,8 @@ async def list_owned(session: AsyncSession, owner_id: uuid.UUID, limit: int, off
     """
     query = owned(owner_id).order_by(Persona.created_at.desc(), Persona.id).limit(limit).offset(offset)
     return list(await session.scalars(query))
+
+
+async def delete_all_owned(session: AsyncSession, owner_id: uuid.UUID) -> None:
+    """이 사람의 보관함을 모두 지운다(탈퇴). 가져간 테이블은 사본을 갖고 있다."""
+    await session.execute(delete(Persona).where(Persona.owner_id == owner_id))

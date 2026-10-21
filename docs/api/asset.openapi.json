@@ -1322,6 +1322,19 @@
         ],
         "title": "Visibility",
         "type": "string"
+      },
+      "WithdrawalResult": {
+        "description": "답. 지운 것이 없어도(이미 지웠다, 이 서버에 그 사람의 것이 없다) 같다. 인증 서버는 이것을 보고 그만 보낸다.",
+        "properties": {
+          "status": {
+            "const": "processed",
+            "default": "processed",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "WithdrawalResult",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -2232,6 +2245,51 @@
           "personas"
         ],
         "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/service/users/{public_id}/withdrawal": {
+      "post": {
+        "description": "탈퇴한 사람의 페르소나와 비공개 캐릭터를 지운다.",
+        "operationId": "receive_withdrawal_api_v1_asset_service_users__public_id__withdrawal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawalResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Receive Withdrawal",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
       }
     },
     "/api/v1/asset/service/{caller}/characters/{character_id}/latest": {

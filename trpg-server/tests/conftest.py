@@ -37,6 +37,9 @@ TEST_SCHEMA = 'game_test'
 # 존재하지 않는 주소. 테스트는 실제 인증 서버에 요청을 보내지 않는다
 TEST_JWKS_URL = 'http://auth.test/api/v1/auth/jwks'
 
+# 인증 서버가 탈퇴를 알릴 때의 테스트용 서명 비밀(app/withdrawal/). 32자 이상이다
+TEST_AUTH_SECRET = 'test-auth-secret-0123456789abcdef'
+
 
 def make_test_settings(**overrides) -> Settings:
     """
@@ -74,6 +77,7 @@ def make_test_settings(**overrides) -> Settings:
         'billing_secret': '',
         'notification_url': '',
         'notification_secret': '',
+        'auth_server_secret': TEST_AUTH_SECRET,
         'openai_api_key': '',
         'openai_base_url': 'https://api.openai.com/v1',
         'anthropic_api_key': '',

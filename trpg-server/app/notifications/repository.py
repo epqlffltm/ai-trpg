@@ -7,6 +7,7 @@
 지운 줄을 되살리거나 받지 않은 줄을 다시 기다리게 하지 않는다.
 """
 
+import uuid
 from datetime import datetime
 
 from sqlalchemy import delete, or_, select, update
@@ -64,3 +65,8 @@ async def drop_stale(session: AsyncSession, cutoff: datetime) -> int:
     query = delete(OutgoingNotification).where(is_pending(), OutgoingNotification.created_at < cutoff)
     result = await session.execute(query)
     return result.rowcount
+
+
+async def drop_for_user(session: AsyncSession, user_id: uuid.UUID) -> None:
+    """그 사람에게 아직 보내지 않은 알림을 지운다(탈퇴). 알림 서버도 그 사람의 알림함을 지운다."""
+    await session.execute(delete(OutgoingNotification).where(OutgoingNotification.user_id == user_id))
