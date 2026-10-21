@@ -1,7 +1,7 @@
 # trpg-server/tests/test_llm_narrator.py
 
 """
-언어 모델로 서술하는 서술자(app/rounds/llm_narrator.py)를 검증한다. 모델은 가짜 provider 다(app/ai/fake.py).
+언어 모델로 서술하는 서술자(app/rounds/llm_narrator.py)를 검증한다. 모델은 가짜 provider 다(ai_core/fake.py).
 
 보는 것은 넷이다.
   - 서술자는 메시지를 조립해 provider 에 넘기고, 받은 글을 검사해 장면으로 돌려준다.
@@ -14,14 +14,9 @@ import uuid
 from dataclasses import dataclass, replace
 
 import pytest
-from fastapi import FastAPI, status
-from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.ai.calls import CallScope, Outcome, chars_of, input_digest
-from app.ai.fake import FAKE_MODEL, FakeCallLog, FakeProvider
-from app.ai.provider import (
+from ai_core.calls import CallScope, Outcome, chars_of, input_digest
+from ai_core.fake import FAKE_MODEL, FakeCallLog, FakeProvider
+from ai_core.provider import (
     ChatMessage,
     Completion,
     GenerationParams,
@@ -31,6 +26,11 @@ from app.ai.provider import (
     TextSink,
     ignore_text,
 )
+from fastapi import FastAPI, status
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.models import AiInvocation
 from app.assets.models import NarrationStyle

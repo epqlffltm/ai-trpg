@@ -3,7 +3,7 @@
 """
 서술하기 직전에 로어북 항목을 고르는 것(app/lore/retrieval.py)을 검증한다. 임베딩 모델은 가짜다.
 
-가짜 임베더는 낱말이 겹치는 글끼리 가까운 벡터를 낸다(app/ai/fake.py).
+가짜 임베더는 낱말이 겹치는 글끼리 가까운 벡터를 낸다(ai_core/fake.py).
 뜻은 모르지만 "가까운 것을 고르는지"는 볼 수 있다.
 
 보는 것은 넷이다.
@@ -22,12 +22,12 @@ import uuid
 from dataclasses import dataclass, field
 
 import pytest
+from ai_core.fake import FakeEmbedder, FakeProvider, word_vector
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.fake import FakeEmbedder, FakeProvider, word_vector
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.models import AiInvocation
 from app.assets.models import LoreKind

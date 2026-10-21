@@ -87,10 +87,6 @@ GROUPS: dict[str, tuple[str, ...]] = {
     ),
     # 모델과 값: 모델 호출과 창구, 모델 목록, 서술의 값과 크레딧 기다림
     'models': (
-        'anthropic',
-        'gemini',
-        'openai_compat',
-        'streaming',
         'embedder',
         'call_',
         'retry_budget',

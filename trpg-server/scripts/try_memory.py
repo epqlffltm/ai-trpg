@@ -23,10 +23,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 import httpx
+from ai_core.openai_compat import OpenAICompatProvider
+from ai_core.openai_embedder import OpenAICompatEmbedder
+from ai_core.provider import Completion, ProviderError
 
-from app.ai.openai_compat import OpenAICompatProvider
-from app.ai.openai_embedder import OpenAICompatEmbedder
-from app.ai.provider import Completion, ProviderError
 from app.assets.models import NarrationStyle
 from app.core.config import get_settings
 from app.memory.retrieval import MemoryThresholds

@@ -27,12 +27,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from ai_core.provider import ProviderError
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.provider import ProviderError
 from app.main import API_PREFIX
 from app.realtime.service import Cursor
 from app.rounds import closing, service

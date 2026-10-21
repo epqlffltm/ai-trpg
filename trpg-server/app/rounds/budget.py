@@ -28,8 +28,9 @@ import math
 from collections.abc import Iterator
 from dataclasses import replace
 
-from app.ai.calls import chars_of
-from app.ai.provider import ChatMessage
+from ai_core.calls import chars_of
+from ai_core.provider import ChatMessage
+
 from app.assets.models import NarrationStyle
 from app.catalog.rules import ROUND_INPUT_TOKENS
 from app.rounds.narrator import NarrationRequest, StoryContext

@@ -38,10 +38,10 @@ from collections.abc import Mapping, Sequence, Set
 from dataclasses import dataclass
 from typing import Protocol
 
+from ai_core.embedder import Embedder
+from ai_core.provider import ProviderError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai.embedder import Embedder
-from app.ai.provider import ProviderError
 from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot, read_snapshot
 from app.lore import repository

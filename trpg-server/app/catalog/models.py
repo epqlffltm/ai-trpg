@@ -25,7 +25,7 @@
   - 새로 넣은 모델은 꺼진 채로 시작한다. 원가를 적고, 평가 장면을 통과한 뒤에 켠다.
 
 창구(provider), 생각의 방식(reasoning_style), 출력 상한의 칸(token_limit_field)의 열거형은 AI 를 부르는 코드도 쓰므로
-모델 목록의 계약(app/ai/catalog_contract.py)에 있다(#496). 보이는 분류(Grade)는 서비스의 몫이라 여기 남는다.
+모델 목록의 계약(ai_core/catalog_contract.py)에 있다(#496). 보이는 분류(Grade)는 서비스의 몫이라 여기 남는다.
 창구(provider)와 분류(grade)는 코드가 아는 값만 받는다.
 새 창구는 그것을 부르는 코드가 있어야 하므로 마이그레이션과 함께 늘린다.
 회사(vendor)는 보이는 데만 쓰는 이름이라 모양만 본다(app/catalog/schemas.py).
@@ -38,6 +38,7 @@ import enum
 from datetime import date, datetime
 from decimal import Decimal
 
+from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -55,7 +56,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from app.assets.models import one_of
 from app.core.database import Base
 

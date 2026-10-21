@@ -1,4 +1,4 @@
-# trpg-server/app/ai/gemini.py
+# shared/ai-core/src/ai_core/gemini.py
 
 """
 Gemini 를 부르는 provider. Google 의 Gemini API(generateContent, 흘려 받기)를 SDK 없이 httpx 로 부른다.
@@ -19,9 +19,9 @@ generateContent 를 쓰고 Interactions API 는 쓰지 않는다.
       level_low     끌 수 없다(minimal 도 받지 않는다). 끄라고 하면 low. 켜면 low/medium/high
       budget        끄기 thinkingBudget 0. 켜면 그 깊이의 토큰 수(2.5 Flash·Flash-Lite)
       budget_min    끌 수 없다. 끄라고 하면 가장 작은 128. 켜면 그 깊이의 토큰 수(2.5 Pro)
-    생각할 때는 그 몫을 출력 상한에 더한다(app/ai/thinking.py). 생각의 요약은 달라고 하지 않는다(includeThoughts 없음).
+    생각할 때는 그 몫을 출력 상한에 더한다(ai_core/thinking.py). 생각의 요약은 달라고 하지 않는다(includeThoughts 없음).
   - 온도: Gemini 3 부터는 기본값(1.0)을 바꾸지 말라고 권한다. 받는 모델에만 싣는다(supports_temperature).
-보내고 받는 HTTP 의 일(시간의 상한, 실패의 이름, Retry-After)은 app/ai/http_stream.py 가 한다.
+보내고 받는 HTTP 의 일(시간의 상한, 실패의 이름, Retry-After)은 ai_core/http_stream.py 가 한다.
 """
 
 from dataclasses import dataclass
@@ -31,12 +31,12 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
-from app.ai.catalog_contract import ReasoningStyle
-from app.ai.gemini_stream import read_gemini_stream
-from app.ai.http_stream import stream_completion
-from app.ai.openai_compat import THINKING_TOKENS
-from app.ai.provider import ChatMessage, Completion, GenerationParams, Reasoning, Role, TextSink, ignore_text
-from app.ai.thinking import thinking_budget
+from ai_core.catalog_contract import ReasoningStyle
+from ai_core.gemini_stream import read_gemini_stream
+from ai_core.http_stream import stream_completion
+from ai_core.openai_compat import THINKING_TOKENS
+from ai_core.provider import ChatMessage, Completion, GenerationParams, Reasoning, Role, TextSink, ignore_text
+from ai_core.thinking import thinking_budget
 
 # 대화의 역할을 Gemini 의 이름으로. 어시스턴트는 model 이다
 ROLES = {Role.USER: 'user', Role.ASSISTANT: 'model'}
@@ -112,7 +112,7 @@ def gemini_headers(api_key: SecretStr | None) -> dict[str, str]:
 @dataclass(frozen=True)
 class GeminiProvider:
     """
-    Gemini 를 부르는 provider. 고르는 것(app/ai/routing.py)이 모델 목록의 값으로 만든다.
+    Gemini 를 부르는 provider. 고르는 것(ai_core/routing.py)이 모델 목록의 값으로 만든다.
 
     client 는 앱이 들고 있는 httpx 클라이언트다. 닫는 것은 앱이 한다.
     base_url 은 /v1beta 앞까지다(https://generativelanguage.googleapis.com). api_key 는 repr 에 나오지 않는다.

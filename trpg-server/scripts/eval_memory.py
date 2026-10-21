@@ -23,9 +23,9 @@ import sys
 from pathlib import Path
 
 import httpx
+from ai_core.embedder import Embedder
+from ai_core.provider import ProviderError
 
-from app.ai.embedder import Embedder
-from app.ai.provider import ProviderError
 from app.core.config import get_settings
 from app.memory.retrieval import MemoryThresholds
 from evals.lore.dataset import DatasetError

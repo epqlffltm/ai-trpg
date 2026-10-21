@@ -47,7 +47,12 @@ x-auth-image: &auth-image
   image: ai-trpg/auth-server:local
 
 x-game-image: &game-image
-  build: ./trpg-server
+  build:
+    context: ./trpg-server
+    # 공용 코드(shared/). Dockerfile 이 COPY --from=shared 로 가져온다(docs/architecture/shared-code.md 의 "정한 것").
+    # 빌드 범위를 루트로 넓히지 않는다. 다른 서버의 .env 가 빌드에 섞이지 않게
+    additional_contexts:
+      shared: ./shared
   image: ai-trpg/trpg-server:local
 
 x-board-image: &board-image

@@ -19,7 +19,7 @@
 | `billing-server/` | 연습용 결제, 크레딧, 원장 | Go |
 | `notification-server/` | 사람에게 보내는 알림함 | FastAPI |
 | `asset-server/` | 제작자의 자산(캐릭터, 페르소나, 그림)의 원본 | FastAPI |
-| `shared/` | FastAPI 서버들이 함께 쓰는 코드(`server-core`). 빌드할 때 이미지에 넣는다([공용 코드 규칙](docs/architecture/shared-code.md)) | Python 패키지 |
+| `shared/` | FastAPI 서버들이 함께 쓰는 코드(`server-core`, `ai-core`). 빌드할 때 이미지에 넣는다([공용 코드 규칙](docs/architecture/shared-code.md)) | Python 패키지 |
 | `docker/`, `docker-compose.yml` | 공용 인프라, 프록시, 컨테이너 | Docker |
 | `docs/` | 서버들이 함께 지키는 규격 | Markdown |
 

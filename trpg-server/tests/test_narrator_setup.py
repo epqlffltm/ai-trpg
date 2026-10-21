@@ -9,11 +9,11 @@
 
 import httpx
 import pytest
+from ai_core.retry_budget import RetryBudget
+from ai_core.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ZAI_KIND, ModelRouter
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.ai.retry_budget import RetryBudget
-from app.ai.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ZAI_KIND, ModelRouter
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.metered import MeteredCallLog
 from app.catalog.lookup import DbModelLookup

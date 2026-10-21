@@ -18,13 +18,13 @@ import uuid
 from datetime import UTC, date, datetime
 
 import pytest
+from ai_core.catalog_contract import Provider, TokenLimitField
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.catalog_contract import Provider, TokenLimitField
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import FREE_BOOK, Tier
 from app.billing.routing import utc_now

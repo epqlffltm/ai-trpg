@@ -1,41 +1,37 @@
 # trpg-server/tests/test_model_routing.py
 
 """
-모델의 이름으로 창구를 고르는 것(app/ai/routing.py)과, 그것으로 부를 때 고르는 서술자를 검증한다.
+모델의 이름으로 창구를 고르는 것(ai_core/routing.py)으로 부를 때 고르는 서술자를 검증한다.
 
 실제 모델을 부르지 않는다. httpx 의 가짜 전송이 서버 곁의 모델과 OpenAI 인 척 답한다.
 모델 목록은 사전으로 흉내 낸다(FakeLookup). DB 에서 읽는 것(DbModelLookup)은 맨 아래에서 본다.
-"오늘"은 테스트가 정한다.
+"오늘"은 테스트가 정한다. 고르기와 못 고르기는 공용 코드의 테스트(shared/ai-core/tests/test_routing.py)가 본다.
+다른 테스트(test_deepinfra_provider.py)가 이 파일의 도구(make_router, refused 등)를 가져다 쓴다.
 
-넷을 본다.
-  - 고르기: 목록에 없는 이름은 서버 곁의 모델, 목록의 모델은 목록의 창구·날짜판·받는 칸.
-  - 못 고르기: 꺼짐, 은퇴, 키 없음, 코드 없는 창구. 다른 모델로 바꿔 부르지 않는다. warning 한 줄.
+둘을 본다.
   - 부르기: 고른 대로 보낸다(주소, 키, 칸). 서술자가 부를 때마다 고른다.
   - DB: 목록을 부를 때마다 읽는다. 끄면 다음 서술부터 바로 맞는다.
 """
 
 import json
-import logging
 from dataclasses import dataclass, field, replace
-from datetime import date, timedelta
+from datetime import date
 
 import httpx
 import pytest
-from pydantic import SecretStr
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.ai.anthropic import AnthropicProvider
-from app.ai.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField
-from app.ai.fake import FakeCallLog
-from app.ai.gemini import GeminiProvider
-from app.ai.openai_compat import WireOptions
-from app.ai.provider import ProviderError
-from app.ai.routing import (
+from ai_core.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField
+from ai_core.fake import FakeCallLog
+from ai_core.openai_compat import WireOptions
+from ai_core.provider import ProviderError
+from ai_core.routing import (
     MODEL_UNAVAILABLE,
     PROVIDER_NOT_CONFIGURED,
     Endpoint,
     ModelRouter,
 )
+from pydantic import SecretStr
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.catalog import service
 from app.catalog.lookup import DbModelLookup
 from app.catalog.models import Grade
@@ -49,7 +45,7 @@ TODAY = date(2026, 10, 17)
 LOCAL_URL = 'http://127.0.0.1:11434/v1'
 OPENAI_URL = 'https://api.openai.com/v1'
 KEY = 'sk-test'
-ROUTING_LOGGER = 'app.ai.routing'
+ROUTING_LOGGER = 'ai_core.routing'
 SCENE = '엔진 소리가 골목을 메운다.'
 
 LUNA = CatalogModel(
@@ -174,118 +170,6 @@ async def refused(router: ModelRouter, name: str, **options) -> str:
     with pytest.raises(ProviderError) as caught:
         await router.provider_for(name, **options)
     return str(caught.value)
-
-
-# --- 고르기 ---
-
-
-async def test_a_name_not_in_the_catalog_is_a_local_model():
-    provider = await make_router(LUNA).provider_for('gemma4:31b-it-qat')
-
-    # 예전과 같다. 설정의 주소로 그 이름을, 키 없이, 설정의 받는 칸으로 부른다
-    assert (provider.base_url, provider.model, provider.api_key, provider.kind) == (
-        LOCAL_URL,
-        'gemma4:31b-it-qat',
-        None,
-        'openai_compat',
-    )
-    assert provider.options == WireOptions(supports_reasoning=False)
-    assert provider.timeout == 30
-
-
-async def test_a_catalog_model_is_called_through_its_provider_and_snapshot():
-    provider = await make_router(LUNA).provider_for('gpt-6-luna')
-
-    assert (provider.base_url, provider.model, provider.kind) == (OPENAI_URL, 'gpt-6-luna-2026-09-22', 'openai')
-    assert provider.api_key.get_secret_value() == KEY
-    assert provider.options == WireOptions(
-        supports_reasoning=True, supports_temperature=False, token_field='max_completion_tokens'
-    )
-
-
-async def test_a_local_catalog_model_uses_the_local_endpoint_with_its_snapshot():
-    provider = await make_router(GEMMA).provider_for('gemma-4')
-
-    assert (provider.base_url, provider.model, provider.api_key) == (LOCAL_URL, 'gemma4:26b', None)
-    assert provider.options == WireOptions(supports_reasoning=False, token_field='max_tokens')
-
-
-async def test_a_model_that_retires_later_can_be_called():
-    router = make_router(replace(LUNA, retires_on=TODAY + timedelta(days=1)))
-
-    assert (await router.provider_for('gpt-6-luna')).model == 'gpt-6-luna-2026-09-22'
-
-
-# --- 못 고르기 ---
-
-
-async def test_a_disabled_model_is_unavailable():
-    assert await refused(make_router(replace(LUNA, enabled=False)), 'gpt-6-luna') == MODEL_UNAVAILABLE
-
-
-async def test_an_evaluation_may_call_a_disabled_model():
-    # 켜기 전에 평가 장면을 돌려야 한다
-    provider = await make_router(replace(LUNA, enabled=False)).provider_for('gpt-6-luna', allow_disabled=True)
-
-    assert provider.model == 'gpt-6-luna-2026-09-22'
-
-
-async def test_a_retired_model_is_unavailable_even_for_an_evaluation():
-    router = make_router(replace(LUNA, retires_on=TODAY))
-
-    assert await refused(router, 'gpt-6-luna') == MODEL_UNAVAILABLE
-    assert await refused(router, 'gpt-6-luna', allow_disabled=True) == MODEL_UNAVAILABLE
-
-
-async def test_an_openai_model_without_a_key_is_not_configured():
-    assert await refused(make_router(LUNA, with_key=False), 'gpt-6-luna') == PROVIDER_NOT_CONFIGURED
-
-
-async def test_a_local_model_needs_no_key():
-    assert (await make_router(GEMMA, with_key=False).provider_for('gemma-4')).model == 'gemma4:26b'
-
-
-async def test_a_gemini_model_is_called_through_the_gemini_endpoint():
-    provider = await make_router(GEMINI).provider_for('gemini-4-argon')
-
-    assert isinstance(provider, GeminiProvider)
-    assert (provider.base_url, provider.model, provider.kind) == (GEMINI_URL, 'gemini-4-argon', 'gemini')
-    assert provider.api_key.get_secret_value() == KEY
-    assert (provider.reasoning_style, provider.supports_temperature) == (ReasoningStyle.LEVEL_LOW, False)
-
-
-async def test_a_gemini_model_without_a_key_is_not_configured():
-    assert await refused(make_router(GEMINI, with_key=False), 'gemini-4-argon') == PROVIDER_NOT_CONFIGURED
-
-
-async def test_a_claude_model_is_called_through_the_anthropic_endpoint():
-    provider = await make_router(OPUS).provider_for('claude-opus-5-5')
-
-    assert isinstance(provider, AnthropicProvider)
-    assert (provider.base_url, provider.model, provider.kind) == (
-        ANTHROPIC_URL,
-        'claude-opus-5-5-20260901',
-        'anthropic',
-    )
-    assert provider.api_key.get_secret_value() == KEY
-    # 생각의 방식과 온도는 모델 목록의 값이다
-    assert (provider.reasoning_style, provider.supports_temperature, provider.timeout) == (
-        ReasoningStyle.ALWAYS,
-        False,
-        30,
-    )
-
-
-async def test_a_claude_model_without_a_key_is_not_configured():
-    assert await refused(make_router(OPUS, with_key=False), 'claude-opus-5-5') == PROVIDER_NOT_CONFIGURED
-
-
-async def test_a_refusal_leaves_a_warning(caplog: pytest.LogCaptureFixture):
-    with caplog.at_level(logging.WARNING, logger=ROUTING_LOGGER):
-        await refused(make_router(replace(LUNA, enabled=False)), 'gpt-6-luna')
-
-    (record,) = [record for record in caplog.records if record.name == ROUTING_LOGGER]
-    assert (record.levelname, record.model, record.reason) == ('WARNING', 'gpt-6-luna', MODEL_UNAVAILABLE)
 
 
 # --- 부르기 ---

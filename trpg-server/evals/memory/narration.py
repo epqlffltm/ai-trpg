@@ -22,7 +22,8 @@ import enum
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
-from app.ai.embedder import Embedder
+from ai_core.embedder import Embedder
+
 from app.lore.retrieval import query_text, scene_label
 from app.memory.history import history_of, scene_lines
 from app.memory.retrieval import MemoryThresholds, choose_memories, eligible, people_in, to_note

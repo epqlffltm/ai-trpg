@@ -14,9 +14,9 @@ import uuid
 from pathlib import Path
 
 import pytest
+from ai_core.fake import FakeEmbedder
+from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
 
-from app.ai.fake import FakeEmbedder
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError
 from app.references.records import ReferenceKind, StoredReference
 from app.references.retrieval import ReferenceThresholds
 from app.rounds.narrator import Move, NarrationRequest, StoryContext

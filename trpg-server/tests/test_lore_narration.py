@@ -9,9 +9,9 @@
 import uuid
 
 import pytest
+from ai_core.fake import FakeEmbedder, FakeProvider
+from ai_core.provider import ChatMessage, Reasoning, Role
 
-from app.ai.fake import FakeEmbedder, FakeProvider
-from app.ai.provider import ChatMessage, Reasoning, Role
 from app.assets.models import LoreKind, NarrationStyle
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.lore.retrieval import Thresholds, choose, keyword_hits, query_text, scene_labels

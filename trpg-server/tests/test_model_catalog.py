@@ -18,11 +18,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField, always_thinks, is_offered, is_retired
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField, always_thinks, is_offered, is_retired
 from app.catalog import repository, service
 from app.catalog.errors import CatalogConflictError, Conflict, InvalidModelError, ModelNotFoundError
 from app.catalog.models import AiModel, AiModelCost, Grade

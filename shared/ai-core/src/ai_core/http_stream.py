@@ -1,9 +1,9 @@
-# trpg-server/app/ai/http_stream.py
+# shared/ai-core/src/ai_core/http_stream.py
 
 """
 모델의 API 에 요청을 보내고 흘러오는 답(SSE)을 받는 HTTP 의 일. 어느 회사의 모양인지는 모른다.
 
-provider 들(app/ai/openai_compat.py, app/ai/anthropic.py)이 함께 쓴다.
+provider 들(ai_core/openai_compat.py, ai_core/anthropic.py)이 함께 쓴다.
 본문을 만드는 것과 흘러온 줄을 읽는 것은 provider 가 한다.
 여기는 보내고, 실패를 ProviderError 의 이름으로 바꾸고, 시간의 상한을 지키는 것만 한다.
 
@@ -30,7 +30,7 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
-from app.ai.provider import Completion, ProviderError
+from ai_core.provider import Completion, ProviderError
 
 # 흘러온 줄들을 끝까지 읽어 답을 만드는 것. provider 가 자기 모양에 맞게 넘긴다
 StreamReader = Callable[[AsyncIterator[str]], Awaitable[Completion]]

@@ -15,10 +15,10 @@ from pathlib import Path
 
 import httpx
 import pytest
+from ai_core.fake import FakeEmbedder
+from ai_core.openai_embedder import OpenAICompatEmbedder
+from ai_core.provider import ProviderError
 
-from app.ai.fake import FakeEmbedder
-from app.ai.openai_embedder import OpenAICompatEmbedder
-from app.ai.provider import ProviderError
 from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.lore.retrieval import KEYWORD_MAX_DISTANCE, MAX_DISTANCE, Thresholds, choose, query_text

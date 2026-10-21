@@ -9,19 +9,20 @@ AI 호출의 기록을 DB 에 쓰는 기록장(app/ai_log/call_log.py)과 그 �
   - 서로 맞지 않는 기록은 DB 가 막는다(잘 끝났는데 이유가 있다, 받지 못했는데 글이 있다 …).
 
 모델을 부르지 않는다. 기록을 직접 만들어 넣는다. 서술자가 기록을 남기는지는 tests/test_llm_narrator.py 가 본다.
+보낸 메시지의 지문(input_digest)은 공용 코드의 테스트(shared/ai-core/tests/test_calls.py)가 본다.
 """
 
 import uuid
 from dataclasses import replace
 
 import pytest
+from ai_core.calls import CallRecord, CallScope, Outcome
+from ai_core.provider import Reasoning
 from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.calls import CallRecord, CallScope, Outcome, input_digest
-from app.ai.provider import ChatMessage, Reasoning, Role
 from app.ai_log.call_log import DbCallLog, to_row
 from app.ai_log.models import AiInvocation
 
@@ -140,39 +141,3 @@ async def test_the_database_refuses_a_record_that_does_not_add_up(
 
     with pytest.raises(IntegrityError, match=constraint):
         await session.commit()
-
-
-# --- 입력의 지문 ---
-
-MESSAGES = [
-    ChatMessage(Role.SYSTEM, '너는 GM 이다. 악역영애는 사실 경찰의 끄나풀이다.'),
-    ChatMessage(Role.USER, '달린다.'),
-]
-
-
-def test_the_digest_is_an_hmac_of_the_messages():
-    digest = input_digest(MESSAGES, b'server-key')
-
-    assert digest is not None
-    assert len(digest) == 64
-    # 같은 입력이면 같은 지문이다. 두 호출이 같은 입력이었는지 알 수 있다
-    assert digest == input_digest(list(MESSAGES), b'server-key')
-
-
-def test_a_different_message_or_key_gives_a_different_digest():
-    changed = [MESSAGES[0], ChatMessage(Role.USER, '멈춘다.')]
-
-    assert input_digest(changed, b'server-key') != input_digest(MESSAGES, b'server-key')
-    # 키를 모르면 같은 입력으로도 지문을 맞출 수 없다. 내용을 대입해 확인하지 못한다
-    assert input_digest(MESSAGES, b'other-key') != input_digest(MESSAGES, b'server-key')
-
-
-def test_the_role_is_part_of_the_digest():
-    as_assistant = [MESSAGES[0], ChatMessage(Role.ASSISTANT, '달린다.')]
-
-    assert input_digest(as_assistant, b'server-key') != input_digest(MESSAGES, b'server-key')
-
-
-@pytest.mark.parametrize('key', [None, b''])
-def test_without_a_key_there_is_no_digest(key: bytes | None):
-    assert input_digest(MESSAGES, key) is None

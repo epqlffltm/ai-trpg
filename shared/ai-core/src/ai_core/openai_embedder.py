@@ -1,10 +1,10 @@
-# trpg-server/app/ai/openai_embedder.py
+# shared/ai-core/src/ai_core/openai_embedder.py
 
 """
-OpenAI 와 같은 모양의 임베딩 주소(/embeddings)를 부르는 임베더. app/ai/embedder.py 의 모양을 따른다.
+OpenAI 와 같은 모양의 임베딩 주소(/embeddings)를 부르는 임베더. ai_core/embedder.py 의 모양을 따른다.
 
 Ollama, LM Studio, vLLM, 그리고 같은 모양을 받는 클라우드 API 를 이 하나로 부른다.
-서술의 provider(app/ai/openai_compat.py)와 같은 httpx 클라이언트를 쓴다. SDK 를 쓰지 않는다.
+서술의 provider(ai_core/openai_compat.py)와 같은 httpx 클라이언트를 쓴다. SDK 를 쓰지 않는다.
 
 글 여러 개를 한 번에 보낸다(input 에 목록). 답의 data 는 index 로 차례를 맞춘다. 서버가 차례를 섞어 보내도 된다.
 실패는 모두 ProviderError 다. 응답의 본문은 오류에 싣지 않는다.
@@ -26,7 +26,7 @@ from typing import Any, ClassVar
 
 import httpx
 
-from app.ai.provider import ProviderError
+from ai_core.provider import ProviderError
 
 
 def embeddings_url(base_url: str) -> str:

@@ -12,7 +12,8 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
-from app.ai.provider import Completion, LLMProvider, ProviderError, Reasoning
+from ai_core.provider import Completion, LLMProvider, ProviderError, Reasoning
+
 from app.rounds.llm_narrator import NARRATION_PARAMS, NarrationError, accept_completion
 from app.rounds.prompt import build_messages
 from evals.lore.narration import prompt_text

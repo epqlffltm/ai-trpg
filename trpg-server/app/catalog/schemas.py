@@ -10,9 +10,9 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated, Self
 
+from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from app.catalog.models import Grade
 from app.catalog.rules import reasoning_style_problem, token_field_problem
 
