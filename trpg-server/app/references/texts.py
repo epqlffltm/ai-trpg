@@ -5,6 +5,7 @@
 
 로어북 항목과 같은 모양이다(app/lore/texts.py). 이름, 다른 이름, 글이 한 줄씩이다.
 다른 이름(한국어 이름)이 들어가야 한국어 장면에서도 영어 원본의 줄이 가까워진다.
+글은 한국어로 옮긴 것이 있으면 그것이다. 장면이 한국어라 한국어 글과 가깝다. 서술자에게 가는 글과도 같다.
 """
 
 from app.references.records import StoredReference
@@ -15,6 +16,6 @@ def reference_text(reference: StoredReference) -> str:
     lines = [reference.name]
     if reference.aliases:
         lines.append(f'다른 이름: {", ".join(reference.aliases)}')
-    if reference.content:
-        lines.append(reference.content)
+    if reference.shown_content:
+        lines.append(reference.shown_content)
     return '\n'.join(lines)
