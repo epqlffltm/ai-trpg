@@ -180,14 +180,15 @@ write_new() {
 
 # 여덟 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
 # 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버,
-# 알림 서버와 게임·결제·게시판 서버)
+# 알림 서버와 게임·결제·게시판 서버, asset 서버와 chat 서버)
 write_env_files() {
-  local game_secret auth_secret notify_secret billing_notify_secret board_notify_secret
+  local game_secret auth_secret notify_secret billing_notify_secret board_notify_secret chat_asset_secret
   game_secret="$(throwaway)"
   auth_secret="$(throwaway)"
   notify_secret="$(throwaway)"
   billing_notify_secret="$(throwaway)"
   board_notify_secret="$(throwaway)"
+  chat_asset_secret="$(throwaway)"
   write_new .env <<EOF
 POSTGRES_PASSWORD=$(throwaway)
 AUTH_DB_PASSWORD=$(throwaway)
@@ -230,13 +231,14 @@ GAME_SERVER_SECRET=$notify_secret
 BILLING_SERVER_SECRET=$billing_notify_secret
 BOARD_SERVER_SECRET=$board_notify_secret
 EOF
-  # asset 서버의 비밀은 DB 비밀번호뿐이고 compose 가 루트 .env 의 것으로 주소를 만든다. env_file 이 있어야 해서 빈 파일을 둔다
+  # asset 서버와 chat 서버의 DB 비밀번호는 compose 가 루트 .env 의 것으로 주소를 만든다.
+  # 둘이 함께 아는 비밀은 chat 이 대화를 시작할 때 판과 페르소나를 가져오는 서명이다.
+  # compose 가 chat 서버에 ASSET_URL 을 주므로 이 비밀이 없으면 chat 서버가 뜨지 않는다
   write_new asset-server/.env <<EOF
-# CI 에서만 쓰는 빈 설정. 값은 docker-compose.yml 이 준다
+CHAT_SERVER_SECRET=$chat_asset_secret
 EOF
-  # chat 서버도 asset 서버와 같다(비밀은 DB 비밀번호뿐)
   write_new chat-server/.env <<EOF
-# CI 에서만 쓰는 빈 설정. 값은 docker-compose.yml 이 준다
+ASSET_SECRET=$chat_asset_secret
 EOF
 }
 
