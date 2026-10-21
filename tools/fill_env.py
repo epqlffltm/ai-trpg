@@ -1,7 +1,7 @@
 # tools/fill_env.py
 
 """
-일곱 개의 .env(루트와 서버 여섯)를 만들고, 비어 있는 비밀을 난수로 채운다. 표준 라이브러리만 쓴다.
+여덟 개의 .env(루트와 서버 일곱)를 만들고, 비어 있는 비밀을 난수로 채운다. 표준 라이브러리만 쓴다.
 
 하는 일:
   1. .env 가 없으면 그 폴더의 .env.example 을 복사해 만든다.
@@ -47,6 +47,7 @@ ENV_FILES = (
     'billing-server/.env',
     'notification-server/.env',
     'asset-server/.env',
+    'chat-server/.env',
 )
 
 # 아직 채우지 않았다는 값. .env.example 이 일부러 넣어 둔 것이다(짧아서 서버가 뜨지 않는다)
@@ -114,6 +115,7 @@ SECRETS = (
     database('billing', 'BILLING_DB_PASSWORD'),
     database('notification', 'NOTIFICATION_DB_PASSWORD'),
     database('asset', 'ASSET_DB_PASSWORD'),
+    database('chat', 'CHAT_DB_PASSWORD'),
     shared('DB 메트릭 계정(monitor)', ('.env', 'MONITOR_DB_PASSWORD')),
     shared('Grafana 관리자', ('.env', 'GRAFANA_ADMIN_PASSWORD')),
     shared('그림 저장소의 로컬 흉내', ('.env', 'IMAGE_STORE_SECRET_ACCESS_KEY')),

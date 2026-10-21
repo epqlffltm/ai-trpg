@@ -36,6 +36,7 @@ jobs:
       billing: ${{ steps.pick.outputs.billing }}
       notification: ${{ steps.pick.outputs.notification }}
       asset: ${{ steps.pick.outputs.asset }}
+      chat: ${{ steps.pick.outputs.chat }}
       shared: ${{ steps.pick.outputs.shared }}
     steps:
       # PR 이 갈라져 나온 곳을 찾으려면 기록이 있어야 한다
@@ -84,6 +85,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.asset == 'true'
     uses: ./.github/workflows/asset-server.yml
+
+  chat-server:
+    needs: changes
+    if: needs.changes.outputs.chat == 'true'
+    uses: ./.github/workflows/chat-server.yml
 
   # 공용 코드(shared/). 쓰는 서버의 CI 는 위에서 따로 불린다(changed-servers.sh 가 경로 의존을 읽어 고른다)
   shared:
@@ -134,7 +140,8 @@ jobs:
     if: >-
       needs.changes.outputs.trpg == 'true' || needs.changes.outputs.notification == 'true' ||
       needs.changes.outputs.billing == 'true' || needs.changes.outputs.asset == 'true' ||
-      needs.changes.outputs.auth == 'true' || needs.changes.outputs.board == 'true'
+      needs.changes.outputs.auth == 'true' || needs.changes.outputs.board == 'true' ||
+      needs.changes.outputs.chat == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -174,7 +181,8 @@ jobs:
     if: >-
       needs.changes.outputs.auth == 'true' || needs.changes.outputs.trpg == 'true' ||
       needs.changes.outputs.board == 'true' || needs.changes.outputs.billing == 'true' ||
-      needs.changes.outputs.notification == 'true' || needs.changes.outputs.asset == 'true'
+      needs.changes.outputs.notification == 'true' || needs.changes.outputs.asset == 'true' ||
+      needs.changes.outputs.chat == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -219,6 +227,7 @@ jobs:
       - billing-server
       - notification-server
       - asset-server
+      - chat-server
       - shared
       - stack
     runs-on: ubuntu-latest
