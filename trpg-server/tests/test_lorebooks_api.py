@@ -172,7 +172,17 @@ async def test_adds_an_entry(client: AsyncClient, my_headers: dict[str, str]):
 
     assert response.status_code == status.HTTP_201_CREATED
     entry = response.json()
-    assert set(entry) == {'id', 'name', 'kind', 'keywords', 'content', 'true_names', 'created_at', 'updated_at'}
+    assert set(entry) == {
+        'id',
+        'name',
+        'kind',
+        'keywords',
+        'content',
+        'true_names',
+        'copied_from',
+        'created_at',
+        'updated_at',
+    }
     assert entry['name'] == NAME
     assert entry['keywords'] == KEYWORDS
     assert entry['content'] == CONTENT

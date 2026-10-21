@@ -9,10 +9,12 @@
 """
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
+from app.assets.copies import Copy, CopyOutcome, split_copied
 from app.assets.lorebooks import repository
 from app.assets.lorebooks.schemas import EntryCreate, EntryUpdate, LorebookCreate, LorebookUpdate
 from app.assets.models import LOREBOOK_MAX_ENTRIES, AssetType, Lorebook, LoreEntry
@@ -75,6 +77,14 @@ def build_entry(lorebook_id: uuid.UUID, data: EntryCreate) -> LoreEntry:
     )
 
 
+def build_copied_entry(lorebook_id: uuid.UUID, copy: Copy[EntryCreate]) -> LoreEntry:
+    """복사할 줄에서 항목 객체를 만든다. 출처를 적는다. 아직 저장하지 않는다."""
+    entry = build_entry(lorebook_id, copy.data)
+    entry.copied_source = copy.source
+    entry.copied_key = copy.key
+    return entry
+
+
 def apply_entry_changes(entry: LoreEntry, data: EntryUpdate) -> None:
     """보낸 칸만 항목에 반영한다."""
     changes = data.model_dump(exclude_unset=True, exclude_none=True)
@@ -106,6 +116,30 @@ async def add_entry(session: AsyncSession, owner_id: uuid.UUID, lorebook_id: uui
     assets.touch(lorebook)
     await session.commit()
     return entry
+
+
+async def add_copied_entries(
+    session: AsyncSession, owner_id: uuid.UUID, lorebook_id: uuid.UUID, copies: Sequence[Copy[EntryCreate]]
+) -> CopyOutcome[LoreEntry]:
+    """
+    복사할 줄들을 자기 로어북에 항목으로 더한다. 로어북이 없으면 AssetNotFoundError.
+
+    이미 같은 출처를 복사해 둔 줄은 건너뛴다(두 번 누른 요청이 항목을 둘 만들지 않는다).
+    남은 것을 다 넣으면 상한을 넘을 때는 하나도 넣지 않고 LorebookFullError 다. 반만 들어가면 무엇이 빠졌는지 헷갈린다.
+    항목 하나를 더할 때(add_entry)와 같이 세기 전에 로어북을 잠근다.
+    """
+    lorebook = await assets.lock_owned(session, Lorebook, owner_id, lorebook_id)
+    fresh, skipped = split_copied(list(copies), await repository.copied_keys(session, lorebook_id))
+    if await repository.count_entries(session, lorebook_id) + len(fresh) > LOREBOOK_MAX_ENTRIES:
+        raise LorebookFullError
+
+    entries = [build_copied_entry(lorebook_id, copy) for copy in fresh]
+    for entry in entries:
+        repository.add_entry(session, entry)
+    if entries:
+        assets.touch(lorebook)
+    await session.commit()
+    return CopyOutcome(created=entries, skipped=skipped)
 
 
 async def list_entries(session: AsyncSession, owner_id: uuid.UUID, lorebook_id: uuid.UUID) -> list[LoreEntry]:

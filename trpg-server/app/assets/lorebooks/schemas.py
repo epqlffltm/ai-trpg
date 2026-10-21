@@ -13,6 +13,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
+from app.assets.copies import CopiedFrom
 from app.assets.models import (
     LORE_ENTRY_CONTENT_MAX_LENGTH,
     LORE_ENTRY_MAX_KEYWORDS,
@@ -97,5 +98,7 @@ class EntryDetail(BaseModel):
     kind: LoreKind
     # 지목할 때 맞다고 받는 이름들. 만든 사람만 본다(로어북은 만든 사람의 것이다)
     true_names: list[str]
+    # 참고 자료에서 복사한 항목이면 그 출처. 직접 쓴 항목은 null 이다
+    copied_from: CopiedFrom | None = None
     created_at: datetime
     updated_at: datetime

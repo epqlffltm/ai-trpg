@@ -43,3 +43,12 @@ async def count_entries(session: AsyncSession, lorebook_id: uuid.UUID) -> int:
 async def delete_entry(session: AsyncSession, entry: LoreEntry) -> None:
     """항목의 행을 지운다."""
     await session.delete(entry)
+
+
+async def copied_keys(session: AsyncSession, lorebook_id: uuid.UUID) -> set[tuple[str, str]]:
+    """로어북에 이미 복사해 둔 출처(자료, key)들. 직접 쓴 항목은 없다."""
+    query = select(LoreEntry.copied_source, LoreEntry.copied_key).where(
+        LoreEntry.lorebook_id == lorebook_id, LoreEntry.copied_source.is_not(None)
+    )
+    rows = await session.execute(query)
+    return {(source, key) for source, key in rows.all()}
