@@ -48,7 +48,7 @@ class DashboardScopeTests(unittest.TestCase):
         self.assertEqual(check({'billing-server': dashboard(panel(GOOD), panel(ratio, 2))}), [])
 
     def test_a_selector_without_the_service_mixes_servers(self):
-        # 다섯 서버가 같은 이름을 쓴다. 나눗셈의 한쪽만 빠뜨려도 다른 서버의 요청이 섞인다
+        # 서버들이 같은 이름을 쓴다. 나눗셈의 한쪽만 빠뜨려도 다른 서버의 요청이 섞인다
         mixed = (
             'sum(rate(http_server_requests_total{service="billing-server", status_code=~"5.."}[5m]))'
             ' / sum(rate(http_server_requests_total{route="/health"}[5m]))'

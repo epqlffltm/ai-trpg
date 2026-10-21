@@ -95,7 +95,7 @@ groups:
           severity: critical
         annotations:
           summary: Redis 에 붙지 못한다
-          description: 시도 횟수 제한이 서버의 메모리로 넘어가거나(게임) 꺼진다(인증). docker compose ps redis 를 본다
+          description: 시도 횟수를 셀 수 없다. 인증 서버는 세지 않고 통과시킨다(AuthRateLimitsUnavailable). 게임 서버는 로비 비밀번호를 받지 않고(503) 채팅은 세지 않고 통과시키며, 준비 상태 확인(/health/ready)이 503 이다. docker compose ps redis 를 본다
 
       - alert: RedisAOFWriteFailing
         expr: redis_aof_last_write_status{job="redis"} == 0
@@ -470,3 +470,55 @@ groups:
         annotations:
           summary: 게시판 서버의 알림 보내기가 실패하고 있다
           description: 댓글과 답글의 알림이 발송함에 쌓인다. 게시판 서버의 로그(operation=notification.send, error_code=job.failed)를 본다
+
+  # asset 서버. 업무의 메트릭이 붙으면 그 경보를 이 묶음에 더한다
+  - name: asset-server
+    rules:
+      - alert: AssetDatabaseUnreachable
+        # 준비 상태 확인(/health/ready)이 마지막으로 본 DB. compose 의 healthcheck 가 10초마다 부른다
+        expr: db_up{service="asset-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: asset 서버가 DB 에 닿지 못한다
+          description: 페르소나, 캐릭터, 그림을 읽지도 쓰지도 못한다. 다른 서버가 테이블이나 대화를 새로 만들 때 자산을 가져오지 못한다(이미 가져온 것으로 도는 것은 그대로다). PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+      - alert: AssetServerErrors
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        expr: |
+          sum(rate(http_server_requests_total{service="asset-server", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="asset-server"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="asset-server"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'asset 서버의 5xx 가 {{ $value | humanizePercentage }} 다'
+          description: 대시보드 asset-server 의 "상태 코드"와 로그의 error_code 를 본다
+
+  # chat 서버. 업무의 메트릭이 붙으면 그 경보를 이 묶음에 더한다
+  - name: chat-server
+    rules:
+      - alert: ChatDatabaseUnreachable
+        # 준비 상태 확인(/health/ready)이 마지막으로 본 DB. compose 의 healthcheck 가 10초마다 부른다
+        expr: db_up{service="chat-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: chat 서버가 DB 에 닿지 못한다
+          description: 대화를 읽지도 쓰지도 못한다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+      - alert: ChatServerErrors
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        expr: |
+          sum(rate(http_server_requests_total{service="chat-server", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="chat-server"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="chat-server"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'chat 서버의 5xx 가 {{ $value | humanizePercentage }} 다'
+          description: 대시보드 chat-server 의 "상태 코드"와 로그의 error_code 를 본다
