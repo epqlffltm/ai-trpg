@@ -330,10 +330,31 @@ def send_withdrawal_requested_notice(*, user: User, scheduled_at: datetime) -> N
         body=(
             f'{user.nickname} 님의 탈퇴 요청을 받았습니다. {when}(한국 시각)에 계정과 개인정보를 지웁니다.\n\n'
             '그 전에 다시 로그인하면 탈퇴를 취소할 수 있습니다. 그동안은 다른 기능을 쓸 수 없습니다.\n'
-            '지우면 남은 골드와 실버가 사라지고 되돌릴 수 없습니다.\n\n'
+            '지우면 남은 골드와 실버가 사라지고 되돌릴 수 없습니다. 지우기 하루 전에 한 번 더 알려 드립니다.\n\n'
             '직접 요청하지 않았다면 바로 로그인해 탈퇴를 취소하고 비밀번호를 바꿔 주세요.'
         ),
         kind=MailKind.WITHDRAWAL_REQUESTED,
+    )
+
+
+def send_withdrawal_reminder_notice(*, user: User, scheduled_at: datetime) -> None:
+    """
+    탈퇴를 곧 마친다고 한 번 더 알린다(#624). 마치기 하루 전에 워커가 부른다.
+
+    요청 메일을 놓친 주인이 마지막으로 알 기회다. 취소하는 법과 직접 하지 않았으면 할 일을 요청 메일처럼 적는다.
+    "내일"이라고 쓰지 않고 시각을 적는다. 워커가 늦으면 하루가 남지 않았을 수 있다.
+    """
+    when = scheduled_at.astimezone(_KOREA).strftime('%Y-%m-%d %H:%M')
+    enqueue_mail(
+        to_email=user.email,
+        subject=f'[AI TRPG] {when}(한국 시각)에 계정을 지웁니다',
+        body=(
+            f'{user.nickname} 님이 요청한 탈퇴를 {when}(한국 시각)에 마칩니다. 계정과 개인정보를 지웁니다.\n'
+            '남은 골드와 실버가 사라지고 되돌릴 수 없습니다.\n\n'
+            '그 전에 다시 로그인하면 탈퇴를 취소할 수 있습니다.\n\n'
+            '직접 요청하지 않았다면 바로 로그인해 탈퇴를 취소하고 비밀번호를 바꿔 주세요.'
+        ),
+        kind=MailKind.WITHDRAWAL_REMINDER,
     )
 
 

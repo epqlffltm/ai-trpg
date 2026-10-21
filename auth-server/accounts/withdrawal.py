@@ -7,8 +7,10 @@
   1. 요청(request_withdrawal): 요청 시각을 적고 모든 세션을 끊는다. 메일로 알린다.
      비밀번호는 부르는 쪽이 먼저 확인한다(check_withdrawal_password)
   2. 유예(GRACE, 7일): 로그인은 되지만 토큰이 인증 서버에만 통한다(tokens.py). 그 안에 취소한다(cancel_withdrawal)
-  3. 마치기(complete_due_withdrawals): 워커가 부른다. 계정을 비우고(erasure.py) 서버마다 알릴 줄을 적는다
-  4. 알리기(deliver_due_withdrawal_notices): 워커가 부른다. 서명해 보내고 200 processed 까지 다시 보낸다.
+  3. 하루 전 알림(remind_due_withdrawals, #624): 워커가 부른다. 마치기 하루 전에 메일을 한 통 더 보낸다.
+     요청마다 한 통이다. 워커가 늦어도 마치기 전이면 보내고, 마치는 시각은 늦추지 않는다
+  4. 마치기(complete_due_withdrawals): 워커가 부른다. 계정을 비우고(erasure.py) 서버마다 알릴 줄을 적는다
+  5. 알리기(deliver_due_withdrawal_notices): 워커가 부른다. 서명해 보내고 200 processed 까지 다시 보낸다.
      줄은 모든 서버에 적고, 비밀을 적은 서버의 줄만 보낸다(withdrawal_client.py). 나머지는 비밀을 적을 때까지 기다린다
 
 알리는 일의 모양은 결제 자격을 알리는 것(payment_eligibility.py)과 같다. 짧은 트랜잭션에서 줄을 차지하고,
@@ -26,7 +28,11 @@ from django.utils import timezone
 from accounts.backoff import retry_delay
 from accounts.consents import erase_consents
 from accounts.erasure import blank_account, erase_identity_records, erase_mail_records
-from accounts.mail import send_withdrawal_completed_notice, send_withdrawal_requested_notice
+from accounts.mail import (
+    send_withdrawal_completed_notice,
+    send_withdrawal_reminder_notice,
+    send_withdrawal_requested_notice,
+)
 from accounts.models import SecurityEventKind, User, WithdrawalNotice, WithdrawalTarget
 from accounts.security_events import record_security_event
 from accounts.tokens import revoke_all_sessions
@@ -36,6 +42,7 @@ from accounts.withdrawal_schedule import GRACE, withdrawal_scheduled_at
 logger = logging.getLogger(__name__)
 
 # 한 묶음을 처리하는 일의 이름. 로그의 operation 칸에 들어간다(docs/observability.md)
+REMIND_OPERATION = 'withdrawal.remind'
 COMPLETE_OPERATION = 'withdrawal.complete'
 DELIVER_OPERATION = 'withdrawal.deliver'
 # 다른 서버에 알리지 못했을 때의 오류 코드
@@ -48,6 +55,9 @@ MAX_RETRY_DELAY = timedelta(hours=1)
 LEASE = timedelta(seconds=30)
 
 DEFAULT_BATCH_SIZE = 20
+
+# 마치기 얼마 전에 다시 알리는가(유저 결정, 2026-10-22). 매일 보내면 많아서 스팸으로 간다
+REMINDER_LEAD = timedelta(days=1)
 
 
 class WrongWithdrawalPasswordError(Exception):
@@ -95,7 +105,9 @@ def request_withdrawal(user: User) -> datetime:
     if scheduled is not None:
         return scheduled
     locked.withdrawal_requested_at = timezone.now()
-    locked.save(update_fields=['withdrawal_requested_at'])
+    # 하루 전 알림은 요청마다 한 통이다. 취소한 요청에 보낸 기록을 지운다
+    locked.withdrawal_reminded_at = None
+    locked.save(update_fields=['withdrawal_requested_at', 'withdrawal_reminded_at'])
     revoke_all_sessions(locked)
     scheduled = withdrawal_scheduled_at(locked)
     send_withdrawal_requested_notice(user=locked, scheduled_at=scheduled)
@@ -115,6 +127,62 @@ def cancel_withdrawal(user: User) -> None:
         return
     locked.withdrawal_requested_at = None
     locked.save(update_fields=['withdrawal_requested_at'])
+
+
+def remind_due_withdrawals(*, batch_size: int = DEFAULT_BATCH_SIZE) -> int:
+    """하루 전 알림을 보낼 계정에 최대 batch_size 통을 보내고, 보낸 수를 돌려준다. 계정마다 트랜잭션 하나다."""
+    now = timezone.now()
+    return sum(1 for user_id in _reminder_due_ids(now, batch_size) if remind_withdrawal(user_id, now))
+
+
+def _reminder_due_ids(now: datetime, batch_size: int) -> list[int]:
+    """
+    하루 전 알림을 보낼 계정의 번호. 아래 reminder_is_due 와 같은 조건을 DB 에서 고른다.
+
+    마칠 때가 지난 계정은 고르지 않는다. 그 계정은 같은 바퀴에 마치므로 "곧 지운다"를 보내지 않는다.
+    """
+    return list(
+        User.objects.filter(
+            withdrawal_reminded_at__isnull=True,
+            withdrawal_requested_at__lte=now - (GRACE - REMINDER_LEAD),
+            withdrawal_requested_at__gt=now - GRACE,
+            withdrawn_at__isnull=True,
+        )
+        .order_by('withdrawal_requested_at', 'pk')
+        .values_list('pk', flat=True)[:batch_size]
+    )
+
+
+def reminder_is_due(user: User, now: datetime) -> bool:
+    """
+    지금 그 계정에 하루 전 알림을 보낼 때인가.
+
+    유예 중이고, 하루 전이 지났고, 아직 마칠 때가 아니고, 이 요청에 보내지 않았으면 그렇다.
+    보낸 기록은 요청할 때 비운다(request_withdrawal). 다시 요청했으면 새 요청에 한 통을 더 보낸다.
+    """
+    scheduled = withdrawal_scheduled_at(user)
+    if scheduled is None or not scheduled - REMINDER_LEAD <= now < scheduled:
+        return False
+    return user.withdrawal_reminded_at is None
+
+
+@transaction.atomic
+def remind_withdrawal(user_id: int, now: datetime) -> bool:
+    """
+    그 계정에 하루 전 알림을 보낸다. 보냈으면 True, 그사이 취소했거나 이미 보냈으면 False 다.
+
+    줄을 잠근 뒤 다시 보므로 워커 둘이 같은 계정을 골라도 한 통이다.
+    보낸 시각과 메일(발송함의 줄)을 한 트랜잭션에 적는다. 하나만 남는 일이 없다.
+    발송함의 메일이 마칠 때까지 나가지 못하면 마치기가 지운다(erasure.erase_mail_records).
+    마친 뒤에 "곧 지운다"가 가지 않는다.
+    """
+    locked = User.objects.select_for_update().get(pk=user_id)
+    if not reminder_is_due(locked, now):
+        return False
+    locked.withdrawal_reminded_at = now
+    locked.save(update_fields=['withdrawal_reminded_at'])
+    send_withdrawal_reminder_notice(user=locked, scheduled_at=withdrawal_scheduled_at(locked))
+    return True
 
 
 def complete_due_withdrawals(*, batch_size: int = DEFAULT_BATCH_SIZE) -> int:

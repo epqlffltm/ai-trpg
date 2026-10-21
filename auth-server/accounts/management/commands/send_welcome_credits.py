@@ -3,6 +3,7 @@
 """
 결제 서버에 맡길 일을 보내는 워커. 한 바퀴에 차례로 한다.
   - 환영 크레딧과 결제 자격(#336)을 보낸다
+  - 마치기 하루 전의 탈퇴에 메일을 한 통 더 보낸다(#624)
   - 유예가 지난 탈퇴를 마치고(계정을 비운다), 다른 서버에 탈퇴를 알린다(#603). 비밀을 적은 서버에만 보낸다
 
     uv run python manage.py send_welcome_credits            # 계속 돌면서 맡긴다. Ctrl+C 로 멈춘다
@@ -34,19 +35,22 @@ DEFAULT_INTERVAL_SECONDS = 5.0
 
 @dataclass(frozen=True)
 class WithdrawalRound:
-    """한 바퀴에 탈퇴로 한 일. 마친 계정의 수와 알린 결과다."""
+    """한 바퀴에 탈퇴로 한 일. 하루 전 알림을 보낸 수, 마친 계정의 수, 다른 서버에 알린 결과다."""
 
+    reminded: int = 0
     completed: int = 0
     notices: withdrawal.DeliveryReport = field(default_factory=withdrawal.DeliveryReport)
 
     @property
     def done(self) -> int:
         """이번에 끝낸 일. 다시 시도할 것은 세지 않는다(그것만 있으면 워커가 쉰다)."""
-        return self.completed + self.notices.sent
+        return self.reminded + self.completed + self.notices.sent
 
 
 class Command(BaseCommand):
-    help = '환영 크레딧과 결제 자격을 결제 서버에 맡기고, 유예가 지난 탈퇴를 마치고 알린다.'
+    help = (
+        '환영 크레딧과 결제 자격을 결제 서버에 맡기고, 탈퇴를 하루 전에 다시 알리고, 유예가 지난 탈퇴를 마치고 알린다.'
+    )
 
     def add_arguments(self, parser) -> None:
         parser.add_argument('--once', action='store_true', help='한 번만 처리하고 끝낸다.')
@@ -96,7 +100,8 @@ class Command(BaseCommand):
         일마다 한 묶음씩 처리한다. 일마다 작업의 식별자(job_id)를 걸어, 그 일이 남긴 로그를 그 식별자로 묶는다.
 
         할 일이 없던 바퀴는 추적을 남기지 않는다(observability/idle_rounds.py).
-        탈퇴는 마치는 것을 먼저 한다. 이번에 마친 계정의 알림이 같은 바퀴에 나간다.
+        탈퇴는 하루 전 알림, 마치기, 다른 서버에 알리기 차례다. 이번에 마친 계정의 알림이 같은 바퀴에 나간다.
+        마칠 때가 지난 계정에는 하루 전 알림을 보내지 않는다(withdrawal.reminder_is_due).
         """
         with run_as_job(DELIVER_OPERATION):
             report = deliver_due_welcome_credits()
@@ -104,13 +109,16 @@ class Command(BaseCommand):
         with run_as_job(payment_eligibility.DELIVER_OPERATION):
             eligibility = payment_eligibility.deliver_due_eligibility()
             record_handled(eligibility.handled)
+        with run_as_job(withdrawal.REMIND_OPERATION):
+            reminded = withdrawal.remind_due_withdrawals()
+            record_handled(reminded)
         with run_as_job(withdrawal.COMPLETE_OPERATION):
             completed = withdrawal.complete_due_withdrawals()
             record_handled(completed)
         with run_as_job(withdrawal.DELIVER_OPERATION):
             notices = withdrawal.deliver_due_withdrawal_notices()
             record_handled(notices.handled)
-        return report, eligibility, WithdrawalRound(completed=completed, notices=notices)
+        return report, eligibility, WithdrawalRound(reminded=reminded, completed=completed, notices=notices)
 
     def _deliver_safely(self) -> tuple[DeliveryReport, payment_eligibility.DeliveryReport, WithdrawalRound]:
         """
@@ -144,9 +152,9 @@ class Command(BaseCommand):
 
     def _report_withdrawals(self, result: WithdrawalRound) -> None:
         """탈퇴의 한 일. 한 일이 있을 때만 출력한다."""
-        if result.completed + result.notices.handled == 0:
+        if result.reminded + result.completed + result.notices.handled == 0:
             return
         self.stdout.write(
-            f'탈퇴를 마친 계정 {result.completed}건, 탈퇴 알림 {result.notices.sent}건, '
-            f'다시 시도 예정 {result.notices.retried}건'
+            f'탈퇴 하루 전 메일 {result.reminded}건, 탈퇴를 마친 계정 {result.completed}건, '
+            f'탈퇴 알림 {result.notices.sent}건, 다시 시도 예정 {result.notices.retried}건'
         )
