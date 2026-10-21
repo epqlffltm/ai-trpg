@@ -13,6 +13,8 @@
   - kind: 종류(ReferenceKind).
   - name: 원본의 이름. aliases: 장면에서 부를 다른 이름(한국어 이름 등).
   - content: 서술자가 읽는 글. 수치(HP, 명중, 피해, 난이도)를 넣지 않는다. 판정은 엔진이 한다.
+  - name_ko, content_ko: 한국어로 옮긴 이름과 글(번역 파일에서 온다, app/references/translations.py).
+    있으면 서술과 복사(기본 자산)가 이것을 쓴다. 원본의 글과 같은 규칙(수치 없음, 1,000자)을 지킨다.
   - data: 원본의 수치를 정리한 것. 서술자에게 가지 않는다. 기본 자산(시트 채우기)에 쓴다.
 """
 
@@ -67,6 +69,8 @@ class ReferenceRecord(BaseModel):
     aliases: list[Alias] = Field(default_factory=list, max_length=REFERENCE_MAX_ALIASES)
     content: Content = ''
     data: dict[str, Any] = Field(default_factory=dict)
+    name_ko: Annotated[str, StringConstraints(max_length=REFERENCE_NAME_MAX_LENGTH)] = ''
+    content_ko: Content = ''
 
 
 class ReferenceOrigin(BaseModel):
@@ -78,6 +82,8 @@ class ReferenceOrigin(BaseModel):
     revision: str
     license: str
     attribution: str
+    # 원본을 어떻게 바꿨나(CC BY 4.0 은 바꾼 것을 밝히게 한다). 바꾸지 않았으면 비어 있다
+    changes: str = ''
 
 
 class ReferenceDocument(BaseModel):
@@ -130,13 +136,28 @@ class StoredReference:
     content: str = ''
     kind: str = ReferenceKind.ITEM
     data: dict[str, Any] = field(default_factory=dict)
+    name_ko: str = ''
+    content_ko: str = ''
+
+    @property
+    def shown_name(self) -> str:
+        """서술과 복사에 쓰는 이름. 한국어 이름이 있으면 그것, 없으면 원본의 이름이다."""
+        return self.name_ko or self.name
+
+    @property
+    def shown_content(self) -> str:
+        """서술과 복사에 쓰는 글. 한국어 글이 있으면 그것, 없으면 원본의 글이다."""
+        return self.content_ko or self.content
 
     def matches(self, record: ReferenceRecord) -> bool:
         """파일의 줄과 값이 모두 같은가(key 는 같다고 본다)."""
-        return (self.kind, self.name, self.aliases, self.content, self.data) == (
+        mine = (self.kind, self.name, self.aliases, self.content, self.data, self.name_ko, self.content_ko)
+        return mine == (
             record.kind,
             record.name,
             record.aliases,
             record.content,
             record.data,
+            record.name_ko,
+            record.content_ko,
         )

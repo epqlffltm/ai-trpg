@@ -47,6 +47,7 @@ class ReferenceEntry(Base):
         CheckConstraint(one_of('kind', ReferenceKind), name='kind_allowed'),
         CheckConstraint(at_most('content', REFERENCE_CONTENT_MAX_LENGTH), name='content_length'),
         CheckConstraint(f'cardinality(aliases) <= {REFERENCE_MAX_ALIASES}', name='aliases_count'),
+        CheckConstraint(at_most('content_ko', REFERENCE_CONTENT_MAX_LENGTH), name='content_ko_length'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -71,6 +72,10 @@ class ReferenceEntry(Base):
 
     # 원본의 수치. 서술자에게 가지 않는다
     data: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+    # 한국어로 옮긴 이름과 글. 없으면 빈 글이다. 있으면 서술과 복사가 이것을 쓴다(app/references/translations.py)
+    name_ko: Mapped[str] = mapped_column(String(REFERENCE_NAME_MAX_LENGTH), default='', server_default='')
+    content_ko: Mapped[str] = mapped_column(Text, default='', server_default='')
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

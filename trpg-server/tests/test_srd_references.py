@@ -34,7 +34,7 @@ from app.references.records import (
 from scripts.build_srd import EQUIPMENT_FILE, MAGIC_ITEMS_FILE, MONSTERS_FILE, build
 
 # 판정의 수치. 서술자가 읽는 글에 있으면 안 된다
-NUMBERS = re.compile(r'\bDC\s*\d+|\d+d\d+|[+-]\d+\b|\bto hit\b', re.IGNORECASE)
+NUMBERS = re.compile(r'\bDC\s*\d+|\b\d*d\d+\b|[+-]\d+\b|\bto hit\b', re.IGNORECASE)
 DATA_FILE = Path(__file__).resolve().parents[1] / 'data' / 'references' / 'srd51.json'
 
 ABOLETH = {
