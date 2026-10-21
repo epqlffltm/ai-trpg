@@ -348,6 +348,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `ai_log.prune` | game | AI 호출 기록에서 보관 기간(기본 30일)이 지난 원문 비우기(정리 작업의 한 바퀴, 한 시간마다. `cleared`, `retention_days`) |
 | `notification.put` | notification | 다른 서버가 서명한 요청으로 알림을 넣기. `source`, `kind`, `notification_id`, `outcome`(`created`, `existing`, `muted`). 표에 맞지 않아 받지 않았으면 `notification.kind_refused` 다. 받는 사람과 `payload` 는 싣지 않는다 |
 | `notification.prune` | notification | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업의 한 바퀴, 한 시간마다. `deleted`, `retention_days`) |
+| `notification.withdrawal` | notification | 인증 서버가 서명해 알린 탈퇴로 그 사람의 알림과 끈 종류 지우기(#603. `deleted_notifications`, `deleted_mutes`). 사람은 싣지 않는다 |
 | `billing.hold` | game | 결제 서버에 서술 값의 홀드를 걸기 |
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
 | `billing.release` | game | 결제 서버에 홀드의 반환을 맡기기 |

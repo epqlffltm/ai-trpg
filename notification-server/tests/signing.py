@@ -1,7 +1,7 @@
 # notification-server/tests/signing.py
 
 """
-테스트가 알림을 넣는 서버 흉내를 낼 때 쓰는 도구. 그 서버처럼 요청에 서명해 보낸다.
+테스트가 알림을 넣는 서버와 인증 서버의 흉내를 낼 때 쓰는 도구. 그 서버처럼 요청에 서명해 보낸다.
 """
 
 import json
@@ -18,6 +18,8 @@ TEST_SECRETS = {
     'billing': 'test-billing-secret-0123456789abcd',
     'board': 'test-board-secret-0123456789abcdef',
 }
+# 인증 서버의 테스트용 서명 비밀. 탈퇴를 알린다. 위의 것과 다르다
+TEST_AUTH_SECRET = 'test-auth-secret-0123456789abcdefg'
 
 
 def put_path(source: str) -> str:
@@ -53,6 +55,23 @@ async def signed_put(
         signed_as or path,
         raw,
     )
+    return await client.post(
+        path, content=raw, headers={SIGNATURE_HEADER: signature, 'Content-Type': 'application/json'}
+    )
+
+
+def withdrawal_path(user_id: str) -> str:
+    """인증 서버가 그 사람의 탈퇴를 알리는 주소."""
+    return f'{API_PREFIX}/service/users/{user_id}/withdrawal'
+
+
+async def signed_withdrawal(
+    client: AsyncClient, user_id: str, body: object, *, secret: str = TEST_AUTH_SECRET
+) -> Response:
+    """인증 서버처럼 서명한 요청으로 그 사람의 탈퇴를 알린다. secret 을 주면 그 비밀로 서명한다."""
+    path = withdrawal_path(user_id)
+    raw = body if isinstance(body, bytes) else encode(body)
+    signature = sign(secret, int(time.time()), 'POST', path, raw)
     return await client.post(
         path, content=raw, headers={SIGNATURE_HEADER: signature, 'Content-Type': 'application/json'}
     )

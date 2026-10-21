@@ -4,7 +4,7 @@
 알림 서버의 설정. 환경 변수와 notification-server/.env 에서 읽는다.
 
 FastAPI 서버들이 함께 쓰는 칸(DB, 인증 서버, 로그, 수집기)은 공용 코드의 설정(server_core.settings.CoreSettings)에 있다.
-여기에는 이 서버의 이름과 기본값, 이 서버만의 칸(알림의 보관, 넣는 서버의 서명 비밀)을 둔다.
+여기에는 이 서버의 이름과 기본값, 이 서버만의 칸(알림의 보관, 넣는 서버와 인증 서버의 서명 비밀)을 둔다.
 
 비밀값과 환경마다 달라지는 값은 코드에 적지 않는다.
 다른 서버의 .env 와 따로 둔다. 한 서버가 다른 서버의 비밀값을 읽을 수 없게 하기 위해서다.
@@ -46,10 +46,16 @@ class Settings(CoreSettings):
     billing_server_secret: SecretStr = SecretStr('')
     board_server_secret: SecretStr = SecretStr('')
 
+    # 인증 서버가 탈퇴를 알리는 요청의 서명 비밀(#603, app/withdrawals/).
+    # 인증 서버의 NOTIFICATION_SECRET 과 같은 값이다.
+    # 알림을 넣는 비밀(service_secrets)과 따로 둔다. 인증 서버는 알림을 넣지 않고, 넣는 서버는 탈퇴를 알릴 수 없다.
+    # 비워 두면 탈퇴의 알림을 받지 않는다(401). 인증 서버는 비밀을 적은 뒤에 쌓인 것부터 다시 보낸다
+    auth_server_secret: SecretStr = SecretStr('')
+
     @model_validator(mode='after')
     def require_strong_distinct_secrets(self) -> Self:
         """적은 서명 비밀이 짧거나 서로 같으면 뜨지 않는다. 받기 시작한 뒤에 모든 요청이 401 인 것보다 낫다."""
-        written = [secret for secret in self.service_secrets().values() if secret]
+        written = [secret for secret in self.all_secrets() if secret]
         if any(len(secret) < MIN_SECRET_LENGTH for secret in written):
             raise ValueError(f'서명 비밀(*_SERVER_SECRET)은 {MIN_SECRET_LENGTH}자 이상이어야 한다')
         if len(set(written)) != len(written):
@@ -63,6 +69,10 @@ class Settings(CoreSettings):
             'billing': self.billing_server_secret.get_secret_value(),
             'board': self.board_server_secret.get_secret_value(),
         }
+
+    def all_secrets(self) -> list[str]:
+        """이 서버가 확인하는 서명 비밀 전부. 알림을 넣는 서버들과 인증 서버의 것이다. 비어 있는 것도 들어 있다."""
+        return [*self.service_secrets().values(), self.auth_server_secret.get_secret_value()]
 
 
 @lru_cache
