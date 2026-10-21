@@ -290,6 +290,8 @@ SIMPLE_JWT = {
             'ai-trpg-asset',
             # chat-server 는 아직 없다. 만들기 전에 이름을 넣어 둔다(docs/architecture/services.md 의 계획인 것)
             'ai-trpg-chat',
+            # story-server 도 아직 없다. chat 과 같이 미리 넣어 둔다(docs/architecture/services.md, #591)
+            'ai-trpg-story',
         ],
     ),
     # 다른 서버는 블랙리스트를 보지 않고 서명과 만료만 확인한다.

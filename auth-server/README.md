@@ -465,6 +465,7 @@ curl 로 시험할 때는 `-H 'Origin: http://localhost:8080'` 처럼 직접 붙
 | 알림 서버 | `ai-trpg-notification` |
 | asset 서버 | `ai-trpg-asset` |
 | chat 서버(아직 없다) | `ai-trpg-chat` |
+| story 서버(아직 없다) | `ai-trpg-story` |
 
 서버가 늘면 `config/settings.py`의 기본값과 `.env.example`에 이름을 더한다. `.env`에 `JWT_AUDIENCE`를 적어 둔 곳은 그 줄도 고친다.
 고치기 전에 발급한 access 토큰에는 새 이름이 없다. 수명이 15분이라 그 뒤로는 저절로 맞는다.
