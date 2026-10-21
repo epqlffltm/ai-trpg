@@ -59,6 +59,7 @@ SERVER_AUDIENCES = (
     'ai-trpg-notification',
     'ai-trpg-asset',
     'ai-trpg-chat',
+    'ai-trpg-story',
 )
 
 
