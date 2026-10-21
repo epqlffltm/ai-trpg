@@ -31,7 +31,7 @@ export function hasRoomForReply(replyCount: number): boolean {
   return replyCount < MAX_REPLIES_PER_COMMENT;
 }
 
-/** 이 사람이 이 댓글의 글쓴이인가. */
+/** 이 사람이 이 댓글의 글쓴이인가. 글쓴이가 탈퇴한 댓글(null)은 누구의 것도 아니다. 고칠 수 없고 운영자만 지운다. */
 export function isAuthor(
   comment: Pick<Comment, 'authorId'>,
   userId: string,

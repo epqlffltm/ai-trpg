@@ -95,7 +95,10 @@ export async function createTestApp(
     useWriteLimits(NO_WRITE_LIMITS),
   )(Test.createTestingModule({ imports: [AppModule, ...probes] }));
   const module = await customize(builder).compile();
-  const app = module.createNestApplication<NestExpressApplication>();
+  // 서버와 같이 받은 본문의 바이트를 남겨 둔다(main.ts). 서명한 요청(탈퇴의 알림)을 확인한다
+  const app = module.createNestApplication<NestExpressApplication>({
+    rawBody: true,
+  });
   // 테스트가 도는 동안에는 경고와 오류만 화면에 찍는다. 요청마다 한 줄씩 남는 로그가 테스트의 결과를 가린다.
   // 로그를 보는 테스트는 줄을 모으는 로거를 따로 꽂는다(app.useLogger)
   app.useLogger(['warn', 'error', 'fatal']);

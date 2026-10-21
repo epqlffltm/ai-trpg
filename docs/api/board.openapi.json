@@ -52,14 +52,18 @@
       "CommentResponse": {
         "properties": {
           "author_id": {
-            "description": "글쓴이. 지운 댓글이면 null",
+            "description": "글쓴이. 지운 댓글이거나 탈퇴한 사람이면 null",
             "nullable": true,
             "type": "string"
           },
           "author_nickname": {
-            "description": "글쓴이의 닉네임. 지운 댓글이거나 이 서버가 이름을 모르는 사람이면 null",
+            "description": "글쓴이의 닉네임. 지운 댓글이거나, 이 서버가 이름을 모르는 사람이거나, 탈퇴한 사람이면 null",
             "nullable": true,
             "type": "string"
+          },
+          "author_withdrawn": {
+            "description": "글쓴이가 탈퇴했는가. 지운 댓글이면 false 다",
+            "type": "boolean"
           },
           "content": {
             "description": "내용. 지운 댓글이면 null",
@@ -94,6 +98,7 @@
           "parent_id",
           "author_id",
           "author_nickname",
+          "author_withdrawn",
           "content",
           "deleted",
           "created_at",
@@ -104,14 +109,18 @@
       "CommentThreadResponse": {
         "properties": {
           "author_id": {
-            "description": "글쓴이. 지운 댓글이면 null",
+            "description": "글쓴이. 지운 댓글이거나 탈퇴한 사람이면 null",
             "nullable": true,
             "type": "string"
           },
           "author_nickname": {
-            "description": "글쓴이의 닉네임. 지운 댓글이거나 이 서버가 이름을 모르는 사람이면 null",
+            "description": "글쓴이의 닉네임. 지운 댓글이거나, 이 서버가 이름을 모르는 사람이거나, 탈퇴한 사람이면 null",
             "nullable": true,
             "type": "string"
+          },
+          "author_withdrawn": {
+            "description": "글쓴이가 탈퇴했는가. 지운 댓글이면 false 다",
+            "type": "boolean"
           },
           "content": {
             "description": "내용. 지운 댓글이면 null",
@@ -153,6 +162,7 @@
           "parent_id",
           "author_id",
           "author_nickname",
+          "author_withdrawn",
           "content",
           "deleted",
           "created_at",
@@ -403,12 +413,18 @@
       "PostResponse": {
         "properties": {
           "author_id": {
+            "description": "글쓴이. 탈퇴한 사람이면 null 이다",
+            "nullable": true,
             "type": "string"
           },
           "author_nickname": {
-            "description": "글쓴이의 닉네임. 이 서버가 이름을 모르는 사람이면 null 이다",
+            "description": "글쓴이의 닉네임. 이 서버가 이름을 모르는 사람이거나 탈퇴한 사람이면 null 이다",
             "nullable": true,
             "type": "string"
+          },
+          "author_withdrawn": {
+            "description": "글쓴이가 탈퇴했는가",
+            "type": "boolean"
           },
           "board": {
             "description": "글이 있는 게시판의 주소 이름(slug)",
@@ -448,6 +464,7 @@
           "board",
           "author_id",
           "author_nickname",
+          "author_withdrawn",
           "title",
           "comment_count",
           "pinned",
@@ -490,12 +507,18 @@
       "PostSummaryResponse": {
         "properties": {
           "author_id": {
+            "description": "글쓴이. 탈퇴한 사람이면 null 이다",
+            "nullable": true,
             "type": "string"
           },
           "author_nickname": {
-            "description": "글쓴이의 닉네임. 이 서버가 이름을 모르는 사람이면 null 이다",
+            "description": "글쓴이의 닉네임. 이 서버가 이름을 모르는 사람이거나 탈퇴한 사람이면 null 이다",
             "nullable": true,
             "type": "string"
+          },
+          "author_withdrawn": {
+            "description": "글쓴이가 탈퇴했는가",
+            "type": "boolean"
           },
           "board": {
             "description": "글이 있는 게시판의 주소 이름(slug)",
@@ -532,6 +555,7 @@
           "board",
           "author_id",
           "author_nickname",
+          "author_withdrawn",
           "title",
           "comment_count",
           "pinned",
@@ -681,7 +705,8 @@
             "type": "string"
           },
           "reporter_id": {
-            "description": "신고한 사람. 인증 서버의 public_id",
+            "description": "신고한 사람. 인증 서버의 public_id. 탈퇴한 사람이면 null 이다",
+            "nullable": true,
             "type": "string"
           }
         },
@@ -749,6 +774,33 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "WithdrawalDto": {
+        "properties": {
+          "withdrawn_at": {
+            "description": "인증 서버가 계정을 비운 시각(ISO 8601, 시간대 포함)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "withdrawn_at"
+        ],
+        "type": "object"
+      },
+      "WithdrawalResponse": {
+        "properties": {
+          "status": {
+            "description": "반영했다. 이미 했거나 할 것이 없었던 것도 같다",
+            "enum": [
+              "processed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
         "type": "object"
       }
     },
@@ -1825,6 +1877,70 @@
           "ReportReviews"
         ],
         "x-audience": "operator"
+      }
+    },
+    "/api/v1/board/service/users/{userId}/withdrawal": {
+      "post": {
+        "operationId": "WithdrawalsController_receive",
+        "parameters": [
+          {
+            "description": "인증 서버의 서명(t=<초>,v1=<HMAC>). 비밀은 AUTH_SERVER_SECRET 이다. 틀리면 401",
+            "in": "header",
+            "name": "X-Service-Signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawalDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawalResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "그 사람의 글과 댓글의 글쓴이, 신고한 사람을 비우고 닉네임과 보낼 알림을 지운다.",
+        "tags": [
+          "Withdrawals"
+        ],
+        "x-audience": "service"
       }
     },
     "/health": {

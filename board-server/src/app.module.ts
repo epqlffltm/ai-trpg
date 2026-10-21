@@ -34,6 +34,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { ObservabilityModule } from './observability/observability.module.js';
 import { PostsModule } from './posts/posts.module.js';
 import { ReportsModule } from './reports/reports.module.js';
+import { WithdrawalsModule } from './withdrawals/withdrawals.module.js';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { ReportsModule } from './reports/reports.module.js';
     CommentsModule,
     ReportsModule,
     NotificationsModule,
+    WithdrawalsModule,
     ObservabilityModule,
   ],
   providers: [

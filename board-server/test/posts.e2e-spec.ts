@@ -93,6 +93,7 @@ describe('글 쓰기', () => {
       board: 'free',
       author_id: WRITER,
       author_nickname: null,
+      author_withdrawn: false,
       title: '첫 글',
       comment_count: 0,
       pinned: false,
@@ -117,6 +118,7 @@ describe('글 쓰기', () => {
       ...POST,
       author_id: STRANGER,
       author_nickname: null,
+      author_withdrawn: false,
     });
 
     expect(response.status).toBe(400);
@@ -179,6 +181,7 @@ describe('글 쓰기', () => {
       board: 'notice',
       author_id: OPERATOR,
       author_nickname: null,
+      author_withdrawn: false,
     });
   });
 });
@@ -195,6 +198,7 @@ describe('글 읽기', () => {
       board: 'free',
       author_id: WRITER,
       author_nickname: null,
+      author_withdrawn: false,
       title: '첫 글',
       content: '본문입니다.',
     });
@@ -233,6 +237,7 @@ describe('글 목록', () => {
           board: 'free',
           author_id: STRANGER,
           author_nickname: null,
+          author_withdrawn: false,
           title: '나중에 쓴 글',
           comment_count: 0,
           pinned: false,
@@ -245,6 +250,7 @@ describe('글 목록', () => {
           board: 'free',
           author_id: WRITER,
           author_nickname: null,
+          author_withdrawn: false,
           title: '먼저 쓴 글',
           comment_count: 0,
           pinned: false,

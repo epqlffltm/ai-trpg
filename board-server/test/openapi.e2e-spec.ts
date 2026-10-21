@@ -76,6 +76,19 @@ describe('API 목록', () => {
     },
   );
 
+  it('탈퇴를 받는 주소는 토큰이 아니라 인증 서버의 서명을 받는다고 적혀 있다', () => {
+    const found = operation('post', '/service/users/{userId}/withdrawal');
+
+    expect(found.security).toEqual([{}]);
+    expect(found.parameters).toContainEqual(
+      expect.objectContaining({
+        name: 'X-Service-Signature',
+        in: 'header',
+        required: true,
+      }),
+    );
+  });
+
   it('신고하기는 운영자의 것이 아니다. 같은 주소의 신고 목록과 갈린다', () => {
     expect(operation('post', '/posts/{id}/reports')).not.toHaveProperty(
       'x-audience',

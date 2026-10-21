@@ -85,4 +85,17 @@ describe('noticesForComment', () => {
 
     expect([notice.userId, notice.kind]).toEqual([COMMENTER, COMMENT_REPLIED]);
   });
+
+  it('글쓴이가 탈퇴한 글에 단 댓글은 알리지 않는다', () => {
+    const withdrawn = context(COMMENTER);
+    withdrawn.post.authorId = null;
+
+    expect(noticesForComment(withdrawn)).toEqual([]);
+  });
+
+  it('글쓴이가 탈퇴한 댓글에 단 답글은 알리지 않는다. 글쓴이에게 대신 보내지도 않는다', () => {
+    expect(
+      noticesForComment(context(REPLIER, { id: '5', authorId: null })),
+    ).toEqual([]);
+  });
 });
