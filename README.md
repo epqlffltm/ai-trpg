@@ -53,7 +53,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 
 ### 1. 인프라 환경 변수
 
-일곱 개의 `.env`(루트와 서버 여섯)를 `.env.example` 에서 만들고, 비밀번호와 비밀을 난수로 채운다. 저장소 루트에서 실행한다.
+여덟 개의 `.env`(루트와 서버 일곱)를 `.env.example` 에서 만들고, 비밀번호와 비밀을 난수로 채운다. 저장소 루트에서 실행한다.
 이 파일들은 커밋하지 않는다.
 
 ```
@@ -101,6 +101,7 @@ docker compose ps
 - 결제 서버: [billing-server/README.md](billing-server/README.md#실행)
 - 알림 서버: [notification-server/README.md](notification-server/README.md#실행)
 - asset 서버: [asset-server/README.md](asset-server/README.md#실행)
+- chat 서버: [chat-server/README.md](chat-server/README.md#실행)
 
 ### 4. 모든 서버를 컨테이너로 (선택)
 
@@ -445,6 +446,8 @@ board-server/             NestJS 게시판 서버 (독립된 npm 프로젝트)
 billing-server/           Go 결제 서버 (독립된 Go 모듈). 연습용이고 실제 결제가 아니다
 notification-server/      FastAPI 알림 서버 (독립된 uv 프로젝트)
 asset-server/             FastAPI asset 서버. 계정 페르소나, 캐릭터, 그림 (독립된 uv 프로젝트, 만드는 중 #564)
+chat-server/              FastAPI chat 서버. 캐릭터 하나와 1:1 대화 (독립된 uv 프로젝트, 만드는 중 #590)
+shared/                   FastAPI 서버들이 함께 쓰는 코드(server-core). 서버의 이미지에 빌드할 때 넣는다
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
 docker/nginx/templates/   프록시(nginx)의 설정. 로컬과 staging 이 함께 쓰는 몸통(api.inc), http 단계(http.inc), 보안 머리말
 docker/nginx/staging/     staging 의 프록시: 듣는 포트와 TLS, 허용 주소, 인증서를 지켜보다 다시 읽히는 시작 스크립트
@@ -459,7 +462,7 @@ docker/loki/              로그 저장소(Loki)의 설정
 docker/prometheus/        메트릭 저장소(Prometheus)의 설정
 docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki, Prometheus)
 docs/                     서버들이 함께 지키는 규격 (관측), 설계와 화면 명세, 서버마다의 API 목록(docs/api/, OpenAPI)
-tools/                    패치 zip 을 적용하는 도구(apply_ai_update.py), .env 일곱을 만들고 비밀을 채우는 도구(fill_env.py), 그 위에 staging 의 값을 적는 도구(staging_env.py), 서버마다의 API 목록을 뽑는 도구(export_openapi.py)
+tools/                    패치 zip 을 적용하는 도구(apply_ai_update.py), .env 여덟을 만들고 비밀을 채우는 도구(fill_env.py), 그 위에 staging 의 값을 적는 도구(staging_env.py), 서버마다의 API 목록을 뽑는 도구(export_openapi.py)
 docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 그림 저장소(SeaweedFS), 모든 서버와 워커, cron, 프록시(프로필 app), 로그와 메트릭 모으기(프로필 observability)
 docker-compose.staging.yml  staging(VM)에서 위의 파일에 덮어쓰는 설정. TLS, 허용 주소, certbot, 임베딩의 Ollama, 환경 이름
 .env.example              인프라 환경 변수 목록
