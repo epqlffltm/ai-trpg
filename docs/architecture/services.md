@@ -78,7 +78,7 @@
 | story | `story-server/` | FastAPI | 8007 | `ai-trpg-story` | `story`, `story_test` | `10-story-role.sql` | 세계관 안에서 여러 인물과 이야기. 시각, 인물의 위치, 이벤트와 선택지, 호감도, 고백과 엔딩. 대화의 핵심은 chat 과 같은 공용 코드를 쓴다. [story 서버 설계](story.md) |
 | 관리 | 이름 미정(`ops-server` 후보) | FastAPI | 미정 | 미정 | `ops` | 미정 | 운영 조회와 집계, 관리자 작업 요청과 감사 기록. [관측 규격의 경계](../observability.md#관리-서버의-경계)를 따른다 |
 | 프런트엔드 | `web/` | React + TypeScript(Vite, SPA) | - | - | - | - | 사용자 화면과 관리자 화면. 같은 nginx 가 정적 파일로 내준다. [화면 명세](../product/screens.md#프런트-구조) |
-| 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | FastAPI 서버의 공통부(`server-core`: 토큰 검증, 관측, 서버끼리의 서명), AI 호출(`ai-core`), 공용 템플릿, 나중에 대화의 핵심(`conversation-core`). [공용 코드 규칙](shared-code.md) |
+| 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | FastAPI 서버의 공통부(`server-core`: 토큰 검증, 관측, 서버끼리의 서명. 있다, #588), AI 호출(`ai-core`), 공용 템플릿, 나중에 대화의 핵심(`conversation-core`). [공용 코드 규칙](shared-code.md) |
 
 - 포트와 스크립트 번호는 비어 있는 다음 번호를 예약한 것이다. 서버를 실제로 만드는 PR 에서 확정한다.
   알림 서버가 먼저 만들어져 8004 와 06 을 썼다. 07 은 메트릭을 읽는 계정(`07-monitor-role.sql`)이 먼저 썼다. story 가 예약했던 8006 과 08 은 asset 이 받았다.
@@ -207,7 +207,7 @@
 1단계(운영자 혼자 TRPG, chat, story 를 끝까지)에 1~6 이 들어간다. VM 은 1단계가 끝난 뒤에 띄운다(2026-10-20, [화면 명세의 첫 출시의 범위](../product/screens.md#첫-출시의-범위)).
 
 1. **API 목록.** 다섯 서버가 모두 OpenAPI 를 내고 `docs/api/` 에 파일로 모은다. CI 가 서버의 것과 같은지 본다. 프런트의 타입과 Stitch 에 넘길 목록이 이것이다(2026-10-21).
-2. `shared/` 를 만든다. 먼저 서버의 공통부(`server-core`: 토큰 검증, 관측)를 알림과 asset 에서 뽑아 두 서버를 옮기고, chat 과 story 는 처음부터 그것을 쓴다. trpg-server 는 그 뒤에 하나씩 옮긴다(2026-10-21). AI 호출 코드(`ai-core`)는 trpg-server 안에서 경계를 정리했고(#496, #497, #498), `shared/` 로 옮기는 일은 chat-server 의 "한 번의 말"을 만들 때 한다(#499). 방식은 [공용 코드 규칙의 정한 것](shared-code.md#정한-것)에 있다.
+2. `shared/` 를 만든다. 먼저 서버의 공통부(`server-core`: 토큰 검증, 관측)를 알림과 asset 에서 뽑아 두 서버를 옮겼다(#588). chat 과 story 는 처음부터 그것을 쓴다. trpg-server 는 그 뒤에 하나씩 옮긴다(#589). AI 호출 코드(`ai-core`)는 trpg-server 안에서 경계를 정리했고(#496, #497, #498), `shared/` 로 옮기는 일은 chat-server 의 "한 번의 말"을 만들 때 한다(#499). 방식은 [공용 코드 규칙의 정한 것](shared-code.md#정한-것)에 있다.
 3. `asset-server` 를 새로 만들고, 새 종류인 캐릭터를 처음부터 거기서 만든다. 같은 때에 trpg-server 가 세계관과 로어북의 게시된 판을, asset-server 가 나중에 줄 것과 같은 모양의 API 로 내준다.
 4. `chat-server` 의 첫 버전. 캐릭터를 쓴 대화(판 가져오기), 스트리밍 대화, 다시 생성, 자동 요약 기억, 모델 등급과 크레딧, 장소와 소지품. TRPG 의 지도, 물건, 인물을 공용 템플릿으로 올려 쓴다. 자세한 순서는 [chat 서버 설계](chat-server.md#만드는-순서).
 5. `story-server` 의 첫 버전. 여러 인물, 호감도(NPC 의 태도에서 이어 가는 수치), 이벤트와 엔딩(조건으로 드러나는 퀘스트의 모양). 규칙은 [story 서버 설계](story.md)에 있다(2026-10-20). chat 과 같은 대화의 핵심은 그때 `shared/conversation-core` 로 뽑아 함께 쓴다.

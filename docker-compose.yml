@@ -59,11 +59,21 @@ x-billing-image: &billing-image
   image: ai-trpg/billing-server:local
 
 x-notification-image: &notification-image
-  build: ./notification-server
+  build:
+    context: ./notification-server
+    # 공용 코드(shared/). Dockerfile 이 COPY --from=shared 로 가져온다(docs/architecture/shared-code.md 의 "정한 것").
+    # 빌드 범위를 루트로 넓히지 않는다. 다른 서버의 .env 가 빌드에 섞이지 않게
+    additional_contexts:
+      shared: ./shared
   image: ai-trpg/notification-server:local
 
 x-asset-image: &asset-image
-  build: ./asset-server
+  build:
+    context: ./asset-server
+    # 공용 코드(shared/). Dockerfile 이 COPY --from=shared 로 가져온다(docs/architecture/shared-code.md 의 "정한 것").
+    # 빌드 범위를 루트로 넓히지 않는다. 다른 서버의 .env 가 빌드에 섞이지 않게
+    additional_contexts:
+      shared: ./shared
   image: ai-trpg/asset-server:local
 
 # 인증 서버의 JWT 개인키가 든 폴더. 읽기 전용으로 붙인다. 폴더가 없으면 만들지 않고 실패한다

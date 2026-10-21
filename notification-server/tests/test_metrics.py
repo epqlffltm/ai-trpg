@@ -2,8 +2,10 @@
 
 """
 메트릭을 세는 곳을 검증한다. 이름, 단위, label 이 docs/observability.md 의 "메트릭"의 표와 같은지 본다.
-app/observability/metrics.py, request_metrics.py, pool_metrics.py 와, 그것을 부르는 readiness, 정리 작업, 알림 넣기.
-메모리에 모으는 것(tests/metrics.py)으로 읽는다. 끝에서 끝까지(Prometheus 에 들어오는가)는 CI 의 stack 이 본다.
+server_core/observability/metrics.py, request_metrics.py, pool_metrics.py 와,
+그것을 부르는 readiness, 정리 작업, 알림 넣기(app/notifications/metrics.py).
+메모리에 모으는 것(server_core/testing/metrics.py)으로 읽는다.
+끝에서 끝까지(Prometheus 에 들어오는가)는 CI 의 stack 이 본다.
 """
 
 import asyncio
@@ -12,15 +14,15 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.database import POOL_MAX_CONNECTIONS
+from server_core.observability.metrics import DURATION_BUCKETS, OTHER_METHOD, method_label, record_request
+from server_core.observability.pool_metrics import MeteredPool
+from server_core.observability.request_metrics import RequestMetricsMiddleware
+from server_core.testing.metrics import MetricsRecorder
 from sqlalchemy import text
 
 from app.api import readiness
-from app.core.database import POOL_MAX_CONNECTIONS
 from app.notifications.retention import PRUNE_OPERATION, NotificationPruner
-from app.observability.metrics import DURATION_BUCKETS, OTHER_METHOD, method_label, record_request
-from app.observability.pool_metrics import MeteredPool
-from app.observability.request_metrics import RequestMetricsMiddleware
-from tests.metrics import MetricsRecorder
 from tests.signing import signed_put
 
 USER = '0b9f5e0c-6c1d-4f6e-9a57-3f1c2d4e5a6b'

@@ -1,7 +1,7 @@
 # notification-server/app/mutes/router.py
 
 """
-사용자가 알림의 종류별로 끄고 켜는 API(#525). 인증 서버가 발급한 access 토큰으로 누구인지 안다(app/auth).
+사용자가 알림의 종류별로 끄고 켜는 API(#525). 인증 서버가 발급한 access 토큰으로 누구인지 안다(server_core/auth).
 
     GET    /api/v1/notification/me/notifications/mutes           끌 수 있는 종류마다 껐는지
     PUT    /api/v1/notification/me/notifications/mutes/{kind}    그 종류를 끈다
@@ -16,10 +16,10 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
+from server_core.auth.dependencies import CurrentUser
+from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import CurrentUser
-from app.core.database import get_session
 from app.mutes import service
 from app.mutes.schemas import MuteSettings
 from app.notifications.models import KIND_MAX_LENGTH
