@@ -488,6 +488,64 @@ no_env_file_in_image() {
   compose exec -T "$1" test ! -e /app/.env
 }
 
+# --- staging 의 데이터 디스크(#539, docker/disks/prepare-disks.sh) ---
+
+# 컨테이너가 실제로 도는 사용자(uid). 셸이 없는 이미지(Tempo)도 보도록 호스트에서 그 프로세스를 본다
+process_uid() {
+  local pid
+  pid="$(docker inspect -f '{{.State.Pid}}' "$(container_of "$1")")"
+  ps -o uid= -p "$pid" | tr -d ' '
+}
+
+# staging 의 데이터 디스크에 만드는 폴더의 주인(prepare-disks.sh 의 표)이 그 컨테이너가 실제로 도는 uid 와 같은가.
+# 다르면 staging 에서 그 컨테이너가 제 폴더에 쓰지 못한다. 이미지를 올려 사용자가 바뀌면 여기서 잡는다
+disk_owners_match() {
+  local service uid actual problems=0
+  while read -r service uid; do
+    actual="$(process_uid "$service")"
+    if [[ "$actual" != "$uid" ]]; then
+      echo "$service: 표는 $uid, 컨테이너는 $actual 로 돈다"
+      problems=1
+    fi
+  done < <(bash docker/disks/prepare-disks.sh --owners)
+  return "$problems"
+}
+
+# prepare-disks.sh 를 임시 디스크(tmpfs) 둘에 돌려 본다.
+# 마운트하기 전에는 아무것도 만들지 않고 멈추고, 마운트한 뒤에는 표의 주인과 권한으로 폴더를 만드는가
+prepare_disks_works() {
+  local root db observability service uid folder disk problems=0
+  root="$(mktemp -d)"
+  db="$root/db"
+  observability="$root/observability"
+  mkdir -p "$db" "$observability"
+  if sudo DB_DISK="$db" OBSERVABILITY_DISK="$observability" bash docker/disks/prepare-disks.sh >/dev/null 2>&1; then
+    echo "디스크를 마운트하지 않았는데 멈추지 않았다"
+    return 1
+  fi
+  if find "$db" "$observability" -mindepth 1 | grep -q .; then
+    echo "디스크를 마운트하지 않았는데 폴더를 만들었다"
+    return 1
+  fi
+  sudo mount -t tmpfs none "$db"
+  sudo mount -t tmpfs none "$observability"
+  sudo DB_DISK="$db" OBSERVABILITY_DISK="$observability" bash docker/disks/prepare-disks.sh >/dev/null
+  while read -r service uid; do
+    if [[ "$service" == db ]]; then folder="$db/postgres"; else folder="$observability/$service"; fi
+    if [[ "$(stat -c '%u' "$folder")" != "$uid" ]]; then
+      echo "$folder 의 주인이 $uid 가 아니다"
+      problems=1
+    fi
+  done < <(bash docker/disks/prepare-disks.sh --owners)
+  for disk in "$db" "$observability"; do
+    [[ -d "$disk/probe" ]] || { echo "$disk/probe 가 없다"; problems=1; }
+  done
+  [[ "$(stat -c '%a' "$db/postgres")" == 700 ]] || { echo "$db/postgres 가 700 이 아니다"; problems=1; }
+  sudo umount "$db" "$observability"
+  rm -rf "$root"
+  return "$problems"
+}
+
 # 설정을 보는 검사(secret_scope.py, port_scope.py, logging_scope.py, dashboard_scope.py)의 규칙이 맞는가.
 # 규칙이 틀리면 새는 것을 놓치고 초록이 된다. .env 를 만들고 비밀을 채우는 도구(tools/fill_env.py)의 테스트도 함께 돌린다
 scope_rules_hold() {
@@ -703,6 +761,12 @@ prometheus_finds() {
     python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["data"]["result"] else 1)'
 }
 
+# Prometheus 의 보관에 기간(14일)과 크기(8GB)가 함께 걸렸는가(docker/prometheus/prometheus.yml, #539)
+prometheus_retention_has_size() {
+  fetch_on observability http://prometheus:9090/api/v1/status/runtimeinfo |
+    python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["data"]["storageRetention"] == "2w or 8GiB" else 1)'
+}
+
 # Prometheus 가 긁는 대상이 하나도 없는가. 받기만 해야 저장소를 Mimir 로 바꿀 때 Alloy 의 주소만 바뀐다
 prometheus_scrapes_nothing() {
   fetch_on observability http://prometheus:9090/api/v1/targets |
@@ -861,6 +925,12 @@ check_metrics() {
     eventually prometheus_finds 'pg_up{job="postgres", instance="db"} == 1'
   report "Alloy 가 Redis 의 메트릭을 읽는다(redis_up == 1)" \
     eventually prometheus_finds 'redis_up{job="redis", instance="redis"} == 1'
+  # 로컬과 CI 의 디스크는 기본 디스크(system) 하나다. staging 은 db 와 observability 가 더해진다(docker/alloy/metrics.alloy)
+  report "Alloy 가 디스크(system)의 크기와 남은 양을 잰다" \
+    eventually prometheus_finds 'node_filesystem_avail_bytes{job="disks", disk="system"} > 0'
+  report "디스크의 지표는 정한 마운트만 남긴다(로컬은 하나)" \
+    eventually prometheus_finds 'count(node_filesystem_size_bytes{job="disks"}) == 1'
+  report "Prometheus 의 보관에 크기의 상한(8GB)이 걸렸다" prometheus_retention_has_size
   report "monitor 계정은 서버의 표를 읽지 못한다" monitor_cannot_read_tables
   report "monitor 계정은 쓰지 못한다(읽기 전용)" monitor_cannot_write
   report "Alloy 가 서버들의 망(default)에 없다. DB 와 Redis 에는 datastore-metrics 로만 닿는다" alloy_off_server_network
@@ -1161,6 +1231,8 @@ check() {
   report "게시판 서버가 알림 서버에 닿는다" reachable_from board-server http://notification-server:8004/health
   report "게시판 서버가 서명한 알림을 알림 서버가 받는다" board_notification_accepted
   report "설정 검사(비밀, 열린 포트, 로그 상한, 대시보드)와 .env 를 채우는 도구의 규칙이 맞다" scope_rules_hold
+  report_problems "staging 의 데이터 디스크 폴더의 주인이 컨테이너가 도는 사용자와 같다(prepare-disks.sh)" disk_owners_match
+  report_problems "데이터 디스크의 폴더를 만드는 스크립트가 마운트를 확인하고 표대로 만든다(prepare-disks.sh)" prepare_disks_works
   check_config "비밀은 그것을 쓰는 프로세스에만 간다(docker-compose.yml 과 secret_scope.py 의 표)" compose .github/scripts/secret_scope.py
   check_config "바깥에 여는 포트는 정해 둔 것뿐이고 모두 127.0.0.1 에 묶였다(port_scope.py)" compose .github/scripts/port_scope.py
   check_config "모든 서비스의 로그에 크기와 파일 수의 상한이 있다(logging_scope.py)" compose .github/scripts/logging_scope.py

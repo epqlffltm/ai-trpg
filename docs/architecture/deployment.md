@@ -23,6 +23,7 @@
 - [외부 서비스](#외부-서비스)
 - [백업](#백업)
 - [그림 저장소](#그림-저장소)
+- [디스크](#디스크)
 - [지켜보기](#지켜보기)
 - [VM 준비 순서](#vm-준비-순서)
 - [만드는 순서](#만드는-순서)
@@ -271,15 +272,39 @@ chat 과 story 의 그림(배경, 캐릭터, 일러스트)을 둔다(#540, 2026-
 - **staging.** `object-store` 를 띄우지 않는다. 그림 버킷(서울, 공개 접근 차단)과 그 버킷만 쓰는 IAM 사용자(`docker/object-store/iam-policy.json`: 올리기, 받기, 지우기)를 만들고, 그 키를 루트 `.env` 의 `IMAGE_STORE_ACCESS_KEY_ID`, `IMAGE_STORE_SECRET_ACCESS_KEY` 에 사람이 적는다([staging VM 준비](../operations/staging-vm.md)의 1번과 6번). `tools/staging_env.py` 는 버킷의 이름(`--image-bucket`)을 적고 두 키를 비워 둔다. 비어 있으면 compose 가 뜨기를 거부한다. 백업과 같은 버킷을 주면 그 도구가 거절한다.
 - 아직 정하지 않은 것은 [열린 질문](#열린-질문)에 있다.
 
+## 디스크
+
+크게 자라는 데이터를 기본 디스크와 나눈다(#539, 2026-10-21 결정). staging 에서만이다. 로컬과 CI 는 Docker 의 볼륨 그대로다.
+
+| 디스크 | 크기(시작값) | 두는 것 | 까닭 |
+| --- | --- | --- | --- |
+| 기본(system) | 인스턴스의 것 | OS, Docker 의 이미지와 컨테이너, 백업의 덤프, Ollama 의 모델, 인증서 | 백업의 덤프가 DB 와 다른 디스크에 있어 DB 디스크를 잃어도 남는다 |
+| DB(`/mnt/db`) | 16GB | PostgreSQL | 관측 데이터가 폭주해도 DB 가 쓰기를 멈추지 않는다. 크기를 따로 재고 따로 키운다 |
+| 관측(`/mnt/observability`) | 32GB | Loki, Prometheus(8GB 상한), Alertmanager, Tempo, Grafana, Alloy | 가장 빨리, 예측하기 어렵게 자란다. 잃어도 서비스는 그대로다 |
+
+- **붙이는 법.** Lightsail 의 블록 스토리지 둘을 ext4 로 포맷해 이름표(LABEL)로 마운트한다(`nofail`). Docker 는 두 디스크가 마운트된 뒤에 뜬다(`After=`). `docker-compose.staging.yml` 이 로컬의 볼륨 자리에 그 디스크의 폴더를 붙인다. 폴더가 없으면 컨테이너가 뜨지 않는다(`create_host_path: false`). 마운트를 빠뜨렸을 때 기본 디스크에 몰래 쓰지 않게 한다.
+- **폴더.** `docker/disks/prepare-disks.sh` 가 컨테이너마다 그 사용자(uid)의 것으로 만든다. 디스크가 마운트되지 않았으면 만들지 않는다. CI(stack)가 그 표의 uid 와 컨테이너가 실제로 도는 uid 를 견주고, 임시 디스크로 스크립트를 돌려 본다.
+- **재기와 경보.** Alloy 안의 node_exporter 가 디스크마다(system, db, observability) 잰다. node_exporter 의 경보 묶음을 따라 남은 비율(15%, 5%)과 "지금 속도면 곧 찬다"(24시간, 4시간)를 함께 본다. 화면은 대시보드 `disks` 다([관측 규격의 디스크](../observability.md#붙인-것-디스크)).
+- **크기를 정하는 법.** 띄운 뒤 일주일 동안 대시보드 `disks` 의 "하루에 느는 양"을 보고 정한다. 볼륨마다의 내역은 손으로 한 번 본다(`du`, [staging VM 준비](../operations/staging-vm.md)의 11번). 붙인 채로는 키우지 못하고 스냅샷에서 큰 디스크를 만들어 바꾼다.
+
+고르지 않은 것:
+
+| 안 | 고르지 않은 까닭 |
+| --- | --- |
+| 관측 데이터만 나눈다(디스크 하나) | DB 의 크기를 따로 재고 키울 수 없다 |
+| 데이터를 모두 한 디스크에 | OS 는 지키지만 로그가 폭주하면 같은 디스크의 DB 가 멈춘다 |
+| Docker 의 데이터 폴더(`data-root`)를 통째로 옮긴다 | 설정 하나로 되지만 나누는 것이 없다 |
+| 볼륨마다 크기를 지표로(du 를 도는 cron 컨테이너) | 정석이 아니다. 훑을 때마다 디스크를 읽고, DB 의 데이터까지 읽을 수 있는 컨테이너가 하나 는다. 디스크를 나누면 디스크의 지표가 곧 저장소의 크기다 |
+
 ## 지켜보기
 
-혼자 쓰는 동안은 가볍게 간다. 로그를 모으는 것(Alloy, Loki, Grafana)과 메트릭의 저장소(Prometheus)는 compose 의 프로필 `observability` 로 붙였다(#25, [README 의 로그와 메트릭 모으기](../../README.md#로그와-메트릭-모으기)). `staging` 에서 켠다(`COMPOSE_PROFILES=app,observability`). Grafana 는 지금처럼 `127.0.0.1:3000` 에만 열고 SSH 터널로 붙는다. 서버의 메트릭은 서버마다 붙이는 중이다.
+혼자 쓰는 동안은 가볍게 간다. 로그를 모으는 것(Alloy, Loki, Grafana)과 메트릭의 저장소(Prometheus)는 compose 의 프로필 `observability` 로 붙였다(#25, [README 의 로그와 메트릭 모으기](../../README.md#로그와-메트릭-모으기)). `staging` 에서 켠다(`COMPOSE_PROFILES=app,observability`). Grafana 는 VM 의 `127.0.0.1:3000` 에만 열고 사설망(Tailscale)으로 넘겨 연다(`tailscale serve`, #539). 인터넷에는 열지 않는다. 서버의 메트릭은 서버마다 붙이는 중이다.
 수집기, 보관 기간, Grafana 를 여는 곳은 [관측 규격](../observability.md#수집기grafana-alloy를-붙일-자리)에 정했다.
 같은 VM 에 올리므로 메모리를 다시 잰다(아래 [열린 질문](#열린-질문)). 문제가 생기면 로그와 메트릭을 S3 에 따로 두고 VM 을 나눈다.
 
 - **가동 확인.** 바깥의 무료 감시(UptimeRobot 등)가 몇 분마다 `https://<도메인>/healthz` 를 부르고, 죽으면 메일을 보낸다. 프록시 자신만 답한다(`{"status":"ok"}`). VM, nginx, TLS 가 살아 있는지를 본다. 감시가 인증서의 만료도 보면 켠다.
 - **인증서의 남은 날짜.** certbot 의 `healthy` 다([도메인과 TLS](#도메인과-tls)). 지금은 `docker compose ps` 로 본다. 컨테이너의 상태를 경보로 잇는 일은 #25 의 경보에서 한다.
-- **디스크.** 로그에는 상한이 있지만 백업과 이미지가 쌓인다. 남은 공간이 줄면 알린다(Lightsail 의 경보나 cron 한 줄).
+- **디스크.** 디스크마다 남은 비율과 "곧 찬다"를 경보로 본다(위의 [디스크](#디스크)). 경보는 다른 경보와 같은 길(Alertmanager)로 온다.
 - **바깥 백업.** `backup-offsite` 의 `healthy` 다. 26시간 넘게 올리지 못했거나 주마다 풀어 보기가 실패하면 `unhealthy` 다([백업](#백업)).
 - **컨테이너의 상태**(`docker compose ps` 의 `healthy`).
 - 장애 판정은 이 수치와 조건이 한다. 관리 서버와 요약은 나중이다(`docs/observability.md`).
@@ -288,13 +313,13 @@ chat 과 story 의 그림(배경, 캐릭터, 일러스트)을 둔다(#540, 2026-
 
 처음 한 번 하는 일이다. 순서마다의 실제 명령은 [staging VM 준비](../operations/staging-vm.md)에 있다. 여기에는 무엇을 하는지만 둔다.
 
-1. Lightsail 에 인스턴스를 만든다(서울, Ubuntu, 8GB). 고정 IP 를 붙이고, 방화벽에서 22 를 내 주소로 좁히고 80, 443 을 연다. 자동 스냅샷을 켠다.
+1. Lightsail 에 인스턴스를 만든다(서울, Ubuntu, 8GB). 고정 IP 를 붙이고, 방화벽에서 22 를 내 주소로 좁히고 80, 443 을 연다. 자동 스냅샷을 켠다. 데이터 디스크 둘(DB 16GB, 관측 32GB)을 만들어 붙이고 그 자동 스냅샷도 켠다([디스크](#디스크)).
 2. SSH 를 키로만 받게 한다. 패키지를 올리고 보안 업데이트를 저절로 받게 한다(unattended-upgrades).
 3. 스왑 2GB 를 만든다.
-4. Docker 와 compose 를 공식 저장소에서 설치한다. `/etc/docker/daemon.json` 에 로그 상한을 적는다(README "외부에 열기 전").
-5. Tailscale 을 VM 과 집 PC 에 설치하고 같은 사설망에 넣는다. 접근 규칙(ACL)으로 VM 이 집 PC 의 11434 에만 닿게 한다. 집 PC 의 Ollama 를 사설망 주소에만 듣게 한다.
+4. Docker 와 compose 를 공식 저장소에서 설치한다. `/etc/docker/daemon.json` 에 로그 상한을 적는다(README "외부에 열기 전"). 데이터 디스크 둘을 포맷해 마운트하고, Docker 가 그 뒤에 뜨게 한다.
+5. Tailscale 을 VM 과 집 PC 에 설치하고 같은 사설망에 넣는다. 접근 규칙(ACL)으로 VM 이 집 PC 의 11434 에만 닿게 한다. 집 PC 의 Ollama 를 사설망 주소에만 듣게 한다. Grafana 를 사설망에 연다(`tailscale serve`).
 6. 도메인을 사서 A 레코드를 고정 IP 로 가리킨다.
-7. 저장소를 받고, 비밀과 `.env` 를 새로 만든다. `tools/staging_env.py` 가 여섯을 한 번에 만든다. 비밀과 짝은 `tools/fill_env.py` 가 채우고, 그 위에 staging 의 값을 적는다([비밀과 설정](#비밀과-설정)).
+7. 저장소를 받고, 데이터 디스크에 컨테이너의 폴더를 만들고(`docker/disks/prepare-disks.sh`), 비밀과 `.env` 를 새로 만든다. `tools/staging_env.py` 가 여섯을 한 번에 만든다. 비밀과 짝은 `tools/fill_env.py` 가 채우고, 그 위에 staging 의 값을 적는다([비밀과 설정](#비밀과-설정)).
 8. 허용 주소를 적는다: `cp docker/nginx/allowlist/allow.conf.example docker/nginx/allowlist/allow.conf` 그다음 내 공인 IP 를 `allow` 줄로.
 9. 바깥 백업을 준비한다([백업](#백업)).
    - S3 에 버킷을 만들고(서울, 공개 접근 차단, 버전 관리, 수명 주기), IAM 사용자에 `docker/backup-offsite/iam-policy.json` 의 권한을 주고 접근 키를 만든다.

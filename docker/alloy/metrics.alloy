@@ -123,6 +123,63 @@ prometheus.scrape "datastores" {
 	forward_to      = [prometheus.remote_write.local.receiver]
 }
 
+// 디스크(#539). Alloy 안의 node_exporter(파일시스템만)가 디스크마다 크기와 남은 양을 잰다. 새 컨테이너가 없다.
+// 호스트의 폴더를 붙이지 않는다. 컨테이너 안에 보이는 마운트가 놓인 디스크를 잰다. 그 가운데 셋만 남긴다
+//   /etc/alloy            저장소의 이 폴더(compose 의 bind). OS 와 Docker 가 있는 기본 디스크다            disk="system"
+//   /disks/db             staging 의 DB 디스크에 둔 빈 폴더(docker-compose.staging.yml)                    disk="db"
+//   /disks/observability  staging 의 관측 디스크(Loki, Prometheus, Tempo, Grafana, Alloy)에 둔 빈 폴더    disk="observability"
+// 로컬과 CI 는 system 하나다. 경보는 docker/prometheus/rules/ai-trpg.yml 의 disks, 화면은 대시보드 disks 다
+prometheus.exporter.unix "disks" {
+	set_collectors = ["filesystem"]
+}
+
+discovery.relabel "disks" {
+	targets = prometheus.exporter.unix.disks.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "disks"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "host"
+	}
+}
+
+// 디스크는 천천히 바뀐다. 1분마다 긁는다
+prometheus.scrape "disks" {
+	targets         = discovery.relabel.disks.output
+	scrape_interval = "60s"
+	forward_to      = [prometheus.relabel.disks.receiver]
+}
+
+// 위의 세 마운트의 파일시스템 지표와 긁기의 성공(up)만 남기고, 마운트를 디스크의 이름(disk)으로 바꿔 적는다
+prometheus.relabel "disks" {
+	forward_to = [prometheus.remote_write.local.receiver]
+
+	rule {
+		source_labels = ["__name__", "mountpoint"]
+		separator     = ";"
+		regex         = "up;|node_filesystem_[a-z_]+;(/etc/alloy|/disks/db|/disks/observability)"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["mountpoint"]
+		regex         = "/etc/alloy"
+		target_label  = "disk"
+		replacement   = "system"
+	}
+
+	rule {
+		source_labels = ["mountpoint"]
+		regex         = "/disks/(db|observability)"
+		target_label  = "disk"
+		replacement   = "$1"
+	}
+}
+
 // Prometheus 로 보낸다. 보내지 못한 것은 --storage.path(볼륨 alloydata)의 WAL 에 남았다가 Prometheus 가 돌아오면 보낸다
 prometheus.remote_write "local" {
 	endpoint {

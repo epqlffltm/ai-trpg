@@ -747,3 +747,128 @@ tests:
             exp_annotations:
               summary: 게시판 서버의 알림 보내기가 실패하고 있다
               description: 댓글과 답글의 알림이 발송함에 쌓인다. 게시판 서버의 로그(operation=notification.send, error_code=job.failed)를 본다
+
+  # 디스크: 남은 공간이 10% 에 머문다. 30분 뒤에 DiskSpaceLow 가 울린다. 줄지 않으므로 곧 찬다는 경보는 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="disks", instance="host", disk="system", mountpoint="/etc/alloy"}'
+        values: '10x40'
+      - series: 'node_filesystem_size_bytes{job="disks", instance="host", disk="system", mountpoint="/etc/alloy"}'
+        values: '100x40'
+      - series: 'node_filesystem_readonly{job="disks", instance="host", disk="system", mountpoint="/etc/alloy"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DiskSpaceLow
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: DiskSpaceLow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: disks
+              instance: host
+              disk: system
+              mountpoint: /etc/alloy
+            exp_annotations:
+              summary: system 디스크에 남은 공간이 10% 다
+              description: 대시보드 disks 에서 언제부터 늘었는지 본다. 디스크를 키우는 법은 docs/operations/staging-vm.md 의 "그 뒤로"에 있다
+      - eval_time: 35m
+        alertname: DiskSpaceCritical
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: DiskFillingUp
+        exp_alerts: []
+
+  # 디스크: 남은 공간이 3% 다. 5분 뒤에 DiskSpaceCritical 이 울린다
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="disks", instance="host", disk="db", mountpoint="/disks/db"}'
+        values: '3x10'
+      - series: 'node_filesystem_size_bytes{job="disks", instance="host", disk="db", mountpoint="/disks/db"}'
+        values: '100x10'
+      - series: 'node_filesystem_readonly{job="disks", instance="host", disk="db", mountpoint="/disks/db"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: DiskSpaceCritical
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: disks
+              instance: host
+              disk: db
+              mountpoint: /disks/db
+            exp_annotations:
+              summary: db 디스크에 남은 공간이 3% 뿐이다
+              description: 곧 쓰기가 멈춘다. 바로 지울 것을 찾거나 디스크를 키운다(docs/operations/staging-vm.md 의 "그 뒤로")
+
+  # 디스크: 35% 에서 한 시간에 3%씩 준다. 하루 안에 차므로 한 시간 넘게 이어지면 DiskFillingUp 이 울린다.
+  # 아직 20% 위라 DiskFillingUpFast 는 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="disks", instance="host", disk="observability", mountpoint="/disks/observability"}'
+        values: '35-0.05x120'
+      - series: 'node_filesystem_size_bytes{job="disks", instance="host", disk="observability", mountpoint="/disks/observability"}'
+        values: '100x120'
+      - series: 'node_filesystem_readonly{job="disks", instance="host", disk="observability", mountpoint="/disks/observability"}'
+        values: '0x120'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: DiskFillingUp
+        exp_alerts: []
+      - eval_time: 90m
+        alertname: DiskFillingUp
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: disks
+              instance: host
+              disk: observability
+              mountpoint: /disks/observability
+            exp_annotations:
+              summary: observability 디스크가 지금 속도라면 하루 안에 찬다
+              description: 대시보드 disks 의 "하루에 느는 양"을 본다. 로그나 추적이 갑자기 늘었는지, 백업이 쌓이는지 본다
+      - eval_time: 90m
+        alertname: DiskFillingUpFast
+        exp_alerts: []
+
+  # 디스크: 18% 에서 한 시간에 6%씩 준다. 4시간 안에 차므로 한 시간 넘게 이어지면 DiskFillingUpFast 가 울린다
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="disks", instance="host", disk="system", mountpoint="/etc/alloy"}'
+        values: '18-0.1x90'
+      - series: 'node_filesystem_size_bytes{job="disks", instance="host", disk="system", mountpoint="/etc/alloy"}'
+        values: '100x90'
+      - series: 'node_filesystem_readonly{job="disks", instance="host", disk="system", mountpoint="/etc/alloy"}'
+        values: '0x90'
+    alert_rule_test:
+      - eval_time: 75m
+        alertname: DiskFillingUpFast
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: disks
+              instance: host
+              disk: system
+              mountpoint: /etc/alloy
+            exp_annotations:
+              summary: system 디스크가 지금 속도라면 4시간 안에 찬다
+              description: 무엇이 쓰고 있는지 바로 본다(docker compose logs, 대시보드 disks). 멈추지 않으면 그 디스크의 서비스가 멈춘다
+
+  # 디스크를 재지 못한다. 15분 뒤에 울린다
+  - interval: 1m
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: DiskMetricsMissing
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: DiskMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: disks
+              disk: system
+            exp_annotations:
+              summary: 디스크의 크기가 15분 동안 들어오지 않는다
+              description: Alloy 의 로그에서 prometheus.exporter.unix.disks 를 본다. staging 이면 디스크의 빈 폴더(/mnt/*/probe)가 붙었는지도 본다
