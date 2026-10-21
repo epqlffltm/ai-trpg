@@ -32,6 +32,38 @@ func (q *Queries) AddPaidBalance(ctx context.Context, arg AddPaidBalanceParams) 
 	return err
 }
 
+const countFreeGrantsWithKey = `-- name: CountFreeGrantsWithKey :one
+SELECT count(*) FROM free_grants
+WHERE grant_key = $1::TEXT AND user_id = ANY($2::UUID[])
+`
+
+type CountFreeGrantsWithKeyParams struct {
+	GrantKey string
+	UserIds  []uuid.UUID
+}
+
+// 그 이름의 지급을 받은 사람이 users 가운데 몇인지 센다. 한 사람은 같은 이름을 한 번만 받는다(free_grants_key_once).
+// 운영자가 지급하기 전에 미리 보는 것이다. 잠그지 않는다.
+func (q *Queries) CountFreeGrantsWithKey(ctx context.Context, arg CountFreeGrantsWithKeyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countFreeGrantsWithKey, arg.GrantKey, arg.UserIds)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countWallets = `-- name: CountWallets :one
+SELECT count(*) FROM wallets
+WHERE user_id = ANY($1::UUID[])
+`
+
+// users 가운데 지갑이 있는 사람이 몇인지 센다. 잠그지 않는다.
+func (q *Queries) CountWallets(ctx context.Context, userIds []uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countWallets, userIds)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createFreeGrant = `-- name: CreateFreeGrant :one
 INSERT INTO free_grants (user_id, amount, remaining, expires_at, grant_key, created_at)
 VALUES (
