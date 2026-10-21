@@ -3,8 +3,8 @@
 캐릭터 하나와의 1:1 대화를 맡는 서버다(#590). 설계는 [docs/architecture/chat-server.md](../docs/architecture/chat-server.md)에 있다.
 여러 인물이 나오는 story 는 story-server 가 맡는다(#591).
 
-**지금은 뼈대다(#590).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic, 테스트만 있다.
-대화와 한 번의 말(스트리밍, 홀드와 확정)이 차례로 붙는다([만드는 순서](../docs/architecture/chat-server.md#만드는-순서)).
+공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증이 있고(#590),
+[대화](#대화)를 시작하고 읽는 길이 있다(만드는 순서 1). 한 번의 말(스트리밍, 홀드와 확정)이 다음으로 붙는다([만드는 순서](../docs/architecture/chat-server.md#만드는-순서)).
 
 정해 둔 값: 포트 `8005`, 토큰의 대상 `ai-trpg-chat`, DB 계정과 스키마 `chat`(테스트는 `chat_test`), 주소 `/api/v1/chat/`.
 
@@ -67,8 +67,9 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰의 발급자(`iss`). 인증 서버의 `JWT_ISSUER`와 같아야 한다 |
 | `JWT_AUDIENCE` | `ai-trpg-chat` | 이 서버의 이름. 토큰의 대상(`aud`)에 이 이름이 있어야 받는다 |
-| `ASSET_URL` | 비어 있음(부르지 않음) | asset 서버의 주소(`http://127.0.0.1:8006`). 대화를 시작할 때 캐릭터의 판과 페르소나의 사본을 가져온다([asset 서버의 다른 서버에 내주기](../asset-server/README.md#다른-서버에-내주기)). 부르는 코드는 대화의 PR 이 더한다 |
+| `ASSET_URL` | 비어 있음(부르지 않음) | asset 서버의 주소(`http://127.0.0.1:8006`). 대화를 시작할 때 캐릭터의 판과 페르소나의 사본을 가져온다([asset 서버의 다른 서버에 내주기](../asset-server/README.md#다른-서버에-내주기)). 비우면 대화를 시작하지 못한다(503) |
 | `ASSET_SECRET` | 비어 있음 | asset 서버에 보내는 요청에 서명하는 비밀. `asset-server/.env` 의 `CHAT_SERVER_SECRET` 과 같은 값. `ASSET_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
+| `ASSET_TIMEOUT_SECONDS` | `5` | asset 서버를 한 번 부르는 시간의 상한(초, 30 까지). 대화를 시작하는 사람이 기다린다 |
 
 결제 서버를 부를 때의 비밀(`BILLING_SECRET`, 결제 쪽은 #578)은 그 길을 만들 때 더한다.
 환경 변수는 다른 서버와 같은 이름을 쓰고 머리(`CHAT_`)를 붙이지 않는다. 머리는 다른 서버의 설정에 들어가는 값(`CHAT_SERVER_SECRET`)에만 붙인다.
@@ -88,10 +89,50 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | 방법 | 주소 | 하는 일 | 인증 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/chat/me` | 토큰의 주인(`{"user_id"}`, 인증 서버의 `public_id`). 토큰 검증이 이어졌는지 보는 가장 작은 주소다(게임 서버의 `GET /me` 와 같다) | access 토큰 |
+| POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
+| GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 지금 가지의 말들(첫 말부터) | access 토큰 |
+| DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 
 **스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages` 와 `POST /api/v1/chat/messages/{id}/regenerate`, `/continue` 가
 바로 SSE(`text/event-stream`)로 답한다. 응답에 `X-Accel-Buffering: no` 를 싣고 15초마다 하트비트를 보낸다. 끊겨도 서버는 생성을 끝까지 저장하고,
 앱은 다시 들어와 저장된 말을 읽는다. 그 주소를 만들 때 공용 코드의 `StreamRoutes` 로 span 과 요청 메트릭에서 뺀다.
+
+### 대화
+
+캐릭터 하나와의 대화다(docs/architecture/chat-server.md 의 만드는 순서 1). `app/conversations/`, asset 서버를 부르는 것은 `app/assets/`.
+한 번의 말(스트리밍, 과금)은 다음 조각이다.
+
+**시작하기.** 캐릭터와 시작 상황만 고르고 들어간다(2026-10-20).
+
+1. asset 서버에서 그 캐릭터의 **마지막 판**과 페르소나의 사본을 가져온다. 이 서버의 비밀(`ASSET_SECRET`)로 서명하고 사용자의 토큰을 그대로 넘긴다.
+   쓸 수 있는 캐릭터인지는 asset 서버가 판단한다. 가져온 판의 등급은 이 서버도 한 번 더 본다(`allowed_ratings`).
+2. 판의 시작 상황 가운데 `start`(0 부터, 기본 0) 번째를 고른다. 없으면 422 `start_not_found`(`starts` 에 판의 시작 상황의 수).
+3. 판의 사본, 대화, 페르소나의 사본, 첫 말(캐릭터의 인사말)을 한 트랜잭션에서 저장한다. 인사말이 비어 있으면 첫 말이 없다.
+
+| `persona_id` | 쓰는 페르소나 |
+| --- | --- |
+| 보내지 않음 | 지난번(가장 최근에 시작한) 대화의 것을 다시 가져온다. 그사이에 고쳤으면 새 revision 이다. 지난번에 없었거나 지워졌으면 없이 시작한다 |
+| `null` | 없이 시작한다 |
+| id | 그 페르소나. 없거나 남의 것이면 404 `persona_not_found` |
+
+| asset 서버의 답 | 이 서버의 답 |
+| --- | --- |
+| 404(없다, 남의 비공개, 게시한 적 없음, 볼 수 없는 등급) | 404 `character_not_found` |
+| 403 `adult_content_required`(자기 캐릭터인데 등급을 쓸 수 없다) | 403 `adult_content_required` |
+| 닿지 못함, 시간 초과, 401, 5xx, 모양이 틀린 답, `ASSET_URL` 이 없음 | 503 `asset_unavailable`, `Retry-After: 5`. 다시 시도하지 않는다(사람이 다시 누른다) |
+
+어느 경우든 실패하면 아무것도 저장하지 않는다.
+
+- **사본.** 판의 사본(`characters`)은 사람마다, 판마다 하나다. 같은 판으로 여러 번 시작해도 하나를 함께 쓴다. 동시에 시작해도 하나만 남는다(`ON CONFLICT DO NOTHING`).
+  가져온 뒤 바뀌지 않는다. 원본이 바뀌어도 그대로이고, 새 판과 새 설정을 알리는 것은 다음 조각이다.
+- **DB 연결.** 지난번 페르소나를 읽은 뒤 트랜잭션을 닫고 asset 서버를 부른다. 바깥을 기다리는 동안 연결을 쥐지 않는다(연결의 몫이 5 + 5 다).
+- **목록과 읽기.** 내 것만, 지우지 않은 것만, 볼 수 있는 등급(가져온 판의 등급)만 나온다. 나머지는 404 다.
+- **가지.** 말은 트리다(`parent_id`). 대화는 지금 보고 있는 가지의 끝(`active_leaf_id`)을 가리키고, 읽을 때 재귀 쿼리로 끝에서 첫 말까지만 읽는다.
+  가지 안의 차례는 시각이 아니라 깊이로 정한다(한 트랜잭션의 말들은 시각이 같다).
+- **지우기.** 지운 시각만 적는다. 말과 사본은 남는다. 탈퇴할 때의 처리는 인증 서버의 알릴 곳에 chat 을 더하는 PR 이 정한다.
+- 표의 모양은 설계 문서(docs/architecture/chat-server.md 의 "데이터의 모양")와 같다. 대화가 캐릭터의 사본을 바로 가리킨다(잇는 표가 없다).
+  chat 은 캐릭터가 하나이고 story 는 자기 스키마에 자기 표를 둔다. 모델(`model`)과 생성 중 표시(`generating_since`)는 한 번의 말을 만들 때 더한다.
 
 ### 토큰 검증
 
@@ -160,7 +201,8 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. chat 서버는 `chat` 계정으로 `chat`
 스키마(테스트는 `chat_test`)만 쓴다. 다른 서버의 스키마에 닿지 못하는 것을 테스트(`tests/test_schema_isolation.py`)가 확인한다.
 
-아직 테이블이 없다. 대화의 테이블이 생기면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
+테이블은 `app/conversations/models.py` 에 있다(`characters`, `conversations`, `conversation_personas`, `messages`).
+모델 파일을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
 ### 마이그레이션
 
