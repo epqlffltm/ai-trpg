@@ -145,6 +145,7 @@ SOURCES: dict[str, Source] = {
     'notification': fastapi_source('notification-server'),
     'billing': go_source('billing-server'),
     'asset': fastapi_source('asset-server'),
+    'chat': fastapi_source('chat-server'),
     'auth': django_source('auth-server'),
     'board': nest_source('board-server'),
 }
