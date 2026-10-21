@@ -19,6 +19,7 @@
 - [이름 규칙](#이름-규칙)
 - [토큰과 권한](#토큰과-권한)
 - [데이터](#데이터)
+- [DB 와 Redis 의 한도](#db-와-redis-의-한도)
 - [배포 형태](#배포-형태)
 - [서비스를 더할 때 고칠 곳](#서비스를-더할-때-고칠-곳)
 - [순서](#순서)
@@ -174,8 +175,60 @@
 - 서비스 사이에 외래키를 걸지 않는다. 사용자는 인증 서버의 `public_id` 로 가리킨다.
 - 자산(세계관, 로어북, 캐릭터)의 원본은 `asset` 스키마에 있다. 쓰는 서비스는 시작할 때 게시된 판을 자기 스키마로 복사해 고정하고, 외래키 없이 출처(서비스, 자산 id, 판)만 적는다. 원본이 바뀌어도 복사본은 따라가지 않는다.
 - 정확해야 하는 데이터(HP, 소지품, 퀘스트, 크레딧, 호감도)는 관계형 DB 가 기준이다. 세계관, 로어, 기억 같은 검색용 데이터는 임베딩(pgvector)으로 찾는다.
-- Redis 는 캐시와 시도 제한 같은 곳에만 쓴다. 결제 기록과 게임의 확정 상태는 PostgreSQL 이 기준이다.
+- Redis 는 캐시와 시도 제한 같은 곳에만 쓴다. 결제 기록과 게임의 확정 상태는 PostgreSQL 이 기준이다. 서버마다의 연결과 메모리의 몫은 [DB 와 Redis 의 한도](#db-와-redis-의-한도)에 있다.
 - 운영 로그, 메트릭, 관리자 작업 이력은 관리 서버(`ops`)와 수집 저장소의 몫이고, 업무 원본(게임 판정, 결제 원장)은 각 서비스가 가진다.
+
+## DB 와 Redis 의 한도
+
+서버들은 PostgreSQL 한 대와 Redis 한 대를 함께 쓴다. 한 서버가 한도를 다 쓰면 다른 서버가 함께 멈추므로, 몫을 미리 나눈다(2026-10-21, #592).
+
+### DB 의 연결
+
+PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 을 빼면 서버들의 계정이 쓸 수 있는 것은 97 이다.
+아래는 서버마다 한 대씩 띄울 때 쥘 수 있는 가장 많은 연결이다. 합이 97 안에 들게 나눈다.
+
+| 쓰는 곳 | 몫 | 정하는 곳 |
+| --- | --- | --- |
+| trpg | 16 | 풀 5 + 10(`trpg-server/app/core/database.py`). 실시간 신호의 LISTEN 연결 1 은 풀 밖이다. server-core 로 옮길 때(#589) 설정으로 넘어온다 |
+| chat | 10 | compose 의 `DB_POOL_SIZE` 5, `DB_MAX_OVERFLOW` 5 |
+| story(계획) | 10 | chat 과 같다(#591) |
+| notification | 5 | compose 의 2 + 3 |
+| asset | 5 | compose 의 2 + 3. 그림은 S3 로 가고 DB 에는 줄만 쓴다 |
+| billing | 12 | 서버 8, sweeper 2, cron 2(`billing-server/README.md` 에 잰 값) |
+| board | 10 | TypeORM 의 `poolSize`(`board-server/src/database/database.options.ts`) |
+| auth | 4 | gunicorn 의 워커 1(`WEB_CONCURRENCY`), mail, welcome-credits, cron 이 1 씩. Django 는 요청마다 연결을 맺고 닫는다 |
+| 관리(계획) | 5 | 운영자만 쓴다 |
+| 감시(monitor), 백업, 배포 중의 마이그레이션 | 3 | |
+| **합** | **80** | 남는 17 은 auth 의 워커를 늘리거나 잰 뒤 몫을 고치는 데 쓴다 |
+
+- **몫은 쓰는 양이 아니라 상한이다.** 붐빌 때만 넘침(overflow)까지 맺고 돌려주면 닫는다. DB 의 CPU 가 둘이라 동시에 도는 쿼리는 이보다 훨씬 적어야 빠르다(결제 서버가 잰 것으로는 연결 8 과 16 이 같은 빠르기다)
+- **FastAPI 서버(server-core)의 몫은 compose 에 적는다.** 다시 빌드하지 않고 값만 바꾼다. 적지 않으면 SQLAlchemy 의 기본(5 + 10)이다. PC 에서 서버를 직접 띄울 때가 그렇다
+- **AI 모델을 기다리는 동안 DB 연결을 쥐지 않는다.** 스트리밍(chat, story, trpg 의 서술)은 길게는 수십 초다. 그동안 연결을 쥐면 몫 10 이 동시에 말하는 10 명에서 막힌다
+- 풀이 모자라면 메트릭 `db_pool_wait_seconds` 가 오른다. 전체가 한도에 가까우면 경보 `PostgresConnectionsNearLimit`(80%)가 울린다
+- 서버를 두 대 이상 띄우면 그 서버의 몫이 대수만큼 곱해진다. 그때 이 표를 다시 센다
+- 몫이 모자라면 차례로 본다. 먼저 몫을 다시 나눈다(재 보고). 그래도 모자라면 `max_connections` 를 올린다(연결마다 메모리를 조금 더 쓴다). PgBouncer 는 그다음이다. 컨테이너가 하나 늘고 asyncpg 의 prepared statement 설정을 바꿔야 한다
+- staging 에서 실제 연결 수를 재서 이 표를 고친다(#491)
+
+### Redis
+
+| 쓰는 곳 | DB 번호 | 키의 머리 | 넣는 것 |
+| --- | --- | --- | --- |
+| auth | 0 | `auth:attempts` | 시도 횟수, IP 차단(기한이 있다) |
+| trpg | 0 | `game:limit` | 로비 비밀번호와 채팅의 시도 횟수(기한이 있다) |
+| chat | 2 | 서버가 정한다 | 요청 제한(기한이 있다) |
+| story(계획) | 3 | 서버가 정한다 | 요청 제한(기한이 있다) |
+
+- **메모리는 64MB 까지, 차면 `volatile-lru`.** 기한이 걸린 키 가운데 오래 안 쓴 것부터 내쫓는다. 지금 넣는 것은 모두 기한이 있는 시도 횟수라, 내쫓기면 제한이 조금 느슨해질 뿐이다. 내쫓으면 경보 `RedisEvictingKeys` 가 울린다
+  - `noeviction` 을 고르지 않은 까닭: 차면 쓰기가 실패한다. trpg 는 Redis 가 막히면 닫힌 쪽으로 실패해(로비 비밀번호와 채팅이 503) 메모리가 찬 것이 서비스가 멈춘 것이 된다
+- **버리면 안 되는 것은 Redis 에 두지 않는다.** 잠금, 큐, 확정된 상태는 PostgreSQL 에 둔다(chat 의 한 대화 한 생성은 DB 의 조건부 UPDATE, trpg 의 실시간 신호는 PostgreSQL 의 NOTIFY). 그런 것이 Redis 에 꼭 필요해지면 정책을 섞지 않고 인스턴스를 따로 둔다
+- **캐시를 두게 되면 캐시용 인스턴스를 따로 둔다.** 정책(`maxmemory-policy`)이 인스턴스에 하나뿐이다
+- DB 번호는 메모리도 정책도 나누지 않는다. 키를 나눌 뿐이다. 인증과 trpg 는 머리가 달라 0 을 함께 쓴다. 새 서버는 다음 번호를 쓰고 머리에 서버 이름을 붙인다
+
+### 언제 나누는가
+
+- DB 와 Redis 를 서버마다 따로 두는 것은 부하가 실제로 부딪힐 때다. 미리 나누면 VM 의 메모리와 백업, 감시가 그만큼 는다
+- 먼저 나뉠 후보는 pgvector 를 쓰는 쪽(chat, story 의 기억과 로어)이다. 벡터 검색이 CPU 와 메모리를 가장 많이 쓴다
+- 나눌 때도 서버는 자기 스키마와 자기 계정만 쓴다. 바뀌는 것은 접속 주소뿐이다
 
 ## 배포 형태
 
@@ -196,6 +249,7 @@
 | 프록시 | `docker/nginx/templates/api.inc.template` 의 `/api/v1/<이름>/` 위치(로컬과 staging 이 함께 쓴다), 요청 수 제한(`http.inc.template`) |
 | 비밀과 포트 검사 | `.github/scripts/secret_scope.py`, `port_scope.py`, `logging_scope.py` 의 표 |
 | CI | `.github/workflows/<이름>-server.yml`, `ci.yml`, `.github/scripts/changed-servers.sh` |
+| DB 와 Redis 의 몫 | [DB 와 Redis 의 한도](#db-와-redis-의-한도)의 표. FastAPI 서버는 compose 의 `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`. Redis 를 쓰면 다음 번호와 키의 머리 |
 | 관측 | `docs/observability.md` 의 서비스 이름 표와 작업, operation, 오류 코드 표 |
 | 결제 (결제를 부르는 서버일 때) | `billing-server` 의 설정(`<이름>_SERVER_SECRET` 과 다른 비밀과 같은 값인지의 검사), 그 비밀로 열리는 주소, 비밀마다 쓸 수 있는 가격표 이름의 머리, 홀드에 부른 서버를 적는 칸(마이그레이션). 비밀이 늘면 `.github/scripts/secret_scope.py` 의 표와 `docker-compose.yml` 에서 비밀을 비우는 곳도 고친다 |
 | 공용 코드 (FastAPI 서버일 때) | `pyproject.toml` 의 경로 의존(`shared/server-core` 등), compose 의 `build.additional_contexts`, Dockerfile 의 `COPY --from=shared`. CI 는 경로 의존을 읽어 저절로 고른다([공용 코드 규칙](shared-code.md#버전과-ci)) |

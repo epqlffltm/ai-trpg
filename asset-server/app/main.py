@@ -19,7 +19,7 @@ import httpx
 from fastapi import FastAPI
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
-from server_core.database import POOL_MAX_CONNECTIONS, create_engine, create_session_factory
+from server_core.database import create_engine, create_session_factory
 from server_core.observability.db_spans import instrument_engine
 from server_core.observability.http_spans import traced_client
 from server_core.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
@@ -115,7 +115,7 @@ def create_app(
     app.state.engine = engine or create_engine(settings)
     # 쿼리마다 span 을 건다(요청이나 작업 안의 것만). 같은 엔진에 여러 번 불러도 한 번만 단다
     instrument_engine(app.state.engine)
-    watch_pool(pool_stats(app.state.engine, POOL_MAX_CONNECTIONS))
+    watch_pool(pool_stats(app.state.engine, settings.db_max_connections))
     app.state.session_factory = create_session_factory(app.state.engine)
 
     # 인증 서버의 공개키(server_core/auth/jwks.py)와 끊긴 세션의 목록(server_core/auth/revocations.py).
