@@ -5,12 +5,12 @@
 import uuid
 from collections.abc import Collection, Sequence
 
-from sqlalchemy import delete, exists, func, select, update
+from sqlalchemy import and_, delete, exists, func, or_, select, true, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.references.models import ReferenceEmbedding, ReferenceEntry
-from app.references.records import ReferenceRecord, ReferenceSource, StoredReference
+from app.references.records import ReferenceKind, ReferenceRecord, ReferenceSource, StoredReference
 
 
 def to_stored(entry: ReferenceEntry) -> StoredReference:
@@ -25,6 +25,7 @@ def to_stored(entry: ReferenceEntry) -> StoredReference:
         data=dict(entry.data),
         name_ko=entry.name_ko,
         content_ko=entry.content_ko,
+        source=entry.source,
     )
 
 
@@ -147,3 +148,50 @@ async def distances_of(
         ReferenceEmbedding.model == model, ReferenceEmbedding.reference_id.in_(ids)
     )
     return {reference_id: float(value) for reference_id, value in await session.execute(query)}
+
+
+async def find_many(session: AsyncSession, ids: Collection[uuid.UUID]) -> list[StoredReference]:
+    """그 id 들의 줄. 없는 id 는 빠진다. 차례는 정하지 않는다."""
+    if not ids:
+        return []
+    query = select(ReferenceEntry).where(ReferenceEntry.id.in_(ids))
+    return [to_stored(entry) for entry in await session.scalars(query)]
+
+
+def escape_like(text: str) -> str:
+    """LIKE 의 특수 글자(%, _, \\)를 글자 그대로 찾게 한다."""
+    return text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
+def search_filter(text: str, kind: ReferenceKind | None):
+    """찾는 조건. 글이 비면 전부다. 이름(원본, 한국어)과 다른 이름에 글이 들어 있는 줄이다. 대소문자는 가리지 않는다."""
+    conditions = []
+    if text:
+        pattern = f'%{escape_like(text)}%'
+        conditions.append(
+            or_(
+                ReferenceEntry.name.ilike(pattern, escape='\\'),
+                ReferenceEntry.name_ko.ilike(pattern, escape='\\'),
+                func.array_to_string(ReferenceEntry.aliases, ' ').ilike(pattern, escape='\\'),
+            )
+        )
+    if kind is not None:
+        conditions.append(ReferenceEntry.kind == kind)
+    return and_(true(), *conditions)
+
+
+async def search(
+    session: AsyncSession, text: str, kind: ReferenceKind | None, limit: int, offset: int
+) -> tuple[list[StoredReference], int]:
+    """
+    이름으로 찾은 줄들의 한 쪽과 전체 개수. 보이는 이름(한국어 이름, 없으면 원본)의 차례다.
+
+    벡터로 찾지 않는다. 제작자는 이름을 알고 고른다. 임베딩 모델이 없어도 돈다.
+    차례는 글자의 코드 순(C 정렬)이다. DB 의 기본 정렬(로케일)은 서버마다 달라 영어와 한글의 앞뒤가 바뀐다.
+    코드 순이면 어디서나 같다. 한글끼리는 가나다 순이고, 번역이 없는 영어 이름이 앞에 온다.
+    """
+    condition = search_filter(text, kind)
+    shown = func.coalesce(func.nullif(ReferenceEntry.name_ko, ''), ReferenceEntry.name).collate('C')
+    query = select(ReferenceEntry).where(condition).order_by(shown, ReferenceEntry.key).limit(limit).offset(offset)
+    total = await session.scalar(select(func.count()).select_from(ReferenceEntry).where(condition))
+    return [to_stored(entry) for entry in await session.scalars(query)], total or 0

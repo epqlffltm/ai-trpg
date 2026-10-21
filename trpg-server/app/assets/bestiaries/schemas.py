@@ -14,6 +14,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from app.assets.bestiaries.models import MONSTER_CONTENT_MAX_LENGTH, MONSTER_NAME_MAX_LENGTH, MonsterKind
+from app.assets.copies import CopiedFrom
 from app.assets.schemas import AssetCreate, AssetUpdate
 
 
@@ -65,5 +66,7 @@ class MonsterDetail(BaseModel):
     content: str
     kind: MonsterKind
     unique: bool
+    # 참고 자료에서 복사한 몬스터면 그 출처. 직접 쓴 몬스터는 null 이다
+    copied_from: CopiedFrom | None = None
     created_at: datetime
     updated_at: datetime

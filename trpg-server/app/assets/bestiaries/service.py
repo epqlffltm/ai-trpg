@@ -9,6 +9,7 @@
 """
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,7 @@ from app.assets import service as assets
 from app.assets.bestiaries import repository
 from app.assets.bestiaries.models import BESTIARY_MAX_MONSTERS, Bestiary, Monster
 from app.assets.bestiaries.schemas import BestiaryCreate, BestiaryUpdate, MonsterCreate, MonsterUpdate
+from app.assets.copies import Copy, CopyOutcome, split_copied
 from app.assets.models import AssetType
 from app.assets.service import AssetNotFoundError
 
@@ -69,6 +71,14 @@ def build_monster(bestiary_id: uuid.UUID, data: MonsterCreate) -> Monster:
     return Monster(bestiary_id=bestiary_id, name=data.name, content=data.content, kind=data.kind, unique=data.unique)
 
 
+def build_copied_monster(bestiary_id: uuid.UUID, copy: Copy[MonsterCreate]) -> Monster:
+    """복사할 줄에서 몬스터 객체를 만든다. 출처를 적는다. 아직 저장하지 않는다."""
+    monster = build_monster(bestiary_id, copy.data)
+    monster.copied_source = copy.source
+    monster.copied_key = copy.key
+    return monster
+
+
 def apply_monster_changes(monster: Monster, data: MonsterUpdate) -> None:
     """보낸 칸만 몬스터에 반영한다. null 은 "보내지 않았다"로 본다."""
     changes = data.model_dump(exclude_unset=True, exclude_none=True)
@@ -102,6 +112,29 @@ async def add_monster(
     assets.touch(bestiary)
     await session.commit()
     return monster
+
+
+async def add_copied_monsters(
+    session: AsyncSession, owner_id: uuid.UUID, bestiary_id: uuid.UUID, copies: Sequence[Copy[MonsterCreate]]
+) -> CopyOutcome[Monster]:
+    """
+    복사할 줄들을 자기 도감에 몬스터로 더한다. 도감이 없으면 AssetNotFoundError.
+
+    로어북의 것(app/assets/lorebooks/service.py 의 add_copied_entries)과 같은 규칙이다.
+    이미 복사해 둔 출처는 건너뛰고, 상한을 넘으면 하나도 넣지 않고 BestiaryFullError 다.
+    """
+    bestiary = await assets.lock_owned(session, Bestiary, owner_id, bestiary_id)
+    fresh, skipped = split_copied(list(copies), await repository.copied_keys(session, bestiary_id))
+    if await repository.count_monsters(session, bestiary_id) + len(fresh) > BESTIARY_MAX_MONSTERS:
+        raise BestiaryFullError
+
+    monsters = [build_copied_monster(bestiary_id, copy) for copy in fresh]
+    for monster in monsters:
+        repository.add_monster(session, monster)
+    if monsters:
+        assets.touch(bestiary)
+    await session.commit()
+    return CopyOutcome(created=monsters, skipped=skipped)
 
 
 async def list_monsters(session: AsyncSession, owner_id: uuid.UUID, bestiary_id: uuid.UUID) -> list[Monster]:

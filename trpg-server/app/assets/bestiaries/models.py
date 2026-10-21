@@ -23,7 +23,14 @@ from datetime import datetime
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, Text, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.assets.models import AssetContent, at_most, one_of
+from app.assets.models import (
+    COPIED_FROM_PAIRED,
+    COPIED_KEY_MAX_LENGTH,
+    COPIED_SOURCE_MAX_LENGTH,
+    AssetContent,
+    at_most,
+    one_of,
+)
 from app.core.database import Base
 
 # 도감 하나에 둘 수 있는 몬스터의 수. 로어북의 항목과 같다
@@ -72,6 +79,7 @@ class Monster(Base):
     __table_args__ = (
         CheckConstraint(at_most('content', MONSTER_CONTENT_MAX_LENGTH), name='content_length'),
         CheckConstraint(one_of('kind', MonsterKind), name='kind_allowed'),
+        CheckConstraint(COPIED_FROM_PAIRED, name='copied_from_paired'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -92,6 +100,10 @@ class Monster(Base):
     # 네임드 몹인가. 보스나 특별한 몹이다. 이름과 글이 그 한 마리의 것이고, 판 전체에서 한 마리만 둔다(게시할 때 본다).
     # 번호 없이 이름으로 부르고, 서술자에게는 마리마다 자기 글이 간다. 일반 몹은 종류와 마릿수만 간다
     unique: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+
+    # 참고 자료에서 복사한 몬스터면 그 출처(자료, key). 로어북의 항목과 같다(app/assets/models.py 의 LoreEntry)
+    copied_source: Mapped[str | None] = mapped_column(String(COPIED_SOURCE_MAX_LENGTH), default=None)
+    copied_key: Mapped[str | None] = mapped_column(String(COPIED_KEY_MAX_LENGTH), default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

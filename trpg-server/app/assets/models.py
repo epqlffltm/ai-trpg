@@ -121,6 +121,9 @@ LORE_KEYWORD_MAX_LENGTH = 30
 # 인물을 지목할 때 맞다고 받는 이름의 수와 길이(LoreEntry.true_names)
 LORE_ENTRY_MAX_TRUE_NAMES = 5
 LORE_TRUE_NAME_MAX_LENGTH = 50
+# 참고 자료에서 복사한 항목과 몬스터의 출처(#482 4단계). 자료의 이름과 그 안의 key 다(app/references/records.py)
+COPIED_SOURCE_MAX_LENGTH = 20
+COPIED_KEY_MAX_LENGTH = 100
 
 
 class AssetType(enum.StrEnum):
@@ -418,6 +421,10 @@ def all_of(column: str, values: type[enum.StrEnum]) -> str:
 def at_most(column: str, max_length: int) -> str:
     """컬럼의 글자 수가 제한을 넘지 않아야 한다는 조건을 SQL 로 만든다."""
     return f'char_length({column}) <= {max_length}'
+
+
+# 복사한 출처는 자료와 key 가 함께 있거나 함께 없다
+COPIED_FROM_PAIRED = '(copied_source IS NULL) = (copied_key IS NULL)'
 
 
 class Asset(Base):
@@ -817,6 +824,7 @@ class LoreEntry(Base):
         CheckConstraint(f'cardinality(keywords) <= {LORE_ENTRY_MAX_KEYWORDS}', name='keywords_count'),
         CheckConstraint(one_of('kind', LoreKind), name='kind_allowed'),
         CheckConstraint(f'cardinality(true_names) <= {LORE_ENTRY_MAX_TRUE_NAMES}', name='true_names_count'),
+        CheckConstraint(COPIED_FROM_PAIRED, name='copied_from_paired'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -845,6 +853,11 @@ class LoreEntry(Base):
     true_names: Mapped[list[str]] = mapped_column(
         ARRAY(String(LORE_TRUE_NAME_MAX_LENGTH)), default=list, server_default='{}'
     )
+
+    # 참고 자료에서 복사한 항목이면 그 출처(자료, key). 직접 쓴 항목은 비어 있다.
+    # 출처 표시(SRD 는 CC BY 4.0)를 하고, 같은 줄을 두 번 복사하지 않는 데 쓴다. 고쳐도 그대로다(원본에서 나왔다)
+    copied_source: Mapped[str | None] = mapped_column(String(COPIED_SOURCE_MAX_LENGTH), default=None)
+    copied_key: Mapped[str | None] = mapped_column(String(COPIED_KEY_MAX_LENGTH), default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
