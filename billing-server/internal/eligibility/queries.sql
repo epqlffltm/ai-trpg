@@ -15,3 +15,7 @@ WHERE payment_eligibility.version < EXCLUDED.version;
 
 -- name: GetEligibility :one
 SELECT * FROM payment_eligibility WHERE user_id = sqlc.arg(user_id);
+
+-- name: DeleteEligibility :execrows
+-- 그 사람의 결제 자격을 지운다(탈퇴). 없으면 지운 줄이 0 이다.
+DELETE FROM payment_eligibility WHERE user_id = sqlc.arg(user_id);

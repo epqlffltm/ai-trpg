@@ -9,7 +9,8 @@
 // 홀드의 상태는 한 방향으로만 흐른다.
 //
 //	held -> captured (확정했다. 크레딧은 돌아오지 않는다)
-//	     -> released (돌려줬다. 부르는 쪽이 돌려 달라고 했거나(requested), 만료되어 정리 작업이 돌려줬다(expired))
+//	     -> released (돌려줬다. 부르는 쪽이 돌려 달라고 했거나(requested), 만료되어 정리 작업이 돌려줬거나(expired),
+//	                  건 사람이 탈퇴했다(withdrawn))
 //
 // 홀드에는 만료 시각이 있다(TTL). 그 안에 확정하지 않으면 정리 작업이 돌려준다. 오래 걸리는 쪽은 만료 전에 연장한다.
 // 카드의 승인(authorization)이 며칠 뒤 저절로 풀리는 것과 같은 생각이다. 끝이 열린 홀드를 남기지 않는다.
@@ -83,6 +84,8 @@ const (
 	ReleaseRequested ReleaseReason = "requested"
 	// ReleaseExpired 는 만료 시각이 지나 정리 작업이 돌려준 것이다.
 	ReleaseExpired ReleaseReason = "expired"
+	// ReleaseWithdrawn 은 홀드를 건 사람이 탈퇴해 돌려준 것이다(#603, withdraw.go).
+	ReleaseWithdrawn ReleaseReason = "withdrawn"
 )
 
 // Hold 는 홀드 하나다.

@@ -96,6 +96,9 @@ const (
 	// ReasonRegroup 은 묶음 없이 있던 산 크레딧을 묶음으로 옮겼다는 뜻이다. 잔액은 그대로다.
 	// 묶음을 두기 전(00007)의 잔액과, 그 전에 건 홀드가 돌아온 크레딧에만 생긴다.
 	ReasonRegroup Reason = "regroup"
+	// ReasonForfeit 는 탈퇴로 남은 크레딧이 사라졌다는 뜻이다(#603). 산 크레딧과 무료 크레딧 모두에 생긴다.
+	// 기한이 지나 사라진 것(ReasonExpire)과 나눈다.
+	ReasonForfeit Reason = "forfeit"
 )
 
 // Policy 는 크레딧을 다루는 규칙 가운데 설정으로 바꿀 수 있는 것들이다.
