@@ -5,7 +5,7 @@ FastAPI 서버들이 함께 쓰는 설정의 칸. 서버의 설정(app/core/conf
 
 공용 코드는 설정 파일을 읽지 않는다. 서버가 읽어 만든 설정을 받아 쓴다
 (docs/architecture/shared-code.md 의 "재정의하는 법").
-물려받는 것은 설정뿐이다. 서버마다 다른 값은 셋이다.
+물려받는 것은 설정뿐이다. 서버마다 다른 값은 셋이다(연결 풀의 크기처럼 환경마다 다른 값은 환경 변수로 준다).
 
   - service_name: 이 서버의 이름(asset-server). 로그의 service 칸, span 과 메트릭의 출처가 된다. 클래스에 적는다.
     환경 변수로 바꿀 수 없다. 이름이 바뀌면 대시보드와 경보가 그 서버를 잃는다
@@ -100,6 +100,13 @@ class CoreSettings(BaseSettings):
     # 테스트는 <이름>_test 로 바꿔서 개발용 데이터와 섞이지 않게 한다
     db_schema: str = Field(pattern=SCHEMA_PATTERN)
 
+    # 연결 풀이 늘 들고 있는 연결과, 붐빌 때 더 맺는 연결. 둘의 합(db_max_connections)이
+    # 이 서버가 DB 에 쥘 수 있는 가장 많은 연결이다. 모든 서버의 합이 DB 의 max_connections 안에 들어야 한다.
+    # 서버마다의 값은 compose 가 준다(docs/architecture/services.md 의 "DB 와 Redis 의 한도", #592).
+    # 기본은 SQLAlchemy 의 기본값이다
+    db_pool_size: int = Field(default=5, ge=1, le=50)
+    db_max_overflow: int = Field(default=10, ge=0, le=50)
+
     # 인증 서버가 공개키를 내주는 주소(JWKS). 기본값이 없다.
     # 여기서 받은 키로 서명된 토큰을 믿는다. 엉뚱한 주소를 기본으로 믿는 것보다 뜨지 않는 쪽이 낫다.
     # 예: http://127.0.0.1:8000/api/v1/auth/jwks
@@ -138,6 +145,11 @@ class CoreSettings(BaseSettings):
                 f'AUTH_JWKS_URL 이 {JWKS_PATH} 로 끝나지 않는다. AUTH_SESSION_REVOCATIONS_URL 을 적어야 한다'
             )
         return self
+
+    @property
+    def db_max_connections(self) -> int:
+        """이 서버의 풀이 DB 에 쥘 수 있는 가장 많은 연결. 메트릭 db_pool_connections_max 의 값이다."""
+        return self.db_pool_size + self.db_max_overflow
 
     @property
     def session_revocations_url(self) -> str:

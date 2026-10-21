@@ -155,16 +155,25 @@ x-billing-without-request-secrets: &billing-without-request-secrets
 x-notification-environment: &notification-environment
   DATABASE_URL: postgresql+asyncpg://notification:${NOTIFICATION_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
+  # 연결 풀의 크기. 모든 서버의 합이 DB 의 max_connections 안에 들게 나눈 몫이다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
+  DB_POOL_SIZE: "2"
+  DB_MAX_OVERFLOW: "3"
 
 # asset 서버의 프로세스가 함께 쓰는 설정(#564). 비밀은 DB 비밀번호뿐이고 루트 .env 에서 온다
 x-asset-environment: &asset-environment
   DATABASE_URL: postgresql+asyncpg://asset:${ASSET_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
+  # 연결 풀의 크기. 모든 서버의 합이 DB 의 max_connections 안에 들게 나눈 몫이다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
+  DB_POOL_SIZE: "2"
+  DB_MAX_OVERFLOW: "3"
 
 # chat 서버의 프로세스가 함께 쓰는 설정(#590). 비밀은 DB 비밀번호뿐이고 루트 .env 에서 온다
 x-chat-environment: &chat-environment
   DATABASE_URL: postgresql+asyncpg://chat:${CHAT_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
+  # 연결 풀의 크기. 모든 서버의 합이 DB 의 max_connections 안에 들게 나눈 몫이다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
+  DB_POOL_SIZE: "5"
+  DB_MAX_OVERFLOW: "5"
 
 # asset-server 가 그림을 넣고 꺼내는 저장소(#566, docs/architecture/asset-server.md 의 "그림"). 마이그레이션에는 주지 않는다.
 # 로컬은 object-store(SeaweedFS)다. staging 은 docker-compose.staging.yml 이 주소를 S3 로 바꾸고, 키와 버킷은 루트 .env 의 것(그 버킷만 쓰는 IAM 사용자)이다.
@@ -286,7 +295,10 @@ services:
     # AOF 를 켠다. 로그인 시도 횟수와 IP 차단 기록이 들어갈 자리다.
     # 재시작으로 데이터가 사라지면 차단이 풀리고 시도 횟수가 처음부터 다시 세어진다.
     # (폐기한 refresh 토큰은 Redis 가 아니라 PostgreSQL 에 기록한다)
-    command: ["redis-server", "--appendonly", "yes"]
+    # 메모리는 64MB 까지다. 차면 기한이 걸린 키 가운데 오래 안 쓴 것부터 내쫓는다(volatile-lru, #592).
+    # 지금 넣는 것은 모두 기한이 있는 시도 횟수라, 내쫓기면 제한이 조금 느슨해질 뿐이다. noeviction 이면 쓰기가 실패해 게임의 로비와 채팅이 503 이다.
+    # 버리면 안 되는 것은 Redis 에 두지 않는다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "64mb", "--maxmemory-policy", "volatile-lru"]
     volumes:
       - redisdata:/data
     ports:

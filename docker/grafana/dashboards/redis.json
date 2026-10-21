@@ -582,7 +582,7 @@
       "type": "timeseries",
       "id": 12,
       "title": "메모리",
-      "description": "Redis 가 쓰는 메모리와, 운영체제에서 차지한 메모리(rss)",
+      "description": "Redis 가 쓰는 메모리와, 운영체제에서 차지한 메모리(rss), 한도(max, maxmemory). used 가 max 에 닿으면 기한이 걸린 키부터 내쫓는다",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -642,6 +642,17 @@
           "expr": "redis_memory_used_rss_bytes{job=\"redis\"}",
           "legendFormat": "rss",
           "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "redis_memory_max_bytes{job=\"redis\"} > 0",
+          "legendFormat": "max",
+          "refId": "C",
           "range": true,
           "instant": false
         }

@@ -184,6 +184,29 @@ tests:
               summary: Redis 가 AOF 파일에 쓰지 못한다
               description: 다시 뜨면 시도 횟수와 IP 차단의 기록을 잃는다. 디스크가 찼는지 본다
 
+  # 키를 하나라도 내쫓으면 울리고, 10분이 지나면 그친다
+  - interval: 1m
+    input_series:
+      - series: 'redis_evicted_keys_total{job="redis", instance="redis"}'
+        values: '0 0 0 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RedisEvictingKeys
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: RedisEvictingKeys
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: redis
+              instance: redis
+            exp_annotations:
+              summary: Redis 가 메모리가 모자라 키를 내쫓았다
+              description: 시도 횟수의 기록을 잃어 제한이 느슨해졌다. 대시보드 redis 의 "메모리"와 "사라진 키"를 보고, 키가 갑자기 늘었는지(대입 공격) 한도가 작은지 가린다
+      - eval_time: 15m
+        alertname: RedisEvictingKeys
+        exp_alerts: []
+
   # 5xx 가 많아도 요청이 아주 적으면 울리지 않는다. 요청이 많고 5xx 가 10% 면 10분 뒤에 울린다
   - interval: 1m
     input_series:
