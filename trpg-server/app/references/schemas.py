@@ -10,7 +10,9 @@ from typing import Annotated
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from app.assets.bestiaries.schemas import MonsterDetail
+from app.assets.copies import CopiedFrom
 from app.assets.lorebooks.schemas import EntryDetail
+from app.assets.scenarios.schemas import MonsterSheet
 from app.references.records import ReferenceKind
 
 # 한 번에 복사할 수 있는 줄의 수. 로어북과 도감의 상한(100)보다 작게, 화면에서 한 번에 고를 만큼이다
@@ -75,3 +77,16 @@ class MonsterCopyResult(BaseModel):
 
     created: list[MonsterDetail]
     skipped: list[uuid.UUID]
+
+
+class MonsterSheetProposal(BaseModel):
+    """
+    몬스터 시트의 제안. 저장하지 않는다. sheet 는 시나리오의 monster_sheets 에 그대로 넣을 수 있는 모양이다.
+
+    notes 는 원본과 다르게 옮긴 것들이다(범위에 맞춘 점수, 옮기지 않은 행동). 제작자가 읽고 고친다.
+    copied_from 은 수치를 가져온 참고 자료다.
+    """
+
+    sheet: MonsterSheet
+    notes: list[str]
+    copied_from: CopiedFrom

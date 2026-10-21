@@ -83,7 +83,8 @@ from app.realtime.signing import signer_from
 from app.references import router as references
 from app.references.copying import NotAMonsterError
 from app.references.retrieval import ReferenceRetriever, ReferenceThresholds
-from app.references.service import ReferenceNotFoundError
+from app.references.service import NoRulebookError, NotCopiedError, ReferenceNotFoundError
+from app.references.sheets import RulesNotSrdError
 from app.rounds import clock
 from app.rounds import router as rounds
 from app.rounds.closing import closer_of
@@ -356,6 +357,9 @@ def create_app(
     app.add_exception_handler(BestiaryFullError, bestiaries.handle_bestiary_full)
     app.add_exception_handler(ReferenceNotFoundError, references.handle_reference_not_found)
     app.add_exception_handler(NotAMonsterError, references.handle_not_a_monster)
+    app.add_exception_handler(NoRulebookError, references.handle_no_rulebook)
+    app.add_exception_handler(NotCopiedError, references.handle_not_copied)
+    app.add_exception_handler(RulesNotSrdError, references.handle_rules_not_srd)
     app.add_exception_handler(ScenarioNotReadyError, scenarios.handle_scenario_not_ready)
     app.add_exception_handler(ListingNotReadyError, listings.handle_listing_not_ready)
     app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)

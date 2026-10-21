@@ -195,3 +195,10 @@ async def search(
     query = select(ReferenceEntry).where(condition).order_by(shown, ReferenceEntry.key).limit(limit).offset(offset)
     total = await session.scalar(select(func.count()).select_from(ReferenceEntry).where(condition))
     return [to_stored(entry) for entry in await session.scalars(query)], total or 0
+
+
+async def find_by_key(session: AsyncSession, source: str, key: str) -> StoredReference | None:
+    """자료와 key 로 줄 하나. 없으면 None 이다(다시 넣을 때 원본에서 빠졌다)."""
+    query = select(ReferenceEntry).where(ReferenceEntry.source == source, ReferenceEntry.key == key)
+    entry = await session.scalar(query)
+    return None if entry is None else to_stored(entry)

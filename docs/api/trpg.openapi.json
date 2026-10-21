@@ -4441,6 +4441,31 @@
         "title": "MonsterSheet",
         "type": "object"
       },
+      "MonsterSheetProposal": {
+        "description": "몬스터 시트의 제안. 저장하지 않는다. sheet 는 시나리오의 monster_sheets 에 그대로 넣을 수 있는 모양이다.\n\nnotes 는 원본과 다르게 옮긴 것들이다(범위에 맞춘 점수, 옮기지 않은 행동). 제작자가 읽고 고친다.\ncopied_from 은 수치를 가져온 참고 자료다.",
+        "properties": {
+          "copied_from": {
+            "$ref": "#/components/schemas/CopiedFrom"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "sheet": {
+            "$ref": "#/components/schemas/MonsterSheet-Output"
+          }
+        },
+        "required": [
+          "sheet",
+          "notes",
+          "copied_from"
+        ],
+        "title": "MonsterSheetProposal",
+        "type": "object"
+      },
       "MonsterSnapshot": {
         "description": "몬스터 하나. 도감의 몬스터(글과 타입)와 시나리오의 몬스터 시트(숫자)를 합친 것이다.\n\n한 종류다. 테이블에 몇 마리가 나오든 판에는 하나다. 어느 도감에서 왔는지는 플레이에 쓰지 않아서 싣지 않는다.",
         "properties": {
@@ -14587,6 +14612,66 @@
         "summary": "Set Publication",
         "tags": [
           "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/scenarios/{scenario_id}/monsters/{monster_id}/sheet-proposal": {
+      "get": {
+        "description": "참고 자료(SRD)에서 복사한 몬스터에 시나리오의 룰북으로 시트를 제안한다. 저장하지 않는다.\n\nsheet 는 시나리오의 monster_sheets 에 그대로 넣을 수 있다. notes 는 원본과 다르게 옮긴 것들이다.\n몬스터는 시나리오에 붙인 도감의 것이어야 한다(아니면 404). 룰북이 없으면 409(no_rulebook),\n복사한 몬스터가 아니면 422(not_copied), 룰북의 능력치가 SRD 와 다르면 422(rules_not_srd)다.",
+        "operationId": "propose_monster_sheet_api_v1_game_scenarios__scenario_id__monsters__monster_id__sheet_proposal_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "monster_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Monster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonsterSheetProposal"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Propose Monster Sheet",
+        "tags": [
+          "scenarios"
         ],
         "x-audience": "user"
       }
