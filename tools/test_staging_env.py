@@ -33,6 +33,8 @@ ARGS = [
     'http://100.64.0.2:11434/v1',
     '--s3-bucket',
     'ai-trpg-backups',
+    '--image-bucket',
+    'ai-trpg-images-staging',
     '--age-recipients',
     'age1master age1check',
 ]
@@ -79,6 +81,7 @@ class StagingEnvTests(unittest.TestCase):
     def test_every_secret_of_fill_env_is_enabled_and_paired(self):
         # 주석인 채로 남으면 그 서버는 비밀 없이 뜨고, 짝인 서버는 그 요청을 거절한다
         self.run_tool()
+        left_for_a_person = {(target, name) for target, name, _ in TO_FILL}
 
         for secret in SECRETS:
             lines = [spot for spot in secret.spots if not spot.url]
@@ -87,7 +90,11 @@ class StagingEnvTests(unittest.TestCase):
                 self.assertEqual(len(values), 1)
                 value = values.pop()
                 self.assertIsNotNone(value, '켜져 있지 않다')
-                self.assertGreaterEqual(len(value), 32)
+                if all((spot.file, spot.key) in left_for_a_person for spot in lines):
+                    # staging 에서는 사람이 채운다(그림 저장소의 IAM 키). 로컬의 흉내를 위한 난수를 남기지 않는다
+                    self.assertEqual(value, '')
+                else:
+                    self.assertGreaterEqual(len(value), 32)
 
     def test_database_passwords_are_in_the_root_env(self):
         # 서버의 DATABASE_URL 은 compose 가 루트 .env 의 비밀번호로 만든다(docker-compose.yml)
@@ -134,6 +141,8 @@ class StagingEnvTests(unittest.TestCase):
         self.assertEqual(root['BACKUP_S3_BUCKET'], 'ai-trpg-backups')
         self.assertEqual(root['BACKUP_S3_REGION'], 'ap-northeast-2')
         self.assertEqual(root['BACKUP_AGE_RECIPIENTS'], 'age1master age1check')
+        self.assertEqual(root['IMAGE_STORE_BUCKET'], 'ai-trpg-images-staging')
+        self.assertEqual(root['IMAGE_STORE_REGION'], 'ap-northeast-2')
         self.assertEqual(root['AUTH_DB_ALLOW_TEST_DB'], 'false')
         self.assertEqual(self.env('billing-server/.env')['PAYMENT_PROVIDER'], 'fake')
         self.assertEqual(self.env('trpg-server/.env')['NARRATOR'], 'llm')
@@ -179,6 +188,9 @@ class StagingEnvTests(unittest.TestCase):
         self.assertEqual(self.env('.env')['BACKUP_AWS_ACCESS_KEY_ID'], '')
         self.assertEqual(self.env('.env')['BACKUP_AWS_SECRET_ACCESS_KEY'], '')
         self.assertEqual(self.env('trpg-server/.env')['ZAI_API_KEY'], '')
+        # 그림 저장소의 비밀 키는 fill_env.py 가 로컬의 흉내를 위해 채운 난수를 지운다. staging 은 IAM 사용자의 키다
+        self.assertEqual(self.env('.env')['IMAGE_STORE_ACCESS_KEY_ID'], '')
+        self.assertEqual(self.env('.env')['IMAGE_STORE_SECRET_ACCESS_KEY'], '')
 
     def test_refuses_and_writes_nothing_when_one_file_exists(self):
         (self.root / 'board-server/.env').write_text('LEFT=alone\n', encoding='utf-8')
@@ -191,6 +203,14 @@ class StagingEnvTests(unittest.TestCase):
     def test_two_age_recipients_are_required(self):
         with self.assertRaises(SystemExit):
             self.run_tool([*ARGS[:-1], 'age1only'])
+
+    def test_images_and_backups_need_different_buckets(self):
+        same = [*ARGS]
+        same[same.index('--image-bucket') + 1] = 'ai-trpg-backups'
+
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            self.run_tool(same)
+        self.assertFalse((self.root / '.env').exists())
 
 
 class EnableTests(unittest.TestCase):

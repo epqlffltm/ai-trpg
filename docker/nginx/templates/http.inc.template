@@ -33,6 +33,20 @@ limit_conn_status 429;
 limit_req_log_level info;
 limit_conn_log_level info;
 
+# --- 그림(#566) ---
+# asset-server 가 볼 수 있는지 본 그림을 저장소(S3)에서 받아 둔다. 키는 그림의 id 다(api.inc 의 /_images/).
+# 그림은 바뀌지 않으므로(고치면 새 id) 오래 둔다. 7일 동안 아무도 보지 않으면 지우고, 1GB 를 넘으면 오래된 것부터 지운다.
+# 컨테이너 안에 둔다. 다시 만들면 비지만 저장소에서 다시 받으면 된다(볼륨을 두면 nginx-unprivileged 가 쓰지 못한다)
+proxy_cache_path /var/cache/nginx/images levels=1:2 keys_zone=images:10m max_size=1g inactive=7d use_temp_path=off;
+
+# asset-server 가 알려 준 저장소의 주소가 그림 저장소의 것인가. 로컬과 CI 는 SeaweedFS, staging 은 S3 다.
+# 다른 곳이면 받지 않는다(502). asset-server 가 잘못 적어도 nginx 가 아무 주소에나 요청을 보내지 않게 한다
+map $upstream_http_x_image_source $image_source_allowed {
+    "~^http://object-store:8333/"                                   1;
+    "~^https://([a-z0-9][a-z0-9.-]*\.)?s3\.[a-z0-9-]+\.amazonaws\.com/" 1;
+    default                                                         0;
+}
+
 # --- HSTS ---
 # HTTPS 로 온 응답에만 붙인다(security-headers.inc). 값이 빈 글자면 nginx 가 그 머리말을 보내지 않는다.
 # 로컬(HTTP)에서는 늘 비어 있다. 브라우저도 HTTP 로 받은 HSTS 는 버린다.

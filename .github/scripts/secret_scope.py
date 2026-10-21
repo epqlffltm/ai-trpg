@@ -123,9 +123,9 @@ ROOT_SECRETS: dict[str, frozenset[str]] = {
     # DB 의 메트릭을 읽는 계정(monitor). DB 가 계정을 만들고, 수집기(Alloy)가 그 계정으로 붙는다
     'MONITOR_DB_PASSWORD': frozenset({'db', 'alloy'}),
     'GRAFANA_ADMIN_PASSWORD': frozenset({'grafana'}),
-    # 그림 저장소의 로컬 흉내(SeaweedFS)의 비밀 키(#540). 지금은 저장소 자신만 받는다.
-    # 그림을 올리는 서버(asset-server)를 만들면 더한다
-    'IMAGE_STORE_SECRET_ACCESS_KEY': frozenset({'object-store'}),
+    # 그림 저장소의 비밀 키(#540). 로컬은 SeaweedFS 자신과 그림을 넣고 꺼내는 asset-server 가 받는다(#566).
+    # staging 은 그 버킷만 쓰는 IAM 사용자의 키이고 asset-server 만 받는다(object-store 는 뜨지 않는다)
+    'IMAGE_STORE_SECRET_ACCESS_KEY': frozenset({'object-store', 'asset-server'}),
     # 바깥 백업이 S3 에 올리고 받는 접근 키(staging). 그 컨테이너만 쓴다
     'BACKUP_AWS_SECRET_ACCESS_KEY': frozenset({'backup-offsite'}),
     # 경보를 보내는 곳(Discord, Slack, Telegram, 메일)의 비밀. 경보를 보내는 Alertmanager 만 쓴다
