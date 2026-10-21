@@ -96,15 +96,28 @@ class IdentityAnswerSerializer(serializers.Serializer):
 
 
 class MeSerializer(UserSerializer):
-    """GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의를 더한다."""
+    """GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태를 더한다."""
 
     identity = IdentityStatusSerializer()
     guardian_consent = serializers.ChoiceField(choices=['none', *GuardianConsentStatus.values])
     consents_pending = serializers.ListField(child=serializers.CharField())
+    withdrawal_scheduled_at = serializers.DateTimeField(allow_null=True)
 
     class Meta(UserSerializer.Meta):
-        fields = (*UserSerializer.Meta.fields, 'identity', 'guardian_consent', 'consents_pending')
+        fields = (
+            *UserSerializer.Meta.fields,
+            'identity',
+            'guardian_consent',
+            'consents_pending',
+            'withdrawal_scheduled_at',
+        )
         read_only_fields = fields
+
+
+class WithdrawalStateSerializer(serializers.Serializer):
+    """탈퇴의 상태(#603). 요청하면 계정을 비울 시각, 취소하면 null 이다."""
+
+    withdrawal_scheduled_at = serializers.DateTimeField(allow_null=True)
 
 
 class JwkSerializer(serializers.Serializer):

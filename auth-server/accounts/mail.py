@@ -315,3 +315,33 @@ def send_guardian_payment_notice(
         deadline=deadline,
         kind=MailKind.GUARDIAN_PAYMENT,
     )
+
+
+def send_withdrawal_requested_notice(*, user: User, scheduled_at: datetime) -> None:
+    """
+    탈퇴 요청을 받았다고 알린다(#603). 언제 지우는지, 취소하는 법, 직접 하지 않았으면 할 일을 적는다.
+
+    요청은 계정을 빼앗긴 사람이 낼 수도 있다. 그래서 진짜 주인이 알고 취소할 수 있게 메일로 알린다.
+    """
+    when = scheduled_at.astimezone(_KOREA).strftime('%Y-%m-%d %H:%M')
+    enqueue_mail(
+        to_email=user.email,
+        subject='[AI TRPG] 탈퇴 요청을 받았습니다',
+        body=(
+            f'{user.nickname} 님의 탈퇴 요청을 받았습니다. {when}(한국 시각)에 계정과 개인정보를 지웁니다.\n\n'
+            '그 전에 다시 로그인하면 탈퇴를 취소할 수 있습니다. 그동안은 다른 기능을 쓸 수 없습니다.\n'
+            '지우면 남은 골드와 실버가 사라지고 되돌릴 수 없습니다.\n\n'
+            '직접 요청하지 않았다면 바로 로그인해 탈퇴를 취소하고 비밀번호를 바꿔 주세요.'
+        ),
+        kind=MailKind.WITHDRAWAL_REQUESTED,
+    )
+
+
+def send_withdrawal_completed_notice(*, email: str) -> None:
+    """탈퇴를 마쳤다고 알린다(#603). 계정의 주소는 이미 지웠으므로 지우기 전의 주소를 받는다."""
+    enqueue_mail(
+        to_email=email,
+        subject='[AI TRPG] 탈퇴를 마쳤습니다',
+        body='계정과 개인정보를 지웠습니다. 그동안 이용해 주셔서 감사합니다.\n이 주소로 더 메일을 보내지 않습니다.',
+        kind=MailKind.WITHDRAWAL_COMPLETED,
+    )

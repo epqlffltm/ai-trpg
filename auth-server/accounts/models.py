@@ -86,6 +86,12 @@ class User(AbstractUser):
     # 끊긴 세션 목록에 싣는다(session_revocations.py)
     sessions_revoked_at = models.DateTimeField('세션을 끊은 시각', null=True, blank=True, db_index=True)
 
+    # 탈퇴를 요청한 시각(#603, docs/architecture/withdrawal.md). 비어 있으면 요청하지 않았거나 취소했다.
+    # 이 시각에서 유예(withdrawal.GRACE)가 지나면 정리 작업이 계정을 비운다. 그동안의 토큰은 인증 서버에만 통한다
+    withdrawal_requested_at = models.DateTimeField('탈퇴를 요청한 시각', null=True, blank=True, db_index=True)
+    # 탈퇴를 마친 시각. 계정을 비운 때다. 마친 계정은 되돌리지 않는다
+    withdrawn_at = models.DateTimeField('탈퇴를 마친 시각', null=True, blank=True)
+
     # AbstractUser 가 가진 실명 필드를 없앤다. 수집하지 않는 정보의 컬럼은 두지 않는다
     first_name = None
     last_name = None
@@ -232,6 +238,9 @@ class SecurityEventKind(models.TextChoices):
     IDENTITY_UNDER_AGE = 'identity_under_age', '본인인증: 만 14세 미만이라 계정을 막음'
     # 다른 계정이 이미 인증한 사람이다. 부모의 휴대폰이나 계정을 여럿 만드는 것을 운영자가 알아본다
     IDENTITY_IN_USE = 'identity_in_use', '본인인증: 다른 계정에서 인증한 사람'
+    # 탈퇴(#603). 요청은 계정을 빼앗긴 신호일 수 있어 운영자가 본다. 마친 것은 계정을 비웠다는 기록이다
+    WITHDRAWAL_REQUESTED = 'withdrawal_requested', '탈퇴: 요청'
+    ACCOUNT_WITHDRAWN = 'account_withdrawn', '탈퇴: 계정을 비움'
 
 
 class SecurityEvent(models.Model):
@@ -316,6 +325,8 @@ class MailKind(models.TextChoices):
     GUARDIAN_REVOKED = 'guardian_revoked', '보호자 동의 철회 확인'
     MINOR_GUARDIAN = 'minor_guardian', '미성년자에게 보호자 동의 알림'
     GUARDIAN_PAYMENT = 'guardian_payment', '보호자에게 결제 알림'
+    WITHDRAWAL_REQUESTED = 'withdrawal_requested', '탈퇴 요청 확인'
+    WITHDRAWAL_COMPLETED = 'withdrawal_completed', '탈퇴를 마침'
     # 종류를 적지 않은 메일. 이 칸이 생기기 전에 적힌 것도 이것이다
     OTHER = 'other', '그 밖'
 
@@ -698,3 +709,52 @@ class ConsentRecord(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user} / {self.get_item_display()} {self.version}판 / {self.get_action_display()}'
+
+
+class WithdrawalTarget(models.TextChoices):
+    """
+    탈퇴를 알릴 서버(#603). 서버가 받는 주소를 만들면 여기에 더한다(docs/architecture/withdrawal.md 의 만드는 순서).
+    """
+
+    BILLING = 'billing', '결제 서버'
+
+
+class WithdrawalNotice(models.Model):
+    """
+    탈퇴를 다른 서버에 알릴 일 하나(#603). 탈퇴를 마치는 트랜잭션에서 서버마다 한 줄을 적는다.
+
+    워커가 서명해 보내고, 그 서버가 2xx 로 답할 때까지 다시 보낸다. 버리지 않는다. 늦게 알려도 정리는 해야 한다.
+    받는 서버는 같은 알림을 두 번 받아도 결과가 같다. 그래서 워커가 보낸 뒤 죽어 다시 보내도 된다.
+    계정의 줄은 탈퇴한 뒤에도 남으므로(비운다) 이 줄도 계정을 가리킨다. 보내는 것은 계정의 공개 ID 다.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='withdrawal_notices', verbose_name='계정')
+    target = models.CharField('알릴 서버', max_length=32, choices=WithdrawalTarget.choices)
+    # 탈퇴를 마친 시각. 받는 서버에 그대로 보낸다
+    withdrawn_at = models.DateTimeField('탈퇴를 마친 시각')
+    # 받는 서버가 2xx 로 답한 시각. 비어 있으면 아직 보낼 일이 있다
+    delivered_at = models.DateTimeField('알린 시각', null=True, blank=True)
+
+    attempts = models.PositiveIntegerField('시도 횟수', default=0)
+    last_error = models.CharField('마지막 오류', max_length=200, blank=True)
+    # 이 시각부터 보낼 수 있다. 실패하면 뒤로 미룬다. 워커가 보내는 동안은 임대가 끝나는 시각이다
+    next_attempt_at = models.DateTimeField('다음 시도 시각')
+
+    class Meta:
+        verbose_name = '탈퇴 알림'
+        verbose_name_plural = '탈퇴 알림'
+        constraints = [
+            # 한 계정의 탈퇴는 서버마다 한 번 알린다
+            models.UniqueConstraint(fields=['user', 'target'], name='accounts_withdrawal_notice_once'),
+        ]
+        indexes = [
+            # 워커가 "알릴 것이 있고 때가 된 줄" 을 찾을 때 쓴다. 다 알린 줄은 색인에 넣지 않는다
+            models.Index(
+                fields=['next_attempt_at'],
+                name='accounts_withdrawal_due_idx',
+                condition=models.Q(delivered_at__isnull=True),
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.get_target_display()} / {"알림" if self.delivered_at else "보낼 것"}'

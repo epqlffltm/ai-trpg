@@ -494,13 +494,20 @@
           },
           "token_type": {
             "type": "string"
+          },
+          "withdrawal_scheduled_at": {
+            "description": "탈퇴를 요청했으면 계정을 비울 시각(#603). 있으면 access 토큰이 인증 서버에만 통한다. 취소하면 null",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
           "access_token",
           "consents_pending",
           "expires_in",
-          "token_type"
+          "token_type",
+          "withdrawal_scheduled_at"
         ],
         "type": "object"
       },
@@ -540,7 +547,7 @@
       },
       "Me": {
         "additionalProperties": false,
-        "description": "GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의를 더한다.",
+        "description": "GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태를 더한다.",
         "properties": {
           "consents_pending": {
             "items": {
@@ -575,6 +582,11 @@
             "readOnly": true,
             "title": "아이디",
             "type": "string"
+          },
+          "withdrawal_scheduled_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -584,7 +596,8 @@
           "identity",
           "nickname",
           "public_id",
-          "username"
+          "username",
+          "withdrawal_scheduled_at"
         ],
         "type": "object"
       },
@@ -848,6 +861,37 @@
           "duplicate"
         ],
         "type": "string"
+      },
+      "WithdrawalRequestRequest": {
+        "additionalProperties": false,
+        "description": "탈퇴 요청(#603). 열린 채 둔 기기에서 남이 누르지 못하게 비밀번호를 다시 받는다.",
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
+      "WithdrawalState": {
+        "additionalProperties": false,
+        "description": "탈퇴의 상태(#603). 요청하면 계정을 비울 시각, 취소하면 null 이다.",
+        "properties": {
+          "withdrawal_scheduled_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "withdrawal_scheduled_at"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -1961,6 +2005,143 @@
           }
         ],
         "summary": "그 항목에 동의한다(본문의 판으로)",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me/withdrawal": {
+      "delete": {
+        "description": "POST, DELETE /api/v1/auth/me/withdrawal. 탈퇴를 요청하고 취소한다(#603, docs/architecture/withdrawal.md).",
+        "operationId": "me_withdrawal_destroy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawalState"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "유예 중인 탈퇴를 취소한다. 그 뒤의 /refresh 부터 모든 서버에 통한다. 요청하지 않았어도 200",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "POST, DELETE /api/v1/auth/me/withdrawal. 탈퇴를 요청하고 취소한다(#603, docs/architecture/withdrawal.md).",
+        "operationId": "me_withdrawal_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawalRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawalState"
+                }
+              }
+            },
+            "description": "받았다. 계정을 비울 시각"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "비밀번호가 틀렸다(password)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "시도가 너무 많다(too_many_attempts)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "탈퇴를 요청한다. 모든 세션이 끊기고 7일 뒤에 계정을 비운다. 그 안에 다시 로그인해 취소한다",
         "tags": [
           "me"
         ],
