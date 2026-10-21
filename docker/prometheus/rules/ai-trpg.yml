@@ -106,6 +106,70 @@ groups:
           summary: Redis 가 AOF 파일에 쓰지 못한다
           description: 다시 뜨면 시도 횟수와 IP 차단의 기록을 잃는다. 디스크가 찼는지 본다
 
+  # 디스크(#539). Alloy 안의 node_exporter 가 디스크마다 잰다(disk: system, db, observability. docker/alloy/metrics.alloy).
+  # node_exporter 의 경보 묶음(node-mixin)을 따른다. 남은 비율만 보면 천천히 차는 디스크에는 일찍, 갑자기 차는 디스크에는
+  # 늦게 울린다. 그래서 "지금 속도면 곧 찬다"(predict_linear, 지난 6시간의 기울기)를 함께 둔다. 읽기만 하는 디스크는 보지 않는다
+  - name: disks
+    rules:
+      - alert: DiskSpaceLow
+        expr: |
+          node_filesystem_avail_bytes{job="disks"} / node_filesystem_size_bytes{job="disks"} < 0.15
+          and node_filesystem_readonly{job="disks"} == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $labels.disk }} 디스크에 남은 공간이 {{ $value | humanizePercentage }} 다'
+          description: 대시보드 disks 에서 언제부터 늘었는지 본다. 디스크를 키우는 법은 docs/operations/staging-vm.md 의 "그 뒤로"에 있다
+
+      - alert: DiskSpaceCritical
+        # 다 차면 그 디스크의 DB 나 저장소가 쓰기를 멈춘다
+        expr: |
+          node_filesystem_avail_bytes{job="disks"} / node_filesystem_size_bytes{job="disks"} < 0.05
+          and node_filesystem_readonly{job="disks"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: '{{ $labels.disk }} 디스크에 남은 공간이 {{ $value | humanizePercentage }} 뿐이다'
+          description: 곧 쓰기가 멈춘다. 바로 지울 것을 찾거나 디스크를 키운다(docs/operations/staging-vm.md 의 "그 뒤로")
+
+      - alert: DiskFillingUp
+        # 남은 공간이 40% 밑이고, 지난 6시간의 속도라면 24시간 안에 찬다
+        expr: |
+          node_filesystem_avail_bytes{job="disks"} / node_filesystem_size_bytes{job="disks"} < 0.40
+          and predict_linear(node_filesystem_avail_bytes{job="disks"}[6h], 24 * 3600) < 0
+          and node_filesystem_readonly{job="disks"} == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $labels.disk }} 디스크가 지금 속도라면 하루 안에 찬다'
+          description: 대시보드 disks 의 "하루에 느는 양"을 본다. 로그나 추적이 갑자기 늘었는지, 백업이 쌓이는지 본다
+
+      - alert: DiskFillingUpFast
+        # 남은 공간이 20% 밑이고, 지난 6시간의 속도라면 4시간 안에 찬다
+        expr: |
+          node_filesystem_avail_bytes{job="disks"} / node_filesystem_size_bytes{job="disks"} < 0.20
+          and predict_linear(node_filesystem_avail_bytes{job="disks"}[6h], 4 * 3600) < 0
+          and node_filesystem_readonly{job="disks"} == 0
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: '{{ $labels.disk }} 디스크가 지금 속도라면 4시간 안에 찬다'
+          description: 무엇이 쓰고 있는지 바로 본다(docker compose logs, 대시보드 disks). 멈추지 않으면 그 디스크의 서비스가 멈춘다
+
+      - alert: DiskMetricsMissing
+        # 디스크를 재지 못하면 위의 경보도 울리지 못한다. Alloy 가 멈춘 것은 MetricsCollectorDown 이 따로 알린다
+        expr: absent(node_filesystem_size_bytes{job="disks", disk="system"})
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 디스크의 크기가 15분 동안 들어오지 않는다
+          description: Alloy 의 로그에서 prometheus.exporter.unix.disks 를 본다. staging 이면 디스크의 빈 폴더(/mnt/*/probe)가 붙었는지도 본다
+
   # 결제 서버. 메트릭의 이름과 뜻은 docs/observability.md 의 "결제 (billing)" 표에 있다
   - name: billing-server
     rules:

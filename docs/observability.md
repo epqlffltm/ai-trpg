@@ -710,7 +710,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | 고르지 않은 것 | OpenTelemetry Collector(contrib), Vector, Fluent Bit, Promtail | Collector 는 업체에 묶이지 않지만 로그 파일에 컨테이너 번호만 있어 이름을 붙이는 설정이 길다. Vector 와 Fluent Bit 는 추적까지 가면 수집기가 하나 더 필요하다. Promtail 은 지원이 끝났다(2026-03-02) |
 | 자리 | 지금은 서버들과 **같은 VM**. 문제가 생기면 로그와 메트릭을 S3 에 따로 두고 VM 을 나눈다 | 혼자 쓰는 동안 비용을 늘리지 않는다. 옮길 때 서버 코드와 수집기의 설정은 거의 그대로고 보내는 주소와 저장소만 바뀐다 |
 | 보관 | Loki **14일**(`staging`). 정식 공개 전에 30일 + 그보다 오래된 것은 압축해 S3 에 90일로 다시 본다 | 장애는 보통 며칠 안에 알아챈다. 오래 남겨야 하는 기록(운영자의 접속과 조작, 보안 이벤트, 결제)은 각 서버의 DB 가 원본이다(아래) |
-| Grafana 를 여는 곳 | 관리 서버가 생기기 전에는 **SSH 터널로만**. 생긴 뒤에는 **관리 서버가 문**이다(Grafana 의 auth proxy) | 바깥에 Grafana 의 로그인 화면을 열지 않는다. 운영자 확인은 관리 서버가 토큰의 `roles` 로 한 번만 한다 |
+| Grafana 를 여는 곳 | 관리 서버가 생기기 전에는 **사설망(Tailscale)으로만**(2026-10-21, #539). VM 의 `127.0.0.1:3000` 을 `tailscale serve` 가 사설망에 넘긴다. 생긴 뒤에는 **관리 서버가 문**이다(Grafana 의 auth proxy) | 바깥에 Grafana 의 로그인 화면을 열지 않는다. VM 은 이미 Tailscale 에 있다(집 PC 의 Ollama). SSH 터널을 매번 열지 않고 휴대폰으로도 본다. 운영자 확인은 관리 서버가 토큰의 `roles` 로 한 번만 한다 |
 | 켜는 법 | compose 의 프로필 `observability`. 로컬은 기본으로 꺼 두고 `staging` 에서 켠다 | 개발 PC 를 무겁게 하지 않는다 |
 
 ### 1. 로그 — 서버 코드를 고치지 않는다
@@ -847,6 +847,21 @@ Prometheus 에 쓰는 것은 Alloy 하나, 읽는 것은 Grafana 하나다. 이 
 - **이미 있는 볼륨에서는 계정을 직접 만든다.** 초기화 스크립트는 볼륨이 비어 있는 첫 기동 때만 돈다. 루트 README 의 "로그와 메트릭 모으기"에 명령이 있다. 다시 돌려도 된다(있으면 비밀번호만 맞춘다).
 - **CI 가 보는 것.** `pg_up{job="postgres", instance="db"} == 1`, `redis_up{job="redis", instance="redis"} == 1` 이 들어온다. `monitor` 가 통계는 읽고, 결제 서버의 표(`billing.wallets`)는 읽지 못하고, 표를 만들지 못한다. Alloy 가 `default` 망에 없다.
 
+#### 붙인 것 (디스크)
+
+디스크가 차서 DB 와 저장소가 쓰기를 멈추는 일을 막는다(#539, 2026-10-21). 디스크를 나누는 것은 [배포 설계의 디스크](architecture/deployment.md#디스크)에 있다.
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `docker/alloy/metrics.alloy` 의 `prometheus.exporter.unix "disks"` | Alloy 안의 node_exporter(파일시스템만)가 1분마다 잰다. 새 컨테이너도, 호스트의 폴더도 붙이지 않는다. 컨테이너 안의 마운트 셋이 놓인 디스크를 잰다: `/etc/alloy`(기본 디스크, `disk="system"`), staging 의 `/disks/db`, `/disks/observability`(그 디스크의 빈 폴더 probe 를 읽기 전용으로). 그 밖의 마운트는 버린다. 이름표는 `job="disks", instance="host", disk` 다 |
+| `docker/prometheus/rules/ai-trpg.yml` 의 `disks` | node_exporter 의 경보 묶음(node-mixin)을 따른다. `DiskSpaceLow`(남은 15% 밑, 30분), `DiskSpaceCritical`(5% 밑, 5분), `DiskFillingUp`(40% 밑이고 지난 6시간의 속도면 24시간 안에 찬다, 1시간), `DiskFillingUpFast`(20% 밑이고 4시간 안, 1시간), `DiskMetricsMissing`(기본 디스크의 지표가 15분 없다). 읽기만 하는 디스크는 보지 않는다 |
+| `docker/grafana/dashboards/disks.json` | 디스크마다 남은 비율과 양, 지금 속도면 가득 차기까지, 쓴 양, 하루에 느는 양 |
+| `docker/prometheus/prometheus.yml` 의 `retention.size` | 메트릭의 크기 상한 8GB. 14일과 둘 가운데 먼저 닿는 쪽이 지운다 |
+
+- **비율 하나로 보지 않는다.** 남은 비율만 보면 천천히 차는 디스크에는 너무 일찍, 갑자기 차는 디스크에는 너무 늦게 울린다. 그래서 지난 6시간의 기울기로 "곧 찬다"를 함께 본다. 잠깐 늘었다 주는 일(백업 파일, 압축)에 속지 않게 한 시간 넘게 이어질 때만 울린다.
+- **저장소마다의 크기.** 저장소가 스스로 내는 숫자를 쓴다. Prometheus 는 낸다(`prometheus_tsdb_storage_blocks_bytes`, `prometheus_tsdb_wal_storage_size_bytes`). Loki 3.7 과 Tempo 3.1 은 디스크에 둔 양을 내지 않는다(실제로 띄워 지표를 보았다). 관측 데이터를 따로 둔 디스크의 사용량이 셋의 합이다. 볼륨마다의 내역은 손으로 본다([staging VM 준비](operations/staging-vm.md)의 11번).
+- **CI 가 보는 것.** 경보의 시험(promtool)이 다섯 경보마다 울리는 때와 울리지 않는 때를 본다. 스택에서 기본 디스크의 지표가 들어오고 마운트가 하나만 남는다. Prometheus 의 보관에 크기의 상한이 걸렸다. staging 의 데이터 디스크 폴더(`docker/disks/prepare-disks.sh`)의 주인이 컨테이너가 실제로 도는 uid 와 같다.
+
 #### 대시보드
 
 Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-trpg` 에 붙인다(`docker/grafana/provisioning/dashboards/dashboards.yaml`).
@@ -907,6 +922,11 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | watchdog | `AlertDeliveryFailing` | warning | 지난 15분에 받는 곳(Discord, Slack, Telegram, 메일) 가운데 하나로 보내지 못했다. 나머지 받는 곳으로 간다. 바깥 감시(webhook)의 실패는 세지 않는다 |
 | collectors | `MetricsCollectorDown` | critical | Alloy 의 `up` 이 끊겼다(10분쯤 뒤에 울린다, 아래). 다른 경보가 모두 멈춘다 |
 | collectors | `ObservabilityComponentDown` | warning | loki, grafana, alertmanager 의 `up` 이 5분 동안 0 이다 |
+| disks | `DiskSpaceLow` | warning | 디스크에 남은 공간이 15% 밑으로 30분 이어진다 |
+| disks | `DiskSpaceCritical` | critical | 디스크에 남은 공간이 5% 밑으로 5분 이어진다 |
+| disks | `DiskFillingUp` | warning | 남은 공간이 40% 밑이고, 지난 6시간의 속도면 24시간 안에 찬다(1시간 이어진다) |
+| disks | `DiskFillingUpFast` | critical | 남은 공간이 20% 밑이고, 지난 6시간의 속도면 4시간 안에 찬다(1시간 이어진다) |
+| disks | `DiskMetricsMissing` | warning | 기본 디스크의 크기가 15분 동안 들어오지 않는다 |
 | datastores | `PostgresDown`, `RedisDown` | critical | exporter 가 1분 동안 붙지 못한다 |
 | datastores | `RedisAOFWriteFailing` | critical | AOF 의 마지막 쓰기가 1분 동안 실패다 |
 | datastores | `PostgresConnectionsNearLimit` | warning | 연결이 `max_connections` 의 80% 를 10분 동안 넘는다 |

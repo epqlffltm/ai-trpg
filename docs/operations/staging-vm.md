@@ -43,6 +43,16 @@
 2. IAM 사용자 `ai-trpg-images` 를 만든다(콘솔 로그인 없음). 인라인 정책에 `docker/object-store/iam-policy.json` 을 붙이고 `BUCKET_NAME` 을 `<그림 버킷>` 으로 바꾼다.
 3. 그 사용자의 접근 키를 만든다(용도: 그 밖). 두 값을 비밀번호 관리자에 둔다. 6번에서 `.env` 에 적는다.
 
+**[웹] 데이터 디스크 둘(#539)**. 크게 자라는 데이터를 기본 디스크(OS, Docker)와 나눈다. 로그가 폭주해 디스크를 채워도 DB 와 서버가 멈추지 않는다(배포 설계의 "디스크").
+
+1. Lightsail 의 **Storage → Create disk** 로 둘을 만든다. 인스턴스와 **같은 가용 영역**이어야 붙는다.
+   - `ai-trpg-db`: 16GB. DB(PostgreSQL)를 둔다.
+   - `ai-trpg-observability`: 32GB. 로그(Loki), 메트릭(Prometheus, 8GB 상한), 추적(Tempo), Grafana, Alloy 를 둔다.
+2. 둘 다 인스턴스에 **Attach** 한다. 3번에서 VM 이 포맷하고 마운트한다.
+3. 두 디스크의 **자동 스냅샷**을 켠다. 인스턴스의 자동 스냅샷은 붙인 디스크를 따로 챙기지 않는다. DB 는 바깥 백업도 있다.
+
+크기는 시작값이다. 띄운 뒤 일주일 동안 대시보드 `disks` 의 "하루에 느는 양"을 보고 정한다. 붙인 채로 키우지 못한다. 스냅샷에서 더 큰 디스크를 만들어 바꾼다(11번 "디스크를 키운다").
+
 **[웹] 도메인**: `<도메인>` 의 A 레코드를 VM 의 고정 IP 로 둔다. 프록시(Cloudflare 의 주황 구름 등)는 켜지 않는다.
 
 ## 2. VM 의 기본
@@ -102,6 +112,27 @@ sudo usermod -aG docker ubuntu
 exit                                                  # 다시 붙어야 그룹이 먹는다
 ```
 
+**[VM] 데이터 디스크(#539).** 1번에서 붙인 둘을 포맷하고 `/mnt/db`, `/mnt/observability` 에 마운트한다. 장치의 이름(`nvme1n1`)은 붙인 차례로 바뀔 수 있어서 크기로 가리고, `/etc/fstab` 에는 이름표(LABEL)로 적는다.
+`nofail` 은 디스크가 없어도 VM 이 뜨게 한다. Docker 는 디스크가 마운트된 뒤에 뜨게 한다(`After=`). 디스크가 끝내 없으면 그 디스크의 컨테이너만 뜨지 않는다(docker-compose.staging.yml 의 `create_host_path: false`).
+`mkfs` 는 새 디스크에만 한다. 이미 파일시스템이 있는 디스크(스냅샷에서 만든 것)에 하면 데이터가 지워진다. `sudo file -s /dev/<장치>` 가 `data` 일 때만 한다.
+
+```bash
+lsblk -o NAME,SIZE,MOUNTPOINT                         # 16G 와 32G 의 새 디스크(nvme1n1, nvme2n1 등)를 크기로 가린다
+sudo file -s /dev/<16G 의 장치> /dev/<32G 의 장치>     # 둘 다 "data" 여야 한다
+sudo mkfs -t ext4 -L ai-trpg-db /dev/<16G 의 장치>
+sudo mkfs -t ext4 -L ai-trpg-obs /dev/<32G 의 장치>
+sudo mkdir -p /mnt/db /mnt/observability
+echo 'LABEL=ai-trpg-db  /mnt/db             ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
+echo 'LABEL=ai-trpg-obs /mnt/observability  ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload && sudo mount -a
+findmnt /mnt/db /mnt/observability                    # 둘 다 나오면 된다
+sudo mkdir -p /etc/systemd/system/docker.service.d
+printf '[Unit]\nAfter=mnt-db.mount mnt-observability.mount\n' | sudo tee /etc/systemd/system/docker.service.d/disks.conf
+sudo systemctl daemon-reload
+```
+
+컨테이너가 쓸 폴더는 저장소를 받은 뒤(5번) 만든다.
+
 ## 4. Tailscale 과 집 PC 의 Ollama
 
 VM 은 집 PC 의 Ollama(11434)에만 닿고, 집의 다른 기기에는 닿지 않게 한다.
@@ -141,6 +172,15 @@ New-NetFirewallRule -DisplayName "Ollama over Tailscale" -Direction Inbound -Pro
 curl -s http://<집 PC 의 Tailscale 주소>:11434/api/tags | head -c 300; echo
 ```
 
+**[VM] Grafana 를 사설망에 연다(#539).** Grafana 는 VM 의 `127.0.0.1:3000` 에만 열려 있다. Tailscale 이 사설망에서 오는 3000 을 거기로 넘긴다(`tailscale serve`). 인터넷에는 열리지 않는다(`funnel` 이 아니다). 사설망 안의 길은 Tailscale 이 암호화하므로 HTTP 로 연다.
+`--bg` 로 걸면 VM 을 다시 켜도 그대로 남는다. 위의 접근 규칙에서 내 기기(`autogroup:member`)는 VM 의 모든 포트에 닿는다. 휴대폰도 Tailscale 앱으로 같은 계정에 들어가면 연다.
+관리 서버가 생기면 그것이 문이 된다(관측 규격의 "Grafana 를 여는 곳"). 그때 이것을 끈다: `sudo tailscale serve --http=3000 off`.
+
+```bash
+sudo tailscale serve --bg --http=3000 localhost:3000
+tailscale serve status                                # http://<VM 의 Tailscale 이름>:3000 이 보이면 된다
+```
+
 ## 5. 저장소와 열쇠
 
 **[VM]** 저장소를 받는다. 공개 저장소라 인증이 필요 없다.
@@ -149,6 +189,12 @@ curl -s http://<집 PC 의 Tailscale 주소>:11434/api/tags | head -c 300; echo
 sudo mkdir -p /srv/ai-trpg && sudo chown ubuntu:ubuntu /srv/ai-trpg
 git clone https://github.com/epqlffltm/ai-trpg.git /srv/ai-trpg
 cd /srv/ai-trpg
+```
+
+**[VM] 데이터 디스크의 폴더.** 컨테이너마다 제 폴더를 그 컨테이너가 도는 사용자의 것으로 만든다(`docker/disks/prepare-disks.sh`). 디스크가 마운트되어 있지 않으면 아무것도 만들지 않고 멈춘다. 여러 번 돌려도 된다.
+
+```bash
+sudo bash docker/disks/prepare-disks.sh
 ```
 
 **[집 PC] 바깥 백업의 주 열쇠.** VM 에 두지 않는다. 비밀번호 관리자와 오프라인 사본(USB 등) 두 곳에 둔다. 공개키(`age1...`)를 적어 둔다.
@@ -250,10 +296,11 @@ docker compose exec trpg-server python -m scripts.models add glm-4-7-flash --pro
 docker compose exec auth-server python manage.py createsuperuser
 ```
 
-**[집 PC]** 관리자 화면과 Grafana 는 SSH 터널로만 연다. 띄워 둔 채 브라우저에서 `http://localhost:8000/admin/`, `http://localhost:3000` 을 연다. Grafana 의 비밀번호는 루트 `.env` 의 `GRAFANA_ADMIN_PASSWORD` 다.
+**[집 PC]** 관리자 화면은 SSH 터널로만 연다. 띄워 둔 채 브라우저에서 `http://localhost:8000/admin/` 을 연다.
+Grafana 는 Tailscale 로 연다(4번): `http://<VM 의 Tailscale 이름>:3000`. 비밀번호는 루트 `.env` 의 `GRAFANA_ADMIN_PASSWORD` 다. Tailscale 이 끊겼을 때는 터널에 `-L 3000:127.0.0.1:3000` 을 더해 `http://localhost:3000` 으로 연다.
 
 ```powershell
-ssh -i $HOME\.ssh\LightsailDefaultKey-ap-northeast-2.pem -L 8000:127.0.0.1:8000 -L 3000:127.0.0.1:3000 ubuntu@<VM 의 고정 IP>
+ssh -i $HOME\.ssh\LightsailDefaultKey-ap-northeast-2.pem -L 8000:127.0.0.1:8000 ubuntu@<VM 의 고정 IP>
 ```
 
 ## 10. 확인
@@ -269,6 +316,9 @@ ssh -i $HOME\.ssh\LightsailDefaultKey-ap-northeast-2.pem -L 8000:127.0.0.1:8000 
 | 바깥 백업 | [VM] `docker compose logs backup-offsite` | "올렸다", "풀어 봤다" 줄 |
 | 주 열쇠로 풀리는가 | [웹] S3 콘솔에서 가장 최근 `trpg-*.dump.age` 를 받는다. [집 PC] `age -d -i "$HOME\ai-trpg-master.key" -o check.dump <받은 파일>` 이 오류 없이 끝나면 지운다 | 주마다 저절로 푸는 것은 확인 열쇠뿐이다. 주 열쇠는 이때 손으로 본다 |
 | 메모리 | [VM] `docker stats --no-stream` | 합을 배포 설계의 열린 질문에 적는다 |
+| 데이터 디스크 | [VM] `docker compose exec db df -h /var/lib/postgresql/data` 와 `docker compose exec prometheus df -h /prometheus` | 1번의 16G, 32G 디스크가 보인다(기본 디스크가 아니다) |
+| 디스크의 대시보드 | [집 PC] Grafana 의 대시보드 `disks` | system, db, observability 셋이 보인다. 일주일 뒤 "하루에 느는 양"으로 크기를 다시 본다 |
+| Grafana 를 사설망으로 | [집 PC] Tailscale 을 켜고 `http://<VM 의 Tailscale 이름>:3000`, 끄고 다시 | 켜면 열리고, 끄면 닿지 않는다 |
 | 가동 확인의 경보 | 바깥의 감시(UptimeRobot 등)에 `https://<도메인>/healthz` 를 걸고, 잠깐 `docker compose stop proxy` 로 메일이 오는지 본다 | 다시 `docker compose start proxy` |
 
 ## 11. 그 뒤로
@@ -281,4 +331,17 @@ cd /srv/ai-trpg && git pull && docker compose up -d --build
 
 **허용 주소를 바꾼다.** `docker/nginx/allowlist/allow.conf` 를 고치면 1분 안에 다시 읽는다. 바로 읽히려면 `docker compose exec proxy nginx -s reload`. 집의 주소가 바뀌었으면 Lightsail 방화벽의 22 도 고친다.
 
-**로그를 본다.** Grafana(9번의 터널) 또는 `docker compose logs --tail 100 <서비스>`.
+**로그를 본다.** Grafana(4번의 사설망 주소) 또는 `docker compose logs --tail 100 <서비스>`.
+
+**볼륨마다의 크기를 본다.** 대시보드 `disks` 는 디스크마다의 합만 보인다. 무엇이 큰지는 한 번씩 손으로 본다. Prometheus 는 제 크기를 지표로도 낸다(Explore 에서 `prometheus_tsdb_storage_blocks_bytes`). Loki 와 Tempo 는 내지 않는다.
+
+```bash
+sudo du -sh /mnt/db/postgres /mnt/observability/* /var/lib/docker/volumes/* 2>/dev/null | sort -h | tail -15
+```
+
+**디스크를 키운다.** Lightsail 의 디스크는 붙인 채로 키우지 못한다. 스냅샷에서 더 큰 디스크를 만들어 바꾼다. 그 디스크의 컨테이너가 멈추는 동안 그 기능이 멈춘다(DB 면 모두).
+
+1. [VM] 그 디스크를 쓰는 컨테이너를 멈춘다: DB 면 `docker compose stop`, 관측이면 `docker compose stop alloy loki prometheus alertmanager tempo grafana`.
+2. [웹] 그 디스크의 스냅샷을 만들고, 스냅샷에서 **더 큰 디스크**를 같은 가용 영역에 만든다. 옛 디스크를 떼고(Detach) 새 디스크를 붙인다.
+3. [VM] 파일시스템을 디스크의 크기로 늘린다. 이름표가 같아서 `/etc/fstab` 은 그대로다: `sudo mount -a && sudo resize2fs /dev/<새 장치>`. `findmnt` 로 크기를 본다.
+4. [VM] `docker compose up -d`. 하루쯤 지켜본 뒤 옛 디스크를 지운다.

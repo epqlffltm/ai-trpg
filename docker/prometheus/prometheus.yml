@@ -12,8 +12,11 @@ storage:
     # 미는 방식이라 점이 몇 초 늦거나 순서가 바뀌어 올 수 있다. 10분 안의 것은 받는다. Mimir 에도 같은 이름의 한도가 있다
     out_of_order_time_window: 10m
     # 보관 기간. 로그(Loki)와 같은 14일이다. Mimir 의 compactor_blocks_retention_period 가 된다
+    # 크기의 상한도 둔다(#539). 14일이 되기 전이라도 8GB 를 넘으면 오래된 것부터 지운다. 둘 가운데 먼저 닿는 쪽이 지운다.
+    # staging 의 관측 디스크(32GB)를 Loki, Tempo 와 나눠 쓰므로 그 4분의 1이다. 늘리면 디스크와 함께 본다(docs/observability.md 의 "디스크")
     retention:
       time: 14d
+      size: 8GB
 
 # 경보(#25). 규칙을 15초마다 평가한다. Alloy 가 긁는 간격(15s)과 같다
 global:
