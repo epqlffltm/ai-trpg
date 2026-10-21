@@ -74,7 +74,7 @@
 | 서비스 | 폴더 | 기술 | 포트 | 토큰의 대상 | 스키마 | 초기화 스크립트 | 하는 일 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 자산 | `asset-server/` | FastAPI | 8006 | `ai-trpg-asset` | `asset`, `asset_test` | `08-asset-role.sql` | 제작자가 만드는 자산(세계관, 로어북과 항목, 캐릭터, 일러스트)과 계정 페르소나의 원본. 게시와 판, 공개 범위, 등급, 그림 올리기와 내주기. 쓰는 서비스가 시작할 때 판과 페르소나를 가져가게 내준다. [asset 서버 설계](asset-server.md) |
-| chat | `chat-server/` | FastAPI | 8005 | `ai-trpg-chat` | `chat`, `chat_test` | `09-chat-role.sql` | 캐릭터 하나와 1:1 대화. 대화 조작(다시 생성, 분기), 기억, 로어북 검색, 장소와 소지품, 호감도. [chat 서버 설계](chat-server.md) |
+| chat | `chat-server/` | FastAPI | 8005 | `ai-trpg-chat` | `chat`, `chat_test` | `09-chat-role.sql` | 캐릭터 하나와 1:1 대화. 대화 조작(다시 생성, 분기), 기억, 로어북 검색, 장소와 소지품, 호감도. 뼈대와 인프라(compose, `09-chat-role.sql`, 프록시의 `/api/v1/chat/` 와 말을 보내는 스트리밍 주소)가 있다(#590). [chat 서버 설계](chat-server.md) |
 | story | `story-server/` | FastAPI | 8007 | `ai-trpg-story` | `story`, `story_test` | `10-story-role.sql` | 세계관 안에서 여러 인물과 이야기. 시각, 인물의 위치, 이벤트와 선택지, 호감도, 고백과 엔딩. 대화의 핵심은 chat 과 같은 공용 코드를 쓴다. [story 서버 설계](story.md) |
 | 관리 | 이름 미정(`ops-server` 후보) | FastAPI | 미정 | 미정 | `ops` | 미정 | 운영 조회와 집계, 관리자 작업 요청과 감사 기록. [관측 규격의 경계](../observability.md#관리-서버의-경계)를 따른다 |
 | 프런트엔드 | `web/` | React + TypeScript(Vite, SPA) | - | - | - | - | 사용자 화면과 관리자 화면. 같은 nginx 가 정적 파일로 내준다. [화면 명세](../product/screens.md#프런트-구조) |
