@@ -31,6 +31,7 @@ from config.security import (
     parse_cookie_origin,
     proxy_ssl_header,
     require_cookie_origins,
+    require_own_audience,
     require_secure_refresh_cookie,
     secure_cookies,
 )
@@ -303,6 +304,12 @@ SIMPLE_JWT = {
     # 머리말에 kid 를 넣는 토큰 클래스. 검증할 때도 같은 클래스를 쓴다
     'AUTH_TOKEN_CLASSES': ('accounts.tokens.AccessToken',),
 }
+
+# 인증 서버 자신의 이름(aud). 다시 동의할 필수 항목이 남은 사람의 access 토큰에는 이 이름만 싣는다
+# (accounts/tokens.py, #450).
+# 다른 서버는 aud 에 자기 이름이 없어 그 토큰을 받지 않는다. 인증 서버는 받아서 그 사람이 동의를 마칠 수 있다
+JWT_OWN_AUDIENCE = 'ai-trpg-auth'
+require_own_audience(JWT_OWN_AUDIENCE, SIMPLE_JWT['AUDIENCE'])
 
 # refresh 토큰 쿠키를 HTTPS 에서만 보낼지.
 # 적지 않으면 True. 로컬 개발은 HTTP 라서 .env 에서 false 로 둔다

@@ -23,6 +23,7 @@ from config.security import (
     parse_cookie_origin,
     proxy_ssl_header,
     require_cookie_origins,
+    require_own_audience,
     require_secure_refresh_cookie,
     secure_cookies,
 )
@@ -100,6 +101,12 @@ class FunctionTests(SimpleTestCase):
         require_secure_refresh_cookie(False, 'development')
         require_secure_refresh_cookie(True, 'staging')
         require_secure_refresh_cookie(True, 'production')
+
+    def test_the_token_audiences_must_name_this_server(self):
+        # 다시 동의할 사람의 토큰은 이 이름만 싣는다(#450). 목록에 없으면 그 사람은 동의를 마칠 길이 없다
+        require_own_audience('ai-trpg-auth', ['ai-trpg-auth', 'ai-trpg-game'])
+        with self.assertRaises(ImproperlyConfigured):
+            require_own_audience('ai-trpg-auth', ['ai-trpg-game', 'ai-trpg-billing'])
 
     def test_the_forwarded_proto_is_trusted_only_behind_a_proxy(self):
         self.assertIsNone(proxy_ssl_header(0))

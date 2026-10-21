@@ -171,6 +171,7 @@ def build_token_response(token_pair: TokenPair) -> Response:
             'access_token': token_pair.access,
             'token_type': 'Bearer',
             'expires_in': int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),
+            'consents_pending': list(token_pair.consents_pending),
         }
     )
     response = Response(body.data, status=status.HTTP_200_OK)
