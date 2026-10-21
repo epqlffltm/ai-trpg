@@ -22,6 +22,7 @@ from export_openapi import (
     audience_of,
     command_env,
     fastapi_source,
+    go_source,
     mark_audience,
     parse_args,
     render,
@@ -83,6 +84,11 @@ class SourceTests(unittest.TestCase):
     def test_fastapi_servers_are_listed(self):
         self.assertEqual(SOURCES['trpg'].folder, 'trpg-server')
         self.assertEqual(SOURCES['notification'].folder, 'notification-server')
+
+    def test_the_billing_server_reads_its_written_spec(self):
+        self.assertEqual(SOURCES['billing'], go_source('billing-server'))
+        self.assertEqual(SOURCES['billing'].command, ('go', 'run', './cmd/openapi'))
+        self.assertEqual(SOURCES['billing'].env, ())
 
     def test_required_settings_are_filled_only_when_missing(self):
         source = fastapi_source('x-server')

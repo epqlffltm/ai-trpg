@@ -49,7 +49,7 @@ func observeWithDeadline(t *testing.T, reader httpapi.WalletReader, limit time.D
 		Logger:         obs.NewLogger(&out, info, slog.LevelDebug),
 		RequestTimeout: limit,
 	})
-	return observed{router: router, out: &out}
+	return observed{t: t, router: router, out: &out}
 }
 
 func TestARequestPastItsDeadlineIsA503ToSendAgain(t *testing.T) {
@@ -91,9 +91,8 @@ func TestAClientThatLeftIsNotAServerError(t *testing.T) {
 	cancel()
 	request := httptest.NewRequestWithContext(ctx, http.MethodGet, walletURL, nil)
 	request.Header.Set("Authorization", "Bearer the-token")
-	response := httptest.NewRecorder()
 
-	server.router.ServeHTTP(response, request)
+	response := serve(t, server.router, request)
 
 	if failures := server.errorLines(t); len(failures) != 0 {
 		t.Errorf("서버의 오류로 적었다: %v", failures)
