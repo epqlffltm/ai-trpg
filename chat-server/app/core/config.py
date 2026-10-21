@@ -37,13 +37,16 @@ class Settings(CoreSettings):
     jwt_audience: str = 'ai-trpg-chat'
 
     # asset 서버의 주소. 대화를 시작할 때 캐릭터의 판과 페르소나의 사본을 여기서 가져온다
-    # (asset-server 의 /api/v1/asset/service/chat/...). 비우면 부르지 않는다. 예: http://127.0.0.1:8006
-    # 부르는 코드는 대화의 PR 이 더한다. 지금은 설정만 있다
+    # (asset-server 의 /api/v1/asset/service/chat/..., app/assets/client.py). 예: http://127.0.0.1:8006
+    # 비우면 부르지 않는다. 그때 대화를 만들려 하면 503 이다(진행 중인 대화는 사본으로 돈다)
     asset_url: str = ''
 
     # asset 서버에 보내는 요청에 서명하는 비밀(server_core/service_auth/signing.py).
     # asset 서버의 CHAT_SERVER_SECRET 과 같은 값이어야 한다. 32자 이상. 비밀값이다. 로그와 오류에 싣지 않는다
     asset_secret: SecretStr = SecretStr('')
+
+    # asset 서버를 한 번 부르는 시간의 상한(초). 대화를 만드는 사람이 기다리므로 짧게 둔다
+    asset_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
 
     @model_validator(mode='after')
     def require_an_asset_secret(self) -> Self:

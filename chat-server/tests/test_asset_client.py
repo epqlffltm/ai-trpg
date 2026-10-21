@@ -1,0 +1,151 @@
+# chat-server/tests/test_asset_client.py
+
+"""
+asset 서버를 부르는 것(app/assets/client.py)을 검증한다. 가짜 HTTP(httpx.MockTransport)로 돈다. DB 를 쓰지 않는다.
+
+보는 것.
+  - 주소와 서명: 이 서버의 이름(chat)의 주소로, 이 서버의 비밀로 서명하고(asset 서버의 is_valid 로 확인한다),
+    사용자의 토큰을 함께 넘긴다
+  - 답: 200 은 그 모양으로 읽는다. 404, 403 adult_content_required 는 각각의 예외다.
+    그 밖의 답, 모양이 틀린 답, 닿지 못함, 주소가 없음은 모두 AssetUnavailableError 다
+"""
+
+import json
+import time
+import uuid
+
+import httpx
+import pytest
+from server_core.service_auth.signing import SIGNATURE_HEADER, is_valid
+
+from app.assets.client import (
+    AssetAdultRequiredError,
+    AssetClient,
+    AssetNotFoundError,
+    AssetUnavailableError,
+    character_path,
+    persona_path,
+)
+from tests.assets import make_character, make_persona
+
+SECRET = 'test-asset-secret-0123456789abcdef'
+TOKEN = 'user-access-token'
+BASE_URL = 'http://asset.test'
+
+
+def client_answering(handler, base_url: str = BASE_URL + '/') -> AssetClient:
+    return AssetClient(httpx.AsyncClient(transport=httpx.MockTransport(handler)), base_url, SECRET, 3.0)
+
+
+def answer(status_code: int, body: object) -> httpx.Response:
+    return httpx.Response(status_code, content=json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
+
+
+async def test_a_character_is_fetched_with_a_signature_and_the_token():
+    copy = make_character()
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return answer(200, copy.model_dump(mode='json'))
+
+    fetched = await client_answering(handler).fetch_character(TOKEN, copy.id)
+
+    (request,) = seen
+    path = f'/api/v1/asset/service/chat/characters/{copy.id}/latest'
+    assert (request.method, str(request.url)) == ('GET', BASE_URL + path)
+    assert is_valid(SECRET, request.headers[SIGNATURE_HEADER], 'GET', path, b'', time.time())
+    assert request.headers['Authorization'] == f'Bearer {TOKEN}'
+    assert request.extensions['timeout']['read'] == 3.0
+    assert fetched == copy
+
+
+async def test_a_persona_is_fetched_from_its_address():
+    copy = make_persona()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == f'/api/v1/asset/service/chat/personas/{copy.id}'
+        return answer(200, copy.model_dump(mode='json'))
+
+    assert await client_answering(handler).fetch_persona(TOKEN, copy.id) == copy
+
+
+def test_the_paths_carry_this_servers_name():
+    some_id = uuid.UUID(int=1)
+
+    assert character_path(some_id) == f'/api/v1/asset/service/chat/characters/{some_id}/latest'
+    assert persona_path(some_id) == f'/api/v1/asset/service/chat/personas/{some_id}'
+
+
+async def test_unknown_fields_in_the_answer_are_ignored():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    body['later_field'] = 1
+    body['document']['later_field'] = 2
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    assert fetched == copy
+
+
+@pytest.mark.parametrize(
+    ('status_code', 'body', 'error'),
+    [
+        (404, {'detail': '찾을 수 없습니다.'}, AssetNotFoundError),
+        (403, {'detail': '성인', 'code': 'adult_content_required'}, AssetAdultRequiredError),
+        (403, {'detail': '다른 까닭'}, AssetUnavailableError),
+        (403, ['not', 'an', 'object'], AssetUnavailableError),
+        (401, {'detail': '요청의 서명이 맞지 않습니다.'}, AssetUnavailableError),
+        (500, {'detail': '오류'}, AssetUnavailableError),
+        (200, {'id': 'not the shape'}, AssetUnavailableError),
+    ],
+    ids=['not-found', 'adult', 'other-403', 'odd-403', 'bad-signature', 'server-error', 'bad-shape'],
+)
+async def test_answers_become_errors(status_code: int, body: object, error: type[Exception]):
+    asset = client_answering(lambda request: answer(status_code, body))
+
+    with pytest.raises(error):
+        await asset.fetch_character(TOKEN, uuid.uuid4())
+
+
+@pytest.mark.parametrize('status_code', [202, 500])
+async def test_only_200_is_read_even_if_the_body_fits(status_code: int):
+    copy = make_character()
+    asset = client_answering(lambda request: answer(status_code, copy.model_dump(mode='json')))
+
+    with pytest.raises(AssetUnavailableError):
+        await asset.fetch_character(TOKEN, copy.id)
+
+
+async def test_the_adult_code_counts_only_on_403():
+    asset = client_answering(lambda request: answer(500, {'code': 'adult_content_required'}))
+
+    with pytest.raises(AssetUnavailableError):
+        await asset.fetch_character(TOKEN, uuid.uuid4())
+
+
+async def test_a_403_that_is_not_json_is_unavailable():
+    asset = client_answering(lambda request: httpx.Response(403, content=b'<html>'))
+
+    with pytest.raises(AssetUnavailableError):
+        await asset.fetch_character(TOKEN, uuid.uuid4())
+
+
+async def test_not_reaching_it_is_unavailable():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError('닿지 않는다', request=request)
+
+    with pytest.raises(AssetUnavailableError):
+        await client_answering(handler).fetch_persona(TOKEN, uuid.uuid4())
+
+
+async def test_without_an_address_nothing_is_called():
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return answer(200, {})
+
+    with pytest.raises(AssetUnavailableError):
+        await client_answering(handler, base_url='').fetch_character(TOKEN, uuid.uuid4())
+    assert calls == []
