@@ -149,6 +149,8 @@ class PublicListingDetail(PublicListing):
     # 지금 팔지 않는 모델일 수 있다. 화면은 GET /tables/narration-models 에서 찾는다.
     # 없으면 테이블을 만들 때 같은 회사의 대신 쓸 모델로 정해진다(app/tables/model_choice.py)
     recommended_narration_model: str | None
+    # 이 판으로 만든 테이블에서 방장이 참고 자료(SRD 같은 바깥 자료)를 켤 수 있는가(app/references/policy.py)
+    references_allowed: bool
 
 
 class PublicListingPage(BaseModel):

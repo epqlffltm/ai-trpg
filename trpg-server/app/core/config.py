@@ -229,6 +229,13 @@ class Settings(BaseSettings):
     # 키워드로 걸린 항목: 이보다 멀면 넣지 않는다(동음이의어 막기). 임베딩이 실패하면 보지 않는다
     lore_keyword_max_distance: float = Field(default=0.50, gt=0, le=2)
 
+    # 참고 자료(#482, SRD 같은 바깥 자료) 검색의 거리 기준(코사인 거리). 기본값은 로어북의 것과 같다.
+    # 자료가 영어라 한국어 장면과는 더 멀 수 있다. 켠 것과 끈 것을 견주는 평가로 다시 잰다(app/references/retrieval.py).
+    # 뜻으로 고를 때: 이보다 먼 줄은 넣지 않는다
+    reference_max_distance: float = Field(default=0.45, gt=0, le=2)
+    # 다른 이름(한국어 이름)으로 걸린 줄: 이보다 멀면 넣지 않는다. 임베딩이 실패하면 보지 않는다
+    reference_keyword_max_distance: float = Field(default=0.50, gt=0, le=2)
+
     # 지난 일(앞 라운드의 기억) 검색의 거리 기준(코사인 거리). 기억은 로어북 항목보다 글이 길어 따로 잰다
     # (uv run python -m scripts.eval_memory). 기본값은 bge-m3 로 잰 것이다(app/memory/retrieval.py 의 같은 이름의 상수).
     # 뜻으로 고를 때: 이보다 먼 기억은 넣지 않는다

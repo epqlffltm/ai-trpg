@@ -93,7 +93,8 @@ from app.engine.sheet import Sheet
 #  39: 인물의 NPC 시트에 훔치다 들켰을 때(npc_sheets[].on_caught: hostile, fight)가 있다
 #  40: 규칙에 빼앗긴 NPC 가 깨어날 때의 반응(robbed_wake: hostile, wary)이 있다. 태도에 경계(wary)가 더해졌다
 #  41: 인물의 NPC 시트에 공격(npc_sheets[].attacks)이 있다. 몬스터의 공격과 같은 모양이다
-SNAPSHOT_FORMAT = 41
+#  42: 세계관에 참고 자료를 켤 수 있는지(world.references_allowed)가 있다(#482)
+SNAPSHOT_FORMAT = 42
 
 
 class EntrySnapshot(BaseModel):
@@ -127,6 +128,8 @@ class WorldSnapshot(BaseModel):
     title: str
     setting: str
     gm_notes: str
+    # 방장이 참고 자료를 켤 수 있는가(app/references/policy.py)
+    references_allowed: bool = False
 
 
 class RulebookSnapshot(BaseModel):
@@ -635,7 +638,13 @@ def snapshot_lorebook(lorebook: Lorebook, entries: list[LoreEntry]) -> LorebookS
 
 def snapshot_world(world: World) -> WorldSnapshot:
     """세계관을 굳힌다."""
-    return WorldSnapshot(id=world.asset_id, title=world.asset.title, setting=world.setting, gm_notes=world.gm_notes)
+    return WorldSnapshot(
+        id=world.asset_id,
+        title=world.asset.title,
+        setting=world.setting,
+        gm_notes=world.gm_notes,
+        references_allowed=world.references_allowed,
+    )
 
 
 def snapshot_rulebook(rulebook: Rulebook) -> RulebookSnapshot:

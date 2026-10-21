@@ -80,6 +80,7 @@ from app.realtime.listener import PostgresListener
 from app.realtime.shutdown import closing_on_exit
 from app.realtime.signals import session_info
 from app.realtime.signing import signer_from
+from app.references.retrieval import ReferenceRetriever, ReferenceThresholds
 from app.rounds import clock
 from app.rounds import router as rounds
 from app.rounds.closing import closer_of
@@ -252,6 +253,9 @@ def create_app(
     indexer = LoreIndexer(app.state.session_factory, app.state.embedder, app.state.jobs)
     thresholds = Thresholds(settings.lore_max_distance, settings.lore_keyword_max_distance)
     app.state.lore = LoreRetriever(app.state.session_factory, app.state.embedder, indexer, thresholds)
+    # 참고 자료(#482)를 고르는 것. 로어북과 같은 임베더를 쓴다. 자료의 벡터는 관리 명령(scripts/references.py)이 만든다
+    reference_thresholds = ReferenceThresholds(settings.reference_max_distance, settings.reference_keyword_max_distance)
+    app.state.references = ReferenceRetriever(app.state.session_factory, app.state.embedder, reference_thresholds)
 
     # 서술하기 직전에 지난 기록보다 앞의 라운드 중 이번 장면에 맞는 것을 고르는 것(app/memory/retrieval.py).
     # 테이블의 라운드 벡터가 모자라면 위의 임베더로 색인을 맡긴다.
