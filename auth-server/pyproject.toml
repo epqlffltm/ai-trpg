@@ -9,6 +9,7 @@ dependencies = [
     "django-environ>=0.14.0",
     "djangorestframework>=3.18.1",
     "djangorestframework-simplejwt[crypto]>=5.5.1",
+    "drf-spectacular>=0.30.0",
     "gunicorn>=26.2.0",
     "opentelemetry-exporter-otlp-proto-http>=1.45.1",
     "opentelemetry-sdk>=1.45.1",
@@ -21,6 +22,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "coverage>=7.11.0",
+    "openapi-core>=0.23.1",
     "ruff>=0.16.10",
 ]
 

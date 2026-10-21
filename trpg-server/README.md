@@ -196,13 +196,13 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PATCH | `/api/v1/game/scenarios/{id}/listing` | 소개 페이지 고치기. 보낸 칸만 바뀐다. 공개 중인데 조건을 못 갖추게 되면 409 | access 토큰 |
 | PUT | `/api/v1/game/scenarios/{id}/listing/publication` | 공개할 판 정하기. `version` 을 `null` 로 보내면 공개를 내린다. 조건을 못 갖췄으면 409 | access 토큰 |
 | GET | `/api/v1/game/listings` | 공개된 시나리오 목록. 최근에 공개한 것부터. `genre`, `tag`, `players`, `limit`, `offset` | 없어도 된다(전체 이용가만, #530) |
-| GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다. 목록의 칸에 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 능력치의 이름, 추천 서술 모델)이 더 있다(#428) | 없어도 된다(전체 이용가만, #530) |
+| GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다. 목록의 칸에 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 능력치의 이름, 추천 서술 모델, 참고 자료를 켤 수 있는지 `references_allowed`)이 더 있다(#428) | 없어도 된다(전체 이용가만, #530) |
 | POST | `/api/v1/game/personas` | 보관함에 캐릭터 만들기. 201. 이름, 설명, 참고로 적어 두는 능력치(없어도 된다) | access 토큰 |
 | GET | `/api/v1/game/personas` | 내 보관함. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/personas/{id}` | 보관한 캐릭터 하나 | access 토큰 |
 | PUT | `/api/v1/game/personas/{id}` | 보관한 캐릭터 고치기. 보낸 것으로 통째로 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/personas/{id}` | 보관한 캐릭터 지우기. 204 | access 토큰 |
-| POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_model` 로 서술 모델을 고른다(비우면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대체 모델. [추천 모델](#추천-모델)). `credit_wait_seconds`, `remove_short_payers` 로 크레딧이 모자란 사람을 기다리는 규칙을 고른다(비우면 5분, 켬). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
+| POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_model` 로 서술 모델을 고른다(비우면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대체 모델. [추천 모델](#추천-모델)). `credit_wait_seconds`, `remove_short_payers` 로 크레딧이 모자란 사람을 기다리는 규칙을 고른다(비우면 5분, 켬). `references_enabled` 로 서술에 [참고 자료](#참고-자료)를 넣는다(기본 끔, 판의 세계관이 허용해야 한다. 아니면 422). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables` | 내가 앉아 있는 테이블 목록. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/join` | 초대 코드로 테이블에 들어가 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables/narration-models` | 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값(`{"free": false, "models": [{"slug", "display_name", "vendor", "grade", "credits", "tier", "promo", "next", "retires_on"}]}`). 가격 목록을 받지 못했으면 503 ([고를 수 있는 모델](#고를-수-있는-모델)) | access 토큰 |
@@ -232,6 +232,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/narration-model` | 서술 모델 바꾸기(`{"narration_model": "gpt-6-luna"}`). 방장만. 고를 수 있는 모델만. 비울 수 없다. 시작하면 고정이다. 진행 중에는 지금 모델을 쓸 수 없을 때(꺼짐, 팔지 않음)만 되고 아니면 409(`narration_model_locked`). 바꾼 값은 다음 라운드부터 쓴다(아직 서술하지 않은 지금 라운드는 함께 바뀐다) ([모델 고르기](#모델-고르기)) | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/credit-wait` | 크레딧이 모자란 사람을 기다리는 시간(`credit_wait_seconds`, 30~3600초)과 지나면 빼는지(`remove_short_payers`) 바꾸기. 방장만. 둘 다 적는다. 진행 중에도 되고 지금 기다리는 라운드에도 바로 쓴다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/whisper-notice` | 쪽지를 보낸 사실을 모두에게 알릴지(`whisper_notice`) 바꾸기. 방장만. 바꾼 뒤에 보내는 쪽지부터 따른다 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/references` | 서술에 [참고 자료](#참고-자료)를 넣을지(`references_enabled`) 바꾸기. 방장만. 모집 중에만(시작하면 409 `not_recruiting`). 켜려면 판의 세계관이 허용해야 한다(아니면 422) | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/start` | 테이블 시작하기. 방장만. 모두 캐릭터가 있어야 한다. 모두가 시트를 받는다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/end` | 테이블 끝내기. 방장만 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds` | 라운드 목록. 처음 것부터. `limit`, `offset` | access 토큰 |
@@ -388,6 +389,8 @@ app/engine/
 | `description` (메모) | 1,000자 | 만든 사람만 본다 | 보지 않는다 |
 | `setting` (공개 설정) | 8,000자 | 본다 | 본다 |
 | `gm_notes` (GM 전용) | 4,000자 | 만든 사람만 본다 | 본다 |
+
+`references_allowed`(기본 `false`)는 이 세계관의 판에서 방장이 [참고 자료](#참고-자료)(SRD 같은 바깥 자료)를 켤 수 있는가다. 바깥 자료가 세계관에 맞지 않을 수 있어(SF 세계에 D&D 의 몬스터) 제작자가 고른다. 게시하면 판에 굳는다(판 형식 42).
 
 ### 룰북
 
@@ -794,6 +797,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
   - 형식 39: NPC 시트의 훔치다 들켰을 때(`npc_sheets[].on_caught`). 그 전 판의 인물은 적대만 한다
   - 형식 40: 규칙의 빼앗긴 NPC 가 깨어날 때의 반응(`robbed_wake`). 그 전 판은 `srd5` 의 것으로 읽는다(DB 의 룰북은 마이그레이션 `9e2b6d4a8c13` 이 채웠다). 태도에 경계(`wary`)가 더해졌다
   - 형식 41: NPC 시트의 공격(`npc_sheets[].attacks`). 그 전 판의 인물은 공격이 없다
+  - 형식 42: 세계관의 참고 자료 허용(`world.references_allowed`, #482). 그 전 판의 세계관은 허용하지 않은 것으로 읽는다. 세계관이 없는 판은 그대로다
 - 규칙을 템플릿의 값으로 채워 읽는 형식(4, 6~10, 14, 15, 23, 25, 28, 36)은 DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 형식 12 의 항목의 종류와 형식 16 의 지목의 정답도 DB 의 항목에 채웠다.
 - 옛 판의 규칙에 점수제가 채워져도 그 판에서 점수제를 쓸 수 있게 되는 것은 아니다. 옛 판이 허용한 방식은 그때 있던 것 그대로다. 방식이 나중에 늘어도 옛 판에 저절로 켜지지 않는다.
 - 게시는 "굳히기"다. 남에게 보이게 하는 것은 따로다([공개와 소개 페이지](#공개와-소개-페이지)). 굳힌 내용(`snapshot`)은 공개해도 만든 사람만 본다.
@@ -1785,6 +1789,7 @@ app/rounds/
   - `narration-33`: 한 일의 줄에 이룬 퀘스트에 넘긴 물건(`(넘긴 물건: 약초 배달에 약초 2개)`)
   - `narration-34`: 한 일의 줄에 훔치기(`(훔치기: 수로 쥐 1 에게서 송곳니 1개를 몰래 빼냈다)`, 들켰으면 그 마리가 노린다는 말)
   - `narration-35`: `[인물의 상태]` 의 줄에 태도(중립이 아니면 `태도: 적대`)와, 태도도 엔진이 정한 사실이라는 다루는 법
+  - `narration-43`: 테이블이 켰으면 `[참고할 설정]` 뒤에 `[참고 자료]`(바깥 자료의 줄과 다루는 법, #482)
   - `narration-42`: 기한이 다 됐거나 이번 라운드에 넘긴 퀘스트를 마지막 부탁 앞에 다시 적는다(#268 의 측정)
   - `narration-41`: `[퀘스트]` 의 줄에 남은 기한의 감각(`진행 중(기한 빠듯함)`)과 이번 라운드에 기한을 넘긴 것, 기한을 다루는 법(#268)
   - `narration-40`: 몬스터와 NPC 가 쓰러진 캐릭터를 친 줄(`쓰러진 엘프에게 물기 (맞음) → 엘프 죽음의 굴림 실패 +1 (실패 2/3, 죽어 가는 중)`, #369)
@@ -2012,7 +2017,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 
 **AI 호출의 기록.** 언어 모델을 부를 때마다 `ai_invocations` 에 한 줄을 덧붙인다. 줄을 지우지 않고, 원문(모델이 쓴 글) 말고는 고치지 않는다. 사용량과 비용, 실패를 볼 근거다.
 - 잘 끝났든(`ok`), 답은 왔지만 장면으로 쓰지 않았든(`rejected`: `cut_off`, `empty`, `too_long`, `secret_leaked`), 답을 받지 못했든(`failed`: `timeout`, `unreachable`, `status_503` …) 한 번에 하나다. 실패한 호출도 시간과 토큰을 썼다.
-- 적는 것: 쓰임새(`narration`), 테이블, 라운드 번호, 그때의 방장, provider 의 종류와 모델(답에 적힌 이름, 없으면 부른 이름), 틀의 버전, 추론, 문체, 생성 설정(`temperature`, `max_tokens`), 넣은 로어북 항목(`lore_entry_ids`), 넣은 지난 일(`memory_rounds`), 보낸 글자 수(`input_chars`), 걸린 시간, 토큰 수, 멈춘 이유, 모델이 쓴 글(쓰지 않은 글도).
+- 적는 것: 쓰임새(`narration`), 테이블, 라운드 번호, 그때의 방장, provider 의 종류와 모델(답에 적힌 이름, 없으면 부른 이름), 틀의 버전, 추론, 문체, 생성 설정(`temperature`, `max_tokens`), 넣은 로어북 항목(`lore_entry_ids`), 넣은 지난 일(`memory_rounds`), 넣은 참고 자료의 줄(`reference_ids`), 보낸 글자 수(`input_chars`), 걸린 시간, 토큰 수, 멈춘 이유, 모델이 쓴 글(쓰지 않은 글도).
   로어북 항목과 지난 일은 입력 예산에 맞게 줄인 뒤 실제로 보낸 것이다.
 - 생성 설정은 코드의 상수라 틀의 버전과 따로 바뀔 수 있어 함께 적는다. 넣은 로어북 항목은 검색이 맞는 것을 골랐는지 볼 근거다.
 - **자세한 사용량과 원가**(#332, `app/ai/costs.py`). 캐시에서 읽은 입력(`cached_input_tokens`), 캐시에 쓴 입력(`cache_write_tokens`), 생각에 쓴 출력(`reasoning_tokens`)을 적는다. 모두 입력·출력 수에 들어 있다(OpenAI 의 뜻. 다른 provider 는 이 뜻으로 바꿔 채운다).
@@ -2473,6 +2478,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `narration_model_unavailable` | 서술 모델이 은퇴했는데 같은 회사에 대신할 모델이 없다. 방장이 모델을 골라야 서술한다 | `narration_model`, `reason`: `retired` |
 | `credit_wait_changed` | 방장이 크레딧이 모자란 사람을 기다리는 규칙을 바꿨다 | `credit_wait_seconds`, `remove_short_payers` |
 | `whisper_notice_changed` | 방장이 쪽지를 보낸 사실을 알릴지 바꿨다 | `whisper_notice` |
+| `references_changed` | 방장이 참고 자료를 서술에 넣을지 바꿨다(모집 중에만, #482) | `references_enabled` |
 | `ledger_drafts_changed` | 방장이 장부 초안을 쓸지 바꿨다. 장부 초안을 걷어내 이제 생기지 않는다(#371). 그 전의 이벤트에만 있다 | `ledger_drafts` |
 | `whisper_sent` | 누가 누구에게 쪽지를 보냈다. 알리기로 한 테이블에만 적힌다. 쪽지의 글은 적지 않는다 | `user_id`, `character_name`, `recipient_id`, `recipient_character_name` |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
@@ -2962,12 +2968,12 @@ uv run python -m scripts.eval_lore --fake
 ## 참고 자료
 
 미리 넣어 둔 바깥 자료다(#482). 제작자가 "범선", "리치"라고만 적어도 서술이 구조와 생김새를 채우게 하려는 것이다.
-지금은 SRD 5.1 의 몬스터, 장비, 마법 물건을 넣는 데까지 왔다. **아직 서술에 들어가지 않는다.** 단계로 나눈다.
+지금은 SRD 5.1 의 몬스터, 장비, 마법 물건을 넣고, 테이블이 켜면 서술에 섞는 데까지 왔다. 단계로 나눈다.
 
 | 단계 | 내용 |
 | --- | --- |
-| 1 | 저장과 넣기. 데이터 파일, 테이블, 넣는 명령, 벡터를 만드는 명령(지금) |
-| 2 | 서술에 섞기. 세계관이 허용하고 방장이 방 설정으로 켜면, 제작자의 로어북을 고르고 남은 자리에 참고 자료를 넣는다. 켜면 값이 더 든다는 것을 입장 전에 보인다 |
+| 1 | 저장과 넣기. 데이터 파일, 테이블, 넣는 명령, 벡터를 만드는 명령(#568) |
+| 2 | 서술에 섞기. 세계관이 허용하고 방장이 방 설정으로 켜면, 제작자의 로어북을 고르고 남은 자리에 참고 자료를 넣는다([서술에 섞기](#서술에-섞기)) |
 | 3 | 켠 것과 끈 것을 견주는 평가(서술의 품질, 늘어난 토큰) |
 | 4 | 기본 자산. 참고 자료를 내 로어북과 도감으로 복사해 쓴다. srd5 룰북이면 몬스터 시트를 채운다 |
 
@@ -3026,6 +3032,30 @@ uv run python -m scripts.references index --model qwen3-embedding:0.6b
   임베딩 모델이 실패하면 멈추고 남은 수를 찍고 1 로 끝난다. 다시 돌리면 남은 것부터 만든다. `EMBEDDER` 설정과 상관없이 실제 임베딩 모델을 부른다.
 - 차례는 `load` 다음 `index` 다. 둘을 함께 돌리지 않는다. 넣기가 지운 줄의 벡터를 색인이 넣으려 하면 외래 키가 막는다.
 - 벡터로 바꾸는 글은 로어북 항목과 같은 모양이다(이름, "다른 이름: …", 글이 한 줄씩).
+
+### 서술에 섞기
+
+테이블이 켰으면 서술을 맡기기 직전에 참고 자료를 고른다(`app/references/retrieval.py`). 고른 것은 `[참고할 설정]` 뒤의 `[참고 자료]` 에 들어간다(`narration-43`).
+
+**켜기.** 세계관의 제작자가 허용하고(`worlds.references_allowed`), 방장이 테이블을 만들 때(`references_enabled`) 또는 모집 중에(`PUT .../references`) 켠다(2026-10-21 유저 결정).
+- 세계관이 없는 판은 켤 수 있다. 지킬 설정이 없다. 판의 세계관이 허용하지 않으면 422 다(`app/references/policy.py`).
+- 시작하면 고정이다(409 `not_recruiting`). 서술 모델처럼 앉는 것이 그 서술에 대한 동의다. 바꾼 것은 `references_changed` 이벤트로 모두에게 간다.
+- 들어가기 전에 보인다. 테이블의 응답(하나, 내 목록, 로비)의 `references_enabled`, 공개 소개의 `references_allowed`.
+- **값을 더 받지 않는다.** 참고 자료는 로어북 항목이 쓰고 남은 글자 수(3,000자)에만, 그 안에서도 1,500자와 세 줄까지만 들어간다.
+  입력이 예산을 넘으면 참고 자료를 가장 먼저 뺀다(지난 기록, 로어북, 기억보다 먼저, `app/rounds/budget.py`). 그래서 원가가 판매가가 가정한 입력(12,000 토큰) 안에 든다.
+
+**고르기.** 로어북 검색과 같은 방식이다. 찾는 글(장면과 선언)을 벡터로 바꿔 지금 임베딩 모델의 자료의 벡터와 거리를 잰다.
+- 다른 이름(`aliases`, 한국어 이름)이 글에 그대로 있고 거리가 `REFERENCE_KEYWORD_MAX_DISTANCE`(0.50) 이하인 줄을 먼저 넣는다. 원본의 영어 이름으로는 고르지 않는다. 한국어 장면에 나오지 않고, 짧은 이름("Bat")은 낱말 속에서 잘못 걸린다.
+- 그다음 거리가 `REFERENCE_MAX_DISTANCE`(0.45) 이하인 줄을 가까운 순으로. 기본값은 로어북의 것(bge-m3)과 같다. 자료가 영어라 한국어 장면과는 더 멀 수 있어 3단계의 평가로 다시 잰다.
+- 임베딩 모델이 실패하면 다른 이름으로만, 거리를 보지 않고 고른다. 벡터가 없는 자료(`scripts.references index` 를 돌리지 않음)도 다른 이름으로만 걸린다. 지금은 다른 이름이 비어 있어 4단계 전까지는 벡터로만 걸린다.
+- 넣은 줄은 AI 호출의 기록(`ai_invocations.reference_ids`)에 남는다.
+
+**다루는 법.** 프롬프트에 적는다. 생김새, 쓰임, 버릇을 그리는 데만 쓴다. 위의 설정과 다르면 설정을 따르고, 맞지 않으면 쓰지 않는다. 수치와 규칙은 쓰지 않는다(결과는 엔진이 정했다). 이름은 한국어로 옮겨 쓴다.
+
+```
+REFERENCE_MAX_DISTANCE=0.45
+REFERENCE_KEYWORD_MAX_DISTANCE=0.50
+```
 
 ## 지난 일(기억)
 

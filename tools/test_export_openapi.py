@@ -21,6 +21,7 @@ from export_openapi import (
     Source,
     audience_of,
     command_env,
+    django_source,
     fastapi_source,
     go_source,
     mark_audience,
@@ -101,6 +102,13 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(SOURCES['billing'], go_source('billing-server'))
         self.assertEqual(SOURCES['billing'].command, ('go', 'run', './cmd/openapi'))
         self.assertEqual(SOURCES['billing'].env, ())
+
+    def test_the_auth_server_builds_its_list_from_the_views(self):
+        self.assertEqual(SOURCES['auth'], django_source('auth-server'))
+        self.assertIn('--fail-on-warn', SOURCES['auth'].command)
+        # 키 없이, DEBUG 를 끄고 뜬다
+        self.assertEqual(dict(SOURCES['auth'].env)['JWT_PRIVATE_KEY_PATH'], '')
+        self.assertEqual(dict(SOURCES['auth'].env)['DEBUG'], 'false')
 
     def test_the_board_server_builds_and_prints_its_spec(self):
         self.assertEqual(SOURCES['board'], nest_source('board-server'))

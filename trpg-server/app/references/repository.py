@@ -5,7 +5,7 @@
 import uuid
 from collections.abc import Collection, Sequence
 
-from sqlalchemy import delete, exists, select, update
+from sqlalchemy import delete, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -101,3 +101,45 @@ async def add_embeddings(session: AsyncSession, model: str, vectors: dict[uuid.U
         {'reference_id': reference_id, 'model': model, 'embedding': vector} for reference_id, vector in vectors.items()
     ]
     await session.execute(insert(ReferenceEmbedding).values(rows).on_conflict_do_nothing())
+
+
+async def list_aliased(session: AsyncSession) -> list[StoredReference]:
+    """다른 이름(한국어 이름 등)이 있는 줄들. 장면의 글에 그 이름이 나왔는지 볼 때 쓴다. 자료와 key 의 차례다."""
+    query = (
+        select(ReferenceEntry)
+        .where(func.cardinality(ReferenceEntry.aliases) > 0)
+        .order_by(ReferenceEntry.source, ReferenceEntry.key)
+    )
+    return [to_stored(entry) for entry in await session.scalars(query)]
+
+
+async def nearest(
+    session: AsyncSession, model: str, vector: list[float], max_distance: float, limit: int
+) -> list[tuple[StoredReference, float]]:
+    """
+    이 모델의 벡터 중 vector 와 가까운 줄들과 그 거리. 거리가 max_distance 이하인 것, 가까운 순으로 limit 개까지.
+
+    거리는 코사인 거리다. 색인 없이 이 모델의 벡터를 모두 견준다(자료가 천 줄 안쪽이다).
+    """
+    distance = ReferenceEmbedding.embedding.cosine_distance(vector)
+    query = (
+        select(ReferenceEntry, distance)
+        .join(ReferenceEmbedding, ReferenceEmbedding.reference_id == ReferenceEntry.id)
+        .where(ReferenceEmbedding.model == model, distance <= max_distance)
+        .order_by(distance)
+        .limit(limit)
+    )
+    return [(to_stored(entry), float(value)) for entry, value in await session.execute(query)]
+
+
+async def distances_of(
+    session: AsyncSession, model: str, vector: list[float], ids: Collection[uuid.UUID]
+) -> dict[uuid.UUID, float]:
+    """그 줄들의 이 모델의 벡터와 vector 의 거리. 벡터가 없는 줄은 빠진다."""
+    if not ids:
+        return {}
+    distance = ReferenceEmbedding.embedding.cosine_distance(vector)
+    query = select(ReferenceEmbedding.reference_id, distance).where(
+        ReferenceEmbedding.model == model, ReferenceEmbedding.reference_id.in_(ids)
+    )
+    return {reference_id: float(value) for reference_id, value in await session.execute(query)}

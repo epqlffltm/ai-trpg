@@ -67,7 +67,7 @@ from app.core.jobs import BackgroundJobs
 from app.observability.metrics import NARRATION_FAILURE, NARRATION_SUCCESS, record_narration
 from app.rounds import service
 from app.rounds.llm_narrator import NarrationError
-from app.rounds.narrator import LoreNote, MemoryNote, NarrationRequest, Narrator, PersonHistory
+from app.rounds.narrator import LoreNote, MemoryNote, NarrationRequest, Narrator, PersonHistory, ReferenceNote
 from app.rounds.preview import notifier, open_preview
 from app.rounds.retrying_narrator import NarrationFailed
 
@@ -112,6 +112,24 @@ class NoLore:
 
 
 NO_LORE = NoLore()
+
+
+class ReferenceFinder(Protocol):
+    """서술에 넣을 참고 자료(#482)를 고르는 것. 구현은 app/references/retrieval.py 의 ReferenceRetriever 다."""
+
+    async def find(self, request: NarrationRequest) -> list[ReferenceNote]:
+        """이번 장면에 맞는 참고 자료. 로어북을 고른 뒤(request.lore) 남은 자리에 넣는다. 없으면 빈 목록이다."""
+        ...
+
+
+class NoReferences:
+    """아무것도 고르지 않는 것. 참고 자료가 필요 없는 곳(테스트)에서 꽂는다."""
+
+    async def find(self, request: NarrationRequest) -> list[ReferenceNote]:
+        return []
+
+
+NO_REFERENCES = NoReferences()
 
 
 class MemoryFinder(Protocol):
@@ -170,11 +188,12 @@ class Run:
 
 @dataclass(frozen=True)
 class Finders:
-    """서술에 넣을 것을 고르는 셋. 로어북, 지난 일, 인물의 이력."""
+    """서술에 넣을 것을 고르는 넷. 로어북, 지난 일, 인물의 이력, 참고 자료."""
 
     lore: LoreFinder = NO_LORE
     memories: MemoryFinder = NO_MEMORIES
     histories: HistoryFinder = NO_HISTORIES
+    references: ReferenceFinder = NO_REFERENCES
 
 
 @dataclass(frozen=True)
@@ -249,15 +268,18 @@ async def find_or_nothing[Found](find: Callable[[], Awaitable[list[Found]]], dea
 
 async def gather_context(request: NarrationRequest, finders: Finders, budget: float) -> NarrationRequest:
     """
-    서술에 넣을 로어북 항목과 지난 일을 고르고 인물의 이력을 모아 요청에 싣는다. 셋을 합쳐 budget 초까지 쓴다.
+    서술에 넣을 로어북 항목과 지난 일을 고르고 인물의 이력을 모으고 참고 자료를 골라 요청에 싣는다.
+    넷을 합쳐 budget 초까지 쓴다.
 
-    이력은 로어북이 고른 인물의 것이라 로어북을 먼저 고른다. 하나가 실패해도 나머지는 고른다.
+    이력은 로어북이 고른 인물의 것이고, 참고 자료는 로어북이 쓰고 남은 자리에 들어가서 로어북을 먼저 고른다.
+    하나가 실패해도 나머지는 고른다.
     """
     deadline = asyncio.get_running_loop().time() + budget
     request = replace(request, lore=await find_or_nothing(lambda: finders.lore.find(request), deadline, '로어북을'))
     memories = await find_or_nothing(lambda: finders.memories.find(request), deadline, '지난 일을')
     histories = await find_or_nothing(lambda: finders.histories.find(request), deadline, '인물의 이력을')
-    return replace(request, memories=memories, histories=histories)
+    references = await find_or_nothing(lambda: finders.references.find(request), deadline, '참고 자료를')
+    return replace(request, memories=memories, histories=histories, references=references)
 
 
 async def write_scene(
@@ -373,6 +395,7 @@ async def narrate_round(
     lore: LoreFinder = NO_LORE,
     memories: MemoryFinder = NO_MEMORIES,
     histories: HistoryFinder = NO_HISTORIES,
+    references: ReferenceFinder = NO_REFERENCES,
     budgets: Budgets = BUDGETS,
     billing: Billing = FREE,
     after_open: AfterOpen = nothing_after_open,
@@ -395,7 +418,7 @@ async def narrate_round(
     서술 모델이 은퇴했으면 바꾼다(app/tables/retirement_watch.py). 예외를 올리지 않는다.
     """
     run = Run(table_id, number, started)
-    finders = Finders(lore, memories, histories)
+    finders = Finders(lore, memories, histories, references)
     try:
         async with asyncio.timeout(seconds_left(started, datetime.now(UTC), budgets.job)):
             scene = await close_run(session_factory, narrator, run, finders, billing, budgets, prices)
@@ -426,6 +449,7 @@ class RoundCloser:
     lore: LoreFinder = NO_LORE
     memories: MemoryFinder = NO_MEMORIES
     histories: HistoryFinder = NO_HISTORIES
+    references: ReferenceFinder = NO_REFERENCES
     billing: Billing = FREE
     after_open: AfterOpen = nothing_after_open
     prices: PriceList = FREE_PRICES
@@ -446,6 +470,7 @@ class RoundCloser:
             self.lore,
             self.memories,
             self.histories,
+            references=self.references,
             billing=self.billing,
             after_open=self.after_open,
             prices=self.prices,
@@ -466,6 +491,7 @@ def closer_of(state: Any) -> RoundCloser:
         lore=state.lore,
         memories=state.memories,
         histories=state.histories,
+        references=state.references,
         billing=state.billing,
         after_open=state.retirement_watch.after_round_opened,
         prices=state.price_list,
