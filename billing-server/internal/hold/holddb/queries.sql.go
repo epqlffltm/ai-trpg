@@ -276,3 +276,51 @@ func (q *Queries) ReleaseHold(ctx context.Context, arg ReleaseHoldParams) (Hold,
 	)
 	return i, err
 }
+
+const withdrawHeldHolds = `-- name: WithdrawHeldHolds :many
+UPDATE holds
+SET status = 'released', release_reason = 'withdrawn',
+    settled_at = $1::TIMESTAMPTZ, updated_at = $1::TIMESTAMPTZ
+WHERE user_id = $2 AND status = 'held'
+RETURNING id, user_id, source, reference, price_code, amount, status, created_at, updated_at, settled_at, expires_at, release_reason
+`
+
+type WithdrawHeldHoldsParams struct {
+	Now    time.Time
+	UserID uuid.UUID
+}
+
+// 탈퇴한 사람의 held 홀드를 모두 released 로 바꾼다. 문장 하나라서 읽은 뒤에 확정된 홀드를 바꾸는 틈이 없다.
+// 지갑의 줄을 잠근 뒤에 부른다. 새 홀드는 지갑을 잠가야 걸리므로 더 늘지 않는다.
+func (q *Queries) WithdrawHeldHolds(ctx context.Context, arg WithdrawHeldHoldsParams) ([]Hold, error) {
+	rows, err := q.db.Query(ctx, withdrawHeldHolds, arg.Now, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Hold
+	for rows.Next() {
+		var i Hold
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Source,
+			&i.Reference,
+			&i.PriceCode,
+			&i.Amount,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SettledAt,
+			&i.ExpiresAt,
+			&i.ReleaseReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

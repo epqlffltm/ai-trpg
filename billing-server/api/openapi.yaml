@@ -613,6 +613,49 @@ paths:
         "500": { $ref: "#/components/responses/ServerError" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/billing/service/users/{id}/withdrawal:
+    post:
+      tags: [service]
+      summary: (인증 서버) 사용자의 탈퇴를 반영한다. 걸린 홀드를 돌려주고, 남은 크레딧을 소멸로 적고, 결제 자격을 지운다
+      description: |
+        인증 서버가 유예(7일)가 지난 계정을 비운 뒤 알린다(docs/architecture/withdrawal.md). 200 과 processed 를 받을 때까지 다시 보낸다.
+        몇 번을 받아도 결과가 같다. 이미 반영한 사용자와 이 서버가 모르는 사용자도 200 이다
+      operationId: processWithdrawal
+      security: [{ serviceSignature: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 탈퇴한 사용자(인증 서버의 public_id)
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [withdrawn_at]
+              properties:
+                withdrawn_at:
+                  type: string
+                  format: date-time
+                  description: 인증 서버가 계정을 비운 시각
+      responses:
+        "200":
+          description: 반영했다. 이미 했거나 할 것이 없었던 것도 같다
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status]
+                properties:
+                  status: { type: string, enum: [processed] }
+        "400": { $ref: "#/components/responses/ServiceBadRequest" }
+        "401": { $ref: "#/components/responses/ServiceUnauthorized" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
 components:
   securitySchemes:
     bearer:
@@ -709,7 +752,7 @@ components:
       description: |
         요청을 받을 수 없다. code 가 까닭이다.
         service.bad_request(본문을 읽지 못했다), hold.invalid_request, price.unknown, price.not_for_sale,
-        eligibility.invalid_request. 환영 크레딧의 user_id 가 없을 때는 code 가 없다
+        eligibility.invalid_request, withdrawal.invalid_request. 환영 크레딧의 user_id 가 없을 때는 code 가 없다
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -792,7 +835,7 @@ components:
         kind: { type: string, enum: [paid, free] }
         reason:
           type: string
-          enum: [deposit, grant, spend, expire, hold, release, regroup, refund, unrefund]
+          enum: [deposit, grant, spend, expire, hold, release, regroup, refund, unrefund, forfeit]
         amount: { $ref: "#/components/schemas/Amount" }
         order_id: { type: string, format: uuid, nullable: true }
         hold_id: { type: string, format: uuid, nullable: true }
@@ -938,7 +981,7 @@ components:
         settled_at: { type: string, format: date-time, nullable: true }
         release_reason:
           type: string
-          enum: [requested, expired]
+          enum: [requested, expired, withdrawn]
           nullable: true
 
     PriceList:
