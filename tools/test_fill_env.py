@@ -35,8 +35,10 @@ EXAMPLES = {
     '# NOTIFICATION_SECRET=\n# TOSS_SECRET_KEY=\n',
     'notification-server/.env': 'DATABASE_URL=postgresql+asyncpg://notification:여기에비밀번호@127.0.0.1:5432/trpg\n'
     'GAME_SERVER_SECRET=\nBILLING_SERVER_SECRET=\nBOARD_SERVER_SECRET=\n',
-    'asset-server/.env': 'DATABASE_URL=postgresql+asyncpg://asset:여기에비밀번호@127.0.0.1:5432/trpg\n',
-    'chat-server/.env': 'DATABASE_URL=postgresql+asyncpg://chat:여기에비밀번호@127.0.0.1:5432/trpg\n',
+    'asset-server/.env': 'DATABASE_URL=postgresql+asyncpg://asset:여기에비밀번호@127.0.0.1:5432/trpg\n'
+    'CHAT_SERVER_SECRET=\n',
+    'chat-server/.env': 'DATABASE_URL=postgresql+asyncpg://chat:여기에비밀번호@127.0.0.1:5432/trpg\n'
+    '# ASSET_URL=http://127.0.0.1:8006\n# ASSET_SECRET=\n',
 }
 
 
@@ -113,11 +115,13 @@ class FillEnvTests(unittest.TestCase):
 
         auth, game, board = self.env('auth-server/.env'), self.env('trpg-server/.env'), self.env('board-server/.env')
         billing, notification = self.env('billing-server/.env'), self.env('notification-server/.env')
+        chat, asset = self.env('chat-server/.env'), self.env('asset-server/.env')
         self.assertEqual(auth['BILLING_SECRET'], billing['AUTH_SERVER_SECRET'])
         self.assertEqual(game['BILLING_SECRET'], billing['GAME_SERVER_SECRET'])
         self.assertEqual(game['NOTIFICATION_SECRET'], notification['GAME_SERVER_SECRET'])
         self.assertEqual(billing['NOTIFICATION_SECRET'], notification['BILLING_SERVER_SECRET'])
         self.assertEqual(board['NOTIFICATION_SECRET'], notification['BOARD_SERVER_SECRET'])
+        self.assertEqual(chat['ASSET_SECRET'], asset['CHAT_SERVER_SECRET'])
 
     def test_both_sides_of_a_pair_are_uncommented(self):
         # compose 가 주소(BILLING_URL, NOTIFICATION_URL)를 주므로 비밀이 막혀 있으면 서버가 뜨지 않는다
@@ -129,6 +133,7 @@ class FillEnvTests(unittest.TestCase):
             ('trpg-server/.env', 'NOTIFICATION_SECRET'),
             ('board-server/.env', 'NOTIFICATION_SECRET'),
             ('billing-server/.env', 'NOTIFICATION_SECRET'),
+            ('chat-server/.env', 'ASSET_SECRET'),
         ):
             env = self.env(relative)
             self.assertNotIn(f'#{key}', env, relative)

@@ -108,3 +108,30 @@ class PersonaDetail(BaseModel):
     revision: int
     created_at: datetime
     updated_at: datetime
+
+
+class PersonaCopy(BaseModel):
+    """
+    다른 서버(chat, story, TRPG)에 내주는 페르소나의 사본. 세션을 시작하거나 바꿀 때 가져가 고정한다.
+
+    모델에 넣을 내용과 revision 만 싣는다. 기본인지와 시각은 그 서버가 쓰지 않는다.
+    가져간 쪽은 revision 을 적어 두고, 지금의 revision(PersonaRevision)과 다르면 "새 설정으로 바꾸기"를 보인다.
+    """
+
+    id: uuid.UUID
+    revision: int
+    name: str
+    description: str
+    image_id: uuid.UUID | None
+    age: str
+    gender: str
+    form_of_address: str
+    speech_examples: str
+    personality: str
+
+
+class PersonaRevision(BaseModel):
+    """페르소나의 지금 revision. 화면을 열 때 한 번 묻는다. 내용은 싣지 않는다."""
+
+    id: uuid.UUID
+    revision: int

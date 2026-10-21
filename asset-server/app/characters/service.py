@@ -11,6 +11,8 @@
   - 판은 바뀌지 않는다. 게시할 때마다 번호가 하나씩 오른다.
     같은 캐릭터를 동시에 게시해도 번호가 겹치지 않게 행을 잠근다.
   - 공개 목록은 공개이고 게시한 판이 있고, 보는 사람이 볼 수 있는 등급(판의 등급)인 것만 낸다. 나머지는 404 다.
+  - 다른 서버(chat, story)에 내주는 판은 마지막 판이다. 쓸 수 있는 사람은 주인이거나, 공개 캐릭터를 볼 수 있는 사람이다.
+    등급은 주인에게도 본다(성인 확인을 잃은 주인에게 성인 판을 내주지 않는다). 주인에게는 403, 남에게는 404 다.
   - 나이와 성별로 거르거나 막지 않는다.
 """
 
@@ -26,7 +28,7 @@ from app.characters.models import Character, CharacterVersion, Visibility
 from app.characters.publishing import CharacterNotReadyError, cleaned_intro, find_problems
 from app.characters.schemas import CharacterCreate, CharacterUpdate
 from app.content.html import Removed
-from app.ratings import allowed_ratings, require_rating
+from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
 
 
 class CharacterNotFoundError(Exception):
@@ -190,3 +192,46 @@ async def get_public(
     if found is None:
         raise CharacterNotFoundError
     return found
+
+
+def is_owner(character: Character, viewer: AccessClaims) -> bool:
+    """그 사람이 만든 캐릭터인가."""
+    return character.owner_id == viewer.user_id
+
+
+def require_reachable(character: Character, viewer: AccessClaims) -> None:
+    """주인이 아니면 공개여야 한다. 아니면 CharacterNotFoundError(있는지도 드러내지 않는다)."""
+    if not is_owner(character, viewer) and character.visibility != Visibility.PUBLIC:
+        raise CharacterNotFoundError
+
+
+def require_usable_rating(character: Character, version: CharacterVersion, viewer: AccessClaims) -> None:
+    """
+    판의 등급을 그 사람이 쓸 수 있어야 한다.
+
+    주인이면 AdultContentRequiredError(자기 캐릭터라 있는 것을 안다. 화면이 본인인증으로 안내한다),
+    남이면 CharacterNotFoundError(공개 목록과 같다).
+    """
+    if version.rating in allowed_ratings(viewer):
+        return
+    if is_owner(character, viewer):
+        raise AdultContentRequiredError
+    raise CharacterNotFoundError
+
+
+async def get_usable_latest(
+    session: AsyncSession, viewer: AccessClaims, character_id: uuid.UUID
+) -> tuple[Character, CharacterVersion]:
+    """
+    그 사람이 쓸 수 있는 캐릭터와 그 마지막 판. 다른 서버가 대화를 시작하거나 새 판을 물을 때 쓴다.
+
+    없거나 게시한 적이 없거나 쓸 수 없으면 CharacterNotFoundError,
+    주인인데 등급을 쓸 수 없으면 AdultContentRequiredError.
+    """
+    found = await repository.find_latest(session, character_id)
+    if found is None:
+        raise CharacterNotFoundError
+    character, version = found
+    require_reachable(character, viewer)
+    require_usable_rating(character, version, viewer)
+    return character, version
