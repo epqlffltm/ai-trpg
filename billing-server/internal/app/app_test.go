@@ -21,6 +21,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/metrics/metricstest"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/order"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/peers"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
@@ -281,5 +282,33 @@ func TestNewProviderPicksTheConfiguredOne(t *testing.T) {
 	// 토스페이먼츠의 실제 주소를 부른다(테스트 키라 테스트 모드다)
 	if !strings.Contains(toss.String(), payment.TossAPIURL) {
 		t.Errorf("toss: %s", toss)
+	}
+}
+
+func TestNewServicesShortensTheChatHolds(t *testing.T) {
+	// chat 서버의 홀드는 CHAT_HOLD_TTL 뒤에, 게임 서버의 홀드는 HOLD_TTL 뒤에 만료된다
+	pool := testenv.Pool(t)
+	clock := func() time.Time { return now }
+	rules := config.Rules{FreeCreditTTL: time.Hour, HoldTTL: 2 * time.Hour, ChatHoldTTL: 5 * time.Minute, OrderTTL: time.Hour}
+	services, err := app.NewServices(pool, rules, fakeProviders, clock)
+	if err != nil {
+		t.Fatalf("서비스를 만들지 못했다: %v", err)
+	}
+	user := uuid.New()
+	if err := services.Wallet.GrantFree(context.Background(), user, 1000); err != nil {
+		t.Fatalf("크레딧을 주지 못했다: %v", err)
+	}
+
+	chat, _, chatErr := services.Holds.Place(context.Background(), peers.Chat, user, "conversation:"+uuid.NewString()+":turn:1", pricing.NarrationStandard)
+	game, _, gameErr := services.Holds.Place(context.Background(), peers.Game, user, "table:"+uuid.NewString()+":round:1", pricing.NarrationStandard)
+
+	if chatErr != nil || gameErr != nil {
+		t.Fatalf("홀드를 걸지 못했다: %v, %v", chatErr, gameErr)
+	}
+	if got := chat.ExpiresAt.Sub(chat.CreatedAt); got != 5*time.Minute {
+		t.Errorf("chat 홀드의 기한 = %v", got)
+	}
+	if got := game.ExpiresAt.Sub(game.CreatedAt); got != 2*time.Hour {
+		t.Errorf("게임 홀드의 기한 = %v", got)
 	}
 }

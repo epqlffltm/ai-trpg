@@ -80,9 +80,10 @@ func TestLoadFillsDefaults(t *testing.T) {
 		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 30일 뒤에 사라진다
 		SpendFreeFirst: true,
 		FreeCreditTTL:  30 * 24 * time.Hour,
-		// 적지 않으면 홀드와 주문은 하루 뒤에 만료된다
-		HoldTTL:  24 * time.Hour,
-		OrderTTL: 24 * time.Hour,
+		// 적지 않으면 홀드와 주문은 하루 뒤에 만료된다. chat 서버의 홀드만 10분 뒤다
+		HoldTTL:     24 * time.Hour,
+		ChatHoldTTL: 10 * time.Minute,
+		OrderTTL:    24 * time.Hour,
 		// 적지 않으면 환영 크레딧은 1,000 이다
 		WelcomeCredits: 1_000,
 		// 적지 않으면 출석은 140 에서 260 까지 7일이다
@@ -112,6 +113,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		"SPEND_FREE_FIRST":             "false",
 		"FREE_CREDIT_TTL":              "36h30m",
 		"HOLD_TTL":                     "2h",
+		"CHAT_HOLD_TTL":                "7m",
 		"ORDER_TTL":                    "30m",
 		"PG_WEBHOOK_SECRET":            "0123456789abcdef0123456789abcdef",
 		"GAME_SERVER_SECRET":           "fedcba9876543210fedcba9876543210",
@@ -145,6 +147,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		SpendFreeFirst:     false,
 		FreeCreditTTL:      36*time.Hour + 30*time.Minute,
 		HoldTTL:            2 * time.Hour,
+		ChatHoldTTL:        7 * time.Minute,
 		OrderTTL:           30 * time.Minute,
 		WelcomeCredits:     250,
 		// 칸 사이의 빈칸은 무시한다
@@ -256,6 +259,8 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"기한이 너무 짧다", required(map[string]string{"FREE_CREDIT_TTL": "999ms"}), "FREE_CREDIT_TTL"},
 		{"홀드의 기한에 단위가 없다", required(map[string]string{"HOLD_TTL": "24"}), "HOLD_TTL"},
 		{"홀드의 기한이 너무 짧다", required(map[string]string{"HOLD_TTL": "59s"}), "HOLD_TTL"},
+		{"chat 홀드의 기한이 너무 짧다", required(map[string]string{"CHAT_HOLD_TTL": "59s"}), "CHAT_HOLD_TTL"},
+		{"chat 홀드의 기한에 단위가 없다", required(map[string]string{"CHAT_HOLD_TTL": "10"}), "CHAT_HOLD_TTL"},
 		{"주문의 기한이 날 단위다", required(map[string]string{"ORDER_TTL": "1d"}), "ORDER_TTL"},
 		{"주문의 기한이 너무 짧다", required(map[string]string{"ORDER_TTL": "59s"}), "ORDER_TTL"},
 	}
@@ -299,7 +304,8 @@ func TestLoadJobsNeedsNoServerSettings(t *testing.T) {
 		Database: config.Database{URL: databaseURL, Schema: "billing_test"},
 		Logging:  config.Logging{AppEnvironment: "staging", AppVersion: "dev", LogLevel: "debug"},
 		Rules: config.Rules{
-			SpendFreeFirst: false, FreeCreditTTL: 30 * 24 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 24 * time.Hour,
+			SpendFreeFirst: false, FreeCreditTTL: 30 * 24 * time.Hour, HoldTTL: 2 * time.Hour, ChatHoldTTL: 10 * time.Minute,
+			OrderTTL: 24 * time.Hour,
 		},
 		Payment: config.Payment{Provider: "fake"},
 	}
@@ -335,7 +341,8 @@ func TestLoadSweeperReadsWhatItUses(t *testing.T) {
 		Database: config.Database{URL: databaseURL, Schema: "billing_test"},
 		Logging:  config.Logging{AppEnvironment: "staging", AppVersion: "dev", LogLevel: "debug"},
 		Rules: config.Rules{
-			SpendFreeFirst: false, FreeCreditTTL: 30 * 24 * time.Hour, HoldTTL: 2 * time.Hour, OrderTTL: 24 * time.Hour,
+			SpendFreeFirst: false, FreeCreditTTL: 30 * 24 * time.Hour, HoldTTL: 2 * time.Hour, ChatHoldTTL: 10 * time.Minute,
+			OrderTTL: 24 * time.Hour,
 		},
 		HeartbeatFile: "/tmp/heartbeat",
 	}
@@ -832,5 +839,18 @@ func TestTheChatSecretIsRead(t *testing.T) {
 
 	if err != nil || settings.ChatServerSecret != secret {
 		t.Errorf("오류 = %v, 비밀이 읽히지 않았다", err)
+	}
+}
+
+func TestTheChatHoldTTLIsTenMinutesUnlessWritten(t *testing.T) {
+	// chat 의 말 한 번은 몇 초면 끝난다. 게임 서버의 홀드(HOLD_TTL)와 따로 짧게 둔다
+	unwritten, err := config.Load(from(required(nil)))
+	if err != nil || unwritten.ChatHoldTTL != 10*time.Minute || unwritten.Rules().ChatHoldTTL != 10*time.Minute {
+		t.Errorf("기본 = %v, %v", unwritten.ChatHoldTTL, err)
+	}
+
+	written, err := config.Load(from(required(map[string]string{"CHAT_HOLD_TTL": "3m"})))
+	if err != nil || written.ChatHoldTTL != 3*time.Minute || written.HoldTTL != config.DefaultHoldTTL {
+		t.Errorf("적은 값 = %v, HOLD_TTL = %v, %v", written.ChatHoldTTL, written.HoldTTL, err)
 	}
 }

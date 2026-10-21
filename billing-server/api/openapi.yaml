@@ -510,7 +510,7 @@ paths:
   /api/v1/billing/service/holds/extend:
     post:
       tags: [service]
-      summary: (게임, chat 서버) 홀드의 만료 시각을 지금부터 HOLD_TTL 뒤로 민다. 끝난 홀드면 409
+      summary: (게임, chat 서버) 홀드의 만료 시각을 지금부터 그 서버의 만료 시간(HOLD_TTL, chat 서버는 CHAT_HOLD_TTL) 뒤로 민다. 끝난 홀드면 409
       operationId: extendHold
       security: [{ serviceSignature: [] }]
       requestBody: { $ref: "#/components/requestBodies/HoldReference" }
