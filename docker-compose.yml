@@ -62,6 +62,10 @@ x-notification-image: &notification-image
   build: ./notification-server
   image: ai-trpg/notification-server:local
 
+x-asset-image: &asset-image
+  build: ./asset-server
+  image: ai-trpg/asset-server:local
+
 # 인증 서버의 JWT 개인키가 든 폴더. 읽기 전용으로 붙인다. 폴더가 없으면 만들지 않고 실패한다
 # (없는 경로를 붙이면 Docker 가 빈 폴더를 만들어 버려서, 키가 없다는 것이 늦게 드러난다)
 x-auth-keys: &auth-keys
@@ -134,6 +138,11 @@ x-notification-environment: &notification-environment
   DATABASE_URL: postgresql+asyncpg://notification:${NOTIFICATION_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
 
+# asset 서버의 프로세스가 함께 쓰는 설정(#564). 비밀은 DB 비밀번호뿐이고 루트 .env 에서 온다
+x-asset-environment: &asset-environment
+  DATABASE_URL: postgresql+asyncpg://asset:${ASSET_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
+  AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
+
 # 메트릭이나 추적을 OTLP 로 미는 프로세스가 함께 쓰는 설정(#25, docs/observability.md 의 "2. 메트릭", "3. 추적"). 비밀은 없다.
 # 보낼 곳(Alloy)은 루트 .env 의 OTEL_EXPORTER_OTLP_ENDPOINT 로 받는다. 프로필 observability 를 켤 때만 적는다.
 # 비어 있으면 서버는 메트릭을 내보내지 않는다(계측은 그대로). app 프로필만 켰을 때 없는 Alloy 로 보내며 오류를 남기지 않는다.
@@ -172,6 +181,8 @@ services:
       BOARD_DB_PASSWORD: ${BOARD_DB_PASSWORD:?.env 에 BOARD_DB_PASSWORD 를 설정하세요}
       # 알림 서버 전용 계정의 비밀번호. 초기화 스크립트가 읽는다
       NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?.env 에 NOTIFICATION_DB_PASSWORD 를 설정하세요}
+      # asset 서버 전용 계정의 비밀번호. 초기화 스크립트(08-asset-role.sql)가 읽는다
+      ASSET_DB_PASSWORD: ${ASSET_DB_PASSWORD:?.env 에 ASSET_DB_PASSWORD 를 설정하세요(tools/fill_env.py)}
       # 인증 서버 계정에 테스트용 DB 를 만들 권한(CREATEDB)을 줄지. 개발에서만 true 로 둔다.
       # 운영에서는 적지 않는다(false). 볼륨이 비어 있는 첫 기동 때만 반영된다(#20)
       AUTH_DB_ALLOW_TEST_DB: ${AUTH_DB_ALLOW_TEST_DB:-false}
@@ -626,6 +637,39 @@ services:
       start_period: 10s
     depends_on:
       notification-migrate:
+        condition: service_completed_successfully
+
+  asset-migrate:
+    <<: *asset-image
+    profiles: [app]
+    logging: *logging
+    command: ["alembic", "upgrade", "heads"]
+    env_file: ./asset-server/.env
+    environment:
+      <<: *asset-environment
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # asset 서버(#564). 계정 페르소나, 캐릭터, 그림의 원본. 끊긴 세션 목록 받기는 이 프로세스 안에서 돈다(워커가 따로 없다)
+  asset-server:
+    <<: *asset-image
+    profiles: [app]
+    logging: *logging
+    restart: unless-stopped
+    env_file: ./asset-server/.env
+    environment:
+      <<: [*asset-environment, *telemetry-environment]
+    # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
+    networks: [default, telemetry]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8006/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    depends_on:
+      asset-migrate:
         condition: service_completed_successfully
 
   proxy:

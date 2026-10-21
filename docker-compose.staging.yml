@@ -42,7 +42,7 @@ x-logging: &logging
 x-staging: &staging
   APP_ENVIRONMENT: staging
 
-# DEBUG 를 읽는 서버(인증, 게임, 결제, 알림)의 프로세스. 게시판 서버는 DEBUG 를 읽지 않는다
+# DEBUG 를 읽는 서버(인증, 게임, 결제, 알림, asset)의 프로세스. 게시판 서버는 DEBUG 를 읽지 않는다
 x-staging-debug-off: &staging-debug-off
   <<: *staging
   DEBUG: "false"
@@ -108,6 +108,11 @@ services:
   notification-migrate:
     environment: *staging-debug-off
   notification-server:
+    environment: *staging-debug-off
+
+  asset-migrate:
+    environment: *staging-debug-off
+  asset-server:
     environment: *staging-debug-off
 
   # 프록시. 로컬의 틀(templates) 가운데 default.conf.template 만 staging 의 것으로 바꿔 붙인다.

@@ -119,6 +119,7 @@ ROOT_SECRETS: dict[str, frozenset[str]] = {
     'BILLING_DB_PASSWORD': frozenset({'db', 'billing-migrate', 'billing-server', 'billing-sweeper', 'billing-cron'}),
     'BOARD_DB_PASSWORD': frozenset({'db', 'board-migrate', 'board-server'}),
     'NOTIFICATION_DB_PASSWORD': frozenset({'db', 'notification-migrate', 'notification-server'}),
+    'ASSET_DB_PASSWORD': frozenset({'db', 'asset-migrate', 'asset-server'}),
     # DB 의 메트릭을 읽는 계정(monitor). DB 가 계정을 만들고, 수집기(Alloy)가 그 계정으로 붙는다
     'MONITOR_DB_PASSWORD': frozenset({'db', 'alloy'}),
     'GRAFANA_ADMIN_PASSWORD': frozenset({'grafana'}),
