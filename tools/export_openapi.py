@@ -48,6 +48,32 @@ FASTAPI_REQUIRED_ENV = {
     'AUTH_JWKS_URL': 'http://127.0.0.1:1/api/v1/auth/jwks',
 }
 
+# 인증 서버(Django REST framework)가 뷰에 적은 모양으로 목록을 만들어 표준 출력에 내는 명령(drf-spectacular).
+# 경고가 하나라도 있으면(모양을 적지 않은 뷰) 실패한다. 목록의 모양도 OpenAPI 의 규칙으로 검사한다
+DJANGO_COMMAND = (
+    'uv',
+    'run',
+    '--frozen',
+    '--quiet',
+    'python',
+    'manage.py',
+    'spectacular',
+    '--format',
+    'openapi-json',
+    '--validate',
+    '--fail-on-warn',
+)
+
+# 인증 서버의 설정을 읽는 데 꼭 있어야 하는 값. 목록을 만들기만 하므로 DB 에 닿지 않고 서명하지 않는다.
+# 서명 키의 경로를 비워 키 없이 뜬다(서명하지 않는 프로세스와 같다). CI 에는 키가 없다.
+# DEBUG 를 끈다. 개발자의 .env 가 켜 둬도 운영과 같은 목록이 나온다(.env 는 이미 있는 환경 변수를 덮지 않는다)
+DJANGO_REQUIRED_ENV = {
+    'SECRET_KEY': 'openapi-export-only-not-a-secret',
+    'DATABASE_URL': 'postgres://openapi:openapi@127.0.0.1:1/openapi',
+    'JWT_PRIVATE_KEY_PATH': '',
+    'DEBUG': 'false',
+}
+
 # 결제 서버가 손으로 쓴 목록을 읽고 검사해 OpenAPI 를 표준 출력에 내는 명령(billing-server/cmd/openapi).
 # 파이썬의 표준 라이브러리로는 YAML 을 읽지 못해서 서버의 Go 로 읽는다. 목록의 검사도 서버의 테스트와 같은 것을 쓴다
 GO_COMMAND = ('go', 'run', './cmd/openapi')
@@ -83,17 +109,23 @@ def fastapi_source(folder: str) -> Source:
     )
 
 
+def django_source(folder: str) -> Source:
+    """Django 서버의 Source. 그 서버의 uv 가상 환경에서 manage.py spectacular 를 돌린다."""
+    return Source(folder=folder, command=DJANGO_COMMAND, env=tuple(DJANGO_REQUIRED_ENV.items()))
+
+
 def go_source(folder: str) -> Source:
     """Go 서버의 Source. 그 서버의 go.mod 그대로 명령을 돌린다. 설정은 읽지 않는다."""
     return Source(folder=folder, command=GO_COMMAND)
 
 
-# OpenAPI 를 내는 서버들. 인증(#558), 게시판(#559)은 OpenAPI 를 내게 되면 여기에 더한다
+# OpenAPI 를 내는 서버들. 게시판(#559)은 OpenAPI 를 내게 되면 여기에 더한다
 SOURCES: dict[str, Source] = {
     'trpg': fastapi_source('trpg-server'),
     'notification': fastapi_source('notification-server'),
     'billing': go_source('billing-server'),
     'asset': fastapi_source('asset-server'),
+    'auth': django_source('auth-server'),
 }
 
 

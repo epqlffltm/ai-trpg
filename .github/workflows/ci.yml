@@ -120,12 +120,14 @@ jobs:
   # 서버마다의 API 목록(docs/api/<서버>.openapi.json, #557)이 지금의 서버와 같은지 본다.
   # 화면의 타입과 디자인 도구에 넘길 목록이라, 서버의 API 를 바꾸고 목록을 새로 뽑지 않으면 실패한다.
   # 목록을 내는 서버(tools/export_openapi.py 의 SOURCES) 가운데 하나라도 고르면 돈다. 서버마다 uv 의 환경을 만들어 앱을 불러온다.
-  # 결제 서버는 Go 로 손으로 쓴 목록(billing-server/api/openapi.yaml)을 읽는다. 목록이 코드와 맞는지는 결제 서버의 테스트가 본다
+  # 결제 서버는 Go 로 손으로 쓴 목록(billing-server/api/openapi.yaml)을 읽는다. 목록이 코드와 맞는지는 결제 서버의 테스트가 본다.
+  # 인증 서버는 manage.py spectacular 로 뷰에 적은 모양에서 만든다. 응답이 그 모양과 맞는지는 인증 서버의 테스트가 본다
   api-docs:
     needs: changes
     if: >-
       needs.changes.outputs.trpg == 'true' || needs.changes.outputs.notification == 'true' ||
-      needs.changes.outputs.billing == 'true' || needs.changes.outputs.asset == 'true'
+      needs.changes.outputs.billing == 'true' || needs.changes.outputs.asset == 'true' ||
+      needs.changes.outputs.auth == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
