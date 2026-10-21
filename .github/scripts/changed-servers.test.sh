@@ -48,7 +48,9 @@ expect "이름이 비슷한 다른 폴더는 고르지 않는다" "" "board-serv
 expect "폴더 이름만 같은 다른 경로는 고르지 않는다" "" "docs/board-server/x.md"
 expect "서버의 API 목록은 그 서버" "trpg" "docs/api/trpg.openapi.json"
 expect "API 목록의 안내는 아무것도" "" "docs/api/README.md"
-expect "API 목록을 뽑는 도구는 목록을 내는 서버" "trpg notification" "tools/export_openapi.py"
+expect "API 목록을 뽑는 도구는 목록을 내는 서버" "trpg billing notification" "tools/export_openapi.py"
+expect "결제 서버의 손으로 쓴 목록은 결제 서버" "billing" "billing-server/api/openapi.yaml"
+expect "결제 서버의 API 목록은 결제 서버" "billing" "docs/api/billing.openapi.json"
 
 all="$(select_all | tr '\n' ' ')"
 if [[ "$all" == "auth=true trpg=true board=true billing=true notification=true " ]]; then

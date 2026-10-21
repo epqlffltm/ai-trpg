@@ -51,6 +51,7 @@ func (*panickingWallet) Balance(context.Context, uuid.UUID) (wallet.Balance, err
 
 // observed 는 로그를 모으는 라우터다.
 type observed struct {
+	t      *testing.T
 	router http.Handler
 	out    *bytes.Buffer
 }
@@ -69,7 +70,7 @@ func observe(t *testing.T, reader httpapi.WalletReader) observed {
 		Wallet:   reader,
 		Logger:   obs.NewLogger(&out, info, slog.LevelDebug),
 	})
-	return observed{router: router, out: &out}
+	return observed{t: t, router: router, out: &out}
 }
 
 // send 는 요청을 보내고 응답을 돌려준다. headers 는 이름과 값을 번갈아 적는다.
@@ -78,9 +79,7 @@ func (o observed) send(method string, path string, headers ...string) *httptest.
 	for i := 0; i+1 < len(headers); i += 2 {
 		request.Header.Add(headers[i], headers[i+1])
 	}
-	response := httptest.NewRecorder()
-	o.router.ServeHTTP(response, request)
-	return response
+	return serve(o.t, o.router, request)
 }
 
 // lines 는 나간 줄들을 다시 읽는다. 줄마다 JSON 하나여야 한다.
@@ -461,17 +460,18 @@ func TestHealthBodiesAreUnchanged(t *testing.T) {
 }
 
 // observeWith 는 정해 둔 대로 답하는 DB 를 꽂고 로그를 모으는 라우터다. 상태 확인의 줄을 보는 테스트가 쓴다.
-func observeWith(db database.Pinger) observed {
+func observeWith(t *testing.T, db database.Pinger) observed {
+	t.Helper()
 	var out bytes.Buffer
 	info := obs.ServiceInfo{Service: obs.ServiceName, Environment: "test", Version: "test-version"}
 	router := httpapi.NewRouter(httpapi.Dependencies{DB: db, Logger: obs.NewLogger(&out, info, slog.LevelDebug)})
-	return observed{router: router, out: &out}
+	return observed{t: t, router: router, out: &out}
 }
 
 func TestASuccessfulProbeIsDebug(t *testing.T) {
 	for _, path := range []string{httpapi.HealthPath, httpapi.ReadyPath} {
 		t.Run(path, func(t *testing.T) {
-			server := observeWith(&fakeDB{})
+			server := observeWith(t, &fakeDB{})
 
 			server.send(http.MethodGet, path)
 
@@ -485,7 +485,7 @@ func TestASuccessfulProbeIsDebug(t *testing.T) {
 }
 
 func TestAnUnavailableProbeIsAWarningNotAnError(t *testing.T) {
-	server := observeWith(&fakeDB{err: errors.New("db is down")})
+	server := observeWith(t, &fakeDB{err: errors.New("db is down")})
 
 	server.send(http.MethodGet, httpapi.ReadyPath)
 
@@ -497,7 +497,7 @@ func TestAnUnavailableProbeIsAWarningNotAnError(t *testing.T) {
 }
 
 func TestAPanickingProbeIsStillAnError(t *testing.T) {
-	server := observeWith(panickingDB{})
+	server := observeWith(t, panickingDB{})
 
 	server.send(http.MethodGet, httpapi.ReadyPath)
 

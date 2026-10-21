@@ -100,6 +100,8 @@ type request struct {
 	headers map[string]string
 	// anonymous 가 true 면 토큰을 붙이지 않는다.
 	anonymous bool
+	// unchecked 가 true 면 응답을 API 목록으로 보지 않는다. 모든 오류를 모든 주소에 보내 보는 표의 테스트가 쓴다
+	unchecked bool
 }
 
 // send 는 라우터에 요청을 보내고 응답을 돌려준다. 토큰의 주인은 testenv.UserID 다.
@@ -121,9 +123,10 @@ func sendAs(t *testing.T, deps httpapi.Dependencies, userID string, r request) *
 	for name, value := range r.headers {
 		req.Header.Set(name, value)
 	}
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, req)
-	return response
+	if r.unchecked {
+		return serveUnchecked(router, req)
+	}
+	return serve(t, router, req)
 }
 
 func TestProductsListsWhatIsForSale(t *testing.T) {
@@ -220,12 +223,13 @@ func TestOrderErrorsBecomeStatusCodes(t *testing.T) {
 		{"본인인증 전", eligibility.ErrVerificationRequired, http.StatusForbidden},
 		{"보호자 동의가 없는 미성년자", eligibility.ErrGuardianConsentRequired, http.StatusForbidden},
 	}
+	// 주소마다 같은 표로 바꾸는지 본다. 그 주소가 실제로 내지 않는 오류도 보내므로 API 목록으로는 보지 않는다
 	requests := []request{
-		{method: http.MethodPost, path: ordersURL, body: `{"product_id":"x"}`},
-		{method: http.MethodGet, path: ordersURL + "/" + orderID},
-		{method: http.MethodGet, path: ordersURL},
-		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/confirm", body: `{"payment_key":"x"}`},
-		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/refund"},
+		{method: http.MethodPost, path: ordersURL, body: `{"product_id":"x"}`, unchecked: true},
+		{method: http.MethodGet, path: ordersURL + "/" + orderID, unchecked: true},
+		{method: http.MethodGet, path: ordersURL, unchecked: true},
+		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/confirm", body: `{"payment_key":"x"}`, unchecked: true},
+		{method: http.MethodPost, path: ordersURL + "/" + orderID + "/refund", unchecked: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

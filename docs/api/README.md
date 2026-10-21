@@ -8,7 +8,7 @@
 | [notification.openapi.json](notification.openapi.json) | notification-server (FastAPI) | 앱이 내는 것을 그대로 |
 | (없음) | auth-server (Django REST framework) | #558 |
 | (없음) | board-server (NestJS) | #559 |
-| (없음) | billing-server (Go, Gin) | #560 |
+| [billing.openapi.json](billing.openapi.json) | billing-server (Go, Gin) | 손으로 쓴 목록(`billing-server/api/openapi.yaml`). 테스트가 라우터와 응답을 견준다 |
 
 ## 쓰는 법
 
@@ -21,6 +21,9 @@
   ```
 
   서버를 띄우지 않고 DB 에도 닿지 않는다. 서버마다 그 서버의 uv 환경에서 앱을 불러온다(처음에는 의존성을 받느라 조금 걸린다).
+  결제 서버는 손으로 쓴 목록을 Go 로 읽어 검사한다(`go run ./cmd/openapi`). Go 가 깔려 있어야 한다.
+- **결제 서버는 목록을 먼저 고친다.** 결제 서버의 목록은 코드에서 나오지 않는다. API 를 바꾸면 `billing-server/api/openapi.yaml` 을 고치고 뽑는다.
+  고치지 않으면 결제 서버의 테스트가 실패한다([결제 서버의 API](../../billing-server/README.md#api)).
 - **CI 가 본다.** 목록을 내는 서버를 고친 PR 에서 관문의 `api-docs` 가 목록이 지금의 서버와 같은지 본다. 다르면 실패하고 위의 명령을 알린다.
 - **누가 부르는가.** 요청마다 `x-audience` 를 적는다. 화면은 `user` 만 부른다.
 

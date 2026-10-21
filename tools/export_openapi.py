@@ -8,8 +8,9 @@
 운영 서버는 /docs 와 /openapi.json 을 열지 않는다. 목록은 저장소의 파일로만 나간다.
 
 하는 일:
-  1. 서버마다 그 서버의 환경(uv 의 가상 환경)에서 앱을 불러 OpenAPI 를 JSON 으로 받는다.
-     서버를 띄우지 않고 DB 에도 닿지 않는다.
+  1. 서버마다 OpenAPI 를 JSON 으로 받는다. 서버를 띄우지 않고 DB 에도 닿지 않는다.
+     FastAPI 서버는 그 서버의 환경(uv 의 가상 환경)에서 앱을 불러 받는다.
+     결제 서버(Go)는 손으로 쓴 목록(billing-server/api/openapi.yaml)을 그 서버의 명령이 읽고 검사해 JSON 으로 낸다.
   2. 주소마다 누가 부르는 것인지를 적는다(x-audience: user, service, operator, webhook, infra).
      화면은 user 만 부른다. 서버끼리만 부르는 주소(/service/)를 화면이 부르지 않게 하려고다.
   3. 키의 차례를 정해 같은 내용이면 늘 같은 글이 되게 쓴다. CI 가 글을 견주어 본다.
@@ -47,6 +48,10 @@ FASTAPI_REQUIRED_ENV = {
     'AUTH_JWKS_URL': 'http://127.0.0.1:1/api/v1/auth/jwks',
 }
 
+# 결제 서버가 손으로 쓴 목록을 읽고 검사해 OpenAPI 를 표준 출력에 내는 명령(billing-server/cmd/openapi).
+# 파이썬의 표준 라이브러리로는 YAML 을 읽지 못해서 서버의 Go 로 읽는다. 목록의 검사도 서버의 테스트와 같은 것을 쓴다
+GO_COMMAND = ('go', 'run', './cmd/openapi')
+
 # 주소의 모양으로 누가 부르는지를 정한다. 위에서부터 맞춰 보고, 맞는 것이 없으면 사용자(화면)다
 AUDIENCE_RULES = (
     ('/health', 'infra'),
@@ -78,10 +83,16 @@ def fastapi_source(folder: str) -> Source:
     )
 
 
-# OpenAPI 를 내는 서버들. 인증(#558), 게시판(#559), 결제(#560)는 OpenAPI 를 내게 되면 여기에 더한다
+def go_source(folder: str) -> Source:
+    """Go 서버의 Source. 그 서버의 go.mod 그대로 명령을 돌린다. 설정은 읽지 않는다."""
+    return Source(folder=folder, command=GO_COMMAND)
+
+
+# OpenAPI 를 내는 서버들. 인증(#558), 게시판(#559)은 OpenAPI 를 내게 되면 여기에 더한다
 SOURCES: dict[str, Source] = {
     'trpg': fastapi_source('trpg-server'),
     'notification': fastapi_source('notification-server'),
+    'billing': go_source('billing-server'),
 }
 
 
