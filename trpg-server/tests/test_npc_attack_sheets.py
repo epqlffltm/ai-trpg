@@ -116,7 +116,7 @@ async def test_the_snapshot_carries_the_attacks(client: AsyncClient, me: dict[st
 
     snapshot = await published(client, me, scenario)
 
-    assert snapshot['format'] == SNAPSHOT_FORMAT == 41
+    assert snapshot['format'] == SNAPSHOT_FORMAT >= 41
     assert snapshot['npc_sheets'] == [armed(lore, [BITE])]
 
 

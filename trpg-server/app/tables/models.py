@@ -265,6 +265,10 @@ class GameTable(Base):
     # 바꾼 뒤에 보내는 쪽지부터 따른다
     whisper_notice: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 
+    # 서술에 참고 자료(#482, SRD 같은 바깥 자료)를 넣는가. 판의 세계관이 허용해야 켤 수 있다(app/references/policy.py).
+    # 만들 때 방장이 고르고, 모집 중에만 바꾼다. 시작하면 고정이다. 앉는 것이 그 서술에 대한 동의다
+    references_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.
     # server_default: DB 에도 기본값을 둔다. 이 칸이 생기기 전에 만든 테이블은 0 에서 시작한다

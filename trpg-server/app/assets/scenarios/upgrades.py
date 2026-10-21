@@ -683,6 +683,19 @@ def upgrade_from_40(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_41(document: dict) -> dict:
+    """
+    형식 41 의 문서를 형식 42 로 올린다. 그때는 세계관에 참고 자료의 허용이 없었다. 허용하지 않은 것으로 읽는다.
+
+    세계관이 없는 판은 그대로다. 세계관이 없으면 막을 설정이 없어 켤 수 있다(app/references/policy.py).
+    """
+    upgraded = dict(document)
+    if document.get('world') is not None:
+        upgraded['world'] = {**document['world'], 'references_allowed': False}
+    upgraded['format'] = 42
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -726,4 +739,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     38: upgrade_from_38,
     39: upgrade_from_39,
     40: upgrade_from_40,
+    41: upgrade_from_41,
 }

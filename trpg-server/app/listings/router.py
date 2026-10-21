@@ -35,6 +35,7 @@ from app.listings.schemas import (
     PublicListingPage,
 )
 from app.listings.service import ListingNotReadyError
+from app.references.policy import references_allowed
 
 owner_router = APIRouter(prefix='/scenarios', tags=['listings'])
 public_router = APIRouter(prefix='/listings', tags=['listings'])
@@ -76,6 +77,7 @@ def to_public_detail(public: PublicListing, snapshot: Snapshot, recommended: str
         pregens=to_listing_pregens(snapshot),
         abilities=snapshot.rulebook.rules.abilities,
         recommended_narration_model=recommended,
+        references_allowed=references_allowed(snapshot),
     )
 
 
