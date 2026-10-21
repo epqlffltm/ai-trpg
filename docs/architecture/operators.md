@@ -77,7 +77,7 @@ chat-server 를 만드는 PR 의 요구 사항이다.
 
 ### 결제와 인증
 
-- 결제: 지금 운영 작업은 명령(`cmd/prices`, `cmd/pricereviews`, `cmd/orders`)이다. 관리 서버가 생기면 관리자용 주소로 연다([services.md](services.md)).
+- 결제: 지금 운영 작업은 명령(`cmd/prices`, `cmd/pricereviews`, `cmd/orders`, `cmd/grants`)이다. 관리 서버가 생기면 관리자용 주소로 연다([services.md](services.md)).
 - 인증: 운영자를 넣고 빼는 것은 인증 서버의 관리자 화면이다.
 
 ## 제재
