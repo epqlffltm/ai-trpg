@@ -8,6 +8,7 @@
 | [notification.openapi.json](notification.openapi.json) | notification-server (FastAPI) | 앱이 내는 것을 그대로 |
 | (없음) | auth-server (Django REST framework) | #558 |
 | (없음) | board-server (NestJS) | #559 |
+| [asset.openapi.json](asset.openapi.json) | asset-server (FastAPI) | 앱이 내는 것을 그대로 |
 | [billing.openapi.json](billing.openapi.json) | billing-server (Go, Gin) | 손으로 쓴 목록(`billing-server/api/openapi.yaml`). 테스트가 라우터와 응답을 견준다 |
 
 ## 쓰는 법

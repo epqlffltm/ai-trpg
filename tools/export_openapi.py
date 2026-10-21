@@ -93,6 +93,7 @@ SOURCES: dict[str, Source] = {
     'trpg': fastapi_source('trpg-server'),
     'notification': fastapi_source('notification-server'),
     'billing': go_source('billing-server'),
+    'asset': fastapi_source('asset-server'),
 }
 
 
