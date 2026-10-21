@@ -1,0 +1,158 @@
+# trpg-server/evals/references/scenes.yaml
+#
+# 참고 자료 검색(#482)의 평가 데이터. 한국어 장면과, 그 장면이면 서술자에게 주고 싶은 SRD 5.1 의 줄(key)이다.
+# 자료(data/references/srd51.json)는 영어다. 한국어 장면에서 영어 자료가 얼마나 가까운지를 잰다.
+#
+# scenes: 라운드 하나의 장면과 선언, 그리고 정답(expected).
+#   set:  언제 더한 장면인가. 처음 것은 v1 이다. 장면을 늘리면 새 이름(v2 …)을 붙인다.
+#   kind: named(그것을 한국어로 부른다), meaning(이름 없이 생김새나 쓰임으로만), none(SRD 에 맞는 것이 없다).
+#         none 은 expected 가 비어 있다.
+#   expected: 맞다고 보는 줄의 key 들. 그중 하나라도 고르면 맞힌 것이다(드래곤처럼 비슷한 줄이 여럿이다).
+#   moves: 선언한 캐릭터와 글.
+#
+# 정답은 "이 장면이면 나는 이 줄을 AI 에게 주고 싶다"이다. 검색이 어떻게 도는지가 아니라 GM 의 감각으로 붙인다.
+# 읽을 때 key 가 자료에 있는지 본다. 테스트가 늘 이 파일을 읽어 보므로 실수는 CI 에서 걸린다.
+
+story: 어두운 숲과 폐허를 떠도는 모험가들의 이야기. 마법은 드물고 괴물은 흔하다.
+
+scenes:
+  - name: torch-cave
+    set: v1
+    kind: named
+    scene: 동굴 입구는 칠흑같이 어둡다. 안쪽에서 물 떨어지는 소리가 울린다.
+    moves:
+      - [엘프, 횃불에 불을 붙여 높이 들고 동굴 안으로 들어간다.]
+    expected: [equipment/torch]
+  - name: goblin-ambush
+    set: v1
+    kind: named
+    scene: 덤불 사이로 작고 초록빛 얼굴들이 번뜩인다. 녹슨 언월도가 햇빛을 받는다.
+    moves:
+      - [드워프, 고블린 무리를 향해 도끼를 휘두른다.]
+    expected: [monsters/goblin, monsters/hobgoblin]
+  - name: lich-phylactery
+    set: v1
+    kind: named
+    scene: 해골 같은 마법사가 무너진 왕좌에 앉아 있다. 눈구멍에 푸른 불꽃이 탄다.
+    moves:
+      - [엘프, 리치가 영혼을 숨겨 둔 그릇을 찾아 방을 뒤진다.]
+    expected: [monsters/lich]
+  - name: bag-of-holding
+    set: v1
+    kind: meaning
+    scene: 상인이 낡은 가죽 주머니를 내민다. 손바닥만 한데 안이 끝없이 깊어 보인다.
+    moves:
+      - [드워프, 주머니에 망치와 방패와 침낭을 차례로 밀어 넣어 본다.]
+    expected: [magic-items/bag-of-holding]
+  - name: sailing-ship
+    set: v1
+    kind: named
+    scene: 항구에는 돛대 셋을 단 범선이 닻을 올리고 있다. 선원들이 밧줄을 당긴다.
+    moves:
+      - [엘프, 범선에 올라 선장에게 뱃삯을 건넨다.]
+    expected: [equipment/sailing-ship, equipment/galley, equipment/longship]
+  - name: wolf-howl
+    set: v1
+    kind: named
+    scene: 달 아래 숲에서 늑대 울음이 이어진다. 회색 그림자가 나무 사이를 오간다.
+    moves:
+      - [드워프, 모닥불을 키우고 늑대 떼를 향해 불붙은 나뭇가지를 흔든다.]
+    expected: [monsters/wolf, monsters/dire-wolf]
+  - name: climbing-rope
+    set: v1
+    kind: named
+    scene: 절벽은 까마득하다. 위쪽 바위틈에 튼튼해 보이는 나무뿌리가 걸려 있다.
+    moves:
+      - [엘프, 밧줄 끝에 갈고리를 묶어 바위틈으로 던진다.]
+    expected: [equipment/rope-hempen-50-feet, equipment/rope-silk-50-feet, equipment/grappling-hook]
+  - name: red-dragon
+    set: v1
+    kind: named
+    scene: 산이 흔들리고 붉은 비늘의 용이 날개를 펼친다. 동굴 안에 금화가 산처럼 쌓여 있다.
+    moves:
+      - [드워프, 방패를 들어 붉은 용의 불길을 막으려 한다.]
+    expected: [monsters/adult-red-dragon, monsters/ancient-red-dragon, monsters/young-red-dragon, monsters/red-dragon-wyrmling]
+  - name: skeletons-rise
+    set: v1
+    kind: named
+    scene: 무덤의 흙이 갈라지고 뼈만 남은 병사들이 녹슨 창을 들고 일어선다.
+    moves:
+      - [엘프, 해골 병사의 다리를 노려 활을 쏜다.]
+    expected: [monsters/skeleton]
+  - name: mimic-chest
+    set: v1
+    kind: meaning
+    scene: 방 한가운데 보물 상자가 놓여 있다. 가까이 가자 뚜껑의 나뭇결이 숨을 쉬듯 움직인다.
+    moves:
+      - [드워프, 상자 뚜껑을 열려고 손을 뻗는다.]
+    expected: [monsters/mimic]
+  - name: gelatinous-cube
+    set: v1
+    kind: meaning
+    scene: 복도 끝에서 투명한 젤리 덩어리가 천천히 밀려온다. 그 안에 해골과 동전이 떠 있다.
+    moves:
+      - [엘프, 뒤로 물러서며 덩어리 속에 떠 있는 열쇠를 노려본다.]
+    expected: [monsters/gelatinous-cube]
+  - name: healing-potion
+    set: v1
+    kind: named
+    scene: 싸움이 끝나고 드워프가 피를 흘리며 주저앉는다.
+    moves:
+      - [엘프, 붉은 치유 물약의 마개를 따서 드워프의 입에 흘려 넣는다.]
+    expected: [magic-items/potion-of-healing]
+  - name: invisibility-ring
+    set: v1
+    kind: meaning
+    scene: 경비병 둘이 성문을 지킨다. 엘프의 손가락에 낀 반지가 차갑게 빛난다.
+    moves:
+      - [엘프, 반지를 돌려 몸을 보이지 않게 하고 경비병 사이를 지나간다.]
+    expected: [magic-items/ring-of-invisibility]
+  - name: owlbear
+    set: v1
+    kind: meaning
+    scene: 부엉이의 머리에 곰의 몸을 한 짐승이 덤불을 헤치고 나온다. 날카로운 울음이 숲을 찢는다.
+    moves:
+      - [드워프, 짐승의 앞발을 피하며 옆으로 구른다.]
+    expected: [monsters/owlbear]
+  - name: medusa-gaze
+    set: v1
+    kind: meaning
+    scene: 정원에는 겁에 질린 표정의 석상들이 서 있다. 머리카락 대신 뱀이 꿈틀대는 여인이 그 사이를 걷는다.
+    moves:
+      - [엘프, 눈을 감고 방패에 비친 모습으로만 여인을 살핀다.]
+    expected: [monsters/medusa]
+  - name: rats-swarm
+    set: v1
+    kind: named
+    scene: 하수도 바닥이 꿈틀댄다. 수백 마리의 쥐가 한 덩어리가 되어 몰려온다.
+    moves:
+      - [드워프, 횃불을 휘둘러 쥐 떼를 쫓는다.]
+    expected: [monsters/swarm-of-rats, monsters/rat, equipment/torch]
+  - name: market-haggle
+    set: v1
+    kind: none
+    scene: 시장에는 사과와 생선 냄새가 뒤섞여 있다. 상인이 큰 소리로 값을 부른다.
+    moves:
+      - [엘프, 사과 한 바구니의 값을 깎아 달라고 웃으며 흥정한다.]
+    expected: []
+  - name: letter-tears
+    set: v1
+    kind: none
+    scene: 여관 방의 촛불 아래 오래된 편지가 펼쳐져 있다.
+    moves:
+      - [드워프, 고향의 어머니가 보낸 편지를 읽다가 조용히 눈물을 훔친다.]
+    expected: []
+  - name: council-vote
+    set: v1
+    kind: none
+    scene: 마을 회관에 촌장과 원로들이 모였다. 다리를 새로 놓을지 표결을 앞두고 있다.
+    moves:
+      - [엘프, 다리를 놓으면 장사가 잘될 거라고 원로들을 설득한다.]
+    expected: []
+  - name: song-at-inn
+    set: v1
+    kind: none
+    scene: 여관 1층에서 음유시인이 류트를 조율한다. 손님들이 잔을 부딪친다.
+    moves:
+      - [드워프, 술잔을 들고 고향의 노래를 따라 부른다.]
+    expected: []
