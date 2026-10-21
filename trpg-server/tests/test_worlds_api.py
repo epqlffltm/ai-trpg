@@ -115,6 +115,7 @@ async def test_the_response_does_not_carry_internal_fields(client: AsyncClient, 
         'updated_at',
         'setting',
         'gm_notes',
+        'references_allowed',
     }
 
 

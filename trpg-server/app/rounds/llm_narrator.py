@@ -223,6 +223,7 @@ class LLMNarrator:
             max_tokens=self.params.max_tokens,
             lore_entry_ids=tuple(note.entry_id for note in request.lore),
             memory_rounds=tuple(note.round_number for note in request.memories),
+            reference_ids=tuple(note.reference_id for note in request.references),
             input_digest=digest,
             input_chars=input_chars,
             usage=usage_of(completion, self.price),

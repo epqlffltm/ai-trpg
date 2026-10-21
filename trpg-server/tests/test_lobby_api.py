@@ -216,6 +216,7 @@ async def test_the_lobby_lists_the_newest_table_first(client: AsyncClient, me: d
         'credit_wait_seconds',
         'remove_short_payers',
         'whisper_notice',
+        'references_enabled',
         'created_at',
     }
 

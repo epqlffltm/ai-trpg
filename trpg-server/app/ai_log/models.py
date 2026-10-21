@@ -100,6 +100,10 @@ class AiInvocation(Base):
     # 프롬프트에 넣은 지난 일(같은 테이블의 라운드 번호). 넣은 것이 없으면 빈 목록이다
     memory_rounds: Mapped[list[int]] = mapped_column(ARRAY(Integer), server_default='{}')
 
+    # 프롬프트에 넣은 참고 자료의 줄들(reference_entries 의 id, #482). 넣은 것이 없으면 빈 목록이다.
+    # 자료를 다시 넣어 줄이 지워져도 기록은 남는다. 외래 키를 걸지 않는다
+    reference_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), server_default='{}')
+
     # 보낸 메시지의 지문(HMAC-SHA256, 16진수 64자). 서버의 키가 없으면 비어 있다
     input_digest: Mapped[str | None] = mapped_column(String(64))
 

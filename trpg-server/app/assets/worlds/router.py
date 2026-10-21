@@ -23,7 +23,12 @@ router = APIRouter(prefix='/worlds', tags=['worlds'])
 
 def to_detail(world: World) -> WorldDetail:
     """세계관을 만든 사람에게 보여 주는 응답으로 바꾼다. gm_notes 까지 싣는다."""
-    return WorldDetail(**to_summary(world.asset).model_dump(), setting=world.setting, gm_notes=world.gm_notes)
+    return WorldDetail(
+        **to_summary(world.asset).model_dump(),
+        setting=world.setting,
+        gm_notes=world.gm_notes,
+        references_allowed=world.references_allowed,
+    )
 
 
 @router.post('', response_model=WorldDetail, status_code=status.HTTP_201_CREATED)
