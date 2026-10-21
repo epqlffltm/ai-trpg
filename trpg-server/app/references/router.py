@@ -25,11 +25,13 @@ from app.references.schemas import (
     SEARCH_TEXT_MAX_LENGTH,
     LoreCopyResult,
     MonsterCopyResult,
+    MonsterSheetProposal,
     ReferenceCopy,
     ReferenceItem,
     ReferencePage,
 )
-from app.references.service import ReferenceNotFoundError
+from app.references.service import NoRulebookError, NotCopiedError, ReferenceNotFoundError
+from app.references.sheets import RulesNotSrdError
 
 router = APIRouter()
 
@@ -64,6 +66,34 @@ async def handle_not_a_monster(request: Request, error: NotAMonsterError) -> JSO
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={'detail': '도감에는 몬스터만 넣을 수 있습니다.', 'code': 'not_a_monster', 'keys': error.keys},
+    )
+
+
+async def handle_no_rulebook(request: Request, error: NoRulebookError) -> JSONResponse:
+    """시나리오에 룰북이 없으면 409 다. 룰북을 붙이면 풀린다. 앱에 한 번 등록한다(app/main.py)."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={'detail': '룰북을 붙인 시나리오에만 시트를 제안할 수 있습니다.', 'code': 'no_rulebook'},
+    )
+
+
+async def handle_not_copied(request: Request, error: NotCopiedError) -> JSONResponse:
+    """참고 자료에서 복사한 몬스터가 아니면 422 다. 앱에 한 번 등록한다(app/main.py)."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '참고 자료에서 복사한 몬스터에만 시트를 제안할 수 있습니다.', 'code': 'not_copied'},
+    )
+
+
+async def handle_rules_not_srd(request: Request, error: RulesNotSrdError) -> JSONResponse:
+    """룰북의 규칙에 SRD 의 능력치가 없으면 422 다. 빠진 이름표를 싣는다. 앱에 한 번 등록한다(app/main.py)."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={
+            'detail': '룰북의 능력치가 SRD 와 달라 시트를 제안할 수 없습니다.',
+            'code': 'rules_not_srd',
+            'missing': error.missing,
+        },
     )
 
 
@@ -125,3 +155,23 @@ async def copy_to_bestiary(
     return MonsterCopyResult(
         created=[to_monster_detail(monster) for monster in outcome.created], skipped=outcome.skipped
     )
+
+
+@router.get(
+    '/scenarios/{scenario_id}/monsters/{monster_id}/sheet-proposal',
+    response_model=MonsterSheetProposal,
+    status_code=status.HTTP_200_OK,
+    tags=['scenarios'],
+)
+async def propose_monster_sheet(
+    scenario_id: uuid.UUID, monster_id: uuid.UUID, user: CurrentUser, session: Session
+) -> MonsterSheetProposal:
+    """
+    참고 자료(SRD)에서 복사한 몬스터에 시나리오의 룰북으로 시트를 제안한다. 저장하지 않는다.
+
+    sheet 는 시나리오의 monster_sheets 에 그대로 넣을 수 있다. notes 는 원본과 다르게 옮긴 것들이다.
+    몬스터는 시나리오에 붙인 도감의 것이어야 한다(아니면 404). 룰북이 없으면 409(no_rulebook),
+    복사한 몬스터가 아니면 422(not_copied), 룰북의 능력치가 SRD 와 다르면 422(rules_not_srd)다.
+    """
+    sheet, notes, origin = await service.propose_monster_sheet(session, user.user_id, scenario_id, monster_id)
+    return MonsterSheetProposal(sheet=sheet, notes=notes, copied_from=origin)
