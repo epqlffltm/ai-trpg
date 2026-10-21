@@ -72,6 +72,8 @@ export interface Environment {
   NOTIFICATION_URL: string;
   /** 알림 서버에 보내는 요청에 서명하는 비밀. 주소가 비어 있으면 빈 글자다 */
   NOTIFICATION_SECRET: string;
+  /** 인증 서버가 탈퇴를 알리는 요청의 서명을 확인하는 비밀(#603). 비어 있으면 탈퇴의 알림을 받지 않는다(401) */
+  AUTH_SERVER_SECRET: string;
   /** span 과 메트릭을 미는 수집기(Alloy)의 주소. 경로 없이 적는다. 비어 있으면 내보내지 않는다 */
   OTEL_EXPORTER_OTLP_ENDPOINT: string;
   /** 메트릭을 보내는 간격(밀리초). 1000 이상 */
@@ -316,6 +318,28 @@ export function readNotificationSettings(
   return { NOTIFICATION_URL: address, NOTIFICATION_SECRET: written };
 }
 
+/** 인증 서버의 비밀의 가장 짧은 길이. 인증 서버(BOARD_SECRET)와 같은 기준이다 */
+export const AUTH_SERVER_SECRET_MIN_LENGTH = 32;
+
+/**
+ * 인증 서버가 탈퇴를 알리는 요청(withdrawals/)의 서명 비밀을 읽는다. 적지 않았으면 빈 글자다(탈퇴의 알림을 받지 않는다).
+ *
+ * 적었으면 32자 이상이어야 한다. 짧은 비밀은 누구나 서명을 만들 수 있다. 예외의 글에 비밀을 싣지 않는다.
+ * 비어 있는 동안 인증 서버는 보내지 않고 쌓아 둔다. 적은 뒤에 그 전에 탈퇴한 사람의 것부터 온다.
+ */
+export function readAuthServerSecret(value: unknown): string {
+  if (!isSet(value)) {
+    return '';
+  }
+  const written = value.trim();
+  if (written.length < AUTH_SERVER_SECRET_MIN_LENGTH) {
+    throw new Error(
+      `AUTH_SERVER_SECRET 은 ${AUTH_SERVER_SECRET_MIN_LENGTH}자 이상이어야 합니다.`,
+    );
+  }
+  return written;
+}
+
 /**
  * span 을 미는 수집기의 주소를 읽는다(observability/tracing.ts). 적지 않았으면 빈 글자다(내보내지 않는다).
  *
@@ -401,6 +425,7 @@ export function readEnvironment(
       variables.NOTIFICATION_URL,
       variables.NOTIFICATION_SECRET,
     ),
+    AUTH_SERVER_SECRET: readAuthServerSecret(variables.AUTH_SERVER_SECRET),
     OTEL_EXPORTER_OTLP_ENDPOINT: readOtlpEndpoint(
       variables.OTEL_EXPORTER_OTLP_ENDPOINT,
     ),

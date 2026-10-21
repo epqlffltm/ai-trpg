@@ -24,6 +24,10 @@ export const TEST_SCHEMA = 'board_test';
  */
 export const TEST_JWKS_URL = 'http://auth.invalid/api/v1/auth/jwks';
 
+/** 인증 서버가 탈퇴를 알릴 때 서명하는 비밀. 테스트는 인증 서버처럼 이 값으로 서명한다(test/withdrawals.e2e-spec.ts) */
+export const TEST_AUTH_SERVER_SECRET =
+  'board-test-auth-server-secret-0123456789';
+
 /** 개발자의 설정 파일. 테스트를 돌리는 폴더(board-server)에서 찾는다 */
 const ENV_FILE = '.env';
 
@@ -52,3 +56,5 @@ delete process.env.LOG_LEVEL;
 // 알림 서버는 부르지 않는다. 알림은 발송함에 적히기만 한다. 보내는 것을 보는 테스트는 가짜를 꽂는다
 delete process.env.NOTIFICATION_URL;
 delete process.env.NOTIFICATION_SECRET;
+// 탈퇴의 알림은 테스트의 비밀로 받는다. 개발자의 .env 의 값과 상관없다
+process.env.AUTH_SERVER_SECRET = TEST_AUTH_SERVER_SECRET;

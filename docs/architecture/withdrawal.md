@@ -72,7 +72,7 @@
 | 결제 | 걸린 홀드를 돌려주고(`withdrawn`) 골드와 실버를 소멸로 적는다(원장의 이유 `forfeit`). 둘은 지갑을 잠근 한 트랜잭션이다. 결제 자격을 지운다. 보내지 않은 사용자의 알림은 멈춘다(지우면 정리 작업이 다시 적는다. 30일 뒤 지워진다). 결과를 모르는 주문(`confirming`, `refunding`)은 대사가 그대로 끝낸다. 원장, 주문, 홀드, 출석, 보호자 결제 알림의 기록은 남긴다(공개 ID 만 있다) | 만들었다(`billing-server/README.md` 의 탈퇴) |
 | 알림 | 알림함(읽은 것 모두)과 끈 알림의 종류를 지운다. 남기는 것이 없다 | 받는 주소를 만들었다(`notification-server/README.md` 의 "탈퇴 받기") |
 | 게임 | 모집 중, 진행 중인 테이블에서 나간다(스스로 나가기와 같다. 방장이면 넘기고, 혼자면 끝낸다). 끝난 테이블의 자리는 남긴다. 보관함(페르소나)을 지운다. 시나리오의 공개를 내린다. 자산과 판은 지우지 않고 남기고, 진행 중인 테이블은 판의 사본으로 돈다. 보내지 않은 알림을 지운다. 테이블의 기록(대화, 선언, 귓속말)은 남기고 이름을 "탈퇴한 사용자"로 보인다 | 정했다(2026-10-21 유저 결정). 받는 주소를 만들었다(`trpg-server/README.md` 의 "탈퇴") |
-| 게시판 | 글과 댓글은 남기고 `author_id` 와 `author_nickname` 을 비워 "탈퇴한 사용자"로 보인다(`author_withdrawn`) | 정했다(`board-server/README.md`). 게시판 세션이 만든다 |
+| 게시판 | 글과 댓글(지운 것도)은 남기고 `author_id` 를 비워 "탈퇴한 사용자"로 보인다(`author_withdrawn`). 신고는 남기고 신고한 사람을 비운다. 닉네임과 보낼 알림을 지운다 | 받는 주소를 만들었다(`board-server/README.md` 의 "탈퇴 받기") |
 | asset | 페르소나, 비공개 캐릭터, 그림을 지운다. 공개 캐릭터와 그 판은 남긴다 | 받는 주소를 만들었다(`asset-server/README.md` 의 "탈퇴"). 그림은 #566 이 더한다 |
 | chat, story | 대화를 지운다 | 제안. 서버를 만들 때 정한다 |
 
@@ -100,7 +100,7 @@ POST /api/v1/<서버>/service/users/{public_id}/withdrawal
 | 결제 | `/api/v1/billing` | `BILLING_URL`(8003) / `BILLING_SECRET` | `AUTH_SERVER_SECRET` | 이미 있다 |
 | 알림 | `/api/v1/notification` | `NOTIFICATION_URL`(8004) / `NOTIFICATION_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다 |
 | 게임 | `/api/v1/game` | `GAME_URL`(8001) / `GAME_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다 |
-| 게시판 | `/api/v1/board` | `BOARD_URL`(8002) / `BOARD_SECRET` | `AUTH_SERVER_SECRET` | 칸이 열려 있다. 비어 있다 |
+| 게시판 | `/api/v1/board` | `BOARD_URL`(8002) / `BOARD_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다 |
 | asset | `/api/v1/asset` | `ASSET_URL`(8006) / `ASSET_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다 |
 
 - 주소의 기본값은 로컬의 포트다(`http://127.0.0.1:<포트>`). compose 에서는 그 서버의 컨테이너 이름으로 적는다
@@ -116,7 +116,7 @@ POST /api/v1/<서버>/service/users/{public_id}/withdrawal
 | 2 | 결제 서버: 받는 주소, 홀드 돌려주기, 소멸, 지우기 | 결제 | #612 |
 | 3 | 인증 → 알림, 게임, 게시판, asset 의 비밀(위의 "서버마다의 이름") | 4, 5 의 PR 이 함께 한다 | 인증 쪽 칸은 열었다. 알림, 게임, asset 은 더했다 |
 | 4 | 알림 서버: 받는 주소, 알림함 지우기 | 결제(알림 담당) | #619 |
-| 5 | 게임, asset: 받는 주소와 정리 / 게시판: 받는 주소와 정리 | 게임 세션 / 게시판 세션 | 게임과 asset 은 #614 |
+| 5 | 게임, asset: 받는 주소와 정리 / 게시판: 받는 주소와 정리 | 게임 세션 / 결제(게시판 세션 대신) | 게임과 asset 은 #614, 게시판은 이 PR |
 | 6 | 화면: 탈퇴(A5), 유예 화면 | 화면 | |
 
 1 과 2 가 머지되면 결제까지는 탈퇴가 끝까지 돈다. 나머지 서버는 받는 주소를 만들고 비밀을 적으면, 그 전에 쌓인 것부터 받는다.

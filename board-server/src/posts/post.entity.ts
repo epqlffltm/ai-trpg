@@ -6,6 +6,7 @@
  *   - id 는 순번이다(bigint). 번호의 차례가 곧 쓴 차례다. 글 목록은 번호가 큰 것부터 보여 준다.
  *     JavaScript 의 숫자는 큰 정수를 정확히 담지 못해서, 코드와 응답에서는 글자로 다룬다.
  *   - 글쓴이는 인증 서버의 public_id 로만 가리킨다. 이름은 이 테이블에 없다.
+ *     글쓴이가 탈퇴하면 비운다(null, withdrawals/). 글은 남고 "탈퇴한 사용자"의 글로 보인다.
  *   - 지운 글은 행을 없애지 않고 지운 시각을 적는다(deleted_at). 읽는 쿼리는 지운 글을 알아서 뺀다.
  *     행을 없애면 나중에 붙을 댓글과 신고의 기록이 가리킬 곳을 잃는다.
  *   - 고정한 글은 고정한 시각(pinned_at)과 고정이 끝나는 시각(pinned_until)을 적는다. 둘은 함께 있거나 함께 없다.
@@ -60,9 +61,9 @@ export class Post {
   @JoinColumn({ name: 'board_id', foreignKeyConstraintName: 'fk_posts_board' })
   board: Board;
 
-  /** 글쓴이. 인증 서버의 public_id */
-  @Column({ name: 'author_id', type: 'uuid' })
-  authorId: string;
+  /** 글쓴이. 인증 서버의 public_id. 탈퇴한 사람이면 null 이다 */
+  @Column({ name: 'author_id', type: 'uuid', nullable: true })
+  authorId: string | null;
 
   @Column({ type: 'varchar', length: TITLE_MAX_LENGTH })
   title: string;

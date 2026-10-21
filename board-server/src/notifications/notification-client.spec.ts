@@ -19,7 +19,11 @@ import {
 import { recordSpans, spanIdOf, traceIdOf } from '../../test/spans.js';
 import { tracer } from '../observability/spans.js';
 import { OutgoingNotification } from './outgoing-notification.entity.js';
-import { SIGNATURE_HEADER, sign, signedContent } from './signing.js';
+import {
+  SIGNATURE_HEADER,
+  sign,
+  signedContent,
+} from '../service-auth/signing.js';
 
 const recorder = recordSpans();
 

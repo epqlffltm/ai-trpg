@@ -35,8 +35,11 @@ export function needsDescription(reason: unknown): boolean {
   return reason === 'other';
 }
 
-/** 이 사람이 이것(글이나 댓글)을 신고해도 되는가. 자기가 쓴 것은 안 된다. */
-export function canReport(authorId: string, reporterId: string): boolean {
+/** 이 사람이 이것(글이나 댓글)을 신고해도 되는가. 자기가 쓴 것은 안 된다. 글쓴이가 탈퇴한 것(null)은 누구나 신고한다. */
+export function canReport(
+  authorId: string | null,
+  reporterId: string,
+): boolean {
   return authorId !== reporterId;
 }
 

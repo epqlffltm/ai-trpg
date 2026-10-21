@@ -54,6 +54,10 @@ describe('canReport', () => {
   it('자기가 쓴 것은 신고하지 못한다', () => {
     expect(canReport(ME, ME)).toBe(false);
   });
+
+  it('글쓴이가 탈퇴한 것은 누구나 신고한다', () => {
+    expect(canReport(null, ME)).toBe(true);
+  });
 });
 
 describe('sqlList', () => {

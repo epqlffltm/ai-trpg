@@ -7,6 +7,7 @@
  *   - comment.replied: 내 댓글에 답글이 달렸다. 그 댓글의 글쓴이에게 간다
  *
  * 자기 글에 자기가 단 댓글, 자기 댓글에 자기가 단 답글은 알리지 않는다.
+ * 글쓴이가 탈퇴한 글과 댓글(번호가 비었다)에 달린 것도 알리지 않는다. 받을 사람이 없다.
  * 답글은 댓글의 글쓴이에게만 간다. 글쓴이에게 "글에 댓글이 달렸다"를 또 보내지 않는다. 답글마다 둘씩 가면 시끄럽다.
  *
  * 열쇠(source_key)는 "<kind>:<댓글 번호>" 다. 댓글 하나에 알림은 하나라서 다시 보내도 같은 열쇠다.
@@ -27,10 +28,17 @@ export interface NewNotice {
 
 /** 새 댓글이 달린 곳. 알림을 정하는 데 필요한 것만 담는다. */
 export interface CommentContext {
-  post: { id: string; title: string; authorId: string; boardSlug: string };
-  /** 답글이면 단 댓글. 글에 단 댓글이면 null 이다 */
-  parent: { id: string; authorId: string } | null;
-  comment: { id: string; authorId: string };
+  /** 글. 글쓴이가 탈퇴했으면 authorId 가 null 이다 */
+  post: {
+    id: string;
+    title: string;
+    authorId: string | null;
+    boardSlug: string;
+  };
+  /** 답글이면 단 댓글. 글에 단 댓글이면 null 이다. 그 댓글의 글쓴이가 탈퇴했으면 authorId 가 null 이다 */
+  parent: { id: string; authorId: string | null } | null;
+  /** 새 댓글. 방금 쓴 것이라 글쓴이가 있다. 엔티티의 칸이 비울 수 있는 타입이라 같은 타입으로 받는다 */
+  comment: { id: string; authorId: string | null };
 }
 
 /** 그 댓글에서 온 알림의 열쇠. */
@@ -54,7 +62,7 @@ export function commentPayload(
   return payload;
 }
 
-/** 이 댓글을 누구에게 알리는가. 받는 사람과 종류다. 알릴 사람이 없으면 null 이다. */
+/** 이 댓글을 누구에게 알리는가. 받는 사람과 종류다. 알릴 사람이 없으면(자기 자신, 탈퇴한 사람) null 이다. */
 export function recipientOf(
   context: CommentContext,
 ): { userId: string; kind: string } | null {
@@ -62,7 +70,10 @@ export function recipientOf(
     context.parent === null
       ? { userId: context.post.authorId, kind: POST_COMMENTED }
       : { userId: context.parent.authorId, kind: COMMENT_REPLIED };
-  return target.userId === context.comment.authorId ? null : target;
+  if (target.userId === null || target.userId === context.comment.authorId) {
+    return null;
+  }
+  return { userId: target.userId, kind: target.kind };
 }
 
 /** 새 댓글 하나에서 나오는 알림들. 없거나 하나다. */
