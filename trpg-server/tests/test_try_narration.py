@@ -9,9 +9,9 @@
 """
 
 import pytest
+from ai_core.fake import FakeProvider
+from ai_core.provider import Reasoning
 
-from app.ai.fake import FakeProvider
-from app.ai.provider import Reasoning
 from app.assets.models import NarrationStyle
 from evals.lore.dataset import load_dataset
 from evals.lore.narration import LoreMode, LoreSets, select_noise

@@ -1,7 +1,7 @@
-# trpg-server/tests/test_gemini.py
+# shared/ai-core/tests/test_gemini.py
 
 """
-Gemini 를 부르는 provider(app/ai/gemini.py)와 흘려 받는 답을 읽는 것(app/ai/gemini_stream.py)을 검증한다.
+Gemini 를 부르는 provider(ai_core/gemini.py)와 흘려 받는 답을 읽는 것(ai_core/gemini_stream.py)을 검증한다.
 
 실제 API 를 부르지 않는다. httpx 의 가짜 전송이 Google 인 척 답한다.
 응답의 모양은 Google 의 문서(generateContent, 2026-10)를 따랐다.
@@ -19,10 +19,10 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from app.ai.catalog_contract import ReasoningStyle
-from app.ai.gemini import GeminiProvider, build_body, stream_url
-from app.ai.openai_compat import THINKING_TOKENS
-from app.ai.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
+from ai_core.catalog_contract import ReasoningStyle
+from ai_core.gemini import GeminiProvider, build_body, stream_url
+from ai_core.openai_compat import THINKING_TOKENS
+from ai_core.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
 
 BASE_URL = 'https://generativelanguage.googleapis.com'
 MODEL = 'gemini-4-argon'

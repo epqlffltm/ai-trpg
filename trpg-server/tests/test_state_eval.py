@@ -17,9 +17,9 @@ import re
 from dataclasses import replace
 
 import pytest
+from ai_core.fake import FakeProvider
+from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, TextSink, ignore_text
 
-from app.ai.fake import FakeProvider
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, TextSink, ignore_text
 from app.rounds import prompt
 from app.rounds.cast import CONDITIONS
 from app.rounds.llm_narrator import NARRATION_PARAMS

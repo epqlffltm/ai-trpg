@@ -14,8 +14,8 @@ import copy
 import math
 
 import pytest
+from ai_core.fake import FakeEmbedder
 
-from app.ai.fake import FakeEmbedder
 from app.assets.models import LoreKind
 from app.lore.retrieval import query_text
 from app.memory import history

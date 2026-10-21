@@ -14,11 +14,11 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import FREE_BOOK, Change, Price, PriceBook, Sale, Tier, narration_code
 from app.billing.routing import utc_now

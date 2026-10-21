@@ -3,7 +3,7 @@
 """
 GM 의 서술을 부탁하는 메시지를 조립한다. 순수 함수다. DB 도 모델도 모른다.
 
-메시지는 이런 순서다(대화형, app/ai/provider.py).
+메시지는 이런 순서다(대화형, ai_core/provider.py).
   1. 시스템: GM 으로서의 지시, 글쓰기의 공통 규칙, 문체, 수위, 룰북의 진행 지침, 세계관의 설정과 GM 메모.
      방장이 문체를 바꾸기 전까지 라운드마다 같다.
   2. 지난 라운드들: 모델의 말(그때의 장면)과 사람의 말(그때 플레이어들이 한 말)을 번갈아 둔다.
@@ -28,7 +28,8 @@ GM 의 서술을 부탁하는 메시지를 조립한다. 순수 함수다. DB �
 
 from dataclasses import dataclass
 
-from app.ai.provider import ChatMessage, Role
+from ai_core.provider import ChatMessage, Role
+
 from app.assets.models import LoreKind, NarrationStyle
 from app.rounds.move_lines import describe_injuries, describe_items, lost_before_acting, round_lines
 from app.rounds.narrator import (

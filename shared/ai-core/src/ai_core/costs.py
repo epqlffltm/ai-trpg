@@ -1,13 +1,13 @@
-# trpg-server/app/ai/costs.py
+# shared/ai-core/src/ai_core/costs.py
 
 """
-AI 호출 한 번의 원가를 센다. 모델 목록의 그날의 단가(app/ai/catalog_contract.py 의 UnitCost)와
+AI 호출 한 번의 원가를 센다. 모델 목록의 그날의 단가(ai_core/catalog_contract.py 의 UnitCost)와
 provider 가 알려 준 토큰 수로.
 
 센 원가는 호출의 기록(ai_invocations.cost_usd)에 남는다. 모델마다 실제로 얼마가 드는지, 판매가가 맞는지 볼 근거다.
 사용자의 크레딧과는 상관없다. 크레딧은 라운드를 열 때 정한 값(결제 서버의 가격표)으로만 받는다.
 
-세는 법(토큰의 뜻은 app/ai/provider.py 의 Completion, OpenAI 의 뜻이다).
+세는 법(토큰의 뜻은 ai_core/provider.py 의 Completion, OpenAI 의 뜻이다).
   - 캐시에서 읽은 입력은 캐시 읽기 단가로, 캐시에 쓴 입력은 캐시 쓰기 단가로, 나머지 입력은 입력 단가로 센다.
     캐시 단가를 적지 않은 모델이면 입력 단가로 센다.
   - 출력은 생각에 쓴 것까지 출력 단가로 센다.
@@ -20,9 +20,9 @@ provider 가 알려 준 토큰 수로.
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.ai.calls import NO_USAGE, CallUsage
-from app.ai.catalog_contract import UnitCost
-from app.ai.provider import Completion
+from ai_core.calls import NO_USAGE, CallUsage
+from ai_core.catalog_contract import UnitCost
+from ai_core.provider import Completion
 
 MILLION = Decimal(1_000_000)
 # 원가를 적는 자릿수

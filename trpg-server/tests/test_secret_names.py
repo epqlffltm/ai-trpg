@@ -15,11 +15,11 @@
 import uuid
 
 import pytest
+from ai_core.fake import FakeCallLog, FakeProvider
+from ai_core.provider import ProviderError
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 
-from app.ai.fake import FakeCallLog, FakeProvider
-from app.ai.provider import ProviderError
 from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot
 from app.rounds.llm_narrator import SECRET_LEAKED, LLMNarrator, SecretLeaked, keep_secrets

@@ -3,8 +3,8 @@
 """
 서술할 때 모델 목록에서 모델 하나를 찾는 것. 이름표로 찾고, 찾은 것은 DB 와 떨어진 값으로 돌려준다.
 
-찾는 쪽(app/ai/routing.py)은 ModelLookup 의 모양만 안다. 그 모양과 돌려주는 값(CatalogModel, UnitCost)은
-모델 목록의 계약(app/ai/catalog_contract.py)에 있다. 여기는 그것을 DB 로 채우는 구현이다.
+찾는 쪽(ai_core/routing.py)은 ModelLookup 의 모양만 안다. 그 모양과 돌려주는 값(CatalogModel, UnitCost)은
+모델 목록의 계약(ai_core/catalog_contract.py)에 있다. 여기는 그것을 DB 로 채우는 구현이다.
 지금 꽂는 것은 부를 때마다 DB 에서 한 줄 읽는 DbModelLookup 이다.
   - 서술은 테이블마다 라운드에 한 번이라 드물다. 이름표로 한 줄 읽는 것은 싸다.
   - 관리 명령으로 끄거나 날짜판을 바꾸면 다음 서술부터 바로 맞는다. 늦게 맞는 때가 없다.
@@ -16,9 +16,9 @@ ORM 객체는 세션에 묶여 있어서, 세션이 닫힌 뒤나 다른 작업�
 from dataclasses import dataclass
 from datetime import date
 
+from ai_core.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField, UnitCost
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField, UnitCost
 from app.catalog import repository
 from app.catalog.models import AiModel, AiModelCost
 

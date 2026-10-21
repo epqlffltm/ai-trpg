@@ -20,13 +20,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import pytest
+from ai_core.calls import CallRecord, CallScope, Outcome
+from ai_core.fake import FakeCallLog
+from ai_core.provider import Reasoning
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from app.ai.calls import CallRecord, CallScope, Outcome
-from app.ai.fake import FakeCallLog
-from app.ai.provider import Reasoning
 from app.ai_log.metered import MeteredCallLog
 from app.ai_log.retention import PRUNE_OPERATION, AiLogPruner
 from app.api import readiness

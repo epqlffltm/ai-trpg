@@ -19,12 +19,12 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 import pytest
+from ai_core.fake import FakeEmbedder, word_vector
+from ai_core.provider import ProviderError
 from fastapi import FastAPI
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai.fake import FakeEmbedder, word_vector
-from app.ai.provider import ProviderError
 from app.references import repository
 from app.references.indexing import IndexResult, index_references
 from app.references.loading import load_document

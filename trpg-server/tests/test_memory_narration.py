@@ -9,8 +9,8 @@
 from dataclasses import replace
 
 import pytest
+from ai_core.fake import FakeEmbedder, FakeProvider
 
-from app.ai.fake import FakeEmbedder, FakeProvider
 from app.assets.models import NarrationStyle
 from app.lore.retrieval import query_text
 from app.memory.retrieval import MemoryThresholds, choose_memories, eligible, people_in

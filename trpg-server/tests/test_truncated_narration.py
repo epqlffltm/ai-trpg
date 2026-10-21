@@ -10,10 +10,10 @@
 """
 
 import pytest
+from ai_core.calls import Outcome
+from ai_core.fake import FAKE_MODEL, FakeCallLog, FakeProvider
+from ai_core.provider import Completion
 
-from app.ai.calls import Outcome
-from app.ai.fake import FAKE_MODEL, FakeCallLog, FakeProvider
-from app.ai.provider import Completion
 from app.rounds.llm_narrator import (
     TRUNCATED_MIN_LENGTH,
     LLMNarrator,

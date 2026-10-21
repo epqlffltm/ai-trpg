@@ -6,9 +6,9 @@
 하는 일은 넷이다. 넷을 한 함수에 섞지 않는다.
   1. 입력 예산에 맞게 요청을 줄이고(app/rounds/budget.py) 메시지를 조립한다(app/rounds/prompt.py, 순수 함수).
      기록에는 줄인 요청이 넣은 로어북 항목과 기억을 적는다. 실제로 보낸 것이다.
-  2. provider 를 부른다(app/ai/provider.py). 어느 모델인지는 모른다.
+  2. provider 를 부른다(ai_core/provider.py). 어느 모델인지는 모른다.
   3. 받은 글을 검사한다. 장면으로 쓸 수 있는 글만 돌려준다.
-  4. 부른 것을 기록한다(app/ai/calls.py). 잘 끝났든, 글을 쓰지 않았든, 부르지 못했든 한 번에 하나.
+  4. 부른 것을 기록한다(ai_core/calls.py). 잘 끝났든, 글을 쓰지 않았든, 부르지 못했든 한 번에 하나.
      어디에 쓰는지는 모른다. 앱이 DB 에 쓰는 기록장을 꽂는다.
 모델이 쓰는 대로 받은 조각은 미리 보기에 그대로 넘긴다. 검사하기 전의 글이다. 받지 않으면 버려지는 글이 된다.
 
@@ -27,9 +27,10 @@ import re
 import time
 from dataclasses import dataclass
 
-from app.ai.calls import CallLog, CallRecord, CallScope, Outcome, chars_of, input_digest
-from app.ai.costs import PriceTag, usage_of
-from app.ai.provider import ChatMessage, Completion, GenerationParams, LLMProvider, ProviderError
+from ai_core.calls import CallLog, CallRecord, CallScope, Outcome, chars_of, input_digest
+from ai_core.costs import PriceTag, usage_of
+from ai_core.provider import ChatMessage, Completion, GenerationParams, LLMProvider, ProviderError
+
 from app.catalog.rules import ROUND_OUTPUT_TOKENS
 from app.rounds.budget import INPUT_BUDGET, estimate_messages, fit_request
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
@@ -180,8 +181,8 @@ class LLMNarrator:
     언어 모델로 서술하는 서술자. provider 를 바꿔 끼우면 다른 모델이 쓴다.
 
     log 는 호출을 기록하는 곳이다. 비워 둘 수 없다. 기록 없이 모델을 부르는 길을 만들지 않는다.
-    digest_key 는 보낸 메시지의 지문(HMAC)을 만드는 키다. 없으면 지문을 남기지 않는다(app/ai/calls.py).
-    price 는 모델 목록의 이름표와 그날의 단가다. 있으면 기록에 원가를 센다(app/ai/costs.py). 목록에 없는 모델이면 None.
+    digest_key 는 보낸 메시지의 지문(HMAC)을 만드는 키다. 없으면 지문을 남기지 않는다(ai_core/calls.py).
+    price 는 모델 목록의 이름표와 그날의 단가다. 있으면 기록에 원가를 센다(ai_core/costs.py). 목록에 없는 모델이면 None.
     """
 
     provider: LLMProvider

@@ -16,10 +16,10 @@
 from dataclasses import dataclass, field
 
 import pytest
+from ai_core.calls import Outcome
+from ai_core.fake import FakeCallLog
+from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError, TextSink, ignore_text
 
-from app.ai.calls import Outcome
-from app.ai.fake import FakeCallLog
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, TextSink, ignore_text
 from app.rounds.llm_narrator import LLMNarrator, NarrationError
 from app.rounds.narrator import NO_PREVIEW, Move, NarrationRequest, Preview, StoryContext
 from app.rounds.retrying_narrator import (

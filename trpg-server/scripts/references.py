@@ -18,9 +18,9 @@ import asyncio
 from pathlib import Path
 
 import httpx
+from ai_core.embedder import Embedder
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai.embedder import Embedder
 from app.core.config import get_settings
 from app.core.database import create_engine, create_session_factory
 from app.references.indexing import IndexResult, index_references

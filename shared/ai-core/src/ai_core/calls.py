@@ -1,4 +1,4 @@
-# trpg-server/app/ai/calls.py
+# shared/ai-core/src/ai_core/calls.py
 
 """
 AI 호출 한 번의 기록과, 그 기록을 받는 곳(CallLog)의 모양.
@@ -6,7 +6,7 @@ AI 호출 한 번의 기록과, 그 기록을 받는 곳(CallLog)의 모양.
 AI 를 부르는 코드는 부를 때마다 기록을 하나 넘긴다. 성공했든, 답을 받지 않았든, 부르지 못했든.
 실패한 호출도 시간과 토큰을 썼다. 사용량과 비용의 근거는 빠짐없이 남아야 한다.
 
-기록을 어디에 쓰는지는 모른다. 앱은 DB 에 쓰는 것을, 테스트는 목록에 쌓는 가짜를 꽂는다(app/ai/fake.py).
+기록을 어디에 쓰는지는 모른다. 앱은 DB 에 쓰는 것을, 테스트는 목록에 쌓는 가짜를 꽂는다(ai_core/fake.py).
 provider 를 바꿔 끼우는 것과 같은 방식이다.
 
 생각 글(reasoning)은 기록에 넣지 않는다. GM 메모를 따져 본 내용이 들어 있을 수 있다.
@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol
 
-from app.ai.provider import ChatMessage, Reasoning
+from ai_core.provider import ChatMessage, Reasoning
 
 
 class Outcome(enum.StrEnum):
@@ -58,7 +58,7 @@ class CallUsage:
     """
     호출 한 번의 자세한 사용량과 원가. 모르면 None 이다.
 
-    토큰 수는 provider 가 알려 준 만큼이다(뜻은 app/ai/provider.py 의 Completion).
+    토큰 수는 provider 가 알려 준 만큼이다(뜻은 ai_core/provider.py 의 Completion).
     model_slug 는 모델 목록의 이름표다. 목록에 없는 모델(서버 곁의 모델)이면 None 이다.
     cost_usd 는 그날의 단가로 센 원가(USD), cost_id 는 그 단가의 줄(ai_model_costs.id)이다.
     단가가 없거나 답을 받지 못했으면 None.
@@ -90,7 +90,7 @@ class CallRecord:
     reference_ids 는 프롬프트에 넣은 참고 자료의 줄들이다(app/references/retrieval.py, #482).
     input_digest 는 보낸 메시지의 지문이다(input_digest 함수). 키가 없으면 None.
     input_chars 는 보낸 메시지의 글자 수의 합이다(chars_of 함수). input_tokens 와 나란히 놓아 글자당 토큰 수를 잰다.
-    usage 는 자세한 사용량과 원가다(CallUsage, app/ai/costs.py 의 usage_of 가 만든다).
+    usage 는 자세한 사용량과 원가다(CallUsage, ai_core/costs.py 의 usage_of 가 만든다).
     """
 
     scope: CallScope

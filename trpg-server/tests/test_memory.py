@@ -16,12 +16,12 @@ import uuid
 from dataclasses import dataclass, field
 
 import pytest
+from ai_core.fake import FakeEmbedder, FakeProvider
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.fake import FakeEmbedder, FakeProvider
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.models import AiInvocation
 from app.assets.models import LoreKind

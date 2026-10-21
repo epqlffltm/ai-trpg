@@ -3,7 +3,7 @@
 """
 DeepInfra 창구(#398)를 검증한다. DeepSeek 의 공개 가중치를 중국 본토가 아닌 곳(미국)에서 띄운 호스팅이다.
 
-OpenAI 와 같은 모양이라 OpenAI 의 provider(app/ai/openai_compat.py)로 부른다. 주소와 키만 다르다.
+OpenAI 와 같은 모양이라 OpenAI 의 provider(ai_core/openai_compat.py)로 부른다. 주소와 키만 다르다.
 실제 API 는 부르지 않는다. 가짜 전송(tests/test_model_routing.py 의 Transport)에 보낸 요청을 본다.
 
 보는 것.
@@ -16,12 +16,12 @@ OpenAI 와 같은 모양이라 OpenAI 의 provider(app/ai/openai_compat.py)로 �
 """
 
 import pytest
+from ai_core.catalog_contract import CatalogModel, Provider, ReasoningStyle
+from ai_core.fake import FakeCallLog
+from ai_core.routing import DEEPINFRA_KIND, PROVIDER_NOT_CONFIGURED
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.catalog_contract import CatalogModel, Provider, ReasoningStyle
-from app.ai.fake import FakeCallLog
-from app.ai.routing import DEEPINFRA_KIND, PROVIDER_NOT_CONFIGURED
 from app.catalog import service
 from app.catalog.models import Grade
 from app.catalog.schemas import ModelCreate

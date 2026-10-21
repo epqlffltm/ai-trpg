@@ -1,4 +1,4 @@
-# trpg-server/app/ai/fake.py
+# shared/ai-core/src/ai_core/fake.py
 
 """
 가짜 provider 와 가짜 임베더. 모델을 부르지 않고 정해 둔 글, 글에서 바로 계산한 벡터를 돌려준다.
@@ -14,8 +14,8 @@ import re
 from dataclasses import dataclass, field
 from typing import ClassVar
 
-from app.ai.calls import CallRecord
-from app.ai.provider import ChatMessage, Completion, GenerationParams, ProviderError, TextSink, ignore_text
+from ai_core.calls import CallRecord
+from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError, TextSink, ignore_text
 
 # 가짜 모델의 이름. 기록에 남을 때 진짜 모델과 섞이지 않게 한다
 FAKE_MODEL = 'fake'

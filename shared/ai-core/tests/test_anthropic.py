@@ -1,7 +1,7 @@
-# trpg-server/tests/test_anthropic.py
+# shared/ai-core/tests/test_anthropic.py
 
 """
-Claude 를 부르는 provider(app/ai/anthropic.py)와 흘려 받는 답을 읽는 것(app/ai/anthropic_stream.py)을 검증한다.
+Claude 를 부르는 provider(ai_core/anthropic.py)와 흘려 받는 답을 읽는 것(ai_core/anthropic_stream.py)을 검증한다.
 
 실제 API 를 부르지 않는다. httpx 의 가짜 전송이 Anthropic 인 척 답한다.
 이벤트의 모양은 Anthropic 의 문서(2026-10)를 따랐다.
@@ -19,16 +19,16 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from app.ai.anthropic import (
+from ai_core.anthropic import (
     ANTHROPIC_VERSION,
     AnthropicProvider,
     build_body,
     messages_url,
 )
-from app.ai.catalog_contract import ReasoningStyle
-from app.ai.openai_compat import THINKING_TOKENS
-from app.ai.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
-from app.ai.thinking import thinking_budget
+from ai_core.catalog_contract import ReasoningStyle
+from ai_core.openai_compat import THINKING_TOKENS
+from ai_core.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
+from ai_core.thinking import thinking_budget
 
 BASE_URL = 'https://api.anthropic.com'
 MODEL = 'claude-opus-5-5-20260901'

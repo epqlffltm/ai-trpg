@@ -16,10 +16,15 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
+# 공용 코드(shared/ai-core). compose 가 shared 라는 이름의 빌드 범위로 넘긴다(build.additional_contexts).
+# pyproject.toml 의 경로 의존(../shared/ai-core)이 이미지 안에서도 맞게 /shared 에 둔다. 설정과 소스만 담는다
+COPY --from=shared ai-core/pyproject.toml /shared/ai-core/pyproject.toml
+COPY --from=shared ai-core/src /shared/ai-core/src
 COPY pyproject.toml uv.lock ./
-# 잠금 파일과 어긋나면 실패한다(--locked). 테스트 도구는 넣지 않는다(--no-dev)
+# 잠금 파일과 어긋나면 실패한다(--locked). 테스트 도구는 넣지 않는다(--no-dev).
+# 공용 코드는 .venv 안에 설치된 모양으로 넣는다(--no-editable). 실행 단계는 /shared 없이 /app 만 담는다
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-install-project
+    uv sync --locked --no-dev --no-install-project --no-editable
 COPY . .
 
 FROM python:3.13-slim-trixie AS runtime
