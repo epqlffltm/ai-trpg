@@ -70,7 +70,18 @@ FastAPI 서버 넷(trpg, notification, asset, 그리고 만들 chat 과 story)�
 | `app/core/database.py`, `loops.py` | 비동기 DB 연결과 세션, 뒤에서 일정하게 도는 일의 틀 | `server_core.database`, `server_core.loops` | 접속 주소, 풀 크기 |
 
 - 각 서버의 `app/core/config.py` 는 서버에 남는다. 공용 코드는 설정 파일을 읽지 않고, 서버가 설정의 값을 넘겨준다([재정의하는 법](#재정의하는-법)).
-- 서버만의 일(TRPG 의 `jobs.py`, `dice.py`, 관측의 `idle_rounds.py` 등)은 서버에 남는다.
+- 서버만의 일(TRPG 의 `jobs.py`, `dice.py`, 라운드의 지표 등)은 서버에 남는다. 할 일이 없던 바퀴의 추적을 버리는 `DropIdleRounds`(`idle_rounds.py`)와 바퀴가 처리한 수를 세는 것(`add_handled`)은 `loops` 와 함께 쓰므로 공용으로 올린다.
+
+trpg 가 바라는 자리(2026-10-21). asset, notification 과 다른 곳이다. chat 과 story 도 쓰므로 처음부터 연다.
+
+| 자리 | 하는 일 | 쓰는 서버 |
+| --- | --- | --- |
+| 토큰의 기본 칸 | `AccessClaims` 에 `adult_content`(참일 때만 실린다), `is_operator`(`roles` 에 `operator`). 토큰이 없으면 `None`, 틀리면 401 인 `OptionalUser` | trpg(공개 목록), chat, story(보이는 등급) |
+| 스트림인 경로 | 설정의 정규식 목록. 스트림은 span 을 걸지 않고, 걸린 시간과 처리 중인 수에 넣지 않고, 끝난 요청의 수에만 넣는다. SSE 연결의 지표(`sse_connections`, `sse_connections_opened`, `sse_connection_duration`, `measured_stream`) | trpg, chat, story |
+| 다른 서버를 부르는 클라이언트 | 부르는 쪽이 붙일 머리(`outgoing_headers`)를 받을 때만 지금 span 으로 잇는다. 바깥(AI 모델의 창구)에는 traceparent 를 붙이지 않는다 | 모두 |
+| 서버의 지표 | 공용 코드는 요청과 연결 풀의 지표, 서버가 자기 지표를 더할 meter 만 둔다. AI 호출의 지표(`ai_*`)는 `ai-core` 로, 라운드와 청구의 지표는 trpg 에 남는다. 지표의 이름은 바꾸지 않는다 | 모두 |
+| span processor 를 끼우는 자리 | 추적 설정이 processor 를 받는다. `DropIdleRounds` 가 기본으로 들어간다 | 모두 |
+| 설정으로 받는 것 | 서비스 이름(`SERVICE_NAME`, `SCOPE_NAME`), 지금의 추적(`context.current_trace()`), 로그 처리기가 JSON 인지(`has_json_handler`) | 모두 |
 
 ### AI 호출 (`shared/ai-core`)
 
