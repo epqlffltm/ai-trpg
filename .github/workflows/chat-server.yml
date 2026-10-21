@@ -1,0 +1,166 @@
+# .github/workflows/chat-server.yml
+# chat 서버의 CI. PR 과 main 푸시마다 린트, 모양, 의존성 취약점, 마이그레이션, 테스트를 검사한다.
+#
+# PR 에서는 관문(.github/workflows/ci.yml)이 바뀐 파일을 보고 이 워크플로를 부른다.
+# 고르는 규칙은 .github/scripts/changed-servers.sh 에 있다. 검사할 것을 바꾸면 이 파일만 고친다.
+# 단계는 알림 서버의 것(notification-server.yml)과 같다. Redis 와 pgvector 확장이 필요 없다.
+# DB 계정은 초기화 스크립트(docker/postgres/init/09-chat-role.sql)로 만든다. 그 스크립트는 인프라 세션의 PR 이 더한다.
+# 관문(ci.yml, changed-servers.sh)이 이 워크플로를 부르게 하는 것도 그 PR 이다(#590). 같은 PR 에 얹는다.
+
+name: chat-server
+
+on:
+  # PR 에서는 관문(ci.yml)이 바뀐 서버를 골라 이 워크플로를 부른다. 필수 검사는 관문의 ci-ok 하나다
+  workflow_call:
+  # main 에 들어간 뒤에는 이 서버가 바뀐 경우에만 스스로 돈다. README 의 배지가 이 결과를 보여 준다
+  push:
+    branches: [main]
+    paths:
+      - "chat-server/**"
+      # 이 서버가 쓰는 공용 코드(pyproject.toml 의 경로 의존)
+      - "shared/server-core/**"
+      - "docker/postgres/init/**"
+      - ".github/workflows/chat-server.yml"
+
+# 이 워크플로는 저장소를 읽기만 한다. 필요한 권한만 준다
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # 테스트가 PC 에서 15 초 안쪽이다. 멈춘 테스트를 하염없이 기다리지 않게 하려는 상한이다
+    timeout-minutes: 10
+
+    services:
+      # docker-compose.yml 과 같은 이미지를 쓴다
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: trpg
+          POSTGRES_PASSWORD: ci-root-password
+          POSTGRES_DB: trpg
+        ports:
+          - 5432:5432
+        # 접속을 받을 때까지 기다린 뒤 다음 단계로 넘어간다
+        options: >-
+          --health-cmd "pg_isready -U trpg -d trpg"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    # CI 전용 값. 이 실행이 끝나면 사라지는 DB 에만 쓰이므로 비밀값이 아니다.
+    # .env 파일 없이 환경 변수만으로 설정을 읽는다
+    env:
+      AUTH_DB_PASSWORD: ci-auth-password
+      GAME_DB_PASSWORD: ci-game-password
+      BILLING_DB_PASSWORD: ci-billing-password
+      BOARD_DB_PASSWORD: ci-board-password
+      NOTIFICATION_DB_PASSWORD: ci-notification-password
+      ASSET_DB_PASSWORD: ci-asset-password
+      CHAT_DB_PASSWORD: ci-chat-password
+      DATABASE_URL: postgresql+asyncpg://chat:ci-chat-password@127.0.0.1:5432/trpg
+      # 필수 설정이라 적는다. CI 에는 인증 서버가 없고, 테스트는 가짜 인증 서버를 쓴다.
+      # 이 주소로는 요청이 가지 않는다
+      AUTH_JWKS_URL: http://127.0.0.1:8000/api/v1/auth/jwks
+
+    defaults:
+      run:
+        working-directory: chat-server
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # 로컬과 같은 초기화 스크립트로 계정과 스키마를 만든다.
+      # 슈퍼유저로 테스트하면 로컬에서 권한 때문에 실패할 코드가 CI 를 통과한다.
+      # 다른 서버의 계정과 스키마(auth, game, billing, board, notification, asset)도 만든다. chat 계정이 그 스키마에 닿지 못하는지 테스트가 확인한다
+      - name: DB 계정과 스키마 만들기
+        working-directory: .
+        env:
+          PGPASSWORD: ci-root-password
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/01-auth-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/02-game-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/04-billing-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/05-board-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/06-notification-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/08-asset-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/09-chat-role.sql
+
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      # uv.lock 과 pyproject.toml 이 어긋나면 실패한다
+      - name: 의존성 설치
+        run: uv sync --locked
+
+      # 쓰지 않는 import, 정의되지 않은 이름 같은 문제를 실행하지 않고 찾는다
+      - name: 린트
+        run: uv run ruff check .
+
+      # 모양을 고치지 않고 검사만 한다. 어긋나면 실패한다
+      - name: 모양 검사
+        run: uv run ruff format --check .
+
+      # 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
+      # uv.lock 에 잠긴 그대로를 해시와 함께 넘긴다. 받아들이기로 한 것은 --ignore-vuln 에 까닭과 함께 적는다
+      # 저장소 안의 공용 코드(shared/server-core)는 해시가 없어 뺀다(--no-emit-local). 그 의존성은 여기에 그대로 들고, 공용 코드 자체는 shared.yml 이 본다
+      - name: 의존성 취약점 검사
+        run: |
+          uv export --frozen --no-dev --no-emit-project --no-emit-local --format requirements-txt -q > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip --progress-spinner off
+
+      # 마이그레이션의 끝(head)을 찍기만 한다. 끝이 여럿이어도 실패하지 않는다. 적용은 upgrade heads 로 모두 한다
+      - name: 마이그레이션 끝
+        run: uv run alembic heads
+
+      # 빈 DB 에 마이그레이션을 처음부터 모든 끝까지 적용할 수 있는지 본다
+      - name: 마이그레이션 적용
+        run: uv run alembic upgrade heads
+
+      # 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
+      - name: 마이그레이션 누락 검사
+        run: uv run alembic check
+
+      # 마이그레이션을 끝까지 되돌릴 수 있는지 보고 다시 적용한다. 되돌리기는 개발용 DB 를 고칠 때 쓴다
+      - name: 마이그레이션 되돌리기
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade heads
+
+      # 테스트는 chat_test 스키마에서 돈다. 그 스키마에도 테이블을 만든다
+      - name: 테스트용 스키마에 마이그레이션 적용
+        env:
+          DB_SCHEMA: chat_test
+        run: uv run alembic upgrade heads
+
+      # 테스트를 돌리며 지나간 줄을 센다. 재는 대상은 pyproject.toml 의 [tool.coverage.run] 이다.
+      # 표는 아래 요약 단계에서 적는다. 여기서는 찍지 않는다(--cov-report=)
+      - name: 테스트
+        run: uv run pytest --cov --cov-report=
+
+      # 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 기준은 다음 단계에서 본다.
+      # 표에는 다 지나간 파일을 빼고, 덜 지나간 파일부터 적는다
+      - name: 커버리지 요약
+        run: |
+          total="$(uv run coverage report --format=total)"
+          echo "chat 서버 커버리지 ${total}%"
+          {
+            echo "### chat 서버 커버리지 ${total}%"
+            echo
+            echo "<details><summary>덜 지나간 파일</summary>"
+            echo
+            uv run coverage report --format=markdown --skip-covered --sort=cover
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 합계가 기준 아래로 떨어지면 실패한다. 요약을 먼저 적은 뒤에 보므로, 실패해도 어느 파일이 덜 지나갔는지 요약에 남는다.
+      # 처음 잰 값은 100% 다(뼈대). 알림 서버, asset 서버와 같은 95 로 둔다. 작은 서버라 한 파일의 빈틈이 크게 보인다.
+      # 내릴 때는 PR 에 까닭을 적는다
+      - name: 커버리지 기준
+        env:
+          COVERAGE_MIN: "95"
+        run: uv run coverage report --format=total --fail-under="$COVERAGE_MIN"
