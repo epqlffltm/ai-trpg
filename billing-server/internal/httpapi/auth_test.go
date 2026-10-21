@@ -43,9 +43,7 @@ func call(t *testing.T, verifier httpapi.TokenVerifier, path string, header stri
 	if header != "" {
 		request.Header.Set("Authorization", header)
 	}
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-	return response
+	return serve(t, router, request)
 }
 
 // mustUUID 는 글자를 UUID 로 읽는다. 못 읽으면 테스트를 실패시킨다.

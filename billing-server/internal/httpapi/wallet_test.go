@@ -57,9 +57,7 @@ func asUser(t *testing.T, reader httpapi.WalletReader, userID string, path strin
 	router := httpapi.NewRouter(httpapi.Dependencies{DB: &fakeDB{}, Verifier: verifier, Wallet: reader})
 	request := httptest.NewRequest(http.MethodGet, path, nil)
 	request.Header.Set("Authorization", "Bearer the-token")
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-	return response
+	return serve(t, router, request)
 }
 
 func TestWalletReturnsBothKindsAndTheirSum(t *testing.T) {
@@ -120,9 +118,8 @@ func TestWalletNeedsAToken(t *testing.T) {
 	for _, path := range []string{walletURL, entriesURL} {
 		reader := &fakeWallet{}
 		router := httpapi.NewRouter(httpapi.Dependencies{DB: &fakeDB{}, Verifier: &fakeVerifier{}, Wallet: reader})
-		response := httptest.NewRecorder()
 
-		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		response := serve(t, router, httptest.NewRequest(http.MethodGet, path, nil))
 
 		assertUnauthorized(t, response)
 		if reader.calls != 0 {
