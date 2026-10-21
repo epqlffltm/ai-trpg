@@ -1,7 +1,7 @@
 # auth-server/accounts/tests/test_outbox.py
 
 """
-메일 발송함을 검증한다. 적기, 보내기, 실패 후 재시도, 버리기,
+메일 발송함을 검증한다. 적기, 보내기, 실패 후 재시도, 버리기, 버린 메일의 줄을 30일 뒤 지우기,
 메일 서버와 통신하는 동안 잠금을 쥐지 않는 것과 임대가 끝난 메일을 다시 가져가는 것(#24).
 
 다른 테스트는 메일을 그 자리에서 보내는 방식(inline)으로 돈다.
@@ -24,15 +24,18 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.mail_crypto import decrypt_mail_body
-from accounts.models import OutgoingMail, OutgoingMailStatus, User
+from accounts.models import MailReceipt, OutgoingMail, OutgoingMailStatus, User
 from accounts.outbox import (
+    DISCARDED_MAIL_RETENTION,
     FIRST_RETRY_DELAY,
     LEASE_EXPIRED_ERROR,
     MAIL_CLAIM_LEASE,
     MAIL_SEND_DEADLINE,
+    delete_old_discarded_mail,
     deliver_due_mail,
     enqueue_mail,
 )
+from accounts.security_digest import EVENT_RETENTION
 from accounts.tests.helpers import code_from
 
 SIGNUP_URL = reverse('accounts:signup')
@@ -294,6 +297,60 @@ class DiscardTests(TestCase):
             report = deliver_due_mail()
 
         self.assertEqual(report.handled, 0)
+
+
+@override_settings(MAIL_DELIVERY='outbox')
+class DiscardedMailCleanupTests(TestCase):
+    """버린 메일의 줄에는 받는 사람과 제목이 남는다. 기한 없이 두지 않는다."""
+
+    def setUp(self):
+        self.start = timezone.now()
+
+    def discarded(self, **overrides) -> OutgoingMail:
+        """start 에 적고 보내지 못해 버린 메일. 버린 시각은 start + 5분이다."""
+        with at(self.start):
+            queued = enqueue(**overrides)
+        with at(self.start + MAIL_SEND_DEADLINE), self.assertLogs('accounts.outbox', level='ERROR'):
+            deliver_due_mail()
+        queued.refresh_from_db()
+        self.assertEqual(queued.status, OutgoingMailStatus.DISCARDED)
+        return queued
+
+    def delete_at(self, moment) -> int:
+        with at(moment):
+            return delete_old_discarded_mail()
+
+    def test_deletes_mail_discarded_longer_ago_than_the_retention(self):
+        old = self.discarded()
+        discarded_at = old.discarded_at
+
+        kept = self.delete_at(discarded_at + DISCARDED_MAIL_RETENTION - timedelta(seconds=1))
+        deleted = self.delete_at(discarded_at + DISCARDED_MAIL_RETENTION + timedelta(seconds=1))
+
+        self.assertEqual((kept, deleted), (0, 1))
+        self.assertFalse(OutgoingMail.objects.filter(pk=old.pk).exists())
+
+    def test_keeps_mail_that_is_still_waiting(self):
+        # 오래 기다린 메일이라도 버리기 전에는 지우지 않는다. 버리는 것은 워커의 일이다
+        with at(self.start):
+            waiting = enqueue()
+
+        self.assertEqual(self.delete_at(self.start + DISCARDED_MAIL_RETENTION * 2), 0)
+        self.assertTrue(OutgoingMail.objects.filter(pk=waiting.pk).exists())
+
+    def test_keeps_the_receipt_of_a_deleted_mail(self):
+        # 보호자 결제 알림이 가리키는 기록이다. 받는 사람도 본문도 없어 남긴다
+        receipt = MailReceipt.objects.create(purpose='guardian_payment_notice')
+        mail_row = self.discarded(receipt=receipt)
+
+        self.delete_at(mail_row.discarded_at + DISCARDED_MAIL_RETENTION + timedelta(seconds=1))
+
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.discarded_at, mail_row.discarded_at)
+
+    def test_lives_as_long_as_the_security_event_that_reported_it(self):
+        # 버린 일은 보안 이벤트(mail_discarded)로 알린다. 하나만 먼저 사라지면 서로를 찾지 못한다
+        self.assertEqual(DISCARDED_MAIL_RETENTION, EVENT_RETENTION)
 
 
 def lock_from_another_connection(pk: int) -> str:
