@@ -259,6 +259,27 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "WithdrawalOut": {
+        "description": "탈퇴를 받은 답. 지운 수는 싣지 않는다. 인증 서버는 결과만 본다.",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/WithdrawalStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "WithdrawalOut",
+        "type": "object"
+      },
+      "WithdrawalStatus": {
+        "description": "탈퇴를 받은 결과. 인증 서버는 processed 를 받아야 보내기를 멈춘다.",
+        "enum": [
+          "processed"
+        ],
+        "title": "WithdrawalStatus",
+        "type": "string"
       }
     },
     "securitySchemes": {
@@ -583,6 +604,57 @@
           "inbox"
         ],
         "x-audience": "user"
+      }
+    },
+    "/api/v1/notification/service/users/{user_id}/withdrawal": {
+      "post": {
+        "description": "그 사람의 알림과 끈 종류를 지운다. 지웠든, 이미 지웠든, 없던 사람이든 200 이다.",
+        "operationId": "receive_withdrawal_api_v1_notification_service_users__user_id__withdrawal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawalOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "서명이 없거나 맞지 않다(AUTH_SERVER_SECRET)"
+          },
+          "413": {
+            "description": "본문이 16KB 를 넘는다"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Receive Withdrawal",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
       }
     },
     "/api/v1/notification/service/{source}/notifications": {

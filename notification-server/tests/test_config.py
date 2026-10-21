@@ -29,6 +29,22 @@ def test_does_not_start_when_two_servers_share_a_secret():
         make_test_settings(game_server_secret=LONG_ENOUGH, billing_server_secret=LONG_ENOUGH)
 
 
+def test_the_auth_server_secret_follows_the_same_rules():
+    # 인증 서버의 비밀도 짧으면 안 되고, 알림을 넣는 서버의 것과 같으면 그 서버가 탈퇴를 꾸며 낼 수 있다
+    with pytest.raises(ValidationError, match='32자 이상'):
+        make_test_settings(auth_server_secret='short')
+    with pytest.raises(ValidationError, match='서버마다 달라야'):
+        make_test_settings(game_server_secret=LONG_ENOUGH, auth_server_secret=LONG_ENOUGH)
+
+
+def test_the_auth_server_cannot_put_notifications():
+    # 인증 서버의 비밀은 알림을 넣는 서버의 표에 없다. 탈퇴를 알릴 뿐이다
+    settings = make_test_settings()
+
+    assert settings.auth_server_secret.get_secret_value() not in settings.service_secrets().values()
+    assert 'auth' not in settings.service_secrets()
+
+
 def test_does_not_start_without_a_database_url(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv('DATABASE_URL', raising=False)
 

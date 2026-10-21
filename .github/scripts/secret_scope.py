@@ -95,14 +95,15 @@ SECRETS = [
     *secrets('billing-server', ['billing-server', 'billing-cron'], 'TOSS_SECRET_KEY'),
     # 알림 서버와 함께 아는 비밀. 정리 작업이 사용자에게 알릴 일을 알림 서버에 넣는다(#385). 서버와 대사는 부르지 않는다
     *secrets('billing-server', ['billing-sweeper'], 'NOTIFICATION_SECRET'),
-    # 알림 서버가 알림을 넣는 요청의 서명을 확인하는 비밀. 넣는 서버마다 하나다. 요청을 받는 서버만 쓴다.
-    # 마이그레이션(notification-migrate)에는 주지 않는다
+    # 알림 서버가 알림을 넣는 요청과 탈퇴의 알림(#603)의 서명을 확인하는 비밀. 부르는 서버마다 하나다.
+    # 요청을 받는 서버만 쓴다. 마이그레이션(notification-migrate)에는 주지 않는다
     *secrets(
         'notification-server',
         ['notification-server'],
         'GAME_SERVER_SECRET',
         'BILLING_SERVER_SECRET',
         'BOARD_SERVER_SECRET',
+        'AUTH_SERVER_SECRET',
     ),
     # asset 서버가 페르소나와 판을 가져가는 요청의 서명을 확인하는 비밀. 가져가는 서버마다 하나다.
     # 요청을 받는 서버만 쓴다. 마이그레이션(asset-migrate)에는 주지 않는다
@@ -117,6 +118,8 @@ SECRETS = [
     *secrets('trpg-server', ['trpg-server'], 'AUTH_SERVER_SECRET'),
     # 인증 서버가 게임 서버에 탈퇴를 알릴 때 서명하는 비밀. 알리는 것은 결제 서버에 맡기는 워커(auth-welcome-credits)다
     *secrets('auth-server', ['auth-welcome-credits'], 'GAME_SECRET'),
+    # 인증 서버가 알림 서버에 탈퇴를 알릴 때 서명하는 비밀. 알리는 것은 결제 서버에 맡기는 워커(auth-welcome-credits)다
+    *secrets('auth-server', ['auth-welcome-credits'], 'NOTIFICATION_SECRET'),
 ]
 
 
