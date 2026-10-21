@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -21,6 +22,24 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.age import korean_today
+from accounts.api_schema import (
+    BAD_REQUEST_BODY,
+    ORIGIN_REFUSED,
+    TOO_MANY_ATTEMPTS,
+    GuardianNoticeAnswerSerializer,
+    GuardianRequestedSerializer,
+    GuardianRevokedSerializer,
+    IdentityAnswerSerializer,
+    JwksSerializer,
+    MeSerializer,
+    RetryLaterSerializer,
+    RevocationDocumentSerializer,
+    bad_request,
+    coded,
+    detail,
+    retry_later,
+    unauthenticated,
+)
 from accounts.attempt_policies import (
     block_ip_if_reserved_username,
     clear_login_attempts,
@@ -131,6 +150,9 @@ from accounts.tokens import (
     revoke_refresh_token,
     rotate_refresh_token,
 )
+
+# 본인의 항목마다의 동의 상태. 읽기, 동의, 철회가 같은 모양으로 답한다(API 목록의 모양)
+CONSENT_STATES = inline_serializer('ConsentStates', {'items': ConsentStateSerializer(many=True)})
 
 # 다른 서버가 공개키를 캐시해도 되는 시간(초).
 # 키를 교체할 때는 이 시간 동안 옛 키와 새 키를 함께 내보내야 한다
@@ -261,6 +283,15 @@ class SignupView(APIView):
     # 가입은 메일을 보낸다. 한 IP 가 낼 수 있는 요청 수를 묶는다
     throttle_classes = [SignupIpThrottle]
 
+    @extend_schema(
+        summary='가입 1단계: 이메일로 코드를 보낸다',
+        request=SignupSerializer,
+        responses={
+            202: detail('코드를 보냈다. 이미 가입된 주소여도 같은 답이다'),
+            400: bad_request(),
+            429: TOO_MANY_ATTEMPTS,
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = SignupSerializer(data=request.data)
         # 검증에 실패하면 400 과 필드별 오류 메시지로 응답한다
@@ -282,6 +313,11 @@ class SignupVerifyView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='가입 2단계: 코드를 맞히면 가입 티켓을 준다',
+        request=SignupVerifySerializer,
+        responses={200: SignupVerifiedSerializer, 400: bad_request('형식이 틀렸거나 코드가 맞지 않거나 만료됐다')},
+    )
     def post(self, request: Request) -> Response:
         serializer = SignupVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -307,6 +343,18 @@ class SignupCompleteView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='가입 3단계: 티켓과 가입 내용으로 계정을 만든다',
+        request=SignupCompleteSerializer,
+        responses={
+            201: detail('가입했다. 로그인은 따로 한다'),
+            400: bad_request('칸의 오류이거나 티켓을 쓸 수 없다(signup_ticket_invalid)'),
+            409: OpenApiResponse(
+                response=BAD_REQUEST_BODY,
+                description='이미 가입한 이메일(email_registered)이거나, 다른 가입이 같은 이름을 방금 가져갔다',
+            ),
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = SignupCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -347,6 +395,20 @@ class LoginView(APIView):
     # 한 IP 의 로그인 시도 전체를 묶는다. 계정별로 틀린 횟수는 post 안에서 따로 센다
     throttle_classes = [LoginIpThrottle]
 
+    @extend_schema(
+        summary='로그인 1단계: 아이디와 비밀번호가 맞으면 메일로 코드를 보내고 티켓을 준다',
+        request=LoginSerializer,
+        responses={
+            202: LoginChallengeSerializer,
+            400: bad_request(),
+            401: detail('아이디 또는 비밀번호가 틀렸다. 막힌 IP 에도 같은 답이다'),
+            403: coded('이메일 인증을 마치지 않았다(email_not_verified)'),
+            429: OpenApiResponse(
+                response=RetryLaterSerializer,
+                description='시도가 너무 많다(too_many_attempts) 또는 코드를 자주 요청했다(login_code_unavailable)',
+            ),
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -404,6 +466,15 @@ class LoginVerifyView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='로그인 2단계: 코드를 맞히면 토큰을 준다',
+        request=LoginVerifySerializer,
+        responses={
+            200: OpenApiResponse(response=LoginResponseSerializer, description='access 토큰. refresh 토큰은 쿠키다'),
+            400: bad_request('형식이 틀렸거나 코드가 맞지 않거나 만료됐다'),
+            401: coded('로그인 티켓을 쓸 수 없다(login_ticket_invalid). 처음부터 다시 한다'),
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = LoginVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -427,6 +498,16 @@ class LoginResendView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='로그인 코드를 다시 보낸다',
+        request=LoginTicketSerializer,
+        responses={
+            200: detail('다시 보냈다'),
+            400: bad_request(),
+            401: coded('로그인 티켓을 쓸 수 없다(login_ticket_invalid)'),
+            429: retry_later('코드를 너무 자주 요청했다(login_code_unavailable)'),
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = LoginTicketSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -449,6 +530,16 @@ class PasswordChangeView(APIView):
 
     # 로그인한 본인만 바꿀 수 있다. 기본 권한(IsAuthenticated)을 쓴다
 
+    @extend_schema(
+        summary='비밀번호를 바꾼다. 다른 기기는 로그아웃되고 이 기기는 새 토큰을 받는다',
+        request=PasswordChangeSerializer,
+        responses={
+            200: LoginResponseSerializer,
+            400: bad_request('현재 비밀번호가 틀렸거나(current_password) 새 비밀번호가 규칙에 어긋났다(new_password)'),
+            401: unauthenticated(),
+            429: TOO_MANY_ATTEMPTS,
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = PasswordChangeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -483,6 +574,15 @@ class PasswordResetRequestView(APIView):
     authentication_classes = []
     throttle_classes = [PasswordResetIpThrottle]
 
+    @extend_schema(
+        summary='비밀번호 재설정 메일을 보낸다',
+        request=EmailSerializer,
+        responses={
+            202: detail('가입된 주소면 보냈다. 아니어도 같은 답이다'),
+            400: bad_request(),
+            429: TOO_MANY_ATTEMPTS,
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = EmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -502,6 +602,14 @@ class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='메일의 링크로 비밀번호를 새로 정한다',
+        request=PasswordResetConfirmSerializer,
+        responses={
+            200: detail('바꿨다. 새 비밀번호로 로그인한다'),
+            400: bad_request('링크가 틀렸거나 만료됐거나 새 비밀번호가 규칙에 어긋났다(new_password)'),
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -531,6 +639,15 @@ class RefreshView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='refresh 쿠키로 새 access 토큰을 받는다. refresh 토큰도 새것으로 바뀐다',
+        request=None,
+        responses={
+            200: LoginResponseSerializer,
+            401: detail('refresh 쿠키가 없거나 쓸 수 없다. 다시 로그인한다'),
+            403: ORIGIN_REFUSED,
+        },
+    )
     def post(self, request: Request) -> Response:
         # 쿠키를 읽기 전에 본다. 우리 화면에서 온 요청에만 쿠키를 쓴다
         refused = refuse_unknown_origin(request)
@@ -557,6 +674,11 @@ class LogoutView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='이 기기에서 로그아웃한다. refresh 토큰을 폐기하고 쿠키를 지운다',
+        request=None,
+        responses={204: OpenApiResponse(description='로그아웃했다. 토큰이 없었어도 같다'), 403: ORIGIN_REFUSED},
+    )
     def post(self, request: Request) -> Response:
         # 다른 곳의 페이지가 사용자를 로그아웃시키지 못하게 한다
         refused = refuse_unknown_origin(request)
@@ -580,6 +702,11 @@ class LogoutAllView(APIView):
 
     # 다른 기기까지 끊는 동작이다. 본인 확인이 필요하므로 기본 권한(IsAuthenticated)을 쓴다
 
+    @extend_schema(
+        summary='모든 기기에서 로그아웃한다(세션 버전을 올린다)',
+        request=None,
+        responses={204: OpenApiResponse(description='모든 세션을 끊었다'), 401: unauthenticated()},
+    )
     def post(self, request: Request) -> Response:
         revoke_all_sessions(request.user)
 
@@ -595,6 +722,7 @@ class JwksView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(summary='토큰을 검증할 공개키(JWKS). 다른 서버가 받아 간다', responses={200: JwksSerializer})
     def get(self, request: Request) -> Response:
         response = Response(build_jwks(), status=status.HTTP_200_OK)
         response['Cache-Control'] = f'public, max-age={JWKS_CACHE_SECONDS}'
@@ -608,6 +736,9 @@ class SessionRevocationsView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='끊긴 세션의 목록. 다른 서버가 30초마다 받아 간다', responses={200: RevocationDocumentSerializer}
+    )
     def get(self, request: Request) -> Response:
         response = Response(build_revocation_document(timezone.now()), status=status.HTTP_200_OK)
         # 중간에서 기억해 두지 않는다. 끊은 세션이 늦게 알려지면 이 목록을 두는 뜻이 줄어든다
@@ -620,6 +751,20 @@ class IdentityVerifyView(APIView):
 
     # 로그인한 본인만 한다. 기본 권한(IsAuthenticated)을 쓴다
 
+    @extend_schema(
+        summary='휴대폰 본인인증을 적는다',
+        request=IdentityVerifySerializer,
+        responses={
+            201: IdentityAnswerSerializer,
+            400: bad_request('형식이 틀렸거나 본인인증의 글자를 쓸 수 없다(identity_token_invalid)'),
+            401: unauthenticated(),
+            403: coded('만 14세 미만이라 계정을 막았다(identity_under_age). refresh 쿠키도 지운다'),
+            409: coded(
+                '이미 본인인증을 마쳤다(identity_already_verified) 또는 다른 계정이 쓴 사람이다(identity_in_use)'
+            ),
+            503: coded('본인확인 업체에 닿지 않는다(identity_unavailable)'),
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = IdentityVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -667,6 +812,18 @@ class GuardianRequestView(APIView):
 
     # 로그인한 본인만 한다. 기본 권한(IsAuthenticated)을 쓴다
 
+    @extend_schema(
+        summary='미성년자가 보호자에게 결제 동의를 부탁한다',
+        request=GuardianRequestSerializer,
+        responses={
+            202: GuardianRequestedSerializer,
+            400: bad_request('형식이 틀렸거나 내 이메일을 적었다(guardian_email)'),
+            401: unauthenticated(),
+            403: coded('본인인증을 먼저 한다(identity_verification_required)'),
+            409: coded('성년이다(guardian_not_needed) 또는 보호자가 이미 동의했다(guardian_consent_active)'),
+            429: retry_later('보호자에게 너무 자주 요청했다(guardian_request_unavailable)'),
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = GuardianRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -712,6 +869,19 @@ class GuardianConsentView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='보호자가 메일의 링크에서 본인인증을 하고 동의한다',
+        request=GuardianConsentSerializer,
+        responses={
+            200: detail('동의를 적었다'),
+            400: bad_request(
+                '링크를 쓸 수 없다(guardian_link_invalid) 또는 본인인증의 글자를 쓸 수 없다(identity_token_invalid)'
+            ),
+            403: coded('보호자가 성년이 아니다(guardian_not_adult)'),
+            409: coded('회원이 이미 성년이다(guardian_not_needed) 또는 회원 본인이다(guardian_is_minor)'),
+            503: coded('본인확인 업체에 닿지 않는다(identity_unavailable)'),
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = GuardianConsentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -750,6 +920,11 @@ class GuardianRevokeView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='보호자가 메일의 링크로 동의를 철회한다',
+        request=GuardianRevokeSerializer,
+        responses={200: GuardianRevokedSerializer, 400: bad_request('링크를 쓸 수 없다(guardian_link_invalid)')},
+    )
     def post(self, request: Request) -> Response:
         serializer = GuardianRevokeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -786,6 +961,15 @@ class ServiceGuardianNoticeView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='결제 서버가 미성년자의 결제와 청약철회를 알린다(서버끼리)',
+        request=GuardianNoticeSerializer,
+        responses={
+            200: GuardianNoticeAnswerSerializer,
+            400: bad_request(),
+            401: coded('결제 서버의 서명이 맞지 않다(service_bad_signature)'),
+        },
+    )
     def post(self, request: Request) -> Response:
         if not has_billing_signature(request):
             return build_coded_error_response(
@@ -815,6 +999,7 @@ class MeView(APIView):
 
     # permission_classes 를 적지 않는다. 기본값인 IsAuthenticated 가 적용된다
 
+    @extend_schema(summary='로그인한 본인의 계정', responses={200: MeSerializer, 401: unauthenticated()})
     def get(self, request: Request) -> Response:
         # 인증 클래스가 토큰을 검증하고 request.user 에 사용자를 넣어 준다
         body = {
@@ -833,6 +1018,10 @@ class ConsentDocumentsView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='동의를 받는 항목마다 지금의 판. 로그인 없이 읽는다',
+        responses={200: inline_serializer('ConsentDocuments', {'items': ConsentDocumentSerializer(many=True)})},
+    )
     def get(self, request: Request) -> Response:
         items = ConsentDocumentSerializer(POLICIES.values(), many=True).data
         return Response({'items': items}, status=status.HTTP_200_OK)
@@ -854,6 +1043,7 @@ class MyConsentsView(APIView):
 
     # 로그인한 본인만 읽는다. 기본 권한(IsAuthenticated)을 쓴다
 
+    @extend_schema(summary='본인의 항목마다의 동의 상태', responses={200: CONSENT_STATES, 401: unauthenticated()})
     def get(self, request: Request) -> Response:
         return build_consents_response(request.user)
 
@@ -864,6 +1054,17 @@ class MyConsentView(APIView):
     DELETE /api/v1/auth/me/consents/{item}: 그 항목의 동의를 철회한다. 필수 항목은 철회하지 못한다.
     """
 
+    @extend_schema(
+        summary='그 항목에 동의한다(본문의 판으로)',
+        request=ConsentAgreeSerializer,
+        responses={
+            200: CONSENT_STATES,
+            400: bad_request(),
+            401: unauthenticated(),
+            404: coded('그런 항목이 없다(consent_item_unknown)'),
+            409: coded('문서의 판이 바뀌었다(consent_outdated)'),
+        },
+    )
     def put(self, request: Request, item: str) -> Response:
         serializer = ConsentAgreeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -877,6 +1078,15 @@ class MyConsentView(APIView):
             )
         return build_consents_response(request.user)
 
+    @extend_schema(
+        summary='그 항목의 동의를 철회한다. 필수 항목은 철회하지 못한다',
+        responses={
+            200: CONSENT_STATES,
+            400: coded('필수 항목이다(consent_required). 탈퇴로 한다'),
+            401: unauthenticated(),
+            404: coded('그런 항목이 없다(consent_item_unknown)'),
+        },
+    )
     def delete(self, request: Request, item: str) -> Response:
         try:
             withdraw(request.user, item, timezone.now())
@@ -905,6 +1115,18 @@ class PublicNamesView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        summary='다른 사람의 공개 ID 로 이름을 한꺼번에 찾는다. 로그인 없이 읽는다',
+        parameters=[
+            OpenApiParameter(
+                'ids', str, OpenApiParameter.QUERY, required=True, description='공개 ID 를 쉼표로 이은 것(100개까지)'
+            )
+        ],
+        responses={
+            200: inline_serializer('PublicNames', {'names': PublicNameSerializer(many=True)}),
+            400: coded('공개 ID 의 목록이 틀렸다(public_ids_invalid)'),
+        },
+    )
     def get(self, request: Request) -> Response:
         try:
             ids = parse_ids(request.query_params.get('ids', ''))

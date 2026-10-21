@@ -124,6 +124,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # 외부 패키지
     'rest_framework',
+    # API 목록(OpenAPI)을 뷰에서 뽑는다(#558). 뽑는 법은 README 의 "API 목록"
+    'drf_spectacular',
     # 발급한 refresh 토큰과 폐기 목록을 DB 에 기록한다
     'rest_framework_simplejwt.token_blacklist',
     # 이 프로젝트의 앱
@@ -206,6 +208,33 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
+    ],
+    # 뷰에 적은 요청과 응답의 모양(accounts/api_schema.py)으로 API 목록을 만든다(#558)
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+
+# API 목록(OpenAPI, #558)
+# https://drf-spectacular.readthedocs.io/en/latest/settings.html
+#
+# 목록은 docs/api/auth.openapi.json 으로 저장소에 둔다(tools/export_openapi.py).
+# 운영 서버는 목록의 주소를 열지 않는다(config/urls.py)
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'AI TRPG 인증 서버',
+    'DESCRIPTION': '가입, 로그인, 토큰 발급과 공개키, 본인인증과 보호자 동의, 동의 기록.',
+    'VERSION': '0.1.0',
+    # 목록을 내는 주소는 목록에 올리지 않는다
+    'SERVE_INCLUDE_SCHEMA': False,
+    # 요청과 응답을 다른 모양으로 나눈다. 비밀번호처럼 받기만 하는 칸이 응답의 모양에 들어가지 않는다
+    'COMPONENT_SPLIT_REQUEST': True,
+    # 묶음(tag)을 /api/v1/auth 다음 칸으로 정한다(signup, login, me ...)
+    'SCHEMA_PATH_PREFIX': r'/api/v1/auth',
+    # 기본 처리(고르는 값을 enum 으로) 뒤에 이 서버의 것을 더한다: 상태 확인 주소, 닫힌 객체
+    'POSTPROCESSING_HOOKS': [
+        'drf_spectacular.hooks.postprocess_schema_enums',
+        'accounts.api_schema.add_health_paths',
+        'accounts.api_schema.close_objects',
     ],
 }
 
