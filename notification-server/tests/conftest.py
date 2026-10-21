@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core.config import Settings
 from app.main import create_app
 from tests.cleaning import clear_tables
-from tests.signing import TEST_SECRETS
+from tests.signing import TEST_AUTH_SECRET, TEST_SECRETS
 
 TEST_SCHEMA = 'notification_test'
 
@@ -51,6 +51,8 @@ def make_test_settings(**overrides) -> Settings:
         'game_server_secret': TEST_SECRETS['game'],
         'billing_server_secret': TEST_SECRETS['billing'],
         'board_server_secret': TEST_SECRETS['board'],
+        # 탈퇴를 알리는 인증 서버의 서명 비밀(tests/signing.py)
+        'auth_server_secret': TEST_AUTH_SECRET,
         # span 을 내보내지 않는다. 개발자의 .env 에 수집기의 주소가 있어도 테스트는 보내지 않는다.
         # span 을 보는 테스트는 메모리에 모으는 것을 끼운다(spans fixture)
         'otel_exporter_otlp_endpoint': '',

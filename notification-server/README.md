@@ -72,6 +72,7 @@ uv run uvicorn app.main:app --port 8004 --reload
 | `GAME_SERVER_SECRET` | 비어 있음 | 게임 서버가 넣는 요청의 서명 비밀. 비우면 게임 서버의 알림을 받지 않는다(401). 32자 이상, 다른 비밀과 달라야 한다 |
 | `BILLING_SERVER_SECRET` | 비어 있음 | 결제 서버의 것. 규칙은 위와 같다 |
 | `BOARD_SERVER_SECRET` | 비어 있음 | 게시판 서버의 것. 규칙은 위와 같다 |
+| `AUTH_SERVER_SECRET` | 비어 있음 | 인증 서버가 탈퇴를 알리는 요청의 서명 비밀([탈퇴 받기](#탈퇴-받기서버끼리)). 알림을 넣는 비밀과 따로다. 비우면 탈퇴의 알림을 받지 않는다(401). 규칙은 위와 같다 |
 
 서명 비밀이 짧거나 서로 같으면 서버가 뜨지 않는다. 비밀은 로그와 오류에 싣지 않는다.
 
@@ -222,6 +223,32 @@ Content-Type: application/json
 배포는 알림 서버가 먼저다. 넣는 서버가 먼저 나가면 그 사이의 알림은 422 로 `failed` 가 되어 버려진다.
 `tests/test_catalog.py` 의 `SENT_BY` 에도 더한다. 표와 넣는 서버의 목록이 어긋나면 테스트가 실패한다.
 
+## 탈퇴 받기(서버끼리)
+
+인증 서버가 탈퇴를 마치면(유예 7일이 지나 계정을 비우면) 알린다(#603, [탈퇴 설계](../docs/architecture/withdrawal.md)). 이 서버는 그 사람의 것을 지운다(`app/withdrawals/`).
+
+```
+POST /api/v1/notification/service/users/{user_id}/withdrawal
+X-Service-Signature: t=<보낸 시각(초)>,v1=<서명>        (AUTH_SERVER_SECRET)
+Content-Type: application/json
+
+{"withdrawn_at": "2026-10-28T03:00:00+00:00"}
+```
+
+| 답 | 뜻 |
+| --- | --- |
+| 200 `{"status": "processed"}` | 지웠다. 이미 지웠거나 이 서버가 모르는 사람이어도 같다 |
+| 401 | 서명이 없거나 맞지 않다. 알림을 넣는 서버의 비밀로는 부를 수 없다. `AUTH_SERVER_SECRET` 이 비어 있으면 모두 401 이다 |
+| 413 | 본문이 16KB 를 넘는다 |
+| 422 | 주소의 `user_id` 가 UUID 가 아니다, `withdrawn_at` 이 없거나 시간대가 있는 시각이 아니다, 모르는 칸이 있다 |
+
+- **지우는 것:** 그 사람의 알림(읽은 것, 읽지 않은 것 모두)과 끈 알림의 종류. 한 트랜잭션이다. 남기는 것은 없다. 알림의 원문은 그 일을 맡은 서버에 있고, 그 서버가 탈퇴를 따로 받는다
+- **몇 번을 받아도 같다.** 인증 서버는 200 과 `processed` 를 받을 때까지 간격을 늘려 다시 보낸다. 그래서 두 번째에도, 모르는 사람에게도 200 이다
+- 비밀이 비어 있는 동안 인증 서버는 보내지 않고 쌓아 둔다. 비밀을 적으면 그 전에 탈퇴한 사람의 것부터 온다
+- 서명은 [알림 넣기](#알림-넣기서버끼리)와 같은 모양이다. 본문은 서명을 확인한 뒤에 읽는다(`app/core/signed_requests.py` 를 함께 쓴다)
+- 로그에는 지운 수만 남긴다(`operation`: `notification.withdrawal`, `deleted_notifications`, `deleted_mutes`). 사람은 남기지 않는다
+- 탈퇴한 뒤에 다른 서버가 그 사람의 알림을 늦게 넣으면 다시 생긴다. 보관 기간(30일)이 지나면 지워진다. 넣는 서버들이 탈퇴를 받으면(설계 문서의 만드는 순서 5) 넣지 않는다
+
 ## 보관 기간
 
 받은 지 30일(`NOTIFICATION_RETENTION_DAYS`)이 지난 알림은 지운다. 읽었는지는 보지 않는다. 일 자체의 기록(시나리오, 결제)은 그 일을 맡은 서버에 남는다.
@@ -247,6 +274,7 @@ Content-Type: application/json
 | `http.request` | 요청이 끝났다 |
 | `notification.put` | 다른 서버가 알림을 넣었다(`source`, `kind`, `notification_id`, `outcome`). 표에 맞지 않아 받지 않았으면 `warning`(`notification.kind_refused`, `refusal`, `missing_fields`) |
 | `notification.prune` | 보관 기간이 지난 알림을 지웠다(`deleted`, `retention_days`). 지운 것이 없으면 `debug` |
+| `notification.withdrawal` | 인증 서버가 알린 탈퇴로 그 사람의 알림과 끈 종류를 지웠다(`deleted_notifications`, `deleted_mutes`). 사람은 남기지 않는다 |
 | `auth.revocations_fetch` | 끊긴 세션의 목록을 받지 못했다(`warning`, `auth.revocations_unavailable`) |
 
 ## 추적
