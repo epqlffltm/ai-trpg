@@ -174,11 +174,19 @@ def render(spec: dict) -> str:
     return json.dumps(spec, ensure_ascii=False, indent=2, sort_keys=True) + '\n'
 
 
+# 파이썬이 표준 출력과 표준 에러에 쓰는 인코딩. 읽는 쪽(fetch_spec)이 UTF-8 로 읽으므로 맞춘다.
+# 적지 않으면 Windows 에서는 파이프에 시스템의 인코딩(한국어 Windows 는 cp949)으로 쓴다.
+# 인증 서버(drf-spectacular)는 한글을 그대로 내므로 그때 읽지 못한다. 다른 서버의 명령에는 영향이 없다
+OUTPUT_ENCODING_ENV = ('PYTHONIOENCODING', 'utf-8')
+
+
 def command_env(source: Source) -> dict[str, str]:
-    """명령을 돌릴 환경 변수. 지금의 환경에, 비어 있는 꼭 필요한 설정만 채운다."""
+    """명령을 돌릴 환경 변수. 지금의 환경에, 비어 있는 꼭 필요한 설정만 채우고, 출력의 인코딩은 UTF-8 로 맞춘다."""
     env = dict(os.environ)
     for name, value in source.env:
         env.setdefault(name, value)
+    name, value = OUTPUT_ENCODING_ENV
+    env[name] = value
     return env
 
 
