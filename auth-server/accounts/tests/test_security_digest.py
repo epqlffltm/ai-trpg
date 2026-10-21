@@ -259,6 +259,19 @@ class CommandTests(TestCase):
         self.assertIn('알린 보안 이벤트 2건', output)
         self.assertIn('지운 오래된 기록 1건', output)
 
+    @override_settings(MAIL_DELIVERY='outbox', SECURITY_DIGEST_TO=[])
+    def test_also_deletes_mail_discarded_long_ago(self):
+        # 버린 메일의 줄도 같은 명령이 지운다. 주기 명령을 따로 두지 않는다
+        enqueue_mail(to_email='someone@example.com', subject='제목', body='본문')
+        OutgoingMail.objects.update(
+            status=OutgoingMailStatus.DISCARDED, body='', discarded_at=timezone.now() - timedelta(days=31)
+        )
+
+        output = self.run_command()
+
+        self.assertFalse(OutgoingMail.objects.exists())
+        self.assertIn('지운 버린 메일 1건', output)
+
     @override_settings(SECURITY_DIGEST_TO=[])
     def test_says_so_when_there_are_no_recipients(self):
         record()

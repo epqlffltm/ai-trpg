@@ -11,6 +11,7 @@
 
 보낸 메일의 줄은 지운다. 보냈다는 사실을 남겨야 하는 메일은 기록(MailReceipt)을 붙여 적는다(#352).
 보내면 그 기록에 보낸 시각을, 버리면 버린 시각을 적는다.
+끝내 보내지 못하고 버린 메일의 줄은 본문만 지우고 남긴다. 30일 뒤에 줄도 지운다(delete_old_discarded_mail).
 
 보내 본 결과를 메일의 종류(kind)마다 센다(메트릭 emails_sent_total). 보냄(sent), 다시 시도할 것(retried),
 버림(discarded)이다. 메일 서버와의 통신과 마무리가 끝난 뒤에 센다. inline 은 보낸 것만 센다(실패는 요청의 오류다).
@@ -38,6 +39,12 @@ logger = logging.getLogger(__name__)
 
 # 이 시간 안에 보내지 못한 메일은 버린다. 인증 코드의 유효 시간(5분)과 같다
 MAIL_SEND_DEADLINE = timedelta(minutes=5)
+
+# 끝내 보내지 못하고 버린 메일의 줄을 두는 기간. 지나면 줄을 지운다(delete_old_discarded_mail).
+# 본문은 버릴 때 지웠고 받는 사람, 제목, 마지막 오류가 남는다. 운영자가 관리자 화면에서 원인을 볼 때 쓴다.
+# 받는 사람의 주소가 있어 기한 없이 두지 않는다. 같은 일을 알린 보안 이벤트(mail_discarded)와 같은 기간이다
+# (security_digest.EVENT_RETENTION). 둘 중 하나만 남아 이벤트에서 메일을 찾지 못하는 일이 없다
+DISCARDED_MAIL_RETENTION = timedelta(days=30)
 
 # 실패한 뒤 다시 시도하기까지의 간격. 실패할 때마다 두 배가 된다(5초, 10초, 20초, ...).
 # 메일 서버가 죽어 있을 때 쉬지 않고 두드리지 않기 위해서다
@@ -328,6 +335,18 @@ def _describe(error: Exception) -> str:
     """오류를 한 줄로 적는다. 저장 칸의 길이에 맞춰 자른다."""
     text = f'{type(error).__name__}: {error}'
     return text[: OutgoingMail._meta.get_field('last_error').max_length]
+
+
+def delete_old_discarded_mail() -> int:
+    """
+    버린 지 보관 기간(DISCARDED_MAIL_RETENTION)이 지난 메일의 줄을 지우고, 지운 건수를 돌려준다.
+
+    버린 시각(discarded_at)으로 센다. 대기 중이거나 보내는 중인 메일은 건드리지 않는다.
+    보낸 메일의 기록(MailReceipt)은 지우지 않는다. 받는 사람도 본문도 없고, 보호자 결제 알림이 그 기록을 가리킨다.
+    """
+    cutoff = timezone.now() - DISCARDED_MAIL_RETENTION
+    deleted, _ = OutgoingMail.objects.filter(status=OutgoingMailStatus.DISCARDED, discarded_at__lt=cutoff).delete()
+    return deleted
 
 
 def count_waiting_mail() -> int:
