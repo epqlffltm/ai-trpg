@@ -185,6 +185,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
 | auth-server | 환영 크레딧을 결제 서버에 맡기기(워커가 한 번 훑는 것) | `welcome_credit.deliver` |
 | auth-server | 결제 자격(성년이 되는 날, 보호자 동의)을 결제 서버에 알리기(같은 워커가 한 번 훑는 것) | `payment_eligibility.deliver` |
+| auth-server | 마치기 하루 전의 탈퇴에 메일을 한 통 더 보내기(같은 워커가 한 번 훑는 것, #624) | `withdrawal.remind` |
 | auth-server | 유예가 지난 탈퇴를 마치기(같은 워커가 한 번 훑는 것, #603) | `withdrawal.complete` |
 | auth-server | 탈퇴를 다른 서버에 알리기(같은 워커가 한 번 훑는 것, #603) | `withdrawal.deliver` |
 | billing-server | 만료된 홀드·주문, 사라진 무료 크레딧 닫기, 보호자와 사용자에게 알릴 일 보내기(정리 작업이 30초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `user_notices_queued`, `_sent`, `_retried`, `_rejected`, `_expired`, `_purged`) | `sweep.run` |
@@ -348,7 +349,6 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `ai_log.prune` | game | AI 호출 기록에서 보관 기간(기본 30일)이 지난 원문 비우기(정리 작업의 한 바퀴, 한 시간마다. `cleared`, `retention_days`) |
 | `notification.put` | notification | 다른 서버가 서명한 요청으로 알림을 넣기. `source`, `kind`, `notification_id`, `outcome`(`created`, `existing`, `muted`). 표에 맞지 않아 받지 않았으면 `notification.kind_refused` 다. 받는 사람과 `payload` 는 싣지 않는다 |
 | `notification.prune` | notification | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업의 한 바퀴, 한 시간마다. `deleted`, `retention_days`) |
-| `board.withdrawal` | board | 인증 서버가 서명해 알린 탈퇴로 그 사람의 글과 댓글의 글쓴이, 신고한 사람을 비우고 닉네임과 보낼 알림 지우기(#603. `blanked_posts`, `blanked_comments`, `blanked_reports`, `deleted_authors`, `deleted_notifications`). 사람은 싣지 않는다 |
 | `notification.withdrawal` | notification | 인증 서버가 서명해 알린 탈퇴로 그 사람의 알림과 끈 종류 지우기(#603. `deleted_notifications`, `deleted_mutes`). 사람은 싣지 않는다 |
 | `billing.hold` | game | 결제 서버에 서술 값의 홀드를 걸기 |
 | `billing.capture` | game | 결제 서버에 홀드의 확정을 맡기기 |
@@ -359,6 +359,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
 | `welcome_credit.deliver` | auth | 환영 크레딧을 결제 서버에 맡기기 |
 | `payment_eligibility.deliver` | auth | 결제 자격을 결제 서버에 알리기 |
+| `withdrawal.remind` | auth | 마치기 하루 전의 탈퇴에 메일을 한 통 더 보내기(요청마다 한 통) |
 | `withdrawal.complete` | auth | 유예가 지난 탈퇴를 마치기(계정을 비우고 알릴 줄을 적는다) |
 | `withdrawal.deliver` | auth | 탈퇴를 다른 서버에 알리기 |
 | `account.delete_unverified` | auth | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기(옛 이름 그대로) |
@@ -648,7 +649,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
-| `emails_sent_total` | counter | `kind`(메일의 종류: `signup_code`, `login_code`, `already_registered`, `password_reset`, `password_changed`, `security_digest`, `guardian_consent`, `guardian_consented`, `guardian_revoked`, `minor_guardian`, `guardian_payment`, `withdrawal_requested`, `withdrawal_completed`, `other`), `result`(`sent`, `retried`, `discarded`) | 메일 한 통을 보내 본 결과의 수. 시도마다 센다. `retried` 는 메일 서버가 받지 않아 다시 보낼 것, `discarded` 는 버린 것(받는 사람이 받지 못했다)이다. 종류는 발송함의 칸 `kind` 다(`accounts.models.MailKind`). 메일 서버 없이 바로 찍는 것(inline)은 `sent` 만 센다 |
+| `emails_sent_total` | counter | `kind`(메일의 종류: `signup_code`, `login_code`, `already_registered`, `password_reset`, `password_changed`, `security_digest`, `guardian_consent`, `guardian_consented`, `guardian_revoked`, `minor_guardian`, `guardian_payment`, `withdrawal_requested`, `withdrawal_reminder`, `withdrawal_completed`, `other`), `result`(`sent`, `retried`, `discarded`) | 메일 한 통을 보내 본 결과의 수. 시도마다 센다. `retried` 는 메일 서버가 받지 않아 다시 보낼 것, `discarded` 는 버린 것(받는 사람이 받지 못했다)이다. 종류는 발송함의 칸 `kind` 다(`accounts.models.MailKind`). 메일 서버 없이 바로 찍는 것(inline)은 `sent` 만 센다 |
 | `auth_rate_limited_total` | counter | `limit`(제한의 이름: `login-ip`, `login-fail-account-ip`, `login-ip-block`, `signup-ip`, `password-reset-ip`, `password-change-fail-user`) | 시도 횟수 제한에 걸린 수 |
 | `auth_rate_limits_unavailable_total` | counter | `limit` | Redis 에 묻지 못해 세지 않고 통과시킨 수. 0 이 아니면 그동안 시도 제한이 꺼져 있었다 |
 

@@ -5,6 +5,8 @@
 
   - 요청: 비밀번호를 확인하고, 모든 세션을 끊고, 메일과 보안 이벤트를 남긴다. 다시 눌러도 유예가 늘지 않는다
   - 유예: 다시 로그인하면 토큰이 인증 서버에만 통한다. 취소하면 갱신부터 모든 서버에 통한다
+  - 하루 전 알림(#624): 마치기 하루 전에 한 통을 더 보낸다. 요청마다 한 통이다. 늦어도 마치기 전에만 보내고,
+    마치는 시각은 그대로다. 나가지 못한 알림은 마칠 때 지운다
   - 마치기: 7일이 지나면 계정을 비우고, 지우기 전의 주소로 메일을 보내고, 결제 서버에 알릴 줄을 적는다
   - 알리기: 모든 서버에 줄을 적고, 비밀을 적은 서버에만 받을 때까지 다시 보낸다. 받으면 끝이다
 """
@@ -12,6 +14,7 @@
 from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import jwt
 from django.conf import settings
@@ -26,9 +29,12 @@ from rest_framework.test import APITestCase
 from accounts.cookies import REFRESH_COOKIE_NAME
 from accounts.erasure import is_removed_account
 from accounts.identity import verify_identity
+from accounts.management.commands.send_welcome_credits import WithdrawalRound
 from accounts.models import (
     ConsentRecord,
     IdentityVerification,
+    MailKind,
+    OutgoingMail,
     PaymentEligibility,
     SecurityEvent,
     SecurityEventKind,
@@ -42,9 +48,13 @@ from accounts.tests.helpers import BrowserClient, agree_to_required, identity_to
 from accounts.tokens import issue_token_pair
 from accounts.withdrawal import (
     LEASE,
+    REMINDER_LEAD,
+    cancel_withdrawal,
     complete_due_withdrawals,
     complete_withdrawal,
     deliver_due_withdrawal_notices,
+    remind_due_withdrawals,
+    remind_withdrawal,
     request_withdrawal,
 )
 from accounts.withdrawal_client import WithdrawalUndeliveredError
@@ -147,6 +157,7 @@ class RequestTests(APITestCase):
         self.assertEqual(mail.outbox[0].to, [EMAIL])
         self.assertIn('탈퇴 요청', mail.outbox[0].subject)
         self.assertIn('취소', mail.outbox[0].body)
+        self.assertIn('하루 전에 한 번 더', mail.outbox[0].body)
         self.assertTrue(
             SecurityEvent.objects.filter(kind=SecurityEventKind.WITHDRAWAL_REQUESTED, user=self.user).exists()
         )
@@ -299,6 +310,156 @@ class CompleteTests(TestCase):
         self.assertTrue(self.user.is_active)
 
 
+class RemindTests(TestCase):
+    """마치기 하루 전의 알림(#624)."""
+
+    def setUp(self):
+        self.user = make_user()
+        with at(timezone.now()):
+            request_withdrawal(self.user)
+        self.user.refresh_from_db()
+        self.due = self.user.withdrawal_requested_at + GRACE
+        mail.outbox.clear()
+
+    def remind_at(self, moment, **options) -> int:
+        with at(moment):
+            return remind_due_withdrawals(**options)
+
+    def earlier_request(self, before, **fields) -> User:
+        """이 계정보다 before 만큼 먼저 탈퇴를 요청한 다른 계정. 고르는 차례가 앞선다."""
+        other = User.objects.create_user(
+            username='player_02', email='other@example.com', nickname='둘', password=PASSWORD
+        )
+        User.objects.filter(pk=other.pk).update(
+            withdrawal_requested_at=self.user.withdrawal_requested_at - before, **fields
+        )
+        return other
+
+    def reminders(self) -> list:
+        return [message for message in mail.outbox if '계정을 지웁니다' in message.subject]
+
+    def test_nothing_is_sent_before_the_day_before(self):
+        # 요청에서 6일이 하루 전이다
+        self.assertEqual(self.remind_at(self.user.withdrawal_requested_at + timedelta(days=6, seconds=-1)), 0)
+
+        self.assertEqual(mail.outbox, [])
+        self.user.refresh_from_db()
+        self.assertIsNone(self.user.withdrawal_reminded_at)
+
+    def test_tells_the_owner_a_day_before(self):
+        self.assertEqual(self.remind_at(self.user.withdrawal_requested_at + timedelta(days=6)), 1)
+
+        (message,) = mail.outbox
+        self.assertEqual(message.to, [EMAIL])
+        # "내일"이 아니라 지우는 시각을 적는다(한국 시각)
+        when = self.due.astimezone(ZoneInfo('Asia/Seoul')).strftime('%Y-%m-%d %H:%M')
+        self.assertIn(when, message.subject)
+        self.assertIn(when, message.body)
+        # 빼앗긴 계정이면 진짜 주인이 마지막으로 알 기회다
+        self.assertIn('로그인하면 탈퇴를 취소', message.body)
+        self.assertIn('비밀번호를 바꿔', message.body)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.withdrawal_reminded_at, self.due - REMINDER_LEAD)
+
+    def test_one_mail_per_request_however_often_the_worker_runs(self):
+        for moment in (self.due - REMINDER_LEAD, self.due - timedelta(hours=12), self.due - timedelta(seconds=1)):
+            self.remind_at(moment)
+
+        self.assertEqual(len(self.reminders()), 1)
+
+    def test_a_late_worker_still_reminds_and_the_end_does_not_move(self):
+        # 워커가 멈췄다가 마치기 1분 전에 다시 떴다. 보내되 마치는 시각은 늦추지 않는다
+        self.assertEqual(self.remind_at(self.due - timedelta(minutes=1)), 1)
+
+        with at(self.due):
+            self.assertEqual(complete_due_withdrawals(), 1)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.withdrawn_at, self.due)
+
+    def test_no_reminder_once_the_end_has_come(self):
+        # 워커가 마칠 때가 지나서 떴다. 같은 바퀴에 마치므로 "곧 지운다"를 보내지 않는다
+        self.assertEqual(self.remind_at(self.due), 0)
+        self.assertEqual(self.remind_at(self.due + timedelta(days=1)), 0)
+
+        self.assertEqual(mail.outbox, [])
+
+    def test_a_finished_account_is_not_reminded(self):
+        # 마친 계정의 요청 시각이 하루 전의 범위에 있어도(관리자의 실수) 보내지 않고, 고르는 묶음도 채우지 않는다
+        self.earlier_request(timedelta(hours=1), withdrawn_at=self.due - REMINDER_LEAD - timedelta(hours=2))
+
+        self.assertEqual(self.remind_at(self.due - REMINDER_LEAD, batch_size=1), 1)
+        self.assertEqual([message.to for message in mail.outbox], [[EMAIL]])
+
+    def test_accounts_already_reminded_do_not_fill_the_batch(self):
+        self.earlier_request(timedelta(hours=1), withdrawal_reminded_at=self.due - REMINDER_LEAD - timedelta(hours=1))
+
+        self.assertEqual(self.remind_at(self.due - REMINDER_LEAD, batch_size=1), 1)
+        self.assertEqual([message.to for message in mail.outbox], [[EMAIL]])
+
+    def test_accounts_at_their_end_do_not_fill_the_batch(self):
+        # 마칠 때가 막 된 계정(같은 바퀴에 마친다)이 앞에 있어도 이 계정에 보낸다
+        self.earlier_request(REMINDER_LEAD)
+
+        self.assertEqual(self.remind_at(self.due - REMINDER_LEAD, batch_size=1), 1)
+        self.assertEqual([message.to for message in mail.outbox], [[EMAIL]])
+
+    def test_a_cancelled_request_is_not_reminded(self):
+        cancel_withdrawal(self.user)
+
+        self.assertEqual(self.remind_at(self.due - REMINDER_LEAD), 0)
+        self.assertEqual(mail.outbox, [])
+
+    def test_a_request_cancelled_after_the_pick_is_not_reminded(self):
+        # 워커가 고른 뒤 잠그기 전에 취소했다. 잠근 뒤 다시 보므로 보내지 않는다
+        User.objects.filter(pk=self.user.pk).update(withdrawal_requested_at=None)
+
+        self.assertFalse(remind_withdrawal(self.user.pk, self.due - REMINDER_LEAD))
+        self.assertEqual(mail.outbox, [])
+
+    def test_a_worker_that_locks_at_the_end_does_not_remind(self):
+        # 마치기 전에 골랐는데 잠갔을 때는 마칠 때가 되었다. 같은 바퀴에 마치므로 보내지 않는다
+        self.assertFalse(remind_withdrawal(self.user.pk, self.due))
+        self.assertEqual(mail.outbox, [])
+
+    def test_only_the_mails_sent_are_counted(self):
+        # 고른 계정을 다른 워커가 먼저 보냈다
+        with patch('accounts.withdrawal.remind_withdrawal', return_value=False):
+            self.assertEqual(self.remind_at(self.due - REMINDER_LEAD), 0)
+
+    def test_two_workers_send_one_mail(self):
+        # 둘이 같은 계정을 골랐다. 뒤의 것은 잠근 뒤 보낸 것을 보고 그만둔다
+        self.assertTrue(remind_withdrawal(self.user.pk, self.due - REMINDER_LEAD))
+
+        self.assertFalse(remind_withdrawal(self.user.pk, self.due - REMINDER_LEAD + timedelta(seconds=1)))
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_a_new_request_after_cancelling_gets_its_own_reminder(self):
+        self.remind_at(self.due - REMINDER_LEAD)
+        cancel_withdrawal(self.user)
+        again = self.due - REMINDER_LEAD + timedelta(hours=1)
+        with at(again):
+            request_withdrawal(self.user)
+        new_due = again + GRACE
+
+        early = self.remind_at(new_due - REMINDER_LEAD - timedelta(seconds=1))
+        on_time = self.remind_at(new_due - REMINDER_LEAD)
+        later = self.remind_at(new_due - timedelta(seconds=1))
+
+        self.assertEqual((early, on_time, later), (0, 1, 0))
+        self.assertEqual(len(self.reminders()), 2)
+
+    @override_settings(MAIL_DELIVERY='outbox')
+    def test_a_reminder_not_yet_sent_is_dropped_when_the_account_is_emptied(self):
+        # 메일 서버가 멈춰 알림이 발송함에 남은 채 마칠 때가 왔다. 마친 뒤에 "곧 지운다"가 가지 않는다
+        self.remind_at(self.due - timedelta(minutes=1))
+        self.assertEqual(OutgoingMail.objects.filter(kind=MailKind.WITHDRAWAL_REMINDER).count(), 1)
+
+        with at(self.due):
+            complete_due_withdrawals()
+
+        self.assertEqual(list(OutgoingMail.objects.values_list('kind', flat=True)), [MailKind.WITHDRAWAL_COMPLETED])
+
+
 @override_settings(BILLING_SECRET=SECRET)
 class DeliverTests(TestCase):
     def setUp(self):
@@ -380,6 +541,24 @@ class WorkerTests(TestCase):
         with servers_answer(None)[0]:
             call_command('send_welcome_credits', '--once', stdout=output)
 
-        # 마친 계정의 알림이 같은 바퀴에 나간다
-        self.assertIn('탈퇴를 마친 계정 1건, 탈퇴 알림 1건', output.getvalue())
+        # 마친 계정의 알림이 같은 바퀴에 나간다. 마칠 때가 지났으므로 하루 전 알림은 보내지 않는다
+        self.assertIn('탈퇴 하루 전 메일 0건, 탈퇴를 마친 계정 1건, 탈퇴 알림 1건', output.getvalue())
         self.assertIsNotNone(WithdrawalNotice.objects.get(user=user, target=WithdrawalTarget.BILLING).delivered_at)
+        self.assertEqual([message.subject for message in mail.outbox], ['[AI TRPG] 탈퇴를 마쳤습니다'])
+
+    def test_a_round_that_reminded_is_not_idle(self):
+        # 보낸 것이 있으면 워커가 쉬지 않고 다음 묶음을 본다
+        self.assertEqual(WithdrawalRound(reminded=1).done, 1)
+
+    def test_one_round_reminds_a_day_before(self):
+        user = make_user()
+        requested = timezone.now() - (GRACE - REMINDER_LEAD) - timedelta(minutes=1)
+        User.objects.filter(pk=user.pk).update(withdrawal_requested_at=requested)
+        output = StringIO()
+
+        call_command('send_welcome_credits', '--once', stdout=output)
+
+        self.assertIn('탈퇴 하루 전 메일 1건, 탈퇴를 마친 계정 0건', output.getvalue())
+        self.assertEqual([message.to for message in mail.outbox], [[EMAIL]])
+        user.refresh_from_db()
+        self.assertIsNone(user.withdrawn_at)
