@@ -6,7 +6,8 @@ staging(VM)의 .env 일곱(루트와 서버 여섯)을 새로 만든다. VM 을 
     사용(VM 의 저장소 루트에서):
         python3 tools/staging_env.py --domain <도메인> --acme-email <메일> \\
             --llm-base-url http://<집 PC 의 Tailscale 주소>:11434/v1 \\
-            --s3-bucket <버킷> --age-recipients "<주 열쇠의 공개키> <확인 열쇠의 공개키>"
+            --s3-bucket <버킷> --image-bucket <그림 버킷> \\
+            --age-recipients "<주 열쇠의 공개키> <확인 열쇠의 공개키>"
 
 하는 일(차례대로):
   1. tools/fill_env.py 로 .env 일곱을 .env.example 에서 만들고 비밀을 난수로 채운다.
@@ -23,8 +24,11 @@ staging(VM)의 .env 일곱(루트와 서버 여섯)을 새로 만든다. VM 을 
 서버의 .env 에는 DEBUG, APP_ENVIRONMENT, DATABASE_URL 을 적지 않는다.
 docker-compose.yml 과 docker-compose.staging.yml 이 environment 로 덮는다(DB 주소의 비밀번호는 루트 .env 에서 가져간다).
 
-사람이 채울 것: 모델 창구의 키(trpg-server/.env 의 ZAI_API_KEY), S3 의 접근 키(루트 .env 의 BACKUP_AWS_*).
+사람이 채울 것: 모델 창구의 키(trpg-server/.env 의 ZAI_API_KEY),
+S3 의 접근 키(루트 .env 의 BACKUP_AWS_*, IMAGE_STORE_*).
 비워 두면 docker compose 가 뜨기를 거부하거나(S3 키) 그 창구의 모델을 부르지 않는다(모델 키).
+그림 저장소의 비밀 키(IMAGE_STORE_SECRET_ACCESS_KEY)는 fill_env.py 가 로컬의 흉내를 위해 난수로 채우지만,
+staging 에서는 그 버킷만 쓰는 IAM 사용자의 키라서 비운다.
 JWT 의 서명 키(auth-server/keys/)는 만들지 않는다. 문서의 openssl 명령으로 만든다.
 
 VM 에는 uv 가 없어 Ubuntu 에 든 python3 로 돌린다. 표준 라이브러리만 쓴다. 테스트는 tools/test_staging_env.py 다.
@@ -56,6 +60,10 @@ STAGING_VALUES = {
         # 사람이 채운다. 비워 두면 compose 가 뜨기를 거부한다(${...:?})
         'BACKUP_AWS_ACCESS_KEY_ID': '',
         'BACKUP_AWS_SECRET_ACCESS_KEY': '',
+        # 사람이 채운다. 그림 버킷만 쓰는 IAM 사용자의 키다(docker/object-store/iam-policy.json).
+        # 비밀 키는 fill_env.py 가 로컬의 흉내를 위해 채운 난수를 지운다. 비워 두면 compose 가 뜨기를 거부한다
+        'IMAGE_STORE_ACCESS_KEY_ID': '',
+        'IMAGE_STORE_SECRET_ACCESS_KEY': '',
     },
     'trpg-server/.env': {
         'NARRATOR': 'llm',
@@ -88,6 +96,8 @@ TO_FILL = (
     ('trpg-server/.env', 'ZAI_API_KEY', 'Z.ai 의 API 키(GLM-4.7-Flash)'),
     ('.env', 'BACKUP_AWS_ACCESS_KEY_ID', 'S3 의 접근 키(docker/backup-offsite/iam-policy.json 의 권한)'),
     ('.env', 'BACKUP_AWS_SECRET_ACCESS_KEY', 'S3 의 비밀 접근 키'),
+    ('.env', 'IMAGE_STORE_ACCESS_KEY_ID', '그림 버킷의 접근 키(docker/object-store/iam-policy.json 의 권한)'),
+    ('.env', 'IMAGE_STORE_SECRET_ACCESS_KEY', '그림 버킷의 비밀 접근 키'),
 )
 
 
@@ -99,6 +109,7 @@ class Options:
     acme_email: str
     llm_base_url: str
     s3_bucket: str
+    image_bucket: str
     age_recipients: str
     s3_region: str = 'ap-northeast-2'
 
@@ -125,6 +136,9 @@ def option_values(options: Options) -> dict[str, str]:
         'BACKUP_S3_BUCKET': options.s3_bucket,
         'BACKUP_S3_REGION': options.s3_region,
         'BACKUP_AGE_RECIPIENTS': options.age_recipients,
+        'IMAGE_STORE_BUCKET': options.image_bucket,
+        # 그림 버킷도 백업과 같은 리전에 둔다
+        'IMAGE_STORE_REGION': options.s3_region,
     }
 
 
@@ -220,7 +234,8 @@ def parse_options(argv: list[str]) -> Options:
         '--llm-base-url', required=True, help='집 PC 의 Ollama(Tailscale 주소), 예: http://100.x.y.z:11434/v1'
     )
     parser.add_argument('--s3-bucket', required=True, help='바깥 백업의 S3 버킷')
-    parser.add_argument('--s3-region', default='ap-northeast-2', help='그 버킷의 리전')
+    parser.add_argument('--image-bucket', required=True, help='그림의 S3 버킷. 백업의 버킷과 다르다')
+    parser.add_argument('--s3-region', default='ap-northeast-2', help='두 버킷의 리전')
     parser.add_argument(
         '--age-recipients', required=True, help='age 의 공개키 둘(주 열쇠, 확인 열쇠)을 빈칸으로 이은 것'
     )
@@ -228,11 +243,16 @@ def parse_options(argv: list[str]) -> Options:
     recipients = parsed.age_recipients.split()
     if len(recipients) != 2 or not all(key.startswith('age1') for key in recipients):
         parser.error('--age-recipients 는 age 의 공개키(age1...) 둘이다(주 열쇠, 확인 열쇠)')
+    if parsed.image_bucket == parsed.s3_bucket:
+        # 두 키의 권한이 정반대다. 백업의 키는 지우지 못하고 그림의 키는 지운다
+        # (docs/architecture/deployment.md 의 "그림 저장소")
+        parser.error('--image-bucket 은 --s3-bucket(백업)과 다른 버킷이어야 한다')
     return Options(
         domain=parsed.domain,
         acme_email=parsed.acme_email,
         llm_base_url=parsed.llm_base_url,
         s3_bucket=parsed.s3_bucket,
+        image_bucket=parsed.image_bucket,
         s3_region=parsed.s3_region,
         age_recipients=' '.join(recipients),
     )

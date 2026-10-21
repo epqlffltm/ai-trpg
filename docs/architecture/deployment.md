@@ -253,6 +253,9 @@ chat 과 story 의 그림(배경, 캐릭터, 일러스트)을 둔다(#540, 2026-
 | 버킷 | 그림 버킷 하나(비공개). 백업의 버킷과 나눈다 | 열쇠의 권한이 정반대다. 백업의 키는 지우지 못하고, 그림의 키는 지워야 한다. 보관 규칙(버전, 수명)도 다르다. 모든 그림이 서버를 거쳐 나가므로 공개 버킷이 필요 없다 |
 | 내주는 길 | asset-server 가 권한(소유자, 공개 범위, 등급)을 보고 `X-Accel-Redirect` 로 nginx 에 넘긴다. nginx 가 S3 에서 받아 캐시하고 내준다 | 비공개 캐릭터의 그림은 주소를 알아도 남이 받지 못한다. 성인 등급도 같은 자리에서 막는다. S3 의 열쇠는 서버에만 있다. 캐시를 그림의 id 로 찾으므로 서명이 바뀌어도 캐시가 맞는다 |
 | 서명 | 로컬의 흉내도 서명한 요청만 받는다(익명은 403). 없는 버킷에 올리면 만들지 않고 404 다 | 서명하는 코드와 버킷의 이름이 로컬에서도 진짜 S3 와 같은 길을 거친다 |
+| nginx 가 받는 법(#566) | asset-server 가 60초 산 서명 주소를 `X-Image-Source` 에 실어 넘기고, nginx 의 내부 위치(`/_images/{id}`)가 그 주소로 받는다. 저장소의 주소가 아니면 받지 않는다 | 키가 asset-server 에만 있다. 표준 nginx 로 되고, nginx 에 서명 모듈이나 서명 프록시 컨테이너가 필요 없다. 약속은 [asset-server 의 그림](asset-server.md#그림) |
+| 캐시(#566) | nginx 의 디스크 캐시. 그림의 id 가 키, 1GB, 7일 동안 안 보면 지운다. 컨테이너 안에 둔다(다시 만들면 비고, 다시 받는다) | 그림은 바뀌지 않아 틀어질 일이 없다. S3 의 요청과 대역이 준다 |
+| 브라우저(#566) | `private, max-age=3600` | 비공개로 돌린 그림이 남의 브라우저에 한 시간 넘게 남지 않는다. 같은 화면을 다시 그릴 때는 묻지 않는다 |
 
 고르지 않은 것:
 
@@ -265,7 +268,7 @@ chat 과 story 의 그림(배경, 캐릭터, 일러스트)을 둔다(#540, 2026-
 
 - **로컬.** `docker compose up -d` 가 DB, Redis 와 함께 띄운다. S3 는 `127.0.0.1:8333`(`IMAGE_STORE_PORT`)이다. 비밀 키는 루트 `.env` 의 `IMAGE_STORE_SECRET_ACCESS_KEY` 이고 `tools/fill_env.py` 가 채운다. 접근 키의 이름은 `ai-trpg-local`, 버킷은 `ai-trpg-images` 다. 그림은 볼륨 `objectdata` 에 남는다.
 - **CI.** stack 이 서명해 올리고 받고 지워 보고, 서명 없는 요청과 틀린 키와 없는 버킷을 막는지 본다(`check_object_store`). 서명한 주소로 받기와 올리기는 SeaweedFS 4.48 에서 손으로 확인했다(200, 바꾼 주소는 403). CI 에서는 asset-server 를 만들 때 그 서버의 코드로 본다.
-- **staging.** `object-store` 를 띄우지 않는다. 버킷과 IAM 사용자는 asset-server 를 만들 때 만든다. 그때 루트 `.env` 의 키가 그 IAM 사용자의 것이 된다. 그 전에는 `tools/staging_env.py` 가 채우는 난수를 쓰는 곳이 없다.
+- **staging.** `object-store` 를 띄우지 않는다. 그림 버킷(서울, 공개 접근 차단)과 그 버킷만 쓰는 IAM 사용자(`docker/object-store/iam-policy.json`: 올리기, 받기, 지우기)를 만들고, 그 키를 루트 `.env` 의 `IMAGE_STORE_ACCESS_KEY_ID`, `IMAGE_STORE_SECRET_ACCESS_KEY` 에 사람이 적는다([staging VM 준비](../operations/staging-vm.md)의 1번과 6번). `tools/staging_env.py` 는 버킷의 이름(`--image-bucket`)을 적고 두 키를 비워 둔다. 비어 있으면 compose 가 뜨기를 거부한다. 백업과 같은 버킷을 주면 그 도구가 거절한다.
 - 아직 정하지 않은 것은 [열린 질문](#열린-질문)에 있다.
 
 ## 지켜보기
@@ -298,6 +301,7 @@ chat 과 story 의 그림(배경, 캐릭터, 일러스트)을 둔다(#540, 2026-
    - 주 열쇠는 VM 밖(집 PC)에서 만든다: `age-keygen -o master.key`(Windows 는 `winget install FiloSottile.age`). 비밀번호 관리자와 오프라인 사본에 둔다.
    - 확인 열쇠는 VM 에서 만든다: `sudo apt install age` 그다음 `mkdir -m 700 backup-keys && age-keygen -o backup-keys/check.key && chmod 600 backup-keys/check.key`. 비밀번호 관리자에도 둔다.
    - 두 공개키(`age1...`)를 빈칸으로 이어 루트 `.env` 의 `BACKUP_AGE_RECIPIENTS` 에 적는다.
+   - 그림 버킷도 따로 만든다(공개 접근 차단, 버전 관리 끔). 그 버킷만 쓰는 IAM 사용자에 `docker/object-store/iam-policy.json` 의 권한을 준다([그림 저장소](#그림-저장소)).
 10. 인증서를 처음 받는다: `docker compose run --rm -p 80:80 certbot issue --dry-run` 이 통과하면 `docker compose run --rm -p 80:80 certbot issue`.
 11. 띄운다: `docker compose up -d --build`. 처음에는 `ollama-pull` 이 `bge-m3`(1GB 남짓)를 받느라 게임 서버가 늦게 뜬다.
 12. 모델 목록을 넣는다([모델](#모델)). 결제 서버의 가격표에 쓸 모델이 있는지 본다.
@@ -341,4 +345,4 @@ PR 하나에 한 가지다.
 - staging 의 가격표에 시험용 모델(GLM-4.7-Flash, 집 PC 의 Ollama)의 이름표를 넣을지와 그 값. 결제 서버가 떠 있으면 가격표에 있는 모델만 고를 수 있다. 무료 모델은 가격표에 올리지 않기로 했으므로(게임 서버 README), 지금 그대로는 staging 에서 서술 모델로 고를 수 없다.
 - 화면을 내주는 nginx 의 위치와 캐시 규칙, 화면의 CSP. 화면은 같은 nginx 가 정적 파일로, 같은 출처에서 내주기로 했다(2026-10-21, [화면 명세의 프런트 구조](../product/screens.md#프런트-구조)). 화면을 만들 때 정한다.
 - 모델 회사마다의 월 사용 한도를 어디에 기록해 둘지.
-- 그림 저장소(#540): nginx 가 비공개 버킷에서 받는 법(asset-server 가 넘기는 짧은 서명 주소를 따라갈지), 캐시의 크기와 VM 디스크, 올리는 크기의 상한, 이미지 디코딩의 격리. asset-server 를 만들 때 정한다([그림 저장소](#그림-저장소)).
+- 그림 저장소(#540): 올리는 크기의 상한, 이미지 디코딩의 격리. asset-server 를 만들 때 정한다([그림 저장소](#그림-저장소)). nginx 가 받는 법과 캐시는 정했다(#566).

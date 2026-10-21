@@ -143,6 +143,16 @@ x-asset-environment: &asset-environment
   DATABASE_URL: postgresql+asyncpg://asset:${ASSET_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
 
+# asset-server 가 그림을 넣고 꺼내는 저장소(#566, docs/architecture/asset-server.md 의 "그림"). 마이그레이션에는 주지 않는다.
+# 로컬은 object-store(SeaweedFS)다. staging 은 docker-compose.staging.yml 이 주소를 S3 로 바꾸고, 키와 버킷은 루트 .env 의 것(그 버킷만 쓰는 IAM 사용자)이다.
+# 이 주소로 서명한 주소(60초)를 nginx 가 받아 간다. nginx 는 이 주소가 저장소의 것일 때만 받는다(docker/nginx/templates/http.inc.template)
+x-asset-image-store: &asset-image-store
+  IMAGE_STORE_ENDPOINT: http://object-store:8333
+  IMAGE_STORE_REGION: ${IMAGE_STORE_REGION:-ap-northeast-2}
+  IMAGE_STORE_BUCKET: ${IMAGE_STORE_BUCKET:-ai-trpg-images}
+  IMAGE_STORE_ACCESS_KEY_ID: ${IMAGE_STORE_ACCESS_KEY_ID:-ai-trpg-local}
+  IMAGE_STORE_SECRET_ACCESS_KEY: ${IMAGE_STORE_SECRET_ACCESS_KEY:?.env 에 IMAGE_STORE_SECRET_ACCESS_KEY 를 설정하세요(tools/fill_env.py)}
+
 # 메트릭이나 추적을 OTLP 로 미는 프로세스가 함께 쓰는 설정(#25, docs/observability.md 의 "2. 메트릭", "3. 추적"). 비밀은 없다.
 # 보낼 곳(Alloy)은 루트 .env 의 OTEL_EXPORTER_OTLP_ENDPOINT 로 받는다. 프로필 observability 를 켤 때만 적는다.
 # 비어 있으면 서버는 메트릭을 내보내지 않는다(계측은 그대로). app 프로필만 켰을 때 없는 Alloy 로 보내며 오류를 남기지 않는다.
@@ -659,7 +669,7 @@ services:
     restart: unless-stopped
     env_file: ./asset-server/.env
     environment:
-      <<: [*asset-environment, *telemetry-environment]
+      <<: [*asset-environment, *asset-image-store, *telemetry-environment]
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:

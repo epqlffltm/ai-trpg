@@ -66,6 +66,8 @@ KEYLESS=(auth-migrate auth-mail auth-welcome-credits auth-cron)
 CRONTABS=(auth-cron:docker/cron/auth.crontab billing-cron:docker/cron/billing.crontab)
 # 프록시의 주소와, 관리자 화면 때문에 따로 연 인증 서버의 주소
 PROXY="${PROXY:-http://127.0.0.1:8080}"
+# 그림의 내부 위치(/_images/<id>)를 바깥에서 불러 볼 때 쓰는 id. 모양만 맞고 없는 그림이다
+NO_IMAGE=00000000-0000-4000-8000-000000000000
 ADMIN="${ADMIN:-http://127.0.0.1:8000}"
 # 그림 저장소(object-store)의 주소와 버킷, 접근 키의 이름. 이 PC 에서 연 포트다. 버킷과 키의 이름은 compose 의 기본값이다.
 # 서명(SigV4)은 curl 이 한다(--aws-sigv4). 지역은 S3 의 서울과 같게 둔다. 흉내는 지역을 가리지 않는다
@@ -156,6 +158,7 @@ staging_compose() {
   DOMAIN="$STAGING_DOMAIN" ACME_EMAIL=ci@example.com GAME_LLM_BASE_URL=http://100.64.0.1:11434/v1 \
     BACKUP_S3_BUCKET="$STAGING_BUCKET" BACKUP_S3_ENDPOINT="http://$STAGING_S3:5000" \
     BACKUP_AWS_ACCESS_KEY_ID=ci BACKUP_AWS_SECRET_ACCESS_KEY=ci BACKUP_AGE_RECIPIENTS="$staging_recipients" \
+    IMAGE_STORE_BUCKET=ci-images IMAGE_STORE_ACCESS_KEY_ID=ci \
     docker compose "${STAGING_FILES[@]}" --profile app --profile observability "$@"
 }
 
@@ -1214,6 +1217,10 @@ check_proxy() {
   # 알림 서버에 닿으면 서명이 없어 401 이다
   report "프록시는 서버끼리만 부르는 알림 주소를 막는다" status_is 404 "$PROXY/api/v1/notification/service/game/notifications" -X POST
   report "프록시는 서버의 상태 확인 주소를 막는다" status_is 404 "$PROXY/health"
+  # asset-server 가 X-Accel-Redirect 로만 넘기는 내부 위치다(#566). 바깥에서 부르면 404 다
+  report "프록시는 그림의 내부 위치를 바깥에 열지 않는다" status_is 404 "$PROXY/_images/$NO_IMAGE"
+  # nginx-unprivileged 가 뜰 때 만든다. 쓰지 못하면 그림을 내줄 때마다 502 다
+  report "프록시가 그림의 캐시에 쓸 수 있다" runs_once proxy 'test -d /var/cache/nginx/images && test -w /var/cache/nginx/images'
   report "프록시는 그 밖의 주소를 막는다" status_is 404 "$PROXY/"
   report "프록시가 요청 식별자를 하나 정해 돌려준다" one_request_id_from_proxy
   report "서버의 응답에 보안 머리말이 하나씩 붙는다" security_headers "$PROXY/api/v1/auth/jwks"
@@ -1501,6 +1508,7 @@ check_staging() {
   report "허용 주소를 고치면 다시 읽어 서버에 닿는다" eventually_status_is 401 "$STAGING_HTTPS/api/v1/game/me"
   report "서버의 응답에도 보안 머리말과 HSTS 가 하나씩 붙는다" staging_security_headers "$STAGING_HTTPS/api/v1/game/me"
   report "허용 주소 안에서도 관리자 화면은 막는다" staging_status_is 404 "$STAGING_HTTPS/admin/login/"
+  report "허용 주소 안에서도 그림의 내부 위치는 막는다" staging_status_is 404 "$STAGING_HTTPS/_images/$NO_IMAGE"
   report "허용 주소 안에서도 서버끼리만 부르는 주소는 막는다" staging_status_is 404 "$STAGING_HTTPS/api/v1/billing/service/holds" -X POST
   staging_proxy_down
   check_offsite_backup
