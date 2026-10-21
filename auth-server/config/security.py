@@ -34,6 +34,17 @@ SILENCED_DEPLOY_CHECKS = [
 ]
 
 
+def require_own_audience(own: str, audiences: list[str]) -> None:
+    """
+    토큰의 대상 목록(JWT_AUDIENCE)에 인증 서버 자신의 이름이 없으면 서버가 뜨지 않게 한다.
+
+    다시 동의할 필수 항목이 남은 사람의 access 토큰에는 이 이름만 싣는다(accounts/tokens.py, #450).
+    목록에 없으면 인증 서버가 그 토큰을 받지 못해, 그 사람은 동의를 마칠 길이 없다.
+    """
+    if own not in audiences:
+        raise ImproperlyConfigured(f'JWT_AUDIENCE 에 인증 서버 자신의 이름({own})이 있어야 합니다.')
+
+
 def secure_cookies(environment: str) -> bool:
     """
     세션 쿠키와 CSRF 쿠키에 Secure 를 붙일지. 운영이면 붙인다.
