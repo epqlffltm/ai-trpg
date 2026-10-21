@@ -4,8 +4,8 @@
 모델 하나를 실제로 불러 본다. 짧은 장면 하나를 쓰게 하고, 글과 토큰 수, 원가, 걸린 시간을 찍는다.
 
 쓰는 때.
-  - 모델 목록에 넣은 모델(scripts/models.py add)이 API 모델 이름과 키로 정말 불리는지 볼 때. 켜기 전이다.
-  - 날짜판을 바꾼 뒤(switch-snapshot) 다시 불리는지 볼 때.
+  - 모델 목록에 들여온 모델(scripts/models.py sync)이 API 모델 이름과 키로 정말 불리는지 볼 때. 켜기 전이다.
+  - 날짜판을 바꿔 들여온 뒤 다시 불리는지 볼 때.
   - 키를 새로 넣었거나 바꾼 뒤.
   - 글자당 토큰 수를 잴 때. 서술의 입력 예산은 글자 수로 어림한다(app/rounds/budget.py).
     --text-file 로 긴 한국어 글을 보내면 보낸 글자 수와 받은 입력 토큰 수의 비율을 찍는다.
@@ -108,7 +108,7 @@ def cost_line(completion: Completion, price: PriceTag | None) -> str:
     if price is None:
         return '원가: 모델 목록에 없는 모델이라 세지 않는다'
     if price.cost is None:
-        return '원가: 오늘의 단가가 없다(scripts.models set-cost)'
+        return '원가: 오늘의 단가가 없다(모델 목록의 파일에 적고 scripts.models sync)'
     amount = cost_usd(completion, price.cost)
     return '원가: 토큰 수를 몰라 세지 못했다' if amount is None else f'원가: ${amount}'
 

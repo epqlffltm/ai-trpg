@@ -17,15 +17,15 @@ OpenAI 와 같은 모양이라 OpenAI 의 provider(ai_core/openai_compat.py)로 
 
 import pytest
 from ai_core.catalog_contract import CatalogModel, Provider, ReasoningStyle
+from ai_core.catalog_file import ModelEntry
 from ai_core.fake import FakeCallLog
 from ai_core.routing import DEEPINFRA_KIND, PROVIDER_NOT_CONFIGURED
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalog import service
-from app.catalog.models import Grade
-from app.catalog.schemas import ModelCreate
+from app.catalog.models import AiModel, Grade
 from app.rounds.routed_narrator import RoutedNarrator
+from tests.catalog_rows import put_models
 from tests.conftest import make_test_settings
 from tests.test_model_catalog import OPUS
 from tests.test_model_routing import DEEPINFRA_URL, KEY, SCENE, Transport, make_router, refused, request
@@ -79,13 +79,13 @@ def test_a_deepinfra_model_takes_no_token_field_and_no_reasoning_style():
         'token_limit_field': None,
     }
 
-    assert ModelCreate(**deepseek).provider == 'deepinfra'
+    assert ModelEntry(**deepseek).provider == 'deepinfra'
     # 생각은 reasoning_effort 하나로 켜고 끈다. 생각의 방식은 적지 않는다
     with pytest.raises(ValidationError, match='적지 않는다'):
-        ModelCreate(**{**deepseek, 'reasoning_style': ReasoningStyle.THINKING_TYPE})
+        ModelEntry(**{**deepseek, 'reasoning_style': ReasoningStyle.THINKING_TYPE})
     # 출력 상한의 칸은 max_tokens 로 정해져 있다
     with pytest.raises(ValidationError, match='적지 않는다'):
-        ModelCreate(**{**deepseek, 'token_limit_field': 'max_tokens'})
+        ModelEntry(**{**deepseek, 'token_limit_field': 'max_tokens'})
 
 
 def test_the_deepinfra_endpoint_carries_the_key_of_the_settings():
@@ -99,7 +99,7 @@ def test_the_deepinfra_endpoint_carries_the_key_of_the_settings():
 
 @pytest.mark.usefixtures('clean_tables')
 async def test_the_database_takes_a_deepinfra_model(session: AsyncSession):
-    data = ModelCreate(
+    data = ModelEntry(
         slug='deepseek-v4-pro',
         provider=Provider.DEEPINFRA,
         api_model_id='deepseek-ai/DeepSeek-V4-Pro-0813',
@@ -109,7 +109,8 @@ async def test_the_database_takes_a_deepinfra_model(session: AsyncSession):
         supports_reasoning=True,
     )
 
-    model = await service.add_model(session, data)
+    await put_models(session, data)
+    model = await session.get(AiModel, 'deepseek-v4-pro')
 
-    # 새로 넣은 모델은 꺼져 있다. 원가를 적고 평가 장면을 통과한 뒤에 켠다
+    # 새로 넣은 모델은 꺼져 있다. 원가를 보고 평가 장면을 통과한 뒤에 켠다
     assert (model.provider, model.reasoning_style, model.enabled) == ('deepinfra', None, False)

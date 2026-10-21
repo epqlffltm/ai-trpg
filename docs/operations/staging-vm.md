@@ -281,12 +281,18 @@ docker compose ps -a
 
 ## 9. 모델 목록과 운영자 계정
 
-**[VM] 모델 목록.** 목록이 비어 있으면 시나리오를 저장하지 못한다. 넣는 명령의 값은 [게임 서버의 README](../../trpg-server/README.md) 의 `scripts.models` 에 있다.
+**[VM] 모델 목록.** 목록이 비어 있으면 시나리오를 저장하지 못한다. 모델 목록의 원본 파일(`shared/ai-core/src/ai_core/model_catalog.toml`)을 들여오고 쓸 모델을 켠다. 들여온 모델은 꺼져 있다. 명령은 [게임 서버의 README](../../trpg-server/README.md#관리-명령) 에 있다.
 
 ```bash
+docker compose exec trpg-server python -m scripts.models sync
+docker compose exec trpg-server python -m scripts.models enable glm-4-7-flash
 docker compose exec trpg-server python -m scripts.models list
-docker compose exec trpg-server python -m scripts.models add glm-4-7-flash --provider zai --api-model-id glm-4.7-flash \
-  --name "GLM-4.7-Flash" --vendor zai --grade basic --reasoning-style thinking_type
+```
+
+서버 곁의 모델(집 PC 의 Ollama)은 환경마다 이름이 달라 원본 파일에 두지 않는다. VM 에 그 모델만 적은 파일(`format = 1` 과 `[[models]]` 하나, `provider = "local"`, 값이 0 인 `[[models.costs]]`)을 두고 같은 명령으로 들여온다. 원본 파일을 다시 들여와도 지워지지 않는다.
+
+```bash
+docker compose exec -T trpg-server python -m scripts.models sync --file /dev/stdin < local-models.toml
 ```
 
 결제 서버가 떠 있으면 결제 서버의 가격표에 있는 모델만 고를 수 있다. 무료 모델은 가격표에 올리지 않기로 했으므로(게임 서버 README) 지금 그대로는 staging 에서 고를 수 없다. 정할 것으로 남긴다(배포 설계의 열린 질문).
