@@ -27,11 +27,11 @@ import sys
 from pathlib import Path
 
 import httpx
+from ai_core.embedder import Embedder
+from ai_core.fake import FakeEmbedder, FakeProvider
+from ai_core.openai_embedder import OpenAICompatEmbedder
+from ai_core.provider import LLMProvider, ProviderError
 
-from app.ai.embedder import Embedder
-from app.ai.fake import FakeEmbedder, FakeProvider
-from app.ai.openai_embedder import OpenAICompatEmbedder
-from app.ai.provider import LLMProvider, ProviderError
 from app.core.config import get_settings
 from app.references.retrieval import ReferenceThresholds
 from evals.references.dataset import DEFAULT_SCENES, Dataset, DatasetError, chosen_sets, load_dataset

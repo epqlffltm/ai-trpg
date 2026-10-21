@@ -255,7 +255,7 @@ AI가 서술하거나 대답할 때 그 입력이 국외의 AI 모델 회사로 
 | AI 원문 30일 | `trpg-server/app/ai_log/retention.py`, `AI_LOG_TEXT_RETENTION_DAYS` |
 | 알림함 30일 | `notification-server/app/core/config.py`(`NOTIFICATION_RETENTION_DAYS`) |
 | 백업 | `docs/architecture/deployment.md` 의 백업 |
-| 모델 회사, 보내는 것과 보내지 않는 것 | `trpg-server/app/core/config.py`, `trpg-server/app/rounds/prompt.py`, `trpg-server/app/ai/` |
+| 모델 회사, 보내는 것과 보내지 않는 것 | `trpg-server/app/core/config.py`, `trpg-server/app/rounds/prompt.py`, `shared/ai-core/src/ai_core/` |
 | 운영자 열람 | `docs/architecture/operators.md` 의 "사용자에게 알릴 것", `docs/architecture/chat-server.md` |
 | 쿠키 | `auth-server/accounts/cookies.py` |
 | AI 에 보내는 귓속말(보낸 사람이 고른 것), 서술 모델은 방장이 고름 | `trpg-server/app/rounds/narrator.py`(WhisperNote), `trpg-server/README.md` 의 쪽지와 테이블 |

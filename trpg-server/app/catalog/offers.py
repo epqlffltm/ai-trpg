@@ -29,9 +29,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
+from ai_core.catalog_contract import is_offered
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.catalog_contract import is_offered
 from app.billing.price_list import PriceList
 from app.billing.prices import Change, PriceBook, Tier, narration_code, price_at
 from app.catalog import repository

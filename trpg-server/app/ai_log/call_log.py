@@ -1,7 +1,7 @@
 # trpg-server/app/ai_log/call_log.py
 
 """
-AI 호출의 기록을 DB(ai_invocations)에 쓰는 기록장. app/ai/calls.py 의 CallLog 모양을 따른다.
+AI 호출의 기록을 DB(ai_invocations)에 쓰는 기록장. ai_core/calls.py 의 CallLog 모양을 따른다.
 
 기록 하나를 쓸 때마다 세션을 따로 열고 바로 저장한다. 게임의 상태를 바꾸는 트랜잭션과 섞지 않는다.
   - 모델을 부르는 동안에는 DB 연결을 쥐고 있지 않다(app/rounds/closing.py). 기록은 부른 뒤에 쓴다.
@@ -11,9 +11,9 @@ AI 호출의 기록을 DB(ai_invocations)에 쓰는 기록장. app/ai/calls.py �
 
 from dataclasses import dataclass
 
+from ai_core.calls import CallRecord
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai.calls import CallRecord
 from app.ai_log.models import AiInvocation
 
 

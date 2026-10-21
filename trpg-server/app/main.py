@@ -239,7 +239,7 @@ def create_app(
     # 판정에 쓰는 주사위. 서버만 굴린다. 테스트는 정해진 눈을 내는 주사위로 바꿔 꽂는다
     app.state.dice = RandomDice()
 
-    # 모델의 이름으로 부를 창구를 고르는 것(app/ai/routing.py). 부를 때마다 모델 목록(app/catalog)을 DB 에서 읽는다.
+    # 모델의 이름으로 부를 창구를 고르는 것(ai_core/routing.py). 부를 때마다 모델 목록(app/catalog)을 DB 에서 읽는다.
     # 위의 httpx 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다
     app.state.model_router = build_router(settings, app.state.http_client, app.state.session_factory)
     # GM 의 서술을 만드는 것. 설정(NARRATOR)이 정한다. 기본은 AI 를 부르지 않는 가짜다.

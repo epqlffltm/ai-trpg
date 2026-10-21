@@ -1,4 +1,4 @@
-# trpg-server/app/ai/retry_budget.py
+# shared/ai-core/src/ai_core/retry_budget.py
 
 """
 같은 모델로 다시 부르는 것(재시도)의 예산. 공급자가 아플 때 재시도가 일을 몇 배로 키우지 않게 한다.

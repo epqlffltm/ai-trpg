@@ -14,14 +14,14 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from ai_core.calls import CallRecord, CallScope, Outcome
+from ai_core.catalog_contract import Provider
+from ai_core.provider import Reasoning
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.calls import CallRecord, CallScope, Outcome
-from app.ai.catalog_contract import Provider
-from app.ai.provider import Reasoning
 from app.ai_log.call_log import DbCallLog
 from app.catalog import service as catalog
 from app.catalog.models import Grade

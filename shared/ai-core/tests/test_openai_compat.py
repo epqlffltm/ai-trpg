@@ -1,7 +1,7 @@
-# trpg-server/tests/test_openai_compat.py
+# shared/ai-core/tests/test_openai_compat.py
 
 """
-OpenAI 와 같은 모양의 주소를 부르는 provider(app/ai/openai_compat.py)를 검증한다.
+OpenAI 와 같은 모양의 주소를 부르는 provider(ai_core/openai_compat.py)를 검증한다.
 
 실제 모델을 부르지 않는다. httpx 의 가짜 전송(MockTransport)이 Ollama 인 척 답한다.
 답은 흘려 보내는 모양(SSE)이다. 조각마다 delta.content, 멈춘 이유는 마지막 글 조각, 토큰 수는 맨 끝 조각에 온다.
@@ -18,9 +18,9 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from app.ai import openai_compat
-from app.ai.http_stream import retry_after_of
-from app.ai.openai_compat import (
+from ai_core import openai_compat
+from ai_core.http_stream import retry_after_of
+from ai_core.openai_compat import (
     THINKING_TOKENS,
     OpenAICompatProvider,
     WireOptions,
@@ -28,7 +28,7 @@ from app.ai.openai_compat import (
     chat_url,
     token_limit,
 )
-from app.ai.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
+from ai_core.provider import ChatMessage, GenerationParams, ProviderError, Reasoning, Role
 
 BASE_URL = 'http://127.0.0.1:11434/v1'
 MODEL = 'gemma4:26b'

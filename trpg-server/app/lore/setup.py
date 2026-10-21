@@ -7,10 +7,10 @@
 """
 
 import httpx
+from ai_core.embedder import Embedder
+from ai_core.fake import FakeEmbedder
+from ai_core.openai_embedder import OpenAICompatEmbedder
 
-from app.ai.embedder import Embedder
-from app.ai.fake import FakeEmbedder
-from app.ai.openai_embedder import OpenAICompatEmbedder
 from app.core.config import Settings
 
 

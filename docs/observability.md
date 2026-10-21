@@ -430,7 +430,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 - 누구인지는 사용자 번호(`public_id`)로 적는다. 이메일로 적지 않는다. 꼭 이메일이 필요하면 가린 것(`a***@example.com`)이나 해시를 적는다.
 - 무엇인지는 번호로 적는다(`order_id`, `post_id`, `table_id`). 내용을 적지 않는다.
 - AI 호출은 원문 대신 길이, 토큰 수, 모델 이름, 걸린 시간, 결과를 적는다.
-  게임 서버는 이미 AI 호출마다 기록을 DB 에 남긴다(`app/ai/calls.py`). 거기에도 보낸 메시지는 없고 HMAC 지문만 있다.
+  게임 서버는 이미 AI 호출마다 기록을 DB 에 남긴다(기록의 모양은 `shared/ai-core` 의 `ai_core/calls.py`). 거기에도 보낸 메시지는 없고 HMAC 지문만 있다.
 
 ### 원문을 남기는 개발 기능
 
@@ -982,7 +982,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | --- | --- |
 | HTTP 요청 수, 시간, 처리 중인 수 | 요청이 끝난 줄을 남기는 미들웨어. 같은 값(`method`, `route`, `status_code`, 걸린 시간)을 이미 갖고 있다 |
 | 작업 | trpg-server `app/core/jobs.py`, auth-server `observability/jobs.py`, billing-server `internal/jobs/jobs.go`, notification-server 와 asset-server `server_core/observability/metrics.py` 의 `measured_job` |
-| AI 호출 | trpg-server `app/ai/calls.py` 의 `CallLog`. 기록장을 감싸 센다(`app/ai_log/metered.py`) |
+| AI 호출 | `shared/ai-core` 의 `ai_core/calls.py` 의 `CallLog`. 기록장을 감싸 센다(`app/ai_log/metered.py`) |
 | DB 풀 | 서버마다 풀을 만드는 곳 |
 
 - **이름.** 계측기의 이름은 표의 이름에서 `_total` 과 단위(`_seconds`, `_bytes`)를 뗀 것이고, 단위는 계측기의 단위로 준다(초 `s`, 바이트 `By`). Alloy 가 단위와 `_total` 을 붙여 표의 이름이 된다.
@@ -1065,7 +1065,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | `app/billing/metered.py` | 결제 서버를 부르는 것(`HttpBilling`)을 감싸 센다. 결제 서버를 쓰지 않으면(`FreeBilling`) 감싸지 않는다 |
 | `app/billing/repository.py` 의 `count_unfinished` | 끝나지 않은 청구의 수. 청구 정리의 바퀴가 센다 |
 
-- **AI 를 부르는 코드(`app/ai`)는 메트릭을 모른다.** 공용 코드로 옮길 후보라 경계를 지킨다(`tests/test_ai_boundary.py`). 기록장과 결제 서버를 부르는 것을 밖에서 감싸 센다. 그래서 AI 호출의 수는 호출 기록(`ai_invocations`)의 수와 같다.
+- **AI 를 부르는 코드(`shared/ai-core`)는 메트릭을 모른다.** 공용 코드라 경계를 지킨다(`shared/ai-core/tests/test_boundary.py`). 기록장과 결제 서버를 부르는 것을 밖에서 감싸 센다. 그래서 AI 호출의 수는 호출 기록(`ai_invocations`)의 수와 같다.
 - **끝나지 않은 청구를 세는 쿼리는 두 부분 색인만 읽는다.** 조건을 색인의 조건 둘(`DUE_STATUSES` 또는 `OPEN_STATUSES`)로 나눠 적어야 PostgreSQL 이 둘을 합쳐 읽는다(BitmapOr). 다섯 상태를 `IN` 하나로 적으면 표 전체를 읽는다. 끝난 청구는 쌓이기만 하므로 5초마다 표 전체를 읽게 둘 수 없다. 테스트가 계획을 본다.
 - **서버가 여럿이면 `narration_charges` 를 모두 같은 수로 낸다.** 대시보드와 경보는 `max` 로 본다. 더하면(`sum`) 서버의 수만큼 부풀려진다.
 - **라운드는 커밋한 뒤에 센다.** 결제 서버의 규칙과 같다. 서술은 작업 안에서 끝난 모양(마무리, 실패를 적음)으로 센다.
@@ -1225,7 +1225,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 - **작업의 span 은 걸린 span 아래에 놓인다**(`job_span`). 요청이 맡긴 서술(`round.narrate`)은 그 요청의 추적에, 시계의 한 바퀴(`round.close_overdue`)가 맡긴 서술은 그 바퀴의 추적에 이어진다. 로그의 `trace_id` 도 같은 것을 이어 쓴다(`job_scope`). 서버가 뜰 때 시작한 정리 작업의 바퀴(`round.close_overdue`, `charge.settle`, `notification.send`, `ai_log.prune`, `model.retirement`)에는 걸린 span 이 없어 바퀴마다 새 추적이다. 알림 서버의 정리 작업도 같은 결과다(부모가 없다).
 - **테이블의 스트림(`/api/v1/game/tables/{table_id}/stream`)은 span 을 걸지 않는다.** 응답이 몇 시간씩 끝나지 않고, 그동안 새 이벤트마다 도는 쿼리가 한 span 아래에 쌓인다. 상태 확인처럼 실제 경로로 가른다(`request_spans.STREAM_PATH`). 스트림 안의 쿼리는 부모가 없어 span 이 없다.
 
-- **`app/ai` 는 span 의 코드를 가져오지 않는다**(`tests/test_ai_boundary.py`). 모델을 부르는 것은 밖에서 넘긴 클라이언트(`app.state.http_client`)로 부르므로 transport 가 client span 을 건다.
+- **`ai_core` 는 span 의 코드를 가져오지 않는다**(`shared/ai-core/tests/test_boundary.py`). 모델을 부르는 것은 밖에서 넘긴 클라이언트(`app.state.http_client`)로 부르므로 transport 가 client span 을 건다.
 - **5초마다 도는 바퀴가 셋이다**(시계, 청구 정리, 알림 보내기). 할 일이 없던 바퀴의 추적은 보내지 않는다. 그대로 두면 하루에 추적이 오만 개를 넘는다.
   인증 서버와 같은 `DropIdleRounds`(`app/observability/idle_rounds.py`)다. 바퀴는 찾아낸 것의 수를 더하고(`spans.add_handled`), `job_span` 이 그 합을 `handled` 로 싣는다.
   찾아낸 것은 마감이 지난 테이블, 크레딧을 기다리는 테이블, 서술이 사라진 테이블, 돌려줄 것으로 바꾼 청구와 차례가 된 청구, 지운 알림과 보낼 알림이다.

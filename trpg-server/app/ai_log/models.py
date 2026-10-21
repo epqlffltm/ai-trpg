@@ -12,19 +12,19 @@ AI 호출의 기록(ai_invocations). 모델을 한 번 부를 때마다 한 줄�
     원문을 볼 수 있는 사람은 DB 에 닿는 운영자뿐이다. API 로 내보내지 않는다.
   - 테이블에 외래 키를 걸지 않는다. 기록은 테이블보다 오래 산다. 테이블이 지워져도 남는다.
 
-생각 글과 보낸 메시지는 적지 않는다(app/ai/calls.py). 보낸 메시지는 지문(HMAC)만 남긴다.
-모델 목록의 모델이면 이름표와 원가도 남긴다(app/ai/costs.py). 실제 청구서와 견줄 근거다.
+생각 글과 보낸 메시지는 적지 않는다(ai_core/calls.py). 보낸 메시지는 지문(HMAC)만 남긴다.
+모델 목록의 모델이면 이름표와 원가도 남긴다(ai_core/costs.py). 실제 청구서와 견줄 근거다.
 """
 
 import uuid
 from datetime import datetime
 from decimal import Decimal
 
+from ai_core.calls import Outcome
 from sqlalchemy import CheckConstraint, DateTime, Float, Index, Integer, Numeric, String, Text, Uuid, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.ai.calls import Outcome
 from app.assets.models import one_of
 from app.core.database import Base
 
@@ -115,7 +115,7 @@ class AiInvocation(Base):
 
     # 모델 목록(app/catalog)의 이름표. 목록에 없는 모델(서버 곁의 모델)이면 비어 있다
     model_slug: Mapped[str | None] = mapped_column(String(48))
-    # 그날의 단가로 센 원가(USD)와 그 단가의 줄(ai_model_costs.id). 모르면 비어 있다(app/ai/costs.py).
+    # 그날의 단가로 센 원가(USD)와 그 단가의 줄(ai_model_costs.id). 모르면 비어 있다(ai_core/costs.py).
     # 단가의 줄에 외래 키를 걸지 않는다. 기록은 무엇보다 오래 산다(위의 규칙). 단가의 줄도 지우지 않는다
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 8))
     cost_id: Mapped[int | None] = mapped_column(Integer)

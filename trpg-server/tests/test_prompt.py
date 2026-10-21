@@ -15,8 +15,8 @@ import uuid
 from dataclasses import replace
 
 import pytest
+from ai_core.provider import Role
 
-from app.ai.provider import Role
 from app.assets.models import LoreKind, NarrationStyle
 from app.rounds import prompt
 from app.rounds.narrator import LoreNote, MemoryNote, Move, NarrationRequest, PastRound, StoryContext, Verdict

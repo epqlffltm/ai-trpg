@@ -46,7 +46,7 @@ def test_every_head_matches_a_file_in_its_group(group, head):
         ('test_treatment.py', 'engine'),
         ('test_narration_billing.py', 'models'),
         ('test_monster_turns.py', 'adventure'),
-        ('test_streaming.py', 'models'),
+        ('test_embedder.py', 'models'),
         ('test_lore_retrieval.py', 'narration'),
         ('test_stream_api.py', 'realtime'),
         ('test_table_map.py', 'tables'),

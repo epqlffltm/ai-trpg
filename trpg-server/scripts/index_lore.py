@@ -20,8 +20,8 @@ import argparse
 import asyncio
 
 import httpx
+from ai_core.openai_embedder import OpenAICompatEmbedder
 
-from app.ai.openai_embedder import OpenAICompatEmbedder
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine, create_session_factory
 from app.lore import repository

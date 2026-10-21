@@ -18,11 +18,11 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
+from ai_core.fake import FakeCallLog, FakeEmbedder, FakeProvider
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.fake import FakeCallLog, FakeEmbedder, FakeProvider
 from app.assets.scenarios.upgrades import upgrade_from_41
 from app.lore.retrieval import LORE_MAX_CHARS
 from app.references.indexing import index_references
