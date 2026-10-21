@@ -4,8 +4,7 @@
 asset 서버의 시작점. 앱을 만들고 라우터를 붙인다.
 
 asset 서버는 캐릭터, 계정 페르소나, 그림의 원본을 맡는다(docs/architecture/asset-server.md).
-지금은 뼈대다(#564). 상태 확인과 토큰의 주인을 돌려주는 주소만 있다. 계정 페르소나(#565), 그림(#566),
-캐릭터와 게시(#567)가 차례로 붙는다.
+상태 확인, 토큰의 주인, 계정 페르소나(#565)가 있다. 그림(#566), 캐릭터와 게시(#567)가 차례로 붙는다.
 
 띄우는 법: uv run uvicorn app.main:app --port 8006 --reload
 """
@@ -33,6 +32,8 @@ from app.observability.request_spans import RequestSpanMiddleware
 from app.observability.responses import handle_unexpected_error
 from app.observability.setup import configure_logging
 from app.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
+from app.personas import router as personas
+from app.personas.service import PersonaLimitError, PersonaNotFoundError
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/asset'
@@ -121,6 +122,11 @@ def create_app(
 
     # 토큰의 주인을 돌려주는 주소. 인증 서버의 access 토큰(대상 ai-trpg-asset)으로 확인한다
     app.include_router(me.router, prefix=API_PREFIX)
+    # 계정 페르소나(#565). 주인만 다룬다
+    app.include_router(personas.router, prefix=API_PREFIX)
+
+    app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)
+    app.add_exception_handler(PersonaLimitError, personas.handle_persona_limit)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다. 원인은 로그에 남긴다(app/observability/responses.py)
     app.add_exception_handler(Exception, handle_unexpected_error)
