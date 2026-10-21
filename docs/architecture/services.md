@@ -115,6 +115,9 @@
 | 게임, 결제, 게시판 → 알림 | 사람에게 보낼 알림 넣기(`POST /api/v1/notification/service/{source}/notifications`). 서명 비밀은 넣는 서버마다 따로다(알림 서버의 `GAME_SERVER_SECRET`, `BILLING_SERVER_SECRET`, `BOARD_SERVER_SECRET`). 게임과 게시판은 일이 일어난 트랜잭션에서 발송함에 적고 5초마다 보낸다. 결제는 정리 작업이 주문과 지급에서 알릴 일을 찾아 보낸다 | `notification-server/README.md` 의 "알림 넣기" |
 | 게임, 게시판, 결제, 알림 → 인증 | 공개키(JWKS)와 끊긴 세션의 목록 받기 | `auth-server/README.md` |
 
+여러 서비스의 것을 한 화면에 보이는 곳(첫 화면의 이어하기, 갤러리, 계정의 기록)은 화면이 서비스마다 부르고 화면에서 놓는다. 모아 주는 서버를 두지 않는다(#593, [화면 명세의 A1](../product/screens.md#a1-첫-화면탐색)).
+한 서비스가 죽어도 그 칸만 비고, 서버끼리 실행 중에 부르는 길이 생기지 않는다.
+
 앞으로 생길 길(계획):
 
 | 부르는 쪽 → 받는 쪽 | 무엇을 | 비고 |
