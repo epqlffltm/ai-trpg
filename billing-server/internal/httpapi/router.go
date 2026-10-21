@@ -30,6 +30,8 @@ type Dependencies struct {
 	Wallet WalletReader
 	// Eligibility 는 인증 서버가 알려 준 결제 자격을 받아 적는다.
 	Eligibility EligibilityRecorder
+	// Withdrawals 는 인증 서버가 알린 탈퇴를 반영한다(#603).
+	Withdrawals WithdrawalProcessor
 	// Welcome 은 환영 크레딧을 준다. WelcomeCredits 는 그 양이다. 0 이면 주지 않는다.
 	Welcome        WelcomeGranter
 	WelcomeCredits credit.Amount
@@ -158,6 +160,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	authServer := service.Group("", requireService(AuthServer, deps.AuthServerSecret, deps.Now))
 	authServer.POST("/grants/welcome", grantWelcome(deps.Welcome, deps.WelcomeCredits))
 	authServer.POST("/eligibility", recordEligibility(deps.Eligibility))
+	authServer.POST("/users/:id/withdrawal", processWithdrawal(deps.Withdrawals))
 
 	return router
 }

@@ -12,6 +12,22 @@ import (
 	"github.com/google/uuid"
 )
 
+const cancelUserNotices = `-- name: CancelUserNotices :execrows
+UPDATE user_notices SET status = 'expired', last_error = 'withdrawn'
+WHERE user_id = $1 AND status = 'pending'
+`
+
+// 그 사람에게 아직 보내지 않은 것을 보내지 않기로 한다(탈퇴). 줄은 지우지 않는다.
+// 지우면 적기(Queue...)가 거슬러 보는 기간(LookBack) 안의 결제와 환영 크레딧을 다시 찾아 적는다.
+// 다른 끝난 것처럼 30일(Retention)이 지나면 지워진다. last_error 에 까닭을 남긴다.
+func (q *Queries) CancelUserNotices(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelUserNotices, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const delayNotice = `-- name: DelayNotice :exec
 UPDATE user_notices SET next_attempt_at = $1, last_error = $2
 WHERE id = $3 AND status = 'pending'

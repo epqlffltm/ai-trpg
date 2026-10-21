@@ -55,3 +55,12 @@ SELECT id FROM holds
 WHERE status = 'held' AND expires_at <= sqlc.arg(now)::TIMESTAMPTZ
 ORDER BY expires_at, id
 LIMIT sqlc.arg(row_limit);
+
+-- name: WithdrawHeldHolds :many
+-- 탈퇴한 사람의 held 홀드를 모두 released 로 바꾼다. 문장 하나라서 읽은 뒤에 확정된 홀드를 바꾸는 틈이 없다.
+-- 지갑의 줄을 잠근 뒤에 부른다. 새 홀드는 지갑을 잠가야 걸리므로 더 늘지 않는다.
+UPDATE holds
+SET status = 'released', release_reason = 'withdrawn',
+    settled_at = sqlc.arg(now)::TIMESTAMPTZ, updated_at = sqlc.arg(now)::TIMESTAMPTZ
+WHERE user_id = sqlc.arg(user_id) AND status = 'held'
+RETURNING *;

@@ -78,3 +78,13 @@ func (s *Service) find(ctx context.Context, userID uuid.UUID) (*Record, error) {
 	}
 	return &Record{LegalAdultFrom: row.LegalAdultFrom, GuardianConsent: row.GuardianConsent}, nil
 }
+
+// Erase 는 그 사용자의 결제 자격을 지운다(탈퇴, #603). 지웠으면 true, 없었으면 false 다. 몇 번을 불러도 같다.
+// 인증 서버도 탈퇴를 마칠 때 보낼 결제 자격을 함께 지운다. 그래서 지운 뒤에 다시 적히지 않는다.
+func (s *Service) Erase(ctx context.Context, userID uuid.UUID) (bool, error) {
+	deleted, err := eligibilitydb.New(s.pool).DeleteEligibility(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return deleted > 0, nil
+}

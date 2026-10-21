@@ -115,3 +115,10 @@ WHERE id = sqlc.arg(id) AND status = 'pending';
 -- 알림 서버가 받지 않았다고 적는다. 다시 보내지 않는다.
 UPDATE user_notices SET status = 'failed', last_error = sqlc.arg(last_error)
 WHERE id = sqlc.arg(id) AND status = 'pending';
+
+-- name: CancelUserNotices :execrows
+-- 그 사람에게 아직 보내지 않은 것을 보내지 않기로 한다(탈퇴). 줄은 지우지 않는다.
+-- 지우면 적기(Queue...)가 거슬러 보는 기간(LookBack) 안의 결제와 환영 크레딧을 다시 찾아 적는다.
+-- 다른 끝난 것처럼 30일(Retention)이 지나면 지워진다. last_error 에 까닭을 남긴다.
+UPDATE user_notices SET status = 'expired', last_error = 'withdrawn'
+WHERE user_id = sqlc.arg(user_id) AND status = 'pending';
