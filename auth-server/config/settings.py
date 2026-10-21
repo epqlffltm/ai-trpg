@@ -497,6 +497,19 @@ BILLING_URL = validate_billing_url(env('BILLING_URL', default='http://127.0.0.1:
 # 비어 있으면 워커가 돌지 못한다. 서버는 이 값 없이도 뜬다. 가입과 로그인에는 쓰이지 않는다
 BILLING_SECRET = validate_service_secret(env('BILLING_SECRET', default=''))
 
+# 탈퇴를 알릴 다른 서버(#603, docs/architecture/withdrawal.md 의 "알리는 길").
+# 서버마다 주소와 비밀이다. 비밀은 받는 서버의 AUTH_SERVER_SECRET 과 같은 값이다.
+# 비밀이 비어 있으면 그 서버에는 알리지 않는다. 알릴 줄은 쌓여 있다가 비밀을 적은 뒤에 나간다.
+# 받는 주소를 만드는 PR 이 .env.example 과 compose 에 그 서버의 비밀을 더한다. 이 서버의 코드는 고치지 않는다
+NOTIFICATION_URL = validate_billing_url(env('NOTIFICATION_URL', default='http://127.0.0.1:8004'), 'NOTIFICATION_URL')
+NOTIFICATION_SECRET = validate_service_secret(env('NOTIFICATION_SECRET', default=''), 'NOTIFICATION_SECRET')
+GAME_URL = validate_billing_url(env('GAME_URL', default='http://127.0.0.1:8001'), 'GAME_URL')
+GAME_SECRET = validate_service_secret(env('GAME_SECRET', default=''), 'GAME_SECRET')
+BOARD_URL = validate_billing_url(env('BOARD_URL', default='http://127.0.0.1:8002'), 'BOARD_URL')
+BOARD_SECRET = validate_service_secret(env('BOARD_SECRET', default=''), 'BOARD_SECRET')
+ASSET_URL = validate_billing_url(env('ASSET_URL', default='http://127.0.0.1:8006'), 'ASSET_URL')
+ASSET_SECRET = validate_service_secret(env('ASSET_SECRET', default=''), 'ASSET_SECRET')
+
 
 # 본인확인(#336)
 # 휴대폰 본인인증을 받는 업체. fake(가짜, 개발용) 또는 disabled(받지 않음)다(config/identity.py).

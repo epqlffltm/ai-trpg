@@ -8,14 +8,14 @@
      비밀번호는 부르는 쪽이 먼저 확인한다(check_withdrawal_password)
   2. 유예(GRACE, 7일): 로그인은 되지만 토큰이 인증 서버에만 통한다(tokens.py). 그 안에 취소한다(cancel_withdrawal)
   3. 마치기(complete_due_withdrawals): 워커가 부른다. 계정을 비우고(erasure.py) 서버마다 알릴 줄을 적는다
-  4. 알리기(deliver_due_withdrawal_notices): 워커가 부른다. 서명해 보내고 2xx 까지 다시 보낸다
+  4. 알리기(deliver_due_withdrawal_notices): 워커가 부른다. 서명해 보내고 200 processed 까지 다시 보낸다.
+     줄은 모든 서버에 적고, 비밀을 적은 서버의 줄만 보낸다(withdrawal_client.py). 나머지는 비밀을 적을 때까지 기다린다
 
 알리는 일의 모양은 결제 자격을 알리는 것(payment_eligibility.py)과 같다. 짧은 트랜잭션에서 줄을 차지하고,
 트랜잭션 밖에서 상대를 부르고, 다시 짧게 결과를 적는다. 잠근 채로 상대를 기다리지 않는다.
 """
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
@@ -24,13 +24,13 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.backoff import retry_delay
-from accounts.billing_client import BillingUnavailableError, report_withdrawal
 from accounts.consents import erase_consents
 from accounts.erasure import blank_account, erase_identity_records, erase_mail_records
 from accounts.mail import send_withdrawal_completed_notice, send_withdrawal_requested_notice
 from accounts.models import SecurityEventKind, User, WithdrawalNotice, WithdrawalTarget
 from accounts.security_events import record_security_event
 from accounts.tokens import revoke_all_sessions
+from accounts.withdrawal_client import WithdrawalUndeliveredError, configured_targets, send_withdrawal
 from accounts.withdrawal_schedule import GRACE, withdrawal_scheduled_at
 
 logger = logging.getLogger(__name__)
@@ -74,11 +74,6 @@ class DeliveryReport:
     @property
     def handled(self) -> int:
         return self.sent + self.retried
-
-
-# 서버마다 알리는 함수와, 그 함수가 "나중에 다시 하면 된다"로 내는 오류. 서버를 더하면 여기에 더한다
-SENDERS: dict[str, Callable[..., str]] = {WithdrawalTarget.BILLING: report_withdrawal}
-RETRYABLE_ERRORS: tuple[type[Exception], ...] = (BillingUnavailableError,)
 
 
 def check_withdrawal_password(user: User, password: str) -> None:
@@ -160,10 +155,15 @@ def complete_withdrawal(user_id: int, now: datetime) -> bool:
 
 
 def _queue_notices(user: User, withdrawn_at: datetime) -> None:
-    """알릴 서버마다 한 줄을 적는다. 바로 보낼 수 있게 한다."""
+    """
+    모든 서버에 한 줄씩 적는다. 바로 보낼 수 있게 한다.
+
+    비밀을 아직 적지 않은 서버(받는 주소를 만들기 전)의 줄도 적는다. 비밀을 적으면 그때 나간다.
+    적지 않으면 그 서버는 받는 주소를 만들기 전에 탈퇴한 사람의 데이터를 영영 모른다.
+    """
     WithdrawalNotice.objects.bulk_create(
         WithdrawalNotice(user=user, target=target, withdrawn_at=withdrawn_at, next_attempt_at=withdrawn_at)
-        for target in SENDERS
+        for target in WithdrawalTarget
     )
 
 
@@ -190,8 +190,8 @@ def _deliver_next() -> str | None:
     if claim is None:
         return None
     try:
-        SENDERS[claim.target](user_public_id=claim.user_public_id, withdrawn_at=claim.withdrawn_at)
-    except RETRYABLE_ERRORS as exc:
+        send_withdrawal(target=claim.target, user_public_id=claim.user_public_id, withdrawn_at=claim.withdrawn_at)
+    except WithdrawalUndeliveredError as exc:
         _schedule_retry(claim.notice_id, exc, now)
         return 'retried'
     WithdrawalNotice.objects.filter(pk=claim.notice_id).update(delivered_at=now, attempts=0, last_error='')
@@ -201,14 +201,14 @@ def _deliver_next() -> str | None:
 @transaction.atomic
 def _claim_next(now: datetime) -> NoticeClaim | None:
     """
-    보낼 차례가 된 알림 하나를 차지한다. 다른 워커가 차지하는 중인 줄은 건너뛴다.
+    보낼 차례가 된 알림 하나를 차지한다. 다른 워커가 차지하는 중인 줄은 건너뛴다. 비밀이 없는 서버의 줄은 고르지 않는다.
 
     차지하면 다음 시도 시각을 임대가 끝나는 때로 민다. 워커가 보내다 죽으면 그 뒤에 다른 워커가 다시 보낸다.
     """
     notice = (
         WithdrawalNotice.objects.select_for_update(skip_locked=True)
         .select_related('user')
-        .filter(delivered_at__isnull=True, next_attempt_at__lte=now)
+        .filter(delivered_at__isnull=True, next_attempt_at__lte=now, target__in=configured_targets())
         .order_by('next_attempt_at', 'id')
         .first()
     )
