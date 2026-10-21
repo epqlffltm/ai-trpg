@@ -7,9 +7,9 @@
 | 이슈 | 내용 |
 | --- | --- |
 | #564 | 뼈대 |
-| #565 | 계정 페르소나. 사용자 API(지금). 서버끼리 사본 내주기는 server-core(#588) 뒤 |
+| #565 | 계정 페르소나. 사용자 API. 서버끼리 사본 내주기는 다음 조각 |
 | #566 | 그림. 올리기, 디코딩 격리, 내주기(nginx 의 `X-Accel-Redirect`) |
-| #567 | 캐릭터와 게시. 판, 소개 HTML 거르기, 서버끼리 판 내주기 |
+| #567 | 캐릭터와 게시. 소개 HTML 거르기, 초안과 판, 공개 목록(지금). 서버끼리 판 내주기는 다음 조각 |
 
 정해 둔 값: 포트 `8006`, 토큰의 대상 `ai-trpg-asset`, DB 계정과 스키마 `asset`(테스트는 `asset_test`), 주소 `/api/v1/asset/`.
 
@@ -71,6 +71,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰의 발급자(`iss`). 인증 서버의 `JWT_ISSUER`와 같아야 한다 |
 | `JWT_AUDIENCE` | `ai-trpg-asset` | 이 서버의 이름. 토큰의 대상(`aud`)에 이 이름이 있어야 받는다 |
 | `PERSONA_MAX_PER_OWNER` | `50` | 한 사람이 가질 수 있는 계정 페르소나의 수(1~500). TRPG 의 보관함과 같다 |
+| `CHARACTERS_FOR_EVERYONE` | `false` | 캐릭터를 누구나 만들 수 있는가. 1~2단계에는 운영자만 만든다(거짓). 참이어도 공개로 두는 것은 운영자만이다 |
 
 서버끼리 부를 때의 비밀(계정 페르소나와 판을 가져가는 서버마다의 비밀)은 server-core 의 서명(#588)이 들어온 뒤에 더한다.
 
@@ -95,6 +96,17 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | PATCH | `/api/v1/asset/personas/{id}` | 고치기. 보낸 칸만 바뀐다. 내용이 바뀌면 `revision` 이 오른다 | access 토큰 |
 | PUT | `/api/v1/asset/personas/{id}/default` | 기본으로 두기. 다른 것은 기본에서 내린다. `revision` 은 그대로 | access 토큰 |
 | DELETE | `/api/v1/asset/personas/{id}` | 지우기. 204. 기본이었으면 가장 먼저 만든 것이 기본이 된다 | access 토큰 |
+| POST | `/api/v1/asset/characters` | [캐릭터](#캐릭터와-게시) 만들기. 201. 처음에는 비공개. 1~2단계에는 운영자만(403 `operator_only`). 성인 등급은 성인 확인이 필요하다(403 `adult_content_required`) | access 토큰 |
+| GET | `/api/v1/asset/characters` | 자기 캐릭터의 목록(`{items, total}`). 최근에 고친 것부터. `limit`, `offset` | access 토큰 |
+| GET | `/api/v1/asset/characters/{id}` | 자기 캐릭터의 초안 하나. 남의 것과 없는 것은 404 | access 토큰 |
+| PATCH | `/api/v1/asset/characters/{id}` | 초안 고치기. 보낸 칸만 바뀐다. 게시한 판은 그대로다. 공개로 두는 것(`visibility`)은 운영자만 | access 토큰 |
+| DELETE | `/api/v1/asset/characters/{id}` | 지우기. 204. 판도 함께 지워진다 | access 토큰 |
+| GET | `/api/v1/asset/characters/{id}/publish-check` | 게시해 보기(`{ready, problems, removed}`). 판은 생기지 않는다 | access 토큰 |
+| POST | `/api/v1/asset/characters/{id}/versions` | 게시. 201. 새 판과 소개에서 걸러 낸 것(`removed`). 막는 것이 있으면 409 `{problems}` | access 토큰 |
+| GET | `/api/v1/asset/characters/{id}/versions` | 판의 목록. 최근 것부터 | access 토큰 |
+| GET | `/api/v1/asset/characters/{id}/versions/{number}` | 판 하나(굳힌 문서까지) | access 토큰 |
+| GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서). 볼 수 없으면 404 | 없어도 된다 |
 
 ### 계정 페르소나
 
@@ -137,11 +149,41 @@ TRPG, chat, story 가 함께 쓰는 "나"의 설정이다(#565, [설계](../docs
 - 허용 목록은 모듈의 상수(`ALLOWED_TAGS`, `GLOBAL_ATTRIBUTES`, `TAG_ATTRIBUTES`, `ALLOWED_STYLE_PROPERTIES`)다. 화면의 DOMPurify 설정과 문서의 표를 이 값과 같게 둔다.
 - **app.* 를 가져오지 않는다**(`tests/test_content_boundary.py`). 두 번째로 쓰는 곳(TRPG 시나리오 소개를 asset 으로 옮기는 PR)이 생기면 파일째 `shared/` 로 옮긴다(2026-10-21 결정).
 
+### 캐릭터와 게시
+
+chat 의 상대가 되는 캐릭터다(#567, [설계](../docs/architecture/asset-server.md#게시와-판)). `app/characters/`.
+제작자는 초안을 고치고, **게시**하면 판(번호가 오르는 고정된 문서)이 생긴다. chat 은 대화를 시작할 때 판 하나를 가져가 고정한다.
+
+| 칸 | 제한 | 내용 |
+| --- | --- | --- |
+| `name` | 1~50자(필수) | 이름 |
+| `intro_html` | 50KB(UTF-8 바이트) | 소개(HTML 과 인라인 CSS). 초안에는 쓴 그대로 둔다. 게시할 때 거른다([소개 글의 HTML](#소개-글의-html)) |
+| `greeting`, `speech_examples` | 각 2,000자 | 인사말(대화를 열 때 먼저 하는 말), 말투 예시. 모델이 읽는다 |
+| `age`, `gender` | 각 20자 | 적어 두는 글이다. 거르거나 막지 않는다 |
+| `tags` | 10개, 각 20자 | 목록에서 찾을 때 쓴다. 대소문자만 다른 것도 같은 것으로 보아 거부한다 |
+| `starts` | 5개 | 시작 상황 `{title(30자), situation(2,000자)}`. 대화를 열 때 하나를 고른다. 제목이 겹치면 거부한다 |
+| `image_id` | 그림의 id 또는 `null` | 대표 그림. 그림(#566)이 생기기 전이라 적어 두기만 한다 |
+| `rating` | `all`, `adult` | 이용 등급 |
+| `visibility` | `private`, `public` | 공개 범위. 처음에는 비공개. 고칠 때만 바꾼다 |
+| `latest_version`, `published_at` | 응답에만 | 마지막으로 게시한 판의 번호와 시각 |
+
+첫 칸은 대화에 필요한 핵심만이다(2026-10-21 유저 결정). 호감도의 규칙, 의복과 물건, 지도, 일러스트는 chat 이 그 단계(장소와 소지품)에 갈 때 판의 형식을 올려 더한다.
+
+- **누가 만드나.** 1~2단계에는 운영자만 만든다(`CHARACTERS_FOR_EVERYONE` 거짓, 403 `operator_only`). 3단계에서 열어도 **공개로 두는 것은 운영자만**이다. 일반 사용자의 공개는 신고와 관리자 화면(E4)이 생긴 뒤에 연다.
+- **등급.** 성인 등급(`adult`)은 성인 확인을 한 사람이나 운영자만 쓴다(`app/ratings.py` 의 `allowed_ratings`, 게임 서버와 같은 규칙). 나이와 성별로는 거르지 않는다.
+- **게시.** 막는 것은 시작 상황이 없는 것(`start_missing`)이다. 소개는 허용 목록으로 걸러 판에 넣고, 걸러 낸 것을 `removed` 로 알린다(게시는 된다).
+  - 판은 바뀌지 않는다. 번호는 1 부터 오른다. 같은 캐릭터를 동시에 게시하면 행을 잠가 차례로 번호를 준다.
+  - 판의 문서(`document`)는 형식 번호(`format`, 지금 1)를 갖는다. 칸이 늘면 번호를 올리고 받는 쪽이 번호로 읽는 법을 고른다.
+- **공개 목록.** 공개이고 게시한 판이 있는 캐릭터의 **마지막 판**을 낸다(초안이 아니다). 등급은 **판의 등급**으로 거른다. 초안의 등급을 바꿔도 다음 판까지는 게시한 판이 나간다.
+  로그인하지 않은 사람과 성인 확인을 하지 않은 사람에게 성인 캐릭터는 없는 것이다(404). 토큰을 보냈는데 틀렸으면 401 이다.
+- 지우면 판도 함께 지워진다. 이미 가져간 대화는 사본으로 돈다.
+- 서버끼리 판을 가져가는 길과 지금의 판 번호를 묻는 길은 다음 조각이다(서명은 `server_core.service_auth`).
+
 ### 토큰 검증
 
 공용 코드 `shared/server-core` 의 것(`server_core/auth/`)을 쓴다(#588). 알림 서버와 같다. 규칙의 설명은
 [게임 서버의 토큰 검증](../trpg-server/README.md#토큰-검증)에 있다. 토큰의 주인(`CurrentUser`)에는 성인 등급(`adult_content`)과
-운영자(`is_operator`)도 실린다. 캐릭터의 목록(#567)이 그것으로 등급을 가른다. 로그인 없이도 읽는 주소는 `OptionalUser` 를 쓴다.
+운영자(`is_operator`)도 실린다. 캐릭터의 만들기와 공개, 등급(`app/ratings.py`)이 그것을 본다. 로그인 없이도 읽는 주소(공개 목록)는 `OptionalUser` 를 쓴다.
 
 - 공개키: 처음 필요할 때 가져와 5분 기억한다. 모르는 `kid` 면 다시 가져오되 60초에 한 번만. 30분 넘게 못 가져오면 버리고 503.
 - 끊긴 세션: 서버가 뜨자마자, 그 뒤 30초마다 인증 서버의 목록을 받는다. `ver` 가 그 사람의 `min_ver` 보다 낮은 토큰은 401.
@@ -204,7 +246,7 @@ TRPG, chat, story 가 함께 쓰는 "나"의 설정이다(#565, [설계](../docs
 DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. asset 서버는 `asset` 계정으로 `asset`
 스키마(테스트는 `asset_test`)만 쓴다. 다른 서버의 스키마에 닿지 못하는 것을 테스트(`tests/test_schema_isolation.py`)가 확인한다.
 
-테이블은 `personas`(#565) 하나다. 모델을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
+테이블은 `personas`(#565), `characters`, `character_versions`(#567)다. 모델을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
 ### 마이그레이션
 

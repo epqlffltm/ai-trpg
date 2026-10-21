@@ -4,7 +4,7 @@
 asset 서버의 시작점. 앱을 만들고 라우터를 붙인다.
 
 asset 서버는 캐릭터, 계정 페르소나, 그림의 원본을 맡는다(docs/architecture/asset-server.md).
-상태 확인, 토큰의 주인, 계정 페르소나(#565)가 있다. 그림(#566), 캐릭터와 게시(#567)가 차례로 붙는다.
+상태 확인, 토큰의 주인, 계정 페르소나(#565), 캐릭터와 게시와 공개 목록(#567)이 있다. 그림(#566)이 붙는다.
 
 띄우는 법: uv run uvicorn app.main:app --port 8006 --reload
 """
@@ -31,9 +31,14 @@ from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource,
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
+from app.characters import listings as character_listings
+from app.characters import router as characters
+from app.characters.publishing import CharacterNotReadyError
+from app.characters.service import CharacterNotFoundError, OperatorOnlyError
 from app.core.config import Settings, get_settings
 from app.personas import router as personas
 from app.personas.service import PersonaLimitError, PersonaNotFoundError
+from app.ratings import AdultContentRequiredError, handle_adult_content_required
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/asset'
@@ -127,6 +132,14 @@ def create_app(
 
     app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)
     app.add_exception_handler(PersonaLimitError, personas.handle_persona_limit)
+    # 캐릭터의 초안과 판(#567), 공개 목록. 공개 목록은 로그인하지 않아도 읽는다
+    app.include_router(characters.router, prefix=API_PREFIX)
+    app.include_router(character_listings.router, prefix=API_PREFIX)
+
+    app.add_exception_handler(CharacterNotFoundError, characters.handle_character_not_found)
+    app.add_exception_handler(OperatorOnlyError, characters.handle_operator_only)
+    app.add_exception_handler(CharacterNotReadyError, characters.handle_character_not_ready)
+    app.add_exception_handler(AdultContentRequiredError, handle_adult_content_required)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.
     # 원인은 로그에 남긴다(server_core/observability/responses.py)
