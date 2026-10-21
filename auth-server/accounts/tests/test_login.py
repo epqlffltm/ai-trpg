@@ -51,7 +51,14 @@ ME_URL = reverse('accounts:me')
 PASSWORD = 'correct-horse-battery'
 GAME_SERVER_AUDIENCE = 'ai-trpg-game'
 # 토큰을 받아 쓰는 서버들의 이름. 서버마다 토큰의 aud 에 자기 이름이 있는지 확인한다
-SERVER_AUDIENCES = ('ai-trpg-game', 'ai-trpg-board', 'ai-trpg-billing', 'ai-trpg-notification')
+SERVER_AUDIENCES = (
+    'ai-trpg-game',
+    'ai-trpg-board',
+    'ai-trpg-billing',
+    'ai-trpg-notification',
+    'ai-trpg-asset',
+    'ai-trpg-chat',
+)
 
 
 def create_user(**overrides) -> User:
