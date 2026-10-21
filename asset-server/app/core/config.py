@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     # SDK 의 기본(60초)이면 rate(…[1m]) 에 점이 하나뿐이다
     otel_metric_export_interval: int = Field(default=15000, ge=1000)
 
+    # 한 사람이 가질 수 있는 계정 페르소나의 수(#565). TRPG 의 보관함과 같은 50 이 기본이다
+    persona_max_per_owner: int = Field(default=50, ge=1, le=500)
+
     @field_validator('otel_exporter_otlp_endpoint')
     @classmethod
     def check_otlp_endpoint(cls, value: str) -> str:
