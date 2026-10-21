@@ -91,6 +91,9 @@ class User(AbstractUser):
     withdrawal_requested_at = models.DateTimeField('탈퇴를 요청한 시각', null=True, blank=True, db_index=True)
     # 탈퇴를 마친 시각. 계정을 비운 때다. 마친 계정은 되돌리지 않는다
     withdrawn_at = models.DateTimeField('탈퇴를 마친 시각', null=True, blank=True)
+    # 마치기 하루 전의 알림 메일을 보낸 시각(#624). 요청마다 한 통만 보내려고 적는다.
+    # 요청할 때 비운다. 취소하고 다시 요청하면 새 요청에 한 통을 더 보낸다
+    withdrawal_reminded_at = models.DateTimeField('탈퇴 하루 전 알림을 보낸 시각', null=True, blank=True)
 
     # AbstractUser 가 가진 실명 필드를 없앤다. 수집하지 않는 정보의 컬럼은 두지 않는다
     first_name = None
@@ -326,6 +329,7 @@ class MailKind(models.TextChoices):
     MINOR_GUARDIAN = 'minor_guardian', '미성년자에게 보호자 동의 알림'
     GUARDIAN_PAYMENT = 'guardian_payment', '보호자에게 결제 알림'
     WITHDRAWAL_REQUESTED = 'withdrawal_requested', '탈퇴 요청 확인'
+    WITHDRAWAL_REMINDER = 'withdrawal_reminder', '탈퇴 하루 전 알림'
     WITHDRAWAL_COMPLETED = 'withdrawal_completed', '탈퇴를 마침'
     # 종류를 적지 않은 메일. 이 칸이 생기기 전에 적힌 것도 이것이다
     OTHER = 'other', '그 밖'

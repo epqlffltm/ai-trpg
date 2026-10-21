@@ -46,6 +46,7 @@ class UserAdmin(DjangoUserAdmin):
         'last_login',
         'date_joined',
         'withdrawal_requested_at',
+        'withdrawal_reminded_at',
         'withdrawn_at',
     )
 
@@ -55,8 +56,8 @@ class UserAdmin(DjangoUserAdmin):
         ('프로필', {'fields': ('email', 'email_verified_at', 'nickname', 'public_id')}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('기록', {'fields': ('token_version', 'sessions_revoked_at', 'last_login', 'date_joined')}),
-        # 탈퇴(#603). 화면에서 고치지 않는다. 요청과 취소는 본인이, 마치기는 워커가 한다
-        ('탈퇴', {'fields': ('withdrawal_requested_at', 'withdrawn_at')}),
+        # 탈퇴(#603). 화면에서 고치지 않는다. 요청과 취소는 본인이, 하루 전 알림과 마치기는 워커가 한다
+        ('탈퇴', {'fields': ('withdrawal_requested_at', 'withdrawal_reminded_at', 'withdrawn_at')}),
     )
 
     @admin.display(boolean=True, description='이메일 인증')
