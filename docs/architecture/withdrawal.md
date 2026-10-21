@@ -71,9 +71,9 @@
 | --- | --- | --- |
 | 결제 | 걸린 홀드를 돌려주고 골드와 실버를 소멸로 적는다(원장에 새 이유. 마이그레이션). 결제 자격과 사용자 알림을 지운다. 결과를 모르는 주문(`confirming`, `refunding`)은 대사가 그대로 끝낸다. 원장과 주문은 남긴다(법정 보존, 공개 ID 만 있다) | 제안. 결제 세션이 만든다 |
 | 알림 | 알림함을 지운다 | 제안. 결제 세션이 만든다 |
-| 게임 | 앉은 테이블에서 뺀다(방장이면 넘긴다). 페르소나를 지운다. 공개한 시나리오를 내린다. 테이블의 기록(대화, 선언, 귓속말)은 함께한 사람의 기록이라 남기고 이름을 "탈퇴한 사용자"로 보인다 | 제안. 게임 세션이 정한다 |
+| 게임 | 모집 중, 진행 중인 테이블에서 나간다(스스로 나가기와 같다. 방장이면 넘기고, 혼자면 끝낸다). 끝난 테이블의 자리는 남긴다. 보관함(페르소나)을 지운다. 시나리오의 공개를 내린다. 자산과 판은 지우지 않고 남기고, 진행 중인 테이블은 판의 사본으로 돈다. 보내지 않은 알림을 지운다. 테이블의 기록(대화, 선언, 귓속말)은 남기고 이름을 "탈퇴한 사용자"로 보인다 | 정했다(2026-10-21 유저 결정). 받는 주소를 만들었다(`trpg-server/README.md` 의 "탈퇴") |
 | 게시판 | 글과 댓글은 남기고 `author_id` 와 `author_nickname` 을 비워 "탈퇴한 사용자"로 보인다(`author_withdrawn`) | 정했다(`board-server/README.md`). 게시판 세션이 만든다 |
-| asset | 페르소나, 비공개 캐릭터, 그림을 지운다 | 정했다(`docs/architecture/asset-server.md`). 게임 세션이 만든다 |
+| asset | 페르소나, 비공개 캐릭터, 그림을 지운다. 공개 캐릭터와 그 판은 남긴다 | 받는 주소를 만들었다(`asset-server/README.md` 의 "탈퇴"). 그림은 #566 이 더한다 |
 | chat, story | 대화를 지운다 | 제안. 서버를 만들 때 정한다 |
 
 - 남긴 기록에서 사람을 알아볼 수 있는 것은 공개 ID 뿐이다. 인증 서버가 그 ID 의 이름을 지웠으므로 이름을 물으면 `null` 이다(`/public-names`). 화면은 "탈퇴한 사용자"로 보인다
@@ -99,9 +99,9 @@ POST /api/v1/<서버>/service/users/{public_id}/withdrawal
 | --- | --- | --- | --- | --- |
 | 결제 | `/api/v1/billing` | `BILLING_URL`(8003) / `BILLING_SECRET` | `AUTH_SERVER_SECRET` | 이미 있다 |
 | 알림 | `/api/v1/notification` | `NOTIFICATION_URL`(8004) / `NOTIFICATION_SECRET` | `AUTH_SERVER_SECRET` | 칸이 열려 있다. 비어 있다 |
-| 게임 | `/api/v1/game` | `GAME_URL`(8001) / `GAME_SECRET` | `AUTH_SERVER_SECRET` | 칸이 열려 있다. 비어 있다 |
+| 게임 | `/api/v1/game` | `GAME_URL`(8001) / `GAME_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다 |
 | 게시판 | `/api/v1/board` | `BOARD_URL`(8002) / `BOARD_SECRET` | `AUTH_SERVER_SECRET` | 칸이 열려 있다. 비어 있다 |
-| asset | `/api/v1/asset` | `ASSET_URL`(8006) / `ASSET_SECRET` | `AUTH_SERVER_SECRET` | 칸이 열려 있다. 비어 있다 |
+| asset | `/api/v1/asset` | `ASSET_URL`(8006) / `ASSET_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다 |
 
 - 주소의 기본값은 로컬의 포트다(`http://127.0.0.1:<포트>`). compose 에서는 그 서버의 컨테이너 이름으로 적는다
 - 받는 주소를 만드는 PR 이 함께 고치는 것: 두 서버의 `.env.example`, `secret_scope.py` 의 표, `fill_env.py` 의 짝과 그 시험, compose 에서 비우는 줄과 `auth-welcome-credits` 의 주소. 어려우면 인프라 쪽이 그 브랜치에 얹을 zip 을 준다
@@ -116,7 +116,7 @@ POST /api/v1/<서버>/service/users/{public_id}/withdrawal
 | 2 | 결제 서버: 받는 주소, 홀드 돌려주기, 소멸, 지우기 | 결제 | |
 | 3 | 인증 → 알림, 게임, 게시판, asset 의 비밀(위의 "서버마다의 이름") | 4, 5 의 PR 이 함께 한다 | 인증 쪽 칸은 열었다 |
 | 4 | 알림 서버: 받는 주소, 알림함 지우기 | 결제(알림 담당) | |
-| 5 | 게임, asset: 받는 주소와 정리 / 게시판: 받는 주소와 정리 | 게임 세션 / 게시판 세션 | |
+| 5 | 게임, asset: 받는 주소와 정리 / 게시판: 받는 주소와 정리 | 게임 세션 / 게시판 세션 | 게임과 asset 은 이 PR |
 | 6 | 화면: 탈퇴(A5), 유예 화면 | 화면 | |
 
 1 과 2 가 머지되면 결제까지는 탈퇴가 끝까지 돈다. 나머지 서버는 받는 주소를 만들고 비밀을 적으면, 그 전에 쌓인 것부터 받는다.

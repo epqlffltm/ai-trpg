@@ -300,3 +300,19 @@ def test_a_vector_length_of_zero_is_refused(monkeypatch: pytest.MonkeyPatch):
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_the_auth_server_secret_is_empty_by_default():
+    # 비우면 탈퇴 알림을 받지 않는다(401). 뜨기는 한다
+    assert Settings(_env_file=None).auth_server_secret.get_secret_value() == ''
+
+
+@pytest.mark.parametrize(('length', 'starts'), [(31, False), (32, True)])
+def test_the_auth_server_secret_has_a_minimum(monkeypatch: pytest.MonkeyPatch, length: int, starts: bool):
+    monkeypatch.setenv('AUTH_SERVER_SECRET', 'a' * length)
+
+    if starts:
+        assert Settings(_env_file=None).auth_server_secret.get_secret_value() == 'a' * length
+    else:
+        with pytest.raises(ValidationError, match='AUTH_SERVER_SECRET'):
+            Settings(_env_file=None)

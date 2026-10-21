@@ -1,15 +1,18 @@
 # asset-server/app/core/service_auth.py
 
 """
-다른 서버(chat, 나중에 story 와 TRPG)가 부르는 주소의 서명을 확인한다(server_core/service_auth/signing.py).
+다른 서버가 부르는 주소의 서명을 확인한다(server_core/service_auth/signing.py).
 
-    /api/v1/asset/service/{caller}/...
+    /api/v1/asset/service/{caller}/...                   페르소나와 판을 가져가는 서버(chat, 나중에 story, TRPG)
+    /api/v1/asset/service/users/{public_id}/withdrawal   인증 서버의 탈퇴 알림(app/withdrawal/)
 
   - caller 는 부르는 서버의 이름이다. 주소까지 서명하므로 남의 이름으로 부를 수 없다
   - 서명이 없거나 틀렸거나 오래됐거나, 그 서버의 비밀이 설정에 없으면 401 이다. 어느 경우인지 나누지 않는다
-  - 본문은 서명을 확인한 뒤에 쓴다. 지금의 주소는 모두 GET 이라 본문이 비어 있지만, 받은 바이트 그대로 서명을 본다
-  - 서명은 "어느 서버가 부르나"만 증명한다. "누구를 위해 가져가나"는 함께 넘긴 사용자의 토큰(CurrentUser)이 증명한다.
-    그래서 서버의 비밀이 새도 그 비밀만으로는 아무의 페르소나도 가져가지 못한다(토큰이 있어야 한다)
+  - 본문은 서명을 확인한 뒤에 쓴다. 받은 바이트 그대로 서명을 본다(가져가는 길은 GET 이라 본문이 비어 있다)
+  - 서명은 "어느 서버가 부르나"만 증명한다. 가져가는 길에서 "누구를 위해 가져가나"는
+    함께 넘긴 사용자의 토큰(CurrentUser)이 증명한다.
+    그래서 서버의 비밀이 새도 그 비밀만으로는 아무의 페르소나도 가져가지 못한다(토큰이 있어야 한다).
+    탈퇴 알림에는 토큰이 없다(탈퇴한 사람은 토큰이 없다). 인증 서버의 비밀이 그 길만 연다
 
 알림 서버의 것(notification-server/app/notifications/router.py)과 같은 방법이다. 서버끼리 받는 곳이 둘째라
 server_core 로 옮길 때가 됐다. app.* 를 가져오지 않게 두어 파일째 옮길 수 있게 한다(설정은 app.state 에서 읽는다).
@@ -68,18 +71,36 @@ def caller_secret(request: Request, caller: str) -> str:
     return request.app.state.settings.service_secrets().get(caller, '')
 
 
+def auth_server_secret(request: Request) -> str:
+    """인증 서버의 서명 비밀. 비어 있으면 빈 글이다(is_valid 가 받지 않는다)."""
+    return request.app.state.settings.auth_server_secret.get_secret_value()
+
+
+async def verified_body(request: Request, secret: str) -> bytes:
+    """그 비밀로 서명을 확인하고 받은 본문을 돌려준다. 틀리면 401 이다."""
+    body = await read_body(request)
+    header = request.headers.get(SIGNATURE_HEADER)
+    if not is_valid(secret, header, request.method, signed_path(request), body, time.time()):
+        raise unauthorized()
+    return body
+
+
 async def verify_caller(request: Request, caller: Annotated[str, Path(pattern=CALLER_PATTERN)]) -> str:
     """
     부르는 서버의 서명을 확인하고 그 이름을 돌려준다. FastAPI 의 의존성으로 쓴다.
 
     모르는 서버이거나 그 서버의 비밀이 비어 있으면 401 이다. 404 로 나누지 않는다(어느 이름이 있는지 알리지 않는다).
     """
-    body = await read_body(request)
-    header = request.headers.get(SIGNATURE_HEADER)
-    if not is_valid(caller_secret(request, caller), header, request.method, signed_path(request), body, time.time()):
-        raise unauthorized()
+    await verified_body(request, caller_secret(request, caller))
     return caller
+
+
+async def verify_auth_server(request: Request) -> bytes:
+    """인증 서버의 서명을 확인하고 본문을 돌려준다. FastAPI 의 의존성으로 쓴다. 본문은 그다음에 해석한다."""
+    return await verified_body(request, auth_server_secret(request))
 
 
 # 서명을 확인한 부르는 서버의 이름. 라우터의 의존성(dependencies=[...])이나 인자로 쓴다
 SignedCaller = Annotated[str, Depends(verify_caller)]
+# 인증 서버가 서명한 본문
+AuthServerBody = Annotated[bytes, Depends(verify_auth_server)]

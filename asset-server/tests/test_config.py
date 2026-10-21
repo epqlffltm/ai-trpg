@@ -46,3 +46,24 @@ def test_the_caller_secret_is_hidden_when_printed():
     settings = make_test_settings()
 
     assert settings.chat_server_secret.get_secret_value() not in repr(settings)
+
+
+def test_does_not_start_with_a_short_auth_secret():
+    with pytest.raises(ValidationError, match='32자 이상'):
+        make_test_settings(auth_server_secret='short')
+
+
+def test_does_not_start_when_two_servers_share_a_secret():
+    with pytest.raises(ValidationError, match='서버마다 달라야'):
+        make_test_settings(chat_server_secret='x' * MIN_SECRET_LENGTH, auth_server_secret='x' * MIN_SECRET_LENGTH)
+
+
+def test_two_empty_secrets_are_not_shared_ones():
+    settings = make_test_settings(chat_server_secret='', auth_server_secret='')
+
+    assert settings.all_secrets() == ['', '']
+
+
+def test_the_auth_secret_is_not_a_caller():
+    # 인증 서버의 비밀로는 페르소나와 판을 가져가지 못한다
+    assert 'auth' not in make_test_settings().service_secrets()

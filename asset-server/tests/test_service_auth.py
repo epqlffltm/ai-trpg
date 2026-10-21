@@ -168,17 +168,20 @@ def test_service_auth_imports_nothing_from_the_app():
 
 
 async def test_every_service_route_needs_the_signature(app: FastAPI, client: AsyncClient, mine: dict):
-    # 서명을 보는 주소는 모두 /api/v1/asset/service/{caller}/ 아래다. 프록시가 그 아래를 바깥에 열지 않는다
-    # (docker/nginx/templates/api.inc.template). 그 아래의 주소는 모두 서명이 없으면 401 이다
-    paths = [path for path in app.openapi()['paths'] if path.startswith(f'{API_PREFIX}/service/')]
+    # 서명을 보는 주소는 모두 /api/v1/asset/service/ 아래다. 프록시가 그 아래를 바깥에 열지 않는다
+    # (docker/nginx/templates/api.inc.template). 그 아래의 주소는 모두 서명이 없으면 401 이다(토큰이 있어도)
     some_id = str(uuid.UUID(int=1))
-    answers = {
-        path: await client.get(path.format(caller='chat', persona_id=some_id, character_id=some_id), headers=mine)
-        for path in paths
-    }
+    routes = [
+        (method.upper(), path)
+        for path, operations in app.openapi()['paths'].items()
+        if path.startswith(f'{API_PREFIX}/service/')
+        for method in operations
+    ]
+    answers = {}
+    for method, path in routes:
+        url = path.format(caller='chat', persona_id=some_id, character_id=some_id, public_id=some_id)
+        answer = await client.request(method, url, headers=mine, json={'withdrawn_at': '2026-10-28T03:00:00Z'})
+        answers[(method, path)] = (answer.status_code, answer.json())
 
-    assert len(paths) == 4
-    assert all(path.startswith(f'{API_PREFIX}/service/{{caller}}/') for path in paths)
-    assert {path: (answer.status_code, answer.json()) for path, answer in answers.items()} == {
-        path: (status.HTTP_401_UNAUTHORIZED, BAD_SIGNATURE) for path in paths
-    }
+    assert len(routes) == 5
+    assert answers == {route: (status.HTTP_401_UNAUTHORIZED, BAD_SIGNATURE) for route in routes}

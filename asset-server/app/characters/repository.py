@@ -10,6 +10,7 @@
 import uuid
 from collections.abc import Sequence
 
+from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +56,17 @@ async def list_owned(
 async def delete(session: AsyncSession, character: Character) -> None:
     """캐릭터의 행을 지운다. 판도 함께 지워진다(외래 키의 CASCADE)."""
     await session.delete(character)
+
+
+async def delete_private_owned(session: AsyncSession, owner_id: uuid.UUID) -> int:
+    """
+    이 사람의 비공개 캐릭터를 모두 지운다(탈퇴). 판도 함께 지워진다(외래 키의 CASCADE). 지운 수를 돌려준다.
+
+    공개 캐릭터는 남긴다. 남이 쓰는 것이다(docs/architecture/asset-server.md). 1~2단계에는 운영자만 공개로 둔다.
+    """
+    condition = (Character.owner_id == owner_id) & (Character.visibility == Visibility.PRIVATE)
+    result = await session.execute(delete_rows(Character).where(condition))
+    return result.rowcount
 
 
 async def list_versions(session: AsyncSession, character_id: uuid.UUID) -> list[CharacterVersion]:
