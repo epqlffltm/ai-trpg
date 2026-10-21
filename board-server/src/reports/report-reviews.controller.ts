@@ -27,19 +27,20 @@ import { CurrentUser } from '../auth/current-user.decorator.js';
 // 타입만 가져온다(import type). 데코레이터가 붙은 인자의 타입이 인터페이스면 이렇게 적어야 빌드된다
 import type { AccessClaims } from '../auth/tokens.js';
 import { CommentIdPipe } from '../comments/comment-id.pipe.js';
-import { Page } from '../posts/page.js';
+import { ForOperators } from '../openapi/audience.js';
 import { PostIdPipe } from '../posts/post-id.pipe.js';
 import { HandleReportsDto } from './handle-reports.dto.js';
 import { ListReportsQuery } from './list-reports.query.js';
 import { ReportReviewsService } from './report-reviews.service.js';
 import {
-  OpenReportGroupResponse,
-  ReportResponse,
+  OpenReportGroupPageResponse,
+  ReportPageResponse,
   toOpenReportGroupResponse,
   toReportResponse,
 } from './report.response.js';
 import { commentTarget, postTarget, ReportTarget } from './report-target.js';
 
+@ForOperators()
 @Controller()
 export class ReportReviewsController {
   constructor(private readonly reviews: ReportReviewsService) {}
@@ -50,7 +51,7 @@ export class ReportReviewsController {
   async listOpen(
     @Query() query: ListReportsQuery,
     @CurrentUser() user: AccessClaims,
-  ): Promise<Page<OpenReportGroupResponse>> {
+  ): Promise<OpenReportGroupPageResponse> {
     const page = await this.reviews.listOpen(user, query.page, query.size);
     return {
       ...page,
@@ -67,7 +68,7 @@ export class ReportReviewsController {
     @Param('id', PostIdPipe) id: string,
     @Query() query: ListReportsQuery,
     @CurrentUser() user: AccessClaims,
-  ): Promise<Page<ReportResponse>> {
+  ): Promise<ReportPageResponse> {
     return this.listFor(postTarget(id), query, user);
   }
 
@@ -78,7 +79,7 @@ export class ReportReviewsController {
     @Param('id', CommentIdPipe) id: string,
     @Query() query: ListReportsQuery,
     @CurrentUser() user: AccessClaims,
-  ): Promise<Page<ReportResponse>> {
+  ): Promise<ReportPageResponse> {
     return this.listFor(commentTarget(id), query, user);
   }
 
@@ -109,7 +110,7 @@ export class ReportReviewsController {
     target: ReportTarget,
     query: ListReportsQuery,
     user: AccessClaims,
-  ): Promise<Page<ReportResponse>> {
+  ): Promise<ReportPageResponse> {
     const page = await this.reviews.listFor(
       target,
       user,

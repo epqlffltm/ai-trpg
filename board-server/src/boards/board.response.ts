@@ -5,11 +5,13 @@
  *
  * 칸 이름은 다른 서버들처럼 밑줄로 잇는다(write_policy). 테이블의 번호(id)는 내보내지 않는다.
  * 게시판은 주소의 이름(slug)으로 가리킨다.
+ *
+ * 응답의 모양은 인터페이스가 아니라 클래스로 적는다. API 목록(docs/api/board.openapi.json)이 빌드할 때 클래스의 칸과 주석을 읽는다.
  */
 
 import { Board, WritePolicy } from './board.entity.js';
 
-export interface BoardResponse {
+export class BoardResponse {
   slug: string;
   name: string;
   description: string;

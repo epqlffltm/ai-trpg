@@ -37,15 +37,14 @@ import { CommentIdPipe } from './comment-id.pipe.js';
 import { Comment } from './comment.entity.js';
 import {
   authorsOf,
+  CommentListResponse,
   CommentResponse,
-  CommentThreadResponse,
   toCommentResponse,
   toCommentThreadResponse,
 } from './comment.response.js';
 import { CommentsService } from './comments.service.js';
 import { CreateCommentDto } from './create-comment.dto.js';
 import { ListCommentsQuery } from './list-comments.query.js';
-import { Slice } from './slice.js';
 import { UpdateCommentDto } from './update-comment.dto.js';
 
 @Controller()
@@ -62,7 +61,7 @@ export class CommentsController {
   async list(
     @Param('postId', PostIdPipe) postId: string,
     @Query() query: ListCommentsQuery,
-  ): Promise<Slice<CommentThreadResponse>> {
+  ): Promise<CommentListResponse> {
     const slice = await this.comments.listIn(postId, query.after, query.size);
     const nicknames = await this.authors.nicknamesOf(authorsOf(slice.items));
     return {

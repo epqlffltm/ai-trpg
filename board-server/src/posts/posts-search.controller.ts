@@ -18,8 +18,11 @@ import { Board } from '../boards/board.entity.js';
 import { BoardsService } from '../boards/boards.service.js';
 import { CommentCountsService } from '../comment-counts/comment-counts.service.js';
 import { countOf } from '../comment-counts/counts.js';
-import { Page, pageOf } from './page.js';
-import { PostSummaryResponse, toPostSummaryResponse } from './post.response.js';
+import { pageOf } from './page.js';
+import {
+  PostSummaryPageResponse,
+  toPostSummaryResponse,
+} from './post.response.js';
 import { PostsSearchService } from './posts-search.service.js';
 import { SearchPostsQuery } from './search-posts.query.js';
 import { termsOf } from './search.js';
@@ -44,7 +47,7 @@ export class PostsSearchController {
   @HttpCode(HttpStatus.OK)
   async find(
     @Query() query: SearchPostsQuery,
-  ): Promise<Page<PostSummaryResponse>> {
+  ): Promise<PostSummaryPageResponse> {
     const now = new Date();
     const board =
       query.board === undefined

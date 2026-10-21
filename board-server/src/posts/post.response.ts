@@ -8,14 +8,17 @@
  * 목록에는 본문을 싣지 않는다. 한 쪽에 본문 스무 개를 실으면 응답이 쓸데없이 커진다.
  * 댓글 수는 글의 칸이 아니다. 따로 세어서 넘겨받는다(comment-counts/).
  * 고정되어 있는지는 지금 시각에 달려 있다. 끝나는 시각이 지난 글은 고정하지 않은 글로 내보낸다.
+ *
+ * 응답의 모양은 인터페이스가 아니라 클래스로 적는다. API 목록(docs/api/board.openapi.json)이 빌드할 때 클래스의 칸과 주석을 읽는다.
  */
 
 import { Page } from './page.js';
+import { PageFields } from './page.response.js';
 import { isPinned, pinnedUntilOf } from './pins.policy.js';
 import { Post } from './post.entity.js';
 
 /** 글 목록의 한 줄. */
-export interface PostSummaryResponse {
+export class PostSummaryResponse {
   id: string;
   /** 글이 있는 게시판의 주소 이름(slug) */
   board: string;
@@ -34,12 +37,20 @@ export interface PostSummaryResponse {
 }
 
 /** 글 하나. 목록의 한 줄에 본문이 더해진다. */
-export interface PostResponse extends PostSummaryResponse {
+export class PostResponse extends PostSummaryResponse {
   content: string;
 }
 
-/** 글 목록의 한 쪽. 고정한 글을 따로 싣는다. */
-export interface PostListResponse extends Page<PostSummaryResponse> {
+/** 글 목록의 한 쪽. 검색의 결과가 이 모양이다. */
+export class PostSummaryPageResponse
+  extends PageFields
+  implements Page<PostSummaryResponse>
+{
+  items: PostSummaryResponse[];
+}
+
+/** 게시판의 글 목록의 한 쪽. 고정한 글을 따로 싣는다. */
+export class PostListResponse extends PostSummaryPageResponse {
   /** 지금 고정되어 있는 글들. 나중에 고정한 것부터다. 첫 쪽에만 싣는다. items 와 total 에는 들지 않는다 */
   pinned: PostSummaryResponse[];
 }

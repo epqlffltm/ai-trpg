@@ -374,6 +374,31 @@ npm run migration:revert                                     # 마지막 하나 
 401 은 왜 틀렸는지 알리지 않는다. 만료든 서명이 틀렸든 응답이 같다. 클라이언트는 401 이면 토큰을 갱신하고, 503 이면 로그아웃시키지 않고 잠시 뒤 다시 부른다.
 게임 서버와 같은 응답이다.
 
+### API 목록(OpenAPI)
+
+화면의 타입과 디자인 도구에 넘기는 API 목록은 [`docs/api/board.openapi.json`](../docs/api/board.openapi.json)이다(#559, [API 목록](../docs/api/README.md)).
+코드에서 뽑는다. 손으로 고치지 않는다. API 를 바꾸면 저장소 루트에서 다시 뽑아 함께 커밋한다. 빠뜨리면 CI 의 `api-docs` 가 실패한다.
+
+```
+# board-server 에서 npm ci 를 해 둔 뒤, 저장소 루트에서
+uv run --no-project python tools/export_openapi.py board
+```
+
+도구는 이 서버의 `npm run --silent openapi` 를 부른다. 빌드한 뒤(`nest build`) 앱을 미리 보기로 만들어 목록을 JSON 으로 낸다(`src/openapi/export.ts`).
+서버를 띄우지 않고 DB 에도 닿지 않는다. 서버는 `/docs` 를 열지 않는다. 바깥에 나가는 목록은 저장소의 파일뿐이다.
+
+목록이 맞으려면 코드를 이렇게 쓴다.
+
+- **응답의 모양은 `*.response.ts` 의 클래스로 적는다.** 인터페이스는 빌드에서 사라져 목록에 칸이 빠진다.
+  `@nestjs/swagger` 의 플러그인이 빌드할 때 `*.dto.ts`, `*.query.ts`, `*.response.ts` 의 클래스에서 칸의 타입과 `/** */` 주석을 읽는다(`nest-cli.json`).
+  컨트롤러의 반환 타입은 응답으로, 메서드의 주석은 요약으로 실린다.
+- **제네릭은 읽지 못한다.** `Page<Item>` 을 그대로 돌려주면 `items` 가 무엇의 목록인지 빠진다. 항목마다 클래스를 둔다
+  (`PostSummaryPageResponse` 처럼 `PageFields`(`posts/page.response.ts`)를 이어받고 `Page<Item>` 을 implements 한다).
+- **로그인 없이 부르는 API** 는 `@Public()` 이 목록에도 그렇게 적는다. 목록은 기본으로 bearer 토큰이 필요하다고 적는다.
+- **운영자의 API** 는 컨트롤러에 `@ForOperators()` 를 붙인다(`src/openapi/audience.ts`). 주소에 `/admin/` 이 없어서 도구가 주소로 알 수 없다.
+  표시는 목록에만 쓰인다. 운영자만 부르게 막는 것은 서비스가 한다.
+- 기본값이 있는 입력(`page`, `size`, `days`)은 적지 않아도 되는 것으로, 모든 API 의 오류는 `ErrorBody` 로 목록에 적힌다(`src/openapi/document.ts`).
+
 ## 알림 보내기
 
 내 글에 댓글이 달리거나 내 댓글에 답글이 달리면 그 사람의 알림함에 알린다(#385, `src/notifications/`). 알림함은 알림 서버에 있다([알림 서버의 README](../notification-server/README.md)).
@@ -457,6 +482,7 @@ src/
     posts.controller.ts          글의 API
     post.response.ts             글을 응답의 모양으로 바꾼다
     page.ts                      목록을 쪽으로 나누는 셈
+    page.response.ts             쪽의 칸(page, size, total). 목록의 응답 클래스들이 이어받는다
     post-id.pipe.ts              주소의 글 번호를 검사한다
     posts.errors.ts              글을 다루다 거절할 때의 응답들
     pins.policy.ts               누가 고정하는가, 몇 개까지인가, 언제 끝나는가
@@ -547,6 +573,10 @@ src/
     notification-dispatcher.runner.ts  그 바퀴를 5초마다 돌린다. 앱이 뜨면 시작하고 닫히면 멈춘다
     notifications.module.ts      위의 것들을 묶는다. 주소가 없으면 보내는 것이 없다
   health/                        살아 있는지, 준비됐는지 확인하는 API
+  openapi/                       API 목록(OpenAPI, #559)
+    document.ts                  목록을 만든다. 기본값이 있는 입력과 오류의 모양을 더한다
+    audience.ts                  @ForOperators(). 운영자의 API 라는 목록의 표시
+    export.ts                    목록을 JSON 으로 표준 출력에 낸다(npm run openapi)
   migrations/                    마이그레이션 파일
 test/
   setup.ts                       테스트의 환경 변수를 맞춘다(DB 주소, 테스트용 스키마, 닿지 않는 공개키 주소)
