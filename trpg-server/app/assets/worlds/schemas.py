@@ -20,6 +20,8 @@ class WorldCreate(AssetCreate):
 
     setting: Setting = ''
     gm_notes: GmNotes = ''
+    # 이 세계관의 판에서 방장이 참고 자료(SRD 같은 바깥 자료)를 켤 수 있는가
+    references_allowed: bool = False
 
 
 class WorldUpdate(AssetUpdate):
@@ -27,6 +29,7 @@ class WorldUpdate(AssetUpdate):
 
     setting: Setting | None = None
     gm_notes: GmNotes | None = None
+    references_allowed: bool | None = None
 
 
 class WorldDetail(AssetSummary):
@@ -39,3 +42,4 @@ class WorldDetail(AssetSummary):
 
     setting: str
     gm_notes: str
+    references_allowed: bool

@@ -43,6 +43,7 @@ from app.rounds.narrator import (
     PersonState,
     PlaceNote,
     QuestNote,
+    ReferenceNote,
     StoryContext,
     WhisperNote,
 )
@@ -128,7 +129,10 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-41: [퀘스트]의 진행 중인 줄에 남은 기한의 감각(기한 넉넉함, 빠듯함, 다 됨)이,
 #                 이번 라운드에 기한을 넘겨 실패한 줄에 그것이 붙는다. 다루는 법에 기한을 다루는 말이 더해진다(#268)
 #   narration-42: 기한이 다 됐거나 이번 라운드에 넘긴 퀘스트를 마지막 부탁 앞에 한 줄씩 다시 적는다(#268 의 측정)
-PROMPT_VERSION = 'narration-42'
+#   narration-43: 테이블이 참고 자료(#482)를 켰으면 [참고할 설정] 뒤에 [참고 자료]가 붙는다.
+#                 바깥 자료(SRD 5.1)의 줄이다.
+#                 설정이 먼저라는 것, 맞지 않으면 쓰지 않는다는 것, 수치와 규칙은 쓰지 않는다는 것을 적는다
+PROMPT_VERSION = 'narration-43'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -304,6 +308,17 @@ LORE_NOTE = (
     '결과와 선언한 행동은 그대로 둔다. 설정 속의 비밀은 장면에서 드러내지 않는다. '
     '인물은 장면에 이미 나온 호칭으로 부른다. 설정에만 있는 이름은 장면에서 그 이름이 밝혀질 때 쓴다.'
 )
+
+# 검색한 참고 자료(#482) 앞에 붙이는 말. 바깥 자료라 세계관과 맞지 않을 수 있다.
+# 글에는 수치가 없지만(app/references/srd.py), 모델이 원본의 규칙을 떠올려 결과를 덧붙이지 않게 적는다
+REFERENCE_TITLE = '[참고 자료]'
+REFERENCE_NOTE = (
+    '바깥 자료(D&D SRD 5.1, 영어)에서 이번 장면과 관련 있을 수 있는 것을 고른 것이다. '
+    '생김새, 쓰임, 버릇을 그리는 데만 쓴다. 위의 설정과 다르면 설정을 따르고, 장면에 맞지 않으면 쓰지 않는다. '
+    '수치와 규칙(피해, 난이도, 횟수)은 쓰지 않는다. 결과는 엔진이 정했다. 이름은 장면의 말(한국어)로 옮겨 쓴다.'
+)
+# 참고 자료의 종류 앞에 붙는 이름
+REFERENCE_KIND_NAMES = {'monster': '몬스터', 'item': '물건'}
 
 # 검색한 지난 일 앞에 붙이는 말. 지난 기록(대화)보다 앞의 라운드라 모델이 모르는 일이다.
 # 지난 행동에 끌려 이번 행동이 바뀌지 않게, 이미 끝난 일이라는 것과 무엇에 쓰는지를 적는다
@@ -592,6 +607,19 @@ def memory_lines(notes: list[MemoryNote]) -> list[str]:
     return [*lines, '']
 
 
+def reference_line(note: ReferenceNote) -> str:
+    """참고 자료 한 줄. 앞에 종류를 붙인다."""
+    kind = REFERENCE_KIND_NAMES.get(note.kind, note.kind)
+    return f'- [{kind}] {note.name}: {note.content}'
+
+
+def reference_lines(notes: list[ReferenceNote]) -> list[str]:
+    """검색한 참고 자료들을 적는 줄들. 끝에 빈 줄이 붙는다. 없으면 빈 목록이다(테이블이 켜지 않았으면 늘 없다)."""
+    if not notes:
+        return []
+    return [REFERENCE_TITLE, REFERENCE_NOTE, *(reference_line(note) for note in notes), '']
+
+
 def history_lines(histories: list[PersonHistory]) -> list[str]:
     """
     인물의 이력을 적는 줄들. 인물마다 이름 한 줄과 "- (N 라운드) 문장" 줄들.
@@ -777,8 +805,8 @@ def round_text(request: NarrationRequest) -> str:
     """
     이번 라운드에 플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁. 사람의 말로 들어간다.
 
-    검색한 로어북 항목, 지난 일, 인물의 이력, 비밀 쪽지, 퀘스트, 시각, 맵, 몬스터, 인물의 상태가 있으면 맨 앞에 둔다
-    (설정, 지난 일, 이력, 쪽지, 퀘스트, 시각, 맵, 몬스터, 상태, 이번 라운드의 차례).
+    검색한 로어북 항목, 참고 자료, 지난 일, 인물의 이력, 비밀 쪽지, 퀘스트, 시각, 맵, 몬스터, 인물의 상태가 있으면
+    맨 앞에 둔다(설정, 참고 자료, 지난 일, 이력, 쪽지, 퀘스트, 시각, 맵, 몬스터, 상태, 이번 라운드의 차례).
     이번 라운드에 한 일은 차례 순서다. 맞붙은 몬스터가 있었으면 캐릭터와 몬스터의 줄이 섞인다(round_lines).
     상태는 이번 라운드의 결과 바로 앞이다. 엔진이 정한 사실이라 결과와 가까이 둔다.
     지목이 있으면 결과 뒤에 다루는 법을 한 줄 붙인다. 찾기로 길을 찾았으면 그것을 다루는 법도 한 줄 붙인다.
@@ -789,6 +817,7 @@ def round_text(request: NarrationRequest) -> str:
     부탁이 늘 마지막 줄이다.
     """
     lines = lore_lines(request.lore, {move.character_name for move in request.moves})
+    lines.extend(reference_lines(request.references))
     lines.extend(memory_lines(request.memories))
     lines.extend(history_lines(request.histories))
     lines.extend(whisper_lines(request.whispers))

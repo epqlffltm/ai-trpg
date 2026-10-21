@@ -69,10 +69,14 @@ def trimmed(request: NarrationRequest) -> Iterator[NarrationRequest]:
     """
     요청을 하나씩 줄여 가며 내놓는다. 처음 것은 줄이지 않은 요청이다(지난 기록의 글자 수 상한만 건 것).
 
-    지난 기록의 오래된 것 → 로어북 항목의 뒤쪽 → 기억의 뒤쪽 순서로 하나씩 뺀다. 마지막 것은 셋을 다 뺀 요청이다.
+    참고 자료의 뒤쪽 → 지난 기록의 오래된 것 → 로어북 항목의 뒤쪽 → 기억의 뒤쪽 순서로 하나씩 뺀다.
+    마지막 것은 넷을 다 뺀 요청이다. 참고 자료는 바깥 자료라 제작자의 것과 지난 일보다 먼저 뺀다(#482).
     """
     current = replace(request, history=fit_history(request.history, HISTORY_ROUNDS, HISTORY_MAX_CHARS))
     yield current
+    while current.references:
+        current = replace(current, references=current.references[:-1])
+        yield current
     while current.history:
         current = replace(current, history=current.history[1:])
         yield current

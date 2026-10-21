@@ -43,6 +43,7 @@ from app.tables import (
     places,
     quest_changes,
     quests,
+    references,
     replacements,
     repository,
     rolls,
@@ -89,6 +90,7 @@ from app.tables.schemas import (
     PregenChoice,
     QuestChange,
     QuestOut,
+    ReferencesUpdate,
     RollOut,
     RoundTimeLimitUpdate,
     RouteOut,
@@ -175,6 +177,7 @@ def to_summary(table: GameTable) -> TableSummary:
         credit_wait_seconds=table.credit_wait_seconds,
         remove_short_payers=table.remove_short_payers,
         whisper_notice=table.whisper_notice,
+        references_enabled=table.references_enabled,
         created_at=table.created_at,
     )
 
@@ -739,6 +742,19 @@ async def change_whisper_notice(
     진행 중에도 된다. 바꾼 뒤에 보내는 쪽지부터 따른다.
     """
     table = await whisper_notices.change_whisper_notice(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/references', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_references(
+    table_id: uuid.UUID, data: ReferencesUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    서술에 참고 자료(SRD 같은 바깥 자료)를 넣을지 바꾼다. 방장만 한다. 모집 중에만 된다(시작하면 고정이다).
+
+    켜려면 판의 세계관이 허용해야 한다. 아니면 422 다.
+    """
+    table = await references.change_references(session, user.user_id, table_id, data)
     return to_detail(table, user.user_id)
 
 

@@ -2,6 +2,7 @@
 
 """
 테스트 실행기. 테스트에서만 달라야 하는 설정 세 가지를 바꾸고, 로그를 화면에 찍지 않게 한다.
+테스트가 받은 응답이 API 목록과 맞는지도 본다(config/schema_check.py, #558).
 
 비밀번호 해셔를 가벼운 것으로 바꾼다. 기본 해셔는 일부러 느리게 만든 계산이라,
 가입과 로그인을 수백 번 하는 테스트에서는 실행 시간의 대부분을 차지한다.
@@ -23,6 +24,8 @@ import logging
 from django.test.runner import DiscoverRunner
 from django.test.utils import override_settings
 
+from config.schema_check import build_openapi, start_checking
+
 # 강도가 없는 해셔다. 테스트 밖에서 쓰면 안 된다
 FAST_PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 
@@ -43,8 +46,11 @@ class FastHasherTestRunner(DiscoverRunner):
         # 로그를 보는 테스트는 assertLogs 로 잡는다. assertLogs 는 그 로거의 수준을 잠깐 내려서 잡는다
         self._root_log_level = logging.getLogger().level
         logging.getLogger().setLevel(logging.CRITICAL + 1)
+        # 테스트 클라이언트가 받는 응답을 모두 API 목록과 견준다. 맞지 않으면 그 테스트가 실패한다
+        self._stop_schema_check = start_checking(build_openapi())
 
     def teardown_test_environment(self, **kwargs) -> None:
+        self._stop_schema_check()
         logging.getLogger().setLevel(self._root_log_level)
         self._settings_override.disable()
         super().teardown_test_environment(**kwargs)

@@ -87,6 +87,7 @@ class CallRecord:
     temperature, max_tokens 는 부를 때의 생성 설정이다. 코드의 상수라 틀의 버전과 따로 바뀔 수 있어 함께 남긴다.
     lore_entry_ids 는 프롬프트에 넣은 로어북 항목들이다(app/lore/retrieval.py). 검색이 맞는 것을 골랐는지 볼 근거다.
     memory_rounds 는 프롬프트에 넣은 지난 일(라운드의 번호)들이다(app/memory/retrieval.py).
+    reference_ids 는 프롬프트에 넣은 참고 자료의 줄들이다(app/references/retrieval.py, #482).
     input_digest 는 보낸 메시지의 지문이다(input_digest 함수). 키가 없으면 None.
     input_chars 는 보낸 메시지의 글자 수의 합이다(chars_of 함수). input_tokens 와 나란히 놓아 글자당 토큰 수를 잰다.
     usage 는 자세한 사용량과 원가다(CallUsage, app/ai/costs.py 의 usage_of 가 만든다).
@@ -109,6 +110,7 @@ class CallRecord:
     max_tokens: int | None = None
     lore_entry_ids: tuple[uuid.UUID, ...] = ()
     memory_rounds: tuple[int, ...] = ()
+    reference_ids: tuple[uuid.UUID, ...] = ()
     input_digest: str | None = None
     input_chars: int | None = None
     usage: CallUsage = NO_USAGE
