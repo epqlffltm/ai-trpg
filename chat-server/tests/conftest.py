@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import Settings
 from app.main import create_app
+from tests.assets import FakeAsset
 from tests.cleaning import clear_tables
 
 TEST_SCHEMA = 'chat_test'
@@ -110,6 +111,14 @@ async def app(settings: Settings, auth_server: FakeAuthServer, engine: AsyncEngi
     app = create_app(settings, http_client=auth_server.make_client(), engine=engine)
     yield app
     await app.state.http_client.aclose()
+
+
+@pytest.fixture
+def asset(app: FastAPI) -> FakeAsset:
+    """가짜 asset 서버. 앱의 asset 클라이언트 자리에 끼운다(tests/assets.py)."""
+    fake = FakeAsset()
+    app.state.asset = fake
+    return fake
 
 
 @pytest.fixture
