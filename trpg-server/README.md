@@ -2974,7 +2974,7 @@ uv run python -m scripts.eval_lore --fake
 | --- | --- |
 | 1 | 저장과 넣기. 데이터 파일, 테이블, 넣는 명령, 벡터를 만드는 명령(#568) |
 | 2 | 서술에 섞기. 세계관이 허용하고 방장이 방 설정으로 켜면, 제작자의 로어북을 고르고 남은 자리에 참고 자료를 넣는다([서술에 섞기](#서술에-섞기)) |
-| 3 | 켠 것과 끈 것을 견주는 평가(서술의 품질, 늘어난 토큰) |
+| 3 | 켠 것과 끈 것을 견주는 평가(서술의 품질, 늘어난 토큰). 도구는 있다([평가](#참고-자료의-평가)). 잰 결과로 거리 기준을 고친다 |
 | 4 | 기본 자산. 참고 자료를 내 로어북과 도감으로 복사해 쓴다. srd5 룰북이면 몬스터 시트를 채운다 |
 
 정한 것.
@@ -3056,6 +3056,31 @@ uv run python -m scripts.references index --model qwen3-embedding:0.6b
 REFERENCE_MAX_DISTANCE=0.45
 REFERENCE_KEYWORD_MAX_DISTANCE=0.50
 ```
+
+### 참고 자료의 평가
+
+한국어 장면에서 영어 SRD 를 얼마나 맞게 고르는지, 켠 서술과 끈 서술이 어떻게 다른지 잰다(`evals/references/`, `scripts/eval_references.py`).
+서버도 DB 도 쓰지 않는다. 고르는 규칙은 서버의 함수(`alias_hits`, `choose`)를 그대로 쓰고, 서술은 서버의 서술자(`LLMNarrator`)를 그대로 쓴다.
+
+```
+uv run python -m scripts.eval_references
+uv run python -m scripts.eval_references --model bge-m3 qwen3-embedding:0.6b --out $HOME\refs-eval.md
+uv run python -m scripts.eval_references --narrate --narration-model gemma4:26b-a4b-it-qat --repeat 2
+uv run python -m scripts.eval_references --narrate --max-distance 0.55
+uv run python -m scripts.eval_references --fake --narrate
+```
+
+- **검색.** 자료 810줄과 장면을 임베딩 모델로 바꿔 거리를 재고, 지금의 기준과 0.30~0.80 의 거리 기준마다 점수를 매긴다. 모델은 한 번만 부른다.
+  지표는 맞힘(정답 중 하나라도 고름), 정밀도, 비우기(맞는 것이 없는 장면에서 아무것도 고르지 않음), 거리 기준 없는 hit@1·3·5, 정답과 정답 아닌 줄의 거리 분포다.
+  맞힘과 비우기의 평균이 가장 높은 기준에 "가장 나음"을 표시한다. 그 값으로 `REFERENCE_MAX_DISTANCE` 를 고친다.
+- **서술(`--narrate`).** 장면마다 끈 것(off)과 켠 것(on)을 `--repeat` 번씩 서술하게 한다. 켠 것에는 첫째 임베딩 모델로 고른 줄을 넣는다.
+  입력·출력 토큰의 평균(provider 가 알려 준 만큼), 수치가 샌 서술(`DC 14`, `2d6`, `+5`, `난이도 15`), 글자 수를 세고 장면을 모두 남긴다. 서술이 나아졌는지는 사람이 읽고 판단한다.
+- **데이터**(`evals/references/scenes.yaml`). 장면, 선언, 정답(맞다고 보는 줄의 key, 그중 하나면 맞음).
+  - `kind`: `named`(한국어로 부름), `meaning`(이름 없이 뜻으로만), `none`(SRD 에 맞는 것이 없음, 정답이 빈다).
+  - `set`: 장면의 묶음(`v1` …). 늘릴 때 새 이름을 붙이면 지난 결과와 같은 묶음끼리 견줄 수 있다(`--set v1`).
+  - 읽을 때 검사한다(자료에 없는 key, 겹치는 이름, 빠진 칸, `none` 과 정답이 어긋남). 테스트가 늘 이 파일을 읽어 보므로 실수는 CI 에서 걸린다.
+- `--fake` 는 모델 없이 가짜 임베더와 수치를 흘리는 정해 둔 글로 돈다. 숫자에 뜻은 없다. 스크립트가 도는지 볼 때 쓴다.
+- 한국어 이름(`aliases`)을 채우면(4단계) 다시 잰다. 그 전에는 벡터로만 고른다.
 
 ## 지난 일(기억)
 
