@@ -1,0 +1,131 @@
+{
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "MeResponse": {
+        "description": "토큰의 주인.",
+        "properties": {
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "MeResponse",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "AI TRPG asset 서버",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/asset/me": {
+      "get": {
+        "description": "토큰이 유효하면 그 주인의 ID 를 돌려준다.",
+        "operationId": "read_me_api_v1_asset_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Me",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "서버 프로세스가 요청을 받을 수 있으면 200 을 돌려준다.\n\nDB 나 다른 서버의 상태는 보지 않는다. 그것까지 보면, DB 가 잠깐 느려졌을 때\n관리 도구가 멀쩡한 서버를 죽은 것으로 보고 재시작한다.",
+        "operationId": "check_health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Check Health",
+        "tags": [
+          "health"
+        ],
+        "x-audience": "infra"
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "DB 에 3초 안에 닿으면 200, 아니면 503 을 돌려준다.\n\n왜 닿지 않는지는 응답에 싣지 않는다. 오류 문구에는 DB 의 주소와 계정 이름이 들어 있다.\n원인은 서버의 로그에 남긴다. 오류의 종류만 적는다.",
+        "operationId": "check_readiness_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Check Readiness",
+        "tags": [
+          "health"
+        ],
+        "x-audience": "infra"
+      }
+    }
+  }
+}

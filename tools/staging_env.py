@@ -1,7 +1,7 @@
 # tools/staging_env.py
 
 """
-staging(VM)의 .env 여섯(루트와 서버 다섯)을 새로 만든다. VM 을 처음 준비할 때 한 번 쓴다(docs/operations/staging-vm.md).
+staging(VM)의 .env 일곱(루트와 서버 여섯)을 새로 만든다. VM 을 처음 준비할 때 한 번 쓴다(docs/operations/staging-vm.md).
 
     사용(VM 의 저장소 루트에서):
         python3 tools/staging_env.py --domain <도메인> --acme-email <메일> \\
@@ -9,7 +9,7 @@ staging(VM)의 .env 여섯(루트와 서버 다섯)을 새로 만든다. VM 을 
             --s3-bucket <버킷> --age-recipients "<주 열쇠의 공개키> <확인 열쇠의 공개키>"
 
 하는 일(차례대로):
-  1. tools/fill_env.py 로 .env 여섯을 .env.example 에서 만들고 비밀을 난수로 채운다.
+  1. tools/fill_env.py 로 .env 일곱을 .env.example 에서 만들고 비밀을 난수로 채운다.
      어느 비밀끼리 짝인지, DB 비밀번호가 어디에 들어가는지는 그 도구의 표(SECRETS)가 정한다. 여기에 다시 적지 않는다.
      서버끼리의 짝 비밀(# BILLING_SECRET= 등)은 그 도구가 주석을 풀어 둔다
   2. 그 표의 비밀 가운데 아직 주석으로 막힌 줄을 값 그대로 푼다. 남는 것은 한 파일만 아는 비밀이다
@@ -17,7 +17,7 @@ staging(VM)의 .env 여섯(루트와 서버 다섯)을 새로 만든다. VM 을 
      SIGNAL_SECRET 은 서버를 다시 띄워도 같은 값이 되고, AI_LOG_HMAC_KEY 는 호출 기록에 입력의 지문을 남긴다
   3. staging 에서만 쓰는 값을 적는다(STAGING_VALUES 와 명령줄의 값). 주석으로 막힌 줄이면 풀어서 적는다
 
-여섯 가운데 하나라도 이미 있으면 아무것도 만들지 않고 멈춘다. 두 번 돌려 staging 의 값을 덮는 일을 막는다.
+일곱 가운데 하나라도 이미 있으면 아무것도 만들지 않고 멈춘다. 두 번 돌려 staging 의 값을 덮는 일을 막는다.
 이미 있는 .env 의 빈 비밀만 채우려면 tools/fill_env.py 를 쓴다. 파일은 주인만 읽는다(600).
 
 서버의 .env 에는 DEBUG, APP_ENVIRONMENT, DATABASE_URL 을 적지 않는다.
@@ -199,7 +199,7 @@ def existing_targets(root: Path) -> list[str]:
 
 
 def create(root: Path, options: Options) -> str:
-    """여섯을 만들고 staging 의 값을 적는다. fill_env.py 가 한 일을 글로 돌려준다(비밀의 값은 없다)."""
+    """일곱을 만들고 staging 의 값을 적는다. fill_env.py 가 한 일을 글로 돌려준다(비밀의 값은 없다)."""
     previous = os.umask(PRIVATE_UMASK)
     try:
         files, outcomes, external = run(root, dry_run=False)
@@ -213,7 +213,7 @@ def create(root: Path, options: Options) -> str:
 
 def parse_options(argv: list[str]) -> Options:
     """명령줄을 읽는다. age 의 공개키는 둘이어야 한다(주 열쇠, 확인 열쇠)."""
-    parser = argparse.ArgumentParser(description='staging(VM)의 .env 여섯을 새로 만든다')
+    parser = argparse.ArgumentParser(description='staging(VM)의 .env 일곱을 새로 만든다')
     parser.add_argument('--domain', required=True, help='이 VM 의 도메인')
     parser.add_argument('--acme-email', required=True, help="Let's Encrypt 에 알리는 메일")
     parser.add_argument(
