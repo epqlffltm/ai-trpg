@@ -9,7 +9,7 @@ Grafana 의 대시보드(docker/grafana/dashboards/*.json)가 정해 둔 규칙�
   - 데이터 소스는 uid 로 고정해 부른다(prometheus, loki). 저장소를 Mimir 로 바꿀 때 데이터 소스의 주소만 바뀐다.
     화면에서 "Export for sharing externally" 로 내보낸 파일의 ${DS_PROMETHEUS} 같은 자리와 __inputs 는 받지 않는다
   - Prometheus 의 쿼리는 모든 선택자({…})에 그 서버의 service 를 건다(인프라는 job).
-    다섯 서버가 같은 이름(http_server_requests_total)을 쓰므로, 빠뜨리면 다른 서버의 요청까지 섞여 보인다
+    서버들이 같은 이름(http_server_requests_total)을 쓰므로, 빠뜨리면 다른 서버의 요청까지 섞여 보인다
   - 패널의 id 는 대시보드 안에서 겹치지 않는다
 
     사용: python3 .github/scripts/dashboard_scope.py docker/grafana/dashboards
