@@ -273,21 +273,43 @@ async def set_character(
     return await save(session, table)
 
 
-async def leave_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> None:
+async def depart(session: AsyncSession, table: GameTable, member: TableMember) -> None:
     """
-    테이블에서 나간다. 앉지 않았으면 TableNotFoundError.
+    잠근 테이블에서 그 사람을 뺀다. 저장하지 않는다. 스스로 나가기와 탈퇴(leave_for_withdrawal)가 함께 쓴다.
 
     방장이 나가면 남은 사람 중 가장 먼저 들어온 사람이 방장이 된다. 마지막 사람이 나가면 테이블이 끝난다.
     나간 사람의 닫히지 않은 라운드의 서술 값은 돌려준다(charges.release_departed).
     """
-    table, member = await lock_seated(session, user_id, table_id)
     table.members.remove(member)
-    await charges.release_departed(session, table.id, user_id, datetime.now(UTC))
+    await charges.release_departed(session, table.id, member.user_id, datetime.now(UTC))
     payload = {'character_name': member.character_name}
-    left = recorder.record(session, table, EventType.MEMBER_LEFT, actor_id=user_id, payload=payload)
+    left = recorder.record(session, table, EventType.MEMBER_LEFT, actor_id=member.user_id, payload=payload)
     departures.record_departure(session, table, member, DepartureKind.LEFT, left)
-    if table.host_id == user_id:
+    if table.host_id == member.user_id:
         record_hand_over(session, table, hand_over(table), left)
+
+
+async def leave_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> None:
+    """테이블에서 나간다. 앉지 않았으면 TableNotFoundError. 나가는 일은 depart 다."""
+    table, member = await lock_seated(session, user_id, table_id)
+    await depart(session, table, member)
+    await commit(session, table)
+
+
+async def leave_for_withdrawal(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> None:
+    """
+    탈퇴한 사람을 테이블에서 뺀다(app/withdrawal/). 스스로 나가기와 같은 길(depart)이다.
+
+    끝난 테이블에서는 빼지 않는다. 함께한 사람의 기록이라 자리를 남긴다(2026-10-21 유저 결정).
+    이미 나갔거나, 테이블이 없거나, 그사이에 끝났으면 아무것도 하지 않는다. 같은 알림이 다시 와도 된다.
+    잠근 뒤에 확인한다. 고른 뒤 잠그기 전에 끝나거나 나갔을 수 있다.
+    """
+    table = await repository.lock_table(session, table_id)
+    member = None if table is None else find_member(table, user_id)
+    if member is None or table.status == TableStatus.ENDED:
+        await session.rollback()
+        return
+    await depart(session, table, member)
     await commit(session, table)
 
 
