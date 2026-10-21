@@ -6,7 +6,7 @@
   - 요청: 비밀번호를 확인하고, 모든 세션을 끊고, 메일과 보안 이벤트를 남긴다. 다시 눌러도 유예가 늘지 않는다
   - 유예: 다시 로그인하면 토큰이 인증 서버에만 통한다. 취소하면 갱신부터 모든 서버에 통한다
   - 마치기: 7일이 지나면 계정을 비우고, 지우기 전의 주소로 메일을 보내고, 결제 서버에 알릴 줄을 적는다
-  - 알리기: 결제 서버가 받을 때까지 다시 보낸다. 받으면 끝이다
+  - 알리기: 모든 서버에 줄을 적고, 비밀을 적은 서버에만 받을 때까지 다시 보낸다. 받으면 끝이다
 """
 
 from datetime import timedelta
@@ -23,7 +23,6 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.billing_client import PROCESSED, BillingUnavailableError
 from accounts.cookies import REFRESH_COOKIE_NAME
 from accounts.erasure import is_removed_account
 from accounts.identity import verify_identity
@@ -48,6 +47,7 @@ from accounts.withdrawal import (
     deliver_due_withdrawal_notices,
     request_withdrawal,
 )
+from accounts.withdrawal_client import WithdrawalUndeliveredError
 from accounts.withdrawal_schedule import GRACE
 
 WITHDRAWAL_URL = reverse('accounts:my-withdrawal')
@@ -77,14 +77,14 @@ def at(moment):
     return patch('accounts.withdrawal.timezone.now', return_value=moment)
 
 
-def billing_answers(*outcomes):
+def servers_answer(*outcomes):
     """
-    결제 서버가 차례로 이렇게 답하는 상황을 만든다. 예외면 그 예외를 낸다.
+    알림을 받는 서버가 차례로 이렇게 답하는 상황을 만든다. None 이면 받았다, 예외면 그 예외를 낸다.
 
     바꿔 끼우는 것(with 에 쓴다)과 가짜(받은 것을 calls 에 적는다)를 함께 돌려준다.
     """
     fake = _answering(list(outcomes))
-    return patch.dict('accounts.withdrawal.SENDERS', {WithdrawalTarget.BILLING: fake}), fake
+    return patch('accounts.withdrawal.send_withdrawal', fake), fake
 
 
 def _answering(outcomes: list):
@@ -248,13 +248,15 @@ class CompleteTests(TestCase):
         # 같은 사람이 계정을 바꿔 환영 크레딧을 다시 받지 못하게 남긴다
         self.assertTrue(WelcomeCredit.objects.filter(user_public_id=self.user.public_id).exists())
 
-    def test_tells_the_old_address_and_queues_the_billing_notice(self):
+    def test_tells_the_old_address_and_queues_a_notice_for_every_server(self):
         self.complete_at(self.due)
 
         self.assertEqual([message.to for message in mail.outbox], [[EMAIL]])
         self.assertIn('탈퇴를 마쳤습니다', mail.outbox[0].subject)
-        notice = WithdrawalNotice.objects.get(user=self.user)
-        self.assertEqual((notice.target, notice.withdrawn_at, notice.delivered_at), ('billing', self.due, None))
+        # 비밀을 아직 적지 않은 서버의 줄도 적는다. 받는 주소를 만들고 비밀을 적으면 그때 나간다
+        notices = WithdrawalNotice.objects.filter(user=self.user)
+        self.assertEqual({notice.target for notice in notices}, set(WithdrawalTarget))
+        self.assertTrue(all(n.withdrawn_at == self.due and n.delivered_at is None for n in notices))
         self.assertTrue(SecurityEvent.objects.filter(kind=SecurityEventKind.ACCOUNT_WITHDRAWN, user=self.user).exists())
 
     def test_a_finished_account_cannot_log_in(self):
@@ -270,7 +272,7 @@ class CompleteTests(TestCase):
         self.assertEqual(self.complete_at(self.due), 1)
         self.assertEqual(self.complete_at(self.due + timedelta(days=1)), 0)
 
-        self.assertEqual(WithdrawalNotice.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(WithdrawalNotice.objects.filter(user=self.user).count(), len(WithdrawalTarget))
         self.assertEqual(len(mail.outbox), 1)
 
     def test_a_finished_account_is_not_finished_again(self):
@@ -278,7 +280,7 @@ class CompleteTests(TestCase):
         self.assertTrue(complete_withdrawal(self.user.pk, self.due))
 
         self.assertFalse(complete_withdrawal(self.user.pk, self.due + timedelta(hours=1)))
-        self.assertEqual(WithdrawalNotice.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(WithdrawalNotice.objects.filter(user=self.user).count(), len(WithdrawalTarget))
 
     def test_a_request_made_again_waits_its_own_grace(self):
         # 정리 작업이 고른 뒤 잠그기 전에 취소하고 다시 요청했다. 새 요청의 유예가 지나지 않았으니 비우지 않는다
@@ -305,28 +307,29 @@ class DeliverTests(TestCase):
         User.objects.filter(pk=self.user.pk).update(withdrawal_requested_at=self.now - GRACE)
         with at(self.now):
             complete_due_withdrawals()
-        self.notice = WithdrawalNotice.objects.get(user=self.user)
+        self.notice = WithdrawalNotice.objects.get(user=self.user, target=WithdrawalTarget.BILLING)
 
     def deliver_at(self, moment):
         with at(moment):
             return deliver_due_withdrawal_notices()
 
-    def test_tells_billing_who_and_when(self):
-        answers, fake = billing_answers(PROCESSED)
+    def test_tells_only_the_servers_with_a_secret(self):
+        # 비밀은 결제 서버의 것뿐이다. 다른 서버의 줄은 비밀을 적을 때까지 기다린다
+        answers, fake = servers_answer(None)
         with answers:
             report = self.deliver_at(self.now)
 
         self.assertEqual((report.sent, report.retried), (1, 0))
         self.assertEqual(
             fake.calls,
-            [{'user_public_id': self.user.public_id, 'withdrawn_at': self.now}],
+            [{'target': 'billing', 'user_public_id': self.user.public_id, 'withdrawn_at': self.now}],
         )
         self.notice.refresh_from_db()
         self.assertEqual(self.notice.delivered_at, self.now)
 
     def test_keeps_trying_until_billing_answers(self):
         with (
-            billing_answers(BillingUnavailableError('결제 서버가 404 로 답했다'), PROCESSED)[0],
+            servers_answer(WithdrawalUndeliveredError('billing 가 404 로 답했다'), None)[0],
             self.assertLogs('accounts.withdrawal', level='WARNING'),
         ):
             first = self.deliver_at(self.now)
@@ -339,8 +342,19 @@ class DeliverTests(TestCase):
         self.assertIsNotNone(self.notice.delivered_at)
         self.assertEqual(self.notice.attempts, 0)
 
+    def test_a_server_whose_secret_is_written_later_gets_the_old_notices(self):
+        with servers_answer(None)[0]:
+            self.deliver_at(self.now)
+        answers, fake = servers_answer(None)
+
+        # 게임 서버가 받는 주소를 만들고 비밀을 적었다. 그 전에 탈퇴한 사람의 것도 받는다
+        with override_settings(GAME_SECRET=SECRET), answers:
+            report = self.deliver_at(self.now + timedelta(days=30))
+
+        self.assertEqual((report.sent, [call['target'] for call in fake.calls]), (1, ['game']))
+
     def test_a_delivered_notice_is_not_sent_again(self):
-        with billing_answers(PROCESSED)[0]:
+        with servers_answer(None)[0]:
             self.deliver_at(self.now)
 
         self.assertEqual(self.deliver_at(self.now + timedelta(days=1)).handled, 0)
@@ -349,7 +363,7 @@ class DeliverTests(TestCase):
         # 차지한 워커가 보내다 죽었다. 임대가 끝나면 다른 워커가 다시 보낸다(받는 쪽은 두 번 받아도 같다)
         WithdrawalNotice.objects.filter(pk=self.notice.pk).update(next_attempt_at=self.now + LEASE)
 
-        with billing_answers(PROCESSED)[0]:
+        with servers_answer(None)[0]:
             early = self.deliver_at(self.now + LEASE - timedelta(seconds=1))
             late = self.deliver_at(self.now + LEASE)
 
@@ -363,9 +377,9 @@ class WorkerTests(TestCase):
         User.objects.filter(pk=user.pk).update(withdrawal_requested_at=timezone.now() - GRACE - timedelta(minutes=1))
         output = StringIO()
 
-        with billing_answers(PROCESSED)[0]:
+        with servers_answer(None)[0]:
             call_command('send_welcome_credits', '--once', stdout=output)
 
         # 마친 계정의 알림이 같은 바퀴에 나간다
         self.assertIn('탈퇴를 마친 계정 1건, 탈퇴 알림 1건', output.getvalue())
-        self.assertIsNotNone(WithdrawalNotice.objects.get(user=user).delivered_at)
+        self.assertIsNotNone(WithdrawalNotice.objects.get(user=user, target=WithdrawalTarget.BILLING).delivered_at)
