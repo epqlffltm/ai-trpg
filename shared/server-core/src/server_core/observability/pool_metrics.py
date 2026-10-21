@@ -5,7 +5,7 @@ DB 연결 풀의 메트릭. 풀을 만드는 곳(server_core/database.py)이 이
 앱이 뜰 때 값을 내보내기 시작한다(서버의 app/main.py 가 metrics.watch_pool 을 부른다).
 
   - db_pool_connections{state=idle|in_use}: 지금의 연결 수. 수집할 때 풀에 묻는다
-  - db_pool_connections_max: 풀이 가질 수 있는 가장 많은 연결(pool_size + max_overflow)
+  - db_pool_connections_max: 풀이 가질 수 있는 가장 많은 연결(설정의 db_max_connections)
   - db_pool_wait_seconds: 연결을 얻으려고 기다린 시간. 새 연결을 맺는 시간도 든다(결제 서버의 pgxpool 과 같다)
 
 SQLAlchemy 의 풀에는 "꺼내기 시작"을 알리는 이벤트가 없다(checkout 은 꺼낸 뒤다). 그래서 풀의 꺼내는 자리(_do_get)를
@@ -32,6 +32,6 @@ class MeteredPool(AsyncAdaptedQueuePool):
 
 
 def pool_stats(engine: AsyncEngine, maximum: int) -> PoolStats:
-    """엔진의 풀에서 지금의 값을 읽는 것. maximum 은 풀을 만들 때 정한 가장 많은 연결이다."""
+    """엔진의 풀에서 지금의 값을 읽는 것. maximum 은 풀을 만들 때 정한 가장 많은 연결이다(설정의 db_max_connections)."""
     pool = engine.sync_engine.pool
     return PoolStats(idle=pool.checkedin, in_use=pool.checkedout, maximum=maximum)

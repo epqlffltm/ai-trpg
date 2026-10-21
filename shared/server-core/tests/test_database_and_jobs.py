@@ -18,11 +18,9 @@ import pytest
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
+from pydantic import ValidationError
 
 from server_core.database import (
-    MAX_OVERFLOW,
-    POOL_MAX_CONNECTIONS,
-    POOL_SIZE,
     create_engine,
     create_session_factory,
     get_session,
@@ -66,18 +64,34 @@ def test_the_search_path_puts_the_schema_first():
 
 
 async def test_the_engine_is_made_without_connecting():
-    engine = create_engine(make_test_settings(), pool_size=2, max_overflow=1)
+    settings = make_test_settings(db_pool_size=2, db_max_overflow=1)
+    engine = create_engine(settings)
 
     pool = engine.sync_engine.pool
     assert isinstance(pool, MeteredPool)
     assert (pool.size(), pool._max_overflow) == (2, 1)
-    stats = pool_stats(engine, 3)
+    stats = pool_stats(engine, settings.db_max_connections)
     assert (stats.idle(), stats.in_use(), stats.maximum) == (0, 0, 3)
     await engine.dispose()
 
 
-def test_the_default_pool_matches_the_metric():
-    assert POOL_MAX_CONNECTIONS == POOL_SIZE + MAX_OVERFLOW
+def test_the_default_pool_is_sqlalchemys():
+    settings = make_test_settings()
+
+    assert (settings.db_pool_size, settings.db_max_overflow, settings.db_max_connections) == (5, 10, 15)
+
+
+def test_the_pool_size_comes_from_the_environment(monkeypatch):
+    monkeypatch.setenv('DB_POOL_SIZE', '2')
+    monkeypatch.setenv('DB_MAX_OVERFLOW', '3')
+
+    assert make_test_settings().db_max_connections == 5
+
+
+@pytest.mark.parametrize(('field', 'value'), [('db_pool_size', 0), ('db_pool_size', 51), ('db_max_overflow', -1)])
+def test_a_pool_size_out_of_range_is_refused(field, value):
+    with pytest.raises(ValidationError):
+        make_test_settings(**{field: value})
 
 
 async def test_a_request_gets_a_session_from_the_app():

@@ -106,6 +106,15 @@ groups:
           summary: Redis 가 AOF 파일에 쓰지 못한다
           description: 다시 뜨면 시도 횟수와 IP 차단의 기록을 잃는다. 디스크가 찼는지 본다
 
+      - alert: RedisEvictingKeys
+        # 메모리(maxmemory 64MB)가 차서 키를 내쫓았다. 내쫓긴 것은 시도 횟수라 그만큼 제한이 느슨해진다
+        expr: increase(redis_evicted_keys_total{job="redis"}[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis 가 메모리가 모자라 키를 내쫓았다
+          description: 시도 횟수의 기록을 잃어 제한이 느슨해졌다. 대시보드 redis 의 "메모리"와 "사라진 키"를 보고, 키가 갑자기 늘었는지(대입 공격) 한도가 작은지 가린다
+
   # 디스크(#539). Alloy 안의 node_exporter 가 디스크마다 잰다(disk: system, db, observability. docker/alloy/metrics.alloy).
   # node_exporter 의 경보 묶음(node-mixin)을 따른다. 남은 비율만 보면 천천히 차는 디스크에는 일찍, 갑자기 차는 디스크에는
   # 늦게 울린다. 그래서 "지금 속도면 곧 찬다"(predict_linear, 지난 6시간의 기울기)를 함께 둔다. 읽기만 하는 디스크는 보지 않는다

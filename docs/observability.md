@@ -933,6 +933,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | disks | `DiskMetricsMissing` | warning | 기본 디스크의 크기가 15분 동안 들어오지 않는다 |
 | datastores | `PostgresDown`, `RedisDown` | critical | exporter 가 1분 동안 붙지 못한다 |
 | datastores | `RedisAOFWriteFailing` | critical | AOF 의 마지막 쓰기가 1분 동안 실패다 |
+| datastores | `RedisEvictingKeys` | warning | 지난 10분에 메모리(64MB)가 차서 키를 내쫓았다. 시도 횟수를 잃어 제한이 느슨해졌다 |
 | datastores | `PostgresConnectionsNearLimit` | warning | 연결이 `max_connections` 의 80% 를 10분 동안 넘는다 |
 | datastores | `PostgresDeadlocks` | warning | 지난 10분에 `trpg` 에 교착이 있었다 |
 | billing-server | `BillingDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
@@ -1039,7 +1040,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 
 - **OpenTelemetry 의 전역에 두지 않는다.** 추적과 같은 까닭이다. 바꿔 끼우면(`use_meter_provider`) 계측기를 그것으로 다시 만든다. 세는 곳은 `instruments()` 나 `record_*` 로 그때의 것을 꺼낸다.
 - **span 과 메트릭이 한 출처다.** 앱이 뜰 때 출처를 한 번 만들어 둘에 준다(`app/main.py`). 같은 프로세스의 span 과 메트릭이 같은 `service.instance.id` 다.
-- **SQLAlchemy 의 풀에는 "꺼내기 시작"의 이벤트가 없다.** 그래서 풀의 꺼내는 자리(`_do_get`)를 감싼 풀을 쓴다. 안쪽 이름이라 SQLAlchemy 의 판이 바뀌면 깨질 수 있어 테스트가 지킨다. 풀의 크기(5 + 넘칠 때 10)를 설정에 적어 `db_pool_connections_max` 로 낸다.
+- **SQLAlchemy 의 풀에는 "꺼내기 시작"의 이벤트가 없다.** 그래서 풀의 꺼내는 자리(`_do_get`)를 감싼 풀을 쓴다. 안쪽 이름이라 SQLAlchemy 의 판이 바뀌면 깨질 수 있어 테스트가 지킨다. 풀의 크기는 설정(`DB_POOL_SIZE` + `DB_MAX_OVERFLOW`, 기본 5 + 10)이고 그 합을 `db_pool_connections_max` 로 낸다. 서버마다의 값은 compose 가 준다([DB 와 Redis 의 한도](architecture/services.md#db-와-redis-의-한도)).
 - **연결 풀의 값은 수집할 때 읽는다**(observable gauge). 앱이 뜰 때 풀 하나를 건다(`watch_pool`).
 - **트랜잭션 안의 일은 커밋한 뒤에 센다.** 알림 넣기는 커밋한 뒤에 센다. 결제 서버의 규칙과 같다.
 - **FastAPI 가 스스로 내는 메트릭은 끈다**(추적과 같은 `FASTAPI_TELEMETRY`). 테스트가 가짜 수집기로 우리가 만든 메트릭만 가는 것을 본다.

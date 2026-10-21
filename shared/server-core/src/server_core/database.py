@@ -36,12 +36,6 @@ NAMING_CONVENTION = {
 
 # DB 에 연결을 맺을 때 기다리는 최대 시간(초). DB 가 응답하지 않을 때 요청이 오래 매달리지 않게 한다
 CONNECT_TIMEOUT_SECONDS = 5
-# 풀이 늘 들고 있는 연결과, 붐빌 때 더 맺는 연결. SQLAlchemy 의 기본값을 적어 둔다.
-# 둘의 합이 메트릭의 db_pool_connections_max 다(server_core/observability/pool_metrics.py).
-# 서버마다 다르게 하려면 create_engine 에 넘긴다(#592 에서 서버마다의 한도를 정한다)
-POOL_SIZE = 5
-MAX_OVERFLOW = 10
-POOL_MAX_CONNECTIONS = POOL_SIZE + MAX_OVERFLOW
 
 
 def search_path(schema: str, extra_schemas: Sequence[str] = ()) -> str:
@@ -56,8 +50,6 @@ def search_path(schema: str, extra_schemas: Sequence[str] = ()) -> str:
 def create_engine(
     settings: CoreSettings,
     extra_schemas: Sequence[str] = (),
-    pool_size: int = POOL_SIZE,
-    max_overflow: int = MAX_OVERFLOW,
 ) -> AsyncEngine:
     """
     엔진을 만든다. 이때는 DB 에 연결하지 않는다. 처음 쓸 때 연결한다.
@@ -65,7 +57,8 @@ def create_engine(
     search_path 는 "스키마 이름 없이 테이블을 부르면 어느 스키마에서 찾는가" 다.
     연결할 때마다 설정의 스키마로 맞춘다. 그래서 코드에 스키마 이름을 적지 않아도 되고,
     테스트는 설정만 바꿔서 테스트용 스키마를 쓴다.
-    풀은 연결을 기다린 시간을 재는 것이다(MeteredPool). 그 밖은 SQLAlchemy 의 기본 풀과 같다.
+    풀은 연결을 기다린 시간을 재는 것이다(MeteredPool). 크기는 설정(DB_POOL_SIZE, DB_MAX_OVERFLOW)에서 읽는다.
+    그 밖은 SQLAlchemy 의 기본 풀과 같다.
     """
     return create_async_engine(
         settings.database_url,
@@ -77,8 +70,8 @@ def create_engine(
         # DB 가 재시작된 뒤에 끊긴 연결을 그대로 쓰다가 실패하는 것을 막는다
         pool_pre_ping=True,
         poolclass=MeteredPool,
-        pool_size=pool_size,
-        max_overflow=max_overflow,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
     )
 
 
