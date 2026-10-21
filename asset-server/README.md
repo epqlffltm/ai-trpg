@@ -122,9 +122,9 @@ TRPG, chat, story 가 함께 쓰는 "나"의 설정이다(#565, [설계](../docs
 
 ### 토큰 검증
 
-게임 서버의 것(`app/auth/jwks.py`, `tokens.py`, `revocations.py`, `dependencies.py`)을 알림 서버를 거쳐 그대로 가져왔다. 규칙의 설명은
-[게임 서버의 토큰 검증](../trpg-server/README.md#토큰-검증)에 있다. asset 서버는 누구인지(`sub`)만 읽는다. 성인 등급과 역할은
-캐릭터의 목록(#567)에서 읽게 될 때 더한다.
+공용 코드 `shared/server-core` 의 것(`server_core/auth/`)을 쓴다(#588). 알림 서버와 같다. 규칙의 설명은
+[게임 서버의 토큰 검증](../trpg-server/README.md#토큰-검증)에 있다. 토큰의 주인(`CurrentUser`)에는 성인 등급(`adult_content`)과
+운영자(`is_operator`)도 실린다. 캐릭터의 목록(#567)이 그것으로 등급을 가른다. 로그인 없이도 읽는 주소는 `OptionalUser` 를 쓴다.
 
 - 공개키: 처음 필요할 때 가져와 5분 기억한다. 모르는 `kid` 면 다시 가져오되 60초에 한 번만. 30분 넘게 못 가져오면 버리고 503.
 - 끊긴 세션: 서버가 뜨자마자, 그 뒤 30초마다 인증 서버의 목록을 받는다. `ver` 가 그 사람의 `min_ver` 보다 낮은 토큰은 401.
@@ -134,7 +134,8 @@ TRPG, chat, story 가 함께 쓰는 "나"의 설정이다(#565, [설계](../docs
 
 ## 로그
 
-[관측 규격](../docs/observability.md)을 따른다. 알림 서버의 `app/observability/` 를 그대로 가져왔다.
+[관측 규격](../docs/observability.md)을 따른다. 공용 코드 `shared/server-core` 의 `server_core/observability/` 를 쓴다(#588).
+이 서버의 이름(`asset-server`)은 설정(`app/core/config.py` 의 `service_name`)이 넘긴다. 공용 코드가 남긴 줄의 `logger` 는 `server_core.*` 다.
 
 - 로그는 한 줄에 하나의 JSON 이다(`service`: `asset-server`). 표준 오류로 나간다.
 - 요청마다 `X-Request-ID` 를 걸고 응답에 돌려준다. 요청이 끝나면 한 줄(`http.request`)을 남긴다. 주소는 경로의 틀로 적고 실제 값과 쿼리는 적지 않는다.
@@ -153,10 +154,10 @@ TRPG, chat, story 가 함께 쓰는 "나"의 설정이다(#565, [설계](../docs
 
 | span | 이름 | 코드 |
 | --- | --- | --- |
-| 요청 | `GET /api/v1/asset/me`(메서드와 경로의 틀). 상태 확인은 걸지 않는다 | `app/observability/request_spans.py` |
-| 인증 서버를 부르는 것 | `HTTP GET` | `app/observability/http_spans.py` |
-| 쿼리 | `db SELECT personas`(종류와 테이블). 손으로 쓴 것은 `db SELECT` | `app/observability/db_spans.py` |
-| 뒤의 작업 | 작업의 이름. 한 바퀴가 새 추적 하나다 | `app/observability/spans.py` 의 `job_span` |
+| 요청 | `GET /api/v1/asset/me`(메서드와 경로의 틀). 상태 확인은 걸지 않는다 | `server_core/observability/request_spans.py` |
+| 인증 서버를 부르는 것 | `HTTP GET` | `server_core/observability/http_spans.py` |
+| 쿼리 | `db SELECT personas`(종류와 테이블). 손으로 쓴 것은 `db SELECT` | `server_core/observability/db_spans.py` |
+| 뒤의 작업 | 작업의 이름. 한 바퀴가 새 추적 하나다 | `server_core/observability/spans.py` 의 `job_span` |
 
 - 로그의 `trace_id` 가 span 의 trace id 와 같다. 요청의 span 에는 `request_id`, 작업의 span 에는 `job_id` 를 싣는다
 - 싣지 않는 것: 주소의 경로와 뒤의 값, 머리말, 본문, SQL 의 문장과 값, 예외의 글. 쿼리가 실패하면 SQLSTATE 만 적는다
@@ -171,13 +172,14 @@ TRPG, chat, story 가 함께 쓰는 "나"의 설정이다(#565, [설계](../docs
 
 | 메트릭 | label | 세는 곳 |
 | --- | --- | --- |
-| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `app/observability/request_metrics.py`. 미들웨어의 맨 바깥이다 |
+| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `server_core/observability/request_metrics.py`. 미들웨어의 맨 바깥이다 |
 | `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB |
-| `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `app/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
-| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`, `result` | `app/observability/metrics.py` 의 `measured_job`. 아직 쓰는 작업이 없다 |
+| `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `server_core/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
+| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`, `result` | `server_core/observability/metrics.py` 의 `measured_job`. 아직 쓰는 작업이 없다 |
 
-- 계측기는 `app/observability/metrics.py` 에 한 묶음으로 둔다. 테스트는 `tests/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
-- 보내는 길은 `tests/test_metrics_setup.py` 가 가짜 수집기로 본다
+- 계측기는 공용 코드(`server_core/observability/metrics.py`)에 한 묶음으로 있다. 이 서버만의 계측기가 생기면 `InstrumentSet` 으로 더한다(알림 서버의 `app/notifications/metrics.py`).
+  테스트는 `server_core/testing/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
+- 보내는 길은 공용 코드의 테스트가 가짜 수집기로 본다. 이 서버가 꺼질 때 이 서버의 이름으로 보내는지는 `tests/test_tracing_setup.py` 가 본다
 - 대시보드와 경보, Prometheus 에 들어오는지 보는 CI(`stack`)는 인프라 세션의 PR 과 함께 붙는다
 
 ## DB

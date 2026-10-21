@@ -36,6 +36,7 @@ jobs:
       billing: ${{ steps.pick.outputs.billing }}
       notification: ${{ steps.pick.outputs.notification }}
       asset: ${{ steps.pick.outputs.asset }}
+      shared: ${{ steps.pick.outputs.shared }}
     steps:
       # PR 이 갈라져 나온 곳을 찾으려면 기록이 있어야 한다
       - uses: actions/checkout@v7
@@ -83,6 +84,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.asset == 'true'
     uses: ./.github/workflows/asset-server.yml
+
+  # 공용 코드(shared/). 쓰는 서버의 CI 는 위에서 따로 불린다(changed-servers.sh 가 경로 의존을 읽어 고른다)
+  shared:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true'
+    uses: ./.github/workflows/shared.yml
 
   # 서버 폴더 밖의 파이썬(tools/, .github/scripts/, docker/ 의 검사 스크립트)을 ruff 로 본다. 규칙은 저장소 루트의 ruff.toml 이다.
   # 서버의 CI 는 제 폴더만 보므로 이 파일들은 여기서만 본다. 몇 초면 끝나서 PR 마다 늘 돈다(도구만 고친 PR 은 서버를 고르지 않는다).
@@ -212,6 +219,7 @@ jobs:
       - billing-server
       - notification-server
       - asset-server
+      - shared
       - stack
     runs-on: ubuntu-latest
     timeout-minutes: 2

@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +22,6 @@ from app.inbox import repository
 from app.inbox.schemas import PAGE_SIZE_MAX
 from app.main import API_PREFIX
 from app.notifications.models import Notification
-from tests.tokens import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

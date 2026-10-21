@@ -1,7 +1,7 @@
 # asset-server/tests/test_tracing_jobs.py
 
 """
-작업 한 바퀴가 span 하나로 남는지 검증한다(app/observability/spans.py 의 job_span, 바퀴는 tests/jobs.py).
+작업 한 바퀴가 span 하나로 남는지 검증한다(server_core/observability/spans.py 의 job_span, 바퀴는 tests/jobs.py).
 식별자(context.py)가 span 을 따르는지도 본다.
 """
 
@@ -11,25 +11,31 @@ import logging
 import pytest
 from fastapi import FastAPI
 from opentelemetry.trace import StatusCode, format_trace_id
+from server_core.observability.context import current_ids, job_scope, outgoing_headers, request_scope
+from server_core.observability.identifiers import new_trace
+from server_core.observability.spans import (
+    ATTRIBUTE_JOB_ID,
+    JOB_FAILED_ERROR_CODE,
+    job_span,
+    span_trace,
+    span_traceparent,
+)
+from server_core.testing.logs import rendered
+from server_core.testing.spans import SpanRecorder, hex_span_id, hex_trace_id
 
-from app.observability.context import current_ids, job_scope, outgoing_headers, request_scope
-from app.observability.identifiers import new_trace
-from app.observability.spans import ATTRIBUTE_JOB_ID, JOB_FAILED_ERROR_CODE, job_span, span_trace, span_traceparent
 from tests.jobs import PROBE_OPERATION, run_round
-from tests.logs import rendered
-from tests.spans import SpanRecorder, hex_span_id, hex_trace_id
 
 LOGGER = 'tests.jobs'
 
 
 async def test_a_round_is_a_span_of_its_own_trace(app: FastAPI, spans: SpanRecorder, caplog: pytest.LogCaptureFixture):
-    with caplog.at_level(logging.DEBUG, logger=LOGGER), spans.parent() as parent:
+    # 서버가 뜰 때 띄운 바퀴처럼 걸린 span 이 없다. 바퀴마다 새 추적이다.
+    # 걸린 span 이 있으면 그 아래에 놓이는 것은 공용 코드의 테스트가 본다(shared/server-core)
+    with caplog.at_level(logging.DEBUG, logger=LOGGER):
         await run_round(app)
 
     span = spans.find(PROBE_OPERATION)
-    # 띄운 곳의 span 아래에 놓이지 않는다. 몇 초마다 도는 것이 한 추적으로 묶이면 끝없이 길어진다
     assert span.parent is None
-    assert span.context.trace_id != parent.get_span_context().trace_id
     (line,) = rendered(caplog.records, LOGGER)
     # 로그의 trace_id 와 job_id 가 이 span 의 것이다
     assert line['trace_id'] == hex_trace_id(span)

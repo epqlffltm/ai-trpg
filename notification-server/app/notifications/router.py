@@ -1,7 +1,7 @@
 # notification-server/app/notifications/router.py
 
 """
-다른 서버가 알림을 넣는 API. 사용자의 토큰이 아니라 그 서버의 서명으로 확인한다(app/service_auth/signing.py).
+다른 서버가 알림을 넣는 API. 사용자의 토큰이 아니라 그 서버의 서명으로 확인한다(server_core/service_auth/signing.py).
 
     POST /api/v1/notification/service/{source}/notifications
 
@@ -24,13 +24,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
+from server_core.database import get_session
+from server_core.service_auth.signing import SIGNATURE_HEADER, is_valid
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_session
 from app.notifications import catalog, service
+from app.notifications.metrics import record_notification
 from app.notifications.schemas import NotificationIn, NotificationPut, PutStatus
-from app.observability.metrics import record_notification
-from app.service_auth.signing import SIGNATURE_HEADER, is_valid
 
 logger = logging.getLogger(__name__)
 

@@ -21,6 +21,7 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import TEST_USER_ID, FakeAuthServer, SigningKey, make_access_claims, make_token
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -33,7 +34,6 @@ from app.personas.models import (
     Persona,
 )
 from tests.conftest import make_client, make_test_settings
-from tests.tokens import TEST_USER_ID, FakeAuthServer, SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
