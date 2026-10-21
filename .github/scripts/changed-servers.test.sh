@@ -51,10 +51,11 @@ expect "asset 서버가 바뀌면 asset 서버" "asset" "asset-server/app/main.p
 expect "asset 서버의 워크플로가 바뀌면 asset 서버" "asset" ".github/workflows/asset-server.yml"
 expect "asset 서버의 API 목록은 asset 서버" "asset" "docs/api/asset.openapi.json"
 expect "API 목록의 안내는 아무것도" "" "docs/api/README.md"
-expect "API 목록을 뽑는 도구는 목록을 내는 서버" "auth trpg billing notification asset" "tools/export_openapi.py"
+expect "API 목록을 뽑는 도구는 목록을 내는 서버" "auth trpg board billing notification asset" "tools/export_openapi.py"
 expect "인증 서버의 API 목록은 인증 서버" "auth" "docs/api/auth.openapi.json"
 expect "결제 서버의 손으로 쓴 목록은 결제 서버" "billing" "billing-server/api/openapi.yaml"
 expect "결제 서버의 API 목록은 결제 서버" "billing" "docs/api/billing.openapi.json"
+expect "게시판 서버의 API 목록은 게시판 서버" "board" "docs/api/board.openapi.json"
 
 all="$(select_all | tr '\n' ' ')"
 if [[ "$all" == "auth=true trpg=true board=true billing=true notification=true asset=true " ]]; then

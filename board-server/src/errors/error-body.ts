@@ -15,18 +15,38 @@
  * detail 은 이 서버가 적은 문장만 내보낸다. 예외를 던질 때 { detail } 을 넣은 것만 그대로 쓰고,
  * 나머지(Nest 나 라이브러리가 만든 예외)는 상태 코드에 맞는 문장으로 바꾼다.
  * 라이브러리의 글에는 내부 사정(주소, 파서의 오류)이 들어 있을 수 있다.
+ *
+ * ErrorBody 는 API 목록(docs/api/board.openapi.json)에 모든 API 의 오류 응답으로 실린다(openapi/document.ts).
+ * 칸의 설명을 데코레이터로 직접 적는다. 목록 도구가 저절로 읽는 파일(*.response.ts)이 아니고,
+ * errors 처럼 칸의 이름이 정해지지 않은 객체는 도구가 모양을 읽지 못한다.
  */
 
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /** 칸의 이름마다 틀린 까닭들. */
 export type FieldErrors = Record<string, string[]>;
 
 /** 오류 응답의 본문. */
-export interface ErrorBody {
+export class ErrorBody {
+  @ApiProperty({
+    description: '무엇이 잘못됐는가. 화면에 그대로 보여 줄 수 있는 문장이다',
+  })
   detail: string;
+
+  @ApiPropertyOptional({
+    description: '입력이 틀렸을 때만 있다. 칸의 이름마다 틀린 까닭들이다',
+    type: 'object',
+    additionalProperties: { type: 'array', items: { type: 'string' } },
+  })
   errors?: FieldErrors;
-  /** 몇 초 뒤에 다시 부르면 되는가. 1 이상의 정수다 */
+
+  @ApiPropertyOptional({
+    description:
+      '너무 자주 불러서 거절했을 때만 있다. 몇 초 뒤에 다시 부르면 되는가',
+    type: 'integer',
+    minimum: 1,
+  })
   retry_after?: number;
 }
 

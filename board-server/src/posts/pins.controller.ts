@@ -23,10 +23,12 @@ import {
 import { CurrentUser } from '../auth/current-user.decorator.js';
 // 타입만 가져온다(import type). 데코레이터가 붙은 인자의 타입이 인터페이스면 이렇게 적어야 빌드된다
 import type { AccessClaims } from '../auth/tokens.js';
+import { ForOperators } from '../openapi/audience.js';
 import { PinPostDto } from './pin-post.dto.js';
 import { PinsService } from './pins.service.js';
 import { PostIdPipe } from './post-id.pipe.js';
 
+@ForOperators()
 @Controller('posts/:id/pin')
 export class PinsController {
   constructor(private readonly pins: PinsService) {}
