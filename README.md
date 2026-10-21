@@ -202,8 +202,8 @@ docker compose --profile app --profile observability ps
 ```
 
 `prometheus`, `alertmanager`, `tempo`, `grafana` 가 `healthy`, `alloy`, `loki`, `docker-socket-proxy` 가 `Up` 이면 된다. `http://127.0.0.1:3000` 에서 `admin` 과 그 비밀번호로 들어가
-Explore 에서 데이터 소스 Loki(로그), Prometheus(메트릭), Tempo(추적)를 고른다. 로그의 `trace_id` 옆 "추적 보기"를 누르면 그 추적으로, 추적의 span 에서 "Logs for this span"을 누르면 그 로그로 건너간다(서버가 span 을 내보낸 뒤부터). 서버(VM)에서는 SSH 터널로 붙는다. `ssh -L 3000:127.0.0.1:3000 <서버>` 를 띄워 두고 같은 주소를 연다.
-대시보드는 Dashboards 의 폴더 `ai-trpg` 에 있다. 지금은 결제 서버(`/d/billing-server`), 알림 서버(`/d/notification-server`), TRPG 서버(`/d/trpg-server`), 인증 서버(`/d/auth-server`), 게시판 서버(`/d/board-server`), PostgreSQL(`/d/postgres`), Redis(`/d/redis`)다. 저장소의 `docker/grafana/dashboards/` 가 원본이라 화면에서 고치지 못한다.
+Explore 에서 데이터 소스 Loki(로그), Prometheus(메트릭), Tempo(추적)를 고른다. 로그의 `trace_id` 옆 "추적 보기"를 누르면 그 추적으로, 추적의 span 에서 "Logs for this span"을 누르면 그 로그로 건너간다(서버가 span 을 내보낸 뒤부터). 서버(VM)에서는 사설망(Tailscale)으로 연다. `http://<VM 의 Tailscale 이름>:3000`([staging VM 준비](docs/operations/staging-vm.md)의 4번).
+대시보드는 Dashboards 의 폴더 `ai-trpg` 에 있다. 지금은 결제 서버(`/d/billing-server`), 알림 서버(`/d/notification-server`), TRPG 서버(`/d/trpg-server`), 인증 서버(`/d/auth-server`), 게시판 서버(`/d/board-server`), PostgreSQL(`/d/postgres`), Redis(`/d/redis`), 디스크(`/d/disks`)다. 저장소의 `docker/grafana/dashboards/` 가 원본이라 화면에서 고치지 못한다.
 고치는 법은 [관측 규격의 대시보드](docs/observability.md#대시보드)에 있다.
 끌 때도 두 프로필을 붙인다. `docker compose --profile app --profile observability down`
 
@@ -280,7 +280,7 @@ VM 의 설정은 로컬의 `docker-compose.yml` 위에 덮어쓰는 `docker-comp
 | `proxy` | `127.0.0.1:8080`. staging 은 `80`(→8080), `443`(→8443) | 바깥의 요청이 들어오는 입구. staging 에서는 모든 주소에 연다. 그 밖은 staging 에서도 `127.0.0.1` 이다 |
 | `auth-server` | `127.0.0.1:8000` | 관리자 화면. SSH 터널로만 붙는다(`ssh -L 8000:127.0.0.1:8000 <서버>`) |
 | `db`, `redis` | `127.0.0.1` | PC 에서 직접 띄운 서버가 붙는다 |
-| `grafana` | `127.0.0.1:3000` | 로그를 보는 화면(프로필 `observability`). SSH 터널로만 붙는다(`ssh -L 3000:127.0.0.1:3000 <서버>`). 관리 서버가 생기면 그것이 문이 된다 |
+| `grafana` | `127.0.0.1:3000` | 로그를 보는 화면(프로필 `observability`). VM 에서는 Tailscale 이 사설망에만 넘긴다(`tailscale serve`). 관리 서버가 생기면 그것이 문이 된다 |
 
 - 게임, 게시판, 결제 서버와 워커는 포트를 열지 않는다. 열면 프록시의 요청 수 제한과 경로 차단을 건너뛰는 길이 된다
 - **Docker 는 VM 의 방화벽(ufw 등)을 거치지 않고 포트를 연다.** `127.0.0.1:` 을 빼면 방화벽이 있어도 그 포트가 바로 바깥에 열린다.
@@ -453,7 +453,8 @@ docker/certbot/           staging 의 인증서(Let's Encrypt)를 받고 갱신�
 docker/cron/              주기 명령의 crontab (인증, 결제)
 docker/backup/            DB 의 백업과 복원 확인 스크립트
 docker/backup-offsite/    staging 의 바깥 백업: age 로 잠가 S3 에 올리고 주마다 풀어 보는 스크립트, 그 이미지, S3 접근 키의 권한
-docker/alloy/             수집기(Grafana Alloy)의 설정. 로그(config.alloy)와 메트릭(metrics.alloy)
+docker/alloy/             수집기(Grafana Alloy)의 설정. 로그(config.alloy)와 메트릭(metrics.alloy, 디스크 포함)
+docker/disks/             staging 의 데이터 디스크(DB, 관측)에 컨테이너의 폴더를 만드는 스크립트
 docker/loki/              로그 저장소(Loki)의 설정
 docker/prometheus/        메트릭 저장소(Prometheus)의 설정
 docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki, Prometheus)

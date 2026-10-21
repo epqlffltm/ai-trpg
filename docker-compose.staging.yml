@@ -27,6 +27,7 @@
 #   - db-backup 이 뜬 덤프를 암호화해(age) S3 에 한 벌 더 두고, 일주일에 한 번 버킷의 것을 실제로 풀어 본다
 #     (backup-offsite, docker/backup-offsite/)
 #   - 그림 저장소의 로컬 흉내(object-store, SeaweedFS)를 띄우지 않는다. 그림은 진짜 S3(서울)에 둔다
+#   - DB 와 관측(로그, 메트릭, 추적)의 데이터를 데이터 디스크 둘(/mnt/db, /mnt/observability)에 둔다(#539, 아래의 "데이터 디스크")
 #
 # 이 파일에도 비밀을 적지 않는다. 비밀은 VM 에서 새로 만든 루트 .env 와 각 서버의 .env 에만 있다.
 # 컨테이너의 로그는 로컬과 같은 상한을 둔다(아래의 x-logging, logging_scope.py)
@@ -264,6 +265,88 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # 데이터 디스크(#539, docs/architecture/deployment.md 의 "디스크")
+  #
+  # 크게 자라는 데이터를 기본 디스크(OS, Docker)와 나눠 Lightsail 의 블록 스토리지 둘에 둔다.
+  #   /mnt/db             DB(PostgreSQL)
+  #   /mnt/observability  Loki, Prometheus, Alertmanager, Tempo, Grafana, Alloy
+  # 로그가 폭주해 관측 디스크를 채워도 DB 와 서버는 멈추지 않는다. 디스크마다 크기를 따로 재고 따로 키운다.
+  # 로컬의 볼륨(pgdata, lokidata 등) 자리에 그 디스크의 폴더를 붙인다. compose 는 붙이는 자리(target)가 같으면 이것으로 바꾼다.
+  # 폴더는 docker/disks/prepare-disks.sh 가 그 컨테이너의 사용자의 것으로 만든다.
+  # 폴더가 없으면 만들지 않고 컨테이너가 뜨지 않는다(create_host_path: false). 디스크가 마운트되지 않았을 때
+  # 기본 디스크에 몰래 쓰는 일을 막는다
+  # ---------------------------------------------------------------------------
+
+  db:
+    volumes:
+      - type: bind
+        source: /mnt/db/postgres
+        target: /var/lib/postgresql/data
+        bind:
+          create_host_path: false
+
+  loki:
+    volumes:
+      - type: bind
+        source: /mnt/observability/loki
+        target: /loki
+        bind:
+          create_host_path: false
+
+  prometheus:
+    volumes:
+      - type: bind
+        source: /mnt/observability/prometheus
+        target: /prometheus
+        bind:
+          create_host_path: false
+
+  alertmanager:
+    volumes:
+      - type: bind
+        source: /mnt/observability/alertmanager
+        target: /alertmanager
+        bind:
+          create_host_path: false
+
+  tempo:
+    volumes:
+      - type: bind
+        source: /mnt/observability/tempo
+        target: /var/tempo
+        bind:
+          create_host_path: false
+
+  grafana:
+    volumes:
+      - type: bind
+        source: /mnt/observability/grafana
+        target: /var/lib/grafana
+        bind:
+          create_host_path: false
+
+  # Alloy 는 제 데이터에 더해 디스크마다의 빈 폴더(probe)를 읽기 전용으로 붙인다. 그 디스크의 크기를 잰다(docker/alloy/metrics.alloy)
+  alloy:
+    volumes:
+      - type: bind
+        source: /mnt/observability/alloy
+        target: /var/lib/alloy/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /mnt/db/probe
+        target: /disks/db
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /mnt/observability/probe
+        target: /disks/observability
+        read_only: true
+        bind:
+          create_host_path: false
 
   # 그림 저장소의 로컬 흉내. staging 은 진짜 S3(서울)를 쓴다(docs/architecture/deployment.md 의 "그림 저장소").
   # 켜는 일이 없는 프로필로 옮겨 띄우지 않는다. 덮어쓰는 파일에서는 서비스를 지울 수 없어서다
