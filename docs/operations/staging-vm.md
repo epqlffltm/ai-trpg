@@ -217,12 +217,12 @@ sudo chown 10001 auth-server/keys/jwt-private.pem
 
 ## 6. .env
 
-**[VM]** 여섯(루트와 서버 다섯)을 `tools/staging_env.py` 로 만든다. 이 도구는 두 단계다.
+**[VM]** 여덟(루트와 서버 일곱)을 `tools/staging_env.py` 로 만든다. 이 도구는 두 단계다.
 
-1. 로컬과 같은 `tools/fill_env.py` 를 불러 `.env.example` 에서 여섯을 만들고 비밀을 모두 난수로 채운다. 서버끼리 같아야 하는 비밀의 짝과 DB 비밀번호도 그 도구가 맞추고, 주석으로 막힌 짝의 줄(`# BILLING_SECRET=` 등)도 켠다(짝의 표는 그 도구의 `SECRETS` 하나다).
+1. 로컬과 같은 `tools/fill_env.py` 를 불러 `.env.example` 에서 여덟을 만들고 비밀을 모두 난수로 채운다. 서버끼리 같아야 하는 비밀의 짝과 DB 비밀번호도 그 도구가 맞추고, 주석으로 막힌 짝의 줄(`# BILLING_SECRET=` 등)도 켠다(짝의 표는 그 도구의 `SECRETS` 하나다).
 2. staging 의 값(도메인, `COMPOSE_FILE`, 서술 모델, `PAYMENT_PROVIDER=fake` 등)을 적고, 게임 서버만 아는 비밀 둘(`SIGNAL_SECRET`, `AI_LOG_HMAC_KEY`)도 켠다. 로컬에서는 막혀 있는 것들이다. `SIGNAL_SECRET` 을 켜면 서버를 다시 띄워도 신호의 서명이 같고, `AI_LOG_HMAC_KEY` 를 켜면 호출 기록에 입력의 지문이 남는다.
 
-파일은 주인만 읽는다(600). 여섯 가운데 하나라도 이미 있으면 덮어쓰지 않고 멈춘다. 이미 있는 `.env` 의 빈 비밀만 다시 채울 때는 `python3 tools/fill_env.py` 를 쓴다.
+파일은 주인만 읽는다(600). 여덟 가운데 하나라도 이미 있으면 덮어쓰지 않고 멈춘다. 이미 있는 `.env` 의 빈 비밀만 다시 채울 때는 `python3 tools/fill_env.py` 를 쓴다.
 VM 에는 uv 가 없어 Ubuntu 에 든 `python3` 로 돌린다(표준 라이브러리만 쓴다).
 
 ```bash
@@ -243,7 +243,7 @@ nano trpg-server/.env           # ZAI_API_KEY
 
 경보를 휴대폰 등으로 받으려면 루트 `.env` 에 받는 곳(Discord, Slack, Telegram, 메일 가운데 적은 것만)을 적는다. 적는 이름과 만드는 법은 README 의 "경보"에 있다. 적지 않으면 Grafana 의 Alerting 화면에서만 본다.
 
-여섯 파일과 두 열쇠를 비밀번호 관리자에 둔다. VM 을 잃으면 거기서 되살린다. 백업 파일과 같은 곳에 두지 않는다.
+여덟 파일과 두 열쇠를 비밀번호 관리자에 둔다. VM 을 잃으면 거기서 되살린다. 백업 파일과 같은 곳에 두지 않는다.
 
 ## 7. 허용 주소와 첫 인증서
 
@@ -275,7 +275,7 @@ docker compose up -d --build
 docker compose ps -a
 ```
 
-`*-migrate` 다섯과 `ollama-pull` 이 `Exited (0)`, 서버 다섯과 `proxy`, 워커 넷, `certbot`, `ollama`, `prometheus`, `grafana` 가 `healthy` 면 된다.
+`*-migrate` 일곱과 `ollama-pull` 이 `Exited (0)`, 서버 일곱과 `proxy`, 워커 넷, `certbot`, `ollama`, `prometheus`, `grafana` 가 `healthy` 면 된다.
 `backup-offsite` 는 처음 올리고 풀어 보는 동안(15분 안) `starting` 이다. cron 둘과 Alloy, Loki 는 `Up` 이다.
 
 ## 9. 모델 목록과 운영자 계정
