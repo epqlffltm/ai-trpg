@@ -130,6 +130,12 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(env['DATABASE_URL'], 'mine')
         self.assertTrue(env['AUTH_JWKS_URL'])
 
+    def test_the_output_is_always_utf8(self):
+        # 읽는 쪽이 UTF-8 로 읽는다. 개발자가 다른 값을 적어 두었어도 덮는다(Windows 의 cp949)
+        for source in (django_source('auth-server'), fastapi_source('x-server'), go_source('y-server')):
+            with self.subTest(folder=source.folder), mock.patch.dict('os.environ', {'PYTHONIOENCODING': 'cp949'}):
+                self.assertEqual(command_env(source)['PYTHONIOENCODING'], 'utf-8')
+
     def test_unknown_server_is_refused(self):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             parse_args(['nope'])
