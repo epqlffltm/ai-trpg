@@ -10,12 +10,15 @@ JWT 발급, 갱신, 폐기.
     - access 토큰에 닉네임(nickname)을 넣어, 다른 서버가 인증 서버를 부르지 않고 글쓴이의 이름을 알게 한다.
     - access 토큰에 성인용 내용을 볼 수 있는지(adult_content)를 넣는다(#336, 게임 서버의 #59).
     - access 토큰에 역할(roles)을 넣는다. 운영자면 ["operator"](#389, docs/architecture/operators.md).
+    - 다시 동의할 필수 항목이 남은 사람의 access 토큰은 대상(aud)이 인증 서버뿐이다(#450). 다른 서버의 API 는 막히고,
+      인증 서버에서 동의를 마친 뒤 갱신하면 모든 서버의 이름이 다시 실린다.
     - refresh 토큰은 쓸 때마다 새것으로 바꾸고, 이미 폐기된 토큰이 다시 쓰이면 탈취로 본다.
 """
 
 from dataclasses import dataclass
 
 import jwt
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -28,6 +31,7 @@ from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToke
 from rest_framework_simplejwt.utils import datetime_from_epoch
 
 from accounts.age import korean_today
+from accounts.consents import pending_items
 from accounts.identity_status import identity_status_of
 from accounts.key_ring import current_key_ring
 from accounts.models import User
@@ -49,10 +53,15 @@ class InvalidRefreshTokenError(Exception):
 
 @dataclass(frozen=True)
 class TokenPair:
-    """함께 발급되는 access 토큰과 refresh 토큰."""
+    """
+    함께 발급되는 access 토큰과 refresh 토큰.
+
+    consents_pending 은 다시 동의할 필수 항목이다. 비어 있지 않으면 access 토큰의 대상이 인증 서버뿐이다.
+    """
 
     access: str
     refresh: str
+    consents_pending: tuple[str, ...] = ()
 
 
 class KeyIdTokenBackend(TokenBackend):
@@ -66,7 +75,8 @@ class KeyIdTokenBackend(TokenBackend):
         kid 가 없으면 키를 교체하는 동안 어느 키로 검증할지 알 수 없다.
         """
         jwt_payload = payload.copy()
-        if self.audience is not None:
+        # 토큰이 대상을 정해 두었으면 그대로 둔다(audience_for). 정하지 않은 토큰(refresh)은 설정의 목록이다
+        if self.audience is not None and 'aud' not in jwt_payload:
             jwt_payload['aud'] = self.audience
         if self.issuer is not None:
             jwt_payload['iss'] = self.issuer
@@ -149,7 +159,25 @@ def issue_token_pair(user: User) -> TokenPair:
     refresh[api_settings.USER_ID_CLAIM] = str(user.public_id)
     refresh[VERSION_CLAIM] = user.token_version
     _record_issued_refresh_token(refresh, user)
-    return TokenPair(access=str(_access_token_for(refresh, user)), refresh=str(refresh))
+    pending = tuple(pending_items(user))
+    access = _access_token_for(refresh, user)
+    access['aud'] = audience_for(pending)
+    return TokenPair(access=str(access), refresh=str(refresh), consents_pending=pending)
+
+
+def audience_for(consents_pending: tuple[str, ...]) -> list[str]:
+    """
+    access 토큰의 대상(aud). 다시 동의할 필수 항목이 있으면 인증 서버뿐이고, 없으면 설정의 모든 서버다.
+
+    약관의 판이 오르면(중요한 변경) 동의하기 전까지 서비스를 쓰지 못하게 한다(#450). 다른 서버를 고치지 않는다.
+    다른 서버는 aud 에 자기 이름이 있는지 보므로 이 토큰을 받지 않는다(401).
+    인증 서버는 받는다. 그 사람은 /me 와 /me/consents 로 동의를 마치고,
+    /refresh 로 모든 서버의 이름이 실린 토큰을 받는다.
+    이미 나간 access 토큰은 수명(15분)까지 통한다. 판을 올린 뒤 길어야 15분이다.
+    """
+    if consents_pending:
+        return [settings.JWT_OWN_AUDIENCE]
+    return list(api_settings.AUDIENCE)
 
 
 def _access_token_for(refresh: RefreshToken, user: User) -> AccessToken:
