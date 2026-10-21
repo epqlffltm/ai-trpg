@@ -125,6 +125,7 @@ func run() error {
 		Prices:            services.Prices,
 		GameServerSecret:  settings.GameServerSecret,
 		AuthServerSecret:  settings.AuthServerSecret,
+		ChatServerSecret:  settings.ChatServerSecret,
 		CheckoutClientKey: settings.CheckoutClientKey(),
 		Now:               time.Now,
 		Meter:             meters.Meter(),

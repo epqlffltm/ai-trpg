@@ -72,7 +72,8 @@ func listPrices(prices PriceLister) gin.HandlerFunc {
 			internalError(c, err)
 			return
 		}
-		body, err := json.Marshal(toPriceList(listings))
+		// 부르는 서버의 머리의 줄만 낸다(price_scope.go). ETag 도 그 서버가 받는 목록의 것이다
+		body, err := json.Marshal(toPriceList(pricesFor(caller(c), listings)))
 		if err != nil {
 			internalError(c, err)
 			return

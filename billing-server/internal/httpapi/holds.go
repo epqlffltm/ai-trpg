@@ -75,6 +75,11 @@ func placeHold(holds HoldService) gin.HandlerFunc {
 			abort(c, http.StatusBadRequest, codeHoldInvalidRequest, "user_id 가 있어야 합니다.")
 			return
 		}
+		// 다른 서버의 가격표는 없는 가격표와 같다(price_scope.go). 홀드를 걸어 보지도 않는다
+		if !mayUsePrice(caller(c), request.PriceCode) {
+			holdError(c, hold.ErrUnknownPrice)
+			return
+		}
 		placed, isNew, err := holds.Place(c.Request.Context(), caller(c), request.UserID, request.Reference, request.PriceCode)
 		if err != nil {
 			holdError(c, err)
