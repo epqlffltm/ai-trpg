@@ -148,6 +148,9 @@ type Settings struct {
 	// AuthServerSecret 은 인증 서버가 보낸 요청의 서명을 확인하는 비밀이다. 인증 서버도 같은 값을 갖는다(BILLING_SECRET).
 	// 로그와 오류에 싣지 않는다.
 	AuthServerSecret string
+	// ChatServerSecret 은 chat 서버가 보낸 요청의 서명을 확인하는 비밀이다. chat 서버도 같은 값을 갖는다.
+	// 비어 있으면 chat 서버의 요청을 하나도 받지 않는다(chat 서버를 띄우지 않는 동안). 로그와 오류에 싣지 않는다.
+	ChatServerSecret string
 	// Payment 는 꽂을 결제 대행사와 그 키다.
 	Payment Payment
 }
@@ -270,13 +273,14 @@ func Load(lookup Lookup) (Settings, error) {
 	webhookSecret, webhookErr := readSecret(lookup, "PG_WEBHOOK_SECRET", MinWebhookSecretLength)
 	gameSecret, gameSecretErr := readSecret(lookup, "GAME_SERVER_SECRET", MinServiceSecretLength)
 	authSecret, authSecretErr := readSecret(lookup, "AUTH_SERVER_SECRET", MinServiceSecretLength)
+	chatSecret, chatSecretErr := readOptionalSecret(lookup, "CHAT_SERVER_SECRET", MinServiceSecretLength)
 	welcome, welcomeErr := readCredits(lookup, "WELCOME_CREDITS", DefaultWelcomeCredits, MaxWelcomeCredits)
 	attendanceSilver, attendanceErr := readSchedule(lookup, "ATTENDANCE_SILVER")
 	payment, paymentErr := loadPayment(lookup)
 
 	if err := errors.Join(
 		debugErr, portErr, dbErr, jwksErr, revocationsErr, rulesErr, loggingErr, webhookErr, welcomeErr, attendanceErr, paymentErr,
-		gameSecretErr, authSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret),
+		gameSecretErr, authSecretErr, chatSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret, chatSecret),
 		providerAllowed(logging, payment),
 	); err != nil {
 		return Settings{}, err
@@ -303,6 +307,7 @@ func Load(lookup Lookup) (Settings, error) {
 		WebhookSecret:      webhookSecret,
 		GameServerSecret:   gameSecret,
 		AuthServerSecret:   authSecret,
+		ChatServerSecret:   chatSecret,
 		Payment:            payment,
 	}, nil
 }
@@ -636,6 +641,19 @@ func readSecret(lookup Lookup, name string, minimum int) (string, error) {
 	return value, nil
 }
 
+// readOptionalSecret 은 없어도 되는 비밀을 읽는다. 없거나 비어 있으면 빈 글자다. 적었으면 minimum 자 이상이어야 한다.
+// 비어 있는 비밀로는 아무 요청도 통과하지 않는다(httpapi 의 requireAnyService 가 건너뛴다).
+func readOptionalSecret(lookup Lookup, name string, minimum int) (string, error) {
+	value, ok := lookup(name)
+	if !ok || value == "" {
+		return "", nil
+	}
+	if len(value) < minimum {
+		return "", fmt.Errorf("%s 는 %d자 이상이어야 합니다", name, minimum)
+	}
+	return value, nil
+}
+
 // distinctSecrets 는 서명에 쓰는 비밀들이 서로 다른 값인지 본다. 읽지 못한 것(빈 글자)은 보지 않는다. 그 오류는 따로 난다.
 // 같은 값을 두 자리에 쓰면 한쪽이 아는 비밀로 다른 쪽인 척할 수 있고, 하나가 새면 둘 다 샌 것이 된다.
 func distinctSecrets(secrets ...string) error {
@@ -645,7 +663,7 @@ func distinctSecrets(secrets ...string) error {
 			continue
 		}
 		if seen[secret] {
-			return errors.New("PG_WEBHOOK_SECRET, GAME_SERVER_SECRET, AUTH_SERVER_SECRET 은 서로 다른 값이어야 합니다")
+			return errors.New("PG_WEBHOOK_SECRET, GAME_SERVER_SECRET, AUTH_SERVER_SECRET, CHAT_SERVER_SECRET 은 서로 다른 값이어야 합니다")
 		}
 		seen[secret] = true
 	}
