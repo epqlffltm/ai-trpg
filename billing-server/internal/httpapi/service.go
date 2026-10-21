@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/peers"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/serviceauth"
 )
 
@@ -17,12 +18,12 @@ import (
 // 사용자의 토큰을 보지 않는다. 요청의 서명을 본다. 사용자는 이 주소들을 부를 수 없다.
 
 const (
-	// GameServer 는 게임 서버의 이름이다. 홀드에 "누가 걸었는가"로 적힌다. 관측 규격의 서비스 이름과 같다.
-	GameServer = "trpg-server"
+	// GameServer 는 게임 서버의 이름이다. 홀드에 "누가 걸었는가"로 적힌다(internal/peers).
+	GameServer = peers.Game
 	// AuthServer 는 인증 서버의 이름이다.
-	AuthServer = "auth-server"
+	AuthServer = peers.Auth
 	// ChatServer 는 chat 서버의 이름이다. chat 과 story 의 말 한 번에 홀드를 건다(docs/architecture/chat-server.md).
-	ChatServer = "chat-server"
+	ChatServer = peers.Chat
 	// callerKey 는 서명을 확인한 서버의 이름을 요청에 실어 두는 이름이다.
 	callerKey = "service.caller"
 )

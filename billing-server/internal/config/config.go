@@ -54,9 +54,12 @@ const (
 	// DefaultHoldTTL 은 홀드를 걸거나 연장한 뒤 만료될 때까지의 시간이다. 하루다.
 	// 부르는 쪽(게임 서버)이 그 안에 확정하거나 연장하지 않으면 정리 작업이 돌려준다.
 	DefaultHoldTTL = 24 * time.Hour
+	// DefaultChatHoldTTL 은 chat 서버가 건 홀드의 만료까지의 시간이다. 10분이다.
+	// 말 한 번(길게 쓰는 답이어도 몇 분)보다 넉넉하고, chat 서버가 죽었을 때 크레딧이 오래 묶이지 않는다
+	DefaultChatHoldTTL = 10 * time.Minute
 	// DefaultOrderTTL 은 주문을 만든 뒤 만료될 때까지의 시간이다. 하루다. Stripe 의 결제창(Checkout)과 같은 기본값이다.
 	DefaultOrderTTL = 24 * time.Hour
-	// MinExpiryTTL 은 HOLD_TTL 과 ORDER_TTL 로 받는 가장 짧은 시간이다.
+	// MinExpiryTTL 은 HOLD_TTL, CHAT_HOLD_TTL, ORDER_TTL 로 받는 가장 짧은 시간이다.
 	// 정리 작업은 몇십 초마다 돈다. 그보다 짧으면 만료가 정리 작업의 간격에 묻힌다.
 	MinExpiryTTL = time.Minute
 	// DefaultWelcomeCredits 는 사용자가 한 번 받는 환영 크레딧(무료 크레딧)의 양이다. 가장 싼 상품과 같은 양이다.
@@ -133,6 +136,8 @@ type Settings struct {
 	FreeCreditTTL time.Duration
 	// HoldTTL 은 홀드를 걸거나 연장한 뒤 만료될 때까지의 시간이다. 바꾸면 그 뒤에 걸거나 연장한 홀드부터 적용된다.
 	HoldTTL time.Duration
+	// ChatHoldTTL 은 chat 서버가 건 홀드의 만료까지의 시간이다(CHAT_HOLD_TTL). 연장할 때도 이만큼 민다.
+	ChatHoldTTL time.Duration
 	// OrderTTL 은 주문을 만든 뒤 만료될 때까지의 시간이다. 바꾸면 그 뒤에 만든 주문부터 적용된다.
 	OrderTTL time.Duration
 	// WelcomeCredits 는 사용자가 한 번 받는 환영 크레딧의 양이다. 0 이면 주지 않는다.
@@ -199,7 +204,9 @@ type Rules struct {
 	SpendFreeFirst bool
 	FreeCreditTTL  time.Duration
 	HoldTTL        time.Duration
-	OrderTTL       time.Duration
+	// ChatHoldTTL 은 chat 서버가 건 홀드의 만료까지의 시간이다. 0 이면 따로 정하지 않은 것이다(HoldTTL 그대로)
+	ChatHoldTTL time.Duration
+	OrderTTL    time.Duration
 }
 
 // Jobs 는 결제 대행사에 묻는 작업 명령(cmd/reconcile, cmd/orders)이 읽는 설정이다.
@@ -301,6 +308,7 @@ func Load(lookup Lookup) (Settings, error) {
 		SpendFreeFirst:     rules.SpendFreeFirst,
 		FreeCreditTTL:      rules.FreeCreditTTL,
 		HoldTTL:            rules.HoldTTL,
+		ChatHoldTTL:        rules.ChatHoldTTL,
 		OrderTTL:           rules.OrderTTL,
 		WelcomeCredits:     welcome,
 		AttendanceSilver:   attendanceSilver,
@@ -514,16 +522,22 @@ func loadRules(lookup Lookup) (Rules, error) {
 	freeFirst, freeFirstErr := readBool(lookup, "SPEND_FREE_FIRST", DefaultSpendFreeFirst)
 	freeTTL, freeTTLErr := readDuration(lookup, "FREE_CREDIT_TTL", DefaultFreeCreditTTL, MinFreeCreditTTL)
 	holdTTL, holdTTLErr := readDuration(lookup, "HOLD_TTL", DefaultHoldTTL, MinExpiryTTL)
+	chatHoldTTL, chatHoldTTLErr := readDuration(lookup, "CHAT_HOLD_TTL", DefaultChatHoldTTL, MinExpiryTTL)
 	orderTTL, orderTTLErr := readDuration(lookup, "ORDER_TTL", DefaultOrderTTL, MinExpiryTTL)
-	if err := errors.Join(freeFirstErr, freeTTLErr, holdTTLErr, orderTTLErr); err != nil {
+	if err := errors.Join(freeFirstErr, freeTTLErr, holdTTLErr, chatHoldTTLErr, orderTTLErr); err != nil {
 		return Rules{}, err
 	}
-	return Rules{SpendFreeFirst: freeFirst, FreeCreditTTL: freeTTL, HoldTTL: holdTTL, OrderTTL: orderTTL}, nil
+	return Rules{
+		SpendFreeFirst: freeFirst, FreeCreditTTL: freeTTL, HoldTTL: holdTTL, ChatHoldTTL: chatHoldTTL, OrderTTL: orderTTL,
+	}, nil
 }
 
 // Rules 는 서버의 설정에서 크레딧을 다루는 규칙만 꺼낸다. 서버와 작업 명령이 같은 방법으로 서비스를 만든다.
 func (s Settings) Rules() Rules {
-	return Rules{SpendFreeFirst: s.SpendFreeFirst, FreeCreditTTL: s.FreeCreditTTL, HoldTTL: s.HoldTTL, OrderTTL: s.OrderTTL}
+	return Rules{
+		SpendFreeFirst: s.SpendFreeFirst, FreeCreditTTL: s.FreeCreditTTL, HoldTTL: s.HoldTTL, ChatHoldTTL: s.ChatHoldTTL,
+		OrderTTL: s.OrderTTL,
+	}
 }
 
 // ReceivesTossNotifications 는 토스페이먼츠의 알림(웹훅)을 받는지다. 토스페이먼츠를 꽂았을 때만 받는다.
