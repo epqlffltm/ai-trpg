@@ -42,7 +42,12 @@ class SyncPlan:
 def same_text(stored: StoredReference, record: ReferenceRecord) -> bool:
     """벡터로 바꿀 글이 같은가."""
     incoming = StoredReference(
-        id=stored.id, key=record.key, name=record.name, aliases=record.aliases, content=record.content
+        id=stored.id,
+        key=record.key,
+        name=record.name,
+        aliases=record.aliases,
+        content=record.content,
+        content_ko=record.content_ko,
     )
     return reference_text(stored) == reference_text(incoming)
 

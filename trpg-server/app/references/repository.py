@@ -23,6 +23,8 @@ def to_stored(entry: ReferenceEntry) -> StoredReference:
         content=entry.content,
         kind=entry.kind,
         data=dict(entry.data),
+        name_ko=entry.name_ko,
+        content_ko=entry.content_ko,
     )
 
 
@@ -42,6 +44,8 @@ def entry_values(source: ReferenceSource, record: ReferenceRecord) -> dict:
         'aliases': list(record.aliases),
         'content': record.content,
         'data': record.data,
+        'name_ko': record.name_ko,
+        'content_ko': record.content_ko,
     }
 
 
