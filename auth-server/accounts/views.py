@@ -34,6 +34,7 @@ from accounts.api_schema import (
     MeSerializer,
     RetryLaterSerializer,
     RevocationDocumentSerializer,
+    WithdrawalStateSerializer,
     bad_request,
     coded,
     detail,
@@ -113,6 +114,7 @@ from accounts.serializers import (
     SignupVerifiedSerializer,
     SignupVerifySerializer,
     UserSerializer,
+    WithdrawalRequestSerializer,
 )
 from accounts.service_signature import SIGNATURE_HEADER, verify_request
 from accounts.services import (
@@ -150,6 +152,13 @@ from accounts.tokens import (
     revoke_refresh_token,
     rotate_refresh_token,
 )
+from accounts.withdrawal import (
+    WrongWithdrawalPasswordError,
+    cancel_withdrawal,
+    check_withdrawal_password,
+    request_withdrawal,
+)
+from accounts.withdrawal_schedule import withdrawal_scheduled_at
 
 # 본인의 항목마다의 동의 상태. 읽기, 동의, 철회가 같은 모양으로 답한다(API 목록의 모양)
 CONSENT_STATES = inline_serializer('ConsentStates', {'items': ConsentStateSerializer(many=True)})
@@ -172,6 +181,7 @@ def build_token_response(token_pair: TokenPair) -> Response:
             'token_type': 'Bearer',
             'expires_in': int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),
             'consents_pending': list(token_pair.consents_pending),
+            'withdrawal_scheduled_at': token_pair.withdrawal_scheduled_at,
         }
     )
     response = Response(body.data, status=status.HTTP_200_OK)
@@ -1009,8 +1019,55 @@ class MeView(APIView):
             'guardian_consent': guardian_status_of(request.user),
             # 다시 동의를 받아야 하는 필수 항목(#450). 비어 있지 않으면 화면이 동의를 받는다
             'consents_pending': pending_items(request.user),
+            # 탈퇴를 요청했으면 계정을 비울 시각(#603). 화면은 취소할지 묻는 화면만 연다
+            'withdrawal_scheduled_at': withdrawal_scheduled_at(request.user),
         }
         return Response(body, status=status.HTTP_200_OK)
+
+
+class MyWithdrawalView(APIView):
+    """POST, DELETE /api/v1/auth/me/withdrawal. 탈퇴를 요청하고 취소한다(#603, docs/architecture/withdrawal.md)."""
+
+    # 로그인한 본인만. 기본 권한(IsAuthenticated)을 쓴다. 유예 중의 토큰(인증 서버에만 통하는 것)으로도 부른다
+
+    @extend_schema(
+        summary='탈퇴를 요청한다. 모든 세션이 끊기고 7일 뒤에 계정을 비운다. 그 안에 다시 로그인해 취소한다',
+        request=WithdrawalRequestSerializer,
+        responses={
+            202: OpenApiResponse(response=WithdrawalStateSerializer, description='받았다. 계정을 비울 시각'),
+            400: bad_request('비밀번호가 틀렸다(password)'),
+            401: unauthenticated(),
+            429: TOO_MANY_ATTEMPTS,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = WithdrawalRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # 비밀번호를 확인하기 전에 먼저 센다. 비밀번호 변경과 같은 한도다. 빼앗긴 토큰으로 비밀번호를 맞혀 보지 못한다
+        count_password_change_attempt(user=request.user, ip=get_attempt_subject(request))
+        try:
+            check_withdrawal_password(request.user, serializer.validated_data['password'])
+        except WrongWithdrawalPasswordError:
+            return Response({'password': ['비밀번호가 올바르지 않습니다.']}, status=status.HTTP_400_BAD_REQUEST)
+        clear_password_change_attempts(user=request.user)
+
+        # 요청하면 이 기기를 포함한 모든 세션이 끊긴다. 화면은 로그인 화면으로 간다
+        scheduled = request_withdrawal(request.user)
+        body = WithdrawalStateSerializer({'withdrawal_scheduled_at': scheduled})
+        response = Response(body.data, status=status.HTTP_202_ACCEPTED)
+        clear_refresh_cookie(response)
+        return response
+
+    @extend_schema(
+        summary='유예 중인 탈퇴를 취소한다. 그 뒤의 /refresh 부터 모든 서버에 통한다. 요청하지 않았어도 200',
+        request=None,
+        responses={200: WithdrawalStateSerializer, 401: unauthenticated()},
+    )
+    def delete(self, request: Request) -> Response:
+        cancel_withdrawal(request.user)
+        body = WithdrawalStateSerializer({'withdrawal_scheduled_at': None})
+        return Response(body.data, status=status.HTTP_200_OK)
 
 
 class ConsentDocumentsView(APIView):

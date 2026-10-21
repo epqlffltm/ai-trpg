@@ -185,6 +185,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
 | auth-server | 환영 크레딧을 결제 서버에 맡기기(워커가 한 번 훑는 것) | `welcome_credit.deliver` |
 | auth-server | 결제 자격(성년이 되는 날, 보호자 동의)을 결제 서버에 알리기(같은 워커가 한 번 훑는 것) | `payment_eligibility.deliver` |
+| auth-server | 유예가 지난 탈퇴를 마치기(같은 워커가 한 번 훑는 것, #603) | `withdrawal.complete` |
+| auth-server | 탈퇴를 다른 서버에 알리기(같은 워커가 한 번 훑는 것, #603) | `withdrawal.deliver` |
 | billing-server | 만료된 홀드·주문, 사라진 무료 크레딧 닫기, 보호자와 사용자에게 알릴 일 보내기(정리 작업이 30초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `user_notices_queued`, `_sent`, `_retried`, `_rejected`, `_expired`, `_purged`) | `sweep.run` |
 | billing-server | 장부 맞춰 보기와 오래된 결제 끝내기(하루 한 번 돌리는 명령) | `reconcile.run` |
 | auth-server | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기 | `account.delete_unverified` |
@@ -355,6 +357,8 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
 | `welcome_credit.deliver` | auth | 환영 크레딧을 결제 서버에 맡기기 |
 | `payment_eligibility.deliver` | auth | 결제 자격을 결제 서버에 알리기 |
+| `withdrawal.complete` | auth | 유예가 지난 탈퇴를 마치기(계정을 비우고 알릴 줄을 적는다) |
+| `withdrawal.deliver` | auth | 탈퇴를 다른 서버에 알리기 |
 | `account.delete_unverified` | auth | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기(옛 이름 그대로) |
 | `security.send_digest` | auth | 보안 이벤트 요약 메일 |
 | `auth.jwks_fetch` | billing | 인증 서버에서 공개키 받기 |
@@ -382,6 +386,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다. 게임 서버, 결제 서버, 알림 서버는 마지막으로 받은 지 30분이 지나 기억한 키를 버릴 때 `error` 로 남긴다(그 뒤 인증이 필요한 요청은 503). 사람이 인증 서버를 봐야 한다 |
 | `auth.revocations_unavailable` | 게임 서버, 결제 서버, 게시판 서버, 알림 서버가 남긴다. 인증 서버에서 끊긴 세션의 목록(`/api/v1/auth/session-revocations`)을 받지 못했다. 마지막으로 받은 목록을 그대로 쓴다. 30초마다 다시 받으므로 인증 서버가 죽어 있으면 그만큼 줄이 쌓인다. `reason` 에 종류를 싣는다. `warning` |
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했거나, 결과를 알 수 없는 답이 왔다(토스페이먼츠의 5xx, 401, "처리 중" 같은 것). 주문은 `confirming` 에 남고 다시 부르거나 대사가 조회해 끝낸다. 청약철회(`order.refund`)면 `refunding` 에 남고 다시 부르거나 대사가 같은 취소를 다시 보낸다. 가상계좌(입금 대기)를 취소하지 못했을 때도 이 코드다(`order.confirm`, `cancel_status`). `warning` |
+| `withdrawal.undelivered` | 인증 서버가 탈퇴를 다른 서버에 알리지 못했다(닿지 못했거나 `200` `processed` 가 아닌 답). 다시 보낸다. `warning`. `target` 에 그 서버, `withdrawal_notice_id` 에 줄의 번호 |
 | `billing.unavailable` | 결제 서버에 일을 맡기지 못했다. 다시 부른다. 게임 서버(홀드): 답을 받지 못했다. 서명이 거절된 것(401)이면 `error`, 그 밖에는 `warning`. 서술 뒤의 확정을 정해 둔 시간 안에 끝내지 못해 정리 작업에 넘긴 것도 이 코드다(`warning`). 인증 서버(환영 크레딧): 닿지 못했거나 2xx 가 아닌 답이 왔다. `warning` |
 | `billing.rejected` | 결제 서버가 게임 서버의 요청을 받아들이지 않았다(400, 404, 409). 다시 불러도 같다. 연장이면 홀드를 그대로 두고 한 시간 뒤에 다시 부른다. 서술 뒤의 확정이 409(만료되어 돌려준 홀드)면 그 값은 받지 못한다. 홀드가 400 이면 가격표에 그 모델의 가격표 이름(`narration.<이름표>.i0.o0`)이 없는지 먼저 본다 |
 | `notification.unavailable` | 게임 서버, 결제 서버(정리 작업), 게시판 서버가 알림 서버에 알림을 넣지 못했다(연결 실패, 시간 초과, 401, 408, 429, 5xx). 발송함에 남아 늘어나는 간격으로 다시 보낸다. 서명이 거절된 것(401, `reason: unauthorized`)이면 `error`, 그 밖에는 `warning` |
@@ -641,7 +646,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
-| `emails_sent_total` | counter | `kind`(메일의 종류: `signup_code`, `login_code`, `already_registered`, `password_reset`, `password_changed`, `security_digest`, `guardian_consent`, `guardian_consented`, `guardian_revoked`, `minor_guardian`, `guardian_payment`, `other`), `result`(`sent`, `retried`, `discarded`) | 메일 한 통을 보내 본 결과의 수. 시도마다 센다. `retried` 는 메일 서버가 받지 않아 다시 보낼 것, `discarded` 는 버린 것(받는 사람이 받지 못했다)이다. 종류는 발송함의 칸 `kind` 다(`accounts.models.MailKind`). 메일 서버 없이 바로 찍는 것(inline)은 `sent` 만 센다 |
+| `emails_sent_total` | counter | `kind`(메일의 종류: `signup_code`, `login_code`, `already_registered`, `password_reset`, `password_changed`, `security_digest`, `guardian_consent`, `guardian_consented`, `guardian_revoked`, `minor_guardian`, `guardian_payment`, `withdrawal_requested`, `withdrawal_completed`, `other`), `result`(`sent`, `retried`, `discarded`) | 메일 한 통을 보내 본 결과의 수. 시도마다 센다. `retried` 는 메일 서버가 받지 않아 다시 보낼 것, `discarded` 는 버린 것(받는 사람이 받지 못했다)이다. 종류는 발송함의 칸 `kind` 다(`accounts.models.MailKind`). 메일 서버 없이 바로 찍는 것(inline)은 `sent` 만 센다 |
 | `auth_rate_limited_total` | counter | `limit`(제한의 이름: `login-ip`, `login-fail-account-ip`, `login-ip-block`, `signup-ip`, `password-reset-ip`, `password-change-fail-user`) | 시도 횟수 제한에 걸린 수 |
 | `auth_rate_limits_unavailable_total` | counter | `limit` | Redis 에 묻지 못해 세지 않고 통과시킨 수. 0 이 아니면 그동안 시도 제한이 꺼져 있었다 |
 
