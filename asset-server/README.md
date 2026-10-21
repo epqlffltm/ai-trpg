@@ -120,6 +120,23 @@ TRPG, chat, story 가 함께 쓰는 "나"의 설정이다(#565, [설계](../docs
 - 서버끼리 사본과 `revision` 을 내주는 길은 server-core 의 서명(#588)이 들어온 뒤에 더한다.
 - TRPG 의 보관함을 나누는 이관(이름과 설명은 계정 페르소나로, 능력치는 TRPG 의 시트로)은 따로 한다.
 
+### 소개 글의 HTML
+
+제작자가 쓴 소개 글(HTML 과 인라인 CSS)을 허용 목록으로 거르는 모듈이다(`app/content/html.py`). 캐릭터의 게시(#567)가 쓴다.
+규칙은 [공용 코드 규칙의 소개 글의 HTML](../docs/architecture/shared-code.md#소개-글의-html)이다. 화면은 같은 허용 목록으로 DOMPurify 를 한 번 더 거친다.
+
+- `clean_intro(html)` 은 거른 글과 걸러 낸 것(`removed`: 종류와 이름)을 돌려준다. 게시가 걸러 낸 것을 `problems[]` 로 제작자에게 보인다.
+  - 종류: `tag`(script, iframe, form …), `attribute`("div.onclick"), `style`(CSS 속성), `link`(https 가 아닌 링크), `image`(우리 그림 저장소의 것이 아닌 그림).
+  - 같은 것은 한 번, 처음 나온 차례다.
+- 거르는 것은 `nh3` 다. 무엇이 빠졌는지는 `nh3` 가 알려 주지 않아서, 같은 판단 함수로 입력을 따로 훑어 모은다.
+  거른 글을 다시 거르면 바뀌지 않고 알릴 것도 없다(테스트가 본다). 거르기와 알리기가 같은 규칙을 쓴다는 뜻이다.
+- 링크는 `https://` 만 남고 `rel="noopener noreferrer"` 가 붙는다. 상대 주소(`/login`, `#top`)도 뺀다.
+- 그림은 우리 그림 저장소의 주소(`/api/v1/asset/images/{소문자 UUID}`)만 남는다.
+- CSS 는 허용 목록의 속성만, 값에 `url(`, `expression(`, `\`(이스케이프)가 없을 때만 남는다. 남는 것이 없으면 `style` 을 뺀다.
+- 크기 상한은 50KB(UTF-8 의 바이트, `intro_too_long`)다.
+- 허용 목록은 모듈의 상수(`ALLOWED_TAGS`, `GLOBAL_ATTRIBUTES`, `TAG_ATTRIBUTES`, `ALLOWED_STYLE_PROPERTIES`)다. 화면의 DOMPurify 설정과 문서의 표를 이 값과 같게 둔다.
+- **app.* 를 가져오지 않는다**(`tests/test_content_boundary.py`). 두 번째로 쓰는 곳(TRPG 시나리오 소개를 asset 으로 옮기는 PR)이 생기면 파일째 `shared/` 로 옮긴다(2026-10-21 결정).
+
 ### 토큰 검증
 
 공용 코드 `shared/server-core` 의 것(`server_core/auth/`)을 쓴다(#588). 알림 서버와 같다. 규칙의 설명은
