@@ -24,6 +24,7 @@ from accounts.models import (
     SignupCode,
     User,
     WelcomeCredit,
+    WithdrawalNotice,
 )
 
 
@@ -37,7 +38,16 @@ class UserAdmin(DjangoUserAdmin):
     # 값이 자동으로 정해지는 필드는 화면에서 고칠 수 없게 한다.
     # is_active 도 여기서 끄지 못한다. 정지는 관리 명령(suspend_account)으로 한다.
     # 화면에서 끄면 세션 버전이 오르지 않아, 다른 서버에서 옛 access 토큰이 만료(15분)까지 통한다
-    readonly_fields = ('public_id', 'token_version', 'sessions_revoked_at', 'is_active', 'last_login', 'date_joined')
+    readonly_fields = (
+        'public_id',
+        'token_version',
+        'sessions_revoked_at',
+        'is_active',
+        'last_login',
+        'date_joined',
+        'withdrawal_requested_at',
+        'withdrawn_at',
+    )
 
     # 수정 화면. 기본 구성에서 first_name, last_name 을 빼고 nickname, public_id 를 넣는다
     fieldsets = (
@@ -45,6 +55,8 @@ class UserAdmin(DjangoUserAdmin):
         ('프로필', {'fields': ('email', 'email_verified_at', 'nickname', 'public_id')}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('기록', {'fields': ('token_version', 'sessions_revoked_at', 'last_login', 'date_joined')}),
+        # 탈퇴(#603). 화면에서 고치지 않는다. 요청과 취소는 본인이, 마치기는 워커가 한다
+        ('탈퇴', {'fields': ('withdrawal_requested_at', 'withdrawn_at')}),
     )
 
     @admin.display(boolean=True, description='이메일 인증')
@@ -283,6 +295,20 @@ class PaymentEligibilityAdmin(ReadOnlyAdmin):
     list_display = ('user', 'version', 'delivered_version', 'attempts', 'last_error', 'next_attempt_at')
     search_fields = ('user__username',)
     ordering = ('next_attempt_at',)
+
+
+@admin.register(WithdrawalNotice)
+class WithdrawalNoticeAdmin(ReadOnlyAdmin):
+    """
+    다른 서버에 알릴 탈퇴를 조회만 한다(#603). 밀려 있는 줄을 확인하는 곳이다.
+
+    알린 시각이 비어 있으면 아직 나가지 못한 것이다. 시도 횟수와 마지막 오류가 남아 있다.
+    """
+
+    list_display = ('user', 'target', 'withdrawn_at', 'delivered_at', 'attempts', 'last_error', 'next_attempt_at')
+    list_filter = ('target',)
+    ordering = ('next_attempt_at',)
+    list_select_related = ('user',)
 
 
 @admin.register(GuardianNotice)

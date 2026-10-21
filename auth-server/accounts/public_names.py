@@ -15,7 +15,7 @@
 import uuid
 from dataclasses import dataclass
 
-from accounts.identity import is_removed_account
+from accounts.erasure import is_removed_account
 from accounts.models import User
 
 # 한 번에 찾는 공개 ID 의 상한. 화면의 한 쪽(목록은 많아야 100개)이면 넉넉하다

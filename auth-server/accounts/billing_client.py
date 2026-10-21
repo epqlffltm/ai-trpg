@@ -1,9 +1,10 @@
 # auth-server/accounts/billing_client.py
 
 """
-결제 서버를 부른다. 부르는 일은 둘이다.
+결제 서버를 부른다. 부르는 일은 셋이다.
   - 본인인증을 마친 사용자에게 환영 크레딧을 주라고 맡긴다(welcome_credit.py)
   - 사용자의 결제 자격(성년이 되는 날, 보호자 동의)을 알린다(payment_eligibility.py, #336)
+  - 사용자가 탈퇴했다고 알린다(withdrawal.py, #603)
 
 요청마다 서명을 붙인다(service_signature.py). 결제 서버가 그것으로 인증 서버임을 확인한다.
 
@@ -15,7 +16,7 @@ import json
 import time
 import urllib.error
 import urllib.request
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from django.conf import settings
@@ -29,6 +30,9 @@ WELCOME_PATH = '/api/v1/billing/service/grants/welcome'
 
 # 결제 자격을 알리는 주소(결제 서버의 #337)
 ELIGIBILITY_PATH = '/api/v1/billing/service/eligibility'
+
+# 탈퇴를 알리는 주소(#603, docs/architecture/withdrawal.md). {user_id} 에 공개 ID 가 들어간다
+WITHDRAWAL_PATH = '/api/v1/billing/service/users/{user_id}/withdrawal'
 
 # 결제 서버의 답을 기다리는 가장 긴 시간(초). 워커가 죽은 서버를 무한정 기다리지 않게 한다
 TIMEOUT_SECONDS = 5
@@ -44,6 +48,10 @@ APPLIED = 'applied'
 # 결제 서버가 이미 같거나 더 높은 버전을 가지고 있다
 STALE = 'stale'
 ELIGIBILITY_OUTCOMES = (APPLIED, STALE)
+
+# 탈퇴에 결제 서버가 돌려주는 결과. 정리했다(이미 정리했거나 그 사용자의 것이 없던 것도 같다)
+PROCESSED = 'processed'
+WITHDRAWAL_OUTCOMES = (PROCESSED,)
 
 
 class BillingUnavailableError(Exception):
@@ -99,6 +107,22 @@ def report_payment_eligibility(
     if status_code != 200:
         raise BillingUnavailableError(f'결제 서버가 {status_code} 로 답했다')
     return _read_outcome(text, ELIGIBILITY_OUTCOMES)
+
+
+def report_withdrawal(*, user_public_id: UUID, withdrawn_at: datetime) -> str:
+    """
+    결제 서버에 사용자가 탈퇴했다고 알리고, 결과를 돌려준다.
+
+    결과는 PROCESSED 다. 결제 서버가 그 사용자의 홀드를 돌려주고 크레딧을 소멸로 적고 결제 자격을 지웠다는 뜻이다.
+    같은 사용자로 여러 번 불러도 결과가 같다. 그것은 결제 서버가 지킨다.
+    그 밖의 모든 경우(결제 서버가 이 주소를 모르는 옛 판이라 404 인 것을 포함한다)는 BillingUnavailableError 다.
+    """
+    path = WITHDRAWAL_PATH.format(user_id=user_public_id)
+    body = json.dumps({'withdrawn_at': withdrawn_at.isoformat()}).encode()
+    status_code, text = _post(path, body)
+    if status_code != 200:
+        raise BillingUnavailableError(f'결제 서버가 {status_code} 로 답했다')
+    return _read_outcome(text, WITHDRAWAL_OUTCOMES)
 
 
 def _post(path: str, body: bytes) -> tuple[int, bytes]:

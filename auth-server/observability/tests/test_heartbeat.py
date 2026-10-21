@@ -13,7 +13,7 @@ from unittest.mock import patch
 from django.db import OperationalError
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from accounts import payment_eligibility
+from accounts import payment_eligibility, withdrawal
 from accounts.management.commands import send_outgoing_mail, send_welcome_credits
 from observability.heartbeat import beat
 
@@ -71,7 +71,7 @@ class WorkerHeartbeatTests(TestCase):
         """
         워커의 한 바퀴를 돈다.
 
-        결제 서버에 맡기는 워커는 결제 자격도 보낸다. 그것은 비어 있는 것으로 둔다.
+        결제 서버에 맡기는 워커는 결제 자격도 보내고 탈퇴도 마치고 알린다(#603). 그것들은 비어 있는 것으로 둔다.
         메일 워커가 바퀴마다 세는 발송함에 남은 메일(DB 를 읽는다)도 0 으로 둔다.
         워커는 바퀴마다 끊긴 DB 연결을 버린다. 테스트의 트랜잭션 안에서는 그것이 연결을 닫아,
         실제로 DB 를 읽으면 실패한다.
@@ -84,6 +84,8 @@ class WorkerHeartbeatTests(TestCase):
                 payment_eligibility, 'deliver_due_eligibility', return_value=payment_eligibility.DeliveryReport()
             ),
             patch.object(send_outgoing_mail, 'count_waiting_mail', return_value=0),
+            patch.object(withdrawal, 'complete_due_withdrawals', return_value=0),
+            patch.object(withdrawal, 'deliver_due_withdrawal_notices', return_value=withdrawal.DeliveryReport()),
         ):
             command._deliver_safely()
 

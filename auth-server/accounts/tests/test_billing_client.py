@@ -11,7 +11,7 @@ import json
 import os
 import time
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from unittest.mock import patch
 
 from django.core.exceptions import ImproperlyConfigured
@@ -23,10 +23,12 @@ from accounts.billing_client import (
     APPLIED,
     DISABLED,
     GRANTED,
+    PROCESSED,
     STALE,
     BillingUnavailableError,
     grant_welcome_credit,
     report_payment_eligibility,
+    report_withdrawal,
 )
 from accounts.tests.billing_stub import SECRET, BillingStub, closed_port_url
 from config.billing import validate_billing_url, validate_service_secret
@@ -247,3 +249,35 @@ class EligibilityTests(SimpleTestCase):
                 self.assertRaises(BillingUnavailableError),
             ):
                 report(stub)
+
+
+def withdraw(stub: BillingStub) -> str:
+    """가짜 결제 서버를 가리키게 설정을 바꾸고 탈퇴를 알린다."""
+    with override_settings(BILLING_URL=stub.url, BILLING_SECRET=SECRET):
+        return report_withdrawal(user_public_id=USER_ID, withdrawn_at=datetime(2026, 10, 28, 3, 0, tzinfo=UTC))
+
+
+class WithdrawalTests(SimpleTestCase):
+    """탈퇴를 알리는 요청(#603)."""
+
+    def test_posts_the_time_to_the_users_route(self):
+        with BillingStub(status_code=200, body=b'{"status":"processed"}') as stub:
+            outcome = withdraw(stub)
+
+        request = stub.requests[0]
+        self.assertEqual(outcome, PROCESSED)
+        # 누구인지는 주소에 있다. 서명이 주소까지 덮는다
+        self.assertEqual(request.path, f'/api/v1/billing/service/users/{USER_ID}/withdrawal')
+        self.assertTrue(request.has_valid_signature())
+        self.assertEqual(json.loads(request.body), {'withdrawn_at': '2026-10-28T03:00:00+00:00'})
+
+    def test_anything_else_means_try_again_later(self):
+        # 404 는 결제 서버에 이 주소가 아직 없는 것이다. 버리지 않고 다시 보낸다
+        answers = [(404, b''), (202, b'{"status":"processed"}'), (200, b'{"status":"applied"}'), (500, b'')]
+        for status_code, body in answers:
+            with (
+                self.subTest(status_code=status_code, body=body),
+                BillingStub(status_code=status_code, body=body) as stub,
+                self.assertRaises(BillingUnavailableError),
+            ):
+                withdraw(stub)

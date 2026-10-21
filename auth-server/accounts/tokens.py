@@ -12,10 +12,12 @@ JWT 발급, 갱신, 폐기.
     - access 토큰에 역할(roles)을 넣는다. 운영자면 ["operator"](#389, docs/architecture/operators.md).
     - 다시 동의할 필수 항목이 남은 사람의 access 토큰은 대상(aud)이 인증 서버뿐이다(#450). 다른 서버의 API 는 막히고,
       인증 서버에서 동의를 마친 뒤 갱신하면 모든 서버의 이름이 다시 실린다.
+      탈퇴를 요청해 유예 중인 사람도 같다(#603). 취소한 뒤 갱신하면 다시 실린다.
     - refresh 토큰은 쓸 때마다 새것으로 바꾸고, 이미 폐기된 토큰이 다시 쓰이면 탈취로 본다.
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 
 import jwt
 from django.conf import settings
@@ -36,6 +38,7 @@ from accounts.identity_status import identity_status_of
 from accounts.key_ring import current_key_ring
 from accounts.models import User
 from accounts.roles import roles_of
+from accounts.withdrawal_schedule import withdrawal_scheduled_at
 
 # 세션 버전을 담는 클레임 이름
 VERSION_CLAIM = 'ver'
@@ -56,12 +59,14 @@ class TokenPair:
     """
     함께 발급되는 access 토큰과 refresh 토큰.
 
-    consents_pending 은 다시 동의할 필수 항목이다. 비어 있지 않으면 access 토큰의 대상이 인증 서버뿐이다.
+    consents_pending 은 다시 동의할 필수 항목이고, withdrawal_scheduled_at 은 탈퇴를 요청한 계정을 비울 시각이다.
+    둘 중 하나라도 있으면 access 토큰의 대상이 인증 서버뿐이다.
     """
 
     access: str
     refresh: str
     consents_pending: tuple[str, ...] = ()
+    withdrawal_scheduled_at: datetime | None = None
 
 
 class KeyIdTokenBackend(TokenBackend):
@@ -160,14 +165,20 @@ def issue_token_pair(user: User) -> TokenPair:
     refresh[VERSION_CLAIM] = user.token_version
     _record_issued_refresh_token(refresh, user)
     pending = tuple(pending_items(user))
+    scheduled = withdrawal_scheduled_at(user)
     access = _access_token_for(refresh, user)
-    access['aud'] = audience_for(pending)
-    return TokenPair(access=str(access), refresh=str(refresh), consents_pending=pending)
+    access['aud'] = audience_for(pending, scheduled)
+    return TokenPair(
+        access=str(access), refresh=str(refresh), consents_pending=pending, withdrawal_scheduled_at=scheduled
+    )
 
 
-def audience_for(consents_pending: tuple[str, ...]) -> list[str]:
+def audience_for(consents_pending: tuple[str, ...], withdrawal_scheduled: datetime | None = None) -> list[str]:
     """
-    access 토큰의 대상(aud). 다시 동의할 필수 항목이 있으면 인증 서버뿐이고, 없으면 설정의 모든 서버다.
+    access 토큰의 대상(aud). 다시 동의할 필수 항목이 있거나 탈퇴의 유예 중이면 인증 서버뿐이고,
+    아니면 설정의 모든 서버다.
+
+    탈퇴의 유예(#603)도 같은 길이다. 그동안 다른 서버를 쓰지 못하고, 인증 서버에서 취소한 뒤 갱신하면 돌아온다.
 
     약관의 판이 오르면(중요한 변경) 동의하기 전까지 서비스를 쓰지 못하게 한다(#450). 다른 서버를 고치지 않는다.
     다른 서버는 aud 에 자기 이름이 있는지 보므로 이 토큰을 받지 않는다(401).
@@ -175,7 +186,7 @@ def audience_for(consents_pending: tuple[str, ...]) -> list[str]:
     /refresh 로 모든 서버의 이름이 실린 토큰을 받는다.
     이미 나간 access 토큰은 수명(15분)까지 통한다. 판을 올린 뒤 길어야 15분이다.
     """
-    if consents_pending:
+    if consents_pending or withdrawal_scheduled is not None:
         return [settings.JWT_OWN_AUDIENCE]
     return list(api_settings.AUDIENCE)
 
