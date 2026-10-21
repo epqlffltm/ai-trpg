@@ -45,6 +45,7 @@ from app.notifications.dispatcher import (
 )
 from app.notifications.models import OutboxStatus, OutgoingNotification
 from app.notifications.setup import build_notifications
+from tests.catalog_rows import retire
 from tests.conftest import make_test_settings
 from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, FixedPrices, add_enabled, book, on_sale
@@ -133,7 +134,7 @@ async def test_each_retirement_stage_is_one_notification_for_the_host(
     client: AsyncClient, app: FastAPI, session: AsyncSession, host
 ):
     table = await start_with(client, host, narration_model='gpt-6-luna')
-    await catalog.retire_model(session, 'gpt-6-luna', TODAY + timedelta(days=20))
+    await retire(session, 'gpt-6-luna', TODAY + timedelta(days=20))
 
     await watch(app, NOW)
     await watch(app, NOW + timedelta(days=7))
@@ -158,7 +159,7 @@ async def test_a_replacement_is_told_to_the_host_only(
     client: AsyncClient, app: FastAPI, session: AsyncSession, host, guest
 ):
     table = await start_with(client, host, guest, narration_model='gpt-6-luna')
-    await catalog.retire_model(session, 'gpt-6-luna', TODAY)
+    await retire(session, 'gpt-6-luna', TODAY)
 
     await watch(app, NOW)
     (notice,) = await outgoing(session)
@@ -176,7 +177,7 @@ async def test_a_retired_model_without_a_replacement_is_told_once(
 ):
     await start_with(client, host, narration_model='gpt-6-luna')
     await catalog.disable_model(session, 'gpt-6-mini')
-    await catalog.retire_model(session, 'gpt-6-luna', TODAY)
+    await retire(session, 'gpt-6-luna', TODAY)
 
     await watch(app, NOW)
     await watch(app, NOW + timedelta(hours=1))

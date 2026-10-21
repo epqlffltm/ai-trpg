@@ -15,6 +15,7 @@ from decimal import Decimal
 
 import pytest
 from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField
+from ai_core.catalog_file import CostEntry, ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,8 +26,8 @@ from app.billing.routing import utc_now
 from app.catalog import service as catalog
 from app.catalog.models import Grade
 from app.catalog.offers import ModelCard, OfferedModel, grade_disagrees, offer, offered_models
-from app.catalog.schemas import CostCreate, ModelCreate
 from app.main import API_PREFIX
+from tests.catalog_rows import add_cost, put_models
 from tests.signing import SigningKey, make_access_claims, make_token
 
 NOW = datetime(2026, 10, 18, 3, 0, tzinfo=UTC)
@@ -155,7 +156,7 @@ class FixedPrices:
         return self.fixed
 
 
-LUNA = ModelCreate(
+LUNA = ModelEntry(
     slug='gpt-6-luna',
     provider=Provider.OPENAI,
     api_model_id='gpt-6-luna-2026-09-22',
@@ -165,7 +166,7 @@ LUNA = ModelCreate(
     supports_reasoning=True,
     token_limit_field=TokenLimitField.MAX_COMPLETION_TOKENS,
 )
-OPUS = ModelCreate(
+OPUS = ModelEntry(
     slug='claude-opus-5-5',
     provider=Provider.ANTHROPIC,
     api_model_id='claude-opus-5-5-20260901',
@@ -182,13 +183,13 @@ def me(signing_key: SigningKey) -> dict[str, str]:
     return {'Authorization': f'Bearer {make_token(signing_key, make_access_claims(sub=str(ME)))}'}
 
 
-async def add_enabled(session: AsyncSession, data: ModelCreate) -> None:
+async def add_enabled(session: AsyncSession, data: ModelEntry) -> None:
     """모델을 넣고 오늘의 원가를 적고 켠다."""
-    await catalog.add_model(session, data)
-    cost = CostCreate(
+    await put_models(session, data)
+    cost = CostEntry(
         input_per_mtok=Decimal('0.1'), output_per_mtok=Decimal('0.5'), effective_from=NOW.date(), checked_on=NOW.date()
     )
-    await catalog.add_cost(session, data.slug, cost)
+    await add_cost(session, data.slug, cost)
     await catalog.enable_model(session, data.slug, NOW.date())
 
 

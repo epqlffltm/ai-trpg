@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 import pytest
 from ai_core.calls import CallRecord, CallScope, Outcome
 from ai_core.catalog_contract import Provider
+from ai_core.catalog_file import CostEntry, ModelEntry
 from ai_core.provider import Reasoning
 from fastapi import FastAPI
 from httpx import AsyncClient
@@ -23,9 +24,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai_log.call_log import DbCallLog
-from app.catalog import service as catalog
 from app.catalog.models import Grade
-from app.catalog.schemas import CostCreate, ModelCreate, SnapshotSwitch
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
 from app.memory.indexing import index_table
@@ -53,6 +52,7 @@ from app.tables.models import (
     TableVisit,
 )
 from app.whispers.models import Whisper
+from tests.catalog_rows import add_cost, put_models
 from tests.cleaning import clear_tables, clearing_order
 from tests.narration_model import with_model
 from tests.sheets import SHEET
@@ -68,7 +68,7 @@ OTHER = uuid.UUID('22222222-2222-4333-8444-555555555555')
 ALEMBIC_TABLE = 'alembic_version'
 
 # 모델 목록에 넣는 모델 하나와 그 원가. 서버 곁의 모델이다
-CATALOG_MODEL = ModelCreate(
+CATALOG_MODEL = ModelEntry(
     slug='gemma',
     provider=Provider.LOCAL,
     api_model_id='gemma4:26b',
@@ -84,7 +84,7 @@ REFERENCES = ReferenceDocument(
     origin=ReferenceOrigin(dataset='test', revision='abc', license='CC-BY-4.0', attribution='SRD 5.1'),
     entries=[ReferenceRecord(key='items/torch', kind='item', name='Torch', content='A torch burns.')],
 )
-CATALOG_COST = CostCreate(input_per_mtok=0, output_per_mtok=0, effective_from='2026-10-17', checked_on='2026-10-17')
+CATALOG_COST = CostEntry(input_per_mtok=0, output_per_mtok=0, effective_from='2026-10-17', checked_on='2026-10-17')
 
 
 @pytest.fixture
@@ -217,9 +217,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         await session.commit()
 
     async with app.state.session_factory() as session:
-        await catalog.add_model(session, CATALOG_MODEL)
-        await catalog.add_cost(session, CATALOG_MODEL.slug, CATALOG_COST)
-        await catalog.switch_snapshot(session, CATALOG_MODEL.slug, SnapshotSwitch(api_model_id='gemma4:31b'))
+        await put_models(session, CATALOG_MODEL)
+        await add_cost(session, CATALOG_MODEL.slug, CATALOG_COST)
+        await put_models(session, CATALOG_MODEL.model_copy(update={'api_model_id': 'gemma4:31b'}))
 
     # 참고 자료는 관리 명령으로만 생긴다(scripts/references.py). 넣고 벡터를 만든다
     async with app.state.session_factory() as session:

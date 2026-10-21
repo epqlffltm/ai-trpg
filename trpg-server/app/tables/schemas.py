@@ -11,6 +11,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Literal
 
+from ai_core.catalog_file import Slug
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.assets.models import (
@@ -33,7 +34,6 @@ from app.assets.scenarios.schemas import (
 from app.billing.prices import Tier
 from app.calendar.schemas import ClockOut, ClockTimeOut
 from app.catalog.models import Grade
-from app.catalog.schemas import Slug
 from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
 from app.engine.sheet import Score, Sheet
 from app.tables.models import (

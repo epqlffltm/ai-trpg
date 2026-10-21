@@ -20,6 +20,7 @@ from datetime import date
 import httpx
 import pytest
 from ai_core.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField
+from ai_core.catalog_file import ModelEntry
 from ai_core.fake import FakeCallLog
 from ai_core.openai_compat import WireOptions
 from ai_core.provider import ProviderError
@@ -32,13 +33,12 @@ from ai_core.routing import (
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalog import service
 from app.catalog.lookup import DbModelLookup
 from app.catalog.models import Grade
-from app.catalog.schemas import ModelCreate, ModelUpdate
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 from app.rounds.retrying_narrator import NarrationFailed, RetryingNarrator
 from app.rounds.routed_narrator import RoutedNarrator
+from tests.catalog_rows import put_models
 from tests.previews import RecordingPreview
 
 TODAY = date(2026, 10, 17)
@@ -290,7 +290,7 @@ async def test_an_unavailable_model_is_not_tried_again():
 
 # --- DB ---
 
-LUNA_ROW = ModelCreate(
+LUNA_ROW = ModelEntry(
     slug='gpt-6-luna',
     provider=Provider.OPENAI,
     api_model_id='gpt-6-luna-2026-09-22',
@@ -305,7 +305,7 @@ LUNA_ROW = ModelCreate(
 
 @pytest.mark.usefixtures('clean_tables')
 async def test_the_database_lookup_finds_a_plain_value(app, session: AsyncSession):
-    await service.add_model(session, LUNA_ROW)
+    await put_models(session, LUNA_ROW)
     lookup = DbModelLookup(app.state.session_factory)
 
     found = await lookup.find('gpt-6-luna', TODAY)
@@ -317,10 +317,10 @@ async def test_the_database_lookup_finds_a_plain_value(app, session: AsyncSessio
 
 @pytest.mark.usefixtures('clean_tables')
 async def test_the_database_lookup_sees_a_change_at_once(app, session: AsyncSession):
-    await service.add_model(session, LUNA_ROW)
+    await put_models(session, LUNA_ROW)
     lookup = DbModelLookup(app.state.session_factory)
     before = await lookup.find('gpt-6-luna', TODAY)
 
-    await service.update_model(session, 'gpt-6-luna', ModelUpdate(supports_temperature=True))
+    await put_models(session, LUNA_ROW.model_copy(update={'supports_temperature': True}))
 
     assert (before.supports_temperature, (await lookup.find('gpt-6-luna', TODAY)).supports_temperature) == (False, True)

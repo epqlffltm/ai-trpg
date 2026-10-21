@@ -19,26 +19,27 @@
     이름표와 창구는 바꾸지 않는다.
   - API 모델 이름에는 날짜가 붙은 이름(날짜판)을 적는다. 별칭(gpt-x-latest 같은)은 공급자가 말없이 다른 모델로 돌린다.
     공급자가 새 날짜판을 내면 이름표는 그대로 두고 날짜판만 바꾼다(유저 결정, 2026-10-17). 같은 상품이라 값도 그대로다.
-    다만 서술의 목소리가 바뀔 수 있다. 그래서 날짜판은 따로 둔 명령으로만 바꾼다
-    (app/catalog/service.py 의 switch_snapshot).
-    바꾸면 기록이 남고 모델이 꺼진다. 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다.
-  - 새로 넣은 모델은 꺼진 채로 시작한다. 원가를 적고, 평가 장면을 통과한 뒤에 켠다.
+    다만 서술의 목소리가 바뀔 수 있다. 그래서 날짜판이 바뀌면 들여오기가 기록을 남기고 모델을 끈다
+    (app/catalog/sync.py). 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다.
+  - 새로 넣은 모델은 꺼진 채로 시작한다. 원가를 보고, 평가 장면을 통과한 뒤에 켠다.
 
-창구(provider), 생각의 방식(reasoning_style), 출력 상한의 칸(token_limit_field)의 열거형은 AI 를 부르는 코드도 쓰므로
-모델 목록의 계약(ai_core/catalog_contract.py)에 있다(#496). 보이는 분류(Grade)는 서비스의 몫이라 여기 남는다.
+원본은 파일 하나다(ai_core/model_catalog.toml, #499). 표는 그것을 들여온 사본에 이 서버의 스위치(enabled,
+vendor_fallback)를 더한 것이다. 모델과 원가는 파일을 고치고 들여와서 바꾼다(scripts.models sync, app/catalog/sync.py).
+켜고 끄기와 대체 모델은 이 표에서 한다(app/catalog/service.py).
+
+창구(provider), 생각의 방식(reasoning_style), 출력 상한의 칸(token_limit_field), 분류(grade)의 열거형은
+모델 목록의 계약(ai_core/catalog_contract.py)에 있다(#496, #499).
 창구(provider)와 분류(grade)는 코드가 아는 값만 받는다.
 새 창구는 그것을 부르는 코드가 있어야 하므로 마이그레이션과 함께 늘린다.
-회사(vendor)는 보이는 데만 쓰는 이름이라 모양만 본다(app/catalog/schemas.py).
+회사(vendor)는 보이는 데만 쓰는 이름이라 모양만 본다(ai_core/catalog_file.py).
 
 외부에 내보내지 않는다. 지금은 관리 명령(scripts/models.py)으로만 다룬다.
-나중에 관리 서버가 같은 함수들(app/catalog/service.py)을 부른다.
 """
 
-import enum
 from datetime import date, datetime
 from decimal import Decimal
 
-from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField
+from ai_core.catalog_contract import Grade, Provider, ReasoningStyle, TokenLimitField
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -61,16 +62,6 @@ from app.core.database import Base
 
 # 단가 칸의 자릿수. 백만 토큰당 USD 를 소수 여섯째 자리까지 적는다($0.075 같은 값이 있다)
 PRICE_TYPE = Numeric(12, 6)
-
-
-class Grade(enum.StrEnum):
-    """보이는 분류. 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 따로 정한다."""
-
-    # 아주 싸거나 행사로 풀 모델. 서버 곁의 모델로 한다
-    BASIC = 'basic'
-    STANDARD = 'standard'
-    # 비싼 모델(Opus, Fable, Astra, Argon)
-    PREMIUM = 'premium'
 
 
 class AiModel(Base):
@@ -109,12 +100,13 @@ class AiModel(Base):
     # 생각을 켜고 끄는 방식(ReasoningStyle). anthropic 창구만 적는다
     reasoning_style: Mapped[str | None] = mapped_column(String(20))
 
-    # 켜져 있나. 새로 넣은 모델은 꺼져 있다
+    # 켜져 있나. 새로 넣은 모델은 꺼져 있다. 파일에 없는 이 서버의 스위치다
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
-    # 이 날부터 쓰지 않는다. 공급자가 모델을 내리는 날이다. 없으면 정해지지 않았다
+    # 이 날부터 쓰지 않는다. 공급자가 모델을 내리는 날이다(파일의 retires_on). 없으면 정해지지 않았다
     retires_on: Mapped[date | None] = mapped_column(Date)
     # 그 회사의 대체 모델인가. 시나리오의 추천 모델을 쓸 수 없을 때 같은 회사의 이 모델로 바꾼다(app/catalog/offers.py).
-    # 운영자가 정한다(scripts/models.py fallback). 정하지 않았으면 같은 회사의 standard 중 가장 싼 모델이다
+    # 운영자가 정한다(scripts/models.py fallback). 파일에 없는 이 서버의 스위치다.
+    # 정하지 않았으면 같은 회사의 standard 중 가장 싼 모델이다
     vendor_fallback: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

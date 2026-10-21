@@ -1,0 +1,812 @@
+# shared/ai-core/src/ai_core/model_catalog.toml
+#
+# 모델 목록의 원본(#499). 서비스마다 자기 표에 들여온다(게임 서버: uv run python -m scripts.models sync).
+# 읽는 것과 칸의 뜻은 ai_core/catalog_file.py 에 있다. 들여온 모델은 꺼진 채다. 켜고 끄기는 서비스의 표에서 한다.
+#
+# 고치는 법
+#   - 모델을 넣는다: [[models]] 를 더한다. 이름표(slug)는 API 이름에서 날짜를 빼고 점을 붙임표로 바꾼 상품 이름이다.
+#     이름표는 결제 서버의 가격 코드(narration.<이름표>.i0.o0)가 그대로 쓴다. 이름표와 창구(provider)는 바꾸지 않는다.
+#   - 날짜판이 바뀐다: api_model_id 만 바꾼다. 들여오면 기록이 남고 모델이 꺼진다. 평가 장면을 다시 통과한 뒤 켠다.
+#   - 값이 바뀐다: 앞의 [[models.costs]] 를 지우지 않고 effective_from 이 그날인 줄을 더한다. 미리 알린 인상도 미리 적는다.
+#   - 공급자가 내리는 날이 정해진다: retires_on 을 적는다. "이 날보다 늦다"는 날짜가 아니라 적지 않는다(주석에 둔다).
+#   - 서버 곁의 모델(local)은 여기 두지 않는다. 환경마다 이름이 달라 그 환경의 파일로 들여온다(sync --file).
+#
+# 단가는 USD, 백만 토큰당. 기본 등급(일괄 처리가 아니고, 긴 입력의 웃돈이 붙기 전)의 값이다.
+# cached_input 은 캐시 읽기, cache_write 는 캐시 쓰기(Anthropic 의 5분 캐시)다. 따로 값을 매기지 않으면 적지 않는다.
+# 모든 값과 이름은 2026-10-21 에 각 회사의 공식 문서에서 확인했다(checked_on). 그 전의 값은 알지 못해 그날부터 적는다.
+# 출처: platform.claude.com/docs(pricing, model-deprecations, models/overview), developers.openai.com/api/docs(pricing, models),
+#       ai.google.dev/gemini-api/docs(pricing, models, deprecations), docs.z.ai(guides/overview/pricing, guides/llm),
+#       deepinfra.com/deepseek-ai/DeepSeek-V4-Pro-0813, docs.deepinfra.com/chat/reasoning
+# 아직 넣지 않은 것: Kimi(창구가 없다), DeepSeek 의 Flash(DeepInfra 의 판에서 생각을 끄는 법을 확인하지 못했다).
+
+format = 1
+
+# --- Anthropic (Claude). 4.6 이후는 날짜 없는 이름 하나가 날짜판이다 ---
+
+# 생각을 끌 수 없다. Anthropic 이 입력과 출력을 30일 보관한다(개인정보 안내). 은퇴는 2027-09-01 보다 늦다
+[[models]]
+slug = "claude-fable-5-1"
+provider = "anthropic"
+api_model_id = "claude-fable-5-1"
+display_name = "Claude Fable 5.1"
+vendor = "anthropic"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "always"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 10
+cached_input_per_mtok = 0.25
+cache_write_per_mtok = 12.5
+output_per_mtok = 50
+
+# 생각을 끌 수 없다. 입력과 출력을 30일 보관한다. 은퇴는 2027-06-09 보다 늦다
+[[models]]
+slug = "claude-fable-5"
+provider = "anthropic"
+api_model_id = "claude-fable-5"
+display_name = "Claude Fable 5"
+vendor = "anthropic"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "always"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 10
+cached_input_per_mtok = 1
+cache_write_per_mtok = 12.5
+output_per_mtok = 50
+
+# 생각을 끌 수 없다. 은퇴는 2027-09-22 보다 늦다
+[[models]]
+slug = "claude-opus-5-5"
+provider = "anthropic"
+api_model_id = "claude-opus-5-5"
+display_name = "Claude Opus 5.5"
+vendor = "anthropic"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "always"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 4
+cached_input_per_mtok = 0.2
+cache_write_per_mtok = 5
+output_per_mtok = 20
+
+# effort high 이하에서 생각을 끈다. 은퇴는 2027-07-24 보다 늦다
+[[models]]
+slug = "claude-opus-5"
+provider = "anthropic"
+api_model_id = "claude-opus-5"
+display_name = "Claude Opus 5"
+vendor = "anthropic"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "adaptive"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 5
+cached_input_per_mtok = 0.5
+cache_write_per_mtok = 6.25
+output_per_mtok = 25
+
+# 은퇴는 2027-05-28 보다 늦다
+[[models]]
+slug = "claude-opus-4-8"
+provider = "anthropic"
+api_model_id = "claude-opus-4-8"
+display_name = "Claude Opus 4.8"
+vendor = "anthropic"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "adaptive"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 5
+cached_input_per_mtok = 0.5
+cache_write_per_mtok = 6.25
+output_per_mtok = 25
+
+# 은퇴는 2027-04-16 보다 늦다. 4.7 부터 기본값이 아닌 온도에 400 이다
+[[models]]
+slug = "claude-opus-4-7"
+provider = "anthropic"
+api_model_id = "claude-opus-4-7"
+display_name = "Claude Opus 4.7"
+vendor = "anthropic"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "adaptive"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 5
+cached_input_per_mtok = 0.5
+cache_write_per_mtok = 6.25
+output_per_mtok = 25
+
+# 은퇴는 2027-02-05 보다 늦다
+[[models]]
+slug = "claude-opus-4-6"
+provider = "anthropic"
+api_model_id = "claude-opus-4-6"
+display_name = "Claude Opus 4.6"
+vendor = "anthropic"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = true
+reasoning_style = "adaptive"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 5
+cached_input_per_mtok = 0.5
+cache_write_per_mtok = 6.25
+output_per_mtok = 25
+
+# 은퇴는 2026-11-24 보다 늦다(날짜는 아직 없다). 정해지면 retires_on 을 적는다
+[[models]]
+slug = "claude-opus-4-5"
+provider = "anthropic"
+api_model_id = "claude-opus-4-5-20251101"
+display_name = "Claude Opus 4.5"
+vendor = "anthropic"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = true
+reasoning_style = "budget"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 5
+cached_input_per_mtok = 0.5
+cache_write_per_mtok = 6.25
+output_per_mtok = 25
+
+# disabled 를 받지 않는다. between_tools 로 미리 생각하지 않게 한다. 은퇴는 2027-09-28 보다 늦다
+[[models]]
+slug = "claude-sonnet-5-5"
+provider = "anthropic"
+api_model_id = "claude-sonnet-5-5"
+display_name = "Claude Sonnet 5.5"
+vendor = "anthropic"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "between_tools"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 2
+cached_input_per_mtok = 0.1
+cache_write_per_mtok = 2.5
+output_per_mtok = 10
+
+# 은퇴는 2027-06-30 보다 늦다
+[[models]]
+slug = "claude-sonnet-5"
+provider = "anthropic"
+api_model_id = "claude-sonnet-5"
+display_name = "Claude Sonnet 5"
+vendor = "anthropic"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "adaptive"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 2
+cached_input_per_mtok = 0.2
+cache_write_per_mtok = 2.5
+output_per_mtok = 10
+
+# 은퇴는 2027-02-17 보다 늦다
+[[models]]
+slug = "claude-sonnet-4-6"
+provider = "anthropic"
+api_model_id = "claude-sonnet-4-6"
+display_name = "Claude Sonnet 4.6"
+vendor = "anthropic"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = true
+reasoning_style = "adaptive"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 3
+cached_input_per_mtok = 0.3
+cache_write_per_mtok = 3.75
+output_per_mtok = 15
+
+# 2026-09-30 에 폐기 예고, 2026-11-30 에 내린다(대신할 모델 claude-sonnet-5-5)
+[[models]]
+slug = "claude-sonnet-4-5"
+provider = "anthropic"
+api_model_id = "claude-sonnet-4-5-20250929"
+display_name = "Claude Sonnet 4.5"
+vendor = "anthropic"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = true
+reasoning_style = "budget"
+retires_on = 2026-11-30
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 3
+cached_input_per_mtok = 0.3
+cache_write_per_mtok = 3.75
+output_per_mtok = 15
+
+# effort high 이하에서 생각을 끈다. 은퇴는 2027-10-07 보다 늦다
+[[models]]
+slug = "claude-haiku-5-5"
+provider = "anthropic"
+api_model_id = "claude-haiku-5-5"
+display_name = "Claude Haiku 5.5"
+vendor = "anthropic"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "adaptive"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.1
+cached_input_per_mtok = 0.01
+cache_write_per_mtok = 0.125
+output_per_mtok = 0.5
+note = "입력 100k 토큰을 넘으면 0.5/0.05/0.625/2.5"
+
+# 은퇴는 "2026-10-15 보다 늦다"였고 아직 날짜가 없다. 언제든 공지가 날 수 있다
+[[models]]
+slug = "claude-haiku-4-5"
+provider = "anthropic"
+api_model_id = "claude-haiku-4-5-20251001"
+display_name = "Claude Haiku 4.5"
+vendor = "anthropic"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = true
+reasoning_style = "budget"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 1
+cached_input_per_mtok = 0.1
+cache_write_per_mtok = 1.25
+output_per_mtok = 5
+
+# --- OpenAI ---
+
+# 날짜판이 없다. reasoning_effort 가 low 부터다(none 을 받지 않는다)
+[[models]]
+slug = "gpt-6-astra"
+provider = "openai"
+api_model_id = "gpt-6-astra"
+display_name = "GPT-6 Astra"
+vendor = "openai"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = false
+token_limit_field = "max_completion_tokens"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 10
+cached_input_per_mtok = 1
+output_per_mtok = 50
+note = "입력 272K 토큰을 넘으면 입력 2배, 출력 1.5배"
+
+# 날짜판이 없다. reasoning_effort 가 low 부터다(none 을 받지 않는다)
+[[models]]
+slug = "gpt-6-1-sol"
+provider = "openai"
+api_model_id = "gpt-6.1-sol"
+display_name = "GPT-6.1 Sol"
+vendor = "openai"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+token_limit_field = "max_completion_tokens"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 2
+cached_input_per_mtok = 0.1
+output_per_mtok = 10
+note = "입력 272K 토큰을 넘으면 입력 2배, 출력 1.5배"
+
+# 날짜판이 없다. 공식 가격표에는 Cyber 모델 칸에 있다. 행사가 끝난 뒤의 값이 나오면 그날부터의 단가를 더한다
+[[models]]
+slug = "gpt-5-6-sol"
+provider = "openai"
+api_model_id = "gpt-5.6-sol"
+display_name = "GPT-5.6 Sol"
+vendor = "openai"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+token_limit_field = "max_completion_tokens"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 4
+cached_input_per_mtok = 0.4
+output_per_mtok = 20
+note = "행사가. 적어도 2026-11-21 까지. 그 뒤의 값은 공식 표에 없다"
+
+# 날짜판이 없다(이 이름 하나가 날짜판이다)
+[[models]]
+slug = "gpt-6-luna"
+provider = "openai"
+api_model_id = "gpt-6-luna"
+display_name = "GPT-6 Luna"
+vendor = "openai"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+token_limit_field = "max_completion_tokens"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.1
+cached_input_per_mtok = 0.01
+output_per_mtok = 0.5
+note = "입력 272K 토큰을 넘으면 입력 2배, 출력 1.5배"
+
+# --- Google (Gemini). 날짜판이 없다. 정식판은 이름 하나다 ---
+
+# 생각을 끌 수 없고 가장 낮은 것이 low 다. 판매는 값이 오르는 2026-12-01 부터다(결제 서버의 가격표)
+[[models]]
+slug = "gemini-4-argon"
+provider = "gemini"
+api_model_id = "gemini-4-argon"
+display_name = "Gemini 4 Argon"
+vendor = "google"
+grade = "premium"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "level_low"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 2
+cached_input_per_mtok = 0.1
+output_per_mtok = 10
+
+[[models.costs]]
+effective_from = 2026-12-01
+checked_on = 2026-10-21
+input_per_mtok = 4
+cached_input_per_mtok = 0.2
+output_per_mtok = 20
+note = "두 배로 오른다(공식 가격표의 예고)"
+
+# 미리보기. 가장 낮은 생각의 깊이가 low 다
+[[models]]
+slug = "gemini-3-1-pro-preview"
+provider = "gemini"
+api_model_id = "gemini-3.1-pro-preview"
+display_name = "Gemini 3.1 Pro Preview"
+vendor = "google"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "level_low"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 2
+cached_input_per_mtok = 0.2
+output_per_mtok = 12
+note = "입력 200k 토큰을 넘으면 4/0.4/18"
+
+# 생각을 끌 수 없다(thinkingBudget 128 부터). 전에 쓴 적이 있는 계정만 부를 수 있다
+[[models]]
+slug = "gemini-2-5-pro"
+provider = "gemini"
+api_model_id = "gemini-2.5-pro"
+display_name = "Gemini 2.5 Pro"
+vendor = "google"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = true
+reasoning_style = "budget_min"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 1.25
+cached_input_per_mtok = 0.125
+output_per_mtok = 10
+note = "입력 200k 토큰을 넘으면 2.5/0.25/15"
+
+# minimal 을 받지 않는다. 가장 낮은 것이 low 다
+[[models]]
+slug = "gemini-3-8-flash"
+provider = "gemini"
+api_model_id = "gemini-3.8-flash"
+display_name = "Gemini 3.8 Flash"
+vendor = "google"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "level_low"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.75
+cached_input_per_mtok = 0.075
+output_per_mtok = 3.75
+
+[[models.costs]]
+effective_from = 2027-01-01
+checked_on = 2026-10-21
+input_per_mtok = 1.5
+cached_input_per_mtok = 0.15
+output_per_mtok = 7.5
+note = "두 배로 오른다(공식 가격표의 예고)"
+
+[[models]]
+slug = "gemini-3-6-flash"
+provider = "gemini"
+api_model_id = "gemini-3.6-flash"
+display_name = "Gemini 3.6 Flash"
+vendor = "google"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "level_minimal"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.75
+cached_input_per_mtok = 0.075
+output_per_mtok = 3.75
+
+[[models.costs]]
+effective_from = 2027-01-01
+checked_on = 2026-10-21
+input_per_mtok = 1.5
+cached_input_per_mtok = 0.15
+output_per_mtok = 7.5
+note = "두 배로 오른다(공식 가격표의 예고)"
+
+# 미리보기. 공식 문서가 대신할 모델로 gemini-3.6-flash 를 적었다
+[[models]]
+slug = "gemini-3-flash-preview"
+provider = "gemini"
+api_model_id = "gemini-3-flash-preview"
+display_name = "Gemini 3 Flash Preview"
+vendor = "google"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "level_minimal"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.5
+cached_input_per_mtok = 0.05
+output_per_mtok = 3
+
+[[models]]
+slug = "gemini-3-5-flash-lite"
+provider = "gemini"
+api_model_id = "gemini-3.5-flash-lite"
+display_name = "Gemini 3.5 Flash-Lite"
+vendor = "google"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "level_minimal"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.3
+cached_input_per_mtok = 0.03
+output_per_mtok = 2.5
+
+# 2027-05-07 에 내린다(가장 이른 날, 대신할 모델 gemini-3.5-flash-lite)
+[[models]]
+slug = "gemini-3-1-flash-lite"
+provider = "gemini"
+api_model_id = "gemini-3.1-flash-lite"
+display_name = "Gemini 3.1 Flash-Lite"
+vendor = "google"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = false
+reasoning_style = "level_minimal"
+retires_on = 2027-05-07
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.25
+cached_input_per_mtok = 0.025
+output_per_mtok = 1.5
+
+# 전에 쓴 적이 있는 계정만 부를 수 있다
+[[models]]
+slug = "gemini-2-5-flash"
+provider = "gemini"
+api_model_id = "gemini-2.5-flash"
+display_name = "Gemini 2.5 Flash"
+vendor = "google"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = true
+reasoning_style = "budget"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.3
+cached_input_per_mtok = 0.03
+output_per_mtok = 2.5
+
+# 전에 쓴 적이 있는 계정만 부를 수 있다
+[[models]]
+slug = "gemini-2-5-flash-lite"
+provider = "gemini"
+api_model_id = "gemini-2.5-flash-lite"
+display_name = "Gemini 2.5 Flash-Lite"
+vendor = "google"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = true
+reasoning_style = "budget"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.1
+cached_input_per_mtok = 0.01
+output_per_mtok = 0.4
+
+# --- Z.ai (GLM). 처리 서버는 싱가포르다. 날짜판이 없다 ---
+
+# 생각을 끌 수 없다(reasoning_effort 의 기본값이 max)
+[[models]]
+slug = "glm-5-3"
+provider = "zai"
+api_model_id = "glm-5.3"
+display_name = "GLM-5.3"
+vendor = "zai"
+grade = "standard"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "always"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 1.4
+cached_input_per_mtok = 0.26
+output_per_mtok = 4.4
+
+[[models]]
+slug = "glm-5-2"
+provider = "zai"
+api_model_id = "glm-5.2"
+display_name = "GLM-5.2"
+vendor = "zai"
+grade = "standard"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "thinking_type"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 1.4
+cached_input_per_mtok = 0.26
+output_per_mtok = 4.4
+
+[[models]]
+slug = "glm-5-1"
+provider = "zai"
+api_model_id = "glm-5.1"
+display_name = "GLM-5.1"
+vendor = "zai"
+grade = "standard"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "thinking_type"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 1.4
+cached_input_per_mtok = 0.26
+output_per_mtok = 4.4
+
+[[models]]
+slug = "glm-5"
+provider = "zai"
+api_model_id = "glm-5"
+display_name = "GLM-5"
+vendor = "zai"
+grade = "standard"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "thinking_type"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 1
+cached_input_per_mtok = 0.2
+output_per_mtok = 3.2
+
+# 생각을 끌 수 없다. 공식 문서는 시각 모델(VLM) 칸에 둔다
+[[models]]
+slug = "glm-5-3-flash"
+provider = "zai"
+api_model_id = "glm-5.3-flash"
+display_name = "GLM-5.3-Flash"
+vendor = "zai"
+grade = "standard"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "always"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.15
+cached_input_per_mtok = 0.03
+output_per_mtok = 0.5
+
+# 팔지 않기로 했다(유저 결정, 2026-10-18). 켜지 않는다. 생각은 enabled 만 받는다
+[[models]]
+slug = "glm-5-3-flashx"
+provider = "zai"
+api_model_id = "glm-5.3-flashx"
+display_name = "GLM-5.3-FlashX"
+vendor = "zai"
+grade = "standard"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "always"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.37
+cached_input_per_mtok = 0.075
+output_per_mtok = 1.25
+
+[[models]]
+slug = "glm-4-7"
+provider = "zai"
+api_model_id = "glm-4.7"
+display_name = "GLM-4.7"
+vendor = "zai"
+grade = "standard"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "thinking_type"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.6
+cached_input_per_mtok = 0.11
+output_per_mtok = 2.2
+
+[[models]]
+slug = "glm-4-6"
+provider = "zai"
+api_model_id = "glm-4.6"
+display_name = "GLM-4.6"
+vendor = "zai"
+grade = "standard"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "thinking_type"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.6
+cached_input_per_mtok = 0.11
+output_per_mtok = 2.2
+
+# API 문서의 모델 목록에는 없고 모델 안내 문서에만 있다
+[[models]]
+slug = "glm-4-5"
+provider = "zai"
+api_model_id = "glm-4.5"
+display_name = "GLM-4.5"
+vendor = "zai"
+grade = "standard"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "thinking_type"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0.6
+cached_input_per_mtok = 0.11
+output_per_mtok = 2.2
+
+# 유저 혼자 쓰는 시험용이다. 결제 서버의 가격표에 올리지 않는다(2026-10-18). API 이름은 공식 문서에서 글자 그대로는 찾지 못했다
+[[models]]
+slug = "glm-4-7-flash"
+provider = "zai"
+api_model_id = "glm-4.7-flash"
+display_name = "GLM-4.7-Flash"
+vendor = "zai"
+grade = "basic"
+supports_reasoning = false
+supports_temperature = true
+reasoning_style = "thinking_type"
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 0
+output_per_mtok = 0
+note = "무료. 동시 요청 1개"
+
+# --- DeepInfra (공개 가중치 모델의 미국 호스팅) ---
+
+# DeepSeek 의 정식 API(중국 본토) 대신 DeepInfra(미국)로 부른다(2026-10-18). reasoning_effort none 으로 생각을 끈다
+[[models]]
+slug = "deepseek-v4-pro"
+provider = "deepinfra"
+api_model_id = "deepseek-ai/DeepSeek-V4-Pro-0813"
+display_name = "DeepSeek V4 Pro"
+vendor = "deepseek"
+grade = "standard"
+supports_reasoning = true
+supports_temperature = true
+
+[[models.costs]]
+effective_from = 2026-10-21
+checked_on = 2026-10-21
+input_per_mtok = 1.3
+cached_input_per_mtok = 0.1
+output_per_mtok = 2.6
