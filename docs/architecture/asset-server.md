@@ -85,9 +85,33 @@ TRPG 의 시나리오와 같은 방식이다.
 **내주기.** `GET /api/v1/asset/images/{id}`
 
 1. nginx 가 받아 asset-server 에 묻는다. asset-server 는 이 사람이 볼 수 있는지(주인이거나, 그림이 붙은 것이 공개이고 등급이 맞는지) 본다.
-2. 볼 수 있으면 `X-Accel-Redirect` 로 nginx 의 내부 위치를 알려 준다. nginx 가 저장소에서 받아 캐시하고 내준다. 볼 수 없으면 404 다.
-3. 캐시는 그림의 id 로 찾는다. 그림은 바뀌지 않는다(고치면 새 id). 그래서 오래 캐시해도 된다.
-4. 비공개 버킷에서 nginx 가 받는 법은 만들 때 정한다(asset-server 가 짧게 산 서명 주소를 내부 위치에 실어 주는 것이 기본안).
+2. 볼 수 없으면(없는 그림 포함) 404 다. 그대로 나간다.
+3. 볼 수 있으면 **본문 없이** 아래 두 머리말을 답한다. nginx 가 저장소에서 받아 캐시하고 내준다(`docker/nginx/templates/api.inc.template` 의 `/_images/`).
+4. 캐시는 그림의 id 로 찾는다. 그림은 바뀌지 않는다(고치면 새 id). 볼 수 있는지는 캐시가 있어도 요청마다 asset-server 가 본다. 캐시는 바이트만 둔다.
+
+asset-server 와 nginx 의 약속(#566, 2026-10-21 결정):
+
+| 무엇 | 값 | 까닭 |
+| --- | --- | --- |
+| `X-Accel-Redirect` | `/_images/{id}`. id 는 그림의 UUID(소문자, 붙임표 있음) | nginx 의 내부 위치다. 바깥에서 부르면 404 다 |
+| `X-Image-Source` | 저장소의 `GetObject` 를 서명한 주소. 60초 동안 산다 | 키는 asset-server 만 갖는다. nginx 는 받은 주소를 따라가기만 한다. 서명하는 코드가 로컬(SeaweedFS)과 staging(S3)에서 같다 |
+| 주소의 범위 | 로컬과 CI 는 `http://object-store:8333/`, staging 은 `https://…s3.<리전>.amazonaws.com/`. 다른 곳이면 nginx 가 502 로 거절한다 | asset-server 가 잘못 적어도 nginx 가 아무 곳에나 요청을 보내지 않게 한다 |
+| 형식(`Content-Type`) | 올릴 때 저장소의 객체에 적는다(`image/png`, `image/jpeg`, `image/webp`). nginx 는 저장소가 준 것을 내보낸다 | asset-server 의 답에 적은 형식은 쓰이지 않는다 |
+| 저장소가 404, 403 | nginx 가 `{"detail":"찾을 수 없습니다."}` 404 로 답한다. 캐시하지 않는다 | S3 의 XML 과 머리말이 나가지 않는다 |
+| nginx 의 캐시 | 디스크, 그림의 id 가 키, 1GB, 7일 동안 안 보면 지운다 | 같은 그림을 S3 에 다시 묻지 않는다. 그림은 바뀌지 않아 틀어질 일이 없다 |
+| 브라우저의 캐시 | `Cache-Control: private, max-age=3600` (nginx 가 붙인다) | 공개 그림을 비공개로 돌리면 남의 브라우저에서도 한 시간 안에 막힌다 |
+| 사용자의 머리말 | 저장소에 넘기지 않는다(토큰, 쿠키) | 서명한 주소에 `Authorization` 까지 붙으면 S3 가 거절한다. 토큰이 저장소로 새지 않는다 |
+
+asset-server 가 저장소를 읽는 설정(compose 가 넘긴다, `docker-compose.yml` 의 `x-asset-image-store`):
+
+| 이름 | 로컬 | staging |
+| --- | --- | --- |
+| `IMAGE_STORE_ENDPOINT` | `http://object-store:8333` | `https://s3.<리전>.amazonaws.com` |
+| `IMAGE_STORE_REGION` | `ap-northeast-2`(SeaweedFS 는 아무 값이나 받는다) | 루트 `.env` 의 값(서울) |
+| `IMAGE_STORE_BUCKET` | `ai-trpg-images` | 루트 `.env` 의 값(그림 버킷) |
+| `IMAGE_STORE_ACCESS_KEY_ID`, `IMAGE_STORE_SECRET_ACCESS_KEY` | `ai-trpg-local` 과 루트 `.env` 의 난수 | 그 버킷만 쓰는 IAM 사용자의 키(`docker/object-store/iam-policy.json`) |
+
+서명한 주소는 이 주소로 만든다. nginx 가 그 주소로 받아 가므로, compose 밖에서 띄운 asset-server(`127.0.0.1:8333`)가 만든 주소는 nginx 가 따라가지 못한다. 프록시를 거쳐 내주기를 볼 때는 compose 안에서 띄운다.
 
 ## 쓰는 서비스에 내주기
 
@@ -129,7 +153,6 @@ TRPG 의 시나리오와 같은 방식이다.
 
 ## 열린 질문
 
-- 비공개 버킷에서 nginx 가 그림을 받는 법(서명 주소를 내부 위치에 싣기, nginx 에 서명 모듈). 캐시의 크기와 VM 디스크.
 - 디코딩을 격리하는 방법(따로 된 프로세스에 `resource` 상한, 작은 컨테이너). 1단계는 프로세스로 충분한지.
 - 그림의 크기 상한과 줄인 그림(목록용 작은 그림)을 올릴 때 만들지, 내줄 때 만들지.
 - 계정을 지울 때 남이 쓰는 공개 판의 그림을 어떻게 할지(판이 그림의 id 를 가리킨다).

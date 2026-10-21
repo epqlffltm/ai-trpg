@@ -113,7 +113,13 @@ services:
   asset-migrate:
     environment: *staging-debug-off
   asset-server:
-    environment: *staging-debug-off
+    environment:
+      <<: *staging-debug-off
+      # 그림은 진짜 S3(서울)에 둔다. 버킷과 그 버킷만 쓰는 IAM 사용자의 키는 루트 .env 에 사람이 적는다(docs/operations/staging-vm.md 의 1번)
+      IMAGE_STORE_ENDPOINT: https://s3.${IMAGE_STORE_REGION:-ap-northeast-2}.amazonaws.com
+      IMAGE_STORE_BUCKET: ${IMAGE_STORE_BUCKET:?루트 .env 에 그림의 S3 버킷을 적는다}
+      IMAGE_STORE_ACCESS_KEY_ID: ${IMAGE_STORE_ACCESS_KEY_ID:?루트 .env 에 그림 버킷의 IAM 접근 키를 적는다}
+      IMAGE_STORE_SECRET_ACCESS_KEY: ${IMAGE_STORE_SECRET_ACCESS_KEY:?루트 .env 에 그림 버킷의 IAM 비밀 접근 키를 적는다}
 
   # 프록시. 로컬의 틀(templates) 가운데 default.conf.template 만 staging 의 것으로 바꿔 붙인다.
   # 시작 스크립트(start.sh)가 인증서와 허용 주소를 지켜보다가 바뀌면 다시 읽힌다. 그다음 이미지의 원래 시작 스크립트로 넘긴다

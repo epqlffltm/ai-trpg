@@ -91,6 +91,7 @@ docker compose ps
 
 `object-store`는 그림 파일을 두는 S3 의 로컬 흉내(SeaweedFS)다. `127.0.0.1:8333`에 열고 서명한 요청만 받는다.
 버킷 `ai-trpg-images`를 뜰 때 만든다. 쓰는 서버는 asset-server 다(그림을 올리고 내주는 일은 #566, [그림 저장소](docs/architecture/deployment.md#그림-저장소)).
+그림은 프록시가 저장소에서 받아 캐시하고 내준다. 볼 수 있는지는 asset-server 가 요청마다 본다([asset-server 의 그림](docs/architecture/asset-server.md#그림)).
 
 ### 3. 서버
 
