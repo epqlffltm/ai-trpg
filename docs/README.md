@@ -9,6 +9,7 @@
 | [architecture/operators.md](architecture/operators.md) | 운영자 권한. 누가 운영자인가(토큰의 `roles`), 서비스마다 운영자가 더 할 수 있는 것, 감사 기록, 사용자에게 알릴 것, 순서 |
 | [architecture/deployment.md](architecture/deployment.md) | 배포 설계. 첫 배포(운영자 혼자 쓰는 서버)의 클라우드, 막는 법, 환경 이름, TLS 와 인증서, 모델, 올리는 방식, 비밀, 백업(age 로 잠가 S3 에, 주마다 풀어 보기), 지켜보기, VM 준비 순서 |
 | [operations/staging-vm.md](operations/staging-vm.md) | staging VM 준비. 배포 설계의 "VM 준비 순서"를 실제 명령으로. AWS, VM 의 기본, Docker, Tailscale, 열쇠, `.env`(`tools/staging_env.py`), 첫 인증서, 띄우기, 확인 |
+| [architecture/withdrawal.md](architecture/withdrawal.md) | 탈퇴. 7일 유예와 그동안의 토큰, 인증 서버가 비우는 것과 남기는 것, 서버마다 지우는 것, 다른 서버에 알리는 길(발송함), 만드는 순서 |
 | [architecture/chat-server.md](architecture/chat-server.md) | chat 서버 설계. chat(1:1), story-server 와 나눈 선과 함께 쓰는 코드, 권한의 선, 자산 가져오기, 데이터의 모양, 장소와 소지품, 그림, 과금, 기억, 성인 콘텐츠, 만드는 순서 |
 | [architecture/asset-server.md](architecture/asset-server.md) | asset 서버 설계. 맡는 것, 계정 페르소나(TRPG 의 시트와 나누기), 게시와 판, 그림(올리기의 격리, 권한을 보고 nginx 가 내주기), 쓰는 서비스에 내주기, 만드는 순서 |
 | [architecture/story.md](architecture/story.md) | story 서버 설계. 열린 세계와 기한, 시각, 인물의 위치와 여러 인물의 말, 이벤트와 선택지, 조건과 효과, 호감도, 고백과 엔딩, 세션과 기록 |
