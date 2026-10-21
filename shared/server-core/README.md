@@ -48,7 +48,7 @@ FastAPI 서버들이 함께 쓰는 공통부다. 토큰 검증, 관측(로그, �
 
 | 자리 | 쓰는 법 |
 | --- | --- |
-| 설정 값 | 토큰의 대상, 서비스 이름, 스키마는 설정에. 풀의 크기와 search_path 에 더할 스키마는 `create_engine(settings, extra_schemas=..., pool_size=..., max_overflow=...)` |
+| 설정 값 | 토큰의 대상, 서비스 이름, 스키마는 설정에. 풀의 크기는 환경 변수 `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` 로 compose 가 준다([DB 와 Redis 의 한도](../../docs/architecture/services.md#db-와-redis-의-한도)). search_path 에 더할 스키마는 `create_engine(settings, extra_schemas=...)` |
 | 스트림인 주소 | `StreamRoutes.of(r'/api/v1/chat/conversations/[^/]+/messages')` 를 `RequestSpanMiddleware` 와 `RequestMetricsMiddleware` 에 `streams=` 로 넘긴다. SSE 연결은 `measured_stream()` 으로 센다 |
 | 서버만의 계측기 | `InstrumentSet(build)` 을 모듈에 하나 두고 `get()` 으로 꺼낸다(알림 서버의 `app/notifications/metrics.py`) |
 | span 을 보내기 전 | `configure_tracing(settings, resource, wrap=...)`. 기본은 할 일 없던 바퀴를 버리는 `DropIdleRounds` 다 |

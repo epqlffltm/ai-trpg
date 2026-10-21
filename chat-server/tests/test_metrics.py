@@ -13,7 +13,6 @@ import asyncio
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
-from server_core.database import POOL_MAX_CONNECTIONS
 from server_core.observability import metrics as metrics_module
 from server_core.observability.metrics import (
     DURATION_BUCKETS,
@@ -128,7 +127,7 @@ async def test_the_pool_reports_its_connections_and_waits(app: FastAPI, metrics:
 
     assert in_use is not None and in_use >= 1
     assert metrics.value('db_pool_connections', state='idle') is not None
-    assert metrics.value('db_pool_connections_max') == POOL_MAX_CONNECTIONS
+    assert metrics.value('db_pool_connections_max') == app.state.settings.db_max_connections
     (wait,) = metrics.points('db_pool_wait')
     assert (wait.unit, wait.value >= 1) == ('s', True)
 
