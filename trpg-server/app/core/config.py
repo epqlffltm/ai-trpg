@@ -29,6 +29,9 @@ BILLING_SECRET_MIN_LENGTH = 32
 # 알림 서버의 비밀의 가장 짧은 길이. 알림 서버(GAME_SERVER_SECRET)와 같은 기준이다
 NOTIFICATION_SECRET_MIN_LENGTH = 32
 
+# 인증 서버가 탈퇴를 알릴 때의 서명 비밀의 가장 짧은 길이. 다른 서버끼리의 비밀과 같은 기준이다
+AUTH_SERVER_SECRET_MIN_LENGTH = 32
+
 # 실시간 신호에 서명하는 비밀의 가장 짧은 길이
 SIGNAL_SECRET_MIN_LENGTH = 32
 
@@ -277,6 +280,11 @@ class Settings(BaseSettings):
     # 알림 서버를 한 번 부르는 시간의 상한(초). 뒤에서 보내므로 사람이 기다리지 않는다
     notification_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
 
+    # 인증 서버가 탈퇴를 알리는 요청(app/withdrawal/)의 서명 비밀. 인증 서버의 GAME_SECRET 과 같은 값이어야 한다.
+    # 비우면 탈퇴 알림을 받지 않는다(401). 인증 서버는 받을 때까지 다시 보낸다. 적으면 32자 이상.
+    # 비밀값이다. 로그와 오류에 싣지 않는다
+    auth_server_secret: SecretStr = SecretStr('')
+
     # 시도 횟수 제한(app/limits/, #56)을 세는 Redis 의 주소(redis://...). 비우면 서버 안의 메모리로 센다(기본).
     # 메모리는 서버가 하나일 때만 맞고 다시 띄우면 지워진다. 서버를 여럿 띄우거나 운영에서는 적는다.
     # 인증 서버와 같은 Redis 를 써도 된다. 키의 앞부분(LIMIT_KEY_PREFIX)이 달라 섞이지 않는다
@@ -351,6 +359,14 @@ class Settings(BaseSettings):
         if self.notification_url.strip() and len(secret) < NOTIFICATION_SECRET_MIN_LENGTH:
             minimum = NOTIFICATION_SECRET_MIN_LENGTH
             raise ValueError(f'NOTIFICATION_URL 을 적었으면 NOTIFICATION_SECRET 을 {minimum}자 이상 적어야 합니다')
+        return self
+
+    @model_validator(mode='after')
+    def require_a_long_auth_server_secret(self) -> Self:
+        """인증 서버의 비밀을 적었는데 짧으면 뜨지 않는다. 비운 것은 괜찮다(탈퇴 알림을 받지 않는다)."""
+        secret = self.auth_server_secret.get_secret_value()
+        if secret and len(secret) < AUTH_SERVER_SECRET_MIN_LENGTH:
+            raise ValueError(f'AUTH_SERVER_SECRET 은 {AUTH_SERVER_SECRET_MIN_LENGTH}자 이상이어야 합니다')
         return self
 
     @model_validator(mode='after')

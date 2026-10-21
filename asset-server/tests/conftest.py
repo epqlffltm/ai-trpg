@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core.config import Settings
 from app.main import create_app
 from tests.cleaning import clear_tables
-from tests.signing import TEST_SECRETS
+from tests.signing import TEST_AUTH_SECRET, TEST_SECRETS
 
 TEST_SCHEMA = 'asset_test'
 
@@ -52,6 +52,7 @@ def make_test_settings(**overrides) -> Settings:
         'otel_exporter_otlp_endpoint': '',
         # 부르는 서버의 서명 비밀(tests/signing.py). 개발자의 .env 의 값과 상관없이 같다
         'chat_server_secret': TEST_SECRETS['chat'],
+        'auth_server_secret': TEST_AUTH_SECRET,
     }
     values.update(overrides)
     return Settings(**values)

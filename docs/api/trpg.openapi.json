@@ -11386,6 +11386,19 @@
         "title": "WhisperPage",
         "type": "object"
       },
+      "WithdrawalResult": {
+        "description": "답. 정리할 것이 없어도(이미 했다, 이 서버에 그 사람의 것이 없다) 같다. 인증 서버는 이것을 보고 그만 보낸다.",
+        "properties": {
+          "status": {
+            "const": "processed",
+            "default": "processed",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "WithdrawalResult",
+        "type": "object"
+      },
       "WorldCreate": {
         "additionalProperties": false,
         "description": "세계관을 만들 때 받는 값. 제목만 필수다.",
@@ -14895,6 +14908,51 @@
           "scenarios"
         ],
         "x-audience": "user"
+      }
+    },
+    "/api/v1/game/service/users/{public_id}/withdrawal": {
+      "post": {
+        "description": "탈퇴한 사람을 게임에서 정리한다.",
+        "operationId": "receive_withdrawal_api_v1_game_service_users__public_id__withdrawal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawalResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Receive Withdrawal",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
       }
     },
     "/api/v1/game/tables": {

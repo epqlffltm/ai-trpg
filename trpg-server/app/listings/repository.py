@@ -12,7 +12,7 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
@@ -106,3 +106,18 @@ async def count_public(session: AsyncSession, allowed_ratings: list[Rating], whe
     """공개된 시나리오가 몇 개인지 센다."""
     query = filtered(visible(allowed_ratings), where)
     return await session.scalar(select(func.count()).select_from(query.subquery())) or 0
+
+
+async def unpublish_all_owned(session: AsyncSession, owner_id: uuid.UUID) -> None:
+    """
+    이 사람의 시나리오의 공개를 모두 내린다(탈퇴). 소개 페이지의 글과 시나리오, 판은 그대로 남는다.
+
+    내리는 일은 service.unpublish 와 같다(공개 중인 판과 공개한 시각을 비운다).
+    """
+    owned = select(Asset.id).where(Asset.owner_id == owner_id)
+    statement = (
+        update(Listing)
+        .where(Listing.scenario_id.in_(owned), Listing.version_id.is_not(None))
+        .values(version_id=None, published_at=None)
+    )
+    await session.execute(statement)

@@ -103,6 +103,7 @@ from app.tables.errors import (
 )
 from app.transcripts import router as transcripts
 from app.whispers import router as whispers
+from app.withdrawal import router as withdrawal
 
 # 이 서버의 API 가 놓이는 주소. 인증 서버는 /api/v1/auth 를 쓴다
 API_PREFIX = '/api/v1/game'
@@ -347,6 +348,8 @@ def create_app(
     app.include_router(whispers.router, prefix=API_PREFIX)
     app.include_router(realtime.router, prefix=API_PREFIX)
     app.include_router(operators.router, prefix=API_PREFIX)
+    # 인증 서버가 탈퇴를 알리는 주소(docs/architecture/withdrawal.md). 인증 서버의 서명만 본다
+    app.include_router(withdrawal.router, prefix=API_PREFIX)
 
     # 서비스가 던지는 예외를 HTTP 응답으로 바꾸는 곳. API 함수마다 try 를 쓰지 않는다
     app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)

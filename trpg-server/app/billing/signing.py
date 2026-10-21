@@ -21,8 +21,12 @@ import hmac
 SIGNATURE_HEADER = 'X-Service-Signature'
 
 
-def signed_content(sent_at: int, method: str, path: str, body: bytes) -> bytes:
-    """서명하는 글자. 보낸 시각과 요청이다. 메서드와 주소에는 줄바꿈이 없어서 세 부분이 섞이지 않는다."""
+def signed_content(sent_at: int | str, method: str, path: str, body: bytes) -> bytes:
+    """
+    서명하는 글자. 보낸 시각과 요청이다. 메서드와 주소에는 줄바꿈이 없어서 세 부분이 섞이지 않는다.
+
+    받는 쪽(app/core/service_auth.py)은 머리말에서 읽은 시각의 글자를 그대로 넣는다.
+    """
     return f'{sent_at}.{method}\n{path}\n'.encode() + body
 
 

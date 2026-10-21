@@ -109,6 +109,14 @@ SECRETS = [
     *secrets('asset-server', ['asset-server'], 'CHAT_SERVER_SECRET'),
     # chat 서버가 asset 서버를 부를 때 서명하는 비밀. 서버만 쓴다. 마이그레이션(chat-migrate)에는 주지 않는다
     *secrets('chat-server', ['chat-server'], 'ASSET_SECRET'),
+    # 인증 서버가 탈퇴를 알리는 요청의 서명을 asset 서버가 확인하는 비밀. 요청을 받는 서버만 쓴다
+    *secrets('asset-server', ['asset-server'], 'AUTH_SERVER_SECRET'),
+    # 인증 서버가 asset 서버에 탈퇴를 알릴 때 서명하는 비밀. 알리는 것은 결제 서버에 맡기는 워커(auth-welcome-credits)다
+    *secrets('auth-server', ['auth-welcome-credits'], 'ASSET_SECRET'),
+    # 인증 서버가 탈퇴를 알리는 요청의 서명을 게임 서버가 확인하는 비밀. 요청을 받는 서버만 쓴다
+    *secrets('trpg-server', ['trpg-server'], 'AUTH_SERVER_SECRET'),
+    # 인증 서버가 게임 서버에 탈퇴를 알릴 때 서명하는 비밀. 알리는 것은 결제 서버에 맡기는 워커(auth-welcome-credits)다
+    *secrets('auth-server', ['auth-welcome-credits'], 'GAME_SECRET'),
 ]
 
 

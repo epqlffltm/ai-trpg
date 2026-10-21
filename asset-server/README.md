@@ -73,6 +73,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `PERSONA_MAX_PER_OWNER` | `50` | 한 사람이 가질 수 있는 계정 페르소나의 수(1~500). TRPG 의 보관함과 같다 |
 | `CHARACTERS_FOR_EVERYONE` | `false` | 캐릭터를 누구나 만들 수 있는가. 1~2단계에는 운영자만 만든다(거짓). 참이어도 공개로 두는 것은 운영자만이다 |
 | `CHAT_SERVER_SECRET` | 비어 있음(받지 않음) | chat 서버가 페르소나와 판을 가져갈 때 서명하는 비밀([다른 서버에 내주기](#다른-서버에-내주기)). `chat-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상. 비밀값이다 |
+| `AUTH_SERVER_SECRET` | 비어 있음(받지 않음) | 인증 서버가 [탈퇴](#탈퇴)를 알릴 때 서명하는 비밀. `auth-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상이고 다른 비밀과 달라야 한다. 비밀값이다 |
 
 부르는 서버마다 비밀을 따로 둔다. story 와 TRPG 는 그 서버가 가져가기 시작할 때 `STORY_SERVER_SECRET`, `TRPG_SERVER_SECRET` 으로 더한다.
 
@@ -112,6 +113,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/service/{caller}/personas/{id}/revision` | 페르소나의 지금 `revision`(`{id, revision}`) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/characters/{id}/latest` | 쓸 수 있는 캐릭터의 마지막 판(`{id, version, rating, published_at, document}`) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/characters/{id}/latest/number` | 마지막 판의 번호(`{id, version}`). 같은 규칙 | 서버의 서명 + access 토큰 |
+| POST | `/api/v1/asset/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴)한 사람의 페르소나와 비공개 캐릭터를 지운다. 200 `{"status":"processed"}` | 인증 서버의 서명 |
 
 ### 계정 페르소나
 
@@ -209,6 +211,21 @@ chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본
 - 가져간 쪽은 사본으로 돈다. asset 서버가 죽어도 진행 중인 대화는 계속되고, 새 세션만 시작하지 못한다.
 - 지금은 마지막 판만 내준다. 옛 판은 가져간 쪽이 사본으로 갖고 있다. 번호를 골라 가져올 일이 생기면 그때 더한다.
 
+### 탈퇴
+
+인증 서버가 유예(7일)가 지난 탈퇴를 알리면 그 사람의 것을 지운다([탈퇴](../docs/architecture/withdrawal.md)). `app/withdrawal/`.
+
+    POST /api/v1/asset/service/users/{public_id}/withdrawal
+    본문: {"withdrawn_at": "2026-10-28T03:00:00Z"}
+    서명: 인증 서버의 비밀(AUTH_SERVER_SECRET). 사용자의 토큰은 없다
+
+- **지우는 것.** 페르소나 모두, 비공개 캐릭터(판까지). 한 트랜잭션이다. 그림(#566)이 생기면 그 사람의 그림도 여기서 지운다.
+- **남기는 것.** 공개 캐릭터와 그 판. 남이 쓰는 것이다. 1~2단계에는 운영자만 공개로 둔다. 가져간 세션은 사본으로 돈다.
+- **멱등.** 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 `{"status":"processed"}` 다. 그 밖의 답이면 인증 서버가 다시 보낸다.
+- **서명.** 인증 서버의 비밀은 부르는 서버의 표(`CHAT_SERVER_SECRET` 등)와 따로다. 그 비밀로는 페르소나와 판을 가져가지 못하고,
+  chat 의 비밀로는 탈퇴를 알리지 못한다. 서명이 맞지 않으면 401, 본문의 모양이 틀리면 422 이고 아무것도 지우지 않는다. 본문의 모르는 칸은 버린다.
+- 따로 로그를 남기지 않는다. 요청의 줄(`http.request`)에 경로의 틀과 결과가 남는다. 공개 ID 는 남기지 않는다.
+- 보내는 쪽은 인증 서버의 워커(`auth-welcome-credits`)다. 인증 서버의 `ASSET_SECRET` 이 비어 있으면 보내지 않고 쌓아 둔다. 비밀을 적으면 그 전에 쌓인 것부터 온다.
 ### 토큰 검증
 
 공용 코드 `shared/server-core` 의 것(`server_core/auth/`)을 쓴다(#588). 알림 서버와 같다. 규칙의 설명은

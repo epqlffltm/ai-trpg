@@ -382,6 +382,8 @@ services:
     environment:
       <<: [*auth-environment, *auth-without-signing-key]
       BILLING_SECRET: ""
+      ASSET_SECRET: ""
+      GAME_SECRET: ""
       SMTP_PASSWORD: ""
     depends_on:
       db:
@@ -399,6 +401,9 @@ services:
       JWT_PRIVATE_KEY_PATH: keys/jwt-private.pem
       # 서버는 결제 서버를 부르지 않는다(부르는 것은 환영 크레딧의 워커다). 다만 결제 서버가 보낸
       # 보호자 알림(/service/guardian-notices)의 서명을 이 비밀로 확인하므로 BILLING_SECRET 을 남긴다(#352)
+      # 탈퇴를 알리는 것도 워커다. asset 서버와 게임 서버에 알릴 때의 비밀을 비운다
+      ASSET_SECRET: ""
+      GAME_SECRET: ""
     # span 과 메트릭을 Alloy 에 민다(telemetry)
     networks: [default, telemetry]
     # 토큰에 서명하는 것은 이 서버뿐이다. 키 폴더는 여기에만 붙인다
@@ -431,6 +436,8 @@ services:
       <<: [*auth-environment, *auth-without-signing-key, *telemetry-environment]
       HEARTBEAT_FILE: /tmp/heartbeat
       BILLING_SECRET: ""
+      ASSET_SECRET: ""
+      GAME_SECRET: ""
     networks: [default, telemetry]
     healthcheck: *worker-heartbeat
     depends_on:
@@ -451,6 +458,9 @@ services:
       <<: [*auth-environment, *auth-without-signing-key, *telemetry-environment]
       HEARTBEAT_FILE: /tmp/heartbeat
       SMTP_PASSWORD: ""
+      # 탈퇴를 알릴 서버의 주소(docs/architecture/withdrawal.md). 비밀(ASSET_SECRET, GAME_SECRET)은 auth-server/.env 에 있다
+      ASSET_URL: http://asset-server:8006
+      GAME_URL: http://trpg-server:8001
     networks: [default, telemetry]
     healthcheck: *worker-heartbeat
     depends_on:
@@ -471,6 +481,8 @@ services:
     environment:
       <<: [*auth-environment, *auth-without-signing-key, *telemetry-environment]
       BILLING_SECRET: ""
+      ASSET_SECRET: ""
+      GAME_SECRET: ""
     networks: [default, telemetry]
     volumes:
       - ./docker/cron/auth.crontab:/etc/supercronic/crontab:ro
@@ -499,6 +511,7 @@ services:
       DEEPINFRA_API_KEY: ""
       SIGNAL_SECRET: ""
       AI_LOG_HMAC_KEY: ""
+      AUTH_SERVER_SECRET: ""
     # host.docker.internal 이 이 PC 를 가리키게 한다. Docker Desktop 에는 원래 있고, 리눅스에는 이 줄이 있어야 한다
     extra_hosts: &host-gateway
       - "host.docker.internal:host-gateway"
@@ -692,10 +705,11 @@ services:
     logging: *logging
     command: ["alembic", "upgrade", "heads"]
     env_file: ./asset-server/.env
-    # 마이그레이션은 DB 만 쓴다. 페르소나와 판을 가져가는 서버마다의 서명 비밀을 비운다
+    # 마이그레이션은 DB 만 쓴다. 페르소나와 판을 가져가는 서버마다의 서명 비밀과 탈퇴를 알리는 인증 서버의 비밀을 비운다
     environment:
       <<: *asset-environment
       CHAT_SERVER_SECRET: ""
+      AUTH_SERVER_SECRET: ""
     depends_on:
       db:
         condition: service_healthy
