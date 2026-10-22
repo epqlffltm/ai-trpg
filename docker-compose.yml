@@ -800,8 +800,11 @@ services:
       chat-migrate:
         condition: service_completed_successfully
 
+  # 화면(web/)을 빌드해 담은 nginx 의 이미지다(web/Dockerfile, #290). /api/ 는 서버로, 그 밖은 화면이다
   proxy:
-    image: nginxinc/nginx-unprivileged:1.30-alpine3.24
+    build:
+      context: ./web
+    image: ai-trpg/proxy:local
     profiles: [app]
     logging: *logging
     restart: unless-stopped

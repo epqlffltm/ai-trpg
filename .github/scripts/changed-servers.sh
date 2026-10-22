@@ -6,7 +6,7 @@
 #   사용: changed-servers.sh <기준 커밋> <PR 의 커밋>
 #   출력: GITHUB_OUTPUT 의 모양으로 서버마다 한 줄. auth=true, trpg=false, board=false, billing=true, notification=false, asset=false,
 #         chat=false.
-#         공용 코드(shared/)의 검사는 shared=true 다
+#         공용 코드(shared/)의 검사는 shared=true, 화면(web/)의 검사는 web=true 다
 #
 # 고르는 규칙:
 #   - 서버의 폴더(auth-server/ 등)나 그 서버의 워크플로(.github/workflows/auth-server.yml)가 바뀌면 그 서버
@@ -21,6 +21,8 @@
 #   - 공용 코드(shared/<패키지>/)가 바뀌면 공용 코드의 검사(shared)와, 그 패키지를 쓰는 서버들.
 #     쓰는 서버는 서버마다 pyproject.toml 의 경로 의존(path = "../shared/<패키지>")을 읽어 고른다. 따로 표를 두지 않는다.
 #     새 서버가 공용 코드를 쓰기 시작하면 저절로 잡힌다(docs/architecture/shared-code.md 의 "버전과 CI")
+#   - 화면의 폴더(web/)나 그 워크플로(.github/workflows/web.yml)가 바뀌면 화면(web). 화면은 서버의 API 목록에서 타입을 만들므로
+#     API 목록(docs/api/*.openapi.json)이 바뀌어도 화면이다. 모두를 고르는 경로(docker/ 등)도 화면을 고른다(프록시의 이미지가 화면을 담는다)
 #   - 그 밖(문서, 루트 README 등)은 아무것도 고르지 않는다
 #   - 바뀐 파일을 알 수 없으면(커밋을 찾지 못함) 모두. 모르면 검사하는 쪽으로 기운다
 #
@@ -30,8 +32,8 @@ set -euo pipefail
 
 # 검사하는 서버들. 출력의 이름과 폴더의 이름
 SERVERS=(auth trpg board billing notification asset chat)
-# 출력하는 것 모두. 서버들과 공용 코드의 검사(shared, .github/workflows/shared.yml)
-OUTPUTS=("${SERVERS[@]}" shared)
+# 출력하는 것 모두. 서버들과 공용 코드의 검사(shared, .github/workflows/shared.yml), 화면의 검사(web, .github/workflows/web.yml)
+OUTPUTS=("${SERVERS[@]}" shared web)
 # 서버의 폴더들이 있는 곳. 테스트가 가짜 pyproject.toml 을 둔 곳으로 바꾼다
 SERVER_ROOT="${SERVER_ROOT:-.}"
 
@@ -45,6 +47,11 @@ belongs_to() {
 # 공용 코드의 경로인가. 공용 코드의 폴더나 그 워크플로다.
 shared_path() {
   [[ "$1" == shared/* || "$1" == ".github/workflows/shared.yml" ]]
+}
+
+# 화면의 경로인가. 화면의 폴더, 그 워크플로, 화면이 타입을 만드는 서버의 API 목록이다.
+web_path() {
+  [[ "$1" == web/* || "$1" == ".github/workflows/web.yml" || "$1" == docs/api/*.openapi.json ]]
 }
 
 # 공용 코드의 경로에서 패키지의 이름을 꺼낸다(shared/server-core/src/x.py -> server-core). 패키지 밖이면 비어 있다.
@@ -108,6 +115,9 @@ select_servers() {
       picked[asset]=1
       picked[chat]=1
       picked[shared]=1
+    fi
+    if web_path "$path"; then
+      picked[web]=1
     fi
     if shared_path "$path"; then
       picked[shared]=1

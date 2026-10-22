@@ -11,7 +11,7 @@
 # 문서로 열려도 아무것도 불러오거나 실행하지 못하고, 다른 사이트의 iframe 에 들어가지 못한다(CSP).
 # 주소에 든 값이 다른 사이트로 새지 않게 한다(Referrer-Policy).
 # 이 도메인에는 HTTPS 로만 오게 한다(HSTS, #451). 값($hsts)은 http.inc 가 정한다. HTTP 로 온 응답에서는 비어 있어 붙지 않는다.
-# 화면(#290)을 이 프록시로 내주게 되면 화면에는 화면에 맞는 CSP 를 따로 둔다. 이 값은 API 의 것이다
+# 이 값은 API 의 것이다. 화면(#290)의 응답에는 화면의 CSP 를 따로 붙인다(web-headers.inc.template)
 add_header X-Content-Type-Options "nosniff" always;
 add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
 add_header Referrer-Policy "no-referrer" always;

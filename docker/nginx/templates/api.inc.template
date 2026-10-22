@@ -6,10 +6,11 @@
 # 이미지가 뜰 때 ${이름} 을 바꿔 /etc/nginx/conf.d/api.inc 로 쓴다(바꿀 것은 없다).
 #
 # 하는 일:
-#   - /api/v1/<서버>/ 를 그 서버에 보낸다. 주소는 고쳐 쓰지 않는다. 그 밖의 주소는 모두 404 다.
+#   - /api/v1/<서버>/ 를 그 서버에 보낸다. 주소는 고쳐 쓰지 않는다. /api/ 의 그 밖의 주소는 404 다.
 #     관리자 화면(/admin/, /static/), 서버의 /health, 서버끼리만 부르는 /api/v1/billing/service/, /api/v1/auth/service/,
 #     /api/v1/notification/service/, /api/v1/asset/service/, /api/v1/game/service/, /api/v1/board/service/ 도 여기서 404 다(#18).
 #     막은 주소도 403 이 아니라 404 다. 그런 주소가 있다는 것조차 알리지 않는다.
+#   - /api/ 가 아닌 주소는 화면(SPA)이다. 맨 끝의 web.inc 가 정적 파일과 index.html 을 내준다(#290).
 #   - IP 마다 요청 수를 센다(#22). 넘으면 429 다. 인증 서버의 제한(Redis)이 꺼져 있어도 바깥에서 막는다.
 #   - 요청 식별자(X-Request-ID)를 nginx 가 정해 서버에 넘긴다. nginx 의 줄과 서버의 줄이 같은 request_id 로 이어진다.
 #   - 클라이언트가 지어 보낸 IP 와 출처의 머리말(X-Real-IP, Forwarded, X-Forwarded-Host)을 덮거나 지운다(#353, README 의 "외부에 열기 전").
@@ -314,11 +315,40 @@ location @image_not_found {
     return 404 '{"detail":"찾을 수 없습니다."}';
 }
 
-# --- 그 밖의 모든 주소 ---
-# 관리자 화면(/admin/, /static/), 서버들의 /health 도 여기에 걸린다.
-# 관리자 화면은 SSH 터널로 인증 서버의 포트(127.0.0.1:8000)에 직접 붙어서 쓴다(README)
-location / {
+# --- 막는 주소 ---
+# /api/ 의 그 밖의 주소. 위에서 서버에 보내지 않은 것이다. 화면(index.html)으로 돌리지 않는다. API 를 부른 쪽은 JSON 을 기다린다
+location ^~ /api/ {
     # 주소의 확장자(.css 등)로 형식을 고르지 않는다. 본문은 늘 JSON 이다
+    types { }
+    add_header X-Request-ID $request_id always;
+    include /etc/nginx/conf.d/security-headers.inc;
+    return 404 '{"detail":"찾을 수 없습니다."}';
+}
+
+# 관리자 화면(/admin/, /static/)과 서버들의 상태 확인(/health, /health/ready). 화면의 경로로도 돌리지 않는다.
+# 관리자 화면은 SSH 터널로 인증 서버의 포트(127.0.0.1:8000)에 직접 붙어서 쓴다(README)
+location ^~ /admin/ {
+    types { }
+    add_header X-Request-ID $request_id always;
+    include /etc/nginx/conf.d/security-headers.inc;
+    return 404 '{"detail":"찾을 수 없습니다."}';
+}
+
+location ^~ /static/ {
+    types { }
+    add_header X-Request-ID $request_id always;
+    include /etc/nginx/conf.d/security-headers.inc;
+    return 404 '{"detail":"찾을 수 없습니다."}';
+}
+
+location = /health {
+    types { }
+    add_header X-Request-ID $request_id always;
+    include /etc/nginx/conf.d/security-headers.inc;
+    return 404 '{"detail":"찾을 수 없습니다."}';
+}
+
+location ^~ /health/ {
     types { }
     add_header X-Request-ID $request_id always;
     include /etc/nginx/conf.d/security-headers.inc;
@@ -353,3 +383,7 @@ location @gateway_timeout {
 # nginx 가 답할 때는 location 마다 X-Request-ID 를 붙인다. 여기서 붙이면 서버가 돌려준 것과 두 번 실린다.
 # location 에 add_header 를 쓰면 보안 머리말도 사라지므로 security-headers.inc 를 함께 include 한다
 default_type application/json;
+
+# --- 화면(#290) ---
+# 그 밖의 주소(/, /login, /trpg/... 와 빌드한 파일)는 화면이다. web.inc.template 에 있다
+include /etc/nginx/conf.d/web.inc;

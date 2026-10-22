@@ -1,0 +1,27 @@
+{
+  "name": "@ai-trpg/ui",
+  "private": true,
+  "type": "module",
+  "description": "화면의 공통 구성요소. 빌드하지 않고 앱이 소스를 그대로 가져간다(Vite 가 함께 빌드한다)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/react": "^19.3.0",
+    "jsdom": "^30.1.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vitest": "^5.0.5"
+  }
+}

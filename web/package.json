@@ -1,0 +1,29 @@
+{
+  "name": "ai-trpg-web",
+  "private": true,
+  "type": "module",
+  "description": "화면(#290). 앱(apps/web)과 공통 구성요소(packages/ui)를 npm workspaces 로 묶는다",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @ai-trpg/web",
+    "build": "npm run build -w @ai-trpg/web",
+    "typecheck": "npm run typecheck --workspaces",
+    "lint": "eslint .",
+    "test": "npm run test --workspaces",
+    "gen:api": "npm run gen:api -w @ai-trpg/web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.0"
+  }
+}
