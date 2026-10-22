@@ -48,7 +48,7 @@ from app.catalog.errors import CatalogConflictError, ModelNotFoundError
 from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot
 from app.catalog.sync import SyncReport, sync_catalog
 from app.core.config import get_settings
-from app.core.dependencies import utc_today
+from app.core.dependencies import utc_now
 
 # 명령 하나. 세션, 읽은 명령줄, 오늘을 받아 찍을 줄들을 돌려준다
 Command = Callable[[AsyncSession, argparse.Namespace, date], Awaitable[list[str]]]
@@ -249,7 +249,7 @@ async def run(args: argparse.Namespace) -> int:
     engine = create_engine(get_settings())
     try:
         async with create_session_factory(engine)() as session:
-            code, lines = await execute(session, args, utc_today())
+            code, lines = await execute(session, args, utc_now().date())
     finally:
         await engine.dispose()
     print('\n'.join(lines), file=sys.stderr if code else sys.stdout)

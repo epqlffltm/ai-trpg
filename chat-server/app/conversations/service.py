@@ -13,8 +13,11 @@
   5. 판의 사본(사람마다, 판마다 하나), 대화, 페르소나의 사본, 첫 말(인사말)을 한 트랜잭션에서 저장한다
 쓸 수 있는 캐릭터인지는 asset 서버가 판단한다. 가져온 판의 등급도 여기서 한 번 더 본다(allowed_ratings).
 
-모델은 고르거나 바꿀 때 한 번 본다(app/catalog/choice.py). 그 뒤 꺼지거나 은퇴해도 대화는 그 모델을 가리킨 채로 두고,
+모델은 고르거나 바꿀 때 한 번 본다. 모델 목록에서 고를 수 있고(app/catalog/choice.py) 결제 서버가 팔고 있어야 한다
+(app/catalog/offers.py 의 is_sold). 그 뒤 꺼지거나 은퇴하거나 판매를 멈춰도 대화는 그 모델을 가리킨 채로 두고,
 읽을 때 "더는 쓸 수 없다"(usable)를 함께 내준다. 몰래 다른 모델로 바꾸지 않는다.
+결제 서버의 가격 목록은 받아 둔 것을 쓴다. 사람이 고른 모델은 가격 목록이 있어야 정한다(없으면 503).
+지난번 모델과 읽을 때의 usable 은 가격 목록을 받지 못하면 팔고 있다고 본다. 말을 보낼 때 결제 서버가 다시 본다.
 
 지키는 것.
   - 남의 대화는 없는 것과 같다(ConversationNotFoundError, 404). 볼 수 없는 등급의 대화도 그렇다.
@@ -24,16 +27,19 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import datetime
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.client import AssetAdultRequiredError, AssetClient, AssetNotFoundError
 from app.assets.schemas import CharacterCopy, PersonaCopy, StartDocument
+from app.billing.price_list import PriceList, PriceListUnavailable
+from app.billing.prices import PriceBook
 from app.catalog import repository as catalog
 from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
+from app.catalog.offers import is_sold
 from app.conversations import repository
 from app.conversations.models import (
     Conversation,
@@ -160,14 +166,20 @@ def build_opening(conversation_id: uuid.UUID, greeting: str) -> Message | None:
     )
 
 
-def model_usable(model: AiModel | None, rating: Rating, today: date) -> bool:
-    """그 모델을 그 등급의 대화에 그날 고를 수 있나. 표에 없는 모델(None)은 고를 수 없다."""
-    return model is not None and is_choosable(model, rating, today)
+def model_usable(model: AiModel, rating: Rating, book: PriceBook | None, now: datetime) -> bool:
+    """
+    그 모델을 그 등급의 대화에 now 에 고를 수 있나. 모델 목록에서 고를 수 있고 결제 서버가 팔고 있어야 한다.
+
+    book 이 None 이면 값을 모르는 것이다(가격 목록을 받지 못했다). 그때는 팔고 있다고 본다.
+    """
+    if not is_choosable(model, rating, now.date()):
+        return False
+    return book is None or is_sold(book, model.slug, now)
 
 
-def require_usable_model(model: AiModel | None, rating: Rating, today: date) -> AiModel:
-    """고른 모델. 이 대화에 고를 수 없으면 ModelUnavailableError."""
-    if model is None or not is_choosable(model, rating, today):
+def require_usable_model(model: AiModel | None, rating: Rating, book: PriceBook | None, now: datetime) -> AiModel:
+    """고른 모델. 표에 없거나 이 대화에 고를 수 없으면 ModelUnavailableError."""
+    if model is None or not model_usable(model, rating, book, now):
         raise ModelUnavailableError
     return model
 
@@ -222,8 +234,35 @@ async def remember_choices(session: AsyncSession, viewer: Viewer, data: Conversa
     return Remembered(persona_id, model_slug)
 
 
+async def known_book(prices: PriceList) -> PriceBook | None:
+    """가격 목록. 받지 못했고 받아 둔 것도 없으면 None 이다(값을 모른다)."""
+    try:
+        return await prices.book()
+    except PriceListUnavailable:
+        return None
+
+
+async def book_for_choice(prices: PriceList, data: ConversationCreate, slug: str | None) -> PriceBook | None:
+    """
+    대화의 모델을 정할 때 쓰는 가격 목록. 정할 모델이 없으면 부르지 않는다(None).
+
+    사람이 고른 모델이면 꼭 받아야 한다. 받지 못하면 PriceListUnavailable(503). 값을 모르는 모델을 고르게 하지 않는다.
+    지난번 모델이면 받지 못해도 시작한다(None, 팔고 있다고 본다). 결제 서버가 내려가도 대화는 시작된다.
+    """
+    if slug is None:
+        return None
+    if data.model_chosen():
+        return await prices.book()
+    return await known_book(prices)
+
+
 async def pick_model(
-    session: AsyncSession, data: ConversationCreate, slug: str | None, rating: Rating, today: date
+    session: AsyncSession,
+    data: ConversationCreate,
+    slug: str | None,
+    rating: Rating,
+    book: PriceBook | None,
+    now: datetime,
 ) -> str | None:
     """
     대화의 모델을 정한다. 고른 모델을 쓸 수 없으면 ModelUnavailableError 다.
@@ -235,8 +274,8 @@ async def pick_model(
         return None
     model = await catalog.get_model(session, slug)
     if data.model_chosen():
-        return require_usable_model(model, rating, today).slug
-    return slug if model_usable(model, rating, today) else None
+        return require_usable_model(model, rating, book, now).slug
+    return slug if model is not None and model_usable(model, rating, book, now) else None
 
 
 async def save_conversation(
@@ -265,9 +304,18 @@ async def save_conversation(
 
 
 async def start_conversation(
-    session: AsyncSession, asset: AssetClient, viewer: Viewer, data: ConversationCreate, today: date
+    session: AsyncSession,
+    asset: AssetClient,
+    prices: PriceList,
+    viewer: Viewer,
+    data: ConversationCreate,
+    now: datetime,
 ) -> uuid.UUID:
-    """대화를 시작하고 그 id 를 돌려준다. 실패하면 위의 예외들이나 AssetUnavailableError."""
+    """
+    대화를 시작하고 그 id 를 돌려준다. 실패하면 위의 예외들이나 AssetUnavailableError, PriceListUnavailable.
+
+    바깥(asset 서버, 결제 서버의 가격 목록)은 DB 의 트랜잭션을 열기 전에 부른다.
+    """
     remembered = await remember_choices(session, viewer, data)
     copy = await fetch_character(asset, viewer, data.character_id)
     require_usable_rating(copy, viewer)
@@ -276,7 +324,8 @@ async def start_conversation(
         persona = await fetch_chosen_persona(asset, viewer, remembered.persona_id)
     else:
         persona = await fetch_last_persona(asset, viewer, remembered.persona_id)
-    model_slug = await pick_model(session, data, remembered.model_slug, Rating(copy.rating), today)
+    book = await book_for_choice(prices, data, remembered.model_slug)
+    model_slug = await pick_model(session, data, remembered.model_slug, Rating(copy.rating), book, now)
     return await save_conversation(session, viewer.claims.user_id, copy, start, persona, model_slug)
 
 
@@ -306,16 +355,18 @@ async def conversation_models(session: AsyncSession, conversations: list[Convers
 
 
 async def change_model(
-    session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID, slug: str, today: date
+    session: AsyncSession, prices: PriceList, viewer: Viewer, conversation_id: uuid.UUID, slug: str, now: datetime
 ) -> AiModel:
     """
-    대화의 모델을 바꾸고 그 모델을 돌려준다.
-    대화가 없으면 ConversationNotFoundError, 고를 수 없으면 ModelUnavailableError 다.
+    대화의 모델을 바꾸고 그 모델을 돌려준다. 대화가 없으면 ConversationNotFoundError,
+    고를 수 없으면 ModelUnavailableError, 가격 목록을 받지 못했으면 PriceListUnavailable 이다.
 
     바꾸는 순간부터 그 모델의 가격표로 청구한다(다음 말부터). 목록의 차례(최근에 말한 것부터)는 바꾸지 않는다.
+    가격 목록은 DB 의 트랜잭션을 열기 전에 받는다.
     """
+    book = await prices.book()
     conversation, character, _ = await get_conversation(session, viewer, conversation_id)
-    model = require_usable_model(await catalog.get_model(session, slug), Rating(character.rating), today)
+    model = require_usable_model(await catalog.get_model(session, slug), Rating(character.rating), book, now)
     await repository.set_model(session, conversation.id, model.slug)
     await session.commit()
     return model

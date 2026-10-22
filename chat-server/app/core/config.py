@@ -4,7 +4,7 @@
 chat 서버의 설정. 환경 변수와 chat-server/.env 에서 읽는다.
 
 FastAPI 서버들이 함께 쓰는 칸(DB, 인증 서버, 로그, 수집기)은 공용 코드의 설정(server_core.settings.CoreSettings)에 있다.
-여기에는 이 서버의 이름과 기본값, 이 서버만의 칸(asset 서버의 주소와 서명 비밀)을 둔다.
+여기에는 이 서버의 이름과 기본값, 이 서버만의 칸(asset 서버와 결제 서버의 주소와 서명 비밀)을 둔다.
 
 비밀값과 환경마다 달라지는 값은 코드에 적지 않는다.
 다른 서버의 .env 와 따로 둔다. 한 서버가 다른 서버의 비밀값을 읽을 수 없게 하기 위해서다.
@@ -48,11 +48,33 @@ class Settings(CoreSettings):
     # asset 서버를 한 번 부르는 시간의 상한(초). 대화를 만드는 사람이 기다리므로 짧게 둔다
     asset_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
 
+    # 결제 서버의 주소. 말 한 번의 값을 여기서 받고(홀드, 확정, 반환), 모델의 값을 가격 목록에서 읽는다(app/billing/).
+    # 예: http://127.0.0.1:8003. 비우면 받지 않는다(기본). 그때 모델은 값 없이 보이고 말은 공짜로 돈다
+    billing_url: str = ''
+
+    # 결제 서버에 보내는 요청에 서명하는 비밀. 결제 서버의 CHAT_SERVER_SECRET 과 같은 값이어야 한다.
+    # 32자 이상. 비밀값이다. 로그와 오류에 싣지 않는다
+    billing_secret: SecretStr = SecretStr('')
+
+    # 결제 서버를 한 번 부르는 시간의 상한(초). 말을 보내는 사람이 기다리므로 짧게 둔다. 게임 서버와 같은 기본값이다
+    billing_timeout_seconds: float = Field(default=5.0, gt=0, le=10)
+
     @model_validator(mode='after')
     def require_an_asset_secret(self) -> Self:
         """asset 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. asset 서버가 모든 요청을 401 로 거절한다."""
         if self.asset_url.strip() and len(self.asset_secret.get_secret_value()) < MIN_SECRET_LENGTH:
             raise ValueError(f'ASSET_URL 을 적었으면 ASSET_SECRET 을 {MIN_SECRET_LENGTH}자 이상 적어야 합니다')
+        return self
+
+    @model_validator(mode='after')
+    def require_a_billing_secret(self) -> Self:
+        """
+        결제 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. 결제 서버가 모든 요청을 401 로 거절한다.
+
+        마이그레이션(compose 의 chat-migrate)은 결제 서버를 부르지 않으므로 주소와 비밀을 함께 비운다.
+        """
+        if self.billing_url.strip() and len(self.billing_secret.get_secret_value()) < MIN_SECRET_LENGTH:
+            raise ValueError(f'BILLING_URL 을 적었으면 BILLING_SECRET 을 {MIN_SECRET_LENGTH}자 이상 적어야 합니다')
         return self
 
 
