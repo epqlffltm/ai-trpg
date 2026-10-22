@@ -94,7 +94,9 @@ from app.engine.sheet import Sheet
 #  40: 규칙에 빼앗긴 NPC 가 깨어날 때의 반응(robbed_wake: hostile, wary)이 있다. 태도에 경계(wary)가 더해졌다
 #  41: 인물의 NPC 시트에 공격(npc_sheets[].attacks)이 있다. 몬스터의 공격과 같은 모양이다
 #  42: 세계관에 참고 자료를 켤 수 있는지(world.references_allowed)가 있다(#482)
-SNAPSHOT_FORMAT = 42
+#  43: 퀘스트 규칙에 실패하는 조건(quests[].fail)과 그 조건을 맞추는 법(quests[].fail_match)이 있다(#367).
+#      조건의 종류에 인물이 죽음(npc_dead)과 물건을 잃음(lose_item)이 더해졌다
+SNAPSHOT_FORMAT = 43
 
 
 class EntrySnapshot(BaseModel):
@@ -201,6 +203,7 @@ class QuestRuleSnapshot(BaseModel):
     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.
     conditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.
     reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.
+    fail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다. 없으면 기한으로만 실패한다.
     """
 
     entry_id: uuid.UUID
@@ -211,6 +214,8 @@ class QuestRuleSnapshot(BaseModel):
     match: QuestMatch = QuestMatch.ALL
     reveal: list[QuestConditionSnapshot] = []
     reveal_match: QuestMatch = QuestMatch.ALL
+    fail: list[QuestConditionSnapshot] = []
+    fail_match: QuestMatch = QuestMatch.ALL
 
 
 class FindSnapshot(BaseModel):

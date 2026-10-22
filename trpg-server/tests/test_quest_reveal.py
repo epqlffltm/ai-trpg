@@ -12,7 +12,7 @@
     옛 판은 드러나는 조건이 없는 것으로 읽는다.
   - 라운드: 조건을 채우면 드러난다(까닭 conditions_met, 행한 사람 없음, 기한은 그때부터).
     드러나고 바로 이루면 두 번 바뀐다. 다른 퀘스트의 성공과 기한의 실패로 같은 라운드에 드러난다(잇기).
-  - 사람: 방장은 드러내지 못하고(409 quest_reveal_by_engine), 숨긴 퀘스트를 보지도, 끝내지도 못한다(422).
+  - 사람: 방장은 퀘스트를 바꾸지 못한다(API 가 없다, tests/test_table_quests.py). 숨긴 퀘스트는 보지도 못한다.
 """
 
 import uuid
@@ -37,7 +37,7 @@ from tests.test_quest_goals import (
     start,
     status_of,
 )
-from tests.test_table_items import ME, bearer, events_of, read_table, table_url
+from tests.test_table_items import ME, bearer, events_of, read_table
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -76,7 +76,9 @@ async def test_reveal_conditions_are_saved_and_published(client: AsyncClient, me
     rule = secret(
         world, goal('reach_place', world['forest']), link('quest_failed', world['rescue']), reveal_match='any'
     )
-    scenario = await make_scenario(client, me, world, [quest(world, goal('reach_place', world['forest'])), rule])
+    # 실패를 기다리려면 그 퀘스트가 실패할 수 있어야 한다(기한이나 실패하는 조건)
+    rescue = {**quest(world, goal('reach_place', world['forest'])), 'time_limit_minutes': 60}
+    scenario = await make_scenario(client, me, world, [rescue, rule])
 
     response = await publish(client, me, scenario)
 
@@ -256,34 +258,3 @@ async def test_a_missed_deadline_reveals_the_linked_quest(client: AsyncClient, m
         ('왕녀 구출', 'active', 'failed'),
         ('숨은 비밀', 'hidden', 'active'),
     ]
-
-
-# --- 사람 ---
-
-
-@pytest.mark.parametrize('which', ['rescue', 'secret'])
-async def test_the_host_cannot_reveal(client: AsyncClient, me: dict[str, str], which: str):
-    world = await make_world(client, me)
-    rules = [quest(world, goal('reach_place', world['forest'])), secret(world)]
-    table = await start(client, me, world, rules)
-
-    response = await client.put(
-        table_url(table, f'/quests/{world[which]["id"]}'), json={'status': 'active'}, headers=me
-    )
-
-    # 진행 중이든 숨겼든 같은 답이다. 숨긴 퀘스트가 있는지 새지 않는다
-    assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json()['reason'] == 'quest_reveal_by_engine'
-
-
-async def test_the_host_cannot_end_a_hidden_quest(client: AsyncClient, me: dict[str, str]):
-    world = await make_world(client, me)
-    table = await start(client, me, world, [secret(world)])
-
-    response = await client.put(
-        table_url(table, f'/quests/{world["secret"]["id"]}'), json={'status': 'failed'}, headers=me
-    )
-
-    # 없는 퀘스트와 같은 답이다
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert names(await read_table(client, me, table)) == []
