@@ -302,6 +302,54 @@ class SecurityEvent(models.Model):
         return f'{self.get_kind_display()} / {self.ip or "-"}'
 
 
+class SuspensionReason(models.TextChoices):
+    """
+    정지의 사유(#634). 운영자가 정지할 때 하나를 고른다(suspend_account --kind).
+
+    정지된 채 탈퇴한 사람이 다시 가입할 때 무엇을 막고 얼마 동안 막을지가 사유마다 다르다(#634 의 사유 표).
+    """
+
+    SPAM = 'spam', '도배, 광고'
+    ABUSE = 'abuse', '욕설, 괴롭힘, 혐오'
+    FRAUD = 'fraud', '결제 사기, 청약철회 악용, 계정 거래'
+    ILLEGAL = 'illegal', '해킹, 서비스 공격 같은 불법 행위'
+    OTHER = 'other', '그 밖(운영자 판단)'
+
+
+class Suspension(models.Model):
+    """
+    계정 정지의 기록(#634). 정지할 때 한 줄을 적고, 풀 때 그 줄에 푼 시각을 적는다(suspension.py).
+
+    보안 이벤트에도 남지만 그것은 30일 뒤에 지워진다. 정지는 그보다 오래가고, 탈퇴를 마칠 때
+    정지 중인지와 그 사유를 알아야 한다. 그래서 따로 둔다. 풀리지 않은 정지는 계정마다 하나다.
+    """
+
+    user = models.ForeignKey('accounts.User', verbose_name='계정', on_delete=models.CASCADE, related_name='suspensions')
+    reason = models.CharField('사유의 종류', max_length=20, choices=SuspensionReason.choices)
+    # 운영자가 남긴 사유. 보안 이벤트의 사유(SecurityEvent.note)와 같은 글이다
+    note = models.CharField('사유', max_length=200)
+    suspended_at = models.DateTimeField('정지한 시각')
+    # 비어 있으면 아직 정지 중이다
+    restored_at = models.DateTimeField('푼 시각', null=True, blank=True)
+    restore_note = models.CharField('푼 사유', max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = '정지'
+        verbose_name_plural = '정지'
+        ordering = ['-suspended_at']
+        constraints = [
+            # 풀리지 않은 정지는 계정마다 하나다. 정지와 풀기는 계정의 줄을 잠그고 한다(suspension.py)
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(restored_at__isnull=True),
+                name='accounts_one_open_suspension',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.get_reason_display()} / {"풀림" if self.restored_at else "정지 중"}'
+
+
 class OutgoingMailStatus(models.TextChoices):
     PENDING = 'pending', '발송 대기'
     # 워커가 차지하고 메일 서버와 통신하는 중이다. 다음 시도 시각이 임대가 끝나는 시각이다
