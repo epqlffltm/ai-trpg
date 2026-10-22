@@ -610,7 +610,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `background_jobs_started_total` | counter | `operation` | 시작한 작업의 수 |
 | `background_jobs_finished_total` | counter | `operation`, `result`(`success`, `server_error`, `cancelled`) | 끝난 작업의 수. 실패 수는 `result="server_error"` |
 | `background_jobs_running` | gauge | `operation` | 지금 도는 작업의 수 |
-| `background_jobs_queued` | gauge | `operation` | 기다리는 일의 수. 인증 서버의 발송함에 남은 메일이 여기다 |
+| `background_jobs_queued` | gauge | `operation` | 기다리는 일의 수. 인증 서버의 발송함에 남은 메일(`mail.deliver_outgoing`), 비울 시각이 지났는데 비우지 않은 탈퇴(`withdrawal.complete`), 비밀을 적은 서버에 아직 알리지 못한 탈퇴(`withdrawal.deliver`)가 여기다. 워커가 바퀴의 끝에 센다 |
 | `background_job_duration_seconds` | histogram | `operation` | 작업 하나가 걸린 시간 |
 
 **실시간 스트림 (game)**
@@ -964,6 +964,9 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | auth-server | `AuthMailBacklog` | warning | 발송함에 메일이 15분 동안 남아 있다. 메일 서버가 받지 않는다 |
 | auth-server | `AuthMailDiscarded` | warning | 지난 15분에 버린 메일이 있다. 종류(`kind`)마다 울린다 |
 | auth-server | `AuthRateLimitsUnavailable` | warning | 지난 5분에 시도 횟수를 세지 못하고 통과시킨 것이 있다. 제한(`limit`)마다 울린다 |
+| auth-server | `AuthWelcomeCreditsWorkerStalled` | warning | 인증 서버가 떠 있는데 결제 쪽 워커(`auth-welcome-credits`)가 10분 넘게 한 바퀴도 성공하지 않았다. 환영 크레딧, 결제 자격, 탈퇴가 멈춘다 |
+| auth-server | `AuthWithdrawalsOverdue` | warning | 비울 시각이 지난 탈퇴가 30분 동안 남아 있다(#603) |
+| auth-server | `AuthWithdrawalNoticesWaiting` | warning | 다른 서버에 알리지 못한 탈퇴가 2시간 동안 남아 있다. 비밀을 적지 않은 서버의 것은 세지 않는다 |
 | board-server | `BoardDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
 | board-server | `BoardServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 멈춘 검색(503)도 든다 |
 | board-server | `BoardSearchTimeouts` | warning | 지난 15분에 멈춘 검색이 셋을 넘는다 |
@@ -1093,6 +1096,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | `config/health.py` | `db_up` |
 | `accounts/outbox.py` | 보내 본 결과(`emails_sent_total`)와 발송함에 남은 메일의 수(`count_waiting_mail`) |
 | `accounts/management/commands/send_outgoing_mail.py` | 바퀴마다 남은 메일을 `background_jobs_queued{operation="mail.deliver_outgoing"}` 로 적는다 |
+| `accounts/management/commands/send_welcome_credits.py`, `accounts/withdrawal.py` | 바퀴마다 밀린 탈퇴(`count_overdue_withdrawals`)와 알리지 못한 탈퇴(`count_waiting_notices`)를 `background_jobs_queued{operation="withdrawal.complete"}`, `{operation="withdrawal.deliver"}` 로 적는다 |
 | `accounts/attempt_limits.py` | 막은 시도와 세지 못하고 통과시킨 시도 |
 | `accounts/models.py` 의 `MailKind`, 마이그레이션 `0020` | 발송함의 줄에 메일의 종류를 적는다. 이미 있던 줄은 `other` 다 |
 

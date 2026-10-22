@@ -222,6 +222,16 @@ def complete_withdrawal(user_id: int, now: datetime) -> bool:
     return True
 
 
+def count_overdue_withdrawals() -> int:
+    """
+    비울 시각이 지났는데 아직 비우지 않은 계정의 수. 워커가 바퀴마다 메트릭(background_jobs_queued)으로 적는다.
+
+    워커는 5초마다 돌며 때가 된 계정을 비우므로 늘 0 이다.
+    남아 있으면 워커가 멈췄거나 비우다 실패한다(경보 AuthWithdrawalsOverdue).
+    """
+    return User.objects.filter(withdrawal_requested_at__lte=timezone.now() - GRACE, withdrawn_at__isnull=True).count()
+
+
 def _queue_notices(user: User, withdrawn_at: datetime) -> None:
     """
     모든 서버에 한 줄씩 적는다. 바로 보낼 수 있게 한다.
@@ -238,6 +248,17 @@ def _queue_notices(user: User, withdrawn_at: datetime) -> None:
 def _lock(user: User) -> User:
     """계정의 줄을 잠그고 지금 값으로 다시 읽는다."""
     return User.objects.select_for_update().get(pk=user.pk)
+
+
+def count_waiting_notices() -> int:
+    """
+    아직 알리지 못한 탈퇴 알림의 수. 워커가 바퀴마다 메트릭(background_jobs_queued)으로 적는다.
+
+    비밀을 적은 서버의 줄만 센다. 비밀이 없는 서버의 줄은 받는 주소가 생길 때까지 기다리는 것이 정상이다.
+    받는 서버가 멈추면 늘어나고, 다시 받으면 줄어든다. 오래 남으면 경보(AuthWithdrawalNoticesWaiting)다.
+    알릴 것이 남은 줄의 색인(accounts_withdrawal_due_idx)으로 센다.
+    """
+    return WithdrawalNotice.objects.filter(delivered_at__isnull=True, target__in=configured_targets()).count()
 
 
 def deliver_due_withdrawal_notices(*, batch_size: int = DEFAULT_BATCH_SIZE) -> DeliveryReport:
