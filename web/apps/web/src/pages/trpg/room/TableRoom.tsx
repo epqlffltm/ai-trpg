@@ -2,20 +2,22 @@
 // 테이블 방(B6)의 틀. 스트림을 붙잡고, 받은 것을 나눠 준다. 가운데는 테이블의 상태에 따라(모집 중, 진행 중, 끝남), 옆에는 앉은 사람과 채팅.
 //
 // 스트림에서 받은 것:
-//   - 이벤트: 테이블을 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다
+//   - 이벤트: 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다
 //   - 채팅: 읽어 둔 채팅에 번호 차례로 합친다. 그 사람의 "입력 중"을 지운다
 //   - 입력 중: 5초 동안 보인다
+//   - 서술의 미리 보기: 조각을 이어 둔다(round/preview.ts). 서술이 끝났다는 이벤트가 오면 지운다
 //   - 멈춤: 끝났으면 테이블을 다시 읽고(끝난 판의 화면), 앉아 있지 않으면 다시 읽어 404 의 화면으로 간다
 // 스트림이 열릴 때마다 테이블을 한 번 다시 읽는다. 처음 읽은 때와 붙은 때 사이, 끊겼던 동안의 변화를 놓치지 않게.
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
-import type { ChatMessage, MessagePage, TableDetail } from '../../../api/types';
+import { useCallback, useState } from 'react';
+import type { ChatMessage, MessagePage, TableDetail, TableEvent } from '../../../api/types';
 import { meQuery } from '../../../auth/queries';
 import { usePublicNames } from '../../../hooks/usePublicNames';
 import { ChatPanel } from './ChatPanel';
-import { MemberList } from './MemberList';
+import { displayName, MemberList } from './MemberList';
 import { RoomHeader } from './RoomHeader';
+import { applyPreview, ENDS_PREVIEW, type NarrationPreview } from './round/preview';
 import { chatQuery, tableQuery } from './roomQueries';
 import { mergeMessages } from './streamPolicy';
 import { useBatchedRefetch } from './useBatchedRefetch';
@@ -29,6 +31,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
   const me = useQuery(meQuery());
   const typing = useTypingPeople();
   const refetchSoon = useBatchedRefetch(table.id);
+  const [preview, setPreview] = useState<NarrationPreview | null>(null);
   const messages = chat.data?.items ?? [];
   const nameOf = usePublicNames([table.members.map((member) => member.user_id), messages.map((message) => message.user_id)]);
 
@@ -43,12 +46,16 @@ export function TableRoom({ table }: { table: TableDetail }) {
 
   const stream = useTableStream(table.id, chat.isSuccess ? chat.data.last_sequence : null, {
     onOpen: refetchSoon,
-    onEvent: refetchSoon,
+    onEvent: (event: TableEvent) => {
+      if (ENDS_PREVIEW.has(event.type)) setPreview(null);
+      refetchSoon();
+    },
     onChat: (message) => {
       typing.remove(message.user_id);
       appendChat([message]);
     },
     onTyping: typing.add,
+    onPreview: (chunk) => setPreview((current) => applyPreview(current, chunk)),
     onStop: () => void queryClient.invalidateQueries({ queryKey: tableQuery(table.id).queryKey }),
   });
 
@@ -58,7 +65,12 @@ export function TableRoom({ table }: { table: TableDetail }) {
       <RoomHeader table={table} stream={stream} />
       <div className="room__body">
         <div className="room__main">
-          <RoomStage table={table} myId={myId} />
+          <RoomStage
+            table={table}
+            myId={myId}
+            preview={preview}
+            nameOfMember={(userId) => displayName(userId, table.members, nameOf)}
+          />
         </div>
         <div className="room__side">
           <MemberList members={table.members} myId={myId} nameOf={nameOf} />
