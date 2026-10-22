@@ -57,11 +57,15 @@ function backoff(failures: number, random: number): number {
   return Math.min(BACKOFF_MAX_MS, jitter(random) * 2 ** Math.max(0, failures - 1));
 }
 
-/** 받은 메시지의 갈래. 모르는 것(쪽지, 서술의 미리 보기는 아직 쓰지 않는다)은 ignore 다 */
+/** 쓰이는 중인 서술의 조각(narration_preview). id 가 없어 다시 붙으면 다시 오지 않는다 */
+export type PreviewChunk = { round: number; attempt: number; seq: number; text: string };
+
+/** 받은 메시지의 갈래. 모르는 것(쪽지는 아직 쓰지 않는다)은 ignore 다 */
 export type Routed =
   | { kind: 'event'; event: TableEvent }
   | { kind: 'chat'; message: ChatMessage }
   | { kind: 'typing'; userId: string }
+  | { kind: 'preview'; chunk: PreviewChunk }
   | { kind: 'ignore' };
 
 export function routeMessage(message: SseMessage): Routed {
@@ -74,9 +78,19 @@ export function routeMessage(message: SseMessage): Routed {
       return { kind: 'chat', message: data as ChatMessage };
     case 'typing':
       return typeof data.user_id === 'string' ? { kind: 'typing', userId: data.user_id } : { kind: 'ignore' };
+    case 'narration_preview':
+      return toPreview(data);
     default:
       return { kind: 'ignore' };
   }
+}
+
+function toPreview(data: Record<string, unknown>): Routed {
+  const { round, attempt, seq, text } = data;
+  if (typeof round !== 'number' || typeof attempt !== 'number' || typeof seq !== 'number' || typeof text !== 'string') {
+    return { kind: 'ignore' };
+  }
+  return { kind: 'preview', chunk: { round, attempt, seq, text } };
 }
 
 function parseObject(text: string): Record<string, unknown> | null {

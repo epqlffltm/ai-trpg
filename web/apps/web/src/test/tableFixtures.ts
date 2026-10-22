@@ -19,6 +19,11 @@ export const RULES = {
   score_max: 18,
   modifier: { base: 10, step: 2 },
   hp_ability: 'con',
+  default_difficulty: 'normal',
+  difficulties: [
+    { key: 'easy', name: '쉬움', target: 10 },
+    { key: 'normal', name: '보통', target: 15 },
+  ],
   point_buy: {
     budget: 10,
     costs: [
@@ -105,6 +110,40 @@ export function tableDetail(id: string, extra: Record<string, unknown> = {}) {
   };
 }
 
+/** 라운드 하나(RoundOut). 처음 값은 선언을 받는 중이고 아무도 내지 않았다 */
+export function round(number: number, extra: Record<string, unknown> = {}) {
+  return {
+    number,
+    scene: `${number}번째 장면`,
+    status: 'open',
+    declarations: [],
+    death_saves: [],
+    arrivals: [],
+    waiting_for: [ME, OTHER],
+    created_at: '2026-10-22T00:00:00Z',
+    deadline_at: null,
+    narration_model: 'gemini-flash',
+    price: null,
+    closing_at: null,
+    closed_at: null,
+    narration_failed_at: null,
+    narration_failures: 0,
+    ...extra,
+  };
+}
+
+/** 선언 하나(DeclarationOut) */
+export function declaration(userId: string, extra: Record<string, unknown> = {}) {
+  return {
+    user_id: userId,
+    character_name: userId === ME ? '렌' : '미아',
+    content: null,
+    action: null,
+    outcome: null,
+    ...extra,
+  };
+}
+
 /** SSE 의 메시지 하나의 글 */
 export function sse(event: string, data: unknown, id?: string): string {
   return `${id ? `id: ${id}\n` : ''}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -132,6 +171,8 @@ export function roomRoutes(tableId: string, overrides: Record<string, (request: 
     [`GET ${base}/events`]: () => json(200, { items: [], last_sequence: 3 }),
     [`GET ${base}/whispers`]: () => json(200, { items: [], last_sequence: 0 }),
     [`GET ${base}/stream`]: (request: SeenRequest) => sseResponse(request, []),
+    [`GET ${base}/rounds/current`]: () => json(200, round(1)),
+    [`GET ${base}/rounds`]: () => json(200, { items: [round(1)], total: 1 }),
     'GET /api/v1/auth/public-names': () => json(200, { names: [] }),
     ...overrides,
   };

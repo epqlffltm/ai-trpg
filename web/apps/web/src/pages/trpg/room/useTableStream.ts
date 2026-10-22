@@ -11,7 +11,7 @@ import { refreshSession } from '../../../api/refresh';
 import { fetchStreamCursor } from '../../../api/tableRoom';
 import { readTableStream, type StreamCursor, type StreamEnd } from '../../../api/tableStream';
 import type { ChatMessage, TableEvent } from '../../../api/types';
-import { nextStep, routeMessage, type StopReason } from './streamPolicy';
+import { nextStep, routeMessage, type PreviewChunk, type StopReason } from './streamPolicy';
 
 export type StreamStatus =
   | { state: 'connecting' }
@@ -24,6 +24,7 @@ export type StreamHandlers = {
   onEvent: (event: TableEvent) => void;
   onChat: (message: ChatMessage) => void;
   onTyping: (userId: string) => void;
+  onPreview: (chunk: PreviewChunk) => void;
   onStop: (reason: StopReason) => void;
 };
 
@@ -120,6 +121,7 @@ function deliver(message: Parameters<typeof routeMessage>[0], handlers: StreamHa
   if (routed.kind === 'event') handlers.onEvent(routed.event);
   else if (routed.kind === 'chat') handlers.onChat(routed.message);
   else if (routed.kind === 'typing') handlers.onTyping(routed.userId);
+  else if (routed.kind === 'preview') handlers.onPreview(routed.chunk);
 }
 
 function stop(reason: StopReason, setStatus: (status: StreamStatus) => void, handlers: () => StreamHandlers): void {
