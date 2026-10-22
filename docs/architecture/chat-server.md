@@ -122,13 +122,15 @@
 ## 데이터의 모양
 
 스키마는 `chat`, 다른 서비스의 테이블을 직접 읽지 않는다. 앞의 넷(`characters`, `conversations`, `conversation_personas`, `messages`)은
-만들었다(`chat-server/app/conversations/models.py`, chat-server README 의 "대화"). 나머지는 초안이다.
+만들었다(`chat-server/app/conversations/models.py`, chat-server README 의 "대화"). 모델 목록(`ai_models` 와 원가, 날짜판의 기록)도
+만들었다(`chat-server/app/catalog/models.py`, README 의 "모델 목록"). 나머지는 초안이다.
 
 | 테이블 | 주요 칸 | 비고 |
 | --- | --- | --- |
 | `characters` | `id`, `owner_id`, `source_id`(asset 의 캐릭터 id), `version`, `name`, `rating`, `document`(판의 문서 그대로), 가져온 때 | asset-server 에서 가져온 판의 사본. **사람마다, 판마다 하나**(`owner_id`, `source_id`, `version` 이 고유)라 같은 판으로 여러 번 시작해도 함께 쓴다. 동시에 가져와도 하나만 남는다(`ON CONFLICT DO NOTHING`). 사람마다 두는 것은 탈퇴 때 그 사람의 것만 지우기 위해서다. 목록이 될 수 없다(캐릭터 탐색은 asset 의 공개 목록이다) |
 | `conversation_personas` | `conversation_id`, `source_id`(asset 의 페르소나 id), `revision`, 이름, 설명, 그림 id, 나이, 성별, 호칭, 말투 예시, 성격, 가져온 때 | asset-server 의 계정 페르소나를 대화마다 복사한 것. 페르소나 없이 시작한 대화에는 없다. 지금 것의 `revision` 과 다르면 "새 설정으로 바꾸기" |
-| `conversations` | `id`, `owner_id`, `character_id`(위의 사본), 제목, `start_title`, `start_situation`, `active_leaf_id`, 생성·수정 시각, 지운 시각 | 새로 시작할 때마다 하나. 한 캐릭터에 쌓인다. 기억과 모델은 대화마다. 시작 상황은 판의 것을 복사해 둔다(제목은 목록에, 상황은 모델에). 모델(`model`)과 생성 중 표시(`generating_since`)는 "한 번의 말"에서 더한다 |
+| `conversations` | `id`, `owner_id`, `character_id`(위의 사본), `model_slug`, 제목, `start_title`, `start_situation`, `active_leaf_id`, 생성·수정 시각, 지운 시각 | 새로 시작할 때마다 하나. 한 캐릭터에 쌓인다. 기억과 모델은 대화마다. 시작 상황은 판의 것을 복사해 둔다(제목은 목록에, 상황은 모델에). `model_slug` 는 `ai_models` 를 가리킨다(고르지 않았으면 비어 있다). 생성 중 표시(`generating_since`)는 말을 보내는 길에서 더한다 |
+| `ai_models`, `ai_model_costs`, `ai_model_snapshots` | 게임 서버의 모델 목록과 같은 칸, 그리고 `allows_adult` | 공용 파일(`ai_core/model_catalog.toml`)을 들여온 사본과 이 서버의 스위치(켜짐, `allows_adult`). 회사의 대체 모델은 없다 |
 | `message_states` | `message_id`, `place_id`, 시각(시간대), 소지품, 가 본 곳, 상대의 차림, 호감도 | 상태가 바뀐 말에만 둔다. [장소와 소지품](#장소와-소지품). 호감도와 차림도 가지마다 다르므로 같은 행에 둔다 |
 | `illustration_unlocks` | `owner_id`, `character_source`(서비스, 자산 id), `illustration_id`, 처음 연 시각 | 계정마다의 기록. 가지를 바꾸거나 대화를 지워도 남는다. 갤러리(C7)가 읽는다 |
 | `messages` | `id`, `conversation_id`, `parent_id`, `role`, `content`, `status`, `suggestions`, `edited`, 시각 | `status`: `complete`, `partial`, `failed`. `parent_id` 가 같은 것이 서로 대안 |
@@ -291,10 +293,11 @@ chat 도 19금을 허용한다. 조건과 대가:
 
 ## 모델
 
-- 모델은 **대화마다** 저장하고, 사용자가 언제든 바꿀 수 있다. 프롬프트는 말마다 DB 에서 다시 만드니 모델을 바꿔도 대화가 이어진다.
+- 모델은 **대화마다** 저장하고, 사용자가 언제든 바꿀 수 있다(`PUT /conversations/{id}/model`). 프롬프트는 말마다 DB 에서 다시 만드니 모델을 바꿔도 대화가 이어진다.
+- 새 대화는 지난번 대화의 모델을 쓴다. 그 모델을 이 대화에 고를 수 없으면(꺼졌다, 은퇴했다, 성인 대화에 안 된다) 모델 없이 시작하고 화면이 고르게 한다. 사람이 직접 고른 모델을 쓸 수 없으면 422 다(2026-10-22).
 - 말마다 청구가 그 순간의 모델의 가격표로 나간다. 바꾸는 순간부터 새 값이 적용된다.
 - 모델마다 문맥 길이와 출력 한도가 다르다. 토큰 예산은 대화의 모델 등급에서 읽는다.
-- 모델이 끝났거나 판매가 중지되면 몰래 다른 모델로 바꾸지 않는다. 사용자에게 알리고 고르게 한다. TRPG 의 원칙과 같고, 알림은 알림함으로 보낸다.
+- 모델이 끝났거나 판매가 중지되면 몰래 다른 모델로 바꾸지 않는다. 사용자에게 알리고 고르게 한다. TRPG 의 원칙과 같고, 알림은 알림함으로 보낸다. 대화는 끝난 모델을 가리킨 채로 두고 읽을 때 `usable` 이 거짓으로 보인다. 그래서 게임 서버와 달리 회사의 대체 모델이 없다.
 - 요약 모델과 임베딩 모델은 사용자가 고르는 모델과 별개로 서비스가 정한다.
 - 공급자 호출은 어댑터로 분리하고, 같은 인터페이스로 로컬 모델과 외부 API 를 바꿔 끼울 수 있게 한다. 이 코드는 `shared/` 로 뽑는 일([공용 코드 규칙](shared-code.md))이 먼저다.
 
@@ -362,10 +365,10 @@ story 는 `story-server` 가 맡는다(2026-10-21). 규칙은 [story 서버 설�
 
 작은 조각부터 올린다. 각 조각이 PR 하나 이상이다.
 
-0. **준비.** `shared/server-core` 위에 서버의 뼈대(인증, 관측, 상태 확인)를 세운다([공용 코드 규칙의 언제 뽑는가](shared-code.md#언제-뽑는가)). `app/ai` 는 `shared/ai-core` 로 옮겼다(#499 의 1단계). chat 은 경로 의존으로 받는다. 모델 목록은 파일 원본(`ai_core/model_catalog.toml`)으로 바꿨다(2단계). chat 은 모델을 부를 때 그 파일을 자기 표에 들여온다. 결제 서버에 chat 의 서명 비밀과 가격표 머리(`chat`)를 더한다. 포트(8005), DB 역할 스크립트(`09-chat-role.sql`), 프록시 주소를 확정한다. 판 가져오기 API 의 모양을 정한다([자산 가져오기](#자산-가져오기)).
+0. **준비.** `shared/server-core` 위에 서버의 뼈대(인증, 관측, 상태 확인)를 세운다([공용 코드 규칙의 언제 뽑는가](shared-code.md#언제-뽑는가)). `app/ai` 는 `shared/ai-core` 로 옮겼다(#499 의 1단계). chat 은 경로 의존으로 받는다. 모델 목록은 파일 원본(`ai_core/model_catalog.toml`)으로 바꿨다(2단계). chat 은 그 파일을 자기 표에 들여온다(`app/catalog/sync.py`, 한 번의 말의 첫 PR). 결제 서버에 chat 의 서명 비밀과 가격표 머리(`chat`)를 더한다. 포트(8005), DB 역할 스크립트(`09-chat-role.sql`), 프록시 주소를 확정한다. 판 가져오기 API 의 모양을 정한다([자산 가져오기](#자산-가져오기)).
 1. **캐릭터와 대화.** 가져온 캐릭터, 페르소나, 대화 만들기와 목록. 성인 등급 거르기(`allowed_ratings`)를 함께 넣는다.
-2. **한 번의 말.** 스트리밍, 홀드와 확정, 트리의 기본, 한 대화 한 생성. 다시 생성. 대화의 핵심은 `app/conversation/` 에 모은다([story-server 와 나눈 선](#story-server-와-나눈-선)).
-3. **조작.** 최근 대화 창, 다음 답 추천, 모델 바꾸기, 이어서 출력.
+2. **한 번의 말.** 스트리밍, 홀드와 확정, 트리의 기본, 한 대화 한 생성. 다시 생성. 대화의 핵심은 `app/conversation/` 에 모은다([story-server 와 나눈 선](#story-server-와-나눈-선)). PR 셋으로 나눈다(2026-10-22): 모델 목록과 대화의 모델(했다), 결제 서버를 부르는 것(홀드, 확정, 돌려주기, 가격 목록. 게임 서버의 것을 옮기고 나중에 server-core 로), 말을 보내는 SSE 와 다시 생성.
+3. **조작.** 최근 대화 창, 다음 답 추천, 이어서 출력. 모델 바꾸기는 한 번의 말의 첫 PR 에 넣었다(새 대화가 지난번 모델을 쓸 수 없을 때 고를 길이 있어야 해서).
 4. **세계관, 로어북, 지도, 물건 가져오기.** 장소와 물건 항목을 포함한다. 검색은 아직 없다.
 5. **장소와 소지품.** 메시지마다의 상태, 이동, 물건 쓰기와 건네기, 위젯. 규칙의 순수 함수를 `shared/` 로 뽑는다.
 6. **기억.** 굴리는 요약, 기억 메모.

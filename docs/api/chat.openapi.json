@@ -150,12 +150,25 @@
       },
       "ConversationCreate": {
         "additionalProperties": false,
-        "description": "대화를 시작할 때 받는 값. 캐릭터와 시작 상황만 고르고 들어간다(2026-10-20).\n\npersona_id 는 셋 중 하나다.\n  - 보내지 않으면: 지난번 대화의 페르소나를 쓴다. 지난번에 없었거나 그 페르소나가 지워졌으면 페르소나 없이 시작한다\n  - null 을 보내면: 페르소나 없이 시작한다\n  - id 를 보내면: 그 페르소나다. 없거나 남의 것이면 404 다",
+        "description": "대화를 시작할 때 받는 값. 캐릭터와 시작 상황만 고르고 들어간다(2026-10-20). 페르소나와 모델은 지난번 것을 쓴다.\n\npersona_id 는 셋 중 하나다.\n  - 보내지 않으면: 지난번 대화의 페르소나를 쓴다. 지난번에 없었거나 그 페르소나가 지워졌으면 페르소나 없이 시작한다\n  - null 을 보내면: 페르소나 없이 시작한다\n  - id 를 보내면: 그 페르소나다. 없거나 남의 것이면 404 다\n\nmodel 도 셋 중 하나다.\n  - 보내지 않으면: 지난번 대화의 모델을 쓴다. 지난번에 없었거나 이 대화에 고를 수 없으면 모델 없이 시작한다\n  - null 을 보내면: 모델 없이 시작한다. 말을 보내기 전에 고른다\n  - 이름표를 보내면: 그 모델이다. 이 대화에 고를 수 없으면 422 model_unavailable 이다",
         "properties": {
           "character_id": {
             "format": "uuid",
             "title": "Character Id",
             "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 48,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
           },
           "persona_id": {
             "anyOf": [
@@ -206,6 +219,16 @@
             "title": "Messages",
             "type": "array"
           },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationModelOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "persona": {
             "anyOf": [
               {
@@ -235,11 +258,58 @@
           "start",
           "character",
           "persona",
+          "model",
           "messages",
           "created_at",
           "updated_at"
         ],
         "title": "ConversationDetail",
+        "type": "object"
+      },
+      "ConversationModelOut": {
+        "description": "대화에 싣는 모델. usable 이 거짓이면 이 대화에 더는 고를 수 없는 모델이다\n(꺼졌다, 은퇴했다, 성인 등급의 대화에 쓸 수 없게 됐다).\n\n화면이 \"모델을 다시 골라 주세요\"를 보인다. 서버는 몰래 다른 모델로 바꾸지 않는다.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "retires_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retires On"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "usable": {
+            "title": "Usable",
+            "type": "boolean"
+          },
+          "vendor": {
+            "title": "Vendor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "display_name",
+          "vendor",
+          "grade",
+          "retires_on",
+          "usable"
+        ],
+        "title": "ConversationModelOut",
         "type": "object"
       },
       "ConversationPage": {
@@ -280,6 +350,16 @@
             "title": "Id",
             "type": "string"
           },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationModelOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -294,11 +374,22 @@
           "id",
           "title",
           "character",
+          "model",
           "created_at",
           "updated_at"
         ],
         "title": "ConversationSummary",
         "type": "object"
+      },
+      "Grade": {
+        "description": "보이는 분류. 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 모델 목록의 파일에 적는다.",
+        "enum": [
+          "basic",
+          "standard",
+          "premium"
+        ],
+        "title": "Grade",
+        "type": "string"
       },
       "HTTPValidationError": {
         "properties": {
@@ -388,6 +479,86 @@
           "created_at"
         ],
         "title": "MessageOut",
+        "type": "object"
+      },
+      "ModelChoice": {
+        "additionalProperties": false,
+        "description": "대화의 모델을 바꿀 때 받는 값.",
+        "properties": {
+          "model": {
+            "maxLength": 48,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "title": "ModelChoice",
+        "type": "object"
+      },
+      "ModelList": {
+        "description": "고를 수 있는 모델들. 회사, 이름표 순서다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModelOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ModelList",
+        "type": "object"
+      },
+      "ModelOut": {
+        "description": "고를 수 있는 모델 하나.",
+        "properties": {
+          "allows_adult": {
+            "title": "Allows Adult",
+            "type": "boolean"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "retires_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retires On"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "vendor": {
+            "title": "Vendor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "display_name",
+          "vendor",
+          "grade",
+          "allows_adult",
+          "retires_on"
+        ],
+        "title": "ModelOut",
         "type": "object"
       },
       "PersonaOut": {
@@ -641,7 +812,7 @@
         "x-audience": "user"
       },
       "post": {
-        "description": "대화를 시작한다. 캐릭터의 마지막 판과 페르소나를 가져와 고정한다.",
+        "description": "대화를 시작한다. 캐릭터의 마지막 판과 페르소나를 가져와 고정한다. 모델은 지난번 것이거나 고른 것이다.",
         "operationId": "start_conversation_api_v1_chat_conversations_post",
         "requestBody": {
           "content": {
@@ -778,6 +949,66 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/chat/conversations/{conversation_id}/model": {
+      "put": {
+        "description": "대화의 모델을 바꾼다. 다음 말부터 그 모델로 쓰고 그 모델의 값으로 청구한다. 바꾼 모델을 돌려준다.",
+        "operationId": "change_model_api_v1_chat_conversations__conversation_id__model_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationModelOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Model",
+        "tags": [
+          "conversations"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/chat/me": {
       "get": {
         "description": "토큰이 유효하면 그 주인의 ID 를 돌려준다.",
@@ -802,6 +1033,34 @@
         "summary": "Read Me",
         "tags": [
           "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/models": {
+      "get": {
+        "description": "대화에 고를 수 있는 모델들. 회사, 이름표 순서다.",
+        "operationId": "list_models_api_v1_chat_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Models",
+        "tags": [
+          "models"
         ],
         "x-audience": "user"
       }

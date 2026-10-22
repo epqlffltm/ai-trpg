@@ -3,7 +3,7 @@
 여러 서비스가 같은 코드나 형식을 쓸 때 지킬 것을 적는다. 서비스의 구조는 [서비스 구조 명세](services.md)에 있다.
 
 - 기준: `main` `4b383c2` (2026-10-18)
-- 패키지는 둘이다. `shared/server-core`(#588, [서버의 공통부](#서버의-공통부-sharedserver-core))는 알림 서버, asset 서버, chat 서버가 쓴다. `shared/ai-core`(#499, [AI 호출](#ai-호출-sharedai-core))는 게임 서버가 쓴다. `shared/conversation-core` 는 아직 없다.
+- 패키지는 둘이다. `shared/server-core`(#588, [서버의 공통부](#서버의-공통부-sharedserver-core))는 알림 서버, asset 서버, chat 서버가 쓴다. `shared/ai-core`(#499, [AI 호출](#ai-호출-sharedai-core))는 게임 서버와 chat 서버가 쓴다(chat 은 지금 모델 목록의 파일만). `shared/conversation-core` 는 아직 없다.
 - 2026-10-19: 자산은 asset-server 가 원본을 갖는다는 결정을 반영했다(원칙 1·2, 공유 표, 템플릿, 열린 질문).
 - 2026-10-19: `app/ai` 를 뽑는 방식을 정했다(#380). 모델 목록, `shared/` 를 가져오는 법, CI, 뽑는 때다([정한 것](#정한-것)). "AI 호출"의 `app/ai` 표는 `main` `0930cf9` 기준이다.
 - 2026-10-20: 제작자가 쓰는 소개 글(HTML 과 인라인 CSS)을 거르는 규칙을 세 서비스에 하나로 정했다([소개 글의 HTML](#소개-글의-html)).
@@ -88,7 +88,7 @@ FastAPI 서버들이 함께 쓰는 공통부다(#588). 알림 서버와 asset �
 게임 서버의 `app/ai` 를 폴더째 옮겼다(2026-10-22, #499 의 1단계). 패키지 이름은 `ai_core` 다. 창구(OpenAI 호환, Claude, Gemini, Z.ai, DeepInfra), 스트리밍, 토큰 예산, 원가, 재시도 예산, 임베더, 호출 기록의 모양이 있다. 쓰는 법은 [shared/ai-core/README.md](../../shared/ai-core/README.md) 에 있다.
 옮기기 전에 `app/ai` 가 다른 폴더에 기대던 곳(기준 `0930cf9`. 21개 파일 가운데 7개)을 trpg-server 안에서 정리했다(아래 표).
 `shared/ai-core/tests/test_boundary.py` 가 `ai_core` 에서 서버의 모듈(`app.*`), 다른 공용 패키지(`server_core` 등), 관측의 코드(`opentelemetry`)를 가져오면 실패한다. 예외는 없다.
-2단계(모델 목록을 버전 붙인 파일 원본으로 바꾸고 서비스마다 들여오기)는 2026-10-22 에 했다. 원본은 `ai_core/model_catalog.toml`, 읽고 모양을 보는 것은 `ai_core/catalog_file.py` 다. 창구에 맞는 칸과 방식, 분류(`Grade`)의 규칙도 `catalog_contract` 로 올렸다. 게임 서버는 `app/catalog/sync.py` 로 들여온다. chat 과 story 는 모델을 부르기 시작할 때 같은 파일을 자기 표에 들여온다.
+2단계(모델 목록을 버전 붙인 파일 원본으로 바꾸고 서비스마다 들여오기)는 2026-10-22 에 했다. 원본은 `ai_core/model_catalog.toml`, 읽고 모양을 보는 것은 `ai_core/catalog_file.py` 다. 창구에 맞는 칸과 방식, 분류(`Grade`)의 규칙도 `catalog_contract` 로 올렸다. 게임 서버는 `app/catalog/sync.py` 로 들여온다. chat 도 같은 이름의 파일로 들여온다(게임 서버의 것을 줄여 옮겼다. 회사의 대체 모델이 없고 `allows_adult` 가 있다). 들여오는 코드가 두 벌인 것은 story 가 생겨 세 벌이 될 때 공용으로 올릴지 정한다(server-core 나 ai-core 의 DB 쪽). story 는 모델을 부르기 시작할 때 같은 파일을 들여온다.
 
 | `app/ai` 가 기대던 곳(옮기기 전) | 무엇을 가져왔나 | 정리한 것 |
 | --- | --- | --- |
