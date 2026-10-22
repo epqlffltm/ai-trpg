@@ -28,8 +28,9 @@ def make_character(
     greeting: str = '어서 와요. 찾는 책이 있나요?',
     rating: Rating = Rating.ALL,
     starts: list[StartDocument] | None = None,
+    world: dict | None = None,
 ) -> CharacterCopy:
-    """asset 서버가 내주는 캐릭터의 마지막 판."""
+    """asset 서버가 내주는 캐릭터의 마지막 판. world 는 지도와 물건의 칸이다(places, paths, start_place, …)."""
     document = CharacterDocument(
         format=1,
         name=name,
@@ -42,6 +43,7 @@ def make_character(
         starts=STARTS if starts is None else starts,
         image_id=uuid.UUID('0b7c6f1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e'),
         rating=rating,
+        **(world or {}),
     )
     return CharacterCopy(
         id=character_id or uuid.uuid4(),

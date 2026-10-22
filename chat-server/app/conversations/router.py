@@ -57,6 +57,9 @@ from app.conversations.service import (
 )
 from app.core.dependencies import CurrentViewer, Now, Paging, Session
 from app.ratings import Rating
+from app.world import service as world
+from app.world.schemas import state_out
+from app.world.state import WorldState
 
 router = APIRouter(prefix='/conversations', tags=['conversations'])
 # 말 하나를 다루는 주소(고치기). 말을 보내는 SSE 주소들은 app/turns/router.py 에 있다
@@ -170,8 +173,9 @@ def to_detail(
     models: dict[str, AiModel],
     book: PriceBook | None,
     now: datetime,
+    state: WorldState,
 ) -> ConversationDetail:
-    """대화 하나를 응답의 모양으로."""
+    """대화 하나를 응답의 모양으로. state 는 가지 끝의 장소와 소지품이다."""
     conversation, character, persona = row
     return ConversationDetail(
         id=conversation.id,
@@ -186,6 +190,7 @@ def to_detail(
         persona=to_persona(persona),
         model=conversation_model(conversation, character, models, book, now),
         messages=[to_path_message(message, alternatives) for message in messages],
+        state=state_out(state),
         generating=service.is_generating(conversation, now),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
@@ -315,7 +320,8 @@ async def read_conversation(
     messages = await service.read_messages(session, row[0])
     alternatives = await service.message_alternatives(session, row[0], messages)
     models = await service.conversation_models(session, [row[0]])
-    return to_detail(row, messages, alternatives, models, book, now)
+    state = await world.state_on(session, world.document_of(row[1]), [message.id for message in messages])
+    return to_detail(row, messages, alternatives, models, book, now, state)
 
 
 @router.put('/{conversation_id}/model', response_model=ConversationModelOut, status_code=status.HTTP_200_OK)

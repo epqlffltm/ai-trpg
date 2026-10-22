@@ -305,6 +305,9 @@
           "start": {
             "$ref": "#/components/schemas/StartOut"
           },
+          "state": {
+            "$ref": "#/components/schemas/StateOut"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -323,6 +326,7 @@
           "persona",
           "model",
           "messages",
+          "state",
           "generating",
           "created_at",
           "updated_at"
@@ -479,6 +483,25 @@
           "status"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "HoldingOut": {
+        "description": "가진 물건 하나와 그 수.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "item": {
+            "title": "Item",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "count"
+        ],
+        "title": "HoldingOut",
         "type": "object"
       },
       "ItemDocument": {
@@ -775,6 +798,30 @@
           "next"
         ],
         "title": "ModelOut",
+        "type": "object"
+      },
+      "MoveAction": {
+        "additionalProperties": false,
+        "description": "지도에서 장소를 골라 간다. 지금 있는 곳과 길로 바로 이어진 곳만 된다.",
+        "properties": {
+          "kind": {
+            "const": "move",
+            "title": "Kind",
+            "type": "string"
+          },
+          "place": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "place"
+        ],
+        "title": "MoveAction",
         "type": "object"
       },
       "NextPriceOut": {
@@ -1086,6 +1133,48 @@
         "title": "StartOut",
         "type": "object"
       },
+      "StateOut": {
+        "description": "지금 보고 있는 가지의 끝의 상태. place 는 지금 있는 장소(지도가 없으면 null),\nminutes 는 대화를 시작한 뒤 흐른 시간(분), visited 는 가 본 장소들이다(화면이 안개를 그린다).",
+        "properties": {
+          "inventory": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingOut"
+            },
+            "title": "Inventory",
+            "type": "array"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place"
+          },
+          "visited": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Visited",
+            "type": "array"
+          }
+        },
+        "required": [
+          "place",
+          "minutes",
+          "inventory",
+          "visited"
+        ],
+        "title": "StateOut",
+        "type": "object"
+      },
       "Tier": {
         "description": "결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).\n\n결제 서버가 모르는 등급을 보내면 목록 전체를 읽지 못한다(503).\n그래서 결제 서버는 게임 서버와 chat 서버가 등급을 안 뒤에 그 줄을 넣는다.",
         "enum": [
@@ -1365,6 +1454,62 @@
         "summary": "Read Conversation",
         "tags": [
           "conversations"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/conversations/{conversation_id}/actions": {
+      "post": {
+        "description": "행동한다. 지금은 지도에서 이동(kind move)뿐이다. 서버가 갈 수 있는지 보고 상태를 바꾼 뒤, 모델의 반응을 흘려보낸다.\nturn 의 user_message 가 행동 말(role action)이다. 반응을 받으니 한 번 청구한다. SSE 의 모양은 말 보내기와 같다.",
+        "operationId": "act_api_v1_chat_conversations__conversation_id__actions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "SSE. app/turns/schemas.py 의 메시지들"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Act",
+        "tags": [
+          "messages"
         ],
         "x-audience": "user"
       }

@@ -38,10 +38,14 @@ from app.ratings import Rating
 
 
 class Role(enum.StrEnum):
-    """누가 한 말인가. 행동(지도에서 이동, 물건 건네기)은 그 단계에서 더한다."""
+    """
+    누가 한 말인가. action 은 사람이 한 행동(지도에서 이동, 물건 쓰기, 건네기)이다.
+    행동 말은 서버가 쓴 글이고, 그 뒤의 상태가 app/world 의 message_states 에 있다.
+    """
 
     USER = 'user'
     ASSISTANT = 'assistant'
+    ACTION = 'action'
 
 
 class MessageStatus(enum.StrEnum):

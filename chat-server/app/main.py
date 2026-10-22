@@ -56,6 +56,7 @@ from app.turns import router as messages
 from app.turns import settler
 from app.turns.providers import build_router
 from app.turns.service import ModelRequiredError, NotContinuableError, NotRegenerableError, TurnDeclinedError
+from app.world.moves import MoveRefusedError
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/chat'
@@ -63,7 +64,7 @@ API_PREFIX = '/api/v1/chat'
 # SSE 로 답하는 주소들. 요청의 span 과 시간 메트릭에서 빼고 sse_* 로 센다(server_core/observability/streams.py).
 # 프록시도 이 주소에서 버퍼링을 끈다(docker/nginx/templates/api.inc.template)
 STREAMS = StreamRoutes.of(
-    r'/api/v1/chat/conversations/[^/]+/messages',
+    r'/api/v1/chat/conversations/[^/]+/(messages|actions)',
     r'/api/v1/chat/messages/[^/]+/(regenerate|continue)',
 )
 
@@ -205,6 +206,7 @@ def create_app(
     app.add_exception_handler(ModelRequiredError, messages.handle_model_required)
     app.add_exception_handler(NotRegenerableError, messages.handle_not_regenerable)
     app.add_exception_handler(NotContinuableError, messages.handle_not_continuable)
+    app.add_exception_handler(MoveRefusedError, messages.handle_move_refused)
     app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
     app.add_exception_handler(MessageNotFoundError, conversations.handle_message_not_found)
     app.add_exception_handler(NotEditableError, conversations.handle_not_editable)

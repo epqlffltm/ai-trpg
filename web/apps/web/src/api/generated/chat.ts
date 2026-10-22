@@ -50,6 +50,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{conversation_id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Act
+         * @description 행동한다. 지금은 지도에서 이동(kind move)뿐이다. 서버가 갈 수 있는지 보고 상태를 바꾼 뒤, 모델의 반응을 흘려보낸다.
+         *     turn 의 user_message 가 행동 말(role action)이다. 반응을 받으니 한 번 청구한다. SSE 의 모양은 말 보내기와 같다.
+         */
+        post: operations["act_api_v1_chat_conversations__conversation_id__actions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{conversation_id}/branch": {
         parameters: {
             query?: never;
@@ -439,6 +460,7 @@ export interface components {
             model: components["schemas"]["ConversationModelOut"] | null;
             persona: components["schemas"]["PersonaOut"] | null;
             start: components["schemas"]["StartOut"];
+            state: components["schemas"]["StateOut"];
             /** Title */
             title: string;
             /**
@@ -517,6 +539,16 @@ export interface components {
         HealthResponse: {
             /** Status */
             status: string;
+        };
+        /**
+         * HoldingOut
+         * @description 가진 물건 하나와 그 수.
+         */
+        HoldingOut: {
+            /** Count */
+            count: number;
+            /** Item */
+            item: string;
         };
         /**
          * ItemDocument
@@ -646,6 +678,19 @@ export interface components {
             tier: components["schemas"]["Tier"] | null;
             /** Vendor */
             vendor: string;
+        };
+        /**
+         * MoveAction
+         * @description 지도에서 장소를 골라 간다. 지금 있는 곳과 길로 바로 이어진 곳만 된다.
+         */
+        MoveAction: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "move";
+            /** Place */
+            place: string;
         };
         /**
          * NextPriceOut
@@ -793,6 +838,21 @@ export interface components {
             title: string;
         };
         /**
+         * StateOut
+         * @description 지금 보고 있는 가지의 끝의 상태. place 는 지금 있는 장소(지도가 없으면 null),
+         *     minutes 는 대화를 시작한 뒤 흐른 시간(분), visited 는 가 본 장소들이다(화면이 안개를 그린다).
+         */
+        StateOut: {
+            /** Inventory */
+            inventory: components["schemas"]["HoldingOut"][];
+            /** Minutes */
+            minutes: number;
+            /** Place */
+            place: string | null;
+            /** Visited */
+            visited: string[];
+        };
+        /**
          * Tier
          * @description 결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).
          *
@@ -938,6 +998,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    act_api_v1_chat_conversations__conversation_id__actions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveAction"];
+            };
+        };
+        responses: {
+            /** @description SSE. app/turns/schemas.py 의 메시지들 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
