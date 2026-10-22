@@ -2189,6 +2189,20 @@ PC 전용. 1단계에는 운영자가 쓸 만큼(위 표의 칸 전부, 꾸밈�
 - **앱은 웹을 감싸서 낸다**(Capacitor 같은 방식). 가장 싸게 가는 길이라 골랐다. 안드로이드 전용 개발은 하지 않는다([플랫폼과 제품 방향](platform.md)).
 - **PC 와 모바일의 화면은 다르게 둘 수 있다.** 다만 처음에는 반응형 한 벌로 만들고, 구조가 정말 다른 화면만 뷰를 나눈다.
 
+### 시작할 때 정한 것
+
+2026-10-22 에 정했다(#290). 첫 PR 은 로컬 VM 리허설(#622) 뒤에 만든다.
+
+| 정할 것 | 정한 것 | 고르지 않은 것과 까닭 |
+| --- | --- | --- |
+| 폴더와 패키지 관리자 | `web/` 에 npm workspaces. 앱은 `web/apps/web`(Vite, React, TypeScript), 공통 구성요소는 `web/packages/ui`. Node 24(게시판 서버의 `.nvmrc` 와 같다) | pnpm: 빠르지만 저장소에 도구가 하나 는다(게시판은 npm). workspaces 없이 한 앱: `packages/ui` 를 나중에 떼기로 한 것과 어긋난다 |
+| nginx 가 내주는 법 | 프록시의 이미지에 함께 굽는다. 멀티 스테이지로 Node 에서 빌드하고 `nginx-unprivileged` 에 `dist` 를 담는다. compose 의 `proxy` 가 `image` 에서 `build` 로 바뀐다 | 빌드 컨테이너와 볼륨: 움직이는 것이 둘이고 차례를 맞춰야 한다. PC 에서 빌드한 것을 붙이기: VM 에도 Node 가 있어야 하고 로컬과 staging 이 갈린다 |
+| 캐시와 경로 | 해시가 붙은 파일(`/assets/`)은 오래 캐시하고, `index.html` 은 캐시하지 않는다. `/api/` 와 그림이 아닌 주소는 `index.html` 로 돌린다(SPA 의 경로) | - |
+| 개발 중에 붙는 법 | Vite 의 개발 서버가 `/api/` 를 로컬 compose 의 프록시(`127.0.0.1:8080`)로 넘긴다 | 서버마다 주소를 적는다: 주소의 갈래와 요청 수 제한이 실제와 달라진다 |
+| 화면의 CSP(시작값) | `default-src 'self'`. 스크립트, 연결(SSE), 그림은 같은 출처만. `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`. 인라인 스크립트는 쓰지 않는다 | 제작자가 꾸민 소개(인라인 CSS 의 HTML)를 그리는 법은 소개 화면(C2, D1)을 만들 때 정한다. 샌드박스 iframe 이 후보다 |
+| 시험과 CI | 타입 검사(tsc), 린트(ESLint), 단위 시험(Vitest), 빌드. `.github/workflows/web.yml` 과 `changed-servers.sh` 의 `web` | 끝에서 끝까지(Playwright): 한 판이 화면으로 이어질 때 CI 의 stack 에 붙인다. 첫 PR 이 너무 커진다 |
+| 첫 PR 의 범위 | 뼈대(빌드, 프록시, CI), 로그인(A2, refresh 를 한 번에 하나만 #30), 첫 화면(A1: 서비스마다의 이어하기와 공개 목록) | Stitch 의 시안을 먼저: 시안을 받을 때까지 화면 일이 멈춘다. 시안은 따로 받아 `packages/ui` 의 색, 글꼴, 구성요소에만 입힌다 |
+
 ### 두 가지 축
 
 | 축 | 갈리는 것 | 나누는 방법 |
