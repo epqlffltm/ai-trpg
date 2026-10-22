@@ -8,7 +8,7 @@
 | --- | --- |
 | #564 | 뼈대 |
 | #565 | 계정 페르소나. 사용자 API. 서버끼리 사본 내주기는 다음 조각 |
-| #566 | 그림. 올리기, 디코딩 격리, 내주기(nginx 의 `X-Accel-Redirect`) |
+| #566 | 그림. 올리기, 디코딩 격리, 내주기(nginx 의 `X-Accel-Redirect`, 지금은 주인만). 붙은 곳의 확인과 남이 보는 규칙, 탈퇴 때 지우기는 다음 조각 |
 | #567 | 캐릭터와 게시. 소개 HTML 거르기, 초안과 판, 공개 목록(지금). 서버끼리 판 내주기는 다음 조각 |
 
 정해 둔 값: 포트 `8006`, 토큰의 대상 `ai-trpg-asset`, DB 계정과 스키마 `asset`(테스트는 `asset_test`), 주소 `/api/v1/asset/`.
@@ -75,6 +75,15 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `CHAT_SERVER_SECRET` | 비어 있음(받지 않음) | chat 서버가 페르소나와 판을 가져갈 때 서명하는 비밀([다른 서버에 내주기](#다른-서버에-내주기)). `chat-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상. 비밀값이다 |
 | `AUTH_SERVER_SECRET` | 비어 있음(받지 않음) | 인증 서버가 [탈퇴](#탈퇴)를 알릴 때 서명하는 비밀. `auth-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상이고 다른 비밀과 달라야 한다. 비밀값이다 |
 
+| `IMAGE_STORE_ENDPOINT` | 비어 있음(저장소 없음) | [그림](#그림) 저장소의 주소. compose 가 `http://object-store:8333`(로컬), S3 의 지역 주소(staging)를 넘긴다. 비어 있으면 그림 올리기와 내주기가 503 이다 |
+| `IMAGE_STORE_REGION` | `ap-northeast-2` | 서명에 넣는 지역. SeaweedFS 는 아무 값이나 받는다 |
+| `IMAGE_STORE_BUCKET`, `IMAGE_STORE_ACCESS_KEY_ID`, `IMAGE_STORE_SECRET_ACCESS_KEY` | 비어 있음 | 버킷과 키. 주소를 적었으면 셋 다 적어야 뜬다. 비밀 키는 루트 `.env` 에 있다(compose 가 넘긴다). 비밀값이다 |
+| `IMAGE_STORE_TIMEOUT_SECONDS` | `10` | 저장소에 넣는 요청의 시간 상한 |
+| `IMAGE_MAX_BYTES` | `10485760`(10MB) | 올리는 그림의 크기 상한. 프록시의 상한은 11MB 다 |
+| `IMAGE_MAX_PIXELS` | `40000000` | 가로 × 세로의 상한. 풀기 전에 머리만 보고 거절한다 |
+| `IMAGE_DECODE_MEMORY_MB`, `IMAGE_DECODE_CPU_SECONDS`, `IMAGE_DECODE_WALL_SECONDS` | `768`, `10`, `15` | 그림을 여는 따로 된 프로세스의 상한(주소 공간, CPU 시간, 벽시계) |
+| `IMAGE_DECODE_CONCURRENCY` | `2` | 한꺼번에 여는 수. 메모리는 상한 × 이 수까지 쓴다 |
+
 부르는 서버마다 비밀을 따로 둔다. story 와 TRPG 는 그 서버가 가져가기 시작할 때 `STORY_SERVER_SECRET`, `TRPG_SERVER_SECRET` 으로 더한다.
 
 ## 상태 확인
@@ -109,6 +118,8 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/characters/{id}/versions/{number}` | 판 하나(굳힌 문서까지) | access 토큰 |
 | GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서). 볼 수 없으면 404 | 없어도 된다 |
+| POST | `/api/v1/asset/images` | [그림](#그림) 올리기. 201. 본문은 그림 파일의 바이트(PNG, JPEG, WebP). 형식이 아니면 415 `image_format`, 열 수 없으면 422 `image_unreadable`, 크면 413, 저장소를 쓸 수 없으면 503 `image_store_unavailable` | access 토큰 |
+| GET | `/api/v1/asset/images/{id}` | 그림 내주기. 볼 수 있으면 본문 없이 200 과 `X-Accel-Redirect`, `X-Image-Source`(프록시가 그림을 내준다). 없거나 볼 수 없으면 404 | 없어도 된다(지금은 주인만 본다) |
 | GET | `/api/v1/asset/service/{caller}/personas/{id}` | [다른 서버에](#다른-서버에-내주기) 페르소나의 사본과 `revision`. 토큰의 주인의 것만(아니면 404) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/personas/{id}/revision` | 페르소나의 지금 `revision`(`{id, revision}`) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/characters/{id}/latest` | 쓸 수 있는 캐릭터의 마지막 판(`{id, version, rating, published_at, document}`) | 서버의 서명 + access 토큰 |
@@ -185,6 +196,43 @@ chat 의 상대가 되는 캐릭터다(#567, [설계](../docs/architecture/asset
   로그인하지 않은 사람과 성인 확인을 하지 않은 사람에게 성인 캐릭터는 없는 것이다(404). 토큰을 보냈는데 틀렸으면 401 이다.
 - 지우면 판도 함께 지워진다. 이미 가져간 대화는 사본으로 돈다.
 - chat(나중에 story)은 [다른 서버에 내주기](#다른-서버에-내주기)의 주소로 마지막 판을 가져가고, 지금의 번호를 묻는다.
+
+### 그림
+
+배경, 캐릭터, 프로필, 소개 글 안의 그림이다(#566, [설계](../docs/architecture/asset-server.md#그림)). `app/images/`.
+
+**올리기.** `POST /api/v1/asset/images`, 본문은 그림 파일 그대로다(multipart 가 아니다). 화면은 `fetch(url, {method: 'POST', body: file})` 로 보낸다.
+
+1. 로그인을 먼저 본다. 토큰이 없으면 본문을 읽지 않고 401 이다.
+2. 크기를 본다(`IMAGE_MAX_BYTES`). 머리말(Content-Length)이 넘는다고 하면 읽지 않고 413, 읽다가 넘어도 413 이다.
+3. 형식을 파일의 머리로 고른다(PNG, JPEG, WebP). 요청의 Content-Type 과 확장자는 보지 않는다. 아니면 415 다.
+4. **따로 된 프로세스에서 연다**(`app/images/isolation.py`, `app/images/decoder.py`). `python -I` 로 띄워 서버의 코드와 환경 변수를 읽지 않는다.
+   그 프로세스가 맨 처음 주소 공간과 CPU 시간의 상한을 스스로 걸고, 서버는 벽시계의 상한을 걸어 넘으면 죽인다. 한꺼번에 `IMAGE_DECODE_CONCURRENCY` 개까지 연다.
+   - 픽셀 수(`IMAGE_MAX_PIXELS`)는 Pillow 가 풀기 전에 머리만 보고 거절한다(압축 폭탄).
+   - 머리가 고른 형식과 연 형식이 같아야 한다.
+   - **다시 인코딩한다.** EXIF(위치 정보 등), ICC, 글 조각, 그림 뒤에 붙인 바이트가 없어진다. 사진의 방향(EXIF orientation)은 지우기 전에 픽셀에 적용한다. JPEG 과 WebP 는 품질 90 이다.
+   - 움직이는 그림(애니메이션 WebP, APNG)은 첫 장만 남는다.
+   - 열 수 없으면(망가졌다, 형식이 다르다, 상한을 넘었다, 시간이 다 됐다) 모두 422 `image_unreadable` 이다. 까닭은 나누지 않는다.
+5. 저장소에 그림의 id 로 넣는다. 형식(`Content-Type`)을 객체에 적는다. 그다음 행(`images`: 주인, 형식, 바이트, 너비와 높이)을 적는다.
+   여는 일과 넣는 일이 끝난 뒤에야 DB 연결을 잡는다. 넣은 뒤 행을 적지 못하면 아무도 가리키지 않는 객체가 저장소에 남는다(내주지 않는다).
+6. 답: `{id, format, byte_size, width, height, url, created_at}`. `url` 은 내주는 주소(`/api/v1/asset/images/{id}`)다. 소개 글의 img 는 이 모양만 받는다.
+
+**내주기.** `GET /api/v1/asset/images/{id}`
+
+- 볼 수 있으면 본문 없이 200 과 두 머리말을 답한다. `X-Accel-Redirect: /_images/{id}`(프록시의 내부 위치), `X-Image-Source: <저장소의 GetObject 를 서명한 주소, 60초>`.
+  프록시가 그 주소로 받아 그림의 id 로 캐시하고 내준다(`docker/nginx/templates/api.inc.template`). 프록시 없이 부르면 빈 200 이다.
+- 지금은 **주인만** 본다. 남, 토큰 없음, 없는 그림은 같은 404 다. 공개 캐릭터에 붙은 그림을 남이 보는 규칙은 다음 조각이다.
+- 브라우저의 img 는 Authorization 머리말을 싣지 못한다. 주인만 보는 그림은 화면이 토큰을 실어 받아(fetch) object URL 로 보여 준다.
+- 그림은 바뀌지 않는다. 고치려면 새로 올린다(새 id).
+
+**저장소의 서명.** S3 의 서명(Signature Version 4)을 SDK 없이 만든다(`app/images/sigv4.py`). 넣기와 서명한 주소 둘뿐이다.
+AWS 문서의 예시 값으로 시험하고(`tests/test_image_store.py`), 스택 시험이 실제 저장소(SeaweedFS)에 넣고 서명한 주소로 받아 본다.
+주소는 경로 방식(`<주소>/<버킷>/<키>`)이다. 프록시는 그 주소가 저장소의 것일 때만 따라가므로, compose 밖에서 띄운 서버(`127.0.0.1:8333`)가 만든 주소로는 프록시를 거쳐 받을 수 없다.
+
+**알려진 한계**
+- 페르소나와 캐릭터의 `image_id`, 소개 글의 img 가 자기 그림인지 아직 보지 않는다. 남의 그림 id 를 적어도 막지 않는다(다음 조각에서 막는다).
+- 탈퇴해도 그림은 아직 지우지 않는다(다음 조각).
+- 목록용 작은 그림은 만들지 않는다. 원본 하나다.
 
 ### 다른 서버에 내주기
 

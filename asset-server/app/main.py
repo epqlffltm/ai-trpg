@@ -4,7 +4,7 @@
 asset 서버의 시작점. 앱을 만들고 라우터를 붙인다.
 
 asset 서버는 캐릭터, 계정 페르소나, 그림의 원본을 맡는다(docs/architecture/asset-server.md).
-상태 확인, 토큰의 주인, 계정 페르소나(#565), 캐릭터와 게시와 공개 목록(#567)이 있다. 그림(#566)이 붙는다.
+상태 확인, 토큰의 주인, 계정 페르소나(#565), 캐릭터와 게시와 공개 목록(#567), 그림 올리기와 내주기(#566)가 있다.
 다른 서버(chat)가 페르소나의 사본과 판을 가져가는 주소(/service/{caller}/...)는
 그 서버의 서명과 사용자의 토큰을 함께 본다.
 인증 서버가 탈퇴를 알리는 주소(/service/users/...)는 인증 서버의 서명을 본다.
@@ -40,6 +40,11 @@ from app.characters import supply as character_supply
 from app.characters.publishing import CharacterNotReadyError
 from app.characters.service import CharacterNotFoundError, OperatorOnlyError
 from app.core.config import Settings, get_settings
+from app.images import router as images
+from app.images.isolation import ImageUnreadableError
+from app.images.service import ImageNotFoundError, UnsupportedImageError
+from app.images.setup import build_decoder, build_image_store
+from app.images.store import ImageStoreUnavailableError
 from app.personas import router as personas
 from app.personas import supply as persona_supply
 from app.personas.service import PersonaLimitError, PersonaNotFoundError
@@ -126,6 +131,9 @@ def create_app(
     app.state.http_client = http_client or traced_client()
     app.state.jwks = JwksCache(app.state.http_client, settings.auth_jwks_url)
     app.state.revocations = revocations.RevocationList(app.state.http_client, settings.session_revocations_url)
+    # 그림 저장소와 그림을 여는 따로 된 프로세스(#566). 저장소도 같은 클라이언트로 부른다(client span 이 걸린다)
+    app.state.image_store = build_image_store(settings, app.state.http_client)
+    app.state.image_decoder = build_decoder(settings)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
@@ -146,6 +154,13 @@ def create_app(
     app.add_exception_handler(OperatorOnlyError, characters.handle_operator_only)
     app.add_exception_handler(CharacterNotReadyError, characters.handle_character_not_ready)
     app.add_exception_handler(AdultContentRequiredError, handle_adult_content_required)
+    # 그림(#566). 올리기는 로그인, 내주기는 볼 수 있는지 보고 nginx 에 넘긴다
+    app.include_router(images.router, prefix=API_PREFIX)
+
+    app.add_exception_handler(UnsupportedImageError, images.handle_unsupported_image)
+    app.add_exception_handler(ImageUnreadableError, images.handle_unreadable_image)
+    app.add_exception_handler(ImageNotFoundError, images.handle_image_not_found)
+    app.add_exception_handler(ImageStoreUnavailableError, images.handle_store_unavailable)
     # 다른 서버가 페르소나의 사본과 판을 가져가는 주소.
     # 그 서버의 서명(app/core/service_auth.py)과 사용자의 토큰을 함께 본다.
     # 프록시가 바깥에 열지 않는다(docker/nginx/templates/api.inc.template)
