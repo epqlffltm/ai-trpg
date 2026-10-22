@@ -2938,6 +2938,7 @@ uv run python -m scripts.index_lore --model qwen3-embedding:0.6b
 
 **고르기.** 라운드를 닫고 서술을 맡기기 직전에 고른다(`app/lore/retrieval.py`). 한 번 고르면 다시 시도하는 모든 시도가 같은 항목을 쓴다.
 - 서술 전에 고르는 넷의 차례: 로어북을 먼저 고르고, 지난 일과 인물의 이력과 참고 자료는 로어북의 결과를 받아 함께 돈다(`app/rounds/closing.py` 의 `gather_context`). 넷을 합쳐 정해 둔 시간 안에 끝낸다. 하나가 실패하거나 늦어도 나머지는 고른다.
+  걸린 시간은 메트릭으로 본다(`round_context_duration_seconds` 는 전체, `round_context_part_duration_seconds` 는 하나하나와 끝난 모양, #628).
 - 로어북, 지난 일, 참고 자료는 같은 찾는 글을 벡터로 바꾼다. 셋은 같은 글의 벡터를 한 번만 만들어 함께 쓴다(`app/lore/query_embedder.py`. 최근의 글 256개를 기억하고 실패한 것은 기억하지 않는다). 색인은 이것을 쓰지 않는다.
 - 찾는 글: 이번 라운드의 장면과, 선언한 사람마다 "이름: 선언" 한 줄씩. 찾는 글을 벡터로 바꿔 판의 항목 벡터마다 코사인 거리를 잰다.
 - 키워드: 항목의 이름이나 키워드가 찾는 글에 그대로 들어 있고(대소문자 무시), 거리가 `LORE_KEYWORD_MAX_DISTANCE`(0.50) 이하인 것. "드워프가"처럼 조사가 붙어도 "드워프"가 들어 있다. 고유 명사에 강하다.
@@ -3436,6 +3437,8 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 | `ai_fallbacks_total`, `round_narration_retries_total` | `operation`, `model`(실패한 모델) | `app/rounds/retrying_narrator.py` |
 | `rounds_closed_total` | `reason`(`all_declared`, `host`, `timeout`) | `app/rounds/service.py`. 저장한 뒤에 센다 |
 | `round_narrations_total`, `round_narration_duration_seconds` | `result`(`success`, `failure`) | `app/rounds/closing.py`. 시간은 닫기 시작한 때부터, 성공한 것만 |
+| `round_context_duration_seconds` | 없음 | `app/rounds/closing.py` 의 `gather_context`. 서술 전에 넷을 고르는 데 걸린 시간 전체(#628) |
+| `round_context_part_duration_seconds` | `part`(`lore`, `memories`, `histories`, `references`), `result`(`success`, `timeout`, `failure`) | 같은 곳의 `find_or_nothing`. 하나하나가 걸린 시간과 끝난 모양. 취소된 것은 재지 않는다 |
 | `billing_calls_total` | `operation`(`hold`, `capture`, `release`, `extend`), `outcome` | `app/billing/metered.py`. 결제 서버를 쓸 때만 감싼다 |
 | `narration_charges` | `status`(`pending`, `held`, `short`, `capture_due`, `release_due`) | `app/billing/settler.py` 의 바퀴마다. 서버들이 같은 수를 낸다(`max` 로 본다) |
 

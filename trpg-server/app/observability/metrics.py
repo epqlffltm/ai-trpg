@@ -61,6 +61,12 @@ JOB_CANCELLED = 'cancelled'
 NARRATION_SUCCESS = 'success'
 NARRATION_FAILURE = 'failure'
 
+# 서술 전에 고르는 것 하나가 끝난 모양(round_context_part_duration_seconds 의 result, #628).
+# 고르지 못해도 서술은 한다(빈 것으로). 시간이 다 된 것과 예외로 끝난 것을 나눈다
+CONTEXT_SUCCESS = 'success'
+CONTEXT_TIMEOUT = 'timeout'
+CONTEXT_FAILURE = 'failure'
+
 
 @dataclass(frozen=True)
 class PoolStats:
@@ -94,6 +100,8 @@ class Instruments:
     round_narrations: Counter
     round_narration_retries: Counter
     round_narration_duration: Histogram
+    round_context_duration: Histogram
+    round_context_part_duration: Histogram
     rounds_closed: Counter
     billing_calls: Counter
     narration_charges: _Gauge
@@ -169,6 +177,12 @@ def build_instruments(meter: Meter) -> Instruments:
         ),
         round_narration_duration=duration_histogram(
             meter, 'round_narration_duration', '라운드를 닫기 시작한 뒤 서술이 끝날 때까지', LONG_DURATION_BUCKETS
+        ),
+        round_context_duration=duration_histogram(
+            meter, 'round_context_duration', '서술 전에 로어북, 지난 일, 인물의 이력, 참고 자료를 고르는 데 걸린 시간'
+        ),
+        round_context_part_duration=duration_histogram(
+            meter, 'round_context_part_duration', '서술 전에 고르는 것 하나가 걸린 시간'
         ),
         rounds_closed=meter.create_counter('rounds_closed', description='닫기 시작한 라운드의 수'),
         billing_calls=meter.create_counter('billing_calls', description='결제 서버를 부른 수'),
@@ -308,6 +322,16 @@ def record_narration(result: str, seconds: float | None = None) -> None:
     _instruments.round_narrations.add(1, {'result': result})
     if seconds is not None:
         _instruments.round_narration_duration.record(seconds)
+
+
+def record_context(seconds: float) -> None:
+    """서술 전에 고르는 일 전체가 걸린 시간. 로어북 다음의 셋은 함께 돌아, 넷을 더한 것보다 짧다."""
+    _instruments.round_context_duration.record(seconds)
+
+
+def record_context_part(part: str, result: str, seconds: float) -> None:
+    """고르는 것 하나(part: lore, memories, histories, references)가 걸린 시간과 끝난 모양."""
+    _instruments.round_context_part_duration.record(seconds, {'part': part, 'result': result})
 
 
 def record_round_closed(reason: str) -> None:
