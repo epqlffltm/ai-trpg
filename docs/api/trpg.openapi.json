@@ -11191,6 +11191,16 @@
         "title": "TimeOfDay",
         "type": "string"
       },
+      "TranscriptFormat": {
+        "description": "기록의 형식.",
+        "enum": [
+          "md",
+          "html",
+          "txt"
+        ],
+        "title": "TranscriptFormat",
+        "type": "string"
+      },
       "TreatAction": {
         "additionalProperties": false,
         "description": "치료하는 행동. 대상이 입은 오래 가는 부상 하나를 치료한다.\n\n능력과 난이도는 받지 않는다. 규칙의 치료 능력과 그 부상의 치료 난이도로 판정한다.\n대상은 앉은 사람(target)이나 이번 장면의 NPC(npc) 중 하나다.\n둘 다 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).",
@@ -15761,6 +15771,15 @@
               "title": "Table Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TranscriptFormat",
+              "default": "md"
+            }
           }
         ],
         "responses": {
@@ -17750,6 +17769,15 @@
               "format": "uuid",
               "title": "Table Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TranscriptFormat",
+              "default": "md"
             }
           }
         ],
