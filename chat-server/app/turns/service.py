@@ -71,6 +71,10 @@ from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
 from app.turns.prompt import CharacterCard, PersonaCard, build_messages, render_card
 from app.turns.providers import Router
 from app.turns.values import PromptOptions, SavedMessage, TurnResult, TurnStart
+from app.world import repository as world_states
+from app.world import service as world
+from app.world.moves import apply_move, check_move, move_text
+from app.world.scene import render_scene
 
 logger = logging.getLogger(__name__)
 
@@ -191,20 +195,32 @@ def prompt_for(
     persona: ConversationPersona | None,
     path: list[Message],
     options: PromptOptions,
+    scene: str | None,
     closing: str | None = None,
 ) -> list[ChatMessage]:
     """
     모델에 보낼 메시지. 카드와, 지금 가지의 말들 가운데 context_chars 안에 드는 최근 것들이다.
     지난 말은 본문(content)만 보낸다. 선택지(suggestions)는 보내지 않는다.
+    scene 은 가지 끝의 장소와 소지품이다(app/world/scene.py). 카드에 들어간다.
     closing 이 있으면 맨 끝에 사람의 차례로 붙인다(이어서 출력의 지시). 창은 늘 그것을 넣는다.
     """
     card = render_card(
-        character_card(character), persona_card(persona), conversation.start_situation, options.suggestions
+        character_card(character),
+        persona_card(persona),
+        conversation.start_situation,
+        options.suggestions,
+        scene,
     )
     turns = [Turn(message.role, message.content) for message in path]
     if closing is not None:
         turns.append(Turn(Role.USER, closing))
     return build_messages(card, select_window(turns, options.context_chars))
+
+
+async def scene_on(session: AsyncSession, character: ImportedCharacter, path: list[Message]) -> str | None:
+    """가지(path)의 끝의 장소와 소지품을 모델에 보낼 글로. 지도와 물건이 없으면 None."""
+    document = world.document_of(character)
+    return render_scene(document, await world.state_on(session, document, [message.id for message in path]))
 
 
 def require_model(conversation: Conversation, model: AiModel | None, rating: Rating, now: datetime) -> str:
@@ -216,13 +232,15 @@ def require_model(conversation: Conversation, model: AiModel | None, rating: Rat
     return conversation.model_slug
 
 
-def user_message(conversation: Conversation, parent_id: uuid.UUID | None, content: str, now: datetime) -> Message:
-    """사람의 말. parent_id(보통은 지금 가지의 끝) 아래에 붙는다. 아직 저장하지 않는다."""
+def user_message(
+    conversation: Conversation, parent_id: uuid.UUID | None, content: str, now: datetime, role: Role = Role.USER
+) -> Message:
+    """사람의 말(또는 행동 말, role action). parent_id(보통은 지금 가지의 끝) 아래에 붙는다. 아직 저장하지 않는다."""
     return Message(
         id=uuid.uuid4(),
         conversation_id=conversation.id,
         parent_id=parent_id,
-        role=Role.USER,
+        role=role,
         content=content,
         status=MessageStatus.COMPLETE,
         created_at=now,
@@ -365,6 +383,7 @@ async def begin_turn(
         await session.refresh(conversation)
         parent_id = edited if edit_of is not None else conversation.active_leaf_id
         path = await conversations.active_path(session, parent_id)
+        scene = await scene_on(session, character, path)
         message = user_message(conversation, parent_id, content, now)
         repository.add(session, message)
         await session.flush()
@@ -380,7 +399,55 @@ async def begin_turn(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(message),
-        messages=prompt_for(conversation, character, persona, [*path, message], options),
+        messages=prompt_for(conversation, character, persona, [*path, message], options, scene),
+    )
+
+
+async def begin_move(
+    session_factory: async_sessionmaker[AsyncSession],
+    viewer: Viewer,
+    conversation_id: uuid.UUID,
+    place: str,
+    options: PromptOptions,
+    now: datetime,
+) -> TurnStart:
+    """
+    지도에서 고른 곳으로 간다. 행동 말(role action)과 그 뒤의 상태, 기록(pending)을 저장한다. 이어서 모델이 반응을 쓴다.
+
+    갈 수 있는지는 차례를 잡은 뒤 가지 끝의 상태로 본다(app/world/moves.py). 안 되면 MoveRefusedError 이고
+    아무것도 저장하지 않는다(차례도 놓는다). 나머지는 begin_turn 과 같다.
+    홀드가 거절되면 행동 말은 남는다(사람의 말과 같다).
+    """
+    async with session_factory() as session:
+        conversation, character, persona = await get_conversation(session, viewer, conversation_id)
+        model = await catalog.get_model(session, conversation.model_slug) if conversation.model_slug else None
+        slug = require_model(conversation, model, Rating(character.rating), now)
+        if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
+            raise ConversationBusyError
+        await session.refresh(conversation)
+        path = await conversations.active_path(session, conversation.active_leaf_id)
+        document = world.document_of(character)
+        before = await world.state_on(session, document, [message.id for message in path])
+        minutes = check_move(document, before, place)
+        after = apply_move(before, place, minutes)
+        text = move_text(document, place, minutes)
+        message = user_message(conversation, conversation.active_leaf_id, text, now, Role.ACTION)
+        repository.add(session, message)
+        await session.flush()
+        world_states.add_state(session, message.id, after)
+        await repository.move_leaf(session, conversation.id, message.id)
+        generation = new_generation(conversation, viewer.claims.user_id, message.id, slug)
+        repository.add(session, generation)
+        await session.commit()
+    return TurnStart(
+        conversation_id=conversation.id,
+        generation_id=generation.id,
+        owner_id=viewer.claims.user_id,
+        model_slug=slug,
+        reference=generation.reference,
+        price_code=generation.price_code,
+        user_message=saved(message),
+        messages=prompt_for(conversation, character, persona, [*path, message], options, render_scene(document, after)),
     )
 
 
@@ -390,7 +457,7 @@ def answered_message(target: Message) -> uuid.UUID:
 
     부모가 없는 캐릭터의 말(인사말)은 다시 쓰지 않는다(NotRegenerableError). 카드가 쓴 글이지 모델이 쓴 글이 아니다.
     """
-    if target.role == Role.USER:
+    if target.role in (Role.USER, Role.ACTION):
         return target.id
     if target.parent_id is None:
         raise NotRegenerableError
@@ -425,6 +492,7 @@ async def begin_regenerate(
         if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
             raise ConversationBusyError
         path = await conversations.active_path(session, parent_id)
+        scene = await scene_on(session, character, path)
         generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
         repository.add(session, generation)
         await session.commit()
@@ -436,7 +504,7 @@ async def begin_regenerate(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(path[-1]),
-        messages=prompt_for(conversation, character, persona, path, options),
+        messages=prompt_for(conversation, character, persona, path, options, scene),
     )
 
 
@@ -480,6 +548,7 @@ async def begin_continue(
         if conversation.active_leaf_id != target.id:
             raise NotContinuableError
         path = await conversations.active_path(session, target.id)
+        scene = await scene_on(session, character, path)
         generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
         repository.add(session, generation)
         await session.commit()
@@ -491,7 +560,7 @@ async def begin_continue(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(path[-2]),
-        messages=prompt_for(conversation, character, persona, path, options, continuation.instruction()),
+        messages=prompt_for(conversation, character, persona, path, options, scene, continuation.instruction()),
         continued=saved(target),
     )
 

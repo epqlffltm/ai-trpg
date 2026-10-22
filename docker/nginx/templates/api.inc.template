@@ -219,9 +219,9 @@ location /api/v1/chat/ {
 }
 
 # 말을 보내는 주소(docs/architecture/chat-server.md 의 "정한 것"의 스트리밍). POST 가 바로 SSE 로 답한다.
-# 새 말, 다시 생성, 이어서 출력의 셋이다. 서버가 X-Accel-Buffering: no 를 보내지만 nginx 쪽에서도 모으지 않게 못 박는다.
+# 새 말, 행동(지도에서 이동 등), 다시 생성, 이어서 출력이다. 서버가 X-Accel-Buffering: no 를 보내지만 nginx 쪽에서도 모으지 않게 못 박는다.
 # 서버가 15초마다 하트비트를 보내므로 기본 읽기 시간(60초) 안에 끊기지 않는다. 게임 서버의 스트림과 같은 동시 연결 제한을 건다
-location ~ ^/api/v1/chat/conversations/[^/]+/messages$ {
+location ~ ^/api/v1/chat/conversations/[^/]+/(messages|actions)$ {
     set $proxy_upstream chat;
     set $chat_server chat-server:8005;
     limit_req zone=api burst=40 nodelay;
