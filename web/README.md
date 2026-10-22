@@ -5,8 +5,8 @@
 
 지금 있는 것: 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(A2 의 두 단계, 갱신은 한 번에 하나 #30), 가입(세 단계와 동의),
 비밀번호 찾기와 재설정, 다시 동의와 탈퇴 취소, 첫 화면(A1: 서비스 고르기, 이어하기, 공개된 것),
-마이페이지(A5: 계정, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의), TRPG 의 시나리오 탐색(B1)과 소개(B2).
-본인인증, 보호자 동의, 지갑과 탈퇴 요청, TRPG 의 테이블(B3~), chat 의 화면(C)은 다음이다. 그 경로는 "준비 중"을 보인다.
+마이페이지(A5: 계정, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의), TRPG 의 시나리오 탐색(B1), 소개(B2), 로비(B3), 테이블 만들기(B4).
+본인인증, 보호자 동의, 지갑과 탈퇴 요청, TRPG 의 테이블 방(B6~), chat 의 화면(C)은 다음이다. 그 경로는 "준비 중"을 보인다.
 
 ## 실행
 
@@ -56,16 +56,16 @@ web/
   package.json            npm workspaces 의 뿌리. 린트(ESLint)와 TypeScript 를 여기서 함께 쓴다
   Dockerfile              프록시의 이미지(Node 에서 빌드 → nginx-unprivileged 에 dist)
   apps/web/               앱
-    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), publicNames.ts, errors.ts
+    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), tables.ts(B3, B4), publicNames.ts, errors.ts
     src/api/generated/    서버의 API 목록(docs/api/*.openapi.json)에서 만든 타입. 손으로 고치지 않는다
     src/api/account.ts    본인의 계정(동의, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 취소)
     src/auth/             로그인 상태를 읽는 훅, 처음 열 때 되살리기, 로그인해야 열리는 화면(RequireSession), 실패의 글, 돌아갈 주소
     src/legal/            동의 항목의 이름과 요약, 판마다의 문서(documents/, docs/legal 의 사본), 문서를 보이는 창
-    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), trpg(B1 탐색, B2 소개), 준비 중, 없는 경로
+    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기), 준비 중, 없는 경로
     src/components/       여러 화면이 함께 쓰는 것(목록 한 칸, 실패 한 줄)
     src/hooks/            남은 초 세기, 다른 사람의 이름 찾기(public-names, #532)
     src/layout/           머리와 틀
-  packages/ui/            공통 구성요소(버튼, 입력 칸, 체크, 창, 칩, 안내, 목록 한 줄)와 색·글꼴의 변수(styles.css)
+  packages/ui/            공통 구성요소(버튼, 입력 칸, 고르기 칸, 체크, 라디오, 창, 칩, 안내, 목록 한 줄)와 색·글꼴의 변수(styles.css)
 ```
 
 Stitch 의 시안을 받으면 `packages/ui` 의 변수와 구성요소의 모양에만 입힌다. 화면의 코드는 그대로다.
@@ -122,6 +122,7 @@ npm run build
 
 시험은 서버를 부르지 않는다. `fetch` 를 가짜로 바꿔(`src/test/fakeFetch.ts`) 갱신이 하나만 가는지, 로그인 두 단계와 그 실패, 가입 세 단계와 동의(체크한 것만 보내기, 판이 바뀌면 다시 읽기), 비밀번호 재설정, 첫 화면의 줄이 따로 실패하는지,
 다시 동의와 탈퇴 취소가 어느 경로든 막고 마치면 원래 화면을 여는지, 마이페이지(비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의 켜고 끄기),
-시나리오 탐색(로그인 전에 토큰 없이, 거르기, 더 보기와 그 실패, 만든 사람의 이름)과 소개(고를 거리, 로그인 전후의 할 일, 404)를 본다.
+시나리오 탐색(로그인 전에 토큰 없이, 거르기, 더 보기와 그 실패, 만든 사람의 이름)과 소개(고를 거리, 로그인 전후의 할 일, 404),
+테이블 만들기(보내는 본문, 모델을 쓸 수 없을 때)와 로비(들어가기, 비밀번호, 그 사이에 자리가 참, 초대 코드)를 본다.
 프록시에 실려 실제로 뜨는지(index.html 로 돌리기, 캐시, CSP)는 CI 의 stack(`.github/scripts/stack-smoke.sh check-proxy`)이 본다.
 끝에서 끝까지(Playwright)는 한 판이 화면으로 이어질 때 붙인다.

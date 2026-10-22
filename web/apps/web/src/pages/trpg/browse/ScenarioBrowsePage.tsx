@@ -7,7 +7,7 @@
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import type { ListingFilters } from '../../../api/listings';
 import type { PublicListing } from '../../../api/types';
 import { useSession } from '../../../auth/useSession';
@@ -35,7 +35,10 @@ export function ScenarioBrowsePage() {
 
   return (
     <main className="page">
-      <h1>시나리오 찾기</h1>
+      <div className="page-head">
+        <h1>시나리오 찾기</h1>
+        <Link to="/trpg/lobby">모집 중인 테이블 보기</Link>
+      </div>
       <BrowseFilters filters={filters} onChange={change} />
       <AdultContentHint />
       {query.isPending ? <p aria-busy="true">불러오는 중</p> : null}
