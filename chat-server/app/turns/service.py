@@ -26,7 +26,7 @@ import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ai_core.costs import charge_of
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
@@ -73,8 +73,9 @@ from app.turns.providers import Router
 from app.turns.values import PromptOptions, SavedMessage, TurnResult, TurnStart
 from app.world import repository as world_states
 from app.world import service as world
-from app.world.moves import apply_move, check_move, move_text
+from app.world.actions import perform
 from app.world.scene import render_scene
+from app.world.schemas import Action, GiveAction
 
 logger = logging.getLogger(__name__)
 
@@ -403,20 +404,34 @@ async def begin_turn(
     )
 
 
-async def begin_move(
+def action_messages(
+    conversation: Conversation, parent_id: uuid.UUID | None, text: str, words: str | None, now: datetime
+) -> list[Message]:
+    """
+    행동 말과(덧붙인 한마디가 있으면) 그 뒤의 사람의 말. 행동 말이 parent_id 아래에, 한마디가 행동 말 아래에 붙는다.
+    한마디는 행동 말보다 1 마이크로초 뒤에 생긴 것으로 둔다(가지의 끝을 생긴 차례로 고른다).
+    """
+    action = user_message(conversation, parent_id, text, now, Role.ACTION)
+    if words is None:
+        return [action]
+    return [action, user_message(conversation, action.id, words, now + timedelta(microseconds=1))]
+
+
+async def begin_action(
     session_factory: async_sessionmaker[AsyncSession],
     viewer: Viewer,
     conversation_id: uuid.UUID,
-    place: str,
+    action: Action,
     options: PromptOptions,
     now: datetime,
 ) -> TurnStart:
     """
-    지도에서 고른 곳으로 간다. 행동 말(role action)과 그 뒤의 상태, 기록(pending)을 저장한다. 이어서 모델이 반응을 쓴다.
+    행동한다(지도에서 이동, 물건 쓰기, 건네기). 행동 말(role action)과 그 뒤의 상태, 기록(pending)을 저장한다.
+    건넬 때 한마디를 덧붙였으면 행동 말 아래에 사람의 말로 붙는다. 이어서 모델이 반응을 쓴다(한 번 청구한다).
 
-    갈 수 있는지는 차례를 잡은 뒤 가지 끝의 상태로 본다(app/world/moves.py). 안 되면 MoveRefusedError 이고
+    할 수 있는지는 차례를 잡은 뒤 가지 끝의 상태로 본다(app/world/actions.py). 안 되면 ActionRefusedError 이고
     아무것도 저장하지 않는다(차례도 놓는다). 나머지는 begin_turn 과 같다.
-    홀드가 거절되면 행동 말은 남는다(사람의 말과 같다).
+    홀드가 거절되면 행동 말(과 한마디)은 남는다(사람의 말과 같다).
     """
     async with session_factory() as session:
         conversation, character, persona = await get_conversation(session, viewer, conversation_id)
@@ -428,17 +443,18 @@ async def begin_move(
         path = await conversations.active_path(session, conversation.active_leaf_id)
         document = world.document_of(character)
         before = await world.state_on(session, document, [message.id for message in path])
-        minutes = check_move(document, before, place)
-        after = apply_move(before, place, minutes)
-        text = move_text(document, place, minutes)
-        message = user_message(conversation, conversation.active_leaf_id, text, now, Role.ACTION)
-        repository.add(session, message)
+        performed = perform(document, before, action)
+        words = action.words if isinstance(action, GiveAction) else None
+        added = action_messages(conversation, conversation.active_leaf_id, performed.text, words, now)
+        for message in added:
+            repository.add(session, message)
         await session.flush()
-        world_states.add_state(session, message.id, after)
-        await repository.move_leaf(session, conversation.id, message.id)
-        generation = new_generation(conversation, viewer.claims.user_id, message.id, slug)
+        world_states.add_state(session, added[0].id, performed.state)
+        await repository.move_leaf(session, conversation.id, added[-1].id)
+        generation = new_generation(conversation, viewer.claims.user_id, added[-1].id, slug)
         repository.add(session, generation)
         await session.commit()
+    scene = render_scene(document, performed.state)
     return TurnStart(
         conversation_id=conversation.id,
         generation_id=generation.id,
@@ -446,8 +462,9 @@ async def begin_move(
         model_slug=slug,
         reference=generation.reference,
         price_code=generation.price_code,
-        user_message=saved(message),
-        messages=prompt_for(conversation, character, persona, [*path, message], options, render_scene(document, after)),
+        user_message=saved(added[-1]),
+        messages=prompt_for(conversation, character, persona, [*path, *added], options, scene),
+        action=saved(added[0]) if len(added) > 1 else None,
     )
 
 

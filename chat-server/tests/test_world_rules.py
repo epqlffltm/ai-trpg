@@ -21,7 +21,8 @@ from ai_core.provider import Role
 from app.assets.schemas import CharacterDocument
 from app.conversation.window import Turn
 from app.turns.prompt import CharacterCard, build_messages, render_card
-from app.world.moves import MoveRefusal, MoveRefusedError, apply_move, check_move, move_text, path_minutes
+from app.world.moves import apply_move, check_move, move_text, path_minutes
+from app.world.refusals import ActionRefusedError, Refusal
 from app.world.scene import render_scene
 from app.world.state import Holding, WorldState, initial_state, state_at
 from tests.assets import make_character
@@ -60,16 +61,16 @@ def test_the_state_is_the_nearest_one_up_the_branch():
 @pytest.mark.parametrize(
     ('document', 'state', 'target', 'reason'),
     [
-        (PLAIN, initial_state(PLAIN), 'cafe', MoveRefusal.NO_MAP),
-        (DOCUMENT, START, 'garden', MoveRefusal.PLACE_NOT_FOUND),
-        (DOCUMENT, START, 'library', MoveRefusal.ALREADY_THERE),
-        (DOCUMENT, apply_move(START, 'cafe', 15), 'roof', MoveRefusal.NOT_CONNECTED),
+        (PLAIN, initial_state(PLAIN), 'cafe', Refusal.NO_MAP),
+        (DOCUMENT, START, 'garden', Refusal.PLACE_NOT_FOUND),
+        (DOCUMENT, START, 'library', Refusal.ALREADY_THERE),
+        (DOCUMENT, apply_move(START, 'cafe', 15), 'roof', Refusal.NOT_CONNECTED),
     ],
 )
 def test_places_that_cannot_be_reached_are_refused(
-    document: CharacterDocument, state: WorldState, target: str, reason: MoveRefusal
+    document: CharacterDocument, state: WorldState, target: str, reason: Refusal
 ):
-    with pytest.raises(MoveRefusedError) as refused:
+    with pytest.raises(ActionRefusedError) as refused:
         check_move(document, state, target)
 
     assert refused.value.reason == reason

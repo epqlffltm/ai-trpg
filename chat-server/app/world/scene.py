@@ -1,7 +1,8 @@
 # chat-server/app/world/scene.py
 
 """
-모델에 보내는 "[지금]" 블록. 지금 있는 장소와 그 설명, 갈 수 있는 곳, 사용자의 소지품이다. DB 를 모르는 순수 함수다.
+모델에 보내는 "[지금]" 블록. 지금 있는 장소와 그 설명, 갈 수 있는 곳, 사용자의 소지품, 상대의 차림이다.
+DB 를 모르는 순수 함수다.
 
 모델은 이것을 읽고 반응만 쓴다. 바꾸는 것은 서버다(이동, 쓰기, 건네기).
 지도와 물건이 없는 캐릭터면 블록이 없다. 판에 없는 id 는(있을 수 없지만) 빼고 적는다.
@@ -38,11 +39,20 @@ def inventory_line(document: CharacterDocument, state: WorldState) -> str | None
     return f'사용자의 소지품: {", ".join(held)}' if held else None
 
 
+def outfit_line(document: CharacterDocument, state: WorldState) -> str | None:
+    """'상대의 차림: 목도리, …'. 사용자가 건넨 옷이 없으면 None."""
+    names = {item.id: item.name for item in document.items}
+    worn = [names[item] for item in state.outfit if item in names]
+    return f'상대의 차림: {", ".join(worn)}' if worn else None
+
+
 def render_scene(document: CharacterDocument, state: WorldState) -> str | None:
-    """ "[지금]" 블록. 적을 것이 없으면 None."""
-    lines = [
-        line
-        for line in (place_line(document, state), exits_line(document, state), inventory_line(document, state))
-        if line
-    ]
+    """'[지금]' 블록. 적을 것이 없으면 None."""
+    found = (
+        place_line(document, state),
+        exits_line(document, state),
+        inventory_line(document, state),
+        outfit_line(document, state),
+    )
+    lines = [line for line in found if line]
     return '\n'.join(['[지금]', *lines]) if lines else None
