@@ -490,8 +490,23 @@ export interface components {
              * @default
              */
             intro_html: string;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["Item"][];
             /** Name */
             name: string;
+            /**
+             * Paths
+             * @default []
+             */
+            paths: components["schemas"]["Path"][];
+            /**
+             * Places
+             * @default []
+             */
+            places: components["schemas"]["Place"][];
             /** @default all */
             rating: components["schemas"]["Rating"];
             /**
@@ -499,6 +514,13 @@ export interface components {
              * @default
              */
             speech_examples: string;
+            /**
+             * Start Items
+             * @default []
+             */
+            start_items: components["schemas"]["StartItem"][];
+            /** Start Place */
+            start_place?: string | null;
             /**
              * Starts
              * @default []
@@ -535,15 +557,25 @@ export interface components {
             image_id: string | null;
             /** Intro Html */
             intro_html: string;
+            /** Items */
+            items: components["schemas"]["Item"][];
             /** Latest Version */
             latest_version: number | null;
             /** Name */
             name: string;
+            /** Paths */
+            paths: components["schemas"]["Path"][];
+            /** Places */
+            places: components["schemas"]["Place"][];
             /** Published At */
             published_at: string | null;
             rating: components["schemas"]["Rating"];
             /** Speech Examples */
             speech_examples: string;
+            /** Start Items */
+            start_items: components["schemas"]["StartItem"][];
+            /** Start Place */
+            start_place: string | null;
             /** Starts */
             starts: components["schemas"]["Start"][];
             /** Tags */
@@ -558,6 +590,7 @@ export interface components {
         /**
          * CharacterDocument
          * @description 판에 굳힌 캐릭터. intro_html 은 허용 목록으로 거른 소개다.
+         *     지도와 물건의 칸은 형식 2 에서 더했다. 형식 1 의 판을 읽을 수 있게 비어 있는 것이 기본이다.
          */
         CharacterDocument: {
             /** Age */
@@ -572,11 +605,33 @@ export interface components {
             image_id: string | null;
             /** Intro Html */
             intro_html: string;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ItemDocument"][];
             /** Name */
             name: string;
+            /**
+             * Paths
+             * @default []
+             */
+            paths: components["schemas"]["PathDocument"][];
+            /**
+             * Places
+             * @default []
+             */
+            places: components["schemas"]["PlaceDocument"][];
             rating: components["schemas"]["Rating"];
             /** Speech Examples */
             speech_examples: string;
+            /**
+             * Start Items
+             * @default []
+             */
+            start_items: components["schemas"]["StartItemDocument"][];
+            /** Start Place */
+            start_place?: string | null;
             /** Starts */
             starts: components["schemas"]["StartDocument"][];
             /** Tags */
@@ -631,11 +686,21 @@ export interface components {
             image_id?: string | null;
             /** Intro Html */
             intro_html?: string | null;
+            /** Items */
+            items?: components["schemas"]["Item"][] | null;
             /** Name */
             name?: string | null;
+            /** Paths */
+            paths?: components["schemas"]["Path"][] | null;
+            /** Places */
+            places?: components["schemas"]["Place"][] | null;
             rating?: components["schemas"]["Rating"] | null;
             /** Speech Examples */
             speech_examples?: string | null;
+            /** Start Items */
+            start_items?: components["schemas"]["StartItem"][] | null;
+            /** Start Place */
+            start_place?: string | null;
             /** Starts */
             starts?: components["schemas"]["Start"][] | null;
             /** Tags */
@@ -697,6 +762,56 @@ export interface components {
          */
         ImageFormat: "png" | "jpeg" | "webp";
         /**
+         * Item
+         * @description 물건 하나. 옷(clothing)은 건네면 상대의 차림에 들어간다. consumable 이면 쓰면 하나 없어진다.
+         */
+        Item: {
+            /**
+             * Consumable
+             * @default false
+             */
+            consumable: boolean;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /** @default thing */
+            kind: components["schemas"]["ItemKind"];
+            /** Name */
+            name: string;
+        };
+        /**
+         * ItemDocument
+         * @description 물건 하나.
+         */
+        ItemDocument: {
+            /**
+             * Consumable
+             * @default false
+             */
+            consumable: boolean;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            kind: components["schemas"]["ItemKind"];
+            /** Name */
+            name: string;
+        };
+        /**
+         * ItemKind
+         * @description 물건의 종류. 옷은 건네면 상대의 차림에 들어간다(chat 의 장소와 소지품). 나머지는 그냥 물건이다.
+         * @enum {string}
+         */
+        ItemKind: "thing" | "clothing";
+        /**
          * MeResponse
          * @description 토큰의 주인.
          */
@@ -706,6 +821,30 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /**
+         * Path
+         * @description 두 장소(a, b) 사이의 길. 양쪽으로 다닌다. minutes 는 걸리는 시간(분)이고 그만큼 시각이 흐른다.
+         */
+        Path: {
+            /** A */
+            a: string;
+            /** B */
+            b: string;
+            /** Minutes */
+            minutes: number;
+        };
+        /**
+         * PathDocument
+         * @description 두 장소(a, b) 사이의 길. 양쪽으로 다닌다. minutes 는 걸리는 시간(분)이다.
+         */
+        PathDocument: {
+            /** A */
+            a: string;
+            /** B */
+            b: string;
+            /** Minutes */
+            minutes: number;
         };
         /**
          * PersonaCopy
@@ -862,6 +1001,37 @@ export interface components {
             speech_examples?: string | null;
         };
         /**
+         * Place
+         * @description 장소 하나(지도의 점). 그림은 그 장소의 배경이다. 설명은 모델이 읽는다.
+         */
+        Place: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PlaceDocument
+         * @description 장소 하나. 그림은 그 장소의 배경이다.
+         */
+        PlaceDocument: {
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
          * PublicCharacterDetail
          * @description 공개 캐릭터 하나. 마지막 판의 문서다.
          */
@@ -994,6 +1164,29 @@ export interface components {
             situation: string;
             /** Title */
             title: string;
+        };
+        /**
+         * StartItem
+         * @description 사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수.
+         */
+        StartItem: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Item */
+            item: string;
+        };
+        /**
+         * StartItemDocument
+         * @description 사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수.
+         */
+        StartItemDocument: {
+            /** Count */
+            count: number;
+            /** Item */
+            item: string;
         };
         /** ValidationError */
         ValidationError: {
