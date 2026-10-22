@@ -17,7 +17,13 @@ from app.world.state import Holding, WorldState
 def to_state(row: MessageState) -> WorldState:
     """행을 상태의 값으로."""
     holdings = tuple(Holding(entry['item'], entry['count']) for entry in row.inventory)
-    return WorldState(place=row.place, minutes=row.minutes, inventory=holdings, visited=tuple(row.visited))
+    return WorldState(
+        place=row.place,
+        minutes=row.minutes,
+        inventory=holdings,
+        visited=tuple(row.visited),
+        outfit=tuple(row.outfit),
+    )
 
 
 def to_row(message_id: uuid.UUID, state: WorldState) -> MessageState:
@@ -28,6 +34,7 @@ def to_row(message_id: uuid.UUID, state: WorldState) -> MessageState:
         minutes=state.minutes,
         inventory=[{'item': holding.item, 'count': holding.count} for holding in state.inventory],
         visited=list(state.visited),
+        outfit=list(state.outfit),
     )
 
 

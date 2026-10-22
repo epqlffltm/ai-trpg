@@ -9,6 +9,8 @@
     모델에는 [지금](장소, 갈 곳, 소지품)과 [행동] 이 간다
   - 갈 수 없으면 422(까닭이 code) 이고 아무것도 저장하지 않는다. 홀드가 거절되면 행동 말과 상태는 남는다
   - 상태는 가지를 따른다. 이동하기 전의 가지로 가면 그때의 장소다. 행동 말에 대한 반응도 다시 생성한다
+  - 쓰기와 건네기: 소지품이 바뀌고 옷은 상대가 입는다. 건넬 때 덧붙인 한마디는 행동 말 아래의 사람의 말이고,
+    반응은 그 한마디에 답한다(한 번 청구). 가지고 있지 않으면 422
 """
 
 import asyncio
@@ -39,10 +41,20 @@ WORLD = {
     ],
     'paths': [{'a': 'library', 'b': 'cafe', 'minutes': 15}, {'a': 'library', 'b': 'roof', 'minutes': 5}],
     'start_place': 'library',
-    'items': [{'id': 'book', 'name': '시집', 'description': '', 'kind': 'thing', 'image_id': None}],
+    'items': [
+        {'id': 'book', 'name': '시집', 'description': '', 'kind': 'thing', 'image_id': None},
+        {'id': 'scarf', 'name': '목도리', 'description': '', 'kind': 'clothing', 'image_id': None},
+        {'id': 'cookie', 'name': '쿠키', 'description': '', 'kind': 'thing', 'consumable': True, 'image_id': None},
+    ],
     'start_items': [{'item': 'book', 'count': 2}],
 }
-START = {'place': 'library', 'minutes': 0, 'inventory': [{'item': 'book', 'count': 2}], 'visited': ['library']}
+START = {
+    'place': 'library',
+    'minutes': 0,
+    'inventory': [{'item': 'book', 'count': 2}],
+    'visited': ['library'],
+    'outfit': [],
+}
 
 
 @pytest.fixture
@@ -120,7 +132,7 @@ async def test_a_character_without_a_map_has_an_empty_state(
 
     plain = await start(client, asset, mine, None)
 
-    assert plain['state'] == {'place': None, 'minutes': 0, 'inventory': [], 'visited': []}
+    assert plain['state'] == {'place': None, 'minutes': 0, 'inventory': [], 'visited': [], 'outfit': []}
 
 
 # --- 이동 ---
@@ -290,3 +302,129 @@ async def test_a_move_left_without_a_reaction_gets_one(
 
 def test_the_action_address_is_a_stream():
     assert STREAMS.matches(f'{CONVERSATIONS_URL}/{uuid.uuid4()}/actions')
+
+
+# --- 물건 ---
+
+
+async def act(client: AsyncClient, app: FastAPI, headers: dict, conversation: dict, body: dict):
+    url = f'{CONVERSATIONS_URL}/{conversation["id"]}/actions'
+    response = await client.post(url, json=body, headers=headers)
+    await finished(app)
+    return response
+
+
+@pytest.fixture
+async def stocked(clean_tables: None, session: AsyncSession, client: AsyncClient, asset: FakeAsset, mine: dict):
+    """목도리 하나와 쿠키 하나를 가지고 시작하는 대화."""
+    await turn_on_luna(session)
+    world = {**WORLD, 'start_items': [{'item': 'scarf', 'count': 1}, {'item': 'cookie', 'count': 1}]}
+    return await start(client, asset, mine, world)
+
+
+async def test_using_a_consumable_takes_it_and_gets_a_reaction(
+    client: AsyncClient, app: FastAPI, stocked: dict, router: FakeRouter, mine: dict
+):
+    response = await act(client, app, mine, stocked, {'kind': 'use', 'item': 'cookie'})
+
+    events = parse_sse(response.text)
+    assert (events[0][1]['user_message']['content'], events[-1][0]) == ('쿠키를 썼다.', 'done')
+    state = (await read(client, mine, stocked))['state']
+    assert state['inventory'] == [{'item': 'scarf', 'count': 1}]
+
+
+async def test_giving_clothes_with_words_puts_them_on_and_answers_the_words(
+    client: AsyncClient,
+    app: FastAPI,
+    stocked: dict,
+    router: FakeRouter,
+    billing: FakeBillingServer,
+    mine: dict,
+):
+    body = {'kind': 'give', 'item': 'scarf', 'words': '추우니까 해.'}
+
+    response = await act(client, app, mine, stocked, body)
+
+    turn = parse_sse(response.text)[0][1]
+    action, words = turn['action'], turn['user_message']
+    assert (action['role'], action['content']) == ('action', '목도리를 건넸다.')
+    assert (words['role'], words['content'], words['parent_id']) == ('user', '추우니까 해.', action['id'])
+    detail = await read(client, mine, stocked)
+    assert [message['role'] for message in detail['messages']] == ['assistant', 'action', 'user', 'assistant']
+    assert detail['messages'][-1]['parent_id'] == words['id']
+    assert (detail['state']['outfit'], detail['state']['inventory']) == (['scarf'], [{'item': 'cookie', 'count': 1}])
+    # 행동과 말을 한 턴에 붙였으니 반응은 한 번이고 청구도 한 번이다
+    assert billing.balance(ME) == 70
+    sent = router.provider.calls[0][0]
+    assert [message.content for message in sent[-2:]] == ['[행동] 목도리를 건넸다.', '추우니까 해.']
+    assert '상대의 차림: 목도리' in sent[0].content
+
+
+async def test_giving_without_words_answers_the_action(
+    client: AsyncClient, app: FastAPI, stocked: dict, router: FakeRouter, mine: dict
+):
+    turn = parse_sse((await act(client, app, mine, stocked, {'kind': 'give', 'item': 'cookie'})).text)[0][1]
+
+    assert (turn['user_message']['role'], turn['action']) == ('action', None)
+
+
+async def test_a_refused_gift_with_words_keeps_both(
+    client: AsyncClient,
+    app: FastAPI,
+    stocked: dict,
+    router: FakeRouter,
+    billing: FakeBillingServer,
+    mine: dict,
+):
+    billing.balances[ME] = 10
+
+    response = await act(client, app, mine, stocked, {'kind': 'give', 'item': 'scarf', 'words': '받아.'})
+
+    assert response.status_code == status.HTTP_402_PAYMENT_REQUIRED
+    detail = await read(client, mine, stocked)
+    # 가지의 끝은 한마디다(행동 말과 같은 때에 생겼어도 한마디가 뒤다)
+    assert [message['content'] for message in detail['messages'][-2:]] == ['목도리를 건넸다.', '받아.']
+    assert detail['messages'][-1]['id'] == response.json()['message_id']
+    branch = await client.put(
+        f'{CONVERSATIONS_URL}/{stocked["id"]}/branch', json={'message_id': detail['messages'][-2]['id']}, headers=mine
+    )
+    assert branch.json()['messages'][-1]['content'] == '받아.'
+
+
+@pytest.mark.parametrize(
+    ('body', 'code'),
+    [
+        ({'kind': 'use', 'item': 'book'}, 'not_held'),
+        ({'kind': 'give', 'item': 'sword'}, 'item_not_found'),
+    ],
+)
+async def test_items_not_held_are_refused(
+    client: AsyncClient,
+    app: FastAPI,
+    session: AsyncSession,
+    stocked: dict,
+    router: FakeRouter,
+    mine: dict,
+    body: dict,
+    code: str,
+):
+    before = await count_messages(session)
+
+    response = await act(client, app, mine, stocked, body)
+
+    assert (response.status_code, response.json()['code']) == (status.HTTP_422_UNPROCESSABLE_CONTENT, code)
+    assert await count_messages(session) == before
+
+
+@pytest.mark.parametrize(
+    'body',
+    [
+        {'kind': 'give', 'item': 'scarf', 'words': '  '},
+        {'kind': 'give', 'item': 'scarf', 'words': 'x' * 4001},
+        {'kind': 'use', 'item': 'scarf', 'words': '먹어'},
+    ],
+)
+async def test_malformed_item_actions_are_refused(client: AsyncClient, stocked: dict, mine: dict, body: dict):
+    response = await client.post(f'{CONVERSATIONS_URL}/{stocked["id"]}/actions', json=body, headers=mine)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
