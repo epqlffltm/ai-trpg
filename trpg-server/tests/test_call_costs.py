@@ -20,6 +20,7 @@ import httpx
 import pytest
 from ai_core.calls import CallRecord, CallScope, CallUsage, Outcome
 from ai_core.catalog_contract import CatalogModel, Provider, TokenLimitField, UnitCost
+from ai_core.catalog_file import CostEntry, ModelEntry
 from ai_core.fake import FakeCallLog
 from ai_core.provider import Reasoning
 from ai_core.routing import Endpoint, ModelRouter
@@ -30,12 +31,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.models import AiInvocation
-from app.catalog import service
 from app.catalog.lookup import DbModelLookup
 from app.catalog.models import Grade
-from app.catalog.schemas import CostCreate, ModelCreate
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 from app.rounds.routed_narrator import RoutedNarrator
+from tests.catalog_rows import add_cost, put_models
 
 TODAY = date(2026, 10, 17)
 # GPT-6 Luna 의 공식 단가(2026-10-17 확인): 입력 $0.10, 캐시 입력 $0.01, 출력 $0.50
@@ -167,7 +167,7 @@ async def test_a_narration_records_the_cost_with_the_price_of_the_day():
     assert lookup.days == [TODAY]
 
 
-LUNA_ROW = ModelCreate(
+LUNA_ROW = ModelEntry(
     slug='gpt-6-luna',
     provider=Provider.OPENAI,
     api_model_id='gpt-6-luna-2026-09-22',
@@ -178,18 +178,18 @@ LUNA_ROW = ModelCreate(
 )
 
 
-def price(input_price: str, starts: date) -> CostCreate:
+def price(input_price: str, starts: date) -> CostEntry:
     """그날부터의 단가."""
-    return CostCreate(
+    return CostEntry(
         input_per_mtok=Decimal(input_price), output_per_mtok=Decimal('0.5'), effective_from=starts, checked_on=TODAY
     )
 
 
 @pytest.mark.usefixtures('clean_tables')
 async def test_the_catalog_gives_the_price_of_the_day(app: FastAPI, session: AsyncSession):
-    await service.add_model(session, LUNA_ROW)
-    today_price = await service.add_cost(session, 'gpt-6-luna', price('0.1', TODAY))
-    await service.add_cost(session, 'gpt-6-luna', price('0.2', TODAY + timedelta(days=30)))
+    await put_models(session, LUNA_ROW)
+    today_price = await add_cost(session, 'gpt-6-luna', price('0.1', TODAY))
+    await add_cost(session, 'gpt-6-luna', price('0.2', TODAY + timedelta(days=30)))
     lookup = DbModelLookup(app.state.session_factory)
 
     found = await lookup.find('gpt-6-luna', TODAY)
@@ -201,6 +201,6 @@ async def test_the_catalog_gives_the_price_of_the_day(app: FastAPI, session: Asy
 
 @pytest.mark.usefixtures('clean_tables')
 async def test_a_model_without_a_price_of_the_day_has_no_cost(app: FastAPI, session: AsyncSession):
-    await service.add_model(session, LUNA_ROW)
+    await put_models(session, LUNA_ROW)
 
     assert (await DbModelLookup(app.state.session_factory).find('gpt-6-luna', TODAY)).cost is None

@@ -89,7 +89,7 @@ async def test_a_disabled_model_is_called_and_summarised():
     assert pieces == ['사이렌이 ', '울린다.']
     assert lines[1] == '창구 openai, 답한 모델 gpt-6-luna-2026-09-22, 멈춘 이유 stop'
     assert lines[2] == '토큰: 입력 60(캐시 모름), 출력 9(생각 모름)'
-    assert lines[3] == '원가: 오늘의 단가가 없다(scripts.models set-cost)'
+    assert lines[3] == '원가: 오늘의 단가가 없다(모델 목록의 파일에 적고 scripts.models sync)'
     assert lines[4].startswith('시간: 첫 글 ')
 
 

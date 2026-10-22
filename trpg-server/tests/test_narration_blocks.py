@@ -16,6 +16,7 @@ import uuid
 
 import httpx
 import pytest
+from ai_core.catalog_file import ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,6 @@ from app.billing.http_billing import hold_result, require_success
 from app.billing.prices import FREE_BOOK, narration_code
 from app.billing.routing import utc_now
 from app.billing.settling import Readiness, worst
-from app.catalog.schemas import ModelCreate
 from app.rounds.service import NARRATION_FAILURE_LIMIT
 from tests.billing import PRICES, FakeBillingServer
 from tests.signing import SigningKey
@@ -286,7 +286,7 @@ async def test_a_model_with_the_longest_slug_fits_the_price_code(
     monkeypatch: pytest.MonkeyPatch,
 ):
     slug = 'a' * 20 + '-' + 'b' * 27
-    long = ModelCreate(**{**LUNA.model_dump(), 'slug': slug, 'api_model_id': 'long-model-2026-10-01'})
+    long = ModelEntry(**{**LUNA.model_dump(), 'slug': slug, 'api_model_id': 'long-model-2026-10-01'})
     await add_enabled(session, long)
     monkeypatch.setitem(PRICES, narration_code(slug), 20)
 

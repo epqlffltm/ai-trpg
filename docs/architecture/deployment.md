@@ -158,7 +158,7 @@
 - **임베딩.** VM 의 `ollama` 컨테이너가 CPU 로 `bge-m3` 를 돌린다. 처음 뜰 때 `ollama-pull` 이 모델을 받아 두고(이미 있으면 받지 않는다), 게임 서버는 그것이 끝나야 뜬다. 한 번 올린 모델은 내리지 않는다(`OLLAMA_KEEP_ALIVE=-1`).
   - `EMBEDDING_BASE_URL=http://ollama:11434/v1` 을 compose 가 적는다. 비우면 `LLM_BASE_URL`(집 PC)로 가 버린다.
   - 메모리의 상한은 2GB 다. 넘으면 이 컨테이너만 죽는다. 임베딩이 실패하면 로어 검색은 키워드로만 돌고 경고 로그를 남긴다. 서술은 멈추지 않는다.
-- **모델 목록을 넣는다.** 목록이 비어 있으면 시나리오를 저장하지 못한다. staging 의 DB 를 띄운 뒤 `docker compose exec trpg-server python -m scripts.models add ...` 로 `glm-4-7-flash` 와 쓸 로컬 모델을 넣는다(값은 게임 서버의 `scripts/models.py`).
+- **모델 목록을 넣는다.** 목록이 비어 있으면 시나리오를 저장하지 못한다. staging 의 DB 를 띄운 뒤 `docker compose exec trpg-server python -m scripts.models sync` 로 모델 목록의 원본 파일을 들여오고 `enable` 로 `glm-4-7-flash` 를 켠다. 쓸 로컬 모델은 그 환경의 파일을 따로 두고 `sync --file` 로 들여온다(운영 문서 [staging VM](../operations/staging-vm.md) 9번).
 - **가격표.** 결제 서버가 떠 있으면 "지금 팔고 있는 모델"만 고를 수 있다. staging 의 가격표에 로컬 모델의 이름표가 없으면 그 모델이 목록에 나오지 않는다([열린 질문](#열린-질문)).
 
 ## 올리는 방식

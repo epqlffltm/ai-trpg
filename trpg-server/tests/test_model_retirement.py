@@ -13,7 +13,7 @@
 
 import uuid
 from dataclasses import replace
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -28,6 +28,7 @@ from app.catalog import service as catalog
 from app.tables import repository as table_repository
 from app.tables.model_retirement import notice_stage
 from app.tables.retirement_watch import RetirementWatch
+from tests.catalog_rows import retire
 from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, FixedPrices, add_enabled, book, on_sale
 from tests.test_npc_actions import bearer, declare, events_of, table_url
@@ -67,11 +68,6 @@ def set_clock(app: FastAPI, now: datetime) -> RetirementWatch:
 async def tick(app: FastAPI, now: datetime) -> None:
     """그 시각에 지켜보기가 한 바퀴 돈다."""
     await set_clock(app, now).tick()
-
-
-async def retire(session: AsyncSession, slug: str, on: date) -> None:
-    """모델의 은퇴일을 적는다."""
-    await catalog.retire_model(session, slug, on)
 
 
 async def table_model(session: AsyncSession, table: dict) -> str:
