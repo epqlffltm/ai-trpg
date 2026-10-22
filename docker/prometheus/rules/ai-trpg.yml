@@ -428,6 +428,40 @@ groups:
           summary: '시도 횟수 제한 {{ $labels.limit }} 을 세지 못하고 통과시켰다'
           description: RedisDown 이 함께 울렸으면 Redis 쪽부터 본다. 아니면 인증 서버의 로그("시도 횟수를 셀 수 없어")를 본다
 
+      - alert: AuthWelcomeCreditsWorkerStalled
+        # 결제 쪽 워커(send_welcome_credits)는 5초마다 한 바퀴 돈다(맡길 것이 없어도 센다). 인증 서버가 떠 있는데 10분 동안 성공이 없으면 멈췄다
+        expr: |
+          (sum(increase(background_jobs_finished_total{service="auth-server", operation="welcome_credit.deliver", result="success"}[10m])) or vector(0)) == 0
+          and on() count(db_up{service="auth-server"}) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 인증 서버의 결제 쪽 워커가 10분 넘게 돌지 않았다
+          description: 환영 크레딧과 결제 자격이 결제 서버에 가지 않고, 탈퇴를 마치지도 알리지도 않는다. docker compose ps auth-welcome-credits 와 그 로그를 본다(BILLING_SECRET 이 없으면 뜨지 않는다)
+
+      - alert: AuthWithdrawalsOverdue
+        # 워커는 5초마다 비울 시각이 된 탈퇴를 마친다(#603). 그 시각이 지난 계정이 30분 동안 늘 남아 있으면 비우지 못하고 있다.
+        # 처리방침에 적은 삭제(요청에서 7일)가 늦어진다. 워커가 멈추면 이 수도 오지 않는다. 그때는 위의 경보가 울린다
+        expr: max(background_jobs_queued{service="auth-server", operation="withdrawal.complete"}) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: '비울 시각이 지난 탈퇴가 30분 넘게 {{ $value }} 건 남아 있다'
+          description: auth-welcome-credits 의 로그(operation=withdrawal.complete, level=error)를 본다. 관리 화면의 사용자에서 탈퇴를 요청한 시각을 본다
+
+      - alert: AuthWithdrawalNoticesWaiting
+        # 받는 서버가 받지 않으면 5초에서 1시간까지 늘려 다시 보낸다. 2시간 동안 늘 남아 있으면 한 번 더 기다려도 받지 않은 것이다.
+        # 비밀을 적지 않은 서버의 줄은 세지 않는다(기다리는 것이 정상이다)
+        expr: max(background_jobs_queued{service="auth-server", operation="withdrawal.deliver"}) > 0
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: '다른 서버에 알리지 못한 탈퇴가 2시간 넘게 {{ $value }} 건 남아 있다'
+          description: 관리 화면의 "탈퇴 알림"(서버, 시도 횟수, 마지막 오류)과 auth-welcome-credits 의 로그(error_code=withdrawal.undelivered, target)를 본다. 그 서버가 떠 있는지, 그 서버의 AUTH_SERVER_SECRET 이 인증 쪽의 비밀과 같은지 본다
+
   - name: board-server
     rules:
       - alert: BoardDatabaseUnreachable

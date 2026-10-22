@@ -437,8 +437,11 @@ GET /api/v1/auth/public-names?ids=<공개 ID>,<공개 ID>
 | asset | `ASSET_URL`(`http://127.0.0.1:8006`) | `ASSET_SECRET` |
 
 받는 주소를 만드는 그 서버의 PR 이 `.env.example` 과 compose 에 비밀을 더한다([탈퇴 설계](../docs/architecture/withdrawal.md)의 "서버마다의 이름").
-받는 주소가 아직 없는 서버는 `404` 라 다시 보내며 기다린다. 알리지 못하면 로그에 `warning`(`error_code: withdrawal.undelivered`)이 남고,
-관리자 화면의 "탈퇴 알림"에 시도 횟수와 마지막 오류가 남는다.
+알리지 못하면 로그에 `warning`(`error_code: withdrawal.undelivered`)이 남고, 관리자 화면의 "탈퇴 알림"에 시도 횟수와 마지막 오류가 남는다.
+
+**밀리면 경보가 울린다.** 워커가 바퀴마다 비울 시각이 지났는데 비우지 않은 계정과, 비밀을 적은 서버에 아직 알리지 못한 줄의 수를
+`background_jobs_queued`(`operation` 이 `withdrawal.complete`, `withdrawal.deliver`)로 적는다. 앞의 것이 30분 동안 남으면 `AuthWithdrawalsOverdue`,
+뒤의 것이 2시간 동안 남으면 `AuthWithdrawalNoticesWaiting`, 워커가 10분 동안 돌지 않으면 `AuthWelcomeCreditsWorkerStalled` 다(`docker/prometheus/rules/ai-trpg.yml`).
 
 ### 시도 횟수 제한
 
