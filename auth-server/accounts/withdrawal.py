@@ -34,6 +34,7 @@ from accounts.mail import (
     send_withdrawal_requested_notice,
 )
 from accounts.models import SecurityEventKind, User, WithdrawalNotice, WithdrawalTarget
+from accounts.return_blocks import record_return_blocks
 from accounts.security_events import record_security_event
 from accounts.tokens import revoke_all_sessions
 from accounts.withdrawal_client import WithdrawalUndeliveredError, configured_targets, send_withdrawal
@@ -210,6 +211,8 @@ def complete_withdrawal(user_id: int, now: datetime) -> bool:
     if scheduled is None or scheduled > now:
         return False
     email = locked.email
+    # 정지 중이면 재가입을 막는 값을 남긴다(#634). 비우고 기록을 지우기 전에 읽는다
+    record_return_blocks(locked, email, now)
     blank_account(locked)
     revoke_all_sessions(locked)
     erase_mail_records(locked, email)

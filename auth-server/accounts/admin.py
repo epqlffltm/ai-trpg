@@ -20,6 +20,7 @@ from accounts.models import (
     MailReceipt,
     OutgoingMail,
     PaymentEligibility,
+    ReturnBlock,
     SecurityEvent,
     SignupCode,
     Suspension,
@@ -236,6 +237,26 @@ class WelcomeCreditAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(ReturnBlock)
+class ReturnBlockAdmin(admin.ModelAdmin):
+    """
+    정지된 채 탈퇴한 사람의 재가입 막기(#634). 조회하고, 지워서 푼다.
+
+    값은 서명한 것이라 화면에서 사람을 알아볼 수 없다. 만들거나 고치지 못한다(탈퇴를 마칠 때만 적힌다).
+    지우면 그 사람은 다시 가입하고 본인인증할 수 있다.
+    """
+
+    list_display = ('created_at', 'kind', 'reason', 'expires_at')
+    list_filter = ('kind', 'reason')
+    date_hierarchy = 'created_at'
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
         return False
 
 
