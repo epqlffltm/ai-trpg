@@ -27,7 +27,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,6 +53,10 @@ from app.conversations.repository import ConversationRow
 from app.conversations.schemas import ConversationCreate
 from app.core.dependencies import Viewer
 from app.ratings import Rating, allowed_ratings
+
+# 차례(generating_since)를 쥔 채 이만큼 지나면 서버가 도중에 꺼진 것으로 본다.
+# 모델을 부르는 시간의 상한(LLM_TIMEOUT_SECONDS, 10분까지)보다 길다
+GENERATION_STALE = timedelta(minutes=15)
 
 
 class ConversationNotFoundError(Exception):
@@ -81,6 +85,14 @@ class Remembered:
 
     persona_id: uuid.UUID | None
     model_slug: str | None
+
+
+class ConversationBusyError(Exception):
+    """대화가 답을 쓰는 중이다(409). 한 대화에 한 번에 하나의 생성만 받는다. 그동안 가지도 바꾸지 않는다."""
+
+
+class MessageNotFoundError(Exception):
+    """그런 말이 없다. 남의 대화의 말, 다른 대화의 말도 이것이다(404)."""
 
 
 class StartNotFoundError(Exception):
@@ -381,4 +393,38 @@ async def delete_conversation(session: AsyncSession, viewer: Viewer, conversatio
     """대화를 지운다(지운 시각을 적는다). 없으면 ConversationNotFoundError."""
     conversation, _, _ = await get_conversation(session, viewer, conversation_id)
     conversation.deleted_at = func.now()
+    await session.commit()
+
+
+def is_generating(conversation: Conversation, now: datetime) -> bool:
+    """대화가 지금 답을 쓰는 중인가. 차례를 쥔 지 GENERATION_STALE 이 지났으면 아니다(서버가 꺼졌다)."""
+    since = conversation.generating_since
+    return since is not None and since >= now - GENERATION_STALE
+
+
+async def message_alternatives(
+    session: AsyncSession, conversation: Conversation, messages: list[Message]
+) -> dict[uuid.UUID | None, list[uuid.UUID]]:
+    """지금 가지의 말마다 그 대안들(같은 부모 아래의 말들). 부모로 찾는다."""
+    if not messages:
+        return {}
+    return await repository.alternatives(session, conversation.id, [message.parent_id for message in messages])
+
+
+async def choose_branch(
+    session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID, message_id: uuid.UUID, now: datetime
+) -> None:
+    """
+    그 말의 가지를 본다(다른 대안을 고른다). 가지의 끝은 그 말 아래에서 가장 나중에 생긴 말이다.
+
+    대화가 없으면 ConversationNotFoundError, 그 대화의 말이 아니면 MessageNotFoundError,
+    답을 쓰는 중이면 ConversationBusyError. 수정 시각은 바꾸지 않는다.
+    """
+    conversation, _, _ = await get_conversation(session, viewer, conversation_id)
+    message = await session.get(Message, message_id)
+    if message is None or message.conversation_id != conversation.id:
+        raise MessageNotFoundError
+    leaf_id = await repository.latest_descendant(session, message.id)
+    if not await repository.set_leaf(session, conversation.id, leaf_id, now - GENERATION_STALE):
+        raise ConversationBusyError
     await session.commit()

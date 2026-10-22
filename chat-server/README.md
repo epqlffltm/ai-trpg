@@ -104,12 +104,15 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/models` | 대화에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?, model?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
 | GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
-| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터) | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives`), 답을 쓰는 중인지(`generating`) | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`) | access 토큰 |
+| POST | `/api/v1/chat/messages/{id}/regenerate` | [다시 생성](#다시-생성-멈추기-대안). 그 말에 다시 답한다. SSE 의 모양은 말 보내기와 같다. 인사말은 422 `not_regenerable`, 없는 말은 404 `message_not_found` | access 토큰 |
+| POST | `/api/v1/chat/generations/{id}/stop` | [멈추기](#다시-생성-멈추기-대안). 204. 받은 만큼 저장한다. 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
+| PUT | `/api/v1/chat/conversations/{id}/branch` | [다른 대안 보기](#다시-생성-멈추기-대안). `{message_id}`. 바뀐 대화를 돌려준다. 답을 쓰는 중이면 409 `generation_in_progress` | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/model` | 대화의 모델 바꾸기. `{model}`. 바꾼 모델을 돌려준다. 고를 수 없으면 422 `model_unavailable` | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 
-**스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages`(만들었다)와 `POST /api/v1/chat/messages/{id}/regenerate`, `/continue`(다음 PR)가
+**스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages`, `POST /api/v1/chat/messages/{id}/regenerate`(만들었다)와 `/continue`(조작 단계)가
 바로 SSE(`text/event-stream`)로 답한다. 응답에 `X-Accel-Buffering: no` 를 싣고 15초 조용하면 하트비트(`: heartbeat`)를 끼운다. 끊겨도 서버는 생성을 끝까지 저장하고,
 앱은 다시 들어와 저장된 말을 읽는다. 공용 코드의 `StreamRoutes` 로 span 과 요청의 시간 메트릭에서 빼고 `sse_*` 로 센다(`app/main.py` 의 `STREAMS`).
 
@@ -240,11 +243,12 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 | 다 받았다 | `complete` | 확정 |
 | 길이 상한에서 잘렸다, 도중에 끊겼다(공급자의 오류) | 받은 만큼 `partial` | 확정(설계의 과금 표) |
 | 글자 없이 실패했다, 빈 답이다 | 없다(SSE `failed`, `code` 는 `timeout`, `status_429`, `empty` …) | 반환 |
+| 사람이 멈췄다 | 받은 만큼 `partial`(없으면 없다, SSE `failed` 의 `stopped`) | 바로 확정이나 반환 |
 | 서버가 꺼지며 멈췄다 | 받은 만큼 `partial`(없으면 없다) | 다음에 뜬 서버의 청구 정리가 확정이나 반환 |
 
 - **끊겨도 끝까지.** 모델을 부르는 것은 응답과 따로 도는 작업이다(`app.state.turns`). 사람이 앱을 닫아도 끝까지 돌아 저장하고 확정한다.
   서버가 꺼질 때(lifespan)는 도는 작업을 멈추고, 각 작업은 받은 만큼 저장한 뒤 멈춘다.
-- **같은 실패를 되풀이하지 않는다.** 저절로 다시 부르지 않고 다른 모델로 넘어가지 않는다. 사람이 다시 보낸다(다시 생성은 다음 PR).
+- **같은 실패를 되풀이하지 않는다.** 저절로 다시 부르지 않고 다른 모델로 넘어가지 않는다. 사람이 다시 생성한다.
 - **차례.** 15분(`GENERATION_STALE`, 모델의 시간 상한보다 길다)이 지난 차례는 서버가 도중에 꺼진 것으로 보고 다음 말이 다시 잡는다.
 - **모델에 보내는 것.** 카드(지킬 것, 캐릭터, 사용자 페르소나, 시작 상황. 빈 칸은 뺀다)와 지금 가지의 최근 말(`CHAT_CONTEXT_CHARS` 안, 마지막 말은 늘)이다.
   요약, 기억 메모, 로어북, 장소와 소지품은 그 단계에서 끼운다.
@@ -252,6 +256,25 @@ uv run python -m scripts.models adult glm-5-3 --forbid
   `pending`, `held` 인 채로 15분이 지난 것(서버가 꺼졌다)은 돌려준다. 결제 서버가 받아들이지 않으면 `failed` 로 두고 로그에 남긴다(사람이 본다).
 - **원가.** 기록에 토큰 수와 그날의 단가로 센 원가(`cost_usd`)를 남긴다. 판매가가 원가를 넘는지 볼 때 쓴다.
 - 요청 수의 제한(설계의 "요청 제한")은 아직 없다. 한 대화 한 생성과 크레딧이 지금의 상한이다.
+
+### 다시 생성, 멈추기, 대안
+
+대화는 트리다(`messages.parent_id`). 같은 부모 아래의 말들이 서로의 대안이고, 대화가 지금 보는 가지의 끝(`active_leaf_id`)이 하나 있다.
+
+- **다시 생성**(`POST /messages/{id}/regenerate`). 캐릭터의 답이면 그 부모(사람의 말) 아래에, 사람의 말이면(답을 못 받았다) 그 말 아래에 새 답을 쓴다.
+  사람의 말은 새로 저장하지 않는다. 모델에는 그 사람의 말까지의 가지가 간다(앞의 답은 보내지 않는다). 새 호출이라 새로 청구한다.
+  나머지(차례, 홀드, SSE, 실패)는 말 보내기와 같다. `turn` 의 `user_message` 는 답할 사람의 말이다.
+  가지의 끝은 새 답을 저장할 때 옮긴다. 거절되거나 글자 없이 실패하면 앞의 답이 그대로 보인다.
+  인사말(부모가 없는 캐릭터의 말)은 카드가 쓴 글이라 다시 쓰지 않는다(422 `not_regenerable`).
+- **멈추기**(`POST /generations/{id}/stop`). `turn` 의 `generation_id` 로 부른다. 공급자 호출을 끊는다(끊지 않으면 청구하지 않는 글에 원가가 든다).
+  받은 만큼 `partial` 로 저장하고 바로 확정한다. 받은 글이 없으면 반환하고 SSE 는 `failed`(`stopped`)로 끝난다.
+  사람이 멈추는 것은 모델을 부르는 일만 끊는다. 저장과 확정은 끊지 않는다. 서버가 꺼지며 멈추는 것(작업 전체의 취소)과 가른다.
+  멈추는 스위치는 그 생성을 돌리는 서버의 메모리(`app.state.stops`)에 있다. 서버가 여럿이면 다른 서버에 닿은 멈추기는 404 다.
+  지금은 한 대로 돈다. 늘리면 Redis 의 pub/sub 같은 것으로 알린다.
+- **대안 오가기.** 대화를 읽으면 지금 가지의 말마다 `alternatives`(같은 부모 아래의 말들의 id, 먼저 생긴 것부터, 이 말도 든다)가 실린다.
+  화면이 "< 2/3 >" 를 그린다. 다른 대안을 고르면(`PUT /conversations/{id}/branch`) 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다.
+  보는 곳만 바꾸는 것이라 수정 시각(목록의 차례)은 그대로다. 답을 쓰는 중이면 바꾸지 않는다(409). 확인과 바꾸기를 한 문장으로 한다.
+- **`generating`.** 대화가 차례를 쥐고 있으면 참이다(15분이 지난 차례는 아니다). 화면이 보내기와 다시 생성을 막고, 끝난 뒤 다시 읽는다.
 
 ### 토큰 검증
 

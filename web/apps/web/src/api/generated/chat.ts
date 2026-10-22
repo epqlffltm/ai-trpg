@@ -50,6 +50,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{conversation_id}/branch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose Branch
+         * @description 다른 대안의 가지를 본다. 그 말 아래에서 가장 나중에 생긴 말이 끝이 된다. 바뀐 대화를 돌려준다.
+         */
+        put: operations["choose_branch_api_v1_chat_conversations__conversation_id__branch_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{conversation_id}/messages": {
         parameters: {
             query?: never;
@@ -90,6 +110,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/generations/{generation_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Generation
+         * @description 모델을 부르는 것을 멈춘다(공급자의 호출도 끊는다).
+         *     받은 만큼 partial 로 저장하고 청구한다. 받은 글이 없으면 반환한다.
+         *
+         *     멈출 생성이 없으면(끝났다, 남의 것이다, 이 서버에서 도는 것이 아니다) 404 generation_not_running 이다.
+         */
+        post: operations["stop_generation_api_v1_chat_generations__generation_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/me": {
         parameters: {
             query?: never;
@@ -104,6 +147,29 @@ export interface paths {
         get: operations["read_me_api_v1_chat_me_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/messages/{message_id}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate
+         * @description 그 말에 다시 답한다.
+         *     캐릭터의 답이면 같은 사람의 말에 새 대안을, 사람의 말이면(답을 못 받았다) 그 말에 답을 쓴다.
+         *
+         *     새 호출이라 새로 청구한다. 앞의 답은 남고, 대화의 가지는 새 답으로 옮겨 간다. SSE 의 모양은 말 보내기와 같다.
+         */
+        post: operations["regenerate_api_v1_chat_messages__message_id__regenerate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -180,6 +246,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * BranchChoice
+         * @description 볼 가지. 대안 가운데 하나의 id 다. 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다.
+         */
+        BranchChoice: {
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+        };
         /**
          * CharacterDocument
          * @description 판에 굳힌 캐릭터. intro_html 은 asset 서버가 허용 목록으로 거른 소개다.
@@ -272,9 +349,9 @@ export interface components {
         };
         /**
          * ConversationDetail
-         * @description 대화 하나. messages 는 지금 보고 있는 가지의 말들이다. 첫 말부터 차례로.
+         * @description 대화 하나. messages 는 지금 보고 있는 가지의 말들이다. 첫 말부터 차례로. 말마다 그 대안들의 id 가 실린다.
          *
-         *     대안(다시 생성, 고친 말)은 그 단계에서 따로 읽는 길을 둔다.
+         *     generating 이 참이면 답을 쓰는 중이다. 화면이 보내기를 막고, 끝난 뒤 다시 읽는다.
          */
         ConversationDetail: {
             character: components["schemas"]["CharacterOut"];
@@ -283,13 +360,15 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Generating */
+            generating: boolean;
             /**
              * Id
              * Format: uuid
              */
             id: string;
             /** Messages */
-            messages: components["schemas"]["MessageOut"][];
+            messages: components["schemas"]["PathMessageOut"][];
             model: components["schemas"]["ConversationModelOut"] | null;
             persona: components["schemas"]["PersonaOut"] | null;
             start: components["schemas"]["StartOut"];
@@ -392,30 +471,6 @@ export interface components {
             content: string;
         };
         /**
-         * MessageOut
-         * @description 말 하나.
-         */
-        MessageOut: {
-            /** Content */
-            content: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Parent Id */
-            parent_id: string | null;
-            /** Role */
-            role: string;
-            /** Status */
-            status: string;
-        };
-        /**
          * ModelChoice
          * @description 대화의 모델을 바꿀 때 받는 값.
          */
@@ -474,6 +529,34 @@ export interface components {
             /** Promo */
             promo: boolean;
             tier: components["schemas"]["Tier"] | null;
+        };
+        /**
+         * PathMessageOut
+         * @description 지금 가지의 말 하나와 그 대안들. alternatives 는 같은 부모 아래의 말들의 id 다(먼저 생긴 것부터, 이 말도 든다).
+         *
+         *     화면이 "< 2/3 >" 를 그리고, 다른 대안을 고르면 PUT /conversations/{id}/branch 로 그 가지를 본다.
+         */
+        PathMessageOut: {
+            /** Alternatives */
+            alternatives: string[];
+            /** Content */
+            content: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
         };
         /**
          * PersonaOut
@@ -688,6 +771,41 @@ export interface operations {
             };
         };
     };
+    choose_branch_api_v1_chat_conversations__conversation_id__branch_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BranchChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     send_message_api_v1_chat_conversations__conversation_id__messages_post: {
         parameters: {
             query?: never;
@@ -758,6 +876,35 @@ export interface operations {
             };
         };
     };
+    stop_generation_api_v1_chat_generations__generation_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                generation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_me_api_v1_chat_me_get: {
         parameters: {
             query?: never;
@@ -774,6 +921,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    regenerate_api_v1_chat_messages__message_id__regenerate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE. app/turns/schemas.py 의 메시지들 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

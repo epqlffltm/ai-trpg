@@ -8,8 +8,9 @@
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import Select, func, literal, select, update
+from sqlalchemy import Select, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -169,3 +170,70 @@ async def active_path(session: AsyncSession, leaf_id: uuid.UUID | None) -> list[
     )
     query = select(Message).join(upward, Message.id == upward.c.id).order_by(upward.c.depth.desc())
     return list(await session.scalars(query))
+
+
+async def find_visible_message(
+    session: AsyncSession, owner_id: uuid.UUID, ratings: Sequence[Rating], message_id: uuid.UUID
+) -> tuple[Message, ConversationRow] | None:
+    """이 사람이 볼 수 있는 대화의 말 하나와 그 대화. 없거나 남의 대화의 말이면 None."""
+    message = await session.get(Message, message_id)
+    if message is None:
+        return None
+    row = await find_visible(session, owner_id, ratings, message.conversation_id)
+    return None if row is None else (message, row)
+
+
+async def alternatives(
+    session: AsyncSession, conversation_id: uuid.UUID, parent_ids: Sequence[uuid.UUID | None]
+) -> dict[uuid.UUID | None, list[uuid.UUID]]:
+    """
+    부모마다 그 아래의 말들(서로의 대안). 먼저 생긴 것부터. 첫 말들(부모가 없다)은 None 의 자리다.
+
+    지금 가지의 말들의 부모를 한꺼번에 넘긴다. 쿼리 한 번이다(색인 ix_messages_conversation_parent).
+    """
+    parents = [parent for parent in parent_ids if parent is not None]
+    query = (
+        select(Message.parent_id, Message.id)
+        .where(
+            Message.conversation_id == conversation_id,
+            Message.parent_id.in_(parents) | (Message.parent_id.is_(None) if None in parent_ids else False),
+        )
+        .order_by(Message.created_at, Message.id)
+    )
+    found: dict[uuid.UUID | None, list[uuid.UUID]] = {}
+    for parent_id, message_id in (await session.execute(query)).all():
+        found.setdefault(parent_id, []).append(message_id)
+    return found
+
+
+async def latest_descendant(session: AsyncSession, message_id: uuid.UUID) -> uuid.UUID:
+    """
+    그 말 아래에서 가장 나중에 생긴 말(그 말 자신일 수도 있다). 그 가지를 마지막으로 보던 곳이다.
+
+    가장 나중에 생긴 말은 자식이 없다(자식은 언제나 부모보다 늦다). 그래서 그 가지의 끝이다.
+    """
+    downward = select(Message.id, Message.created_at).where(Message.id == message_id).cte('branch', recursive=True)
+    child = aliased(Message)
+    downward = downward.union_all(select(child.id, child.created_at).join(downward, child.parent_id == downward.c.id))
+    query = select(downward.c.id).order_by(downward.c.created_at.desc(), downward.c.id.desc()).limit(1)
+    return (await session.execute(query)).scalar_one()
+
+
+async def set_leaf(session: AsyncSession, conversation_id: uuid.UUID, leaf_id: uuid.UUID, busy_since: datetime) -> bool:
+    """
+    지금 가지의 끝을 바꾼다(다른 대안을 본다). 답을 쓰는 중이면(busy_since 뒤에 차례를 잡았다) 바꾸지 않고 False.
+    수정 시각은 그대로다. 말한 것이 아니라 보는 곳만 바꿨다.
+
+    확인과 바꾸기를 한 문장으로 한다. 따로 하면 그사이 시작한 답이 끝나며 가지의 끝을 덮는다.
+    """
+    statement = (
+        update(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            or_(Conversation.generating_since.is_(None), Conversation.generating_since < busy_since),
+        )
+        .values(active_leaf_id=leaf_id, updated_at=Conversation.updated_at)
+        .returning(Conversation.id)
+        .execution_options(synchronize_session=False)
+    )
+    return (await session.execute(statement)).first() is not None
