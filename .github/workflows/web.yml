@@ -1,5 +1,5 @@
 # .github/workflows/web.yml
-# 화면(web/, #290)의 CI. 서버의 API 목록에서 만든 타입이 지금의 목록과 같은지, 타입 검사, 린트, 단위 시험, 빌드를 본다.
+# 화면(web/, #290)의 CI. 서버의 API 목록에서 만든 타입과 동의 문서의 사본이 원본과 같은지, 타입 검사, 린트, 단위 시험, 빌드를 본다.
 #
 # PR 에서는 관문(.github/workflows/ci.yml)이 바뀐 파일을 보고 이 워크플로를 부른다(changed-servers.sh 의 web).
 # 화면이 프록시에 실려 실제로 뜨는지(index.html 로 돌리기, 캐시, CSP)는 관문의 stack 이 본다.
@@ -15,6 +15,7 @@ on:
     paths:
       - "web/**"
       - "docs/api/*.openapi.json"
+      - "docs/legal/*.md"
       - ".github/workflows/web.yml"
 
 # 이 워크플로는 저장소를 읽기만 한다. 필요한 권한만 준다
@@ -50,6 +51,12 @@ jobs:
         run: |
           npm run gen:api
           git diff --exit-code -- apps/web/src/api/generated
+
+      # 동의 문서(docs/legal)를 고치고 화면의 사본을 다시 만들지 않았으면 실패한다(npm run sync:legal 을 돌려 함께 올린다)
+      - name: 동의 문서의 사본이 원본과 같은가
+        run: |
+          npm run sync:legal
+          git diff --exit-code -- apps/web/src/legal/documents
 
       # 타입이 맞지 않으면 실패한다. 빌드(Vite)는 타입을 보지 않으므로 따로 돌린다
       - name: 타입 검사

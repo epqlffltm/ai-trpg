@@ -35,3 +35,11 @@ export function useCountdown(initialEndsAt: number | null = null): Countdown {
 export function secondsFromNow(seconds: number): number {
   return Date.now() + seconds * 1000;
 }
+
+/** 남은 초를 읽기 좋은 글로(4분 30초, 45초) */
+export function formatRemaining(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes === 0) return `${rest}초`;
+  return rest === 0 ? `${minutes}분` : `${minutes}분 ${rest}초`;
+}

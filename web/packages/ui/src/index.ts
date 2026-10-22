@@ -3,6 +3,10 @@
 
 export { Button } from './Button';
 export type { ButtonProps, ButtonVariant } from './Button';
+export { Checkbox } from './Checkbox';
+export type { CheckboxProps } from './Checkbox';
+export { Dialog } from './Dialog';
+export type { DialogProps } from './Dialog';
 export { ListSection } from './ListSection';
 export type { ListSectionProps, ListStatus } from './ListSection';
 export { Notice } from './Notice';
