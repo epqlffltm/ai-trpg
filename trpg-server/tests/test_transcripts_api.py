@@ -1,7 +1,7 @@
 # trpg-server/tests/test_transcripts_api.py
 
 """
-한 판의 기록을 마크다운 파일로 내려받는 것(#403)을 검증한다.
+한 판의 기록을 마크다운 파일로 내려받는 것(#403)을 검증한다. 다른 형식과 쪽지, 채팅, 받는 수는 #617 의 테스트가 본다.
 
   - GET /tables/{id}/transcript: 앉은 사람
   - GET /tables/past/{id}/transcript: 떠난 사람
@@ -10,7 +10,7 @@
 보는 것.
   - 마크다운 파일로 온다. 이름은 테이블의 제목이다.
   - 시작, 라운드, 스타팅의 서술, 선언, 결과의 서술이 차례대로 있다.
-  - 쪽지의 글, GM 전용 글(진행 지침), 내부 식별자는 없다.
+  - GM 전용 글(진행 지침)과 내부 식별자는 없다. 쪽지와 채팅은 tests/test_transcript_formats.py 가 본다(#617).
   - 떠난 사람은 떠난 때까지만 받는다. 그 뒤의 서술은 없다.
   - 앉지 않은 사람, 떠난 적 없는 사람은 404, 로그인하지 않으면 401 이다.
   - 이벤트는 쪽마다 읽어 빠짐없이 차례대로 나온다.
@@ -48,7 +48,6 @@ friend = event_tests.friend
 stranger = event_tests.stranger
 
 UUID_PATTERN = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
-SECRET = '비밀 통로는 와인 창고 뒤에 있다'
 TABLES_URL = event_tests.TABLES_URL
 
 
@@ -97,15 +96,10 @@ async def test_one_seated_downloads_the_story(client: AsyncClient, me: dict, fri
 
 async def test_secrets_and_ids_are_left_out(client: AsyncClient, me: dict, friend: dict, narrated):
     table = await start_duo(client, me, friend)
-    whispered = await client.post(
-        table_url(table, '/whispers'), json={'recipient_id': str(event_tests.FRIEND), 'content': SECRET}, headers=me
-    )
-    assert whispered.status_code == status.HTTP_201_CREATED, whispered.text
     await play_a_round(client, me, friend, table, narrated)
 
     text = await download(client, transcript_url(table), me)
 
-    assert SECRET not in text
     assert GM_GUIDE not in text
     assert UUID_PATTERN.search(text) is None
 

@@ -20,8 +20,9 @@ import pytest
 
 from app.events.models import EventType, TableEvent
 from app.transcripts.labels import Labels
-from app.transcripts.markdown import RENDERERS, header, render, render_event, scenes_under_rounds
+from app.transcripts.markdown import header, render, render_event
 from app.transcripts.reading import Cut
+from app.transcripts.story import RENDERERS, scenes_under_rounds
 from tests.transcript_samples import SAMPLES
 
 UUID_PATTERN = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
@@ -110,7 +111,10 @@ def test_a_missing_name_is_said_plainly():
     assert render_event(event('member_left', {'character_name': None}), LABELS) == '- 이름 없는 사람: 테이블을 나감\n'
 
 
-@pytest.mark.parametrize(('departed', 'scope'), [(False, '1~42번 이벤트'), (True, '1~42번 이벤트 (떠난 때까지)')])
+@pytest.mark.parametrize(
+    ('departed', 'scope'),
+    [(False, '1~42번 이벤트, 채팅, 내 쪽지'), (True, '1~42번 이벤트, 채팅, 내 쪽지 (떠난 때까지)')],
+)
 def test_the_header_names_the_table_and_the_scope(departed: bool, scope: str):
     text = header(cut(departed), datetime(2026, 10, 20, 12, 0, tzinfo=UTC))
 
