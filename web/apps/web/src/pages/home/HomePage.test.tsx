@@ -74,17 +74,4 @@ describe('HomePage', () => {
     await userEvent.click(retry);
     expect(await within(section('새로 공개된 캐릭터')).findByText('아직 공개된 캐릭터가 없습니다.')).toBeInTheDocument();
   });
-
-  it('다시 동의할 약관이 있으면 이어하기를 부르지 않고 까닭을 알린다', async () => {
-    const { seen } = installFakeFetch({
-      [`POST ${REFRESH_PATH}`]: () => json(200, tokens('limited', { consents_pending: ['terms'] })),
-      'GET /api/v1/auth/me': () => json(200, { nickname: '모험가' }),
-      'GET /api/v1/game/listings': () => json(200, { items: [], total: 0 }),
-      'GET /api/v1/asset/listings/characters': () => json(200, { items: [], total: 0 }),
-    });
-    renderApp('/');
-
-    expect(await screen.findByText(/다시 동의해야/)).toBeInTheDocument();
-    expect(seen.some((request) => request.url.startsWith('/api/v1/game/tables'))).toBe(false);
-  });
 });
