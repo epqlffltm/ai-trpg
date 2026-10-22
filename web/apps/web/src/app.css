@@ -860,3 +860,164 @@ a.ui-button {
   padding-top: 10px;
   border-top: 1px dashed var(--ui-border);
 }
+
+/* 상태 패널(B7). 위에 내 HP, 아래는 탭(캐릭터, 소지품, 퀘스트·장소) */
+.status__mine {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.status__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.status__tab {
+  font: inherit;
+  font-size: 0.9em;
+  padding: 4px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.status__tab[aria-selected='true'] {
+  border-color: currentColor;
+  font-weight: 600;
+}
+
+.status__tab kbd {
+  font-size: 0.8em;
+  color: var(--ui-text-muted);
+}
+
+.status__body {
+  display: grid;
+  gap: 10px;
+}
+
+.status-cards {
+  display: grid;
+  gap: 12px;
+}
+
+.status-card {
+  display: grid;
+  gap: 4px;
+}
+
+.status-card p {
+  margin: 0;
+}
+
+.status-card__name {
+  font-weight: 600;
+}
+
+.status-card__abilities summary {
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.hp {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hp__meter {
+  width: 100%;
+  height: 8px;
+}
+
+.hp__state {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+.hp--dead .hp__text,
+.hp--dead .hp__meter {
+  opacity: 0.5;
+}
+
+.injuries,
+.items,
+.quests,
+.ways {
+  display: grid;
+  gap: 4px;
+  font-size: 0.92em;
+}
+
+.injuries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item,
+.quest {
+  display: grid;
+}
+
+.item__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-muted);
+}
+
+.quest--succeeded > span:first-child {
+  text-decoration: line-through;
+}
+
+.quest--failed > span:first-child {
+  color: var(--ui-text-muted);
+  text-decoration: line-through;
+}
+
+.world {
+  display: grid;
+  gap: 10px;
+}
+
+.world p {
+  margin: 0;
+}
+
+.world__clock {
+  font-weight: 600;
+}
+
+.ways {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+/* 좁은 화면의 내 HP 한 줄. 넓으면 상태 패널이 옆에 있어 숨긴다 */
+.hp-strip {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  gap: 2px;
+  margin-bottom: var(--ui-gap);
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+@media (min-width: 900px) {
+  .hp-strip {
+    display: none;
+  }
+}

@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/trpg/room/TableRoom.tsx
-// 테이블 방(B6)의 틀. 스트림을 붙잡고, 받은 것을 나눠 준다. 가운데는 테이블의 상태에 따라(모집 중, 진행 중, 끝남), 옆에는 앉은 사람과 채팅.
+// 테이블 방(B6)의 틀. 스트림을 붙잡고, 받은 것을 나눠 준다. 가운데는 테이블의 상태에 따라(모집 중, 진행 중, 끝남),
+// 옆에는 앉은 사람(모집 중) 또는 상태 패널(B7, 진행 중과 끝남)과 채팅.
 //
 // 스트림에서 받은 것:
 //   - 이벤트: 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다
@@ -24,6 +25,8 @@ import { useBatchedRefetch } from './useBatchedRefetch';
 import { useTableStream } from './useTableStream';
 import { useTypingPeople } from './useTypingPeople';
 import { RoomStage } from './RoomStage';
+import { MyHpStrip } from './status/MyHpStrip';
+import { StatusPanel } from './status/StatusPanel';
 
 export function TableRoom({ table }: { table: TableDetail }) {
   const queryClient = useQueryClient();
@@ -65,6 +68,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
       <RoomHeader table={table} stream={stream} />
       <div className="room__body">
         <div className="room__main">
+          {table.status === 'playing' ? <MyHpStrip table={table} myId={myId} /> : null}
           <RoomStage
             table={table}
             myId={myId}
@@ -73,7 +77,11 @@ export function TableRoom({ table }: { table: TableDetail }) {
           />
         </div>
         <div className="room__side">
-          <MemberList members={table.members} myId={myId} nameOf={nameOf} />
+          {table.status === 'recruiting' ? (
+            <MemberList members={table.members} myId={myId} nameOf={nameOf} />
+          ) : (
+            <StatusPanel table={table} myId={myId} nameOf={nameOf} />
+          )}
           <ChatPanel
             table={table}
             chat={chat}
