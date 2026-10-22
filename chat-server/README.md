@@ -71,8 +71,13 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `ASSET_URL` | 비어 있음(부르지 않음) | asset 서버의 주소(`http://127.0.0.1:8006`). 대화를 시작할 때 캐릭터의 판과 페르소나의 사본을 가져온다([asset 서버의 다른 서버에 내주기](../asset-server/README.md#다른-서버에-내주기)). 비우면 대화를 시작하지 못한다(503) |
 | `ASSET_SECRET` | 비어 있음 | asset 서버에 보내는 요청에 서명하는 비밀. `asset-server/.env` 의 `CHAT_SERVER_SECRET` 과 같은 값. `ASSET_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `ASSET_TIMEOUT_SECONDS` | `5` | asset 서버를 한 번 부르는 시간의 상한(초, 30 까지). 대화를 시작하는 사람이 기다린다 |
+| `BILLING_URL` | 비어 있음(받지 않음) | 결제 서버의 주소(`http://127.0.0.1:8003`). 모델의 값을 가격 목록에서 읽고, 말 한 번에 홀드를 건다([모델 목록](#모델-목록)). 비우면 모델은 값 없이 보이고 말은 공짜다 |
+| `BILLING_SECRET` | 비어 있음 | 결제 서버에 보내는 요청에 서명하는 비밀. `billing-server/.env` 의 `CHAT_SERVER_SECRET` 과 같은 값. `BILLING_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
+| `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초, 10 까지). 게임 서버와 같다 |
 
-결제 서버를 부를 때의 비밀(`BILLING_SECRET`, 결제 쪽은 #578)은 그 길을 만들 때 더한다.
+`tools/fill_env.py` 가 `ASSET_SECRET` 과 `BILLING_SECRET` 을 짝(asset 서버, 결제 서버의 `CHAT_SERVER_SECRET`)과 같은 값으로 채운다.
+compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)에서는 두 주소와 비밀을 비운다(설정의 검사가 "주소는 있고 비밀이 없다"로 막지 않게).
+서버만 쓰는 설정을 더해 그 검사가 마이그레이션에도 걸리면 `chat-migrate` 에서 같이 비운다.
 환경 변수는 다른 서버와 같은 이름을 쓰고 머리(`CHAT_`)를 붙이지 않는다. 머리는 다른 서버의 설정에 들어가는 값(`CHAT_SERVER_SECRET`)에만 붙인다.
 
 ## 상태 확인
@@ -90,7 +95,7 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | 방법 | 주소 | 하는 일 | 인증 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/chat/me` | 토큰의 주인(`{"user_id"}`, 인증 서버의 `public_id`). 토큰 검증이 이어졌는지 보는 가장 작은 주소다(게임 서버의 `GET /me` 와 같다) | access 토큰 |
-| GET | `/api/v1/chat/models` | 대화에 고를 수 있는 [모델](#모델-목록)들(`{items}`). 켜져 있고 은퇴하지 않은 것만. 회사, 이름표 순서 | access 토큰 |
+| GET | `/api/v1/chat/models` | 대화에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?, model?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
 | GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
 | GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터) | access 토큰 |
@@ -129,15 +134,17 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | --- | --- |
 | 보내지 않음 | 지난번(가장 최근에 시작한, 지운 것도) 대화의 것. 지난번에 없었거나 이 대화에 고를 수 없으면 없이 시작한다 |
 | `null` | 없이 시작한다. 말을 보내기 전에 고른다 |
-| 이름표 | 그 모델. 이 대화에 고를 수 없으면 422 `model_unavailable` |
+| 이름표 | 그 모델. 이 대화에 고를 수 없으면 422 `model_unavailable`, 결제 서버의 가격 목록을 받지 못했으면 503 `prices_unavailable` |
 
 어느 경우든 실패하면 아무것도 저장하지 않는다.
 
-**모델.** 대화마다 하나다(`conversations.model_slug`, 모델 목록의 이름표). 고를 수 있는 모델은 켜져 있고 은퇴하지 않은 것이고,
-성인 등급의 대화(가져온 판의 등급)에는 그중 `allows_adult` 가 참인 것만이다. 고르거나 바꿀 때 한 번 본다.
-그 뒤 모델이 꺼지거나 은퇴해도 대화는 그 모델을 가리킨 채로 두고, 읽기와 목록의 `model.usable` 이 거짓이 된다.
+**모델.** 대화마다 하나다(`conversations.model_slug`, 모델 목록의 이름표). 고를 수 있는 모델은 켜져 있고 은퇴하지 않았고
+결제 서버가 팔고 있는 것이고, 성인 등급의 대화(가져온 판의 등급)에는 그중 `allows_adult` 가 참인 것만이다. 고르거나 바꿀 때 한 번 본다.
+그 뒤 모델이 꺼지거나 은퇴하거나 판매가 멈춰도 대화는 그 모델을 가리킨 채로 두고, 읽기와 목록의 `model.usable` 이 거짓이 된다.
 화면이 다시 고르게 한다. 서버는 몰래 다른 모델로 바꾸지 않는다(TRPG 와 같은 원칙). 바꿔도 목록의 차례(최근에 말한 것부터)는 그대로다.
 은퇴일과 원가의 날은 UTC 의 오늘로 본다.
+결제 서버의 가격 목록을 받지 못했고 받아 둔 것도 없을 때: 사람이 고르거나 바꾸는 모델은 503 이다(값을 모르는 모델을 고르게 하지 않는다).
+지난번 모델로 시작하는 것과 읽기는 그대로 된다. 값을 모르면 팔고 있다고 보고, 말을 보낼 때 결제 서버가 다시 본다.
 
 - **사본.** 판의 사본(`characters`)은 사람마다, 판마다 하나다. 같은 판으로 여러 번 시작해도 하나를 함께 쓴다. 동시에 시작해도 하나만 남는다(`ON CONFLICT DO NOTHING`).
   가져온 뒤 바뀌지 않는다. 원본이 바뀌어도 그대로이고, 새 판과 새 설정을 알리는 것은 다음 조각이다.
@@ -166,7 +173,15 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `allows_adult` | 성인 등급의 대화에 쓸 수 있나. 공급자의 약관을 확인하고 성인 평가 장면을 통과한 뒤에 켠다([설계의 성인 콘텐츠](../docs/architecture/chat-server.md#성인-콘텐츠)). 약관이 성적인 콘텐츠를 막는다고 확인된 창구(`anthropic`, `gemini`)의 모델은 켜지 못한다(`adult_refused`). 전체 이용가의 대화에는 그대로 쓴다 |
 
 게임 서버와 다른 것: 회사의 대체 모델(`vendor_fallback`)이 없다. chat 은 모델이 끝나도 몰래 바꾸지 않고 사람이 고른다.
-판매가(말 한 번에 몇 크레딧)는 결제 서버의 가격표(`chat.<이름표>.i0.o0`)가 정한다. 모델 목록 API 에 값을 붙이는 것은 결제 서버를 부르는 PR 이 한다.
+**값.** 판매가(말 한 번에 몇 크레딧)는 결제 서버의 가격표(`chat.<이름표>.i0.o0`)가 정한다. 이 서버는 받은 값을 붙여 보여 줄 뿐이고,
+실제로 빠지는 값은 홀드를 걸 때 결제 서버가 정한다. `app/billing/` 은 게임 서버의 것에서 결제 서버를 부르는 부분만 옮겼다(나중에 server-core 로 올린다).
+
+- 가격 목록(`GET /api/v1/billing/service/prices`, 서명)을 받아 두고 1분쯤마다 버전(ETag)으로 다시 묻는다. 결제 서버는 이 서버의 머리(`chat`)의 줄만 낸다.
+  받지 못하면 마지막 목록을 쓰고 경고를 남긴다. 한 번도 받지 못했으면 503 `prices_unavailable`(`Retry-After: 30`)이다.
+- 모델 목록 API 의 값 칸은 게임 서버의 서술 모델 목록과 같다: `credits`(글자, 결제 서버 없이 돌면 null), `tier`(`premium` 이면 골드로만 낸다),
+  `promo`(행사가), `next`(예약된 바뀜. `credits` 가 null 이면 그때부터 팔지 않는다). 예약의 시각이 지나면 다시 받기 전에도 스스로 갈아 끼운다.
+- 홀드, 확정, 반환, 연장(`app/billing/http_billing.py`)은 말을 보내는 PR 이 쓴다. 부를 때마다 `billing_calls_total` 을 센다.
+- `BILLING_URL` 이 비면 받지 않는다(`free`). 모델은 값 없이 모두 보이고, 홀드는 언제나 잡힌 것으로 본다.
 
 창구와 생각의 방식, 출력 상한의 칸은 표의 CHECK 로도 막는다. ai-core 의 목록(`catalog_contract`)에 값이 늘면 이 서버에도 마이그레이션이 필요하다.
 `alembic check` 는 CHECK 의 차이를 보지 못해서, 테스트(`tests/test_catalog_sync.py`)가 표의 CHECK 와 계약의 목록을 맞대어 본다.
@@ -254,8 +269,9 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 | `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB |
 | `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `server_core/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
 | `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`, `result` | `server_core/observability/metrics.py` 의 `measured_job`. 아직 쓰는 작업이 없다 |
+| `billing_calls_total` | `operation`(`hold`, `capture`, `release`, `extend`), `outcome` | `app/billing/metered.py`, `metrics.py`. 결제 서버를 부른 수. 게임 서버와 같은 이름과 label 이다 |
 
-- 계측기는 공용 코드(`server_core/observability/metrics.py`)에 한 묶음으로 있다. 이 서버만의 계측기가 생기면 `InstrumentSet` 으로 더한다(알림 서버의 `app/notifications/metrics.py`).
+- 계측기는 공용 코드(`server_core/observability/metrics.py`)에 한 묶음으로 있다. 이 서버만의 계측기는 `InstrumentSet` 으로 더한다(`app/billing/metrics.py`).
   테스트는 `server_core/testing/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
 - 보내는 길은 공용 코드의 테스트가 가짜 수집기로 본다. 이 서버가 꺼질 때 이 서버의 이름으로 보내는지는 `tests/test_tracing_setup.py` 가 본다
 - 대시보드와 경보, Prometheus 에 들어오는지 보는 CI(`stack`)는 인프라 세션의 PR 과 함께 붙는다

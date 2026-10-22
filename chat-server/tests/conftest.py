@@ -52,6 +52,8 @@ def make_test_settings(**overrides) -> Settings:
         'otel_exporter_otlp_endpoint': '',
         # asset 서버를 부르지 않는다. 개발자의 .env 에 주소가 있어도 테스트는 가짜를 끼운다
         'asset_url': '',
+        # 결제 서버를 부르지 않는다(받지 않는 것, 값이 없는 가격 목록). 값을 보는 테스트는 가짜 결제 서버를 끼운다
+        'billing_url': '',
     }
     values.update(overrides)
     return Settings(**values)

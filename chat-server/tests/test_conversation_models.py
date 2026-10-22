@@ -4,7 +4,8 @@
 대화의 모델(app/catalog/router.py, app/conversations/ 의 모델 고르기)을 검증한다. 실제 DB(chat_test)에서 돌고,
 asset 서버는 가짜다(tests/assets.py). 모델은 들여오기(tests/catalog_rows.py)로 넣고 켠다.
 
-"오늘"은 테스트가 정한다(utc_today 를 바꿔 끼운다). 은퇴일을 오늘에 맞춰 시험한다.
+"지금"은 테스트가 정한다(utc_now 를 바꿔 끼운다). 은퇴일을 오늘에 맞춰 시험한다.
+결제 서버는 없다(가격 목록이 free). 값과 판매를 보는 것은 tests/test_model_prices.py 다.
 
 보는 것.
   - 모델 목록: 켜져 있고 은퇴하지 않은 모델만, 운영의 칸(창구, 원가) 없이. 로그인을 요구한다
@@ -17,7 +18,7 @@ asset 서버는 가짜다(tests/assets.py). 모델은 들여오기(tests/catalog
 
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -31,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import service as catalog
 from app.conversations.models import Conversation
-from app.core.dependencies import utc_today
+from app.core.dependencies import utc_now
 from app.main import API_PREFIX
 from app.ratings import Rating
 from tests.assets import FakeAsset, make_character
@@ -41,7 +42,8 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 
 MODELS_URL = f'{API_PREFIX}/models'
 CONVERSATIONS_URL = f'{API_PREFIX}/conversations'
-TODAY = date(2026, 10, 17)
+NOW = datetime(2026, 10, 17, 12, tzinfo=UTC)
+TODAY = NOW.date()
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 SOMEONE_ELSE = uuid.UUID('99999999-2222-4333-8444-555555555555')
 
@@ -73,8 +75,8 @@ def bearer(signing_key: SigningKey, user_id: uuid.UUID = ME, adult: bool = False
 
 @pytest.fixture(autouse=True)
 def fixed_today(app: FastAPI) -> Iterator[None]:
-    """API 가 보는 "오늘"을 TODAY 로 둔다."""
-    app.dependency_overrides[utc_today] = lambda: TODAY
+    """API 가 보는 "지금"을 NOW 로 둔다."""
+    app.dependency_overrides[utc_now] = lambda: NOW
     yield
     app.dependency_overrides.clear()
 
@@ -132,9 +134,12 @@ async def slug_of(client: AsyncClient, headers: dict, conversation: dict) -> str
 # --- 오늘 ---
 
 
-def test_today_is_the_utc_date():
+def test_now_is_in_utc():
     # 은퇴일과 원가의 날을 UTC 로 본다. 관리 명령, 게임 서버와 같다
-    assert utc_today() == datetime.now(UTC).date()
+    now = utc_now()
+
+    assert now.utcoffset() == timedelta(0)
+    assert abs(now - datetime.now(UTC)) < timedelta(minutes=1)
 
 
 # --- 모델 목록 ---
@@ -164,6 +169,7 @@ async def test_the_model_list_has_only_offered_models(client: AsyncClient, sessi
     # 꺼진 SOL 은 없다. 회사, 이름표 순서다. 창구, API 모델 이름, 원가는 싣지 않는다
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
+        'free': True,
         'items': [
             {
                 'slug': 'luna',
@@ -172,6 +178,10 @@ async def test_the_model_list_has_only_offered_models(client: AsyncClient, sessi
                 'grade': 'standard',
                 'allows_adult': False,
                 'retires_on': '2026-12-01',
+                'credits': None,
+                'tier': None,
+                'promo': False,
+                'next': None,
             },
             {
                 'slug': 'nova',
@@ -180,8 +190,12 @@ async def test_the_model_list_has_only_offered_models(client: AsyncClient, sessi
                 'grade': 'standard',
                 'allows_adult': True,
                 'retires_on': None,
+                'credits': None,
+                'tier': None,
+                'promo': False,
+                'next': None,
             },
-        ]
+        ],
     }
 
 

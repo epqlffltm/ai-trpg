@@ -153,6 +153,9 @@ SECRETS = (
         ('board-server/.env', 'AUTH_SERVER_SECRET'),
     ),
     shared('chat 서버 → asset 서버', ('chat-server/.env', 'ASSET_SECRET'), ('asset-server/.env', 'CHAT_SERVER_SECRET')),
+    shared(
+        'chat 서버 → 결제 서버', ('chat-server/.env', 'BILLING_SECRET'), ('billing-server/.env', 'CHAT_SERVER_SECRET')
+    ),
     shared('인증 서버 → asset 서버', ('auth-server/.env', 'ASSET_SECRET'), ('asset-server/.env', 'AUTH_SERVER_SECRET')),
     shared('인증 서버 → 게임 서버', ('auth-server/.env', 'GAME_SECRET'), ('trpg-server/.env', 'AUTH_SERVER_SECRET')),
     shared('게임 서버의 실시간 신호', ('trpg-server/.env', 'SIGNAL_SECRET')),
