@@ -12,6 +12,7 @@ OpenAI 와 같은 모양의 주소를 부르는 provider(ai_core/openai_compat.p
 import asyncio
 import json
 from collections.abc import AsyncIterator, Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import httpx
@@ -166,7 +167,7 @@ def test_the_thinking_switch_replaces_the_reasoning_effort():
 
 
 def test_a_model_that_always_thinks_gets_the_lowest_share_and_no_switch():
-    options = WireOptions(supports_reasoning=True, thinking_switch=True, always_thinks=True)
+    options = WireOptions(supports_reasoning=False, thinking_switch=True, always_thinks=True)
 
     body = build_body(MODEL, MESSAGES, PARAMS, options)
 
@@ -174,6 +175,27 @@ def test_a_model_that_always_thinks_gets_the_lowest_share_and_no_switch():
     assert 'thinking' not in body
     assert 'reasoning_effort' not in body
     assert body['max_tokens'] == 800 + THINKING_TOKENS[Reasoning.LOW]
+
+
+@pytest.mark.parametrize(
+    ('reasoning', 'sent', 'share'),
+    [
+        (Reasoning.NONE, 'low', Reasoning.LOW),
+        (Reasoning.LOW, 'low', Reasoning.LOW),
+        (Reasoning.HIGH, 'high', Reasoning.HIGH),
+    ],
+)
+def test_an_always_thinking_model_that_knows_efforts_gets_low_instead_of_none(
+    reasoning: Reasoning, sent: str, share: Reasoning
+):
+    # GPT-6 Astra, GPT-6.1 Sol 은 reasoning_effort 가 low 부터다. none 이면 400,
+    # 보내지 않으면 기본값(medium)으로 생각한다
+    options = WireOptions(supports_reasoning=True, supports_temperature=False, always_thinks=True)
+
+    body = build_body(MODEL, MESSAGES, replace(PARAMS, reasoning=reasoning), options)
+
+    assert (body['reasoning_effort'], body['max_tokens']) == (sent, 800 + THINKING_TOKENS[share])
+    assert 'thinking' not in body
 
 
 def test_reasoning_is_off_by_default():

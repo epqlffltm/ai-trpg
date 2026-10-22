@@ -307,7 +307,7 @@ output_per_mtok = 5
 
 # --- OpenAI ---
 
-# 날짜판이 없다. reasoning_effort 가 low 부터다(none 을 받지 않는다)
+# 날짜판이 없다. reasoning_effort 가 low 부터다(none 을 받지 않는다). 그래서 생각을 끌 수 없는 모델(always)이다
 [[models]]
 slug = "gpt-6-astra"
 provider = "openai"
@@ -318,6 +318,7 @@ grade = "premium"
 supports_reasoning = true
 supports_temperature = false
 token_limit_field = "max_completion_tokens"
+reasoning_style = "always"
 
 [[models.costs]]
 effective_from = 2026-10-21
@@ -327,7 +328,7 @@ cached_input_per_mtok = 1
 output_per_mtok = 50
 note = "입력 272K 토큰을 넘으면 입력 2배, 출력 1.5배"
 
-# 날짜판이 없다. reasoning_effort 가 low 부터다(none 을 받지 않는다)
+# 날짜판이 없다. reasoning_effort 가 low 부터다(none 을 받지 않는다). 그래서 생각을 끌 수 없는 모델(always)이다
 [[models]]
 slug = "gpt-6-1-sol"
 provider = "openai"
@@ -338,6 +339,7 @@ grade = "standard"
 supports_reasoning = true
 supports_temperature = false
 token_limit_field = "max_completion_tokens"
+reasoning_style = "always"
 
 [[models.costs]]
 effective_from = 2026-10-21
@@ -606,7 +608,7 @@ output_per_mtok = 0.4
 
 # --- Z.ai (GLM). 처리 서버는 싱가포르다. 날짜판이 없다 ---
 
-# 생각을 끌 수 없다(reasoning_effort 의 기본값이 max)
+# 생각을 끌 수 없다. reasoning_effort 의 기본값이 max 라 low 를 보낸다(supports_reasoning)
 [[models]]
 slug = "glm-5-3"
 provider = "zai"
@@ -614,7 +616,7 @@ api_model_id = "glm-5.3"
 display_name = "GLM-5.3"
 vendor = "zai"
 grade = "standard"
-supports_reasoning = false
+supports_reasoning = true
 supports_temperature = true
 reasoning_style = "always"
 

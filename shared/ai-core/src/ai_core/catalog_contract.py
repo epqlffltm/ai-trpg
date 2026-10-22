@@ -62,14 +62,17 @@ class ReasoningStyle(enum.StrEnum):
     부르는 쪽(ai_core/anthropic.py, ai_core/gemini.py, ai_core/openai_compat.py)이 이 값을 보고 요청의 생각 칸을 만든다.
     창구마다 받는 값이 다르다(모델 목록을 읽을 때 STYLES_BY_PROVIDER 로 본다).
     budget 은 두 창구가 함께 쓴다.
-    OpenAI 와 서버 곁의 모델은 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다).
+    서버 곁의 모델과 DeepInfra 는 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다).
+    OpenAI 는 생각을 끌 수 없는 모델(reasoning_effort 가 low 부터인 GPT-6 Astra, GPT-6.1 Sol)만 always 를 적는다.
+    나머지 OpenAI 모델은 적지 않는다(none 으로 끈다).
     끌 수 없는 방식(always, level_minimal, level_low, budget_min)의 모델은 판매가를 생각의 몫까지 넣어 매긴다.
     OpenAI 모양이어도 생각의 칸이 다른 창구(Z.ai)는 이 칸을 쓴다. 끌 수 있으면 thinking_type, 끌 수 없으면 always 다.
     """
 
     # 끌 수 있다(disabled). 켜면 스스로 깊이를 정한다(adaptive + effort). Opus 5, Sonnet 5, Haiku 5.5, Opus 4.6~4.8
     ADAPTIVE = 'adaptive'
-    # 끌 수 없다. 끄라고 하면 effort 를 low 로 주고 출력 상한에 생각의 몫을 더한다. Opus 5.5, Fable 5.1·5
+    # 끌 수 없다. 끄라고 하면 effort 를 low 로 주고 출력 상한에 생각의 몫을 더한다. Opus 5.5, Fable 5.1·5,
+    # GPT-6 Astra, GPT-6.1 Sol(reasoning_effort 가 low 부터다), GLM-5.3 계열
     ALWAYS = 'always'
     # disabled 를 받지 않는다. 미리 생각하지 않게 하는 between_tools 로 끈다. Sonnet 5.5
     BETWEEN_TOOLS = 'between_tools'
@@ -175,9 +178,14 @@ STYLES_BY_PROVIDER = {
     Provider.GEMINI: frozenset(
         {ReasoningStyle.LEVEL_MINIMAL, ReasoningStyle.LEVEL_LOW, ReasoningStyle.BUDGET, ReasoningStyle.BUDGET_MIN}
     ),
-    # 끌 수 있으면 thinking 칸으로 끈다. 끌 수 없는 모델(GLM-5.3 계열)은 칸을 보내지 않고 생각의 몫을 더한다
+    # 끌 수 있으면 thinking 칸으로 끈다. 끌 수 없는 모델(GLM-5.3 계열)은 thinking 칸을 보내지 않고 생각의 몫을 더한다
     Provider.ZAI: frozenset({ReasoningStyle.THINKING_TYPE, ReasoningStyle.ALWAYS}),
+    # 끌 수 없는 모델만 적는다(GPT-6 Astra, GPT-6.1 Sol). 적지 않은 모델은 reasoning_effort none 으로 끈다
+    Provider.OPENAI: frozenset({ReasoningStyle.ALWAYS}),
 }
+
+# 생각의 방식을 적지 않아도 되는 창구. 적지 않으면 그 창구의 기본 방식(OpenAI 는 none 으로 끄기)이다
+STYLE_OPTIONAL_PROVIDERS = frozenset({Provider.OPENAI})
 
 
 def token_field_problem(provider: Provider, field: TokenLimitField | None) -> str | None:
@@ -198,6 +206,8 @@ def reasoning_style_problem(provider: Provider, style: ReasoningStyle | None) ->
     """생각을 켜고 끄는 방식이 창구에 맞지 않으면 그 까닭, 맞으면 None."""
     if provider not in STYLES_BY_PROVIDER:
         return None if style is None else f'{provider} 창구의 모델은 생각을 켜고 끄는 방식을 적지 않는다'
+    if style is None and provider in STYLE_OPTIONAL_PROVIDERS:
+        return None
     if style is None:
         return f'{provider} 창구의 모델은 생각을 켜고 끄는 방식({styles_text(provider)})을 적어야 한다'
     if style not in STYLES_BY_PROVIDER[provider]:
