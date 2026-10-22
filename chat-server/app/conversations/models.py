@@ -114,6 +114,9 @@ class Conversation(Base):
     )
     # 지운 시각. 비어 있으면 지우지 않은 것이다. 지운 대화는 목록과 읽기에 나오지 않는다
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # 모델이 답을 쓰는 중이면 그 시작 시각. 한 대화에 한 번에 하나의 생성만 받는다(app/turns/repository.py).
+    # 서버가 도중에 꺼져 남아도 오래되면(GENERATION_STALE) 다음 말이 다시 잡는다
+    generating_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
 
 class ConversationPersona(Base):
