@@ -42,7 +42,7 @@ from app.characters.service import CharacterNotFoundError, OperatorOnlyError
 from app.core.config import Settings, get_settings
 from app.images import router as images
 from app.images.isolation import ImageUnreadableError
-from app.images.service import ImageNotFoundError, UnsupportedImageError
+from app.images.service import ImageNotFoundError, ImageNotOwnedError, UnsupportedImageError
 from app.images.setup import build_decoder, build_image_store
 from app.images.store import ImageStoreUnavailableError
 from app.personas import router as personas
@@ -160,6 +160,7 @@ def create_app(
     app.add_exception_handler(UnsupportedImageError, images.handle_unsupported_image)
     app.add_exception_handler(ImageUnreadableError, images.handle_unreadable_image)
     app.add_exception_handler(ImageNotFoundError, images.handle_image_not_found)
+    app.add_exception_handler(ImageNotOwnedError, images.handle_image_not_owned)
     app.add_exception_handler(ImageStoreUnavailableError, images.handle_store_unavailable)
     # 다른 서버가 페르소나의 사본과 판을 가져가는 주소.
     # 그 서버의 서명(app/core/service_auth.py)과 사용자의 토큰을 함께 본다.

@@ -77,8 +77,10 @@ class Character(Base):
     tags: Mapped[list[str]] = mapped_column(ARRAY(String(CHARACTER_TAG_MAX_LENGTH)), default=list, server_default='{}')
     # 시작 상황들. [{"title", "situation"}]. 모양은 schemas.Start 가 정한다. 캐릭터에 딸린 짧은 목록이라 문서로 둔다
     starts: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
-    # 대표 그림의 id. 그림(#566)이 생기기 전이라 외래 키를 걸지 않는다
-    image_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, default=None)
+    # 대표 그림의 id. 자기가 올린 그림만 붙인다(app/characters/service.py). 그림이 지워지면(탈퇴) 비운다
+    image_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('images.id', ondelete='SET NULL'), default=None, index=True
+    )
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(

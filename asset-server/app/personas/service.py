@@ -9,12 +9,14 @@
   - 페르소나가 있으면 늘 하나가 기본이다. 처음 만든 것이 기본이 되고, 기본을 지우면 가장 먼저 만든 것이 기본이 된다.
   - 내용이 바뀔 때만 revision 이 오른다. 같은 값을 보내거나 기본으로 두는 것은 내용이 아니다.
   - 나이와 성별로 거르거나 막지 않는다.
+  - 그림(image_id)은 자기가 올린 그림만 붙인다(#566). 아니면 ImageNotOwnedError(422).
 """
 
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.images import service as images
 from app.personas import repository
 from app.personas.models import Persona
 from app.personas.schemas import PersonaCreate, PersonaUpdate
@@ -52,6 +54,12 @@ def apply_changes(persona: Persona, changes: dict) -> bool:
     return bool(changed)
 
 
+async def require_own_image(session: AsyncSession, owner_id: uuid.UUID, image_id: uuid.UUID | None) -> None:
+    """붙이려는 그림이 자기 그림이어야 한다. 떼거나(None) 바꾸지 않으면 보지 않는다. 아니면 ImageNotOwnedError."""
+    if image_id is not None:
+        await images.require_own_images(session, owner_id, [image_id])
+
+
 async def get_persona(session: AsyncSession, owner_id: uuid.UUID, persona_id: uuid.UUID) -> Persona:
     """자기 페르소나 하나. 없으면 PersonaNotFoundError."""
     persona = await repository.find_owned(session, owner_id, persona_id)
@@ -71,6 +79,7 @@ async def create_persona(session: AsyncSession, owner_id: uuid.UUID, data: Perso
 
     세고 나서 더한다. 두 요청이 동시에 세면 둘 다 자리가 있다고 보고 상한을 넘긴다. 그래서 세기 전에 그 사람을 잠근다.
     """
+    await require_own_image(session, owner_id, data.image_id)
     await repository.lock_owner(session, owner_id)
     count = await repository.count_owned(session, owner_id)
     if count >= limit:
@@ -91,6 +100,7 @@ async def update_persona(
     persona = await repository.find_owned(session, owner_id, persona_id, for_update=True)
     if persona is None:
         raise PersonaNotFoundError
+    await require_own_image(session, owner_id, data.image_id)
     apply_changes(persona, data.changes())
     await session.commit()
     await session.refresh(persona)
