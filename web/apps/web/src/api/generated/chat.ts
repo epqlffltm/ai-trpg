@@ -153,6 +153,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/messages/{message_id}/continue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Continue Message
+         * @description 끊긴 답(partial)에 이어 쓴다. 지금 가지의 끝인 말만 된다.
+         *
+         *     새 호출이라 새로 청구한다. SSE 의 turn 에 continues(그 말의 id)가 실리고, delta 는 그 말 끝에 붙일 글이다.
+         *     done 의 말은 이어 붙인 그 말 전체다. 다 쓰면 complete, 또 끊기면 partial 이라 다시 이어 쓸 수 있다.
+         */
+        post: operations["continue_message_api_v1_chat_messages__message_id__continue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/messages/{message_id}/regenerate": {
         parameters: {
             query?: never;
@@ -557,6 +580,11 @@ export interface components {
             role: string;
             /** Status */
             status: string;
+            /**
+             * Suggestions
+             * @default []
+             */
+            suggestions: string[];
         };
         /**
          * PersonaOut
@@ -921,6 +949,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    continue_message_api_v1_chat_messages__message_id__continue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE. app/turns/schemas.py 의 메시지들 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

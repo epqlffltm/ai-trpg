@@ -34,11 +34,14 @@ from app.core.dependencies import Viewer, utc_now
 from app.main import stop_turns
 from app.turns import service
 from app.turns.models import Generation
+from app.turns.values import PromptOptions
 from tests.billing import FakeBillingServer
 from tests.models import FakeRouter, ScriptedProvider
 from tests.turns import ME, bearer, start_with_luna, turn_on_luna
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
+
+OPTIONS = PromptOptions(context_chars=12000, suggestions=False)
 
 PARAMS = GenerationParams(max_tokens=100, temperature=0.5)
 
@@ -60,7 +63,7 @@ def viewer() -> Viewer:
 async def started(app: FastAPI, conversation: dict, viewer: Viewer) -> service.TurnStart:
     """사람의 말을 저장하고 홀드까지 건 말 한 번. 모델은 아직 부르지 않았다."""
     start = await service.begin_turn(
-        app.state.session_factory, viewer, uuid.UUID(conversation['id']), '안녕', 12000, utc_now()
+        app.state.session_factory, viewer, uuid.UUID(conversation['id']), '안녕', OPTIONS, utc_now()
     )
     await service.prepare_turn(app.state.session_factory, FakeRouter(), FreeBilling(), start, utc_now())
     return start

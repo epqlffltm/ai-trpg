@@ -25,11 +25,14 @@ from app.turns import service
 from app.turns.charging import retry_delay
 from app.turns.models import Generation
 from app.turns.settler import ChargeSettler
+from app.turns.values import PromptOptions
 from tests.billing import FakeBillingServer
 from tests.models import FakeRouter
 from tests.turns import ME, PRICE_CODE, bearer, start_with_luna, turn_on_luna
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
+
+OPTIONS = PromptOptions(context_chars=12000, suggestions=False)
 
 
 @pytest.fixture
@@ -52,7 +55,7 @@ async def held(app: FastAPI, session: AsyncSession, client, asset, signing_key, 
     conversation = await start_with_luna(client, asset, bearer(signing_key))
     claims = AccessClaims(user_id=ME, expires_at=datetime.now(UTC) + timedelta(minutes=15))
     start = await service.begin_turn(
-        app.state.session_factory, Viewer(claims, 't'), uuid.UUID(conversation['id']), '안녕', 12000, utc_now()
+        app.state.session_factory, Viewer(claims, 't'), uuid.UUID(conversation['id']), '안녕', OPTIONS, utc_now()
     )
     await service.prepare_turn(app.state.session_factory, FakeRouter(), billing, start, utc_now())
     return start

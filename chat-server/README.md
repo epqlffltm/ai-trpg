@@ -80,6 +80,7 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `CHAT_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
 | `CHAT_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 최근 말부터 채운다. 가격표의 입력 단계(`i0`)가 약속하는 양이다 |
 | `CHAT_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
+| `CHAT_SUGGESTIONS` | `true` | [다음 답 추천](#다음-답-추천). 답 끝에 선택지 셋을 같은 호출에서 받는다. 출력이 조금 는다. 끄면 카드에 지시를 넣지 않는다 |
 
 `tools/fill_env.py` 가 `ASSET_SECRET` 과 `BILLING_SECRET` 을 짝(asset 서버, 결제 서버의 `CHAT_SERVER_SECRET`)과 같은 값으로 채운다.
 compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)에서는 두 주소와 비밀을 비운다(설정의 검사가 "주소는 있고 비밀이 없다"로 막지 않게).
@@ -104,15 +105,16 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/models` | 대화에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?, model?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
 | GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
-| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives`), 답을 쓰는 중인지(`generating`) | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives` 와 `suggestions`), 답을 쓰는 중인지(`generating`) | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`) | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/regenerate` | [다시 생성](#다시-생성-멈추기-대안). 그 말에 다시 답한다. SSE 의 모양은 말 보내기와 같다. 인사말은 422 `not_regenerable`, 없는 말은 404 `message_not_found` | access 토큰 |
+| POST | `/api/v1/chat/messages/{id}/continue` | [이어서 출력](#이어서-출력). 끊긴 답(`partial`)에 이어 쓴다. SSE. 끊긴 답이 아니거나 지금 가지의 끝이 아니면 422 `not_continuable` | access 토큰 |
 | POST | `/api/v1/chat/generations/{id}/stop` | [멈추기](#다시-생성-멈추기-대안). 204. 받은 만큼 저장한다. 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/branch` | [다른 대안 보기](#다시-생성-멈추기-대안). `{message_id}`. 바뀐 대화를 돌려준다. 답을 쓰는 중이면 409 `generation_in_progress` | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/model` | 대화의 모델 바꾸기. `{model}`. 바꾼 모델을 돌려준다. 고를 수 없으면 422 `model_unavailable` | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 
-**스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages`, `POST /api/v1/chat/messages/{id}/regenerate`(만들었다)와 `/continue`(조작 단계)가
+**스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages`, `POST /api/v1/chat/messages/{id}/regenerate`, `/continue`(모두 만들었다)가
 바로 SSE(`text/event-stream`)로 답한다. 응답에 `X-Accel-Buffering: no` 를 싣고 15초 조용하면 하트비트(`: heartbeat`)를 끼운다. 끊겨도 서버는 생성을 끝까지 저장하고,
 앱은 다시 들어와 저장된 말을 읽는다. 공용 코드의 `StreamRoutes` 로 span 과 요청의 시간 메트릭에서 빼고 `sse_*` 로 센다(`app/main.py` 의 `STREAMS`).
 
@@ -241,7 +243,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 | 끝 | 답 | 청구 |
 | --- | --- | --- |
 | 다 받았다 | `complete` | 확정 |
-| 길이 상한에서 잘렸다, 도중에 끊겼다(공급자의 오류) | 받은 만큼 `partial` | 확정(설계의 과금 표) |
+| 길이 상한에서 잘렸다, 도중에 끊겼다(공급자의 오류) | 받은 만큼 `partial`. [이어서 출력](#이어서-출력)으로 이어 쓴다 | 확정(설계의 과금 표) |
 | 글자 없이 실패했다, 빈 답이다 | 없다(SSE `failed`, `code` 는 `timeout`, `status_429`, `empty` …) | 반환 |
 | 사람이 멈췄다 | 받은 만큼 `partial`(없으면 없다, SSE `failed` 의 `stopped`) | 바로 확정이나 반환 |
 | 서버가 꺼지며 멈췄다 | 받은 만큼 `partial`(없으면 없다) | 다음에 뜬 서버의 청구 정리가 확정이나 반환 |
@@ -275,6 +277,31 @@ uv run python -m scripts.models adult glm-5-3 --forbid
   화면이 "< 2/3 >" 를 그린다. 다른 대안을 고르면(`PUT /conversations/{id}/branch`) 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다.
   보는 곳만 바꾸는 것이라 수정 시각(목록의 차례)은 그대로다. 답을 쓰는 중이면 바꾸지 않는다(409). 확인과 바꾸기를 한 문장으로 한다.
 - **`generating`.** 대화가 차례를 쥐고 있으면 참이다(15분이 지난 차례는 아니다). 화면이 보내기와 다시 생성을 막고, 끝난 뒤 다시 읽는다.
+
+### 다음 답 추천
+
+캐릭터의 답 끝에 사람이 이어서 할 만한 말 셋을 함께 받는다(`app/conversation/suggestions.py`). 누르면 입력칸을 채우고, 보내는 것은 사람이다.
+
+- **같은 호출에서 받는다.** 카드의 맨 끝에 "본문을 다 쓴 뒤 새 줄에 `<suggestions>` 를 쓰고 그 아래에 한 줄에 하나씩 써라"를 넣는다.
+  호출이 늘지 않아 원가가 거의 그대로다(출력이 조금 는다). 끄려면 `CHAT_SUGGESTIONS=false`.
+- **본문만 흘린다.** 표식이 조각의 경계에 걸릴 수 있어서, 끝의 몇 글자(표식의 앞부분일 수 있는 것)는 다음 조각이 올 때까지 붙잡는다. 표식 뒤는 흘리지 않는다.
+- **따로 저장한다.** 본문은 `content`, 선택지는 `suggestions`(`done` 의 말과 대화 읽기에 실린다). 다음 호출에는 본문만 간다. 섞으면 모델이 선택지를 흉내 낸다.
+- **거른다.** 줄마다 하나. 번호, 글머리표, 감싼 따옴표를 떼고, 빈 것, 200자보다 긴 것, 같은 것을 뺀 뒤 셋까지. 형식이 깨지면 선택지만 줄거나 없어지고 오류로 만들지 않는다. 표는 넷 이상을 받지 않는다(CHECK).
+- **잘린 답**(길이 상한)은 선택지를 버린다(줄이 잘렸을 수 있다). 끊기거나 멈춘 답도 본문만 저장한다. 표식만 쓴 답은 빈 답(`failed` 의 `empty`)이다.
+
+### 이어서 출력
+
+끊긴 답(`partial`. 길이 상한에서 잘렸거나, 도중에 끊겼거나, 멈췄다)에 이어 쓴다(`app/conversation/continuation.py`). 사람이 "이어서"를 누를 때만 한다. 저절로 하지 않는다.
+
+- **지시로 시킨다.** 끊긴 답까지의 대화를 보내고, 맨 끝에 사람의 차례로 "끊긴 곳 바로 다음 글자부터 이어 써라(사용자의 말이 아니다)"를 붙인다.
+  답을 미리 채워 이어 쓰게 하는 길이 공급자마다 있거나 없어서, 모든 공급자에서 똑같이 도는 쪽으로 했다. 대화가 사람의 말로 끝나야 받는 공급자도 있다.
+- **되풀이한 앞부분은 뗀다.** 새 글의 앞이 끊긴 답의 끝(300자 안)과 8자 이상 겹치면 겹친 만큼 뗀다. 흘릴 때는 새 글이 끊긴 답의 어느 끝부분과 같게 이어지는 동안만 붙잡고, 어긋나면 바로 흘린다.
+  끊긴 답이 문장 끝(마침표 등)에서 끊겼고 새 글이 빈칸 없이 시작하면 빈칸 하나를 끼운다(저장한 끊긴 답은 끝의 빈칸을 뺐다).
+- **같은 말에 붙인다.** 새 말을 만들지 않는다. SSE 의 `turn` 에 `continues`(그 말의 id)가 실리고, `delta` 는 그 말 끝에 붙일 글, `done` 은 이어 붙인 그 말 전체다.
+  다 쓰면 `complete` 가 되고 선택지가 붙는다. 또 끊기면 `partial` 로 남아 다시 이어 쓸 수 있다. 글 없이 실패하거나 거절되면 끊긴 답은 그대로다.
+- **새로 청구한다.** 입력을 다시 보내고 원가가 또 든다(설계의 과금 표). 홀드와 확정, 멈추기, 차례는 말 보내기와 같다.
+- **지금 가지의 끝만.** 끊긴 답 뒤에 말이 붙었거나 다른 가지를 보고 있으면 422 `not_continuable` 이다. 그 뒤의 말이 끊긴 답을 보고 쓴 것이라서다.
+  가지의 끝은 차례를 잡은 뒤에 다시 읽는다(차례를 쥔 동안에는 가지를 바꾸지 못한다).
 
 ### 토큰 검증
 

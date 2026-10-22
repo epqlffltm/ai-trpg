@@ -3,7 +3,7 @@
 """
 모델에 보낼 메시지를 만든다(docs/architecture/chat-server.md 의 build_prompt). DB 도 모델도 모른다.
 
-    [system] 캐릭터의 카드(render_card): 역할, 캐릭터, 사용자(페르소나), 시작 상황, 지킬 것
+    [system] 캐릭터의 카드(render_card): 지킬 것, 캐릭터, 사용자(페르소나), 시작 상황, 다음 답 추천의 지시
     [assistant / user ...] 최근 대화(app/conversation/window.py 의 select_window)
 
 이 단계에는 요약, 기억 메모, 로어북, 장소와 소지품이 없다. 그 단계를 만들 때 카드와 창 사이에 끼운다.
@@ -19,6 +19,7 @@ from html.parser import HTMLParser
 
 from ai_core.provider import ChatMessage, Role
 
+from app.conversation.suggestions import instruction
 from app.conversation.window import Turn
 
 # 지킬 것. 캐릭터로만 말하고, 사용자의 몫(말, 행동, 마음)을 대신 쓰지 않는다
@@ -116,13 +117,17 @@ def persona_section(persona: PersonaCard | None) -> str | None:
     return '\n'.join(['[사용자]', *lines])
 
 
-def render_card(character: CharacterCard, persona: PersonaCard | None, situation: str) -> str:
-    """시스템 메시지(카드). 지킬 것, 캐릭터, 사용자, 시작 상황의 차례다. 빈 블록은 뺀다."""
+def render_card(character: CharacterCard, persona: PersonaCard | None, situation: str, suggest: bool = False) -> str:
+    """
+    시스템 메시지(카드). 지킬 것, 캐릭터, 사용자, 시작 상황, 다음 답 추천의 지시의 차례다. 빈 블록은 뺀다.
+    지시는 suggest 일 때만 넣는다. 맨 끝에 두어 본문을 다 쓴 뒤의 일임을 분명히 한다.
+    """
     sections = [
         '\n'.join(RULES),
         character_section(character),
         persona_section(persona),
         f'[시작 상황]\n{situation.strip()}' if situation.strip() else None,
+        f'[다음 답 추천]\n{instruction()}' if suggest else None,
     ]
     return '\n\n'.join(section for section in sections if section)
 
