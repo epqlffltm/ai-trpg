@@ -63,6 +63,8 @@ from app.conversations.service import (
     get_conversation,
 )
 from app.core.dependencies import Viewer
+from app.memory import service as memory
+from app.memory.service import render_memory
 from app.ratings import Rating, allowed_ratings
 from app.turns import charging, repository
 from app.turns.charging import HoldDeclined, Settled, Settlement
@@ -76,6 +78,7 @@ from app.world import service as world
 from app.world.actions import perform
 from app.world.scene import render_scene
 from app.world.schemas import Action, GiveAction
+from app.world.state import WorldState
 
 logger = logging.getLogger(__name__)
 
@@ -190,19 +193,27 @@ def persona_card(persona: ConversationPersona | None) -> PersonaCard | None:
     )
 
 
+@dataclass(frozen=True)
+class CardExtras:
+    """카드에 더하는 블록들. memory 는 기억 메모(app/memory), scene 은 장소와 소지품(app/world)이다. 없으면 None."""
+
+    memory: str | None
+    scene: str | None
+
+
 def prompt_for(
     conversation: Conversation,
     character: ImportedCharacter,
     persona: ConversationPersona | None,
     path: list[Message],
     options: PromptOptions,
-    scene: str | None,
+    extras: CardExtras,
     closing: str | None = None,
 ) -> list[ChatMessage]:
     """
     모델에 보낼 메시지. 카드와, 지금 가지의 말들 가운데 context_chars 안에 드는 최근 것들이다.
     지난 말은 본문(content)만 보낸다. 선택지(suggestions)는 보내지 않는다.
-    scene 은 가지 끝의 장소와 소지품이다(app/world/scene.py). 카드에 들어간다.
+    extras 는 기억 메모와 가지 끝의 장소와 소지품이다. 카드에 들어간다.
     closing 이 있으면 맨 끝에 사람의 차례로 붙인다(이어서 출력의 지시). 창은 늘 그것을 넣는다.
     """
     card = render_card(
@@ -210,7 +221,8 @@ def prompt_for(
         persona_card(persona),
         conversation.start_situation,
         options.suggestions,
-        scene,
+        scene=extras.scene,
+        memory=extras.memory,
     )
     turns = [Turn(message.role, message.content) for message in path]
     if closing is not None:
@@ -218,10 +230,20 @@ def prompt_for(
     return build_messages(card, select_window(turns, options.context_chars))
 
 
-async def scene_on(session: AsyncSession, character: ImportedCharacter, path: list[Message]) -> str | None:
-    """가지(path)의 끝의 장소와 소지품을 모델에 보낼 글로. 지도와 물건이 없으면 None."""
+async def extras_on(
+    session: AsyncSession,
+    conversation: Conversation,
+    character: ImportedCharacter,
+    path: list[Message],
+    state: WorldState | None = None,
+) -> CardExtras:
+    """
+    가지(path)의 끝에서 카드에 더할 블록들. state 를 주면 그 상태로 장소와 소지품을 적는다(행동한 뒤의 상태).
+    """
     document = world.document_of(character)
-    return render_scene(document, await world.state_on(session, document, [message.id for message in path]))
+    current = state if state is not None else await world.state_on(session, document, [m.id for m in path])
+    notes = await memory.notes_for_prompt(session, conversation.id)
+    return CardExtras(memory=render_memory(notes), scene=render_scene(document, current))
 
 
 def require_model(conversation: Conversation, model: AiModel | None, rating: Rating, now: datetime) -> str:
@@ -384,7 +406,7 @@ async def begin_turn(
         await session.refresh(conversation)
         parent_id = edited if edit_of is not None else conversation.active_leaf_id
         path = await conversations.active_path(session, parent_id)
-        scene = await scene_on(session, character, path)
+        extras = await extras_on(session, conversation, character, path)
         message = user_message(conversation, parent_id, content, now)
         repository.add(session, message)
         await session.flush()
@@ -400,7 +422,7 @@ async def begin_turn(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(message),
-        messages=prompt_for(conversation, character, persona, [*path, message], options, scene),
+        messages=prompt_for(conversation, character, persona, [*path, message], options, extras),
     )
 
 
@@ -453,8 +475,8 @@ async def begin_action(
         await repository.move_leaf(session, conversation.id, added[-1].id)
         generation = new_generation(conversation, viewer.claims.user_id, added[-1].id, slug)
         repository.add(session, generation)
+        extras = await extras_on(session, conversation, character, path, performed.state)
         await session.commit()
-    scene = render_scene(document, performed.state)
     return TurnStart(
         conversation_id=conversation.id,
         generation_id=generation.id,
@@ -463,7 +485,7 @@ async def begin_action(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(added[-1]),
-        messages=prompt_for(conversation, character, persona, [*path, *added], options, scene),
+        messages=prompt_for(conversation, character, persona, [*path, *added], options, extras),
         action=saved(added[0]) if len(added) > 1 else None,
     )
 
@@ -509,7 +531,7 @@ async def begin_regenerate(
         if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
             raise ConversationBusyError
         path = await conversations.active_path(session, parent_id)
-        scene = await scene_on(session, character, path)
+        extras = await extras_on(session, conversation, character, path)
         generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
         repository.add(session, generation)
         await session.commit()
@@ -521,7 +543,7 @@ async def begin_regenerate(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(path[-1]),
-        messages=prompt_for(conversation, character, persona, path, options, scene),
+        messages=prompt_for(conversation, character, persona, path, options, extras),
     )
 
 
@@ -565,7 +587,7 @@ async def begin_continue(
         if conversation.active_leaf_id != target.id:
             raise NotContinuableError
         path = await conversations.active_path(session, target.id)
-        scene = await scene_on(session, character, path)
+        extras = await extras_on(session, conversation, character, path)
         generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
         repository.add(session, generation)
         await session.commit()
@@ -577,7 +599,7 @@ async def begin_continue(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(path[-2]),
-        messages=prompt_for(conversation, character, persona, path, options, scene, continuation.instruction()),
+        messages=prompt_for(conversation, character, persona, path, options, extras, continuation.instruction()),
         continued=saved(target),
     )
 

@@ -108,6 +108,8 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives` 와 `suggestions`), 가지 끝의 [상태](#장소와-소지품)(`state`), 답을 쓰는 중인지(`generating`) | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content, edit_of?}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`). `edit_of` 는 [내 말 고치기](#고치기) | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/actions` | [행동](#장소와-소지품). 이동 `{kind: "move", place}`, 쓰기 `{kind: "use", item}`, 건네기 `{kind: "give", item, words?}`. 바로 SSE 로 반응을 받는다. 할 수 없으면 422(`no_map`, `place_not_found`, `already_there`, `not_connected`, `item_not_found`, `not_held`) | access 토큰 |
+| GET, POST | `/api/v1/chat/conversations/{id}/notes` | [기억 메모](#기억-메모)들(먼저 쓴 것부터), 더하기 `{text}`(201). 가득 차면 409 `notes_full` | access 토큰 |
+| PATCH, DELETE | `/api/v1/chat/conversations/{id}/notes/{note_id}` | 메모 고치기 `{text}`, 지우기(204). 없으면 404 `note_not_found` | access 토큰 |
 | PATCH | `/api/v1/chat/messages/{id}` | [상대의 말 고치기](#고치기). `{content}`. 고친 말을 돌려준다. 사람의 말이면 422 `not_editable` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/regenerate` | [다시 생성](#다시-생성-멈추기-대안). 그 말에 다시 답한다. SSE 의 모양은 말 보내기와 같다. 인사말은 422 `not_regenerable`, 없는 말은 404 `message_not_found` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/continue` | [이어서 출력](#이어서-출력). 끊긴 답(`partial`)에 이어 쓴다. SSE. 끊긴 답이 아니거나 지금 가지의 끝이 아니면 422 `not_continuable` | access 토큰 |
@@ -311,6 +313,16 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - 수가 0 이 되면 소지품에서 빠진다. 가지고 있지 않으면 422 `not_held`, 판에 없는 물건이면 422 `item_not_found` 다.
 - **모델에 보내는 것.** 카드에 "[지금]" 블록(장소와 설명, 갈 수 있는 곳과 시간, 소지품, 상대의 차림)이 들어간다. 행동 말은 "[행동] …"으로 사람의 차례에 간다.
 - 호감도와 시간대(배경), 상대가 받은 선물의 목록은 그 뒤다. 규칙은 `app/world/` 에 두고, TRPG 와 함께 쓸 때 `shared/` 로 뽑는다.
+
+### 기억 메모
+
+상대가 기억할 것을 사용자가 적고 고치는 짧은 글이다(`app/memory/`, 설계의 "기억"의 셋째 층, 화면 명세 C5). 대화마다 따로 있다.
+
+- 모델의 카드에 "[기억]" 으로 늘 간다(시작 상황 뒤, 장소와 소지품 앞). 틀린 기억을 사람이 바로잡는 길이다.
+- 하나에 300자, 대화 하나에 스물까지다. 늘 모델에 가는 글이라 입력의 양을 지킨다. 더할 때 대화의 행을 잠그고 세어 동시에 더해도 넘지 않는다.
+- 답을 쓰는 중에도 고칠 수 있다. 고친 것은 다음 말부터 간다. 호출이 아니라 청구하지 않는다.
+- 출처(`source`)는 사용자가 쓴 것(`user`)과 요약이 제안한 것(`summary`)이다. 요약의 제안은 굴리는 요약(다음 PR)에서 생기고, 받아들이기 전에는 모델에 가지 않는다.
+- 가지와 상관없다(대화 하나에 하나의 목록). 대화를 지우면(행) 함께 지워진다.
 
 ### 고치기
 
