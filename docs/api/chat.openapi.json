@@ -1,6 +1,22 @@
 {
   "components": {
     "schemas": {
+      "BranchChoice": {
+        "additionalProperties": false,
+        "description": "볼 가지. 대안 가운데 하나의 id 다. 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다.",
+        "properties": {
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id"
+        ],
+        "title": "BranchChoice",
+        "type": "object"
+      },
       "CharacterDocument": {
         "description": "판에 굳힌 캐릭터. intro_html 은 asset 서버가 허용 목록으로 거른 소개다.",
         "properties": {
@@ -197,7 +213,7 @@
         "type": "object"
       },
       "ConversationDetail": {
-        "description": "대화 하나. messages 는 지금 보고 있는 가지의 말들이다. 첫 말부터 차례로.\n\n대안(다시 생성, 고친 말)은 그 단계에서 따로 읽는 길을 둔다.",
+        "description": "대화 하나. messages 는 지금 보고 있는 가지의 말들이다. 첫 말부터 차례로. 말마다 그 대안들의 id 가 실린다.\n\ngenerating 이 참이면 답을 쓰는 중이다. 화면이 보내기를 막고, 끝난 뒤 다시 읽는다.",
         "properties": {
           "character": {
             "$ref": "#/components/schemas/CharacterOut"
@@ -207,6 +223,10 @@
             "title": "Created At",
             "type": "string"
           },
+          "generating": {
+            "title": "Generating",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -214,7 +234,7 @@
           },
           "messages": {
             "items": {
-              "$ref": "#/components/schemas/MessageOut"
+              "$ref": "#/components/schemas/PathMessageOut"
             },
             "title": "Messages",
             "type": "array"
@@ -260,6 +280,7 @@
           "persona",
           "model",
           "messages",
+          "generating",
           "created_at",
           "updated_at"
         ],
@@ -450,55 +471,6 @@
         "title": "MessageCreate",
         "type": "object"
       },
-      "MessageOut": {
-        "description": "말 하나.",
-        "properties": {
-          "content": {
-            "title": "Content",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "parent_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Id"
-          },
-          "role": {
-            "title": "Role",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "parent_id",
-          "role",
-          "content",
-          "status",
-          "created_at"
-        ],
-        "title": "MessageOut",
-        "type": "object"
-      },
       "ModelChoice": {
         "additionalProperties": false,
         "description": "대화의 모델을 바꿀 때 받는 값.",
@@ -664,6 +636,64 @@
           "effective_at"
         ],
         "title": "NextPriceOut",
+        "type": "object"
+      },
+      "PathMessageOut": {
+        "description": "지금 가지의 말 하나와 그 대안들. alternatives 는 같은 부모 아래의 말들의 id 다(먼저 생긴 것부터, 이 말도 든다).\n\n화면이 \"< 2/3 >\" 를 그리고, 다른 대안을 고르면 PUT /conversations/{id}/branch 로 그 가지를 본다.",
+        "properties": {
+          "alternatives": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Alternatives",
+            "type": "array"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "parent_id",
+          "role",
+          "content",
+          "status",
+          "created_at",
+          "alternatives"
+        ],
+        "title": "PathMessageOut",
         "type": "object"
       },
       "PersonaOut": {
@@ -1064,6 +1094,66 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/chat/conversations/{conversation_id}/branch": {
+      "put": {
+        "description": "다른 대안의 가지를 본다. 그 말 아래에서 가장 나중에 생긴 말이 끝이 된다. 바뀐 대화를 돌려준다.",
+        "operationId": "choose_branch_api_v1_chat_conversations__conversation_id__branch_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BranchChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Choose Branch",
+        "tags": [
+          "conversations"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/chat/conversations/{conversation_id}/messages": {
       "post": {
         "description": "말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.",
@@ -1180,6 +1270,49 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/chat/generations/{generation_id}/stop": {
+      "post": {
+        "description": "모델을 부르는 것을 멈춘다(공급자의 호출도 끊는다).\n받은 만큼 partial 로 저장하고 청구한다. 받은 글이 없으면 반환한다.\n\n멈출 생성이 없으면(끝났다, 남의 것이다, 이 서버에서 도는 것이 아니다) 404 generation_not_running 이다.",
+        "operationId": "stop_generation_api_v1_chat_generations__generation_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "generation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Generation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stop Generation",
+        "tags": [
+          "messages"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/chat/me": {
       "get": {
         "description": "토큰이 유효하면 그 주인의 ID 를 돌려준다.",
@@ -1204,6 +1337,52 @@
         "summary": "Read Me",
         "tags": [
           "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/messages/{message_id}/regenerate": {
+      "post": {
+        "description": "그 말에 다시 답한다.\n캐릭터의 답이면 같은 사람의 말에 새 대안을, 사람의 말이면(답을 못 받았다) 그 말에 답을 쓴다.\n\n새 호출이라 새로 청구한다. 앞의 답은 남고, 대화의 가지는 새 답으로 옮겨 간다. SSE 의 모양은 말 보내기와 같다.",
+        "operationId": "regenerate_api_v1_chat_messages__message_id__regenerate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "SSE. app/turns/schemas.py 의 메시지들"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Regenerate",
+        "tags": [
+          "messages"
         ],
         "x-audience": "user"
       }

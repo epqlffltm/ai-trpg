@@ -51,6 +51,6 @@ class DoneEvent(BaseModel):
 
 
 class FailedEvent(BaseModel):
-    """failed 메시지. code 는 까닭(timeout, status_429, empty, cancelled, server_error …)이다."""
+    """failed 메시지. code 는 까닭(timeout, status_429, empty, stopped, cancelled, server_error …)이다."""
 
     code: str
