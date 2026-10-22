@@ -16,7 +16,8 @@
     "typecheck": "npm run typecheck --workspaces",
     "lint": "eslint .",
     "test": "npm run test --workspaces",
-    "gen:api": "npm run gen:api -w @ai-trpg/web"
+    "gen:api": "npm run gen:api -w @ai-trpg/web",
+    "sync:legal": "npm run sync:legal -w @ai-trpg/web"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

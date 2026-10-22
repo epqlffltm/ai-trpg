@@ -57,6 +57,10 @@ x-auth-staging: &auth-staging
   ALLOWED_HOSTS: localhost,127.0.0.1,auth-server,${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}
   REFRESH_COOKIE_SECURE: "true"
   REFRESH_COOKIE_ALLOWED_ORIGINS: https://${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}
+  # 메일 속 링크가 여는 화면(web/ 의 경로). 적지 않으면 개발 서버(localhost:5173)를 가리킨다
+  PASSWORD_RESET_URL: https://${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}/reset-password
+  GUARDIAN_CONSENT_URL: https://${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}/guardian/consent
+  GUARDIAN_REVOKE_URL: https://${DOMAIN:?루트 .env 에 DOMAIN 을 적는다}/guardian/revoke
 
 # 임베딩 모델. 이 VM 의 Ollama 가 받아 두고(ollama-pull), 게임 서버가 쓴다. 로어 검색의 기준(LORE_MAX_DISTANCE)이 이 모델로 잰 값이다.
 # 바꾸면 trpg-server 의 scripts.eval_lore 로 기준을 다시 재고 색인을 다시 만든다

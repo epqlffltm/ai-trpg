@@ -3,8 +3,9 @@
 일곱 서버를 부르는 화면 하나다. Vite, React, TypeScript 로 만든 SPA 이고, 빌드한 정적 파일을 프록시(nginx)가 내준다(#290).
 무엇을 왜 그렇게 정했는지는 [화면 명세의 프런트 구조](../docs/product/screens.md#프런트-구조)에 있다. 이 문서는 실행과 구조만 다룬다.
 
-지금 있는 것: 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(A2 의 두 단계, 갱신은 한 번에 하나 #30), 첫 화면(A1: 서비스 고르기, 이어하기, 공개된 것).
-가입, 비밀번호 재설정, 다시 동의, 본인인증과 서비스의 화면(B, C)은 다음이다. 그 경로는 "준비 중"을 보인다.
+지금 있는 것: 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(A2 의 두 단계, 갱신은 한 번에 하나 #30), 가입(세 단계와 동의),
+비밀번호 찾기와 재설정, 첫 화면(A1: 서비스 고르기, 이어하기, 공개된 것).
+다시 동의, 본인인증, 보호자 동의와 서비스의 화면(B, C)은 다음이다. 그 경로는 "준비 중"을 보인다.
 
 ## 실행
 
@@ -25,6 +26,9 @@ npm run dev        # http://localhost:5173
 ```bash
 REFRESH_COOKIE_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173
 ```
+
+비밀번호 재설정 메일의 링크는 인증 서버의 `PASSWORD_RESET_URL` 이 정한다. 적지 않으면 개발 서버(`http://localhost:5173/reset-password`)다.
+컨테이너의 화면(8080)으로 쓰면 `PASSWORD_RESET_URL=http://localhost:8080/reset-password` 로 바꾼다. staging 은 compose 가 도메인으로 채운다.
 
 ### 컨테이너로
 
@@ -53,8 +57,9 @@ web/
   apps/web/               앱
     src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts, errors.ts
     src/api/generated/    서버의 API 목록(docs/api/*.openapi.json)에서 만든 타입. 손으로 고치지 않는다
-    src/auth/             로그인 상태를 읽는 훅, 처음 열 때 되살리기, 로그인 실패의 글, 돌아갈 주소
-    src/pages/            화면. home(A1), login(A2), 준비 중, 없는 경로
+    src/auth/             로그인 상태를 읽는 훅, 처음 열 때 되살리기, 실패의 글(로그인, 가입, 비밀번호), 돌아갈 주소
+    src/legal/            동의 항목의 이름과 요약, 판마다의 문서(documents/, docs/legal 의 사본)
+    src/pages/            화면. home(A1), login·signup·password(A2), 준비 중, 없는 경로
     src/layout/           머리와 틀
   packages/ui/            공통 구성요소(버튼, 입력 칸, 안내, 목록 한 줄)와 색·글꼴의 변수(styles.css)
 ```
@@ -85,6 +90,21 @@ npm run gen:api    # docs/api/{auth,trpg,asset,chat}.openapi.json → apps/web/s
 
 서버의 API 가 바뀌면 이것을 다시 돌려 함께 올린다. CI 가 다시 만들어 보고 어긋나면 실패한다. 새 서버를 부르기 시작하면 `apps/web/scripts/gen-api.mjs` 의 `SERVERS` 에 더한다.
 
+## 동의 문서
+
+가입 3단계의 "보기"가 여는 글이다(#450). 서버(`GET /api/v1/auth/consents`)는 항목과 판 번호만 주고 문서의 글은 화면이 갖는다.
+원본은 `docs/legal/` 이고, 사용자에게 보이는 본문(두 `---` 사이)만 판마다 `apps/web/src/legal/documents/` 에 옮긴다.
+
+```bash
+npm run sync:legal    # docs/legal/{terms,privacy}.md → apps/web/src/legal/documents/{terms,privacy}-v1.md
+```
+
+원본을 고치면 다시 돌려 함께 올린다. CI 가 다시 만들어 보고 어긋나면 실패한다.
+판을 올리면(`auth-server/accounts/consents.py` 의 `POLICIES`) `scripts/sync-legal.mjs` 의 `DOCUMENTS` 와 `src/legal/consentItems.ts` 의 `DOCUMENTS` 에 새 판을 더한다.
+화면이 갖지 않은 판을 서버가 주면 가입을 막는다(옛 문서로 동의를 받지 않는다).
+선택 항목(마케팅, AI 학습)은 따로의 문서가 없어 개인정보 처리방침을 보인다. 초안이라 문서의 맨 위에 "검토 중인 초안"을 띄운다.
+문서는 처음 열 때 받는다(마크다운을 그리는 react-markdown 도 그때). HTML 은 그대로 넣지 않고, 문서 안의 링크는 글로만 둔다.
+
 ## 시험
 
 ```bash
@@ -94,6 +114,6 @@ npm test
 npm run build
 ```
 
-시험은 서버를 부르지 않는다. `fetch` 를 가짜로 바꿔(`src/test/fakeFetch.ts`) 갱신이 하나만 가는지, 로그인 두 단계와 그 실패, 첫 화면의 줄이 따로 실패하는지를 본다.
+시험은 서버를 부르지 않는다. `fetch` 를 가짜로 바꿔(`src/test/fakeFetch.ts`) 갱신이 하나만 가는지, 로그인 두 단계와 그 실패, 가입 세 단계와 동의(체크한 것만 보내기, 판이 바뀌면 다시 읽기), 비밀번호 재설정, 첫 화면의 줄이 따로 실패하는지를 본다.
 프록시에 실려 실제로 뜨는지(index.html 로 돌리기, 캐시, CSP)는 CI 의 stack(`.github/scripts/stack-smoke.sh check-proxy`)이 본다.
 끝에서 끝까지(Playwright)는 한 판이 화면으로 이어질 때 붙인다.

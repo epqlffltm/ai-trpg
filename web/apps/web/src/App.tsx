@@ -6,7 +6,10 @@ import { AppLayout } from './layout/AppLayout';
 import { HomePage } from './pages/home/HomePage';
 import { LoginPage } from './pages/login/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ForgotPasswordPage } from './pages/password/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/password/ResetPasswordPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { SignupPage } from './pages/signup/SignupPage';
 
 export function App() {
   return (
@@ -14,6 +17,10 @@ export function App() {
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
         <Route path="login" element={<LoginPage />} />
+        <Route path="signup" element={<SignupPage />} />
+        <Route path="password/forgot" element={<ForgotPasswordPage />} />
+        {/* 인증 서버의 PASSWORD_RESET_URL 이 가리키는 곳. 바꾸면 그 설정도 바꾼다 */}
+        <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route path="trpg/*" element={<PlaceholderPage service="TRPG" />} />
         <Route path="chat/*" element={<PlaceholderPage service="chat" />} />
         <Route path="story/*" element={<PlaceholderPage service="story" />} />

@@ -6,8 +6,8 @@ import { Button, Notice, TextField } from '@ai-trpg/ui';
 import { useState, type FormEvent } from 'react';
 import { resendLoginCode, verifyLogin } from '../../api/auth';
 import { describeLoginProblem, type LoginProblem } from '../../auth/loginProblem';
-import { secondsFromNow, useCountdown } from '../../hooks/useCountdown';
-import { ProblemNotice } from './ProblemNotice';
+import { formatRemaining, secondsFromNow, useCountdown } from '../../hooks/useCountdown';
+import { ProblemNotice } from '../../components/ProblemNotice';
 
 /** 코드를 다시 받기까지 기다리는 시간(인증 서버의 1분에 1통) */
 const RESEND_SECONDS = 60;
@@ -79,7 +79,7 @@ export function CodeStep({ ticket, ticketEndsAt, onDone, onRestart }: Props) {
   return (
     <form onSubmit={submit} noValidate>
       <p>
-        가입한 메일로 6자리 코드를 보냈습니다. {formatMinutes(ticketSeconds)} 안에 입력해 주세요.
+        가입한 메일로 6자리 코드를 보냈습니다. {formatRemaining(ticketSeconds)} 안에 입력해 주세요.
       </p>
       <ProblemNotice problem={problem} />
       {sent ? <Notice>{sent}</Notice> : null}
@@ -105,10 +105,4 @@ export function CodeStep({ ticket, ticketEndsAt, onDone, onRestart }: Props) {
       </div>
     </form>
   );
-}
-
-function formatMinutes(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return minutes > 0 ? `${minutes}분 ${rest}초` : `${rest}초`;
 }

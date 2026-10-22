@@ -26,7 +26,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 알림 서버 (FastAPI) | [`notification-server/`](notification-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, 상태 확인, CI), 알림 넣기(서버끼리의 서명), 알림함(목록, 읽지 않은 수, 읽음), 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, 보관 기간(30일) 정리, 컨테이너(compose 의 프로필 `app`)까지 완료. 게임 서버가 서술 모델의 은퇴를 방장에게, 운영자의 제재를 당사자에게 넣고, 결제 서버의 정리 작업이 결제·청약철회·환영 크레딧·곧 사라질 무료 크레딧을, 게시판 서버가 댓글과 답글을 넣는다 |
 | asset 서버 (FastAPI) | [`asset-server/`](asset-server/README.md) | 뼈대(공용 코드 `shared/server-core` 위의 서버 실행, 상태 확인, 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, CI), 계정 페르소나, 캐릭터(초안, 게시와 판, 공개 목록, 소개 글의 HTML 거르기), 다른 서버에 페르소나의 사본과 캐릭터의 판 내주기(서버끼리의 서명), 탈퇴 받기, 컨테이너(compose 의 프로필 `app`)까지 완료. 그림을 올리고 내주는 것은 예정(#566) |
 | chat 서버 (FastAPI) | [`chat-server/`](chat-server/README.md) | 뼈대(공용 코드 `shared/server-core` 위의 서버 실행, 상태 확인, 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, CI), 대화 시작(asset 서버에서 캐릭터의 판과 페르소나를 가져와 고정한다), 대화의 목록·읽기·지우기, 컨테이너(compose 의 프로필 `app`)까지 완료. 한 번의 말(스트리밍, 과금)은 다음이다(#590) |
-| 화면 (Vite, React, TypeScript) | [`web/`](web/README.md) | 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(두 단계, 갱신은 한 번에 하나 #30), 첫 화면(서비스 고르기, 이어하기, 공개된 것)까지 완료. 가입, 본인인증, 서비스의 화면은 다음이다(#290) |
+| 화면 (Vite, React, TypeScript) | [`web/`](web/README.md) | 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(두 단계, 갱신은 한 번에 하나 #30), 가입(세 단계, 동의와 판마다의 문서), 비밀번호 찾기와 재설정, 첫 화면(서비스 고르기, 이어하기, 공개된 것)까지 완료. 본인인증, 서비스의 화면은 다음이다(#290) |
 
 ## 문서
 
@@ -41,7 +41,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | [billing-server/README.md](billing-server/README.md) | 결제 서버의 실행, 설정, API, 주문과 결제, 홀드, 크레딧, 정리 작업과 대사, 마이그레이션, 토큰 검증, 테스트, CI, 구조, 설계 메모 |
 | [asset-server/README.md](asset-server/README.md) | asset 서버의 실행, 설정, 상태 확인, API(계정 페르소나, 캐릭터와 게시, 공개 목록, 다른 서버에 내주기, 탈퇴), 소개 글의 HTML, 토큰 검증, 로그와 추적과 메트릭, 마이그레이션, 테스트 |
 | [chat-server/README.md](chat-server/README.md) | chat 서버의 실행, 설정, 상태 확인, API(대화), 스트리밍의 약속, 토큰 검증, 로그와 추적과 메트릭, 마이그레이션, 테스트 |
-| [web/README.md](web/README.md) | 화면의 실행(개발 서버, 프록시의 이미지), 구조, 서버를 부르는 법과 토큰 갱신, API 의 타입 만들기, 시험 |
+| [web/README.md](web/README.md) | 화면의 실행(개발 서버, 프록시의 이미지), 구조, 서버를 부르는 법과 토큰 갱신, API 의 타입 만들기, 동의 문서, 시험 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 기여 지침. 서버의 경계, 기본 검사, 브랜치와 PR 의 모양 |
 | [SECURITY.md](SECURITY.md) | 보안 정책. 취약점을 비공개로 알리는 길 |
 | [docs/observability.md](docs/observability.md) | 서버들이 함께 지키는 관측 규격. 로그의 모양, 요청·추적·작업 식별자, 민감정보, health 와 readiness, 메트릭의 이름, 관리 서버의 경계 |
