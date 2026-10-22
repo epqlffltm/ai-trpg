@@ -9,7 +9,7 @@
 
   - 서명이 틀리면 401 이다. 본문은 서명을 확인한 뒤에 읽는다. 모양이 틀리면 422 다
   - 지우고 200 {"status": "processed"} 다. 이미 지웠거나 이 서버에 그 사람의 것이 없어도 200 이다
-  - 그 밖의 답(500 등)이면 인증 서버가 간격을 늘려 다시 보낸다. 지우기가 한 트랜잭션이라 다시 와도 된다
+  - 그 밖의 답(500, 그림 저장소에 닿지 못한 503 등)이면 인증 서버가 간격을 늘려 다시 보낸다. 다시 와도 된다(멱등)
   - 사용자의 토큰은 없다. 탈퇴한 사람에게는 토큰이 없다
   - 따로 로그를 남기지 않는다. 요청의 줄(http.request)에 경로의 틀과 결과가 남는다. 공개 ID 는 남기지 않는다
 """
@@ -22,6 +22,7 @@ from pydantic import ValidationError
 
 from app.core.dependencies import Session
 from app.core.service_auth import AuthServerBody
+from app.images.router import Store, utc_now
 from app.withdrawal import service
 from app.withdrawal.schemas import WithdrawalNotice, WithdrawalResult
 
@@ -37,8 +38,10 @@ def parse_notice(body: bytes) -> WithdrawalNotice:
 
 
 @router.post('/{public_id}/withdrawal', response_model=WithdrawalResult, status_code=status.HTTP_200_OK)
-async def receive_withdrawal(public_id: uuid.UUID, body: AuthServerBody, session: Session) -> WithdrawalResult:
-    """탈퇴한 사람의 페르소나와 비공개 캐릭터를 지운다."""
+async def receive_withdrawal(
+    public_id: uuid.UUID, body: AuthServerBody, session: Session, store: Store
+) -> WithdrawalResult:
+    """탈퇴한 사람의 페르소나와 비공개 캐릭터, 쓰이지 않는 그림을 지운다."""
     parse_notice(body)
-    await service.erase_user(session, public_id)
+    await service.erase_user(session, store, public_id, utc_now())
     return WithdrawalResult()

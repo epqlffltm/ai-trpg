@@ -15,6 +15,7 @@
 
 import enum
 import re
+import uuid
 from dataclasses import dataclass
 from html.parser import HTMLParser
 
@@ -68,7 +69,7 @@ FORBIDDEN_STYLE_VALUES = ('url(', 'expression(', '\\')
 # 링크는 https 만 받는다. javascript:, data:, http: 는 뺀다
 LINK = re.compile(r'^https://[^\s]+$', re.IGNORECASE)
 # 그림은 우리 그림 저장소의 것만 받는다. asset-server 가 내주는 주소다(그림의 id 는 소문자 UUID)
-IMAGE = re.compile(r'^/api/v1/asset/images/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+IMAGE = re.compile(r'^/api/v1/asset/images/(?P<id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$')
 # 링크에 붙이는 rel. 연 페이지가 이 페이지를 건드리지 못하고, 어디서 왔는지 알리지 않는다
 LINK_REL = 'noopener noreferrer'
 
@@ -201,6 +202,33 @@ class RemovalScanner(HTMLParser):
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
+
+
+class ImageScanner(HTMLParser):
+    """img 의 src 가운데 우리 그림 저장소의 주소에서 그림의 id 를 모은다. 처음 나온 차례로, 같은 것은 한 번만이다."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.ids: dict[uuid.UUID, None] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != 'img':
+            return
+        for name, value in attrs:
+            found = IMAGE.fullmatch((value or '').strip()) if name == 'src' else None
+            if found:
+                self.ids.setdefault(uuid.UUID(found['id']))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+
+
+def image_ids(html: str) -> list[uuid.UUID]:
+    """글에 든 우리 그림들의 id. 거른 글을 넣는다(거르기 전의 글이면 걸러질 그림까지 든다)."""
+    scanner = ImageScanner()
+    scanner.feed(html)
+    scanner.close()
+    return list(scanner.ids)
 
 
 def removals(html: str) -> list[Removed]:

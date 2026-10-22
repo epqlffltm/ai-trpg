@@ -13,6 +13,9 @@
   - 공개 목록은 공개이고 게시한 판이 있고, 보는 사람이 볼 수 있는 등급(판의 등급)인 것만 낸다. 나머지는 404 다.
   - 다른 서버(chat, story)에 내주는 판은 마지막 판이다. 쓸 수 있는 사람은 주인이거나, 공개 캐릭터를 볼 수 있는 사람이다.
     등급은 주인에게도 본다(성인 확인을 잃은 주인에게 성인 판을 내주지 않는다). 주인에게는 403, 남에게는 404 다.
+  - 대표 그림과 소개 글의 그림은 자기가 올린 그림이어야 한다(#566). 초안의 대표 그림은 붙일 때 보고(422),
+    게시할 때는 소개 글의 그림까지 다시 본다(막는 것). 게시하면 판에 쓰인 그림을 적는다. 공개 캐릭터의 판에 쓰인 그림은
+    그 판을 볼 수 있는 사람이 본다(app/images/service.py).
   - 나이와 성별로 거르거나 막지 않는다.
 """
 
@@ -25,9 +28,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.characters import repository
 from app.characters.documents import build_document
 from app.characters.models import Character, CharacterVersion, Visibility
-from app.characters.publishing import CharacterNotReadyError, cleaned_intro, find_problems
+from app.characters.publishing import (
+    CharacterNotReadyError,
+    Problem,
+    cleaned_intro,
+    find_problems,
+    used_image_ids,
+)
 from app.characters.schemas import CharacterCreate, CharacterUpdate
 from app.content.html import Removed
+from app.images import service as images
 from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
 
 
@@ -64,6 +74,12 @@ def apply_changes(character: Character, changes: dict) -> None:
         setattr(character, name, value)
 
 
+async def require_own_image(session: AsyncSession, owner_id: uuid.UUID, image_id: uuid.UUID | None) -> None:
+    """붙이려는 대표 그림이 자기 그림이어야 한다. 떼거나(None) 바꾸지 않으면 보지 않는다. 아니면 ImageNotOwnedError."""
+    if image_id is not None:
+        await images.require_own_images(session, owner_id, [image_id])
+
+
 async def get_mine(session: AsyncSession, owner_id: uuid.UUID, character_id: uuid.UUID) -> Character:
     """자기 캐릭터 하나. 없으면 CharacterNotFoundError."""
     character = await repository.find_owned(session, owner_id, character_id)
@@ -83,6 +99,7 @@ async def create_character(
     """캐릭터를 만든다. 만들 수 없는 사람이면 OperatorOnlyError, 쓸 수 없는 등급이면 AdultContentRequiredError."""
     require_maker(viewer, for_everyone)
     require_rating(data.rating, allowed_ratings(viewer))
+    await require_own_image(session, viewer.user_id, data.image_id)
     character = build_character(viewer.user_id, data)
     repository.add(session, character)
     await session.commit()
@@ -98,6 +115,7 @@ async def update_character(
     require_visibility(viewer, data.visibility)
     if data.rating is not None:
         require_rating(data.rating, allowed_ratings(viewer))
+    await require_own_image(session, viewer.user_id, data.image_id)
     apply_changes(character, data.changes())
     await session.commit()
     await session.refresh(character)
@@ -116,7 +134,17 @@ async def check_publish(
 ) -> tuple[list[str], list[Removed]]:
     """지금 게시하면 막히는 이유와 소개에서 걸러질 것. 판을 만들지 않는다."""
     character = await get_mine(session, owner_id, character_id)
-    return [str(problem) for problem in find_problems(character)], cleaned_intro(character).removed
+    cleaned = cleaned_intro(character)
+    problems = await publishing_problems(session, character, cleaned.html)
+    return [str(problem) for problem in problems], cleaned.removed
+
+
+async def publishing_problems(session: AsyncSession, character: Character, intro_html: str) -> list[Problem]:
+    """게시를 막는 것들. 초안의 규칙(find_problems)과, 판에 쓰일 그림이 모두 자기 그림인지."""
+    problems = find_problems(character)
+    if await images.foreign_ids(session, character.owner_id, used_image_ids(character, intro_html)):
+        problems.append(Problem.IMAGE_NOT_OWNED)
+    return problems
 
 
 def next_number(character: Character) -> int:
@@ -128,6 +156,7 @@ def build_version(character: Character, number: int, note: str, intro: str) -> C
     """초안과 거른 소개로 판을 만든다. 아직 저장하지 않는다."""
     document = build_document(character, intro)
     return CharacterVersion(
+        id=uuid.uuid4(),
         character_id=character.id,
         number=number,
         note=note,
@@ -143,16 +172,19 @@ async def publish(
     자기 캐릭터를 게시한다. 새 판과 소개에서 걸러 낸 것들을 돌려준다.
 
     막는 것이 있으면 CharacterNotReadyError(판을 만들지 않는다). 행을 잠그고 번호를 정한다.
+    판에 쓰인 그림을 판과 같은 트랜잭션에 적는다.
     """
     character = await repository.find_owned(session, owner_id, character_id, for_update=True)
     if character is None:
         raise CharacterNotFoundError
-    problems = find_problems(character)
+    cleaned = cleaned_intro(character)
+    problems = await publishing_problems(session, character, cleaned.html)
     if problems:
         raise CharacterNotReadyError(problems)
-    cleaned = cleaned_intro(character)
     version = build_version(character, next_number(character), note, cleaned.html)
     repository.add(session, version)
+    await session.flush()
+    images.record_uses(session, version.id, used_image_ids(character, cleaned.html))
     character.latest_version = version.number
     character.published_at = func.now()
     await session.commit()

@@ -34,6 +34,7 @@ from app.personas.models import (
     Persona,
 )
 from tests.conftest import make_client, make_test_settings
+from tests.images import own_image
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -43,7 +44,6 @@ NO_SUCH_ID = '00000000-0000-4000-8000-000000000000'
 FULL = {
     'name': '한서윤',
     'description': '서울의 작은 출판사에서 일한다.',
-    'image_id': '0b7c6f1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e',
     'age': '스물일곱',
     'gender': '여성',
     'form_of_address': '선배',
@@ -204,8 +204,10 @@ async def test_the_same_values_do_not_raise_the_revision(client: AsyncClient, mi
     assert same.json()['revision'] == nothing.json()['revision'] == 1
 
 
-async def test_the_image_is_taken_off_with_null_but_text_fields_are_not(client: AsyncClient, mine: dict):
-    persona = await create(client, mine, **FULL)
+async def test_the_image_is_taken_off_with_null_but_text_fields_are_not(
+    client: AsyncClient, mine: dict, session: AsyncSession
+):
+    persona = await create(client, mine, **FULL, image_id=await own_image(session, TEST_USER_ID))
 
     taken_off = await client.patch(url_of(persona), json={'image_id': None}, headers=mine)
     refused = await client.patch(url_of(persona), json={'name': None}, headers=mine)

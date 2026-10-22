@@ -2378,7 +2378,7 @@
     },
     "/api/v1/asset/service/users/{public_id}/withdrawal": {
       "post": {
-        "description": "탈퇴한 사람의 페르소나와 비공개 캐릭터를 지운다.",
+        "description": "탈퇴한 사람의 페르소나와 비공개 캐릭터, 쓰이지 않는 그림을 지운다.",
         "operationId": "receive_withdrawal_api_v1_asset_service_users__public_id__withdrawal_post",
         "parameters": [
           {

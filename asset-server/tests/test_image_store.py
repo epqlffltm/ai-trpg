@@ -205,3 +205,30 @@ def test_the_settings_build_an_s3_store():
     assert store.presigned_get(KEY, NOW).startswith(
         f'https://s3.ap-northeast-2.amazonaws.com/ai-trpg-images-staging/{KEY}?'
     )
+
+
+async def test_delete_sends_a_signed_delete_to_the_object():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(204)
+
+    await store_answering(handler).delete(KEY, NOW)
+
+    (request,) = seen
+    assert (request.method, str(request.url), request.content) == (
+        'DELETE',
+        f'http://object-store:8333/ai-trpg-images/{KEY}',
+        b'',
+    )
+    signed = {name: request.headers[name] for name in ('host', 'x-amz-content-sha256', 'x-amz-date')}
+    expected = authorization_header(LOCAL, 'DELETE', f'/ai-trpg-images/{KEY}', signed, sha256_hex(b''), NOW)
+    assert request.headers['authorization'] == expected
+
+
+async def test_a_refused_delete_means_the_store_is_unavailable():
+    with pytest.raises(ImageStoreUnavailableError):
+        await store_answering(lambda request: httpx.Response(403)).delete(KEY, NOW)
+    with pytest.raises(ImageStoreUnavailableError):
+        await UnconfiguredImageStore().delete(KEY, NOW)

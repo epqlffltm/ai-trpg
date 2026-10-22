@@ -27,7 +27,6 @@ NO_SUCH_ID = '00000000-0000-4000-8000-000000000000'
 FULL = {
     'name': '한서윤',
     'description': '서울의 작은 출판사에서 일한다.',
-    'image_id': '0b7c6f1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e',
     'age': '스물일곱',
     'gender': '여성',
     'form_of_address': '선배',
@@ -70,7 +69,7 @@ async def test_the_copy_is_the_content_and_the_revision(client: AsyncClient, min
     response = await signed_get(client, f'/personas/{persona["id"]}', mine)
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {'id': persona['id'], 'revision': 1, **FULL}
+    assert response.json() == {'id': persona['id'], 'revision': 1, 'image_id': None, **FULL}
 
 
 async def test_the_copy_follows_the_latest_content(client: AsyncClient, mine: dict):

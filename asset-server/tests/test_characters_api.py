@@ -46,7 +46,6 @@ FULL = {
     'gender': '여성',
     'tags': ['사서', '조용함'],
     'starts': [START],
-    'image_id': '0b7c6f1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e',
     'rating': 'all',
 }
 

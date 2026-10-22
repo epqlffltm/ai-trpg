@@ -4,6 +4,7 @@
 그림 저장소(#566). 로컬과 CI 는 SeaweedFS(object-store), staging 은 S3 다. 둘 다 S3 의 API 로 부른다.
 
   - put: 그림을 그림의 id 로 넣는다. 형식(Content-Type)을 객체에 적는다. nginx 는 저장소가 준 형식을 내보낸다.
+  - delete: 그림을 지운다(탈퇴). 없는 것을 지워도 된다(S3 는 204 다).
   - presigned_get: 그림을 60초 동안 받을 수 있는 주소. nginx 가 그 주소로 받아 캐시하고 내준다
     (docs/architecture/asset-server.md 의 "그림"). 키는 이 서버만 갖는다.
 
@@ -53,23 +54,27 @@ class ImageStore(Protocol):
         """그림을 넣는다. 실패하면 ImageStoreUnavailableError."""
         ...
 
+    async def delete(self, key: str, now: datetime) -> None:
+        """그림을 지운다. 없어도 된다. 실패하면 ImageStoreUnavailableError."""
+        ...
+
     def presigned_get(self, key: str, now: datetime) -> str:
         """그림을 잠깐 받을 수 있는 주소. 저장소가 없으면 ImageStoreUnavailableError."""
         ...
 
 
-def put_headers(
-    credentials: Credentials, location: StoreLocation, key: str, data: bytes, content_type: str, now: datetime
+def signed_headers(
+    credentials: Credentials, location: StoreLocation, method: str, key: str, data: bytes, now: datetime, **extra: str
 ) -> dict[str, str]:
-    """넣는 요청의 머리말. 서명(Authorization)까지 든다."""
+    """요청의 머리말. 본문의 해시, 시각, 서명(Authorization)까지 든다. extra 는 함께 서명할 머리말이다(소문자)."""
     payload_hash = sha256_hex(data)
     headers = {
-        'content-type': content_type,
+        **extra,
         'host': location.host(),
         'x-amz-content-sha256': payload_hash,
         'x-amz-date': amz_date(now),
     }
-    authorization = authorization_header(credentials, 'PUT', location.path(key), headers, payload_hash, now)
+    authorization = authorization_header(credentials, method, location.path(key), headers, payload_hash, now)
     return {**headers, 'authorization': authorization}
 
 
@@ -82,16 +87,27 @@ class S3ImageStore:
     location: StoreLocation
     timeout: float
 
-    async def put(self, key: str, data: bytes, content_type: str, now: datetime) -> None:
-        """그림을 넣는다. 닿지 못하거나 2xx 가 아니면 ImageStoreUnavailableError."""
-        headers = put_headers(self.credentials, self.location, key, data, content_type, now)
+    async def send(self, method: str, key: str, data: bytes, headers: dict[str, str]) -> None:
+        """서명한 요청을 보낸다. 닿지 못하거나 2xx 가 아니면 ImageStoreUnavailableError."""
         url = self.location.origin + self.location.path(key)
         try:
-            response = await self.client.put(url, content=data, headers=headers, timeout=self.timeout)
+            response = await self.client.request(method, url, content=data, headers=headers, timeout=self.timeout)
         except httpx.HTTPError as error:
             raise ImageStoreUnavailableError from error
         if not response.is_success:
             raise ImageStoreUnavailableError(f'저장소가 {response.status_code} 로 답했다')
+
+    async def put(self, key: str, data: bytes, content_type: str, now: datetime) -> None:
+        """그림을 넣는다."""
+        headers = signed_headers(
+            self.credentials, self.location, 'PUT', key, data, now, **{'content-type': content_type}
+        )
+        await self.send('PUT', key, data, headers)
+
+    async def delete(self, key: str, now: datetime) -> None:
+        """그림을 지운다. 없는 것도 2xx(204)다."""
+        headers = signed_headers(self.credentials, self.location, 'DELETE', key, b'', now)
+        await self.send('DELETE', key, b'', headers)
 
     def presigned_get(self, key: str, now: datetime) -> str:
         """그림을 60초 동안 받을 수 있는 주소."""
@@ -107,6 +123,10 @@ class UnconfiguredImageStore:
 
     async def put(self, key: str, data: bytes, content_type: str, now: datetime) -> None:
         """넣을 곳이 없다."""
+        raise ImageStoreUnavailableError('저장소가 설정되지 않았다')
+
+    async def delete(self, key: str, now: datetime) -> None:
+        """지울 곳이 없다."""
         raise ImageStoreUnavailableError('저장소가 설정되지 않았다')
 
     def presigned_get(self, key: str, now: datetime) -> str:
