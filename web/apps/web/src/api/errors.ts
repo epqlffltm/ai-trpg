@@ -1,6 +1,6 @@
 // web/apps/web/src/api/errors.ts
 // 서버의 실패 응답을 화면이 다룰 하나의 모양(ApiError)으로 바꾼다.
-// 서버마다 오류의 본문이 조금씩 다르다: {"detail"}, {"detail","code"}, {"detail","code","retry_after"}, 칸마다의 글({"username": [...]}).
+// 서버마다 오류의 본문이 조금씩 다르다: {"detail"}, {"detail","code"}, {"detail","reason"}(게임의 409), {"detail","code","retry_after"}, 칸마다의 글({"username": [...]}).
 
 export type FieldErrors = Record<string, string[]>;
 
@@ -45,11 +45,17 @@ export async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError({
     status: response.status,
     detail: typeof body.detail === 'string' ? body.detail : FALLBACK_DETAIL,
-    code: typeof body.code === 'string' ? body.code : undefined,
+    code: codeOf(body),
     retryAfter: retryAfterOf(body, response.headers),
     fields: fieldErrorsOf(body),
     requestId: response.headers.get('X-Request-ID') ?? undefined,
   });
+}
+
+/** 실패의 까닭. 대개 code 이고, 게임 서버의 409 는 reason 에 싣는다(테이블의 table_full 같은 것) */
+function codeOf(body: Record<string, unknown>): string | undefined {
+  if (typeof body.code === 'string') return body.code;
+  return typeof body.reason === 'string' ? body.reason : undefined;
 }
 
 async function readJsonObject(response: Response): Promise<Record<string, unknown>> {

@@ -26,6 +26,9 @@ export type NarrationModels = Trpg['schemas']['NarrationModelsOut'];
 export type NarrationModel = Trpg['schemas']['NarrationModelOut'];
 export type TablePage = Trpg['schemas']['TablePage'];
 export type TableSummary = Trpg['schemas']['TableSummary'];
+export type TableDetail = Trpg['schemas']['TableDetail'];
+export type TableCreate = Trpg['schemas']['TableCreate'];
+export type NarrationStyle = Trpg['schemas']['NarrationStyle'];
 
 export type PublicCharacterPage = Asset['schemas']['PublicCharacterPage'];
 export type PublicCharacterSummary = Asset['schemas']['PublicCharacterSummary'];
