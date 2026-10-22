@@ -190,6 +190,16 @@ location /api/v1/asset/ {
     proxy_pass http://$asset_server;
 }
 
+# 그림 올리기(#566). 본문이 그림 파일 그대로다. asset 서버의 상한(IMAGE_MAX_BYTES, 기본 10MB)보다 조금 크게 둔다.
+# 넘는 것은 여기서 413 이다. 정확한 상한은 asset 서버가 본다
+location = /api/v1/asset/images {
+    set $proxy_upstream asset;
+    set $asset_server asset-server:8006;
+    limit_req zone=api burst=40 nodelay;
+    client_max_body_size 11m;
+    proxy_pass http://$asset_server;
+}
+
 # 다른 서버만 부르는 주소(페르소나의 사본과 판 가져오기, asset-server/README.md 의 "다른 서버에 내주기").
 # 그 서버들은 프록시를 거치지 않고 컨테이너끼리 부른다
 location ^~ /api/v1/asset/service/ {

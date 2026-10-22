@@ -5,7 +5,7 @@ asset 서버의 설정. 환경 변수와 asset-server/.env 에서 읽는다.
 
 FastAPI 서버들이 함께 쓰는 칸(DB, 인증 서버, 로그, 수집기)은 공용 코드의 설정(server_core.settings.CoreSettings)에 있다.
 여기에는 이 서버의 이름과 기본값, 이 서버만의 칸(페르소나의 상한, 캐릭터를 만드는 사람,
-부르는 서버와 인증 서버의 서명 비밀)을 둔다.
+부르는 서버와 인증 서버의 서명 비밀, 그림 저장소와 그림을 여는 상한)을 둔다.
 
 비밀값과 환경마다 달라지는 값은 코드에 적지 않는다.
 다른 서버의 .env 와 따로 둔다. 한 서버가 다른 서버의 비밀값을 읽을 수 없게 하기 위해서다.
@@ -55,6 +55,45 @@ class Settings(CoreSettings):
     # 부르는 서버의 표(service_secrets)에 넣지 않는다. 인증 서버는 페르소나와 판을 가져가는 서버가 아니다.
     # 비워 두면 탈퇴 알림을 받지 않는다(401). 인증 서버는 받을 때까지 다시 보낸다
     auth_server_secret: SecretStr = SecretStr('')
+
+    # 그림 저장소(#566, app/images/store.py). compose 가 넘긴다(docker-compose.yml 의 x-asset-image-store).
+    # 주소가 비어 있으면 저장소가 없는 서버다. 그림 올리기와 내주기가 503 이다. 주소를 적으면 나머지도 적어야 뜬다.
+    # 주소는 nginx 가 서명한 주소를 따라가는 곳이기도 하다. compose 밖에서 띄우면 nginx 가 그 주소를 받지 않는다
+    image_store_endpoint: str = ''
+    image_store_region: str = 'ap-northeast-2'
+    image_store_bucket: str = ''
+    image_store_access_key_id: str = ''
+    image_store_secret_access_key: SecretStr = SecretStr('')
+    # 저장소에 넣는 요청의 시간 상한(초)
+    image_store_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+
+    # 올리는 그림의 크기 상한(바이트). 프록시의 상한(client_max_body_size)이 이보다 조금 크다
+    image_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+    # 그림을 여는 따로 된 프로세스의 상한(app/images/isolation.py). 픽셀 수(가로 × 세로), 주소 공간(MB),
+    # CPU 시간과 벽시계(초), 한꺼번에 여는 수. 메모리는 상한 × 한꺼번에 여는 수까지 쓴다
+    image_max_pixels: int = Field(default=40_000_000, ge=1_000_000, le=200_000_000)
+    image_decode_memory_mb: int = Field(default=768, ge=128, le=4096)
+    image_decode_cpu_seconds: int = Field(default=10, ge=1, le=120)
+    image_decode_wall_seconds: float = Field(default=15.0, gt=0, le=180)
+    image_decode_concurrency: int = Field(default=2, ge=1, le=16)
+
+    @model_validator(mode='after')
+    def require_complete_image_store(self) -> Self:
+        """저장소의 주소를 적었으면 버킷과 키도 적어야 한다. 올리기마다 실패하는 것보다 뜨지 않는 것이 낫다."""
+        if not self.image_store_endpoint:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ('IMAGE_STORE_BUCKET', self.image_store_bucket),
+                ('IMAGE_STORE_ACCESS_KEY_ID', self.image_store_access_key_id),
+                ('IMAGE_STORE_SECRET_ACCESS_KEY', self.image_store_secret_access_key.get_secret_value()),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(f'IMAGE_STORE_ENDPOINT 를 적었으면 {", ".join(missing)} 도 적어야 한다')
+        return self
 
     @model_validator(mode='after')
     def require_strong_distinct_secrets(self) -> Self:
