@@ -7,8 +7,9 @@
   2. 업체에 묻는다(identity_providers.py). 트랜잭션 밖에서 한다. 업체가 느려도 DB 의 잠금을 오래 쥐지 않는다
   3. 만 14세 미만이면 계정을 막고 모은 개인정보를 지운다. 개인정보 보호법(22조의2)은 만 14세 미만의
      개인정보를 보호자의 동의 없이 모으지 못하게 한다. 이 서비스는 보호자 동의를 받아 가입시키지 않는다
-  4. 다른 계정이 이미 인증한 사람이면 거절한다. 한 사람은 한 계정에서만 인증한다
-  5. 인증 기록과 환영 크레딧, 결제 서버에 알릴 결제 자격을 한 트랜잭션에서 적는다
+  4. 정지된 채 탈퇴한 사람이면(return_blocks.py, #634) 사유의 규칙대로 인증을 거절하거나 이 계정도 정지한다
+  5. 다른 계정이 이미 인증한 사람이면 거절한다. 한 사람은 한 계정에서만 인증한다
+  6. 인증 기록과 환영 크레딧, 결제 서버에 알릴 결제 자격을 한 트랜잭션에서 적는다
 
 결과는 바로 토큰에 실리지 않는다. 다음에 토큰을 갱신할 때 실린다(tokens.py). 화면은 인증 뒤에 갱신을 부른다.
 """
@@ -23,9 +24,11 @@ from accounts.age import adult_content_from, has_reached, is_under_min_age, kore
 from accounts.consents import erase_consents
 from accounts.erasure import blank_account, erase_mail_records
 from accounts.identity_providers import IdentityResult, get_identity_provider
-from accounts.models import IdentityVerification, SecurityEventKind, User
+from accounts.models import IdentityVerification, ReturnBlock, ReturnBlockKind, SecurityEventKind, User
 from accounts.payment_eligibility import mark_changed
+from accounts.return_blocks import IdentityRule, active_block, policy_for
 from accounts.security_events import record_security_event
+from accounts.suspension import suspend_account
 from accounts.tokens import revoke_all_sessions
 from accounts.welcome_credit import request_welcome_credit
 
@@ -46,6 +49,14 @@ class UnderMinAgeError(Exception):
     """만 14세 미만이다. 계정을 막고 개인정보를 지웠다."""
 
 
+class IdentityBlockedError(Exception):
+    """정지된 채 탈퇴한 사람이다(#634). 인증하지 않았다. 사유의 규칙에 따라 이 계정도 정지했을 수 있다."""
+
+
+# 정지된 채 탈퇴한 사람이 돌아와 이 계정도 정지할 때 정지의 기록에 적는 사유
+RETURN_SUSPENSION_NOTE = '정지된 채 탈퇴한 사람이 본인인증했다(#634)'
+
+
 def person_key(di: str) -> str:
     """
     사람 열쇠. 업체가 준 DI 를 서버의 비밀키로 서명한 값이다(HMAC-SHA256, 16진수 64자).
@@ -62,7 +73,7 @@ def verify_identity(*, user: User, token: str, ip: str = '') -> IdentityVerifica
 
     이미 인증했으면 IdentityAlreadyVerifiedError, 업체가 token 을 모르면 IdentityTokenError,
     업체를 쓸 수 없으면 IdentityUnavailableError, 만 14세 미만이면 UnderMinAgeError,
-    다른 계정의 사람이면 IdentityInUseError 를 낸다.
+    정지된 채 탈퇴한 사람이면 IdentityBlockedError, 다른 계정의 사람이면 IdentityInUseError 를 낸다.
     """
     _ensure_not_verified(user)
     provider = get_identity_provider()
@@ -73,8 +84,14 @@ def verify_identity(*, user: User, token: str, ip: str = '') -> IdentityVerifica
         close_under_age_account(user)
         raise UnderMinAgeError
 
+    key = person_key(result.di)
+    block = active_block(ReturnBlockKind.IDENTITY, key, timezone.now())
+    if block is not None:
+        turn_away(user, block, ip)
+        raise IdentityBlockedError
+
     try:
-        return _record_verification(user, result, provider.name, today)
+        return _record_verification(user, result, provider.name, today, key)
     except IdentityInUseError:
         # 위의 트랜잭션은 취소됐다. 이벤트는 따로 남긴다
         record_security_event(kind=SecurityEventKind.IDENTITY_IN_USE, user=user, ip=ip)
@@ -87,8 +104,21 @@ def _ensure_not_verified(user: User) -> None:
         raise IdentityAlreadyVerifiedError
 
 
+def turn_away(user: User, block: ReturnBlock, ip: str) -> None:
+    """
+    정지된 채 탈퇴한 사람이 이 계정에서 본인인증했다. 운영자가 보게 남기고, 사유의 규칙이 그렇다면 이 계정도 정지한다.
+
+    정지는 인증을 거절하기 전에 커밋한다(suspend_account 의 트랜잭션). 거절이 정지를 되돌리지 않는다.
+    """
+    record_security_event(kind=SecurityEventKind.RETURN_BLOCKED, user=user, ip=ip, note=f'본인인증 / {block.reason}')
+    if policy_for(block.reason).identity is IdentityRule.SUSPEND:
+        suspend_account(user, RETURN_SUSPENSION_NOTE, reason=block.reason)
+
+
 @transaction.atomic
-def _record_verification(user: User, result: IdentityResult, provider_name: str, today: date) -> IdentityVerification:
+def _record_verification(
+    user: User, result: IdentityResult, provider_name: str, today: date, key: str
+) -> IdentityVerification:
     """
     인증 기록과 환영 크레딧, 결제 자격을 한 트랜잭션에서 적는다.
 
@@ -97,7 +127,6 @@ def _record_verification(user: User, result: IdentityResult, provider_name: str,
     """
     locked = _lock(user)
     _ensure_not_verified(locked)
-    key = person_key(result.di)
     try:
         verification = IdentityVerification.objects.create(
             user=locked,

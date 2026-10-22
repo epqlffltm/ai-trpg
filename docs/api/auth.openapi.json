@@ -1330,7 +1330,7 @@
                 }
               }
             },
-            "description": "만 14세 미만이라 계정을 막았다(identity_under_age). refresh 쿠키도 지운다"
+            "description": "만 14세 미만이라 계정을 막았다(identity_under_age). refresh 쿠키도 지운다. 또는 정지된 채 탈퇴한 사람이라 인증하지 않았다(identity_blocked)"
           },
           "409": {
             "content": {

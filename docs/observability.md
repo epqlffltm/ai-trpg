@@ -650,7 +650,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
-| `emails_sent_total` | counter | `kind`(메일의 종류: `signup_code`, `login_code`, `already_registered`, `password_reset`, `password_changed`, `security_digest`, `guardian_consent`, `guardian_consented`, `guardian_revoked`, `minor_guardian`, `guardian_payment`, `withdrawal_requested`, `withdrawal_reminder`, `withdrawal_completed`, `other`), `result`(`sent`, `retried`, `discarded`) | 메일 한 통을 보내 본 결과의 수. 시도마다 센다. `retried` 는 메일 서버가 받지 않아 다시 보낼 것, `discarded` 는 버린 것(받는 사람이 받지 못했다)이다. 종류는 발송함의 칸 `kind` 다(`accounts.models.MailKind`). 메일 서버 없이 바로 찍는 것(inline)은 `sent` 만 센다 |
+| `emails_sent_total` | counter | `kind`(메일의 종류: `signup_code`, `login_code`, `already_registered`, `password_reset`, `password_changed`, `security_digest`, `guardian_consent`, `guardian_consented`, `guardian_revoked`, `minor_guardian`, `guardian_payment`, `withdrawal_requested`, `withdrawal_reminder`, `withdrawal_completed`, `signup_refused`, `other`), `result`(`sent`, `retried`, `discarded`) | 메일 한 통을 보내 본 결과의 수. 시도마다 센다. `retried` 는 메일 서버가 받지 않아 다시 보낼 것, `discarded` 는 버린 것(받는 사람이 받지 못했다)이다. 종류는 발송함의 칸 `kind` 다(`accounts.models.MailKind`). 메일 서버 없이 바로 찍는 것(inline)은 `sent` 만 센다 |
 | `auth_rate_limited_total` | counter | `limit`(제한의 이름: `login-ip`, `login-fail-account-ip`, `login-ip-block`, `signup-ip`, `password-reset-ip`, `password-change-fail-user`) | 시도 횟수 제한에 걸린 수 |
 | `auth_rate_limits_unavailable_total` | counter | `limit` | Redis 에 묻지 못해 세지 않고 통과시킨 수. 0 이 아니면 그동안 시도 제한이 꺼져 있었다 |
 
