@@ -13,7 +13,9 @@ import { ResetPasswordPage } from './pages/password/ResetPasswordPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { SignupPage } from './pages/signup/SignupPage';
 import { ScenarioBrowsePage } from './pages/trpg/browse/ScenarioBrowsePage';
+import { LobbyPage } from './pages/trpg/lobby/LobbyPage';
 import { ScenarioPage } from './pages/trpg/scenario/ScenarioPage';
+import { TableCreatePage } from './pages/trpg/tables/TableCreatePage';
 
 export function App() {
   return (
@@ -36,7 +38,23 @@ export function App() {
         <Route path="trpg">
           <Route index element={<ScenarioBrowsePage />} />
           <Route path="scenarios/:scenarioId" element={<ScenarioPage />} />
-          {/* 테이블 만들기(B4, tables/new), 로비(B3, lobby), 테이블 방(B6)은 다음이다 */}
+          <Route
+            path="lobby"
+            element={
+              <RequireSession>
+                <LobbyPage />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="tables/new"
+            element={
+              <RequireSession>
+                <TableCreatePage />
+              </RequireSession>
+            }
+          />
+          {/* 테이블 방(B6, tables/:tableId)은 다음이다 */}
           <Route path="*" element={<PlaceholderPage service="TRPG" />} />
         </Route>
         <Route path="chat/*" element={<PlaceholderPage service="chat" />} />
