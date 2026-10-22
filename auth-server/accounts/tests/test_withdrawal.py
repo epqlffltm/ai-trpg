@@ -38,6 +38,8 @@ from accounts.models import (
     PaymentEligibility,
     SecurityEvent,
     SecurityEventKind,
+    Suspension,
+    SuspensionReason,
     User,
     WelcomeCredit,
     WithdrawalNotice,
@@ -312,12 +314,14 @@ class CompleteTests(TestCase):
 
     def test_an_account_suspended_during_the_grace_is_still_emptied(self):
         # 정지는 탈퇴를 멈추지 않는다(withdrawal.md 의 "정한 것"). 정지된 사람의 개인정보를 쥐고 있지 않는다
-        suspend_account(self.user, '도배')
+        suspend_account(self.user, '도배', reason=SuspensionReason.SPAM)
 
         self.assertEqual(self.complete_at(self.due), 1)
         self.user.refresh_from_db()
         self.assertTrue(is_removed_account(self.user))
         self.assertEqual(self.user.withdrawn_at, self.due)
+        # 운영자가 적은 사유도 그 사람에 관한 글이라 지운다(#634)
+        self.assertFalse(Suspension.objects.filter(user=self.user).exists())
 
 
 class RemindTests(TestCase):

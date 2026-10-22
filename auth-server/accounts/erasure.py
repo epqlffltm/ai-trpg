@@ -17,6 +17,7 @@ from accounts.models import (
     OutgoingMail,
     PaymentEligibility,
     SignupCode,
+    Suspension,
     User,
 )
 
@@ -48,6 +49,15 @@ def erase_mail_records(user: User, email: str) -> None:
     EmailCode.objects.filter(user=user).delete()
     SignupCode.objects.filter(email=email.lower()).delete()
     OutgoingMail.objects.filter(to_email__iexact=email).delete()
+
+
+def erase_suspensions(user: User) -> None:
+    """
+    정지의 기록을 지운다(#634). 운영자가 적은 사유는 그 사람에 관한 글이다.
+
+    정지된 채 탈퇴하는 사람의 재가입을 막는 데 필요한 것(사유의 종류)은 부르는 쪽이 지우기 전에 읽는다.
+    """
+    Suspension.objects.filter(user=user).delete()
 
 
 def erase_identity_records(user: User) -> None:
