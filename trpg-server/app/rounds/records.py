@@ -274,7 +274,7 @@ def record_item_give(session: AsyncSession, table: GameTable, declaration: Decla
 
 def record_move(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
     """
-    한 칸 간 것을 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. 방장이 옮길 때와 같은 종류(character_moved)다.
+    한 칸 간 것을 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. 판의 사건이 옮길 때와 같은 종류(character_moved)다.
 
     가지 못했으면 적지 않는다. 위치가 바뀌지 않았다. 못 간 까닭은 라운드의 선언 결과에 있다.
     행한 사람(actor_id)을 적지 않는다. 위치를 바꾼 것은 엔진이다.

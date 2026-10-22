@@ -6,7 +6,7 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Annotated, ClassVar
+from typing import Annotated, ClassVar, Literal
 
 from ai_core.catalog_file import Slug
 from pydantic import (
@@ -35,6 +35,7 @@ from app.assets.models import (
     DROP_CHANCE_MAX,
     ENCOUNTER_MAX_COUNT,
     FAIL_ONLY_CONDITIONS,
+    HAPPENING_MAX_EFFECTS,
     ITEM_STACK_MAX,
     MONSTER_MAX_ATTACKS,
     PLAYER_MADE_HP_MAX,
@@ -45,6 +46,7 @@ from app.assets.models import (
     ROUND_MAX_MINUTES,
     SCENARIO_MAX_BESTIARIES,
     SCENARIO_MAX_ENCOUNTERS,
+    SCENARIO_MAX_HAPPENINGS,
     SCENARIO_MAX_ITEM_RULES,
     SCENARIO_MAX_LANDMARKS,
     SCENARIO_MAX_LOREBOOKS,
@@ -60,6 +62,7 @@ from app.assets.models import (
     TABLE_MAX_PLAYERS,
     VERSION_NOTE_MAX_LENGTH,
     CharacterMode,
+    HappeningEffectKind,
     ItemKind,
     ItemRarity,
     NarrationStyle,
@@ -741,6 +744,82 @@ QuestRules = Annotated[
 ]
 
 
+class MoveEffect(BaseModel):
+    """
+    사건의 효과 하나: 캐릭터들을 맵의 한 장소(to_place)로 옮긴다(#367).
+
+    from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 옮긴다.
+    쓰러진 캐릭터도 옮겨진다(끌려간다). 두 장소가 맵의 장소인지는 게시할 때 본다. 길로 이어져 있지 않아도 된다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[HappeningEffectKind.MOVE]
+    to_place: uuid.UUID
+    from_place: uuid.UUID | None = None
+
+    @model_validator(mode='after')
+    def leads_somewhere_else(self) -> 'MoveEffect':
+        """그 자리로 옮기는 것은 뜻이 없다."""
+        if self.from_place == self.to_place:
+            raise ValueError('옮기는 곳과 옮겨지는 사람이 선 곳이 같습니다.')
+        return self
+
+    @field_serializer('to_place', 'from_place')
+    def place_as_text(self, place: uuid.UUID | None) -> str | None:
+        """장소의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return None if place is None else str(place)
+
+
+HappeningEffects = Annotated[list[MoveEffect], Field(min_length=1, max_length=HAPPENING_MAX_EFFECTS)]
+
+
+class HappeningRule(BaseModel):
+    """
+    사건 규칙 하나(#367). 조건(when)이 채워지면 한 번 일어나 효과(effects)를 낸다. 붙인 로어북의 사건 항목 하나다.
+
+    조건의 모양과 종류는 퀘스트의 것과 같다(QuestCondition). 하나 이상 적는다.
+    match 는 모두(all)인지 하나라도(any)인지다.
+    가져가기(consume)는 쓰지 않는다. 사건은 물건을 받지 않는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)과
+    물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).
+    라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다
+    (app/rounds/happenings.py).
+    가리키는 사건과 장소가 붙인 로어북에 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    when: Annotated[QuestConditions, Field(min_length=1)]
+    match: QuestMatch = QuestMatch.ALL
+    effects: HappeningEffects
+
+    @model_validator(mode='after')
+    def nothing_consumed(self) -> 'HappeningRule':
+        """사건은 물건을 가져가지 않는다. 가져가는 것은 퀘스트를 이룰 때다."""
+        if any(condition.consume for condition in self.when):
+            raise ValueError('consume 은 퀘스트의 이루는 조건(conditions)에만 적습니다.')
+        return self
+
+    @field_serializer('entry_id')
+    def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
+        """항목의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(entry_id)
+
+
+def reject_duplicate_happenings(rules: list[HappeningRule]) -> list[HappeningRule]:
+    """같은 사건의 규칙이 두 번 있으면 거부한다. 일어났다고 적는 것이 사건 항목 하나마다다."""
+    entry_ids = [rule.entry_id for rule in rules]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 사건의 사건 규칙이 두 번 있습니다.')
+    return rules
+
+
+Happenings = Annotated[
+    list[HappeningRule], Field(max_length=SCENARIO_MAX_HAPPENINGS), AfterValidator(reject_duplicate_happenings)
+]
+
+
 def in_fixed_order(modes: list[CharacterMode]) -> list[CharacterMode]:
     """
     방식의 목록을 정해진 순서로 놓는다. 같은 것이 두 번 있으면 거부한다.
@@ -808,6 +887,7 @@ class ScenarioCreate(AssetCreate):
     routes: Routes = []
     landmarks: Landmarks = []
     place_items: PlaceItems = []
+    happenings: Happenings = []
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
@@ -826,7 +906,7 @@ class ScenarioUpdate(AssetUpdate):
     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-    quests, routes, landmarks, place_items, character_modes 는
+    quests, routes, landmarks, place_items, happenings, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -857,6 +937,7 @@ class ScenarioUpdate(AssetUpdate):
     routes: Routes | None = None
     landmarks: Landmarks | None = None
     place_items: PlaceItems | None = None
+    happenings: Happenings | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
@@ -915,6 +996,7 @@ class ScenarioDetail(ScenarioSummary):
     routes: list[RouteRule]
     landmarks: list[uuid.UUID]
     place_items: list[PlaceItem]
+    happenings: list[HappeningRule]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle

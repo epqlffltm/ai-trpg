@@ -101,6 +101,10 @@ SCENARIO_MAX_ENCOUNTERS = 50
 ENCOUNTER_MAX_COUNT = 10
 # 시나리오 하나에 둘 수 있는 놓인 물건의 줄 수(장소, 물건, 보이는지의 짝). 한 줄의 개수는 한 가지의 상한(99)까지다
 SCENARIO_MAX_PLACE_ITEMS = 100
+# 시나리오 하나에 둘 수 있는 사건 규칙(조건이 채워지면 한 번 일어나는 일, #367)의 수와, 사건 하나의 효과의 수.
+# 조건의 수는 퀘스트와 같다(QUEST_MAX_CONDITIONS)
+SCENARIO_MAX_HAPPENINGS = 50
+HAPPENING_MAX_EFFECTS = 5
 # 몬스터 하나의 공격(스킬)의 수와 이름의 길이. 공격이 여럿이면 차례마다 서버의 주사위로 하나를 고른다
 MONSTER_MAX_ATTACKS = 5
 ATTACK_NAME_MAX_LENGTH = 30
@@ -297,6 +301,13 @@ class QuestMatch(enum.StrEnum):
     ALL = 'all'
     # 하나라도 채우면 된다
     ANY = 'any'
+
+
+class HappeningEffectKind(enum.StrEnum):
+    """사건이 일어났을 때 하는 일의 종류(#367). 효과는 목록이라 종류가 늘어도 판의 모양은 그대로다."""
+
+    # 캐릭터들을 맵의 한 장소로 옮긴다. 모두이거나, 한 장소에 서 있던 캐릭터들이다
+    MOVE = 'move'
 
 
 class Visibility(enum.StrEnum):
@@ -582,6 +593,7 @@ class Scenario(AssetContent):
         ),
         CheckConstraint(f'jsonb_array_length(encounters) <= {SCENARIO_MAX_ENCOUNTERS}', name='encounters_count'),
         CheckConstraint(f'jsonb_array_length(place_items) <= {SCENARIO_MAX_PLACE_ITEMS}', name='place_items_count'),
+        CheckConstraint(f'jsonb_array_length(happenings) <= {SCENARIO_MAX_HAPPENINGS}', name='happenings_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
@@ -703,6 +715,11 @@ class Scenario(AssetContent):
     # 숨긴 물건(hidden)은 찾는 판정(find)으로 드러난다. 테이블을 시작할 때 줄마다 남은 개수를 만든다
     # (app/tables/place_items.py). 가져가면 그 테이블에서 줄어든다. 판은 그대로다
     place_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 사건 규칙들(#367). 하나하나가 {entry_id, when, match, effects} 다. "이 조건이 채워지면 이 일이 한 번 일어난다"는
+    # 뜻이다. 사건은 붙인 로어북의 사건 항목이고, 조건의 모양은 퀘스트의 것과 같다. 효과는 지금 옮기기(move) 하나다.
+    # 잡혀 끌려가기, 함정, 휩쓸림처럼 길로 이어지지 않은 이동을 판이 정한다(app/rounds/happenings.py)
+    happenings: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다

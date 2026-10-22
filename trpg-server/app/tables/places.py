@@ -20,7 +20,6 @@ from dataclasses import dataclass
 
 from app.assets.models import RouteVisibility
 from app.assets.scenarios.snapshot import EntrySnapshot, RouteSnapshot, Snapshot, has_map, place_entries
-from app.tables.errors import TableOptionError
 from app.tables.models import GameTable, TableFoundRoute, TableMember, TableSheet, TableVisit
 
 # 길 하나를 가리키는 값. 판에 적힌 두 끝(from_place, to_place)이다
@@ -86,17 +85,6 @@ def known_map(snapshot: Snapshot, known: Knowledge) -> KnownMap | None:
     places = {snapshot.start_place, *snapshot.landmarks, *known.seen}
     places.update(end for route in routes for end in (route.from_place, route.to_place))
     return KnownMap(places=[entry for entry in place_entries(snapshot) if entry.id in places], routes=routes)
-
-
-def require_known(known: KnownMap | None, place_id: uuid.UUID) -> None:
-    """
-    아는 장소인지 확인한다. 아니면 TableOptionError(place_id).
-
-    판에 없는 장소, 장소가 아닌 항목, 아직 모르는 장소, 맵이 없는 판을 가르지 않고 같은 답을 준다.
-    가르면 숨긴 장소가 있다는 것이 드러난다.
-    """
-    if known is None or not known.has(place_id):
-        raise TableOptionError('place_id')
 
 
 def exits(known: KnownMap | None, place_id: uuid.UUID) -> list[uuid.UUID]:
@@ -183,7 +171,7 @@ def describe_move(snapshot: Snapshot, member: TableMember, previous: uuid.UUID |
     """
     옮겨 간 것을 이벤트에 적을 모양. 누가, 어디에서, 어디로. 맵이 생기기 전에 시작한 테이블이면 어디에서가 없다.
 
-    방장이 옮길 때(app/tables/place_changes.py)와 선언 행동으로 갈 때(app/rounds/map_actions.py)가 같이 쓴다.
+    선언 행동으로 갈 때(app/rounds/map_actions.py)와 판의 사건이 옮길 때(app/rounds/happenings.py)가 같이 쓴다.
     """
     return {
         'user_id': str(member.user_id),

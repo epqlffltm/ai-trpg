@@ -34,6 +34,7 @@ from app.assets.models import LoreKind, NarrationStyle
 from app.rounds.move_lines import describe_injuries, describe_items, lost_before_acting, round_lines
 from app.rounds.narrator import (
     ClockNote,
+    HappeningNote,
     LoreNote,
     MemoryNote,
     MonsterNote,
@@ -138,7 +139,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 시간이 건너뛰지 않았다)). 건너뛴 시간은 [시각]의 흐르는 시간에 있다(#367)
 #   narration-46: 가기의 결과 줄에 업고 간 쓰러진 동료가 붙는다((간 곳: 성문 → 숲, 약사을(를) 업고),
 #                 업지 못했으면 그 까닭). 업힌 사람은 스스로 걷지 않았다(#367)
-PROMPT_VERSION = 'narration-46'
+#   narration-47: 이번 라운드가 닫힐 때 일어난 판의 사건이 "[일어난 사건]"으로 퀘스트 뒤, 시각 앞에 붙는다
+#                 (- 무너지는 다리: 기사 → 강 하류). 옮겨진 인물은 이미 그곳에 있다는 다루는 법이 함께 간다(#367)
+PROMPT_VERSION = 'narration-47'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -365,7 +368,7 @@ ITEMS_NOTE = (
     '[소지품]은 게임 엔진이 관리하는 사실이다. 캐릭터가 가지지 않은 물건을 쓰는 장면을 쓰지 마라. '
     '선언한 행동이 가지지 않은 물건을 쓰려 하면, 찾았지만 없다는 식으로 서술한다.'
 )
-# 테이블의 퀘스트와 지금 상태. 엔진(드러내기, 성공, 기한의 실패)과 방장(실패)이 정한 사실이다.
+# 테이블의 퀘스트와 지금 상태. 엔진(드러내기, 성공, 실패)이 정한 사실이다(#367).
 # AI 는 퀘스트를 바꾸지 못한다.
 # 서술이 결말을 먼저 정하거나("왕녀를 구했다") 숨긴 퀘스트를 드러내면 장면과 장부가 어긋난다
 QUEST_TITLE = '[퀘스트]'
@@ -419,6 +422,16 @@ MAP_NOTE = (
 NO_EXITS = '없음'
 # 게임 안의 시각(#248). 시각은 엔진이 흘린다(app/calendar/). 서술이 "날이 밝았다"고 써도 시계는 그대로다.
 # 밤 장면에 햇빛을 쓰거나, 하룻밤을 건너뛴 장면을 여전히 밤으로 쓰면 장면과 시계가 어긋난다
+# 이번 라운드가 닫힐 때 일어난 판의 사건(#367). 엔진이 판의 규칙으로 일으켰다. 서술은 그 까닭을 장면으로 그린다.
+# 옮겨진 인물을 다른 곳에 두거나 사건을 없던 일로 쓰면 장면과 장부(위치)가 어긋난다
+HAPPENING_TITLE = '[일어난 사건]'
+HAPPENING_NOTE = (
+    '이번 라운드가 끝날 때 게임이 일으킨 사건이다. 정해진 일이니 그대로 따른다. '
+    '옮겨진 인물은 장면이 끝날 때 이미 그곳에 있다. 왜, 어떻게 그곳에 가게 됐는지를 장면 속 일로 그려라. '
+    '사건을 막아 내거나 없던 일로 쓰지 마라.'
+)
+# 옮겨진 사람이 없는 사건(모두 이미 그곳에 있었다)에 붙이는 말
+HAPPENING_NO_MOVE = '옮겨진 사람은 없다'
 CLOCK_TITLE = '[시각]'
 # 숫자(며칠째, 몇 시 몇 분)를 장면에 옮기면 이야기가 기록처럼 읽힌다. 화면이 시각을 따로 보여 준다(narration-24)
 CLOCK_NOTE = (
@@ -708,6 +721,19 @@ def quest_lines(quests: list[QuestNote]) -> list[str]:
     return [QUEST_TITLE, QUEST_NOTE, *(quest_line(quest) for quest in quests), '']
 
 
+def happening_lines(happenings: list[HappeningNote]) -> list[str]:
+    """
+    이번 라운드가 닫힐 때 일어난 판의 사건을 적는 줄들. 다루는 법 한 줄과 사건마다 한 줄(narration-47).
+
+    예: - 무너지는 다리: 기사 → 강 하류, 약사 → 강 하류
+    끝에 빈 줄이 붙는다. 일어난 사건이 없으면 빈 목록이다.
+    """
+    if not happenings:
+        return []
+    lines = [f'- {happening.name}: {", ".join(happening.moved) or HAPPENING_NO_MOVE}' for happening in happenings]
+    return [HAPPENING_TITLE, HAPPENING_NOTE, *lines, '']
+
+
 def clock_lines(clock: ClockNote | None) -> list[str]:
     """
     게임 안의 시각을 적는 줄들. 다루는 법, 시작하는 때, 흐르는 시간, 끝나는 때.
@@ -828,6 +854,7 @@ def round_text(request: NarrationRequest) -> str:
     lines.extend(history_lines(request.histories))
     lines.extend(whisper_lines(request.whispers))
     lines.extend(quest_lines(request.quests))
+    lines.extend(happening_lines(request.happenings))
     lines.extend(clock_lines(request.clock))
     lines.extend(map_lines(request.moves))
     lines.extend(monster_lines(request.monsters))

@@ -708,6 +708,18 @@ def upgrade_from_42(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_43(document: dict) -> dict:
+    """
+    형식 43 의 문서를 형식 44 로 올린다. 그때는 사건 규칙이 없었다. 길로 이어지지 않은 이동은 방장이 손으로 옮겼다.
+
+    사건 규칙이 없는 것으로 읽는다. 방장이 옮기는 길은 없어졌으므로(#367) 옛 판에서는 길로만 다닌다.
+    """
+    upgraded = dict(document)
+    upgraded['happenings'] = []
+    upgraded['format'] = 44
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -753,4 +765,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     40: upgrade_from_40,
     41: upgrade_from_41,
     42: upgrade_from_42,
+    43: upgrade_from_43,
 }

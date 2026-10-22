@@ -38,7 +38,6 @@ from app.tables import (
     item_grants,
     items,
     narration_models,
-    place_changes,
     place_items,
     places,
     quests,
@@ -83,7 +82,6 @@ from app.tables.schemas import (
     NarrationModelUpdate,
     NarrationStyleUpdate,
     NextPriceOut,
-    PlaceChange,
     PlaceItemOut,
     PlaceOut,
     PregenChoice,
@@ -633,21 +631,6 @@ async def take_items(
     가진 것보다 많으면 409(not_enough_items). 모두에게 이벤트(items_lost)가 간다.
     """
     table = await item_grants.take_items(session, user.user_id, table_id, user_id, entry_id, count)
-    return to_detail(table, user.user_id)
-
-
-@router.put('/{table_id}/members/{user_id}/place', response_model=TableDetail, status_code=status.HTTP_200_OK)
-async def move_character(
-    table_id: uuid.UUID, user_id: uuid.UUID, data: PlaceChange, user: CurrentUser, session: Session
-) -> TableDetail:
-    """
-    방장이 그 사람의 지금 캐릭터를 맵의 아는 장소로 옮긴다. 진행 중에만 된다. 길로 이어져 있지 않아도 된다.
-
-    아는 장소(TableDetail.map.places)가 아니면 422 다. 방장도 숨긴 장소는 모른다.
-    죽은 캐릭터는 409(character_dead). 이미 그 장소에 있으면 아무것도 바뀌지 않는다.
-    AI 는 캐릭터를 옮기지 못한다. 모두에게 이벤트(character_moved)가 간다.
-    """
-    table = await place_changes.move_character(session, user.user_id, table_id, user_id, data.place_id)
     return to_detail(table, user.user_id)
 
 

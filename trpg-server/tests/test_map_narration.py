@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import Snapshot
 from app.rounds.move_lines import describe_move
@@ -28,7 +29,7 @@ from tests import test_table_map as map_tables
 from tests.test_map_actions import FOUND, SEARCHING, going, load_dice, play
 from tests.test_scenario_map import GATE, SQUARE, map_document
 from tests.test_table_items import ME, events_of
-from tests.test_table_map import move, start_duo
+from tests.test_table_map import put_at, start_duo
 from tests.test_whispers import RecordingNarrator
 
 # 지도 테스트의 픽스처를 그대로 쓴다. 방장(기사), 함께 앉는 사람(약사), 장소 여섯이 든 로어북.
@@ -166,10 +167,10 @@ def test_the_map_comes_after_the_quests_and_before_the_people_only_when_someone_
 
 
 async def test_the_narrator_gets_where_everyone_stands_and_what_lies_hidden(
-    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await move(client, me, table, ME, lore['square'])
+    await put_at(session, table, ME, lore['square'])
     recording = RecordingNarrator()
     app.state.narrator = recording
 
@@ -185,10 +186,10 @@ async def test_the_narrator_gets_where_everyone_stands_and_what_lies_hidden(
 
 
 async def test_a_route_found_this_round_is_an_exit_not_a_secret(
-    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await move(client, me, table, ME, lore['square'])
+    await put_at(session, table, ME, lore['square'])
     recording = RecordingNarrator()
     app.state.narrator = recording
     load_dice(app, [FOUND])
@@ -201,10 +202,10 @@ async def test_a_route_found_this_round_is_an_exit_not_a_secret(
 
 
 async def test_the_plain_narration_never_names_a_hidden_place(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await move(client, me, table, ME, lore['square'])
+    await put_at(session, table, ME, lore['square'])
 
     # 가짜 서술자는 한 일의 줄을 그대로 장면으로 쓴다. 그 장면은 모두가 읽는다
     await play(client, me, friend, table, narrated)

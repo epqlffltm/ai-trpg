@@ -311,6 +311,10 @@ class GameTable(Base):
         lazy='selectin', cascade='all, delete-orphan', order_by='TablePlaceItem.slot'
     )
 
+    # 이 테이블에서 일어난 판의 사건들(#367). 사건 규칙마다 많아야 하나다(많아야 50 개). 라운드가 닫힐 때마다
+    # 일어나지 않은 것만 보므로 테이블을 읽을 때 함께 읽는다(app/rounds/happenings.py)
+    happenings: Mapped[list['TableHappening']] = relationship(lazy='selectin', cascade='all, delete-orphan')
+
 
 class TableMember(Base):
     """
@@ -475,7 +479,7 @@ class TableSheet(Base):
     died_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # 캐릭터가 서 있는 맵의 장소. 판의 로어북 장소 항목의 ID 다. 맵이 없는 판이면 비어 있다.
-    # 시작할 때 판의 시작 장소에 서고, 방장이 옮긴다(app/tables/place_changes.py). 죽은 캐릭터는 쓰러진 곳에 남는다.
+    # 시작할 때 판의 시작 장소에 서고, 엔진이 옮긴다(가기와 업고 가기, 판의 사건). 죽은 캐릭터는 쓰러진 곳에 남는다.
     # 서 본 장소는 늘 아는 장소다. 그래서 이 값이 숨긴 장소를 드러내는 일은 없다
     place_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
@@ -782,6 +786,29 @@ class TableQuest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 마지막으로 상태를 바꾼 때. 처음 만든 뒤로 바꾸지 않았으면 비어 있다
     changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TableHappening(Base):
+    """
+    테이블 하나에서 일어난 판의 사건 하나(#367).
+
+    판의 사건 규칙은 조건이 채워지면 한 번 일어난다(app/rounds/happenings.py).
+    일어난 것을 여기 적어 다시 일어나지 않게 한다. 일어난 라운드(round_number)와
+    옮긴 사람들(moves: 누가, 어디에서, 어디로)도 적는다. 그 라운드의 서술이 이것을 읽는다.
+    바꾸는 것은 엔진뿐이다. 지우지 않는다.
+    """
+
+    __tablename__ = 'table_happenings'
+    __table_args__ = (CheckConstraint('round_number >= 1', name='round_number_positive'),)
+
+    # 두 칸을 합쳐 기본 키로 삼는다. 한 테이블에서 사건 하나는 한 번만 일어난다. 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 판(content)의 로어북 사건 항목의 ID
+    entry_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    round_number: Mapped[int] = mapped_column(Integer)
+    # 옮긴 사람들. 하나하나가 {user_id, character_name, from, to} 다(장소는 {entry_id, name}). 효과의 차례다
+    moves: Mapped[list[dict]] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class TableVisit(Base):
