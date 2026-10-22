@@ -8,6 +8,7 @@
   - HTTP 셋(observability/request_metrics.py)과 db_up(config/health.py)
   - 작업 넷(observability/jobs.py 의 run_as_job)과 발송함에 남은 메일(send_outgoing_mail)
   - 보낸 메일(accounts/outbox.py)
+  - 밀린 탈퇴와 알리지 못한 탈퇴 알림(send_welcome_credits 가 바퀴마다 적는다)
   - 시도 횟수 제한(accounts/attempt_limits.py)
 """
 
@@ -25,11 +26,15 @@ from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
+from accounts import withdrawal
 from accounts.attempt_limits import AttemptLimit, TooManyAttemptsError, count_attempt, count_failure, ensure_not_blocked
 from accounts.mail import send_signup_code
-from accounts.models import MailKind, OutgoingMail
+from accounts.models import MailKind, OutgoingMail, User, WithdrawalNotice
 from accounts.outbox import MAIL_SEND_DEADLINE, deliver_due_mail, enqueue_mail
+from accounts.tests.billing_stub import SECRET
 from accounts.tests.helpers import delete_attempt_keys, reset_redis_breaker
+from accounts.withdrawal_client import WithdrawalUndeliveredError
+from accounts.withdrawal_schedule import GRACE
 from observability.jobs import run_as_job
 from observability.metrics import DURATION_BUCKETS, OTHER_METHOD, method_label, record_request
 from observability.request_metrics import RequestMetricsMiddleware
@@ -204,6 +209,66 @@ class MailTests(TestCase):
         self.assertEqual(
             self.metrics.value('background_jobs_finished', operation='mail.deliver_outgoing', result='success'), 1
         )
+
+
+@override_settings(BILLING_SECRET=SECRET)
+class WithdrawalQueueTests(TestCase):
+    """결제 쪽 워커(send_welcome_credits)가 바퀴의 끝에 적는 밀린 탈퇴와 알리지 못한 알림의 수."""
+
+    def setUp(self) -> None:
+        self.metrics = record_metrics(self)
+        self.user = User.objects.create_user(username='player_01', email=EMAIL, nickname='플레이어', password='x' * 12)
+        # 유예가 1분 전에 끝났다
+        User.objects.filter(pk=self.user.pk).update(
+            withdrawal_requested_at=timezone.now() - GRACE - timedelta(minutes=1)
+        )
+
+    def one_round(self) -> None:
+        """워커의 한 바퀴. 결제 서버는 탈퇴 알림을 받지 않는다."""
+        undelivered = WithdrawalUndeliveredError('billing 가 503 으로 답했다')
+        with (
+            patch('accounts.withdrawal.send_withdrawal', side_effect=undelivered),
+            self.assertLogs('accounts.withdrawal', level='WARNING'),
+        ):
+            call_command('send_welcome_credits', '--once', stdout=StringIO())
+
+    def queued(self, operation: str):
+        return self.metrics.value('background_jobs_queued', operation=operation)
+
+    def test_a_round_writes_what_is_left(self):
+        self.one_round()
+
+        # 이 바퀴에 비웠으니 밀린 탈퇴는 없다. 결제 서버가 받지 않아 알림 하나가 남았다
+        self.assertEqual(self.queued('withdrawal.complete'), 0)
+        self.assertEqual(self.queued('withdrawal.deliver'), 1)
+
+    def test_delivered_notices_are_not_counted(self):
+        with patch('accounts.withdrawal.send_withdrawal', return_value=None):
+            call_command('send_welcome_credits', '--once', stdout=StringIO())
+
+        self.assertEqual(self.queued('withdrawal.deliver'), 0)
+
+    def test_only_servers_with_a_secret_are_counted(self):
+        self.one_round()
+
+        # 줄은 서버마다 적었지만 비밀은 결제 서버의 것뿐이다. 나머지는 받는 주소가 생길 때까지 기다리는 것이 정상이다
+        self.assertGreater(WithdrawalNotice.objects.filter(delivered_at__isnull=True).count(), 1)
+        self.assertEqual(self.queued('withdrawal.deliver'), 1)
+
+    def test_an_account_still_in_its_grace_is_not_overdue(self):
+        User.objects.filter(pk=self.user.pk).update(withdrawal_requested_at=timezone.now() - timedelta(days=1))
+
+        call_command('send_welcome_credits', '--once', stdout=StringIO())
+
+        self.assertEqual(self.queued('withdrawal.complete'), 0)
+
+    def test_an_account_not_emptied_in_time_is_counted(self):
+        # 비우지 못했다(비우다 실패하는 것과 같다)
+        with patch.object(withdrawal, 'complete_due_withdrawals', return_value=0):
+            call_command('send_welcome_credits', '--once', stdout=StringIO())
+
+        self.assertEqual(self.queued('withdrawal.complete'), 1)
+        self.assertEqual(self.queued('withdrawal.deliver'), 0)
 
 
 @override_settings(ATTEMPT_LIMITS_ENABLED=True)

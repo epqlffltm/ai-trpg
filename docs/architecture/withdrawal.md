@@ -110,7 +110,8 @@ POST /api/v1/<서버>/service/users/{public_id}/withdrawal
 
 - 주소의 기본값은 로컬의 포트다(`http://127.0.0.1:<포트>`). compose 에서는 그 서버의 컨테이너 이름으로 적는다
 - 받는 주소를 만드는 PR 이 함께 고치는 것: 두 서버의 `.env.example`, `secret_scope.py` 의 표, `fill_env.py` 의 짝과 그 시험, compose 에서 비우는 줄과 `auth-welcome-credits` 의 주소. 어려우면 인프라 쪽이 그 브랜치에 얹을 zip 을 준다
-- 알리지 못할 때마다 로그에 `warning`(`withdrawal.undelivered`)이 남고, 인증 서버의 관리자 화면 "탈퇴 알림"에 시도 횟수와 마지막 오류가 남는다. 〔정할 것: 오래 실패하는 줄의 경보(Alertmanager)〕
+- 알리지 못할 때마다 로그에 `warning`(`withdrawal.undelivered`)이 남고, 인증 서버의 관리자 화면 "탈퇴 알림"에 시도 횟수와 마지막 오류가 남는다.
+- **경보**(`docker/prometheus/rules/ai-trpg.yml`): 비밀을 적은 서버에 알리지 못한 줄이 2시간 동안 남으면 `AuthWithdrawalNoticesWaiting`, 비울 시각이 지난 계정이 30분 동안 남으면 `AuthWithdrawalsOverdue`, 워커가 10분 동안 돌지 않으면 `AuthWelcomeCreditsWorkerStalled` 다. 워커가 바퀴마다 두 수를 `background_jobs_queued` 로 적는다
 
 ## 만드는 순서
 
