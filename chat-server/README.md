@@ -74,6 +74,12 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `BILLING_URL` | 비어 있음(받지 않음) | 결제 서버의 주소(`http://127.0.0.1:8003`). 모델의 값을 가격 목록에서 읽고, 말 한 번에 홀드를 건다([모델 목록](#모델-목록)). 비우면 모델은 값 없이 보이고 말은 공짜다 |
 | `BILLING_SECRET` | 비어 있음 | 결제 서버에 보내는 요청에 서명하는 비밀. `billing-server/.env` 의 `CHAT_SERVER_SECRET` 과 같은 값. `BILLING_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초, 10 까지). 게임 서버와 같다 |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `ZAI_API_KEY`, `DEEPINFRA_API_KEY` | 비어 있음 | 모델 목록의 창구마다의 키. 비밀값이다. 키가 없는 창구의 모델로 말을 보내면 503 `provider_unavailable` 이다. 공급자가 내주는 값이라 `tools/fill_env.py` 가 만들지 않는다. 게임 서버와 다른 키(사용 한도를 따로 거는 키)를 권한다 |
+| `OPENAI_BASE_URL` 등 `*_BASE_URL` | 게임 서버와 같다 | 창구의 주소. `LLM_BASE_URL` 은 모델 목록의 `local` 창구 모델에만 쓴다(지금은 없다) |
+| `LLM_TIMEOUT_SECONDS` | `120` | 모델을 한 번 부르는 시간의 상한(초, 600 까지). 흘려 받는 답이 다 올 때까지다 |
+| `CHAT_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
+| `CHAT_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 최근 말부터 채운다. 가격표의 입력 단계(`i0`)가 약속하는 양이다 |
+| `CHAT_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 
 `tools/fill_env.py` 가 `ASSET_SECRET` 과 `BILLING_SECRET` 을 짝(asset 서버, 결제 서버의 `CHAT_SERVER_SECRET`)과 같은 값으로 채운다.
 compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)에서는 두 주소와 비밀을 비운다(설정의 검사가 "주소는 있고 비밀이 없다"로 막지 않게).
@@ -99,12 +105,13 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?, model?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
 | GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
 | GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터) | access 토큰 |
+| POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`) | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/model` | 대화의 모델 바꾸기. `{model}`. 바꾼 모델을 돌려준다. 고를 수 없으면 422 `model_unavailable` | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 
-**스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages` 와 `POST /api/v1/chat/messages/{id}/regenerate`, `/continue` 가
-바로 SSE(`text/event-stream`)로 답한다. 응답에 `X-Accel-Buffering: no` 를 싣고 15초마다 하트비트를 보낸다. 끊겨도 서버는 생성을 끝까지 저장하고,
-앱은 다시 들어와 저장된 말을 읽는다. 그 주소를 만들 때 공용 코드의 `StreamRoutes` 로 span 과 요청 메트릭에서 뺀다.
+**스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages`(만들었다)와 `POST /api/v1/chat/messages/{id}/regenerate`, `/continue`(다음 PR)가
+바로 SSE(`text/event-stream`)로 답한다. 응답에 `X-Accel-Buffering: no` 를 싣고 15초 조용하면 하트비트(`: heartbeat`)를 끼운다. 끊겨도 서버는 생성을 끝까지 저장하고,
+앱은 다시 들어와 저장된 말을 읽는다. 공용 코드의 `StreamRoutes` 로 span 과 요청의 시간 메트릭에서 빼고 `sse_*` 로 센다(`app/main.py` 의 `STREAMS`).
 
 ### 대화
 
@@ -213,6 +220,39 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 거절되면(없는 모델, 원가가 없음, 은퇴함, 약관이 막는 창구, 파일이 틀림) 까닭을 찍고 1 로 끝난다. 일은 `app/catalog` 의 함수가 하고, 명령은 찍기만 한다.
 
+### 한 번의 말
+
+사람의 말을 받아 모델의 답을 흘려보낸다(설계의 "한 번의 말이 지나가는 길"). `app/turns/`, chat 과 story 가 함께 쓸 부분은 `app/conversation/`(창, SSE, 흘려보내기).
+
+| 차례 | 하는 일 | 실패하면 |
+| --- | --- | --- |
+| 1 | 대화와 모델을 본다. 차례를 잡는다(`conversations.generating_since` 의 조건부 UPDATE, 한 대화 한 생성). 사람의 말과 기록(`generations`, `pending`)을 한 트랜잭션에 저장한다 | 404, 409 `model_required`, 422 `model_unavailable`, 409 `generation_in_progress`. 아무것도 저장하지 않는다 |
+| 2 | 모델을 부를 provider 를 고른다(ai-core 의 `ModelRouter`, 모델 목록대로) | 503 `provider_unavailable`(키가 없다), 422 `model_unavailable` |
+| 3 | 홀드를 건다(`chat.<이름표>.i0.o0`, 이름표 `chat:gen:<기록의 id>`) | 402 `credit_short`, 402 `gold_required`, 422 `model_unavailable`(팔지 않는다), 503 `billing_unavailable` |
+| 4 | SSE 를 시작하고, 따로 도는 작업이 모델을 부른다. 받는 대로 `delta` 로 흘린다 | 이 뒤의 실패는 SSE 의 `failed` 다 |
+| 5 | 받은 만큼 답을 저장하고 차례를 놓는다. 가지의 끝이 답이 된다 | 글자 없이 실패하면 답을 저장하지 않는다(`failed`) |
+| 6 | 답이 있으면 확정, 없으면 반환한다 | 결제 서버가 받지 못하면 청구 정리가 마저 한다 |
+
+2, 3 에서 거절하면 사람의 말은 남는다(응답의 `message_id`). 설계의 "모자라면 말은 저장하되 생성하지 않는다"다. 차례는 놓고 기록은 `declined` 다.
+
+| 끝 | 답 | 청구 |
+| --- | --- | --- |
+| 다 받았다 | `complete` | 확정 |
+| 길이 상한에서 잘렸다, 도중에 끊겼다(공급자의 오류) | 받은 만큼 `partial` | 확정(설계의 과금 표) |
+| 글자 없이 실패했다, 빈 답이다 | 없다(SSE `failed`, `code` 는 `timeout`, `status_429`, `empty` …) | 반환 |
+| 서버가 꺼지며 멈췄다 | 받은 만큼 `partial`(없으면 없다) | 다음에 뜬 서버의 청구 정리가 확정이나 반환 |
+
+- **끊겨도 끝까지.** 모델을 부르는 것은 응답과 따로 도는 작업이다(`app.state.turns`). 사람이 앱을 닫아도 끝까지 돌아 저장하고 확정한다.
+  서버가 꺼질 때(lifespan)는 도는 작업을 멈추고, 각 작업은 받은 만큼 저장한 뒤 멈춘다.
+- **같은 실패를 되풀이하지 않는다.** 저절로 다시 부르지 않고 다른 모델로 넘어가지 않는다. 사람이 다시 보낸다(다시 생성은 다음 PR).
+- **차례.** 15분(`GENERATION_STALE`, 모델의 시간 상한보다 길다)이 지난 차례는 서버가 도중에 꺼진 것으로 보고 다음 말이 다시 잡는다.
+- **모델에 보내는 것.** 카드(지킬 것, 캐릭터, 사용자 페르소나, 시작 상황. 빈 칸은 뺀다)와 지금 가지의 최근 말(`CHAT_CONTEXT_CHARS` 안, 마지막 말은 늘)이다.
+  요약, 기억 메모, 로어북, 장소와 소지품은 그 단계에서 끼운다.
+- **청구 정리**(`app/turns/settler.py`, 5초마다). 확정할 것과 돌려줄 것을 맡긴다. 맡기지 못하면 5초, 10초 … 5분 뒤로 미룬다.
+  `pending`, `held` 인 채로 15분이 지난 것(서버가 꺼졌다)은 돌려준다. 결제 서버가 받아들이지 않으면 `failed` 로 두고 로그에 남긴다(사람이 본다).
+- **원가.** 기록에 토큰 수와 그날의 단가로 센 원가(`cost_usd`)를 남긴다. 판매가가 원가를 넘는지 볼 때 쓴다.
+- 요청 수의 제한(설계의 "요청 제한")은 아직 없다. 한 대화 한 생성과 크레딧이 지금의 상한이다.
+
 ### 토큰 검증
 
 공용 코드 `shared/server-core` 의 것(`server_core/auth/`)을 쓴다(#588). 알림 서버와 같다. 규칙의 설명은
@@ -239,6 +279,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 | --- | --- |
 | `http.request` | 요청이 끝났다 |
 | `auth.revocations_fetch` | 끊긴 세션의 목록을 받지 못했다(`warning`, `auth.revocations_unavailable`) |
+| `charge.settle` | 청구 정리가 한 바퀴를 돌았다(맡긴 것이 있으면 `info`, 없으면 `debug`). 바퀴마다 `job_id`. 게임 서버와 같은 이름이다 |
 
 ## 추적
 
@@ -268,7 +309,8 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 | `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `server_core/observability/request_metrics.py`. 미들웨어의 맨 바깥이다 |
 | `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB |
 | `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `server_core/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
-| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`, `result` | `server_core/observability/metrics.py` 의 `measured_job`. 아직 쓰는 작업이 없다 |
+| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`, `result` | `server_core/observability/metrics.py` 의 `measured_job`. 청구 정리(`charge.settle`)의 바퀴마다 |
+| `sse_connections`, `sse_connections_opened_total`, `sse_connection_duration_seconds` | 없음 | `server_core/observability/metrics.py` 의 `measured_stream`. 말을 보내는 SSE 하나마다(`app/turns/router.py`) |
 | `billing_calls_total` | `operation`(`hold`, `capture`, `release`, `extend`), `outcome` | `app/billing/metered.py`, `metrics.py`. 결제 서버를 부른 수. 게임 서버와 같은 이름과 label 이다 |
 
 - 계측기는 공용 코드(`server_core/observability/metrics.py`)에 한 묶음으로 있다. 이 서버만의 계측기는 `InstrumentSet` 으로 더한다(`app/billing/metrics.py`).
@@ -281,8 +323,8 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. chat 서버는 `chat` 계정으로 `chat`
 스키마(테스트는 `chat_test`)만 쓴다. 다른 서버의 스키마에 닿지 못하는 것을 테스트(`tests/test_schema_isolation.py`)가 확인한다.
 
-테이블은 `app/conversations/models.py`(`characters`, `conversations`, `conversation_personas`, `messages`)와
-`app/catalog/models.py`(`ai_models`, `ai_model_costs`, `ai_model_snapshots`)에 있다.
+테이블은 `app/conversations/models.py`(`characters`, `conversations`, `conversation_personas`, `messages`),
+`app/catalog/models.py`(`ai_models`, `ai_model_costs`, `ai_model_snapshots`), `app/turns/models.py`(`generations`)에 있다.
 모델 파일을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
 ### 마이그레이션

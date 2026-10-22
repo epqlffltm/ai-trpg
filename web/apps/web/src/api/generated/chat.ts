@@ -50,6 +50,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{conversation_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Message
+         * @description 말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.
+         */
+        post: operations["send_message_api_v1_chat_conversations__conversation_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{conversation_id}/model": {
         parameters: {
             query?: never;
@@ -364,6 +384,14 @@ export interface components {
             user_id: string;
         };
         /**
+         * MessageCreate
+         * @description 보내는 말.
+         */
+        MessageCreate: {
+            /** Content */
+            content: string;
+        };
+        /**
          * MessageOut
          * @description 말 하나.
          */
@@ -648,6 +676,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_message_api_v1_chat_conversations__conversation_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageCreate"];
+            };
+        };
+        responses: {
+            /** @description SSE. app/turns/schemas.py 의 메시지들 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
             };
             /** @description Validation Error */
             422: {

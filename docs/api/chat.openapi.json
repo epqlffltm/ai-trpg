@@ -432,6 +432,24 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "MessageCreate": {
+        "additionalProperties": false,
+        "description": "보내는 말.",
+        "properties": {
+          "content": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "MessageCreate",
+        "type": "object"
+      },
       "MessageOut": {
         "description": "말 하나.",
         "properties": {
@@ -1042,6 +1060,62 @@
         "summary": "Read Conversation",
         "tags": [
           "conversations"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/conversations/{conversation_id}/messages": {
+      "post": {
+        "description": "말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.",
+        "operationId": "send_message_api_v1_chat_conversations__conversation_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "SSE. app/turns/schemas.py 의 메시지들"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Message",
+        "tags": [
+          "messages"
         ],
         "x-audience": "user"
       }

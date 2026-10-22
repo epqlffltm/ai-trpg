@@ -74,6 +74,8 @@ class FakeBillingServer:
     # 골드로만 내는 가격표 이름들(프리미엄)과 골드가 있는 사람들. 없으면 402 credit.gold_required
     gold_only: set[str] = field(default_factory=set)
     gold: set[uuid.UUID] = field(default_factory=set)
+    # 가격표(이름과 값). 테스트가 더한다
+    prices: dict[str, int] = field(default_factory=lambda: dict(PRICES))
     # 만료 시각을 정하는 시계와 HOLD_TTL. 테스트가 바꿔 꽂는다
     clock: Callable[[], datetime] = utc_now
     ttl: timedelta = HOLD_TTL
@@ -110,13 +112,13 @@ class FakeBillingServer:
         if existing is not None:
             same = (existing.user_id, existing.price_code) == (user_id, price_code)
             return self.answer(200, reference) if same else self.answer(409)
-        if price_code not in PRICES:
+        if price_code not in self.prices:
             return self.answer(400, code='price.unknown')
         if price_code in self.not_for_sale:
             return self.answer(400, code='price.not_for_sale')
         if price_code in self.gold_only and uuid.UUID(user_id) not in self.gold:
             return self.answer(402, code='credit.gold_required')
-        amount = PRICES[price_code]
+        amount = self.prices[price_code]
         balance = self.balances.get(uuid.UUID(user_id), 0)
         if balance < amount:
             return self.answer(402, code='credit.insufficient')

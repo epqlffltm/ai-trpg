@@ -1,0 +1,451 @@
+# chat-server/app/turns/service.py
+
+"""
+말 한 번(docs/architecture/chat-server.md 의 "한 번의 말이 지나가는 길"). 아래 차례의 각 줄이 함수 하나다.
+
+  응답을 시작하기 전(실패하면 HTTP 의 오류로 답한다)
+    1. begin_turn: 대화와 모델을 보고, 차례를 잡고(한 대화 한 생성), 사람의 말과 기록(pending)을 한 트랜잭션에 저장한다.
+       모델에 보낼 메시지도 여기서 만든다(app/turns/prompt.py).
+       그 뒤로 ORM 객체를 들고 다니지 않는다(app/turns/values.py)
+    2. route_turn: 모델을 부를 provider 를 고른다. 키가 없거나 쓸 수 없는 모델이면 거절한다
+    3. hold_turn: 홀드를 건다. 걸리지 않으면(모자람, 팔지 않음, 결제 서버가 죽음) 거절한다
+       거절되면 decline_turn 이 차례를 놓고 기록을 declined 로 둔다. 사람의 말은 남는다(말은 저장하되 생성하지 않는다)
+  응답을 시작한 뒤(따로 도는 작업. 사람이 끊어도 끝까지 돈다)
+    4. call_model: 모델을 부르고 글을 흘려보낸다(app/conversation/relay.py)
+    5. save_result: 받은 만큼 답을 저장하고 차례를 놓는다.
+       다 받았으면 complete, 길이에서 잘렸거나 도중에 끊겼으면 partial. 글자 없이 실패했으면 답을 저장하지 않는다
+    6. settle_turn: 답이 있으면 확정, 없으면 반환한다.
+       결제 서버가 받지 못하면 정리 작업이 마저 한다(app/turns/settler.py)
+
+DB 접근, 바깥 호출(공급자, 결제 서버), 응답 만들기를 한 함수에 섞지 않는다. 바깥을 부르는 동안 DB 의 연결을 쥐지 않는다.
+같은 실패를 저절로 되풀이하지 않는다(사람이 다시 보낸다). 다른 모델로 넘어가지 않는다.
+"""
+
+import asyncio
+import logging
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+
+from ai_core.costs import charge_of
+from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
+from ai_core.routing import MODEL_UNAVAILABLE as ROUTE_MODEL_UNAVAILABLE
+from ai_core.routing import Route
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.assets.schemas import CharacterDocument
+from app.billing.client import Billing
+from app.billing.prices import chat_code
+from app.catalog import repository as catalog
+from app.catalog.choice import is_choosable
+from app.catalog.models import AiModel
+from app.conversation.relay import Relay
+from app.conversation.window import Turn, select_window
+from app.conversations import repository as conversations
+from app.conversations.models import (
+    Conversation,
+    ConversationPersona,
+    ImportedCharacter,
+    Message,
+    MessageStatus,
+    Role,
+)
+from app.conversations.service import ModelUnavailableError, get_conversation
+from app.core.dependencies import Viewer
+from app.ratings import Rating
+from app.turns import charging, repository
+from app.turns.charging import HoldDeclined, Settled, Settlement
+from app.turns.frames import delta_frame, done_frame, failed_frame
+from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
+from app.turns.prompt import CharacterCard, PersonaCard, build_messages, render_card
+from app.turns.providers import Router
+from app.turns.values import SavedMessage, TurnResult, TurnStart
+
+logger = logging.getLogger(__name__)
+
+# 차례를 쥔 채 이만큼 지나면 서버가 도중에 꺼진 것으로 본다.
+# 모델을 부르는 시간의 상한(LLM_TIMEOUT_SECONDS, 10분까지)보다 길다
+GENERATION_STALE = timedelta(minutes=15)
+# 공급자를 부르지 못한 까닭(키가 없다, 부르는 코드가 없다)의 이름. 사람에게는 잠시 뒤에 다시 하라고 알린다
+PROVIDER_UNAVAILABLE = 'provider_unavailable'
+# 서버가 꺼지며 멈춘 생성, 예상하지 못한 오류, 글자 없이 끝난 답의 까닭
+CANCELLED = 'cancelled'
+SERVER_ERROR = 'server_error'
+EMPTY = 'empty'
+
+
+class ModelRequiredError(Exception):
+    """대화에 모델이 없다. 먼저 고른다(409)."""
+
+
+class TurnBusyError(Exception):
+    """대화가 다른 답을 쓰는 중이다(409). 한 대화에 한 번에 하나의 생성만 받는다."""
+
+
+class TurnDeclinedError(Exception):
+    """
+    사람의 말은 저장했지만 답을 쓰지 않는다. code 는 까닭(credit_short, model_unavailable …), message_id 는 저장한
+    말이다.
+    """
+
+    def __init__(self, code: str, message_id: uuid.UUID) -> None:
+        super().__init__(code)
+        self.code = code
+        self.message_id = message_id
+
+
+@dataclass
+class Collector:
+    """모델이 흘려 주는 글을 모으면서 응답으로 넘긴다. 도중에 끊겨도 받은 만큼을 안다."""
+
+    relay: Relay
+    pieces: list[str] = field(default_factory=list)
+
+    def __call__(self, piece: str) -> None:
+        self.pieces.append(piece)
+        self.relay.push(delta_frame(piece))
+
+    def text(self) -> str:
+        """지금까지 받은 글."""
+        return ''.join(self.pieces)
+
+
+# --- 만들기. DB 와 바깥을 모른다 ---
+
+
+def saved(message: Message) -> SavedMessage:
+    """저장한 말을 세션과 떨어진 값으로."""
+    return SavedMessage(
+        message.id, message.parent_id, message.role, message.content, message.status, message.created_at
+    )
+
+
+def character_card(character: ImportedCharacter) -> CharacterCard:
+    """판의 사본에서 카드의 캐릭터 칸."""
+    document = CharacterDocument.model_validate(character.document)
+    return CharacterCard(
+        name=document.name,
+        intro_html=document.intro_html,
+        speech_examples=document.speech_examples,
+        age=document.age,
+        gender=document.gender,
+    )
+
+
+def persona_card(persona: ConversationPersona | None) -> PersonaCard | None:
+    """페르소나의 사본에서 카드의 사용자 칸. 페르소나 없이 시작한 대화면 None."""
+    if persona is None:
+        return None
+    return PersonaCard(
+        name=persona.name,
+        description=persona.description,
+        age=persona.age,
+        gender=persona.gender,
+        form_of_address=persona.form_of_address,
+        speech_examples=persona.speech_examples,
+        personality=persona.personality,
+    )
+
+
+def prompt_for(
+    conversation: Conversation,
+    character: ImportedCharacter,
+    persona: ConversationPersona | None,
+    path: list[Message],
+    context_chars: int,
+) -> list[ChatMessage]:
+    """모델에 보낼 메시지. 카드와, 지금 가지의 말들 가운데 context_chars 안에 드는 최근 것들이다."""
+    card = render_card(character_card(character), persona_card(persona), conversation.start_situation)
+    turns = [Turn(message.role, message.content) for message in path]
+    return build_messages(card, select_window(turns, context_chars))
+
+
+def require_model(conversation: Conversation, model: AiModel | None, rating: Rating, now: datetime) -> str:
+    """대화의 모델의 이름표. 고르지 않았으면 ModelRequiredError, 이 대화에 쓸 수 없으면 ModelUnavailableError."""
+    if conversation.model_slug is None:
+        raise ModelRequiredError
+    if model is None or not is_choosable(model, rating, now.date()):
+        raise ModelUnavailableError
+    return conversation.model_slug
+
+
+def user_message(conversation: Conversation, content: str, now: datetime) -> Message:
+    """사람의 말. 지금 가지의 끝에 붙는다. 아직 저장하지 않는다."""
+    return Message(
+        id=uuid.uuid4(),
+        conversation_id=conversation.id,
+        parent_id=conversation.active_leaf_id,
+        role=Role.USER,
+        content=content,
+        status=MessageStatus.COMPLETE,
+        created_at=now,
+    )
+
+
+def new_generation(conversation: Conversation, owner_id: uuid.UUID, parent_id: uuid.UUID, slug: str) -> Generation:
+    """기록(pending). 이름표와 가격표 이름을 정한다. 아직 저장하지 않는다."""
+    generation_id = uuid.uuid4()
+    return Generation(
+        id=generation_id,
+        conversation_id=conversation.id,
+        owner_id=owner_id,
+        parent_id=parent_id,
+        model_slug=slug,
+        reference=charging.hold_reference(generation_id),
+        price_code=chat_code(slug),
+        billing_status=BillingStatus.PENDING,
+        settle_attempts=0,
+    )
+
+
+def result_of(completion: Completion, route: Route) -> TurnResult:
+    """다 받은 답. 길이 상한에서 잘렸으면 partial, 글자가 없으면 failed 다. 원가는 그날의 단가로 센다."""
+    cost, _ = charge_of(completion, route.price)
+    usage = {'input_tokens': completion.input_tokens, 'output_tokens': completion.output_tokens, 'cost_usd': cost}
+    if not completion.text:
+        return TurnResult(text='', outcome=Outcome.FAILED, error_code=EMPTY, **usage)
+    outcome = Outcome.PARTIAL if completion.truncated else Outcome.COMPLETE
+    return TurnResult(text=completion.text, outcome=outcome, **usage)
+
+
+def failure_of(received: str, code: str) -> TurnResult:
+    """도중에 실패했다. 받은 글이 있으면 partial(그만큼 저장하고 청구한다), 없으면 failed."""
+    return TurnResult(text=received, outcome=Outcome.PARTIAL if received else Outcome.FAILED, error_code=code)
+
+
+def answer_of(start: TurnStart, result: TurnResult, now: datetime) -> Message | None:
+    """저장할 답. 글자가 없으면 None. 아직 저장하지 않는다."""
+    if not result.text:
+        return None
+    return Message(
+        id=uuid.uuid4(),
+        conversation_id=start.conversation_id,
+        parent_id=start.user_message.id,
+        role=Role.ASSISTANT,
+        content=result.text,
+        status=MessageStatus.PARTIAL if result.outcome == Outcome.PARTIAL else MessageStatus.COMPLETE,
+        created_at=now,
+    )
+
+
+def finished_values(result: TurnResult, answer: Message | None, now: datetime) -> dict[str, object]:
+    """기록에 적을 결과. 답이 있으면 확정할 것, 없으면 돌려줄 것이다."""
+    return {
+        'billing_status': BillingStatus.CAPTURE_DUE if answer is not None else BillingStatus.RELEASE_DUE,
+        'message_id': answer.id if answer is not None else None,
+        'outcome': result.outcome,
+        'error_code': result.error_code,
+        'input_tokens': result.input_tokens,
+        'output_tokens': result.output_tokens,
+        'cost_usd': result.cost_usd,
+        'finished_at': now,
+    }
+
+
+def settled_values(generation: Generation, capture: bool, settlement: Settlement, now: datetime) -> dict[str, object]:
+    """맡겨 본 결과를 기록에 적을 값. 다시 부를 일이면 다음에 부를 때를 미룬다."""
+    if settlement.result == Settled.DONE:
+        return {'billing_status': BillingStatus.CAPTURED if capture else BillingStatus.RELEASED}
+    if settlement.result == Settled.FAILED:
+        return {'billing_status': BillingStatus.FAILED, 'error_code': settlement.error_code}
+    return {
+        'settle_attempts': generation.settle_attempts + 1,
+        'next_settle_at': now + charging.retry_delay(generation.settle_attempts),
+    }
+
+
+# --- 응답을 시작하기 전 ---
+
+
+async def begin_turn(
+    session_factory: async_sessionmaker[AsyncSession],
+    viewer: Viewer,
+    conversation_id: uuid.UUID,
+    content: str,
+    context_chars: int,
+    now: datetime,
+) -> TurnStart:
+    """
+    차례를 잡고 사람의 말과 기록(pending)을 저장한다. 모델에 보낼 메시지를 함께 만든다.
+
+    대화가 없으면 ConversationNotFoundError, 모델이 없으면 ModelRequiredError, 쓸 수 없으면 ModelUnavailableError,
+    다른 답을 쓰는 중이면 TurnBusyError. 어느 것이든 아무것도 저장하지 않는다.
+    판매(결제 서버의 가격표)는 여기서 보지 않는다. 홀드를 걸 때 결제 서버가 본다.
+    """
+    async with session_factory() as session:
+        conversation, character, persona = await get_conversation(session, viewer, conversation_id)
+        model = await catalog.get_model(session, conversation.model_slug) if conversation.model_slug else None
+        slug = require_model(conversation, model, Rating(character.rating), now)
+        if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
+            raise TurnBusyError
+        path = await conversations.active_path(session, conversation.active_leaf_id)
+        message = user_message(conversation, content, now)
+        repository.add(session, message)
+        await session.flush()
+        await repository.move_leaf(session, conversation.id, message.id)
+        generation = new_generation(conversation, viewer.claims.user_id, message.id, slug)
+        repository.add(session, generation)
+        await session.commit()
+    return TurnStart(
+        conversation_id=conversation.id,
+        generation_id=generation.id,
+        owner_id=viewer.claims.user_id,
+        model_slug=slug,
+        reference=generation.reference,
+        price_code=generation.price_code,
+        user_message=saved(message),
+        messages=prompt_for(conversation, character, persona, [*path, message], context_chars),
+    )
+
+
+async def route_turn(router: Router, start: TurnStart) -> Route:
+    """모델을 부를 provider. 부를 수 없으면 HoldDeclined(model_unavailable, provider_unavailable). 부르지는 않는다."""
+    try:
+        return await router.route(start.model_slug)
+    except ProviderError as error:
+        code = charging.MODEL_UNAVAILABLE if str(error) == ROUTE_MODEL_UNAVAILABLE else PROVIDER_UNAVAILABLE
+        raise HoldDeclined(code) from error
+
+
+async def mark_held(session_factory: async_sessionmaker[AsyncSession], start: TurnStart) -> None:
+    """기록을 held 로 옮긴다. 이제부터 서버가 꺼지면 정리 작업이 돌려준다."""
+    async with session_factory() as session:
+        await repository.move_billing(
+            session, start.generation_id, frozenset({BillingStatus.PENDING}), {'billing_status': BillingStatus.HELD}
+        )
+        await session.commit()
+
+
+async def decline_turn(
+    session_factory: async_sessionmaker[AsyncSession], start: TurnStart, code: str, now: datetime
+) -> None:
+    """답을 쓰지 않는다. 차례를 놓고 기록을 declined 로 둔다. 사람의 말은 남는다."""
+    async with session_factory() as session:
+        await repository.unlock_turn(session, start.conversation_id)
+        await repository.move_billing(
+            session,
+            start.generation_id,
+            frozenset({BillingStatus.PENDING}),
+            {'billing_status': BillingStatus.DECLINED, 'error_code': code, 'finished_at': now},
+        )
+        await session.commit()
+
+
+async def prepare_turn(
+    session_factory: async_sessionmaker[AsyncSession], router: Router, billing: Billing, start: TurnStart, now: datetime
+) -> Route:
+    """provider 를 고르고 홀드를 건다. 어느 하나라도 안 되면 차례를 놓고 TurnDeclinedError."""
+    try:
+        route = await route_turn(router, start)
+        await charging.place_hold(billing, start.reference, start.owner_id, start.price_code)
+    except HoldDeclined as declined:
+        await decline_turn(session_factory, start, declined.code, now)
+        raise TurnDeclinedError(declined.code, start.user_message.id) from declined
+    await mark_held(session_factory, start)
+    return route
+
+
+# --- 응답을 시작한 뒤(따로 도는 작업) ---
+
+
+async def call_model(route: Route, start: TurnStart, params: GenerationParams, collector: Collector) -> TurnResult:
+    """
+    모델을 부른다. 받는 대로 collector 에 넘긴다. 실패해도 예외를 올리지 않고 결과로 돌려준다.
+
+    서버가 꺼지며 멈추면(취소) 그대로 올린다. 받은 만큼은 collector 가 안다.
+    """
+    try:
+        completion = await route.provider.complete(start.messages, params, collector)
+    except ProviderError as error:
+        return failure_of(collector.text(), str(error))
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception(
+            '모델을 부르다 예상하지 못한 오류가 났습니다', extra={'generation_id': str(start.generation_id)}
+        )
+        return failure_of(collector.text(), SERVER_ERROR)
+    return result_of(completion, route)
+
+
+async def save_result(
+    session_factory: async_sessionmaker[AsyncSession], start: TurnStart, result: TurnResult, now: datetime
+) -> SavedMessage | None:
+    """답을 저장하고(있으면) 차례를 놓고 기록에 결과를 적는다. 한 트랜잭션이다. 저장한 답이나 None."""
+    answer = answer_of(start, result, now)
+    async with session_factory() as session:
+        if answer is not None:
+            repository.add(session, answer)
+            await session.flush()
+            await repository.finish_turn(session, start.conversation_id, answer.id)
+        else:
+            await repository.unlock_turn(session, start.conversation_id)
+        await repository.move_billing(
+            session, start.generation_id, frozenset({BillingStatus.HELD}), finished_values(result, answer, now)
+        )
+        await session.commit()
+    return saved(answer) if answer is not None else None
+
+
+async def settle_generation(
+    session_factory: async_sessionmaker[AsyncSession], billing: Billing, generation: Generation, now: datetime
+) -> Settlement:
+    """
+    확정할 것이나 돌려줄 것 하나를 결제 서버에 맡기고 결과를 적는다. 말 한 번의 끝과 정리 작업이 함께 쓴다.
+
+    상태가 그사이에 바뀌었으면(다른 쪽이 먼저 끝냈다) 적지 않는다.
+    """
+    capture = generation.billing_status == BillingStatus.CAPTURE_DUE
+    settlement = await charging.settle(billing, generation.reference, capture)
+    async with session_factory() as session:
+        await repository.move_billing(
+            session,
+            generation.id,
+            frozenset({BillingStatus(generation.billing_status)}),
+            settled_values(generation, capture, settlement, now),
+        )
+        await session.commit()
+    return settlement
+
+
+async def settle_turn(
+    session_factory: async_sessionmaker[AsyncSession], billing: Billing, generation_id: uuid.UUID, now: datetime
+) -> None:
+    """말 한 번이 끝난 뒤 바로 맡긴다. 맡길 것이 아니면(이미 끝났다) 아무것도 하지 않는다."""
+    async with session_factory() as session:
+        generation = await repository.get_generation(session, generation_id)
+    if generation is not None and generation.billing_status in DUE_STATUSES:
+        await settle_generation(session_factory, billing, generation, now)
+
+
+async def run_generation(
+    session_factory: async_sessionmaker[AsyncSession],
+    billing: Billing,
+    route: Route,
+    start: TurnStart,
+    params: GenerationParams,
+    relay: Relay,
+    clock: Callable[[], datetime],
+) -> None:
+    """
+    모델을 부르고, 흘려보내고, 저장하고, 맡긴다. 응답과 따로 도는 작업이다. 사람이 끊어도 끝까지 돈다.
+
+    서버가 꺼지며 멈추면 받은 만큼 저장하고 멈춘다. 맡기는 것은 다음에 뜬 서버의 정리 작업이 한다.
+    저장하다 실패하면(DB 가 없다) 응답에 실패를 알리고 끝낸다.
+    차례와 홀드는 오래되면 풀린다(GENERATION_STALE, 정리 작업).
+    """
+    collector = Collector(relay)
+    try:
+        result = await call_model(route, start, params, collector)
+    except asyncio.CancelledError:
+        await save_result(session_factory, start, failure_of(collector.text(), CANCELLED), clock())
+        raise
+    try:
+        answer = await save_result(session_factory, start, result, clock())
+    except Exception:
+        logger.exception('답을 저장하지 못했습니다', extra={'generation_id': str(start.generation_id)})
+        relay.close(failed_frame(SERVER_ERROR))
+        return
+    relay.close(done_frame(answer) if answer is not None else failed_frame(result.error_code or SERVER_ERROR))
+    await settle_turn(session_factory, billing, start.generation_id, clock())
