@@ -6,10 +6,9 @@
 다섯을 본다.
   - 시작: 판의 사건마다 퀘스트가 생긴다. 처음 상태는 판의 퀘스트 규칙의 것이고, 규칙이 없으면 숨김이다.
   - 보이기: 숨긴 것은 아무도(방장도) 보지 않는다. 사건의 글(로어북)은 아무에게도 나가지 않는다.
-  - 방장이 바꾸기: 진행 중에, 판의 드러난 퀘스트만, 실패로만. 드러내기와 성공은 엔진만 정한다
-    (quest_reveal_by_engine, quest_success_by_engine). 숨긴 것은 없는 것과 같다. 끝난 것은 되돌리지 않는다.
-  - 드러내기와 성공과 보상은 엔진이 조건을 보고 정한다. 그 테스트는 tests/test_quest_goals.py 와
-    tests/test_quest_reveal.py 에 있다.
+  - 사람은 바꾸지 못한다: 퀘스트를 바꾸는 API 가 없다(#367).
+  - 드러내기, 성공, 실패, 보상은 엔진이 조건과 기한을 보고 정한다. 그 테스트는 tests/test_quest_goals.py,
+    tests/test_quest_reveal.py, tests/test_quest_failure.py, tests/test_quest_deadline.py 에 있다.
   - 서술: 서술을 맡길 때 퀘스트 전부가 이름과 상태로 서술자에게 간다. 닫기 시작할 때 굳히지 않는다.
 """
 
@@ -26,22 +25,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.rounds import prompt, service
 from app.rounds.narrator import NarrationRequest, QuestNote, WhisperNote
 from app.tables import items
-from app.tables.errors import Conflict, TableConflictError
-from app.tables.models import QuestStatus, TableItem, TableSheet
-from app.tables.quests import change_problem, require_changeable
+from app.tables.models import TableItem, TableSheet
 from tests.sheets import SHEET
 from tests.test_round_closing import HeldJobs, started_at
 from tests.test_table_items import (
     FRIEND,
     LOREBOOKS_URL,
     ME,
-    NO_SUCH_ID,
     RULEBOOKS_URL,
     SCENARIOS_URL,
     TABLES_URL,
     bearer,
     events_of,
-    held,
     post,
     read_table,
     table_url,
@@ -133,9 +128,17 @@ async def start_duo(client: AsyncClient, me: dict, friend: dict, lore: dict) -> 
     return started.json()
 
 
-async def change(client: AsyncClient, headers: dict, table: dict, entry: dict, to: str):
-    """퀘스트의 상태를 바꾸는 요청. 응답을 그대로 돌려준다."""
-    return await client.put(table_url(table, f'/quests/{entry["id"]}'), json={'status': to}, headers=headers)
+async def set_status(session: AsyncSession, table: dict, entry: dict, to: str) -> None:
+    """
+    퀘스트의 상태를 DB 에서 바로 바꾼다. 그 상태에서 일어나는 일을 볼 때 쓴다.
+
+    사람은 퀘스트를 바꾸지 못하고(#367) 엔진이 바꾸는 길은 그 테스트들이 본다. 여기서는 상태만 만든다.
+    """
+    await session.execute(
+        text('UPDATE table_quests SET status = :status WHERE table_id = :table_id AND entry_id = :entry_id'),
+        {'status': to, 'table_id': table['id'], 'entry_id': entry['id']},
+    )
+    await session.commit()
 
 
 def quests_in(table: dict) -> list[tuple[str, str]]:
@@ -179,7 +182,6 @@ async def test_hidden_quests_are_shown_to_nobody(client: AsyncClient, me: dict, 
 
 async def test_the_text_of_an_event_never_leaves(client: AsyncClient, me: dict, friend: dict, lore: dict):
     table = await start_duo(client, me, friend, lore)
-    await change(client, me, table, lore['rescue'], 'failed')
 
     for headers in (me, friend):
         detail = await client.get(table_url(table), headers=headers)
@@ -188,150 +190,22 @@ async def test_the_text_of_an_event_never_leaves(client: AsyncClient, me: dict, 
         assert TRAITOR_SECRET not in stream.text
 
 
-# --- 방장이 바꾸기 ---
+# --- 사람은 바꾸지 못한다 ---
 
 
-@pytest.mark.parametrize('quest', ['rescue', 'mine'])
-async def test_the_host_cannot_reveal_a_quest(client: AsyncClient, me: dict, friend: dict, lore: dict, quest: str):
+@pytest.mark.parametrize('to', ['active', 'succeeded', 'failed'])
+async def test_there_is_no_way_to_change_a_quest(client: AsyncClient, me: dict, friend: dict, lore: dict, to: str):
     table = await start_duo(client, me, friend, lore)
 
-    response = await change(client, me, table, lore[quest], 'active')
+    response = await client.put(table_url(table, f'/quests/{lore["rescue"]["id"]}'), json={'status': to}, headers=me)
 
-    # 드러나는 것은 판의 조건을 보고 엔진이 정한다. 진행 중이든 숨겼든 같은 답이라 숨긴 것이 새지 않는다
-    assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json()['reason'] == 'quest_reveal_by_engine'
+    # 방장은 PC 다. 드러내기, 성공, 실패는 엔진이 판의 조건과 기한으로 정한다(#367)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert quests_in(await read_table(client, me, table)) == [('왕녀 구출', 'active')]
     assert await events_of(client, me, table, 'quest_changed') == []
-
-
-async def test_the_host_cannot_end_a_hidden_quest(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore)
-
-    response = await change(client, me, table, lore['traitor'], 'failed')
-
-    # 방장에게도 숨긴 퀘스트는 없는 것과 같다
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert await events_of(client, me, table, 'quest_changed') == []
-
-
-async def test_a_quest_can_fail(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore)
-
-    response = await change(client, me, table, lore['rescue'], 'failed')
-
-    # 실패하면 보상이 없다
-    assert response.status_code == status.HTTP_200_OK, response.text
-    assert quests_in(response.json())[0] == ('왕녀 구출', 'failed')
-    assert held(response.json(), ME) == held(response.json(), FRIEND) == []
-    [event] = await events_of(client, friend, table, 'quest_changed')
-    assert (event['payload']['previous'], event['payload']['status'], event['payload']['rewards']) == (
-        'active',
-        'failed',
-        [],
-    )
-
-
-@pytest.mark.parametrize(('second', 'reason'), [('failed', 'quest_finished'), ('active', 'quest_reveal_by_engine')])
-async def test_some_changes_are_refused(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, second: str, reason: str
-):
-    table = await start_duo(client, me, friend, lore)
-    await change(client, me, table, lore['rescue'], 'failed')
-
-    response = await change(client, me, table, lore['rescue'], second)
-
-    assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json()['reason'] == reason
-    assert len(await events_of(client, me, table, 'quest_changed')) == 1
-
-
-@pytest.mark.parametrize('quest', ['rescue', 'traitor'])
-async def test_the_host_cannot_succeed_a_quest(client: AsyncClient, me: dict, friend: dict, lore: dict, quest: str):
-    table = await start_duo(client, me, friend, lore)
-
-    response = await change(client, me, table, lore[quest], 'succeeded')
-
-    # 방장은 PC 다. 성공은 판의 조건을 보고 엔진이 정한다
-    assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json()['reason'] == 'quest_success_by_engine'
-    assert held(await read_table(client, me, table), ME) == []
-    assert await events_of(client, me, table, 'quest_changed') == []
-
-
-@pytest.mark.parametrize('to', ['hidden', 'done', ''])
-async def test_a_quest_cannot_be_hidden_again_or_given_a_made_up_status(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, to: str
-):
-    table = await start_duo(client, me, friend, lore)
-
-    response = await change(client, me, table, lore['rescue'], to)
-
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-
-
-@pytest.mark.parametrize('what', ['potion', 'lady', 'nothing'])
-async def test_only_quests_of_the_table_can_be_changed(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, what: str
-):
-    table = await start_duo(client, me, friend, lore)
-    entry = {'id': NO_SUCH_ID} if what == 'nothing' else lore[what]
-
-    response = await change(client, me, table, entry, 'failed')
-
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-
-
-async def test_only_the_host_changes_quests(client: AsyncClient, me: dict, friend: dict, stranger: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore)
-
-    by_friend = await change(client, friend, table, lore['mine'], 'active')
-    by_stranger = await change(client, stranger, table, lore['mine'], 'active')
-
-    assert by_friend.status_code == status.HTTP_403_FORBIDDEN
-    assert by_stranger.status_code == status.HTTP_404_NOT_FOUND
-    assert await events_of(client, me, table, 'quest_changed') == []
-
-
-async def test_quests_change_only_while_playing(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await open_duo(client, me, friend, lore)
-    before = await change(client, me, table, lore['mine'], 'active')
-    await start_duo_from(client, me, table)
-    await client.post(table_url(table, '/end'), headers=me)
-    after = await change(client, me, table, lore['mine'], 'active')
-
-    assert (before.status_code, after.status_code) == (status.HTTP_409_CONFLICT, status.HTTP_409_CONFLICT)
-    assert before.json()['reason'] == after.json()['reason'] == 'not_playing'
-
-
-async def test_a_table_started_before_quests_existed_has_none_to_change(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, session: AsyncSession
-):
-    table = await start_duo(client, me, friend, lore)
-    # 퀘스트가 생기기 전에 시작한 테이블에는 퀘스트의 행이 없다
-    await session.execute(text('DELETE FROM table_quests WHERE table_id = :table_id'), {'table_id': table['id']})
-    await session.commit()
-
-    response = await change(client, me, table, lore['rescue'], 'failed')
-
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert (await read_table(client, me, table))['quests'] == []
 
 
 # --- 규칙과 DB ---
-
-
-def test_the_allowed_change():
-    # 사람에게 남은 것은 진행 중인 것을 실패로 끝내는 것뿐이다. 숨긴 것은 그 앞에서 없는 것으로 걸러진다
-    require_changeable(QuestStatus.ACTIVE, QuestStatus.FAILED)
-
-
-@pytest.mark.parametrize('current', [QuestStatus.HIDDEN, QuestStatus.ACTIVE, QuestStatus.FAILED])
-def test_people_never_succeed_a_quest(current: QuestStatus):
-    assert change_problem(current, QuestStatus.SUCCEEDED) == Conflict.QUEST_SUCCESS_BY_ENGINE
-
-
-@pytest.mark.parametrize('current', [QuestStatus.HIDDEN, QuestStatus.ACTIVE, QuestStatus.FAILED])
-def test_people_never_reveal_a_quest(current: QuestStatus):
-    assert change_problem(current, QuestStatus.ACTIVE) == Conflict.QUEST_REVEAL_BY_ENGINE
 
 
 def test_adding_up_to_the_cap_gives_what_fits():
@@ -345,11 +219,6 @@ def test_adding_up_to_the_cap_gives_what_fits():
     assert items.add_up_to(uuid.uuid4(), sheet, entry_id, 1) == 0
     assert items.add_up_to(uuid.uuid4(), sheet, other, 3) == 3
     assert [(item.entry_id, item.count) for item in sheet.items] == [(entry_id, 99), (other, 3)]
-
-
-def test_a_finished_quest_stays_finished():
-    with pytest.raises(TableConflictError):
-        require_changeable(QuestStatus.SUCCEEDED, QuestStatus.FAILED)
 
 
 async def test_the_database_refuses_a_made_up_status(
@@ -391,10 +260,16 @@ async def declare_both(client: AsyncClient, me: dict, friend: dict, table: dict)
 
 
 async def test_the_narrator_gets_every_quest_with_its_status(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, recording: RecordingNarrator, narrated
+    client: AsyncClient,
+    me: dict,
+    friend: dict,
+    lore: dict,
+    session: AsyncSession,
+    recording: RecordingNarrator,
+    narrated,
 ):
     table = await start_duo(client, me, friend, lore)
-    await change(client, me, table, lore['rescue'], 'failed')
+    await set_status(session, table, lore['rescue'], 'failed')
 
     await declare_both(client, me, friend, table)
     await narrated()
@@ -415,8 +290,8 @@ async def test_a_quest_changed_after_closing_reaches_the_narration(
     await declare_both(client, me, friend, table)
     started = await started_at(app, table)
 
-    # 결정적인 라운드가 닫힌 뒤 방장이 실패를 적었다. 그 라운드의 서술이 실패를 그릴 수 있어야 한다
-    await change(client, me, table, lore['rescue'], 'failed')
+    # 퀘스트는 닫기 시작할 때 굳히지 않는다. 그 뒤에 바뀐 상태를 서술이 받는다
+    await set_status(session, table, lore['rescue'], 'failed')
     request = await service.load_closing_request(session, uuid.UUID(table['id']), 1, started)
 
     assert request.quests[0] == QuestNote(name='왕녀 구출', status='failed')

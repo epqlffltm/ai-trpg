@@ -1472,30 +1472,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/game/tables/{table_id}/quests/{entry_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Change Quest
-         * @description 방장이 진행 중인 퀘스트를 실패로 끝낸다. 진행 중인 테이블에서만 된다. 판의 드러난 퀘스트만 된다.
-         *
-         *     성공과 드러내기는 엔진이 판의 조건으로 정한다. 409(quest_success_by_engine, quest_reveal_by_engine).
-         *     끝난 것은 409(quest_finished). 숨긴 퀘스트는 없는 것과 같다(422). 숨김으로는 바꾸지 않는다(422).
-         *     AI 는 퀘스트를 바꾸지 못한다. 모두에게 이벤트(quest_changed)가 간다.
-         */
-        put: operations["change_quest_api_v1_game_tables__table_id__quests__entry_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/game/tables/{table_id}/references": {
         parameters: {
             query?: never;
@@ -4970,25 +4946,13 @@ export interface components {
             put_down: components["schemas"]["PutDownOut"];
         };
         /**
-         * QuestChange
-         * @description 방장이 퀘스트의 상태를 바꿀 때 받는 값.
-         *
-         *     숨김으로는 바꾸지 않는다. 한 번 드러낸 것을 다시 숨기면 앉은 사람의 기억과 화면이 어긋난다.
-         */
-        QuestChange: {
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "active" | "succeeded" | "failed";
-        };
-        /**
          * QuestCondition
          * @description 퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).
          *
-         *     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것), hold_item 은 물건 항목,
-         *     defeat_npc 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
-         *     count 는 defeat_monster 와 hold_item 만 쓴다. 나머지는 1 로 둔다.
+         *     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),
+         *     hold_item 과 lose_item 은 물건 항목,
+         *     defeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
+         *     count 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.
          *     consume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).
          *     일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.
          *     가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.
@@ -5015,9 +4979,10 @@ export interface components {
          * QuestCondition
          * @description 퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).
          *
-         *     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것), hold_item 은 물건 항목,
-         *     defeat_npc 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
-         *     count 는 defeat_monster 와 hold_item 만 쓴다. 나머지는 1 로 둔다.
+         *     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),
+         *     hold_item 과 lose_item 은 물건 항목,
+         *     defeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
+         *     count 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.
          *     consume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).
          *     일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.
          *     가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.
@@ -5042,10 +5007,11 @@ export interface components {
          * @description 퀘스트의 조건 하나가 무엇을 보는가. 엔진이 이미 아는 사실(상태)만 본다(app/rounds/quest_goals.py).
          *
          *     target 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물, 다른 퀘스트(사건)다.
-         *     다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)에만 쓴다. 이루는 조건(conditions)에는 쓰지 않는다.
+         *     다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)과 실패하는 조건(fail)에 쓴다.
+         *     이루는 조건(conditions)에는 쓰지 않는다. 물건을 잃는 것(lose_item)은 실패하는 조건에만 쓴다(#367).
          * @enum {string}
          */
-        QuestConditionKind: "reach_place" | "defeat_monster" | "hold_item" | "defeat_npc" | "quest_succeeded" | "quest_failed";
+        QuestConditionKind: "reach_place" | "defeat_monster" | "hold_item" | "defeat_npc" | "npc_dead" | "lose_item" | "quest_succeeded" | "quest_failed";
         /**
          * QuestConditionSnapshot
          * @description 퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목, 사건 항목(퀘스트)이다.
@@ -5104,9 +5070,13 @@ export interface components {
          *     match 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.
          *     조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.
          *     reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.
-         *     숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기에만 쓴다.
+         *     숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.
          *     자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).
          *     사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.
+         *     fail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).
+         *     진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.
+         *     같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.
+         *     조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.
          *     규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.
          *     가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.
          */
@@ -5121,6 +5091,13 @@ export interface components {
              * Format: uuid
              */
             entry_id: string;
+            /**
+             * Fail
+             * @default []
+             */
+            fail: components["schemas"]["QuestCondition-Input"][];
+            /** @default all */
+            fail_match: components["schemas"]["QuestMatch"];
             /** @default all */
             match: components["schemas"]["QuestMatch"];
             /**
@@ -5151,9 +5128,13 @@ export interface components {
          *     match 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.
          *     조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.
          *     reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.
-         *     숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기에만 쓴다.
+         *     숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.
          *     자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).
          *     사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.
+         *     fail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).
+         *     진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.
+         *     같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.
+         *     조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.
          *     규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.
          *     가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.
          */
@@ -5165,6 +5146,13 @@ export interface components {
             conditions: components["schemas"]["QuestCondition-Output"][];
             /** Entry Id */
             entry_id: string;
+            /**
+             * Fail
+             * @default []
+             */
+            fail: components["schemas"]["QuestCondition-Output"][];
+            /** @default all */
+            fail_match: components["schemas"]["QuestMatch"];
             /** @default all */
             match: components["schemas"]["QuestMatch"];
             /**
@@ -5192,6 +5180,7 @@ export interface components {
          *     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.
          *     conditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.
          *     reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.
+         *     fail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다. 없으면 기한으로만 실패한다.
          */
         QuestRuleSnapshot: {
             /**
@@ -5204,6 +5193,13 @@ export interface components {
              * Format: uuid
              */
             entry_id: string;
+            /**
+             * Fail
+             * @default []
+             */
+            fail: components["schemas"]["QuestConditionSnapshot"][];
+            /** @default all */
+            fail_match: components["schemas"]["QuestMatch"];
             /** @default all */
             match: components["schemas"]["QuestMatch"];
             /**
@@ -6257,7 +6253,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 42
+             * @default 43
              */
             format: number;
             /**
@@ -10067,42 +10063,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["NarrationStyleUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TableDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    change_quest_api_v1_game_tables__table_id__quests__entry_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table_id: string;
-                entry_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuestChange"];
             };
         };
         responses: {

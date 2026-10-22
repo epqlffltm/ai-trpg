@@ -756,7 +756,7 @@ class TableQuest(Base):
     테이블 하나에서 로어북의 사건 항목 하나의 퀘스트 상태.
 
     시작할 때 판의 사건 항목마다 하나씩 만든다. 처음 상태는 판의 퀘스트 규칙에서 온다(app/tables/quests.py).
-    상태를 바꾸는 것은 서버뿐이다. 방장이 API 로 바꾼다(app/tables/quest_changes.py). AI 는 바꾸지 못한다.
+    상태를 바꾸는 것은 엔진뿐이다(app/rounds/quest_goals.py, app/rounds/deadlines.py). 방장도 AI 도 바꾸지 못한다(#367).
 
     누구의 것인지는 항목의 ID(entry_id)로만 적는다. 이름과 글은 판에 있다. 글은 AI 만 읽는다.
     기한이 있는 퀘스트는 드러날 때 끝나는 게임 안의 시각(due_at)을 적는다. 지나면 서버가 실패로 바꾼다

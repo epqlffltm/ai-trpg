@@ -43,7 +43,7 @@ from tests.test_table_items import (
     read_table,
     table_url,
 )
-from tests.test_table_quests import change, quests_in
+from tests.test_table_quests import quests_in, set_status
 from tests.test_whispers import RecordingNarrator
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -224,20 +224,20 @@ async def test_the_failure_is_in_the_closing_group(client: AsyncClient, me: dict
     assert failed['sequence'] < closed['sequence']
 
 
-async def test_a_quest_the_host_finished_in_time_is_left_alone(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, narrated
+async def test_a_quest_already_finished_is_left_alone(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, session: AsyncSession, narrated
 ):
     table = await start_with_deadlines(client, me, friend, lore)
     await step(client, me, table, HOUR)
     await play(client, me, friend, table, narrated)
 
-    # 기한이 지났어도 방장이 먼저 실패로 끝냈다. 끝난 것은 기한이 다시 바꾸지 않는다
-    await change(client, me, table, lore['rescue'], 'failed')
+    # 기한이 지났어도 먼저 끝났다(실패하는 조건으로). 끝난 것은 기한이 다시 바꾸지 않는다
+    await set_status(session, table, lore['rescue'], 'failed')
     await play(client, me, friend, table, narrated)
 
     seen = await read_table(client, friend, table)
     assert ('왕녀 구출', 'failed') in quests_in(seen)
-    assert len(await events_of(client, me, table, 'quest_changed')) == 1
+    assert await events_of(client, me, table, 'quest_changed') == []
 
 
 async def test_a_quest_without_a_time_limit_never_fails(
