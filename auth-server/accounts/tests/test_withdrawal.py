@@ -43,6 +43,7 @@ from accounts.models import (
     WithdrawalNotice,
     WithdrawalTarget,
 )
+from accounts.suspension import suspend_account
 from accounts.tests.billing_stub import SECRET
 from accounts.tests.helpers import BrowserClient, agree_to_required, identity_token, log_in
 from accounts.tokens import issue_token_pair
@@ -308,6 +309,15 @@ class CompleteTests(TestCase):
         self.assertFalse(complete_withdrawal(self.user.pk, self.due))
         self.user.refresh_from_db()
         self.assertTrue(self.user.is_active)
+
+    def test_an_account_suspended_during_the_grace_is_still_emptied(self):
+        # 정지는 탈퇴를 멈추지 않는다(withdrawal.md 의 "정한 것"). 정지된 사람의 개인정보를 쥐고 있지 않는다
+        suspend_account(self.user, '도배')
+
+        self.assertEqual(self.complete_at(self.due), 1)
+        self.user.refresh_from_db()
+        self.assertTrue(is_removed_account(self.user))
+        self.assertEqual(self.user.withdrawn_at, self.due)
 
 
 class RemindTests(TestCase):
