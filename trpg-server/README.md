@@ -2298,7 +2298,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **API 모델 이름에는 날짜가 붙은 이름(날짜판)을 적는다.** 별칭은 공급자가 말없이 다른 모델로 돌려 서술의 목소리가 바뀐다. 날짜판을 주지 않는 공급자(Gemini 의 정식판, 중국 모델들)는 공식 이름 하나를 적고 평가 장면으로 자주 본다. 공급자가 새 날짜판을 내면 이름표와 값은 그대로 두고 파일의 `api_model_id` 만 바꿔 들여온다. 들여오기가 바꾼 기록을 남기고 모델을 끈다. 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다. 둘이 동시에 들여와도 기록이 끊기지 않게 모델의 줄을 잠그고 바꾼다.
 - **창구**는 `openai`, `anthropic`, `gemini`, `zai`(GLM), `deepinfra`(DeepSeek), `local`(서버 곁의 Ollama, LM Studio)이다. 새 창구는 부르는 코드와 마이그레이션이 함께 있어야 한다.
 - **분류**(`basic`, `standard`, `premium`)는 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 정한다. 회사(`vendor`)가 그 안의 소분류다.
-- **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나, 생각을 켜고 끄는 방식(`reasoning_style`). 칸은 `openai`, `local` 창구만, 방식은 `anthropic`, `gemini`, `zai` 창구만 적는다. 창구마다 받는 방식이 다르다. 파일을 읽을 때 본다(`ai_core/catalog_file.py`).
+- **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나, 생각을 켜고 끄는 방식(`reasoning_style`). 칸은 `openai`, `local` 창구만, 방식은 `anthropic`, `gemini`, `zai` 창구는 늘, `openai` 창구는 생각을 끌 수 없는 모델(`always`, GPT-6 Astra, GPT-6.1 Sol)만 적는다. 창구마다 받는 방식이 다르다. 끌 수 없는 모델이 추론 수준을 알면(`supports_reasoning`) 끄라고 할 때 `reasoning_effort: low` 를 보낸다(OpenAI 의 기본값 medium, GLM-5.3 의 max 로 생각하지 않게). 파일을 읽을 때 본다(`ai_core/catalog_file.py`).
 - **켜기**: 새로 들여온 모델은 꺼져 있다. 그날의 원가가 있고 은퇴하지 않았어야 켤 수 있다. 원가를 보고 평가 장면을 통과한 뒤에 켠다.
 - **그날의 단가**는 그날 이전에 시작한 것 중 가장 늦은 것이다. 같은 날이면 나중에 적은 것이다. 행사가가 끝나는 날의 값을 파일에 미리 적어 둘 수 있고, 잘못 적은 값은 파일에서 고쳐 다시 들여오면 같은 날의 줄이 더해져 이긴다. 표의 줄은 고치지도 지우지도 않는다. 파일에서 줄을 빼도 표에는 남는다. 확인한 날(`checked_on`)만 바뀐 것은 더하지 않는다.
 - **이름표와 결제 서버의 가격 코드**: 판매가 파일(`docs/model-prices-*.csv`)의 가격 코드가 가리키는 이름표는 모두 파일에 있어야 한다(`tools/model_slugs.py`, PR 마다 CI 가 본다). 판매가가 없는 모델은 된다(혼자 쓰는 시험용).
