@@ -1,9 +1,11 @@
 // web/apps/web/src/pages/trpg/room/useBatchedRefetch.ts
-// 이벤트가 몰려 와도 테이블을 한 번만 다시 읽는다. 라운드 하나가 닫힐 때 이벤트가 여럿 온다(화면 명세 B7 의 "값이 바뀜").
+// 이벤트가 몰려 와도 테이블과 라운드를 한 번만 다시 읽는다. 라운드 하나가 닫힐 때 이벤트가 여럿 온다(화면 명세 B7 의 "값이 바뀜").
+// 채팅은 다시 읽지 않는다(스트림이 더한다).
 // 마지막 부름에서 BATCH_MS 가 지나면 읽는다. 화면을 떠나면 읽지 않는다.
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
+import { roundsKey } from './round/roundQueries';
 import { tableQuery } from './roomQueries';
 
 export const BATCH_MS = 300;
@@ -24,6 +26,7 @@ export function useBatchedRefetch(tableId: string): () => void {
     timer.current = setTimeout(() => {
       timer.current = null;
       void queryClient.invalidateQueries({ queryKey: tableQuery(tableId).queryKey });
+      void queryClient.invalidateQueries({ queryKey: roundsKey(tableId) });
     }, BATCH_MS);
   }, [queryClient, tableId]);
 }
