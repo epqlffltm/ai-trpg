@@ -1276,7 +1276,7 @@
 | 나가기 | `DELETE .../members/me` | |
 | 라운드 닫기(방장) | `POST .../rounds/current/close` | 선언을 기다리지 않고 넘어간다. 접수만 하고(202) 서술은 뒤에서 돈다. 닫는 중인 채 오래 멈춰 있으면 다시 불러 서술을 다시 맡긴다 |
 | 테이블 운영(방장) | 내보내기, 방장 넘기기, 시작·끝내기, 서술 문체·모델, 시간 제한, 크레딧 기다리기, 쪽지 알림 | 첫 출시에 넣는다 |
-| 결과를 정하는 권한(방장) | 물건 주기·빼앗기, 캐릭터 옮기기 | **임시 권한이다(#367).** 엔진의 규칙으로 옮겨 가며 지워질 것이므로 첫 출시의 화면에는 넣지 않는다. 퀘스트는 드러내기, 성공, 실패를 모두 엔진이 판의 조건을 보고 정하고, 퀘스트를 바꾸는 API 는 없다 |
+| 결과를 정하는 권한(방장) | 물건 주기·빼앗기 | **임시 권한이다(#367).** 엔진의 규칙으로 옮겨 가며 지워질 것이므로 첫 출시의 화면에는 넣지 않는다. 퀘스트는 드러내기, 성공, 실패를 모두 엔진이 판의 조건을 보고 정하고, 퀘스트를 바꾸는 API 는 없다. 캐릭터를 옮기는 것도 엔진이다(가기와 업고 가기, 판의 사건 규칙). 판의 사건이 일어나면 `happening_occurred` 이벤트로 사건의 이름과 옮겨진 사람을 보여 준다 |
 
 **4. 버튼이 비활성인 조건**
 
@@ -1527,7 +1527,7 @@
 | 스타팅 | `openings` | 5 개, 하나에 2000 자 |
 | 인원과 캐릭터 | `recommended_players`, `character_modes`, `pregens`, `default_sheet`, `player_made_hp`, `reroll_allowed` | 추천 인원 1~4, 프리젠 8 |
 | 인물·물건·퀘스트 | `npc_sheets`, `items`, `starting_items`, `quests` | 인물 시트 100, 물건 규칙 100, 시작 물건 20, 퀘스트 50(조건은 퀘스트마다 5) |
-| 지도 | `start_place`, `routes`, `landmarks` | 길 200, 명소 100 |
+| 지도 | `start_place`, `routes`, `landmarks`, `happenings` | 길 200, 명소 100, 사건 규칙 50(조건 5, 효과 5) |
 | 몬스터 배치 | `monster_sheets`, `encounters` | 몬스터 시트 100, 조우 50 |
 | 서술 | `narration_style`, `narration_model`, `clock` | 문체는 안 보내면 정통. 시계는 안 보내면 1일째 8시, 한 라운드에 10분 |
 | 등급 | `rating` | 안 보내면 `all`. 성인용은 직접 골라야 한다 |
@@ -1567,6 +1567,7 @@
 | 물건 | `item_entry_missing`, `item_not_item`, `item_magnitude_missing` |
 | 퀘스트 | `quest_entry_missing`, `quest_not_event`, `quest_condition_missing`, `quest_condition_invalid`, `quest_condition_impossible` |
 | 지도 | `map_place_missing`, `map_not_place`, `map_start_missing`, `route_find_invalid` |
+| 사건 규칙 | `happening_entry_missing`, `happening_not_event`, `happening_condition_missing`, `happening_condition_invalid`, `happening_condition_impossible`, `happening_place_off_map` |
 | 몬스터, 조우 | `monster_sheet_missing`, `monster_sheet_invalid`, `monster_attack_invalid`, `unique_monster_repeated`, `encounter_place_missing`, `encounter_not_place`, `encounter_monster_missing`, `encounter_map_missing` |
 
 **5. 상태**

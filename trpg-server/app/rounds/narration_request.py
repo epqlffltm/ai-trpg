@@ -23,7 +23,7 @@ from dataclasses import asdict
 from pydantic import TypeAdapter
 
 from app.assets.models import NpcAttitude
-from app.assets.scenarios.snapshot import Snapshot, person_entries
+from app.assets.scenarios.snapshot import Snapshot, person_entries, quest_entries
 from app.calendar import clock, state
 from app.engine.check import find_ability, find_difficulty
 from app.engine.injury import known_injuries
@@ -37,6 +37,7 @@ from app.rounds.narrator import (
     DropNote,
     DroppedNote,
     HandOverNote,
+    HappeningNote,
     Impact,
     ItemActionNote,
     ItemNote,
@@ -67,7 +68,7 @@ from app.rounds.narrator import (
 from app.rounds.secret_names import secret_names
 from app.rounds.state import loot_of, move_of, put_down_of, rest_of, search_of, steal_of, take_of, wait_of
 from app.tables import quests
-from app.tables.models import GameTable, QuestStatus, TableNpc, TableQuest
+from app.tables.models import GameTable, QuestStatus, TableHappening, TableNpc, TableQuest
 from app.tables.npc_attitudes import ATTITUDE_WORDS
 from app.tables.quests import CatalogQuest
 from app.whispers.models import Whisper
@@ -552,6 +553,24 @@ def to_quest_notes(table: GameTable, snapshot: Snapshot, expired: list[str] | No
         to_quest_note(row, catalog[row.entry_id], scene_end, missed)
         for row in quests.in_catalog_order(table.quests, catalog)
     ]
+
+
+def to_happening_note(snapshot: Snapshot, row: TableHappening) -> HappeningNote:
+    """일어난 사건 하나를 서술자에게 줄 모양으로 바꾼다. 옮겨진 사람마다 "이름 → 장소"다."""
+    name = next(entry.name for entry in quest_entries(snapshot) if entry.id == row.entry_id)
+    moved = [f'{move["character_name"]} → {move["to"]["name"]}' for move in row.moves]
+    return HappeningNote(name=name, moved=moved)
+
+
+def to_happening_notes(table: GameTable, snapshot: Snapshot, round_number: int) -> list[HappeningNote]:
+    """
+    그 라운드가 닫힐 때 일어난 판의 사건들을 서술자에게 줄 모양으로 바꾼다. 판의 순서다(#367).
+
+    일어난 것은 테이블에 적혀 있다(table_happenings). 다시 맡겨도 같은 것을 받는다.
+    """
+    order = {rule.entry_id: index for index, rule in enumerate(snapshot.happenings)}
+    rows = [row for row in table.happenings if row.round_number == round_number and row.entry_id in order]
+    return [to_happening_note(snapshot, row) for row in sorted(rows, key=lambda row: order[row.entry_id])]
 
 
 def to_clock_note(table: GameTable) -> ClockNote | None:

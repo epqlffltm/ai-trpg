@@ -23,6 +23,7 @@ from app.assets.models import (
     DEFAULT_START_DAY,
     DEFAULT_START_HOUR,
     CharacterMode,
+    HappeningEffectKind,
     ItemKind,
     ItemRarity,
     Lorebook,
@@ -96,7 +97,8 @@ from app.engine.sheet import Sheet
 #  42: 세계관에 참고 자료를 켤 수 있는지(world.references_allowed)가 있다(#482)
 #  43: 퀘스트 규칙에 실패하는 조건(quests[].fail)과 그 조건을 맞추는 법(quests[].fail_match)이 있다(#367).
 #      조건의 종류에 인물이 죽음(npc_dead)과 물건을 잃음(lose_item)이 더해졌다
-SNAPSHOT_FORMAT = 43
+#  44: 사건 규칙(happenings: 조건이 채워지면 한 번 일어나 캐릭터를 옮기는 것)이 있다(#367)
+SNAPSHOT_FORMAT = 44
 
 
 class EntrySnapshot(BaseModel):
@@ -216,6 +218,31 @@ class QuestRuleSnapshot(BaseModel):
     reveal_match: QuestMatch = QuestMatch.ALL
     fail: list[QuestConditionSnapshot] = []
     fail_match: QuestMatch = QuestMatch.ALL
+
+
+class HappeningEffectSnapshot(BaseModel):
+    """
+    사건의 효과 하나. 지금은 옮기기(move) 하나다. 두 장소는 판의 맵의 장소 항목이다.
+
+    from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.
+    """
+
+    kind: HappeningEffectKind
+    to_place: uuid.UUID
+    from_place: uuid.UUID | None = None
+
+
+class HappeningSnapshot(BaseModel):
+    """
+    사건 규칙 하나(#367). 판 안의 로어북 사건 항목 하나(entry_id)다. 조건(when)이 채워지면 한 번 일어나 효과를 낸다.
+
+    조건의 모양은 퀘스트의 것과 같다. match 는 그것을 모두 채워야 하는지 하나라도 되는지다.
+    """
+
+    entry_id: uuid.UUID
+    when: list[QuestConditionSnapshot]
+    match: QuestMatch = QuestMatch.ALL
+    effects: list[HappeningEffectSnapshot]
 
 
 class FindSnapshot(BaseModel):
@@ -395,6 +422,8 @@ class Snapshot(BaseModel):
     landmarks: list[uuid.UUID] = []
     # 장소에 놓인 물건들. 장소는 판 안의 장소 항목, 물건은 판 안의 물건 항목이다. 있으면 시작 장소도 있다
     place_items: list[PlaceItemSnapshot] = []
+    # 사건 규칙들. 판 안의 로어북 사건 항목마다 많아야 하나다. 효과의 장소는 판의 맵의 장소다(#367)
+    happenings: list[HappeningSnapshot] = []
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용했으면 반드시 있다
     player_made_hp: PlayerMadeHpSnapshot | None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 제작자가 정한 것이다
@@ -529,6 +558,32 @@ class Snapshot(BaseModel):
         events = {entry.id for entry in quest_entries(self)}
         if any(rule.entry_id not in events for rule in self.quests):
             raise ValueError('사건 항목이 아닌 것을 가리키는 퀘스트 규칙이 있습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_happening_targets(self) -> 'Snapshot':
+        """
+        사건 규칙이 모두 판 안의 사건 항목을 가리키고, 효과의 장소가 모두 판 안의 장소 항목인지 본다.
+        사건이 있으면 시작 장소가 있는지도 본다(옮길 맵이 있어야 한다). 아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py).
+        판을 읽는 쪽(app/rounds/happenings.py)은 장소가 있다고 믿고 쓴다.
+        """
+        events = {entry.id for entry in quest_entries(self)}
+        places = {entry.id for entry in place_entries(self)}
+        pointed = [
+            place
+            for rule in self.happenings
+            for effect in rule.effects
+            for place in (effect.to_place, effect.from_place)
+            if place is not None
+        ]
+        if any(rule.entry_id not in events for rule in self.happenings):
+            raise ValueError('사건 항목이 아닌 것을 가리키는 사건 규칙이 있습니다.')
+        if any(place not in places for place in pointed):
+            raise ValueError('장소 항목이 아닌 것을 가리키는 사건의 효과가 있습니다.')
+        if self.happenings and self.start_place is None:
+            raise ValueError('사건 규칙이 있는데 시작 장소가 없습니다.')
         return self
 
 
@@ -694,6 +749,7 @@ def build_snapshot(
         routes=[RouteSnapshot(**route) for route in scenario.routes],
         landmarks=list(scenario.landmarks),
         place_items=[PlaceItemSnapshot(**rule) for rule in scenario.place_items],
+        happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,

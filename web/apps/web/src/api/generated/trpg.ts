@@ -1314,30 +1314,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/game/tables/{table_id}/members/{user_id}/place": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Move Character
-         * @description 방장이 그 사람의 지금 캐릭터를 맵의 아는 장소로 옮긴다. 진행 중에만 된다. 길로 이어져 있지 않아도 된다.
-         *
-         *     아는 장소(TableDetail.map.places)가 아니면 422 다. 방장도 숨긴 장소는 모른다.
-         *     죽은 캐릭터는 409(character_dead). 이미 그 장소에 있으면 아무것도 바뀌지 않는다.
-         *     AI 는 캐릭터를 옮기지 못한다. 모두에게 이벤트(character_moved)가 간다.
-         */
-        put: operations["move_character_api_v1_game_tables__table_id__members__user_id__place_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/game/tables/{table_id}/members/{user_id}/reroll": {
         parameters: {
             query?: never;
@@ -2769,7 +2745,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_put_down" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "place_searched" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_put_down" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -2890,6 +2866,94 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HappeningEffectKind
+         * @description 사건이 일어났을 때 하는 일의 종류(#367). 효과는 목록이라 종류가 늘어도 판의 모양은 그대로다.
+         * @enum {string}
+         */
+        HappeningEffectKind: "move";
+        /**
+         * HappeningEffectSnapshot
+         * @description 사건의 효과 하나. 지금은 옮기기(move) 하나다. 두 장소는 판의 맵의 장소 항목이다.
+         *
+         *     from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.
+         */
+        HappeningEffectSnapshot: {
+            /** From Place */
+            from_place?: string | null;
+            kind: components["schemas"]["HappeningEffectKind"];
+            /**
+             * To Place
+             * Format: uuid
+             */
+            to_place: string;
+        };
+        /**
+         * HappeningRule
+         * @description 사건 규칙 하나(#367). 조건(when)이 채워지면 한 번 일어나 효과(effects)를 낸다. 붙인 로어북의 사건 항목 하나다.
+         *
+         *     조건의 모양과 종류는 퀘스트의 것과 같다(QuestCondition). 하나 이상 적는다.
+         *     match 는 모두(all)인지 하나라도(any)인지다.
+         *     가져가기(consume)는 쓰지 않는다. 사건은 물건을 받지 않는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)과
+         *     물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).
+         *     라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다
+         *     (app/rounds/happenings.py).
+         *     가리키는 사건과 장소가 붙인 로어북에 있는지는 게시할 때 본다.
+         */
+        "HappeningRule-Input": {
+            /** Effects */
+            effects: components["schemas"]["MoveEffect-Input"][];
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** @default all */
+            match: components["schemas"]["QuestMatch"];
+            /** When */
+            when: components["schemas"]["QuestCondition-Input"][];
+        };
+        /**
+         * HappeningRule
+         * @description 사건 규칙 하나(#367). 조건(when)이 채워지면 한 번 일어나 효과(effects)를 낸다. 붙인 로어북의 사건 항목 하나다.
+         *
+         *     조건의 모양과 종류는 퀘스트의 것과 같다(QuestCondition). 하나 이상 적는다.
+         *     match 는 모두(all)인지 하나라도(any)인지다.
+         *     가져가기(consume)는 쓰지 않는다. 사건은 물건을 받지 않는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)과
+         *     물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).
+         *     라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다
+         *     (app/rounds/happenings.py).
+         *     가리키는 사건과 장소가 붙인 로어북에 있는지는 게시할 때 본다.
+         */
+        "HappeningRule-Output": {
+            /** Effects */
+            effects: components["schemas"]["MoveEffect-Output"][];
+            /** Entry Id */
+            entry_id: string;
+            /** @default all */
+            match: components["schemas"]["QuestMatch"];
+            /** When */
+            when: components["schemas"]["QuestCondition-Output"][];
+        };
+        /**
+         * HappeningSnapshot
+         * @description 사건 규칙 하나(#367). 판 안의 로어북 사건 항목 하나(entry_id)다. 조건(when)이 채워지면 한 번 일어나 효과를 낸다.
+         *
+         *     조건의 모양은 퀘스트의 것과 같다. match 는 그것을 모두 채워야 하는지 하나라도 되는지다.
+         */
+        HappeningSnapshot: {
+            /** Effects */
+            effects: components["schemas"]["HappeningEffectSnapshot"][];
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** @default all */
+            match: components["schemas"]["QuestMatch"];
+            /** When */
+            when: components["schemas"]["QuestConditionSnapshot"][];
         };
         /**
          * Healing
@@ -3921,6 +3985,45 @@ export interface components {
             place: string;
         };
         /**
+         * MoveEffect
+         * @description 사건의 효과 하나: 캐릭터들을 맵의 한 장소(to_place)로 옮긴다(#367).
+         *
+         *     from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 옮긴다.
+         *     쓰러진 캐릭터도 옮겨진다(끌려간다). 두 장소가 맵의 장소인지는 게시할 때 본다. 길로 이어져 있지 않아도 된다.
+         */
+        "MoveEffect-Input": {
+            /** From Place */
+            from_place?: string | null;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "move";
+            /**
+             * To Place
+             * Format: uuid
+             */
+            to_place: string;
+        };
+        /**
+         * MoveEffect
+         * @description 사건의 효과 하나: 캐릭터들을 맵의 한 장소(to_place)로 옮긴다(#367).
+         *
+         *     from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 옮긴다.
+         *     쓰러진 캐릭터도 옮겨진다(끌려간다). 두 장소가 맵의 장소인지는 게시할 때 본다. 길로 이어져 있지 않아도 된다.
+         */
+        "MoveEffect-Output": {
+            /** From Place */
+            from_place?: string | null;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "move";
+            /** To Place */
+            to_place: string | null;
+        };
+        /**
          * MoveOut
          * @description 한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 판정이 없다.
          */
@@ -4459,17 +4562,6 @@ export interface components {
             description: string;
             /** Name */
             name: string;
-        };
-        /**
-         * PlaceChange
-         * @description 방장이 캐릭터를 옮길 때 받는 값. 테이블이 아는 장소(TableDetail.map.places)의 ID 다.
-         */
-        PlaceChange: {
-            /**
-             * Place Id
-             * Format: uuid
-             */
-            place_id: string;
         };
         /**
          * PlaceItem
@@ -5816,6 +5908,11 @@ export interface components {
              */
             encounters: components["schemas"]["Encounter-Input"][];
             /**
+             * Happenings
+             * @default []
+             */
+            happenings: components["schemas"]["HappeningRule-Input"][];
+            /**
              * Items
              * @default []
              */
@@ -5919,6 +6016,8 @@ export interface components {
             description: string;
             /** Encounters */
             encounters: components["schemas"]["Encounter-Output"][];
+            /** Happenings */
+            happenings: components["schemas"]["HappeningRule-Output"][];
             /**
              * Id
              * Format: uuid
@@ -6014,7 +6113,7 @@ export interface components {
          *     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-         *     quests, routes, landmarks, place_items, character_modes 는
+         *     quests, routes, landmarks, place_items, happenings, character_modes 는
          *     보낸 목록으로 통째로 바꾼다.
          *     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
          *     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -6031,6 +6130,8 @@ export interface components {
             description?: string | null;
             /** Encounters */
             encounters?: components["schemas"]["Encounter-Input"][] | null;
+            /** Happenings */
+            happenings?: components["schemas"]["HappeningRule-Input"][] | null;
             /** Items */
             items?: components["schemas"]["ItemRule-Input"][] | null;
             /** Landmarks */
@@ -6253,9 +6354,14 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 43
+             * @default 44
              */
             format: number;
+            /**
+             * Happenings
+             * @default []
+             */
+            happenings: components["schemas"]["HappeningSnapshot"][];
             /**
              * Items
              * @default []
@@ -9820,42 +9926,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TableDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    move_character_api_v1_game_tables__table_id__members__user_id__place_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table_id: string;
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlaceChange"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {

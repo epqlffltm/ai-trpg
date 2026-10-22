@@ -634,6 +634,18 @@ class WhisperNote:
 
 
 @dataclass(frozen=True)
+class HappeningNote:
+    """
+    이번 라운드가 닫힐 때 일어난 판의 사건 하나(app/rounds/happenings.py, #367). 엔진이 정한 것이다.
+
+    name 은 사건 항목의 이름, moved 는 옮겨진 사람마다 "이름 → 장소"다. 사건의 글은 로어북 검색이 따로 준다.
+    """
+
+    name: str
+    moved: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class QuestNote:
     """
     테이블의 퀘스트 하나와 그 지금 상태. 상태는 정해진 사실이다. 드러내기, 성공, 실패는 엔진이 판의 조건을 보고
@@ -775,6 +787,8 @@ class NarrationRequest:
     whispers: list[WhisperNote] = field(default_factory=list)
     # 테이블의 퀘스트들과 그 지금 상태. 판의 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
     quests: list[QuestNote] = field(default_factory=list)
+    # 이번 라운드가 닫힐 때 일어난 판의 사건들. 판의 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
+    happenings: list[HappeningNote] = field(default_factory=list)
     # 이번 장면의 몬스터들. 판의 몬스터 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
     monsters: list[MonsterNote] = field(default_factory=list)
     # 이 라운드의 차례(라운드의 turns). 맞붙은 몬스터가 없었으면 비어 있고, 그때는 moves 의 순서다.
