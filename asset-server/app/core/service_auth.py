@@ -48,22 +48,28 @@ def signed_path(request: Request) -> str:
     return f'{request.url.path}?{query}' if query else request.url.path
 
 
-def declared_too_large(request: Request) -> bool:
+def declared_too_large(request: Request, limit: int) -> bool:
     """머리말(Content-Length)이 상한을 넘는다고 말하는가. 그러면 읽기 전에 거절한다."""
     declared = request.headers.get('content-length')
-    return declared is not None and declared.isdigit() and int(declared) > BODY_MAX_BYTES
+    return declared is not None and declared.isdigit() and int(declared) > limit
 
 
-async def read_body(request: Request) -> bytes:
-    """본문을 읽는다. 상한을 넘으면 413 이다. 서명을 확인하기 전에 큰 본문을 끝까지 읽지 않는다."""
-    if declared_too_large(request):
+async def read_body(request: Request, limit: int = BODY_MAX_BYTES) -> bytes:
+    """
+    본문을 읽는다. 상한을 넘으면 413 이다. 서명을 확인하기 전에 큰 본문을 끝까지 읽지 않는다.
+
+    그림 올리기(app/images/router.py)도 자기 상한으로 쓴다.
+    """
+    if declared_too_large(request, limit):
         raise too_large()
-    body = b''
+    chunks: list[bytes] = []
+    size = 0
     async for chunk in request.stream():
-        body += chunk
-        if len(body) > BODY_MAX_BYTES:
+        chunks.append(chunk)
+        size += len(chunk)
+        if size > limit:
             raise too_large()
-    return body
+    return b''.join(chunks)
 
 
 def caller_secret(request: Request, caller: str) -> str:
