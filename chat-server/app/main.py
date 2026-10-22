@@ -4,8 +4,8 @@
 chat 서버의 시작점. 앱을 만들고 라우터를 붙인다.
 
 chat 서버는 캐릭터 하나와의 1:1 대화를 맡는다(docs/architecture/chat-server.md). story 는 story-server 가 맡는다.
-상태 확인, 토큰의 주인, 대화(캐릭터의 판과 페르소나를 asset 서버에서 가져와 시작하기, 목록, 읽기, 지우기)가 있다.
-한 번의 말(스트리밍, 과금)이 다음으로 붙는다.
+상태 확인, 토큰의 주인, 모델 목록, 대화(캐릭터의 판과 페르소나를 asset 서버에서 가져와 시작하기, 목록, 읽기,
+모델 바꾸기, 지우기)가 있다. 한 번의 말(스트리밍, 과금)이 다음으로 붙는다.
 
 띄우는 법: uv run uvicorn app.main:app --port 8005 --reload
 """
@@ -33,11 +33,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
 from app.assets.client import AssetClient, AssetUnavailableError
+from app.catalog import router as models
 from app.conversations import router as conversations
 from app.conversations.service import (
     AdultContentRequiredError,
     CharacterNotFoundError,
     ConversationNotFoundError,
+    ModelUnavailableError,
     PersonaNotFoundError,
     StartNotFoundError,
 )
@@ -137,6 +139,8 @@ def create_app(
 
     # 토큰의 주인을 돌려주는 주소. 인증 서버의 access 토큰(대상 ai-trpg-chat)으로 확인한다
     app.include_router(me.router, prefix=API_PREFIX)
+    # 대화에 고를 수 있는 모델들(app/catalog). 모델 목록의 파일을 이 서버의 표에 들여온 것이다
+    app.include_router(models.router, prefix=API_PREFIX)
     # 대화. 캐릭터의 판과 페르소나를 asset 서버에서 가져와 시작한다
     app.include_router(conversations.router, prefix=API_PREFIX)
 
@@ -145,6 +149,7 @@ def create_app(
     app.add_exception_handler(PersonaNotFoundError, conversations.handle_persona_not_found)
     app.add_exception_handler(AdultContentRequiredError, conversations.handle_adult_content_required)
     app.add_exception_handler(StartNotFoundError, conversations.handle_start_not_found)
+    app.add_exception_handler(ModelUnavailableError, conversations.handle_model_unavailable)
     app.add_exception_handler(AssetUnavailableError, conversations.handle_asset_unavailable)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.

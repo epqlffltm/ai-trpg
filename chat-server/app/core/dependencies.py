@@ -1,10 +1,11 @@
 # chat-server/app/core/dependencies.py
 
 """
-라우터들이 함께 쓰는 의존성. 요청 하나의 DB 세션, 목록의 쪽 나누기, 토큰을 함께 든 사용자다.
+라우터들이 함께 쓰는 의존성. 요청 하나의 DB 세션, 목록의 쪽 나누기, 토큰을 함께 든 사용자, 오늘이다.
 """
 
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from fastapi import Depends, Query
@@ -57,3 +58,16 @@ async def get_viewer(
 
 # asset 서버를 부르는 API 가 인자의 형식으로 쓴다
 CurrentViewer = Annotated[Viewer, Depends(get_viewer)]
+
+
+def utc_today() -> date:
+    """
+    오늘(UTC). 모델의 은퇴일과 원가 단가의 날을 이 날로 본다. 모델 목록의 관리 명령과 게임 서버도 UTC 로 본다.
+
+    의존성으로 둔다. 테스트가 날을 바꿔 은퇴한 모델을 시험한다(app.dependency_overrides).
+    """
+    return datetime.now(UTC).date()
+
+
+# 모델 목록을 그날로 보는 API 가 인자의 형식으로 쓴다
+Today = Annotated[date, Depends(utc_today)]
