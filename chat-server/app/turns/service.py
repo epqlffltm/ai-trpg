@@ -63,8 +63,10 @@ from app.conversations.service import (
     get_conversation,
 )
 from app.core.dependencies import Viewer
+from app.memory import repository as memory_store
 from app.memory import service as memory
 from app.memory.service import render_memory
+from app.memory.summaries import latest_summary, overflow, render_story
 from app.ratings import Rating, allowed_ratings
 from app.turns import charging, repository
 from app.turns.charging import HoldDeclined, Settled, Settlement
@@ -195,8 +197,12 @@ def persona_card(persona: ConversationPersona | None) -> PersonaCard | None:
 
 @dataclass(frozen=True)
 class CardExtras:
-    """카드에 더하는 블록들. memory 는 기억 메모(app/memory), scene 은 장소와 소지품(app/world)이다. 없으면 None."""
+    """
+    카드에 더하는 블록들. story 는 창 밖으로 밀려난 앞부분의 요약, memory 는 기억 메모(app/memory),
+    scene 은 장소와 소지품(app/world)이다. 없으면 None.
+    """
 
+    story: str | None
     memory: str | None
     scene: str | None
 
@@ -223,6 +229,7 @@ def prompt_for(
         options.suggestions,
         scene=extras.scene,
         memory=extras.memory,
+        story=extras.story,
     )
     turns = [Turn(message.role, message.content) for message in path]
     if closing is not None:
@@ -235,15 +242,23 @@ async def extras_on(
     conversation: Conversation,
     character: ImportedCharacter,
     path: list[Message],
+    context_chars: int,
     state: WorldState | None = None,
 ) -> CardExtras:
     """
     가지(path)의 끝에서 카드에 더할 블록들. state 를 주면 그 상태로 장소와 소지품을 적는다(행동한 뒤의 상태).
+    요약은 창(context_chars)에 들지 못하고 밀려난 말 가운데 가장 뒤의 것이다.
     """
     document = world.document_of(character)
     current = state if state is not None else await world.state_on(session, document, [m.id for m in path])
     notes = await memory.notes_for_prompt(session, conversation.id)
-    return CardExtras(memory=render_memory(notes), scene=render_scene(document, current))
+    dropped = overflow(path, context_chars)
+    summaries = await memory_store.summaries_on(session, [message.id for message in dropped])
+    return CardExtras(
+        story=render_story(latest_summary(dropped, summaries)),
+        memory=render_memory(notes),
+        scene=render_scene(document, current),
+    )
 
 
 def require_model(conversation: Conversation, model: AiModel | None, rating: Rating, now: datetime) -> str:
@@ -406,7 +421,7 @@ async def begin_turn(
         await session.refresh(conversation)
         parent_id = edited if edit_of is not None else conversation.active_leaf_id
         path = await conversations.active_path(session, parent_id)
-        extras = await extras_on(session, conversation, character, path)
+        extras = await extras_on(session, conversation, character, path, options.context_chars)
         message = user_message(conversation, parent_id, content, now)
         repository.add(session, message)
         await session.flush()
@@ -475,7 +490,7 @@ async def begin_action(
         await repository.move_leaf(session, conversation.id, added[-1].id)
         generation = new_generation(conversation, viewer.claims.user_id, added[-1].id, slug)
         repository.add(session, generation)
-        extras = await extras_on(session, conversation, character, path, performed.state)
+        extras = await extras_on(session, conversation, character, path, options.context_chars, performed.state)
         await session.commit()
     return TurnStart(
         conversation_id=conversation.id,
@@ -531,7 +546,7 @@ async def begin_regenerate(
         if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
             raise ConversationBusyError
         path = await conversations.active_path(session, parent_id)
-        extras = await extras_on(session, conversation, character, path)
+        extras = await extras_on(session, conversation, character, path, options.context_chars)
         generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
         repository.add(session, generation)
         await session.commit()
@@ -587,7 +602,7 @@ async def begin_continue(
         if conversation.active_leaf_id != target.id:
             raise NotContinuableError
         path = await conversations.active_path(session, target.id)
-        extras = await extras_on(session, conversation, character, path)
+        extras = await extras_on(session, conversation, character, path, options.context_chars)
         generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
         repository.add(session, generation)
         await session.commit()

@@ -54,6 +54,7 @@ from app.conversations.service import (
 from app.core.config import Settings, get_settings
 from app.memory import router as notes
 from app.memory.service import NoteNotFoundError, NotesFullError
+from app.memory.summarizer import Summarizer
 from app.turns import router as messages
 from app.turns import settler
 from app.turns.providers import build_router
@@ -87,6 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await revoking.halt()
     await settling.halt()
     await stop_turns(app.state.turns)
+    await app.state.summarizer.stop()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
     await asyncio.to_thread(shutdown_tracing, app.state.tracing)
@@ -180,6 +182,10 @@ def create_app(
     app.state.stops = {}
     # 청구 정리. 결제 서버는 부를 때마다 앱에서 꺼낸다(테스트가 바꿔 꽂는다)
     app.state.settler = settler.ChargeSettler(app.state.session_factory, billing=lambda: app.state.billing)
+    # 굴리는 요약. 말 한 번이 끝날 때 대화를 보러 간다(app/turns/router.py 의 keep_running)
+    app.state.summarizer = Summarizer(
+        app.state.session_factory, router=lambda: app.state.model_router, settings=lambda: app.state.settings
+    )
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
