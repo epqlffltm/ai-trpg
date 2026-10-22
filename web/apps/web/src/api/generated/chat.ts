@@ -319,11 +319,33 @@ export interface components {
             image_id: string | null;
             /** Intro Html */
             intro_html: string;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ItemDocument"][];
             /** Name */
             name: string;
+            /**
+             * Paths
+             * @default []
+             */
+            paths: components["schemas"]["PathDocument"][];
+            /**
+             * Places
+             * @default []
+             */
+            places: components["schemas"]["PlaceDocument"][];
             rating: components["schemas"]["Rating"];
             /** Speech Examples */
             speech_examples: string;
+            /**
+             * Start Items
+             * @default []
+             */
+            start_items: components["schemas"]["StartItemDocument"][];
+            /** Start Place */
+            start_place?: string | null;
             /** Starts */
             starts: components["schemas"]["StartDocument"][];
             /** Tags */
@@ -497,6 +519,28 @@ export interface components {
             status: string;
         };
         /**
+         * ItemDocument
+         * @description 물건 하나. kind 는 thing 이나 clothing(건네면 상대의 차림에 들어간다)이다. 모르는 종류도 받아 둔다.
+         *     consumable 이면 쓰면 하나 없어진다.
+         */
+        ItemDocument: {
+            /**
+             * Consumable
+             * @default false
+             */
+            consumable: boolean;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /**
          * MeResponse
          * @description 토큰의 주인.
          */
@@ -620,6 +664,18 @@ export interface components {
             tier: components["schemas"]["Tier"] | null;
         };
         /**
+         * PathDocument
+         * @description 두 장소(a, b) 사이의 길. 양쪽으로 다닌다. minutes 는 걸리는 시간(분)이다.
+         */
+        PathDocument: {
+            /** A */
+            a: string;
+            /** B */
+            b: string;
+            /** Minutes */
+            minutes: number;
+        };
+        /**
          * PathMessageOut
          * @description 지금 가지의 말 하나와 그 대안들. alternatives 는 같은 부모 아래의 말들의 id 다(먼저 생긴 것부터, 이 말도 든다).
          *
@@ -687,6 +743,20 @@ export interface components {
             speech_examples: string;
         };
         /**
+         * PlaceDocument
+         * @description 장소 하나. id 는 캐릭터 안에서 고유하다. 그림은 그 장소의 배경이다.
+         */
+        PlaceDocument: {
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
          * Rating
          * @description 이용 등급. asset 서버, 게임 서버와 같은 값이다.
          * @enum {string}
@@ -701,6 +771,16 @@ export interface components {
             situation: string;
             /** Title */
             title: string;
+        };
+        /**
+         * StartItemDocument
+         * @description 사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수.
+         */
+        StartItemDocument: {
+            /** Count */
+            count: number;
+            /** Item */
+            item: string;
         };
         /**
          * StartOut

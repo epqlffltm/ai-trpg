@@ -17,14 +17,27 @@ from app.characters.models import (
     CHARACTER_AGE_MAX_LENGTH,
     CHARACTER_GENDER_MAX_LENGTH,
     CHARACTER_GREETING_MAX_LENGTH,
+    CHARACTER_MAX_ITEMS,
+    CHARACTER_MAX_PATHS,
+    CHARACTER_MAX_PLACES,
+    CHARACTER_MAX_START_ITEMS,
     CHARACTER_MAX_STARTS,
     CHARACTER_MAX_TAGS,
     CHARACTER_NAME_MAX_LENGTH,
     CHARACTER_SPEECH_MAX_LENGTH,
     CHARACTER_TAG_MAX_LENGTH,
+    ITEM_DESCRIPTION_MAX_LENGTH,
+    ITEM_NAME_MAX_LENGTH,
+    KEY_MAX_LENGTH,
+    KEY_PATTERN,
+    PATH_MAX_MINUTES,
+    PLACE_DESCRIPTION_MAX_LENGTH,
+    PLACE_NAME_MAX_LENGTH,
+    START_ITEM_MAX_COUNT,
     START_SITUATION_MAX_LENGTH,
     START_TITLE_MAX_LENGTH,
     VERSION_NOTE_MAX_LENGTH,
+    ItemKind,
     Visibility,
 )
 from app.content.html import INTRO_MAX_BYTES, RemovedKind, intro_too_long
@@ -75,8 +88,107 @@ def reject_repeated_starts(starts: list[Start]) -> list[Start]:
 
 Starts = Annotated[list[Start], Field(max_length=CHARACTER_MAX_STARTS), AfterValidator(reject_repeated_starts)]
 
-# 고칠 때 null 로 비울 수 있는 칸. 그림은 "없음"이 null 이다. 글과 목록의 칸은 빈 값으로 비운다
-NULLABLE_FIELDS = frozenset({'image_id'})
+# 장소와 물건의 id. 캐릭터 안에서 고유하다. 대소문자는 가린다(만드는 화면이 붙이는 것이라 헷갈릴 일이 적다)
+Key = Annotated[str, StringConstraints(min_length=1, max_length=KEY_MAX_LENGTH, pattern=KEY_PATTERN)]
+
+
+class Place(BaseModel):
+    """장소 하나(지도의 점). 그림은 그 장소의 배경이다. 설명은 모델이 읽는다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=PLACE_NAME_MAX_LENGTH)]
+    description: Annotated[str, StringConstraints(strip_whitespace=True, max_length=PLACE_DESCRIPTION_MAX_LENGTH)] = ''
+    image_id: uuid.UUID | None = None
+
+
+class Path(BaseModel):
+    """두 장소(a, b) 사이의 길. 양쪽으로 다닌다. minutes 는 걸리는 시간(분)이고 그만큼 시각이 흐른다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    a: Key
+    b: Key
+    minutes: Annotated[int, Field(ge=0, le=PATH_MAX_MINUTES)]
+
+    @model_validator(mode='after')
+    def two_places(self) -> Self:
+        """제자리로 가는 길은 없다."""
+        if self.a == self.b:
+            raise ValueError('길은 서로 다른 두 장소를 잇습니다.')
+        return self
+
+
+class Item(BaseModel):
+    """물건 하나. 옷(clothing)은 건네면 상대의 차림에 들어간다. consumable 이면 쓰면 하나 없어진다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ITEM_NAME_MAX_LENGTH)]
+    description: Annotated[str, StringConstraints(strip_whitespace=True, max_length=ITEM_DESCRIPTION_MAX_LENGTH)] = ''
+    kind: ItemKind = ItemKind.THING
+    # 쓰면 하나 없어지는가(음식은 참, 우산은 거짓). chat 이 쓰기에서 소지품을 줄일 때 본다
+    consumable: bool = False
+    image_id: uuid.UUID | None = None
+
+
+class StartItem(BaseModel):
+    """사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    item: Key
+    count: Annotated[int, Field(ge=1, le=START_ITEM_MAX_COUNT)] = 1
+
+
+def reject_repeated_keys(keys: list[str]) -> None:
+    """같은 id 가 두 번 있으면 거부한다. 길과 소지품이 어느 것을 가리키는지 모른다."""
+    if len(set(keys)) != len(keys):
+        raise ValueError('같은 id 가 두 번 있습니다.')
+
+
+def unique_places(places: list[Place]) -> list[Place]:
+    reject_repeated_keys([place.id for place in places])
+    return places
+
+
+def unique_paths(paths: list[Path]) -> list[Path]:
+    """같은 두 장소를 잇는 길은 하나다(a, b 의 차례는 가리지 않는다)."""
+    pairs = [frozenset((path.a, path.b)) for path in paths]
+    if len(set(pairs)) != len(pairs):
+        raise ValueError('같은 두 장소를 잇는 길이 두 번 있습니다.')
+    return paths
+
+
+def unique_items(items: list[Item]) -> list[Item]:
+    reject_repeated_keys([item.id for item in items])
+    return items
+
+
+def unique_start_items(starts: list[StartItem]) -> list[StartItem]:
+    """같은 물건은 한 줄에 수로 적는다."""
+    reject_repeated_keys([start.item for start in starts])
+    return starts
+
+
+Places = Annotated[list[Place], Field(max_length=CHARACTER_MAX_PLACES), AfterValidator(unique_places)]
+Paths = Annotated[list[Path], Field(max_length=CHARACTER_MAX_PATHS), AfterValidator(unique_paths)]
+Items = Annotated[list[Item], Field(max_length=CHARACTER_MAX_ITEMS), AfterValidator(unique_items)]
+StartItems = Annotated[list[StartItem], Field(max_length=CHARACTER_MAX_START_ITEMS), AfterValidator(unique_start_items)]
+# 지도와 물건의 칸. DB 에 적을 때 dict 의 목록으로 바꾼다
+WORLD_LISTS = ('places', 'paths', 'items', 'start_items')
+
+
+def attached_images(image_id: uuid.UUID | None, places: list[Place], items: list[Item]) -> list[uuid.UUID]:
+    """붙인 그림들. 대표 그림, 장소의 배경, 물건의 그림이다. 없는 것은 뺀다."""
+    found = [image_id] if image_id is not None else []
+    return found + [entry.image_id for entry in [*places, *items] if entry.image_id is not None]
+
+
+# 고칠 때 null 로 비울 수 있는 칸. 그림과 처음 있는 장소는 "없음"이 null 이다. 글과 목록의 칸은 빈 값으로 비운다
+NULLABLE_FIELDS = frozenset({'image_id', 'start_place'})
 
 
 class CharacterCreate(BaseModel):
@@ -94,6 +206,22 @@ class CharacterCreate(BaseModel):
     starts: Starts = []
     image_id: uuid.UUID | None = None
     rating: Rating = Rating.ALL
+    places: Places = []
+    paths: Paths = []
+    start_place: Key | None = None
+    items: Items = []
+    start_items: StartItems = []
+
+    def image_ids(self) -> list[uuid.UUID]:
+        """붙인 그림들. 자기 그림인지 볼 것들이다."""
+        return attached_images(self.image_id, self.places, self.items)
+
+    def values(self) -> dict:
+        """DB 에 적을 칸과 값. 시작 상황, 지도, 물건은 dict 의 목록이다(그림의 id 는 글이다)."""
+        values = self.model_dump()
+        for name in ('starts', *WORLD_LISTS):
+            values[name] = [entry.model_dump(mode='json') for entry in getattr(self, name)]
+        return values
 
 
 class CharacterUpdate(BaseModel):
@@ -116,21 +244,31 @@ class CharacterUpdate(BaseModel):
     image_id: uuid.UUID | None = None
     rating: Rating | None = None
     visibility: Visibility | None = None
+    places: Places | None = None
+    paths: Paths | None = None
+    start_place: Key | None = None
+    items: Items | None = None
+    start_items: StartItems | None = None
 
     @model_validator(mode='after')
     def null_only_for_the_image(self) -> Self:
-        """그림 말고는 null 을 거부한다. "비우기"인지 "보내지 않음"인지 헷갈린다."""
+        """그림과 처음 있는 장소 말고는 null 을 거부한다. "비우기"인지 "보내지 않음"인지 헷갈린다."""
         nulls = [name for name in self.model_fields_set - NULLABLE_FIELDS if getattr(self, name) is None]
         if nulls:
             raise ValueError(f'null 로 비울 수 없는 칸입니다: {", ".join(sorted(nulls))}')
         return self
 
     def changes(self) -> dict:
-        """보낸 칸과 그 값. 시작 상황은 DB 에 적을 모양(dict)으로 바꾼다."""
+        """보낸 칸과 그 값. 시작 상황, 지도, 물건은 DB 에 적을 모양(dict 의 목록)으로 바꾼다."""
         changes = {name: getattr(self, name) for name in self.model_fields_set}
-        if 'starts' in changes:
-            changes['starts'] = [start.model_dump() for start in self.starts or []]
+        for name in ('starts', *WORLD_LISTS):
+            if name in changes:
+                changes[name] = [entry.model_dump(mode='json') for entry in changes[name]]
         return changes
+
+    def image_ids(self) -> list[uuid.UUID]:
+        """보낸 칸에 붙인 그림들. 자기 그림인지 볼 것들이다."""
+        return attached_images(self.image_id, self.places or [], self.items or [])
 
 
 class CharacterDetail(BaseModel):
@@ -148,6 +286,11 @@ class CharacterDetail(BaseModel):
     image_id: uuid.UUID | None
     rating: Rating
     visibility: Visibility
+    places: list[Place]
+    paths: list[Path]
+    start_place: str | None
+    items: list[Item]
+    start_items: list[StartItem]
     latest_version: int | None
     published_at: datetime | None
     created_at: datetime
