@@ -1,0 +1,787 @@
+// web/apps/web/src/api/generated/chat.ts
+// docs/api/chat.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
+
+export interface paths {
+    "/api/v1/chat/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Conversations
+         * @description 내 대화의 목록. 최근에 말한 것부터다. 가격 목록은 DB 를 읽기 전에 받는다(바깥을 기다리며 연결을 쥐지 않는다).
+         */
+        get: operations["list_conversations_api_v1_chat_conversations_get"];
+        put?: never;
+        /**
+         * Start Conversation
+         * @description 대화를 시작한다. 캐릭터의 마지막 판과 페르소나를 가져와 고정한다. 모델은 지난번 것이거나 고른 것이다.
+         */
+        post: operations["start_conversation_api_v1_chat_conversations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Conversation
+         * @description 대화 하나. 지금 보고 있는 가지의 말들까지. 가격 목록은 DB 를 읽기 전에 받는다.
+         */
+        get: operations["read_conversation_api_v1_chat_conversations__conversation_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Conversation
+         * @description 대화를 지운다. 목록과 읽기에 더는 나오지 않는다.
+         */
+        delete: operations["delete_conversation_api_v1_chat_conversations__conversation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{conversation_id}/model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change Model
+         * @description 대화의 모델을 바꾼다. 다음 말부터 그 모델로 쓰고 그 모델의 값으로 청구한다. 바꾼 모델을 돌려준다.
+         */
+        put: operations["change_model_api_v1_chat_conversations__conversation_id__model_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Me
+         * @description 토큰이 유효하면 그 주인의 ID 를 돌려준다.
+         */
+        get: operations["read_me_api_v1_chat_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Models
+         * @description 대화에 고를 수 있는 모델들과 그 값. 회사, 이름표 순서다.
+         */
+        get: operations["list_models_api_v1_chat_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Health
+         * @description 서버 프로세스가 요청을 받을 수 있으면 200 을 돌려준다.
+         *
+         *     DB 나 다른 서버의 상태는 보지 않는다. 그것까지 보면, DB 가 잠깐 느려졌을 때
+         *     관리 도구가 멀쩡한 서버를 죽은 것으로 보고 재시작한다.
+         */
+        get: operations["check_health_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Readiness
+         * @description DB 에 3초 안에 닿으면 200, 아니면 503 을 돌려준다.
+         *
+         *     왜 닿지 않는지는 응답에 싣지 않는다. 오류 문구에는 DB 의 주소와 계정 이름이 들어 있다.
+         *     원인은 서버의 로그에 남긴다. 오류의 종류만 적는다.
+         */
+        get: operations["check_readiness_health_ready_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+}
+export type webhooks = Record<string, never>;
+export interface components {
+    schemas: {
+        /**
+         * CharacterDocument
+         * @description 판에 굳힌 캐릭터. intro_html 은 asset 서버가 허용 목록으로 거른 소개다.
+         */
+        CharacterDocument: {
+            /** Age */
+            age: string;
+            /** Format */
+            format: number;
+            /** Gender */
+            gender: string;
+            /** Greeting */
+            greeting: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Intro Html */
+            intro_html: string;
+            /** Name */
+            name: string;
+            rating: components["schemas"]["Rating"];
+            /** Speech Examples */
+            speech_examples: string;
+            /** Starts */
+            starts: components["schemas"]["StartDocument"][];
+            /** Tags */
+            tags: string[];
+        };
+        /**
+         * CharacterOut
+         * @description 대화 하나에 싣는 캐릭터. 가져온 판의 문서까지다.
+         */
+        CharacterOut: {
+            document: components["schemas"]["CharacterDocument"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            rating: components["schemas"]["Rating"];
+            /** Version */
+            version: number;
+        };
+        /**
+         * CharacterSummary
+         * @description 목록에 싣는 캐릭터. id 는 asset 서버의 캐릭터 id 다.
+         */
+        CharacterSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+            rating: components["schemas"]["Rating"];
+            /** Version */
+            version: number;
+        };
+        /**
+         * ConversationCreate
+         * @description 대화를 시작할 때 받는 값. 캐릭터와 시작 상황만 고르고 들어간다(2026-10-20). 페르소나와 모델은 지난번 것을 쓴다.
+         *
+         *     persona_id 는 셋 중 하나다.
+         *       - 보내지 않으면: 지난번 대화의 페르소나를 쓴다. 지난번에 없었거나 그 페르소나가 지워졌으면 페르소나 없이 시작한다
+         *       - null 을 보내면: 페르소나 없이 시작한다
+         *       - id 를 보내면: 그 페르소나다. 없거나 남의 것이면 404 다
+         *
+         *     model 도 셋 중 하나다.
+         *       - 보내지 않으면: 지난번 대화의 모델을 쓴다. 지난번에 없었거나 이 대화에 고를 수 없으면 모델 없이 시작한다
+         *       - null 을 보내면: 모델 없이 시작한다. 말을 보내기 전에 고른다
+         *       - 이름표를 보내면: 그 모델이다. 이 대화에 고를 수 없으면 422 model_unavailable 이다
+         */
+        ConversationCreate: {
+            /**
+             * Character Id
+             * Format: uuid
+             */
+            character_id: string;
+            /** Model */
+            model?: string | null;
+            /** Persona Id */
+            persona_id?: string | null;
+            /**
+             * Start
+             * @default 0
+             */
+            start: number;
+        };
+        /**
+         * ConversationDetail
+         * @description 대화 하나. messages 는 지금 보고 있는 가지의 말들이다. 첫 말부터 차례로.
+         *
+         *     대안(다시 생성, 고친 말)은 그 단계에서 따로 읽는 길을 둔다.
+         */
+        ConversationDetail: {
+            character: components["schemas"]["CharacterOut"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Messages */
+            messages: components["schemas"]["MessageOut"][];
+            model: components["schemas"]["ConversationModelOut"] | null;
+            persona: components["schemas"]["PersonaOut"] | null;
+            start: components["schemas"]["StartOut"];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ConversationModelOut
+         * @description 대화에 싣는 모델. usable 이 거짓이면 이 대화에 더는 고를 수 없는 모델이다
+         *     (꺼졌다, 은퇴했다, 성인 등급의 대화에 쓸 수 없게 됐다).
+         *
+         *     화면이 "모델을 다시 골라 주세요"를 보인다. 서버는 몰래 다른 모델로 바꾸지 않는다.
+         */
+        ConversationModelOut: {
+            /** Display Name */
+            display_name: string;
+            grade: components["schemas"]["Grade"];
+            /** Retires On */
+            retires_on: string | null;
+            /** Slug */
+            slug: string;
+            /** Usable */
+            usable: boolean;
+            /** Vendor */
+            vendor: string;
+        };
+        /**
+         * ConversationPage
+         * @description 목록의 한 쪽과 전체 개수. 게임 서버의 GET /tables 와 같은 모양이다(#593).
+         */
+        ConversationPage: {
+            /** Items */
+            items: components["schemas"]["ConversationSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ConversationSummary
+         * @description 목록의 한 줄.
+         */
+        ConversationSummary: {
+            character: components["schemas"]["CharacterSummary"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            model: components["schemas"]["ConversationModelOut"] | null;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * Grade
+         * @description 보이는 분류. 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 모델 목록의 파일에 적는다.
+         * @enum {string}
+         */
+        Grade: "basic" | "standard" | "premium";
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HealthResponse */
+        HealthResponse: {
+            /** Status */
+            status: string;
+        };
+        /**
+         * MeResponse
+         * @description 토큰의 주인.
+         */
+        MeResponse: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * MessageOut
+         * @description 말 하나.
+         */
+        MessageOut: {
+            /** Content */
+            content: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * ModelChoice
+         * @description 대화의 모델을 바꿀 때 받는 값.
+         */
+        ModelChoice: {
+            /** Model */
+            model: string;
+        };
+        /**
+         * ModelList
+         * @description 고를 수 있는 모델들. 회사, 이름표 순서다. free 는 결제 서버 없이 도는 서버라 값이 없다는 뜻이다.
+         */
+        ModelList: {
+            /** Free */
+            free: boolean;
+            /** Items */
+            items: components["schemas"]["ModelOut"][];
+        };
+        /**
+         * ModelOut
+         * @description 고를 수 있는 모델 하나와 말 한 번의 값.
+         *
+         *     credits 는 결제 서버가 정한 값(글자, "30")이다. 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.
+         *     tier 가 premium 이면 골드(유료 크레딧)로만 낸다. grade 는 화면의 묶음(basic, standard, premium)이다.
+         */
+        ModelOut: {
+            /** Allows Adult */
+            allows_adult: boolean;
+            /** Credits */
+            credits: string | null;
+            /** Display Name */
+            display_name: string;
+            grade: components["schemas"]["Grade"];
+            next: components["schemas"]["NextPriceOut"] | null;
+            /** Promo */
+            promo: boolean;
+            /** Retires On */
+            retires_on: string | null;
+            /** Slug */
+            slug: string;
+            tier: components["schemas"]["Tier"] | null;
+            /** Vendor */
+            vendor: string;
+        };
+        /**
+         * NextPriceOut
+         * @description 예약된 값의 바뀜. credits 가 null 이면 effective_at 부터 팔지 않는다.
+         */
+        NextPriceOut: {
+            /** Credits */
+            credits: string | null;
+            /**
+             * Effective At
+             * Format: date-time
+             */
+            effective_at: string;
+            /** Promo */
+            promo: boolean;
+            tier: components["schemas"]["Tier"] | null;
+        };
+        /**
+         * PersonaOut
+         * @description 대화에 가져온 페르소나의 사본. id 는 asset 서버의 페르소나 id 다.
+         */
+        PersonaOut: {
+            /** Age */
+            age: string;
+            /** Description */
+            description: string;
+            /** Form Of Address */
+            form_of_address: string;
+            /** Gender */
+            gender: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+            /** Personality */
+            personality: string;
+            /** Revision */
+            revision: number;
+            /** Speech Examples */
+            speech_examples: string;
+        };
+        /**
+         * Rating
+         * @description 이용 등급. asset 서버, 게임 서버와 같은 값이다.
+         * @enum {string}
+         */
+        Rating: "all" | "adult";
+        /**
+         * StartDocument
+         * @description 시작 상황 하나. 제목은 목록에, 상황은 모델에 간다.
+         */
+        StartDocument: {
+            /** Situation */
+            situation: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * StartOut
+         * @description 고른 시작 상황.
+         */
+        StartOut: {
+            /** Situation */
+            situation: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * Tier
+         * @description 결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).
+         *
+         *     결제 서버가 모르는 등급을 보내면 목록 전체를 읽지 못한다(503).
+         *     그래서 결제 서버는 게임 서버와 chat 서버가 등급을 안 뒤에 그 줄을 넣는다.
+         * @enum {string}
+         */
+        Tier: "basic" | "standard" | "premium";
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
+    };
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
+}
+export type $defs = Record<string, never>;
+export interface operations {
+    list_conversations_api_v1_chat_conversations_get: {
+        parameters: {
+            query?: {
+                /** @description asset 서버의 캐릭터 id. 주면 그 캐릭터의 대화만 */
+                character_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_conversation_api_v1_chat_conversations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_conversation_api_v1_chat_conversations__conversation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_conversation_api_v1_chat_conversations__conversation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_model_api_v1_chat_conversations__conversation_id__model_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationModelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_me_api_v1_chat_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    list_models_api_v1_chat_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelList"];
+                };
+            };
+        };
+    };
+    check_health_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    check_readiness_health_ready_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+}
