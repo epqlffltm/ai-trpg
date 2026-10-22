@@ -136,3 +136,70 @@
   border: 1px solid var(--ui-border);
   color: var(--ui-text-muted);
 }
+
+/* 인증 화면 */
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: var(--ui-gap);
+}
+
+.step-indicator {
+  color: var(--ui-text-muted);
+  margin-top: -8px;
+}
+
+.consents {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 12px 14px 4px;
+  margin: 0 0 var(--ui-gap);
+}
+
+.consents legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.consents__group {
+  color: var(--ui-text-muted);
+  font-size: 0.9em;
+  margin: 12px 0 8px;
+}
+
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.consent-row > .ui-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 동의 문서 */
+.legal-document table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92em;
+}
+
+.legal-document th,
+.legal-document td {
+  border: 1px solid var(--ui-border);
+  padding: 6px 8px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.legal-document h1 {
+  font-size: 1.3rem;
+}
+
+.legal-document h2 {
+  font-size: 1.1rem;
+  margin-top: 1.6em;
+}

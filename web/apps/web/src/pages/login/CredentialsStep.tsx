@@ -7,15 +7,17 @@ import { useState, type FormEvent } from 'react';
 import { startLogin } from '../../api/auth';
 import { describeLoginProblem, type LoginProblem } from '../../auth/loginProblem';
 import { useCountdown } from '../../hooks/useCountdown';
-import { ProblemNotice } from './ProblemNotice';
+import { ProblemNotice } from '../../components/ProblemNotice';
 
 type Props = {
   initialProblem?: LoginProblem | undefined;
+  /** 가입을 막 마치고 왔으면 그 아이디 */
+  initialUsername?: string | undefined;
   onTicket: (ticket: string) => void;
 };
 
-export function CredentialsStep({ initialProblem, onTicket }: Props) {
-  const [username, setUsername] = useState('');
+export function CredentialsStep({ initialProblem, initialUsername, onTicket }: Props) {
+  const [username, setUsername] = useState(initialUsername ?? '');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<LoginProblem | undefined>(initialProblem);

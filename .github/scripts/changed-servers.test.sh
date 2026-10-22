@@ -53,6 +53,7 @@ expect "asset 서버의 API 목록은 asset 서버과 화면" "asset web" "docs/
 expect "API 목록의 안내는 아무것도" "" "docs/api/README.md"
 expect "화면이 바뀌면 화면" "web" "web/apps/web/src/main.tsx"
 expect "화면의 워크플로가 바뀌면 화면" "web" ".github/workflows/web.yml"
+expect "동의 문서가 바뀌면 화면" "web" "docs/legal/terms.md"
 expect "web 이라는 이름의 다른 폴더는 고르지 않는다" "" "docs/web/x.md" "web-old/x"
 expect "chat 서버가 바뀌면 chat 서버" "chat" "chat-server/app/main.py"
 expect "chat 서버의 워크플로가 바뀌면 chat 서버" "chat" ".github/workflows/chat-server.yml"

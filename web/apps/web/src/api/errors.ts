@@ -68,13 +68,22 @@ function retryAfterOf(body: Record<string, unknown>, headers: Headers): number |
   return Number.isFinite(header) && header > 0 ? header : undefined;
 }
 
-/** 칸마다의 오류 글. 글의 목록인 값만 칸으로 본다(detail, code 같은 글 하나는 칸이 아니다) */
+/**
+ * 칸마다의 오류 글. 글의 목록(["..."])이나, 그 안에 다시 칸이 있는 것({"terms": ["..."]})을 칸으로 본다.
+ * detail, code 같은 글 하나는 칸이 아니다. 안쪽 칸의 글은 바깥 칸의 글로 모은다(동의의 항목마다의 오류 같은 것)
+ */
 function fieldErrorsOf(body: Record<string, unknown>): FieldErrors {
   const fields: FieldErrors = {};
   for (const [name, value] of Object.entries(body)) {
-    if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
-      fields[name] = value;
-    }
+    const messages = messagesIn(value);
+    if (messages.length > 0 && typeof value !== 'string') fields[name] = messages;
   }
   return fields;
+}
+
+function messagesIn(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(messagesIn);
+  if (value !== null && typeof value === 'object') return Object.values(value).flatMap(messagesIn);
+  return [];
 }

@@ -23,9 +23,12 @@ export function AppHeader() {
         {session ? (
           <AccountMenu />
         ) : (
-          <Link to="/login" state={{ from: location.pathname + location.search }}>
-            로그인
-          </Link>
+          <>
+            <Link to="/login" state={{ from: location.pathname + location.search }}>
+              로그인
+            </Link>
+            <Link to="/signup">가입</Link>
+          </>
         )}
       </div>
     </header>
