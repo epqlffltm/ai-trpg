@@ -22,6 +22,7 @@ from accounts.models import (
     PaymentEligibility,
     SecurityEvent,
     SignupCode,
+    Suspension,
     User,
     WelcomeCredit,
     WithdrawalNotice,
@@ -168,6 +169,30 @@ class SecurityEventAdmin(admin.ModelAdmin):
     search_fields = ('ip', 'user__username')
     date_hierarchy = 'created_at'
     # 목록을 그릴 때 행마다 계정을 따로 조회하지 않게 한다
+    list_select_related = ('user',)
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(Suspension)
+class SuspensionAdmin(admin.ModelAdmin):
+    """
+    정지의 기록을 조회만 한다(#634). 정지와 풀기는 관리 명령(suspend_account, restore_account)으로 한다.
+
+    화면에서 고치면 계정이 막혔는지(is_active)와 기록이 어긋난다. 그래서 만들거나 고치거나 지우지 못하게 한다.
+    """
+
+    list_display = ('suspended_at', 'user', 'reason', 'note', 'restored_at', 'restore_note')
+    list_filter = ('reason',)
+    search_fields = ('user__username',)
+    date_hierarchy = 'suspended_at'
     list_select_related = ('user',)
 
     def has_add_permission(self, request) -> bool:
