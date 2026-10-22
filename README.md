@@ -45,6 +45,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 기여 지침. 서버의 경계, 기본 검사, 브랜치와 PR 의 모양 |
 | [SECURITY.md](SECURITY.md) | 보안 정책. 취약점을 비공개로 알리는 길 |
 | [docs/observability.md](docs/observability.md) | 서버들이 함께 지키는 관측 규격. 로그의 모양, 요청·추적·작업 식별자, 민감정보, health 와 readiness, 메트릭의 이름, 관리 서버의 경계 |
+| [docs/operations/local-screens.md](docs/operations/local-screens.md) | 화면을 실제 서버로 보기. 견본 채우기(`tools/dev_seed.py`), 로그인 코드, 화면마다 볼 것 |
 | [docs/README.md](docs/README.md) | 문서 안내. 서비스 구조 명세, 공용 코드 규칙, 플랫폼과 제품 방향, 화면 명세, AI 챗 서비스 조사 |
 
 ## 요구 사항
@@ -155,6 +156,7 @@ cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
   예를 들어 결제 서버의 정리 작업은 요청의 서명을 확인하는 비밀을, 게임 서버의 마이그레이션은 모델의 키를 받지 않는다.
   어느 프로세스가 무엇을 받는지는 `.github/scripts/secret_scope.py` 의 표에 있다. 새 비밀을 더하면 그 표에도 적는다. 표에 없으면 CI(`stack`)가 실패한다.
 - 포트가 다른 프로그램과 겹치면 루트 `.env` 의 `PROXY_PORT`(8080), `AUTH_PORT`(8000)로 바꾼다.
+- 화면을 실제 서버에 붙여 보려면 시험 계정과 공개된 견본 시나리오가 있어야 한다. `uv run --no-project python tools/dev_seed.py` 가 채운다([화면을 실제 서버로 보기](docs/operations/local-screens.md)).
 
 ## 백업과 복원
 
