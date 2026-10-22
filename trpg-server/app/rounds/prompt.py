@@ -134,7 +134,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 바깥 자료(SRD 5.1)의 줄이다.
 #                 설정이 먼저라는 것, 맞지 않으면 쓰지 않는다는 것, 수치와 규칙은 쓰지 않는다는 것을 적는다
 #   narration-44: [참고 자료]의 줄이 한국어로 옮긴 이름과 글이다(#482 4단계). "영어"와 "한국어로 옮겨 쓴다"를 뺀다
-PROMPT_VERSION = 'narration-44'
+#   narration-45: 한 일의 줄에 기다리기의 결과가 붙는다((기다리기: 3일), (기다리기: 3일. 모두가 기다리지 않아
+#                 시간이 건너뛰지 않았다)). 건너뛴 시간은 [시각]의 흐르는 시간에 있다(#367)
+PROMPT_VERSION = 'narration-45'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3

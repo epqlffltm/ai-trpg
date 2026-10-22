@@ -60,11 +60,12 @@ from app.rounds.narrator import (
     TreatmentNote,
     TurnNote,
     Verdict,
+    WaitNote,
     WakeNote,
     WhisperNote,
 )
 from app.rounds.secret_names import secret_names
-from app.rounds.state import loot_of, move_of, put_down_of, rest_of, search_of, steal_of, take_of
+from app.rounds.state import loot_of, move_of, put_down_of, rest_of, search_of, steal_of, take_of, wait_of
 from app.tables import quests
 from app.tables.models import GameTable, QuestStatus, TableNpc, TableQuest
 from app.tables.npc_attitudes import ATTITUDE_WORDS
@@ -178,6 +179,14 @@ def to_rest(declaration: Declaration | None) -> RestNote | None:
         after=rest['after'],
         max_hp=rest['max_hp'],
     )
+
+
+def to_wait(declaration: Declaration | None) -> WaitNote | None:
+    """선언에 적힌 기다리기의 결과를 서술자에게 줄 모양으로 바꾼다. 기다리는 행동이 아니면 None."""
+    wait = wait_of(declaration)
+    if wait is None:
+        return None
+    return WaitNote(minutes=wait['minutes'], waited=wait['waited'], reason=wait['reason'])
 
 
 def find_revival(revivals: list[dict], user_id: uuid.UUID) -> RevivalNote | None:
@@ -546,7 +555,7 @@ def to_clock_note(table: GameTable) -> ClockNote | None:
     """
     테이블의 시계를 서술자에게 줄 모양으로 바꾼다. 지금 시각, 다음 라운드가 열릴 때까지 흐를 시간, 그때의 시각.
 
-    퀘스트처럼 서술을 맡길 때의 것을 읽는다. 방장이 닫은 뒤에 흐를 시간을 정해도 그 라운드의 서술이 따른다.
+    서술을 맡길 때의 것을 읽는다. 라운드가 닫힐 때 엔진이 늘린 걸음(길, 쉬기, 기다리기)을 그 라운드의 서술이 따른다.
     시계가 없는 테이블이면 None 이다.
     """
     if table.clock is None:

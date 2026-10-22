@@ -30,7 +30,7 @@ from app.rounds.narration_request import Pace, pace_of, scene_end_of
 from app.rounds.narrator import QuestNote
 from tests import test_table_quests as quest_tables
 from tests.test_map_actions import play
-from tests.test_quest_deadline import HOUR, start_with_deadlines, step
+from tests.test_quest_deadline import HOUR, start_with_deadlines, wait_together
 from tests.test_table_quests import set_status
 from tests.test_whispers import RecordingNarrator
 
@@ -87,9 +87,9 @@ async def test_only_the_round_that_missed_the_deadline_says_so(
     narrated,
 ):
     table = await start_with_deadlines(client, me, friend, lore)
-    await step(client, me, table, HOUR)
 
-    for _ in range(3):
+    await wait_together(client, me, friend, table, HOUR, narrated)
+    for _ in range(2):
         await play(client, me, friend, table, narrated)
 
     first, second, third = (rescue(request) for request in narrator.requests)
@@ -193,8 +193,7 @@ async def test_the_reminder_sits_just_before_the_request(
     client: AsyncClient, me: dict, friend: dict, lore: dict, narrator: RecordingNarrator, narrated
 ):
     table = await start_with_deadlines(client, me, friend, lore)
-    await step(client, me, table, HOUR)
-    await play(client, me, friend, table, narrated)
+    await wait_together(client, me, friend, table, HOUR, narrated)
 
     lines = prompt.round_text(narrator.requests[0]).splitlines()
 

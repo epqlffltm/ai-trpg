@@ -38,6 +38,7 @@ from app.engine.action import (
     TakeAction,
     TreatAction,
     UseAction,
+    WaitAction,
 )
 from app.engine.dice import Dice
 from app.rounds import initiative, npc_attacks
@@ -58,6 +59,7 @@ from app.rounds.rests import judge_rest
 from app.rounds.state import find_declaration, rules_of
 from app.rounds.steals import judge_steal
 from app.rounds.treatments import judge_treatment
+from app.rounds.waits import judge_wait
 from app.tables import items, sheets
 from app.tables.models import GameTable, TableMember
 
@@ -67,7 +69,7 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     한 사람의 행동을 판정하고 그 결과를 정한다.
     행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming),
     물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(search_place), 줍기(judge_take),
-    내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot)다.
+    내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot), 쉬기(judge_rest), 기다리기(judge_wait)다.
     """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
@@ -91,6 +93,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_loot(judging, member, action)
     if isinstance(action, RestAction):
         return judge_rest(judging, action)
+    if isinstance(action, WaitAction):
+        return judge_wait(action)
     return judge_check(judging, member, action)
 
 

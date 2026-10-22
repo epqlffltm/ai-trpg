@@ -7,8 +7,10 @@
   - 셈: 1일째 0시부터 흐른 분을 며칠째, 몇 시, 몇 분, 하루의 어느 때로 푼다. 자정을 넘으면 날이 바뀐다.
   - 달기: 테이블을 만들면 판의 시작 시각을 가리키는 시계가 달린다. 첫 라운드는 그 시각에 열린다.
   - 흐르기: 새 라운드가 열릴 때 판의 기본 시간만큼 흐른다. 열린 이벤트에 그때의 시각과 흐른 시간이 있다.
-  - 방장이 정하기: 다음에 흐를 시간을 방장이 정한다. 한 번 쓰면 판의 기본으로 돌아간다. 이벤트로 남는다.
-  - 막기: 방장만, 진행 중에만, 0 분에서 일주일까지. 앉지 않은 사람에게는 테이블이 없다.
+  - 기다리기(#367, app/rounds/waits.py): 모두 기다리면 가장 짧게 부른 시간만큼 건너뛴다. 한 번 쓰고 판의 기본으로.
+    한 사람이라도 다른 일을 하거나 내지 않으면 흐르지 않는다. 1분에서 일주일까지.
+  - 막기: 사람(방장)이 흐를 시간을 정하는 길은 없다. 앉지 않은 사람에게는 테이블이 없다.
+기다리는 중에 맞으면 깨지는 것은 tests/test_waits.py 가 본다.
 """
 
 import pytest
@@ -105,9 +107,29 @@ async def read_clock(client: AsyncClient, headers: dict[str, str], table: dict) 
     return response.json()
 
 
-async def set_step(client: AsyncClient, headers: dict[str, str], table: dict, minutes: int | None):
-    """다음 라운드에 흐를 시간을 정하는 요청. 응답을 그대로 돌려준다."""
-    return await client.put(clock_url(table, '/step'), json={'minutes': minutes}, headers=headers)
+def wait(minutes: int) -> dict:
+    """minutes 분을 기다리는 행동."""
+    return {'kind': 'wait', 'minutes': minutes}
+
+
+async def declare_wait(client: AsyncClient, headers: dict[str, str], table: dict, minutes: int):
+    """기다리기를 선언하는 요청. 응답을 그대로 돌려준다."""
+    body = {'content': '기다린다.', 'action': wait(minutes)}
+    return await client.put(f'{TABLES_URL}/{table["id"]}/rounds/current/declaration', json=body, headers=headers)
+
+
+async def wait_round(client: AsyncClient, headers: dict[str, str], table: dict, minutes: int, narrated) -> None:
+    """혼자 기다리기를 선언해 라운드를 닫고, 다음 라운드가 열릴 때까지 기다린다."""
+    response = await declare_wait(client, headers, table, minutes)
+    assert response.status_code == status.HTTP_200_OK, response.text
+    await narrated()
+
+
+async def wait_outcome(client: AsyncClient, headers: dict[str, str], table: dict, number: int) -> dict:
+    """그 라운드에서 나의(ME) 기다리기의 결과."""
+    response = await client.get(f'{TABLES_URL}/{table["id"]}/rounds/{number}', headers=headers)
+    mine = next(item for item in response.json()['declarations'] if item['user_id'] == str(ME))
+    return mine['outcome']['wait']
 
 
 def when(clock: dict) -> tuple[int, int, int, str]:
@@ -209,107 +231,103 @@ async def test_time_passes_when_the_next_round_opens(client: AsyncClient, me: di
     assert when(await read_clock(client, me, table)) == (4, 4, 0, 'dawn')
 
 
-# --- 방장이 정하기 ---
+# --- 기다리기 ---
 
 
-async def test_the_host_sets_the_next_step_once(client: AsyncClient, me: dict, narrated):
+async def test_waiting_skips_the_time_once(client: AsyncClient, me: dict, narrated):
     table = await start_solo(client, me, NIGHT_MARCH)
 
-    response = await set_step(client, me, table, 8 * 60)
-    await next_round(client, me, table, narrated)
+    await wait_round(client, me, table, 8 * 60, narrated)
     after = await read_clock(client, me, table)
     await next_round(client, me, table, narrated)
 
-    assert response.status_code == status.HTTP_200_OK, response.text
-    assert (response.json()['next_step_minutes'], response.json()['step_changed']) == (480, True)
-    # 하룻밤 쉬었다. 정한 값은 한 번 쓰고 판의 기본으로 돌아간다
-    _, rested, then = await events_of(client, me, table, 'round_opened')
-    assert (rested['payload']['passed_minutes'], when(rested['payload']['clock'])) == (480, (4, 6, 0, 'dawn'))
+    # 하룻밤 기다렸다. 늘린 걸음은 한 번 쓰고 판의 기본으로 돌아간다
+    _, waited, then = await events_of(client, me, table, 'round_opened')
+    assert (waited['payload']['passed_minutes'], when(waited['payload']['clock'])) == (480, (4, 6, 0, 'dawn'))
     assert (after['next_step_minutes'], after['step_changed']) == (180, False)
     assert (then['payload']['passed_minutes'], when(then['payload']['clock'])) == (180, (4, 9, 0, 'morning'))
+    assert await wait_outcome(client, me, table, 1) == {'minutes': 480, 'waited': True, 'reason': None}
 
 
-async def test_a_step_of_zero_keeps_the_same_moment(client: AsyncClient, me: dict, narrated):
+async def test_a_wait_shorter_than_a_round_does_not_shorten_it(client: AsyncClient, me: dict, narrated):
     table = await start_solo(client, me, NIGHT_MARCH)
 
-    await set_step(client, me, table, 0)
-    await next_round(client, me, table, narrated)
+    await wait_round(client, me, table, 30, narrated)
 
+    # 판의 기본(3시간)보다 짧게 기다려도 라운드는 판의 기본만큼 흐른다
     _, opened = await events_of(client, me, table, 'round_opened')
-    assert (opened['payload']['passed_minutes'], when(opened['payload']['clock'])) == (0, (3, 22, 0, 'night'))
+    assert opened['payload']['passed_minutes'] == 180
 
 
-async def test_null_goes_back_to_the_default(client: AsyncClient, me: dict):
-    table = await start_solo(client, me, NIGHT_MARCH)
-
-    await set_step(client, me, table, 60)
-    response = await set_step(client, me, table, None)
-
-    assert (response.json()['next_step_minutes'], response.json()['step_changed']) == (180, False)
-
-
-async def test_everyone_is_told_of_the_step(client: AsyncClient, me: dict, friend: dict):
+async def test_the_shortest_wait_is_kept(client: AsyncClient, me: dict, friend: dict, narrated):
     table = await start_duo(client, me, friend)
 
-    await set_step(client, me, table, 480)
-    await set_step(client, me, table, None)
+    for headers, minutes in ((me, 3 * 24 * 60), (friend, 24 * 60)):
+        response = await declare_wait(client, headers, table, minutes)
+        assert response.status_code == status.HTTP_200_OK, response.text
+    await narrated()
 
-    changed, reset = await events_of(client, friend, table, 'clock_step_changed')
-    assert (changed['actor_id'], changed['payload']) == (
-        str(ME),
-        {'previous': 10, 'next_step_minutes': 480, 'default': False},
-    )
-    assert reset['payload'] == {'previous': 480, 'next_step_minutes': 10, 'default': True}
-    # 앉은 사람 모두가 같은 시계를 본다
-    assert (await read_clock(client, friend, table))['next_step_minutes'] == 10
+    # 사흘을 부른 사람도 하루는 기다리겠다고 한 것이다
+    _, opened = await events_of(client, me, table, 'round_opened')
+    assert opened['payload']['passed_minutes'] == 24 * 60
+
+
+async def test_one_who_does_something_else_stops_the_wait(client: AsyncClient, me: dict, friend: dict, narrated):
+    table = await start_duo(client, me, friend)
+
+    await declare_wait(client, me, table, 3 * 24 * 60)
+    await declare(client, friend, table, MY_ACTION)
+    await narrated()
+
+    # 방장 혼자 사흘을 흘려 다른 사람의 기한을 넘기지 못한다
+    _, opened = await events_of(client, me, table, 'round_opened')
+    assert opened['payload']['passed_minutes'] == 10
+    assert await wait_outcome(client, me, table, 1) == {'minutes': 3 * 24 * 60, 'waited': False, 'reason': 'not_all'}
+
+
+async def test_one_who_did_not_declare_stops_the_wait(client: AsyncClient, me: dict, friend: dict, narrated):
+    table = await start_duo(client, me, friend)
+
+    await declare_wait(client, me, table, 8 * 60)
+    closed = await client.post(f'{TABLES_URL}/{table["id"]}/rounds/current/close', headers=me)
+    assert closed.status_code == status.HTTP_202_ACCEPTED, closed.text
+    await narrated()
+
+    _, opened = await events_of(client, me, table, 'round_opened')
+    assert opened['payload']['passed_minutes'] == 10
+    assert (await wait_outcome(client, me, table, 1))['reason'] == 'not_all'
+
+
+@pytest.mark.parametrize('minutes', [0, -1, WEEK + 1, '사흘'])
+async def test_rejects_a_bad_wait(client: AsyncClient, me: dict, minutes):
+    table = await start_solo(client, me)
+
+    response = await declare_wait(client, me, table, minutes)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def test_a_week_is_the_longest_wait(client: AsyncClient, me: dict, narrated):
+    table = await start_solo(client, me)
+
+    await wait_round(client, me, table, WEEK, narrated)
+
+    _, opened = await events_of(client, me, table, 'round_opened')
+    assert opened['payload']['passed_minutes'] == WEEK
 
 
 # --- 막기 ---
 
 
-async def test_only_the_host_sets_the_step(client: AsyncClient, me: dict, friend: dict, stranger: dict):
-    table = await start_duo(client, me, friend)
-
-    by_friend = await set_step(client, friend, table, 60)
-    by_stranger = await set_step(client, stranger, table, 60)
-
-    assert by_friend.status_code == status.HTTP_403_FORBIDDEN
-    assert by_stranger.status_code == status.HTTP_404_NOT_FOUND
-    assert (await read_clock(client, me, table))['step_changed'] is False
-
-
-async def test_the_step_is_set_only_while_playing(client: AsyncClient, me: dict):
-    waiting = await open_solo(client, me)
-    ended = await start_solo(client, me)
-    await client.post(f'{TABLES_URL}/{ended["id"]}/end', headers=me)
-
-    before = await set_step(client, me, waiting, 60)
-    after = await set_step(client, me, ended, 60)
-
-    for response in (before, after):
-        assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json()['reason'] == 'not_playing'
-
-
-@pytest.mark.parametrize(
-    'body',
-    [{'minutes': -1}, {'minutes': WEEK + 1}, {}, {'minutes': 60, 'hours': 1}, {'minutes': '한 시간'}],
-    ids=['negative', 'over-a-week', 'missing', 'unknown-field', 'not-a-number'],
-)
-async def test_rejects_a_bad_step(client: AsyncClient, me: dict, body: dict):
-    table = await start_solo(client, me)
+@pytest.mark.parametrize('body', [{'minutes': 480}, {'minutes': None}])
+async def test_no_one_sets_the_step(client: AsyncClient, me: dict, body: dict):
+    table = await start_solo(client, me, NIGHT_MARCH)
 
     response = await client.put(clock_url(table, '/step'), json=body, headers=me)
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-
-
-async def test_a_week_is_the_longest_step(client: AsyncClient, me: dict):
-    table = await start_solo(client, me)
-
-    response = await set_step(client, me, table, WEEK)
-
-    assert response.json()['next_step_minutes'] == WEEK
+    # 방장이 흐를 시간을 정하던 길(#367)은 없다. 시간을 건너뛰려면 모두 기다린다
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert (await read_clock(client, me, table))['step_changed'] is False
 
 
 async def test_only_those_seated_see_the_clock(client: AsyncClient, me: dict, stranger: dict):
@@ -321,8 +339,7 @@ async def test_only_those_seated_see_the_clock(client: AsyncClient, me: dict, st
     assert seen.status_code == missing.status_code == status.HTTP_404_NOT_FOUND
 
 
-@pytest.mark.parametrize(('method', 'path'), [('GET', ''), ('PUT', '/step')])
-async def test_every_address_requires_login(client: AsyncClient, method: str, path: str):
-    response = await client.request(method, f'{TABLES_URL}/{NO_SUCH_ID}/clock{path}', json={'minutes': 1})
+async def test_the_clock_requires_login(client: AsyncClient):
+    response = await client.get(f'{TABLES_URL}/{NO_SUCH_ID}/clock')
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED

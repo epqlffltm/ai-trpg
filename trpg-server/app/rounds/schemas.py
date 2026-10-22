@@ -581,6 +581,26 @@ class RestOutcome(BaseModel):
     rest: RestOut
 
 
+class WaitOut(BaseModel):
+    """
+    기다린 결과. 엔진이 정했다(app/rounds/waits.py). 판정이 없다.
+
+    앉은 사람이 모두 기다렸고 아무도 맞지 않았으면 다음 라운드가 적어도 가장 짧게 부른 시간만큼 뒤에 열렸다.
+    아니면 기다림이 깨져 시간이 건너뛰지 않았다(waited 가 false, reason 이 hurt 또는 not_all).
+    """
+
+    # 이 사람이 부른 게임 안의 시간(분)
+    minutes: int
+    waited: bool
+    reason: str | None
+
+
+class WaitOutcome(BaseModel):
+    """기다리는 행동의 결과."""
+
+    wait: WaitOut
+
+
 class TargetGoneOut(BaseModel):
     """판정할 때 겨눈 몬스터(나 훔치려던 NPC)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다."""
 
@@ -620,7 +640,7 @@ class DeclarationOut(BaseModel):
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
     # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
     # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 훔쳤으면 StealOutcome, 빼앗았으면 LootOutcome,
-    # 쉬었으면 RestOutcome 이다.
+    # 쉬었으면 RestOutcome, 기다렸으면 WaitOutcome 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
     # 차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면 TurnLostOutcome 이다
     outcome: (
@@ -635,6 +655,7 @@ class DeclarationOut(BaseModel):
         | StealOutcome
         | LootOutcome
         | RestOutcome
+        | WaitOutcome
         | TargetGoneOutcome
         | TurnLostOutcome
         | None

@@ -32,7 +32,7 @@ def moment_of(table: GameTable, round_number: int) -> Moment:
     """
     닫히는 라운드의 때. 테이블의 시계에서 지금 시각과 이 장면이 끝나는 시각을 읽는다.
 
-    라운드가 닫기 시작할 때 한 번 읽는다. 그 뒤에 방장이 걸음을 바꿔도 이 라운드의 부상은 이 때로 정한다.
+    라운드가 닫기 시작할 때 한 번 읽는다. 기다리기로 늘어난 걸음은 이미 들어 있다(app/rounds/waits.py).
     """
     return Moment(
         round_number=round_number,
