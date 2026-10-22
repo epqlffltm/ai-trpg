@@ -13,7 +13,7 @@
 """
 
 import uuid
-from datetime import date
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, status
@@ -21,6 +21,8 @@ from fastapi.responses import JSONResponse
 
 from app.assets.client import AssetUnavailableError
 from app.assets.schemas import CharacterDocument
+from app.billing.prices import PriceBook
+from app.billing.routing import Prices
 from app.catalog.models import AiModel
 from app.conversations import service
 from app.conversations.models import Conversation, ConversationPersona, ImportedCharacter, Message
@@ -45,7 +47,7 @@ from app.conversations.service import (
     PersonaNotFoundError,
     StartNotFoundError,
 )
-from app.core.dependencies import CurrentViewer, Paging, Session, Today
+from app.core.dependencies import CurrentViewer, Now, Paging, Session
 from app.ratings import Rating
 
 router = APIRouter(prefix='/conversations', tags=['conversations'])
@@ -81,24 +83,32 @@ def to_model(model: AiModel, usable: bool) -> ConversationModelOut:
 
 
 def conversation_model(
-    conversation: Conversation, character: ImportedCharacter, models: dict[str, AiModel], today: date
+    conversation: Conversation,
+    character: ImportedCharacter,
+    models: dict[str, AiModel],
+    book: PriceBook | None,
+    now: datetime,
 ) -> ConversationModelOut | None:
-    """대화가 가리키는 모델. 고르지 않았으면 None 이다."""
+    """대화가 가리키는 모델. 고르지 않았으면 None 이다. book 이 None 이면 값을 모르는 것이다(팔고 있다고 본다)."""
     model = models.get(conversation.model_slug)
     if model is None:
         return None
-    return to_model(model, service.model_usable(model, Rating(character.rating), today))
+    return to_model(model, service.model_usable(model, Rating(character.rating), book, now))
 
 
 def to_summary(
-    conversation: Conversation, character: ImportedCharacter, models: dict[str, AiModel], today: date
+    conversation: Conversation,
+    character: ImportedCharacter,
+    models: dict[str, AiModel],
+    book: PriceBook | None,
+    now: datetime,
 ) -> ConversationSummary:
     """대화를 목록의 한 줄로."""
     return ConversationSummary(
         id=conversation.id,
         title=conversation.title,
         character=to_character_summary(character),
-        model=conversation_model(conversation, character, models, today),
+        model=conversation_model(conversation, character, models, book, now),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -123,7 +133,11 @@ def to_persona(persona: ConversationPersona | None) -> PersonaOut | None:
 
 
 def to_detail(
-    row: service.ConversationRow, messages: list[Message], models: dict[str, AiModel], today: date
+    row: service.ConversationRow,
+    messages: list[Message],
+    models: dict[str, AiModel],
+    book: PriceBook | None,
+    now: datetime,
 ) -> ConversationDetail:
     """대화 하나를 응답의 모양으로."""
     conversation, character, persona = row
@@ -138,7 +152,7 @@ def to_detail(
             document=CharacterDocument.model_validate(character.document),
         ),
         persona=to_persona(persona),
-        model=conversation_model(conversation, character, models, today),
+        model=conversation_model(conversation, character, models, book, now),
         messages=[MessageOut.model_validate(message, from_attributes=True) for message in messages],
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
@@ -209,11 +223,11 @@ async def handle_asset_unavailable(request: Request, error: AssetUnavailableErro
 
 @router.post('', response_model=ConversationDetail, status_code=status.HTTP_201_CREATED)
 async def start_conversation(
-    data: ConversationCreate, viewer: CurrentViewer, session: Session, request: Request, today: Today
+    data: ConversationCreate, viewer: CurrentViewer, session: Session, request: Request, prices: Prices, now: Now
 ) -> ConversationDetail:
     """대화를 시작한다. 캐릭터의 마지막 판과 페르소나를 가져와 고정한다. 모델은 지난번 것이거나 고른 것이다."""
-    conversation_id = await service.start_conversation(session, request.app.state.asset, viewer, data, today)
-    return await read_conversation(conversation_id, viewer, session, today)
+    conversation_id = await service.start_conversation(session, request.app.state.asset, prices, viewer, data, now)
+    return await read_conversation(conversation_id, viewer, session, prices, now)
 
 
 @router.get('', response_model=ConversationPage, status_code=status.HTTP_200_OK)
@@ -221,36 +235,40 @@ async def list_conversations(
     viewer: CurrentViewer,
     session: Session,
     paging: Paging,
-    today: Today,
+    prices: Prices,
+    now: Now,
     character_id: Annotated[
         uuid.UUID | None, Query(description='asset 서버의 캐릭터 id. 주면 그 캐릭터의 대화만')
     ] = None,
 ) -> ConversationPage:
-    """내 대화의 목록. 최근에 말한 것부터다."""
+    """내 대화의 목록. 최근에 말한 것부터다. 가격 목록은 DB 를 읽기 전에 받는다(바깥을 기다리며 연결을 쥐지 않는다)."""
+    book = await service.known_book(prices)
     rows, total = await service.list_conversations(session, viewer, character_id, paging.limit, paging.offset)
     models = await service.conversation_models(session, [conversation for conversation, _ in rows])
     return ConversationPage(
-        items=[to_summary(conversation, character, models, today) for conversation, character in rows], total=total
+        items=[to_summary(conversation, character, models, book, now) for conversation, character in rows],
+        total=total,
     )
 
 
 @router.get('/{conversation_id}', response_model=ConversationDetail, status_code=status.HTTP_200_OK)
 async def read_conversation(
-    conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session, today: Today
+    conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
 ) -> ConversationDetail:
-    """대화 하나. 지금 보고 있는 가지의 말들까지."""
+    """대화 하나. 지금 보고 있는 가지의 말들까지. 가격 목록은 DB 를 읽기 전에 받는다."""
+    book = await service.known_book(prices)
     row = await service.get_conversation(session, viewer, conversation_id)
     messages = await service.read_messages(session, row[0])
     models = await service.conversation_models(session, [row[0]])
-    return to_detail(row, messages, models, today)
+    return to_detail(row, messages, models, book, now)
 
 
 @router.put('/{conversation_id}/model', response_model=ConversationModelOut, status_code=status.HTTP_200_OK)
 async def change_model(
-    conversation_id: uuid.UUID, data: ModelChoice, viewer: CurrentViewer, session: Session, today: Today
+    conversation_id: uuid.UUID, data: ModelChoice, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
 ) -> ConversationModelOut:
     """대화의 모델을 바꾼다. 다음 말부터 그 모델로 쓰고 그 모델의 값으로 청구한다. 바꾼 모델을 돌려준다."""
-    model = await service.change_model(session, viewer, conversation_id, data.model, today)
+    model = await service.change_model(session, prices, viewer, conversation_id, data.model, now)
     return to_model(model, usable=True)
 
 
