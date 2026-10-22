@@ -4,7 +4,7 @@
 대화의 테이블(docs/architecture/chat-server.md 의 "데이터의 모양"). 스키마는 chat 이다.
 
   - characters: asset 서버에서 가져온 캐릭터의 판의 사본. 사람마다, 판마다 하나다. 그 사람의 대화들이 함께 쓴다
-  - conversations: 대화 하나. 새로 시작할 때마다 하나. 지우면 지운 시각만 적는다
+  - conversations: 대화 하나. 새로 시작할 때마다 하나. 지우면 지운 시각만 적는다. 대화의 모델을 가리킨다(ai_models)
   - conversation_personas: 대화마다 가져온 페르소나의 사본. 페르소나 없이 시작한 대화에는 없다
   - messages: 말 하나. 트리다(parent_id). parent_id 가 같은 것이 서로의 대안(다시 생성, 고친 말)이다
 
@@ -93,6 +93,13 @@ class Conversation(Base):
     # 대화가 쓰는 판의 사본. 대화가 남아 있는 동안 사본을 지우지 못한다
     character_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('characters.id', ondelete='RESTRICT'), index=True)
     title: Mapped[str] = mapped_column(Text)
+    # 대화의 모델(app/catalog/models.py 의 이름표). 고르지 않았으면 비어 있다
+    # (처음 시작한 대화, 지난번 모델을 쓸 수 없을 때). 모델은 지우지 않으므로 RESTRICT 다.
+    # 은퇴하거나 꺼져도 가리킨 채로 두고, 화면이 다시 고르게 한다(몰래 바꾸지 않는다).
+    # 색인은 "이 모델을 쓰는 대화"를 찾는 데 쓴다(모델이 끝날 때 알릴 사람)
+    model_slug: Mapped[str | None] = mapped_column(
+        ForeignKey('ai_models.slug', ondelete='RESTRICT'), index=True, default=None
+    )
     # 고른 시작 상황. 제목은 목록에, 상황은 모델에 간다. 판의 것을 복사해 둔다
     start_title: Mapped[str] = mapped_column(Text)
     start_situation: Mapped[str] = mapped_column(Text)

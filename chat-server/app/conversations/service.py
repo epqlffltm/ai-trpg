@@ -1,14 +1,20 @@
 # chat-server/app/conversations/service.py
 
 """
-대화를 시작하고, 목록으로 내주고, 하나를 읽고, 지운다(docs/architecture/chat-server.md 의 만드는 순서 1).
+대화를 시작하고, 목록으로 내주고, 하나를 읽고, 모델을 바꾸고, 지운다
+(docs/architecture/chat-server.md 의 만드는 순서 1, 2).
 
 대화를 시작하는 길.
-  1. 지난번 대화의 페르소나를 읽는다(사람이 페르소나를 고르지 않았을 때만). 읽은 뒤 트랜잭션을 닫는다
+  1. 지난번 대화의 페르소나와 모델을 읽는다(사람이 고르지 않은 것만). 읽은 뒤 트랜잭션을 닫는다
   2. asset 서버에서 캐릭터의 마지막 판과 페르소나의 사본을 가져온다. DB 연결을 쥐지 않은 채로 부른다
   3. 시작 상황을 고른다. 판에 없는 번호면 StartNotFoundError(422)
-  4. 판의 사본(사람마다, 판마다 하나), 대화, 페르소나의 사본, 첫 말(인사말)을 한 트랜잭션에서 저장한다
+  4. 모델을 정한다. 판의 등급을 알아야 해서 판을 가져온 뒤다. 고른 모델을 쓸 수 없으면 ModelUnavailableError(422),
+     지난번 모델을 쓸 수 없으면 모델 없이 시작한다
+  5. 판의 사본(사람마다, 판마다 하나), 대화, 페르소나의 사본, 첫 말(인사말)을 한 트랜잭션에서 저장한다
 쓸 수 있는 캐릭터인지는 asset 서버가 판단한다. 가져온 판의 등급도 여기서 한 번 더 본다(allowed_ratings).
+
+모델은 고르거나 바꿀 때 한 번 본다(app/catalog/choice.py). 그 뒤 꺼지거나 은퇴해도 대화는 그 모델을 가리킨 채로 두고,
+읽을 때 "더는 쓸 수 없다"(usable)를 함께 내준다. 몰래 다른 모델로 바꾸지 않는다.
 
 지키는 것.
   - 남의 대화는 없는 것과 같다(ConversationNotFoundError, 404). 볼 수 없는 등급의 대화도 그렇다.
@@ -17,12 +23,17 @@
 """
 
 import uuid
+from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.client import AssetAdultRequiredError, AssetClient, AssetNotFoundError
 from app.assets.schemas import CharacterCopy, PersonaCopy, StartDocument
+from app.catalog import repository as catalog
+from app.catalog.choice import is_choosable
+from app.catalog.models import AiModel
 from app.conversations import repository
 from app.conversations.models import (
     Conversation,
@@ -35,7 +46,7 @@ from app.conversations.models import (
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import ConversationCreate
 from app.core.dependencies import Viewer
-from app.ratings import allowed_ratings
+from app.ratings import Rating, allowed_ratings
 
 
 class ConversationNotFoundError(Exception):
@@ -52,6 +63,18 @@ class PersonaNotFoundError(Exception):
 
 class AdultContentRequiredError(Exception):
     """자기 캐릭터인데 등급을 쓸 수 없다. 화면이 본인인증으로 안내한다(403)."""
+
+
+class ModelUnavailableError(Exception):
+    """고른 모델을 이 대화에 쓸 수 없다(없다, 꺼졌다, 은퇴했다, 성인 등급의 대화에 쓸 수 없다). 422 다."""
+
+
+@dataclass(frozen=True)
+class Remembered:
+    """지난번 대화에서 가져올 것. 사람이 고른 것은 그 값이다. 비어 있으면 없이 시작한다."""
+
+    persona_id: uuid.UUID | None
+    model_slug: str | None
 
 
 class StartNotFoundError(Exception):
@@ -92,12 +115,15 @@ def build_character(owner_id: uuid.UUID, copy: CharacterCopy) -> ImportedCharact
     )
 
 
-def build_conversation(owner_id: uuid.UUID, character: ImportedCharacter, start: StartDocument) -> Conversation:
+def build_conversation(
+    owner_id: uuid.UUID, character: ImportedCharacter, start: StartDocument, model_slug: str | None
+) -> Conversation:
     """대화를 만든다. 제목은 캐릭터의 이름이다. 아직 저장하지 않는다."""
     return Conversation(
         id=uuid.uuid4(),
         owner_id=owner_id,
         character_id=character.id,
+        model_slug=model_slug,
         title=character.name,
         start_title=start.title,
         start_situation=start.situation,
@@ -134,6 +160,18 @@ def build_opening(conversation_id: uuid.UUID, greeting: str) -> Message | None:
     )
 
 
+def model_usable(model: AiModel | None, rating: Rating, today: date) -> bool:
+    """그 모델을 그 등급의 대화에 그날 고를 수 있나. 표에 없는 모델(None)은 고를 수 없다."""
+    return model is not None and is_choosable(model, rating, today)
+
+
+def require_usable_model(model: AiModel | None, rating: Rating, today: date) -> AiModel:
+    """고른 모델. 이 대화에 고를 수 없으면 ModelUnavailableError."""
+    if model is None or not is_choosable(model, rating, today):
+        raise ModelUnavailableError
+    return model
+
+
 # --- asset 서버를 부르기 ---
 
 
@@ -168,25 +206,50 @@ async def fetch_last_persona(asset: AssetClient, viewer: Viewer, persona_id: uui
 # --- 저장과 읽기 ---
 
 
-async def persona_to_fetch(session: AsyncSession, viewer: Viewer, data: ConversationCreate) -> uuid.UUID | None:
+async def remember_choices(session: AsyncSession, viewer: Viewer, data: ConversationCreate) -> Remembered:
     """
-    가져올 페르소나. 고르지 않았으면 지난번 대화의 것이다.
+    쓸 페르소나와 모델. 고르지 않은 것은 지난번 대화의 것이다.
 
     읽은 뒤 트랜잭션을 닫는다. asset 서버를 부르는 동안 DB 연결을 쥐고 있지 않게 한다.
     """
+    owner_id = viewer.claims.user_id
     if data.persona_chosen():
-        return data.persona_id
-    persona_id = await repository.last_persona_source(session, viewer.claims.user_id)
+        persona_id = data.persona_id
+    else:
+        persona_id = await repository.last_persona_source(session, owner_id)
+    model_slug = data.model if data.model_chosen() else await repository.last_model(session, owner_id)
     await session.rollback()
-    return persona_id
+    return Remembered(persona_id, model_slug)
+
+
+async def pick_model(
+    session: AsyncSession, data: ConversationCreate, slug: str | None, rating: Rating, today: date
+) -> str | None:
+    """
+    대화의 모델을 정한다. 고른 모델을 쓸 수 없으면 ModelUnavailableError 다.
+    지난번 모델을 쓸 수 없으면 없이(None) 시작한다.
+
+    잠그지 않는다. 그사이에 모델이 꺼져도 대화는 그 모델을 가리킬 뿐이고, 읽을 때 usable 이 거짓으로 보인다.
+    """
+    if slug is None:
+        return None
+    model = await catalog.get_model(session, slug)
+    if data.model_chosen():
+        return require_usable_model(model, rating, today).slug
+    return slug if model_usable(model, rating, today) else None
 
 
 async def save_conversation(
-    session: AsyncSession, owner_id: uuid.UUID, copy: CharacterCopy, start: StartDocument, persona: PersonaCopy | None
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    copy: CharacterCopy,
+    start: StartDocument,
+    persona: PersonaCopy | None,
+    model_slug: str | None,
 ) -> uuid.UUID:
     """판의 사본, 대화, 페르소나의 사본, 첫 말을 한 번에 저장하고 대화의 id 를 돌려준다."""
     character = await repository.keep_character(session, build_character(owner_id, copy))
-    conversation = build_conversation(owner_id, character, start)
+    conversation = build_conversation(owner_id, character, start, model_slug)
     repository.add(session, conversation)
     if persona is not None:
         repository.add(session, build_persona(conversation.id, persona))
@@ -202,18 +265,19 @@ async def save_conversation(
 
 
 async def start_conversation(
-    session: AsyncSession, asset: AssetClient, viewer: Viewer, data: ConversationCreate
+    session: AsyncSession, asset: AssetClient, viewer: Viewer, data: ConversationCreate, today: date
 ) -> uuid.UUID:
     """대화를 시작하고 그 id 를 돌려준다. 실패하면 위의 예외들이나 AssetUnavailableError."""
-    persona_id = await persona_to_fetch(session, viewer, data)
+    remembered = await remember_choices(session, viewer, data)
     copy = await fetch_character(asset, viewer, data.character_id)
     require_usable_rating(copy, viewer)
     start = pick_start(copy, data.start)
     if data.persona_chosen():
-        persona = await fetch_chosen_persona(asset, viewer, persona_id)
+        persona = await fetch_chosen_persona(asset, viewer, remembered.persona_id)
     else:
-        persona = await fetch_last_persona(asset, viewer, persona_id)
-    return await save_conversation(session, viewer.claims.user_id, copy, start, persona)
+        persona = await fetch_last_persona(asset, viewer, remembered.persona_id)
+    model_slug = await pick_model(session, data, remembered.model_slug, Rating(copy.rating), today)
+    return await save_conversation(session, viewer.claims.user_id, copy, start, persona, model_slug)
 
 
 async def get_conversation(session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID) -> ConversationRow:
@@ -233,6 +297,28 @@ async def list_conversations(
     return await repository.list_visible(
         session, viewer.claims.user_id, allowed_ratings(viewer.claims), source_id, limit, offset
     )
+
+
+async def conversation_models(session: AsyncSession, conversations: list[Conversation]) -> dict[str, AiModel]:
+    """대화들이 가리키는 모델들. 이름표로 찾는다. 모델이 없는 대화는 들지 않는다."""
+    slugs = {conversation.model_slug for conversation in conversations if conversation.model_slug is not None}
+    return await catalog.models_in(session, slugs)
+
+
+async def change_model(
+    session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID, slug: str, today: date
+) -> AiModel:
+    """
+    대화의 모델을 바꾸고 그 모델을 돌려준다.
+    대화가 없으면 ConversationNotFoundError, 고를 수 없으면 ModelUnavailableError 다.
+
+    바꾸는 순간부터 그 모델의 가격표로 청구한다(다음 말부터). 목록의 차례(최근에 말한 것부터)는 바꾸지 않는다.
+    """
+    conversation, character, _ = await get_conversation(session, viewer, conversation_id)
+    model = require_usable_model(await catalog.get_model(session, slug), Rating(character.rating), today)
+    await repository.set_model(session, conversation.id, model.slug)
+    await session.commit()
+    return model
 
 
 async def read_messages(session: AsyncSession, conversation: Conversation) -> list[Message]:

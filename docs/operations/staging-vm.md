@@ -289,6 +289,13 @@ docker compose exec trpg-server python -m scripts.models enable glm-4-7-flash
 docker compose exec trpg-server python -m scripts.models list
 ```
 
+chat 서버도 같은 파일을 자기 표에 들여온다. 켜는 것은 서버마다 따로다. 성인 등급의 대화에 쓸 모델은 약관을 확인한 뒤 `adult <이름표> --allow` 로 켠다. 명령은 [chat 서버의 README](../../chat-server/README.md#관리-명령) 에 있다.
+
+```bash
+docker compose exec chat-server python -m scripts.models sync
+docker compose exec chat-server python -m scripts.models enable glm-4-7-flash
+```
+
 서버 곁의 모델(집 PC 의 Ollama)은 환경마다 이름이 달라 원본 파일에 두지 않는다. VM 에 그 모델만 적은 파일(`format = 1` 과 `[[models]]` 하나, `provider = "local"`, 값이 0 인 `[[models.costs]]`)을 두고 같은 명령으로 들여온다. 원본 파일을 다시 들여와도 지워지지 않는다.
 
 ```bash

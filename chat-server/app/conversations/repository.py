@@ -9,7 +9,7 @@
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import Select, func, literal, select
+from sqlalchemy import Select, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -41,6 +41,37 @@ async def last_persona_source(session: AsyncSession, owner_id: uuid.UUID) -> uui
         .limit(1)
     )
     return await session.scalar(query)
+
+
+async def last_model(session: AsyncSession, owner_id: uuid.UUID) -> str | None:
+    """
+    이 사람이 가장 최근에 시작한 대화의 모델(이름표). 대화가 없거나 그 대화에 모델이 없었으면 None.
+
+    지운 대화도 센다. "지난번에 고른 것"이다. 페르소나와 같다(last_persona_source).
+    """
+    query = (
+        select(Conversation.model_slug)
+        .where(Conversation.owner_id == owner_id)
+        .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+        .limit(1)
+    )
+    return await session.scalar(query)
+
+
+async def set_model(session: AsyncSession, conversation_id: uuid.UUID, slug: str) -> None:
+    """
+    대화의 모델을 적는다. 수정 시각(updated_at)은 그대로 둔다.
+    목록은 최근에 말한 것부터라 모델을 바꿨다고 앞으로 오지 않는다.
+
+    ORM 의 객체를 고치면 onupdate 가 수정 시각을 바꾸므로 UPDATE 를 바로 쓴다. 칸에 제 값을 적어 onupdate 를 막는다.
+    """
+    statement = (
+        update(Conversation)
+        .where(Conversation.id == conversation_id)
+        .values(model_slug=slug, updated_at=Conversation.updated_at)
+        .execution_options(synchronize_session=False)
+    )
+    await session.execute(statement)
 
 
 async def keep_character(session: AsyncSession, character: ImportedCharacter) -> ImportedCharacter:
