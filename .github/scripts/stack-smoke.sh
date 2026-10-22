@@ -7,6 +7,7 @@
 #     prepare      설정 파일(.env 여덟)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
 #     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, 그림 저장소, Prometheus, Alertmanager, Tempo, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
 #                  Loki 가 준비될 때까지 기다린다.
+#                  이미지를 받고 만드는 것은 저장소가 잠깐 답하지 않으면 쉬었다가 다시 한다(with_retries, 3번까지).
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
 #                  DB 의 백업은 최근 백업 파일이 있으면 healthy 다
@@ -153,6 +154,24 @@ staging_recipients="age1ci age1ci"
 # 서버들(app)과 로그와 메트릭 모으기(observability)를 함께 띄운다
 compose() {
   docker compose --profile app --profile observability "$@"
+}
+
+# 이미지 저장소(Docker Hub 등)가 잠깐 답하지 않는 일(502, 인증의 EOF)로 CI 가 떨어지지 않게 몇 번 더 해 본다.
+# 쓰는 곳은 이미지를 받고 만드는 것과 저장소에 태그를 묻는 것뿐이다. 서버의 시험은 다시 해도 같은 답이라 쓰지 않는다.
+# 쉬는 시간은 REGISTRY_WAIT 초, 두 번째는 그 두 배다(15초, 30초). 바꾸려면 환경 변수로 준다
+REGISTRY_TRIES="${REGISTRY_TRIES:-3}"
+REGISTRY_WAIT="${REGISTRY_WAIT:-15}"
+with_retries() {
+  local attempt=1
+  until "$@"; do
+    if ((attempt >= REGISTRY_TRIES)); then
+      echo "$REGISTRY_TRIES 번 해도 되지 않았다: ${*:1:2}" >&2
+      return 1
+    fi
+    echo "이미지 저장소가 답하지 않았다. $((REGISTRY_WAIT * attempt))초 뒤에 다시 한다($((attempt + 1))/$REGISTRY_TRIES): ${*:1:2}" >&2
+    sleep $((REGISTRY_WAIT * attempt))
+    attempt=$((attempt + 1))
+  done
 }
 
 # staging 의 설정(두 파일을 겹친 것). VM 의 루트 .env 에 적을 값을 이 실행에서만 준다
@@ -331,8 +350,20 @@ wait_loki_ready() {
   return 1
 }
 
+# 띄우기 전에 이미지를 받고 만든다. 저장소가 잠깐 답하지 않으면 다시 한다(with_retries).
+# 받는 것: compose 의 이미지(만드는 것은 빼고), 검사가 따로 띄우는 이미지(PROBE_IMAGE, 경보와 S3 흉내의 파이썬 이미지).
+# 만드는 것: 서버와 프록시의 이미지. 그 안의 FROM(golang, node, alpine …)도 이때 받는다
+pull_images() {
+  compose pull --ignore-buildable --quiet &&
+    docker pull --quiet "$PROBE_IMAGE" >/dev/null &&
+    docker pull --quiet "$ALERT_SINK_IMAGE" >/dev/null &&
+    docker pull --quiet "$STAGING_S3_IMAGE" >/dev/null
+}
+
 up() {
-  compose up -d --build
+  with_retries pull_images
+  with_retries compose build
+  compose up -d
   wait_healthy
   wait_loki_ready
 }
@@ -1509,7 +1540,7 @@ eventually_status_is() {
 staging_images_exist() {
   local image
   while IFS= read -r image; do
-    docker manifest inspect "$image" >/dev/null || { echo "$image 이 없다" >&2; return 1; }
+    with_retries docker manifest inspect "$image" >/dev/null || { echo "$image 이 없다" >&2; return 1; }
   done < <(comm -13 <(compose config --images | sort -u) <(staging_compose config --images | sort -u) | grep -v '^ai-trpg/')
 }
 
@@ -1667,7 +1698,7 @@ offsite_down() {
 
 # 바깥 백업: 암호화해 올리고, 확인 열쇠와 주 열쇠로 풀리고, 다른 열쇠로는 풀리지 않는가
 check_offsite_backup() {
-  report "바깥 백업의 이미지를 만든다(age, aws CLI)" staging_compose build backup-offsite
+  report "바깥 백업의 이미지를 만든다(age, aws CLI)" with_retries staging_compose build backup-offsite
   report "바깥 백업의 열쇠(확인, 주)를 만든다" offsite_keys
   if ! offsite_s3_up; then
     echo "FAIL S3 흉내(moto)가 뜬다"
@@ -1695,6 +1726,7 @@ check_staging() {
     .github/scripts/port_scope.py --public
   check_config "staging 에만 있는 서비스에도 로그의 상한이 있다(logging_scope.py)" staging_compose .github/scripts/logging_scope.py
   report "staging 에만 있는 이미지의 태그가 있다" staging_images_exist
+  report "인증서의 이미지(certbot)를 받는다" with_retries staging_compose pull --quiet certbot
   report "인증서의 남은 날짜 검사의 규칙이 맞다(docker/certbot)" cert_check_rules_hold
   report "받은 인증서를 프록시가 읽는 곳에 옮긴다(deploy-hook.sh)" staging_certificate
   report "옮긴 키를 프록시의 사용자만 읽는다" private_key_private
