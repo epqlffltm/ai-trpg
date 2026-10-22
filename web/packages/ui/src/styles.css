@@ -215,3 +215,27 @@ a {
   overflow: auto;
   padding: 16px;
 }
+
+/* 칩(하나만 고르는 거르기) */
+.ui-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ui-chip {
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 0.92em;
+  cursor: pointer;
+}
+
+.ui-chip[aria-pressed="true"] {
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: var(--ui-accent-text);
+}
