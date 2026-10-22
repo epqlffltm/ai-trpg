@@ -441,6 +441,76 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * Affection
+         * @description 캐릭터의 호감도. 값 하나(0~100)와 단계들이다. display 는 사람에게 보이는 방식이다
+         *     (number: 숫자와 게이지, stage: 단계 이름과 게이지. 숫자는 chat 이 내려보내지 않는다).
+         */
+        Affection: {
+            /** @default number */
+            display: components["schemas"]["AffectionDisplay"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AffectionRule"][];
+            /** Stages */
+            stages: components["schemas"]["Stage"][];
+            /**
+             * Start
+             * @default 0
+             */
+            start: number;
+        };
+        /**
+         * AffectionDisplay
+         * @description 호감도를 사람에게 보이는 방식. 숫자와 게이지, 또는 단계 이름과 게이지(숫자는 숨긴다).
+         * @enum {string}
+         */
+        AffectionDisplay: "number" | "stage";
+        /**
+         * AffectionDocument
+         * @description 캐릭터의 호감도.
+         */
+        AffectionDocument: {
+            display: components["schemas"]["AffectionDisplay"];
+            /** Rules */
+            rules: components["schemas"]["AffectionRuleDocument"][];
+            /** Stages */
+            stages: components["schemas"]["StageDocument"][];
+            /** Start */
+            start: number;
+        };
+        /**
+         * AffectionRule
+         * @description 오르내리는 규칙 하나. on 의 행동을 하면 change 만큼 바꾼다(0~100 안으로 자른다).
+         *     once 면 그 가지에서 처음 한 번만 바꾼다(처음 하는 일). id 는 캐릭터 안에서 고유하고, chat 이 "이미 했다"를 적는다.
+         */
+        AffectionRule: {
+            /** Change */
+            change: number;
+            /** Id */
+            id: string;
+            on: components["schemas"]["Trigger"];
+            /**
+             * Once
+             * @default false
+             */
+            once: boolean;
+        };
+        /**
+         * AffectionRuleDocument
+         * @description 오르내리는 규칙 하나. once 면 그 가지에서 처음 한 번만.
+         */
+        AffectionRuleDocument: {
+            /** Change */
+            change: number;
+            /** Id */
+            id: string;
+            on: components["schemas"]["TriggerDocument"];
+            /** Once */
+            once: boolean;
+        };
+        /**
          * CharacterCopy
          * @description 다른 서버(chat, story)에 내주는 판. 대화를 시작할 때 가져가 고정한다.
          *
@@ -468,6 +538,7 @@ export interface components {
          * @description 캐릭터를 만들 때 받는 값. 이름만 필수다. 처음에는 비공개다.
          */
         CharacterCreate: {
+            affection?: components["schemas"]["Affection"] | null;
             /**
              * Age
              * @default
@@ -537,6 +608,7 @@ export interface components {
          * @description 캐릭터의 초안 하나. 만든 사람만 본다. latest_version 은 마지막으로 게시한 판의 번호다(없으면 null).
          */
         CharacterDetail: {
+            affection: components["schemas"]["Affection"] | null;
             /** Age */
             age: string;
             /**
@@ -593,6 +665,7 @@ export interface components {
          *     지도와 물건의 칸은 형식 2 에서 더했다. 형식 1 의 판을 읽을 수 있게 비어 있는 것이 기본이다.
          */
         CharacterDocument: {
+            affection?: components["schemas"]["AffectionDocument"] | null;
             /** Age */
             age: string;
             /** Format */
@@ -676,6 +749,7 @@ export interface components {
          *     null 은 그림(image_id)만 받는다. 공개 범위(visibility)도 여기서 바꾼다(공개는 운영자만, 1~2단계).
          */
         CharacterUpdate: {
+            affection?: components["schemas"]["Affection"] | null;
             /** Age */
             age?: string | null;
             /** Gender */
@@ -1146,6 +1220,26 @@ export interface components {
          */
         RemovedKind: "tag" | "attribute" | "style" | "link" | "image";
         /**
+         * Stage
+         * @description 호감도의 단계 하나. at 이상이면 이 단계다(다음 단계의 at 전까지).
+         */
+        Stage: {
+            /** At */
+            at: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * StageDocument
+         * @description 호감도의 단계 하나. at 이상이면 이 단계다.
+         */
+        StageDocument: {
+            /** At */
+            at: number;
+            /** Name */
+            name: string;
+        };
+        /**
          * Start
          * @description 시작 상황 하나. 대화를 열 때 사용자가 고른다. 제목은 목록에, 상황은 모델에 간다.
          */
@@ -1188,6 +1282,31 @@ export interface components {
             /** Item */
             item: string;
         };
+        /**
+         * Trigger
+         * @description 호감도를 바꾸는 사용자의 행동. target 은 그 물건이나 장소의 id 다.
+         */
+        Trigger: {
+            kind: components["schemas"]["TriggerKind"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * TriggerDocument
+         * @description 호감도를 바꾸는 행동(종류, 대상).
+         */
+        TriggerDocument: {
+            kind: components["schemas"]["TriggerKind"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * TriggerKind
+         * @description 호감도를 바꾸는 사용자의 행동. TRPG 의 퀘스트 조건과 같은 (종류, 대상) 모양이다.
+         *     물건을 건넸다(give_item), 장소에 갔다(reach_place), 물건을 썼다(use_item).
+         * @enum {string}
+         */
+        TriggerKind: "give_item" | "reach_place" | "use_item";
         /** ValidationError */
         ValidationError: {
             /** Context */
