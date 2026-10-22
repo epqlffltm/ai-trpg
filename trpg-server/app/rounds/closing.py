@@ -272,13 +272,16 @@ async def gather_context(request: NarrationRequest, finders: Finders, budget: fl
     넷을 합쳐 budget 초까지 쓴다.
 
     이력은 로어북이 고른 인물의 것이고, 참고 자료는 로어북이 쓰고 남은 자리에 들어가서 로어북을 먼저 고른다.
+    나머지 셋은 서로 기대지 않아 함께 돈다. 같은 찾는 글의 벡터는 검색들이 함께 쓴다(app/lore/query_embedder.py).
     하나가 실패해도 나머지는 고른다.
     """
     deadline = asyncio.get_running_loop().time() + budget
     request = replace(request, lore=await find_or_nothing(lambda: finders.lore.find(request), deadline, '로어북을'))
-    memories = await find_or_nothing(lambda: finders.memories.find(request), deadline, '지난 일을')
-    histories = await find_or_nothing(lambda: finders.histories.find(request), deadline, '인물의 이력을')
-    references = await find_or_nothing(lambda: finders.references.find(request), deadline, '참고 자료를')
+    memories, histories, references = await asyncio.gather(
+        find_or_nothing(lambda: finders.memories.find(request), deadline, '지난 일을'),
+        find_or_nothing(lambda: finders.histories.find(request), deadline, '인물의 이력을'),
+        find_or_nothing(lambda: finders.references.find(request), deadline, '참고 자료를'),
+    )
     return replace(request, memories=memories, histories=histories, references=references)
 
 
