@@ -256,7 +256,7 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 | 관측 | `docs/observability.md` 의 서비스 이름 표와 작업, operation, 오류 코드 표 |
 | 결제 (결제를 부르는 서버일 때) | `billing-server` 의 설정(`<이름>_SERVER_SECRET` 과 다른 비밀과 같은 값인지의 검사), 그 비밀로 열리는 주소, 비밀마다 쓸 수 있는 가격표 이름의 머리, 홀드에 부른 서버를 적는 칸(마이그레이션). 비밀이 늘면 `.github/scripts/secret_scope.py` 의 표와 `docker-compose.yml` 에서 비밀을 비우는 곳도 고친다 |
 | 공용 코드 (FastAPI 서버일 때) | `pyproject.toml` 의 경로 의존(`shared/server-core` 등), compose 의 `build.additional_contexts`, Dockerfile 의 `COPY --from=shared`. CI 는 경로 의존을 읽어 저절로 고른다([공용 코드 규칙](shared-code.md#버전과-ci)) |
-| 문서 | 루트 `README.md` 의 상태 표, `CONTRIBUTING.md` 의 구성 표, 이 문서 |
+| 문서 | 루트 `README.md` 의 CI 배지, 상태 표, 문서 표(`.github/scripts/readme_scope.py` 가 서버 폴더마다 본다), `CONTRIBUTING.md` 의 구성 표, 이 문서 |
 
 ## 순서
 
