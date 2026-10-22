@@ -80,6 +80,8 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `CHAT_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
 | `CHAT_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 최근 말부터 채운다. 가격표의 입력 단계(`i0`)가 약속하는 양이다 |
 | `CHAT_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
+| `SUMMARY_MODEL` | 비어 있음(요약하지 않음) | [굴리는 요약](#굴리는-요약)의 모델(모델 목록의 이름표). 싼 모델을 쓴다. 사용자에게 팔지 않는(꺼 둔) 모델도 된다. 원가는 서비스가 낸다 |
+| `SUMMARY_AFTER_MESSAGES` | `8` | 창 밖으로 밀려난 말이 마지막 요약 뒤로 이만큼(2~200) 쌓이면 요약한다 |
 | `CHAT_SUGGESTIONS` | `true` | [다음 답 추천](#다음-답-추천). 답 끝에 선택지 셋을 같은 호출에서 받는다. 출력이 조금 는다. 끄면 카드에 지시를 넣지 않는다 |
 
 `tools/fill_env.py` 가 `ASSET_SECRET` 과 `BILLING_SECRET` 을 짝(asset 서버, 결제 서버의 `CHAT_SERVER_SECRET`)과 같은 값으로 채운다.
@@ -109,6 +111,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content, edit_of?}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`). `edit_of` 는 [내 말 고치기](#고치기) | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/actions` | [행동](#장소와-소지품). 이동 `{kind: "move", place}`, 쓰기 `{kind: "use", item}`, 건네기 `{kind: "give", item, words?}`. 바로 SSE 로 반응을 받는다. 할 수 없으면 422(`no_map`, `place_not_found`, `already_there`, `not_connected`, `item_not_found`, `not_held`) | access 토큰 |
 | GET, POST | `/api/v1/chat/conversations/{id}/notes` | [기억 메모](#기억-메모)들(먼저 쓴 것부터), 더하기 `{text}`(201). 가득 차면 409 `notes_full` | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#굴리는-요약)(읽기만, `{text, covered_up_to, created_at}`). 아직 없으면 `null` | access 토큰 |
 | PATCH, DELETE | `/api/v1/chat/conversations/{id}/notes/{note_id}` | 메모 고치기 `{text}`, 지우기(204). 없으면 404 `note_not_found` | access 토큰 |
 | PATCH | `/api/v1/chat/messages/{id}` | [상대의 말 고치기](#고치기). `{content}`. 고친 말을 돌려준다. 사람의 말이면 422 `not_editable` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/regenerate` | [다시 생성](#다시-생성-멈추기-대안). 그 말에 다시 답한다. SSE 의 모양은 말 보내기와 같다. 인사말은 422 `not_regenerable`, 없는 말은 404 `message_not_found` | access 토큰 |
@@ -321,8 +324,23 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - 모델의 카드에 "[기억]" 으로 늘 간다(시작 상황 뒤, 장소와 소지품 앞). 틀린 기억을 사람이 바로잡는 길이다.
 - 하나에 300자, 대화 하나에 스물까지다. 늘 모델에 가는 글이라 입력의 양을 지킨다. 더할 때 대화의 행을 잠그고 세어 동시에 더해도 넘지 않는다.
 - 답을 쓰는 중에도 고칠 수 있다. 고친 것은 다음 말부터 간다. 호출이 아니라 청구하지 않는다.
-- 출처(`source`)는 사용자가 쓴 것(`user`)과 요약이 제안한 것(`summary`)이다. 요약의 제안은 굴리는 요약(다음 PR)에서 생기고, 받아들이기 전에는 모델에 가지 않는다.
+- 출처(`source`)는 사용자가 쓴 것(`user`)과 요약이 제안한 것(`summary`)이다. 요약의 제안은 아직 만들지 않는다. 생기더라도 받아들이기 전에는 모델에 가지 않는다.
 - 가지와 상관없다(대화 하나에 하나의 목록). 대화를 지우면(행) 함께 지워진다.
+
+### 굴리는 요약
+
+최근 대화의 창(`CHAT_CONTEXT_CHARS`)에 들지 못하고 밀려난 앞부분을 싼 모델로 요약한다(`app/memory/summaries.py`, `summarizer.py`, 설계의 "기억"의 둘째 층).
+
+- **언제.** 말 한 번이 끝나면(멈추지 않았으면) 그 대화를 한 번 본다. 밀려난 말이 마지막 요약 뒤로 `SUMMARY_AFTER_MESSAGES` 개 쌓였으면 요약한다.
+  앞의 요약과 그 뒤의 말을 합쳐 새 요약을 쓴다(굴린다). 응답과 따로 돌아 사람은 기다리지 않는다.
+- **어디에 붙나.** 요약은 밀려난 마지막 말에 붙는다(`summaries.message_id`, 첫 말부터 그 말까지의 요약). 대화는 트리라서 첫 말부터 어느 말까지의 길은 하나뿐이다.
+  그래서 앞 가지로 돌아가도 그 가지에 있는 말의 요약을 쓰면 맞다. 버리고 다시 만들 일이 없다. 원본 말은 늘 남는다.
+- **모델에 보내는 것.** 밀려난 말 가운데 가장 뒤의 요약이 카드에 "[앞의 줄거리]" 로 간다(시작 상황 뒤, 기억 메모 앞). 창 안의 말에 붙은 요약은 보내지 않는다(겹친다).
+  그 요약 뒤에서 창 앞까지의 말은 다음 요약이 생길 때까지 빠진다.
+- **원가.** 서비스가 낸다. 청구하지 않고 요약의 행에 모델, 토큰, 원가를 적는다. `SUMMARY_MODEL` 을 비우면 요약하지 않는다(창만 쓴다).
+- **실패.** 로그(`chat.summary`)만 남기고 대화는 이어진다. 다음 말 한 번이 끝나면 다시 본다. 모델이 빈 글을 주면 적지 않는다.
+- 한 대화에 한 번에 하나만 돈다(이 서버 안). 서버가 여럿이라 같은 말의 요약을 둘이 써도 먼저 쓴 것만 남는다. 서버가 꺼질 때 도는 요약을 멈춘다.
+- 사람에게는 `GET /conversations/{id}/summary` 로 읽기만 보인다(화면 명세 C5).
 
 ### 고치기
 
@@ -381,6 +399,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 | `http.request` | 요청이 끝났다 |
 | `auth.revocations_fetch` | 끊긴 세션의 목록을 받지 못했다(`warning`, `auth.revocations_unavailable`) |
 | `charge.settle` | 청구 정리가 한 바퀴를 돌았다(맡긴 것이 있으면 `info`, 없으면 `debug`). 바퀴마다 `job_id`. 게임 서버와 같은 이름이다 |
+| `chat.summary` | [굴리는 요약](#굴리는-요약)을 쓰지 못했다(`error`, `conversation_id`). 대화는 이어진다 |
 
 ## 추적
 
