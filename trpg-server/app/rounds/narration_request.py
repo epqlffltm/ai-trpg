@@ -157,12 +157,15 @@ def to_travel(declaration: Declaration | None) -> TravelNote | None:
     move = move_of(declaration)
     if move is None:
         return None
+    carry = move.get('carry') or {}
     return TravelNote(
         from_place=place_name(move['from']),
         to_place=move['to']['name'],
         moved=move['moved'],
         reason=move['reason'],
         travel_minutes=move.get('travel_minutes'),
+        carried=carry.get('character_name'),
+        carry_reason=carry.get('reason'),
     )
 
 

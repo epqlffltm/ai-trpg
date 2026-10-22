@@ -138,6 +138,7 @@ class EventType(enum.StrEnum):
     # 캐릭터가 맵의 다른 장소로 옮겨 갔다. 누가, 어디에서, 어디로.
     # 방장이 옮겼으면(app/tables/place_changes.py) 행한 사람이 방장이다. 선언 행동으로 한 칸 갔으면
     # (app/rounds/map_actions.py) 행한 사람이 없고, 그 행동의 이벤트에 이어지며 라운드의 번호가 있다.
+    # 쓰러진 동료를 업고 갔으면 업힌 사람의 것이 업은 사람의 것에 이어지고 업은 사람(carried_by)이 적힌다(#367).
     # 아는 장소로만 가므로 숨긴 장소는 이 이벤트로 새지 않는다
     CHARACTER_MOVED = 'character_moved'
     # 캐릭터가 서 있는 곳에서 숨긴 길을 찾았다(app/rounds/map_actions.py). 찾은 길만 적는다. 못 찾았으면 빈 목록이다.

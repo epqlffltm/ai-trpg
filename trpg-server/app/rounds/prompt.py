@@ -136,7 +136,9 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-44: [참고 자료]의 줄이 한국어로 옮긴 이름과 글이다(#482 4단계). "영어"와 "한국어로 옮겨 쓴다"를 뺀다
 #   narration-45: 한 일의 줄에 기다리기의 결과가 붙는다((기다리기: 3일), (기다리기: 3일. 모두가 기다리지 않아
 #                 시간이 건너뛰지 않았다)). 건너뛴 시간은 [시각]의 흐르는 시간에 있다(#367)
-PROMPT_VERSION = 'narration-45'
+#   narration-46: 가기의 결과 줄에 업고 간 쓰러진 동료가 붙는다((간 곳: 성문 → 숲, 약사을(를) 업고),
+#                 업지 못했으면 그 까닭). 업힌 사람은 스스로 걷지 않았다(#367)
+PROMPT_VERSION = 'narration-46'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3

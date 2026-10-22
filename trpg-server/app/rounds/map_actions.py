@@ -6,6 +6,9 @@
   - 가기: 지금 서 있는 장소에서 아는 길로 이어진 장소로 한 칸 간다. 판정이 없다. 한 라운드에 한 칸이다.
     받을 때 이어진 곳인지 보고, 차례가 오면 다시 본다. 그사이 방장이 캐릭터를 옮겼을 수 있다.
     그때는 가지 않고 왜 못 갔는지(reason)를 적는다.
+  - 업고 가기(carry, #367): 같은 장소에 쓰러져 있는(죽지 않은) 동료 한 명을 함께 데려간다. 쓰러진 사람은 선언을 못 하니
+    일행이 가면 혼자 남는다. 받을 때 보고, 차례가 오면 다시 본다. 그사이 일어났거나 죽었거나 다른 사람이 먼저 업고
+    갔으면 혼자 간다. 업을 사람이 가지 못했으면 업힌 사람도 그대로다. 죽은 캐릭터는 쓰러진 곳에 남는다.
   - 찾기: 지금 서 있는 장소에 닿은, 아직 찾지 않은 숨긴 길마다 판에 적힌 판정(능력과 난이도)을 굴린다.
     그 장소의 숨긴 물건도 함께 찾는다(app/rounds/place_item_actions.py 의 search_items, app/rounds/judging.py).
     부상의 영향은 판정하는 행동과 같다. 성공한 길은 찾은 것으로 적는다(테이블의 모두가 안다).
@@ -25,8 +28,9 @@ from app.engine.check import find_difficulty, resolve_hindered
 from app.rounds import injuries as round_injuries
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionTargetError, Conflict, RoundConflictError
-from app.tables import places
+from app.tables import places, sheets
 from app.tables.models import GameTable, TableMember
+from app.tables.state import find_member
 
 
 class Reason:
@@ -34,6 +38,19 @@ class Reason:
 
     # 차례가 왔을 때 서 있는 곳에서 그 장소로 가는 아는 길이 없었다
     NOT_ADJACENT = 'not_adjacent'
+
+
+class CarryReason:
+    """업고 가지 못한 까닭. 결과의 carry.reason 에 적는다."""
+
+    # 업을 사람이 가지 못했다
+    NOT_MOVED = 'not_moved'
+    # 차례가 오기 전에 일어났다(회복, 치료). 스스로 갈 수 있다
+    STANDING = 'standing'
+    # 차례가 오기 전에 죽었다. 죽은 캐릭터는 쓰러진 곳에 남는다
+    DEAD = 'dead'
+    # 같은 곳에 없다. 앞 차례에 누가 먼저 업고 갔거나 그 사람이 테이블을 떠났다
+    ELSEWHERE = 'elsewhere'
 
 
 def standing_place(member: TableMember) -> uuid.UUID:
@@ -56,7 +73,20 @@ def accept_move(table: GameTable, member: TableMember, action: MoveAction) -> di
     known = places.known_map(snapshot, places.knowledge(table))
     if action.place not in places.exits(known, here):
         raise ActionTargetError('place')
-    return action.model_dump(mode='json')
+    if action.carry is not None and not can_carry(find_member(table, action.carry), here):
+        raise ActionTargetError('carry')
+    # 업지 않으면 carry 를 적지 않는다. 업고 가기가 생기기 전과 같은 모양이다
+    return action.model_dump(mode='json', exclude_none=True)
+
+
+def can_carry(carried: TableMember | None, here: uuid.UUID) -> bool:
+    """
+    그 사람을 업을 수 있는가. 앉아 있고, 쓰러져 있지만 죽지 않았고, 같은 장소에 있다.
+
+    앉지 않은 사람, 서 있는 사람, 죽은 사람, 다른 곳의 사람을 가르지 않는다(모두 422 carry).
+    자기 자신은 따로 보지 않는다. 선언하는 사람은 서 있다(쓰러진 사람은 선언을 못 한다).
+    """
+    return carried is not None and sheets.is_downed_alive(carried) and carried.sheet.place_id == here
 
 
 def accept_search(member: TableMember, action: SearchAction) -> dict:
@@ -82,7 +112,39 @@ def judge_move(judging: Judging, member: TableMember, action: MoveAction) -> dic
         places.stand(judging.table, member.sheet, action.place)
     move = places.describe_move(snapshot, member, here, action.place)
     reason = None if moved else Reason.NOT_ADJACENT
-    return {'move': {**move, 'moved': moved, 'reason': reason, 'travel_minutes': travel}}
+    outcome = {**move, 'moved': moved, 'reason': reason, 'travel_minutes': travel}
+    if action.carry is not None:
+        carried = find_member(judging.table, action.carry)
+        outcome['carry'] = carry_along(judging, carried, action.carry, here, action.place if moved else None)
+    return {'move': outcome}
+
+
+def carry_problem(carried: TableMember | None, here: uuid.UUID, to: uuid.UUID | None) -> str | None:
+    """차례가 왔을 때 업고 가지 못하는 까닭. 업을 수 있으면 None. 업을 사람이 못 갔으면 to 가 None 이다."""
+    if to is None:
+        return CarryReason.NOT_MOVED
+    if carried is None or carried.sheet is None or carried.sheet.place_id != here:
+        return CarryReason.ELSEWHERE
+    if sheets.is_dead(carried):
+        return CarryReason.DEAD
+    if not sheets.is_downed_alive(carried):
+        return CarryReason.STANDING
+    return None
+
+
+def carry_along(
+    judging: Judging, carried: TableMember | None, user_id: uuid.UUID, here: uuid.UUID, to: uuid.UUID | None
+) -> dict:
+    """
+    쓰러진 동료를 함께 데려간다. 결과의 carry 에 넣을 문서를 돌려준다.
+
+    to 는 업은 사람이 간 곳이다. 가지 못했으면 None 이다. 업힌 사람도 그곳이 서 본 곳이 된다.
+    """
+    reason = carry_problem(carried, here, to)
+    if reason is None:
+        places.stand(judging.table, carried.sheet, to)
+    name = carried.character_name if carried is not None else None
+    return {'user_id': str(user_id), 'character_name': name, 'carried': reason is None, 'reason': reason}
 
 
 def travel_time(judging: Judging, route: RouteSnapshot) -> int | None:

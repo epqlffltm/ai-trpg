@@ -84,6 +84,7 @@ class ActionTargetError(Exception):
 
     field 는 행동의 어느 칸인지다. target 이면 이 테이블에 앉은 사람이 아니고, npc 면 이번 장면에 나온 인물이 아니다.
     place 면 지금 장소에서 아는 길로 이어진 장소가 아니다. item 이면 지금 장소에 보이게 놓인 물건이 아니다(줍기).
+    carry 면 같은 장소에 쓰러져 있는(죽지 않은) 다른 사람이 아니다(업고 가기).
     """
 
     def __init__(self, field: str) -> None:
