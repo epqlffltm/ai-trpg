@@ -3,6 +3,8 @@
 
 export { Button } from './Button';
 export type { ButtonProps, ButtonVariant } from './Button';
+export { ChipGroup } from './ChipGroup';
+export type { Chip, ChipGroupProps } from './ChipGroup';
 export { Checkbox } from './Checkbox';
 export type { CheckboxProps } from './Checkbox';
 export { Dialog } from './Dialog';

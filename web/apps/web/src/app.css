@@ -139,6 +139,11 @@
   font-size: 0.95em;
 }
 
+.item-card__byline {
+  color: var(--ui-text-muted);
+  font-size: 0.85em;
+}
+
 .item-card__meta {
   display: flex;
   flex-wrap: wrap;
@@ -264,4 +269,173 @@
 .legal-document h2 {
   font-size: 1.1rem;
   margin-top: 1.6em;
+}
+
+/* 짧은 안내 한 줄 */
+.hint {
+  color: var(--ui-text-muted);
+  font-size: 0.9em;
+}
+
+/* 글을 쓴 그대로(줄바꿈을 살린다). 소개글, 스타팅 */
+.prose {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 링크를 버튼 모양으로 */
+a.ui-button {
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* 시나리오 탐색(B1) */
+.browse-filters {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  margin-bottom: var(--ui-gap);
+}
+
+.browse-filters__tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.result-count {
+  color: var(--ui-text-muted);
+  margin: var(--ui-gap) 0 8px;
+}
+
+.empty-state {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: var(--ui-gap) 0;
+  color: var(--ui-text-muted);
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--ui-gap);
+}
+
+/* 시나리오 소개(B2). 넓으면 소개글과 요약을 나란히, 좁으면 위아래로 */
+.scenario__tagline {
+  font-size: 1.1em;
+  margin: -8px 0 4px;
+}
+
+.scenario__byline {
+  color: var(--ui-text-muted);
+  margin: 0;
+}
+
+.scenario__body {
+  display: grid;
+  gap: calc(var(--ui-gap) * 2);
+  margin-top: var(--ui-gap);
+}
+
+@media (min-width: 800px) {
+  .scenario__body {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: start;
+  }
+
+  .scenario__side {
+    position: sticky;
+    top: var(--ui-gap);
+  }
+}
+
+.scenario__main section + section,
+.scenario__main .tag-links + section {
+  margin-top: calc(var(--ui-gap) * 1.5);
+}
+
+.scenario__main h2 {
+  font-size: 1.1rem;
+  margin: 0 0 8px;
+}
+
+.scenario__side {
+  display: grid;
+  gap: var(--ui-gap);
+  padding: var(--ui-gap);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.scenario__actions {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-links {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: var(--ui-gap) 0 0;
+  padding: 0;
+}
+
+.openings {
+  display: grid;
+  gap: 12px;
+  padding-left: 1.4em;
+}
+
+.pregens {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 0;
+}
+
+.pregen {
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.pregen__name {
+  font-weight: 600;
+  margin: 0;
+}
+
+.pregen__description {
+  color: var(--ui-text-muted);
+  font-size: 0.92em;
+  margin: 4px 0 8px;
+}
+
+.pregen__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 0.9em;
+}
+
+.pregen__stat {
+  display: flex;
+  gap: 4px;
+}
+
+.pregen__stat dt {
+  color: var(--ui-text-muted);
+}
+
+.pregen__stat dd {
+  margin: 0;
+  font-weight: 600;
 }
