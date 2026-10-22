@@ -439,3 +439,149 @@ a.ui-button {
   margin: 0;
   font-weight: 600;
 }
+
+/* 제목 줄(제목과 오른쪽의 할 일) */
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px var(--ui-gap);
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ui-gap);
+}
+
+.section-head h2 {
+  font-size: 1.15rem;
+  margin: 0 0 12px;
+}
+
+.plain-list {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+/* 로비(B3). 넓으면 오른쪽에 내 테이블 */
+.lobby {
+  display: grid;
+  gap: calc(var(--ui-gap) * 2);
+}
+
+@media (min-width: 900px) {
+  .lobby {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    align-items: start;
+  }
+}
+
+.filter-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.invite-join__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.invite-join__row .ui-field {
+  flex: 1 1 220px;
+}
+
+.invite-join__row > .ui-button {
+  margin-bottom: var(--ui-gap);
+}
+
+.lobby-list {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.lobby-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px var(--ui-gap);
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.lobby-card__body {
+  flex: 1 1 260px;
+}
+
+.lobby-card__title {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.lobby-card__seats {
+  margin-left: 8px;
+  color: var(--ui-text-muted);
+  font-weight: 400;
+}
+
+.lobby-card__facts {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.lobby-card__facts li {
+  font-size: 0.82em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+}
+
+/* 테이블 만들기(B4) */
+.choice-list {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 12px 14px 4px;
+  margin: 0 0 var(--ui-gap);
+}
+
+.choice-list legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.advanced {
+  margin: 0 0 var(--ui-gap);
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.advanced > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.advanced[open] > summary {
+  margin-bottom: var(--ui-gap);
+}

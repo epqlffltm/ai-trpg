@@ -111,6 +111,12 @@ a {
   border-color: var(--ui-danger);
 }
 
+.ui-field__hint {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 0.9em;
+}
+
 .ui-field__error {
   margin: 0;
   color: var(--ui-danger);
