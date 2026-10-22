@@ -662,7 +662,9 @@ a.ui-button {
 }
 
 .start {
-  margin-top: var(--ui-gap);
+  margin-top: calc(var(--ui-gap) * 1.5);
+  padding-top: var(--ui-gap);
+  border-top: 1px solid var(--ui-border);
 }
 
 .chat__messages {
@@ -705,4 +707,64 @@ a.ui-button {
 
 .chat__form > .ui-button {
   justify-self: end;
+}
+
+/* 캐릭터 정하기(B5). 대기실 안의 "내 캐릭터" */
+.character-panel {
+  margin-top: var(--ui-gap);
+}
+
+.character-summary {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.character-form {
+  display: grid;
+  gap: 4px;
+}
+
+.character-form__description {
+  resize: vertical;
+}
+
+.character-numbers {
+  margin-bottom: var(--ui-gap);
+}
+
+.pregen-choice {
+  display: grid;
+  gap: 4px;
+}
+
+/* 능력치의 칸들. 넓으면 여러 줄로, 좁으면 둘씩 */
+.ability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0 12px;
+}
+
+.points {
+  margin: 0 0 8px;
+}
+
+.rolled-scores {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 8px 0;
+  padding: 0;
+}
+
+.roll {
+  margin-bottom: 8px;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
