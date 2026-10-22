@@ -246,7 +246,7 @@ async def test_the_map_is_frozen_into_the_version(client: AsyncClient, me: dict[
 
 
 async def test_a_start_alone_is_a_map(client: AsyncClient, me: dict[str, str], lore: dict):
-    # 길 없이 장소 하나에 서 있는 것도 맵이다. 방장이 옮기거나 나중에 길을 더한다
+    # 길 없이 장소 하나에 서 있는 것도 맵이다. 판의 사건이 옮기거나 나중에 길을 더한다
     scenario = await scenario_with(client, me, lore, start_place=lore['square']['id'])
 
     snapshot = await published(client, me, scenario)

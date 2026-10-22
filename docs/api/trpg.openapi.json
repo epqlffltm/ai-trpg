@@ -2146,6 +2146,7 @@
           "quest_changed",
           "clock_step_changed",
           "character_moved",
+          "happening_occurred",
           "place_searched",
           "character_rested",
           "character_revived",
@@ -2406,6 +2407,159 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HappeningEffectKind": {
+        "description": "사건이 일어났을 때 하는 일의 종류(#367). 효과는 목록이라 종류가 늘어도 판의 모양은 그대로다.",
+        "enum": [
+          "move"
+        ],
+        "title": "HappeningEffectKind",
+        "type": "string"
+      },
+      "HappeningEffectSnapshot": {
+        "description": "사건의 효과 하나. 지금은 옮기기(move) 하나다. 두 장소는 판의 맵의 장소 항목이다.\n\nfrom_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.",
+        "properties": {
+          "from_place": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Place"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/HappeningEffectKind"
+          },
+          "to_place": {
+            "format": "uuid",
+            "title": "To Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "to_place"
+        ],
+        "title": "HappeningEffectSnapshot",
+        "type": "object"
+      },
+      "HappeningRule-Input": {
+        "additionalProperties": false,
+        "description": "사건 규칙 하나(#367). 조건(when)이 채워지면 한 번 일어나 효과(effects)를 낸다. 붙인 로어북의 사건 항목 하나다.\n\n조건의 모양과 종류는 퀘스트의 것과 같다(QuestCondition). 하나 이상 적는다.\nmatch 는 모두(all)인지 하나라도(any)인지다.\n가져가기(consume)는 쓰지 않는다. 사건은 물건을 받지 않는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)과\n물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).\n라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다\n(app/rounds/happenings.py).\n가리키는 사건과 장소가 붙인 로어북에 있는지는 게시할 때 본다.",
+        "properties": {
+          "effects": {
+            "items": {
+              "$ref": "#/components/schemas/MoveEffect-Input"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Effects",
+            "type": "array"
+          },
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "match": {
+            "$ref": "#/components/schemas/QuestMatch",
+            "default": "all"
+          },
+          "when": {
+            "items": {
+              "$ref": "#/components/schemas/QuestCondition-Input"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "When",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entry_id",
+          "when",
+          "effects"
+        ],
+        "title": "HappeningRule",
+        "type": "object"
+      },
+      "HappeningRule-Output": {
+        "additionalProperties": false,
+        "description": "사건 규칙 하나(#367). 조건(when)이 채워지면 한 번 일어나 효과(effects)를 낸다. 붙인 로어북의 사건 항목 하나다.\n\n조건의 모양과 종류는 퀘스트의 것과 같다(QuestCondition). 하나 이상 적는다.\nmatch 는 모두(all)인지 하나라도(any)인지다.\n가져가기(consume)는 쓰지 않는다. 사건은 물건을 받지 않는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)과\n물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).\n라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다\n(app/rounds/happenings.py).\n가리키는 사건과 장소가 붙인 로어북에 있는지는 게시할 때 본다.",
+        "properties": {
+          "effects": {
+            "items": {
+              "$ref": "#/components/schemas/MoveEffect-Output"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Effects",
+            "type": "array"
+          },
+          "entry_id": {
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "match": {
+            "$ref": "#/components/schemas/QuestMatch",
+            "default": "all"
+          },
+          "when": {
+            "items": {
+              "$ref": "#/components/schemas/QuestCondition-Output"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "When",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entry_id",
+          "when",
+          "effects"
+        ],
+        "title": "HappeningRule",
+        "type": "object"
+      },
+      "HappeningSnapshot": {
+        "description": "사건 규칙 하나(#367). 판 안의 로어북 사건 항목 하나(entry_id)다. 조건(when)이 채워지면 한 번 일어나 효과를 낸다.\n\n조건의 모양은 퀘스트의 것과 같다. match 는 그것을 모두 채워야 하는지 하나라도 되는지다.",
+        "properties": {
+          "effects": {
+            "items": {
+              "$ref": "#/components/schemas/HappeningEffectSnapshot"
+            },
+            "title": "Effects",
+            "type": "array"
+          },
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "match": {
+            "$ref": "#/components/schemas/QuestMatch",
+            "default": "all"
+          },
+          "when": {
+            "items": {
+              "$ref": "#/components/schemas/QuestConditionSnapshot"
+            },
+            "title": "When",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entry_id",
+          "when",
+          "effects"
+        ],
+        "title": "HappeningSnapshot",
         "type": "object"
       },
       "Healing": {
@@ -4676,6 +4830,79 @@
         "title": "MoveAction",
         "type": "object"
       },
+      "MoveEffect-Input": {
+        "additionalProperties": false,
+        "description": "사건의 효과 하나: 캐릭터들을 맵의 한 장소(to_place)로 옮긴다(#367).\n\nfrom_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 옮긴다.\n쓰러진 캐릭터도 옮겨진다(끌려간다). 두 장소가 맵의 장소인지는 게시할 때 본다. 길로 이어져 있지 않아도 된다.",
+        "properties": {
+          "from_place": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Place"
+          },
+          "kind": {
+            "const": "move",
+            "title": "Kind",
+            "type": "string"
+          },
+          "to_place": {
+            "format": "uuid",
+            "title": "To Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "to_place"
+        ],
+        "title": "MoveEffect",
+        "type": "object"
+      },
+      "MoveEffect-Output": {
+        "additionalProperties": false,
+        "description": "사건의 효과 하나: 캐릭터들을 맵의 한 장소(to_place)로 옮긴다(#367).\n\nfrom_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 옮긴다.\n쓰러진 캐릭터도 옮겨진다(끌려간다). 두 장소가 맵의 장소인지는 게시할 때 본다. 길로 이어져 있지 않아도 된다.",
+        "properties": {
+          "from_place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Place"
+          },
+          "kind": {
+            "const": "move",
+            "title": "Kind",
+            "type": "string"
+          },
+          "to_place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Place"
+          }
+        },
+        "required": [
+          "kind",
+          "to_place"
+        ],
+        "title": "MoveEffect",
+        "type": "object"
+      },
       "MoveOut": {
         "description": "한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 판정이 없다.",
         "properties": {
@@ -5787,22 +6014,6 @@
           "name"
         ],
         "title": "PersonaWrite",
-        "type": "object"
-      },
-      "PlaceChange": {
-        "additionalProperties": false,
-        "description": "방장이 캐릭터를 옮길 때 받는 값. 테이블이 아는 장소(TableDetail.map.places)의 ID 다.",
-        "properties": {
-          "place_id": {
-            "format": "uuid",
-            "title": "Place Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "place_id"
-        ],
-        "title": "PlaceChange",
         "type": "object"
       },
       "PlaceItem-Input": {
@@ -8440,6 +8651,15 @@
             "title": "Encounters",
             "type": "array"
           },
+          "happenings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HappeningRule-Input"
+            },
+            "maxItems": 50,
+            "title": "Happenings",
+            "type": "array"
+          },
           "items": {
             "default": [],
             "items": {
@@ -8686,6 +8906,13 @@
             "title": "Encounters",
             "type": "array"
           },
+          "happenings": {
+            "items": {
+              "$ref": "#/components/schemas/HappeningRule-Output"
+            },
+            "title": "Happenings",
+            "type": "array"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -8891,6 +9118,7 @@
           "routes",
           "landmarks",
           "place_items",
+          "happenings",
           "player_made_hp",
           "reroll_allowed",
           "narration_style",
@@ -8971,7 +9199,7 @@
       },
       "ScenarioUpdate": {
         "additionalProperties": false,
-        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
+        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, happenings, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
         "properties": {
           "bestiary_ids": {
             "anyOf": [
@@ -9060,6 +9288,21 @@
               }
             ],
             "title": "Encounters"
+          },
+          "happenings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HappeningRule-Input"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Happenings"
           },
           "items": {
             "anyOf": [
@@ -9699,9 +9942,17 @@
             "type": "array"
           },
           "format": {
-            "default": 43,
+            "default": 44,
             "title": "Format",
             "type": "integer"
+          },
+          "happenings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HappeningSnapshot"
+            },
+            "title": "Happenings",
+            "type": "array"
           },
           "items": {
             "default": [],
@@ -16457,76 +16708,6 @@
           }
         ],
         "summary": "Take Items",
-        "tags": [
-          "tables"
-        ],
-        "x-audience": "user"
-      }
-    },
-    "/api/v1/game/tables/{table_id}/members/{user_id}/place": {
-      "put": {
-        "description": "방장이 그 사람의 지금 캐릭터를 맵의 아는 장소로 옮긴다. 진행 중에만 된다. 길로 이어져 있지 않아도 된다.\n\n아는 장소(TableDetail.map.places)가 아니면 422 다. 방장도 숨긴 장소는 모른다.\n죽은 캐릭터는 409(character_dead). 이미 그 장소에 있으면 아무것도 바뀌지 않는다.\nAI 는 캐릭터를 옮기지 못한다. 모두에게 이벤트(character_moved)가 간다.",
-        "operationId": "move_character_api_v1_game_tables__table_id__members__user_id__place_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "table_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Table Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "user_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "User Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlaceChange"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TableDetail"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Move Character",
         "tags": [
           "tables"
         ],

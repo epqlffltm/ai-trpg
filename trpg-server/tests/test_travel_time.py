@@ -6,7 +6,7 @@
 넷을 본다.
   - 판: 길에 한 칸 가는 시간(travel_minutes)을 적는다. 1분부터 일주일까지다. 옛 판은 비어 있는 것으로 읽는다.
   - 흐르기: 그 길로 가면 다음 라운드가 열릴 때 적어도 그만큼 흐른다. 여럿이면 가장 긴 길을 따른다.
-    방장이 더 길게 정한 걸음은 줄지 않는다. 시간을 적지 않은 길은 라운드의 걸음 안에서 간다(전과 같다).
+    길을 간 사람이 있으면 다른 사람의 기다리기는 깨진다. 시간을 적지 않은 길은 라운드의 걸음 안에서 간다(전과 같다).
   - 보이기: 결과, 이벤트, 테이블의 아는 맵에 그 시간이 실린다.
   - 서술: 가기의 줄에 걸린 시간이 붙고, [시각]의 흐르는 시간도 그만큼이다.
 """
@@ -14,6 +14,7 @@
 import pytest
 from fastapi import status
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_25
 from app.rounds import move_lines
@@ -134,16 +135,18 @@ async def test_a_road_without_a_time_takes_only_the_round(
     assert (await outcome_of(client, me, table, 1, ME))['move']['travel_minutes'] is None
 
 
-async def test_a_move_that_fails_takes_no_time(client: AsyncClient, me: dict, friend: dict, lore: dict, narrated):
+async def test_a_move_that_fails_takes_no_time(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
+):
     table = await start_duo(client, me, friend, lore, **far_map(lore))
-    # 받은 뒤에 방장이 광장으로 옮겼다. 광장에서 숲으로 가는 길은 없다
+    # 받은 뒤에 광장에 서게 됐다(테스트가 옮긴다). 광장에서 숲으로 가는 길은 없다
     declared = await client.put(
         table_url(table, '/rounds/current/declaration'),
         json={'content': '숲으로 간다.', 'action': going(lore['forest'])},
         headers=me,
     )
     assert declared.status_code == status.HTTP_200_OK, declared.text
-    await map_tables.move(client, me, table, ME, lore['square'])
+    await map_tables.put_at(session, table, ME, lore['square'])
     await play_friend_only(client, friend, table, narrated)
 
     result = (await outcome_of(client, me, table, 1, ME))['move']
@@ -175,17 +178,6 @@ async def test_the_time_is_shown_in_the_result_the_event_and_the_map(
     assert moved['payload']['travel_minutes'] == 3 * HOUR
     routes = (await read_table(client, friend, table))['map']['routes']
     assert [item['travel_minutes'] for item in routes] == [None, 3 * HOUR, 12 * HOUR]
-
-
-async def test_a_host_move_takes_no_time(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore, **far_map(lore))
-
-    # 방장이 옮기는 것은 이야기가 건너뛴 이동이다. 시간은 방장이 걸음으로 정한다
-    await map_tables.move(client, me, table, ME, lore['tower'])
-
-    (moved,) = await events_of(client, friend, table, 'character_moved')
-    assert 'travel_minutes' not in moved['payload']
-    assert (await clock_of(client, me, table))['next_step_minutes'] == 10
 
 
 # --- 서술 ---

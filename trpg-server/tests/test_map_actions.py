@@ -26,7 +26,7 @@ from app.engine.dice import ScriptedDice
 from app.tables.models import TableInjury, TableSheet
 from tests import test_table_map as map_tables
 from tests.test_table_items import FRIEND, ME, events_of, read_table, table_url
-from tests.test_table_map import known_places, known_routes, move, place_of, start_duo
+from tests.test_table_map import known_places, known_routes, place_of, put_at, start_duo
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -103,7 +103,7 @@ async def test_a_character_goes_one_step_along_a_known_route(
         'travel_minutes': None,
         'carry': None,
     }
-    # 방장이 옮길 때와 같은 이벤트다. 행동에 이어지고, 행한 사람은 없다(엔진이 옮겼다)
+    # 판의 사건이 옮길 때와 같은 이벤트다. 행동에 이어지고, 행한 사람은 없다(엔진이 옮겼다)
     [moved] = await events_of(client, friend, table, 'character_moved')
     [acted] = [event for event in await events_of(client, me, table, 'player_action') if event['actor_id'] == str(ME)]
     assert (moved['actor_id'], moved['caused_by_sequence']) == (None, acted['sequence'])
@@ -142,10 +142,10 @@ async def test_only_a_place_next_door_can_be_reached(client: AsyncClient, me: di
 
 
 async def test_a_one_way_route_goes_only_one_way(
-    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await move(client, me, table, ME, lore['square'])
+    await put_at(session, table, ME, lore['square'])
     load_dice(app, [FOUND])
     await play(client, me, friend, table, narrated, mine=SEARCHING)
 
@@ -157,12 +157,12 @@ async def test_a_one_way_route_goes_only_one_way(
 
 
 async def test_a_character_moved_away_meanwhile_does_not_go(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
     await declare(client, me, table, going(lore['square']))
-    # 선언을 낸 뒤 방장이 탑으로 옮겼다. 탑에서 광장으로 가는 길은 없다
-    await move(client, me, table, ME, lore['tower'])
+    # 선언을 낸 뒤 탑에 서게 됐다(테스트가 옮긴다). 탑에서 광장으로 가는 길은 없다
+    await put_at(session, table, ME, lore['tower'])
 
     await declare(client, friend, table)
     await narrated()
@@ -170,18 +170,18 @@ async def test_a_character_moved_away_meanwhile_does_not_go(
     assert place_of(await read_table(client, me, table), ME) == lore['tower']['id']
     outcome = (await outcome_of(client, me, table, 1, ME))['move']
     assert (outcome['moved'], outcome['reason'], outcome['from']['name']) == (False, 'not_adjacent', '탑')
-    # 옮겨 간 이벤트는 방장의 것 하나뿐이다
-    assert [event['actor_id'] for event in await events_of(client, me, table, 'character_moved')] == [str(ME)]
+    # 가지 못했으니 옮겨 간 이벤트가 없다
+    assert await events_of(client, me, table, 'character_moved') == []
 
 
 # --- 찾기 ---
 
 
 async def test_searching_finds_a_hidden_route_for_everyone(
-    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await move(client, me, table, ME, lore['square'])
+    await put_at(session, table, ME, lore['square'])
     dice = load_dice(app, [FOUND])
 
     await play(client, me, friend, table, narrated, mine=SEARCHING)
@@ -210,7 +210,7 @@ async def test_an_injury_hinders_the_search(
     client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await move(client, me, table, ME, lore['square'])
+    await put_at(session, table, ME, lore['square'])
     # 한쪽 눈을 잃었다(지혜의 판정에 -2). 다치지 않았으면 찾았을 눈이다
     sheet_id = await session.scalar(select(TableSheet.id).where(TableSheet.user_id == ME))
     session.add(
@@ -227,10 +227,10 @@ async def test_an_injury_hinders_the_search(
 
 
 async def test_a_failed_search_looks_like_finding_nothing(
-    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await move(client, me, table, ME, lore['square'])
+    await put_at(session, table, ME, lore['square'])
     load_dice(app, [MISSED])
 
     await play(client, me, friend, table, narrated, mine=SEARCHING)
@@ -259,11 +259,11 @@ async def test_searching_where_nothing_is_hidden_rolls_nothing(
 
 
 async def test_a_route_found_first_is_not_searched_again(
-    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await move(client, me, table, ME, lore['square'])
-    await move(client, me, table, FRIEND, lore['square'])
+    await put_at(session, table, ME, lore['square'])
+    await put_at(session, table, FRIEND, lore['square'])
     # 앞사람(방장)이 찾았다. 뒷사람은 굴릴 길이 남지 않았다. 눈은 하나뿐이다
     dice = load_dice(app, [FOUND])
 
@@ -275,10 +275,10 @@ async def test_a_route_found_first_is_not_searched_again(
 
 
 async def test_a_found_route_stays_found(
-    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, narrated, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await move(client, me, table, ME, lore['square'])
+    await put_at(session, table, ME, lore['square'])
     load_dice(app, [FOUND])
     await play(client, me, friend, table, narrated, mine=SEARCHING)
 

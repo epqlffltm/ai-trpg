@@ -39,6 +39,7 @@ from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import (
     Encounter,
     FindCheck,
+    HappeningRule,
     ItemRule,
     ItemStack,
     MonsterAttack,
@@ -132,6 +133,18 @@ class Problem(enum.StrEnum):
     PLACE_ITEM_OFF_MAP = 'place_item_off_map'
     # 숨긴 물건을 찾는 판정의 능력치나 난이도가 룰북의 규칙에 없다
     PLACE_ITEM_FIND_INVALID = 'place_item_find_invalid'
+    # 붙인 로어북에 없는 항목을 가리키는 사건 규칙이 있다(#367)
+    HAPPENING_ENTRY_MISSING = 'happening_entry_missing'
+    # 사건이 아닌 항목(인물, 물건 …)을 가리키는 사건 규칙이 있다
+    HAPPENING_NOT_EVENT = 'happening_not_event'
+    # 사건의 조건이 가리키는 것이 없다. 퀘스트의 조건과 같은 까닭이다(quest_condition_missing)
+    HAPPENING_CONDITION_MISSING = 'happening_condition_missing'
+    # 사건의 조건이 맞지 않는 종류를 가리킨다
+    HAPPENING_CONDITION_INVALID = 'happening_condition_invalid'
+    # 사건의 조건을 이룰 수 없다. 퀘스트의 조건과 같은 까닭이다(quest_condition_impossible)
+    HAPPENING_CONDITION_IMPOSSIBLE = 'happening_condition_impossible'
+    # 사건이 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)로 옮기거나 그런 장소에 선 사람을 옮긴다
+    HAPPENING_PLACE_OFF_MAP = 'happening_place_off_map'
     # 붙인 도감에 없는 몬스터를 가리키는 몬스터 시트가 있다. 몬스터를 지웠거나 도감을 뗐다
     MONSTER_SHEET_MISSING = 'monster_sheet_missing'
     # 룰북의 규칙에 맞지 않는 몬스터 시트가 있다
@@ -623,6 +636,63 @@ def has_reveal_cycle(rules: list[QuestRule]) -> bool:
     return any(leads_back(links, entry_id, set(), done) for entry_id in links)
 
 
+def read_happenings(scenario: Scenario) -> list[HappeningRule]:
+    """사건 규칙들을 읽는다."""
+    return [HappeningRule.model_validate(document) for document in scenario.happenings]
+
+
+# 퀘스트의 조건 문제와 같은 까닭의 사건의 조건 문제. 조건 하나의 문제는 condition_problem 이 함께 본다
+HAPPENING_CONDITION_PROBLEMS = {
+    Problem.QUEST_CONDITION_MISSING: Problem.HAPPENING_CONDITION_MISSING,
+    Problem.QUEST_CONDITION_INVALID: Problem.HAPPENING_CONDITION_INVALID,
+    Problem.QUEST_CONDITION_IMPOSSIBLE: Problem.HAPPENING_CONDITION_IMPOSSIBLE,
+}
+
+
+def happening_places(rules: list[HappeningRule]) -> list[uuid.UUID]:
+    """사건의 효과가 가리키는 장소 전부. 옮기는 곳과, 옮겨질 사람이 선 곳이다."""
+    return [
+        place
+        for rule in rules
+        for effect in rule.effects
+        for place in (effect.to_place, effect.from_place)
+        if place is not None
+    ]
+
+
+def find_happening_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """
+    사건 규칙에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만, 정한 순서로 적는다(#367).
+
+    가리키는 것은 붙인 로어북의 사건 항목이어야 한다. 조건은 퀘스트의 조건과 같이 본다(condition_problem).
+    효과의 장소는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 맵이 없는 판이면 어느 장소도 맵에 없다.
+    """
+    entries = lore_entries(parts)
+    rules = read_happenings(scenario)
+    on_map = set(map_places(scenario, read_routes(scenario)))
+    found = set()
+    if any(rule.entry_id not in entries for rule in rules):
+        found.add(Problem.HAPPENING_ENTRY_MISSING)
+    if any(rule.entry_id in entries and entries[rule.entry_id].kind != LoreKind.EVENT for rule in rules):
+        found.add(Problem.HAPPENING_NOT_EVENT)
+    for rule in rules:
+        for condition in rule.when:
+            problem = condition_problem(condition, scenario, parts)
+            if problem is not None:
+                found.add(HAPPENING_CONDITION_PROBLEMS[problem])
+    if any(place not in on_map for place in happening_places(rules)):
+        found.add(Problem.HAPPENING_PLACE_OFF_MAP)
+    order = [
+        Problem.HAPPENING_ENTRY_MISSING,
+        Problem.HAPPENING_NOT_EVENT,
+        Problem.HAPPENING_CONDITION_MISSING,
+        Problem.HAPPENING_CONDITION_INVALID,
+        Problem.HAPPENING_CONDITION_IMPOSSIBLE,
+        Problem.HAPPENING_PLACE_OFF_MAP,
+    ]
+    return [problem for problem in order if problem in found]
+
+
 def read_routes(scenario: Scenario) -> list[RouteRule]:
     """길들을 읽는다."""
     return [RouteRule.model_validate(document) for document in scenario.routes]
@@ -725,6 +795,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_quest_problems(scenario, parts))
     problems.extend(find_map_problems(scenario, parts, ruleset))
     problems.extend(find_place_item_problems(scenario, ruleset))
+    problems.extend(find_happening_problems(scenario, parts))
     problems.extend(find_seating_problems(scenario))
     return problems
 

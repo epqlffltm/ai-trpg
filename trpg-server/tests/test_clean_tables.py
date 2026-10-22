@@ -41,6 +41,7 @@ from app.tables.models import (
     QuestStatus,
     TableDeparture,
     TableFoundRoute,
+    TableHappening,
     TableItem,
     TableMonster,
     TableMonsterItem,
@@ -200,6 +201,7 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         session.add(TableFoundRoute(table_id=uuid.UUID(table['id']), from_place=uuid.uuid4(), to_place=uuid.uuid4()))
         placed = {'slot': 0, 'place_id': uuid.uuid4(), 'entry_id': uuid.uuid4(), 'count': 1, 'hidden': False}
         session.add(TablePlaceItem(table_id=uuid.UUID(table['id']), **placed))
+        session.add(TableHappening(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4(), round_number=1, moves=[]))
         monster = {'monster_id': uuid.uuid4(), 'number': 1, 'place_id': uuid.uuid4(), 'abilities': {}, 'max_hp': 1}
         held = TableMonster(table_id=uuid.UUID(table['id']), hp=1, status='alive', **monster)
         held.items = [TableMonsterItem(slot=0, count=0)]

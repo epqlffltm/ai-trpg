@@ -356,14 +356,6 @@ class QuestOut(BaseModel):
     due_at: ClockTimeOut | None = None
 
 
-class PlaceChange(BaseModel):
-    """방장이 캐릭터를 옮길 때 받는 값. 테이블이 아는 장소(TableDetail.map.places)의 ID 다."""
-
-    model_config = ConfigDict(extra='forbid')
-
-    place_id: uuid.UUID
-
-
 class PlaceItemOut(BaseModel):
     """장소에 보이게 놓인 물건 한 가지. 같은 물건은 합친 개수다. 이름은 판의 로어북 물건 항목의 이름이다."""
 
