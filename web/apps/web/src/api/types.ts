@@ -13,8 +13,17 @@ export type Me = Auth['schemas']['Me'];
 export type ConsentState = Auth['schemas']['ConsentState'];
 export type ConsentStates = Auth['schemas']['ConsentStates'];
 
+export type PublicNames = Auth['schemas']['PublicNames'];
+
 export type PublicListingPage = Trpg['schemas']['PublicListingPage'];
 export type PublicListing = Trpg['schemas']['PublicListing'];
+export type PublicListingDetail = Trpg['schemas']['PublicListingDetail'];
+export type ListingPregen = Trpg['schemas']['ListingPregen'];
+export type Genre = Trpg['schemas']['Genre'];
+export type CharacterMode = Trpg['schemas']['CharacterMode'];
+export type RecommendedPlayers = Trpg['schemas']['RecommendedPlayers'];
+export type NarrationModels = Trpg['schemas']['NarrationModelsOut'];
+export type NarrationModel = Trpg['schemas']['NarrationModelOut'];
 export type TablePage = Trpg['schemas']['TablePage'];
 export type TableSummary = Trpg['schemas']['TableSummary'];
 

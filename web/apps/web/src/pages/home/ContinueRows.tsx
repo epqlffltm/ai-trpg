@@ -5,7 +5,7 @@
 import { ListSection } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { ItemCard } from './ItemCard';
+import { ItemCard } from '../../components/ItemCard';
 import { tableStatusLabel } from './labels';
 import { listStatus } from './listStatus';
 import { myConversationsQuery, myTablesQuery } from './queries';
