@@ -106,7 +106,8 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?, model?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
 | GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
 | GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives` 와 `suggestions`), 답을 쓰는 중인지(`generating`) | access 토큰 |
-| POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`) | access 토큰 |
+| POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content, edit_of?}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`). `edit_of` 는 [내 말 고치기](#고치기) | access 토큰 |
+| PATCH | `/api/v1/chat/messages/{id}` | [상대의 말 고치기](#고치기). `{content}`. 고친 말을 돌려준다. 사람의 말이면 422 `not_editable` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/regenerate` | [다시 생성](#다시-생성-멈추기-대안). 그 말에 다시 답한다. SSE 의 모양은 말 보내기와 같다. 인사말은 422 `not_regenerable`, 없는 말은 404 `message_not_found` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/continue` | [이어서 출력](#이어서-출력). 끊긴 답(`partial`)에 이어 쓴다. SSE. 끊긴 답이 아니거나 지금 가지의 끝이 아니면 422 `not_continuable` | access 토큰 |
 | POST | `/api/v1/chat/generations/{id}/stop` | [멈추기](#다시-생성-멈추기-대안). 204. 받은 만큼 저장한다. 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
@@ -288,6 +289,22 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - **따로 저장한다.** 본문은 `content`, 선택지는 `suggestions`(`done` 의 말과 대화 읽기에 실린다). 다음 호출에는 본문만 간다. 섞으면 모델이 선택지를 흉내 낸다.
 - **거른다.** 줄마다 하나. 번호, 글머리표, 감싼 따옴표를 떼고, 빈 것, 200자보다 긴 것, 같은 것을 뺀 뒤 셋까지. 형식이 깨지면 선택지만 줄거나 없어지고 오류로 만들지 않는다. 표는 넷 이상을 받지 않는다(CHECK).
 - **잘린 답**(길이 상한)은 선택지를 버린다(줄이 잘렸을 수 있다). 끊기거나 멈춘 답도 본문만 저장한다. 표식만 쓴 답은 빈 답(`failed` 의 `empty`)이다.
+
+### 고치기
+
+고친 글이 다음 호출부터 모델에 간다. 둘 다 답을 쓰는 중이면 409 `generation_in_progress` 다.
+
+| | 내 말 고치기 | 상대의 말 고치기 |
+| --- | --- | --- |
+| 주소 | 말 보내기에 `edit_of`(고칠 사람의 말의 id) | `PATCH /messages/{id}` |
+| 하는 일 | 고칠 말의 부모 아래에 새 말을 붙이고 답을 받는다. 새 가지다. 원본과 그 답은 남아 대안으로 오간다 | 그 말을 그 자리에서 고친다. `edited` 가 참이 되고 선택지는 지운다(앞의 글에 맞춘 것이다) |
+| 청구 | 답을 받으니 한 번 | 호출이 아니라 없다 |
+| 안 되는 것 | 캐릭터의 말을 고르면 422 `not_editable` | 사람의 말이면 422 `not_editable`(원본을 남기려고 새 가지로만 고친다) |
+
+- 상대의 말 고치기는 "답을 쓰는 중인가" 확인과 고치기를 UPDATE 한 문장으로 한다. 따로 하면 그사이 시작한 이어 쓰기가 끝나며 고친 글을 덮는다.
+- 대화의 수정 시각(목록의 차례)은 바꾸지 않는다. 말한 것이 아니다. 내 말 고치기는 말을 보낸 것이라 바뀐다.
+- 인사말도 고칠 수 있다(대화마다의 사본이다).
+- 말 보내기는 가지의 끝을 차례를 잡은 뒤에 다시 읽는다. 그사이 다른 가지를 골랐으면 고른 가지에 붙는다.
 
 ### 이어서 출력
 

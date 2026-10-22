@@ -16,6 +16,8 @@ from app.ratings import Rating
 
 # 고를 수 있는 시작 상황의 번호의 상한. asset 서버가 캐릭터마다 다섯까지 둔다. 넉넉히 받고 판에 없으면 422 다
 START_INDEX_MAX = 20
+# 캐릭터의 말을 고친 글의 길이의 상한(글자). 이어 쓴 답은 길어질 수 있어 사람의 말(4000)보다 넉넉하다
+EDIT_MAX_CHARS = 20000
 
 # 모델의 이름표. 표의 칸(String(48))보다 길면 들어올 수 없다
 ModelSlug = Annotated[str, Field(min_length=1, max_length=48)]
@@ -132,6 +134,16 @@ class MessageOut(BaseModel):
     created_at: datetime
     # 다음 답 추천의 선택지(0~3개). 캐릭터의 답에만 있다. 누르면 입력칸을 채운다. 보내는 것은 사람이다
     suggestions: list[str] = []
+    # 사람이 고친 캐릭터의 말이다(상대의 말 고치기)
+    edited: bool = False
+
+
+class MessageEdit(BaseModel):
+    """캐릭터의 말을 고친 글."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    content: Annotated[str, Field(min_length=1, max_length=EDIT_MAX_CHARS, pattern=r'\S')]
 
 
 class PathMessageOut(MessageOut):

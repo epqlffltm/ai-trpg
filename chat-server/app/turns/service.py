@@ -59,6 +59,7 @@ from app.conversations.service import (
     ConversationBusyError,
     MessageNotFoundError,
     ModelUnavailableError,
+    NotEditableError,
     get_conversation,
 )
 from app.core.dependencies import Viewer
@@ -215,12 +216,12 @@ def require_model(conversation: Conversation, model: AiModel | None, rating: Rat
     return conversation.model_slug
 
 
-def user_message(conversation: Conversation, content: str, now: datetime) -> Message:
-    """사람의 말. 지금 가지의 끝에 붙는다. 아직 저장하지 않는다."""
+def user_message(conversation: Conversation, parent_id: uuid.UUID | None, content: str, now: datetime) -> Message:
+    """사람의 말. parent_id(보통은 지금 가지의 끝) 아래에 붙는다. 아직 저장하지 않는다."""
     return Message(
         id=uuid.uuid4(),
         conversation_id=conversation.id,
-        parent_id=conversation.active_leaf_id,
+        parent_id=parent_id,
         role=Role.USER,
         content=content,
         status=MessageStatus.COMPLETE,
@@ -323,6 +324,19 @@ def settled_values(generation: Generation, capture: bool, settlement: Settlement
 # --- 응답을 시작하기 전 ---
 
 
+async def edited_parent(session: AsyncSession, conversation: Conversation, edit_of: uuid.UUID) -> uuid.UUID | None:
+    """
+    고친 말(내 말 고치기)이 붙을 자리. 고칠 사람의 말의 부모다. 새 말은 그 말의 대안(새 가지)이 되고 원본은 남는다.
+    그 대화의 말이 아니면 MessageNotFoundError, 사람의 말이 아니면 NotEditableError.
+    """
+    original = await session.get(Message, edit_of)
+    if original is None or original.conversation_id != conversation.id:
+        raise MessageNotFoundError
+    if original.role != Role.USER:
+        raise NotEditableError
+    return original.parent_id
+
+
 async def begin_turn(
     session_factory: async_sessionmaker[AsyncSession],
     viewer: Viewer,
@@ -330,22 +344,28 @@ async def begin_turn(
     content: str,
     options: PromptOptions,
     now: datetime,
+    edit_of: uuid.UUID | None = None,
 ) -> TurnStart:
     """
     차례를 잡고 사람의 말과 기록(pending)을 저장한다. 모델에 보낼 메시지를 함께 만든다.
 
+    새 말은 지금 가지의 끝에 붙는다. edit_of(고칠 사람의 말)가 있으면 그 말의 부모 아래에 붙는다(새 가지).
+    가지의 끝은 차례를 잡은 뒤에 다시 읽는다. 그사이 가지를 바꿨어도 바꾼 곳에 붙는다.
     대화가 없으면 ConversationNotFoundError, 모델이 없으면 ModelRequiredError, 쓸 수 없으면 ModelUnavailableError,
-    다른 답을 쓰는 중이면 ConversationBusyError. 어느 것이든 아무것도 저장하지 않는다.
-    판매(결제 서버의 가격표)는 여기서 보지 않는다. 홀드를 걸 때 결제 서버가 본다.
+    다른 답을 쓰는 중이면 ConversationBusyError, 고칠 말이 틀리면 MessageNotFoundError, NotEditableError.
+    어느 것이든 아무것도 저장하지 않는다. 판매(결제 서버의 가격표)는 여기서 보지 않는다. 홀드를 걸 때 결제 서버가 본다.
     """
     async with session_factory() as session:
         conversation, character, persona = await get_conversation(session, viewer, conversation_id)
         model = await catalog.get_model(session, conversation.model_slug) if conversation.model_slug else None
         slug = require_model(conversation, model, Rating(character.rating), now)
+        edited = await edited_parent(session, conversation, edit_of) if edit_of is not None else None
         if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
             raise ConversationBusyError
-        path = await conversations.active_path(session, conversation.active_leaf_id)
-        message = user_message(conversation, content, now)
+        await session.refresh(conversation)
+        parent_id = edited if edit_of is not None else conversation.active_leaf_id
+        path = await conversations.active_path(session, parent_id)
+        message = user_message(conversation, parent_id, content, now)
         repository.add(session, message)
         await session.flush()
         await repository.move_leaf(session, conversation.id, message.id)
