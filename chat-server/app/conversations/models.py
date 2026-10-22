@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -149,13 +149,16 @@ class Message(Base):
     """
     말 하나. parent_id 가 같은 말들이 서로의 대안이다. 첫 말은 parent_id 가 없다.
 
-    본문(content)에는 사람에게 보이는 글만 둔다. 다음 답 선택지는 그 단계에서 따로 칸을 둔다.
+    본문(content)에는 사람에게 보이는 글만 둔다. 다음 답 추천의 선택지는 suggestions 에 따로 둔다.
+    본문에 섞으면 다음 호출의 프롬프트에 다시 들어가 모델이 선택지를 흉내 낸다.
     """
 
     __tablename__ = 'messages'
     __table_args__ = (
         CheckConstraint(one_of('role', Role), name='role_allowed'),
         CheckConstraint(one_of('status', MessageStatus), name='status_allowed'),
+        # 선택지는 셋까지다(app/conversation/suggestions.py 의 MAX_SUGGESTIONS)
+        CheckConstraint('cardinality(suggestions) <= 3', name='suggestions_at_most_three'),
         # 한 말의 대안들(같은 부모의 자식들)을 찾는다
         Index('ix_messages_conversation_parent', 'conversation_id', 'parent_id'),
     )
@@ -166,4 +169,6 @@ class Message(Base):
     role: Mapped[str] = mapped_column(String(20))
     content: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default=MessageStatus.COMPLETE)
+    # 다음 답 추천의 선택지. 캐릭터의 답에만 있다. 없으면 빈 목록이다
+    suggestions: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

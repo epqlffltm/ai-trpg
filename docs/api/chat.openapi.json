@@ -682,6 +682,14 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "suggestions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
           }
         },
         "required": [
@@ -1337,6 +1345,52 @@
         "summary": "Read Me",
         "tags": [
           "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/messages/{message_id}/continue": {
+      "post": {
+        "description": "끊긴 답(partial)에 이어 쓴다. 지금 가지의 끝인 말만 된다.\n\n새 호출이라 새로 청구한다. SSE 의 turn 에 continues(그 말의 id)가 실리고, delta 는 그 말 끝에 붙일 글이다.\ndone 의 말은 이어 붙인 그 말 전체다. 다 쓰면 complete, 또 끊기면 partial 이라 다시 이어 쓸 수 있다.",
+        "operationId": "continue_message_api_v1_chat_messages__message_id__continue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "SSE. app/turns/schemas.py 의 메시지들"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Continue Message",
+        "tags": [
+          "messages"
         ],
         "x-audience": "user"
       }

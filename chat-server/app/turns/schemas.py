@@ -3,11 +3,15 @@
 """
 말을 보내는 API 가 받는 입력과, SSE 로 흘려보내는 메시지의 모양.
 
-    event: turn    data: {"generation_id": ..., "user_message": {...}}   맨 처음. 저장한 사람의 말
+    event: turn    data: {"generation_id": ..., "user_message": {...}, "continues": null}
+                                                                         맨 처음. 답할 사람의 말
     event: delta   data: {"text": "..."}                                 모델이 새로 쓴 글의 조각
     event: done    data: {"message": {...}}                              저장한 답(status 는 complete 나 partial)
     event: failed  data: {"code": "timeout"}                             글자 없이 실패했다. 답은 저장하지 않았다
     : heartbeat                                                          15초 조용하면 끼우는 주석
+
+이어서 출력이면 continues 가 이어 쓰는 끊긴 답의 id 다. delta 는 그 말 끝에 붙일 글이고,
+done 의 말은 그 말 전체(같은 id, 이어 붙인 본문)다. 이어 쓴 글이 없이 실패하면 그 말은 그대로다.
 
 done 이나 failed 가 마지막이다. 그 전에 끊겨도 서버는 끝까지 돌아 저장한다. 앱은 대화를 다시 읽는다.
 """
@@ -36,6 +40,8 @@ class TurnEvent(BaseModel):
 
     generation_id: uuid.UUID
     user_message: MessageOut
+    # 이어서 출력이면 이어 쓰는 끊긴 답의 id. 아니면 null
+    continues: uuid.UUID | None = None
 
 
 class DeltaEvent(BaseModel):
