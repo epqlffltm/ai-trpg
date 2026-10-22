@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.assets.schemas import CharacterDocument
 from app.ratings import Rating
+from app.world.schemas import StateOut
 
 # 고를 수 있는 시작 상황의 번호의 상한. asset 서버가 캐릭터마다 다섯까지 둔다. 넉넉히 받고 판에 없으면 422 다
 START_INDEX_MAX = 20
@@ -196,6 +197,8 @@ class ConversationDetail(BaseModel):
     persona: PersonaOut | None
     model: ConversationModelOut | None
     messages: list[PathMessageOut]
+    # 지금 보고 있는 가지의 끝의 장소와 소지품. 가지를 바꾸면 그 가지의 것이다
+    state: StateOut
     generating: bool
     created_at: datetime
     updated_at: datetime

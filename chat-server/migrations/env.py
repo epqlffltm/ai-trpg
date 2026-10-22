@@ -22,6 +22,7 @@ from sqlalchemy.engine import Connection
 import app.catalog.models  # noqa: E402, F401
 import app.conversations.models  # noqa: E402, F401
 import app.turns.models  # noqa: E402, F401
+import app.world.models  # noqa: E402, F401
 from app.core.config import get_settings
 from app.core.database import Base
 

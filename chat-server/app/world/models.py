@@ -1,0 +1,33 @@
+# chat-server/app/world/models.py
+
+"""
+말마다의 상태(message_states). 상태가 바뀐 말(행동 말)에만 행이 있다. 나머지 말은 부모의 상태를 따른다.
+
+매번 상태 전체를 담는다(바뀐 것만 담아 다시 쌓는 방식이 아니다). 장소 하나와 소지품 수십 개라 작고, 읽기가 단순하다.
+말을 지우면(대화를 지우면) 함께 지워진다.
+"""
+
+import uuid
+
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+
+# 장소와 물건의 id 의 길이. asset 서버의 판과 같다
+KEY_MAX_LENGTH = 40
+
+
+class MessageState(Base):
+    """그 말 뒤의 상태. place 는 지금 있는 장소의 id, minutes 는 흐른 시간(분), visited 는 가 본 장소들이다."""
+
+    __tablename__ = 'message_states'
+    __table_args__ = (CheckConstraint('minutes >= 0', name='minutes_not_negative'),)
+
+    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('messages.id', ondelete='CASCADE'), primary_key=True)
+    place: Mapped[str | None] = mapped_column(String(KEY_MAX_LENGTH), default=None)
+    minutes: Mapped[int] = mapped_column(Integer)
+    # 가진 물건들 [{"item", "count"}]
+    inventory: Mapped[list[dict]] = mapped_column(JSONB)
+    visited: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)))

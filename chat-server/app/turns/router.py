@@ -4,6 +4,7 @@
 말을 보내는 API. 바로 SSE(text/event-stream)로 답한다(메시지의 모양은 app/turns/schemas.py).
 
     POST /api/v1/chat/conversations/{id}/messages    {content}  말을 보낸다
+    POST /api/v1/chat/conversations/{id}/actions     {kind, …}  행동한다(지금은 지도에서 이동). 이어서 반응을 받는다
     POST /api/v1/chat/messages/{id}/regenerate                  그 말에 다시 답한다. 새 답은 같은 부모 아래의 대안이다
     POST /api/v1/chat/messages/{id}/continue                    끊긴 답에 이어 쓴다. 새로 청구한다
     POST /api/v1/chat/generations/{id}/stop                     모델을 부르는 것을 멈춘다. 받은 만큼 저장한다. 204
@@ -12,6 +13,7 @@
   - 404: 대화가 없다(남의 것, 지운 것, 볼 수 없는 등급). 다시 쓸 말이 없다(message_not_found)
   - 422 not_regenerable: 다시 쓸 수 없는 말이다(캐릭터의 인사말)
   - 404 message_not_found, 422 not_editable: 고칠 말(edit_of)이 그 대화에 없다, 사람의 말이 아니다
+  - 422 no_map, place_not_found, already_there, not_connected: 그곳으로 갈 수 없다(app/world/moves.py)
   - 422 not_continuable: 이어 쓸 수 없는 말이다(끊긴 답이 아니다, 지금 가지의 끝이 아니다)
   - 409 model_required: 대화에 모델이 없다. 먼저 고른다(PUT /conversations/{id}/model)
   - 422 model_unavailable: 모델을 쓸 수 없다(꺼졌다, 은퇴했다, 팔지 않는다). 사람의 말은 저장했을 수 있다
@@ -50,6 +52,8 @@ from app.turns.service import (
     TurnStart,
 )
 from app.turns.values import PromptOptions
+from app.world.moves import MoveRefusedError
+from app.world.schemas import MoveAction
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +146,14 @@ async def handle_not_continuable(request: Request, error: NotContinuableError) -
     )
 
 
+async def handle_move_refused(request: Request, error: MoveRefusedError) -> JSONResponse:
+    """갈 수 없으면 422 다. code 가 까닭이다. 아무것도 저장하지 않았다."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '그곳으로 갈 수 없습니다.', 'code': error.reason},
+    )
+
+
 async def handle_turn_declined(request: Request, error: TurnDeclinedError) -> JSONResponse:
     """답을 쓰지 않았다. 사람의 말은 저장했다(message_id). 까닭마다 상태 코드가 다르다."""
     status_code = DECLINED_STATUS.get(error.code, status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -188,6 +200,25 @@ async def send_message(
     start = await service.begin_turn(
         state.session_factory, viewer, conversation_id, data.content, options, now, data.edit_of
     )
+    return await stream_turn(request, start, now)
+
+
+@router.post(
+    '/{conversation_id}/actions',
+    status_code=status.HTTP_200_OK,
+    response_class=StreamingResponse,
+    responses=SSE_RESPONSES,
+)
+async def act(
+    conversation_id: uuid.UUID, data: MoveAction, viewer: CurrentViewer, request: Request, now: Now
+) -> StreamingResponse:
+    """
+    행동한다. 지금은 지도에서 이동(kind move)뿐이다. 서버가 갈 수 있는지 보고 상태를 바꾼 뒤, 모델의 반응을 흘려보낸다.
+    turn 의 user_message 가 행동 말(role action)이다. 반응을 받으니 한 번 청구한다. SSE 의 모양은 말 보내기와 같다.
+    """
+    state = request.app.state
+    options = prompt_options(state.settings)
+    start = await service.begin_move(state.session_factory, viewer, conversation_id, data.place, options, now)
     return await stream_turn(request, start, now)
 
 
