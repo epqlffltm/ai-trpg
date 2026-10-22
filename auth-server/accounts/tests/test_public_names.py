@@ -18,7 +18,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.identity import close_under_age_account
-from accounts.models import User
+from accounts.models import SuspensionReason, User
 from accounts.public_names import MAX_IDS
 from accounts.suspension import suspend_account
 
@@ -76,7 +76,7 @@ class PublicNamesTest(APITestCase):
         self.assertEqual([name['nickname'] for name in response.json()['names']], [None, None])
 
     def test_a_suspended_account_keeps_its_name(self):
-        suspend_account(self.first, note='테스트')
+        suspend_account(self.first, note='테스트', reason=SuspensionReason.OTHER)
 
         response = self.get(ids_param(self.first.public_id))
 

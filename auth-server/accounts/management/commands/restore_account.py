@@ -18,7 +18,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser) -> None:
         parser.add_argument('username', help='정지를 풀 계정의 아이디')
-        parser.add_argument('--reason', required=True, help='정지를 푸는 사유. 보안 이벤트에 남는다')
+        parser.add_argument('--reason', required=True, help='정지를 푸는 사유. 정지의 기록과 보안 이벤트에 남는다')
 
     def handle(self, *args, **options) -> None:
         try:

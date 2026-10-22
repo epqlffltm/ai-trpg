@@ -27,7 +27,7 @@ from django.utils import timezone
 
 from accounts.backoff import retry_delay
 from accounts.consents import erase_consents
-from accounts.erasure import blank_account, erase_identity_records, erase_mail_records
+from accounts.erasure import blank_account, erase_identity_records, erase_mail_records, erase_suspensions
 from accounts.mail import (
     send_withdrawal_completed_notice,
     send_withdrawal_reminder_notice,
@@ -201,7 +201,8 @@ def complete_withdrawal(user_id: int, now: datetime) -> bool:
     """
     그 계정의 탈퇴를 마친다. 마쳤으면 True, 그사이 취소했거나 이미 마쳤으면 False 다.
 
-    계정을 비우고(erasure.py), 동의 기록을 지우고, 서버마다 알릴 줄을 적고, 지우기 전의 주소로 메일을 보낸다.
+    계정을 비우고(erasure.py), 동의 기록과 정지의 기록을 지우고, 서버마다 알릴 줄을 적고,
+    지우기 전의 주소로 메일을 보낸다.
     모두 한 트랜잭션이다. 줄을 잠근 뒤 다시 확인하므로 취소와 엇갈려도 둘 중 하나만 된다.
     """
     locked = User.objects.select_for_update().get(pk=user_id)
@@ -214,6 +215,7 @@ def complete_withdrawal(user_id: int, now: datetime) -> bool:
     erase_mail_records(locked, email)
     erase_identity_records(locked)
     erase_consents(locked)
+    erase_suspensions(locked)
     locked.withdrawn_at = now
     locked.save(update_fields=['withdrawn_at'])
     _queue_notices(locked, now)
