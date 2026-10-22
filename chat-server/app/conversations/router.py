@@ -7,6 +7,7 @@
     GET    /api/v1/chat/conversations              내 대화의 목록. ?limit=&offset=&character_id=
     GET    /api/v1/chat/conversations/{id}         대화 하나(지금 가지의 말들까지)
     PUT    /api/v1/chat/conversations/{id}/model   대화의 모델 바꾸기
+    PUT    /api/v1/chat/conversations/{id}/branch  다른 대안의 가지를 보기
     DELETE /api/v1/chat/conversations/{id}         지우기. 204
 
 모든 주소가 로그인을 요구한다. 남의 대화는 404 다(403 이면 그 ID 가 있다는 것이 드러난다).
@@ -27,6 +28,7 @@ from app.catalog.models import AiModel
 from app.conversations import service
 from app.conversations.models import Conversation, ConversationPersona, ImportedCharacter, Message
 from app.conversations.schemas import (
+    BranchChoice,
     CharacterOut,
     CharacterSummary,
     ConversationCreate,
@@ -34,15 +36,17 @@ from app.conversations.schemas import (
     ConversationModelOut,
     ConversationPage,
     ConversationSummary,
-    MessageOut,
     ModelChoice,
+    PathMessageOut,
     PersonaOut,
     StartOut,
 )
 from app.conversations.service import (
     AdultContentRequiredError,
     CharacterNotFoundError,
+    ConversationBusyError,
     ConversationNotFoundError,
+    MessageNotFoundError,
     ModelUnavailableError,
     PersonaNotFoundError,
     StartNotFoundError,
@@ -132,9 +136,23 @@ def to_persona(persona: ConversationPersona | None) -> PersonaOut | None:
     )
 
 
+def to_path_message(message: Message, alternatives: dict[uuid.UUID | None, list[uuid.UUID]]) -> PathMessageOut:
+    """지금 가지의 말 하나와 그 대안들. 대안을 못 찾으면(있을 수 없다) 그 말 하나다."""
+    return PathMessageOut(
+        id=message.id,
+        parent_id=message.parent_id,
+        role=message.role,
+        content=message.content,
+        status=message.status,
+        created_at=message.created_at,
+        alternatives=alternatives.get(message.parent_id, [message.id]),
+    )
+
+
 def to_detail(
     row: service.ConversationRow,
     messages: list[Message],
+    alternatives: dict[uuid.UUID | None, list[uuid.UUID]],
     models: dict[str, AiModel],
     book: PriceBook | None,
     now: datetime,
@@ -153,7 +171,8 @@ def to_detail(
         ),
         persona=to_persona(persona),
         model=conversation_model(conversation, character, models, book, now),
-        messages=[MessageOut.model_validate(message, from_attributes=True) for message in messages],
+        messages=[to_path_message(message, alternatives) for message in messages],
+        generating=service.is_generating(conversation, now),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -203,6 +222,19 @@ async def handle_model_unavailable(request: Request, error: ModelUnavailableErro
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={'detail': '이 대화에 쓸 수 없는 모델입니다.', 'code': 'model_unavailable'},
+    )
+
+
+async def handle_message_not_found(request: Request, error: MessageNotFoundError) -> JSONResponse:
+    """그런 말이 없으면 404 다(code message_not_found)."""
+    return not_found('message_not_found')
+
+
+async def handle_conversation_busy(request: Request, error: ConversationBusyError) -> JSONResponse:
+    """답을 쓰는 중이면 409 다. 그 답이 끝난 뒤에 한다."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={'detail': '답을 쓰는 중입니다. 끝난 뒤에 해 주세요.', 'code': 'generation_in_progress'},
     )
 
 
@@ -259,8 +291,9 @@ async def read_conversation(
     book = await service.known_book(prices)
     row = await service.get_conversation(session, viewer, conversation_id)
     messages = await service.read_messages(session, row[0])
+    alternatives = await service.message_alternatives(session, row[0], messages)
     models = await service.conversation_models(session, [row[0]])
-    return to_detail(row, messages, models, book, now)
+    return to_detail(row, messages, alternatives, models, book, now)
 
 
 @router.put('/{conversation_id}/model', response_model=ConversationModelOut, status_code=status.HTTP_200_OK)
@@ -270,6 +303,15 @@ async def change_model(
     """대화의 모델을 바꾼다. 다음 말부터 그 모델로 쓰고 그 모델의 값으로 청구한다. 바꾼 모델을 돌려준다."""
     model = await service.change_model(session, prices, viewer, conversation_id, data.model, now)
     return to_model(model, usable=True)
+
+
+@router.put('/{conversation_id}/branch', response_model=ConversationDetail, status_code=status.HTTP_200_OK)
+async def choose_branch(
+    conversation_id: uuid.UUID, data: BranchChoice, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
+) -> ConversationDetail:
+    """다른 대안의 가지를 본다. 그 말 아래에서 가장 나중에 생긴 말이 끝이 된다. 바뀐 대화를 돌려준다."""
+    await service.choose_branch(session, viewer, conversation_id, data.message_id, now)
+    return await read_conversation(conversation_id, viewer, session, prices, now)
 
 
 @router.delete('/{conversation_id}', status_code=status.HTTP_204_NO_CONTENT)

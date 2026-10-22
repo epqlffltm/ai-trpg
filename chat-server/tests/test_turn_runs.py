@@ -11,6 +11,8 @@
     확정은 다음 서버의 정리 작업이 한다
   - 받은 글이 없이 멈추면 답이 없고 돌려줄 것(release_due)이다
   - 답을 저장하지 못하면(DB 가 없다) 통로에 실패를 알리고 끝난다
+  - 사람이 멈추면(StopSwitch) 받은 만큼 partial 로 저장하고 바로 확정한다. 받은 글이 없으면 돌려준다.
+    부르기 전에 멈추면 부르지 않는다. 다 받은 뒤에는 멈출 것이 없다
 """
 
 import asyncio
@@ -69,9 +71,23 @@ async def generation_of(session: AsyncSession) -> Generation:
     return (await session.scalars(select(Generation))).one()
 
 
-async def run(app: FastAPI, start: service.TurnStart, provider: ScriptedProvider, relay: Relay) -> None:
+async def run(
+    app: FastAPI,
+    start: service.TurnStart,
+    provider: ScriptedProvider,
+    relay: Relay,
+    stop: service.StopSwitch | None = None,
+) -> None:
     route = await FakeRouter(provider).route(start.model_slug)
-    await service.run_generation(app.state.session_factory, FreeBilling(), route, start, PARAMS, relay, utc_now)
+    switch = stop if stop is not None else service.StopSwitch()
+    await service.run_generation(app.state.session_factory, FreeBilling(), route, start, PARAMS, relay, utc_now, switch)
+
+
+async def until_called(provider: ScriptedProvider) -> None:
+    """모델을 부르고 조각을 다 흘릴 때까지 기다린다."""
+    while not provider.calls:
+        await asyncio.sleep(0.01)
+    await asyncio.sleep(0.01)
 
 
 async def test_nobody_reading_the_stream_still_saves_and_charges(
@@ -190,3 +206,103 @@ async def test_shutdown_stops_the_running_turns(app: FastAPI):
         app.state.turns.add(task)
 
     assert task.cancelled()
+
+
+# --- 사람이 멈춘다 ---
+
+
+async def test_a_stopped_turn_keeps_what_it_got_and_charges_it(
+    app: FastAPI, session: AsyncSession, started: service.TurnStart
+):
+    provider = ScriptedProvider(pieces=['어서 ', '와'], hold=asyncio.Event())
+    stop = service.StopSwitch()
+    relay = Relay()
+    task = asyncio.create_task(run(app, started, provider, relay, stop))
+    await until_called(provider)
+
+    assert stop.request() is True
+    await task
+
+    generation = await generation_of(session)
+    assert (generation.billing_status, generation.outcome, generation.error_code) == (
+        'captured',
+        'partial',
+        'stopped',
+    )
+    frames = [item async for item in relay.frames()]
+    assert frames[-1].event == 'done'
+    assert '"content":"어서 와"' in frames[-1].data
+    assert '"status":"partial"' in frames[-1].data
+
+
+async def test_a_turn_stopped_before_any_text_is_released_at_once(
+    app: FastAPI, session: AsyncSession, started: service.TurnStart
+):
+    provider = ScriptedProvider(pieces=[], hold=asyncio.Event())
+    stop = service.StopSwitch()
+    relay = Relay()
+    task = asyncio.create_task(run(app, started, provider, relay, stop))
+    await until_called(provider)
+
+    stop.request()
+    await task
+
+    generation = await generation_of(session)
+    assert (generation.billing_status, generation.message_id, generation.error_code) == ('released', None, 'stopped')
+    frames = [item async for item in relay.frames()]
+    assert (frames[-1].event, frames[-1].data) == ('failed', '{"code":"stopped"}')
+    session.expire_all()
+    row = await session.get(Conversation, started.conversation_id)
+    assert row.generating_since is None
+
+
+async def test_a_turn_stopped_before_the_call_calls_nothing(
+    app: FastAPI, session: AsyncSession, started: service.TurnStart
+):
+    provider = ScriptedProvider()
+    stop = service.StopSwitch()
+
+    assert stop.request() is True
+    await run(app, started, provider, Relay(), stop)
+
+    assert provider.calls == []
+    assert (await generation_of(session)).billing_status == 'released'
+
+
+async def test_a_finished_call_cannot_be_stopped(app: FastAPI, session: AsyncSession, started: service.TurnStart):
+    stop = service.StopSwitch()
+
+    await run(app, started, ScriptedProvider(), Relay(), stop)
+
+    assert stop.request() is False
+    assert (await generation_of(session)).outcome == 'complete'
+
+
+async def test_shutdown_while_a_stop_is_settling_stops_the_whole_turn(
+    app: FastAPI, session: AsyncSession, started: service.TurnStart
+):
+    class SlowToStop(ScriptedProvider):
+        """멈추라는 말을 받고도 정리하느라 바로 끝나지 않는 공급자."""
+
+        async def complete(self, messages, params, on_text=None):
+            try:
+                return await super().complete(messages, params, on_text)
+            except asyncio.CancelledError:
+                cleaning.set()
+                await asyncio.Event().wait()
+                raise
+
+    cleaning = asyncio.Event()
+    provider = SlowToStop(pieces=['어'], hold=asyncio.Event())
+    stop = service.StopSwitch()
+    task = asyncio.create_task(run(app, started, provider, Relay(), stop))
+    await until_called(provider)
+    stop.request()
+    await cleaning.wait()
+
+    # 사람이 멈춘 뒤 공급자가 끊기기 전에 서버가 꺼진다. 서버가 꺼지는 쪽을 따른다
+    await stop_turns({task})
+
+    assert task.cancelled()
+    generation = await generation_of(session)
+    assert (generation.billing_status, generation.error_code) == ('capture_due', 'cancelled')

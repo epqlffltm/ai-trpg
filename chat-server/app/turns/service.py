@@ -26,7 +26,7 @@ import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from ai_core.costs import charge_of
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
@@ -51,9 +51,15 @@ from app.conversations.models import (
     MessageStatus,
     Role,
 )
-from app.conversations.service import ModelUnavailableError, get_conversation
+from app.conversations.service import (
+    GENERATION_STALE,
+    ConversationBusyError,
+    MessageNotFoundError,
+    ModelUnavailableError,
+    get_conversation,
+)
 from app.core.dependencies import Viewer
-from app.ratings import Rating
+from app.ratings import Rating, allowed_ratings
 from app.turns import charging, repository
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, failed_frame
@@ -64,13 +70,11 @@ from app.turns.values import SavedMessage, TurnResult, TurnStart
 
 logger = logging.getLogger(__name__)
 
-# 차례를 쥔 채 이만큼 지나면 서버가 도중에 꺼진 것으로 본다.
-# 모델을 부르는 시간의 상한(LLM_TIMEOUT_SECONDS, 10분까지)보다 길다
-GENERATION_STALE = timedelta(minutes=15)
 # 공급자를 부르지 못한 까닭(키가 없다, 부르는 코드가 없다)의 이름. 사람에게는 잠시 뒤에 다시 하라고 알린다
 PROVIDER_UNAVAILABLE = 'provider_unavailable'
-# 서버가 꺼지며 멈춘 생성, 예상하지 못한 오류, 글자 없이 끝난 답의 까닭
+# 서버가 꺼지며 멈춘 생성, 사람이 멈춘 생성, 예상하지 못한 오류, 글자 없이 끝난 답의 까닭
 CANCELLED = 'cancelled'
+STOPPED = 'stopped'
 SERVER_ERROR = 'server_error'
 EMPTY = 'empty'
 
@@ -79,8 +83,8 @@ class ModelRequiredError(Exception):
     """대화에 모델이 없다. 먼저 고른다(409)."""
 
 
-class TurnBusyError(Exception):
-    """대화가 다른 답을 쓰는 중이다(409). 한 대화에 한 번에 하나의 생성만 받는다."""
+class NotRegenerableError(Exception):
+    """다시 쓸 수 없는 말이다(422). 사람의 말에 답한 것이 아닌 말(캐릭터의 인사말)이다."""
 
 
 class TurnDeclinedError(Exception):
@@ -270,7 +274,7 @@ async def begin_turn(
     차례를 잡고 사람의 말과 기록(pending)을 저장한다. 모델에 보낼 메시지를 함께 만든다.
 
     대화가 없으면 ConversationNotFoundError, 모델이 없으면 ModelRequiredError, 쓸 수 없으면 ModelUnavailableError,
-    다른 답을 쓰는 중이면 TurnBusyError. 어느 것이든 아무것도 저장하지 않는다.
+    다른 답을 쓰는 중이면 ConversationBusyError. 어느 것이든 아무것도 저장하지 않는다.
     판매(결제 서버의 가격표)는 여기서 보지 않는다. 홀드를 걸 때 결제 서버가 본다.
     """
     async with session_factory() as session:
@@ -278,7 +282,7 @@ async def begin_turn(
         model = await catalog.get_model(session, conversation.model_slug) if conversation.model_slug else None
         slug = require_model(conversation, model, Rating(character.rating), now)
         if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
-            raise TurnBusyError
+            raise ConversationBusyError
         path = await conversations.active_path(session, conversation.active_leaf_id)
         message = user_message(conversation, content, now)
         repository.add(session, message)
@@ -296,6 +300,62 @@ async def begin_turn(
         price_code=generation.price_code,
         user_message=saved(message),
         messages=prompt_for(conversation, character, persona, [*path, message], context_chars),
+    )
+
+
+def answered_message(target: Message) -> uuid.UUID:
+    """
+    다시 쓸 답의 부모(사람의 말). 캐릭터의 답이면 그 부모, 사람의 말이면 그 말 자신이다(답을 못 받은 말에 다시 답한다).
+
+    부모가 없는 캐릭터의 말(인사말)은 다시 쓰지 않는다(NotRegenerableError). 카드가 쓴 글이지 모델이 쓴 글이 아니다.
+    """
+    if target.role == Role.USER:
+        return target.id
+    if target.parent_id is None:
+        raise NotRegenerableError
+    return target.parent_id
+
+
+async def begin_regenerate(
+    session_factory: async_sessionmaker[AsyncSession],
+    viewer: Viewer,
+    message_id: uuid.UUID,
+    context_chars: int,
+    now: datetime,
+) -> TurnStart:
+    """
+    그 말에 다시 답할 차례를 잡는다. 새 답은 같은 부모 아래의 대안이다. 앞의 답은 그대로 남는다.
+
+    기록(pending)만 저장한다. 사람의 말은 새로 저장하지 않는다.
+    가지의 끝은 옮기지 않는다. 새 답을 저장할 때 옮긴다(save_result).
+    그래서 거절되거나 글자 없이 실패하면 앞의 답이 그대로 보인다.
+    말이 없으면 MessageNotFoundError, 다시 쓸 수 없는 말이면 NotRegenerableError. 나머지는 begin_turn 과 같다.
+    """
+    async with session_factory() as session:
+        found = await conversations.find_visible_message(
+            session, viewer.claims.user_id, allowed_ratings(viewer.claims), message_id
+        )
+        if found is None:
+            raise MessageNotFoundError
+        target, (conversation, character, persona) = found
+        parent_id = answered_message(target)
+        model = await catalog.get_model(session, conversation.model_slug) if conversation.model_slug else None
+        slug = require_model(conversation, model, Rating(character.rating), now)
+        if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
+            raise ConversationBusyError
+        path = await conversations.active_path(session, parent_id)
+        generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
+        repository.add(session, generation)
+        await session.commit()
+    return TurnStart(
+        conversation_id=conversation.id,
+        generation_id=generation.id,
+        owner_id=viewer.claims.user_id,
+        model_slug=slug,
+        reference=generation.reference,
+        price_code=generation.price_code,
+        user_message=saved(path[-1]),
+        messages=prompt_for(conversation, character, persona, path, context_chars),
     )
 
 
@@ -419,6 +479,57 @@ async def settle_turn(
         await settle_generation(session_factory, billing, generation, now)
 
 
+@dataclass
+class StopSwitch:
+    """
+    사람이 멈추는 스위치. 모델을 부르는 일(call)만 멈춘다. 저장과 확정은 멈추지 않는다.
+
+    서버가 꺼지며 멈추는 것(작업 전체의 취소)과 가른다. 사람이 멈추면 받은 만큼 저장하고 바로 확정한다.
+    """
+
+    requested: bool = False
+    call: asyncio.Task | None = None
+
+    def request(self) -> bool:
+        """
+        멈춘다. 모델을 부르기 전이거나 부르는 중이었으면 True, 이미 다 받았으면 False.
+        부르기 전에 멈추면 부르지 않는다(run_generation).
+        """
+        if self.call is not None and self.call.done():
+            return False
+        self.requested = True
+        if self.call is not None:
+            self.call.cancel()
+        return True
+
+
+async def stoppable_call(
+    session_factory: async_sessionmaker[AsyncSession],
+    route: Route,
+    start: TurnStart,
+    params: GenerationParams,
+    collector: Collector,
+    clock: Callable[[], datetime],
+    stop: StopSwitch,
+) -> TurnResult:
+    """
+    모델을 부르는 일을 따로 띄우고 기다린다. 사람이 멈추면 받은 만큼의 결과(stopped)를 돌려준다.
+
+    서버가 꺼지며 멈추면(이 작업의 취소) 부르는 일도 끊고, 받은 만큼 저장한 뒤 그대로 올린다.
+    """
+    if stop.requested:
+        return failure_of('', STOPPED)
+    stop.call = asyncio.create_task(call_model(route, start, params, collector))
+    try:
+        return await stop.call
+    except asyncio.CancelledError:
+        if stop.requested and not asyncio.current_task().cancelling():
+            return failure_of(collector.text(), STOPPED)
+        stop.call.cancel()
+        await save_result(session_factory, start, failure_of(collector.text(), CANCELLED), clock())
+        raise
+
+
 async def run_generation(
     session_factory: async_sessionmaker[AsyncSession],
     billing: Billing,
@@ -427,20 +538,18 @@ async def run_generation(
     params: GenerationParams,
     relay: Relay,
     clock: Callable[[], datetime],
+    stop: StopSwitch,
 ) -> None:
     """
     모델을 부르고, 흘려보내고, 저장하고, 맡긴다. 응답과 따로 도는 작업이다. 사람이 끊어도 끝까지 돈다.
 
+    사람이 멈추면(stop) 받은 만큼 저장하고 맡긴다(받은 글이 있으면 partial 로 확정, 없으면 반환).
     서버가 꺼지며 멈추면 받은 만큼 저장하고 멈춘다. 맡기는 것은 다음에 뜬 서버의 정리 작업이 한다.
     저장하다 실패하면(DB 가 없다) 응답에 실패를 알리고 끝낸다.
     차례와 홀드는 오래되면 풀린다(GENERATION_STALE, 정리 작업).
     """
     collector = Collector(relay)
-    try:
-        result = await call_model(route, start, params, collector)
-    except asyncio.CancelledError:
-        await save_result(session_factory, start, failure_of(collector.text(), CANCELLED), clock())
-        raise
+    result = await stoppable_call(session_factory, route, start, params, collector, clock, stop)
     try:
         answer = await save_result(session_factory, start, result, clock())
     except Exception:

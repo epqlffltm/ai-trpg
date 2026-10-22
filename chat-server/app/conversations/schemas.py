@@ -132,6 +132,24 @@ class MessageOut(BaseModel):
     created_at: datetime
 
 
+class PathMessageOut(MessageOut):
+    """
+    지금 가지의 말 하나와 그 대안들. alternatives 는 같은 부모 아래의 말들의 id 다(먼저 생긴 것부터, 이 말도 든다).
+
+    화면이 "< 2/3 >" 를 그리고, 다른 대안을 고르면 PUT /conversations/{id}/branch 로 그 가지를 본다.
+    """
+
+    alternatives: list[uuid.UUID]
+
+
+class BranchChoice(BaseModel):
+    """볼 가지. 대안 가운데 하나의 id 다. 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    message_id: uuid.UUID
+
+
 class ConversationSummary(BaseModel):
     """목록의 한 줄."""
 
@@ -152,9 +170,9 @@ class ConversationPage(BaseModel):
 
 class ConversationDetail(BaseModel):
     """
-    대화 하나. messages 는 지금 보고 있는 가지의 말들이다. 첫 말부터 차례로.
+    대화 하나. messages 는 지금 보고 있는 가지의 말들이다. 첫 말부터 차례로. 말마다 그 대안들의 id 가 실린다.
 
-    대안(다시 생성, 고친 말)은 그 단계에서 따로 읽는 길을 둔다.
+    generating 이 참이면 답을 쓰는 중이다. 화면이 보내기를 막고, 끝난 뒤 다시 읽는다.
     """
 
     id: uuid.UUID
@@ -163,6 +181,7 @@ class ConversationDetail(BaseModel):
     character: CharacterOut
     persona: PersonaOut | None
     model: ConversationModelOut | None
-    messages: list[MessageOut]
+    messages: list[PathMessageOut]
+    generating: bool
     created_at: datetime
     updated_at: datetime
