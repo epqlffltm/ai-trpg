@@ -86,6 +86,9 @@ class Settings(CoreSettings):
     chat_context_chars: int = Field(default=12000, ge=1000, le=200000)
     # 글의 다양함. 0 에 가까울수록 같은 입력에 비슷한 답이다. 받지 않는 모델에는 보내지 않는다(모델 목록)
     chat_temperature: float = Field(default=0.9, ge=0, le=2)
+    # 다음 답 추천. 켜면 답 끝에 선택지 셋을 함께 받는다(app/conversation/suggestions.py).
+    # 호출은 늘지 않고 출력이 조금 는다
+    chat_suggestions: bool = True
 
     @model_validator(mode='after')
     def require_an_asset_secret(self) -> Self:
