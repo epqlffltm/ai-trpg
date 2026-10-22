@@ -29,6 +29,12 @@ export type TableSummary = Trpg['schemas']['TableSummary'];
 export type TableDetail = Trpg['schemas']['TableDetail'];
 export type TableCreate = Trpg['schemas']['TableCreate'];
 export type NarrationStyle = Trpg['schemas']['NarrationStyle'];
+export type TableMember = Trpg['schemas']['MemberOut'];
+export type TableEvent = Trpg['schemas']['EventOut'];
+export type EventPage = Trpg['schemas']['EventPage'];
+export type ChatMessage = Trpg['schemas']['MessageOut'];
+export type MessagePage = Trpg['schemas']['MessagePage'];
+export type WhisperPage = Trpg['schemas']['WhisperPage'];
 
 export type PublicCharacterPage = Asset['schemas']['PublicCharacterPage'];
 export type PublicCharacterSummary = Asset['schemas']['PublicCharacterSummary'];

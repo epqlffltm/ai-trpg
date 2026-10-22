@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/TableScreens.test.tsx
-// 테이블 만들기(B4)와 로비(B3). 보내는 본문, 들어간 뒤 테이블 방으로 가는지, 비밀번호와 그 사이에 달라진 목록을 본다.
+// 테이블 만들기(B4)와 로비(B3). 보내는 본문, 들어간 뒤 테이블 방(B6)이 열리는지, 비밀번호와 그 사이에 달라진 목록을 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
+import { roomRoutes } from '../../test/tableFixtures';
 
 const SCENARIO_ID = '00000000-0000-4000-8000-0000000000a1';
 const TABLE_ID = '00000000-0000-4000-8000-0000000000b1';
@@ -70,6 +71,7 @@ function signedIn(routes: Record<string, (request: SeenRequest) => Response>) {
     'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', identity: { adult_content: false } }),
     'GET /api/v1/game/tables/narration-models': () => json(200, MODELS),
     'GET /api/v1/game/tables': () => json(200, { items: [], total: 0 }),
+    ...roomRoutes(TABLE_ID),
     ...routes,
   });
 }
@@ -95,7 +97,7 @@ describe('TableCreatePage', () => {
     await userEvent.click(screen.getByLabelText('준비된 캐릭터(프리젠)'));
     await userEvent.click(screen.getByRole('button', { name: '만들기' }));
 
-    expect(await screen.findByRole('heading', { name: 'TRPG' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '목요일 모임', level: 1 })).toBeInTheDocument();
     expect(seen.find((request) => request.method === 'POST' && request.url === '/api/v1/game/tables')?.body).toMatchObject({
       scenario_id: SCENARIO_ID,
       opening_index: 1,
@@ -145,7 +147,7 @@ describe('LobbyPage', () => {
 
     await userEvent.click(within(card).getByRole('button', { name: '테이블 b1에 들어가기' }));
 
-    expect(await screen.findByRole('heading', { name: 'TRPG' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '목요일 모임', level: 1 })).toBeInTheDocument();
     expect(seen.find((request) => request.url.endsWith('/join'))?.body).toEqual({ password: null });
   });
 
@@ -169,7 +171,7 @@ describe('LobbyPage', () => {
     await userEvent.clear(within(dialog).getByLabelText('테이블의 비밀번호'));
     await userEvent.type(within(dialog).getByLabelText('테이블의 비밀번호'), 'right');
     await userEvent.click(within(dialog).getByRole('button', { name: '들어가기' }));
-    expect(await screen.findByRole('heading', { name: 'TRPG' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '목요일 모임', level: 1 })).toBeInTheDocument();
   });
 
   it('그 사이에 자리가 찼으면 알리고 목록을 다시 읽는다', async () => {
