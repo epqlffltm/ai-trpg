@@ -52,6 +52,7 @@ from app.limits.setup import build_limiting, build_redis
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
 from app.lore.indexing import LoreIndexer
+from app.lore.query_embedder import QueryEmbedder
 from app.lore.retrieval import LoreRetriever, Thresholds
 from app.lore.setup import build_embedder
 from app.memory.history import HistoryCollector
@@ -251,25 +252,26 @@ def create_app(
     # 로어북 항목을 벡터로 바꾸는 것. 설정(EMBEDDER)이 정한다. 기본은 모델을 부르지 않는 가짜다.
     # 시나리오를 게시하면 뒤에서 판의 항목을 벡터로 바꾼다(app/lore/indexing.py)
     app.state.embedder = build_embedder(settings, app.state.http_client)
+    # 서술 전의 검색 셋(로어북, 참고 자료, 지난 일)이 함께 쓰는 임베더. 셋이 같은 찾는 글을 바꾸므로 한 번만 부른다
+    # (app/lore/query_embedder.py). 색인은 위의 임베더를 그대로 쓴다
+    query_embedder = QueryEmbedder(app.state.embedder)
 
     # 서술하기 직전에 이번 장면에 맞는 로어북 항목을 고르는 것(app/lore/retrieval.py).
     # 판의 벡터가 모자라면 위의 임베더로 색인을 다시 맡긴다.
     # 거리 기준은 설정(LORE_MAX_DISTANCE, LORE_KEYWORD_MAX_DISTANCE)이 정한다
     indexer = LoreIndexer(app.state.session_factory, app.state.embedder, app.state.jobs)
     thresholds = Thresholds(settings.lore_max_distance, settings.lore_keyword_max_distance)
-    app.state.lore = LoreRetriever(app.state.session_factory, app.state.embedder, indexer, thresholds)
+    app.state.lore = LoreRetriever(app.state.session_factory, query_embedder, indexer, thresholds)
     # 참고 자료(#482)를 고르는 것. 로어북과 같은 임베더를 쓴다. 자료의 벡터는 관리 명령(scripts/references.py)이 만든다
     reference_thresholds = ReferenceThresholds(settings.reference_max_distance, settings.reference_keyword_max_distance)
-    app.state.references = ReferenceRetriever(app.state.session_factory, app.state.embedder, reference_thresholds)
+    app.state.references = ReferenceRetriever(app.state.session_factory, query_embedder, reference_thresholds)
 
     # 서술하기 직전에 지난 기록보다 앞의 라운드 중 이번 장면에 맞는 것을 고르는 것(app/memory/retrieval.py).
     # 테이블의 라운드 벡터가 모자라면 위의 임베더로 색인을 맡긴다.
     # 거리 기준은 설정(MEMORY_MAX_DISTANCE, MEMORY_KEYWORD_MAX_DISTANCE)이 정한다
     memory_indexer = MemoryIndexer(app.state.session_factory, app.state.embedder, app.state.jobs)
     memory_thresholds = MemoryThresholds(settings.memory_max_distance, settings.memory_keyword_max_distance)
-    app.state.memories = MemoryRetriever(
-        app.state.session_factory, app.state.embedder, memory_indexer, memory_thresholds
-    )
+    app.state.memories = MemoryRetriever(app.state.session_factory, query_embedder, memory_indexer, memory_thresholds)
 
     # 로어북이 고른 인물마다 지난 서술에서 그 인물이 나온 문장을 모으는 것(app/memory/history.py). 모델을 부르지 않는다
     app.state.histories = HistoryCollector(app.state.session_factory)
