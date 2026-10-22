@@ -6,8 +6,9 @@
   - 캐릭터(Character)는 초안이다. 만든 사람이 고친다.
   - 게시하면 판(CharacterVersion)이 생긴다. 판은 그때의 초안을 굳힌 문서이고 바뀌지 않는다. 번호가 1 부터 오른다.
   - 쓰는 서비스(chat)는 대화를 시작할 때 판 하나를 가져가 복사해 고정한다. 새 판이 나와도 알리기만 한다.
-첫 칸은 대화에 필요한 핵심만이다(2026-10-21 유저 결정). 호감도의 규칙, 의복과 물건, 지도, 일러스트는
-chat 이 그 단계(장소와 소지품)에 갈 때 판의 형식을 올려 더한다.
+첫 칸은 대화에 필요한 핵심만이었다(2026-10-21 유저 결정). 장소와 길(지도), 물건과 시작 소지품은
+chat 의 만드는 순서 4 에서 캐릭터에 넣었다(2026-10-22 유저 결정, 판의 형식 2).
+호감도의 규칙, 상대의 차림, 일러스트는 chat 이 그 단계에 갈 때 판의 형식을 올려 더한다.
 """
 
 import enum
@@ -38,6 +39,30 @@ START_TITLE_MAX_LENGTH = 30
 START_SITUATION_MAX_LENGTH = 2000
 # 판의 변경 내용. 사람이 읽는다. TRPG 의 판과 같다
 VERSION_NOTE_MAX_LENGTH = 500
+# 장소, 물건의 id. 캐릭터 안에서만 고유한 짧은 글이다. 길과 시작 소지품이 가리키고, chat 의 상태가 적어 둔다.
+# 판이 바뀌어도 같은 것은 같은 id 로 둔다(만드는 화면이 정해 붙인다)
+KEY_MAX_LENGTH = 40
+KEY_PATTERN = r'^[A-Za-z0-9_-]+$'
+# 장소(지도의 점)와 길(두 장소 사이, 걸리는 시간)
+CHARACTER_MAX_PLACES = 30
+PLACE_NAME_MAX_LENGTH = 30
+PLACE_DESCRIPTION_MAX_LENGTH = 1000
+CHARACTER_MAX_PATHS = 100
+# 길 하나에 걸리는 시간의 상한(분). 하루다
+PATH_MAX_MINUTES = 1440
+# 물건과 시작 소지품(사용자가 처음에 가진 것)
+CHARACTER_MAX_ITEMS = 50
+ITEM_NAME_MAX_LENGTH = 30
+ITEM_DESCRIPTION_MAX_LENGTH = 500
+CHARACTER_MAX_START_ITEMS = 20
+START_ITEM_MAX_COUNT = 99
+
+
+class ItemKind(enum.StrEnum):
+    """물건의 종류. 옷은 건네면 상대의 차림에 들어간다(chat 의 장소와 소지품). 나머지는 그냥 물건이다."""
+
+    THING = 'thing'
+    CLOTHING = 'clothing'
 
 
 class Visibility(enum.StrEnum):
@@ -81,6 +106,14 @@ class Character(Base):
     image_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey('images.id', ondelete='SET NULL'), default=None, index=True
     )
+    # 지도. 장소들 [{"id", "name", "description", "image_id"}], 길들 [{"a", "b", "minutes"}], 처음 있는 장소의 id.
+    # 물건들 [{"id", "name", "description", "kind", "consumable", "image_id"}], 시작 소지품 [{"item", "count"}].
+    # 모양은 schemas 가 정한다. 서로 가리키는 것이 맞는지는 게시할 때 본다(초안은 고치는 중이라 어긋날 수 있다)
+    places: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    paths: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    start_place: Mapped[str | None] = mapped_column(String(KEY_MAX_LENGTH), default=None)
+    items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    start_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(
