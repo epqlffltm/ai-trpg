@@ -15,7 +15,7 @@
 import enum
 import uuid
 
-from app.characters.models import Character
+from app.characters.models import Character, TriggerKind
 from app.content.html import Cleaned, clean_intro, image_ids
 
 
@@ -32,6 +32,8 @@ class Problem(enum.StrEnum):
     START_PLACE_MISSING = 'start_place_missing'
     # 시작 소지품이 없는 물건을 가리킨다
     ITEM_MISSING = 'item_missing'
+    # 호감도의 규칙이 없는 물건이나 장소를 가리킨다
+    AFFECTION_TARGET_MISSING = 'affection_target_missing'
 
 
 class CharacterNotReadyError(Exception):
@@ -63,10 +65,23 @@ def item_problems(character: Character) -> list[Problem]:
     return [Problem.ITEM_MISSING] if any(start['item'] not in known for start in character.start_items) else []
 
 
+def affection_problems(character: Character) -> list[Problem]:
+    """호감도가 맞지 않는 것들. 규칙의 대상은 있는 물건(건넸다, 썼다)이나 장소(갔다)여야 한다."""
+    if not character.affection:
+        return []
+    places = {place['id'] for place in character.places}
+    items = {item['id'] for item in character.items}
+    for rule in character.affection['rules']:
+        known = places if rule['on']['kind'] == TriggerKind.REACH_PLACE else items
+        if rule['on']['target'] not in known:
+            return [Problem.AFFECTION_TARGET_MISSING]
+    return []
+
+
 def find_problems(character: Character) -> list[Problem]:
     """게시를 막는 것들. 없으면 빈 목록이다."""
     problems = [] if character.starts else [Problem.START_MISSING]
-    return problems + place_problems(character) + item_problems(character)
+    return problems + place_problems(character) + item_problems(character) + affection_problems(character)
 
 
 def cleaned_intro(character: Character) -> Cleaned:
