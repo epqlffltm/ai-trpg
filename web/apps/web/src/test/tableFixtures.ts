@@ -8,6 +8,52 @@ import { json } from './fakeFetch';
 export const ME = '00000000-0000-4000-8000-0000000000e1';
 export const OTHER = '00000000-0000-4000-8000-0000000000e2';
 
+/** 시험의 규칙. 능력치 셋, 점수 3~18, 보정은 (점수-10)/2 내림, 최대 HP 에 건강의 보정을 더한다 */
+export const RULES = {
+  abilities: [
+    { key: 'str', name: '근력' },
+    { key: 'dex', name: '민첩' },
+    { key: 'con', name: '건강' },
+  ],
+  score_min: 3,
+  score_max: 18,
+  modifier: { base: 10, step: 2 },
+  hp_ability: 'con',
+  point_buy: {
+    budget: 10,
+    costs: [
+      { score: 8, cost: 0 },
+      { score: 10, cost: 2 },
+      { score: 12, cost: 4 },
+      { score: 14, cost: 7 },
+    ],
+  },
+  score_roll: { count: 4, sides: 6, keep: 3 },
+};
+
+export function pregen(name: string, extra: Record<string, unknown> = {}) {
+  return {
+    name,
+    description: `${name}의 설명`,
+    sheet: { abilities: { str: 14, dex: 12, con: 10 }, max_hp: 12 },
+    taken_by: null,
+    dead: false,
+    ...extra,
+  };
+}
+
+/** 굴린 점수(members[].roll). 능력치 셋이라 점수도 셋이다 */
+export function roll(scores: number[], extra: Record<string, unknown> = {}) {
+  return {
+    dice: scores.map(() => [6, 5, 4, 1]),
+    scores,
+    times_rolled: 1,
+    character_number: 1,
+    reroll_granted: false,
+    ...extra,
+  };
+}
+
 export function member(userId: string, extra: Record<string, unknown> = {}) {
   return {
     user_id: userId,
@@ -45,6 +91,12 @@ export function tableDetail(id: string, extra: Record<string, unknown> = {}) {
     references_enabled: false,
     created_at: '2026-10-22T00:00:00Z',
     opening: '문 앞에서 시작한다.',
+    rules: RULES,
+    character_modes: ['pregen', 'custom', 'manual', 'point_buy', 'rolled'],
+    default_sheet: { abilities: { str: 10, dex: 10, con: 10 }, max_hp: 10 },
+    player_made_hp: { base: 8, cap: 20 },
+    reroll_allowed: true,
+    pregens: [pregen('렌'), pregen('미아', { taken_by: OTHER }), pregen('조', { dead: true })],
     members: [member(ME, { is_host: true }), member(OTHER)],
     invite_code: 'ABC123',
     started_at: null,
