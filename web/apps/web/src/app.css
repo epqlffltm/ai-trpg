@@ -585,3 +585,124 @@ a.ui-button {
 .advanced[open] > summary {
   margin-bottom: var(--ui-gap);
 }
+
+/* 테이블 방(B6). 넓으면 가운데와 오른쪽(앉은 사람, 채팅), 좁으면 위아래 */
+.room__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room__head .hint {
+  margin: -8px 0 0;
+}
+
+.room__body {
+  display: grid;
+  gap: calc(var(--ui-gap) * 1.5);
+  margin-top: var(--ui-gap);
+}
+
+@media (min-width: 900px) {
+  .room__body {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    align-items: start;
+  }
+}
+
+.room__side {
+  display: grid;
+  gap: var(--ui-gap);
+}
+
+.room-panel {
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.room-panel h2,
+.waiting-room h2 {
+  font-size: 1.05rem;
+  margin: 0 0 10px;
+}
+
+.stream-badge {
+  font-size: 0.85em;
+  color: var(--ui-text-muted);
+}
+
+.member {
+  display: grid;
+}
+
+.member__character {
+  font-weight: 600;
+}
+
+.waiting-room__label {
+  font-size: 0.95rem;
+  margin: var(--ui-gap) 0 4px;
+}
+
+.invite-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.invite-code code {
+  font-size: 1.1em;
+  padding: 2px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-surface);
+}
+
+.start {
+  margin-top: var(--ui-gap);
+}
+
+.chat__messages {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.chat__message {
+  display: grid;
+}
+
+.chat__name {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--ui-text-muted);
+}
+
+.chat__end {
+  height: 0;
+}
+
+.chat__typing {
+  margin: 0 0 6px;
+}
+
+.chat__form {
+  display: grid;
+  gap: 6px;
+}
+
+.chat__input {
+  resize: vertical;
+  min-height: 2.6em;
+}
+
+.chat__form > .ui-button {
+  justify-self: end;
+}

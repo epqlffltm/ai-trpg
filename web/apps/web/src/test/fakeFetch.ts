@@ -4,7 +4,7 @@
 
 import { vi } from 'vitest';
 
-export type SeenRequest = { url: string; method: string; headers: Headers; body: unknown };
+export type SeenRequest = { url: string; method: string; headers: Headers; body: unknown; signal: AbortSignal | null };
 type Handler = (request: SeenRequest) => Response | Promise<Response>;
 
 export function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
@@ -23,6 +23,7 @@ export function installFakeFetch(routes: Record<string, Handler>) {
       method: init.method ?? 'GET',
       headers: new Headers(init.headers),
       body: typeof init.body === 'string' ? JSON.parse(init.body) : undefined,
+      signal: init.signal ?? null,
     };
     seen.push(request);
     const key = `${request.method} ${url.split('?')[0]}`;
