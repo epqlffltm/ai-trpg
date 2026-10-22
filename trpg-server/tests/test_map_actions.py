@@ -101,6 +101,7 @@ async def test_a_character_goes_one_step_along_a_known_route(
         'reason': None,
         # 이 길은 시간을 적지 않았다. 라운드의 걸음 안에서 간다
         'travel_minutes': None,
+        'carry': None,
     }
     # 방장이 옮길 때와 같은 이벤트다. 행동에 이어지고, 행한 사람은 없다(엔진이 옮겼다)
     [moved] = await events_of(client, friend, table, 'character_moved')

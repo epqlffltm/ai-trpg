@@ -103,7 +103,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.QUEST_CHANGED: ('entry_id', 'name', 'previous', 'status', 'rewards', 'consumed', 'due_at', 'reason'),
     EventType.CLOCK_STEP_CHANGED: ('previous', 'next_step_minutes', 'default'),
     # 캐릭터의 위치는 공개다. 아는 장소만 적히므로 숨긴 장소는 새지 않는다
-    EventType.CHARACTER_MOVED: ('round', 'user_id', 'character_name', 'from', 'to', 'travel_minutes'),
+    # 업혀 갔으면 업은 사람(carried_by)이 더 있다(#367)
+    EventType.CHARACTER_MOVED: ('round', 'user_id', 'character_name', 'from', 'to', 'travel_minutes', 'carried_by'),
     # 찾은 길은 공개다. 찾았으니 이제 모두가 아는 길이다. 굴린 판정은 처음부터 적지 않는다
     EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found', 'items'),
     # 쉰 것과 그 회복, 깨진 까닭은 공개다. HP 는 다른 회복과 같이 보인다
