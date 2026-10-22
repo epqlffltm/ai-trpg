@@ -63,9 +63,7 @@ def require_visibility(viewer: AccessClaims, visibility: Visibility | None) -> N
 
 def build_character(owner_id: uuid.UUID, data: CharacterCreate) -> Character:
     """입력에서 캐릭터 객체를 만든다. 아직 저장하지 않는다. 처음에는 비공개다."""
-    values = data.model_dump()
-    values['starts'] = [start.model_dump() for start in data.starts]
-    return Character(owner_id=owner_id, visibility=Visibility.PRIVATE, **values)
+    return Character(owner_id=owner_id, visibility=Visibility.PRIVATE, **data.values())
 
 
 def apply_changes(character: Character, changes: dict) -> None:
@@ -74,10 +72,13 @@ def apply_changes(character: Character, changes: dict) -> None:
         setattr(character, name, value)
 
 
-async def require_own_image(session: AsyncSession, owner_id: uuid.UUID, image_id: uuid.UUID | None) -> None:
-    """붙이려는 대표 그림이 자기 그림이어야 한다. 떼거나(None) 바꾸지 않으면 보지 않는다. 아니면 ImageNotOwnedError."""
-    if image_id is not None:
-        await images.require_own_images(session, owner_id, [image_id])
+async def require_own_images(session: AsyncSession, owner_id: uuid.UUID, image_ids: list[uuid.UUID]) -> None:
+    """
+    붙이려는 그림(대표 그림, 장소의 배경, 물건의 그림)이 모두 자기 그림이어야 한다. 아니면 ImageNotOwnedError.
+    떼거나 바꾸지 않은 칸은 보지 않는다(빈 목록이면 보지 않는다).
+    """
+    if image_ids:
+        await images.require_own_images(session, owner_id, image_ids)
 
 
 async def get_mine(session: AsyncSession, owner_id: uuid.UUID, character_id: uuid.UUID) -> Character:
@@ -99,7 +100,7 @@ async def create_character(
     """캐릭터를 만든다. 만들 수 없는 사람이면 OperatorOnlyError, 쓸 수 없는 등급이면 AdultContentRequiredError."""
     require_maker(viewer, for_everyone)
     require_rating(data.rating, allowed_ratings(viewer))
-    await require_own_image(session, viewer.user_id, data.image_id)
+    await require_own_images(session, viewer.user_id, data.image_ids())
     character = build_character(viewer.user_id, data)
     repository.add(session, character)
     await session.commit()
@@ -115,7 +116,7 @@ async def update_character(
     require_visibility(viewer, data.visibility)
     if data.rating is not None:
         require_rating(data.rating, allowed_ratings(viewer))
-    await require_own_image(session, viewer.user_id, data.image_id)
+    await require_own_images(session, viewer.user_id, data.image_ids())
     apply_changes(character, data.changes())
     await session.commit()
     await session.refresh(character)

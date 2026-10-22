@@ -263,7 +263,7 @@ async def test_publishing_freezes_a_cleaned_document(client: AsyncClient, operat
         first['document']['intro_html'] == '<p>도서관의 <strong>사서</strong>.</p><a rel="noopener noreferrer">링크</a>'
     )
     assert first['removed'] == [{'kind': 'tag', 'name': 'script'}, {'kind': 'link', 'name': 'javascript:x'}]
-    assert first['document']['format'] == 1 and first['document']['starts'] == [START]
+    assert first['document']['format'] == 2 and first['document']['starts'] == [START]
     # 판은 바뀌지 않는다. 초안은 쓴 그대로다(거르지 않는다)
     assert frozen['document'] == first['document']
     assert draft['name'] == '세라 2' and '<script>' in draft['intro_html']

@@ -74,11 +74,38 @@
             "title": "Intro Html",
             "type": "string"
           },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
+            "maxItems": 50,
+            "title": "Items",
+            "type": "array"
+          },
           "name": {
             "maxLength": 50,
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "paths": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Path"
+            },
+            "maxItems": 100,
+            "title": "Paths",
+            "type": "array"
+          },
+          "places": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Place"
+            },
+            "maxItems": 30,
+            "title": "Places",
+            "type": "array"
           },
           "rating": {
             "$ref": "#/components/schemas/Rating",
@@ -89,6 +116,29 @@
             "maxLength": 2000,
             "title": "Speech Examples",
             "type": "string"
+          },
+          "start_items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StartItem"
+            },
+            "maxItems": 20,
+            "title": "Start Items",
+            "type": "array"
+          },
+          "start_place": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Place"
           },
           "starts": {
             "default": [],
@@ -158,6 +208,13 @@
             "title": "Intro Html",
             "type": "string"
           },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
+            "title": "Items",
+            "type": "array"
+          },
           "latest_version": {
             "anyOf": [
               {
@@ -172,6 +229,20 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/Path"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/Place"
+            },
+            "title": "Places",
+            "type": "array"
           },
           "published_at": {
             "anyOf": [
@@ -191,6 +262,24 @@
           "speech_examples": {
             "title": "Speech Examples",
             "type": "string"
+          },
+          "start_items": {
+            "items": {
+              "$ref": "#/components/schemas/StartItem"
+            },
+            "title": "Start Items",
+            "type": "array"
+          },
+          "start_place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Place"
           },
           "starts": {
             "items": {
@@ -228,6 +317,11 @@
           "image_id",
           "rating",
           "visibility",
+          "places",
+          "paths",
+          "start_place",
+          "items",
+          "start_items",
           "latest_version",
           "published_at",
           "created_at",
@@ -238,7 +332,7 @@
       },
       "CharacterDocument": {
         "additionalProperties": false,
-        "description": "판에 굳힌 캐릭터. intro_html 은 허용 목록으로 거른 소개다.",
+        "description": "판에 굳힌 캐릭터. intro_html 은 허용 목록으로 거른 소개다.\n지도와 물건의 칸은 형식 2 에서 더했다. 형식 1 의 판을 읽을 수 있게 비어 있는 것이 기본이다.",
         "properties": {
           "age": {
             "title": "Age",
@@ -272,9 +366,33 @@
             "title": "Intro Html",
             "type": "string"
           },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemDocument"
+            },
+            "title": "Items",
+            "type": "array"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "paths": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PathDocument"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "places": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlaceDocument"
+            },
+            "title": "Places",
+            "type": "array"
           },
           "rating": {
             "$ref": "#/components/schemas/Rating"
@@ -282,6 +400,25 @@
           "speech_examples": {
             "title": "Speech Examples",
             "type": "string"
+          },
+          "start_items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StartItemDocument"
+            },
+            "title": "Start Items",
+            "type": "array"
+          },
+          "start_place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Place"
           },
           "starts": {
             "items": {
@@ -445,6 +582,21 @@
             ],
             "title": "Intro Html"
           },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Item"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
           "name": {
             "anyOf": [
               {
@@ -457,6 +609,36 @@
               }
             ],
             "title": "Name"
+          },
+          "paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Path"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paths"
+          },
+          "places": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Place"
+                },
+                "maxItems": 30,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Places"
           },
           "rating": {
             "anyOf": [
@@ -479,6 +661,35 @@
               }
             ],
             "title": "Speech Examples"
+          },
+          "start_items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StartItem"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Items"
+          },
+          "start_place": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Place"
           },
           "starts": {
             "anyOf": [
@@ -627,6 +838,114 @@
         "title": "ImageFormat",
         "type": "string"
       },
+      "Item": {
+        "additionalProperties": false,
+        "description": "물건 하나. 옷(clothing)은 건네면 상대의 차림에 들어간다. consumable 이면 쓰면 하나 없어진다.",
+        "properties": {
+          "consumable": {
+            "default": false,
+            "title": "Consumable",
+            "type": "boolean"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ItemKind",
+            "default": "thing"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "Item",
+        "type": "object"
+      },
+      "ItemDocument": {
+        "additionalProperties": false,
+        "description": "물건 하나.",
+        "properties": {
+          "consumable": {
+            "default": false,
+            "title": "Consumable",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ItemKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "kind",
+          "image_id"
+        ],
+        "title": "ItemDocument",
+        "type": "object"
+      },
+      "ItemKind": {
+        "description": "물건의 종류. 옷은 건네면 상대의 차림에 들어간다(chat 의 장소와 소지품). 나머지는 그냥 물건이다.",
+        "enum": [
+          "thing",
+          "clothing"
+        ],
+        "title": "ItemKind",
+        "type": "string"
+      },
       "MeResponse": {
         "description": "토큰의 주인.",
         "properties": {
@@ -640,6 +959,64 @@
           "user_id"
         ],
         "title": "MeResponse",
+        "type": "object"
+      },
+      "Path": {
+        "additionalProperties": false,
+        "description": "두 장소(a, b) 사이의 길. 양쪽으로 다닌다. minutes 는 걸리는 시간(분)이고 그만큼 시각이 흐른다.",
+        "properties": {
+          "a": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "A",
+            "type": "string"
+          },
+          "b": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "B",
+            "type": "string"
+          },
+          "minutes": {
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "minutes"
+        ],
+        "title": "Path",
+        "type": "object"
+      },
+      "PathDocument": {
+        "additionalProperties": false,
+        "description": "두 장소(a, b) 사이의 길. 양쪽으로 다닌다. minutes 는 걸리는 시간(분)이다.",
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "string"
+          },
+          "b": {
+            "title": "B",
+            "type": "string"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "minutes"
+        ],
+        "title": "PathDocument",
         "type": "object"
       },
       "PersonaCopy": {
@@ -985,6 +1362,87 @@
         "title": "PersonaUpdate",
         "type": "object"
       },
+      "Place": {
+        "additionalProperties": false,
+        "description": "장소 하나(지도의 점). 그림은 그 장소의 배경이다. 설명은 모델이 읽는다.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "Place",
+        "type": "object"
+      },
+      "PlaceDocument": {
+        "additionalProperties": false,
+        "description": "장소 하나. 그림은 그 장소의 배경이다.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "image_id"
+        ],
+        "title": "PlaceDocument",
+        "type": "object"
+      },
       "PublicCharacterDetail": {
         "description": "공개 캐릭터 하나. 마지막 판의 문서다.",
         "properties": {
@@ -1247,6 +1705,51 @@
           "situation"
         ],
         "title": "StartDocument",
+        "type": "object"
+      },
+      "StartItem": {
+        "additionalProperties": false,
+        "description": "사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수.",
+        "properties": {
+          "count": {
+            "default": 1,
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "item": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Item",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "title": "StartItem",
+        "type": "object"
+      },
+      "StartItemDocument": {
+        "additionalProperties": false,
+        "description": "사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "item": {
+            "title": "Item",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "count"
+        ],
+        "title": "StartItemDocument",
         "type": "object"
       },
       "ValidationError": {

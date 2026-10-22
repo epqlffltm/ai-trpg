@@ -6,7 +6,8 @@ asset 서버를 부르는 것(app/assets/client.py)을 검증한다. 가짜 HTTP
 보는 것.
   - 주소와 서명: 이 서버의 이름(chat)의 주소로, 이 서버의 비밀로 서명하고(asset 서버의 is_valid 로 확인한다),
     사용자의 토큰을 함께 넘긴다
-  - 답: 200 은 그 모양으로 읽는다. 404, 403 adult_content_required 는 각각의 예외다.
+  - 답: 200 은 그 모양으로 읽는다. 형식 2 의 지도와 물건은 남기고, 형식 1 의 판에서는 비어 있다.
+    404, 403 adult_content_required 는 각각의 예외다.
     그 밖의 답, 모양이 틀린 답, 닿지 못함, 주소가 없음은 모두 AssetUnavailableError 다
 """
 
@@ -86,6 +87,41 @@ async def test_unknown_fields_in_the_answer_are_ignored():
     fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
 
     assert fetched == copy
+
+
+# asset 서버의 형식 2 의 판에 든 지도와 물건
+WORLD = {
+    'places': [{'id': 'library', 'name': '도서관', 'description': '', 'image_id': None}],
+    'paths': [],
+    'start_place': 'library',
+    'items': [
+        {'id': 'scarf', 'name': '목도리', 'description': '', 'kind': 'clothing', 'consumable': False, 'image_id': None}
+    ],
+    'start_items': [{'item': 'scarf', 'count': 1}],
+}
+
+
+async def test_the_map_and_items_of_a_format_two_version_are_kept():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    body['document'] |= {'format': 2, **WORLD}
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    # 대화가 판을 복사할 때 이 모양으로 적는다(모르는 칸은 버리므로 여기에 있어야 남는다)
+    kept = fetched.document.model_dump(mode='json')
+    assert {name: kept[name] for name in WORLD} == WORLD
+
+
+async def test_a_format_one_version_has_no_map_or_items():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    for name in WORLD:
+        del body['document'][name]
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    assert (fetched.document.places, fetched.document.start_place, fetched.document.start_items) == ([], None, [])
 
 
 @pytest.mark.parametrize(
