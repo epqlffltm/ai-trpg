@@ -56,7 +56,7 @@ from app.turns import router as messages
 from app.turns import settler
 from app.turns.providers import build_router
 from app.turns.service import ModelRequiredError, NotContinuableError, NotRegenerableError, TurnDeclinedError
-from app.world.moves import MoveRefusedError
+from app.world.refusals import ActionRefusedError
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/chat'
@@ -206,7 +206,7 @@ def create_app(
     app.add_exception_handler(ModelRequiredError, messages.handle_model_required)
     app.add_exception_handler(NotRegenerableError, messages.handle_not_regenerable)
     app.add_exception_handler(NotContinuableError, messages.handle_not_continuable)
-    app.add_exception_handler(MoveRefusedError, messages.handle_move_refused)
+    app.add_exception_handler(ActionRefusedError, messages.handle_action_refused)
     app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
     app.add_exception_handler(MessageNotFoundError, conversations.handle_message_not_found)
     app.add_exception_handler(NotEditableError, conversations.handle_not_editable)

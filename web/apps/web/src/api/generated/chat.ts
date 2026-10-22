@@ -61,8 +61,10 @@ export interface paths {
         put?: never;
         /**
          * Act
-         * @description 행동한다. 지금은 지도에서 이동(kind move)뿐이다. 서버가 갈 수 있는지 보고 상태를 바꾼 뒤, 모델의 반응을 흘려보낸다.
-         *     turn 의 user_message 가 행동 말(role action)이다. 반응을 받으니 한 번 청구한다. SSE 의 모양은 말 보내기와 같다.
+         * @description 행동한다. 지도에서 이동(move), 물건 쓰기(use), 건네기(give, 한마디를 덧붙일 수 있다).
+         *     서버가 할 수 있는지 보고 상태를 바꾼 뒤, 모델의 반응을 흘려보낸다. 반응을 받으니 한 번 청구한다.
+         *     turn 의 user_message 가 행동 말(role action)이다(한마디를 덧붙였으면 그 한마디이고 action 이 행동 말이다).
+         *     SSE 의 모양은 말 보내기와 같다.
          */
         post: operations["act_api_v1_chat_conversations__conversation_id__actions_post"];
         delete?: never;
@@ -525,6 +527,22 @@ export interface components {
             updated_at: string;
         };
         /**
+         * GiveAction
+         * @description 소지품의 물건을 상대에게 건넨다. 하나 줄고, 옷이면 상대가 입는다.
+         *     words 는 덧붙이는 한마디다(없으면 행동만). 행동과 말을 한 턴에 붙이고 반응을 한 번 받는다.
+         */
+        GiveAction: {
+            /** Item */
+            item: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "give";
+            /** Words */
+            words?: string | null;
+        };
+        /**
          * Grade
          * @description 보이는 분류. 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 모델 목록의 파일에 적는다.
          * @enum {string}
@@ -685,8 +703,8 @@ export interface components {
          */
         MoveAction: {
             /**
-             * Kind
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             kind: "move";
             /** Place */
@@ -841,12 +859,15 @@ export interface components {
          * StateOut
          * @description 지금 보고 있는 가지의 끝의 상태. place 는 지금 있는 장소(지도가 없으면 null),
          *     minutes 는 대화를 시작한 뒤 흐른 시간(분), visited 는 가 본 장소들이다(화면이 안개를 그린다).
+         *     outfit 은 상대가 입은 옷들이다.
          */
         StateOut: {
             /** Inventory */
             inventory: components["schemas"]["HoldingOut"][];
             /** Minutes */
             minutes: number;
+            /** Outfit */
+            outfit: string[];
             /** Place */
             place: string | null;
             /** Visited */
@@ -861,6 +882,19 @@ export interface components {
          * @enum {string}
          */
         Tier: "basic" | "standard" | "premium";
+        /**
+         * UseAction
+         * @description 소지품의 물건을 쓴다. 쓰면 없어지는 물건이면 하나 준다.
+         */
+        UseAction: {
+            /** Item */
+            item: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "use";
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -1021,7 +1055,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MoveAction"];
+                "application/json": components["schemas"]["MoveAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"];
             };
         };
         responses: {

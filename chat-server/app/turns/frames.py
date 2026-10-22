@@ -20,8 +20,12 @@ def message_out(message: SavedMessage) -> MessageOut:
 def turn_frame(start: TurnStart) -> Frame:
     """맨 처음. 답할 사람의 말과 기록의 id. 이어서 출력이면 이어 쓰는 말의 id."""
     continues = start.continued.id if start.continued is not None else None
+    action = message_out(start.action) if start.action is not None else None
     body = TurnEvent(
-        generation_id=start.generation_id, user_message=message_out(start.user_message), continues=continues
+        generation_id=start.generation_id,
+        user_message=message_out(start.user_message),
+        continues=continues,
+        action=action,
     )
     return Frame(event='turn', data=body.model_dump_json())
 

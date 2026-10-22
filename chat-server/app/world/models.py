@@ -20,7 +20,10 @@ KEY_MAX_LENGTH = 40
 
 
 class MessageState(Base):
-    """그 말 뒤의 상태. place 는 지금 있는 장소의 id, minutes 는 흐른 시간(분), visited 는 가 본 장소들이다."""
+    """
+    그 말 뒤의 상태. place 는 지금 있는 장소의 id, minutes 는 흐른 시간(분), visited 는 가 본 장소들,
+    outfit 은 상대가 입은 옷들이다.
+    """
 
     __tablename__ = 'message_states'
     __table_args__ = (CheckConstraint('minutes >= 0', name='minutes_not_negative'),)
@@ -31,3 +34,5 @@ class MessageState(Base):
     # 가진 물건들 [{"item", "count"}]
     inventory: Mapped[list[dict]] = mapped_column(JSONB)
     visited: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)))
+    # 상대가 입은 옷들(사용자가 건넨 옷)의 물건 id
+    outfit: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)), default=list, server_default='{}')
