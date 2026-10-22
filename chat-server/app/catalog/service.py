@@ -1,15 +1,15 @@
 # chat-server/app/catalog/service.py
 
 """
-이 서버의 표에서 하는 모델 목록의 일. 켜기, 끄기, 성인 등급의 대화에 쓰기, 목록 보기, 고를 수 있는 모델.
+이 서버의 표에서 하는 모델 목록의 일. 켜기, 끄기, 성인 등급의 대화에 쓰기, 목록 보기.
+고를 수 있는 모델과 그 값은 app/catalog/offers.py 다.
 게임 서버의 것(trpg-server/app/catalog/service.py)을 줄여 옮겼다. 회사의 대체 모델이 없고 성인 스위치가 있다.
 
 모델을 넣고 고치고 원가를 적는 일은 여기 없다. 원본 파일(ai_core/model_catalog.toml)을 고치고 들여온다
 (app/catalog/sync.py). 켜짐과 성인 등급의 대화에 쓰기(allows_adult)는 이 서버만의 스위치라 파일에 없고 여기서 바꾼다.
 
 HTTP 를 모른다. SQL 을 모른다. 일마다 commit 하나로 저장한다.
-관리 명령(scripts/models.py)과 모델 목록 API(app/catalog/router.py), 대화(모델 고르기)가 부른다.
-나중에 관리 서버가 생기면 관리 명령이 쓰는 함수들을 관리 API 로 연다.
+관리 명령(scripts/models.py)이 부른다. 나중에 관리 서버가 생기면 같은 함수들을 관리 API 로 연다.
 
 잠그지 않는다. 부딪혀도 망가지는 것이 없다.
   - 원가는 덧붙이기만 하므로, 켤 때 본 "오늘의 단가가 있다"는 그 뒤에도 참이다.
@@ -20,7 +20,7 @@ HTTP 를 모른다. SQL 을 모른다. 일마다 commit 하나로 저장한다.
 from dataclasses import dataclass
 from datetime import date
 
-from ai_core.catalog_contract import is_offered, is_retired
+from ai_core.catalog_contract import is_retired
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import repository
@@ -90,11 +90,6 @@ async def forbid_adult(session: AsyncSession, slug: str) -> AiModel:
     model.allows_adult = False
     await session.commit()
     return model
-
-
-async def offered_models(session: AsyncSession, today: date) -> list[AiModel]:
-    """그날 고를 수 있는 모델들(켜져 있고 은퇴하지 않았다). 회사, 이름표 순서다. 모델은 수십 개라 모두 읽고 거른다."""
-    return [model for model in await repository.list_models(session) if is_offered(model, today)]
 
 
 async def list_entries(session: AsyncSession, today: date) -> list[CatalogEntry]:

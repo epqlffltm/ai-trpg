@@ -110,6 +110,10 @@ SECRETS = [
     *secrets('asset-server', ['asset-server'], 'CHAT_SERVER_SECRET'),
     # chat 서버가 asset 서버를 부를 때 서명하는 비밀. 서버만 쓴다. 마이그레이션(chat-migrate)에는 주지 않는다
     *secrets('chat-server', ['chat-server'], 'ASSET_SECRET'),
+    # chat 서버가 결제 서버를 부를 때 서명하는 비밀. 서버만 쓴다. 마이그레이션(chat-migrate)에는 주지 않는다
+    *secrets('chat-server', ['chat-server'], 'BILLING_SECRET'),
+    # 결제 서버가 chat 서버의 요청의 서명을 확인하는 비밀. 요청을 받는 서버만 읽는다(config.Load)
+    *secrets('billing-server', ['billing-server'], 'CHAT_SERVER_SECRET'),
     # 인증 서버가 탈퇴를 알리는 요청의 서명을 asset 서버가 확인하는 비밀. 요청을 받는 서버만 쓴다
     *secrets('asset-server', ['asset-server'], 'AUTH_SERVER_SECRET'),
     # 인증 서버가 asset 서버에 탈퇴를 알릴 때 서명하는 비밀. 알리는 것은 결제 서버에 맡기는 워커(auth-welcome-credits)다

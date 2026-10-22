@@ -9,13 +9,14 @@
 
 넷을 본다.
   - 고를 수 있나: 켜져 있고 은퇴하지 않았다. 성인 등급의 대화에는 allows_adult 가 참인 모델만이다.
+    값과 판매는 tests/test_model_prices.py 가 본다.
   - 켜고 끄기: 켜려면 원가가 있고 은퇴하지 않아야 한다. 없는 모델은 찾지 못한다.
   - 성인 스위치: 약관이 막는 창구(anthropic, gemini)는 켜지 못한다. 끄는 것은 늘 된다.
   - 원가: 덧붙이기만 한다. 그날의 단가는 그날 이전에 시작한 것 중 가장 늦은 것, 같은 날이면 나중에 적은 것이다.
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
 import pytest
@@ -24,7 +25,8 @@ from ai_core.catalog_file import CostEntry, ModelEntry
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalog import repository, service
+from app.billing.price_list import FREE_PRICES
+from app.catalog import offers, repository, service
 from app.catalog.choice import is_choosable, may_allow_adult, suits_rating
 from app.catalog.errors import CatalogConflictError, Conflict, ModelNotFoundError
 from app.catalog.models import AiModel
@@ -245,12 +247,14 @@ async def test_only_enabled_unretired_models_are_offered(session: AsyncSession):
     await put_models(session, FLASH)
     await retire(session, 'glm-5-3', TODAY)
 
-    offered = await service.offered_models(session, TODAY)
-    before_retiring = await service.offered_models(session, TODAY - timedelta(days=1))
+    noon = datetime.combine(TODAY, time(12), UTC)
+    offered = await offers.list_offered(session, FREE_PRICES, noon)
+    before_retiring = await offers.list_offered(session, FREE_PRICES, noon - timedelta(days=1))
 
-    # 회사, 이름표 순서다. 꺼진 것(Flash)과 은퇴한 것(GLM, 은퇴일 당일부터)은 없다
-    assert [model.slug for model in offered] == ['claude-opus-5-5', 'gpt-6-luna']
-    assert [model.slug for model in before_retiring] == ['claude-opus-5-5', 'gpt-6-luna', 'glm-5-3']
+    # 회사, 이름표 순서다. 꺼진 것(Flash)과 은퇴한 것(GLM, 은퇴일 당일부터)은 없다. 결제 서버가 없으니 값이 없다
+    assert [found.model.slug for found in offered.offers] == ['claude-opus-5-5', 'gpt-6-luna']
+    assert [found.model.slug for found in before_retiring.offers] == ['claude-opus-5-5', 'gpt-6-luna', 'glm-5-3']
+    assert offered.free and offered.offers[0].sale is None
 
 
 async def test_models_are_found_by_their_slugs(session: AsyncSession):

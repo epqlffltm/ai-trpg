@@ -499,8 +499,12 @@
         "type": "object"
       },
       "ModelList": {
-        "description": "고를 수 있는 모델들. 회사, 이름표 순서다.",
+        "description": "고를 수 있는 모델들. 회사, 이름표 순서다. free 는 결제 서버 없이 도는 서버라 값이 없다는 뜻이다.",
         "properties": {
+          "free": {
+            "title": "Free",
+            "type": "boolean"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ModelOut"
@@ -510,17 +514,29 @@
           }
         },
         "required": [
+          "free",
           "items"
         ],
         "title": "ModelList",
         "type": "object"
       },
       "ModelOut": {
-        "description": "고를 수 있는 모델 하나.",
+        "description": "고를 수 있는 모델 하나와 말 한 번의 값.\n\ncredits 는 결제 서버가 정한 값(글자, \"30\")이다. 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.\ntier 가 premium 이면 골드(유료 크레딧)로만 낸다. grade 는 화면의 묶음(basic, standard, premium)이다.",
         "properties": {
           "allows_adult": {
             "title": "Allows Adult",
             "type": "boolean"
+          },
+          "credits": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credits"
           },
           "display_name": {
             "title": "Display Name",
@@ -528,6 +544,20 @@
           },
           "grade": {
             "$ref": "#/components/schemas/Grade"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextPriceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "promo": {
+            "title": "Promo",
+            "type": "boolean"
           },
           "retires_on": {
             "anyOf": [
@@ -545,6 +575,16 @@
             "title": "Slug",
             "type": "string"
           },
+          "tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "vendor": {
             "title": "Vendor",
             "type": "string"
@@ -556,9 +596,56 @@
           "vendor",
           "grade",
           "allows_adult",
-          "retires_on"
+          "retires_on",
+          "credits",
+          "tier",
+          "promo",
+          "next"
         ],
         "title": "ModelOut",
+        "type": "object"
+      },
+      "NextPriceOut": {
+        "description": "예약된 값의 바뀜. credits 가 null 이면 effective_at 부터 팔지 않는다.",
+        "properties": {
+          "credits": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credits"
+          },
+          "effective_at": {
+            "format": "date-time",
+            "title": "Effective At",
+            "type": "string"
+          },
+          "promo": {
+            "title": "Promo",
+            "type": "boolean"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "credits",
+          "tier",
+          "promo",
+          "effective_at"
+        ],
+        "title": "NextPriceOut",
         "type": "object"
       },
       "PersonaOut": {
@@ -676,6 +763,16 @@
         "title": "StartOut",
         "type": "object"
       },
+      "Tier": {
+        "description": "결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).\n\n결제 서버가 모르는 등급을 보내면 목록 전체를 읽지 못한다(503).\n그래서 결제 서버는 게임 서버와 chat 서버가 등급을 안 뒤에 그 줄을 넣는다.",
+        "enum": [
+          "basic",
+          "standard",
+          "premium"
+        ],
+        "title": "Tier",
+        "type": "string"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -732,7 +829,7 @@
   "paths": {
     "/api/v1/chat/conversations": {
       "get": {
-        "description": "내 대화의 목록. 최근에 말한 것부터다.",
+        "description": "내 대화의 목록. 최근에 말한 것부터다. 가격 목록은 DB 를 읽기 전에 받는다(바깥을 기다리며 연결을 쥐지 않는다).",
         "operationId": "list_conversations_api_v1_chat_conversations_get",
         "parameters": [
           {
@@ -901,7 +998,7 @@
         "x-audience": "user"
       },
       "get": {
-        "description": "대화 하나. 지금 보고 있는 가지의 말들까지.",
+        "description": "대화 하나. 지금 보고 있는 가지의 말들까지. 가격 목록은 DB 를 읽기 전에 받는다.",
         "operationId": "read_conversation_api_v1_chat_conversations__conversation_id__get",
         "parameters": [
           {
@@ -1039,7 +1136,7 @@
     },
     "/api/v1/chat/models": {
       "get": {
-        "description": "대화에 고를 수 있는 모델들. 회사, 이름표 순서다.",
+        "description": "대화에 고를 수 있는 모델들과 그 값. 회사, 이름표 순서다.",
         "operationId": "list_models_api_v1_chat_models_get",
         "responses": {
           "200": {

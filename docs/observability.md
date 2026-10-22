@@ -643,7 +643,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
-| `billing_calls_total` | counter | `operation`(`hold`, `capture`, `release`, `extend`), `outcome`(`held`, `short`, `gold_required`, `done`, `missing`, `ended`, `unavailable`, `rejected`) | 게임 서버가 결제 서버를 부른 수. 걸기는 `held`·`short`·`gold_required`, 나머지 셋이 된 것은 `done` 이다. 연장의 `missing`·`ended` 는 정리 작업이 새 이름표로 다시 건다. `unavailable` 은 답을 받지 못한 것(다시 부른다), `rejected` 는 받아들이지 않은 것(그 청구는 `failed`, 사람이 본다) |
+| `billing_calls_total` | counter | `operation`(`hold`, `capture`, `release`, `extend`), `outcome`(`held`, `short`, `gold_required`, `done`, `missing`, `ended`, `unavailable`, `rejected`) | 게임 서버와 chat 서버가 결제 서버를 부른 수(서버마다 `service` 로 나뉜다). 걸기는 `held`·`short`·`gold_required`, 나머지 셋이 된 것은 `done` 이다. 연장의 `missing`·`ended` 는 정리 작업이 새 이름표로 다시 건다. `unavailable` 은 답을 받지 못한 것(다시 부른다), `rejected` 는 받아들이지 않은 것(그 청구는 `failed`, 사람이 본다) |
 | `narration_charges` | gauge | `status`(`pending`, `held`, `short`, `capture_due`, `release_due`) | 끝나지 않은 청구의 수. 청구 정리(5초마다)가 바퀴의 끝에 센다. 없는 상태도 0 이다. 서버들이 같은 수를 내므로 `max` 로 본다. `capture_due` 가 쌓이면 결제 서버가 죽어 있다. `failed` 는 세지 않는다(한 번 되면 남아 쌓이고 색인이 없다). `failed` 가 되는 것은 `billing_calls_total` 의 `rejected` 로 본다 |
 
 **메일과 인증 (auth)**

@@ -155,6 +155,7 @@ x-billing-without-request-secrets: &billing-without-request-secrets
   PG_WEBHOOK_SECRET: ""
   GAME_SERVER_SECRET: ""
   AUTH_SERVER_SECRET: ""
+  CHAT_SERVER_SECRET: ""
 
 # 알림 서버의 프로세스가 함께 쓰는 설정. 비밀은 없다(비밀은 notification-server/.env 에서 온다)
 x-notification-environment: &notification-environment
@@ -642,13 +643,14 @@ services:
     command: ["/app/sweeper"]
     env_file: ./billing-server/.env
     # 결제 대행사를 부르지 않는다. 설정(config.LoadSweeper)이 결제 대행사의 설정을 읽지 않아 TOSS_SECRET_KEY 도 비운다.
-    # 요청을 받지 않으니 받는 쪽의 비밀(PG_WEBHOOK_SECRET, GAME_SERVER_SECRET)도 비운다.
+    # 요청을 받지 않으니 받는 쪽의 비밀(PG_WEBHOOK_SECRET, GAME_SERVER_SECRET, CHAT_SERVER_SECRET)도 비운다.
     # AUTH_SERVER_SECRET 은 남긴다. 미성년자의 결제를 보호자에게 알리라고 인증 서버에 서명해 보낸다(#352).
     # NOTIFICATION_SECRET 도 남긴다. 사용자에게 알릴 일을 알림 서버에 서명해 넣는다(#385)
     environment:
       <<: [*billing-environment, *telemetry-environment]
       PG_WEBHOOK_SECRET: ""
       GAME_SERVER_SECRET: ""
+      CHAT_SERVER_SECRET: ""
       TOSS_SECRET_KEY: ""
       HEARTBEAT_FILE: /tmp/heartbeat
       NOTIFICATION_URL: http://notification-server:8004
@@ -758,12 +760,14 @@ services:
     logging: *logging
     command: ["alembic", "upgrade", "heads"]
     env_file: ./chat-server/.env
-    # 마이그레이션은 DB 만 쓴다. asset 서버의 주소와 서명 비밀을 함께 비운다.
+    # 마이그레이션은 DB 만 쓴다. asset 서버와 결제 서버의 주소와 서명 비밀을 함께 비운다.
     # 주소만 남으면(.env.example 의 ASSET_URL) 설정의 검사가 "주소는 있고 비밀이 없다"로 막는다(로컬 VM 리허설, 2026-10-22)
     environment:
       <<: *chat-environment
       ASSET_URL: ""
       ASSET_SECRET: ""
+      BILLING_URL: ""
+      BILLING_SECRET: ""
     depends_on:
       db:
         condition: service_healthy
@@ -781,6 +785,9 @@ services:
       # 대화를 시작할 때 캐릭터의 판과 페르소나를 가져온다(chat-server/README.md 의 "대화").
       # chat-server/.env 에 ASSET_SECRET 이 있어야 뜬다(asset 서버의 CHAT_SERVER_SECRET 과 같은 값)
       ASSET_URL: http://asset-server:8006
+      # 말 한 번의 값을 결제 서버에서 받고 모델의 값을 가격 목록에서 읽는다(chat-server/README.md 의 "모델 목록").
+      # chat-server/.env 에 BILLING_SECRET 이 있어야 뜬다(결제 서버의 CHAT_SERVER_SECRET 과 같은 값)
+      BILLING_URL: http://billing-server:8003
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:

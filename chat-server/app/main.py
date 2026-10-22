@@ -4,8 +4,8 @@
 chat 서버의 시작점. 앱을 만들고 라우터를 붙인다.
 
 chat 서버는 캐릭터 하나와의 1:1 대화를 맡는다(docs/architecture/chat-server.md). story 는 story-server 가 맡는다.
-상태 확인, 토큰의 주인, 모델 목록, 대화(캐릭터의 판과 페르소나를 asset 서버에서 가져와 시작하기, 목록, 읽기,
-모델 바꾸기, 지우기)가 있다. 한 번의 말(스트리밍, 과금)이 다음으로 붙는다.
+상태 확인, 토큰의 주인, 모델 목록과 값(결제 서버의 가격 목록), 대화(캐릭터의 판과 페르소나를 asset 서버에서 가져와
+시작하기, 목록, 읽기, 모델 바꾸기, 지우기)가 있다. 말을 보내는 길(스트리밍, 홀드와 확정)이 다음으로 붙는다.
 
 띄우는 법: uv run uvicorn app.main:app --port 8005 --reload
 """
@@ -33,6 +33,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
 from app.assets.client import AssetClient, AssetUnavailableError
+from app.billing import router as billing
+from app.billing.price_list import PriceListUnavailable
+from app.billing.setup import build_billing, build_price_list
 from app.catalog import router as models
 from app.conversations import router as conversations
 from app.conversations.service import (
@@ -133,6 +136,11 @@ def create_app(
         settings.asset_timeout_seconds,
     )
 
+    # 결제 서버를 부르는 것과 가격 목록을 받아 두는 것(app/billing/). BILLING_URL 이 비었으면 받지 않는 것이다.
+    # 같은 연결의 풀을 쓴다. 요청 안에서 부르면 client span 이 걸리고 traceparent 가 결제 서버로 간다
+    app.state.billing = build_billing(settings, app.state.http_client)
+    app.state.price_list = build_price_list(settings, app.state.http_client)
+
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
     app.include_router(readiness.router)
@@ -151,6 +159,7 @@ def create_app(
     app.add_exception_handler(StartNotFoundError, conversations.handle_start_not_found)
     app.add_exception_handler(ModelUnavailableError, conversations.handle_model_unavailable)
     app.add_exception_handler(AssetUnavailableError, conversations.handle_asset_unavailable)
+    app.add_exception_handler(PriceListUnavailable, billing.handle_prices_unavailable)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.
     # 원인은 로그에 남긴다(server_core/observability/responses.py)

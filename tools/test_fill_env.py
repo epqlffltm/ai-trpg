@@ -34,13 +34,13 @@ EXAMPLES = {
     '# NOTIFICATION_SECRET=\n# AUTH_SERVER_SECRET=\n',
     'billing-server/.env': 'DATABASE_URL=postgres://billing:여기에비밀번호@127.0.0.1:5432/trpg\n'
     'PG_WEBHOOK_SECRET=바꿔야합니다\nGAME_SERVER_SECRET=바꿔야합니다\nAUTH_SERVER_SECRET=바꿔야합니다\n'
-    '# NOTIFICATION_SECRET=\n# TOSS_SECRET_KEY=\n',
+    '# CHAT_SERVER_SECRET=\n# NOTIFICATION_SECRET=\n# TOSS_SECRET_KEY=\n',
     'notification-server/.env': 'DATABASE_URL=postgresql+asyncpg://notification:여기에비밀번호@127.0.0.1:5432/trpg\n'
     'GAME_SERVER_SECRET=\nBILLING_SERVER_SECRET=\nBOARD_SERVER_SECRET=\nAUTH_SERVER_SECRET=\n',
     'asset-server/.env': 'DATABASE_URL=postgresql+asyncpg://asset:여기에비밀번호@127.0.0.1:5432/trpg\n'
     'CHAT_SERVER_SECRET=\nAUTH_SERVER_SECRET=\n',
     'chat-server/.env': 'DATABASE_URL=postgresql+asyncpg://chat:여기에비밀번호@127.0.0.1:5432/trpg\n'
-    '# ASSET_URL=http://127.0.0.1:8006\n# ASSET_SECRET=\n',
+    '# ASSET_URL=http://127.0.0.1:8006\n# ASSET_SECRET=\n# BILLING_URL=http://127.0.0.1:8003\n# BILLING_SECRET=\n',
 }
 
 
@@ -124,6 +124,7 @@ class FillEnvTests(unittest.TestCase):
         self.assertEqual(billing['NOTIFICATION_SECRET'], notification['BILLING_SERVER_SECRET'])
         self.assertEqual(board['NOTIFICATION_SECRET'], notification['BOARD_SERVER_SECRET'])
         self.assertEqual(chat['ASSET_SECRET'], asset['CHAT_SERVER_SECRET'])
+        self.assertEqual(chat['BILLING_SECRET'], billing['CHAT_SERVER_SECRET'])
         self.assertEqual(auth['ASSET_SECRET'], asset['AUTH_SERVER_SECRET'])
         self.assertEqual(auth['GAME_SECRET'], game['AUTH_SERVER_SECRET'])
         self.assertEqual(auth['NOTIFICATION_SECRET'], notification['AUTH_SERVER_SECRET'])
@@ -140,6 +141,8 @@ class FillEnvTests(unittest.TestCase):
             ('board-server/.env', 'NOTIFICATION_SECRET'),
             ('billing-server/.env', 'NOTIFICATION_SECRET'),
             ('chat-server/.env', 'ASSET_SECRET'),
+            ('chat-server/.env', 'BILLING_SECRET'),
+            ('billing-server/.env', 'CHAT_SERVER_SECRET'),
             ('auth-server/.env', 'ASSET_SECRET'),
             ('auth-server/.env', 'GAME_SECRET'),
             ('auth-server/.env', 'NOTIFICATION_SECRET'),
