@@ -145,6 +145,7 @@ def to_path_message(message: Message, alternatives: dict[uuid.UUID | None, list[
         content=message.content,
         status=message.status,
         created_at=message.created_at,
+        suggestions=message.suggestions,
         alternatives=alternatives.get(message.parent_id, [message.id]),
     )
 

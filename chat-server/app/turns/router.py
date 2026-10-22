@@ -5,11 +5,13 @@
 
     POST /api/v1/chat/conversations/{id}/messages    {content}  말을 보낸다
     POST /api/v1/chat/messages/{id}/regenerate                  그 말에 다시 답한다. 새 답은 같은 부모 아래의 대안이다
+    POST /api/v1/chat/messages/{id}/continue                    끊긴 답에 이어 쓴다. 새로 청구한다
     POST /api/v1/chat/generations/{id}/stop                     모델을 부르는 것을 멈춘다. 받은 만큼 저장한다. 204
 
 응답을 시작하기 전에 거절하는 것은 보통의 오류다(아래 handle_*). 시작한 뒤의 실패는 SSE 의 failed 메시지다.
   - 404: 대화가 없다(남의 것, 지운 것, 볼 수 없는 등급). 다시 쓸 말이 없다(message_not_found)
   - 422 not_regenerable: 다시 쓸 수 없는 말이다(캐릭터의 인사말)
+  - 422 not_continuable: 이어 쓸 수 없는 말이다(끊긴 답이 아니다, 지금 가지의 끝이 아니다)
   - 409 model_required: 대화에 모델이 없다. 먼저 고른다(PUT /conversations/{id}/model)
   - 422 model_unavailable: 모델을 쓸 수 없다(꺼졌다, 은퇴했다, 팔지 않는다). 사람의 말은 저장했을 수 있다
   - 409 generation_in_progress: 이 대화가 다른 답을 쓰는 중이다(app/conversations/router.py 가 답한다)
@@ -38,7 +40,15 @@ from app.turns import service
 from app.turns.charging import CREDIT_SHORT, GOLD_REQUIRED, MODEL_UNAVAILABLE
 from app.turns.frames import turn_frame
 from app.turns.schemas import MessageCreate
-from app.turns.service import ModelRequiredError, NotRegenerableError, StopSwitch, TurnDeclinedError, TurnStart
+from app.turns.service import (
+    ModelRequiredError,
+    NotContinuableError,
+    NotRegenerableError,
+    StopSwitch,
+    TurnDeclinedError,
+    TurnStart,
+)
+from app.turns.values import PromptOptions
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +79,11 @@ DECLINED_DETAIL = {
 def generation_params(settings: Settings) -> GenerationParams:
     """말 한 번의 생성 설정. 길이의 상한과 다양함은 설정에서 온다."""
     return GenerationParams(max_tokens=settings.chat_output_limit, temperature=settings.chat_temperature)
+
+
+def prompt_options(settings: Settings) -> PromptOptions:
+    """모델에 보낼 메시지의 설정. 지난 말의 양과 다음 답 추천은 설정에서 온다."""
+    return PromptOptions(context_chars=settings.chat_context_chars, suggestions=settings.chat_suggestions)
 
 
 def keep_running(request: Request, start: TurnStart, stop: StopSwitch, coroutine) -> None:
@@ -118,6 +133,14 @@ async def handle_not_regenerable(request: Request, error: NotRegenerableError) -
     )
 
 
+async def handle_not_continuable(request: Request, error: NotContinuableError) -> JSONResponse:
+    """이어 쓸 수 없는 말이면 422 다(끊긴 답이 아니다, 지금 가지의 끝이 아니다)."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '이어 쓸 수 없는 말입니다.', 'code': 'not_continuable'},
+    )
+
+
 async def handle_turn_declined(request: Request, error: TurnDeclinedError) -> JSONResponse:
     """답을 쓰지 않았다. 사람의 말은 저장했다(message_id). 까닭마다 상태 코드가 다르다."""
     status_code = DECLINED_STATUS.get(error.code, status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -158,7 +181,7 @@ async def send_message(
     """말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다."""
     state = request.app.state
     start = await service.begin_turn(
-        state.session_factory, viewer, conversation_id, data.content, state.settings.chat_context_chars, now
+        state.session_factory, viewer, conversation_id, data.content, prompt_options(state.settings), now
     )
     return await stream_turn(request, start, now)
 
@@ -178,8 +201,28 @@ async def regenerate(message_id: uuid.UUID, viewer: CurrentViewer, request: Requ
     """
     state = request.app.state
     start = await service.begin_regenerate(
-        state.session_factory, viewer, message_id, state.settings.chat_context_chars, now
+        state.session_factory, viewer, message_id, prompt_options(state.settings), now
     )
+    return await stream_turn(request, start, now)
+
+
+@message_router.post(
+    '/{message_id}/continue',
+    status_code=status.HTTP_200_OK,
+    response_class=StreamingResponse,
+    responses=SSE_RESPONSES,
+)
+async def continue_message(
+    message_id: uuid.UUID, viewer: CurrentViewer, request: Request, now: Now
+) -> StreamingResponse:
+    """
+    끊긴 답(partial)에 이어 쓴다. 지금 가지의 끝인 말만 된다.
+
+    새 호출이라 새로 청구한다. SSE 의 turn 에 continues(그 말의 id)가 실리고, delta 는 그 말 끝에 붙일 글이다.
+    done 의 말은 이어 붙인 그 말 전체다. 다 쓰면 complete, 또 끊기면 partial 이라 다시 이어 쓸 수 있다.
+    """
+    state = request.app.state
+    start = await service.begin_continue(state.session_factory, viewer, message_id, prompt_options(state.settings), now)
     return await stream_turn(request, start, now)
 
 

@@ -24,6 +24,17 @@ class SavedMessage:
     content: str
     status: str
     created_at: datetime
+    suggestions: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PromptOptions:
+    """모델에 보낼 메시지를 만드는 설정. 설정(Settings)에서 온다."""
+
+    # 지난 말의 양의 상한(글자). 최근 말부터 채운다
+    context_chars: int
+    # 다음 답 추천을 받는가. 끄면 카드에 지시를 넣지 않는다
+    suggestions: bool
 
 
 @dataclass(frozen=True)
@@ -38,15 +49,21 @@ class TurnStart:
     price_code: str
     user_message: SavedMessage
     messages: list[ChatMessage]
+    # 이어서 출력이면 이어 쓰는 끊긴 답. 새 글은 이 말의 끝에 붙는다. 보통의 말 한 번이면 None
+    continued: SavedMessage | None = None
 
 
 @dataclass(frozen=True)
 class TurnResult:
-    """모델을 부른 결과. text 가 비어 있으면 저장할 답이 없다."""
+    """
+    모델을 부른 결과. text 가 비어 있으면 저장할 답이 없다. text 는 본문이고, 선택지는 suggestions 에 따로 있다.
+    이어서 출력이면 text 는 끊긴 답 끝에 붙일 글이다(되풀이한 앞부분을 뗐다).
+    """
 
     text: str
     outcome: Outcome
     error_code: str | None = None
+    suggestions: tuple[str, ...] = ()
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: Decimal | None = None

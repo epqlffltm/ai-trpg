@@ -130,6 +130,8 @@ class MessageOut(BaseModel):
     content: str
     status: str
     created_at: datetime
+    # 다음 답 추천의 선택지(0~3개). 캐릭터의 답에만 있다. 누르면 입력칸을 채운다. 보내는 것은 사람이다
+    suggestions: list[str] = []
 
 
 class PathMessageOut(MessageOut):

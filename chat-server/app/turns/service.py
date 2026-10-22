@@ -25,7 +25,7 @@ import asyncio
 import logging
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from ai_core.costs import charge_of
@@ -40,7 +40,10 @@ from app.billing.prices import chat_code
 from app.catalog import repository as catalog
 from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
+from app.conversation import continuation
+from app.conversation.continuation import OverlapTrim, continued_text
 from app.conversation.relay import Relay
+from app.conversation.suggestions import MarkerHold, parse_suggestions, split_answer
 from app.conversation.window import Turn, select_window
 from app.conversations import repository as conversations
 from app.conversations.models import (
@@ -66,7 +69,7 @@ from app.turns.frames import delta_frame, done_frame, failed_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
 from app.turns.prompt import CharacterCard, PersonaCard, build_messages, render_card
 from app.turns.providers import Router
-from app.turns.values import SavedMessage, TurnResult, TurnStart
+from app.turns.values import PromptOptions, SavedMessage, TurnResult, TurnStart
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,10 @@ class NotRegenerableError(Exception):
     """다시 쓸 수 없는 말이다(422). 사람의 말에 답한 것이 아닌 말(캐릭터의 인사말)이다."""
 
 
+class NotContinuableError(Exception):
+    """이어 쓸 수 없는 말이다(422). 끊긴 캐릭터의 답(partial)이 아니거나, 지금 가지의 끝이 아니다."""
+
+
 class TurnDeclinedError(Exception):
     """
     사람의 말은 저장했지만 답을 쓰지 않는다. code 는 까닭(credit_short, model_unavailable …), message_id 는 저장한
@@ -101,18 +108,37 @@ class TurnDeclinedError(Exception):
 
 @dataclass
 class Collector:
-    """모델이 흘려 주는 글을 모으면서 응답으로 넘긴다. 도중에 끊겨도 받은 만큼을 안다."""
+    """
+    모델이 흘려 주는 글을 모으면서 응답으로 넘긴다. 도중에 끊겨도 받은 만큼을 안다.
+
+    본문만 흘린다. 다음 답 추천의 표식 뒤는 흘리지 않는다(app/conversation/suggestions.py 의 MarkerHold).
+    """
 
     relay: Relay
-    pieces: list[str] = field(default_factory=list)
+    hold: MarkerHold = field(default_factory=MarkerHold)
+    # 이어서 출력이면 되풀이한 앞부분을 떼는 것(app/conversation/continuation.py). 표식을 찾기 전에 거친다
+    trim: OverlapTrim | None = None
 
     def __call__(self, piece: str) -> None:
-        self.pieces.append(piece)
-        self.relay.push(delta_frame(piece))
+        self.push(self.hold.feed(self.trim.feed(piece) if self.trim is not None else piece))
 
-    def text(self) -> str:
-        """지금까지 받은 글."""
-        return ''.join(self.pieces)
+    def push(self, text: str) -> None:
+        """본문의 조각을 응답으로. 빈 조각은 보내지 않는다."""
+        if text:
+            self.relay.push(delta_frame(text))
+
+    def finish(self) -> str:
+        """끝났다. 붙잡아 둔 본문을 마저 흘리고, 지금까지 흘린 본문을 돌려준다."""
+        if self.trim is not None:
+            self.push(self.hold.feed(self.trim.release()))
+        self.push(self.hold.release())
+        return self.hold.body()
+
+
+def collector_for(start: TurnStart, relay: Relay) -> Collector:
+    """말 한 번의 Collector. 이어서 출력이면 끊긴 답과 겹친 앞부분을 뗀다."""
+    trim = OverlapTrim(start.continued.content) if start.continued is not None else None
+    return Collector(relay, trim=trim)
 
 
 # --- 만들기. DB 와 바깥을 모른다 ---
@@ -121,7 +147,13 @@ class Collector:
 def saved(message: Message) -> SavedMessage:
     """저장한 말을 세션과 떨어진 값으로."""
     return SavedMessage(
-        message.id, message.parent_id, message.role, message.content, message.status, message.created_at
+        id=message.id,
+        parent_id=message.parent_id,
+        role=message.role,
+        content=message.content,
+        status=message.status,
+        created_at=message.created_at,
+        suggestions=tuple(message.suggestions or ()),
     )
 
 
@@ -157,12 +189,21 @@ def prompt_for(
     character: ImportedCharacter,
     persona: ConversationPersona | None,
     path: list[Message],
-    context_chars: int,
+    options: PromptOptions,
+    closing: str | None = None,
 ) -> list[ChatMessage]:
-    """모델에 보낼 메시지. 카드와, 지금 가지의 말들 가운데 context_chars 안에 드는 최근 것들이다."""
-    card = render_card(character_card(character), persona_card(persona), conversation.start_situation)
+    """
+    모델에 보낼 메시지. 카드와, 지금 가지의 말들 가운데 context_chars 안에 드는 최근 것들이다.
+    지난 말은 본문(content)만 보낸다. 선택지(suggestions)는 보내지 않는다.
+    closing 이 있으면 맨 끝에 사람의 차례로 붙인다(이어서 출력의 지시). 창은 늘 그것을 넣는다.
+    """
+    card = render_card(
+        character_card(character), persona_card(persona), conversation.start_situation, options.suggestions
+    )
     turns = [Turn(message.role, message.content) for message in path]
-    return build_messages(card, select_window(turns, context_chars))
+    if closing is not None:
+        turns.append(Turn(Role.USER, closing))
+    return build_messages(card, select_window(turns, options.context_chars))
 
 
 def require_model(conversation: Conversation, model: AiModel | None, rating: Rating, now: datetime) -> str:
@@ -203,14 +244,22 @@ def new_generation(conversation: Conversation, owner_id: uuid.UUID, parent_id: u
     )
 
 
-def result_of(completion: Completion, route: Route) -> TurnResult:
-    """다 받은 답. 길이 상한에서 잘렸으면 partial, 글자가 없으면 failed 다. 원가는 그날의 단가로 센다."""
+def result_of(completion: Completion, route: Route, previous: str | None = None) -> TurnResult:
+    """
+    다 받은 답. 본문과 선택지로 나눈다. 길이 상한에서 잘렸으면 partial 이고 선택지는 버린다(줄이 잘렸을 수 있다).
+    본문이 없으면(선택지만 썼어도) failed 다. 원가는 그날의 단가로 센다.
+    previous 는 이어서 출력의 끊긴 답이다. 있으면 되풀이한 앞부분을 떼고 사이에 끼울 것을 붙인 뒤에 나눈다.
+    """
     cost, _ = charge_of(completion, route.price)
     usage = {'input_tokens': completion.input_tokens, 'output_tokens': completion.output_tokens, 'cost_usd': cost}
-    if not completion.text:
+    text = continued_text(previous, completion.text) if previous is not None else completion.text
+    body, tail = split_answer(text)
+    if not body:
         return TurnResult(text='', outcome=Outcome.FAILED, error_code=EMPTY, **usage)
-    outcome = Outcome.PARTIAL if completion.truncated else Outcome.COMPLETE
-    return TurnResult(text=completion.text, outcome=outcome, **usage)
+    if completion.truncated:
+        return TurnResult(text=body, outcome=Outcome.PARTIAL, **usage)
+    suggestions = tuple(parse_suggestions(tail))
+    return TurnResult(text=body, outcome=Outcome.COMPLETE, suggestions=suggestions, **usage)
 
 
 def failure_of(received: str, code: str) -> TurnResult:
@@ -229,15 +278,27 @@ def answer_of(start: TurnStart, result: TurnResult, now: datetime) -> Message | 
         role=Role.ASSISTANT,
         content=result.text,
         status=MessageStatus.PARTIAL if result.outcome == Outcome.PARTIAL else MessageStatus.COMPLETE,
+        suggestions=list(result.suggestions),
         created_at=now,
     )
 
 
-def finished_values(result: TurnResult, answer: Message | None, now: datetime) -> dict[str, object]:
+def extension_of(continued: SavedMessage, result: TurnResult) -> SavedMessage | None:
+    """
+    이어서 출력의 결과로 바뀔 말. 이어 쓴 글이 없으면 None(끊긴 답은 그대로다).
+    다 썼으면 complete 이고 선택지가 붙는다. 또 끊겼으면 partial 로 남아 다시 이어 쓸 수 있다.
+    """
+    if not result.text:
+        return None
+    status = MessageStatus.PARTIAL if result.outcome == Outcome.PARTIAL else MessageStatus.COMPLETE
+    return replace(continued, content=continued.content + result.text, status=status, suggestions=result.suggestions)
+
+
+def finished_values(result: TurnResult, answer_id: uuid.UUID | None, now: datetime) -> dict[str, object]:
     """기록에 적을 결과. 답이 있으면 확정할 것, 없으면 돌려줄 것이다."""
     return {
-        'billing_status': BillingStatus.CAPTURE_DUE if answer is not None else BillingStatus.RELEASE_DUE,
-        'message_id': answer.id if answer is not None else None,
+        'billing_status': BillingStatus.CAPTURE_DUE if answer_id is not None else BillingStatus.RELEASE_DUE,
+        'message_id': answer_id,
         'outcome': result.outcome,
         'error_code': result.error_code,
         'input_tokens': result.input_tokens,
@@ -267,7 +328,7 @@ async def begin_turn(
     viewer: Viewer,
     conversation_id: uuid.UUID,
     content: str,
-    context_chars: int,
+    options: PromptOptions,
     now: datetime,
 ) -> TurnStart:
     """
@@ -299,7 +360,7 @@ async def begin_turn(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(message),
-        messages=prompt_for(conversation, character, persona, [*path, message], context_chars),
+        messages=prompt_for(conversation, character, persona, [*path, message], options),
     )
 
 
@@ -320,7 +381,7 @@ async def begin_regenerate(
     session_factory: async_sessionmaker[AsyncSession],
     viewer: Viewer,
     message_id: uuid.UUID,
-    context_chars: int,
+    options: PromptOptions,
     now: datetime,
 ) -> TurnStart:
     """
@@ -355,7 +416,63 @@ async def begin_regenerate(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(path[-1]),
-        messages=prompt_for(conversation, character, persona, path, context_chars),
+        messages=prompt_for(conversation, character, persona, path, options),
+    )
+
+
+def require_continuable(target: Message) -> uuid.UUID:
+    """
+    이어 쓸 끊긴 답의 부모(답한 사람의 말). 끊긴 답(partial)이 아니면 NotContinuableError.
+    partial 은 캐릭터의 답에만 있다(사람의 말과 인사말은 complete 다). 그 답에는 늘 부모가 있다.
+    """
+    if target.status != MessageStatus.PARTIAL or target.parent_id is None:
+        raise NotContinuableError
+    return target.parent_id
+
+
+async def begin_continue(
+    session_factory: async_sessionmaker[AsyncSession],
+    viewer: Viewer,
+    message_id: uuid.UUID,
+    options: PromptOptions,
+    now: datetime,
+) -> TurnStart:
+    """
+    끊긴 답을 이어 쓸 차례를 잡는다. 기록(pending)만 저장한다. 새 글은 저장할 때 그 말 끝에 붙는다(save_result).
+
+    지금 가지의 끝인 끊긴 답만 이어 쓴다. 그 뒤에 말이 붙었거나 다른 가지를 보고 있으면 NotContinuableError.
+    가지의 끝은 차례를 잡은 뒤에 다시 읽는다. 차례를 쥔 동안에는 가지를 바꾸지 못한다(conversations 의 choose_branch).
+    말이 없으면 MessageNotFoundError. 나머지는 begin_turn 과 같다.
+    """
+    async with session_factory() as session:
+        found = await conversations.find_visible_message(
+            session, viewer.claims.user_id, allowed_ratings(viewer.claims), message_id
+        )
+        if found is None:
+            raise MessageNotFoundError
+        target, (conversation, character, persona) = found
+        parent_id = require_continuable(target)
+        model = await catalog.get_model(session, conversation.model_slug) if conversation.model_slug else None
+        slug = require_model(conversation, model, Rating(character.rating), now)
+        if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
+            raise ConversationBusyError
+        await session.refresh(conversation)
+        if conversation.active_leaf_id != target.id:
+            raise NotContinuableError
+        path = await conversations.active_path(session, target.id)
+        generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
+        repository.add(session, generation)
+        await session.commit()
+    return TurnStart(
+        conversation_id=conversation.id,
+        generation_id=generation.id,
+        owner_id=viewer.claims.user_id,
+        model_slug=slug,
+        reference=generation.reference,
+        price_code=generation.price_code,
+        user_message=saved(path[-2]),
+        messages=prompt_for(conversation, character, persona, path, options, continuation.instruction()),
+        continued=saved(target),
     )
 
 
@@ -418,34 +535,56 @@ async def call_model(route: Route, start: TurnStart, params: GenerationParams, c
     try:
         completion = await route.provider.complete(start.messages, params, collector)
     except ProviderError as error:
-        return failure_of(collector.text(), str(error))
+        return failure_of(collector.finish(), str(error))
     except asyncio.CancelledError:
         raise
     except Exception:
         logger.exception(
             '모델을 부르다 예상하지 못한 오류가 났습니다', extra={'generation_id': str(start.generation_id)}
         )
-        return failure_of(collector.text(), SERVER_ERROR)
-    return result_of(completion, route)
+        return failure_of(collector.finish(), SERVER_ERROR)
+    collector.finish()
+    return result_of(completion, route, start.continued.content if start.continued is not None else None)
+
+
+async def store_answer(
+    session: AsyncSession, start: TurnStart, result: TurnResult, now: datetime
+) -> SavedMessage | None:
+    """
+    답을 세션에 적는다(커밋하지 않는다). 저장한 답이나, 글이 없으면 None.
+    보통은 새 말이고, 이어서 출력이면 끊긴 답을 바꾼다.
+    """
+    if start.continued is not None:
+        extended = extension_of(start.continued, result)
+        if extended is not None:
+            await repository.extend_message(
+                session, extended.id, extended.content, extended.status, list(extended.suggestions)
+            )
+        return extended
+    answer = answer_of(start, result, now)
+    if answer is None:
+        return None
+    repository.add(session, answer)
+    await session.flush()
+    return saved(answer)
 
 
 async def save_result(
     session_factory: async_sessionmaker[AsyncSession], start: TurnStart, result: TurnResult, now: datetime
 ) -> SavedMessage | None:
     """답을 저장하고(있으면) 차례를 놓고 기록에 결과를 적는다. 한 트랜잭션이다. 저장한 답이나 None."""
-    answer = answer_of(start, result, now)
     async with session_factory() as session:
+        answer = await store_answer(session, start, result, now)
         if answer is not None:
-            repository.add(session, answer)
-            await session.flush()
             await repository.finish_turn(session, start.conversation_id, answer.id)
         else:
             await repository.unlock_turn(session, start.conversation_id)
+        answer_id = answer.id if answer is not None else None
         await repository.move_billing(
-            session, start.generation_id, frozenset({BillingStatus.HELD}), finished_values(result, answer, now)
+            session, start.generation_id, frozenset({BillingStatus.HELD}), finished_values(result, answer_id, now)
         )
         await session.commit()
-    return saved(answer) if answer is not None else None
+    return answer
 
 
 async def settle_generation(
@@ -524,9 +663,9 @@ async def stoppable_call(
         return await stop.call
     except asyncio.CancelledError:
         if stop.requested and not asyncio.current_task().cancelling():
-            return failure_of(collector.text(), STOPPED)
+            return failure_of(collector.finish(), STOPPED)
         stop.call.cancel()
-        await save_result(session_factory, start, failure_of(collector.text(), CANCELLED), clock())
+        await save_result(session_factory, start, failure_of(collector.finish(), CANCELLED), clock())
         raise
 
 
@@ -548,7 +687,7 @@ async def run_generation(
     저장하다 실패하면(DB 가 없다) 응답에 실패를 알리고 끝낸다.
     차례와 홀드는 오래되면 풀린다(GENERATION_STALE, 정리 작업).
     """
-    collector = Collector(relay)
+    collector = collector_for(start, relay)
     result = await stoppable_call(session_factory, route, start, params, collector, clock, stop)
     try:
         answer = await save_result(session_factory, start, result, clock())
