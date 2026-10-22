@@ -210,7 +210,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/tables/narration-models` | 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값(`{"free": false, "models": [{"slug", "display_name", "vendor", "grade", "credits", "tier", "promo", "next", "retires_on"}]}`). 가격 목록을 받지 못했으면 503 ([고를 수 있는 모델](#고를-수-있는-모델)) | access 토큰 |
 | GET | `/api/v1/game/tables/past` | 내가 떠난 테이블 목록. 최근에 떠난 것부터. `limit`, `offset`([떠난 테이블](#떠난-테이블)) | access 토큰 |
 | GET | `/api/v1/game/tables/past/{id}/events` | 떠난 테이블의 이벤트. 떠난 때까지만. `after`, `limit` 은 앉은 사람의 것과 같다 | access 토큰 |
-| GET | `/api/v1/game/tables/past/{id}/transcript` | 떠난 테이블의 기록을 마크다운 파일로. 떠난 때까지만([기록 내려받기](#기록-내려받기)) | access 토큰 |
+| GET | `/api/v1/game/tables/past/{id}/transcript` | 떠난 테이블의 기록을 파일로(`format`: `md` 기본, `html`, `txt`). 떠난 때까지만([기록 내려받기](#기록-내려받기)) | access 토큰 |
 | GET | `/api/v1/game/tables/lobby` | 로비. 들어갈 수 있는 테이블 목록. 최근에 만든 것부터. `scenario_id`, `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/join` | 로비에 보이는 테이블에 들어가 앉는다. 비밀번호가 걸려 있으면 `password` 를 보낸다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}` | 내가 앉아 있는 테이블 하나 | access 토큰 |
@@ -241,7 +241,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/rounds/current/declaration` | 선언 내기. 다시 내면 바뀐다. `action` 으로 행동(판정)을 하나 붙일 수 있다. 모두 냈으면 라운드가 닫기 시작한다(`closing`). 다음 라운드는 스트림으로 온다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/close` | 라운드 닫기. 202. 방장만. 선언을 기다리지 않고 넘어간다. 오래 멈춘 라운드에 다시 부르면 서술을 다시 맡긴다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/events` | 테이블의 이벤트. 일어난 순서대로. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
-| GET | `/api/v1/game/tables/{id}/transcript` | 한 판의 기록을 마크다운 파일로([기록 내려받기](#기록-내려받기)) | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/transcript` | 한 판의 기록을 파일로(`format`: `md` 기본, `html`, `txt`, [기록 내려받기](#기록-내려받기)) | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/messages` | 채팅 쓰기. 201. 끝난 테이블에는 쓸 수 없다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/messages` | 테이블의 채팅. 쓴 순서대로. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/messages/typing` | "입력 중"이라고 알리기. 204. 저장하지 않는다. 다른 사람들의 스트림에 `typing` 이 간다 | access 토큰 |
@@ -1088,26 +1088,44 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 
 ### 기록 내려받기
 
-한 판의 공개된 기록을 마크다운 파일 하나로 내려받는다(#403, `app/transcripts/`). 읽기만 하고 테이블을 바꾸지 않는다.
+한 판의 공개된 기록과 받는 사람의 채팅, 쪽지를 파일 하나로 내려받는다(#403, #617, `app/transcripts/`). 읽기만 하고 테이블을 바꾸지 않는다.
 
 | 받는 사람 | 길 | 어디까지 |
 | --- | --- | --- |
-| 앉은 사람 | `GET /tables/{id}/transcript` | 받기 시작한 때의 마지막 이벤트까지. 받는 동안 판이 이어져도 파일의 끝은 그대로다 |
-| 떠난 사람 | `GET /tables/past/{id}/transcript` | 떠났다는 이벤트까지([떠난 테이블](#떠난-테이블)과 같다) |
+| 앉은 사람 | `GET /tables/{id}/transcript` | 받기 시작한 때의 마지막 이벤트, 채팅, 쪽지까지. 받는 동안 판이 이어져도 파일의 끝은 그대로다 |
+| 떠난 사람 | `GET /tables/past/{id}/transcript` | 떠났다는 이벤트까지. 채팅과 쪽지는 떠난 시각까지([떠난 테이블](#떠난-테이블)과 같다) |
 
-둘 다 아니면 404 다. 응답은 `text/markdown; charset=utf-8` 이고 `Content-Disposition` 의 `filename*` 이 테이블의 제목이다.
+둘 다 아니면 404 다. 판이 진행 중이어도 끝났어도 받는다(긴 판도 그때그때 백업한다).
 
-**넣는 것과 빼는 것.** 이벤트를 읽어 글로 바꾼다. 앉은 사람에게 내보내는 칸(`app/events/responses.py` 의 `VISIBLE`)만 본다. 기록이 화면보다 더 많이 알지 않는다.
-- 넣는 것: 시작과 함께한 캐릭터, 라운드(번호와 게임 안의 시각), GM 의 서술, 선언, 판정의 눈과 성패, 죽음의 굴림, HP, 몬스터와 NPC 의 공격과 몸(양과 생사만), 부상, 물건, 훔치기, 드러난 퀘스트, 이동, 찾기, 쉬기, 이름 맞히기, NPC 의 태도, 자리를 떠남, 끝
-- 빼는 것: 쪽지(누가 누구에게 보냈는지도), 숨긴 퀘스트, 설정과 운영(모델, 문체, 시간 제한, 크레딧, 서술 실패), 내부 식별자(사람, 항목, 몬스터의 id). 비공개 로어, 모델의 추론, 프롬프트는 처음부터 이벤트에 없다
-- 쓰는 종류는 `app/transcripts/markdown.py` 의 `RENDERERS` 에 적은 것뿐이다. 이벤트의 종류가 늘어도 거기 올리기 전에는 기록에 나가지 않는다
-- 능력치, 난이도, 부상은 이 판의 규칙에 적힌 이름으로 쓴다. 서술과 선언의 글이 맨 앞에 `#` 을 써도 제목이 되지 않게 글자로 남긴다(`\#`)
-- 이벤트에는 서술이 먼저, 그 서술로 여는 라운드가 뒤에 적힌다. 기록에는 라운드의 구분을 그 장면 앞에 쓴다
+**형식(`format`).** 셋 다 같은 내용을 모양만 다르게 쓴다(`app/transcripts/formats.py`).
 
-**흘려 보낸다.** 다 모으지 않는다. 이벤트를 200 개씩 새 세션으로 읽어 글로 바꾸는 대로 보낸다. 보내는 동안 DB 연결을 붙잡지 않는다.
+| `format` | 응답 | 쓰임 |
+| --- | --- | --- |
+| `md`(기본) | `text/markdown; charset=utf-8` | 다른 도구에 붙여 넣기 좋다. 구분은 제목, 서술은 문단, 선언은 인용, 한 줄의 일은 목록이다 |
+| `html` | `text/html; charset=utf-8` | 브라우저로 열어 읽는 파일 하나. 글꼴, 그림, 스크립트를 밖에서 가져오지 않는다 |
+| `txt` | `text/plain; charset=utf-8` | 꾸밈 없는 글. 어떤 편집기로도 읽는다 |
+
+모르는 형식은 422 다. `Content-Disposition` 의 `filename*` 이 테이블의 제목(과 확장자)이고, `X-Content-Type-Options: nosniff` 가 붙는다.
+
+**넣는 것과 빼는 것.** 앉은 사람에게 내보내는 칸(`app/events/responses.py` 의 `VISIBLE`)만 본다. 기록이 화면보다 더 많이 알지 않는다.
+- 넣는 것: 시작과 함께한 캐릭터, 라운드(번호와 게임 안의 시각), GM 의 서술, 선언, 판정의 눈과 성패, 죽음의 굴림, HP, 몬스터와 NPC 의 공격과 몸(양과 생사만), 부상, 물건, 훔치기, 드러난 퀘스트, 이동(업혀 감, 판의 사건으로 옮겨짐), 판의 사건, 찾기, 쉬기, 이름 맞히기, NPC 의 태도, 자리를 떠남, 끝
+- 채팅은 그 테이블의 모두가 본 것이라 넣는다(`채팅 · 엘프: …`). 쪽지는 받는 사람의 쪽지함에 있는 것(보냈거나 받은 것)만 넣는다(`쪽지 · 엘프 → 영애: …`, #617). 남의 쪽지는 글도, 오갔다는 것도 넣지 않는다(`whisper_sent` 이벤트는 쓰지 않는다)
+- 빼는 것: 숨긴 퀘스트, 설정과 운영(모델, 문체, 시간 제한, 크레딧, 서술 실패), 내부 식별자(사람, 항목, 몬스터의 id). 비공개 로어, 모델의 추론, 프롬프트는 처음부터 이벤트에 없다
+- 사람은 캐릭터의 이름으로만 쓴다(#617). 계정의 이름과 id 는 쓰지 않는다. 탈퇴한 사람(#603)도 이야기 속 이름은 남는다
+- 쓰는 종류는 `app/transcripts/story.py` 의 `RENDERERS` 에 적은 것뿐이다. 이벤트의 종류가 늘어도 거기 올리기 전에는 기록에 나가지 않는다
+- 능력치, 난이도, 부상은 이 판의 규칙에 적힌 이름으로 쓴다
+- 이벤트에는 서술이 먼저, 그 서술로 여는 라운드가 뒤에 적힌다. 기록에는 라운드의 구분을 그 장면 앞에 쓴다. 채팅과 쪽지는 적힌 시각의 차례로 이벤트 사이에 끼운다
+
+**글을 막는다.** 서술, 선언, 채팅, 쪽지는 모델과 플레이어가 쓴 글이다.
+- 마크다운: 서술과 선언의 글이 맨 앞에 `#` 을 써도 제목이 되지 않게 글자로 남긴다(`\#`)
+- HTML: 모든 글의 꺾쇠와 따옴표를 바꿔 쓴다(`html.escape`). 머리의 `Content-Security-Policy`(`default-src 'none'; style-src 'unsafe-inline'`)가 스크립트와 밖의 자원을 한 번 더 막는다
+
+**흘려 보낸다.** 다 모으지 않는다. 이벤트, 채팅, 쪽지를 200 개씩 새 세션으로 읽어 시각의 차례로 합치고(`reading.merged`), 글로 바꾸는 대로 보낸다. 보내는 동안 DB 연결을 붙잡지 않는다.
 받을 수 있는지는 응답을 시작하기 전에 짧은 세션으로 본다(시작한 뒤에는 404 를 줄 수 없다). 실시간 스트림(`app/realtime/router.py`)과 같은 방식이다.
 
-나중: HTML 로 내보내기, 공유 링크.
+**받는 수.** 판 하나를 통째로 읽어 글로 바꾸므로 비싸다. 한 사람이 구간(`TRANSCRIPT_WINDOW_SECONDS`, 기본 600초) 안에 `TRANSCRIPTS_PER_WINDOW`(기본 10)번까지 받는다. 테이블을 가리지 않고 사람마다 센다. 넘으면 429(`too_many_attempts`, `Retry-After`)다. 앉지 않은 사람의 요청도 센다(테이블을 찾아다니지 못하게).
+
+나중: 공유 링크.
 
 **동시에 오는 요청.** 테이블을 바꾸는 일은 모두 테이블의 행을 잠그고 한다(`SELECT ... FOR UPDATE`).
 한 자리가 남았을 때 두 사람이 동시에 들어와도 한 사람만 앉고, 두 사람이 같은 프리젠을 동시에 골라도 한 사람만 가져간다.
@@ -2900,6 +2918,7 @@ Redis 가 느리면 요청이 그만큼 기다리므로 연결과 명령에 짧�
 | `LIMIT_KEY_PREFIX` | `game:limit` | Redis 의 키의 앞부분 |
 | `PASSWORD_ATTEMPTS_PER_USER`, `PASSWORD_ATTEMPTS_PER_TABLE`, `PASSWORD_ATTEMPT_WINDOW_SECONDS` | `5`, `30`, `600` | 로비의 비밀번호를 틀릴 수 있는 수와 구간 |
 | `CHAT_MESSAGES_PER_WINDOW`, `CHAT_WINDOW_SECONDS` | `5`, `10` | 채팅을 쓸 수 있는 수와 구간 |
+| `TRANSCRIPTS_PER_WINDOW`, `TRANSCRIPT_WINDOW_SECONDS` | `10`, `600` | 한 사람이 기록을 내려받을 수 있는 수와 구간(#617) |
 
 테스트는 제한을 끄고(`tests/conftest.py`) 제한을 보는 테스트만 켠다(`tests/test_attempt_limits.py`). Redis 로 세는 테스트는 실제 Redis(`TEST_REDIS_URL`, 기본 `redis://127.0.0.1:6379/15`)에서 돈다. `docker compose up -d` 가 띄우는 Redis 다.
 
