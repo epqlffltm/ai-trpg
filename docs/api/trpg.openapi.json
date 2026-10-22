@@ -410,6 +410,50 @@
         "title": "CarriedOut",
         "type": "object"
       },
+      "CarryOut": {
+        "description": "업고 간 결과(#367). 엔진이 정했다(app/rounds/map_actions.py).",
+        "properties": {
+          "carried": {
+            "title": "Carried",
+            "type": "boolean"
+          },
+          "character_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Name"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "character_name",
+          "carried",
+          "reason"
+        ],
+        "title": "CarryOut",
+        "type": "object"
+      },
       "CatalogItemOut": {
         "description": "판에 있는 물건 하나. 로어북의 물건 항목이다.\n\nkind 가 consumable 이면 쓰면 하나 줄어든다. heals 가 있으면 쓸 때 HP 를 그 등급(rules 의 magnitudes)만큼 되돌린다.",
         "properties": {
@@ -4600,8 +4644,20 @@
       },
       "MoveAction": {
         "additionalProperties": false,
-        "description": "맵에서 한 칸 가는 행동. 지금 서 있는 장소에서 아는 길로 이어진 장소(place)로 간다(app/rounds/map_actions.py).\n\nplace 는 판의 로어북 장소 항목의 id 다. 엔진은 이 값을 읽지 않는다. 어디와 이어져 있는지는 판이 안다.\n한 라운드에 한 칸이다. 한 사람의 선언에는 행동이 하나다.",
+        "description": "맵에서 한 칸 가는 행동. 지금 서 있는 장소에서 아는 길로 이어진 장소(place)로 간다(app/rounds/map_actions.py).\n\nplace 는 판의 로어북 장소 항목의 id 다. 엔진은 이 값을 읽지 않는다. 어디와 이어져 있는지는 판이 안다.\n한 라운드에 한 칸이다. 한 사람의 선언에는 행동이 하나다.\ncarry 는 함께 업고 갈 쓰러진 동료(앉은 사람의 user_id)다. 한 사람이 한 명을 업는다(#367).",
         "properties": {
+          "carry": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carry"
+          },
           "kind": {
             "const": "move",
             "title": "Kind",
@@ -4623,6 +4679,16 @@
       "MoveOut": {
         "description": "한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 판정이 없다.",
         "properties": {
+          "carry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CarryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "character_name": {
             "title": "Character Name",
             "type": "string"

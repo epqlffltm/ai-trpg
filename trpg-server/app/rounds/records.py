@@ -278,6 +278,7 @@ def record_move(session: AsyncSession, table: GameTable, declaration: Declaratio
 
     가지 못했으면 적지 않는다. 위치가 바뀌지 않았다. 못 간 까닭은 라운드의 선언 결과에 있다.
     행한 사람(actor_id)을 적지 않는다. 위치를 바꾼 것은 엔진이다.
+    쓰러진 동료를 업고 갔으면 그 사람이 옮겨 간 것도 같은 종류로 잇는다(record_carried).
     """
     move = move_of(declaration)
     if not move['moved']:
@@ -286,6 +287,28 @@ def record_move(session: AsyncSession, table: GameTable, declaration: Declaratio
         'round': cause.payload['round'],
         **{key: move[key] for key in ('user_id', 'character_name', 'from', 'to')},
         'travel_minutes': move.get('travel_minutes'),
+    }
+    moved = recorder.record(session, table, EventType.CHARACTER_MOVED, payload=payload, cause=cause)
+    record_carried(session, table, move, moved)
+
+
+def record_carried(session: AsyncSession, table: GameTable, move: dict, cause: TableEvent) -> None:
+    """
+    업혀 간 사람이 옮겨 간 것을 이벤트로 적는다. 업은 사람이 옮겨 간 이벤트(cause)에 잇는다.
+
+    업고 가지 못했으면 적지 않는다. 업은 사람(carried_by)이 함께 적힌다. 화면은 이 이벤트로 업힌 사람의 위치를 고친다.
+    """
+    carry = move.get('carry')
+    if carry is None or not carry['carried']:
+        return
+    payload = {
+        'round': cause.payload['round'],
+        'user_id': carry['user_id'],
+        'character_name': carry['character_name'],
+        'from': move['from'],
+        'to': move['to'],
+        'travel_minutes': move.get('travel_minutes'),
+        'carried_by': move['user_id'],
     }
     recorder.record(session, table, EventType.CHARACTER_MOVED, payload=payload, cause=cause)
 
