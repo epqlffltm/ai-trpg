@@ -239,6 +239,31 @@ tests:
         alertname: BillingServerErrors
         exp_alerts: []
 
+  # 상태 확인(/health, /health/ready)은 세지 않는다(#645). DB 가 멈춰 healthcheck(분당 6번)가 모두 503 이어도 울리지 않는다.
+  # 상태 확인 밖의 5xx 는 그대로 센다
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="trpg-server", route="/health/ready", method="GET", status_code="503", instance="server-b"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="billing-server", route="/health/ready", method="GET", status_code="503", instance="server-a"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="billing-server", route="/health", method="GET", status_code="200", instance="server-a"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="billing-server", route="/x", method="GET", status_code="500", instance="server-a"}'
+        values: '0+6x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: TrpgServerErrors
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: BillingServerErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 결제 서버의 5xx 가 100% 다
+              description: 대시보드 billing-server 의 "상태 코드"와 로그의 error_code 를 본다
+
   # 결제 서버의 인스턴스마다 울린다
   - interval: 30s
     input_series:
