@@ -8,6 +8,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, ClassVar
 
+from ai_core.catalog_file import Slug
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -74,7 +75,6 @@ from app.assets.models import (
 from app.assets.scenarios.recommended_model import ModelState
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
-from app.catalog.schemas import Slug
 from app.engine.ruleset import Key
 from app.engine.sheet import Sheet
 

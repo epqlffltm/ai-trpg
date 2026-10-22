@@ -19,6 +19,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 from ai_core.catalog_contract import Provider, TokenLimitField
+from ai_core.catalog_file import ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import text
@@ -32,8 +33,8 @@ from app.catalog import service as catalog
 from app.catalog.errors import CatalogConflictError, Conflict
 from app.catalog.models import Grade
 from app.catalog.offers import OfferedModel, replacement_for
-from app.catalog.schemas import ModelCreate, ModelUpdate
 from scripts import models as script
+from tests.catalog_rows import put_models, retire
 from tests.narration_model import TEST_MODEL
 from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, OPUS, FixedPrices, add_enabled, book, on_sale
@@ -46,7 +47,7 @@ ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 NOW = datetime(2026, 10, 18, 3, 0, tzinfo=UTC)
 LATER = date(2026, 12, 1)
 
-MINI = ModelCreate(
+MINI = ModelEntry(
     slug='gpt-6-mini',
     provider=Provider.OPENAI,
     api_model_id='gpt-6-mini-2026-09-22',
@@ -55,7 +56,7 @@ MINI = ModelCreate(
     grade=Grade.STANDARD,
     token_limit_field=TokenLimitField.MAX_COMPLETION_TOKENS,
 )
-PRO = ModelCreate(
+PRO = ModelEntry(
     slug='gpt-6-pro',
     provider=Provider.OPENAI,
     api_model_id='gpt-6-pro-2026-09-22',
@@ -166,7 +167,7 @@ def test_a_vendor_without_a_standard_has_no_replacement():
 
 async def test_setting_a_fallback_moves_it_within_the_vendor(session: AsyncSession):
     for data in (LUNA, MINI, OPUS):
-        await catalog.add_model(session, data)
+        await put_models(session, data)
     await catalog.set_fallback(session, 'claude-opus-5-5', NOW.date())
 
     await catalog.set_fallback(session, 'gpt-6-luna', NOW.date())
@@ -178,8 +179,8 @@ async def test_setting_a_fallback_moves_it_within_the_vendor(session: AsyncSessi
 
 
 async def test_a_retired_model_cannot_be_the_fallback(session: AsyncSession):
-    await catalog.add_model(session, LUNA)
-    await catalog.retire_model(session, 'gpt-6-luna', NOW.date())
+    await put_models(session, LUNA)
+    await retire(session, 'gpt-6-luna', NOW.date())
 
     with pytest.raises(CatalogConflictError) as raised:
         await catalog.set_fallback(session, 'gpt-6-luna', NOW.date())
@@ -189,13 +190,13 @@ async def test_a_retired_model_cannot_be_the_fallback(session: AsyncSession):
 
 async def test_clearing_and_moving_vendor_drop_the_flag(session: AsyncSession):
     for data in (LUNA, MINI):
-        await catalog.add_model(session, data)
+        await put_models(session, data)
     await catalog.set_fallback(session, 'gpt-6-luna', NOW.date())
     await catalog.clear_fallback(session, 'gpt-6-luna')
     await catalog.set_fallback(session, 'gpt-6-mini', NOW.date())
 
     # 다른 회사로 옮기면 옛 회사의 대체 표시를 들고 가지 않는다
-    await catalog.update_model(session, 'gpt-6-mini', ModelUpdate(vendor='other'))
+    await put_models(session, MINI.model_copy(update={'vendor': 'other'}))
 
     assert (await fallback_flags(session))['gpt-6-mini'] is False
     assert (await fallback_flags(session))['gpt-6-luna'] is False
@@ -203,7 +204,7 @@ async def test_clearing_and_moving_vendor_drop_the_flag(session: AsyncSession):
 
 async def test_the_database_allows_one_fallback_per_vendor(session: AsyncSession):
     for data in (LUNA, MINI):
-        await catalog.add_model(session, data)
+        await put_models(session, data)
 
     with pytest.raises(IntegrityError):
         await session.execute(text("UPDATE ai_models SET vendor_fallback = true WHERE vendor = 'openai'"))
@@ -211,7 +212,7 @@ async def test_the_database_allows_one_fallback_per_vendor(session: AsyncSession
 
 
 async def test_the_script_sets_and_clears_the_fallback(session: AsyncSession):
-    await catalog.add_model(session, LUNA)
+    await put_models(session, LUNA)
 
     set_code, set_lines = await script.execute(
         session, script.build_parser().parse_args(['fallback', 'gpt-6-luna']), NOW.date()
@@ -257,7 +258,7 @@ async def test_a_model_out_of_service_cannot_be_recommended(
 
 @pytest.mark.usefixtures('openai_models')
 async def test_a_retired_model_cannot_be_recommended(client: AsyncClient, session: AsyncSession, me: dict[str, str]):
-    await catalog.retire_model(session, 'gpt-6-mini', NOW.date())
+    await retire(session, 'gpt-6-mini', NOW.date())
 
     response = await client.post(SCENARIOS_URL, json={'title': '은퇴', 'narration_model': 'gpt-6-mini'}, headers=me)
 
@@ -328,7 +329,7 @@ async def test_a_retiring_model_shows_its_day_and_the_replacement(
     client: AsyncClient, session: AsyncSession, me: dict[str, str]
 ):
     scenario = await publish_scenario(client, me, narration_model='gpt-6-mini')
-    await catalog.retire_model(session, 'gpt-6-mini', LATER)
+    await retire(session, 'gpt-6-mini', LATER)
 
     found = await read_scenario(client, me, scenario)
 
@@ -434,7 +435,7 @@ async def test_a_retired_recommendation_uses_the_operator_fallback(
 ):
     scenario = await publish_scenario(client, me, narration_model='gpt-6-mini')
     await catalog.set_fallback(session, 'gpt-6-luna', NOW.date())
-    await catalog.retire_model(session, 'gpt-6-mini', NOW.date())
+    await retire(session, 'gpt-6-mini', NOW.date())
 
     response = await open_table(client, me, scenario)
 

@@ -2283,23 +2283,25 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 
 ## 모델 목록
 
-서술에 쓸 수 있는 언어 모델들과 모델마다의 원가 단가를 DB 에 둔다(`app/catalog/`). 표는 셋이다.
+서술에 쓸 수 있는 언어 모델들과 모델마다의 원가 단가를 DB 에 둔다(`app/catalog/`).
+**원본은 파일 하나다**(`shared/ai-core/src/ai_core/model_catalog.toml`, #499). chat, story 서버도 같은 파일을 자기 표에 들여온다. 모델을 넣고, 칸을 고치고, 원가를 더하고, 날짜판과 은퇴일을 바꾸는 것은 모두 파일을 고쳐 PR 로 올리고 `scripts.models sync` 로 들여온다. 켜고 끄기와 회사의 대체 모델은 이 서버만의 스위치라 파일에 없고 이 표에서 한다([관리 명령](#관리-명령)). 표는 셋이다.
 
 | 표 | 무엇 | 규칙 |
 | --- | --- | --- |
-| `ai_models` | 모델 하나에 한 줄. 이름표(slug), 창구(provider), API 모델 이름, 보이는 이름, 회사, 분류, 받는 것, 켜짐, 은퇴일 | 지우지 않는다. 끄거나 은퇴일을 적는다 |
+| `ai_models` | 모델 하나에 한 줄. 이름표(slug), 창구(provider), API 모델 이름, 보이는 이름, 회사, 분류, 받는 것, 은퇴일(여기까지 파일의 것), 켜짐, 회사의 대체 모델(이 서버의 것) | 지우지 않는다. 파일에서 빠져도 남는다. 끄거나 은퇴일을 적는다 |
 | `ai_model_costs` | 원가 단가(USD, 백만 토큰당). 입력, 출력, 캐시 읽기, 캐시 쓰기와 시작하는 날, 확인한 날 | 덧붙이기만 한다 |
 | `ai_model_snapshots` | 날짜판(API 모델 이름)을 바꾼 기록. 앞의 이름, 새 이름, 덧붙인 말, 바꾼 때 | 덧붙이기만 한다 |
 
 - **판매가는 여기 없다.** 1인 1라운드에 몇 크레딧인지는 결제 서버의 가격표(`price_versions`, `billing-server` 의 `cmd/prices`)가 정한다. 여기는 공급자에게 내는 값이다. 판매가가 맞는지 볼 때와 실제 사용량의 원가를 잴 때 쓴다.
 - **이름표**는 영어 소문자, 숫자, 붙임표다(`gpt-6-luna`). 점은 쓰지 않는다. 결제 서버의 가격 코드(`narration.<이름표>.i0.o0`)에서 점이 칸을 나눈다. 48자까지다.
 - **이름표는 상품 이름이다**(API 모델 이름에서 날짜를 빼고 점을 붙임표로: `gpt-6-1-sol`, `claude-opus-5-5`). 이름표와 창구는 바꾸지 않는다.
-- **API 모델 이름에는 날짜가 붙은 이름(날짜판)을 적는다.** 별칭은 공급자가 말없이 다른 모델로 돌려 서술의 목소리가 바뀐다. 공급자가 새 날짜판을 내면 이름표와 값은 그대로 두고 날짜판만 `switch-snapshot` 으로 바꾼다. 바꾸면 기록이 남고 모델이 꺼진다. 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다. `update` 로는 날짜판을 바꾸지 못한다. 둘이 동시에 바꿔도 기록이 끊기지 않게 모델의 줄을 잠그고 바꾼다.
+- **API 모델 이름에는 날짜가 붙은 이름(날짜판)을 적는다.** 별칭은 공급자가 말없이 다른 모델로 돌려 서술의 목소리가 바뀐다. 날짜판을 주지 않는 공급자(Gemini 의 정식판, 중국 모델들)는 공식 이름 하나를 적고 평가 장면으로 자주 본다. 공급자가 새 날짜판을 내면 이름표와 값은 그대로 두고 파일의 `api_model_id` 만 바꿔 들여온다. 들여오기가 바꾼 기록을 남기고 모델을 끈다. 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다. 둘이 동시에 들여와도 기록이 끊기지 않게 모델의 줄을 잠그고 바꾼다.
 - **창구**는 `openai`, `anthropic`, `gemini`, `zai`(GLM), `deepinfra`(DeepSeek), `local`(서버 곁의 Ollama, LM Studio)이다. 새 창구는 부르는 코드와 마이그레이션이 함께 있어야 한다.
 - **분류**(`basic`, `standard`, `premium`)는 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 정한다. 회사(`vendor`)가 그 안의 소분류다.
-- **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나, 생각을 켜고 끄는 방식(`reasoning_style`). 칸은 `openai`, `local` 창구만, 방식은 `anthropic`, `gemini`, `zai` 창구만 적는다(`--reasoning-style`). 창구마다 받는 방식이 다르다.
-- **켜기**: 새로 넣은 모델은 꺼져 있다. 그날의 원가가 있고 은퇴하지 않았어야 켤 수 있다. 원가를 적고 평가 장면을 통과한 뒤에 켠다.
-- **그날의 단가**는 그날 이전에 시작한 것 중 가장 늦은 것이다. 같은 날이면 나중에 적은 것이다. 행사가가 끝나는 날의 값을 미리 적어 둘 수 있고, 잘못 적은 값은 같은 날로 다시 적어 고친다. 앞의 줄은 남는다.
+- **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나, 생각을 켜고 끄는 방식(`reasoning_style`). 칸은 `openai`, `local` 창구만, 방식은 `anthropic`, `gemini`, `zai` 창구만 적는다. 창구마다 받는 방식이 다르다. 파일을 읽을 때 본다(`ai_core/catalog_file.py`).
+- **켜기**: 새로 들여온 모델은 꺼져 있다. 그날의 원가가 있고 은퇴하지 않았어야 켤 수 있다. 원가를 보고 평가 장면을 통과한 뒤에 켠다.
+- **그날의 단가**는 그날 이전에 시작한 것 중 가장 늦은 것이다. 같은 날이면 나중에 적은 것이다. 행사가가 끝나는 날의 값을 파일에 미리 적어 둘 수 있고, 잘못 적은 값은 파일에서 고쳐 다시 들여오면 같은 날의 줄이 더해져 이긴다. 표의 줄은 고치지도 지우지도 않는다. 파일에서 줄을 빼도 표에는 남는다. 확인한 날(`checked_on`)만 바뀐 것은 더하지 않는다.
+- **이름표와 결제 서버의 가격 코드**: 판매가 파일(`docs/model-prices-*.csv`)의 가격 코드가 가리키는 이름표는 모두 파일에 있어야 한다(`tools/model_slugs.py`, PR 마다 CI 가 본다). 판매가가 없는 모델은 된다(혼자 쓰는 시험용).
 
 테이블은 이 목록의 모델로 서술한다([모델 고르기](#모델-고르기)). 켜기 전에는 `scripts.try_model` 로 불러 본다.
 - **회사의 대체 모델**(`vendor_fallback`): 시나리오의 추천 모델을 쓸 수 없을 때 같은 회사에서 대신 쓸 모델을 운영자가 정한다(`fallback`). 회사마다 하나다. 정하지 않았으면 같은 회사의 standard 중 가장 싼 모델이다([추천 모델](#추천-모델)).
@@ -2351,7 +2353,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 
 ### 모델 은퇴
 
-공급자가 모델을 내리는 날(모델 목록의 은퇴일, `scripts.models retire`)이 정해지면 그 모델을 쓰는 테이블에 미리 알리고, 그날이 되면 같은 회사의 다른 모델로 바꾼다(`app/tables/model_retirement.py`).
+공급자가 모델을 내리는 날(모델 목록 파일의 `retires_on`, 들여와서 표의 은퇴일이 된다)이 정해지면 그 모델을 쓰는 테이블에 미리 알리고, 그날이 되면 같은 회사의 다른 모델로 바꾼다(`app/tables/model_retirement.py`).
 - **미리 알린다.** 은퇴일이 30, 14, 7, 1 일 남았을 때 한 번씩, 모두 네 번(`narration_model_retiring`). 앉은 사람 모두가 본다. 서버가 꺼져 있다가 늦게 보면 지금 닿은 단계 하나만 알린다. 은퇴일이 미뤄지거나 방장이 모델을 바꾸면 처음부터 다시 센다.
 - **은퇴일은 목록에도 보인다.** `GET /tables/narration-models` 의 `retires_on`. 화면이 "12월 1일 종료"를 보여 준다.
 - **은퇴하면 바꾼다.** 대신 쓸 모델은 [추천 모델](#추천-모델)과 같은 규칙이다(운영자가 정한 회사의 대체 모델, 없으면 같은 회사의 standard 중 가장 싼 모델). 방장이 모델을 바꾸는 것과 같은 길이라, 아직 서술하지 않은 지금 라운드도 바꾸고 그 라운드의 청구를 새 가격표로 다시 건다. `narration_model_replaced` 이벤트에 옛 모델, 새 모델, 까닭, 함께 바꾼 라운드가 실린다.
@@ -2369,35 +2371,30 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 관리 화면이 생기기 전까지는 명령으로 다룬다. trpg-server 폴더에서 돈다. 설정(`.env`)의 DB 를 쓴다. 서버를 띄우지 않아도 된다.
 
 ```powershell
+uv run python -m scripts.models sync --dry-run
+uv run python -m scripts.models sync
+uv run python -m scripts.models sync --file ..\shared\ai-core\src\ai_core\model_catalog.toml
 uv run python -m scripts.models list
 uv run python -m scripts.models list --on 2026-12-01
 uv run python -m scripts.models show gpt-6-luna
-uv run python -m scripts.models add gpt-6-luna --provider openai --api-model-id <공식 문서의 날짜 붙은 이름> --name "GPT-6 Luna" --vendor openai --grade standard --token-field max_completion_tokens --reasoning
-uv run python -m scripts.models add glm-4-7-flash --provider zai --api-model-id glm-4.7-flash --name "GLM-4.7-Flash" --vendor zai --grade basic --reasoning-style thinking_type
-uv run python -m scripts.models add deepseek-v4-pro --provider deepinfra --api-model-id deepseek-ai/DeepSeek-V4-Pro-0813 --name "DeepSeek V4 Pro" --vendor deepseek --grade standard --reasoning
-uv run python -m scripts.models add claude-opus-5-5 --provider anthropic --api-model-id <공식 문서의 이름> --name "Claude Opus 5.5" --vendor anthropic --grade premium --reasoning --no-temperature --reasoning-style always
-uv run python -m scripts.models set-cost gpt-6-luna --input 0.1 --output 0.5 --from 2026-10-17
-uv run python -m scripts.models set-cost gpt-5-6-sol --input 5 --output 30 --from 2026-11-21 --note "행사가 끝남"
-uv run python -m scripts.models update gpt-6-luna --no-temperature
-uv run python -m scripts.models switch-snapshot gpt-6-luna --api-model-id <새 날짜판> --note "공급자 공지"
 uv run python -m scripts.models enable gpt-6-luna
 uv run python -m scripts.models disable gpt-6-luna
-uv run python -m scripts.models retire gpt-6-luna --on 2027-06-01
-uv run python -m scripts.models retire gpt-6-luna --cancel
 uv run python -m scripts.models fallback gpt-6-luna
 uv run python -m scripts.models fallback gpt-6-luna --cancel
 ```
 
+- `sync` 는 모델 목록의 파일을 표에 들여온다. 새 모델은 꺼진 채 넣고, 있는 모델은 파일대로 고치고(켜짐은 그대로), 날짜판이 바뀌면 기록을 남기고 끄고, 모자란 단가를 더한다. 몇 번을 돌려도 같다. 하나라도 거절되면(창구가 바뀌었다, 파일에 없는 모델이 그 API 모델을 쓴다) 아무것도 바꾸지 않는다. 바뀐 것과 파일에 없는 표의 모델을 찍는다. `--dry-run` 은 찍기만 하고 표는 그대로 둔다. `--file` 이 없으면 설치된 ai-core 에 든 파일이다(이미지는 구울 때의 파일을 갖고 있다).
+- 파일의 모양: `format = 1`, 모델마다 `[[models]]`, 단가마다 `[[models.costs]]`(USD, 백만 토큰당. `effective_from`, `checked_on`, `input_per_mtok`, `output_per_mtok`, 있으면 `cached_input_per_mtok`, `cache_write_per_mtok`, `note`). 틀린 곳이 있으면 몇째 모델의 어느 칸인지 찍고 아무것도 들여오지 않는다.
 - `show` 는 받는 것, 단가들(앞으로 쓸 것까지), 날짜판을 바꾼 일들을 찍는다.
 - `list` 는 모델마다 분류, 회사, 상태(켜짐, 꺼짐, 은퇴), 그날의 단가와 1라운드 원가 어림(입력 12,000, 출력 1,200 토큰, 1달러 1,500원), 회사의 대체 모델이면 `대체` 를 찍는다.
 - `fallback` 은 그 모델을 회사의 대체 모델로 정한다. 같은 회사의 앞의 대체 모델은 풀린다. 은퇴한 모델은 정하지 않는다. 꺼진 모델은 정할 수 있지만 꺼져 있는 동안에는 standard 중 가장 싼 모델을 쓴다.
-- 거절되면(없는 모델, 틀린 모양, 원가 없이 켜기) 까닭을 찍고 1 로 끝난다.
-- 일은 모두 `app/catalog/service.py` 의 함수가 한다. 나중에 관리 서버가 생기면 같은 함수를 관리 API 로 연다.
+- 거절되면(없는 모델, 틀린 파일, 원가 없이 켜기) 까닭을 찍고 1 로 끝난다.
+- 일은 모두 `app/catalog` 의 함수가 한다(들여오기는 `sync.py`, 나머지는 `service.py`). 나중에 관리 서버가 생기면 같은 함수를 관리 API 로 연다.
 - API 키는 여기 적지 않는다. `.env` 에만 둔다.
 
 **알려진 한계**
-- 누가 언제 무엇을 바꿨는지는 남지 않는다(원가는 줄마다 남는다). 지금은 DB 에 닿는 운영자만 명령을 돌린다. 관리 화면을 붙일 때 바꾼 기록을 더한다.
-- 처음 데이터는 넣어 두지 않는다. API 모델 이름은 공식 문서에서 확인하고 넣는다.
+- 켜고 끈 것은 누가 언제 했는지 남지 않는다. 모델과 원가는 파일의 git 기록에 남는다. 지금은 DB 에 닿는 운영자만 명령을 돌린다. 관리 화면을 붙일 때 바꾼 기록을 더한다.
+- 서버가 뜰 때 저절로 들여오지 않는다. 배포한 뒤 `sync` 를 돌린다. 날짜판이 바뀐 모델이 사람의 확인 없이 꺼지지 않게 하려는 것이다.
 
 ## 알림 보내기
 
@@ -2453,7 +2450,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
    ```
    s=$(sed -n 's/^GAME_SERVER_SECRET=//p' notification-server/.env); printf '\nNOTIFICATION_URL=http://127.0.0.1:8004\nNOTIFICATION_SECRET=%s\n' "$s" >> trpg-server/.env; unset s
    ```
-2. 게임 서버를 다시 띄운다. 모델의 은퇴일을 30 일 안으로 적고(`scripts.models retire`) 그 모델의 테이블이 있으면, 한 시간 안에(라운드가 열리면 바로) 방장의 알림함(`GET /api/v1/notification/me/notifications`)에 알림이 생긴다.
+2. 게임 서버를 다시 띄운다. 모델의 은퇴일을 30 일 안으로 적고(모델 목록 파일의 `retires_on` 을 고쳐 `scripts.models sync --file`) 그 모델의 테이블이 있으면, 한 시간 안에(라운드가 열리면 바로) 방장의 알림함(`GET /api/v1/notification/me/notifications`)에 알림이 생긴다.
 
 **알려진 한계**
 - 서술 모델의 은퇴를 시나리오 작성자에게는 보내지 않는다. 은퇴 지켜보기는 테이블만 본다. 작성자는 시나리오 응답의 `narration_model_status` 로 본다([추천 모델](#추천-모델)).
