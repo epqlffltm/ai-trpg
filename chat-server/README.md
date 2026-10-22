@@ -105,9 +105,9 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/models` | 대화에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?, model?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
 | GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
-| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives` 와 `suggestions`), 가지 끝의 [상태](#장소와-이동)(`state`), 답을 쓰는 중인지(`generating`) | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives` 와 `suggestions`), 가지 끝의 [상태](#장소와-소지품)(`state`), 답을 쓰는 중인지(`generating`) | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content, edit_of?}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`). `edit_of` 는 [내 말 고치기](#고치기) | access 토큰 |
-| POST | `/api/v1/chat/conversations/{id}/actions` | [행동](#장소와-이동). 지금은 지도에서 이동(`{kind: "move", place}`). 바로 SSE 로 반응을 받는다. 갈 수 없으면 422(`no_map`, `place_not_found`, `already_there`, `not_connected`) | access 토큰 |
+| POST | `/api/v1/chat/conversations/{id}/actions` | [행동](#장소와-소지품). 이동 `{kind: "move", place}`, 쓰기 `{kind: "use", item}`, 건네기 `{kind: "give", item, words?}`. 바로 SSE 로 반응을 받는다. 할 수 없으면 422(`no_map`, `place_not_found`, `already_there`, `not_connected`, `item_not_found`, `not_held`) | access 토큰 |
 | PATCH | `/api/v1/chat/messages/{id}` | [상대의 말 고치기](#고치기). `{content}`. 고친 말을 돌려준다. 사람의 말이면 422 `not_editable` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/regenerate` | [다시 생성](#다시-생성-멈추기-대안). 그 말에 다시 답한다. SSE 의 모양은 말 보내기와 같다. 인사말은 422 `not_regenerable`, 없는 말은 404 `message_not_found` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/continue` | [이어서 출력](#이어서-출력). 끊긴 답(`partial`)에 이어 쓴다. SSE. 끊긴 답이 아니거나 지금 가지의 끝이 아니면 422 `not_continuable` | access 토큰 |
@@ -291,20 +291,26 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - **거른다.** 줄마다 하나. 번호, 글머리표, 감싼 따옴표를 떼고, 빈 것, 200자보다 긴 것, 같은 것을 뺀 뒤 셋까지. 형식이 깨지면 선택지만 줄거나 없어지고 오류로 만들지 않는다. 표는 넷 이상을 받지 않는다(CHECK).
 - **잘린 답**(길이 상한)은 선택지를 버린다(줄이 잘렸을 수 있다). 끊기거나 멈춘 답도 본문만 저장한다. 표식만 쓴 답은 빈 답(`failed` 의 `empty`)이다.
 
-### 장소와 이동
+### 장소와 소지품
 
 캐릭터의 판에 지도(장소, 길, 처음 있는 장소)와 물건(물건, 시작 소지품)이 있으면 대화가 그 안에서 돈다(`app/world/`, 설계의 "장소와 소지품").
 상태는 서버가 갖고 바꾼다. 모델은 바뀐 상태를 읽고 반응만 쓴다.
 
-- **상태.** 지금 있는 장소(`place`), 대화를 시작한 뒤 흐른 시간(`minutes`), 사용자의 소지품(`inventory`), 가 본 장소(`visited`, 화면이 안개를 그린다).
+- **상태.** 지금 있는 장소(`place`), 대화를 시작한 뒤 흐른 시간(`minutes`), 사용자의 소지품(`inventory`), 가 본 장소(`visited`, 화면이 안개를 그린다),
+  상대의 차림(`outfit`, 사용자가 건넨 옷).
   처음에는 판의 시작 상태다. 지도가 없는 캐릭터면 장소가 없다(`null`).
 - **말마다.** 상태는 바뀐 말(행동 말)에만 적는다(`message_states`, 매번 전체를). 나머지 말은 부모의 상태를 따르고, 지금의 상태는 가지의 끝에서 거슬러 올라가 읽는다.
   그래서 다시 생성하거나 앞 가지로 가면 그 가지의 상태가 된다. 되돌리기가 가지를 바꾸는 것으로 끝난다.
 - **이동**(`POST /conversations/{id}/actions`, `{kind: "move", place}`). 지금 있는 곳과 길로 바로 이어진 곳만 간다(길은 양쪽으로).
   행동 말(`role` 이 `action`, "카페에 갔다. 15분이 걸렸다.")과 바뀐 상태를 저장하고, 모델의 반응을 흘려보낸다. 반응을 받으니 한 번 청구한다.
   갈 수 없으면 422 이고 아무것도 저장하지 않는다. 홀드가 거절되면 행동 말과 상태는 남는다(사람의 말과 같다). 반응은 다시 생성으로 받는다.
-- **모델에 보내는 것.** 카드에 "[지금]" 블록(장소와 설명, 갈 수 있는 곳과 시간, 소지품)이 들어간다. 행동 말은 "[행동] …"으로 사람의 차례에 간다.
-- 물건 쓰기와 건네기, 상대의 차림은 다음 PR 이다. 호감도와 시간대(배경)는 그 뒤다.
+- **쓰기**(`{kind: "use", item}`). 가진 물건만 쓴다. 쓰면 없어지는 물건(판의 `consumable`, 음식 등)은 하나 줄고, 아니면(우산 등) 남는다(물건마다 정한다).
+- **건네기**(`{kind: "give", item, words?}`). 가진 물건을 하나 상대에게 건넨다. 옷(`kind` 가 `clothing`)이면 상대가 입는다(차림에 한 번만 든다).
+  `words` 는 덧붙이는 한마디다. 행동 말 아래에 사람의 말로 붙고, 반응은 그 한마디에 답한다(행동과 말이 한 턴, 한 번 청구).
+  SSE 의 `turn` 에서 `user_message` 가 한마디, `action` 이 그 위의 행동 말이다. 한마디가 없으면 `user_message` 가 행동 말이고 `action` 은 `null` 이다.
+- 수가 0 이 되면 소지품에서 빠진다. 가지고 있지 않으면 422 `not_held`, 판에 없는 물건이면 422 `item_not_found` 다.
+- **모델에 보내는 것.** 카드에 "[지금]" 블록(장소와 설명, 갈 수 있는 곳과 시간, 소지품, 상대의 차림)이 들어간다. 행동 말은 "[행동] …"으로 사람의 차례에 간다.
+- 호감도와 시간대(배경), 상대가 받은 선물의 목록은 그 뒤다. 규칙은 `app/world/` 에 두고, TRPG 와 함께 쓸 때 `shared/` 로 뽑는다.
 
 ### 고치기
 

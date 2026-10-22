@@ -51,6 +51,8 @@ class TurnStart:
     messages: list[ChatMessage]
     # 이어서 출력이면 이어 쓰는 끊긴 답. 새 글은 이 말의 끝에 붙는다. 보통의 말 한 번이면 None
     continued: SavedMessage | None = None
+    # 행동에 한마디를 덧붙였으면 그 행동 말. user_message 는 한마디이고 이 말 아래에 있다. 아니면 None
+    action: SavedMessage | None = None
 
 
 @dataclass(frozen=True)
