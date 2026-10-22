@@ -53,6 +53,8 @@ def make_test_settings(**overrides) -> Settings:
         # 부르는 서버의 서명 비밀(tests/signing.py). 개발자의 .env 의 값과 상관없이 같다
         'chat_server_secret': TEST_SECRETS['chat'],
         'auth_server_secret': TEST_AUTH_SECRET,
+        # 그림 저장소는 없다. 그림을 보는 테스트는 가짜 저장소(tests/images.py)를 앱에 꽂는다
+        'image_store_endpoint': '',
     }
     values.update(overrides)
     return Settings(**values)

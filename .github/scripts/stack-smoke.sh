@@ -630,12 +630,42 @@ object_store_refuses_unknown_bucket() {
   return "$ok"
 }
 
+# asset 서버가 제 설정(IMAGE_STORE_*)과 제 서명 코드(app/images/sigv4.py)로 저장소에 넣고,
+# 제가 서명한 주소(nginx 가 따라가는 것, 60초)로 같은 바이트와 형식을 받는가(#566)
+asset_store_round_trip() {
+  compose exec -T asset-server python - <<'PY'
+import asyncio
+import uuid
+from datetime import UTC, datetime
+
+import httpx
+
+from app.core.config import Settings
+from app.images.setup import build_image_store
+
+
+async def main() -> None:
+    async with httpx.AsyncClient() as client:
+        store = build_image_store(Settings(), client)
+        key, now = f'ci/{uuid.uuid4()}', datetime.now(UTC)
+        await store.put(key, b'asset-smoke', 'image/webp', now)
+        response = await client.get(store.presigned_get(key, now), timeout=10)
+        assert response.status_code == 200, response.status_code
+        assert response.content == b'asset-smoke'
+        assert response.headers['content-type'] == 'image/webp'
+
+
+asyncio.run(main())
+PY
+}
+
 check_object_store() {
   report "그림 저장소가 root 가 아닌 사용자로 돈다" object_store_not_root
   report "그림 저장소는 서명 없는 요청을 막는다(403)" status_is 403 "$IMAGE_STORE/$IMAGE_STORE_BUCKET/"
   report "그림 저장소는 틀린 비밀 키를 막는다(403)" object_store_refuses_wrong_key
   report "그림 저장소에 서명해 올린 것을 그대로 받고 지울 수 있다(뜰 때 버킷을 만들었다)" object_store_round_trip
   report "그림 저장소는 없는 버킷에 올리면 만들지 않고 거절한다(404)" object_store_refuses_unknown_bucket
+  report "asset 서버가 제 서명으로 저장소에 넣고 서명한 주소로 받는다" asset_store_round_trip
 }
 
 # --- 로그 모으기(observability 프로필) ---
@@ -1281,6 +1311,17 @@ check_workers() {
   done
 }
 
+# 그 크기(바이트)의 본문으로 그림을 올리면 이 상태 코드인가. 토큰은 싣지 않는다
+upload_status_is() {
+  local expected="$1" size="$2" work ok=1
+  work="$(mktemp -d)"
+  head -c "$size" /dev/zero >"$work/body"
+  status_is "$expected" "$PROXY/api/v1/asset/images" -X POST --data-binary "@$work/body" \
+    -H 'Content-Type: image/png' --max-time 20 && ok=0
+  rm -rf "$work"
+  return "$ok"
+}
+
 # 프록시를 거쳐 본다. 요청 수 제한을 채우므로 맨 마지막에 부른다
 check_proxy() {
   report "프록시로 인증 서버에 닿는다" status_is 200 "$PROXY/api/v1/auth/jwks"
@@ -1311,6 +1352,10 @@ check_proxy() {
   report "프록시는 그림의 내부 위치를 바깥에 열지 않는다" status_is 404 "$PROXY/_images/$NO_IMAGE"
   # nginx-unprivileged 가 뜰 때 만든다. 쓰지 못하면 그림을 내줄 때마다 502 다
   report "프록시가 그림의 캐시에 쓸 수 있다" runs_once proxy 'test -d /var/cache/nginx/images && test -w /var/cache/nginx/images'
+  # 그림 올리기의 본문 상한(#566). asset 서버의 상한(10MB)보다 조금 큰 11MB 까지 넘긴다.
+  # 넘긴 것은 asset 서버가 토큰이 없어 401 로, 넘는 것은 프록시가 413 으로 답한다
+  report "프록시는 10MB 의 그림을 asset 서버에 넘긴다" upload_status_is 401 10485760
+  report "프록시는 11MB 를 넘는 그림을 막는다(413)" upload_status_is 413 11600000
   report "프록시는 그 밖의 주소를 막는다" status_is 404 "$PROXY/"
   report "프록시가 요청 식별자를 하나 정해 돌려준다" one_request_id_from_proxy
   report "서버의 응답에 보안 머리말이 하나씩 붙는다" security_headers "$PROXY/api/v1/auth/jwks"

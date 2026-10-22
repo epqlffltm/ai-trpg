@@ -67,3 +67,24 @@ def test_two_empty_secrets_are_not_shared_ones():
 def test_the_auth_secret_is_not_a_caller():
     # 인증 서버의 비밀로는 페르소나와 판을 가져가지 못한다
     assert 'auth' not in make_test_settings().service_secrets()
+
+
+@pytest.mark.parametrize(
+    'missing',
+    ['image_store_bucket', 'image_store_access_key_id', 'image_store_secret_access_key'],
+)
+def test_an_image_store_endpoint_needs_its_bucket_and_keys(missing: str):
+    complete = {
+        'image_store_endpoint': 'http://object-store:8333',
+        'image_store_bucket': 'ai-trpg-images',
+        'image_store_access_key_id': 'ai-trpg-local',
+        'image_store_secret_access_key': 'secret',
+    }
+
+    assert make_test_settings(**complete).image_store_bucket == 'ai-trpg-images'
+    with pytest.raises(ValidationError, match=missing.upper()):
+        make_test_settings(**{**complete, missing: ''})
+
+
+def test_without_an_endpoint_the_image_store_needs_nothing():
+    assert make_test_settings(image_store_endpoint='', image_store_bucket='').image_store_endpoint == ''
