@@ -51,8 +51,9 @@ async def kick(client: AsyncClient, host: dict, table: dict) -> None:
 
 
 async def move_on(client: AsyncClient, host: dict, table: dict) -> None:
-    """남은 방장이 테이블을 이어 간다. 이벤트가 하나 더 적힌다(clock_step_changed)."""
-    response = await client.put(table_url(table, '/clock/step'), json={'minutes': 60}, headers=host)
+    """남은 방장이 테이블을 이어 간다. 이벤트가 하나 더 적힌다(narration_style_changed)."""
+    body = {'narration_style': 'literary'}
+    response = await client.put(table_url(table, '/narration-style'), json=body, headers=host)
     assert response.status_code == status.HTTP_200_OK, response.text
 
 
@@ -84,8 +85,8 @@ async def test_one_who_left_reads_up_to_leaving(client: AsyncClient, me: dict, f
     assert types(page['items'])[-1] == 'member_left'
     assert page['last_sequence'] == listed['last_sequence'] == page['items'][-1]['sequence']
     assert page['items'] == everything[: len(page['items'])]
-    assert 'clock_step_changed' in types(everything)
-    assert 'clock_step_changed' not in types(page['items'])
+    assert 'narration_style_changed' in types(everything)
+    assert 'narration_style_changed' not in types(page['items'])
 
 
 async def test_one_who_was_kicked_reads_up_to_the_kick(client: AsyncClient, me: dict, friend: dict):

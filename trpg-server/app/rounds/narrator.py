@@ -278,6 +278,21 @@ class TravelNote:
 
 
 @dataclass(frozen=True)
+class WaitNote:
+    """
+    기다리는 행동의 결과(app/rounds/waits.py). 엔진이 정한 것이다. 판정이 없다.
+
+    minutes 는 이 사람이 부른 시간이다. waited 가 거짓이면 시간이 건너뛰지 않았다.
+    까닭은 reason 이다(hurt: 그 라운드에 누가 맞았다, not_all: 모두가 기다리지 않았다).
+    실제로 흐르는 시간은 [시각]의 흐르는 시간이다(모두 부른 것 중 가장 짧은 것, 적어도 판의 기본).
+    """
+
+    minutes: int
+    waited: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
 class RestNote:
     """
     쉬는 행동의 결과(app/rounds/rests.py). 엔진이 정한 것이다. 판정이 없다.
@@ -471,6 +486,8 @@ class Move:
     target_gone: TargetGoneNote | None = None
     # 쉬는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     rest: RestNote | None = None
+    # 기다리는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다. 이 칸이 생기기 전에 굳힌 것은 None 이다
+    wait: WaitNote | None = None
     # 이 라운드가 닫힐 때 굴린 되살아나기와 저절로 회복. 없었으면 None 이다(app/rounds/rests.py)
     revival: RevivalNote | None = None
     recovery: RecoveryNote | None = None

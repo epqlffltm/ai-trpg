@@ -43,6 +43,7 @@ from app.rounds.narrator import (
     TreatmentNote,
     TurnNote,
     Verdict,
+    WaitNote,
     WakeNote,
 )
 from app.rounds.time_words import duration_text
@@ -219,6 +220,23 @@ def describe_rest(note: RestNote) -> str:
     if not note.rested:
         return f'(쉬기: {length}. {REST_BREAKS.get(note.reason, "쉬지 못했다")})'
     return f'(쉬기: {length}, HP {note.before} → {note.after}/{note.max_hp})'
+
+
+# 기다림이 깨진 까닭을 서술자에게 주는 말
+WAIT_BREAKS = {'hurt': '싸움이 벌어져 시간이 건너뛰지 않았다', 'not_all': '모두가 기다리지 않아 시간이 건너뛰지 않았다'}
+
+
+def describe_wait(note: WaitNote) -> str:
+    """
+    기다리는 행동의 결과를 한 줄로 적는다. 실제로 흐르는 시간은 [시각]에 있다.
+
+    예: (기다리기: 3일)
+        (기다리기: 3일. 모두가 기다리지 않아 시간이 건너뛰지 않았다)
+    """
+    asked = duration_text(note.minutes)
+    if not note.waited:
+        return f'(기다리기: {asked}. {WAIT_BREAKS.get(note.reason, "시간이 건너뛰지 않았다")})'
+    return f'(기다리기: {asked})'
 
 
 def describe_revival(note: RevivalNote) -> str:
@@ -470,6 +488,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_handed_over(move.handed_over))
     if move.rest is not None:
         parts.append(describe_rest(move.rest))
+    if move.wait is not None:
+        parts.append(describe_wait(move.wait))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
     if move.revival is not None:
