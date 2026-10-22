@@ -24,6 +24,13 @@ export const RULES = {
     { key: 'easy', name: '쉬움', target: 10 },
     { key: 'normal', name: '보통', target: 15 },
   ],
+  death_save: { target: 10, successes: 3, failures: 3 },
+  injuries: [
+    { key: 'sprain', name: '삔 발목', healing: 'rounds' },
+    { key: 'broken_arm', name: '부러진 팔', healing: 'heals' },
+    { key: 'lost_eye', name: '잃은 눈', healing: 'permanent' },
+  ],
+  magnitudes: [{ key: 'light', name: '가벼움', count: 1, sides: 4 }],
   point_buy: {
     budget: 10,
     costs: [
@@ -43,6 +50,23 @@ export function pregen(name: string, extra: Record<string, unknown> = {}) {
     sheet: { abilities: { str: 14, dex: 12, con: 10 }, max_hp: 12 },
     taken_by: null,
     dead: false,
+    ...extra,
+  };
+}
+
+/** 시작한 뒤의 시트(SheetOut). 처음 값은 다치지 않았고 지닌 것이 없다 */
+export function sheet(extra: Record<string, unknown> = {}) {
+  return {
+    number: 1,
+    abilities: { str: 14, dex: 12, con: 10 },
+    max_hp: 12,
+    hp: 12,
+    death_successes: 0,
+    death_failures: 0,
+    dead: false,
+    injuries: [],
+    items: [],
+    place_id: null,
     ...extra,
   };
 }
@@ -102,6 +126,10 @@ export function tableDetail(id: string, extra: Record<string, unknown> = {}) {
     player_made_hp: { base: 8, cap: 20 },
     reroll_allowed: true,
     pregens: [pregen('렌'), pregen('미아', { taken_by: OTHER }), pregen('조', { dead: true })],
+    items: [],
+    quests: [],
+    map: null,
+    clock: { day: 1, hour: 8, minute: 0, time_of_day: 'morning', next_step_minutes: 30, default_step_minutes: 30, step_changed: false },
     members: [member(ME, { is_host: true }), member(OTHER)],
     invite_code: 'ABC123',
     started_at: null,
