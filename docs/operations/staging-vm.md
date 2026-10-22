@@ -2,7 +2,7 @@
 
 [배포 설계](../architecture/deployment.md)의 "VM 준비 순서"를 실제 명령으로 적는다. 처음 한 번 하는 일이다. 무엇을 왜 그렇게 정했는지는 배포 설계에 있고, 여기에는 순서와 명령만 둔다.
 
-- 기준: `main` `38c3292` (2026-10-19). 명령은 VM 을 실제로 만들 때 한 번 따라 해 보고 고친다.
+- 기준: `main` `8dddef0` (2026-10-22). 집 PC 의 VM 에서 한 번 따라 해 보고 고쳤다([로컬 VM 리허설의 결과](local-vm-rehearsal.md#결과-2026-10-22)). 클라우드에서 다시 따라 해 보고 고친다.
 - 클라우드에 빌리기 전에 집 PC 의 VM 에서 먼저 따라 해 본다. 로컬이라 바꾸는 곳은 [로컬 VM 리허설](local-vm-rehearsal.md)에 있다.
 - 명령마다 어디서 치는지 붙인다: **[웹]** AWS·도메인·Tailscale 의 콘솔, **[집 PC]** Windows 의 PowerShell, **[VM]** VM 에 SSH 로 붙은 bash.
 - `<...>` 는 사람마다 다른 값이다. 처음 정할 때 비밀번호 관리자에 함께 적어 둔다: 도메인, VM 의 고정 IP, 집 PC 의 Tailscale 주소, S3 버킷의 이름.
@@ -65,8 +65,10 @@ ssh -i $HOME\.ssh\LightsailDefaultKey-ap-northeast-2.pem ubuntu@<VM 의 고정 I
 ```
 
 **[VM]** SSH 는 키로만 받는지, root 로 들어올 수 없는지 본다. 둘 다 `no` 여야 한다(Lightsail 의 Ubuntu 는 기본이 그렇다).
+24.04 의 SSH 는 들어올 때 켜지는 방식(socket)이라 `/run/sshd` 가 없을 수 있고, 그러면 `sshd -T` 가 "Missing privilege separation directory" 로 멈춘다. 먼저 만든다.
 
 ```bash
+sudo install -d -m 0755 /run/sshd
 sudo sshd -T | grep -E '^(passwordauthentication|permitrootlogin) '
 ```
 
@@ -78,6 +80,7 @@ sudo sshd -T | grep -E '^(passwordauthentication|permitrootlogin) '
 sudo apt update && sudo apt -y upgrade
 sudo apt install -y unattended-upgrades age git
 sudo dpkg-reconfigure -plow unattended-upgrades        # "Yes"
+swapon --show                                         # 비어 있어야 한다. 이미 있으면 만들지 않는다
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 free -h                                               # Swap 이 2.0Gi 면 된다
@@ -109,7 +112,7 @@ sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin d
 ```bash
 echo '{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "5" } }' | sudo tee /etc/docker/daemon.json
 sudo systemctl restart docker
-sudo usermod -aG docker ubuntu
+sudo usermod -aG docker $USER
 exit                                                  # 다시 붙어야 그룹이 먹는다
 ```
 
@@ -125,8 +128,8 @@ sudo mkfs -t ext4 -L ai-trpg-obs /dev/<32G 의 장치>
 sudo mkdir -p /mnt/db /mnt/observability
 echo 'LABEL=ai-trpg-db  /mnt/db             ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
 echo 'LABEL=ai-trpg-obs /mnt/observability  ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
-sudo systemctl daemon-reload && sudo mount -a
-findmnt /mnt/db /mnt/observability                    # 둘 다 나오면 된다
+sudo udevadm settle && sudo systemctl daemon-reload && sudo mount -a
+df -h /mnt/db /mnt/observability                      # 16G 와 32G 의 장치가 나오면 된다
 sudo mkdir -p /etc/systemd/system/docker.service.d
 printf '[Unit]\nAfter=mnt-db.mount mnt-observability.mount\n' | sudo tee /etc/systemd/system/docker.service.d/disks.conf
 sudo systemctl daemon-reload
@@ -187,7 +190,7 @@ tailscale serve status                                # http://<VM 의 Tailscale
 **[VM]** 저장소를 받는다. 공개 저장소라 인증이 필요 없다.
 
 ```bash
-sudo mkdir -p /srv/ai-trpg && sudo chown ubuntu:ubuntu /srv/ai-trpg
+sudo mkdir -p /srv/ai-trpg && sudo chown $USER:$USER /srv/ai-trpg
 git clone https://github.com/epqlffltm/ai-trpg.git /srv/ai-trpg
 cd /srv/ai-trpg
 ```
@@ -268,11 +271,11 @@ docker compose run --rm -p 80:80 certbot issue
 ## 8. 띄우기
 
 **[VM]** 루트 `.env` 의 `COMPOSE_FILE` 과 `COMPOSE_PROFILES` 가 운영 설정과 프로필을 고르므로 명령에 `-f` 와 `--profile` 을 붙이지 않는다.
-처음에는 이미지를 빌드하고 `ollama-pull` 이 `bge-m3`(1GB 남짓)를 받느라 시간이 걸린다.
+처음에는 이미지를 빌드하고 `ollama-pull` 이 `bge-m3`(1GB 남짓)를 받느라 시간이 걸린다. SSH 가 끊겨도 이어지게 `tmux new -s up` 안에서 하고, 다시 붙으면 `tmux attach -t up` 이다. 이미지와 빌드 캐시가 기본 디스크에서 20GB 남짓을 쓴다(로컬 VM 리허설).
 
 ```bash
 cd /srv/ai-trpg
-docker compose up -d --build
+time docker compose up -d --build
 docker compose ps -a
 ```
 
@@ -303,11 +306,11 @@ docker compose exec -T trpg-server python -m scripts.models sync --file /dev/std
 docker compose exec auth-server python manage.py createsuperuser
 ```
 
-**[집 PC]** 관리자 화면은 SSH 터널로만 연다. 띄워 둔 채 브라우저에서 `http://localhost:8000/admin/` 을 연다.
-Grafana 는 Tailscale 로 연다(4번): `http://<VM 의 Tailscale 이름>:3000`. 비밀번호는 루트 `.env` 의 `GRAFANA_ADMIN_PASSWORD` 다. Tailscale 이 끊겼을 때는 터널에 `-L 3000:127.0.0.1:3000` 을 더해 `http://localhost:3000` 으로 연다.
+**[집 PC]** 관리자 화면은 SSH 터널로만 연다. 띄워 둔 채 브라우저에서 `http://localhost:18000/admin/` 을 연다. 집 PC 의 로컬 스택이 8000 과 3000 을 쓰므로 집 PC 쪽은 18000, 13000 으로 연다(같은 포트면 `bind … Permission denied` 가 나고 브라우저는 로컬 스택을 연다).
+Grafana 는 Tailscale 로 연다(4번): `http://<VM 의 Tailscale 이름>:3000`. 비밀번호는 루트 `.env` 의 `GRAFANA_ADMIN_PASSWORD` 다. Tailscale 이 끊겼을 때는 터널에 `-L 13000:127.0.0.1:3000` 을 더해 `http://localhost:13000` 으로 연다.
 
 ```powershell
-ssh -i $HOME\.ssh\LightsailDefaultKey-ap-northeast-2.pem -L 8000:127.0.0.1:8000 ubuntu@<VM 의 고정 IP>
+ssh -i $HOME\.ssh\LightsailDefaultKey-ap-northeast-2.pem -L 18000:127.0.0.1:8000 ubuntu@<VM 의 고정 IP>
 ```
 
 ## 10. 확인
@@ -322,7 +325,7 @@ ssh -i $HOME\.ssh\LightsailDefaultKey-ap-northeast-2.pem -L 8000:127.0.0.1:8000 
 | 인증서의 갱신 | [VM] `docker compose run --rm certbot renew --dry-run` | "Congratulations, all simulated renewals succeeded" |
 | 바깥 백업 | [VM] `docker compose logs backup-offsite` | "올렸다", "풀어 봤다" 줄 |
 | 주 열쇠로 풀리는가 | [웹] S3 콘솔에서 가장 최근 `trpg-*.dump.age` 를 받는다. [집 PC] `age -d -i "$HOME\ai-trpg-master.key" -o check.dump <받은 파일>` 이 오류 없이 끝나면 지운다 | 주마다 저절로 푸는 것은 확인 열쇠뿐이다. 주 열쇠는 이때 손으로 본다 |
-| 메모리 | [VM] `docker stats --no-stream` | 합을 배포 설계의 열린 질문에 적는다 |
+| 메모리 | [VM] Grafana 의 화면을 열기 전에 `free -h` 와 `docker stats --no-stream` | 합을 배포 설계의 열린 질문에 적는다. 로컬 VM 의 바닥값은 2.3Gi 였다 |
 | 데이터 디스크 | [VM] `docker compose exec db df -h /var/lib/postgresql/data` 와 `docker compose exec prometheus df -h /prometheus` | 1번의 16G, 32G 디스크가 보인다(기본 디스크가 아니다) |
 | 디스크의 대시보드 | [집 PC] Grafana 의 대시보드 `disks` | system, db, observability 셋이 보인다. 일주일 뒤 "하루에 느는 양"으로 크기를 다시 본다 |
 | Grafana 를 사설망으로 | [집 PC] Tailscale 을 켜고 `http://<VM 의 Tailscale 이름>:3000`, 끄고 다시 | 켜면 열리고, 끄면 닿지 않는다 |

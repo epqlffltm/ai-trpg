@@ -233,11 +233,13 @@ BOARD_SERVER_SECRET=$board_notify_secret
 EOF
   # asset 서버와 chat 서버의 DB 비밀번호는 compose 가 루트 .env 의 것으로 주소를 만든다.
   # 둘이 함께 아는 비밀은 chat 이 대화를 시작할 때 판과 페르소나를 가져오는 서명이다.
-  # compose 가 chat 서버에 ASSET_URL 을 주므로 이 비밀이 없으면 chat 서버가 뜨지 않는다
+  # compose 가 chat 서버에 ASSET_URL 을 주므로 이 비밀이 없으면 chat 서버가 뜨지 않는다.
+  # ASSET_URL 은 tools/fill_env.py 가 만드는 .env 처럼 .env.example 의 값을 둔다. 마이그레이션이 그 값을 비우는지 본다
   write_new asset-server/.env <<EOF
 CHAT_SERVER_SECRET=$chat_asset_secret
 EOF
   write_new chat-server/.env <<EOF
+ASSET_URL=http://127.0.0.1:8006
 ASSET_SECRET=$chat_asset_secret
 EOF
 }
