@@ -166,7 +166,7 @@ describe('TableRoom', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '시작하기' }));
 
-    expect(await screen.findByText(/진행 중입니다/)).toBeInTheDocument();
+    expect(await screen.findByText('1번째 장면')).toBeInTheDocument();
   });
 
   it('나가면 로비로 간다', async () => {

@@ -5,8 +5,8 @@
 
 지금 있는 것: 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(A2 의 두 단계, 갱신은 한 번에 하나 #30), 가입(세 단계와 동의),
 비밀번호 찾기와 재설정, 다시 동의와 탈퇴 취소, 첫 화면(A1: 서비스 고르기, 이어하기, 공개된 것),
-마이페이지(A5: 계정, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의), TRPG 의 시나리오 탐색(B1), 소개(B2), 로비(B3), 테이블 만들기(B4), 테이블 방(B6)의 대기실과 스트림, 채팅, 캐릭터 정하기(B5, 모집 중).
-본인인증, 보호자 동의, 지갑과 탈퇴 요청, TRPG 의 캐릭터 보관함과 진행 중의 새 캐릭터, 라운드, 상태 패널(B7), chat 의 화면(C)은 다음이다. 그 경로는 "준비 중"을 보인다.
+마이페이지(A5: 계정, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의), TRPG 의 시나리오 탐색(B1), 소개(B2), 로비(B3), 테이블 만들기(B4), 테이블 방(B6)의 대기실과 스트림, 채팅, 캐릭터 정하기(B5, 모집 중), 라운드(서술, 선언과 판정, 판정 결과, 서술의 미리 보기, 방장의 닫기).
+본인인증, 보호자 동의, 지갑과 탈퇴 요청, TRPG 의 캐릭터 보관함과 진행 중의 새 캐릭터, 판정이 아닌 행동, 상태 패널(B7), chat 의 화면(C)은 다음이다. 그 경로는 "준비 중"을 보인다.
 
 ## 실행
 
@@ -56,12 +56,12 @@ web/
   package.json            npm workspaces 의 뿌리. 린트(ESLint)와 TypeScript 를 여기서 함께 쓴다
   Dockerfile              프록시의 이미지(Node 에서 빌드 → nginx-unprivileged 에 dist)
   apps/web/               앱
-    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), tables.ts(B3, B4), tableRoom.ts·tableStream.ts·sse.ts(B6), publicNames.ts, errors.ts
+    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), tables.ts(B3, B4), tableRoom.ts·rounds.ts·tableStream.ts·sse.ts(B6), publicNames.ts, errors.ts
     src/api/generated/    서버의 API 목록(docs/api/*.openapi.json)에서 만든 타입. 손으로 고치지 않는다
     src/api/account.ts    본인의 계정(동의, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 취소)
     src/auth/             로그인 상태를 읽는 훅, 처음 열 때 되살리기, 로그인해야 열리는 화면(RequireSession), 실패의 글, 돌아갈 주소
     src/legal/            동의 항목의 이름과 요약, 판마다의 문서(documents/, docs/legal 의 사본), 문서를 보이는 창
-    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기, room 의 B6 테이블 방, room/character 의 B5 캐릭터 정하기), 준비 중, 없는 경로
+    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기, room 의 B6 테이블 방, room/character 의 B5 캐릭터 정하기, room/round 의 라운드), 준비 중, 없는 경로
     src/components/       여러 화면이 함께 쓰는 것(목록 한 칸, 실패 한 줄)
     src/hooks/            남은 초 세기, 다른 사람의 이름 찾기(public-names, #532)
     src/layout/           머리와 틀
@@ -95,6 +95,8 @@ Stitch 의 시안을 받으면 `packages/ui` 의 변수와 구성요소의 모�
 - 토큰이 만료되면(`token_expired`, 401) `refresh.ts` 로 갱신한다. 갱신은 다른 요청과 같이 한 번에 하나다(#30).
 - 이벤트로 값을 고치지 않는다. 오면 테이블을 묶어서 다시 읽는다(화면 명세 B7 의 "다시 읽기").
 - 남이 캐릭터를 정한 것은 이벤트가 없다. 모집 중에는 15초마다도 테이블을 읽는다(`roomQueries.ts`).
+- 남이 선언을 낸 것도 이벤트가 없다. 선언을 받는 동안에는 10초마다 지금 라운드를 읽는다(`round/roundQueries.ts`).
+- 서술의 미리 보기(`narration_preview`)는 조각을 이어 보이고(`round/preview.ts`), 서술이 끝났다는 이벤트가 오면 지운다. 남는 장면은 이벤트와 라운드의 글뿐이다.
 - 프록시는 이 주소의 버퍼를 끈다(`docker/nginx/templates/api.inc.template` 의 `/stream`). 개발 서버(Vite)의 프록시도 그대로 흘려보낸다.
 
 ## API 의 타입
@@ -135,7 +137,8 @@ npm run build
 다시 동의와 탈퇴 취소가 어느 경로든 막고 마치면 원래 화면을 여는지, 마이페이지(비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의 켜고 끄기),
 시나리오 탐색(로그인 전에 토큰 없이, 거르기, 더 보기와 그 실패, 만든 사람의 이름)과 소개(고를 거리, 로그인 전후의 할 일, 404),
 테이블 만들기(보내는 본문, 모델을 쓸 수 없을 때)와 로비(들어가기, 비밀번호, 그 사이에 자리가 참, 초대 코드),
-테이블 방(붙는 번호, 스트림의 채팅과 입력 중, 쓰기, 이벤트가 오면 묶어서 다시 읽기, Last-Event-ID 로 다시 붙기, 토큰 만료, 시작, 나가기, 내보내짐), 캐릭터 정하기(프리젠, 점수제의 총점, 주사위를 굴리고 놓기, 바꾸기, 그 사이 남이 가져간 프리젠)를 본다.
+테이블 방(붙는 번호, 스트림의 채팅과 입력 중, 쓰기, 이벤트가 오면 묶어서 다시 읽기, Last-Event-ID 로 다시 붙기, 토큰 만료, 시작, 나가기, 내보내짐), 캐릭터 정하기(프리젠, 점수제의 총점, 주사위를 굴리고 놓기, 바꾸기, 그 사이 남이 가져간 프리젠),
+라운드(지난 라운드와 지금 라운드, 판정을 붙인 선언과 고치기, 판정 결과, 서술의 미리 보기와 끝, 방장의 닫기와 다시 맡기기, 그 사이 마감함)를 본다.
 가짜 스트림은 `src/test/tableFixtures.ts` 의 `sseResponse` 다.
 프록시에 실려 실제로 뜨는지(index.html 로 돌리기, 캐시, CSP)는 CI 의 stack(`.github/scripts/stack-smoke.sh check-proxy`)이 본다.
 끝에서 끝까지(Playwright)는 한 판이 화면으로 이어질 때 붙인다.
