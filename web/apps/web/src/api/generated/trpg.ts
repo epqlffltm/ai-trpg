@@ -6872,6 +6872,12 @@ export interface components {
          */
         TimeOfDay: "dawn" | "morning" | "day" | "evening" | "night";
         /**
+         * TranscriptFormat
+         * @description 기록의 형식.
+         * @enum {string}
+         */
+        TranscriptFormat: "md" | "html" | "txt";
+        /**
          * TreatAction
          * @description 치료하는 행동. 대상이 입은 오래 가는 부상 하나를 치료한다.
          *
@@ -9393,7 +9399,9 @@ export interface operations {
     };
     download_past_transcript_api_v1_game_tables_past__table_id__transcript_get: {
         parameters: {
-            query?: never;
+            query?: {
+                format?: components["schemas"]["TranscriptFormat"];
+            };
             header?: never;
             path: {
                 table_id: string;
@@ -10511,7 +10519,9 @@ export interface operations {
     };
     download_transcript_api_v1_game_tables__table_id__transcript_get: {
         parameters: {
-            query?: never;
+            query?: {
+                format?: components["schemas"]["TranscriptFormat"];
+            };
             header?: never;
             path: {
                 table_id: string;
