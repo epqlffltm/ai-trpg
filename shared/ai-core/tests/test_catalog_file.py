@@ -121,8 +121,11 @@ def test_a_claude_model_needs_its_reasoning_style():
         with_fields(OPUS, reasoning_style=None)
 
 
-def test_an_openai_model_takes_no_reasoning_style():
-    with pytest.raises(ValidationError, match='적지 않는다'):
+def test_an_openai_model_takes_only_always_or_nothing():
+    # 끌 수 없는 모델(GPT-6 Astra, GPT-6.1 Sol)만 always 를 적는다. 적지 않으면 none 으로 끄는 모델이다
+    assert with_fields(LUNA, reasoning_style=ReasoningStyle.ALWAYS).reasoning_style == 'always'
+    assert LUNA.reasoning_style is None
+    with pytest.raises(ValidationError, match='받는 생각의 방식이 아니다'):
         with_fields(LUNA, reasoning_style=ReasoningStyle.ADAPTIVE)
 
 

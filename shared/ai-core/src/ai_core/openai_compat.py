@@ -21,7 +21,10 @@ SDK 를 쓰지 않고 httpx 로 직접 부른다. 쓰는 칸이 몇 개 안 되�
   그래서 추론 수준(reasoning_effort)을 늘 보낸다. 끌 때는 'none' 이다. 켤 때는 생각에 쓸 토큰을 상한에 더한다.
   추론을 모르는 모델이면(supports_reasoning=False) 보내지 않는다.
   생각을 다른 칸으로 켜고 끄는 창구도 있다(Z.ai 의 thinking: {"type": "disabled"}). 그런 모델은 thinking_switch 다.
-  끌 수 없는 모델(always_thinks)에는 끄라는 칸을 보내지 않고, 끄라고 해도 가장 낮은 깊이의 몫을 상한에 더한다.
+  끌 수 없는 모델(always_thinks)에는 끄라는 칸(none, disabled)을 보내지 않는다.
+  끄라고 해도 가장 낮은 깊이의 몫을 상한에 더한다.
+  그 모델이 추론 수준을 알면(supports_reasoning) 끄라고 할 때 가장 낮은 수준(low)을 보낸다. 보내지 않으면 모델의 기본값
+  (OpenAI 는 medium, GLM-5.3 은 max)으로 생각해 더한 몫을 넘고 장면이 잘린다.
   생각이 장면의 몫을 먹어 장면이 잘리지 않게 한다(ai_core/thinking.py 와 같은 규칙).
   content 에 생각 글(<think>...</think>)이 섞여 오면 떼어 낸다. 실행기나 모델에 따라 그렇게 오는 경우가 있다.
 
@@ -106,6 +109,11 @@ def token_limit(params: GenerationParams, options: WireOptions) -> int:
     return params.max_tokens + thinking_tokens(params, options)
 
 
+def lowest_effort(params: GenerationParams) -> Reasoning:
+    """끌 수 없는 모델에 보내는 추론 수준. 끄라고 했으면 가장 낮은 low, 아니면 그대로다."""
+    return Reasoning.LOW if params.reasoning == Reasoning.NONE else params.reasoning
+
+
 def thinking_switch(params: GenerationParams) -> dict[str, str]:
     """thinking 칸. 끄라고 했으면 disabled, 아니면 enabled 다."""
     return {'type': 'disabled' if params.reasoning == Reasoning.NONE else 'enabled'}
@@ -116,7 +124,8 @@ def build_body(
 ) -> dict[str, Any]:
     """
     보낼 요청의 본문. 추론을 아는 모델에는 추론 수준을 늘 싣는다. 끌 때도 'none' 을 보내야 꺼진다.
-    thinking 칸으로 켜고 끄는 모델에는 그 칸을 늘 싣는다. 끌 수 없는 모델에는 생각의 칸을 싣지 않는다.
+    thinking 칸으로 켜고 끄는 모델에는 그 칸을 늘 싣는다. 끌 수 없는 모델에는 끄는 칸을 싣지 않는다
+    (추론 수준을 알면 low 부터 싣는다).
 
     출력 상한은 모델이 받는 칸에 싣는다. 온도는 받는 모델에만 싣는다.
     흘려 받는다. 토큰 수는 흘려 받을 때 따로 달라고 해야 온다(include_usage).
@@ -131,6 +140,8 @@ def build_body(
     if options.supports_temperature:
         body['temperature'] = params.temperature
     if options.always_thinks:
+        if options.supports_reasoning:
+            body['reasoning_effort'] = lowest_effort(params).value
         return body
     if options.thinking_switch:
         body['thinking'] = thinking_switch(params)
