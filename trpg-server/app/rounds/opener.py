@@ -68,7 +68,7 @@ def open_round(
     서술 모델은 테이블의 지금 것이다. 아직 서술하지 않은 동안에만 방장이 바꿀 수 있다(app/tables/narration_models.py).
     서술 값의 청구를 함께 적는다(charges.charge_round).
     price 는 그 모델의 지금 값이다(app/rounds/round_price.py). 라운드와 열린 이벤트에 1인 1라운드의 값으로 싣는다.
-    첫 라운드가 아니면 게임 안의 시간을 흘린다(calendar.pass_round). 방장이 정한 걸음이 있으면 그것으로.
+    첫 라운드가 아니면 게임 안의 시간을 흘린다(calendar.pass_round). 엔진이 늘린 걸음이 있으면 그것으로.
 
     앞 라운드가 있으면 닫은 것을 먼저 DB 에 보낸 뒤에 부른다(유일 색인 uq_table_rounds_open).
     """

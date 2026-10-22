@@ -53,6 +53,7 @@ from tests.test_character_death import (
     table_url,
 )
 from tests.test_ruleset import load_migration
+from tests.test_table_clock import wait
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -414,12 +415,12 @@ async def test_the_clock_heals_when_the_rules_say_so(
 ):
     table = await start_with_natural_recovery(client, me, friend, session)
     await set_hp(session, ME, 3)
-    await client.put(table_url(table, '/clock/step'), json={'minutes': 2 * HOUR}, headers=me)
-    # 8시에서 10시까지 눈금 둘(9시, 10시)을 지난다. 엘프는 2, 3 을 회복한다. 친구는 가득 차 있어 굴리지 않는다
+    # 둘이 두 시간을 기다린다. 8시에서 10시까지 눈금 둘(9시, 10시)을 지난다.
+    # 엘프는 2, 3 을 회복한다. 친구는 가득 차 있어 굴리지 않는다. 기다리는 것은 쉬는 것이 아니다
     dice = load_dice(app, [2, 3])
 
-    await declare(client, me, table, LAUGH)
-    await declare(client, friend, table, LAUGH)
+    await declare(client, me, table, LAUGH, wait(2 * HOUR))
+    await declare(client, friend, table, LAUGH, wait(2 * HOUR))
     await narrated()
 
     assert (await saves_of(client, me, table, '엘프'))[0] == 8
@@ -434,11 +435,10 @@ async def test_the_template_does_not_heal_by_itself(
 ):
     table = await start_duo(client, me, friend)
     await set_hp(session, ME, 3)
-    await client.put(table_url(table, '/clock/step'), json={'minutes': 8 * HOUR}, headers=me)
     dice = load_dice(app, [])
 
-    await declare(client, me, table, LAUGH)
-    await declare(client, friend, table, LAUGH)
+    await declare(client, me, table, LAUGH, wait(8 * HOUR))
+    await declare(client, friend, table, LAUGH, wait(8 * HOUR))
     await narrated()
 
     # 쉬지 않으면 여덟 시간이 흘러도 그대로다

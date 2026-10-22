@@ -113,6 +113,7 @@ def build_moves(
                 handed_over=narration_request.find_handed_over(quest_changes, member.user_id),
                 target_gone=narration_request.to_target_gone(declaration),
                 rest=narration_request.to_rest(declaration),
+                wait=narration_request.to_wait(declaration),
                 revival=narration_request.find_revival(recovered.revivals, member.user_id),
                 recovery=narration_request.find_recovery(recovered.natural, member.user_id),
                 place=place_note(mapping, member),

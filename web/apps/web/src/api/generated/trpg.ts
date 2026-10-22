@@ -1119,28 +1119,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/game/tables/{table_id}/clock/step": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Set Step
-         * @description 방장이 다음 라운드가 열릴 때 흐를 시간(분)을 정한다. 진행 중에만 된다. null 이면 판의 기본으로.
-         *
-         *     한 번 쓰면 판의 기본으로 돌아간다. 모두에게 이벤트(clock_step_changed)가 간다. AI 는 시계를 바꾸지 못한다.
-         */
-        put: operations["set_step_api_v1_game_tables__table_id__clock_step_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/game/tables/{table_id}/credit-wait": {
         parameters: {
             query?: never;
@@ -2286,7 +2264,8 @@ export interface components {
          * ClockOut
          * @description 테이블의 지금 시각과 다음 라운드에 흐를 시간.
          *
-         *     next_step_minutes 는 실제로 흐를 시간이다(방장이 정한 값, 없으면 판의 기본). step_changed 가 참이면 방장이 정했다.
+         *     next_step_minutes 는 실제로 흐를 시간이다. step_changed 가 참이면 엔진이 판의 기본보다 늘렸다
+         *     (이번 라운드에 길을 갔거나 쉬었거나 모두 기다렸다). 라운드가 닫힌 뒤 다음 라운드가 열릴 때까지만 참일 수 있다.
          */
         ClockOut: {
             /** Day */
@@ -2407,13 +2386,13 @@ export interface components {
          */
         DeclarationOut: {
             /** Action */
-            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"]) | null;
+            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"]) | null;
             /** Character Name */
             character_name: string;
             /** Content */
             content: string | null;
             /** Outcome */
-            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
+            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
             /**
              * User Id
              * Format: uuid
@@ -2429,7 +2408,7 @@ export interface components {
          */
         DeclarationUpdate: {
             /** Action */
-            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"]) | null;
+            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"]) | null;
             /** Content */
             content: string;
         };
@@ -6433,17 +6412,6 @@ export interface components {
             steal: components["schemas"]["StealOut"];
         };
         /**
-         * StepChange
-         * @description 방장이 다음 라운드가 열릴 때 흐를 시간을 정할 때 받는 값.
-         *
-         *     minutes 는 꼭 보낸다. null 이면 판의 기본으로 되돌린다. 빈 본문이 몰래 되돌리지 않게 한다.
-         *     0 이면 다음 라운드는 같은 때에 열린다(한 장면을 이어 간다). 한 번에 일주일까지 흘린다(판의 기본과 같은 한도).
-         */
-        StepChange: {
-            /** Minutes */
-            minutes: number | null;
-        };
-        /**
          * Surprise
          * @description 조우에서 누가 기습하는가. 제작자가 조우마다 정한다.
          *
@@ -6937,6 +6905,43 @@ export interface components {
          * @enum {string}
          */
         Visibility: "private";
+        /**
+         * WaitAction
+         * @description 시간을 건너뛰는 행동(app/rounds/waits.py). 얼마나 기다리는지(minutes, 1분~일주일)만 받는다.
+         *
+         *     앉은 사람이 모두 기다리고 아무도 맞지 않았으면 다음 라운드가 적어도 가장 짧게 부른 시간만큼 뒤에 열린다.
+         */
+        WaitAction: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "wait";
+            /** Minutes */
+            minutes: number;
+        };
+        /**
+         * WaitOut
+         * @description 기다린 결과. 엔진이 정했다(app/rounds/waits.py). 판정이 없다.
+         *
+         *     앉은 사람이 모두 기다렸고 아무도 맞지 않았으면 다음 라운드가 적어도 가장 짧게 부른 시간만큼 뒤에 열렸다.
+         *     아니면 기다림이 깨져 시간이 건너뛰지 않았다(waited 가 false, reason 이 hurt 또는 not_all).
+         */
+        WaitOut: {
+            /** Minutes */
+            minutes: number;
+            /** Reason */
+            reason: string | null;
+            /** Waited */
+            waited: boolean;
+        };
+        /**
+         * WaitOutcome
+         * @description 기다리는 행동의 결과.
+         */
+        WaitOutcome: {
+            wait: components["schemas"]["WaitOut"];
+        };
         /**
          * WakeOut
          * @description 쓰러진 동안 빼앗겼던 NPC 가 깨어날 때의 반응. 엔진이 굴렸다(app/rounds/wakes.py).
@@ -9492,41 +9497,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClockOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_step_api_v1_game_tables__table_id__clock_step_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StepChange"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {

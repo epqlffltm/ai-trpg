@@ -874,7 +874,7 @@
         "type": "object"
       },
       "ClockOut": {
-        "description": "테이블의 지금 시각과 다음 라운드에 흐를 시간.\n\nnext_step_minutes 는 실제로 흐를 시간이다(방장이 정한 값, 없으면 판의 기본). step_changed 가 참이면 방장이 정했다.",
+        "description": "테이블의 지금 시각과 다음 라운드에 흐를 시간.\n\nnext_step_minutes 는 실제로 흐를 시간이다. step_changed 가 참이면 엔진이 판의 기본보다 늘렸다\n(이번 라운드에 길을 갔거나 쉬었거나 모두 기다렸다). 라운드가 닫힌 뒤 다음 라운드가 열릴 때까지만 참일 수 있다.",
         "properties": {
           "day": {
             "title": "Day",
@@ -1106,7 +1106,8 @@
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
                     "treat": "#/components/schemas/TreatAction",
-                    "use": "#/components/schemas/UseAction"
+                    "use": "#/components/schemas/UseAction",
+                    "wait": "#/components/schemas/WaitAction"
                   },
                   "propertyName": "kind"
                 },
@@ -1146,6 +1147,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/LootAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WaitAction"
                   }
                 ]
               },
@@ -1206,6 +1210,9 @@
                 "$ref": "#/components/schemas/RestOutcome"
               },
               {
+                "$ref": "#/components/schemas/WaitOutcome"
+              },
+              {
                 "$ref": "#/components/schemas/TargetGoneOutcome"
               },
               {
@@ -1253,7 +1260,8 @@
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
                     "treat": "#/components/schemas/TreatAction",
-                    "use": "#/components/schemas/UseAction"
+                    "use": "#/components/schemas/UseAction",
+                    "wait": "#/components/schemas/WaitAction"
                   },
                   "propertyName": "kind"
                 },
@@ -1293,6 +1301,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/LootAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WaitAction"
                   }
                 ]
               },
@@ -10080,30 +10091,6 @@
         "title": "StealOutcome",
         "type": "object"
       },
-      "StepChange": {
-        "additionalProperties": false,
-        "description": "방장이 다음 라운드가 열릴 때 흐를 시간을 정할 때 받는 값.\n\nminutes 는 꼭 보낸다. null 이면 판의 기본으로 되돌린다. 빈 본문이 몰래 되돌리지 않게 한다.\n0 이면 다음 라운드는 같은 때에 열린다(한 장면을 이어 간다). 한 번에 일주일까지 흘린다(판의 기본과 같은 한도).",
-        "properties": {
-          "minutes": {
-            "anyOf": [
-              {
-                "maximum": 10080.0,
-                "minimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Minutes"
-          }
-        },
-        "required": [
-          "minutes"
-        ],
-        "title": "StepChange",
-        "type": "object"
-      },
       "Surprise": {
         "description": "조우에서 누가 기습하는가. 제작자가 조우마다 정한다.\n\n기습한 쪽은 만난 첫 라운드(살아 있는 캐릭터가 그 장소에서 처음 차례를 받는 라운드)에 모두 먼저 움직인다.\n그다음부터는 차례를 정하는 능력치(Ruleset.initiative_ability)의 순서다. 순서를 정하는 것은 라운드 닫기다.",
         "enum": [
@@ -11221,6 +11208,73 @@
         ],
         "title": "Visibility",
         "type": "string"
+      },
+      "WaitAction": {
+        "additionalProperties": false,
+        "description": "시간을 건너뛰는 행동(app/rounds/waits.py). 얼마나 기다리는지(minutes, 1분~일주일)만 받는다.\n\n앉은 사람이 모두 기다리고 아무도 맞지 않았으면 다음 라운드가 적어도 가장 짧게 부른 시간만큼 뒤에 열린다.",
+        "properties": {
+          "kind": {
+            "const": "wait",
+            "title": "Kind",
+            "type": "string"
+          },
+          "minutes": {
+            "maximum": 10080.0,
+            "minimum": 1.0,
+            "title": "Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "minutes"
+        ],
+        "title": "WaitAction",
+        "type": "object"
+      },
+      "WaitOut": {
+        "description": "기다린 결과. 엔진이 정했다(app/rounds/waits.py). 판정이 없다.\n\n앉은 사람이 모두 기다렸고 아무도 맞지 않았으면 다음 라운드가 적어도 가장 짧게 부른 시간만큼 뒤에 열렸다.\n아니면 기다림이 깨져 시간이 건너뛰지 않았다(waited 가 false, reason 이 hurt 또는 not_all).",
+        "properties": {
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "waited": {
+            "title": "Waited",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "minutes",
+          "waited",
+          "reason"
+        ],
+        "title": "WaitOut",
+        "type": "object"
+      },
+      "WaitOutcome": {
+        "description": "기다리는 행동의 결과.",
+        "properties": {
+          "wait": {
+            "$ref": "#/components/schemas/WaitOut"
+          }
+        },
+        "required": [
+          "wait"
+        ],
+        "title": "WaitOutcome",
+        "type": "object"
       },
       "WakeOut": {
         "description": "쓰러진 동안 빼앗겼던 NPC 가 깨어날 때의 반응. 엔진이 굴렸다(app/rounds/wakes.py).\n\nroll 은 백면체의 눈, reaction 은 그 눈이 정한 반응(hostile 적대, wary 경계, None 눈치채지 못함)이다.\nattitude_change 는 실제로 바뀐 태도다. 이미 그만큼 날 서 있었으면 None 이다.",
@@ -15779,66 +15833,6 @@
           }
         ],
         "summary": "Get Clock",
-        "tags": [
-          "calendar"
-        ],
-        "x-audience": "user"
-      }
-    },
-    "/api/v1/game/tables/{table_id}/clock/step": {
-      "put": {
-        "description": "방장이 다음 라운드가 열릴 때 흐를 시간(분)을 정한다. 진행 중에만 된다. null 이면 판의 기본으로.\n\n한 번 쓰면 판의 기본으로 돌아간다. 모두에게 이벤트(clock_step_changed)가 간다. AI 는 시계를 바꾸지 못한다.",
-        "operationId": "set_step_api_v1_game_tables__table_id__clock_step_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "table_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Table Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StepChange"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClockOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Set Step",
         "tags": [
           "calendar"
         ],

@@ -57,7 +57,7 @@ from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
 from app.observability.metrics import record_round_closed
-from app.rounds import deadlines, narration_request, opener, quest_goals, repository, rests
+from app.rounds import deadlines, narration_request, opener, quest_goals, repository, rests, waits
 from app.rounds.acceptance import accept_action, put_declaration
 from app.rounds.cast import Scene, cast_of
 from app.rounds.errors import Conflict, RoundConflictError, RoundNotFoundError
@@ -242,7 +242,8 @@ def begin_closing(
     closer_id 는 라운드를 닫은 방장이다. 저절로 닫혔으면(모두 냄, 마감) 주지 않는다.
     scene 은 이번 장면의 NPC 와 몬스터들이다(load_scene).
     행동이 겨눈 NPC 와 몬스터, 몬스터가 친 캐릭터의 상태를 여기서 바꾼다.
-    판정과 죽음의 굴림을 끝낸 뒤에 때가 된 부상을 끝낸다. 이번 라운드의 판정에는 아직 효과가 있었다.
+    판정과 죽음의 굴림을 끝낸 뒤에 모두 기다렸으면 시간을 건너뛴다(app/rounds/waits.py). 누가 맞았으면 깨진다.
+    그다음 때가 된 부상을 끝낸다. 이번 라운드의 판정에는 아직 효과가 있었다. 늘어난 걸음으로 본다.
     오래 가는 것이 나으면 후유증 표를 굴린다(expire_injuries).
     그다음 쉰 사람이 회복하고, 고비를 넘긴 사람이 되살아나기를 굴리고, 저절로 회복한다(app/rounds/rests.py).
     그 라운드에 다친 사람의 휴식은 깨진다. 그다음 조건을 채운 숨긴 퀘스트를 드러내고 이룬 퀘스트를 성공으로 바꾸고
@@ -263,6 +264,7 @@ def begin_closing(
     dying = find_dying(table)
     hurt = roll_checks(table, round_, dice, scene)
     round_.death_saves = roll_death_saves(table, dying, dice)
+    waits.settle(table, round_, hurt)
     ended = expire_injuries(table, scene, round_.number, dice)
     recovered = rests.settle(table, round_, hurt, dice)
     settled = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs)
@@ -495,10 +497,9 @@ async def load_closing_request(
       - GM 에게 보인 쪽지는 라운드가 열려 있는 동안 보낸 것이다. 닫기 시작한 뒤에 보낸 것은 다음 라운드로 간다.
       - 몬스터의 상태도 NPC 와 같다. 차례와 몬스터가 한 일은 닫기 시작할 때 라운드에 굳혀 둔 것(turns)이다.
     그래서 서술을 몇 번 다시 맡겨도 서술자는 같은 것을 받는다.
-    퀘스트의 상태만은 예외다(이번 라운드에 기한을 넘긴 것만 굳힌다). 방장이 언제든 바꾸고, 서술을 맡길 때의 것을 읽는다.
-    남은 기한의 감각도 그때의 시계로 잰다. 굳히지 않는 까닭:
-    결정적인 라운드가 닫힌 뒤 방장이 성공을 적으면, 그 라운드의 서술이 성공을 그릴 수 있어야 한다. 지금의 사실이 맞다.
-    게임 안의 시각도 같다. 닫은 뒤에 방장이 "하룻밤 쉰다"를 정하면 그 라운드의 서술이 새벽에서 맺어야 한다.
+    퀘스트의 상태와 게임 안의 시각은 굳히지 않고 서술을 맡길 때의 것을 읽는다(이번 라운드에 기한을 넘긴 것만 굳힌다).
+    남은 기한의 감각도 그때의 시계로 잰다. 둘 다 라운드가 닫힐 때 엔진이 바꾼 뒤로는 사람이 바꾸지 못하므로(#367)
+    닫힐 때의 것과 같다.
     이야기의 바탕과 지난 라운드 몇 개는 가짜 서술자는 읽지 않고, 언어 모델의 서술자가 읽는다.
     """
     table = await table_repository.find_table(session, table_id)

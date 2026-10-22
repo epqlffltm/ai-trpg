@@ -30,6 +30,7 @@ from tests import test_table_quests as quest_tables
 from tests.narration_model import with_model
 from tests.sheets import SHEET
 from tests.test_map_actions import play
+from tests.test_table_clock import wait
 from tests.test_table_items import (
     FRIEND,
     ME,
@@ -115,10 +116,9 @@ async def start_with_deadlines(client: AsyncClient, me: dict, friend: dict, lore
     return started.json()
 
 
-async def step(client: AsyncClient, me: dict, table: dict, minutes: int) -> None:
-    """방장이 다음 라운드가 열릴 때 흐를 시간을 정한다."""
-    response = await client.put(table_url(table, '/clock/step'), json={'minutes': minutes}, headers=me)
-    assert response.status_code == status.HTTP_200_OK, response.text
+async def wait_together(client: AsyncClient, me: dict, friend: dict, table: dict, minutes: int, narrated) -> None:
+    """둘 다 minutes 분을 기다려 라운드를 닫는다. 다음 라운드가 그만큼 뒤에 열린다(app/rounds/waits.py)."""
+    await play(client, me, friend, table, narrated, mine=wait(minutes), theirs=wait(minutes))
 
 
 def due_of(table: dict, name: str) -> dict | None:
@@ -184,13 +184,11 @@ async def test_an_overdue_quest_fails_one_round_after_its_deadline(
     client: AsyncClient, me: dict, friend: dict, lore: dict, narrated
 ):
     table = await start_with_deadlines(client, me, friend, lore)
-    await step(client, me, table, HOUR)
-
-    # 8시의 장면이 한 시간 이어지는 동안 기한(8시 20분)이 지났다. 그 결과는 서술이 끝나야 보인다
-    await play(client, me, friend, table, narrated)
+    # 둘이 한 시간을 기다렸다. 8시의 장면이 이어지는 동안 기한(8시 20분)이 지났다. 결과는 서술이 끝나야 보인다
+    await wait_together(client, me, friend, table, HOUR, narrated)
     assert ('왕녀 구출', 'active') in quests_in(await read_table(client, friend, table))
 
-    # 방장이 9시에 열린 라운드에서도 정하지 않았다. 그 라운드가 닫히면 실패다
+    # 9시에 열린 라운드가 닫히면 실패다
     await play(client, me, friend, table, narrated)
 
     seen = await read_table(client, friend, table)
@@ -212,8 +210,7 @@ async def test_an_overdue_quest_fails_one_round_after_its_deadline(
 
 async def test_the_failure_is_in_the_closing_group(client: AsyncClient, me: dict, friend: dict, lore: dict, narrated):
     table = await start_with_deadlines(client, me, friend, lore)
-    await step(client, me, table, HOUR)
-    await play(client, me, friend, table, narrated)
+    await wait_together(client, me, friend, table, HOUR, narrated)
     await play(client, me, friend, table, narrated)
 
     [failed] = await events_of(client, me, table, 'quest_changed')
@@ -228,8 +225,7 @@ async def test_a_quest_already_finished_is_left_alone(
     client: AsyncClient, me: dict, friend: dict, lore: dict, session: AsyncSession, narrated
 ):
     table = await start_with_deadlines(client, me, friend, lore)
-    await step(client, me, table, HOUR)
-    await play(client, me, friend, table, narrated)
+    await wait_together(client, me, friend, table, HOUR, narrated)
 
     # 기한이 지났어도 먼저 끝났다(실패하는 조건으로). 끝난 것은 기한이 다시 바꾸지 않는다
     await set_status(session, table, lore['rescue'], 'failed')
@@ -246,9 +242,8 @@ async def test_a_quest_without_a_time_limit_never_fails(
     table = await start_with_deadlines(client, me, friend, lore)
     await give(client, me, table, ME, lore['potion'])
     await play(client, me, friend, table, narrated)
-    await step(client, me, table, 7 * 24 * HOUR)
 
-    await play(client, me, friend, table, narrated)
+    await wait_together(client, me, friend, table, 7 * 24 * HOUR, narrated)
     await play(client, me, friend, table, narrated)
 
     assert ('광산의 비밀', 'active') in quests_in(await read_table(client, friend, table))
@@ -260,9 +255,8 @@ async def test_the_narrator_hears_that_the_quest_failed(
     narrator = RecordingNarrator()
     app.state.narrator = narrator
     table = await start_with_deadlines(client, me, friend, lore)
-    await step(client, me, table, HOUR)
 
-    await play(client, me, friend, table, narrated)
+    await wait_together(client, me, friend, table, HOUR, narrated)
     await play(client, me, friend, table, narrated)
 
     first, second = narrator.requests

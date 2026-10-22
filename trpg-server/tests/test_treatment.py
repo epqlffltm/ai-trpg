@@ -59,6 +59,7 @@ from tests.test_npc_actions import (
     table_url,
 )
 from tests.test_ruleset import load_migration
+from tests.test_table_clock import wait
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -906,13 +907,11 @@ async def test_a_night_of_rest_heals_what_ten_minute_rounds_would_not(
     await declare(client, me, world['table'], REST)
     await narrated()
 
-    # 방장이 "하룻밤 쉰다"를 정했다. 2 라운드의 장면은 8시 10분에 시작해 16시 10분에 끝난다. 14시에 낫는 팔이 낫는다
-    stepped = await client.put(table_url(world['table'], '/clock/step'), json={'minutes': 8 * 60}, headers=me)
+    # 여덟 시간을 기다렸다. 2 라운드의 장면은 8시 10분에 시작해 16시 10분에 끝난다. 14시에 낫는 팔이 낫는다
     dice = load_dice(app, [CLEAN])
-    await declare(client, me, world['table'], REST)
+    await declare(client, me, world['table'], REST, wait(8 * 60))
     await narrated()
 
-    assert stepped.status_code == status.HTTP_200_OK, stepped.text
     assert dice.remaining == 0
     (row,) = await injury_rows(session)
     assert row.ended_at is not None
