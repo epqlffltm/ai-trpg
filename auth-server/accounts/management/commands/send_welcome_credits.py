@@ -27,6 +27,7 @@ from accounts import payment_eligibility, withdrawal
 from accounts.welcome_credit import DELIVER_OPERATION, DeliveryReport, deliver_due_welcome_credits
 from observability.heartbeat import beat
 from observability.jobs import run_as_job
+from observability.metrics import record_queued
 from observability.spans import record_handled
 
 # 맡길 것이 없을 때 다시 확인하기까지 쉬는 시간(초). 메일과 달리 몇 초 늦어도 된다
@@ -102,6 +103,7 @@ class Command(BaseCommand):
         할 일이 없던 바퀴는 추적을 남기지 않는다(observability/idle_rounds.py).
         탈퇴는 하루 전 알림, 마치기, 다른 서버에 알리기 차례다. 이번에 마친 계정의 알림이 같은 바퀴에 나간다.
         마칠 때가 지난 계정에는 하루 전 알림을 보내지 않는다(withdrawal.reminder_is_due).
+        마치기와 알리기는 바퀴의 끝에 남은 수를 메트릭(background_jobs_queued)으로 적는다. 경보가 이것을 본다.
         """
         with run_as_job(DELIVER_OPERATION):
             report = deliver_due_welcome_credits()
@@ -115,9 +117,11 @@ class Command(BaseCommand):
         with run_as_job(withdrawal.COMPLETE_OPERATION):
             completed = withdrawal.complete_due_withdrawals()
             record_handled(completed)
+            record_queued(withdrawal.COMPLETE_OPERATION, withdrawal.count_overdue_withdrawals())
         with run_as_job(withdrawal.DELIVER_OPERATION):
             notices = withdrawal.deliver_due_withdrawal_notices()
             record_handled(notices.handled)
+            record_queued(withdrawal.DELIVER_OPERATION, withdrawal.count_waiting_notices())
         return report, eligibility, WithdrawalRound(reminded=reminded, completed=completed, notices=notices)
 
     def _deliver_safely(self) -> tuple[DeliveryReport, payment_eligibility.DeliveryReport, WithdrawalRound]:

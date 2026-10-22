@@ -691,6 +691,84 @@ tests:
               summary: 시도 횟수 제한 login-ip 을 세지 못하고 통과시켰다
               description: RedisDown 이 함께 울렸으면 Redis 쪽부터 본다. 아니면 인증 서버의 로그("시도 횟수를 셀 수 없어")를 본다
 
+  # 결제 쪽 워커: 인증 서버는 떠 있는데 바퀴가 멈추면 울린다
+  - interval: 1m
+    input_series:
+      - series: 'db_up{service="auth-server", instance="server-a"}'
+        values: '1x30'
+      - series: 'background_jobs_finished_total{service="auth-server", operation="welcome_credit.deliver", result="success", instance="send_welcome_credits-a"}'
+        values: '0+12x5 _x25'
+      # 메일 워커는 돈다. 다른 워커의 바퀴로 세지 않는다
+      - series: 'background_jobs_finished_total{service="auth-server", operation="mail.deliver_outgoing", result="success", instance="send_outgoing_mail-a"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: AuthWelcomeCreditsWorkerStalled
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AuthWelcomeCreditsWorkerStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 인증 서버의 결제 쪽 워커가 10분 넘게 돌지 않았다
+              description: 환영 크레딧과 결제 자격이 결제 서버에 가지 않고, 탈퇴를 마치지도 알리지도 않는다. docker compose ps auth-welcome-credits 와 그 로그를 본다(BILLING_SECRET 이 없으면 뜨지 않는다)
+
+  # 인증 서버가 없으면(observability 만 띄운 PC) 결제 쪽 워커도 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'up{job="loki", instance="loki:3100"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: AuthWelcomeCreditsWorkerStalled
+        exp_alerts: []
+
+  # 밀린 탈퇴: 30분 넘게 남아 있으면 울린다. 잠깐 남았다가 비운 것은 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'background_jobs_queued{service="auth-server", operation="withdrawal.complete", instance="send_welcome_credits-a"}'
+        values: '0 1 0 0 2x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AuthWithdrawalsOverdue
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: AuthWithdrawalsOverdue
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: AuthWithdrawalsOverdue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 비울 시각이 지난 탈퇴가 30분 넘게 2 건 남아 있다
+              description: auth-welcome-credits 의 로그(operation=withdrawal.complete, level=error)를 본다. 관리 화면의 사용자에서 탈퇴를 요청한 시각을 본다
+
+  # 알리지 못한 탈퇴: 다시 보내며 2시간 넘게 남아 있으면 울린다. 1시간쯤 멈췄다가 받은 서버는 울리지 않는다
+  - interval: 5m
+    input_series:
+      - series: 'background_jobs_queued{service="auth-server", operation="withdrawal.deliver", instance="send_welcome_credits-a"}'
+        values: '0 3x12 0 1x30'
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: AuthWithdrawalNoticesWaiting
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AuthWithdrawalNoticesWaiting
+        exp_alerts: []
+      - eval_time: 3h
+        alertname: AuthWithdrawalNoticesWaiting
+        exp_alerts: []
+      - eval_time: 3h15m
+        alertname: AuthWithdrawalNoticesWaiting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 다른 서버에 알리지 못한 탈퇴가 2시간 넘게 1 건 남아 있다
+              description: 관리 화면의 "탈퇴 알림"(서버, 시도 횟수, 마지막 오류)과 auth-welcome-credits 의 로그(error_code=withdrawal.undelivered, target)를 본다. 그 서버가 떠 있는지, 그 서버의 AUTH_SERVER_SECRET 이 인증 쪽의 비밀과 같은지 본다
+
   # 게시판 서버의 DB
   - interval: 1m
     input_series:

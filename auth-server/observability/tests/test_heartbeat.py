@@ -73,7 +73,7 @@ class WorkerHeartbeatTests(TestCase):
 
         결제 서버에 맡기는 워커는 결제 자격도 보내고 탈퇴도 하루 전에 알리고(#624) 마치고 알린다(#603).
         그것들은 비어 있는 것으로 둔다.
-        메일 워커가 바퀴마다 세는 발송함에 남은 메일(DB 를 읽는다)도 0 으로 둔다.
+        메일 워커가 바퀴마다 세는 발송함에 남은 메일과, 이 워커가 세는 밀린 탈퇴와 알림(DB 를 읽는다)도 0 으로 둔다.
         워커는 바퀴마다 끊긴 DB 연결을 버린다. 테스트의 트랜잭션 안에서는 그것이 연결을 닫아,
         실제로 DB 를 읽으면 실패한다.
         """
@@ -88,6 +88,8 @@ class WorkerHeartbeatTests(TestCase):
             patch.object(withdrawal, 'remind_due_withdrawals', return_value=0),
             patch.object(withdrawal, 'complete_due_withdrawals', return_value=0),
             patch.object(withdrawal, 'deliver_due_withdrawal_notices', return_value=withdrawal.DeliveryReport()),
+            patch.object(withdrawal, 'count_overdue_withdrawals', return_value=0),
+            patch.object(withdrawal, 'count_waiting_notices', return_value=0),
         ):
             command._deliver_safely()
 
