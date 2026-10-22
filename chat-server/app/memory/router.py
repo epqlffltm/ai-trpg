@@ -7,6 +7,7 @@
     POST   /api/v1/chat/conversations/{id}/notes            {text}  더하기. 201
     PATCH  /api/v1/chat/conversations/{id}/notes/{note_id}  {text}  고치기
     DELETE /api/v1/chat/conversations/{id}/notes/{note_id}          지우기. 204
+    GET    /api/v1/chat/conversations/{id}/summary          지금 가지의 요약(읽기만). 없으면 null
 
 남의 대화는 404(app/conversations/router.py 가 답한다), 그 대화에 없는 메모는 404 note_not_found,
 가득 차면 409 notes_full. 호출이 아니라 청구하지 않는다. 답을 쓰는 중에도 된다(다음 말부터 들어간다).
@@ -20,7 +21,7 @@ from fastapi.responses import JSONResponse
 from app.core.dependencies import CurrentViewer, Session
 from app.memory import service
 from app.memory.models import MemoryNote
-from app.memory.schemas import NoteOut, NoteWrite
+from app.memory.schemas import NoteOut, NoteWrite, SummaryOut
 from app.memory.service import NoteNotFoundError, NotesFullError
 
 router = APIRouter(prefix='/conversations', tags=['memory'])
@@ -57,6 +58,15 @@ async def edit_note(
 async def delete_note(conversation_id: uuid.UUID, note_id: uuid.UUID, viewer: CurrentViewer, session: Session) -> None:
     """기억 메모를 지운다."""
     await service.delete_note(session, viewer, conversation_id, note_id)
+
+
+@router.get('/{conversation_id}/summary', response_model=SummaryOut | None, status_code=status.HTTP_200_OK)
+async def read_summary(conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session) -> SummaryOut | None:
+    """지금 가지의 굴리는 요약. 아직 없으면 null 이다."""
+    summary = await service.current_summary(session, viewer, conversation_id)
+    if summary is None:
+        return None
+    return SummaryOut(text=summary.text, covered_up_to=summary.message_id, created_at=summary.created_at)
 
 
 # --- 예외를 응답으로. 앱에 한 번 등록한다(app/main.py) ---

@@ -89,6 +89,10 @@ class Settings(CoreSettings):
     # 다음 답 추천. 켜면 답 끝에 선택지 셋을 함께 받는다(app/conversation/suggestions.py).
     # 호출은 늘지 않고 출력이 조금 는다
     chat_suggestions: bool = True
+    # 굴리는 요약의 모델(모델 목록의 이름표). 싼 모델을 쓴다. 비우면 요약하지 않는다(app/memory/summarizer.py)
+    summary_model: str = ''
+    # 창 밖으로 밀려난 말이 마지막 요약 뒤로 이만큼 쌓이면 요약한다
+    summary_after_messages: int = Field(default=8, ge=2, le=200)
 
     @model_validator(mode='after')
     def require_an_asset_secret(self) -> Self:
