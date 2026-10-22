@@ -6,14 +6,18 @@
   - FakeImageStore: 넣은 객체를 메모리에 둔다. 서명한 주소는 저장소의 주소 모양을 흉내 낸다. 고장 낼 수 있다.
   - png_bytes, jpeg_bytes, webp_bytes: 크기와 색을 정한 그림. JPEG 에는 EXIF(방향, 설명)를 붙일 수 있다.
   - animated_webp: 장이 둘인 움직이는 WebP.
+  - own_image: 그 사람이 올린 그림의 행을 바로 적는다(저장소의 바이트는 없다). 그림을 붙이는 테스트가 쓴다.
 """
 
 import io
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
 from PIL import Image
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.images import models
 from app.images.store import ImageStoreUnavailableError
 
 STORE_ORIGIN = 'http://object-store:8333'
@@ -42,6 +46,11 @@ class FakeImageStore:
         if self.broken:
             raise ImageStoreUnavailableError('고장')
         self.objects[key] = StoredObject(data, content_type)
+
+    async def delete(self, key: str, now: datetime) -> None:
+        if self.broken:
+            raise ImageStoreUnavailableError('고장')
+        self.objects.pop(key, None)
 
     def presigned_get(self, key: str, now: datetime) -> str:
         if self.broken:
@@ -92,3 +101,11 @@ def opened(data: bytes) -> Image.Image:
     image = Image.open(io.BytesIO(data))
     image.load()
     return image
+
+
+async def own_image(session: AsyncSession, owner_id: uuid.UUID) -> str:
+    """그 사람이 올린 그림의 행. id 를 글로 돌려준다."""
+    image = models.Image(id=uuid.uuid4(), owner_id=owner_id, format='png', byte_size=1, width=1, height=1)
+    session.add(image)
+    await session.commit()
+    return str(image.id)
