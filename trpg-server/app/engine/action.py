@@ -11,8 +11,8 @@
   - 모양(CheckAction): 규칙을 몰라도 볼 수 있는 것. 입력을 받을 때 검사한다.
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
-종류는 열하나다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search),
-쉬기(rest), 줍기(take), 내려놓기(put_down), 훔치기(steal).
+종류는 열셋이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search),
+쉬기(rest), 줍기(take), 내려놓기(put_down), 훔치기(steal), 빼앗기(loot), 기다리기(wait).
 종류를 나타내는 칸(kind)으로 가른다(Action).
 치료는 능력과 난이도를 받지 않는다. 규칙이 정한다(app/engine/treatment.py).
 지목은 주사위를 굴리지 않는다. 짚은 이름이 정답인지만 본다(app/rounds/naming.py).
@@ -23,6 +23,7 @@
 훔치기는 규칙이 정한 능력과 목표값으로 한 번 굴린다. 목표값은 물건과 대상에 따라 오르내린다(app/rounds/steals.py).
 쉬기는 판정이 없다. 쉬는 라운드가 그 휴식의 시간만큼 이어지고, 라운드가 닫힐 때 다치지 않았으면 회복한다
 (app/rounds/rests.py).
+기다리기도 판정이 없다. 앉은 사람이 모두 기다리면 가장 짧게 부른 시간만큼 흐른다(app/rounds/waits.py).
 
 행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
 
@@ -78,6 +79,8 @@ class ActionKind(enum.StrEnum):
     STEAL = 'steal'
     # 쓰러졌거나 죽은 몬스터나 인물이 지닌 물건 하나를 가져간다. 굴리지 않는다
     LOOT = 'loot'
+    # 시간을 건너뛴다("사흘 기다린다"). 모두가 기다려야 흐른다
+    WAIT = 'wait'
 
 
 class RestLength(enum.StrEnum):
@@ -295,6 +298,23 @@ class RestAction(BaseModel):
     length: RestLength
 
 
+# 기다리기로 부를 수 있는 가장 긴 시간(분). 일주일. 시계의 걸음의 상한(app/assets/models.py 의 ROUND_MAX_MINUTES)과 같다
+WAIT_MAX_MINUTES = 7 * 24 * 60
+
+
+class WaitAction(BaseModel):
+    """
+    시간을 건너뛰는 행동(app/rounds/waits.py). 얼마나 기다리는지(minutes, 1분~일주일)만 받는다.
+
+    앉은 사람이 모두 기다리고 아무도 맞지 않았으면 다음 라운드가 적어도 가장 짧게 부른 시간만큼 뒤에 열린다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.WAIT]
+    minutes: int = Field(ge=1, le=WAIT_MAX_MINUTES)
+
+
 class TakeAction(BaseModel):
     """
     지금 서 있는 장소에 보이게 놓인 물건(item) count 개를 줍는 행동(app/rounds/place_item_actions.py).
@@ -391,6 +411,7 @@ AnyAction = (
     | PutDownAction
     | StealAction
     | LootAction
+    | WaitAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

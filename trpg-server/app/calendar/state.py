@@ -5,10 +5,11 @@
 
   - 테이블을 만들 때 판의 시작 시각으로 시계를 단다(app/tables/service.py).
   - 새 라운드가 열릴 때 흐를 시간만큼 흘린다(app/rounds/opener.py). 첫 라운드는 흘리지 않는다. 시작 시각에 열린다.
-  - 흐를 시간은 방장이 정한 값이 있으면 그것, 없으면 판의 기본이다. 흘린 뒤에는 방장이 정한 값을 지운다.
+  - 흐를 시간은 판의 기본이다. 라운드가 닫힐 때 엔진이 늘릴 수 있다(길을 가기, 쉬기, 기다리기).
+    늘린 값은 한 번 쓰고 지운다. 사람(방장)이 정하는 길은 없다(#367).
 
 파일을 따로 둔 이유: 라운드를 여는 쪽(opener)이 부른다. opener 는 어느 서비스도 불러오지 않는다.
-이 파일도 서비스를 불러오지 않는다(app/calendar/service.py 는 테이블 서비스를 불러온다).
+이 파일도 서비스를 불러오지 않는다.
 """
 
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
@@ -29,7 +30,7 @@ def default_step(table: GameTable) -> int:
 
 
 def next_step(table: GameTable) -> int:
-    """다음 라운드가 열릴 때 흐를 시간(분). 방장이 정했으면 그 값, 아니면 판의 기본."""
+    """다음 라운드가 열릴 때 흐를 시간(분). 엔진이 늘렸으면 그 값, 아니면 판의 기본."""
     if table.clock.next_step_minutes is not None:
         return table.clock.next_step_minutes
     return default_step(table)
@@ -44,8 +45,8 @@ def stretch_next_step(table: GameTable, minutes: int) -> bool:
     """
     다음 라운드가 열릴 때 적어도 minutes 분은 흐르게 한다. 이미 그보다 길면 그대로 둔다. 늘렸으면 True.
 
-    맵에서 시간이 걸리는 길로 갔을 때 엔진이 부른다(app/rounds/map_actions.py). 여럿이 갔으면 가장 긴 길을 따른다.
-    방장이 정한 걸음이 더 길면(하룻밤 쉬기) 줄이지 않는다. 늘린 값은 방장이 정한 것처럼 한 번 쓰고 지워진다.
+    맵에서 시간이 걸리는 길로 갔을 때(app/rounds/map_actions.py), 쉴 때(app/rounds/rests.py),
+    모두 기다렸을 때(app/rounds/waits.py) 엔진이 부른다. 여럿이면 가장 긴 것을 따른다. 늘린 값은 한 번 쓰고 지워진다.
     """
     if next_step(table) >= minutes:
         return False
@@ -54,7 +55,7 @@ def stretch_next_step(table: GameTable, minutes: int) -> bool:
 
 
 def pass_round(table: GameTable) -> int:
-    """새 라운드가 열릴 때 시간을 흘린다. 흐른 분을 돌려준다. 방장이 정한 값은 한 번 쓰고 지운다."""
+    """새 라운드가 열릴 때 시간을 흘린다. 흐른 분을 돌려준다. 엔진이 늘린 값은 한 번 쓰고 지운다."""
     passed = next_step(table)
     table.clock.minutes += passed
     table.clock.next_step_minutes = None

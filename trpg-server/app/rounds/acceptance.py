@@ -16,6 +16,7 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
   - 가기(MoveAction), 찾기(SearchAction). 맵에 서 있어야 한다. 가기는 아는 길로 이어진 곳으로만
     (app/rounds/map_actions.py).
   - 쉬기(RestAction). 규칙에 쉬기가 있어야 한다. 쉴 수 없는 곳은 없다(app/rounds/rests.py).
+  - 기다리기(WaitAction). 규칙과 장소를 보지 않는다. 몬스터가 있어도 받는다(app/rounds/waits.py).
   - 줍기(TakeAction). 맵에 서 있고, 그 장소에 보이게 남은 물건이어야 한다(app/rounds/place_item_actions.py).
   - 내려놓기(PutDownAction). 맵에 서 있고, 판의 물건을 그만큼 가지고 있어야 한다.
   - 훔치기(StealAction). 규칙에 훔치기가 있고, 자기가 선 장소의 죽지 않은 마리나 이번 장면의 죽지 않은 인물이
@@ -45,6 +46,7 @@ from app.engine.action import (
     TakeAction,
     TreatAction,
     UseAction,
+    WaitAction,
 )
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
@@ -58,6 +60,7 @@ from app.rounds.rests import accept_rest
 from app.rounds.state import find_declaration, is_down, rules_of
 from app.rounds.steals import require_steal
 from app.rounds.victims import find_monster_carried, find_npc_carried
+from app.rounds.waits import accept_wait
 from app.tables import items, npcs, sheets
 from app.tables import monsters as table_monsters
 from app.tables import state as table_state
@@ -390,6 +393,8 @@ def accept_action(
         return accept_loot(member, scene, action)
     if isinstance(action, RestAction):
         return accept_rest(ruleset, action)
+    if isinstance(action, WaitAction):
+        return accept_wait(action)
     return accept_check(table, member, action, scene, ruleset)
 
 

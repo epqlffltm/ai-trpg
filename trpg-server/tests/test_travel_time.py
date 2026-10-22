@@ -20,6 +20,7 @@ from app.rounds import move_lines
 from app.rounds.narrator import TravelNote
 from tests import test_table_map as map_tables
 from tests.test_map_actions import going, outcome_of, play
+from tests.test_table_clock import wait
 from tests.test_table_items import ME, events_of, read_table, table_url
 from tests.test_table_map import route, start_duo
 from tests.test_whispers import RecordingNarrator
@@ -111,16 +112,14 @@ async def test_the_longest_road_sets_the_pace(client: AsyncClient, me: dict, fri
     assert second['passed_minutes'] == 12 * HOUR
 
 
-async def test_a_longer_rest_set_by_the_host_is_not_shortened(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, narrated
-):
+async def test_one_on_the_road_stops_the_others_wait(client: AsyncClient, me: dict, friend: dict, lore: dict, narrated):
     table = await start_duo(client, me, friend, lore, **far_map(lore))
-    await client.put(table_url(table, '/clock/step'), json={'minutes': 16 * HOUR}, headers=me)
 
-    await play(client, me, friend, table, narrated, mine=going(lore['tower']))
+    await play(client, me, friend, table, narrated, mine=going(lore['tower']), theirs=wait(16 * HOUR))
 
+    # 길을 간 사람이 있어 모두 기다린 것이 아니다. 기다림은 깨지고 길의 시간만 흐른다(app/rounds/waits.py)
     _, second = await opened(client, me, table)
-    assert second['passed_minutes'] == 16 * HOUR
+    assert second['passed_minutes'] == 12 * HOUR
 
 
 async def test_a_road_without_a_time_takes_only_the_round(

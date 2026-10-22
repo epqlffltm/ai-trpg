@@ -1,7 +1,9 @@
 # trpg-server/app/calendar/router.py
 
 """
-테이블의 시계 API. 앉은 사람이 지금 시각을 보고, 방장이 다음 라운드에 흐를 시간을 정한다.
+테이블의 시계 API. 앉은 사람이 지금 시각과 다음 라운드에 흐를 시간을 본다.
+
+흐를 시간은 엔진이 정한다(판의 기본, 길을 가기, 쉬기, 기다리기). 사람이 정하는 길은 없다(#367).
 
 길은 테이블 아래다(/tables/{id}/clock).
 테이블의 예외(없음, 방장 아님, 진행 중 아님)는 테이블의 처리기가 응답으로 바꾼다.
@@ -13,9 +15,8 @@ from fastapi import APIRouter, status
 
 from app.assets.routing import Session
 from app.auth.dependencies import CurrentUser
-from app.calendar import service
 from app.calendar.responses import to_clock
-from app.calendar.schemas import ClockOut, StepChange
+from app.calendar.schemas import ClockOut
 from app.tables import service as table_service
 
 router = APIRouter(prefix='/tables', tags=['calendar'])
@@ -29,15 +30,4 @@ async def get_clock(table_id: uuid.UUID, user: CurrentUser, session: Session) ->
     시작 전에는 판의 시작 시각이다. 라운드가 열릴 때마다 흐른다(첫 라운드는 시작 시각에 열린다).
     """
     table = await table_service.get_table(session, user.user_id, table_id)
-    return to_clock(table)
-
-
-@router.put('/{table_id}/clock/step', response_model=ClockOut, status_code=status.HTTP_200_OK)
-async def set_step(table_id: uuid.UUID, data: StepChange, user: CurrentUser, session: Session) -> ClockOut:
-    """
-    방장이 다음 라운드가 열릴 때 흐를 시간(분)을 정한다. 진행 중에만 된다. null 이면 판의 기본으로.
-
-    한 번 쓰면 판의 기본으로 돌아간다. 모두에게 이벤트(clock_step_changed)가 간다. AI 는 시계를 바꾸지 못한다.
-    """
-    table = await service.set_step(session, user.user_id, table_id, data.minutes)
     return to_clock(table)

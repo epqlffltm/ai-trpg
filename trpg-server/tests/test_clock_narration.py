@@ -5,7 +5,7 @@
 
 셋을 본다.
   - 서술자가 받는 것: 이 라운드가 열린 시각, 다음 라운드가 열릴 때까지 흐를 시간, 그때의 시각.
-    방장이 닫은 뒤에 흐를 시간을 정해도 그 라운드의 서술이 따른다(퀘스트처럼 서술을 맡길 때 읽는다).
+    모두 기다려 엔진이 늘린 걸음을 그 라운드의 서술이 따른다(서술을 맡길 때 읽는다).
   - 프롬프트: "[시각]"이 퀘스트 뒤, 맵 앞에 붙는다. 시계가 없으면 붙지 않는다.
   - 흐르는 시간이 한 시간을 넘으면 건너뛰라는 말이 붙는다. 흐르지 않으면 그렇다고 적는다.
 """
@@ -23,8 +23,8 @@ from app.rounds import prompt, service, time_words
 from app.rounds.narrator import ClockNote, Move, NarrationRequest, PlaceNote, QuestNote
 from tests.signing import SigningKey
 from tests.test_round_closing import HeldJobs, started_at
-from tests.test_rounds_api import ME, bearer, declare
-from tests.test_table_clock import NIGHT_MARCH, next_round, set_step, start_solo
+from tests.test_rounds_api import ME, bearer
+from tests.test_table_clock import NIGHT_MARCH, declare_wait, next_round, start_solo
 from tests.test_whispers import RecordingNarrator
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -74,15 +74,14 @@ async def test_the_narrator_gets_the_time_of_the_scene(
     assert second.clock == ClockNote(now=at(4, 1), ends=at(4, 4), passes_minutes=180)
 
 
-async def test_a_step_set_after_closing_reaches_the_narration(
+async def test_a_wait_reaches_the_narration(
     client: AsyncClient, app: FastAPI, me: dict, session: AsyncSession, held_jobs: HeldJobs
 ):
     table = await start_solo(client, me, NIGHT_MARCH)
-    await declare(client, me, table, '모닥불 곁에서 잠든다.')
+    await declare_wait(client, me, table, 8 * 60)
     started = await started_at(app, table)
 
-    # 라운드가 닫힌 뒤 방장이 "하룻밤 쉰다"를 정했다. 그 라운드의 서술이 새벽에서 맺어야 한다
-    await set_step(client, me, table, 8 * 60)
+    # 모두(혼자) 하룻밤을 기다렸다. 닫힐 때 엔진이 늘린 걸음으로 그 라운드의 서술이 새벽에서 맺는다
     request = await service.load_closing_request(session, uuid.UUID(table['id']), 1, started)
 
     assert request.clock == ClockNote(now=at(3, 22), ends=at(4, 6), passes_minutes=480)
