@@ -7,8 +7,9 @@
     형식은 요청의 Content-Type 이 아니라 파일의 머리로 본다. 크기 상한은 설정(IMAGE_MAX_BYTES, 기본 10MB)이다.
   - GET /images/{id}: 볼 수 있으면 본문 없이 200 과 X-Accel-Redirect, X-Image-Source 를 답한다.
     nginx 가 그 머리말을 보고 저장소에서 받아 캐시하고 내준다. 프록시 없이 부르면 빈 200 이다.
-    볼 수 없으면(없는 그림 포함) 404 다. 토큰은 없어도 된다(공개 그림을 위한 자리다. 지금은 주인만 본다).
-    브라우저의 img 는 Authorization 머리말을 싣지 못한다. 주인만 보는 그림은 화면이 토큰을 실어 받아(fetch) 보여 준다.
+    볼 수 없으면(없는 그림 포함) 404 다. 토큰은 없어도 된다. 공개 캐릭터에 쓰인 전체 이용가의 그림은 누구나 본다.
+    브라우저의 img 는 Authorization 머리말을 싣지 못한다. 주인만 보는 그림(페르소나, 초안)과 성인 등급의 그림은
+    화면이 토큰을 실어 받아(fetch) 보여 준다.
 """
 
 import uuid
@@ -25,7 +26,7 @@ from app.images import service
 from app.images.isolation import ImageDecoder, ImageUnreadableError
 from app.images.models import Image
 from app.images.schemas import ImageDetail
-from app.images.service import ImageNotFoundError, UnsupportedImageError
+from app.images.service import ImageNotFoundError, ImageNotOwnedError, UnsupportedImageError
 from app.images.store import ImageStore, ImageStoreUnavailableError
 
 router = APIRouter(prefix='/images', tags=['images'])
@@ -84,6 +85,14 @@ async def handle_image_not_found(request: Request, error: ImageNotFoundError) ->
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={'detail': '찾을 수 없습니다.'})
 
 
+async def handle_image_not_owned(request: Request, error: ImageNotOwnedError) -> JSONResponse:
+    """남의 그림이나 없는 그림을 붙이려 하면 422 다(페르소나와 캐릭터의 image_id)."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '자기가 올린 그림만 붙일 수 있습니다.', 'code': 'image_not_owned'},
+    )
+
+
 async def handle_store_unavailable(request: Request, error: ImageStoreUnavailableError) -> JSONResponse:
     """저장소에 닿지 못했거나 저장소가 없는 서버면 503 이다. 화면은 잠시 뒤 다시 올리게 한다."""
     return JSONResponse(
@@ -113,5 +122,5 @@ async def upload_image(
 )
 async def serve_image(image_id: uuid.UUID, viewer: OptionalUser, session: Session, store: Store) -> Response:
     """볼 수 있으면 nginx 에 넘길 머리말을 답한다. 그림의 바이트는 nginx 가 저장소에서 받아 내준다."""
-    image = await service.viewable_image(session, viewer.user_id if viewer else None, image_id)
+    image = await service.viewable_image(session, viewer, image_id)
     return Response(status_code=status.HTTP_200_OK, headers=service.accel_headers(store, image, utc_now()))

@@ -14,7 +14,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, String, Text, Uuid, func, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -60,8 +60,10 @@ class Persona(Base):
     name: Mapped[str] = mapped_column(String(PERSONA_NAME_MAX_LENGTH))
     description: Mapped[str] = mapped_column(Text, default='', server_default='')
 
-    # 프로필 그림의 id. 그림(#566)이 생기기 전이라 외래 키를 걸지 않는다. 그림이 생기면 주인의 그림인지 본다
-    image_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, default=None)
+    # 프로필 그림의 id. 자기가 올린 그림만 붙인다(app/personas/service.py). 그림이 지워지면 비운다
+    image_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('images.id', ondelete='SET NULL'), default=None, index=True
+    )
 
     age: Mapped[str] = mapped_column(String(PERSONA_AGE_MAX_LENGTH), default='', server_default='')
     gender: Mapped[str] = mapped_column(String(PERSONA_GENDER_MAX_LENGTH), default='', server_default='')

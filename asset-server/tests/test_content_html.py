@@ -11,6 +11,8 @@
   - 크기 상한은 UTF-8 의 바이트로 센다.
 """
 
+import uuid
+
 import pytest
 
 from app.content.html import (
@@ -19,6 +21,7 @@ from app.content.html import (
     RemovedKind,
     clean_intro,
     cleaned_style,
+    image_ids,
     intro_too_long,
     removals,
     sanitize,
@@ -181,3 +184,20 @@ def test_relative_links_and_capital_letters_do_not_slip_through():
     assert 'href' not in cleaned.html
     assert '<p style="color:red">c</p>' in cleaned.html
     assert [removed.name for removed in cleaned.removed] == ['/login', '#top', 'width']
+
+
+def test_image_ids_come_from_our_img_sources_only():
+    other = '0b7c6f1e-2d3a-4b5c-8d9e-0f1a2b3c4d5f'
+    linked = '0b7c6f1e-2d3a-4b5c-8d9e-0f1a2b3c4d60'
+    html = (
+        f'<p>{OUR_IMAGE}</p>'
+        f'<img alt="a" src=" {OUR_IMAGE} ">'
+        f'<a href="/api/v1/asset/images/{linked}">링크</a><div src="/api/v1/asset/images/{linked}"></div>'
+        f'<img src="https://example.com/x.png"><img><img data-src="/api/v1/asset/images/{linked}">'
+        f'<img href="/api/v1/asset/images/{linked}">'
+        f'<img src="/api/v1/asset/images/{other}"/>'
+        f'<img src="{OUR_IMAGE}">'
+    )
+
+    # 글과 링크 속의 주소, 바깥 그림, src 없는 img 는 세지 않는다. 같은 그림은 한 번, 처음 나온 차례다
+    assert image_ids(html) == [uuid.UUID(IMAGE_ID), uuid.UUID(other)]
