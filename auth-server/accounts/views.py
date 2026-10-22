@@ -79,6 +79,7 @@ from accounts.guardian_links import InvalidGuardianLinkError
 from accounts.guardian_notices import PaymentNotice, record_payment_notice
 from accounts.identity import (
     IdentityAlreadyVerifiedError,
+    IdentityBlockedError,
     IdentityInUseError,
     UnderMinAgeError,
     verify_identity,
@@ -769,7 +770,10 @@ class IdentityVerifyView(APIView):
             201: IdentityAnswerSerializer,
             400: bad_request('형식이 틀렸거나 본인인증의 글자를 쓸 수 없다(identity_token_invalid)'),
             401: unauthenticated(),
-            403: coded('만 14세 미만이라 계정을 막았다(identity_under_age). refresh 쿠키도 지운다'),
+            403: coded(
+                '만 14세 미만이라 계정을 막았다(identity_under_age). refresh 쿠키도 지운다. '
+                '또는 정지된 채 탈퇴한 사람이라 인증하지 않았다(identity_blocked)'
+            ),
             409: coded(
                 '이미 본인인증을 마쳤다(identity_already_verified) 또는 다른 계정이 쓴 사람이다(identity_in_use)'
             ),
@@ -803,6 +807,11 @@ class IdentityVerifyView(APIView):
             )
         except UnderMinAgeError:
             return build_under_age_response()
+        except IdentityBlockedError:
+            # 무엇 때문인지는 알리지 않는다. 사유의 규칙에 따라 이 계정도 정지했을 수 있다(그러면 다음 요청부터 401)
+            return build_coded_error_response(
+                '이 본인인증으로는 서비스를 이용할 수 없습니다.', 'identity_blocked', status.HTTP_403_FORBIDDEN
+            )
 
         # 토큰은 다시 주지 않는다. 화면이 갱신(refresh)을 부르면 adult_content 가 실린 토큰을 받는다.
         # 여기서 새 쌍을 주면 쿠키 속의 옛 refresh 토큰이 폐기되지 않은 채 남는다

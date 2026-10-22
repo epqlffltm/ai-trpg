@@ -244,6 +244,10 @@ class SecurityEventKind(models.TextChoices):
     # 탈퇴(#603). 요청은 계정을 빼앗긴 신호일 수 있어 운영자가 본다. 마친 것은 계정을 비웠다는 기록이다
     WITHDRAWAL_REQUESTED = 'withdrawal_requested', '탈퇴: 요청'
     ACCOUNT_WITHDRAWN = 'account_withdrawn', '탈퇴: 계정을 비움'
+    # 정지된 채 탈퇴한 사람이 돌아왔다(#634). 본인인증을 막았거나(계정이 있다),
+    # 가입 1단계에서 코드를 주지 않았다(계정이 없다).
+    # 사유(note)에 막은 곳과 정지의 사유의 종류를 적는다
+    RETURN_BLOCKED = 'return_blocked', '재가입: 정지된 채 탈퇴한 사람을 막음'
 
 
 class SecurityEvent(models.Model):
@@ -350,6 +354,47 @@ class Suspension(models.Model):
         return f'{self.user} / {self.get_reason_display()} / {"풀림" if self.restored_at else "정지 중"}'
 
 
+class ReturnBlockKind(models.TextChoices):
+    """재가입을 막는 값의 종류(#634)."""
+
+    # 본인인증의 사람 열쇠(IdentityVerification.person_key 와 같은 값)
+    IDENTITY = 'identity', '본인인증'
+    # 이메일 주소를 서버의 비밀키로 서명한 값(return_blocks.email_key)
+    EMAIL = 'email', '이메일'
+
+
+class ReturnBlock(models.Model):
+    """
+    정지된 채 탈퇴한 사람이 다시 가입하지 못하게 남기는 값(#634). 탈퇴를 마칠 때 적는다(return_blocks.py).
+
+    값은 서버의 비밀키로 서명한 것이라 사람을 되돌려 알아볼 수 없다. 계정과 잇지 않는다(계정은 비웠다).
+    무엇을 막고 언제까지 둘지는 정지의 사유의 종류가 정한다(return_blocks.POLICIES).
+    기간이 지나면 정리(send_security_digest)가 지운다. 운영자는 관리 화면에서 지워 풀 수 있다.
+    """
+
+    kind = models.CharField('값의 종류', max_length=20, choices=ReturnBlockKind.choices)
+    key = models.CharField('값', max_length=64)
+    reason = models.CharField('정지의 사유의 종류', max_length=20, choices=SuspensionReason.choices)
+    expires_at = models.DateTimeField('지우는 시각')
+    created_at = models.DateTimeField('적은 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '재가입 막기'
+        verbose_name_plural = '재가입 막기'
+        ordering = ['-created_at']
+        constraints = [
+            # 같은 값은 한 줄이다. 같은 사람이 다시 정지된 채 탈퇴하면 그 줄을 늘린다(return_blocks.py)
+            models.UniqueConstraint(fields=['kind', 'key'], name='accounts_return_block_once'),
+        ]
+        indexes = [
+            # 정리가 기간이 지난 줄을 찾을 때 쓴다
+            models.Index(fields=['expires_at'], name='accounts_return_block_exp_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.get_kind_display()} / {self.get_reason_display()} / {self.expires_at:%Y-%m-%d}까지'
+
+
 class OutgoingMailStatus(models.TextChoices):
     PENDING = 'pending', '발송 대기'
     # 워커가 차지하고 메일 서버와 통신하는 중이다. 다음 시도 시각이 임대가 끝나는 시각이다
@@ -379,6 +424,7 @@ class MailKind(models.TextChoices):
     WITHDRAWAL_REQUESTED = 'withdrawal_requested', '탈퇴 요청 확인'
     WITHDRAWAL_REMINDER = 'withdrawal_reminder', '탈퇴 하루 전 알림'
     WITHDRAWAL_COMPLETED = 'withdrawal_completed', '탈퇴를 마침'
+    SIGNUP_REFUSED = 'signup_refused', '가입을 받지 않는 이메일'
     # 종류를 적지 않은 메일. 이 칸이 생기기 전에 적힌 것도 이것이다
     OTHER = 'other', '그 밖'
 

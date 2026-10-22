@@ -40,8 +40,11 @@ from accounts.mail import (
     send_password_changed_notice,
     send_password_reset_link,
     send_signup_code,
+    send_signup_refused_notice,
 )
-from accounts.models import EmailCodePurpose, SignupCode, User
+from accounts.models import EmailCodePurpose, ReturnBlockKind, SecurityEventKind, SignupCode, User
+from accounts.return_blocks import active_block, email_key
+from accounts.security_events import record_security_event
 from accounts.signup_tickets import issue_signup_ticket, read_signup_ticket
 from accounts.tokens import revoke_all_sessions
 
@@ -137,19 +140,22 @@ class LoginChallenge:
 def start_signup(*, email: str) -> None:
     """
     가입의 1단계. 그 이메일로 코드를 보낸다. 이미 가입된 주소면 코드 대신 안내 메일을 보낸다.
+    정지된 채 탈퇴한 사람의 주소면(return_blocks.py, #634) 코드 대신 가입을 받지 않는다는 메일을 보낸다.
 
-    두 경우 모두 아무것도 돌려주지 않는다. 호출한 쪽이 둘을 구분할 수 없어야
-    응답으로 이메일의 가입 여부가 드러나지 않는다. 두 메일은 같은 발급 제한(그 이메일의 행)을 쓴다.
+    세 경우 모두 아무것도 돌려주지 않는다. 호출한 쪽이 셋을 구분할 수 없어야
+    응답으로 이메일의 가입 여부나 막힌 주소인지가 드러나지 않는다. 세 메일은 같은 발급 제한(그 이메일의 행)을 쓴다.
     발급 제한에 걸리면 조용히 넘어간다. 다시 보내기도 이 함수다.
 
     계정은 만들지 않는다. 아이디와 비밀번호는 코드를 맞힌 뒤에 정한다(complete_signup).
     그래서 이메일의 주인이 아닌 사람은 그 이메일의 가입 내용을 정할 수 없다(#271).
     """
     registered_user = _find_user_by_email(email)
-    if registered_user is None:
-        _send_signup_code(email)
-    else:
+    if registered_user is not None:
         _send_already_registered_notice(email, registered_user)
+    elif active_block(ReturnBlockKind.EMAIL, email_key(email), timezone.now()) is not None:
+        _send_signup_refused_notice(email)
+    else:
+        _send_signup_code(email)
 
 
 def verify_signup(*, email: str, code: str) -> str:
@@ -414,6 +420,17 @@ def _send_signup_code(email: str) -> None:
         with transaction.atomic():
             code = issue_signup_code(email=email)
             send_signup_code(email=email, code=code)
+    except (EmailCodeCooldownError, EmailCodeLimitError):
+        return
+
+
+def _send_signup_refused_notice(email: str) -> None:
+    """가입을 받지 않는다는 메일을 보내고 운영자가 보게 남긴다. 가입 코드와 같은 발급 제한을 적용한다."""
+    try:
+        with transaction.atomic():
+            reserve_signup_slot(email=email)
+            send_signup_refused_notice(email=email)
+            record_security_event(kind=SecurityEventKind.RETURN_BLOCKED, note='가입')
     except (EmailCodeCooldownError, EmailCodeLimitError):
         return
 

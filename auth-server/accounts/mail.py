@@ -87,6 +87,24 @@ def send_already_registered_notice(*, user: User) -> None:
     )
 
 
+def send_signup_refused_notice(*, email: str) -> None:
+    """
+    가입을 받지 않는 주소로 누군가 가입을 시도했음을 그 주소로 알린다(#634). 정지된 채 탈퇴한 사람의 주소다.
+
+    가입 화면에서는 알려 주지 않는다(이미 가입된 이메일과 같다). 정지의 사유는 적지 않는다.
+    """
+    enqueue_mail(
+        to_email=email,
+        subject='[AI TRPG] 이 이메일로는 가입할 수 없습니다',
+        body=(
+            '이 이메일 주소로 회원가입 요청이 들어왔습니다.\n'
+            '이 주소로는 가입을 받지 않아 인증 코드를 보내지 않았습니다.\n\n'
+            '요청한 적이 없다면 이 메일을 무시해 주세요.'
+        ),
+        kind=MailKind.SIGNUP_REFUSED,
+    )
+
+
 def build_password_reset_link(*, email: str, token: str) -> str:
     """
     재설정 화면을 여는 링크를 만든다.
