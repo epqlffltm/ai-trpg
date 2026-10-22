@@ -47,6 +47,7 @@ from app.conversations.service import (
     ConversationNotFoundError,
     MessageNotFoundError,
     ModelUnavailableError,
+    NotEditableError,
     PersonaNotFoundError,
     StartNotFoundError,
 )
@@ -187,6 +188,7 @@ def create_app(
     app.include_router(models.router, prefix=API_PREFIX)
     # 대화. 캐릭터의 판과 페르소나를 asset 서버에서 가져와 시작한다
     app.include_router(conversations.router, prefix=API_PREFIX)
+    app.include_router(conversations.message_router, prefix=API_PREFIX)
     # 말 보내기, 다시 쓰기, 멈추기. 앞의 둘은 바로 SSE 로 답한다
     app.include_router(messages.router, prefix=API_PREFIX)
     app.include_router(messages.message_router, prefix=API_PREFIX)
@@ -205,6 +207,7 @@ def create_app(
     app.add_exception_handler(NotContinuableError, messages.handle_not_continuable)
     app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
     app.add_exception_handler(MessageNotFoundError, conversations.handle_message_not_found)
+    app.add_exception_handler(NotEditableError, conversations.handle_not_editable)
     app.add_exception_handler(TurnDeclinedError, messages.handle_turn_declined)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.

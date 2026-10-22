@@ -463,12 +463,104 @@
             "pattern": "\\S",
             "title": "Content",
             "type": "string"
+          },
+          "edit_of": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Of"
           }
         },
         "required": [
           "content"
         ],
         "title": "MessageCreate",
+        "type": "object"
+      },
+      "MessageEdit": {
+        "additionalProperties": false,
+        "description": "캐릭터의 말을 고친 글.",
+        "properties": {
+          "content": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "MessageEdit",
+        "type": "object"
+      },
+      "MessageOut": {
+        "description": "말 하나.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "edited": {
+            "default": false,
+            "title": "Edited",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "suggestions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "parent_id",
+          "role",
+          "content",
+          "status",
+          "created_at"
+        ],
+        "title": "MessageOut",
         "type": "object"
       },
       "ModelChoice": {
@@ -657,6 +749,11 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "edited": {
+            "default": false,
+            "title": "Edited",
+            "type": "boolean"
           },
           "id": {
             "format": "uuid",
@@ -1164,7 +1261,7 @@
     },
     "/api/v1/chat/conversations/{conversation_id}/messages": {
       "post": {
-        "description": "말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.",
+        "description": "말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.\nedit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 캐릭터의 말이면 422 not_editable.",
         "operationId": "send_message_api_v1_chat_conversations__conversation_id__messages_post",
         "parameters": [
           {
@@ -1345,6 +1442,66 @@
         "summary": "Read Me",
         "tags": [
           "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/messages/{message_id}": {
+      "patch": {
+        "description": "캐릭터의 말을 그 자리에서 고친다(상대의 말 고치기). 고친 표시(edited)가 붙고 선택지는 지워진다. 청구하지 않는다.\n사람의 말은 422 not_editable(말 보내기의 edit_of 로 새 가지를 만든다). 답을 쓰는 중이면 409.",
+        "operationId": "edit_message_api_v1_chat_messages__message_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Edit Message",
+        "tags": [
+          "messages"
         ],
         "x-audience": "user"
       }

@@ -8,6 +8,7 @@
     GET    /api/v1/chat/conversations/{id}         대화 하나(지금 가지의 말들까지)
     PUT    /api/v1/chat/conversations/{id}/model   대화의 모델 바꾸기
     PUT    /api/v1/chat/conversations/{id}/branch  다른 대안의 가지를 보기
+    PATCH  /api/v1/chat/messages/{id}              캐릭터의 말을 그 자리에서 고치기(상대의 말 고치기)
     DELETE /api/v1/chat/conversations/{id}         지우기. 204
 
 모든 주소가 로그인을 요구한다. 남의 대화는 404 다(403 이면 그 ID 가 있다는 것이 드러난다).
@@ -36,6 +37,8 @@ from app.conversations.schemas import (
     ConversationModelOut,
     ConversationPage,
     ConversationSummary,
+    MessageEdit,
+    MessageOut,
     ModelChoice,
     PathMessageOut,
     PersonaOut,
@@ -48,6 +51,7 @@ from app.conversations.service import (
     ConversationNotFoundError,
     MessageNotFoundError,
     ModelUnavailableError,
+    NotEditableError,
     PersonaNotFoundError,
     StartNotFoundError,
 )
@@ -55,6 +59,8 @@ from app.core.dependencies import CurrentViewer, Now, Paging, Session
 from app.ratings import Rating
 
 router = APIRouter(prefix='/conversations', tags=['conversations'])
+# 말 하나를 다루는 주소(고치기). 말을 보내는 SSE 주소들은 app/turns/router.py 에 있다
+message_router = APIRouter(prefix='/messages', tags=['messages'])
 
 # asset 서버를 쓸 수 없을 때 다시 해 볼 때까지의 시간(초). 화면이 이만큼 뒤에 다시 누르게 한다
 ASSET_RETRY_AFTER_SECONDS = 5
@@ -136,9 +142,9 @@ def to_persona(persona: ConversationPersona | None) -> PersonaOut | None:
     )
 
 
-def to_path_message(message: Message, alternatives: dict[uuid.UUID | None, list[uuid.UUID]]) -> PathMessageOut:
-    """지금 가지의 말 하나와 그 대안들. 대안을 못 찾으면(있을 수 없다) 그 말 하나다."""
-    return PathMessageOut(
+def to_message(message: Message) -> MessageOut:
+    """말 하나를 응답의 모양으로."""
+    return MessageOut(
         id=message.id,
         parent_id=message.parent_id,
         role=message.role,
@@ -146,7 +152,14 @@ def to_path_message(message: Message, alternatives: dict[uuid.UUID | None, list[
         status=message.status,
         created_at=message.created_at,
         suggestions=message.suggestions,
-        alternatives=alternatives.get(message.parent_id, [message.id]),
+        edited=message.edited,
+    )
+
+
+def to_path_message(message: Message, alternatives: dict[uuid.UUID | None, list[uuid.UUID]]) -> PathMessageOut:
+    """지금 가지의 말 하나와 그 대안들. 대안을 못 찾으면(있을 수 없다) 그 말 하나다."""
+    return PathMessageOut(
+        **to_message(message).model_dump(), alternatives=alternatives.get(message.parent_id, [message.id])
     )
 
 
@@ -223,6 +236,14 @@ async def handle_model_unavailable(request: Request, error: ModelUnavailableErro
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={'detail': '이 대화에 쓸 수 없는 모델입니다.', 'code': 'model_unavailable'},
+    )
+
+
+async def handle_not_editable(request: Request, error: NotEditableError) -> JSONResponse:
+    """그렇게 고칠 수 없는 말이면 422 다. 캐릭터의 말은 PATCH 로, 사람의 말은 말 보내기의 edit_of 로 고친다."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '그렇게 고칠 수 없는 말입니다.', 'code': 'not_editable'},
     )
 
 
@@ -313,6 +334,17 @@ async def choose_branch(
     """다른 대안의 가지를 본다. 그 말 아래에서 가장 나중에 생긴 말이 끝이 된다. 바뀐 대화를 돌려준다."""
     await service.choose_branch(session, viewer, conversation_id, data.message_id, now)
     return await read_conversation(conversation_id, viewer, session, prices, now)
+
+
+@message_router.patch('/{message_id}', response_model=MessageOut, status_code=status.HTTP_200_OK)
+async def edit_message(
+    message_id: uuid.UUID, data: MessageEdit, viewer: CurrentViewer, session: Session, now: Now
+) -> MessageOut:
+    """
+    캐릭터의 말을 그 자리에서 고친다(상대의 말 고치기). 고친 표시(edited)가 붙고 선택지는 지워진다. 청구하지 않는다.
+    사람의 말은 422 not_editable(말 보내기의 edit_of 로 새 가지를 만든다). 답을 쓰는 중이면 409.
+    """
+    return to_message(await service.edit_message(session, viewer, message_id, data.content, now))
 
 
 @router.delete('/{conversation_id}', status_code=status.HTTP_204_NO_CONTENT)
