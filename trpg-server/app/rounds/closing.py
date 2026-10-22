@@ -64,7 +64,16 @@ from app.billing.client import Billing
 from app.billing.free_billing import FreeBilling
 from app.billing.price_list import FREE_PRICES, PriceList
 from app.core.jobs import BackgroundJobs
-from app.observability.metrics import NARRATION_FAILURE, NARRATION_SUCCESS, record_narration
+from app.observability.metrics import (
+    CONTEXT_FAILURE,
+    CONTEXT_SUCCESS,
+    CONTEXT_TIMEOUT,
+    NARRATION_FAILURE,
+    NARRATION_SUCCESS,
+    record_context,
+    record_context_part,
+    record_narration,
+)
 from app.rounds import service
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import LoreNote, MemoryNote, NarrationRequest, Narrator, PersonHistory, ReferenceNote
@@ -249,21 +258,39 @@ def seconds_since(started: datetime) -> float:
     return (datetime.now(UTC) - started).total_seconds()
 
 
-async def find_or_nothing[Found](find: Callable[[], Awaitable[list[Found]]], deadline: float, what: str) -> list[Found]:
+async def find_or_nothing[Found](
+    find: Callable[[], Awaitable[list[Found]]], deadline: float, what: str, part: str
+) -> list[Found]:
     """
-    고르는 일 하나를 deadline(이벤트 루프의 시각)까지 해 본다. 예외가 나거나 시간이 다 되면 빈 목록이다.
+    고르는 일 하나를 deadline(이벤트 루프의 시각)까지 해 보고, 걸린 시간과 끝난 모양을 메트릭으로 남긴다(#628).
 
-    고르지 못해도 서술은 한다. 까닭은 로그에 남긴다. 버그라면 여기서 드러난다.
-    작업이 취소된 것(CancelledError)은 받지 않는다. 그대로 올라간다.
+    예외가 나거나 시간이 다 되면 빈 목록이다. part 는 메트릭의 이름(lore, memories, histories, references)이다.
+    작업이 취소된 것(CancelledError)은 받지 않고 재지도 않는다. 그대로 올라간다.
+    """
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    found, result = await try_find(find, deadline, what)
+    record_context_part(part, result, loop.time() - started)
+    return found
+
+
+async def try_find[Found](
+    find: Callable[[], Awaitable[list[Found]]], deadline: float, what: str
+) -> tuple[list[Found], str]:
+    """
+    고르는 일 하나를 deadline 까지 해 본다. 고른 것과 끝난 모양(success, timeout, failure)을 돌려준다.
+
+    고르지 못해도 서술은 한다(빈 목록). 까닭은 로그에 남긴다. 버그라면 여기서 드러난다.
     """
     try:
         async with asyncio.timeout_at(deadline):
-            return await find()
+            return await find(), CONTEXT_SUCCESS
     except TimeoutError:
         logger.warning('%s 고르는 데 시간이 다 됐다. 없이 서술한다', what)
+        return [], CONTEXT_TIMEOUT
     except Exception:
         logger.exception('%s 고르지 못했다. 없이 서술한다', what)
-    return []
+        return [], CONTEXT_FAILURE
 
 
 async def gather_context(request: NarrationRequest, finders: Finders, budget: float) -> NarrationRequest:
@@ -273,15 +300,19 @@ async def gather_context(request: NarrationRequest, finders: Finders, budget: fl
 
     이력은 로어북이 고른 인물의 것이고, 참고 자료는 로어북이 쓰고 남은 자리에 들어가서 로어북을 먼저 고른다.
     나머지 셋은 서로 기대지 않아 함께 돈다. 같은 찾는 글의 벡터는 검색들이 함께 쓴다(app/lore/query_embedder.py).
-    하나가 실패해도 나머지는 고른다.
+    하나가 실패해도 나머지는 고른다. 전체와 하나하나가 걸린 시간을 메트릭으로 남긴다(#628).
     """
-    deadline = asyncio.get_running_loop().time() + budget
-    request = replace(request, lore=await find_or_nothing(lambda: finders.lore.find(request), deadline, '로어북을'))
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    deadline = started + budget
+    lore = await find_or_nothing(lambda: finders.lore.find(request), deadline, '로어북을', 'lore')
+    request = replace(request, lore=lore)
     memories, histories, references = await asyncio.gather(
-        find_or_nothing(lambda: finders.memories.find(request), deadline, '지난 일을'),
-        find_or_nothing(lambda: finders.histories.find(request), deadline, '인물의 이력을'),
-        find_or_nothing(lambda: finders.references.find(request), deadline, '참고 자료를'),
+        find_or_nothing(lambda: finders.memories.find(request), deadline, '지난 일을', 'memories'),
+        find_or_nothing(lambda: finders.histories.find(request), deadline, '인물의 이력을', 'histories'),
+        find_or_nothing(lambda: finders.references.find(request), deadline, '참고 자료를', 'references'),
     )
+    record_context(loop.time() - started)
     return replace(request, memories=memories, histories=histories, references=references)
 
 
