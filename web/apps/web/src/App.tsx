@@ -14,6 +14,7 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 import { SignupPage } from './pages/signup/SignupPage';
 import { ScenarioBrowsePage } from './pages/trpg/browse/ScenarioBrowsePage';
 import { LobbyPage } from './pages/trpg/lobby/LobbyPage';
+import { TableRoomPage } from './pages/trpg/room/TableRoomPage';
 import { ScenarioPage } from './pages/trpg/scenario/ScenarioPage';
 import { TableCreatePage } from './pages/trpg/tables/TableCreatePage';
 
@@ -54,7 +55,14 @@ export function App() {
               </RequireSession>
             }
           />
-          {/* 테이블 방(B6, tables/:tableId)은 다음이다 */}
+          <Route
+            path="tables/:tableId"
+            element={
+              <RequireSession>
+                <TableRoomPage />
+              </RequireSession>
+            }
+          />
           <Route path="*" element={<PlaceholderPage service="TRPG" />} />
         </Route>
         <Route path="chat/*" element={<PlaceholderPage service="chat" />} />
