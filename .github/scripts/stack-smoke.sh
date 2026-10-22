@@ -34,7 +34,8 @@
 #                  비밀이 설정 파일에 없는가. 받는 곳의 흉내(alert_sink.py)를 띄워 시험 경보가 Discord, Slack, Telegram 의
 #                  모양으로 넘어가는지 본다(메일은 보내 보지 않는다). 늘 울리는 Watchdog 이 바깥 감시로만 가는지도 본다
 #     check-proxy  프록시를 거쳐 본다: 서버마다 닿는가, 막을 주소를 막는가, 요청 식별자, 요청 수 제한,
-#                  모든 응답(서버의 응답, 404, 429)의 보안 머리말, HTTP 의 응답에 HSTS 가 없는가.
+#                  모든 응답(서버의 응답, 404, 429)의 보안 머리말, HTTP 의 응답에 HSTS 가 없는가,
+#                  화면(#290)을 내주는가(index.html 로 돌리기, 캐시, 화면의 CSP).
 #                  HTTP 로만 보므로 컨테이너 없이도 돈다. 주소는 PROXY, ADMIN 환경 변수로 바꾼다
 #     check-staging  staging 의 설정(docker-compose.staging.yml, #451)을 본다. up 뒤에 부른다.
 #                  두 파일을 겹친 설정에서 비밀의 범위, 바깥에 여는 포트(프록시의 80, 443 뿐), 로그 상한을 보고,
@@ -384,6 +385,40 @@ security_headers() {
   one_header "$headers" X-Content-Type-Options nosniff &&
     one_header "$headers" Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" &&
     one_header "$headers" Referrer-Policy no-referrer
+}
+
+# 화면의 CSP(#290, docker/nginx/templates/web-headers.inc.template). API 의 것과 다르다
+WEB_CSP="default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+
+# 화면의 응답에 보안 머리말 셋이 하나씩, 화면의 값으로 붙었는가. 둘째 인자부터는 curl 에 넘긴다
+web_security_headers() {
+  local url="$1" headers; shift
+  headers="$(curl -s -D - -o /dev/null --max-time 5 "$@" "$url" | tr -d '\r')"
+  one_header "$headers" X-Content-Type-Options nosniff &&
+    one_header "$headers" Content-Security-Policy "$WEB_CSP" &&
+    one_header "$headers" Referrer-Policy no-referrer
+}
+
+# 그 주소에서 화면(index.html)이 오는가: 200, HTML, 캐시하지 않음, 앱이 그려질 자리(#root)
+serves_web() {
+  local url="$1" headers body
+  headers="$(curl -s -D - -o /dev/null --max-time 5 "$url" | tr -d '\r')"
+  body="$(curl -s --max-time 5 "$url")"
+  grep -q '^HTTP/[0-9.]* 200' <<<"$headers" &&
+    grep -qi '^content-type: text/html' <<<"$headers" &&
+    one_header "$headers" Cache-Control no-cache &&
+    grep -q '<div id="root"></div>' <<<"$body"
+}
+
+# 화면이 부르는 해시가 붙은 파일(/assets/)을 내주고 오래 캐시하는가. 없는 파일은 화면으로 돌리지 않고 404 인가
+web_assets_cached() {
+  local asset headers
+  asset="$(curl -s --max-time 5 "$PROXY/" | grep -o '/assets/[^"]*\.js' | head -n 1)"
+  [[ -n "$asset" ]] || { echo "index.html 에 /assets/ 의 스크립트가 없다" >&2; return 1; }
+  headers="$(curl -s -D - -o /dev/null --max-time 5 "$PROXY$asset" | tr -d '\r')"
+  grep -q '^HTTP/[0-9.]* 200' <<<"$headers" &&
+    one_header "$headers" Cache-Control "public, max-age=31536000, immutable" &&
+    status_is 404 "$PROXY/assets/ci-no-such-file.js"
 }
 
 # 같은 주소를 count 번 부른 뒤 한 번 더 부르면 429 와 Retry-After(초)가 오는가. 넷째 인자부터는 curl 에 넘긴다
@@ -1384,6 +1419,7 @@ check_proxy() {
   # 게시판 서버에 닿으면 서명이 없어 401 이다
   report "프록시는 서버끼리만 부르는 게시판 주소를 막는다" status_is 404 "$PROXY/api/v1/board/service/users/00000000-0000-4000-8000-000000000000/withdrawal" -X POST
   report "프록시는 서버의 상태 확인 주소를 막는다" status_is 404 "$PROXY/health"
+  report "프록시는 서버의 준비 확인 주소를 막는다" status_is 404 "$PROXY/health/ready"
   # asset-server 가 X-Accel-Redirect 로만 넘기는 내부 위치다(#566). 바깥에서 부르면 404 다
   report "프록시는 그림의 내부 위치를 바깥에 열지 않는다" status_is 404 "$PROXY/_images/$NO_IMAGE"
   # nginx-unprivileged 가 뜰 때 만든다. 쓰지 못하면 그림을 내줄 때마다 502 다
@@ -1392,10 +1428,15 @@ check_proxy() {
   # 넘긴 것은 asset 서버가 토큰이 없어 401 로, 넘는 것은 프록시가 413 으로 답한다
   report "프록시는 10MB 의 그림을 asset 서버에 넘긴다" upload_status_is 401 10485760
   report "프록시는 11MB 를 넘는 그림을 막는다(413)" upload_status_is 413 11600000
-  report "프록시는 그 밖의 주소를 막는다" status_is 404 "$PROXY/"
+  report "프록시는 /api/ 의 그 밖의 주소를 막는다" status_is 404 "$PROXY/api/v1/ci-nothing/here"
+  # 화면(#290). /api/ 가 아닌 주소는 프록시의 이미지에 구운 화면이다
+  report "프록시가 화면을 내준다" serves_web "$PROXY/"
+  report "화면의 경로는 index.html 로 돌린다" serves_web "$PROXY/trpg/tables/ci"
+  report "화면의 해시가 붙은 파일은 오래 캐시하고 없는 파일은 404 다" web_assets_cached
+  report "화면에는 화면의 CSP 가 붙는다" web_security_headers "$PROXY/"
   report "프록시가 요청 식별자를 하나 정해 돌려준다" one_request_id_from_proxy
   report "서버의 응답에 보안 머리말이 하나씩 붙는다" security_headers "$PROXY/api/v1/auth/jwks"
-  report "막은 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/"
+  report "막은 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/api/v1/ci-nothing/here"
   report "HTTP 의 응답에는 HSTS 가 없다" no_header Strict-Transport-Security "$PROXY/api/v1/auth/jwks"
   report "서버끼리만 부르는 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/api/v1/billing/service/holds" -X POST
   report "인증의 민감한 요청을 IP 마다 막는다" limited_after 12 "$PROXY/api/v1/auth/login" 6 \
@@ -1674,10 +1715,12 @@ check_staging() {
   report "가동 확인은 허용 주소 밖에서도 답한다" staging_status_is 200 "$STAGING_HTTPS/healthz"
   report "가동 확인에도 보안 머리말과 HSTS 가 붙는다" staging_security_headers "$STAGING_HTTPS/healthz"
   report "허용 주소 밖에서는 서버에 닿지 못한다(403)" staging_status_is 403 "$STAGING_HTTPS/api/v1/game/me"
+  report "허용 주소 밖에서는 화면도 막는다(403)" staging_status_is 403 "$STAGING_HTTPS/"
   report "막은 403 에도 보안 머리말과 HSTS 가 붙는다" staging_security_headers "$STAGING_HTTPS/api/v1/game/me"
   allow_everyone
   report "허용 주소를 고치면 다시 읽어 서버에 닿는다" eventually_status_is 401 "$STAGING_HTTPS/api/v1/game/me"
   report "서버의 응답에도 보안 머리말과 HSTS 가 하나씩 붙는다" staging_security_headers "$STAGING_HTTPS/api/v1/game/me"
+  report "허용 주소 안에서 화면을 내준다" staging_status_is 200 "$STAGING_HTTPS/trpg"
   report "허용 주소 안에서도 관리자 화면은 막는다" staging_status_is 404 "$STAGING_HTTPS/admin/login/"
   report "허용 주소 안에서도 그림의 내부 위치는 막는다" staging_status_is 404 "$STAGING_HTTPS/_images/$NO_IMAGE"
   report "허용 주소 안에서도 서버끼리만 부르는 주소는 막는다" staging_status_is 404 "$STAGING_HTTPS/api/v1/billing/service/holds" -X POST
