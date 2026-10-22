@@ -760,7 +760,7 @@ services:
     logging: *logging
     command: ["alembic", "upgrade", "heads"]
     env_file: ./chat-server/.env
-    # 마이그레이션은 DB 만 쓴다. asset 서버와 결제 서버의 주소와 서명 비밀을 함께 비운다.
+    # 마이그레이션은 DB 만 쓴다. asset 서버와 결제 서버의 주소와 서명 비밀, 모델의 키를 함께 비운다.
     # 주소만 남으면(.env.example 의 ASSET_URL) 설정의 검사가 "주소는 있고 비밀이 없다"로 막는다(로컬 VM 리허설, 2026-10-22)
     environment:
       <<: *chat-environment
@@ -768,6 +768,11 @@ services:
       ASSET_SECRET: ""
       BILLING_URL: ""
       BILLING_SECRET: ""
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      GEMINI_API_KEY: ""
+      ZAI_API_KEY: ""
+      DEEPINFRA_API_KEY: ""
     depends_on:
       db:
         condition: service_healthy

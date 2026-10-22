@@ -292,7 +292,7 @@ docker compose exec trpg-server python -m scripts.models enable glm-4-7-flash
 docker compose exec trpg-server python -m scripts.models list
 ```
 
-chat 서버도 같은 파일을 자기 표에 들여온다. 켜는 것은 서버마다 따로다. 성인 등급의 대화에 쓸 모델은 약관을 확인한 뒤 `adult <이름표> --allow` 로 켠다. 명령은 [chat 서버의 README](../../chat-server/README.md#관리-명령) 에 있다.
+chat 서버도 같은 파일을 자기 표에 들여온다. 켜는 것은 서버마다 따로다. 모델의 키(`OPENAI_API_KEY` 등)도 `chat-server/.env` 에 따로 적는다(게임 서버와 다른 키를 권한다). 성인 등급의 대화에 쓸 모델은 약관을 확인한 뒤 `adult <이름표> --allow` 로 켠다. 명령은 [chat 서버의 README](../../chat-server/README.md#관리-명령) 에 있다.
 
 ```bash
 docker compose exec chat-server python -m scripts.models sync
