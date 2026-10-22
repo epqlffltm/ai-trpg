@@ -31,7 +31,7 @@ from app.rounds.narrator import QuestNote
 from tests import test_table_quests as quest_tables
 from tests.test_map_actions import play
 from tests.test_quest_deadline import HOUR, start_with_deadlines, step
-from tests.test_table_quests import change
+from tests.test_table_quests import set_status
 from tests.test_whispers import RecordingNarrator
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -100,11 +100,18 @@ async def test_only_the_round_that_missed_the_deadline_says_so(
     assert await expired_in(session, table, 3) == []
 
 
-async def test_a_quest_failed_by_the_host_did_not_miss_its_deadline(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, narrator: RecordingNarrator, narrated
+async def test_a_quest_failed_otherwise_did_not_miss_its_deadline(
+    client: AsyncClient,
+    me: dict,
+    friend: dict,
+    lore: dict,
+    session: AsyncSession,
+    narrator: RecordingNarrator,
+    narrated,
 ):
     table = await start_with_deadlines(client, me, friend, lore)
-    await change(client, me, table, lore['rescue'], 'failed')
+    # 실패하는 조건으로 실패했다. 기한을 넘긴 것은 아니다
+    await set_status(session, table, lore['rescue'], 'failed')
 
     await play(client, me, friend, table, narrated)
 

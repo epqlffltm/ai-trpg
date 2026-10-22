@@ -510,6 +510,8 @@ CONDITION_ENTRY_KINDS = {
     QuestConditionKind.REACH_PLACE: LoreKind.PLACE,
     QuestConditionKind.HOLD_ITEM: LoreKind.ITEM,
     QuestConditionKind.DEFEAT_NPC: LoreKind.PERSON,
+    QuestConditionKind.NPC_DEAD: LoreKind.PERSON,
+    QuestConditionKind.LOSE_ITEM: LoreKind.ITEM,
     QuestConditionKind.QUEST_SUCCEEDED: LoreKind.EVENT,
     QuestConditionKind.QUEST_FAILED: LoreKind.EVENT,
 }
@@ -525,6 +527,18 @@ def can_succeed(scenario: Scenario, entry_id: uuid.UUID) -> bool:
     return any(rule.entry_id == entry_id and rule.conditions for rule in read_quest_rules(scenario))
 
 
+def can_fail(scenario: Scenario, entry_id: uuid.UUID) -> bool:
+    """
+    그 퀘스트가 실패할 수 있는가. 실패하는 조건이나 기한이 있어야 한다. 규칙이 없는 사건은 실패하지 않는다.
+
+    사람(방장)이 실패시키는 길은 없다(#367). 그래서 실패를 기다리는 잇기는 이것이 참이어야 이룰 수 있다.
+    """
+    return any(
+        rule.entry_id == entry_id and (rule.fail or rule.time_limit_minutes is not None)
+        for rule in read_quest_rules(scenario)
+    )
+
+
 def condition_problem(condition: QuestCondition, scenario: Scenario, parts: Parts) -> Problem | None:
     """
     조건 하나의 문제. 없으면 None.
@@ -532,7 +546,7 @@ def condition_problem(condition: QuestCondition, scenario: Scenario, parts: Part
     몬스터를 쓰러뜨리기는 시트를 적은 몬스터여야 하고(판에 들어가는 몬스터), 놓인 마리보다 많이 요구하지 않는다.
     장소에 닿기는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 맵에 없는 장소에는 설 수 없다.
     다른 퀘스트의 성공을 기다리면 그 퀘스트에 이루는 조건이 있어야 한다. 없으면 성공하지 않는다.
-    실패는 기한이나 방장이 정하므로 따로 보지 않는다.
+    다른 퀘스트의 실패를 기다리면 그 퀘스트에 실패하는 조건이나 기한이 있어야 한다. 없으면 실패하지 않는다.
     """
     if condition.kind == QuestConditionKind.DEFEAT_MONSTER:
         sheeted = {sheet.monster_id for sheet in read_monster_sheets(scenario)}
@@ -552,17 +566,20 @@ def condition_problem(condition: QuestCondition, scenario: Scenario, parts: Part
         return Problem.QUEST_CONDITION_IMPOSSIBLE
     if condition.kind == QuestConditionKind.QUEST_SUCCEEDED and not can_succeed(scenario, condition.target):
         return Problem.QUEST_CONDITION_IMPOSSIBLE
+    if condition.kind == QuestConditionKind.QUEST_FAILED and not can_fail(scenario, condition.target):
+        return Problem.QUEST_CONDITION_IMPOSSIBLE
     return None
 
 
 def find_condition_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     """
-    퀘스트의 조건들(이루는 조건, 드러나는 조건)에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만, 정한 순서로 적는다.
+    퀘스트의 조건들(이루는 조건, 드러나는 조건, 실패하는 조건)에서 문제를 찾는다.
+    여럿 틀려도 같은 문제는 한 번만, 정한 순서로 적는다.
     """
     found = {
         condition_problem(condition, scenario, parts)
         for rule in read_quest_rules(scenario)
-        for condition in [*rule.conditions, *rule.reveal]
+        for condition in [*rule.conditions, *rule.reveal, *rule.fail]
     }
     order = [Problem.QUEST_CONDITION_MISSING, Problem.QUEST_CONDITION_INVALID, Problem.QUEST_CONDITION_IMPOSSIBLE]
     return [problem for problem in order if problem in found]
