@@ -95,6 +95,13 @@ class MessageNotFoundError(Exception):
     """그런 말이 없다. 남의 대화의 말, 다른 대화의 말도 이것이다(404)."""
 
 
+class NotEditableError(Exception):
+    """
+    그렇게 고칠 수 없는 말이다(422). 캐릭터의 말은 그 자리에서 고치고(PATCH),
+    사람의 말은 새 가지로 고친다(말 보내기의 edit_of). 반대로 하면 이것이다.
+    """
+
+
 class StartNotFoundError(Exception):
     """판에 그 번호의 시작 상황이 없다. count 는 판의 시작 상황의 수다."""
 
@@ -428,3 +435,27 @@ async def choose_branch(
     if not await repository.set_leaf(session, conversation.id, leaf_id, now - GENERATION_STALE):
         raise ConversationBusyError
     await session.commit()
+
+
+async def edit_message(
+    session: AsyncSession, viewer: Viewer, message_id: uuid.UUID, content: str, now: datetime
+) -> Message:
+    """
+    캐릭터의 말을 그 자리에서 고친다(상대의 말 고치기). 호출이 아니라 청구하지 않는다. 고친 말을 돌려준다.
+
+    말이 없으면 MessageNotFoundError, 사람의 말이면 NotEditableError, 답을 쓰는 중이면 ConversationBusyError.
+    다음 호출부터 고친 글이 모델에 간다. 대화의 수정 시각(목록의 차례)은 바꾸지 않는다.
+    """
+    found = await repository.find_visible_message(
+        session, viewer.claims.user_id, allowed_ratings(viewer.claims), message_id
+    )
+    if found is None:
+        raise MessageNotFoundError
+    message, _ = found
+    if message.role != Role.ASSISTANT:
+        raise NotEditableError
+    if not await repository.edit_message(session, message.id, content, now - GENERATION_STALE):
+        raise ConversationBusyError
+    await session.commit()
+    await session.refresh(message)
+    return message
