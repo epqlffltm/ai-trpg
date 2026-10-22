@@ -1,10 +1,10 @@
 // web/apps/web/src/api/tableRoom.ts
-// 테이블 방(B6)이 부르는 것. 테이블 하나, 시작(방장), 나가기, 채팅(읽기, 쓰기, 입력 중), 스트림을 열 번호.
+// 테이블 방(B6)이 부르는 것. 테이블 하나, 캐릭터 정하기와 굴리기(B5), 시작(방장), 나가기, 채팅(읽기, 쓰기, 입력 중), 스트림을 열 번호.
 // 앉아 있는 사람만 부른다. 앉지 않았거나 없는 테이블은 404 다(있다는 것을 드러내지 않는다).
 
 import { apiRequest } from './http';
 import type { StreamCursor } from './tableStream';
-import type { ChatMessage, EventPage, MessagePage, TableDetail, WhisperPage } from './types';
+import type { CharacterUpdate, ChatMessage, EventPage, MessagePage, TableDetail, WhisperPage } from './types';
 
 const TABLES = '/api/v1/game/tables';
 
@@ -17,6 +17,16 @@ function tablePath(tableId: string, rest = ''): string {
 
 export function fetchTable(tableId: string, signal?: AbortSignal): Promise<TableDetail> {
   return apiRequest<TableDetail>(tablePath(tableId), signal ? { signal } : {});
+}
+
+/** 내 캐릭터를 정한다(모집 중). 보낸 것으로 통째로 바꾼다. 방식마다 적는 칸이 다르다(CharacterUpdate) */
+export function setCharacter(tableId: string, body: CharacterUpdate): Promise<TableDetail> {
+  return apiRequest<TableDetail>(tablePath(tableId, '/character'), { method: 'PUT', body });
+}
+
+/** 능력치의 점수를 서버가 주사위로 굴린다. 캐릭터 하나에 한 번(방장이 한 번 더를 주면 또). 굴린 것은 members[].roll */
+export function rollAbilities(tableId: string): Promise<TableDetail> {
+  return apiRequest<TableDetail>(tablePath(tableId, '/character/roll'), { method: 'POST' });
 }
 
 /** 테이블을 시작한다(방장). 모두가 캐릭터를 정해야 한다(409 characters_missing) */
