@@ -33,6 +33,8 @@ class MessageCreate(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     content: Annotated[str, Field(min_length=1, max_length=CONTENT_MAX_CHARS, pattern=r'\S')]
+    # 내 말 고치기. 고칠 사람의 말의 id. 새 말은 그 말의 대안(새 가지)이 되고 원본은 남는다
+    edit_of: uuid.UUID | None = None
 
 
 class TurnEvent(BaseModel):

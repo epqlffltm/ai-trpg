@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import Select, func, literal, or_, select, update
+from sqlalchemy import Select, exists, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -181,6 +181,24 @@ async def find_visible_message(
         return None
     row = await find_visible(session, owner_id, ratings, message.conversation_id)
     return None if row is None else (message, row)
+
+
+async def edit_message(session: AsyncSession, message_id: uuid.UUID, content: str, busy_since: datetime) -> bool:
+    """
+    캐릭터의 말을 고친다. 고친 표시를 달고 선택지는 지운다(앞의 글에 맞춘 것이다).
+    그 대화가 답을 쓰는 중이면(busy_since 뒤에 차례를 잡았다) 고치지 않고 False.
+
+    확인과 고치기를 한 문장으로 한다. 따로 하면 그사이 시작한 이어 쓰기가 끝나며 고친 글을 덮는다.
+    """
+    generating = exists().where(Conversation.id == Message.conversation_id, Conversation.generating_since >= busy_since)
+    statement = (
+        update(Message)
+        .where(Message.id == message_id, ~generating)
+        .values(content=content, edited=True, suggestions=[])
+        .returning(Message.id)
+        .execution_options(synchronize_session=False)
+    )
+    return (await session.execute(statement)).first() is not None
 
 
 async def alternatives(

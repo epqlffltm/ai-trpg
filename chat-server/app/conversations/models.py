@@ -16,7 +16,20 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    false,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -171,4 +184,6 @@ class Message(Base):
     status: Mapped[str] = mapped_column(String(20), default=MessageStatus.COMPLETE)
     # 다음 답 추천의 선택지. 캐릭터의 답에만 있다. 없으면 빈 목록이다
     suggestions: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
+    # 사람이 고친 캐릭터의 말인가(상대의 말 고치기). 화면이 "고침" 표시를 단다
+    edited: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -82,6 +82,7 @@ export interface paths {
         /**
          * Send Message
          * @description 말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.
+         *     edit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 캐릭터의 말이면 422 not_editable.
          */
         post: operations["send_message_api_v1_chat_conversations__conversation_id__messages_post"];
         delete?: never;
@@ -151,6 +152,27 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/messages/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit Message
+         * @description 캐릭터의 말을 그 자리에서 고친다(상대의 말 고치기). 고친 표시(edited)가 붙고 선택지는 지워진다. 청구하지 않는다.
+         *     사람의 말은 422 not_editable(말 보내기의 edit_of 로 새 가지를 만든다). 답을 쓰는 중이면 409.
+         */
+        patch: operations["edit_message_api_v1_chat_messages__message_id__patch"];
         trace?: never;
     };
     "/api/v1/chat/messages/{message_id}/continue": {
@@ -492,6 +514,50 @@ export interface components {
         MessageCreate: {
             /** Content */
             content: string;
+            /** Edit Of */
+            edit_of?: string | null;
+        };
+        /**
+         * MessageEdit
+         * @description 캐릭터의 말을 고친 글.
+         */
+        MessageEdit: {
+            /** Content */
+            content: string;
+        };
+        /**
+         * MessageOut
+         * @description 말 하나.
+         */
+        MessageOut: {
+            /** Content */
+            content: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /**
+             * Suggestions
+             * @default []
+             */
+            suggestions: string[];
         };
         /**
          * ModelChoice
@@ -569,6 +635,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
             /**
              * Id
              * Format: uuid
@@ -949,6 +1020,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    edit_message_api_v1_chat_messages__message_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

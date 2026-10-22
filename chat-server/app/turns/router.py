@@ -11,6 +11,7 @@
 응답을 시작하기 전에 거절하는 것은 보통의 오류다(아래 handle_*). 시작한 뒤의 실패는 SSE 의 failed 메시지다.
   - 404: 대화가 없다(남의 것, 지운 것, 볼 수 없는 등급). 다시 쓸 말이 없다(message_not_found)
   - 422 not_regenerable: 다시 쓸 수 없는 말이다(캐릭터의 인사말)
+  - 404 message_not_found, 422 not_editable: 고칠 말(edit_of)이 그 대화에 없다, 사람의 말이 아니다
   - 422 not_continuable: 이어 쓸 수 없는 말이다(끊긴 답이 아니다, 지금 가지의 끝이 아니다)
   - 409 model_required: 대화에 모델이 없다. 먼저 고른다(PUT /conversations/{id}/model)
   - 422 model_unavailable: 모델을 쓸 수 없다(꺼졌다, 은퇴했다, 팔지 않는다). 사람의 말은 저장했을 수 있다
@@ -178,10 +179,14 @@ async def stream_turn(request: Request, start: TurnStart, now) -> StreamingRespo
 async def send_message(
     conversation_id: uuid.UUID, data: MessageCreate, viewer: CurrentViewer, request: Request, now: Now
 ) -> StreamingResponse:
-    """말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다."""
+    """
+    말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.
+    edit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 캐릭터의 말이면 422 not_editable.
+    """
     state = request.app.state
+    options = prompt_options(state.settings)
     start = await service.begin_turn(
-        state.session_factory, viewer, conversation_id, data.content, prompt_options(state.settings), now
+        state.session_factory, viewer, conversation_id, data.content, options, now, data.edit_of
     )
     return await stream_turn(request, start, now)
 
