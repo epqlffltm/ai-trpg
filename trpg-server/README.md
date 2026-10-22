@@ -904,7 +904,7 @@ app/personas/
 | 권한 | 지금 남은 것 | 대체 |
 | --- | --- | --- |
 | 물건 주기·빼앗기 | 전부 | 몬스터 드롭(#372), 장소에 놓인 물건의 줍기와 찾기(#279), 선언한 쓰기·건네기·내려놓기(#454)는 있다. 퀘스트에 넘기기(#455), 몬스터와 NPC 에게서 훔치기(#456, #457), 쓰러진 상대에게서 빼앗기(#475)도 있다. 사고팔기(#278)가 들어오면 지운다 |
-| 캐릭터 옮기기 | 아는 장소 어디로든 | 선언한 이동은 있다. 길로 이어지지 않은 이동(순간이동 같은 사건)과 조우(#283)는 대체가 없다 |
+| 캐릭터 옮기기 | 아는 장소 어디로든 | 선언한 이동과 쓰러진 동료를 업고 가기(#367)는 있다. 길로 이어지지 않은 강제 이동(잡혀 끌려감, 함정)은 판의 사건 규칙이 들어오면 지운다 |
 
 운영하는 권한(내보내기, 방장 넘기기, 시작·끝내기, 문체, 시간 제한, 크레딧 기다리기, 쪽지 알림, 라운드 강제로 닫기)과 시나리오의 제작자가 허락한 다시 굴리기 주기는 그대로 둔다.
 서술 모델은 시작하면 고정이다. 서술 값은 앉은 사람 모두가 내므로 방장 혼자 바꾸면 남의 값을 정하게 된다. 지금 모델을 쓸 수 없을 때만 방장이 다시 고른다([모델 고르기](#모델-고르기)).
@@ -1409,6 +1409,7 @@ records.py      일어난 일을 이벤트로 적기
 
 ```json
 {"content": "숲으로 들어간다.", "action": {"kind": "move", "place": "…"}}
+{"content": "쓰러진 약사를 업고 광장으로 간다.", "action": {"kind": "move", "place": "…", "carry": "<약사의 user_id>"}}
 {"content": "벽을 두드려 본다.", "action": {"kind": "search"}}
 {"content": "탁자의 물약을 챙긴다.", "action": {"kind": "take", "item": "…", "count": 2}}
 {"content": "밧줄을 바닥에 둔다.", "action": {"kind": "put_down", "item": "…", "count": 1}}
@@ -1417,8 +1418,13 @@ records.py      일어난 일을 이벤트로 적기
 - **가기**는 판정이 없다. 지금 장소에서 아는 길로 이어진 장소로 한 칸 간다. 한 라운드에 한 칸이다. 한쪽 길은 `from_place` 에서 `to_place` 로만 간다.
   이어지지 않은 곳, 모르는 곳, 숨긴 곳, 장소가 아닌 것, 지금 서 있는 곳은 모두 같은 422(`action.place`)다. 답이 다르면 숨긴 장소가 드러난다.
   마감할 때 다시 본다. 그사이 방장이 다른 곳으로 옮겼으면 가지 않고 까닭을 적는다(`not_adjacent`). 간 곳은 서 본 곳이 되어 거기서 나가는 안개 길이 보인다.
-  시간이 걸리는 길(`travel_minutes`)로 가면 다음 라운드가 열릴 때 적어도 그만큼 흐른다([시계](#시계)). 여럿이 갔으면 가장 긴 길을 따르고, 방장이 더 길게 정한 걸음은 줄이지 않는다.
-  결과는 선언의 `outcome.move`(`user_id`, `character_name`, `from`, `to`, `moved`, `reason`, `travel_minutes`)다. 갔으면 이벤트(`character_moved`, 행동에 이어지고 `round` 가 있다)가 남는다.
+  시간이 걸리는 길(`travel_minutes`)로 가면 다음 라운드가 열릴 때 적어도 그만큼 흐른다([시계](#시계)). 여럿이 갔으면 가장 긴 길을 따른다.
+  결과는 선언의 `outcome.move`(`user_id`, `character_name`, `from`, `to`, `moved`, `reason`, `travel_minutes`, `carry`)다. 갔으면 이벤트(`character_moved`, 행동에 이어지고 `round` 가 있다)가 남는다.
+- **업고 가기(#367).** 쓰러진 사람은 선언을 못 하므로 일행이 가면 혼자 남는다. 가기에 `carry`(앉은 사람의 `user_id`)를 적으면 같은 장소에 쓰러져 있는 동료 한 명을 함께 데려간다. 한 사람이 한 명을 업는다.
+  받을 때 같은 장소에 쓰러져 있는(죽지 않은) 다른 사람이어야 한다. 자기 자신, 서 있는 사람, 죽은 사람, 다른 곳의 사람, 앉지 않은 사람은 모두 같은 422(`action.carry`)다.
+  마감할 때 다시 본다. 그사이 일어났거나(`standing`) 죽었거나(`dead`, 죽은 캐릭터는 쓰러진 곳에 남는다) 누가 먼저 업고 갔으면(`elsewhere`) 혼자 간다. 업을 사람이 가지 못했으면 업힌 사람도 그대로다(`not_moved`).
+  결과는 `outcome.move.carry`(`user_id`, `character_name`, `carried`, `reason`)다. 업고 갔으면 업힌 사람의 `character_moved` 가 업은 사람의 것에 이어지고 `carried_by` 가 적힌다. 업힌 사람도 그곳이 서 본 곳이 된다.
+  서술에는 간 곳의 줄에 붙는다(`narration-46`, `(간 곳: 성문 → 숲, 약사을(를) 업고)`).
 - **찾기**는 받는 값이 없다. 서 있는 곳에 닿은, 아직 찾지 않은 숨긴 길마다 판에 적힌 판정(능력과 난이도)을 굴린다. 부상의 영향은 판정과 같다.
   성공한 길은 찾은 것이 된다. 테이블의 모두가 알고(방장도 이때 안다), 응답의 맵에 나온다. 같은 라운드에 앞사람이 찾은 길은 다시 굴리지 않는다.
   **굴린 판정은 어디에도 적지 않는다.** 결과는 찾은 길뿐이다(`outcome.search`: `place`, `found`: 길마다 `from_place`, `to_place`, `two_way`). 이벤트(`place_searched`)도 같다.
@@ -1811,6 +1817,7 @@ app/rounds/
   - `narration-33`: 한 일의 줄에 이룬 퀘스트에 넘긴 물건(`(넘긴 물건: 약초 배달에 약초 2개)`)
   - `narration-34`: 한 일의 줄에 훔치기(`(훔치기: 수로 쥐 1 에게서 송곳니 1개를 몰래 빼냈다)`, 들켰으면 그 마리가 노린다는 말)
   - `narration-35`: `[인물의 상태]` 의 줄에 태도(중립이 아니면 `태도: 적대`)와, 태도도 엔진이 정한 사실이라는 다루는 법
+  - `narration-46`: 가기의 줄에 업고 간 쓰러진 동료(`(간 곳: 성문 → 숲, 약사을(를) 업고)`, 업지 못했으면 그 까닭, #367)
   - `narration-45`: 한 일의 줄에 기다리기(`(기다리기: 3일)`, `(기다리기: 3일. 모두가 기다리지 않아 시간이 건너뛰지 않았다)`, #367)
   - `narration-44`: `[참고 자료]` 의 줄이 한국어로 옮긴 이름과 글이고, 다루는 법에서 "영어"를 뺐다(#482)
   - `narration-43`: 테이블이 켰으면 `[참고할 설정]` 뒤에 `[참고 자료]`(바깥 자료의 줄과 다루는 법, #482)
@@ -2556,7 +2563,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `item_put_down` | 캐릭터가 가진 물건을 서 있는 장소에 내려놓았다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`(`entry_id`, `name`), `entry_id`, `name`, `count`, `put`, `reason`(`not_held`), `remaining` |
 | `clock_step_changed` | 방장이 다음 라운드에 흐를 시간을 정했다. 그 길을 지운 뒤로는 적지 않는다(#367). 그 전에 적힌 것을 읽으려고 남긴다 | `previous`(앞의 걸음, 분), `next_step_minutes`(이제 흐를 분), `default`(판의 기본으로 되돌렸으면 `true`) |
 | `quest_changed` | 퀘스트의 상태가 바뀌었다. 조건을 채워 엔진이 드러내거나 성공이나 실패로(`reason: conditions_met`), 또는 기한을 넘겨 서버가 실패로(`reason: deadline`) 바꿨다. 사람이 바꾸는 일은 없다(#367) | `entry_id`, `name`(사건의 이름), `previous`, `status`, `rewards`: 성공이면 받은 사람마다 `user_id`, `character_name`, `items`(물건마다 `entry_id`, `name`, `count`(받은 개수), `total`, `capped`). 실패나 드러내기면 빈 목록. `consumed`: 이뤄서 가져간 물건. 낸 사람마다 `user_id`, `character_name`, `items`(물건마다 `entry_id`, `name`, `count`(낸 개수), `total`(그 뒤의 개수)). 가져가지 않았으면 빈 목록(이 칸이 생기기 전의 이벤트에는 없다). `due_at`: 기한이 끝나는 시각(`day`, `hour`, `minute`, `time_of_day`), 기한이 없으면 `null`. `reason`: 서버가 바꿨으면 `conditions_met`(조건을 채워 드러남이나 성공) 또는 `deadline`(기한을 넘겨 실패). 그때 `actor_id` 는 `null` 이다. 사람이 바꿨으면 `null` |
-| `character_moved` | 캐릭터가 맵의 다른 장소로 옮겨 갔다. 방장이 옮겼으면 행한 사람이 방장이다. 선언 행동으로 갔으면 행한 사람이 없고 그 행동 바로 뒤에 적힌다 | `user_id`, `character_name`, `from`, `to`: 장소마다 `entry_id`, `name`. 맵이 생기기 전에 시작한 테이블의 캐릭터면 `from` 이 `null`. 선언 행동이면 `round` 와 `travel_minutes`(그 길에 걸린 분, 없으면 `null`)도 |
+| `character_moved` | 캐릭터가 맵의 다른 장소로 옮겨 갔다. 방장이 옮겼으면 행한 사람이 방장이다. 선언 행동으로 갔으면 행한 사람이 없고 그 행동 바로 뒤에 적힌다. 업혀 갔으면 업은 사람의 것 바로 뒤에 적힌다 | `user_id`, `character_name`, `from`, `to`: 장소마다 `entry_id`, `name`. 맵이 생기기 전에 시작한 테이블의 캐릭터면 `from` 이 `null`. 선언 행동이면 `round` 와 `travel_minutes`(그 길에 걸린 분, 없으면 `null`)도. 업혀 갔으면 `carried_by`(업은 사람의 `user_id`)도 |
 | `place_searched` | 캐릭터가 서 있는 곳에서 숨긴 길과 숨긴 물건을 찾았다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`, `found`: 찾은 길마다 `from_place`, `to_place`, `two_way`. `items`: 찾아서 가진 물건마다 `entry_id`, `name`, `count`, `left`, `total`. 못 찾았으면 빈 목록. 굴린 판정은 없다 |
 | `character_rested` | 캐릭터가 쉬었다. 쉬는 행동이면 그 행동 바로 뒤에(`cause: rest`), 저절로 회복이면 닫힘 앞에(`cause: natural`) 적힌다 | `round`, `user_id`, `character_name`, `cause`, `length`(`short`, `long`. 저절로 회복이면 `null`), `rested`(깨졌으면 `false`), `reason`(`hurt`, `downed`, `dead` 또는 `null`), `rolls`, `before`, `after`, `max_hp` |
 | `character_revived` | 고비를 넘기고 쓰러져 있던 캐릭터가 오래 쉬어 되살아나기를 굴렸다. 끝난 부상들 뒤, 닫힘 앞에 적힌다 | `round`, `user_id`, `character_name`, `roll`, `target`, `success`, `hp`(성공이면 1) |

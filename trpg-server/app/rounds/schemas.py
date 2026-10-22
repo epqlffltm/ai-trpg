@@ -355,6 +355,18 @@ class PlaceRefOut(BaseModel):
     name: str
 
 
+class CarryOut(BaseModel):
+    """업고 간 결과(#367). 엔진이 정했다(app/rounds/map_actions.py)."""
+
+    # 업으려던 사람. 그 사람이 테이블을 떠났으면 이름이 None 이다
+    user_id: uuid.UUID
+    character_name: str | None
+    # 업고 갔는가. 못 했으면 reason 이 있다: not_moved(업은 사람이 가지 못했다), standing(그사이 일어났다),
+    # dead(그사이 죽었다), elsewhere(같은 곳에 없었다. 누가 먼저 업고 갔다)
+    carried: bool
+    reason: str | None
+
+
 class MoveOut(BaseModel):
     """한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 판정이 없다."""
 
@@ -368,6 +380,8 @@ class MoveOut(BaseModel):
     reason: str | None
     # 지나간 길에 걸린 게임 안의 시간(분). 다음 라운드가 열릴 때 적어도 그만큼 흐른다. 안 걸렸거나 못 갔으면 None 이다
     travel_minutes: int | None = None
+    # 쓰러진 동료를 업고 가려 했으면 그 결과. 아니면 None 이다
+    carry: CarryOut | None = None
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 

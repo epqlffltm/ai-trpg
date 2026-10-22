@@ -289,6 +289,21 @@ def describe_items(items: list[ItemNote]) -> str:
 
 # 가지 못한 까닭을 서술자에게 주는 말
 TRAVEL_FAILURES = {'not_adjacent': '그쪽으로 이어진 길이 없었다'}
+# 업고 가지 못한 까닭을 서술자에게 주는 말. 업은 사람이 가지 못한 것(not_moved)은 가지 못한 줄이 말한다
+CARRY_FAILURES = {
+    'standing': '이미 일어나 있어 업지 않았다',
+    'dead': '숨을 거두어 쓰러진 곳에 남았다',
+    'elsewhere': '그 자리에 없었다',
+}
+
+
+def carry_text(note: TravelNote) -> str:
+    """업고 간 것을 간 곳의 줄 끝에 붙일 말. 업으려 하지 않았으면 빈 말이다."""
+    if note.carried is None:
+        return ''
+    if note.carry_reason is None:
+        return f', {note.carried}을(를) 업고'
+    return f'. {note.carried}은(는) {CARRY_FAILURES.get(note.carry_reason, "업지 못했다")}'
 
 
 def describe_travel(note: TravelNote) -> str:
@@ -297,13 +312,15 @@ def describe_travel(note: TravelNote) -> str:
 
     예: (간 곳: 성문 → 숲)
         (간 곳: 성문 → 숲, 3시간 걸림)
+        (간 곳: 성문 → 숲, 3시간 걸림, 약사을(를) 업고)
+        (간 곳: 성문 → 숲. 약사은(는) 숨을 거두어 쓰러진 곳에 남았다)
         (가려던 곳: 광장. 그쪽으로 이어진 길이 없었다)
     """
     if not note.moved:
         return f'(가려던 곳: {note.to_place}. {TRAVEL_FAILURES.get(note.reason, "가지 못했다")})'
     start = f'{note.from_place} → ' if note.from_place else ''
     took = f', {duration_text(note.travel_minutes)} 걸림' if note.travel_minutes else ''
-    return f'(간 곳: {start}{note.to_place}{took})'
+    return f'(간 곳: {start}{note.to_place}{took}{carry_text(note)})'
 
 
 def describe_search(note: SearchNote) -> str:

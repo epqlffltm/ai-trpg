@@ -2097,6 +2097,23 @@ export interface components {
             rarity: components["schemas"]["ItemRarity"];
         };
         /**
+         * CarryOut
+         * @description 업고 간 결과(#367). 엔진이 정했다(app/rounds/map_actions.py).
+         */
+        CarryOut: {
+            /** Carried */
+            carried: boolean;
+            /** Character Name */
+            character_name: string | null;
+            /** Reason */
+            reason: string | null;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
          * CatalogItemOut
          * @description 판에 있는 물건 하나. 로어북의 물건 항목이다.
          *
@@ -3887,8 +3904,11 @@ export interface components {
          *
          *     place 는 판의 로어북 장소 항목의 id 다. 엔진은 이 값을 읽지 않는다. 어디와 이어져 있는지는 판이 안다.
          *     한 라운드에 한 칸이다. 한 사람의 선언에는 행동이 하나다.
+         *     carry 는 함께 업고 갈 쓰러진 동료(앉은 사람의 user_id)다. 한 사람이 한 명을 업는다(#367).
          */
         MoveAction: {
+            /** Carry */
+            carry?: string | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -3905,6 +3925,7 @@ export interface components {
          * @description 한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 판정이 없다.
          */
         MoveOut: {
+            carry?: components["schemas"]["CarryOut"] | null;
             /** Character Name */
             character_name: string;
             from: components["schemas"]["PlaceRefOut"] | null;
