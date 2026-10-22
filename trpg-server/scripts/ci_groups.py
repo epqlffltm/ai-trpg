@@ -104,6 +104,8 @@ GROUPS: dict[str, tuple[str, ...]] = {
     # 서술: 프롬프트, 서술자, 로어와 기억의 검색, 참고 자료
     'narration': (
         'narrat',
+        'gather_context',
+        'query_embedder',
         'clock_narration',
         'llm_narrator',
         'retrying_narrator',
