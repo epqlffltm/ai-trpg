@@ -113,6 +113,23 @@ async def test_the_map_and_items_of_a_format_two_version_are_kept():
     assert {name: kept[name] for name in WORLD} == WORLD
 
 
+async def test_the_affection_of_a_format_three_version_is_kept():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    affection = {
+        'display': 'stage',
+        'start': 10,
+        'stages': [{'name': '낯섦', 'at': 0}],
+        'rules': [{'id': 'gift', 'on': {'kind': 'give_item', 'target': 'scarf'}, 'change': 5, 'once': True}],
+    }
+    body['document'] |= {'format': 3, 'affection': affection}
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    assert fetched.document.model_dump(mode='json')['affection'] == affection
+    assert make_character().document.affection is None
+
+
 async def test_a_format_one_version_has_no_map_or_items():
     copy = make_character()
     body = copy.model_dump(mode='json')

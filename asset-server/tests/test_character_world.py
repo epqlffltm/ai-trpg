@@ -91,7 +91,7 @@ async def test_the_world_is_kept_in_the_draft_and_frozen_in_the_version(client: 
 
     assert response.status_code == status.HTTP_201_CREATED
     document = response.json()['document']
-    assert document['format'] == 2
+    assert document['format'] == 3
     assert {name: document[name] for name in WORLD} == WORLD
     assert {name: character[name] for name in WORLD} == WORLD
 

@@ -8,6 +8,7 @@ TRPG 의 판 형식과 같은 방식이다.
   - 1: 처음의 칸(이름, 소개, 인사말, 말투, 나이, 성별, 태그, 시작 상황, 대표 그림, 등급)
   - 2: 지도(장소, 길, 처음 있는 장소)와 물건(물건, 시작 소지품)을 더했다(2026-10-22).
        1 의 판은 이 칸들이 비어 있는 것으로 읽는다
+  - 3: 호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙)를 더했다(2026-10-22). 1, 2 의 판은 호감도가 없다(null)
 DB 를 모르는 순수한 함수다. 초안(Character)과 거른 소개에서 문서를 만든다.
 """
 
@@ -15,11 +16,11 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
-from app.characters.models import Character, ItemKind
+from app.characters.models import AffectionDisplay, Character, ItemKind, TriggerKind
 from app.ratings import Rating
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 2
+DOCUMENT_FORMAT = 3
 
 
 class StartDocument(BaseModel):
@@ -74,6 +75,46 @@ class StartItemDocument(BaseModel):
     count: int
 
 
+class StageDocument(BaseModel):
+    """호감도의 단계 하나. at 이상이면 이 단계다."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    name: str
+    at: int
+
+
+class TriggerDocument(BaseModel):
+    """호감도를 바꾸는 행동(종류, 대상)."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    kind: TriggerKind
+    target: str
+
+
+class AffectionRuleDocument(BaseModel):
+    """오르내리는 규칙 하나. once 면 그 가지에서 처음 한 번만."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    id: str
+    on: TriggerDocument
+    change: int
+    once: bool
+
+
+class AffectionDocument(BaseModel):
+    """캐릭터의 호감도."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    display: AffectionDisplay
+    start: int
+    stages: list[StageDocument]
+    rules: list[AffectionRuleDocument]
+
+
 class CharacterDocument(BaseModel):
     """
     판에 굳힌 캐릭터. intro_html 은 허용 목록으로 거른 소개다.
@@ -98,6 +139,7 @@ class CharacterDocument(BaseModel):
     start_place: str | None = None
     items: list[ItemDocument] = []
     start_items: list[StartItemDocument] = []
+    affection: AffectionDocument | None = None
 
 
 def build_document(character: Character, cleaned_intro: str) -> CharacterDocument:
@@ -119,4 +161,5 @@ def build_document(character: Character, cleaned_intro: str) -> CharacterDocumen
         start_place=character.start_place,
         items=[ItemDocument(**item) for item in character.items],
         start_items=[StartItemDocument(**start) for start in character.start_items],
+        affection=AffectionDocument.model_validate(character.affection) if character.affection else None,
     )

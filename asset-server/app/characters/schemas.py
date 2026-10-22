@@ -14,6 +14,10 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 
 from app.characters.documents import CharacterDocument
 from app.characters.models import (
+    AFFECTION_MAX,
+    AFFECTION_MAX_CHANGE,
+    AFFECTION_MAX_RULES,
+    AFFECTION_MAX_STAGES,
     CHARACTER_AGE_MAX_LENGTH,
     CHARACTER_GENDER_MAX_LENGTH,
     CHARACTER_GREETING_MAX_LENGTH,
@@ -33,11 +37,14 @@ from app.characters.models import (
     PATH_MAX_MINUTES,
     PLACE_DESCRIPTION_MAX_LENGTH,
     PLACE_NAME_MAX_LENGTH,
+    STAGE_NAME_MAX_LENGTH,
     START_ITEM_MAX_COUNT,
     START_SITUATION_MAX_LENGTH,
     START_TITLE_MAX_LENGTH,
     VERSION_NOTE_MAX_LENGTH,
+    AffectionDisplay,
     ItemKind,
+    TriggerKind,
     Visibility,
 )
 from app.content.html import INTRO_MAX_BYTES, RemovedKind, intro_too_long
@@ -177,6 +184,78 @@ Places = Annotated[list[Place], Field(max_length=CHARACTER_MAX_PLACES), AfterVal
 Paths = Annotated[list[Path], Field(max_length=CHARACTER_MAX_PATHS), AfterValidator(unique_paths)]
 Items = Annotated[list[Item], Field(max_length=CHARACTER_MAX_ITEMS), AfterValidator(unique_items)]
 StartItems = Annotated[list[StartItem], Field(max_length=CHARACTER_MAX_START_ITEMS), AfterValidator(unique_start_items)]
+
+
+class Stage(BaseModel):
+    """호감도의 단계 하나. at 이상이면 이 단계다(다음 단계의 at 전까지)."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=STAGE_NAME_MAX_LENGTH)]
+    at: Annotated[int, Field(ge=0, le=AFFECTION_MAX)]
+
+
+class Trigger(BaseModel):
+    """호감도를 바꾸는 사용자의 행동. target 은 그 물건이나 장소의 id 다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: TriggerKind
+    target: Key
+
+
+class AffectionRule(BaseModel):
+    """
+    오르내리는 규칙 하나. on 의 행동을 하면 change 만큼 바꾼다(0~100 안으로 자른다).
+    once 면 그 가지에서 처음 한 번만 바꾼다(처음 하는 일). id 는 캐릭터 안에서 고유하고, chat 이 "이미 했다"를 적는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    on: Trigger
+    change: Annotated[int, Field(ge=-AFFECTION_MAX_CHANGE, le=AFFECTION_MAX_CHANGE)]
+    once: bool = False
+
+    @model_validator(mode='after')
+    def changes_something(self) -> Self:
+        """바꾸지 않는 규칙은 없다."""
+        if self.change == 0:
+            raise ValueError('규칙은 호감도를 바꿉니다(0 이 아닙니다).')
+        return self
+
+
+def stages_from_zero(stages: list[Stage]) -> list[Stage]:
+    """첫 단계는 0 에서 시작하고 경계가 오른다. 같은 이름은 없다. 어느 값이든 단계가 하나다."""
+    if stages[0].at != 0:
+        raise ValueError('첫 단계는 0 에서 시작합니다.')
+    if any(later.at <= earlier.at for earlier, later in zip(stages, stages[1:], strict=False)):
+        raise ValueError('단계의 경계는 차례로 커집니다.')
+    reject_repeated([stage.name for stage in stages])
+    return stages
+
+
+def unique_rules(rules: list[AffectionRule]) -> list[AffectionRule]:
+    reject_repeated_keys([rule.id for rule in rules])
+    return rules
+
+
+class Affection(BaseModel):
+    """
+    캐릭터의 호감도. 값 하나(0~100)와 단계들이다. display 는 사람에게 보이는 방식이다
+    (number: 숫자와 게이지, stage: 단계 이름과 게이지. 숫자는 chat 이 내려보내지 않는다).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    display: AffectionDisplay = AffectionDisplay.NUMBER
+    start: Annotated[int, Field(ge=0, le=AFFECTION_MAX)] = 0
+    stages: Annotated[
+        list[Stage], Field(min_length=1, max_length=AFFECTION_MAX_STAGES), AfterValidator(stages_from_zero)
+    ]
+    rules: Annotated[list[AffectionRule], Field(max_length=AFFECTION_MAX_RULES), AfterValidator(unique_rules)] = []
+
+
 # 지도와 물건의 칸. DB 에 적을 때 dict 의 목록으로 바꾼다
 WORLD_LISTS = ('places', 'paths', 'items', 'start_items')
 
@@ -187,8 +266,8 @@ def attached_images(image_id: uuid.UUID | None, places: list[Place], items: list
     return found + [entry.image_id for entry in [*places, *items] if entry.image_id is not None]
 
 
-# 고칠 때 null 로 비울 수 있는 칸. 그림과 처음 있는 장소는 "없음"이 null 이다. 글과 목록의 칸은 빈 값으로 비운다
-NULLABLE_FIELDS = frozenset({'image_id', 'start_place'})
+# 고칠 때 null 로 비울 수 있는 칸. 그림, 처음 있는 장소, 호감도는 "없음"이 null 이다. 글과 목록의 칸은 빈 값으로 비운다
+NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'affection'})
 
 
 class CharacterCreate(BaseModel):
@@ -211,6 +290,7 @@ class CharacterCreate(BaseModel):
     start_place: Key | None = None
     items: Items = []
     start_items: StartItems = []
+    affection: Affection | None = None
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
@@ -221,6 +301,7 @@ class CharacterCreate(BaseModel):
         values = self.model_dump()
         for name in ('starts', *WORLD_LISTS):
             values[name] = [entry.model_dump(mode='json') for entry in getattr(self, name)]
+        values['affection'] = self.affection.model_dump(mode='json') if self.affection is not None else None
         return values
 
 
@@ -249,10 +330,11 @@ class CharacterUpdate(BaseModel):
     start_place: Key | None = None
     items: Items | None = None
     start_items: StartItems | None = None
+    affection: Affection | None = None
 
     @model_validator(mode='after')
     def null_only_for_the_image(self) -> Self:
-        """그림과 처음 있는 장소 말고는 null 을 거부한다. "비우기"인지 "보내지 않음"인지 헷갈린다."""
+        """그림, 처음 있는 장소, 호감도 말고는 null 을 거부한다. "비우기"인지 "보내지 않음"인지 헷갈린다."""
         nulls = [name for name in self.model_fields_set - NULLABLE_FIELDS if getattr(self, name) is None]
         if nulls:
             raise ValueError(f'null 로 비울 수 없는 칸입니다: {", ".join(sorted(nulls))}')
@@ -264,6 +346,8 @@ class CharacterUpdate(BaseModel):
         for name in ('starts', *WORLD_LISTS):
             if name in changes:
                 changes[name] = [entry.model_dump(mode='json') for entry in changes[name]]
+        if changes.get('affection') is not None:
+            changes['affection'] = self.affection.model_dump(mode='json')
         return changes
 
     def image_ids(self) -> list[uuid.UUID]:
@@ -291,6 +375,7 @@ class CharacterDetail(BaseModel):
     start_place: str | None
     items: list[Item]
     start_items: list[StartItem]
+    affection: Affection | None
     latest_version: int | None
     published_at: datetime | None
     created_at: datetime
