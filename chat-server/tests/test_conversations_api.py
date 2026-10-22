@@ -301,12 +301,12 @@ async def test_someone_elses_last_persona_is_not_mine(client: AsyncClient, asset
     assert [kind for kind, _, _ in asset.calls].count('persona') == 1
 
 
-async def test_reading_the_last_persona_does_not_hold_a_connection(session: AsyncSession):
-    # asset 서버를 부르는 동안 DB 연결을 쥐지 않는다. 지난번 것을 읽은 뒤 트랜잭션을 닫는다
+async def test_reading_the_last_choices_does_not_hold_a_connection(session: AsyncSession):
+    # asset 서버를 부르는 동안 DB 연결을 쥐지 않는다. 지난번 페르소나와 모델을 읽은 뒤 트랜잭션을 닫는다
     claims = AccessClaims(user_id=ME, expires_at=datetime.now(UTC) + timedelta(minutes=15))
     viewer = Viewer(claims=claims, token='t')
 
-    await service.persona_to_fetch(session, viewer, ConversationCreate(character_id=uuid.uuid4()))
+    await service.remember_choices(session, viewer, ConversationCreate(character_id=uuid.uuid4()))
 
     assert not session.in_transaction()
 

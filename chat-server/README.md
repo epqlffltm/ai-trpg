@@ -4,7 +4,8 @@
 여러 인물이 나오는 story 는 story-server 가 맡는다(#591).
 
 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증이 있고(#590),
-[대화](#대화)를 시작하고 읽는 길이 있다(만드는 순서 1). 한 번의 말(스트리밍, 홀드와 확정)이 다음으로 붙는다([만드는 순서](../docs/architecture/chat-server.md#만드는-순서)).
+[대화](#대화)를 시작하고 읽는 길이 있다(만드는 순서 1). 한 번의 말(만드는 순서 2)의 첫 조각으로 [모델 목록](#모델-목록)과 대화의 모델이 있다.
+결제 서버의 가격과 홀드, 스트리밍이 다음으로 붙는다([만드는 순서](../docs/architecture/chat-server.md#만드는-순서)).
 
 정해 둔 값: 포트 `8005`, 토큰의 대상 `ai-trpg-chat`, DB 계정과 스키마 `chat`(테스트는 `chat_test`), 주소 `/api/v1/chat/`.
 
@@ -89,9 +90,11 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | 방법 | 주소 | 하는 일 | 인증 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/chat/me` | 토큰의 주인(`{"user_id"}`, 인증 서버의 `public_id`). 토큰 검증이 이어졌는지 보는 가장 작은 주소다(게임 서버의 `GET /me` 와 같다) | access 토큰 |
-| POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
+| GET | `/api/v1/chat/models` | 대화에 고를 수 있는 [모델](#모델-목록)들(`{items}`). 켜져 있고 은퇴하지 않은 것만. 회사, 이름표 순서 | access 토큰 |
+| POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?, model?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
 | GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
-| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 지금 가지의 말들(첫 말부터) | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터) | access 토큰 |
+| PUT | `/api/v1/chat/conversations/{id}/model` | 대화의 모델 바꾸기. `{model}`. 바꾼 모델을 돌려준다. 고를 수 없으면 422 `model_unavailable` | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 
 **스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages` 와 `POST /api/v1/chat/messages/{id}/regenerate`, `/continue` 가
@@ -122,7 +125,19 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | 403 `adult_content_required`(자기 캐릭터인데 등급을 쓸 수 없다) | 403 `adult_content_required` |
 | 닿지 못함, 시간 초과, 401, 5xx, 모양이 틀린 답, `ASSET_URL` 이 없음 | 503 `asset_unavailable`, `Retry-After: 5`. 다시 시도하지 않는다(사람이 다시 누른다) |
 
+| `model` | 쓰는 모델 |
+| --- | --- |
+| 보내지 않음 | 지난번(가장 최근에 시작한, 지운 것도) 대화의 것. 지난번에 없었거나 이 대화에 고를 수 없으면 없이 시작한다 |
+| `null` | 없이 시작한다. 말을 보내기 전에 고른다 |
+| 이름표 | 그 모델. 이 대화에 고를 수 없으면 422 `model_unavailable` |
+
 어느 경우든 실패하면 아무것도 저장하지 않는다.
+
+**모델.** 대화마다 하나다(`conversations.model_slug`, 모델 목록의 이름표). 고를 수 있는 모델은 켜져 있고 은퇴하지 않은 것이고,
+성인 등급의 대화(가져온 판의 등급)에는 그중 `allows_adult` 가 참인 것만이다. 고르거나 바꿀 때 한 번 본다.
+그 뒤 모델이 꺼지거나 은퇴해도 대화는 그 모델을 가리킨 채로 두고, 읽기와 목록의 `model.usable` 이 거짓이 된다.
+화면이 다시 고르게 한다. 서버는 몰래 다른 모델로 바꾸지 않는다(TRPG 와 같은 원칙). 바꿔도 목록의 차례(최근에 말한 것부터)는 그대로다.
+은퇴일과 원가의 날은 UTC 의 오늘로 본다.
 
 - **사본.** 판의 사본(`characters`)은 사람마다, 판마다 하나다. 같은 판으로 여러 번 시작해도 하나를 함께 쓴다. 동시에 시작해도 하나만 남는다(`ON CONFLICT DO NOTHING`).
   가져온 뒤 바뀌지 않는다. 원본이 바뀌어도 그대로이고, 새 판과 새 설정을 알리는 것은 다음 조각이다.
@@ -132,7 +147,56 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
   가지 안의 차례는 시각이 아니라 깊이로 정한다(한 트랜잭션의 말들은 시각이 같다).
 - **지우기.** 지운 시각만 적는다. 말과 사본은 남는다. 탈퇴할 때의 처리는 인증 서버의 알릴 곳에 chat 을 더하는 PR 이 정한다.
 - 표의 모양은 설계 문서(docs/architecture/chat-server.md 의 "데이터의 모양")와 같다. 대화가 캐릭터의 사본을 바로 가리킨다(잇는 표가 없다).
-  chat 은 캐릭터가 하나이고 story 는 자기 스키마에 자기 표를 둔다. 모델(`model`)과 생성 중 표시(`generating_since`)는 한 번의 말을 만들 때 더한다.
+  chat 은 캐릭터가 하나이고 story 는 자기 스키마에 자기 표를 둔다. 생성 중 표시(`generating_since`)는 말을 보내는 길을 만들 때 더한다.
+
+### 모델 목록
+
+대화에 쓸 수 있는 언어 모델들이다. `app/catalog/`. 게임 서버의 모델 목록(`trpg-server/app/catalog/`)을 줄여 옮겼다.
+
+**원본은 파일 하나다**(`shared/ai-core/src/ai_core/model_catalog.toml`, #499). 게임 서버와 같은 파일을 이 서버의 표에 들여온다.
+모델을 넣고, 칸을 고치고, 원가를 더하고, 날짜판과 은퇴일을 바꾸는 것은 파일을 고쳐 PR 로 올리고 `scripts.models sync` 로 들여온다.
+들여오는 규칙은 게임 서버와 같다([게임 서버의 모델 목록](../trpg-server/README.md#모델-목록)). 새 모델은 꺼진 채 들어가고,
+날짜판이 바뀌면 기록을 남기고 끈다. 파일에 없는 표의 모델은 지우지 않는다(대화와 청구 기록이 가리킨다).
+
+이 서버만의 스위치는 둘이다. 파일에 없고 이 표에서 바꾼다.
+
+| 칸 | 뜻 |
+| --- | --- |
+| `enabled` | 켜져 있나. 오늘의 원가가 있고 은퇴하지 않은 모델만 켠다. 게임 서버와 따로 켠다 |
+| `allows_adult` | 성인 등급의 대화에 쓸 수 있나. 공급자의 약관을 확인하고 성인 평가 장면을 통과한 뒤에 켠다([설계의 성인 콘텐츠](../docs/architecture/chat-server.md#성인-콘텐츠)). 약관이 성적인 콘텐츠를 막는다고 확인된 창구(`anthropic`, `gemini`)의 모델은 켜지 못한다(`adult_refused`). 전체 이용가의 대화에는 그대로 쓴다 |
+
+게임 서버와 다른 것: 회사의 대체 모델(`vendor_fallback`)이 없다. chat 은 모델이 끝나도 몰래 바꾸지 않고 사람이 고른다.
+판매가(말 한 번에 몇 크레딧)는 결제 서버의 가격표(`chat.<이름표>.i0.o0`)가 정한다. 모델 목록 API 에 값을 붙이는 것은 결제 서버를 부르는 PR 이 한다.
+
+창구와 생각의 방식, 출력 상한의 칸은 표의 CHECK 로도 막는다. ai-core 의 목록(`catalog_contract`)에 값이 늘면 이 서버에도 마이그레이션이 필요하다.
+`alembic check` 는 CHECK 의 차이를 보지 못해서, 테스트(`tests/test_catalog_sync.py`)가 표의 CHECK 와 계약의 목록을 맞대어 본다.
+
+#### 관리 명령
+
+관리 화면이 생기기 전까지 이것으로 들여오고, 켜고 끈다. `chat-server` 폴더에서 돌린다. 설정(`.env`)의 DB 를 쓰고 서버를 띄우지 않아도 된다.
+
+```powershell
+uv run python -m scripts.models sync --dry-run
+uv run python -m scripts.models sync
+uv run python -m scripts.models sync --file ..\shared\ai-core\src\ai_core\model_catalog.toml
+uv run python -m scripts.models list
+uv run python -m scripts.models list --on 2026-12-01
+uv run python -m scripts.models show glm-5-3
+uv run python -m scripts.models enable glm-5-3
+uv run python -m scripts.models disable glm-5-3
+uv run python -m scripts.models adult glm-5-3 --allow
+uv run python -m scripts.models adult glm-5-3 --forbid
+```
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `sync` | 파일을 들여온다. `--file` 이 없으면 설치된 ai-core 에 든 파일이다. `--dry-run` 은 바뀔 것만 보인다 |
+| `list` | 모든 모델과 그날의 원가(입력/출력, USD, 백만 토큰당). 성인 등급의 대화에 쓰는 모델에는 `성인` 이 붙는다 |
+| `show` | 모델 하나. 받는 것, 원가들, 날짜판을 바꾼 일 |
+| `enable`, `disable` | 켜고 끈다. 지우지 않는다 |
+| `adult --allow`, `adult --forbid` | 성인 등급의 대화에 쓰게 하거나 쓰지 않게 한다. 끄면 그 모델을 고른 성인 대화는 `usable` 이 거짓이 된다 |
+
+거절되면(없는 모델, 원가가 없음, 은퇴함, 약관이 막는 창구, 파일이 틀림) 까닭을 찍고 1 로 끝난다. 일은 `app/catalog` 의 함수가 하고, 명령은 찍기만 한다.
 
 ### 토큰 검증
 
@@ -201,7 +265,8 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. chat 서버는 `chat` 계정으로 `chat`
 스키마(테스트는 `chat_test`)만 쓴다. 다른 서버의 스키마에 닿지 못하는 것을 테스트(`tests/test_schema_isolation.py`)가 확인한다.
 
-테이블은 `app/conversations/models.py` 에 있다(`characters`, `conversations`, `conversation_personas`, `messages`).
+테이블은 `app/conversations/models.py`(`characters`, `conversations`, `conversation_personas`, `messages`)와
+`app/catalog/models.py`(`ai_models`, `ai_model_costs`, `ai_model_snapshots`)에 있다.
 모델 파일을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
 ### 마이그레이션
