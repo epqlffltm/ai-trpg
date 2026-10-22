@@ -1,0 +1,154 @@
+/* web/packages/ui/src/styles.css
+ * 공통 구성요소의 모양. 색, 글꼴, 간격은 맨 위의 변수에만 있다. Stitch 의 시안을 받으면 이 변수와 구성요소의 모양만 바꾼다.
+ * 시스템 글꼴을 쓴다. 바깥의 글꼴을 부르지 않는다(화면의 CSP 가 같은 출처만 연다).
+ */
+
+:root {
+  --ui-bg: #f7f6f3;
+  --ui-surface: #ffffff;
+  --ui-text: #1d1b18;
+  --ui-text-muted: #5f5a52;
+  --ui-border: #ddd8cf;
+  --ui-accent: #7a3e14;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #a3221b;
+  --ui-focus: #2f6fdb;
+  --ui-radius: 10px;
+  --ui-gap: 16px;
+  --ui-font: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ui-bg: #17150f;
+    --ui-surface: #211e18;
+    --ui-text: #f1ede6;
+    --ui-text-muted: #b3aca0;
+    --ui-border: #3a352c;
+    --ui-accent: #e0a46a;
+    --ui-accent-text: #1d1b18;
+    --ui-danger: #f08a80;
+    --ui-focus: #8bb4ff;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-family: var(--ui-font);
+  line-height: 1.5;
+}
+
+a {
+  color: var(--ui-accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* 버튼 */
+.ui-button {
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius);
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ui-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ui-button--primary {
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+}
+
+.ui-button--secondary {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+}
+
+.ui-button--quiet {
+  background: none;
+  color: var(--ui-accent);
+  padding: 4px 8px;
+}
+
+/* 입력 칸 */
+.ui-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: var(--ui-gap);
+}
+
+.ui-field__label {
+  font-weight: 600;
+}
+
+.ui-field__input {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 10px 12px;
+  font: inherit;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+
+.ui-field__input[aria-invalid="true"] {
+  border-color: var(--ui-danger);
+}
+
+.ui-field__error {
+  margin: 0;
+  color: var(--ui-danger);
+  font-size: 0.9em;
+}
+
+/* 안내 */
+.ui-notice {
+  border-radius: var(--ui-radius);
+  padding: 10px 14px;
+  margin-bottom: var(--ui-gap);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+
+.ui-notice--error {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+
+/* 목록 한 줄 */
+.ui-list-section {
+  margin-bottom: calc(var(--ui-gap) * 2);
+}
+
+.ui-list-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ui-gap);
+}
+
+.ui-list-section__title {
+  font-size: 1.15rem;
+  margin: 0 0 12px;
+}
+
+.ui-list-section__state {
+  color: var(--ui-text-muted);
+  padding: 12px 0;
+}
