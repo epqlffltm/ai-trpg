@@ -73,14 +73,8 @@ class Conflict(enum.StrEnum):
     TOO_MANY_ITEMS = 'too_many_items'
     # 가진 것보다 많이 빼려 했다. 없는 물건을 빼려 한 것도 이 이유다
     NOT_ENOUGH_ITEMS = 'not_enough_items'
-    # 이미 끝난(성공, 실패) 퀘스트다. 끝난 것은 되돌리지 않는다
-    QUEST_FINISHED = 'quest_finished'
-    # 퀘스트를 사람이 드러내려(진행 중으로 바꾸려) 했다. 드러나는 것은 시나리오의 조건을 보고 엔진이 정한다
-    QUEST_REVEAL_BY_ENGINE = 'quest_reveal_by_engine'
     # 시작한 테이블의 서술 모델을 바꾸려 했다. 지금 모델을 쓸 수 있으면 시작한 뒤에는 고정이다
     NARRATION_MODEL_LOCKED = 'narration_model_locked'
-    # 퀘스트를 사람이 성공으로 바꾸려 했다. 성공은 시나리오의 조건을 보고 엔진이 정한다(app/rounds/quest_goals.py)
-    QUEST_SUCCESS_BY_ENGINE = 'quest_success_by_engine'
     # 판의 작가 글(진행 지침, 세계관, GM 메모)이 서술의 입력 예산을 넘어 시작할 수 없다(app/rounds/budget.py)
     STORY_TOO_LONG = 'story_too_long'
 

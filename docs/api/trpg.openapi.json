@@ -6635,29 +6635,9 @@
         "title": "PutDownOutcome",
         "type": "object"
       },
-      "QuestChange": {
-        "additionalProperties": false,
-        "description": "방장이 퀘스트의 상태를 바꿀 때 받는 값.\n\n숨김으로는 바꾸지 않는다. 한 번 드러낸 것을 다시 숨기면 앉은 사람의 기억과 화면이 어긋난다.",
-        "properties": {
-          "status": {
-            "enum": [
-              "active",
-              "succeeded",
-              "failed"
-            ],
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "title": "QuestChange",
-        "type": "object"
-      },
       "QuestCondition-Input": {
         "additionalProperties": false,
-        "description": "퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).\n\nreach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것), hold_item 은 물건 항목,\ndefeat_npc 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.\ncount 는 defeat_monster 와 hold_item 만 쓴다. 나머지는 1 로 둔다.\nconsume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).\n일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.\n가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.",
+        "description": "퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).\n\nreach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),\nhold_item 과 lose_item 은 물건 항목,\ndefeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.\ncount 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.\nconsume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).\n일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.\n가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.",
         "properties": {
           "consume": {
             "default": false,
@@ -6689,7 +6669,7 @@
       },
       "QuestCondition-Output": {
         "additionalProperties": false,
-        "description": "퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).\n\nreach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것), hold_item 은 물건 항목,\ndefeat_npc 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.\ncount 는 defeat_monster 와 hold_item 만 쓴다. 나머지는 1 로 둔다.\nconsume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).\n일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.\n가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.",
+        "description": "퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).\n\nreach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),\nhold_item 과 lose_item 은 물건 항목,\ndefeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.\ncount 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.\nconsume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).\n일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.\n가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.",
         "properties": {
           "consume": {
             "default": false,
@@ -6719,12 +6699,14 @@
         "type": "object"
       },
       "QuestConditionKind": {
-        "description": "퀘스트의 조건 하나가 무엇을 보는가. 엔진이 이미 아는 사실(상태)만 본다(app/rounds/quest_goals.py).\n\ntarget 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물, 다른 퀘스트(사건)다.\n다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)에만 쓴다. 이루는 조건(conditions)에는 쓰지 않는다.",
+        "description": "퀘스트의 조건 하나가 무엇을 보는가. 엔진이 이미 아는 사실(상태)만 본다(app/rounds/quest_goals.py).\n\ntarget 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물, 다른 퀘스트(사건)다.\n다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)과 실패하는 조건(fail)에 쓴다.\n이루는 조건(conditions)에는 쓰지 않는다. 물건을 잃는 것(lose_item)은 실패하는 조건에만 쓴다(#367).",
         "enum": [
           "reach_place",
           "defeat_monster",
           "hold_item",
           "defeat_npc",
+          "npc_dead",
+          "lose_item",
           "quest_succeeded",
           "quest_failed"
         ],
@@ -6805,7 +6787,7 @@
       },
       "QuestRule-Input": {
         "additionalProperties": false,
-        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기에만 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
+        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
         "properties": {
           "conditions": {
             "default": [],
@@ -6820,6 +6802,19 @@
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "fail": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/QuestCondition-Input"
+            },
+            "maxItems": 5,
+            "title": "Fail",
+            "type": "array"
+          },
+          "fail_match": {
+            "$ref": "#/components/schemas/QuestMatch",
+            "default": "all"
           },
           "match": {
             "$ref": "#/components/schemas/QuestMatch",
@@ -6873,7 +6868,7 @@
       },
       "QuestRule-Output": {
         "additionalProperties": false,
-        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기에만 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
+        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
         "properties": {
           "conditions": {
             "default": [],
@@ -6887,6 +6882,19 @@
           "entry_id": {
             "title": "Entry Id",
             "type": "string"
+          },
+          "fail": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/QuestCondition-Output"
+            },
+            "maxItems": 5,
+            "title": "Fail",
+            "type": "array"
+          },
+          "fail_match": {
+            "$ref": "#/components/schemas/QuestMatch",
+            "default": "all"
           },
           "match": {
             "$ref": "#/components/schemas/QuestMatch",
@@ -6939,7 +6947,7 @@
         "type": "object"
       },
       "QuestRuleSnapshot": {
-        "description": "퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.\n\nstart 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건이다.\ntime_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.\nconditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.",
+        "description": "퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.\n\nstart 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건이다.\ntime_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.\nconditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다. 없으면 기한으로만 실패한다.",
         "properties": {
           "conditions": {
             "default": [],
@@ -6953,6 +6961,18 @@
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "fail": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/QuestConditionSnapshot"
+            },
+            "title": "Fail",
+            "type": "array"
+          },
+          "fail_match": {
+            "$ref": "#/components/schemas/QuestMatch",
+            "default": "all"
           },
           "match": {
             "$ref": "#/components/schemas/QuestMatch",
@@ -9602,7 +9622,7 @@
             "type": "array"
           },
           "format": {
-            "default": 42,
+            "default": 43,
             "title": "Format",
             "type": "integer"
           },
@@ -16801,76 +16821,6 @@
           }
         ],
         "summary": "Change Narration Style",
-        "tags": [
-          "tables"
-        ],
-        "x-audience": "user"
-      }
-    },
-    "/api/v1/game/tables/{table_id}/quests/{entry_id}": {
-      "put": {
-        "description": "방장이 진행 중인 퀘스트를 실패로 끝낸다. 진행 중인 테이블에서만 된다. 판의 드러난 퀘스트만 된다.\n\n성공과 드러내기는 엔진이 판의 조건으로 정한다. 409(quest_success_by_engine, quest_reveal_by_engine).\n끝난 것은 409(quest_finished). 숨긴 퀘스트는 없는 것과 같다(422). 숨김으로는 바꾸지 않는다(422).\nAI 는 퀘스트를 바꾸지 못한다. 모두에게 이벤트(quest_changed)가 간다.",
-        "operationId": "change_quest_api_v1_game_tables__table_id__quests__entry_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "table_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Table Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "entry_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Entry Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/QuestChange"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TableDetail"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Change Quest",
         "tags": [
           "tables"
         ],

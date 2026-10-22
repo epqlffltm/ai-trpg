@@ -257,7 +257,8 @@ class QuestConditionKind(enum.StrEnum):
     퀘스트의 조건 하나가 무엇을 보는가. 엔진이 이미 아는 사실(상태)만 본다(app/rounds/quest_goals.py).
 
     target 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물, 다른 퀘스트(사건)다.
-    다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)에만 쓴다. 이루는 조건(conditions)에는 쓰지 않는다.
+    다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)과 실패하는 조건(fail)에 쓴다.
+    이루는 조건(conditions)에는 쓰지 않는다. 물건을 잃는 것(lose_item)은 실패하는 조건에만 쓴다(#367).
     """
 
     # 그 장소에 죽지 않은 캐릭터가 서 있다
@@ -268,6 +269,11 @@ class QuestConditionKind(enum.StrEnum):
     HOLD_ITEM = 'hold_item'
     # 그 인물(NPC)이 쓰러지거나 죽었다
     DEFEAT_NPC = 'defeat_npc'
+    # 그 인물(NPC)이 죽었다. 쓰러진 것은 아니다(회복을 받으면 일어난다). 지켜야 할 인물에 쓴다
+    NPC_DEAD = 'npc_dead'
+    # 죽지 않은 캐릭터들이 그 물건을 모두 합쳐 count 개보다 적게 가졌다. 지켜야 할 물건에 쓴다.
+    # 가진 적이 없어도 채워진다. 그 물건을 받은 뒤에 드러나는 퀘스트나 시작 소지품의 물건에 쓴다
+    LOSE_ITEM = 'lose_item'
     # 그 퀘스트가 성공했다
     QUEST_SUCCEEDED = 'quest_succeeded'
     # 그 퀘스트가 실패했다
@@ -275,9 +281,13 @@ class QuestConditionKind(enum.StrEnum):
 
 
 # count 를 쓰는 조건. 나머지는 1 이다
-COUNTED_CONDITIONS = frozenset({QuestConditionKind.DEFEAT_MONSTER, QuestConditionKind.HOLD_ITEM})
-# 다른 퀘스트를 보는 조건(퀘스트 잇기). 드러나는 조건에만 쓴다
+COUNTED_CONDITIONS = frozenset(
+    {QuestConditionKind.DEFEAT_MONSTER, QuestConditionKind.HOLD_ITEM, QuestConditionKind.LOSE_ITEM}
+)
+# 다른 퀘스트를 보는 조건(퀘스트 잇기). 드러나는 조건과 실패하는 조건에 쓴다
 QUEST_LINK_CONDITIONS = frozenset({QuestConditionKind.QUEST_SUCCEEDED, QuestConditionKind.QUEST_FAILED})
+# 실패하는 조건에만 쓰는 조건. 잃어서 이루거나 드러나는 퀘스트는 없다
+FAIL_ONLY_CONDITIONS = frozenset({QuestConditionKind.LOSE_ITEM})
 
 
 class QuestMatch(enum.StrEnum):

@@ -9,7 +9,7 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Annotated, Literal
+from typing import Annotated
 
 from ai_core.catalog_file import Slug
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -354,18 +354,6 @@ class QuestOut(BaseModel):
     # 기한이 끝나는 게임 안의 시각. 판의 규칙에 기한이 있는 퀘스트가 드러날 때 정한다. 없으면 None.
     # 진행 중인데 이 시각이 지나면 그다음에 닫히는 라운드까지 기다렸다가 서버가 실패로 바꾼다
     due_at: ClockTimeOut | None = None
-
-
-class QuestChange(BaseModel):
-    """
-    방장이 퀘스트의 상태를 바꿀 때 받는 값.
-
-    숨김으로는 바꾸지 않는다. 한 번 드러낸 것을 다시 숨기면 앉은 사람의 기억과 화면이 어긋난다.
-    """
-
-    model_config = ConfigDict(extra='forbid')
-
-    status: Literal[QuestStatus.ACTIVE, QuestStatus.SUCCEEDED, QuestStatus.FAILED]
 
 
 class PlaceChange(BaseModel):

@@ -84,6 +84,8 @@ async def test_quests_are_saved_and_read_back(client: AsyncClient, me: dict[str,
             'match': 'all',
             'reveal': [],
             'reveal_match': 'all',
+            'fail': [],
+            'fail_match': 'all',
         },
         {
             'entry_id': lore['mine']['id'],
@@ -94,6 +96,8 @@ async def test_quests_are_saved_and_read_back(client: AsyncClient, me: dict[str,
             'match': 'all',
             'reveal': [],
             'reveal_match': 'all',
+            'fail': [],
+            'fail_match': 'all',
         },
     ]
 
@@ -179,6 +183,8 @@ async def test_quests_are_frozen_into_the_version(client: AsyncClient, me: dict[
             'match': 'all',
             'reveal': [],
             'reveal_match': 'all',
+            'fail': [],
+            'fail_match': 'all',
         }
     ]
 

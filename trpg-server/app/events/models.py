@@ -127,8 +127,9 @@ class EventType(enum.StrEnum):
     # 원인은 그 행동의 이벤트다. NPC 의 태도가 바뀌었으면 npc_attitude_changed 가,
     # 훔쳤으면 items_gained(source 가 steal)가 그 뒤에 잇는다
     STEAL_ATTEMPTED = 'steal_attempted'
-    # 방장이 퀘스트의 상태를 바꿨다(app/tables/quest_changes.py). 무엇에서 무엇으로, 성공이면 누가 무엇을 받았는가.
-    # 숨김으로 바꾸는 일은 없으므로 숨긴 퀘스트는 이 이벤트로 새지 않는다
+    # 엔진이 퀘스트의 상태를 바꿨다(app/rounds/quest_goals.py, app/rounds/deadlines.py).
+    # 사람(방장)은 바꾸지 못한다(#367).
+    # 무엇에서 무엇으로, 성공이면 누가 무엇을 받았는가, 바꾼 까닭(reason). 숨김으로 바꾸는 일은 없다
     QUEST_CHANGED = 'quest_changed'
     # 방장이 다음 라운드가 열릴 때 흐를 게임 안의 시간을 정했다(app/calendar/service.py). 몇 분에서 몇 분으로.
     # 시각이 흐른 것은 따로 적지 않는다. 라운드가 열린 이벤트에 그때의 시각이 있다

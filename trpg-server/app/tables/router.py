@@ -41,7 +41,6 @@ from app.tables import (
     place_changes,
     place_items,
     places,
-    quest_changes,
     quests,
     references,
     replacements,
@@ -88,7 +87,6 @@ from app.tables.schemas import (
     PlaceItemOut,
     PlaceOut,
     PregenChoice,
-    QuestChange,
     QuestOut,
     ReferencesUpdate,
     RollOut,
@@ -635,21 +633,6 @@ async def take_items(
     가진 것보다 많으면 409(not_enough_items). 모두에게 이벤트(items_lost)가 간다.
     """
     table = await item_grants.take_items(session, user.user_id, table_id, user_id, entry_id, count)
-    return to_detail(table, user.user_id)
-
-
-@router.put('/{table_id}/quests/{entry_id}', response_model=TableDetail, status_code=status.HTTP_200_OK)
-async def change_quest(
-    table_id: uuid.UUID, entry_id: uuid.UUID, data: QuestChange, user: CurrentUser, session: Session
-) -> TableDetail:
-    """
-    방장이 진행 중인 퀘스트를 실패로 끝낸다. 진행 중인 테이블에서만 된다. 판의 드러난 퀘스트만 된다.
-
-    성공과 드러내기는 엔진이 판의 조건으로 정한다. 409(quest_success_by_engine, quest_reveal_by_engine).
-    끝난 것은 409(quest_finished). 숨긴 퀘스트는 없는 것과 같다(422). 숨김으로는 바꾸지 않는다(422).
-    AI 는 퀘스트를 바꾸지 못한다. 모두에게 이벤트(quest_changed)가 간다.
-    """
-    table = await quest_changes.change_quest(session, user.user_id, table_id, entry_id, data.status)
     return to_detail(table, user.user_id)
 
 

@@ -38,6 +38,7 @@ from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
 from tests.test_table_items import FRIEND, ME, bearer, events_of, kill, read_table, table_url
 from tests.test_table_items import held as held_items
+from tests.test_table_quests import set_status
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -281,7 +282,9 @@ async def test_reaching_the_place_succeeds_the_quest(client: AsyncClient, me: di
     assert changed['sequence'] < closed['sequence']
 
 
-async def test_a_finished_quest_is_not_finished_again(client: AsyncClient, me: dict[str, str], narrated):
+async def test_a_finished_quest_is_not_finished_again(
+    client: AsyncClient, me: dict[str, str], session: AsyncSession, narrated
+):
     world = await make_world(client, me)
     reward = [{'entry_id': world['potion']['id'], 'count': 2}]
     rules = [
@@ -289,11 +292,8 @@ async def test_a_finished_quest_is_not_finished_again(client: AsyncClient, me: d
         {'entry_id': world['secret']['id'], 'start': 'active', 'conditions': [goal('reach_place', world['forest'])]},
     ]
     table = await start(client, me, world, rules)
-    # 방장이 먼저 실패로 끝냈다. 조건을 채워도 되돌리지 않는다
-    failed = await client.put(
-        table_url(table, f'/quests/{world["secret"]["id"]}'), json={'status': 'failed'}, headers=me
-    )
-    assert failed.status_code == status.HTTP_200_OK, failed.text
+    # 먼저 실패로 끝났다(실패하는 조건으로). 이루는 조건을 채워도 되돌리지 않는다
+    await set_status(session, table, world['secret'], 'failed')
 
     await declare(client, me, table, '숲으로 간다.', move(world['forest']))
     await narrated()
@@ -305,7 +305,8 @@ async def test_a_finished_quest_is_not_finished_again(client: AsyncClient, me: d
     assert (status_of(seen, '왕녀 구출'), status_of(seen, '숨은 비밀')) == ('succeeded', 'failed')
     assert held_items(seen, ME) == [('치유 물약', 2)]
     reasons = [event['payload']['reason'] for event in await events_of(client, me, table, 'quest_changed')]
-    assert reasons == [None, 'conditions_met']
+    # 앞의 실패는 DB 에 바로 적은 것이라 이벤트가 없다. 이룬 것 하나만 이벤트다
+    assert reasons == ['conditions_met']
 
 
 async def test_not_yet_reached_stays_active(client: AsyncClient, me: dict[str, str], narrated):

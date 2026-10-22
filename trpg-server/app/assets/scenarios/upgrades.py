@@ -696,6 +696,18 @@ def upgrade_from_41(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_42(document: dict) -> dict:
+    """
+    형식 42 의 문서를 형식 43 으로 올린다. 그때는 퀘스트에 실패하는 조건이 없었다. 기한 말고는 방장이 손으로 실패시켰다.
+
+    조건이 없는 것으로 읽는다. 사람이 실패시키는 길은 없어졌으므로(#367) 옛 판의 퀘스트는 기한으로만 실패한다.
+    """
+    upgraded = dict(document)
+    upgraded['quests'] = [{**quest, 'fail': [], 'fail_match': 'all'} for quest in document.get('quests', [])]
+    upgraded['format'] = 43
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -740,4 +752,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     39: upgrade_from_39,
     40: upgrade_from_40,
     41: upgrade_from_41,
+    42: upgrade_from_42,
 }

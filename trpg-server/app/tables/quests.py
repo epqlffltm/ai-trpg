@@ -7,12 +7,11 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 퀘스트의 행(
 
   - 판의 사건 항목 하나가 퀘스트 하나다. 처음 상태는 판의 퀘스트 규칙의 것이다(규칙이 없으면 숨김).
   - 바뀌는 길: 숨김 → 진행 중 / 성공, 진행 중 → 성공 / 실패. 끝난 것은 그대로다. 숨김으로 돌아가지 않는다.
-  - 드러내기와 성공은 엔진만 정한다. 판의 조건을 라운드가 닫힐 때 보고 바꾼다(app/rounds/quest_goals.py).
-    방장의 요청은 진행 중인 퀘스트의 실패만 한다(#367).
+  - 드러내기, 성공, 실패는 엔진만 정한다. 판의 조건을 라운드가 닫힐 때 보고 바꾸고(app/rounds/quest_goals.py),
+    기한을 넘긴 것을 실패로 바꾼다(app/rounds/deadlines.py). 사람(방장)은 퀘스트를 바꾸지 못한다(#367).
   - 성공하면 보상을 받는다. 앉은 사람의 지금 캐릭터 중 살아 있는 것마다 받는다.
     한 가지의 상한(99 개)에 닿으면 그 사람은 거기까지만 받는다. 다른 사람의 보상은 막지 않는다.
-  - 숨긴 퀘스트는 아무도 보지 않는다. 방장도 PC 라서 다른 사람이 모르는 것을 알면 안 된다.
-    방장이 바꾸려 해도 없는 퀘스트처럼 다룬다. 있는지조차 알리지 않는다. 서술자(GM)만 안다.
+  - 숨긴 퀘스트는 아무도 보지 않는다. 방장도 PC 라서 다른 사람이 모르는 것을 알면 안 된다. 서술자(GM)만 안다.
   - 기한: 판의 규칙에 기한이 있으면 드러날 때(진행 중이 될 때) 끝나는 게임 안의 시각을 적는다.
     처음부터 진행 중인 것은 테이블이 시작하는 시각부터, 숨겼다가 드러난 것은 드러난 라운드가 열린 시각부터 센다.
     숨긴 채로 바로 끝낸 것에는 적지 않는다. 기한이 지난 것을 실패로 바꾸는 것은 app/rounds/deadlines.py 다.
@@ -30,7 +29,6 @@ from app.assets.scenarios.snapshot import (
     quest_rule_of,
 )
 from app.tables import items, sheets
-from app.tables.errors import Conflict, TableConflictError, TableOptionError
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, QuestStatus, TableMember, TableQuest
 
@@ -46,6 +44,7 @@ class CatalogQuest:
     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 없으면 None.
     conditions 는 이루는 조건, match 는 그것을 맞추는 법이다. 조건이 없으면 성공하지 않는다.
     reveal 은 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 조건이 없으면 이루어야만 드러난다.
+    fail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다. 조건이 없으면 기한으로만 실패한다.
     """
 
     entry_id: uuid.UUID
@@ -57,6 +56,8 @@ class CatalogQuest:
     match: QuestMatch = QuestMatch.ALL
     reveal: tuple[QuestConditionSnapshot, ...] = ()
     reveal_match: QuestMatch = QuestMatch.ALL
+    fail: tuple[QuestConditionSnapshot, ...] = ()
+    fail_match: QuestMatch = QuestMatch.ALL
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogQuest]:
@@ -74,6 +75,8 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogQuest]:
             match=rule.match,
             reveal=tuple(rule.reveal),
             reveal_match=rule.reveal_match,
+            fail=tuple(rule.fail),
+            fail_match=rule.fail_match,
         )
     return quests
 
@@ -99,66 +102,6 @@ def make_quests(table_id: uuid.UUID, snapshot: Snapshot, now: int) -> list[Table
 def find_quest(table: GameTable, entry_id: uuid.UUID) -> TableQuest | None:
     """이 테이블의 그 퀘스트의 행. 없으면 None."""
     return next((quest for quest in table.quests if quest.entry_id == entry_id), None)
-
-
-def require_quest(
-    table: GameTable, quests: dict[uuid.UUID, CatalogQuest], entry_id: uuid.UUID
-) -> tuple[TableQuest, CatalogQuest]:
-    """
-    사람이 다룰 수 있는 이 테이블의 퀘스트인지 확인한다. 그 행과 판의 퀘스트를 돌려준다.
-    아니면 TableOptionError(entry_id).
-
-    사건이 아닌 항목은 퀘스트가 아니다. 퀘스트가 생기기 전에 시작한 테이블에는 퀘스트의 행이 없다.
-    숨긴 퀘스트도 없는 것과 같다. 아무에게도 보이지 않으므로 있는지조차 알리지 않는다.
-    """
-    row = find_quest(table, entry_id)
-    quest = quests.get(entry_id)
-    if row is None or quest is None or row.status == QuestStatus.HIDDEN:
-        raise TableOptionError('entry_id')
-    return row, quest
-
-
-def target_problem(to: QuestStatus) -> Conflict | None:
-    """
-    사람이 그 상태로 바꿀 수 없는 까닭. 지금 상태와 상관없다. 바꿀 수 있으면 None.
-
-    성공으로 바꾸면 quest_success_by_engine, 진행 중으로(드러내기) 바꾸면 quest_reveal_by_engine 이다.
-    둘 다 엔진이 판의 조건을 보고 정한다(app/rounds/quest_goals.py). 사람에게 남은 것은 실패뿐이다.
-    """
-    if to == QuestStatus.SUCCEEDED:
-        return Conflict.QUEST_SUCCESS_BY_ENGINE
-    if to == QuestStatus.ACTIVE:
-        return Conflict.QUEST_REVEAL_BY_ENGINE
-    return None
-
-
-def change_problem(current: QuestStatus, to: QuestStatus) -> Conflict | None:
-    """
-    사람이 지금 상태에서 그 상태로 바꿀 수 없는 까닭. 바꿀 수 있으면 None.
-
-    바꿀 상태의 까닭(target_problem)을 먼저 본다. 그다음 끝난 것은 quest_finished 다.
-    숨김으로 바꾸는 것은 입력에서 받지 않는다(app/tables/schemas.py 의 QuestChange).
-    """
-    problem = target_problem(to)
-    if problem is not None:
-        return problem
-    if current in FINISHED:
-        return Conflict.QUEST_FINISHED
-    return None
-
-
-def require_target(to: QuestStatus) -> None:
-    """사람이 그 상태로 바꿀 수 있는지 확인한다. 아니면 TableConflictError(그 까닭)."""
-    problem = target_problem(to)
-    if problem is not None:
-        raise TableConflictError(problem)
-
-
-def require_changeable(current: QuestStatus, to: QuestStatus) -> None:
-    """지금 상태에서 그 상태로 바꿀 수 있는지 확인한다. 아니면 TableConflictError(그 까닭)."""
-    problem = change_problem(current, to)
-    if problem is not None:
-        raise TableConflictError(problem)
 
 
 def reveal(row: TableQuest, quest: CatalogQuest, now: int) -> None:
