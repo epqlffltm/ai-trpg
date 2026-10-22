@@ -1,15 +1,16 @@
 // web/apps/web/src/pages/trpg/room/WaitingRoom.tsx
 // 모집 중인 테이블의 대기실. 방장은 초대 코드를 보고 나누며, 모두 캐릭터를 정하면 시작한다.
 // 시작이 되면 서버가 테이블을 돌려준다. 그 값으로 바로 바꾸고, 다른 사람은 스트림의 이벤트(table_started)로 다시 읽는다.
-// 캐릭터를 정하는 화면(B5)은 다음이다. 지금은 누가 정했는지만 보인다.
+// 내 캐릭터는 여기서 정한다(B5, character/CharacterPanel.tsx). 누가 정했는지는 앉은 사람(MemberList)에 보인다.
 
-import { Button, Notice } from '@ai-trpg/ui';
+import { Button } from '@ai-trpg/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { startTable } from '../../../api/tableRoom';
 import type { TableDetail } from '../../../api/types';
 import type { FormProblem } from '../../../auth/problem';
 import { ProblemNotice } from '../../../components/ProblemNotice';
+import { CharacterPanel } from './character/CharacterPanel';
 import { everyoneHasCharacter } from './MemberList';
 import { tableQuery } from './roomQueries';
 import { describeStartProblem } from './roomProblem';
@@ -21,11 +22,9 @@ export function WaitingRoom({ table, myId }: { table: TableDetail; myId: string 
     <section className="waiting-room" aria-labelledby="waiting-heading">
       <h2 id="waiting-heading">모집 중</h2>
       {table.invite_code ? <InviteCode code={table.invite_code} /> : null}
-      {mine && !mine.character ? (
-        <Notice>캐릭터를 정해야 시작할 수 있습니다. 캐릭터를 정하는 화면은 준비 중입니다.</Notice>
-      ) : null}
       <h3 className="waiting-room__label">시작하는 장면</h3>
       <p className="prose opening">{table.opening}</p>
+      {mine ? <CharacterPanel table={table} member={mine} /> : null}
       {isHost ? <StartButton table={table} /> : <p className="hint">모두 캐릭터를 정하면 방장이 시작합니다.</p>}
     </section>
   );
