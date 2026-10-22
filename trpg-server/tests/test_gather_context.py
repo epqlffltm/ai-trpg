@@ -5,6 +5,7 @@
 
   - 로어북을 먼저 고르고, 지난 일과 인물의 이력과 참고 자료는 로어북의 결과를 받아 함께 돈다
   - 하나가 실패하거나 시간이 다 되어도 나머지는 고른다
+  - 전체와 하나하나가 걸린 시간을 메트릭으로 남긴다(#628). 하나하나에는 끝난 모양(success, timeout, failure)이 붙는다
 """
 
 import asyncio
@@ -15,6 +16,7 @@ import pytest
 
 from app.rounds.closing import Finders, gather_context
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
+from tests.metrics import MetricsRecorder
 
 REQUEST = NarrationRequest(
     round_number=1,
@@ -107,3 +109,45 @@ async def test_one_that_runs_out_of_time_leaves_the_others(caplog: pytest.LogCap
 
     assert (request.memories, request.histories, request.references) == (['지난 일'], ['이력'], [])
     assert '참고 자료를 고르는 데 시간이 다 됐다' in caplog.text
+
+
+# --- 메트릭(#628) ---
+
+PARTS = ('lore', 'memories', 'histories', 'references')
+
+
+async def test_the_whole_and_each_part_are_timed(metrics: MetricsRecorder):
+    finders = Finders(lore=Fixed(LORE), memories=Fixed([]), histories=Fixed(['이력']), references=Fixed(['참고']))
+
+    await gather_context(REQUEST, finders, BUDGET)
+
+    assert metrics.value('round_context_duration') == 1
+    assert [metrics.value('round_context_part_duration', part=part, result='success') for part in PARTS] == [1] * 4
+    (point,) = metrics.points('round_context_duration')
+    assert point.unit == 's'
+
+
+async def test_a_failure_and_a_timeout_are_told_apart(metrics: MetricsRecorder):
+    finders = Finders(lore=Fixed(LORE), memories=Broken(), histories=Fixed(['이력']), references=Stuck())
+
+    await gather_context(REQUEST, finders, 0.05)
+
+    assert metrics.value('round_context_part_duration', part='memories', result='failure') == 1
+    assert metrics.value('round_context_part_duration', part='references', result='timeout') == 1
+    assert metrics.value('round_context_part_duration', part='histories', result='success') == 1
+    # 고르지 못한 것이 있어도 전체는 잰다
+    assert metrics.value('round_context_duration') == 1
+
+
+async def test_a_cancelled_round_is_not_timed(metrics: MetricsRecorder):
+    # 작업이 취소되면 그대로 올라간다. 끝나지 않은 일을 재지 않는다
+    finders = Finders(lore=Stuck())
+    task = asyncio.create_task(gather_context(REQUEST, finders, BUDGET))
+    await asyncio.sleep(0)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert metrics.points('round_context_duration') == []
+    assert metrics.points('round_context_part_duration') == []

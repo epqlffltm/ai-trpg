@@ -636,6 +636,8 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | --- | --- | --- | --- |
 | `round_narrations_total` | counter | `result`(`success`, `failure`) | 끝난 서술의 수. 닫기를 마무리했으면 `success`, 실패를 적었으면 `failure` 다(서술 값을 잡지 못한 것도). 할 일이 없던 것(이미 닫힘)과 서버가 꺼져 멈춘 것은 세지 않는다 |
 | `round_narration_retries_total` | counter | 없음 | 같은 모델로 서술을 다시 시도한 수 |
+| `round_context_duration_seconds` | histogram | 없음 | 서술 전에 로어북, 지난 일, 인물의 이력, 참고 자료를 고르는 데 걸린 시간 전체(#628). 로어북 다음의 셋은 함께 돌아 넷을 더한 것보다 짧다. 서술까지의 시간(`round_narration_duration_seconds`) 가운데 검색의 몫이다 |
+| `round_context_part_duration_seconds` | histogram | `part`(`lore`, `memories`, `histories`, `references`), `result`(`success`, `timeout`, `failure`) | 고르는 것 하나가 걸린 시간. `timeout` 은 정해 둔 시간이 다 된 것, `failure` 는 예외로 끝난 것이다(둘 다 없이 서술한다). 취소된 것은 재지 않는다 |
 | `round_narration_duration_seconds` | histogram | 없음 | 라운드를 닫기 시작한 뒤 서술이 끝날 때까지. 성공한 것만 잰다. 작업이 차례를 기다린 시간도 든다 |
 | `rounds_closed_total` | counter | `reason`(`all_declared`, `host`, `timeout`) | 닫기 시작한 라운드의 수. 저장한 뒤에 센다. 실패한 서술을 다시 맡긴 것은 세지 않는다. 마감으로 닫힌 비율이 높으면 시간 제한이 짧다 |
 
