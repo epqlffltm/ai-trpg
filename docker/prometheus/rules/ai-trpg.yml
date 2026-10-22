@@ -193,11 +193,12 @@ groups:
           description: 결제, 홀드, 크레딧이 모두 멈춘다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
 
       - alert: BillingServerErrors
-        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다. 상태 확인(/health, /health/ready)은 빼고 센다.
+        # healthcheck 만으로 분당 6번이라 문턱을 넘고, DB 가 멈추면 그 503 이 …DatabaseUnreachable 과 같은 원인으로 또 울린다(#645)
         expr: |
-          sum(rate(http_server_requests_total{service="billing-server", status_code=~"5.."}[5m]))
-            / sum(rate(http_server_requests_total{service="billing-server"}[5m])) > 0.05
-          and sum(rate(http_server_requests_total{service="billing-server"}[5m])) > 0.05
+          sum(rate(http_server_requests_total{service="billing-server", route!~"/health|/health/ready", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="billing-server", route!~"/health|/health/ready"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="billing-server", route!~"/health|/health/ready"}[5m])) > 0.05
         for: 10m
         labels:
           severity: warning
@@ -276,11 +277,12 @@ groups:
           description: 알림을 넣지도 읽지도 못한다. 넣는 서버들은 발송함에 쌓아 두고 다시 보낸다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
 
       - alert: NotificationServerErrors
-        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다. 상태 확인(/health, /health/ready)은 빼고 센다.
+        # healthcheck 만으로 분당 6번이라 문턱을 넘고, DB 가 멈추면 그 503 이 …DatabaseUnreachable 과 같은 원인으로 또 울린다(#645)
         expr: |
-          sum(rate(http_server_requests_total{service="notification-server", status_code=~"5.."}[5m]))
-            / sum(rate(http_server_requests_total{service="notification-server"}[5m])) > 0.05
-          and sum(rate(http_server_requests_total{service="notification-server"}[5m])) > 0.05
+          sum(rate(http_server_requests_total{service="notification-server", route!~"/health|/health/ready", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="notification-server", route!~"/health|/health/ready"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="notification-server", route!~"/health|/health/ready"}[5m])) > 0.05
         for: 10m
         labels:
           severity: warning
@@ -319,11 +321,12 @@ groups:
           description: 게임을 할 수 없다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
 
       - alert: TrpgServerErrors
-        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다. 상태 확인(/health, /health/ready)은 빼고 센다.
+        # healthcheck 만으로 분당 6번이라 문턱을 넘고, DB 가 멈추면 그 503 이 …DatabaseUnreachable 과 같은 원인으로 또 울린다(#645)
         expr: |
-          sum(rate(http_server_requests_total{service="trpg-server", status_code=~"5.."}[5m]))
-            / sum(rate(http_server_requests_total{service="trpg-server"}[5m])) > 0.05
-          and sum(rate(http_server_requests_total{service="trpg-server"}[5m])) > 0.05
+          sum(rate(http_server_requests_total{service="trpg-server", route!~"/health|/health/ready", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="trpg-server", route!~"/health|/health/ready"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="trpg-server", route!~"/health|/health/ready"}[5m])) > 0.05
         for: 10m
         labels:
           severity: warning
@@ -376,11 +379,12 @@ groups:
           description: 로그인, 가입, 토큰 갱신이 모두 멈춘다. 이미 받은 access 토큰은 다른 서버에서 만료까지 쓰인다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
 
       - alert: AuthServerErrors
-        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다. 상태 확인(/health, /health/ready)은 빼고 센다.
+        # healthcheck 만으로 분당 6번이라 문턱을 넘고, DB 가 멈추면 그 503 이 …DatabaseUnreachable 과 같은 원인으로 또 울린다(#645)
         expr: |
-          sum(rate(http_server_requests_total{service="auth-server", status_code=~"5.."}[5m]))
-            / sum(rate(http_server_requests_total{service="auth-server"}[5m])) > 0.05
-          and sum(rate(http_server_requests_total{service="auth-server"}[5m])) > 0.05
+          sum(rate(http_server_requests_total{service="auth-server", route!~"/health|/health/ready", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="auth-server", route!~"/health|/health/ready"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="auth-server", route!~"/health|/health/ready"}[5m])) > 0.05
         for: 10m
         labels:
           severity: warning
@@ -475,11 +479,12 @@ groups:
           description: 글을 읽지도 쓰지도 못한다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
 
       - alert: BoardServerErrors
-        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다. 상태 확인(/health, /health/ready)은 빼고 센다.
+        # healthcheck 만으로 분당 6번이라 문턱을 넘고, DB 가 멈추면 그 503 이 …DatabaseUnreachable 과 같은 원인으로 또 울린다(#645)
         expr: |
-          sum(rate(http_server_requests_total{service="board-server", status_code=~"5.."}[5m]))
-            / sum(rate(http_server_requests_total{service="board-server"}[5m])) > 0.05
-          and sum(rate(http_server_requests_total{service="board-server"}[5m])) > 0.05
+          sum(rate(http_server_requests_total{service="board-server", route!~"/health|/health/ready", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="board-server", route!~"/health|/health/ready"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="board-server", route!~"/health|/health/ready"}[5m])) > 0.05
         for: 10m
         labels:
           severity: warning
@@ -519,11 +524,12 @@ groups:
           description: 페르소나, 캐릭터, 그림을 읽지도 쓰지도 못한다. 다른 서버가 테이블이나 대화를 새로 만들 때 자산을 가져오지 못한다(이미 가져온 것으로 도는 것은 그대로다). PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
 
       - alert: AssetServerErrors
-        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다. 상태 확인(/health, /health/ready)은 빼고 센다.
+        # healthcheck 만으로 분당 6번이라 문턱을 넘고, DB 가 멈추면 그 503 이 …DatabaseUnreachable 과 같은 원인으로 또 울린다(#645)
         expr: |
-          sum(rate(http_server_requests_total{service="asset-server", status_code=~"5.."}[5m]))
-            / sum(rate(http_server_requests_total{service="asset-server"}[5m])) > 0.05
-          and sum(rate(http_server_requests_total{service="asset-server"}[5m])) > 0.05
+          sum(rate(http_server_requests_total{service="asset-server", route!~"/health|/health/ready", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="asset-server", route!~"/health|/health/ready"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="asset-server", route!~"/health|/health/ready"}[5m])) > 0.05
         for: 10m
         labels:
           severity: warning
@@ -545,11 +551,12 @@ groups:
           description: 대화를 읽지도 쓰지도 못한다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
 
       - alert: ChatServerErrors
-        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다. 상태 확인(/health, /health/ready)은 빼고 센다.
+        # healthcheck 만으로 분당 6번이라 문턱을 넘고, DB 가 멈추면 그 503 이 …DatabaseUnreachable 과 같은 원인으로 또 울린다(#645)
         expr: |
-          sum(rate(http_server_requests_total{service="chat-server", status_code=~"5.."}[5m]))
-            / sum(rate(http_server_requests_total{service="chat-server"}[5m])) > 0.05
-          and sum(rate(http_server_requests_total{service="chat-server"}[5m])) > 0.05
+          sum(rate(http_server_requests_total{service="chat-server", route!~"/health|/health/ready", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="chat-server", route!~"/health|/health/ready"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="chat-server", route!~"/health|/health/ready"}[5m])) > 0.05
         for: 10m
         labels:
           severity: warning

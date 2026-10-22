@@ -942,7 +942,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | datastores | `PostgresConnectionsNearLimit` | warning | 연결이 `max_connections` 의 80% 를 10분 동안 넘는다 |
 | datastores | `PostgresDeadlocks` | warning | 지난 10분에 `trpg` 에 교착이 있었다 |
 | billing-server | `BillingDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
-| billing-server | `BillingServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다 |
+| billing-server | `BillingServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645) |
 | billing-server | `BillingPaymentOutcomeUnknown` | warning | 지난 15분에 결제 대행사가 답하지 않은 호출(`outcome="unknown"`)이 있다. 돈이 나갔을 수 있다 |
 | billing-server | `BillingPaymentProviderUnavailable` | warning | 지난 15분에 결제 대행사를 부르지 못한 것이 세 번을 넘는다 |
 | billing-server | `BillingLedgerRollbacks` | warning | 지난 15분에 원장에 적었다가 되돌린 일이 있다(`expire` 는 뺀다. [목록](#목록)의 뜻) |
@@ -950,16 +950,16 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | billing-server | `BillingReconcileMissed` | warning | 지난 이레 안에 돈 대사가 지난 26시간에는 돌지 않았다. 한 번도 돈 적이 없으면 울리지 않는다 |
 | billing-server | `BillingReconcileFailed` | warning | 지난 하루의 대사가 성공하지 못했다 |
 | notification-server | `NotificationDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
-| notification-server | `NotificationServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다 |
+| notification-server | `NotificationServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645) |
 | notification-server | `NotificationsRejected` | warning | 지난 15분에 받지 않은 알림(`refused`, `conflict`)이 있다. 넣은 서버와 결과마다 울린다 |
 | notification-server | `NotificationPruneFailing` | warning | 지난 세 시간에 정리 작업이 실패했다 |
 | trpg-server | `TrpgDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다. Redis 만 닿지 않을 때는 울리지 않는다 |
-| trpg-server | `TrpgServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다 |
+| trpg-server | `TrpgServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645) |
 | trpg-server | `TrpgNarrationsFailing` | warning | 지난 30분의 서술이 셋 이상이고 20% 넘게 실패한 것이 5분 이어진다 |
 | trpg-server | `TrpgChargesNotCaptured` | warning | 확정할 청구(`capture_due`)가 30분 동안 남아 있다. 결제 서버가 죽어 있다 |
 | trpg-server | `TrpgBillingRejected` | warning | 지난 15분에 결제 서버가 받아들이지 않은 부르기가 있다. 일(`operation`)마다 울린다 |
 | auth-server | `AuthDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
-| auth-server | `AuthServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다 |
+| auth-server | `AuthServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645) |
 | auth-server | `AuthMailWorkerStalled` | warning | 인증 서버가 떠 있는데 메일 워커가 10분 넘게 한 바퀴도 성공하지 않았다 |
 | auth-server | `AuthMailBacklog` | warning | 발송함에 메일이 15분 동안 남아 있다. 메일 서버가 받지 않는다 |
 | auth-server | `AuthMailDiscarded` | warning | 지난 15분에 버린 메일이 있다. 종류(`kind`)마다 울린다 |
@@ -968,13 +968,13 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | auth-server | `AuthWithdrawalsOverdue` | warning | 비울 시각이 지난 탈퇴가 30분 동안 남아 있다(#603) |
 | auth-server | `AuthWithdrawalNoticesWaiting` | warning | 다른 서버에 알리지 못한 탈퇴가 2시간 동안 남아 있다. 비밀을 적지 않은 서버의 것은 세지 않는다 |
 | board-server | `BoardDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
-| board-server | `BoardServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 멈춘 검색(503)도 든다 |
+| board-server | `BoardServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645). 멈춘 검색(503)도 든다 |
 | board-server | `BoardSearchTimeouts` | warning | 지난 15분에 멈춘 검색이 셋을 넘는다 |
 | board-server | `BoardNotificationRoundsFailing` | warning | 지난 15분에 알림 보내기의 바퀴가 통째로 실패했다 |
 | asset-server | `AssetDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
-| asset-server | `AssetServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다 |
+| asset-server | `AssetServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645) |
 | chat-server | `ChatDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
-| chat-server | `ChatServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다 |
+| chat-server | `ChatServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645) |
 
 - **규칙마다 시험이 있다**(`docker/prometheus/rules/tests/ai-trpg.test.yml`). 지어낸 시계열을 넣고 정한 때에 울리는지, 울리지 않을 때(요청이 아주 적다, 다른 서버의 것이다) 조용한지 본다. 규칙을 고치면 시험도 고친다.
   `docker compose --profile observability exec prometheus promtool test rules /etc/prometheus/rules/tests/ai-trpg.test.yml`
