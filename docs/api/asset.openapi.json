@@ -1,6 +1,153 @@
 {
   "components": {
     "schemas": {
+      "Affection": {
+        "additionalProperties": false,
+        "description": "캐릭터의 호감도. 값 하나(0~100)와 단계들이다. display 는 사람에게 보이는 방식이다\n(number: 숫자와 게이지, stage: 단계 이름과 게이지. 숫자는 chat 이 내려보내지 않는다).",
+        "properties": {
+          "display": {
+            "$ref": "#/components/schemas/AffectionDisplay",
+            "default": "number"
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AffectionRule"
+            },
+            "maxItems": 50,
+            "title": "Rules",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/Stage"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Stages",
+            "type": "array"
+          },
+          "start": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stages"
+        ],
+        "title": "Affection",
+        "type": "object"
+      },
+      "AffectionDisplay": {
+        "description": "호감도를 사람에게 보이는 방식. 숫자와 게이지, 또는 단계 이름과 게이지(숫자는 숨긴다).",
+        "enum": [
+          "number",
+          "stage"
+        ],
+        "title": "AffectionDisplay",
+        "type": "string"
+      },
+      "AffectionDocument": {
+        "additionalProperties": false,
+        "description": "캐릭터의 호감도.",
+        "properties": {
+          "display": {
+            "$ref": "#/components/schemas/AffectionDisplay"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/AffectionRuleDocument"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageDocument"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "start": {
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "display",
+          "start",
+          "stages",
+          "rules"
+        ],
+        "title": "AffectionDocument",
+        "type": "object"
+      },
+      "AffectionRule": {
+        "additionalProperties": false,
+        "description": "오르내리는 규칙 하나. on 의 행동을 하면 change 만큼 바꾼다(0~100 안으로 자른다).\nonce 면 그 가지에서 처음 한 번만 바꾼다(처음 하는 일). id 는 캐릭터 안에서 고유하고, chat 이 \"이미 했다\"를 적는다.",
+        "properties": {
+          "change": {
+            "maximum": 20.0,
+            "minimum": -20.0,
+            "title": "Change",
+            "type": "integer"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "on": {
+            "$ref": "#/components/schemas/Trigger"
+          },
+          "once": {
+            "default": false,
+            "title": "Once",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "on",
+          "change"
+        ],
+        "title": "AffectionRule",
+        "type": "object"
+      },
+      "AffectionRuleDocument": {
+        "additionalProperties": false,
+        "description": "오르내리는 규칙 하나. once 면 그 가지에서 처음 한 번만.",
+        "properties": {
+          "change": {
+            "title": "Change",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "on": {
+            "$ref": "#/components/schemas/TriggerDocument"
+          },
+          "once": {
+            "title": "Once",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "on",
+          "change",
+          "once"
+        ],
+        "title": "AffectionRuleDocument",
+        "type": "object"
+      },
       "CharacterCopy": {
         "description": "다른 서버(chat, story)에 내주는 판. 대화를 시작할 때 가져가 고정한다.\n\n마지막 판의 번호와 문서다. 가져간 쪽은 번호를 적어 두고,\n지금의 번호(CharacterVersionNumber)가 크면 \"새 판이 있다\"를 알린다.",
         "properties": {
@@ -39,6 +186,16 @@
         "additionalProperties": false,
         "description": "캐릭터를 만들 때 받는 값. 이름만 필수다. 처음에는 비공개다.",
         "properties": {
+          "affection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Affection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "age": {
             "default": "",
             "maxLength": 20,
@@ -170,6 +327,16 @@
       "CharacterDetail": {
         "description": "캐릭터의 초안 하나. 만든 사람만 본다. latest_version 은 마지막으로 게시한 판의 번호다(없으면 null).",
         "properties": {
+          "affection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Affection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "age": {
             "title": "Age",
             "type": "string"
@@ -322,6 +489,7 @@
           "start_place",
           "items",
           "start_items",
+          "affection",
           "latest_version",
           "published_at",
           "created_at",
@@ -334,6 +502,16 @@
         "additionalProperties": false,
         "description": "판에 굳힌 캐릭터. intro_html 은 허용 목록으로 거른 소개다.\n지도와 물건의 칸은 형식 2 에서 더했다. 형식 1 의 판을 읽을 수 있게 비어 있는 것이 기본이다.",
         "properties": {
+          "affection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AffectionDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "age": {
             "title": "Age",
             "type": "string"
@@ -523,6 +701,16 @@
         "additionalProperties": false,
         "description": "캐릭터를 고칠 때 받는 값. 보낸 칸만 바꾼다. 초안만 바뀐다. 게시한 판은 그대로다.\n\nnull 은 그림(image_id)만 받는다. 공개 범위(visibility)도 여기서 바꾼다(공개는 운영자만, 1~2단계).",
         "properties": {
+          "affection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Affection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "age": {
             "anyOf": [
               {
@@ -1663,6 +1851,50 @@
         "title": "RemovedKind",
         "type": "string"
       },
+      "Stage": {
+        "additionalProperties": false,
+        "description": "호감도의 단계 하나. at 이상이면 이 단계다(다음 단계의 at 전까지).",
+        "properties": {
+          "at": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "At",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "at"
+        ],
+        "title": "Stage",
+        "type": "object"
+      },
+      "StageDocument": {
+        "additionalProperties": false,
+        "description": "호감도의 단계 하나. at 이상이면 이 단계다.",
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "at"
+        ],
+        "title": "StageDocument",
+        "type": "object"
+      },
       "Start": {
         "additionalProperties": false,
         "description": "시작 상황 하나. 대화를 열 때 사용자가 고른다. 제목은 목록에, 상황은 모델에 간다.",
@@ -1751,6 +1983,57 @@
         ],
         "title": "StartItemDocument",
         "type": "object"
+      },
+      "Trigger": {
+        "additionalProperties": false,
+        "description": "호감도를 바꾸는 사용자의 행동. target 은 그 물건이나 장소의 id 다.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/TriggerKind"
+          },
+          "target": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "Trigger",
+        "type": "object"
+      },
+      "TriggerDocument": {
+        "additionalProperties": false,
+        "description": "호감도를 바꾸는 행동(종류, 대상).",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/TriggerKind"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "TriggerDocument",
+        "type": "object"
+      },
+      "TriggerKind": {
+        "description": "호감도를 바꾸는 사용자의 행동. TRPG 의 퀘스트 조건과 같은 (종류, 대상) 모양이다.\n물건을 건넸다(give_item), 장소에 갔다(reach_place), 물건을 썼다(use_item).",
+        "enum": [
+          "give_item",
+          "reach_place",
+          "use_item"
+        ],
+        "title": "TriggerKind",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {

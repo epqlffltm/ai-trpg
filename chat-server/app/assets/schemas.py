@@ -9,6 +9,7 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
   - 1: 처음의 칸
   - 2: 지도(장소, 길, 처음 있는 장소)와 물건(물건, 시작 소지품). 형식 1 의 판에서는 비어 있다.
        쓰는 것(현재 장소, 이동, 소지품)은 chat 의 만드는 순서 5(장소와 소지품)다
+  - 3: 호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙). 형식 1, 2 의 판에서는 없다(null)
 """
 
 import uuid
@@ -74,6 +75,49 @@ class StartItemDocument(BaseModel):
     count: int
 
 
+class StageDocument(BaseModel):
+    """호감도의 단계 하나. at 이상이면 이 단계다."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    name: str
+    at: int
+
+
+class TriggerDocument(BaseModel):
+    """
+    호감도를 바꾸는 행동. kind 는 give_item, reach_place, use_item 이다.
+    모르는 종류도 받아 둔다(맞는 행동이 없을 뿐이다).
+    """
+
+    model_config = ConfigDict(extra='ignore')
+
+    kind: str
+    target: str
+
+
+class AffectionRuleDocument(BaseModel):
+    """오르내리는 규칙 하나. on 의 행동을 하면 change 만큼. once 면 그 가지에서 처음 한 번만."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    id: str
+    on: TriggerDocument
+    change: int
+    once: bool = False
+
+
+class AffectionDocument(BaseModel):
+    """캐릭터의 호감도. display 는 number(숫자와 게이지)나 stage(단계 이름과 게이지, 숫자를 내려보내지 않는다)다."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    display: str
+    start: int
+    stages: list[StageDocument]
+    rules: list[AffectionRuleDocument] = []
+
+
 class CharacterDocument(BaseModel):
     """판에 굳힌 캐릭터. intro_html 은 asset 서버가 허용 목록으로 거른 소개다."""
 
@@ -95,6 +139,7 @@ class CharacterDocument(BaseModel):
     start_place: str | None = None
     items: list[ItemDocument] = []
     start_items: list[StartItemDocument] = []
+    affection: AffectionDocument | None = None
 
 
 class CharacterCopy(BaseModel):

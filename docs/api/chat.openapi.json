@@ -1,6 +1,69 @@
 {
   "components": {
     "schemas": {
+      "AffectionDocument": {
+        "description": "캐릭터의 호감도. display 는 number(숫자와 게이지)나 stage(단계 이름과 게이지, 숫자를 내려보내지 않는다)다.",
+        "properties": {
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AffectionRuleDocument"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageDocument"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "start": {
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "display",
+          "start",
+          "stages"
+        ],
+        "title": "AffectionDocument",
+        "type": "object"
+      },
+      "AffectionRuleDocument": {
+        "description": "오르내리는 규칙 하나. on 의 행동을 하면 change 만큼. once 면 그 가지에서 처음 한 번만.",
+        "properties": {
+          "change": {
+            "title": "Change",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "on": {
+            "$ref": "#/components/schemas/TriggerDocument"
+          },
+          "once": {
+            "default": false,
+            "title": "Once",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "on",
+          "change"
+        ],
+        "title": "AffectionRuleDocument",
+        "type": "object"
+      },
       "BranchChoice": {
         "additionalProperties": false,
         "description": "볼 가지. 대안 가운데 하나의 id 다. 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다.",
@@ -20,6 +83,16 @@
       "CharacterDocument": {
         "description": "판에 굳힌 캐릭터. intro_html 은 asset 서버가 허용 목록으로 거른 소개다.",
         "properties": {
+          "affection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AffectionDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "age": {
             "title": "Age",
             "type": "string"
@@ -1176,6 +1249,25 @@
         "title": "Rating",
         "type": "string"
       },
+      "StageDocument": {
+        "description": "호감도의 단계 하나. at 이상이면 이 단계다.",
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "at"
+        ],
+        "title": "StageDocument",
+        "type": "object"
+      },
       "StartDocument": {
         "description": "시작 상황 하나. 제목은 목록에, 상황은 모델에 간다.",
         "properties": {
@@ -1318,6 +1410,25 @@
         ],
         "title": "Tier",
         "type": "string"
+      },
+      "TriggerDocument": {
+        "description": "호감도를 바꾸는 행동. kind 는 give_item, reach_place, use_item 이다.\n모르는 종류도 받아 둔다(맞는 행동이 없을 뿐이다).",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "TriggerDocument",
+        "type": "object"
       },
       "UseAction": {
         "additionalProperties": false,

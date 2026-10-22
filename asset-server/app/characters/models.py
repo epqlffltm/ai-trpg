@@ -8,7 +8,8 @@
   - 쓰는 서비스(chat)는 대화를 시작할 때 판 하나를 가져가 복사해 고정한다. 새 판이 나와도 알리기만 한다.
 첫 칸은 대화에 필요한 핵심만이었다(2026-10-21 유저 결정). 장소와 길(지도), 물건과 시작 소지품은
 chat 의 만드는 순서 4 에서 캐릭터에 넣었다(2026-10-22 유저 결정, 판의 형식 2).
-호감도의 규칙, 상대의 차림, 일러스트는 chat 이 그 단계에 갈 때 판의 형식을 올려 더한다.
+호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙)는 판의 형식 3 에서 더했다(2026-10-22).
+상대의 시작 차림, 일러스트는 chat 이 그 단계에 갈 때 판의 형식을 올려 더한다.
 """
 
 import enum
@@ -56,6 +57,32 @@ ITEM_NAME_MAX_LENGTH = 30
 ITEM_DESCRIPTION_MAX_LENGTH = 500
 CHARACTER_MAX_START_ITEMS = 20
 START_ITEM_MAX_COUNT = 99
+
+
+# 호감도. 값은 0~100 이다. 단계와 규칙의 개수, 단계 이름의 길이, 규칙 하나가 바꾸는 크기의 상한
+AFFECTION_MAX = 100
+AFFECTION_MAX_STAGES = 10
+STAGE_NAME_MAX_LENGTH = 20
+AFFECTION_MAX_RULES = 50
+AFFECTION_MAX_CHANGE = 20
+
+
+class AffectionDisplay(enum.StrEnum):
+    """호감도를 사람에게 보이는 방식. 숫자와 게이지, 또는 단계 이름과 게이지(숫자는 숨긴다)."""
+
+    NUMBER = 'number'
+    STAGE = 'stage'
+
+
+class TriggerKind(enum.StrEnum):
+    """
+    호감도를 바꾸는 사용자의 행동. TRPG 의 퀘스트 조건과 같은 (종류, 대상) 모양이다.
+    물건을 건넸다(give_item), 장소에 갔다(reach_place), 물건을 썼다(use_item).
+    """
+
+    GIVE_ITEM = 'give_item'
+    REACH_PLACE = 'reach_place'
+    USE_ITEM = 'use_item'
 
 
 class ItemKind(enum.StrEnum):
@@ -114,6 +141,10 @@ class Character(Base):
     start_place: Mapped[str | None] = mapped_column(String(KEY_MAX_LENGTH), default=None)
     items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     start_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 호감도. {"display", "start", "stages": [{"name", "at"}],
+    #         "rules": [{"id", "on": {"kind", "target"}, "change", "once"}]}.
+    # 없으면(null) 호감도가 없는 캐릭터다. 모양은 schemas.Affection 이 정한다
+    affection: Mapped[dict | None] = mapped_column(JSONB, default=None)
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(

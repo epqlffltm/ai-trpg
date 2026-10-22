@@ -383,6 +383,39 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AffectionDocument
+         * @description 캐릭터의 호감도. display 는 number(숫자와 게이지)나 stage(단계 이름과 게이지, 숫자를 내려보내지 않는다)다.
+         */
+        AffectionDocument: {
+            /** Display */
+            display: string;
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AffectionRuleDocument"][];
+            /** Stages */
+            stages: components["schemas"]["StageDocument"][];
+            /** Start */
+            start: number;
+        };
+        /**
+         * AffectionRuleDocument
+         * @description 오르내리는 규칙 하나. on 의 행동을 하면 change 만큼. once 면 그 가지에서 처음 한 번만.
+         */
+        AffectionRuleDocument: {
+            /** Change */
+            change: number;
+            /** Id */
+            id: string;
+            on: components["schemas"]["TriggerDocument"];
+            /**
+             * Once
+             * @default false
+             */
+            once: boolean;
+        };
+        /**
          * BranchChoice
          * @description 볼 가지. 대안 가운데 하나의 id 다. 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다.
          */
@@ -398,6 +431,7 @@ export interface components {
          * @description 판에 굳힌 캐릭터. intro_html 은 asset 서버가 허용 목록으로 거른 소개다.
          */
         CharacterDocument: {
+            affection?: components["schemas"]["AffectionDocument"] | null;
             /** Age */
             age: string;
             /** Format */
@@ -932,6 +966,16 @@ export interface components {
          */
         Rating: "all" | "adult";
         /**
+         * StageDocument
+         * @description 호감도의 단계 하나. at 이상이면 이 단계다.
+         */
+        StageDocument: {
+            /** At */
+            at: number;
+            /** Name */
+            name: string;
+        };
+        /**
          * StartDocument
          * @description 시작 상황 하나. 제목은 목록에, 상황은 모델에 간다.
          */
@@ -1006,6 +1050,17 @@ export interface components {
          * @enum {string}
          */
         Tier: "basic" | "standard" | "premium";
+        /**
+         * TriggerDocument
+         * @description 호감도를 바꾸는 행동. kind 는 give_item, reach_place, use_item 이다.
+         *     모르는 종류도 받아 둔다(맞는 행동이 없을 뿐이다).
+         */
+        TriggerDocument: {
+            /** Kind */
+            kind: string;
+            /** Target */
+            target: string;
+        };
         /**
          * UseAction
          * @description 소지품의 물건을 쓴다. 쓰면 없어지는 물건이면 하나 준다.
