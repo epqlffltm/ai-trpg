@@ -182,6 +182,26 @@ export interface paths {
         patch: operations["edit_note_api_v1_chat_conversations__conversation_id__notes__note_id__patch"];
         trace?: never;
     };
+    "/api/v1/chat/conversations/{conversation_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Summary
+         * @description 지금 가지의 굴리는 요약. 아직 없으면 null 이다.
+         */
+        get: operations["read_summary_api_v1_chat_conversations__conversation_id__summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/generations/{generation_id}/stop": {
         parameters: {
             query?: never;
@@ -960,6 +980,24 @@ export interface components {
             visited: string[];
         };
         /**
+         * SummaryOut
+         * @description 지금 가지의 요약(읽기만). covered_up_to 는 요약한 마지막 말의 id 다(첫 말부터 그 말까지를 요약했다).
+         */
+        SummaryOut: {
+            /**
+             * Covered Up To
+             * Format: uuid
+             */
+            covered_up_to: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Text */
+            text: string;
+        };
+        /**
          * Tier
          * @description 결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).
          *
@@ -1389,6 +1427,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_summary_api_v1_chat_conversations__conversation_id__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SummaryOut"] | null;
                 };
             };
             /** @description Validation Error */
