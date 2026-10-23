@@ -190,7 +190,7 @@ def to_detail(
         persona=to_persona(persona),
         model=conversation_model(conversation, character, models, book, now),
         messages=[to_path_message(message, alternatives) for message in messages],
-        state=state_out(state),
+        state=state_out(state, world.document_of(character)),
         generating=service.is_generating(conversation, now),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,

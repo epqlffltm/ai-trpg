@@ -26,7 +26,10 @@ class MessageState(Base):
     """
 
     __tablename__ = 'message_states'
-    __table_args__ = (CheckConstraint('minutes >= 0', name='minutes_not_negative'),)
+    __table_args__ = (
+        CheckConstraint('minutes >= 0', name='minutes_not_negative'),
+        CheckConstraint('affection IS NULL OR affection BETWEEN 0 AND 100', name='affection_in_range'),
+    )
 
     message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('messages.id', ondelete='CASCADE'), primary_key=True)
     place: Mapped[str | None] = mapped_column(String(KEY_MAX_LENGTH), default=None)
@@ -36,3 +39,6 @@ class MessageState(Base):
     visited: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)))
     # 상대가 입은 옷들(사용자가 건넨 옷)의 물건 id
     outfit: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)), default=list, server_default='{}')
+    # 호감도(0~100, 판에 호감도가 없으면 null)와 이 가지에서 걸린 "처음 한 번만" 규칙의 id
+    affection: Mapped[int | None] = mapped_column(Integer, default=None)
+    fired: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)), default=list, server_default='{}')

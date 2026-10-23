@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.schemas import CharacterDocument
 from app.conversations.models import ImportedCharacter
 from app.world import repository
-from app.world.state import WorldState, initial_state, state_at
+from app.world.state import WorldState, filled, initial_state, state_at
 
 
 def document_of(character: ImportedCharacter) -> CharacterDocument:
@@ -23,4 +23,4 @@ def document_of(character: ImportedCharacter) -> CharacterDocument:
 async def state_on(session: AsyncSession, document: CharacterDocument, path_ids: Sequence[uuid.UUID]) -> WorldState:
     """가지(첫 말부터 끝까지의 id)의 끝의 상태. 가지에 상태가 하나도 없으면 판의 시작 상태다."""
     states = await repository.states_for(session, path_ids)
-    return state_at(path_ids, states, initial_state(document))
+    return filled(document, state_at(path_ids, states, initial_state(document)))
