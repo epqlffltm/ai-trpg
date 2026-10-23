@@ -18,10 +18,11 @@
 
 import uuid
 
+from server_core.notifications import repository as notifications
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.listings import repository as listings
-from app.notifications import repository as notifications
+from app.notifications.models import OutgoingNotification
 from app.personas import repository as personas
 from app.tables import repository as tables
 from app.tables import service as seating
@@ -31,7 +32,7 @@ async def erase_belongings(session: AsyncSession, user_id: uuid.UUID) -> None:
     """보관함을 지우고, 공개를 내리고, 보내지 않은 알림을 지운다. 한 번에 저장한다."""
     await personas.delete_all_owned(session, user_id)
     await listings.unpublish_all_owned(session, user_id)
-    await notifications.drop_for_user(session, user_id)
+    await notifications.drop_for_user(session, OutgoingNotification, user_id)
     await session.commit()
 
 

@@ -1073,7 +1073,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | `app/observability/request_metrics.py` | HTTP 셋. 테이블의 스트림은 끝난 요청의 수에만 든다(`request_spans.is_stream`) |
 | `app/api/readiness.py` | `db_up`. DB 와 Redis 를 따로 본다. Redis 만 닿지 않으면 503 이어도 `db_up` 은 1 이다 |
 | `app/core/jobs.py` | 맡긴 작업(`round.narrate`, `lore.index`, `memory.index`)을 차례가 온 뒤부터 센다. 기다린 시간은 들지 않는다 |
-| `app/rounds/clock.py`, `app/billing/settler.py`, `app/notifications/dispatcher.py`, `app/ai_log/retention.py`, `app/tables/retirement_watch.py` | 도는 작업의 한 바퀴를 `measured_job` 으로 감싼다 |
+| `app/rounds/clock.py`, `app/billing/settler.py`, `server_core/notifications/dispatcher.py`, `app/ai_log/retention.py`, `app/tables/retirement_watch.py` | 도는 작업의 한 바퀴를 `measured_job` 으로 감싼다 |
 | `app/realtime/router.py` | SSE 셋. 응답을 시작한 뒤부터 끊길 때까지다 |
 | `app/ai_log/metered.py` | 호출 기록장(`DbCallLog`)을 감싸 AI 호출 셋을 센다. 기록장에 쓰지 못해도 센다 |
 | `app/rounds/retrying_narrator.py` | 같은 모델로 다시 부른 것과 다음 모델로 넘어간 것 |

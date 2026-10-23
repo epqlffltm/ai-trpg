@@ -16,6 +16,7 @@ import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
 from server_core.observability.context import job_scope
+from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
 from app.billing.client import (
     BillingRejected,
@@ -29,7 +30,6 @@ from app.billing.free_billing import FreeBilling
 from app.billing.http_billing import CAPTURE_PATH, EXTEND_PATH, HOLDS_PATH, RELEASE_PATH, HttpBilling
 from app.billing.metered import MeteredBilling
 from app.billing.setup import build_billing
-from app.billing.signing import SIGNATURE_HEADER, sign
 from tests.billing import BILLING_URL, SECRET, FakeBillingServer
 from tests.conftest import make_test_settings
 

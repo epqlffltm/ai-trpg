@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 import httpx
 import pytest
 from pydantic import SecretStr
+from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
 from app.billing.price_list import (
     PRICES_PATH,
@@ -24,7 +25,6 @@ from app.billing.price_list import (
     PriceListUnavailable,
 )
 from app.billing.prices import FREE_BOOK
-from app.billing.signing import SIGNATURE_HEADER, sign
 
 SECRET = 's' * 32
 NOW = 1_800_000_000
@@ -86,7 +86,7 @@ async def test_the_request_is_signed_like_the_holds():
     (request,) = fake.requests
     assert (request.method, request.url.path) == ('GET', PRICES_PATH)
     assert request.content == b''
-    # 결제 서버와 같은 모양의 서명이다(app/billing/signing.py). 메서드는 GET, 본문은 비어 있다
+    # 결제 서버와 같은 모양의 서명이다(server_core/service_auth/signing.py). 메서드는 GET, 본문은 비어 있다
     assert request.headers[SIGNATURE_HEADER] == sign(SECRET, NOW, 'GET', PRICES_PATH, b'')
     assert 'If-None-Match' not in request.headers
 

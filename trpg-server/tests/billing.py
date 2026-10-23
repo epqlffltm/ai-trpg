@@ -4,7 +4,7 @@
 가짜 결제 서버. 홀드를 걸고, 확정하고, 돌려주고, 연장하는 네 주소를 결제 서버의 규칙대로 흉내 낸다
 (billing-server/README.md 의 "홀드").
 
-서명을 확인한다. 앱의 서명 코드(app/billing/signing.py)를 쓰지 않고 여기서 따로 계산한다.
+서명을 확인한다. 앱의 서명 코드(server_core/service_auth/signing.py)를 쓰지 않고 여기서 따로 계산한다.
 같은 코드로 만들고 확인하면 둘이 함께 틀려도 통과한다.
 앱의 서명이 결제 서버(Go)와 같은지는 tests/test_billing_client.py 가 결제 서버의 코드로 만든 값과 견줘 본다.
 
