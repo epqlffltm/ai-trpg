@@ -181,11 +181,13 @@ export function aimableInjuries(ctx: ActionContext): Choice[] {
   return ctx.table.rules.injuries.filter((injury) => injury.aimable).map((injury) => ({ value: injury.key, label: injury.name }));
 }
 
-/** 타격에 쓸 무기. 내가 착용한 것 가운데 공격 보정이 있는 것. "장검(+2)" (#276) */
+/** 타격에 쓸 무기. 내가 착용한 것 가운데 공격 보정이 있는 것. "장검(+2)", 관통력이 있으면 "볼터(+1, 관통 2)" (#276) */
 export function myWeapons(ctx: ActionContext): Choice[] {
   return (ctx.me.sheet?.worn ?? []).flatMap((worn) => {
-    const attack = ctx.table.items.find((item) => item.entry_id === worn.entry_id)?.attack;
-    return attack ? [{ value: worn.entry_id, label: `${worn.name}(+${attack})` }] : [];
+    const item = ctx.table.items.find((one) => one.entry_id === worn.entry_id);
+    if (!item?.attack) return [];
+    const pierce = item.ap ? `, 관통 ${item.ap}` : '';
+    return [{ value: worn.entry_id, label: `${worn.name}(+${item.attack}${pierce})` }];
   });
 }
 

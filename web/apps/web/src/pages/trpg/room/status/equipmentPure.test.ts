@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/status/equipmentPure.test.ts
 // 장비(#276)의 순수한 함수. 칸의 줄(여러 칸을 차지한 것은 한 줄), 공격과 방어, 착용할 칸, 바꿀 수 있는 때,
-// 타격의 무기와 노릴 부위, 보내는 값, 결과의 타격 줄을 본다.
+// 타격의 무기와 노릴 부위, 보내는 값, 결과의 타격 줄, 세이브 방식과 관통과 불굴 세이브를 본다.
 
 import { describe, expect, it } from 'vitest';
 import type { Round, Sheet, TableDetail, TableMember } from '../../../../api/types';
@@ -8,7 +8,7 @@ import { ME, member, RULES, round, sheet, tableDetail } from '../../../../test/t
 import { actionHint, emptyActionDraft, toAction, type ActionDraft } from '../round/action/actionDraft';
 import { myWeapons, strikeSlots, type ActionContext } from '../round/action/actionOptions';
 import { actionLabel, blowLine } from '../round/roundView';
-import { canChangeEquipment, defenseAt, equipmentRows, fixedSlots, gearLabel, guardOf, wearableItems } from './equipmentView';
+import { canChangeEquipment, defenseAt, equipmentNote, equipmentRows, fixedSlots, gearLabel, guardOf, wardOf, wearableItems } from './equipmentView';
 
 const NPC = '00000000-0000-4000-8000-0000000000f1';
 const SLOTS = [
@@ -22,6 +22,9 @@ const ITEMS = [
   { entry_id: 'mail', name: '사슬 갑옷', kind: 'gear', rarity: 'normal', heals: null, slots: ['body'], slot_count: 1, defense: 4 },
   { entry_id: 'shield', name: '방패', kind: 'gear', rarity: 'normal', heals: null, slots: ['main_hand', 'off_hand'], slot_count: 1, guard: 1 },
   { entry_id: 'herb', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light', slots: [], slot_count: 1 },
+  { entry_id: 'bolter', name: '볼터', kind: 'gear', rarity: 'normal', heals: null, slots: ['main_hand'], slot_count: 1, attack: 1, ap: 2 },
+  { entry_id: 'halo', name: '헤일로', kind: 'gear', rarity: 'rare', heals: null, slots: ['head'], slot_count: 1, ward: 4 },
+  { entry_id: 'charm', name: '부적', kind: 'gear', rarity: 'normal', heals: null, slots: ['off_hand'], slot_count: 1, ward: 2 },
 ];
 const HELD = ITEMS.map((item) => ({ entry_id: item.entry_id, name: item.name, kind: item.kind, rarity: 'normal', count: 1 }));
 
@@ -72,7 +75,7 @@ describe('장비의 줄', () => {
 
   it('착용할 물건은 칸이 있고 아직 착용하지 않은 것. 들어갈 칸이 정해져 있으면 고르지 않는다', () => {
     const detail = table();
-    expect(wearableItems(detail, mySheet(detail)).map((item) => item.entry_id)).toEqual(['mail', 'shield']);
+    expect(wearableItems(detail, mySheet(detail)).map((item) => item.entry_id)).toEqual(['mail', 'shield', 'bolter', 'halo', 'charm']);
     expect(fixedSlots(detail, 'sword')).toEqual(['main_hand', 'off_hand']);
     expect(fixedSlots(detail, 'mail')).toEqual(['body']);
     expect(fixedSlots(detail, 'shield')).toBeNull();
@@ -109,9 +112,58 @@ describe('타격의 무기와 부위', () => {
     const detail = table();
     const action = { kind: 'check', ability: 'str', difficulty: 'normal', harm: 'light', lethal: false, npc: NPC, weapon: 'sword', strike: 'body' } as const;
     expect(actionLabel(action, detail)).toBe('판정 · 근력, 보통, 공격, 장검, 몸 노림');
-    const blow = { weapon: { entry_id: 'sword', name: '장검', bonus: 2 }, location: 'body', location_name: '몸', aimed: true, defense: 5, mode: 'ac' };
+    const blow = { weapon: { entry_id: 'sword', name: '장검', bonus: 2, ap: 0 }, location: 'body', location_name: '몸', aimed: true, defense: 5, mode: 'ac' };
     expect(blowLine(blow)).toBe('장검 +2 · 몸(노림) · 방어 5(목표값에 더함)');
     expect(blowLine({ ...blow, weapon: null, aimed: false, mode: 'reduce', defense: 2 })).toBe('몸 · 방어 2(피해에서 뺌)');
     expect(blowLine(null)).toBeNull();
+  });
+});
+
+describe('세이브와 관통', () => {
+  const SAVE = { armor: { mode: 'save', save_target: 7, pierce_base: 10 } };
+  const worn = [
+    { entry_id: 'bolter', name: '볼터', slots: ['main_hand'] },
+    { entry_id: 'charm', name: '부적', slots: ['off_hand'] },
+    { entry_id: 'halo', name: '헤일로', slots: ['head'] },
+    { entry_id: 'mail', name: '사슬 갑옷', slots: ['body'] },
+  ];
+
+  it('물건에 관통력과 불굴 세이브를 적고, 불굴 세이브는 더하지 않고 가장 큰 값이다', () => {
+    const detail = table(SAVE, worn);
+    expect(gearLabel(detail, 'bolter')).toBe('공격 +1 · 관통 2');
+    expect(gearLabel(detail, 'halo')).toBe('불굴 세이브 4');
+    expect(wardOf(detail, mySheet(detail))).toBe(4);
+    expect(wardOf(table(SAVE, []), mySheet(table(SAVE, [])))).toBe(0);
+  });
+
+  it('장비 아래 줄에 불굴 세이브와 세이브의 목표값을 적는다. 적을 것이 없으면 null', () => {
+    const detail = table(SAVE, worn);
+    expect(equipmentNote(detail, mySheet(detail))).toBe('불굴 세이브 4 · 방어는 세이브로 막음(목표 7)');
+    expect(equipmentNote(table(), mySheet(table()))).toBe('방어는 맞히기 어렵게');
+    expect(equipmentNote(table({ armor: null }, []), mySheet(table({ armor: null }, [])))).toBeNull();
+  });
+
+  it('무기 고르기에 관통력을 붙인다', () => {
+    expect(myWeapons(ctx(table(SAVE, worn)))).toEqual([{ value: 'bolter', label: '볼터(+1, 관통 2)' }]);
+  });
+
+  it('타격 줄에 관통과 세이브. 관통했거나 세이브 방식이면 방어가 한 일을 붙이지 않는다', () => {
+    const blow = {
+      weapon: { entry_id: 'bolter', name: '볼터', bonus: 1, ap: 2 },
+      location: 'body',
+      location_name: '몸',
+      aimed: false,
+      defense: 5,
+      mode: 'save',
+      pierce: { roll: 9, ap: 2, target: 15, pierced: false },
+      save: { kind: 'armor', value: 5, roll: 10, target: 7, saved: true },
+    };
+    expect(blowLine(blow)).toBe('볼터 +1 · 몸 · 방어 5 · 관통 못 함 · 아머 세이브 10 + 5 → 막음');
+    const pierced = { ...blow, pierce: { roll: 14, ap: 2, target: 15, pierced: true }, save: { kind: 'ward', value: 4, roll: 2, target: 7, saved: false } };
+    expect(blowLine(pierced)).toBe('볼터 +1 · 몸 · 방어 5 · 관통함 · 불굴 세이브 2 + 4 → 못 막음');
+    expect(blowLine({ ...pierced, mode: 'ac', save: null })).toBe('볼터 +1 · 몸 · 방어 5 · 관통함');
+    expect(blowLine({ weapon: null, location: null, location_name: null, aimed: false, defense: 0, mode: 'save', save: blow.save })).toBe(
+      '아머 세이브 10 + 5 → 막음',
+    );
   });
 });
