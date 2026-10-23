@@ -1442,6 +1442,20 @@ a.ui-button {
   gap: 12px;
 }
 
+/* 시나리오의 소개 탭의 장르. 열세 개를 칸이 허락하는 만큼 여러 줄로 놓는다 */
+.scenario-genres__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  column-gap: 12px;
+}
+
+/* 게시 탭의 낸 판. 공개 중인 판의 표시 */
+.version-published {
+  margin-left: 6px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
 /* 설명이 길어도 단추는 한 줄로 두고, 설명이 줄을 바꾼다 */
 .studio-item > :first-child {
   flex: 1;
