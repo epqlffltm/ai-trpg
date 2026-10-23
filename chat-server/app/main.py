@@ -52,10 +52,14 @@ from app.conversations.service import (
     StartNotFoundError,
 )
 from app.core.config import Settings, get_settings
+from app.core.database import EXTRA_SCHEMAS
 from app.gallery import router as gallery
 from app.limits.attempts import TooManyAttempts
 from app.limits.responses import handle_too_many_attempts
 from app.limits.setup import build_limiting, build_redis
+from app.lore.indexing import LoreIndexer
+from app.lore.recall import LoreRecall
+from app.lore.setup import build_embedder
 from app.memory import router as notes
 from app.memory.service import NoteNotFoundError, NotesFullError
 from app.memory.summarizer import Summarizer
@@ -94,6 +98,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await settling.halt()
     await stop_turns(app.state.turns)
     await app.state.summarizer.stop()
+    if app.state.lore_indexer is not None:
+        await app.state.lore_indexer.stop()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
     if app.state.redis is not None:
@@ -157,7 +163,7 @@ def create_app(
 
     # 엔진과 세션 틀을 앱에 붙여 둔다. 앱마다 자기 엔진을 가지므로 테스트끼리 섞이지 않는다.
     # 엔진을 만드는 것만으로는 DB 에 연결하지 않는다. DB 가 꺼져 있어도 서버는 뜬다(/health/ready 가 503 이다)
-    app.state.engine = engine or create_engine(settings)
+    app.state.engine = engine or create_engine(settings, EXTRA_SCHEMAS)
     # 쿼리마다 span 을 건다(요청이나 작업 안의 것만). 같은 엔진에 여러 번 불러도 한 번만 단다
     instrument_engine(app.state.engine)
     watch_pool(pool_stats(app.state.engine, settings.db_max_connections))
@@ -195,6 +201,12 @@ def create_app(
     # 굴리는 요약. 말 한 번이 끝날 때 대화를 보러 간다(app/turns/router.py 의 keep_running)
     app.state.summarizer = Summarizer(
         app.state.session_factory, router=lambda: app.state.model_router, settings=lambda: app.state.settings
+    )
+    # 로어북을 뜻으로 찾기(app/lore/, #672). EMBEDDER 가 off 면 둘 다 없다(상시와 키워드만 쓴다)
+    embedder = build_embedder(settings, app.state.http_client)
+    app.state.lore_indexer = LoreIndexer(app.state.session_factory, embedder) if embedder is not None else None
+    app.state.lore_recall = (
+        LoreRecall(app.state.session_factory, embedder, app.state.lore_indexer) if embedder is not None else None
     )
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다

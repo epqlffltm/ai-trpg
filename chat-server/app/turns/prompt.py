@@ -160,6 +160,25 @@ def render_card(
     return '\n\n'.join(section for section in sections if section)
 
 
+# 카드에서 "[로어북]" 이 들어가는 자리의 바로 뒤 블록의 머리. 지금(장소와 소지품)은 카드에 늘 있다
+LORE_BEFORE = '\n\n[지금]'
+
+
+def with_lore(card: str, old: str | None, new: str | None) -> str:
+    """
+    카드의 "[로어북]" 블록을 바꾼다(뜻으로 찾은 항목을 더한 뒤). old 는 render_card 가 넣은 블록이다.
+    old 가 없으면 지금 블록 앞(render_card 의 자리)에 넣는다. 지금 블록이 없으면 끝에 붙인다. new 가 없으면 그대로다.
+    """
+    if new is None:
+        return card
+    if old is not None:
+        return card.replace(old, new, 1)
+    position = card.find(LORE_BEFORE)
+    if position < 0:
+        return f'{card}\n\n{new}'
+    return f'{card[:position]}\n\n{new}{card[position:]}'
+
+
 def to_message(turn: Turn) -> ChatMessage:
     """
     대화의 말 하나를 모델에 보내는 메시지로. 캐릭터의 말은 assistant, 사람의 말은 user 다.
