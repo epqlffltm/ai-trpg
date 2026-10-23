@@ -49,7 +49,7 @@ from app.realtime.signals import Kind, Signal
 from app.references.policy import references_allowed
 from app.rounds import opener
 from app.rounds.round_price import price_of
-from app.tables import departures, monsters, npcs, place_items, places, quests, repository, sheets
+from app.tables import departures, monsters, npcs, place_items, places, quests, repository, route_locks, sheets
 from app.tables.building import build_table, hash_table_password, new_invite_code, require_rating
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
@@ -379,7 +379,7 @@ async def start_table(
     방장이 테이블을 시작한다. 그 뒤로는 새로 들어올 수 없고 캐릭터를 바꿀 수 없다.
     앉은 사람 모두에게 캐릭터 시트를 주고, 판의 인물마다 NPC 의 상태를, 사건마다 퀘스트를,
     조우마다 몬스터의 상태를 만들고, 첫 라운드를 연다.
-    맵이 있는 판이면 캐릭터 모두를 시작 장소에 세운다.
+    맵이 있는 판이면 캐릭터 모두를 시작 장소에 세우고, 자물쇠가 있는 길마다 그 상태를 만든다(#281).
     장면은 테이블을 만들 때 고른 스타팅이다.
 
     방장이 아니면 NotHostError, 모집 중이 아니거나 캐릭터를 만들지 않은 사람이 있거나
@@ -402,6 +402,7 @@ async def start_table(
     repository.add_monsters(session, monsters.make_monsters(table.id, snapshot))
     table.quests.extend(quests.make_quests(table.id, snapshot, table.clock.minutes))
     table.place_items.extend(place_items.make_place_items(table.id, snapshot))
+    table.route_locks.extend(route_locks.make_route_locks(table.id, snapshot))
 
     table.status = TableStatus.PLAYING
     table.started_at = func.now()

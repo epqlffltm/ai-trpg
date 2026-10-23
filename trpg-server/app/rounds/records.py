@@ -281,9 +281,12 @@ def record_move(session: AsyncSession, table: GameTable, declaration: Declaratio
 
     가지 못했으면 적지 않는다. 위치가 바뀌지 않았다. 못 간 까닭은 라운드의 선언 결과에 있다.
     행한 사람(actor_id)을 적지 않는다. 위치를 바꾼 것은 엔진이다.
+    길을 넘는 판정을 굴렸으면 그 판정(과 실패해서 다친 것)을 먼저 적는다(record_cross, #281). 못 갔어도 적는다.
+    잠긴 문을 열고 갔으면 unlocked 가 붙는다. 화면은 이것으로 맵의 문을 연다.
     쓰러진 동료를 업고 갔으면 그 사람이 옮겨 간 것도 같은 종류로 잇는다(record_carried).
     """
     move = move_of(declaration)
+    record_cross(session, table, declaration.character_name, move, cause)
     if not move['moved']:
         return
     payload = {
@@ -291,8 +294,36 @@ def record_move(session: AsyncSession, table: GameTable, declaration: Declaratio
         **{key: move[key] for key in ('user_id', 'character_name', 'from', 'to')},
         'travel_minutes': move.get('travel_minutes'),
     }
+    # 문을 열지 않았으면 싣지 않는다. 자물쇠가 생기기 전과 같은 모양이다
+    if move.get('unlocked'):
+        payload['unlocked'] = True
     moved = recorder.record(session, table, EventType.CHARACTER_MOVED, payload=payload, cause=cause)
     record_carried(session, table, move, moved)
+
+
+def record_cross(session: AsyncSession, table: GameTable, character_name: str, move: dict, cause: TableEvent) -> None:
+    """
+    길을 넘는 판정을 이벤트로 적는다(#281). 판정하는 행동과 같은 종류(check_rolled)다. 굴리지 않았으면 적지 않는다.
+
+    실패해서 다쳤으면 바로 뒤에 HP 의 변화(와 부상)를 판정에 잇는다.
+    """
+    cross = move.get('cross')
+    if cross is None:
+        return
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': character_name,
+        **{key: cross[key] for key in ('ability', 'difficulty', 'roll', 'modifier', 'total', 'target', 'success')},
+        'hindrance': cross['hindrance'],
+        'called_shot': None,
+        'blow': None,
+    }
+    rolled = recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
+    effect = move.get('effect')
+    if effect is not None:
+        changed = record_hp_change(session, table, effect, cause=rolled)
+        holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
+        record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
 
 
 def record_carried(session: AsyncSession, table: GameTable, move: dict, cause: TableEvent) -> None:

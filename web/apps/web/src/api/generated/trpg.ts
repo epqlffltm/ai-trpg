@@ -2576,6 +2576,55 @@ export interface components {
             remove_short_payers: boolean;
         };
         /**
+         * CrossCheck
+         * @description 길을 넘는 판정(#281). 절벽 오르기, 급류 헤엄치기처럼 지날 때마다 가는 사람이 굴린다.
+         *
+         *     ability 와 difficulty 는 찾는 판정(FindCheck)과 같다. 실패하면 가지 못하고 그 자리에 남는다.
+         *     harm 을 적었으면 실패한 사람이 그 양의 등급(룰북의 magnitudes 의 이름)만큼 다친다(떨어짐, 휩쓸림).
+         *     셋 다 룰북의 규칙에 있는지는 게시할 때 본다.
+         */
+        CrossCheck: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Harm */
+            harm?: string | null;
+        };
+        /**
+         * CrossOut
+         * @description 길을 넘는 판정(#281). 판에 적힌 능력과 난이도로 엔진이 굴렸다. 굴림은 공개다.
+         */
+        CrossOut: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty: string;
+            hindrance?: components["schemas"]["HindranceOut"] | null;
+            /** Modifier */
+            modifier: number;
+            /** Roll */
+            roll: number;
+            /** Success */
+            success: boolean;
+            /** Target */
+            target: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * CrossSnapshot
+         * @description 길을 넘는 판정(#281). 판 안의 룰북의 능력치, 난이도, 실패했을 때 다치는 양의 등급의 이름이다.
+         */
+        CrossSnapshot: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Harm */
+            harm?: string | null;
+        };
+        /**
          * Currency
          * @description 시나리오의 화폐(#278). 이름(금화)과 단위(닢), 캐릭터 모두가 시작할 때 받는 돈, 상인이 사 주는 값의 백분율이다.
          *
@@ -3805,6 +3854,22 @@ export interface components {
             password?: string | null;
         };
         /**
+         * LockSnapshot
+         * @description 길의 자물쇠(#281). 여는 열쇠(판 안의 물건 항목)와 시작할 때 잠겨 있는가.
+         */
+        LockSnapshot: {
+            /**
+             * Key
+             * Format: uuid
+             */
+            key: string;
+            /**
+             * Locked
+             * @default true
+             */
+            locked: boolean;
+        };
+        /**
          * LongRest
          * @description 긴 휴식. minutes 분을 쉬면 최대 HP 까지 회복한다.
          */
@@ -4531,12 +4596,14 @@ export interface components {
         };
         /**
          * MoveOut
-         * @description 한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 판정이 없다.
+         * @description 한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 넘기 판정(#281)이 있는 길이 아니면 판정이 없다.
          */
         MoveOut: {
             carry?: components["schemas"]["CarryOut"] | null;
             /** Character Name */
             character_name: string;
+            cross?: components["schemas"]["CrossOut"] | null;
+            effect?: components["schemas"]["EffectOut"] | null;
             from: components["schemas"]["PlaceRefOut"] | null;
             /** Moved */
             moved: boolean;
@@ -4545,6 +4612,11 @@ export interface components {
             to: components["schemas"]["PlaceRefOut"];
             /** Travel Minutes */
             travel_minutes?: number | null;
+            /**
+             * Unlocked
+             * @default false
+             */
+            unlocked: boolean;
             /**
              * User Id
              * Format: uuid
@@ -6362,15 +6434,67 @@ export interface components {
             round_time_limit: number | null;
         };
         /**
+         * RouteCrossOut
+         * @description 길을 넘는 판정(#281). 지날 때마다 가는 사람이 굴린다. 룰북의 능력치와 난이도의 이름표다.
+         */
+        RouteCrossOut: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty: string;
+        };
+        /**
+         * RouteLock
+         * @description 길의 자물쇠(#281). 잠겨 있으면 그 열쇠(key)를 지닌 사람만 지나간다. 지나가면서 연다.
+         *
+         *     열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.
+         *     locked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.
+         *     열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다. 열쇠는 쓰여도 없어지지 않는다.
+         */
+        "RouteLock-Input": {
+            /**
+             * Key
+             * Format: uuid
+             */
+            key: string;
+            /**
+             * Locked
+             * @default true
+             */
+            locked: boolean;
+        };
+        /**
+         * RouteLock
+         * @description 길의 자물쇠(#281). 잠겨 있으면 그 열쇠(key)를 지닌 사람만 지나간다. 지나가면서 연다.
+         *
+         *     열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.
+         *     locked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.
+         *     열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다. 열쇠는 쓰여도 없어지지 않는다.
+         */
+        "RouteLock-Output": {
+            /** Key */
+            key: string;
+            /**
+             * Locked
+             * @default true
+             */
+            locked: boolean;
+        };
+        /**
          * RouteOut
          * @description 아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.
+         *
+         *     길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지와 실패의 피해는 싣지 않는다.
          */
         RouteOut: {
+            cross?: components["schemas"]["RouteCrossOut"] | null;
             /**
              * From Place
              * Format: uuid
              */
             from_place: string;
+            /** Locked */
+            locked?: boolean | null;
             /**
              * To Place
              * Format: uuid
@@ -6390,15 +6514,19 @@ export interface components {
          *     숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.
          *     travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
          *     (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
+         *     길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠다. 둘 다 양쪽에서 같다.
+         *     둘 다 있으면 자물쇠를 먼저 보고 넘기 판정을 굴린다.
          *     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
          */
         "RouteRule-Input": {
+            cross?: components["schemas"]["CrossCheck"] | null;
             find?: components["schemas"]["FindCheck"] | null;
             /**
              * From Place
              * Format: uuid
              */
             from_place: string;
+            lock?: components["schemas"]["RouteLock-Input"] | null;
             /**
              * To Place
              * Format: uuid
@@ -6423,12 +6551,16 @@ export interface components {
          *     숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.
          *     travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
          *     (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
+         *     길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠다. 둘 다 양쪽에서 같다.
+         *     둘 다 있으면 자물쇠를 먼저 보고 넘기 판정을 굴린다.
          *     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
          */
         "RouteRule-Output": {
+            cross?: components["schemas"]["CrossCheck"] | null;
             find?: components["schemas"]["FindCheck"] | null;
             /** From Place */
             from_place: string;
+            lock?: components["schemas"]["RouteLock-Output"] | null;
             /** To Place */
             to_place: string;
             /** Travel Minutes */
@@ -6448,14 +6580,17 @@ export interface components {
          *     two_way 가 아니면 from_place 에서 to_place 로만 간다. visibility 는 플레이어가 길을 언제 아는가다.
          *     숨긴 길은 찾는 판정(find)으로 드러난다. travel_minutes 는 한 칸 가는 데 걸리는 게임 안의 시간(분)이다.
          *     비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.
+         *     cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠의 자물쇠다(#281). 형식 52 보다 옛 판은 둘 다 없다.
          */
         RouteSnapshot: {
+            cross?: components["schemas"]["CrossSnapshot"] | null;
             find?: components["schemas"]["FindSnapshot"] | null;
             /**
              * From Place
              * Format: uuid
              */
             from_place: string;
+            lock?: components["schemas"]["LockSnapshot"] | null;
             /**
              * To Place
              * Format: uuid
@@ -7208,7 +7343,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 51
+             * @default 52
              */
             format: number;
             /**

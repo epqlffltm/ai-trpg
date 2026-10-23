@@ -348,8 +348,8 @@ def describe_items(items: list[ItemNote]) -> str:
     return ', '.join(item.name if item.count == 1 else f'{item.name} {item.count}개' for item in items)
 
 
-# 가지 못한 까닭을 서술자에게 주는 말
-TRAVEL_FAILURES = {'not_adjacent': '그쪽으로 이어진 길이 없었다'}
+# 가지 못한 까닭을 서술자에게 주는 말. 넘기에 실패한 것(cross_failed)은 cross_failure 가 따로 말한다
+TRAVEL_FAILURES = {'not_adjacent': '그쪽으로 이어진 길이 없었다', 'locked': '문이 잠겨 있었고 맞는 열쇠가 없었다'}
 # 업고 가지 못한 까닭을 서술자에게 주는 말. 업은 사람이 가지 못한 것(not_moved)은 가지 못한 줄이 말한다
 CARRY_FAILURES = {
     'standing': '이미 일어나 있어 업지 않았다',
@@ -367,6 +367,26 @@ def carry_text(note: TravelNote) -> str:
     return f'. {note.carried}은(는) {CARRY_FAILURES.get(note.carry_reason, "업지 못했다")}'
 
 
+def cross_failure(note: TravelNote) -> str:
+    """길을 넘지 못한 까닭의 말(#281). 무슨 판정에 실패했는지와, 다쳤으면 다쳤다는 것."""
+    hurt = '. 실패해 다쳤다' if note.hurt else ''
+    return f'{note.cross} 판정에 실패해 넘지 못했다{hurt}'
+
+
+def travel_failure(note: TravelNote) -> str:
+    """가지 못한 까닭의 말."""
+    if note.reason == 'cross_failed':
+        return cross_failure(note)
+    return TRAVEL_FAILURES.get(note.reason, '가지 못했다')
+
+
+def passage_text(note: TravelNote) -> str:
+    """길의 조건을 채우고 간 것을 간 곳의 줄에 붙일 말(#281). 열쇠로 연 문, 넘기 판정. 없었으면 빈 말이다."""
+    unlocked = ', 열쇠로 문을 열고' if note.unlocked else ''
+    crossed = f', {note.cross} 판정에 성공해 넘어' if note.cross else ''
+    return f'{unlocked}{crossed}'
+
+
 def describe_travel(note: TravelNote) -> str:
     """
     맵에서 한 칸 간 결과를 한 줄로 적는다.
@@ -375,13 +395,15 @@ def describe_travel(note: TravelNote) -> str:
         (간 곳: 성문 → 숲, 3시간 걸림)
         (간 곳: 성문 → 숲, 3시간 걸림, 약사을(를) 업고)
         (간 곳: 성문 → 숲. 약사은(는) 숨을 거두어 쓰러진 곳에 남았다)
+        (간 곳: 광장 → 탑, 열쇠로 문을 열고, 근력 판정에 성공해 넘어)
         (가려던 곳: 광장. 그쪽으로 이어진 길이 없었다)
+        (가려던 곳: 탑. 근력 판정에 실패해 넘지 못했다. 실패해 다쳤다)
     """
     if not note.moved:
-        return f'(가려던 곳: {note.to_place}. {TRAVEL_FAILURES.get(note.reason, "가지 못했다")})'
+        return f'(가려던 곳: {note.to_place}. {travel_failure(note)})'
     start = f'{note.from_place} → ' if note.from_place else ''
     took = f', {duration_text(note.travel_minutes)} 걸림' if note.travel_minutes else ''
-    return f'(간 곳: {start}{note.to_place}{took}{carry_text(note)})'
+    return f'(간 곳: {start}{note.to_place}{took}{passage_text(note)}{carry_text(note)})'
 
 
 def describe_search(note: SearchNote) -> str:

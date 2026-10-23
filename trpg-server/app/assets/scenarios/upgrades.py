@@ -859,6 +859,18 @@ def upgrade_from_50(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_51(document: dict) -> dict:
+    """
+    형식 51 의 문서를 형식 52 로 올린다. 그때는 길에 조건이 없었다(#281).
+
+    넘기 판정도 자물쇠도 없는 것으로 읽는다. 알기만 하면 누구나 지나가던 그대로다.
+    """
+    upgraded = dict(document)
+    upgraded['routes'] = [{**route, 'cross': None, 'lock': None} for route in document.get('routes', [])]
+    upgraded['format'] = 52
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -912,4 +924,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     48: upgrade_from_48,
     49: upgrade_from_49,
     50: upgrade_from_50,
+    51: upgrade_from_51,
 }
