@@ -4,14 +4,20 @@
 // 내 물건에는 쓰기(소모품), 건네기, 내려놓기(맵에 서 있을 때), 팔기(장면에 사 주는 상인이 있고 값이 있을 때) 단추가,
 // 내 돈에는 돈 건네기 단추가 있다. 누르면 선언 입력의 행동 칸이 채워진다.
 // 돈은 판 안의 돈이다. 결제의 크레딧과 섞이지 않게 "돈"이라 부른다(#278).
+// 장비(#276)는 소지품 위에 칸마다 보인다(EquipmentList). 내 것은 칸마다 벗기, 물건 줄에서 착용한다(선언이 아니라 바로 바꾼다).
 
 import { useQuery } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import type { HeldItem, TableDetail, TableMember } from '../../../../api/types';
 import { amountLabel, itemPrice, merchantsBuy, moneyLabel, type Currency } from '../money';
 import { openMerchants } from '../round/action/actionOptions';
 import { sceneCastQuery } from '../round/roundQueries';
 import { ActionButton, type ActionShortcuts } from './ActionButton';
+import { EquipmentList } from './EquipmentList';
+import { isWearable, isWorn, slotsLabel, wornOf } from './equipmentView';
 import { healsLabel, itemLabel, meFirst } from './statusView';
+import { useEquipment, type Equipment } from './useEquipment';
+import { WearButton } from './WearButton';
 
 type Props = { table: TableDetail; myId: string | undefined; shortcuts: ActionShortcuts };
 
@@ -20,6 +26,8 @@ type SellTo = string | null;
 
 export function Inventory({ table, myId, shortcuts }: Props) {
   const sellTo = useSellTo(table);
+  const equipment = useEquipment(table, myId);
+  const playing = table.status === 'playing';
   const holders = meFirst(table.members, myId).filter((member) => member.sheet && member.character);
   if (holders.length === 0) return <p className="hint">아직 물건을 가진 캐릭터가 없습니다.</p>;
   return (
@@ -30,6 +38,14 @@ export function Inventory({ table, myId, shortcuts }: Props) {
           {table.currency ? (
             <Money member={member} currency={table.currency} shortcuts={member.user_id === myId ? shortcuts : null} />
           ) : null}
+          {member.sheet ? (
+            <EquipmentList
+              table={table}
+              sheet={member.sheet}
+              name={member.character?.name ?? ''}
+              equipment={member.user_id === myId && playing ? equipment : null}
+            />
+          ) : null}
           {member.sheet && member.sheet.items.length > 0 ? (
             <ul className="plain-list items">
               {member.sheet.items.map((item) => (
@@ -37,13 +53,14 @@ export function Inventory({ table, myId, shortcuts }: Props) {
                   <span>
                     {item.name} <span className="item__count">×{item.count}</span>
                   </span>
-                  <span className="hint">{itemNote(table, item)}</span>
+                  <span className="hint">{itemNote(table, item, member)}</span>
                   {member.user_id === myId ? (
                     <ItemActions
                       item={item}
                       onMap={Boolean(table.map && member.sheet?.place_id)}
                       sellTo={itemPrice(table, item.entry_id) !== null ? sellTo : null}
                       shortcuts={shortcuts}
+                      wear={playing ? wearFor(table, member, item, equipment) : null}
                     />
                   ) : null}
                 </li>
@@ -68,11 +85,20 @@ function useSellTo(table: TableDetail): SellTo {
   return open.length === 1 ? `npc:${open[0]?.id ?? ''}` : '';
 }
 
-/** "소모품 · 노말 · 회복 가벼움(1d4) · 값 5닢" */
-function itemNote(table: TableDetail, item: HeldItem): string {
+/** "소모품 · 노말 · 회복 가벼움(1d4) · 값 5닢", 착용했으면 "· 착용(주손)" */
+function itemNote(table: TableDetail, item: HeldItem, member: TableMember): string {
   const heals = item.kind === 'consumable' ? healsLabel(table, item.entry_id) : null;
   const price = itemPrice(table, item.entry_id);
-  return [itemLabel(item), heals, price !== null ? `값 ${amountLabel(table.currency, price)}` : null].filter(Boolean).join(' · ');
+  const worn = member.sheet ? wornOf(member.sheet).find((one) => one.entry_id === item.entry_id) : undefined;
+  return [itemLabel(item), heals, price !== null ? `값 ${amountLabel(table.currency, price)}` : null, worn ? `착용(${slotsLabel(table, worn.slots)})` : null]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** 착용 단추. 착용하는 물건이고 아직 착용하지 않았을 때만 */
+function wearFor(table: TableDetail, member: TableMember, item: HeldItem, equipment: Equipment) {
+  if (!member.sheet || !isWearable(table, item.entry_id) || isWorn(member.sheet, item.entry_id)) return null;
+  return <WearButton table={table} sheet={member.sheet} item={item} equipment={equipment} />;
 }
 
 function Money({ member, currency, shortcuts }: { member: TableMember; currency: Currency; shortcuts: ActionShortcuts }) {
@@ -89,12 +115,13 @@ function Money({ member, currency, shortcuts }: { member: TableMember; currency:
   );
 }
 
-type ItemActionsProps = { item: HeldItem; onMap: boolean; sellTo: SellTo; shortcuts: ActionShortcuts };
+type ItemActionsProps = { item: HeldItem; onMap: boolean; sellTo: SellTo; shortcuts: ActionShortcuts; wear: ReactNode };
 
-function ItemActions({ item, onMap, sellTo, shortcuts }: ItemActionsProps) {
+function ItemActions({ item, onMap, sellTo, shortcuts, wear }: ItemActionsProps) {
   if (!shortcuts) return null;
   return (
     <span className="action-chips">
+      {wear}
       {item.kind === 'consumable' ? (
         <ActionButton shortcuts={shortcuts} patch={{ kind: 'use', item: item.entry_id, target: '' }} label="쓰기" what={item.name} />
       ) : null}

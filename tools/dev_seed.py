@@ -16,9 +16,9 @@
   3. 방장의 토큰으로 프록시를 거쳐 게임 서버를 부른다. 고를 수 있는 서술 모델 하나, 룰북(SRD5),
      로어북(장소, 물건, 인물, 사건. dev_seed_world.py), 시나리오(스타팅 둘, 프리젠 셋, 맵, 물건, NPC, 퀘스트),
      소개 페이지(한 줄 소개, 장르, 태그)를 만들고 게시해 공개한다.
-     이미 있으면(제목으로 찾는다) 만들지 않는다. 맵이나 화폐가 없는 앞의 견본이면 세계를 넣고 새 판을 게시한다
+     이미 있으면(제목으로 찾는다) 만들지 않는다. 맵이나 화폐나 장비가 없는 앞의 견본이면 세계를 넣고 새 판을 게시한다
   4. 방장이 로비에 보이는 견본 테이블을 연다. 모집 중인 것이 이미 있으면 열지 않는다.
-     맵이나 화폐가 없는 앞의 판으로 연 것이면 새로 연다
+     맵이나 화폐나 장비가 없는 앞의 판으로 연 것이면 새로 연다
   5. 계정과 주소를 찍는다. 화면에서 로그인하면 메일 코드는 auth-mail 의 로그에 찍힌다(메일 서버를 적지 않았을 때)
 
 몇 번 돌려도 같다. 계정의 비밀번호만 다시 정한다.
@@ -83,7 +83,7 @@ class Account:
 class Seeded:
     accounts: list[Account]
     scenario_id: str
-    # created(새로 만듦), upgraded(맵이나 화폐가 없던 앞의 견본에 세계를 넣음), kept(이미 있었음)
+    # created(새로 만듦), upgraded(맵이나 화폐나 장비가 없던 앞의 견본에 세계를 넣음), kept(이미 있었음)
     scenario_state: str
     table: dict | None
 
@@ -333,7 +333,7 @@ def seed_scenario(proxy: str, token: str) -> tuple[str, str]:
 def seed_table(proxy: str, token: str, scenario_id: str) -> dict:
     """
     방장이 앉은 모집 중인 견본 테이블. 이미 있으면 그것을 돌려준다.
-    테이블은 열 때의 판을 쓴다. 맵이나 화폐가 없으면 앞의 판으로 연 것이라 새로 연다(앞의 것은 그대로 둔다)
+    테이블은 열 때의 판을 쓴다. 맵이나 화폐나 장비가 없으면 앞의 판으로 연 것이라 새로 연다(앞의 것은 그대로 둔다)
     """
     mine = call(proxy, token, 'GET', f'{GAME}/tables?limit=100')
     for table in mine.get('items', []):

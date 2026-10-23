@@ -1,10 +1,11 @@
 // web/apps/web/src/pages/trpg/room/round/action/CheckFields.tsx
 // 판정의 칸. 능력과 난이도, 목적(그냥, 타격, 회복), 대상과 크기, 죽이려는가, 노려 치기, 실패의 대가.
-// 타격은 장면의 인물이나 내가 선 곳의 몬스터에게, 회복은 다른 사람이나 인물에게(비우면 나) 한다. 노려 치기는 인물에게만.
+// 타격은 장면의 인물이나 내가 선 곳의 몬스터에게, 회복은 다른 사람이나 인물에게(비우면 나) 한다. 부상을 노리는 것은 인물에게만.
+// 타격에는 착용한 무기와 노릴 부위(#276)도 고를 수 있다. 부위와 부상은 함께 노리지 않는다(고르면 다른 쪽을 비운다).
 
 import { Checkbox, Radio } from '@ai-trpg/ui';
 import type { ActionDraft, CheckPurpose } from './actionDraft';
-import { aimableInjuries, harmTargets, healTargets, magnitudes, splitRef, type ActionContext } from './actionOptions';
+import { aimableInjuries, harmTargets, healTargets, magnitudes, myWeapons, splitRef, strikeSlots, type ActionContext } from './actionOptions';
 import { ChoiceSelect } from './ChoiceSelect';
 
 type Props = { draft: ActionDraft; ctx: ActionContext; onChange: (changes: Partial<ActionDraft>) => void };
@@ -74,9 +75,10 @@ function HarmFields({ draft, ctx, onChange }: Props) {
             value={draft.aim}
             choices={aimableInjuries(ctx)}
             empty="노리지 않음"
-            onChange={(aim) => onChange({ aim })}
+            onChange={(aim) => onChange({ aim, strike: aim ? '' : draft.strike })}
           />
         ) : null}
+        <GearFields draft={draft} ctx={ctx} onChange={onChange} />
       </div>
       <Checkbox
         label="죽이려 한다"
@@ -84,6 +86,29 @@ function HarmFields({ draft, ctx, onChange }: Props) {
         checked={draft.lethal}
         onChange={(event) => onChange({ lethal: event.target.checked })}
       />
+    </>
+  );
+}
+
+/** 무기와 노릴 부위(#276). 고를 것이 없으면 칸을 두지 않는다 */
+function GearFields({ draft, ctx, onChange }: Props) {
+  const weapons = myWeapons(ctx);
+  const slots = strikeSlots(ctx);
+  return (
+    <>
+      {weapons.length > 0 ? (
+        <ChoiceSelect label="무기(선택)" value={draft.weapon} choices={weapons} empty="쓰지 않음" onChange={(weapon) => onChange({ weapon })} />
+      ) : null}
+      {slots.length > 0 ? (
+        <ChoiceSelect
+          label="노릴 부위(선택)"
+          value={draft.strike}
+          choices={slots}
+          empty="노리지 않음(굴림)"
+          hint="노리면 노려 치기의 대가를 치릅니다."
+          onChange={(strike) => onChange({ strike, aim: strike ? '' : draft.aim })}
+        />
+      ) : null}
     </>
   );
 }

@@ -44,6 +44,10 @@ export type ActionDraft = {
   lethal: boolean;
   /** 노려 칠 부상. 빈 값이면 노리지 않는다 */
   aim: string;
+  /** 타격에 쓰는 무기(착용한 물건, #276). 빈 값이면 쓰지 않는다 */
+  weapon: string;
+  /** 노릴 부위(장비의 칸, #276). 빈 값이면 서버가 굴린다. 부상을 노리는 것(aim)과 함께 고르지 않는다 */
+  strike: string;
   injury: string;
   guess: string;
   /** 지목할 인물. 빈 값이면 "이런 이름의 인물이 있다" */
@@ -70,6 +74,8 @@ export function emptyActionDraft(rules: Ruleset): ActionDraft {
     target: '',
     lethal: false,
     aim: '',
+    weapon: '',
+    strike: '',
     injury: '',
     guess: '',
     npc: '',
@@ -132,6 +138,8 @@ function checkDraft(action: Extract<DeclaredAction, { kind: 'check' }>): Partial
     target: refOf(action.target, action.npc, action.monster),
     lethal: action.lethal,
     aim: action.aim ?? '',
+    weapon: action.weapon ?? '',
+    strike: action.strike ?? '',
   };
 }
 
@@ -207,6 +215,7 @@ function checkHint(draft: ActionDraft, rules: Ruleset): string | null {
   if (!ability || !difficulty) return '이 테이블의 규칙에 있는 능력과 난이도를 골라 주세요.';
   if (draft.purpose === 'harm' && !draft.target) return '칠 대상을 골라 주세요.';
   if (draft.purpose !== 'plain' && !draft.magnitude) return '피해나 회복의 크기를 골라 주세요.';
+  if (draft.purpose === 'harm' && draft.strike && draft.aim) return '부위와 부상을 함께 노릴 수 없습니다. 하나만 골라 주세요.';
   return null;
 }
 
@@ -273,8 +282,10 @@ function toCheck(draft: ActionDraft, member: string | null, npc: string | null, 
     ...(draft.risk ? { risk: draft.risk } : {}),
   };
   if (draft.purpose === 'harm') {
-    const aim = npc && draft.aim ? { aim: draft.aim } : {};
-    return { ...base, harm: draft.magnitude, lethal: draft.lethal, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}), ...aim };
+    // 노려 치기는 하나다. 부위를 노리면 부상은 노리지 않는다(서버도 둘을 함께 받지 않는다)
+    const aim = npc && draft.aim && !draft.strike ? { aim: draft.aim } : {};
+    const gear = { ...(draft.weapon ? { weapon: draft.weapon } : {}), ...(draft.strike ? { strike: draft.strike } : {}) };
+    return { ...base, harm: draft.magnitude, lethal: draft.lethal, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}), ...aim, ...gear };
   }
   if (draft.purpose === 'recover') {
     return { ...base, recover: draft.magnitude, lethal: false, ...(member ? { target: member } : {}), ...(npc ? { npc } : {}) };
