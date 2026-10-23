@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { grantReroll, kickMember, transferHost } from '../../../../api/tableHost';
 import type { TableDetail, TableMember } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
-import { ConfirmButton } from './ConfirmButton';
+import { ConfirmButton } from '../../../../components/ConfirmButton';
 import { canGrantReroll, otherMembers } from './hostView';
 import { useHostAction } from './useHostAction';
 
