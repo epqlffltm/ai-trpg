@@ -47,10 +47,13 @@ from app.images.setup import build_decoder, build_image_store
 from app.images.store import ImageStoreUnavailableError
 from app.lorebooks import router as lorebooks
 from app.lorebooks.service import LorebookNotFoundError
+from app.operators import router as operators
 from app.personas import router as personas
 from app.personas import supply as persona_supply
 from app.personas.service import PersonaLimitError, PersonaNotFoundError
 from app.ratings import AdultContentRequiredError, handle_adult_content_required
+from app.reports import router as reports
+from app.reports.service import AlreadyReportedError, OwnCharacterReportError
 from app.withdrawal import router as withdrawal
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
@@ -158,6 +161,11 @@ def create_app(
     app.add_exception_handler(LorebookNotOwnedError, characters.handle_lorebook_not_owned)
     app.add_exception_handler(AdultContentRequiredError, handle_adult_content_required)
     # 그림(#566). 올리기는 로그인, 내주기는 볼 수 있는지 보고 nginx 에 넘긴다
+    app.include_router(reports.router, prefix=API_PREFIX)
+    app.add_exception_handler(OwnCharacterReportError, reports.handle_own_character)
+    app.add_exception_handler(AlreadyReportedError, reports.handle_already_reported)
+    app.include_router(operators.router, prefix=API_PREFIX)
+
     app.include_router(lorebooks.router, prefix=API_PREFIX)
     app.add_exception_handler(LorebookNotFoundError, lorebooks.handle_lorebook_not_found)
 

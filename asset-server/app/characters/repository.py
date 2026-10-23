@@ -89,12 +89,14 @@ async def find_version(session: AsyncSession, character_id: uuid.UUID, number: i
 
 def listed(ratings: Sequence[Rating]):
     """
-    공개 목록에 나오는 조건. 공개이고, 마지막 판이 볼 수 있는 등급이다.
+    공개 목록에 나오는 조건. 공개이고, 숨기지 않았고(#678), 마지막 판이 볼 수 있는 등급이다.
 
     등급은 판의 것으로 거른다. 초안의 등급을 바꿔도 다음 판까지는 게시한 판이 나간다. 그 판의 등급이 맞아야 한다.
     """
-    return (Character.visibility == Visibility.PUBLIC) & CharacterVersion.rating.in_(
-        [rating.value for rating in ratings]
+    return (
+        (Character.visibility == Visibility.PUBLIC)
+        & Character.hidden_at.is_(None)
+        & CharacterVersion.rating.in_([rating.value for rating in ratings])
     )
 
 

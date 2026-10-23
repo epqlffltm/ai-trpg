@@ -40,13 +40,14 @@ def add_uses(session: AsyncSession, version_id: uuid.UUID, image_ids: Collection
 
 
 async def used_publicly(session: AsyncSession, image_id: uuid.UUID, ratings: Sequence[Rating]) -> bool:
-    """그 그림이 공개 캐릭터의 판에 쓰였고, 그 판의 등급이 ratings 안에 있나."""
+    """그 그림이 공개 캐릭터(숨기지 않은 것)의 판에 쓰였고, 그 판의 등급이 ratings 안에 있나."""
     query = select(
         exists()
         .where(ImageUse.image_id == image_id)
         .where(CharacterVersion.id == ImageUse.version_id)
         .where(Character.id == CharacterVersion.character_id)
-        .where(Character.visibility == Visibility.PUBLIC, CharacterVersion.rating.in_(ratings))
+        .where(Character.visibility == Visibility.PUBLIC, Character.hidden_at.is_(None))
+        .where(CharacterVersion.rating.in_(ratings))
     )
     return bool(await session.scalar(query))
 

@@ -494,6 +494,8 @@ class CharacterDetail(BaseModel):
     lorebooks: list[uuid.UUID]
     latest_version: int | None
     published_at: datetime | None
+    # 운영자가 숨긴 시각(#678). 숨긴 동안은 공개여도 남에게 보이지 않는다
+    hidden_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -506,6 +508,7 @@ class CharacterSummary(BaseModel):
     rating: Rating
     visibility: Visibility
     latest_version: int | None
+    hidden_at: datetime | None
     updated_at: datetime
 
 
