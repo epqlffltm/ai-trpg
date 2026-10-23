@@ -19,6 +19,7 @@ from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.characters.documents import DOCUMENT_FORMAT
 from app.characters.models import AFFECTION_MAX_STAGES, CharacterVersion
 from app.main import API_PREFIX
 
@@ -72,7 +73,7 @@ async def test_affection_is_kept_and_frozen_in_the_version(client: AsyncClient, 
     document = (await publish(client, operator, character)).json()['document']
 
     assert character['affection'] == AFFECTION
-    assert (document['format'], document['affection']) == (3, AFFECTION)
+    assert (document['format'], document['affection']) == (DOCUMENT_FORMAT, AFFECTION)
 
 
 async def test_defaults_fill_the_display_the_start_and_the_rules(client: AsyncClient, operator: dict):

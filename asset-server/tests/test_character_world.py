@@ -22,6 +22,7 @@ from server_core.testing.tokens import SigningKey, make_access_claims, make_toke
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.characters.documents import DOCUMENT_FORMAT
 from app.characters.models import CHARACTER_MAX_PLACES, Character, CharacterVersion
 from app.images.models import ImageUse
 from app.main import API_PREFIX
@@ -33,8 +34,14 @@ CHARACTERS_URL = f'{API_PREFIX}/characters'
 OPERATOR = uuid.UUID('11111111-2222-4333-8444-555555555555')
 OTHER = uuid.UUID('99999999-2222-4333-8444-555555555555')
 START = {'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.'}
-LIBRARY = {'id': 'library', 'name': '도서관', 'description': '오래된 책 냄새가 난다.', 'image_id': None}
-CAFE = {'id': 'cafe', 'name': '카페', 'description': '', 'image_id': None}
+LIBRARY = {
+    'id': 'library',
+    'name': '도서관',
+    'description': '오래된 책 냄새가 난다.',
+    'image_id': None,
+    'backgrounds': {},
+}
+CAFE = {'id': 'cafe', 'name': '카페', 'description': '', 'image_id': None, 'backgrounds': {}}
 BOOK = {
     'id': 'book',
     'name': '시집',
@@ -91,7 +98,7 @@ async def test_the_world_is_kept_in_the_draft_and_frozen_in_the_version(client: 
 
     assert response.status_code == status.HTTP_201_CREATED
     document = response.json()['document']
-    assert document['format'] == 3
+    assert document['format'] == DOCUMENT_FORMAT
     assert {name: document[name] for name in WORLD} == WORLD
     assert {name: character[name] for name in WORLD} == WORLD
 
