@@ -48,3 +48,8 @@ export const MessageReportPage = lazyPage(() => import('../pages/operator/Messag
 export const CharactersPage = lazyPage(() => import('../pages/chat/studio/characters/CharactersPage'), 'CharactersPage');
 export const CharacterNewPage = lazyPage(() => import('../pages/chat/studio/characters/CharacterNewPage'), 'CharacterNewPage');
 export const CharacterEditPage = lazyPage(() => import('../pages/chat/studio/characters/CharacterEditPage'), 'CharacterEditPage');
+
+// chat 의 로어북(캐릭터가 붙이는 설정의 모음). TRPG 의 로어북(LorebooksPage)과 다른 것이라 이름 앞에 Chat 을 붙인다
+export const ChatLorebooksPage = lazyPage(() => import('../pages/chat/studio/lorebooks/ChatLorebooksPage'), 'ChatLorebooksPage');
+export const ChatLorebookNewPage = lazyPage(() => import('../pages/chat/studio/lorebooks/ChatLorebookNewPage'), 'ChatLorebookNewPage');
+export const ChatLorebookEditPage = lazyPage(() => import('../pages/chat/studio/lorebooks/ChatLorebookEditPage'), 'ChatLorebookEditPage');
