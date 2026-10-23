@@ -43,7 +43,7 @@ const PROBLEMS: Record<string, ProblemText> = {
   route_find_invalid: { text: '숨긴 길을 찾는 판정이 룰북에 없는 능력치나 난이도를 씁니다.', section: 'map' },
   route_cross_invalid: { text: '길을 넘는 판정이 룰북에 없는 능력치나 난이도, 양을 씁니다.', section: 'map' },
   route_key_repeated: { text: '열쇠 하나를 두 길의 자물쇠에 적었습니다. 열쇠 하나는 자물쇠 하나만 엽니다.', section: 'map' },
-  route_open_invalid: { text: '자물쇠를 따거나 문을 부수는 판정이 룰북에 없는 능력치나 난이도를 씁니다.', section: 'map' },
+  route_open_invalid: { text: '자물쇠를 따거나 문을 부수거나 고치는 판정이 룰북에 없는 능력치나 난이도를 씁니다.', section: 'map' },
   place_item_off_map: { text: '맵에 없는 장소에 놓인 물건이 있습니다.', section: 'map' },
   place_item_find_invalid: { text: '숨긴 물건을 찾는 판정이 룰북에 없는 능력치나 난이도를 씁니다.', section: 'map' },
   cover_off_map: { text: '맵에 없는 장소에 커버가 있습니다.', section: 'map' },

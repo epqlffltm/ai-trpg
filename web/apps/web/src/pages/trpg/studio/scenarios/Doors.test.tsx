@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/Doors.test.tsx
-// 지도의 둘째 조각(B9, #281·#279). 길의 문(넘기와 피해, 자물쇠와 따기, 빗장, 부수기)을 창에서 바로 보내기,
-// 다른 길의 열쇠 막기, 부수기는 자물쇠나 빗장과 함께. 장소에 놓인 물건(보임과 숨김, 찾는 판정). 입력의 순수한 함수.
+// 지도의 둘째 조각(B9, #281·#279). 길의 문(넘기와 피해, 자물쇠와 따기, 빗장, 부수기, 고치기와 도구)을 창에서 바로 보내기,
+// 다른 길의 열쇠 막기, 부수기와 고치기는 자물쇠나 빗장과 함께. 길을 고쳐도 고치기는 남는다. 장소에 놓인 물건(보임과 숨김, 찾는 판정). 입력의 순수한 함수.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,7 +13,7 @@ import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
 import { doorDraft, doorHints, withDoor } from './doorForm';
 import { placeHints } from './placesForm';
-import { routeLine } from './routesForm';
+import { routeDraft, routeLine, toRoute } from './routesForm';
 
 const GAME = '/api/v1/game';
 const ID = '00000000-0000-4000-8000-0000000000d1';
@@ -26,12 +26,13 @@ const CRYPT = '00000000-0000-4000-8000-00000000c003';
 const KEY = '00000000-0000-4000-8000-00000000a009';
 const PICK = '00000000-0000-4000-8000-00000000a010';
 const COIN = '00000000-0000-4000-8000-00000000a011';
+const HAMMER = '00000000-0000-4000-8000-00000000a012';
 
 function route(from: string, to: string, extra: Record<string, unknown> = {}) {
   return { from_place: from, to_place: to, two_way: true, visibility: 'open', find: null, travel_minutes: null, cross: null, lock: null, bar: null, force: null, ...extra };
 }
 
-const LOCKED = route(GATE, TOWER, { lock: { key: KEY, locked: true, pick: null } });
+const LOCKED = route(GATE, TOWER, { lock: { key: KEY, locked: true, pick: null }, repair: { ability: 'dex', difficulty: null, tool: null } });
 const PLAIN = route(TOWER, CRYPT);
 
 function entry(id: string, name: string, kind: string) {
@@ -53,6 +54,7 @@ function signedIn(start: Record<string, unknown> = {}) {
         entry(KEY, '녹슨 열쇠', 'item'),
         entry(PICK, '쇠꼬챙이', 'item'),
         entry(COIN, '은화 주머니', 'item'),
+        entry(HAMMER, '망치', 'item'),
       ]),
     [`GET ${SCENARIO}`]: () => json(200, current),
     [`GET ${SCENARIO}/publish-check`]: () => json(200, { ready: true, problems: [] }),
@@ -84,6 +86,7 @@ describe('길의 문', () => {
     await userEvent.click(routes.getByRole('button', { name: '종탑–지하 묘지 길의 문' }));
     const dialog = within(await screen.findByRole('dialog'));
     expect(dialog.getByRole('checkbox', { name: '문을 부술 수 있다' })).toBeDisabled();
+    expect(dialog.getByRole('checkbox', { name: '부서진 문을 고칠 수 있다' })).toBeDisabled();
 
     await userEvent.click(dialog.getByRole('checkbox', { name: '지날 때마다 판정한다' }));
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '넘기 판정의 능력치' }), 'str');
@@ -103,6 +106,10 @@ describe('길의 문', () => {
     expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '부수기 판정의 능력치' }), 'str');
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '부수기 판정의 난이도' }), 'normal');
+    await userEvent.click(dialog.getByRole('checkbox', { name: '부서진 문을 고칠 수 있다' }));
+    expect(dialog.getByText('고치기 판정의 능력치를 골라 주세요.')).toBeInTheDocument();
+    await userEvent.selectOptions(dialog.getByRole('combobox', { name: '고치기 판정의 능력치' }), 'dex');
+    await userEvent.selectOptions(dialog.getByRole('combobox', { name: '고치는 도구(선택)' }), HAMMER);
     await userEvent.click(dialog.getByRole('button', { name: '저장' }));
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
@@ -114,8 +121,11 @@ describe('길의 문', () => {
       lock: { key: COIN, locked: true, pick: { ability: 'dex', difficulty: null, tool: PICK } },
       bar: { side: CRYPT, barred: false },
       force: { ability: 'str', difficulty: 'normal' },
+      repair: { ability: 'dex', difficulty: null, tool: HAMMER },
     });
-    expect(await routes.findByText('종탑 ↔ 지하 묘지 · 처음부터 앎 · 넘기 판정 · 자물쇠(잠김, 딸 수 있음) · 빗장(지하 묘지 쪽) · 부술 수 있음')).toBeInTheDocument();
+    expect(
+      await routes.findByText('종탑 ↔ 지하 묘지 · 처음부터 앎 · 넘기 판정 · 자물쇠(잠김, 딸 수 있음) · 빗장(지하 묘지 쪽) · 부술 수 있음 · 고칠 수 있음'),
+    ).toBeInTheDocument();
   });
 
   it('장소에 숨긴 물건을 놓으면 찾는 판정과 함께 보낸다', async () => {
@@ -142,14 +152,17 @@ describe('길의 문', () => {
 });
 
 describe('길의 문 입력', () => {
-  it('끈 것은 null, 부수기는 자물쇠나 빗장과 함께, 빗장은 두 끝 중 하나', () => {
+  it('끈 것은 null, 부수기와 고치기는 자물쇠나 빗장과 함께, 빗장은 두 끝 중 하나', () => {
     const routes = [LOCKED, PLAIN] as unknown as RouteRule[];
     const draft = doorDraft(routes[0] as RouteRule);
-    expect(withDoor(routes, 0, { ...draft, lock: { ...draft.lock, on: false } })[0]).toMatchObject({ lock: null, force: null });
+    expect(draft.repair).toEqual({ on: true, ability: 'dex', difficulty: '', tool: '' });
+    expect(withDoor(routes, 0, { ...draft, lock: { ...draft.lock, on: false } })[0]).toMatchObject({ lock: null, force: null, repair: null });
+    expect(doorHints({ ...draft, lock: { ...draft.lock, on: false } }, routes, 0).repair).toContain('자물쇠나 빗장');
+    expect(toRoute({ ...routeDraft(routes[0] as RouteRule), minutes: '5' }, routes[0] as RouteRule).repair).toEqual({ ability: 'dex', difficulty: null, tool: null });
     expect(doorHints({ ...draft, lock: { ...draft.lock, on: false }, force: { on: true, ability: 'str', difficulty: '' } }, routes, 0).force).toContain('자물쇠나 빗장');
     expect(doorHints({ ...draft, bar: { on: true, side: CRYPT, barred: false } }, routes, 0).bar).toBeDefined();
     expect(routeLine({ ...LOCKED, bar: { side: GATE, barred: true } } as unknown as RouteRule, (id) => (id === GATE ? '문' : '탑'), null)).toBe(
-      '문 ↔ 탑 · 처음부터 앎 · 자물쇠(잠김) · 빗장(문 쪽, 걸림)',
+      '문 ↔ 탑 · 처음부터 앎 · 자물쇠(잠김) · 빗장(문 쪽, 걸림) · 고칠 수 있음',
     );
   });
 
