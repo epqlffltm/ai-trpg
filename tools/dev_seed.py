@@ -10,10 +10,12 @@
 하는 일:
   1. 인증 서버의 컨테이너에서 dev_seed_accounts.py 를 돌려 시험 계정 둘(방장, 손님)을 만들고 access 토큰을 받는다.
      개발 환경(APP_ENVIRONMENT=development)이 아니면 거기서 멈춘다. 로그인의 메일 코드는 거치지 않는다
-  2. 방장의 토큰으로 프록시를 거쳐 게임 서버를 부른다. 고를 수 있는 서술 모델 하나, 룰북,
-     시나리오(스타팅 둘, 프리젠 셋), 소개 페이지(한 줄 소개, 장르, 태그)를 만들고 1판을 게시해 공개한다.
-     이미 있으면(제목으로 찾는다) 만들지 않는다
-  3. 방장이 로비에 보이는 견본 테이블을 연다. 모집 중인 것이 이미 있으면 열지 않는다
+  2. 방장의 토큰으로 프록시를 거쳐 게임 서버를 부른다. 고를 수 있는 서술 모델 하나, 룰북(SRD5),
+     로어북(장소, 물건, 인물, 사건. dev_seed_world.py), 시나리오(스타팅 둘, 프리젠 셋, 맵, 물건, NPC, 퀘스트),
+     소개 페이지(한 줄 소개, 장르, 태그)를 만들고 게시해 공개한다.
+     이미 있으면(제목으로 찾는다) 만들지 않는다. 맵이 없는 앞의 견본이면 세계를 넣고 새 판을 게시한다
+  3. 방장이 로비에 보이는 견본 테이블을 연다. 모집 중인 것이 이미 있으면 열지 않는다.
+     맵이 없는 앞의 판으로 연 것이면 새로 연다
   4. 계정과 주소를 찍는다. 화면에서 로그인하면 메일 코드는 auth-mail 의 로그에 찍힌다(메일 서버를 적지 않았을 때)
 
 몇 번 돌려도 같다. 계정의 비밀번호만 다시 정한다.
@@ -33,6 +35,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from dev_seed_world import ENTRIES, LOREBOOK_TITLE, sheet, world_fields
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ACCOUNTS_SCRIPT = REPO_ROOT / 'tools' / 'dev_seed_accounts.py'
 RESULT_PREFIX = 'SEED_RESULT '
@@ -50,9 +54,6 @@ ACCOUNTS = (
     {'username': 'seed_guest', 'nickname': '견본손님', 'email': 'seed-guest@example.com'},
 )
 
-# SRD5 템플릿의 능력치. 모두 10 이면 보정이 0 이다
-ABILITY_KEYS = ('str', 'dex', 'con', 'int', 'wis', 'cha')
-
 
 class SeedError(Exception):
     """채우지 못했다. 까닭을 사람이 읽을 글로 싣는다."""
@@ -69,7 +70,8 @@ class Account:
 class Seeded:
     accounts: list[Account]
     scenario_id: str
-    created_scenario: bool
+    # created(새로 만듦), upgraded(맵이 없던 앞의 견본에 세계를 넣음), kept(이미 있었음)
+    scenario_state: str
     table: dict | None
 
 
@@ -173,30 +175,30 @@ def pick_model(models: dict) -> str:
     return offered[0]['slug']
 
 
-def sheet(max_hp: int, **scores: int) -> dict:
-    return {'abilities': {key: scores.get(key, 10) for key in ABILITY_KEYS}, 'max_hp': max_hp}
-
-
-def scenario_body(rulebook_id: str, model: str) -> dict:
-    """견본 시나리오. 스타팅 둘, 프리젠 셋, 프리젠과 직접 쓰기를 허용한다. 추천 인원 2~4명."""
+def scenario_fields(model: str, world: dict) -> dict:
+    """
+    견본 시나리오의 칸(제목과 룰북 말고). 스타팅 둘, 다섯 방식 모두, 추천 인원 2~4명에 세계(world_fields)를 더한다.
+    첫 스타팅에 문지기가 나와 첫 장면부터 겨눌 인물이 있다. 능력치를 정하는 방식의 최대 HP 는 8 에 건강의 보정, 20 까지
+    """
     return {
-        'title': SEED_TITLE,
-        'rulebook_id': rulebook_id,
         'narration_model': model,
         'description': '화면을 손으로 보려고 만든 견본이다(tools/dev_seed.py).',
         'openings': [
-            '비가 내리는 밤, 수도원의 문 앞에 선다. 종은 울리지 않는다.',
-            '이미 수도원 안이다. 등 뒤에서 문이 스스로 닫힌다.',
+            '비가 내리는 밤, 수도원의 문 앞에 선다. 종은 울리지 않는다. 문 옆에 늙은 문지기가 등불을 들고 서 있다.',
+            '이미 수도원 안이다. 등 뒤에서 문이 스스로 닫힌다. 늙은 문지기가 어둠 속에서 너희를 본다.',
         ],
         'default_sheet': sheet(10),
-        'pregens': [
-            {'name': '수도사 렌', 'description': '말이 없다. 기도문을 외운다.', 'sheet': sheet(12, wis=15, con=12)},
-            {'name': '사냥꾼 미라', 'description': '활을 쓴다. 발소리가 없다.', 'sheet': sheet(11, dex=16, wis=12)},
-            {'name': '용병 도르', 'description': '도끼를 든다. 돈을 받고 왔다.', 'sheet': sheet(14, str=16, con=14)},
-        ],
-        'character_modes': ['pregen', 'custom'],
+        'character_modes': ['pregen', 'custom', 'manual', 'point_buy', 'rolled'],
+        'player_made_hp': {'base': 8, 'cap': 20},
+        'reroll_allowed': True,
         'recommended_players': {'min': 2, 'max': 4},
+        **world,
     }
+
+
+def scenario_body(rulebook_id: str, model: str, world: dict) -> dict:
+    """새로 만들 때의 견본 시나리오"""
+    return {'title': SEED_TITLE, 'rulebook_id': rulebook_id, **scenario_fields(model, world)}
 
 
 def listing_body() -> dict:
@@ -233,27 +235,66 @@ def is_listed(proxy: str, token: str, scenario_id: str) -> bool:
     return True
 
 
-def seed_scenario(proxy: str, token: str) -> tuple[str, bool]:
-    """견본 시나리오의 ID 와 새로 만들었는지. 있으면 공개만 확인한다."""
+def seed_lorebook(proxy: str, token: str) -> tuple[str, dict[str, str]]:
+    """견본 로어북의 ID 와, 항목의 이름에서 ID 로 가는 표. 없는 로어북과 항목만 만든다(이름으로 찾는다)."""
+    found = find_by_title(call(proxy, token, 'GET', f'{GAME}/lorebooks?limit=100'), LOREBOOK_TITLE)
+    lorebook = found or call(
+        proxy, token, 'POST', f'{GAME}/lorebooks', {'title': LOREBOOK_TITLE, 'description': '견본'}
+    )
+    path = f'{GAME}/lorebooks/{lorebook["id"]}/entries'
+    have = {entry['name']: entry['id'] for entry in call_list(proxy, token, path)} if found else {}
+    for entry in ENTRIES:
+        if entry['name'] not in have:
+            have[entry['name']] = call(proxy, token, 'POST', path, entry)['id']
+    return lorebook['id'], have
+
+
+def call_list(proxy: str, token: str, path: str) -> list[dict]:
+    """목록을 돌려주는 주소(로어북의 항목)를 부른다. 목록이 아니면 빈 목록이다"""
+    answer = call(proxy, token, 'GET', path)
+    return answer if isinstance(answer, list) else []
+
+
+def seed_world(proxy: str, token: str) -> dict:
+    """로어북을 채우고 시나리오에 넣을 세계의 칸을 만든다."""
+    lorebook_id, ids = seed_lorebook(proxy, token)
+    return world_fields(ids, lorebook_id)
+
+
+def seed_scenario(proxy: str, token: str) -> tuple[str, str]:
+    """
+    견본 시나리오의 ID 와 한 일(created, upgraded, kept).
+    있고 세계(시작 장소)가 있으면 공개만 확인한다. 맵이 없는 앞의 견본이면 세계를 넣고 새 판을 게시한다
+    """
     found = find_by_title(call(proxy, token, 'GET', f'{GAME}/scenarios?limit=100'), SEED_TITLE)
-    if found:
+    if found and call(proxy, token, 'GET', f'{GAME}/scenarios/{found["id"]}').get('start_place'):
         if not is_listed(proxy, token, found['id']):
             publish(proxy, token, found['id'])
-        return found['id'], False
+        return found['id'], 'kept'
     model = pick_model(call(proxy, token, 'GET', f'{GAME}/tables/narration-models'))
+    world = seed_world(proxy, token)
+    if found:
+        call(proxy, token, 'PATCH', f'{GAME}/scenarios/{found["id"]}', scenario_fields(model, world))
+        publish(proxy, token, found['id'])
+        return found['id'], 'upgraded'
     rulebook = call(proxy, token, 'POST', f'{GAME}/rulebooks', {'title': '[견본] 룰북', 'template': 'srd5'})
-    scenario = call(proxy, token, 'POST', f'{GAME}/scenarios', scenario_body(rulebook['id'], model))
+    scenario = call(proxy, token, 'POST', f'{GAME}/scenarios', scenario_body(rulebook['id'], model, world))
     call(proxy, token, 'PATCH', f'{GAME}/scenarios/{scenario["id"]}/listing', listing_body())
     publish(proxy, token, scenario['id'])
-    return scenario['id'], True
+    return scenario['id'], 'created'
 
 
 def seed_table(proxy: str, token: str, scenario_id: str) -> dict:
-    """방장이 앉은 모집 중인 견본 테이블. 이미 있으면 그것을 돌려준다."""
+    """
+    방장이 앉은 모집 중인 견본 테이블. 이미 있으면 그것을 돌려준다.
+    테이블은 열 때의 판을 쓴다. 맵이 없으면 앞의 판으로 연 것이라 새로 연다(앞의 것은 그대로 둔다)
+    """
     mine = call(proxy, token, 'GET', f'{GAME}/tables?limit=100')
     for table in mine.get('items', []):
         if table.get('scenario_id') == scenario_id and table.get('status') == 'recruiting':
-            return call(proxy, token, 'GET', f'{GAME}/tables/{table["id"]}')
+            detail = call(proxy, token, 'GET', f'{GAME}/tables/{table["id"]}')
+            if detail.get('map'):
+                return detail
     return call(proxy, token, 'POST', f'{GAME}/tables', table_body(scenario_id))
 
 
@@ -264,9 +305,12 @@ def run(proxy: str, password: str, with_table: bool) -> Seeded:
     ensure_local(proxy)
     accounts = seed_accounts(password)
     host = accounts[0]
-    scenario_id, created = seed_scenario(proxy, host.access_token)
+    scenario_id, state = seed_scenario(proxy, host.access_token)
     table = seed_table(proxy, host.access_token, scenario_id) if with_table else None
-    return Seeded(accounts=accounts, scenario_id=scenario_id, created_scenario=created, table=table)
+    return Seeded(accounts=accounts, scenario_id=scenario_id, scenario_state=state, table=table)
+
+
+SCENARIO_STATES = {'created': '새로 만들었다', 'upgraded': '맵과 물건을 넣어 새 판을 게시했다', 'kept': '이미 있었다'}
 
 
 def report(seeded: Seeded, proxy: str, password: str) -> str:
@@ -274,7 +318,7 @@ def report(seeded: Seeded, proxy: str, password: str) -> str:
     roles = ('방장', '손님')
     for role, account in zip(roles, seeded.accounts, strict=False):
         lines.append(f'  {role}: {account.username} / {password}')
-    state = '새로 만들었다' if seeded.created_scenario else '이미 있었다'
+    state = SCENARIO_STATES[seeded.scenario_state]
     lines += ['', f'시나리오({state}): {proxy}/trpg/scenarios/{seeded.scenario_id}']
     if seeded.table:
         lines += [f'테이블: {proxy}/trpg/tables/{seeded.table["id"]}  초대 코드 {seeded.table.get("invite_code")}']
@@ -283,6 +327,7 @@ def report(seeded: Seeded, proxy: str, password: str) -> str:
         '화면에서 로그인하면 메일 코드가 온다. 메일 서버를 적지 않았으면 로그에 찍힌다:',
         '  docker compose --profile app logs -f auth-mail',
         '두 계정으로 보려면 다른 브라우저나 시크릿 창을 하나 더 쓴다(같은 브라우저의 창은 로그인을 나눈다).',
+        '한 판을 따라가는 순서는 docs/operations/local-screens.md 의 "한 판 따라가기"에 있다.',
     ]
     return '\n'.join(lines)
 
