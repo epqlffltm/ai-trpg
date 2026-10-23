@@ -37,6 +37,9 @@ from dev_seed_world import ENTRIES, LOREBOOK_TITLE, world_fields
 PROXY = 'http://127.0.0.1:8080'
 LOREBOOKS = '/api/v1/game/lorebooks'
 
+# 지금 세계를 담은 시나리오의 답(맵, 화폐, 장비가 있다)
+CURRENT_SCENARIO = {'id': 's1', 'start_place': 'e0', 'currency': {'name': '은화'}, 'items': [{'slots': ['body']}]}
+
 # 로어북의 항목이 모두 있을 때의 이름에서 ID 로 가는 표
 IDS = {entry['name']: f'e{index}' for index, entry in enumerate(ENTRIES)}
 
@@ -158,7 +161,7 @@ class ScenarioTest(unittest.TestCase):
         game = FakeGame(
             {
                 ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [{'id': 's1', 'title': SEED_TITLE}]},
-                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': 'e0', 'currency': {'name': '은화'}},
+                ('GET', '/api/v1/game/scenarios/s1'): CURRENT_SCENARIO,
                 ('GET', '/api/v1/game/listings/s1'): {'scenario_id': 's1'},
             }
         )
@@ -170,7 +173,7 @@ class ScenarioTest(unittest.TestCase):
         game = FakeGame(
             {
                 ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [{'id': 's1', 'title': SEED_TITLE}]},
-                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': 'e0', 'currency': {'name': '은화'}},
+                ('GET', '/api/v1/game/scenarios/s1'): CURRENT_SCENARIO,
                 ('GET', '/api/v1/game/listings/s1'): SeedError('404'),
                 ('POST', '/api/v1/game/scenarios/s1/versions'): {'number': 2},
                 ('PUT', '/api/v1/game/scenarios/s1/listing/publication'): {},
@@ -253,11 +256,25 @@ class WorldTest(unittest.TestCase):
         self.assertTrue({line['entry_id'] for line in merchant['inventory']} <= priced)
         self.assertNotIn(IDS['녹슨 열쇠'], priced)
 
-    def test_is_current_needs_a_world_and_a_currency(self):
-        self.assertTrue(dev_seed_world.is_current({'start_place': 'p', 'currency': {'name': '은화'}}))
-        self.assertTrue(dev_seed_world.is_current({'map': {'places': []}, 'currency': {'name': '은화'}}))
-        self.assertFalse(dev_seed_world.is_current({'start_place': 'p', 'currency': None}))
-        self.assertFalse(dev_seed_world.is_current({'currency': {'name': '은화'}}))
+    def test_is_current_needs_a_world_a_currency_and_gear(self):
+        gear = [{'slots': ['body']}]
+        self.assertTrue(dev_seed_world.is_current({'start_place': 'p', 'currency': {'name': '은화'}, 'items': gear}))
+        self.assertTrue(dev_seed_world.is_current({'map': {'places': []}, 'currency': {'name': '은화'}, 'items': gear}))
+        self.assertFalse(dev_seed_world.is_current({'start_place': 'p', 'currency': None, 'items': gear}))
+        self.assertFalse(dev_seed_world.is_current({'currency': {'name': '은화'}, 'items': gear}))
+        self.assertFalse(
+            dev_seed_world.is_current({'start_place': 'p', 'currency': {'name': '은화'}, 'items': [{'slots': []}]})
+        )
+
+    def test_a_pregen_starts_wearing_gear_that_fits(self):
+        fields = world_fields(IDS, 'l1')
+        rules = {rule['entry_id']: rule for rule in fields['items']}
+        worn = [line for pregen in fields['pregens'] for line in pregen.get('items', []) if line.get('wear')]
+        self.assertTrue(worn)
+        for line in worn:
+            rule = rules[line['entry_id']]
+            self.assertTrue(set(line['wear']) <= set(rule['slots']))
+            self.assertEqual(len(line['wear']), rule.get('slot_count', 1))
 
 
 class TableTest(unittest.TestCase):
@@ -275,6 +292,7 @@ class TableTest(unittest.TestCase):
                     'invite_code': 'ABC',
                     'map': {'places': []},
                     'currency': {'name': '은화'},
+                    'items': [{'slots': ['body']}],
                 },
             }
         )

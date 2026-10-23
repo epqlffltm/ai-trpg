@@ -35,6 +35,7 @@ const CONFLICTS: Record<string, RoundProblem> = {
   recipient_full: { message: '그 물건을 더 가질 수 없습니다(한 가지 99개까지).', refresh: true },
   not_on_map: { message: '맵에 서 있지 않아 가거나 찾을 수 없습니다.', refresh: true },
   target_not_down: { message: '대상이 쓰러지지 않았습니다. 그때는 훔치기입니다.', refresh: true },
+  weapon_not_worn: { message: '고른 무기를 착용하고 있지 않습니다. 장비를 확인해 주세요.', refresh: true },
   // 돈(#278)
   not_merchant: { message: '그 인물은 상인이 아닙니다.', refresh: true },
   merchant_unavailable: { message: '상인이 쓰러졌거나 적대해 거래하지 않습니다.', refresh: true },

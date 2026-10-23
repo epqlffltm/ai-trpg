@@ -1378,3 +1378,36 @@ a.ui-button {
   font-size: 0.85em;
 }
 
+
+/* 장비(#276). 소지품 탭의 캐릭터마다, 칸마다 한 줄 */
+.equipment {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--ui-border);
+  border-radius: var(--ui-radius);
+  font-size: 0.92em;
+}
+
+.equipment__rows {
+  display: grid;
+  gap: 2px;
+}
+
+.equipment__row {
+  display: grid;
+  grid-template-columns: minmax(64px, auto) 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.equipment__slot {
+  color: var(--ui-text-muted);
+  font-size: 0.9em;
+}
+
+.equipment__note {
+  margin: 0;
+  font-size: 0.85em;
+}
