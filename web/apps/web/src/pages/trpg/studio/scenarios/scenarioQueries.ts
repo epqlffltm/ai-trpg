@@ -1,10 +1,11 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/scenarioQueries.ts
-// 시나리오 고치기(B9)가 읽는 것. 시나리오 하나, 게시 점검, 판의 목록은 시나리오의 낱개 열쇠 아래에 둔다.
+// 시나리오 고치기(B9)가 읽는 것. 시나리오 하나, 게시 점검, 판의 목록, 소개 페이지는 시나리오의 낱개 열쇠 아래에 둔다.
 // 저장하면 점검만 다시 읽고(시나리오는 받은 것으로 바꾼다), 게시하면 점검과 판의 목록을 다시 읽는다.
+// 소개를 고치거나 공개하면 받은 소개 페이지로 바꾼다.
 // 재료를 고르는 칸은 종류마다 내 재료를 한 번에 100 개까지 읽는다(목록 열쇠 아래라 재료를 만들면 함께 무른다).
 
 import { queryOptions } from '@tanstack/react-query';
-import { fetchPublishCheck, fetchScenario, fetchVersions } from '../../../../api/scenarios';
+import { fetchOwnListing, fetchPublishCheck, fetchScenario, fetchVersions } from '../../../../api/scenarios';
 import { fetchAssets, type StudioKind } from '../../../../api/studio';
 import { assetDetailKey, assetListKey } from '../studioQueries';
 
@@ -37,6 +38,17 @@ export function versionsQuery(scenarioId: string) {
   return queryOptions({
     queryKey: versionsKey(scenarioId),
     queryFn: ({ signal }) => fetchVersions(scenarioId, signal),
+  });
+}
+
+export function listingKey(scenarioId: string) {
+  return [...assetDetailKey('scenarios', scenarioId), 'listing'] as const;
+}
+
+export function listingQuery(scenarioId: string) {
+  return queryOptions({
+    queryKey: listingKey(scenarioId),
+    queryFn: ({ signal }) => fetchOwnListing(scenarioId, signal),
   });
 }
 
