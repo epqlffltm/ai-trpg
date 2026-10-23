@@ -219,6 +219,14 @@
             "title": "Items",
             "type": "array"
           },
+          "lorebooks": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LorebookCopyDocument"
+            },
+            "title": "Lorebooks",
+            "type": "array"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -846,6 +854,81 @@
           "image_id"
         ],
         "title": "ItemDocument",
+        "type": "object"
+      },
+      "LoreEntryDocument": {
+        "description": "로어북의 항목 하나. constant 면 늘 모델에 간다. 아니면 최근 말에 keywords 가운데 하나가 나올 때 간다\n(app/conversation/lorebook.py). kind 는 종류(person, place …)다. 모르는 종류도 받아 둔다.",
+        "properties": {
+          "constant": {
+            "default": false,
+            "title": "Constant",
+            "type": "boolean"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "keywords": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Keywords",
+            "type": "array"
+          },
+          "kind": {
+            "default": "other",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "content"
+        ],
+        "title": "LoreEntryDocument",
+        "type": "object"
+      },
+      "LorebookCopyDocument": {
+        "description": "캐릭터의 판에 복사된 로어북 하나. id 와 version 은 asset 의 로어북과 그 판의 번호다.",
+        "properties": {
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LoreEntryDocument"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "name"
+        ],
+        "title": "LorebookCopyDocument",
         "type": "object"
       },
       "MeResponse": {
