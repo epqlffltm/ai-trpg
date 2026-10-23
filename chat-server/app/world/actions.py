@@ -1,7 +1,7 @@
 # chat-server/app/world/actions.py
 
 """
-행동 하나를 상태에 적용한다(이동, 쓰기, 건네기). DB 를 모르는 순수 함수다.
+행동 하나를 상태에 적용한다(이동, 쓰기, 건네기, 시간 보내기). DB 를 모르는 순수 함수다.
 
 할 수 있는지 보고(안 되면 ActionRefusedError), 바뀐 상태와 행동 말의 글을 돌려준다. 저장은 부르는 쪽이 한다.
 행동의 결과 뒤에 호감도의 규칙을 건다(app/world/affection.py).
@@ -15,6 +15,7 @@ from app.world.items import apply_give, apply_use, check_held, give_text, use_te
 from app.world.moves import apply_move, check_move, move_text
 from app.world.schemas import Action, GiveAction, MoveAction, UseAction
 from app.world.state import WorldState
+from app.world.waiting import apply_wait, wait_text
 
 
 @dataclass(frozen=True)
@@ -44,10 +45,18 @@ def perform_give(document: CharacterDocument, state: WorldState, action: GiveAct
     return Performed(apply_affection(document, apply_give(state, item), GIVE_ITEM, item.id), give_text(item))
 
 
-def perform(document: CharacterDocument, state: WorldState, action: Action) -> Performed:
-    """행동 하나. kind 로 가른다."""
+def perform_wait(state: WorldState, start_hour: int) -> Performed:
+    """시간을 보낸다. 다음 시간대가 된다. 호감도의 규칙은 걸지 않는다(시간 보내기의 행동 종류가 없다)."""
+    waited = apply_wait(state, start_hour)
+    return Performed(waited, wait_text(waited, start_hour))
+
+
+def perform(document: CharacterDocument, state: WorldState, action: Action, start_hour: int) -> Performed:
+    """행동 하나. kind 로 가른다. start_hour 는 대화의 시작 시각(몇 시)이다."""
     if isinstance(action, MoveAction):
         return perform_move(document, state, action)
     if isinstance(action, UseAction):
         return perform_use(document, state, action)
-    return perform_give(document, state, action)
+    if isinstance(action, GiveAction):
+        return perform_give(document, state, action)
+    return perform_wait(state, start_hour)

@@ -257,7 +257,7 @@ async def extras_on(
     return CardExtras(
         story=render_story(latest_summary(dropped, summaries)),
         memory=render_memory(notes),
-        scene=render_scene(document, current),
+        scene=render_scene(document, current, conversation.start_hour),
     )
 
 
@@ -480,7 +480,7 @@ async def begin_action(
         path = await conversations.active_path(session, conversation.active_leaf_id)
         document = world.document_of(character)
         before = await world.state_on(session, document, [message.id for message in path])
-        performed = perform(document, before, action)
+        performed = perform(document, before, action, conversation.start_hour)
         words = action.words if isinstance(action, GiveAction) else None
         added = action_messages(conversation, conversation.active_leaf_id, performed.text, words, now)
         for message in added:

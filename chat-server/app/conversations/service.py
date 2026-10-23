@@ -152,6 +152,7 @@ def build_conversation(
         title=character.name,
         start_title=start.title,
         start_situation=start.situation,
+        start_hour=start.hour,
     )
 
 

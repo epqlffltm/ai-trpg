@@ -118,10 +118,11 @@ class PersonaOut(BaseModel):
 
 
 class StartOut(BaseModel):
-    """고른 시작 상황."""
+    """고른 시작 상황. hour 는 대화가 시작한 시각(1일째 몇 시)이다."""
 
     title: str
     situation: str
+    hour: int
 
 
 class MessageOut(BaseModel):

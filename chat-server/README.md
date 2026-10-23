@@ -115,7 +115,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
 | GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives` 와 `suggestions`), 가지 끝의 [상태](#장소와-소지품)(`state`), 답을 쓰는 중인지(`generating`) | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content, edit_of?}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`). `edit_of` 는 [내 말 고치기](#고치기) | access 토큰 |
-| POST | `/api/v1/chat/conversations/{id}/actions` | [행동](#장소와-소지품). 이동 `{kind: "move", place}`, 쓰기 `{kind: "use", item}`, 건네기 `{kind: "give", item, words?}`. 바로 SSE 로 반응을 받는다. 할 수 없으면 422(`no_map`, `place_not_found`, `already_there`, `not_connected`, `item_not_found`, `not_held`) | access 토큰 |
+| POST | `/api/v1/chat/conversations/{id}/actions` | [행동](#장소와-소지품). 이동 `{kind: "move", place}`, 쓰기 `{kind: "use", item}`, 건네기 `{kind: "give", item, words?}`, 시간 보내기 `{kind: "wait"}`. 바로 SSE 로 반응을 받는다. 할 수 없으면 422(`no_map`, `place_not_found`, `already_there`, `not_connected`, `item_not_found`, `not_held`) | access 토큰 |
 | GET, POST | `/api/v1/chat/conversations/{id}/notes` | [기억 메모](#기억-메모)들(먼저 쓴 것부터), 더하기 `{text}`(201). 가득 차면 409 `notes_full` | access 토큰 |
 | GET | `/api/v1/chat/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#굴리는-요약)(읽기만, `{text, covered_up_to, created_at}`). 아직 없으면 `null` | access 토큰 |
 | PATCH, DELETE | `/api/v1/chat/conversations/{id}/notes/{note_id}` | 메모 고치기 `{text}`, 지우기(204). 없으면 404 `note_not_found` | access 토큰 |
@@ -141,6 +141,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 1. asset 서버에서 그 캐릭터의 **마지막 판**과 페르소나의 사본을 가져온다. 이 서버의 비밀(`ASSET_SECRET`)로 서명하고 사용자의 토큰을 그대로 넘긴다.
    쓸 수 있는 캐릭터인지는 asset 서버가 판단한다. 가져온 판의 등급은 이 서버도 한 번 더 본다(`allowed_ratings`).
 2. 판의 시작 상황 가운데 `start`(0 부터, 기본 0) 번째를 고른다. 없으면 422 `start_not_found`(`starts` 에 판의 시작 상황의 수).
+   제목, 상황, 시작 시각(`hour`, 1일째 몇 시. 판에 없으면 정오)을 대화에 복사해 둔다.
 3. 판의 사본, 대화, 페르소나의 사본, 첫 말(캐릭터의 인사말)을 한 트랜잭션에서 저장한다. 인사말이 비어 있으면 첫 말이 없다.
 
 | `persona_id` | 쓰는 페르소나 |
@@ -308,7 +309,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 상태는 서버가 갖고 바꾼다. 모델은 바뀐 상태를 읽고 반응만 쓴다.
 
 - **상태.** 지금 있는 장소(`place`), 대화를 시작한 뒤 흐른 시간(`minutes`), 사용자의 소지품(`inventory`), 가 본 장소(`visited`, 화면이 안개를 그린다),
-  상대의 차림(`outfit`, 사용자가 건넨 옷), 호감도(`affection`, 아래).
+  상대의 차림(`outfit`, 사용자가 건넨 옷), 호감도(`affection`, 아래), 지금 시각(`clock`)과 배경(`background`, [시각과 배경](#시각과-배경)).
   처음에는 판의 시작 상태다. 지도가 없는 캐릭터면 장소가 없다(`null`).
 - **말마다.** 상태는 바뀐 말(행동 말)에만 적는다(`message_states`, 매번 전체를). 나머지 말은 부모의 상태를 따르고, 지금의 상태는 가지의 끝에서 거슬러 올라가 읽는다.
   그래서 다시 생성하거나 앞 가지로 가면 그 가지의 상태가 된다. 되돌리기가 가지를 바꾸는 것으로 끝난다.
@@ -320,12 +321,25 @@ uv run python -m scripts.models adult glm-5-3 --forbid
   `words` 는 덧붙이는 한마디다. 행동 말 아래에 사람의 말로 붙고, 반응은 그 한마디에 답한다(행동과 말이 한 턴, 한 번 청구).
   SSE 의 `turn` 에서 `user_message` 가 한마디, `action` 이 그 위의 행동 말이다. 한마디가 없으면 `user_message` 가 행동 말이고 `action` 은 `null` 이다.
 - 수가 0 이 되면 소지품에서 빠진다. 가지고 있지 않으면 422 `not_held`, 판에 없는 물건이면 422 `item_not_found` 다.
-- **모델에 보내는 것.** 카드에 "[지금]" 블록(장소와 설명, 갈 수 있는 곳과 시간, 소지품, 상대의 차림)이 들어간다. 행동 말은 "[행동] …"으로 사람의 차례에 간다.
+- **모델에 보내는 것.** 카드에 "[지금]" 블록(시각, 장소와 설명, 갈 수 있는 곳과 시간, 소지품, 상대의 차림, 호감의 단계)이 들어간다. 시각이 늘 있으므로 블록도 늘 있다. 행동 말은 "[행동] …"으로 사람의 차례에 간다.
 - **호감도**(`app/world/affection.py`). 판에 호감도가 있으면 시작 값에서 출발해, 사용자의 행동(건넸다, 갔다, 썼다)에 제작자가 적은 규칙대로 엔진이 바꾼다(0~100 으로 자른다).
   "처음 한 번만" 규칙은 그 가지에서 한 번만 걸린다(걸린 규칙을 상태에 적는다). 대화의 내용만으로는 움직이지 않는다(첫 출시).
   모델에는 단계 이름만 간다("사용자에 대한 호감: 친구"). 응답의 `affection` 은 `{display, value, stage, stage_index, stages}` 이고,
   단계로 보이는 캐릭터(`display` 가 `stage`)는 `value` 가 `null` 이다(숫자를 내려보내지 않는다). 호감도를 더하기 전에 적힌 상태는 시작 값으로 읽는다.
-- 시간대(배경), 상대가 받은 선물의 목록, 모델이 호감도의 변화를 제안하는 것은 그 뒤다. 규칙은 `app/world/` 에 두고, TRPG 와 함께 쓸 때 `shared/` 로 뽑는다.
+- 상대가 받은 선물의 목록, 모델이 호감도의 변화를 제안하는 것은 그 뒤다. 규칙은 `app/world/` 에 두고, TRPG 와 함께 쓸 때 `shared/` 로 뽑는다.
+
+#### 시각과 배경
+
+대화는 고른 시작 상황의 시각(1일째 `hour` 시)에서 시작한다. 이동(길의 시간)과 시간 보내기로 흐른다(#668, `app/world/clock.py`).
+
+- **시각.** 시작 시각(대화의 `start_hour`)에 상태의 흐른 시간(`minutes`)을 더한 것이다. 응답의 `clock` 은 `{day, hour, minute, time_of_day}` 이다.
+  따로 적지 않고 계산하므로 서로 어긋날 일이 없다. 모델에는 "시각: 2일째 저녁 18:30" 으로 간다.
+- **시간대**는 다섯이고 경계는 TRPG 와 같다(2026-10-22 유저 결정): 새벽(`dawn`) 4시, 아침(`morning`) 7시, 낮(`day`) 11시, 저녁(`evening`) 17시, 밤(`night`) 21시. 4시 전은 밤이다.
+- **시간 보내기**(`{kind: "wait"}`, 2026-10-22 유저 결정). 다음 시간대가 시작하는 시각까지 흐른다. 밤이면 다음 날 새벽 4시다.
+  행동 말("시간을 보냈다. 저녁이 되었다.")을 붙이고 반응을 받는다(한 번 청구). 지도가 없어도 되고 막는 까닭이 없다. "하루 마치기"는 두지 않는다.
+- **배경**(`background`). 지금 장소의 그 시간대의 배경, 없으면 장소의 기본 배경, 그것도 없거나 장소가 없으면 `null` 이다. 화면이 같은 규칙을 다시 짜지 않게 서버가 고른다.
+  기본 배경의 색감만 바꿔 시간대를 보이는 연출은 화면의 일이다(나중).
+- 시작 시각을 더하기 전에 만든 대화는 정오에 시작한 것으로 본다.
 
 ### 기억 메모
 
