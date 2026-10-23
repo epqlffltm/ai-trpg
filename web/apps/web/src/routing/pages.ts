@@ -28,3 +28,9 @@ export const RulebookEditPage = lazyPage(() => import('../pages/trpg/studio/rule
 export const WorldsPage = lazyPage(() => import('../pages/trpg/studio/worlds/WorldsPage'), 'WorldsPage');
 export const WorldNewPage = lazyPage(() => import('../pages/trpg/studio/worlds/WorldNewPage'), 'WorldNewPage');
 export const WorldEditPage = lazyPage(() => import('../pages/trpg/studio/worlds/WorldEditPage'), 'WorldEditPage');
+export const LorebooksPage = lazyPage(() => import('../pages/trpg/studio/lorebooks/LorebooksPage'), 'LorebooksPage');
+export const LorebookNewPage = lazyPage(() => import('../pages/trpg/studio/lorebooks/LorebookNewPage'), 'LorebookNewPage');
+export const LorebookEditPage = lazyPage(() => import('../pages/trpg/studio/lorebooks/LorebookEditPage'), 'LorebookEditPage');
+export const BestiariesPage = lazyPage(() => import('../pages/trpg/studio/bestiaries/BestiariesPage'), 'BestiariesPage');
+export const BestiaryNewPage = lazyPage(() => import('../pages/trpg/studio/bestiaries/BestiaryNewPage'), 'BestiaryNewPage');
+export const BestiaryEditPage = lazyPage(() => import('../pages/trpg/studio/bestiaries/BestiaryEditPage'), 'BestiaryEditPage');
