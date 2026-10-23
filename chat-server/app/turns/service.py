@@ -41,6 +41,7 @@ from app.catalog import repository as catalog
 from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
 from app.conversation import continuation
+from app.conversation.changes import parse_changes
 from app.conversation.continuation import OverlapTrim, continued_text
 from app.conversation.expressions import ExpressionHead, match_expression, split_expression
 from app.conversation.relay import Relay
@@ -76,10 +77,11 @@ from app.turns.frames import delta_frame, done_frame, expression_frame, failed_f
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
 from app.turns.prompt import CharacterCard, PersonaCard, build_messages, render_card
 from app.turns.providers import Router
-from app.turns.values import PromptOptions, SavedMessage, TurnResult, TurnStart
+from app.turns.values import PromptOptions, SavedMessage, TurnResult, TurnStart, WorldBase
 from app.world import repository as world_states
 from app.world import service as world
 from app.world.actions import perform
+from app.world.proposals import Applied, apply_proposals, offer_of, render_offer
 from app.world.scene import render_scene
 from app.world.scenes import find_scene
 from app.world.schemas import Action, GiveAction
@@ -197,6 +199,7 @@ def saved(message: Message) -> SavedMessage:
         suggestions=tuple(message.suggestions or ()),
         event_scene=message.event_scene,
         expression=message.expression,
+        changes=tuple(message.changes or ()),
     )
 
 
@@ -233,12 +236,15 @@ class CardExtras:
     카드에 더하는 블록들. story 는 창 밖으로 밀려난 앞부분의 요약, memory 는 기억 메모(app/memory),
     scene 은 장소와 소지품(app/world)이다. 없으면 None.
     expressions 는 모델이 고를 수 있는 표정과 그 캐릭터 그림이다(없으면 표정을 고르지 않는다).
+    offer 는 모델이 제안할 수 있는 상태의 변화의 지시(없으면 None), world 는 그 바탕인 판과 상태다(#676).
     """
 
     story: str | None
     memory: str | None
     scene: str | None
     expressions: Mapping[str, uuid.UUID] = field(default_factory=dict)
+    offer: str | None = None
+    world: WorldBase | None = None
 
 
 def prompt_for(
@@ -265,6 +271,7 @@ def prompt_for(
         memory=extras.memory,
         story=extras.story,
         expressions=list(extras.expressions),
+        changes=extras.offer,
     )
     turns = [Turn(message.role, message.content) for message in path]
     if closing is not None:
@@ -287,6 +294,7 @@ async def extras_on(
     요약은 창(context_chars)에 들지 못하고 밀려난 말 가운데 가장 뒤의 것이다.
     scene_id 는 이번 답에 붙는 이벤트 씬이다. 있으면 그 장면을 "[지금]" 에 적는다(그림과 글이 어긋나지 않게).
     choose_expression 이면 지금 차림에서 고를 수 있는 표정을 함께 준다(이어서 출력은 끊긴 답의 표정을 그대로 둔다).
+    모델이 제안할 수 있는 상태의 변화(지금의 상태로 정한다)와 그 바탕도 함께 준다.
     """
     document = world.document_of(character)
     current = state if state is not None else await world.state_on(session, document, [m.id for m in path])
@@ -298,6 +306,8 @@ async def extras_on(
         memory=render_memory(notes),
         scene=render_scene(document, current, conversation.start_hour, find_scene(document, scene_id)),
         expressions=expression_images(document, current) if choose_expression else {},
+        offer=render_offer(offer_of(document, current)),
+        world=WorldBase(document, current),
     )
 
 
@@ -350,6 +360,7 @@ def result_of(
     """
     다 받은 답. 본문과 선택지로 나눈다. 길이 상한에서 잘렸으면 partial 이고 선택지는 버린다(줄이 잘렸을 수 있다).
     본문이 없으면(선택지만 썼어도) failed 다. 원가는 그날의 단가로 센다.
+    다 받았으면 모델이 제안한 상태의 변화도 읽는다(받아들이는 것은 저장할 때다). 잘렸으면 버린다.
     previous 는 이어서 출력의 끊긴 답이다. 있으면 되풀이한 앞부분을 떼고 사이에 끼울 것을 붙인 뒤에 나눈다.
     expressions 가 있으면 맨 앞의 표정의 표식을 떼고 고를 수 있는 표정이면 적는다(이어서 출력에는 비어 있다).
     """
@@ -364,7 +375,14 @@ def result_of(
     if completion.truncated:
         return TurnResult(text=body, outcome=Outcome.PARTIAL, expression=expression, **usage)
     suggestions = tuple(parse_suggestions(tail))
-    return TurnResult(text=body, outcome=Outcome.COMPLETE, suggestions=suggestions, expression=expression, **usage)
+    return TurnResult(
+        text=body,
+        outcome=Outcome.COMPLETE,
+        suggestions=suggestions,
+        expression=expression,
+        proposed=parse_changes(text),
+        **usage,
+    )
 
 
 def failure_of(received: str, code: str) -> TurnResult:
@@ -372,8 +390,8 @@ def failure_of(received: str, code: str) -> TurnResult:
     return TurnResult(text=received, outcome=Outcome.PARTIAL if received else Outcome.FAILED, error_code=code)
 
 
-def answer_of(start: TurnStart, result: TurnResult, now: datetime) -> Message | None:
-    """저장할 답. 글자가 없으면 None. 아직 저장하지 않는다."""
+def answer_of(start: TurnStart, result: TurnResult, now: datetime, changes: tuple[dict, ...] = ()) -> Message | None:
+    """저장할 답. 글자가 없으면 None. changes 는 받아들인 상태의 변화(칩)다. 아직 저장하지 않는다."""
     if not result.text:
         return None
     return Message(
@@ -385,19 +403,46 @@ def answer_of(start: TurnStart, result: TurnResult, now: datetime) -> Message | 
         status=MessageStatus.PARTIAL if result.outcome == Outcome.PARTIAL else MessageStatus.COMPLETE,
         suggestions=list(result.suggestions),
         expression=result.expression,
+        changes=list(changes),
         created_at=now,
     )
 
 
-def extension_of(continued: SavedMessage, result: TurnResult) -> SavedMessage | None:
+def accepted_of(start: TurnStart, result: TurnResult) -> Applied | None:
+    """
+    모델이 제안한 상태의 변화를 받아들인 결과. 판과 상태를 모르면 None.
+    제안은 다 받은 답에만 있다(result_of). 잘리거나 끊긴 답은 빈 제안이라 바뀌는 것이 없다.
+    """
+    if start.world is None:
+        return None
+    return apply_proposals(start.world.document, start.world.state, result.proposed)
+
+
+def log_rejected(start: TurnStart, applied: Applied | None) -> None:
+    """버린 제안을 로그로 남긴다(사람에게는 보이지 않는다)."""
+    if applied is not None and applied.rejected:
+        logger.info(
+            '모델의 제안을 버렸습니다',
+            extra={'generation_id': str(start.generation_id), 'rejected': list(applied.rejected)},
+        )
+
+
+def extension_of(continued: SavedMessage, result: TurnResult, changes: tuple[dict, ...] = ()) -> SavedMessage | None:
     """
     이어서 출력의 결과로 바뀔 말. 이어 쓴 글이 없으면 None(끊긴 답은 그대로다).
-    다 썼으면 complete 이고 선택지가 붙는다. 또 끊겼으면 partial 로 남아 다시 이어 쓸 수 있다.
+    다 썼으면 complete 이고 선택지와 받아들인 상태의 변화(changes)가 붙는다.
+    또 끊겼으면 partial 로 남아 다시 이어 쓸 수 있다.
     """
     if not result.text:
         return None
     status = MessageStatus.PARTIAL if result.outcome == Outcome.PARTIAL else MessageStatus.COMPLETE
-    return replace(continued, content=continued.content + result.text, status=status, suggestions=result.suggestions)
+    return replace(
+        continued,
+        content=continued.content + result.text,
+        status=status,
+        suggestions=result.suggestions,
+        changes=changes,
+    )
 
 
 def finished_values(result: TurnResult, answer_id: uuid.UUID | None, now: datetime) -> dict[str, object]:
@@ -488,6 +533,7 @@ async def begin_turn(
         user_message=saved(message),
         messages=prompt_for(conversation, character, persona, [*path, message], options, extras),
         expressions=extras.expressions,
+        world=extras.world,
     )
 
 
@@ -558,6 +604,7 @@ async def begin_action(
         messages=prompt_for(conversation, character, persona, [*path, *added], options, extras),
         expressions=extras.expressions,
         action=saved(added[0]) if len(added) > 1 else None,
+        world=extras.world,
     )
 
 
@@ -623,6 +670,7 @@ async def begin_regenerate(
         user_message=saved(path[-1]),
         messages=prompt_for(conversation, character, persona, path, options, extras),
         expressions=extras.expressions,
+        world=extras.world,
     )
 
 
@@ -688,6 +736,7 @@ async def begin_continue(
         user_message=saved(path[-2]),
         messages=prompt_for(conversation, character, persona, path, options, extras, continuation.instruction()),
         continued=saved(target),
+        world=extras.world,
     )
 
 
@@ -769,20 +818,27 @@ async def store_answer(
     """
     답을 세션에 적는다(커밋하지 않는다). 저장한 답이나, 글이 없으면 None.
     보통은 새 말이고, 이어서 출력이면 끊긴 답을 바꾼다.
+    모델이 제안한 상태의 변화를 받아들였으면 칩을 답에 붙이고 바뀐 상태를 그 답에 적는다(가지마다 따로다).
     """
+    applied = accepted_of(start, result)
+    log_rejected(start, applied)
+    changes = applied.changes if applied is not None else ()
     if start.continued is not None:
-        extended = extension_of(start.continued, result)
-        if extended is not None:
+        stored = extension_of(start.continued, result, changes)
+        if stored is not None:
             await repository.extend_message(
-                session, extended.id, extended.content, extended.status, list(extended.suggestions)
+                session, stored.id, stored.content, stored.status, list(stored.suggestions), list(stored.changes)
             )
-        return extended
-    answer = answer_of(start, result, now)
-    if answer is None:
-        return None
-    repository.add(session, answer)
-    await session.flush()
-    return saved(answer)
+    else:
+        answer = answer_of(start, result, now, changes)
+        if answer is None:
+            return None
+        repository.add(session, answer)
+        await session.flush()
+        stored = saved(answer)
+    if stored is not None and changes:
+        world_states.add_state(session, stored.id, applied.state)
+    return stored
 
 
 async def save_result(

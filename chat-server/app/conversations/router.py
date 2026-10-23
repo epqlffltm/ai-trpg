@@ -159,6 +159,7 @@ def to_message(message: Message) -> MessageOut:
         edited=message.edited,
         event_scene=message.event_scene,
         expression=message.expression,
+        changes=message.changes or [],
     )
 
 
