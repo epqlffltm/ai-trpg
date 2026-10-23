@@ -8,11 +8,22 @@
   - 키워드는 대소문자를 가리지 않고, 조사가 붙어도 맞는다. 빈 키워드는 보지 않는다. 오래된 말의 키워드는 보지 않는다
   - 차례: 상시가 먼저(판의 차례), 그다음 키워드가 가장 최근에 나온 것부터(같으면 판의 차례)
   - 상한: 항목의 수, 글자(들어가지 않는 것은 건너뛰고 다음 것을 본다)
+  - 뜻으로 찾은 항목은 키워드로 고른 것 뒤에 붙는다(이미 고른 것은 빠진다). 찾는 글은 최근 말 둘이다
   - 블록의 모양. 항목이 없으면 블록이 없다
 """
 
 from app.assets.schemas import LoreEntryDocument
-from app.conversation.lorebook import MAX_CHARS, MAX_ENTRIES, SCAN_MESSAGES, render_lore, select_entries
+from app.conversation.lorebook import (
+    MAX_CHARS,
+    MAX_ENTRIES,
+    QUERY_MESSAGES,
+    SCAN_MESSAGES,
+    chosen_entries,
+    query_text,
+    ranked,
+    render_lore,
+    with_recalled,
+)
 
 
 def entry(entry_id: str, keywords: list[str] | None = None, constant: bool = False, content: str = '설정.'):
@@ -21,6 +32,10 @@ def entry(entry_id: str, keywords: list[str] | None = None, constant: bool = Fal
 
 def names(entries) -> list[str]:
     return [item.name for item in entries]
+
+
+def select_entries(entries, recent):
+    return chosen_entries(entries, ranked(entries, recent))
 
 
 def test_constant_entries_always_go_in():
@@ -81,3 +96,13 @@ def test_entries_that_do_not_fit_are_skipped():
 def test_the_block_lists_names_and_contents():
     assert render_lore([entry('city', content='제국의 수도.')]) == '[로어북]\n- city: 제국의 수도.'
     assert render_lore([]) is None
+
+
+def test_recalled_entries_follow_the_keyword_ones():
+    assert with_recalled([2, 0], [1, 0, 3]) == [2, 0, 1, 3]
+
+
+def test_the_query_is_the_last_messages():
+    recent = ['오래된 말', '앞의 답', '이번 말']
+
+    assert query_text(recent) == '\n'.join(recent[-QUERY_MESSAGES:]) == '앞의 답\n이번 말'
