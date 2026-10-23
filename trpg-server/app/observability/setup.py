@@ -17,8 +17,9 @@ uvicorn 은 제 로거(uvicorn, uvicorn.error, uvicorn.access)에 제 처리기�
 import logging
 import sys
 
+from server_core.observability.context import current_ids
+
 from app.core.config import Settings
-from app.observability.context import current_ids
 from app.observability.formatter import CONTEXT_IDS_FIELD, JsonFormatter, ServiceInfo
 
 # 이 서버의 이름. 로그의 service 칸에 들어간다. 규격(docs/observability.md)에 적힌 이름이다

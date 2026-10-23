@@ -14,6 +14,7 @@ import logging
 import uuid
 from datetime import datetime
 
+from server_core.observability.context import current_ids
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Scenario, ScenarioVersion
@@ -23,7 +24,6 @@ from app.chat import repository as messages
 from app.chat.models import ChatMessage
 from app.events import repository as events
 from app.events.models import TableEvent
-from app.observability.context import current_ids
 from app.operators import repository
 from app.operators.models import OperatorRead, ReadKind
 from app.tables import repository as tables

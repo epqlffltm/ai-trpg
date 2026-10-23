@@ -25,6 +25,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
+from server_core.observability.context import current_ids
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.service import AssetNotFoundError
@@ -32,7 +33,6 @@ from app.events import recorder
 from app.events.models import EventType
 from app.listings import repository as listings
 from app.listings.service import unpublish
-from app.observability.context import current_ids
 from app.operators import notices, repository
 from app.operators.models import ActionKind, OperatorAction, PublishingBan, ScenarioSanction
 from app.operators.publishing import is_active

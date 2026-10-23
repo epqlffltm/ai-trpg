@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator, Iterator
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from server_core.testing.tokens import FakeAuthServer, SigningKey, make_signing_key
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import Settings
@@ -28,9 +29,9 @@ from tests.collector import Collector, serving
 from tests.metrics import MetricsRecorder
 from tests.metrics import recording as recording_metrics
 from tests.narration_model import add_test_model
-from tests.signing import FakeAuthServer, SigningKey, make_signing_key, make_viewer
 from tests.spans import SpanRecorder, recording
 from tests.streaming import LONG_HEARTBEAT, Reader
+from tests.viewers import make_viewer
 
 TEST_SCHEMA = 'game_test'
 

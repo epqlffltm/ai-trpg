@@ -24,6 +24,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,7 +44,6 @@ from app.transcripts.labels import Labels
 from app.transcripts.markdown import render_event
 from tests.narration_model import asset_body
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_clock_narration import held_jobs  # noqa: F401 (테스트가 픽스처로 쓴다)
 from tests.test_table_items import kill
 

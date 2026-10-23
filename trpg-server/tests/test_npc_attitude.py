@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +33,6 @@ from app.tables.models import TableNpc
 from app.tables.npc_attitudes import attitude_word, change_attitude
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_npc_actions import LOREBOOKS_URL, OPENING, RULEBOOKS_URL, SCENARIOS_URL, TABLES_URL, post, table_url
 from tests.test_whispers import RecordingNarrator
 

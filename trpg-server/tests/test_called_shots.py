@@ -20,6 +20,7 @@ import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +31,6 @@ from app.engine.injury import NO_HINDRANCE, Hindrance
 from app.engine.ruleset import CalledShot, CalledShotMode
 from app.engine.templates import SRD5
 from app.rounds import prompt
-from tests.signing import SigningKey
 from tests.test_npc_actions import (
     PASS,
     PUNCH,

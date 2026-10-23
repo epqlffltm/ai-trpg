@@ -12,6 +12,7 @@ import uuid
 
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.copies import copied_from
 from app.assets.lorebooks import service
@@ -20,7 +21,6 @@ from app.assets.lorebooks.service import LorebookFullError
 from app.assets.models import LOREBOOK_MAX_ENTRIES, LoreEntry, LoreKind
 from app.assets.routing import Paging, Session, to_page, to_summary
 from app.assets.schemas import AssetPage, AssetSummary
-from app.auth.dependencies import CurrentUser
 
 router = APIRouter(prefix='/lorebooks', tags=['lorebooks'])
 

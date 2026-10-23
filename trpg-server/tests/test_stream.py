@@ -26,6 +26,7 @@ import asyncpg
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.events import recorder
@@ -40,8 +41,8 @@ from app.tables import repository as table_repository
 from tests.conftest import make_test_settings
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token, make_viewer
 from tests.streaming import LONG_HEARTBEAT, DeafSource, FakeClock, QuietSource
+from tests.viewers import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

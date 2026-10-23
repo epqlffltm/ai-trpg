@@ -11,10 +11,11 @@ import asyncio
 import secrets
 import uuid
 
+from server_core.auth.tokens import AccessClaims
+
 from app.assets import ratings
 from app.assets.models import CharacterMode, NarrationStyle, ScenarioVersion
 from app.assets.scenarios.snapshot import Snapshot
-from app.auth.tokens import AccessClaims
 from app.tables import passwords
 from app.tables.errors import (
     WrongPasswordError,

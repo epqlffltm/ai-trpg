@@ -11,9 +11,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.routing import Paging, Session
-from app.auth.dependencies import CurrentUser
 from app.billing.models import NarrationCharge
 from app.core.dice import Rolling
 from app.rounds import service, state, trades

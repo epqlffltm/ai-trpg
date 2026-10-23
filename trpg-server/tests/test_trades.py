@@ -23,12 +23,12 @@ import uuid
 import pytest
 from fastapi import status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import API_PREFIX
 from tests.narration_model import asset_body
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_table_items import kill
 
 pytestmark = pytest.mark.usefixtures('clean_tables')

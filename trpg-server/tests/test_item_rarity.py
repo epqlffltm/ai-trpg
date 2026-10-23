@@ -16,13 +16,13 @@ import uuid
 import pytest
 from fastapi import status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 
 from app.assets.models import RARITY_ORDER, ItemRarity
 from app.assets.scenarios.snapshot import Snapshot, item_rule_of, read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_34
 from app.tables import items
 from tests.narration_model import with_model
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_npc_sheets import add_entry, post, published
 from tests.test_scenario_items import LOREBOOKS_URL, ME, SCENARIOS_URL, rule, scenario_with
 

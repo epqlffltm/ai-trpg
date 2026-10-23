@@ -9,8 +9,8 @@
 
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
+from server_core.observability.identifiers import REQUEST_ID_HEADER
 
-from app.observability.identifiers import REQUEST_ID_HEADER
 from app.observability.middleware import SCOPE_REQUEST_ID
 
 # 서버의 잘못으로 처리하지 못했을 때의 문장. 다른 오류 응답과 같은 칸(detail)에 싣는다

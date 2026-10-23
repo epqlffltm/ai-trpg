@@ -16,12 +16,12 @@ from dataclasses import replace
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.calendar.clock import ClockTime, TimeOfDay, read_time
 from app.rounds import prompt, service, time_words
 from app.rounds.narrator import ClockNote, Move, NarrationRequest, PlaceNote, QuestNote
-from tests.signing import SigningKey
 from tests.test_round_closing import HeldJobs, started_at
 from tests.test_rounds_api import ME, bearer
 from tests.test_table_clock import NIGHT_MARCH, declare_wait, next_round, start_solo

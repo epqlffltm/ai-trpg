@@ -16,6 +16,7 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engine.dice import ScriptedDice
@@ -23,7 +24,6 @@ from app.main import API_PREFIX
 from app.personas.models import PERSONA_MAX_PER_OWNER, Persona
 from tests.narration_model import with_model
 from tests.sheets import make_sheet
-from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

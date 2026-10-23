@@ -11,13 +11,13 @@ from collections.abc import AsyncIterator
 import pytest
 from httpx import ASGITransport, AsyncClient
 from opentelemetry.trace import SpanKind, StatusCode
+from server_core.testing.tokens import FakeAuthServer
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import Settings
 from app.main import API_PREFIX, create_app
 from app.observability.spans import ATTRIBUTE_REQUEST_ID
 from tests.logs import rendered
-from tests.signing import FakeAuthServer
 from tests.spans import SpanRecorder, hex_span_id, hex_trace_id
 
 REQUEST_LOGGER = 'app.observability.middleware'

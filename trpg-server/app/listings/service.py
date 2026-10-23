@@ -16,6 +16,7 @@ import enum
 import uuid
 from collections.abc import Sequence
 
+from server_core.auth.tokens import AccessClaims
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +26,6 @@ from app.assets.ratings import ALL_AGES_ONLY, allowed_ratings, require_rating
 from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
-from app.auth.tokens import AccessClaims
 from app.listings import repository
 from app.listings.models import Listing
 from app.listings.repository import ListingFilter, PublicRow

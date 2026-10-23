@@ -15,6 +15,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 
 from app.assets.models import ITEM_STACK_MAX, SCENARIO_MAX_STARTING_ITEMS, ItemKind
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot, item_entries, item_rule_of, read_snapshot
@@ -23,7 +24,6 @@ from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_npc_sheets import add_entry, create_scenario, post, published, refused
 
 pytestmark = pytest.mark.usefixtures('clean_tables')

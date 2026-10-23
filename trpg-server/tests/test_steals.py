@@ -29,6 +29,7 @@ import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,7 +45,6 @@ from app.rounds.victims import is_unwary
 from app.tables.models import NpcStatus
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_monster_combat import (
     BESTIARIES_URL,
     LOREBOOKS_URL,

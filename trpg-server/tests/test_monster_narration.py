@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.bestiaries.models import MonsterKind
@@ -42,7 +43,6 @@ from app.rounds.service import load_scene
 from app.tables.models import NpcStatus
 from app.tables.repository import find_table
 from tests.sheets import make_sheet
-from tests.signing import SigningKey
 from tests.test_monster_turns import (
     BITE,
     FAIL,
