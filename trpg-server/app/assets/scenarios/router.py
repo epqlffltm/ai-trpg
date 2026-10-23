@@ -75,6 +75,7 @@ def to_detail(scenario: Scenario, found: ModelStatus | None) -> ScenarioDetail:
         encounters=scenario.encounters,
         items=scenario.items,
         starting_items=scenario.starting_items,
+        currency=scenario.currency,
         quests=scenario.quests,
         start_place=scenario.start_place,
         routes=scenario.routes,

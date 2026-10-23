@@ -6,7 +6,7 @@
 DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면의 인물을 받는다.
 저장은 부른 쪽(app/rounds/service.py)이 한다.
 
-행동은 열하나다(app/engine/action.py).
+행동은 열여섯이다(app/engine/action.py).
   - 판정(CheckAction). 이번 장면에 나온 NPC 를 겨눌 수 있다(app/rounds/cast.py). 노려 칠 수도 있다.
     자기가 선 장소의 몬스터 한 마리를 칠 수도 있다(app/rounds/monster_scene.py).
   - 치료(TreatAction). 능력과 난이도는 규칙이 정한다. 대상이 그 부상을 입고 있어야 한다.
@@ -23,6 +23,8 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
     그 물건을 지금 지녀야 한다(app/rounds/steals.py).
   - 빼앗기(LootAction). 자기가 선 장소의 마리나 이번 장면의 인물이 쓰러졌거나 죽어 있고, 그 물건을 지금 지녀야 한다
     (app/rounds/loots.py). 판정이 없어 규칙을 보지 않는다.
+  - 사기(BuyAction), 팔기(SellAction), 돈 건네기(PayAction). 화폐가 있는 판이어야 한다. 사고팔기는 이번 장면의
+    거래하는 상인과, 값이 있는 물건과, 그만큼의 돈(재고, 소지품)이 있어야 한다(app/rounds/trades.py).
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
 비워 둔 칸(난이도, 회복과 치료의 대상)은 여기서 채워 저장한다. 읽는 쪽이 "비어 있으면"을 다시 따지지 않는다.
 """
@@ -34,14 +36,17 @@ from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import action as actions
 from app.engine.action import (
     AnyAction,
+    BuyAction,
     CheckAction,
     GiveAction,
     LootAction,
     MoveAction,
     NameAction,
+    PayAction,
     PutDownAction,
     RestAction,
     SearchAction,
+    SellAction,
     StealAction,
     TakeAction,
     TreatAction,
@@ -59,6 +64,7 @@ from app.rounds.place_item_actions import accept_take
 from app.rounds.rests import accept_rest
 from app.rounds.state import find_declaration, is_down, rules_of
 from app.rounds.steals import require_steal
+from app.rounds.trades import accept_buy, accept_pay, accept_sell
 from app.rounds.victims import find_monster_carried, find_npc_carried
 from app.rounds.waits import accept_wait
 from app.tables import items, npcs, sheets
@@ -366,7 +372,8 @@ def accept_action(
     member 는 선언하는 사람이고, scene 은 이번 장면(인물과 몬스터)이다.
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
-    accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal, accept_loot).
+    accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal, accept_loot,
+    accept_buy, accept_sell, accept_pay).
     """
     if action is None:
         return None
@@ -395,6 +402,12 @@ def accept_action(
         return accept_rest(ruleset, action)
     if isinstance(action, WaitAction):
         return accept_wait(action)
+    if isinstance(action, BuyAction):
+        return accept_buy(table, member, scene, action)
+    if isinstance(action, SellAction):
+        return accept_sell(table, member, scene, action)
+    if isinstance(action, PayAction):
+        return accept_pay(table, member, action)
     return accept_check(table, member, action, scene, ruleset)
 
 

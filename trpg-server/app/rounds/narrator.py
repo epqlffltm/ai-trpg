@@ -417,6 +417,39 @@ class LootNote:
 
 
 @dataclass(frozen=True)
+class TradeNote:
+    """
+    상인과 사고판 결과(app/rounds/trades.py, #278). 엔진이 정한 것이다. 판정이 없다.
+
+    side 는 buy(샀다)나 sell(팔았다)이다. merchant 는 상인의 장면의 호칭, price 는 오간 돈의 글(금화 20닢)이다.
+    traded 가 거짓이면 하지 못했다. 까닭은 reason 이다(app/rounds/trades.py 의 Reason).
+    """
+
+    side: str
+    merchant: str
+    name: str
+    count: int
+    price: str
+    traded: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class PayNote:
+    """
+    돈을 건넨 결과(app/rounds/trades.py, #278). 엔진이 정한 것이다.
+
+    amount 는 건넨(건네려던) 돈의 글(금화 10닢), target 은 받는 사람의 캐릭터 이름이다(떠났으면 None).
+    paid 가 거짓이면 하지 못했다. 까닭은 reason 이다.
+    """
+
+    amount: str
+    target: str | None
+    paid: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
 class HandOverNote:
     """
     이룬 퀘스트가 이 캐릭터에게서 가져간 물건 한 가지(app/rounds/quest_handover.py). 엔진이 정한 것이다.
@@ -486,6 +519,12 @@ class Move:
     steal: StealNote | None = None
     # 쓰러졌거나 죽은 대상에게서 빼앗는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     loot: LootNote | None = None
+    # 상인과 사고판 행동이면 그 결과, 돈을 건넨 행동이면 그 결과(#278). 판정이 아니라 verdict 와 함께 있지 않다
+    trade: TradeNote | None = None
+    pay: PayNote | None = None
+    # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 가진 돈의 글(금화 30닢). 돈이 없는 판이면 None 이다(#278).
+    # 서술자는 돈을 주거나 받는 장면을 지어내지 않는다. 돈을 바꾸는 것은 서버뿐이다
+    money: str | None = None
     # 이 라운드가 닫힐 때 이룬 퀘스트가 이 캐릭터에게서 가져간 물건들. 퀘스트마다, 물건마다 한 줄이다
     handed_over: list[HandOverNote] = field(default_factory=list)
     # 겨눈 몬스터를 칠 수 없어 굴리지 않았으면 그 까닭. 아니면 None 이다. verdict 와 함께 있지 않다

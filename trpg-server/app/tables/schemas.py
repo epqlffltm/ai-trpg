@@ -364,6 +364,20 @@ class CatalogItemOut(BaseModel):
     heals: str | None
     # 물건의 등급(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다
     rarity: ItemRarity
+    # 상인이 파는 값(#278). 사 줄 때는 currency.sell_percent 를 곱해 내림한다. 비어 있으면 사고팔 수 없다
+    price: int | None = None
+
+
+class CurrencyOut(BaseModel):
+    """
+    테이블의 화폐(#278). 판에 굳은 것이다. 돈은 엔진만 바꾼다. 결제의 크레딧과 상관없다.
+
+    sell_percent 는 상인이 사 주는 값의 백분율이다. 물건 하나의 값에 곱해 내림한다.
+    """
+
+    name: str
+    unit: str
+    sell_percent: int
 
 
 class ItemChange(BaseModel):
@@ -453,6 +467,8 @@ class SheetOut(BaseModel):
     injuries: list[InjuryOut] = []
     # 가진 물건들. 판의 물건 순서다(TableDetail.items). 앉은 사람은 서로의 소지품을 본다
     items: list[ItemOut] = []
+    # 가진 돈(#278). 테이블의 화폐(TableDetail.currency)로 센다. 화폐가 없는 테이블이면 늘 0 이다
+    money: int = 0
     # 서 있는 맵의 장소. 이름은 TableDetail.map.places 에서 찾는다. 맵이 없는 테이블이면 None 이다
     place_id: uuid.UUID | None = None
 
@@ -591,8 +607,10 @@ class TableDetail(TableSummary):
     # 시나리오의 제작자가 추천한 문체. 방장이 문체를 고르는 화면에서 "추천"을 표시한다
     recommended_narration_style: NarrationStyle
     pregens: list[PregenChoice]
-    # 이 테이블의 판에 있는 물건들. 방장이 줄 수 있는 것이고, 소지품의 이름과 종류를 여기서 찾는다
+    # 이 테이블의 판에 있는 물건들. 소지품의 이름과 종류와 값을 여기서 찾는다
     items: list[CatalogItemOut]
+    # 화폐(#278). 돈이 없는 판이면 None 이다. 그때는 사고팔지도 돈을 건네지도 못한다
+    currency: CurrencyOut | None = None
     # 이 테이블의 퀘스트들. 숨긴 것은 방장에게만 보인다. 시작 전에는 비어 있다
     quests: list[QuestOut]
     # 이 테이블이 아는 맵. 맵이 없는 판이면 None 이다. 시작 전에도 처음부터 아는 것(열린 길, 명소)이 보인다

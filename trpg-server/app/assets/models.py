@@ -79,6 +79,14 @@ SCENARIO_MAX_ITEM_RULES = 100
 # 시작 소지품의 가짓수(시나리오의 것, 프리젠 하나의 것)와 한 가지의 개수
 SCENARIO_MAX_STARTING_ITEMS = 20
 ITEM_STACK_MAX = 99
+# 돈(#278). 판의 화폐로 센다. 캐릭터 하나가 가질 수 있는 돈과 물건 하나의 값, 보상 하나의 상한이다.
+# 결제의 크레딧과 상관없다. 게임 안의 숫자이고 엔진만 바꾼다
+MONEY_MAX = 1_000_000
+# 화폐의 이름(금화)과 단위(닢)
+CURRENCY_NAME_MAX_LENGTH = 20
+CURRENCY_UNIT_MAX_LENGTH = 10
+# 상인이 물건을 사 주는 값. 물건의 값에 이 백분율을 곱해 내림한다
+DEFAULT_SELL_PERCENT = 50
 # 시나리오 하나에 둘 수 있는 퀘스트 규칙의 수. 사건 항목마다 하나다. 한 판에 쫓는 퀘스트가 이보다 많지는 않다
 SCENARIO_MAX_QUEST_RULES = 50
 # 퀘스트의 기한(분). 드러난 때부터 센다. 상한은 한 해다(오래 가는 부상이 낫는 기간과 같다)
@@ -679,6 +687,11 @@ class Scenario(AssetContent):
     # 시작 소지품. 하나하나가 {entry_id, count} 다. 캐릭터 모두가 테이블이 시작할 때 받는다.
     # 프리젠을 고른 사람은 그 프리젠의 소지품(pregens[].items)도 더 받는다
     starting_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 화폐(#278). {name, unit, starting, sell_percent} 다. 이름과 단위, 캐릭터 모두가 시작할 때 받는 돈,
+    # 상인이 사 주는 값의 백분율이다. 비우면 돈이 없는 시나리오다(값, 상인, 돈의 보상을 쓰지 못한다).
+    # 화폐가 없는데 돈을 쓰는 칸이 있으면 게시할 때 막는다(currency_missing)
+    currency: Mapped[dict | None] = mapped_column(JSONB)
 
     # 퀘스트 규칙들. 하나하나가 {entry_id, start, reward} 다. 붙인 로어북의 사건 항목 하나가 퀘스트로서 어떤지 정한다.
     # 아이템 규칙과 같은 까닭으로 여기 둔다. 사건의 글은 로어북에, 시작 상태와 보상은 시나리오에 있다.

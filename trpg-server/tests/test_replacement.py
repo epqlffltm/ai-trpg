@@ -315,6 +315,7 @@ async def test_a_player_whose_character_died_brings_in_a_new_one(
         'dead': False,
         'injuries': [],
         'items': [],
+        'money': 0,
         'place_id': None,
     }
     assert seat['sheet'] == {**PLAIN, **fresh}

@@ -155,6 +155,18 @@ describe('toAction', () => {
     const give = { kind: 'give', item: 'i1', count: 2, target: OTHER } as const;
     expect(toAction(draftFromAction(RULES as unknown as TableDetail['rules'], give), ctx)).toEqual(give);
   });
+
+  it('사기, 팔기, 돈 건네기도 낸 것을 그대로 다시 보낸다(#278)', () => {
+    const rules = RULES as unknown as TableDetail['rules'];
+    const buy = { kind: 'buy', npc: NPC, item: 'i1', count: 2 } as const;
+    const sell = { kind: 'sell', npc: NPC, item: 'i1', count: 1 } as const;
+    const pay = { kind: 'pay', target: OTHER, amount: 30 } as const;
+    expect(toAction(draftFromAction(rules, buy), ctx)).toEqual(buy);
+    expect(toAction(draftFromAction(rules, sell), ctx)).toEqual(sell);
+    expect(toAction(draftFromAction(rules, pay), ctx)).toEqual(pay);
+    expect(actionHint(draft({ kind: 'buy', item: 'i1' }), ctx)).toBe('상인과 물건을 골라 주세요.');
+    expect(actionHint(draft({ kind: 'pay', target: `member:${OTHER}`, amount: 0 }), ctx)).toContain('1에서');
+  });
 });
 
 describe('actionHint', () => {

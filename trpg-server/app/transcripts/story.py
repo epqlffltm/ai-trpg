@@ -215,6 +215,28 @@ def item_given(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'{who(payload)} → {who(target)}: {item_count(payload)}{done}')]
 
 
+def money_label(amount: object, labels: Labels) -> str:
+    """돈을 그 판의 화폐로. 예: 금화 30닢. 화폐의 이름이 없으면 숫자만이다."""
+    number = f'{amount:,}' if isinstance(amount, int) else text_of(amount)
+    return f'{labels.currency_name} {number}{labels.currency_unit}' if labels.currency_name else number
+
+
+def item_traded(payload: dict, labels: Labels) -> list[Block]:
+    """상인과 사고팖(#278). 누가, 어느 상인과, 무엇을, 얼마에."""
+    verb = '삼' if payload.get('side') == 'buy' else '팖'
+    done = '' if payload.get('traded') else ' (하지 못함)'
+    price = money_label(payload.get('price'), labels)
+    merchant = text_of(payload.get('npc_name'))
+    return [Note(f'{who(payload)} · {merchant}: {item_count(payload)} {verb} ({price}){done}')]
+
+
+def money_paid(payload: dict, labels: Labels) -> list[Block]:
+    """돈을 건넴(#278)."""
+    target = payload.get('target') if isinstance(payload.get('target'), dict) else {}
+    done = '' if payload.get('paid') else ' (건네지 못함)'
+    return [Note(f'{who(payload)} → {who(target)}: {money_label(payload.get("amount"), labels)}{done}')]
+
+
 def item_put_down(payload: dict, labels: Labels) -> list[Block]:
     """물건을 내려놓음."""
     item = item_count(payload)
@@ -338,6 +360,8 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.ITEM_USED: item_used,
     EventType.ITEM_GIVEN: item_given,
     EventType.ITEM_PUT_DOWN: item_put_down,
+    EventType.ITEM_TRADED: item_traded,
+    EventType.MONEY_PAID: money_paid,
     EventType.STEAL_ATTEMPTED: steal_attempted,
     EventType.QUEST_CHANGED: quest_changed,
     EventType.CHARACTER_MOVED: character_moved,

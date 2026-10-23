@@ -77,6 +77,34 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'reason',
         'remaining',
     ),
+    # 사고판 것과 돈을 건넨 것도 공개다(#278). 소지품과 돈은 모두에게 보인다. 못 했으면 까닭(reason)이 있다
+    EventType.ITEM_TRADED: (
+        'round',
+        'user_id',
+        'character_name',
+        'side',
+        'npc_id',
+        'npc_name',
+        'entry_id',
+        'name',
+        'count',
+        'price',
+        'traded',
+        'reason',
+        'total',
+        'money',
+    ),
+    EventType.MONEY_PAID: (
+        'round',
+        'user_id',
+        'character_name',
+        'amount',
+        'paid',
+        'reason',
+        'target',
+        'remaining',
+        'target_total',
+    ),
     # 훔치기의 판정은 다른 판정처럼 공개다. 대상의 능력치는 적지 않는다(목표값에 섞여 있다).
     # 대상이 몬스터면 monster_id·monster_name, NPC 면 npc_id·npc_name 이 있다. 들켜 싸움이 붙었으면 fight 가 참이다
     EventType.STEAL_ATTEMPTED: (

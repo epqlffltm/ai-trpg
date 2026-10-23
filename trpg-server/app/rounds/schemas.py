@@ -568,6 +568,64 @@ class LootOutcome(BaseModel):
     loot: LootOut
 
 
+class TradeOut(BaseModel):
+    """
+    상인과 사고판 결과(#278). 엔진이 정했다(app/rounds/trades.py). 판정이 없다.
+
+    side 는 buy(샀다)나 sell(팔았다)이다. npc_id 는 상인의 인물 항목의 id, npc_name 은 장면의 호칭이다.
+    price 는 오간(오가려던) 돈이다. 살 때는 낸 돈, 팔 때는 받은 돈이다. 다 하거나 하나도 하지 않는다.
+    traded 가 거짓이면 reason 이 있다: unavailable(상인이 쓰러졌거나 죽었거나 적대했다), out_of_stock(재고가 모자랐다),
+    not_enough_money(돈이 모자랐다), not_held(팔 물건이 모자랐다), full(산 물건을 더 가질 수 없었다),
+    too_much_money(받을 돈을 더 가질 수 없었다).
+    total 은 그 뒤에 그 물건을 가진 개수, money 는 그 뒤에 가진 돈이다.
+    """
+
+    user_id: uuid.UUID
+    character_name: str
+    side: str
+    npc_id: uuid.UUID
+    npc_name: str
+    entry_id: uuid.UUID
+    name: str
+    count: int
+    price: int
+    traded: bool
+    reason: str | None
+    total: int
+    money: int
+
+
+class TradeOutcome(BaseModel):
+    """사거나 파는 행동의 결과."""
+
+    trade: TradeOut
+
+
+class PayOut(BaseModel):
+    """
+    돈을 건넨 결과(#278). 엔진이 정했다(app/rounds/trades.py). 판정이 없다.
+
+    paid 가 거짓이면 reason 이 있다: not_enough_money, target_gone(받을 사람이 떠났거나 죽었다),
+    too_much_money(받을 사람이 더 가질 수 없었다).
+    remaining 은 건넨 뒤에 가진 돈, target_total 은 받은 사람이 가진 돈이다. 받을 사람이 떠났으면 None 이다.
+    """
+
+    user_id: uuid.UUID
+    character_name: str
+    amount: int
+    paid: bool
+    reason: str | None
+    target: ItemPersonOut
+    remaining: int
+    target_total: int | None
+
+
+class PayOutcome(BaseModel):
+    """돈을 건네는 행동의 결과."""
+
+    pay: PayOut
+
+
 class RestOut(BaseModel):
     """
     쉰 결과. 엔진이 정했다(app/rounds/rests.py). 판정이 없다.
@@ -654,7 +712,7 @@ class DeclarationOut(BaseModel):
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
     # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
     # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 훔쳤으면 StealOutcome, 빼앗았으면 LootOutcome,
-    # 쉬었으면 RestOutcome, 기다렸으면 WaitOutcome 이다.
+    # 쉬었으면 RestOutcome, 기다렸으면 WaitOutcome, 사거나 팔았으면 TradeOutcome, 돈을 건넸으면 PayOutcome 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
     # 차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면 TurnLostOutcome 이다
     outcome: (
@@ -670,6 +728,8 @@ class DeclarationOut(BaseModel):
         | LootOutcome
         | RestOutcome
         | WaitOutcome
+        | TradeOutcome
+        | PayOutcome
         | TargetGoneOutcome
         | TurnLostOutcome
         | None
@@ -770,6 +830,8 @@ class CarriedOut(BaseModel):
     count: int
     # 몸에 걸치거나 쥔 장비인가. 아니면 품에 넣은 소지품이다
     equipped: bool
+    # 물건의 값(#278). 상인의 소지품이고 값이 있으면 이 값에 산다. 비어 있으면 사고팔 수 없다
+    price: int | None = None
 
 
 class PersonOut(BaseModel):
@@ -789,6 +851,9 @@ class PersonOut(BaseModel):
     attitude: NpcAttitude
     # 지금 지닌 물건. 판의 NPC 시트에 적은 것에서 떨어뜨리거나 빼앗긴 것을 뺀 것이다. 장비 다음 소지품의 차례다
     items: list[CarriedOut] = []
+    # 상인인가(#278). 상인은 소지품 중 값이 있는 것을 팔고(buy), 값이 있는 물건을 사 준다(sell).
+    # 살아 있고 적대하지 않을 때만 거래한다
+    merchant: bool = False
 
 
 class SceneMonsterOut(BaseModel):

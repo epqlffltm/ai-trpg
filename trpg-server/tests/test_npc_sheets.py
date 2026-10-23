@@ -120,6 +120,7 @@ def npc(entry: dict, sheet: dict) -> dict:
         'dull': False,
         'on_caught': 'hostile',
         'attacks': [],
+        'merchant': False,
     }
 
 

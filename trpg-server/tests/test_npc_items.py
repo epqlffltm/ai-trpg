@@ -229,8 +229,15 @@ async def test_the_people_list_shows_what_the_person_carries(client: AsyncClient
     (lady,) = (await people(client, me, world['table']))['people']
 
     assert lady['items'] == [
-        {'entry_id': world['fan']['id'], 'name': '부채', 'rarity': 'rare', 'count': 1, 'equipped': True},
-        {'entry_id': world['coins']['id'], 'name': '금화', 'rarity': 'normal', 'count': 5, 'equipped': False},
+        {'entry_id': world['fan']['id'], 'name': '부채', 'rarity': 'rare', 'count': 1, 'equipped': True, 'price': None},
+        {
+            'entry_id': world['coins']['id'],
+            'name': '금화',
+            'rarity': 'normal',
+            'count': 5,
+            'equipped': False,
+            'price': None,
+        },
     ]
 
 

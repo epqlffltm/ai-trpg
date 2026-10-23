@@ -11,8 +11,9 @@
   - 모양(CheckAction): 규칙을 몰라도 볼 수 있는 것. 입력을 받을 때 검사한다.
   - 맞음(find_fault): 그 테이블의 규칙과 견주어야 알 수 있는 것. "근력"이 이 규칙에 있는 능력인가.
 
-종류는 열셋이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search),
-쉬기(rest), 줍기(take), 내려놓기(put_down), 훔치기(steal), 빼앗기(loot), 기다리기(wait).
+종류는 열여섯이다. 판정(check), 치료(treat), 지목(name), 물건 쓰기(use), 물건 건네기(give), 가기(move), 찾기(search),
+쉬기(rest), 줍기(take), 내려놓기(put_down), 훔치기(steal), 빼앗기(loot), 기다리기(wait), 사기(buy), 팔기(sell),
+돈 건네기(pay).
 종류를 나타내는 칸(kind)으로 가른다(Action).
 치료는 능력과 난이도를 받지 않는다. 규칙이 정한다(app/engine/treatment.py).
 지목은 주사위를 굴리지 않는다. 짚은 이름이 정답인지만 본다(app/rounds/naming.py).
@@ -24,6 +25,7 @@
 쉬기는 판정이 없다. 쉬는 라운드가 그 휴식의 시간만큼 이어지고, 라운드가 닫힐 때 다치지 않았으면 회복한다
 (app/rounds/rests.py).
 기다리기도 판정이 없다. 앉은 사람이 모두 기다리면 가장 짧게 부른 시간만큼 흐른다(app/rounds/waits.py).
+사기, 팔기, 돈 건네기도 판정이 없다. 값은 판이 정하고, 돈과 소지품을 엔진이 옮긴다(app/rounds/trades.py, #278).
 
 행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
 
@@ -81,6 +83,12 @@ class ActionKind(enum.StrEnum):
     LOOT = 'loot'
     # 시간을 건너뛴다("사흘 기다린다"). 모두가 기다려야 흐른다
     WAIT = 'wait'
+    # 장면의 상인에게서 물건을 산다. 판에 적힌 값을 낸다(#278)
+    BUY = 'buy'
+    # 장면의 상인에게 가진 물건을 판다. 판에 적힌 값에 화폐의 백분율을 곱해 받는다(#278)
+    SELL = 'sell'
+    # 가진 돈을 앉은 다른 사람에게 건넨다(#278)
+    PAY = 'pay'
 
 
 class RestLength(enum.StrEnum):
@@ -399,6 +407,56 @@ class LootAction(BaseModel):
         return self
 
 
+class BuyAction(BaseModel):
+    """
+    이번 장면의 상인(npc)에게서 물건(item) count 개를 사는 행동(app/rounds/trades.py, #278).
+
+    판정이 없다. 값은 판의 물건의 값 × 개수다. 상인의 소지품에 그만큼 있어야 하고(재고), 돈이 모자라면 사지 못한다.
+    다 사거나 하나도 사지 않는다. 사려던 것보다 적게 사서 돈이 엉뚱하게 남는 일을 만들지 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.BUY]
+    # 판의 로어북 인물 항목의 id 다. 이번 장면의 상인만 고를 수 있다(app/rounds/cast.py)
+    npc: uuid.UUID
+    # 판의 로어북 물건 항목의 id 다. 장면의 인물 목록의 items 에서 고른다
+    item: uuid.UUID
+    count: int = Field(default=1, ge=1, le=GIVE_MAX_COUNT)
+
+
+class SellAction(BaseModel):
+    """
+    가진 물건(item) count 개를 이번 장면의 상인(npc)에게 파는 행동(app/rounds/trades.py, #278).
+
+    판정이 없다. 받는 돈은 물건 하나의 값에 화폐의 백분율을 곱해 내림한 것 × 개수다.
+    판 물건은 상인의 재고가 되지 않는다.
+    다 팔거나 하나도 팔지 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.SELL]
+    npc: uuid.UUID
+    item: uuid.UUID
+    count: int = Field(default=1, ge=1, le=GIVE_MAX_COUNT)
+
+
+# 한 번에 건넬 수 있는 돈. 한 캐릭터가 가질 수 있는 돈과 같다(app/assets/models.py 의 MONEY_MAX)
+PAY_MAX_AMOUNT = 1_000_000
+
+
+class PayAction(BaseModel):
+    """가진 돈 amount 를 앉은 다른 사람(target)에게 건네는 행동(app/rounds/trades.py, #278). 판정이 없다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.PAY]
+    # 받는 사람. 테이블에 앉은 다른 사람이다
+    target: uuid.UUID
+    amount: int = Field(ge=1, le=PAY_MAX_AMOUNT)
+
+
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
 AnyAction = (
     CheckAction
@@ -414,6 +472,9 @@ AnyAction = (
     | StealAction
     | LootAction
     | WaitAction
+    | BuyAction
+    | SellAction
+    | PayAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다
