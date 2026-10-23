@@ -1514,11 +1514,15 @@ a.ui-button {
 }
 
 .scenario-clock,
-.scenario-choices {
+.scenario-choices,
+.scenario-players,
+.scenario-sheet {
   border: 1px solid var(--ui-border);
   border-radius: 8px;
   padding: 10px 14px;
   margin: 0 0 var(--ui-gap);
+  /* fieldset 은 기본이 min-width: min-content 라 좁은 화면에서 안의 격자가 화면 밖으로 밀린다 */
+  min-width: 0;
 }
 
 .scenario-opening {
@@ -1589,4 +1593,20 @@ a.ui-button {
 .moderation-facts dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* 둘을 나란히(추천 인원의 최소와 최대, 최대 HP 의 기준값과 상한). 좁으면 줄을 바꾼다 */
+.scenario-players__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0 12px;
+}
+
+.scenario-players__row > * {
+  min-width: 0;
+}
+
+.scenario-players__row .ui-field__input {
+  width: 100%;
+  box-sizing: border-box;
 }
