@@ -194,7 +194,7 @@ describe('게시', () => {
     await userEvent.type(publish.getByLabelText('바뀐 것(선택)'), '첫 판');
     await userEvent.click(publish.getByRole('button', { name: '게시' }));
 
-    expect(await publish.findByText('1판을 게시했습니다.')).toBeInTheDocument();
+    expect(await publish.findByText('1판을 게시했습니다. 공개하려면 아래 낸 판에서 고르세요.')).toBeInTheDocument();
     expect(sent(seen, 'POST', `${SCENARIOS}/${ID}/versions`)[0]?.body).toEqual({ note: '첫 판' });
     expect(await within(publish.getByRole('list', { name: '판' })).findByText('첫 판')).toBeInTheDocument();
     expect(await screen.findByText('스타팅이 하나도 없습니다.')).toBeInTheDocument();

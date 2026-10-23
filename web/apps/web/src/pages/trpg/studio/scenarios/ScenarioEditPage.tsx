@@ -15,13 +15,14 @@ import { BasicsTab } from './BasicsTab';
 import { CharactersTab } from './CharactersTab';
 import { CheckPanel } from './CheckPanel';
 import { ItemsTab } from './ItemsTab';
+import { ListingTab } from './ListingTab';
 import { MapTab } from './MapTab';
 import { MonstersTab } from './MonstersTab';
-import { QuestsTab } from './QuestsTab';
 import { NpcsTab } from './NpcsTab';
 import { MaterialsTab } from './MaterialsTab';
 import { OpeningsTab } from './OpeningsTab';
 import { PublishTab } from './PublishTab';
+import { QuestsTab } from './QuestsTab';
 import { scenarioQuery } from './scenarioQueries';
 import { SCENARIO_TABS, sectionLabel, tabOf, type ScenarioTab } from './scenarioTabs';
 
@@ -81,7 +82,8 @@ function panelOf(tab: ScenarioTab, scenario: ScenarioDetail, goTo: (tab: Scenari
   if (tab === 'map') return <MapTab scenario={scenario} goTo={goTo} />;
   if (tab === 'monsters') return <MonstersTab scenario={scenario} goTo={goTo} />;
   if (tab === 'quests') return <QuestsTab scenario={scenario} goTo={goTo} />;
-  return <PublishTab scenario={scenario} />;
+  if (tab === 'listing') return <ListingTab scenario={scenario} />;
+  return <PublishTab scenario={scenario} goTo={goTo} />;
 }
 
 function TabList({ current, onChange }: { current: ScenarioTab; onChange: (tab: ScenarioTab) => void }) {
