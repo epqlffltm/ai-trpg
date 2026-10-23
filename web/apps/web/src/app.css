@@ -1065,3 +1065,39 @@ a.ui-button {
   cursor: not-allowed;
   opacity: 0.5;
 }
+
+/* 방장의 운영(B6 의 ⑤). 방장에게만, 접어 둔다 */
+.host-panel > summary {
+  cursor: pointer;
+  list-style: revert;
+}
+
+.host-panel__title {
+  display: inline;
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.host-panel[open] > summary {
+  margin-bottom: 8px;
+}
+
+.host-members {
+  display: grid;
+  gap: 8px;
+}
+
+.host-member {
+  display: grid;
+  gap: 4px;
+}
+
+.host-member__name {
+  font-weight: 600;
+}
+
+.host-end {
+  margin-top: var(--ui-gap);
+  padding-top: 10px;
+  border-top: 1px dashed var(--ui-border);
+}
