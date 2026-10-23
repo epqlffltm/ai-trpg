@@ -103,8 +103,8 @@ describe('시작 상황', () => {
 
 describe('탭과 점검의 글', () => {
   it('주소의 탭', () => {
-    expect([tabOf('affection'), tabOf('images'), tabOf(null)]).toEqual(['affection', 'basics', 'basics']);
-    expect([isTab('intro'), isTab('images')]).toEqual([true, false]);
+    expect([tabOf('images'), tabOf('lorebooks'), tabOf(null)]).toEqual(['images', 'basics', 'basics']);
+    expect([isTab('intro'), isTab('lorebooks')]).toEqual([true, false]);
   });
 
   it('문제는 그 묶음을 가리킨다. 모르는 이름은 그대로', () => {

@@ -41,7 +41,7 @@ export function ItemsTab({ character }: { character: AssetCharacterDetail }) {
   const update: Update = (change) => setDraft(change);
 
   async function submit() {
-    const saved = await saving.save(toItemsBody(draft));
+    const saved = await saving.save(toItemsBody(draft, character));
     if (saved) setDraft(itemsDraft(saved));
   }
 

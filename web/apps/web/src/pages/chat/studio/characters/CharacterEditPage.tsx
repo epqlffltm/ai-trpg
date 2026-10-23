@@ -16,6 +16,7 @@ import { isMissingCharacter } from './characterProblem';
 import { characterQuery } from './characterQueries';
 import { CHARACTER_TABS, sectionLabel, tabOf, type CharacterTab } from './characterTabs';
 import { CheckPanel } from './CheckPanel';
+import { ImagesTab } from './ImagesTab';
 import { IntroTab } from './IntroTab';
 import { ItemsTab } from './ItemsTab';
 import { MapTab } from './MapTab';
@@ -92,6 +93,7 @@ function panelOf(tab: CharacterTab, character: AssetCharacterDetail): ReactNode 
   if (tab === 'map') return <MapTab character={character} />;
   if (tab === 'items') return <ItemsTab character={character} />;
   if (tab === 'affection') return <AffectionTab character={character} />;
+  if (tab === 'images') return <ImagesTab character={character} />;
   return <PublishTab character={character} />;
 }
 
