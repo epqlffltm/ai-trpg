@@ -36,6 +36,47 @@
         "title": "AffectionDocument",
         "type": "object"
       },
+      "AffectionOut": {
+        "description": "사용자에 대한 상대의 호감도. 보이는 방식(display)은 제작자가 정한다.\nnumber 면 value(0~100)가 실리고, stage 면 value 는 null 이다(숫자를 내려보내지 않는다. 화면의 코드로 숨기지 않는다).\nstage 는 지금 단계의 이름, stage_index 는 그 자리(0 부터), stages 는 단계의 수다(게이지를 그린다).",
+        "properties": {
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "stage_index": {
+            "title": "Stage Index",
+            "type": "integer"
+          },
+          "stages": {
+            "title": "Stages",
+            "type": "integer"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "display",
+          "value",
+          "stage",
+          "stage_index",
+          "stages"
+        ],
+        "title": "AffectionOut",
+        "type": "object"
+      },
       "AffectionRuleDocument": {
         "description": "오르내리는 규칙 하나. on 의 행동을 하면 change 만큼. once 면 그 가지에서 처음 한 번만.",
         "properties": {
@@ -1328,6 +1369,16 @@
       "StateOut": {
         "description": "지금 보고 있는 가지의 끝의 상태. place 는 지금 있는 장소(지도가 없으면 null),\nminutes 는 대화를 시작한 뒤 흐른 시간(분), visited 는 가 본 장소들이다(화면이 안개를 그린다).\noutfit 은 상대가 입은 옷들이다.",
         "properties": {
+          "affection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AffectionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "inventory": {
             "items": {
               "$ref": "#/components/schemas/HoldingOut"
@@ -1370,7 +1421,8 @@
           "minutes",
           "inventory",
           "visited",
-          "outfit"
+          "outfit",
+          "affection"
         ],
         "title": "StateOut",
         "type": "object"

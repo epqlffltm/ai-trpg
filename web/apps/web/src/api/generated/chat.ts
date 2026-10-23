@@ -400,6 +400,24 @@ export interface components {
             start: number;
         };
         /**
+         * AffectionOut
+         * @description 사용자에 대한 상대의 호감도. 보이는 방식(display)은 제작자가 정한다.
+         *     number 면 value(0~100)가 실리고, stage 면 value 는 null 이다(숫자를 내려보내지 않는다. 화면의 코드로 숨기지 않는다).
+         *     stage 는 지금 단계의 이름, stage_index 는 그 자리(0 부터), stages 는 단계의 수다(게이지를 그린다).
+         */
+        AffectionOut: {
+            /** Display */
+            display: string;
+            /** Stage */
+            stage: string;
+            /** Stage Index */
+            stage_index: number;
+            /** Stages */
+            stages: number;
+            /** Value */
+            value: number | null;
+        };
+        /**
          * AffectionRuleDocument
          * @description 오르내리는 규칙 하나. on 의 행동을 하면 change 만큼. once 면 그 가지에서 처음 한 번만.
          */
@@ -1012,6 +1030,7 @@ export interface components {
          *     outfit 은 상대가 입은 옷들이다.
          */
         StateOut: {
+            affection: components["schemas"]["AffectionOut"] | null;
             /** Inventory */
             inventory: components["schemas"]["HoldingOut"][];
             /** Minutes */
