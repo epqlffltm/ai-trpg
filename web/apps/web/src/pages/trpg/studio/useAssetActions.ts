@@ -4,6 +4,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { deleteAsset, type StudioKind } from '../../../api/studio';
+import type { FormProblem } from '../../../auth/problem';
 import { describeDeleteProblem, describeSaveProblem } from './studioProblem';
 import { assetDetailKey, assetListKey } from './studioQueries';
 import { useSending } from './useSending';
@@ -19,12 +20,15 @@ function useRemember(kind: StudioKind) {
   };
 }
 
-/** 만들기나 고치기. send 로 보낼 것을 넘기면 결과를 기억하고 돌려준다 */
-export function useSaveAsset<T extends Saved>(kind: StudioKind) {
+/**
+ * 만들기나 고치기. send 로 보낼 것을 넘기면 결과를 기억하고 돌려준다.
+ * describe 를 주면 실패의 글을 그것으로 만든다(시나리오처럼 재료에 없는 실패가 있을 때). 없으면 재료의 글이다
+ */
+export function useSaveAsset<T extends Saved>(kind: StudioKind, describe?: (error: unknown) => FormProblem) {
   const sending = useSending();
   const remember = useRemember(kind);
   async function save(request: () => Promise<T>): Promise<T | null> {
-    const saved = await sending.send(request, (error) => describeSaveProblem(error, kind));
+    const saved = await sending.send(request, describe ?? ((error) => describeSaveProblem(error, kind)));
     if (saved) remember(saved);
     return saved;
   }
