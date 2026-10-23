@@ -61,7 +61,7 @@ FastAPI 서버들이 함께 쓰는 공통부다. 토큰 검증, 관측(로그, �
 ## 알림 보내기
 
 사람에게 알릴 일을 알림 서버([notification-server](../../notification-server/README.md))에 넣는 발송함이다(`server_core/notifications/`, #678).
-trpg-server 의 `app/notifications/` 에서 뽑았다. 쓰는 서버는 asset-server 이고, chat-server 가 다음이다. trpg-server 는 옮길 때(#589) 이것으로 바꾼다.
+trpg-server 의 `app/notifications/` 에서 뽑았다. 쓰는 서버는 asset-server 와 chat-server 다. trpg-server 는 옮길 때(#589) 이것으로 바꾼다.
 
 | 서버가 하는 것 | 공용 코드가 하는 것 |
 | --- | --- |
