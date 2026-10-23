@@ -20,7 +20,11 @@ export const LobbyPage = lazyPage(() => import('../pages/trpg/lobby/LobbyPage'),
 export const TableCreatePage = lazyPage(() => import('../pages/trpg/tables/TableCreatePage'), 'TableCreatePage');
 export const TableRoomPage = lazyPage(() => import('../pages/trpg/room/TableRoomPage'), 'TableRoomPage');
 
-// 제작 도구(B9). 지금은 룰북뿐이다
+// 제작 도구(B9). 만들기(허브)와 재료마다의 목록, 만들기, 고치기
+export const StudioPage = lazyPage(() => import('../pages/trpg/studio/StudioPage'), 'StudioPage');
 export const RulebooksPage = lazyPage(() => import('../pages/trpg/studio/rulebooks/RulebooksPage'), 'RulebooksPage');
 export const RulebookNewPage = lazyPage(() => import('../pages/trpg/studio/rulebooks/RulebookNewPage'), 'RulebookNewPage');
 export const RulebookEditPage = lazyPage(() => import('../pages/trpg/studio/rulebooks/RulebookEditPage'), 'RulebookEditPage');
+export const WorldsPage = lazyPage(() => import('../pages/trpg/studio/worlds/WorldsPage'), 'WorldsPage');
+export const WorldNewPage = lazyPage(() => import('../pages/trpg/studio/worlds/WorldNewPage'), 'WorldNewPage');
+export const WorldEditPage = lazyPage(() => import('../pages/trpg/studio/worlds/WorldEditPage'), 'WorldEditPage');

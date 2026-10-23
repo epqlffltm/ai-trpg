@@ -58,6 +58,7 @@ function signedIn(routes: Routes = {}) {
     'GET /api/v1/auth/me/consents': () => json(200, { items: [] }),
     'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
     [`GET ${BASE}`]: () => json(200, { items: [], total: 0 }),
+    'GET /api/v1/game/worlds': () => json(200, { items: [], total: 0 }),
     [`GET ${BASE}/templates`]: () => json(200, TEMPLATES),
     [`GET ${BASE}/${ID}`]: () => json(200, detail()),
     ...routes,
@@ -79,6 +80,7 @@ describe('룰북', () => {
     });
     renderApp('/me');
 
+    await userEvent.click(await screen.findByRole('link', { name: /재료 만들기/ }));
     await userEvent.click(await screen.findByRole('link', { name: '내 룰북' }));
     expect(await screen.findByText('아직 만든 룰북이 없습니다.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('link', { name: '첫 룰북 만들기' }));
