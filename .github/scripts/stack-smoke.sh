@@ -512,22 +512,24 @@ PY
 # 닿기만 하고 서명이 어긋나면(두 .env 의 비밀이 다르다) 알림이 발송함에 쌓이기만 한다. 그것을 여기서 잡는다.
 # 받는 사람은 이 실행에서만 쓰는 무작위 값이다. 알림 서버는 서버마다 넣을 수 있는 kind 를 정해 두었으므로
 # 게임 서버의 kind 중 값이 필요 없는 것(publishing.unbanned)으로 보낸다(notification-server/app/notifications/catalog.py)
+# 발송함과 보내는 것은 공용 코드(server_core/notifications/)다. 이 서버의 이름(game)은 app/notifications/outbox.py 에 있다
 game_notification_accepted() {
   compose exec -T trpg-server python - <<'PY'
 import asyncio
 import uuid
 
 import httpx
+from server_core.notifications.client import Delivery
+from server_core.notifications.setup import build_notifications
 
 from app.core.config import get_settings
-from app.notifications.client import Delivery
 from app.notifications.models import OutgoingNotification
-from app.notifications.setup import build_notifications
+from app.notifications.outbox import SOURCE
 
 
 async def main() -> None:
     async with httpx.AsyncClient() as client:
-        notifications = build_notifications(get_settings(), client)
+        notifications = build_notifications(get_settings(), client, SOURCE)
         notification = OutgoingNotification(
             source_key=f'stack-smoke:{uuid.uuid4()}', user_id=uuid.uuid4(), kind='publishing.unbanned', payload={}
         )
