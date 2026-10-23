@@ -1,11 +1,12 @@
 // web/apps/web/src/auth/problems.test.ts
-// 가입과 비밀번호 재설정의 실패를 화면 명세 A2 의 표대로 바꾸는지, 돌아갈 주소와 재설정 링크를 바르게 읽는지 본다.
+// 가입과 비밀번호 재설정의 실패를 화면 명세 A2 의 표대로 바꾸는지(막은 IP 포함), 돌아갈 주소와 재설정 링크를 바르게 읽는지 본다.
 
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../api/errors';
 import { installFakeFetch, json } from '../test/fakeFetch';
 import { apiRequest } from '../api/http';
 import { parseResetLink } from '../pages/password/resetLink';
+import { describeLoginProblem } from './loginProblem';
 import { describePasswordProblem } from './passwordProblem';
 import { safeReturnPath } from './safeReturnPath';
 import { describeSignupProblem } from './signupProblem';
@@ -46,6 +47,15 @@ describe('describeSignupProblem', () => {
 
   it('코드가 틀리면 서버의 글을 보인다', () => {
     expect(describeSignupProblem(apiError(400), 'code').message).toBe('서버의 글');
+  });
+});
+
+describe('막은 IP(#638)', () => {
+  it('가입과 로그인의 어느 단계든 막혔다고 알린다', () => {
+    const blocked = apiError(403, { code: 'network_blocked', requestId: 'r-1' });
+    expect(describeSignupProblem(blocked, 'email')).toEqual({ message: expect.stringContaining('제한되었습니다'), requestId: 'r-1' });
+    expect(describeLoginProblem(blocked, 'credentials').message).toContain('제한되었습니다');
+    expect(describeLoginProblem(blocked, 'code').message).toContain('제한되었습니다');
   });
 });
 

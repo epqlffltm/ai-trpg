@@ -205,6 +205,8 @@ def unauthenticated() -> OpenApiResponse:
 TOO_MANY_ATTEMPTS = retry_later('시도가 너무 많다(too_many_attempts)')
 # 허용하지 않은 출처에서 온 쿠키 요청(403, origin_not_allowed). 쿠키는 지우지 않는다
 ORIGIN_REFUSED = coded('허용하지 않은 출처에서 온 쿠키 요청(origin_not_allowed)')
+# 운영자가 막은 IP 주소나 대역에서 온 가입, 로그인, 토큰 갱신(#638)
+NETWORK_BLOCKED = coded('막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다')
 
 
 # 상태 확인 둘. Django 의 뷰(config/health.py)라 DRF 의 목록에 저절로 들지 않는다. 다른 서버의 목록과 같은 자리에 둔다

@@ -655,6 +655,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `emails_sent_total` | counter | `kind`(메일의 종류: `signup_code`, `login_code`, `already_registered`, `password_reset`, `password_changed`, `security_digest`, `guardian_consent`, `guardian_consented`, `guardian_revoked`, `minor_guardian`, `guardian_payment`, `withdrawal_requested`, `withdrawal_reminder`, `withdrawal_completed`, `signup_refused`, `other`), `result`(`sent`, `retried`, `discarded`) | 메일 한 통을 보내 본 결과의 수. 시도마다 센다. `retried` 는 메일 서버가 받지 않아 다시 보낼 것, `discarded` 는 버린 것(받는 사람이 받지 못했다)이다. 종류는 발송함의 칸 `kind` 다(`accounts.models.MailKind`). 메일 서버 없이 바로 찍는 것(inline)은 `sent` 만 센다 |
 | `auth_rate_limited_total` | counter | `limit`(제한의 이름: `login-ip`, `login-fail-account-ip`, `login-ip-block`, `signup-ip`, `password-reset-ip`, `password-change-fail-user`) | 시도 횟수 제한에 걸린 수 |
 | `auth_rate_limits_unavailable_total` | counter | `limit` | Redis 에 묻지 못해 세지 않고 통과시킨 수. 0 이 아니면 그동안 시도 제한이 꺼져 있었다 |
+| `auth_network_blocked_total` | counter | `endpoint`(`signup`, `login`, `refresh`) | 운영자가 막은 IP 에서 와서 거절한 요청의 수(#638, `block_network`). 막은 사람이 되돌아오려는지 본다 |
 
 인증 시도의 성공과 실패는 따로 세지 않는다. 주소마다 상태 코드로 본다(`http_server_requests_total{service="auth-server", route="/api/v1/auth/login"}` 의 `status_code`). 같은 수를 두 번 세지 않는다.
 
