@@ -36,7 +36,7 @@ from tests.conftest import no_limits
 from tests.indexers import NO_INDEXER
 from tests.narration_model import TEST_MODEL, free_picker, today
 from tests.sheets import SHEET
-from tests.signing import make_viewer
+from tests.viewers import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

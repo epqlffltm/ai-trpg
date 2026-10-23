@@ -11,6 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.models import PLAYER_MADE_MODES, CharacterMode
 from app.assets.routing import Paging, Session
@@ -25,7 +26,6 @@ from app.assets.scenarios.snapshot import (
     cover_at,
     read_snapshot,
 )
-from app.auth.dependencies import CurrentUser
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import Change
 from app.billing.routing import Now, Prices

@@ -26,10 +26,10 @@ from typing import Protocol
 
 import httpx
 from pydantic import SecretStr
+from server_core.observability.context import outgoing_headers
 
 from app.billing.signing import SIGNATURE_HEADER, sign
 from app.notifications.models import OutgoingNotification
-from app.observability.context import outgoing_headers
 
 # 게임 서버가 알림을 넣는 주소. 주소에 넣는 서버의 이름(game)이 들어간다
 PUT_PATH = '/api/v1/notification/service/game/notifications'

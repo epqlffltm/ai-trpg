@@ -16,13 +16,13 @@ import uuid
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.notifications.models import OutgoingNotification
 from app.operators.models import OperatorAction
 from app.operators.notices import action_key
-from tests.signing import SigningKey
 from tests.test_listings_api import ME, TITLE, make_public
 from tests.test_operator_sanctions import (
     ADMIN_URL,

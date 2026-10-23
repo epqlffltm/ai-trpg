@@ -10,6 +10,7 @@
 import uuid
 
 from fastapi import APIRouter, status
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.models import Rulebook
 from app.assets.routing import Paging, Session, to_page, to_summary
@@ -22,7 +23,6 @@ from app.assets.rulebooks.schemas import (
     TemplateSummary,
 )
 from app.assets.schemas import AssetPage
-from app.auth.dependencies import CurrentUser
 from app.engine.ruleset import Ruleset
 from app.engine.templates import DEFAULT_TEMPLATE, Template, TemplateFile
 

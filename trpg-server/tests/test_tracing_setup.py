@@ -11,6 +11,7 @@ import pytest
 from opentelemetry import trace
 from opentelemetry.metrics import NoOpMeterProvider
 from pydantic import ValidationError
+from server_core.testing.tokens import FakeAuthServer
 
 from app.core.database import create_engine
 from app.main import create_app
@@ -20,7 +21,6 @@ from app.observability.spans import tracer, use_provider
 from app.observability.tracing import build_provider, configure_tracing, shutdown_tracing
 from tests.collector import Collector
 from tests.conftest import make_client, make_test_settings
-from tests.signing import FakeAuthServer
 
 
 @pytest.fixture

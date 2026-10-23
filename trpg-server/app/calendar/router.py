@@ -12,9 +12,9 @@
 import uuid
 
 from fastapi import APIRouter, status
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.routing import Session
-from app.auth.dependencies import CurrentUser
 from app.calendar.responses import to_clock
 from app.calendar.schemas import ClockOut
 from app.tables import service as table_service

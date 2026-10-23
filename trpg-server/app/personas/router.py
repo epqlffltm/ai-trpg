@@ -12,9 +12,9 @@ import uuid
 
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.routing import Paging, Session
-from app.auth.dependencies import CurrentUser
 from app.personas import service
 from app.personas.models import Persona
 from app.personas.schemas import PersonaOut, PersonaPage, PersonaWrite

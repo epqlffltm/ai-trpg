@@ -12,12 +12,12 @@ import httpx
 import pytest
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.trace import SpanKind, StatusCode
+from server_core.auth.jwks import fetch_jwks
+from server_core.observability.context import outgoing_headers, request_scope
+from server_core.observability.identifiers import Trace, parse_traceparent
+from server_core.testing.tokens import FakeAuthServer
 
-from app.auth.jwks import fetch_jwks
-from app.observability.context import outgoing_headers, request_scope
 from app.observability.http_spans import TracingTransport, traced_client
-from app.observability.identifiers import Trace, parse_traceparent
-from tests.signing import FakeAuthServer
 from tests.spans import SpanRecorder, hex_span_id, hex_trace_id
 
 JWKS_URL = 'http://auth.test/api/v1/auth/jwks'

@@ -18,6 +18,7 @@ import httpx
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.http_billing import amount_of
@@ -28,7 +29,6 @@ from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.service import NARRATION_FAILURE_LIMIT
 from tests.billing import PRICES, FakeBillingServer
-from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, OPUS, FixedPrices, add_enabled, book, on_sale
 from tests.test_narration_billing import tick
 from tests.test_npc_actions import bearer, declare, events_of, table_url

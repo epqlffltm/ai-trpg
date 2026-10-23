@@ -25,8 +25,8 @@ from app.realtime.service import Batch, Closed, Cursor
 from app.realtime.signals import Kind
 from app.realtime.sse import Frame
 from tests import test_stream as stream_tests
-from tests.signing import make_viewer
 from tests.test_stream import FRIEND, kinds, open_duo, say, table_url
+from tests.viewers import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

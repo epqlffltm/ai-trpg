@@ -26,6 +26,7 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 import uuid
 from datetime import UTC, datetime
 
+from server_core.auth.tokens import AccessClaims
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +36,6 @@ from app.assets.models import Scenario, ScenarioVersion
 from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
-from app.auth.tokens import AccessClaims
 from app.billing import charges
 from app.billing.price_list import FREE_PRICES, PriceList
 from app.calendar import state as calendar

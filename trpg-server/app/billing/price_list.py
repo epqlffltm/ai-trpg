@@ -27,10 +27,10 @@ from typing import Protocol
 
 import httpx
 from pydantic import SecretStr, ValidationError
+from server_core.observability.context import outgoing_headers
 
 from app.billing.prices import FREE_BOOK, PriceBook, parse_price_list
 from app.billing.signing import SIGNATURE_HEADER, sign
-from app.observability.context import outgoing_headers
 
 logger = logging.getLogger(__name__)
 

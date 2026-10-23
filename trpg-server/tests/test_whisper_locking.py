@@ -28,8 +28,8 @@ from app.whispers import repository, service
 from app.whispers.models import Whisper
 from app.whispers.schemas import WhisperCreate
 from tests.conftest import no_limits
-from tests.signing import make_viewer
 from tests.test_chat_locking import FRIEND, ME, is_waiting, open_duo
+from tests.viewers import make_viewer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

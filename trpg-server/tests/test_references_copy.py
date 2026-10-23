@@ -17,6 +17,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +46,6 @@ from app.references.records import (
     StoredReference,
 )
 from app.references.schemas import COPY_MAX_REFERENCES, ReferenceCopy
-from tests.signing import SigningKey, make_access_claims, make_token
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 SOMEONE_ELSE = uuid.UUID('99999999-2222-4333-8444-555555555555')

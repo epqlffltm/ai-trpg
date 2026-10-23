@@ -14,6 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser, OptionalUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import TABLE_MAX_PLAYERS, Asset, Rating, ScenarioVersion
@@ -21,7 +22,6 @@ from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
-from app.auth.dependencies import CurrentUser, OptionalUser
 from app.listings import service
 from app.listings.models import TAG_MAX_LENGTH, Genre, Listing
 from app.listings.repository import ListingFilter

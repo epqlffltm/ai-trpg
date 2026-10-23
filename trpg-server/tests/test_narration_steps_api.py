@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import WORLD_GM_NOTES_MAX_LENGTH, WORLD_SETTING_MAX_LENGTH
@@ -26,7 +27,6 @@ from app.billing.routing import utc_now
 from app.catalog.steps import BASE_STEPS, NarrationSteps
 from tests.billing import PRICES, FakeBillingServer
 from tests.catalog_rows import retire
-from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, MODELS_URL, OPUS, FixedPrices, add_enabled
 from tests.test_model_retirement import tick as watch_tick
 from tests.test_narration_billing import charges_of, tick

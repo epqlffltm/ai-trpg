@@ -17,13 +17,13 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import delete, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import API_PREFIX
 from app.operators.models import OperatorAction
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_listings_api import (
     LISTINGS_URL,
     ME,

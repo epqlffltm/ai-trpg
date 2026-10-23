@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,7 +42,6 @@ from app.tables.models import (
     TableSheet,
 )
 from tests.logs import rendered
-from tests.signing import SigningKey
 from tests.test_npc_actions import bearer, declare, events_of, table_url
 from tests.test_tables_api import TABLES_URL, publish_scenario
 

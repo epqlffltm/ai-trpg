@@ -8,7 +8,7 @@ FastAPI 서버들이 함께 쓰는 공통부다. 토큰 검증, 관측(로그, �
 | --- | --- |
 | notification-server, asset-server | #588 |
 | chat-server, story-server | 처음부터(#590, #591) |
-| trpg-server | 나중에 옮긴다(#589) |
+| trpg-server | #589 에서 한 폴더씩 옮긴다. 설정, 인증, 작업의 틀(`loops`), 관측의 문맥과 식별자부터 |
 
 ## 서버에 붙이기
 

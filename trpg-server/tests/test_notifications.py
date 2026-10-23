@@ -26,6 +26,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
 from pydantic import SecretStr, ValidationError
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,7 +48,6 @@ from app.notifications.models import OutboxStatus, OutgoingNotification
 from app.notifications.setup import build_notifications
 from tests.catalog_rows import retire
 from tests.conftest import make_test_settings
-from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, FixedPrices, add_enabled, book, on_sale
 from tests.test_npc_actions import bearer
 from tests.test_recommended_model import MINI

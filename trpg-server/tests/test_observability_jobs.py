@@ -2,7 +2,7 @@
 
 """
 뒤에서 도는 작업에 식별자(job_id)가 걸리는지, 우리 서버를 부를 때 추적이 이어지는지 검증한다
-(app/core/jobs.py, app/observability/context.py). 규격은 docs/observability.md 에 있다.
+(app/core/jobs.py, server_core/observability/context.py). 규격은 docs/observability.md 에 있다.
 """
 
 import asyncio
@@ -11,13 +11,13 @@ import uuid
 
 import httpx
 import pytest
+from server_core.auth.jwks import fetch_jwks
+from server_core.observability.context import current_ids, request_scope
+from server_core.observability.identifiers import new_trace, parse_traceparent
+from server_core.testing.tokens import FakeAuthServer
 
-from app.auth.jwks import fetch_jwks
 from app.core.jobs import BackgroundJobs
-from app.observability.context import current_ids, request_scope
-from app.observability.identifiers import new_trace, parse_traceparent
 from tests.logs import rendered
-from tests.signing import FakeAuthServer
 
 JOBS_LOGGER = 'app.core.jobs'
 JWKS_URL = 'http://auth.test/api/v1/auth/jwks'
