@@ -235,6 +235,8 @@ describe('LobbyPage', () => {
       'href',
       `/trpg/tables/new?scenario_id=${SCENARIO_ID}`,
     );
+    // 제목은 시나리오 요청의 답이다. 로비 요청이 나갔는지는 로비의 답으로 기다린다.
+    expect(await screen.findByText('지금 모집 중인 테이블이 없습니다.')).toBeInTheDocument();
     const first = seen.find((request) => request.url.startsWith('/api/v1/game/tables/lobby')) as SeenRequest;
     expect(query(first).get('scenario_id')).toBe(SCENARIO_ID);
 
