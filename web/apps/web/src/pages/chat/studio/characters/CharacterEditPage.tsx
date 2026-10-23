@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import type { AssetCharacterDetail } from '../../../../api/types';
+import { AffectionTab } from './AffectionTab';
 import { BasicsTab } from './BasicsTab';
 import { CHARACTERS_PATH } from './characterPaths';
 import { isMissingCharacter } from './characterProblem';
@@ -90,6 +91,7 @@ function panelOf(tab: CharacterTab, character: AssetCharacterDetail): ReactNode 
   if (tab === 'starts') return <StartsTab character={character} />;
   if (tab === 'map') return <MapTab character={character} />;
   if (tab === 'items') return <ItemsTab character={character} />;
+  if (tab === 'affection') return <AffectionTab character={character} />;
   return <PublishTab character={character} />;
 }
 
