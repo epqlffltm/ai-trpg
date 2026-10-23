@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/MapTab.tsx
-// 시나리오의 지도 탭(B9). 탭의 저장: 시작 장소. 창에서 바로 저장: 장소(명소, 커버, 인물의 자리, PlacesSection)와 길(RoutesSection).
+// 시나리오의 지도 탭(B9). 탭의 저장: 시작 장소. 창에서 바로 저장: 장소(명소, 커버, 인물의 자리, 놓인 물건, PlacesSection)와
+// 길(두 끝·보임·시간, 그리고 길의 문, RoutesSection).
 // 지도는 좌표 없이 장소와 길뿐이라 그림 없이 목록 둘로 보인다. 장소는 저장된 로어북들의 장소 항목이다.
 
 import { Button, Notice, SelectField } from '@ai-trpg/ui';
@@ -20,6 +21,7 @@ export function MapTab({ scenario, goTo }: Props) {
   const { rules, pending } = useScenarioRules(scenario);
   const places = useLoreEntries(scenario.lorebook_ids, 'place');
   const people = useLoreEntries(scenario.lorebook_ids, 'person');
+  const items = useLoreEntries(scenario.lorebook_ids, 'item');
   if (pending || places.pending) return <p aria-busy="true">불러오는 중</p>;
   const nameOf = placeNameOf(places.entries);
   return (
@@ -34,8 +36,8 @@ export function MapTab({ scenario, goTo }: Props) {
       ) : null}
       {places.failed ? <Notice tone="error">로어북의 항목을 불러오지 못했습니다. 장소의 이름이 보이지 않을 수 있습니다.</Notice> : null}
       <StartForm scenario={scenario} places={places.entries} />
-      <PlacesSection scenario={scenario} places={places.entries} people={people.entries} nameOf={nameOf} />
-      <RoutesSection scenario={scenario} rules={rules} places={places.entries} nameOf={nameOf} />
+      <PlacesSection scenario={scenario} rules={rules} places={places.entries} people={people.entries} items={items.entries} nameOf={nameOf} />
+      <RoutesSection scenario={scenario} rules={rules} places={places.entries} items={items.entries} nameOf={nameOf} />
     </>
   );
 }
