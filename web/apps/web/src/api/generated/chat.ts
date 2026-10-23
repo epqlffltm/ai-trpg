@@ -18,6 +18,7 @@ export interface paths {
         /**
          * Start Conversation
          * @description 대화를 시작한다. 캐릭터의 마지막 판과 페르소나를 가져와 고정한다. 모델은 지난번 것이거나 고른 것이다.
+         *     뜻으로 찾기를 켰으면 판의 로어북 항목을 벡터로 바꾸는 일을 맡긴다(따로 돈다, app/lore/indexing.py).
          */
         post: operations["start_conversation_api_v1_chat_conversations_post"];
         delete?: never;

@@ -34,7 +34,7 @@ from ai_core.routing import MODEL_UNAVAILABLE as ROUTE_MODEL_UNAVAILABLE
 from ai_core.routing import Route
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.assets.schemas import CharacterDocument, LoreEntryDocument
+from app.assets.schemas import CharacterDocument
 from app.billing.client import Billing
 from app.billing.prices import chat_code
 from app.catalog import repository as catalog
@@ -44,7 +44,7 @@ from app.conversation import continuation
 from app.conversation.changes import parse_changes
 from app.conversation.continuation import OverlapTrim, continued_text
 from app.conversation.expressions import ExpressionHead, match_expression, split_expression
-from app.conversation.lorebook import render_lore, select_entries
+from app.conversation.lorebook import chosen_entries, query_text, ranked, render_lore, with_recalled
 from app.conversation.relay import Relay
 from app.conversation.suggestions import MarkerHold, parse_suggestions, split_answer
 from app.conversation.window import Turn, select_window
@@ -67,6 +67,8 @@ from app.conversations.service import (
 )
 from app.core.dependencies import Viewer
 from app.gallery import repository as gallery
+from app.lore.recall import LoreRecall
+from app.lore.texts import keyed_entries
 from app.memory import repository as memory_store
 from app.memory import service as memory
 from app.memory.service import render_memory
@@ -76,9 +78,9 @@ from app.turns import charging, repository
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, expression_frame, failed_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
-from app.turns.prompt import CharacterCard, PersonaCard, build_messages, render_card
+from app.turns.prompt import CharacterCard, PersonaCard, build_messages, render_card, with_lore
 from app.turns.providers import Router
-from app.turns.values import PromptOptions, SavedMessage, TurnResult, TurnStart, WorldBase
+from app.turns.values import LorePlan, PromptOptions, SavedMessage, TurnResult, TurnStart, WorldBase
 from app.world import repository as world_states
 from app.world import service as world
 from app.world.actions import perform
@@ -238,7 +240,7 @@ class CardExtras:
     scene 은 장소와 소지품(app/world)이다. 없으면 None.
     expressions 는 모델이 고를 수 있는 표정과 그 캐릭터 그림이다(없으면 표정을 고르지 않는다).
     offer 는 모델이 제안할 수 있는 상태의 변화의 지시(없으면 None), world 는 그 바탕인 판과 상태다(#676).
-    lore 는 고른 로어북의 항목이다(없으면 None, #672).
+    lore 는 고른 로어북의 항목이다(없으면 None, #672). lore_plan 은 뜻으로 찾아 더할 바탕이다(로어북이 없으면 None).
     """
 
     story: str | None
@@ -248,6 +250,7 @@ class CardExtras:
     offer: str | None = None
     world: WorldBase | None = None
     lore: str | None = None
+    lore_plan: LorePlan | None = None
 
 
 def prompt_for(
@@ -283,9 +286,24 @@ def prompt_for(
     return build_messages(card, select_window(turns, options.context_chars))
 
 
-def lore_entries(document: CharacterDocument) -> list[LoreEntryDocument]:
-    """판의 로어북들의 항목(로어북의 차례, 그 안의 차례)."""
-    return [entry for lorebook in document.lorebooks for entry in lorebook.entries]
+def lore_plan_of(character: ImportedCharacter, document: CharacterDocument, recent: list[str]) -> LorePlan | None:
+    """
+    판의 로어북에서 상시와 키워드로 고른 것과, 뜻으로 찾아 더할 바탕. 로어북의 항목이 없으면 None.
+    recent 는 최근 말들(오래된 것부터, 이번에 더하는 말까지)이다.
+    """
+    keyed = keyed_entries(document)
+    if not keyed:
+        return None
+    entries = tuple(item.entry for item in keyed)
+    order = tuple(ranked(entries, recent))
+    return LorePlan(
+        character_id=character.id,
+        entries=entries,
+        keys=tuple(item.key for item in keyed),
+        ranked=order,
+        query=query_text(recent),
+        block=render_lore(chosen_entries(entries, order)),
+    )
 
 
 async def extras_on(
@@ -309,6 +327,7 @@ async def extras_on(
     """
     document = world.document_of(character)
     current = state if state is not None else await world.state_on(session, document, [m.id for m in path])
+    plan = lore_plan_of(character, document, [*(message.content for message in path), *incoming])
     notes = await memory.notes_for_prompt(session, conversation.id)
     dropped = overflow(path, context_chars)
     summaries = await memory_store.summaries_on(session, [message.id for message in dropped])
@@ -319,7 +338,8 @@ async def extras_on(
         expressions=expression_images(document, current) if choose_expression else {},
         offer=render_offer(offer_of(document, current)),
         world=WorldBase(document, current),
-        lore=render_lore(select_entries(lore_entries(document), [*(m.content for m in path), *incoming])),
+        lore=plan.block if plan is not None else None,
+        lore_plan=plan,
     )
 
 
@@ -546,6 +566,7 @@ async def begin_turn(
         messages=prompt_for(conversation, character, persona, [*path, message], options, extras),
         expressions=extras.expressions,
         world=extras.world,
+        lore=extras.lore_plan,
     )
 
 
@@ -624,6 +645,7 @@ async def begin_action(
         expressions=extras.expressions,
         action=saved(added[0]) if len(added) > 1 else None,
         world=extras.world,
+        lore=extras.lore_plan,
     )
 
 
@@ -690,6 +712,7 @@ async def begin_regenerate(
         messages=prompt_for(conversation, character, persona, path, options, extras),
         expressions=extras.expressions,
         world=extras.world,
+        lore=extras.lore_plan,
     )
 
 
@@ -756,6 +779,7 @@ async def begin_continue(
         messages=prompt_for(conversation, character, persona, path, options, extras, continuation.instruction()),
         continued=saved(target),
         world=extras.world,
+        lore=extras.lore_plan,
     )
 
 
@@ -933,6 +957,22 @@ class StopSwitch:
         return True
 
 
+async def with_recalled_lore(recall: LoreRecall | None, start: TurnStart) -> TurnStart:
+    """
+    로어북을 뜻으로 찾아 카드의 "[로어북]" 에 더한다(모델을 부르기 직전). 찾을 수 없거나 더할 것이 없으면 그대로다.
+    """
+    plan = start.lore
+    if recall is None or plan is None:
+        return start
+    recalled = await recall.recall(plan)
+    if not recalled:
+        return start
+    block = render_lore(chosen_entries(plan.entries, with_recalled(plan.ranked, recalled)))
+    card = start.messages[0]
+    rebuilt = replace(card, content=with_lore(card.content, plan.block, block))
+    return replace(start, messages=[rebuilt, *start.messages[1:]])
+
+
 async def stoppable_call(
     session_factory: async_sessionmaker[AsyncSession],
     route: Route,
@@ -969,15 +1009,18 @@ async def run_generation(
     relay: Relay,
     clock: Callable[[], datetime],
     stop: StopSwitch,
+    recall: LoreRecall | None = None,
 ) -> None:
     """
     모델을 부르고, 흘려보내고, 저장하고, 맡긴다. 응답과 따로 도는 작업이다. 사람이 끊어도 끝까지 돈다.
+    부르기 전에 로어북을 뜻으로 찾아 카드에 더한다(recall 이 있을 때).
 
     사람이 멈추면(stop) 받은 만큼 저장하고 맡긴다(받은 글이 있으면 partial 로 확정, 없으면 반환).
     서버가 꺼지며 멈추면 받은 만큼 저장하고 멈춘다. 맡기는 것은 다음에 뜬 서버의 정리 작업이 한다.
     저장하다 실패하면(DB 가 없다) 응답에 실패를 알리고 끝낸다.
     차례와 홀드는 오래되면 풀린다(GENERATION_STALE, 정리 작업).
     """
+    start = await with_recalled_lore(recall, start)
     collector = collector_for(start, relay)
     result = await stoppable_call(session_factory, route, start, params, collector, clock, stop)
     try:

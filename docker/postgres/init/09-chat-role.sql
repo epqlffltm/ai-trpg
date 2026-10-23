@@ -17,3 +17,7 @@ CREATE SCHEMA chat AUTHORIZATION chat;
 
 -- 테스트용 스키마. 테스트가 개발용 데이터를 건드리지 않게 따로 둔다
 CREATE SCHEMA chat_test AUTHORIZATION chat;
+
+-- pgvector(03-extensions.sql 의 extensions 스키마)를 쓴다. 로어북 항목의 벡터를 저장하고 가까운 것을 찾는다(#672).
+-- 읽기(USAGE)만 준다. chat 서버는 search_path 에 이 스키마를 더한다(chat-server/app/core/database.py)
+GRANT USAGE ON SCHEMA extensions TO chat;
