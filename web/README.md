@@ -5,8 +5,8 @@
 
 지금 있는 것: 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(A2 의 두 단계, 갱신은 한 번에 하나 #30), 가입(세 단계와 동의),
 비밀번호 찾기와 재설정, 다시 동의와 탈퇴 취소, 첫 화면(A1: 서비스 고르기, 이어하기, 공개된 것),
-마이페이지(A5: 계정, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의), 지갑(A6: 머리의 잔액, 골드·실버, 원장), TRPG 의 시나리오 탐색(B1), 소개(B2), 로비(B3), 테이블 만들기(B4), 테이블 방(B6)의 대기실과 스트림, 채팅, 캐릭터 정하기(B5, 모집 중), 라운드(서술, 행동을 붙인 선언과 사고팔기·돈 건네기, 결과, 서술의 미리 보기, 방장의 닫기), 상태 패널(B7, 선언으로 가는 단추), 일어난 일(이벤트 기록과 서술을 막는 일의 알림), 방장의 운영(내보내기, 방장 넘기기, 한 번 더 굴리기, 설정, 끝내기), 서술 모델과 단계 고르기(B8, 만들기와 방장 패널).
-본인인증, 보호자 동의, 충전과 출석, 탈퇴 요청, TRPG 의 캐릭터 보관함과 진행 중의 새 캐릭터, chat 의 화면(C)은 다음이다. 그 경로는 "준비 중"을 보인다.
+마이페이지(A5: 계정, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의), 지갑(A6: 머리의 잔액, 골드·실버, 원장), 충전(A7: 상품, 주문, 시험용 결제창, 승인과 다시 확인), TRPG 의 시나리오 탐색(B1), 소개(B2), 로비(B3), 테이블 만들기(B4), 테이블 방(B6)의 대기실과 스트림, 채팅, 캐릭터 정하기(B5, 모집 중), 라운드(서술, 행동을 붙인 선언과 사고팔기·돈 건네기, 결과, 서술의 미리 보기, 방장의 닫기), 상태 패널(B7, 선언으로 가는 단추), 일어난 일(이벤트 기록과 서술을 막는 일의 알림), 방장의 운영(내보내기, 방장 넘기기, 한 번 더 굴리기, 설정, 끝내기), 서술 모델과 단계 고르기(B8, 만들기와 방장 패널).
+본인인증, 보호자 동의, 토스페이먼츠 결제창, 출석, 주문 내역과 청약철회, 탈퇴 요청, TRPG 의 캐릭터 보관함과 진행 중의 새 캐릭터, chat 의 화면(C)은 다음이다. 그 경로는 "준비 중"을 보인다.
 
 ## 실행
 
@@ -49,6 +49,12 @@ nginx 의 설정은 이미지에 담지 않고 compose 가 붙인다(`docker/ngi
 | 그 밖(`/`, `/login`, `/trpg/...`) | 있는 파일이면 그것, 없으면 `index.html`. 캐시하지 않는다(`no-cache`) |
 | `/admin/`, `/static/`, `/health` | 404. 관리자 화면은 SSH 터널로 인증 서버에 직접 붙는다 |
 
+빌드할 때 고르는 것은 하나다.
+
+| 이름 | 기본 | 뜻 |
+| --- | --- | --- |
+| `VITE_PAYMENT_GATEWAY` | `fake` | 충전(A7)의 결제창. `fake` 는 결제 서버의 가짜 결제 대행사에 맞춘 시험용 결제창이다(결과를 골라 결제 번호의 앞머리를 정한다). 그 밖의 값이면 결제창을 띄우지 않고 준비 중이라 알린다. 토스페이먼츠 결제창은 다음에 더한다 |
+
 ## 구조
 
 ```
@@ -56,12 +62,12 @@ web/
   package.json            npm workspaces 의 뿌리. 린트(ESLint)와 TypeScript 를 여기서 함께 쓴다
   Dockerfile              프록시의 이미지(Node 에서 빌드 → nginx-unprivileged 에 dist)
   apps/web/               앱
-    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), tables.ts(B3, B4), tableRoom.ts·rounds.ts·tableHost.ts·tableStream.ts·sse.ts(B6), publicNames.ts, errors.ts
+    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), tables.ts(B3, B4), tableRoom.ts·rounds.ts·tableHost.ts·tableStream.ts·sse.ts(B6), wallet.ts(A6), orders.ts(A7), publicNames.ts, errors.ts
     src/api/generated/    서버의 API 목록(docs/api/*.openapi.json)에서 만든 타입. 손으로 고치지 않는다
     src/api/account.ts    본인의 계정(동의, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 취소)
     src/auth/             로그인 상태를 읽는 훅, 처음 열 때 되살리기, 로그인해야 열리는 화면(RequireSession), 실패의 글, 돌아갈 주소
     src/legal/            동의 항목의 이름과 요약, 판마다의 문서(documents/, docs/legal 의 사본), 문서를 보이는 창
-    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), wallet(A6), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기, room 의 B6 테이블 방, room/character 의 B5 캐릭터 정하기, room/round 의 라운드와 round/action 의 행동, room/status 의 B7 상태 패널, room/money.ts 의 판 안의 돈, room/events 의 일어난 일, room/host 의 방장의 운영, models 의 B8 서술 모델 고르기), 준비 중, 없는 경로
+    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), wallet(A6), charge(A7), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기, room 의 B6 테이블 방, room/character 의 B5 캐릭터 정하기, room/round 의 라운드와 round/action 의 행동, room/status 의 B7 상태 패널, room/money.ts 의 판 안의 돈, room/events 의 일어난 일, room/host 의 방장의 운영, models 의 B8 서술 모델 고르기), 준비 중, 없는 경로
     src/components/       여러 화면이 함께 쓰는 것(목록 한 칸, 실패 한 줄)
     src/hooks/            남은 초 세기, 다른 사람의 이름 찾기(public-names, #532)
     src/layout/           머리와 틀

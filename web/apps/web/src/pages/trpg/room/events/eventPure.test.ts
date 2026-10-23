@@ -141,6 +141,12 @@ describe('roomNotices', () => {
     expect(modelNoticeEvent([ev(2, 'narration_model_replaced'), unavailable])).toBe(unavailable);
   });
 
+  it('내 크레딧이 모자라다는 알림에만 충전으로 가는 길을 붙인다', () => {
+    const events = [ev(1, 'narration_credits_short', { round: 2, user_id: ME }), ev(2, 'narration_credits_short', { round: 2, user_id: OTHER })];
+    expect(roomNotices(events, 2, CTX, ME).map((notice) => notice.charge)).toEqual([true, false]);
+    expect(roomNotices(events, 2, CTX).map((notice) => notice.charge)).toEqual([false, false]);
+  });
+
   it('모델의 알림이 먼저, 막는 일은 error', () => {
     const notices = roomNotices(
       [ev(1, 'narration_model_retiring', { narration_model: 'gemini-flash', days_left: 3 }), ev(2, 'narration_failed', { round: 2, reason: 'timeout' })],
