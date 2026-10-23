@@ -15,13 +15,16 @@ from functools import lru_cache
 from typing import ClassVar, Self
 
 from pydantic import Field, SecretStr, model_validator
+from server_core.notifications.settings import NotificationSettings
 from server_core.service_auth.signing import MIN_SECRET_LENGTH
 from server_core.settings import SCHEMA_PATTERN, CoreSettings
 
 
-class Settings(CoreSettings):
+class Settings(CoreSettings, NotificationSettings):
     """
     설정 값의 목록과 형식. 함께 쓰는 칸은 CoreSettings 에 있다.
+    알림 서버의 칸(NOTIFICATION_URL, NOTIFICATION_SECRET, NOTIFICATION_TIMEOUT_SECONDS)은
+    NotificationSettings 에 있다(#678).
 
     같은 이름의 환경 변수가 있으면 그 값을 쓰고, 없으면 .env 파일, 그것도 없으면 여기 적힌 기본값을 쓴다.
     형식이 맞지 않으면(예: DEBUG=maybe) 서버가 뜨기 전에 오류가 난다.
