@@ -200,10 +200,10 @@ write_new() {
 
 # 여덟 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
 # 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버,
-# 알림 서버와 게임·결제·게시판 서버, asset 서버와 chat 서버, 결제 서버와 chat 서버)
+# 알림 서버와 게임·결제·게시판·asset 서버, asset 서버와 chat 서버, 결제 서버와 chat 서버)
 write_env_files() {
   local game_secret auth_secret notify_secret billing_notify_secret board_notify_secret chat_asset_secret
-  local chat_billing_secret
+  local chat_billing_secret asset_notify_secret
   game_secret="$(throwaway)"
   auth_secret="$(throwaway)"
   notify_secret="$(throwaway)"
@@ -211,6 +211,7 @@ write_env_files() {
   board_notify_secret="$(throwaway)"
   chat_asset_secret="$(throwaway)"
   chat_billing_secret="$(throwaway)"
+  asset_notify_secret="$(throwaway)"
   write_new .env <<EOF
 POSTGRES_PASSWORD=$(throwaway)
 AUTH_DB_PASSWORD=$(throwaway)
@@ -253,14 +254,17 @@ EOF
 GAME_SERVER_SECRET=$notify_secret
 BILLING_SERVER_SECRET=$billing_notify_secret
 BOARD_SERVER_SECRET=$board_notify_secret
+ASSET_SERVER_SECRET=$asset_notify_secret
 EOF
   # asset 서버와 chat 서버의 DB 비밀번호는 compose 가 루트 .env 의 것으로 주소를 만든다.
   # 둘이 함께 아는 비밀은 chat 이 대화를 시작할 때 판과 페르소나를 가져오는 서명이다.
   # compose 가 chat 서버에 ASSET_URL 을 주므로 이 비밀이 없으면 chat 서버가 뜨지 않는다.
   # ASSET_URL 은 tools/fill_env.py 가 만드는 .env 처럼 .env.example 의 값을 둔다. 마이그레이션이 그 값을 비우는지 본다.
-  # 결제 서버의 비밀도 함께 안다. compose 가 chat 서버에 BILLING_URL 을 준다. 마이그레이션은 BILLING_URL 도 비우는지 본다
+  # 결제 서버의 비밀도 함께 안다. compose 가 chat 서버에 BILLING_URL 을 준다. 마이그레이션은 BILLING_URL 도 비우는지 본다.
+  # asset 서버는 운영자의 조치를 알림 서버에 넣는다(#678). compose 가 NOTIFICATION_URL 을 주므로 이 비밀이 없으면 뜨지 않는다
   write_new asset-server/.env <<EOF
 CHAT_SERVER_SECRET=$chat_asset_secret
+NOTIFICATION_SECRET=$asset_notify_secret
 EOF
   write_new chat-server/.env <<EOF
 ASSET_URL=http://127.0.0.1:8006
@@ -544,6 +548,37 @@ const payload = { board_slug: 'free', post_id: '1', post_title: 'stack-smoke', c
 const sent = await sender.send({ sourceKey: 'stack-smoke:' + randomUUID(), userId: randomUUID(), kind: 'post.commented', payload });
 process.exit(sent.delivery === 'delivered' ? 0 : 1);
 "
+}
+
+# asset 서버가 제 설정(NOTIFICATION_URL, NOTIFICATION_SECRET)으로 서명한 알림을 알림 서버가 받는가(201).
+# 게임 서버의 것과 같다. 발송함과 보내는 것은 공용 코드(server_core/notifications/)다.
+# asset 의 kind 중 신고의 처리(character_report.handled)에 화면이 쓰는 칸(name)을 채워 보낸다
+asset_notification_accepted() {
+  compose exec -T asset-server python - <<'PY'
+import asyncio
+import uuid
+
+import httpx
+from server_core.notifications.client import Delivery
+from server_core.notifications.setup import build_notifications
+
+from app.core.config import get_settings
+from app.notifications.models import OutgoingNotification
+from app.notifications.outbox import REPORT_HANDLED, SOURCE
+
+
+async def main() -> None:
+    async with httpx.AsyncClient() as client:
+        notifications = build_notifications(get_settings(), client, SOURCE)
+        notification = OutgoingNotification(
+            source_key=f'stack-smoke:{uuid.uuid4()}', user_id=uuid.uuid4(), kind=REPORT_HANDLED, payload={'name': 'smoke'}
+        )
+        sent = await notifications.send(notification)
+    raise SystemExit(0 if sent.delivery == Delivery.DELIVERED else 1)
+
+
+asyncio.run(main())
+PY
 }
 
 # 서버가 제 컨테이너 안에서 준비됐다고(/health/ready 가 200) 답하는가. 503 이면 실패다
@@ -1373,6 +1408,8 @@ check() {
   report "결제 서버의 정리 작업이 알림 서버에 닿는다" reachable_from billing-sweeper http://notification-server:8004/health
   report "게시판 서버가 알림 서버에 닿는다" reachable_from board-server http://notification-server:8004/health
   report "게시판 서버가 서명한 알림을 알림 서버가 받는다" board_notification_accepted
+  report "asset 서버가 알림 서버에 닿는다" reachable_from asset-server http://notification-server:8004/health
+  report "asset 서버가 서명한 알림을 알림 서버가 받는다(NOTIFICATION_SECRET 의 짝)" asset_notification_accepted
   report "설정 검사(비밀, 열린 포트, 로그 상한, 대시보드)와 .env 를 채우는 도구의 규칙이 맞다" scope_rules_hold
   report_problems "staging 의 데이터 디스크 폴더의 주인이 컨테이너가 도는 사용자와 같다(prepare-disks.sh)" disk_owners_match
   report_problems "데이터 디스크의 폴더를 만드는 스크립트가 마운트를 확인하고 표대로 만든다(prepare-disks.sh)" prepare_disks_works

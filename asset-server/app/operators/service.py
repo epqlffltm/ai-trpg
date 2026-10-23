@@ -8,6 +8,8 @@
     주인은 계속 쓴다. 이미 시작한 남의 대화는 사본으로 돈다. 주인이 공개로 돌려도 숨김이 앞선다. 운영자만 푼다
   - 신고를 받아들이면(actioned) 숨기고, 받아들이지 않으면(dismissed) 그대로 둔다. 그 캐릭터의 열린 신고를 모두 처리한다
   - 사유와 운영자는 로그에 싣지 않는다(사유는 자유 글이다)
+  - 숨김이 바뀌면 주인에게, 신고를 처리하면 신고한 사람마다 알린다(app/notifications/outbox.py).
+    알림은 조치와 같은 트랜잭션에서 발송함에 적는다. 조치가 되돌려지면 알림도 없다
 """
 
 import logging
@@ -19,11 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters.models import Character
 from app.characters.service import CharacterNotFoundError
+from app.notifications import outbox
 from app.operators import repository
 from app.operators.models import ActionKind, OperatorAction
 from app.reports import repository as reports
 from app.reports.models import CharacterReport, ReportOutcome
-from app.reports.repository import OpenGroup
+from app.reports.repository import HandledReport, OpenGroup
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,27 @@ def set_hidden(character: Character, hidden: bool, now: datetime) -> None:
         character.hidden_at = now
 
 
+async def record_action(session: AsyncSession, action: OperatorAction) -> None:
+    """감사 기록을 올리고 번호를 받는다(알림의 열쇠에 쓴다). 저장하지 않는다."""
+    repository.add_action(session, action)
+    await session.flush()
+
+
+def tell_owner_if_changed(
+    session: AsyncSession, character: Character, was_hidden: bool, action: OperatorAction
+) -> None:
+    """숨김이 바뀌었으면 주인에게 알린다. 그대로면 알리지 않는다."""
+    hidden = character.hidden_at is not None
+    if hidden != was_hidden:
+        outbox.tell_owner(session, character, hidden, action.id)
+
+
+def tell_reporters(session: AsyncSession, character: Character, handled: list[HandledReport]) -> None:
+    """처리한 신고마다 신고한 사람에게 알린다."""
+    for report in handled:
+        outbox.tell_reporter(session, character, report.report_id, report.reporter_id)
+
+
 async def list_open(session: AsyncSession, limit: int, offset: int) -> tuple[list[OpenGroup], int]:
     """열린 신고의 묶음 한 쪽과 전체 묶음의 수."""
     return await reports.open_groups(session, limit, offset)
@@ -94,15 +118,18 @@ async def handle_reports(
 ) -> tuple[int, bool]:
     """그 캐릭터의 열린 신고를 처리한다. actioned 면 숨긴다. (처리한 수, 숨겨져 있는가)."""
     character = await locked_character(session, character_id)
+    was_hidden = character.hidden_at is not None
     handled = await reports.handle_open(session, character_id, operator_id, outcome, now)
     kind = ActionKind.CHARACTER_HIDE if outcome == ReportOutcome.ACTIONED else ActionKind.REPORTS_DISMISS
     if outcome == ReportOutcome.ACTIONED:
         set_hidden(character, True, now)
     action = build_action(operator_id, kind, character_id, reason, now)
-    repository.add_action(session, action)
+    await record_action(session, action)
+    tell_owner_if_changed(session, character, was_hidden, action)
+    tell_reporters(session, character, handled)
     await session.commit()
     log_action(action)
-    return handled, character.hidden_at is not None
+    return len(handled), character.hidden_at is not None
 
 
 async def change_hidden(
@@ -110,9 +137,11 @@ async def change_hidden(
 ) -> bool:
     """캐릭터를 숨기거나 푼다. 숨겨져 있는가를 돌려준다."""
     character = await locked_character(session, character_id)
+    was_hidden = character.hidden_at is not None
     set_hidden(character, hidden, now)
     action = build_action(operator_id, hide_kind(hidden), character_id, reason, now)
-    repository.add_action(session, action)
+    await record_action(session, action)
+    tell_owner_if_changed(session, character, was_hidden, action)
     await session.commit()
     log_action(action)
     return character.hidden_at is not None

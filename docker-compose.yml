@@ -753,6 +753,9 @@ services:
     env_file: ./asset-server/.env
     environment:
       <<: [*asset-environment, *asset-image-store, *telemetry-environment]
+      # 운영자의 숨김과 신고 처리를 알림 서버에 넣는다(#678). asset-server/.env 에 NOTIFICATION_SECRET 이 있어야 뜬다
+      # (알림 서버의 ASSET_SERVER_SECRET 과 같은 값). 마이그레이션(asset-migrate)에는 넘기지 않는다
+      NOTIFICATION_URL: http://notification-server:8004
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:
