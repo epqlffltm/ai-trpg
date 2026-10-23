@@ -13,6 +13,10 @@ import pytest
 from pydantic import ValidationError
 
 from app.engine.ruleset import (
+    NARRATION_AVOID_MAX_LENGTH,
+    NARRATION_MAX_AVOIDS,
+    NARRATION_OUTCOME_MAX_LENGTH,
+    NARRATION_TONE_MAX_LENGTH,
     RULESET_MAX_ABILITIES,
     RULESET_MAX_DIFFICULTIES,
     RULESET_MAX_MAGNITUDES,
@@ -24,6 +28,18 @@ from app.engine.templates import DEFAULT_TEMPLATE, SRD5, TEMPLATES, Template, fr
 from tests.rules import NO_INJURIES
 
 MIGRATIONS = Path(__file__).parent.parent / 'migrations' / 'versions'
+
+
+def outcome_guide(outcome: str, text: str = '그린다.') -> dict:
+    """결과 단계 하나의 지침."""
+    return {'outcome': outcome, 'guide': text}
+
+
+def guide(**changes) -> dict:
+    """서술 지침 하나. 몇 칸만 바꿔 틀린 지침을 만들어 볼 때 쓴다."""
+    document = {'tone': '모험담이다.', 'outcomes': [outcome_guide('success'), outcome_guide('failure')], 'avoid': []}
+    document.update(changes)
+    return document
 
 
 def rules(**changes) -> dict:
@@ -65,6 +81,7 @@ def load_backfill_rules() -> dict:
     rest = load_migration('rulebook_rest')
     steal = load_migration('steal')
     robbed_wake = load_migration('robbed_wake')
+    narration = load_migration('rule_narration')
     treated = [
         {**injury, **treatment.TREATABLE.get(injury['key'], treatment.UNTREATABLE)} for injury in injuries['injuries']
     ]
@@ -82,9 +99,9 @@ def load_backfill_rules() -> dict:
         'initiative_ability': initiative,
     }
     # 오래 가는 부상과 치료의 기간을 분으로 옮긴 것(판 형식 25), 쉬기(판 형식 28)와 훔치기(판 형식 36),
-    # 빼앗긴 인물이 깨어날 때의 반응(판 형식 40)을 더한 것
+    # 빼앗긴 인물이 깨어날 때의 반응(판 형식 40), 빈 서술 지침(판 형식 45)을 더한 것
     converted = minutes.convert(filled, minutes.injury_to_minutes, minutes.row_to_minutes)
-    return robbed_wake.with_robbed_wake(steal.with_steal(rest.with_rest(converted)))
+    return narration.with_narration(robbed_wake.with_robbed_wake(steal.with_steal(rest.with_rest(converted))))
 
 
 # --- 내장 템플릿 ---
@@ -131,8 +148,9 @@ def test_a_ruleset_survives_the_trip_through_a_document():
 
 def test_the_migration_filled_old_rulebooks_with_the_same_rules():
     # 옛 판을 읽을 때 SRD5 를 "그때의 규칙"으로 쓴다(upgrades.upgrade_from_3, upgrade_from_5).
-    # 그러니 SRD5 의 값은 마이그레이션들이 채운 값과 늘 같아야 한다. 템플릿을 고치면 이 테스트가 깨진다
-    assert load_backfill_rules() == SRD5.model_dump(mode='json')
+    # 그러니 SRD5 의 값은 마이그레이션들이 채운 값과 늘 같아야 한다. 템플릿을 고치면 이 테스트가 깨진다.
+    # 서술 지침만은 다르다. 옛 룰북은 지침이 없는 것으로 둔다(#616). SRD5 의 판타지 분위기를 옛 판에 얹지 않는다
+    assert load_backfill_rules() == {**SRD5.model_dump(mode='json'), 'narration': None}
 
 
 def test_a_ruleset_cannot_be_changed_after_it_is_made():
@@ -231,6 +249,16 @@ def test_a_ruleset_cannot_be_changed_after_it_is_made():
         # 능력치의 보정이나 다른 주사위를 적지 못한다. 규칙의 주사위를 그대로 굴린다
         {'death_save': {'target': 10, 'successes': 3, 'failures': 3, 'ability': 'con'}},
         {'death_save': {'target': 10, 'successes': 3, 'failures': 3, 'die': 6}},
+        # 서술 지침: 분위기는 비지 않고 300자까지, 단계마다 하나, 단계의 지침은 200자까지, 하지 말 것은 다섯까지
+        {'narration': guide(tone='')},
+        {'narration': guide(tone='가' * (NARRATION_TONE_MAX_LENGTH + 1))},
+        {'narration': guide(outcomes=[outcome_guide('success'), outcome_guide('success')])},
+        {'narration': guide(outcomes=[outcome_guide('partial')])},
+        {'narration': guide(outcomes=[outcome_guide('success', '가' * (NARRATION_OUTCOME_MAX_LENGTH + 1))])},
+        {'narration': guide(avoid=['하지 마라.'] * (NARRATION_MAX_AVOIDS + 1))},
+        {'narration': guide(avoid=['가' * (NARRATION_AVOID_MAX_LENGTH + 1)])},
+        # 지침이 판정을 고치는 칸은 없다
+        {'narration': {**guide(), 'difficulty_bonus': 2}},
         {'unknown': 1},
     ],
 )
@@ -440,3 +468,24 @@ def test_a_ruleset_without_magnitudes_is_not_a_ruleset():
 )
 def test_finds_the_keys_that_appear_twice(keys: list[str], expected: list[str]):
     assert find_duplicates(keys) == expected
+
+
+def test_a_ruleset_may_go_without_a_narration_guide():
+    """지침이 없는 규칙(옛 룰북)도 규칙이다. 서술은 공통의 지시만으로 한다."""
+    assert Ruleset.model_validate(rules(narration=None)).narration is None
+
+
+def test_a_guide_may_leave_an_outcome_unguided():
+    """적지 않은 단계는 공통의 지시대로 그린다."""
+    loaded = Ruleset.model_validate(rules(narration=guide(outcomes=[outcome_guide('failure')], avoid=[])))
+
+    assert [item.outcome.value for item in loaded.narration.outcomes] == ['failure']
+
+
+def test_the_narration_field_cannot_be_left_out():
+    """칸을 빠뜨리면 "지침 없음"으로 읽지 않는다. 옛 문서는 마이그레이션과 판의 올려 읽기가 채운다."""
+    document = SRD5.model_dump(mode='json')
+    document.pop('narration')
+
+    with pytest.raises(ValidationError):
+        Ruleset.model_validate(document)

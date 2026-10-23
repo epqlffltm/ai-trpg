@@ -9,6 +9,7 @@ GM 의 서술을 부탁하는 메시지의 조립(app/rounds/prompt.py)을 검�
   - 문체마다 글의 결과 끝맺음이 들어간다. 미사용이면 문체를 지시하지 않는다. 수위는 문체 뒤에 온다.
   - 이번 라운드의 결과는 엔진이 정한 그대로 들어간다. 검색한 로어북 항목은 그 앞에 붙는다.
   - 지난 기록은 정해 둔 라운드 수와 글자 수 안에서, 오래된 것부터 뺀다.
+  - 규칙의 서술 지침(#616)은 공통 핵심 바로 뒤, 문체 앞에 붙는다. 지침이 없으면 빠진다.
 """
 
 import uuid
@@ -18,7 +19,10 @@ import pytest
 from ai_core.provider import Role
 
 from app.assets.models import LoreKind, NarrationStyle
+from app.engine.ruleset import NarrationGuide, Outcome, OutcomeGuide
+from app.engine.templates import TEMPLATES, Template
 from app.rounds import prompt
+from app.rounds.move_lines import describe_verdict
 from app.rounds.narrator import LoreNote, MemoryNote, Move, NarrationRequest, PastRound, StoryContext, Verdict
 from app.rounds.prompt import build_messages, fit_history, lore_lines, memory_lines, system_text
 
@@ -282,8 +286,8 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_the_template_is_narration_47():
-    assert prompt.PROMPT_VERSION == 'narration-47'
+def test_the_template_is_narration_48():
+    assert prompt.PROMPT_VERSION == 'narration-48'
 
 
 def test_the_rules_ask_for_a_scene_shorter_than_the_output_limit():
@@ -484,3 +488,67 @@ def test_memories_stay_out_of_the_system_message():
 def test_the_memory_note_says_it_is_already_over():
     # 지난 행동에 끌려 이번 행동이 바뀌지 않게 한다(#101 의 망치)
     assert '이미 서술했고 이번 라운드의 일이 아니다' in prompt.MEMORY_NOTE
+
+
+# --- 규칙의 서술 지침(#616) ---
+
+DREAD = NarrationGuide(
+    tone='공포다. 어둠과 소리로 긴장을 쌓는다.',
+    outcomes=(OutcomeGuide(outcome=Outcome.FAILURE, guide='상황이 나빠지는 것을 감각으로 보여 준다.'),),
+    avoid=('농담으로 긴장을 풀지 마라.',),
+)
+GUIDED = replace(STORY, narration=DREAD)
+
+
+def test_the_rule_guide_sits_between_the_common_core_and_the_style():
+    text = system_text(GUIDED, NarrationStyle.CLASSIC)
+
+    guide = text.index(f'## {prompt.RULE_GUIDE_TITLE}')
+    assert text.index(prompt.WRITING_RULES) < guide < text.index('## 문체')
+    # 문체가 없어도 지침은 남는다
+    assert f'## {prompt.RULE_GUIDE_TITLE}' in system_text(GUIDED, NarrationStyle.NONE)
+
+
+def test_the_rule_guide_names_the_outcomes_as_the_check_lines_do():
+    text = prompt.rule_guide_text(DREAD)
+
+    assert text == (
+        f'## {prompt.RULE_GUIDE_TITLE}\n'
+        '분위기: 공포다. 어둠과 소리로 긴장을 쌓는다.\n'
+        f'{prompt.RULE_GUIDE_OUTCOMES}\n'
+        '- 실패: 상황이 나빠지는 것을 감각으로 보여 준다.\n'
+        f'{prompt.RULE_GUIDE_AVOID}\n'
+        '- 농담으로 긴장을 풀지 마라.\n'
+        f'{prompt.RULE_GUIDE_KEEPS_RESULTS}'
+    )
+    # 판정 줄의 단계 이름과 같다
+    assert '판정 실패' in describe_verdict(replace(VERDICT, success=False, total=9))
+
+
+def test_a_guide_with_nothing_to_list_keeps_only_the_tone():
+    bare = NarrationGuide(tone='가벼운 모험이다.', outcomes=(), avoid=())
+
+    lines = prompt.rule_guide_lines(bare)
+
+    assert lines == ['분위기: 가벼운 모험이다.', prompt.RULE_GUIDE_KEEPS_RESULTS]
+
+
+def test_rules_without_a_guide_leave_the_system_message_as_it_was():
+    """지침이 없는 규칙(옛 룰북)은 공통의 지시만으로 쓴다."""
+    assert prompt.rule_guide_text(None) is None
+    assert f'## {prompt.RULE_GUIDE_TITLE}' not in system_text(STORY, NarrationStyle.CLASSIC)
+
+
+def test_two_templates_give_the_same_result_different_guides():
+    """같은 판정 결과라도 템플릿이 다르면 서술자에게 가는 지침이 다르다. 결과의 줄은 같다."""
+    systems = {}
+    lasts = {}
+    for template in (Template.SRD5, Template.HORROR):
+        request = make_request(story=replace(STORY, narration=TEMPLATES[template].rules.narration))
+        messages = build_messages(request)
+        systems[template], lasts[template] = messages[0].content, messages[-1].content
+
+    assert systems[Template.SRD5] != systems[Template.HORROR]
+    assert TEMPLATES[Template.HORROR].rules.narration.tone in systems[Template.HORROR]
+    assert TEMPLATES[Template.HORROR].rules.narration.tone not in systems[Template.SRD5]
+    assert lasts[Template.SRD5] == lasts[Template.HORROR]

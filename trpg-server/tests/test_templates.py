@@ -6,6 +6,7 @@
 보는 것.
   - 고를 수 있는 템플릿마다 파일이 있고, 규칙의 모양으로 읽힌다. 틀린 파일은 읽지 않는다.
   - 이미 내놓은 템플릿의 값은 그대로다(해시). 옛 판을 읽을 때 그 값을 쓴다.
+  - 템플릿마다 서술 지침(#616)이 있고, 판정 결과의 두 단계를 다 적었다. 지침은 판정을 바꾸지 않는다.
   - 템플릿마다 정해진 눈으로 판정이 성공하고, 한 눈 모자라면 실패한다. 가장 큰 눈과 가장 작은 눈도 본다.
   - 이름에 상용 룰의 이름이 없다. 공개 문서를 본떴으면 출처 표시가 있다.
 """
@@ -16,10 +17,11 @@ from pathlib import Path
 
 import pytest
 
+from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_44
 from app.engine import templates
 from app.engine.check import find_difficulty, modifier_of, resolve
 from app.engine.dice import ScriptedDice
-from app.engine.ruleset import Ruleset
+from app.engine.ruleset import Outcome, Ruleset
 from app.engine.templates import (
     FORMAT,
     SRD5,
@@ -35,6 +37,12 @@ from app.engine.templates import (
 # 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 # 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
 RELEASED = {
+    Template.SRD5: '0a9a23ee2bf555e694a520e0f10e4e9adba23eaa57656eccda904dff045cd995',
+    Template.HORROR: '72fa8e76f685929a7362ebaa9304677e9b631db949dade6d2d87a7b7fda53859',
+    Template.LIGHT: 'ad2871a9fe507d18c59cfa861b94951f20123524852e8ad812ba24f81b97ba88',
+}
+# 서술 지침(narration, #616)을 더하기 전의 해시. 지침을 뺀 규칙은 그때와 같아야 한다
+BEFORE_NARRATION = {
     Template.SRD5: '9f83745c16ede0d830b47f4a9eb65e789f61be1cd471d5d76342ce114bc96384',
     Template.HORROR: 'f01fe773025fc11769c5989e3d92bf886addbc6d470742d36578bf7820cafe33',
     Template.LIGHT: '562d3014c5dee777f7d3436319cffa81b0fe39c244be18308ee0f25bd7c9b443',
@@ -44,9 +52,10 @@ RELEASED = {
 COMMERCIAL_NAMES = ('d&d', 'dungeons', '던전 앤 드래곤', '던전즈', 'pathfinder', '패스파인더', 'cthulhu', '크툴루')
 
 
-def fingerprint(rules: Ruleset) -> str:
-    """규칙의 값을 정해진 차례의 JSON 으로 적어 해시를 낸다."""
-    canonical = json.dumps(rules.model_dump(mode='json'), sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+def fingerprint(rules: Ruleset, without: tuple[str, ...] = ()) -> str:
+    """규칙의 값을 정해진 차례의 JSON 으로 적어 해시를 낸다. without 의 칸은 빼고 낸다."""
+    values = {key: value for key, value in rules.model_dump(mode='json').items() if key not in without}
+    canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
@@ -78,6 +87,11 @@ def test_released_templates_keep_their_values():
         assert fingerprint(TEMPLATES[template].rules) == expected, (
             f'{template.value} 의 값이 바뀌었다. 이미 내놓은 템플릿의 값은 고치지 않는다. 새 이름으로 하나 더 낸다'
         )
+
+
+def test_adding_the_narration_guide_kept_the_other_values():
+    for template, expected in BEFORE_NARRATION.items():
+        assert fingerprint(TEMPLATES[template].rules, without=('narration',)) == expected
 
 
 def test_the_old_srd5_name_still_points_to_the_file():
@@ -227,3 +241,45 @@ def test_light_never_kills_by_the_dice():
     assert light.death_save is None
     assert light.injuries == () and light.injury_table is None
     assert light.rest.revive is not None
+
+
+# --- 서술 지침(#616) ---
+
+
+@pytest.mark.parametrize('template', list(Template))
+def test_every_template_guides_both_outcomes(template: Template):
+    guide = TEMPLATES[template].rules.narration
+
+    assert guide is not None
+    assert {item.outcome for item in guide.outcomes} == set(Outcome)
+
+
+def test_the_guides_differ_between_templates():
+    tones = {TEMPLATES[template].rules.narration.tone for template in Template}
+
+    assert len(tones) == len(Template)
+
+
+@pytest.mark.parametrize('template', list(Template))
+def test_the_guide_does_not_change_the_check(template: Template):
+    """서술 지침을 지워도 같은 눈이면 같은 판정이다. 엔진은 지침을 보지 않는다."""
+    rules = TEMPLATES[template].rules
+    plain = rules.model_copy(update={'narration': None})
+    difficulty = find_difficulty(rules, None)
+    score = middle_score(rules)
+
+    assert resolve(rules, score, difficulty, ScriptedDice([3])) == resolve(plain, score, difficulty, ScriptedDice([3]))
+
+
+def test_an_old_snapshot_reads_as_no_narration_guide():
+    """형식 44 의 판은 지침이 없는 것으로 읽는다. SRD5 의 판타지 분위기를 옛 판에 얹지 않는다."""
+    rules = SRD5.model_dump(mode='json')
+    rules.pop('narration')
+    document = {'format': 44, 'rulebook': {'id': 'r', 'title': '룰북', 'gm_guide': '', 'rules': rules}}
+
+    upgraded = upgrade_from_44(document)
+
+    assert upgraded['format'] == 45
+    assert upgraded['rulebook']['rules'] == {**rules, 'narration': None}
+    assert 'narration' not in document['rulebook']['rules']
+    assert UPGRADES[44] is upgrade_from_44

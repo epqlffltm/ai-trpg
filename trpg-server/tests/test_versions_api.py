@@ -70,6 +70,9 @@ GM_NOTES = '고속도로의 끝에는 아무것도 없다.'
 NPC_SHEET = make_sheet(str=16, max_hp=22)
 PREGENS = [{'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.', 'sheet': make_sheet(dex=16, max_hp=8)}]
 
+# 옛 판을 끝까지 올려 읽은 규칙. SRD5 에서 서술 지침만 없다(판 형식 45, #616)
+OLD_SRD5 = SRD5.model_copy(update={'narration': None})
+
 
 @pytest.fixture
 def my_headers(signing_key: SigningKey) -> dict[str, str]:
@@ -928,7 +931,7 @@ def test_reads_a_document_of_any_format():
     assert read_snapshot(FORMAT_1).openings == [OPENING]
     # 형식 1 은 1 → 2 → … → 11 을 차례로 거친다
     assert read_snapshot(FORMAT_1).pregens == []
-    assert read_snapshot(FORMAT_1).rulebook.rules == SRD5
+    assert read_snapshot(FORMAT_1).rulebook.rules == OLD_SRD5
 
 
 async def test_a_version_in_the_old_format_is_read_in_the_current_one(
@@ -944,7 +947,7 @@ async def test_a_version_in_the_old_format_is_read_in_the_current_one(
     assert response.status_code == status.HTTP_200_OK
     assert response.json()['snapshot']['format'] == SNAPSHOT_FORMAT
     assert response.json()['snapshot']['openings'] == [OPENING]
-    assert response.json()['snapshot']['rulebook']['rules'] == SRD5.model_dump(mode='json')
+    assert response.json()['snapshot']['rulebook']['rules'] == OLD_SRD5.model_dump(mode='json')
     # 저장된 문서는 옛 모양 그대로다. 판은 고치지 않는다
     stored = await session.scalar(
         text('SELECT snapshot FROM scenario_versions WHERE scenario_id = :id'), {'id': scenario['id']}

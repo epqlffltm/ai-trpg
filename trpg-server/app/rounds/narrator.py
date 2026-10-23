@@ -23,6 +23,7 @@ from typing import Protocol
 
 from app.assets.models import LoreKind, NarrationStyle
 from app.calendar.clock import ClockTime
+from app.engine.ruleset import NarrationGuide
 
 
 @dataclass(frozen=True)
@@ -516,6 +517,8 @@ class StoryContext:
     # 세계관의 설정과 GM 메모. 세계관이 없는 시나리오면 빈 글이다
     setting: str = ''
     gm_notes: str = ''
+    # 규칙의 서술 지침(#616). 분위기, 판정 결과 단계마다의 묘사, 하지 말 것. 없으면 공통의 지시만으로 서술한다
+    narration: NarrationGuide | None = None
 
 
 @dataclass(frozen=True)
