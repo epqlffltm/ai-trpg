@@ -9,6 +9,7 @@
 첫 칸은 대화에 필요한 핵심만이었다(2026-10-21 유저 결정). 장소와 길(지도), 물건과 시작 소지품은
 chat 의 만드는 순서 4 에서 캐릭터에 넣었다(2026-10-22 유저 결정, 판의 형식 2).
 호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙)는 판의 형식 3 에서 더했다(2026-10-22).
+시작 상황의 시작 시각과 장소의 시간대 배경은 판의 형식 4 에서 더했다(2026-10-22, #668).
 상대의 시작 차림, 일러스트는 chat 이 그 단계에 갈 때 판의 형식을 올려 더한다.
 """
 
@@ -65,6 +66,22 @@ AFFECTION_MAX_STAGES = 10
 STAGE_NAME_MAX_LENGTH = 20
 AFFECTION_MAX_RULES = 50
 AFFECTION_MAX_CHANGE = 20
+# 시작 상황의 시작 시각(몇 시, 0~23). 적지 않으면 정오다. 형식 3 까지의 판도 이 값으로 읽는다
+START_HOUR_DEFAULT = 12
+HOURS_PER_DAY = 24
+
+
+class TimeOfDay(enum.StrEnum):
+    """
+    하루의 어느 때. 장소의 시간대 배경을 고르는 열쇠다.
+    경계는 TRPG 와 같다(trpg-server 의 app/calendar/clock.py, 2026-10-22 유저 결정). 계산은 chat 이 한다.
+    """
+
+    DAWN = 'dawn'
+    MORNING = 'morning'
+    DAY = 'day'
+    EVENING = 'evening'
+    NIGHT = 'night'
 
 
 class AffectionDisplay(enum.StrEnum):
@@ -127,13 +144,15 @@ class Character(Base):
     age: Mapped[str] = mapped_column(String(CHARACTER_AGE_MAX_LENGTH), default='', server_default='')
     gender: Mapped[str] = mapped_column(String(CHARACTER_GENDER_MAX_LENGTH), default='', server_default='')
     tags: Mapped[list[str]] = mapped_column(ARRAY(String(CHARACTER_TAG_MAX_LENGTH)), default=list, server_default='{}')
-    # 시작 상황들. [{"title", "situation"}]. 모양은 schemas.Start 가 정한다. 캐릭터에 딸린 짧은 목록이라 문서로 둔다
+    # 시작 상황들. [{"title", "situation", "hour"}]. 모양은 schemas.Start 가 정한다.
+    # 캐릭터에 딸린 짧은 목록이라 문서로 둔다
     starts: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     # 대표 그림의 id. 자기가 올린 그림만 붙인다(app/characters/service.py). 그림이 지워지면(탈퇴) 비운다
     image_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey('images.id', ondelete='SET NULL'), default=None, index=True
     )
-    # 지도. 장소들 [{"id", "name", "description", "image_id"}], 길들 [{"a", "b", "minutes"}], 처음 있는 장소의 id.
+    # 지도. 장소들 [{"id", "name", "description", "image_id", "backgrounds": {시간대: 그림 id}}],
+    # 길들 [{"a", "b", "minutes"}], 처음 있는 장소의 id.
     # 물건들 [{"id", "name", "description", "kind", "consumable", "image_id"}], 시작 소지품 [{"item", "count"}].
     # 모양은 schemas 가 정한다. 서로 가리키는 것이 맞는지는 게시할 때 본다(초안은 고치는 중이라 어긋날 수 있다)
     places: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')

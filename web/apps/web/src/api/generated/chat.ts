@@ -965,9 +965,18 @@ export interface components {
         };
         /**
          * PlaceDocument
-         * @description 장소 하나. id 는 캐릭터 안에서 고유하다. 그림은 그 장소의 배경이다.
+         * @description 장소 하나. id 는 캐릭터 안에서 고유하다. 그림(image_id)은 그 장소의 기본 배경이다.
+         *     backgrounds 는 시간대(dawn, morning, day, evening, night)마다의 배경이다.
+         *     모르는 시간대도 받아 둔다(쓰이지 않을 뿐이다).
          */
         PlaceDocument: {
+            /**
+             * Backgrounds
+             * @default {}
+             */
+            backgrounds: {
+                [key: string]: string;
+            };
             /** Description */
             description: string;
             /** Id */
@@ -995,9 +1004,14 @@ export interface components {
         };
         /**
          * StartDocument
-         * @description 시작 상황 하나. 제목은 목록에, 상황은 모델에 간다.
+         * @description 시작 상황 하나. 제목은 목록에, 상황은 모델에 간다. hour 는 시작하는 시각(몇 시, 0~23)이다.
          */
         StartDocument: {
+            /**
+             * Hour
+             * @default 12
+             */
+            hour: number;
             /** Situation */
             situation: string;
             /** Title */

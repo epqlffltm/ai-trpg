@@ -6,7 +6,8 @@ asset 서버를 부르는 것(app/assets/client.py)을 검증한다. 가짜 HTTP
 보는 것.
   - 주소와 서명: 이 서버의 이름(chat)의 주소로, 이 서버의 비밀로 서명하고(asset 서버의 is_valid 로 확인한다),
     사용자의 토큰을 함께 넘긴다
-  - 답: 200 은 그 모양으로 읽는다. 형식 2 의 지도와 물건은 남기고, 형식 1 의 판에서는 비어 있다.
+  - 답: 200 은 그 모양으로 읽는다. 형식 2 의 지도와 물건, 형식 3 의 호감도, 형식 4 의 시작 시각과 시간대 배경은 남긴다.
+    앞 형식의 판에서는 비어 있다(시작 시각은 정오).
     404, 403 adult_content_required 는 각각의 예외다.
     그 밖의 답, 모양이 틀린 답, 닿지 못함, 주소가 없음은 모두 AssetUnavailableError 다
 """
@@ -110,7 +111,9 @@ async def test_the_map_and_items_of_a_format_two_version_are_kept():
 
     # 대화가 판을 복사할 때 이 모양으로 적는다(모르는 칸은 버리므로 여기에 있어야 남는다)
     kept = fetched.document.model_dump(mode='json')
-    assert {name: kept[name] for name in WORLD} == WORLD
+    # 시간대 배경은 형식 4 에서 더했다. 앞 형식의 장소에는 없다(빈 것으로 읽는다)
+    places = [{**place, 'backgrounds': {}} for place in WORLD['places']]
+    assert {name: kept[name] for name in WORLD} == {**WORLD, 'places': places}
 
 
 async def test_the_affection_of_a_format_three_version_is_kept():
@@ -128,6 +131,31 @@ async def test_the_affection_of_a_format_three_version_is_kept():
 
     assert fetched.document.model_dump(mode='json')['affection'] == affection
     assert make_character().document.affection is None
+
+
+async def test_the_start_hours_and_backgrounds_of_a_format_four_version_are_kept():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    night = str(uuid.UUID(int=7))
+    starts = [{'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.', 'hour': 21}]
+    places = [{**WORLD['places'][0], 'backgrounds': {'night': night, 'later_time': night}}]
+    body['document'] |= {'format': 4, **WORLD, 'starts': starts, 'places': places}
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    kept = fetched.document.model_dump(mode='json')
+    # 모르는 시간대도 받아 둔다(쓰이지 않을 뿐이다)
+    assert (kept['starts'], kept['places']) == (starts, places)
+
+
+async def test_a_format_three_version_starts_at_noon():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    body['document'] |= {'format': 3, 'starts': [{'title': '오후', 'situation': '햇살이 든다.'}]}
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    assert fetched.document.starts[0].hour == 12
 
 
 async def test_a_format_one_version_has_no_map_or_items():
