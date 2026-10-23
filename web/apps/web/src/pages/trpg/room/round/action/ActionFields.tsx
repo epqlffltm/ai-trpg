@@ -19,6 +19,7 @@ import {
 } from './actionOptions';
 import { ACTION_LABELS } from './actionLabels';
 import { CheckFields } from './CheckFields';
+import { DoorActionFields } from './DoorActionFields';
 import { ChoiceSelect } from './ChoiceSelect';
 import { GiveFields, PutDownFields, TakeFields, UseFields, VictimFields } from './ItemActionFields';
 import { BuyFields, PayFields, SellFields } from './TradeFields';
@@ -85,6 +86,12 @@ function KindFields({ draft, ctx, onChange }: Omit<Props, 'error'>) {
       return <SellFields draft={draft} ctx={ctx} onChange={onChange} />;
     case 'pay':
       return <PayFields draft={draft} ctx={ctx} onChange={onChange} />;
+    case 'lock':
+    case 'unlock':
+    case 'pick':
+    case 'force':
+    case 'repair':
+      return <DoorActionFields kind={draft.kind} draft={draft} ctx={ctx} onChange={onChange} />;
     default:
       return null;
   }

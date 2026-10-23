@@ -3,12 +3,15 @@
 // 퀘스트의 글은 서버가 주지 않는다. 숨긴 퀘스트는 방장에게만 온다. 맵이 없는 판이면 장소를 숨긴다.
 // 기한이 지난 퀘스트는 서버가 다음에 닫히는 라운드에서 실패로 바꾼다. 화면이 스스로 바꾸지 않는다.
 // 갈 수 있는 곳에는 "가기", 지금 있는 곳에는 "찾기", 놓인 물건에는 "줍기" 단추가 있다. 누르면 선언 입력의 행동 칸이 채워진다.
+// 지금 있는 곳에 닿은 길의 문(#281)은 상태(자물쇠, 빗장, 부서짐)와 지금 할 수 있어 보이는 행동의 단추를 보인다.
 
 import { useQuery } from '@tanstack/react-query';
 import type { TableDetail, TableMember } from '../../../../api/types';
 import { stepName } from '../../models/modelChoice';
 import { ModelPrice } from '../../models/ModelPicker';
 import { narrationModelsQuery } from '../../queries';
+import { ACTION_LABELS } from '../round/action/actionLabels';
+import { canHandleDoor, DOOR_KINDS, doorsHere, doorState } from '../round/action/doorOptions';
 import { ActionButton, type ActionShortcuts } from './ActionButton';
 import {
   clockLabel,
@@ -153,7 +156,37 @@ function Places({ table, map, mine, shortcuts }: PlacesProps) {
       ) : here ? (
         <p className="hint">아는 길이 없습니다.</p>
       ) : null}
+      {here ? <Doors map={map} here={here} shortcuts={shortcuts} /> : null}
       <WhoIsWhere map={map} members={table.members} />
     </section>
+  );
+}
+
+type DoorsProps = { map: NonNullable<TableDetail['map']>; here: string; shortcuts: ActionShortcuts };
+
+/** 지금 있는 곳에 닿은 길의 문. 문마다 상태와, 지금 할 수 있어 보이는 행동(열기, 잠그기, 따기, 부수기, 고치기)의 단추 */
+function Doors({ map, here, shortcuts }: DoorsProps) {
+  const doors = doorsHere(map, here);
+  if (doors.length === 0) return null;
+  return (
+    <>
+      <p className="hint">문</p>
+      <ul className="ways" aria-label="문">
+        {doors.map((door) => (
+          <li key={door.place}>
+            {door.name} 쪽 문 <span className="hint">({doorState(door, map)})</span>{' '}
+            {DOOR_KINDS.filter((kind) => canHandleDoor(kind, door.route, here)).map((kind) => (
+              <ActionButton
+                key={kind}
+                shortcuts={shortcuts}
+                patch={{ kind, place: door.place, device: '' }}
+                label={ACTION_LABELS[kind]}
+                what={`${door.name} 쪽 문`}
+              />
+            ))}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

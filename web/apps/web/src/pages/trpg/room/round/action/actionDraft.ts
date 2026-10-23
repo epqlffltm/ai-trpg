@@ -5,6 +5,7 @@
 
 import type { DeclaredAction, Ruleset } from '../../../../../api/types';
 import { amountLabel, buyingCost, moneyOf } from '../../money';
+import { chosenDevice, doorDevices, doorsHere } from './doorOptions';
 import {
   heldCount,
   itemHeals,
@@ -55,6 +56,8 @@ export type ActionDraft = {
   item: string;
   count: number;
   place: string;
+  /** 잠그기와 열기의 장치(lock, bar). 빈 값이면 그 문에서 할 수 있는 것의 첫째 */
+  device: string;
   /** 함께 업고 갈 사람의 user_id. 빈 값이면 혼자 */
   carry: string;
   length: 'short' | 'long';
@@ -82,6 +85,7 @@ export function emptyActionDraft(rules: Ruleset): ActionDraft {
     item: '',
     count: 1,
     place: '',
+    device: '',
     carry: '',
     length: 'short',
     minutes: 60,
@@ -121,6 +125,13 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
       return { ...base, kind: action.kind, item: action.item, count: action.count, target: `npc:${action.npc}` };
     case 'pay':
       return { ...base, kind: 'pay', amount: action.amount, target: `member:${action.target}` };
+    case 'lock':
+    case 'unlock':
+      return { ...base, kind: action.kind, place: action.place, device: action.device ?? '' };
+    case 'pick':
+    case 'force':
+    case 'repair':
+      return { ...base, kind: action.kind, place: action.place };
     default:
       return { ...base, kind: action.kind };
   }
@@ -194,7 +205,7 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
     case 'pick':
     case 'force':
     case 'repair':
-      return draft.place ? null : '문이 있는 길을 골라 주세요.';
+      return draft.place ? null : '다룰 문을 골라 주세요.';
   }
 }
 
@@ -279,14 +290,23 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return { kind: draft.kind, npc: npc ?? '', item: draft.item, count: draft.count };
     case 'pay':
       return { kind: 'pay', target: member ?? '', amount: draft.amount };
-    // 문을 다루는 행동(#281). 장치는 비우면 서버가 그 길의 하나로 채운다
+    // 문을 다루는 행동(#281). 잠그기와 열기는 장치를 적어 보낸다(자물쇠와 빗장이 다 있는 길은 서버가 적으라고 한다)
     case 'lock':
     case 'unlock':
+      return toLockAction(draft.kind, draft, ctx);
     case 'pick':
     case 'force':
     case 'repair':
       return { kind: draft.kind, place: draft.place };
   }
+}
+
+/** 잠그기, 열기. 고른 장치가 지금 그 문에서 할 수 없으면 할 수 있는 것으로 바꾼다 */
+function toLockAction(kind: 'lock' | 'unlock', draft: ActionDraft, ctx: ActionContext): DeclaredAction {
+  const here = ctx.me.sheet?.place_id ?? '';
+  const door = doorsHere(ctx.table.map, here).find((one) => one.place === draft.place);
+  const device = chosenDevice(door ? doorDevices(kind, door.route, here) : [], draft.device);
+  return { kind, place: draft.place, ...(device ? { device } : {}) };
 }
 
 /** 판정. 목적에 맞는 칸만 넣는다. 타격은 인물이나 몬스터, 회복은 사람이나 인물(비우면 자기 자신) */
