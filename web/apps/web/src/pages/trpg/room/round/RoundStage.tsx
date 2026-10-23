@@ -42,7 +42,7 @@ export function RoundStage({ table, myId, preview, nameOfMember }: Props) {
       ) : null}
       {recent.isError ? <p className="hint">지난 라운드를 불러오지 못했습니다.</p> : null}
       {past.map((round) => (
-        <RoundEntry key={round.number} round={round} rules={table.rules} />
+        <RoundEntry key={round.number} round={round} table={table} />
       ))}
       <CurrentRound table={table} round={current.data} myId={myId} preview={preview} nameOfMember={nameOfMember} />
     </section>

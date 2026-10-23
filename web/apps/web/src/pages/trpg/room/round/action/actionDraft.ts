@@ -1,0 +1,246 @@
+// web/apps/web/src/pages/trpg/room/round/action/actionDraft.ts
+// 선언에 붙일 행동의 입력. 순수한 함수다. 종류마다 칸이 다르지만 입력은 한 모양으로 들고, 보낼 때 종류에 맞게 고른다.
+// 종류를 바꿔도 다른 종류의 칸은 지우지 않는다(되돌아오면 그대로다). 보내는 값에는 그 종류의 칸만 들어간다.
+// 칸의 규칙은 서버의 것이다(trpg-server/app/engine/action.py). 여기서 막는 것은 보내기 전에 알리는 것이다.
+
+import type { DeclaredAction, Ruleset } from '../../../../../api/types';
+import {
+  heldCount,
+  itemHeals,
+  placeItems,
+  splitRef,
+  type ActionContext,
+  type ActionKind,
+  type TargetRef,
+} from './actionOptions';
+
+/** 지목하는 이름의 길이(NAME_GUESS_MAX_LENGTH) */
+export const NAME_GUESS_MAX = 50;
+/** 한 번에 건네거나 줍거나 내려놓는 개수(GIVE_MAX_COUNT) */
+export const COUNT_MAX = 99;
+/** 기다리기의 가장 긴 시간(분). 일주일 */
+export const WAIT_MAX_MINUTES = 7 * 24 * 60;
+
+/** 판정의 목적. 그냥 판정, 타격(인물이나 몬스터), 회복(사람이나 인물) */
+export type CheckPurpose = 'plain' | 'harm' | 'recover';
+
+export type ActionDraft = {
+  /** none 이면 행동이 없는 선언이다 */
+  kind: ActionKind | 'none';
+  ability: string;
+  difficulty: string;
+  /** 실패의 대가(피해 등급). 빈 값이면 없다 */
+  risk: string;
+  purpose: CheckPurpose;
+  /** 타격이나 회복의 등급 */
+  magnitude: string;
+  /** 판정, 치료, 물건 쓰기, 건네기, 훔치기, 빼앗기의 대상 */
+  target: TargetRef;
+  lethal: boolean;
+  /** 노려 칠 부상. 빈 값이면 노리지 않는다 */
+  aim: string;
+  injury: string;
+  guess: string;
+  /** 지목할 인물. 빈 값이면 "이런 이름의 인물이 있다" */
+  npc: string;
+  item: string;
+  count: number;
+  place: string;
+  /** 함께 업고 갈 사람의 user_id. 빈 값이면 혼자 */
+  carry: string;
+  length: 'short' | 'long';
+  minutes: number;
+};
+
+export function emptyActionDraft(rules: Ruleset): ActionDraft {
+  return {
+    kind: 'none',
+    ability: rules.abilities[0]?.key ?? '',
+    difficulty: rules.default_difficulty,
+    risk: '',
+    purpose: 'plain',
+    magnitude: rules.magnitudes[0]?.key ?? '',
+    target: '',
+    lethal: false,
+    aim: '',
+    injury: '',
+    guess: '',
+    npc: '',
+    item: '',
+    count: 1,
+    place: '',
+    carry: '',
+    length: 'short',
+    minutes: 60,
+  };
+}
+
+/** 낸 선언의 행동으로 입력을 채운다(고치기) */
+export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): ActionDraft {
+  const base = emptyActionDraft(rules);
+  if (!action) return base;
+  switch (action.kind) {
+    case 'check':
+      return { ...base, ...checkDraft(action), kind: 'check' };
+    case 'treat':
+      return { ...base, kind: 'treat', injury: action.injury, target: refOf(action.target, action.npc, null) };
+    case 'name':
+      return { ...base, kind: 'name', guess: action.name, npc: action.npc ?? '' };
+    case 'use':
+      return { ...base, kind: 'use', item: action.item, target: refOf(action.target, null, null) };
+    case 'give':
+      return { ...base, kind: 'give', item: action.item, count: action.count, target: `member:${action.target}` };
+    case 'move':
+      return { ...base, kind: 'move', place: action.place, carry: action.carry ?? '' };
+    case 'take':
+    case 'put_down':
+      return { ...base, kind: action.kind, item: action.item, count: action.count };
+    case 'steal':
+    case 'loot':
+      return { ...base, kind: action.kind, item: action.item, target: refOf(null, action.npc, action.monster) };
+    case 'rest':
+      return { ...base, kind: 'rest', length: action.length };
+    case 'wait':
+      return { ...base, kind: 'wait', minutes: action.minutes };
+    default:
+      return { ...base, kind: action.kind };
+  }
+}
+
+function checkDraft(action: Extract<DeclaredAction, { kind: 'check' }>): Partial<ActionDraft> {
+  const purpose: CheckPurpose = action.harm ? 'harm' : action.recover ? 'recover' : 'plain';
+  const magnitude = action.harm ?? action.recover;
+  return {
+    ability: action.ability,
+    ...(action.difficulty ? { difficulty: action.difficulty } : {}),
+    ...(magnitude ? { magnitude } : {}),
+    risk: action.risk ?? '',
+    purpose,
+    target: refOf(action.target, action.npc, action.monster),
+    lethal: action.lethal,
+    aim: action.aim ?? '',
+  };
+}
+
+function refOf(member: string | null | undefined, npc: string | null | undefined, monster: string | null | undefined): TargetRef {
+  if (member) return `member:${member}`;
+  if (npc) return `npc:${npc}`;
+  if (monster) return `monster:${monster}`;
+  return '';
+}
+
+/** 보내기 전에 알릴 것 한 줄. 없으면 null */
+export function actionHint(draft: ActionDraft, ctx: ActionContext): string | null {
+  switch (draft.kind) {
+    case 'none':
+    case 'search':
+      return null;
+    case 'check':
+      return checkHint(draft, ctx.table.rules);
+    case 'treat':
+      return draft.injury ? null : '치료할 부상을 골라 주세요.';
+    case 'name':
+      return nameHint(draft.guess);
+    case 'use':
+      return draft.item ? null : '쓸 물건을 골라 주세요.';
+    case 'give':
+      if (!draft.item || !draft.target) return '건넬 물건과 받을 사람을 골라 주세요.';
+      return countHint(draft.count, heldCount(ctx.me, draft.item));
+    case 'put_down':
+      return draft.item ? countHint(draft.count, heldCount(ctx.me, draft.item)) : '내려놓을 물건을 골라 주세요.';
+    case 'take':
+      return draft.item ? countHint(draft.count, COUNT_MAX) : '주울 물건을 골라 주세요.';
+    case 'move':
+      return draft.place ? null : '갈 곳을 골라 주세요.';
+    case 'steal':
+    case 'loot':
+      return draft.target && draft.item ? null : '대상과 물건을 골라 주세요.';
+    case 'rest':
+      return null;
+    case 'wait':
+      return Number.isInteger(draft.minutes) && draft.minutes >= 1 && draft.minutes <= WAIT_MAX_MINUTES
+        ? null
+        : `기다리는 시간은 1분에서 ${WAIT_MAX_MINUTES}분 사이입니다.`;
+  }
+}
+
+function checkHint(draft: ActionDraft, rules: Ruleset): string | null {
+  const ability = rules.abilities.some((entry) => entry.key === draft.ability);
+  const difficulty = rules.difficulties.some((entry) => entry.key === draft.difficulty);
+  if (!ability || !difficulty) return '이 테이블의 규칙에 있는 능력과 난이도를 골라 주세요.';
+  if (draft.purpose === 'harm' && !draft.target) return '칠 대상을 골라 주세요.';
+  if (draft.purpose !== 'plain' && !draft.magnitude) return '피해나 회복의 크기를 골라 주세요.';
+  return null;
+}
+
+function nameHint(guess: string): string | null {
+  const trimmed = guess.trim();
+  if (!trimmed) return '짚을 이름을 적어 주세요.';
+  return trimmed.length > NAME_GUESS_MAX ? `이름은 ${NAME_GUESS_MAX}자까지입니다.` : null;
+}
+
+function countHint(count: number, max: number): string | null {
+  if (!Number.isInteger(count) || count < 1) return '개수는 1 이상입니다.';
+  if (count > Math.min(max, COUNT_MAX)) return `개수는 ${Math.min(max, COUNT_MAX)}개까지입니다.`;
+  return null;
+}
+
+/** 서버에 보낼 행동. 행동이 없으면 null. 그 종류의 칸만 넣는다 */
+export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction | null {
+  const [targetKind, targetId] = splitRef(draft.target);
+  const member = targetKind === 'member' ? targetId : null;
+  const npc = targetKind === 'npc' ? targetId : null;
+  const monster = targetKind === 'monster' ? targetId : null;
+  switch (draft.kind) {
+    case 'none':
+      return null;
+    case 'check':
+      return toCheck(draft, member, npc, monster);
+    case 'treat':
+      return { kind: 'treat', injury: draft.injury, ...(member ? { target: member } : {}), ...(npc ? { npc } : {}) };
+    case 'name':
+      return { kind: 'name', name: draft.guess.trim(), ...(draft.npc ? { npc: draft.npc } : {}) };
+    case 'use':
+      return { kind: 'use', item: draft.item, ...(member && itemHeals(ctx.table, draft.item) ? { target: member } : {}) };
+    case 'give':
+      return { kind: 'give', item: draft.item, count: draft.count, target: member ?? '' };
+    case 'move':
+      return { kind: 'move', place: draft.place, ...(draft.carry ? { carry: draft.carry } : {}) };
+    case 'search':
+      return { kind: 'search' };
+    case 'take':
+      return { kind: 'take', item: draft.item, count: Math.min(draft.count, placeCount(ctx, draft.item)) };
+    case 'put_down':
+      return { kind: 'put_down', item: draft.item, count: draft.count };
+    case 'steal':
+    case 'loot':
+      return { kind: draft.kind, item: draft.item, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}) };
+    case 'rest':
+      return { kind: 'rest', length: draft.length };
+    case 'wait':
+      return { kind: 'wait', minutes: draft.minutes };
+  }
+}
+
+/** 판정. 목적에 맞는 칸만 넣는다. 타격은 인물이나 몬스터, 회복은 사람이나 인물(비우면 자기 자신) */
+function toCheck(draft: ActionDraft, member: string | null, npc: string | null, monster: string | null): DeclaredAction {
+  const base = {
+    kind: 'check' as const,
+    ability: draft.ability,
+    difficulty: draft.difficulty,
+    ...(draft.risk ? { risk: draft.risk } : {}),
+  };
+  if (draft.purpose === 'harm') {
+    const aim = npc && draft.aim ? { aim: draft.aim } : {};
+    return { ...base, harm: draft.magnitude, lethal: draft.lethal, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}), ...aim };
+  }
+  if (draft.purpose === 'recover') {
+    return { ...base, recover: draft.magnitude, lethal: false, ...(member ? { target: member } : {}), ...(npc ? { npc } : {}) };
+  }
+  return { ...base, lethal: false };
+}
+
+/** 줍는 개수는 놓인 것보다 많이 부르지 않는다(서버는 남은 만큼만 준다) */
+function placeCount(ctx: ActionContext, entryId: string): number {
+  return placeItems(ctx).find((item) => item.entry_id === entryId)?.count ?? COUNT_MAX;
+}

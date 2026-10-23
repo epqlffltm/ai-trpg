@@ -5,7 +5,7 @@
 // 아직 이벤트가 없어서다(선언은 마감할 때 player_action 으로 적힌다). 게임 서버가 그 이벤트를 내면 이 읽기를 뺀다.
 
 import { queryOptions } from '@tanstack/react-query';
-import { fetchCurrentRound, fetchRecentRounds } from '../../../../api/rounds';
+import { fetchCurrentRound, fetchRecentRounds, fetchSceneCast } from '../../../../api/rounds';
 
 /** 선언을 받는 동안 지금 라운드를 다시 읽는 사이 */
 export const OPEN_POLL_MS = 10_000;
@@ -27,5 +27,13 @@ export function recentRoundsQuery(tableId: string) {
   return queryOptions({
     queryKey: [...roundsKey(tableId), 'recent'],
     queryFn: ({ signal }) => fetchRecentRounds(tableId, signal),
+  });
+}
+
+/** 지금 장면의 인물과 몬스터. 행동의 대상을 고를 때만 읽는다. 라운드와 함께 버려진다(다음 장면) */
+export function sceneCastQuery(tableId: string) {
+  return queryOptions({
+    queryKey: [...roundsKey(tableId), 'people'],
+    queryFn: ({ signal }) => fetchSceneCast(tableId, signal),
   });
 }
