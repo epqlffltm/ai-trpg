@@ -14,7 +14,7 @@ from app.events.schemas import EventOut
 # 여기에 적지 않은 칸은 나가지 않는다. 여기에 없는 종류는 payload 가 통째로 비어서 나간다.
 # 나중에 AI 호출이나 GM 만 아는 판정을 이벤트로 적어도, 이 목록에 올리기 전에는 플레이어에게 보이지 않는다
 VISIBLE: dict[EventType, tuple[str, ...]] = {
-    EventType.TABLE_CREATED: ('narration_model', 'recommended_model'),
+    EventType.TABLE_CREATED: ('narration_model', 'recommended_model', 'input_step', 'output_step'),
     EventType.MEMBER_JOINED: ('via',),
     EventType.MEMBER_LEFT: ('character_name',),
     EventType.MEMBER_KICKED: ('user_id', 'character_name'),
@@ -25,7 +25,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.NARRATION_STYLE_CHANGED: ('narration_style',),
     EventType.ROUND_TIME_LIMIT_CHANGED: ('round_time_limit',),
     EventType.NARRATION_TIER_CHANGED: ('narration_tier',),
-    EventType.NARRATION_MODEL_CHANGED: ('narration_model', 'round', 'price'),
+    EventType.NARRATION_MODEL_CHANGED: ('narration_model', 'input_step', 'output_step', 'round', 'price'),
     EventType.CREDIT_WAIT_CHANGED: ('credit_wait_seconds', 'remove_short_payers'),
     EventType.WHISPER_NOTICE_CHANGED: ('whisper_notice',),
     EventType.REFERENCES_CHANGED: ('references_enabled',),
@@ -140,7 +140,16 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
     # 게임 안의 시각은 공개다. 모두 같은 때에 있다
-    EventType.ROUND_OPENED: ('number', 'deadline_at', 'narration_model', 'price', 'clock', 'passed_minutes'),
+    EventType.ROUND_OPENED: (
+        'number',
+        'deadline_at',
+        'narration_model',
+        'input_step',
+        'output_step',
+        'price',
+        'clock',
+        'passed_minutes',
+    ),
     EventType.PLAYER_ACTION: ('round', 'character_name', 'content', 'action'),
     # 굴림은 공개다. 숫자까지 모두에게 보인다
     EventType.CHECK_ROLLED: (

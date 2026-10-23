@@ -226,6 +226,24 @@ async def test_the_api_lists_the_models_with_their_prices(client: AsyncClient, a
             'promo': False,
             'next': {'credits': '310', 'tier': 'premium', 'promo': False, 'effective_at': '2026-12-01T00:00:00Z'},
             'retires_on': None,
+            # 기본 단계만 판다. 값은 위와 같다(#387)
+            'options': [
+                {
+                    'input_step': 0,
+                    'output_step': 0,
+                    'input_tokens': 12_000,
+                    'output_tokens': 1_200,
+                    'credits': '300',
+                    'tier': 'standard',
+                    'promo': False,
+                    'next': {
+                        'credits': '310',
+                        'tier': 'premium',
+                        'promo': False,
+                        'effective_at': '2026-12-01T00:00:00Z',
+                    },
+                }
+            ],
         },
         {
             'slug': 'gpt-6-luna',
@@ -237,6 +255,18 @@ async def test_the_api_lists_the_models_with_their_prices(client: AsyncClient, a
             'promo': False,
             'next': None,
             'retires_on': None,
+            'options': [
+                {
+                    'input_step': 0,
+                    'output_step': 0,
+                    'input_tokens': 12_000,
+                    'output_tokens': 1_200,
+                    'credits': '20',
+                    'tier': 'standard',
+                    'promo': False,
+                    'next': None,
+                }
+            ],
         },
     ]
 

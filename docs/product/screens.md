@@ -1034,7 +1034,7 @@
 | --- | --- | --- |
 | 공개 테이블 | 모집 중이고 자리가 남은 것만, 최근에 만든 것부터 | `GET /tables/lobby`(`?scenario_id=` 로 거른다) |
 | 한 줄 정보 | 제목, 등급, 인원(`member_count` / `capacity`), 비밀번호 여부(`has_password`), 문체, 라운드 시간 제한, 서술 모델, 크레딧 기다리기, 쪽지 알림 | `TableSummary` 의 칸. 들어가기 전에 알아야 할 설정이 여기에 모두 있다 |
-| 서술 모델의 이름과 값 | 모델 이름과 1인 1라운드의 값 | `TableSummary.narration_model` 의 이름표를 `GET /tables/narration-models` 에서 찾는다(B8) |
+| 서술 모델의 이름과 값 | 모델 이름, 단계, 1인 1라운드의 값 | `TableSummary.narration_model` 의 이름표를 `GET /tables/narration-models` 에서 찾고, 그 모델의 `options` 에서 `TableSummary.input_step`, `output_step` 의 값을 찾는다(B8, #387) |
 | 내 테이블 | 내가 앉아 있는 테이블 | `GET /tables` |
 
 **3. 할 수 있는 행동**
@@ -1467,6 +1467,7 @@
 | 행사가 | `promo` | 지금 값이 행사가인가 |
 | 예약된 바뀜 | `next.credits`, `next.tier`, `next.promo`, `next.effective_at` | `next.credits` 가 `null` 이면 그때부터 팔지 않는다. 화면이 "12월 1일부터 240", "11월 21일까지 행사가"처럼 미리 알린다 |
 | 은퇴 | `retires_on` | 이 날부터 쓰지 않는다. 정해지지 않았으면 `null` |
+| 서술의 단계와 값(#387) | `options[]`: `input_step`, `output_step`, `input_tokens`, `output_tokens`, `credits`, `tier`, `promo`, `next` | 지금 파는 단계들. 기본 단계(0, 0)가 맨 앞이고 그 값은 위의 `credits` 와 같다. 입력 단계마다 지난 기록·로어북·기억이 더 들어가고(12,000·20,000·28,000 토큰), 출력 단계마다 장면이 길어진다(1,200·2,200·3,200 토큰). 화면이 "더 긴 기억", "더 긴 장면"처럼 보이고 값을 함께 보인다 |
 
 - 목록에 있는 모델은 **지금 고를 수 있는 것**뿐이다. 모델 목록에서 켜져 있고, 은퇴하지 않았고, 결제 서버가 지금 팔고 있어야 한다. 목록에 없는 모델은 그 이유(꺼짐, 은퇴, 판매 중지)를 구분해 알려 주지 않는다.
 - 응답의 `free` 가 참이면 결제 서버 없이 도는 서버다(로컬·시험). 모델은 모두 나오지만 `credits`, `tier` 가 `null` 이다. 값 칸을 숨긴다.
@@ -1477,8 +1478,8 @@
 | 행동 | 호출 | 동작 |
 | --- | --- | --- |
 | 모델 목록과 값 보기 | `GET /tables/narration-models` | 고를 수 있는 모델 전부와 값 |
-| 만들 때 고르기 | `POST /tables` 의 `narration_model` | 비우면 시나리오의 추천 모델. 쓸 수 없으면 같은 회사의 대체 모델 |
-| 바꾸기(방장) | `PUT /tables/{id}/narration-model` | 진행 중에도 된다. 바꾼 값은 다음 라운드부터다. 아직 서술하지 않은 지금 라운드는 함께 바뀌고 새 값으로 다시 건다 |
+| 만들 때 고르기 | `POST /tables` 의 `narration_model`, `input_step`, `output_step` | 비우면 시나리오의 추천 모델. 쓸 수 없으면 같은 회사의 대체 모델. 단계는 비우면 0 이고, 그 모델의 `options` 에 있어야 한다(아니면 422 `narration_steps`) |
+| 바꾸기(방장) | `PUT /tables/{id}/narration-model` | 모델과 단계를 함께 보낸다(단계를 비우면 0). 모집 중에만 되고, 시작한 뒤에는 지금 쓰는 모델이나 단계를 쓸 수 없을 때만 된다(409 `narration_model_locked`). 바꾼 값은 다음 라운드부터다. 아직 서술하지 않은 지금 라운드는 함께 바뀌고 새 값으로 다시 건다 |
 
 **4. 버튼이 비활성인 조건**
 

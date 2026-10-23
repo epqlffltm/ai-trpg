@@ -34,6 +34,7 @@ from app.assets.scenarios.schemas import (
 from app.billing.prices import Tier
 from app.calendar.schemas import ClockOut, ClockTimeOut
 from app.catalog.models import Grade
+from app.catalog.steps import MAX_STEP
 from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
 from app.engine.sheet import Score, Sheet
 from app.tables.models import (
@@ -60,6 +61,8 @@ TablePassword = Annotated[
 RoundTimeLimit = Annotated[int, Field(ge=ROUND_TIME_LIMIT_MIN, le=ROUND_TIME_LIMIT_MAX)]
 # 크레딧이 모자란 사람을 기다리는 시간(초). 누가 모자라 서술이 멈춘 때부터 센다
 CreditWait = Annotated[int, Field(ge=CREDIT_WAIT_MIN, le=CREDIT_WAIT_MAX)]
+# 서술의 입력·출력 단계(#387, app/catalog/steps.py)
+Step = Annotated[int, Field(ge=0, le=MAX_STEP)]
 
 
 class TableCreate(BaseModel):
@@ -90,6 +93,10 @@ class TableCreate(BaseModel):
     # 서술 모델(모델 목록의 이름표). 적지 않으면 시나리오의 추천 모델이고, 쓸 수 없으면 같은 회사의 대체 모델이다.
     # 고를 수 있는 모델만 된다(GET /tables/narration-models). 만든 뒤에도 방장이 바꿀 수 있다
     narration_model: Slug | None = None
+    # 서술의 입력·출력 단계(#387). 적지 않으면 0, 0(i0.o0)이다. 정한 모델이 그 단계를 팔아야 한다(그 모델의 options).
+    # 모델과 함께 바꾼다(PUT /tables/{id}/narration-model)
+    input_step: Step = 0
+    output_step: Step = 0
     # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 빼고 서술하는가. 만든 뒤에도 방장이 바꿀 수 있다
     credit_wait_seconds: CreditWait = DEFAULT_CREDIT_WAIT
     remove_short_payers: bool = True
@@ -228,11 +235,17 @@ class ReferencesUpdate(BaseModel):
 
 
 class NarrationModelUpdate(BaseModel):
-    """서술 모델을 바꿀 때 받는 값. 칸을 빼먹으면 거부한다. 비울 수 없다(서버의 기본 모델로 돌아가지 않는다)."""
+    """
+    서술 모델과 단계를 바꿀 때 받는 값. 모델을 빼먹으면 거부한다. 비울 수 없다(서버의 기본 모델로 돌아가지 않는다).
+
+    단계(#387)는 모델과 함께 한 가격표를 고르는 것이다. 적지 않으면 0, 0(i0.o0)이다. 그 모델이 그 단계를 팔아야 한다.
+    """
 
     model_config = ConfigDict(extra='forbid')
 
     narration_model: Slug
+    input_step: Step = 0
+    output_step: Step = 0
 
 
 class HostTransfer(BaseModel):
@@ -251,6 +264,24 @@ class NextPriceOut(BaseModel):
     # 그때부터의 값도 행사가인가
     promo: bool
     effective_at: datetime
+
+
+class StepPriceOut(BaseModel):
+    """
+    모델의 단계 하나와 1인 1라운드의 값(#387). 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.
+
+    입력 단계마다 입력 +8,000 토큰(12,000, 20,000, 28,000), 출력 단계마다 출력 +1,000 토큰(1,200, 2,200, 3,200)이다.
+    입력이 크면 지난 기록, 로어북, 기억이 더 들어가고, 출력이 크면 장면이 길어진다.
+    """
+
+    input_step: int
+    output_step: int
+    input_tokens: int
+    output_tokens: int
+    credits: str | None
+    tier: Tier | None
+    promo: bool
+    next: NextPriceOut | None
 
 
 class NarrationModelOut(BaseModel):
@@ -273,6 +304,9 @@ class NarrationModelOut(BaseModel):
     # 이 날부터 쓰지 않는다(공급자가 내리는 날). 이 모델을 쓰는 테이블은 그날 같은 회사의 다른 모델로 바뀐다.
     # 화면이 "12월 1일 종료"를 보여 준다. 정해지지 않았으면 null
     retires_on: date | None
+    # 지금 파는 단계들과 그 값(#387). 기본 단계(0, 0)가 맨 앞이고 그 값은 위의 credits 와 같다.
+    # 입력, 출력의 차례다. 결제 서버 없이 도는 서버면 모든 단계가 값 없이 나온다
+    options: list[StepPriceOut]
 
 
 class NarrationModelsOut(BaseModel):
@@ -512,6 +546,9 @@ class TableSummary(BaseModel):
     # 지금의 서술 모델(이름표). 로비에서 들어가기 전에 어느 모델로 서술하는지 안다. 바꾸면 보통 다음 라운드부터다.
     # 값은 GET /tables/narration-models 에서 이름표로 찾는다. 이 규칙 전에 만든 테이블만 null 이다(서버의 기본 모델)
     narration_model: str | None
+    # 서술의 입력·출력 단계(#387). 값은 그 모델의 options 에서 이 단계로 찾는다. 들어가기 전에 안다
+    input_step: int
+    output_step: int
     # 크레딧이 모자란 사람을 기다리는 시간(초)과, 지나면 그 사람을 자리에서 빼는가. 들어가기 전에 안다
     credit_wait_seconds: int
     remove_short_payers: bool

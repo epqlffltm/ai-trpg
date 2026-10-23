@@ -1,7 +1,7 @@
 # trpg-server/app/tables/narration_models.py
 
 """
-테이블의 서술 모델을 바꾼다. 방장만 한다.
+테이블의 서술 모델과 단계(#387)를 바꾼다. 방장만 한다. 모델과 단계는 함께 한 가격표를 고르는 것이라 함께 바꾼다.
 
 시작하면 고정이다(유저 결정, 2026-10-19). 서술 값은 앉은 사람 모두가 낸다. 들어오는 사람은 모델과 값을 보고 앉으므로
 앉는 것이 그 모델에 대한 동의다. 시작한 뒤에 방장 혼자 비싼 모델로 바꾸면 남의 값을 정하게 된다.
@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.billing import charges
 from app.catalog import offers
 from app.catalog.offers import OfferedModel
+from app.catalog.steps import NarrationSteps, steps_of
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds import repository as round_repository
@@ -56,11 +57,22 @@ def takes_new_model(round_: Round | None) -> bool:
     return round_.status == RoundStatus.CLOSING and round_.narration_failed_at is not None
 
 
-def is_unchanged(table: GameTable, round_: Round | None, model: str) -> bool:
-    """바꿀 것이 없는가. 테이블의 모델이 같고, 지금 바꿀 수 있는 라운드가 있으면 그 라운드의 모델도 같다."""
-    if table.narration_model != model:
+# 지금 쓰는 것 하나. 서술 모델(없으면 옛 것)과 단계다. 둘이 한 가격표다
+Choice = tuple[str | None, NarrationSteps]
+
+
+def choice_of(row: GameTable | Round) -> Choice:
+    """테이블이나 라운드의 모델과 단계."""
+    return row.narration_model, steps_of(row)
+
+
+def is_unchanged(table: GameTable, round_: Round | None, chosen: Choice) -> bool:
+    """
+    바꿀 것이 없는가. 테이블의 모델과 단계가 같고, 지금 바꿀 수 있는 라운드가 있으면 그 라운드의 것도 같다.
+    """
+    if choice_of(table) != chosen:
         return False
-    return not takes_new_model(round_) or round_.narration_model == model
+    return not takes_new_model(round_) or choice_of(round_) == chosen
 
 
 def forget_retire_notices(table: GameTable) -> None:
@@ -69,28 +81,30 @@ def forget_retire_notices(table: GameTable) -> None:
     table.retire_notice_days = None
 
 
-def models_in_use(table: GameTable, round_: Round | None) -> list[str | None]:
+def choices_in_use(table: GameTable, round_: Round | None) -> list[Choice]:
     """
-    지금 쓰는 모델들. 테이블의 모델과, 지금 바꿀 수 있는 라운드(takes_new_model)가 있으면 그 라운드의 모델이다.
+    지금 쓰는 모델과 단계들. 테이블의 것과, 지금 바꿀 수 있는 라운드(takes_new_model)가 있으면 그 라운드의 것이다.
 
-    서술이 실패해 멈춘 라운드는 연 때의 모델로 다시 서술한다. 테이블의 모델을 쓸 수 있어도 그 라운드의 모델을 못 쓰면
+    서술이 실패해 멈춘 라운드는 연 때의 모델과 단계로 다시 서술한다. 테이블의 것을 쓸 수 있어도 그 라운드의 것을 못 쓰면
     라운드가 풀리지 않는다.
     """
-    if takes_new_model(round_) and round_.narration_model != table.narration_model:
-        return [table.narration_model, round_.narration_model]
-    return [table.narration_model]
+    if takes_new_model(round_) and choice_of(round_) != choice_of(table):
+        return [choice_of(table), choice_of(round_)]
+    return [choice_of(table)]
 
 
-async def is_usable(session: AsyncSession, picker: ModelPicker, model: str | None) -> bool:
+async def is_usable(session: AsyncSession, picker: ModelPicker, chosen: Choice) -> bool:
     """
-    그 모델을 지금 쓸 수 있는가. 고를 수 있는 목록에 있으면 쓸 수 있다(app/catalog/offers.py).
+    그 모델과 단계를 지금 쓸 수 있는가. 그 단계로 고를 수 있는 목록에 있으면 쓸 수 있다(app/catalog/offers.py).
 
     모델이 없는 옛 테이블과 옛 라운드는 쓸 수 없는 것으로 본다. 방장이 모델을 고르게 둔다.
+    그 단계의 가격표를 팔지 않게 됐어도 쓸 수 없다. 방장이 다른 단계나 모델을 고른다.
     가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다(503).
     """
+    model, steps = chosen
     if model is None:
         return False
-    return await offers.find_offered(session, picker.prices, model, picker.now) is not None
+    return await offers.find_offered(session, picker.prices, model, picker.now, steps) is not None
 
 
 async def require_changeable(
@@ -99,23 +113,27 @@ async def require_changeable(
     """
     지금 서술 모델을 바꿀 수 있는지 확인한다. 아니면 TableConflictError(narration_model_locked).
 
-    모집 중이면 늘 된다. 시작한 뒤에는 지금 쓰는 모델(models_in_use) 중 하나라도 쓸 수 없을 때만 된다.
+    모집 중이면 늘 된다. 시작한 뒤에는 지금 쓰는 모델과 단계(choices_in_use) 중 하나라도 쓸 수 없을 때만 된다.
+    단계만 바꾸는 것도 같다. 앉은 사람 모두가 그 값을 보고 앉았다.
     """
     if table.status == TableStatus.RECRUITING:
         return
-    for model in models_in_use(table, round_):
-        if not await is_usable(session, picker, model):
+    for chosen in choices_in_use(table, round_):
+        if not await is_usable(session, picker, chosen):
             return
     raise TableConflictError(Conflict.NARRATION_MODEL_LOCKED)
 
 
-async def apply_to_round(session: AsyncSession, round_: Round, model: str, price: OfferedModel | None) -> None:
+async def apply_to_round(
+    session: AsyncSession, round_: Round, model: str, steps: NarrationSteps, price: OfferedModel | None
+) -> None:
     """
-    라운드의 모델을 바꾸고, 그 라운드의 청구를 새 가격표로 다시 걸게 적는다.
+    라운드의 모델과 단계를 바꾸고, 그 라운드의 청구를 새 가격표로 다시 걸게 적는다.
 
-    price 는 새 모델의 지금 값이다. 라운드에 알린 값도 바꾼다(app/rounds/round_price.py).
+    price 는 새 모델과 단계의 지금 값이다. 라운드에 알린 값도 바꾼다(app/rounds/round_price.py).
     """
     round_.narration_model = model
+    round_.input_step, round_.output_step = steps.input, steps.output
     announce(round_, price)
     await charges.reprice_round(session, round_, datetime.now(UTC))
 
@@ -124,10 +142,12 @@ async def change_narration_model(
     session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, data: NarrationModelUpdate, picker: ModelPicker
 ) -> GameTable:
     """
-    방장이 서술 모델을 바꾼다. 지금 라운드가 바꿀 수 있는 라운드면(takes_new_model) 그 라운드에도 적용한다.
+    방장이 서술 모델과 단계를 바꾼다. 지금 라운드가 바꿀 수 있는 라운드면(takes_new_model) 그 라운드에도 적용한다.
 
-    방장이 아니면 NotHostError, 끝난 테이블이면 TableConflictError, 고를 수 없는 모델이면 TableOptionError.
-    시작한 테이블의 지금 쓰는 모델을 모두 쓸 수 있으면 TableConflictError(narration_model_locked).
+    방장이 아니면 NotHostError, 끝난 테이블이면 TableConflictError,
+    고를 수 없는 모델이면 TableOptionError(narration_model),
+    그 모델이 팔지 않는 단계면 TableOptionError(narration_steps).
+    시작한 테이블의 지금 쓰는 모델과 단계를 모두 쓸 수 있으면 TableConflictError(narration_model_locked).
     바꿀 것이 없으면 아무것도 적지 않는다. 바뀐 것이 없는데 이벤트가 쌓이지 않게 한다.
     고를 수 있는지는 잠근 뒤, 값이 바뀔 때만 본다. 바꿀 것이 없으면 결제 서버의 가격 목록을 묻지 않는다.
     """
@@ -135,19 +155,24 @@ async def change_narration_model(
     require_host(table, host_id)
     require_not_ended(table)
     round_ = await round_repository.find_latest_round(session, table_id)
+    steps = NarrationSteps(data.input_step, data.output_step)
 
-    if is_unchanged(table, round_, data.narration_model):
+    if is_unchanged(table, round_, (data.narration_model, steps)):
         return table
     await require_changeable(session, picker, table, round_)
-    found = await require_pickable(session, picker, data.narration_model)
+    found = await require_pickable(session, picker, data.narration_model, steps)
 
+    if table.narration_model != data.narration_model:
+        forget_retire_notices(table)
     table.narration_model = data.narration_model
-    forget_retire_notices(table)
+    table.input_step, table.output_step = steps.input, steps.output
     applied = takes_new_model(round_)
     if applied:
-        await apply_to_round(session, round_, data.narration_model, found)
+        await apply_to_round(session, round_, data.narration_model, steps, found)
     payload = {
         'narration_model': data.narration_model,
+        'input_step': steps.input,
+        'output_step': steps.output,
         'round': round_.number if applied else None,
         'price': price_payload(round_) if applied else None,
     }

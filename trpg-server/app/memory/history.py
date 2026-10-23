@@ -34,7 +34,7 @@ from app.lore.texts import version_entries
 from app.memory import repository
 from app.rounds.narration_request import to_past
 from app.rounds.narrator import HistoryLine, NarrationRequest, PastRound, PersonHistory
-from app.rounds.prompt import HISTORY_ROUNDS
+from app.rounds.prompt import HISTORY_ROUNDS, history_rounds
 from app.tables import repository as table_repository
 
 # 인물 하나에 넣는 문장의 수와 글자 수의 상한. 최근 것부터 채운다
@@ -138,7 +138,7 @@ class HistoryCollector:
         sources = await load_sources(self.session_factory, request.table_id, request.round_number)
         if sources is None:
             return []
-        lines = scene_lines(sources.rounds, request.round_number)
+        lines = scene_lines(sources.rounds, request.round_number, history_rounds(request.steps))
         histories = [
             PersonHistory(note.entry_id, note.name, history_of(sources.people[note.entry_id], lines))
             for note in notes

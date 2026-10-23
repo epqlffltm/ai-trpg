@@ -200,6 +200,9 @@ async def test_changing_the_model_reprices_the_blocked_round(
     (first, _) = await charges_of(session, table)
 
     assert changed['payload'] == {
+        # 단계는 고르지 않았다(#387)
+        'input_step': 0,
+        'output_step': 0,
         'narration_model': 'claude-opus-5-5',
         'round': 1,
         'price': {'tier': 'standard', 'credits': '300'},

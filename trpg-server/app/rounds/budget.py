@@ -1,15 +1,16 @@
 # trpg-server/app/rounds/budget.py
 
 """
-서술 요청의 입력 토큰 예산. 판매가가 가정한 입력(ROUND_INPUT_TOKENS, 12,000 토큰)을 넘지 않게 한다.
+서술 요청의 입력 토큰 예산. 판매가가 가정한 입력을 넘지 않게 한다.
 
-판매가는 "한 라운드에 입력 12,000, 출력 1,200 토큰"으로 매겼다(app/catalog/rules.py, 결제 서버의 가격표).
+판매가는 단계마다 "한 라운드에 입력 몇, 출력 몇 토큰"으로 매겼다(app/catalog/steps.py, 결제 서버의 가격표).
+기본 단계(i0)는 입력 12,000, 입력 단계마다 8,000 이 는다(20,000, 28,000, #387).
 보내는 양이 그보다 많으면 그 라운드는 판 값보다 원가가 크다.
 
 세는 법: 글자 수 × TOKENS_PER_CHAR 로 어림한다(유저 결정, 2026-10-18).
   - 공급자마다 토크나이저가 달라 한글 한 글자가 몇 토큰인지 다르다(대략 0.5~1.5).
     창구마다 토크나이저 코드를 두거나 부를 때마다 세기 API 를 부르지 않는다.
-  - 대신 판매가의 70% 까지만 보낸다(INPUT_BUDGET). 어림이 30% 쯤 틀려도 판매가 안이다.
+  - 대신 판매가의 70% 까지만 보낸다(input_budget). 어림이 30% 쯤 틀려도 판매가 안이다.
   - 호출 기록에 보낸 글자 수(input_chars)를 남긴다. 실제 입력 토큰 수와 견주어 비율과 여유를 고친다.
     올리는 쪽은 안전하다. 이미 매긴 판매가는 그대로다. 그래서 코드의 상수로 두고 PR 로 바꾼다.
 
@@ -22,6 +23,7 @@
 
 다 빼고도 넘치는 것은 빼지 않는 것이 큰 때다. 그래도 부른다. 라운드를 실패시키면 앉은 사람 모두가 멈춘다.
 작가의 글이 판매가의 예산을 혼자 넘는 판은 테이블을 시작할 때 막는다(story_fits, app/tables/service.py).
+그 테이블의 입력 단계의 것으로 본다. 단계를 올리면 더 긴 작가의 글도 받는다.
 """
 
 import math
@@ -32,18 +34,28 @@ from ai_core.calls import chars_of
 from ai_core.provider import ChatMessage
 
 from app.assets.models import NarrationStyle
-from app.catalog.rules import ROUND_INPUT_TOKENS
+from app.catalog.steps import BASE_STEPS, ROUND_INPUT_TOKENS, NarrationSteps, input_tokens
 from app.rounds.narrator import NarrationRequest, StoryContext
-from app.rounds.prompt import HISTORY_MAX_CHARS, HISTORY_ROUNDS, build_messages, fit_history, system_text
+from app.rounds.prompt import build_messages, fit_history, history_max_chars, history_rounds, system_text
 
 # 글자 하나를 몇 토큰으로 어림하나. 호출 기록(input_chars, input_tokens)으로 고친다
 TOKENS_PER_CHAR = 1.0
 # 판매가가 가정한 입력 중 실제로 보내는 몫. 어림이 틀려도 판매가를 넘지 않게 남겨 둔다
 INPUT_SAFETY_RATIO = 0.7
-# 서술 요청에 보내는 입력의 상한(어림 토큰)
+# 기본 단계에서 서술 요청에 보내는 입력의 상한(어림 토큰)
 INPUT_BUDGET = int(ROUND_INPUT_TOKENS * INPUT_SAFETY_RATIO)
-# 시스템 지시(규칙과 작가의 글)의 상한(어림 토큰). 이보다 크면 어느 라운드든 판매가를 넘는다
+# 기본 단계에서 시스템 지시(규칙과 작가의 글)의 상한(어림 토큰). 이보다 크면 어느 라운드든 판매가를 넘는다
 STORY_MAX_TOKENS = ROUND_INPUT_TOKENS
+
+
+def input_budget(steps: NarrationSteps) -> int:
+    """그 입력 단계에서 서술 요청에 보내는 입력의 상한(어림 토큰). 판매가가 가정한 입력의 70% 다."""
+    return int(input_tokens(steps) * INPUT_SAFETY_RATIO)
+
+
+def story_max_tokens(steps: NarrationSteps) -> int:
+    """그 입력 단계에서 시스템 지시가 혼자 차지해도 되는 상한(어림 토큰). 판매가가 가정한 입력이다."""
+    return input_tokens(steps)
 
 
 def estimate_tokens(chars: int) -> int:
@@ -56,14 +68,14 @@ def estimate_messages(messages: list[ChatMessage]) -> int:
     return estimate_tokens(chars_of(messages))
 
 
-def story_tokens(story: StoryContext, style: NarrationStyle) -> int:
+def story_tokens(story: StoryContext, style: NarrationStyle, steps: NarrationSteps = BASE_STEPS) -> int:
     """시스템 지시(규칙, 문체, 수위, 작가의 글)의 어림 토큰 수. 라운드마다 똑같이 들어가는 몫이다."""
-    return estimate_tokens(len(system_text(story, style)))
+    return estimate_tokens(len(system_text(story, style, steps)))
 
 
-def story_fits(story: StoryContext, style: NarrationStyle) -> bool:
-    """작가의 글이 판매가의 입력 예산 안에 드나. 안 들면 테이블을 시작하지 않는다."""
-    return story_tokens(story, style) <= STORY_MAX_TOKENS
+def story_fits(story: StoryContext, style: NarrationStyle, steps: NarrationSteps = BASE_STEPS) -> bool:
+    """작가의 글이 그 입력 단계의 판매가의 입력 예산 안에 드나. 안 들면 테이블을 시작하지 않는다."""
+    return story_tokens(story, style, steps) <= story_max_tokens(steps)
 
 
 def trimmed(request: NarrationRequest) -> Iterator[NarrationRequest]:
@@ -73,7 +85,8 @@ def trimmed(request: NarrationRequest) -> Iterator[NarrationRequest]:
     참고 자료의 뒤쪽 → 지난 기록의 오래된 것 → 로어북 항목의 뒤쪽 → 기억의 뒤쪽 순서로 하나씩 뺀다.
     마지막 것은 넷을 다 뺀 요청이다. 참고 자료는 바깥 자료라 제작자의 것과 지난 일보다 먼저 뺀다(#482).
     """
-    current = replace(request, history=fit_history(request.history, HISTORY_ROUNDS, HISTORY_MAX_CHARS))
+    steps = request.steps
+    current = replace(request, history=fit_history(request.history, history_rounds(steps), history_max_chars(steps)))
     yield current
     while current.references:
         current = replace(current, references=current.references[:-1])
@@ -89,12 +102,14 @@ def trimmed(request: NarrationRequest) -> Iterator[NarrationRequest]:
         yield current
 
 
-def fit_request(request: NarrationRequest, budget: int = INPUT_BUDGET) -> NarrationRequest:
+def fit_request(request: NarrationRequest, budget: int | None = None) -> NarrationRequest:
     """
     입력이 budget(어림 토큰) 안에 드는 가장 덜 줄인 요청. 다 줄여도 안 들면 다 줄인 요청이다.
 
+    budget 을 주지 않으면 요청의 입력 단계의 예산이다(input_budget).
     이야기의 바탕(request.story)이 있어야 한다(build_messages).
     """
+    budget = input_budget(request.steps) if budget is None else budget
     last = request
     for candidate in trimmed(request):
         last = candidate

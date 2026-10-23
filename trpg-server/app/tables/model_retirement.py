@@ -43,6 +43,7 @@ from app.catalog import offers
 from app.catalog import repository as catalog
 from app.catalog.models import AiModel
 from app.catalog.offers import OfferedModel
+from app.catalog.steps import steps_of
 from app.events import recorder
 from app.events.models import EventType
 from app.notifications import outbox
@@ -113,14 +114,17 @@ def is_watched(table: GameTable) -> bool:
 
 
 async def replacement_of(
-    session: AsyncSession, prices: PriceList, model: AiModel, now: datetime
+    session: AsyncSession, prices: PriceList, table: GameTable, model: AiModel, now: datetime
 ) -> OfferedModel | None:
     """
-    은퇴하는 모델 대신 쓸 같은 회사의 모델. 없으면 None.
+    은퇴하는 모델 대신 쓸 같은 회사의 모델. 테이블의 단계(#387)를 파는 모델만 된다. 없으면 None.
 
+    단계를 바꿔 가며 대신하지 않는다. 단계까지 바뀌면 앉은 사람이 동의한 값과 너무 멀어진다. 그때는 방장이 고른다.
     가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다. 다음에 다시 본다.
     """
-    return await offers.find_replacement(session, prices, model.vendor, now, excluding=model.slug)
+    return await offers.find_replacement(
+        session, prices, model.vendor, now, excluding=model.slug, steps=steps_of(table)
+    )
 
 
 def notify_retiring(session: AsyncSession, table: GameTable, model: AiModel, stage: int, today: date) -> None:
@@ -145,7 +149,7 @@ async def replace_model(session: AsyncSession, table: GameTable, retired: str, r
     table.narration_model = replacement.slug
     applied = takes_new_model(round_)
     if applied:
-        await apply_to_round(session, round_, replacement.slug, replacement)
+        await apply_to_round(session, round_, replacement.slug, steps_of(table), replacement)
     forget_retire_notices(table)
     payload = {
         'from': retired,
@@ -170,7 +174,7 @@ async def handle_retired(
     session: AsyncSession, table: GameTable, model: AiModel, prices: PriceList, now: datetime
 ) -> Checked:
     """은퇴한 모델을 쓰는 테이블. 대신 쓸 모델이 있으면 바꾸고, 없으면 (아직 알리지 않았으면) 알린다."""
-    replacement = await replacement_of(session, prices, model, now)
+    replacement = await replacement_of(session, prices, table, model, now)
     if replacement is not None:
         await replace_model(session, table, model.slug, replacement)
         return Checked(replaced=True)
