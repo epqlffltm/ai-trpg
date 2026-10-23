@@ -9,6 +9,13 @@
             "$ref": "#/components/schemas/AffectionDisplay",
             "default": "number"
           },
+          "model_step": {
+            "default": 3,
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Model Step",
+            "type": "integer"
+          },
           "rules": {
             "default": [],
             "items": {
@@ -56,6 +63,11 @@
         "properties": {
           "display": {
             "$ref": "#/components/schemas/AffectionDisplay"
+          },
+          "model_step": {
+            "default": 3,
+            "title": "Model Step",
+            "type": "integer"
           },
           "rules": {
             "items": {
@@ -1207,6 +1219,11 @@
             "title": "Description",
             "type": "string"
           },
+          "giftable": {
+            "default": false,
+            "title": "Giftable",
+            "type": "boolean"
+          },
           "id": {
             "maxLength": 40,
             "minLength": 1,
@@ -1256,6 +1273,11 @@
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "giftable": {
+            "default": false,
+            "title": "Giftable",
+            "type": "boolean"
           },
           "id": {
             "title": "Id",

@@ -18,6 +18,7 @@ from app.characters.models import (
     AFFECTION_MAX_CHANGE,
     AFFECTION_MAX_RULES,
     AFFECTION_MAX_STAGES,
+    AFFECTION_MODEL_STEP_DEFAULT,
     CHARACTER_AGE_MAX_LENGTH,
     CHARACTER_GENDER_MAX_LENGTH,
     CHARACTER_GREETING_MAX_LENGTH,
@@ -155,6 +156,8 @@ class Item(BaseModel):
     kind: ItemKind = ItemKind.THING
     # 쓰면 하나 없어지는가(음식은 참, 우산은 거짓). chat 이 쓰기에서 소지품을 줄일 때 본다
     consumable: bool = False
+    # 상대가 사용자에게 줄 수 있는가(#676). 참인 물건만 chat 의 모델이 선물로 제안할 수 있다
+    giftable: bool = False
     image_id: uuid.UUID | None = None
 
 
@@ -271,6 +274,8 @@ class Affection(BaseModel):
         list[Stage], Field(min_length=1, max_length=AFFECTION_MAX_STAGES), AfterValidator(stages_from_zero)
     ]
     rules: Annotated[list[AffectionRule], Field(max_length=AFFECTION_MAX_RULES), AfterValidator(unique_rules)] = []
+    # 모델이 답 하나에 바꿀 수 있는 크기의 상한(#676). 0 이면 모델은 바꾸지 못하고 규칙만 바꾼다
+    model_step: Annotated[int, Field(ge=0, le=AFFECTION_MAX_CHANGE)] = AFFECTION_MODEL_STEP_DEFAULT
 
 
 class SceneCondition(BaseModel):

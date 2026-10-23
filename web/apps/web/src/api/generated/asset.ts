@@ -449,6 +449,11 @@ export interface components {
             /** @default number */
             display: components["schemas"]["AffectionDisplay"];
             /**
+             * Model Step
+             * @default 3
+             */
+            model_step: number;
+            /**
              * Rules
              * @default []
              */
@@ -473,6 +478,11 @@ export interface components {
          */
         AffectionDocument: {
             display: components["schemas"]["AffectionDisplay"];
+            /**
+             * Model Step
+             * @default 3
+             */
+            model_step: number;
             /** Rules */
             rules: components["schemas"]["AffectionRuleDocument"][];
             /** Stages */
@@ -926,6 +936,11 @@ export interface components {
              * @default
              */
             description: string;
+            /**
+             * Giftable
+             * @default false
+             */
+            giftable: boolean;
             /** Id */
             id: string;
             /** Image Id */
@@ -947,6 +962,11 @@ export interface components {
             consumable: boolean;
             /** Description */
             description: string;
+            /**
+             * Giftable
+             * @default false
+             */
+            giftable: boolean;
             /** Id */
             id: string;
             /** Image Id */
