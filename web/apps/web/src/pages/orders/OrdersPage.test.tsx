@@ -64,7 +64,8 @@ describe('주문 내역', () => {
 
     await userEvent.click(await screen.findByRole('link', { name: '주문 내역' }));
     const list = within(await screen.findByRole('list', { name: '주문' }));
-    expect(list.getAllByRole('article')).toHaveLength(1);
+    // 목록의 틀은 읽는 동안에도 그려진다. 주문이 들어올 때까지 기다린다
+    expect(await list.findAllByRole('article')).toHaveLength(1);
     expect(list.getByText('충전됨')).toBeInTheDocument();
     expect(list.getByText(/까지 청약철회할 수 있습니다/)).toBeInTheDocument();
 
