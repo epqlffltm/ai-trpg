@@ -57,6 +57,8 @@ def make_test_settings(**overrides) -> Settings:
         'asset_url': '',
         # 결제 서버를 부르지 않는다(받지 않는 것, 값이 없는 가격 목록). 값을 보는 테스트는 가짜 결제 서버를 끼운다
         'billing_url': '',
+        # 알림 서버로 보내지 않는다. 발송함에 적기만 한다. 보내는 것을 보는 테스트는 가짜를 꽂는다
+        'notification_url': '',
         # 요청 수 제한을 끈다. Redis 를 부르지 않는다. 제한을 보는 테스트(tests/test_limits.py)만 켠다
         'limits_enabled': False,
         'redis_url': '',

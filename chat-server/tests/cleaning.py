@@ -14,6 +14,7 @@ import app.conversations.models  # noqa: F401
 import app.gallery.models  # noqa: F401
 import app.lore.models  # noqa: F401
 import app.memory.models  # noqa: F401
+import app.notifications.models  # noqa: F401
 import app.operators.models  # noqa: F401
 import app.reports.models  # noqa: F401
 import app.turns.models  # noqa: F401
