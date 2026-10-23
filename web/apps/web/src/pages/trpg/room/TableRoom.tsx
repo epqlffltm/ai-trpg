@@ -18,6 +18,7 @@ import { usePublicNames } from '../../../hooks/usePublicNames';
 import { ChatPanel } from './ChatPanel';
 import { displayName, MemberList } from './MemberList';
 import { RoomHeader } from './RoomHeader';
+import { ActionRequestProvider } from './round/action/actionRequest';
 import { applyPreview, ENDS_PREVIEW, type NarrationPreview } from './round/preview';
 import { chatQuery, tableQuery } from './roomQueries';
 import { mergeMessages } from './streamPolicy';
@@ -64,34 +65,36 @@ export function TableRoom({ table }: { table: TableDetail }) {
 
   const myId = me.data?.public_id;
   return (
-    <main className="page room">
-      <RoomHeader table={table} stream={stream} />
-      <div className="room__body">
-        <div className="room__main">
-          {table.status === 'playing' ? <MyHpStrip table={table} myId={myId} /> : null}
-          <RoomStage
-            table={table}
-            myId={myId}
-            preview={preview}
-            nameOfMember={(userId) => displayName(userId, table.members, nameOf)}
-          />
+    <ActionRequestProvider>
+      <main className="page room">
+        <RoomHeader table={table} stream={stream} />
+        <div className="room__body">
+          <div className="room__main">
+            {table.status === 'playing' ? <MyHpStrip table={table} myId={myId} /> : null}
+            <RoomStage
+              table={table}
+              myId={myId}
+              preview={preview}
+              nameOfMember={(userId) => displayName(userId, table.members, nameOf)}
+            />
+          </div>
+          <div className="room__side">
+            {table.status === 'recruiting' ? (
+              <MemberList members={table.members} myId={myId} nameOf={nameOf} />
+            ) : (
+              <StatusPanel table={table} myId={myId} nameOf={nameOf} />
+            )}
+            <ChatPanel
+              table={table}
+              chat={chat}
+              members={table.members}
+              nameOf={nameOf}
+              typingIds={typing.userIds}
+              onSent={(message) => appendChat([message])}
+            />
+          </div>
         </div>
-        <div className="room__side">
-          {table.status === 'recruiting' ? (
-            <MemberList members={table.members} myId={myId} nameOf={nameOf} />
-          ) : (
-            <StatusPanel table={table} myId={myId} nameOf={nameOf} />
-          )}
-          <ChatPanel
-            table={table}
-            chat={chat}
-            members={table.members}
-            nameOf={nameOf}
-            typingIds={typing.userIds}
-            onSent={(message) => appendChat([message])}
-          />
-        </div>
-      </div>
-    </main>
+      </main>
+    </ActionRequestProvider>
   );
 }

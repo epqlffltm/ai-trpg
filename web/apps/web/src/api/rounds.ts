@@ -1,10 +1,10 @@
 // web/apps/web/src/api/rounds.ts
-// 테이블 방(B6)의 라운드가 부르는 것. 지금 라운드, 최근의 라운드들, 선언 내기, 라운드 닫기(방장).
+// 테이블 방(B6)의 라운드가 부르는 것. 지금 라운드, 최근의 라운드들, 장면의 인물과 몬스터, 선언 내기, 라운드 닫기(방장).
 // 앉아 있는 사람만 부른다. 시작하지 않은 테이블에는 라운드가 없다(409 not_started).
 // 선언을 받는 동안에는 남의 선언의 글과 행동이 null 이다(누가 냈는지만 보인다). 마감하면 모두의 것이 보인다.
 
 import { apiRequest } from './http';
-import type { DeclarationUpdate, Round, RoundPage } from './types';
+import type { DeclarationUpdate, Round, RoundPage, SceneCast } from './types';
 
 /** 한 번에 보일 지난 라운드의 수(지금 라운드를 함께 센다) */
 export const ROUND_TAIL = 10;
@@ -30,6 +30,14 @@ export async function fetchRecentRounds(tableId: string, signal?: AbortSignal): 
 
 function fetchRounds(tableId: string, offset: number, limit: number, signal?: AbortSignal): Promise<RoundPage> {
   return apiRequest<RoundPage>(roundsPath(tableId), { query: { offset, limit }, ...(signal ? { signal } : {}) });
+}
+
+/**
+ * 가장 최근 라운드의 장면에 나온 인물과 몬스터. 행동의 npc, monster 칸에 적을 id 와 지닌 물건이 있다.
+ * 장면에 이름이나 호칭이 나온 인물만, 몬스터는 살아 있는 캐릭터가 선 장소들의 마리만 온다
+ */
+export function fetchSceneCast(tableId: string, signal?: AbortSignal): Promise<SceneCast> {
+  return apiRequest<SceneCast>(roundsPath(tableId, '/current/people'), signal ? { signal } : {});
 }
 
 /** 열려 있는 라운드에 선언을 낸다. 다시 내면 통째로 바뀐다. 모두가 내면 닫기 시작한 라운드(closing)가 온다 */

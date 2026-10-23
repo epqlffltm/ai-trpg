@@ -1,56 +1,61 @@
 // web/apps/web/src/pages/trpg/room/round/DeclarationForm.tsx
-// 선언 내기와 고치기. 글을 쓰고, 판정을 붙이려면 능력과 난이도를 고른다. 판정의 눈은 라운드를 마감할 때 서버가 굴린다.
+// 선언 내기와 고치기. 글을 쓰고, 행동을 하나 붙이거나 붙이지 않는다(action/ActionFields.tsx).
+// 행동의 대상(장면의 인물과 몬스터)은 장면을 읽어 고른다. 상태 패널의 단추가 행동의 칸을 채워 달라고 하면 받아 채운다.
 // 보내면 서버가 라운드를 돌려준다. 그 값으로 바로 바꾼다. 모두가 냈으면 닫기 시작한 라운드가 온다.
 // 마감 전에는 남의 선언이 보이지 않는다. 맞출 것은 채팅으로 맞춘다.
 
-import { Button, Checkbox, SelectField } from '@ai-trpg/ui';
-import { useQueryClient } from '@tanstack/react-query';
-import { useId, useState, type FormEvent } from 'react';
+import { Button } from '@ai-trpg/ui';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { declare } from '../../../../api/rounds';
-import type { Declaration, Ruleset } from '../../../../api/types';
+import type { Declaration, TableDetail, TableMember } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
+import { ActionFields } from './action/ActionFields';
+import type { ActionContext } from './action/actionOptions';
+import { useActionRequests } from './action/actionRequest';
 import {
   DECLARATION_MAX,
   declarationHints,
-  hasOtherAction,
   initialDeclarationDraft,
   toDeclarationUpdate,
   type DeclarationDraft,
 } from './declarationForm';
-import { currentRoundQuery, roundsKey } from './roundQueries';
+import { currentRoundQuery, roundsKey, sceneCastQuery } from './roundQueries';
 import { describeDeclarationProblem, type RoundProblem } from './roundProblem';
 
 type Props = {
-  tableId: string;
-  rules: Ruleset;
+  table: TableDetail;
+  me: TableMember;
   mine: Declaration | undefined;
   onDone: () => void;
   onCancel?: (() => void) | undefined;
+  /** 상태 패널의 부탁을 받아 칸을 채웠다. 낸 것을 보던 중이었으면 입력을 계속 연다 */
+  onRequest?: () => void;
 };
 
-export function DeclarationForm({ tableId, rules, mine, onDone, onCancel }: Props) {
+export function DeclarationForm({ table, me, mine, onDone, onCancel, onRequest }: Props) {
   const queryClient = useQueryClient();
   const contentId = useId();
-  const [draft, setDraft] = useState<DeclarationDraft>(() => initialDeclarationDraft(rules, mine));
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const cast = useQuery(sceneCastQuery(table.id));
+  const [draft, setDraft] = useState<DeclarationDraft>(() => initialDeclarationDraft(table.rules, mine));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<RoundProblem | undefined>();
-  const hints = declarationHints(draft, rules);
-
-  function update(changes: Partial<DeclarationDraft>) {
-    setDraft((current) => ({ ...current, ...changes }));
-  }
+  const ctx: ActionContext = { table, me, cast: cast.data ?? null };
+  const hints = declarationHints(draft, ctx);
+  useRequestedAction(setDraft, contentRef, onRequest);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setProblem(undefined);
     try {
-      queryClient.setQueryData(currentRoundQuery(tableId).queryKey, await declare(tableId, toDeclarationUpdate(draft)));
+      queryClient.setQueryData(currentRoundQuery(table.id).queryKey, await declare(table.id, toDeclarationUpdate(draft, ctx)));
       onDone();
     } catch (error) {
       const next = describeDeclarationProblem(error);
       setProblem(next);
-      if (next.refresh) void queryClient.invalidateQueries({ queryKey: roundsKey(tableId) });
+      if (next.refresh) void queryClient.invalidateQueries({ queryKey: roundsKey(table.id) });
       setBusy(false);
     }
   }
@@ -63,26 +68,24 @@ export function DeclarationForm({ tableId, rules, mine, onDone, onCancel }: Prop
           무엇을 하나요
         </label>
         <textarea
+          ref={contentRef}
           id={contentId}
           className="ui-field__input declaration-form__content"
           rows={3}
           maxLength={DECLARATION_MAX}
           value={draft.content}
-          onChange={(event) => update({ content: event.target.value })}
+          onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))}
           aria-invalid={hints.content && draft.content ? true : undefined}
         />
         <p className="ui-field__hint">마감 전에는 다른 사람의 선언이 보이지 않습니다. 함께 할 일은 채팅으로 맞춰 주세요.</p>
       </div>
-      <Checkbox
-        label="판정 붙이기"
-        description="능력과 난이도를 고르면 라운드를 마감할 때 서버가 주사위를 굴립니다. 한 라운드에 한 번입니다."
-        checked={draft.withCheck}
-        onChange={(event) => update({ withCheck: event.target.checked })}
+      <ActionFields
+        draft={draft.action}
+        ctx={ctx}
+        onChange={(changes) => setDraft((current) => ({ ...current, action: { ...current.action, ...changes } }))}
+        error={draft.action.kind === 'none' ? null : hints.action}
       />
-      {draft.withCheck ? <CheckInputs rules={rules} draft={draft} onChange={update} error={hints.check} /> : null}
-      {hasOtherAction(mine) ? (
-        <p className="hint">앞서 낸 선언의 행동은 여기서 고칠 수 없습니다. 다시 내면 그 행동은 빠집니다.</p>
-      ) : null}
+      {cast.isError ? <p className="hint">장면의 인물을 불러오지 못해 대상을 고르는 행동이 줄었습니다.</p> : null}
       <div className="form-actions">
         <Button type="submit" busy={busy} disabled={Object.keys(hints).length > 0}>
           {mine ? '고쳐 내기' : '선언하기'}
@@ -97,36 +100,20 @@ export function DeclarationForm({ tableId, rules, mine, onDone, onCancel }: Prop
   );
 }
 
-type CheckInputsProps = {
-  rules: Ruleset;
-  draft: DeclarationDraft;
-  onChange: (changes: Partial<DeclarationDraft>) => void;
-  error?: string | undefined;
-};
-
-/** 판정의 능력과 난이도. 난이도는 "보통(15)"처럼 목표값을 함께 보인다 */
-function CheckInputs({ rules, draft, onChange, error }: CheckInputsProps) {
-  return (
-    <div className="ability-grid">
-      <SelectField label="능력" value={draft.ability} onChange={(event) => onChange({ ability: event.target.value })}>
-        {rules.abilities.map((ability) => (
-          <option key={ability.key} value={ability.key}>
-            {ability.name}
-          </option>
-        ))}
-      </SelectField>
-      <SelectField
-        label="난이도"
-        value={draft.difficulty}
-        onChange={(event) => onChange({ difficulty: event.target.value })}
-        error={error}
-      >
-        {rules.difficulties.map((difficulty) => (
-          <option key={difficulty.key} value={difficulty.key}>
-            {difficulty.name}({difficulty.target})
-          </option>
-        ))}
-      </SelectField>
-    </div>
-  );
+/** 상태 패널이 부탁한 행동으로 칸을 채우고, 글을 쓰는 칸으로 간다. 받은 부탁은 지운다 */
+function useRequestedAction(
+  setDraft: (update: (current: DeclarationDraft) => DeclarationDraft) => void,
+  contentRef: RefObject<HTMLTextAreaElement | null>,
+  onRequest: (() => void) | undefined,
+) {
+  const { pending, take } = useActionRequests();
+  useEffect(() => {
+    if (!pending) return;
+    setDraft((current) => ({ ...current, action: { ...current.action, ...pending.patch } }));
+    onRequest?.();
+    take(pending.id);
+    contentRef.current?.focus();
+    // 부탁(pending)이 바뀔 때만 한다. onRequest 는 그릴 때마다 새로 만들어진다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, take, setDraft, contentRef]);
 }
