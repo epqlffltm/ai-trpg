@@ -1,12 +1,49 @@
 {
   "components": {
     "schemas": {
+      "AffectionChangeOut": {
+        "description": "모델의 제안으로 바뀐 호감도(#676). rising 은 올랐는가다. delta 는 바뀐 크기인데,\n단계 이름으로 보이는 캐릭터면 null 이다(숫자를 내려보내지 않는다).",
+        "properties": {
+          "delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "kind": {
+            "const": "affection",
+            "title": "Kind",
+            "type": "string"
+          },
+          "rising": {
+            "title": "Rising",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "rising",
+          "delta"
+        ],
+        "title": "AffectionChangeOut",
+        "type": "object"
+      },
       "AffectionDocument": {
-        "description": "캐릭터의 호감도. display 는 number(숫자와 게이지)나 stage(단계 이름과 게이지, 숫자를 내려보내지 않는다)다.",
+        "description": "캐릭터의 호감도. display 는 number(숫자와 게이지)나 stage(단계 이름과 게이지, 숫자를 내려보내지 않는다)다.\nmodel_step 은 모델이 답 하나에 바꿀 수 있는 크기다(0 이면 바꾸지 못한다, #676).",
         "properties": {
           "display": {
             "title": "Display",
             "type": "string"
+          },
+          "model_step": {
+            "default": 3,
+            "title": "Model Step",
+            "type": "integer"
           },
           "rules": {
             "default": [],
@@ -646,6 +683,26 @@
         "title": "EventSceneDocument",
         "type": "object"
       },
+      "GiftChangeOut": {
+        "description": "모델의 제안으로 상대에게 받은 물건(판의 물건 id). 소지품에 하나 더해졌다.",
+        "properties": {
+          "item": {
+            "title": "Item",
+            "type": "string"
+          },
+          "kind": {
+            "const": "gift",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "item"
+        ],
+        "title": "GiftChangeOut",
+        "type": "object"
+      },
       "GiveAction": {
         "additionalProperties": false,
         "description": "소지품의 물건을 상대에게 건넨다. 하나 줄고, 옷이면 상대가 입는다.\nwords 는 덧붙이는 한마디다(없으면 행동만). 행동과 말을 한 턴에 붙이고 반응을 한 번 받는다.",
@@ -740,7 +797,7 @@
         "type": "object"
       },
       "ItemDocument": {
-        "description": "물건 하나. kind 는 thing 이나 clothing(건네면 상대의 차림에 들어간다)이다. 모르는 종류도 받아 둔다.\nconsumable 이면 쓰면 하나 없어진다.",
+        "description": "물건 하나. kind 는 thing 이나 clothing(건네면 상대의 차림에 들어간다)이다. 모르는 종류도 받아 둔다.\nconsumable 이면 쓰면 하나 없어진다. giftable 이면 상대가 사용자에게 줄 수 있다(모델이 제안한다, #676).",
         "properties": {
           "consumable": {
             "default": false,
@@ -750,6 +807,11 @@
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "giftable": {
+            "default": false,
+            "title": "Giftable",
+            "type": "boolean"
           },
           "id": {
             "title": "Id",
@@ -852,6 +914,32 @@
       "MessageOut": {
         "description": "말 하나.",
         "properties": {
+          "changes": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "affection": "#/components/schemas/AffectionChangeOut",
+                  "gift": "#/components/schemas/GiftChangeOut",
+                  "move": "#/components/schemas/MoveChangeOut"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/AffectionChangeOut"
+                },
+                {
+                  "$ref": "#/components/schemas/GiftChangeOut"
+                },
+                {
+                  "$ref": "#/components/schemas/MoveChangeOut"
+                }
+              ]
+            },
+            "title": "Changes",
+            "type": "array"
+          },
           "content": {
             "title": "Content",
             "type": "string"
@@ -1081,6 +1169,31 @@
         "title": "MoveAction",
         "type": "object"
       },
+      "MoveChangeOut": {
+        "description": "모델의 제안으로 함께 간 장소(판의 장소 id)와 걸린 시간(분).",
+        "properties": {
+          "kind": {
+            "const": "move",
+            "title": "Kind",
+            "type": "string"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "place": {
+            "title": "Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "place",
+          "minutes"
+        ],
+        "title": "MoveChangeOut",
+        "type": "object"
+      },
       "NextPriceOut": {
         "description": "예약된 값의 바뀜. credits 가 null 이면 effective_at 부터 팔지 않는다.",
         "properties": {
@@ -1237,6 +1350,32 @@
               "type": "string"
             },
             "title": "Alternatives",
+            "type": "array"
+          },
+          "changes": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "affection": "#/components/schemas/AffectionChangeOut",
+                  "gift": "#/components/schemas/GiftChangeOut",
+                  "move": "#/components/schemas/MoveChangeOut"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/AffectionChangeOut"
+                },
+                {
+                  "$ref": "#/components/schemas/GiftChangeOut"
+                },
+                {
+                  "$ref": "#/components/schemas/MoveChangeOut"
+                }
+              ]
+            },
+            "title": "Changes",
             "type": "array"
           },
           "content": {

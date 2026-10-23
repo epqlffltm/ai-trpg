@@ -47,6 +47,16 @@ def take_one(state: WorldState, item_id: str) -> WorldState:
     return replace(state, inventory=tuple(holding for holding in inventory if holding.count > 0))
 
 
+def add_one(state: WorldState, item_id: str) -> WorldState:
+    """소지품에 그 물건을 하나 더한다. 없던 물건이면 줄을 끝에 더한다."""
+    if held_count(state, item_id) == 0:
+        return replace(state, inventory=(*state.inventory, Holding(item_id, 1)))
+    inventory = tuple(
+        Holding(holding.item, holding.count + 1) if holding.item == item_id else holding for holding in state.inventory
+    )
+    return replace(state, inventory=inventory)
+
+
 def apply_use(state: WorldState, item: ItemDocument) -> WorldState:
     """쓴 뒤의 상태. 쓰면 없어지는 물건이면 하나 준다. 검사는 check_held 가 한다."""
     return take_one(state, item.id) if item.consumable else state

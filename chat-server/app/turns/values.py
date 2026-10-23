@@ -12,7 +12,10 @@ from decimal import Decimal
 
 from ai_core.provider import ChatMessage
 
+from app.assets.schemas import CharacterDocument
+from app.conversation.changes import Proposed
 from app.turns.models import Outcome
+from app.world.state import WorldState
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,16 @@ class SavedMessage:
     event_scene: str | None = None
     # 모델이 고른 표정(캐릭터 그림의 표정 이름). 기본 표정이면 None
     expression: str | None = None
+    # 모델이 제안해 받아들인 상태의 변화(칩, app/world/proposals.py)
+    changes: tuple[dict, ...] = ()
+
+
+@dataclass(frozen=True)
+class WorldBase:
+    """답을 쓰기 전의 판과 상태. 모델의 제안을 이것으로 받아들인다(app/world/proposals.py)."""
+
+    document: CharacterDocument
+    state: WorldState
 
 
 @dataclass(frozen=True)
@@ -59,6 +72,8 @@ class TurnStart:
     action: SavedMessage | None = None
     # 모델이 고를 수 있는 표정과 그 캐릭터 그림(app/world/sprites.py 의 expression_images). 비어 있으면 고르지 않는다
     expressions: Mapping[str, uuid.UUID] = field(default_factory=dict)
+    # 답을 쓰기 전의 판과 상태. 모델의 제안을 받아들일 때 쓴다(차례를 쥔 동안 상태는 바뀌지 않는다)
+    world: WorldBase | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +89,8 @@ class TurnResult:
     suggestions: tuple[str, ...] = ()
     # 모델이 고른 표정. 기본이거나 고르지 않았으면 None
     expression: str | None = None
+    # 모델이 제안한 상태의 변화. 다 받은 답(complete)에만 있다. 받아들이는 것은 저장할 때다
+    proposed: Proposed = field(default_factory=Proposed)
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: Decimal | None = None

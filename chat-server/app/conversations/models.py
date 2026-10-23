@@ -202,4 +202,8 @@ class Message(Base):
     # 캐릭터의 답에서 모델이 고른 표정(캐릭터 그림의 표정 이름, app/conversation/expressions.py).
     # 기본 표정이면 비어 있다
     expression: Mapped[str | None] = mapped_column(String(20), default=None)
+    # 캐릭터의 답에서 모델이 제안해 서버가 받아들인 상태의 변화(app/world/proposals.py, #676).
+    # [{"kind": "affection", "delta", "rising"}, {"kind": "gift", "item"}, {"kind": "move", "place", "minutes"}]
+    # 화면이 답 아래에 칩으로 보인다. 받아들인 것이 없으면 빈 목록이다
+    changes: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

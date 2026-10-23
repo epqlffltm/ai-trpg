@@ -44,3 +44,5 @@ class MessageState(Base):
     fired: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)), default=list, server_default='{}')
     # 이 가지에서 나온 이벤트 씬의 id(나온 차례, app/world/scenes.py, #669). 한 가지에서 한 번만 나온다
     shown: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)), default=list, server_default='{}')
+    # 이 가지에서 상대에게 받은 물건의 id(받은 차례, app/world/proposals.py, #676). 한 가지에서 한 번만 받는다
+    received: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)), default=list, server_default='{}')
