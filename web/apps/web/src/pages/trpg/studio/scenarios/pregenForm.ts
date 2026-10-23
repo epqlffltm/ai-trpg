@@ -73,3 +73,8 @@ export function pregenExtras(pregen: ScenarioPregen): string | null {
   if (pregen.money > 0) parts.push(`돈 ${pregen.money}`);
   return parts.length > 0 ? parts.join(' · ') : null;
 }
+
+/** at 번째 프리젠의 소지품과 더 받는 돈만 바꾼 목록(물건·돈 탭). 이름, 설명, 시트는 그대로 */
+export function withBelongings(pregens: ScenarioPregen[], at: number, items: PregenBody['items'], money: number): PregenBody[] {
+  return pregens.map((one, index) => (index === at ? { ...one, items, money } : one));
+}
