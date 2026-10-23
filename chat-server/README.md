@@ -73,6 +73,7 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `ASSET_TIMEOUT_SECONDS` | `5` | asset 서버를 한 번 부르는 시간의 상한(초, 30 까지). 대화를 시작하는 사람이 기다린다 |
 | `BILLING_URL` | 비어 있음(받지 않음) | 결제 서버의 주소(`http://127.0.0.1:8003`). 모델의 값을 가격 목록에서 읽고, 말 한 번에 홀드를 건다([모델 목록](#모델-목록)). 비우면 모델은 값 없이 보이고 말은 공짜다 |
 | `BILLING_SECRET` | 비어 있음 | 결제 서버에 보내는 요청에 서명하는 비밀. `billing-server/.env` 의 `CHAT_SERVER_SECRET` 과 같은 값. `BILLING_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
+| `AUTH_SERVER_SECRET` | 비어 있음(받지 않음) | 인증 서버가 [탈퇴](#탈퇴)를 알릴 때 서명하는 비밀. `auth-server/.env` 의 `CHAT_SECRET` 과 같은 값. 적으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초, 10 까지). 게임 서버와 같다 |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `ZAI_API_KEY`, `DEEPINFRA_API_KEY` | 비어 있음 | 모델 목록의 창구마다의 키. 비밀값이다. 키가 없는 창구의 모델로 말을 보내면 503 `provider_unavailable` 이다. 공급자가 내주는 값이라 `tools/fill_env.py` 가 만들지 않는다. 게임 서버와 다른 키(사용 한도를 따로 거는 키)를 권한다 |
 | `OPENAI_BASE_URL` 등 `*_BASE_URL` | 게임 서버와 같다 | 창구의 주소. `LLM_BASE_URL` 은 모델 목록의 `local` 창구 모델에만 쓴다(지금은 없다) |
@@ -126,6 +127,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | PUT | `/api/v1/chat/conversations/{id}/branch` | [다른 대안 보기](#다시-생성-멈추기-대안). `{message_id}`. 바뀐 대화를 돌려준다. 답을 쓰는 중이면 409 `generation_in_progress` | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/model` | 대화의 모델 바꾸기. `{model}`. 바꾼 모델을 돌려준다. 고를 수 없으면 422 `model_unavailable` | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
+| POST | `/api/v1/chat/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴) 알림 받기. `{withdrawn_at}`. 200 `{"status": "processed"}`. 프록시는 밖에서 받지 않는다(404) | 인증 서버의 서명 |
 
 **스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages`, `POST /api/v1/chat/messages/{id}/regenerate`, `/continue`(모두 만들었다)가
 바로 SSE(`text/event-stream`)로 답한다. 응답에 `X-Accel-Buffering: no` 를 싣고 15초 조용하면 하트비트(`: heartbeat`)를 끼운다. 끊겨도 서버는 생성을 끝까지 저장하고,
@@ -409,6 +411,20 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - **새로 청구한다.** 입력을 다시 보내고 원가가 또 든다(설계의 과금 표). 홀드와 확정, 멈추기, 차례는 말 보내기와 같다.
 - **지금 가지의 끝만.** 끊긴 답 뒤에 말이 붙었거나 다른 가지를 보고 있으면 422 `not_continuable` 이다. 그 뒤의 말이 끊긴 답을 보고 쓴 것이라서다.
   가지의 끝은 차례를 잡은 뒤에 다시 읽는다(차례를 쥔 동안에는 가지를 바꾸지 못한다).
+
+### 탈퇴
+
+인증 서버가 유예(7일)가 지난 탈퇴를 알리면 그 사람의 것을 지운다(#670, [탈퇴 설계](../docs/architecture/withdrawal.md), `app/withdrawal/`).
+
+- **지우는 것.** 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 캐릭터의 판의 사본이다. 한 트랜잭션이다.
+- **남기는 것.** 청구 기록(`generations`)이다. 대화와 말을 가리키는 칸만 비운다(외래 키가 `SET NULL`, 2026-10-23 유저 결정).
+  남는 것은 공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표이고 글은 없다. 결제 서버도 원장과 홀드를 공개 ID 로 남기므로 서로 맞추고 원가를 셀 때 쓴다.
+- **받는 길.** `POST /api/v1/chat/service/users/{public_id}/withdrawal`, 본문 `{"withdrawn_at": "..."}`. 인증 서버의 비밀(`AUTH_SERVER_SECRET`)로 서명한다(`app/core/service_auth.py`).
+  서명이 틀리거나 비밀이 비어 있으면 401, 본문의 모양이 틀리면 422 다(아무것도 지우지 않는다). 모르는 칸은 버린다.
+- **멱등.** 지우고 200 `{"status": "processed"}` 다. 이미 지웠거나 이 서버에 그 사람의 것이 없어도 200 이다. 그 밖의 답이면 인증 서버가 다시 보낸다.
+- 유예 동안은 토큰이 이 서버에 통하지 않으므로 지우는 사이에 새 말이 생기지 않는다. 요청 수 제한은 걸지 않는다(사람이 부르는 주소가 아니다).
+- 보내는 쪽은 인증 서버의 워커(`auth-welcome-credits`)다. 인증 서버의 `CHAT_SECRET` 이 비어 있으면 보내지 않고 쌓아 둔다. 비밀을 적으면 그 전에 쌓인 것부터 나간다.
+- 기록을 내려받는 길은 아직 없다(#617 과 같은 질문).
 
 ### 토큰 검증
 

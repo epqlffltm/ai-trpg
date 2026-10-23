@@ -62,6 +62,7 @@ from app.turns import router as messages
 from app.turns import settler
 from app.turns.providers import build_router
 from app.turns.service import ModelRequiredError, NotContinuableError, NotRegenerableError, TurnDeclinedError
+from app.withdrawal import router as withdrawal
 from app.world.refusals import ActionRefusedError
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
@@ -211,6 +212,8 @@ def create_app(
     app.include_router(messages.router, prefix=API_PREFIX)
     app.include_router(messages.message_router, prefix=API_PREFIX)
     app.include_router(messages.generation_router, prefix=API_PREFIX)
+    # 인증 서버가 탈퇴를 알리는 주소(#670). 서버끼리만 부른다(서명). 프록시는 밖에서 받지 않는다
+    app.include_router(withdrawal.router, prefix=API_PREFIX)
 
     app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)
     app.add_exception_handler(CharacterNotFoundError, conversations.handle_character_not_found)
