@@ -26,9 +26,7 @@ def add_steps(table: str) -> None:
     """그 표에 입력 단계와 출력 단계를 더한다. 0 부터 MAX_STEP 까지다."""
     for column in ('input_step', 'output_step'):
         op.add_column(table, sa.Column(column, sa.SmallInteger(), server_default=sa.text('0'), nullable=False))
-        op.create_check_constraint(
-            op.f(f'ck_{table}_{column}_range'), table, f'{column} BETWEEN 0 AND {MAX_STEP}'
-        )
+        op.create_check_constraint(op.f(f'ck_{table}_{column}_range'), table, f'{column} BETWEEN 0 AND {MAX_STEP}')
 
 
 def drop_steps(table: str) -> None:
