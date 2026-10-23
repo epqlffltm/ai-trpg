@@ -12,6 +12,9 @@
   - 쓰기와 건네기: 소지품이 바뀌고 옷은 상대가 입는다. 건넬 때 덧붙인 한마디는 행동 말 아래의 사람의 말이고,
     반응은 그 한마디에 답한다(한 번 청구). 가지고 있지 않으면 422
   - 호감도: 판의 시작 값에서 행동의 규칙대로 바뀌고, 단계로 보이면 숫자를 내려보내지 않는다. 가지를 따른다
+  - 시각: 고른 시작 상황의 시각에서 시작한다.
+    시간 보내기(kind wait)는 다음 시간대까지 흐르고 반응을 받는다(지도가 없어도).
+    배경은 그 시간대의 것, 없으면 장소의 기본 배경이다
 """
 
 import asyncio
@@ -25,6 +28,7 @@ from server_core.testing.tokens import SigningKey
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets.schemas import StartDocument
 from app.conversations.models import Conversation, Message
 from app.main import API_PREFIX, STREAMS
 from app.world.models import MessageState
@@ -57,6 +61,9 @@ START = {
     'visited': ['library'],
     'outfit': [],
     'affection': None,
+    # 시작 상황에 시작 시각이 없으면 정오다
+    'clock': {'day': 1, 'hour': 12, 'minute': 0, 'time_of_day': 'day'},
+    'background': None,
 }
 
 
@@ -142,6 +149,8 @@ async def test_a_character_without_a_map_has_an_empty_state(
         'visited': [],
         'outfit': [],
         'affection': None,
+        'clock': {'day': 1, 'hour': 12, 'minute': 0, 'time_of_day': 'day'},
+        'background': None,
     }
 
 
@@ -164,7 +173,13 @@ async def test_moving_adds_an_action_changes_the_state_and_gets_a_reaction(
     assert (action['role'], action['content']) == ('action', '카페에 갔다. 15분이 걸렸다.')
     assert (done['parent_id'], done['content']) == (action['id'], '어서 와요.')
     detail = await read(client, mine, conversation)
-    assert detail['state'] == {**START, 'place': 'cafe', 'minutes': 15, 'visited': ['library', 'cafe']}
+    assert detail['state'] == {
+        **START,
+        'place': 'cafe',
+        'minutes': 15,
+        'visited': ['library', 'cafe'],
+        'clock': {**START['clock'], 'minute': 15},
+    }
     assert [message['role'] for message in detail['messages']] == ['assistant', 'action', 'assistant']
     # 반응을 받았으니 한 번 청구했다
     assert billing.balance(ME) == 70
@@ -177,7 +192,7 @@ async def test_the_model_reads_the_new_place_and_the_action(
 
     sent = router.provider.calls[0][0]
     card = sent[0].content
-    assert '[지금]\n장소: 카페\n갈 수 있는 곳: 도서관(15분)\n사용자의 소지품: 시집 2개' in card
+    assert '[지금]\n시각: 1일째 낮 12:15\n장소: 카페\n갈 수 있는 곳: 도서관(15분)\n사용자의 소지품: 시집 2개' in card
     assert (sent[-1].role, sent[-1].content) == (Role.USER, '[행동] 카페에 갔다. 15분이 걸렸다.')
 
 
@@ -505,3 +520,88 @@ async def test_a_state_written_before_affection_reads_as_the_start(
     await session.commit()
 
     assert (await read(client, mine, liked))['state']['affection']['stage'] == '낯섦'
+
+
+# --- 시각과 배경 ---
+
+NIGHT_PICTURE = '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+BASE_PICTURE = '8b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e'
+
+
+@pytest.fixture
+async def at_night(clean_tables: None, session: AsyncSession, client: AsyncClient, asset: FakeAsset, mine: dict):
+    """밤 9시에 시작하는 대화. 도서관에는 기본 배경과 밤의 배경이 있다."""
+    await turn_on_luna(session)
+    library = {**WORLD['places'][0], 'image_id': BASE_PICTURE, 'backgrounds': {'night': NIGHT_PICTURE}}
+    world = {**WORLD, 'places': [library, *WORLD['places'][1:]]}
+    starts = [StartDocument(title='비 오는 밤', situation='문을 두드리는 소리가 난다.', hour=21)]
+    character = asset.add_character(make_character(world=world, starts=starts))
+    body = {'character_id': str(character.id), 'model': 'luna'}
+    response = await client.post(CONVERSATIONS_URL, json=body, headers=mine)
+    assert response.status_code == status.HTTP_201_CREATED, response.text
+    return response.json()
+
+
+async def wait(client: AsyncClient, app: FastAPI, headers: dict, conversation: dict, body: dict | None = None):
+    url = f'{CONVERSATIONS_URL}/{conversation["id"]}/actions'
+    response = await client.post(url, json=body or {'kind': 'wait'}, headers=headers)
+    await finished(app)
+    return response
+
+
+async def test_a_conversation_starts_at_the_hour_of_its_start(at_night: dict):
+    assert at_night['start']['hour'] == 21
+    assert at_night['state']['clock'] == {'day': 1, 'hour': 21, 'minute': 0, 'time_of_day': 'night'}
+    assert at_night['state']['background'] == NIGHT_PICTURE
+
+
+async def test_waiting_runs_to_the_next_time_of_day_and_gets_a_reaction(
+    client: AsyncClient, app: FastAPI, at_night: dict, router: FakeRouter, billing: FakeBillingServer, mine: dict
+):
+    response = await wait(client, app, mine, at_night)
+
+    assert response.status_code == status.HTTP_200_OK
+    action = parse_sse(response.text)[0][1]['user_message']
+    assert (action['role'], action['content']) == ('action', '시간을 보냈다. 새벽이 되었다.')
+    state = (await read(client, mine, at_night))['state']
+    assert (state['minutes'], state['clock']) == (420, {'day': 2, 'hour': 4, 'minute': 0, 'time_of_day': 'dawn'})
+    # 새벽의 배경이 없으니 기본 배경이다
+    assert state['background'] == BASE_PICTURE
+    card = router.provider.calls[0][0][0].content
+    assert '[지금]\n시각: 2일째 새벽 04:00\n장소: 도서관' in card
+    assert billing.balance(ME) == 70
+
+
+async def test_waiting_without_a_map_still_passes_time(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, asset: FakeAsset, router: FakeRouter, mine: dict
+):
+    await turn_on_luna(session)
+    plain = await start(client, asset, mine, None)
+
+    response = await wait(client, app, mine, plain)
+
+    assert response.status_code == status.HTTP_200_OK
+    state = (await read(client, mine, plain))['state']
+    assert (state['clock']['hour'], state['clock']['time_of_day'], state['background']) == (17, 'evening', None)
+
+
+async def test_a_wait_with_something_else_is_refused(
+    client: AsyncClient, app: FastAPI, at_night: dict, session: AsyncSession, mine: dict
+):
+    before = await count_messages(session)
+
+    response = await wait(client, app, mine, at_night, {'kind': 'wait', 'hours': 3})
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert await count_messages(session) == before
+
+
+async def test_moving_in_the_night_keeps_the_time_of_day(
+    client: AsyncClient, app: FastAPI, at_night: dict, router: FakeRouter, mine: dict
+):
+    await move(client, app, mine, at_night, 'cafe')
+
+    state = (await read(client, mine, at_night))['state']
+    assert state['clock'] == {'day': 1, 'hour': 21, 'minute': 15, 'time_of_day': 'night'}
+    # 카페에는 그림이 없다
+    assert state['background'] is None

@@ -181,7 +181,9 @@ def to_detail(
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,
-        start=StartOut(title=conversation.start_title, situation=conversation.start_situation),
+        start=StartOut(
+            title=conversation.start_title, situation=conversation.start_situation, hour=conversation.start_hour
+        ),
         character=CharacterOut(
             id=character.source_id,
             version=character.version,
@@ -191,7 +193,7 @@ def to_detail(
         persona=to_persona(persona),
         model=conversation_model(conversation, character, models, book, now),
         messages=[to_path_message(message, alternatives) for message in messages],
-        state=state_out(state, world.document_of(character)),
+        state=state_out(state, world.document_of(character), conversation.start_hour),
         generating=service.is_generating(conversation, now),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,

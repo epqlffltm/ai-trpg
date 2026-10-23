@@ -103,7 +103,7 @@ async def test_starting_fixes_the_version_and_the_greeting(client: AsyncClient, 
     made = await start(client, mine, character_id=str(character.id))
 
     assert made['title'] == '세라'
-    assert made['start'] == {'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.'}
+    assert made['start'] == {'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.', 'hour': 12}
     assert (made['character']['id'], made['character']['version']) == (str(character.id), 3)
     assert made['character']['document'] == character.document.model_dump(mode='json')
     assert made['persona'] is None

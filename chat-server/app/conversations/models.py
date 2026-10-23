@@ -23,6 +23,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -33,6 +34,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.assets.schemas import START_HOUR_DEFAULT
 from app.core.database import Base
 from app.ratings import Rating
 
@@ -103,6 +105,7 @@ class Conversation(Base):
     __table_args__ = (
         # 내 대화 목록: 최근에 말한 것부터
         Index('ix_conversations_owner_updated', 'owner_id', 'updated_at'),
+        CheckConstraint('start_hour BETWEEN 0 AND 23', name='start_hour_in_day'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -120,6 +123,9 @@ class Conversation(Base):
     # 고른 시작 상황. 제목은 목록에, 상황은 모델에 간다. 판의 것을 복사해 둔다
     start_title: Mapped[str] = mapped_column(Text)
     start_situation: Mapped[str] = mapped_column(Text)
+    # 시작 시각(1일째 몇 시). 지금 시각은 이것에 상태의 흐른 시간을 더한 것이다(app/world/clock.py, #668).
+    # 시작 시각을 더하기 전의 대화는 정오에 시작한 것으로 본다
+    start_hour: Mapped[int] = mapped_column(SmallInteger, server_default=str(START_HOUR_DEFAULT))
     # 지금 보고 있는 가지의 끝. 말과 대화가 서로 가리키므로 외래 키는 표를 다 만든 뒤에 건다(use_alter)
     active_leaf_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey('messages.id', ondelete='SET NULL', use_alter=True, name='fk_conversations_active_leaf_id_messages'),
