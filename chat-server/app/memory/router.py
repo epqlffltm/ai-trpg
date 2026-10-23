@@ -19,6 +19,7 @@ from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.dependencies import CurrentViewer, Session
+from app.limits.routing import WRITE_LIMIT
 from app.memory import service
 from app.memory.models import MemoryNote
 from app.memory.schemas import NoteOut, NoteWrite, SummaryOut
@@ -40,13 +41,20 @@ async def list_notes(conversation_id: uuid.UUID, viewer: CurrentViewer, session:
     return [to_note(note) for note in await service.list_notes(session, viewer, conversation_id)]
 
 
-@router.post('/{conversation_id}/notes', response_model=NoteOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    '/{conversation_id}/notes', response_model=NoteOut, status_code=status.HTTP_201_CREATED, dependencies=[WRITE_LIMIT]
+)
 async def add_note(conversation_id: uuid.UUID, data: NoteWrite, viewer: CurrentViewer, session: Session) -> NoteOut:
     """기억 메모를 더한다. 다음 말부터 모델에 간다."""
     return to_note(await service.add_note(session, viewer, conversation_id, data.text))
 
 
-@router.patch('/{conversation_id}/notes/{note_id}', response_model=NoteOut, status_code=status.HTTP_200_OK)
+@router.patch(
+    '/{conversation_id}/notes/{note_id}',
+    response_model=NoteOut,
+    status_code=status.HTTP_200_OK,
+    dependencies=[WRITE_LIMIT],
+)
 async def edit_note(
     conversation_id: uuid.UUID, note_id: uuid.UUID, data: NoteWrite, viewer: CurrentViewer, session: Session
 ) -> NoteOut:
@@ -54,7 +62,7 @@ async def edit_note(
     return to_note(await service.edit_note(session, viewer, conversation_id, note_id, data.text))
 
 
-@router.delete('/{conversation_id}/notes/{note_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{conversation_id}/notes/{note_id}', status_code=status.HTTP_204_NO_CONTENT, dependencies=[WRITE_LIMIT])
 async def delete_note(conversation_id: uuid.UUID, note_id: uuid.UUID, viewer: CurrentViewer, session: Session) -> None:
     """기억 메모를 지운다."""
     await service.delete_note(session, viewer, conversation_id, note_id)
