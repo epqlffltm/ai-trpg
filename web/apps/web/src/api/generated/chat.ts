@@ -554,6 +554,11 @@ export interface components {
              * @default []
              */
             items: components["schemas"]["ItemDocument"][];
+            /**
+             * Lorebooks
+             * @default []
+             */
+            lorebooks: components["schemas"]["LorebookCopyDocument"][];
             /** Name */
             name: string;
             /**
@@ -858,6 +863,54 @@ export interface components {
             kind: string;
             /** Name */
             name: string;
+        };
+        /**
+         * LoreEntryDocument
+         * @description 로어북의 항목 하나. constant 면 늘 모델에 간다. 아니면 최근 말에 keywords 가운데 하나가 나올 때 간다
+         *     (app/conversation/lorebook.py). kind 는 종류(person, place …)다. 모르는 종류도 받아 둔다.
+         */
+        LoreEntryDocument: {
+            /**
+             * Constant
+             * @default false
+             */
+            constant: boolean;
+            /** Content */
+            content: string;
+            /** Id */
+            id: string;
+            /**
+             * Keywords
+             * @default []
+             */
+            keywords: string[];
+            /**
+             * Kind
+             * @default other
+             */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * LorebookCopyDocument
+         * @description 캐릭터의 판에 복사된 로어북 하나. id 와 version 은 asset 의 로어북과 그 판의 번호다.
+         */
+        LorebookCopyDocument: {
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["LoreEntryDocument"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
         };
         /**
          * MeResponse

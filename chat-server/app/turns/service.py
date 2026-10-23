@@ -24,7 +24,7 @@ DB 접근, 바깥 호출(공급자, 결제 서버), 응답 만들기를 한 함�
 import asyncio
 import logging
 import uuid
-from collections.abc import Callable, Collection, Mapping
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 
@@ -34,7 +34,7 @@ from ai_core.routing import MODEL_UNAVAILABLE as ROUTE_MODEL_UNAVAILABLE
 from ai_core.routing import Route
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.assets.schemas import CharacterDocument
+from app.assets.schemas import CharacterDocument, LoreEntryDocument
 from app.billing.client import Billing
 from app.billing.prices import chat_code
 from app.catalog import repository as catalog
@@ -44,6 +44,7 @@ from app.conversation import continuation
 from app.conversation.changes import parse_changes
 from app.conversation.continuation import OverlapTrim, continued_text
 from app.conversation.expressions import ExpressionHead, match_expression, split_expression
+from app.conversation.lorebook import render_lore, select_entries
 from app.conversation.relay import Relay
 from app.conversation.suggestions import MarkerHold, parse_suggestions, split_answer
 from app.conversation.window import Turn, select_window
@@ -237,6 +238,7 @@ class CardExtras:
     scene 은 장소와 소지품(app/world)이다. 없으면 None.
     expressions 는 모델이 고를 수 있는 표정과 그 캐릭터 그림이다(없으면 표정을 고르지 않는다).
     offer 는 모델이 제안할 수 있는 상태의 변화의 지시(없으면 None), world 는 그 바탕인 판과 상태다(#676).
+    lore 는 고른 로어북의 항목이다(없으면 None, #672).
     """
 
     story: str | None
@@ -245,6 +247,7 @@ class CardExtras:
     expressions: Mapping[str, uuid.UUID] = field(default_factory=dict)
     offer: str | None = None
     world: WorldBase | None = None
+    lore: str | None = None
 
 
 def prompt_for(
@@ -272,11 +275,17 @@ def prompt_for(
         story=extras.story,
         expressions=list(extras.expressions),
         changes=extras.offer,
+        lore=extras.lore,
     )
     turns = [Turn(message.role, message.content) for message in path]
     if closing is not None:
         turns.append(Turn(Role.USER, closing))
     return build_messages(card, select_window(turns, options.context_chars))
+
+
+def lore_entries(document: CharacterDocument) -> list[LoreEntryDocument]:
+    """판의 로어북들의 항목(로어북의 차례, 그 안의 차례)."""
+    return [entry for lorebook in document.lorebooks for entry in lorebook.entries]
 
 
 async def extras_on(
@@ -288,6 +297,7 @@ async def extras_on(
     state: WorldState | None = None,
     scene_id: str | None = None,
     choose_expression: bool = True,
+    incoming: Sequence[str] = (),
 ) -> CardExtras:
     """
     가지(path)의 끝에서 카드에 더할 블록들. state 를 주면 그 상태로 장소와 소지품을 적는다(행동한 뒤의 상태).
@@ -295,6 +305,7 @@ async def extras_on(
     scene_id 는 이번 답에 붙는 이벤트 씬이다. 있으면 그 장면을 "[지금]" 에 적는다(그림과 글이 어긋나지 않게).
     choose_expression 이면 지금 차림에서 고를 수 있는 표정을 함께 준다(이어서 출력은 끊긴 답의 표정을 그대로 둔다).
     모델이 제안할 수 있는 상태의 변화(지금의 상태로 정한다)와 그 바탕도 함께 준다.
+    로어북은 가지의 최근 말과 이번에 더하는 말(incoming, 아직 path 에 없다)에서 키워드를 찾아 고른다.
     """
     document = world.document_of(character)
     current = state if state is not None else await world.state_on(session, document, [m.id for m in path])
@@ -308,6 +319,7 @@ async def extras_on(
         expressions=expression_images(document, current) if choose_expression else {},
         offer=render_offer(offer_of(document, current)),
         world=WorldBase(document, current),
+        lore=render_lore(select_entries(lore_entries(document), [*(m.content for m in path), *incoming])),
     )
 
 
@@ -515,7 +527,7 @@ async def begin_turn(
         await session.refresh(conversation)
         parent_id = edited if edit_of is not None else conversation.active_leaf_id
         path = await conversations.active_path(session, parent_id)
-        extras = await extras_on(session, conversation, character, path, options.context_chars)
+        extras = await extras_on(session, conversation, character, path, options.context_chars, incoming=[content])
         message = user_message(conversation, parent_id, content, now)
         repository.add(session, message)
         await session.flush()
@@ -590,7 +602,14 @@ async def begin_action(
         generation = new_generation(conversation, viewer.claims.user_id, added[-1].id, slug)
         repository.add(session, generation)
         extras = await extras_on(
-            session, conversation, character, path, options.context_chars, performed.state, added[-1].event_scene
+            session,
+            conversation,
+            character,
+            path,
+            options.context_chars,
+            performed.state,
+            added[-1].event_scene,
+            incoming=[message.content for message in added],
         )
         await session.commit()
     return TurnStart(

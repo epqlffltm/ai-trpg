@@ -133,6 +133,7 @@ def render_card(
     story: str | None = None,
     expressions: Sequence[str] = (),
     changes: str | None = None,
+    lore: str | None = None,
 ) -> str:
     """
     시스템 메시지(카드). 지킬 것, 캐릭터, 사용자, 시작 상황, 앞의 줄거리(story), 기억(memory), 지금(scene),
@@ -140,6 +141,7 @@ def render_card(
     memory 는 기억 메모(app/memory), scene 은 지금의 장소와 소지품이다(app/world/scene.py).
     지시는 suggest 일 때만 넣는다. expressions 가 있으면 표정을 고르는 지시를 넣는다(app/conversation/expressions.py).
     changes 는 모델이 제안할 수 있는 상태의 변화의 지시다(app/world/proposals.py 의 render_offer, #676).
+    lore 는 고른 로어북의 항목이다(app/conversation/lorebook.py, #672). 기억 메모 뒤, 지금 앞에 둔다.
     지시를 맨 끝에 두어 본문을 다 쓴 뒤의 일임을 분명히 한다.
     """
     sections = [
@@ -149,6 +151,7 @@ def render_card(
         f'[시작 상황]\n{situation.strip()}' if situation.strip() else None,
         story,
         memory,
+        lore,
         scene,
         f'[표정]\n{expression_instruction(expressions)}' if expressions else None,
         f'[상태 바꾸기]\n{changes}' if changes else None,

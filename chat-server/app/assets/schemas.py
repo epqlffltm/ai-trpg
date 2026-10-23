@@ -17,6 +17,7 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
        5 까지의 판은 캐릭터 그림이 없다
   - 7: 물건의 giftable(상대가 줄 수 있다)과 호감도의 model_step(모델이 답 하나에 바꿀 수 있는 크기, #676).
        6 까지의 판은 줄 수 있는 물건이 없고 model_step 이 AFFECTION_MODEL_STEP_DEFAULT 다
+  - 8: 로어북(lorebooks, 캐릭터가 가리킨 로어북의 게시할 때의 마지막 판, #672). 7 까지의 판은 로어북이 없다
 """
 
 import uuid
@@ -180,6 +181,33 @@ class SpriteDocument(BaseModel):
     outfit: str | None = None
 
 
+class LoreEntryDocument(BaseModel):
+    """
+    로어북의 항목 하나. constant 면 늘 모델에 간다. 아니면 최근 말에 keywords 가운데 하나가 나올 때 간다
+    (app/conversation/lorebook.py). kind 는 종류(person, place …)다. 모르는 종류도 받아 둔다.
+    """
+
+    model_config = ConfigDict(extra='ignore')
+
+    id: str
+    name: str
+    kind: str = 'other'
+    keywords: list[str] = []
+    content: str
+    constant: bool = False
+
+
+class LorebookCopyDocument(BaseModel):
+    """캐릭터의 판에 복사된 로어북 하나. id 와 version 은 asset 의 로어북과 그 판의 번호다."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    id: uuid.UUID
+    version: int
+    name: str
+    entries: list[LoreEntryDocument] = []
+
+
 def legacy_scenes(data: dict) -> dict:
     """형식 5 의 판의 이벤트 씬(illustrations, scene)을 지금의 이름(event_scenes, description)으로 바꾼다."""
     if 'illustrations' not in data or data.get('event_scenes'):
@@ -216,6 +244,7 @@ class CharacterDocument(BaseModel):
     affection: AffectionDocument | None = None
     event_scenes: list[EventSceneDocument] = []
     sprites: list[SpriteDocument] = []
+    lorebooks: list[LorebookCopyDocument] = []
 
     @model_validator(mode='before')
     @classmethod
