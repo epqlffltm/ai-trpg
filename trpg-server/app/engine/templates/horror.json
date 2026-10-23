@@ -1,0 +1,561 @@
+{
+  "format": 1,
+  "key": "horror",
+  "name": "공포",
+  "summary": "능력치 넷과 d20 으로 판정하는 공포. 맞으면 크게 다치고 마음도 다친다. 쓰러지면 빨리 죽는다.",
+  "attribution": [
+    "This work includes material taken from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "This work includes material from the System Reference Document 5.2.1 (\"SRD 5.2.1\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "이 프로젝트는 Wizards of the Coast 와 관계가 없다."
+  ],
+  "notes": [
+    "판정은 d20 의 눈에 보정을 더해 목표값과 견준다. 보정을 구하는 방법((점수 - 10) // 2)은 SRD 5.1 을 따랐다.",
+    "점수제의 값표와 점수를 주사위로 정하는 법(4d6 에서 높은 셋)은 SRD 5.2.1 을 따랐다. 총점(18)은 능력치가 넷이라 이 프로젝트가 줄였다.",
+    "능력치(몸, 날램, 정신, 직감), 난이도의 숫자, 양의 등급, 죽음의 굴림(d20 12 이상, 실패 둘이면 죽음), 부상과 부상 표, 치료, 쉬기, 훔치기는 이 프로젝트가 정한 값이다.",
+    "마음의 상처(공황, 악몽, 떨치지 못한 기억)를 몸의 부상과 같은 부상으로 둔다. 효과는 이 엔진의 세 종류다."
+  ],
+  "rules": {
+    "template": "horror",
+    "abilities": [
+      {
+        "key": "body",
+        "name": "몸"
+      },
+      {
+        "key": "agility",
+        "name": "날램"
+      },
+      {
+        "key": "mind",
+        "name": "정신"
+      },
+      {
+        "key": "sense",
+        "name": "직감"
+      }
+    ],
+    "score_min": 1,
+    "score_max": 20,
+    "modifier": {
+      "base": 10,
+      "step": 2
+    },
+    "die": 20,
+    "difficulties": [
+      {
+        "key": "easy",
+        "name": "쉬움",
+        "target": 8
+      },
+      {
+        "key": "medium",
+        "name": "보통",
+        "target": 12
+      },
+      {
+        "key": "hard",
+        "name": "어려움",
+        "target": 16
+      },
+      {
+        "key": "very_hard",
+        "name": "매우 어려움",
+        "target": 20
+      }
+    ],
+    "default_difficulty": "medium",
+    "magnitudes": [
+      {
+        "key": "light",
+        "name": "가벼움",
+        "count": 1,
+        "sides": 6
+      },
+      {
+        "key": "moderate",
+        "name": "보통",
+        "count": 1,
+        "sides": 10
+      },
+      {
+        "key": "heavy",
+        "name": "심함",
+        "count": 2,
+        "sides": 10
+      }
+    ],
+    "hp_ability": "body",
+    "initiative_ability": "sense",
+    "point_buy": {
+      "budget": 18,
+      "costs": [
+        {
+          "score": 8,
+          "cost": 0
+        },
+        {
+          "score": 9,
+          "cost": 1
+        },
+        {
+          "score": 10,
+          "cost": 2
+        },
+        {
+          "score": 11,
+          "cost": 3
+        },
+        {
+          "score": 12,
+          "cost": 4
+        },
+        {
+          "score": 13,
+          "cost": 5
+        },
+        {
+          "score": 14,
+          "cost": 7
+        },
+        {
+          "score": 15,
+          "cost": 9
+        }
+      ]
+    },
+    "score_roll": {
+      "count": 4,
+      "sides": 6,
+      "keep": 3
+    },
+    "death_save": {
+      "target": 12,
+      "successes": 3,
+      "failures": 2
+    },
+    "injuries": [
+      {
+        "key": "panicked",
+        "name": "공황",
+        "fact": "겁에 질려 숨이 가쁘고 손이 떨린다. 침착하게 무언가를 하기 어렵다.",
+        "effects": [
+          {
+            "kind": "disadvantage",
+            "abilities": [],
+            "amount": 0
+          }
+        ],
+        "healing": "rounds",
+        "rounds": 2,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "stunned",
+        "name": "기절",
+        "fact": "정신이 아득해 몸을 가누지 못한다. 아무것도 하지 못한다.",
+        "effects": [
+          {
+            "kind": "no_actions",
+            "abilities": [],
+            "amount": 0
+          }
+        ],
+        "healing": "rounds",
+        "rounds": 1,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "shaken",
+        "name": "떨림",
+        "fact": "손이 떨려 섬세한 일을 하기 어렵다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "agility"
+            ],
+            "amount": 2
+          }
+        ],
+        "healing": "rounds",
+        "rounds": 3,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "bleeding",
+        "name": "출혈",
+        "fact": "상처에서 피가 멎지 않아 힘이 빠진다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "body"
+            ],
+            "amount": 1
+          }
+        ],
+        "healing": "rounds",
+        "rounds": 3,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "deep_cut",
+        "name": "깊은 상처",
+        "fact": "살이 깊게 베여 움직일 때마다 상처가 벌어진다.",
+        "effects": [
+          {
+            "kind": "disadvantage",
+            "abilities": [
+              "body"
+            ],
+            "amount": 0
+          }
+        ],
+        "healing": "heals",
+        "rounds": null,
+        "heal_minutes": 14400,
+        "aftermath": {
+          "sides": 20,
+          "rows": [
+            {
+              "low": 1,
+              "high": 6,
+              "injury": "scar"
+            },
+            {
+              "low": 7,
+              "high": 20,
+              "injury": null
+            }
+          ]
+        },
+        "aimable": true,
+        "treat_difficulty": "medium",
+        "treat_minutes": 4320
+      },
+      {
+        "key": "broken_leg",
+        "name": "다리 골절",
+        "fact": "다리가 부러져 걷기도 힘들다. 달리지 못한다.",
+        "effects": [
+          {
+            "kind": "disadvantage",
+            "abilities": [
+              "agility"
+            ],
+            "amount": 0
+          }
+        ],
+        "healing": "heals",
+        "rounds": null,
+        "heal_minutes": 30240,
+        "aftermath": {
+          "sides": 20,
+          "rows": [
+            {
+              "low": 1,
+              "high": 6,
+              "injury": "limp"
+            },
+            {
+              "low": 7,
+              "high": 20,
+              "injury": null
+            }
+          ]
+        },
+        "aimable": true,
+        "treat_difficulty": "hard",
+        "treat_minutes": 7200
+      },
+      {
+        "key": "nightmares",
+        "name": "악몽",
+        "fact": "눈을 감으면 그날 본 것이 떠올라 잠을 이루지 못한다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "mind"
+            ],
+            "amount": 1
+          }
+        ],
+        "healing": "heals",
+        "rounds": null,
+        "heal_minutes": 10080,
+        "aftermath": {
+          "sides": 20,
+          "rows": [
+            {
+              "low": 1,
+              "high": 4,
+              "injury": "haunted"
+            },
+            {
+              "low": 5,
+              "high": 20,
+              "injury": null
+            }
+          ]
+        },
+        "aimable": false,
+        "treat_difficulty": "medium",
+        "treat_minutes": 2880
+      },
+      {
+        "key": "lost_fingers",
+        "name": "손가락 잃음",
+        "fact": "한 손의 손가락 몇 개가 없다. 그 손으로 쥐는 일이 서툴다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "agility"
+            ],
+            "amount": 2
+          }
+        ],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": true,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "lost_eye",
+        "name": "한쪽 눈 잃음",
+        "fact": "한쪽 눈을 잃어 거리를 잘 가늠하지 못한다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "sense"
+            ],
+            "amount": 2
+          }
+        ],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": true,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "scar",
+        "name": "흉터",
+        "fact": "몸에 깊은 흉터가 남았다.",
+        "effects": [],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "limp",
+        "name": "절뚝거림",
+        "fact": "다쳤던 다리를 전다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "agility"
+            ],
+            "amount": 1
+          }
+        ],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "haunted",
+        "name": "떨치지 못한 기억",
+        "fact": "그날 본 것이 떠나지 않는다. 어둠 속에서 쉽게 놀란다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "mind"
+            ],
+            "amount": 1
+          }
+        ],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      }
+    ],
+    "injury_table": {
+      "sides": 20,
+      "rows": [
+        {
+          "low": 1,
+          "high": 8,
+          "injury": null
+        },
+        {
+          "low": 9,
+          "high": 11,
+          "injury": "panicked"
+        },
+        {
+          "low": 12,
+          "high": 13,
+          "injury": "shaken"
+        },
+        {
+          "low": 14,
+          "high": 14,
+          "injury": "stunned"
+        },
+        {
+          "low": 15,
+          "high": 15,
+          "injury": "bleeding"
+        },
+        {
+          "low": 16,
+          "high": 17,
+          "injury": "deep_cut"
+        },
+        {
+          "low": 18,
+          "high": 18,
+          "injury": "nightmares"
+        },
+        {
+          "low": 19,
+          "high": 19,
+          "injury": "broken_leg"
+        },
+        {
+          "low": 20,
+          "high": 20,
+          "injury": "scar"
+        }
+      ]
+    },
+    "injury_triggers": {
+      "big_hit_percent": 40,
+      "downed": true,
+      "called_shot": true
+    },
+    "called_shot": {
+      "mode": "target_plus",
+      "amount": 4
+    },
+    "treatment": {
+      "ability": "mind",
+      "mishaps": {
+        "sides": 100,
+        "rows": [
+          {
+            "low": 1,
+            "high": 2,
+            "kind": "fatal",
+            "delay_minutes": null,
+            "magnitude": null
+          },
+          {
+            "low": 3,
+            "high": 15,
+            "kind": "worsen",
+            "delay_minutes": 2880,
+            "magnitude": "moderate"
+          },
+          {
+            "low": 16,
+            "high": 35,
+            "kind": "worsen",
+            "delay_minutes": 1440,
+            "magnitude": null
+          },
+          {
+            "low": 36,
+            "high": 55,
+            "kind": "pain",
+            "delay_minutes": null,
+            "magnitude": "light"
+          },
+          {
+            "low": 56,
+            "high": 100,
+            "kind": "nothing",
+            "delay_minutes": null,
+            "magnitude": null
+          }
+        ]
+      }
+    },
+    "rest": {
+      "short": {
+        "minutes": 60,
+        "heal": "light"
+      },
+      "long": {
+        "minutes": 480
+      },
+      "revive": {
+        "minutes": 480,
+        "target": 14
+      },
+      "natural": null
+    },
+    "steal": {
+      "ability": "agility",
+      "difficulty": "medium",
+      "awareness": "sense",
+      "equipped": 5,
+      "rarity_step": 2,
+      "dull_kinds": [
+        {
+          "kind": "undead",
+          "amount": 3
+        },
+        {
+          "kind": "construct",
+          "amount": 3
+        }
+      ],
+      "dull": 3,
+      "unwary": 3,
+      "distracted": 2
+    },
+    "robbed_wake": {
+      "hostile": 20,
+      "wary": 40
+    }
+  }
+}

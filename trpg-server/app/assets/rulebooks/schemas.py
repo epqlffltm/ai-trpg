@@ -6,7 +6,7 @@
 
 from typing import Annotated
 
-from pydantic import StringConstraints
+from pydantic import BaseModel, StringConstraints
 
 from app.assets.models import RULEBOOK_GM_GUIDE_MAX_LENGTH
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
@@ -47,3 +47,29 @@ class RulebookDetail(AssetSummary):
 
     gm_guide: str
     rules: Ruleset
+
+
+class TemplateSummary(BaseModel):
+    """
+    고를 수 있는 템플릿 하나(#615). 룰북을 만들 때 template 에 key 를 보내면 rules 가 룰북에 복사된다.
+
+    attribution 은 본뜬 공개 문서의 출처 표시다. 화면에 템플릿을 보여 줄 때 함께 싣는다.
+    """
+
+    key: Template
+    name: str
+    summary: str
+    attribution: list[str]
+    notes: list[str]
+    rules: Ruleset
+
+
+class TemplateList(BaseModel):
+    """
+    고를 수 있는 템플릿들. app/engine/templates/ 의 Template 에 적은 차례다.
+
+    default 는 룰북을 만들 때 template 을 보내지 않으면 쓰는 것이다.
+    """
+
+    default: Template
+    items: list[TemplateSummary]

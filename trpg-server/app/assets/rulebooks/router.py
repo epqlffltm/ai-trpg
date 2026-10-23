@@ -14,10 +14,17 @@ from fastapi import APIRouter, status
 from app.assets.models import Rulebook
 from app.assets.routing import Paging, Session, to_page, to_summary
 from app.assets.rulebooks import service
-from app.assets.rulebooks.schemas import RulebookCreate, RulebookDetail, RulebookUpdate
+from app.assets.rulebooks.schemas import (
+    RulebookCreate,
+    RulebookDetail,
+    RulebookUpdate,
+    TemplateList,
+    TemplateSummary,
+)
 from app.assets.schemas import AssetPage
 from app.auth.dependencies import CurrentUser
 from app.engine.ruleset import Ruleset
+from app.engine.templates import DEFAULT_TEMPLATE, Template, TemplateFile
 
 router = APIRouter(prefix='/rulebooks', tags=['rulebooks'])
 
@@ -35,6 +42,18 @@ def to_detail(rulebook: Rulebook) -> RulebookDetail:
     )
 
 
+def to_template_summary(template: TemplateFile) -> TemplateSummary:
+    """템플릿 파일 하나를 목록의 한 줄로 바꾼다."""
+    return TemplateSummary(
+        key=Template(template.key),
+        name=template.name,
+        summary=template.summary,
+        attribution=list(template.attribution),
+        notes=list(template.notes),
+        rules=template.rules,
+    )
+
+
 @router.post('', response_model=RulebookDetail, status_code=status.HTTP_201_CREATED)
 async def create_rulebook(data: RulebookCreate, user: CurrentUser, session: Session) -> RulebookDetail:
     """룰북을 만든다. 만든 사람은 요청의 본문이 아니라 토큰에서 정해진다."""
@@ -47,6 +66,17 @@ async def list_rulebooks(user: CurrentUser, session: Session, paging: Paging) ->
     """자기 룰북의 목록을 최근에 만든 것부터 돌려준다."""
     rulebooks, total = await service.list_rulebooks(session, user.user_id, paging.limit, paging.offset)
     return to_page(rulebooks, total)
+
+
+@router.get('/templates', response_model=TemplateList, status_code=status.HTTP_200_OK)
+async def list_templates(user: CurrentUser) -> TemplateList:
+    """
+    룰북을 만들 때 고를 수 있는 템플릿들과 그 규칙(#615). 다른 주소처럼 로그인을 요구한다(user 는 쓰지 않는다).
+
+    룰북의 길(/{rulebook_id})보다 먼저 등록한다. templates 를 룰북의 id 로 읽지 않게 한다.
+    """
+    items = [to_template_summary(template) for template in service.list_templates()]
+    return TemplateList(default=DEFAULT_TEMPLATE, items=items)
 
 
 @router.get('/{rulebook_id}', response_model=RulebookDetail, status_code=status.HTTP_200_OK)
