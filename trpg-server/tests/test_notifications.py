@@ -6,17 +6,14 @@
 보는 것.
   - 발송함에 적기: 서술 모델의 은퇴 셋(예정, 바꿈, 대신할 모델 없음)이 방장에게만, 이벤트마다 한 줄이다.
     열쇠는 "<kind>:<테이블>:<이벤트의 번호>" 라 은퇴 예정의 단계마다 다르다. 내용에 테이블의 ID 와 제목이 붙는다.
-  - 알림 서버를 부르는 것: 본문, 서명, 답의 뜻(보냈다, 다시 보낼 일, 받지 않았다).
-  - 보내는 작업: 보내면 지우고, 못 보내면 기다리는 시간을 늘려 다시 보내고, 받지 않으면 실패로 둔다.
-    오래 못 보낸 것은 지운다. 주소가 없으면 보내지 않는다. 한 알림이 예외로 끝나도 다른 알림은 보낸다.
-  - 설정: 주소를 적으면 비밀이 32자 이상이어야 한다.
+  - 알림 서버를 부르는 것: 이 서버의 이름(game)의 주소로 서명해 넣는다.
+  - 보내는 작업: 이 서버의 발송함 표로 돈다(보내면 지운다, 늦게 본 서버가 지운 것을 되살리지 않는다).
+  - 설정: 주소가 있으면 game 으로서 알림 서버를 부른다. 테스트는 보내지 않는다.
+
+서명의 모양, 답의 뜻, 다시 보내는 간격, 오래된 것 지우기, 로그, 설정의 검사는 공용 코드의 테스트가 본다
+(shared/server-core/tests/test_notifications.py, #589).
 """
 
-import asyncio
-import hashlib
-import hmac
-import json
-import logging
 import uuid
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -25,7 +22,10 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
-from pydantic import SecretStr, ValidationError
+from server_core.notifications.client import Delivery, HttpNotifications, Sent
+from server_core.notifications.dispatcher import NotificationDispatcher
+from server_core.notifications.setup import build_notifications
+from server_core.service_auth.signing import SIGNATURE_HEADER
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -33,19 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.routing import utc_now
 from app.catalog import service as catalog
-from app.notifications import dispatcher as dispatching
 from app.notifications import outbox
-from app.notifications.client import PUT_PATH, Delivery, HttpNotifications, Sent, encode
-from app.notifications.dispatcher import (
-    DISPATCH_OPERATION,
-    REJECTED_ERROR_CODE,
-    STALE_AFTER,
-    UNAVAILABLE_ERROR_CODE,
-    NotificationDispatcher,
-    retry_delay,
-)
 from app.notifications.models import OutboxStatus, OutgoingNotification
-from app.notifications.setup import build_notifications
 from tests.catalog_rows import retire
 from tests.conftest import make_test_settings
 from tests.test_model_offers import LUNA, FixedPrices, add_enabled, book, on_sale
@@ -191,18 +180,6 @@ async def test_a_retired_model_without_a_replacement_is_told_once(
 # --- 알림 서버를 부르는 것 ---
 
 
-def mock_client(handler) -> httpx.AsyncClient:
-    """handler 가 답하는 httpx 클라이언트."""
-    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-
-def http_notifications(handler) -> HttpNotifications:
-    """가짜 알림 서버를 부르는 것. 서명의 시각은 고정한다."""
-    return HttpNotifications(
-        mock_client(handler), BASE_URL + '/', SecretStr(SECRET), timeout=1, clock=lambda: 1_700_000_000
-    )
-
-
 def sample() -> OutgoingNotification:
     """발송함의 한 줄. DB 에 넣지 않는다."""
     return OutgoingNotification(
@@ -214,67 +191,23 @@ def sample() -> OutgoingNotification:
     )
 
 
-async def test_the_request_is_signed_like_the_notification_server_expects():
+async def test_the_game_server_puts_into_its_own_address():
+    # 알림 서버는 주소의 이름(game)으로 비밀(GAME_SERVER_SECRET)과 넣을 수 있는 종류를 정한다
     seen: list[httpx.Request] = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def answer(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return httpx.Response(201, json={'id': 1, 'status': 'created'})
+        return httpx.Response(201)
 
-    sent = await http_notifications(handler).send(sample())
+    settings = make_test_settings(notification_url=BASE_URL, notification_secret=SECRET)
+    built = build_notifications(settings, httpx.AsyncClient(transport=httpx.MockTransport(answer)), outbox.SOURCE)
 
-    (request,) = seen
+    sent = await built.send(sample())
+
     assert sent == Sent(Delivery.DELIVERED)
-    assert str(request.url) == BASE_URL + PUT_PATH
-    assert json.loads(request.content) == {
-        'source_key': 'narration_model.retiring:t:3',
-        'user_id': str(HOST),
-        'kind': 'narration_model.retiring',
-        'payload': {'title': '추격전', 'days_left': 7},
-    }
-    # 알림 서버가 확인하는 그대로 다시 계산해 본다(notification-server/app/service_auth/signing.py)
-    content = f'1700000000.POST\n{PUT_PATH}\n'.encode() + request.content
-    digest = hmac.new(SECRET.encode(), content, hashlib.sha256).hexdigest()
-    assert request.headers['X-Service-Signature'] == f't=1700000000,v1={digest}'
-
-
-def test_the_body_is_compact_utf8():
-    # 보낸 바이트에 서명한다. 빈칸을 넣지 않고 한글을 그대로 둔다
-    assert '추격전'.encode() in encode(sample())
-    assert b': ' not in encode(sample())
-
-
-@pytest.mark.parametrize(
-    ('status_code', 'expected'),
-    [
-        (201, Sent(Delivery.DELIVERED)),
-        (200, Sent(Delivery.DELIVERED)),
-        (401, Sent(Delivery.UNAVAILABLE, 'unauthorized')),
-        (408, Sent(Delivery.UNAVAILABLE, 'status_408')),
-        (429, Sent(Delivery.UNAVAILABLE, 'status_429')),
-        (500, Sent(Delivery.UNAVAILABLE, 'status_500')),
-        (503, Sent(Delivery.UNAVAILABLE, 'status_503')),
-        (409, Sent(Delivery.REJECTED, 'status_409')),
-        (413, Sent(Delivery.REJECTED, 'status_413')),
-        (422, Sent(Delivery.REJECTED, 'status_422')),
-        (404, Sent(Delivery.REJECTED, 'status_404')),
-    ],
-)
-async def test_the_answer_decides_what_happens_next(status_code: int, expected: Sent):
-    sent = await http_notifications(lambda request: httpx.Response(status_code)).send(sample())
-
-    assert sent == expected
-
-
-@pytest.mark.parametrize(
-    ('error', 'reason'),
-    [(httpx.ReadTimeout('slow'), 'timeout'), (httpx.ConnectError('refused'), 'unreachable')],
-)
-async def test_no_answer_is_sent_again(error: Exception, reason: str):
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise error
-
-    assert await http_notifications(handler).send(sample()) == Sent(Delivery.UNAVAILABLE, reason)
+    (request,) = seen
+    assert request.url.path == '/api/v1/notification/service/game/notifications'
+    assert request.headers[SIGNATURE_HEADER].startswith('t=')
 
 
 # --- 보내는 작업 ---
@@ -291,93 +224,6 @@ async def test_a_delivered_notification_leaves_the_outbox(app: FastAPI, session:
     assert await outgoing(session) == []
 
 
-async def test_an_unavailable_server_is_tried_again_later(app: FastAPI, session: AsyncSession):
-    await put(session, 'a')
-    fake = FakeNotifications([Sent(Delivery.UNAVAILABLE, 'status_503')])
-
-    assert (await dispatcher_of(app, fake).tick()).retried == 1
-    (waiting,) = await outgoing(session)
-    assert (waiting.status, waiting.attempts, waiting.last_error) == (OutboxStatus.PENDING, 1, 'status_503')
-    assert waiting.next_attempt_at == NOW + timedelta(seconds=10)
-
-    # 기다리는 동안은 보내지 않는다. 지나면 다시 보낸다
-    await dispatcher_of(app, fake, NOW + timedelta(seconds=9)).tick()
-    await dispatcher_of(app, fake, NOW + timedelta(seconds=10)).tick()
-    assert fake.sent == ['a', 'a']
-    assert await outgoing(session) == []
-
-
-@pytest.mark.parametrize(
-    ('attempts', 'seconds'), [(0, 10), (1, 10), (2, 20), (3, 40), (9, 2560), (10, 3600), (30, 3600)]
-)
-def test_the_wait_doubles_up_to_an_hour(attempts: int, seconds: int):
-    assert retry_delay(attempts) == timedelta(seconds=seconds)
-
-
-async def test_a_rejected_notification_is_kept_as_failed(app: FastAPI, session: AsyncSession):
-    await put(session, 'a')
-    fake = FakeNotifications([Sent(Delivery.REJECTED, 'status_409')])
-
-    assert (await dispatcher_of(app, fake).tick()).rejected == 1
-    await dispatcher_of(app, fake, NOW + timedelta(days=1)).tick()
-
-    # 버그다. 사람이 보도록 남기고 다시 보내지 않는다
-    (failed,) = await outgoing(session)
-    assert (failed.status, failed.last_error) == (OutboxStatus.FAILED, 'status_409')
-    assert fake.sent == ['a']
-
-
-async def test_without_an_address_nothing_is_sent(app: FastAPI, session: AsyncSession):
-    await put(session, 'a')
-
-    dispatched = await dispatcher_of(app, None).tick()
-
-    # 주소를 비우면 적기만 한다
-    assert dispatched.busy() is False
-    assert len(await outgoing(session)) == 1
-
-
-async def test_old_unsent_notifications_are_dropped(app: FastAPI, session: AsyncSession):
-    old = NOW - STALE_AFTER - timedelta(minutes=1)
-    await put(session, 'old', created_at=old)
-    await put(session, 'old-failed', created_at=old, status=OutboxStatus.FAILED)
-    await put(session, 'fresh', created_at=NOW - timedelta(days=1))
-
-    dispatched = await dispatcher_of(app, None).tick()
-
-    # 주소가 없어도 지운다. 받지 않은 것(failed)은 사람이 볼 때까지 남긴다
-    assert dispatched.dropped == 1
-    assert [notification.source_key for notification in await outgoing(session)] == ['old-failed', 'fresh']
-
-
-async def test_one_broken_notification_does_not_stop_the_others(
-    app: FastAPI, session: AsyncSession, caplog: pytest.LogCaptureFixture
-):
-    await put(session, 'a')
-    await put(session, 'b')
-    fake = FakeNotifications([RuntimeError('boom')])
-
-    with caplog.at_level(logging.ERROR, logger=dispatching.__name__):
-        dispatched = await dispatcher_of(app, fake).tick()
-
-    assert (dispatched.failed, dispatched.sent) == (1, 1)
-    # 예외가 난 알림은 그대로 남아 다음 바퀴에 다시 보낸다
-    assert [notification.source_key for notification in await outgoing(session)] == ['a']
-    assert any(record.error_code == 'job.failed' for record in caplog.records)
-
-
-async def test_a_batch_is_limited(app: FastAPI, session: AsyncSession, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(dispatching, 'DISPATCH_BATCH', 2)
-    for key in ('a', 'b', 'c'):
-        await put(session, key)
-    fake = FakeNotifications()
-
-    await dispatcher_of(app, fake).tick()
-
-    # 먼저 적은 것부터 보낸다. 남은 것은 다음 바퀴다
-    assert fake.sent == ['a', 'b']
-
-
 async def test_two_servers_sending_the_same_notification_do_not_revive_it(app: FastAPI, session: AsyncSession):
     notification = await put(session, 'a')
     first = dispatcher_of(app, FakeNotifications())
@@ -390,93 +236,17 @@ async def test_two_servers_sending_the_same_notification_do_not_revive_it(app: F
     assert await outgoing(session) == []
 
 
-# --- 로그 ---
-
-
-@pytest.mark.parametrize(
-    ('sent', 'level', 'error_code'),
-    [
-        (Sent(Delivery.UNAVAILABLE, 'status_503'), logging.WARNING, UNAVAILABLE_ERROR_CODE),
-        (Sent(Delivery.UNAVAILABLE, 'unauthorized'), logging.ERROR, UNAVAILABLE_ERROR_CODE),
-        (Sent(Delivery.REJECTED, 'status_422'), logging.ERROR, REJECTED_ERROR_CODE),
-    ],
-)
-async def test_an_unsent_notification_leaves_one_line_without_the_person(
-    app: FastAPI, session: AsyncSession, caplog: pytest.LogCaptureFixture, sent: Sent, level: int, error_code: str
-):
-    await put(session, 'a')
-
-    with caplog.at_level(logging.WARNING, logger=dispatching.__name__):
-        await dispatcher_of(app, FakeNotifications([sent])).tick()
-
-    (record,) = caplog.records
-    assert (record.levelno, record.error_code, record.reason) == (level, error_code, sent.reason)
-    assert (record.operation, record.kind) == (DISPATCH_OPERATION, 'narration_model.retiring')
-    # 받는 사람과 알림의 내용은 남기지 않는다
-    assert str(HOST) not in str(record.__dict__)
-    assert '추격전' not in str(record.__dict__)
-
-
-async def test_a_busy_round_is_logged_at_info(app: FastAPI, session: AsyncSession, caplog: pytest.LogCaptureFixture):
-    await put(session, 'a')
-
-    with caplog.at_level(logging.DEBUG, logger=dispatching.__name__):
-        await dispatcher_of(app, FakeNotifications()).tick()
-        await dispatcher_of(app, FakeNotifications()).tick()
-
-    busy, quiet = caplog.records
-    assert (busy.levelno, busy.sent, busy.operation) == (logging.INFO, 1, DISPATCH_OPERATION)
-    assert quiet.levelno == logging.DEBUG
-
-
-# --- 도는 것 ---
-
-
-async def test_the_loop_keeps_running_after_a_failed_round(app: FastAPI, caplog: pytest.LogCaptureFixture):
-    rounds = 0
-
-    def broken_session():
-        nonlocal rounds
-        rounds += 1
-        raise RuntimeError('db down')
-
-    looping = replace(dispatcher_of(app, None), session_factory=broken_session, interval=0)
-
-    with caplog.at_level(logging.ERROR, logger=dispatching.__name__):
-        running = dispatching.start(looping)
-        while rounds < 2:
-            await asyncio.sleep(0)
-        await asyncio.wait_for(running.halt(), timeout=1)
-
-    # 한 바퀴가 통째로 실패해도(DB 가 없다) 멈추지 않고 다음 바퀴를 돈다
-    assert running.task.done()
-    assert caplog.records
-    assert all(record.error_code == 'job.failed' for record in caplog.records)
-
-
 # --- 설정 ---
-
-
-def test_the_address_needs_a_long_secret():
-    with pytest.raises(ValidationError, match='NOTIFICATION_SECRET'):
-        make_test_settings(notification_url=BASE_URL, notification_secret='short')
-    with pytest.raises(ValidationError, match='NOTIFICATION_SECRET'):
-        make_test_settings(notification_url=BASE_URL)
-
-
-def test_without_an_address_nothing_calls_the_server():
-    settings = make_test_settings(notification_url='  ')
-
-    assert build_notifications(settings, httpx.AsyncClient()) is None
 
 
 def test_with_an_address_the_server_is_called():
     settings = make_test_settings(notification_url=BASE_URL, notification_secret=SECRET, notification_timeout_seconds=2)
 
-    built = build_notifications(settings, httpx.AsyncClient())
+    built = build_notifications(settings, httpx.AsyncClient(), outbox.SOURCE)
 
     assert isinstance(built, HttpNotifications)
     assert (built.base_url, built.secret.get_secret_value(), built.timeout) == (BASE_URL, SECRET, 2)
+    assert built.source == 'game'
 
 
 async def test_tests_do_not_send(app: FastAPI):

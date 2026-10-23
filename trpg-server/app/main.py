@@ -15,6 +15,9 @@ from fastapi import FastAPI
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_session_factory
+from server_core.notifications import dispatcher
+from server_core.notifications.setup import build_notifications
+from server_core.notifications.store import SqlOutboxStore
 from server_core.observability.db_spans import instrument_engine
 from server_core.observability.http_spans import traced_client
 from server_core.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
@@ -70,8 +73,8 @@ from app.lore.setup import build_embedder
 from app.memory.history import HistoryCollector
 from app.memory.indexing import MemoryIndexer
 from app.memory.retrieval import MemoryRetriever, MemoryThresholds
-from app.notifications import dispatcher
-from app.notifications.setup import build_notifications
+from app.notifications import outbox
+from app.notifications.models import OutgoingNotification
 from app.operators import router as operators
 from app.operators.publishing import PublicationRefusedError
 from app.operators.sanctions import SanctionConflictError
@@ -304,11 +307,11 @@ def create_app(
     # 방장에게 보내는 알림을 넣는 알림 서버(app/notifications/). 설정(NOTIFICATION_URL)이 정한다. 비우면 None 이고
     # 알림은 발송함에 적히기만 한다. 위의 httpx 클라이언트로 부른다.
     # 요청마다 두 서버만 아는 비밀(NOTIFICATION_SECRET)로 서명한다
-    app.state.notifications = build_notifications(settings, app.state.http_client)
-    # 발송함의 알림을 몇 초마다 알림 서버에 보내는 작업(app/notifications/dispatcher.py). lifespan 이 돌리고 멈춘다.
-    # 알림 서버는 부를 때마다 앱에서 꺼낸다. 테스트가 바꿔 꽂은 것을 쓴다
+    app.state.notifications = build_notifications(settings, app.state.http_client, outbox.SOURCE)
+    # 발송함의 알림을 몇 초마다 알림 서버에 보내는 작업(server_core/notifications/dispatcher.py).
+    # lifespan 이 돌리고 멈춘다. 알림 서버는 부를 때마다 앱에서 꺼낸다. 테스트가 바꿔 꽂은 것을 쓴다
     app.state.notification_dispatcher = dispatcher.NotificationDispatcher(
-        session_factory=app.state.session_factory,
+        store=SqlOutboxStore(app.state.session_factory, OutgoingNotification),
         notifications=lambda: app.state.notifications,
     )
 
