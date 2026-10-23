@@ -11,6 +11,7 @@ import type { TableDetail, TableEvent } from '../../../../api/types';
 import { NARRATION_STYLE_VALUES, durationLabel, narrationStyleLabel } from '../../labels';
 import { dayLabel, stepName } from '../../models/modelChoice';
 import { amountLabel } from '../money';
+import { blowLine, type Blow } from '../round/roundView';
 import { clockTimeLabel, injuryName, questStatusLabel } from '../status/statusView';
 
 export type EventType = TableEvent['type'];
@@ -126,9 +127,43 @@ function changeText(payload: Payload, fallback: string): string {
   return `${text(payload, 'name') ?? fallback}: ${kind}${amount === null ? '' : ` ${amount}`}${fate}`;
 }
 
+/**
+ * 몬스터와 인물의 공격. "고블린: 할퀴기 → 렌 맞힘", 장비가 들었으면 뒤에 괄호로 타격 줄(roundView 의 blowLine)
+ * "고블린: 할퀴기 → 렌 맞힘 (몸 · 방어 5 · 아머 세이브 10 + 5 → 막음)"
+ */
 function attackText(payload: Payload, ctx: EventContext, event: TableEvent): string {
   const hit = flag(payload, 'success') ? '맞힘' : '빗나감';
-  return `${text(payload, 'name') ?? '누군가'}: ${text(payload, 'attack') ?? '공격'} → ${who(payload, ctx, event)} ${hit}`;
+  const blow = blowOf(payload);
+  const gear = blow ? blowLine(blow) : null;
+  return `${text(payload, 'name') ?? '누군가'}: ${attackName(payload)} → ${who(payload, ctx, event)} ${hit}${gear ? ` (${gear})` : ''}`;
+}
+
+/** 공격의 이름. 서버는 공격을 {name, ability, difficulty, harm} 로 싣는다. 글 하나로 와도 읽는다 */
+function attackName(payload: Payload): string {
+  const attack = part(payload, 'attack');
+  return (attack ? text(attack, 'name') : text(payload, 'attack')) ?? '공격';
+}
+
+/** 공격에 장비가 든 것(blow). 타격 줄이 읽는 칸의 모양이 맞을 때만, 아니면 null(줄을 깨지 않는다) */
+function blowOf(payload: Payload): Blow | null {
+  const blow = part(payload, 'blow');
+  if (!blow || typeof blow.aimed !== 'boolean' || typeof blow.defense !== 'number') return null;
+  if (!nullOr(blow.mode, 'string') || !nullOr(blow.location_name, 'string')) return null;
+  const weapon = part(blow, 'weapon');
+  if (blow.weapon != null && (!weapon || text(weapon, 'name') === null || count(weapon, 'bonus') === null)) return null;
+  const pierce = part(blow, 'pierce');
+  if (blow.pierce != null && (!pierce || typeof pierce.pierced !== 'boolean')) return null;
+  const save = part(blow, 'save');
+  if (blow.save != null && (!save || !saveShaped(save))) return null;
+  return blow as Blow;
+}
+
+function nullOr(value: unknown, type: 'string' | 'number'): boolean {
+  return value == null || typeof value === type;
+}
+
+function saveShaped(save: Payload): boolean {
+  return text(save, 'kind') !== null && count(save, 'roll') !== null && count(save, 'value') !== null && typeof save.saved === 'boolean';
 }
 
 /** 얻은 곳. 몬스터나 인물에게서, 장소에서 주움, 찾음 */

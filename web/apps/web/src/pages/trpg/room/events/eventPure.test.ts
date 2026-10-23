@@ -61,6 +61,30 @@ describe('eventLine', () => {
     expect(line('npc_changed', { name: '문지기', kind: 'damage', amount: 3, status: 'downed' })?.text).toBe('문지기: 피해 3 · 쓰러짐');
     expect(line('injury_gained', { name: '문지기', injury: 'broken_arm' })?.text).toBe('문지기: 부러진 팔 입음');
     expect(line('monster_attacked', { name: '수로 쥐', attack: '물기', character_name: '렌', success: true })?.text).toBe('수로 쥐: 물기 → 렌 맞힘');
+    const attack = { name: '할퀴기', ability: 'str', difficulty: 'normal', harm: 'light' };
+    expect(line('monster_attacked', { name: '고블린', attack, character_name: '렌', success: false })?.text).toBe('고블린: 할퀴기 → 렌 빗나감');
+    const blow = {
+      weapon: null,
+      location: 'body',
+      location_name: '몸',
+      aimed: false,
+      defense: 5,
+      mode: 'save',
+      pierce: null,
+      save: { kind: 'armor', value: 5, roll: 10, target: 7, saved: true },
+    };
+    expect(line('monster_attacked', { name: '고블린', attack, character_name: '렌', success: true, blow })?.text).toBe(
+      '고블린: 할퀴기 → 렌 맞힘 (몸 · 방어 5 · 아머 세이브 10 + 5 → 막음)',
+    );
+    const npcBlow = { ...blow, weapon: { entry_id: 'w', name: '단검', bonus: 1, ap: 0 }, mode: 'ac', save: null, location_name: null, defense: 0 };
+    expect(line('npc_attacked', { name: '문지기', attack, character_name: '렌', success: true, blow: npcBlow })?.text).toBe(
+      '문지기: 할퀴기 → 렌 맞힘 (단검 +1)',
+    );
+    // 모양이 다른 장비 줄은 빼고 적는다(줄이 깨지지 않게)
+    expect(line('monster_attacked', { name: '고블린', attack, character_name: '렌', success: true, blow: { ...blow, save: { kind: 'armor' } } })?.text).toBe(
+      '고블린: 할퀴기 → 렌 맞힘',
+    );
+    expect(line('monster_attacked', { name: '고블린', attack: {}, character_name: '렌', success: true })?.text).toBe('고블린: 공격 → 렌 맞힘');
     const place = { entry_id: 'p1', name: '지하 저장고' };
     expect(line('items_gained', { character_name: '미아', name: '은 성배', count: 1, total: 1, source: 'search', place })?.text).toBe(
       '미아: 은 성배 ×1 얻음(지금 1) · 지하 저장고에서 찾음',

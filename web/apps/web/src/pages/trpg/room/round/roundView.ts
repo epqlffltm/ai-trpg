@@ -162,7 +162,8 @@ function checkEffects(outcome: CheckResult, rules: Ruleset): string[] {
   return blow ? [blow, ...parts] : parts;
 }
 
-type Blow = NonNullable<CheckResult['blow']>;
+/** 타격에 장비가 든 것(#276). 판정의 결과와 몬스터·인물의 공격 이벤트(eventLines.ts)가 같은 모양이다 */
+export type Blow = NonNullable<CheckResult['blow']>;
 
 /** 방어가 한 일(ac, reduce). 세이브는 세이브 줄이 따로 말한다 */
 const ARMOR_EFFECTS: Record<string, string> = { ac: '목표값에 더함', reduce: '피해에서 뺌' };
