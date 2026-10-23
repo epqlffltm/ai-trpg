@@ -1,13 +1,13 @@
 // web/apps/web/src/pages/chat/studio/characters/CheckPanel.tsx
 // 게시 점검(C6, GET /characters/{id}/publish-check). 캐릭터 고치기의 옆에 늘 둔다. 저장할 때마다 다시 읽는다.
-// 문제마다 글과 그 칸이 있는 탭으로 가는 단추를 둔다. 아직 화면이 없는 묶음의 문제는 묶음의 이름만 적는다.
+// 문제마다 글과 그 칸이 있는 탭으로 가는 단추를 둔다. 모르는 문제는 이름만 적는다.
 // 게시할 때 소개에서 걸러질 것(removed)도 보인다. 걸러져도 게시는 된다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import type { RemovedHtml } from '../../../../api/types';
 import { checkQuery } from './characterQueries';
-import { isTab, sectionLabel, type CharacterTab } from './characterTabs';
+import { tabLabel, type CharacterTab } from './characterTabs';
 import { problemLine } from './publishProblems';
 import { removedLine } from './removedHtml';
 
@@ -49,12 +49,10 @@ function ProblemItem({ name, goTo }: { name: string; goTo: (tab: CharacterTab) =
   return (
     <li className="scenario-check__item">
       <span>{line.text}</span>{' '}
-      {section && isTab(section) ? (
+      {section ? (
         <Button variant="quiet" onClick={() => goTo(section)}>
-          {sectionLabel(section)} 탭으로
+          {tabLabel(section)} 탭으로
         </Button>
-      ) : section ? (
-        <span className="hint">({sectionLabel(section)}: 화면 준비 중)</span>
       ) : null}
     </li>
   );

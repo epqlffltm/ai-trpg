@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AssetCharacterDetail } from '../../../../api/types';
 import { basicsDraft, basicsHints, parseTags, toBasicsBody, type BasicsDraft } from './basicsForm';
-import { isTab, tabOf } from './characterTabs';
+import { tabLabel, tabOf } from './characterTabs';
 import { problemLine } from './publishProblems';
 import { removedLine } from './removedHtml';
 import {
@@ -103,13 +103,14 @@ describe('시작 상황', () => {
 
 describe('탭과 점검의 글', () => {
   it('주소의 탭', () => {
-    expect([tabOf('images'), tabOf('lorebooks'), tabOf(null)]).toEqual(['images', 'basics', 'basics']);
-    expect([isTab('intro'), isTab('lorebooks')]).toEqual([true, false]);
+    expect([tabOf('images'), tabOf('lorebooks'), tabOf('nope'), tabOf(null)]).toEqual(['images', 'lorebooks', 'basics', 'basics']);
+    expect(tabLabel('lorebooks')).toBe('로어북');
   });
 
   it('문제는 그 묶음을 가리킨다. 모르는 이름은 그대로', () => {
     expect(problemLine('start_missing')).toEqual({ text: '시작 상황이 하나도 없습니다.', section: 'starts' });
     expect(problemLine('item_missing').section).toBe('items');
+    expect(problemLine('lorebook_unpublished').section).toBe('lorebooks');
     expect(problemLine('new_problem')).toEqual({ text: 'new_problem', section: null });
   });
 
