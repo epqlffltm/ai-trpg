@@ -45,9 +45,12 @@ nginx 의 설정은 이미지에 담지 않고 compose 가 붙인다(`docker/ngi
 | 주소 | 프록시가 하는 일 |
 | --- | --- |
 | `/api/v1/<서버>/...` | 그 서버로 보낸다. `/api/` 의 그 밖은 404(JSON) |
-| `/assets/...` | 빌드가 해시를 붙인 파일. 1년 캐시(`immutable`). 없으면 404 |
+| `/assets/...` | 빌드가 해시를 붙인 파일. 1년 캐시(`immutable`). 없으면 404(새로 올린 뒤의 예전 조각도. 화면이 새로 고치라고 알린다) |
 | 그 밖(`/`, `/login`, `/trpg/...`) | 있는 파일이면 그것, 없으면 `index.html`. 캐시하지 않는다(`no-cache`) |
 | `/admin/`, `/static/`, `/health` | 404. 관리자 화면은 SSH 터널로 인증 서버에 직접 붙는다 |
+
+빌드는 화면마다 조각을 나눈다. 첫 화면, 로그인, 가입, 비밀번호는 첫 묶음에 있고, 나머지 화면은 처음 갈 때 받는다(`src/routing/pages.ts`).
+React, React Router, TanStack Query 는 `vendor` 조각 하나로 묶는다(`vite.config.ts`). 화면만 고쳐 올리면 이 조각의 이름이 그대로라 캐시가 남는다.
 
 빌드할 때 고르는 것은 하나다.
 
@@ -71,6 +74,7 @@ web/
     src/components/       여러 화면이 함께 쓰는 것(목록 한 칸, 실패 한 줄, 한 번 더 묻는 단추)
     src/hooks/            남은 초 세기, 다른 사람의 이름 찾기(public-names, #532)
     src/layout/           머리와 틀
+    src/routing/          코드 분할. 처음 갈 때 받는 화면들(pages.ts), 받지 못했거나 깨졌을 때의 안내(RouteBoundary)
   packages/ui/            공통 구성요소(버튼, 입력 칸, 고르기 칸, 체크, 라디오, 창, 칩, 안내, 목록 한 줄)와 색·글꼴의 변수(styles.css)
 ```
 
