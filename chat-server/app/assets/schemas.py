@@ -15,6 +15,8 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
        그때 이름은 illustrations(장면의 설명은 scene)였다. 판의 사본에도 그 이름으로 남아 있을 수 있어 바꿔 읽는다
   - 6: 이벤트 씬의 이름(event_scenes, description)과 캐릭터 그림(sprites, 표정과 차림마다).
        5 까지의 판은 캐릭터 그림이 없다
+  - 7: 물건의 giftable(상대가 줄 수 있다)과 호감도의 model_step(모델이 답 하나에 바꿀 수 있는 크기, #676).
+       6 까지의 판은 줄 수 있는 물건이 없고 model_step 이 AFFECTION_MODEL_STEP_DEFAULT 다
 """
 
 import uuid
@@ -26,6 +28,8 @@ from app.ratings import Rating
 
 # 시작 시각을 적지 않은 시작 상황(형식 3 까지의 판)은 정오에 시작한다(asset 서버의 START_HOUR_DEFAULT 와 같다)
 START_HOUR_DEFAULT = 12
+# model_step 을 적지 않은 호감도(형식 6 까지의 판)의 크기(asset 서버의 AFFECTION_MODEL_STEP_DEFAULT 와 같다)
+AFFECTION_MODEL_STEP_DEFAULT = 3
 
 
 class StartDocument(BaseModel):
@@ -67,7 +71,7 @@ class PathDocument(BaseModel):
 class ItemDocument(BaseModel):
     """
     물건 하나. kind 는 thing 이나 clothing(건네면 상대의 차림에 들어간다)이다. 모르는 종류도 받아 둔다.
-    consumable 이면 쓰면 하나 없어진다.
+    consumable 이면 쓰면 하나 없어진다. giftable 이면 상대가 사용자에게 줄 수 있다(모델이 제안한다, #676).
     """
 
     model_config = ConfigDict(extra='ignore')
@@ -77,6 +81,7 @@ class ItemDocument(BaseModel):
     description: str
     kind: str
     consumable: bool = False
+    giftable: bool = False
     image_id: uuid.UUID | None
 
 
@@ -122,7 +127,10 @@ class AffectionRuleDocument(BaseModel):
 
 
 class AffectionDocument(BaseModel):
-    """캐릭터의 호감도. display 는 number(숫자와 게이지)나 stage(단계 이름과 게이지, 숫자를 내려보내지 않는다)다."""
+    """
+    캐릭터의 호감도. display 는 number(숫자와 게이지)나 stage(단계 이름과 게이지, 숫자를 내려보내지 않는다)다.
+    model_step 은 모델이 답 하나에 바꿀 수 있는 크기다(0 이면 바꾸지 못한다, #676).
+    """
 
     model_config = ConfigDict(extra='ignore')
 
@@ -130,6 +138,7 @@ class AffectionDocument(BaseModel):
     start: int
     stages: list[StageDocument]
     rules: list[AffectionRuleDocument] = []
+    model_step: int = AFFECTION_MODEL_STEP_DEFAULT
 
 
 class SceneConditionDocument(BaseModel):

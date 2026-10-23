@@ -28,6 +28,7 @@ from app.assets.client import (
     character_path,
     persona_path,
 )
+from app.assets.schemas import AFFECTION_MODEL_STEP_DEFAULT
 from tests.assets import make_character, make_persona
 
 SECRET = 'test-asset-secret-0123456789abcdef'
@@ -113,7 +114,9 @@ async def test_the_map_and_items_of_a_format_two_version_are_kept():
     kept = fetched.document.model_dump(mode='json')
     # 시간대 배경은 형식 4 에서 더했다. 앞 형식의 장소에는 없다(빈 것으로 읽는다)
     places = [{**place, 'backgrounds': {}} for place in WORLD['places']]
-    assert {name: kept[name] for name in WORLD} == {**WORLD, 'places': places}
+    # 줄 수 있는지(giftable)는 형식 7 에서 더했다. 앞 형식의 물건은 줄 수 없다
+    items = [{**item, 'giftable': False} for item in WORLD['items']]
+    assert {name: kept[name] for name in WORLD} == {**WORLD, 'places': places, 'items': items}
 
 
 async def test_the_affection_of_a_format_three_version_is_kept():
@@ -129,8 +132,23 @@ async def test_the_affection_of_a_format_three_version_is_kept():
 
     fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
 
-    assert fetched.document.model_dump(mode='json')['affection'] == affection
+    # 모델이 바꾸는 크기(model_step)는 형식 7 에서 더했다. 앞 형식은 기본값이다
+    kept = fetched.document.model_dump(mode='json')['affection']
+    assert kept == {**affection, 'model_step': AFFECTION_MODEL_STEP_DEFAULT}
     assert make_character().document.affection is None
+
+
+async def test_the_gifts_and_model_step_of_a_format_seven_version_are_kept():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    items = [{**WORLD['items'][0], 'giftable': True}]
+    affection = {'display': 'number', 'start': 0, 'stages': [{'name': '보통', 'at': 0}], 'rules': [], 'model_step': 7}
+    body['document'] |= {'format': 7, **WORLD, 'items': items, 'affection': affection}
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    kept = fetched.document.model_dump(mode='json')
+    assert (kept['items'][0]['giftable'], kept['affection']['model_step']) == (True, 7)
 
 
 async def test_the_start_hours_and_backgrounds_of_a_format_four_version_are_kept():
