@@ -138,6 +138,14 @@
             "title": "Age",
             "type": "string"
           },
+          "event_scenes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EventSceneDocument"
+            },
+            "title": "Event Scenes",
+            "type": "array"
+          },
           "format": {
             "title": "Format",
             "type": "integer"
@@ -149,14 +157,6 @@
           "greeting": {
             "title": "Greeting",
             "type": "string"
-          },
-          "illustrations": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/IllustrationDocument"
-            },
-            "title": "Illustrations",
-            "type": "array"
           },
           "image_id": {
             "anyOf": [
@@ -208,6 +208,14 @@
           "speech_examples": {
             "title": "Speech Examples",
             "type": "string"
+          },
+          "sprites": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SpriteDocument"
+            },
+            "title": "Sprites",
+            "type": "array"
           },
           "start_items": {
             "default": [],
@@ -599,6 +607,45 @@
         "title": "ConversationSummary",
         "type": "object"
       },
+      "EventSceneDocument": {
+        "description": "이벤트 씬 하나. collectible 이면 해금 대상이다. description 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.",
+        "properties": {
+          "collectible": {
+            "default": true,
+            "title": "Collectible",
+            "type": "boolean"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "when": {
+            "$ref": "#/components/schemas/SceneConditionDocument"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "image_id",
+          "when"
+        ],
+        "title": "EventSceneDocument",
+        "type": "object"
+      },
       "GiveAction": {
         "additionalProperties": false,
         "description": "소지품의 물건을 상대에게 건넨다. 하나 줄고, 옷이면 상대가 입는다.\nwords 는 덧붙이는 한마디다(없으면 행동만). 행동과 말을 한 턴에 붙이고 반응을 한 번 받는다.",
@@ -690,64 +737,6 @@
           "count"
         ],
         "title": "HoldingOut",
-        "type": "object"
-      },
-      "IllustrationConditionDocument": {
-        "description": "일러스트가 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.\n모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).",
-        "properties": {
-          "kind": {
-            "title": "Kind",
-            "type": "string"
-          },
-          "target": {
-            "title": "Target",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "target"
-        ],
-        "title": "IllustrationConditionDocument",
-        "type": "object"
-      },
-      "IllustrationDocument": {
-        "description": "일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.",
-        "properties": {
-          "collectible": {
-            "default": true,
-            "title": "Collectible",
-            "type": "boolean"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "image_id": {
-            "format": "uuid",
-            "title": "Image Id",
-            "type": "string"
-          },
-          "scene": {
-            "default": "",
-            "title": "Scene",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "when": {
-            "$ref": "#/components/schemas/IllustrationConditionDocument"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "image_id",
-          "when"
-        ],
-        "title": "IllustrationDocument",
         "type": "object"
       },
       "ItemDocument": {
@@ -1392,6 +1381,61 @@
         ],
         "title": "Rating",
         "type": "string"
+      },
+      "SceneConditionDocument": {
+        "description": "이벤트 씬이 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.\n모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "SceneConditionDocument",
+        "type": "object"
+      },
+      "SpriteDocument": {
+        "description": "캐릭터 그림 하나(배경이 투명한 서 있는 그림). expression 은 표정(빈 글이면 기본),\noutfit 은 이 그림의 차림인 옷(물건의 id, 없으면 처음 차림)이다.",
+        "properties": {
+          "expression": {
+            "default": "",
+            "title": "Expression",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "outfit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outfit"
+          }
+        },
+        "required": [
+          "id",
+          "image_id"
+        ],
+        "title": "SpriteDocument",
+        "type": "object"
       },
       "StageDocument": {
         "description": "호감도의 단계 하나. at 이상이면 이 단계다.",

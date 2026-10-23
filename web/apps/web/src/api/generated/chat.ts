@@ -472,17 +472,17 @@ export interface components {
             affection?: components["schemas"]["AffectionDocument"] | null;
             /** Age */
             age: string;
+            /**
+             * Event Scenes
+             * @default []
+             */
+            event_scenes: components["schemas"]["EventSceneDocument"][];
             /** Format */
             format: number;
             /** Gender */
             gender: string;
             /** Greeting */
             greeting: string;
-            /**
-             * Illustrations
-             * @default []
-             */
-            illustrations: components["schemas"]["IllustrationDocument"][];
             /** Image Id */
             image_id: string | null;
             /** Intro Html */
@@ -507,6 +507,11 @@ export interface components {
             rating: components["schemas"]["Rating"];
             /** Speech Examples */
             speech_examples: string;
+            /**
+             * Sprites
+             * @default []
+             */
+            sprites: components["schemas"]["SpriteDocument"][];
             /**
              * Start Items
              * @default []
@@ -685,6 +690,32 @@ export interface components {
             updated_at: string;
         };
         /**
+         * EventSceneDocument
+         * @description 이벤트 씬 하나. collectible 이면 해금 대상이다. description 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
+         */
+        EventSceneDocument: {
+            /**
+             * Collectible
+             * @default true
+             */
+            collectible: boolean;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /** Title */
+            title: string;
+            when: components["schemas"]["SceneConditionDocument"];
+        };
+        /**
          * GiveAction
          * @description 소지품의 물건을 상대에게 건넨다. 하나 줄고, 옷이면 상대가 입는다.
          *     words 는 덧붙이는 한마디다(없으면 행동만). 행동과 말을 한 턴에 붙이고 반응을 한 번 받는다.
@@ -725,43 +756,6 @@ export interface components {
             count: number;
             /** Item */
             item: string;
-        };
-        /**
-         * IllustrationConditionDocument
-         * @description 일러스트가 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.
-         *     모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).
-         */
-        IllustrationConditionDocument: {
-            /** Kind */
-            kind: string;
-            /** Target */
-            target: string;
-        };
-        /**
-         * IllustrationDocument
-         * @description 일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
-         */
-        IllustrationDocument: {
-            /**
-             * Collectible
-             * @default true
-             */
-            collectible: boolean;
-            /** Id */
-            id: string;
-            /**
-             * Image Id
-             * Format: uuid
-             */
-            image_id: string;
-            /**
-             * Scene
-             * @default
-             */
-            scene: string;
-            /** Title */
-            title: string;
-            when: components["schemas"]["IllustrationConditionDocument"];
         };
         /**
          * ItemDocument
@@ -1067,6 +1061,38 @@ export interface components {
          * @enum {string}
          */
         Rating: "all" | "adult";
+        /**
+         * SceneConditionDocument
+         * @description 이벤트 씬이 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.
+         *     모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).
+         */
+        SceneConditionDocument: {
+            /** Kind */
+            kind: string;
+            /** Target */
+            target: string;
+        };
+        /**
+         * SpriteDocument
+         * @description 캐릭터 그림 하나(배경이 투명한 서 있는 그림). expression 은 표정(빈 글이면 기본),
+         *     outfit 은 이 그림의 차림인 옷(물건의 id, 없으면 처음 차림)이다.
+         */
+        SpriteDocument: {
+            /**
+             * Expression
+             * @default
+             */
+            expression: string;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /** Outfit */
+            outfit?: string | null;
+        };
         /**
          * StageDocument
          * @description 호감도의 단계 하나. at 이상이면 이 단계다.
