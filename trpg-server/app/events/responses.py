@@ -135,6 +135,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     # 캐릭터의 위치는 공개다. 아는 장소만 적히므로 숨긴 장소는 새지 않는다
     # 업혀 갔으면 업은 사람(carried_by)이 더 있다(#367)
     # 판의 사건이 옮겼으면 그 사건 항목(happening)이 더 있다
+    # 지닌 열쇠로 잠긴 문을 열고 갔으면 unlocked 가 더 있다(#281). 문이 열린 것은 맵에 보이므로 공개다
     EventType.CHARACTER_MOVED: (
         'round',
         'user_id',
@@ -144,6 +145,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'travel_minutes',
         'carried_by',
         'happening',
+        'unlocked',
     ),
     # 판의 사건은 공개다. 일어난 것과 옮긴 것만 적는다. 조건은 적지 않는다(아직 일어나지 않은 사건이 드러나지 않게)
     EventType.HAPPENING_OCCURRED: ('round', 'entry_id', 'name', 'moves'),

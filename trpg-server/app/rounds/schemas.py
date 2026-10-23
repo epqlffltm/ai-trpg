@@ -424,19 +424,41 @@ class CarryOut(BaseModel):
     reason: str | None
 
 
+class CrossOut(BaseModel):
+    """길을 넘는 판정(#281). 판에 적힌 능력과 난이도로 엔진이 굴렸다. 굴림은 공개다."""
+
+    # 무엇으로 굴렸는가. 룰북의 능력치와 난이도의 이름표다. 판에 난이도를 비웠으면 규칙의 기본 난이도다
+    ability: str
+    difficulty: str
+    roll: int
+    modifier: int
+    total: int
+    target: int
+    success: bool
+    # 입은 부상이 이 판정에 준 것. 없었으면 None 이다
+    hindrance: HindranceOut | None = None
+
+
 class MoveOut(BaseModel):
-    """한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 판정이 없다."""
+    """한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 넘기 판정(#281)이 있는 길이 아니면 판정이 없다."""
 
     user_id: uuid.UUID
     character_name: str
     # 차례가 왔을 때 서 있던 곳과 가려던 곳. 서 있던 곳이 없으면(맵 밖) None 이다
     from_: PlaceRefOut | None = Field(alias='from')
     to: PlaceRefOut
-    # 갔는가. 못 갔으면 reason 이 있다: not_adjacent(그사이 다른 곳으로 옮겨져 이어진 길이 없었다)
+    # 갔는가. 못 갔으면 reason 이 있다: not_adjacent(그사이 다른 곳으로 옮겨져 이어진 길이 없었다),
+    # locked(잠겨 있었고 그 열쇠가 없었다, #281), cross_failed(길을 넘는 판정에 실패했다, #281)
     moved: bool
     reason: str | None
     # 지나간 길에 걸린 게임 안의 시간(분). 다음 라운드가 열릴 때 적어도 그만큼 흐른다. 안 걸렸거나 못 갔으면 None 이다
     travel_minutes: int | None = None
+    # 지닌 열쇠로 잠긴 문을 열었는가(#281). 연 문은 열린 채다
+    unlocked: bool = False
+    # 길을 넘는 판정(#281). 넘기 판정이 없는 길이거나 그 앞에서 막혔으면 None 이다
+    cross: CrossOut | None = None
+    # 넘기에 실패해서 다친 것(#281). 판에 실패의 피해를 적지 않았으면 None 이다
+    effect: EffectOut | None = None
     # 쓰러진 동료를 업고 가려 했으면 그 결과. 아니면 None 이다
     carry: CarryOut | None = None
 

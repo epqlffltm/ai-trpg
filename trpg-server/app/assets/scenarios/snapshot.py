@@ -113,7 +113,9 @@ from app.engine.sheet import Sheet
 #  50: 인물의 자리(npc_places: 인물이 처음 있는 맵의 장소)와 인물을 옮기는 사건의 효과(happenings[].effects[] 의
 #      kind move_npc 와 그 인물 npc)가 있다(#282)
 #  51: 장소마다의 커버(covers: 장소, 커버의 값)가 있다(#276 의 커버 세이브)
-SNAPSHOT_FORMAT = 51
+#  52: 길의 조건이 있다(#281). 지날 때마다 굴리는 넘기 판정(routes[].cross: 능력, 난이도, 실패의 피해)과
+#      열쇠의 자물쇠(routes[].lock: 열쇠, 처음에 잠겼는가)
+SNAPSHOT_FORMAT = 52
 
 
 class EntrySnapshot(BaseModel):
@@ -297,6 +299,21 @@ class FindSnapshot(BaseModel):
     difficulty: str | None = None
 
 
+class CrossSnapshot(BaseModel):
+    """길을 넘는 판정(#281). 판 안의 룰북의 능력치, 난이도, 실패했을 때 다치는 양의 등급의 이름이다."""
+
+    ability: str
+    difficulty: str | None = None
+    harm: str | None = None
+
+
+class LockSnapshot(BaseModel):
+    """길의 자물쇠(#281). 여는 열쇠(판 안의 물건 항목)와 시작할 때 잠겨 있는가."""
+
+    key: uuid.UUID
+    locked: bool = True
+
+
 class RouteSnapshot(BaseModel):
     """
     길 하나. 판 안의 로어북 장소 항목 둘을 잇는다.
@@ -304,6 +321,7 @@ class RouteSnapshot(BaseModel):
     two_way 가 아니면 from_place 에서 to_place 로만 간다. visibility 는 플레이어가 길을 언제 아는가다.
     숨긴 길은 찾는 판정(find)으로 드러난다. travel_minutes 는 한 칸 가는 데 걸리는 게임 안의 시간(분)이다.
     비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.
+    cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠의 자물쇠다(#281). 형식 52 보다 옛 판은 둘 다 없다.
     """
 
     from_place: uuid.UUID
@@ -312,6 +330,8 @@ class RouteSnapshot(BaseModel):
     visibility: RouteVisibility = RouteVisibility.OPEN
     find: FindSnapshot | None = None
     travel_minutes: int | None = None
+    cross: CrossSnapshot | None = None
+    lock: LockSnapshot | None = None
 
 
 class PregenSnapshot(BaseModel):
@@ -598,6 +618,21 @@ class Snapshot(BaseModel):
         return self
 
     @model_validator(mode='after')
+    def require_route_keys(self) -> 'Snapshot':
+        """
+        길의 자물쇠마다 열쇠가 판 안의 물건 항목이고, 열쇠 하나가 자물쇠 하나만 여는지 본다(#281). 아니면 거부한다.
+
+        게시할 때 이미 막는다(item_not_item, route_key_repeated). 테이블은 열쇠로 그 길 하나를 찾는다.
+        """
+        items = {entry.id for entry in item_entries(self)}
+        keys = route_keys(self)
+        if any(key not in items for key in keys):
+            raise ValueError('물건 항목이 아닌 것을 열쇠로 적은 자물쇠가 있습니다.')
+        if len(set(keys)) != len(keys):
+            raise ValueError('열쇠 하나가 두 자물쇠를 엽니다.')
+        return self
+
+    @model_validator(mode='after')
     def require_fitting_wear(self) -> 'Snapshot':
         """
         시작할 때의 착용이 맞는지 본다(#276). 시작 소지품만으로도, 프리젠마다 그 소지품을 더해서도 본다.
@@ -786,6 +821,11 @@ def npc_place_of(snapshot: Snapshot, entry_id: uuid.UUID) -> uuid.UUID | None:
 def cover_at(snapshot: Snapshot, place_id: uuid.UUID | None) -> int:
     """그 장소의 커버. 커버가 없거나 장소가 없으면(맵에 서 있지 않다) 0 이다."""
     return next((rule.cover for rule in snapshot.covers if rule.place_id == place_id), 0)
+
+
+def route_keys(snapshot: Snapshot) -> list[uuid.UUID]:
+    """길의 자물쇠마다의 열쇠. 판의 길 순서다(#281)."""
+    return [route.lock.key for route in snapshot.routes if route.lock is not None]
 
 
 def has_map(snapshot: Snapshot) -> bool:

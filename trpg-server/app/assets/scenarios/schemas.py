@@ -832,6 +832,42 @@ class FindCheck(BaseModel):
     difficulty: Key | None = None
 
 
+class CrossCheck(BaseModel):
+    """
+    길을 넘는 판정(#281). 절벽 오르기, 급류 헤엄치기처럼 지날 때마다 가는 사람이 굴린다.
+
+    ability 와 difficulty 는 찾는 판정(FindCheck)과 같다. 실패하면 가지 못하고 그 자리에 남는다.
+    harm 을 적었으면 실패한 사람이 그 양의 등급(룰북의 magnitudes 의 이름)만큼 다친다(떨어짐, 휩쓸림).
+    셋 다 룰북의 규칙에 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    ability: Key
+    difficulty: Key | None = None
+    harm: Key | None = None
+
+
+class RouteLock(BaseModel):
+    """
+    길의 자물쇠(#281). 잠겨 있으면 그 열쇠(key)를 지닌 사람만 지나간다. 지나가면서 연다.
+
+    열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.
+    locked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.
+    열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다. 열쇠는 쓰여도 없어지지 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    key: uuid.UUID
+    locked: bool = True
+
+    @field_serializer('key')
+    def key_as_text(self, key: uuid.UUID) -> str:
+        """열쇠의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(key)
+
+
 class RouteRule(BaseModel):
     """
     길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.
@@ -841,6 +877,8 @@ class RouteRule(BaseModel):
     숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.
     travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
     (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
+    길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠다. 둘 다 양쪽에서 같다.
+    둘 다 있으면 자물쇠를 먼저 보고 넘기 판정을 굴린다.
     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
     """
 
@@ -852,6 +890,8 @@ class RouteRule(BaseModel):
     visibility: RouteVisibility = RouteVisibility.OPEN
     find: FindCheck | None = None
     travel_minutes: int | None = Field(default=None, ge=1, le=ROUND_MAX_MINUTES)
+    cross: CrossCheck | None = None
+    lock: RouteLock | None = None
 
     @model_validator(mode='after')
     def leads_somewhere_else(self) -> 'RouteRule':
