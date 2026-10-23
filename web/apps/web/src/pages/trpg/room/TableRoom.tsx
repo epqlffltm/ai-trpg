@@ -3,7 +3,8 @@
 // 옆에는 방장의 운영(방장에게만), 앉은 사람(모집 중) 또는 상태 패널(B7, 진행 중과 끝남), 채팅.
 //
 // 스트림에서 받은 것:
-//   - 이벤트: 일어난 일에 더하고, 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다
+//   - 이벤트: 일어난 일에 더하고, 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다.
+//     서술 값이 걸리거나 잡히거나 풀리는 일이면 머리의 잔액(A6)도 다시 읽는다(wallet/walletView.ts 의 WALLET_EVENTS)
 //   - 채팅: 읽어 둔 채팅에 번호 차례로 합친다. 그 사람의 "입력 중"을 지운다
 //   - 입력 중: 5초 동안 보인다
 //   - 서술의 미리 보기: 조각을 이어 둔다(round/preview.ts). 서술이 끝났다는 이벤트가 오면 지운다
@@ -26,6 +27,8 @@ import { mergeEvents, mergeMessages } from './streamPolicy';
 import { useBatchedRefetch } from './useBatchedRefetch';
 import { useTableStream } from './useTableStream';
 import { useTypingPeople } from './useTypingPeople';
+import { WALLET_KEY } from '../../wallet/walletQueries';
+import { changesWallet } from '../../wallet/walletView';
 import { RoomStage } from './RoomStage';
 import { MyHpStrip } from './status/MyHpStrip';
 import { StatusPanel } from './status/StatusPanel';
@@ -65,6 +68,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
     onEvent: (event: TableEvent) => {
       if (ENDS_PREVIEW.has(event.type)) setPreview(null);
       appendEvent(event);
+      if (changesWallet(event.type)) void queryClient.invalidateQueries({ queryKey: WALLET_KEY });
       refetchSoon();
     },
     onChat: (message) => {
