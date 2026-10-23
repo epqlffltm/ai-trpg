@@ -452,14 +452,30 @@ class PlaceOut(BaseModel):
     cover: int = 0
 
 
+class RouteCrossOut(BaseModel):
+    """길을 넘는 판정(#281). 지날 때마다 가는 사람이 굴린다. 룰북의 능력치와 난이도의 이름표다."""
+
+    ability: str
+    # 판에 비워 뒀으면 규칙의 기본 난이도다
+    difficulty: str
+
+
 class RouteOut(BaseModel):
-    """아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다."""
+    """
+    아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.
+
+    길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지와 실패의 피해는 싣지 않는다.
+    """
 
     from_place: uuid.UUID
     to_place: uuid.UUID
     two_way: bool
     # 한 칸 가는 데 걸리는 게임 안의 시간(분). 비어 있으면 라운드의 걸음 안에서 간다
     travel_minutes: int | None = None
+    # 자물쇠가 지금 잠겨 있는가. 자물쇠가 없는 길이면 None 이다. 잠겨 있으면 그 열쇠를 지닌 사람만 지나가며 연다
+    locked: bool | None = None
+    # 길을 넘는 판정. 없으면 None 이다
+    cross: RouteCrossOut | None = None
 
 
 class MapOut(BaseModel):

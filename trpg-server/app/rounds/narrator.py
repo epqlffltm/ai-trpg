@@ -291,9 +291,12 @@ class PlaceNote:
 @dataclass(frozen=True)
 class TravelNote:
     """
-    맵에서 한 칸 간 결과(app/rounds/map_actions.py). 엔진이 정한 것이다. 판정이 없다.
+    맵에서 한 칸 간 결과(app/rounds/map_actions.py). 엔진이 정한 것이다.
 
-    moved 가 거짓이면 가지 못했다. 까닭은 reason 이다(not_adjacent: 차례가 왔을 때 이어진 길이 없었다).
+    moved 가 거짓이면 가지 못했다. 까닭은 reason 이다(not_adjacent: 차례가 왔을 때 이어진 길이 없었다,
+    locked: 문이 잠겨 있었고 열쇠가 없었다, cross_failed: 길을 넘는 판정에 실패했다, #281).
+    unlocked 는 지닌 열쇠로 잠긴 문을 열었는가, cross 는 길을 넘는 판정의 능력치의 이름이다(굴리지 않았으면 None).
+    hurt 는 넘기에 실패해 다쳤는가다. 얼마나 다쳤는지는 HP 의 줄이 말한다.
     from_place 는 차례가 왔을 때 서 있던 곳이다. 맵 밖에 있었으면 None 이다.
     travel_minutes 는 지나간 길에 걸린 게임 안의 시간(분)이다. 안 걸렸으면 None 이다.
     carried 는 업고 가려던 쓰러진 동료의 이름이다(#367). 업지 않았으면 None 이다.
@@ -307,6 +310,9 @@ class TravelNote:
     travel_minutes: int | None = None
     carried: str | None = None
     carry_reason: str | None = None
+    unlocked: bool = False
+    cross: str | None = None
+    hurt: bool = False
 
 
 @dataclass(frozen=True)

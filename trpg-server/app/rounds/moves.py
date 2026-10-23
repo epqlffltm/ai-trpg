@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from app.assets.bestiaries.models import MonsterKind
 from app.assets.models import NarrationStyle
 from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, place_entries, read_snapshot
+from app.engine.check import find_ability
 from app.engine.injury import find_injury
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
@@ -35,7 +36,7 @@ from app.rounds.state import (
     rules_of,
     trade_of,
 )
-from app.tables import equipment, injuries, items, money, place_items, places, sheets
+from app.tables import equipment, injuries, items, money, place_items, places, route_locks, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 from app.tables.npc_attitudes import attitude_word
@@ -116,7 +117,7 @@ def build_moves(
                 item_action=narration_request.to_item_action(declaration),
                 items=held_notes(catalog, member),
                 worn=worn_notes_of(snapshot, catalog, member),
-                travel=narration_request.to_travel(declaration),
+                travel=narration_request.to_travel(declaration, snapshot.rulebook.rules if snapshot else None),
                 search=narration_request.to_search(declaration),
                 take=narration_request.to_take(declaration),
                 put_down=narration_request.to_put_down(declaration),
@@ -176,6 +177,22 @@ def hidden_item_names(mapping: MapView, place_id: uuid.UUID) -> list[str]:
     return list(dict.fromkeys(names))
 
 
+def exit_name(mapping: MapView, here: uuid.UUID, there: uuid.UUID) -> str:
+    """
+    나가는 길 하나의 이름. 길의 조건이 있으면 이름 뒤에 붙인다(#281).
+
+    예: 광장, 탑(잠긴 문), 절벽 위(넘기: 근력). 무슨 열쇠인지와 실패의 피해는 적지 않는다.
+    """
+    route = places.route_between(mapping.known, here, there)
+    marks = []
+    if route_locks.is_locked(mapping.table, route):
+        marks.append('잠긴 문')
+    if route.cross is not None:
+        ability = find_ability(mapping.snapshot.rulebook.rules, route.cross.ability)
+        marks.append(f'넘기: {ability.name}')
+    return f'{mapping.names[there]}({", ".join(marks)})' if marks else mapping.names[there]
+
+
 def place_note(mapping: MapView | None, member: TableMember) -> PlaceNote | None:
     """
     이 사람의 지금 캐릭터가 서 있는 곳을 서술자에게 줄 모양으로. 맵에 서 있지 않으면 None.
@@ -191,7 +208,7 @@ def place_note(mapping: MapView | None, member: TableMember) -> PlaceNote | None
     hidden = places.hidden_routes_at(mapping.snapshot, mapping.knowledge, here)
     return PlaceNote(
         name=mapping.names[here],
-        exits=[mapping.names[place] for place in exits],
+        exits=[exit_name(mapping, here, place) for place in exits],
         hidden=[mapping.names[route.to_place if route.from_place == here else route.from_place] for route in hidden],
         items=item_notes_at(mapping, here),
         hidden_items=hidden_item_names(mapping, here),

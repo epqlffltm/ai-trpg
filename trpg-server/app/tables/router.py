@@ -15,7 +15,14 @@ from fastapi.responses import JSONResponse
 from app.assets.models import PLAYER_MADE_MODES, CharacterMode
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
-from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, cover_at, read_snapshot
+from app.assets.scenarios.snapshot import (
+    CrossSnapshot,
+    CurrencySnapshot,
+    RouteSnapshot,
+    Snapshot,
+    cover_at,
+    read_snapshot,
+)
 from app.auth.dependencies import CurrentUser
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import Change
@@ -26,6 +33,7 @@ from app.catalog import offers
 from app.catalog.offers import OfferedModel, StepPrice
 from app.catalog.steps import input_tokens, output_tokens
 from app.core.dice import Rolling
+from app.engine.check import find_difficulty
 from app.engine.ruleset import Ruleset
 from app.limits.routing import Limited
 from app.personas import saving
@@ -47,6 +55,7 @@ from app.tables import (
     replacements,
     repository,
     rolls,
+    route_locks,
     service,
     sheets,
     styles,
@@ -101,6 +110,7 @@ from app.tables.schemas import (
     ReferencesUpdate,
     RollOut,
     RoundTimeLimitUpdate,
+    RouteCrossOut,
     RouteOut,
     SheetOut,
     StepPriceOut,
@@ -325,16 +335,29 @@ def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, Catalo
             )
             for place in known.places
         ],
-        routes=[
-            RouteOut(
-                from_place=route.from_place,
-                to_place=route.to_place,
-                two_way=route.two_way,
-                travel_minutes=route.travel_minutes,
-            )
-            for route in known.routes
-        ],
+        routes=[to_route(table, snapshot, route) for route in known.routes],
     )
+
+
+def to_route(table: GameTable, snapshot: Snapshot, route: RouteSnapshot) -> RouteOut:
+    """아는 길 하나를 응답으로 바꾼다. 자물쇠는 이 테이블의 지금 상태, 넘기 판정은 판의 것이다(#281)."""
+    locked = route_locks.is_locked(table, route) if route.lock is not None else None
+    return RouteOut(
+        from_place=route.from_place,
+        to_place=route.to_place,
+        two_way=route.two_way,
+        travel_minutes=route.travel_minutes,
+        locked=locked,
+        cross=to_cross(snapshot, route.cross),
+    )
+
+
+def to_cross(snapshot: Snapshot, cross: CrossSnapshot | None) -> RouteCrossOut | None:
+    """길을 넘는 판정을 응답으로 바꾼다. 난이도를 비웠으면 규칙의 기본 난이도의 이름표다. 없으면 None."""
+    if cross is None:
+        return None
+    difficulty = find_difficulty(snapshot.rulebook.rules, cross.difficulty)
+    return RouteCrossOut(ability=cross.ability, difficulty=difficulty.key)
 
 
 def to_roll(roll: TableRoll | None) -> RollOut | None:
