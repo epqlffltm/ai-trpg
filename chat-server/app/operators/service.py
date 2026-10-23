@@ -8,6 +8,7 @@
     이미 처리한 신고면 409 already_handled 이고 기록도 없다
   - 신고의 목록은 대화의 글을 싣지 않는다. 그래서 보는 기록을 남기지 않는다
   - 사유와 본 내용은 로그에 싣지 않는다
+  - 처리하면 신고한 사람에게 알린다(app/notifications/outbox.py). 처리와 같은 트랜잭션에서 발송함에 적는다
 """
 
 import logging
@@ -17,6 +18,7 @@ from datetime import datetime
 from server_core.observability.context import current_ids
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.notifications import outbox
 from app.operators import repository
 from app.operators.models import ActionKind, OperatorAction, OperatorRead, ReadKind
 from app.reports import repository as reports
@@ -97,10 +99,12 @@ async def handle_report(
     session: AsyncSession, operator_id: uuid.UUID, report_id: uuid.UUID, outcome: ReportOutcome, reason: str, now
 ) -> None:
     """신고를 처리한다. 없으면 ReportNotFoundError, 이미 처리했으면 AlreadyHandledError."""
-    if not await reports.handle(session, report_id, operator_id, outcome, now):
+    handled = await reports.handle(session, report_id, operator_id, outcome, now)
+    if handled is None:
         await session.rollback()
         raise ReportNotFoundError if await reports.get(session, report_id) is None else AlreadyHandledError
     action = build_action(operator_id, action_kind(outcome), report_id, reason, now)
     repository.add_record(session, action)
+    outbox.tell_reporter(session, handled)
     await session.commit()
     log_record(ACT_OPERATION, operator_id, action.action, report_id)
