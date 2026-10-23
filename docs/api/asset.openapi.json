@@ -401,6 +401,18 @@
             "title": "Greeting",
             "type": "string"
           },
+          "hidden_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -557,6 +569,7 @@
           "lorebooks",
           "latest_version",
           "published_at",
+          "hidden_at",
           "created_at",
           "updated_at"
         ],
@@ -743,6 +756,18 @@
       "CharacterSummary": {
         "description": "내 캐릭터 목록의 한 줄.",
         "properties": {
+          "hidden_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -781,6 +806,7 @@
           "rating",
           "visibility",
           "latest_version",
+          "hidden_at",
           "updated_at"
         ],
         "title": "CharacterSummary",
@@ -1190,6 +1216,42 @@
           "status"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "HiddenInput": {
+        "additionalProperties": false,
+        "description": "숨기기(true)와 풀기(false). reason 은 감사 기록의 사유다.",
+        "properties": {
+          "hidden": {
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "reason": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hidden",
+          "reason"
+        ],
+        "title": "HiddenInput",
+        "type": "object"
+      },
+      "HiddenResult": {
+        "description": "조치한 뒤 캐릭터가 숨겨져 있는가.",
+        "properties": {
+          "hidden": {
+            "title": "Hidden",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hidden"
+        ],
+        "title": "HiddenResult",
         "type": "object"
       },
       "ImageDetail": {
@@ -1844,6 +1906,121 @@
           "user_id"
         ],
         "title": "MeResponse",
+        "type": "object"
+      },
+      "OpenReportGroupOut": {
+        "description": "열린 신고를 캐릭터마다 묶은 한 줄. reasons 는 사유마다의 수다. hidden 은 이미 숨긴 캐릭터인가.",
+        "properties": {
+          "character_id": {
+            "format": "uuid",
+            "title": "Character Id",
+            "type": "string"
+          },
+          "first_reported_at": {
+            "format": "date-time",
+            "title": "First Reported At",
+            "type": "string"
+          },
+          "hidden": {
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "last_reported_at": {
+            "format": "date-time",
+            "title": "Last Reported At",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_count": {
+            "title": "Open Count",
+            "type": "integer"
+          },
+          "reasons": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/ReportReason"
+            },
+            "title": "Reasons",
+            "type": "object"
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "hidden",
+          "open_count",
+          "reasons",
+          "first_reported_at",
+          "last_reported_at"
+        ],
+        "title": "OpenReportGroupOut",
+        "type": "object"
+      },
+      "OpenReportPage": {
+        "description": "열린 신고의 묶음 한 쪽과 전체 묶음의 수.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OpenReportGroupOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "OpenReportPage",
+        "type": "object"
+      },
+      "OutcomeInput": {
+        "additionalProperties": false,
+        "description": "열린 신고의 처리. actioned 면 캐릭터를 숨긴다. reason 은 감사 기록의 사유다.",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/ReportOutcome"
+          },
+          "reason": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "reason"
+        ],
+        "title": "OutcomeInput",
+        "type": "object"
+      },
+      "OutcomeResult": {
+        "description": "처리한 신고의 수와, 처리한 뒤 캐릭터가 숨겨져 있는가.",
+        "properties": {
+          "handled": {
+            "title": "Handled",
+            "type": "integer"
+          },
+          "hidden": {
+            "title": "Hidden",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "handled",
+          "hidden"
+        ],
+        "title": "OutcomeResult",
         "type": "object"
       },
       "Path": {
@@ -2572,6 +2749,128 @@
         "title": "RemovedKind",
         "type": "string"
       },
+      "ReportCreate": {
+        "additionalProperties": false,
+        "description": "신고할 때 받는 값. 사유가 other 면 설명이 있어야 한다(게시판의 신고와 같다).",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ReportReason"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ReportCreate",
+        "type": "object"
+      },
+      "ReportCreated": {
+        "description": "접수한 신고. 화면이 \"접수했습니다\"를 보인다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at"
+        ],
+        "title": "ReportCreated",
+        "type": "object"
+      },
+      "ReportOut": {
+        "description": "신고 하나(운영자가 본다). 신고한 사람의 id 는 싣지 않는다. 처리하는 데 필요하지 않다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "handled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ReportReason"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "reason",
+          "description",
+          "created_at",
+          "handled_at",
+          "outcome"
+        ],
+        "title": "ReportOut",
+        "type": "object"
+      },
+      "ReportOutcome": {
+        "description": "처리의 결과. 받아들였다(캐릭터를 숨겼다), 받아들이지 않았다.",
+        "enum": [
+          "actioned",
+          "dismissed"
+        ],
+        "title": "ReportOutcome",
+        "type": "string"
+      },
+      "ReportReason": {
+        "description": "신고의 사유. 게시판의 다섯에 minor(미성년 인물을 성적으로 다룬다)를 더했다(2026-10-23 유저 결정).\nminor 는 약관이 금지하는 선이라 운영자의 목록에서 가장 먼저 보인다.",
+        "enum": [
+          "spam",
+          "abuse",
+          "sexual",
+          "minor",
+          "illegal",
+          "other"
+        ],
+        "title": "ReportReason",
+        "type": "string"
+      },
       "SceneCondition": {
         "additionalProperties": false,
         "description": "이벤트 씬이 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다.",
@@ -3068,6 +3367,243 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/asset/admin/character-reports": {
+      "get": {
+        "description": "열린 신고를 캐릭터마다 묶은 목록. minor 가 있는 것이 먼저, 그다음 마지막 신고가 최근인 것부터다.",
+        "operationId": "list_open_reports_api_v1_asset_admin_character_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenReportPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Open Reports",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
+    "/api/v1/asset/admin/characters/{character_id}/hidden": {
+      "put": {
+        "description": "캐릭터를 숨기거나 푼다. 캐릭터가 없으면 404 다.",
+        "operationId": "change_hidden_api_v1_asset_admin_characters__character_id__hidden_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HiddenInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HiddenResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Hidden",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
+    "/api/v1/asset/admin/characters/{character_id}/reports": {
+      "get": {
+        "description": "그 캐릭터의 신고 전부(처리된 것까지). 최근 것부터. 캐릭터가 없으면 404 다.",
+        "operationId": "list_character_reports_api_v1_asset_admin_characters__character_id__reports_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReportOut"
+                  },
+                  "title": "Response List Character Reports Api V1 Asset Admin Characters  Character Id  Reports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Character Reports",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
+    "/api/v1/asset/admin/characters/{character_id}/reports/outcome": {
+      "put": {
+        "description": "그 캐릭터의 열린 신고를 처리한다. actioned 면 숨기고, dismissed 면 그대로 둔다. 캐릭터가 없으면 404 다.",
+        "operationId": "handle_reports_api_v1_asset_admin_characters__character_id__reports_outcome_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutcomeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutcomeResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Handle Reports",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
     "/api/v1/asset/characters": {
       "get": {
         "description": "자기 캐릭터의 목록. 최근에 고친 것부터다.",
@@ -3268,7 +3804,7 @@
         "x-audience": "user"
       },
       "patch": {
-        "description": "자기 캐릭터의 초안을 고친다. 보낸 칸만 바뀐다. 공개로 두는 것은 운영자만이다.",
+        "description": "자기 캐릭터의 초안을 고친다. 보낸 칸만 바뀐다. 공개로 두는 것은 운영자만이다(PUBLIC_FOR_EVERYONE 이면 누구나).",
         "operationId": "update_character_api_v1_asset_characters__character_id__patch",
         "parameters": [
           {
@@ -3728,6 +4264,66 @@
           }
         ],
         "summary": "Read Public",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/listings/characters/{character_id}/reports": {
+      "post": {
+        "description": "공개 캐릭터를 신고한다. 볼 수 없는 캐릭터는 404, 자기 것은 403, 이미 신고했으면 409 다.",
+        "operationId": "report_character_api_v1_asset_listings_characters__character_id__reports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Report Character",
         "tags": [
           "listings"
         ],
