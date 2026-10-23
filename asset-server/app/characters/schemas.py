@@ -24,6 +24,7 @@ from app.characters.models import (
     CHARACTER_GREETING_MAX_LENGTH,
     CHARACTER_MAX_EVENT_SCENES,
     CHARACTER_MAX_ITEMS,
+    CHARACTER_MAX_LOREBOOKS,
     CHARACTER_MAX_PATHS,
     CHARACTER_MAX_PLACES,
     CHARACTER_MAX_SPRITES,
@@ -341,7 +342,17 @@ def unique_sprites(sprites: list[Sprite]) -> list[Sprite]:
 
 Sprites = Annotated[list[Sprite], Field(max_length=CHARACTER_MAX_SPRITES), AfterValidator(unique_sprites)]
 
+
 # 지도와 물건, 이벤트 씬, 캐릭터 그림의 칸. DB 에 적을 때 dict 의 목록으로 바꾼다
+def reject_repeated_ids(ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    """같은 로어북을 두 번 가리키면 거부한다."""
+    if len(set(ids)) != len(ids):
+        raise ValueError('같은 로어북이 두 번 있습니다.')
+    return ids
+
+
+Lorebooks = Annotated[list[uuid.UUID], Field(max_length=CHARACTER_MAX_LOREBOOKS), AfterValidator(reject_repeated_ids)]
+
 WORLD_LISTS = ('places', 'paths', 'items', 'start_items', 'event_scenes', 'sprites')
 
 
@@ -386,6 +397,7 @@ class CharacterCreate(BaseModel):
     affection: Affection | None = None
     event_scenes: EventScenes = []
     sprites: Sprites = []
+    lorebooks: Lorebooks = []
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
@@ -428,6 +440,7 @@ class CharacterUpdate(BaseModel):
     affection: Affection | None = None
     event_scenes: EventScenes | None = None
     sprites: Sprites | None = None
+    lorebooks: Lorebooks | None = None
 
     @model_validator(mode='after')
     def null_only_for_the_image(self) -> Self:
@@ -477,6 +490,8 @@ class CharacterDetail(BaseModel):
     affection: Affection | None
     event_scenes: list[EventScene]
     sprites: list[Sprite]
+    # 가리키는 로어북들의 id(#672). 지운 로어북의 id 가 남아 있을 수 있다(다시 게시할 때 막힌다)
+    lorebooks: list[uuid.UUID]
     latest_version: int | None
     published_at: datetime | None
     created_at: datetime

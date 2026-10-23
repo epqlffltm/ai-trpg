@@ -17,6 +17,8 @@
     게시할 때는 소개 글의 그림까지 다시 본다(막는 것). 게시하면 판에 쓰인 그림을 적는다. 공개 캐릭터의 판에 쓰인 그림은
     그 판을 볼 수 있는 사람이 본다(app/images/service.py).
   - 나이와 성별로 거르거나 막지 않는다.
+  - 가리키는 로어북은 자기 로어북이어야 한다(#672). 붙일 때 보고(422 lorebook_not_owned), 게시할 때 그 마지막 판을
+    판에 복사한다. 지웠거나 게시한 적이 없는 로어북이면 게시를 막는다.
 """
 
 import uuid
@@ -26,18 +28,20 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters import repository
-from app.characters.documents import build_document
+from app.characters.documents import LorebookCopyDocument, build_document
 from app.characters.models import Character, CharacterVersion, Visibility
 from app.characters.publishing import (
     CharacterNotReadyError,
     Problem,
     cleaned_intro,
     find_problems,
+    lorebook_copies,
     used_image_ids,
 )
 from app.characters.schemas import CharacterCreate, CharacterUpdate
 from app.content.html import Removed
 from app.images import service as images
+from app.lorebooks import repository as lorebooks
 from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
 
 
@@ -47,6 +51,10 @@ class CharacterNotFoundError(Exception):
 
 class OperatorOnlyError(Exception):
     """운영자만 할 수 있는 일이다(1~2단계의 캐릭터 만들기, 공개로 두기). 403 이다."""
+
+
+class LorebookNotOwnedError(Exception):
+    """가리키려는 로어북 가운데 자기 로어북이 아닌(또는 없는) 것이 있다. 422 다."""
 
 
 def require_maker(viewer: AccessClaims, for_everyone: bool) -> None:
@@ -81,6 +89,12 @@ async def require_own_images(session: AsyncSession, owner_id: uuid.UUID, image_i
         await images.require_own_images(session, owner_id, image_ids)
 
 
+async def require_own_lorebooks(session: AsyncSession, owner_id: uuid.UUID, lorebook_ids: list[uuid.UUID]) -> None:
+    """가리키려는 로어북이 모두 자기 로어북이어야 한다. 아니면 LorebookNotOwnedError. 빈 목록이면 보지 않는다."""
+    if lorebook_ids and await lorebooks.owned_ids(session, owner_id, lorebook_ids) != set(lorebook_ids):
+        raise LorebookNotOwnedError
+
+
 async def get_mine(session: AsyncSession, owner_id: uuid.UUID, character_id: uuid.UUID) -> Character:
     """자기 캐릭터 하나. 없으면 CharacterNotFoundError."""
     character = await repository.find_owned(session, owner_id, character_id)
@@ -101,6 +115,7 @@ async def create_character(
     require_maker(viewer, for_everyone)
     require_rating(data.rating, allowed_ratings(viewer))
     await require_own_images(session, viewer.user_id, data.image_ids())
+    await require_own_lorebooks(session, viewer.user_id, data.lorebooks)
     character = build_character(viewer.user_id, data)
     repository.add(session, character)
     await session.commit()
@@ -117,6 +132,7 @@ async def update_character(
     if data.rating is not None:
         require_rating(data.rating, allowed_ratings(viewer))
     await require_own_images(session, viewer.user_id, data.image_ids())
+    await require_own_lorebooks(session, viewer.user_id, data.lorebooks or [])
     apply_changes(character, data.changes())
     await session.commit()
     await session.refresh(character)
@@ -136,7 +152,8 @@ async def check_publish(
     """지금 게시하면 막히는 이유와 소개에서 걸러질 것. 판을 만들지 않는다."""
     character = await get_mine(session, owner_id, character_id)
     cleaned = cleaned_intro(character)
-    problems = await publishing_problems(session, character, cleaned.html)
+    _, lorebook_problems = await lorebook_parts(session, character)
+    problems = await publishing_problems(session, character, cleaned.html) + lorebook_problems
     return [str(problem) for problem in problems], cleaned.removed
 
 
@@ -148,14 +165,28 @@ async def publishing_problems(session: AsyncSession, character: Character, intro
     return problems
 
 
+async def lorebook_parts(
+    session: AsyncSession, character: Character
+) -> tuple[list[LorebookCopyDocument], list[Problem]]:
+    """가리킨 로어북들의 마지막 판을 판에 넣을 모양으로, 그리고 막는 것들(지웠다, 게시한 적이 없다). 한 번의 쿼리다."""
+    if not character.lorebooks:
+        return [], []
+    found = await lorebooks.latest_owned(session, character.owner_id, character.lorebooks)
+    numbers = {lorebook_id: version.number if version else None for lorebook_id, (_, version) in found.items()}
+    documents = {lorebook_id: version.document for lorebook_id, (_, version) in found.items() if version}
+    return lorebook_copies(character.lorebooks, numbers, documents)
+
+
 def next_number(character: Character) -> int:
     """다음 판의 번호. 처음이면 1 이다."""
     return (character.latest_version or 0) + 1
 
 
-def build_version(character: Character, number: int, note: str, intro: str) -> CharacterVersion:
-    """초안과 거른 소개로 판을 만든다. 아직 저장하지 않는다."""
-    document = build_document(character, intro)
+def build_version(
+    character: Character, number: int, note: str, intro: str, copies: list[LorebookCopyDocument]
+) -> CharacterVersion:
+    """초안과 거른 소개, 복사할 로어북들로 판을 만든다. 아직 저장하지 않는다."""
+    document = build_document(character, intro, copies)
     return CharacterVersion(
         id=uuid.uuid4(),
         character_id=character.id,
@@ -173,16 +204,18 @@ async def publish(
     자기 캐릭터를 게시한다. 새 판과 소개에서 걸러 낸 것들을 돌려준다.
 
     막는 것이 있으면 CharacterNotReadyError(판을 만들지 않는다). 행을 잠그고 번호를 정한다.
+    가리킨 로어북들의 마지막 판을 판에 복사한다.
     판에 쓰인 그림을 판과 같은 트랜잭션에 적는다.
     """
     character = await repository.find_owned(session, owner_id, character_id, for_update=True)
     if character is None:
         raise CharacterNotFoundError
     cleaned = cleaned_intro(character)
-    problems = await publishing_problems(session, character, cleaned.html)
+    copies, lorebook_problems = await lorebook_parts(session, character)
+    problems = await publishing_problems(session, character, cleaned.html) + lorebook_problems
     if problems:
         raise CharacterNotReadyError(problems)
-    version = build_version(character, next_number(character), note, cleaned.html)
+    version = build_version(character, next_number(character), note, cleaned.html, copies)
     repository.add(session, version)
     await session.flush()
     images.record_uses(session, version.id, used_image_ids(character, cleaned.html))

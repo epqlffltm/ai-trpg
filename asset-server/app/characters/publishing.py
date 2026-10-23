@@ -14,7 +14,9 @@
 
 import enum
 import uuid
+from collections.abc import Mapping, Sequence
 
+from app.characters.documents import LorebookCopyDocument, lorebook_copy
 from app.characters.models import Character, ItemKind, SceneWhen, TriggerKind
 from app.content.html import Cleaned, clean_intro, image_ids
 
@@ -38,6 +40,10 @@ class Problem(enum.StrEnum):
     SCENE_TARGET_MISSING = 'scene_target_missing'
     # 캐릭터 그림의 차림이 없는 물건이나 옷이 아닌 물건을 가리킨다
     SPRITE_OUTFIT_MISSING = 'sprite_outfit_missing'
+    # 가리킨 로어북이 없다(지웠다)
+    LOREBOOK_MISSING = 'lorebook_missing'
+    # 가리킨 로어북을 게시한 적이 없다. 판에 복사할 것이 없다
+    LOREBOOK_UNPUBLISHED = 'lorebook_unpublished'
 
 
 class CharacterNotReadyError(Exception):
@@ -114,6 +120,26 @@ def find_problems(character: Character) -> list[Problem]:
     problems = [] if character.starts else [Problem.START_MISSING]
     problems += place_problems(character) + item_problems(character)
     return problems + affection_problems(character) + scene_problems(character) + sprite_problems(character)
+
+
+def lorebook_copies(
+    lorebook_ids: Sequence[uuid.UUID], found: Mapping[uuid.UUID, int | None], documents: Mapping[uuid.UUID, dict]
+) -> tuple[list[LorebookCopyDocument], list[Problem]]:
+    """
+    가리킨 로어북들(차례대로)을 판에 넣을 것과 막는 것들로 가른다.
+    found 는 자기 로어북의 마지막 판 번호(게시한 적이 없으면 None), documents 는 그 판의 문서다.
+    found 에 없으면 지운(또는 남의) 로어북이다.
+    """
+    copies: list[LorebookCopyDocument] = []
+    problems: list[Problem] = []
+    for lorebook_id in lorebook_ids:
+        if lorebook_id not in found:
+            problems.append(Problem.LOREBOOK_MISSING)
+        elif found[lorebook_id] is None:
+            problems.append(Problem.LOREBOOK_UNPUBLISHED)
+        else:
+            copies.append(lorebook_copy(lorebook_id, found[lorebook_id], documents[lorebook_id]))
+    return copies, list(dict.fromkeys(problems))
 
 
 def cleaned_intro(character: Character) -> Cleaned:

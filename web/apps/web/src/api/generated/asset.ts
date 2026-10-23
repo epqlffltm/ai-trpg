@@ -198,6 +198,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/lorebooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Lorebooks
+         * @description 자기 로어북의 목록. 최근에 고친 것부터다.
+         */
+        get: operations["list_lorebooks_api_v1_asset_lorebooks_get"];
+        put?: never;
+        /**
+         * Create Lorebook
+         * @description 로어북을 만든다. 1~2단계에는 운영자만 만든다(403 operator_only).
+         */
+        post: operations["create_lorebook_api_v1_asset_lorebooks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/lorebooks/{lorebook_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Lorebook
+         * @description 자기 로어북의 초안 하나.
+         */
+        get: operations["read_lorebook_api_v1_asset_lorebooks__lorebook_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Lorebook
+         * @description 자기 로어북을 지운다. 판도 함께 지워진다. 게시한 캐릭터의 판에 복사된 것은 남는다.
+         */
+        delete: operations["delete_lorebook_api_v1_asset_lorebooks__lorebook_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Lorebook
+         * @description 자기 로어북의 초안을 고친다. 보낸 칸만 바뀐다. 항목은 목록을 통째로 바꾼다.
+         */
+        patch: operations["update_lorebook_api_v1_asset_lorebooks__lorebook_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/asset/lorebooks/{lorebook_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Versions
+         * @description 자기 로어북의 판들. 최근 것부터다.
+         */
+        get: operations["list_versions_api_v1_asset_lorebooks__lorebook_id__versions_get"];
+        put?: never;
+        /**
+         * Publish
+         * @description 게시한다. 새 판을 돌려준다.
+         */
+        post: operations["publish_api_v1_asset_lorebooks__lorebook_id__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/lorebooks/{lorebook_id}/versions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Version
+         * @description 자기 로어북의 판 하나. 굳힌 문서까지다.
+         */
+        get: operations["read_version_api_v1_asset_lorebooks__lorebook_id__versions__number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/me": {
         parameters: {
             query?: never;
@@ -581,6 +677,11 @@ export interface components {
              * @default []
              */
             items: components["schemas"]["Item"][];
+            /**
+             * Lorebooks
+             * @default []
+             */
+            lorebooks: string[];
             /** Name */
             name: string;
             /**
@@ -655,6 +756,8 @@ export interface components {
             items: components["schemas"]["Item"][];
             /** Latest Version */
             latest_version: number | null;
+            /** Lorebooks */
+            lorebooks: string[];
             /** Name */
             name: string;
             /** Paths */
@@ -712,6 +815,11 @@ export interface components {
              * @default []
              */
             items: components["schemas"]["ItemDocument"][];
+            /**
+             * Lorebooks
+             * @default []
+             */
+            lorebooks: components["schemas"]["LorebookCopyDocument"][];
             /** Name */
             name: string;
             /**
@@ -798,6 +906,8 @@ export interface components {
             intro_html?: string | null;
             /** Items */
             items?: components["schemas"]["Item"][] | null;
+            /** Lorebooks */
+            lorebooks?: string[] | null;
             /** Name */
             name?: string | null;
             /** Paths */
@@ -981,6 +1091,228 @@ export interface components {
          * @enum {string}
          */
         ItemKind: "thing" | "clothing";
+        /**
+         * LoreEntry
+         * @description 항목 하나. 이름과 내용은 모델에 간다. constant 면 늘 간다.
+         */
+        LoreEntry: {
+            /**
+             * Constant
+             * @default false
+             */
+            constant: boolean;
+            /** Content */
+            content: string;
+            /** Id */
+            id: string;
+            /**
+             * Keywords
+             * @default []
+             */
+            keywords: string[];
+            /** @default other */
+            kind: components["schemas"]["LoreKind"];
+            /** Name */
+            name: string;
+        };
+        /**
+         * LoreEntryDocument
+         * @description 항목 하나. constant 면 늘 모델에 간다. 아니면 최근 대화에 키워드가 나올 때 간다(고르는 것은 chat 이다).
+         */
+        LoreEntryDocument: {
+            /** Constant */
+            constant: boolean;
+            /** Content */
+            content: string;
+            /** Id */
+            id: string;
+            /** Keywords */
+            keywords: string[];
+            kind: components["schemas"]["LoreKind"];
+            /** Name */
+            name: string;
+        };
+        /**
+         * LoreKind
+         * @description 로어북 항목의 종류. TRPG 의 LoreKind 와 같은 값이다. chat 은 지금 종류로 다르게 다루지 않는다(보이기만 한다).
+         *     인물, 장소, 물건, 세력, 종족, 전설(사실인지 애매한 이야기), 사건, 기타.
+         * @enum {string}
+         */
+        LoreKind: "person" | "place" | "item" | "faction" | "species" | "legend" | "event" | "other";
+        /**
+         * LorebookCopyDocument
+         * @description 캐릭터의 판에 복사한 로어북 하나(#672). id 와 version 은 로어북과 그 판의 번호다(어디서 왔는지 적어 둔다).
+         */
+        LorebookCopyDocument: {
+            /** Entries */
+            entries: components["schemas"]["LoreEntryDocument"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+        };
+        /**
+         * LorebookCreate
+         * @description 로어북을 만들 때 받는 값. 이름만 필수다.
+         */
+        LorebookCreate: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["LoreEntry"][];
+            /** Name */
+            name: string;
+        };
+        /**
+         * LorebookDetail
+         * @description 로어북의 초안 하나. 만든 사람만 본다. latest_version 은 마지막으로 게시한 판의 번호다(없으면 null).
+         */
+        LorebookDetail: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Entries */
+            entries: components["schemas"]["LoreEntry"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Latest Version */
+            latest_version: number | null;
+            /** Name */
+            name: string;
+            /** Published At */
+            published_at: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * LorebookDocument
+         * @description 판에 굳힌 로어북. 설명은 만든 사람이 보는 것이라 판에 넣지 않는다.
+         */
+        LorebookDocument: {
+            /** Entries */
+            entries: components["schemas"]["LoreEntryDocument"][];
+            /** Format */
+            format: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * LorebookPage
+         * @description 목록의 한 쪽과 전체 개수.
+         */
+        LorebookPage: {
+            /** Items */
+            items: components["schemas"]["LorebookSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * LorebookSummary
+         * @description 내 로어북 목록의 한 줄. entry_count 는 초안의 항목 수다.
+         */
+        LorebookSummary: {
+            /** Entry Count */
+            entry_count: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Latest Version */
+            latest_version: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * LorebookUpdate
+         * @description 로어북을 고칠 때 받는 값. 보낸 칸만 바꾼다. 게시한 판은 그대로다. null 은 받지 않는다.
+         */
+        LorebookUpdate: {
+            /** Description */
+            description?: string | null;
+            /** Entries */
+            entries?: components["schemas"]["LoreEntry"][] | null;
+            /** Name */
+            name?: string | null;
+        };
+        /**
+         * LorebookVersionCreate
+         * @description 게시할 때 받는 값. 이번 판에서 무엇이 바뀌었는지 적는다(비워도 된다).
+         */
+        LorebookVersionCreate: {
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
+         * LorebookVersionDetail
+         * @description 판 하나. 굳힌 문서까지 싣는다.
+         */
+        LorebookVersionDetail: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            document: components["schemas"]["LorebookDocument"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string;
+            /** Number */
+            number: number;
+        };
+        /**
+         * LorebookVersionSummary
+         * @description 판의 목록에 싣는 값. 굳힌 문서는 싣지 않는다.
+         */
+        LorebookVersionSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string;
+            /** Number */
+            number: number;
+        };
         /**
          * MeResponse
          * @description 토큰의 주인.
@@ -1989,6 +2321,264 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicCharacterDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_lorebooks_api_v1_asset_lorebooks_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_lorebook_api_v1_asset_lorebooks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LorebookCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_lorebook_api_v1_asset_lorebooks__lorebook_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lorebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_lorebook_api_v1_asset_lorebooks__lorebook_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lorebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_lorebook_api_v1_asset_lorebooks__lorebook_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lorebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LorebookUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_versions_api_v1_asset_lorebooks__lorebook_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lorebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookVersionSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_api_v1_asset_lorebooks__lorebook_id__versions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lorebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LorebookVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookVersionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_version_api_v1_asset_lorebooks__lorebook_id__versions__number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lorebook_id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookVersionDetail"];
                 };
             };
             /** @description Validation Error */
