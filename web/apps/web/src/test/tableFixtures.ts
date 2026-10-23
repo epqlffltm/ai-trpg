@@ -76,6 +76,7 @@ export function sheet(extra: Record<string, unknown> = {}) {
     dead: false,
     injuries: [],
     items: [],
+    worn: [],
     money: 0,
     place_id: null,
     ...extra,
