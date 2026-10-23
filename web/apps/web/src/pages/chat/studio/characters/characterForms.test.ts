@@ -103,7 +103,7 @@ describe('시작 상황', () => {
 
 describe('탭과 점검의 글', () => {
   it('주소의 탭', () => {
-    expect([tabOf('starts'), tabOf('map'), tabOf(null)]).toEqual(['starts', 'basics', 'basics']);
+    expect([tabOf('map'), tabOf('affection'), tabOf(null)]).toEqual(['map', 'basics', 'basics']);
     expect([isTab('intro'), isTab('affection')]).toEqual([true, false]);
   });
 

@@ -16,6 +16,8 @@ import { characterQuery } from './characterQueries';
 import { CHARACTER_TABS, sectionLabel, tabOf, type CharacterTab } from './characterTabs';
 import { CheckPanel } from './CheckPanel';
 import { IntroTab } from './IntroTab';
+import { ItemsTab } from './ItemsTab';
+import { MapTab } from './MapTab';
 import { PublishTab } from './PublishTab';
 import { SpeechTab } from './SpeechTab';
 import { StartsTab } from './StartsTab';
@@ -86,6 +88,8 @@ function panelOf(tab: CharacterTab, character: AssetCharacterDetail): ReactNode 
   if (tab === 'intro') return <IntroTab character={character} />;
   if (tab === 'speech') return <SpeechTab character={character} />;
   if (tab === 'starts') return <StartsTab character={character} />;
+  if (tab === 'map') return <MapTab character={character} />;
+  if (tab === 'items') return <ItemsTab character={character} />;
   return <PublishTab character={character} />;
 }
 

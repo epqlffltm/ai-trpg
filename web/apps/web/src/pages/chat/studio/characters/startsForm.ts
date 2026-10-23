@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/chat/studio/characters/startsForm.ts
 // 캐릭터의 시작 상황 목록의 입력. 순수한 함수다.
 // 5 개까지. 제목(30자)은 대화를 열 때 고르는 목록에, 상황(2,000자)은 모델에 간다. 시각(0~23시)은 1일째의 그 시각에서 시작한다.
-// 목록의 차례가 고르는 화면의 차례다. 시작 장소와 차림은 지도와 물건의 탭이 생기면 더한다(#673).
+// 목록의 차례가 고르는 화면의 차례다. 처음 있는 장소와 시작 소지품은 캐릭터에 하나씩이라 지도·물건 탭에 있다.
 
 import type { AssetCharacterStart, AssetCharacterUpdate } from '../../../../api/types';
 
