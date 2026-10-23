@@ -424,6 +424,7 @@ def to_story(snapshot: Snapshot) -> StoryContext:
     판의 복사본에서 이야기의 바탕을 꺼낸다. 서술자에게만 준다.
 
     룰북의 진행 지침과 세계관의 GM 메모가 들어간다. 이것들은 AI 가 읽으라고 쓴 글이다. 플레이어에게 내보내지 않는다.
+    규칙의 서술 지침(#616)도 함께 간다. 판에 굳은 규칙의 것이라 템플릿이 바뀌어도 그대로다.
     세계관이 없는 시나리오면 설정과 GM 메모는 빈 글이다. 로어북은 넣지 않는다(검색 단계의 일).
     """
     world = snapshot.world
@@ -433,6 +434,7 @@ def to_story(snapshot: Snapshot) -> StoryContext:
         guide=snapshot.rulebook.gm_guide,
         setting=world.setting if world else '',
         gm_notes=world.gm_notes if world else '',
+        narration=snapshot.rulebook.rules.narration,
     )
 
 
