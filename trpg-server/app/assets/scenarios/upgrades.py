@@ -813,6 +813,31 @@ def upgrade_from_47(document: dict) -> dict:
     return upgraded
 
 
+def armor_with_pierce(armor: dict | None) -> dict | None:
+    """방어 방식에 세이브의 목표값(없음)과 관통의 기준값(10)을 더한다. 방어 방식이 없으면 그대로 없다."""
+    if armor is None:
+        return None
+    return {**armor, 'save_target': None, 'pierce_base': 10}
+
+
+def upgrade_from_48(document: dict) -> dict:
+    """
+    형식 48 의 문서를 형식 49 로 올린다. 그때는 세이브와 관통이 없었다(#276).
+
+    방어 방식은 그대로이고(그때는 ac 와 reduce 뿐이다), 관통의 기준값은 그 뒤의 기본값(10)이다.
+    물건에는 관통력과 불굴 세이브가 없고, 몬스터에는 타고난 불굴 세이브가 없다.
+    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    rules = rulebook['rules']
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rules, 'armor': armor_with_pierce(rules['armor'])}}
+    upgraded['items'] = [{**rule, 'ap': None, 'ward': None} for rule in document.get('items', [])]
+    upgraded['monsters'] = [{**monster, 'ward': None} for monster in document.get('monsters', [])]
+    upgraded['format'] = 49
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -863,4 +888,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     45: upgrade_from_45,
     46: upgrade_from_46,
     47: upgrade_from_47,
+    48: upgrade_from_48,
 }

@@ -236,12 +236,14 @@ async def test_a_worn_weapon_adds_its_bonus(client: AsyncClient, app: FastAPI, m
 
     assert (outcome['modifier'], outcome['total'], outcome['target'], outcome['success']) == (2, 15, 15, True)
     assert outcome['blow'] == {
-        'weapon': {'entry_id': parts['sword']['id'], 'name': '장검', 'bonus': 2},
+        'weapon': {'entry_id': parts['sword']['id'], 'name': '장검', 'bonus': 2, 'ap': 0},
         'location': None,
         'location_name': None,
         'aimed': False,
         'defense': 0,
         'mode': 'ac',
+        'pierce': None,
+        'save': None,
     }
     assert outcome['monster_effect']['amount'] == 6
     assert dice.remaining == 0
@@ -513,7 +515,7 @@ async def test_the_gear_is_frozen_into_the_version(client: AsyncClient, me: dict
     _, response = await publish(client, me, parts, monster_sheets=[sheet])
 
     snapshot = response.json()['snapshot']
-    assert snapshot['rulebook']['rules']['armor'] == {'mode': 'ac'}
+    assert snapshot['rulebook']['rules']['armor'] == {'mode': 'ac', 'save_target': None, 'pierce_base': 10}
     (goblin,) = snapshot['monsters']
     assert goblin['equipment'][0]['wear'] == ['body']
     assert goblin['natural_armor'] == [{'slot': 'head', 'defense': 1}]
@@ -528,7 +530,7 @@ async def test_the_catalog_shows_the_numbers(client: AsyncClient, me: dict, sess
     numbers = {item['name']: (item['attack'], item['defense'], item['guard']) for item in detail['items']}
     assert numbers['장검'] == (2, None, None)
     assert numbers['방패'] == (None, None, 2)
-    assert detail['rules']['armor'] == {'mode': 'ac'}
+    assert detail['rules']['armor'] == {'mode': 'ac', 'save_target': None, 'pierce_base': 10}
 
 
 # --- DB 를 쓰지 않는 것 ---

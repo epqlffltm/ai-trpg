@@ -24,6 +24,7 @@ from dataclasses import asdict
 
 from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine import check as checks
+from app.engine.armor import Save
 from app.engine.check import Check
 from app.engine.dice import choose
 from app.engine.health import ChangeKind
@@ -104,20 +105,23 @@ def hit_outcome(judging: Judging, attack: AttackSnapshot, victim: TableMember, r
     판정 뒤의 일. 쓰러진 대상이면 죽음의 굴림 실패를 쌓고(downed_strike), 서 있는 대상이면 맞혔을 때 피해를 준다.
 
     차례의 outcome 에 적을 문서다. 몬스터와 싸우는 NPC 의 차례가 함께 쓴다.
-    맞은 부위의 방어가 피해를 깎는다(reduce). 장비가 든 것(blow)이 있으면 붙인다(#276).
+    맞은 부위의 방어가 피해를 깎는다(reduce). 맞혔고 세이브 방식이면 대상이 세이브를 굴리고, 막으면 맞지 않은 것과 같다
+    (쓰러진 대상에게도 죽음의 굴림 실패가 쌓이지 않는다). 장비가 든 것(blow)이 있으면 붙인다(#276).
     """
+    save = blows.roll_blow_save(judging, blow) if rolled.success else None
+    landed = rolled.success and not blows.is_saved(save)
     if sheets.is_downed_alive(victim):
-        struck = strike_downed(judging, victim, rolled.success)
+        struck = strike_downed(judging, victim, landed)
         outcome = {**attack_outcome(attack, victim, rolled, None), 'downed_strike': struck}
     else:
-        effect = change_sheet(judging, victim, ChangeKind.DAMAGE, attack.harm, blow.cut) if rolled.success else None
+        effect = change_sheet(judging, victim, ChangeKind.DAMAGE, attack.harm, blow.cut) if landed else None
         outcome = attack_outcome(attack, victim, rolled, effect)
-    return with_blow(judging, outcome, blow)
+    return with_blow(judging, outcome, blow, save)
 
 
-def with_blow(judging: Judging, outcome: dict, blow: Blow) -> dict:
-    """차례의 outcome 에 장비가 든 것(blow)을 붙인다. 무기도 방어 방식도 없으면 그대로다."""
-    document = blows.blow_document(judging.ruleset, blow)
+def with_blow(judging: Judging, outcome: dict, blow: Blow, save: Save | None = None) -> dict:
+    """차례의 outcome 에 장비가 든 것(blow)을 붙인다. 무기도 방어도 세이브도 없으면 그대로다."""
+    document = blows.blow_document(judging.ruleset, blow, save)
     return outcome if document is None else {**outcome, 'blow': document}
 
 

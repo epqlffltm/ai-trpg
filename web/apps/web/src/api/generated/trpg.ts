@@ -1888,16 +1888,26 @@ export interface components {
         /**
          * Armor
          * @description 방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다.
+         *
+         *     save_target 은 세이브의 목표값이다. save 방식에만 적는다.
+         *     pierce_base 는 관통의 기준값이다. 관통력(ap)이 있는 무기로 칠 때 쓴다. 방식을 가리지 않는다.
          */
         Armor: {
             mode: components["schemas"]["ArmorMode"];
+            /**
+             * Pierce Base
+             * @default 10
+             */
+            pierce_base: number;
+            /** Save Target */
+            save_target?: number | null;
         };
         /**
          * ArmorMode
          * @description 방어구가 공격을 막는 방식(#276). 룰북이 고른다.
          * @enum {string}
          */
-        ArmorMode: "ac" | "reduce";
+        ArmorMode: "ac" | "reduce" | "save";
         /**
          * ArrivalOut
          * @description 이 라운드에 새로 들어온 캐릭터 하나. 캐릭터가 죽은 플레이어가 들인 새 캐릭터다.
@@ -2016,6 +2026,8 @@ export interface components {
             location_name: string | null;
             /** Mode */
             mode: string | null;
+            pierce?: components["schemas"]["PierceOut"] | null;
+            save?: components["schemas"]["SaveOut"] | null;
             weapon: components["schemas"]["BlowWeaponOut"] | null;
         };
         /**
@@ -2023,6 +2035,11 @@ export interface components {
          * @description 타격에 쓴 무기(#276). 판의 물건과 그 이름과 판정의 보정에 더한 공격 보정이다.
          */
         BlowWeaponOut: {
+            /**
+             * Ap
+             * @default 0
+             */
+            ap: number;
             /** Bonus */
             bonus: number;
             /**
@@ -2219,6 +2236,8 @@ export interface components {
          *     kind 가 consumable 이면 쓰면 하나 줄어든다. heals 가 있으면 쓸 때 HP 를 그 등급(rules 의 magnitudes)만큼 되돌린다.
          */
         CatalogItemOut: {
+            /** Ap */
+            ap?: number | null;
             /** Attack */
             attack?: number | null;
             /** Defense */
@@ -2248,6 +2267,8 @@ export interface components {
              * @default []
              */
             slots: string[];
+            /** Ward */
+            ward?: number | null;
         };
         /**
          * ChangeKind
@@ -3409,8 +3430,12 @@ export interface components {
          *     attack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).
          *     defense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.
          *     어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.
+         *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
+         *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
          */
         "ItemRule-Input": {
+            /** Ap */
+            ap?: number | null;
             /** Attack */
             attack?: number | null;
             /** Defense */
@@ -3440,6 +3465,8 @@ export interface components {
              * @default []
              */
             slots: string[];
+            /** Ward */
+            ward?: number | null;
         };
         /**
          * ItemRule
@@ -3456,8 +3483,12 @@ export interface components {
          *     attack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).
          *     defense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.
          *     어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.
+         *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
+         *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
          */
         "ItemRule-Output": {
+            /** Ap */
+            ap?: number | null;
             /** Attack */
             attack?: number | null;
             /** Defense */
@@ -3484,6 +3515,8 @@ export interface components {
              * @default []
              */
             slots: string[];
+            /** Ward */
+            ward?: number | null;
         };
         /**
          * ItemRuleSnapshot
@@ -3495,6 +3528,8 @@ export interface components {
          *     slots 가 비어 있으면 착용하지 않는 물건이다.
          */
         ItemRuleSnapshot: {
+            /** Ap */
+            ap?: number | null;
             /** Attack */
             attack?: number | null;
             /** Defense */
@@ -3523,6 +3558,8 @@ export interface components {
              * @default []
              */
             slots: string[];
+            /** Ward */
+            ward?: number | null;
         };
         /**
          * ItemStack
@@ -4184,6 +4221,8 @@ export interface components {
              */
             natural_armor: components["schemas"]["NaturalArmor"][];
             sheet: components["schemas"]["Sheet"];
+            /** Ward */
+            ward?: number | null;
         };
         /**
          * MonsterSheet
@@ -4221,6 +4260,8 @@ export interface components {
              */
             natural_armor: components["schemas"]["NaturalArmor"][];
             sheet: components["schemas"]["Sheet"];
+            /** Ward */
+            ward?: number | null;
         };
         /**
          * MonsterSheetProposal
@@ -4283,6 +4324,8 @@ export interface components {
              * @default false
              */
             unique: boolean;
+            /** Ward */
+            ward?: number | null;
         };
         /**
          * MonsterUpdate
@@ -5043,6 +5086,20 @@ export interface components {
             description: string;
             /** Name */
             name: string;
+        };
+        /**
+         * PierceOut
+         * @description 관통 굴림(#276). 눈 + 관통력(ap)이 target(그 부위의 방어 + 룰북의 기준값) 이상이면 관통이다.
+         */
+        PierceOut: {
+            /** Ap */
+            ap: number;
+            /** Pierced */
+            pierced: boolean;
+            /** Roll */
+            roll: number;
+            /** Target */
+            target: number;
         };
         /**
          * PlaceItem
@@ -6243,8 +6300,11 @@ export interface components {
          * @description 룰북을 만들 때 받는 값. 제목만 필수다.
          *
          *     규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.
+         *     방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.
+         *     보내지 않으면 템플릿의 것이다.
          */
         RulebookCreate: {
+            armor?: components["schemas"]["Armor"] | null;
             /**
              * Description
              * @default
@@ -6312,9 +6372,11 @@ export interface components {
          * RulebookUpdate
          * @description 룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.
          *
-         *     규칙은 아직 고칠 수 없다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
+         *     규칙은 방어 규칙(armor)만 고칠 수 있다(#276). null 을 보내면 방어구가 막지 않는 규칙이 된다.
+         *     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
          */
         RulebookUpdate: {
+            armor?: components["schemas"]["Armor"] | null;
             /** Description */
             description?: string | null;
             /** Gm Guide */
@@ -6387,6 +6449,22 @@ export interface components {
             scenario_id: string;
             /** Version Number */
             version_number: number;
+        };
+        /**
+         * SaveOut
+         * @description 세이브 굴림(#276). kind 는 armor(그 부위의 방어) 또는 ward(불굴). 눈 + value 가 target 이상이면 막았다.
+         */
+        SaveOut: {
+            /** Kind */
+            kind: string;
+            /** Roll */
+            roll: number;
+            /** Saved */
+            saved: boolean;
+            /** Target */
+            target: number;
+            /** Value */
+            value: number;
         };
         /**
          * ScenarioCreate
@@ -6921,7 +6999,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 48
+             * @default 49
              */
             format: number;
             /**
