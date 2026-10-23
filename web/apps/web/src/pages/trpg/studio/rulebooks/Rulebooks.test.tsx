@@ -80,7 +80,7 @@ describe('룰북', () => {
     });
     renderApp('/me');
 
-    await userEvent.click(await screen.findByRole('link', { name: /재료 만들기/ }));
+    await userEvent.click(await screen.findByRole('link', { name: /재료와 시나리오 만들기/ }));
     await userEvent.click(await screen.findByRole('link', { name: '내 룰북' }));
     expect(await screen.findByText('아직 만든 룰북이 없습니다.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('link', { name: '첫 룰북 만들기' }));

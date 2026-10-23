@@ -1,12 +1,13 @@
 // web/apps/web/src/api/studio.ts
 // 제작 도구(B9)의 재료가 함께 쓰는 부르기. 재료마다 주소의 이름만 다르고 목록과 지우기의 모양이 같다.
+// 시나리오도 같은 주소의 모양이라 목록과 지우기를 함께 쓴다.
 // 모두 만든 사람 자신의 것만 읽고 쓴다. 남의 것은 있어도 404 다. 쓰는 시나리오가 있으면 지우지 못한다(409 used_by).
 
 import { apiRequest } from './http';
 import type { AssetPage } from './types';
 
 /** 재료의 종류. 게임 서버의 주소 /api/v1/game/<종류> 다 */
-export type StudioKind = 'rulebooks' | 'worlds' | 'lorebooks' | 'bestiaries';
+export type StudioKind = 'rulebooks' | 'worlds' | 'lorebooks' | 'bestiaries' | 'scenarios';
 
 export function assetsPath(kind: StudioKind): string {
   return `/api/v1/game/${kind}`;
