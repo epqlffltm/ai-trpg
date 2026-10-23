@@ -573,7 +573,7 @@ class Ruleset(Part):
     """
     규칙 한 벌.
 
-    template 은 어느 템플릿에서 왔는지를 적어 둔 것이다(app/engine/templates.py). 엔진은 이 값을 보지 않는다.
+    template 은 어느 템플릿에서 왔는지를 적어 둔 것이다(app/engine/templates/). 엔진은 이 값을 보지 않는다.
     """
 
     template: Key

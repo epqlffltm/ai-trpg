@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_24
 from app.engine.ruleset import Ruleset
-from app.engine.templates import DAY, SRD5
+from app.engine.templates import SRD5
 from tests.signing import SigningKey
 from tests.test_injuries import make_format_13
 from tests.test_npc_actions import bearer, start_table
@@ -31,6 +31,9 @@ from tests.test_ruleset import load_migration
 from tests.test_treatment import ME
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
+
+# 하루(분). 템플릿의 부상과 치료의 기간을 적는 단위다
+DAY = 24 * 60
 
 
 @pytest.fixture

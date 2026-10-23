@@ -72,6 +72,7 @@ async def create_rulebook(client: AsyncClient, headers: dict[str, str], **fields
         ('GET', '/11111111-2222-4333-8444-555555555555'),
         ('PATCH', '/11111111-2222-4333-8444-555555555555'),
         ('DELETE', '/11111111-2222-4333-8444-555555555555'),
+        ('GET', '/templates'),
     ],
 )
 async def test_every_address_requires_login(client: AsyncClient, method: str, path: str):

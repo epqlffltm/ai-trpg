@@ -65,6 +65,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'injur',
         'treatment',
         'rest',
+        'template',
     ),
     # 라운드: 열고 닫기, 선언과 판정의 흐름, 시간 제한, 복구, 라운드의 값
     'rounds': (

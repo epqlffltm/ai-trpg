@@ -1,0 +1,229 @@
+# trpg-server/tests/test_templates.py
+
+"""
+템플릿(app/engine/templates/, #615)을 검증한다. DB 도 HTTP 도 쓰지 않는다.
+
+보는 것.
+  - 고를 수 있는 템플릿마다 파일이 있고, 규칙의 모양으로 읽힌다. 틀린 파일은 읽지 않는다.
+  - 이미 내놓은 템플릿의 값은 그대로다(해시). 옛 판을 읽을 때 그 값을 쓴다.
+  - 템플릿마다 정해진 눈으로 판정이 성공하고, 한 눈 모자라면 실패한다. 가장 큰 눈과 가장 작은 눈도 본다.
+  - 이름에 상용 룰의 이름이 없다. 공개 문서를 본떴으면 출처 표시가 있다.
+"""
+
+import hashlib
+import json
+from pathlib import Path
+
+import pytest
+
+from app.engine import templates
+from app.engine.check import find_difficulty, modifier_of, resolve
+from app.engine.dice import ScriptedDice
+from app.engine.ruleset import Ruleset
+from app.engine.templates import (
+    FORMAT,
+    SRD5,
+    TEMPLATES,
+    Template,
+    TemplateFile,
+    TemplateFileError,
+    file_problem,
+    read_template,
+)
+
+# 내놓은 템플릿의 규칙의 해시. 값을 고치면 이 테스트가 깨진다.
+# 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
+# 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
+RELEASED = {
+    Template.SRD5: '9f83745c16ede0d830b47f4a9eb65e789f61be1cd471d5d76342ce114bc96384',
+    Template.HORROR: 'f01fe773025fc11769c5989e3d92bf886addbc6d470742d36578bf7820cafe33',
+    Template.LIGHT: '562d3014c5dee777f7d3436319cffa81b0fe39c244be18308ee0f25bd7c9b443',
+}
+
+# 템플릿의 이름과 소개에 쓰지 않는 상용 룰의 이름
+COMMERCIAL_NAMES = ('d&d', 'dungeons', '던전 앤 드래곤', '던전즈', 'pathfinder', '패스파인더', 'cthulhu', '크툴루')
+
+
+def fingerprint(rules: Ruleset) -> str:
+    """규칙의 값을 정해진 차례의 JSON 으로 적어 해시를 낸다."""
+    canonical = json.dumps(rules.model_dump(mode='json'), sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def middle_score(rules: Ruleset) -> int:
+    """점수의 범위 가운데의 점수."""
+    return (rules.score_min + rules.score_max) // 2
+
+
+# --- 파일 ---
+
+
+def test_every_template_has_a_file_that_reads_as_rules():
+    assert set(TEMPLATES) == set(Template)
+    for template, loaded in TEMPLATES.items():
+        assert loaded.key == template.value
+        assert loaded.rules.template == template.value
+
+
+def test_every_file_in_the_folder_is_a_template():
+    """폴더에 고를 수 없는 파일이 남아 있지 않다. Template 에서 빠진 템플릿은 파일도 지운다."""
+    files = {path.stem for path in templates.TEMPLATES_DIR.glob('*.json')}
+
+    assert files == {template.value for template in Template}
+
+
+def test_released_templates_keep_their_values():
+    assert set(RELEASED) == set(Template), '새 템플릿을 내면 RELEASED 에 그 해시를 적는다'
+    for template, expected in RELEASED.items():
+        assert fingerprint(TEMPLATES[template].rules) == expected, (
+            f'{template.value} 의 값이 바뀌었다. 이미 내놓은 템플릿의 값은 고치지 않는다. 새 이름으로 하나 더 낸다'
+        )
+
+
+def test_the_old_srd5_name_still_points_to_the_file():
+    """옛 판을 올려 읽을 때 쓰는 SRD5 는 파일의 srd5 다."""
+    assert SRD5 is TEMPLATES[Template.SRD5].rules
+
+
+def with_changes(template: Template, **changes) -> TemplateFile:
+    """그 템플릿의 파일에서 몇 칸만 바꾼 것."""
+    return TEMPLATES[template].model_copy(update=changes)
+
+
+@pytest.mark.parametrize(
+    ('changes', 'problem'),
+    [
+        ({'format': FORMAT + 1}, '판이'),
+        ({'key': 'horror'}, 'key 가'),
+        ({'rules': TEMPLATES[Template.HORROR].rules}, '규칙의 template 이'),
+    ],
+)
+def test_a_file_that_is_not_its_template_is_named(changes: dict, problem: str):
+    found = file_problem(Template.SRD5, with_changes(Template.SRD5, **changes))
+
+    assert found is not None and found.startswith(problem)
+
+
+def test_a_matching_file_has_no_problem():
+    assert file_problem(Template.LIGHT, TEMPLATES[Template.LIGHT]) is None
+
+
+def write_srd5(folder: Path, document: dict) -> None:
+    (folder / 'srd5.json').write_text(json.dumps(document, ensure_ascii=False), encoding='utf-8')
+
+
+def srd5_document() -> dict:
+    return json.loads(templates.template_path(Template.SRD5).read_text(encoding='utf-8'))
+
+
+@pytest.mark.parametrize(
+    'broken',
+    [
+        # 칸을 빠뜨리면 "없음"으로 읽지 않는다
+        lambda document: document['rules'].pop('death_save'),
+        lambda document: document['rules'].update(die=1),
+        lambda document: document.update(format=FORMAT + 1),
+        lambda document: document.update(extra='모르는 칸'),
+    ],
+)
+def test_a_broken_file_is_not_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, broken):
+    document = srd5_document()
+    broken(document)
+    write_srd5(tmp_path, document)
+    monkeypatch.setattr(templates, 'TEMPLATES_DIR', tmp_path)
+
+    with pytest.raises(TemplateFileError, match='srd5.json'):
+        read_template(Template.SRD5)
+
+
+def test_a_file_that_is_not_json_is_not_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    (tmp_path / 'srd5.json').write_text('{"format": 1,', encoding='utf-8')
+    monkeypatch.setattr(templates, 'TEMPLATES_DIR', tmp_path)
+
+    with pytest.raises(TemplateFileError, match='srd5.json'):
+        read_template(Template.SRD5)
+
+
+def test_a_missing_file_is_not_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(templates, 'TEMPLATES_DIR', tmp_path)
+
+    with pytest.raises(TemplateFileError, match='srd5.json'):
+        read_template(Template.SRD5)
+
+
+# --- 이름과 출처 ---
+
+
+@pytest.mark.parametrize('template', list(Template))
+def test_no_commercial_rule_name_is_used(template: Template):
+    loaded = TEMPLATES[template]
+    shown = f'{loaded.name} {loaded.summary}'.lower()
+
+    assert not [name for name in COMMERCIAL_NAMES if name in shown]
+
+
+@pytest.mark.parametrize('template', list(Template))
+def test_a_template_that_borrows_from_the_srd_carries_its_attribution(template: Template):
+    loaded = TEMPLATES[template]
+    borrowed = any('SRD' in note for note in loaded.notes)
+    attributed = any('Creative Commons Attribution 4.0' in line for line in loaded.attribution)
+
+    # 본뜬 것이 있으면 출처 표시가 있다. 본뜬 것이 없는 템플릿(가벼운 모험)은 출처 표시가 없어도 된다
+    assert attributed or not borrowed
+
+
+# --- 템플릿마다 판정 ---
+
+
+@pytest.mark.parametrize('template', list(Template))
+def test_exactly_the_target_succeeds_and_one_short_fails(template: Template):
+    rules = TEMPLATES[template].rules
+    difficulty = find_difficulty(rules, None)
+    score = middle_score(rules)
+    needed = difficulty.target - modifier_of(rules, score)
+    assert 1 < needed <= rules.die, '가운데 점수로 기본 난이도에 주사위로 닿을 수 있어야 한다'
+
+    hit = resolve(rules, score, difficulty, ScriptedDice([needed]))
+    miss = resolve(rules, score, difficulty, ScriptedDice([needed - 1]))
+
+    assert (hit.total, hit.target, hit.success) == (difficulty.target, difficulty.target, True)
+    assert (miss.total, miss.success) == (difficulty.target - 1, False)
+
+
+@pytest.mark.parametrize('template', list(Template))
+def test_the_easiest_and_hardest_rolls_at_the_edges_of_the_die(template: Template):
+    """가장 쉬운 난이도는 가장 큰 눈이면 가운데 점수로도 성공하고, 가장 작은 눈이면 가장 낮은 점수로 실패한다."""
+    rules = TEMPLATES[template].rules
+    easiest = min(rules.difficulties, key=lambda difficulty: difficulty.target)
+
+    best = resolve(rules, middle_score(rules), easiest, ScriptedDice([rules.die]))
+    worst = resolve(rules, rules.score_min, easiest, ScriptedDice([1]))
+
+    assert best.success
+    assert not worst.success
+
+
+def test_light_counts_the_score_itself_as_the_modifier():
+    """가벼운 모험은 점수가 곧 보정이다. 재치 3 으로 보통(8)에 도전해 눈 5 면 5 + 3 = 8 로 성공이다."""
+    rules = TEMPLATES[Template.LIGHT].rules
+
+    check = resolve(rules, 3, find_difficulty(rules, 'medium'), ScriptedDice([5]))
+
+    assert (check.roll, check.modifier, check.total, check.target, check.success) == (5, 3, 8, 8, True)
+
+
+def test_horror_is_harder_to_survive_than_srd5():
+    """공포는 SRD5 보다 죽음의 굴림의 목표가 높고 실패를 덜 견딘다."""
+    horror = TEMPLATES[Template.HORROR].rules
+
+    assert horror.death_save.target > SRD5.death_save.target
+    assert horror.death_save.failures < SRD5.death_save.failures
+
+
+def test_light_never_kills_by_the_dice():
+    """가벼운 모험에는 죽음의 굴림과 부상이 없다. 쓰러져도 쉬면 일어난다."""
+    light = TEMPLATES[Template.LIGHT].rules
+
+    assert light.death_save is None
+    assert light.injuries == () and light.injury_table is None
+    assert light.rest.revive is not None
