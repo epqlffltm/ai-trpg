@@ -6,7 +6,7 @@ import { apiRequest } from './http';
 import type { AssetPage } from './types';
 
 /** 재료의 종류. 게임 서버의 주소 /api/v1/game/<종류> 다 */
-export type StudioKind = 'rulebooks' | 'worlds';
+export type StudioKind = 'rulebooks' | 'worlds' | 'lorebooks' | 'bestiaries';
 
 export function assetsPath(kind: StudioKind): string {
   return `/api/v1/game/${kind}`;

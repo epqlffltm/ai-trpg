@@ -8,7 +8,7 @@ export function MyStudioLink() {
     <section className="page-section" aria-labelledby="my-studio-heading">
       <h2 id="my-studio-heading">만들기</h2>
       <p>
-        <Link to="/trpg/studio">재료 만들기(룰북, 세계관)</Link>
+        <Link to="/trpg/studio">재료 만들기(룰북, 세계관, 로어북, 몬스터 모음)</Link>
       </p>
     </section>
   );
