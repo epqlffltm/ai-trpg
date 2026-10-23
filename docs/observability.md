@@ -1062,6 +1062,8 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 
 #### 붙인 것 (TRPG 서버의 메트릭)
 
+> #589 로 요청, DB, 작업, SSE 의 계측기와 보내는 길은 `shared/server-core` 의 것을 쓴다. 게임 서버에는 그만의 계측기(AI 호출, 서술, 라운드, 결제 서버)를 `InstrumentSet` 으로 더하는 `app/observability/metrics.py` 만 남았다. 아래는 붙일 때의 기록이다.
+
 [알림 서버](#붙인-것-알림-서버의-메트릭-python-의-본보기)의 모양을 그대로 가져왔다(`metrics.py`, `request_metrics.py`, `pool_metrics.py`, `tests/metrics.py`, `tests/collector.py`).
 그 위에 실시간 스트림, AI 호출, 라운드와 서술, 서술 값을 더했다. 새 의존성은 없다.
 
@@ -1233,6 +1235,8 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 - **compose.** `notification-server` 가 `x-telemetry-environment` 와 망 `telemetry` 를 붙였다. 메트릭은 아직 없다.
 
 #### 붙인 것 (TRPG 서버의 추적)
+
+> #589 로 추적의 코드는 모두 `shared/server-core` 의 `server_core/observability/` 를 쓴다. 테이블의 스트림은 `app/main.py` 의 `TABLE_STREAMS` 로 넘긴다. 아래는 붙일 때의 기록이다.
 
 알림 서버의 것(`app/observability/` 의 `spans.py`, `tracing.py`, `request_spans.py`, `http_spans.py`, `db_spans.py`)을 옮겼다. 다른 것은 셋이다.
 

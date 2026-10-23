@@ -21,9 +21,10 @@ import asyncio
 
 import httpx
 from ai_core.openai_embedder import OpenAICompatEmbedder
+from server_core.database import create_session_factory
 
 from app.core.config import Settings, get_settings
-from app.core.database import create_engine, create_session_factory
+from app.core.database import create_engine
 from app.lore import repository
 from app.lore.indexing import index_version
 

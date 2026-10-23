@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.logs import rendered
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import select, update
 
@@ -33,7 +34,6 @@ from app.rounds.clock import RoundClock
 from app.rounds.closing import closer_of
 from app.rounds.models import Round
 from app.rounds.recovery import AUTO_RETRY_LIMIT, STALLED, Recovery
-from tests.logs import rendered
 from tests.test_round_closing import (
     FRIEND,
     FRIENDS_ACTION,

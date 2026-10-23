@@ -11,13 +11,13 @@ from typing import Annotated
 
 from fastapi import Depends, Query, Request, status
 from fastapi.responses import JSONResponse
+from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Asset, AssetContent
 from app.assets.ratings import AdultContentRequiredError
 from app.assets.schemas import AssetPage, AssetSummary
 from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
-from app.core.database import get_session
 
 # 요청 하나가 쓰는 DB 세션
 Session = Annotated[AsyncSession, Depends(get_session)]

@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
+from server_core.testing.logs import rendered
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +26,6 @@ from app.ai_log import repository, retention
 from app.ai_log.models import AiInvocation
 from app.ai_log.retention import PRUNE_OPERATION, AiLogPruner, cutoff
 from app.core.config import Settings
-from tests.logs import rendered
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

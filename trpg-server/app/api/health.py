@@ -10,7 +10,7 @@
 HEAD 도 받는다(본문 없이 같은 상태 코드). 네 서버가 같다. HEAD 로 확인하는 도구가 있다.
 HEAD 는 같은 함수를 따로 등록하고 API 문서에는 올리지 않는다. GET 과 한 번에 등록하면
 문서에 같은 operation id 가 두 번 올라간다. 확인 요청은 문서로 알릴 API 가 아니다.
-요청이 끝난 줄은 성공이면 debug 다(app/observability/middleware.py 의 probe_level_of).
+요청이 끝난 줄은 성공이면 debug 다(server_core/observability/middleware.py 의 probe_level_of).
 """
 
 from fastapi import APIRouter, status
