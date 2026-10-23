@@ -81,9 +81,9 @@ function signedIn(routes: Record<string, (request: SeenRequest) => Response>) {
   return installFakeFetch({
     [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
     'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', identity: { adult_content: false } }),
-    'GET /api/v1/game/tables/narration-models': () => json(200, MODELS),
     'GET /api/v1/game/tables': () => json(200, { items: [], total: 0 }),
     ...roomRoutes(TABLE_ID),
+    'GET /api/v1/game/tables/narration-models': () => json(200, MODELS),
     ...routes,
   });
 }

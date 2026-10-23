@@ -108,3 +108,10 @@ export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): 
   for (const message of incoming) bySequence.set(message.sequence, message);
   return [...bySequence.values()].sort((a, b) => a.sequence - b.sequence);
 }
+
+/** 일어난 일을 번호 차례로 합친다. 같은 번호는 한 번만(다시 붙을 때 겹칠 수 있다) */
+export function mergeEvents(current: TableEvent[], incoming: TableEvent[]): TableEvent[] {
+  const bySequence = new Map(current.map((event) => [event.sequence, event]));
+  for (const event of incoming) bySequence.set(event.sequence, event);
+  return [...bySequence.values()].sort((a, b) => a.sequence - b.sequence);
+}

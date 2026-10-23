@@ -1,11 +1,13 @@
 // web/apps/web/src/pages/trpg/room/roomPure.test.ts
-// 스트림이 끝난 뒤의 일, 받은 메시지의 갈래, 채팅 합치기, 입력 중 지우기, 실패의 글을 순수한 함수로 본다.
+// 스트림이 끝난 뒤의 일, 받은 메시지의 갈래, 채팅과 일어난 일 합치기, 입력 중 지우기, 실패의 글을 순수한 함수로 본다.
 
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../api/errors';
 import { streamLabel } from './RoomHeader';
 import { describeChatProblem, describeStartProblem } from './roomProblem';
-import { mergeMessages, nextStep, routeMessage } from './streamPolicy';
+import type { TableEvent } from '../../../api/types';
+import { event } from '../../../test/tableFixtures';
+import { mergeEvents, mergeMessages, nextStep, routeMessage } from './streamPolicy';
 import { withoutExpired } from './useTypingPeople';
 
 function chat(sequence: number) {
@@ -49,6 +51,13 @@ describe('routeMessage', () => {
 describe('mergeMessages', () => {
   it('번호 차례로 합치고 같은 번호는 한 번만 둔다', () => {
     expect(mergeMessages([chat(1), chat(3)], [chat(2), chat(3)]).map((message) => message.sequence)).toEqual([1, 2, 3]);
+  });
+});
+
+describe('mergeEvents', () => {
+  it('일어난 일도 번호 차례로 합치고 같은 번호는 한 번만 둔다(다시 붙을 때 겹친다)', () => {
+    const one = (sequence: number) => event(sequence, 'table_started') as unknown as TableEvent;
+    expect(mergeEvents([one(1), one(3)], [one(3), one(2)]).map((item) => item.sequence)).toEqual([1, 2, 3]);
   });
 });
 

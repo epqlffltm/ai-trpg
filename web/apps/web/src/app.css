@@ -903,6 +903,40 @@ a.ui-button {
   gap: 10px;
 }
 
+/* 일어난 일(④-2). 상태 패널의 탭. 최근 것이 위. 서술을 막는 일은 두드러진다 */
+.event-log__list {
+  display: grid;
+  gap: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+  font-size: 0.92em;
+}
+
+.event-line {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+
+.event-line__round {
+  flex: none;
+  font-size: 0.8em;
+  color: var(--ui-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-line--important {
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+
+/* 지금 라운드 위의 알림 */
+.room-notices {
+  display: grid;
+  gap: 6px;
+}
+
 .status-cards {
   display: grid;
   gap: 12px;

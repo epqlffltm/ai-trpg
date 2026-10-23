@@ -58,9 +58,12 @@ const MODELS = {
 function open(routes: Record<string, (request: SeenRequest) => Response> = {}, me = ME) {
   return installFakeFetch({
     [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
-    'GET /api/v1/game/tables/narration-models': () => json(200, MODELS),
     'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', public_id: me }),
-    ...roomRoutes(TABLE_ID, { [`GET ${BASE}`]: () => json(200, waiting()), ...routes }),
+    ...roomRoutes(TABLE_ID, {
+      'GET /api/v1/game/tables/narration-models': () => json(200, MODELS),
+      [`GET ${BASE}`]: () => json(200, waiting()),
+      ...routes,
+    }),
   });
 }
 

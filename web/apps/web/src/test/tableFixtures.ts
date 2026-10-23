@@ -179,6 +179,20 @@ export function declaration(userId: string, extra: Record<string, unknown> = {})
 }
 
 /** SSE 의 메시지 하나의 글 */
+/** 일어난 일 하나(EventOut). payload 는 서버가 앉은 사람에게 보이는 칸만(responses.py 의 VISIBLE) */
+export function event(sequence: number, type: string, payload: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) {
+  return {
+    sequence,
+    type,
+    actor_id: null,
+    payload,
+    caused_by_sequence: null,
+    action_group_id: null,
+    created_at: '2026-10-22T00:00:00Z',
+    ...extra,
+  };
+}
+
 export function sse(event: string, data: unknown, id?: string): string {
   return `${id ? `id: ${id}\n` : ''}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
@@ -209,6 +223,8 @@ export function roomRoutes(tableId: string, overrides: Record<string, (request: 
     [`GET ${base}/rounds`]: () => json(200, { items: [round(1)], total: 1 }),
     [`GET ${base}/rounds/current/people`]: () => json(200, { round: 1, people: [], monsters: [] }),
     'GET /api/v1/auth/public-names': () => json(200, { names: [] }),
+    // 일어난 일의 글이 모델의 이름을 찾는다(events/useEventContext). 모델을 보는 시험은 overrides 로 바꾼다
+    'GET /api/v1/game/tables/narration-models': () => json(200, { free: false, models: [] }),
     ...overrides,
   };
 }

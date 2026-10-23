@@ -1,5 +1,6 @@
 // web/apps/web/src/api/tableRoom.ts
-// 테이블 방(B6)이 부르는 것. 테이블 하나, 캐릭터 정하기와 굴리기(B5), 시작(방장), 나가기, 채팅(읽기, 쓰기, 입력 중), 스트림을 열 번호.
+// 테이블 방(B6)이 부르는 것. 테이블 하나, 캐릭터 정하기와 굴리기(B5), 시작(방장), 나가기, 채팅(읽기, 쓰기, 입력 중),
+// 일어난 일(이벤트)의 끝부분, 스트림을 열 번호.
 // 앉아 있는 사람만 부른다. 앉지 않았거나 없는 테이블은 404 다(있다는 것을 드러내지 않는다).
 
 import { apiRequest } from './http';
@@ -10,6 +11,9 @@ const TABLES = '/api/v1/game/tables';
 
 /** 한 번에 보일 지난 채팅의 수 */
 export const CHAT_TAIL = 50;
+
+/** 한 번에 보일 지난 일(이벤트)의 수. 라운드 하나가 닫힐 때 여럿이 적혀 채팅보다 많이 둔다 */
+export const EVENT_TAIL = 100;
 
 function tablePath(tableId: string, rest = ''): string {
   return `${TABLES}/${encodeURIComponent(tableId)}${rest}`;
@@ -68,14 +72,33 @@ export function announceTyping(tableId: string): Promise<void> {
 }
 
 /**
- * 스트림을 처음 열 번호. 이벤트와 쪽지는 아직 화면에 보이지 않으므로 지금의 마지막 번호부터 받는다.
- * 채팅은 화면이 읽은 끝부분(fetchChatTail)의 마지막 번호다
+ * 일어난 일(이벤트)의 끝부분(EVENT_TAIL 개). 채팅처럼 마지막 번호를 먼저 묻고 그 앞을 읽는다.
+ * 서버는 종류마다 앉은 사람에게 보일 칸만 싣는다(trpg-server/app/events/responses.py 의 VISIBLE)
  */
-export async function fetchStreamCursor(tableId: string, messages: number, signal?: AbortSignal): Promise<StreamCursor> {
+export async function fetchEventsTail(tableId: string, signal?: AbortSignal): Promise<EventPage> {
+  const probe = await fetchEvents(tableId, 0, 1, signal);
+  const after = Math.max(0, probe.last_sequence - EVENT_TAIL);
+  if (after === 0 && probe.last_sequence <= 1) return probe;
+  return fetchEvents(tableId, after, EVENT_TAIL, signal);
+}
+
+function fetchEvents(tableId: string, after: number, limit: number, signal?: AbortSignal): Promise<EventPage> {
+  return apiRequest<EventPage>(tablePath(tableId, '/events'), { query: { after, limit }, ...(signal ? { signal } : {}) });
+}
+
+/**
+ * 스트림을 처음 열 번호. 채팅과 이벤트는 화면이 읽은 끝부분의 마지막 번호다(그 뒤부터 받는다).
+ * 일어난 일을 읽지 못했으면(events 가 null) 지금의 마지막 번호부터 받는다. 쪽지는 아직 화면에 보이지 않아 늘 그렇다
+ */
+export async function fetchStreamCursor(
+  tableId: string,
+  start: { messages: number; events: number | null },
+  signal?: AbortSignal,
+): Promise<StreamCursor> {
   const options = { query: { after: 0, limit: 1 }, ...(signal ? { signal } : {}) };
   const [events, whispers] = await Promise.all([
-    apiRequest<EventPage>(tablePath(tableId, '/events'), options),
+    start.events === null ? apiRequest<EventPage>(tablePath(tableId, '/events'), options) : null,
     apiRequest<WhisperPage>(tablePath(tableId, '/whispers'), options),
   ]);
-  return { events: events.last_sequence, messages, whispers: whispers.last_sequence };
+  return { events: start.events ?? events?.last_sequence ?? 0, messages: start.messages, whispers: whispers.last_sequence };
 }
