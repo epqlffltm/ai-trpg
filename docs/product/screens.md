@@ -1260,7 +1260,7 @@
 | 장면의 인물 | 행동의 대상으로 고를 인물. 장면에 이름이나 호칭이 나온 인물만 | `GET .../rounds/current/people` |
 | 채팅, 쪽지 | 판 채팅과 자기 쪽지함 | `GET .../chat`, 스트림의 `chat_message`, `whisper` |
 | 입력 중 | 다른 사람이 글을 치는 중 | 스트림의 `typing`(받는 쪽이 5초쯤 뒤에 스스로 지운다) |
-| 상태 패널(B7) | HP, 능력치, 부상, 소지품, 장소, 퀘스트, 맵 | `TableDetail.members[].character`(`hp`, `max_hp`, `death_successes`, `death_failures`, `dead`, `injuries`, `items`, `place_id`), `quests`, `map` |
+| 상태 패널(B7) | HP, 능력치, 부상, 소지품, 돈, 장소, 퀘스트, 맵 | `TableDetail.members[].character`(`hp`, `max_hp`, `death_successes`, `death_failures`, `dead`, `injuries`, `items`, `money`, `place_id`), `quests`, `map`, `currency` |
 | 일어난 일 | 물건, 퀘스트, 이동 같은 변화의 기록 | `GET .../events`, 스트림의 `table_event` |
 
 화면에 보이는 값은 모두 서버가 준 것이다. 화면이 HP나 소지품을 계산하지 않는다.
@@ -1270,7 +1270,7 @@
 | 행동 | 호출 | 동작 |
 | --- | --- | --- |
 | 선언 내기·고치기 | `PUT .../rounds/current/declaration` `{content, action?}` | 다시 내면 앞의 것을 통째로 바꾼다. 행동을 빼고 다시 내면 행동도 없어진다. 모두가 내면 라운드가 닫히기 시작한다 |
-| 행동 붙이기 | 위와 같음 | 한 선언에 행동은 하나다. 종류는 판정, 치료, 지목, 물건 쓰기, 건네기, 가기, 찾기, 쉬기, 줍기, 내려놓기, 훔치기, 빼앗기, 기다리기(`engine/action.py`). 기다리기는 앉은 사람이 모두 내야 시간이 건너뛴다(#367). 마감 전에는 남의 선언이 보이지 않으므로 채팅으로 맞춘다는 안내를 붙인다. 가기에는 같은 장소에 쓰러진 동료를 업고 가기(`carry`)를 고를 수 있다 |
+| 행동 붙이기 | 위와 같음 | 한 선언에 행동은 하나다. 종류는 판정, 치료, 지목, 물건 쓰기, 건네기, 가기, 찾기, 쉬기, 줍기, 내려놓기, 훔치기, 빼앗기, 기다리기, 사기, 팔기, 돈 건네기(`engine/action.py`). 사기·팔기는 장면의 상인(`people[].merchant`)과 하고, 셋 다 화폐가 있는 판(`TableDetail.currency`)에서만 고를 수 있다(#278). 기다리기는 앉은 사람이 모두 내야 시간이 건너뛴다(#367). 마감 전에는 남의 선언이 보이지 않으므로 채팅으로 맞춘다는 안내를 붙인다. 가기에는 같은 장소에 쓰러진 동료를 업고 가기(`carry`)를 고를 수 있다 |
 | 채팅 쓰기 | `POST .../chat` | 쓰면 모두의 스트림으로 간다 |
 | 입력 중 알리기 | `POST .../chat/typing` | 글자를 치는 동안 3초쯤에 한 번 부른다 |
 | 나가기 | `DELETE .../members/me` | |
@@ -1383,7 +1383,8 @@
 | 능력치 | 점수 | `sheet.abilities`. 이름표가 무슨 능력치인지는 `TableDetail.rules` |
 | 쓰러짐 | 죽음의 굴림의 성공·실패 수, 죽었는가 | `sheet.death_successes`, `death_failures`, `dead`. 몇 번이 모이면 죽는지는 `rules.death_save` |
 | 부상 | 입고 있는 부상과 풀리는 때 | `sheet.injuries[]` 의 `injury`(이름표), `ends_after_round`, `heals_at`. 이름과 효과는 `rules.injuries` |
-| 소지품 | 이름, 종류, 개수 | `sheet.items[]`. 종류와 회복량은 `TableDetail.items`. 물건의 설명은 내려오지 않는다(로어북에 비밀이 있을 수 있어서) |
+| 소지품 | 이름, 종류, 개수 | `sheet.items[]`. 종류와 회복량과 값은 `TableDetail.items`. 물건의 설명은 내려오지 않는다(로어북에 비밀이 있을 수 있어서) |
+| 돈(#278) | 가진 돈 | `sheet.money` 를 `TableDetail.currency` 의 이름과 단위로 적는다(금화 30닢). 화폐가 없는 판(`currency: null`)이면 줄을 숨긴다. 결제의 크레딧(골드·실버)과 섞이지 않게 다른 자리와 다른 말로 보인다 |
 | 퀘스트 | 이름, 상태(진행 중, 성공, 실패), 기한 | `TableDetail.quests[]` 의 `name`, `status`, `due_at`. 숨긴 퀘스트는 방장에게만 온다. 퀘스트의 글은 내려오지 않는다 |
 | 장소 | 서 있는 곳, 아는 장소와 길 | `sheet.place_id`, `TableDetail.map` 의 `places[]`, `routes[]`(걸리는 시간 `travel_minutes`). 숨긴 길과 안개 길은 내려오지 않는다 |
 | 시각 | 며칠째, 몇 시, 하루의 어느 때, 다음 라운드에 흐를 시간 | `TableDetail.clock`. `GET /tables/{id}/clock` 과 같은 값이다(#428). 라운드가 열리면 `round_opened` 의 `clock` 으로 바꾼다 |
@@ -1581,6 +1582,7 @@
 | 스타팅 | `openings` | 5 개, 하나에 2000 자 |
 | 인원과 캐릭터 | `recommended_players`, `character_modes`, `pregens`, `default_sheet`, `player_made_hp`, `reroll_allowed` | 추천 인원 1~4, 프리젠 8 |
 | 인물·물건·퀘스트 | `npc_sheets`, `items`, `starting_items`, `quests` | 인물 시트 100, 물건 규칙 100, 시작 물건 20, 퀘스트 50(조건은 퀘스트마다 5) |
+| 돈(#278) | `currency`, `items[].price`, `pregens[].money`, `quests[].reward_money`, `npc_sheets[].merchant` | 화폐의 이름 20 자, 단위 10 자, 돈과 값은 1,000,000 까지, 되사는 값 0~100%. 화폐 없이 값·상인·돈을 적으면 게시할 때 `currency_missing` |
 | 지도 | `start_place`, `routes`, `landmarks`, `happenings` | 길 200, 명소 100, 사건 규칙 50(조건 5, 효과 5) |
 | 몬스터 배치 | `monster_sheets`, `encounters` | 몬스터 시트 100, 조우 50 |
 | 서술 | `narration_style`, `narration_model`, `clock` | 문체는 안 보내면 정통. 시계는 안 보내면 1일째 8시, 한 라운드에 10분 |

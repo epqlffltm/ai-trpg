@@ -22,13 +22,18 @@ from app.tables.models import TableItem, TableSheet
 
 @dataclass(frozen=True)
 class CatalogItem:
-    """판에 있는 물건 하나. 이름은 로어북 항목의 이름, 종류와 회복의 양과 등급은 아이템 규칙의 것이다."""
+    """
+    판에 있는 물건 하나. 이름은 로어북 항목의 이름, 종류와 회복의 양과 등급과 값은 아이템 규칙의 것이다.
+
+    price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
+    """
 
     entry_id: uuid.UUID
     name: str
     kind: ItemKind
     heals: str | None
     rarity: ItemRarity = ItemRarity.NORMAL
+    price: int | None = None
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -37,7 +42,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
     for entry in item_entries(snapshot):
         rule = item_rule_of(snapshot, entry.id)
         items[entry.id] = CatalogItem(
-            entry_id=entry.id, name=entry.name, kind=rule.kind, heals=rule.heals, rarity=rule.rarity
+            entry_id=entry.id, name=entry.name, kind=rule.kind, heals=rule.heals, rarity=rule.rarity, price=rule.price
         )
     return items
 

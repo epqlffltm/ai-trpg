@@ -9,8 +9,8 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 퀘스트의 행(
   - 바뀌는 길: 숨김 → 진행 중 / 성공, 진행 중 → 성공 / 실패. 끝난 것은 그대로다. 숨김으로 돌아가지 않는다.
   - 드러내기, 성공, 실패는 엔진만 정한다. 판의 조건을 라운드가 닫힐 때 보고 바꾸고(app/rounds/quest_goals.py),
     기한을 넘긴 것을 실패로 바꾼다(app/rounds/deadlines.py). 사람(방장)은 퀘스트를 바꾸지 못한다(#367).
-  - 성공하면 보상을 받는다. 앉은 사람의 지금 캐릭터 중 살아 있는 것마다 받는다.
-    한 가지의 상한(99 개)에 닿으면 그 사람은 거기까지만 받는다. 다른 사람의 보상은 막지 않는다.
+  - 성공하면 보상(물건과 돈)을 받는다. 앉은 사람의 지금 캐릭터 중 살아 있는 것마다 받는다.
+    한 가지의 상한(99 개)이나 돈의 상한에 닿으면 그 사람은 거기까지만 받는다. 다른 사람의 보상은 막지 않는다.
   - 숨긴 퀘스트는 아무도 보지 않는다. 방장도 PC 라서 다른 사람이 모르는 것을 알면 안 된다. 서술자(GM)만 안다.
   - 기한: 판의 규칙에 기한이 있으면 드러날 때(진행 중이 될 때) 끝나는 게임 안의 시각을 적는다.
     처음부터 진행 중인 것은 테이블이 시작하는 시각부터, 숨겼다가 드러난 것은 드러난 라운드가 열린 시각부터 센다.
@@ -28,7 +28,7 @@ from app.assets.scenarios.snapshot import (
     quest_entries,
     quest_rule_of,
 )
-from app.tables import items, sheets
+from app.tables import items, money, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, QuestStatus, TableMember, TableQuest
 
@@ -41,6 +41,7 @@ class CatalogQuest:
     """
     판에 있는 퀘스트 하나. 이름은 로어북 사건 항목의 이름, 처음 상태와 보상과 기한은 퀘스트 규칙의 것이다.
 
+    reward_money 는 성공하면 살아 있는 캐릭터마다 받는 돈이다(#278). 0 이면 돈은 없다.
     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 없으면 None.
     conditions 는 이루는 조건, match 는 그것을 맞추는 법이다. 조건이 없으면 성공하지 않는다.
     reveal 은 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 조건이 없으면 이루어야만 드러난다.
@@ -52,6 +53,7 @@ class CatalogQuest:
     start: QuestStatus
     reward: list[ItemStackSnapshot]
     time_limit_minutes: int | None = None
+    reward_money: int = 0
     conditions: tuple[QuestConditionSnapshot, ...] = ()
     match: QuestMatch = QuestMatch.ALL
     reveal: tuple[QuestConditionSnapshot, ...] = ()
@@ -71,6 +73,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogQuest]:
             start=QuestStatus(rule.start),
             reward=list(rule.reward),
             time_limit_minutes=rule.time_limit_minutes,
+            reward_money=rule.reward_money,
             conditions=tuple(rule.conditions),
             match=rule.match,
             reveal=tuple(rule.reveal),
@@ -136,6 +139,7 @@ def give_reward(
     한 사람의 지금 캐릭터에게 보상을 준다. 이벤트에 적을 모양으로 돌려준다.
 
     물건마다 받은 개수(count), 그 뒤의 개수(total), 상한에 닿아 덜 받았는지(capped)를 적는다.
+    돈도 같은 모양이다(money). 돈의 보상이 없는 퀘스트면 None 이다.
     """
     given = []
     for stack in quest.reward:
@@ -149,12 +153,29 @@ def give_reward(
                 'capped': count < stack.count,
             }
         )
-    return {'user_id': str(member.user_id), 'character_name': member.character_name, 'items': given}
+    return {
+        'user_id': str(member.user_id),
+        'character_name': member.character_name,
+        'items': given,
+        'money': give_reward_money(member, quest),
+    }
+
+
+def give_reward_money(member: TableMember, quest: CatalogQuest) -> dict | None:
+    """
+    한 사람의 지금 캐릭터에게 돈의 보상을 준다. 받은 돈(count), 그 뒤의 돈(total), 상한에 닿아 덜 받았는지(capped).
+
+    돈의 보상이 없는 퀘스트면 아무것도 하지 않고 None.
+    """
+    if not quest.reward_money:
+        return None
+    count = money.add_up_to(member.sheet, quest.reward_money)
+    return {'count': count, 'total': member.sheet.money, 'capped': count < quest.reward_money}
 
 
 def give_rewards(table: GameTable, quest: CatalogQuest, things: dict[uuid.UUID, CatalogItem]) -> list[dict]:
-    """보상을 받는 사람마다 준다. 보상이 없는 퀘스트면 아무도 받지 않는다(빈 목록)."""
-    if not quest.reward:
+    """보상을 받는 사람마다 준다. 보상(물건과 돈)이 없는 퀘스트면 아무도 받지 않는다(빈 목록)."""
+    if not quest.reward and not quest.reward_money:
         return []
     return [give_reward(table, member, quest, things) for member in rewarded_members(table)]
 

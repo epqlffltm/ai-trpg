@@ -32,6 +32,7 @@ from app.rounds.narrator import (
     Move,
     NamingNote,
     NpcImpact,
+    PayNote,
     PutDownNote,
     RecoveryNote,
     RestNote,
@@ -40,6 +41,7 @@ from app.rounds.narrator import (
     StealNote,
     TakeNote,
     TargetGoneNote,
+    TradeNote,
     TravelNote,
     TreatmentNote,
     TurnNote,
@@ -438,6 +440,49 @@ def describe_loot(note: LootNote) -> str:
     return f'(빼앗기: {note.name}을(를) 더 들 수 없어 가져가지 못했다)'
 
 
+# 사거나 팔거나 돈을 건네지 못한 까닭을 서술자에게 주는 말(app/rounds/trades.py 의 Reason)
+TRADE_FAILURES = {
+    'unavailable': '상인이 거래할 수 없었다',
+    'out_of_stock': '상인에게 그만큼이 없었다',
+    'not_enough_money': '돈이 모자랐다',
+    'not_held': '그만큼 가지고 있지 않았다',
+    'full': '더 가질 수 없었다',
+    'too_much_money': '돈을 더 가질 수 없었다',
+    'target_gone': '받을 사람이 없었다',
+}
+
+
+def describe_trade(note: TradeNote) -> str:
+    """
+    상인과 사고판 결과를 한 줄로 적는다(#278).
+
+    예: (산 물건: 상인 에게서 치유 물약 2개. 금화 20닢을 냈다)
+        (판 물건: 상인 에게 늑대 가죽 3개. 금화 15닢을 받았다)
+        (사려던 물건: 상인 에게서 치유 물약 2개(금화 20닢). 돈이 모자랐다)
+    """
+    what = f'{note.name} {note.count}개'
+    buying = note.side == 'buy'
+    whom = f'{note.merchant} 에게서' if buying else f'{note.merchant} 에게'
+    if not note.traded:
+        verb = '사려던' if buying else '팔려던'
+        return f'({verb} 물건: {whom} {what}({note.price}). {TRADE_FAILURES.get(note.reason, "하지 못했다")})'
+    verb, money_verb = ('산', '냈다') if buying else ('판', '받았다')
+    return f'({verb} 물건: {whom} {what}. {note.price}을(를) {money_verb})'
+
+
+def describe_pay(note: PayNote) -> str:
+    """
+    돈을 건넨 결과를 한 줄로 적는다(#278).
+
+    예: (건넨 돈: 금화 10닢 → 영애)
+        (건네려던 돈: 금화 10닢 → 영애. 돈이 모자랐다)
+    """
+    to = f' → {note.target}' if note.target else ''
+    if not note.paid:
+        return f'(건네려던 돈: {note.amount}{to}. {TRADE_FAILURES.get(note.reason, "하지 못했다")})'
+    return f'(건넨 돈: {note.amount}{to})'
+
+
 def describe_handed_over(notes: list[HandOverNote]) -> str:
     """
     이룬 퀘스트에 넘긴 물건들을 한 줄로 적는다. 퀘스트의 차례, 그 안의 물건 차례다.
@@ -469,7 +514,7 @@ def describe_move(move: Move) -> str:
     한 캐릭터가 한 일을 한 줄로 적는다. 판정이 있었으면 뒤에 붙이고, 치료였으면 그 결과를,
     HP 가 바뀌었으면 그 뒤에 붙인다. 지목이었으면 그 결과를, 물건을 쓰거나 건넸으면 그 결과를 붙인다.
     죽음의 굴림을 굴렸으면 그 뒤에, 시간이 지나 나은 부상이 있으면 그 뒤에, 입고 있는 부상이 있으면 그 뒤에,
-    가진 물건이 있으면 그 뒤에, 맵에 서 있으면 그 장소의 이름을 맨 뒤에 붙인다.
+    가진 물건이 있으면 그 뒤에, 돈이 있는 판이면 가진 돈을 그 뒤에, 맵에 서 있으면 그 장소의 이름을 맨 뒤에 붙인다.
     맵에서 가거나 찾았으면 물건의 결과 자리에 그 결과를, 쉬었으면 그 뒤에 쉰 결과를 붙인다.
     되살아나기와 저절로 회복은 죽음의 굴림 뒤에 붙인다.
     서 있는 곳의 출구와 숨긴 길은 붙이지 않는다. 이 줄은 가짜 서술자가 장면으로 그대로 내보낸다(PlaceNote).
@@ -510,6 +555,10 @@ def describe_move(move: Move) -> str:
         parts.append(describe_steal(move.steal))
     if move.loot is not None:
         parts.append(describe_loot(move.loot))
+    if move.trade is not None:
+        parts.append(describe_trade(move.trade))
+    if move.pay is not None:
+        parts.append(describe_pay(move.pay))
     if move.handed_over:
         parts.append(describe_handed_over(move.handed_over))
     if move.rest is not None:
@@ -528,6 +577,8 @@ def describe_move(move: Move) -> str:
         parts.append(f'[입은 부상: {describe_injuries(move.injuries)}]')
     if move.items:
         parts.append(f'[소지품: {describe_items(move.items)}]')
+    if move.money is not None:
+        parts.append(f'[소지금: {move.money}]')
     if move.place is not None:
         parts.append(f'[있는 곳: {move.place.name}]')
     return ' '.join(parts)

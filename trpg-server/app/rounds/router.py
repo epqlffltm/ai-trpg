@@ -16,7 +16,7 @@ from app.assets.routing import Paging, Session
 from app.auth.dependencies import CurrentUser
 from app.billing.models import NarrationCharge
 from app.core.dice import Rolling
-from app.rounds import service, state
+from app.rounds import service, state, trades
 from app.rounds.cast import Scene, is_named
 from app.rounds.closing import RoundCloser, closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
@@ -127,6 +127,7 @@ def to_carried(held: list[Carried], things: dict[uuid.UUID, CatalogItem]) -> lis
             rarity=things[one.entry_id].rarity,
             count=one.count,
             equipped=one.equipped,
+            price=things[one.entry_id].price,
         )
         for one in held
     ]
@@ -147,6 +148,7 @@ def to_cast(round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem]) -
             named=is_named(member.npc),
             attitude=member.npc.attitude,
             items=to_carried(npc_items.carried(member.npc, member.definition), things),
+            merchant=trades.is_merchant(member),
         )
         for member in scene.cast
     ]

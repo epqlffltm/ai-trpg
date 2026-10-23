@@ -48,6 +48,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         encounters=[encounter.model_dump() for encounter in data.encounters],
         items=[rule.model_dump() for rule in data.items],
         starting_items=[stack.model_dump() for stack in data.starting_items],
+        currency=data.currency.model_dump() if data.currency else None,
         quests=[quest.model_dump() for quest in data.quests],
         start_place=data.start_place,
         routes=[route.model_dump() for route in data.routes],
