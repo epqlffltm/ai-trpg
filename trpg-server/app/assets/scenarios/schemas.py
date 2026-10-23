@@ -56,6 +56,7 @@ from app.assets.models import (
     SCENARIO_MAX_LANDMARKS,
     SCENARIO_MAX_LOREBOOKS,
     SCENARIO_MAX_MONSTER_SHEETS,
+    SCENARIO_MAX_NPC_PLACES,
     SCENARIO_MAX_NPC_SHEETS,
     SCENARIO_MAX_OPENINGS,
     SCENARIO_MAX_PLACE_ITEMS,
@@ -542,6 +543,38 @@ Encounters = Annotated[
 ]
 
 
+class NpcPlace(BaseModel):
+    """
+    인물의 자리 하나(#282). 붙인 로어북의 인물 항목 하나(entry_id)가 처음에 맵의 장소 하나(place_id)에 있다.
+
+    자리가 있는 인물은 캐릭터가 그 장소에 서 있을 때 장면에 나오고, 같은 장소에서만 겨눈다. 서술이 불러내지 못한다.
+    NPC 시트가 없는 인물도 자리를 적을 수 있다. 인물이 인물 항목인지, 장소가 맵의 장소인지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    place_id: uuid.UUID
+
+    @field_serializer('entry_id', 'place_id')
+    def id_as_text(self, value: uuid.UUID) -> str:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(value)
+
+
+def reject_duplicate_npc_places(places: list[NpcPlace]) -> list[NpcPlace]:
+    """같은 인물의 자리가 두 번 있으면 거부한다. 인물 하나는 한 곳에만 있다."""
+    entry_ids = [place.entry_id for place in places]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 인물의 자리가 두 번 있습니다.')
+    return places
+
+
+NpcPlaces = Annotated[
+    list[NpcPlace], Field(max_length=SCENARIO_MAX_NPC_PLACES), AfterValidator(reject_duplicate_npc_places)
+]
+
+
 class ItemRule(BaseModel):
     """
     아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.
@@ -943,7 +976,29 @@ class MoveEffect(BaseModel):
         return None if place is None else str(place)
 
 
-HappeningEffects = Annotated[list[MoveEffect], Field(min_length=1, max_length=HAPPENING_MAX_EFFECTS)]
+class MoveNpcEffect(BaseModel):
+    """
+    사건의 효과 하나: 인물(NPC) 하나(npc)를 맵의 한 장소(to_place)로 옮긴다(#282).
+
+    인물은 붙인 로어북의 인물 항목이다. 자리를 적지 않은 인물이면 그 뒤로 자리가 있는 인물이 된다.
+    쓰러진 인물도 옮겨진다. 죽은 인물은 그 자리에 남는다. 길로 이어져 있지 않아도 된다.
+    인물이 인물 항목인지, 장소가 맵의 장소인지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[HappeningEffectKind.MOVE_NPC]
+    npc: uuid.UUID
+    to_place: uuid.UUID
+
+    @field_serializer('npc', 'to_place')
+    def id_as_text(self, value: uuid.UUID) -> str:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(value)
+
+
+HappeningEffect = Annotated[MoveEffect | MoveNpcEffect, Field(discriminator='kind')]
+HappeningEffects = Annotated[list[HappeningEffect], Field(min_length=1, max_length=HAPPENING_MAX_EFFECTS)]
 
 
 class HappeningRule(BaseModel):
@@ -956,7 +1011,8 @@ class HappeningRule(BaseModel):
     물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).
     라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다
     (app/rounds/happenings.py).
-    가리키는 사건과 장소가 붙인 로어북에 있는지는 게시할 때 본다.
+    효과는 캐릭터 옮기기(MoveEffect)와 인물 옮기기(MoveNpcEffect, #282)다. kind 로 가른다.
+    가리키는 사건과 장소, 옮기는 인물이 붙인 로어북에 있는지는 게시할 때 본다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -1062,6 +1118,7 @@ class ScenarioCreate(AssetCreate):
     landmarks: Landmarks = []
     place_items: PlaceItems = []
     happenings: Happenings = []
+    npc_places: NpcPlaces = []
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
@@ -1081,7 +1138,7 @@ class ScenarioUpdate(AssetUpdate):
     null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-    quests, routes, landmarks, place_items, happenings, character_modes 는
+    quests, routes, landmarks, place_items, happenings, npc_places, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -1114,6 +1171,7 @@ class ScenarioUpdate(AssetUpdate):
     landmarks: Landmarks | None = None
     place_items: PlaceItems | None = None
     happenings: Happenings | None = None
+    npc_places: NpcPlaces | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     narration_style: NarrationStyle | None = None
@@ -1174,6 +1232,7 @@ class ScenarioDetail(ScenarioSummary):
     landmarks: list[uuid.UUID]
     place_items: list[PlaceItem]
     happenings: list[HappeningRule]
+    npc_places: list[NpcPlace]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     narration_style: NarrationStyle

@@ -110,7 +110,9 @@ from app.engine.sheet import Sheet
 #      NPC 와 몬스터가 착용한 칸(equipment[].wear), 공격의 무기(attacks[].weapon), 몬스터의 타고난 방어(natural_armor)
 #  49: 세이브와 관통이 있다(#276). 규칙의 세이브 방식과 그 목표값, 관통의 기준값(armor.save_target, pierce_base),
 #      물건의 관통력과 불굴 세이브(items[].ap, ward), 몬스터의 타고난 불굴 세이브(monsters[].ward)
-SNAPSHOT_FORMAT = 49
+#  50: 인물의 자리(npc_places: 인물이 처음 있는 맵의 장소)와 인물을 옮기는 사건의 효과(happenings[].effects[] 의
+#      kind move_npc 와 그 인물 npc)가 있다(#282)
+SNAPSHOT_FORMAT = 50
 
 
 class EntrySnapshot(BaseModel):
@@ -262,14 +264,16 @@ class QuestRuleSnapshot(BaseModel):
 
 class HappeningEffectSnapshot(BaseModel):
     """
-    사건의 효과 하나. 지금은 옮기기(move) 하나다. 두 장소는 판의 맵의 장소 항목이다.
+    사건의 효과 하나. 캐릭터 옮기기(move)와 인물 옮기기(move_npc, #282)다. 장소는 판의 맵의 장소 항목이다.
 
-    from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.
+    move: from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.
+    move_npc: 판 안의 인물 항목 하나(npc)를 to_place 로 옮긴다. 죽은 인물은 옮기지 않는다. from_place 는 없다.
     """
 
     kind: HappeningEffectKind
     to_place: uuid.UUID
     from_place: uuid.UUID | None = None
+    npc: uuid.UUID | None = None
 
 
 class HappeningSnapshot(BaseModel):
@@ -426,6 +430,13 @@ class PlaceItemSnapshot(BaseModel):
     find: FindSnapshot | None = None
 
 
+class NpcPlaceSnapshot(BaseModel):
+    """인물의 자리 하나(#282). 판 안의 인물 항목 하나(entry_id)가 처음에 판 안의 장소 항목 하나(place_id)에 있다."""
+
+    entry_id: uuid.UUID
+    place_id: uuid.UUID
+
+
 class PlayerMadeHpSnapshot(BaseModel):
     """플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다."""
 
@@ -484,6 +495,9 @@ class Snapshot(BaseModel):
     place_items: list[PlaceItemSnapshot] = []
     # 사건 규칙들. 판 안의 로어북 사건 항목마다 많아야 하나다. 효과의 장소는 판의 맵의 장소다(#367)
     happenings: list[HappeningSnapshot] = []
+    # 인물의 자리들(#282). 인물 하나에 많아야 하나다. 인물은 판 안의 인물 항목, 장소는 판 안의 장소 항목이다.
+    # 있으면 시작 장소도 있다. 자리가 없는 인물은 장면의 글로 나온다
+    npc_places: list[NpcPlaceSnapshot] = []
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용했으면 반드시 있다
     player_made_hp: PlayerMadeHpSnapshot | None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 제작자가 정한 것이다
@@ -655,7 +669,8 @@ class Snapshot(BaseModel):
     @model_validator(mode='after')
     def require_happening_targets(self) -> 'Snapshot':
         """
-        사건 규칙이 모두 판 안의 사건 항목을 가리키고, 효과의 장소가 모두 판 안의 장소 항목인지 본다.
+        사건 규칙이 모두 판 안의 사건 항목을 가리키고, 효과의 장소가 모두 판 안의 장소 항목인지,
+        옮기는 인물(move_npc)이 판 안의 인물 항목인지 본다.
         사건이 있으면 시작 장소가 있는지도 본다(옮길 맵이 있어야 한다). 아니면 거부한다.
 
         게시할 때 이미 막는다(scenarios/publishing.py).
@@ -663,19 +678,36 @@ class Snapshot(BaseModel):
         """
         events = {entry.id for entry in quest_entries(self)}
         places = {entry.id for entry in place_entries(self)}
-        pointed = [
-            place
-            for rule in self.happenings
-            for effect in rule.effects
-            for place in (effect.to_place, effect.from_place)
-            if place is not None
-        ]
+        people = {entry.id for entry in person_entries(self)}
+        effects = [effect for rule in self.happenings for effect in rule.effects]
+        pointed = [place for effect in effects for place in (effect.to_place, effect.from_place) if place is not None]
+        moved = [effect.npc for effect in effects if effect.kind == HappeningEffectKind.MOVE_NPC]
         if any(rule.entry_id not in events for rule in self.happenings):
             raise ValueError('사건 항목이 아닌 것을 가리키는 사건 규칙이 있습니다.')
         if any(place not in places for place in pointed):
             raise ValueError('장소 항목이 아닌 것을 가리키는 사건의 효과가 있습니다.')
+        if any(npc not in people for npc in moved):
+            raise ValueError('인물 항목이 아닌 것을 옮기는 사건의 효과가 있습니다.')
         if self.happenings and self.start_place is None:
             raise ValueError('사건 규칙이 있는데 시작 장소가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_npc_place_targets(self) -> 'Snapshot':
+        """
+        인물의 자리가 모두 판 안의 인물 항목과 장소 항목을 가리키는지, 자리가 있으면 시작 장소가 있는지 본다.
+        아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py). 테이블을 시작할 때 인물을 그 장소에 둔다(app/tables/npcs.py).
+        """
+        people = {entry.id for entry in person_entries(self)}
+        places = {entry.id for entry in place_entries(self)}
+        if any(place.entry_id not in people for place in self.npc_places):
+            raise ValueError('인물 항목이 아닌 것을 가리키는 인물의 자리가 있습니다.')
+        if any(place.place_id not in places for place in self.npc_places):
+            raise ValueError('장소 항목이 아닌 것을 가리키는 인물의 자리가 있습니다.')
+        if self.npc_places and self.start_place is None:
+            raise ValueError('인물의 자리가 있는데 시작 장소가 없습니다.')
         return self
 
 
@@ -720,6 +752,11 @@ def item_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
 def place_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
     """판의 로어북에서 장소 항목만. 맵의 장소다. 로어북의 순서, 그 안의 항목 순서다."""
     return [entry for lorebook in snapshot.lorebooks for entry in lorebook.entries if entry.kind == LoreKind.PLACE]
+
+
+def npc_place_of(snapshot: Snapshot, entry_id: uuid.UUID) -> uuid.UUID | None:
+    """인물 하나가 처음 있는 장소(#282). 자리를 적지 않은 인물이면 None 이다."""
+    return next((place.place_id for place in snapshot.npc_places if place.entry_id == entry_id), None)
 
 
 def has_map(snapshot: Snapshot) -> bool:
@@ -875,6 +912,7 @@ def build_snapshot(
         landmarks=list(scenario.landmarks),
         place_items=[PlaceItemSnapshot(**rule) for rule in scenario.place_items],
         happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
+        npc_places=[NpcPlaceSnapshot(**place) for place in scenario.npc_places],
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         narration_style=scenario.narration_style,

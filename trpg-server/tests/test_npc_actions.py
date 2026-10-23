@@ -212,7 +212,8 @@ async def test_only_the_people_in_the_scene_are_listed(client: AsyncClient, me: 
     # 드워프는 장면에 나오지 않았고, 고속도로는 인물이 아니다. 이름은 장면의 호칭이다. 진짜 이름은 아직 드러나지 않았다
     # 태도는 판에 적지 않아 중립이다. 지닌 물건도 적지 않았다
     lady = {'id': world['lady']['id'], 'name': '악역영애', 'status': 'alive', 'injuries': [], 'named': False}
-    lady.update(attitude='neutral', items=[], merchant=False)
+    # 판에 자리를 적지 않았다. 장면의 글로 나온 인물이다(#282)
+    lady.update(attitude='neutral', items=[], merchant=False, place_id=None)
     # 몬스터가 없는 판이다
     assert cast == {'round': 1, 'people': [lady], 'monsters': []}
 
@@ -378,7 +379,7 @@ async def test_a_person_not_in_the_scene_cannot_be_aimed_at(client: AsyncClient,
     # 셋 다 같은 답이다. 장면에 나오지 않은 것이 무엇인지 알려 주지 않는다
     for response in (absent, place, unknown):
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-        assert response.json() == {'detail': 'action.npc 가 이번 장면의 인물이 아닙니다.'}
+        assert response.json() == {'detail': 'action.npc 가 이번 장면의 인물이 아니거나 다른 장소에 있습니다.'}
 
 
 async def test_a_dead_npc_cannot_be_aimed_at(client: AsyncClient, app: FastAPI, me: dict[str, str], narrated):

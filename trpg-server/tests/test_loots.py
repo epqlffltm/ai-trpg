@@ -104,7 +104,10 @@ async def test_a_standing_npc_cannot_be_looted(client: AsyncClient, me: dict):
 @pytest.mark.parametrize(
     ('change', 'detail'),
     [
-        (lambda world: loot(world, 'coins', npc='dwarf'), 'action.npc 가 이번 장면의 인물이 아닙니다.'),
+        (
+            lambda world: loot(world, 'coins', npc='dwarf'),
+            'action.npc 가 이번 장면의 인물이 아니거나 다른 장소에 있습니다.',
+        ),
         (
             lambda world: {**loot(world, 'coins'), 'item': world['highway']['id']},
             'action.item 이 그 몬스터나 인물이 지금 지닌 물건이 아닙니다.',

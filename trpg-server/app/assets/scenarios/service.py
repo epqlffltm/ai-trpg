@@ -55,6 +55,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         landmarks=list(data.landmarks),
         place_items=[rule.model_dump() for rule in data.place_items],
         happenings=[rule.model_dump() for rule in data.happenings],
+        npc_places=[place.model_dump() for place in data.npc_places],
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
         reroll_allowed=data.reroll_allowed,
         narration_style=data.narration_style,
