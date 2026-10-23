@@ -756,8 +756,8 @@
 
 **확인할 것**
 
-- **알림을 넣는 서버는 게임, 결제, 게시판 셋이다.** 게임은 모델 은퇴 셋과 운영자의 제재 셋, 결제는 결제와 크레딧 다섯, 게시판은 댓글 둘을 넣는다(아래 표). 원본은 `trpg-server/README.md` 와 `board-server/README.md` 의 "알림 보내기", `billing-server/README.md` 의 "정리 작업과 대사"(사용자의 알림함), 받는 쪽은 `notification-server/README.md` 의 "알림 넣기(서버끼리)"다.
-- 지금 오는 `kind` 는 아래 열세 가지다. 화면이 `kind` 별로 문장을 만든다. 모르는 `kind` 는 일반 문구로 보인다. 화면은 `source` 와 `kind` 를 함께 보고 문장을 고른다. 표에 없는 짝은 일반 문구로 보인다.
+- **알림을 넣는 서버는 게임, 결제, 게시판, asset, chat 다섯이다.** 게임은 모델 은퇴 셋과 운영자의 제재 셋, 결제는 결제와 크레딧 다섯, 게시판은 댓글 둘, asset 은 캐릭터의 숨김 둘과 신고 처리 하나, chat 은 신고 처리 하나를 넣는다(아래 표). 원본은 `trpg-server/README.md` 와 `board-server/README.md` 의 "알림 보내기", `billing-server/README.md` 의 "정리 작업과 대사"(사용자의 알림함), 받는 쪽은 `notification-server/README.md` 의 "알림 넣기(서버끼리)"다.
+- 지금 오는 `kind` 는 아래 열일곱 가지다. 화면이 `kind` 별로 문장을 만든다. 모르는 `kind` 는 일반 문구로 보인다. 화면은 `source` 와 `kind` 를 함께 보고 문장을 고른다. 표에 없는 짝은 일반 문구로 보인다.
 
   | `kind` | `source` | 받는 사람 | `payload` |
   | --- | --- | --- | --- |
@@ -774,6 +774,10 @@
   | `credit.short` | `billing` | 크레딧이 모자라 홀드(서술 값)를 걸지 못한 사람. 한 사람에게 하루(한국 날짜)에 한 번 | `price_code`(걸려던 가격표의 이름), `amount`(그 값, 글자), `gold_required`(프리미엄이라 골드로만 낼 수 있었다) |
   | `post.commented` | `board` | 글쓴이 | `board_slug`, `post_id`, `post_title`, `comment_id` |
   | `comment.replied` | `board` | 그 댓글의 글쓴이 | `board_slug`, `post_id`, `post_title`, `comment_id`, `parent_id` |
+  | `character.hidden` | `asset` | 캐릭터의 주인. 운영자가 숨겼다(공개 목록과 남의 새 대화에서 빠진다, 주인은 계속 쓴다) | `character_id`, `name` |
+  | `character.unhidden` | `asset` | 캐릭터의 주인. 운영자가 숨김을 풀었다 | `character_id`, `name` |
+  | `character_report.handled` | `asset` | 캐릭터를 신고한 사람. 운영자가 처리했다 | `name`(캐릭터의 이름) |
+  | `message_report.handled` | `chat` | 대화 속 답을 신고한 사람. 운영자가 처리했다 | `name`(캐릭터의 이름) |
 
   크레딧의 양(`credits`, `amount`)은 정확한 값을 지키려고 글자로 온다(A6 과 같다). `expires_at`, `first_expires_at` 은 UTC 의 ISO 8601 시각이다.
   자기 글에 자기가 단 댓글, 자기 댓글에 자기가 단 답글은 알리지 않는다. 답글은 그 댓글의 글쓴이에게만 가고 글쓴이에게 또 가지 않는다. 댓글의 내용은 싣지 않는다(지운 댓글도 알림함에는 남아서). 눌렀을 때 글로 가서 댓글을 본다.
@@ -781,6 +785,8 @@
   서술 값은 라운드가 열린 뒤 게임 서버의 정리 작업이 걸어서, 모자란 것을 알 때 그 사람이 방에 없을 수 있다. 정해 둔 시간(기본 5분)이 지나면 테이블의 규칙에 따라 자리에서 빠질 수 있다.
   결제 서버는 테이블을 모른다. 알림을 누르면 충전(A7)으로 간다. `gold_required` 가 참이면 "프리미엄 모델은 골드로만 낸다"를 함께 보인다.
   제재 알림에는 사유와 운영자를 싣지 않는다(신고한 사람이 드러날 수 있어서). 화면도 사유를 보이지 않는다.
+  신고 처리의 알림(`character_report.handled`, `message_report.handled`)은 처리했다는 것만 알린다. 결과(숨겼는지, 받아들이지 않았는지)는 싣지 않는다(2026-10-23 유저 결정, #678).
+  숨김의 알림을 누르면 내 캐릭터의 만드는 화면(C6)으로 간다. 신고 처리의 알림은 가는 곳이 없다.
 - 알림을 눌렀을 때 어디로 가는지(`payload` 의 ID 로 가는 화면 주소)는 `kind` 마다 정한다.
 - **알림 끄기(#525).** 끌 수 있는 종류는 `narration_model.retiring`, `credit.expiring`, `credit.short`, `post.commented`, `comment.replied` 다섯이다(`GET .../mutes` 가 준다).
   결제와 청약철회, 제재, 내 테이블의 모델이 이미 바뀐 일은 끌 수 없다. 화면은 받은 목록으로 단추를 그리고 종류의 이름을 사람의 말로 바꾼다.

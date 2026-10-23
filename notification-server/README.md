@@ -72,6 +72,7 @@ uv run uvicorn app.main:app --port 8004 --reload
 | `GAME_SERVER_SECRET` | 비어 있음 | 게임 서버가 넣는 요청의 서명 비밀. 비우면 게임 서버의 알림을 받지 않는다(401). 32자 이상, 다른 비밀과 달라야 한다 |
 | `BILLING_SERVER_SECRET` | 비어 있음 | 결제 서버의 것. 규칙은 위와 같다 |
 | `BOARD_SERVER_SECRET` | 비어 있음 | 게시판 서버의 것. 규칙은 위와 같다 |
+| `ASSET_SERVER_SECRET`, `CHAT_SERVER_SECRET` | 비어 있음 | asset 서버와 chat 서버의 것(#678). 규칙은 위와 같다 |
 | `AUTH_SERVER_SECRET` | 비어 있음 | 인증 서버가 탈퇴를 알리는 요청의 서명 비밀([탈퇴 받기](#탈퇴-받기서버끼리)). 알림을 넣는 비밀과 따로다. 비우면 탈퇴의 알림을 받지 않는다(401). 규칙은 위와 같다 |
 
 서명 비밀이 짧거나 서로 같으면 서버가 뜨지 않는다. 비밀은 로그와 오류에 싣지 않는다.
@@ -168,10 +169,12 @@ Content-Type: application/json
 | 422 `{"detail": {"code": "kind_not_allowed", "kind": "…"}}` | 표에 있지만 그 서버가 넣는 `kind` 가 아니다(게시판 서버가 `order.paid` 를 넣으려 했다) |
 | 422 `{"detail": {"code": "payload_missing_fields", "kind": "…", "missing": ["title"]}}` | `payload` 에 꼭 있어야 하는 칸이 없다. 빠진 칸을 이름 차례로 싣는다 |
 
-- `source` 는 넣는 서버의 이름이다: `game`, `billing`, `board`. 모르는 이름도 401 이다(404 가 아니다. 어느 이름이 있는지 알리지 않는다).
+- `source` 는 넣는 서버의 이름이다: `game`, `billing`, `board`, `asset`, `chat`. 모르는 이름도 401 이다(404 가 아니다. 어느 이름이 있는지 알리지 않는다).
   지금 넣는 서버는 게임 서버(서술 모델의 은퇴를 방장에게, 운영자의 제재를 당사자에게, [게임 서버의 알림 보내기](../trpg-server/README.md#알림-보내기))와
   결제 서버(결제, 청약철회, 환영 크레딧, 곧 사라질 무료 크레딧, 크레딧 부족을 그 사람에게, [결제 서버의 정리 작업과 대사](../billing-server/README.md#정리-작업과-대사)의 "사용자의 알림함"),
-  게시판 서버(내 글의 댓글, 내 댓글의 답글을 그 글쓴이에게, [게시판 서버의 알림 보내기](../board-server/README.md#알림-보내기))다.
+  게시판 서버(내 글의 댓글, 내 댓글의 답글을 그 글쓴이에게, [게시판 서버의 알림 보내기](../board-server/README.md#알림-보내기)),
+  asset 서버(캐릭터의 숨김과 풀기를 주인에게, 캐릭터 신고의 처리를 신고한 사람에게)와 chat 서버(대화 속 답의 신고의 처리를 신고한 사람에게)다(#678).
+  asset 과 chat 이 실제로 보내는 것은 그 서버의 다음 PR 이다. 알림 서버를 먼저 배포한다.
 - **서명은 결제 서버와 같은 모양이다.** `HMAC-SHA256(비밀, "<시각>.<메서드>\n<주소>\n<본문>")` 의 16진수. 주소는 호스트를 뺀 경로다.
   서명을 만들고 확인하는 코드는 공용 코드 `server_core/service_auth/signing.py` 에 있다(#588).
   주소까지 서명하므로 한 서버의 서명을 다른 서버의 주소에 붙여 쓸 수 없다. 시각이 앞뒤 5분을 넘긴 서명은 받지 않는다.
@@ -210,6 +213,10 @@ Content-Type: application/json
 | `credit.short` | `billing` | `price_code`, `amount`, `gold_required` |
 | `post.commented` | `board` | `board_slug`, `post_id`, `post_title`, `comment_id` |
 | `comment.replied` | `board` | `board_slug`, `post_id`, `post_title`, `comment_id`, `parent_id` |
+| `character.hidden` | `asset` | `character_id`, `name` |
+| `character.unhidden` | `asset` | `character_id`, `name` |
+| `character_report.handled` | `asset` | `name` |
+| `message_report.handled` | `chat` | `name` |
 
 - 각 칸의 뜻과 받는 사람은 넣는 서버의 README(게임과 게시판의 "알림 보내기", 결제의 "정리 작업과 대사")와
   화면 명세(`docs/product/screens.md` 의 A10)에 있다.

@@ -271,6 +271,29 @@ async def test_refuses_a_kind_from_a_server_that_does_not_own_it(client: AsyncCl
     assert await count_rows(session) == 0
 
 
+async def test_asset_and_chat_put_their_moderation_notices(client: AsyncClient, session: AsyncSession):
+    hidden = make_body(
+        source_key='character-hidden:1', kind='character.hidden', payload={'character_id': 'c-1', 'name': '세라'}
+    )
+    handled = make_body(source_key='message-report:1', kind='message_report.handled', payload={'name': '세라'})
+
+    from_asset = await signed_put(client, hidden, source='asset')
+    from_chat = await signed_put(client, handled, source='chat')
+
+    assert (from_asset.status_code, from_chat.status_code) == (status.HTTP_201_CREATED, status.HTTP_201_CREATED)
+    sources = set(await session.scalars(select(Notification.source)))
+    assert sources == {'asset', 'chat'}
+
+
+async def test_chat_cannot_hide_characters(client: AsyncClient, session: AsyncSession):
+    hidden = make_body(kind='character.hidden', payload={'character_id': 'c-1', 'name': '세라'})
+
+    response = await signed_put(client, hidden, source='chat')
+
+    assert response.json()['detail'] == {'code': 'kind_not_allowed', 'kind': 'character.hidden'}
+    assert await count_rows(session) == 0
+
+
 async def test_refuses_a_payload_without_the_fields_the_screen_needs(client: AsyncClient, session: AsyncSession):
     payload = {key: value for key, value in SANCTIONED.items() if key not in ('title', 'version_number')}
 

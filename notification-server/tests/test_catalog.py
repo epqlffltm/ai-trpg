@@ -15,8 +15,10 @@ import pytest
 
 from app.core.config import Settings
 from app.notifications.catalog import (
+    ASSET,
     BILLING,
     BOARD,
+    CHAT,
     GAME,
     KINDS,
     Refusal,
@@ -39,6 +41,8 @@ SENT_BY = {
     },
     BILLING: {'order.paid', 'order.refunded', 'credit.welcome', 'credit.expiring', 'credit.short'},
     BOARD: {'post.commented', 'comment.replied'},
+    ASSET: {'character.hidden', 'character.unhidden', 'character_report.handled'},
+    CHAT: {'message_report.handled'},
 }
 
 
