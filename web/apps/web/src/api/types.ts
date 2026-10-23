@@ -33,6 +33,17 @@ export type NarrationStyle = Trpg['schemas']['NarrationStyle'];
 export type TableMember = Trpg['schemas']['MemberOut'];
 export type CharacterUpdate = Trpg['schemas']['CharacterUpdate'];
 export type Ruleset = Trpg['schemas']['Ruleset'];
+// 제작 도구(B9). 재료의 목록은 종류를 가리지 않고 같은 모양이다
+export type AssetPage = Trpg['schemas']['AssetPage'];
+export type AssetSummary = Trpg['schemas']['AssetSummary'];
+export type RulebookDetail = Trpg['schemas']['RulebookDetail'];
+export type RulebookCreate = Trpg['schemas']['RulebookCreate'];
+export type RulebookUpdate = Trpg['schemas']['RulebookUpdate'];
+export type RulebookTemplates = Trpg['schemas']['TemplateList'];
+export type RulebookTemplate = Trpg['schemas']['TemplateSummary'];
+export type TemplateKey = Trpg['schemas']['Template'];
+export type Armor = Trpg['schemas']['Armor'];
+export type ArmorMode = Trpg['schemas']['ArmorMode'];
 export type PregenChoice = Trpg['schemas']['PregenChoice'];
 export type AbilityRoll = Trpg['schemas']['RollOut'];
 export type Round = Trpg['schemas']['RoundOut'];
