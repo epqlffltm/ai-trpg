@@ -303,6 +303,9 @@ class Settings(BaseSettings):
     # 한 사람이 한 테이블에 구간(CHAT_WINDOW_SECONDS) 안에 쓸 수 있는 채팅의 수
     chat_messages_per_window: int = Field(default=5, ge=1)
     chat_window_seconds: int = Field(default=10, ge=1)
+    # 한 사람이 구간(TRANSCRIPT_WINDOW_SECONDS) 안에 기록을 내려받을 수 있는 수(#617). 테이블을 가리지 않고 센다
+    transcripts_per_window: int = Field(default=10, ge=1)
+    transcript_window_seconds: int = Field(default=600, ge=1)
 
     # 공개 금지(블랙리스트, #392). 한 사람의 시나리오가 운영자에게 이만큼 제재되면 저절로 공개를 막는다.
     # 운영자가 풀면 그 뒤의 제재부터 다시 센다. 자기 시나리오와 남의 시나리오로 플레이하는 것은 막지 않는다

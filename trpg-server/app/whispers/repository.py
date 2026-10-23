@@ -8,6 +8,7 @@
 """
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,24 +21,35 @@ def add_whisper(session: AsyncSession, whisper: Whisper) -> None:
     session.add(whisper)
 
 
-async def last_sequence(session: AsyncSession, table_id: uuid.UUID, owner_id: uuid.UUID) -> int:
-    """이 쪽지함의 마지막 번호. 비어 있으면 0 이다."""
+async def last_sequence(
+    session: AsyncSession, table_id: uuid.UUID, owner_id: uuid.UUID, before: datetime | None = None
+) -> int:
+    """이 쪽지함의 마지막 번호. before 를 주면 그 시각까지 적힌 것 중에서다. 비어 있으면 0 이다."""
     query = select(func.coalesce(func.max(Whisper.sequence), 0)).where(
         Whisper.table_id == table_id, Whisper.owner_id == owner_id
     )
+    if before is not None:
+        query = query.where(Whisper.created_at <= before)
     return await session.scalar(query)
 
 
 async def list_after(
-    session: AsyncSession, table_id: uuid.UUID, owner_id: uuid.UUID, after: int, limit: int
+    session: AsyncSession,
+    table_id: uuid.UUID,
+    owner_id: uuid.UUID,
+    after: int,
+    limit: int,
+    until: int | None = None,
 ) -> list[Whisper]:
-    """이 사람의 쪽지함에서 after 번 뒤의 쪽지를 순서대로 돌려준다. limit 장까지다. 채팅을 읽는 방식과 같다."""
-    query = (
-        select(Whisper)
-        .where(Whisper.table_id == table_id, Whisper.owner_id == owner_id, Whisper.sequence > after)
-        .order_by(Whisper.sequence)
-        .limit(limit)
-    )
+    """
+    이 사람의 쪽지함에서 after 번 뒤의 쪽지를 순서대로 돌려준다. limit 장까지다. 채팅을 읽는 방식과 같다.
+
+    until 을 주면 그 번호까지만 준다. 기록을 내려받을 때 받기 시작한 때(떠난 사람은 떠난 때)까지만 읽는다.
+    """
+    query = select(Whisper).where(Whisper.table_id == table_id, Whisper.owner_id == owner_id, Whisper.sequence > after)
+    if until is not None:
+        query = query.where(Whisper.sequence <= until)
+    query = query.order_by(Whisper.sequence).limit(limit)
     return list(await session.scalars(query))
 
 
