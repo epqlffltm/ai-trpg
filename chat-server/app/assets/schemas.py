@@ -11,6 +11,7 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
        쓰는 것(현재 장소, 이동, 소지품)은 chat 의 만드는 순서 5(장소와 소지품)다
   - 3: 호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙). 형식 1, 2 의 판에서는 없다(null)
   - 4: 시작 상황의 시작 시각(hour)과 장소의 시간대 배경(backgrounds). 3 까지의 판은 정오에 시작하고 시간대 배경이 없다
+  - 5: 일러스트(그림, 해금 대상인지, 장면의 설명, 나오는 조건, #669). 4 까지의 판은 일러스트가 없다
 """
 
 import uuid
@@ -128,6 +129,31 @@ class AffectionDocument(BaseModel):
     rules: list[AffectionRuleDocument] = []
 
 
+class IllustrationConditionDocument(BaseModel):
+    """
+    일러스트가 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.
+    모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).
+    """
+
+    model_config = ConfigDict(extra='ignore')
+
+    kind: str
+    target: str
+
+
+class IllustrationDocument(BaseModel):
+    """일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    id: str
+    title: str
+    image_id: uuid.UUID
+    scene: str = ''
+    collectible: bool = True
+    when: IllustrationConditionDocument
+
+
 class CharacterDocument(BaseModel):
     """판에 굳힌 캐릭터. intro_html 은 asset 서버가 허용 목록으로 거른 소개다."""
 
@@ -150,6 +176,7 @@ class CharacterDocument(BaseModel):
     items: list[ItemDocument] = []
     start_items: list[StartItemDocument] = []
     affection: AffectionDocument | None = None
+    illustrations: list[IllustrationDocument] = []
 
 
 class CharacterCopy(BaseModel):

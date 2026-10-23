@@ -478,6 +478,11 @@ export interface components {
             gender: string;
             /** Greeting */
             greeting: string;
+            /**
+             * Illustrations
+             * @default []
+             */
+            illustrations: components["schemas"]["IllustrationDocument"][];
             /** Image Id */
             image_id: string | null;
             /** Intro Html */
@@ -720,6 +725,43 @@ export interface components {
             count: number;
             /** Item */
             item: string;
+        };
+        /**
+         * IllustrationConditionDocument
+         * @description 일러스트가 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.
+         *     모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).
+         */
+        IllustrationConditionDocument: {
+            /** Kind */
+            kind: string;
+            /** Target */
+            target: string;
+        };
+        /**
+         * IllustrationDocument
+         * @description 일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
+         */
+        IllustrationDocument: {
+            /**
+             * Collectible
+             * @default true
+             */
+            collectible: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /**
+             * Scene
+             * @default
+             */
+            scene: string;
+            /** Title */
+            title: string;
+            when: components["schemas"]["IllustrationConditionDocument"];
         };
         /**
          * ItemDocument

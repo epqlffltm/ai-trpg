@@ -554,6 +554,11 @@ export interface components {
              * @default
              */
             greeting: string;
+            /**
+             * Illustrations
+             * @default []
+             */
+            illustrations: components["schemas"]["Illustration"][];
             /** Image Id */
             image_id?: string | null;
             /**
@@ -625,6 +630,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Illustrations */
+            illustrations: components["schemas"]["Illustration"][];
             /** Image Id */
             image_id: string | null;
             /** Intro Html */
@@ -674,6 +681,11 @@ export interface components {
             gender: string;
             /** Greeting */
             greeting: string;
+            /**
+             * Illustrations
+             * @default []
+             */
+            illustrations: components["schemas"]["IllustrationDocument"][];
             /** Image Id */
             image_id: string | null;
             /** Intro Html */
@@ -756,6 +768,8 @@ export interface components {
             gender?: string | null;
             /** Greeting */
             greeting?: string | null;
+            /** Illustrations */
+            illustrations?: components["schemas"]["Illustration"][] | null;
             /** Image Id */
             image_id?: string | null;
             /** Intro Html */
@@ -804,6 +818,80 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * Illustration
+         * @description 일러스트 하나(#669). 조건이 맞은 뒤의 첫 응답에 붙어 배경과 캐릭터를 대신한다(chat).
+         *     collectible 이면 해금 대상이다. 한 번 열면 계정에 남고 갤러리와 소개의 칸에 보인다.
+         *     아니면 이야기 중에만 나온다(칸도 보이지 않는다). scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
+         */
+        Illustration: {
+            /**
+             * Collectible
+             * @default true
+             */
+            collectible: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /**
+             * Scene
+             * @default
+             */
+            scene: string;
+            /** Title */
+            title: string;
+            when: components["schemas"]["IllustrationCondition"];
+        };
+        /**
+         * IllustrationCondition
+         * @description 일러스트가 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다.
+         */
+        IllustrationCondition: {
+            kind: components["schemas"]["IllustrationWhen"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * IllustrationConditionDocument
+         * @description 일러스트가 나오는 조건(종류, 대상).
+         */
+        IllustrationConditionDocument: {
+            kind: components["schemas"]["IllustrationWhen"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * IllustrationDocument
+         * @description 일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
+         */
+        IllustrationDocument: {
+            /** Collectible */
+            collectible: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /** Scene */
+            scene: string;
+            /** Title */
+            title: string;
+            when: components["schemas"]["IllustrationConditionDocument"];
+        };
+        /**
+         * IllustrationWhen
+         * @description 일러스트가 나오는 조건의 종류(#669). 호감도의 규칙과 같은 (종류, 대상) 모양이다.
+         *     그 장소에 갔다(reach_place, 장소의 id), 그 물건을 처음 건넸다(give_item, 물건의 id),
+         *     호감도가 그 단계에 이르렀다(affection_stage, 단계의 이름). 맞추는 것은 chat 의 엔진이다.
+         * @enum {string}
+         */
+        IllustrationWhen: "reach_place" | "give_item" | "affection_stage";
         /**
          * ImageDetail
          * @description 올린 그림. url 은 그 그림을 내주는 주소다(소개 글의 img 에 그대로 쓴다).

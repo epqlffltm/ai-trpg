@@ -15,7 +15,7 @@
 import enum
 import uuid
 
-from app.characters.models import Character, TriggerKind
+from app.characters.models import Character, IllustrationWhen, TriggerKind
 from app.content.html import Cleaned, clean_intro, image_ids
 
 
@@ -34,6 +34,8 @@ class Problem(enum.StrEnum):
     ITEM_MISSING = 'item_missing'
     # 호감도의 규칙이 없는 물건이나 장소를 가리킨다
     AFFECTION_TARGET_MISSING = 'affection_target_missing'
+    # 일러스트의 조건이 없는 장소나 물건, 호감도의 단계를 가리킨다(호감도가 없는데 단계를 가리키는 것도)
+    ILLUSTRATION_TARGET_MISSING = 'illustration_target_missing'
 
 
 class CharacterNotReadyError(Exception):
@@ -78,10 +80,31 @@ def affection_problems(character: Character) -> list[Problem]:
     return []
 
 
+def illustration_targets(character: Character) -> dict[str, set[str]]:
+    """일러스트의 조건이 가리킬 수 있는 것들. 조건의 종류마다 장소의 id, 물건의 id, 호감도 단계의 이름이다."""
+    stages = {stage['name'] for stage in character.affection['stages']} if character.affection else set()
+    return {
+        IllustrationWhen.REACH_PLACE: {place['id'] for place in character.places},
+        IllustrationWhen.GIVE_ITEM: {item['id'] for item in character.items},
+        IllustrationWhen.AFFECTION_STAGE: stages,
+    }
+
+
+def illustration_problems(character: Character) -> list[Problem]:
+    """일러스트가 맞지 않는 것들. 조건은 있는 장소, 물건, 호감도의 단계를 가리켜야 한다."""
+    known = illustration_targets(character)
+    for illustration in character.illustrations:
+        when = illustration['when']
+        if when['target'] not in known[when['kind']]:
+            return [Problem.ILLUSTRATION_TARGET_MISSING]
+    return []
+
+
 def find_problems(character: Character) -> list[Problem]:
     """게시를 막는 것들. 없으면 빈 목록이다."""
     problems = [] if character.starts else [Problem.START_MISSING]
-    return problems + place_problems(character) + item_problems(character) + affection_problems(character)
+    problems += place_problems(character) + item_problems(character)
+    return problems + affection_problems(character) + illustration_problems(character)
 
 
 def cleaned_intro(character: Character) -> Cleaned:
@@ -90,8 +113,8 @@ def cleaned_intro(character: Character) -> Cleaned:
 
 
 def world_image_ids(character: Character) -> list[uuid.UUID]:
-    """장소의 배경(기본과 시간대마다)과 물건의 그림. 초안에는 글로 적혀 있다."""
-    entries = [*character.places, *character.items]
+    """장소의 배경(기본과 시간대마다), 물건의 그림, 일러스트. 초안에는 글로 적혀 있다."""
+    entries = [*character.places, *character.items, *character.illustrations]
     found = [uuid.UUID(entry['image_id']) for entry in entries if entry.get('image_id')]
     backgrounds = [image for place in character.places for image in place.get('backgrounds', {}).values()]
     return found + [uuid.UUID(image) for image in backgrounds]
