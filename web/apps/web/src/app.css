@@ -1600,6 +1600,8 @@ a.ui-button {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0 12px;
+  /* 한쪽에만 도움말이 있어도 칸의 위를 맞춘다 */
+  align-items: start;
 }
 
 .scenario-players__row > * {
@@ -1609,4 +1611,13 @@ a.ui-button {
 .scenario-players__row .ui-field__input {
   width: 100%;
   box-sizing: border-box;
+}
+
+/* 소지품의 한 줄(물건, 개수, 착용). 줄마다 테두리로 나눈다 */
+.scenario-stack {
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 10px;
+  min-width: 0;
 }

@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/labels.ts
-// 게임 서버의 값(영문의 이름)을 화면의 글로 바꾼다. 장르, 캐릭터 방식, 서술 문체의 이름은 화면이 정한다(서버는 값만 준다).
+// 게임 서버의 값(영문의 이름)을 화면의 글로 바꾼다. 장르, 캐릭터 방식, 서술 문체, 물건의 종류와 등급의 이름은 화면이 정한다(서버는 값만 준다).
 
-import type { CharacterMode, Genre, NarrationStyle, RecommendedPlayers } from '../../api/types';
+import type { CharacterMode, Genre, ItemKind, ItemRarity, NarrationStyle, RecommendedPlayers } from '../../api/types';
 
 // 차례가 곧 거르는 칩의 차례다. 앞의 열한 개는 이야기의 종류, 뒤의 둘은 누구를 위한 이야기인가(화면 명세 B1)
 const GENRES: Record<Genre, string> = {
@@ -39,6 +39,28 @@ const NARRATION_STYLES: Record<NarrationStyle, string> = {
   dopamine: '도파민',
   literary: '문학',
 };
+
+const ITEM_KINDS: Record<ItemKind, string> = { gear: '장비', consumable: '소모품' };
+
+// 물건의 등급. 차례가 곧 낮은 것에서 높은 것이다(높을수록 훔치기 어렵다)
+const RARITIES: Record<ItemRarity, string> = {
+  normal: '보통',
+  rare: '희귀',
+  unique: '고유',
+  epic: '영웅',
+  legendary: '전설',
+};
+
+export const ITEM_KIND_VALUES = Object.keys(ITEM_KINDS) as ItemKind[];
+export const RARITY_VALUES = Object.keys(RARITIES) as ItemRarity[];
+
+export function itemKindLabel(kind: ItemKind): string {
+  return ITEM_KINDS[kind];
+}
+
+export function rarityLabel(rarity: ItemRarity): string {
+  return RARITIES[rarity];
+}
 
 export const GENRE_VALUES = Object.keys(GENRES) as Genre[];
 
