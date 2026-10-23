@@ -1,7 +1,8 @@
 # chat-server/app/world/scene.py
 
 """
-모델에 보내는 "[지금]" 블록. 지금 있는 장소와 그 설명, 갈 수 있는 곳, 사용자의 소지품, 상대의 차림이다.
+모델에 보내는 "[지금]" 블록. 지금 있는 장소와 그 설명, 갈 수 있는 곳, 사용자의 소지품, 상대의 차림,
+사용자에 대한 상대의 호감도(단계 이름만. 숫자는 보내지 않는다)다.
 DB 를 모르는 순수 함수다.
 
 모델은 이것을 읽고 반응만 쓴다. 바꾸는 것은 서버다(이동, 쓰기, 건네기).
@@ -9,6 +10,7 @@ DB 를 모르는 순수 함수다.
 """
 
 from app.assets.schemas import CharacterDocument
+from app.world.affection import stage_of
 from app.world.moves import find_place
 from app.world.state import WorldState
 
@@ -46,6 +48,13 @@ def outfit_line(document: CharacterDocument, state: WorldState) -> str | None:
     return f'상대의 차림: {", ".join(worn)}' if worn else None
 
 
+def affection_line(document: CharacterDocument, state: WorldState) -> str | None:
+    """'사용자에 대한 호감: 친구'. 호감도가 없으면 None. 모델에는 단계 이름만 간다."""
+    if document.affection is None or state.affection is None:
+        return None
+    return f'사용자에 대한 호감: {stage_of(document.affection, state.affection).name}'
+
+
 def render_scene(document: CharacterDocument, state: WorldState) -> str | None:
     """'[지금]' 블록. 적을 것이 없으면 None."""
     found = (
@@ -53,6 +62,7 @@ def render_scene(document: CharacterDocument, state: WorldState) -> str | None:
         exits_line(document, state),
         inventory_line(document, state),
         outfit_line(document, state),
+        affection_line(document, state),
     )
     lines = [line for line in found if line]
     return '\n'.join(['[지금]', *lines]) if lines else None
