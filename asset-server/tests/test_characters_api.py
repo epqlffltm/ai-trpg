@@ -24,6 +24,7 @@ from server_core.testing.tokens import FakeAuthServer, SigningKey, make_access_c
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.characters.documents import DOCUMENT_FORMAT
 from app.characters.models import CHARACTER_MAX_TAGS, Character, CharacterVersion
 from app.content.html import INTRO_MAX_BYTES
 from app.main import API_PREFIX, create_app
@@ -36,7 +37,7 @@ LISTINGS_URL = f'{API_PREFIX}/listings/characters'
 OPERATOR = uuid.UUID('11111111-2222-4333-8444-555555555555')
 PLAYER = uuid.UUID('99999999-2222-4333-8444-555555555555')
 NO_SUCH_ID = '00000000-0000-4000-8000-000000000000'
-START = {'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.'}
+START = {'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.', 'hour': 21}
 FULL = {
     'name': '세라',
     'intro_html': '<p>도서관의 <strong>사서</strong>.</p><script>alert(1)</script><a href="javascript:x">링크</a>',
@@ -263,7 +264,7 @@ async def test_publishing_freezes_a_cleaned_document(client: AsyncClient, operat
         first['document']['intro_html'] == '<p>도서관의 <strong>사서</strong>.</p><a rel="noopener noreferrer">링크</a>'
     )
     assert first['removed'] == [{'kind': 'tag', 'name': 'script'}, {'kind': 'link', 'name': 'javascript:x'}]
-    assert first['document']['format'] == 3 and first['document']['starts'] == [START]
+    assert first['document']['format'] == DOCUMENT_FORMAT and first['document']['starts'] == [START]
     # 판은 바뀌지 않는다. 초안은 쓴 그대로다(거르지 않는다)
     assert frozen['document'] == first['document']
     assert draft['name'] == '세라 2' and '<script>' in draft['intro_html']

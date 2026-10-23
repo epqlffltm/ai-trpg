@@ -90,9 +90,11 @@ def cleaned_intro(character: Character) -> Cleaned:
 
 
 def world_image_ids(character: Character) -> list[uuid.UUID]:
-    """장소의 배경과 물건의 그림. 초안에는 글로 적혀 있다."""
+    """장소의 배경(기본과 시간대마다)과 물건의 그림. 초안에는 글로 적혀 있다."""
     entries = [*character.places, *character.items]
-    return [uuid.UUID(entry['image_id']) for entry in entries if entry.get('image_id')]
+    found = [uuid.UUID(entry['image_id']) for entry in entries if entry.get('image_id')]
+    backgrounds = [image for place in character.places for image in place.get('backgrounds', {}).values()]
+    return found + [uuid.UUID(image) for image in backgrounds]
 
 
 def used_image_ids(character: Character, intro_html: str) -> list[uuid.UUID]:

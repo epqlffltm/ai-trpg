@@ -10,6 +10,7 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
   - 2: 지도(장소, 길, 처음 있는 장소)와 물건(물건, 시작 소지품). 형식 1 의 판에서는 비어 있다.
        쓰는 것(현재 장소, 이동, 소지품)은 chat 의 만드는 순서 5(장소와 소지품)다
   - 3: 호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙). 형식 1, 2 의 판에서는 없다(null)
+  - 4: 시작 상황의 시작 시각(hour)과 장소의 시간대 배경(backgrounds). 3 까지의 판은 정오에 시작하고 시간대 배경이 없다
 """
 
 import uuid
@@ -19,18 +20,26 @@ from pydantic import BaseModel, ConfigDict
 
 from app.ratings import Rating
 
+# 시작 시각을 적지 않은 시작 상황(형식 3 까지의 판)은 정오에 시작한다(asset 서버의 START_HOUR_DEFAULT 와 같다)
+START_HOUR_DEFAULT = 12
+
 
 class StartDocument(BaseModel):
-    """시작 상황 하나. 제목은 목록에, 상황은 모델에 간다."""
+    """시작 상황 하나. 제목은 목록에, 상황은 모델에 간다. hour 는 시작하는 시각(몇 시, 0~23)이다."""
 
     model_config = ConfigDict(extra='ignore')
 
     title: str
     situation: str
+    hour: int = START_HOUR_DEFAULT
 
 
 class PlaceDocument(BaseModel):
-    """장소 하나. id 는 캐릭터 안에서 고유하다. 그림은 그 장소의 배경이다."""
+    """
+    장소 하나. id 는 캐릭터 안에서 고유하다. 그림(image_id)은 그 장소의 기본 배경이다.
+    backgrounds 는 시간대(dawn, morning, day, evening, night)마다의 배경이다.
+    모르는 시간대도 받아 둔다(쓰이지 않을 뿐이다).
+    """
 
     model_config = ConfigDict(extra='ignore')
 
@@ -38,6 +47,7 @@ class PlaceDocument(BaseModel):
     name: str
     description: str
     image_id: uuid.UUID | None
+    backgrounds: dict[str, uuid.UUID] = {}
 
 
 class PathDocument(BaseModel):
