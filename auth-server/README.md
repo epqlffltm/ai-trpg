@@ -428,7 +428,7 @@ GET /api/v1/auth/public-names?ids=<공개 ID>,<공개 ID>
   보안 기록(30일 뒤 함께 지워진다), 보호자 결제 알림의 기록(결제의 법정 보존과 함께 정한다)
 - 지우기 전의 주소로 "탈퇴를 마쳤다" 메일을 보낸다. 다른 사람이 이름을 물으면 `null` 이다(`/public-names`)
 
-**다른 서버에 알리기.** 비우는 트랜잭션에서 결제, 알림, 게임, 게시판, asset 마다 한 줄(`WithdrawalNotice`)을 적는다. 워커가 서명해
+**다른 서버에 알리기.** 비우는 트랜잭션에서 결제, 알림, 게임, 게시판, asset, chat 마다 한 줄(`WithdrawalNotice`)을 적는다. 워커가 서명해
 `POST /api/v1/<서버>/service/users/{public_id}/withdrawal`(본문 `{"withdrawn_at": "..."}`)로 보내고, `200` 과 `{"status": "processed"}` 를 받을 때까지
 5초, 10초, ... 1시간까지 늘려 가며 다시 보낸다. 버리지 않는다(`accounts/withdrawal_client.py`).
 **비밀이 비어 있는 서버에는 보내지 않는다.** 그 줄은 비밀을 적을 때까지 기다린다. 서버마다의 설정은 아래 표다. 주소는 적지 않으면 로컬의 포트다.
@@ -440,6 +440,7 @@ GET /api/v1/auth/public-names?ids=<공개 ID>,<공개 ID>
 | 게임 | `GAME_URL`(`http://127.0.0.1:8001`) | `GAME_SECRET` |
 | 게시판 | `BOARD_URL`(`http://127.0.0.1:8002`) | `BOARD_SECRET` |
 | asset | `ASSET_URL`(`http://127.0.0.1:8006`) | `ASSET_SECRET` |
+| chat | `CHAT_URL`(`http://127.0.0.1:8005`) | `CHAT_SECRET` |
 
 받는 주소를 만드는 그 서버의 PR 이 `.env.example` 과 compose 에 비밀을 더한다([탈퇴 설계](../docs/architecture/withdrawal.md)의 "서버마다의 이름").
 알리지 못하면 로그에 `warning`(`error_code: withdrawal.undelivered`)이 남고, 관리자 화면의 "탈퇴 알림"에 시도 횟수와 마지막 오류가 남는다.

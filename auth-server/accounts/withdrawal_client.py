@@ -44,6 +44,7 @@ DESTINATIONS: dict[str, Destination] = {
     WithdrawalTarget.GAME: Destination('/api/v1/game', 'GAME_URL', 'GAME_SECRET'),
     WithdrawalTarget.BOARD: Destination('/api/v1/board', 'BOARD_URL', 'BOARD_SECRET'),
     WithdrawalTarget.ASSET: Destination('/api/v1/asset', 'ASSET_URL', 'ASSET_SECRET'),
+    WithdrawalTarget.CHAT: Destination('/api/v1/chat', 'CHAT_URL', 'CHAT_SECRET'),
 }
 
 

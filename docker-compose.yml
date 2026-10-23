@@ -394,6 +394,7 @@ services:
       GAME_SECRET: ""
       NOTIFICATION_SECRET: ""
       BOARD_SECRET: ""
+      CHAT_SECRET: ""
       SMTP_PASSWORD: ""
     depends_on:
       db:
@@ -411,11 +412,12 @@ services:
       JWT_PRIVATE_KEY_PATH: keys/jwt-private.pem
       # 서버는 결제 서버를 부르지 않는다(부르는 것은 환영 크레딧의 워커다). 다만 결제 서버가 보낸
       # 보호자 알림(/service/guardian-notices)의 서명을 이 비밀로 확인하므로 BILLING_SECRET 을 남긴다(#352)
-      # 탈퇴를 알리는 것도 워커다. asset, 게임, 알림, 게시판 서버에 알릴 때의 비밀을 비운다
+      # 탈퇴를 알리는 것도 워커다. asset, 게임, 알림, 게시판, chat 서버에 알릴 때의 비밀을 비운다
       ASSET_SECRET: ""
       GAME_SECRET: ""
       NOTIFICATION_SECRET: ""
       BOARD_SECRET: ""
+      CHAT_SECRET: ""
     # span 과 메트릭을 Alloy 에 민다(telemetry)
     networks: [default, telemetry]
     # 토큰에 서명하는 것은 이 서버뿐이다. 키 폴더는 여기에만 붙인다
@@ -452,6 +454,7 @@ services:
       GAME_SECRET: ""
       NOTIFICATION_SECRET: ""
       BOARD_SECRET: ""
+      CHAT_SECRET: ""
     networks: [default, telemetry]
     healthcheck: *worker-heartbeat
     depends_on:
@@ -472,11 +475,13 @@ services:
       <<: [*auth-environment, *auth-without-signing-key, *telemetry-environment]
       HEARTBEAT_FILE: /tmp/heartbeat
       SMTP_PASSWORD: ""
-      # 탈퇴를 알릴 서버의 주소(docs/architecture/withdrawal.md). 비밀(ASSET_SECRET, GAME_SECRET, NOTIFICATION_SECRET, BOARD_SECRET)은 auth-server/.env 에 있다
+      # 탈퇴를 알릴 서버의 주소(docs/architecture/withdrawal.md).
+      # 비밀(ASSET_SECRET, GAME_SECRET, NOTIFICATION_SECRET, BOARD_SECRET, CHAT_SECRET)은 auth-server/.env 에 있다
       ASSET_URL: http://asset-server:8006
       GAME_URL: http://trpg-server:8001
       NOTIFICATION_URL: http://notification-server:8004
       BOARD_URL: http://board-server:8002
+      CHAT_URL: http://chat-server:8005
     networks: [default, telemetry]
     healthcheck: *worker-heartbeat
     depends_on:
@@ -501,6 +506,7 @@ services:
       GAME_SECRET: ""
       NOTIFICATION_SECRET: ""
       BOARD_SECRET: ""
+      CHAT_SECRET: ""
     networks: [default, telemetry]
     volumes:
       - ./docker/cron/auth.crontab:/etc/supercronic/crontab:ro
@@ -763,13 +769,15 @@ services:
     command: ["alembic", "upgrade", "heads"]
     env_file: ./chat-server/.env
     # 마이그레이션은 DB 만 쓴다. asset 서버와 결제 서버의 주소와 서명 비밀, 모델의 키를 함께 비운다.
-    # 주소만 남으면(.env.example 의 ASSET_URL) 설정의 검사가 "주소는 있고 비밀이 없다"로 막는다(로컬 VM 리허설, 2026-10-22)
+    # 주소만 남으면(.env.example 의 ASSET_URL) 설정의 검사가 "주소는 있고 비밀이 없다"로 막는다(로컬 VM 리허설, 2026-10-22).
+    # 탈퇴 알림을 받는 비밀(AUTH_SERVER_SECRET)도 비운다. 받지 않고, 설정이 길이를 본다(#670)
     environment:
       <<: *chat-environment
       ASSET_URL: ""
       ASSET_SECRET: ""
       BILLING_URL: ""
       BILLING_SECRET: ""
+      AUTH_SERVER_SECRET: ""
       OPENAI_API_KEY: ""
       ANTHROPIC_API_KEY: ""
       GEMINI_API_KEY: ""

@@ -158,6 +158,7 @@ SECRETS = (
     ),
     shared('인증 서버 → asset 서버', ('auth-server/.env', 'ASSET_SECRET'), ('asset-server/.env', 'AUTH_SERVER_SECRET')),
     shared('인증 서버 → 게임 서버', ('auth-server/.env', 'GAME_SECRET'), ('trpg-server/.env', 'AUTH_SERVER_SECRET')),
+    shared('인증 서버 → chat 서버', ('auth-server/.env', 'CHAT_SECRET'), ('chat-server/.env', 'AUTH_SERVER_SECRET')),
     shared('게임 서버의 실시간 신호', ('trpg-server/.env', 'SIGNAL_SECRET')),
     shared('게임 서버의 AI 기록 지문', ('trpg-server/.env', 'AI_LOG_HMAC_KEY')),
 )
