@@ -69,7 +69,8 @@ class StateOut(BaseModel):
     clock: ClockOut
     # 지금 장소와 시간대의 배경 그림. 시간대의 것이 없으면 장소의 기본 배경, 장소나 그림이 없으면 null
     background: uuid.UUID | None
-    # 지금 띄울 캐릭터 그림(배경 위에 겹친다). 상대의 차림에 맞춘 기본 표정의 그림이다. 그림이 없으면 null
+    # 지금 띄울 캐릭터 그림(배경 위에 겹친다). 상대의 차림과 가지 끝의 답의 표정(없으면 기본)에 맞춘 그림이다.
+    # 그림이 없으면 null
     sprite: uuid.UUID | None
     inventory: list[HoldingOut]
     visited: list[str]
@@ -142,15 +143,20 @@ def clock_out(state: WorldState, start_hour: int) -> ClockOut:
     return ClockOut(day=time.day, hour=time.hour, minute=time.minute, time_of_day=time.time_of_day)
 
 
-def state_out(state: WorldState, document: CharacterDocument, start_hour: int) -> StateOut:
-    """상태를 응답의 모양으로. start_hour 는 대화의 시작 시각(몇 시)이다."""
+def state_out(
+    state: WorldState, document: CharacterDocument, start_hour: int, expression: str | None = None
+) -> StateOut:
+    """
+    상태를 응답의 모양으로. start_hour 는 대화의 시작 시각(몇 시)이다.
+    expression 은 가지 끝의 캐릭터의 답에서 모델이 고른 표정이다(캐릭터 그림을 고를 때 쓴다).
+    """
     clock = clock_out(state, start_hour)
     return StateOut(
         place=state.place,
         minutes=state.minutes,
         clock=clock,
         background=background_of(document, state.place, clock.time_of_day),
-        sprite=sprite_image(document, state),
+        sprite=sprite_image(document, state, expression),
         inventory=[HoldingOut(item=holding.item, count=holding.count) for holding in state.inventory],
         visited=list(state.visited),
         outfit=list(state.outfit),

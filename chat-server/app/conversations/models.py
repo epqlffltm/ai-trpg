@@ -199,4 +199,7 @@ class Message(Base):
     # 이 말에 답하는 차례에 나온 이벤트 씬(판의 이벤트 씬 id, #669). 행동으로 조건이 맞은 말에만 있다.
     # 이 말에 대한 답(다시 생성한 대안까지)이 그 이벤트 씬을 그림 창에 띄운다
     event_scene: Mapped[str | None] = mapped_column(String(40), default=None)
+    # 캐릭터의 답에서 모델이 고른 표정(캐릭터 그림의 표정 이름, app/conversation/expressions.py).
+    # 기본 표정이면 비어 있다
+    expression: Mapped[str | None] = mapped_column(String(20), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
