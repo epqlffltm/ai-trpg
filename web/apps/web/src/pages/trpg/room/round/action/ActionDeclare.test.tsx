@@ -43,16 +43,20 @@ const CAST = {
 };
 
 function open(routes: Record<string, (request: SeenRequest) => Response> = {}) {
+  // 실제 서버처럼, 선언을 낸 뒤의 지금 라운드 읽기에도 낸 것이 보인다(이벤트의 묶은 읽기가 언제 와도 같다)
+  let current = round(2);
   return installFakeFetch({
     [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
     'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', public_id: ME }),
     ...roomRoutes(TABLE_ID, {
       [`GET ${BASE}`]: () => json(200, playing()),
-      [`GET ${BASE}/rounds/current`]: () => json(200, round(2)),
+      [`GET ${BASE}/rounds/current`]: () => json(200, current),
       [`GET ${BASE}/rounds`]: () => json(200, { items: [round(2)], total: 1 }),
       [`GET ${BASE}/rounds/current/people`]: () => json(200, CAST),
-      [`PUT ${BASE}/rounds/current/declaration`]: (request) =>
-        json(200, round(2, { waiting_for: [OTHER], declarations: [declaration(ME, request.body as Record<string, unknown>)] })),
+      [`PUT ${BASE}/rounds/current/declaration`]: (request) => {
+        current = round(2, { waiting_for: [OTHER], declarations: [declaration(ME, request.body as Record<string, unknown>)] });
+        return json(200, current);
+      },
       ...routes,
     }),
   });
