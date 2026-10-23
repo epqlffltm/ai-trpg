@@ -25,6 +25,7 @@ from ai_core.fake import FakeCallLog
 from ai_core.provider import Reasoning
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 
 from app.ai_log.metered import MeteredCallLog
@@ -64,7 +65,6 @@ from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import NO_PREVIEW, Move, NarrationRequest, Preview, StoryContext
 from app.rounds.retrying_narrator import RetryingNarrator
 from tests.metrics import MetricsRecorder
-from tests.signing import SigningKey
 from tests.test_npc_actions import bearer, declare, table_url
 from tests.test_round_time_limit import after, clock_at, current, start_with
 

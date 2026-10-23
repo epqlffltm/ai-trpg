@@ -17,6 +17,7 @@ import json
 import pytest
 from httpx import AsyncClient
 from pydantic import ValidationError
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +25,6 @@ from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_24
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
-from tests.signing import SigningKey
 from tests.test_injuries import make_format_13
 from tests.test_npc_actions import bearer, start_table
 from tests.test_ruleset import load_migration

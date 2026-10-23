@@ -16,11 +16,11 @@
 import pytest
 from fastapi import status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 
 from app.calendar.clock import ClockTime, TimeOfDay, read_time, start_minutes, time_of_day
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey
 from tests.test_rounds_api import (
     FRIEND,
     ME,

@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +30,6 @@ from app.tables import repository as table_repository
 from app.tables.model_retirement import notice_stage
 from app.tables.retirement_watch import RetirementWatch
 from tests.catalog_rows import retire
-from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, FixedPrices, add_enabled, book, on_sale
 from tests.test_npc_actions import bearer, declare, events_of, table_url
 from tests.test_recommended_model import MINI

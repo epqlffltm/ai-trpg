@@ -18,8 +18,7 @@ from contextvars import ContextVar
 from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.trace import NonRecordingSpan, Span, SpanContext, SpanKind, StatusCode, TraceFlags, TracerProvider
-
-from app.observability.identifiers import Trace, traceparent_parts
+from server_core.observability.identifiers import Trace, traceparent_parts
 
 # span 을 만드는 쪽의 이름. 서비스 이름과 같다
 SCOPE_NAME = 'trpg-server'

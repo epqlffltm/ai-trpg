@@ -10,13 +10,13 @@
 import uuid
 
 from fastapi import APIRouter, status
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.models import World
 from app.assets.routing import Paging, Session, to_page, to_summary
 from app.assets.schemas import AssetPage
 from app.assets.worlds import service
 from app.assets.worlds.schemas import WorldCreate, WorldDetail, WorldUpdate
-from app.auth.dependencies import CurrentUser
 
 router = APIRouter(prefix='/worlds', tags=['worlds'])
 

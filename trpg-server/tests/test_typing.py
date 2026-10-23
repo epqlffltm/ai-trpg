@@ -16,6 +16,7 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 
 from app.chat.typing import PRUNE_THRESHOLD, TYPING_INTERVAL_SECONDS, TypingThrottle
 from app.main import API_PREFIX
@@ -23,7 +24,6 @@ from app.realtime.service import Cursor
 from app.realtime.signals import Kind, Signal
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.streaming import DeafSource
 
 pytestmark = pytest.mark.usefixtures('clean_tables')

@@ -186,6 +186,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
   1. notification 과 asset 에서 뽑아 `shared/server-core` 를 만들고 두 서버를 옮긴다. 두 서버의 코드가 거의 같아 차이가 적다. 같은 PR 에서 compose 의 `additional_contexts`, 두 서버의 Dockerfile, `changed-servers.sh` 가 경로 의존을 읽게 하는 일, CI 를 함께 바꾼다(#588. 끝).
   2. chat-server 와 story-server 는 처음부터 `server-core` 를 쓴다.
   3. trpg-server 는 그 뒤에 한 폴더씩 옮긴다(인증, 관측, 서명 순). 지표와 구간이 다른 곳은 [정해 둔 자리](#재정의하는-법)로 넘긴다.
+     첫 PR(#589 의 1/3)에서 설정(`CoreSettings`), 인증, 작업의 틀(`loops`), 관측의 문맥과 식별자를 옮겼다. 인증이 다른 서버를 부를 때 붙이는 추적의 문맥이 둘로 갈리지 않게 함께 옮겼다.
 - AI 호출 코드는 단계로 뽑는다. 먼저 trpg-server 안에서 `app/ai` 가 다른 폴더를 가져오지 않게 경계를 정리했다(#496, #497, #498. 끝). 다음으로 `shared/ai-core` 로 폴더째 옮겼다(#499 의 1단계, 2026-10-22. 끝). 두 번째로 쓰는 곳인 chat 의 "한 번의 말"이 바로 뒤라, 그 PR 이 커지지 않게 옮기는 일만 먼저 했다. 모델 목록을 파일 원본으로 바꾸는 것(2단계)은 chat 이 모델을 부를 때 한다.
 - 템플릿은 asset-server 를 만들 때 정한다. 캐릭터는 처음부터 asset-server 에서 만들고, 세계관과 로어북은 trpg-server 에서 옮겨 온다. chat 이라는 두 번째 사용자가 확실하므로 일찍 정한다.
   그 밖의 템플릿(지도, 물건, 인물)은 chat 이 실제로 쓰려고 할 때 뽑는다. 처음부터 공용 패키지로 만들지 않는다.
@@ -206,7 +207,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 - `shared/server-core` 는 인프라와 문서를 맡는 쪽이 만들고 고친다. notification 과 asset 을 옮기는 일도 그쪽이 한다. trpg-server 를 옮기는 일은 게임 서버를 만드는 쪽이 한다(2026-10-21).
 - `shared/ai-core` 와 `shared/conversation-core` 는 게임 서버와 chat, story 를 만드는 쪽이 주도하고, 나중에 쓰는 서비스가 따라간다. 공용 코드 때문에 한 서비스의 진행이 다른 서비스에 막히는 일을 줄이려는 것이다. `app/ai` 를 `shared/ai-core` 로 옮기는 일(#499 의 1단계)만 인프라와 문서를 맡는 쪽이 했다(2026-10-22).
 - 공용으로 올라간 뒤에 형식을 바꿀 때는, 쓰는 서비스를 모두 확인하고 한 PR 에서 맞춘다.
-- 게임 서버의 `app/lore`, `app/memory`, `app/assets`, 그리고 게임 서버의 `app/auth`, `app/observability` 는 공용 후보이므로 고칠 때는 이 문서를 읽고 쓰임을 확인한다. `server-core` 로 옮기는 동안 그 폴더를 다른 PR 이 고치면 알린다.
+- 게임 서버의 `app/lore`, `app/memory`, `app/assets`, 그리고 게임 서버의 `app/observability` 는 공용 후보이므로 고칠 때는 이 문서를 읽고 쓰임을 확인한다. `server-core` 로 옮기는 동안 그 폴더를 다른 PR 이 고치면 알린다.
 - `ai_core` 가 서버의 모듈, 다른 공용 패키지, 관측의 코드를 가져오면 테스트가 실패한다(`shared/ai-core/tests/test_boundary.py`, #498). 예외를 두지 않는다. 필요하면 경계를 다시 의논한다.
 
 ## 정한 것

@@ -15,6 +15,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 
 from app.assets.models import SCENARIO_MAX_QUEST_RULES, SCENARIO_MAX_STARTING_ITEMS, QuestStart
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot, quest_entries, quest_rule_of, read_snapshot
@@ -22,7 +23,6 @@ from app.assets.scenarios.upgrades import upgrade_from_17
 from app.main import API_PREFIX
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_npc_sheets import add_entry, create_scenario, post, published, refused
 from tests.test_scenario_items import entry, snapshot_document, stack
 

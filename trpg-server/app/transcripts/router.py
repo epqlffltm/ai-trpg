@@ -20,9 +20,9 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import StreamingResponse
+from server_core.auth.dependencies import CurrentUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import CurrentUser
 from app.limits.routing import Limited
 from app.limits.setup import Limiting
 from app.transcripts import reading

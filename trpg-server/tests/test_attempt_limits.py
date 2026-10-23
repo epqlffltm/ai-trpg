@@ -26,6 +26,7 @@ from datetime import timedelta
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 
 from app.limits.attempts import AttemptLimit, Limiter, LimitsUnavailable, TooManyAttempts
 from app.limits.counters import CounterUnavailable, MemoryCounter, Tally
@@ -35,7 +36,6 @@ from app.main import create_app
 from app.tables import passwords
 from tests.conftest import make_test_settings
 from tests.logs import rendered
-from tests.signing import SigningKey
 from tests.test_chat_api import open_duo
 from tests.test_lobby_api import PASSWORD, bearer, join_url, open_table
 

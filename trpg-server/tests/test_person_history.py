@@ -15,6 +15,7 @@ import pytest
 from ai_core.fake import FakeProvider
 from fastapi import FastAPI
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 
 from app.ai_log.call_log import DbCallLog
 from app.assets.models import LoreKind
@@ -42,7 +43,6 @@ from app.rounds.narrator import (
     PersonHistory,
     StoryContext,
 )
-from tests.signing import SigningKey, make_access_claims, make_token
 
 # 테이블을 열고 라운드를 진행하는 도우미와 예시는 지난 일의 테스트와 같은 것을 쓴다
 from tests.test_memory import CURRENT, LADY, ME, open_table, play, played_table

@@ -289,6 +289,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 
 게임 서버는 회원 정보를 갖지 않는다. 인증 서버가 발급한 access 토큰을 공개키(JWKS)로 검증만 한다.
 인증 서버의 DB를 보지 않고, 요청마다 인증 서버를 부르지도 않는다.
+검증하는 코드는 FastAPI 서버들이 함께 쓰는 `shared/server-core` 의 `server_core/auth/` 다(#589). 테스트도 그쪽에 있다.
 
 확인하는 것: 서명 방식이 RS256인가, 인증 서버의 키로 서명됐는가, 만료되지 않았는가(`exp`),
 발급자가 맞는가(`iss`), 이 서버용인가(`aud`), access 토큰인가(`token_type`), 끊긴 세션의 것이 아닌가(`ver`). 서버 간 시계 차이는 10초까지 봐준다.
@@ -304,7 +305,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 
 그래서 인증 서버가 잠깐(30분 안) 죽어도, 키를 가져온 게임 서버는 이미 로그인한 사용자의 요청을 계속 처리한다.
 
-**로그인 없이 읽는 길(#530).** 공개 목록(`GET /listings`)과 시나리오 소개(`GET /listings/{id}`)만 토큰 없이 받는다(`app/auth/dependencies.py` 의 `OptionalUser`).
+**로그인 없이 읽는 길(#530).** 공개 목록(`GET /listings`)과 시나리오 소개(`GET /listings/{id}`)만 토큰 없이 받는다(server-core 의 `server_core/auth/dependencies.py` 의 `OptionalUser`).
 - `Authorization` 머리말이 없으면 로그인하지 않은 사람이다. 등급은 전체 이용가만이다(`app/assets/ratings.py` 의 `allowed_ratings(None)`).
 - 머리말이 있으면 다른 길과 똑같이 검증한다. 틀렸거나 만료됐으면 401, 키가 없으면 503 이다. 로그인하지 않은 것으로 넘기지 않는다.
   넘기면 만료된 토큰을 가진 화면이 갱신할 때를 모르고, 성인 등급이 말없이 빠진 목록을 받는다. `Basic` 처럼 Bearer 가 아닌 값도 401 이다.
@@ -323,7 +324,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 그러지 않으면 인증 서버가 다시 뜨는 동안 플랫폼 전체가 함께 멈춘다.
 
 **끊긴 세션은 목록으로 안다(#274).** 인증 서버에서 세션을 끊으면(비밀번호 변경과 재설정, 모든 기기 로그아웃, 계정 정지)
-그 사용자의 세션 버전이 오른다. 게임 서버는 토큰만 보므로 따로 받은 목록(`/api/v1/auth/session-revocations`)으로 안다(`app/auth/revocations.py`).
+그 사용자의 세션 버전이 오른다. 게임 서버는 토큰만 보므로 따로 받은 목록(`/api/v1/auth/session-revocations`)으로 안다(`server_core/auth/revocations.py`).
 목록의 모양은 [인증 서버](../auth-server/README.md#다른-서버에서-토큰을-검증하는-방법)의 5단계에 있다. 결제 서버, 게시판 서버와 같은 규칙이다.
 
 - 서버가 뜨자마자 받고 그 뒤 30초마다 다시 받는다. 요청과 따로 받으므로 요청이 인증 서버를 기다리지 않는다
@@ -3610,7 +3611,8 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 - uvicorn 이 스스로 찍던 요청 줄(access log)은 껐다. 주소 뒤에 붙은 값까지 찍었고, 요청이 끝난 줄과 겹친다. uvicorn 의 나머지 줄(뜨고 꺼지는 것)은 같은 JSON 으로 나간다.
 - AI 에 보낸 글과 받은 글은 로그에 남기지 않는다. AI 호출의 기록은 따로 DB 에 남는다(`ai_core/calls.py`). 거기에도 보낸 글은 없고 지문만 있다.
 
-코드는 `app/observability/` 에 있다. `identifiers.py`(식별자의 규칙), `context.py`(요청과 작업 동안 식별자를 들고 있는 곳),
+코드는 `app/observability/` 에 있다. 식별자의 규칙(`identifiers.py`)과 요청과 작업 동안 식별자를 들고 있는 곳(`context.py`)은
+server-core 의 것(`server_core/observability/`)을 쓴다(#589). 이 서버에 남은 것은
 `redaction.py`(가리는 규칙), `formatter.py`(JSON 한 줄), `setup.py`(로그를 거는 일), `middleware.py`(요청), `responses.py`(처리하지 못한 예외의 응답).
 
 ### 추적

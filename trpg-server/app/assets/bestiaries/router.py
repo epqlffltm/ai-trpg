@@ -12,6 +12,7 @@ import uuid
 
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.bestiaries import service
 from app.assets.bestiaries.models import BESTIARY_MAX_MONSTERS, Monster, MonsterKind
@@ -20,7 +21,6 @@ from app.assets.bestiaries.service import BestiaryFullError
 from app.assets.copies import copied_from
 from app.assets.routing import Paging, Session, to_page, to_summary
 from app.assets.schemas import AssetPage, AssetSummary
-from app.auth.dependencies import CurrentUser
 
 router = APIRouter(prefix='/bestiaries', tags=['bestiaries'])
 

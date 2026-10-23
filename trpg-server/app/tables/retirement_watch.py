@@ -28,14 +28,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from server_core import loops
+from server_core.loops import Running
+from server_core.observability.context import job_scope
+from server_core.observability.identifiers import new_job_id
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.billing.price_list import PriceList
-from app.core import loops
 from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
-from app.core.loops import Running
-from app.observability.context import job_scope
-from app.observability.identifiers import new_job_id
 from app.observability.metrics import measured_job
 from app.observability.spans import job_span
 from app.tables import model_retirement

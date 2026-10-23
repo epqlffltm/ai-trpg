@@ -28,6 +28,7 @@ from ai_core.provider import (
 )
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,7 +43,6 @@ from app.rounds.narrator import LoreNote, MemoryNote, Move, NarrationRequest, Pa
 from tests.narration_model import with_model
 from tests.previews import RecordingPreview
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 

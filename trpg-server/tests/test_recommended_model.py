@@ -22,6 +22,7 @@ from ai_core.catalog_contract import Provider, TokenLimitField
 from ai_core.catalog_file import ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +37,6 @@ from app.catalog.offers import OfferedModel, replacement_for
 from scripts import models as script
 from tests.catalog_rows import put_models, retire
 from tests.narration_model import TEST_MODEL
-from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, OPUS, FixedPrices, add_enabled, book, on_sale
 from tests.test_npc_actions import bearer, events_of
 from tests.test_tables_api import SCENARIOS_URL, TABLES_URL, publish_scenario

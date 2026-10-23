@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +39,6 @@ from app.whispers.service import target_round
 from tests.conftest import make_test_settings
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_chat_api import make_table
 
 pytestmark = pytest.mark.usefixtures('clean_tables')

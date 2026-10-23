@@ -18,10 +18,10 @@ import re
 from http import HTTPStatus
 
 from opentelemetry.trace import Span, SpanKind, StatusCode
+from server_core.observability.identifiers import TRACEPARENT_HEADER
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.observability.identifiers import TRACEPARENT_HEADER
 from app.observability.middleware import PROBE_ROUTES, route_fields, single_header
 from app.observability.spans import remote_parent, tracer
 

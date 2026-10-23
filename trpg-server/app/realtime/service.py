@@ -31,9 +31,9 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from server_core.auth.tokens import AccessClaims
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.auth.tokens import AccessClaims
 from app.chat import repository as chat_repository
 from app.chat.responses import to_message
 from app.events import repository as event_repository

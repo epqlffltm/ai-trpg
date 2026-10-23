@@ -11,11 +11,11 @@ import re
 import sys
 
 import pytest
+from server_core.observability.context import job_scope, request_scope
+from server_core.observability.identifiers import new_trace
 
 from app.core.config import Settings
-from app.observability.context import job_scope, request_scope
 from app.observability.formatter import JsonFormatter
-from app.observability.identifiers import new_trace
 from app.observability.redaction import MAX_VALUE_LENGTH, REDACTED, is_sensitive_name, safe_value, scrub_text
 from app.observability.setup import JsonLogHandler, attach_json_handler, configure_logging
 from tests.conftest import make_test_settings

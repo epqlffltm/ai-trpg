@@ -11,9 +11,9 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Query, status
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.routing import MAX_PAGE_SIZE, Session
-from app.auth.dependencies import CurrentUser
 from app.events import service
 from app.events.responses import to_event
 from app.events.schemas import DEFAULT_EVENT_LIMIT, EventPage
