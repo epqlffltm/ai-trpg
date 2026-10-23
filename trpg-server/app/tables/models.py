@@ -919,14 +919,17 @@ class TableFoundRoute(Base):
 
 class TableRouteLock(Base):
     """
-    테이블 하나에서 길 하나의 자물쇠가 지금 잠겨 있는가(#281).
+    테이블 하나에서 길 하나의 문(자물쇠와 빗장)의 지금 상태(#281).
 
-    시작할 때 판에 자물쇠를 적은 길마다 하나씩 만든다. 처음 상태는 판의 것이다(app/tables/route_locks.py).
+    시작할 때 판에 자물쇠나 빗장을 적은 길마다 하나씩 만든다. 처음 상태는 판의 것이다(app/tables/route_locks.py).
     길은 판의 길의 두 끝으로 가리킨다(찾은 숨긴 길과 같다). 바꾸는 것은 엔진뿐이다.
     열쇠를 지닌 사람이 지나가면 열린다. 연 자물쇠는 누가 다시 잠그기 전까지 열린 채다.
+    부서진 문(broken)은 열린 채이고 다시 잠그거나 걸지 못한다.
     """
 
     __tablename__ = 'table_route_locks'
+    # 부서진 문은 열린 채다. 엔진의 실수를 DB 가 한 번 더 막는다
+    __table_args__ = (CheckConstraint('NOT broken OR (NOT locked AND NOT barred)', name='broken_is_open'),)
 
     # 세 칸을 합쳐 기본 키로 삼는다. 한 길의 자물쇠는 하나다. 테이블의 행이 지워지면 함께 지워진다
     table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
@@ -934,8 +937,12 @@ class TableRouteLock(Base):
     from_place: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     to_place: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
 
-    # 지금 잠겨 있는가. 언제 누가 열었는지는 이벤트에 있다
+    # 자물쇠가 지금 잠겨 있는가. 자물쇠가 없는 길이면 늘 거짓이다. 언제 누가 열었는지는 이벤트에 있다
     locked: Mapped[bool] = mapped_column(Boolean)
+    # 빗장이 지금 걸려 있는가. 빗장이 없는 길이면 늘 거짓이다
+    barred: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+    # 부서졌는가. 부서진 문은 열린 채이고 고치기 전까지 다시 잠그거나 걸지 못한다
+    broken: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 
 
 class TablePlaceItem(Base):

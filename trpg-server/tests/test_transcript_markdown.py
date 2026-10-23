@@ -8,6 +8,7 @@
   - 쓰지 않는 종류(쪽지, 설정, 서술 실패)는 빈 글자다. 숨긴 퀘스트도 쓰지 않는다.
   - 앉은 사람에게 보이지 않는 칸은 payload 에 있어도 쓰지 않는다.
   - 능력치, 난이도, 부상은 판의 규칙에 적힌 이름으로 쓴다. 없으면 이름표 그대로다.
+  - 문을 다룬 것(#281)은 길의 두 끝과 장치, 한 일을 쓴다. 장치가 없으면 "문"이다.
   - 서술과 선언의 글이 파일의 제목처럼 보이지 않는다(맨 앞의 # 을 글자로 남긴다).
   - 머리에 제목과 범위가 있다. 떠난 사람의 것이면 "떠난 때까지"다.
 """
@@ -94,6 +95,14 @@ def test_the_main_lines_read_as_a_story():
     assert render_event(event('character_moved', SAMPLES['character_moved']), LABELS) == (
         '- 이동: 드워프 기사 · 수로 입구 → 깊은 수로\n'
     )
+
+
+def test_a_door_says_the_device_and_the_act():
+    barred = render_event(event('door_changed', SAMPLES['door_changed']), LABELS)
+    picked = render_event(event('door_changed', {**SAMPLES['door_changed'], 'act': 'pick', 'device': None}), LABELS)
+
+    assert barred == '- 문: 드워프 기사 · 수로 입구 ↔ 깊은 수로 빗장 잠금\n'
+    assert picked == '- 문: 드워프 기사 · 수로 입구 ↔ 깊은 수로 문 땀\n'
 
 
 def test_written_text_does_not_make_headings():

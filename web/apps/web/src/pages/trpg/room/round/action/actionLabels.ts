@@ -21,4 +21,8 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   sell: '팔기',
   pay: '돈 건네기',
   cover: '엄폐하기',
+  lock: '잠그기',
+  unlock: '열기',
+  pick: '따기',
+  force: '부수기',
 };

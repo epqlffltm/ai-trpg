@@ -189,6 +189,11 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
       return draft.target && draft.item ? countHint(draft.count, heldCount(ctx.me, draft.item)) : '상인과 물건을 골라 주세요.';
     case 'pay':
       return draft.target ? payHint(draft.amount, ctx) : '돈을 받을 사람을 골라 주세요.';
+    case 'lock':
+    case 'unlock':
+    case 'pick':
+    case 'force':
+      return draft.place ? null : '문이 있는 길을 골라 주세요.';
   }
 }
 
@@ -273,6 +278,12 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return { kind: draft.kind, npc: npc ?? '', item: draft.item, count: draft.count };
     case 'pay':
       return { kind: 'pay', target: member ?? '', amount: draft.amount };
+    // 문을 다루는 행동(#281). 장치는 비우면 서버가 그 길의 하나로 채운다
+    case 'lock':
+    case 'unlock':
+    case 'pick':
+    case 'force':
+      return { kind: draft.kind, place: draft.place };
   }
 }
 

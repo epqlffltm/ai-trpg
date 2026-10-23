@@ -238,6 +238,26 @@
         "title": "AttitudeChangeOut",
         "type": "object"
       },
+      "BarSnapshot": {
+        "description": "길의 빗장(#281). 있는 쪽(길의 한 끝)과 시작할 때 걸려 있는가.",
+        "properties": {
+          "barred": {
+            "default": false,
+            "title": "Barred",
+            "type": "boolean"
+          },
+          "side": {
+            "format": "uuid",
+            "title": "Side",
+            "type": "string"
+          }
+        },
+        "required": [
+          "side"
+        ],
+        "title": "BarSnapshot",
+        "type": "object"
+      },
       "BestiaryCreate": {
         "additionalProperties": false,
         "description": "도감을 만들 때 받는 값. 공통 칸뿐이다. 몬스터는 만든 뒤에 하나씩 더한다.",
@@ -1576,7 +1596,7 @@
         "type": "object"
       },
       "CrossOut": {
-        "description": "길을 넘는 판정(#281). 판에 적힌 능력과 난이도로 엔진이 굴렸다. 굴림은 공개다.",
+        "description": "판에 적힌 판정 하나(#281). 길을 넘을 때, 자물쇠를 딸 때, 문을 부술 때다.\n\n판에 적힌 능력과 난이도로 엔진이 굴렸다. 굴림은 공개다.",
         "properties": {
           "ability": {
             "title": "Ability",
@@ -1846,11 +1866,14 @@
                     "buy": "#/components/schemas/BuyAction",
                     "check": "#/components/schemas/CheckAction",
                     "cover": "#/components/schemas/CoverAction",
+                    "force": "#/components/schemas/ForceAction",
                     "give": "#/components/schemas/GiveAction",
+                    "lock": "#/components/schemas/LockAction",
                     "loot": "#/components/schemas/LootAction",
                     "move": "#/components/schemas/MoveAction",
                     "name": "#/components/schemas/NameAction",
                     "pay": "#/components/schemas/PayAction",
+                    "pick": "#/components/schemas/PickAction",
                     "put_down": "#/components/schemas/PutDownAction",
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
@@ -1858,6 +1881,7 @@
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
                     "treat": "#/components/schemas/TreatAction",
+                    "unlock": "#/components/schemas/UnlockAction",
                     "use": "#/components/schemas/UseAction",
                     "wait": "#/components/schemas/WaitAction"
                   },
@@ -1914,6 +1938,18 @@
                   },
                   {
                     "$ref": "#/components/schemas/CoverAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LockAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnlockAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PickAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ForceAction"
                   }
                 ]
               },
@@ -1957,6 +1993,9 @@
               },
               {
                 "$ref": "#/components/schemas/SearchOutcome"
+              },
+              {
+                "$ref": "#/components/schemas/DoorOutcome"
               },
               {
                 "$ref": "#/components/schemas/TakeOutcome"
@@ -2025,11 +2064,14 @@
                     "buy": "#/components/schemas/BuyAction",
                     "check": "#/components/schemas/CheckAction",
                     "cover": "#/components/schemas/CoverAction",
+                    "force": "#/components/schemas/ForceAction",
                     "give": "#/components/schemas/GiveAction",
+                    "lock": "#/components/schemas/LockAction",
                     "loot": "#/components/schemas/LootAction",
                     "move": "#/components/schemas/MoveAction",
                     "name": "#/components/schemas/NameAction",
                     "pay": "#/components/schemas/PayAction",
+                    "pick": "#/components/schemas/PickAction",
                     "put_down": "#/components/schemas/PutDownAction",
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
@@ -2037,6 +2079,7 @@
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
                     "treat": "#/components/schemas/TreatAction",
+                    "unlock": "#/components/schemas/UnlockAction",
                     "use": "#/components/schemas/UseAction",
                     "wait": "#/components/schemas/WaitAction"
                   },
@@ -2093,6 +2136,18 @@
                   },
                   {
                     "$ref": "#/components/schemas/CoverAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LockAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnlockAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PickAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ForceAction"
                   }
                 ]
               },
@@ -2154,6 +2209,106 @@
           "target"
         ],
         "title": "Difficulty",
+        "type": "object"
+      },
+      "DoorDevice": {
+        "description": "문을 잠그는 장치(#281). 잠그기와 열기가 무엇으로 하는지다.",
+        "enum": [
+          "lock",
+          "bar"
+        ],
+        "title": "DoorDevice",
+        "type": "string"
+      },
+      "DoorOut": {
+        "description": "길의 문을 다룬 결과(#281). 엔진이 정했다(app/rounds/door_actions.py).",
+        "properties": {
+          "act": {
+            "title": "Act",
+            "type": "string"
+          },
+          "character_name": {
+            "title": "Character Name",
+            "type": "string"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CrossOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "device": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "to": {
+            "$ref": "#/components/schemas/PlaceRefOut"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "character_name",
+          "from",
+          "to",
+          "act",
+          "done",
+          "reason"
+        ],
+        "title": "DoorOut",
+        "type": "object"
+      },
+      "DoorOutcome": {
+        "description": "문을 다루는 행동의 결과(#281).",
+        "properties": {
+          "door": {
+            "$ref": "#/components/schemas/DoorOut"
+          }
+        },
+        "required": [
+          "door"
+        ],
+        "title": "DoorOutcome",
         "type": "object"
       },
       "DropOut": {
@@ -2927,6 +3082,7 @@
           "character_moved",
           "happening_occurred",
           "place_searched",
+          "door_changed",
           "character_rested",
           "character_revived",
           "round_closed",
@@ -3051,6 +3207,83 @@
           "ability"
         ],
         "title": "FindSnapshot",
+        "type": "object"
+      },
+      "ForceAction": {
+        "additionalProperties": false,
+        "description": "지금 서 있는 장소에 닿은 길의 문을 부수는 행동(#281). 판에 적힌 부수는 판정(능력, 난이도)으로 굴린다.\n\n성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 문은 다시 잠그지 못한다. 지나가지는 않는다.",
+        "properties": {
+          "kind": {
+            "const": "force",
+            "title": "Kind",
+            "type": "string"
+          },
+          "place": {
+            "format": "uuid",
+            "title": "Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "place"
+        ],
+        "title": "ForceAction",
+        "type": "object"
+      },
+      "ForceCheck": {
+        "additionalProperties": false,
+        "description": "문을 부수는 판정(#281). 행동 '부수기'가 이 능력과 난이도로 굴린다. 적지 않으면 부수지 못한다.\n\n성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 것은 고치기 전까지 다시 잠그거나 걸지 못한다.",
+        "properties": {
+          "ability": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "ForceCheck",
+        "type": "object"
+      },
+      "ForceSnapshot": {
+        "description": "문을 부수는 판정(#281). 능력치와 난이도의 이름이다.",
+        "properties": {
+          "ability": {
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "ForceSnapshot",
         "type": "object"
       },
       "FoundItemOut": {
@@ -4649,8 +4882,40 @@
         "title": "LobbyJoinRequest",
         "type": "object"
       },
+      "LockAction": {
+        "additionalProperties": false,
+        "description": "지금 서 있는 장소에 닿은 길(place 로 이어진 길)의 문을 잠그는 행동(#281, app/rounds/door_actions.py).\n\ndevice 는 자물쇠(lock)인지 빗장(bar)인지다. 그 길에 하나만 있으면 비워도 된다. 둘 다 있으면 적어야 한다.\n자물쇠는 그 열쇠를 지녀야 잠그고, 빗장은 빗장 쪽에 서 있어야 건다. 부서진 문은 잠그지 못한다.",
+        "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoorDevice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "const": "lock",
+            "title": "Kind",
+            "type": "string"
+          },
+          "place": {
+            "format": "uuid",
+            "title": "Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "place"
+        ],
+        "title": "LockAction",
+        "type": "object"
+      },
       "LockSnapshot": {
-        "description": "길의 자물쇠(#281). 여는 열쇠(판 안의 물건 항목)와 시작할 때 잠겨 있는가.",
+        "description": "길의 자물쇠(#281). 여는 열쇠(판 안의 물건 항목), 시작할 때 잠겨 있는가, 따는 판정(없으면 못 딴다).",
         "properties": {
           "key": {
             "format": "uuid",
@@ -4661,6 +4926,16 @@
             "default": true,
             "title": "Locked",
             "type": "boolean"
+          },
+          "pick": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PickSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -6275,6 +6550,11 @@
             ],
             "title": "Travel Minutes"
           },
+          "unbarred": {
+            "default": false,
+            "title": "Unbarred",
+            "type": "boolean"
+          },
           "unlocked": {
             "default": false,
             "title": "Unlocked",
@@ -7667,6 +7947,148 @@
           "name"
         ],
         "title": "PersonaWrite",
+        "type": "object"
+      },
+      "PickAction": {
+        "additionalProperties": false,
+        "description": "지금 서 있는 장소에 닿은 길의 잠긴 자물쇠를 따는 행동(#281). 판에 적힌 따는 판정(능력, 난이도)으로 굴린다.\n\n판에 도구를 적었으면 그 물건을 지녀야 딴다. 성공하면 자물쇠가 열린다. 지나가지는 않는다.",
+        "properties": {
+          "kind": {
+            "const": "pick",
+            "title": "Kind",
+            "type": "string"
+          },
+          "place": {
+            "format": "uuid",
+            "title": "Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "place"
+        ],
+        "title": "PickAction",
+        "type": "object"
+      },
+      "PickCheck-Input": {
+        "additionalProperties": false,
+        "description": "자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.\n\ntool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.\n능력치와 난이도가 룰북에 있는지는 게시할 때 본다.",
+        "properties": {
+          "ability": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "PickCheck",
+        "type": "object"
+      },
+      "PickCheck-Output": {
+        "additionalProperties": false,
+        "description": "자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.\n\ntool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.\n능력치와 난이도가 룰북에 있는지는 게시할 때 본다.",
+        "properties": {
+          "ability": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "PickCheck",
+        "type": "object"
+      },
+      "PickSnapshot": {
+        "description": "자물쇠를 따는 판정(#281). 능력치, 난이도의 이름과 있어야 하는 도구(판 안의 물건 항목, 없으면 None).",
+        "properties": {
+          "ability": {
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "PickSnapshot",
         "type": "object"
       },
       "PierceOut": {
@@ -9706,8 +10128,49 @@
         "title": "RoundTimeLimitUpdate",
         "type": "object"
       },
+      "RouteBar-Input": {
+        "additionalProperties": false,
+        "description": "길의 빗장(#281). 길의 한쪽 끝(side)에만 있다. 그쪽에 선 사람만 열쇠 없이 걸고 푼다(행동 '잠그기', '열기').\n\n걸려 있으면 빗장 쪽에서는 지나가며 풀고, 반대쪽에서는 지나가지 못한다. 반대쪽에서는 부수기로만 연다.\nbarred 는 테이블이 시작할 때 걸려 있는가다(기본은 안 걸림). side 는 길의 두 끝 중 하나여야 한다.",
+        "properties": {
+          "barred": {
+            "default": false,
+            "title": "Barred",
+            "type": "boolean"
+          },
+          "side": {
+            "format": "uuid",
+            "title": "Side",
+            "type": "string"
+          }
+        },
+        "required": [
+          "side"
+        ],
+        "title": "RouteBar",
+        "type": "object"
+      },
+      "RouteBar-Output": {
+        "additionalProperties": false,
+        "description": "길의 빗장(#281). 길의 한쪽 끝(side)에만 있다. 그쪽에 선 사람만 열쇠 없이 걸고 푼다(행동 '잠그기', '열기').\n\n걸려 있으면 빗장 쪽에서는 지나가며 풀고, 반대쪽에서는 지나가지 못한다. 반대쪽에서는 부수기로만 연다.\nbarred 는 테이블이 시작할 때 걸려 있는가다(기본은 안 걸림). side 는 길의 두 끝 중 하나여야 한다.",
+        "properties": {
+          "barred": {
+            "default": false,
+            "title": "Barred",
+            "type": "boolean"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          }
+        },
+        "required": [
+          "side"
+        ],
+        "title": "RouteBar",
+        "type": "object"
+      },
       "RouteCrossOut": {
-        "description": "길을 넘는 판정(#281). 지날 때마다 가는 사람이 굴린다. 룰북의 능력치와 난이도의 이름표다.",
+        "description": "길에 적힌 판정 하나(#281). 넘기(지날 때마다 가는 사람이 굴린다), 따기, 부수기다.\n\n룰북의 능력치와 난이도의 이름표다.",
         "properties": {
           "ability": {
             "title": "Ability",
@@ -9727,7 +10190,7 @@
       },
       "RouteLock-Input": {
         "additionalProperties": false,
-        "description": "길의 자물쇠(#281). 잠겨 있으면 그 열쇠(key)를 지닌 사람만 지나간다. 지나가면서 연다.\n\n열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.\nlocked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.\n열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다. 열쇠는 쓰여도 없어지지 않는다.",
+        "description": "길의 자물쇠(#281). 잠겨 있으면 그 열쇠(key)를 지닌 사람만 지나간다. 지나가면서 연다.\n\n열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.\nlocked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.\n열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다(행동 '잠그기', '열기'). 열쇠는 쓰여도 없어지지 않는다.\npick 을 적었으면 열쇠 없이 따기로 열 수 있다. 적지 않으면 따지 못한다.",
         "properties": {
           "key": {
             "format": "uuid",
@@ -9738,6 +10201,16 @@
             "default": true,
             "title": "Locked",
             "type": "boolean"
+          },
+          "pick": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PickCheck-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -9748,7 +10221,7 @@
       },
       "RouteLock-Output": {
         "additionalProperties": false,
-        "description": "길의 자물쇠(#281). 잠겨 있으면 그 열쇠(key)를 지닌 사람만 지나간다. 지나가면서 연다.\n\n열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.\nlocked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.\n열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다. 열쇠는 쓰여도 없어지지 않는다.",
+        "description": "길의 자물쇠(#281). 잠겨 있으면 그 열쇠(key)를 지닌 사람만 지나간다. 지나가면서 연다.\n\n열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.\nlocked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.\n열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다(행동 '잠그기', '열기'). 열쇠는 쓰여도 없어지지 않는다.\npick 을 적었으면 열쇠 없이 따기로 열 수 있다. 적지 않으면 따지 못한다.",
         "properties": {
           "key": {
             "title": "Key",
@@ -9758,6 +10231,16 @@
             "default": true,
             "title": "Locked",
             "type": "boolean"
+          },
+          "pick": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PickCheck-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -9767,9 +10250,47 @@
         "type": "object"
       },
       "RouteOut": {
-        "description": "아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.\n\n길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지와 실패의 피해는 싣지 않는다.",
+        "description": "아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.\n\n길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지, 따는 도구,\n실패의 피해는 싣지 않는다.",
         "properties": {
+          "bar_side": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bar Side"
+          },
+          "barred": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barred"
+          },
+          "broken": {
+            "default": false,
+            "title": "Broken",
+            "type": "boolean"
+          },
           "cross": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteCrossOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/RouteCrossOut"
@@ -9794,6 +10315,16 @@
               }
             ],
             "title": "Locked"
+          },
+          "pick": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteCrossOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "to_place": {
             "format": "uuid",
@@ -9826,8 +10357,18 @@
       },
       "RouteRule-Input": {
         "additionalProperties": false,
-        "description": "길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.\n\ntwo_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).\nvisibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).\n숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.\ntravel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다\n(옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).\n길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠다. 둘 다 양쪽에서 같다.\n둘 다 있으면 자물쇠를 먼저 보고 넘기 판정을 굴린다.\n가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.",
+        "description": "길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.\n\ntwo_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).\nvisibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).\n숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.\ntravel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다\n(옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).\n길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,\nforce 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.\n빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.\n가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.",
         "properties": {
+          "bar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteBar-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cross": {
             "anyOf": [
               {
@@ -9842,6 +10383,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FindCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForceCheck"
               },
               {
                 "type": "null"
@@ -9900,8 +10451,18 @@
       },
       "RouteRule-Output": {
         "additionalProperties": false,
-        "description": "길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.\n\ntwo_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).\nvisibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).\n숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.\ntravel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다\n(옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).\n길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠다. 둘 다 양쪽에서 같다.\n둘 다 있으면 자물쇠를 먼저 보고 넘기 판정을 굴린다.\n가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.",
+        "description": "길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.\n\ntwo_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).\nvisibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).\n숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.\ntravel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다\n(옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).\n길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,\nforce 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.\n빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.\n가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.",
         "properties": {
+          "bar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteBar-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cross": {
             "anyOf": [
               {
@@ -9916,6 +10477,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FindCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForceCheck"
               },
               {
                 "type": "null"
@@ -9971,8 +10542,18 @@
         "type": "object"
       },
       "RouteSnapshot": {
-        "description": "길 하나. 판 안의 로어북 장소 항목 둘을 잇는다.\n\ntwo_way 가 아니면 from_place 에서 to_place 로만 간다. visibility 는 플레이어가 길을 언제 아는가다.\n숨긴 길은 찾는 판정(find)으로 드러난다. travel_minutes 는 한 칸 가는 데 걸리는 게임 안의 시간(분)이다.\n비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.\ncross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠의 자물쇠다(#281). 형식 52 보다 옛 판은 둘 다 없다.",
+        "description": "길 하나. 판 안의 로어북 장소 항목 둘을 잇는다.\n\ntwo_way 가 아니면 from_place 에서 to_place 로만 간다. visibility 는 플레이어가 길을 언제 아는가다.\n숨긴 길은 찾는 판정(find)으로 드러난다. travel_minutes 는 한 칸 가는 데 걸리는 게임 안의 시간(분)이다.\n비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.\ncross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠의 자물쇠다(#281). 형식 52 보다 옛 판은 둘 다 없다.\nbar 는 한쪽의 빗장, force 는 문을 부수는 판정이다. 형식 53 보다 옛 판은 둘 다 없고 자물쇠를 따지 못한다.",
         "properties": {
+          "bar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BarSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cross": {
             "anyOf": [
               {
@@ -9987,6 +10568,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FindSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForceSnapshot"
               },
               {
                 "type": "null"
@@ -12064,7 +12655,7 @@
             "type": "array"
           },
           "format": {
-            "default": 52,
+            "default": 53,
             "title": "Format",
             "type": "integer"
           },
@@ -13777,6 +14368,38 @@
           "turn_lost"
         ],
         "title": "TurnLostOutcome",
+        "type": "object"
+      },
+      "UnlockAction": {
+        "additionalProperties": false,
+        "description": "지금 서 있는 장소에 닿은 길의 문을 여는 행동(#281). 지나가지 않고 열기만 한다. device 는 잠그기와 같다.\n\n자물쇠는 그 열쇠를 지녀야 열고, 빗장은 빗장 쪽에 서 있어야 푼다.",
+        "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoorDevice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "const": "unlock",
+            "title": "Kind",
+            "type": "string"
+          },
+          "place": {
+            "format": "uuid",
+            "title": "Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "place"
+        ],
+        "title": "UnlockAction",
         "type": "object"
       },
       "UseAction": {

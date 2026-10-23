@@ -102,7 +102,8 @@ async def test_a_character_goes_one_step_along_a_known_route(
         # 이 길은 시간을 적지 않았다. 라운드의 걸음 안에서 간다
         'travel_minutes': None,
         'carry': None,
-        # 자물쇠도 넘기 판정도 없는 길이다(#281)
+        # 자물쇠도 빗장도 넘기 판정도 없는 길이다(#281)
+        'unbarred': False,
         'unlocked': False,
         'cross': None,
         'effect': None,

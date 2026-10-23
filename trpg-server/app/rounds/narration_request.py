@@ -35,6 +35,7 @@ from app.rounds.narrator import (
     ClockNote,
     CoverNote,
     DeathSaveNote,
+    DoorNote,
     DownedStrikeNote,
     DropNote,
     DroppedNote,
@@ -72,6 +73,7 @@ from app.rounds.narrator import (
 from app.rounds.secret_names import secret_names
 from app.rounds.state import (
     cover_of,
+    door_of,
     loot_of,
     move_of,
     pay_of,
@@ -198,6 +200,26 @@ def to_travel(declaration: Declaration | None, ruleset: Ruleset | None = None) -
         unlocked=move.get('unlocked', False),
         cross=cross_ability_name(ruleset, move.get('cross')),
         hurt=move.get('effect') is not None,
+        unbarred=move.get('unbarred', False),
+    )
+
+
+def to_door(declaration: Declaration | None, ruleset: Ruleset | None = None) -> DoorNote | None:
+    """
+    선언에 적힌 문 다루기의 결과를 서술자에게 줄 모양으로 바꾼다(#281). 문을 다루는 행동이 아니면 None.
+
+    ruleset 은 따기와 부수기의 판정의 능력치의 이름을 찾는다.
+    """
+    door = door_of(declaration)
+    if door is None:
+        return None
+    return DoorNote(
+        act=door['act'],
+        other_end=door['to']['name'],
+        done=door['done'],
+        device=door['device'],
+        reason=door['reason'],
+        check=cross_ability_name(ruleset, door['check']),
     )
 
 
