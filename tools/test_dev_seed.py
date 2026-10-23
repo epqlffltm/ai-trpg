@@ -30,6 +30,7 @@ from dev_seed import (
     seed_lorebook,
     seed_scenario,
     seed_table,
+    verify_identity,
 )
 from dev_seed_world import ENTRIES, LOREBOOK_TITLE, world_fields
 
@@ -318,6 +319,33 @@ class TableTest(unittest.TestCase):
         self.assertEqual(game.calls[-1][2], {'scenario_id': 's1', 'capacity': 4, 'is_public': True})
 
 
+class IdentityTest(unittest.TestCase):
+    ACCOUNT = Account('seed_host', 'p1', 't1')
+    PATH = '/api/v1/auth/identity/verify'
+
+    def test_verifies_with_a_fake_adult_token_per_account(self):
+        game = FakeGame({('POST', self.PATH): {'identity': {'verified': True}}})
+        with mock.patch.object(dev_seed, 'call', game):
+            self.assertEqual(verify_identity(PROXY, self.ACCOUNT), 'verified')
+        self.assertEqual(game.calls, [('POST', self.PATH, {'token': 'fake:seed_host:1990-01-01'})])
+
+    def test_already_verified_is_fine(self):
+        already = SeedError('409', status=409, code='identity_already_verified')
+        with mock.patch.object(dev_seed, 'call', FakeGame({('POST', self.PATH): already})):
+            self.assertEqual(verify_identity(PROXY, self.ACCOUNT), 'already')
+
+    def test_other_failures_stop_the_seed(self):
+        unavailable = SeedError('503', status=503, code='identity_unavailable')
+        game = FakeGame({('POST', self.PATH): unavailable})
+        with mock.patch.object(dev_seed, 'call', game), self.assertRaises(SeedError):
+            verify_identity(PROXY, self.ACCOUNT)
+
+    def test_reads_the_error_code_from_the_body(self):
+        self.assertEqual(dev_seed.error_code('{"detail": "x", "code": "identity_in_use"}'), 'identity_in_use')
+        self.assertIsNone(dev_seed.error_code('<html>'))
+        self.assertIsNone(dev_seed.error_code('{"detail": "x"}'))
+
+
 class ReportTest(unittest.TestCase):
     def test_lists_accounts_addresses_and_where_the_codes_are(self):
         seeded = dev_seed.Seeded(
@@ -332,6 +360,7 @@ class ReportTest(unittest.TestCase):
         self.assertIn(f'{PROXY}/trpg/tables/t9', text)
         self.assertIn('docker compose --profile app logs -f auth-mail', text)
         self.assertIn('새 판을 게시했다', text)
+        self.assertIn('본인인증', text)
         self.assertNotIn('t1', text.replace('/t9', ''))
 
 

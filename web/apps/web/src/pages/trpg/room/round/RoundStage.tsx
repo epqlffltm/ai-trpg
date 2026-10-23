@@ -46,7 +46,7 @@ export function RoundStage({ table, myId, preview, nameOfMember }: Props) {
       {past.map((round) => (
         <RoundEntry key={round.number} round={round} table={table} />
       ))}
-      <RoomNotices table={table} currentRound={current.data.number} nameOfMember={nameOfMember} />
+      <RoomNotices table={table} currentRound={current.data.number} myId={myId} nameOfMember={nameOfMember} />
       <CurrentRound table={table} round={current.data} myId={myId} preview={preview} nameOfMember={nameOfMember} />
     </section>
   );
