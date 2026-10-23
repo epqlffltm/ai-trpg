@@ -148,6 +148,27 @@ async def test_the_start_hours_and_backgrounds_of_a_format_four_version_are_kept
     assert (kept['starts'], kept['places']) == (starts, places)
 
 
+async def test_the_illustrations_of_a_format_five_version_are_kept():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    illustrations = [
+        {
+            'id': 'first-date',
+            'title': '첫 데이트',
+            'image_id': str(uuid.UUID(int=9)),
+            'scene': '창가 자리에서 마주 앉는다.',
+            'collectible': True,
+            'when': {'kind': 'reach_place', 'target': 'library'},
+        }
+    ]
+    body['document'] |= {'format': 5, **WORLD, 'illustrations': illustrations}
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    assert fetched.document.model_dump(mode='json')['illustrations'] == illustrations
+    assert make_character().document.illustrations == []
+
+
 async def test_a_format_three_version_starts_at_noon():
     copy = make_character()
     body = copy.model_dump(mode='json')

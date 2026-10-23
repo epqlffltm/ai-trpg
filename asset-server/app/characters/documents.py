@@ -11,6 +11,7 @@ TRPG 의 판 형식과 같은 방식이다.
   - 3: 호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙)를 더했다(2026-10-22). 1, 2 의 판은 호감도가 없다(null)
   - 4: 시작 상황의 시작 시각(hour)과 장소의 시간대 배경(backgrounds)을 더했다(2026-10-22, #668).
        3 까지의 판은 정오에 시작하고 시간대 배경이 없는 것으로 읽는다
+  - 5: 일러스트(그림, 해금 대상인지, 장면의 설명, 나오는 조건)를 더했다(2026-10-23, #669). 4 까지의 판은 일러스트가 없다
 DB 를 모르는 순수한 함수다. 초안(Character)과 거른 소개에서 문서를 만든다.
 """
 
@@ -18,11 +19,19 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
-from app.characters.models import START_HOUR_DEFAULT, AffectionDisplay, Character, ItemKind, TimeOfDay, TriggerKind
+from app.characters.models import (
+    START_HOUR_DEFAULT,
+    AffectionDisplay,
+    Character,
+    IllustrationWhen,
+    ItemKind,
+    TimeOfDay,
+    TriggerKind,
+)
 from app.ratings import Rating
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 4
+DOCUMENT_FORMAT = 5
 
 
 class StartDocument(BaseModel):
@@ -119,6 +128,28 @@ class AffectionDocument(BaseModel):
     rules: list[AffectionRuleDocument]
 
 
+class IllustrationConditionDocument(BaseModel):
+    """일러스트가 나오는 조건(종류, 대상)."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    kind: IllustrationWhen
+    target: str
+
+
+class IllustrationDocument(BaseModel):
+    """일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    id: str
+    title: str
+    image_id: uuid.UUID
+    scene: str
+    collectible: bool
+    when: IllustrationConditionDocument
+
+
 class CharacterDocument(BaseModel):
     """
     판에 굳힌 캐릭터. intro_html 은 허용 목록으로 거른 소개다.
@@ -144,6 +175,7 @@ class CharacterDocument(BaseModel):
     items: list[ItemDocument] = []
     start_items: list[StartItemDocument] = []
     affection: AffectionDocument | None = None
+    illustrations: list[IllustrationDocument] = []
 
 
 def build_document(character: Character, cleaned_intro: str) -> CharacterDocument:
@@ -166,4 +198,5 @@ def build_document(character: Character, cleaned_intro: str) -> CharacterDocumen
         items=[ItemDocument(**item) for item in character.items],
         start_items=[StartItemDocument(**start) for start in character.start_items],
         affection=AffectionDocument.model_validate(character.affection) if character.affection else None,
+        illustrations=[IllustrationDocument.model_validate(illustration) for illustration in character.illustrations],
     )
