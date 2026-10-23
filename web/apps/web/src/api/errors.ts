@@ -10,6 +10,8 @@ export class ApiError extends Error {
   readonly retryAfter: number | undefined;
   readonly fields: FieldErrors;
   readonly requestId: string | undefined;
+  /** 본문 그대로. 화면마다 따로 읽는 칸(지우지 못한 재료를 쓰는 시나리오의 used_by 같은 것)이 있을 때 읽는다 */
+  readonly body: Record<string, unknown>;
 
   constructor(init: {
     status: number;
@@ -18,6 +20,7 @@ export class ApiError extends Error {
     retryAfter?: number | undefined;
     fields?: FieldErrors;
     requestId?: string | undefined;
+    body?: Record<string, unknown>;
   }) {
     super(init.detail);
     this.name = 'ApiError';
@@ -26,6 +29,7 @@ export class ApiError extends Error {
     this.retryAfter = init.retryAfter;
     this.fields = init.fields ?? {};
     this.requestId = init.requestId;
+    this.body = init.body ?? {};
   }
 }
 
@@ -49,6 +53,7 @@ export async function toApiError(response: Response): Promise<ApiError> {
     retryAfter: retryAfterOf(body, response.headers),
     fields: fieldErrorsOf(body),
     requestId: response.headers.get('X-Request-ID') ?? undefined,
+    body,
   });
 }
 
