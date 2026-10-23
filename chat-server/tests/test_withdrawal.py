@@ -11,6 +11,7 @@ asset 서버, 결제 서버, 모델은 가짜다.
   - 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 processed 다
   - 인증 서버의 서명이 아니면(없음, 틀림, 다른 주소의 서명, 비밀이 빔) 401 이고 아무것도 지우지 않는다
   - 본문의 모양이 틀리면 422 이고 아무것도 지우지 않는다. 모르는 칸은 버린다
+  - 연 이벤트 씬의 기록(#669)도 지운다. 남의 것은 남는다
   - 짧은 비밀은 설정이 받지 않는다
 """
 
@@ -29,6 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.conversations.models import Conversation, ConversationPersona, ImportedCharacter, Message
+from app.gallery.models import SceneUnlock
 from app.main import API_PREFIX, create_app
 from app.memory.models import MemoryNote, Summary
 from app.turns.models import Generation
@@ -297,3 +299,16 @@ async def test_a_conversation_marked_deleted_is_erased_too(client: AsyncClient, 
     # 지운 것으로 적어 둔 대화의 기록도 대화와 끊겨 남는다
     assert await count(session, Generation, Generation.conversation_id == deleted) == 0
     assert await count(session, Generation, Generation.owner_id == LEAVER) == 2
+
+
+async def test_the_leavers_unlocked_event_scenes_are_erased(client: AsyncClient, session: AsyncSession):
+    character = uuid.uuid4()
+    for owner in (LEAVER, STAYER):
+        session.add(SceneUnlock(owner_id=owner, character_source=character, scene_id='first-date'))
+    await session.commit()
+
+    response = await notify(client, LEAVER)
+
+    assert response.status_code == status.HTTP_200_OK
+    owners = (await session.scalars(select(SceneUnlock.owner_id))).all()
+    assert owners == [STAYER]

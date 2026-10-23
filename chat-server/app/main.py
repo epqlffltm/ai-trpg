@@ -52,6 +52,7 @@ from app.conversations.service import (
     StartNotFoundError,
 )
 from app.core.config import Settings, get_settings
+from app.gallery import router as gallery
 from app.limits.attempts import TooManyAttempts
 from app.limits.responses import handle_too_many_attempts
 from app.limits.setup import build_limiting, build_redis
@@ -212,6 +213,8 @@ def create_app(
     app.include_router(messages.router, prefix=API_PREFIX)
     app.include_router(messages.message_router, prefix=API_PREFIX)
     app.include_router(messages.generation_router, prefix=API_PREFIX)
+    # 내가 연 이벤트 씬(#669). 소개의 이벤트 씬 칸과 갤러리가 읽는다
+    app.include_router(gallery.router, prefix=API_PREFIX)
     # 인증 서버가 탈퇴를 알리는 주소(#670). 서버끼리만 부른다(서명). 프록시는 밖에서 받지 않는다
     app.include_router(withdrawal.router, prefix=API_PREFIX)
 

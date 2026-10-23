@@ -63,6 +63,7 @@ from app.conversations.service import (
     get_conversation,
 )
 from app.core.dependencies import Viewer
+from app.gallery import repository as gallery
 from app.memory import repository as memory_store
 from app.memory import service as memory
 from app.memory.service import render_memory
@@ -79,6 +80,7 @@ from app.world import repository as world_states
 from app.world import service as world
 from app.world.actions import perform
 from app.world.scene import render_scene
+from app.world.scenes import find_scene
 from app.world.schemas import Action, GiveAction
 from app.world.state import WorldState
 
@@ -165,6 +167,7 @@ def saved(message: Message) -> SavedMessage:
         status=message.status,
         created_at=message.created_at,
         suggestions=tuple(message.suggestions or ()),
+        event_scene=message.event_scene,
     )
 
 
@@ -244,10 +247,12 @@ async def extras_on(
     path: list[Message],
     context_chars: int,
     state: WorldState | None = None,
+    scene_id: str | None = None,
 ) -> CardExtras:
     """
     가지(path)의 끝에서 카드에 더할 블록들. state 를 주면 그 상태로 장소와 소지품을 적는다(행동한 뒤의 상태).
     요약은 창(context_chars)에 들지 못하고 밀려난 말 가운데 가장 뒤의 것이다.
+    scene_id 는 이번 답에 붙는 이벤트 씬이다. 있으면 그 장면을 "[지금]" 에 적는다(그림과 글이 어긋나지 않게).
     """
     document = world.document_of(character)
     current = state if state is not None else await world.state_on(session, document, [m.id for m in path])
@@ -257,7 +262,7 @@ async def extras_on(
     return CardExtras(
         story=render_story(latest_summary(dropped, summaries)),
         memory=render_memory(notes),
-        scene=render_scene(document, current, conversation.start_hour),
+        scene=render_scene(document, current, conversation.start_hour, find_scene(document, scene_id)),
     )
 
 
@@ -483,14 +488,19 @@ async def begin_action(
         performed = perform(document, before, action, conversation.start_hour)
         words = action.words if isinstance(action, GiveAction) else None
         added = action_messages(conversation, conversation.active_leaf_id, performed.text, words, now)
+        shown = performed.revealed.shown
+        added[-1].event_scene = shown.id if shown is not None else None
         for message in added:
             repository.add(session, message)
         await session.flush()
         world_states.add_state(session, added[0].id, performed.state)
+        await gallery.add_unlocks(session, viewer.claims.user_id, character.source_id, performed.revealed.collected)
         await repository.move_leaf(session, conversation.id, added[-1].id)
         generation = new_generation(conversation, viewer.claims.user_id, added[-1].id, slug)
         repository.add(session, generation)
-        extras = await extras_on(session, conversation, character, path, options.context_chars, performed.state)
+        extras = await extras_on(
+            session, conversation, character, path, options.context_chars, performed.state, added[-1].event_scene
+        )
         await session.commit()
     return TurnStart(
         conversation_id=conversation.id,
@@ -503,6 +513,11 @@ async def begin_action(
         messages=prompt_for(conversation, character, persona, [*path, *added], options, extras),
         action=saved(added[0]) if len(added) > 1 else None,
     )
+
+
+def answered_scene(path: list[Message]) -> str | None:
+    """이어 쓰는 답(가지의 끝)이 답하는 말의 이벤트 씬. 그 말은 끝의 바로 앞이다."""
+    return path[-2].event_scene if len(path) >= 2 else None
 
 
 def answered_message(target: Message) -> uuid.UUID:
@@ -546,7 +561,9 @@ async def begin_regenerate(
         if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
             raise ConversationBusyError
         path = await conversations.active_path(session, parent_id)
-        extras = await extras_on(session, conversation, character, path, options.context_chars)
+        extras = await extras_on(
+            session, conversation, character, path, options.context_chars, scene_id=path[-1].event_scene
+        )
         generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
         repository.add(session, generation)
         await session.commit()
@@ -602,7 +619,9 @@ async def begin_continue(
         if conversation.active_leaf_id != target.id:
             raise NotContinuableError
         path = await conversations.active_path(session, target.id)
-        extras = await extras_on(session, conversation, character, path, options.context_chars)
+        extras = await extras_on(
+            session, conversation, character, path, options.context_chars, scene_id=answered_scene(path)
+        )
         generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
         repository.add(session, generation)
         await session.commit()

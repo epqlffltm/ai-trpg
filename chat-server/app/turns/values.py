@@ -25,6 +25,7 @@ class SavedMessage:
     status: str
     created_at: datetime
     suggestions: tuple[str, ...] = ()
+    event_scene: str | None = None
 
 
 @dataclass(frozen=True)
