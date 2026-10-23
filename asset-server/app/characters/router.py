@@ -28,7 +28,7 @@ from app.characters.schemas import (
     VersionDetail,
     VersionSummary,
 )
-from app.characters.service import CharacterNotFoundError, OperatorOnlyError
+from app.characters.service import CharacterNotFoundError, LorebookNotOwnedError, OperatorOnlyError
 from app.content.html import Removed
 from app.core.dependencies import AppSettings, Paging, Session
 
@@ -65,6 +65,14 @@ async def handle_operator_only(request: Request, error: OperatorOnlyError) -> JS
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
         content={'detail': '지금은 운영자만 할 수 있습니다.', 'code': 'operator_only'},
+    )
+
+
+async def handle_lorebook_not_owned(request: Request, error: LorebookNotOwnedError) -> JSONResponse:
+    """가리키려는 로어북이 자기 것이 아니면(또는 없으면) 422 다. 앱에 한 번 등록한다(app/main.py)."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '자기 로어북만 가리킬 수 있습니다.', 'code': 'lorebook_not_owned'},
     )
 
 

@@ -261,6 +261,16 @@
             "title": "Items",
             "type": "array"
           },
+          "lorebooks": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Lorebooks",
+            "type": "array"
+          },
           "name": {
             "maxLength": 50,
             "minLength": 1,
@@ -430,6 +440,14 @@
             ],
             "title": "Latest Version"
           },
+          "lorebooks": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Lorebooks",
+            "type": "array"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -536,6 +554,7 @@
           "affection",
           "event_scenes",
           "sprites",
+          "lorebooks",
           "latest_version",
           "published_at",
           "created_at",
@@ -604,6 +623,14 @@
               "$ref": "#/components/schemas/ItemDocument"
             },
             "title": "Items",
+            "type": "array"
+          },
+          "lorebooks": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LorebookCopyDocument"
+            },
+            "title": "Lorebooks",
             "type": "array"
           },
           "name": {
@@ -861,6 +888,22 @@
               }
             ],
             "title": "Items"
+          },
+          "lorebooks": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lorebooks"
           },
           "name": {
             "anyOf": [
@@ -1321,6 +1364,472 @@
         ],
         "title": "ItemKind",
         "type": "string"
+      },
+      "LoreEntry": {
+        "additionalProperties": false,
+        "description": "항목 하나. 이름과 내용은 모델에 간다. constant 면 늘 간다.",
+        "properties": {
+          "constant": {
+            "default": false,
+            "title": "Constant",
+            "type": "boolean"
+          },
+          "content": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "keywords": {
+            "default": [],
+            "items": {
+              "maxLength": 30,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Keywords",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LoreKind",
+            "default": "other"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "content"
+        ],
+        "title": "LoreEntry",
+        "type": "object"
+      },
+      "LoreEntryDocument": {
+        "additionalProperties": false,
+        "description": "항목 하나. constant 면 늘 모델에 간다. 아니면 최근 대화에 키워드가 나올 때 간다(고르는 것은 chat 이다).",
+        "properties": {
+          "constant": {
+            "title": "Constant",
+            "type": "boolean"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keywords",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LoreKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "keywords",
+          "content",
+          "constant"
+        ],
+        "title": "LoreEntryDocument",
+        "type": "object"
+      },
+      "LoreKind": {
+        "description": "로어북 항목의 종류. TRPG 의 LoreKind 와 같은 값이다. chat 은 지금 종류로 다르게 다루지 않는다(보이기만 한다).\n인물, 장소, 물건, 세력, 종족, 전설(사실인지 애매한 이야기), 사건, 기타.",
+        "enum": [
+          "person",
+          "place",
+          "item",
+          "faction",
+          "species",
+          "legend",
+          "event",
+          "other"
+        ],
+        "title": "LoreKind",
+        "type": "string"
+      },
+      "LorebookCopyDocument": {
+        "additionalProperties": false,
+        "description": "캐릭터의 판에 복사한 로어북 하나(#672). id 와 version 은 로어북과 그 판의 번호다(어디서 왔는지 적어 둔다).",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LoreEntryDocument"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "name",
+          "entries"
+        ],
+        "title": "LorebookCopyDocument",
+        "type": "object"
+      },
+      "LorebookCreate": {
+        "additionalProperties": false,
+        "description": "로어북을 만들 때 받는 값. 이름만 필수다.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LoreEntry"
+            },
+            "maxItems": 200,
+            "title": "Entries",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "LorebookCreate",
+        "type": "object"
+      },
+      "LorebookDetail": {
+        "description": "로어북의 초안 하나. 만든 사람만 본다. latest_version 은 마지막으로 게시한 판의 번호다(없으면 null).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LoreEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "entries",
+          "latest_version",
+          "published_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "LorebookDetail",
+        "type": "object"
+      },
+      "LorebookDocument": {
+        "additionalProperties": false,
+        "description": "판에 굳힌 로어북. 설명은 만든 사람이 보는 것이라 판에 넣지 않는다.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LoreEntryDocument"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "format": {
+            "title": "Format",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "format",
+          "name",
+          "entries"
+        ],
+        "title": "LorebookDocument",
+        "type": "object"
+      },
+      "LorebookPage": {
+        "description": "목록의 한 쪽과 전체 개수.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LorebookSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "LorebookPage",
+        "type": "object"
+      },
+      "LorebookSummary": {
+        "description": "내 로어북 목록의 한 줄. entry_count 는 초안의 항목 수다.",
+        "properties": {
+          "entry_count": {
+            "title": "Entry Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "entry_count",
+          "latest_version",
+          "updated_at"
+        ],
+        "title": "LorebookSummary",
+        "type": "object"
+      },
+      "LorebookUpdate": {
+        "additionalProperties": false,
+        "description": "로어북을 고칠 때 받는 값. 보낸 칸만 바꾼다. 게시한 판은 그대로다. null 은 받지 않는다.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "entries": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LoreEntry"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entries"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "LorebookUpdate",
+        "type": "object"
+      },
+      "LorebookVersionCreate": {
+        "additionalProperties": false,
+        "description": "게시할 때 받는 값. 이번 판에서 무엇이 바뀌었는지 적는다(비워도 된다).",
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "title": "LorebookVersionCreate",
+        "type": "object"
+      },
+      "LorebookVersionDetail": {
+        "description": "판 하나. 굳힌 문서까지 싣는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/LorebookDocument"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at",
+          "document"
+        ],
+        "title": "LorebookVersionDetail",
+        "type": "object"
+      },
+      "LorebookVersionSummary": {
+        "description": "판의 목록에 싣는 값. 굳힌 문서는 싣지 않는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at"
+        ],
+        "title": "LorebookVersionSummary",
+        "type": "object"
       },
       "MeResponse": {
         "description": "토큰의 주인.",
@@ -3221,6 +3730,435 @@
         "summary": "Read Public",
         "tags": [
           "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/lorebooks": {
+      "get": {
+        "description": "자기 로어북의 목록. 최근에 고친 것부터다.",
+        "operationId": "list_lorebooks_api_v1_asset_lorebooks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LorebookPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Lorebooks",
+        "tags": [
+          "lorebooks"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "로어북을 만든다. 1~2단계에는 운영자만 만든다(403 operator_only).",
+        "operationId": "create_lorebook_api_v1_asset_lorebooks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LorebookCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LorebookDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Lorebook",
+        "tags": [
+          "lorebooks"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/lorebooks/{lorebook_id}": {
+      "delete": {
+        "description": "자기 로어북을 지운다. 판도 함께 지워진다. 게시한 캐릭터의 판에 복사된 것은 남는다.",
+        "operationId": "delete_lorebook_api_v1_asset_lorebooks__lorebook_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lorebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lorebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Lorebook",
+        "tags": [
+          "lorebooks"
+        ],
+        "x-audience": "user"
+      },
+      "get": {
+        "description": "자기 로어북의 초안 하나.",
+        "operationId": "read_lorebook_api_v1_asset_lorebooks__lorebook_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lorebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lorebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LorebookDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Lorebook",
+        "tags": [
+          "lorebooks"
+        ],
+        "x-audience": "user"
+      },
+      "patch": {
+        "description": "자기 로어북의 초안을 고친다. 보낸 칸만 바뀐다. 항목은 목록을 통째로 바꾼다.",
+        "operationId": "update_lorebook_api_v1_asset_lorebooks__lorebook_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lorebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lorebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LorebookUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LorebookDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Lorebook",
+        "tags": [
+          "lorebooks"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/lorebooks/{lorebook_id}/versions": {
+      "get": {
+        "description": "자기 로어북의 판들. 최근 것부터다.",
+        "operationId": "list_versions_api_v1_asset_lorebooks__lorebook_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lorebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lorebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LorebookVersionSummary"
+                  },
+                  "title": "Response List Versions Api V1 Asset Lorebooks  Lorebook Id  Versions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Versions",
+        "tags": [
+          "lorebooks"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "게시한다. 새 판을 돌려준다.",
+        "operationId": "publish_api_v1_asset_lorebooks__lorebook_id__versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lorebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lorebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LorebookVersionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LorebookVersionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish",
+        "tags": [
+          "lorebooks"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/lorebooks/{lorebook_id}/versions/{number}": {
+      "get": {
+        "description": "자기 로어북의 판 하나. 굳힌 문서까지다.",
+        "operationId": "read_version_api_v1_asset_lorebooks__lorebook_id__versions__number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lorebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lorebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LorebookVersionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Version",
+        "tags": [
+          "lorebooks"
         ],
         "x-audience": "user"
       }

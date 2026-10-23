@@ -38,13 +38,15 @@ from app.characters import listings as character_listings
 from app.characters import router as characters
 from app.characters import supply as character_supply
 from app.characters.publishing import CharacterNotReadyError
-from app.characters.service import CharacterNotFoundError, OperatorOnlyError
+from app.characters.service import CharacterNotFoundError, LorebookNotOwnedError, OperatorOnlyError
 from app.core.config import Settings, get_settings
 from app.images import router as images
 from app.images.isolation import ImageUnreadableError
 from app.images.service import ImageNotFoundError, ImageNotOwnedError, UnsupportedImageError
 from app.images.setup import build_decoder, build_image_store
 from app.images.store import ImageStoreUnavailableError
+from app.lorebooks import router as lorebooks
+from app.lorebooks.service import LorebookNotFoundError
 from app.personas import router as personas
 from app.personas import supply as persona_supply
 from app.personas.service import PersonaLimitError, PersonaNotFoundError
@@ -153,8 +155,12 @@ def create_app(
     app.add_exception_handler(CharacterNotFoundError, characters.handle_character_not_found)
     app.add_exception_handler(OperatorOnlyError, characters.handle_operator_only)
     app.add_exception_handler(CharacterNotReadyError, characters.handle_character_not_ready)
+    app.add_exception_handler(LorebookNotOwnedError, characters.handle_lorebook_not_owned)
     app.add_exception_handler(AdultContentRequiredError, handle_adult_content_required)
     # 그림(#566). 올리기는 로그인, 내주기는 볼 수 있는지 보고 nginx 에 넘긴다
+    app.include_router(lorebooks.router, prefix=API_PREFIX)
+    app.add_exception_handler(LorebookNotFoundError, lorebooks.handle_lorebook_not_found)
+
     app.include_router(images.router, prefix=API_PREFIX)
 
     app.add_exception_handler(UnsupportedImageError, images.handle_unsupported_image)

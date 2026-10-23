@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 import app.characters.models  # noqa: F401
 import app.images.models  # noqa: F401
+import app.lorebooks.models  # noqa: F401
 import app.personas.models  # noqa: F401  # 모델을 불러와야 Base.metadata 에 테이블이 들어간다
 from app.core.database import Base
 
