@@ -855,7 +855,7 @@ class TableHappening(Base):
 
     판의 사건 규칙은 조건이 채워지면 한 번 일어난다(app/rounds/happenings.py).
     일어난 것을 여기 적어 다시 일어나지 않게 한다. 일어난 라운드(round_number)와
-    옮긴 사람들(moves: 누가, 어디에서, 어디로)과 옮긴 인물들(npc_moves, #282)도 적는다.
+    옮긴 사람들(moves: 누가, 어디에서, 어디로)과 옮긴 인물들(npc_moves, #282), 다룬 길의 문들(doors, #281)도 적는다.
     그 라운드의 서술이 이것을 읽는다.
     바꾸는 것은 엔진뿐이다. 지우지 않는다.
     """
@@ -874,6 +874,10 @@ class TableHappening(Base):
     # 효과의 차례다.
     # 이벤트에는 싣지 않는다. 누가 어디로 갔는지는 일행이 본 만큼만 서술이 그린다
     npc_moves: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    # 다룬 길의 문들(#281). 하나하나가 {act, device, from, to} 다(act 는 lock, unlock, repair,
+    # device 는 lock, bar, 고치기면 null, 장소는 ID). 바뀐 장치마다 하나, 효과의 차례다.
+    # 이벤트에는 싣지 않는다. 일행이 그 길의 끝에 있을 때만 서술이 그린다
+    doors: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

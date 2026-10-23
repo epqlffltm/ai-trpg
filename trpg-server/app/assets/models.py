@@ -324,6 +324,12 @@ class HappeningEffectKind(enum.StrEnum):
     MOVE = 'move'
     # 인물(NPC) 하나를 맵의 한 장소로 옮긴다(#282). 죽은 인물은 옮기지 않는다
     MOVE_NPC = 'move_npc'
+    # 길 하나의 문을 잠근다(#281). 장치를 적지 않으면 그 문의 장치 모두다. 부서진 문은 잠그지 못한다
+    LOCK_ROUTE = 'lock_route'
+    # 길 하나의 문을 연다(#281). 장치를 적지 않으면 그 문의 장치 모두다
+    UNLOCK_ROUTE = 'unlock_route'
+    # 길 하나의 부서진 문을 고친다(#281). 고친 문은 열린 채다. 다시 잠그려면 잠그는 효과를 잇는다
+    REPAIR_ROUTE = 'repair_route'
 
 
 class Visibility(enum.StrEnum):

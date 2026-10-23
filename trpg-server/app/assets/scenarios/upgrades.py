@@ -891,6 +891,21 @@ def with_no_pick(lock: dict | None) -> dict | None:
     return None if lock is None else {**lock, 'pick': None}
 
 
+def upgrade_from_53(document: dict) -> dict:
+    """
+    형식 53 의 문서를 형식 54 로 올린다. 그때는 사건이 길의 문을 다루지 못했다(#281).
+
+    사건의 효과는 캐릭터 옮기기와 인물 옮기기뿐이었으므로 그대로 읽는다. 문을 다루는 장치(device)는 없다.
+    """
+    upgraded = dict(document)
+    upgraded['happenings'] = [
+        {**rule, 'effects': [{**effect, 'device': None} for effect in rule['effects']]}
+        for rule in document.get('happenings', [])
+    ]
+    upgraded['format'] = 54
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -946,4 +961,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     50: upgrade_from_50,
     51: upgrade_from_51,
     52: upgrade_from_52,
+    53: upgrade_from_53,
 }
