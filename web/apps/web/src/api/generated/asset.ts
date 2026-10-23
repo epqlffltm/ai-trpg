@@ -1076,9 +1076,17 @@ export interface components {
         };
         /**
          * Place
-         * @description 장소 하나(지도의 점). 그림은 그 장소의 배경이다. 설명은 모델이 읽는다.
+         * @description 장소 하나(지도의 점). 그림(image_id)은 그 장소의 기본 배경이다. 설명은 모델이 읽는다.
+         *     backgrounds 는 시간대마다의 배경이다. 그 시간대의 것이 없으면 기본 배경을 쓴다(chat 의 화면).
          */
         Place: {
+            /**
+             * Backgrounds
+             * @default {}
+             */
+            backgrounds: {
+                [key: string]: string;
+            };
             /**
              * Description
              * @default
@@ -1093,9 +1101,16 @@ export interface components {
         };
         /**
          * PlaceDocument
-         * @description 장소 하나. 그림은 그 장소의 배경이다.
+         * @description 장소 하나. 그림은 그 장소의 기본 배경이고, backgrounds 는 시간대마다의 배경이다.
          */
         PlaceDocument: {
+            /**
+             * Backgrounds
+             * @default {}
+             */
+            backgrounds: {
+                [key: string]: string;
+            };
             /** Description */
             description: string;
             /** Id */
@@ -1242,8 +1257,14 @@ export interface components {
         /**
          * Start
          * @description 시작 상황 하나. 대화를 열 때 사용자가 고른다. 제목은 목록에, 상황은 모델에 간다.
+         *     hour 는 대화가 시작하는 시각(몇 시)이다. 1일째의 그 시각에서 시작해 이동과 시간 보내기로 흐른다(chat).
          */
         Start: {
+            /**
+             * Hour
+             * @default 12
+             */
+            hour: number;
             /** Situation */
             situation: string;
             /** Title */
@@ -1251,9 +1272,14 @@ export interface components {
         };
         /**
          * StartDocument
-         * @description 시작 상황 하나.
+         * @description 시작 상황 하나. hour 는 시작하는 시각(몇 시)이다.
          */
         StartDocument: {
+            /**
+             * Hour
+             * @default 12
+             */
+            hour: number;
             /** Situation */
             situation: string;
             /** Title */
@@ -1282,6 +1308,13 @@ export interface components {
             /** Item */
             item: string;
         };
+        /**
+         * TimeOfDay
+         * @description 하루의 어느 때. 장소의 시간대 배경을 고르는 열쇠다.
+         *     경계는 TRPG 와 같다(trpg-server 의 app/calendar/clock.py, 2026-10-22 유저 결정). 계산은 chat 이 한다.
+         * @enum {string}
+         */
+        TimeOfDay: "dawn" | "morning" | "day" | "evening" | "night";
         /**
          * Trigger
          * @description 호감도를 바꾸는 사용자의 행동. target 은 그 물건이나 장소의 id 다.

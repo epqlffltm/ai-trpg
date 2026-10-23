@@ -30,6 +30,7 @@ from app.characters.models import (
     CHARACTER_NAME_MAX_LENGTH,
     CHARACTER_SPEECH_MAX_LENGTH,
     CHARACTER_TAG_MAX_LENGTH,
+    HOURS_PER_DAY,
     ITEM_DESCRIPTION_MAX_LENGTH,
     ITEM_NAME_MAX_LENGTH,
     KEY_MAX_LENGTH,
@@ -38,12 +39,14 @@ from app.characters.models import (
     PLACE_DESCRIPTION_MAX_LENGTH,
     PLACE_NAME_MAX_LENGTH,
     STAGE_NAME_MAX_LENGTH,
+    START_HOUR_DEFAULT,
     START_ITEM_MAX_COUNT,
     START_SITUATION_MAX_LENGTH,
     START_TITLE_MAX_LENGTH,
     VERSION_NOTE_MAX_LENGTH,
     AffectionDisplay,
     ItemKind,
+    TimeOfDay,
     TriggerKind,
     Visibility,
 )
@@ -77,7 +80,10 @@ Tags = Annotated[list[Tag], Field(max_length=CHARACTER_MAX_TAGS), AfterValidator
 
 
 class Start(BaseModel):
-    """시작 상황 하나. 대화를 열 때 사용자가 고른다. 제목은 목록에, 상황은 모델에 간다."""
+    """
+    시작 상황 하나. 대화를 열 때 사용자가 고른다. 제목은 목록에, 상황은 모델에 간다.
+    hour 는 대화가 시작하는 시각(몇 시)이다. 1일째의 그 시각에서 시작해 이동과 시간 보내기로 흐른다(chat).
+    """
 
     model_config = ConfigDict(extra='forbid')
 
@@ -85,6 +91,7 @@ class Start(BaseModel):
     situation: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=START_SITUATION_MAX_LENGTH)
     ]
+    hour: Annotated[int, Field(ge=0, lt=HOURS_PER_DAY)] = START_HOUR_DEFAULT
 
 
 def reject_repeated_starts(starts: list[Start]) -> list[Start]:
@@ -100,7 +107,10 @@ Key = Annotated[str, StringConstraints(min_length=1, max_length=KEY_MAX_LENGTH, 
 
 
 class Place(BaseModel):
-    """장소 하나(지도의 점). 그림은 그 장소의 배경이다. 설명은 모델이 읽는다."""
+    """
+    장소 하나(지도의 점). 그림(image_id)은 그 장소의 기본 배경이다. 설명은 모델이 읽는다.
+    backgrounds 는 시간대마다의 배경이다. 그 시간대의 것이 없으면 기본 배경을 쓴다(chat 의 화면).
+    """
 
     model_config = ConfigDict(extra='forbid')
 
@@ -108,6 +118,7 @@ class Place(BaseModel):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=PLACE_NAME_MAX_LENGTH)]
     description: Annotated[str, StringConstraints(strip_whitespace=True, max_length=PLACE_DESCRIPTION_MAX_LENGTH)] = ''
     image_id: uuid.UUID | None = None
+    backgrounds: dict[TimeOfDay, uuid.UUID] = {}
 
 
 class Path(BaseModel):
@@ -261,9 +272,10 @@ WORLD_LISTS = ('places', 'paths', 'items', 'start_items')
 
 
 def attached_images(image_id: uuid.UUID | None, places: list[Place], items: list[Item]) -> list[uuid.UUID]:
-    """붙인 그림들. 대표 그림, 장소의 배경, 물건의 그림이다. 없는 것은 뺀다."""
+    """붙인 그림들. 대표 그림, 장소의 배경(기본과 시간대마다), 물건의 그림이다. 없는 것은 뺀다."""
     found = [image_id] if image_id is not None else []
-    return found + [entry.image_id for entry in [*places, *items] if entry.image_id is not None]
+    found += [entry.image_id for entry in [*places, *items] if entry.image_id is not None]
+    return found + [background for place in places for background in place.backgrounds.values()]
 
 
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 처음 있는 장소, 호감도는 "없음"이 null 이다. 글과 목록의 칸은 빈 값으로 비운다

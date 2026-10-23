@@ -9,6 +9,8 @@ TRPG 의 판 형식과 같은 방식이다.
   - 2: 지도(장소, 길, 처음 있는 장소)와 물건(물건, 시작 소지품)을 더했다(2026-10-22).
        1 의 판은 이 칸들이 비어 있는 것으로 읽는다
   - 3: 호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙)를 더했다(2026-10-22). 1, 2 의 판은 호감도가 없다(null)
+  - 4: 시작 상황의 시작 시각(hour)과 장소의 시간대 배경(backgrounds)을 더했다(2026-10-22, #668).
+       3 까지의 판은 정오에 시작하고 시간대 배경이 없는 것으로 읽는다
 DB 를 모르는 순수한 함수다. 초안(Character)과 거른 소개에서 문서를 만든다.
 """
 
@@ -16,24 +18,25 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
-from app.characters.models import AffectionDisplay, Character, ItemKind, TriggerKind
+from app.characters.models import START_HOUR_DEFAULT, AffectionDisplay, Character, ItemKind, TimeOfDay, TriggerKind
 from app.ratings import Rating
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 3
+DOCUMENT_FORMAT = 4
 
 
 class StartDocument(BaseModel):
-    """시작 상황 하나."""
+    """시작 상황 하나. hour 는 시작하는 시각(몇 시)이다."""
 
     model_config = ConfigDict(extra='forbid', frozen=True)
 
     title: str
     situation: str
+    hour: int = START_HOUR_DEFAULT
 
 
 class PlaceDocument(BaseModel):
-    """장소 하나. 그림은 그 장소의 배경이다."""
+    """장소 하나. 그림은 그 장소의 기본 배경이고, backgrounds 는 시간대마다의 배경이다."""
 
     model_config = ConfigDict(extra='forbid', frozen=True)
 
@@ -41,6 +44,7 @@ class PlaceDocument(BaseModel):
     name: str
     description: str
     image_id: uuid.UUID | None
+    backgrounds: dict[TimeOfDay, uuid.UUID] = {}
 
 
 class PathDocument(BaseModel):
