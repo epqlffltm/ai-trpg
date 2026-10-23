@@ -5,6 +5,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import type { TableDetail } from '../../../../api/types';
+import { narrationModelsQuery } from '../../queries';
 import { tableQuery } from '../roomQueries';
 import { describeHostProblem, type HostProblem } from './hostProblem';
 
@@ -32,6 +33,7 @@ export function useHostAction(tableId: string): HostAction {
         const next = describeHostProblem(error);
         setProblem(next);
         if (next.refresh) void queryClient.invalidateQueries({ queryKey: tableQuery(tableId).queryKey });
+        if (next.models) void queryClient.invalidateQueries({ queryKey: narrationModelsQuery().queryKey });
         return null;
       } finally {
         setBusy(false);

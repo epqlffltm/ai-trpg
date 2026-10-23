@@ -19,13 +19,46 @@ function waiting(extra: Record<string, unknown> = {}, other: Record<string, unkn
       member(OTHER, { character: { name: '미아', description: '' }, ...other }),
     ],
     recommended_narration_style: 'classic',
+    input_step: 0,
+    output_step: 0,
     ...extra,
   });
 }
 
+const MODELS = {
+  free: false,
+  models: [
+    {
+      slug: 'gemini-flash',
+      display_name: 'Gemini Flash',
+      vendor: 'Google',
+      grade: 'standard',
+      credits: '40',
+      tier: 'standard',
+      promo: false,
+      next: null,
+      retires_on: null,
+      options: [{ input_step: 0, output_step: 0, input_tokens: 12000, output_tokens: 1200, credits: '40', tier: 'standard', promo: false, next: null }],
+    },
+    {
+      slug: 'glm-air',
+      display_name: 'GLM Air',
+      vendor: 'Z.ai',
+      grade: 'basic',
+      credits: '10',
+      tier: 'basic',
+      promo: false,
+      next: null,
+      retires_on: null,
+      options: [{ input_step: 0, output_step: 0, input_tokens: 12000, output_tokens: 1200, credits: '10', tier: 'basic', promo: false, next: null }],
+    },
+  ],
+};
+
 function open(routes: Record<string, (request: SeenRequest) => Response> = {}, me = ME) {
   return installFakeFetch({
     [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
+    'GET /api/v1/game/tables/narration-models': () => json(200, MODELS),
     'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', public_id: me }),
     ...roomRoutes(TABLE_ID, { [`GET ${BASE}`]: () => json(200, waiting()), ...routes }),
   });
@@ -146,5 +179,40 @@ describe('HostPanel', () => {
 
     await vi.waitFor(() => expect(screen.queryByText('방장', { selector: 'h2' })).not.toBeInTheDocument());
     expect(reads).toBeGreaterThanOrEqual(2);
+  });
+
+  it('모집 중에는 서술 모델을 바꾼다', async () => {
+    const { seen } = open({
+      [`PUT ${BASE}/narration-model`]: () => json(200, waiting({ narration_model: 'glm-air' })),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const panel = await hostPanel();
+    expect(await panel.findByText('Gemini Flash')).toBeInTheDocument();
+    expect(panel.getByText(/1인 1라운드 40 크레딧/)).toBeInTheDocument();
+    await userEvent.click(panel.getByRole('button', { name: '모델 바꾸기' }));
+    await userEvent.selectOptions(panel.getByLabelText('서술 모델'), 'glm-air');
+    await userEvent.click(panel.getByRole('button', { name: '이 모델로 바꾸기' }));
+
+    expect(await panel.findByText('GLM Air')).toBeInTheDocument();
+    expect(sent(seen, 'PUT', '/narration-model')[0]?.body).toEqual({ narration_model: 'glm-air', input_step: 0, output_step: 0 });
+  });
+
+  it('시작한 뒤에는 지금 모델을 쓸 수 있으면 바꾸지 않는다', async () => {
+    open({ [`GET ${BASE}`]: () => json(200, waiting({ status: 'playing' })) });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const panel = await hostPanel();
+    expect(await panel.findByText(/지금 모델을 쓸 수 없을 때만/)).toBeInTheDocument();
+    expect(panel.queryByRole('button', { name: '모델 바꾸기' })).not.toBeInTheDocument();
+  });
+
+  it('시작한 뒤에도 지금 모델을 쓸 수 없으면 알리고 바꾸게 한다', async () => {
+    open({ [`GET ${BASE}`]: () => json(200, waiting({ status: 'playing', narration_model: 'retired-model' })) });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const panel = await hostPanel();
+    expect(await panel.findByText(/바꾸지 않으면 서술하지 못합니다/)).toBeInTheDocument();
+    expect(panel.getByRole('button', { name: '모델 바꾸기' })).toBeInTheDocument();
   });
 });
