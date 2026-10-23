@@ -2,9 +2,9 @@
 // 게시 점검(GET /scenarios/{id}/publish-check)과 게시의 409 가 주는 문제의 이름을 화면의 글과 묶음으로 바꾼다. 순수한 함수다.
 // 이름은 서버의 Problem(trpg-server/app/assets/scenarios/publishing.py)이다. 모르는 이름이 오면 이름을 그대로 보인다.
 
-import type { ScenarioSection } from './scenarioTabs';
+import type { ScenarioTab } from './scenarioTabs';
 
-type ProblemText = { text: string; section: ScenarioSection };
+type ProblemText = { text: string; section: ScenarioTab };
 
 const PROBLEMS: Record<string, ProblemText> = {
   rulebook_missing: { text: '룰북을 고르지 않았습니다.', section: 'materials' },
@@ -69,7 +69,7 @@ const PROBLEMS: Record<string, ProblemText> = {
 };
 
 /** 문제 하나의 글과 묶음. 모르는 이름이면 이름 그대로, 묶음은 없다 */
-export function problemLine(name: string): { text: string; section: ScenarioSection | null } {
+export function problemLine(name: string): { text: string; section: ScenarioTab | null } {
   return PROBLEMS[name] ?? { text: name, section: null };
 }
 
