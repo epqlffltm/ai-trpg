@@ -14,11 +14,12 @@ import { BasicsTab } from './BasicsTab';
 import { CHARACTERS_PATH } from './characterPaths';
 import { isMissingCharacter } from './characterProblem';
 import { characterQuery } from './characterQueries';
-import { CHARACTER_TABS, sectionLabel, tabOf, type CharacterTab } from './characterTabs';
+import { CHARACTER_TABS, tabLabel, tabOf, type CharacterTab } from './characterTabs';
 import { CheckPanel } from './CheckPanel';
 import { ImagesTab } from './ImagesTab';
 import { IntroTab } from './IntroTab';
 import { ItemsTab } from './ItemsTab';
+import { LorebooksTab } from './LorebooksTab';
 import { MapTab } from './MapTab';
 import { PublishTab } from './PublishTab';
 import { ScenesTab } from './ScenesTab';
@@ -98,6 +99,7 @@ function panelOf(tab: CharacterTab, character: AssetCharacterDetail): ReactNode 
   if (tab === 'images') return <ImagesTab character={character} />;
   if (tab === 'sprites') return <SpritesTab character={character} />;
   if (tab === 'scenes') return <ScenesTab character={character} />;
+  if (tab === 'lorebooks') return <LorebooksTab character={character} />;
   return <PublishTab character={character} />;
 }
 
@@ -115,7 +117,7 @@ function TabList({ current, onChange }: { current: CharacterTab; onChange: (tab:
           className="scenario-tab"
           onClick={() => onChange(tab)}
         >
-          {sectionLabel(tab)}
+          {tabLabel(tab)}
         </button>
       ))}
     </div>

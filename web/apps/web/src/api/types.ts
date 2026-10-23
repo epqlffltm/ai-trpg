@@ -179,3 +179,13 @@ export type TimeOfDay = Asset['schemas']['TimeOfDay'];
 export type AssetSprite = Asset['schemas']['Sprite'];
 export type AssetEventScene = Asset['schemas']['EventScene'];
 export type AssetSceneWhen = Asset['schemas']['SceneWhen'];
+// chat 의 로어북(C6 의 로어북 붙이기). TRPG 의 LoreEntry, LoreKind 와 섞이지 않게 앞에 Asset 을 붙인다
+export type AssetLorebookPage = Asset['schemas']['LorebookPage'];
+export type AssetLorebookSummary = Asset['schemas']['LorebookSummary'];
+export type AssetLorebookDetail = Asset['schemas']['LorebookDetail'];
+export type AssetLorebookCreate = Asset['schemas']['LorebookCreate'];
+export type AssetLorebookUpdate = Asset['schemas']['LorebookUpdate'];
+export type AssetLorebookVersionSummary = Asset['schemas']['LorebookVersionSummary'];
+export type AssetLorebookVersionDetail = Asset['schemas']['LorebookVersionDetail'];
+export type AssetLoreEntry = Asset['schemas']['LoreEntry'];
+export type AssetLoreKind = Asset['schemas']['LoreKind'];

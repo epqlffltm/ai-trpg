@@ -1,10 +1,10 @@
 // web/apps/web/src/pages/chat/studio/characters/publishProblems.ts
-// 캐릭터의 게시 점검(GET /characters/{id}/publish-check)과 게시의 409 가 주는 문제의 이름을 화면의 글과 묶음으로 바꾼다. 순수한 함수다.
+// 캐릭터의 게시 점검(GET /characters/{id}/publish-check)과 게시의 409 가 주는 문제의 이름을 화면의 글과 그 칸이 있는 탭으로 바꾼다. 순수한 함수다.
 // 이름은 서버의 Problem(asset-server/app/characters/publishing.py)이다. 모르는 이름이 오면 이름을 그대로 보인다.
 
-import type { CharacterSection } from './characterTabs';
+import type { CharacterTab } from './characterTabs';
 
-type ProblemText = { text: string; section: CharacterSection };
+type ProblemText = { text: string; section: CharacterTab };
 
 const PROBLEMS: Record<string, ProblemText> = {
   start_missing: { text: '시작 상황이 하나도 없습니다.', section: 'starts' },
@@ -19,7 +19,7 @@ const PROBLEMS: Record<string, ProblemText> = {
   lorebook_unpublished: { text: '붙인 로어북 가운데 아직 게시하지 않은 것이 있습니다.', section: 'lorebooks' },
 };
 
-/** 문제 하나의 글과 묶음. 모르는 이름이면 이름 그대로, 묶음은 없다 */
-export function problemLine(name: string): { text: string; section: CharacterSection | null } {
+/** 문제 하나의 글과 탭. 모르는 이름이면 이름 그대로, 탭은 없다 */
+export function problemLine(name: string): { text: string; section: CharacterTab | null } {
   return PROBLEMS[name] ?? { text: name, section: null };
 }
