@@ -1176,3 +1176,75 @@ a.ui-button {
 .host-model {
   margin-bottom: var(--ui-gap);
 }
+
+/* 지갑(A6). 머리의 잔액, 잔액 칸, 원장. 크레딧(골드, 실버)이다. 판 안의 돈(.money)과 다르다 */
+.app-header__balance {
+  margin-right: 8px;
+  padding: 2px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  color: inherit;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.balance {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
+.balance__item {
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.balance__item dt {
+  color: var(--ui-text-muted);
+  font-size: 0.85em;
+}
+
+.balance__item dd {
+  margin: 2px 0 0;
+  font-size: 1.4em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance__item--total dd {
+  color: var(--ui-text-muted);
+}
+
+.ledger {
+  display: grid;
+  gap: 0;
+}
+
+.ledger__line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.ledger__amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+.ledger__line--out .ledger__amount {
+  color: var(--ui-text-muted);
+}
+
+.ledger__when {
+  grid-column: 1 / -1;
+  font-size: 0.85em;
+}
+

@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/trpg/room/round/DeclarationForm.tsx
 // 선언 내기와 고치기. 글을 쓰고, 행동을 하나 붙이거나 붙이지 않는다(action/ActionFields.tsx).
 // 행동의 대상(장면의 인물과 몬스터)은 장면을 읽어 고른다. 상태 패널의 단추가 행동의 칸을 채워 달라고 하면 받아 채운다.
-// 보내면 서버가 라운드를 돌려준다. 그 값으로 바로 바꾼다. 모두가 냈으면 닫기 시작한 라운드가 온다.
+// 보내면 서버가 라운드를 돌려준다. 하던 라운드 읽기를 멈추고 그 값으로 바로 바꾼다(roundQueries 의 replaceCurrentRound).
+// 모두가 냈으면 닫기 시작한 라운드가 온다.
 // 마감 전에는 남의 선언이 보이지 않는다. 맞출 것은 채팅으로 맞춘다.
 
 import { Button } from '@ai-trpg/ui';
@@ -21,7 +22,7 @@ import {
   type DeclarationDraft,
 } from './declarationForm';
 import { tableQuery } from '../roomQueries';
-import { currentRoundQuery, roundsKey, sceneCastQuery } from './roundQueries';
+import { replaceCurrentRound, roundsKey, sceneCastQuery } from './roundQueries';
 import { describeDeclarationProblem, type RoundProblem } from './roundProblem';
 
 type Props = {
@@ -51,7 +52,7 @@ export function DeclarationForm({ table, me, mine, onDone, onCancel, onRequest }
     setBusy(true);
     setProblem(undefined);
     try {
-      queryClient.setQueryData(currentRoundQuery(table.id).queryKey, await declare(table.id, toDeclarationUpdate(draft, ctx)));
+      await replaceCurrentRound(queryClient, table.id, await declare(table.id, toDeclarationUpdate(draft, ctx)));
       onDone();
     } catch (error) {
       const next = describeDeclarationProblem(error);

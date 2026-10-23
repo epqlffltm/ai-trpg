@@ -80,6 +80,35 @@ describe('RoundStage', () => {
     expect(within(screen.getByRole('form', { name: '선언' })).getByLabelText('무엇을 하나요')).toHaveValue('문을 밀어 연다');
   });
 
+  it('선언을 내는 동안 시작한 라운드 읽기가 늦게 돌아와도 낸 선언을 덮지 않는다', async () => {
+    const mine = declaration(ME, { content: '기다린다', action: null });
+    let reads = 0;
+    let releaseStale: (() => void) | undefined;
+    open({
+      // 첫 읽기는 바로, 두 번째(스트림이 붙은 뒤의 묶은 읽기)는 선언을 낸 뒤까지 붙잡아 둔다
+      [`GET ${BASE}/rounds/current`]: (() => {
+        reads += 1;
+        if (reads === 1) return json(200, round(2));
+        return new Promise<Response>((resolve) => {
+          releaseStale = () => resolve(json(200, round(2)));
+        });
+      }) as unknown as () => Response,
+      [`PUT ${BASE}/rounds/current/declaration`]: () => json(200, round(2, { declarations: [mine], waiting_for: [OTHER] })),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const form = within(await screen.findByRole('form', { name: '선언' }));
+    await vi.waitFor(() => expect(reads).toBe(2));
+    await userEvent.type(form.getByLabelText('무엇을 하나요'), '기다린다');
+    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    expect(await screen.findByRole('button', { name: '고치기' })).toBeInTheDocument();
+
+    releaseStale?.();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByRole('button', { name: '고치기' })).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: '선언' })).not.toBeInTheDocument();
+  });
+
   it('마감한 라운드는 모두의 선언과 판정 결과를 보이고, 쓰이는 서술을 이어 보이다가 끝나면 지운다', async () => {
     let reads = 0;
     const closing = round(2, {

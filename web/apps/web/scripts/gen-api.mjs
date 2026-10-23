@@ -14,7 +14,7 @@ import openapiTS, { astToString } from 'openapi-typescript';
 const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const API_DOCS = join(APP_ROOT, '..', '..', '..', 'docs', 'api');
 const OUT_DIR = join(APP_ROOT, 'src', 'api', 'generated');
-const SERVERS = ['auth', 'trpg', 'asset', 'chat'];
+const SERVERS = ['auth', 'trpg', 'asset', 'chat', 'billing'];
 
 const HEADER = (server) =>
   `// web/apps/web/src/api/generated/${server}.ts\n` +
