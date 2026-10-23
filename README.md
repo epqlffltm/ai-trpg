@@ -148,6 +148,8 @@ cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
   그 값이 `notification-server/.env` 의 `BOARD_SERVER_SECRET` 과 같아야 한다. 명령은 [게시판 서버의 알림 보내기](board-server/README.md#알림-보내기)에 있다.
 - 게임 서버의 언어 모델은 컨테이너 밖, 이 PC 의 Ollama(`host.docker.internal:11434`)로 간다.
   다른 곳의 모델을 쓰면 루트 `.env` 의 `GAME_LLM_BASE_URL` 에 적는다. `trpg-server/.env` 의 `LLM_BASE_URL` 은 덮인다.
+- 게임 서버는 결제 서버에서 라운드의 서술 값을 받는다. 크레딧 없이 한 판을 돌려 보려면 루트 `.env` 에 `GAME_BILLING_URL=`(빈 값)을 적는다.
+  그러면 서술 값을 받지 않는다. 로컬에서만 쓴다([화면을 실제 서버로 보기](docs/operations/local-screens.md)).
 - 인증 서버의 JWT 개인키는 `auth-server/keys/` 를 읽기 전용으로 붙인다. 이미지에는 넣지 않는다.
   토큰에 서명하는 `auth-server` 에만 붙인다. 인증의 워커와 마이그레이션은 키 없이 뜬다(`JWT_PRIVATE_KEY_PATH` 를 비운다).
   **리눅스에서는** 키 파일의 주인이 PC 의 사용자라 컨테이너의 사용자(번호 10001)가 읽지 못한다.

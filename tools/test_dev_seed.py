@@ -15,6 +15,7 @@ import unittest
 from unittest import mock
 
 import dev_seed
+import dev_seed_world
 from dev_seed import (
     RESULT_PREFIX,
     SEED_TITLE,
@@ -26,15 +27,33 @@ from dev_seed import (
     proxy_port,
     report,
     scenario_body,
+    seed_lorebook,
     seed_scenario,
     seed_table,
 )
+from dev_seed_world import ENTRIES, LOREBOOK_TITLE, world_fields
 
 PROXY = 'http://127.0.0.1:8080'
+LOREBOOKS = '/api/v1/game/lorebooks'
+
+# 로어북의 항목이 모두 있을 때의 이름에서 ID 로 가는 표
+IDS = {entry['name']: f'e{index}' for index, entry in enumerate(ENTRIES)}
+
+
+def lorebook_answers(entries: list[dict]) -> dict:
+    """로어북이 이미 있고 항목이 entries 만큼 있는 게임 서버의 답. 없는 항목은 만들면 'new-<이름>' 이 된다"""
+    answers = {
+        ('GET', f'{LOREBOOKS}?limit=100'): {'items': [{'id': 'l1', 'title': LOREBOOK_TITLE}]},
+        ('GET', f'{LOREBOOKS}/l1/entries'): entries,
+    }
+    return answers
 
 
 class FakeGame:
-    """게임 서버의 흉내. (방법, 주소) 마다 답을 정하고 받은 요청을 적는다. 정하지 않은 것은 시험을 실패시킨다."""
+    """
+    게임 서버의 흉내. (방법, 주소) 마다 답을 정하고 받은 요청을 적는다. 정하지 않은 것은 시험을 실패시킨다.
+    답이 부를 수 있는 것이면 부를 때마다 불러 새 답을 받는다(만들 때마다 다른 ID)
+    """
 
     def __init__(self, answers: dict):
         self.answers = answers
@@ -45,7 +64,7 @@ class FakeGame:
         answer = self.answers[(method, path)]
         if isinstance(answer, Exception):
             raise answer
-        return answer
+        return answer() if callable(answer) else answer
 
 
 class ProxyTest(unittest.TestCase):
@@ -101,44 +120,56 @@ class ScenarioTest(unittest.TestCase):
             pick_model({'free': True, 'models': []})
 
     def test_body_has_two_openings_and_three_pregens_with_full_sheets(self):
-        body = scenario_body('r1', 'm1')
+        body = scenario_body('r1', 'm1', world_fields(IDS, 'l1'))
         self.assertEqual(len(body['openings']), 2)
         self.assertEqual(len(body['pregens']), 3)
         for pregen in body['pregens']:
             self.assertEqual(sorted(pregen['sheet']['abilities']), ['cha', 'con', 'dex', 'int', 'str', 'wis'])
+        self.assertEqual(body['character_modes'], ['pregen', 'custom', 'manual', 'point_buy', 'rolled'])
 
     def test_creates_and_publishes_when_missing(self):
-        game = FakeGame(
-            {
-                ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [], 'total': 0},
-                ('GET', '/api/v1/game/tables/narration-models'): {'models': [{'slug': 'm1'}]},
-                ('POST', '/api/v1/game/rulebooks'): {'id': 'r1'},
-                ('POST', '/api/v1/game/scenarios'): {'id': 's1'},
-                ('PATCH', '/api/v1/game/scenarios/s1/listing'): {},
-                ('POST', '/api/v1/game/scenarios/s1/versions'): {'number': 1},
-                ('PUT', '/api/v1/game/scenarios/s1/listing/publication'): {},
-            }
-        )
+        answers = {
+            ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [], 'total': 0},
+            ('GET', '/api/v1/game/tables/narration-models'): {'models': [{'slug': 'm1'}]},
+            ('GET', f'{LOREBOOKS}?limit=100'): {'items': []},
+            ('POST', LOREBOOKS): {'id': 'l1'},
+            ('POST', '/api/v1/game/rulebooks'): {'id': 'r1'},
+            ('POST', '/api/v1/game/scenarios'): {'id': 's1'},
+            ('PATCH', '/api/v1/game/scenarios/s1/listing'): {},
+            ('POST', '/api/v1/game/scenarios/s1/versions'): {'number': 1},
+            ('PUT', '/api/v1/game/scenarios/s1/listing/publication'): {},
+        }
+        game = FakeGame(answers)
+        made = iter(range(len(ENTRIES)))
+        answers[('POST', f'{LOREBOOKS}/l1/entries')] = mock.Mock(side_effect=lambda: {'id': f'e{next(made)}'})
         with mock.patch.object(dev_seed, 'call', game):
-            self.assertEqual(seed_scenario(PROXY, 't'), ('s1', True))
+            self.assertEqual(seed_scenario(PROXY, 't'), ('s1', 'created'))
         self.assertEqual(game.calls[-1], ('PUT', '/api/v1/game/scenarios/s1/listing/publication', {'version': 1}))
-        self.assertEqual(game.calls[4][2]['genres'], ['horror', 'mystery'])
+        created = next(
+            body for method, path, body in game.calls if (method, path) == ('POST', '/api/v1/game/scenarios')
+        )
+        self.assertEqual(created['start_place'], IDS['수도원 문'])
+        self.assertEqual(created['lorebook_ids'], ['l1'])
+        listing = next(body for method, path, body in game.calls if path.endswith('/listing') and method == 'PATCH')
+        self.assertEqual(listing['genres'], ['horror', 'mystery'])
 
-    def test_existing_listed_scenario_is_left_alone(self):
+    def test_existing_listed_scenario_with_world_is_left_alone(self):
         game = FakeGame(
             {
                 ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [{'id': 's1', 'title': SEED_TITLE}]},
+                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': 'e0'},
                 ('GET', '/api/v1/game/listings/s1'): {'scenario_id': 's1'},
             }
         )
         with mock.patch.object(dev_seed, 'call', game):
-            self.assertEqual(seed_scenario(PROXY, 't'), ('s1', False))
-        self.assertEqual(len(game.calls), 2)
+            self.assertEqual(seed_scenario(PROXY, 't'), ('s1', 'kept'))
+        self.assertEqual(len(game.calls), 3)
 
     def test_existing_unlisted_scenario_is_published(self):
         game = FakeGame(
             {
                 ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [{'id': 's1', 'title': SEED_TITLE}]},
+                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': 'e0'},
                 ('GET', '/api/v1/game/listings/s1'): SeedError('404'),
                 ('POST', '/api/v1/game/scenarios/s1/versions'): {'number': 2},
                 ('PUT', '/api/v1/game/scenarios/s1/listing/publication'): {},
@@ -147,6 +178,51 @@ class ScenarioTest(unittest.TestCase):
         with mock.patch.object(dev_seed, 'call', game):
             seed_scenario(PROXY, 't')
         self.assertEqual(game.calls[-1][2], {'version': 2})
+
+    def test_old_seed_without_a_map_gets_the_world_and_a_new_version(self):
+        game = FakeGame(
+            {
+                ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [{'id': 's1', 'title': SEED_TITLE}]},
+                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': None},
+                ('GET', '/api/v1/game/tables/narration-models'): {'models': [{'slug': 'm1'}]},
+                **lorebook_answers([{'id': IDS[name], 'name': name} for name in IDS]),
+                ('PATCH', '/api/v1/game/scenarios/s1'): {},
+                ('POST', '/api/v1/game/scenarios/s1/versions'): {'number': 3},
+                ('PUT', '/api/v1/game/scenarios/s1/listing/publication'): {},
+            }
+        )
+        with mock.patch.object(dev_seed, 'call', game):
+            self.assertEqual(seed_scenario(PROXY, 't'), ('s1', 'upgraded'))
+        patched = next(body for method, path, body in game.calls if method == 'PATCH')
+        self.assertNotIn('title', patched)
+        self.assertNotIn('rulebook_id', patched)
+        self.assertEqual(patched['start_place'], IDS['수도원 문'])
+        self.assertEqual(game.calls[-1][2], {'version': 3})
+
+
+class LorebookTest(unittest.TestCase):
+    def test_makes_only_missing_entries(self):
+        have = [{'id': IDS[name], 'name': name} for name in IDS if name != '은 성배']
+        answers = lorebook_answers(have)
+        answers[('POST', f'{LOREBOOKS}/l1/entries')] = {'id': 'new'}
+        game = FakeGame(answers)
+        with mock.patch.object(dev_seed, 'call', game):
+            lorebook_id, ids = seed_lorebook(PROXY, 't')
+        self.assertEqual(lorebook_id, 'l1')
+        self.assertEqual(ids['은 성배'], 'new')
+        posts = [body for method, path, body in game.calls if method == 'POST']
+        self.assertEqual([body['name'] for body in posts], ['은 성배'])
+
+
+class WorldTest(unittest.TestCase):
+    def test_every_name_the_world_points_to_is_an_entry(self):
+        fields = world_fields(IDS, 'l1')
+        text = str(fields)
+        self.assertNotIn('KeyError', text)
+        self.assertEqual({entry['kind'] for entry in ENTRIES}, {'place', 'item', 'person', 'event'})
+        hidden = [route for route in fields['routes'] if route.get('visibility') == 'hidden']
+        self.assertTrue(all('find' in route for route in hidden))
+        self.assertEqual(dev_seed_world.START_PLACE, '수도원 문')
 
 
 class TableTest(unittest.TestCase):
@@ -159,11 +235,24 @@ class TableTest(unittest.TestCase):
                         {'id': 't1', 'scenario_id': 's1', 'status': 'recruiting'},
                     ]
                 },
-                ('GET', '/api/v1/game/tables/t1'): {'id': 't1', 'invite_code': 'ABC'},
+                ('GET', '/api/v1/game/tables/t1'): {'id': 't1', 'invite_code': 'ABC', 'map': {'places': []}},
             }
         )
         with mock.patch.object(dev_seed, 'call', game):
-            self.assertEqual(seed_table(PROXY, 't', 's1'), {'id': 't1', 'invite_code': 'ABC'})
+            self.assertEqual(seed_table(PROXY, 't', 's1')['id'], 't1')
+
+    def test_a_table_of_the_old_version_without_a_map_is_not_reused(self):
+        game = FakeGame(
+            {
+                ('GET', '/api/v1/game/tables?limit=100'): {
+                    'items': [{'id': 't1', 'scenario_id': 's1', 'status': 'recruiting'}]
+                },
+                ('GET', '/api/v1/game/tables/t1'): {'id': 't1', 'map': None},
+                ('POST', '/api/v1/game/tables'): {'id': 't2', 'invite_code': 'XYZ'},
+            }
+        )
+        with mock.patch.object(dev_seed, 'call', game):
+            self.assertEqual(seed_table(PROXY, 't', 's1')['id'], 't2')
 
     def test_opens_a_public_table_when_none(self):
         game = FakeGame(
@@ -182,7 +271,7 @@ class ReportTest(unittest.TestCase):
         seeded = dev_seed.Seeded(
             accounts=[Account('seed_host', 'p1', 't1'), Account('seed_guest', 'p2', 't2')],
             scenario_id='s1',
-            created_scenario=True,
+            scenario_state='upgraded',
             table={'id': 't9', 'invite_code': 'ABC'},
         )
         text = report(seeded, PROXY, 'pw')
@@ -190,6 +279,7 @@ class ReportTest(unittest.TestCase):
         self.assertIn('손님: seed_guest / pw', text)
         self.assertIn(f'{PROXY}/trpg/tables/t9', text)
         self.assertIn('docker compose --profile app logs -f auth-mail', text)
+        self.assertIn('새 판을 게시했다', text)
         self.assertNotIn('t1', text.replace('/t9', ''))
 
 
