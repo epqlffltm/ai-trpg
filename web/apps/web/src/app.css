@@ -1526,3 +1526,67 @@ a.ui-button {
   margin-bottom: 12px;
   border-bottom: 1px solid var(--ui-border);
 }
+
+/* 신고 처리(E4). 운영자의 화면은 표와 폼이 중심이다(docs/product/screens.md 의 "E. 관리자") */
+.moderation-list__item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.moderation-list__item p {
+  margin: 4px 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--ui-danger);
+  border-radius: var(--ui-radius);
+  color: var(--ui-danger);
+  font-size: 0.85em;
+}
+
+.moderation-detail,
+.moderation-form {
+  margin-top: var(--ui-gap);
+}
+
+.moderation-form fieldset {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  margin: 0 0 var(--ui-gap);
+}
+
+.moderation-report {
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--ui-border);
+}
+
+.moderation-report p {
+  margin: 2px 0;
+}
+
+/* 신고한 사람과 대화의 글은 쓴 그대로(줄바꿈 포함) 보인다 */
+.moderation-report__text,
+.moderation-quote {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.moderation-quote {
+  margin: 0 0 var(--ui-gap);
+  padding: 8px 12px;
+  border-left: 3px solid var(--ui-danger);
+  background: var(--ui-surface);
+}
+
+.moderation-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+}
+
+.moderation-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
