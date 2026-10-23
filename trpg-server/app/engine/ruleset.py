@@ -57,6 +57,8 @@ NARRATION_TONE_MAX_LENGTH = 300
 NARRATION_OUTCOME_MAX_LENGTH = 200
 NARRATION_AVOID_MAX_LENGTH = 100
 NARRATION_MAX_AVOIDS = 5
+# 장비의 칸(#276). 캐릭터 하나가 동시에 착용하는 자리의 수다(손, 몸, 머리 …)
+RULESET_MAX_EQUIPMENT_SLOTS = 8
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -621,6 +623,17 @@ class NarrationGuide(Part):
         return self
 
 
+class EquipmentSlot(Part):
+    """
+    장비의 칸 하나(#276). 캐릭터가 물건을 착용하는 자리다. 예: 주손, 보조손, 몸.
+
+    칸마다 하나의 물건이 들어간다. 어느 물건이 어느 칸에 들어가는지는 시나리오의 아이템 규칙이 정한다.
+    """
+
+    key: Key
+    name: Name
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
@@ -675,6 +688,16 @@ class Ruleset(Part):
     robbed_wake: RobbedWake | None
     # 서술 지침(#616). 엔진은 보지 않는다. None 이면 공통의 지시만으로 서술한다. 칸 자체는 늘 있어야 한다
     narration: NarrationGuide | None
+    # 장비의 칸들(#276). 비어 있으면 이 규칙에는 착용이 없다. 칸 자체는 늘 있어야 한다
+    equipment_slots: Annotated[tuple[EquipmentSlot, ...], Field(max_length=RULESET_MAX_EQUIPMENT_SLOTS)]
+
+    @model_validator(mode='after')
+    def reject_duplicate_slots(self) -> Self:
+        """같은 칸이 두 번 있으면 거부한다. 어느 칸에 끼웠는지 알 수 없다."""
+        duplicates = find_duplicates([slot.key for slot in self.equipment_slots])
+        if duplicates:
+            raise ValueError(f'같은 장비의 칸이 두 번 있습니다: {", ".join(duplicates)}')
+        return self
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:

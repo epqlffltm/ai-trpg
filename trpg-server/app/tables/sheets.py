@@ -31,7 +31,7 @@ from app.engine.point_buy import affordable
 from app.engine.ruleset import Ruleset
 from app.engine.score_roll import uses_exactly
 from app.engine.sheet import Sheet
-from app.tables import items, money
+from app.tables import equipment, items, money
 from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 
 
@@ -192,6 +192,7 @@ def hand_out(table: GameTable, snapshot: Snapshot) -> bool:
         sheet = give_sheet(member, source)
         items.equip(table.id, sheet, snapshot, member.pregen_index)
         money.endow(sheet, snapshot, member.pregen_index)
+        equipment.dress(table.id, sheet, snapshot, member.pregen_index)
     return True
 
 

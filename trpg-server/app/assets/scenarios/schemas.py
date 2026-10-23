@@ -83,7 +83,7 @@ from app.assets.models import (
 from app.assets.scenarios.recommended_model import ModelState
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
-from app.engine.ruleset import Key
+from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, Key
 from app.engine.sheet import Sheet
 
 # 스타팅 하나. 공백이 아닌 글자가 하나는 있어야 한다. 빈 스타팅은 고를 수 없으니 받지 않는다.
@@ -176,17 +176,31 @@ class Currency(BaseModel):
     sell_percent: int = Field(default=DEFAULT_SELL_PERCENT, ge=0, le=100)
 
 
+def reject_duplicate_slots(slots: list[str]) -> list[str]:
+    """같은 칸을 두 번 적으면 거부한다."""
+    if len(set(slots)) != len(slots):
+        raise ValueError('같은 장비의 칸을 두 번 적었습니다.')
+    return slots
+
+
+# 장비의 칸들(#276). 룰북의 equipment_slots 의 이름표다. 룰북에 있는지는 게시할 때 본다
+Slots = Annotated[list[Key], Field(max_length=RULESET_MAX_EQUIPMENT_SLOTS), AfterValidator(reject_duplicate_slots)]
+
+
 class ItemStack(BaseModel):
     """
     물건 몇 개. 붙인 로어북의 물건 항목 하나(entry_id)를 count 개다. 시작 소지품에 쓴다.
 
-    가리키는 항목이 붙인 로어북에 있는지, 물건인지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.
+    wear 는 그중 하나를 시작할 때 착용하는 칸들이다(#276). 비우면 착용하지 않고 시작한다.
+    그 물건의 아이템 규칙이 정한 칸 중에서, 차지하는 칸의 수만큼 적는다. 퀘스트의 보상에는 적지 않는다.
+    가리키는 항목이 붙인 로어북에 있는지, 물건인지, 칸이 맞는지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
     entry_id: uuid.UUID
     count: int = Field(ge=1, le=ITEM_STACK_MAX)
+    wear: Slots = []
 
     @field_serializer('entry_id')
     def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
@@ -467,6 +481,9 @@ class ItemRule(BaseModel):
     rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
     price 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.
     비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).
+    slots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
+    두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.
+    장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -476,6 +493,22 @@ class ItemRule(BaseModel):
     heals: Key | None = None
     rarity: ItemRarity = ItemRarity.NORMAL
     price: Price | None = None
+    slots: Slots = []
+    slot_count: int = Field(default=1, ge=1, le=RULESET_MAX_EQUIPMENT_SLOTS)
+
+    @model_validator(mode='after')
+    def slots_only_on_gear(self) -> 'ItemRule':
+        """소모품은 착용하지 않는다. 쓰면 없어지는 물건이다."""
+        if self.slots and self.kind != ItemKind.GEAR:
+            raise ValueError('장비의 칸(slots)은 장비(gear)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def slot_count_within_slots(self) -> 'ItemRule':
+        """차지하는 칸의 수는 들어갈 수 있는 칸보다 많지 않다."""
+        if self.slots and self.slot_count > len(self.slots):
+            raise ValueError('차지하는 칸의 수(slot_count)가 들어갈 수 있는 칸(slots)보다 많습니다.')
+        return self
 
     @model_validator(mode='after')
     def heal_only_with_consumables(self) -> 'ItemRule':
@@ -591,6 +624,13 @@ class QuestRule(BaseModel):
     reveal_match: QuestMatch = QuestMatch.ALL
     fail: QuestConditions = []
     fail_match: QuestMatch = QuestMatch.ALL
+
+    @model_validator(mode='after')
+    def no_wear_in_rewards(self) -> 'QuestRule':
+        """보상은 소지품으로 받는다. 착용하는 칸을 적지 않는다."""
+        if any(stack.wear for stack in self.reward):
+            raise ValueError('보상에는 착용하는 칸(wear)을 적지 않습니다.')
+        return self
 
     @model_validator(mode='after')
     def no_links_in_conditions(self) -> 'QuestRule':

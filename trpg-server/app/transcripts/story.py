@@ -221,6 +221,19 @@ def money_label(amount: object, labels: Labels) -> str:
     return f'{labels.currency_name} {number}{labels.currency_unit}' if labels.currency_name else number
 
 
+def slots_label(slots: object, labels: Labels) -> str:
+    """칸의 이름표들을 이름으로. 예: 주손·보조손"""
+    keys = slots if isinstance(slots, list) else []
+    return '·'.join(labels.slots.get(text_of(key), text_of(key)) for key in keys)
+
+
+def equipment_changed(payload: dict, labels: Labels) -> list[Block]:
+    """장비를 착용하거나 벗음(#276). 무엇을 어느 칸에."""
+    verb = '착용' if payload.get('change') == 'wear' else '벗음'
+    item = text_of(payload.get('name'))
+    return [Note(f'{who(payload)}: {item} {verb} ({slots_label(payload.get("slots"), labels)})')]
+
+
 def item_traded(payload: dict, labels: Labels) -> list[Block]:
     """상인과 사고팖(#278). 누가, 어느 상인과, 무엇을, 얼마에."""
     verb = '삼' if payload.get('side') == 'buy' else '팖'
@@ -361,6 +374,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.ITEM_GIVEN: item_given,
     EventType.ITEM_PUT_DOWN: item_put_down,
     EventType.ITEM_TRADED: item_traded,
+    EventType.EQUIPMENT_CHANGED: equipment_changed,
     EventType.MONEY_PAID: money_paid,
     EventType.STEAL_ATTEMPTED: steal_attempted,
     EventType.QUEST_CHANGED: quest_changed,

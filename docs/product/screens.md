@@ -1402,6 +1402,7 @@
 | 부상 | 입고 있는 부상과 풀리는 때 | `sheet.injuries[]` 의 `injury`(이름표), `ends_after_round`, `heals_at`. 이름과 효과는 `rules.injuries` |
 | 소지품 | 이름, 종류, 개수 | `sheet.items[]`. 종류와 회복량과 값은 `TableDetail.items`. 물건의 설명은 내려오지 않는다(로어북에 비밀이 있을 수 있어서) |
 | 돈(#278) | 가진 돈 | `sheet.money` 를 `TableDetail.currency` 의 이름과 단위로 적는다(금화 30닢). 화폐가 없는 판(`currency: null`)이면 줄을 숨긴다. 결제의 크레딧(골드·실버)과 섞이지 않게 다른 자리와 다른 말로 보인다 |
+| 장비(#276) | 칸마다 착용한 물건 | `sheet.worn[]` 의 `name`, `slots`(규칙의 칸의 차례로 온다). 칸의 이름과 차례는 `rules.equipment_slots`, 물건이 들어갈 칸과 차지하는 칸의 수는 `TableDetail.items` 의 `slots`, `slot_count`. 칸이 없는 규칙이면 영역을 숨긴다. 두 칸을 차지한 것(두 손 검)은 두 칸에 걸쳐 그린다 |
 | 퀘스트 | 이름, 상태(진행 중, 성공, 실패), 기한 | `TableDetail.quests[]` 의 `name`, `status`, `due_at`. 숨긴 퀘스트는 방장에게만 온다. 퀘스트의 글은 내려오지 않는다 |
 | 장소 | 서 있는 곳, 아는 장소와 길 | `sheet.place_id`, `TableDetail.map` 의 `places[]`, `routes[]`(걸리는 시간 `travel_minutes`). 숨긴 길과 안개 길은 내려오지 않는다 |
 | 시각 | 며칠째, 몇 시, 하루의 어느 때, 다음 라운드에 흐를 시간 | `TableDetail.clock`. `GET /tables/{id}/clock` 과 같은 값이다(#428). 라운드가 열리면 `round_opened` 의 `clock` 으로 바꾼다 |
@@ -1409,12 +1410,13 @@
 
 **3. 할 수 있는 행동**
 
-읽기가 중심이다. 이 패널은 상태를 바꾸지 않고, 선언으로 가는 길만 연다.
+읽기가 중심이다. 이 패널은 장비 말고는 상태를 바꾸지 않고, 선언으로 가는 길만 연다.
 
 | 행동 | 동작 |
 | --- | --- |
 | 물건에서 "쓰기", "건네기" | B6 의 선언 입력에 그 행동을 채워 넣는다. 보내는 것은 B6 의 선언이다 |
 | 장소에서 "가기", "찾기" | 위와 같다. 길로 이어진 아는 장소만 고를 수 있다 |
+| 장비에서 "착용", "벗기"(#276) | 내 캐릭터만. 바로 보낸다(`PUT .../equipment` 에 `{"entry_id", "slots"}`, `DELETE .../equipment/{slot}`). 선언이 아니고 AI 를 부르지 않는다. 착용할 물건은 가진 것 중 `slots` 가 있는 것, 칸은 그 물건의 `slots` 중에서 `slot_count` 만큼 고른다. 찬 칸에 착용하면 서버가 그 칸의 것을 벗긴다. 응답은 테이블이고, 다른 사람에게는 `equipment_changed` 이벤트로 간다 |
 | 퀘스트 | 읽기만 한다 |
 | 다른 사람 | 시트와 소지품을 읽는다. 물건을 건넬 사람을 고를 때 쓴다 |
 | 캐릭터가 죽었을 때 | 새 캐릭터를 들이는 길을 보인다(`POST .../character`, B5) |
@@ -1427,6 +1429,7 @@
 | 건네기 | 라운드가 열려 있지 않거나 받을 사람이 살아 있지 않다 |
 | 가기 | 라운드가 열려 있지 않거나 갈 수 있는 길이 없다 |
 | 찾기 | 라운드가 열려 있지 않다 |
+| 착용, 벗기 | 라운드가 선언을 받는 중이 아니다(닫는 중이면 409 `round_closing`), 내 캐릭터가 쓰러졌다(409 `character_downed`). 착용은 그 칸에 들어가는 물건을 가지고 있지 않을 때도 |
 | 모든 행동 | 내 캐릭터가 죽었다 |
 
 **5. 상태**
@@ -1600,6 +1603,7 @@
 | 인원과 캐릭터 | `recommended_players`, `character_modes`, `pregens`, `default_sheet`, `player_made_hp`, `reroll_allowed` | 추천 인원 1~4, 프리젠 8 |
 | 인물·물건·퀘스트 | `npc_sheets`, `items`, `starting_items`, `quests` | 인물 시트 100, 물건 규칙 100, 시작 물건 20, 퀘스트 50(조건은 퀘스트마다 5) |
 | 돈(#278) | `currency`, `items[].price`, `pregens[].money`, `quests[].reward_money`, `npc_sheets[].merchant` | 화폐의 이름 20 자, 단위 10 자, 돈과 값은 1,000,000 까지, 되사는 값 0~100%. 화폐 없이 값·상인·돈을 적으면 게시할 때 `currency_missing` |
+| 장비(#276) | `items[].slots`, `items[].slot_count`, `starting_items[].wear`, `pregens[].items[].wear` | 칸은 룰북의 `equipment_slots`(8 개까지) 중에서. 차지하는 칸은 1~8, 들어갈 수 있는 칸보다 많지 않다. 소모품에는 칸이 없다. 시작할 때의 착용은 그 물건의 칸을 차지하는 칸의 수만큼, 시작 소지품과 한 프리젠의 소지품을 합쳐 겹치지 않게. 틀리면 게시 문제 `item_slot_invalid`, `starting_wear_invalid` |
 | 지도 | `start_place`, `routes`, `landmarks`, `happenings` | 길 200, 명소 100, 사건 규칙 50(조건 5, 효과 5) |
 | 몬스터 배치 | `monster_sheets`, `encounters` | 몬스터 시트 100, 조우 50 |
 | 서술 | `narration_style`, `narration_model`, `clock` | 문체는 안 보내면 정통. 시계는 안 보내면 1일째 8시, 한 라운드에 10분 |

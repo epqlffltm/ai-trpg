@@ -34,7 +34,7 @@ from app.billing.prices import Tier
 from app.calendar.schemas import ClockOut, ClockTimeOut
 from app.catalog.models import Grade
 from app.catalog.steps import MAX_STEP
-from app.engine.ruleset import RULESET_MAX_ABILITIES, Key, Ruleset
+from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_EQUIPMENT_SLOTS, Key, Ruleset
 from app.engine.sheet import Score, Sheet
 from app.tables.models import (
     CREDIT_WAIT_MAX,
@@ -365,6 +365,31 @@ class CatalogItemOut(BaseModel):
     rarity: ItemRarity
     # 상인이 파는 값(#278). 사 줄 때는 currency.sell_percent 를 곱해 내림한다. 비어 있으면 사고팔 수 없다
     price: int | None = None
+    # 착용할 때 들어갈 수 있는 규칙의 칸(rules.equipment_slots)과 함께 차지하는 칸의 수(#276).
+    # 칸이 비어 있으면 착용하지 않는 물건이다
+    slots: list[str] = []
+    slot_count: int = 1
+
+
+class WornOut(BaseModel):
+    """착용한 물건 하나(#276). 무엇을 규칙의 어느 칸들에 끼웠는가. 이름은 판의 로어북 물건 항목의 이름이다."""
+
+    entry_id: uuid.UUID
+    name: str
+    slots: list[str]
+
+
+class WearRequest(BaseModel):
+    """
+    장비를 착용할 때 받는 값(#276). 가진 물건 하나를 규칙의 칸들에 끼운다.
+
+    slots 는 그 물건이 들어갈 수 있는 칸 중에서 차지하는 칸의 수만큼 고른다(CatalogItemOut.slots, slot_count).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    slots: list[Key] = Field(min_length=1, max_length=RULESET_MAX_EQUIPMENT_SLOTS)
 
 
 class CurrencyOut(BaseModel):
@@ -459,6 +484,8 @@ class SheetOut(BaseModel):
     items: list[ItemOut] = []
     # 가진 돈(#278). 테이블의 화폐(TableDetail.currency)로 센다. 화폐가 없는 테이블이면 늘 0 이다
     money: int = 0
+    # 착용한 물건들(#276). 규칙의 칸의 차례다. 착용한 것도 소지품(items)에 들어 있다
+    worn: list[WornOut] = []
     # 서 있는 맵의 장소. 이름은 TableDetail.map.places 에서 찾는다. 맵이 없는 테이블이면 None 이다
     place_id: uuid.UUID | None = None
 

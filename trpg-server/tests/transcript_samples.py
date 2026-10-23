@@ -233,6 +233,15 @@ SAMPLES = {
         'reason': None,
         'remaining': 1,
     },
+    'equipment_changed': {
+        'user_id': '11111111-2222-4333-8444-555555555555',
+        'character_name': '기사',
+        'change': 'wear',
+        'entry_id': '136baf14-b053-4497-8512-0a6a8305f68e',
+        'name': '대검',
+        'slots': ['main_hand', 'off_hand'],
+        'removed': [],
+    },
     'item_traded': {
         'round': 1,
         'user_id': '11111111-2222-4333-8444-555555555555',

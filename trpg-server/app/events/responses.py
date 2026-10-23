@@ -77,6 +77,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'reason',
         'remaining',
     ),
+    # 착용도 공개다(#276). 소지품처럼 모두에게 보인다
+    EventType.EQUIPMENT_CHANGED: ('user_id', 'character_name', 'change', 'entry_id', 'name', 'slots', 'removed'),
     # 사고판 것과 돈을 건넨 것도 공개다(#278). 소지품과 돈은 모두에게 보인다. 못 했으면 까닭(reason)이 있다
     EventType.ITEM_TRADED: (
         'round',

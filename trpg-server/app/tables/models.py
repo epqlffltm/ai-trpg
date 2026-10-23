@@ -514,6 +514,11 @@ class TableSheet(Base):
         lazy='selectin', cascade='all, delete-orphan', order_by='TableItem.created_at, TableItem.id'
     )
 
+    # 이 캐릭터가 착용한 물건들(#276). 시트를 읽을 때 함께 읽는다(칸의 수만큼뿐이다). 벗으면 행을 지운다
+    worn: Mapped[list['TableWorn']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='TableWorn.created_at, TableWorn.id'
+    )
+
 
 class TableItem(Base):
     """
@@ -545,6 +550,36 @@ class TableItem(Base):
     # 판의 로어북 물건 항목의 id
     entry_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     count: Mapped[int] = mapped_column(SmallInteger)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TableWorn(Base):
+    """
+    캐릭터 하나가 착용한 물건 하나(#276). 어느 물건을 규칙의 어느 칸들에 끼웠는가.
+
+    물건 하나가 칸 여럿을 함께 차지할 수 있다(두 손 검은 주손과 보조손). 그래서 칸마다가 아니라 착용 하나마다 행이다.
+    착용한 물건은 소지품의 일부다. 가진 개수보다 많이 착용하지 않는다. 소지품이 줄면 착용도 함께 준다
+    (app/tables/equipment.py). 한 칸에 둘이 겹치지 않는 것은 테이블을 잠그고 코드가 지킨다.
+    바꾸는 것은 서버뿐이다. 본인이 화면에서 바꾸고(app/tables/wearing.py), 시작할 때 판에 적힌 대로 끼운다.
+    """
+
+    __tablename__ = 'table_worn'
+    __table_args__ = (
+        # 시트가 지워지면(사람이 나감) 함께 지워진다
+        ForeignKeyConstraint(['sheet_id'], ['table_sheets.id'], ondelete='CASCADE'),
+        CheckConstraint('cardinality(slots) >= 1', name='slots_not_empty'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    # 어느 테이블의 것인가. 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), index=True)
+    # 착용한 캐릭터의 시트
+    sheet_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    # 판의 로어북 물건 항목의 id
+    entry_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    # 차지한 규칙의 칸들. 규칙의 equipment_slots 의 이름표다
+    slots: Mapped[list[str]] = mapped_column(ARRAY(String(20)))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

@@ -123,6 +123,9 @@ class EventType(enum.StrEnum):
     ITEM_GIVEN = 'item_given'
     # 캐릭터가 가진 물건을 서 있는 장소에 내려놓았다(또는 내려놓으려 했지만 못 했다). 원인은 그 행동의 이벤트다
     ITEM_PUT_DOWN = 'item_put_down'
+    # 캐릭터가 장비를 착용하거나 벗었다(#276). 본인이 화면에서 바꿨다(행한 사람이 본인). 무엇을 어느 칸에,
+    # 끼우느라 함께 빠진 것. 소지품이 줄어 저절로 벗은 것은 적지 않는다(그 일의 이벤트에 소지품이 있다)
+    EQUIPMENT_CHANGED = 'equipment_changed'
     # 캐릭터가 장면의 상인에게서 물건을 샀거나 상인에게 팔았다(또는 하려 했지만 못 했다, #278).
     # 무엇을 몇 개, 오간 돈, 그 뒤에 가진 개수와 돈. 원인은 그 행동의 이벤트다
     ITEM_TRADED = 'item_traded'

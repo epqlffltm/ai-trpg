@@ -70,8 +70,8 @@ GM_NOTES = '고속도로의 끝에는 아무것도 없다.'
 NPC_SHEET = make_sheet(str=16, max_hp=22)
 PREGENS = [{'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧을 못 쓴다.', 'sheet': make_sheet(dex=16, max_hp=8)}]
 
-# 옛 판을 끝까지 올려 읽은 규칙. SRD5 에서 서술 지침만 없다(판 형식 45, #616)
-OLD_SRD5 = SRD5.model_copy(update={'narration': None})
+# 옛 판을 끝까지 올려 읽은 규칙. SRD5 에서 서술 지침(판 형식 45, #616)과 장비의 칸(판 형식 47, #276)이 없다
+OLD_SRD5 = SRD5.model_copy(update={'narration': None, 'equipment_slots': ()})
 
 
 @pytest.fixture

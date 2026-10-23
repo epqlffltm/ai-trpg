@@ -37,6 +37,12 @@ from app.engine.templates import (
 # 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 # 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
 RELEASED = {
+    Template.SRD5: '903134da06976f9fc6a761880f04ffa9ba2d61a9c2216cf8b319a96a45e9ea25',
+    Template.HORROR: '03303285f8d9a686ea8040d5162d7cb3f8c021c7daf5d0fd1b65b1aef057ee55',
+    Template.LIGHT: '6adbbd4747389e1d386f75bb57d2d380f0b11012e3124cae90e7379ea69c6134',
+}
+# 장비의 칸(equipment_slots, #276)을 더하기 전의 해시. 칸을 뺀 규칙은 그때와 같아야 한다
+BEFORE_SLOTS = {
     Template.SRD5: '0a9a23ee2bf555e694a520e0f10e4e9adba23eaa57656eccda904dff045cd995',
     Template.HORROR: '72fa8e76f685929a7362ebaa9304677e9b631db949dade6d2d87a7b7fda53859',
     Template.LIGHT: 'ad2871a9fe507d18c59cfa861b94951f20123524852e8ad812ba24f81b97ba88',
@@ -91,7 +97,20 @@ def test_released_templates_keep_their_values():
 
 def test_adding_the_narration_guide_kept_the_other_values():
     for template, expected in BEFORE_NARRATION.items():
-        assert fingerprint(TEMPLATES[template].rules, without=('narration',)) == expected
+        assert fingerprint(TEMPLATES[template].rules, without=('narration', 'equipment_slots')) == expected
+
+
+def test_adding_the_equipment_slots_kept_the_other_values():
+    for template, expected in BEFORE_SLOTS.items():
+        assert fingerprint(TEMPLATES[template].rules, without=('equipment_slots',)) == expected
+
+
+@pytest.mark.parametrize('template', list(Template))
+def test_every_template_has_hands_and_a_body(template: Template):
+    """모든 템플릿에 무기를 쥘 두 손과 갑옷을 입을 몸이 있다(#276)."""
+    keys = [slot.key for slot in TEMPLATES[template].rules.equipment_slots]
+
+    assert keys[:3] == ['main_hand', 'off_hand', 'body']
 
 
 def test_the_old_srd5_name_still_points_to_the_file():
