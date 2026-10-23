@@ -877,6 +877,17 @@
             ],
             "title": "Event Scene"
           },
+          "expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expression"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1234,6 +1245,17 @@
               }
             ],
             "title": "Event Scene"
+          },
+          "expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expression"
           },
           "id": {
             "format": "uuid",

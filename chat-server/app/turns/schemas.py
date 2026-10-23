@@ -5,6 +5,8 @@
 
     event: turn    data: {"generation_id": ..., "user_message": {...}, "continues": null}
                                                                          맨 처음. 답할 사람의 말
+    event: expression data: {"expression": "웃음", "sprite": "..."}
+                                                                         고른 표정과 그 캐릭터 그림(본문보다 먼저)
     event: delta   data: {"text": "..."}                                 모델이 새로 쓴 글의 조각
     event: done    data: {"message": {...}}                              저장한 답(status 는 complete 나 partial)
     event: failed  data: {"code": "timeout"}                             글자 없이 실패했다. 답은 저장하지 않았다
@@ -48,6 +50,16 @@ class TurnEvent(BaseModel):
     continues: uuid.UUID | None = None
     # 행동에 한마디를 덧붙였으면 그 행동 말(user_message 의 부모). 아니면 null
     action: MessageOut | None = None
+
+
+class ExpressionEvent(BaseModel):
+    """
+    expression 메시지. 모델이 답의 맨 앞에 고른 표정과, 지금 차림에서 그 표정의 캐릭터 그림이다.
+    고를 수 있는 표정이 있는 캐릭터에서, 모델이 기본이 아닌 표정을 골랐을 때만 온다. 첫 delta 보다 먼저 온다.
+    """
+
+    expression: str
+    sprite: uuid.UUID
 
 
 class DeltaEvent(BaseModel):
