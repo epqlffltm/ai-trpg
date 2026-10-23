@@ -16,6 +16,7 @@
 결과의 모양은 app/rounds/narrator.py 에 있다.
 """
 
+from app.engine.ruleset import Outcome
 from app.rounds.narrator import (
     DeathSaveNote,
     DownedStrikeNote,
@@ -48,6 +49,14 @@ from app.rounds.narrator import (
 )
 from app.rounds.time_words import duration_text
 
+# 판정 결과 단계의 이름. 판정 줄과 서술 지침(app/rounds/prompt.py 의 [규칙의 서술 지침])이 같은 이름을 쓴다
+OUTCOME_WORDS = {Outcome.SUCCESS: '성공', Outcome.FAILURE: '실패'}
+
+
+def outcome_of(success: bool) -> Outcome:
+    """판정이 성공했는가를 결과 단계로 바꾼다."""
+    return Outcome.SUCCESS if success else Outcome.FAILURE
+
 
 def describe_verdict(verdict: Verdict) -> str:
     """
@@ -56,7 +65,7 @@ def describe_verdict(verdict: Verdict) -> str:
     부상이 영향을 줬으면 그 이름을 붙인다. 예: (근력 판정 실패: 5 - 1 = 4, 목표 15. 전부터 입은 부상의 영향: 팔 골절)
     노려 쳤으면 노린 것을 붙인다. 예: (민첩 판정 성공: 18 + 2 = 20, 목표 20. 노려 치기: 한쪽 눈 잃음)
     """
-    result = '성공' if verdict.success else '실패'
+    result = OUTCOME_WORDS[outcome_of(verdict.success)]
     # 보정이 음수면 "13 - 1" 로 적는다
     sign = '-' if verdict.modifier < 0 else '+'
     sum_ = f'{verdict.roll} {sign} {abs(verdict.modifier)} = {verdict.total}'

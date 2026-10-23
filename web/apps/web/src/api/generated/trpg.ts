@@ -4118,6 +4118,22 @@ export interface components {
             naming: components["schemas"]["NamingOut"];
         };
         /**
+         * NarrationGuide
+         * @description 서술 지침(#616). 이 규칙으로 하는 판을 어떤 분위기로, 판정 결과를 어떻게 그리는가, 무엇을 하지 않는가.
+         *
+         *     엔진은 보지 않는다. 서술자의 시스템 지시에 들어갈 뿐이다(app/rounds/prompt.py).
+         *     판정을 바꾸지 못한다. 성공과 실패는 엔진이 이미 정했고, 지침은 그것을 그리는 법만 말한다.
+         *     결과 단계마다 지침은 하나다. 적지 않은 단계는 공통의 지시대로 그린다.
+         */
+        NarrationGuide: {
+            /** Avoid */
+            avoid: string[];
+            /** Outcomes */
+            outcomes: components["schemas"]["OutcomeGuide"][];
+            /** Tone */
+            tone: string;
+        };
+        /**
          * NarrationModelOut
          * @description 고를 수 있는 서술 모델 하나와 1인 1라운드의 값.
          *
@@ -4445,6 +4461,23 @@ export interface components {
             items: components["schemas"]["WhisperOut"][];
             /** Total */
             total: number;
+        };
+        /**
+         * Outcome
+         * @description 판정 결과의 단계. 엔진의 판정(app/engine/check.py)이 내는 것이다.
+         *
+         *     지금의 판정은 성공과 실패 둘이다. 부분 성공 같은 단계는 엔진이 그 단계를 정하게 될 때 더한다.
+         * @enum {string}
+         */
+        Outcome: "success" | "failure";
+        /**
+         * OutcomeGuide
+         * @description 판정 결과 한 단계를 어떻게 그리는가. 예: 실패하면 상황이 나빠지는 것을 감각으로 보여 준다.
+         */
+        OutcomeGuide: {
+            /** Guide */
+            guide: string;
+            outcome: components["schemas"]["Outcome"];
         };
         /**
          * PastTableOut
@@ -5832,6 +5865,7 @@ export interface components {
          * @description 규칙 한 벌.
          *
          *     template 은 어느 템플릿에서 왔는지를 적어 둔 것이다(app/engine/templates/). 엔진은 이 값을 보지 않는다.
+         *     narration(서술 지침)도 엔진은 보지 않는다. 서술자만 읽는다.
          */
         Ruleset: {
             /** Abilities */
@@ -5855,6 +5889,7 @@ export interface components {
             /** Magnitudes */
             magnitudes: components["schemas"]["Magnitude"][];
             modifier: components["schemas"]["Modifier"];
+            narration: components["schemas"]["NarrationGuide"] | null;
             point_buy: components["schemas"]["PointBuy"] | null;
             rest: components["schemas"]["Rest"] | null;
             robbed_wake: components["schemas"]["RobbedWake"] | null;
@@ -6376,7 +6411,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 44
+             * @default 45
              */
             format: number;
             /**
