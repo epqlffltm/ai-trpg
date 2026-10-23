@@ -14,7 +14,7 @@ import { basicsHints, modelStatusText, type BasicsDraft } from './basicsForm';
 import { toggleId, toMaterialsBody, withChosen } from './materialsForm';
 import { addOpening, moveOpeningUp, openingsHints, OPENINGS_MAX } from './openingsForm';
 import { problemLine } from './publishProblems';
-import { isTab, tabOf } from './scenarioTabs';
+import { tabOf } from './scenarioTabs';
 
 const GAME = '/api/v1/game';
 const SCENARIOS = `${GAME}/scenarios`;
@@ -92,7 +92,7 @@ describe('시나리오 만들기와 게시 점검', () => {
 
     const check = within(await screen.findByRole('list', { name: '고칠 것' }));
     expect(check.getByText('룰북을 고르지 않았습니다.')).toBeInTheDocument();
-    expect(check.getByText('(퀘스트·사건: 화면 준비 중)')).toBeInTheDocument();
+    expect(check.getByRole('button', { name: '퀘스트·사건 탭으로' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '기본' })).toHaveAttribute('aria-selected', 'true');
 
     await userEvent.click(check.getByRole('button', { name: '재료 탭으로' }));
@@ -246,7 +246,6 @@ describe('입력', () => {
     );
     expect(problemLine('cover_off_map')).toEqual({ text: '맵에 없는 장소에 커버가 있습니다.', section: 'map' });
     expect(problemLine('something_new')).toEqual({ text: 'something_new', section: null });
-    expect(isTab('quests')).toBe(false);
     expect(tabOf('openings')).toBe('openings');
     expect(tabOf('nope')).toBe('basics');
   });
