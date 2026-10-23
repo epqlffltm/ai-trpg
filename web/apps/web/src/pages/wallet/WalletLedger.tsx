@@ -1,9 +1,11 @@
 // web/apps/web/src/pages/wallet/WalletLedger.tsx
 // 지갑의 원장. 최근 것부터 한 쪽씩, "더 보기"로 앞의 것을 읽는다. 한 줄은 언제, 무엇(충전, 서술 값 …), 골드인지 실버인지, 늘고 준 양.
 // 서술 값의 줄(hold)에는 그 홀드의 지금 상태를 붙인다(대기, 사용, 반환됨). 내부 정리(regroup)는 숨긴다.
+// 주문에서 온 줄(충전, 환불)은 그 주문(A8)으로 가는 길을 붙인다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import type { WalletEntry } from '../../api/types';
 import { formatDateTime } from '../../format/dateTime';
 import { walletProblemText } from './walletProblem';
@@ -49,6 +51,14 @@ function LedgerLine({ entry }: { entry: WalletEntry }) {
     <li className={`ledger__line ledger__line--${entryDirection(entry)}`}>
       <span className="ledger__what">
         {entryLabel(entry)} <span className="hint">· {kindLabel(entry.kind)}</span>
+        {entry.order_id ? (
+          <>
+            {' '}
+            <Link to={`/wallet/orders/${entry.order_id}`} className="ledger__order">
+              주문 보기
+            </Link>
+          </>
+        ) : null}
       </span>
       <span className="ledger__amount">{signedAmount(entry.amount)}</span>
       <time className="hint ledger__when" dateTime={entry.created_at}>

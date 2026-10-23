@@ -1319,3 +1319,62 @@ a.ui-button {
   padding-left: 18px;
   font-size: 0.85em;
 }
+
+/* 주문 내역(A8). 주문 카드, 치르지 않은 주문 보기 */
+.orders {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.orders__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9em;
+}
+
+.order {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.order p {
+  margin: 0;
+}
+
+.order__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.order__title {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.order__status {
+  font-size: 0.85em;
+  color: var(--ui-text-muted);
+}
+
+.order--refunded .order__title,
+.order--failed .order__title,
+.order--expired .order__title {
+  color: var(--ui-text-muted);
+}
+
+.order > .ui-button {
+  justify-self: start;
+}
+
+.ledger__order {
+  font-size: 0.85em;
+}
+

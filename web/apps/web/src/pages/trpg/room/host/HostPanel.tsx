@@ -5,7 +5,7 @@
 
 import { endTable } from '../../../../api/tableHost';
 import type { TableDetail } from '../../../../api/types';
-import { ConfirmButton } from './ConfirmButton';
+import { ConfirmButton } from '../../../../components/ConfirmButton';
 import { MemberActions } from './MemberActions';
 import { ModelSettings } from './ModelSettings';
 import { TableSettings } from './TableSettings';

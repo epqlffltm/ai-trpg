@@ -5,12 +5,13 @@
 //   - 주문의 열쇠(Idempotency-Key)는 주문마다 새로 짓고, 답을 받지 못해 다시 보낼 때만 앞의 것을 쓴다(orderKey)
 //   - 승인은 한 번에 하나만 보낸다(busy). 답을 받지 못했으면 같은 결제 번호로 다시 보낸다. 크레딧은 한 번만 들어간다
 //   - 결과를 모르면(confirming) 실패로 보이지 않는다. "다시 확인"은 같은 결제 번호로 다시 부른다(서버가 결제 대행사에 묻는다)
-//   - 승인되면 지갑(잔액과 원장)을 다시 읽는다
+//   - 승인 요청의 답이 오면 주문 내역(A8)을, 승인되면 지갑(잔액과 원장)도 다시 읽는다
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { confirmOrder, createOrder } from '../../api/orders';
 import type { Order } from '../../api/types';
+import { ORDERS_KEY } from '../orders/orderQueries';
 import { WALLET_KEY } from '../wallet/walletQueries';
 import { describeChargeProblem, type ChargeProblem } from './chargeProblem';
 import { orderKey } from './chargeView';
@@ -58,6 +59,7 @@ export function useCharge(): Charge {
 
   function settle(next: Order) {
     setOrder(next);
+    void queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
     if (next.status === 'paid') void queryClient.invalidateQueries({ queryKey: WALLET_KEY });
   }
 
