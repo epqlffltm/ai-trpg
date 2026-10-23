@@ -42,3 +42,5 @@ class MessageState(Base):
     # 호감도(0~100, 판에 호감도가 없으면 null)와 이 가지에서 걸린 "처음 한 번만" 규칙의 id
     affection: Mapped[int | None] = mapped_column(Integer, default=None)
     fired: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)), default=list, server_default='{}')
+    # 이 가지에서 나온 이벤트 씬의 id(나온 차례, app/world/scenes.py, #669). 한 가지에서 한 번만 나온다
+    shown: Mapped[list[str]] = mapped_column(ARRAY(String(KEY_MAX_LENGTH)), default=list, server_default='{}')

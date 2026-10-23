@@ -202,6 +202,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/gallery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Unlocks
+         * @description 내가 연 이벤트 씬들. 최근에 연 것부터다.
+         */
+        get: operations["list_unlocks_api_v1_chat_gallery_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/generations/{generation_id}/stop": {
         parameters: {
             query?: never;
@@ -825,6 +845,8 @@ export interface components {
              * @default false
              */
             edited: boolean;
+            /** Event Scene */
+            event_scene?: string | null;
             /**
              * Id
              * Format: uuid
@@ -986,6 +1008,8 @@ export interface components {
              * @default false
              */
             edited: boolean;
+            /** Event Scene */
+            event_scene?: string | null;
             /**
              * Id
              * Format: uuid
@@ -1159,6 +1183,8 @@ export interface components {
             outfit: string[];
             /** Place */
             place: string | null;
+            /** Sprite */
+            sprite: string | null;
             /** Visited */
             visited: string[];
         };
@@ -1205,6 +1231,34 @@ export interface components {
             kind: string;
             /** Target */
             target: string;
+        };
+        /**
+         * UnlockOut
+         * @description 연 이벤트 씬 하나. character_id 는 asset 서버의 캐릭터 id 다.
+         */
+        UnlockOut: {
+            /**
+             * Character Id
+             * Format: uuid
+             */
+            character_id: string;
+            /** Scene Id */
+            scene_id: string;
+            /**
+             * Unlocked At
+             * Format: date-time
+             */
+            unlocked_at: string;
+        };
+        /**
+         * UnlockPage
+         * @description 목록의 한 쪽과 전체 개수. 대화 목록과 같은 모양이다.
+         */
+        UnlockPage: {
+            /** Items */
+            items: components["schemas"]["UnlockOut"][];
+            /** Total */
+            total: number;
         };
         /**
          * UseAction
@@ -1681,6 +1735,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SummaryOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_unlocks_api_v1_chat_gallery_get: {
+        parameters: {
+            query?: {
+                /** @description asset 서버의 캐릭터 id. 주면 그 캐릭터의 것만 */
+                character_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnlockPage"];
                 };
             };
             /** @description Validation Error */

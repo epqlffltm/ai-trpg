@@ -157,6 +157,7 @@ def to_message(message: Message) -> MessageOut:
         created_at=message.created_at,
         suggestions=message.suggestions,
         edited=message.edited,
+        event_scene=message.event_scene,
     )
 
 
