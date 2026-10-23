@@ -23,7 +23,7 @@ operation 은 round.close_overdue 다. 요청 밖에서 혼자 시작한 작업�
 다시 맡기기를 그만둔 수(gave_up)를 싣는다. 실패는 error 와 job.failed 다.
 닫은 라운드의 서술은 따로 맡긴 작업(round.narrate)이 하고, 그 맡긴 줄의 spawned_job_id 로 이어진다.
 찾아낸 테이블의 수를 바퀴의 span 에 싣는다(add_handled). 찾아낸 것이 없던 바퀴의 추적은 보내지 않는다
-(app/observability/idle_rounds.py). 하다가 실패한 테이블도 찾아낸 것에 들어 그 추적은 남는다.
+(server_core/observability/idle_rounds.py). 하다가 실패한 테이블도 찾아낸 것에 들어 그 추적은 남는다.
 바퀴마다 작업의 메트릭(background_jobs_*)을 센다(app/observability/metrics.py 의 measured_job).
 """
 
@@ -41,14 +41,14 @@ from server_core import loops
 from server_core.loops import Running
 from server_core.observability.context import job_scope
 from server_core.observability.identifiers import new_job_id
+from server_core.observability.metrics import measured_job
+from server_core.observability.spans import add_handled, job_span
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.billing import repository as billing_repository
 from app.billing.price_list import FREE_PRICES, PriceList
 from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
 from app.engine.dice import Dice
-from app.observability.metrics import measured_job
-from app.observability.spans import add_handled, job_span
 from app.rounds import credit_waits, recovery, repository, service
 from app.rounds.recovery import Recovery
 from app.rounds.service import NarrationScheduler

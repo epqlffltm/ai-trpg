@@ -39,6 +39,7 @@ from pathlib import Path
 
 from ai_core.catalog_contract import is_offered, is_retired
 from ai_core.catalog_file import CatalogFileError, load_catalog
+from server_core.database import create_session_factory
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import service
@@ -47,7 +48,7 @@ from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot
 from app.catalog.rules import round_cost_usd
 from app.catalog.sync import SyncReport, sync_catalog
 from app.core.config import get_settings
-from app.core.database import create_engine, create_session_factory
+from app.core.database import create_engine
 
 # 1라운드 어림을 원으로 보일 때의 환율. 어림이다. 판매가를 정할 때 쓴 값과 같다(프로젝트 문서 model-pricing-plan)
 KRW_PER_USD = 1500

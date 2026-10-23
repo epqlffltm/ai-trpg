@@ -13,10 +13,10 @@ import logging
 from dataclasses import dataclass, field
 
 import pytest
+from server_core.testing.metrics import MetricsRecorder
 
 from app.rounds.closing import Finders, gather_context
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
-from tests.metrics import MetricsRecorder
 
 REQUEST = NarrationRequest(
     round_number=1,

@@ -15,6 +15,10 @@ from collections.abc import AsyncIterator, Iterator
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from server_core.testing.collector import Collector, serving
+from server_core.testing.metrics import MetricsRecorder
+from server_core.testing.metrics import recording as recording_metrics
+from server_core.testing.spans import SpanRecorder, recording
 from server_core.testing.tokens import FakeAuthServer, SigningKey, make_signing_key
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -25,11 +29,7 @@ from app.main import create_app
 from app.realtime import service as stream_service
 from app.realtime.service import Cursor
 from tests.cleaning import clear_tables
-from tests.collector import Collector, serving
-from tests.metrics import MetricsRecorder
-from tests.metrics import recording as recording_metrics
 from tests.narration_model import add_test_model
-from tests.spans import SpanRecorder, recording
 from tests.streaming import LONG_HEARTBEAT, Reader
 from tests.viewers import make_viewer
 
@@ -251,7 +251,7 @@ def spans() -> Iterator[SpanRecorder]:
     """
     테스트가 남긴 span 을 메모리에 모은다. 끝나면 아무것도 하지 않는 것으로 되돌린다.
 
-    span 을 만드는 것은 서버에 하나라(app/observability/spans.py) 이것을 쓰는 테스트는 동시에 돌지 않는다.
+    span 을 만드는 것은 서버에 하나라(server_core/observability/spans.py) 이것을 쓰는 테스트는 동시에 돌지 않는다.
     """
     with recording() as recorder:
         yield recorder

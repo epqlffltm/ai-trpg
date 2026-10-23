@@ -3611,9 +3611,10 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 - uvicorn 이 스스로 찍던 요청 줄(access log)은 껐다. 주소 뒤에 붙은 값까지 찍었고, 요청이 끝난 줄과 겹친다. uvicorn 의 나머지 줄(뜨고 꺼지는 것)은 같은 JSON 으로 나간다.
 - AI 에 보낸 글과 받은 글은 로그에 남기지 않는다. AI 호출의 기록은 따로 DB 에 남는다(`ai_core/calls.py`). 거기에도 보낸 글은 없고 지문만 있다.
 
-코드는 `app/observability/` 에 있다. 식별자의 규칙(`identifiers.py`)과 요청과 작업 동안 식별자를 들고 있는 곳(`context.py`)은
-server-core 의 것(`server_core/observability/`)을 쓴다(#589). 이 서버에 남은 것은
-`redaction.py`(가리는 규칙), `formatter.py`(JSON 한 줄), `setup.py`(로그를 거는 일), `middleware.py`(요청), `responses.py`(처리하지 못한 예외의 응답).
+코드는 FastAPI 서버들이 함께 쓰는 `shared/server-core` 의 `server_core/observability/` 에 있다(#589).
+`identifiers.py`(식별자의 규칙), `context.py`(요청과 작업 동안 식별자를 들고 있는 곳), `redaction.py`(가리는 규칙),
+`formatter.py`(JSON 한 줄), `setup.py`(로그를 거는 일), `middleware.py`(요청), `responses.py`(처리하지 못한 예외의 응답).
+서비스 이름(`trpg-server`)은 설정의 클래스에 적는다(`app/core/config.py` 의 `service_name`).
 
 ### 추적
 
@@ -3623,14 +3624,14 @@ server-core 의 것(`server_core/observability/`)을 쓴다(#589). 이 서버에
 
 | span | 이름 | 코드 |
 | --- | --- | --- |
-| 요청 | `POST /api/v1/game/tables/{table_id}/rounds`(메서드와 경로의 틀). 상태 확인과 테이블의 스트림은 걸지 않는다 | `app/observability/request_spans.py` |
-| 다른 곳을 부르는 것 | `HTTP POST`. 인증, 결제, 알림 서버와 AI 모델의 창구 | `app/observability/http_spans.py` |
-| 쿼리 | `db SELECT game_tables`(종류와 테이블). 손으로 쓴 것은 `db SELECT` | `app/observability/db_spans.py` |
-| 작업 | `operation`(`round.narrate`, `round.close_overdue`, `charge.settle`, …) | `app/observability/spans.py` 의 `job_span` |
+| 요청 | `POST /api/v1/game/tables/{table_id}/rounds`(메서드와 경로의 틀). 상태 확인과 테이블의 스트림은 걸지 않는다 | `server_core/observability/request_spans.py`. 스트림은 `app/main.py` 의 `TABLE_STREAMS` 다 |
+| 다른 곳을 부르는 것 | `HTTP POST`. 인증, 결제, 알림 서버와 AI 모델의 창구 | `server_core/observability/http_spans.py` |
+| 쿼리 | `db SELECT game_tables`(종류와 테이블). 손으로 쓴 것은 `db SELECT` | `server_core/observability/db_spans.py` |
+| 작업 | `operation`(`round.narrate`, `round.close_overdue`, `charge.settle`, …) | `server_core/observability/spans.py` 의 `job_span` |
 
 - 로그의 `trace_id` 가 span 의 trace id 와 같다. 요청의 span 에는 `request_id`, 작업의 span 에는 `job_id` 를 싣는다
 - 요청이 맡긴 서술의 span 은 그 요청의 span 아래에 놓인다. 서버가 뜰 때 시작한 정리 작업은 바퀴마다 새 추적이다
-- 5초마다 도는 바퀴(시계, 청구 정리, 알림 보내기)는 찾아낸 것이 없으면 그 추적을 보내지 않는다(`app/observability/idle_rounds.py`). 찾아낸 수는 span 의 `handled` 다
+- 5초마다 도는 바퀴(시계, 청구 정리, 알림 보내기)는 찾아낸 것이 없으면 그 추적을 보내지 않는다(`server_core/observability/idle_rounds.py`). 찾아낸 수는 span 의 `handled` 다
 - `traceparent` 는 부르는 쪽이 붙였을 때만(우리 서버) 그 호출의 span 으로 바꾼다. AI 모델의 창구에는 붙이지 않는다
 - 싣지 않는 것: 주소의 경로와 뒤의 값, 머리말, 본문, SQL 의 문장과 값, 예외의 글, AI 에 보낸 글과 받은 글. 쿼리가 실패하면 SQLSTATE 만 적는다
 - 요청이나 작업 밖의 쿼리와 호출(끊긴 세션의 목록을 30초마다 받는 것)은 span 을 걸지 않는다
@@ -3646,9 +3647,9 @@ server-core 의 것(`server_core/observability/`)을 쓴다(#589). 이 서버에
 
 | 메트릭 | label | 세는 곳 |
 | --- | --- | --- |
-| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `app/observability/request_metrics.py`. 미들웨어의 맨 바깥이다. 테이블의 스트림은 요청 수에만 든다 |
+| `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `server_core/observability/request_metrics.py`. 미들웨어의 맨 바깥이다. 테이블의 스트림은 요청 수에만 든다 |
 | `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB. Redis 만 닿지 않으면 1 이다 |
-| `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `app/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
+| `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `server_core/observability/pool_metrics.py`. 풀은 설정(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)이고, 적지 않으면 5 + 넘칠 때 10 이다 |
 | `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`, `result` | 맡긴 작업(`app/core/jobs.py`)과 도는 작업의 한 바퀴(시계, 청구 정리, 알림 보내기, 원문 정리, 은퇴 지켜보기) |
 | `sse_connections`, `sse_connections_opened_total`, `sse_connection_duration_seconds` | 없음 | `app/realtime/router.py`. 응답을 시작한 뒤부터 끊길 때까지 |
 | `ai_calls_total`, `ai_call_duration_seconds`, `ai_tokens_total` | `operation`(`narration`), `provider`, `model`, `outcome`, `direction` | `app/ai_log/metered.py`. 호출 기록장을 감싼다. 값은 `ai_invocations` 와 같다 |
@@ -3660,8 +3661,8 @@ server-core 의 것(`server_core/observability/`)을 쓴다(#589). 이 서버에
 
 - 대시보드는 Grafana 의 `trpg-server`(`docker/grafana/dashboards/trpg-server.json`), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `trpg-server` 묶음이다
 - `ai_core` 는 메트릭의 코드를 가져오지 않는다(`shared/ai-core/tests/test_boundary.py`). 기록장과 결제 서버를 부르는 것을 밖에서 감싸 센다
-- 계측기는 `app/observability/metrics.py` 에 한 묶음으로 둔다. 테스트는 `tests/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
-- 보내는 길은 `tests/test_metrics_setup.py` 가 가짜 수집기로 본다. Prometheus 에 들어오는지는 저장소의 CI(`stack`)가 본다
+- 요청, DB, 작업, SSE 의 계측기는 server-core 의 것이다(`server_core/observability/metrics.py`). 게임 서버만의 것(AI 호출, 서술, 라운드, 결제 서버)은 `app/observability/metrics.py` 가 공용 코드의 자리(`InstrumentSet`)에 더한다(#589). 테스트는 `server_core.testing.metrics` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
+- 보내는 길은 server-core 의 테스트가, 이 서버가 미는지와 그 이름은 `tests/test_tracing_setup.py` 가 가짜 수집기로 본다. Prometheus 에 들어오는지는 저장소의 CI(`stack`)가 본다
 
 
 ## CI

@@ -14,10 +14,10 @@ import pytest
 from server_core.auth.jwks import fetch_jwks
 from server_core.observability.context import current_ids, request_scope
 from server_core.observability.identifiers import new_trace, parse_traceparent
+from server_core.testing.logs import rendered
 from server_core.testing.tokens import FakeAuthServer
 
 from app.core.jobs import BackgroundJobs
-from tests.logs import rendered
 
 JOBS_LOGGER = 'app.core.jobs'
 JWKS_URL = 'http://auth.test/api/v1/auth/jwks'

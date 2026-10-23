@@ -30,9 +30,8 @@ from dataclasses import dataclass
 
 from server_core.observability.context import job_scope
 from server_core.observability.identifiers import new_job_id
-
-from app.observability.metrics import measured_job
-from app.observability.spans import job_span
+from server_core.observability.metrics import measured_job
+from server_core.observability.spans import job_span
 
 logger = logging.getLogger(__name__)
 
