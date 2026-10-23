@@ -2,7 +2,7 @@
 
 """
 모델에 보내는 "[지금]" 블록. 시각과 시간대, 지금 있는 장소와 그 설명, 갈 수 있는 곳, 사용자의 소지품, 상대의 차림,
-사용자에 대한 상대의 호감도(단계 이름만. 숫자는 보내지 않는다)다.
+사용자에 대한 상대의 호감도(단계 이름만. 숫자는 보내지 않는다), 이번 답에 붙는 이벤트 씬의 장면(#669)이다.
 DB 를 모르는 순수 함수다.
 
 모델은 이것을 읽고 반응만 쓴다. 바꾸는 것은 서버다(이동, 쓰기, 건네기, 시간 보내기).
@@ -10,7 +10,7 @@ DB 를 모르는 순수 함수다.
 판에 없는 id 는(있을 수 없지만) 빼고 적는다.
 """
 
-from app.assets.schemas import CharacterDocument
+from app.assets.schemas import CharacterDocument, EventSceneDocument
 from app.world.affection import stage_of
 from app.world.clock import clock_minutes, read_time, time_words
 from app.world.moves import find_place
@@ -62,8 +62,17 @@ def affection_line(document: CharacterDocument, state: WorldState) -> str | None
     return f'사용자에 대한 호감: {stage_of(document.affection, state.affection).name}'
 
 
-def render_scene(document: CharacterDocument, state: WorldState, start_hour: int) -> str:
-    """'[지금]' 블록. start_hour 는 대화의 시작 시각(몇 시)이다."""
+def event_scene_line(event_scene: EventSceneDocument | None) -> str | None:
+    """'장면: 창가 자리에서 마주 앉는다.'. 이번 답에 붙는 이벤트 씬이 없으면 None. 설명이 없으면 제목이다."""
+    if event_scene is None:
+        return None
+    return f'장면: {event_scene.description or event_scene.title}'
+
+
+def render_scene(
+    document: CharacterDocument, state: WorldState, start_hour: int, event_scene: EventSceneDocument | None = None
+) -> str:
+    """'[지금]' 블록. start_hour 는 대화의 시작 시각(몇 시)이다. event_scene 은 이번 답에 붙는 이벤트 씬이다."""
     found = (
         time_line(state, start_hour),
         place_line(document, state),
@@ -71,6 +80,7 @@ def render_scene(document: CharacterDocument, state: WorldState, start_hour: int
         inventory_line(document, state),
         outfit_line(document, state),
         affection_line(document, state),
+        event_scene_line(event_scene),
     )
     lines = [line for line in found if line]
     return '\n'.join(['[지금]', *lines])

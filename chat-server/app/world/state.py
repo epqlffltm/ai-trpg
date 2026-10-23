@@ -1,7 +1,7 @@
 # chat-server/app/world/state.py
 
 """
-대화의 상태(장소, 흐른 시간, 소지품, 가 본 곳, 상대의 차림, 호감도). DB 를 모르는 순수한 값과 함수다.
+대화의 상태(장소, 흐른 시간, 소지품, 가 본 곳, 상대의 차림, 호감도, 나온 이벤트 씬). DB 를 모르는 순수한 값과 함수다.
 
 상태는 바뀐 말에만 적는다(message_states). 나머지 말은 부모의 상태를 따른다.
 그래서 지금의 상태는 가지의 끝에서 거슬러 올라가 처음 만나는 상태다(state_at).
@@ -31,6 +31,7 @@ class WorldState:
     minutes 는 대화를 시작한 뒤 흐른 시간(분), visited 는 가 본 장소들(처음 간 차례)이다.
     outfit 은 상대가 입은 옷들(사용자가 건넨 옷, 건넨 차례)의 물건 id 다.
     affection 은 호감도(0~100, 판에 호감도가 없으면 None), fired 는 이 가지에서 걸린 "처음 한 번만" 규칙의 id 다.
+    shown 은 이 가지에서 나온 이벤트 씬의 id 다(나온 차례, #669).
     """
 
     place: str | None
@@ -40,6 +41,7 @@ class WorldState:
     outfit: tuple[str, ...] = ()
     affection: int | None = None
     fired: tuple[str, ...] = ()
+    shown: tuple[str, ...] = ()
 
 
 def initial_state(document: CharacterDocument) -> WorldState:
