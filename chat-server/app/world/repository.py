@@ -25,6 +25,7 @@ def to_state(row: MessageState) -> WorldState:
         outfit=tuple(row.outfit),
         affection=row.affection,
         fired=tuple(row.fired),
+        shown=tuple(row.shown),
     )
 
 
@@ -39,6 +40,7 @@ def to_row(message_id: uuid.UUID, state: WorldState) -> MessageState:
         outfit=list(state.outfit),
         affection=state.affection,
         fired=list(state.fired),
+        shown=list(state.shown),
     )
 
 

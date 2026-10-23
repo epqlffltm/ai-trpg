@@ -866,6 +866,17 @@
             "title": "Edited",
             "type": "boolean"
           },
+          "event_scene": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Scene"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1212,6 +1223,17 @@
             "default": false,
             "title": "Edited",
             "type": "boolean"
+          },
+          "event_scene": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Scene"
           },
           "id": {
             "format": "uuid",
@@ -1580,6 +1602,18 @@
             ],
             "title": "Place"
           },
+          "sprite": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sprite"
+          },
           "visited": {
             "items": {
               "type": "string"
@@ -1593,6 +1627,7 @@
           "minutes",
           "clock",
           "background",
+          "sprite",
           "inventory",
           "visited",
           "outfit",
@@ -1666,6 +1701,54 @@
           "target"
         ],
         "title": "TriggerDocument",
+        "type": "object"
+      },
+      "UnlockOut": {
+        "description": "연 이벤트 씬 하나. character_id 는 asset 서버의 캐릭터 id 다.",
+        "properties": {
+          "character_id": {
+            "format": "uuid",
+            "title": "Character Id",
+            "type": "string"
+          },
+          "scene_id": {
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "unlocked_at": {
+            "format": "date-time",
+            "title": "Unlocked At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "scene_id",
+          "unlocked_at"
+        ],
+        "title": "UnlockOut",
+        "type": "object"
+      },
+      "UnlockPage": {
+        "description": "목록의 한 쪽과 전체 개수. 대화 목록과 같은 모양이다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UnlockOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "UnlockPage",
         "type": "object"
       },
       "UseAction": {
@@ -2536,6 +2619,88 @@
         "summary": "Read Summary",
         "tags": [
           "memory"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/gallery": {
+      "get": {
+        "description": "내가 연 이벤트 씬들. 최근에 연 것부터다.",
+        "operationId": "list_unlocks_api_v1_chat_gallery_get",
+        "parameters": [
+          {
+            "description": "asset 서버의 캐릭터 id. 주면 그 캐릭터의 것만",
+            "in": "query",
+            "name": "character_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "asset 서버의 캐릭터 id. 주면 그 캐릭터의 것만",
+              "title": "Character Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnlockPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Unlocks",
+        "tags": [
+          "gallery"
         ],
         "x-audience": "user"
       }

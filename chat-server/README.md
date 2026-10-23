@@ -127,6 +127,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | PUT | `/api/v1/chat/conversations/{id}/branch` | [다른 대안 보기](#다시-생성-멈추기-대안). `{message_id}`. 바뀐 대화를 돌려준다. 답을 쓰는 중이면 409 `generation_in_progress` | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/model` | 대화의 모델 바꾸기. `{model}`. 바꾼 모델을 돌려준다. 고를 수 없으면 422 `model_unavailable` | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
+| GET | `/api/v1/chat/gallery` | 내가 연 [이벤트 씬](#이벤트-씬)(`{items: [{character_id, scene_id, unlocked_at}], total}`). 최근에 연 것부터. `character_id`(asset 서버의 캐릭터 id), `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/chat/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴) 알림 받기. `{withdrawn_at}`. 200 `{"status": "processed"}`. 프록시는 밖에서 받지 않는다(404) | 인증 서버의 서명 |
 
 **스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages`, `POST /api/v1/chat/messages/{id}/regenerate`, `/continue`(모두 만들었다)가
@@ -311,7 +312,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 상태는 서버가 갖고 바꾼다. 모델은 바뀐 상태를 읽고 반응만 쓴다.
 
 - **상태.** 지금 있는 장소(`place`), 대화를 시작한 뒤 흐른 시간(`minutes`), 사용자의 소지품(`inventory`), 가 본 장소(`visited`, 화면이 안개를 그린다),
-  상대의 차림(`outfit`, 사용자가 건넨 옷), 호감도(`affection`, 아래), 지금 시각(`clock`)과 배경(`background`, [시각과 배경](#시각과-배경)).
+  상대의 차림(`outfit`, 사용자가 건넨 옷), 호감도(`affection`, 아래), 지금 시각(`clock`)과 배경(`background`, [시각과 배경](#시각과-배경)), 캐릭터 그림(`sprite`, [캐릭터 그림](#캐릭터-그림)).
   처음에는 판의 시작 상태다. 지도가 없는 캐릭터면 장소가 없다(`null`).
 - **말마다.** 상태는 바뀐 말(행동 말)에만 적는다(`message_states`, 매번 전체를). 나머지 말은 부모의 상태를 따르고, 지금의 상태는 가지의 끝에서 거슬러 올라가 읽는다.
   그래서 다시 생성하거나 앞 가지로 가면 그 가지의 상태가 된다. 되돌리기가 가지를 바꾸는 것으로 끝난다.
@@ -329,6 +330,30 @@ uv run python -m scripts.models adult glm-5-3 --forbid
   모델에는 단계 이름만 간다("사용자에 대한 호감: 친구"). 응답의 `affection` 은 `{display, value, stage, stage_index, stages}` 이고,
   단계로 보이는 캐릭터(`display` 가 `stage`)는 `value` 가 `null` 이다(숫자를 내려보내지 않는다). 호감도를 더하기 전에 적힌 상태는 시작 값으로 읽는다.
 - 상대가 받은 선물의 목록, 모델이 호감도의 변화를 제안하는 것은 그 뒤다. 규칙은 `app/world/` 에 두고, TRPG 와 함께 쓸 때 `shared/` 로 뽑는다.
+
+#### 이벤트 씬
+
+캐릭터의 판에 이벤트 씬(asset 의 판 형식 5, 6. CG)이 있으면, 사용자가 행동해 조건이 맞을 때 그 답에 이벤트 씬이 붙는다(#669, `app/world/scenes.py`, 화면 명세 C3).
+
+- **조건.** 그 장소에 갔다(`reach_place`, 이번 행동이 그 장소로의 이동), 그 물건을 처음 건넸다(`give_item`, 이번 행동이 그 물건을 건넨 것),
+  호감도가 그 단계 이상이다(`affection_stage`, 행동 뒤의 값). 말만 주고받아서는 상태가 바뀌지 않으므로 새로 맞는 것이 없다.
+- **한 가지에서 한 번.** 나온 이벤트 씬은 상태의 `shown` 에 적는다(가지를 바꾸면 그 가지의 것이다). 다른 가지에서는 다시 나온다.
+- **어디에 붙나.** 답하는 말(행동 말, 건넬 때 한마디를 덧붙였으면 그 한마디)의 `event_scene` 에 이벤트 씬의 id 를 적는다.
+  그 말에 대한 답(다시 생성한 대안까지)이 그림 창에 그 이벤트 씬을 띄운다. SSE 의 `turn` 의 `user_message` 와 대화 읽기의 말에 실린다.
+- **모델에 보내는 것.** 그 답을 쓰는 차례에 "[지금]" 에 "장면: …"(이벤트 씬의 장면 설명, 없으면 제목)이 간다. 다시 생성하거나 이어 써도 간다.
+- **한 행동에 여럿.** 판의 차례로 첫 것이 답에 붙고, 나머지도 나온 것으로 적고 연 것으로 센다(사건이 지나가면 다시 오지 않는다).
+- **연 기록**(`scene_unlocks`, `app/gallery/`). 해금 대상(`collectible`)인 이벤트 씬이 처음 나오면 계정에 적는다. 사람, 캐릭터(asset 의 id), 이벤트 씬마다 한 줄이고 처음 연 시각이 남는다.
+  대화를 가리키지 않아 가지를 바꾸거나 대화를 지워도 남는다. 탈퇴하면 지운다. 해금 대상이 아닌 것은 나오기만 한다.
+- 조건이 없는 이벤트 씬을 모델이 고르는 길은 다음 단계다.
+
+#### 캐릭터 그림
+
+그림은 셋이다(2026-10-23 유저 결정). 캐릭터 그림(배경이 투명한 서 있는 그림), 배경, 이벤트 씬(CG)이다. 보통의 장면은 배경 위에 캐릭터 그림을 겹친다(화면의 일).
+이벤트 씬이 붙은 답에서는 이벤트 씬이 둘을 대신한다. 서버는 상태의 `sprite` 로 지금 띄울 캐릭터 그림을 고른다(`app/world/sprites.py`).
+
+- **차림.** 상대가 입은 옷(상태의 `outfit`) 가운데 가장 나중에 입은 것부터, 그 차림의 그림이 있는 것이다. 없으면 처음 차림(차림이 빈 그림)이다.
+- **표정.** 지금은 기본 표정(빈 글)이다. 그 차림에 기본 표정의 그림이 없으면 그 차림의 첫 그림이다. 표정을 고르는 것은 다음 단계다(모델이 응답 끝의 표식으로 고르고 서버가 검증한다).
+- 맞는 그림이 없으면 `null` 이다(화면은 대표 그림으로 대신하거나 캐릭터 없이 그린다).
 
 #### 시각과 배경
 
@@ -416,7 +441,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 인증 서버가 유예(7일)가 지난 탈퇴를 알리면 그 사람의 것을 지운다(#670, [탈퇴 설계](../docs/architecture/withdrawal.md), `app/withdrawal/`).
 
-- **지우는 것.** 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 캐릭터의 판의 사본이다. 한 트랜잭션이다.
+- **지우는 것.** 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 캐릭터의 판의 사본, 연 이벤트 씬의 기록이다. 한 트랜잭션이다.
 - **남기는 것.** 청구 기록(`generations`)이다. 대화와 말을 가리키는 칸만 비운다(외래 키가 `SET NULL`, 2026-10-23 유저 결정).
   남는 것은 공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표이고 글은 없다. 결제 서버도 원장과 홀드를 공개 ID 로 남기므로 서로 맞추고 원가를 셀 때 쓴다.
 - **받는 길.** `POST /api/v1/chat/service/users/{public_id}/withdrawal`, 본문 `{"withdrawn_at": "..."}`. 인증 서버의 비밀(`AUTH_SERVER_SECRET`)로 서명한다(`app/core/service_auth.py`).
@@ -498,7 +523,8 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. ch
 스키마(테스트는 `chat_test`)만 쓴다. 다른 서버의 스키마에 닿지 못하는 것을 테스트(`tests/test_schema_isolation.py`)가 확인한다.
 
 테이블은 `app/conversations/models.py`(`characters`, `conversations`, `conversation_personas`, `messages`),
-`app/catalog/models.py`(`ai_models`, `ai_model_costs`, `ai_model_snapshots`), `app/turns/models.py`(`generations`)에 있다.
+`app/catalog/models.py`(`ai_models`, `ai_model_costs`, `ai_model_snapshots`), `app/turns/models.py`(`generations`),
+`app/memory/models.py`(`memory_notes`, `summaries`), `app/world/models.py`(`message_states`), `app/gallery/models.py`(`scene_unlocks`)에 있다.
 모델 파일을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
 ### 마이그레이션

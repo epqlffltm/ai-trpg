@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 import app.catalog.models  # noqa: F401  # 모델을 불러와야 Base.metadata 에 테이블이 들어간다
 import app.conversations.models  # noqa: F401
+import app.gallery.models  # noqa: F401
 import app.memory.models  # noqa: F401
 import app.turns.models  # noqa: F401
 import app.world.models  # noqa: F401

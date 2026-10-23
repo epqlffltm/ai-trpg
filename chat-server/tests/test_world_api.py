@@ -64,6 +64,7 @@ START = {
     # 시작 상황에 시작 시각이 없으면 정오다
     'clock': {'day': 1, 'hour': 12, 'minute': 0, 'time_of_day': 'day'},
     'background': None,
+    'sprite': None,
 }
 
 
@@ -151,6 +152,7 @@ async def test_a_character_without_a_map_has_an_empty_state(
         'affection': None,
         'clock': {'day': 1, 'hour': 12, 'minute': 0, 'time_of_day': 'day'},
         'background': None,
+        'sprite': None,
     }
 
 

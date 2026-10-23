@@ -15,6 +15,7 @@ from app.world.affection import stage_index
 from app.world.backgrounds import background_of
 from app.world.clock import TimeOfDay, clock_minutes, read_time
 from app.world.models import KEY_MAX_LENGTH
+from app.world.sprites import sprite_image
 from app.world.state import WorldState
 
 # 숫자와 게이지로 보이는 호감도(asset 서버의 AffectionDisplay.NUMBER)
@@ -68,6 +69,8 @@ class StateOut(BaseModel):
     clock: ClockOut
     # 지금 장소와 시간대의 배경 그림. 시간대의 것이 없으면 장소의 기본 배경, 장소나 그림이 없으면 null
     background: uuid.UUID | None
+    # 지금 띄울 캐릭터 그림(배경 위에 겹친다). 상대의 차림에 맞춘 기본 표정의 그림이다. 그림이 없으면 null
+    sprite: uuid.UUID | None
     inventory: list[HoldingOut]
     visited: list[str]
     # 상대가 입은 옷들(사용자가 건넨 옷)의 물건 id
@@ -147,6 +150,7 @@ def state_out(state: WorldState, document: CharacterDocument, start_hour: int) -
         minutes=state.minutes,
         clock=clock,
         background=background_of(document, state.place, clock.time_of_day),
+        sprite=sprite_image(document, state),
         inventory=[HoldingOut(item=holding.item, count=holding.count) for holding in state.inventory],
         visited=list(state.visited),
         outfit=list(state.outfit),

@@ -138,6 +138,8 @@ class MessageOut(BaseModel):
     suggestions: list[str] = []
     # 사람이 고친 캐릭터의 말이다(상대의 말 고치기)
     edited: bool = False
+    # 이 말에 답하는 차례에 나온 이벤트 씬(판의 이벤트 씬 id, #669). 이 말의 답들이 그림 창에 그 이벤트 씬을 띄운다
+    event_scene: str | None = None
 
 
 class MessageEdit(BaseModel):
