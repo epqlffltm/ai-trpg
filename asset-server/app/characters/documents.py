@@ -18,11 +18,14 @@ TRPG 의 판 형식과 같은 방식이다.
        5 까지의 판은 캐릭터 그림이 없다
   - 7: 물건의 giftable(상대가 줄 수 있다)과 호감도의 model_step(모델이 답 하나에 바꿀 수 있는 크기)을 더했다
        (2026-10-23, #676).
+  - 8: 로어북(lorebooks)을 더했다(2026-10-23, #672). 캐릭터가 가리킨 로어북마다 게시할 때의 마지막 판(id, 판 번호,
+       이름, 항목들)을 복사한다. 7 까지의 판은 로어북이 없다
        6 까지의 판은 줄 수 있는 물건이 없고 model_step 이 AFFECTION_MODEL_STEP_DEFAULT 다
 DB 를 모르는 순수한 함수다. 초안(Character)과 거른 소개에서 문서를 만든다.
 """
 
 import uuid
+from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -36,10 +39,11 @@ from app.characters.models import (
     TimeOfDay,
     TriggerKind,
 )
+from app.lorebooks.documents import LoreEntryDocument
 from app.ratings import Rating
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 7
+DOCUMENT_FORMAT = 8
 
 
 class StartDocument(BaseModel):
@@ -171,6 +175,24 @@ class SpriteDocument(BaseModel):
     outfit: str | None
 
 
+class LorebookCopyDocument(BaseModel):
+    """
+    캐릭터의 판에 복사한 로어북 하나(#672). id 와 version 은 로어북과 그 판의 번호다(어디서 왔는지 적어 둔다).
+    """
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    id: uuid.UUID
+    version: int
+    name: str
+    entries: list[LoreEntryDocument]
+
+
+def lorebook_copy(lorebook_id: uuid.UUID, number: int, document: dict) -> LorebookCopyDocument:
+    """로어북의 판(굳힌 문서)을 캐릭터의 판에 넣을 모양으로. 로어북의 판 형식은 빼고 이름과 항목만 담는다."""
+    return LorebookCopyDocument(id=lorebook_id, version=number, name=document['name'], entries=document['entries'])
+
+
 def legacy_scenes(data: dict) -> dict:
     """형식 5 의 판의 이벤트 씬(illustrations, scene)을 지금의 이름(event_scenes, description)으로 바꾼다."""
     if 'illustrations' not in data or data.get('event_scenes'):
@@ -210,6 +232,7 @@ class CharacterDocument(BaseModel):
     affection: AffectionDocument | None = None
     event_scenes: list[EventSceneDocument] = []
     sprites: list[SpriteDocument] = []
+    lorebooks: list[LorebookCopyDocument] = []
 
     @model_validator(mode='before')
     @classmethod
@@ -218,8 +241,10 @@ class CharacterDocument(BaseModel):
         return legacy_scenes(data) if isinstance(data, dict) else data
 
 
-def build_document(character: Character, cleaned_intro: str) -> CharacterDocument:
-    """초안과 거른 소개로 판의 문서를 만든다."""
+def build_document(
+    character: Character, cleaned_intro: str, lorebooks: Sequence[LorebookCopyDocument] = ()
+) -> CharacterDocument:
+    """초안과 거른 소개, 복사할 로어북들로 판의 문서를 만든다."""
     return CharacterDocument(
         format=DOCUMENT_FORMAT,
         name=character.name,
@@ -240,4 +265,5 @@ def build_document(character: Character, cleaned_intro: str) -> CharacterDocumen
         affection=AffectionDocument.model_validate(character.affection) if character.affection else None,
         event_scenes=[EventSceneDocument.model_validate(scene) for scene in character.event_scenes],
         sprites=[SpriteDocument.model_validate(sprite) for sprite in character.sprites],
+        lorebooks=list(lorebooks),
     )

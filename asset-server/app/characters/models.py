@@ -82,6 +82,8 @@ SCENE_TITLE_MAX_LENGTH = 30
 SCENE_DESCRIPTION_MAX_LENGTH = 300
 # 캐릭터 그림. 개수와 표정의 이름(빈 글이면 기본 표정)
 CHARACTER_MAX_SPRITES = 30
+# 캐릭터가 가리키는 로어북의 수(#672). 판에 로어북의 마지막 판이 복사되므로 묶어 둔다
+CHARACTER_MAX_LOREBOOKS = 3
 SPRITE_EXPRESSION_MAX_LENGTH = 20
 
 
@@ -196,6 +198,9 @@ class Character(Base):
     # 캐릭터 그림들 [{"id", "image_id", "expression", "outfit"}]. 대표 그림(image_id)은 목록과 프로필에 쓰고,
     # 대화의 그림 창에는 이것을 배경 위에 겹친다. 모양은 schemas.Sprite 가 정한다
     sprites: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 가리키는 로어북들의 id(#672, 자기 로어북만). 게시할 때 그 마지막 판이 판에 복사된다.
+    # 로어북을 지워도 여기서 빠지지 않는다. 다시 게시할 때 막힌다(lorebook_missing)
+    lorebooks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default='{}')
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(
