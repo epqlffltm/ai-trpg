@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/RoutesSection.tsx
 // 지도 탭의 길(B9). 길마다 한 줄("수도원 문 ↔ 종탑 · 끝에 서 보면 앎 · 30분"), 더하기와 고치기는 창에서, 지우기는 한 번 더 묻는다.
-// 창의 저장이 길 목록을 통째로 바로 보낸다. 길의 문(넘기, 자물쇠, 빗장, 부수기)은 줄마다의 "문" 창(DoorForm)이 따로 고친다.
+// 창의 저장이 길 목록을 통째로 바로 보낸다. 길의 문(넘기, 자물쇠, 빗장, 부수기, 고치기)은 줄마다의 "문" 창(DoorForm)이 따로 고친다.
 
 import { Button, Checkbox, Dialog, SelectField, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent } from 'react';
@@ -30,7 +30,7 @@ export function RoutesSection({ scenario, rules, places, items, nameOf }: Props)
           ({routes.length} / {MAX_ROUTES})
         </span>
       </h2>
-      <p className="hint">장소 둘을 잇습니다. "문"에서 넘기 판정, 자물쇠, 빗장, 부수기를 정합니다. 창에서 저장하면 바로 저장됩니다.</p>
+      <p className="hint">장소 둘을 잇습니다. "문"에서 넘기 판정, 자물쇠, 빗장, 부수기, 고치기를 정합니다. 창에서 저장하면 바로 저장됩니다.</p>
       <p>
         <Button variant="secondary" disabled={routes.length >= MAX_ROUTES || places.length < 2} onClick={() => setEditing('new')}>
           길 더하기
