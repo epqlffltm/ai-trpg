@@ -17,6 +17,9 @@ export type CreateDraft = {
   roundTimeLimit: number | null;
   /** 비우면 시나리오의 추천 모델(쓸 수 없으면 같은 회사의 대체 모델) */
   narrationModel: string;
+  /** 서술의 입력(기억)과 출력(장면) 단계(#387). 그 모델이 파는 단계여야 한다. 기본은 0 */
+  inputStep: number;
+  outputStep: number;
   creditWaitSeconds: number;
   removeShortPayers: boolean;
   whisperNotice: boolean;
@@ -41,6 +44,8 @@ export function initialDraft(listing: PublicListingDetail): CreateDraft {
     narrationStyle: '',
     roundTimeLimit: 300,
     narrationModel: '',
+    inputStep: 0,
+    outputStep: 0,
     creditWaitSeconds: 300,
     removeShortPayers: true,
     whisperNotice: false,
@@ -76,9 +81,8 @@ export function toTableCreate(draft: CreateDraft, listing: PublicListingDetail):
     narration_style: draft.narrationStyle === '' ? null : draft.narrationStyle,
     round_time_limit: draft.roundTimeLimit,
     narration_model: draft.narrationModel === '' ? null : draft.narrationModel,
-    // 서술의 입력·출력 단계(#387)는 아직 화면에서 고르지 않는다. 기본 단계다
-    input_step: 0,
-    output_step: 0,
+    input_step: draft.inputStep,
+    output_step: draft.outputStep,
     credit_wait_seconds: draft.creditWaitSeconds,
     remove_short_payers: draft.removeShortPayers,
     whisper_notice: draft.whisperNotice,

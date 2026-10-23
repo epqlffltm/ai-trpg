@@ -61,7 +61,19 @@ const MODELS = {
   free: false,
   models: [
     { slug: 'gemini-flash', display_name: 'Gemini Flash', grade: 'standard', credits: '40', tier: 'standard' },
-    { slug: 'glm-air', display_name: 'GLM Air', grade: 'basic', credits: '10', tier: 'basic' },
+    {
+      slug: 'glm-air',
+      display_name: 'GLM Air',
+      vendor: 'Z.ai',
+      grade: 'basic',
+      credits: '10',
+      tier: 'basic',
+      options: [
+        { input_step: 0, output_step: 0, input_tokens: 12000, output_tokens: 1200, credits: '10', tier: 'basic', promo: false, next: null },
+        { input_step: 1, output_step: 0, input_tokens: 20000, output_tokens: 1200, credits: '15', tier: 'basic', promo: false, next: null },
+        { input_step: 1, output_step: 1, input_tokens: 20000, output_tokens: 2200, credits: '20', tier: 'basic', promo: false, next: null },
+      ],
+    },
   ],
 };
 
@@ -94,6 +106,9 @@ describe('TableCreatePage', () => {
     await userEvent.type(screen.getByLabelText('비밀번호(선택)'), 'abcd');
     await userEvent.click(screen.getByText('자세한 설정'));
     await userEvent.selectOptions(screen.getByLabelText('서술 모델'), 'glm-air');
+    await userEvent.selectOptions(screen.getByLabelText('기억(서술에 넣는 지난 이야기)'), '1단계 · 20,000 토큰');
+    await userEvent.selectOptions(screen.getByLabelText('장면의 길이'), '1단계 · 2,200 토큰');
+    expect(screen.getByText(/1인 1라운드 20 크레딧/)).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText('준비된 캐릭터(프리젠)'));
     await userEvent.click(screen.getByRole('button', { name: '만들기' }));
 
@@ -105,6 +120,8 @@ describe('TableCreatePage', () => {
       is_public: true,
       password: 'abcd',
       narration_model: 'glm-air',
+      input_step: 1,
+      output_step: 1,
       character_modes: ['custom'],
     });
   });

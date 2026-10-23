@@ -49,8 +49,13 @@ export function optionField(message: string): string | null {
 }
 
 function optionProblem(error: ApiError): FormProblem {
-  if (optionField(error.message) === 'narration_model') {
+  const field = optionField(error.message);
+  if (field === 'narration_model') {
     const message = '시나리오의 추천 모델을 지금 쓸 수 없습니다. 서술 모델을 골라 주세요.';
+    return { message, fields: { narration_model: message } };
+  }
+  if (field === 'narration_steps') {
+    const message = '고른 기억이나 장면의 단계를 그 모델이 지금 팔지 않습니다. 다시 골라 주세요.';
     return { message, fields: { narration_model: message } };
   }
   return { message: '고를 수 없는 값이 있습니다. 시나리오가 바뀌었을 수 있으니 새로 고쳐 주세요.' };

@@ -7,7 +7,6 @@ import type { PublicListingDetail } from '../../../api/types';
 import { durationLabel } from '../labels';
 import { tableFacts } from '../lobby/LobbyCard';
 import { draftHints, initialDraft, toTableCreate } from './createForm';
-import { modelOptionLabel } from './ModelSelect';
 import { describeCreateProblem, describeJoinProblem, optionField } from './tableProblem';
 
 const LISTING = {
@@ -93,12 +92,6 @@ describe('labels', () => {
     expect(durationLabel(null)).toBe('제한 없음');
   });
 
-  it('모델의 고를 거리에 묶음과 값을 붙인다', () => {
-    const model = { grade: 'premium', display_name: 'Claude', credits: '120', tier: 'premium' };
-    expect(modelOptionLabel(model as never)).toBe('프리미엄 · Claude · 120 크레딧(골드만)');
-    expect(modelOptionLabel({ ...model, credits: null } as never)).toBe('프리미엄 · Claude');
-  });
-
   it('로비의 카드는 켜진 설정만 적는다', () => {
     const table = {
       rating: 'all',
@@ -116,5 +109,7 @@ describe('labels', () => {
       '라운드 제한 없음',
       '크레딧 기다림 5분(빼지 않음)',
     ]);
+    const stepped = { ...table, input_step: 1, output_step: 0 };
+    expect(tableFacts(stepped as never, 'GLM Air')).toContain('모델 GLM Air(기억 1단계)');
   });
 });

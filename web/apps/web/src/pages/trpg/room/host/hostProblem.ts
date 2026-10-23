@@ -5,14 +5,18 @@
 //   - 403: 방장이 아니다(그 사이 방장이 바뀌었다)
 //   - 404: 그 참가자가 앉아 있지 않다(그 사이 나갔다)
 //   - 409: 테이블의 지금 상태와 부딪힌다. 까닭은 reason(ApiError.code)
-//   - 422: 고를 수 없는 값. 참고 자료는 판의 세계관이 허용하지 않으면 422 다
+//   - 422: 고를 수 없는 값. 참고 자료는 판의 세계관이 허용하지 않으면, 모델과 단계는 지금 팔지 않으면 422 다
 // refresh 가 켜지면 테이블을 다시 읽는다.
 
 import { ApiError } from '../../../../api/errors';
 import { commonProblem, unknownProblem, type FormProblem } from '../../../../auth/problem';
 import { optionField } from '../../tables/tableProblem';
 
-export type HostProblem = FormProblem & { refresh?: boolean };
+export type HostProblem = FormProblem & {
+  refresh?: boolean;
+  /** 서술 모델의 목록이 그 사이 바뀌었다. 다시 읽는다 */
+  models?: boolean;
+};
 
 const FAILED = '처리하지 못했습니다. 잠시 뒤에 다시 시도하세요.';
 
@@ -25,6 +29,7 @@ const CONFLICTS: Record<string, string> = {
   not_rolled: '그 사람이 아직 굴리지 않았습니다.',
   character_mode_not_allowed: '이 테이블은 주사위 방식을 쓰지 않습니다.',
   character_alive: '진행 중에는 캐릭터가 죽어 새 캐릭터를 굴리는 사람에게만 줄 수 있습니다.',
+  narration_model_locked: '시작한 뒤에는 지금 모델과 단계를 쓸 수 없을 때만 바꿀 수 있습니다.',
 };
 
 export function describeHostProblem(error: unknown): HostProblem {
@@ -38,8 +43,9 @@ export function describeHostProblem(error: unknown): HostProblem {
 }
 
 function optionProblem(error: ApiError): HostProblem {
-  if (optionField(error.message) === 'references_enabled') {
-    return { message: '이 시나리오는 참고 자료를 허용하지 않습니다.' };
-  }
+  const field = optionField(error.message);
+  if (field === 'references_enabled') return { message: '이 시나리오는 참고 자료를 허용하지 않습니다.' };
+  if (field === 'narration_model') return { message: '그 모델은 지금 고를 수 없습니다. 목록을 새로 읽었습니다.', models: true };
+  if (field === 'narration_steps') return { message: '그 모델이 그 단계를 지금 팔지 않습니다. 목록을 새로 읽었습니다.', models: true };
   return unknownProblem(error, '고를 수 없는 값입니다.');
 }

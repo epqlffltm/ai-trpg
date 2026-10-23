@@ -4,11 +4,13 @@
 // 바꿀 수 없는 것: 캐릭터 방식(그래서 여기서 좁힌다).
 
 import { Checkbox, SelectField } from '@ai-trpg/ui';
+import { useQuery } from '@tanstack/react-query';
 import type { NarrationStyle, PublicListingDetail } from '../../../api/types';
 import type { FormProblem } from '../../../auth/problem';
 import { characterModeLabel, durationLabel, NARRATION_STYLE_VALUES, narrationStyleLabel } from '../labels';
+import { ModelPicker } from '../models/ModelPicker';
+import { narrationModelsQuery } from '../queries';
 import { CREDIT_WAITS, ROUND_LIMITS, type CreateDraft } from './createForm';
-import { ModelSelect } from './ModelSelect';
 
 type Props = {
   listing: PublicListingDetail;
@@ -20,13 +22,18 @@ type Props = {
 
 export function AdvancedSettings({ listing, draft, onChange, hints, problem }: Props) {
   const mustOpen = Boolean(problem?.fields?.narration_model || hints.character_modes);
+  const models = useQuery(narrationModelsQuery());
   return (
     <details className="advanced" open={mustOpen || undefined}>
       <summary>자세한 설정</summary>
-      <ModelSelect
-        value={draft.narrationModel}
+      <ModelPicker
+        models={models.data}
+        failed={models.isError}
+        value={{ model: draft.narrationModel, inputStep: draft.inputStep, outputStep: draft.outputStep }}
         recommended={listing.recommended_narration_model}
-        onChange={(narrationModel) => onChange({ narrationModel })}
+        onChange={(value) =>
+          onChange({ narrationModel: value.model, inputStep: value.inputStep, outputStep: value.outputStep })
+        }
         error={problem?.fields?.narration_model}
       />
       <SelectField
