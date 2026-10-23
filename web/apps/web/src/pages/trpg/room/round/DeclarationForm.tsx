@@ -20,6 +20,7 @@ import {
   toDeclarationUpdate,
   type DeclarationDraft,
 } from './declarationForm';
+import { tableQuery } from '../roomQueries';
 import { currentRoundQuery, roundsKey, sceneCastQuery } from './roundQueries';
 import { describeDeclarationProblem, type RoundProblem } from './roundProblem';
 
@@ -55,9 +56,15 @@ export function DeclarationForm({ table, me, mine, onDone, onCancel, onRequest }
     } catch (error) {
       const next = describeDeclarationProblem(error);
       setProblem(next);
-      if (next.refresh) void queryClient.invalidateQueries({ queryKey: roundsKey(table.id) });
+      if (next.refresh) refreshAfterProblem();
       setBusy(false);
     }
+  }
+
+  /** 그 사이 바뀐 것(라운드, 장면, 내 돈과 소지품)을 다시 읽는다 */
+  function refreshAfterProblem() {
+    void queryClient.invalidateQueries({ queryKey: roundsKey(table.id) });
+    void queryClient.invalidateQueries({ queryKey: tableQuery(table.id).queryKey });
   }
 
   return (
