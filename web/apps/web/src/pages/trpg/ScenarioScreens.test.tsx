@@ -123,7 +123,9 @@ describe('ScenarioBrowsePage', () => {
     });
     renderApp('/trpg?tag=%EC%A2%80%EB%B9%84&players=9');
 
+    // 태그 칩은 주소만 보고 바로 그려진다. 목록 요청이 나갔는지는 받은 결과로 기다린다.
     expect(await screen.findByText('#좀비')).toBeInTheDocument();
+    expect(await screen.findByText('시나리오 1')).toBeInTheDocument();
     const first = query(seen.find((entry) => entry.url.startsWith('/api/v1/game/listings')) as SeenRequest);
     expect(first.get('tag')).toBe('좀비');
     expect(first.has('players')).toBe(false);
