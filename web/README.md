@@ -65,12 +65,12 @@ web/
   package.json            npm workspaces 의 뿌리. 린트(ESLint)와 TypeScript 를 여기서 함께 쓴다
   Dockerfile              프록시의 이미지(Node 에서 빌드 → nginx-unprivileged 에 dist)
   apps/web/               앱
-    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), tables.ts(B3, B4), tableRoom.ts·rounds.ts·tableHost.ts·tableStream.ts·sse.ts(B6), rulebooks.ts·worlds.ts·studio.ts(B9), wallet.ts(A6), orders.ts(A7), publicNames.ts, errors.ts
+    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), tables.ts(B3, B4), tableRoom.ts·rounds.ts·tableHost.ts·tableStream.ts·sse.ts(B6), rulebooks.ts·worlds.ts·lorebooks.ts·bestiaries.ts·studio.ts(B9), wallet.ts(A6), orders.ts(A7), publicNames.ts, errors.ts
     src/api/generated/    서버의 API 목록(docs/api/*.openapi.json)에서 만든 타입. 손으로 고치지 않는다
     src/api/account.ts    본인의 계정(동의, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 취소)
     src/auth/             로그인 상태를 읽는 훅, 처음 열 때 되살리기, 로그인해야 열리는 화면(RequireSession), 실패의 글, 돌아갈 주소
     src/legal/            동의 항목의 이름과 요약, 판마다의 문서(documents/, docs/legal 의 사본), 문서를 보이는 창
-    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), wallet(A6), charge(A7), orders(A8), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기, room 의 B6 테이블 방, room/character 의 B5 캐릭터 정하기, room/round 의 라운드와 round/action 의 행동, room/status 의 B7 상태 패널, room/money.ts 의 판 안의 돈, room/events 의 일어난 일, room/host 의 방장의 운영, models 의 B8 서술 모델 고르기, studio 의 B9 제작 도구: 허브, 룰북, 세계관), 준비 중, 없는 경로
+    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), wallet(A6), charge(A7), orders(A8), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기, room 의 B6 테이블 방, room/character 의 B5 캐릭터 정하기, room/round 의 라운드와 round/action 의 행동, room/status 의 B7 상태 패널, room/money.ts 의 판 안의 돈, room/events 의 일어난 일, room/host 의 방장의 운영, models 의 B8 서술 모델 고르기, studio 의 B9 제작 도구: 허브, 룰북, 세계관, 로어북, 몬스터 모음), 준비 중, 없는 경로
     src/components/       여러 화면이 함께 쓰는 것(목록 한 칸, 실패 한 줄, 한 번 더 묻는 단추)
     src/hooks/            남은 초 세기, 다른 사람의 이름 찾기(public-names, #532)
     src/layout/           머리와 틀

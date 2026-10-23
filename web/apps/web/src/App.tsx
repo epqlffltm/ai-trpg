@@ -13,8 +13,14 @@ import { ResetPasswordPage } from './pages/password/ResetPasswordPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { SignupPage } from './pages/signup/SignupPage';
 import {
+  BestiariesPage,
+  BestiaryEditPage,
+  BestiaryNewPage,
   ChargePage,
   LobbyPage,
+  LorebookEditPage,
+  LorebookNewPage,
+  LorebooksPage,
   MyPage,
   OrderPage,
   OrdersPage,
@@ -125,6 +131,12 @@ export function App() {
             <Route path="worlds" element={<WorldsPage />} />
             <Route path="worlds/new" element={<WorldNewPage />} />
             <Route path="worlds/:worldId" element={<WorldEditPage />} />
+            <Route path="lorebooks" element={<LorebooksPage />} />
+            <Route path="lorebooks/new" element={<LorebookNewPage />} />
+            <Route path="lorebooks/:lorebookId" element={<LorebookEditPage />} />
+            <Route path="bestiaries" element={<BestiariesPage />} />
+            <Route path="bestiaries/new" element={<BestiaryNewPage />} />
+            <Route path="bestiaries/:bestiaryId" element={<BestiaryEditPage />} />
           </Route>
           <Route path="*" element={<PlaceholderPage service="TRPG" />} />
         </Route>
