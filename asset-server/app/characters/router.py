@@ -108,10 +108,10 @@ async def read_character(character_id: uuid.UUID, user: CurrentUser, session: Se
 
 @router.patch('/{character_id}', response_model=CharacterDetail, status_code=status.HTTP_200_OK)
 async def update_character(
-    character_id: uuid.UUID, data: CharacterUpdate, user: CurrentUser, session: Session
+    character_id: uuid.UUID, data: CharacterUpdate, user: CurrentUser, session: Session, settings: AppSettings
 ) -> CharacterDetail:
-    """자기 캐릭터의 초안을 고친다. 보낸 칸만 바뀐다. 공개로 두는 것은 운영자만이다."""
-    return to_detail(await service.update_character(session, user, character_id, data))
+    """자기 캐릭터의 초안을 고친다. 보낸 칸만 바뀐다. 공개로 두는 것은 운영자만이다(PUBLIC_FOR_EVERYONE 이면 누구나)."""
+    return to_detail(await service.update_character(session, user, character_id, data, settings.public_for_everyone))
 
 
 @router.delete('/{character_id}', status_code=status.HTTP_204_NO_CONTENT)

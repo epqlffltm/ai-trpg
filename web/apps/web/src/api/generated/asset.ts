@@ -2,6 +2,86 @@
 // docs/api/asset.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/asset/admin/character-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Open Reports
+         * @description 열린 신고를 캐릭터마다 묶은 목록. minor 가 있는 것이 먼저, 그다음 마지막 신고가 최근인 것부터다.
+         */
+        get: operations["list_open_reports_api_v1_asset_admin_character_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/admin/characters/{character_id}/hidden": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change Hidden
+         * @description 캐릭터를 숨기거나 푼다. 캐릭터가 없으면 404 다.
+         */
+        put: operations["change_hidden_api_v1_asset_admin_characters__character_id__hidden_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/admin/characters/{character_id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Character Reports
+         * @description 그 캐릭터의 신고 전부(처리된 것까지). 최근 것부터. 캐릭터가 없으면 404 다.
+         */
+        get: operations["list_character_reports_api_v1_asset_admin_characters__character_id__reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/admin/characters/{character_id}/reports/outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Handle Reports
+         * @description 그 캐릭터의 열린 신고를 처리한다. actioned 면 숨기고, dismissed 면 그대로 둔다. 캐릭터가 없으면 404 다.
+         */
+        put: operations["handle_reports_api_v1_asset_admin_characters__character_id__reports_outcome_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/characters": {
         parameters: {
             query?: never;
@@ -49,7 +129,7 @@ export interface paths {
         head?: never;
         /**
          * Update Character
-         * @description 자기 캐릭터의 초안을 고친다. 보낸 칸만 바뀐다. 공개로 두는 것은 운영자만이다.
+         * @description 자기 캐릭터의 초안을 고친다. 보낸 칸만 바뀐다. 공개로 두는 것은 운영자만이다(PUBLIC_FOR_EVERYONE 이면 누구나).
          */
         patch: operations["update_character_api_v1_asset_characters__character_id__patch"];
         trace?: never;
@@ -192,6 +272,26 @@ export interface paths {
         get: operations["read_public_api_v1_asset_listings_characters__character_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/listings/characters/{character_id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Character
+         * @description 공개 캐릭터를 신고한다. 볼 수 없는 캐릭터는 404, 자기 것은 403, 이미 신고했으면 409 다.
+         */
+        post: operations["report_character_api_v1_asset_listings_characters__character_id__reports_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -743,6 +843,8 @@ export interface components {
             gender: string;
             /** Greeting */
             greeting: string;
+            /** Hidden At */
+            hidden_at: string | null;
             /**
              * Id
              * Format: uuid
@@ -867,6 +969,8 @@ export interface components {
          * @description 내 캐릭터 목록의 한 줄.
          */
         CharacterSummary: {
+            /** Hidden At */
+            hidden_at: string | null;
             /**
              * Id
              * Format: uuid
@@ -999,6 +1103,24 @@ export interface components {
         HealthResponse: {
             /** Status */
             status: string;
+        };
+        /**
+         * HiddenInput
+         * @description 숨기기(true)와 풀기(false). reason 은 감사 기록의 사유다.
+         */
+        HiddenInput: {
+            /** Hidden */
+            hidden: boolean;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * HiddenResult
+         * @description 조치한 뒤 캐릭터가 숨겨져 있는가.
+         */
+        HiddenResult: {
+            /** Hidden */
+            hidden: boolean;
         };
         /**
          * ImageDetail
@@ -1323,6 +1445,66 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /**
+         * OpenReportGroupOut
+         * @description 열린 신고를 캐릭터마다 묶은 한 줄. reasons 는 사유마다의 수다. hidden 은 이미 숨긴 캐릭터인가.
+         */
+        OpenReportGroupOut: {
+            /**
+             * Character Id
+             * Format: uuid
+             */
+            character_id: string;
+            /**
+             * First Reported At
+             * Format: date-time
+             */
+            first_reported_at: string;
+            /** Hidden */
+            hidden: boolean;
+            /**
+             * Last Reported At
+             * Format: date-time
+             */
+            last_reported_at: string;
+            /** Name */
+            name: string;
+            /** Open Count */
+            open_count: number;
+            /** Reasons */
+            reasons: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * OpenReportPage
+         * @description 열린 신고의 묶음 한 쪽과 전체 묶음의 수.
+         */
+        OpenReportPage: {
+            /** Items */
+            items: components["schemas"]["OpenReportGroupOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * OutcomeInput
+         * @description 열린 신고의 처리. actioned 면 캐릭터를 숨긴다. reason 은 감사 기록의 사유다.
+         */
+        OutcomeInput: {
+            outcome: components["schemas"]["ReportOutcome"];
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * OutcomeResult
+         * @description 처리한 신고의 수와, 처리한 뒤 캐릭터가 숨겨져 있는가.
+         */
+        OutcomeResult: {
+            /** Handled */
+            handled: number;
+            /** Hidden */
+            hidden: boolean;
         };
         /**
          * Path
@@ -1663,6 +1845,71 @@ export interface components {
          */
         RemovedKind: "tag" | "attribute" | "style" | "link" | "image";
         /**
+         * ReportCreate
+         * @description 신고할 때 받는 값. 사유가 other 면 설명이 있어야 한다(게시판의 신고와 같다).
+         */
+        ReportCreate: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            reason: components["schemas"]["ReportReason"];
+        };
+        /**
+         * ReportCreated
+         * @description 접수한 신고. 화면이 "접수했습니다"를 보인다.
+         */
+        ReportCreated: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /**
+         * ReportOut
+         * @description 신고 하나(운영자가 본다). 신고한 사람의 id 는 싣지 않는다. 처리하는 데 필요하지 않다.
+         */
+        ReportOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Handled At */
+            handled_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            outcome: components["schemas"]["ReportOutcome"] | null;
+            reason: components["schemas"]["ReportReason"];
+            /** Version */
+            version: number;
+        };
+        /**
+         * ReportOutcome
+         * @description 처리의 결과. 받아들였다(캐릭터를 숨겼다), 받아들이지 않았다.
+         * @enum {string}
+         */
+        ReportOutcome: "actioned" | "dismissed";
+        /**
+         * ReportReason
+         * @description 신고의 사유. 게시판의 다섯에 minor(미성년 인물을 성적으로 다룬다)를 더했다(2026-10-23 유저 결정).
+         *     minor 는 약관이 금지하는 선이라 운영자의 목록에서 가장 먼저 보인다.
+         * @enum {string}
+         */
+        ReportReason: "spam" | "abuse" | "sexual" | "minor" | "illegal" | "other";
+        /**
          * SceneCondition
          * @description 이벤트 씬이 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다.
          */
@@ -1926,6 +2173,139 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_open_reports_api_v1_asset_admin_character_reports_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenReportPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_hidden_api_v1_asset_admin_characters__character_id__hidden_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HiddenInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HiddenResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_character_reports_api_v1_asset_admin_characters__character_id__reports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_reports_api_v1_asset_admin_characters__character_id__reports_outcome_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutcomeInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_characters_api_v1_asset_characters_get: {
         parameters: {
             query?: {
@@ -2321,6 +2701,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicCharacterDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_character_api_v1_asset_listings_characters__character_id__reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportCreated"];
                 };
             };
             /** @description Validation Error */
