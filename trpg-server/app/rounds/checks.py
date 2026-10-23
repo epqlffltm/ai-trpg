@@ -10,19 +10,23 @@ HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거�
 겨눈 마리가 판정할 때 이미 죽었거나 다른 곳에 있으면 굴리지 않고 그 까닭을 적는다(target_gone).
 살아 있던 마리를 처음 쓰러뜨리면 엔진이 드롭을 굴려 그 장소의 한 명에게 준다(app/rounds/drops.py).
 큰 타격이나 쓰러짐이면 부상 표를 굴린다. 노려 친 타격은 그 부상이 확정으로 생긴다.
+타격에는 장비가 든다(#276, app/rounds/blows.py). 무기의 공격 보정이 판정에 더해지고, 맞은 부위의 방어가
+목표값을 올리거나(ac) 피해를 깎는다(reduce). 부위는 판정보다 먼저 굴린다.
 DB 를 모른다. 시트와 NPC 의 상태를 고친다. 저장하지는 않는다.
 """
 
 from dataclasses import asdict
 
 from app.engine import action as actions
-from app.engine import health
+from app.engine import armor, health
 from app.engine import injury as injury_rules
 from app.engine.action import CheckAction, Consequence, Recipient
+from app.engine.armor import Protection
 from app.engine.check import Check
 from app.engine.health import Change, ChangeKind
-from app.rounds import drops, wakes
+from app.rounds import blows, drops, wakes
 from app.rounds import injuries as round_injuries
+from app.rounds.blows import Blow
 from app.rounds.cast import find_cast_member
 from app.rounds.effects import (
     Judging,
@@ -64,11 +68,14 @@ def change_member(judging: Judging, actor: TableMember, action: CheckAction, fou
     return change_sheet(judging, affected, found.kind, found.magnitude)
 
 
-def change_sheet(judging: Judging, affected: TableMember | None, kind: ChangeKind, magnitude_key: str) -> dict | None:
+def change_sheet(
+    judging: Judging, affected: TableMember | None, kind: ChangeKind, magnitude_key: str, cut: int = 0
+) -> dict | None:
     """
     앉은 사람 하나의 HP 를 그 등급만큼 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 HP 가 없으면 None.
 
     판정의 결과와 소모품의 회복(app/rounds/item_actions.py)이 함께 쓴다.
+    cut 은 방어구가 피해에서 깎는 양이다(#276). 몬스터와 NPC 의 공격이 넘긴다.
     """
     # 대상이 떠났거나 시트가 없으면 바뀔 HP 가 없다. 양을 정하는 주사위도 굴리지 않는다.
     # 죽은 캐릭터도 그렇다. 회복으로 되살리지 못한다
@@ -77,7 +84,7 @@ def change_sheet(judging: Judging, affected: TableMember | None, kind: ChangeKin
 
     sheet = affected.sheet
     magnitude = health.find_magnitude(judging.ruleset, magnitude_key)
-    change = health.change_hp(kind, magnitude, sheet.hp, sheet.max_hp, judging.dice)
+    change = health.change_hp(kind, magnitude, sheet.hp, sheet.max_hp, judging.dice, cut)
     sheet.hp = change.after
     if kind == ChangeKind.DAMAGE:
         mark_hurt(judging, affected)
@@ -104,7 +111,7 @@ def npc_injury(judging: Judging, action: CheckAction, change: Change, npc: Table
     return injury_after(judging, change, npc.max_hp, False, npc.injuries)
 
 
-def change_cast_member(judging: Judging, action: CheckAction, found: Consequence) -> dict | None:
+def change_cast_member(judging: Judging, action: CheckAction, found: Consequence, cut: int = 0) -> dict | None:
     """
     겨눈 NPC 의 HP 와 생사를 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 것이 없으면 None.
 
@@ -120,12 +127,12 @@ def change_cast_member(judging: Judging, action: CheckAction, found: Consequence
     npc = member.npc
     status_before = npc.status
     magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
-    change = npcs.change_npc(npc, found.kind, magnitude, action.lethal, judging.dice)
+    change = npcs.change_npc(npc, found.kind, magnitude, action.lethal, judging.dice, cut)
     injury_roll = npc_injury(judging, action, change, npc)
     return npc_effect(member, found.magnitude, change, action.lethal, status_before, injury_roll)
 
 
-def change_scene_monster(judging: Judging, action: CheckAction, found: Consequence) -> dict | None:
+def change_scene_monster(judging: Judging, action: CheckAction, found: Consequence, cut: int = 0) -> dict | None:
     """
     겨눈 몬스터 한 마리의 HP 와 생사를 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 것이 없으면 None.
 
@@ -139,7 +146,7 @@ def change_scene_monster(judging: Judging, action: CheckAction, found: Consequen
     status_before = monster.state.status
     magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
     traits = table_monsters.traits_of(monster.definition.kind)
-    change = table_monsters.change_monster(monster.state, traits, magnitude, action.lethal, judging.dice)
+    change = table_monsters.change_monster(monster.state, traits, magnitude, action.lethal, judging.dice, cut)
     return monster_effect(monster, found.magnitude, change, action.lethal, status_before)
 
 
@@ -161,13 +168,13 @@ def target_gone(judging: Judging, member: TableMember, action: CheckAction) -> d
     return {'monster_id': str(monster.state.id), 'name': monster.name, 'reason': reason}
 
 
-def monster_outcome(judging: Judging, action: CheckAction, found: Consequence) -> dict:
+def monster_outcome(judging: Judging, action: CheckAction, found: Consequence, cut: int = 0) -> dict:
     """
     몬스터를 친 판정의 결과 칸들. 마리의 변화(monster_effect)와, 처음 쓰러뜨려 무엇이 나왔으면 그 드롭(drop)이다.
 
     drop 은 나온 것이 있을 때만 적는다. 드롭이 없는 판정의 결과는 이 칸이 생기기 전과 같다.
     """
-    effect = change_scene_monster(judging, action, found)
+    effect = change_scene_monster(judging, action, found, cut)
     outcome = {'effect': None, 'npc_effect': None, 'monster_effect': effect}
     drop = drops.drop_after(judging, effect)
     if drop is not None:
@@ -175,14 +182,14 @@ def monster_outcome(judging: Judging, action: CheckAction, found: Consequence) -
     return outcome
 
 
-def npc_outcome(judging: Judging, actor: TableMember, action: CheckAction, found: Consequence) -> dict:
+def npc_outcome(judging: Judging, actor: TableMember, action: CheckAction, found: Consequence, cut: int = 0) -> dict:
     """
     NPC 를 겨눈 판정의 결과 칸들. NPC 의 변화(npc_effect)와, 처음 쓰러뜨려 무엇이 나왔으면 그 드롭(drop),
     쓰러진 동안 빼앗겼던 인물을 일으켰으면 깨어날 때의 반응(wake)이다.
 
     drop 과 wake 는 있을 때만 적는다. 받는 곳은 친 사람이 선 장소다(app/rounds/drops.py, app/rounds/wakes.py).
     """
-    effect = change_cast_member(judging, action, found)
+    effect = change_cast_member(judging, action, found, cut)
     outcome = {'effect': None, 'npc_effect': effect}
     drop = drops.npc_drop_after(judging, actor, effect)
     if drop is not None:
@@ -193,7 +200,7 @@ def npc_outcome(judging: Judging, actor: TableMember, action: CheckAction, found
     return outcome
 
 
-def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction, check: Check) -> dict:
+def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction, check: Check, cut: int = 0) -> dict:
     """
     판정의 결과에 따라 HP 를 바꾸고, 바뀐 내용을 선언의 outcome 에 넣을 칸들로 돌려준다.
 
@@ -202,14 +209,15 @@ def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction,
     한 판정에서 하나만 일어난다. 없으면 effect 와 npc_effect 가 None 이다.
     monster_effect 는 몬스터를 겨눈 판정에만 적는다. 몬스터가 없는 판정의 결과는 이 칸이 생기기 전과 같다.
     대가는 늘 행동한 사람이 입는다. 대상의 일(타격, 회복)은 행동이 겨눈 NPC 나 몬스터가, 아니면 앉은 사람이 받는다.
+    cut 은 대상의 방어구가 타격의 피해에서 깎는 양이다(#276). 대가에는 쓰지 않는다.
     """
     found = actions.consequence(action, check)
     if found is None:
         return {'effect': None, 'npc_effect': None}
     if found.recipient == Recipient.TARGET and action.monster is not None:
-        return monster_outcome(judging, action, found)
+        return monster_outcome(judging, action, found, cut)
     if found.recipient == Recipient.TARGET and action.npc is not None:
-        return npc_outcome(judging, actor, action, found)
+        return npc_outcome(judging, actor, action, found, cut)
     return {'effect': change_member(judging, actor, action, found), 'npc_effect': None}
 
 
@@ -226,12 +234,30 @@ def mark_npc_attack(judging: Judging, member: TableMember, action: CheckAction) 
         mark_npc_fight(judging, person.npc, member)
 
 
+def target_protection(judging: Judging, action: CheckAction) -> Protection:
+    """타격의 대상(NPC 나 몬스터)의 지금 방어. 대상이 없으면 방어가 없다."""
+    if action.monster is not None:
+        monster = find_scene_monster(judging.monsters, action.monster)
+        return blows.monster_protection(judging, monster) if monster is not None else armor.NO_PROTECTION
+    person = find_cast_member(judging.cast, action.npc) if action.npc is not None else None
+    return blows.npc_protection(judging, person) if person is not None else armor.NO_PROTECTION
+
+
+def plan_check_blow(judging: Judging, member: TableMember, action: CheckAction) -> Blow | None:
+    """타격하는 판정이면 무기와 맞은 부위와 그 방어를 정한다(부위를 굴린다). 타격이 아니면 None."""
+    if action.harm is None:
+        return None
+    weapon = blows.member_weapon(judging, member, action.weapon)
+    return blows.plan_blow(judging, weapon, target_protection(judging, action), action.strike)
+
+
 def judge_check(judging: Judging, member: TableMember, action: CheckAction) -> dict:
     """
     한 사람의 판정하는 행동을 판정하고 그 결과를 정한다. 선언의 outcome 에 적을 문서를 돌려준다.
 
     그 캐릭터가 입은 부상이 이 행동의 능력에 주는 것(보정 깎기, 불리함)을 판정에 적용한다(hindrance).
     겨눈 몬스터를 지금 칠 수 없으면 굴리지 않고 그 까닭만 적는다(target_gone).
+    타격이면 장비가 든 것(blow)을 붙인다. 무기도 방어 방식도 없으면 붙이지 않는다(app/rounds/blows.py).
     """
     gone = target_gone(judging, member, action)
     if gone is not None:
@@ -241,10 +267,18 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction) -> d
     mark_npc_attack(judging, member, action)
     sheet = member.sheet
     hindrance = round_injuries.hindrance_for(judging.ruleset, sheet.injuries, action.ability)
-    hindered = actions.attempt_hindered(judging.ruleset, action, sheet.abilities, judging.dice, hindrance)
-    return {
+    blow = plan_check_blow(judging, member, action)
+    bonus, raise_by, cut = (blow.bonus, blow.raise_by, blow.cut) if blow is not None else (0, 0, 0)
+    hindered = actions.attempt_hindered(
+        judging.ruleset, action, sheet.abilities, judging.dice, hindrance, bonus=bonus, raise_by=raise_by
+    )
+    outcome = {
         **asdict(hindered.check),
         'hindrance': round_injuries.hindrance_document(hindered),
         'called_shot': round_injuries.called_shot_document(judging.ruleset, action.aim),
-        **apply_consequence(judging, member, action, hindered.check),
+        **apply_consequence(judging, member, action, hindered.check, cut),
     }
+    document = blows.blow_document(judging.ruleset, blow) if blow is not None else None
+    if document is not None:
+        outcome['blow'] = document
+    return outcome

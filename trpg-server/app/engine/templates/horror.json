@@ -578,16 +578,22 @@
     "equipment_slots": [
       {
         "key": "main_hand",
-        "name": "주손"
+        "name": "주손",
+        "hit_weight": 1
       },
       {
         "key": "off_hand",
-        "name": "보조손"
+        "name": "보조손",
+        "hit_weight": 1
       },
       {
         "key": "body",
-        "name": "몸"
+        "name": "몸",
+        "hit_weight": 4
       }
-    ]
+    ],
+    "armor": {
+      "mode": "reduce"
+    }
   }
 }

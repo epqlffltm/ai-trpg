@@ -227,6 +227,9 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'price': None,
             'slots': [],
             'slot_count': 1,
+            'attack': None,
+            'defense': None,
+            'guard': None,
         },
         {
             'entry_id': lore['rope']['id'],
@@ -237,6 +240,9 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'price': None,
             'slots': [],
             'slot_count': 1,
+            'attack': None,
+            'defense': None,
+            'guard': None,
         },
         {
             'entry_id': lore['lamp']['id'],
@@ -247,6 +253,9 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'price': None,
             'slots': [],
             'slot_count': 1,
+            'attack': None,
+            'defense': None,
+            'guard': None,
         },
     ]
 

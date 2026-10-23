@@ -102,14 +102,16 @@ def status_after(hp: int, lethal: bool, traits: Traits) -> NpcStatus:
     return NpcStatus.DEAD if lethal or traits.destroyed_at_zero else NpcStatus.DOWNED
 
 
-def change_monster(monster: TableMonster, traits: Traits, magnitude: Magnitude, lethal: bool, dice: Dice) -> Change:
+def change_monster(
+    monster: TableMonster, traits: Traits, magnitude: Magnitude, lethal: bool, dice: Dice, cut: int = 0
+) -> Change:
     """
     몬스터 한 마리가 피해를 한 번 입는다. 양을 정하는 주사위를 여기서 굴린다. 바뀐 것을 돌려준다.
 
     몬스터의 상태를 고치는 길은 이 함수 하나다. 상태를 고친다. 저장하지는 않는다. 죽은 몬스터에는 부르지 않는다.
-    몬스터에게는 회복이 없다(app/engine/action.py 의 CheckAction).
+    몬스터에게는 회복이 없다(app/engine/action.py 의 CheckAction). cut 은 방어구와 가죽이 피해에서 깎는 양이다(#276).
     """
-    change = health.change_hp(ChangeKind.DAMAGE, magnitude, monster.hp, monster.max_hp, dice)
+    change = health.change_hp(ChangeKind.DAMAGE, magnitude, monster.hp, monster.max_hp, dice, cut)
     monster.hp = change.after
     monster.status = status_after(change.after, lethal, traits)
     return change

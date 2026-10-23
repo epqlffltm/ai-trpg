@@ -1886,6 +1886,19 @@ export interface components {
             reason: string;
         };
         /**
+         * Armor
+         * @description 방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다.
+         */
+        Armor: {
+            mode: components["schemas"]["ArmorMode"];
+        };
+        /**
+         * ArmorMode
+         * @description 방어구가 공격을 막는 방식(#276). 룰북이 고른다.
+         * @enum {string}
+         */
+        ArmorMode: "ac" | "reduce";
+        /**
          * ArrivalOut
          * @description 이 라운드에 새로 들어온 캐릭터 하나. 캐릭터가 죽은 플레이어가 들인 새 캐릭터다.
          */
@@ -1949,6 +1962,8 @@ export interface components {
             harm: string;
             /** Name */
             name: string;
+            /** Weapon */
+            weapon?: string | null;
         };
         /**
          * AttitudeChangeOut
@@ -1982,6 +1997,41 @@ export interface components {
             description?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * BlowOut
+         * @description 타격에 장비가 든 것(#276). 엔진이 정했다. 무기, 맞은 부위, 노렸는가, 그 부위의 방어다.
+         *
+         *     mode 는 룰북의 방어 방식이다. ac 면 방어가 목표값(target)에 이미 더해졌고, reduce 면 피해에서 빠졌다
+         *     (변화의 rolls 를 더한 값과 amount 의 차이). 방어 방식이 없는 규칙이면 None 이고 부위도 없다.
+         */
+        BlowOut: {
+            /** Aimed */
+            aimed: boolean;
+            /** Defense */
+            defense: number;
+            /** Location */
+            location: string | null;
+            /** Location Name */
+            location_name: string | null;
+            /** Mode */
+            mode: string | null;
+            weapon: components["schemas"]["BlowWeaponOut"] | null;
+        };
+        /**
+         * BlowWeaponOut
+         * @description 타격에 쓴 무기(#276). 판의 물건과 그 이름과 판정의 보정에 더한 공격 보정이다.
+         */
+        BlowWeaponOut: {
+            /** Bonus */
+            bonus: number;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Name */
+            name: string;
         };
         /**
          * BuyAction
@@ -2048,6 +2098,8 @@ export interface components {
          *
          *     chance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).
          *     줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.
+         *     wear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.
+         *     떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).
          *     항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
          */
         "CarriedItem-Input": {
@@ -2066,6 +2118,11 @@ export interface components {
              * Format: uuid
              */
             entry_id: string;
+            /**
+             * Wear
+             * @default []
+             */
+            wear: string[];
         };
         /**
          * CarriedItem
@@ -2073,6 +2130,8 @@ export interface components {
          *
          *     chance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).
          *     줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.
+         *     wear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.
+         *     떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).
          *     항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
          */
         "CarriedItem-Output": {
@@ -2088,6 +2147,11 @@ export interface components {
             count: number;
             /** Entry Id */
             entry_id: string;
+            /**
+             * Wear
+             * @default []
+             */
+            wear: string[];
         };
         /**
          * CarriedItemSnapshot
@@ -2105,6 +2169,11 @@ export interface components {
              * Format: uuid
              */
             entry_id: string;
+            /**
+             * Wear
+             * @default []
+             */
+            wear: string[];
         };
         /**
          * CarriedOut
@@ -2150,11 +2219,17 @@ export interface components {
          *     kind 가 consumable 이면 쓰면 하나 줄어든다. heals 가 있으면 쓸 때 HP 를 그 등급(rules 의 magnitudes)만큼 되돌린다.
          */
         CatalogItemOut: {
+            /** Attack */
+            attack?: number | null;
+            /** Defense */
+            defense?: number | null;
             /**
              * Entry Id
              * Format: uuid
              */
             entry_id: string;
+            /** Guard */
+            guard?: number | null;
             /** Heals */
             heals: string | null;
             kind: components["schemas"]["ItemKind"];
@@ -2277,14 +2352,19 @@ export interface components {
             recover?: string | null;
             /** Risk */
             risk?: string | null;
+            /** Strike */
+            strike?: string | null;
             /** Target */
             target?: string | null;
+            /** Weapon */
+            weapon?: string | null;
         };
         /**
          * CheckOutcome
          * @description 판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다.
          */
         CheckOutcome: {
+            blow?: components["schemas"]["BlowOut"] | null;
             called_shot?: components["schemas"]["CalledShotOut"] | null;
             drop?: components["schemas"]["DropOut"] | null;
             effect?: components["schemas"]["EffectOut"] | null;
@@ -2831,6 +2911,11 @@ export interface components {
          *     칸마다 하나의 물건이 들어간다. 어느 물건이 어느 칸에 들어가는지는 시나리오의 아이템 규칙이 정한다.
          */
         EquipmentSlot: {
+            /**
+             * Hit Weight
+             * @default 1
+             */
+            hit_weight: number;
             /** Key */
             key: string;
             /** Name */
@@ -3321,13 +3406,22 @@ export interface components {
          *     slots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
          *     두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.
          *     장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).
+         *     attack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).
+         *     defense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.
+         *     어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.
          */
         "ItemRule-Input": {
+            /** Attack */
+            attack?: number | null;
+            /** Defense */
+            defense?: number | null;
             /**
              * Entry Id
              * Format: uuid
              */
             entry_id: string;
+            /** Guard */
+            guard?: number | null;
             /** Heals */
             heals?: string | null;
             /** @default gear */
@@ -3359,10 +3453,19 @@ export interface components {
          *     slots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
          *     두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.
          *     장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).
+         *     attack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).
+         *     defense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.
+         *     어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.
          */
         "ItemRule-Output": {
+            /** Attack */
+            attack?: number | null;
+            /** Defense */
+            defense?: number | null;
             /** Entry Id */
             entry_id: string;
+            /** Guard */
+            guard?: number | null;
             /** Heals */
             heals?: string | null;
             /** @default gear */
@@ -3392,11 +3495,17 @@ export interface components {
          *     slots 가 비어 있으면 착용하지 않는 물건이다.
          */
         ItemRuleSnapshot: {
+            /** Attack */
+            attack?: number | null;
+            /** Defense */
+            defense?: number | null;
             /**
              * Entry Id
              * Format: uuid
              */
             entry_id: string;
+            /** Guard */
+            guard?: number | null;
             /** Heals */
             heals?: string | null;
             kind: components["schemas"]["ItemKind"];
@@ -3912,7 +4021,7 @@ export interface components {
          *     이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
          *     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
          */
-        MonsterAttack: {
+        "MonsterAttack-Input": {
             /** Ability */
             ability: string;
             /** Difficulty */
@@ -3921,6 +4030,27 @@ export interface components {
             harm: string;
             /** Name */
             name: string;
+            /** Weapon */
+            weapon?: string | null;
+        };
+        /**
+         * MonsterAttack
+         * @description 몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.
+         *
+         *     이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
+         *     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
+         */
+        "MonsterAttack-Output": {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty: string;
+            /** Harm */
+            harm: string;
+            /** Name */
+            name: string;
+            /** Weapon */
+            weapon?: string | null;
         };
         /**
          * MonsterCopyResult
@@ -4027,7 +4157,7 @@ export interface components {
              * Attacks
              * @default []
              */
-            attacks: components["schemas"]["MonsterAttack"][];
+            attacks: components["schemas"]["MonsterAttack-Input"][];
             /**
              * Dull
              * @default false
@@ -4048,6 +4178,11 @@ export interface components {
              * Format: uuid
              */
             monster_id: string;
+            /**
+             * Natural Armor
+             * @default []
+             */
+            natural_armor: components["schemas"]["NaturalArmor"][];
             sheet: components["schemas"]["Sheet"];
         };
         /**
@@ -4062,7 +4197,7 @@ export interface components {
              * Attacks
              * @default []
              */
-            attacks: components["schemas"]["MonsterAttack"][];
+            attacks: components["schemas"]["MonsterAttack-Output"][];
             /**
              * Dull
              * @default false
@@ -4080,6 +4215,11 @@ export interface components {
             inventory: components["schemas"]["CarriedItem-Output"][];
             /** Monster Id */
             monster_id: string;
+            /**
+             * Natural Armor
+             * @default []
+             */
+            natural_armor: components["schemas"]["NaturalArmor"][];
             sheet: components["schemas"]["Sheet"];
         };
         /**
@@ -4132,6 +4272,11 @@ export interface components {
             kind: components["schemas"]["MonsterKind"];
             /** Name */
             name: string;
+            /**
+             * Natural Armor
+             * @default []
+             */
+            natural_armor: components["schemas"]["NaturalArmorSnapshot"][];
             sheet: components["schemas"]["Sheet"];
             /**
              * Unique
@@ -4376,6 +4521,26 @@ export interface components {
             narration_style: components["schemas"]["NarrationStyle"] | null;
         };
         /**
+         * NaturalArmor
+         * @description 몬스터의 한 부위의 타고난 방어(#276). 칸(slot)은 룰북의 장비의 칸이다. 룰북에 있는지는 게시할 때 본다.
+         */
+        NaturalArmor: {
+            /** Defense */
+            defense: number;
+            /** Slot */
+            slot: string;
+        };
+        /**
+         * NaturalArmorSnapshot
+         * @description 몬스터의 한 부위의 타고난 방어(#276). 칸은 판 안의 규칙의 장비의 칸이다.
+         */
+        NaturalArmorSnapshot: {
+            /** Defense */
+            defense: number;
+            /** Slot */
+            slot: string;
+        };
+        /**
          * NaturalRecovery
          * @description 저절로 회복하기. 게임 안의 시계가 every_minutes 분의 눈금을 하나 지날 때마다 heal 등급만큼 회복한다.
          *
@@ -4466,7 +4631,7 @@ export interface components {
              * Attacks
              * @default []
              */
-            attacks: components["schemas"]["MonsterAttack"][];
+            attacks: components["schemas"]["MonsterAttack-Input"][];
             /** @default neutral */
             attitude: components["schemas"]["NpcAttitude"];
             /**
@@ -4518,7 +4683,7 @@ export interface components {
              * Attacks
              * @default []
              */
-            attacks: components["schemas"]["MonsterAttack"][];
+            attacks: components["schemas"]["MonsterAttack-Output"][];
             /** @default neutral */
             attitude: components["schemas"]["NpcAttitude"];
             /**
@@ -6167,6 +6332,7 @@ export interface components {
         Ruleset: {
             /** Abilities */
             abilities: components["schemas"]["Ability"][];
+            armor: components["schemas"]["Armor"] | null;
             called_shot: components["schemas"]["CalledShot"] | null;
             death_save: components["schemas"]["DeathSave"] | null;
             /** Default Difficulty */
@@ -6755,7 +6921,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 47
+             * @default 48
              */
             format: number;
             /**

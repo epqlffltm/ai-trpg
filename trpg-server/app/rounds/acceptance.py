@@ -136,6 +136,18 @@ def require_able(table: GameTable, member: TableMember) -> Ruleset:
     return ruleset
 
 
+def require_weapon(table: GameTable, member: TableMember, entry_id: uuid.UUID) -> None:
+    """
+    타격에 쓰겠다는 무기를 본다(#276). 공격 보정이 있는 판의 물건이 아니면 ActionNotInRulesError(weapon),
+    착용하고 있지 않으면 RoundConflictError(weapon_not_worn).
+    """
+    item = items.catalog(read_snapshot(table.content)).get(entry_id)
+    if item is None or item.attack is None:
+        raise ActionNotInRulesError('weapon')
+    if member.sheet is None or all(row.entry_id != entry_id for row in member.sheet.worn):
+        raise RoundConflictError(Conflict.WEAPON_NOT_WORN)
+
+
 def accept_check(table: GameTable, member: TableMember, action: CheckAction, scene: Scene, ruleset: Ruleset) -> dict:
     """
     판정하는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
@@ -145,6 +157,8 @@ def accept_check(table: GameTable, member: TableMember, action: CheckAction, sce
       - 겨눈 NPC 가 이번 장면의 인물이 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
       - 겨눈 몬스터가 같은 장소의 마리가 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
       - 노린 부상이 규칙에서 노릴 수 없는 것이면 ActionNotInRulesError, 대상이 이미 입었으면 RoundConflictError.
+      - 노린 부위가 규칙에서 노릴 수 없는 것이면 ActionNotInRulesError(strike, #276).
+      - 무기가 공격 보정이 없는 물건이면 ActionNotInRulesError, 착용하고 있지 않으면 RoundConflictError(#276).
     비워 둔 난이도는 규칙의 기본 난이도로, 비워 둔 회복의 대상은 자기 자신으로 채운다.
     """
     fault = actions.find_fault(ruleset, action)
@@ -156,6 +170,8 @@ def accept_check(table: GameTable, member: TableMember, action: CheckAction, sce
         require_npc_target(scene.cast, action.npc, action.aim)
     if action.monster is not None:
         require_monster_target(scene.monsters, member, action.monster)
+    if action.weapon is not None:
+        require_weapon(table, member, action.weapon)
     return aim(actions.settle(ruleset, action), member.user_id).model_dump(mode='json')
 
 

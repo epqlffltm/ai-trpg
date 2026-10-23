@@ -62,6 +62,9 @@ async def test_a_rarity_is_saved_and_published(client: AsyncClient, me: dict[str
             'price': None,
             'slots': [],
             'slot_count': 1,
+            'attack': None,
+            'defense': None,
+            'guard': None,
         },
         {
             'entry_id': lore['potion']['id'],
@@ -71,6 +74,9 @@ async def test_a_rarity_is_saved_and_published(client: AsyncClient, me: dict[str
             'price': None,
             'slots': [],
             'slot_count': 1,
+            'attack': None,
+            'defense': None,
+            'guard': None,
         },
     ]
     assert [item['rarity'] for item in snapshot['items']] == ['epic', 'normal']

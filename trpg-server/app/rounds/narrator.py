@@ -150,6 +150,23 @@ class HealNote:
 
 
 @dataclass(frozen=True)
+class BlowNote:
+    """
+    타격에 장비가 든 것(#276). 엔진이 정했다. 무기와 그 공격 보정, 맞은 부위의 이름, 노렸는가, 그 부위의 방어다.
+
+    mode 는 규칙의 방어 방식이다. ac 면 방어가 맞히는 목표값에 더해졌고, reduce 면 맞은 피해에서 빠졌다.
+    방어 방식이 없는 규칙이면 None 이고 부위도 방어도 없다.
+    """
+
+    weapon: str | None = None
+    weapon_bonus: int = 0
+    location: str | None = None
+    aimed: bool = False
+    defense: int = 0
+    mode: str | None = None
+
+
+@dataclass(frozen=True)
 class Verdict:
     """
     판정의 결과. 엔진이 정한 것이다. 서술자는 이것을 바꾸지 못하고 글로 옮기기만 한다.
@@ -182,6 +199,8 @@ class Verdict:
     aimed: str | None = None
     # 치료하는 행동이면 그 결과. 판정의 능력과 난이도는 규칙이 정한 치료의 것이다. 치료가 아니면 None 이다
     treatment: TreatmentNote | None = None
+    # 타격에 장비가 든 것(#276). 무기도 방어 방식도 없었거나 이 칸이 생기기 전에 굳힌 것은 None 이다
+    blow: BlowNote | None = None
 
 
 @dataclass(frozen=True)
@@ -773,6 +792,8 @@ class MonsterTurnNote:
     impact: Impact | None = None
     # 쓰러진 캐릭터를 쳤으면 그 결과(#369). 서 있는 캐릭터를 쳤으면 None 이다
     downed: DownedStrikeNote | None = None
+    # 공격에 장비가 든 것(#276). 무기도 방어 방식도 없었거나 이 칸이 생기기 전에 굳힌 것은 None 이다
+    blow: BlowNote | None = None
 
 
 @dataclass(frozen=True)
