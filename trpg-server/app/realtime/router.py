@@ -21,8 +21,8 @@ from typing import Annotated
 from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from server_core.auth.dependencies import CurrentUser
+from server_core.observability.metrics import measured_stream
 
-from app.observability.metrics import measured_stream
 from app.realtime import service, sse
 from app.realtime.service import Cursor
 from app.realtime.sse import Comment, Frame

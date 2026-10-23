@@ -38,9 +38,10 @@ from ai_core.calls import chars_of
 from ai_core.costs import PriceTag, cost_usd
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError, Reasoning, Role
 from ai_core.routing import ModelRouter
+from server_core.database import create_session_factory
 
 from app.core.config import get_settings
-from app.core.database import create_engine, create_session_factory
+from app.core.database import create_engine
 from app.rounds.narrator_setup import build_router
 
 MESSAGES = [

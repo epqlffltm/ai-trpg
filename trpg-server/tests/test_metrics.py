@@ -2,9 +2,10 @@
 
 """
 메트릭을 세는 곳을 검증한다. 이름, 단위, label 이 docs/observability.md 의 "메트릭"의 표와 같은지 본다.
-메모리에 모으는 것(tests/metrics.py)으로 읽는다. 끝에서 끝까지(Prometheus 에 들어오는가)는 CI 의 stack 이 본다.
+메모리에 모으는 것(server_core/testing/metrics.py)으로 읽는다.
+끝에서 끝까지(Prometheus 에 들어오는가)는 CI 의 stack 이 본다.
 
-  - HTTP 셋(app/observability/request_metrics.py). 테이블의 스트림은 수에만 든다
+  - HTTP 셋(server_core/observability/request_metrics.py). 테이블의 스트림은 수에만 든다
   - DB 넷(readiness 의 db_up, 연결 풀)
   - 작업 넷(맡긴 작업 app/core/jobs.py, 도는 작업의 한 바퀴)
   - SSE 셋(app/realtime/router.py)
@@ -25,6 +26,17 @@ from ai_core.fake import FakeCallLog
 from ai_core.provider import Reasoning
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.observability.metrics import (
+    DURATION_BUCKETS,
+    LONG_DURATION_BUCKETS,
+    OTHER_METHOD,
+    STREAM_BUCKETS,
+    method_label,
+    record_request,
+)
+from server_core.observability.pool_metrics import MeteredPool
+from server_core.observability.request_metrics import RequestMetricsMiddleware
+from server_core.testing.metrics import MetricsRecorder
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 
@@ -44,19 +56,8 @@ from app.billing.metered import MeteredBilling
 from app.billing.models import UNFINISHED_STATUSES
 from app.billing.repository import unfinished_by_status
 from app.billing.settler import ChargeSettler
-from app.core.database import POOL_MAX_CONNECTIONS
 from app.core.jobs import BackgroundJobs
-from app.main import API_PREFIX
-from app.observability.metrics import (
-    DURATION_BUCKETS,
-    LONG_DURATION_BUCKETS,
-    OTHER_METHOD,
-    STREAM_BUCKETS,
-    method_label,
-    record_request,
-)
-from app.observability.pool_metrics import MeteredPool
-from app.observability.request_metrics import RequestMetricsMiddleware
+from app.main import API_PREFIX, TABLE_STREAMS
 from app.realtime.router import encode_all
 from app.realtime.sse import Frame
 from app.rounds.clock import CLOCK_OPERATION
@@ -64,7 +65,6 @@ from app.rounds.closing import NARRATE_OPERATION
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import NO_PREVIEW, Move, NarrationRequest, Preview, StoryContext
 from app.rounds.retrying_narrator import RetryingNarrator
-from tests.metrics import MetricsRecorder
 from tests.test_npc_actions import bearer, declare, table_url
 from tests.test_round_time_limit import after, clock_at, current, start_with
 
@@ -165,7 +165,8 @@ async def test_a_stream_is_counted_but_neither_timed_nor_active(metrics: Metrics
     async def ignore(message) -> None:
         return
 
-    await RequestMetricsMiddleware(streaming)({'type': 'http', 'method': 'GET', 'path': STREAM}, None, ignore)
+    middleware = RequestMetricsMiddleware(streaming, streams=TABLE_STREAMS)
+    await middleware({'type': 'http', 'method': 'GET', 'path': STREAM}, None, ignore)
 
     # 몇 시간씩 열려 있는 스트림이 처리 중인 수와 시간 분포를 덮지 않는다. 스트림은 sse_* 가 센다
     assert active_while_open == [None]
@@ -231,7 +232,8 @@ async def test_the_pool_reports_its_connections_and_waits(app: FastAPI, metrics:
 
     assert in_use is not None and in_use >= 1
     assert metrics.value('db_pool_connections', state='idle') is not None
-    assert metrics.value('db_pool_connections_max') == POOL_MAX_CONNECTIONS
+    # 설정에 풀의 크기를 적지 않았으면 5 + 10 이다(SQLAlchemy 의 기본값)
+    assert metrics.value('db_pool_connections_max') == app.state.settings.db_max_connections == 15
     (wait,) = metrics.points('db_pool_wait')
     assert (wait.unit, wait.value >= 1) == ('s', True)
 

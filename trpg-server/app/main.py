@@ -14,6 +14,18 @@ import httpx
 from fastapi import FastAPI
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
+from server_core.database import create_session_factory
+from server_core.observability.db_spans import instrument_engine
+from server_core.observability.http_spans import traced_client
+from server_core.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
+from server_core.observability.middleware import RequestLoggingMiddleware
+from server_core.observability.pool_metrics import pool_stats
+from server_core.observability.request_metrics import RequestMetricsMiddleware
+from server_core.observability.request_spans import RequestSpanMiddleware
+from server_core.observability.responses import handle_unexpected_error
+from server_core.observability.setup import configure_logging
+from server_core.observability.streams import StreamRoutes
+from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.ai_log import retention
@@ -42,7 +54,7 @@ from app.calendar import router as calendar
 from app.chat import router as chat
 from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
-from app.core.database import POOL_MAX_CONNECTIONS, create_engine, create_session_factory
+from app.core.database import create_engine
 from app.core.job_setup import build_jobs
 from app.engine.dice import RandomDice
 from app.events import router as events
@@ -60,16 +72,6 @@ from app.memory.indexing import MemoryIndexer
 from app.memory.retrieval import MemoryRetriever, MemoryThresholds
 from app.notifications import dispatcher
 from app.notifications.setup import build_notifications
-from app.observability.db_spans import instrument_engine
-from app.observability.http_spans import traced_client
-from app.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
-from app.observability.middleware import RequestLoggingMiddleware
-from app.observability.pool_metrics import pool_stats
-from app.observability.request_metrics import RequestMetricsMiddleware
-from app.observability.request_spans import RequestSpanMiddleware
-from app.observability.responses import handle_unexpected_error
-from app.observability.setup import configure_logging
-from app.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 from app.operators import router as operators
 from app.operators.publishing import PublicationRefusedError
 from app.operators.sanctions import SanctionConflictError
@@ -108,6 +110,9 @@ from app.withdrawal import router as withdrawal
 
 # 이 서버의 API 가 놓이는 주소. 인증 서버는 /api/v1/auth 를 쓴다
 API_PREFIX = '/api/v1/game'
+# 테이블의 스트림(SSE, app/realtime/router.py)의 주소. 요청의 span 을 걸지 않고, 요청의 걸린 시간을 재지 않는다.
+# 연결은 몇 시간씩 이어진다. 스트림은 sse_* 메트릭이 따로 센다(server_core/observability/streams.py)
+TABLE_STREAMS = StreamRoutes.of(rf'{API_PREFIX}/tables/[^/]+/stream')
 
 
 @asynccontextmanager
@@ -182,16 +187,16 @@ def create_app(
         redoc_url=None,
         openapi_url=f'{API_PREFIX}/openapi.json' if settings.debug else None,
         lifespan=lifespan,
-        # FastAPI 가 스스로 span, 메트릭, 로그를 내보내지 않게 한다(app/observability/tracing.py)
+        # FastAPI 가 스스로 span, 메트릭, 로그를 내보내지 않게 한다(server_core/observability/tracing.py)
         telemetry=FASTAPI_TELEMETRY,
     )
 
     # 요청마다 식별자(request_id, trace_id)를 걸고, 끝나면 한 줄을 남긴다. 응답에 X-Request-ID 를 돌려준다
     app.add_middleware(RequestLoggingMiddleware)
     # 요청마다 서버 span 을 건다. 나중에 붙인 것이 바깥이다. 로그(trace_id)와 쿼리의 span 이 이 span 을 따른다
-    app.add_middleware(RequestSpanMiddleware)
+    app.add_middleware(RequestSpanMiddleware, streams=TABLE_STREAMS)
     # 요청마다 HTTP 메트릭 셋을 센다. 맨 바깥이라 요청 전체(span 과 로그를 거는 시간까지)를 잰다
-    app.add_middleware(RequestMetricsMiddleware)
+    app.add_middleware(RequestMetricsMiddleware, streams=TABLE_STREAMS)
 
     # 요청을 처리하는 코드가 설정을 꺼내 쓸 수 있게 앱에 붙여 둔다
     app.state.settings = settings
@@ -207,7 +212,7 @@ def create_app(
     # 쿼리마다 span 을 건다(요청이나 작업 안의 것만). 같은 엔진에 여러 번 불러도 한 번만 단다
     instrument_engine(app.state.engine)
     # 연결 풀의 값을 메트릭으로 낸다. 앱이 마지막으로 건 풀 하나다
-    watch_pool(pool_stats(app.state.engine, POOL_MAX_CONNECTIONS))
+    watch_pool(pool_stats(app.state.engine, settings.db_max_connections))
     app.state.signal_signer = signer_from(settings)
     app.state.session_factory = create_session_factory(app.state.engine, session_info(app.state.signal_signer))
 

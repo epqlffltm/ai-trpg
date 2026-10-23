@@ -14,6 +14,7 @@ import asyncio
 import logging
 
 import pytest
+from server_core.testing.logs import rendered
 
 from app.core.config import Settings
 from app.core.job_setup import job_limits
@@ -21,7 +22,6 @@ from app.core.jobs import DEFAULT_LIMIT, JOB_REFUSED_ERROR_CODE, BackgroundJobs,
 from app.lore import indexing as lore_indexing
 from app.memory import indexing as memory_indexing
 from app.rounds import closing
-from tests.logs import rendered
 
 JOBS_LOGGER = 'app.core.jobs'
 NARRATE = 'round.narrate'

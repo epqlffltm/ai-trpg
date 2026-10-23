@@ -19,10 +19,11 @@ from pathlib import Path
 
 import httpx
 from ai_core.embedder import Embedder
+from server_core.database import create_session_factory
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
-from app.core.database import create_engine, create_session_factory
+from app.core.database import create_engine
 from app.references.indexing import IndexResult, index_references
 from app.references.loading import SyncPlan, load_document
 from app.references.records import read_document

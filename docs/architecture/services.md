@@ -192,7 +192,7 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 
 | 쓰는 곳 | 몫 | 정하는 곳 |
 | --- | --- | --- |
-| trpg | 16 | 풀 5 + 10(`trpg-server/app/core/database.py`). 실시간 신호의 LISTEN 연결 1 은 풀 밖이다. server-core 로 옮길 때(#589) 설정으로 넘어온다 |
+| trpg | 16 | 풀 5 + 10(설정 `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` 의 기본값, #589). 실시간 신호의 LISTEN 연결 1 은 풀 밖이다 |
 | chat | 10 | compose 의 `DB_POOL_SIZE` 5, `DB_MAX_OVERFLOW` 5 |
 | story(계획) | 10 | chat 과 같다(#591) |
 | notification | 5 | compose 의 2 + 3 |
