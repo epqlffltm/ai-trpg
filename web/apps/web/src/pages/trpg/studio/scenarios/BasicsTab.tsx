@@ -61,7 +61,7 @@ export function BasicsTab({ scenario }: { scenario: ScenarioDetail }) {
         value={draft.description}
         onChange={(event) => update({ description: event.target.value })}
         error={hints.description}
-        hint="내 시나리오 목록에서 알아보기 위한 짧은 설명입니다. 공개할 때의 소개글은 따로 씁니다."
+        hint="내 시나리오 목록에서 알아보기 위한 짧은 설명입니다. 공개할 때의 한줄소개와 소개글은 소개 탭에서 씁니다."
       />
       <SelectField
         label="등급"

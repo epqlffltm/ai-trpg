@@ -6,10 +6,15 @@
 //   - 403 code adult_content_required: 성인 확인 없이 성인용으로 만들거나 고쳤다
 //   - 409 {problems}: 게시할 조건을 갖추지 못했다. 게시해 보기(publish-check)와 같은 이름들이다
 //   - 422 {field: narration_model, reason: missing | not_offered}: 추천 서술 모델이 없거나 서비스 중이 아니다
+//
+// 소개 페이지와 공개(trpg-server/app/listings/router.py):
+//   - 409 {problems: tagline_empty | genre_missing}: 공개할 조건(한줄소개, 장르)을 갖추지 못했다. 공개 중에 비워도 같다
+//   - 403 code version_sanctioned | publishing_banned: 운영자가 제재한 판이거나 공개 금지 중이다(#392)
+//   - 403 code adult_content_required: 성인 확인 없이 성인용을 고치거나 공개했다
 
 import { apiRequest } from './http';
 import { assetPath, assetsPath } from './studio';
-import type { PublishCheck, ScenarioCreate, ScenarioDetail, ScenarioUpdate, VersionDetail, VersionSummary } from './types';
+import type { ListingDetail, ListingUpdate, PublishCheck, ScenarioCreate, ScenarioDetail, ScenarioUpdate, VersionDetail, VersionSummary } from './types';
 
 function scenarioPath(scenarioId: string, rest = ''): string {
   return `${assetPath('scenarios', scenarioId)}${rest}`;
@@ -44,4 +49,19 @@ export function fetchVersions(scenarioId: string, signal?: AbortSignal): Promise
 /** 지금의 내용이 새 판으로 굳는다. 조건을 갖추지 못했으면 409 problems */
 export function publishScenario(scenarioId: string, note: string): Promise<VersionDetail> {
   return apiRequest<VersionDetail>(scenarioPath(scenarioId, '/versions'), { method: 'POST', body: { note } });
+}
+
+/** 자기 시나리오의 소개 페이지와 공개 중인 판. 아직 쓰지 않았으면 빈 것이 온다 */
+export function fetchOwnListing(scenarioId: string, signal?: AbortSignal): Promise<ListingDetail> {
+  return apiRequest<ListingDetail>(scenarioPath(scenarioId, '/listing'), signal ? { signal } : {});
+}
+
+/** 소개 페이지를 고친다. 보낸 칸만 바뀐다. 판을 새로 내지 않아도 공개된 소개에 바로 보인다 */
+export function updateListing(scenarioId: string, body: ListingUpdate): Promise<ListingDetail> {
+  return apiRequest<ListingDetail>(scenarioPath(scenarioId, '/listing'), { method: 'PATCH', body });
+}
+
+/** 공개할 판을 정한다. 시나리오 하나에 공개 판은 하나다. null 이면 공개를 내린다 */
+export function setPublication(scenarioId: string, version: number | null): Promise<ListingDetail> {
+  return apiRequest<ListingDetail>(scenarioPath(scenarioId, '/listing/publication'), { method: 'PUT', body: { version } });
 }
