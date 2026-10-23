@@ -21,6 +21,9 @@ import {
   CharacterNewPage,
   CharactersPage,
   ChargePage,
+  ChatLorebookEditPage,
+  ChatLorebookNewPage,
+  ChatLorebooksPage,
   LobbyPage,
   LorebookEditPage,
   LorebookNewPage,
@@ -180,6 +183,19 @@ export function App() {
             <Route index element={<CharactersPage />} />
             <Route path="new" element={<CharacterNewPage />} />
             <Route path=":characterId" element={<CharacterEditPage />} />
+          </Route>
+          {/* chat 의 로어북. 캐릭터의 로어북 탭이 붙인다. 모두 만든 사람 자신의 것이다 */}
+          <Route
+            path="studio/lorebooks"
+            element={
+              <RequireSession>
+                <Outlet />
+              </RequireSession>
+            }
+          >
+            <Route index element={<ChatLorebooksPage />} />
+            <Route path="new" element={<ChatLorebookNewPage />} />
+            <Route path=":lorebookId" element={<ChatLorebookEditPage />} />
           </Route>
           <Route index element={<PlaceholderPage service="chat" />} />
           <Route path="*" element={<PlaceholderPage service="chat" />} />

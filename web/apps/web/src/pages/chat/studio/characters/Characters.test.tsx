@@ -1,9 +1,10 @@
 // web/apps/web/src/pages/chat/studio/characters/Characters.test.tsx
 // 캐릭터 만들기(C6)의 뼈대. 빈 목록에서 만들기 → 고치기와 게시 점검, 점검에서 탭으로 가기, 운영자만 만드는 때(403),
-// 기본과 시작 상황의 저장 본문(저장하면 점검을 다시 읽는다), 아직 화면이 없는 묶음의 문제, 숨긴 캐릭터, 게시와 걸러 낸 것,
+// 기본과 시작 상황의 저장 본문(저장하면 점검을 다시 읽는다), 모르는 문제, 숨긴 캐릭터, 게시와 걸러 낸 것,
 // 지도(장소, 길, 처음 있는 장소, 지우면 길도)와 물건(시작 소지품, 그림 칸을 그대로 보내기),
 // 호감도(켜고 끄기, 단계, 규칙의 대상과 화면이 붙이는 id), 그림(올리기, 토큰을 실은 미리 보기, 장소의 배경, 막힌 올리기),
-// 캐릭터 그림(체크무늬 미리 보기, 옷만 고르는 차림), 이벤트 씬(조건을 바꾸면 대상을 비우기, 호감도 단계).
+// 캐릭터 그림(체크무늬 미리 보기, 옷만 고르는 차림), 이벤트 씬(조건을 바꾸면 대상을 비우기, 호감도 단계),
+// 로어북(고르기 목록에서 붙이기, 차례, 게시하지 않은 것과 목록에 없는 것, 남의 로어북의 422).
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -72,6 +73,8 @@ function signedIn(initial = character(), routes: Routes = {}) {
     },
     [`GET ${CHARACTERS}/${ID}/publish-check`]: () => json(200, check()),
     [`GET ${CHARACTERS}/${ID}/versions`]: () => json(200, []),
+    // 로어북 탭의 고르기 목록. 탭은 모두 그려 두므로 어느 탭에서든 읽는다
+    'GET /api/v1/asset/lorebooks': () => json(200, { items: [], total: 0 }),
     ...routes,
   });
 }
@@ -160,16 +163,16 @@ describe('캐릭터 만들기', () => {
     });
   });
 
-  it('아직 화면이 없는 묶음의 문제는 이름만 적고, 숨긴 캐릭터면 알린다', async () => {
+  it('모르는 문제는 이름만 적고, 숨긴 캐릭터면 알린다', async () => {
     signedIn(character({ hidden_at: '2026-10-24T01:00:00Z' }), {
-      [`GET ${CHARACTERS}/${ID}/publish-check`]: () =>
-        json(200, { ready: false, problems: ['lorebook_missing', 'item_missing'], removed: [] }),
+      [`GET ${CHARACTERS}/${ID}/publish-check`]: () => json(200, { ready: false, problems: ['new_problem', 'item_missing'], removed: [] }),
     });
     renderApp(`/chat/studio/characters/${ID}`);
 
     expect(await screen.findByText(/운영자가 숨긴 캐릭터입니다/)).toBeInTheDocument();
     const problems = await screen.findByRole('list', { name: '고칠 것' });
-    expect(within(problems).getByText('(로어북: 화면 준비 중)')).toBeInTheDocument();
+    expect(within(problems).getByText('new_problem')).toBeInTheDocument();
+    expect(within(problems).getAllByRole('button')).toHaveLength(1);
     await userEvent.click(within(problems).getByRole('button', { name: '물건 탭으로' }));
     expect(screen.getByRole('form', { name: '물건' })).toBeVisible();
   });
@@ -404,6 +407,56 @@ describe('캐릭터 만들기', () => {
     expect(calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body).toEqual({
       event_scenes: [{ ...scene, collectible: false, when: { kind: 'affection_stage', target: '연인' } }],
     });
+  });
+
+  it('로어북을 고르기 목록에서 붙이고 차례를 바꿔 저장한다. 게시하지 않은 것과 목록에 없는 것을 알린다', async () => {
+    const lore = (id: string, name: string, latest: number | null) => ({ id, name, entry_count: 2, latest_version: latest, updated_at: '2026-10-24T00:00:00Z' });
+    const sea = lore('00000000-0000-4000-8000-00000000f001', '바다', 1);
+    const city = lore('00000000-0000-4000-8000-00000000f002', '도시', null);
+    const gone = '00000000-0000-4000-8000-00000000f009';
+    const { seen } = signedIn(character({ lorebooks: [city.id, gone] }), {
+      [`GET ${CHARACTERS}/${ID}/publish-check`]: () =>
+        json(200, { ready: false, problems: ['start_missing', 'lorebook_unpublished', 'lorebook_missing'], removed: [] }),
+      'GET /api/v1/asset/lorebooks': () => json(200, { items: [sea, city], total: 2 }),
+    });
+    renderApp(`/chat/studio/characters/${ID}`);
+
+    const problems = await screen.findByRole('list', { name: '고칠 것' });
+    await userEvent.click(within(problems).getAllByRole('button', { name: '로어북 탭으로' })[0] as HTMLElement);
+    const form = screen.getByRole('form', { name: '로어북' });
+    expect(form).toBeVisible();
+    const attached = within(form).getByRole('list', { name: '붙인 로어북' });
+    expect(await within(attached).findByText(/아직 게시하지 않았습니다/)).toBeInTheDocument();
+    expect(within(attached).getByText(/목록에 없습니다/)).toBeInTheDocument();
+    expect(within(attached).getByRole('link', { name: '도시' })).toHaveAttribute('href', `/chat/studio/lorebooks/${city.id}`);
+    // 이미 붙인 것은 고르는 목록에 나오지 않는다
+    expect(within(form).queryByRole('option', { name: '도시' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(form).getByRole('button', { name: '로어북 2 떼기' }));
+    await userEvent.selectOptions(within(form).getByLabelText('붙일 로어북'), '바다');
+    await userEvent.click(within(form).getByRole('button', { name: '붙이기' }));
+    await userEvent.click(within(form).getByRole('button', { name: '바다을(를) 앞으로' }));
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }));
+
+    expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
+    expect(calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body).toEqual({ lorebooks: [sea.id, city.id] });
+    expect(calls(seen, 'GET', '/api/v1/asset/lorebooks')[0]?.url).toContain('limit=100');
+  });
+
+  it('남의 로어북이나 지워진 로어북을 붙이면(422) 알린다', async () => {
+    const sea = { id: '00000000-0000-4000-8000-00000000f001', name: '바다', entry_count: 0, latest_version: 1, updated_at: '2026-10-24T00:00:00Z' };
+    signedIn(character(), {
+      'GET /api/v1/asset/lorebooks': () => json(200, { items: [sea], total: 1 }),
+      [`PATCH ${CHARACTERS}/${ID}`]: () => json(422, { detail: '자기 로어북만 가리킬 수 있습니다.', code: 'lorebook_not_owned' }),
+    });
+    renderApp(`/chat/studio/characters/${ID}?tab=lorebooks`);
+
+    const form = await screen.findByRole('form', { name: '로어북' });
+    await userEvent.selectOptions(await within(form).findByLabelText('붙일 로어북'), '바다');
+    await userEvent.click(within(form).getByRole('button', { name: '붙이기' }));
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }));
+
+    expect(await within(form).findByText(/붙일 수 없는 로어북이 있습니다/)).toBeInTheDocument();
   });
 
   it('게시하면 판을 알리고 소개에서 걸러 낸 것을 보인다. 판의 목록을 다시 읽는다', async () => {
