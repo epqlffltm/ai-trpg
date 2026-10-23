@@ -24,6 +24,8 @@ import app.conversations.models  # noqa: E402, F401
 import app.gallery.models  # noqa: E402, F401
 import app.lore.models  # noqa: E402, F401
 import app.memory.models  # noqa: E402, F401
+import app.operators.models  # noqa: E402, F401
+import app.reports.models  # noqa: E402, F401
 import app.turns.models  # noqa: E402, F401
 import app.world.models  # noqa: E402, F401
 from app.core.config import get_settings

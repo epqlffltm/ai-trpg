@@ -125,6 +125,10 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | PATCH, DELETE | `/api/v1/chat/conversations/{id}/notes/{note_id}` | 메모 고치기 `{text}`, 지우기(204). 없으면 404 `note_not_found` | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/notes/{note_id}/accept` | [요약이 제안한 메모](#요약이-제안하는-메모) 받아들이기(200). 가득 차면 409 `notes_full` | access 토큰 |
 | PATCH | `/api/v1/chat/messages/{id}` | [상대의 말 고치기](#고치기). `{content}`. 고친 말을 돌려준다. 사람의 말이면 422 `not_editable` | access 토큰 |
+| POST | `/api/v1/chat/messages/{id}/reports` | [캐릭터의 답 신고](#신고). `{reason, description?}`. 201. 사람의 말은 422 `not_reportable`, 두 번째는 409 `already_reported` | access 토큰 |
+| GET | `/api/v1/chat/admin/message-reports` | 운영자: 열린 신고의 목록(`minor` 먼저, 오래된 것부터, 대화의 글은 없다). 운영자가 아니면 404 | access 토큰(운영자) |
+| GET | `/api/v1/chat/admin/message-reports/{id}?reason=` | 운영자: 신고 하나와 굳힌 글. 사유 필수, 볼 때마다 감사 기록 | access 토큰(운영자) |
+| PUT | `/api/v1/chat/admin/message-reports/{id}/outcome` | 운영자: 처리 `{outcome: actioned \| dismissed, reason}`. 204. 이미 처리했으면 409 `already_handled` | access 토큰(운영자) |
 | POST | `/api/v1/chat/messages/{id}/regenerate` | [다시 생성](#다시-생성-멈추기-대안). 그 말에 다시 답한다. SSE 의 모양은 말 보내기와 같다. 인사말은 422 `not_regenerable`, 없는 말은 404 `message_not_found` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/continue` | [이어서 출력](#이어서-출력). 끊긴 답(`partial`)에 이어 쓴다. SSE. 끊긴 답이 아니거나 지금 가지의 끝이 아니면 422 `not_continuable` | access 토큰 |
 | POST | `/api/v1/chat/generations/{id}/stop` | [멈추기](#다시-생성-멈추기-대안). 204. 받은 만큼 저장한다. 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
@@ -476,6 +480,19 @@ uv run python -m scripts.models adult glm-5-3 --forbid
   데이터가 이미 있는 볼륨이면 한 번 직접 준다: `docker compose exec postgres psql -U trpg -d trpg -c "GRANT USAGE ON SCHEMA extensions TO chat;"`
 - **원가.** 같은 Ollama(로컬)를 쓰면 거의 없다. 외부 임베딩 API 를 쓰면 서비스가 낸다(청구하지 않는다).
 
+### 신고
+
+자기 대화의 캐릭터의 답을 신고한다(#678, 2026-10-23 유저 결정). `app/reports/`, `app/operators/`. 캐릭터를 숨기는 것은 asset 의 운영자 API 다.
+
+- **굳히기.** 사적 대화는 운영자가 읽지 않는다. 그래서 신고하는 순간 그 답과 앞의 말 여섯(지금 가지의 것), 캐릭터(asset 의 id, 판, 이름)와 모델을 신고에 굳힌다.
+  운영자는 대화 전체를 열지 않고 이것만 본다. 뒤에 그 답을 고치거나 가지를 바꿔도 굳힌 글은 그대로다.
+- **규칙.** 사유는 asset 의 캐릭터 신고와 같다(`spam`, `abuse`, `sexual`, `minor`, `illegal`, `other`, `other` 는 설명 필수). 캐릭터의 답만(사람의 말은 422 `not_reportable`),
+  같은 답은 한 번만(409 `already_reported`, 유일 제약). 쓰기의 요청 수 제한을 받는다.
+- **운영자 API**(`/admin/...`, 운영자가 아니면 404). 열린 신고의 목록은 `minor` 가 먼저, 그다음 오래된 것부터이고 대화의 글과 신고한 사람을 싣지 않는다.
+  신고 하나를 보려면 사유(`reason`, 쿼리, 1~200자)가 필수이고, 보기 전에 감사 기록(`operator_reads`)을 저장한다. 없는 신고를 본 시도도 남는다.
+  처리(`actioned`, `dismissed`)는 감사 기록(`operator_actions`)과 한 트랜잭션이다. 이미 처리했으면 409 `already_handled` 다. 두 기록은 덧붙이기만 한다(트리거).
+- **지우기.** 대화를 지운 것으로 적어도 신고는 남는다. 대화의 행이 지워지면(탈퇴) 함께 지워진다. 신고에 든 것은 신고한 사람의 대화라서다. 감사 기록은 남는다.
+
 ### 요청 수 제한
 
 한 사람이 짧은 시간에 너무 많이 보내지 못하게 막는다(`app/limits/`, #671). "한 대화에 한 생성"과 크레딧만으로는, 대화를 여럿 열어 몰아 보내거나 청구하지 않는 요청을 많이 보내는 것을 막지 못한다.
@@ -524,7 +541,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 인증 서버가 유예(7일)가 지난 탈퇴를 알리면 그 사람의 것을 지운다(#670, [탈퇴 설계](../docs/architecture/withdrawal.md), `app/withdrawal/`).
 
-- **지우는 것.** 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 캐릭터의 판의 사본, 연 이벤트 씬의 기록이다. 한 트랜잭션이다.
+- **지우는 것.** 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본, 그 대화의 [신고](#신고)), 가져온 캐릭터의 판의 사본(과 로어북의 벡터), 연 이벤트 씬의 기록이다. 한 트랜잭션이다.
 - **남기는 것.** 청구 기록(`generations`)이다. 대화와 말을 가리키는 칸만 비운다(외래 키가 `SET NULL`, 2026-10-23 유저 결정).
   남는 것은 공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표이고 글은 없다. 결제 서버도 원장과 홀드를 공개 ID 로 남기므로 서로 맞추고 원가를 셀 때 쓴다.
 - **받는 길.** `POST /api/v1/chat/service/users/{public_id}/withdrawal`, 본문 `{"withdrawn_at": "..."}`. 인증 서버의 비밀(`AUTH_SERVER_SECRET`)로 서명한다(`app/core/service_auth.py`).
