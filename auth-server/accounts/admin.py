@@ -18,6 +18,7 @@ from accounts.models import (
     GuardianNotice,
     IdentityVerification,
     MailReceipt,
+    NetworkBlock,
     OutgoingMail,
     PaymentEligibility,
     ReturnBlock,
@@ -251,6 +252,24 @@ class ReturnBlockAdmin(admin.ModelAdmin):
 
     list_display = ('created_at', 'kind', 'reason', 'expires_at')
     list_filter = ('kind', 'reason')
+    date_hierarchy = 'created_at'
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(NetworkBlock)
+class NetworkBlockAdmin(admin.ModelAdmin):
+    """
+    가입, 로그인, 토큰 갱신을 막는 IP 주소나 대역(#638). 조회하고, 지워서 푼다.
+
+    만들거나 고치지 못한다. 대역의 넓이와 기간의 규칙을 지키게 관리 명령(block_network)으로만 적는다.
+    """
+
+    list_display = ('network', 'note', 'expires_at', 'created_at')
     date_hierarchy = 'created_at'
 
     def has_add_permission(self, request) -> bool:

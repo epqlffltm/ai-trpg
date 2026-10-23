@@ -98,3 +98,8 @@ function messagesIn(value: unknown): string[] {
   if (value !== null && typeof value === 'object') return Object.values(value).flatMap(messagesIn);
   return [];
 }
+
+/** 운영자가 막은 IP 에서 온 요청이라 인증 서버가 거절했는가(#638). 가입, 로그인, 토큰 갱신이 이것으로 답한다 */
+export function isNetworkBlocked(error: ApiError): boolean {
+  return error.status === 403 && error.code === 'network_blocked';
+}

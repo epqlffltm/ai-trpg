@@ -2,7 +2,7 @@
 // 인증 화면(로그인, 가입, 비밀번호)의 실패를 화면에 보일 모양(FormProblem)과 화면마다 같은 부분.
 // 화면마다 다른 것(401 의 뜻, 처음부터 다시 할 때)은 loginProblem.ts, signupProblem.ts, passwordProblem.ts 가 정한다.
 
-import { ApiError, NetworkError } from '../api/errors';
+import { ApiError, isNetworkBlocked, NetworkError } from '../api/errors';
 
 export type FormProblem = {
   message: string;
@@ -18,12 +18,14 @@ export type FormProblem = {
 
 export const UNREACHABLE = '서버에 닿지 못했습니다. 잠시 뒤에 다시 시도하세요.';
 export const UNKNOWN = '처리하지 못했습니다. 잠시 뒤에 다시 시도하세요.';
+export const NETWORK_BLOCKED = '이 네트워크에서는 가입과 로그인이 제한되었습니다. 잘못 막혔다면 고객 문의로 알려 주세요.';
 
-/** 화면마다 같은 실패: 서버에 닿지 못함, 모르는 오류, 너무 많은 시도(429). 아니면 null */
+/** 화면마다 같은 실패: 서버에 닿지 못함, 모르는 오류, 너무 많은 시도(429), 막은 IP(403 network_blocked, #638). 아니면 null */
 export function commonProblem(error: unknown): FormProblem | null {
   if (error instanceof NetworkError) return { message: UNREACHABLE };
   if (!(error instanceof ApiError)) return { message: UNKNOWN };
   if (error.status === 429) return tooMany(error);
+  if (isNetworkBlocked(error)) return unknownProblem(error, NETWORK_BLOCKED);
   return null;
 }
 

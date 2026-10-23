@@ -1187,7 +1187,7 @@ export interface operations {
                     "application/json": components["schemas"]["Detail"];
                 };
             };
-            /** @description 이메일 인증을 마치지 않았다(email_not_verified) */
+            /** @description 이메일 인증을 마치지 않았다(email_not_verified) 또는 막은 IP 다(network_blocked) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1252,6 +1252,15 @@ export interface operations {
                     "application/json": components["schemas"]["CodedError"];
                 };
             };
+            /** @description 막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
             /** @description 코드를 너무 자주 요청했다(login_code_unavailable) */
             429: {
                 headers: {
@@ -1301,6 +1310,15 @@ export interface operations {
             };
             /** @description 로그인 티켓을 쓸 수 없다(login_ticket_invalid). 처음부터 다시 한다 */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+            /** @description 막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다 */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1815,7 +1833,7 @@ export interface operations {
                     "application/json": components["schemas"]["Detail"];
                 };
             };
-            /** @description 허용하지 않은 출처에서 온 쿠키 요청(origin_not_allowed) */
+            /** @description 허용하지 않은 출처의 쿠키 요청(origin_not_allowed) 또는 막은 IP 다(network_blocked) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1927,6 +1945,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description 막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
             /** @description 시도가 너무 많다(too_many_attempts) */
             429: {
                 headers: {
@@ -1972,6 +1999,15 @@ export interface operations {
                         code?: string;
                         detail: string;
                     };
+                };
+            };
+            /** @description 막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
                 };
             };
             /** @description 이미 가입한 이메일(email_registered)이거나, 다른 가입이 같은 이름을 방금 가져갔다 */
@@ -2023,6 +2059,15 @@ export interface operations {
                         code?: string;
                         detail: string;
                     };
+                };
+            };
+            /** @description 막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
                 };
             };
         };

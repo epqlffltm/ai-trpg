@@ -7,9 +7,11 @@
 //     다음 탭이 보내므로 재사용이 되지 않는다. Web Locks 가 없는 브라우저는 창 안의 하나만 지킨다.
 //
 // 401 이면 로그인이 끝난 것이다(쿠키가 없거나 폐기됨). 상태를 비우고 null 을 준다.
+// 403 network_blocked(운영자가 막은 IP, #638)도 이 기기에서는 로그인이 끝난 것으로 본다. 로그인 화면이 까닭을 알린다.
+// 서버는 쿠키를 지우지 않으므로, 다른 네트워크로 옮기거나 막기가 풀리면 새로 열 때 되살아난다.
 // 그 밖의 실패(503, 연결 끊김)는 로그아웃시키지 않는다. 오류를 던지고 상태는 그대로 둔다(화면 명세의 공통 상태).
 
-import { NetworkError, toApiError } from './errors';
+import { isNetworkBlocked, NetworkError, toApiError } from './errors';
 import { clearSession, storeTokens, type Session } from './session';
 import type { LoginResponse } from './types';
 
@@ -31,8 +33,13 @@ async function requestRefresh(): Promise<Session | null> {
     clearSession();
     return null;
   }
-  if (!response.ok) throw await toApiError(response);
-  return storeTokens((await response.json()) as LoginResponse);
+  if (response.ok) return storeTokens((await response.json()) as LoginResponse);
+  const error = await toApiError(response);
+  if (isNetworkBlocked(error)) {
+    clearSession();
+    return null;
+  }
+  throw error;
 }
 
 async function postRefresh(): Promise<Response> {
