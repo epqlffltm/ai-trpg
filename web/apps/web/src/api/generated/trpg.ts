@@ -1983,6 +1983,35 @@ export interface components {
             title?: string | null;
         };
         /**
+         * BuyAction
+         * @description 이번 장면의 상인(npc)에게서 물건(item) count 개를 사는 행동(app/rounds/trades.py, #278).
+         *
+         *     판정이 없다. 값은 판의 물건의 값 × 개수다. 상인의 소지품에 그만큼 있어야 하고(재고), 돈이 모자라면 사지 못한다.
+         *     다 사거나 하나도 사지 않는다. 사려던 것보다 적게 사서 돈이 엉뚱하게 남는 일을 만들지 않는다.
+         */
+        BuyAction: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /**
+             * Item
+             * Format: uuid
+             */
+            item: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "buy";
+            /**
+             * Npc
+             * Format: uuid
+             */
+            npc: string;
+        };
+        /**
          * CalledShot
          * @description 노려 치기의 어려움. 목표값을 올리는 크기(amount)는 그 방식에만 있다.
          */
@@ -2092,6 +2121,8 @@ export interface components {
             equipped: boolean;
             /** Name */
             name: string;
+            /** Price */
+            price?: number | null;
             rarity: components["schemas"]["ItemRarity"];
         };
         /**
@@ -2128,6 +2159,8 @@ export interface components {
             kind: components["schemas"]["ItemKind"];
             /** Name */
             name: string;
+            /** Price */
+            price?: number | null;
             rarity: components["schemas"]["ItemRarity"];
         };
         /**
@@ -2354,6 +2387,66 @@ export interface components {
             remove_short_payers: boolean;
         };
         /**
+         * Currency
+         * @description 시나리오의 화폐(#278). 이름(금화)과 단위(닢), 캐릭터 모두가 시작할 때 받는 돈, 상인이 사 주는 값의 백분율이다.
+         *
+         *     결제의 크레딧과 상관없다. 게임 안의 돈이고 엔진만 바꾼다. 서술(AI)은 돈을 주거나 빼앗지 못한다.
+         *     sell_percent 는 상인이 물건을 사 줄 때 물건의 값에 곱한다(내림). 0 이면 상인이 사 주지 않는다.
+         */
+        Currency: {
+            /** Name */
+            name: string;
+            /**
+             * Sell Percent
+             * @default 50
+             */
+            sell_percent: number;
+            /**
+             * Starting
+             * @default 0
+             */
+            starting: number;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /**
+         * CurrencyOut
+         * @description 테이블의 화폐(#278). 판에 굳은 것이다. 돈은 엔진만 바꾼다. 결제의 크레딧과 상관없다.
+         *
+         *     sell_percent 는 상인이 사 주는 값의 백분율이다. 물건 하나의 값에 곱해 내림한다.
+         */
+        CurrencyOut: {
+            /** Name */
+            name: string;
+            /** Sell Percent */
+            sell_percent: number;
+            /** Unit */
+            unit: string;
+        };
+        /**
+         * CurrencySnapshot
+         * @description 화폐(#278). 이름과 단위, 캐릭터 모두가 시작할 때 받는 돈, 상인이 사 주는 값의 백분율이다.
+         */
+        CurrencySnapshot: {
+            /** Name */
+            name: string;
+            /** Sell Percent */
+            sell_percent: number;
+            /**
+             * Starting
+             * @default 0
+             */
+            starting: number;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /**
          * DeathSave
          * @description 죽음의 굴림. 쓰러진 캐릭터가 죽는지를 주사위가 정하는 법이다.
          *
@@ -2401,13 +2494,13 @@ export interface components {
          */
         DeclarationOut: {
             /** Action */
-            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"]) | null;
+            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"]) | null;
             /** Character Name */
             character_name: string;
             /** Content */
             content: string | null;
             /** Outcome */
-            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
+            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
             /**
              * User Id
              * Format: uuid
@@ -2423,7 +2516,7 @@ export interface components {
          */
         DeclarationUpdate: {
             /** Action */
-            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"]) | null;
+            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"]) | null;
             /** Content */
             content: string;
         };
@@ -2767,7 +2860,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_put_down" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_put_down" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -3216,6 +3309,8 @@ export interface components {
          *     규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.
          *     heals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.
          *     rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
+         *     price 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.
+         *     비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).
          */
         "ItemRule-Input": {
             /**
@@ -3227,6 +3322,8 @@ export interface components {
             heals?: string | null;
             /** @default gear */
             kind: components["schemas"]["ItemKind"];
+            /** Price */
+            price?: number | null;
             /** @default normal */
             rarity: components["schemas"]["ItemRarity"];
         };
@@ -3237,6 +3334,8 @@ export interface components {
          *     규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.
          *     heals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.
          *     rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
+         *     price 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.
+         *     비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).
          */
         "ItemRule-Output": {
             /** Entry Id */
@@ -3245,6 +3344,8 @@ export interface components {
             heals?: string | null;
             /** @default gear */
             kind: components["schemas"]["ItemKind"];
+            /** Price */
+            price?: number | null;
             /** @default normal */
             rarity: components["schemas"]["ItemRarity"];
         };
@@ -3253,6 +3354,7 @@ export interface components {
          * @description 아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.
          *
          *     heals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.
+         *     price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
          */
         ItemRuleSnapshot: {
             /**
@@ -3263,6 +3365,8 @@ export interface components {
             /** Heals */
             heals?: string | null;
             kind: components["schemas"]["ItemKind"];
+            /** Price */
+            price?: number | null;
             /** @default normal */
             rarity: components["schemas"]["ItemRarity"];
         };
@@ -4284,6 +4388,8 @@ export interface components {
          *     지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.
          *     on_caught 는 훔치다 들켰을 때다. 늘 적대가 되고, fight 면 싸움도 붙는다(기본 hostile, 적대만).
          *     attacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).
+         *     merchant 는 상인인지다(#278). 상인은 소지품(inventory) 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다.
+         *     소지품의 개수가 곧 재고다. 장비는 팔지 않는다.
          *
          *     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
          *     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
@@ -4317,6 +4423,11 @@ export interface components {
              * @default []
              */
             inventory: components["schemas"]["CarriedItem-Input"][];
+            /**
+             * Merchant
+             * @default false
+             */
+            merchant: boolean;
             /** @default hostile */
             on_caught: components["schemas"]["NpcCaught"];
             sheet: components["schemas"]["Sheet"];
@@ -4329,6 +4440,8 @@ export interface components {
          *     지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.
          *     on_caught 는 훔치다 들켰을 때다. 늘 적대가 되고, fight 면 싸움도 붙는다(기본 hostile, 적대만).
          *     attacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).
+         *     merchant 는 상인인지다(#278). 상인은 소지품(inventory) 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다.
+         *     소지품의 개수가 곧 재고다. 장비는 팔지 않는다.
          *
          *     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
          *     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
@@ -4359,6 +4472,11 @@ export interface components {
              * @default []
              */
             inventory: components["schemas"]["CarriedItem-Output"][];
+            /**
+             * Merchant
+             * @default false
+             */
+            merchant: boolean;
             /** @default hostile */
             on_caught: components["schemas"]["NpcCaught"];
             sheet: components["schemas"]["Sheet"];
@@ -4395,6 +4513,11 @@ export interface components {
              * @default []
              */
             inventory: components["schemas"]["CarriedItemSnapshot"][];
+            /**
+             * Merchant
+             * @default false
+             */
+            merchant: boolean;
             /** @default hostile */
             on_caught: components["schemas"]["NpcCaught"];
             sheet: components["schemas"]["Sheet"];
@@ -4548,6 +4671,59 @@ export interface components {
             user_id?: string | null;
         };
         /**
+         * PayAction
+         * @description 가진 돈 amount 를 앉은 다른 사람(target)에게 건네는 행동(app/rounds/trades.py, #278). 판정이 없다.
+         */
+        PayAction: {
+            /** Amount */
+            amount: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "pay";
+            /**
+             * Target
+             * Format: uuid
+             */
+            target: string;
+        };
+        /**
+         * PayOut
+         * @description 돈을 건넨 결과(#278). 엔진이 정했다(app/rounds/trades.py). 판정이 없다.
+         *
+         *     paid 가 거짓이면 reason 이 있다: not_enough_money, target_gone(받을 사람이 떠났거나 죽었다),
+         *     too_much_money(받을 사람이 더 가질 수 없었다).
+         *     remaining 은 건넨 뒤에 가진 돈, target_total 은 받은 사람이 가진 돈이다. 받을 사람이 떠났으면 None 이다.
+         */
+        PayOut: {
+            /** Amount */
+            amount: number;
+            /** Character Name */
+            character_name: string;
+            /** Paid */
+            paid: boolean;
+            /** Reason */
+            reason: string | null;
+            /** Remaining */
+            remaining: number;
+            target: components["schemas"]["ItemPersonOut"];
+            /** Target Total */
+            target_total: number | null;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * PayOutcome
+         * @description 돈을 건네는 행동의 결과.
+         */
+        PayOutcome: {
+            pay: components["schemas"]["PayOut"];
+        };
+        /**
          * PersonOut
          * @description 이번 장면의 인물 하나. 행동으로 겨눌 수 있는 NPC 다(죽은 인물은 겨누지 못한다).
          */
@@ -4565,6 +4741,11 @@ export interface components {
              * @default []
              */
             items: components["schemas"]["CarriedOut"][];
+            /**
+             * Merchant
+             * @default false
+             */
+            merchant: boolean;
             /** Name */
             name: string;
             /** Named */
@@ -4838,6 +5019,11 @@ export interface components {
              * @default []
              */
             items: components["schemas"]["ItemStack-Input"][];
+            /**
+             * Money
+             * @default 0
+             */
+            money: number;
             /** Name */
             name: string;
             sheet?: components["schemas"]["Sheet"] | null;
@@ -4861,6 +5047,11 @@ export interface components {
              * @default []
              */
             items: components["schemas"]["ItemStack-Output"][];
+            /**
+             * Money
+             * @default 0
+             */
+            money: number;
             /** Name */
             name: string;
             sheet?: components["schemas"]["Sheet"] | null;
@@ -4884,7 +5075,7 @@ export interface components {
          * PregenSnapshot
          * @description 프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다.
          *
-         *     items 는 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품이다.
+         *     items 와 money 는 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품과 돈이다.
          */
         PregenSnapshot: {
             /** Description */
@@ -4894,6 +5085,11 @@ export interface components {
              * @default []
              */
             items: components["schemas"]["ItemStackSnapshot"][];
+            /**
+             * Money
+             * @default 0
+             */
+            money: number;
             /** Name */
             name: string;
             sheet: components["schemas"]["Sheet"];
@@ -5225,6 +5421,7 @@ export interface components {
          * @description 퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.
          *
          *     start 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.
+         *     reward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.
          *     time_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.
          *     비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).
          *     conditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).
@@ -5273,6 +5470,11 @@ export interface components {
              * @default []
              */
             reward: components["schemas"]["ItemStack-Input"][];
+            /**
+             * Reward Money
+             * @default 0
+             */
+            reward_money: number;
             /** @default hidden */
             start: components["schemas"]["QuestStart"];
             /** Time Limit Minutes */
@@ -5283,6 +5485,7 @@ export interface components {
          * @description 퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.
          *
          *     start 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.
+         *     reward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.
          *     time_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.
          *     비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).
          *     conditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).
@@ -5328,6 +5531,11 @@ export interface components {
              * @default []
              */
             reward: components["schemas"]["ItemStack-Output"][];
+            /**
+             * Reward Money
+             * @default 0
+             */
+            reward_money: number;
             /** @default hidden */
             start: components["schemas"]["QuestStart"];
             /** Time Limit Minutes */
@@ -5337,7 +5545,7 @@ export interface components {
          * QuestRuleSnapshot
          * @description 퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.
          *
-         *     start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건이다.
+         *     start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건, reward_money 는 받는 돈이다.
          *     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.
          *     conditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.
          *     reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.
@@ -5375,6 +5583,11 @@ export interface components {
              * @default []
              */
             reward: components["schemas"]["ItemStackSnapshot"][];
+            /**
+             * Reward Money
+             * @default 0
+             */
+            reward_money: number;
             /** @default hidden */
             start: components["schemas"]["QuestStart"];
             /** Time Limit Minutes */
@@ -5970,6 +6183,7 @@ export interface components {
              *     }
              */
             clock: components["schemas"]["Clock"];
+            currency?: components["schemas"]["Currency"] | null;
             default_npc_sheet?: components["schemas"]["Sheet"] | null;
             default_sheet?: components["schemas"]["Sheet"] | null;
             /**
@@ -6085,6 +6299,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            currency: components["schemas"]["Currency"] | null;
             default_npc_sheet: components["schemas"]["Sheet"] | null;
             default_sheet: components["schemas"]["Sheet"] | null;
             /** Description */
@@ -6185,7 +6400,8 @@ export interface components {
          * ScenarioUpdate
          * @description 시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.
          *
-         *     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.
+         *     rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는
+         *     null 을 보내면 비운다.
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
          *     quests, routes, landmarks, place_items, happenings, character_modes 는
@@ -6199,6 +6415,7 @@ export interface components {
             /** Character Modes */
             character_modes?: components["schemas"]["CharacterMode"][] | null;
             clock?: components["schemas"]["Clock"] | null;
+            currency?: components["schemas"]["Currency"] | null;
             default_npc_sheet?: components["schemas"]["Sheet"] | null;
             default_sheet?: components["schemas"]["Sheet"] | null;
             /** Description */
@@ -6345,6 +6562,36 @@ export interface components {
             search: components["schemas"]["SearchOut"];
         };
         /**
+         * SellAction
+         * @description 가진 물건(item) count 개를 이번 장면의 상인(npc)에게 파는 행동(app/rounds/trades.py, #278).
+         *
+         *     판정이 없다. 받는 돈은 물건 하나의 값에 화폐의 백분율을 곱해 내림한 것 × 개수다.
+         *     판 물건은 상인의 재고가 되지 않는다.
+         *     다 팔거나 하나도 팔지 않는다.
+         */
+        SellAction: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /**
+             * Item
+             * Format: uuid
+             */
+            item: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "sell";
+            /**
+             * Npc
+             * Format: uuid
+             */
+            npc: string;
+        };
+        /**
          * Sheet
          * @description 캐릭터 시트 하나.
          */
@@ -6385,6 +6632,11 @@ export interface components {
             items: components["schemas"]["ItemOut"][];
             /** Max Hp */
             max_hp: number;
+            /**
+             * Money
+             * @default 0
+             */
+            money: number;
             /** Number */
             number: number;
             /** Place Id */
@@ -6418,6 +6670,7 @@ export interface components {
              *     }
              */
             clock: components["schemas"]["ClockSnapshot"];
+            currency?: components["schemas"]["CurrencySnapshot"] | null;
             default_npc_sheet: components["schemas"]["Sheet"] | null;
             default_sheet: components["schemas"]["Sheet"] | null;
             /** Description */
@@ -6429,7 +6682,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 45
+             * @default 46
              */
             format: number;
             /**
@@ -6735,6 +6988,7 @@ export interface components {
             created_at: string;
             /** Credit Wait Seconds */
             credit_wait_seconds: number;
+            currency?: components["schemas"]["CurrencyOut"] | null;
             default_sheet: components["schemas"]["Sheet"] | null;
             /** Ended At */
             ended_at: string | null;
@@ -7016,6 +7270,61 @@ export interface components {
          * @enum {string}
          */
         TimeOfDay: "dawn" | "morning" | "day" | "evening" | "night";
+        /**
+         * TradeOut
+         * @description 상인과 사고판 결과(#278). 엔진이 정했다(app/rounds/trades.py). 판정이 없다.
+         *
+         *     side 는 buy(샀다)나 sell(팔았다)이다. npc_id 는 상인의 인물 항목의 id, npc_name 은 장면의 호칭이다.
+         *     price 는 오간(오가려던) 돈이다. 살 때는 낸 돈, 팔 때는 받은 돈이다. 다 하거나 하나도 하지 않는다.
+         *     traded 가 거짓이면 reason 이 있다: unavailable(상인이 쓰러졌거나 죽었거나 적대했다), out_of_stock(재고가 모자랐다),
+         *     not_enough_money(돈이 모자랐다), not_held(팔 물건이 모자랐다), full(산 물건을 더 가질 수 없었다),
+         *     too_much_money(받을 돈을 더 가질 수 없었다).
+         *     total 은 그 뒤에 그 물건을 가진 개수, money 는 그 뒤에 가진 돈이다.
+         */
+        TradeOut: {
+            /** Character Name */
+            character_name: string;
+            /** Count */
+            count: number;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Money */
+            money: number;
+            /** Name */
+            name: string;
+            /**
+             * Npc Id
+             * Format: uuid
+             */
+            npc_id: string;
+            /** Npc Name */
+            npc_name: string;
+            /** Price */
+            price: number;
+            /** Reason */
+            reason: string | null;
+            /** Side */
+            side: string;
+            /** Total */
+            total: number;
+            /** Traded */
+            traded: boolean;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * TradeOutcome
+         * @description 사거나 파는 행동의 결과.
+         */
+        TradeOutcome: {
+            trade: components["schemas"]["TradeOut"];
+        };
         /**
          * TranscriptFormat
          * @description 기록의 형식.

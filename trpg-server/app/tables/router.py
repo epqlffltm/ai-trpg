@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from app.assets.models import ITEM_STACK_MAX, PLAYER_MADE_MODES, CharacterMode
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
-from app.assets.scenarios.snapshot import Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import Change
@@ -69,6 +69,7 @@ from app.tables.schemas import (
     CharacterOut,
     CharacterUpdate,
     CreditWaitUpdate,
+    CurrencyOut,
     FallenOut,
     HostTransfer,
     InjuryOut,
@@ -216,9 +217,23 @@ def to_quest(quest: TableQuest, catalog: dict[uuid.UUID, quests.CatalogQuest]) -
 def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
     """판의 물건들을 응답으로 바꾼다."""
     return [
-        CatalogItemOut(entry_id=item.entry_id, name=item.name, kind=item.kind, heals=item.heals, rarity=item.rarity)
+        CatalogItemOut(
+            entry_id=item.entry_id,
+            name=item.name,
+            kind=item.kind,
+            heals=item.heals,
+            rarity=item.rarity,
+            price=item.price,
+        )
         for item in catalog.values()
     ]
+
+
+def to_currency(currency: CurrencySnapshot | None) -> CurrencyOut | None:
+    """판의 화폐를 응답으로 바꾼다. 시작 돈은 싣지 않는다. 이미 받았다. 화폐가 없으면 None."""
+    if currency is None:
+        return None
+    return CurrencyOut(name=currency.name, unit=currency.unit, sell_percent=currency.sell_percent)
 
 
 def to_injury(row: TableInjury) -> InjuryOut:
@@ -243,6 +258,7 @@ def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem]) ->
         dead=sheet.died_at is not None,
         injuries=[to_injury(row) for row in injuries.active(sheet.injuries)],
         items=[to_item(item, catalog) for item in items.in_catalog_order(sheet.items, catalog)],
+        money=sheet.money,
         place_id=sheet.place_id,
     )
 
@@ -394,6 +410,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         recommended_narration_style=snapshot.narration_style,
         pregens=to_pregen_choices(table, snapshot),
         items=to_catalog(catalog),
+        currency=to_currency(snapshot.currency),
         quests=[to_quest(quest, quest_catalog) for quest in quests.visible_quests(table, quest_catalog)],
         map=to_map(table, snapshot, catalog),
         clock=to_clock(table),

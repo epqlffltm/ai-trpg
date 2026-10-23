@@ -9,7 +9,8 @@
      없으면 들어온 순서로 판정한다.
      판정이면 app/rounds/checks.py, 치료면 app/rounds/treatments.py,
      지목이면 app/rounds/naming.py(주사위를 굴리지 않는다), 물건을 쓰거나 건네면 app/rounds/item_actions.py,
-     맵에서 가거나 찾으면 app/rounds/map_actions.py, 쉬면 app/rounds/rests.py(시간만 늘리고 회복은 4 에서).
+     맵에서 가거나 찾으면 app/rounds/map_actions.py, 쉬면 app/rounds/rests.py(시간만 늘리고 회복은 4 에서),
+     사고팔거나 돈을 건네면 app/rounds/trades.py.
   2. 쓰러진 캐릭터는 죽음의 굴림을 굴린다(roll_death_saves, app/engine/death.py).
      이번 라운드에 쓰러진 캐릭터는 굴리지 않는다. 동료가 일으킬 틈이 한 라운드는 있다.
      이번 라운드에 회복을 받아 일어난 캐릭터도 굴리지 않는다. 행동의 결과를 먼저 끝내고 나서 굴린다.
@@ -27,13 +28,16 @@ from app.engine import action as actions
 from app.engine import death
 from app.engine.action import (
     AnyAction,
+    BuyAction,
     GiveAction,
     LootAction,
     MoveAction,
     NameAction,
+    PayAction,
     PutDownAction,
     RestAction,
     SearchAction,
+    SellAction,
     StealAction,
     TakeAction,
     TreatAction,
@@ -58,6 +62,7 @@ from app.rounds.place_item_actions import judge_put_down, judge_take, search_ite
 from app.rounds.rests import judge_rest
 from app.rounds.state import find_declaration, rules_of
 from app.rounds.steals import judge_steal
+from app.rounds.trades import judge_buy, judge_pay, judge_sell
 from app.rounds.treatments import judge_treatment
 from app.rounds.waits import judge_wait
 from app.tables import items, sheets
@@ -69,7 +74,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     한 사람의 행동을 판정하고 그 결과를 정한다.
     행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming),
     물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(search_place), 줍기(judge_take),
-    내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot), 쉬기(judge_rest), 기다리기(judge_wait)다.
+    내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot), 쉬기(judge_rest), 기다리기(judge_wait),
+    사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay)다.
     """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
@@ -95,6 +101,12 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_rest(judging, action)
     if isinstance(action, WaitAction):
         return judge_wait(action)
+    if isinstance(action, BuyAction):
+        return judge_buy(judging, member, action)
+    if isinstance(action, SellAction):
+        return judge_sell(judging, member, action)
+    if isinstance(action, PayAction):
+        return judge_pay(judging, member, action)
     return judge_check(judging, member, action)
 
 

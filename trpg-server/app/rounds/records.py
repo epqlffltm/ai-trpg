@@ -34,11 +34,13 @@ from app.rounds.state import (
     loot_of,
     move_of,
     naming_of,
+    pay_of,
     put_down_of,
     rest_of,
     search_of,
     steal_of,
     take_of,
+    trade_of,
 )
 from app.rounds.steals import STEAL_SOURCE
 from app.tables.models import DeathCause, GameTable, InjurySource, TableMember
@@ -442,6 +444,22 @@ def record_gained(
     recorder.record(session, table, EventType.ITEMS_GAINED, payload=payload, cause=cause)
 
 
+def record_trade(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    사고판 결과를 이벤트로 적는다(item_traded). 그 행동의 이벤트(cause)에 잇는다. 행한 사람을 적지 않는다.
+
+    못 했어도 적는다. 건네기와 같다. 까닭(reason)이 있다. 돈과 소지품을 옮긴 것은 엔진이다.
+    """
+    payload = {'round': cause.payload['round'], **trade_of(declaration)}
+    recorder.record(session, table, EventType.ITEM_TRADED, payload=payload, cause=cause)
+
+
+def record_pay(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """돈을 건넨 결과를 이벤트로 적는다(money_paid). 그 행동의 이벤트(cause)에 잇는다. 못 했어도 적는다."""
+    payload = {'round': cause.payload['round'], **pay_of(declaration)}
+    recorder.record(session, table, EventType.MONEY_PAID, payload=payload, cause=cause)
+
+
 def record_rest(
     session: AsyncSession, table: GameTable, member: TableMember, declaration: Declaration, cause: TableEvent
 ) -> None:
@@ -478,7 +496,7 @@ def record_declaration(
 ) -> None:
     """
     한 사람의 선언을 이벤트로 적는다.
-    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기, 줍기와 내려놓기, 훔치기, 쉬기가 있었으면
+    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기, 줍기와 내려놓기, 훔치기, 빼앗기, 사고팔기, 돈 건네기, 쉬기가 있었으면
     행동 바로 뒤에 그 결과를 적는다.
 
     선언을 내지 않았으면 적지 않는다. 판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
@@ -516,6 +534,10 @@ def record_declaration(
         record_steal(session, table, declaration, cause=acted)
     elif loot_of(declaration) is not None:
         record_loot(session, table, declaration, cause=acted)
+    elif trade_of(declaration) is not None:
+        record_trade(session, table, declaration, cause=acted)
+    elif pay_of(declaration) is not None:
+        record_pay(session, table, declaration, cause=acted)
     elif rest_of(declaration) is not None:
         record_rest(session, table, member, declaration, cause=acted)
 

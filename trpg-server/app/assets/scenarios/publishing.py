@@ -161,6 +161,8 @@ class Problem(enum.StrEnum):
     MONSTER_ATTACK_INVALID = 'monster_attack_invalid'
     # 네임드 몹이 두 마리 이상 놓인다. 조우 한 줄에 둘 이상이거나, 두 줄 이상에 나온다
     UNIQUE_MONSTER_REPEATED = 'unique_monster_repeated'
+    # 돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있는데 화폐가 없다(#278)
+    CURRENCY_MISSING = 'currency_missing'
 
 
 class ScenarioNotReadyError(Exception):
@@ -495,6 +497,27 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
     return problems
 
 
+def uses_money(scenario: Scenario) -> bool:
+    """돈을 쓰는 칸이 있는가. 물건의 값, 상인, 프리젠이 더 받는 돈, 퀘스트의 돈의 보상이다."""
+    return (
+        any(rule.price is not None for rule in read_item_rules(scenario))
+        or any(npc_sheet.merchant for npc_sheet in read_npc_sheets(scenario))
+        or any(Pregen.model_validate(document).money for document in scenario.pregens)
+        or any(quest.reward_money for quest in read_quest_rules(scenario))
+    )
+
+
+def find_currency_problems(scenario: Scenario) -> list[Problem]:
+    """
+    돈의 문제를 찾는다. 돈을 쓰는 칸이 있으면 화폐가 있어야 한다(#278).
+
+    초안에서는 화폐와 값을 따로 고칠 수 있어서 입력을 받을 때는 막지 않는다. 판에는 화폐 없이 돈이 들어가지 않는다.
+    """
+    if scenario.currency is None and uses_money(scenario):
+        return [Problem.CURRENCY_MISSING]
+    return []
+
+
 def find_quest_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     """
     퀘스트 규칙에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
@@ -793,6 +816,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_unique_problems(scenario, parts))
     problems.extend(find_item_problems(scenario, parts, ruleset))
     problems.extend(find_quest_problems(scenario, parts))
+    problems.extend(find_currency_problems(scenario))
     problems.extend(find_map_problems(scenario, parts, ruleset))
     problems.extend(find_place_item_problems(scenario, ruleset))
     problems.extend(find_happening_problems(scenario, parts))

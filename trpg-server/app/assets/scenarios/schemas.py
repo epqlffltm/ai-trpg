@@ -27,9 +27,12 @@ from app.assets.models import (
     CHARACTER_NAME_MAX_LENGTH,
     CLOCK_MAX_DAY,
     COUNTED_CONDITIONS,
+    CURRENCY_NAME_MAX_LENGTH,
+    CURRENCY_UNIT_MAX_LENGTH,
     DEFAULT_CHARACTER_MODES,
     DEFAULT_NARRATION_STYLE,
     DEFAULT_ROUND_MINUTES,
+    DEFAULT_SELL_PERCENT,
     DEFAULT_START_DAY,
     DEFAULT_START_HOUR,
     DROP_CHANCE_MAX,
@@ -37,6 +40,7 @@ from app.assets.models import (
     FAIL_ONLY_CONDITIONS,
     HAPPENING_MAX_EFFECTS,
     ITEM_STACK_MAX,
+    MONEY_MAX,
     MONSTER_MAX_ATTACKS,
     PLAYER_MADE_HP_MAX,
     QUEST_CONDITION_MAX_COUNT,
@@ -149,6 +153,28 @@ class Clock(BaseModel):
 # 시계를 보내지 않은 시나리오의 시계. 1일째 8시에 시작하고 라운드 하나에 10분이 흐른다
 DEFAULT_CLOCK = Clock(start_day=DEFAULT_START_DAY, start_hour=DEFAULT_START_HOUR, round_minutes=DEFAULT_ROUND_MINUTES)
 
+# 돈의 양(#278). 시작 돈, 프리젠이 더 받는 돈, 퀘스트의 보상이다. 0 은 주지 않는 것이다
+Money = Annotated[int, Field(ge=0, le=MONEY_MAX)]
+# 물건 하나의 값. 0 으로 팔지 않는다. 사고팔 수 없는 물건은 값을 비운다
+Price = Annotated[int, Field(ge=1, le=MONEY_MAX)]
+
+
+class Currency(BaseModel):
+    """
+    시나리오의 화폐(#278). 이름(금화)과 단위(닢), 캐릭터 모두가 시작할 때 받는 돈, 상인이 사 주는 값의 백분율이다.
+
+    결제의 크레딧과 상관없다. 게임 안의 돈이고 엔진만 바꾼다. 서술(AI)은 돈을 주거나 빼앗지 못한다.
+    sell_percent 는 상인이 물건을 사 줄 때 물건의 값에 곱한다(내림). 0 이면 상인이 사 주지 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CURRENCY_NAME_MAX_LENGTH)]
+    # 단위는 비워도 된다(금화 30)
+    unit: Annotated[str, StringConstraints(strip_whitespace=True, max_length=CURRENCY_UNIT_MAX_LENGTH)] = ''
+    starting: Money = 0
+    sell_percent: int = Field(default=DEFAULT_SELL_PERCENT, ge=0, le=100)
+
 
 class ItemStack(BaseModel):
     """
@@ -204,6 +230,8 @@ class Pregen(BaseModel):
     sheet: Sheet | None = None
     # 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품. 시나리오의 시작 소지품은 따로 받는다
     items: StartingItems = []
+    # 이 프리젠을 고른 사람이 시작할 때 더 받는 돈(#278). 시나리오의 시작 돈(currency.starting)은 따로 받는다
+    money: Money = 0
 
 
 def reject_duplicate_names(pregens: list[Pregen]) -> list[Pregen]:
@@ -299,6 +327,8 @@ class NpcSheet(BaseModel):
     지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.
     on_caught 는 훔치다 들켰을 때다. 늘 적대가 되고, fight 면 싸움도 붙는다(기본 hostile, 적대만).
     attacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).
+    merchant 는 상인인지다(#278). 상인은 소지품(inventory) 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다.
+    소지품의 개수가 곧 재고다. 장비는 팔지 않는다.
 
     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
@@ -319,6 +349,8 @@ class NpcSheet(BaseModel):
     on_caught: NpcCaught = NpcCaught.HOSTILE
     # 공격들. 비우면 싸움이 붙어도 치지 않는다. 이름표가 룰북에 있는지는 게시할 때 본다(npc_attack_invalid)
     attacks: MonsterAttacks = []
+    # 상인인가(#278). 화폐가 없는 시나리오에는 상인을 두지 못한다(게시의 currency_missing)
+    merchant: bool = False
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'NpcSheet':
@@ -433,6 +465,8 @@ class ItemRule(BaseModel):
     규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.
     heals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.
     rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
+    price 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.
+    비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -441,6 +475,7 @@ class ItemRule(BaseModel):
     kind: ItemKind = ItemKind.GEAR
     heals: Key | None = None
     rarity: ItemRarity = ItemRarity.NORMAL
+    price: Price | None = None
 
     @model_validator(mode='after')
     def heal_only_with_consumables(self) -> 'ItemRule':
@@ -524,6 +559,7 @@ class QuestRule(BaseModel):
     퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.
 
     start 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.
+    reward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.
     time_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.
     비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).
     conditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).
@@ -547,6 +583,7 @@ class QuestRule(BaseModel):
     start: QuestStart = QuestStart.HIDDEN
     # 시작 소지품과 모양이 같다. 같은 물건은 한 줄에 개수로 적는다
     reward: StartingItems = []
+    reward_money: Money = 0
     time_limit_minutes: int | None = Field(default=None, ge=1, le=QUEST_MAX_TIME_LIMIT_MINUTES)
     conditions: QuestConditions = []
     match: QuestMatch = QuestMatch.ALL
@@ -882,6 +919,8 @@ class ScenarioCreate(AssetCreate):
     encounters: Encounters = []
     items: ItemRules = []
     starting_items: StartingItems = []
+    # 화폐(#278). 비우면 돈이 없는 시나리오다
+    currency: Currency | None = None
     quests: QuestRules = []
     start_place: uuid.UUID | None = None
     routes: Routes = []
@@ -903,7 +942,8 @@ class ScenarioUpdate(AssetUpdate):
     """
     시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
-    rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.
+    rulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는
+    null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
     quests, routes, landmarks, place_items, happenings, character_modes 는
@@ -913,7 +953,7 @@ class ScenarioUpdate(AssetUpdate):
     """
 
     clearable: ClassVar[frozenset[str]] = frozenset(
-        {'rulebook_id', 'world_id', 'default_sheet', 'default_npc_sheet', 'player_made_hp', 'start_place'}
+        {'rulebook_id', 'world_id', 'default_sheet', 'default_npc_sheet', 'player_made_hp', 'start_place', 'currency'}
     )
 
     rating: Rating | None = None
@@ -932,6 +972,7 @@ class ScenarioUpdate(AssetUpdate):
     encounters: Encounters | None = None
     items: ItemRules | None = None
     starting_items: StartingItems | None = None
+    currency: Currency | None = None
     quests: QuestRules | None = None
     start_place: uuid.UUID | None = None
     routes: Routes | None = None
@@ -991,6 +1032,7 @@ class ScenarioDetail(ScenarioSummary):
     encounters: list[Encounter]
     items: list[ItemRule]
     starting_items: list[ItemStack]
+    currency: Currency | None
     quests: list[QuestRule]
     start_place: uuid.UUID | None
     routes: list[RouteRule]

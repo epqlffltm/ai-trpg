@@ -23,7 +23,7 @@ from dataclasses import asdict
 from pydantic import TypeAdapter
 
 from app.assets.models import NpcAttitude
-from app.assets.scenarios.snapshot import Snapshot, person_entries, quest_entries
+from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, person_entries, quest_entries
 from app.calendar import clock, state
 from app.engine.check import find_ability, find_difficulty
 from app.engine.injury import known_injuries
@@ -47,6 +47,7 @@ from app.rounds.narrator import (
     NamingNote,
     NpcImpact,
     PastRound,
+    PayNote,
     PutDownNote,
     QuestNote,
     RecoveryNote,
@@ -57,6 +58,7 @@ from app.rounds.narrator import (
     StoryContext,
     TakeNote,
     TargetGoneNote,
+    TradeNote,
     TravelNote,
     TreatmentNote,
     TurnNote,
@@ -66,8 +68,19 @@ from app.rounds.narrator import (
     WhisperNote,
 )
 from app.rounds.secret_names import secret_names
-from app.rounds.state import loot_of, move_of, put_down_of, rest_of, search_of, steal_of, take_of, wait_of
-from app.tables import quests
+from app.rounds.state import (
+    loot_of,
+    move_of,
+    pay_of,
+    put_down_of,
+    rest_of,
+    search_of,
+    steal_of,
+    take_of,
+    trade_of,
+    wait_of,
+)
+from app.tables import money, quests
 from app.tables.models import GameTable, QuestStatus, TableHappening, TableNpc, TableQuest
 from app.tables.npc_attitudes import ATTITUDE_WORDS
 from app.tables.quests import CatalogQuest
@@ -288,6 +301,35 @@ def to_loot(declaration: Declaration | None) -> LootNote | None:
         return None
     victim = loot['npc_name'] if loot['npc_id'] is not None else loot['monster_name']
     return LootNote(victim=victim, name=loot['name'], count=loot['count'], looted=loot['looted'], reason=loot['reason'])
+
+
+def to_trade(declaration: Declaration | None, currency: CurrencySnapshot | None) -> TradeNote | None:
+    """선언에 적힌 사기나 팔기의 결과를 서술자에게 줄 모양으로 바꾼다. 그런 행동이 아니면 None."""
+    trade = trade_of(declaration)
+    if trade is None or currency is None:
+        return None
+    return TradeNote(
+        side=trade['side'],
+        merchant=trade['npc_name'],
+        name=trade['name'],
+        count=trade['count'],
+        price=money.money_text(currency, trade['price']),
+        traded=trade['traded'],
+        reason=trade['reason'],
+    )
+
+
+def to_pay(declaration: Declaration | None, currency: CurrencySnapshot | None) -> PayNote | None:
+    """선언에 적힌 돈 건네기의 결과를 서술자에게 줄 모양으로 바꾼다. 그런 행동이 아니면 None."""
+    paid = pay_of(declaration)
+    if paid is None or currency is None:
+        return None
+    return PayNote(
+        amount=money.money_text(currency, paid['amount']),
+        target=paid['target']['character_name'],
+        paid=paid['paid'],
+        reason=paid['reason'],
+    )
 
 
 def to_npc_impact(effect: dict | None) -> NpcImpact | None:

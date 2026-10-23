@@ -20,6 +20,8 @@ export const NAME_GUESS_MAX = 50;
 export const COUNT_MAX = 99;
 /** 기다리기의 가장 긴 시간(분). 일주일 */
 export const WAIT_MAX_MINUTES = 7 * 24 * 60;
+/** 한 번에 건네는 돈(PAY_MAX_AMOUNT) */
+export const PAY_MAX_AMOUNT = 1_000_000;
 
 /** 판정의 목적. 그냥 판정, 타격(인물이나 몬스터), 회복(사람이나 인물) */
 export type CheckPurpose = 'plain' | 'harm' | 'recover';
@@ -50,6 +52,8 @@ export type ActionDraft = {
   carry: string;
   length: 'short' | 'long';
   minutes: number;
+  /** 건넬 돈 */
+  amount: number;
 };
 
 export function emptyActionDraft(rules: Ruleset): ActionDraft {
@@ -72,6 +76,7 @@ export function emptyActionDraft(rules: Ruleset): ActionDraft {
     carry: '',
     length: 'short',
     minutes: 60,
+    amount: 1,
   };
 }
 
@@ -102,6 +107,11 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
       return { ...base, kind: 'rest', length: action.length };
     case 'wait':
       return { ...base, kind: 'wait', minutes: action.minutes };
+    case 'buy':
+    case 'sell':
+      return { ...base, kind: action.kind, item: action.item, count: action.count, target: `npc:${action.npc}` };
+    case 'pay':
+      return { ...base, kind: 'pay', amount: action.amount, target: `member:${action.target}` };
     default:
       return { ...base, kind: action.kind };
   }
@@ -161,6 +171,14 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
       return Number.isInteger(draft.minutes) && draft.minutes >= 1 && draft.minutes <= WAIT_MAX_MINUTES
         ? null
         : `기다리는 시간은 1분에서 ${WAIT_MAX_MINUTES}분 사이입니다.`;
+    case 'buy':
+    case 'sell':
+      return draft.target && draft.item ? countHint(draft.count, COUNT_MAX) : '상인과 물건을 골라 주세요.';
+    case 'pay':
+      if (!draft.target) return '돈을 받을 사람을 골라 주세요.';
+      return Number.isInteger(draft.amount) && draft.amount >= 1 && draft.amount <= PAY_MAX_AMOUNT
+        ? null
+        : `건넬 돈은 1에서 ${PAY_MAX_AMOUNT} 사이입니다.`;
   }
 }
 
@@ -219,6 +237,11 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return { kind: 'rest', length: draft.length };
     case 'wait':
       return { kind: 'wait', minutes: draft.minutes };
+    case 'buy':
+    case 'sell':
+      return { kind: draft.kind, npc: npc ?? '', item: draft.item, count: draft.count };
+    case 'pay':
+      return { kind: 'pay', target: member ?? '', amount: draft.amount };
   }
 }
 

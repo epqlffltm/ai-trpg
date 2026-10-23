@@ -176,6 +176,7 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
         'encounters',
         'items',
         'starting_items',
+        'currency',
         'quests',
         'start_place',
         'routes',
@@ -581,9 +582,10 @@ PREGENS = [
         'description': '귀가 길어서 헬멧을 못 쓴다.',
         'sheet': make_sheet(dex=16, max_hp=8),
         'items': [],
+        'money': 0,
     },
     # 시트는 초안일 때 비워 둘 수 있다
-    {'name': '악역영애', 'description': '바이크는 처음이지만 웃음소리는 크다.', 'sheet': None, 'items': []},
+    {'name': '악역영애', 'description': '바이크는 처음이지만 웃음소리는 크다.', 'sheet': None, 'items': [], 'money': 0},
 ]
 
 
@@ -603,12 +605,12 @@ async def test_a_pregen_needs_only_a_name(client: AsyncClient, my_headers: dict[
     scenario = await create(client, SCENARIOS_URL, my_headers, pregens=[{'name': '  이름뿐인 사람  '}])
 
     # 이름의 앞뒤 공백은 뗀다. 설명과 시트는 비워도 된다
-    assert scenario['pregens'] == [{'name': '이름뿐인 사람', 'description': '', 'sheet': None, 'items': []}]
+    assert scenario['pregens'] == [{'name': '이름뿐인 사람', 'description': '', 'sheet': None, 'items': [], 'money': 0}]
 
 
 async def test_accepts_the_most_pregens_allowed(client: AsyncClient, my_headers: dict[str, str]):
     pregens = [
-        {'name': f'{number}번 캐릭터', 'description': '', 'sheet': SHEET, 'items': []}
+        {'name': f'{number}번 캐릭터', 'description': '', 'sheet': SHEET, 'items': [], 'money': 0}
         for number in range(SCENARIO_MAX_PREGENS)
     ]
 

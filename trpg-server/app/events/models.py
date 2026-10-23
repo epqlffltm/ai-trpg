@@ -123,6 +123,11 @@ class EventType(enum.StrEnum):
     ITEM_GIVEN = 'item_given'
     # 캐릭터가 가진 물건을 서 있는 장소에 내려놓았다(또는 내려놓으려 했지만 못 했다). 원인은 그 행동의 이벤트다
     ITEM_PUT_DOWN = 'item_put_down'
+    # 캐릭터가 장면의 상인에게서 물건을 샀거나 상인에게 팔았다(또는 하려 했지만 못 했다, #278).
+    # 무엇을 몇 개, 오간 돈, 그 뒤에 가진 개수와 돈. 원인은 그 행동의 이벤트다
+    ITEM_TRADED = 'item_traded'
+    # 캐릭터가 다른 캐릭터에게 돈을 건넸다(또는 건네려 했지만 못 했다, #278). 원인은 그 행동의 이벤트다
+    MONEY_PAID = 'money_paid'
     # 캐릭터가 몬스터나 NPC 가 지닌 물건을 훔치려 했다(app/rounds/steals.py). 굴린 판정과 훔쳤는지, 들켰는지.
     # 원인은 그 행동의 이벤트다. NPC 의 태도가 바뀌었으면 npc_attitude_changed 가,
     # 훔쳤으면 items_gained(source 가 steal)가 그 뒤에 잇는다

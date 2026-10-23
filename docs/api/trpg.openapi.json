@@ -238,6 +238,41 @@
         "title": "BestiaryUpdate",
         "type": "object"
       },
+      "BuyAction": {
+        "additionalProperties": false,
+        "description": "이번 장면의 상인(npc)에게서 물건(item) count 개를 사는 행동(app/rounds/trades.py, #278).\n\n판정이 없다. 값은 판의 물건의 값 × 개수다. 상인의 소지품에 그만큼 있어야 하고(재고), 돈이 모자라면 사지 못한다.\n다 사거나 하나도 사지 않는다. 사려던 것보다 적게 사서 돈이 엉뚱하게 남는 일을 만들지 않는다.",
+        "properties": {
+          "count": {
+            "default": 1,
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "item": {
+            "format": "uuid",
+            "title": "Item",
+            "type": "string"
+          },
+          "kind": {
+            "const": "buy",
+            "title": "Kind",
+            "type": "string"
+          },
+          "npc": {
+            "format": "uuid",
+            "title": "Npc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "npc",
+          "item"
+        ],
+        "title": "BuyAction",
+        "type": "object"
+      },
       "CalledShot": {
         "additionalProperties": false,
         "description": "노려 치기의 어려움. 목표값을 올리는 크기(amount)는 그 방식에만 있다.",
@@ -396,6 +431,17 @@
             "title": "Name",
             "type": "string"
           },
+          "price": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
           "rarity": {
             "$ref": "#/components/schemas/ItemRarity"
           }
@@ -479,6 +525,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
           },
           "rarity": {
             "$ref": "#/components/schemas/ItemRarity"
@@ -1051,6 +1108,96 @@
         "title": "CreditWaitUpdate",
         "type": "object"
       },
+      "Currency": {
+        "additionalProperties": false,
+        "description": "시나리오의 화폐(#278). 이름(금화)과 단위(닢), 캐릭터 모두가 시작할 때 받는 돈, 상인이 사 주는 값의 백분율이다.\n\n결제의 크레딧과 상관없다. 게임 안의 돈이고 엔진만 바꾼다. 서술(AI)은 돈을 주거나 빼앗지 못한다.\nsell_percent 는 상인이 물건을 사 줄 때 물건의 값에 곱한다(내림). 0 이면 상인이 사 주지 않는다.",
+        "properties": {
+          "name": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "sell_percent": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Sell Percent",
+            "type": "integer"
+          },
+          "starting": {
+            "default": 0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Starting",
+            "type": "integer"
+          },
+          "unit": {
+            "default": "",
+            "maxLength": 10,
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "Currency",
+        "type": "object"
+      },
+      "CurrencyOut": {
+        "description": "테이블의 화폐(#278). 판에 굳은 것이다. 돈은 엔진만 바꾼다. 결제의 크레딧과 상관없다.\n\nsell_percent 는 상인이 사 주는 값의 백분율이다. 물건 하나의 값에 곱해 내림한다.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sell_percent": {
+            "title": "Sell Percent",
+            "type": "integer"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "unit",
+          "sell_percent"
+        ],
+        "title": "CurrencyOut",
+        "type": "object"
+      },
+      "CurrencySnapshot": {
+        "description": "화폐(#278). 이름과 단위, 캐릭터 모두가 시작할 때 받는 돈, 상인이 사 주는 값의 백분율이다.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sell_percent": {
+            "title": "Sell Percent",
+            "type": "integer"
+          },
+          "starting": {
+            "default": 0,
+            "title": "Starting",
+            "type": "integer"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "sell_percent"
+        ],
+        "title": "CurrencySnapshot",
+        "type": "object"
+      },
       "DeathSave": {
         "additionalProperties": false,
         "description": "죽음의 굴림. 쓰러진 캐릭터가 죽는지를 주사위가 정하는 법이다.\n\n쓰러진 채로 라운드가 닫힐 때마다 규칙의 주사위(Ruleset.die)를 한 번 굴린다. 능력치의 보정은 더하지 않는다.\n눈이 target 이상이면 성공, 아니면 실패다. 성공과 실패를 따로 센다.\n  - 실패가 failures 번 모이면 죽는다.\n  - 성공이 successes 번 모이면 고비를 넘긴다. 더 굴리지 않는다. 쓰러진 채로 있고, 회복을 받으면 일어난다.\n회복을 받아 일어나면 센 것은 처음으로 돌아간다.",
@@ -1139,14 +1286,17 @@
               {
                 "discriminator": {
                   "mapping": {
+                    "buy": "#/components/schemas/BuyAction",
                     "check": "#/components/schemas/CheckAction",
                     "give": "#/components/schemas/GiveAction",
                     "loot": "#/components/schemas/LootAction",
                     "move": "#/components/schemas/MoveAction",
                     "name": "#/components/schemas/NameAction",
+                    "pay": "#/components/schemas/PayAction",
                     "put_down": "#/components/schemas/PutDownAction",
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
+                    "sell": "#/components/schemas/SellAction",
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
                     "treat": "#/components/schemas/TreatAction",
@@ -1194,6 +1344,15 @@
                   },
                   {
                     "$ref": "#/components/schemas/WaitAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/BuyAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SellAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PayAction"
                   }
                 ]
               },
@@ -1257,6 +1416,12 @@
                 "$ref": "#/components/schemas/WaitOutcome"
               },
               {
+                "$ref": "#/components/schemas/TradeOutcome"
+              },
+              {
+                "$ref": "#/components/schemas/PayOutcome"
+              },
+              {
                 "$ref": "#/components/schemas/TargetGoneOutcome"
               },
               {
@@ -1293,14 +1458,17 @@
               {
                 "discriminator": {
                   "mapping": {
+                    "buy": "#/components/schemas/BuyAction",
                     "check": "#/components/schemas/CheckAction",
                     "give": "#/components/schemas/GiveAction",
                     "loot": "#/components/schemas/LootAction",
                     "move": "#/components/schemas/MoveAction",
                     "name": "#/components/schemas/NameAction",
+                    "pay": "#/components/schemas/PayAction",
                     "put_down": "#/components/schemas/PutDownAction",
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
+                    "sell": "#/components/schemas/SellAction",
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
                     "treat": "#/components/schemas/TreatAction",
@@ -1348,6 +1516,15 @@
                   },
                   {
                     "$ref": "#/components/schemas/WaitAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/BuyAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SellAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PayAction"
                   }
                 ]
               },
@@ -2142,6 +2319,8 @@
           "item_used",
           "item_given",
           "item_put_down",
+          "item_traded",
+          "money_paid",
           "steal_attempted",
           "quest_changed",
           "clock_step_changed",
@@ -3091,7 +3270,7 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).",
         "properties": {
           "entry_id": {
             "format": "uuid",
@@ -3115,6 +3294,19 @@
             "$ref": "#/components/schemas/ItemKind",
             "default": "gear"
           },
+          "price": {
+            "anyOf": [
+              {
+                "maximum": 1000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
           "rarity": {
             "$ref": "#/components/schemas/ItemRarity",
             "default": "normal"
@@ -3128,7 +3320,7 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).",
         "properties": {
           "entry_id": {
             "title": "Entry Id",
@@ -3151,6 +3343,19 @@
             "$ref": "#/components/schemas/ItemKind",
             "default": "gear"
           },
+          "price": {
+            "anyOf": [
+              {
+                "maximum": 1000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
           "rarity": {
             "$ref": "#/components/schemas/ItemRarity",
             "default": "normal"
@@ -3163,7 +3368,7 @@
         "type": "object"
       },
       "ItemRuleSnapshot": {
-        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\nheals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.",
+        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\nheals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.",
         "properties": {
           "entry_id": {
             "format": "uuid",
@@ -3183,6 +3388,17 @@
           },
           "kind": {
             "$ref": "#/components/schemas/ItemKind"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
           },
           "rarity": {
             "$ref": "#/components/schemas/ItemRarity",
@@ -5462,7 +5678,7 @@
       },
       "NpcSheet-Input": {
         "additionalProperties": false,
-        "description": "NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자와 처음 태도와 지닌 물건을 준다.\n\nattitude 는 일행을 처음 어떻게 대하는가다(우호, 중립(기본), 적대). 테이블에서는 엔진이 바꾼다(#474).\n지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.\non_caught 는 훔치다 들켰을 때다. 늘 적대가 되고, fight 면 싸움도 붙는다(기본 hostile, 적대만).\nattacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).\n\n프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).\n가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.\n로어북도 룰북도 나중에 바꿀 수 있어서 지금 정할 수 없다.",
+        "description": "NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자와 처음 태도와 지닌 물건을 준다.\n\nattitude 는 일행을 처음 어떻게 대하는가다(우호, 중립(기본), 적대). 테이블에서는 엔진이 바꾼다(#474).\n지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.\non_caught 는 훔치다 들켰을 때다. 늘 적대가 되고, fight 면 싸움도 붙는다(기본 hostile, 적대만).\nattacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).\nmerchant 는 상인인지다(#278). 상인은 소지품(inventory) 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다.\n소지품의 개수가 곧 재고다. 장비는 팔지 않는다.\n\n프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).\n가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.\n로어북도 룰북도 나중에 바꿀 수 있어서 지금 정할 수 없다.",
         "properties": {
           "attacks": {
             "default": [],
@@ -5505,6 +5721,11 @@
             "title": "Inventory",
             "type": "array"
           },
+          "merchant": {
+            "default": false,
+            "title": "Merchant",
+            "type": "boolean"
+          },
           "on_caught": {
             "$ref": "#/components/schemas/NpcCaught",
             "default": "hostile"
@@ -5522,7 +5743,7 @@
       },
       "NpcSheet-Output": {
         "additionalProperties": false,
-        "description": "NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자와 처음 태도와 지닌 물건을 준다.\n\nattitude 는 일행을 처음 어떻게 대하는가다(우호, 중립(기본), 적대). 테이블에서는 엔진이 바꾼다(#474).\n지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.\non_caught 는 훔치다 들켰을 때다. 늘 적대가 되고, fight 면 싸움도 붙는다(기본 hostile, 적대만).\nattacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).\n\n프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).\n가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.\n로어북도 룰북도 나중에 바꿀 수 있어서 지금 정할 수 없다.",
+        "description": "NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자와 처음 태도와 지닌 물건을 준다.\n\nattitude 는 일행을 처음 어떻게 대하는가다(우호, 중립(기본), 적대). 테이블에서는 엔진이 바꾼다(#474).\n지닌 물건(장비와 소지품)과 둔한지는 몬스터 시트와 같은 모양이다(#457). 숨긴 소지품은 없다. 몬스터처럼 보인다.\non_caught 는 훔치다 들켰을 때다. 늘 적대가 되고, fight 면 싸움도 붙는다(기본 hostile, 적대만).\nattacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).\nmerchant 는 상인인지다(#278). 상인은 소지품(inventory) 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다.\n소지품의 개수가 곧 재고다. 장비는 팔지 않는다.\n\n프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).\n가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.\n로어북도 룰북도 나중에 바꿀 수 있어서 지금 정할 수 없다.",
         "properties": {
           "attacks": {
             "default": [],
@@ -5563,6 +5784,11 @@
             "maxItems": 10,
             "title": "Inventory",
             "type": "array"
+          },
+          "merchant": {
+            "default": false,
+            "title": "Merchant",
+            "type": "boolean"
           },
           "on_caught": {
             "$ref": "#/components/schemas/NpcCaught",
@@ -5619,6 +5845,11 @@
             },
             "title": "Inventory",
             "type": "array"
+          },
+          "merchant": {
+            "default": false,
+            "title": "Merchant",
+            "type": "boolean"
           },
           "on_caught": {
             "$ref": "#/components/schemas/NpcCaught",
@@ -5924,6 +6155,111 @@
         "title": "PatientOut",
         "type": "object"
       },
+      "PayAction": {
+        "additionalProperties": false,
+        "description": "가진 돈 amount 를 앉은 다른 사람(target)에게 건네는 행동(app/rounds/trades.py, #278). 판정이 없다.",
+        "properties": {
+          "amount": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Amount",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "pay",
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "format": "uuid",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target",
+          "amount"
+        ],
+        "title": "PayAction",
+        "type": "object"
+      },
+      "PayOut": {
+        "description": "돈을 건넨 결과(#278). 엔진이 정했다(app/rounds/trades.py). 판정이 없다.\n\npaid 가 거짓이면 reason 이 있다: not_enough_money, target_gone(받을 사람이 떠났거나 죽었다),\ntoo_much_money(받을 사람이 더 가질 수 없었다).\nremaining 은 건넨 뒤에 가진 돈, target_total 은 받은 사람이 가진 돈이다. 받을 사람이 떠났으면 None 이다.",
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "integer"
+          },
+          "character_name": {
+            "title": "Character Name",
+            "type": "string"
+          },
+          "paid": {
+            "title": "Paid",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "remaining": {
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ItemPersonOut"
+          },
+          "target_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Total"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "character_name",
+          "amount",
+          "paid",
+          "reason",
+          "target",
+          "remaining",
+          "target_total"
+        ],
+        "title": "PayOut",
+        "type": "object"
+      },
+      "PayOutcome": {
+        "description": "돈을 건네는 행동의 결과.",
+        "properties": {
+          "pay": {
+            "$ref": "#/components/schemas/PayOut"
+          }
+        },
+        "required": [
+          "pay"
+        ],
+        "title": "PayOutcome",
+        "type": "object"
+      },
       "PersonOut": {
         "description": "이번 장면의 인물 하나. 행동으로 겨눌 수 있는 NPC 다(죽은 인물은 겨누지 못한다).",
         "properties": {
@@ -5949,6 +6285,11 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "merchant": {
+            "default": false,
+            "title": "Merchant",
+            "type": "boolean"
           },
           "name": {
             "title": "Name",
@@ -6443,6 +6784,13 @@
             "title": "Items",
             "type": "array"
           },
+          "money": {
+            "default": 0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Money",
+            "type": "integer"
+          },
           "name": {
             "maxLength": 50,
             "minLength": 1,
@@ -6484,6 +6832,13 @@
             "maxItems": 20,
             "title": "Items",
             "type": "array"
+          },
+          "money": {
+            "default": 0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Money",
+            "type": "integer"
           },
           "name": {
             "maxLength": 50,
@@ -6550,7 +6905,7 @@
         "type": "object"
       },
       "PregenSnapshot": {
-        "description": "프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다.\n\nitems 는 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품이다.",
+        "description": "프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다.\n\nitems 와 money 는 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품과 돈이다.",
         "properties": {
           "description": {
             "title": "Description",
@@ -6563,6 +6918,11 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "money": {
+            "default": 0,
+            "title": "Money",
+            "type": "integer"
           },
           "name": {
             "title": "Name",
@@ -7164,7 +7524,7 @@
       },
       "QuestRule-Input": {
         "additionalProperties": false,
-        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
+        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\nreward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
         "properties": {
           "conditions": {
             "default": [],
@@ -7219,6 +7579,13 @@
             "title": "Reward",
             "type": "array"
           },
+          "reward_money": {
+            "default": 0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Reward Money",
+            "type": "integer"
+          },
           "start": {
             "$ref": "#/components/schemas/QuestStart",
             "default": "hidden"
@@ -7245,7 +7612,7 @@
       },
       "QuestRule-Output": {
         "additionalProperties": false,
-        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
+        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\nreward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
         "properties": {
           "conditions": {
             "default": [],
@@ -7299,6 +7666,13 @@
             "title": "Reward",
             "type": "array"
           },
+          "reward_money": {
+            "default": 0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Reward Money",
+            "type": "integer"
+          },
           "start": {
             "$ref": "#/components/schemas/QuestStart",
             "default": "hidden"
@@ -7324,7 +7698,7 @@
         "type": "object"
       },
       "QuestRuleSnapshot": {
-        "description": "퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.\n\nstart 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건이다.\ntime_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.\nconditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다. 없으면 기한으로만 실패한다.",
+        "description": "퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.\n\nstart 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건, reward_money 는 받는 돈이다.\ntime_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.\nconditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다. 없으면 기한으로만 실패한다.",
         "properties": {
           "conditions": {
             "default": [],
@@ -7374,6 +7748,11 @@
             },
             "title": "Reward",
             "type": "array"
+          },
+          "reward_money": {
+            "default": 0,
+            "title": "Reward Money",
+            "type": "integer"
           },
           "start": {
             "$ref": "#/components/schemas/QuestStart",
@@ -8726,6 +9105,16 @@
               "start_hour": 8
             }
           },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "default_npc_sheet": {
             "anyOf": [
               {
@@ -8985,6 +9374,16 @@
             "title": "Created At",
             "type": "string"
           },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "default_npc_sheet": {
             "anyOf": [
               {
@@ -9223,6 +9622,7 @@
           "encounters",
           "items",
           "starting_items",
+          "currency",
           "quests",
           "start_place",
           "routes",
@@ -9309,7 +9709,7 @@
       },
       "ScenarioUpdate": {
         "additionalProperties": false,
-        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place 는 null 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, happenings, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
+        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, happenings, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
         "properties": {
           "bestiary_ids": {
             "anyOf": [
@@ -9346,6 +9746,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Clock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
               },
               {
                 "type": "null"
@@ -9869,6 +10279,41 @@
         "title": "SearchOutcome",
         "type": "object"
       },
+      "SellAction": {
+        "additionalProperties": false,
+        "description": "가진 물건(item) count 개를 이번 장면의 상인(npc)에게 파는 행동(app/rounds/trades.py, #278).\n\n판정이 없다. 받는 돈은 물건 하나의 값에 화폐의 백분율을 곱해 내림한 것 × 개수다.\n판 물건은 상인의 재고가 되지 않는다.\n다 팔거나 하나도 팔지 않는다.",
+        "properties": {
+          "count": {
+            "default": 1,
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "item": {
+            "format": "uuid",
+            "title": "Item",
+            "type": "string"
+          },
+          "kind": {
+            "const": "sell",
+            "title": "Kind",
+            "type": "string"
+          },
+          "npc": {
+            "format": "uuid",
+            "title": "Npc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "npc",
+          "item"
+        ],
+        "title": "SellAction",
+        "type": "object"
+      },
       "Sheet": {
         "additionalProperties": false,
         "description": "캐릭터 시트 하나.",
@@ -9948,6 +10393,11 @@
             "title": "Max Hp",
             "type": "integer"
           },
+          "money": {
+            "default": 0,
+            "title": "Money",
+            "type": "integer"
+          },
           "number": {
             "title": "Number",
             "type": "integer"
@@ -10019,6 +10469,16 @@
               "start_hour": 8
             }
           },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CurrencySnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "default_npc_sheet": {
             "anyOf": [
               {
@@ -10052,7 +10512,7 @@
             "type": "array"
           },
           "format": {
-            "default": 45,
+            "default": 46,
             "title": "Format",
             "type": "integer"
           },
@@ -10769,6 +11229,16 @@
             "title": "Credit Wait Seconds",
             "type": "integer"
           },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CurrencyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "default_sheet": {
             "anyOf": [
               {
@@ -11468,6 +11938,103 @@
         ],
         "title": "TimeOfDay",
         "type": "string"
+      },
+      "TradeOut": {
+        "description": "상인과 사고판 결과(#278). 엔진이 정했다(app/rounds/trades.py). 판정이 없다.\n\nside 는 buy(샀다)나 sell(팔았다)이다. npc_id 는 상인의 인물 항목의 id, npc_name 은 장면의 호칭이다.\nprice 는 오간(오가려던) 돈이다. 살 때는 낸 돈, 팔 때는 받은 돈이다. 다 하거나 하나도 하지 않는다.\ntraded 가 거짓이면 reason 이 있다: unavailable(상인이 쓰러졌거나 죽었거나 적대했다), out_of_stock(재고가 모자랐다),\nnot_enough_money(돈이 모자랐다), not_held(팔 물건이 모자랐다), full(산 물건을 더 가질 수 없었다),\ntoo_much_money(받을 돈을 더 가질 수 없었다).\ntotal 은 그 뒤에 그 물건을 가진 개수, money 는 그 뒤에 가진 돈이다.",
+        "properties": {
+          "character_name": {
+            "title": "Character Name",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "money": {
+            "title": "Money",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "npc_id": {
+            "format": "uuid",
+            "title": "Npc Id",
+            "type": "string"
+          },
+          "npc_name": {
+            "title": "Npc Name",
+            "type": "string"
+          },
+          "price": {
+            "title": "Price",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "traded": {
+            "title": "Traded",
+            "type": "boolean"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "character_name",
+          "side",
+          "npc_id",
+          "npc_name",
+          "entry_id",
+          "name",
+          "count",
+          "price",
+          "traded",
+          "reason",
+          "total",
+          "money"
+        ],
+        "title": "TradeOut",
+        "type": "object"
+      },
+      "TradeOutcome": {
+        "description": "사거나 파는 행동의 결과.",
+        "properties": {
+          "trade": {
+            "$ref": "#/components/schemas/TradeOut"
+          }
+        },
+        "required": [
+          "trade"
+        ],
+        "title": "TradeOutcome",
+        "type": "object"
       },
       "TranscriptFormat": {
         "description": "기록의 형식.",

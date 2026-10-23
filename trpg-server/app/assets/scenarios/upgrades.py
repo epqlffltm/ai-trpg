@@ -735,6 +735,23 @@ def upgrade_from_44(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_45(document: dict) -> dict:
+    """
+    형식 45 의 문서를 형식 46 으로 올린다. 그때는 돈이 없었다(#278).
+
+    화폐가 없는 판으로 읽는다. 물건에는 값이 없고, 상인도 프리젠의 돈도 퀘스트의 돈의 보상도 없다.
+    캐릭터의 돈은 0 이고 늘 0 이다. 거래를 선언하지 못한다.
+    """
+    upgraded = dict(document)
+    upgraded['currency'] = None
+    upgraded['items'] = [{**rule, 'price': None} for rule in document.get('items', [])]
+    upgraded['pregens'] = [{**pregen, 'money': 0} for pregen in document['pregens']]
+    upgraded['quests'] = [{**quest, 'reward_money': 0} for quest in document.get('quests', [])]
+    upgraded['npc_sheets'] = [{**npc_sheet, 'merchant': False} for npc_sheet in document.get('npc_sheets', [])]
+    upgraded['format'] = 46
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -782,4 +799,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     42: upgrade_from_42,
     43: upgrade_from_43,
     44: upgrade_from_44,
+    45: upgrade_from_45,
 }

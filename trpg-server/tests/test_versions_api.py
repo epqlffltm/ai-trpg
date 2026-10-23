@@ -430,7 +430,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'rating': 'all',
         'openings': [OPENING],
         'recommended_players': {'min': 2, 'max': 3},
-        'pregens': [{**pregen, 'items': []} for pregen in PREGENS],
+        'pregens': [{**pregen, 'items': [], 'money': 0} for pregen in PREGENS],
         'character_modes': ['pregen', 'custom'],
         'default_sheet': SHEET,
         # 인물 항목이 모두 시트를 가졌다. 기본 NPC 시트는 없어도 된다
@@ -444,6 +444,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
                 'dull': False,
                 'on_caught': 'hostile',
                 'attacks': [],
+                'merchant': False,
             }
         ],
         'default_npc_sheet': None,
@@ -452,6 +453,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'encounters': [],
         'items': [],
         'starting_items': [],
+        'currency': None,
         'quests': [],
         'start_place': None,
         'routes': [],

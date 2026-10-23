@@ -206,9 +206,24 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'kind': 'consumable',
             'heals': 'light',
             'rarity': 'normal',
+            'price': None,
         },
-        {'entry_id': lore['rope']['id'], 'name': '밧줄', 'kind': 'gear', 'heals': None, 'rarity': 'normal'},
-        {'entry_id': lore['lamp']['id'], 'name': '등불', 'kind': 'gear', 'heals': None, 'rarity': 'normal'},
+        {
+            'entry_id': lore['rope']['id'],
+            'name': '밧줄',
+            'kind': 'gear',
+            'heals': None,
+            'rarity': 'normal',
+            'price': None,
+        },
+        {
+            'entry_id': lore['lamp']['id'],
+            'name': '등불',
+            'kind': 'gear',
+            'heals': None,
+            'rarity': 'normal',
+            'price': None,
+        },
     ]
 
 
