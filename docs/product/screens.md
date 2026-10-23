@@ -1286,7 +1286,7 @@
 | 서술 모델과 값 | 이 라운드에 쓴 모델, 값 | `narration_model`, `price`. 사람마다의 청구는 `GET .../rounds/{n}/charges`(앉은 사람만, 라운드를 연 뒤 몇 초 안에 걸린다. 그 전에는 `null`) |
 | 죽음의 굴림 | 쓰러진 캐릭터의 굴림과 성공·실패 수 | `death_saves` |
 | 도착 | 새로 들어온 사람 | `arrivals` |
-| 장면의 인물 | 행동의 대상으로 고를 인물. 장면에 이름이나 호칭이 나온 인물만 | `GET .../rounds/current/people` |
+| 장면의 인물 | 행동의 대상으로 고를 인물. 자리가 없는 인물은 장면에 이름이나 호칭이 나온 인물만, 자리가 있는 인물은 일행이 서 있는 장소들의 인물만(#282). 자리가 있는 인물은 같은 장소에 선 캐릭터만 겨눈다. 다른 장소의 인물은 대상 목록에서 빼거나 흐리게 둔다 | `GET .../rounds/current/people` 의 `people[].place_id`(자리가 없으면 `null`)와 자기 캐릭터의 `place_id` 를 견준다 |
 | 채팅, 쪽지 | 판 채팅과 자기 쪽지함 | `GET .../chat`, 스트림의 `chat_message`, `whisper` |
 | 입력 중 | 다른 사람이 글을 치는 중 | 스트림의 `typing`(받는 쪽이 5초쯤 뒤에 스스로 지운다) |
 | 상태 패널(B7) | HP, 능력치, 부상, 소지품, 돈, 장소, 퀘스트, 맵 | `TableDetail.members[].character`(`hp`, `max_hp`, `death_successes`, `death_failures`, `dead`, `injuries`, `items`, `money`, `place_id`), `quests`, `map`, `currency` |
@@ -1647,7 +1647,8 @@
 | 돈(#278) | `currency`, `items[].price`, `pregens[].money`, `quests[].reward_money`, `npc_sheets[].merchant` | 화폐의 이름 20 자, 단위 10 자, 돈과 값은 1,000,000 까지, 되사는 값 0~100%. 화폐 없이 값·상인·돈을 적으면 게시할 때 `currency_missing` |
 | 장비(#276) | `items[].slots`, `items[].slot_count`, `starting_items[].wear`, `pregens[].items[].wear` | 칸은 룰북의 `equipment_slots`(8 개까지) 중에서. 차지하는 칸은 1~8, 들어갈 수 있는 칸보다 많지 않다. 소모품에는 칸이 없다. 시작할 때의 착용은 그 물건의 칸을 차지하는 칸의 수만큼, 시작 소지품과 한 프리젠의 소지품을 합쳐 겹치지 않게. 틀리면 게시 문제 `item_slot_invalid`, `starting_wear_invalid` |
 | 공격과 방어(#276) | `items[].attack`, `items[].defense`, `items[].guard`, `items[].ap`, `items[].ward`, `monster_sheets[].ward`, `npc_sheets[]`·`monster_sheets[]` 의 `equipment[].wear` 와 `attacks[].weapon`, `monster_sheets[].natural_armor` | 수치는 1~10, 칸이 있는 물건에만. NPC·몬스터의 착용은 시작 착용과 같은 검사, 무기는 착용한 장비 중 공격 보정이 있는 것, 타고난 방어의 부위는 룰북의 칸. 틀리면 게시 문제 `carried_wear_invalid`, `attack_weapon_invalid`, `natural_armor_invalid` |
-| 지도 | `start_place`, `routes`, `landmarks`, `happenings` | 길 200, 명소 100, 사건 규칙 50(조건 5, 효과 5) |
+| 지도 | `start_place`, `routes`, `landmarks`, `happenings` | 길 200, 명소 100, 사건 규칙 50(조건 5, 효과 5). 효과는 캐릭터 옮기기(`move`)와 인물 옮기기(`move_npc`, #282) |
+| 인물의 자리(#282) | `npc_places` | 100 개, 인물 하나에 자리 하나. 인물은 로어북의 인물 항목(시트가 없어도 된다), 자리는 맵의 장소. 맵이 있어야 한다. 틀리면 게시 문제 `npc_place_not_person`, `npc_place_off_map` |
 | 몬스터 배치 | `monster_sheets`, `encounters` | 몬스터 시트 100, 조우 50 |
 | 서술 | `narration_style`, `narration_model`, `clock` | 문체는 안 보내면 정통. 시계는 안 보내면 1일째 8시, 한 라운드에 10분 |
 | 등급 | `rating` | 안 보내면 `all`. 성인용은 직접 골라야 한다 |
@@ -1687,7 +1688,8 @@
 | 물건 | `item_entry_missing`, `item_not_item`, `item_magnitude_missing` |
 | 퀘스트 | `quest_entry_missing`, `quest_not_event`, `quest_condition_missing`, `quest_condition_invalid`, `quest_condition_impossible` |
 | 지도 | `map_place_missing`, `map_not_place`, `map_start_missing`, `route_find_invalid` |
-| 사건 규칙 | `happening_entry_missing`, `happening_not_event`, `happening_condition_missing`, `happening_condition_invalid`, `happening_condition_impossible`, `happening_place_off_map` |
+| 사건 규칙 | `happening_entry_missing`, `happening_not_event`, `happening_condition_missing`, `happening_condition_invalid`, `happening_condition_impossible`, `happening_place_off_map`, `happening_npc_not_person` |
+| 인물의 자리 | `npc_place_not_person`, `npc_place_off_map` |
 | 몬스터, 조우 | `monster_sheet_missing`, `monster_sheet_invalid`, `monster_attack_invalid`, `unique_monster_repeated`, `encounter_place_missing`, `encounter_not_place`, `encounter_monster_missing`, `encounter_map_missing` |
 
 **5. 상태**

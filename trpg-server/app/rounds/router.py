@@ -149,6 +149,7 @@ def to_cast(round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem]) -
             attitude=member.npc.attitude,
             items=to_carried(npc_items.carried(member.npc, member.definition), things),
             merchant=trades.is_merchant(member),
+            place_id=member.npc.place_id,
         )
         for member in scene.cast
     ]
@@ -193,7 +194,7 @@ async def handle_action_not_in_rules(request: Request, error: ActionNotInRulesEr
 # 겨눌 수 없는 대상의 칸마다 알리는 말
 TARGET_ERRORS = {
     'target': 'action.target 이 이 테이블에 앉은 사람이 아닙니다.',
-    'npc': 'action.npc 가 이번 장면의 인물이 아닙니다.',
+    'npc': 'action.npc 가 이번 장면의 인물이 아니거나 다른 장소에 있습니다.',
     'place': 'action.place 가 지금 장소에서 아는 길로 이어진 장소가 아닙니다.',
     'monster': 'action.monster 가 지금 장소의 몬스터가 아닙니다.',
     'item': 'action.item 이 지금 장소에 보이게 놓인 물건이 아닙니다.',
@@ -232,7 +233,8 @@ async def read_scene_cast(table_id: uuid.UUID, user: CurrentUser, session: Sessi
     """
     가장 최근 라운드의 장면에 나온 인물들을 돌려준다. 행동의 npc 칸에 이 목록의 id 를 적는다.
 
-    장면에 이름이나 호칭이 나온 인물만 들어간다. 테이블의 인물 전부가 아니다.
+    자리가 있는 인물은 살아 있는 캐릭터가 서 있는 장소들의 인물, 없는 인물은 장면에 이름이나 호칭이 나온 인물만
+    들어간다(#282). 테이블의 인물 전부가 아니다.
     """
     round_, scene, things = await service.get_scene_cast(session, user.user_id, table_id)
     return to_cast(round_, scene, things)

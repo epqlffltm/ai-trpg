@@ -145,7 +145,10 @@ async def test_an_unknown_reaction_is_refused(client: AsyncClient, me: dict[str,
     ('change', 'detail'),
     [
         # 드워프는 장면에 나오지 않았다
-        (lambda world: steal(world, 'coins', npc='dwarf'), 'action.npc 가 이번 장면의 인물이 아닙니다.'),
+        (
+            lambda world: steal(world, 'coins', npc='dwarf'),
+            'action.npc 가 이번 장면의 인물이 아니거나 다른 장소에 있습니다.',
+        ),
         # 악역영애는 고속도로를 지니지 않았다
         (
             lambda world: {**steal(world, 'coins'), 'item': world['highway']['id']},

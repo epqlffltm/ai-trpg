@@ -13,19 +13,26 @@ NPC 는 로어북의 인물 항목이다. 로어북은 AI 만 읽는 글이라 �
 플레이어가 진짜 이름을 맞힌(지목한) 인물은 그 뒤로 진짜 이름으로 부른다(app/rounds/naming.py).
 그래서 인물 항목의 키워드는 장면에서 그 인물을 부르는 호칭이어야 한다. 이 목록으로 플레이어에게 보일 수 있다.
 
+자리가 있는 인물(#282). 판에 처음 있는 장소를 적은 인물은 글이 아니라 자리로 고른다. 몬스터와 같다
+(app/rounds/monster_scene.py). 살아 있는 캐릭터가 서 있는 장소들에 있는 인물이 장면에 든다. 글에 나와도
+아무도 그 장소에 서 있지 않으면 들지 않는다. 서술이 다른 곳의 인물을 불러내지 못한다.
+글에 나오지 않은 채 장면에 든 인물은 가장 긴 키워드로 부른다(standing_label). 진짜 이름이 새지 않는다.
+자리가 있는 인물은 같은 장소에 선 캐릭터만 겨눈다(reaches). 자리가 없는 인물은 누구나 겨눈다(지금처럼).
+맵이 없는 판은 자리를 적을 수 없다(게시할 때 막는다).
+
 상태(table_npcs)가 없는 인물은 들어가지 않는다. 이 기능이 생기기 전에 시작한 테이블이 그렇다.
 
 여기의 함수는 DB 를 모른다. 이미 읽어 온 판, 장면, 상태를 받는다.
 """
 
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Set
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from app.assets.scenarios.snapshot import EntrySnapshot, NpcSheetSnapshot, Snapshot, own_npc_sheet, person_entries
 from app.lore.retrieval import mentions, scene_label
-from app.tables.models import NpcStatus, TableMonster, TableNpc
+from app.tables.models import NpcStatus, TableMember, TableMonster, TableNpc
 
 if TYPE_CHECKING:
     # 이번 장면의 몬스터(app/rounds/monster_scene.py).
@@ -76,26 +83,95 @@ def is_named(npc: TableNpc) -> bool:
     return npc.named_round is not None
 
 
+def standing_label(entry: EntrySnapshot) -> str:
+    """
+    글에 나오지 않고 자리로 장면에 든 인물을 부를 이름. 키워드 중 가장 긴 것, 키워드가 없으면 이름이다.
+
+    키워드는 장면의 호칭이라 드러나도 된다. 장면의 호칭(scene_label)과 같은 까닭으로 가장 긴 것을 고른다.
+    """
+    keywords = [word for word in entry.keywords if word.strip()]
+    return max(keywords, key=len) if keywords else entry.name
+
+
 def label_of(entry: EntrySnapshot, scene: str, npc: TableNpc) -> str:
-    """이 인물을 부를 이름. 진짜 이름을 맞혔으면 진짜 이름, 아니면 장면의 호칭이다."""
-    return entry.name if is_named(npc) else scene_label(entry, scene)
+    """
+    이 인물을 부를 이름. 진짜 이름을 맞혔으면 진짜 이름, 장면에 나왔으면 장면의 호칭이다.
+
+    글에 나오지 않았으면(자리로 장면에 든 인물) 가장 긴 키워드다(standing_label).
+    """
+    if is_named(npc):
+        return entry.name
+    if mentions(entry, scene):
+        return scene_label(entry, scene)
+    return standing_label(entry)
 
 
-def cast_of(snapshot: Snapshot, scene: str, npcs: Iterable[TableNpc]) -> list[CastMember]:
-    """이 장면에 나온 인물들. 판의 인물 항목 순서다. 상태가 없는 인물은 뺀다."""
+def is_placed(npc: TableNpc) -> bool:
+    """이 인물에게 자리(맵의 장소)가 있는가. 판에 자리를 적었거나 사건이 옮긴 인물이다."""
+    return npc.place_id is not None
+
+
+def in_scene(entry: EntrySnapshot, scene: str, npc: TableNpc, here: Set[uuid.UUID]) -> bool:
+    """
+    이 인물이 장면에 있는가. 자리가 있으면 캐릭터가 서 있는 장소(here)에 있어야 하고, 없으면 글에 나와야 한다.
+    """
+    if is_placed(npc):
+        return npc.place_id in here
+    return mentions(entry, scene)
+
+
+def cast_of(
+    snapshot: Snapshot, scene: str, npcs: Iterable[TableNpc], here: Set[uuid.UUID] = frozenset()
+) -> list[CastMember]:
+    """
+    이 장면의 인물들. 판의 인물 항목 순서다. 상태가 없는 인물은 뺀다.
+
+    here 는 살아 있는 캐릭터가 서 있는 장소들이다(app/rounds/monster_scene.py 의 occupied_places).
+    """
     states = {npc.entry_id: npc for npc in npcs}
     return [
         CastMember(
             entry.id, label_of(entry, scene, states[entry.id]), states[entry.id], own_npc_sheet(snapshot, entry.id)
         )
         for entry in person_entries(snapshot)
-        if entry.id in states and mentions(entry, scene)
+        if entry.id in states and in_scene(entry, scene, states[entry.id], here)
     ]
+
+
+def labels_of(snapshot: Snapshot, scene: str, npcs: Iterable[TableNpc]) -> dict[uuid.UUID, str]:
+    """
+    이 테이블의 인물마다 부를 이름(label_of). 장면 밖의 인물도 든다. 상태가 없는 인물은 뺀다.
+
+    사건이 옮긴 인물처럼 장면에 없을 수도 있는 인물을 서술자에게 이를 때 쓴다(app/rounds/narration_request.py).
+    """
+    states = {npc.entry_id: npc for npc in npcs}
+    return {
+        entry.id: label_of(entry, scene, states[entry.id]) for entry in person_entries(snapshot) if entry.id in states
+    }
 
 
 def find_cast_member(cast: list[CastMember], entry_id: uuid.UUID) -> CastMember | None:
     """이번 장면의 인물 중에서 이 항목의 것을 찾는다. 장면에 나오지 않았으면 None."""
     return next((member for member in cast if member.entry_id == entry_id), None)
+
+
+def reaches(member: TableMember, person: CastMember) -> bool:
+    """
+    이 캐릭터가 이 인물에게 닿는가(겨눌 수 있는가). 자리가 없는 인물은 누구나, 있는 인물은 같은 장소에 선 캐릭터만이다.
+    """
+    if not is_placed(person.npc):
+        return True
+    return member.sheet is not None and member.sheet.place_id == person.npc.place_id
+
+
+def find_reachable(cast: list[CastMember], member: TableMember, entry_id: uuid.UUID) -> CastMember | None:
+    """
+    이번 장면의 인물 중에서 이 캐릭터가 닿는 이 항목의 것을 찾는다. 장면에 없거나 다른 장소에 있으면 None.
+
+    장면에 없는 것과 다른 장소에 있는 것을 가르지 않는다. 몬스터와 같다(app/rounds/acceptance.py).
+    """
+    person = find_cast_member(cast, entry_id)
+    return person if person is not None and reaches(member, person) else None
 
 
 def condition_of(npc: TableNpc | TableMonster) -> str:

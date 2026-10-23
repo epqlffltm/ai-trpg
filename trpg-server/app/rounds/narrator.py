@@ -696,6 +696,8 @@ class PersonState:
     injuries: list[InjuryNote] = field(default_factory=list)
     # 일행을 대하는 태도의 말(우호, 적대). 중립이면 None 이다(app/tables/npc_attitudes.py)
     attitude: str | None = None
+    # 있는 장소의 이름(#282). 자리가 없는 인물이면 None 이다(장면의 글로 나온 인물)
+    place: str | None = None
 
 
 @dataclass(frozen=True)
@@ -718,6 +720,7 @@ class HappeningNote:
     이번 라운드가 닫힐 때 일어난 판의 사건 하나(app/rounds/happenings.py, #367). 엔진이 정한 것이다.
 
     name 은 사건 항목의 이름, moved 는 옮겨진 사람마다 "이름 → 장소"다. 사건의 글은 로어북 검색이 따로 준다.
+    옮겨진 인물(NPC)도 일행이 본 것이면 같은 모양으로 캐릭터들 뒤에 든다(#282).
     """
 
     name: str

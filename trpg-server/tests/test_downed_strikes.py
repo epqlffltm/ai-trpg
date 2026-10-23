@@ -255,7 +255,10 @@ def test_without_death_saves_a_downed_character_is_never_struck():
 def test_a_fighting_npc_also_strikes_those_already_down():
     standing, fresh, old = member(), member(hp=0), member(hp=0)
 
-    assert targets_of(judging_with(standing, fresh, old, downed=[old])) == [standing, old]
+    # 자리가 없는 인물이다. 장소를 보지 않는다(#282)
+    unplaced = SimpleNamespace(npc=SimpleNamespace(place_id=None))
+
+    assert targets_of(judging_with(standing, fresh, old, downed=[old]), unplaced) == [standing, old]
 
 
 def test_an_ordinary_fall_fails_once():

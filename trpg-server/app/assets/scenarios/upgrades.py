@@ -838,6 +838,19 @@ def upgrade_from_48(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_49(document: dict) -> dict:
+    """
+    형식 49 의 문서를 형식 50 으로 올린다. 그때는 인물의 자리가 없었다(#282).
+
+    자리를 적은 인물이 없는 것으로 읽는다. 인물은 모두 지금처럼 장면의 글에 나왔는지로 장면에 든다.
+    사건의 효과는 캐릭터 옮기기(move)뿐이었으므로 그대로 읽는다.
+    """
+    upgraded = dict(document)
+    upgraded['npc_places'] = []
+    upgraded['format'] = 50
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -889,4 +902,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     46: upgrade_from_46,
     47: upgrade_from_47,
     48: upgrade_from_48,
+    49: upgrade_from_49,
 }

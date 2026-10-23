@@ -255,17 +255,30 @@ def frozen_moves(table: GameTable, round_: Round) -> list[Move]:
     return narration_request.read_moves(round_.moves)
 
 
-def to_people(cast: list[CastMember], ruleset: Ruleset) -> list[PersonState]:
-    """이번 장면의 인물들을 서술자에게 줄 모양으로. 몸 상태를 말로 적는다. 숫자는 주지 않는다. 입은 부상을 함께 준다."""
+def to_people(
+    cast: list[CastMember], ruleset: Ruleset, places: dict[uuid.UUID, str] | None = None
+) -> list[PersonState]:
+    """
+    이번 장면의 인물들을 서술자에게 줄 모양으로. 몸 상태를 말로 적는다. 숫자는 주지 않는다. 입은 부상을 함께 준다.
+
+    places 는 판의 장소 항목의 이름이다. 자리가 있는 인물에는 있는 장소의 이름을 붙인다(#282).
+    """
+    names = places or {}
     return [
         PersonState(
             name=member.name,
             condition=condition_of(member.npc),
             injuries=round_injuries.notes(ruleset, member.npc.injuries),
             attitude=attitude_word(member.npc),
+            place=names.get(member.npc.place_id),
         )
         for member in cast
     ]
+
+
+def place_names(snapshot: Snapshot) -> dict[uuid.UUID, str]:
+    """판의 장소 항목마다 이름."""
+    return {entry.id: entry.name for entry in place_entries(snapshot)}
 
 
 # 몬스터의 타입을 서술자에게 보일 말. 기타는 적지 않는다
