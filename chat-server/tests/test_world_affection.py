@@ -21,6 +21,9 @@ from app.world.schemas import GiveAction, MoveAction, UseAction, affection_out
 from app.world.state import WorldState, filled, initial_state
 from tests.assets import make_character
 
+# 대화의 시작 시각(몇 시)
+NOON = 12
+
 STAGES = [{'name': '낯섦', 'at': 0}, {'name': '친구', 'at': 30}, {'name': '연인', 'at': 70}]
 RULES = [
     {'id': 'gift', 'on': {'kind': 'give_item', 'target': 'scarf'}, 'change': 15, 'once': False},
@@ -100,7 +103,7 @@ def test_the_stage_is_the_last_one_reached(value: int, index: int):
 
 
 def test_the_model_sees_only_the_stage_name():
-    scene = render_scene(DOCUMENT, apply_affection(DOCUMENT, START, 'give_item', 'scarf'))
+    scene = render_scene(DOCUMENT, apply_affection(DOCUMENT, START, 'give_item', 'scarf'), NOON)
 
     assert '사용자에 대한 호감: 친구' in scene
     assert '35' not in scene
@@ -118,8 +121,8 @@ def test_a_stage_display_does_not_send_the_number():
 
 
 def test_each_action_triggers_its_own_rules():
-    moved = perform(DOCUMENT, START, MoveAction(kind='move', place='cafe'))
-    used = perform(DOCUMENT, START, UseAction(kind='use', item='cookie'))
-    given = perform(DOCUMENT, START, GiveAction(kind='give', item='scarf'))
+    moved = perform(DOCUMENT, START, MoveAction(kind='move', place='cafe'), NOON)
+    used = perform(DOCUMENT, START, UseAction(kind='use', item='cookie'), NOON)
+    given = perform(DOCUMENT, START, GiveAction(kind='give', item='scarf'), NOON)
 
     assert (moved.state.affection, used.state.affection, given.state.affection) == (30, 0, 35)

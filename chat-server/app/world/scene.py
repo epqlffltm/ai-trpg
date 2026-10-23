@@ -1,18 +1,25 @@
 # chat-server/app/world/scene.py
 
 """
-모델에 보내는 "[지금]" 블록. 지금 있는 장소와 그 설명, 갈 수 있는 곳, 사용자의 소지품, 상대의 차림,
+모델에 보내는 "[지금]" 블록. 시각과 시간대, 지금 있는 장소와 그 설명, 갈 수 있는 곳, 사용자의 소지품, 상대의 차림,
 사용자에 대한 상대의 호감도(단계 이름만. 숫자는 보내지 않는다)다.
 DB 를 모르는 순수 함수다.
 
-모델은 이것을 읽고 반응만 쓴다. 바꾸는 것은 서버다(이동, 쓰기, 건네기).
-지도와 물건이 없는 캐릭터면 블록이 없다. 판에 없는 id 는(있을 수 없지만) 빼고 적는다.
+모델은 이것을 읽고 반응만 쓴다. 바꾸는 것은 서버다(이동, 쓰기, 건네기, 시간 보내기).
+시각은 늘 있으므로 블록도 늘 있다(지도와 물건이 없는 캐릭터도 낮인지 밤인지는 안다, #668).
+판에 없는 id 는(있을 수 없지만) 빼고 적는다.
 """
 
 from app.assets.schemas import CharacterDocument
 from app.world.affection import stage_of
+from app.world.clock import clock_minutes, read_time, time_words
 from app.world.moves import find_place
 from app.world.state import WorldState
+
+
+def time_line(state: WorldState, start_hour: int) -> str:
+    """'시각: 2일째 저녁 18:30'."""
+    return f'시각: {time_words(read_time(clock_minutes(start_hour, state.minutes)))}'
 
 
 def place_line(document: CharacterDocument, state: WorldState) -> str | None:
@@ -55,9 +62,10 @@ def affection_line(document: CharacterDocument, state: WorldState) -> str | None
     return f'사용자에 대한 호감: {stage_of(document.affection, state.affection).name}'
 
 
-def render_scene(document: CharacterDocument, state: WorldState) -> str | None:
-    """'[지금]' 블록. 적을 것이 없으면 None."""
+def render_scene(document: CharacterDocument, state: WorldState, start_hour: int) -> str:
+    """'[지금]' 블록. start_hour 는 대화의 시작 시각(몇 시)이다."""
     found = (
+        time_line(state, start_hour),
         place_line(document, state),
         exits_line(document, state),
         inventory_line(document, state),
@@ -65,4 +73,4 @@ def render_scene(document: CharacterDocument, state: WorldState) -> str | None:
         affection_line(document, state),
     )
     lines = [line for line in found if line]
-    return '\n'.join(['[지금]', *lines]) if lines else None
+    return '\n'.join(['[지금]', *lines])

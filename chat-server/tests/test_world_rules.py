@@ -27,6 +27,9 @@ from app.world.scene import render_scene
 from app.world.state import Holding, WorldState, initial_state, state_at
 from tests.assets import make_character
 
+# 대화의 시작 시각(몇 시). 시작 상황에 적지 않은 것과 같다
+NOON = 12
+
 WORLD = {
     'places': [
         {'id': 'library', 'name': '도서관', 'description': '책 냄새가 난다.', 'image_id': None},
@@ -97,23 +100,28 @@ def test_the_move_is_written_for_people_and_the_model():
 
 
 def test_the_scene_has_the_place_the_exits_and_the_belongings():
-    assert render_scene(DOCUMENT, START) == '\n'.join(
+    assert render_scene(DOCUMENT, START, NOON) == '\n'.join(
         [
             '[지금]',
+            '시각: 1일째 낮 12:00',
             '장소: 도서관 — 책 냄새가 난다.',
             '갈 수 있는 곳: 카페(15분), 옥상(0분)',
             '사용자의 소지품: 시집 2개',
         ]
     )
     at_cafe = apply_move(START, 'cafe', 15)
-    assert render_scene(DOCUMENT, at_cafe).split('\n')[1:3] == ['장소: 카페', '갈 수 있는 곳: 도서관(15분)']
+    assert render_scene(DOCUMENT, at_cafe, NOON).split('\n')[1:4] == [
+        '시각: 1일째 낮 12:15',
+        '장소: 카페',
+        '갈 수 있는 곳: 도서관(15분)',
+    ]
 
 
-def test_unknown_items_are_left_out_and_nothing_is_no_scene():
+def test_unknown_items_are_left_out_and_without_a_world_only_the_time_is_told():
     stray = WorldState(place=None, minutes=0, inventory=(Holding('ring', 1),), visited=())
 
-    assert render_scene(DOCUMENT, stray) is None
-    assert render_scene(PLAIN, initial_state(PLAIN)) is None
+    assert render_scene(DOCUMENT, stray, NOON) == '[지금]\n시각: 1일째 낮 12:00'
+    assert render_scene(PLAIN, initial_state(PLAIN), 21) == '[지금]\n시각: 1일째 밤 21:00'
 
 
 def test_an_action_goes_to_the_model_as_the_users_turn_with_a_mark():

@@ -528,6 +528,19 @@ export interface components {
             version: number;
         };
         /**
+         * ClockOut
+         * @description 대화 안의 지금 시각. day 는 1 부터(며칠째), hour 는 0~23, minute 는 0~59, time_of_day 는 시간대다.
+         */
+        ClockOut: {
+            /** Day */
+            day: number;
+            /** Hour */
+            hour: number;
+            /** Minute */
+            minute: number;
+            time_of_day: components["schemas"]["TimeOfDay"];
+        };
+        /**
          * ConversationCreate
          * @description 대화를 시작할 때 받는 값. 캐릭터와 시작 상황만 고르고 들어간다(2026-10-20). 페르소나와 모델은 지난번 것을 쓴다.
          *
@@ -1029,9 +1042,11 @@ export interface components {
         };
         /**
          * StartOut
-         * @description 고른 시작 상황.
+         * @description 고른 시작 상황. hour 는 대화가 시작한 시각(1일째 몇 시)이다.
          */
         StartOut: {
+            /** Hour */
+            hour: number;
             /** Situation */
             situation: string;
             /** Title */
@@ -1045,6 +1060,9 @@ export interface components {
          */
         StateOut: {
             affection: components["schemas"]["AffectionOut"] | null;
+            /** Background */
+            background: string | null;
+            clock: components["schemas"]["ClockOut"];
             /** Inventory */
             inventory: components["schemas"]["HoldingOut"][];
             /** Minutes */
@@ -1084,6 +1102,12 @@ export interface components {
          */
         Tier: "basic" | "standard" | "premium";
         /**
+         * TimeOfDay
+         * @description 하루의 어느 때. 배경을 고르고, 모델이 밝기와 분위기를 맞춘다. asset 서버의 TimeOfDay 와 같은 이름이다.
+         * @enum {string}
+         */
+        TimeOfDay: "dawn" | "morning" | "day" | "evening" | "night";
+        /**
          * TriggerDocument
          * @description 호감도를 바꾸는 행동. kind 는 give_item, reach_place, use_item 이다.
          *     모르는 종류도 받아 둔다(맞는 행동이 없을 뿐이다).
@@ -1119,6 +1143,17 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * WaitAction
+         * @description 시간을 보낸다. 다음 시간대가 시작하는 시각까지 흐른다(밤이면 다음 날 새벽). 지도가 없어도 된다.
+         */
+        WaitAction: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "wait";
         };
     };
     responses: never;
@@ -1267,7 +1302,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MoveAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"];
+                "application/json": components["schemas"]["MoveAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["WaitAction"];
             };
         };
         responses: {

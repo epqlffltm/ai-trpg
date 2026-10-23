@@ -26,6 +26,9 @@ from app.world.schemas import GiveAction, MoveAction, UseAction
 from app.world.state import Holding, WorldState, initial_state
 from tests.assets import make_character
 
+# 대화의 시작 시각(몇 시)
+NOON = 12
+
 ITEMS = [
     {'id': 'cookie', 'name': '쿠키', 'description': '', 'kind': 'thing', 'consumable': True, 'image_id': None},
     {'id': 'umbrella', 'name': '우산', 'description': '', 'kind': 'thing', 'consumable': False, 'image_id': None},
@@ -92,9 +95,9 @@ def test_the_object_particle_follows_the_last_letter(word: str, particle: str):
 
 
 def test_actions_are_told_apart_by_kind():
-    used = perform(DOCUMENT, START, UseAction(kind='use', item='cookie'))
-    given = perform(DOCUMENT, START, GiveAction(kind='give', item='scarf', words='추우니까'))
-    moved = perform(DOCUMENT, START, MoveAction(kind='move', place='cafe'))
+    used = perform(DOCUMENT, START, UseAction(kind='use', item='cookie'), NOON)
+    given = perform(DOCUMENT, START, GiveAction(kind='give', item='scarf', words='추우니까'), NOON)
+    moved = perform(DOCUMENT, START, MoveAction(kind='move', place='cafe'), NOON)
 
     assert (used.text, used.state.inventory[0]) == ('쿠키를 썼다.', Holding('cookie', 1))
     assert (given.text, given.state.outfit) == ('목도리를 건넸다.', ('scarf',))
@@ -104,7 +107,7 @@ def test_actions_are_told_apart_by_kind():
 def test_the_scene_shows_what_the_character_wears():
     worn = WorldState(place=None, minutes=0, inventory=(), visited=(), outfit=('scarf', 'lost'))
 
-    assert render_scene(DOCUMENT, worn) == '[지금]\n상대의 차림: 목도리'
+    assert render_scene(DOCUMENT, worn, NOON) == '[지금]\n시각: 1일째 낮 12:00\n상대의 차림: 목도리'
 
 
 def test_words_after_an_action_come_later_than_the_action():
