@@ -1,5 +1,5 @@
 // web/apps/web/src/api/refresh.test.ts
-// 갱신이 한 번에 하나만 가는지(#30), 401 과 그 밖의 실패를 다르게 다루는지 본다.
+// 갱신이 한 번에 하나만 가는지(#30), 401 과 막은 IP(#638), 그 밖의 실패를 다르게 다루는지 본다.
 
 import { describe, expect, it } from 'vitest';
 import { installFakeFetch, json, tokens } from '../test/fakeFetch';
@@ -44,6 +44,19 @@ describe('refreshSession', () => {
 
     await expect(refreshSession()).resolves.toBeNull();
     expect(getSession()).toBeNull();
+  });
+
+  it('막은 IP(403 network_blocked)면 이 기기의 로그인을 끝낸다. 다른 403 은 던진다', async () => {
+    storeTokens(tokens('old') as never);
+    installFakeFetch({ [`POST ${REFRESH_PATH}`]: () => json(403, { detail: '제한', code: 'network_blocked' }) });
+
+    await expect(refreshSession()).resolves.toBeNull();
+    expect(getSession()).toBeNull();
+
+    storeTokens(tokens('old') as never);
+    installFakeFetch({ [`POST ${REFRESH_PATH}`]: () => json(403, { detail: '출처', code: 'origin_not_allowed' }) });
+    await expect(refreshSession()).rejects.toBeInstanceOf(ApiError);
+    expect(getSession()?.accessToken).toBe('old');
   });
 
   it('503 이면 로그아웃시키지 않고 오류를 던진다', async () => {

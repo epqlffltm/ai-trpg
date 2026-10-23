@@ -1477,7 +1477,7 @@
                 }
               }
             },
-            "description": "이메일 인증을 마치지 않았다(email_not_verified)"
+            "description": "이메일 인증을 마치지 않았다(email_not_verified) 또는 막은 IP 다(network_blocked)"
           },
           "429": {
             "content": {
@@ -1578,6 +1578,16 @@
             },
             "description": "로그인 티켓을 쓸 수 없다(login_ticket_invalid)"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -1676,6 +1686,16 @@
               }
             },
             "description": "로그인 티켓을 쓸 수 없다(login_ticket_invalid). 처음부터 다시 한다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다"
           }
         },
         "security": [
@@ -2497,7 +2517,7 @@
                 }
               }
             },
-            "description": "허용하지 않은 출처에서 온 쿠키 요청(origin_not_allowed)"
+            "description": "허용하지 않은 출처의 쿠키 요청(origin_not_allowed) 또는 막은 IP 다(network_blocked)"
           }
         },
         "security": [
@@ -2693,6 +2713,16 @@
             },
             "description": "요청을 받을 수 없다"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -2781,6 +2811,16 @@
               }
             },
             "description": "칸의 오류이거나 티켓을 쓸 수 없다(signup_ticket_invalid)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다"
           },
           "409": {
             "content": {
@@ -2903,6 +2943,16 @@
               }
             },
             "description": "형식이 틀렸거나 코드가 맞지 않거나 만료됐다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "막은 IP 에서 온 요청(network_blocked). 기간이 지나면 풀린다"
           }
         },
         "security": [
