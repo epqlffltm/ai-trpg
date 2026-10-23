@@ -40,6 +40,7 @@ from app.engine.action import (
     BuyAction,
     CheckAction,
     CoverAction,
+    DoorAction,
     GiveAction,
     LootAction,
     MoveAction,
@@ -59,6 +60,7 @@ from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable, is_named
 from app.rounds.covers import accept_cover
+from app.rounds.door_actions import accept_door
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.map_actions import accept_move, accept_search, standing_place
 from app.rounds.models import Declaration, Round
@@ -396,7 +398,7 @@ def accept_action(
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
     accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal, accept_loot,
-    accept_buy, accept_sell, accept_pay, accept_cover).
+    accept_buy, accept_sell, accept_pay, accept_cover, 문을 다루는 accept_door).
     """
     if action is None:
         return None
@@ -433,6 +435,8 @@ def accept_action(
         return accept_pay(table, member, action)
     if isinstance(action, CoverAction):
         return accept_cover(table, member, ruleset, action)
+    if isinstance(action, DoorAction):
+        return accept_door(table, member, action)
     return accept_check(table, member, action, scene, ruleset)
 
 

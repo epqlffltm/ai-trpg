@@ -18,6 +18,8 @@ from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import (
     CrossSnapshot,
     CurrencySnapshot,
+    ForceSnapshot,
+    PickSnapshot,
     RouteSnapshot,
     Snapshot,
     cover_at,
@@ -340,8 +342,10 @@ def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, Catalo
 
 
 def to_route(table: GameTable, snapshot: Snapshot, route: RouteSnapshot) -> RouteOut:
-    """아는 길 하나를 응답으로 바꾼다. 자물쇠는 이 테이블의 지금 상태, 넘기 판정은 판의 것이다(#281)."""
+    """아는 길 하나를 응답으로 바꾼다. 문(자물쇠, 빗장)은 이 테이블의 지금 상태, 판정들은 판의 것이다(#281)."""
     locked = route_locks.is_locked(table, route) if route.lock is not None else None
+    barred = route_locks.is_barred(table, route) if route.bar is not None else None
+    pick = route.lock.pick if route.lock is not None else None
     return RouteOut(
         from_place=route.from_place,
         to_place=route.to_place,
@@ -349,15 +353,20 @@ def to_route(table: GameTable, snapshot: Snapshot, route: RouteSnapshot) -> Rout
         travel_minutes=route.travel_minutes,
         locked=locked,
         cross=to_cross(snapshot, route.cross),
+        barred=barred,
+        bar_side=route.bar.side if route.bar is not None else None,
+        broken=route_locks.is_broken(table, route),
+        pick=to_cross(snapshot, pick),
+        force=to_cross(snapshot, route.force),
     )
 
 
-def to_cross(snapshot: Snapshot, cross: CrossSnapshot | None) -> RouteCrossOut | None:
-    """길을 넘는 판정을 응답으로 바꾼다. 난이도를 비웠으면 규칙의 기본 난이도의 이름표다. 없으면 None."""
-    if cross is None:
+def to_cross(snapshot: Snapshot, terms: CrossSnapshot | PickSnapshot | ForceSnapshot | None) -> RouteCrossOut | None:
+    """길에 적힌 판정을 응답으로 바꾼다. 난이도를 비웠으면 규칙의 기본 난이도의 이름표다. 없으면 None."""
+    if terms is None:
         return None
-    difficulty = find_difficulty(snapshot.rulebook.rules, cross.difficulty)
-    return RouteCrossOut(ability=cross.ability, difficulty=difficulty.key)
+    difficulty = find_difficulty(snapshot.rulebook.rules, terms.difficulty)
+    return RouteCrossOut(ability=terms.ability, difficulty=difficulty.key)
 
 
 def to_roll(roll: TableRoll | None) -> RollOut | None:

@@ -116,6 +116,17 @@ def route_between(known: KnownMap | None, here: uuid.UUID | None, there: uuid.UU
     return None
 
 
+def route_joining(known: KnownMap | None, here: uuid.UUID | None, there: uuid.UUID) -> RouteSnapshot | None:
+    """
+    here 와 there 를 잇는 아는 길. 방향은 보지 않는다. 없으면 None.
+
+    문(#281)은 길의 어느 끝에서든 다룬다. 한쪽으로만 가는 길의 문도 양쪽에서 잠그고 연다.
+    """
+    if known is None or here is None:
+        return None
+    return next((route for route in known.routes if {route.from_place, route.to_place} == {here, there}), None)
+
+
 def hidden_routes_at(snapshot: Snapshot, known: Knowledge, place_id: uuid.UUID) -> list[RouteSnapshot]:
     """그 장소에 한쪽 끝이 닿은, 아직 찾지 않은 숨긴 길들. 판의 길 순서다. 찾기가 굴릴 길들이다."""
     return [

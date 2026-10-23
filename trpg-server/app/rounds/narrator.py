@@ -297,6 +297,7 @@ class TravelNote:
     locked: 문이 잠겨 있었고 열쇠가 없었다, cross_failed: 길을 넘는 판정에 실패했다, #281).
     unlocked 는 지닌 열쇠로 잠긴 문을 열었는가, cross 는 길을 넘는 판정의 능력치의 이름이다(굴리지 않았으면 None).
     hurt 는 넘기에 실패해 다쳤는가다. 얼마나 다쳤는지는 HP 의 줄이 말한다.
+    unbarred 는 빗장 쪽에서 걸린 빗장을 풀었는가다. reason 의 barred 는 빗장이 반대쪽에 걸려 있었다는 것이다.
     from_place 는 차례가 왔을 때 서 있던 곳이다. 맵 밖에 있었으면 None 이다.
     travel_minutes 는 지나간 길에 걸린 게임 안의 시간(분)이다. 안 걸렸으면 None 이다.
     carried 는 업고 가려던 쓰러진 동료의 이름이다(#367). 업지 않았으면 None 이다.
@@ -313,6 +314,7 @@ class TravelNote:
     unlocked: bool = False
     cross: str | None = None
     hurt: bool = False
+    unbarred: bool = False
 
 
 @dataclass(frozen=True)
@@ -380,6 +382,25 @@ class RecoveryNote:
     before: int
     after: int
     max_hp: int
+
+
+@dataclass(frozen=True)
+class DoorNote:
+    """
+    길의 문을 다룬 결과(app/rounds/door_actions.py, #281). 엔진이 정한 것이다.
+
+    act 는 lock(잠그기), unlock(열기), pick(따기), force(부수기)다.
+    device 는 lock(자물쇠), bar(빗장)다(따기와 부수기는 None).
+    other_end 는 그 길의 다른 끝의 이름이다. done 이 거짓이면 reason 이 까닭이다.
+    check 는 따기와 부수기에 굴린 판정의 능력치의 이름이다(굴리지 않았으면 None).
+    """
+
+    act: str
+    other_end: str
+    done: bool
+    device: str | None = None
+    reason: str | None = None
+    check: str | None = None
 
 
 @dataclass(frozen=True)
@@ -565,6 +586,8 @@ class Move:
     # 맵에서 가는 행동이면 그 결과, 찾는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     travel: TravelNote | None = None
     search: SearchNote | None = None
+    # 길의 문을 다루는 행동이면 그 결과(#281). 판정이 아니라 verdict 와 함께 있지 않다
+    door: DoorNote | None = None
     # 놓인 물건을 줍는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     take: TakeNote | None = None
     # 가진 물건을 내려놓는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다

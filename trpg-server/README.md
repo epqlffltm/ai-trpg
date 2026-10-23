@@ -517,7 +517,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 | `currency` (화폐) | 이 시나리오의 돈(#278). `{"name", "unit", "starting", "sell_percent"}` 이다. `name` 은 화폐의 이름(1~20자, 예: 금화), `unit` 은 단위(10자, 비워도 된다, 예: 닢), `starting` 은 캐릭터 모두가 시작할 때 받는 돈(0~1,000,000, 기본 0), `sell_percent` 는 상인이 사 주는 값의 백분율(0~100, 기본 50, 0 이면 사 주지 않는다)이다. 결제의 크레딧과 상관없는 게임 안의 돈이다. 비우면(기본) 돈이 없는 시나리오다. 값(`items[].price`), 상인(`npc_sheets[].merchant`), 프리젠의 돈(`pregens[].money`), 퀘스트의 돈의 보상(`quests[].reward_money`)은 화폐가 있어야 게시된다(`currency_missing`). `null` 을 보내면 비운다 |
 | `quests` (퀘스트 규칙, 50개) | 붙인 로어북의 사건 항목이 퀘스트로서 어떤지. 하나하나가 `{"entry_id", "start", "reward", "reward_money", "time_limit_minutes", "conditions", "match", "reveal", "reveal_match", "fail", "fail_match"}` 이다. `start` 는 테이블이 시작할 때의 상태로 `hidden`(숨김, 기본) 또는 `active`(진행 중). `reward` 는 성공했을 때 받는 물건으로 시작 소지품과 모양이 같다(20가지, 비워도 된다). `reward_money`(0~1,000,000, 기본 0)는 성공했을 때 살아 있는 캐릭터마다 받는 돈이다(#278). `time_limit_minutes` 는 기한(분, 1~한 해)으로, 퀘스트가 드러난 때부터 게임 안의 시간으로 센다. 비우면(기본) 기한이 없다. `conditions`(5개)는 이루는 조건으로 하나하나가 `{"kind", "target", "count", "consume"}` 다. `kind` 는 `reach_place`(장소 항목에 닿기), `defeat_monster`(시트를 적은 몬스터를 `count` 마리 쓰러뜨리기), `hold_item`(물건 항목을 일행이 합쳐 `count` 개 갖기), `defeat_npc`(인물 항목을 쓰러뜨리기), `npc_dead`(인물 항목이 죽기. 쓰러진 것은 아니다)다. `count` 는 1~99 이고 세는 종류(`defeat_monster`, `hold_item`, `lose_item`)에만 적는다. `consume`(기본 `false`)은 `hold_item` 에만 적고, 참이면 이룰 때 그 물건을 `count` 개 가져간다(배달). 같은 조건이 두 줄이면 거부한다. `match` 는 조건이 여럿일 때 `all`(모두, 기본) 또는 `any`(하나라도)다. 조건이 없으면 성공하지 않는다([퀘스트](#퀘스트)). `reveal`(5개)은 숨긴 퀘스트가 드러나는 조건으로 `conditions` 와 모양이 같고, 종류에 `quest_succeeded`(다른 퀘스트가 성공했다), `quest_failed`(다른 퀘스트가 실패했다)가 더 있다. 이 둘(퀘스트 잇기)은 `reveal` 과 `fail` 에만 적는다. `consume` 은 `conditions` 에만 적는다. `reveal_match` 는 `reveal` 을 맞추는 법이다(`all`, `any`). `reveal` 은 `start: hidden` 인 퀘스트에만 적고, 자기 자신을 가리키면 거부한다. `fail`(5개)은 실패하는 조건으로 모양이 같고(#367), 퀘스트 잇기와 `lose_item`(물건 항목을 일행이 합쳐 `count` 개보다 적게 갖기, `fail` 에만)을 쓸 수 있다. `fail_match` 는 그것을 맞추는 법이다. `fail` 도 자기 자신을 가리키면 거부한다. 같은 사건이 두 번 있으면 거부한다 |
 | `start_place` (시작 장소) | 맵의 시작 장소. 붙인 로어북의 장소 항목 하나다. 캐릭터 모두가 테이블이 시작할 때 여기에 선다. 비우면 맵이 없는 시나리오다. `null` 을 보내면 비운다 |
-| `routes` (길, 200개) | 맵의 길. 하나하나가 `{"from_place", "to_place", "two_way", "visibility", "find", "travel_minutes", "cross", "lock"}` 이다. 두 끝은 붙인 로어북의 장소 항목이다. `two_way`(기본 `true`)가 아니면 `from_place` 에서 `to_place` 로만 간다. `visibility` 는 플레이어가 길을 언제 아는가다: `open`(기본, 처음부터), `fog`(한쪽 끝에 서 보면), `hidden`(찾아야). 숨긴 길에만 찾는 판정 `find: {"ability", "difficulty"}` 를 적는다(룰북의 능력치와 난이도의 이름, 난이도를 비우면 규칙의 기본). `travel_minutes` 는 한 칸 가는 데 걸리는 게임 안의 시간(1분~일주일, 양쪽이 같다)이다. 비우면(기본) 라운드의 걸음 안에서 간다(옆방). 길의 조건(#281): `cross: {"ability", "difficulty", "harm"}` 는 지날 때마다 가는 사람이 굴리는 넘기 판정이다(오르기, 헤엄치기. `harm` 은 실패하면 다치는 양의 등급, 비우면 다치지 않는다). `lock: {"key", "locked"}` 는 자물쇠다. `key` 는 붙인 로어북의 물건 항목이고 열쇠 하나는 자물쇠 하나만 연다. `locked`(기본 `true`)는 시작할 때 잠겨 있는가다. 조건은 양쪽에서 같다. 제자리로 돌아오는 길, 같은 두 장소를 잇는 길 둘(방향이 달라도)은 거부한다 |
+| `routes` (길, 200개) | 맵의 길. 하나하나가 `{"from_place", "to_place", "two_way", "visibility", "find", "travel_minutes", "cross", "lock", "bar", "force"}` 이다. 두 끝은 붙인 로어북의 장소 항목이다. `two_way`(기본 `true`)가 아니면 `from_place` 에서 `to_place` 로만 간다. `visibility` 는 플레이어가 길을 언제 아는가다: `open`(기본, 처음부터), `fog`(한쪽 끝에 서 보면), `hidden`(찾아야). 숨긴 길에만 찾는 판정 `find: {"ability", "difficulty"}` 를 적는다(룰북의 능력치와 난이도의 이름, 난이도를 비우면 규칙의 기본). `travel_minutes` 는 한 칸 가는 데 걸리는 게임 안의 시간(1분~일주일, 양쪽이 같다)이다. 비우면(기본) 라운드의 걸음 안에서 간다(옆방). 길의 조건(#281): `cross: {"ability", "difficulty", "harm"}` 는 지날 때마다 가는 사람이 굴리는 넘기 판정이다(오르기, 헤엄치기. `harm` 은 실패하면 다치는 양의 등급, 비우면 다치지 않는다). `lock: {"key", "locked"}` 는 자물쇠다. `key` 는 붙인 로어북의 물건 항목이고 열쇠 하나는 자물쇠 하나만 연다. `locked`(기본 `true`)는 시작할 때 잠겨 있는가다. 자물쇠에 `pick: {"ability", "difficulty", "tool"}` 를 적으면 따기로 열 수 있다(`tool` 은 있어야 하는 도구 물건, 비우면 도구 없이). `bar: {"side", "barred"}` 는 빗장이다. `side` 는 길의 두 끝 중 빗장이 있는 쪽, `barred`(기본 `false`)는 시작할 때 걸려 있는가다. `force: {"ability", "difficulty"}` 는 문을 부수는 판정이다(자물쇠나 빗장이 있는 길에만). 자물쇠와 넘기 판정은 양쪽에서 같다. 제자리로 돌아오는 길, 같은 두 장소를 잇는 길 둘(방향이 달라도)은 거부한다 |
 | `landmarks` (명소, 100개) | 처음부터 아는 장소들(이름난 도시와 마을). 붙인 로어북의 장소 항목이다. 가는 길을 몰라도 이름은 안다. 같은 장소가 두 번 있으면 거부한다 |
 | `place_items` (놓인 물건, 100줄) | 맵의 장소에 놓인 물건. 하나하나가 `{"place_id", "entry_id", "count", "visibility", "find"}` 이다(1~99개). `visibility` 는 `open`(보임, 기본) 또는 `hidden`(숨김)이다. 숨긴 물건에는 찾는 판정 `find`(`{"ability", "difficulty"}`, 숨긴 길과 같다)가 있어야 하고 보이는 물건에는 없다. 같은 장소의 같은 물건이 같은 보이기로 두 줄이면 거부한다(한 줄에 개수로 적는다) |
 | `covers` (커버, 100개) | 장소마다 숨을 곳이 얼마나 좋은지(#276 의 커버 세이브). 하나하나가 `{"place_id", "cover"}` 다(맵의 장소, 1~10). 세이브 방식의 룰북에서 그 장소에 선 사람이 엄폐하면(`cover` 행동) 이 값으로 커버 세이브를 받는다. 다른 방식이면 엄폐를 받지 않는다. 같은 장소가 두 번 있으면 거부한다 |
@@ -783,6 +783,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `map_start_missing` | 길이나 명소가 있는데 시작 장소가 없다 |
 | `route_find_invalid` | 숨긴 길을 찾는 판정의 능력치나 난이도가 룰북의 규칙에 없다 |
 | `route_cross_invalid` | 길을 넘는 판정의 능력치, 난이도, 실패의 피해(양의 등급)가 룰북의 규칙에 없다(#281) |
+| `route_open_invalid` | 자물쇠를 따는 판정이나 문을 부수는 판정의 능력치나 난이도가 룰북의 규칙에 없다(#281). 따는 도구가 물건 항목이 아니면 `item_entry_missing`, `item_not_item` 이다 |
 | `route_key_repeated` | 열쇠 하나를 두 길의 자물쇠에 적었다. 열쇠 하나는 자물쇠 하나만 연다(#281). 열쇠가 물건 항목이 아니면 `item_entry_missing`, `item_not_item` 이다 |
 | `place_item_off_map` | 놓인 물건이 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)에 있다 |
 | `cover_off_map` | 커버가 맵에 없는 장소에 있다(#276) |
@@ -866,6 +867,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
   - 형식 50: 인물의 자리(`npc_places`)와 인물 옮기기(`happenings[].effects[]` 의 `move_npc`, #282). 그 전 판은 자리를 적은 인물이 없는 것으로 읽는다(모두 장면의 글로 나온다)
   - 형식 51: 장소마다의 커버(`covers`: `place_id`, `cover`, #276 의 커버 세이브). 그 전 판은 커버가 없는 것으로 읽는다
   - 형식 52: 길의 조건(#281). 넘기 판정(`routes[].cross`)과 자물쇠(`routes[].lock`). 그 전 판은 둘 다 없는 것으로 읽는다
+  - 형식 53: 문을 여는 다른 길(#281). 따는 판정(`routes[].lock.pick`), 빗장(`routes[].bar`), 부수는 판정(`routes[].force`). 그 전 판은 셋 다 없는 것으로 읽는다(자물쇠는 열쇠로만 연다)
 - 규칙을 템플릿의 값으로 채워 읽는 형식(4, 6~10, 14, 15, 23, 25, 28, 36)은 DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 형식 12 의 항목의 종류와 형식 16 의 지목의 정답도 DB 의 항목에 채웠다.
 - 옛 판의 규칙에 점수제가 채워져도 그 판에서 점수제를 쓸 수 있게 되는 것은 아니다. 옛 판이 허용한 방식은 그때 있던 것 그대로다. 방식이 나중에 늘어도 옛 판에 저절로 켜지지 않는다.
 - 게시는 "굳히기"다. 남에게 보이게 하는 것은 따로다([공개와 소개 페이지](#공개와-소개-페이지)). 굳힌 내용(`snapshot`)은 공개해도 만든 사람만 본다.
@@ -988,7 +990,7 @@ characters.py   캐릭터 정하기(진행 중에 새 캐릭터를 들일 때도
 | `table_worn` | 캐릭터가 착용한 장비(#276). 착용 하나가 한 줄이고 물건과 차지한 칸들(`slots`, 하나 이상)을 적는다. 시트가 지워지면 함께 지워진다. 가진 개수보다 많이 착용하지 않는 것과 칸이 겹치지 않는 것은 서비스가 테이블을 잠그고 지킨다 |
 | `table_quests` | 테이블의 퀘스트. 판의 사건 항목 하나가 한 줄이고 상태(`hidden`, `active`, `succeeded`, `failed`)와 기한이 끝나는 게임 안의 시각(`due_at`, 분. 0 이상)을 적는다. 시작할 때 만든다 |
 | `table_found_routes` | 테이블의 캐릭터가 찾아낸 숨긴 길. 판의 길의 두 끝(`from_place`, `to_place`)으로 가리킨다. 찾은 때를 적는다 |
-| `table_route_locks` | 테이블의 길의 자물쇠가 지금 잠겨 있는가(#281, `locked`). 판에 자물쇠를 적은 길마다 시작할 때 하나씩 만든다. 판의 길의 두 끝으로 가리킨다 |
+| `table_route_locks` | 테이블의 길의 문(#281). 자물쇠가 잠겼는가(`locked`), 빗장이 걸렸는가(`barred`), 부서졌는가(`broken`, 부서진 문은 열린 채라는 CHECK). 판에 자물쇠나 빗장을 적은 길마다 시작할 때 하나씩 만든다. 판의 길의 두 끝으로 가리킨다 |
 | `table_place_items` | 테이블의 장소에 남은 물건. 판의 놓인 물건 줄마다 하나(`slot` 이 판의 줄 순서)다. 장소, 물건, 남은 개수, 아직 찾지 않은 숨긴 줄인지(`hidden`)를 적는다. 0 이 되어도 지우지 않는다 |
 | `table_clocks` | 테이블의 게임 안의 시계. 테이블 하나에 한 줄. 1일째 0시부터 흐른 분(`minutes`)과 엔진이 늘린 다음 걸음(`next_step_minutes`, 비면 판의 기본. 길, 쉬기, 기다리기가 라운드가 닫힐 때 늘리고 다음 라운드가 열릴 때 지운다) |
 | `table_visits` | 테이블의 캐릭터가 서 본 맵의 장소. 판의 장소 항목 하나가 한 줄이다. 처음 선 때를 적는다. 테이블이 맵의 무엇을 아는지 계산하는 재료다 |
@@ -1324,7 +1326,7 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
   - 장소: 시작 장소, 명소, 서 본 곳, 아는 길의 두 끝.
 - **숨긴 것은 방장도 모른다.** 아직 찾지 않은 숨긴 길과 그런 길로만 닿는 장소는 시나리오를 만든 사람과 AI GM 만 안다. 응답에도 이벤트에도 싣지 않는다.
   테이블의 응답에 아는 맵(`map`: `places`(`entry_id`, `name`), `routes`(`from_place`, `to_place`, `two_way`, `travel_minutes`, `locked`, `cross`))이 있다.
-  `locked` 는 자물쇠의 지금 상태(자물쇠가 없으면 `null`), `cross` 는 넘기 판정(`ability`, `difficulty`, 없으면 `null`)이다(#281). 무슨 열쇠로 여는지와 실패의 피해는 싣지 않는다. 모두가 같은 것을 본다. 맵이 없는 판이면 `null` 이다. 장소의 글(로어북)은 내보내지 않는다.
+  `locked` 는 자물쇠의 지금 상태(자물쇠가 없으면 `null`), `cross` 는 넘기 판정(`ability`, `difficulty`, 없으면 `null`)이다(#281). `barred` 와 `bar_side` 는 빗장의 지금 상태와 있는 쪽(빗장이 없으면 `null`), `broken` 은 문이 부서졌는가, `pick` 과 `force` 는 따는 판정과 부수는 판정이다(없으면 `null`). 무슨 열쇠로 여는지, 따는 도구, 실패의 피해는 싣지 않는다. 모두가 같은 것을 본다. 맵이 없는 판이면 `null` 이다. 장소의 글(로어북)은 내보내지 않는다.
   시트마다 서 있는 곳(`sheet.place_id`)이 있다. 서 본 곳은 늘 아는 곳이라 위치가 숨긴 장소를 드러내는 일은 없다.
 - **시작할 때 모두 시작 장소에 선다.** 시작 장소는 서 본 곳이 되고, 거기서 나가는 안개 길이 보인다. 시작 전에는 서 본 곳이 없어 열린 것만 보인다.
 - **옮기는 것은 엔진뿐이다(#367).** 길을 따라 한 칸씩 가는 것과 쓰러진 동료를 업고 가는 것은 [선언 행동](#라운드)이다(`move`, `carry`).
@@ -1432,7 +1434,7 @@ records.py      일어난 일을 이벤트로 적기
 
 | 칸 | 뜻 |
 | --- | --- |
-| `kind` | 행동의 종류. `check`(판정), `treat`(치료, 아래 "치료"), `name`(지목), `use`(물건 쓰기), `give`(물건 건네기), `move`(맵에서 한 칸 가기), `search`(숨긴 길과 숨긴 물건 찾기), `rest`(쉬기), `take`(놓인 물건 줍기), `put_down`(가진 물건 내려놓기), `steal`(몬스터나 NPC 가 지닌 물건 훔치기), `loot`(쓰러졌거나 죽은 상대의 물건 빼앗기), `wait`(시간 건너뛰기), `buy`(상인에게서 사기), `sell`(상인에게 팔기), `pay`(돈 건네기), `cover`(엄폐하기, 세이브 방식에서만)가 있다. 이 표의 칸들은 `check` 의 것이다 |
+| `kind` | 행동의 종류. `check`(판정), `treat`(치료, 아래 "치료"), `name`(지목), `use`(물건 쓰기), `give`(물건 건네기), `move`(맵에서 한 칸 가기), `search`(숨긴 길과 숨긴 물건 찾기), `rest`(쉬기), `take`(놓인 물건 줍기), `put_down`(가진 물건 내려놓기), `steal`(몬스터나 NPC 가 지닌 물건 훔치기), `loot`(쓰러졌거나 죽은 상대의 물건 빼앗기), `wait`(시간 건너뛰기), `buy`(상인에게서 사기), `sell`(상인에게 팔기), `pay`(돈 건네기), `cover`(엄폐하기, 세이브 방식에서만), `lock`(문 잠그기), `unlock`(문 열기), `pick`(자물쇠 따기), `force`(문 부수기, 넷은 #281)가 있다. 이 표의 칸들은 `check` 의 것이다 |
 | `ability` | 판정에 쓰는 능력. 그 테이블의 규칙에 있는 능력의 `key` |
 | `difficulty` | 난이도의 단계. 규칙에 있는 단계의 `key`. 숫자를 직접 받지 않는다. 비우면 규칙의 기본 난이도로 채워 저장한다 |
 | `risk` | 실패의 대가. 실패하면 행동한 캐릭터가 이 등급만큼 피해를 입는다. 규칙에 있는 양의 등급의 `key`. 없어도 된다 |
@@ -1547,8 +1549,15 @@ records.py      일어난 일을 이벤트로 적기
   - 자물쇠: 잠겨 있으면 그 열쇠를 지닌 사람만 간다(`reason` `locked`). 가면서 열고(`unlocked: true`, 이벤트의 `character_moved` 에도 `unlocked`), 연 문은 열린 채라 열쇠가 없는 일행도 그 뒤로 지나간다. 열쇠는 없어지지 않는다.
   - 넘기 판정: 지날 때마다 가는 사람이 판에 적힌 능력과 난이도(비웠으면 규칙의 기본)로 굴린다. 부상의 영향을 받는다. 결과의 `cross`(`ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`)와 이벤트 `check_rolled` 가 남는다(가지 못해도).
     실패하면 그 자리에 남고(`reason` `cross_failed`), 판에 실패의 피해를 적었으면 그만큼 다친다(`effect`, `hp_changed` 가 판정에 이어진다).
-  - 둘 다 있으면 자물쇠를 먼저 본다. 업힌 사람은 따로 굴리지 않는다.
-  - 잠그기, 따기, 부수기, 빗장, 판의 사건으로 잠그고 여는 것은 다음 PR 이다.
+  - 빗장: 걸려 있으면 빗장 쪽에 선 사람은 풀고 지나간다(`unbarred: true`, 이벤트에도 `unbarred`). 반대쪽에서는 지나가지 못한다(`reason` `barred`). 반대쪽에서는 부수기로만 연다.
+  - 빗장, 자물쇠, 넘기 판정의 차례로 본다. 업힌 사람은 따로 굴리지 않는다.
+- **문 다루기(#281).** 지금 장소에 닿은 아는 길의 문을 다룬다. `place` 는 그 길의 다른 끝이다(방향은 보지 않는다). 지나가지는 않는다.
+  - `lock`(잠그기), `unlock`(열기): `device` 는 `lock`(자물쇠, 그 열쇠를 지녀야) 또는 `bar`(빗장, 빗장 쪽에 서 있어야)다. 그 길에 하나만 있으면 비워도 된다. 둘 다 있는데 비웠거나 없는 장치를 적으면 422(`action.device`). 부서진 문은 잠그지 못한다.
+  - `pick`(따기): 판에 적힌 따는 판정으로 잠긴 자물쇠를 연다. 판에 도구를 적었으면 그것을 지녀야 굴린다. 따는 판정이 없는 자물쇠면 409 `not_pickable`.
+  - `force`(부수기): 판에 적힌 부수는 판정으로 문을 부순다. 자물쇠와 빗장이 다 열리고(`broken`), 다시 잠그거나 걸지 못한다. 부수는 판정이 없는 문이면 409 `not_forceable`.
+  - 받을 때는 그 길과 장치, 판정이 있는지만 본다(이어진 곳이 아니면 422 `action.place`). 열쇠, 서 있는 쪽, 문의 지금 상태는 차례가 오면 본다. 못 하면 굴리지 않고 까닭을 적는다.
+  - 결과는 `outcome.door`(`user_id`, `character_name`, `from`, `to`, `act`, `device`, `done`, `reason`: `no_key`, `wrong_side`, `broken`, `already`, `no_tool`, `failed`, `check`)다. 굴린 판정은 `check_rolled`, 해냈으면 `door_changed` 가 남는다.
+  - 판의 사건으로 잠그고 열고 고치는 것은 다음 PR 이다.
 - **업고 가기(#367).** 쓰러진 사람은 선언을 못 하므로 일행이 가면 혼자 남는다. 가기에 `carry`(앉은 사람의 `user_id`)를 적으면 같은 장소에 쓰러져 있는 동료 한 명을 함께 데려간다. 한 사람이 한 명을 업는다.
   받을 때 같은 장소에 쓰러져 있는(죽지 않은) 다른 사람이어야 한다. 자기 자신, 서 있는 사람, 죽은 사람, 다른 곳의 사람, 앉지 않은 사람은 모두 같은 422(`action.carry`)다.
   마감할 때 다시 본다. 그사이 일어났거나(`standing`) 죽었거나(`dead`, 죽은 캐릭터는 쓰러진 곳에 남는다) 누가 먼저 업고 갔으면(`elsewhere`) 혼자 간다. 업을 사람이 가지 못했으면 업힌 사람도 그대로다(`not_moved`).
@@ -1975,6 +1984,7 @@ app/rounds/
   - `narration-54`: 자리가 있는 인물의 상태 줄에 있는 장소(`- 경비대장 [성문]: 멀쩡함`)와 그 인물을 서술이 옮기지 못한다는 다루는 법, 일어난 사건의 줄에 일행이 본 인물의 이동(`경비대장 → 병영`)이 붙는다(#282)
   - `narration-55`: 엄폐한 사람의 한 일의 줄에 숨은 곳과 그 커버(`(엄폐: 무너진 담, 커버 4)`)가 붙고, 세이브에 커버 세이브(`커버 세이브 4: 막음`)가 있다(#276)
   - `narration-56`: 맵의 나가는 길에 잠긴 문과 넘기 판정(`탑(잠긴 문)`, `절벽 위(넘기: 근력)`), 가기의 줄에 열쇠로 연 것과 넘기의 결과(`열쇠로 문을 열고`, `근력 판정에 실패해 넘지 못했다`), 서술로 문을 열거나 판정 없이 건너게 하지 말라는 다루는 법(#281)
+  - `narration-57`: 한 일의 줄에 문 다루기의 결과(`(문: 광장 쪽 문. 빗장을 걸었다)`), 나가는 길에 빗장과 부서진 문(`창고(빗장 걸림)`, `지하실(부서진 문)`), 가기의 줄에 빗장을 푼 것과 반대쪽 빗장에 막힌 것(#281)
   - `narration-47`: 퀘스트 뒤, 시각 앞에 `[일어난 사건]`(그 라운드가 닫힐 때 일어난 판의 사건, `- 함정: 기사 → 지하실`, #367)과 옮겨진 인물은 이미 그곳에 있다는 다루는 법
   - `narration-46`: 가기의 줄에 업고 간 쓰러진 동료(`(간 곳: 성문 → 숲, 약사을(를) 업고)`, 업지 못했으면 그 까닭, #367)
   - `narration-45`: 한 일의 줄에 기다리기(`(기다리기: 3일)`, `(기다리기: 3일. 모두가 기다리지 않아 시간이 건너뛰지 않았다)`, #367)
@@ -2719,7 +2729,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
 | `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_model`(이 라운드의 서술 모델. 모델을 고르는 규칙 전의 테이블이면 `null`), `price`(1인 1라운드의 값 `{"credits", "tier"}`. 알릴 수 없으면 `null`), `clock`(게임 안의 시각: `day`, `hour`, `minute`, `time_of_day`), `passed_minutes`(앞 라운드부터 흐른 분. 첫 라운드는 0) |
 | `player_action` | 플레이어가 선언한 행동 | `round`, `character_name`, `content`, `action`(행동. 없으면 `null`) |
-| `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다. 가기가 길을 넘는 판정을 굴렸으면 그것도 이 종류다(#281) | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면), `blow`(타격에 장비가 들었으면, #276) |
+| `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다. 가기가 길을 넘는 판정을, 따기와 부수기가 그 판정을 굴렸으면 그것도 이 종류다(#281) | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면), `blow`(타격에 장비가 들었으면, #276) |
 | `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed`, `injury_roll`(부상 표를 굴렸으면) |
 | `npc_attitude_changed` | 엔진이 NPC 의 태도를 바꿨다. 그렇게 만든 일 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `previous`, `attitude`(`friendly`, `neutral`, `wary`, `hostile`), `reason`(`caught_stealing` 훔치다 들킴, `robbed_while_down` 쓰러진 동안 빼앗기고 깨어남) |
 | `npc_changed` | 엔진이 NPC 의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`. HP 의 숫자는 내보내지 않는다 |
@@ -2743,8 +2753,9 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `item_put_down` | 캐릭터가 가진 물건을 서 있는 장소에 내려놓았다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`(`entry_id`, `name`), `entry_id`, `name`, `count`, `put`, `reason`(`not_held`), `remaining` |
 | `clock_step_changed` | 방장이 다음 라운드에 흐를 시간을 정했다. 그 길을 지운 뒤로는 적지 않는다(#367). 그 전에 적힌 것을 읽으려고 남긴다 | `previous`(앞의 걸음, 분), `next_step_minutes`(이제 흐를 분), `default`(판의 기본으로 되돌렸으면 `true`) |
 | `quest_changed` | 퀘스트의 상태가 바뀌었다. 조건을 채워 엔진이 드러내거나 성공이나 실패로(`reason: conditions_met`), 또는 기한을 넘겨 서버가 실패로(`reason: deadline`) 바꿨다. 사람이 바꾸는 일은 없다(#367) | `entry_id`, `name`(사건의 이름), `previous`, `status`, `rewards`: 성공이면 받은 사람마다 `user_id`, `character_name`, `items`(물건마다 `entry_id`, `name`, `count`(받은 개수), `total`, `capped`), `money`(돈의 보상이 있으면 `count`(받은 돈), `total`, `capped`, 없으면 `null`. 이 칸이 생기기 전의 이벤트에는 없다). 실패나 드러내기면 빈 목록. `consumed`: 이뤄서 가져간 물건. 낸 사람마다 `user_id`, `character_name`, `items`(물건마다 `entry_id`, `name`, `count`(낸 개수), `total`(그 뒤의 개수)). 가져가지 않았으면 빈 목록(이 칸이 생기기 전의 이벤트에는 없다). `due_at`: 기한이 끝나는 시각(`day`, `hour`, `minute`, `time_of_day`), 기한이 없으면 `null`. `reason`: 서버가 바꿨으면 `conditions_met`(조건을 채워 드러남이나 성공) 또는 `deadline`(기한을 넘겨 실패). 그때 `actor_id` 는 `null` 이다. 사람이 바꿨으면 `null` |
-| `character_moved` | 캐릭터가 맵의 다른 장소로 옮겨 갔다. 선언 행동으로 갔으면 행한 사람이 없고 그 행동 바로 뒤에 적힌다. 판의 사건이 옮겼으면 그 사건(`happening_occurred`) 바로 뒤에 적힌다. 방장이 옮기던 길을 지우기 전(#367)에 적힌 것은 행한 사람이 방장이다. 업혀 갔으면 업은 사람의 것 바로 뒤에 적힌다 | `user_id`, `character_name`, `from`, `to`: 장소마다 `entry_id`, `name`. 맵이 생기기 전에 시작한 테이블의 캐릭터면 `from` 이 `null`. 선언 행동이면 `round` 와 `travel_minutes`(그 길에 걸린 분, 없으면 `null`)도. 업혀 갔으면 `carried_by`(업은 사람의 `user_id`)도. 판의 사건이 옮겼으면 `happening`(사건 항목의 ID)도. 지닌 열쇠로 잠긴 문을 열고 갔으면 `unlocked`(`true`)도(#281) |
+| `character_moved` | 캐릭터가 맵의 다른 장소로 옮겨 갔다. 선언 행동으로 갔으면 행한 사람이 없고 그 행동 바로 뒤에 적힌다. 판의 사건이 옮겼으면 그 사건(`happening_occurred`) 바로 뒤에 적힌다. 방장이 옮기던 길을 지우기 전(#367)에 적힌 것은 행한 사람이 방장이다. 업혀 갔으면 업은 사람의 것 바로 뒤에 적힌다 | `user_id`, `character_name`, `from`, `to`: 장소마다 `entry_id`, `name`. 맵이 생기기 전에 시작한 테이블의 캐릭터면 `from` 이 `null`. 선언 행동이면 `round` 와 `travel_minutes`(그 길에 걸린 분, 없으면 `null`)도. 업혀 갔으면 `carried_by`(업은 사람의 `user_id`)도. 판의 사건이 옮겼으면 `happening`(사건 항목의 ID)도. 지닌 열쇠로 잠긴 문을 열고 갔으면 `unlocked`(`true`), 빗장을 풀고 갔으면 `unbarred`(`true`)도(#281) |
 | `happening_occurred` | 판의 사건이 일어났다(#367). 조건이 채워져 엔진이 한 번 일으켰다. 행한 사람이 없다 | `round`, `entry_id`, `name`(사건 항목의 이름), `moves`(옮긴 사람마다 `user_id`, `character_name`, `from`, `to`). 조건은 싣지 않는다 |
+| `door_changed` | 캐릭터가 길의 문을 잠그거나 열거나 따거나 부쉈다(#281). 해낸 것만 적힌다. 그 행동(따기와 부수기는 그 판정) 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `act`(`lock`, `unlock`, `pick`, `force`), `device`(`lock`, `bar`, 따기와 부수기는 `null`), `from`, `to` |
 | `place_searched` | 캐릭터가 서 있는 곳에서 숨긴 길과 숨긴 물건을 찾았다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`, `found`: 찾은 길마다 `from_place`, `to_place`, `two_way`. `items`: 찾아서 가진 물건마다 `entry_id`, `name`, `count`, `left`, `total`. 못 찾았으면 빈 목록. 굴린 판정은 없다 |
 | `character_rested` | 캐릭터가 쉬었다. 쉬는 행동이면 그 행동 바로 뒤에(`cause: rest`), 저절로 회복이면 닫힘 앞에(`cause: natural`) 적힌다 | `round`, `user_id`, `character_name`, `cause`, `length`(`short`, `long`. 저절로 회복이면 `null`), `rested`(깨졌으면 `false`), `reason`(`hurt`, `downed`, `dead` 또는 `null`), `rolls`, `before`, `after`, `max_hp` |
 | `character_revived` | 고비를 넘기고 쓰러져 있던 캐릭터가 오래 쉬어 되살아나기를 굴렸다. 끝난 부상들 뒤, 닫힘 앞에 적힌다 | `round`, `user_id`, `character_name`, `roll`, `target`, `success`, `hp`(성공이면 1) |

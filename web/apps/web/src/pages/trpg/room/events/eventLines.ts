@@ -208,6 +208,15 @@ function movedText(payload: Payload, ctx: EventContext, event: TableEvent): stri
   return `${who(payload, ctx, event)}: ${placeOf(payload, 'from') ?? '?'} → ${placeOf(payload, 'to') ?? '?'}${by}`;
 }
 
+/** 문을 다룬 것(#281). 해낸 것만 이벤트로 온다 */
+const DOOR_ACTS: Record<string, string> = { lock: '잠갔습니다', unlock: '열었습니다', pick: '땄습니다', force: '부쉈습니다' };
+
+function doorText(payload: Payload, ctx: EventContext, event: TableEvent): string {
+  const device = text(payload, 'device') === 'bar' ? '빗장' : '문';
+  const act = DOOR_ACTS[text(payload, 'act') ?? ''] ?? '다뤘습니다';
+  return `${who(payload, ctx, event)}: ${placeOf(payload, 'from') ?? '?'} ↔ ${placeOf(payload, 'to') ?? '?'} ${device}을 ${act}`;
+}
+
 function givenText(payload: Payload, ctx: EventContext, event: TableEvent): string {
   if (!flag(payload, 'given')) return `${who(payload, ctx, event)}: 건네지 못했습니다.`;
   const target = part(payload, 'target');
@@ -350,6 +359,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   quest_changed: (p) => questText(p),
   character_moved: (p, ctx, e) => movedText(p, ctx, e),
   place_searched: (p, ctx, e) => searchedText(p, ctx, e),
+  door_changed: (p, ctx, e) => doorText(p, ctx, e),
 };
 
 /** 서술을 막거나 사람과 캐릭터를 잃는 일. 기록에서 두드러진다 */
