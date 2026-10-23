@@ -18,9 +18,11 @@ export type StudioKindText = {
   first: string;
   /** 찾지 못했을 때(404) */
   missing: string;
+  /** 지우기 창의 알림. 없으면 재료의 알림(쓰는 시나리오가 있으면 지우지 못한다) */
+  deleteNote?: string;
 };
 
-export const STUDIO_KINDS: StudioKind[] = ['rulebooks', 'worlds', 'lorebooks', 'bestiaries'];
+export const STUDIO_KINDS: StudioKind[] = ['rulebooks', 'worlds', 'lorebooks', 'bestiaries', 'scenarios'];
 
 const TEXTS: Record<StudioKind, StudioKindText> = {
   rulebooks: {
@@ -58,6 +60,16 @@ const TEXTS: Record<StudioKind, StudioKindText> = {
     empty: '아직 만든 몬스터 모음이 없습니다.',
     first: '첫 몬스터 모음 만들기',
     missing: '몬스터 모음을 찾을 수 없습니다. 지워졌을 수 있습니다.',
+  },
+  scenarios: {
+    label: '시나리오',
+    title: '내 시나리오',
+    intro: '시나리오는 재료를 모아 규칙을 적은 것입니다. 게시하면 그때의 내용이 판으로 굳고, 판을 공개하면 테이블을 열 수 있습니다.',
+    create: '새 시나리오 만들기',
+    empty: '아직 만든 시나리오가 없습니다.',
+    first: '첫 시나리오 만들기',
+    missing: '시나리오를 찾을 수 없습니다. 지워졌을 수 있습니다.',
+    deleteNote: '지우면 되돌릴 수 없습니다. 공개했다면 소개 페이지도 더는 열리지 않습니다.',
   },
 };
 
