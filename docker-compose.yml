@@ -124,8 +124,10 @@ x-auth-without-signing-key: &auth-without-signing-key
 x-game-environment: &game-environment
   DATABASE_URL: postgresql+asyncpg://game:${GAME_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
   AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
-  # 모든 서버를 함께 띄우므로 결제 서버에 붙인다. trpg-server/.env 에 BILLING_SECRET 이 있어야 뜬다
-  BILLING_URL: http://billing-server:8003
+  # 모든 서버를 함께 띄우므로 결제 서버에 붙인다. trpg-server/.env 에 BILLING_SECRET 이 있어야 뜬다.
+  # 로컬에서 크레딧 없이 한 판을 돌려 보려면 루트 .env 에 GAME_BILLING_URL= (빈 값)을 적는다. 그러면 서술 값을 받지 않는다
+  # (게임 서버의 결제 없는 모드). 적지 않으면 결제 서버다. ":-" 가 아니라 "-" 라서 빈 값을 적으면 빈 값 그대로 쓴다
+  BILLING_URL: ${GAME_BILLING_URL-http://billing-server:8003}
   # 방장에게 보내는 알림도 알림 서버에 넣는다. trpg-server/.env 에 NOTIFICATION_SECRET 이 있어야 뜬다
   # (알림 서버의 GAME_SERVER_SECRET 과 같은 값)
   NOTIFICATION_URL: http://notification-server:8004
