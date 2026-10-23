@@ -20,7 +20,7 @@ from server_core.testing.tokens import SigningKey, make_access_claims, make_toke
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters.documents import DOCUMENT_FORMAT
-from app.characters.models import AFFECTION_MAX_STAGES, CharacterVersion
+from app.characters.models import AFFECTION_MAX_STAGES, AFFECTION_MODEL_STEP_DEFAULT, CharacterVersion
 from app.main import API_PREFIX
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -42,6 +42,7 @@ AFFECTION = {
         {'id': 'date', 'on': {'kind': 'reach_place', 'target': 'cafe'}, 'change': 10, 'once': True},
         {'id': 'rude', 'on': {'kind': 'use_item', 'target': 'scarf'}, 'change': -3, 'once': False},
     ],
+    'model_step': 5,
 }
 
 
@@ -84,6 +85,7 @@ async def test_defaults_fill_the_display_the_start_and_the_rules(client: AsyncCl
         'start': 0,
         'stages': [{'name': '보통', 'at': 0}],
         'rules': [],
+        'model_step': AFFECTION_MODEL_STEP_DEFAULT,
     }
 
 
