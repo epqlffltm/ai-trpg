@@ -93,6 +93,8 @@ class ActionKind(enum.StrEnum):
     SELL = 'sell'
     # 가진 돈을 앉은 다른 사람에게 건넨다(#278)
     PAY = 'pay'
+    # 지금 장소의 숨을 곳에 엄폐한다. 그 라운드 동안 그 장소의 커버로 커버 세이브를 받는다(#276). 세이브 방식에서만
+    COVER = 'cover'
 
 
 class RestLength(enum.StrEnum):
@@ -480,6 +482,20 @@ class PayAction(BaseModel):
 
 
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
+class CoverAction(BaseModel):
+    """
+    지금 서 있는 장소의 숨을 곳에 엄폐하는 행동(app/rounds/covers.py, #276 의 커버 세이브). 받는 값이 없다.
+
+    그 라운드 동안 그 장소의 커버로 커버 세이브를 받는다. 차례를 기다리지 않는다. 숨는 것은 공격에 앞선다.
+    그 라운드의 행동을 쓰므로 공격하지 못한다. 그것이 대가다.
+    세이브 방식의 룰북에서, 커버가 있는 장소에 서 있을 때만 받는다. 서술이 "벽 뒤에 숨었다"고 써도 엄폐가 아니다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.COVER]
+
+
 AnyAction = (
     CheckAction
     | TreatAction
@@ -497,6 +513,7 @@ AnyAction = (
     | BuyAction
     | SellAction
     | PayAction
+    | CoverAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

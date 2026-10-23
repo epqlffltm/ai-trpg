@@ -16,6 +16,7 @@
 
 import type { DeclaredAction, HeldItem, SceneCast, ScenePerson, TableDetail, TableMember } from '../../../../../api/types';
 import { amountLabel, itemPrice, merchantsBuy, moneyOf } from '../../money';
+import { placeCover } from '../../status/statusView';
 import { waysFrom, type Way } from '../../status/statusView';
 
 export type ActionKind = DeclaredAction['kind'];
@@ -48,6 +49,7 @@ const ACTION_ORDER: ActionKind[] = [
   'buy',
   'sell',
   'pay',
+  'cover',
   'rest',
   'wait',
 ];
@@ -92,6 +94,8 @@ function kindAvailable(kind: ActionKind, ctx: ActionContext): boolean {
       return merchantsBuy(ctx.table) && merchants(ctx).length > 0 && sellableItems(ctx).length > 0;
     case 'pay':
       return Boolean(ctx.table.currency) && moneyOf(ctx.me) > 0 && recipients(ctx).length > 0;
+    case 'cover':
+      return coverHere(ctx) > 0;
     default:
       return true;
   }
@@ -100,6 +104,14 @@ function kindAvailable(kind: ActionKind, ctx: ActionContext): boolean {
 /** 내가 선 장소. 맵이 없거나 맵에 서 있지 않으면 null */
 export function hereId(ctx: ActionContext): string | null {
   return ctx.table.map && ctx.me.sheet?.place_id ? ctx.me.sheet.place_id : null;
+}
+
+/**
+ * 엄폐할 수 있는 커버(#276). 세이브 방식의 판에서 내가 선 장소의 커버. 엄폐할 수 없으면 0
+ * (서버의 app/rounds/covers.py 의 accept_cover 와 같은 조건)
+ */
+export function coverHere(ctx: ActionContext): number {
+  return placeCover(ctx.table, hereId(ctx));
 }
 
 export function heldItems(me: TableMember): HeldItem[] {

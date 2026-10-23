@@ -13,14 +13,17 @@
     방어 방식이 없는 규칙이면 방어구가 막지 않고 부위도 굴리지 않는다.
   - 관통: 관통력(ap)이 있는 무기로 방어가 있는 부위를 치면 관통 굴림을 한다. 판정의 주사위의 눈 + 관통력이
     그 부위의 방어 + 규칙의 관통 기준값 이상이면 관통이다. 관통하면 방어구로는 막지 못한다(ac 와 reduce 에서 방어가 0).
-  - 세이브는 둘이다. 아머 세이브는 그 부위의 방어로, 불굴 세이브(ward: 부적, 역장, 타고난 것)는 그 값으로 굴린다.
-    둘 중 큰 값으로 한 번만 굴린다. 관통하면 아머 세이브는 없다. 불굴 세이브는 관통을 무시한다.
+  - 세이브는 셋이다. 아머 세이브는 그 부위의 방어로, 커버 세이브는 엄폐한 장소의 커버로,
+    불굴 세이브(ward: 부적, 역장, 타고난 것)는 그 값으로 굴린다. 셋 중 큰 값으로 한 번만 굴린다.
+    같으면 아머, 커버, 불굴의 차례로 앞의 것이다.
+    관통하면 아머와 커버 세이브는 없다. 불굴 세이브는 관통을 무시한다.
+    커버는 착용이 아니라 엄폐한 사람의 것이다(app/rounds/covers.py). 부르는 쪽이 방어에 얹는다(with_cover).
 
 DB 를 모른다. 누가 무엇을 착용했는지는 부르는 쪽이 Worn 으로 넘긴다.
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from app.engine.dice import Dice
 from app.engine.ruleset import ArmorMode, EquipmentSlot, Ruleset
@@ -38,11 +41,15 @@ class Worn:
 
 @dataclass(frozen=True)
 class Protection:
-    """한 쪽이 입은 방어. 부위마다의 방어(착용 + 타고난 것)와 모든 부위의 방어와 불굴 세이브의 값이다."""
+    """
+    한 쪽이 입은 방어. 부위마다의 방어(착용 + 타고난 것)와 모든 부위의 방어와 불굴 세이브의 값,
+    엄폐했으면 그 장소의 커버다.
+    """
 
     by_slot: Mapping[str, int]
     guard: int = 0
     ward: int = 0
+    cover: int = 0
 
 
 @dataclass(frozen=True)
@@ -60,6 +67,8 @@ class SaveKind:
 
     # 맞은 부위의 방어로 굴린다. 관통하면 없다
     ARMOR = 'armor'
+    # 엄폐한 장소의 커버로 굴린다. 관통하면 없다
+    COVER = 'cover'
     # 불굴 세이브. 관통을 무시한다
     WARD = 'ward'
 
@@ -91,6 +100,11 @@ def protection_of(worn: Sequence[Worn], natural: Mapping[str, int] | None = None
             by_slot[slot] = by_slot.get(slot, 0) + one.defense
     ward = max([natural_ward, *(one.ward for one in worn)])
     return Protection(by_slot=by_slot, guard=sum(one.guard for one in worn), ward=ward)
+
+
+def with_cover(protection: Protection, cover: int) -> Protection:
+    """방어에 엄폐한 장소의 커버를 얹는다. 받은 방어는 고치지 않는다."""
+    return replace(protection, cover=cover)
 
 
 def defense_at(protection: Protection, slot: str | None) -> int:
@@ -134,9 +148,18 @@ def roll_location(ruleset: Ruleset, dice: Dice) -> str | None:
     return slots[-1].key
 
 
+def barrier(defense: int, cover: int) -> int:
+    """
+    관통이 넘어야 하는 막는 것. 그 부위의 방어와 엄폐한 장소의 커버 중 단단한 것이다.
+    엄폐하지 않았으면 방어 그대로다.
+    """
+    return max(defense, cover)
+
+
 def roll_pierce(ruleset: Ruleset, dice: Dice, ap: int, defense: int) -> Pierce | None:
     """
-    관통 굴림. 관통력이 있는 무기로 방어가 있는 부위를 칠 때만 굴린다. 아니면 굴리지 않고 None.
+    관통 굴림. 관통력이 있는 무기로 막는 것(방어, 커버 중 단단한 것, barrier)이 있는 곳을 칠 때만 굴린다.
+    아니면 굴리지 않고 None.
 
     방어 방식이 없는 규칙이면 막을 것이 없어 굴리지 않는다.
     """
@@ -152,26 +175,27 @@ def holding(defense: int, pierce: Pierce | None) -> int:
     return 0 if pierce is not None and pierce.pierced else defense
 
 
-def save_terms(defense: int, ward: int) -> tuple[str, int] | None:
+def save_terms(defense: int, ward: int, cover: int = 0) -> tuple[str, int] | None:
     """
-    굴릴 세이브의 종류와 값. 아머(그 부위의 방어, 관통했으면 0)와 불굴 중 큰 것이다. 같으면 아머다.
+    굴릴 세이브의 종류와 값. 아머(그 부위의 방어), 커버(엄폐한 장소의 것), 불굴 중 큰 것이다.
+    같으면 아머, 커버, 불굴의 차례로 앞의 것이다. 관통했으면 아머와 커버는 부르는 쪽이 0 으로 넘긴다(holding).
 
-    둘 다 0 이면 막을 것이 없어 None 이다.
+    셋 다 0 이면 막을 것이 없어 None 이다.
     """
-    if defense <= 0 and ward <= 0:
-        return None
-    return (SaveKind.WARD, ward) if ward > defense else (SaveKind.ARMOR, defense)
+    terms = [(SaveKind.ARMOR, defense), (SaveKind.COVER, cover), (SaveKind.WARD, ward)]
+    kind, value = max(terms, key=lambda term: term[1])
+    return None if value <= 0 else (kind, value)
 
 
-def roll_save(ruleset: Ruleset, dice: Dice, defense: int, ward: int) -> Save | None:
+def roll_save(ruleset: Ruleset, dice: Dice, defense: int, ward: int, cover: int = 0) -> Save | None:
     """
     세이브 굴림. 세이브 방식의 규칙에서, 막을 값이 있을 때만 굴린다. 아니면 None.
 
-    defense 는 관통을 뺀 그 부위의 방어(holding), ward 는 불굴 세이브의 값이다.
+    defense 는 관통을 뺀 그 부위의 방어(holding), cover 는 관통을 뺀 엄폐한 장소의 커버, ward 는 불굴 세이브의 값이다.
     """
     if ruleset.armor is None or ruleset.armor.mode != ArmorMode.SAVE:
         return None
-    terms = save_terms(defense, ward)
+    terms = save_terms(defense, ward, cover)
     if terms is None:
         return None
     kind, value = terms

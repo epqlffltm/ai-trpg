@@ -54,6 +54,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         routes=[route.model_dump() for route in data.routes],
         landmarks=list(data.landmarks),
         place_items=[rule.model_dump() for rule in data.place_items],
+        covers=[rule.model_dump() for rule in data.covers],
         happenings=[rule.model_dump() for rule in data.happenings],
         npc_places=[place.model_dump() for place in data.npc_places],
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,

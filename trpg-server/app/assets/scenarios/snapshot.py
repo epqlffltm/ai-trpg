@@ -112,7 +112,8 @@ from app.engine.sheet import Sheet
 #      물건의 관통력과 불굴 세이브(items[].ap, ward), 몬스터의 타고난 불굴 세이브(monsters[].ward)
 #  50: 인물의 자리(npc_places: 인물이 처음 있는 맵의 장소)와 인물을 옮기는 사건의 효과(happenings[].effects[] 의
 #      kind move_npc 와 그 인물 npc)가 있다(#282)
-SNAPSHOT_FORMAT = 50
+#  51: 장소마다의 커버(covers: 장소, 커버의 값)가 있다(#276 의 커버 세이브)
+SNAPSHOT_FORMAT = 51
 
 
 class EntrySnapshot(BaseModel):
@@ -437,6 +438,13 @@ class NpcPlaceSnapshot(BaseModel):
     place_id: uuid.UUID
 
 
+class CoverSnapshot(BaseModel):
+    """장소 하나의 커버. 판 안의 장소 항목 하나(place_id)에 숨을 곳이 얼마나 좋은지(cover)다."""
+
+    place_id: uuid.UUID
+    cover: int
+
+
 class PlayerMadeHpSnapshot(BaseModel):
     """플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다."""
 
@@ -493,6 +501,8 @@ class Snapshot(BaseModel):
     landmarks: list[uuid.UUID] = []
     # 장소에 놓인 물건들. 장소는 판 안의 장소 항목, 물건은 판 안의 물건 항목이다. 있으면 시작 장소도 있다
     place_items: list[PlaceItemSnapshot] = []
+    # 장소마다의 커버(#276). 장소는 판 안의 장소 항목이다. 있으면 시작 장소도 있다. 형식 50 보다 옛 판에는 없다
+    covers: list[CoverSnapshot] = []
     # 사건 규칙들. 판 안의 로어북 사건 항목마다 많아야 하나다. 효과의 장소는 판의 맵의 장소다(#367)
     happenings: list[HappeningSnapshot] = []
     # 인물의 자리들(#282). 인물 하나에 많아야 하나다. 인물은 판 안의 인물 항목, 장소는 판 안의 장소 항목이다.
@@ -655,6 +665,20 @@ class Snapshot(BaseModel):
         return self
 
     @model_validator(mode='after')
+    def require_cover_places(self) -> 'Snapshot':
+        """
+        커버가 모두 판 안의 장소 항목을 가리키는지, 커버가 있으면 시작 장소가 있는지 본다. 아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽(app/rounds/covers.py)은 장소가 있다고 믿고 쓴다.
+        """
+        places = {entry.id for entry in place_entries(self)}
+        if any(rule.place_id not in places for rule in self.covers):
+            raise ValueError('장소 항목이 아닌 것을 가리키는 커버가 있습니다.')
+        if self.covers and self.start_place is None:
+            raise ValueError('커버가 있는데 시작 장소가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
     def require_quest_entries(self) -> 'Snapshot':
         """
         퀘스트 규칙이 모두 판 안의 사건 항목을 가리키는지 본다. 아니면 거부한다.
@@ -757,6 +781,11 @@ def place_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
 def npc_place_of(snapshot: Snapshot, entry_id: uuid.UUID) -> uuid.UUID | None:
     """인물 하나가 처음 있는 장소(#282). 자리를 적지 않은 인물이면 None 이다."""
     return next((place.place_id for place in snapshot.npc_places if place.entry_id == entry_id), None)
+
+
+def cover_at(snapshot: Snapshot, place_id: uuid.UUID | None) -> int:
+    """그 장소의 커버. 커버가 없거나 장소가 없으면(맵에 서 있지 않다) 0 이다."""
+    return next((rule.cover for rule in snapshot.covers if rule.place_id == place_id), 0)
 
 
 def has_map(snapshot: Snapshot) -> bool:
@@ -911,6 +940,7 @@ def build_snapshot(
         routes=[RouteSnapshot(**route) for route in scenario.routes],
         landmarks=list(scenario.landmarks),
         place_items=[PlaceItemSnapshot(**rule) for rule in scenario.place_items],
+        covers=[CoverSnapshot(**rule) for rule in scenario.covers],
         happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
         npc_places=[NpcPlaceSnapshot(**place) for place in scenario.npc_places],
         player_made_hp=scenario.player_made_hp,

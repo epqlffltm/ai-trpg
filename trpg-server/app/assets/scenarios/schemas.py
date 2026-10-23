@@ -50,6 +50,7 @@ from app.assets.models import (
     QUEST_MAX_TIME_LIMIT_MINUTES,
     ROUND_MAX_MINUTES,
     SCENARIO_MAX_BESTIARIES,
+    SCENARIO_MAX_COVERS,
     SCENARIO_MAX_ENCOUNTERS,
     SCENARIO_MAX_HAPPENINGS,
     SCENARIO_MAX_ITEM_RULES,
@@ -944,6 +945,36 @@ PlaceItems = Annotated[
 ]
 
 
+class CoverRule(BaseModel):
+    """
+    장소 하나의 커버(#276 의 커버 세이브). 그 장소(place_id)에 숨을 곳이 얼마나 좋은지(cover, 1~10)다.
+
+    그 장소에서 엄폐한(cover 행동) 앉은 사람은 그 라운드에 이 값으로 커버 세이브를 받는다(app/rounds/covers.py).
+    세이브 방식의 룰북에서만 쓰인다. 장소가 맵의 장소인지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    place_id: uuid.UUID
+    cover: CombatNumber
+
+    @field_serializer('place_id')
+    def id_as_text(self, value: uuid.UUID) -> str:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(value)
+
+
+def reject_duplicate_covers(rules: list[CoverRule]) -> list[CoverRule]:
+    """같은 장소의 커버가 둘이면 거부한다. 어느 값으로 숨는지 가를 수 없다."""
+    places = [rule.place_id for rule in rules]
+    if len(set(places)) != len(places):
+        raise ValueError('같은 장소의 커버가 두 번 있습니다.')
+    return rules
+
+
+Covers = Annotated[list[CoverRule], Field(max_length=SCENARIO_MAX_COVERS), AfterValidator(reject_duplicate_covers)]
+
+
 QuestRules = Annotated[
     list[QuestRule], Field(max_length=SCENARIO_MAX_QUEST_RULES), AfterValidator(reject_duplicate_quests)
 ]
@@ -1117,6 +1148,8 @@ class ScenarioCreate(AssetCreate):
     routes: Routes = []
     landmarks: Landmarks = []
     place_items: PlaceItems = []
+    # 장소마다의 커버(#276). 세이브 방식의 룰북에서 엄폐할 때 쓴다
+    covers: Covers = []
     happenings: Happenings = []
     npc_places: NpcPlaces = []
     player_made_hp: PlayerMadeHp | None = None
@@ -1138,7 +1171,7 @@ class ScenarioUpdate(AssetUpdate):
     null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-    quests, routes, landmarks, place_items, happenings, npc_places, character_modes 는
+    quests, routes, landmarks, place_items, covers, happenings, npc_places, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -1170,6 +1203,7 @@ class ScenarioUpdate(AssetUpdate):
     routes: Routes | None = None
     landmarks: Landmarks | None = None
     place_items: PlaceItems | None = None
+    covers: Covers | None = None
     happenings: Happenings | None = None
     npc_places: NpcPlaces | None = None
     player_made_hp: PlayerMadeHp | None = None
@@ -1231,6 +1265,7 @@ class ScenarioDetail(ScenarioSummary):
     routes: list[RouteRule]
     landmarks: list[uuid.UUID]
     place_items: list[PlaceItem]
+    covers: list[CoverRule]
     happenings: list[HappeningRule]
     npc_places: list[NpcPlace]
     player_made_hp: PlayerMadeHp | None

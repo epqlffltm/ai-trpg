@@ -14,6 +14,7 @@ import {
   clockLabel,
   clockTimeLabel,
   minutesLabel,
+  placeCover,
   placeName,
   questStatusLabel,
   waysFrom,
@@ -114,6 +115,7 @@ function Places({ table, map, mine, shortcuts }: PlacesProps) {
   const here = mine?.sheet?.place_id;
   const ways = waysFrom(map, here);
   const place = map.places.find((entry) => entry.entry_id === here);
+  const cover = placeCover(table, here);
   return (
     <section aria-labelledby="places-heading">
       <h3 id="places-heading" className="waiting-room__label">
@@ -122,7 +124,9 @@ function Places({ table, map, mine, shortcuts }: PlacesProps) {
       <p>
         지금 있는 곳: {placeName(map, here) ?? '맵에 서 있지 않음'}{' '}
         {here ? <ActionButton shortcuts={shortcuts} patch={{ kind: 'search' }} label="찾기" what="지금 있는 곳" /> : null}
+        {cover > 0 ? <ActionButton shortcuts={shortcuts} patch={{ kind: 'cover' }} label="엄폐" what="지금 있는 곳" /> : null}
       </p>
+      {cover > 0 ? <p className="hint">숨을 곳: 커버 {cover}. 엄폐하면 그 라운드 동안 이 값으로 커버 세이브를 받습니다.</p> : null}
       {place && place.items.length > 0 ? (
         <>
           <p className="hint">여기 놓인 것</p>

@@ -81,6 +81,7 @@ def to_detail(scenario: Scenario, found: ModelStatus | None) -> ScenarioDetail:
         routes=scenario.routes,
         landmarks=scenario.landmarks,
         place_items=scenario.place_items,
+        covers=scenario.covers,
         happenings=scenario.happenings,
         npc_places=scenario.npc_places,
         player_made_hp=scenario.player_made_hp,
