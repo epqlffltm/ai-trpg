@@ -179,6 +179,9 @@ func TestAnExhaustedPoolAnswers503AndTheHoldIsPlacedOnceAfter(t *testing.T) {
 	}
 
 	release()
+	// 연결이 빈 뒤는 실제 마감으로 본다. 짧은 마감(100ms)을 그대로 두면 느린 CI(-race)에서
+	// 실제 DB 의 홀드 한 번이 마감을 넘겨 503 이 된다. balance 도 이 deps 를 쓴다
+	deps.RequestTimeout = httpapi.RequestTimeout
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	if err := services.Wallet.Deposit(ctx, user, 100); err != nil {
