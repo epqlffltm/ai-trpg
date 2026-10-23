@@ -111,11 +111,11 @@ class EventType(enum.StrEnum):
     CHARACTER_DIED = 'character_died'
     # 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다. 새 캐릭터가 받은 시트가 적힌다
     CHARACTER_JOINED = 'character_joined'
-    # 캐릭터가 물건을 얻었다. 무엇을 몇 개, 그 뒤에 몇 개가 됐는가.
-    # 방장이 줬거나(app/tables/item_grants.py, 행한 사람이 방장), 몬스터를 쓰러뜨려 엔진이 줬다
-    # (app/rounds/drops.py, 행한 사람이 없고 그 마리의 변화의 이벤트에 잇는다)
+    # 캐릭터가 물건을 얻었다. 무엇을 몇 개, 그 뒤에 몇 개가 됐는가. 엔진이 줬다(행한 사람이 없다).
+    # 몬스터나 NPC 를 쓰러뜨려(app/rounds/drops.py), 줍거나 찾아서, 훔치거나 빼앗아서다.
+    # 방장이 주던 길을 지우기 전(#367)에 적힌 것은 행한 사람이 방장이다
     ITEMS_GAINED = 'items_gained'
-    # 방장이 캐릭터에게서 물건을 빼앗았다
+    # 방장이 캐릭터에게서 물건을 빼앗았다. 그 길을 지운 뒤로는 적지 않는다(#367). 그 전에 적힌 것을 읽으려고 남긴다
     ITEMS_LOST = 'items_lost'
     # 캐릭터가 소모품을 썼다(또는 쓰려 했지만 못 했다). 원인은 그 행동의 이벤트다. 회복했으면 바로 뒤에 HP 의 변화
     ITEM_USED = 'item_used'

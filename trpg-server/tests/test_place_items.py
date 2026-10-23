@@ -20,6 +20,7 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_31
@@ -237,11 +238,12 @@ async def test_the_one_after_finds_nothing_left(
     assert len(await events_of(client, me, table, 'items_gained')) == 1
 
 
-async def test_a_full_bag_takes_only_what_fits(client: AsyncClient, me: dict[str, str], narrated):
+async def test_a_full_bag_takes_only_what_fits(
+    client: AsyncClient, me: dict[str, str], narrated, session: AsyncSession
+):
     world = await make_world(client, me)
     table = await start(client, me, world, [], place_items=[lying(world, 'gate', 'potion', 3)])
-    given = await give(client, me, table, ME, world['potion'], 98)
-    assert given.status_code == status.HTTP_200_OK, given.text
+    await give(session, table, ME, world['potion'], 98)
 
     await declare(client, me, table, '물약을 줍는다.', take(world, 'potion', 3))
     await narrated()
@@ -291,11 +293,15 @@ async def test_searching_finds_a_hidden_item_and_keeps_it(
 
 
 async def test_what_a_full_bag_cannot_hold_stays_in_sight(
-    client: AsyncClient, app: FastAPI, me: dict[str, str], narrated
+    client: AsyncClient,
+    app: FastAPI,
+    me: dict[str, str],
+    narrated,
+    session: AsyncSession,
 ):
     world = await make_world(client, me)
     table = await start(client, me, world, [], place_items=[hidden(world, 'gate', 'pelt', 3)])
-    await give(client, me, table, ME, world['pelt'], 98)
+    await give(session, table, ME, world['pelt'], 98)
     load_dice(app, [PASS])
 
     await declare(client, me, table, '마루 밑을 뒤진다.', SEARCH)

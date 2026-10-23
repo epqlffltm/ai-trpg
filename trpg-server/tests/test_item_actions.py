@@ -26,6 +26,8 @@ from app.rounds.narrator import Impact, ItemActionNote
 from tests.narration_model import asset_body
 from tests.sheets import SHEET
 from tests.signing import SigningKey, make_access_claims, make_token
+from tests.test_table_items import give as stock
+from tests.test_table_items import take as take_away
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -337,11 +339,8 @@ async def test_what_was_taken_meanwhile_is_not_used(
     load_dice(app, [3])
     await declared(client, friend, table, use(lore['potion']))
 
-    # 선언한 뒤에 방장이 물약을 모두 빼앗는다
-    taken = await client.delete(
-        table_url(table, f'/members/{FRIEND}/items/{lore["potion"]["id"]}'), params={'count': 2}, headers=me
-    )
-    assert taken.status_code == status.HTTP_200_OK, taken.text
+    # 선언한 뒤 차례가 오기 전에 물약이 모두 없어졌다(지금은 그런 길이 없다. 차례에 다시 보는지 본다)
+    await take_away(session, table, FRIEND, lore['potion'])
     await declared(client, me, table)
     await narrated()
 
@@ -442,10 +441,10 @@ async def test_cannot_give_to_the_dead(
     assert 'recipient_dead' in response.text
 
 
-async def test_cannot_give_to_someone_full(client: AsyncClient, me: dict, friend: dict, lore: dict, table: dict):
-    await client.post(
-        table_url(table, f'/members/{ME}/items'), json={'entry_id': lore['rope']['id'], 'count': 98}, headers=me
-    )
+async def test_cannot_give_to_someone_full(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, table: dict, session: AsyncSession
+):
+    await stock(session, table, ME, lore['rope'], 98)
 
     response = await declare(client, friend, table, give(lore['rope'], ME))
 
@@ -454,13 +453,11 @@ async def test_cannot_give_to_someone_full(client: AsyncClient, me: dict, friend
 
 
 async def test_a_gift_to_someone_filled_meanwhile_stays(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, table: dict, narrated
+    client: AsyncClient, me: dict, friend: dict, lore: dict, table: dict, session: AsyncSession, narrated
 ):
     await declared(client, friend, table, give(lore['rope'], ME))
-    # 선언한 뒤에 방장이 자기에게 밧줄을 가득 채운다
-    await client.post(
-        table_url(table, f'/members/{ME}/items'), json={'entry_id': lore['rope']['id'], 'count': 98}, headers=me
-    )
+    # 선언한 뒤 차례가 오기 전에 받을 사람의 밧줄이 가득 찼다
+    await stock(session, table, ME, lore['rope'], 98)
     await declared(client, me, table)
     await narrated()
 
@@ -472,16 +469,16 @@ async def test_a_gift_to_someone_filled_meanwhile_stays(
 
 
 async def test_what_was_taken_meanwhile_is_not_given(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, table: dict, narrated
+    client: AsyncClient, me: dict, friend: dict, lore: dict, table: dict, session: AsyncSession, narrated
 ):
     await declared(client, friend, table, give(lore['potion'], ME, 2))
-    # 선언한 뒤에 방장이 물약 하나를 빼앗는다. 둘을 건넬 수 없다
-    await client.delete(table_url(table, f'/members/{FRIEND}/items/{lore["potion"]["id"]}'), headers=me)
+    # 선언한 뒤 차례가 오기 전에 물약이 없어졌다. 건넬 수 없다
+    await take_away(session, table, FRIEND, lore['potion'])
     await declared(client, me, table)
     await narrated()
 
     after = await read_table(client, me, table)
-    assert ('치유 물약', 1) in held(after, FRIEND)
+    assert '치유 물약' not in [name for name, _ in held(after, FRIEND)]
     assert held(after, ME) == [('밧줄', 1)]
     (given,) = await events_of(client, me, table, 'item_given')
     assert (given['payload']['given'], given['payload']['reason']) == (False, 'not_held')

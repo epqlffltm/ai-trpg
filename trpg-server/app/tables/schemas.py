@@ -15,7 +15,6 @@ from ai_core.catalog_file import Slug
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.assets.models import (
-    ITEM_STACK_MAX,
     PLAYER_MADE_MODES,
     TABLE_MAX_PLAYERS,
     CharacterMode,
@@ -378,15 +377,6 @@ class CurrencyOut(BaseModel):
     name: str
     unit: str
     sell_percent: int
-
-
-class ItemChange(BaseModel):
-    """방장이 물건을 주거나 빼앗을 때 받는 값. 어느 물건을 몇 개."""
-
-    model_config = ConfigDict(extra='forbid')
-
-    entry_id: uuid.UUID
-    count: int = Field(default=1, ge=1, le=ITEM_STACK_MAX)
 
 
 class QuestOut(BaseModel):
