@@ -109,6 +109,7 @@ async def test_the_map_is_saved_and_read_back(client: AsyncClient, me: dict[str,
             'lock': None,
             'bar': None,
             'force': None,
+            'repair': None,
         },
         {
             'from_place': lore['square']['id'],
@@ -121,6 +122,7 @@ async def test_the_map_is_saved_and_read_back(client: AsyncClient, me: dict[str,
             'lock': None,
             'bar': None,
             'force': None,
+            'repair': None,
         },
         {
             'from_place': lore['gate']['id'],
@@ -133,6 +135,7 @@ async def test_the_map_is_saved_and_read_back(client: AsyncClient, me: dict[str,
             'lock': None,
             'bar': None,
             'force': None,
+            'repair': None,
         },
     ]
     assert read['landmarks'] == [lore['square']['id']]
@@ -256,6 +259,7 @@ async def test_the_map_is_frozen_into_the_version(client: AsyncClient, me: dict[
         'lock': None,
         'bar': None,
         'force': None,
+        'repair': None,
     }
     assert snapshot['routes'][2]['visibility'] == 'fog'
     assert snapshot['landmarks'] == [lore['square']['id']]

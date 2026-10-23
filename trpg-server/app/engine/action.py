@@ -103,6 +103,8 @@ class ActionKind(enum.StrEnum):
     PICK = 'pick'
     # 지금 장소에 닿은 길의 문을 판에 적힌 판정으로 부순다(#281)
     FORCE = 'force'
+    # 지금 장소에 닿은 길의 부서진 문을 판에 적힌 판정으로 고친다(#281)
+    REPAIR = 'repair'
 
 
 class DoorDevice(enum.StrEnum):
@@ -553,8 +555,22 @@ class ForceAction(BaseModel):
     place: uuid.UUID
 
 
+class RepairAction(BaseModel):
+    """
+    지금 서 있는 장소에 닿은 길의 부서진 문을 고치는 행동(#281). 판에 적힌 고치는 판정(능력, 난이도)으로 굴린다.
+
+    판에 도구를 적었으면 그 물건을 지녀야 고친다. 성공하면 문이 고쳐져 다시 잠글 수 있다. 고친 문은 열린 채다.
+    지나가지는 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.REPAIR]
+    place: uuid.UUID
+
+
 # 문을 다루는 행동들(#281). 같은 곳에서 받고 판정한다(app/rounds/door_actions.py)
-DoorAction = LockAction | UnlockAction | PickAction | ForceAction
+DoorAction = LockAction | UnlockAction | PickAction | ForceAction | RepairAction
 
 
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
@@ -594,6 +610,7 @@ AnyAction = (
     | UnlockAction
     | PickAction
     | ForceAction
+    | RepairAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

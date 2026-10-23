@@ -146,7 +146,7 @@ class Problem(enum.StrEnum):
     ROUTE_CROSS_INVALID = 'route_cross_invalid'
     # 열쇠 하나를 두 길의 자물쇠에 적었다. 열쇠 하나는 자물쇠 하나만 연다(#281)
     ROUTE_KEY_REPEATED = 'route_key_repeated'
-    # 자물쇠를 따는 판정이나 문을 부수는 판정의 능력치나 난이도가 룰북의 규칙에 없다(#281)
+    # 자물쇠를 따는 판정, 문을 부수는 판정, 고치는 판정의 능력치나 난이도가 룰북의 규칙에 없다(#281)
     ROUTE_OPEN_INVALID = 'route_open_invalid'
     # 놓인 물건이 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)에 있다. 아무도 그곳에 설 수 없다
     PLACE_ITEM_OFF_MAP = 'place_item_off_map'
@@ -516,7 +516,7 @@ def item_references(scenario: Scenario) -> list[uuid.UUID]:
     placed = [rule.entry_id for rule in read_place_items(scenario)]
     rules = [rule.entry_id for rule in read_item_rules(scenario)]
     routes = read_routes(scenario)
-    keys = lock_keys(routes) + pick_tools(routes)
+    keys = lock_keys(routes) + pick_tools(routes) + repair_tools(routes)
     return rules + [stack.entry_id for stack in stacks] + carried + placed + keys
 
 
@@ -891,10 +891,15 @@ def pick_tools(routes: list[RouteRule]) -> list[uuid.UUID]:
     ]
 
 
+def repair_tools(routes: list[RouteRule]) -> list[uuid.UUID]:
+    """부서진 문을 고치는 데 있어야 하는 도구들(#281). 길의 순서다."""
+    return [route.repair.tool for route in routes if route.repair is not None and route.repair.tool is not None]
+
+
 def opening_checks(route: RouteRule) -> list[PickCheck | ForceCheck]:
-    """길의 문을 여는 판정들(#281). 따기와 부수기다. 적지 않은 것은 빠진다."""
+    """길의 문을 다루는 판정들(#281). 따기, 부수기, 고치기다. 적지 않은 것은 빠진다."""
     pick = route.lock.pick if route.lock is not None else None
-    return [check for check in (pick, route.force) if check is not None]
+    return [check for check in (pick, route.force, route.repair) if check is not None]
 
 
 def cross_invalid(cross: CrossCheck | None, ruleset: Ruleset) -> bool:
@@ -922,7 +927,7 @@ def find_invalid(find: FindCheck | PickCheck | ForceCheck | None, ruleset: Rules
     """
     찾는 판정(숨긴 길, 숨긴 물건)이 룰북의 규칙에 맞지 않는가. 능력치와 난이도가 규칙에 있어야 한다.
 
-    자물쇠를 따는 판정과 문을 부수는 판정(#281)도 같은 모양이라 같이 본다.
+    자물쇠를 따는 판정, 문을 부수는 판정, 고치는 판정(#281)도 같은 모양이라 같이 본다.
     """
     if find is None:
         return False

@@ -193,6 +193,7 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
     case 'unlock':
     case 'pick':
     case 'force':
+    case 'repair':
       return draft.place ? null : '문이 있는 길을 골라 주세요.';
   }
 }
@@ -283,6 +284,7 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
     case 'unlock':
     case 'pick':
     case 'force':
+    case 'repair':
       return { kind: draft.kind, place: draft.place };
   }
 }

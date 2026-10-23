@@ -2750,7 +2750,7 @@ export interface components {
          */
         DeclarationOut: {
             /** Action */
-            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"]) | null;
+            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"]) | null;
             /** Character Name */
             character_name: string;
             /** Content */
@@ -2772,7 +2772,7 @@ export interface components {
          */
         DeclarationUpdate: {
             /** Action */
-            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"]) | null;
+            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"]) | null;
             /** Content */
             content: string;
         };
@@ -6420,6 +6420,55 @@ export interface components {
             references_enabled: boolean;
         };
         /**
+         * RepairAction
+         * @description 지금 서 있는 장소에 닿은 길의 부서진 문을 고치는 행동(#281). 판에 적힌 고치는 판정(능력, 난이도)으로 굴린다.
+         *
+         *     판에 도구를 적었으면 그 물건을 지녀야 고친다. 성공하면 문이 고쳐져 다시 잠글 수 있다. 고친 문은 열린 채다.
+         *     지나가지는 않는다.
+         */
+        RepairAction: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "repair";
+            /**
+             * Place
+             * Format: uuid
+             */
+            place: string;
+        };
+        /**
+         * RepairCheck
+         * @description 부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.
+         *
+         *     성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.
+         *     tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.
+         */
+        "RepairCheck-Input": {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Tool */
+            tool?: string | null;
+        };
+        /**
+         * RepairCheck
+         * @description 부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.
+         *
+         *     성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.
+         *     tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.
+         */
+        "RepairCheck-Output": {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Tool */
+            tool?: string | null;
+        };
+        /**
          * RepairRouteEffect
          * @description 사건의 효과 하나: 길 하나의 부서진 문을 고친다(repair_route, #281).
          *
@@ -6458,6 +6507,18 @@ export interface components {
             kind: "repair_route";
             /** To Place */
             to_place: string;
+        };
+        /**
+         * RepairSnapshot
+         * @description 부서진 문을 고치는 판정(#281). 능력치, 난이도의 이름과 있어야 하는 도구(판 안의 물건 항목, 없으면 None).
+         */
+        RepairSnapshot: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Tool */
+            tool?: string | null;
         };
         /**
          * Rest
@@ -6695,7 +6756,7 @@ export interface components {
         };
         /**
          * RouteCrossOut
-         * @description 길에 적힌 판정 하나(#281). 넘기(지날 때마다 가는 사람이 굴린다), 따기, 부수기다.
+         * @description 길에 적힌 판정 하나(#281). 넘기(지날 때마다 가는 사람이 굴린다), 따기, 부수기, 고치기다.
          *
          *     룰북의 능력치와 난이도의 이름표다.
          */
@@ -6819,6 +6880,7 @@ export interface components {
             /** Locked */
             locked?: boolean | null;
             pick?: components["schemas"]["RouteCrossOut"] | null;
+            repair?: components["schemas"]["RouteCrossOut"] | null;
             /**
              * To Place
              * Format: uuid
@@ -6839,8 +6901,8 @@ export interface components {
          *     travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
          *     (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
          *     길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,
-         *     force 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.
-         *     빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.
+         *     force 는 문(자물쇠와 빗장)을 부수는 판정, repair 는 부서진 문을 고치는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.
+         *     빗장, 자물쇠, 넘기 판정의 차례로 본다. force 와 repair 는 자물쇠나 빗장이 있는 길에만 적는다.
          *     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
          */
         "RouteRule-Input": {
@@ -6854,6 +6916,7 @@ export interface components {
              */
             from_place: string;
             lock?: components["schemas"]["RouteLock-Input"] | null;
+            repair?: components["schemas"]["RepairCheck-Input"] | null;
             /**
              * To Place
              * Format: uuid
@@ -6879,8 +6942,8 @@ export interface components {
          *     travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
          *     (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
          *     길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,
-         *     force 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.
-         *     빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.
+         *     force 는 문(자물쇠와 빗장)을 부수는 판정, repair 는 부서진 문을 고치는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.
+         *     빗장, 자물쇠, 넘기 판정의 차례로 본다. force 와 repair 는 자물쇠나 빗장이 있는 길에만 적는다.
          *     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
          */
         "RouteRule-Output": {
@@ -6891,6 +6954,7 @@ export interface components {
             /** From Place */
             from_place: string;
             lock?: components["schemas"]["RouteLock-Output"] | null;
+            repair?: components["schemas"]["RepairCheck-Output"] | null;
             /** To Place */
             to_place: string;
             /** Travel Minutes */
@@ -6912,6 +6976,7 @@ export interface components {
          *     비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.
          *     cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠의 자물쇠다(#281). 형식 52 보다 옛 판은 둘 다 없다.
          *     bar 는 한쪽의 빗장, force 는 문을 부수는 판정이다. 형식 53 보다 옛 판은 둘 다 없고 자물쇠를 따지 못한다.
+         *     repair 는 부서진 문을 고치는 판정이다. 형식 55 보다 옛 판은 없다(고치지 못한다).
          */
         RouteSnapshot: {
             bar?: components["schemas"]["BarSnapshot"] | null;
@@ -6924,6 +6989,7 @@ export interface components {
              */
             from_place: string;
             lock?: components["schemas"]["LockSnapshot"] | null;
+            repair?: components["schemas"]["RepairSnapshot"] | null;
             /**
              * To Place
              * Format: uuid
@@ -7676,7 +7742,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 54
+             * @default 55
              */
             format: number;
             /**
