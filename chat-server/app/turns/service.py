@@ -24,7 +24,7 @@ DB 접근, 바깥 호출(공급자, 결제 서버), 응답 만들기를 한 함�
 import asyncio
 import logging
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 
@@ -42,6 +42,7 @@ from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
 from app.conversation import continuation
 from app.conversation.continuation import OverlapTrim, continued_text
+from app.conversation.expressions import ExpressionHead, match_expression, split_expression
 from app.conversation.relay import Relay
 from app.conversation.suggestions import MarkerHold, parse_suggestions, split_answer
 from app.conversation.window import Turn, select_window
@@ -71,7 +72,7 @@ from app.memory.summaries import latest_summary, overflow, render_story
 from app.ratings import Rating, allowed_ratings
 from app.turns import charging, repository
 from app.turns.charging import HoldDeclined, Settled, Settlement
-from app.turns.frames import delta_frame, done_frame, failed_frame
+from app.turns.frames import delta_frame, done_frame, expression_frame, failed_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
 from app.turns.prompt import CharacterCard, PersonaCard, build_messages, render_card
 from app.turns.providers import Router
@@ -82,6 +83,7 @@ from app.world.actions import perform
 from app.world.scene import render_scene
 from app.world.scenes import find_scene
 from app.world.schemas import Action, GiveAction
+from app.world.sprites import expression_images
 from app.world.state import WorldState
 
 logger = logging.getLogger(__name__)
@@ -125,15 +127,37 @@ class Collector:
     모델이 흘려 주는 글을 모으면서 응답으로 넘긴다. 도중에 끊겨도 받은 만큼을 안다.
 
     본문만 흘린다. 다음 답 추천의 표식 뒤는 흘리지 않는다(app/conversation/suggestions.py 의 MarkerHold).
+    고를 수 있는 표정이 있으면 맨 앞의 표정의 표식을 떼고(app/conversation/expressions.py), 고른 표정을 먼저 알린다.
     """
 
     relay: Relay
     hold: MarkerHold = field(default_factory=MarkerHold)
     # 이어서 출력이면 되풀이한 앞부분을 떼는 것(app/conversation/continuation.py). 표식을 찾기 전에 거친다
     trim: OverlapTrim | None = None
+    # 고를 수 있는 표정과 그 캐릭터 그림. 비어 있으면 표정의 표식을 찾지 않는다
+    expressions: Mapping[str, uuid.UUID] = field(default_factory=dict)
+    head: ExpressionHead | None = None
+    announced: bool = False
 
     def __call__(self, piece: str) -> None:
-        self.push(self.hold.feed(self.trim.feed(piece) if self.trim is not None else piece))
+        self.push(self.hold.feed(self.headless(self.trim.feed(piece) if self.trim is not None else piece)))
+
+    def headless(self, text: str) -> str:
+        """맨 앞의 표정의 표식을 떼고 나머지를 돌려준다. 표정이 정해지면 한 번 알린다."""
+        if self.head is None:
+            return text
+        rest = self.head.feed(text)
+        self.announce()
+        return rest
+
+    def announce(self) -> None:
+        """모델이 고를 수 있는 표정을 골랐으면 그 표정과 캐릭터 그림을 한 번 알린다."""
+        if self.announced or self.head is None or not self.head.decided:
+            return
+        self.announced = True
+        expression = match_expression(self.head.raw, self.expressions)
+        if expression is not None:
+            self.relay.push(expression_frame(expression, self.expressions[expression]))
 
     def push(self, text: str) -> None:
         """본문의 조각을 응답으로. 빈 조각은 보내지 않는다."""
@@ -143,15 +167,19 @@ class Collector:
     def finish(self) -> str:
         """끝났다. 붙잡아 둔 본문을 마저 흘리고, 지금까지 흘린 본문을 돌려준다."""
         if self.trim is not None:
-            self.push(self.hold.feed(self.trim.release()))
+            self.push(self.hold.feed(self.headless(self.trim.release())))
+        if self.head is not None:
+            self.push(self.hold.feed(self.head.release()))
+            self.announce()
         self.push(self.hold.release())
         return self.hold.body()
 
 
 def collector_for(start: TurnStart, relay: Relay) -> Collector:
-    """말 한 번의 Collector. 이어서 출력이면 끊긴 답과 겹친 앞부분을 뗀다."""
+    """말 한 번의 Collector. 이어서 출력이면 끊긴 답과 겹친 앞부분을 뗀다. 고를 수 있는 표정이 있으면 표식을 찾는다."""
     trim = OverlapTrim(start.continued.content) if start.continued is not None else None
-    return Collector(relay, trim=trim)
+    head = ExpressionHead() if start.expressions else None
+    return Collector(relay, trim=trim, expressions=start.expressions, head=head)
 
 
 # --- 만들기. DB 와 바깥을 모른다 ---
@@ -168,6 +196,7 @@ def saved(message: Message) -> SavedMessage:
         created_at=message.created_at,
         suggestions=tuple(message.suggestions or ()),
         event_scene=message.event_scene,
+        expression=message.expression,
     )
 
 
@@ -203,11 +232,13 @@ class CardExtras:
     """
     카드에 더하는 블록들. story 는 창 밖으로 밀려난 앞부분의 요약, memory 는 기억 메모(app/memory),
     scene 은 장소와 소지품(app/world)이다. 없으면 None.
+    expressions 는 모델이 고를 수 있는 표정과 그 캐릭터 그림이다(없으면 표정을 고르지 않는다).
     """
 
     story: str | None
     memory: str | None
     scene: str | None
+    expressions: Mapping[str, uuid.UUID] = field(default_factory=dict)
 
 
 def prompt_for(
@@ -233,6 +264,7 @@ def prompt_for(
         scene=extras.scene,
         memory=extras.memory,
         story=extras.story,
+        expressions=list(extras.expressions),
     )
     turns = [Turn(message.role, message.content) for message in path]
     if closing is not None:
@@ -248,11 +280,13 @@ async def extras_on(
     context_chars: int,
     state: WorldState | None = None,
     scene_id: str | None = None,
+    choose_expression: bool = True,
 ) -> CardExtras:
     """
     가지(path)의 끝에서 카드에 더할 블록들. state 를 주면 그 상태로 장소와 소지품을 적는다(행동한 뒤의 상태).
     요약은 창(context_chars)에 들지 못하고 밀려난 말 가운데 가장 뒤의 것이다.
     scene_id 는 이번 답에 붙는 이벤트 씬이다. 있으면 그 장면을 "[지금]" 에 적는다(그림과 글이 어긋나지 않게).
+    choose_expression 이면 지금 차림에서 고를 수 있는 표정을 함께 준다(이어서 출력은 끊긴 답의 표정을 그대로 둔다).
     """
     document = world.document_of(character)
     current = state if state is not None else await world.state_on(session, document, [m.id for m in path])
@@ -263,6 +297,7 @@ async def extras_on(
         story=render_story(latest_summary(dropped, summaries)),
         memory=render_memory(notes),
         scene=render_scene(document, current, conversation.start_hour, find_scene(document, scene_id)),
+        expressions=expression_images(document, current) if choose_expression else {},
     )
 
 
@@ -306,22 +341,30 @@ def new_generation(conversation: Conversation, owner_id: uuid.UUID, parent_id: u
     )
 
 
-def result_of(completion: Completion, route: Route, previous: str | None = None) -> TurnResult:
+def result_of(
+    completion: Completion,
+    route: Route,
+    previous: str | None = None,
+    expressions: Collection[str] = (),
+) -> TurnResult:
     """
     다 받은 답. 본문과 선택지로 나눈다. 길이 상한에서 잘렸으면 partial 이고 선택지는 버린다(줄이 잘렸을 수 있다).
     본문이 없으면(선택지만 썼어도) failed 다. 원가는 그날의 단가로 센다.
     previous 는 이어서 출력의 끊긴 답이다. 있으면 되풀이한 앞부분을 떼고 사이에 끼울 것을 붙인 뒤에 나눈다.
+    expressions 가 있으면 맨 앞의 표정의 표식을 떼고 고를 수 있는 표정이면 적는다(이어서 출력에는 비어 있다).
     """
     cost, _ = charge_of(completion, route.price)
     usage = {'input_tokens': completion.input_tokens, 'output_tokens': completion.output_tokens, 'cost_usd': cost}
     text = continued_text(previous, completion.text) if previous is not None else completion.text
+    raw, text = split_expression(text) if expressions else (None, text)
+    expression = match_expression(raw, expressions)
     body, tail = split_answer(text)
     if not body:
         return TurnResult(text='', outcome=Outcome.FAILED, error_code=EMPTY, **usage)
     if completion.truncated:
-        return TurnResult(text=body, outcome=Outcome.PARTIAL, **usage)
+        return TurnResult(text=body, outcome=Outcome.PARTIAL, expression=expression, **usage)
     suggestions = tuple(parse_suggestions(tail))
-    return TurnResult(text=body, outcome=Outcome.COMPLETE, suggestions=suggestions, **usage)
+    return TurnResult(text=body, outcome=Outcome.COMPLETE, suggestions=suggestions, expression=expression, **usage)
 
 
 def failure_of(received: str, code: str) -> TurnResult:
@@ -341,6 +384,7 @@ def answer_of(start: TurnStart, result: TurnResult, now: datetime) -> Message | 
         content=result.text,
         status=MessageStatus.PARTIAL if result.outcome == Outcome.PARTIAL else MessageStatus.COMPLETE,
         suggestions=list(result.suggestions),
+        expression=result.expression,
         created_at=now,
     )
 
@@ -443,6 +487,7 @@ async def begin_turn(
         price_code=generation.price_code,
         user_message=saved(message),
         messages=prompt_for(conversation, character, persona, [*path, message], options, extras),
+        expressions=extras.expressions,
     )
 
 
@@ -511,6 +556,7 @@ async def begin_action(
         price_code=generation.price_code,
         user_message=saved(added[-1]),
         messages=prompt_for(conversation, character, persona, [*path, *added], options, extras),
+        expressions=extras.expressions,
         action=saved(added[0]) if len(added) > 1 else None,
     )
 
@@ -576,6 +622,7 @@ async def begin_regenerate(
         price_code=generation.price_code,
         user_message=saved(path[-1]),
         messages=prompt_for(conversation, character, persona, path, options, extras),
+        expressions=extras.expressions,
     )
 
 
@@ -620,7 +667,13 @@ async def begin_continue(
             raise NotContinuableError
         path = await conversations.active_path(session, target.id)
         extras = await extras_on(
-            session, conversation, character, path, options.context_chars, scene_id=answered_scene(path)
+            session,
+            conversation,
+            character,
+            path,
+            options.context_chars,
+            scene_id=answered_scene(path),
+            choose_expression=False,
         )
         generation = new_generation(conversation, viewer.claims.user_id, parent_id, slug)
         repository.add(session, generation)
@@ -706,7 +759,8 @@ async def call_model(route: Route, start: TurnStart, params: GenerationParams, c
         )
         return failure_of(collector.finish(), SERVER_ERROR)
     collector.finish()
-    return result_of(completion, route, start.continued.content if start.continued is not None else None)
+    previous = start.continued.content if start.continued is not None else None
+    return result_of(completion, route, previous, start.expressions)
 
 
 async def store_answer(

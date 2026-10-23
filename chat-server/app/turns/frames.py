@@ -4,11 +4,12 @@
 말 한 번의 SSE 메시지를 만든다(모양은 app/turns/schemas.py). DB 도 HTTP 도 모른다.
 """
 
+import uuid
 from dataclasses import asdict
 
 from app.conversation.sse import Frame
 from app.conversations.schemas import MessageOut
-from app.turns.schemas import DeltaEvent, DoneEvent, FailedEvent, TurnEvent
+from app.turns.schemas import DeltaEvent, DoneEvent, ExpressionEvent, FailedEvent, TurnEvent
 from app.turns.values import SavedMessage, TurnStart
 
 
@@ -28,6 +29,11 @@ def turn_frame(start: TurnStart) -> Frame:
         action=action,
     )
     return Frame(event='turn', data=body.model_dump_json())
+
+
+def expression_frame(expression: str, sprite: uuid.UUID) -> Frame:
+    """모델이 고른 표정과 그 캐릭터 그림. 본문보다 먼저다."""
+    return Frame(event='expression', data=ExpressionEvent(expression=expression, sprite=sprite).model_dump_json())
 
 
 def delta_frame(text: str) -> Frame:
