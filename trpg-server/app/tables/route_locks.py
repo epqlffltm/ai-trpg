@@ -8,13 +8,17 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 문의 행을 만
   - 만들기: 테이블을 시작할 때 판에 자물쇠나 빗장을 적은 길마다 하나씩 만든다. 처음 상태는 판의 것이다.
   - 읽기: 길 하나의 자물쇠가 잠겼는가, 빗장이 걸렸는가, 문이 부서졌는가. 문이 없는 길과,
     문이 생기기 전에 시작한 테이블의 길은 잠기지도 걸리지도 부서지지도 않았다.
-  - 바꾸기: 잠그기와 열기, 걸기와 풀기, 부수기. 열쇠를 지녔는지, 어느 쪽에 섰는지, 이미 그런지는 부르는 쪽이 본다
-    (app/rounds/map_actions.py, app/rounds/door_actions.py). 부서진 문은 열린 채다(DB 의 CHECK 도 막는다).
+  - 바꾸기: 잠그기와 열기, 걸기와 풀기, 부수기, 고치기.
+    열쇠를 지녔는지, 어느 쪽에 섰는지, 이미 그런지는 부르는 쪽이 본다
+    (app/rounds/map_actions.py, app/rounds/door_actions.py, app/rounds/happenings.py).
+    부서진 문은 열린 채다(DB 의 CHECK 도 막는다). 고친 문도 열린 채로 둔다.
+  - 장치로 고르기: 자물쇠와 빗장 중 하나를 장치(DoorDevice)로 골라 읽고 바꾼다. 판의 사건이 쓴다.
 """
 
 import uuid
 
 from app.assets.scenarios.snapshot import RouteSnapshot, Snapshot
+from app.engine.action import DoorDevice
 from app.tables.models import GameTable, TableRouteLock
 from app.tables.places import key_of
 
@@ -90,3 +94,23 @@ def break_open(table: GameTable, route: RouteSnapshot) -> None:
     row.locked = False
     row.barred = False
     row.broken = True
+
+
+def repair(table: GameTable, route: RouteSnapshot) -> None:
+    """그 길의 부서진 문을 고친다. 열린 채로 둔다. 문이 있는 길에만 부른다."""
+    find_lock(table, route).broken = False
+
+
+def is_shut(table: GameTable, route: RouteSnapshot, device: DoorDevice) -> bool:
+    """그 길의 문의 장치 하나가 지금 잠기거나 걸려 있는가."""
+    if device == DoorDevice.BAR:
+        return is_barred(table, route)
+    return is_locked(table, route)
+
+
+def set_shut(table: GameTable, route: RouteSnapshot, device: DoorDevice, shut: bool) -> None:
+    """그 길의 문의 장치 하나를 잠그거나 건다(shut 참), 또는 열거나 푼다. 부서지지 않은 문에만 잠근다."""
+    if device == DoorDevice.BAR:
+        find_lock(table, route).barred = shut
+    else:
+        find_lock(table, route).locked = shut

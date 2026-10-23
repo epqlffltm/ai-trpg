@@ -46,6 +46,7 @@ from app.assets.models import (
     World,
 )
 from app.assets.scenarios.upgrades import UPGRADES
+from app.engine.action import DoorDevice
 from app.engine.ruleset import Ruleset
 from app.engine.sheet import Sheet
 
@@ -117,7 +118,15 @@ from app.engine.sheet import Sheet
 #      열쇠의 자물쇠(routes[].lock: 열쇠, 처음에 잠겼는가)
 #  53: 문을 여는 다른 길이 있다(#281). 자물쇠를 따는 판정(routes[].lock.pick: 능력, 난이도, 도구),
 #      한쪽의 빗장(routes[].bar: 있는 쪽, 처음에 걸렸는가), 문을 부수는 판정(routes[].force)
-SNAPSHOT_FORMAT = 53
+#  54: 길의 문을 다루는 사건의 효과가 있다(#281). happenings[].effects[] 의 kind lock_route, unlock_route,
+#      repair_route 와 그 길의 두 끝(from_place, to_place), 잠그고 여는 장치(device)
+SNAPSHOT_FORMAT = 54
+
+
+# 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
+ROUTE_EFFECTS = frozenset(
+    {HappeningEffectKind.LOCK_ROUTE, HappeningEffectKind.UNLOCK_ROUTE, HappeningEffectKind.REPAIR_ROUTE}
+)
 
 
 class EntrySnapshot(BaseModel):
@@ -269,16 +278,20 @@ class QuestRuleSnapshot(BaseModel):
 
 class HappeningEffectSnapshot(BaseModel):
     """
-    사건의 효과 하나. 캐릭터 옮기기(move)와 인물 옮기기(move_npc, #282)다. 장소는 판의 맵의 장소 항목이다.
+    사건의 효과 하나. 캐릭터 옮기기(move), 인물 옮기기(move_npc, #282), 길의 문 다루기(#281)다.
+    장소는 판의 맵의 장소 항목이다.
 
     move: from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.
     move_npc: 판 안의 인물 항목 하나(npc)를 to_place 로 옮긴다. 죽은 인물은 옮기지 않는다. from_place 는 없다.
+    lock_route, unlock_route, repair_route: 두 끝이 from_place 와 to_place 인 길(방향은 보지 않는다)의 문을
+    잠그고, 열고, 고친다. 잠그고 열기는 device 의 장치만, 비었으면 그 문의 장치 모두다. 형식 54 보다 옛 판에는 없다.
     """
 
     kind: HappeningEffectKind
     to_place: uuid.UUID
     from_place: uuid.UUID | None = None
     npc: uuid.UUID | None = None
+    device: DoorDevice | None = None
 
 
 class HappeningSnapshot(BaseModel):
@@ -760,7 +773,8 @@ class Snapshot(BaseModel):
     def require_happening_targets(self) -> 'Snapshot':
         """
         사건 규칙이 모두 판 안의 사건 항목을 가리키고, 효과의 장소가 모두 판 안의 장소 항목인지,
-        옮기는 인물(move_npc)이 판 안의 인물 항목인지 본다.
+        옮기는 인물(move_npc)이 판 안의 인물 항목인지,
+        문을 다루는 효과(#281)가 문이 있는 길과 그 길의 장치를 가리키는지 본다.
         사건이 있으면 시작 장소가 있는지도 본다(옮길 맵이 있어야 한다). 아니면 거부한다.
 
         게시할 때 이미 막는다(scenarios/publishing.py).
@@ -772,12 +786,15 @@ class Snapshot(BaseModel):
         effects = [effect for rule in self.happenings for effect in rule.effects]
         pointed = [place for effect in effects for place in (effect.to_place, effect.from_place) if place is not None]
         moved = [effect.npc for effect in effects if effect.kind == HappeningEffectKind.MOVE_NPC]
+        doors = [effect for effect in effects if effect.kind in ROUTE_EFFECTS]
         if any(rule.entry_id not in events for rule in self.happenings):
             raise ValueError('사건 항목이 아닌 것을 가리키는 사건 규칙이 있습니다.')
         if any(place not in places for place in pointed):
             raise ValueError('장소 항목이 아닌 것을 가리키는 사건의 효과가 있습니다.')
         if any(npc not in people for npc in moved):
             raise ValueError('인물 항목이 아닌 것을 옮기는 사건의 효과가 있습니다.')
+        if any(not door_effect_fits(self, effect) for effect in doors):
+            raise ValueError('문이 없는 길이나 그 길에 없는 장치를 다루는 사건의 효과가 있습니다.')
         if self.happenings and self.start_place is None:
             raise ValueError('사건 규칙이 있는데 시작 장소가 없습니다.')
         return self
@@ -866,6 +883,29 @@ def pick_tools(snapshot: Snapshot) -> list[uuid.UUID]:
         for route in snapshot.routes
         if route.lock is not None and route.lock.pick is not None and route.lock.pick.tool is not None
     ]
+
+
+def door_devices(route: RouteSnapshot) -> list[DoorDevice]:
+    """그 길의 문에 있는 장치들(#281). 자물쇠, 빗장의 차례다. 문이 없는 길이면 빈 목록이다."""
+    present = [(DoorDevice.LOCK, route.lock), (DoorDevice.BAR, route.bar)]
+    return [device for device, part in present if part is not None]
+
+
+def route_between(snapshot: Snapshot, one: uuid.UUID, other: uuid.UUID) -> RouteSnapshot | None:
+    """두 끝이 그 둘인 판의 길(#281). 방향도, 플레이어가 아는지도 보지 않는다. 없으면 None."""
+    return next((route for route in snapshot.routes if {route.from_place, route.to_place} == {one, other}), None)
+
+
+def door_effect_fits(snapshot: Snapshot, effect: HappeningEffectSnapshot) -> bool:
+    """
+    문을 다루는 사건의 효과(#281)가 문이 있는 길을 가리키고, 장치를 적었으면 그 장치가 그 길에 있는가.
+
+    두 끝 사이에 길이 없거나, 길에 문이 없거나, 적은 장치가 없으면 거짓이다.
+    """
+    route = route_between(snapshot, effect.from_place, effect.to_place)
+    if route is None or not door_devices(route):
+        return False
+    return effect.device is None or effect.device in door_devices(route)
 
 
 def has_map(snapshot: Snapshot) -> bool:

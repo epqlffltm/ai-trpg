@@ -673,6 +673,7 @@ def to_quest_notes(table: GameTable, snapshot: Snapshot, expired: list[str] | No
 def is_seen(move: dict, here: Set[uuid.UUID]) -> bool:
     """
     옮겨진 인물을 일행이 봤는가(#282). 떠난 곳이나 닿은 곳에 살아 있는 캐릭터가 서 있다.
+    판의 사건이 다룬 문(#281)도 같이 본다. 그 길의 한 끝에 살아 있는 캐릭터가 서 있다.
 
     아무도 없는 곳에서 아무도 없는 곳으로 간 인물은 서술자에게 이르지 않는다. 일행이 모르는 일이 장면에 새지 않는다.
     """
@@ -685,6 +686,22 @@ def describe_npc_move(move: dict, labels: Mapping[uuid.UUID, str], places: Mappi
     return f'{labels[uuid.UUID(move["entry_id"])]} → {places[uuid.UUID(move["to"])]}'
 
 
+# 판의 사건이 다룬 문(#281)을 서술자에게 이르는 말. (한 일, 장치)마다다
+HAPPENING_DOOR_WORDS = {
+    ('lock', 'lock'): '자물쇠 잠김',
+    ('lock', 'bar'): '빗장 걸림',
+    ('unlock', 'lock'): '자물쇠 열림',
+    ('unlock', 'bar'): '빗장 풀림',
+    ('repair', None): '부서진 문 고쳐짐',
+}
+
+
+def describe_happening_door(change: dict, places: Mapping[uuid.UUID, str]) -> str:
+    """판의 사건이 다룬 문 하나를 "장소 ↔ 장소 빗장 걸림"으로(#281). 장소는 효과에 적힌 두 끝의 차례다."""
+    ends = f'{places[uuid.UUID(change["from"])]} ↔ {places[uuid.UUID(change["to"])]}'
+    return f'{ends} {HAPPENING_DOOR_WORDS[(change["act"], change["device"])]}'
+
+
 def to_happening_note(
     snapshot: Snapshot, row: TableHappening, labels: Mapping[uuid.UUID, str], here: Set[uuid.UUID]
 ) -> HappeningNote:
@@ -692,13 +709,14 @@ def to_happening_note(
     일어난 사건 하나를 서술자에게 줄 모양으로 바꾼다. 옮겨진 사람마다 "이름 → 장소"다.
 
     캐릭터 다음에 일행이 본 인물(is_seen)이다. labels 는 인물마다 부르는 이름(app/rounds/cast.py 의 labels_of),
-    here 는 살아 있는 캐릭터가 서 있는 장소들이다.
+    here 는 살아 있는 캐릭터가 서 있는 장소들이다. 다룬 문(#281)도 그 길의 한 끝에 일행이 있을 때만 준다.
     """
     name = next(entry.name for entry in quest_entries(snapshot) if entry.id == row.entry_id)
     places = {entry.id: entry.name for entry in place_entries(snapshot)}
     moved = [f'{move["character_name"]} → {move["to"]["name"]}' for move in row.moves]
     moved.extend(describe_npc_move(move, labels, places) for move in row.npc_moves if is_seen(move, here))
-    return HappeningNote(name=name, moved=moved)
+    doors = [describe_happening_door(change, places) for change in row.doors if is_seen(change, here)]
+    return HappeningNote(name=name, moved=moved, doors=doors)
 
 
 def to_happening_notes(
