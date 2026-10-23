@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/DoorForm.tsx
-// 길 하나의 문(B9 지도, #281). 넘기 판정, 자물쇠(열쇠, 처음에 잠김, 따기와 도구), 빗장(어느 쪽, 처음에 걸림), 부수기.
+// 길 하나의 문(B9 지도, #281). 넘기 판정, 자물쇠(열쇠, 처음에 잠김, 따기와 도구), 빗장(어느 쪽, 처음에 걸림), 부수기, 고치기(도구).
 // 켜고 끄는 상자마다 칸이 열린다. 창의 저장이 길 목록을 통째로 바로 보내되 이 길의 문만 바꾼다. 검사는 doorForm.ts.
 
 import { Button, Checkbox, SelectField } from '@ai-trpg/ui';
@@ -133,6 +133,30 @@ export function DoorForm({ scenario, rules, items, at, nameOf, done }: Props) {
             onChange={(changes) => update('force', changes)}
             error={hints.force}
           />
+        ) : null}
+      </fieldset>
+      <fieldset className="scenario-choices">
+        <legend>고치기</legend>
+        <Checkbox
+          label="부서진 문을 고칠 수 있다"
+          description="부서진 자물쇠와 빗장을 판정으로 고칩니다. 고친 문은 열린 채라 다시 막으려면 잠그기를 합니다. 자물쇠나 빗장이 있어야 합니다."
+          checked={draft.repair.on}
+          disabled={!draft.lock.on && !draft.bar.on}
+          onChange={(event) => update('repair', { on: event.target.checked })}
+        />
+        {draft.repair.on ? (
+          <>
+            <CheckSelects
+              label="고치기 판정"
+              rules={rules}
+              ability={draft.repair.ability}
+              difficulty={draft.repair.difficulty}
+              onChange={(changes) => update('repair', changes)}
+              error={hints.repair}
+            />
+            <ItemSelect label="고치는 도구(선택)" value={draft.repair.tool} items={items} empty="도구 없이" onChange={(tool) => update('repair', { tool })} />
+            <p className="ui-field__hint">도구를 고르면 그 물건을 지닌 사람만 고칩니다. 도구는 쓰여도 없어지지 않습니다.</p>
+          </>
         ) : null}
       </fieldset>
       <div className="actions">

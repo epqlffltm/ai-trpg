@@ -60,7 +60,7 @@ export function routeHints(draft: RouteDraft, routes: RouteRule[], at: number | 
   return hints;
 }
 
-/** 보낼 길. 숨긴 길에만 찾는 판정을 싣는다. 원래 길의 문(넘기, 자물쇠, 빗장, 부수기)은 그대로 둔다 */
+/** 보낼 길. 숨긴 길에만 찾는 판정을 싣는다. 원래 길의 문(넘기, 자물쇠, 빗장, 부수기, 고치기)은 그대로 둔다 */
 export function toRoute(draft: RouteDraft, original: RouteRule | null): RouteRuleBody {
   return {
     from_place: draft.from,
@@ -73,6 +73,7 @@ export function toRoute(draft: RouteDraft, original: RouteRule | null): RouteRul
     lock: original?.lock ?? null,
     bar: original?.bar ?? null,
     force: original?.force ?? null,
+    repair: original?.repair ?? null,
   };
 }
 
@@ -97,5 +98,6 @@ export function routeLine(route: RouteRule, nameOf: (placeId: string) => string,
   if (route.lock) parts.push(`자물쇠(${route.lock.locked ? '잠김' : '열림'}${route.lock.pick ? ', 딸 수 있음' : ''})`);
   if (route.bar) parts.push(`빗장(${nameOf(route.bar.side)} 쪽${route.bar.barred ? ', 걸림' : ''})`);
   if (route.force) parts.push('부술 수 있음');
+  if (route.repair) parts.push('고칠 수 있음');
   return parts.join(' · ');
 }
