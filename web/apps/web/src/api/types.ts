@@ -154,3 +154,7 @@ export type AssetPath = Asset['schemas']['Path'];
 export type AssetItem = Asset['schemas']['Item'];
 export type AssetItemKind = Asset['schemas']['ItemKind'];
 export type AssetStartItem = Asset['schemas']['StartItem'];
+export type AssetAffection = Asset['schemas']['Affection'];
+export type AssetAffectionDisplay = Asset['schemas']['AffectionDisplay'];
+export type AssetAffectionRule = Asset['schemas']['AffectionRule'];
+export type AssetTriggerKind = Asset['schemas']['TriggerKind'];
