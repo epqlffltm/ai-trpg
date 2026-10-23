@@ -4,11 +4,9 @@
 // 룰북이 없으면 시트를 적을 수 없다고 알리고 재료 탭으로 가는 길을 둔다.
 
 import { Button, Checkbox, Notice, SelectField, TextField } from '@ai-trpg/ui';
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { CharacterMode, Ruleset, ScenarioDetail } from '../../../../api/types';
 import { characterModeLabel } from '../../labels';
-import { rulebookQuery } from '../rulebooks/rulebookQueries';
 import {
   CHARACTER_MODES,
   charactersDraft,
@@ -27,6 +25,7 @@ import { ScenarioForm } from './ScenarioForm';
 import type { ScenarioTab } from './scenarioTabs';
 import { sheetFieldHints } from './sheetForm';
 import { SheetFields } from './SheetFields';
+import { useScenarioRules } from './useScenarioRules';
 import { useScenarioSave } from './useScenarioSave';
 
 const MODE_HINTS: Record<CharacterMode, string> = {
@@ -40,9 +39,8 @@ const MODE_HINTS: Record<CharacterMode, string> = {
 type Props = { scenario: ScenarioDetail; goTo: (tab: ScenarioTab) => void };
 
 export function CharactersTab({ scenario, goTo }: Props) {
-  const rulebook = useQuery({ ...rulebookQuery(scenario.rulebook_id ?? ''), enabled: scenario.rulebook_id !== null });
-  if (scenario.rulebook_id !== null && rulebook.isPending) return <p aria-busy="true">룰북을 불러오는 중</p>;
-  const rules = rulebook.data?.rules ?? null;
+  const { rules, pending, failed } = useScenarioRules(scenario);
+  if (pending) return <p aria-busy="true">룰북을 불러오는 중</p>;
   return (
     <>
       {scenario.rulebook_id === null ? (
@@ -53,7 +51,7 @@ export function CharactersTab({ scenario, goTo }: Props) {
           </Button>
         </Notice>
       ) : null}
-      {rulebook.isError ? <Notice tone="error">룰북을 불러오지 못해 시트를 적을 수 없습니다.</Notice> : null}
+      {failed ? <Notice tone="error">룰북을 불러오지 못해 시트를 적을 수 없습니다.</Notice> : null}
       {/* 룰북이 바뀌면 시트의 칸이 바뀌므로 폼을 새로 만든다 */}
       <CharactersForm key={scenario.rulebook_id ?? 'none'} scenario={scenario} rules={rules} />
       <PregensSection scenario={scenario} rules={rules} />

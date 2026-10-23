@@ -2,6 +2,7 @@
 // 상태 패널(B7)이 보일 글. 순수한 함수다. 값은 모두 서버가 준 것이고, 이름표(str, broken_arm …)를 규칙의 이름으로 읽는다.
 // 화면은 HP 나 소지품을 계산하지 않는다. 바뀌면 서버의 값을 다시 읽는다.
 
+import { itemKindLabel, rarityLabel } from '../../labels';
 import type {
   ClockTime,
   GameClock,
@@ -28,16 +29,6 @@ const QUEST_STATUS: Record<Quest['status'], string> = {
   active: '진행 중',
   succeeded: '성공',
   failed: '실패',
-};
-
-const ITEM_KINDS: Record<HeldItem['kind'], string> = { gear: '장비', consumable: '소모품' };
-
-const RARITIES: Record<HeldItem['rarity'], string> = {
-  normal: '보통',
-  rare: '희귀',
-  unique: '고유',
-  epic: '영웅',
-  legendary: '전설',
 };
 
 export type Condition = 'none' | 'standing' | 'downed' | 'dead';
@@ -104,7 +95,7 @@ export function questStatusLabel(status: Quest['status']): string {
 
 /** "소모품 · 희귀" */
 export function itemLabel(item: Pick<HeldItem, 'kind' | 'rarity'>): string {
-  return `${ITEM_KINDS[item.kind]} · ${RARITIES[item.rarity]}`;
+  return `${itemKindLabel(item.kind)} · ${rarityLabel(item.rarity)}`;
 }
 
 /** 소모품의 회복량. "회복 가벼움(1d4)". 판의 물건(TableDetail.items)과 규칙의 등급(magnitudes)에서 찾는다 */
