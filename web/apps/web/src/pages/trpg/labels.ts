@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/labels.ts
-// 게임 서버의 값(영문의 이름)을 화면의 글로 바꾼다. 장르, 캐릭터 방식, 서술 문체, 물건의 종류와 등급의 이름은 화면이 정한다(서버는 값만 준다).
+// 게임 서버의 값(영문의 이름)을 화면의 글로 바꾼다. 장르, 캐릭터 방식, 서술 문체, 물건의 종류와 등급, 인물의 태도의 이름은 화면이 정한다(서버는 값만 준다).
 
-import type { CharacterMode, Genre, ItemKind, ItemRarity, NarrationStyle, RecommendedPlayers } from '../../api/types';
+import type { CharacterMode, Genre, ItemKind, ItemRarity, NarrationStyle, NpcAttitude, RecommendedPlayers } from '../../api/types';
 
 // 차례가 곧 거르는 칩의 차례다. 앞의 열한 개는 이야기의 종류, 뒤의 둘은 누구를 위한 이야기인가(화면 명세 B1)
 const GENRES: Record<Genre, string> = {
@@ -50,6 +50,16 @@ const RARITIES: Record<ItemRarity, string> = {
   epic: '영웅',
   legendary: '전설',
 };
+
+// 인물이 일행을 대하는 태도(#474). 차례가 곧 고르는 칸의 차례다
+const ATTITUDES: Record<NpcAttitude, string> = { friendly: '우호', neutral: '중립', wary: '경계', hostile: '적대' };
+
+export const ATTITUDE_VALUES = Object.keys(ATTITUDES) as NpcAttitude[];
+
+/** 태도의 이름. 모르는 값(서버가 새 태도를 더했다)이면 null */
+export function attitudeLabel(attitude: string): string | null {
+  return attitude in ATTITUDES ? ATTITUDES[attitude as NpcAttitude] : null;
+}
 
 export const ITEM_KIND_VALUES = Object.keys(ITEM_KINDS) as ItemKind[];
 export const RARITY_VALUES = Object.keys(RARITIES) as ItemRarity[];

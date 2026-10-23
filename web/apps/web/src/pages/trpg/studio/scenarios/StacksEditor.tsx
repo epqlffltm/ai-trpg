@@ -1,26 +1,33 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/StacksEditor.tsx
-// 소지품의 줄들을 고치는 칸(B9). 시작 소지품과 프리젠의 소지품이 함께 쓴다.
-// 줄마다 물건(붙인 로어북의 물건 항목), 개수, 그 물건의 규칙에 칸이 있으면 시작할 때 착용할 칸. 검사는 stacksForm.ts.
+// 소지품의 줄들을 고치는 칸(B9). 시작 소지품, 프리젠의 소지품, 인물·몬스터가 지닌 장비와 소지품이 함께 쓴다.
+// 줄마다 물건(붙인 로어북의 물건 항목), 개수, 그 물건의 규칙에 칸이 있으면 착용할 칸(wear 일 때),
+// 떨어질 확률(chance 일 때). 검사는 stacksForm.ts.
 
 import { Button, Checkbox, SelectField, TextField } from '@ai-trpg/ui';
 import type { ItemRule, Ruleset } from '../../../../api/types';
 import { changeStack, newStack, removeStack, STACK_MAX, wearableSlots, withEntry, type StackDraft } from './stacksForm';
 import { toggleSlot } from './itemRuleForm';
-import type { ItemEntry } from './useItemEntries';
+import type { EntryChoice } from './useLoreEntries';
 
 type Props = {
   /** 줄의 이름. "시작 소지품" */
   label: string;
   drafts: StackDraft[];
   onChange: (drafts: StackDraft[]) => void;
-  entries: ItemEntry[];
+  entries: EntryChoice[];
   itemRules: ItemRule[];
   rules: Ruleset | null;
   hints: Record<number, string>;
   max: number;
+  /** 착용할 칸을 고르게 하는가(소지품의 줄에는 착용이 없다). 기본은 그렇다 */
+  wear?: boolean;
+  /** 떨어질 확률의 칸을 두는가(인물·몬스터가 지닌 줄) */
+  chance?: boolean;
+  /** 착용 칸의 도움말 */
+  wearHint?: string;
 };
 
-export function StacksEditor({ label, drafts, onChange, entries, itemRules, rules, hints, max }: Props) {
+export function StacksEditor({ label, drafts, onChange, entries, itemRules, rules, hints, max, wear = true, chance = false, wearHint }: Props) {
   const ids = entries.map((entry) => entry.id);
   return (
     <div className="scenario-stacks">
@@ -34,12 +41,15 @@ export function StacksEditor({ label, drafts, onChange, entries, itemRules, rule
           itemRules={itemRules}
           rules={rules}
           hint={hints[index]}
+          wear={wear}
+          chance={chance}
+          wearHint={wearHint ?? '시작할 때 착용할 칸(비우면 들고만 시작)'}
           onChange={(next) => onChange(changeStack(drafts, index, next))}
           onRemove={() => onChange(removeStack(drafts, index))}
         />
       ))}
       <p>
-        <Button variant="secondary" disabled={drafts.length >= max || entries.length === 0} onClick={() => onChange([...drafts, newStack(drafts, ids)])}>
+        <Button variant="secondary" disabled={drafts.length >= max || entries.length === 0} onClick={() => onChange([...drafts, newStack(drafts, ids, chance)])}>
           {label} 더하기
         </Button>{' '}
         <span className="hint">
@@ -53,16 +63,19 @@ export function StacksEditor({ label, drafts, onChange, entries, itemRules, rule
 type RowProps = {
   legend: string;
   draft: StackDraft;
-  entries: ItemEntry[];
+  entries: EntryChoice[];
   itemRules: ItemRule[];
   rules: Ruleset | null;
   hint: string | undefined;
+  wear: boolean;
+  chance: boolean;
+  wearHint: string;
   onChange: (draft: StackDraft) => void;
   onRemove: () => void;
 };
 
-function StackRow({ legend, draft, entries, itemRules, rules, hint, onChange, onRemove }: RowProps) {
-  const slots = wearableSlots(itemRules, draft.entryId);
+function StackRow({ legend, draft, entries, itemRules, rules, hint, wear, chance, wearHint, onChange, onRemove }: RowProps) {
+  const slots = wear ? wearableSlots(itemRules, draft.entryId) : [];
   const slotName = (key: string) => rules?.equipment_slots.find((slot) => slot.key === key)?.name ?? key;
   const listed = entries.some((entry) => entry.id === draft.entryId);
   return (
@@ -84,10 +97,18 @@ function StackRow({ legend, draft, entries, itemRules, rules, hint, onChange, on
           value={draft.count}
           onChange={(event) => onChange({ ...draft, count: event.target.value })}
         />
+        {chance ? (
+          <TextField
+            label="떨어질 확률(%)"
+            inputMode="numeric"
+            value={draft.chance ?? ''}
+            onChange={(event) => onChange({ ...draft, chance: event.target.value })}
+          />
+        ) : null}
       </div>
       {slots.length > 0 ? (
         <div className="scenario-stack__wear" role="group" aria-label={`${legend}의 착용`}>
-          <p className="ui-field__hint">시작할 때 착용할 칸(비우면 들고만 시작)</p>
+          <p className="ui-field__hint">{wearHint}</p>
           {slots.map((slot) => (
             <Checkbox
               key={slot}

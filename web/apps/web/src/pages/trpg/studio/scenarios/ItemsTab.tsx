@@ -12,7 +12,7 @@ import { ScenarioForm } from './ScenarioForm';
 import type { ScenarioTab } from './scenarioTabs';
 import { MAX_STARTING_ITEMS, stackDrafts, stacksHints, toStacks, type StackDraft } from './stacksForm';
 import { StacksEditor } from './StacksEditor';
-import { useItemEntries, type ItemEntry } from './useItemEntries';
+import { useLoreEntries, type EntryChoice } from './useLoreEntries';
 import { useScenarioRules } from './useScenarioRules';
 import { useScenarioSave } from './useScenarioSave';
 
@@ -20,7 +20,7 @@ type Props = { scenario: ScenarioDetail; goTo: (tab: ScenarioTab) => void };
 
 export function ItemsTab({ scenario, goTo }: Props) {
   const { rules, pending } = useScenarioRules(scenario);
-  const items = useItemEntries(scenario.lorebook_ids);
+  const items = useLoreEntries(scenario.lorebook_ids, 'item');
   if (pending || items.pending) return <p aria-busy="true">불러오는 중</p>;
   return (
     <>
@@ -40,7 +40,7 @@ export function ItemsTab({ scenario, goTo }: Props) {
   );
 }
 
-type FormProps = { scenario: ScenarioDetail; rules: Ruleset | null; entries: ItemEntry[] };
+type FormProps = { scenario: ScenarioDetail; rules: Ruleset | null; entries: EntryChoice[] };
 
 /** 탭의 저장: 화폐와 시작 소지품 */
 function MoneyForm({ scenario, rules, entries }: FormProps) {
