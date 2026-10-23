@@ -15,9 +15,11 @@ type Props = {
   imageId: string | null;
   onChange: (imageId: string | null) => void;
   hint?: string;
+  /** 미리 보기를 체크무늬 위에 그린다. 투명한 그림(캐릭터 그림)이 투명한지 보인다 */
+  checkered?: boolean;
 };
 
-export function ImagePicker({ label, imageId, onChange, hint }: Props) {
+export function ImagePicker({ label, imageId, onChange, hint, checkered = false }: Props) {
   const inputId = useId();
   const preview = useImageUrl(imageId);
   const [busy, setBusy] = useState(false);
@@ -49,7 +51,11 @@ export function ImagePicker({ label, imageId, onChange, hint }: Props) {
         {label}
       </label>
       {imageId === null ? <p className="hint">붙인 그림이 없습니다.</p> : null}
-      {imageId !== null && preview.url ? <img className="image-picker__preview" src={preview.url} alt={label} /> : null}
+      {imageId !== null && preview.url ? <img
+          className={checkered ? 'image-picker__preview image-picker__preview--checkered' : 'image-picker__preview'}
+          src={preview.url}
+          alt={label}
+        /> : null}
       {imageId !== null && !preview.url ? <p className="hint">{preview.failed ? '미리 보기를 불러오지 못했습니다.' : '붙인 그림이 있습니다.'}</p> : null}
       <input id={inputId} type="file" accept={IMAGE_ACCEPT} disabled={busy} onChange={(event) => void choose(event)} />
       {busy ? <span aria-busy="true"> 올리는 중</span> : null}

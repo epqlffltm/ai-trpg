@@ -21,7 +21,9 @@ import { IntroTab } from './IntroTab';
 import { ItemsTab } from './ItemsTab';
 import { MapTab } from './MapTab';
 import { PublishTab } from './PublishTab';
+import { ScenesTab } from './ScenesTab';
 import { SpeechTab } from './SpeechTab';
+import { SpritesTab } from './SpritesTab';
 import { StartsTab } from './StartsTab';
 
 export function CharacterEditPage() {
@@ -94,6 +96,8 @@ function panelOf(tab: CharacterTab, character: AssetCharacterDetail): ReactNode 
   if (tab === 'items') return <ItemsTab character={character} />;
   if (tab === 'affection') return <AffectionTab character={character} />;
   if (tab === 'images') return <ImagesTab character={character} />;
+  if (tab === 'sprites') return <SpritesTab character={character} />;
+  if (tab === 'scenes') return <ScenesTab character={character} />;
   return <PublishTab character={character} />;
 }
 
