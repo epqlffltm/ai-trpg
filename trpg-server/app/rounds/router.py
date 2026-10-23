@@ -108,6 +108,8 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
         created_at=round_.created_at,
         deadline_at=round_.deadline_at,
         narration_model=round_.narration_model,
+        input_step=round_.input_step,
+        output_step=round_.output_step,
         price=to_price(round_),
         closing_at=round_.closing_at,
         closed_at=round_.closed_at,

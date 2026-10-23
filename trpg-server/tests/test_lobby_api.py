@@ -213,6 +213,8 @@ async def test_the_lobby_lists_the_newest_table_first(client: AsyncClient, me: d
         'narration_style',
         'round_time_limit',
         'narration_model',
+        'input_step',
+        'output_step',
         'credit_wait_seconds',
         'remove_short_payers',
         'whisper_notice',

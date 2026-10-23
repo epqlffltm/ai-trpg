@@ -23,6 +23,7 @@ from typing import Protocol
 
 from app.assets.models import LoreKind, NarrationStyle
 from app.calendar.clock import ClockTime
+from app.catalog.steps import BASE_STEPS, NarrationSteps
 from app.engine.ruleset import NarrationGuide
 
 
@@ -802,6 +803,9 @@ class NarrationRequest:
     # 아직 맞히지 않은 인물의 진짜 이름에서 장면의 호칭으로(app/rounds/secret_names.py). 프롬프트에는 싣지 않는다.
     # 언어 모델의 서술자가 받은 글과 미리 보기에서 이 이름들을 찾는다. 가짜 서술자는 읽지 않는다
     secrets: dict[str, str] = field(default_factory=dict)
+    # 서술의 입력·출력 단계(#387). 라운드를 열 때 굳힌 것이다. 입력의 예산과 칸마다의 상한, 출력의 상한과
+    # 장면의 길이를 정한다(app/catalog/steps.py). 가짜 서술자는 읽지 않는다
+    steps: NarrationSteps = BASE_STEPS
 
 
 class Preview(Protocol):

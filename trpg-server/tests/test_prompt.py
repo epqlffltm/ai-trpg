@@ -286,8 +286,8 @@ def test_the_lore_stays_out_of_the_system_message():
     assert system == build_messages(make_request())[0].content
 
 
-def test_the_template_is_narration_48():
-    assert prompt.PROMPT_VERSION == 'narration-48'
+def test_the_template_is_narration_49():
+    assert prompt.PROMPT_VERSION == 'narration-49'
 
 
 def test_the_rules_ask_for_a_scene_shorter_than_the_output_limit():

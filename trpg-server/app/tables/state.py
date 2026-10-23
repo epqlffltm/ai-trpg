@@ -13,6 +13,7 @@ import uuid
 from app.assets.models import NarrationStyle
 from app.assets.scenarios.snapshot import Snapshot
 from app.catalog.offers import OfferedModel
+from app.catalog.steps import steps_of
 from app.rounds.budget import story_fits
 from app.rounds.narration_request import to_story
 from app.tables import sheets
@@ -51,8 +52,9 @@ def require_story_fits(table: GameTable, snapshot: Snapshot) -> None:
 
     작가의 글은 라운드마다 통째로 들어간다(app/rounds/budget.py). 예산을 혼자 넘으면 어느 라운드든 판 값보다 비싸다.
     시작할 때 막는다. 라운드 중간에 서술이 실패하는 것보다 낫고, 아직 아무도 값을 내지 않았다.
+    예산은 테이블의 입력 단계의 것이다(#387). 시작하면 단계도 고정이라 라운드마다 같다.
     """
-    if not story_fits(to_story(snapshot), NarrationStyle(table.narration_style)):
+    if not story_fits(to_story(snapshot), NarrationStyle(table.narration_style), steps_of(table)):
         raise TableConflictError(Conflict.STORY_TOO_LONG)
 
 
@@ -87,3 +89,13 @@ def require_model_offered(found: OfferedModel | None) -> None:
     """
     if found is None:
         raise TableOptionError('narration_model')
+
+
+def require_steps_offered(found: OfferedModel | None) -> None:
+    """
+    방장이 고른 단계(#387)를 그 모델로 지금 파는지 확인한다. 아니면 TableOptionError(narration_steps).
+
+    모델은 고를 수 있는데(기본 단계를 판다) 그 단계의 가격표가 없거나 팔지 않는 것이다.
+    """
+    if found is None:
+        raise TableOptionError('narration_steps')

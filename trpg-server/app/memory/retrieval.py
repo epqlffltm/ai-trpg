@@ -29,7 +29,7 @@ import logging
 import math
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from ai_core.embedder import Embedder
@@ -38,18 +38,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot, read_snapshot
+from app.catalog.steps import NarrationSteps, scaled_chars, scaled_count
 from app.lore.retrieval import mentions, query_text
 from app.lore.texts import version_entries
 from app.memory import repository, texts
 from app.memory.texts import Memory, memories_of, memory_text
 from app.rounds.narration_request import to_past
 from app.rounds.narrator import MemoryNote, NarrationRequest
-from app.rounds.prompt import HISTORY_ROUNDS
+from app.rounds.prompt import HISTORY_ROUNDS, history_rounds
 from app.tables import repository as table_repository
 
 logger = logging.getLogger(__name__)
 
-# 넣는 기억의 수와 글자 수의 상한
+# 넣는 기억의 수와 글자 수의 상한. 기본 단계의 값이다. 입력 단계마다 는다(for_steps, #387)
 MEMORY_COUNT = 2
 MEMORY_MAX_CHARS = 2000
 # 기억 하나의 글자 수의 상한. 넘으면 문장 끝에서 자른다
@@ -75,6 +76,13 @@ class MemoryThresholds:
     keyword_max_distance: float = KEYWORD_MAX_DISTANCE
     count: int = MEMORY_COUNT
     max_chars: int = MEMORY_MAX_CHARS
+
+
+def for_steps(thresholds: MemoryThresholds, steps: NarrationSteps) -> MemoryThresholds:
+    """그 입력 단계의 고르는 규칙. 수는 단계마다 처음 값만큼 더하고, 글자 수는 입력 토큰과 같은 비율로 는다."""
+    return replace(
+        thresholds, count=scaled_count(thresholds.count, steps), max_chars=scaled_chars(thresholds.max_chars, steps)
+    )
 
 
 @dataclass(frozen=True)
@@ -208,12 +216,13 @@ class MemoryRetriever:
         if past is None:
             return []
         await self.refill(request.table_id, past.memories)
-        candidates = eligible(past.memories, request.round_number)
+        candidates = eligible(past.memories, request.round_number, history_rounds(request.steps))
         if not candidates:
             return []
         text = query_text(request)
         distances = await self.distances(request.table_id, text)
-        chosen = choose_memories(candidates, people_in(past.people, text), distances, self.thresholds)
+        thresholds = for_steps(self.thresholds, request.steps)
+        chosen = choose_memories(candidates, people_in(past.people, text), distances, thresholds)
         return [to_note(memory) for memory in chosen]
 
     async def distances(self, table_id: uuid.UUID, text: str) -> dict[int, float]:

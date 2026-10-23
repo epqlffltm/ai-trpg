@@ -744,6 +744,9 @@ class RoundOut(BaseModel):
     # 이 라운드의 서술 모델(이름표). 열 때 굳은 것이다. 아직 서술하지 않은 라운드는 방장이 바꾸면 함께 바뀐다.
     # 모델을 고르는 규칙 전에 연 라운드만 null 이다(서버의 기본 모델)
     narration_model: str | None
+    # 이 라운드의 서술의 입력·출력 단계(#387). 모델과 함께 굳고 함께 바뀐다
+    input_step: int
+    output_step: int
     # 열 때(또는 모델을 바꿀 때) 알린 1인 1라운드의 값. 결제 서버의 가격 목록의 값이다. 알리지 못했으면 null.
     # 사람마다 실제로 홀드한 값은 GET .../rounds/{number}/charges 에 있다
     price: RoundPriceOut | None

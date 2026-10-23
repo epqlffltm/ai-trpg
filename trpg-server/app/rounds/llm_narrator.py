@@ -25,14 +25,14 @@
 import logging
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ai_core.calls import CallLog, CallRecord, CallScope, Outcome, chars_of, input_digest
 from ai_core.costs import PriceTag, usage_of
 from ai_core.provider import ChatMessage, Completion, GenerationParams, LLMProvider, ProviderError
 
-from app.catalog.rules import ROUND_OUTPUT_TOKENS
-from app.rounds.budget import INPUT_BUDGET, estimate_messages, fit_request
+from app.catalog.steps import ROUND_OUTPUT_TOKENS, NarrationSteps, output_tokens
+from app.rounds.budget import estimate_messages, fit_request, input_budget
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.prompt import PROMPT_VERSION, build_messages
 from app.rounds.secret_names import SecretNames, guarded, leaked, redact
@@ -40,14 +40,17 @@ from app.rounds.secret_names import SecretNames, guarded, leaked, redact
 logger = logging.getLogger(__name__)
 
 # 서술을 만들 때의 설정. 몇 문단의 장면이면 충분하다. 너무 딱딱하지 않게 조금 다양하게 쓴다.
-# 출력 상한은 판매가가 가정한 출력(1,200 토큰)과 같다. 생각을 끌 수 없는 모델은 창구가 생각의 몫을 더한다
+# 출력 상한은 판매가가 가정한 출력과 같다. 이 값은 기본 단계(1,200 토큰)의 것이고, 부를 때 요청의 출력 단계로
+# 바꾼다(params_for, #387). 생각을 끌 수 없는 모델은 창구가 생각의 몫을 더한다
 NARRATION_PARAMS = GenerationParams(max_tokens=ROUND_OUTPUT_TOKENS, temperature=0.8)
 
 # 호출 기록에 적는 쓰임새
 PURPOSE = 'narration'
 
-# 장면으로 받는 글의 상한(글자 수). 다음 라운드의 요청에 다시 들어가므로, 길면 그만큼 다음 호출이 비싸진다
+# 장면으로 받는 글의 상한(글자 수). 다음 라운드의 요청에 다시 들어가므로, 길면 그만큼 다음 호출이 비싸진다.
+# 기본 단계의 값이다. 출력 단계마다 SCENE_STEP_LENGTH 를 더한다(scene_max_length, #387)
 SCENE_MAX_LENGTH = 4000
+SCENE_STEP_LENGTH = 3000
 
 # 출력 상한에 걸려 잘린 글을 마지막 문장까지 잘라 받을 때, 이보다 짧으면 받지 않고 다시 부른다(cut_off).
 # 생각을 끌 수 없는 모델이 생각에 출력을 다 써서 본문이 거의 없는 경우가 여기에 걸린다
@@ -77,16 +80,27 @@ class SecretLeaked(NarrationError):
         self.redacted = redacted
 
 
-def accept_scene(text: str) -> str:
+def scene_max_length(steps: NarrationSteps) -> int:
+    """그 출력 단계에서 장면으로 받는 글의 상한(글자 수). 4,000, 7,000, 10,000 이다."""
+    return SCENE_MAX_LENGTH + SCENE_STEP_LENGTH * steps.output
+
+
+def params_for(params: GenerationParams, steps: NarrationSteps) -> GenerationParams:
+    """부를 때의 설정. 출력 상한만 그 출력 단계의 것으로 바꾼다. 온도와 생각의 깊이는 그대로다."""
+    return replace(params, max_tokens=output_tokens(steps))
+
+
+def accept_scene(text: str, max_length: int = SCENE_MAX_LENGTH) -> str:
     """
     모델의 글을 장면으로 받아도 되는지 보고, 앞뒤 공백을 뗀 글을 돌려준다. 안 되면 NarrationError.
 
     길이를 넘는 글을 잘라서 받지 않는다. 문장 중간에서 끊긴 장면이 기록으로 굳는다.
+    max_length 는 그 출력 단계의 상한이다(scene_max_length).
     """
     scene = text.strip()
     if not scene:
         raise NarrationError('empty')
-    if len(scene) > SCENE_MAX_LENGTH:
+    if len(scene) > max_length:
         raise NarrationError('too_long')
     return scene
 
@@ -97,7 +111,7 @@ def trim_to_sentence(text: str) -> str:
     return text[: ends[-1]].strip() if ends else ''
 
 
-def accept_truncated(text: str) -> str:
+def accept_truncated(text: str, max_length: int = SCENE_MAX_LENGTH) -> str:
     """
     출력 상한에 걸려 잘린 글을 마지막 문장까지 잘라 장면으로 받는다. 너무 짧으면 NarrationError(cut_off).
 
@@ -108,10 +122,10 @@ def accept_truncated(text: str) -> str:
     if len(scene) < TRUNCATED_MIN_LENGTH:
         raise NarrationError('cut_off')
     logger.warning('잘린 서술을 마지막 문장까지 받았다', extra={'result': 'truncated', 'kept_chars': len(scene)})
-    return accept_scene(scene)
+    return accept_scene(scene, max_length)
 
 
-def keep_secrets(scene: str, secrets: SecretNames) -> str:
+def keep_secrets(scene: str, secrets: SecretNames, max_length: int = SCENE_MAX_LENGTH) -> str:
     """
     장면에 숨길 이름이 없으면 그대로 돌려준다. 있으면 SecretLeaked(가린 장면을 든다).
 
@@ -120,18 +134,19 @@ def keep_secrets(scene: str, secrets: SecretNames) -> str:
     if not leaked(scene, secrets):
         return scene
     logger.warning('서술이 숨긴 이름을 썼다', extra={'result': SECRET_LEAKED, 'error_code': 'narration.secret_leaked'})
-    raise SecretLeaked(accept_scene(redact(scene, secrets)))
+    raise SecretLeaked(accept_scene(redact(scene, secrets), max_length))
 
 
-def accept_completion(completion: Completion) -> str:
+def accept_completion(completion: Completion, max_length: int = SCENE_MAX_LENGTH) -> str:
     """
     provider 의 답을 장면으로 받는다. 안 되면 NarrationError.
 
     길이 상한에 걸려 끊긴 답은 마지막 문장까지 잘라 받는다(accept_truncated). 너무 짧으면 다시 부른다.
+    max_length 는 그 출력 단계의 장면의 상한이다(scene_max_length).
     """
     if completion.truncated:
-        return accept_truncated(completion.text)
-    return accept_scene(completion.text)
+        return accept_truncated(completion.text, max_length)
+    return accept_scene(completion.text, max_length)
 
 
 def elapsed_ms(started: float) -> int:
@@ -153,7 +168,8 @@ def warn_if_over_budget(request: NarrationRequest, messages: list[ChatMessage]) 
     부르는 것은 막지 않는다. 라운드를 실패시키면 앉은 사람 모두가 멈춘다. 경고로 그런 판이 얼마나 되는지 본다.
     """
     tokens = estimate_messages(messages)
-    if tokens <= INPUT_BUDGET:
+    budget = input_budget(request.steps)
+    if tokens <= budget:
         return
     logger.warning(
         '서술의 입력이 예산을 넘는다. 뺄 것을 다 빼고 그대로 부른다',
@@ -161,7 +177,7 @@ def warn_if_over_budget(request: NarrationRequest, messages: list[ChatMessage]) 
             'table_id': str(request.table_id),
             'round_number': request.round_number,
             'estimated_tokens': tokens,
-            'budget': INPUT_BUDGET,
+            'budget': budget,
         },
     )
 
@@ -183,6 +199,7 @@ class LLMNarrator:
     log 는 호출을 기록하는 곳이다. 비워 둘 수 없다. 기록 없이 모델을 부르는 길을 만들지 않는다.
     digest_key 는 보낸 메시지의 지문(HMAC)을 만드는 키다. 없으면 지문을 남기지 않는다(ai_core/calls.py).
     price 는 모델 목록의 이름표와 그날의 단가다. 있으면 기록에 원가를 센다(ai_core/costs.py). 목록에 없는 모델이면 None.
+    params 의 출력 상한은 부를 때 요청의 출력 단계의 것으로 바뀐다(params_for). 온도와 생각의 깊이는 그대로 쓴다.
     """
 
     provider: LLMProvider
@@ -194,6 +211,7 @@ class LLMNarrator:
     def describe(
         self,
         request: NarrationRequest,
+        params: GenerationParams,
         latency_ms: int,
         completion: Completion | None = None,
         error: str | None = None,
@@ -201,7 +219,7 @@ class LLMNarrator:
         input_chars: int | None = None,
     ) -> CallRecord:
         """
-        호출 한 번을 기록의 모양으로 만든다. request 는 예산에 맞게 줄인 요청이다.
+        호출 한 번을 기록의 모양으로 만든다. request 는 예산에 맞게 줄인 요청이고, params 는 부를 때의 설정이다.
 
         답이 있으면 답에 적힌 모델의 이름을 쓴다. 없으면(받지 못했으면) provider 가 들고 있는 이름이다.
         생성 설정, 넣은 로어북 항목, 보낸 메시지의 지문(digest)과 글자 수(input_chars)를 함께 적는다.
@@ -211,7 +229,7 @@ class LLMNarrator:
             provider=self.provider.kind,
             model=completion.model if completion else self.provider.model,
             prompt_version=PROMPT_VERSION,
-            reasoning=self.params.reasoning,
+            reasoning=params.reasoning,
             outcome=outcome_of(completion, error),
             latency_ms=latency_ms,
             narration_style=request.style,
@@ -220,8 +238,8 @@ class LLMNarrator:
             output_tokens=completion.output_tokens if completion else None,
             finish_reason=completion.finish_reason if completion else None,
             text=completion.text if completion else None,
-            temperature=self.params.temperature,
-            max_tokens=self.params.max_tokens,
+            temperature=params.temperature,
+            max_tokens=params.max_tokens,
             lore_entry_ids=tuple(note.entry_id for note in request.lore),
             memory_rounds=tuple(note.round_number for note in request.memories),
             reference_ids=tuple(note.reference_id for note in request.references),
@@ -238,10 +256,13 @@ class LLMNarrator:
         부르고 나면 어떻게 끝났든 기록을 하나 남기고, 실패면 그 예외를 그대로 올린다.
         이야기의 바탕이 없는 요청은 부르지 않는다. 부르지 않았으니 기록도, 미리 보기도 없다.
         입력이 예산을 넘으면 덜 중요한 것부터 빼고 부른다(app/rounds/budget.py).
+        출력 상한과 받는 장면의 상한은 요청의 출력 단계의 것이다(#387).
         """
         if request.story is None:
             raise NarrationError('no_story')
         sent = fit_request(request)
+        params = params_for(self.params, sent.steps)
+        max_length = scene_max_length(sent.steps)
         messages = build_messages(sent)
         warn_if_over_budget(sent, messages)
         digest = input_digest(messages, self.digest_key)
@@ -251,19 +272,19 @@ class LLMNarrator:
         shown.begin()
         started = time.perf_counter()
         try:
-            completion = await self.provider.complete(messages, self.params, shown.text)
+            completion = await self.provider.complete(messages, params, shown.text)
         except ProviderError as error:
             await self.log.write(
-                self.describe(sent, elapsed_ms(started), error=str(error), digest=digest, input_chars=chars)
+                self.describe(sent, params, elapsed_ms(started), error=str(error), digest=digest, input_chars=chars)
             )
             raise
         latency_ms = elapsed_ms(started)
         try:
-            scene = keep_secrets(accept_completion(completion), sent.secrets)
+            scene = keep_secrets(accept_completion(completion, max_length), sent.secrets, max_length)
         except NarrationError as error:
             await self.log.write(
-                self.describe(sent, latency_ms, completion, error=str(error), digest=digest, input_chars=chars)
+                self.describe(sent, params, latency_ms, completion, error=str(error), digest=digest, input_chars=chars)
             )
             raise
-        await self.log.write(self.describe(sent, latency_ms, completion, digest=digest, input_chars=chars))
+        await self.log.write(self.describe(sent, params, latency_ms, completion, digest=digest, input_chars=chars))
         return scene

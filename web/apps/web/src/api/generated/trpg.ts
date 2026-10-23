@@ -4147,6 +4147,8 @@ export interface components {
             display_name: string;
             grade: components["schemas"]["Grade"];
             next: components["schemas"]["NextPriceOut"] | null;
+            /** Options */
+            options: components["schemas"]["StepPriceOut"][];
             /** Promo */
             promo: boolean;
             /** Retires On */
@@ -4159,11 +4161,23 @@ export interface components {
         };
         /**
          * NarrationModelUpdate
-         * @description 서술 모델을 바꿀 때 받는 값. 칸을 빼먹으면 거부한다. 비울 수 없다(서버의 기본 모델로 돌아가지 않는다).
+         * @description 서술 모델과 단계를 바꿀 때 받는 값. 모델을 빼먹으면 거부한다. 비울 수 없다(서버의 기본 모델로 돌아가지 않는다).
+         *
+         *     단계(#387)는 모델과 함께 한 가격표를 고르는 것이다. 적지 않으면 0, 0(i0.o0)이다. 그 모델이 그 단계를 팔아야 한다.
          */
         NarrationModelUpdate: {
+            /**
+             * Input Step
+             * @default 0
+             */
+            input_step: number;
             /** Narration Model */
             narration_model: string;
+            /**
+             * Output Step
+             * @default 0
+             */
+            output_step: number;
         };
         /**
          * NarrationModelsOut
@@ -5608,6 +5622,8 @@ export interface components {
             death_saves: components["schemas"]["DeathSaveOut"][];
             /** Declarations */
             declarations: components["schemas"]["DeclarationOut"][];
+            /** Input Step */
+            input_step: number;
             /** Narration Failed At */
             narration_failed_at: string | null;
             /** Narration Failures */
@@ -5616,6 +5632,8 @@ export interface components {
             narration_model: string | null;
             /** Number */
             number: number;
+            /** Output Step */
+            output_step: number;
             price: components["schemas"]["RoundPriceOut"] | null;
             /** Scene */
             scene: string;
@@ -6596,6 +6614,29 @@ export interface components {
             steal: components["schemas"]["StealOut"];
         };
         /**
+         * StepPriceOut
+         * @description 모델의 단계 하나와 1인 1라운드의 값(#387). 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.
+         *
+         *     입력 단계마다 입력 +8,000 토큰(12,000, 20,000, 28,000), 출력 단계마다 출력 +1,000 토큰(1,200, 2,200, 3,200)이다.
+         *     입력이 크면 지난 기록, 로어북, 기억이 더 들어가고, 출력이 크면 장면이 길어진다.
+         */
+        StepPriceOut: {
+            /** Credits */
+            credits: string | null;
+            /** Input Step */
+            input_step: number;
+            /** Input Tokens */
+            input_tokens: number;
+            next: components["schemas"]["NextPriceOut"] | null;
+            /** Output Step */
+            output_step: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Promo */
+            promo: boolean;
+            tier: components["schemas"]["Tier"] | null;
+        };
+        /**
          * Surprise
          * @description 조우에서 누가 기습하는가. 제작자가 조우마다 정한다.
          *
@@ -6623,6 +6664,11 @@ export interface components {
              */
             credit_wait_seconds: number;
             /**
+             * Input Step
+             * @default 0
+             */
+            input_step: number;
+            /**
              * Is Public
              * @default false
              */
@@ -6635,6 +6681,11 @@ export interface components {
              * @default 0
              */
             opening_index: number;
+            /**
+             * Output Step
+             * @default 0
+             */
+            output_step: number;
             /** Password */
             password?: string | null;
             /**
@@ -6699,6 +6750,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Input Step */
+            input_step: number;
             /** Invite Code */
             invite_code: string | null;
             /** Is Public */
@@ -6715,6 +6768,8 @@ export interface components {
             narration_style: components["schemas"]["NarrationStyle"];
             /** Opening */
             opening: string;
+            /** Output Step */
+            output_step: number;
             player_made_hp: components["schemas"]["PlayerMadeHp"] | null;
             /** Pregens */
             pregens: components["schemas"]["PregenChoice"][];
@@ -6799,6 +6854,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Input Step */
+            input_step: number;
             /** Is Public */
             is_public: boolean;
             /** Member Count */
@@ -6806,6 +6863,8 @@ export interface components {
             /** Narration Model */
             narration_model: string | null;
             narration_style: components["schemas"]["NarrationStyle"];
+            /** Output Step */
+            output_step: number;
             rating: components["schemas"]["Rating"];
             /** References Enabled */
             references_enabled: boolean;

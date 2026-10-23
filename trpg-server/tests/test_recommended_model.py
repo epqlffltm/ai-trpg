@@ -66,6 +66,9 @@ PRO = ModelEntry(
     token_limit_field=TokenLimitField.MAX_COMPLETION_TOKENS,
 )
 
+# 단계를 고르지 않은 테이블의 단계(#387). 이벤트에 모델과 함께 실린다
+BASE = {'input_step': 0, 'output_step': 0}
+
 
 def offered(slug: str, vendor: str = 'openai', credits: str | None = '20', tier: Tier | None = Tier.STANDARD, **more):
     """고를 수 있는 모델 하나."""
@@ -401,7 +404,7 @@ async def test_the_table_takes_the_recommended_model(client: AsyncClient, me: di
     (created,) = await events_of(client, me, response.json(), 'table_created')
 
     assert response.json()['narration_model'] == 'gpt-6-luna'
-    assert created['payload'] == {'narration_model': 'gpt-6-luna', 'recommended_model': 'gpt-6-luna'}
+    assert created['payload'] == {**BASE, 'narration_model': 'gpt-6-luna', 'recommended_model': 'gpt-6-luna'}
 
 
 @pytest.mark.usefixtures('openai_models')
@@ -426,7 +429,7 @@ async def test_an_unsold_recommendation_is_replaced_and_recorded(client: AsyncCl
     assert response.status_code == status.HTTP_201_CREATED, response.text
     assert response.json()['narration_model'] == 'gpt-6-mini'
     # 방장이 바뀐 것을 안다. 몰래 바꾸지 않는다
-    assert created['payload'] == {'narration_model': 'gpt-6-mini', 'recommended_model': 'gpt-6-luna'}
+    assert created['payload'] == {**BASE, 'narration_model': 'gpt-6-mini', 'recommended_model': 'gpt-6-luna'}
 
 
 @pytest.mark.usefixtures('openai_models')
@@ -468,7 +471,7 @@ async def test_an_old_scenario_needs_the_host_to_pick(client: AsyncClient, sessi
     (created,) = await events_of(client, me, picked.json(), 'table_created')
 
     assert refused.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert created['payload'] == {'narration_model': 'gpt-6-luna', 'recommended_model': None}
+    assert created['payload'] == {**BASE, 'narration_model': 'gpt-6-luna', 'recommended_model': None}
 
 
 @pytest.mark.usefixtures('openai_models')
@@ -479,4 +482,4 @@ async def test_the_host_pick_wins_over_the_recommendation(client: AsyncClient, m
     (created,) = await events_of(client, me, response.json(), 'table_created')
 
     assert response.json()['narration_model'] == 'gpt-6-pro'
-    assert created['payload'] == {'narration_model': 'gpt-6-pro', 'recommended_model': 'gpt-6-luna'}
+    assert created['payload'] == {**BASE, 'narration_model': 'gpt-6-pro', 'recommended_model': 'gpt-6-luna'}

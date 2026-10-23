@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.billing import repository
 from app.billing.models import ChargeStatus, NarrationCharge
 from app.billing.prices import PRICE_CODE_PREFIX, narration_code
+from app.catalog.steps import steps_of
 from app.rounds.models import Round
 from app.tables.models import GameTable
 
@@ -57,12 +58,13 @@ LEGACY_PRICE_CODE = f'{PRICE_CODE_PREFIX}.standard'
 
 def price_code_of(round_: Round) -> str:
     """
-    그 라운드의 서술 값의 가격표 이름. 그 모델의 것(narration.<이름표>.i0.o0)이다. 값은 결제 서버의 가격표가 정한다.
+    그 라운드의 서술 값의 가격표 이름. 그 모델과 단계의 것(narration.<이름표>.i<입력>.o<출력>)이다.
+    값은 결제 서버의 가격표가 정한다. 단계는 라운드를 열 때 굳힌 것이다(#387).
 
     모델이 없는 옛 라운드는 LEGACY_PRICE_CODE 다.
     """
     if round_.narration_model is not None:
-        return narration_code(round_.narration_model)
+        return narration_code(round_.narration_model, steps_of(round_))
     return LEGACY_PRICE_CODE
 
 
