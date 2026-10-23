@@ -923,6 +923,15 @@ class ForceCheck(BaseModel):
     difficulty: Key | None = None
 
 
+class RepairCheck(PickCheck):
+    """
+    부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.
+
+    성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.
+    tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.
+    """
+
+
 class RouteRule(BaseModel):
     """
     길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.
@@ -933,8 +942,8 @@ class RouteRule(BaseModel):
     travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
     (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
     길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,
-    force 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.
-    빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.
+    force 는 문(자물쇠와 빗장)을 부수는 판정, repair 는 부서진 문을 고치는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.
+    빗장, 자물쇠, 넘기 판정의 차례로 본다. force 와 repair 는 자물쇠나 빗장이 있는 길에만 적는다.
     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
     """
 
@@ -950,6 +959,7 @@ class RouteRule(BaseModel):
     lock: RouteLock | None = None
     bar: RouteBar | None = None
     force: ForceCheck | None = None
+    repair: RepairCheck | None = None
 
     @model_validator(mode='after')
     def leads_somewhere_else(self) -> 'RouteRule':
@@ -970,6 +980,13 @@ class RouteRule(BaseModel):
         """부술 것(자물쇠나 빗장)이 있는 길에만 부수는 판정을 적는다."""
         if self.force is not None and self.lock is None and self.bar is None:
             raise ValueError('부수는 판정(force)은 자물쇠나 빗장이 있는 길에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def repair_only_with_a_door(self) -> 'RouteRule':
+        """고칠 것(자물쇠나 빗장)이 있는 길에만 고치는 판정을 적는다."""
+        if self.repair is not None and self.lock is None and self.bar is None:
+            raise ValueError('고치는 판정(repair)은 자물쇠나 빗장이 있는 길에만 적습니다.')
         return self
 
     @model_validator(mode='after')

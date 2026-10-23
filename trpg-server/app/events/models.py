@@ -156,8 +156,9 @@ class EventType(enum.StrEnum):
     # 캐릭터가 서 있는 곳에서 숨긴 길을 찾았다(app/rounds/map_actions.py). 찾은 길만 적는다. 못 찾았으면 빈 목록이다.
     # 굴린 판정은 적지 않는다. 숨긴 길이 있었는지가 드러난다
     PLACE_SEARCHED = 'place_searched'
-    # 캐릭터가 길의 문을 잠그거나 열거나 따거나 부쉈다(app/rounds/door_actions.py, #281). 해낸 것만 적는다.
-    # 누가, 무엇을(act: lock, unlock, pick, force), 무엇으로(device: lock, bar), 어느 길의(from, to). 문은 맵에 보인다
+    # 캐릭터가 길의 문을 잠그거나 열거나 따거나 부수거나 고쳤다(app/rounds/door_actions.py, #281). 해낸 것만 적는다.
+    # 누가, 무엇을(act: lock, unlock, pick, force, repair), 무엇으로(device: lock, bar), 어느 길의(from, to).
+    # 문은 맵에 보인다
     DOOR_CHANGED = 'door_changed'
     # 캐릭터가 쉬었다(app/rounds/rests.py). 쉬는 행동을 선언했거나(cause: rest), 시간이 흘러 저절로 회복했다
     # (cause: natural). 선언한 휴식이 다쳐서 깨졌으면 rested 가 false 이고 까닭(reason)이 있다

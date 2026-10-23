@@ -1,7 +1,7 @@
 # trpg-server/app/rounds/door_actions.py
 
 """
-길의 문을 다루는 행동(#281). 잠그기(lock), 열기(unlock), 따기(pick), 부수기(force).
+길의 문을 다루는 행동(#281). 잠그기(lock), 열기(unlock), 따기(pick), 부수기(force), 고치기(repair).
 
 선언을 받을 때 보고(accept_door), 라운드가 닫힐 때 차례가 오면 정한다(judge_door).
 문은 지금 서 있는 장소에 닿은 아는 길의 것이다. 길의 방향은 보지 않는다(어느 끝에서든 다룬다). 지나가지는 않는다.
@@ -10,7 +10,9 @@
     장치(device)는 그 길에 하나만 있으면 비워도 된다. 자물쇠와 빗장이 다 있으면 적어야 한다.
   - 따기: 판에 적힌 따는 판정으로 잠긴 자물쇠를 연다. 판에 도구를 적었으면 그것을 지녀야 한다. 빗장은 따지 못한다.
   - 부수기: 판에 적힌 부수는 판정으로 문을 부순다. 자물쇠와 빗장이 다 열리고, 고치기 전까지 다시 잠그지 못한다.
-  - 받을 때는 문이 있는지(그 장치, 따는 판정, 부수는 판정)만 본다. 열쇠, 서 있는 쪽, 문의 지금 상태는 차례가 오면 본다.
+  - 고치기: 판에 적힌 고치는 판정으로 부서진 문을 고친다. 판에 도구를 적었으면 그것을 지녀야 한다. 고친 문은 열린 채다.
+  - 받을 때는 문이 있는지(그 장치, 따는 판정, 부수는 판정, 고치는 판정)만 본다.
+    열쇠, 서 있는 쪽, 문의 지금 상태는 차례가 오면 본다.
     앞 차례에 누가 열쇠를 건넸거나 문을 열었을 수 있다. 할 수 없으면 굴리지 않고 까닭(reason)을 적는다.
   - 판정은 부상의 영향을 받는다. 실패하면 아무 일도 없다. 굴림은 공개다(check_rolled).
 
@@ -20,7 +22,7 @@ DB 를 모른다. 테이블의 문의 상태를 고친다(app/tables/route_locks
 import uuid
 
 from app.assets.scenarios.snapshot import RouteSnapshot, door_devices, read_snapshot
-from app.engine.action import DoorAction, DoorDevice, ForceAction, LockAction, PickAction, UnlockAction
+from app.engine.action import DoorAction, DoorDevice, ForceAction, LockAction, PickAction, RepairAction, UnlockAction
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionTargetError, Conflict, RoundConflictError
 from app.rounds.map_actions import holds_key, roll_terms, standing_place, terms_document
@@ -37,11 +39,11 @@ class DoorReason:
     WRONG_SIDE = 'wrong_side'
     # 문이 부서져 잠그지 못했다
     BROKEN = 'broken'
-    # 이미 그렇게 되어 있었다(잠긴 것을 잠그기, 열린 것을 열기·따기·부수기)
+    # 이미 그렇게 되어 있었다(잠긴 것을 잠그기, 열린 것을 열기·따기·부수기, 부서지지 않은 것을 고치기)
     ALREADY = 'already'
-    # 따는 데 있어야 하는 도구가 없었다
+    # 따거나 고치는 데 있어야 하는 도구가 없었다
     NO_TOOL = 'no_tool'
-    # 따기나 부수기의 판정에 실패했다
+    # 따기, 부수기, 고치기의 판정에 실패했다
     FAILED = 'failed'
 
 
@@ -67,11 +69,13 @@ def resolve_device(route: RouteSnapshot, device: DoorDevice | None) -> DoorDevic
 
 
 def require_opening(route: RouteSnapshot, action: DoorAction) -> None:
-    """따기와 부수기가 할 수 있는 문인지 본다. 판에 그 판정이 없으면 RoundConflictError."""
+    """따기, 부수기, 고치기가 할 수 있는 문인지 본다. 판에 그 판정이 없으면 RoundConflictError."""
     if isinstance(action, PickAction) and (route.lock is None or route.lock.pick is None):
         raise RoundConflictError(Conflict.NOT_PICKABLE)
     if isinstance(action, ForceAction) and route.force is None:
         raise RoundConflictError(Conflict.NOT_FORCEABLE)
+    if isinstance(action, RepairAction) and route.repair is None:
+        raise RoundConflictError(Conflict.NOT_REPAIRABLE)
 
 
 def accept_door(table: GameTable, member: TableMember, action: DoorAction) -> dict:
@@ -83,6 +87,7 @@ def accept_door(table: GameTable, member: TableMember, action: DoorAction) -> di
       - 잠그기, 열기: 장치가 그 길에 없거나, 둘 다 있는데 비웠으면 ActionTargetError(device).
         비운 장치는 그 길의 하나로 채운다.
       - 따기: 판에 따는 판정이 없으면 RoundConflictError(not_pickable). 부수기: 부수는 판정이 없으면 not_forceable.
+        고치기: 고치는 판정이 없으면 not_repairable.
     """
     here = standing_place(member)
     route = joining_route(table, here, action.place)
@@ -176,12 +181,31 @@ def force_door(judging: Judging, member: TableMember, route: RouteSnapshot) -> t
     return (None if rolled.check.success else DoorReason.FAILED), terms_document(judging, route.force, rolled)
 
 
+def repair_door(judging: Judging, member: TableMember, route: RouteSnapshot) -> tuple[str | None, dict | None]:
+    """
+    부서진 문을 고친다. (못 한 까닭, 판정의 문서)를 돌려준다. 부서지지 않았거나 도구가 없으면 굴리지 않는다.
+
+    성공하면 문이 고쳐진다. 열린 채다(자물쇠도 빗장도 풀린 그대로).
+    """
+    repair = route.repair
+    if not route_locks.is_broken(judging.table, route):
+        return DoorReason.ALREADY, None
+    if repair.tool is not None and items.count_of(member.sheet, repair.tool) < 1:
+        return DoorReason.NO_TOOL, None
+    rolled = roll_terms(judging, member, repair)
+    if rolled.check.success:
+        route_locks.repair(judging.table, route)
+    return (None if rolled.check.success else DoorReason.FAILED), terms_document(judging, repair, rolled)
+
+
 def handle_door(judging: Judging, member: TableMember, route: RouteSnapshot, action: DoorAction) -> tuple:
     """행동의 종류대로 문을 다룬다. (못 한 까닭, 판정의 문서)를 돌려준다. 잠그기와 열기는 굴리지 않는다."""
     if isinstance(action, LockAction | UnlockAction):
         return set_door(judging, member, route, action.device, isinstance(action, LockAction)), None
     if isinstance(action, PickAction):
         return pick_lock(judging, member, route)
+    if isinstance(action, RepairAction):
+        return repair_door(judging, member, route)
     return force_door(judging, member, route)
 
 

@@ -325,7 +325,7 @@ def record_door(session: AsyncSession, table: GameTable, declaration: Declaratio
     """
     문을 다룬 것을 이벤트로 적는다(#281). 그 행동의 이벤트(cause)에 잇는다.
 
-    따기와 부수기는 굴린 판정을 먼저 적는다(check_rolled, 해내지 못했어도). 해냈으면 door_changed 를 잇는다.
+    따기, 부수기, 고치기는 굴린 판정을 먼저 적는다(check_rolled, 해내지 못했어도). 해냈으면 door_changed 를 잇는다.
     행한 사람(actor_id)을 적지 않는다. 문을 바꾼 것은 엔진이다.
     """
     door = door_of(declaration)

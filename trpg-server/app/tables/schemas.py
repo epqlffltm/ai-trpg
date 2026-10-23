@@ -454,7 +454,7 @@ class PlaceOut(BaseModel):
 
 class RouteCrossOut(BaseModel):
     """
-    길에 적힌 판정 하나(#281). 넘기(지날 때마다 가는 사람이 굴린다), 따기, 부수기다.
+    길에 적힌 판정 하나(#281). 넘기(지날 때마다 가는 사람이 굴린다), 따기, 부수기, 고치기다.
 
     룰북의 능력치와 난이도의 이름표다.
     """
@@ -484,11 +484,12 @@ class RouteOut(BaseModel):
     # 빗장이 지금 걸려 있는가. 빗장이 없는 길이면 None 이다. 빗장 쪽(bar_side)에서만 걸고 푼다
     barred: bool | None = None
     bar_side: uuid.UUID | None = None
-    # 문이 부서졌는가. 부서진 문은 열린 채이고 다시 잠그지 못한다
+    # 문이 부서졌는가. 부서진 문은 열린 채이고 고치기 전까지 다시 잠그지 못한다
     broken: bool = False
-    # 자물쇠를 따는 판정과 문을 부수는 판정. 없으면 따거나 부수지 못한다
+    # 자물쇠를 따는 판정, 문을 부수는 판정, 부서진 문을 고치는 판정. 없으면 따거나 부수거나 고치지 못한다
     pick: RouteCrossOut | None = None
     force: RouteCrossOut | None = None
+    repair: RouteCrossOut | None = None
 
 
 class MapOut(BaseModel):
