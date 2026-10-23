@@ -86,7 +86,7 @@ function mine(ctx: ActionContext) {
   return heldItems(ctx.me).map((item) => ({ value: item.entry_id, label: `${item.name} ×${item.count}` }));
 }
 
-function CountField({ draft, max, onChange }: { draft: ActionDraft; max: number; onChange: Props['onChange'] }) {
+export function CountField({ draft, max, onChange }: { draft: ActionDraft; max: number; onChange: Props['onChange'] }) {
   return (
     <TextField
       label="개수"
