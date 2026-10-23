@@ -4,6 +4,7 @@
 
 import type { components as Asset } from './generated/asset';
 import type { components as Auth } from './generated/auth';
+import type { components as Billing } from './generated/billing';
 import type { components as Chat } from './generated/chat';
 import type { components as Trpg } from './generated/trpg';
 
@@ -63,3 +64,8 @@ export type PublicCharacterSummary = Asset['schemas']['PublicCharacterSummary'];
 
 export type ConversationPage = Chat['schemas']['ConversationPage'];
 export type ConversationSummary = Chat['schemas']['ConversationSummary'];
+
+// 결제 서버의 지갑(A6). 양은 글자다("80"). 화면이 셈하지 않는다
+export type Wallet = Billing['schemas']['Wallet'];
+export type WalletEntry = Billing['schemas']['Entry'];
+export type WalletEntries = Billing['schemas']['Entries'];
