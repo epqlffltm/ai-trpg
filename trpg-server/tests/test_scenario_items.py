@@ -96,6 +96,9 @@ async def test_items_are_saved_and_read_back(client: AsyncClient, me: dict[str, 
             'price': None,
             'slots': [],
             'slot_count': 1,
+            'attack': None,
+            'defense': None,
+            'guard': None,
         },
         {
             'entry_id': lore['rope']['id'],
@@ -105,6 +108,9 @@ async def test_items_are_saved_and_read_back(client: AsyncClient, me: dict[str, 
             'price': None,
             'slots': [],
             'slot_count': 1,
+            'attack': None,
+            'defense': None,
+            'guard': None,
         },
     ]
     assert read['starting_items'] == [stack(lore['rope'])]
@@ -192,6 +198,9 @@ async def test_items_are_frozen_into_the_version(client: AsyncClient, me: dict[s
             'price': None,
             'slots': [],
             'slot_count': 1,
+            'attack': None,
+            'defense': None,
+            'guard': None,
         }
     ]
     assert snapshot['starting_items'] == [stack(lore['rope'], 3)]
@@ -256,6 +265,9 @@ async def test_a_consumable_may_heal_nothing(client: AsyncClient, me: dict[str, 
             'price': None,
             'slots': [],
             'slot_count': 1,
+            'attack': None,
+            'defense': None,
+            'guard': None,
         }
     ]
 

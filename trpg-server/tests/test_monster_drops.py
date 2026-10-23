@@ -90,7 +90,7 @@ async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -
 
 
 def drop(entry: dict, count: int = 1, chance: int = 100) -> dict:
-    return {'entry_id': entry['id'], 'count': count, 'chance': chance}
+    return {'entry_id': entry['id'], 'count': count, 'chance': chance, 'wear': []}
 
 
 async def make_world(client: AsyncClient, me: dict[str, str]) -> dict:

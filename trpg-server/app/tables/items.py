@@ -28,6 +28,7 @@ class CatalogItem:
 
     price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
     slots 는 착용할 때 들어갈 수 있는 규칙의 칸, slot_count 는 차지하는 칸의 수다(#276). slots 가 비면 착용하지 않는다.
+    attack 은 무기의 공격 보정, defense 는 차지한 칸의 방어, guard 는 모든 부위의 방어다(#276). 없으면 None.
     """
 
     entry_id: uuid.UUID
@@ -38,6 +39,9 @@ class CatalogItem:
     price: int | None = None
     slots: tuple[str, ...] = ()
     slot_count: int = 1
+    attack: int | None = None
+    defense: int | None = None
+    guard: int | None = None
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -54,6 +58,9 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             price=rule.price,
             slots=tuple(rule.slots),
             slot_count=rule.slot_count,
+            attack=rule.attack,
+            defense=rule.defense,
+            guard=rule.guard,
         )
     return items
 
