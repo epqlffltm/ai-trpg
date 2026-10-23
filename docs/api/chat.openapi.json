@@ -150,6 +150,14 @@
             "title": "Greeting",
             "type": "string"
           },
+          "illustrations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IllustrationDocument"
+            },
+            "title": "Illustrations",
+            "type": "array"
+          },
           "image_id": {
             "anyOf": [
               {
@@ -682,6 +690,64 @@
           "count"
         ],
         "title": "HoldingOut",
+        "type": "object"
+      },
+      "IllustrationConditionDocument": {
+        "description": "일러스트가 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.\n모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "IllustrationConditionDocument",
+        "type": "object"
+      },
+      "IllustrationDocument": {
+        "description": "일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.",
+        "properties": {
+          "collectible": {
+            "default": true,
+            "title": "Collectible",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "scene": {
+            "default": "",
+            "title": "Scene",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "when": {
+            "$ref": "#/components/schemas/IllustrationConditionDocument"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "image_id",
+          "when"
+        ],
+        "title": "IllustrationDocument",
         "type": "object"
       },
       "ItemDocument": {
