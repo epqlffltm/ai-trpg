@@ -8334,7 +8334,7 @@
       },
       "Ruleset": {
         "additionalProperties": false,
-        "description": "규칙 한 벌.\n\ntemplate 은 어느 템플릿에서 왔는지를 적어 둔 것이다(app/engine/templates.py). 엔진은 이 값을 보지 않는다.",
+        "description": "규칙 한 벌.\n\ntemplate 은 어느 템플릿에서 왔는지를 적어 둔 것이다(app/engine/templates/). 엔진은 이 값을 보지 않는다.",
         "properties": {
           "abilities": {
             "items": {
@@ -11162,12 +11162,78 @@
         "type": "object"
       },
       "Template": {
-        "description": "고를 수 있는 템플릿.",
+        "description": "고를 수 있는 템플릿. 이름마다 이 폴더에 {이름}.json 이 있다.",
         "enum": [
-          "srd5"
+          "srd5",
+          "horror",
+          "light"
         ],
         "title": "Template",
         "type": "string"
+      },
+      "TemplateList": {
+        "description": "고를 수 있는 템플릿들. app/engine/templates/ 의 Template 에 적은 차례다.\n\ndefault 는 룰북을 만들 때 template 을 보내지 않으면 쓰는 것이다.",
+        "properties": {
+          "default": {
+            "$ref": "#/components/schemas/Template"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "default",
+          "items"
+        ],
+        "title": "TemplateList",
+        "type": "object"
+      },
+      "TemplateSummary": {
+        "description": "고를 수 있는 템플릿 하나(#615). 룰북을 만들 때 template 에 key 를 보내면 rules 가 룰북에 복사된다.\n\nattribution 은 본뜬 공개 문서의 출처 표시다. 화면에 템플릿을 보여 줄 때 함께 싣는다.",
+        "properties": {
+          "attribution": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Attribution",
+            "type": "array"
+          },
+          "key": {
+            "$ref": "#/components/schemas/Template"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/Ruleset"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "summary",
+          "attribution",
+          "notes",
+          "rules"
+        ],
+        "title": "TemplateSummary",
+        "type": "object"
       },
       "Tier": {
         "description": "결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).\n\n결제 서버가 모르는 등급을 보내면 목록 전체를 읽지 못한다(503).\n그래서 결제 서버는 게임 서버가 등급을 안 뒤에 그 줄을 넣는다.",
@@ -14449,6 +14515,34 @@
           }
         ],
         "summary": "Create Rulebook",
+        "tags": [
+          "rulebooks"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/rulebooks/templates": {
+      "get": {
+        "description": "룰북을 만들 때 고를 수 있는 템플릿들과 그 규칙(#615). 다른 주소처럼 로그인을 요구한다(user 는 쓰지 않는다).\n\n룰북의 길(/{rulebook_id})보다 먼저 등록한다. templates 를 룰북의 id 로 읽지 않게 한다.",
+        "operationId": "list_templates_api_v1_game_rulebooks_templates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Templates",
         "tags": [
           "rulebooks"
         ],

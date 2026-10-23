@@ -1,0 +1,153 @@
+{
+  "format": 1,
+  "key": "light",
+  "name": "가벼운 모험",
+  "summary": "능력치 셋과 d10 으로 판정하는 가벼운 모험. 부상과 죽음의 굴림이 없다. 쓰러져도 쉬면 일어난다.",
+  "attribution": [],
+  "notes": [
+    "모든 값은 이 프로젝트가 정했다. 점수가 곧 보정이다(1~5).",
+    "쓰러진 캐릭터는 죽지 않는다(죽음의 굴림이 없다). 한 시간 쉬면 d10 을 굴려 4 이상이면 일어난다.",
+    "네 시간마다 저절로 조금(1d4) 회복한다."
+  ],
+  "rules": {
+    "template": "light",
+    "abilities": [
+      {
+        "key": "body",
+        "name": "몸"
+      },
+      {
+        "key": "wits",
+        "name": "재치"
+      },
+      {
+        "key": "heart",
+        "name": "마음"
+      }
+    ],
+    "score_min": 1,
+    "score_max": 5,
+    "modifier": {
+      "base": 0,
+      "step": 1
+    },
+    "die": 10,
+    "difficulties": [
+      {
+        "key": "easy",
+        "name": "쉬움",
+        "target": 6
+      },
+      {
+        "key": "medium",
+        "name": "보통",
+        "target": 8
+      },
+      {
+        "key": "hard",
+        "name": "어려움",
+        "target": 11
+      }
+    ],
+    "default_difficulty": "medium",
+    "magnitudes": [
+      {
+        "key": "light",
+        "name": "가벼움",
+        "count": 1,
+        "sides": 4
+      },
+      {
+        "key": "moderate",
+        "name": "보통",
+        "count": 1,
+        "sides": 6
+      },
+      {
+        "key": "heavy",
+        "name": "심함",
+        "count": 2,
+        "sides": 6
+      }
+    ],
+    "hp_ability": null,
+    "initiative_ability": "wits",
+    "point_buy": {
+      "budget": 6,
+      "costs": [
+        {
+          "score": 1,
+          "cost": 0
+        },
+        {
+          "score": 2,
+          "cost": 1
+        },
+        {
+          "score": 3,
+          "cost": 2
+        },
+        {
+          "score": 4,
+          "cost": 3
+        },
+        {
+          "score": 5,
+          "cost": 5
+        }
+      ]
+    },
+    "score_roll": null,
+    "death_save": null,
+    "injuries": [],
+    "injury_table": null,
+    "injury_triggers": {
+      "big_hit_percent": null,
+      "downed": false,
+      "called_shot": false
+    },
+    "called_shot": null,
+    "treatment": null,
+    "rest": {
+      "short": {
+        "minutes": 30,
+        "heal": "moderate"
+      },
+      "long": {
+        "minutes": 360
+      },
+      "revive": {
+        "minutes": 60,
+        "target": 4
+      },
+      "natural": {
+        "every_minutes": 240,
+        "heal": "light"
+      }
+    },
+    "steal": {
+      "ability": "wits",
+      "difficulty": "medium",
+      "awareness": "wits",
+      "equipped": 3,
+      "rarity_step": 1,
+      "dull_kinds": [
+        {
+          "kind": "undead",
+          "amount": 2
+        },
+        {
+          "kind": "construct",
+          "amount": 2
+        }
+      ],
+      "dull": 2,
+      "unwary": 2,
+      "distracted": 1
+    },
+    "robbed_wake": {
+      "hostile": 0,
+      "wary": 30
+    }
+  }
+}

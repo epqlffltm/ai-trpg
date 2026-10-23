@@ -1531,7 +1531,7 @@
 | 재료 | 경로 | 칸 | 비고 |
 | --- | --- | --- | --- |
 | 세계관 | `/worlds` | `title`, `description`, `setting`(8000 자), `gm_notes`(4000 자) | `gm_notes` 는 GM 전용이라 테이블 참가자에게 가지 않는다 |
-| 룰북 | `/rulebooks` | `title`, `description`, `gm_guide`(4000 자), `template` | 규칙(`rules`)을 직접 받지 않는다. 템플릿 이름만 고르고 규칙은 서버가 채운다. 응답에는 `rules` 가 있다 |
+| 룰북 | `/rulebooks` | `title`, `description`, `gm_guide`(4000 자), `template` | 규칙(`rules`)을 직접 받지 않는다. 템플릿 이름만 고르고 규칙은 서버가 채운다. 응답에는 `rules` 가 있다. 고를 수 있는 템플릿과 그 규칙, 출처 표시는 `GET /rulebooks/templates`(#615): `srd5`(d20 판타지, 기본), `horror`(공포), `light`(가벼운 모험). 출처 표시(`attribution`)가 있으면 템플릿을 보여 줄 때 함께 싣는다 |
 | 로어북 | `/lorebooks`, `/lorebooks/{id}/entries` | 로어북은 `title`, `description`. 항목은 `name`, `keywords`, `content`, `kind`, `true_names` | 항목의 종류(`kind`)는 `person`, `place`, `item`, `faction`, `species`, `legend`, `event`, `other` 다. 기본은 `other` |
 | 몬스터 모음 | `/bestiaries`, `/bestiaries/{id}/monsters` | 모음은 `title`, `description`. 몬스터는 `name`, `content`, `kind`, `unique` | `unique` 는 판 전체에서 한 마리만 두는 네임드다 |
 | 시나리오 | `/scenarios` | 아래 | |

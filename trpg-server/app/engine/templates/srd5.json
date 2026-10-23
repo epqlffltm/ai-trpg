@@ -1,0 +1,554 @@
+{
+  "format": 1,
+  "key": "srd5",
+  "name": "d20 판타지",
+  "summary": "능력치 여섯과 d20 으로 판정하는 판타지 모험. 부상과 치료, 죽음의 굴림, 훔치기가 있다.",
+  "attribution": [
+    "This work includes material taken from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "This work includes material from the System Reference Document 5.2.1 (\"SRD 5.2.1\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "이 프로젝트는 Wizards of the Coast 와 관계가 없다."
+  ],
+  "notes": [
+    "능력치 여섯, d20, 난이도 다섯 단계. 능력치의 구성과 보정을 구하는 방법, 난이도의 숫자는 SRD 5.1 을 따랐다.",
+    "직업, 레벨, 숙련은 가져오지 않았다. 최대 HP 는 제작자가 시트에 직접 적는다.",
+    "양의 등급(magnitudes)은 SRD 의 표를 옮긴 것이 아니다. 기준 시트의 최대 HP(10)에 맞춰 이 프로젝트가 정한 값이다.",
+    "점수제(point_buy)의 총점과 값표, 점수를 주사위로 정하는 법(score_roll)은 SRD 5.2.1 을 따랐다. SRD 5.1 에는 둘 다 실려 있지 않다.",
+    "죽음의 굴림(death_save)은 SRD 5.1 의 것이다. 눈 1 과 눈 20 의 특별한 결과는 옮기지 않았다(판정과 같다).",
+    "짧은 부상(기절, 중독, 실명, 귀먹음)은 SRD 5.1 의 상태 이상(conditions)을 본떴다. 효과는 이 엔진의 세 종류로 옮겼고, 풀리기까지의 라운드 수는 이 프로젝트가 정했다.",
+    "오래 가는 부상, 결손, 후유증, 부상 표, 노려 치기, 치료와 치료 실패 표는 SRD 5.1 에 없다. 이 프로젝트가 정한 값이다. 오래 가는 부상은 TRPG 의 흐름에 맞춰 실제보다 짧게 잡았다.",
+    "치료의 능력을 지혜로 한 것은 SRD 5.1 의 의학(Medicine)이 지혜의 기술이기 때문이다.",
+    "쉬기는 SRD 5.1 의 짧은 휴식(1시간)과 긴 휴식(8시간)이다. 짧은 휴식의 히트 다이스는 등급 하나(보통, 1d8)로 줄였다. 고비를 넘긴 캐릭터는 긴 휴식만큼 흐르면 d20 을 굴려 10 이상이면 깨어난다. 저절로 회복하기는 SRD 에 없다.",
+    "훔치기와 깨어날 때의 반응은 이 프로젝트가 정한 값이다."
+  ],
+  "rules": {
+    "template": "srd5",
+    "abilities": [
+      {
+        "key": "str",
+        "name": "근력"
+      },
+      {
+        "key": "dex",
+        "name": "민첩"
+      },
+      {
+        "key": "con",
+        "name": "건강"
+      },
+      {
+        "key": "int",
+        "name": "지능"
+      },
+      {
+        "key": "wis",
+        "name": "지혜"
+      },
+      {
+        "key": "cha",
+        "name": "매력"
+      }
+    ],
+    "score_min": 1,
+    "score_max": 20,
+    "modifier": {
+      "base": 10,
+      "step": 2
+    },
+    "die": 20,
+    "difficulties": [
+      {
+        "key": "very_easy",
+        "name": "매우 쉬움",
+        "target": 5
+      },
+      {
+        "key": "easy",
+        "name": "쉬움",
+        "target": 10
+      },
+      {
+        "key": "medium",
+        "name": "보통",
+        "target": 15
+      },
+      {
+        "key": "hard",
+        "name": "어려움",
+        "target": 20
+      },
+      {
+        "key": "very_hard",
+        "name": "매우 어려움",
+        "target": 25
+      }
+    ],
+    "default_difficulty": "medium",
+    "magnitudes": [
+      {
+        "key": "light",
+        "name": "가벼움",
+        "count": 1,
+        "sides": 4
+      },
+      {
+        "key": "moderate",
+        "name": "보통",
+        "count": 1,
+        "sides": 8
+      },
+      {
+        "key": "heavy",
+        "name": "심함",
+        "count": 2,
+        "sides": 8
+      }
+    ],
+    "hp_ability": "con",
+    "initiative_ability": "dex",
+    "point_buy": {
+      "budget": 27,
+      "costs": [
+        {
+          "score": 8,
+          "cost": 0
+        },
+        {
+          "score": 9,
+          "cost": 1
+        },
+        {
+          "score": 10,
+          "cost": 2
+        },
+        {
+          "score": 11,
+          "cost": 3
+        },
+        {
+          "score": 12,
+          "cost": 4
+        },
+        {
+          "score": 13,
+          "cost": 5
+        },
+        {
+          "score": 14,
+          "cost": 7
+        },
+        {
+          "score": 15,
+          "cost": 9
+        }
+      ]
+    },
+    "score_roll": {
+      "count": 4,
+      "sides": 6,
+      "keep": 3
+    },
+    "death_save": {
+      "target": 10,
+      "successes": 3,
+      "failures": 3
+    },
+    "injuries": [
+      {
+        "key": "stunned",
+        "name": "기절",
+        "fact": "정신이 아득해 몸을 가누지 못한다. 아무것도 하지 못한다.",
+        "effects": [
+          {
+            "kind": "no_actions",
+            "abilities": [],
+            "amount": 0
+          }
+        ],
+        "healing": "rounds",
+        "rounds": 1,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "poisoned",
+        "name": "중독",
+        "fact": "독이 돌아 몸이 무겁고 속이 뒤집힌다.",
+        "effects": [
+          {
+            "kind": "disadvantage",
+            "abilities": [],
+            "amount": 0
+          }
+        ],
+        "healing": "rounds",
+        "rounds": 3,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "blinded",
+        "name": "실명",
+        "fact": "눈에 피가 들어가 앞을 보지 못한다.",
+        "effects": [
+          {
+            "kind": "disadvantage",
+            "abilities": [
+              "dex",
+              "wis"
+            ],
+            "amount": 0
+          }
+        ],
+        "healing": "rounds",
+        "rounds": 3,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "deafened",
+        "name": "귀먹음",
+        "fact": "귀가 멍해 소리를 듣지 못한다.",
+        "effects": [],
+        "healing": "rounds",
+        "rounds": 3,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "broken_arm",
+        "name": "팔 골절",
+        "fact": "한쪽 팔이 부러져 제대로 쓰지 못한다.",
+        "effects": [
+          {
+            "kind": "disadvantage",
+            "abilities": [
+              "str"
+            ],
+            "amount": 0
+          }
+        ],
+        "healing": "heals",
+        "rounds": null,
+        "heal_minutes": 20160,
+        "aftermath": {
+          "sides": 20,
+          "rows": [
+            {
+              "low": 1,
+              "high": 5,
+              "injury": "crooked_arm"
+            },
+            {
+              "low": 6,
+              "high": 20,
+              "injury": null
+            }
+          ]
+        },
+        "aimable": true,
+        "treat_difficulty": "hard",
+        "treat_minutes": 4320
+      },
+      {
+        "key": "leg_wound",
+        "name": "다리 부상",
+        "fact": "다리를 깊이 다쳐 절뚝거린다.",
+        "effects": [
+          {
+            "kind": "disadvantage",
+            "abilities": [
+              "dex"
+            ],
+            "amount": 0
+          }
+        ],
+        "healing": "heals",
+        "rounds": null,
+        "heal_minutes": 10080,
+        "aftermath": {
+          "sides": 20,
+          "rows": [
+            {
+              "low": 1,
+              "high": 3,
+              "injury": "limp"
+            },
+            {
+              "low": 4,
+              "high": 20,
+              "injury": null
+            }
+          ]
+        },
+        "aimable": true,
+        "treat_difficulty": "medium",
+        "treat_minutes": 2880
+      },
+      {
+        "key": "lost_left_hand",
+        "name": "왼손 잃음",
+        "fact": "왼손이 없다. 왼손을 쓸 수 없다.",
+        "effects": [
+          {
+            "kind": "disadvantage",
+            "abilities": [
+              "dex"
+            ],
+            "amount": 0
+          }
+        ],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": true,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "lost_right_hand",
+        "name": "오른손 잃음",
+        "fact": "오른손이 없다. 오른손을 쓸 수 없다.",
+        "effects": [
+          {
+            "kind": "disadvantage",
+            "abilities": [
+              "dex"
+            ],
+            "amount": 0
+          }
+        ],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": true,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "lost_eye",
+        "name": "한쪽 눈 잃음",
+        "fact": "한쪽 눈을 잃어 거리를 잘 가늠하지 못한다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "wis"
+            ],
+            "amount": 2
+          }
+        ],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": true,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "deep_scar",
+        "name": "깊은 흉터",
+        "fact": "얼굴에 깊은 흉터가 남았다.",
+        "effects": [],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "crooked_arm",
+        "name": "굽은 팔",
+        "fact": "부러졌던 팔이 굽은 채로 붙었다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "str"
+            ],
+            "amount": 1
+          }
+        ],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      },
+      {
+        "key": "limp",
+        "name": "절뚝거림",
+        "fact": "다친 다리를 전다.",
+        "effects": [
+          {
+            "kind": "penalty",
+            "abilities": [
+              "dex"
+            ],
+            "amount": 1
+          }
+        ],
+        "healing": "permanent",
+        "rounds": null,
+        "heal_minutes": null,
+        "aftermath": null,
+        "aimable": false,
+        "treat_difficulty": null,
+        "treat_minutes": null
+      }
+    ],
+    "injury_table": {
+      "sides": 20,
+      "rows": [
+        {
+          "low": 1,
+          "high": 10,
+          "injury": null
+        },
+        {
+          "low": 11,
+          "high": 12,
+          "injury": "stunned"
+        },
+        {
+          "low": 13,
+          "high": 13,
+          "injury": "blinded"
+        },
+        {
+          "low": 14,
+          "high": 14,
+          "injury": "deafened"
+        },
+        {
+          "low": 15,
+          "high": 16,
+          "injury": "leg_wound"
+        },
+        {
+          "low": 17,
+          "high": 18,
+          "injury": "broken_arm"
+        },
+        {
+          "low": 19,
+          "high": 19,
+          "injury": "deep_scar"
+        },
+        {
+          "low": 20,
+          "high": 20,
+          "injury": "lost_eye"
+        }
+      ]
+    },
+    "injury_triggers": {
+      "big_hit_percent": 50,
+      "downed": true,
+      "called_shot": true
+    },
+    "called_shot": {
+      "mode": "target_plus",
+      "amount": 5
+    },
+    "treatment": {
+      "ability": "wis",
+      "mishaps": {
+        "sides": 100,
+        "rows": [
+          {
+            "low": 1,
+            "high": 1,
+            "kind": "fatal",
+            "delay_minutes": null,
+            "magnitude": null
+          },
+          {
+            "low": 2,
+            "high": 10,
+            "kind": "worsen",
+            "delay_minutes": 2880,
+            "magnitude": "moderate"
+          },
+          {
+            "low": 11,
+            "high": 30,
+            "kind": "worsen",
+            "delay_minutes": 1440,
+            "magnitude": null
+          },
+          {
+            "low": 31,
+            "high": 50,
+            "kind": "pain",
+            "delay_minutes": null,
+            "magnitude": "light"
+          },
+          {
+            "low": 51,
+            "high": 100,
+            "kind": "nothing",
+            "delay_minutes": null,
+            "magnitude": null
+          }
+        ]
+      }
+    },
+    "rest": {
+      "short": {
+        "minutes": 60,
+        "heal": "moderate"
+      },
+      "long": {
+        "minutes": 480
+      },
+      "revive": {
+        "minutes": 480,
+        "target": 10
+      },
+      "natural": null
+    },
+    "steal": {
+      "ability": "dex",
+      "difficulty": "medium",
+      "awareness": "wis",
+      "equipped": 5,
+      "rarity_step": 2,
+      "dull_kinds": [
+        {
+          "kind": "undead",
+          "amount": 3
+        },
+        {
+          "kind": "construct",
+          "amount": 3
+        }
+      ],
+      "dull": 3,
+      "unwary": 3,
+      "distracted": 2
+    },
+    "robbed_wake": {
+      "hostile": 10,
+      "wary": 40
+    }
+  }
+}
