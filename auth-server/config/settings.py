@@ -509,6 +509,8 @@ BOARD_URL = validate_billing_url(env('BOARD_URL', default='http://127.0.0.1:8002
 BOARD_SECRET = validate_service_secret(env('BOARD_SECRET', default=''), 'BOARD_SECRET')
 ASSET_URL = validate_billing_url(env('ASSET_URL', default='http://127.0.0.1:8006'), 'ASSET_URL')
 ASSET_SECRET = validate_service_secret(env('ASSET_SECRET', default=''), 'ASSET_SECRET')
+CHAT_URL = validate_billing_url(env('CHAT_URL', default='http://127.0.0.1:8005'), 'CHAT_URL')
+CHAT_SECRET = validate_service_secret(env('CHAT_SECRET', default=''), 'CHAT_SECRET')
 
 
 # 본인확인(#336)
