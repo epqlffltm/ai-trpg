@@ -44,10 +44,30 @@
       },
       "Armor": {
         "additionalProperties": false,
-        "description": "방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다.",
+        "description": "방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다.\n\nsave_target 은 세이브의 목표값이다. save 방식에만 적는다.\npierce_base 는 관통의 기준값이다. 관통력(ap)이 있는 무기로 칠 때 쓴다. 방식을 가리지 않는다.",
         "properties": {
           "mode": {
             "$ref": "#/components/schemas/ArmorMode"
+          },
+          "pierce_base": {
+            "default": 10,
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Pierce Base",
+            "type": "integer"
+          },
+          "save_target": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Save Target"
           }
         },
         "required": [
@@ -60,7 +80,8 @@
         "description": "방어구가 공격을 막는 방식(#276). 룰북이 고른다.",
         "enum": [
           "ac",
-          "reduce"
+          "reduce",
+          "save"
         ],
         "title": "ArmorMode",
         "type": "string"
@@ -317,6 +338,26 @@
             ],
             "title": "Mode"
           },
+          "pierce": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PierceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "save": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SaveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "weapon": {
             "anyOf": [
               {
@@ -342,6 +383,11 @@
       "BlowWeaponOut": {
         "description": "타격에 쓴 무기(#276). 판의 물건과 그 이름과 판정의 보정에 더한 공격 보정이다.",
         "properties": {
+          "ap": {
+            "default": 0,
+            "title": "Ap",
+            "type": "integer"
+          },
           "bonus": {
             "title": "Bonus",
             "type": "integer"
@@ -659,6 +705,17 @@
       "CatalogItemOut": {
         "description": "판에 있는 물건 하나. 로어북의 물건 항목이다.\n\nkind 가 consumable 이면 쓰면 하나 줄어든다. heals 가 있으면 쓸 때 HP 를 그 등급(rules 의 magnitudes)만큼 되돌린다.",
         "properties": {
+          "ap": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap"
+          },
           "attack": {
             "anyOf": [
               {
@@ -741,6 +798,17 @@
             },
             "title": "Slots",
             "type": "array"
+          },
+          "ward": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ward"
           }
         },
         "required": [
@@ -3516,8 +3584,21 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.",
         "properties": {
+          "ap": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap"
+          },
           "attack": {
             "anyOf": [
               {
@@ -3613,6 +3694,19 @@
             "maxItems": 8,
             "title": "Slots",
             "type": "array"
+          },
+          "ward": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ward"
           }
         },
         "required": [
@@ -3623,8 +3717,21 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.",
         "properties": {
+          "ap": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap"
+          },
           "attack": {
             "anyOf": [
               {
@@ -3719,6 +3826,19 @@
             "maxItems": 8,
             "title": "Slots",
             "type": "array"
+          },
+          "ward": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ward"
           }
         },
         "required": [
@@ -3730,6 +3850,17 @@
       "ItemRuleSnapshot": {
         "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\nheals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.\nslots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\nslots 가 비어 있으면 착용하지 않는 물건이다.",
         "properties": {
+          "ap": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap"
+          },
           "attack": {
             "anyOf": [
               {
@@ -3809,6 +3940,17 @@
             },
             "title": "Slots",
             "type": "array"
+          },
+          "ward": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ward"
           }
         },
         "required": [
@@ -5312,6 +5454,19 @@
           },
           "sheet": {
             "$ref": "#/components/schemas/Sheet"
+          },
+          "ward": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ward"
           }
         },
         "required": [
@@ -5372,6 +5527,19 @@
           },
           "sheet": {
             "$ref": "#/components/schemas/Sheet"
+          },
+          "ward": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ward"
           }
         },
         "required": [
@@ -5469,6 +5637,17 @@
             "default": false,
             "title": "Unique",
             "type": "boolean"
+          },
+          "ward": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ward"
           }
         },
         "required": [
@@ -7010,6 +7189,35 @@
           "name"
         ],
         "title": "PersonaWrite",
+        "type": "object"
+      },
+      "PierceOut": {
+        "description": "관통 굴림(#276). 눈 + 관통력(ap)이 target(그 부위의 방어 + 룰북의 기준값) 이상이면 관통이다.",
+        "properties": {
+          "ap": {
+            "title": "Ap",
+            "type": "integer"
+          },
+          "pierced": {
+            "title": "Pierced",
+            "type": "boolean"
+          },
+          "roll": {
+            "title": "Roll",
+            "type": "integer"
+          },
+          "target": {
+            "title": "Target",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "roll",
+          "ap",
+          "target",
+          "pierced"
+        ],
+        "title": "PierceOut",
         "type": "object"
       },
       "PlaceItem-Input": {
@@ -9221,8 +9429,18 @@
       },
       "RulebookCreate": {
         "additionalProperties": false,
-        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.",
+        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.\n방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.\n보내지 않으면 템플릿의 것이다.",
         "properties": {
+          "armor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Armor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "default": "",
             "maxLength": 1000,
@@ -9333,8 +9551,18 @@
       },
       "RulebookUpdate": {
         "additionalProperties": false,
-        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 아직 고칠 수 없다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
+        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 방어 규칙(armor)만 고칠 수 있다(#276). null 을 보내면 방어구가 막지 않는 규칙이 된다.\n이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
         "properties": {
+          "armor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Armor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "anyOf": [
               {
@@ -9655,6 +9883,40 @@
           "publishing_banned"
         ],
         "title": "SanctionOut",
+        "type": "object"
+      },
+      "SaveOut": {
+        "description": "세이브 굴림(#276). kind 는 armor(그 부위의 방어) 또는 ward(불굴). 눈 + value 가 target 이상이면 막았다.",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "roll": {
+            "title": "Roll",
+            "type": "integer"
+          },
+          "saved": {
+            "title": "Saved",
+            "type": "boolean"
+          },
+          "target": {
+            "title": "Target",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "value",
+          "roll",
+          "target",
+          "saved"
+        ],
+        "title": "SaveOut",
         "type": "object"
       },
       "ScenarioCreate": {
@@ -11106,7 +11368,7 @@
             "type": "array"
           },
           "format": {
-            "default": 48,
+            "default": 49,
             "title": "Format",
             "type": "integer"
           },

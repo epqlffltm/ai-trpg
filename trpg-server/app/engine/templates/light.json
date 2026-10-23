@@ -184,7 +184,9 @@
       }
     ],
     "armor": {
-      "mode": "reduce"
+      "mode": "reduce",
+      "save_target": null,
+      "pierce_base": 10
     }
   }
 }

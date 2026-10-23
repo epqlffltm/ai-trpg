@@ -374,6 +374,9 @@ class CatalogItemOut(BaseModel):
     attack: int | None = None
     defense: int | None = None
     guard: int | None = None
+    # 무기의 관통력과 불굴 세이브의 값(#276). 없으면 None 이다
+    ap: int | None = None
+    ward: int | None = None
 
 
 class WornOut(BaseModel):

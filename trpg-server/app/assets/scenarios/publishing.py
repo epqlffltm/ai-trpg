@@ -429,6 +429,7 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             [CarriedItemSnapshot(**line.model_dump()) for line in monster_sheet.inventory],
             monster_sheet.dull,
             [NaturalArmorSnapshot(**one.model_dump()) for one in monster_sheet.natural_armor],
+            monster_sheet.ward,
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]

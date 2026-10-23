@@ -154,8 +154,10 @@ class BlowNote:
     """
     타격에 장비가 든 것(#276). 엔진이 정했다. 무기와 그 공격 보정, 맞은 부위의 이름, 노렸는가, 그 부위의 방어다.
 
-    mode 는 규칙의 방어 방식이다. ac 면 방어가 맞히는 목표값에 더해졌고, reduce 면 맞은 피해에서 빠졌다.
-    방어 방식이 없는 규칙이면 None 이고 부위도 방어도 없다.
+    mode 는 규칙의 방어 방식이다. ac 면 방어가 맞히는 목표값에 더해졌고, reduce 면 맞은 피해에서 빠졌고,
+    save 면 맞은 뒤 세이브로 막으려 했다. 방어 방식이 없는 규칙이면 None 이고 부위도 방어도 없다.
+    pierced 는 관통 굴림의 결과다. 굴리지 않았으면 None 이다. 관통했으면 방어구가 막지 않았다.
+    save_kind 는 굴린 세이브(armor 아머, ward 불굴)이고 saved 는 막았는가다. 굴리지 않았으면 둘 다 None 이다.
     """
 
     weapon: str | None = None
@@ -164,6 +166,10 @@ class BlowNote:
     aimed: bool = False
     defense: int = 0
     mode: str | None = None
+    pierced: bool | None = None
+    save_kind: str | None = None
+    save_value: int = 0
+    saved: bool | None = None
 
 
 @dataclass(frozen=True)

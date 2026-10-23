@@ -646,12 +646,32 @@ class ArmorMode(enum.StrEnum):
     AC = 'ac'
     # 피해를 깎는다. 맞은 부위의 방어만큼 굴린 피해에서 뺀다. 0 아래로는 가지 않는다(WFRP 의 방어 점수)
     REDUCE = 'reduce'
+    # 세이브. 맞은 뒤 맞는 쪽이 판정의 주사위를 굴린다. 눈 + 방어가 세이브의 목표값 이상이면 막는다(워해머 40K)
+    SAVE = 'save'
+
+
+# 관통의 기준값의 기본. 관통 굴림의 눈 + 관통력이 맞은 부위의 방어 + 이 값 이상이면 관통한다
+DEFAULT_PIERCE_BASE = 10
 
 
 class Armor(Part):
-    """방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다."""
+    """
+    방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다.
+
+    save_target 은 세이브의 목표값이다. save 방식에만 적는다.
+    pierce_base 는 관통의 기준값이다. 관통력(ap)이 있는 무기로 칠 때 쓴다. 방식을 가리지 않는다.
+    """
 
     mode: ArmorMode
+    save_target: Annotated[int, Field(ge=1, le=RULESET_MAX_NUMBER)] | None = None
+    pierce_base: Annotated[int, Field(ge=0, le=RULESET_MAX_NUMBER)] = DEFAULT_PIERCE_BASE
+
+    @model_validator(mode='after')
+    def save_target_only_for_save(self) -> Self:
+        """세이브의 목표값은 세이브 방식에 있어야 하고, 다른 방식에는 없다."""
+        if (self.mode == ArmorMode.SAVE) != (self.save_target is not None):
+            raise ValueError('save_target 은 mode 가 save 일 때만, 반드시 적습니다.')
+        return self
 
 
 class Ruleset(Part):

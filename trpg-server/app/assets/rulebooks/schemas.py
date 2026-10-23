@@ -10,7 +10,7 @@ from pydantic import BaseModel, StringConstraints
 
 from app.assets.models import RULEBOOK_GM_GUIDE_MAX_LENGTH
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
-from app.engine.ruleset import Ruleset
+from app.engine.ruleset import Armor, Ruleset
 from app.engine.templates import DEFAULT_TEMPLATE, Template
 
 GmGuide = Annotated[str, StringConstraints(max_length=RULEBOOK_GM_GUIDE_MAX_LENGTH)]
@@ -21,20 +21,25 @@ class RulebookCreate(AssetCreate):
     룰북을 만들 때 받는 값. 제목만 필수다.
 
     규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.
+    방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.
+    보내지 않으면 템플릿의 것이다.
     """
 
     gm_guide: GmGuide = ''
     template: Template = DEFAULT_TEMPLATE
+    armor: Armor | None = None
 
 
 class RulebookUpdate(AssetUpdate):
     """
     룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
-    규칙은 아직 고칠 수 없다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
+    규칙은 방어 규칙(armor)만 고칠 수 있다(#276). null 을 보내면 방어구가 막지 않는 규칙이 된다.
+    이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
     """
 
     gm_guide: GmGuide | None = None
+    armor: Armor | None = None
 
 
 class RulebookDetail(AssetSummary):

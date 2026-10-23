@@ -590,7 +590,9 @@
       }
     ],
     "armor": {
-      "mode": "ac"
+      "mode": "ac",
+      "save_target": null,
+      "pierce_base": 10
     }
   }
 }

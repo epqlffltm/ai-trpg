@@ -108,7 +108,9 @@ from app.engine.sheet import Sheet
 #  48: 장비가 공격과 방어에 든다(#276). 규칙의 방어 방식(rulebook.rules.armor)과 칸이 맞을 가중치
 #      (equipment_slots[].hit_weight), 물건의 공격 보정과 방어(items[].attack, defense, guard),
 #      NPC 와 몬스터가 착용한 칸(equipment[].wear), 공격의 무기(attacks[].weapon), 몬스터의 타고난 방어(natural_armor)
-SNAPSHOT_FORMAT = 48
+#  49: 세이브와 관통이 있다(#276). 규칙의 세이브 방식과 그 목표값, 관통의 기준값(armor.save_target, pierce_base),
+#      물건의 관통력과 불굴 세이브(items[].ap, ward), 몬스터의 타고난 불굴 세이브(monsters[].ward)
+SNAPSHOT_FORMAT = 49
 
 
 class EntrySnapshot(BaseModel):
@@ -216,6 +218,9 @@ class ItemRuleSnapshot(BaseModel):
     attack: int | None = None
     defense: int | None = None
     guard: int | None = None
+    # 무기의 관통력과 불굴 세이브의 값. 형식 49 보다 옛 판의 물건에는 없다
+    ap: int | None = None
+    ward: int | None = None
 
 
 class QuestConditionSnapshot(BaseModel):
@@ -394,6 +399,8 @@ class MonsterSnapshot(BaseModel):
     dull: bool = False
     # 부위마다 타고난 방어(#276). 형식 48 보다 옛 판의 몬스터는 없다
     natural_armor: list[NaturalArmorSnapshot] = []
+    # 타고난 불굴 세이브. 형식 49 보다 옛 판의 몬스터는 없다
+    ward: int | None = None
 
 
 class EncounterSnapshot(BaseModel):
@@ -787,8 +794,9 @@ def snapshot_monster(
     inventory: list[CarriedItemSnapshot],
     dull: bool = False,
     natural_armor: list[NaturalArmorSnapshot] | None = None,
+    ward: int | None = None,
 ) -> MonsterSnapshot:
-    """몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어를 굳힌다."""
+    """몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브를 굳힌다."""
     return MonsterSnapshot(
         id=monster.id,
         name=monster.name,
@@ -801,6 +809,7 @@ def snapshot_monster(
         inventory=inventory,
         dull=dull,
         natural_armor=natural_armor or [],
+        ward=ward,
     )
 
 
