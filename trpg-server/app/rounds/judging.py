@@ -10,7 +10,8 @@
      판정이면 app/rounds/checks.py, 치료면 app/rounds/treatments.py,
      지목이면 app/rounds/naming.py(주사위를 굴리지 않는다), 물건을 쓰거나 건네면 app/rounds/item_actions.py,
      맵에서 가거나 찾으면 app/rounds/map_actions.py, 쉬면 app/rounds/rests.py(시간만 늘리고 회복은 4 에서),
-     사고팔거나 돈을 건네면 app/rounds/trades.py.
+     사고팔거나 돈을 건네면 app/rounds/trades.py, 엄폐하면 app/rounds/covers.py(굴림이 없다).
+     엄폐한 사람의 커버는 판정을 시작하기 전에 정한다. 차례를 기다리지 않고 그 라운드 동안 든다.
   2. 쓰러진 캐릭터는 죽음의 굴림을 굴린다(roll_death_saves, app/engine/death.py).
      이번 라운드에 쓰러진 캐릭터는 굴리지 않는다. 동료가 일으킬 틈이 한 라운드는 있다.
      이번 라운드에 회복을 받아 일어난 캐릭터도 굴리지 않는다. 행동의 결과를 먼저 끝내고 나서 굴린다.
@@ -29,6 +30,7 @@ from app.engine import death
 from app.engine.action import (
     AnyAction,
     BuyAction,
+    CoverAction,
     GiveAction,
     LootAction,
     MoveAction,
@@ -49,6 +51,7 @@ from app.rounds import initiative, npc_attacks
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, Scene
 from app.rounds.checks import judge_check
+from app.rounds.covers import covers_of, judge_cover
 from app.rounds.effects import Judging
 from app.rounds.initiative import Turn
 from app.rounds.item_actions import judge_give, judge_use
@@ -75,7 +78,7 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming),
     물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(search_place), 줍기(judge_take),
     내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot), 쉬기(judge_rest), 기다리기(judge_wait),
-    사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay)다.
+    사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay), 엄폐하기(judge_cover)다.
     """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
@@ -107,6 +110,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_sell(judging, member, action)
     if isinstance(action, PayAction):
         return judge_pay(judging, member, action)
+    if isinstance(action, CoverAction):
+        return judge_cover(judging, member)
     return judge_check(judging, member, action)
 
 
@@ -164,13 +169,19 @@ def rolling_members(table: GameTable, round_: Round) -> list[tuple[TableMember, 
 
 
 def build_judging(
-    table: GameTable, round_: Round, dice: Dice, scene: Scene, downed: frozenset[uuid.UUID] = frozenset()
+    table: GameTable,
+    round_: Round,
+    dice: Dice,
+    scene: Scene,
+    downed: frozenset[uuid.UUID] = frozenset(),
+    rolling: list[tuple[TableMember, Declaration]] | None = None,
 ) -> Judging:
     """
     이번 라운드의 판정에 함께 쓰는 것들을 모은다.
 
     판의 복사본(규칙, 인물 항목, 물건, 맵)을 통째로 읽는다. 싸지 않아서 판정할 것이 있을 때만 부른다.
     downed 는 판정을 시작하기 전에 쓰러져 있던 사람들이다(몬스터와 NPC 가 칠 수 있다).
+    rolling 은 행동을 판정할 사람과 그 선언이다. 엄폐한 사람의 커버를 여기서 정한다(app/rounds/covers.py).
     """
     snapshot = read_snapshot(table.content)
     return Judging(
@@ -186,6 +197,7 @@ def build_judging(
         snapshot=snapshot,
         monsters=scene.monsters,
         downed_at_start=downed,
+        covers=covers_of(snapshot, rolling or []),
     )
 
 
@@ -263,7 +275,7 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> se
         return set()
 
     downed = frozenset(member.user_id for member in find_dying(table))
-    judging = build_judging(table, round_, dice, scene, downed)
+    judging = build_judging(table, round_, dice, scene, downed, rolling)
     if not acting and not fighting:
         for member, declaration in rolling:
             take_member_turn(judging, member, declaration)

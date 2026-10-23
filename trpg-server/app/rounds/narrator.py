@@ -157,7 +157,8 @@ class BlowNote:
     mode 는 규칙의 방어 방식이다. ac 면 방어가 맞히는 목표값에 더해졌고, reduce 면 맞은 피해에서 빠졌고,
     save 면 맞은 뒤 세이브로 막으려 했다. 방어 방식이 없는 규칙이면 None 이고 부위도 방어도 없다.
     pierced 는 관통 굴림의 결과다. 굴리지 않았으면 None 이다. 관통했으면 방어구가 막지 않았다.
-    save_kind 는 굴린 세이브(armor 아머, ward 불굴)이고 saved 는 막았는가다. 굴리지 않았으면 둘 다 None 이다.
+    save_kind 는 굴린 세이브(armor 아머, cover 커버, ward 불굴)이고 saved 는 막았는가다.
+    굴리지 않았으면 둘 다 None 이다.
     """
 
     weapon: str | None = None
@@ -306,6 +307,20 @@ class TravelNote:
     travel_minutes: int | None = None
     carried: str | None = None
     carry_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class CoverNote:
+    """
+    엄폐하는 행동의 결과(app/rounds/covers.py, #276). 엔진이 정한 것이다. 굴림이 없다.
+
+    place 는 숨은 장소의 이름, value 는 그 장소의 커버다. 0 이면 커버가 없는 곳이라 숨지 못했다.
+    그 라운드 동안 맞힌 공격에 커버 세이브가 들었다(판정과 차례의 줄의 세이브). 서술자는 숨은 곳을 그리되,
+    막았는지는 세이브의 줄을 따른다.
+    """
+
+    place: str | None
+    value: int
 
 
 @dataclass(frozen=True)
@@ -569,6 +584,8 @@ class Move:
     rest: RestNote | None = None
     # 기다리는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다. 이 칸이 생기기 전에 굳힌 것은 None 이다
     wait: WaitNote | None = None
+    # 엄폐하는 행동이면 그 결과(#276). 판정이 아니라 verdict 와 함께 있지 않다. 이 칸이 생기기 전에 굳힌 것은 None 이다
+    cover: CoverNote | None = None
     # 이 라운드가 닫힐 때 굴린 되살아나기와 저절로 회복. 없었으면 None 이다(app/rounds/rests.py)
     revival: RevivalNote | None = None
     recovery: RecoveryNote | None = None

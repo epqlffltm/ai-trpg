@@ -851,6 +851,14 @@ def upgrade_from_49(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_50(document: dict) -> dict:
+    """형식 50 의 문서를 형식 51 로 올린다. 그때는 장소마다의 커버가 없었다(#276 의 커버 세이브)."""
+    upgraded = dict(document)
+    upgraded['covers'] = []
+    upgraded['format'] = 51
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -903,4 +911,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     47: upgrade_from_47,
     48: upgrade_from_48,
     49: upgrade_from_49,
+    50: upgrade_from_50,
 }

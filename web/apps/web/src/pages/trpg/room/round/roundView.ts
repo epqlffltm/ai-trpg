@@ -167,7 +167,7 @@ export type Blow = NonNullable<CheckResult['blow']>;
 
 /** 방어가 한 일(ac, reduce). 세이브는 세이브 줄이 따로 말한다 */
 const ARMOR_EFFECTS: Record<string, string> = { ac: '목표값에 더함', reduce: '피해에서 뺌' };
-const SAVE_KINDS: Record<string, string> = { armor: '아머', ward: '불굴' };
+const SAVE_KINDS: Record<string, string> = { armor: '아머', cover: '커버', ward: '불굴' };
 
 /**
  * 타격에 장비가 든 것(#276). 없으면 null.
@@ -215,7 +215,14 @@ function otherLine(outcome: Outcome): string | null {
   if ('loot' in outcome) return outcome.loot.looted ? `${outcome.loot.name} ×${outcome.loot.count} 가져왔습니다.` : '가져오지 못했습니다.';
   if ('rest' in outcome) return outcome.rest.rested ? `HP ${outcome.rest.before} → ${outcome.rest.after}` : '쉬지 못했습니다.';
   if ('wait' in outcome) return outcome.wait.waited ? `${outcome.wait.minutes}분을 기다렸습니다.` : '기다리지 못했습니다.';
+  if ('cover' in outcome) return coverLine(outcome.cover);
   return null;
+}
+
+/** 엄폐한 결과(#276). "엄폐: 무너진 담 · 커버 4". 막았는지는 맞은 공격의 타격 줄(커버 세이브)에 있다 */
+function coverLine(cover: Extract<Outcome, { cover: unknown }>['cover']): string {
+  if (cover.value <= 0) return '숨을 곳이 없어 엄폐하지 못했습니다.';
+  return `엄폐: ${cover.place?.name ?? '이곳'} · 커버 ${cover.value}`;
 }
 
 function searchLine(search: Extract<Outcome, { search: unknown }>['search']): string {

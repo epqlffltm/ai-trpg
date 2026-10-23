@@ -68,6 +68,8 @@ class Conflict(enum.StrEnum):
     TOO_MUCH_MONEY = 'too_much_money'
     # 타격에 쓰겠다는 무기를 착용하고 있지 않다(#276)
     WEAPON_NOT_WORN = 'weapon_not_worn'
+    # 엄폐하려는데 서 있는 장소에 숨을 곳(커버)이 없다(#276)
+    NO_COVER = 'no_cover'
 
 
 class RoundConflictError(Exception):
