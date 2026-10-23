@@ -34,10 +34,15 @@ class SummaryOut(BaseModel):
 
 
 class NoteOut(BaseModel):
-    """메모 하나. source 는 누가 썼는가(user, summary)다."""
+    """
+    메모 하나. source 는 누가 썼는가(user, summary)다. pending 이면 요약의 제안이고 받아들이기 전이다
+    (모델에 가지 않는다. 화면은 받아들이기와 버리기를 보인다). accepted_at 은 제안을 받아들인 시각이다.
+    """
 
     id: uuid.UUID
     text: str
     source: NoteSource
+    pending: bool
+    accepted_at: datetime | None
     created_at: datetime
     updated_at: datetime

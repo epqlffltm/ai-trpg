@@ -7,12 +7,12 @@
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, not_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.conversations.models import Conversation
-from app.memory.models import MemoryNote, Summary
+from app.memory.models import MemoryNote, NoteSource, Summary
 
 
 async def list_notes(session: AsyncSession, conversation_id: uuid.UUID) -> list[MemoryNote]:
@@ -25,9 +25,28 @@ async def list_notes(session: AsyncSession, conversation_id: uuid.UUID) -> list[
     return list(await session.scalars(query))
 
 
+def pending_condition():
+    """받아들이기를 기다리는 제안인가(요약이 제안했고 받아들인 시각이 없다)."""
+    return and_(MemoryNote.source == NoteSource.SUMMARY, MemoryNote.accepted_at.is_(None))
+
+
 async def count_notes(session: AsyncSession, conversation_id: uuid.UUID) -> int:
-    """대화의 메모 수."""
-    query = select(func.count()).select_from(MemoryNote).where(MemoryNote.conversation_id == conversation_id)
+    """대화의 메모 수. 받아들이기를 기다리는 제안은 세지 않는다(모델에 가는 것만 센다)."""
+    query = (
+        select(func.count())
+        .select_from(MemoryNote)
+        .where(MemoryNote.conversation_id == conversation_id, not_(pending_condition()))
+    )
+    return await session.scalar(query)
+
+
+async def count_proposals(session: AsyncSession, conversation_id: uuid.UUID) -> int:
+    """대화의 받아들이기를 기다리는 제안의 수."""
+    query = (
+        select(func.count())
+        .select_from(MemoryNote)
+        .where(MemoryNote.conversation_id == conversation_id, pending_condition())
+    )
     return await session.scalar(query)
 
 
