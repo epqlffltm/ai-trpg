@@ -63,6 +63,10 @@ from app.lore.setup import build_embedder
 from app.memory import router as notes
 from app.memory.service import NoteNotFoundError, NotesFullError
 from app.memory.summarizer import Summarizer
+from app.operators import router as operators
+from app.operators.service import AlreadyHandledError, ReportNotFoundError
+from app.reports import router as reports
+from app.reports.service import AlreadyReportedError, NotReportableError
 from app.turns import router as messages
 from app.turns import settler
 from app.turns.providers import build_router
@@ -227,6 +231,9 @@ def create_app(
     app.include_router(messages.generation_router, prefix=API_PREFIX)
     # 내가 연 이벤트 씬(#669). 소개의 이벤트 씬 칸과 갤러리가 읽는다
     app.include_router(gallery.router, prefix=API_PREFIX)
+    # 대화 속 답의 신고와 운영자 API(#678)
+    app.include_router(reports.router, prefix=API_PREFIX)
+    app.include_router(operators.router, prefix=API_PREFIX)
     # 인증 서버가 탈퇴를 알리는 주소(#670). 서버끼리만 부른다(서명). 프록시는 밖에서 받지 않는다
     app.include_router(withdrawal.router, prefix=API_PREFIX)
 
@@ -249,6 +256,10 @@ def create_app(
     app.add_exception_handler(NoteNotFoundError, notes.handle_note_not_found)
     app.add_exception_handler(NotesFullError, notes.handle_notes_full)
     app.add_exception_handler(TurnDeclinedError, messages.handle_turn_declined)
+    app.add_exception_handler(NotReportableError, reports.handle_not_reportable)
+    app.add_exception_handler(AlreadyReportedError, reports.handle_already_reported)
+    app.add_exception_handler(ReportNotFoundError, operators.handle_report_not_found)
+    app.add_exception_handler(AlreadyHandledError, operators.handle_already_handled)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.
     # 원인은 로그에 남긴다(server_core/observability/responses.py)
