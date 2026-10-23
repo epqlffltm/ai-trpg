@@ -37,6 +37,12 @@ from app.engine.templates import (
 # 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 # 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
 RELEASED = {
+    Template.SRD5: 'bb50911c27b1baab1fa2394345ef05fed4cf2a8b1d223d423cfbc75fcda9d4e5',
+    Template.HORROR: '3ae1576364da792ef899989385b76670c5b884d58429e9fdebb2a867852169eb',
+    Template.LIGHT: '46c656de0ab15f6de1cb637693fd90bd4bb5df2deeb28ba7d894ab9a055ce1c5',
+}
+# 세이브의 목표값과 관통의 기준값(armor.save_target, pierce_base, #276)을 더하기 전의 해시
+BEFORE_SAVES = {
     Template.SRD5: '6b3781462685f0b6d2441ee9c696f8ac839dafa82fae65f1a98c72cd8f400152',
     Template.HORROR: 'ff320c47eb4e0888b2ba329ad8a40c7fefff3b9b0a9fe281a2d0b537b26232e0',
     Template.LIGHT: 'f514139c38ec21f266e4a93ddad6fd0d9c91426f206ee005907602d22c36ce2f',
@@ -81,6 +87,14 @@ def fingerprint_before_armor(rules: Ruleset) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
+def fingerprint_before_saves(rules: Ruleset) -> str:
+    """방어 규칙에서 세이브의 목표값과 관통의 기준값(#276)을 뺀 규칙의 해시."""
+    values = rules.model_dump(mode='json')
+    values['armor'] = {'mode': values['armor']['mode']}
+    canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def middle_score(rules: Ruleset) -> int:
     """점수의 범위 가운데의 점수."""
     return (rules.score_min + rules.score_max) // 2
@@ -119,6 +133,18 @@ def test_adding_the_narration_guide_kept_the_other_values():
 def test_adding_the_equipment_slots_kept_the_other_values():
     for template, expected in BEFORE_SLOTS.items():
         assert fingerprint(TEMPLATES[template].rules, without=('equipment_slots', 'armor')) == expected
+
+
+def test_adding_the_saves_kept_the_other_values():
+    for template, expected in BEFORE_SAVES.items():
+        assert fingerprint_before_saves(TEMPLATES[template].rules) == expected
+
+
+def test_no_template_saves_and_all_pierce_from_ten():
+    """템플릿은 세이브 방식을 쓰지 않는다. 세이브는 룰북에서 고른다. 관통의 기준값은 10 이다(#276)."""
+    for template in Template:
+        armor = TEMPLATES[template].rules.armor
+        assert (armor.save_target, armor.pierce_base) == (None, 10)
 
 
 def test_adding_the_armor_kept_the_other_values():

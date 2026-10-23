@@ -72,6 +72,27 @@ class BlowWeaponOut(BaseModel):
     entry_id: uuid.UUID
     name: str
     bonus: int
+    # 관통력. 없으면 0 이다
+    ap: int = 0
+
+
+class PierceOut(BaseModel):
+    """관통 굴림(#276). 눈 + 관통력(ap)이 target(그 부위의 방어 + 룰북의 기준값) 이상이면 관통이다."""
+
+    roll: int
+    ap: int
+    target: int
+    pierced: bool
+
+
+class SaveOut(BaseModel):
+    """세이브 굴림(#276). kind 는 armor(그 부위의 방어) 또는 ward(불굴). 눈 + value 가 target 이상이면 막았다."""
+
+    kind: str
+    value: int
+    roll: int
+    target: int
+    saved: bool
 
 
 class BlowOut(BaseModel):
@@ -90,6 +111,11 @@ class BlowOut(BaseModel):
     aimed: bool
     defense: int
     mode: str | None
+    # 관통 굴림. 무기에 관통력이 없거나 그 부위에 방어가 없어 굴리지 않았으면 None 이다
+    pierce: PierceOut | None = None
+    # 세이브 굴림. 세이브 방식이 아니거나, 빗나갔거나, 막을 값이 없어 굴리지 않았으면 None 이다.
+    # 막았으면 아무것도 바뀌지 않았다
+    save: SaveOut | None = None
 
 
 class HindranceOut(BaseModel):

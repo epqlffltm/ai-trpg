@@ -1280,7 +1280,7 @@
 | 서술 | 지나간 라운드의 장면 글과 지금 라운드 | `GET /tables/{id}/rounds`, `GET .../rounds/current` 의 `scene`, `number`, `status` |
 | 선언 | 선언을 받는 동안은 자기 것만 보이고, 마감하면(닫는 중부터) 모두의 글과 행동이 보인다 | `RoundOut.declarations[].content`, `action`(남의 것은 `null`) |
 | 판정 | 눈, 목표값, 보정, 부상, 노려 치기, 불리 여부. 굴림은 공개라 모두에게 보인다 | `declarations[].outcome` |
-| 장비가 든 것(#276) | 무기와 그 보정, 맞은 부위(노렸는지), 그 부위의 방어와 방어 방식. "장검 +2 · 몸 · 방어 5(목표값에 더함)". 없으면 줄을 숨긴다 | `declarations[].outcome.blow`. `mode` 가 `ac` 면 목표값에 이미 들었고, `reduce` 면 피해에서 빠졌다(`rolls` 의 합과 `amount` 의 차이) |
+| 장비가 든 것(#276) | 무기와 그 보정, 맞은 부위(노렸는지), 그 부위의 방어와 방어 방식, 관통 굴림, 세이브 굴림. "볼터 +1 · 몸 · 방어 5 · 관통 못 함 · 아머 세이브 10 + 5 → 막음". 없으면 줄을 숨긴다 | `declarations[].outcome.blow`. `mode` 가 `ac` 면 목표값에 이미 들었고, `reduce` 면 피해에서 빠졌다(`rolls` 의 합과 `amount` 의 차이). `save` 면 `blow.save` 가 막았을 때 아무것도 바뀌지 않았다 |
 | 기다리는 사람 | 아직 선언을 내지 않은 사람 | `waiting_for` |
 | 마감 시각 | 선언을 받는 마감 | `deadline_at` |
 | 서술 모델과 값 | 이 라운드에 쓴 모델, 값 | `narration_model`, `price`. 사람마다의 청구는 `GET .../rounds/{n}/charges`(앉은 사람만, 라운드를 연 뒤 몇 초 안에 걸린다. 그 전에는 `null`) |
@@ -1433,7 +1433,7 @@
 | 소지품 | 이름, 종류, 개수 | `sheet.items[]`. 종류와 회복량과 값은 `TableDetail.items`. 물건의 설명은 내려오지 않는다(로어북에 비밀이 있을 수 있어서) |
 | 돈(#278) | 가진 돈 | `sheet.money` 를 `TableDetail.currency` 의 이름과 단위로 적는다(금화 30닢). 화폐가 없는 판(`currency: null`)이면 줄을 숨긴다. 결제의 크레딧(골드·실버)과 섞이지 않게 다른 자리와 다른 말로 보인다 |
 | 장비(#276) | 칸마다 착용한 물건 | `sheet.worn[]` 의 `name`, `slots`(규칙의 칸의 차례로 온다). 칸의 이름과 차례는 `rules.equipment_slots`, 물건이 들어갈 칸과 차지하는 칸의 수는 `TableDetail.items` 의 `slots`, `slot_count`. 칸이 없는 규칙이면 영역을 숨긴다. 두 칸을 차지한 것(두 손 검)은 두 칸에 걸쳐 그린다 |
-| 공격과 방어(#276) | 착용한 무기의 공격 보정, 칸마다의 방어와 모든 부위의 방어 | `TableDetail.items` 의 `attack`, `defense`, `guard` 를 `sheet.worn[]` 에 맞춰 더한다. 방어가 하는 일은 `rules.armor.mode`(`ac` 맞히기 어렵게, `reduce` 피해 깎기, `null` 막지 않음) |
+| 공격과 방어(#276) | 착용한 무기의 공격 보정, 칸마다의 방어와 모든 부위의 방어 | `TableDetail.items` 의 `attack`, `defense`, `guard` 를 `sheet.worn[]` 에 맞춰 더한다. 방어가 하는 일은 `rules.armor.mode`(`ac` 맞히기 어렵게, `reduce` 피해 깎기, `save` 세이브로 막기, `null` 막지 않음). 무기의 관통력 `ap`, 불굴 세이브 `ward` 도 함께 보인다 |
 | 퀘스트 | 이름, 상태(진행 중, 성공, 실패), 기한 | `TableDetail.quests[]` 의 `name`, `status`, `due_at`. 숨긴 퀘스트는 방장에게만 온다. 퀘스트의 글은 내려오지 않는다 |
 | 장소 | 서 있는 곳, 아는 장소와 길 | `sheet.place_id`, `TableDetail.map` 의 `places[]`, `routes[]`(걸리는 시간 `travel_minutes`). 숨긴 길과 안개 길은 내려오지 않는다 |
 | 시각 | 며칠째, 몇 시, 하루의 어느 때, 다음 라운드에 흐를 시간 | `TableDetail.clock`. `GET /tables/{id}/clock` 과 같은 값이다(#428). 라운드가 열리면 `round_opened` 의 `clock` 으로 바꾼다 |
@@ -1612,7 +1612,7 @@
 | 재료 | 경로 | 칸 | 비고 |
 | --- | --- | --- | --- |
 | 세계관 | `/worlds` | `title`, `description`, `setting`(8000 자), `gm_notes`(4000 자) | `gm_notes` 는 GM 전용이라 테이블 참가자에게 가지 않는다 |
-| 룰북 | `/rulebooks` | `title`, `description`, `gm_guide`(4000 자), `template` | 규칙(`rules`)을 직접 받지 않는다. 템플릿 이름만 고르고 규칙은 서버가 채운다. 응답에는 `rules` 가 있다. 고를 수 있는 템플릿과 그 규칙, 출처 표시는 `GET /rulebooks/templates`(#615): `srd5`(d20 판타지, 기본), `horror`(공포), `light`(가벼운 모험). 출처 표시(`attribution`)가 있으면 템플릿을 보여 줄 때 함께 싣는다. 템플릿을 고르는 화면에 `rules.narration.tone`(서술의 분위기, #616)을 함께 보여 주면 고르기 쉽다 |
+| 룰북 | `/rulebooks` | `title`, `description`, `gm_guide`(4000 자), `template`, `armor` | 규칙(`rules`)을 직접 받지 않는다. 템플릿 이름만 고르고 규칙은 서버가 채운다. 방어 규칙(`armor`: `mode` 는 `ac`·`reduce`·`save`, `save` 면 `save_target`, 관통의 기준값 `pierce_base`)만은 만들 때와 고칠 때 고른다(#276). `null` 이면 방어구가 막지 않는다. 응답에는 `rules` 가 있다. 고를 수 있는 템플릿과 그 규칙, 출처 표시는 `GET /rulebooks/templates`(#615): `srd5`(d20 판타지, 기본), `horror`(공포), `light`(가벼운 모험). 출처 표시(`attribution`)가 있으면 템플릿을 보여 줄 때 함께 싣는다. 템플릿을 고르는 화면에 `rules.narration.tone`(서술의 분위기, #616)을 함께 보여 주면 고르기 쉽다 |
 | 로어북 | `/lorebooks`, `/lorebooks/{id}/entries` | 로어북은 `title`, `description`. 항목은 `name`, `keywords`, `content`, `kind`, `true_names` | 항목의 종류(`kind`)는 `person`, `place`, `item`, `faction`, `species`, `legend`, `event`, `other` 다. 기본은 `other` |
 | 몬스터 모음 | `/bestiaries`, `/bestiaries/{id}/monsters` | 모음은 `title`, `description`. 몬스터는 `name`, `content`, `kind`, `unique` | `unique` 는 판 전체에서 한 마리만 두는 네임드다 |
 | 시나리오 | `/scenarios` | 아래 | |
@@ -1635,7 +1635,7 @@
 | 인물·물건·퀘스트 | `npc_sheets`, `items`, `starting_items`, `quests` | 인물 시트 100, 물건 규칙 100, 시작 물건 20, 퀘스트 50(조건은 퀘스트마다 5) |
 | 돈(#278) | `currency`, `items[].price`, `pregens[].money`, `quests[].reward_money`, `npc_sheets[].merchant` | 화폐의 이름 20 자, 단위 10 자, 돈과 값은 1,000,000 까지, 되사는 값 0~100%. 화폐 없이 값·상인·돈을 적으면 게시할 때 `currency_missing` |
 | 장비(#276) | `items[].slots`, `items[].slot_count`, `starting_items[].wear`, `pregens[].items[].wear` | 칸은 룰북의 `equipment_slots`(8 개까지) 중에서. 차지하는 칸은 1~8, 들어갈 수 있는 칸보다 많지 않다. 소모품에는 칸이 없다. 시작할 때의 착용은 그 물건의 칸을 차지하는 칸의 수만큼, 시작 소지품과 한 프리젠의 소지품을 합쳐 겹치지 않게. 틀리면 게시 문제 `item_slot_invalid`, `starting_wear_invalid` |
-| 공격과 방어(#276) | `items[].attack`, `items[].defense`, `items[].guard`, `npc_sheets[]`·`monster_sheets[]` 의 `equipment[].wear` 와 `attacks[].weapon`, `monster_sheets[].natural_armor` | 수치는 1~10, 칸이 있는 물건에만. NPC·몬스터의 착용은 시작 착용과 같은 검사, 무기는 착용한 장비 중 공격 보정이 있는 것, 타고난 방어의 부위는 룰북의 칸. 틀리면 게시 문제 `carried_wear_invalid`, `attack_weapon_invalid`, `natural_armor_invalid` |
+| 공격과 방어(#276) | `items[].attack`, `items[].defense`, `items[].guard`, `items[].ap`, `items[].ward`, `monster_sheets[].ward`, `npc_sheets[]`·`monster_sheets[]` 의 `equipment[].wear` 와 `attacks[].weapon`, `monster_sheets[].natural_armor` | 수치는 1~10, 칸이 있는 물건에만. NPC·몬스터의 착용은 시작 착용과 같은 검사, 무기는 착용한 장비 중 공격 보정이 있는 것, 타고난 방어의 부위는 룰북의 칸. 틀리면 게시 문제 `carried_wear_invalid`, `attack_weapon_invalid`, `natural_armor_invalid` |
 | 지도 | `start_place`, `routes`, `landmarks`, `happenings` | 길 200, 명소 100, 사건 규칙 50(조건 5, 효과 5) |
 | 몬스터 배치 | `monster_sheets`, `encounters` | 몬스터 시트 100, 조우 50 |
 | 서술 | `narration_style`, `narration_model`, `clock` | 문체는 안 보내면 정통. 시계는 안 보내면 1일째 8시, 한 라운드에 10분 |

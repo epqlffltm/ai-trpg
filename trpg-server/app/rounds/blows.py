@@ -17,11 +17,11 @@ DB 를 모른다. 이미 읽어 온 시트와 장면의 마리와 인물을 받�
 
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from app.assets.scenarios.snapshot import AttackSnapshot, MonsterSnapshot
 from app.engine import armor
-from app.engine.armor import Protection, Worn
+from app.engine.armor import Pierce, Protection, Save, Worn
 from app.engine.ruleset import Ruleset
 from app.rounds.cast import CastMember
 from app.rounds.effects import Judging
@@ -39,14 +39,17 @@ class Weapon:
     entry_id: uuid.UUID
     name: str
     bonus: int
+    # 관통력. 없으면 0 이다
+    ap: int = 0
 
 
 @dataclass(frozen=True)
 class Blow:
     """
-    타격 하나에 장비가 든 것. 무기, 맞은 부위, 노렸는가, 그 부위의 방어다.
+    타격 하나에 장비가 든 것. 무기, 맞은 부위, 노렸는가, 그 부위의 방어, 관통 굴림, 맞는 쪽의 불굴 세이브의 값이다.
 
     raise_by 는 맞히는 목표값을 올리는 양(ac), cut 은 피해에서 깎는 양(reduce)이다. 규칙의 방어 방식이 정한다.
+    관통했으면 둘 다 0 이다. 세이브(save)는 맞힌 뒤에 따로 굴린다(roll_blow_save).
     """
 
     weapon: Weapon | None
@@ -55,6 +58,8 @@ class Blow:
     defense: int
     raise_by: int
     cut: int
+    pierce: Pierce | None = None
+    ward: int = 0
 
     @property
     def bonus(self) -> int:
@@ -70,7 +75,7 @@ def worn_item(item: CatalogItem | None, slots: Sequence[str]) -> Worn:
     """착용 하나를 방어로 셀 모양으로. 판에 없는 물건이면 방어가 없다."""
     if item is None:
         return Worn(slots=tuple(slots))
-    return Worn(slots=tuple(slots), defense=item.defense or 0, guard=item.guard or 0)
+    return Worn(slots=tuple(slots), defense=item.defense or 0, guard=item.guard or 0, ward=item.ward or 0)
 
 
 def member_protection(judging: Judging, member: TableMember) -> Protection:
@@ -80,10 +85,12 @@ def member_protection(judging: Judging, member: TableMember) -> Protection:
     return armor.protection_of([worn_item(judging.items.get(row.entry_id), row.slots) for row in member.sheet.worn])
 
 
-def carried_protection(judging: Judging, held: Sequence[Carried], natural: dict[str, int]) -> Protection:
-    """NPC 나 몬스터의 지금 방어. 아직 지닌 장비 줄 중 착용한 것과, 타고난 방어다."""
+def carried_protection(
+    judging: Judging, held: Sequence[Carried], natural: dict[str, int], natural_ward: int = 0
+) -> Protection:
+    """NPC 나 몬스터의 지금 방어. 아직 지닌 장비 줄 중 착용한 것과, 타고난 방어와 불굴 세이브다."""
     worn = [worn_item(judging.items.get(line.entry_id), line.wear) for line in held if line.equipped and line.wear]
-    return armor.protection_of(worn, natural)
+    return armor.protection_of(worn, natural, natural_ward)
 
 
 def natural_of(definition: MonsterSnapshot) -> dict[str, int]:
@@ -94,7 +101,7 @@ def natural_of(definition: MonsterSnapshot) -> dict[str, int]:
 def monster_protection(judging: Judging, monster: SceneMonster) -> Protection:
     """몬스터 한 마리의 지금 방어."""
     held = monster_items.carried(monster.state, monster.definition)
-    return carried_protection(judging, held, natural_of(monster.definition))
+    return carried_protection(judging, held, natural_of(monster.definition), monster.definition.ward or 0)
 
 
 def npc_protection(judging: Judging, person: CastMember) -> Protection:
@@ -106,7 +113,7 @@ def weapon_of(item: CatalogItem | None) -> Weapon | None:
     """물건을 무기로. 공격 보정이 없는 물건이면 None."""
     if item is None or item.attack is None:
         return None
-    return Weapon(entry_id=item.entry_id, name=item.name, bonus=item.attack)
+    return Weapon(entry_id=item.entry_id, name=item.name, bonus=item.attack, ap=item.ap or 0)
 
 
 def member_weapon(judging: Judging, member: TableMember, entry_id: uuid.UUID | None) -> Weapon | None:
@@ -139,22 +146,42 @@ def npc_weapon(judging: Judging, person: CastMember, attack: AttackSnapshot) -> 
 
 def plan_blow(judging: Judging, weapon: Weapon | None, protection: Protection, strike: str | None) -> Blow:
     """
-    타격 하나를 준비한다. 노렸으면 그 부위, 아니면 부위를 굴린다(판정보다 먼저). 그 부위의 방어를 센다.
+    타격 하나를 준비한다. 판정보다 먼저 굴린다. 노렸으면 그 부위, 아니면 부위를 굴리고, 그 부위의 방어를 센다.
+    무기에 관통력이 있고 그 부위에 방어가 있으면 관통을 굴린다. 관통했으면 방어구가 막지 않는다.
 
-    맞는 쪽이 어느 부위에도 방어가 없으면 굴리지 않는다(armor.varies_by_slot). 주사위를 쓸 까닭이 없다.
+    맞는 쪽이 어느 부위에도 방어가 없으면 부위를 굴리지 않는다(armor.varies_by_slot). 주사위를 쓸 까닭이 없다.
     """
+    ruleset = judging.ruleset
     location = strike
     if location is None and armor.varies_by_slot(protection):
-        location = armor.roll_location(judging.ruleset, judging.dice)
-    defense = armor.defense_at(protection, location) if judging.ruleset.armor is not None else 0
+        location = armor.roll_location(ruleset, judging.dice)
+    defense = armor.defense_at(protection, location) if ruleset.armor is not None else 0
+    pierce = armor.roll_pierce(ruleset, judging.dice, weapon.ap if weapon is not None else 0, defense)
+    holding = armor.holding(defense, pierce)
     return Blow(
         weapon=weapon,
         location=location,
         aimed=strike is not None,
         defense=defense,
-        raise_by=armor.target_raise(judging.ruleset, defense),
-        cut=armor.damage_cut(judging.ruleset, defense),
+        raise_by=armor.target_raise(ruleset, holding),
+        cut=armor.damage_cut(ruleset, holding),
+        pierce=pierce,
+        ward=protection.ward if ruleset.armor is not None else 0,
     )
+
+
+def roll_blow_save(judging: Judging, blow: Blow) -> Save | None:
+    """
+    맞힌 타격에 맞는 쪽이 세이브를 굴린다. 세이브 방식의 규칙이고 막을 값이 있을 때만이다. 아니면 None.
+
+    관통했으면 아머 세이브는 없고 불굴 세이브만 남는다(armor.holding).
+    """
+    return armor.roll_save(judging.ruleset, judging.dice, armor.holding(blow.defense, blow.pierce), blow.ward)
+
+
+def is_saved(save: Save | None) -> bool:
+    """세이브로 막았는가. 굴리지 않았으면 막지 않은 것이다."""
+    return save is not None and save.saved
 
 
 def slot_name(ruleset: Ruleset, key: str | None) -> str | None:
@@ -168,16 +195,27 @@ def weapon_document(weapon: Weapon | None) -> dict | None:
     """무기를 문서로."""
     if weapon is None:
         return None
-    return {'entry_id': str(weapon.entry_id), 'name': weapon.name, 'bonus': weapon.bonus}
+    return {'entry_id': str(weapon.entry_id), 'name': weapon.name, 'bonus': weapon.bonus, 'ap': weapon.ap}
 
 
-def blow_document(ruleset: Ruleset, blow: Blow) -> dict | None:
+def pierce_document(pierce: Pierce | None) -> dict | None:
+    """관통 굴림을 문서로. 굴리지 않았으면 None."""
+    return None if pierce is None else asdict(pierce)
+
+
+def save_document(save: Save | None) -> dict | None:
+    """세이브 굴림을 문서로. 굴리지 않았으면 None."""
+    return None if save is None else asdict(save)
+
+
+def blow_document(ruleset: Ruleset, blow: Blow, save: Save | None = None) -> dict | None:
     """
-    타격에 장비가 든 것을 판정의 outcome 에 붙일 문서로. 무기도 부위도 방어도 없으면 None 이다.
+    타격에 장비가 든 것을 판정의 outcome 에 붙일 문서로. 무기도 부위도 방어도 세이브도 없으면 None 이다.
 
     mode 는 규칙의 방어 방식, defense 는 맞은 부위의 방어다. 깎인 피해는 변화(effect)의 rolls 와 amount 의 차이다.
+    pierce 는 관통 굴림, save 는 세이브 굴림이다. 굴리지 않았으면 None 이다.
     """
-    if blow.weapon is None and blow.location is None and blow.defense == 0:
+    if blow.weapon is None and blow.location is None and blow.defense == 0 and save is None:
         return None
     return {
         'weapon': weapon_document(blow.weapon),
@@ -186,4 +224,6 @@ def blow_document(ruleset: Ruleset, blow: Blow) -> dict | None:
         'aimed': blow.aimed,
         'defense': blow.defense,
         'mode': ruleset.armor.mode.value if ruleset.armor is not None else None,
+        'pierce': pierce_document(blow.pierce),
+        'save': save_document(save),
     }

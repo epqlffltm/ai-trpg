@@ -80,7 +80,9 @@ def describe_verdict(verdict: Verdict) -> str:
 
 
 # 방어가 한 일(#276). 규칙의 방어 방식마다다
-ARMOR_EFFECTS = {'ac': '목표값에 더함', 'reduce': '피해에서 뺌'}
+ARMOR_EFFECTS = {'ac': '목표값에 더함', 'reduce': '피해에서 뺌', 'save': '세이브'}
+# 세이브의 종류(#276)
+SAVE_KINDS = {'armor': '아머', 'ward': '불굴'}
 
 
 def describe_blow(note: BlowNote) -> str:
@@ -89,6 +91,7 @@ def describe_blow(note: BlowNote) -> str:
 
     예: 무기: 장검 +2 · 맞은 곳: 몸 · 방어 3(목표값에 더함)
         맞은 곳: 머리(노림) · 방어 0(피해에서 뺌)
+        무기: 볼트건 +1 · 맞은 곳: 몸 · 방어 5(세이브) · 관통함 · 불굴 세이브 3: 막음
     """
     parts = []
     if note.weapon is not None:
@@ -97,6 +100,11 @@ def describe_blow(note: BlowNote) -> str:
         parts.append(f'맞은 곳: {note.location}' + ('(노림)' if note.aimed else ''))
     if note.mode is not None:
         parts.append(f'방어 {note.defense}({ARMOR_EFFECTS.get(note.mode, note.mode)})')
+    if note.pierced is not None:
+        parts.append('관통함' if note.pierced else '관통 못 함')
+    if note.saved is not None:
+        kind = SAVE_KINDS.get(note.save_kind, note.save_kind)
+        parts.append(f'{kind} 세이브 {note.save_value}: ' + ('막음' if note.saved else '못 막음'))
     return ' · '.join(parts)
 
 

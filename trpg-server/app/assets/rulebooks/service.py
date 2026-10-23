@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets import service as assets
 from app.assets.models import AssetType, Rulebook
 from app.assets.rulebooks.schemas import RulebookCreate, RulebookUpdate
+from app.engine.ruleset import Armor
 from app.engine.templates import TemplateFile, all_templates, from_template
 
 
@@ -23,10 +24,23 @@ def build_rulebook(owner_id: uuid.UUID, data: RulebookCreate) -> Rulebook:
     입력에서 룰북 객체를 만든다. 아직 저장하지 않는다.
 
     고른 템플릿의 규칙을 복사해 넣는다. DB 에 문서로 들어가므로 JSON 으로 옮길 수 있는 값으로 바꾼다.
+    방어 규칙을 보냈으면 템플릿의 것 대신 그것을 쓴다(#276).
     """
     asset = assets.build_asset(owner_id, AssetType.RULEBOOK, data)
     rules = from_template(data.template).model_dump(mode='json')
+    if 'armor' in data.model_fields_set:
+        rules = with_armor(rules, data.armor)
     return Rulebook(asset=asset, gm_guide=data.gm_guide, rules=rules)
+
+
+def with_armor(rules: dict, armor: Armor | None) -> dict:
+    """규칙의 방어 규칙만 바꾼 문서. 받은 문서는 고치지 않는다. 방어 규칙은 받을 때 모양을 확인했다."""
+    return {**rules, 'armor': armor.model_dump(mode='json') if armor is not None else None}
+
+
+def other_changes(data: RulebookUpdate) -> RulebookUpdate:
+    """방어 규칙을 뺀 고칠 것. 공통의 고치기(app/assets/service.py)는 내용의 칸만 안다. 규칙은 여기서 고친다."""
+    return RulebookUpdate.model_validate(data.model_dump(exclude_unset=True, exclude={'armor'}))
 
 
 def list_templates() -> list[TemplateFile]:
@@ -54,8 +68,15 @@ async def list_rulebooks(
 async def update_rulebook(
     session: AsyncSession, owner_id: uuid.UUID, rulebook_id: uuid.UUID, data: RulebookUpdate
 ) -> Rulebook:
-    """자기 룰북을 고친다. 없으면 AssetNotFoundError."""
-    return await assets.update_owned(session, Rulebook, owner_id, rulebook_id, data)
+    """
+    자기 룰북을 고친다. 없으면 AssetNotFoundError.
+
+    방어 규칙을 보냈으면 규칙에서 그것만 바꾼다(#276). 이미 게시한 판은 그때의 규칙으로 굳어 있다.
+    """
+    content = await assets.get_owned(session, Rulebook, owner_id, rulebook_id)
+    if 'armor' in data.model_fields_set:
+        content.rules = with_armor(content.rules, data.armor)
+    return await assets.save_changes(session, content, other_changes(data))
 
 
 async def delete_rulebook(session: AsyncSession, owner_id: uuid.UUID, rulebook_id: uuid.UUID) -> None:

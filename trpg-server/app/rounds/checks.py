@@ -21,7 +21,7 @@ from app.engine import action as actions
 from app.engine import armor, health
 from app.engine import injury as injury_rules
 from app.engine.action import CheckAction, Consequence, Recipient
-from app.engine.armor import Protection
+from app.engine.armor import Protection, Save
 from app.engine.check import Check
 from app.engine.health import Change, ChangeKind
 from app.rounds import blows, drops, wakes
@@ -251,6 +251,19 @@ def plan_check_blow(judging: Judging, member: TableMember, action: CheckAction) 
     return blows.plan_blow(judging, weapon, target_protection(judging, action), action.strike)
 
 
+def saved_consequence(action: CheckAction) -> dict:
+    """세이브로 막은 타격의 결과 칸들. 아무것도 바뀌지 않았다. 몬스터를 친 것이면 몬스터의 칸도 비어 있다."""
+    landed = {'effect': None, 'npc_effect': None}
+    return {**landed, 'monster_effect': None} if action.monster is not None else landed
+
+
+def roll_check_save(judging: Judging, blow: Blow | None, check: Check) -> Save | None:
+    """맞힌 타격이면 맞는 쪽이 세이브를 굴린다(세이브 방식일 때만). 빗나갔거나 타격이 아니면 굴리지 않는다."""
+    if blow is None or not check.success:
+        return None
+    return blows.roll_blow_save(judging, blow)
+
+
 def judge_check(judging: Judging, member: TableMember, action: CheckAction) -> dict:
     """
     한 사람의 판정하는 행동을 판정하고 그 결과를 정한다. 선언의 outcome 에 적을 문서를 돌려준다.
@@ -258,6 +271,7 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction) -> d
     그 캐릭터가 입은 부상이 이 행동의 능력에 주는 것(보정 깎기, 불리함)을 판정에 적용한다(hindrance).
     겨눈 몬스터를 지금 칠 수 없으면 굴리지 않고 그 까닭만 적는다(target_gone).
     타격이면 장비가 든 것(blow)을 붙인다. 무기도 방어 방식도 없으면 붙이지 않는다(app/rounds/blows.py).
+    맞혔고 세이브 방식이면 맞는 쪽이 세이브를 굴린다. 막으면 아무것도 바뀌지 않는다.
     """
     gone = target_gone(judging, member, action)
     if gone is not None:
@@ -272,13 +286,19 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction) -> d
     hindered = actions.attempt_hindered(
         judging.ruleset, action, sheet.abilities, judging.dice, hindrance, bonus=bonus, raise_by=raise_by
     )
+    save = roll_check_save(judging, blow, hindered.check)
+    consequence_ = (
+        saved_consequence(action)
+        if blows.is_saved(save)
+        else apply_consequence(judging, member, action, hindered.check, cut)
+    )
     outcome = {
         **asdict(hindered.check),
         'hindrance': round_injuries.hindrance_document(hindered),
         'called_shot': round_injuries.called_shot_document(judging.ruleset, action.aim),
-        **apply_consequence(judging, member, action, hindered.check, cut),
+        **consequence_,
     }
-    document = blows.blow_document(judging.ruleset, blow) if blow is not None else None
+    document = blows.blow_document(judging.ruleset, blow, save) if blow is not None else None
     if document is not None:
         outcome['blow'] = document
     return outcome
