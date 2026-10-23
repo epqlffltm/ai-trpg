@@ -16,6 +16,9 @@ TRPG 의 판 형식과 같은 방식이다.
        그때는 칸의 이름이 illustrations, 장면의 설명이 scene 이었다. 5 의 판은 그 이름을 바꿔 읽는다(legacy_scenes)
   - 6: 이벤트 씬의 이름을 바로잡고(event_scenes, description), 캐릭터 그림(sprites)을 더했다(2026-10-23).
        5 까지의 판은 캐릭터 그림이 없다
+  - 7: 물건의 giftable(상대가 줄 수 있다)과 호감도의 model_step(모델이 답 하나에 바꿀 수 있는 크기)을 더했다
+       (2026-10-23, #676).
+       6 까지의 판은 줄 수 있는 물건이 없고 model_step 이 AFFECTION_MODEL_STEP_DEFAULT 다
 DB 를 모르는 순수한 함수다. 초안(Character)과 거른 소개에서 문서를 만든다.
 """
 
@@ -24,6 +27,7 @@ import uuid
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.characters.models import (
+    AFFECTION_MODEL_STEP_DEFAULT,
     START_HOUR_DEFAULT,
     AffectionDisplay,
     Character,
@@ -35,7 +39,7 @@ from app.characters.models import (
 from app.ratings import Rating
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 6
+DOCUMENT_FORMAT = 7
 
 
 class StartDocument(BaseModel):
@@ -80,6 +84,7 @@ class ItemDocument(BaseModel):
     description: str
     kind: ItemKind
     consumable: bool = False
+    giftable: bool = False
     image_id: uuid.UUID | None
 
 
@@ -130,6 +135,7 @@ class AffectionDocument(BaseModel):
     start: int
     stages: list[StageDocument]
     rules: list[AffectionRuleDocument]
+    model_step: int = AFFECTION_MODEL_STEP_DEFAULT
 
 
 class SceneConditionDocument(BaseModel):

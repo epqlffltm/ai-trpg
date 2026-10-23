@@ -48,10 +48,27 @@ BOOK = {
     'description': '낡은 시집.',
     'kind': 'thing',
     'consumable': False,
+    'giftable': False,
     'image_id': None,
 }
-SCARF = {'id': 'scarf', 'name': '목도리', 'description': '', 'kind': 'clothing', 'consumable': False, 'image_id': None}
-COOKIE = {'id': 'cookie', 'name': '쿠키', 'description': '', 'kind': 'thing', 'consumable': True, 'image_id': None}
+SCARF = {
+    'id': 'scarf',
+    'name': '목도리',
+    'description': '',
+    'kind': 'clothing',
+    'consumable': False,
+    'giftable': False,
+    'image_id': None,
+}
+COOKIE = {
+    'id': 'cookie',
+    'name': '쿠키',
+    'description': '',
+    'kind': 'thing',
+    'consumable': True,
+    'giftable': True,
+    'image_id': None,
+}
 WORLD = {
     'places': [LIBRARY, CAFE],
     'paths': [{'a': 'library', 'b': 'cafe', 'minutes': 15}],
