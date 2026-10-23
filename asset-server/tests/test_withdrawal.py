@@ -5,6 +5,7 @@
 
 보는 것.
   - 그 사람의 페르소나와 비공개 캐릭터(판까지)를 지운다. 공개 캐릭터와 남의 것은 남는다
+  - 그 사람의 로어북(판까지)을 지운다. 남의 로어북은 남는다
   - 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 processed 다
   - 인증 서버의 서명이 아니면(없음, 틀림, chat 의 비밀, 비밀이 빔) 401 이고 아무것도 지우지 않는다
   - 본문의 모양이 틀리면 422 이고 아무것도 지우지 않는다. 모르는 칸은 버린다
@@ -22,6 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.characters.models import Character, CharacterVersion
+from app.lorebooks.models import Lorebook, LorebookVersion
 from app.main import API_PREFIX, create_app
 from app.personas.models import Persona
 from tests.conftest import make_client, make_test_settings
@@ -127,6 +129,24 @@ async def test_the_same_notice_again_is_processed(client: AsyncClient, session: 
     assert (first.json(), again.json()) == (PROCESSED, PROCESSED)
     assert again.status_code == status.HTTP_200_OK
     assert await character_ids_of(session, LEAVER) == {belongings['leaver']['public']['id']}
+
+
+async def make_lorebook(client: AsyncClient, headers: dict) -> None:
+    response = await client.post(f'{API_PREFIX}/lorebooks', json={'name': '설정'}, headers=headers)
+    assert response.status_code == status.HTTP_201_CREATED, response.text
+    published = await client.post(f'{API_PREFIX}/lorebooks/{response.json()["id"]}/versions', json={}, headers=headers)
+    assert published.status_code == status.HTTP_201_CREATED, published.text
+
+
+async def test_erases_lorebooks(client: AsyncClient, session: AsyncSession, leaver: dict, stayer: dict):
+    await make_lorebook(client, leaver)
+    await make_lorebook(client, stayer)
+
+    await signed_withdrawal(client, str(LEAVER))
+
+    owners = list(await session.scalars(select(Lorebook.owner_id)))
+    assert owners == [STAYER]
+    assert await session.scalar(select(func.count()).select_from(LorebookVersion)) == 1
 
 
 async def test_someone_with_nothing_here_is_processed(client: AsyncClient):
