@@ -566,6 +566,24 @@
         "현대의 말투와 물건을 섞지 마라.",
         "실패를 조롱하듯 쓰지 마라."
       ]
-    }
+    },
+    "equipment_slots": [
+      {
+        "key": "main_hand",
+        "name": "주손"
+      },
+      {
+        "key": "off_hand",
+        "name": "보조손"
+      },
+      {
+        "key": "body",
+        "name": "몸"
+      },
+      {
+        "key": "head",
+        "name": "머리"
+      }
+    ]
   }
 }

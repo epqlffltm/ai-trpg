@@ -30,7 +30,7 @@ from app.events.models import EventType
 from app.rounds import service as rounds
 from app.rounds import state as round_state
 from app.rounds.models import Round
-from app.tables import items, money, places, sheets
+from app.tables import equipment, items, money, places, sheets
 from app.tables.characters import accept_character, describe_sheet, write_character
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember
@@ -113,10 +113,11 @@ async def bring_in_character(
 
     replaces = member.character_name
     write_character(member, chosen)
-    # 새 캐릭터는 앞 캐릭터의 소지품과 돈을 물려받지 않는다. 시작 소지품과 돈을 새로 받는다
+    # 새 캐릭터는 앞 캐릭터의 소지품과 돈과 착용을 물려받지 않는다. 시작할 때의 것을 새로 받는다
     sheet = sheets.give_sheet(member, source)
     items.equip(table.id, sheet, snapshot, member.pregen_index)
     money.endow(sheet, snapshot, member.pregen_index)
+    equipment.dress(table.id, sheet, snapshot, member.pregen_index)
     # 새 캐릭터는 앞 캐릭터가 쓰러진 곳에서 일행에 들어온다
     places.take_over_place(member)
     drop_declaration(round_, user_id)

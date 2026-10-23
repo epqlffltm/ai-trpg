@@ -58,6 +58,7 @@ from app.assets.scenarios.snapshot import (
     MonsterSnapshot,
     build_snapshot,
     snapshot_monster,
+    wear_fault,
 )
 from app.assets.service import AssetNotFoundError
 from app.engine.check import find_ability, find_difficulty
@@ -163,6 +164,10 @@ class Problem(enum.StrEnum):
     UNIQUE_MONSTER_REPEATED = 'unique_monster_repeated'
     # 돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있는데 화폐가 없다(#278)
     CURRENCY_MISSING = 'currency_missing'
+    # 아이템 규칙의 장비의 칸(slots)이 룰북의 규칙에 없다(#276)
+    ITEM_SLOT_INVALID = 'item_slot_invalid'
+    # 시작할 때의 착용(wear)이 틀렸다. 그 물건의 칸이 아니거나, 차지하는 칸의 수와 다르거나, 두 줄이 한 칸에 겹친다
+    STARTING_WEAR_INVALID = 'starting_wear_invalid'
 
 
 class ScenarioNotReadyError(Exception):
@@ -497,6 +502,32 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
     return problems
 
 
+def starting_groups(scenario: Scenario) -> list[list[ItemStack]]:
+    """한 캐릭터가 시작할 때 받을 줄들의 묶음. 시작 소지품만, 그리고 프리젠마다 시작 소지품에 그 소지품을 더한 것."""
+    common = [ItemStack.model_validate(document) for document in scenario.starting_items]
+    pregens = [Pregen.model_validate(document) for document in scenario.pregens]
+    return [common, *([*common, *pregen.items] for pregen in pregens)]
+
+
+def find_wear_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    장비의 칸에서 문제를 찾는다(#276). 룰북이 없으면 볼 수 없다(그때는 RULEBOOK_MISSING 이다).
+
+    아이템 규칙의 칸은 룰북의 칸이어야 하고, 시작할 때의 착용은 그 물건의 칸에 맞아야 한다(wear_fault).
+    """
+    if ruleset is None:
+        return []
+    slot_keys = {slot.key for slot in ruleset.equipment_slots}
+    rules = read_item_rules(scenario)
+    problems = []
+    if any(slot not in slot_keys for rule in rules for slot in rule.slots):
+        problems.append(Problem.ITEM_SLOT_INVALID)
+    item_slots = {rule.entry_id: (rule.slots, rule.slot_count) for rule in rules}
+    if any(wear_fault(slot_keys, item_slots, group) for group in starting_groups(scenario)):
+        problems.append(Problem.STARTING_WEAR_INVALID)
+    return problems
+
+
 def uses_money(scenario: Scenario) -> bool:
     """돈을 쓰는 칸이 있는가. 물건의 값, 상인, 프리젠이 더 받는 돈, 퀘스트의 돈의 보상이다."""
     return (
@@ -817,6 +848,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_item_problems(scenario, parts, ruleset))
     problems.extend(find_quest_problems(scenario, parts))
     problems.extend(find_currency_problems(scenario))
+    problems.extend(find_wear_problems(scenario, ruleset))
     problems.extend(find_map_problems(scenario, parts, ruleset))
     problems.extend(find_place_item_problems(scenario, ruleset))
     problems.extend(find_happening_problems(scenario, parts))

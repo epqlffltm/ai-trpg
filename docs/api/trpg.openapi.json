@@ -539,6 +539,19 @@
           },
           "rarity": {
             "$ref": "#/components/schemas/ItemRarity"
+          },
+          "slot_count": {
+            "default": 1,
+            "title": "Slot Count",
+            "type": "integer"
+          },
+          "slots": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Slots",
+            "type": "array"
           }
         },
         "required": [
@@ -2193,6 +2206,30 @@
         "title": "EntryUpdate",
         "type": "object"
       },
+      "EquipmentSlot": {
+        "additionalProperties": false,
+        "description": "장비의 칸 하나(#276). 캐릭터가 물건을 착용하는 자리다. 예: 주손, 보조손, 몸.\n\n칸마다 하나의 물건이 들어간다. 어느 물건이 어느 칸에 들어가는지는 시나리오의 아이템 규칙이 정한다.",
+        "properties": {
+          "key": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "EquipmentSlot",
+        "type": "object"
+      },
       "EventOut": {
         "description": "앉은 사람이 이벤트 하나를 볼 때의 값.",
         "properties": {
@@ -2319,6 +2356,7 @@
           "item_used",
           "item_given",
           "item_put_down",
+          "equipment_changed",
           "item_traded",
           "money_paid",
           "steal_attempted",
@@ -3247,7 +3285,7 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).",
         "properties": {
           "entry_id": {
             "format": "uuid",
@@ -3287,6 +3325,24 @@
           "rarity": {
             "$ref": "#/components/schemas/ItemRarity",
             "default": "normal"
+          },
+          "slot_count": {
+            "default": 1,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Slot Count",
+            "type": "integer"
+          },
+          "slots": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Slots",
+            "type": "array"
           }
         },
         "required": [
@@ -3297,7 +3353,7 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).",
         "properties": {
           "entry_id": {
             "title": "Entry Id",
@@ -3336,6 +3392,24 @@
           "rarity": {
             "$ref": "#/components/schemas/ItemRarity",
             "default": "normal"
+          },
+          "slot_count": {
+            "default": 1,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Slot Count",
+            "type": "integer"
+          },
+          "slots": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Slots",
+            "type": "array"
           }
         },
         "required": [
@@ -3345,7 +3419,7 @@
         "type": "object"
       },
       "ItemRuleSnapshot": {
-        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\nheals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.",
+        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\nheals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.\nslots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\nslots 가 비어 있으면 착용하지 않는 물건이다.",
         "properties": {
           "entry_id": {
             "format": "uuid",
@@ -3380,6 +3454,19 @@
           "rarity": {
             "$ref": "#/components/schemas/ItemRarity",
             "default": "normal"
+          },
+          "slot_count": {
+            "default": 1,
+            "title": "Slot Count",
+            "type": "integer"
+          },
+          "slots": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Slots",
+            "type": "array"
           }
         },
         "required": [
@@ -3391,7 +3478,7 @@
       },
       "ItemStack-Input": {
         "additionalProperties": false,
-        "description": "물건 몇 개. 붙인 로어북의 물건 항목 하나(entry_id)를 count 개다. 시작 소지품에 쓴다.\n\n가리키는 항목이 붙인 로어북에 있는지, 물건인지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.",
+        "description": "물건 몇 개. 붙인 로어북의 물건 항목 하나(entry_id)를 count 개다. 시작 소지품에 쓴다.\n\nwear 는 그중 하나를 시작할 때 착용하는 칸들이다(#276). 비우면 착용하지 않고 시작한다.\n그 물건의 아이템 규칙이 정한 칸 중에서, 차지하는 칸의 수만큼 적는다. 퀘스트의 보상에는 적지 않는다.\n가리키는 항목이 붙인 로어북에 있는지, 물건인지, 칸이 맞는지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.",
         "properties": {
           "count": {
             "maximum": 99.0,
@@ -3403,6 +3490,17 @@
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "wear": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Wear",
+            "type": "array"
           }
         },
         "required": [
@@ -3414,7 +3512,7 @@
       },
       "ItemStack-Output": {
         "additionalProperties": false,
-        "description": "물건 몇 개. 붙인 로어북의 물건 항목 하나(entry_id)를 count 개다. 시작 소지품에 쓴다.\n\n가리키는 항목이 붙인 로어북에 있는지, 물건인지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.",
+        "description": "물건 몇 개. 붙인 로어북의 물건 항목 하나(entry_id)를 count 개다. 시작 소지품에 쓴다.\n\nwear 는 그중 하나를 시작할 때 착용하는 칸들이다(#276). 비우면 착용하지 않고 시작한다.\n그 물건의 아이템 규칙이 정한 칸 중에서, 차지하는 칸의 수만큼 적는다. 퀘스트의 보상에는 적지 않는다.\n가리키는 항목이 붙인 로어북에 있는지, 물건인지, 칸이 맞는지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.",
         "properties": {
           "count": {
             "maximum": 99.0,
@@ -3425,6 +3523,17 @@
           "entry_id": {
             "title": "Entry Id",
             "type": "string"
+          },
+          "wear": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Wear",
+            "type": "array"
           }
         },
         "required": [
@@ -3435,7 +3544,7 @@
         "type": "object"
       },
       "ItemStackSnapshot": {
-        "description": "물건 몇 개. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개다.",
+        "description": "물건 몇 개. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개다.\n\nwear 는 그중 하나를 시작할 때 착용하는 규칙의 칸들이다(#276). 비어 있으면 착용하지 않는다.",
         "properties": {
           "count": {
             "title": "Count",
@@ -3445,6 +3554,14 @@
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "wear": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Wear",
+            "type": "array"
           }
         },
         "required": [
@@ -8841,6 +8958,14 @@
             "title": "Difficulties",
             "type": "array"
           },
+          "equipment_slots": {
+            "items": {
+              "$ref": "#/components/schemas/EquipmentSlot"
+            },
+            "maxItems": 8,
+            "title": "Equipment Slots",
+            "type": "array"
+          },
           "hp_ability": {
             "anyOf": [
               {
@@ -9012,7 +9137,8 @@
           "rest",
           "steal",
           "robbed_wake",
-          "narration"
+          "narration",
+          "equipment_slots"
         ],
         "title": "Ruleset",
         "type": "object"
@@ -10390,6 +10516,14 @@
               }
             ],
             "title": "Place Id"
+          },
+          "worn": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WornOut"
+            },
+            "title": "Worn",
+            "type": "array"
           }
         },
         "required": [
@@ -10489,7 +10623,7 @@
             "type": "array"
           },
           "format": {
-            "default": 46,
+            "default": 47,
             "title": "Format",
             "type": "integer"
           },
@@ -12472,6 +12606,34 @@
         "title": "WakeOut",
         "type": "object"
       },
+      "WearRequest": {
+        "additionalProperties": false,
+        "description": "장비를 착용할 때 받는 값(#276). 가진 물건 하나를 규칙의 칸들에 끼운다.\n\nslots 는 그 물건이 들어갈 수 있는 칸 중에서 차지하는 칸의 수만큼 고른다(CatalogItemOut.slots, slot_count).",
+        "properties": {
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "slots": {
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Slots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entry_id",
+          "slots"
+        ],
+        "title": "WearRequest",
+        "type": "object"
+      },
       "WhisperCreate": {
         "additionalProperties": false,
         "description": "쪽지를 보낼 때 받는 값. 보낸 사람은 토큰에서 읽는다. 입력으로 받지 않는다.",
@@ -12819,6 +12981,34 @@
           }
         },
         "title": "WorldUpdate",
+        "type": "object"
+      },
+      "WornOut": {
+        "description": "착용한 물건 하나(#276). 무엇을 규칙의 어느 칸들에 끼웠는가. 이름은 판의 로어북 물건 항목의 이름이다.",
+        "properties": {
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Slots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entry_id",
+          "name",
+          "slots"
+        ],
+        "title": "WornOut",
         "type": "object"
       }
     },
@@ -17129,6 +17319,125 @@
           }
         ],
         "summary": "End Table",
+        "tags": [
+          "tables"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/equipment": {
+      "put": {
+        "description": "자기 캐릭터가 가진 물건 하나를 장비의 칸들에 끼운다(#276). 찬 칸의 것은 벗겨진다. 라운드의 행동이 아니다.\n\n선언을 받는 중에만 된다(닫는 중이면 409 round_closing). 쓰러졌거나 죽었으면 409.\n착용하지 않는 물건이나 판에 없는 물건이면 422(entry_id), 칸이 맞지 않으면 422(slots),\n가지고 있지 않으면 409(not_enough_items). 모두에게 이벤트(equipment_changed)가 간다.",
+        "operationId": "wear_equipment_api_v1_game_tables__table_id__equipment_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WearRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Wear Equipment",
+        "tags": [
+          "tables"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/equipment/{slot}": {
+      "delete": {
+        "description": "자기 캐릭터의 그 칸을 비운다(#276). 그 칸을 차지한 착용이 통째로 빠진다. 비어 있으면 그대로 돌려준다.\n\n선언을 받는 중에만 된다(닫는 중이면 409 round_closing). 쓰러졌거나 죽었으면 409.",
+        "operationId": "take_off_equipment_api_v1_game_tables__table_id__equipment__slot__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "slot",
+            "required": true,
+            "schema": {
+              "title": "Slot",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Take Off Equipment",
         "tags": [
           "tables"
         ],

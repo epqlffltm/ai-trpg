@@ -26,6 +26,7 @@ from app.catalog import offers
 from app.catalog.offers import OfferedModel, StepPrice
 from app.catalog.steps import input_tokens, output_tokens
 from app.core.dice import Rolling
+from app.engine.ruleset import Ruleset
 from app.limits.routing import Limited
 from app.personas import saving
 from app.personas.router import to_persona
@@ -35,6 +36,7 @@ from app.rounds.router import Closing
 from app.tables import (
     credit_waits,
     deaths,
+    equipment,
     injuries,
     items,
     narration_models,
@@ -49,6 +51,7 @@ from app.tables import (
     sheets,
     styles,
     time_limits,
+    wearing,
     whisper_notices,
 )
 from app.tables.errors import (
@@ -61,7 +64,16 @@ from app.tables.errors import (
 )
 from app.tables.items import CatalogItem
 from app.tables.model_picker import ModelPicker
-from app.tables.models import GameTable, TableInjury, TableItem, TableMember, TableQuest, TableRoll, TableSheet
+from app.tables.models import (
+    GameTable,
+    TableInjury,
+    TableItem,
+    TableMember,
+    TableQuest,
+    TableRoll,
+    TableSheet,
+    TableWorn,
+)
 from app.tables.retirement_watch import RetirementWatch
 from app.tables.schemas import (
     CatalogItemOut,
@@ -96,7 +108,9 @@ from app.tables.schemas import (
     TableDetail,
     TablePage,
     TableSummary,
+    WearRequest,
     WhisperNoticeUpdate,
+    WornOut,
 )
 
 router = APIRouter(prefix='/tables', tags=['tables'])
@@ -222,6 +236,8 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             heals=item.heals,
             rarity=item.rarity,
             price=item.price,
+            slots=list(item.slots),
+            slot_count=item.slot_count,
         )
         for item in catalog.values()
     ]
@@ -242,8 +258,17 @@ def to_injury(row: TableInjury) -> InjuryOut:
     )
 
 
-def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem]) -> SheetOut | None:
-    """시트를 응답으로 바꾼다. 아직 받지 않았으면 None. 소지품의 이름은 판의 물건(catalog)에서 찾는다."""
+def to_worn(row: TableWorn, catalog: dict[uuid.UUID, CatalogItem]) -> WornOut:
+    """착용 하나를 응답으로 바꾼다. 이름은 판에서 찾는다."""
+    return WornOut(entry_id=row.entry_id, name=catalog[row.entry_id].name, slots=list(row.slots))
+
+
+def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem], ruleset: Ruleset) -> SheetOut | None:
+    """
+    시트를 응답으로 바꾼다. 아직 받지 않았으면 None. 소지품의 이름은 판의 물건(catalog)에서 찾는다.
+
+    착용은 규칙(ruleset)의 칸의 차례로 놓는다.
+    """
     if sheet is None:
         return None
     return SheetOut(
@@ -257,6 +282,7 @@ def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem]) ->
         injuries=[to_injury(row) for row in injuries.active(sheet.injuries)],
         items=[to_item(item, catalog) for item in items.in_catalog_order(sheet.items, catalog)],
         money=sheet.money,
+        worn=[to_worn(row, catalog) for row in equipment.in_slot_order(sheet.worn, ruleset)],
         place_id=sheet.place_id,
     )
 
@@ -325,7 +351,9 @@ def to_fallen(sheet: TableSheet) -> FallenOut:
     )
 
 
-def to_member(table: GameTable, member: TableMember, catalog: dict[uuid.UUID, CatalogItem]) -> MemberOut:
+def to_member(
+    table: GameTable, member: TableMember, catalog: dict[uuid.UUID, CatalogItem], ruleset: Ruleset
+) -> MemberOut:
     """앉은 사람 하나를 응답으로 바꾼다."""
     character = None
     if member.character_name is not None:
@@ -338,7 +366,7 @@ def to_member(table: GameTable, member: TableMember, catalog: dict[uuid.UUID, Ca
         pregen_index=member.pregen_index,
         roll=to_roll(sheets.find_roll(table, member.user_id)),
         abilities=member.abilities,
-        sheet=to_sheet(member.sheet, catalog),
+        sheet=to_sheet(member.sheet, catalog, ruleset),
         fallen=[to_fallen(sheet) for sheet in member.fallen],
         joined_at=member.joined_at,
     )
@@ -412,7 +440,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         quests=[to_quest(quest, quest_catalog) for quest in quests.visible_quests(table, quest_catalog)],
         map=to_map(table, snapshot, catalog),
         clock=to_clock(table),
-        members=[to_member(table, member, catalog) for member in table.members],
+        members=[to_member(table, member, catalog, snapshot.rulebook.rules) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
         started_at=table.started_at,
         ended_at=table.ended_at,
@@ -631,6 +659,30 @@ async def kick_member(
     """
     table = await service.kick_member(session, user.user_id, table_id, user_id)
     await round_service.close_when_ready(session, table_id, closer, dice)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/equipment', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def wear_equipment(table_id: uuid.UUID, data: WearRequest, user: CurrentUser, session: Session) -> TableDetail:
+    """
+    자기 캐릭터가 가진 물건 하나를 장비의 칸들에 끼운다(#276). 찬 칸의 것은 벗겨진다. 라운드의 행동이 아니다.
+
+    선언을 받는 중에만 된다(닫는 중이면 409 round_closing). 쓰러졌거나 죽었으면 409.
+    착용하지 않는 물건이나 판에 없는 물건이면 422(entry_id), 칸이 맞지 않으면 422(slots),
+    가지고 있지 않으면 409(not_enough_items). 모두에게 이벤트(equipment_changed)가 간다.
+    """
+    table = await wearing.wear_item(session, user.user_id, table_id, data.entry_id, data.slots)
+    return to_detail(table, user.user_id)
+
+
+@router.delete('/{table_id}/equipment/{slot}', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def take_off_equipment(table_id: uuid.UUID, slot: str, user: CurrentUser, session: Session) -> TableDetail:
+    """
+    자기 캐릭터의 그 칸을 비운다(#276). 그 칸을 차지한 착용이 통째로 빠진다. 비어 있으면 그대로 돌려준다.
+
+    선언을 받는 중에만 된다(닫는 중이면 409 round_closing). 쓰러졌거나 죽었으면 409.
+    """
+    table = await wearing.take_off_slot(session, user.user_id, table_id, slot)
     return to_detail(table, user.user_id)
 
 

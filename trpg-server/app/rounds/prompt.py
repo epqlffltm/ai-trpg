@@ -156,7 +156,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 길어도 2,800자). 입력 단계가 오르면 지난 기록이 더 많이 들어간다(#387). o0 의 글은 그대로다
 #   narration-50: 돈이 있는 판이면 한 일의 줄에 가진 돈([소지금: 금화 30닢])과 사고판 결과((산 물건: …)),
 #                 건넨 돈((건넨 돈: …))이 붙고, 돈을 다루는 법이 한 줄 붙는다(#278). 돈이 없는 판의 글은 그대로다
-PROMPT_VERSION = 'narration-50'
+#   narration-51: 착용한 것이 있으면 한 일의 줄에 착용([착용: 대검(주손·보조손), 사슬 갑옷(몸)])이 붙는다(#276).
+#                 착용이 없는 판의 글은 그대로다
+PROMPT_VERSION = 'narration-51'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

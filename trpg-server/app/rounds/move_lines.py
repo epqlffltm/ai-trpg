@@ -48,6 +48,7 @@ from app.rounds.narrator import (
     Verdict,
     WaitNote,
     WakeNote,
+    WornNote,
 )
 from app.rounds.time_words import duration_text
 
@@ -291,6 +292,11 @@ def describe_item_action(note: ItemActionNote) -> str:
     verb = '쓴' if note.kind == 'use' else '건넨'
     line = f'({verb} 물건: {what}{to})'
     return f'{line} {describe_impact(note.impact)}' if note.impact else line
+
+
+def describe_worn(worn: list[WornNote]) -> str:
+    """착용한 물건들을 한 줄로 적는다(#276). 예: 대검(주손·보조손), 사슬 갑옷(몸)"""
+    return ', '.join(f'{note.name}({"·".join(note.slots)})' for note in worn)
 
 
 def describe_items(items: list[ItemNote]) -> str:
@@ -579,6 +585,8 @@ def describe_move(move: Move) -> str:
         parts.append(f'[소지품: {describe_items(move.items)}]')
     if move.money is not None:
         parts.append(f'[소지금: {move.money}]')
+    if move.worn:
+        parts.append(f'[착용: {describe_worn(move.worn)}]')
     if move.place is not None:
         parts.append(f'[있는 곳: {move.place.name}]')
     return ' '.join(parts)
