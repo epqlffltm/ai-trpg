@@ -17,13 +17,13 @@ DB 에 적힌 라운드를 서술자에게 줄 모양(app/rounds/narrator.py)으
 """
 
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Set
 from dataclasses import asdict
 
 from pydantic import TypeAdapter
 
 from app.assets.models import NpcAttitude
-from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, person_entries, quest_entries
+from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, person_entries, place_entries, quest_entries
 from app.calendar import clock, state
 from app.engine.check import find_ability, find_difficulty
 from app.engine.injury import known_injuries
@@ -622,22 +622,56 @@ def to_quest_notes(table: GameTable, snapshot: Snapshot, expired: list[str] | No
     ]
 
 
-def to_happening_note(snapshot: Snapshot, row: TableHappening) -> HappeningNote:
-    """일어난 사건 하나를 서술자에게 줄 모양으로 바꾼다. 옮겨진 사람마다 "이름 → 장소"다."""
+def is_seen(move: dict, here: Set[uuid.UUID]) -> bool:
+    """
+    옮겨진 인물을 일행이 봤는가(#282). 떠난 곳이나 닿은 곳에 살아 있는 캐릭터가 서 있다.
+
+    아무도 없는 곳에서 아무도 없는 곳으로 간 인물은 서술자에게 이르지 않는다. 일행이 모르는 일이 장면에 새지 않는다.
+    """
+    ends = (move['from'], move['to'])
+    return any(end is not None and uuid.UUID(end) in here for end in ends)
+
+
+def describe_npc_move(move: dict, labels: Mapping[uuid.UUID, str], places: Mapping[uuid.UUID, str]) -> str:
+    """옮겨진 인물 하나를 "부르는 이름 → 장소"로. 부르는 이름은 장면의 호칭이다(진짜 이름을 맞혔으면 진짜 이름)."""
+    return f'{labels[uuid.UUID(move["entry_id"])]} → {places[uuid.UUID(move["to"])]}'
+
+
+def to_happening_note(
+    snapshot: Snapshot, row: TableHappening, labels: Mapping[uuid.UUID, str], here: Set[uuid.UUID]
+) -> HappeningNote:
+    """
+    일어난 사건 하나를 서술자에게 줄 모양으로 바꾼다. 옮겨진 사람마다 "이름 → 장소"다.
+
+    캐릭터 다음에 일행이 본 인물(is_seen)이다. labels 는 인물마다 부르는 이름(app/rounds/cast.py 의 labels_of),
+    here 는 살아 있는 캐릭터가 서 있는 장소들이다.
+    """
     name = next(entry.name for entry in quest_entries(snapshot) if entry.id == row.entry_id)
+    places = {entry.id: entry.name for entry in place_entries(snapshot)}
     moved = [f'{move["character_name"]} → {move["to"]["name"]}' for move in row.moves]
+    moved.extend(describe_npc_move(move, labels, places) for move in row.npc_moves if is_seen(move, here))
     return HappeningNote(name=name, moved=moved)
 
 
-def to_happening_notes(table: GameTable, snapshot: Snapshot, round_number: int) -> list[HappeningNote]:
+def to_happening_notes(
+    table: GameTable,
+    snapshot: Snapshot,
+    round_number: int,
+    labels: Mapping[uuid.UUID, str] | None = None,
+    here: Set[uuid.UUID] = frozenset(),
+) -> list[HappeningNote]:
     """
     그 라운드가 닫힐 때 일어난 판의 사건들을 서술자에게 줄 모양으로 바꾼다. 판의 순서다(#367).
 
     일어난 것은 테이블에 적혀 있다(table_happenings). 다시 맡겨도 같은 것을 받는다.
+    labels 와 here 는 옮겨진 인물을 이를 때 쓴다(to_happening_note).
     """
     order = {rule.entry_id: index for index, rule in enumerate(snapshot.happenings)}
     rows = [row for row in table.happenings if row.round_number == round_number and row.entry_id in order]
-    return [to_happening_note(snapshot, row) for row in sorted(rows, key=lambda row: order[row.entry_id])]
+    return [
+        to_happening_note(snapshot, row, labels or {}, here)
+        for row in sorted(rows, key=lambda row: order[row.entry_id])
+    ]
 
 
 def to_clock_note(table: GameTable) -> ClockNote | None:

@@ -7,15 +7,20 @@
 방장은 PC 라서 결과를 정하지 않고, AI 는 상태를 바꾸지 못한다.
   - 조건(when)과 맞추는 법(match)은 퀘스트의 것과 같다(app/rounds/quest_goals.py 의 all_met). 지금의 상태로 본다.
   - 한 번만 일어난다. 일어난 것은 테이블에 적는다(table_happenings). 다시 채워져도 일어나지 않는다.
-  - 효과는 지금 옮기기(move) 하나다. 모두이거나(from_place 가 없다) 그 장소에 서 있던 죽지 않은 캐릭터를
-    to_place 로 옮긴다. 쓰러진 캐릭터도 옮겨진다(끌려간다). 죽은 캐릭터는 쓰러진 곳에 남는다.
+  - 효과는 캐릭터 옮기기(move)와 인물 옮기기(move_npc, #282)다.
+    move 는 모두이거나(from_place 가 없다) 그 장소에 서 있던 죽지 않은 캐릭터를 to_place 로 옮긴다.
+    쓰러진 캐릭터도 옮겨진다(끌려간다). 죽은 캐릭터는 쓰러진 곳에 남는다.
     길로 이어져 있지 않아도 된다. 옮겨진 곳은 서 본 곳이 된다. 이미 그곳에 있던 사람은 옮겼다고 적지 않는다.
+    move_npc 는 인물 하나의 자리를 to_place 로 바꾼다. 쓰러진 인물도 옮겨지고, 죽은 인물은 남는다.
+    자리가 없던 인물이면 그 뒤로 자리가 있는 인물이 된다(장면의 글이 아니라 장소로 장면에 든다, app/rounds/cast.py).
+    이미 그곳에 있던 인물은 옮겼다고 적지 않는다. 옮긴 인물은 이벤트에 적지 않는다(NPC 의 상태는 이벤트에 적지 않는다).
+    그 라운드의 서술은 일행이 본 것만 받는다(app/rounds/narration_request.py).
   - 판의 순서로 하나씩 본다. 앞 사건이 옮긴 위치를 뒤 사건이 본다.
   - 라운드가 닫힐 때 퀘스트를 본 뒤, 기한을 보기 전에 본다(app/rounds/service.py 의 begin_closing).
     퀘스트의 성공과 실패로 일어나는 사건이 같은 라운드에 일어난다. 사건이 옮긴 곳에 닿아 이루는 퀘스트는
     다음 라운드가 닫힐 때 본다.
 
-DB 를 모른다. 시트의 위치와 테이블의 서 본 곳, 일어난 사건의 줄을 고친다. 저장과 이벤트는 부른 쪽이 한다.
+DB 를 모른다. 시트의 위치와 테이블의 서 본 곳, 인물의 자리, 일어난 사건의 줄을 고친다. 저장과 이벤트는 부른 쪽이 한다.
 """
 
 import uuid
@@ -33,6 +38,7 @@ from app.assets.scenarios.snapshot import (
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds.quest_goals import all_met
+from app.tables import npcs as table_npcs
 from app.tables import places, sheets
 from app.tables.models import GameTable, TableHappening, TableMember, TableMonster, TableNpc
 
@@ -83,11 +89,42 @@ def move_all(table: GameTable, snapshot: Snapshot, effect: HappeningEffectSnapsh
     return moves
 
 
-def apply_effect(table: GameTable, snapshot: Snapshot, effect: HappeningEffectSnapshot) -> list[dict]:
-    """효과 하나를 낸다. 옮긴 것들을 돌려준다. 종류는 지금 옮기기 하나다."""
-    if effect.kind == HappeningEffectKind.MOVE:
-        return move_all(table, snapshot, effect)
-    return []
+def move_npc(npc: TableNpc | None, effect: HappeningEffectSnapshot) -> dict | None:
+    """
+    인물 옮기기의 효과를 낸다. 옮겼으면 적을 모양(누구, 어디에서, 어디로)을, 아니면 None 을 돌려준다.
+
+    상태가 없는 인물(이 기능 전에 시작한 테이블), 죽은 인물, 이미 그곳에 있는 인물은 옮기지 않는다.
+    """
+    if npc is None or table_npcs.is_dead(npc) or npc.place_id == effect.to_place:
+        return None
+    previous = npc.place_id
+    npc.place_id = effect.to_place
+    return {
+        'entry_id': str(npc.entry_id),
+        'from': str(previous) if previous is not None else None,
+        'to': str(effect.to_place),
+    }
+
+
+def character_moves(table: GameTable, snapshot: Snapshot, rule: HappeningSnapshot) -> list[dict]:
+    """사건 하나의 캐릭터 옮기기(move)를 차례로 낸다. 옮긴 사람들을 돌려준다."""
+    return [
+        move
+        for effect in rule.effects
+        if effect.kind == HappeningEffectKind.MOVE
+        for move in move_all(table, snapshot, effect)
+    ]
+
+
+def npc_moves(npcs: list[TableNpc], rule: HappeningSnapshot) -> list[dict]:
+    """사건 하나의 인물 옮기기(move_npc)를 차례로 낸다. 옮긴 인물들을 돌려준다."""
+    states = {npc.entry_id: npc for npc in npcs}
+    moved = [
+        move_npc(states.get(effect.npc), effect)
+        for effect in rule.effects
+        if effect.kind == HappeningEffectKind.MOVE_NPC
+    ]
+    return [move for move in moved if move is not None]
 
 
 def entry_name(snapshot: Snapshot, entry_id: uuid.UUID) -> str:
@@ -95,13 +132,21 @@ def entry_name(snapshot: Snapshot, entry_id: uuid.UUID) -> str:
     return next(entry.name for entry in quest_entries(snapshot) if entry.id == entry_id)
 
 
-def happen(table: GameTable, snapshot: Snapshot, rule: HappeningSnapshot, round_number: int) -> dict:
+def happen(
+    table: GameTable, snapshot: Snapshot, rule: HappeningSnapshot, round_number: int, npcs: list[TableNpc]
+) -> dict:
     """
-    사건 하나를 일으킨다. 효과를 차례로 내고, 일어났다고 테이블에 적는다. 이벤트에 적을 모양을 돌려준다.
+    사건 하나를 일으킨다. 효과를 내고, 일어났다고 테이블에 적는다. 이벤트에 적을 모양을 돌려준다.
+
+    캐릭터를 옮긴 뒤에 인물을 옮긴다. 둘은 서로를 보지 않으므로 순서가 결과를 바꾸지 않는다.
+    옮긴 인물은 테이블의 줄에만 적고 이벤트의 모양에는 싣지 않는다.
     """
-    moves = [move for effect in rule.effects for move in apply_effect(table, snapshot, effect)]
+    moves = character_moves(table, snapshot, rule)
+    moved_npcs = npc_moves(npcs, rule)
     table.happenings.append(
-        TableHappening(table_id=table.id, entry_id=rule.entry_id, round_number=round_number, moves=moves)
+        TableHappening(
+            table_id=table.id, entry_id=rule.entry_id, round_number=round_number, moves=moves, npc_moves=moved_npcs
+        )
     )
     return {
         'round': round_number,
@@ -128,7 +173,7 @@ def settle_happenings(
         if rule.entry_id in done:
             continue
         if all_met(tuple(rule.when), rule.match, table, monsters, npcs):
-            occurred.append(happen(table, snapshot, rule, round_number))
+            occurred.append(happen(table, snapshot, rule, round_number, npcs))
     return occurred
 
 

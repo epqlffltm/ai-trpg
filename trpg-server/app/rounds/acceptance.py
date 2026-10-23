@@ -55,7 +55,7 @@ from app.engine.action import (
 )
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
-from app.rounds.cast import CastMember, Scene, find_cast_member, is_named
+from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable, is_named
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.map_actions import accept_move, accept_search, standing_place
 from app.rounds.models import Declaration, Round
@@ -93,18 +93,20 @@ def aim_treatment(action: TreatAction, actor_id: uuid.UUID) -> TreatAction:
     return action.model_copy(update={'target': actor_id})
 
 
-def require_npc_target(cast: list[CastMember], npc_id: uuid.UUID, aim: str | None) -> None:
+def require_npc_target(cast: list[CastMember], member: TableMember, npc_id: uuid.UUID, aim: str | None) -> None:
     """
     겨눈 NPC 가 이번 장면의 살아 있는(쓰러졌어도 된다) 인물인지 본다. 노려 쳤으면 그 부상을 아직 입지 않았는지도 본다.
 
-    장면에 나오지 않았으면 ActionTargetError, 이미 죽었거나 노린 부상을 이미 입었으면 RoundConflictError.
+    장면에 나오지 않았거나 자리가 있는 인물이 행동하는 캐릭터와 다른 장소에 있으면 ActionTargetError(#282).
+    둘을 가르지 않는다. 몬스터와 같다. 이미 죽었거나 노린 부상을 이미 입었으면 RoundConflictError.
+    라운드가 열려 있는 동안 캐릭터와 인물의 자리는 바뀌지 않는다. 그래서 판정할 때 다시 보지 않는다.
     """
-    member = find_cast_member(cast, npc_id)
-    if member is None:
+    person = find_reachable(cast, member, npc_id)
+    if person is None:
         raise ActionTargetError('npc')
-    if npcs.is_dead(member.npc):
+    if npcs.is_dead(person.npc):
         raise RoundConflictError(Conflict.NPC_DEAD)
-    if aim is not None and round_injuries.wears(member.npc.injuries, aim):
+    if aim is not None and round_injuries.wears(person.npc.injuries, aim):
         raise RoundConflictError(Conflict.ALREADY_INJURED)
 
 
@@ -154,7 +156,7 @@ def accept_check(table: GameTable, member: TableMember, action: CheckAction, sce
 
       - 규칙에 없는 능력, 난이도, 양의 등급이면 ActionNotInRulesError.
       - 대상이 이 테이블에 앉은 사람이 아니면 ActionTargetError.
-      - 겨눈 NPC 가 이번 장면의 인물이 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
+      - 겨눈 NPC 가 이번 장면의 인물이 아니거나 다른 장소에 있으면 ActionTargetError, 이미 죽었으면 RoundConflictError.
       - 겨눈 몬스터가 같은 장소의 마리가 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
       - 노린 부상이 규칙에서 노릴 수 없는 것이면 ActionNotInRulesError, 대상이 이미 입었으면 RoundConflictError.
       - 노린 부위가 규칙에서 노릴 수 없는 것이면 ActionNotInRulesError(strike, #276).
@@ -167,7 +169,7 @@ def accept_check(table: GameTable, member: TableMember, action: CheckAction, sce
     if action.target is not None and table_state.find_member(table, action.target) is None:
         raise ActionTargetError('target')
     if action.npc is not None:
-        require_npc_target(scene.cast, action.npc, action.aim)
+        require_npc_target(scene.cast, member, action.npc, action.aim)
     if action.monster is not None:
         require_monster_target(scene.monsters, member, action.monster)
     if action.weapon is not None:
@@ -175,20 +177,20 @@ def accept_check(table: GameTable, member: TableMember, action: CheckAction, sce
     return aim(actions.settle(ruleset, action), member.user_id).model_dump(mode='json')
 
 
-def patient_rows(table: GameTable, action: TreatAction, cast: list[CastMember]) -> list:
+def patient_rows(table: GameTable, member: TableMember, action: TreatAction, cast: list[CastMember]) -> list:
     """
-    치료받는 쪽의 부상 목록. 대상을 채운 행동(aim_treatment)에 쓴다.
+    치료받는 쪽의 부상 목록. 대상을 채운 행동(aim_treatment)에 쓴다. member 는 치료하는 사람이다.
 
-      - NPC 가 이번 장면의 인물이 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
+      - NPC 가 이번 장면의 인물이 아니거나 다른 장소에 있으면 ActionTargetError, 이미 죽었으면 RoundConflictError.
       - 앉은 사람이 아니면 ActionTargetError, 그 캐릭터가 이미 죽었으면 RoundConflictError.
     """
     if action.npc is not None:
-        member = find_cast_member(cast, action.npc)
-        if member is None:
+        person = find_reachable(cast, member, action.npc)
+        if person is None:
             raise ActionTargetError('npc')
-        if npcs.is_dead(member.npc):
+        if npcs.is_dead(person.npc):
             raise RoundConflictError(Conflict.NPC_DEAD)
-        return member.npc.injuries
+        return person.npc.injuries
     patient = table_state.find_member(table, action.target)
     if patient is None:
         raise ActionTargetError('target')
@@ -204,7 +206,8 @@ def accept_treatment(
     치료하는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
 
       - 규칙에서 치료할 수 없는 부상이면 ActionNotInRulesError(injury).
-      - 대상이 앉은 사람이나 이번 장면의 인물이 아니면 ActionTargetError, 이미 죽었으면 RoundConflictError.
+      - 대상이 앉은 사람이나 이번 장면의 인물이 아니면(다른 장소의 인물이면) ActionTargetError,
+        이미 죽었으면 RoundConflictError.
       - 대상이 그 부상을 입고 있지 않으면 RoundConflictError.
     비워 둔 대상은 자기 자신으로 채운다.
     """
@@ -212,7 +215,7 @@ def accept_treatment(
     if fault is not None:
         raise ActionNotInRulesError(fault)
     aimed = aim_treatment(action, member.user_id)
-    if not round_injuries.wears(patient_rows(table, aimed, cast), aimed.injury):
+    if not round_injuries.wears(patient_rows(table, member, aimed, cast), aimed.injury):
         raise RoundConflictError(Conflict.NOT_INJURED)
     return aimed.model_dump(mode='json')
 
@@ -332,21 +335,22 @@ def accept_steal(ruleset: Ruleset, member: TableMember, scene: Scene, action: St
 
       - 규칙에 훔치기가 없으면 ActionNotInRulesError(kind).
       - 몬스터가 자기가 선 장소에 없거나 이미 죽었으면 칠 때와 같다(require_monster_target). 쓰러진 마리는 된다.
-      - NPC 가 이번 장면의 인물이 아니거나 이미 죽었으면 겨눌 때와 같다(require_npc_target). 쓰러진 인물은 된다.
+      - NPC 가 이번 장면의 인물이 아니거나 다른 장소에 있거나 이미 죽었으면 겨눌 때와 같다(require_npc_target).
+        쓰러진 인물은 된다.
       - 그 대상이 그 물건을 지금 지니지 않았으면 ActionTargetError(carried).
     """
     require_steal(ruleset)
     if action.monster is not None:
         require_monster_target(scene.monsters, member, action.monster)
     else:
-        require_npc_target(scene.cast, action.npc, None)
+        require_npc_target(scene.cast, member, action.npc, None)
     require_carried_by_victim(scene, action)
     return action.model_dump(mode='json')
 
 
 def require_downed_victim(scene: Scene, member: TableMember, action: LootAction) -> None:
     """
-    빼앗을 대상이 쓰러졌거나 죽어 있는지 본다. 몬스터는 자기가 선 장소의 마리여야 한다.
+    빼앗을 대상이 쓰러졌거나 죽어 있는지 본다. 몬스터와 자리가 있는 인물은 자기가 선 장소에 있어야 한다.
 
     장면에 없거나 다른 장소에 있으면 ActionTargetError(monster, npc), 살아 있으면 RoundConflictError(target_not_down).
     """
@@ -356,7 +360,7 @@ def require_downed_victim(scene: Scene, member: TableMember, action: LootAction)
             raise ActionTargetError('monster')
         status = monster.state.status
     else:
-        person = find_cast_member(scene.cast, action.npc)
+        person = find_reachable(scene.cast, member, action.npc)
         if person is None:
             raise ActionTargetError('npc')
         status = person.npc.status

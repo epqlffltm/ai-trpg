@@ -163,7 +163,11 @@ from app.rounds.time_words import duration_text, time_text
 #                 장비가 들지 않은 타격의 글은 그대로다
 #   narration-53: 그 줄에 관통(관통함, 관통 못 함)과 세이브(아머 세이브 5: 막음)가 붙는다(#276).
 #                 관통도 세이브도 굴리지 않은 타격의 글은 그대로다
-PROMPT_VERSION = 'narration-53'
+#   narration-54: 자리가 있는 인물의 상태 줄에 있는 장소가 붙는다(- 경비대장 [성문]: 멀쩡함, #282).
+#                 장소가 적힌 인물은 그곳에 있고 서술이 다른 곳으로 옮기지 못한다는 줄이 함께 간다.
+#                 판의 사건이 옮긴 인물 중 일행이 본 것이 일어난 사건의 줄에 캐릭터처럼 붙는다(경비대장 → 병영).
+#                 자리가 있는 인물이 없는 판의 글은 그대로다
+PROMPT_VERSION = 'narration-54'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
@@ -415,6 +419,11 @@ PEOPLE_NOTE = (
     '쓰러진 인물은 의식이 없다. 말하거나 움직이지 않는다. 죽은 인물은 되살아나지 않는다. '
     '태도(우호, 경계, 적대)도 엔진이 정한 사실이다. 적힌 태도대로 일행을 대한다. 적히지 않은 인물은 중립이다. '
     '인물이 일행을 공격하는 것은 결과 줄에 있을 때뿐이다. 맞았는지 빗나갔는지는 결과 줄 그대로 쓴다.'
+)
+# 자리가 있는 인물이 있을 때만 붙는다(#282). 인물의 자리는 엔진의 장부다. 서술이 데려오거나 보내면 장부와 어긋난다
+PEOPLE_PLACE_NOTE = (
+    '[장소]가 적힌 인물은 그 장소에 있다. 그 장소에 선 캐릭터만 그 인물을 보고 말을 나눈다. '
+    '인물을 다른 장소로 데려가거나 보내지 마라. 인물이 자리를 옮기는 것은 게임이 정한다.'
 )
 
 
@@ -751,23 +760,27 @@ def history_lines(histories: list[PersonHistory]) -> list[str]:
 def people_lines(people: list[PersonState]) -> list[str]:
     """
     NPC 의 지금 상태를 적는 줄들. 인물마다 "- 이름: 몸 상태" 한 줄.
+    자리가 있는 인물이 있으면 그 다루는 법(PEOPLE_PLACE_NOTE)을 다루는 법 뒤에 붙인다(#282).
 
     끝에 빈 줄이 붙는다. 없으면 빈 목록이다.
     """
     if not people:
         return []
-    return [PEOPLE_TITLE, PEOPLE_NOTE, *(person_line(person) for person in people), '']
+    placed = [PEOPLE_PLACE_NOTE] if any(person.place for person in people) else []
+    return [PEOPLE_TITLE, PEOPLE_NOTE, *placed, *(person_line(person) for person in people), '']
 
 
 def person_line(person: PersonState) -> str:
     """
-    인물 한 줄. 몸 상태 뒤에 태도(중립이 아니면)와 입은 부상(이름과 사실)을 붙인다.
+    인물 한 줄. 이름 뒤에 있는 장소(자리가 있으면), 몸 상태 뒤에 태도(중립이 아니면)와 입은 부상(이름과 사실)을 붙인다.
 
     예: - 악역영애: 크게 다침. 태도: 적대. 부상: 오른손 잃음(…)
+        - 경비대장 [성문]: 멀쩡함
     """
+    place = f' [{person.place}]' if person.place else ''
     attitude = f'. 태도: {person.attitude}' if person.attitude else ''
     injured = f'. 부상: {describe_injuries(person.injuries)}' if person.injuries else ''
-    return f'- {person.name}: {person.condition}{attitude}{injured}'
+    return f'- {person.name}{place}: {person.condition}{attitude}{injured}'
 
 
 def whisper_line(whisper: WhisperNote) -> str:

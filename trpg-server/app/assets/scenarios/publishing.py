@@ -39,11 +39,14 @@ from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import (
     Encounter,
     FindCheck,
+    HappeningEffect,
     HappeningRule,
     ItemRule,
     ItemStack,
     MonsterAttack,
     MonsterSheet,
+    MoveNpcEffect,
+    NpcPlace,
     NpcSheet,
     PlaceItem,
     Pregen,
@@ -147,6 +150,12 @@ class Problem(enum.StrEnum):
     HAPPENING_CONDITION_IMPOSSIBLE = 'happening_condition_impossible'
     # 사건이 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)로 옮기거나 그런 장소에 선 사람을 옮긴다
     HAPPENING_PLACE_OFF_MAP = 'happening_place_off_map'
+    # 붙인 로어북의 인물 항목이 아닌 것(없는 항목, 장소, 물건 …)을 옮기는 사건이 있다(move_npc, #282)
+    HAPPENING_NPC_NOT_PERSON = 'happening_npc_not_person'
+    # 붙인 로어북의 인물 항목이 아닌 것(없는 항목, 장소, 물건 …)의 자리가 있다(#282)
+    NPC_PLACE_NOT_PERSON = 'npc_place_not_person'
+    # 인물의 자리가 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)다. 아무도 그 인물을 만날 수 없다
+    NPC_PLACE_OFF_MAP = 'npc_place_off_map'
     # 붙인 도감에 없는 몬스터를 가리키는 몬스터 시트가 있다. 몬스터를 지웠거나 도감을 뗐다
     MONSTER_SHEET_MISSING = 'monster_sheet_missing'
     # 룰북의 규칙에 맞지 않는 몬스터 시트가 있다
@@ -754,15 +763,21 @@ HAPPENING_CONDITION_PROBLEMS = {
 }
 
 
+def effect_places(effect: HappeningEffect) -> list[uuid.UUID]:
+    """사건의 효과 하나가 가리키는 장소들. 옮기는 곳과, 캐릭터를 옮기면 옮겨질 사람이 선 곳(있으면)이다."""
+    if isinstance(effect, MoveNpcEffect) or effect.from_place is None:
+        return [effect.to_place]
+    return [effect.to_place, effect.from_place]
+
+
 def happening_places(rules: list[HappeningRule]) -> list[uuid.UUID]:
-    """사건의 효과가 가리키는 장소 전부. 옮기는 곳과, 옮겨질 사람이 선 곳이다."""
-    return [
-        place
-        for rule in rules
-        for effect in rule.effects
-        for place in (effect.to_place, effect.from_place)
-        if place is not None
-    ]
+    """사건의 효과가 가리키는 장소 전부."""
+    return [place for rule in rules for effect in rule.effects for place in effect_places(effect)]
+
+
+def moved_npcs(rules: list[HappeningRule]) -> list[uuid.UUID]:
+    """사건의 효과가 옮기는 인물 전부(move_npc, #282)."""
+    return [effect.npc for rule in rules for effect in rule.effects if isinstance(effect, MoveNpcEffect)]
 
 
 def find_happening_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
@@ -771,6 +786,7 @@ def find_happening_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
 
     가리키는 것은 붙인 로어북의 사건 항목이어야 한다. 조건은 퀘스트의 조건과 같이 본다(condition_problem).
     효과의 장소는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 맵이 없는 판이면 어느 장소도 맵에 없다.
+    옮기는 인물(move_npc)은 붙인 로어북의 인물 항목이어야 한다.
     """
     entries = lore_entries(parts)
     rules = read_happenings(scenario)
@@ -787,6 +803,8 @@ def find_happening_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
                 found.add(HAPPENING_CONDITION_PROBLEMS[problem])
     if any(place not in on_map for place in happening_places(rules)):
         found.add(Problem.HAPPENING_PLACE_OFF_MAP)
+    if any(npc not in person_ids(parts) for npc in moved_npcs(rules)):
+        found.add(Problem.HAPPENING_NPC_NOT_PERSON)
     order = [
         Problem.HAPPENING_ENTRY_MISSING,
         Problem.HAPPENING_NOT_EVENT,
@@ -794,6 +812,7 @@ def find_happening_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
         Problem.HAPPENING_CONDITION_INVALID,
         Problem.HAPPENING_CONDITION_IMPOSSIBLE,
         Problem.HAPPENING_PLACE_OFF_MAP,
+        Problem.HAPPENING_NPC_NOT_PERSON,
     ]
     return [problem for problem in order if problem in found]
 
@@ -839,6 +858,29 @@ def find_place_item_problems(scenario: Scenario, ruleset: Ruleset | None) -> lis
         problems.append(Problem.PLACE_ITEM_OFF_MAP)
     if ruleset and any(find_invalid(rule.find, ruleset) for rule in rules):
         problems.append(Problem.PLACE_ITEM_FIND_INVALID)
+    return problems
+
+
+def read_npc_places(scenario: Scenario) -> list[NpcPlace]:
+    """인물의 자리들을 읽는다."""
+    return [NpcPlace.model_validate(document) for document in scenario.npc_places]
+
+
+def find_npc_place_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """
+    인물의 자리에서 문제를 찾는다(#282). 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    인물은 붙인 로어북의 인물 항목이어야 한다. 시트가 없어도 된다(기본 NPC 시트를 쓴다).
+    장소는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 맵이 없는 판이면 어느 장소도 맵에 없다.
+    """
+    places = read_npc_places(scenario)
+    people = person_ids(parts)
+    on_map = set(map_places(scenario, read_routes(scenario)))
+    problems = []
+    if any(place.entry_id not in people for place in places):
+        problems.append(Problem.NPC_PLACE_NOT_PERSON)
+    if any(place.place_id not in on_map for place in places):
+        problems.append(Problem.NPC_PLACE_OFF_MAP)
     return problems
 
 
@@ -904,6 +946,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_map_problems(scenario, parts, ruleset))
     problems.extend(find_place_item_problems(scenario, ruleset))
     problems.extend(find_happening_problems(scenario, parts))
+    problems.extend(find_npc_place_problems(scenario, parts))
     problems.extend(find_seating_problems(scenario))
     return problems
 

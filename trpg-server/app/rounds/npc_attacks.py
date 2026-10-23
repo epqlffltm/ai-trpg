@@ -12,8 +12,9 @@ NPC 의 차례(#487). 싸움이 붙은 적대 인물이 캐릭터 하나를 공�
 
 차례가 오면 먼저 칠 수 있는지 본다. 앞 차례에 쓰러지거나 죽었으면, 입은 부상 때문에 움직이지 못하면(기절 같은 것),
 칠 캐릭터가 없으면 굴리지 않는다(skipped). 앉은 사람이 그런 부상이면 행동을 붙이지 못하는 것과 같다.
-대상. NPC 는 장소가 없다(#282). 앉은 사람의 서 있는 캐릭터와, 라운드를 닫기 시작할 때부터 쓰러져 있던 캐릭터가
-모두 대상이 될 수 있다(#369, app/rounds/downed_strikes.py). 몬스터와 같다.
+대상. 앉은 사람의 서 있는 캐릭터와, 라운드를 닫기 시작할 때부터 쓰러져 있던 캐릭터가 대상이 될 수 있다
+(#369, app/rounds/downed_strikes.py). 자리가 있는 인물은 몬스터처럼 같은 장소의 캐릭터만 친다(#282).
+차례가 올 때의 자리로 본다. 앞 차례에 다른 곳으로 간 캐릭터는 치지 않는다. 자리가 없는 인물은 장소를 보지 않는다.
   1. 이번 라운드에 이 인물에게서 훔치다 들킨 도둑(app/rounds/steals.py). 몬스터와 같다
   2. 이번 라운드에 이 인물과 싸운 사람(타격으로 겨눴다) 중에서 서버의 주사위로
   3. 그 밖의 칠 수 있는 캐릭터 중에서 서버의 주사위로
@@ -33,7 +34,7 @@ from app.engine.dice import choose
 from app.rounds import blows
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow
-from app.rounds.cast import CastMember
+from app.rounds.cast import CastMember, reaches
 from app.rounds.downed_strikes import can_be_struck
 from app.rounds.effects import Judging, mark_npc_fight
 from app.rounds.monster_attacks import Skipped, hit_outcome, plan_attack_blow, raised_difficulty
@@ -66,13 +67,14 @@ def stopped_by(judging: Judging, person: CastMember) -> str | None:
     return None
 
 
-def targets_of(judging: Judging) -> list[TableMember]:
+def targets_of(judging: Judging, person: CastMember) -> list[TableMember]:
     """
-    칠 수 있는 캐릭터들. 장소는 보지 않는다. 앉은 순서다.
+    이 인물이 칠 수 있는 캐릭터들. 앉은 순서다.
 
     서 있는 캐릭터와, 라운드를 닫기 시작할 때부터 쓰러져 있던 캐릭터다(can_be_struck).
+    자리가 있는 인물이면 지금 같은 장소에 있는 캐릭터만이다(reaches, #282).
     """
-    return [member for member in judging.table.members if can_be_struck(judging, member)]
+    return [member for member in judging.table.members if can_be_struck(judging, member) and reaches(member, person)]
 
 
 def pick_victim(judging: Judging, person: CastMember, victims: list[TableMember]) -> TableMember:
@@ -110,7 +112,7 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
     stopped = stopped_by(judging, person)
     if stopped is not None:
         return {'skipped': stopped}
-    victims = targets_of(judging)
+    victims = targets_of(judging, person)
     if not victims:
         return {'skipped': Skipped.NO_TARGET}
     victim = pick_victim(judging, person, victims)

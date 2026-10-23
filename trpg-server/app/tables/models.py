@@ -682,6 +682,10 @@ class TableNpc(Base):
     # 쓰러져 있는 동안 처음 빼앗긴 라운드(app/rounds/loots.py).
     # 깨어날 때 반응을 한 번 굴리고 비운다(app/rounds/wakes.py). 비어 있으면 빼앗긴 것이 없다(또는 이미 굴렸다)
     robbed_round: Mapped[int | None] = mapped_column(Integer)
+    # 이 인물이 있는 맵의 장소(#282). 판의 로어북 장소 항목의 ID 다. 판에 자리를 적은 인물만 있다(시작할 때 그 장소).
+    # 비어 있으면 자리가 없는 인물이다. 장면의 글에 나왔는지로 장면에 든다(app/rounds/cast.py).
+    # 바꾸는 것은 판의 사건(move_npc)뿐이다(app/rounds/happenings.py). 죽어도 그 자리에 남는다
+    place_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -847,7 +851,8 @@ class TableHappening(Base):
 
     판의 사건 규칙은 조건이 채워지면 한 번 일어난다(app/rounds/happenings.py).
     일어난 것을 여기 적어 다시 일어나지 않게 한다. 일어난 라운드(round_number)와
-    옮긴 사람들(moves: 누가, 어디에서, 어디로)도 적는다. 그 라운드의 서술이 이것을 읽는다.
+    옮긴 사람들(moves: 누가, 어디에서, 어디로)과 옮긴 인물들(npc_moves, #282)도 적는다.
+    그 라운드의 서술이 이것을 읽는다.
     바꾸는 것은 엔진뿐이다. 지우지 않는다.
     """
 
@@ -861,6 +866,10 @@ class TableHappening(Base):
     round_number: Mapped[int] = mapped_column(Integer)
     # 옮긴 사람들. 하나하나가 {user_id, character_name, from, to} 다(장소는 {entry_id, name}). 효과의 차례다
     moves: Mapped[list[dict]] = mapped_column(JSONB, default=list)
+    # 옮긴 인물들(#282). 하나하나가 {entry_id, from, to} 다(장소의 ID, 자리가 없던 인물이면 from 은 null).
+    # 효과의 차례다.
+    # 이벤트에는 싣지 않는다. 누가 어디로 갔는지는 일행이 본 만큼만 서술이 그린다
+    npc_moves: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
