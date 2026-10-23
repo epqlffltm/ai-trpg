@@ -10,7 +10,10 @@
 chat 의 만드는 순서 4 에서 캐릭터에 넣었다(2026-10-22 유저 결정, 판의 형식 2).
 호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙)는 판의 형식 3 에서 더했다(2026-10-22).
 시작 상황의 시작 시각과 장소의 시간대 배경은 판의 형식 4 에서 더했다(2026-10-22, #668).
-일러스트(그림, 해금 대상인지, 나오는 조건)는 판의 형식 5 에서 더했다(2026-10-23, #669).
+이벤트 씬(그림, 해금 대상인지, 나오는 조건)은 판의 형식 5 에서 더했다(2026-10-23, #669. 그때 이름은 illustrations).
+캐릭터 그림(표정과 차림마다, 배경이 투명한 서 있는 그림)은 판의 형식 6 에서 더했다(2026-10-23).
+그림은 셋이다. 캐릭터 그림, 배경(장소마다, 시간대마다), 이벤트 씬(배경과 캐릭터를 대신하는 장면).
+보통의 장면은 배경 위에 캐릭터 그림을 겹친다(화면의 일).
 상대의 시작 차림은 chat 이 그 단계에 갈 때 판의 형식을 올려 더한다.
 """
 
@@ -70,10 +73,13 @@ AFFECTION_MAX_CHANGE = 20
 # 시작 상황의 시작 시각(몇 시, 0~23). 적지 않으면 정오다. 형식 3 까지의 판도 이 값으로 읽는다
 START_HOUR_DEFAULT = 12
 HOURS_PER_DAY = 24
-# 일러스트(#669). 개수, 제목(갤러리와 만드는 화면에 보인다), 장면의 설명(그 장면의 답을 쓸 때 모델이 읽는다)
-CHARACTER_MAX_ILLUSTRATIONS = 30
-ILLUSTRATION_TITLE_MAX_LENGTH = 30
-ILLUSTRATION_SCENE_MAX_LENGTH = 300
+# 이벤트 씬(#669). 개수, 제목(갤러리와 만드는 화면에 보인다), 장면의 설명(그 장면의 답을 쓸 때 모델이 읽는다)
+CHARACTER_MAX_EVENT_SCENES = 30
+SCENE_TITLE_MAX_LENGTH = 30
+SCENE_DESCRIPTION_MAX_LENGTH = 300
+# 캐릭터 그림. 개수와 표정의 이름(빈 글이면 기본 표정)
+CHARACTER_MAX_SPRITES = 30
+SPRITE_EXPRESSION_MAX_LENGTH = 20
 
 
 class TimeOfDay(enum.StrEnum):
@@ -107,9 +113,9 @@ class TriggerKind(enum.StrEnum):
     USE_ITEM = 'use_item'
 
 
-class IllustrationWhen(enum.StrEnum):
+class SceneWhen(enum.StrEnum):
     """
-    일러스트가 나오는 조건의 종류(#669). 호감도의 규칙과 같은 (종류, 대상) 모양이다.
+    이벤트 씬이 나오는 조건의 종류(#669). 호감도의 규칙과 같은 (종류, 대상) 모양이다.
     그 장소에 갔다(reach_place, 장소의 id), 그 물건을 처음 건넸다(give_item, 물건의 id),
     호감도가 그 단계에 이르렀다(affection_stage, 단계의 이름). 맞추는 것은 chat 의 엔진이다.
     """
@@ -181,9 +187,12 @@ class Character(Base):
     #         "rules": [{"id", "on": {"kind", "target"}, "change", "once"}]}.
     # 없으면(null) 호감도가 없는 캐릭터다. 모양은 schemas.Affection 이 정한다
     affection: Mapped[dict | None] = mapped_column(JSONB, default=None)
-    # 일러스트들 [{"id", "title", "image_id", "scene", "collectible", "when": {"kind", "target"}}](#669).
-    # 모양은 schemas.Illustration 이 정한다. 조건이 가리키는 것이 맞는지는 게시할 때 본다
-    illustrations: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 이벤트 씬들 [{"id", "title", "image_id", "description", "collectible", "when": {"kind", "target"}}](#669).
+    # 모양은 schemas.EventScene 이 정한다. 조건이 가리키는 것이 맞는지는 게시할 때 본다
+    event_scenes: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 캐릭터 그림들 [{"id", "image_id", "expression", "outfit"}]. 대표 그림(image_id)은 목록과 프로필에 쓰고,
+    # 대화의 그림 창에는 이것을 배경 위에 겹친다. 모양은 schemas.Sprite 가 정한다
+    sprites: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(

@@ -21,10 +21,11 @@ from app.characters.models import (
     CHARACTER_AGE_MAX_LENGTH,
     CHARACTER_GENDER_MAX_LENGTH,
     CHARACTER_GREETING_MAX_LENGTH,
-    CHARACTER_MAX_ILLUSTRATIONS,
+    CHARACTER_MAX_EVENT_SCENES,
     CHARACTER_MAX_ITEMS,
     CHARACTER_MAX_PATHS,
     CHARACTER_MAX_PLACES,
+    CHARACTER_MAX_SPRITES,
     CHARACTER_MAX_START_ITEMS,
     CHARACTER_MAX_STARTS,
     CHARACTER_MAX_TAGS,
@@ -32,8 +33,6 @@ from app.characters.models import (
     CHARACTER_SPEECH_MAX_LENGTH,
     CHARACTER_TAG_MAX_LENGTH,
     HOURS_PER_DAY,
-    ILLUSTRATION_SCENE_MAX_LENGTH,
-    ILLUSTRATION_TITLE_MAX_LENGTH,
     ITEM_DESCRIPTION_MAX_LENGTH,
     ITEM_NAME_MAX_LENGTH,
     KEY_MAX_LENGTH,
@@ -41,6 +40,9 @@ from app.characters.models import (
     PATH_MAX_MINUTES,
     PLACE_DESCRIPTION_MAX_LENGTH,
     PLACE_NAME_MAX_LENGTH,
+    SCENE_DESCRIPTION_MAX_LENGTH,
+    SCENE_TITLE_MAX_LENGTH,
+    SPRITE_EXPRESSION_MAX_LENGTH,
     STAGE_NAME_MAX_LENGTH,
     START_HOUR_DEFAULT,
     START_ITEM_MAX_COUNT,
@@ -48,8 +50,8 @@ from app.characters.models import (
     START_TITLE_MAX_LENGTH,
     VERSION_NOTE_MAX_LENGTH,
     AffectionDisplay,
-    IllustrationWhen,
     ItemKind,
+    SceneWhen,
     TimeOfDay,
     TriggerKind,
     Visibility,
@@ -271,55 +273,85 @@ class Affection(BaseModel):
     rules: Annotated[list[AffectionRule], Field(max_length=AFFECTION_MAX_RULES), AfterValidator(unique_rules)] = []
 
 
-class IllustrationCondition(BaseModel):
-    """일러스트가 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다."""
+class SceneCondition(BaseModel):
+    """이벤트 씬이 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다."""
 
     model_config = ConfigDict(extra='forbid')
 
-    kind: IllustrationWhen
+    kind: SceneWhen
     target: Annotated[str, StringConstraints(min_length=1, max_length=KEY_MAX_LENGTH)]
 
 
-class Illustration(BaseModel):
+class EventScene(BaseModel):
     """
-    일러스트 하나(#669). 조건이 맞은 뒤의 첫 응답에 붙어 배경과 캐릭터를 대신한다(chat).
+    이벤트 씬 하나(#669). 조건이 맞은 뒤의 첫 응답에 붙어 배경과 캐릭터를 대신한다(chat).
     collectible 이면 해금 대상이다. 한 번 열면 계정에 남고 갤러리와 소개의 칸에 보인다.
-    아니면 이야기 중에만 나온다(칸도 보이지 않는다). scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
+    아니면 이야기 중에만 나온다(칸도 보이지 않는다). description 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
     id: Key
-    title: Annotated[
-        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ILLUSTRATION_TITLE_MAX_LENGTH)
-    ]
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=SCENE_TITLE_MAX_LENGTH)]
     image_id: uuid.UUID
-    scene: Annotated[str, StringConstraints(strip_whitespace=True, max_length=ILLUSTRATION_SCENE_MAX_LENGTH)] = ''
+    description: Annotated[str, StringConstraints(strip_whitespace=True, max_length=SCENE_DESCRIPTION_MAX_LENGTH)] = ''
     collectible: bool = True
-    when: IllustrationCondition
+    when: SceneCondition
 
 
-def unique_illustrations(illustrations: list[Illustration]) -> list[Illustration]:
-    reject_repeated_keys([illustration.id for illustration in illustrations])
-    return illustrations
+def unique_event_scenes(event_scenes: list[EventScene]) -> list[EventScene]:
+    reject_repeated_keys([scene.id for scene in event_scenes])
+    return event_scenes
 
 
-Illustrations = Annotated[
-    list[Illustration], Field(max_length=CHARACTER_MAX_ILLUSTRATIONS), AfterValidator(unique_illustrations)
+EventScenes = Annotated[
+    list[EventScene], Field(max_length=CHARACTER_MAX_EVENT_SCENES), AfterValidator(unique_event_scenes)
 ]
 
-# 지도와 물건, 일러스트의 칸. DB 에 적을 때 dict 의 목록으로 바꾼다
-WORLD_LISTS = ('places', 'paths', 'items', 'start_items', 'illustrations')
+
+class Sprite(BaseModel):
+    """
+    캐릭터 그림 하나. 배경이 투명한 서 있는 그림이고, 대화의 그림 창에서 배경 위에 겹친다.
+    expression 은 표정의 이름이다(빈 글이면 기본 표정). outfit 은 이 그림의 차림인 옷(물건의 id)이다.
+    비어 있으면 처음 차림이다. 사용자가 그 옷을 건네 상대가 입으면 그 차림의 그림을 쓴다(chat).
+    투명한지는 서버가 보지 않는다(2026-10-23 유저 결정). 만드는 화면이 미리 보기로 보인다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    image_id: uuid.UUID
+    expression: Annotated[str, StringConstraints(strip_whitespace=True, max_length=SPRITE_EXPRESSION_MAX_LENGTH)] = ''
+    outfit: Key | None = None
+
+
+def unique_sprites(sprites: list[Sprite]) -> list[Sprite]:
+    """id 는 하나씩이다. 같은 표정과 차림의 그림이 둘이면 어느 것을 쓸지 모른다."""
+    reject_repeated_keys([sprite.id for sprite in sprites])
+    pairs = [(sprite.expression.casefold(), sprite.outfit) for sprite in sprites]
+    if len(set(pairs)) != len(pairs):
+        raise ValueError('같은 표정과 차림의 그림이 두 번 있습니다.')
+    return sprites
+
+
+Sprites = Annotated[list[Sprite], Field(max_length=CHARACTER_MAX_SPRITES), AfterValidator(unique_sprites)]
+
+# 지도와 물건, 이벤트 씬, 캐릭터 그림의 칸. DB 에 적을 때 dict 의 목록으로 바꾼다
+WORLD_LISTS = ('places', 'paths', 'items', 'start_items', 'event_scenes', 'sprites')
 
 
 def attached_images(
-    image_id: uuid.UUID | None, places: list[Place], items: list[Item], illustrations: list[Illustration]
+    image_id: uuid.UUID | None,
+    places: list[Place],
+    items: list[Item],
+    event_scenes: list[EventScene],
+    sprites: list[Sprite],
 ) -> list[uuid.UUID]:
-    """붙인 그림들. 대표 그림, 장소의 배경(기본과 시간대마다), 물건의 그림, 일러스트다. 없는 것은 뺀다."""
+    """붙인 그림들. 대표 그림, 장소의 배경(기본, 시간대마다), 물건의 그림, 이벤트 씬, 캐릭터 그림. 없는 것은 뺀다."""
     found = [image_id] if image_id is not None else []
     found += [entry.image_id for entry in [*places, *items] if entry.image_id is not None]
     found += [background for place in places for background in place.backgrounds.values()]
-    return found + [illustration.image_id for illustration in illustrations]
+    return found + [scene.image_id for scene in event_scenes] + [sprite.image_id for sprite in sprites]
 
 
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 처음 있는 장소, 호감도는 "없음"이 null 이다. 글과 목록의 칸은 빈 값으로 비운다
@@ -347,11 +379,12 @@ class CharacterCreate(BaseModel):
     items: Items = []
     start_items: StartItems = []
     affection: Affection | None = None
-    illustrations: Illustrations = []
+    event_scenes: EventScenes = []
+    sprites: Sprites = []
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
-        return attached_images(self.image_id, self.places, self.items, self.illustrations)
+        return attached_images(self.image_id, self.places, self.items, self.event_scenes, self.sprites)
 
     def values(self) -> dict:
         """DB 에 적을 칸과 값. 시작 상황, 지도, 물건은 dict 의 목록이다(그림의 id 는 글이다)."""
@@ -388,7 +421,8 @@ class CharacterUpdate(BaseModel):
     items: Items | None = None
     start_items: StartItems | None = None
     affection: Affection | None = None
-    illustrations: Illustrations | None = None
+    event_scenes: EventScenes | None = None
+    sprites: Sprites | None = None
 
     @model_validator(mode='after')
     def null_only_for_the_image(self) -> Self:
@@ -410,7 +444,9 @@ class CharacterUpdate(BaseModel):
 
     def image_ids(self) -> list[uuid.UUID]:
         """보낸 칸에 붙인 그림들. 자기 그림인지 볼 것들이다."""
-        return attached_images(self.image_id, self.places or [], self.items or [], self.illustrations or [])
+        return attached_images(
+            self.image_id, self.places or [], self.items or [], self.event_scenes or [], self.sprites or []
+        )
 
 
 class CharacterDetail(BaseModel):
@@ -434,7 +470,8 @@ class CharacterDetail(BaseModel):
     items: list[Item]
     start_items: list[StartItem]
     affection: Affection | None
-    illustrations: list[Illustration]
+    event_scenes: list[EventScene]
+    sprites: list[Sprite]
     latest_version: int | None
     published_at: datetime | None
     created_at: datetime

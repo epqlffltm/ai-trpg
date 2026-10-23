@@ -11,13 +11,16 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
        쓰는 것(현재 장소, 이동, 소지품)은 chat 의 만드는 순서 5(장소와 소지품)다
   - 3: 호감도(보이는 방식, 시작 값, 단계, 오르내리는 규칙). 형식 1, 2 의 판에서는 없다(null)
   - 4: 시작 상황의 시작 시각(hour)과 장소의 시간대 배경(backgrounds). 3 까지의 판은 정오에 시작하고 시간대 배경이 없다
-  - 5: 일러스트(그림, 해금 대상인지, 장면의 설명, 나오는 조건, #669). 4 까지의 판은 일러스트가 없다
+  - 5: 이벤트 씬(그림, 해금 대상인지, 장면의 설명, 나오는 조건, #669). 4 까지의 판은 이벤트 씬이 없다.
+       그때 이름은 illustrations(장면의 설명은 scene)였다. 판의 사본에도 그 이름으로 남아 있을 수 있어 바꿔 읽는다
+  - 6: 이벤트 씬의 이름(event_scenes, description)과 캐릭터 그림(sprites, 표정과 차림마다).
+       5 까지의 판은 캐릭터 그림이 없다
 """
 
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.ratings import Rating
 
@@ -129,9 +132,9 @@ class AffectionDocument(BaseModel):
     rules: list[AffectionRuleDocument] = []
 
 
-class IllustrationConditionDocument(BaseModel):
+class SceneConditionDocument(BaseModel):
     """
-    일러스트가 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.
+    이벤트 씬이 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.
     모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).
     """
 
@@ -141,17 +144,43 @@ class IllustrationConditionDocument(BaseModel):
     target: str
 
 
-class IllustrationDocument(BaseModel):
-    """일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다."""
+class EventSceneDocument(BaseModel):
+    """이벤트 씬 하나. collectible 이면 해금 대상이다. description 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다."""
 
     model_config = ConfigDict(extra='ignore')
 
     id: str
     title: str
     image_id: uuid.UUID
-    scene: str = ''
+    description: str = ''
     collectible: bool = True
-    when: IllustrationConditionDocument
+    when: SceneConditionDocument
+
+
+class SpriteDocument(BaseModel):
+    """
+    캐릭터 그림 하나(배경이 투명한 서 있는 그림). expression 은 표정(빈 글이면 기본),
+    outfit 은 이 그림의 차림인 옷(물건의 id, 없으면 처음 차림)이다.
+    """
+
+    model_config = ConfigDict(extra='ignore')
+
+    id: str
+    image_id: uuid.UUID
+    expression: str = ''
+    outfit: str | None = None
+
+
+def legacy_scenes(data: dict) -> dict:
+    """형식 5 의 판의 이벤트 씬(illustrations, scene)을 지금의 이름(event_scenes, description)으로 바꾼다."""
+    if 'illustrations' not in data or data.get('event_scenes'):
+        return data
+    renamed = {key: value for key, value in data.items() if key != 'illustrations'}
+    renamed['event_scenes'] = [
+        {('description' if key == 'scene' else key): value for key, value in scene.items()}
+        for scene in data['illustrations']
+    ]
+    return renamed
 
 
 class CharacterDocument(BaseModel):
@@ -176,7 +205,14 @@ class CharacterDocument(BaseModel):
     items: list[ItemDocument] = []
     start_items: list[StartItemDocument] = []
     affection: AffectionDocument | None = None
-    illustrations: list[IllustrationDocument] = []
+    event_scenes: list[EventSceneDocument] = []
+    sprites: list[SpriteDocument] = []
+
+    @model_validator(mode='before')
+    @classmethod
+    def read_legacy_scenes(cls, data: object) -> object:
+        """형식 5 의 판(과 그것을 복사한 사본)을 읽을 때 이벤트 씬의 옛 이름을 바꾼다."""
+        return legacy_scenes(data) if isinstance(data, dict) else data
 
 
 class CharacterCopy(BaseModel):

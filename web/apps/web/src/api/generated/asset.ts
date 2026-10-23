@@ -545,6 +545,11 @@ export interface components {
              */
             age: string;
             /**
+             * Event Scenes
+             * @default []
+             */
+            event_scenes: components["schemas"]["EventScene"][];
+            /**
              * Gender
              * @default
              */
@@ -554,11 +559,6 @@ export interface components {
              * @default
              */
             greeting: string;
-            /**
-             * Illustrations
-             * @default []
-             */
-            illustrations: components["schemas"]["Illustration"][];
             /** Image Id */
             image_id?: string | null;
             /**
@@ -591,6 +591,11 @@ export interface components {
              */
             speech_examples: string;
             /**
+             * Sprites
+             * @default []
+             */
+            sprites: components["schemas"]["Sprite"][];
+            /**
              * Start Items
              * @default []
              */
@@ -621,6 +626,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Event Scenes */
+            event_scenes: components["schemas"]["EventScene"][];
             /** Gender */
             gender: string;
             /** Greeting */
@@ -630,8 +637,6 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Illustrations */
-            illustrations: components["schemas"]["Illustration"][];
             /** Image Id */
             image_id: string | null;
             /** Intro Html */
@@ -651,6 +656,8 @@ export interface components {
             rating: components["schemas"]["Rating"];
             /** Speech Examples */
             speech_examples: string;
+            /** Sprites */
+            sprites: components["schemas"]["Sprite"][];
             /** Start Items */
             start_items: components["schemas"]["StartItem"][];
             /** Start Place */
@@ -675,17 +682,17 @@ export interface components {
             affection?: components["schemas"]["AffectionDocument"] | null;
             /** Age */
             age: string;
+            /**
+             * Event Scenes
+             * @default []
+             */
+            event_scenes: components["schemas"]["EventSceneDocument"][];
             /** Format */
             format: number;
             /** Gender */
             gender: string;
             /** Greeting */
             greeting: string;
-            /**
-             * Illustrations
-             * @default []
-             */
-            illustrations: components["schemas"]["IllustrationDocument"][];
             /** Image Id */
             image_id: string | null;
             /** Intro Html */
@@ -710,6 +717,11 @@ export interface components {
             rating: components["schemas"]["Rating"];
             /** Speech Examples */
             speech_examples: string;
+            /**
+             * Sprites
+             * @default []
+             */
+            sprites: components["schemas"]["SpriteDocument"][];
             /**
              * Start Items
              * @default []
@@ -764,12 +776,12 @@ export interface components {
             affection?: components["schemas"]["Affection"] | null;
             /** Age */
             age?: string | null;
+            /** Event Scenes */
+            event_scenes?: components["schemas"]["EventScene"][] | null;
             /** Gender */
             gender?: string | null;
             /** Greeting */
             greeting?: string | null;
-            /** Illustrations */
-            illustrations?: components["schemas"]["Illustration"][] | null;
             /** Image Id */
             image_id?: string | null;
             /** Intro Html */
@@ -785,6 +797,8 @@ export interface components {
             rating?: components["schemas"]["Rating"] | null;
             /** Speech Examples */
             speech_examples?: string | null;
+            /** Sprites */
+            sprites?: components["schemas"]["Sprite"][] | null;
             /** Start Items */
             start_items?: components["schemas"]["StartItem"][] | null;
             /** Start Place */
@@ -808,6 +822,54 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * EventScene
+         * @description 이벤트 씬 하나(#669). 조건이 맞은 뒤의 첫 응답에 붙어 배경과 캐릭터를 대신한다(chat).
+         *     collectible 이면 해금 대상이다. 한 번 열면 계정에 남고 갤러리와 소개의 칸에 보인다.
+         *     아니면 이야기 중에만 나온다(칸도 보이지 않는다). description 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
+         */
+        EventScene: {
+            /**
+             * Collectible
+             * @default true
+             */
+            collectible: boolean;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /** Title */
+            title: string;
+            when: components["schemas"]["SceneCondition"];
+        };
+        /**
+         * EventSceneDocument
+         * @description 이벤트 씬 하나. collectible 이면 해금 대상이다. description 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
+         */
+        EventSceneDocument: {
+            /** Collectible */
+            collectible: boolean;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /** Title */
+            title: string;
+            when: components["schemas"]["SceneConditionDocument"];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -818,80 +880,6 @@ export interface components {
             /** Status */
             status: string;
         };
-        /**
-         * Illustration
-         * @description 일러스트 하나(#669). 조건이 맞은 뒤의 첫 응답에 붙어 배경과 캐릭터를 대신한다(chat).
-         *     collectible 이면 해금 대상이다. 한 번 열면 계정에 남고 갤러리와 소개의 칸에 보인다.
-         *     아니면 이야기 중에만 나온다(칸도 보이지 않는다). scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
-         */
-        Illustration: {
-            /**
-             * Collectible
-             * @default true
-             */
-            collectible: boolean;
-            /** Id */
-            id: string;
-            /**
-             * Image Id
-             * Format: uuid
-             */
-            image_id: string;
-            /**
-             * Scene
-             * @default
-             */
-            scene: string;
-            /** Title */
-            title: string;
-            when: components["schemas"]["IllustrationCondition"];
-        };
-        /**
-         * IllustrationCondition
-         * @description 일러스트가 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다.
-         */
-        IllustrationCondition: {
-            kind: components["schemas"]["IllustrationWhen"];
-            /** Target */
-            target: string;
-        };
-        /**
-         * IllustrationConditionDocument
-         * @description 일러스트가 나오는 조건(종류, 대상).
-         */
-        IllustrationConditionDocument: {
-            kind: components["schemas"]["IllustrationWhen"];
-            /** Target */
-            target: string;
-        };
-        /**
-         * IllustrationDocument
-         * @description 일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.
-         */
-        IllustrationDocument: {
-            /** Collectible */
-            collectible: boolean;
-            /** Id */
-            id: string;
-            /**
-             * Image Id
-             * Format: uuid
-             */
-            image_id: string;
-            /** Scene */
-            scene: string;
-            /** Title */
-            title: string;
-            when: components["schemas"]["IllustrationConditionDocument"];
-        };
-        /**
-         * IllustrationWhen
-         * @description 일러스트가 나오는 조건의 종류(#669). 호감도의 규칙과 같은 (종류, 대상) 모양이다.
-         *     그 장소에 갔다(reach_place, 장소의 id), 그 물건을 처음 건넸다(give_item, 물건의 id),
-         *     호감도가 그 단계에 이르렀다(affection_stage, 단계의 이름). 맞추는 것은 chat 의 엔진이다.
-         * @enum {string}
-         */
-        IllustrationWhen: "reach_place" | "give_item" | "affection_stage";
         /**
          * ImageDetail
          * @description 올린 그림. url 은 그 그림을 내주는 주소다(소개 글의 img 에 그대로 쓴다).
@@ -1322,6 +1310,72 @@ export interface components {
          * @enum {string}
          */
         RemovedKind: "tag" | "attribute" | "style" | "link" | "image";
+        /**
+         * SceneCondition
+         * @description 이벤트 씬이 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다.
+         */
+        SceneCondition: {
+            kind: components["schemas"]["SceneWhen"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * SceneConditionDocument
+         * @description 이벤트 씬이 나오는 조건(종류, 대상).
+         */
+        SceneConditionDocument: {
+            kind: components["schemas"]["SceneWhen"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * SceneWhen
+         * @description 이벤트 씬이 나오는 조건의 종류(#669). 호감도의 규칙과 같은 (종류, 대상) 모양이다.
+         *     그 장소에 갔다(reach_place, 장소의 id), 그 물건을 처음 건넸다(give_item, 물건의 id),
+         *     호감도가 그 단계에 이르렀다(affection_stage, 단계의 이름). 맞추는 것은 chat 의 엔진이다.
+         * @enum {string}
+         */
+        SceneWhen: "reach_place" | "give_item" | "affection_stage";
+        /**
+         * Sprite
+         * @description 캐릭터 그림 하나. 배경이 투명한 서 있는 그림이고, 대화의 그림 창에서 배경 위에 겹친다.
+         *     expression 은 표정의 이름이다(빈 글이면 기본 표정). outfit 은 이 그림의 차림인 옷(물건의 id)이다.
+         *     비어 있으면 처음 차림이다. 사용자가 그 옷을 건네 상대가 입으면 그 차림의 그림을 쓴다(chat).
+         *     투명한지는 서버가 보지 않는다(2026-10-23 유저 결정). 만드는 화면이 미리 보기로 보인다.
+         */
+        Sprite: {
+            /**
+             * Expression
+             * @default
+             */
+            expression: string;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /** Outfit */
+            outfit?: string | null;
+        };
+        /**
+         * SpriteDocument
+         * @description 캐릭터 그림 하나. expression 은 표정(빈 글이면 기본), outfit 은 차림인 옷(물건의 id, 없으면 처음 차림)이다.
+         */
+        SpriteDocument: {
+            /** Expression */
+            expression: string;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /** Outfit */
+            outfit: string | null;
+        };
         /**
          * Stage
          * @description 호감도의 단계 하나. at 이상이면 이 단계다(다음 단계의 at 전까지).
