@@ -4,7 +4,7 @@
 // - 두 끝은 다른 장소다. 같은 두 장소를 잇는 길은 하나뿐이다(방향이 달라도 같다)
 // - 보임: 처음부터 앎(open), 끝에 서 보면 앎(fog), 찾아야 앎(hidden). 숨긴 길만 찾는 판정(능력치, 난이도)이 있다
 // - 걸리는 시간(분)은 비우면 라운드의 걸음 안이다(옆방). 1~10080
-// - 길의 문(넘기, 자물쇠, 빗장, 부수기)은 다음 화면에서 고친다. 여기서는 그대로 둔다. 빗장이 있으면 그 끝은 바꾸지 못한다
+// - 길의 문(넘기, 자물쇠, 빗장, 부수기)은 문의 창(doorForm.ts)이 고친다. 길의 창은 그대로 둔다. 빗장이 있으면 그 끝은 바꾸지 못한다
 
 import type { RouteRule, RouteRuleBody, RouteVisibility, Ruleset } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
@@ -84,7 +84,7 @@ export function withoutRoute(routes: RouteRule[], at: number): RouteRuleBody[] {
   return routes.filter((_, index) => index !== at);
 }
 
-/** 목록의 한 줄. "수도원 문 ↔ 종탑 · 끝에 서 보면 앎 · 30분 · 문 있음" */
+/** 목록의 한 줄. "수도원 문 ↔ 종탑 · 끝에 서 보면 앎 · 30분 · 자물쇠(잠김) · 빗장(종탑 쪽)" */
 export function routeLine(route: RouteRule, nameOf: (placeId: string) => string, rules: Ruleset | null): string {
   const arrow = route.two_way ? '↔' : '→';
   const parts = [`${nameOf(route.from_place)} ${arrow} ${nameOf(route.to_place)}`, visibilityLabel(route.visibility)];
@@ -93,7 +93,9 @@ export function routeLine(route: RouteRule, nameOf: (placeId: string) => string,
     parts.push(`찾기: ${ability}`);
   }
   if (route.travel_minutes) parts.push(`${route.travel_minutes}분`);
-  if (route.lock || route.bar) parts.push('문 있음');
   if (route.cross) parts.push('넘기 판정');
+  if (route.lock) parts.push(`자물쇠(${route.lock.locked ? '잠김' : '열림'}${route.lock.pick ? ', 딸 수 있음' : ''})`);
+  if (route.bar) parts.push(`빗장(${nameOf(route.bar.side)} 쪽${route.bar.barred ? ', 걸림' : ''})`);
+  if (route.force) parts.push('부술 수 있음');
   return parts.join(' · ');
 }
