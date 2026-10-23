@@ -6,6 +6,7 @@
     GET    /api/v1/chat/conversations/{id}/notes            메모들(먼저 쓴 것부터)
     POST   /api/v1/chat/conversations/{id}/notes            {text}  더하기. 201
     PATCH  /api/v1/chat/conversations/{id}/notes/{note_id}  {text}  고치기
+    POST   /api/v1/chat/conversations/{id}/notes/{note_id}/accept   요약의 제안을 받아들이기(#677)
     DELETE /api/v1/chat/conversations/{id}/notes/{note_id}          지우기. 204
     GET    /api/v1/chat/conversations/{id}/summary          지금 가지의 요약(읽기만). 없으면 null
 
@@ -18,7 +19,7 @@ import uuid
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
-from app.core.dependencies import CurrentViewer, Session
+from app.core.dependencies import CurrentViewer, Now, Session
 from app.limits.routing import WRITE_LIMIT
 from app.memory import service
 from app.memory.models import MemoryNote
@@ -31,7 +32,13 @@ router = APIRouter(prefix='/conversations', tags=['memory'])
 def to_note(note: MemoryNote) -> NoteOut:
     """메모를 응답의 모양으로."""
     return NoteOut(
-        id=note.id, text=note.text, source=note.source, created_at=note.created_at, updated_at=note.updated_at
+        id=note.id,
+        text=note.text,
+        source=note.source,
+        pending=note.pending,
+        accepted_at=note.accepted_at,
+        created_at=note.created_at,
+        updated_at=note.updated_at,
     )
 
 
@@ -60,6 +67,19 @@ async def edit_note(
 ) -> NoteOut:
     """기억 메모를 고친다."""
     return to_note(await service.edit_note(session, viewer, conversation_id, note_id, data.text))
+
+
+@router.post(
+    '/{conversation_id}/notes/{note_id}/accept',
+    response_model=NoteOut,
+    status_code=status.HTTP_200_OK,
+    dependencies=[WRITE_LIMIT],
+)
+async def accept_note(
+    conversation_id: uuid.UUID, note_id: uuid.UUID, viewer: CurrentViewer, session: Session, now: Now
+) -> NoteOut:
+    """요약이 제안한 메모를 받아들인다. 다음 말부터 모델에 간다. 버리려면 지운다."""
+    return to_note(await service.accept_note(session, viewer, conversation_id, note_id, now))
 
 
 @router.delete('/{conversation_id}/notes/{note_id}', status_code=status.HTTP_204_NO_CONTENT, dependencies=[WRITE_LIMIT])

@@ -182,6 +182,26 @@ export interface paths {
         patch: operations["edit_note_api_v1_chat_conversations__conversation_id__notes__note_id__patch"];
         trace?: never;
     };
+    "/api/v1/chat/conversations/{conversation_id}/notes/{note_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Note
+         * @description 요약이 제안한 메모를 받아들인다. 다음 말부터 모델에 간다. 버리려면 지운다.
+         */
+        post: operations["accept_note_api_v1_chat_conversations__conversation_id__notes__note_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{conversation_id}/summary": {
         parameters: {
             query?: never;
@@ -941,9 +961,12 @@ export interface components {
         };
         /**
          * NoteOut
-         * @description 메모 하나. source 는 누가 썼는가(user, summary)다.
+         * @description 메모 하나. source 는 누가 썼는가(user, summary)다. pending 이면 요약의 제안이고 받아들이기 전이다
+         *     (모델에 가지 않는다. 화면은 받아들이기와 버리기를 보인다). accepted_at 은 제안을 받아들인 시각이다.
          */
         NoteOut: {
+            /** Accepted At */
+            accepted_at: string | null;
             /**
              * Created At
              * Format: date-time
@@ -954,6 +977,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Pending */
+            pending: boolean;
             source: components["schemas"]["NoteSource"];
             /** Text */
             text: string;
@@ -1700,6 +1725,38 @@ export interface operations {
                 "application/json": components["schemas"]["NoteWrite"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_note_api_v1_chat_conversations__conversation_id__notes__note_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
