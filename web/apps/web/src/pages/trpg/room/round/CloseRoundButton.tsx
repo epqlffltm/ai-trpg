@@ -8,7 +8,7 @@ import { useCallback, useState } from 'react';
 import { closeRound } from '../../../../api/rounds';
 import type { Round } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
-import { currentRoundQuery, roundsKey } from './roundQueries';
+import { replaceCurrentRound, roundsKey } from './roundQueries';
 import { describeCloseProblem, type RoundProblem } from './roundProblem';
 
 export function CloseRoundButton({ tableId, round }: { tableId: string; round: Round }) {
@@ -23,7 +23,7 @@ export function CloseRoundButton({ tableId, round }: { tableId: string; round: R
     setBusy(true);
     setProblem(undefined);
     try {
-      queryClient.setQueryData(currentRoundQuery(tableId).queryKey, await closeRound(tableId));
+      await replaceCurrentRound(queryClient, tableId, await closeRound(tableId));
       setAsking(false);
     } catch (error) {
       const next = describeCloseProblem(error);
