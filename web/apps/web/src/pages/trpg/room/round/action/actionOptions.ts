@@ -9,9 +9,13 @@
 //   - 물건 쓰기: 소모품을 지녔을 때. 건네기: 물건을 지녔고 살아 있는 다른 사람이 있을 때. 내려놓기: 물건을 지녔고 맵에 서 있을 때
 //   - 가기: 아는 길이 있을 때. 찾기: 맵에 서 있을 때. 줍기: 선 곳에 보이게 놓인 물건이 있을 때
 //   - 훔치기: 규칙에 훔치기(rules.steal)가 있고 물건을 지닌 산 대상이 있을 때. 빼앗기: 물건을 지닌 쓰러지거나 죽은 대상이 있을 때
+//   - 사기, 팔기, 돈 건네기(#278): 화폐가 있는 판에서만. 사기는 파는 것이 있는 상인이 장면에 있을 때, 팔기는 상인이 사 주는 판이고
+//     장면에 상인이 있고 값이 있는 물건을 지녔을 때, 돈 건네기는 돈이 있고 살아 있는 다른 사람이 있을 때.
+//     상인은 장면의 인물 가운데 merchant 이고 살아 있고 적대하지 않는 이다(서버의 is_open)
 // 캐릭터가 쓰러졌거나 죽었으면 행동을 붙이지 못한다(글만 낸다).
 
-import type { DeclaredAction, HeldItem, SceneCast, TableDetail, TableMember } from '../../../../../api/types';
+import type { DeclaredAction, HeldItem, SceneCast, ScenePerson, TableDetail, TableMember } from '../../../../../api/types';
+import { amountLabel, itemPrice, merchantsBuy, moneyOf } from '../../money';
 import { waysFrom, type Way } from '../../status/statusView';
 
 export type ActionKind = DeclaredAction['kind'];
@@ -41,6 +45,9 @@ const ACTION_ORDER: ActionKind[] = [
   'put_down',
   'steal',
   'loot',
+  'buy',
+  'sell',
+  'pay',
   'rest',
   'wait',
 ];
@@ -79,6 +86,12 @@ function kindAvailable(kind: ActionKind, ctx: ActionContext): boolean {
       return rules.steal !== null && victims(ctx, 'steal').length > 0;
     case 'loot':
       return victims(ctx, 'loot').length > 0;
+    case 'buy':
+      return Boolean(ctx.table.currency) && merchants(ctx).some((choice) => merchantStock(ctx, choice.value).length > 0);
+    case 'sell':
+      return merchantsBuy(ctx.table) && merchants(ctx).length > 0 && sellableItems(ctx).length > 0;
+    case 'pay':
+      return Boolean(ctx.table.currency) && moneyOf(ctx.me) > 0 && recipients(ctx).length > 0;
     default:
       return true;
   }
@@ -225,6 +238,48 @@ export function victimItems(ctx: ActionContext, victim: TargetRef): Choice[] {
     value: item.entry_id,
     label: `${item.name} ×${item.count}${item.equipped ? '(장비)' : ''}`,
   }));
+}
+
+/** 지금 거래하는 상인. 장면의 인물 가운데 상인이고 살아 있고 적대하지 않는 이(서버의 is_open) */
+export function openMerchants(cast: SceneCast | null | undefined): ScenePerson[] {
+  return (cast?.people ?? []).filter((person) => person.merchant && person.status === 'alive' && person.attitude !== 'hostile');
+}
+
+/** 거래할 상인의 고를 거리. 값은 "npc:<id>" */
+export function merchants(ctx: ActionContext): Choice[] {
+  return openMerchants(ctx.cast).map((person) => ({ value: `npc:${person.id}`, label: person.name }));
+}
+
+type Stock = ScenePerson['items'][number] & { price: number };
+
+/** 상인이 파는 것. 소지품(장비가 아닌 것) 가운데 값이 있는 것 */
+export function merchantStock(ctx: ActionContext, merchant: TargetRef): Stock[] {
+  const [, id] = splitRef(merchant);
+  const person = ctx.cast?.people.find((entry) => entry.id === id);
+  return (person?.items ?? []).filter((item): item is Stock => !item.equipped && typeof item.price === 'number');
+}
+
+/** 살 물건의 고를 거리. "횃불 ×3 · 5닢" */
+export function stockChoices(ctx: ActionContext, merchant: TargetRef): Choice[] {
+  return merchantStock(ctx, merchant).map((item) => ({
+    value: item.entry_id,
+    label: `${item.name} ×${item.count} · ${amountLabel(ctx.table.currency, item.price)}`,
+  }));
+}
+
+/** 상인의 그 물건 재고 */
+export function stockCount(ctx: ActionContext, merchant: TargetRef, entryId: string): number {
+  return merchantStock(ctx, merchant).find((item) => item.entry_id === entryId)?.count ?? 0;
+}
+
+/** 상인이 파는 그 물건의 값. 없으면 null */
+export function stockPrice(ctx: ActionContext, merchant: TargetRef, entryId: string): number | null {
+  return merchantStock(ctx, merchant).find((item) => item.entry_id === entryId)?.price ?? null;
+}
+
+/** 팔 수 있는 내 물건. 판의 물건에 값이 있는 것 */
+export function sellableItems(ctx: ActionContext): HeldItem[] {
+  return heldItems(ctx.me).filter((item) => itemPrice(ctx.table, item.entry_id) !== null);
 }
 
 /** "npc:abc" → ["npc", "abc"]. 빈 값이면 ["", ""] */

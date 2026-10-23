@@ -3,6 +3,7 @@
 // 행동은 "종류 · 무엇을, 누구에게"로, 결과는 서버가 적어 준 것(눈, 합, 물건, 장소, 회복)을 한 줄로 적는다.
 
 import type { Declaration, DeclaredAction, Round, Ruleset, TableDetail } from '../../../../api/types';
+import { amountLabel, type Currency } from '../money';
 import { ACTION_LABELS } from './action/actionLabels';
 
 type Outcome = NonNullable<Declaration['outcome']>;
@@ -54,6 +55,11 @@ function actionDetail(action: DeclaredAction, table: TableDetail): string | null
       return action.length === 'long' ? '길게' : '짧게';
     case 'wait':
       return `${action.minutes}분`;
+    case 'buy':
+    case 'sell':
+      return `${itemName(table, action.item)} ×${action.count}`;
+    case 'pay':
+      return `${amountLabel(table.currency, action.amount)} → ${memberName(table, action.target)}`;
     default:
       return null;
   }
@@ -79,13 +85,47 @@ function nameOfInjury(rules: Ruleset, key: string): string {
   return rules.injuries.find((injury) => injury.key === key)?.name ?? key;
 }
 
-/** 결과 한 줄. 결과가 없으면 null(열려 있는 라운드) */
-export function outcomeLine(outcome: Outcome | null, rules: Ruleset): string | null {
+/** 결과 한 줄. 결과가 없으면 null(열려 있는 라운드). 돈의 단위는 테이블의 화폐(없으면 숫자만) */
+export function outcomeLine(outcome: Outcome | null, rules: Ruleset, currency: Currency | null = null): string | null {
   if (!outcome) return null;
   if ('turn_lost' in outcome) return '행동하지 못했습니다.';
   if ('target_gone' in outcome) return '대상이 이미 없어 행동하지 못했습니다.';
   if ('roll' in outcome && 'total' in outcome && 'success' in outcome) return checkLine(outcome, rules);
-  return otherLine(outcome) ?? '결과는 일어난 일에 적힙니다.';
+  return otherLine(outcome) ?? moneyLine(outcome, currency) ?? '결과는 일어난 일에 적힙니다.';
+}
+
+/** 사고팔지 못하거나 돈을 건네지 못한 까닭(trpg-server/app/rounds/trades.py 의 Reason) */
+const TRADE_REASONS: Record<string, string> = {
+  unavailable: '상인이 거래할 수 없었습니다',
+  out_of_stock: '상인의 재고가 모자랐습니다',
+  not_enough_money: '돈이 모자랐습니다',
+  not_held: '그만큼 가지고 있지 않았습니다',
+  full: '더 가질 수 없었습니다',
+  too_much_money: '돈을 더 가질 수 없었습니다',
+  target_gone: '받을 사람이 없었습니다',
+};
+
+function reasonText(reason: string | null | undefined, fallback: string): string {
+  return `${(reason ? TRADE_REASONS[reason] : undefined) ?? fallback}.`;
+}
+
+/** 사기, 팔기, 돈 건네기의 결과(#278) */
+function moneyLine(outcome: Outcome, currency: Currency | null): string | null {
+  if ('trade' in outcome) {
+    const trade = outcome.trade;
+    const buying = trade.side !== 'sell';
+    if (!trade.traded) return `${buying ? '사지' : '팔지'} 못했습니다: ${reasonText(trade.reason, '까닭을 모릅니다')}`;
+    const what = `${trade.name} ×${trade.count}`;
+    const price = amountLabel(currency, trade.price);
+    const left = amountLabel(currency, trade.money);
+    return buying ? `${what} 샀습니다(낸 돈 ${price}, 남은 돈 ${left})` : `${what} 팔았습니다(받은 돈 ${price}, 가진 돈 ${left})`;
+  }
+  if ('pay' in outcome) {
+    const pay = outcome.pay;
+    if (!pay.paid) return `건네지 못했습니다: ${reasonText(pay.reason, '까닭을 모릅니다')}`;
+    return `${amountLabel(currency, pay.amount)} → ${pay.target.character_name ?? '누군가'}(남은 돈 ${amountLabel(currency, pay.remaining)})`;
+  }
+  return null;
 }
 
 type CheckResult = Extract<Outcome, { roll: number; total: number }>;

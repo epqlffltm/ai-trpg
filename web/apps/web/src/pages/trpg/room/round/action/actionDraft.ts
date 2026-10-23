@@ -4,11 +4,14 @@
 // 칸의 규칙은 서버의 것이다(trpg-server/app/engine/action.py). 여기서 막는 것은 보내기 전에 알리는 것이다.
 
 import type { DeclaredAction, Ruleset } from '../../../../../api/types';
+import { amountLabel, buyingCost, moneyOf } from '../../money';
 import {
   heldCount,
   itemHeals,
   placeItems,
   splitRef,
+  stockCount,
+  stockPrice,
   type ActionContext,
   type ActionKind,
   type TargetRef,
@@ -172,14 +175,30 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
         ? null
         : `기다리는 시간은 1분에서 ${WAIT_MAX_MINUTES}분 사이입니다.`;
     case 'buy':
+      return draft.target && draft.item ? buyHint(draft, ctx) : '상인과 물건을 골라 주세요.';
     case 'sell':
-      return draft.target && draft.item ? countHint(draft.count, COUNT_MAX) : '상인과 물건을 골라 주세요.';
+      return draft.target && draft.item ? countHint(draft.count, heldCount(ctx.me, draft.item)) : '상인과 물건을 골라 주세요.';
     case 'pay':
-      if (!draft.target) return '돈을 받을 사람을 골라 주세요.';
-      return Number.isInteger(draft.amount) && draft.amount >= 1 && draft.amount <= PAY_MAX_AMOUNT
-        ? null
-        : `건넬 돈은 1에서 ${PAY_MAX_AMOUNT} 사이입니다.`;
+      return draft.target ? payHint(draft.amount, ctx) : '돈을 받을 사람을 골라 주세요.';
   }
+}
+
+/** 상인의 재고까지, 가진 돈으로 살 수 있는 만큼 */
+function buyHint(draft: ActionDraft, ctx: ActionContext): string | null {
+  const counted = countHint(draft.count, stockCount(ctx, draft.target, draft.item));
+  if (counted) return counted;
+  const price = stockPrice(ctx, draft.target, draft.item);
+  const money = moneyOf(ctx.me);
+  if (price === null || buyingCost(price, draft.count) <= money) return null;
+  const currency = ctx.table.currency;
+  return `돈이 모자랍니다(값 ${amountLabel(currency, buyingCost(price, draft.count))}, 가진 돈 ${amountLabel(currency, money)}).`;
+}
+
+/** 1 이상, 가진 돈까지 */
+function payHint(amount: number, ctx: ActionContext): string | null {
+  const money = moneyOf(ctx.me);
+  if (!Number.isInteger(amount) || amount < 1 || amount > PAY_MAX_AMOUNT) return `건넬 돈은 1에서 ${PAY_MAX_AMOUNT} 사이입니다.`;
+  return amount > money ? `가진 돈(${amountLabel(ctx.table.currency, money)})보다 많이 건넬 수 없습니다.` : null;
 }
 
 function checkHint(draft: ActionDraft, rules: Ruleset): string | null {

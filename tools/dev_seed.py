@@ -13,9 +13,9 @@
   2. 방장의 토큰으로 프록시를 거쳐 게임 서버를 부른다. 고를 수 있는 서술 모델 하나, 룰북(SRD5),
      로어북(장소, 물건, 인물, 사건. dev_seed_world.py), 시나리오(스타팅 둘, 프리젠 셋, 맵, 물건, NPC, 퀘스트),
      소개 페이지(한 줄 소개, 장르, 태그)를 만들고 게시해 공개한다.
-     이미 있으면(제목으로 찾는다) 만들지 않는다. 맵이 없는 앞의 견본이면 세계를 넣고 새 판을 게시한다
+     이미 있으면(제목으로 찾는다) 만들지 않는다. 맵이나 화폐가 없는 앞의 견본이면 세계를 넣고 새 판을 게시한다
   3. 방장이 로비에 보이는 견본 테이블을 연다. 모집 중인 것이 이미 있으면 열지 않는다.
-     맵이 없는 앞의 판으로 연 것이면 새로 연다
+     맵이나 화폐가 없는 앞의 판으로 연 것이면 새로 연다
   4. 계정과 주소를 찍는다. 화면에서 로그인하면 메일 코드는 auth-mail 의 로그에 찍힌다(메일 서버를 적지 않았을 때)
 
 몇 번 돌려도 같다. 계정의 비밀번호만 다시 정한다.
@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from dev_seed_world import ENTRIES, LOREBOOK_TITLE, sheet, world_fields
+from dev_seed_world import ENTRIES, LOREBOOK_TITLE, is_current, sheet, world_fields
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ACCOUNTS_SCRIPT = REPO_ROOT / 'tools' / 'dev_seed_accounts.py'
@@ -70,7 +70,7 @@ class Account:
 class Seeded:
     accounts: list[Account]
     scenario_id: str
-    # created(새로 만듦), upgraded(맵이 없던 앞의 견본에 세계를 넣음), kept(이미 있었음)
+    # created(새로 만듦), upgraded(맵이나 화폐가 없던 앞의 견본에 세계를 넣음), kept(이미 있었음)
     scenario_state: str
     table: dict | None
 
@@ -178,14 +178,21 @@ def pick_model(models: dict) -> str:
 def scenario_fields(model: str, world: dict) -> dict:
     """
     견본 시나리오의 칸(제목과 룰북 말고). 스타팅 둘, 다섯 방식 모두, 추천 인원 2~4명에 세계(world_fields)를 더한다.
-    첫 스타팅에 문지기가 나와 첫 장면부터 겨눌 인물이 있다. 능력치를 정하는 방식의 최대 HP 는 8 에 건강의 보정, 20 까지
+    스타팅에 문지기와 행상이 나와 첫 장면부터 겨누고 거래할 인물이 있다(장면에 나온 인물만 고를 수 있다).
+    능력치를 정하는 방식의 최대 HP 는 8 에 건강의 보정, 20 까지
     """
     return {
         'narration_model': model,
         'description': '화면을 손으로 보려고 만든 견본이다(tools/dev_seed.py).',
         'openings': [
-            '비가 내리는 밤, 수도원의 문 앞에 선다. 종은 울리지 않는다. 문 옆에 늙은 문지기가 등불을 들고 서 있다.',
-            '이미 수도원 안이다. 등 뒤에서 문이 스스로 닫힌다. 늙은 문지기가 어둠 속에서 너희를 본다.',
+            (
+                '비가 내리는 밤, 수도원의 문 앞에 선다. 종은 울리지 않는다. 문 옆에 늙은 문지기가 등불을 들고 서 있다. '
+                '처마 밑에서는 떠돌이 행상이 젖은 짐을 푼다.'
+            ),
+            (
+                '이미 수도원 안이다. 등 뒤에서 문이 스스로 닫힌다. 늙은 문지기가 어둠 속에서 너희를 본다. '
+                '구석의 행상이 손을 흔든다.'
+            ),
         ],
         'default_sheet': sheet(10),
         'character_modes': ['pregen', 'custom', 'manual', 'point_buy', 'rolled'],
@@ -264,10 +271,10 @@ def seed_world(proxy: str, token: str) -> dict:
 def seed_scenario(proxy: str, token: str) -> tuple[str, str]:
     """
     견본 시나리오의 ID 와 한 일(created, upgraded, kept).
-    있고 세계(시작 장소)가 있으면 공개만 확인한다. 맵이 없는 앞의 견본이면 세계를 넣고 새 판을 게시한다
+    있고 지금 세계(맵과 화폐, is_current)이면 공개만 확인한다. 앞의 견본이면 세계를 넣고 새 판을 게시한다
     """
     found = find_by_title(call(proxy, token, 'GET', f'{GAME}/scenarios?limit=100'), SEED_TITLE)
-    if found and call(proxy, token, 'GET', f'{GAME}/scenarios/{found["id"]}').get('start_place'):
+    if found and is_current(call(proxy, token, 'GET', f'{GAME}/scenarios/{found["id"]}')):
         if not is_listed(proxy, token, found['id']):
             publish(proxy, token, found['id'])
         return found['id'], 'kept'
@@ -287,13 +294,13 @@ def seed_scenario(proxy: str, token: str) -> tuple[str, str]:
 def seed_table(proxy: str, token: str, scenario_id: str) -> dict:
     """
     방장이 앉은 모집 중인 견본 테이블. 이미 있으면 그것을 돌려준다.
-    테이블은 열 때의 판을 쓴다. 맵이 없으면 앞의 판으로 연 것이라 새로 연다(앞의 것은 그대로 둔다)
+    테이블은 열 때의 판을 쓴다. 맵이나 화폐가 없으면 앞의 판으로 연 것이라 새로 연다(앞의 것은 그대로 둔다)
     """
     mine = call(proxy, token, 'GET', f'{GAME}/tables?limit=100')
     for table in mine.get('items', []):
         if table.get('scenario_id') == scenario_id and table.get('status') == 'recruiting':
             detail = call(proxy, token, 'GET', f'{GAME}/tables/{table["id"]}')
-            if detail.get('map'):
+            if is_current(detail):
                 return detail
     return call(proxy, token, 'POST', f'{GAME}/tables', table_body(scenario_id))
 
