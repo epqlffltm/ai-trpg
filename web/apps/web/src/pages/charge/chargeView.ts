@@ -11,10 +11,14 @@ export function wonLabel(price: number): string {
   return `${WON.format(price)}원`;
 }
 
-/** "골드 1,000". 크레딧은 글자라 숫자로 바꿀 수 있을 때만 쉼표를 넣는다 */
+/** "1,000". 크레딧은 글자라 정수일 때만 쉼표를 넣는다 */
+export function goldAmount(credits: string): string {
+  return /^\d+$/.test(credits) ? WON.format(Number(credits)) : credits;
+}
+
+/** "골드 1,000" */
 export function goldLabel(credits: string): string {
-  const value = Number(credits);
-  return `골드 ${Number.isFinite(value) && /^\d+$/.test(credits) ? WON.format(value) : credits}`;
+  return `골드 ${goldAmount(credits)}`;
 }
 
 export function productLabel(product: Product): string {

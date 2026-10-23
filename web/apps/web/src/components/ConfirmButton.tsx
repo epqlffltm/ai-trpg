@@ -1,10 +1,11 @@
-// web/apps/web/src/pages/trpg/room/host/ConfirmButton.tsx
-// 한 번 더 묻는 단추. 누르면 창을 열어 무엇이 일어나는지 알리고, 창의 단추로 한다. 되돌리기 어려운 동작(내보내기, 끝내기)에 쓴다.
+// web/apps/web/src/components/ConfirmButton.tsx
+// 한 번 더 묻는 단추. 누르면 창을 열어 무엇이 일어나는지 알리고, 창의 단추로 한다.
+// 되돌리기 어려운 동작(방장의 내보내기와 끝내기, 청약철회)에 쓴다.
 
 import { Button, Dialog, type ButtonVariant } from '@ai-trpg/ui';
 import { useCallback, useState, type ReactNode } from 'react';
-import type { FormProblem } from '../../../../auth/problem';
-import { ProblemNotice } from '../../../../components/ProblemNotice';
+import type { FormProblem } from '../auth/problem';
+import { ProblemNotice } from './ProblemNotice';
 
 type Props = {
   label: string;

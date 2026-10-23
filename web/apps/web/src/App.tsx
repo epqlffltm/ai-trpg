@@ -13,6 +13,8 @@ import { ResetPasswordPage } from './pages/password/ResetPasswordPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { SignupPage } from './pages/signup/SignupPage';
 import { ChargePage } from './pages/charge/ChargePage';
+import { OrderPage } from './pages/orders/OrderPage';
+import { OrdersPage } from './pages/orders/OrdersPage';
 import { WalletPage } from './pages/wallet/WalletPage';
 import { ScenarioBrowsePage } from './pages/trpg/browse/ScenarioBrowsePage';
 import { LobbyPage } from './pages/trpg/lobby/LobbyPage';
@@ -51,6 +53,22 @@ export function App() {
           element={
             <RequireSession>
               <ChargePage />
+            </RequireSession>
+          }
+        />
+        <Route
+          path="wallet/orders"
+          element={
+            <RequireSession>
+              <OrdersPage />
+            </RequireSession>
+          }
+        />
+        <Route
+          path="wallet/orders/:orderId"
+          element={
+            <RequireSession>
+              <OrderPage />
             </RequireSession>
           }
         />
