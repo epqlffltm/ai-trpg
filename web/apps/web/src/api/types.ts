@@ -108,3 +108,19 @@ export type Product = Billing['schemas']['Product'];
 export type Order = Billing['schemas']['Order'];
 // 주문 목록과 상품 목록은 이름 붙은 스키마가 없어 응답의 모양을 그대로 쓴다
 export type OrderPage = BillingOperations['listOrders']['responses'][200]['content']['application/json'];
+
+// 운영자의 신고 처리(E4, #678). 캐릭터의 신고는 asset, 대화 속 답의 신고는 chat 의 것이다.
+// 사유와 처리의 값은 두 서버가 같다(spam, abuse, sexual, minor, illegal, other / actioned, dismissed)
+export type ReportReason = Asset['schemas']['ReportReason'];
+export type ReportOutcome = Asset['schemas']['ReportOutcome'];
+export type OutcomeInput = Asset['schemas']['OutcomeInput'];
+export type OutcomeResult = Asset['schemas']['OutcomeResult'];
+export type HiddenInput = Asset['schemas']['HiddenInput'];
+export type HiddenResult = Asset['schemas']['HiddenResult'];
+export type CharacterReportPage = Asset['schemas']['OpenReportPage'];
+export type CharacterReportGroup = Asset['schemas']['OpenReportGroupOut'];
+export type CharacterReport = Asset['schemas']['ReportOut'];
+export type MessageReportPage = Chat['schemas']['ReportPage'];
+export type MessageReportSummary = Chat['schemas']['ReportSummaryOut'];
+export type MessageReportDetail = Chat['schemas']['ReportDetailOut'];
+export type ReportContextMessage = Chat['schemas']['ContextMessageOut'];
