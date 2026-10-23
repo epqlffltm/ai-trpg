@@ -6,7 +6,7 @@
 DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면의 인물을 받는다.
 저장은 부른 쪽(app/rounds/service.py)이 한다.
 
-행동은 열여섯이다(app/engine/action.py).
+행동은 열일곱이다(app/engine/action.py).
   - 판정(CheckAction). 이번 장면에 나온 NPC 를 겨눌 수 있다(app/rounds/cast.py). 노려 칠 수도 있다.
     자기가 선 장소의 몬스터 한 마리를 칠 수도 있다(app/rounds/monster_scene.py).
   - 치료(TreatAction). 능력과 난이도는 규칙이 정한다. 대상이 그 부상을 입고 있어야 한다.
@@ -25,6 +25,7 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
     (app/rounds/loots.py). 판정이 없어 규칙을 보지 않는다.
   - 사기(BuyAction), 팔기(SellAction), 돈 건네기(PayAction). 화폐가 있는 판이어야 한다. 사고팔기는 이번 장면의
     거래하는 상인과, 값이 있는 물건과, 그만큼의 돈(재고, 소지품)이 있어야 한다(app/rounds/trades.py).
+  - 엄폐하기(CoverAction). 세이브 방식의 규칙이고, 맵에 서 있고, 그 장소에 커버가 있어야 한다(app/rounds/covers.py).
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
 비워 둔 칸(난이도, 회복과 치료의 대상)은 여기서 채워 저장한다. 읽는 쪽이 "비어 있으면"을 다시 따지지 않는다.
 """
@@ -38,6 +39,7 @@ from app.engine.action import (
     AnyAction,
     BuyAction,
     CheckAction,
+    CoverAction,
     GiveAction,
     LootAction,
     MoveAction,
@@ -56,6 +58,7 @@ from app.engine.action import (
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable, is_named
+from app.rounds.covers import accept_cover
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.map_actions import accept_move, accept_search, standing_place
 from app.rounds.models import Declaration, Round
@@ -393,7 +396,7 @@ def accept_action(
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
     accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal, accept_loot,
-    accept_buy, accept_sell, accept_pay).
+    accept_buy, accept_sell, accept_pay, accept_cover).
     """
     if action is None:
         return None
@@ -428,6 +431,8 @@ def accept_action(
         return accept_sell(table, member, scene, action)
     if isinstance(action, PayAction):
         return accept_pay(table, member, action)
+    if isinstance(action, CoverAction):
+        return accept_cover(table, member, ruleset, action)
     return accept_check(table, member, action, scene, ruleset)
 
 

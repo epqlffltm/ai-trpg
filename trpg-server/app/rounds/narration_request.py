@@ -33,6 +33,7 @@ from app.rounds.models import Declaration, Round
 from app.rounds.narrator import (
     BlowNote,
     ClockNote,
+    CoverNote,
     DeathSaveNote,
     DownedStrikeNote,
     DropNote,
@@ -70,6 +71,7 @@ from app.rounds.narrator import (
 )
 from app.rounds.secret_names import secret_names
 from app.rounds.state import (
+    cover_of,
     loot_of,
     move_of,
     pay_of,
@@ -205,6 +207,15 @@ def to_wait(declaration: Declaration | None) -> WaitNote | None:
     if wait is None:
         return None
     return WaitNote(minutes=wait['minutes'], waited=wait['waited'], reason=wait['reason'])
+
+
+def to_cover(declaration: Declaration | None) -> CoverNote | None:
+    """선언에 적힌 엄폐하기의 결과를 서술자에게 줄 모양으로 바꾼다. 엄폐하는 행동이 아니면 None."""
+    cover = cover_of(declaration)
+    if cover is None:
+        return None
+    place = cover['place']
+    return CoverNote(place=place['name'] if place else None, value=cover['value'])
 
 
 def find_revival(revivals: list[dict], user_id: uuid.UUID) -> RevivalNote | None:

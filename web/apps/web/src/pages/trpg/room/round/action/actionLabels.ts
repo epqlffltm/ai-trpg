@@ -20,4 +20,5 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   buy: '사기',
   sell: '팔기',
   pay: '돈 건네기',
+  cover: '엄폐하기',
 };

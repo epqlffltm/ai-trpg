@@ -8,6 +8,7 @@ import { NAME_GUESS_MAX, WAIT_MAX_MINUTES } from './actionDraft';
 import {
   availableKinds,
   canAttachAction,
+  coverHere,
   carriable,
   nameablePeople,
   patients,
@@ -72,6 +73,8 @@ function KindFields({ draft, ctx, onChange }: Omit<Props, 'error'>) {
       return <MoveFields draft={draft} ctx={ctx} onChange={onChange} />;
     case 'search':
       return <p className="hint">지금 있는 곳에서 숨긴 길과 물건을 찾습니다. 무엇으로 굴리는지는 판이 정합니다.</p>;
+    case 'cover':
+      return <CoverHint ctx={ctx} />;
     case 'rest':
       return <RestFields draft={draft} ctx={ctx} onChange={onChange} />;
     case 'wait':
@@ -88,6 +91,16 @@ function KindFields({ draft, ctx, onChange }: Omit<Props, 'error'>) {
 }
 
 type FieldProps = Omit<Props, 'error'>;
+
+/** 엄폐하기(#276). 고를 것이 없다. 이 라운드 동안 그 장소의 커버로 세이브를 받고, 공격하지 못한다 */
+function CoverHint({ ctx }: { ctx: ActionContext }) {
+  return (
+    <p className="hint">
+      이 라운드 동안 지금 있는 곳의 커버({coverHere(ctx)})로 커버 세이브를 받습니다. 몬스터가 먼저 쳐도 듭니다. 이 라운드에는 공격하지
+      못합니다.
+    </p>
+  );
+}
 
 function TreatFields({ draft, ctx, onChange }: FieldProps) {
   const injuries = treatableInjuries(ctx, draft.target);

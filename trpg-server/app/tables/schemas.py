@@ -442,11 +442,14 @@ class PlaceOut(BaseModel):
     장소의 글은 싣지 않는다. 로어북은 AI 가 읽는 설정이다.
     items 는 그곳에 보이게 놓인 물건들이다. 누군가 서 본 장소만 싣는다. 숨긴 물건은 싣지 않는다
     (app/tables/place_items.py). 캐릭터가 내려놓은 것(put_down)도 여기 보인다. 줍기(take)로 가져간다.
+    cover 는 그 장소의 숨을 곳이 얼마나 좋은지다(#276). 세이브 방식의 판에서 엄폐하면 이 값으로 커버 세이브를 받는다.
+    커버가 없는 곳이면 0 이다.
     """
 
     entry_id: uuid.UUID
     name: str
     items: list[PlaceItemOut] = []
+    cover: int = 0
 
 
 class RouteOut(BaseModel):

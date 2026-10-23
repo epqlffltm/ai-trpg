@@ -86,7 +86,10 @@ class PierceOut(BaseModel):
 
 
 class SaveOut(BaseModel):
-    """세이브 굴림(#276). kind 는 armor(그 부위의 방어) 또는 ward(불굴). 눈 + value 가 target 이상이면 막았다."""
+    """
+    세이브 굴림(#276). kind 는 armor(그 부위의 방어), cover(엄폐한 장소의 커버), ward(불굴) 중 하나다.
+    눈 + value 가 target 이상이면 막았다.
+    """
 
     kind: str
     value: int
@@ -727,6 +730,24 @@ class WaitOutcome(BaseModel):
     wait: WaitOut
 
 
+class CoverOut(BaseModel):
+    """
+    엄폐한 결과(#276 의 커버 세이브). 엔진이 정했다(app/rounds/covers.py). 굴림이 없다.
+
+    place 는 숨은 장소, value 는 그 장소의 커버다. 그 라운드 동안 맞힌 공격에 이 값으로 커버 세이브를 굴렸다
+    (판정의 blow.save, 몬스터·인물의 차례의 blow.save 의 kind 가 cover). 0 이면 커버가 없는 곳이라 숨지 못했다.
+    """
+
+    place: PlaceRefOut | None
+    value: int
+
+
+class CoverOutcome(BaseModel):
+    """엄폐하는 행동의 결과."""
+
+    cover: CoverOut
+
+
 class TargetGoneOut(BaseModel):
     """판정할 때 겨눈 몬스터(나 훔치려던 NPC)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다."""
 
@@ -766,7 +787,8 @@ class DeclarationOut(BaseModel):
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
     # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
     # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 훔쳤으면 StealOutcome, 빼앗았으면 LootOutcome,
-    # 쉬었으면 RestOutcome, 기다렸으면 WaitOutcome, 사거나 팔았으면 TradeOutcome, 돈을 건넸으면 PayOutcome 이다.
+    # 쉬었으면 RestOutcome, 기다렸으면 WaitOutcome, 사거나 팔았으면 TradeOutcome, 돈을 건넸으면 PayOutcome,
+    # 엄폐했으면 CoverOutcome 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
     # 차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면 TurnLostOutcome 이다
     outcome: (
@@ -784,6 +806,7 @@ class DeclarationOut(BaseModel):
         | WaitOutcome
         | TradeOutcome
         | PayOutcome
+        | CoverOutcome
         | TargetGoneOutcome
         | TurnLostOutcome
         | None
