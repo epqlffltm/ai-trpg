@@ -315,6 +315,10 @@ class GameTable(Base):
     # 많아야 길의 수라 테이블을 읽을 때 함께 읽는다
     found_routes: Mapped[list['TableFoundRoute']] = relationship(lazy='selectin', cascade='all, delete-orphan')
 
+    # 이 테이블의 길의 자물쇠들(#281). 판에 자물쇠를 적은 길마다 하나다(app/tables/route_locks.py).
+    # 많아야 길의 수라 테이블을 읽을 때 함께 읽는다
+    route_locks: Mapped[list['TableRouteLock']] = relationship(lazy='selectin', cascade='all, delete-orphan')
+
     # 이 테이블의 장소에 남은 물건들. 판의 놓인 물건 줄마다 하나, 캐릭터가 내려놓아 생긴 줄이 그 뒤에 있다
     # (app/tables/place_items.py). 내려놓은 줄은 장소와 물건의 짝마다 많아야 하나라 테이블을 읽을 때 함께 읽는다.
     # 보여 줄 때는 줄 순서(slot)로 놓는다
@@ -911,6 +915,27 @@ class TableFoundRoute(Base):
 
     # 찾은 때
     found_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TableRouteLock(Base):
+    """
+    테이블 하나에서 길 하나의 자물쇠가 지금 잠겨 있는가(#281).
+
+    시작할 때 판에 자물쇠를 적은 길마다 하나씩 만든다. 처음 상태는 판의 것이다(app/tables/route_locks.py).
+    길은 판의 길의 두 끝으로 가리킨다(찾은 숨긴 길과 같다). 바꾸는 것은 엔진뿐이다.
+    열쇠를 지닌 사람이 지나가면 열린다. 연 자물쇠는 누가 다시 잠그기 전까지 열린 채다.
+    """
+
+    __tablename__ = 'table_route_locks'
+
+    # 세 칸을 합쳐 기본 키로 삼는다. 한 길의 자물쇠는 하나다. 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 판(content)의 길의 두 끝. 판에 적힌 방향 그대로다
+    from_place: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    to_place: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+
+    # 지금 잠겨 있는가. 언제 누가 열었는지는 이벤트에 있다
+    locked: Mapped[bool] = mapped_column(Boolean)
 
 
 class TablePlaceItem(Base):

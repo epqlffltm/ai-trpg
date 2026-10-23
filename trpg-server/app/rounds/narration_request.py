@@ -169,8 +169,20 @@ def place_name(place: dict | None) -> str | None:
     return place['name'] if place else None
 
 
-def to_travel(declaration: Declaration | None) -> TravelNote | None:
-    """선언에 적힌 가기의 결과를 서술자에게 줄 모양으로 바꾼다. 가는 행동이 아니면 None."""
+def cross_ability_name(ruleset: Ruleset | None, cross: dict | None) -> str | None:
+    """길을 넘는 판정의 능력치의 이름(#281). 굴리지 않았으면 None. 규칙에서 찾지 못하면 이름표 그대로다."""
+    if cross is None:
+        return None
+    ability = find_ability(ruleset, cross['ability']) if ruleset is not None else None
+    return ability.name if ability is not None else cross['ability']
+
+
+def to_travel(declaration: Declaration | None, ruleset: Ruleset | None = None) -> TravelNote | None:
+    """
+    선언에 적힌 가기의 결과를 서술자에게 줄 모양으로 바꾼다. 가는 행동이 아니면 None.
+
+    ruleset 은 길을 넘는 판정의 능력치의 이름을 찾는다(#281).
+    """
     move = move_of(declaration)
     if move is None:
         return None
@@ -183,6 +195,9 @@ def to_travel(declaration: Declaration | None) -> TravelNote | None:
         travel_minutes=move.get('travel_minutes'),
         carried=carry.get('character_name'),
         carry_reason=carry.get('reason'),
+        unlocked=move.get('unlocked', False),
+        cross=cross_ability_name(ruleset, move.get('cross')),
+        hurt=move.get('effect') is not None,
     )
 
 
