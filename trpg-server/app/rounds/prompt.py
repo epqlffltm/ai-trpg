@@ -161,7 +161,9 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-52: 타격에 장비가 들었으면 판정의 줄과 몬스터·인물의 차례의 줄에 무기, 맞은 부위, 그 부위의
 #                 방어가 붙는다(무기: 장검 +2 · 맞은 곳: 몸 · 방어 3(목표값에 더함), #276).
 #                 장비가 들지 않은 타격의 글은 그대로다
-PROMPT_VERSION = 'narration-52'
+#   narration-53: 그 줄에 관통(관통함, 관통 못 함)과 세이브(아머 세이브 5: 막음)가 붙는다(#276).
+#                 관통도 세이브도 굴리지 않은 타격의 글은 그대로다
+PROMPT_VERSION = 'narration-53'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

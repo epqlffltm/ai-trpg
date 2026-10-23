@@ -133,6 +133,14 @@ def blow_text(blow: object) -> str:
         parts.append(text_of(blow.get('location_name')) + ('(노림)' if blow.get('aimed') else ''))
     if blow.get('mode'):
         parts.append(f'방어 {blow.get("defense")}')
+    pierce = blow.get('pierce')
+    if isinstance(pierce, dict):
+        parts.append('관통' if pierce.get('pierced') else '관통 못 함')
+    save = blow.get('save')
+    if isinstance(save, dict):
+        parts.append(
+            f'세이브 {save.get("roll")} + {save.get("value")} → ' + ('막음' if save.get('saved') else '못 막음')
+        )
     return f' ({" · ".join(parts)})' if parts else ''
 
 

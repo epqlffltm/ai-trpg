@@ -453,6 +453,8 @@ def to_blow(blow: dict | None) -> BlowNote | None:
     if blow is None:
         return None
     weapon = blow['weapon']
+    pierce = blow.get('pierce')
+    save = blow.get('save')
     return BlowNote(
         weapon=weapon['name'] if weapon else None,
         weapon_bonus=weapon['bonus'] if weapon else 0,
@@ -460,6 +462,10 @@ def to_blow(blow: dict | None) -> BlowNote | None:
         aimed=blow['aimed'],
         defense=blow['defense'],
         mode=blow['mode'],
+        pierced=pierce['pierced'] if pierce else None,
+        save_kind=save['kind'] if save else None,
+        save_value=save['value'] if save else 0,
+        saved=save['saved'] if save else None,
     )
 
 

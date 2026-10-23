@@ -84,6 +84,7 @@ def load_backfill_rules() -> dict:
     narration = load_migration('rule_narration')
     slots = load_migration('equipment_slots')
     armor = load_migration('armor')
+    saves = load_migration('saves')
     treated = [
         {**injury, **treatment.TREATABLE.get(injury['key'], treatment.UNTREATABLE)} for injury in injuries['injuries']
     ]
@@ -102,10 +103,10 @@ def load_backfill_rules() -> dict:
     }
     # 오래 가는 부상과 치료의 기간을 분으로 옮긴 것(판 형식 25), 쉬기(판 형식 28)와 훔치기(판 형식 36),
     # 빼앗긴 인물이 깨어날 때의 반응(판 형식 40), 빈 서술 지침(판 형식 45), 빈 장비의 칸(판 형식 47),
-    # 방어 방식이 없음(판 형식 48)을 더한 것
+    # 방어 방식이 없음(판 형식 48, 49)을 더한 것
     converted = minutes.convert(filled, minutes.injury_to_minutes, minutes.row_to_minutes)
     added = narration.with_narration(robbed_wake.with_robbed_wake(steal.with_steal(rest.with_rest(converted))))
-    return armor.with_armor(slots.with_slots(added))
+    return saves.with_pierce(armor.with_armor(slots.with_slots(added)))
 
 
 # --- 내장 템플릿 ---
@@ -169,6 +170,28 @@ def test_the_armor_migration_weights_old_slots_once():
     assert filled == {'equipment_slots': [{'key': 'body', 'name': '몸', 'hit_weight': 1}], 'armor': None}
     assert armor.with_armor(filled) == filled
     assert armor.without_armor(filled) == old
+
+
+@pytest.mark.parametrize(
+    ('armor', 'filled', 'undone'),
+    [
+        (None, None, None),
+        ({'mode': 'ac'}, {'mode': 'ac', 'save_target': None, 'pierce_base': 10}, {'mode': 'ac'}),
+        ({'mode': 'save', 'save_target': 15, 'pierce_base': 8}, None, None),
+    ],
+)
+def test_the_saves_migration_fills_the_pierce_base(armor, filled, undone):
+    """방어 방식이 있는 옛 룰북에 세이브의 목표값(없음)과 관통의 기준값(10)을 채운다(#276).
+
+    되돌리면 세이브 방식은 없어진다. 그 전에는 세이브 방식이 없었다.
+    """
+    saves = load_migration('saves')
+
+    forward = saves.with_pierce({'armor': armor})
+
+    assert forward == {'armor': filled if filled is not None else armor}
+    assert saves.with_pierce(forward) == forward
+    assert saves.without_pierce(forward) == {'armor': undone}
 
 
 def test_a_ruleset_cannot_be_changed_after_it_is_made():

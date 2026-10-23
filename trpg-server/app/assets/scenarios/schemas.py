@@ -472,6 +472,8 @@ class MonsterSheet(BaseModel):
     dull: bool = False
     # 부위마다 타고난 방어(#276). 가죽, 비늘, 껍데기. 착용한 방어구의 방어에 더한다. 칸은 룰북의 것이다
     natural_armor: NaturalArmors = []
+    # 타고난 불굴 세이브(#276). 세이브 방식에서 관통을 무시하고 막는다. 비우면 없다
+    ward: CombatNumber | None = None
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':
@@ -555,6 +557,8 @@ class ItemRule(BaseModel):
     attack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).
     defense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.
     어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.
+    ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
+    세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -569,13 +573,22 @@ class ItemRule(BaseModel):
     attack: CombatNumber | None = None
     defense: CombatNumber | None = None
     guard: CombatNumber | None = None
+    ap: CombatNumber | None = None
+    ward: CombatNumber | None = None
 
     @model_validator(mode='after')
     def combat_only_when_worn(self) -> 'ItemRule':
         """공격 보정과 방어는 착용하는 물건(칸이 있다)에만 적는다. 착용해야 쓰인다."""
-        numbers = (self.attack, self.defense, self.guard)
+        numbers = (self.attack, self.defense, self.guard, self.ap, self.ward)
         if not self.slots and any(number is not None for number in numbers):
-            raise ValueError('공격 보정(attack)과 방어(defense, guard)는 칸(slots)이 있는 물건에만 적습니다.')
+            raise ValueError('공격 보정(attack, ap)과 방어(defense, guard, ward)는 칸(slots)이 있는 물건에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def pierce_only_with_attack(self) -> 'ItemRule':
+        """관통력은 무기(공격 보정이 있다)에만 적는다. 타격에 적을 수 있는 것은 무기뿐이다."""
+        if self.ap is not None and self.attack is None:
+            raise ValueError('관통력(ap)은 공격 보정(attack)이 있는 무기에만 적습니다.')
         return self
 
     @model_validator(mode='after')
