@@ -3,7 +3,7 @@
 // 옆에는 방장의 운영(방장에게만), 앉은 사람(모집 중) 또는 상태 패널(B7, 진행 중과 끝남), 채팅.
 //
 // 스트림에서 받은 것:
-//   - 이벤트: 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다
+//   - 이벤트: 일어난 일에 더하고, 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다
 //   - 채팅: 읽어 둔 채팅에 번호 차례로 합친다. 그 사람의 "입력 중"을 지운다
 //   - 입력 중: 5초 동안 보인다
 //   - 서술의 미리 보기: 조각을 이어 둔다(round/preview.ts). 서술이 끝났다는 이벤트가 오면 지운다
@@ -12,7 +12,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-import type { ChatMessage, MessagePage, TableDetail, TableEvent } from '../../../api/types';
+import type { ChatMessage, EventPage, MessagePage, TableDetail, TableEvent } from '../../../api/types';
 import { meQuery } from '../../../auth/queries';
 import { usePublicNames } from '../../../hooks/usePublicNames';
 import { ChatPanel } from './ChatPanel';
@@ -21,8 +21,8 @@ import { HostPanel } from './host/HostPanel';
 import { RoomHeader } from './RoomHeader';
 import { ActionRequestProvider } from './round/action/actionRequest';
 import { applyPreview, ENDS_PREVIEW, type NarrationPreview } from './round/preview';
-import { chatQuery, tableQuery } from './roomQueries';
-import { mergeMessages } from './streamPolicy';
+import { chatQuery, eventsQuery, tableQuery } from './roomQueries';
+import { mergeEvents, mergeMessages } from './streamPolicy';
 import { useBatchedRefetch } from './useBatchedRefetch';
 import { useTableStream } from './useTableStream';
 import { useTypingPeople } from './useTypingPeople';
@@ -33,6 +33,7 @@ import { StatusPanel } from './status/StatusPanel';
 export function TableRoom({ table }: { table: TableDetail }) {
   const queryClient = useQueryClient();
   const chat = useQuery(chatQuery(table.id));
+  const events = useQuery(eventsQuery(table.id));
   const me = useQuery(meQuery());
   const typing = useTypingPeople();
   const refetchSoon = useBatchedRefetch(table.id);
@@ -49,10 +50,21 @@ export function TableRoom({ table }: { table: TableDetail }) {
     [queryClient, table.id],
   );
 
-  const stream = useTableStream(table.id, chat.isSuccess ? chat.data.last_sequence : null, {
+  const appendEvent = useCallback(
+    (event: TableEvent) => {
+      queryClient.setQueryData<EventPage>(eventsQuery(table.id).queryKey, (current) =>
+        current ? { ...current, items: mergeEvents(current.items, [event]) } : current,
+      );
+    },
+    [queryClient, table.id],
+  );
+
+  const start = chat.isSuccess && !events.isPending ? { messages: chat.data.last_sequence, events: events.data?.last_sequence ?? null } : null;
+  const stream = useTableStream(table.id, start, {
     onOpen: refetchSoon,
     onEvent: (event: TableEvent) => {
       if (ENDS_PREVIEW.has(event.type)) setPreview(null);
+      appendEvent(event);
       refetchSoon();
     },
     onChat: (message) => {
