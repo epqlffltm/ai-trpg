@@ -22,7 +22,9 @@ from sqlalchemy.engine import Connection
 import app.characters.models  # noqa: E402, F401
 import app.images.models  # noqa: E402, F401
 import app.lorebooks.models  # noqa: E402, F401
+import app.operators.models  # noqa: E402, F401
 import app.personas.models  # noqa: E402, F401
+import app.reports.models  # noqa: E402, F401
 from app.core.config import get_settings
 from app.core.database import Base
 

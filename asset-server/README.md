@@ -71,7 +71,8 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰의 발급자(`iss`). 인증 서버의 `JWT_ISSUER`와 같아야 한다 |
 | `JWT_AUDIENCE` | `ai-trpg-asset` | 이 서버의 이름. 토큰의 대상(`aud`)에 이 이름이 있어야 받는다 |
 | `PERSONA_MAX_PER_OWNER` | `50` | 한 사람이 가질 수 있는 계정 페르소나의 수(1~500). TRPG 의 보관함과 같다 |
-| `CHARACTERS_FOR_EVERYONE` | `false` | 캐릭터를 누구나 만들 수 있는가. 1~2단계에는 운영자만 만든다(거짓). 참이어도 공개로 두는 것은 운영자만이다 |
+| `CHARACTERS_FOR_EVERYONE` | `false` | 캐릭터를 누구나 만들 수 있는가. 1~2단계에는 운영자만 만든다(거짓). 참이어도 공개로 두는 것은 `PUBLIC_FOR_EVERYONE` 이 따로 연다 |
+| `PUBLIC_FOR_EVERYONE` | `false` | 일반 사용자도 캐릭터를 공개로 두는가(#678). [신고](#신고와-숨김)가 생겨 열 수 있게 되었다. 운영 준비(관리자 화면 E4, 약관)가 되면 켠다 |
 | `CHAT_SERVER_SECRET` | 비어 있음(받지 않음) | chat 서버가 페르소나와 판을 가져갈 때 서명하는 비밀([다른 서버에 내주기](#다른-서버에-내주기)). `chat-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상. 비밀값이다 |
 | `AUTH_SERVER_SECRET` | 비어 있음(받지 않음) | 인증 서버가 [탈퇴](#탈퇴)를 알릴 때 서명하는 비밀. `auth-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상이고 다른 비밀과 달라야 한다. 비밀값이다 |
 
@@ -123,6 +124,11 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/lorebooks/{id}/versions`, `/versions/{number}` | 로어북의 판의 목록(최근 것부터), 판 하나(굳힌 문서까지) | access 토큰 |
 | GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서). 볼 수 없으면 404 | 없어도 된다 |
+| POST | `/api/v1/asset/listings/characters/{id}/reports` | [신고](#신고와-숨김) `{reason, description?}`. 201. 볼 수 없으면 404, 자기 것은 403 `own_character`, 두 번째는 409 `already_reported` | access 토큰 |
+| GET | `/api/v1/asset/admin/character-reports` | [운영자](#신고와-숨김): 열린 신고를 캐릭터마다 묶은 목록(`minor` 가 먼저). 운영자가 아니면 404 | access 토큰(운영자) |
+| GET | `/api/v1/asset/admin/characters/{id}/reports` | 운영자: 그 캐릭터의 신고 전부(처리한 것까지) | access 토큰(운영자) |
+| PUT | `/api/v1/asset/admin/characters/{id}/reports/outcome` | 운영자: 열린 신고의 처리 `{outcome: actioned \| dismissed, reason}`. `actioned` 면 숨긴다 | access 토큰(운영자) |
+| PUT | `/api/v1/asset/admin/characters/{id}/hidden` | 운영자: 숨기기와 풀기 `{hidden, reason}` | access 토큰(운영자) |
 | POST | `/api/v1/asset/images` | [그림](#그림) 올리기. 201. 본문은 그림 파일의 바이트(PNG, JPEG, WebP). 형식이 아니면 415 `image_format`, 열 수 없으면 422 `image_unreadable`, 크면 413, 저장소를 쓸 수 없으면 503 `image_store_unavailable` | access 토큰 |
 | GET | `/api/v1/asset/images/{id}` | 그림 내주기. 볼 수 있으면 본문 없이 200 과 `X-Accel-Redirect`, `X-Image-Source`(프록시가 그림을 내준다). 없거나 볼 수 없으면 404. 주인과, 공개 캐릭터의 판에 쓰였으면 그 판을 볼 수 있는 사람이 본다 | 없어도 된다 |
 | GET | `/api/v1/asset/service/{caller}/personas/{id}` | [다른 서버에](#다른-서버에-내주기) 페르소나의 사본과 `revision`. 토큰의 주인의 것만(아니면 404) | 서버의 서명 + access 토큰 |
@@ -205,7 +211,8 @@ chat 의 상대가 되는 캐릭터다(#567, [설계](../docs/architecture/asset
 **그림은 셋이다**(2026-10-23 유저 결정). 캐릭터 그림(배경이 투명한 서 있는 그림), 배경(장소마다, 시간대마다), 이벤트 씬(CG. 배경과 캐릭터를 대신해 특정 상황을 그린 그림)이다.
 보통의 장면은 배경 위에 캐릭터 그림을 겹친다(화면의 일). 대표 그림(`image_id`)은 목록과 프로필에 쓰는 그림으로 따로 있다.
 
-- **누가 만드나.** 1~2단계에는 운영자만 만든다(`CHARACTERS_FOR_EVERYONE` 거짓, 403 `operator_only`). 3단계에서 열어도 **공개로 두는 것은 운영자만**이다. 일반 사용자의 공개는 신고와 관리자 화면(E4)이 생긴 뒤에 연다.
+- **누가 만드나.** 1~2단계에는 운영자만 만든다(`CHARACTERS_FOR_EVERYONE` 거짓, 403 `operator_only`). 3단계에서 열어도 **공개로 두는 것은 운영자만**이다.
+  일반 사용자의 공개는 `PUBLIC_FOR_EVERYONE` 으로 연다(#678, [신고와 숨김](#신고와-숨김)이 생겼다. 관리자 화면 E4 와 약관이 준비되면 켠다).
 - **등급.** 성인 등급(`adult`)은 성인 확인을 한 사람이나 운영자만 쓴다(`app/ratings.py` 의 `allowed_ratings`, 게임 서버와 같은 규칙). 나이와 성별로는 거르지 않는다.
 - **게시.** 막는 것은 시작 상황이 없는 것(`start_missing`), 남의 그림(`image_not_owned`), 맞지 않는 [지도와 물건](#지도와-물건), [호감도](#호감도), [이벤트 씬](#이벤트-씬), [캐릭터 그림](#캐릭터-그림), 게시한 적이 없거나 지운 [로어북](#로어북)이다. 소개는 허용 목록으로 걸러 판에 넣고, 걸러 낸 것을 `removed` 로 알린다(게시는 된다).
   - 판은 바뀌지 않는다. 번호는 1 부터 오른다. 같은 캐릭터를 동시에 게시하면 행을 잠가 차례로 번호를 준다.
@@ -340,6 +347,24 @@ chat 의 대화는 1일째의 시작 시각에서 시작해 이동(길의 시간
   그래서 chat 은 캐릭터의 판 하나만 가져온다. 로어북을 고치고 다시 게시해도 이미 게시한 캐릭터의 판은 그대로다. 캐릭터를 다시 게시하면 새 판이 들어간다.
   게시한 적이 없는 로어북(`lorebook_unpublished`)이나 지운 로어북(`lorebook_missing`)을 가리키면 캐릭터의 게시가 막힌다. 지운 로어북의 id 는 초안에 남는다.
 - **지금은 만든 사람만 쓴다.** 공개 범위와 등급이 없다. 캐릭터의 등급이 판 전체(복사한 로어북까지)의 등급이다. 남과 나누는 것은 story 와 TRPG 를 옮길 때 더한다.
+
+### 신고와 숨김
+
+공개 캐릭터를 신고하고 운영자가 숨긴다(#678, 2026-10-23 유저 결정). `app/reports/`, `app/operators/`. 운영자의 화면(E4)은 아직 없고 API 만 있다.
+
+- **신고**(`POST /listings/characters/{id}/reports`). 로그인한 사람이 볼 수 있는 공개 캐릭터를 신고한다(공개 목록과 같은 규칙, 아니면 404).
+  사유는 게시판의 신고와 같은 `spam`, `abuse`, `sexual`, `illegal`, `other` 에 `minor`(미성년 인물을 성적으로 다룬다)를 더했다. `other` 는 설명(500자)이 있어야 한다.
+  신고한 사람이 본 판의 번호를 함께 남긴다. 자기 캐릭터는 403 `own_character`, 같은 캐릭터를 두 번은 409 `already_reported`(처리된 뒤에도, 유일 제약이 정한다).
+- **운영자 API**(`/admin/...`). 운영자(토큰의 `roles` 에 `operator`)가 아니면 404 다(주소가 있다는 것을 알리지 않는다).
+  열린 신고는 캐릭터마다 한 줄로 묶고(사유마다의 수, 처음과 마지막 신고), `minor` 가 있는 것을 먼저, 그다음 마지막 신고가 최근인 것부터 보인다.
+  한 캐릭터의 신고에는 신고한 사람의 id 를 싣지 않는다. 처리하는 데 필요하지 않다.
+- **처리.** 그 캐릭터의 열린 신고를 한꺼번에 처리한다. `actioned` 면 숨기고 `dismissed` 면 그대로 둔다. 숨기기와 풀기는 따로도 한다.
+- **숨김**(`characters.hidden_at`). 숨긴 캐릭터는 공개여도 공개 목록, 공개 소개, 남에게 내주는 판(chat 의 새 대화), 남이 보는 그림에서 빠진다.
+  주인은 계속 쓴다(초안의 `hidden_at` 으로 안다). 주인이 비공개로 했다가 공개로 돌려도 숨김이 앞선다. 운영자만 푼다. 이미 시작한 남의 대화는 사본으로 돈다.
+- **감사 기록**(`operator_actions`). 조치마다 운영자, 시각, 종류(`character_hide`, `character_unhide`, `reports_dismiss`), 캐릭터, 사유(필수, 200자), 요청 식별자를 조치와 한 트랜잭션에 적는다.
+  덧붙이기만 한다(트리거가 고치기와 지우기를 막는다). 같은 것을 로그(`operator.act`, 사유는 빼고)에도 남긴다. 신고의 목록을 보는 것은 적지 않는다(운영자에게 보낸 것이다).
+- **아직 없는 것.** 숨김을 주인의 알림함에 알리는 것(asset 서버에 알림 보내기가 없다), 신고의 횟수 제한(유일 제약이 캐릭터마다 한 번으로 묶는다), 대화 속 답의 신고(chat 의 다음 PR).
+- 캐릭터를 지우면 그 신고도 지워진다. 공개한 캐릭터를 지우면 문제가 된 것도 사라진다.
 
 ### 그림
 

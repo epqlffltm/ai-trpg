@@ -11,6 +11,7 @@
   - 판은 바뀌지 않는다. 게시할 때마다 번호가 하나씩 오른다.
     같은 캐릭터를 동시에 게시해도 번호가 겹치지 않게 행을 잠근다.
   - 공개 목록은 공개이고 게시한 판이 있고, 보는 사람이 볼 수 있는 등급(판의 등급)인 것만 낸다. 나머지는 404 다.
+    운영자가 숨긴 캐릭터(#678)는 공개여도 빠진다. 주인은 계속 쓴다.
   - 다른 서버(chat, story)에 내주는 판은 마지막 판이다. 쓸 수 있는 사람은 주인이거나, 공개 캐릭터를 볼 수 있는 사람이다.
     등급은 주인에게도 본다(성인 확인을 잃은 주인에게 성인 판을 내주지 않는다). 주인에게는 403, 남에게는 404 다.
   - 대표 그림과 소개 글의 그림은 자기가 올린 그림이어야 한다(#566). 초안의 대표 그림은 붙일 때 보고(422),
@@ -63,9 +64,12 @@ def require_maker(viewer: AccessClaims, for_everyone: bool) -> None:
         raise OperatorOnlyError
 
 
-def require_visibility(viewer: AccessClaims, visibility: Visibility | None) -> None:
-    """공개로 두려면 운영자여야 한다. 비공개로 두거나 바꾸지 않으면 누구나 된다."""
-    if visibility == Visibility.PUBLIC and not viewer.is_operator:
+def require_visibility(viewer: AccessClaims, visibility: Visibility | None, public_for_everyone: bool) -> None:
+    """
+    공개로 두려면 운영자여야 한다. 설정(PUBLIC_FOR_EVERYONE)을 켜면 누구나 된다(#678).
+    비공개로 두거나 바꾸지 않으면 누구나 된다.
+    """
+    if visibility == Visibility.PUBLIC and not (viewer.is_operator or public_for_everyone):
         raise OperatorOnlyError
 
 
@@ -124,11 +128,15 @@ async def create_character(
 
 
 async def update_character(
-    session: AsyncSession, viewer: AccessClaims, character_id: uuid.UUID, data: CharacterUpdate
+    session: AsyncSession,
+    viewer: AccessClaims,
+    character_id: uuid.UUID,
+    data: CharacterUpdate,
+    public_for_everyone: bool = False,
 ) -> Character:
-    """자기 캐릭터의 초안을 고친다. 게시한 판은 그대로다."""
+    """자기 캐릭터의 초안을 고친다. 게시한 판은 그대로다. 숨긴 캐릭터는 공개로 돌려도 숨김이 앞선다."""
     character = await get_mine(session, viewer.user_id, character_id)
-    require_visibility(viewer, data.visibility)
+    require_visibility(viewer, data.visibility, public_for_everyone)
     if data.rating is not None:
         require_rating(data.rating, allowed_ratings(viewer))
     await require_own_images(session, viewer.user_id, data.image_ids())
@@ -266,8 +274,12 @@ def is_owner(character: Character, viewer: AccessClaims) -> bool:
 
 
 def require_reachable(character: Character, viewer: AccessClaims) -> None:
-    """주인이 아니면 공개여야 한다. 아니면 CharacterNotFoundError(있는지도 드러내지 않는다)."""
-    if not is_owner(character, viewer) and character.visibility != Visibility.PUBLIC:
+    """
+    주인이 아니면 공개이고 숨기지 않은 것이어야 한다(#678). 아니면 CharacterNotFoundError(있는지도 드러내지 않는다).
+    """
+    if is_owner(character, viewer):
+        return
+    if character.visibility != Visibility.PUBLIC or character.hidden_at is not None:
         raise CharacterNotFoundError
 
 

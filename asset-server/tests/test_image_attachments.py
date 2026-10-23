@@ -19,7 +19,7 @@ import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey, make_access_claims, make_token
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters.models import Character, CharacterVersion
@@ -185,6 +185,20 @@ async def test_a_public_characters_image_is_seen_by_anyone(
 
     assert [await sees(client, image_id) for image_id in (cover, inside)] == [status.HTTP_200_OK] * 2
     assert await sees(client, cover, other) == status.HTTP_200_OK
+
+
+async def test_a_hidden_characters_image_is_seen_by_the_owner_only(
+    client: AsyncClient, owner: dict, other: dict, session: AsyncSession, store: FakeImageStore
+):
+    cover = await own_image(session, OWNER)
+    made = await published_public(client, owner, image_id=cover)
+    await session.execute(
+        update(Character).where(Character.id == uuid.UUID(made['id'])).values(hidden_at=Character.created_at)
+    )
+    await session.commit()
+
+    assert (await sees(client, cover), await sees(client, cover, other)) == (status.HTTP_404_NOT_FOUND,) * 2
+    assert await sees(client, cover, owner) == status.HTTP_200_OK
 
 
 async def test_an_adult_version_shows_its_images_to_adults_only(

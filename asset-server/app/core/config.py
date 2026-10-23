@@ -42,8 +42,11 @@ class Settings(CoreSettings):
 
     # 캐릭터를 누구나 만들 수 있는가(#567). 1~2단계에는 운영자만 만든다(거짓).
     # 3단계에서 일반 사용자에게 열 때 참으로 둔다.
-    # 참이어도 공개로 두는 것은 운영자만이다(신고와 관리자 화면이 생긴 뒤에 연다)
+    # 참이어도 공개로 두는 것은 운영자만이다(PUBLIC_FOR_EVERYONE 이 따로 연다)
     characters_for_everyone: bool = False
+    # 일반 사용자도 캐릭터를 공개로 둔다(#678). 신고와 운영자의 숨김이 생겨 열 수 있게 되었다.
+    # 운영 준비(관리자 화면 E4, 약관)가 되면 켠다. 거짓이면 공개로 두는 것은 운영자만이다
+    public_for_everyone: bool = False
 
     # 페르소나와 판을 가져가는 서버마다의 서명 비밀(server_core/service_auth/signing.py, app/core/service_auth.py).
     # 그 서버의 설정에 같은 값을 적는다(chat 은 ASSET_SECRET). 서버마다 따로 둔다.
