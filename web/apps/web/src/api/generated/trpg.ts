@@ -3337,15 +3337,19 @@ export interface components {
          * @description 사건이 일어났을 때 하는 일의 종류(#367). 효과는 목록이라 종류가 늘어도 판의 모양은 그대로다.
          * @enum {string}
          */
-        HappeningEffectKind: "move" | "move_npc";
+        HappeningEffectKind: "move" | "move_npc" | "lock_route" | "unlock_route" | "repair_route";
         /**
          * HappeningEffectSnapshot
-         * @description 사건의 효과 하나. 캐릭터 옮기기(move)와 인물 옮기기(move_npc, #282)다. 장소는 판의 맵의 장소 항목이다.
+         * @description 사건의 효과 하나. 캐릭터 옮기기(move), 인물 옮기기(move_npc, #282), 길의 문 다루기(#281)다.
+         *     장소는 판의 맵의 장소 항목이다.
          *
          *     move: from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.
          *     move_npc: 판 안의 인물 항목 하나(npc)를 to_place 로 옮긴다. 죽은 인물은 옮기지 않는다. from_place 는 없다.
+         *     lock_route, unlock_route, repair_route: 두 끝이 from_place 와 to_place 인 길(방향은 보지 않는다)의 문을
+         *     잠그고, 열고, 고친다. 잠그고 열기는 device 의 장치만, 비었으면 그 문의 장치 모두다. 형식 54 보다 옛 판에는 없다.
          */
         HappeningEffectSnapshot: {
+            device?: components["schemas"]["DoorDevice"] | null;
             /** From Place */
             from_place?: string | null;
             kind: components["schemas"]["HappeningEffectKind"];
@@ -3372,7 +3376,7 @@ export interface components {
          */
         "HappeningRule-Input": {
             /** Effects */
-            effects: (components["schemas"]["MoveEffect-Input"] | components["schemas"]["MoveNpcEffect-Input"])[];
+            effects: (components["schemas"]["MoveEffect-Input"] | components["schemas"]["MoveNpcEffect-Input"] | components["schemas"]["RouteDoorEffect-Input"] | components["schemas"]["RepairRouteEffect-Input"])[];
             /**
              * Entry Id
              * Format: uuid
@@ -3398,7 +3402,7 @@ export interface components {
          */
         "HappeningRule-Output": {
             /** Effects */
-            effects: (components["schemas"]["MoveEffect-Output"] | components["schemas"]["MoveNpcEffect-Output"])[];
+            effects: (components["schemas"]["MoveEffect-Output"] | components["schemas"]["MoveNpcEffect-Output"] | components["schemas"]["RouteDoorEffect-Output"] | components["schemas"]["RepairRouteEffect-Output"])[];
             /** Entry Id */
             entry_id: string;
             /** @default all */
@@ -6416,6 +6420,46 @@ export interface components {
             references_enabled: boolean;
         };
         /**
+         * RepairRouteEffect
+         * @description 사건의 효과 하나: 길 하나의 부서진 문을 고친다(repair_route, #281).
+         *
+         *     고친 문은 열린 채다. 다시 잠그려면 뒤에 잠그는 효과(lock_route)를 잇는다. 부서지지 않은 문은 그대로다.
+         */
+        "RepairRouteEffect-Input": {
+            /**
+             * From Place
+             * Format: uuid
+             */
+            from_place: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "repair_route";
+            /**
+             * To Place
+             * Format: uuid
+             */
+            to_place: string;
+        };
+        /**
+         * RepairRouteEffect
+         * @description 사건의 효과 하나: 길 하나의 부서진 문을 고친다(repair_route, #281).
+         *
+         *     고친 문은 열린 채다. 다시 잠그려면 뒤에 잠그는 효과(lock_route)를 잇는다. 부서지지 않은 문은 그대로다.
+         */
+        "RepairRouteEffect-Output": {
+            /** From Place */
+            from_place: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "repair_route";
+            /** To Place */
+            to_place: string;
+        };
+        /**
          * Rest
          * @description 쉬기. 짧은 휴식과 긴 휴식, 되살아나기, 저절로 회복하기다.
          *
@@ -6660,6 +6704,52 @@ export interface components {
             ability: string;
             /** Difficulty */
             difficulty: string;
+        };
+        /**
+         * RouteDoorEffect
+         * @description 사건의 효과 하나: 길 하나의 문을 잠그거나(lock_route) 연다(unlock_route, #281).
+         *
+         *     판이 하는 일이라 열쇠도 서 있는 쪽도 보지 않는다. NPC 나 몬스터가 문을 잠그고 여는 것을 이것으로 적는다.
+         *     device 를 적으면 그 장치만, 비우면 그 문의 장치 모두(자물쇠, 빗장)다. 적은 장치가 그 길에 있는지는 게시할 때 본다.
+         *     부서진 문은 잠그지 못한다(고치는 효과를 먼저 적는다). 이미 그렇게 되어 있는 장치는 그대로다.
+         */
+        "RouteDoorEffect-Input": {
+            device?: components["schemas"]["DoorDevice"] | null;
+            /**
+             * From Place
+             * Format: uuid
+             */
+            from_place: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "lock_route" | "unlock_route";
+            /**
+             * To Place
+             * Format: uuid
+             */
+            to_place: string;
+        };
+        /**
+         * RouteDoorEffect
+         * @description 사건의 효과 하나: 길 하나의 문을 잠그거나(lock_route) 연다(unlock_route, #281).
+         *
+         *     판이 하는 일이라 열쇠도 서 있는 쪽도 보지 않는다. NPC 나 몬스터가 문을 잠그고 여는 것을 이것으로 적는다.
+         *     device 를 적으면 그 장치만, 비우면 그 문의 장치 모두(자물쇠, 빗장)다. 적은 장치가 그 길에 있는지는 게시할 때 본다.
+         *     부서진 문은 잠그지 못한다(고치는 효과를 먼저 적는다). 이미 그렇게 되어 있는 장치는 그대로다.
+         */
+        "RouteDoorEffect-Output": {
+            device?: components["schemas"]["DoorDevice"] | null;
+            /** From Place */
+            from_place: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "lock_route" | "unlock_route";
+            /** To Place */
+            to_place: string;
         };
         /**
          * RouteLock
@@ -7586,7 +7676,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 53
+             * @default 54
              */
             format: number;
             /**

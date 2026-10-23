@@ -19,7 +19,7 @@ DB 를 모른다. 테이블의 문의 상태를 고친다(app/tables/route_locks
 
 import uuid
 
-from app.assets.scenarios.snapshot import RouteSnapshot, read_snapshot
+from app.assets.scenarios.snapshot import RouteSnapshot, door_devices, read_snapshot
 from app.engine.action import DoorAction, DoorDevice, ForceAction, LockAction, PickAction, UnlockAction
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionTargetError, Conflict, RoundConflictError
@@ -50,12 +50,6 @@ def joining_route(table: GameTable, here: uuid.UUID, there: uuid.UUID) -> RouteS
     snapshot = read_snapshot(table.content)
     known = places.known_map(snapshot, places.knowledge(table))
     return places.route_joining(known, here, there)
-
-
-def door_devices(route: RouteSnapshot) -> list[DoorDevice]:
-    """그 길의 문에 있는 장치들. 자물쇠, 빗장의 차례다."""
-    present = [(DoorDevice.LOCK, route.lock), (DoorDevice.BAR, route.bar)]
-    return [device for device, part in present if part is not None]
 
 
 def resolve_device(route: RouteSnapshot, device: DoorDevice | None) -> DoorDevice:

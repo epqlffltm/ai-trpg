@@ -86,6 +86,7 @@ from app.assets.models import (
 from app.assets.scenarios.recommended_model import ModelState
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
+from app.engine.action import DoorDevice
 from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, Key
 from app.engine.sheet import Sheet
 
@@ -1139,7 +1140,57 @@ class MoveNpcEffect(BaseModel):
         return str(value)
 
 
-HappeningEffect = Annotated[MoveEffect | MoveNpcEffect, Field(discriminator='kind')]
+class RouteEnds(BaseModel):
+    """
+    사건의 효과가 다루는 길 하나(#281). 길의 두 끝이다. 방향은 보지 않는다(문은 길의 어느 끝에서든 같다).
+
+    판의 길 중 두 끝이 같은 것이 그 길이다. 그런 길이 있고 문(자물쇠나 빗장)이 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    from_place: uuid.UUID
+    to_place: uuid.UUID
+
+    @model_validator(mode='after')
+    def two_ends(self) -> 'RouteEnds':
+        """제자리로 오는 길은 없다."""
+        if self.from_place == self.to_place:
+            raise ValueError('길의 두 끝이 같습니다.')
+        return self
+
+    @field_serializer('from_place', 'to_place')
+    def end_as_text(self, place: uuid.UUID) -> str:
+        """장소의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(place)
+
+
+class RouteDoorEffect(RouteEnds):
+    """
+    사건의 효과 하나: 길 하나의 문을 잠그거나(lock_route) 연다(unlock_route, #281).
+
+    판이 하는 일이라 열쇠도 서 있는 쪽도 보지 않는다. NPC 나 몬스터가 문을 잠그고 여는 것을 이것으로 적는다.
+    device 를 적으면 그 장치만, 비우면 그 문의 장치 모두(자물쇠, 빗장)다. 적은 장치가 그 길에 있는지는 게시할 때 본다.
+    부서진 문은 잠그지 못한다(고치는 효과를 먼저 적는다). 이미 그렇게 되어 있는 장치는 그대로다.
+    """
+
+    kind: Literal[HappeningEffectKind.LOCK_ROUTE, HappeningEffectKind.UNLOCK_ROUTE]
+    device: DoorDevice | None = None
+
+
+class RepairRouteEffect(RouteEnds):
+    """
+    사건의 효과 하나: 길 하나의 부서진 문을 고친다(repair_route, #281).
+
+    고친 문은 열린 채다. 다시 잠그려면 뒤에 잠그는 효과(lock_route)를 잇는다. 부서지지 않은 문은 그대로다.
+    """
+
+    kind: Literal[HappeningEffectKind.REPAIR_ROUTE]
+
+
+HappeningEffect = Annotated[
+    MoveEffect | MoveNpcEffect | RouteDoorEffect | RepairRouteEffect, Field(discriminator='kind')
+]
 HappeningEffects = Annotated[list[HappeningEffect], Field(min_length=1, max_length=HAPPENING_MAX_EFFECTS)]
 
 

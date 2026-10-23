@@ -767,10 +767,12 @@ class HappeningNote:
 
     name 은 사건 항목의 이름, moved 는 옮겨진 사람마다 "이름 → 장소"다. 사건의 글은 로어북 검색이 따로 준다.
     옮겨진 인물(NPC)도 일행이 본 것이면 같은 모양으로 캐릭터들 뒤에 든다(#282).
+    doors 는 일행이 그 길의 끝에 있을 때 다룬 문마다 "장소 ↔ 장소 빗장 걸림"이다(#281).
     """
 
     name: str
     moved: list[str] = field(default_factory=list)
+    doors: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
