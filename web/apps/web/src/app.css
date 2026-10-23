@@ -1442,6 +1442,16 @@ a.ui-button {
   gap: 12px;
 }
 
+/* 설명이 길어도 단추는 한 줄로 두고, 설명이 줄을 바꾼다 */
+.studio-item > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.studio-item > :not(:first-child) {
+  flex-shrink: 0;
+}
+
 /* 입력 칸 아래에 늘 보이는 도움말을 붙인 묶음. 다음 칸과의 틈은 묶음이 갖는다 */
 .field-with-hint {
   margin-bottom: var(--ui-gap);
