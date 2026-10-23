@@ -40,6 +40,7 @@ from app.conversation import sse
 from app.conversation.relay import Relay
 from app.core.config import Settings
 from app.core.dependencies import CurrentViewer, Now, utc_now
+from app.limits.routing import GENERATION_LIMIT
 from app.turns import service
 from app.turns.charging import CREDIT_SHORT, GOLD_REQUIRED, MODEL_UNAVAILABLE
 from app.turns.frames import turn_frame
@@ -193,6 +194,7 @@ async def stream_turn(request: Request, start: TurnStart, now) -> StreamingRespo
 @router.post(
     '/{conversation_id}/messages',
     status_code=status.HTTP_200_OK,
+    dependencies=[GENERATION_LIMIT],
     response_class=StreamingResponse,
     responses=SSE_RESPONSES,
 )
@@ -214,6 +216,7 @@ async def send_message(
 @router.post(
     '/{conversation_id}/actions',
     status_code=status.HTTP_200_OK,
+    dependencies=[GENERATION_LIMIT],
     response_class=StreamingResponse,
     responses=SSE_RESPONSES,
 )
@@ -235,6 +238,7 @@ async def act(
 @message_router.post(
     '/{message_id}/regenerate',
     status_code=status.HTTP_200_OK,
+    dependencies=[GENERATION_LIMIT],
     response_class=StreamingResponse,
     responses=SSE_RESPONSES,
 )
@@ -255,6 +259,7 @@ async def regenerate(message_id: uuid.UUID, viewer: CurrentViewer, request: Requ
 @message_router.post(
     '/{message_id}/continue',
     status_code=status.HTTP_200_OK,
+    dependencies=[GENERATION_LIMIT],
     response_class=StreamingResponse,
     responses=SSE_RESPONSES,
 )

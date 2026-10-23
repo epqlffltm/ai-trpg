@@ -68,7 +68,7 @@
 | 끊긴 말 | "이어서 출력" 버튼을 둔다 |
 | 스트리밍 | 말을 보내는 POST 가 바로 SSE(`text/event-stream`)로 답한다. `POST /api/v1/chat/conversations/{id}/messages`, `POST /api/v1/chat/messages/{id}/regenerate`, `POST /api/v1/chat/messages/{id}/continue`. 서버가 `X-Accel-Buffering: no` 를 보내고 15초마다 하트비트(주석 줄)를 보낸다. 끊겨도 생성은 끝까지 저장하고, 앱은 다시 들어와 GET 으로 읽는다. 끊긴 스트림을 이어 받기는 첫 출시에 없다(2026-10-21) |
 | 뒤의 일 | 요약과 임베딩은 서버 안의 일정한 돌기(`server_core.loops`)로 돌린다. 워커 컨테이너는 두지 않는다. 같은 이미지를 명령만 바꿔 워커로 띄울 수 있게 짜 두고, 부하가 보이면 그때 더한다(2026-10-21) |
-| Redis | 요청 제한에만 쓴다(trpg 의 `app/limits` 와 같은 방식, `REDIS_URL` 이 비면 메모리). DB 번호는 chat 2, story 3(인증과 trpg 는 0). `REDIS_URL` 이 있으면 readiness 가 본다. 한 대화 한 생성은 Redis 잠금이 아니라 DB 의 조건부 UPDATE 다(2026-10-21) |
+| Redis | 요청 제한에만 쓴다(trpg 의 `app/limits` 와 같은 방식, `REDIS_URL` 이 비면 메모리). DB 번호는 chat 2, story 3(인증과 trpg 는 0). readiness 는 Redis 를 보지 않는다. chat 의 제한은 Redis 에 닿지 못하면 막지 않고 통과시키므로(열린 쪽으로 실패) Redis 가 없어도 요청을 처리한다(2026-10-22, #671. trpg 는 닫힌 쪽으로 실패해 본다). 한 대화 한 생성은 Redis 잠금이 아니라 DB 의 조건부 UPDATE 다(2026-10-21) |
 | 모델의 자리 | 대화는 외부 API 만 쓴다. 로어북 임베딩은 trpg 와 같은 Ollama 를 함께 쓴다(설정 이름도 같다: `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`). 로컬 대화 모델은 베이직 등급 때 설정으로 켠다(2026-10-21) |
 | 환경 변수 | 서버 안에서는 머리 없이 다른 서버와 같은 이름을 쓴다(`DATABASE_URL`, `AUTH_JWKS_URL`, `JWT_AUDIENCE`, `REDIS_URL` 등). `CHAT_*` 머리는 다른 서버에 들어가는 값에만 붙인다(결제 서버의 `CHAT_SERVER_SECRET`, `CHAT_HOLD_TTL`)(2026-10-21) |
 | 첫 PR | `shared/server-core`(#588)가 머지된 뒤에 그 위에 세운다. 뼈대(설정, `/health`, `/health/ready`, 인증, `GET /api/v1/chat/me`, 마이그레이션의 틀)와 CI 까지다. compose, `09-chat-role.sql`, nginx, 포트 검사를 같은 PR 에 맞춘다(#590)(2026-10-21) |
@@ -340,7 +340,7 @@ chat 도 19금을 허용한다. 조건과 대가:
   - 이름표(`reference`)는 새로 만들 말마다 하나다. 다시 생성도 새 말이라 새 이름표다. 같은 요청을 다시 보내면 같은 이름표라 홀드가 둘 걸리지 않는다.
 - **모델 장애.** 글자가 오기 전에 실패하면 홀드를 돌려주고 사용자에게 다시 시도를 안내한다. 같은 실패를 자동으로 되풀이하지 않는다. 재시도에는 예산을 둔다(TRPG 의 재시도 예산과 같은 방식).
 - **스트림 끊김.** 앱을 닫거나 접속이 끊겨도 서버는 생성을 끝까지 저장한다. 돌아오면 저장된 말을 읽는다. 사용자가 명시로 멈춘 경우만 공급자를 끊는다. nginx 는 말을 보내는 세 경로에서 버퍼링을 끄고 trpg 의 스트림과 같은 동시 연결 제한(`limit_conn streams`)을 건다.
-- **요청 제한.** 로그인한 사람마다 말의 속도에 제한을 둔다. 값은 설정으로 둔다.
+- **요청 제한.** 로그인한 사람마다 말의 속도에 제한을 둔다. 값은 설정으로 둔다. 모델을 부르는 요청(60초에 20번)과 쓰기(60초에 120번)를 따로 센다(#671, chat-server README 의 "요청 수 제한").
 
 ## story-server 와 나눈 선
 

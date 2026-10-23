@@ -56,6 +56,7 @@ from app.conversations.service import (
     StartNotFoundError,
 )
 from app.core.dependencies import CurrentViewer, Now, Paging, Session
+from app.limits.routing import WRITE_LIMIT
 from app.ratings import Rating
 from app.world import service as world
 from app.world.schemas import state_out
@@ -280,7 +281,7 @@ async def handle_asset_unavailable(request: Request, error: AssetUnavailableErro
 # --- 주소 ---
 
 
-@router.post('', response_model=ConversationDetail, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=ConversationDetail, status_code=status.HTTP_201_CREATED, dependencies=[WRITE_LIMIT])
 async def start_conversation(
     data: ConversationCreate, viewer: CurrentViewer, session: Session, request: Request, prices: Prices, now: Now
 ) -> ConversationDetail:
@@ -324,7 +325,12 @@ async def read_conversation(
     return to_detail(row, messages, alternatives, models, book, now, state)
 
 
-@router.put('/{conversation_id}/model', response_model=ConversationModelOut, status_code=status.HTTP_200_OK)
+@router.put(
+    '/{conversation_id}/model',
+    response_model=ConversationModelOut,
+    status_code=status.HTTP_200_OK,
+    dependencies=[WRITE_LIMIT],
+)
 async def change_model(
     conversation_id: uuid.UUID, data: ModelChoice, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
 ) -> ConversationModelOut:
@@ -333,7 +339,12 @@ async def change_model(
     return to_model(model, usable=True)
 
 
-@router.put('/{conversation_id}/branch', response_model=ConversationDetail, status_code=status.HTTP_200_OK)
+@router.put(
+    '/{conversation_id}/branch',
+    response_model=ConversationDetail,
+    status_code=status.HTTP_200_OK,
+    dependencies=[WRITE_LIMIT],
+)
 async def choose_branch(
     conversation_id: uuid.UUID, data: BranchChoice, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
 ) -> ConversationDetail:
@@ -342,7 +353,9 @@ async def choose_branch(
     return await read_conversation(conversation_id, viewer, session, prices, now)
 
 
-@message_router.patch('/{message_id}', response_model=MessageOut, status_code=status.HTTP_200_OK)
+@message_router.patch(
+    '/{message_id}', response_model=MessageOut, status_code=status.HTTP_200_OK, dependencies=[WRITE_LIMIT]
+)
 async def edit_message(
     message_id: uuid.UUID, data: MessageEdit, viewer: CurrentViewer, session: Session, now: Now
 ) -> MessageOut:
@@ -353,7 +366,7 @@ async def edit_message(
     return to_message(await service.edit_message(session, viewer, message_id, data.content, now))
 
 
-@router.delete('/{conversation_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{conversation_id}', status_code=status.HTTP_204_NO_CONTENT, dependencies=[WRITE_LIMIT])
 async def delete_conversation(conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session) -> None:
     """대화를 지운다. 목록과 읽기에 더는 나오지 않는다."""
     await service.delete_conversation(session, viewer, conversation_id)

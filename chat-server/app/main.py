@@ -52,6 +52,9 @@ from app.conversations.service import (
     StartNotFoundError,
 )
 from app.core.config import Settings, get_settings
+from app.limits.attempts import TooManyAttempts
+from app.limits.responses import handle_too_many_attempts
+from app.limits.setup import build_limiting, build_redis
 from app.memory import router as notes
 from app.memory.service import NoteNotFoundError, NotesFullError
 from app.memory.summarizer import Summarizer
@@ -91,6 +94,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await app.state.summarizer.stop()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
+    if app.state.redis is not None:
+        await app.state.redis.aclose()
     await asyncio.to_thread(shutdown_tracing, app.state.tracing)
     await asyncio.to_thread(shutdown_metrics, app.state.metrics)
 
@@ -182,6 +187,9 @@ def create_app(
     app.state.stops = {}
     # 청구 정리. 결제 서버는 부를 때마다 앱에서 꺼낸다(테스트가 바꿔 꽂는다)
     app.state.settler = settler.ChargeSettler(app.state.session_factory, billing=lambda: app.state.billing)
+    # 요청 수 제한(#671). REDIS_URL 이 있으면 Redis 로, 없으면 메모리로 센다
+    app.state.redis = build_redis(settings)
+    app.state.limiting = build_limiting(settings, app.state.redis)
     # 굴리는 요약. 말 한 번이 끝날 때 대화를 보러 간다(app/turns/router.py 의 keep_running)
     app.state.summarizer = Summarizer(
         app.state.session_factory, router=lambda: app.state.model_router, settings=lambda: app.state.settings
@@ -217,6 +225,7 @@ def create_app(
     app.add_exception_handler(NotContinuableError, messages.handle_not_continuable)
     app.add_exception_handler(ActionRefusedError, messages.handle_action_refused)
     app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
+    app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
     app.add_exception_handler(MessageNotFoundError, conversations.handle_message_not_found)
     app.add_exception_handler(NotEditableError, conversations.handle_not_editable)
     app.add_exception_handler(NoteNotFoundError, notes.handle_note_not_found)
