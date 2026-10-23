@@ -2,7 +2,8 @@
 // 캐릭터 만들기(C6)의 뼈대. 빈 목록에서 만들기 → 고치기와 게시 점검, 점검에서 탭으로 가기, 운영자만 만드는 때(403),
 // 기본과 시작 상황의 저장 본문(저장하면 점검을 다시 읽는다), 아직 화면이 없는 묶음의 문제, 숨긴 캐릭터, 게시와 걸러 낸 것,
 // 지도(장소, 길, 처음 있는 장소, 지우면 길도)와 물건(시작 소지품, 그림 칸을 그대로 보내기),
-// 호감도(켜고 끄기, 단계, 규칙의 대상과 화면이 붙이는 id), 그림(올리기, 토큰을 실은 미리 보기, 장소의 배경, 막힌 올리기).
+// 호감도(켜고 끄기, 단계, 규칙의 대상과 화면이 붙이는 id), 그림(올리기, 토큰을 실은 미리 보기, 장소의 배경, 막힌 올리기),
+// 캐릭터 그림(체크무늬 미리 보기, 옷만 고르는 차림), 이벤트 씬(조건을 바꾸면 대상을 비우기, 호감도 단계).
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -349,6 +350,60 @@ describe('캐릭터 만들기', () => {
     await userEvent.upload(within(form).getByLabelText('대표 그림'), new File(['x'], 'a.png', { type: 'image/png' }));
 
     expect(await within(form).findByText('PNG, JPEG, WebP 그림만 올릴 수 있습니다.')).toBeInTheDocument();
+  });
+
+  it('캐릭터 그림을 올리고 표정과 옷을 골라 저장한다. 미리 보기는 체크무늬 위다', async () => {
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:sprite'), revokeObjectURL: vi.fn() });
+    const sprite = '00000000-0000-4000-8000-00000000b001';
+    const coat = { id: 'coat', name: '외투', description: '', kind: 'clothing', consumable: false, giftable: false, image_id: null };
+    const flower = { ...coat, id: 'flower', name: '꽃', kind: 'thing' };
+    const { seen } = signedIn(character({ items: [coat, flower] }), {
+      'POST /api/v1/asset/images': () => json(201, { id: sprite, format: 'png', byte_size: 3, width: 1, height: 1, url: '', created_at: '' }),
+      [`GET /api/v1/asset/images/${sprite}`]: () => new Response('png', { status: 200 }),
+    });
+    renderApp(`/chat/studio/characters/${ID}?tab=sprites`);
+
+    const form = await screen.findByRole('form', { name: '캐릭터 그림' });
+    await userEvent.click(within(form).getByRole('button', { name: '캐릭터 그림 더하기' }));
+    expect(within(form).getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.upload(within(form).getByLabelText('캐릭터 그림 1'), new File(['png'], 'stand.png', { type: 'image/png' }));
+    expect(await within(form).findByRole('img', { name: '캐릭터 그림 1' })).toHaveClass('image-picker__preview--checkered');
+    await userEvent.type(within(form).getByLabelText('캐릭터 그림 1의 표정(선택)'), '웃음');
+    // 차림은 옷만 고른다(꽃은 물건이라 나오지 않는다)
+    expect(within(form).queryByRole('option', { name: '꽃' })).not.toBeInTheDocument();
+    await userEvent.selectOptions(within(form).getByLabelText('캐릭터 그림 1의 차림'), '외투');
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }));
+
+    expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
+    expect(calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body).toEqual({
+      sprites: [{ id: expect.stringMatching(/^sprite-[0-9a-f]{8}$/), image_id: sprite, expression: '웃음', outfit: 'coat' }],
+    });
+  });
+
+  it('이벤트 씬의 조건을 호감도 단계로 바꾸면 대상을 비우고 단계에서 고른다', async () => {
+    const image = '00000000-0000-4000-8000-00000000b002';
+    const scene = { id: 'scene-1', title: '고백', image_id: image, description: '', collectible: true, when: { kind: 'reach_place', target: 'p1' } };
+    const affection = { display: 'number', start: 0, model_step: 3, stages: [{ name: '처음', at: 0 }, { name: '연인', at: 80 }], rules: [] };
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:scene'), revokeObjectURL: vi.fn() });
+    const { seen } = signedIn(
+      character({ event_scenes: [scene], affection, places: [{ id: 'p1', name: '바다', description: '', image_id: null, backgrounds: {} }] }),
+      { [`GET /api/v1/asset/images/${image}`]: () => new Response('png', { status: 200 }) },
+    );
+    renderApp(`/chat/studio/characters/${ID}?tab=scenes`);
+
+    const form = await screen.findByRole('form', { name: '이벤트 씬' });
+    expect(within(form).getByLabelText('이벤트 씬 1의 대상')).toHaveValue('p1');
+    await userEvent.selectOptions(within(form).getByLabelText('이벤트 씬 1의 조건'), 'affection_stage');
+    expect(within(form).getByLabelText('이벤트 씬 1의 대상')).toHaveValue('');
+    expect(within(form).getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.selectOptions(within(form).getByLabelText('이벤트 씬 1의 대상'), '연인');
+    await userEvent.click(within(form).getByLabelText('해금 대상'));
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }));
+
+    expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
+    expect(calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body).toEqual({
+      event_scenes: [{ ...scene, collectible: false, when: { kind: 'affection_stage', target: '연인' } }],
+    });
   });
 
   it('게시하면 판을 알리고 소개에서 걸러 낸 것을 보인다. 판의 목록을 다시 읽는다', async () => {

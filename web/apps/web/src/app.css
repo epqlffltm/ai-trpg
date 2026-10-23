@@ -1635,3 +1635,15 @@ a.ui-button {
   margin: 0 0 10px;
   min-width: 0;
 }
+
+/* 투명한 그림(캐릭터 그림)은 체크무늬 위에 그려 투명한 곳이 보이게 한다 */
+.image-picker__preview--checkered {
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}

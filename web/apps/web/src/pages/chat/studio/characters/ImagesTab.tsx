@@ -2,7 +2,7 @@
 // 캐릭터의 그림 탭(C6): 대표 그림, 장소마다의 배경(기본과 시간대 다섯), 물건마다의 그림.
 // 장소와 물건은 지도·물건 탭에서 저장한 것이 나온다. 이 탭은 그림 칸만 고치고, 보낼 때 최근의 목록에 얹는다(imagesForm.ts).
 // 그림은 자기가 올린 것만 붙는다(대표 그림은 저장할 때, 나머지는 게시할 때 서버가 본다).
-// 캐릭터 그림(표정, 옷)과 이벤트 씬은 다음 단계에서 더한다.
+// 캐릭터 그림(표정, 옷)과 이벤트 씬은 따로 탭이 있다(SpritesTab, ScenesTab).
 
 import { useState } from 'react';
 import type { AssetCharacterDetail, AssetItem, AssetPlace } from '../../../../api/types';
