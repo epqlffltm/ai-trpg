@@ -1,7 +1,8 @@
 // web/apps/web/src/routing/pages.ts
 // 처음 갈 때 받는 화면들(코드 분할, 2026-10-23). 경로는 App.tsx 가 잇는다.
 //
-// 나눈 것: TRPG(둘러보기, 시나리오, 로비, 테이블 만들기, 테이블 방, 제작 도구), 지갑·충전·주문, 마이페이지, 운영자의 신고 처리.
+// 나눈 것: TRPG(둘러보기, 시나리오, 로비, 테이블 만들기, 테이블 방, 제작 도구), chat 의 캐릭터 만들기, 지갑·충전·주문, 마이페이지,
+// 운영자의 신고 처리.
 // 화면마다 조각 하나다.
 // 나누지 않은 것: 첫 화면, 로그인, 가입, 비밀번호, 없는 주소. 처음 들어오는 곳이라 한 번 더 받게 하지 않는다(App.tsx 가 바로 가져온다).
 // 라이브러리(React, React Router, TanStack Query)는 vite.config.ts 가 따로 묶는다.
@@ -42,3 +43,8 @@ export const ScenarioEditPage = lazyPage(() => import('../pages/trpg/studio/scen
 // 운영자의 신고 처리(E4). 운영자만 가는 곳이라 사용자의 첫 묶음에 넣지 않는다
 export const ReportsPage = lazyPage(() => import('../pages/operator/ReportsPage'), 'ReportsPage');
 export const MessageReportPage = lazyPage(() => import('../pages/operator/MessageReportPage'), 'MessageReportPage');
+
+// chat 의 캐릭터 만들기(C6). 목록, 만들기, 고치기
+export const CharactersPage = lazyPage(() => import('../pages/chat/studio/characters/CharactersPage'), 'CharactersPage');
+export const CharacterNewPage = lazyPage(() => import('../pages/chat/studio/characters/CharacterNewPage'), 'CharacterNewPage');
+export const CharacterEditPage = lazyPage(() => import('../pages/chat/studio/characters/CharacterEditPage'), 'CharacterEditPage');
