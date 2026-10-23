@@ -17,6 +17,9 @@ import {
   BestiariesPage,
   BestiaryEditPage,
   BestiaryNewPage,
+  CharacterEditPage,
+  CharacterNewPage,
+  CharactersPage,
   ChargePage,
   LobbyPage,
   LorebookEditPage,
@@ -164,7 +167,23 @@ export function App() {
           <Route path="reports/messages/:reportId" element={<MessageReportPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
-        <Route path="chat/*" element={<PlaceholderPage service="chat" />} />
+        <Route path="chat">
+          {/* 캐릭터 만들기(C6). 모두 만든 사람 자신의 것이라 묶음째 로그인해야 열린다 */}
+          <Route
+            path="studio/characters"
+            element={
+              <RequireSession>
+                <Outlet />
+              </RequireSession>
+            }
+          >
+            <Route index element={<CharactersPage />} />
+            <Route path="new" element={<CharacterNewPage />} />
+            <Route path=":characterId" element={<CharacterEditPage />} />
+          </Route>
+          <Route index element={<PlaceholderPage service="chat" />} />
+          <Route path="*" element={<PlaceholderPage service="chat" />} />
+        </Route>
         <Route path="story/*" element={<PlaceholderPage service="story" />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

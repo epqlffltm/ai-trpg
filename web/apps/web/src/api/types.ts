@@ -128,3 +128,17 @@ export type MessageReportPage = Chat['schemas']['ReportPage'];
 export type MessageReportSummary = Chat['schemas']['ReportSummaryOut'];
 export type MessageReportDetail = Chat['schemas']['ReportDetailOut'];
 export type ReportContextMessage = Chat['schemas']['ContextMessageOut'];
+
+// chat 의 캐릭터 만들기(C6). 캐릭터의 원본은 asset 서버다. TRPG 의 같은 이름(CharacterUpdate, Rating, PublishCheck)과 섞이지 않게 앞에 Asset 을 붙인다
+export type AssetCharacterPage = Asset['schemas']['CharacterPage'];
+export type AssetCharacterSummary = Asset['schemas']['CharacterSummary'];
+export type AssetCharacterDetail = Asset['schemas']['CharacterDetail'];
+export type AssetCharacterCreate = Asset['schemas']['CharacterCreate'];
+export type AssetCharacterUpdate = Asset['schemas']['CharacterUpdate'];
+export type AssetCharacterStart = Asset['schemas']['Start'];
+export type AssetRating = Asset['schemas']['Rating'];
+export type AssetVisibility = Asset['schemas']['Visibility'];
+export type AssetPublishCheck = Asset['schemas']['PublishCheck'];
+export type AssetPublishResult = Asset['schemas']['PublishResult'];
+export type AssetVersionSummary = Asset['schemas']['VersionSummary'];
+export type RemovedHtml = Asset['schemas']['RemovedItem'];
