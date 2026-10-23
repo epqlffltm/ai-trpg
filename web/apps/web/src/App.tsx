@@ -3,6 +3,7 @@
 // 처음 들어오는 화면(첫 화면, 로그인, 가입, 비밀번호)은 바로 가져오고, 나머지는 처음 갈 때 받는다(routing/pages.ts).
 
 import { Outlet, Route, Routes } from 'react-router';
+import { RequireOperator } from './auth/RequireOperator';
 import { RequireSession } from './auth/RequireSession';
 import { AppLayout } from './layout/AppLayout';
 import { HomePage } from './pages/home/HomePage';
@@ -21,12 +22,14 @@ import {
   LorebookEditPage,
   LorebookNewPage,
   LorebooksPage,
+  MessageReportPage,
   MyPage,
   OrderPage,
   OrdersPage,
   RulebookEditPage,
   RulebookNewPage,
   RulebooksPage,
+  ReportsPage,
   ScenarioBrowsePage,
   ScenarioEditPage,
   ScenarioNewPage,
@@ -145,6 +148,21 @@ export function App() {
             <Route path="scenarios/:scenarioId" element={<ScenarioEditPage />} />
           </Route>
           <Route path="*" element={<PlaceholderPage service="TRPG" />} />
+        </Route>
+        {/* 운영자의 화면(E). 운영자가 아니면 없는 화면이다. /admin/ 은 프록시가 막으므로(인증 서버의 관리 화면) 쓰지 않는다 */}
+        <Route
+          path="operator"
+          element={
+            <RequireSession>
+              <RequireOperator>
+                <Outlet />
+              </RequireOperator>
+            </RequireSession>
+          }
+        >
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="reports/messages/:reportId" element={<MessageReportPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
         <Route path="chat/*" element={<PlaceholderPage service="chat" />} />
         <Route path="story/*" element={<PlaceholderPage service="story" />} />
