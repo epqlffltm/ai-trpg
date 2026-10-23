@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/chat/studio/characters/Characters.test.tsx
 // 캐릭터 만들기(C6)의 뼈대. 빈 목록에서 만들기 → 고치기와 게시 점검, 점검에서 탭으로 가기, 운영자만 만드는 때(403),
-// 기본과 시작 상황의 저장 본문(저장하면 점검을 다시 읽는다), 아직 화면이 없는 묶음의 문제, 숨긴 캐릭터, 게시와 걸러 낸 것.
+// 기본과 시작 상황의 저장 본문(저장하면 점검을 다시 읽는다), 아직 화면이 없는 묶음의 문제, 숨긴 캐릭터, 게시와 걸러 낸 것,
+// 지도(장소, 길, 처음 있는 장소, 지우면 길도)와 물건(시작 소지품, 그림 칸을 그대로 보내기).
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -159,13 +160,93 @@ describe('캐릭터 만들기', () => {
 
   it('아직 화면이 없는 묶음의 문제는 이름만 적고, 숨긴 캐릭터면 알린다', async () => {
     signedIn(character({ hidden_at: '2026-10-24T01:00:00Z' }), {
-      [`GET ${CHARACTERS}/${ID}/publish-check`]: () => json(200, { ready: false, problems: ['item_missing'], removed: [] }),
+      [`GET ${CHARACTERS}/${ID}/publish-check`]: () =>
+        json(200, { ready: false, problems: ['affection_target_missing', 'item_missing'], removed: [] }),
     });
     renderApp(`/chat/studio/characters/${ID}`);
 
     expect(await screen.findByText(/운영자가 숨긴 캐릭터입니다/)).toBeInTheDocument();
     const problems = await screen.findByRole('list', { name: '고칠 것' });
-    expect(within(problems).getByText('(물건: 화면 준비 중)')).toBeInTheDocument();
+    expect(within(problems).getByText('(호감도: 화면 준비 중)')).toBeInTheDocument();
+    await userEvent.click(within(problems).getByRole('button', { name: '물건 탭으로' }));
+    expect(screen.getByRole('form', { name: '물건' })).toBeVisible();
+  });
+
+  it('지도에 장소 둘과 길, 처음 있는 장소를 놓아 저장한다. 장소의 id 는 화면이 붙인다', async () => {
+    const { seen } = signedIn();
+    renderApp(`/chat/studio/characters/${ID}?tab=map`);
+
+    const form = await screen.findByRole('form', { name: '지도' });
+    expect(within(form).getByRole('button', { name: '길 더하기' })).toBeDisabled();
+    await userEvent.click(within(form).getByRole('button', { name: '장소 더하기' }));
+    await userEvent.click(within(form).getByRole('button', { name: '장소 더하기' }));
+    await userEvent.type(within(form).getByLabelText('장소 1의 이름'), '집');
+    await userEvent.type(within(form).getByLabelText('장소 2의 이름'), '시장');
+    await userEvent.click(within(form).getByRole('button', { name: '길 더하기' }));
+    await userEvent.selectOptions(within(form).getByLabelText('길 1의 한쪽'), '집');
+    await userEvent.selectOptions(within(form).getByLabelText('길 1의 다른 쪽'), '시장');
+    await userEvent.clear(within(form).getByLabelText('길 1의 시간(분)'));
+    await userEvent.type(within(form).getByLabelText('길 1의 시간(분)'), '15');
+    await userEvent.selectOptions(within(form).getByLabelText('처음 있는 장소'), '집');
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }));
+
+    expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
+    const body = calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body as {
+      places: { id: string; name: string }[];
+      paths: unknown[];
+      start_place: string;
+    };
+    const [home, market] = body.places;
+    expect(body.places.map((place) => place.name)).toEqual(['집', '시장']);
+    expect(home?.id).toMatch(/^place-[0-9a-f]{8}$/);
+    expect(body.paths).toEqual([{ a: home?.id, b: market?.id, minutes: 15 }]);
+    expect(body.start_place).toBe(home?.id);
+  });
+
+  it('장소를 지우면 그 장소를 잇는 길도 함께 지운다고 알린다', async () => {
+    const mapped = character({
+      places: [
+        { id: 'p1', name: '집', description: '', image_id: null, backgrounds: {} },
+        { id: 'p2', name: '시장', description: '', image_id: null, backgrounds: {} },
+      ],
+      paths: [{ a: 'p1', b: 'p2', minutes: 10 }],
+      start_place: 'p1',
+    });
+    signedIn(mapped);
+    renderApp(`/chat/studio/characters/${ID}?tab=map`);
+
+    const form = await screen.findByRole('form', { name: '지도' });
+    expect(within(form).getAllByText('이 장소를 잇는 길 1개도 함께 지웁니다.')).toHaveLength(2);
+    await userEvent.click(within(form).getByRole('button', { name: '장소 1 지우기' }));
+
+    expect(within(form).queryByLabelText('길 1의 한쪽')).not.toBeInTheDocument();
+    expect(within(form).getByLabelText('처음 있는 장소')).toHaveValue('');
+  });
+
+  it('물건과 시작 소지품을 저장한다. 물건의 그림은 그대로 보낸다', async () => {
+    const image = '00000000-0000-4000-8000-0000000000f1';
+    const { seen } = signedIn(
+      character({ items: [{ id: 'i1', name: '우산', description: '', kind: 'thing', consumable: false, giftable: false, image_id: image }] }),
+    );
+    renderApp(`/chat/studio/characters/${ID}?tab=items`);
+
+    const form = await screen.findByRole('form', { name: '물건' });
+    await userEvent.click(within(form).getByRole('button', { name: '물건 더하기' }));
+    await userEvent.type(within(form).getByLabelText('물건 2의 이름'), '외투');
+    await userEvent.selectOptions(within(form).getByLabelText('물건 2의 종류'), 'clothing');
+    await userEvent.click(within(form).getAllByLabelText('상대가 사용자에게 줄 수 있다')[1] as HTMLElement);
+    await userEvent.click(within(form).getByRole('button', { name: '시작 소지품 더하기' }));
+    await userEvent.selectOptions(within(form).getByLabelText('시작 소지품 1의 물건'), '우산');
+    await userEvent.clear(within(form).getByLabelText('시작 소지품 1의 수'));
+    await userEvent.type(within(form).getByLabelText('시작 소지품 1의 수'), '2');
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }));
+
+    expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
+    const body = calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body as { items: Record<string, unknown>[]; start_items: unknown[] };
+    expect(body.items[0]).toEqual({ id: 'i1', name: '우산', description: '', kind: 'thing', consumable: false, giftable: false, image_id: image });
+    expect(body.items[1]).toMatchObject({ name: '외투', kind: 'clothing', giftable: true, consumable: false, image_id: null });
+    expect(body.items[1]?.id).toMatch(/^item-[0-9a-f]{8}$/);
+    expect(body.start_items).toEqual([{ item: 'i1', count: 2 }]);
   });
 
   it('게시하면 판을 알리고 소개에서 걸러 낸 것을 보인다. 판의 목록을 다시 읽는다', async () => {
