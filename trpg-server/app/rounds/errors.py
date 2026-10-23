@@ -56,6 +56,16 @@ class Conflict(enum.StrEnum):
     NOT_ON_MAP = 'not_on_map'
     # 빼앗으려는 대상이 쓰러지지 않았다(살아 있다). 그때는 훔치기다
     TARGET_NOT_DOWN = 'target_not_down'
+    # 사고팔려는 인물이 상인이 아니다(#278)
+    NOT_MERCHANT = 'not_merchant'
+    # 상인이 쓰러졌거나 죽었거나 적대한다. 거래하지 않는다(#278)
+    MERCHANT_UNAVAILABLE = 'merchant_unavailable'
+    # 상인의 소지품에 사려는 만큼이 없다(#278)
+    OUT_OF_STOCK = 'out_of_stock'
+    # 내거나 건넬 돈이 모자란다(#278)
+    NOT_ENOUGH_MONEY = 'not_enough_money'
+    # 돈을 받을 캐릭터가 더 가질 수 없다(돈의 상한, #278)
+    TOO_MUCH_MONEY = 'too_much_money'
 
 
 class RoundConflictError(Exception):

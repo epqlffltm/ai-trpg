@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from app.assets.bestiaries.models import MonsterKind
 from app.assets.models import NarrationStyle
-from app.assets.scenarios.snapshot import Snapshot, place_entries, read_snapshot
+from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, place_entries, read_snapshot
 from app.engine.injury import find_injury
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
@@ -25,8 +25,17 @@ from app.rounds.monster_scene import SceneMonster
 from app.rounds.monster_scene import condition as monster_condition
 from app.rounds.narrator import HealNote, InjuryNote, ItemNote, MonsterNote, Move, PersonState, PlaceNote
 from app.rounds.rests import NOTHING, Recovered
-from app.rounds.state import find_arrival, find_declaration, has_outcome, is_down, naming_of, rules_of
-from app.tables import injuries, items, place_items, places, sheets
+from app.rounds.state import (
+    find_arrival,
+    find_declaration,
+    has_outcome,
+    is_down,
+    naming_of,
+    pay_of,
+    rules_of,
+    trade_of,
+)
+from app.tables import injuries, items, money, place_items, places, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 from app.tables.npc_attitudes import attitude_word
@@ -79,10 +88,12 @@ def build_moves(
     ruleset = rules_of(table) if needs_rules else None
     holding = any(member.sheet is not None and member.sheet.items for member in table.members)
     on_map = any(member.sheet is not None and member.sheet.place_id is not None for member in table.members)
-    # 판의 복사본은 통째로 읽는 일이라 싸지 않다. 소지품이나 맵이 있을 때만 한 번 읽는다
-    snapshot = read_snapshot(table.content) if holding or on_map else None
-    catalog = items.catalog(snapshot) if holding or on_map else {}
+    paying = has_money(table) or any(trade_of(one) or pay_of(one) for one in declarations)
+    # 판의 복사본은 통째로 읽는 일이라 싸지 않다. 소지품이나 맵이나 돈이 있을 때만 한 번 읽는다
+    snapshot = read_snapshot(table.content) if holding or on_map or paying else None
+    catalog = items.catalog(snapshot) if snapshot is not None else {}
     mapping = map_view(table, snapshot, catalog) if on_map else None
+    currency = snapshot.currency if snapshot is not None else None
 
     moves = []
     for member, declaration in zip(table.members, declarations, strict=True):
@@ -110,6 +121,9 @@ def build_moves(
                 put_down=narration_request.to_put_down(declaration),
                 steal=narration_request.to_steal(declaration),
                 loot=narration_request.to_loot(declaration),
+                trade=narration_request.to_trade(declaration, currency),
+                pay=narration_request.to_pay(declaration, currency),
+                money=money_note(currency, member),
                 handed_over=narration_request.find_handed_over(quest_changes, member.user_id),
                 target_gone=narration_request.to_target_gone(declaration),
                 rest=narration_request.to_rest(declaration),
@@ -188,6 +202,18 @@ def held_notes(catalog: dict[uuid.UUID, CatalogItem], member: TableMember) -> li
         return []
     rows = items.in_catalog_order(member.sheet.items, catalog)
     return [ItemNote(name=catalog[item.entry_id].name, count=item.count) for item in rows]
+
+
+def has_money(table: GameTable) -> bool:
+    """앉은 사람 중 누가 돈을 가졌는가(#278). 돈이 없는 판의 테이블은 늘 거짓이다."""
+    return any(member.sheet is not None and member.sheet.money > 0 for member in table.members)
+
+
+def money_note(currency: CurrencySnapshot | None, member: TableMember) -> str | None:
+    """이 사람의 지금 캐릭터가 가진 돈의 글(금화 30닢). 돈이 없는 판이거나 판을 읽지 않았으면 None."""
+    if currency is None or member.sheet is None:
+        return None
+    return money.money_text(currency, member.sheet.money)
 
 
 def worn_notes(ruleset: Ruleset | None, member: TableMember) -> list[InjuryNote]:

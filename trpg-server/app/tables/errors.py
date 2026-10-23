@@ -73,6 +73,10 @@ class Conflict(enum.StrEnum):
     TOO_MANY_ITEMS = 'too_many_items'
     # 가진 것보다 많이 빼려 했다. 없는 물건을 빼려 한 것도 이 이유다
     NOT_ENOUGH_ITEMS = 'not_enough_items'
+    # 캐릭터가 가질 수 있는 돈(MONEY_MAX)을 넘는다(#278)
+    TOO_MUCH_MONEY = 'too_much_money'
+    # 가진 돈보다 많이 빼려 했다(#278)
+    NOT_ENOUGH_MONEY = 'not_enough_money'
     # 시작한 테이블의 서술 모델을 바꾸려 했다. 지금 모델을 쓸 수 있으면 시작한 뒤에는 고정이다
     NARRATION_MODEL_LOCKED = 'narration_model_locked'
     # 판의 작가 글(진행 지침, 세계관, GM 메모)이 서술의 입력 예산을 넘어 시작할 수 없다(app/rounds/budget.py)

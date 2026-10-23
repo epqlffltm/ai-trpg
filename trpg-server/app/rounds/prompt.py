@@ -154,7 +154,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 하지 말 것)이 붙는다. 지침은 결과를 바꾸지 못한다는 줄이 함께 간다(#616)
 #   narration-49: 장면의 길이 안내가 출력 단계를 따른다(o1 1,100~1,600자, 길어도 2,000자. o2 1,600~2,400자,
 #                 길어도 2,800자). 입력 단계가 오르면 지난 기록이 더 많이 들어간다(#387). o0 의 글은 그대로다
-PROMPT_VERSION = 'narration-49'
+#   narration-50: 돈이 있는 판이면 한 일의 줄에 가진 돈([소지금: 금화 30닢])과 사고판 결과((산 물건: …)),
+#                 건넨 돈((건넨 돈: …))이 붙고, 돈을 다루는 법이 한 줄 붙는다(#278). 돈이 없는 판의 글은 그대로다
+PROMPT_VERSION = 'narration-50'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
@@ -421,6 +423,12 @@ WHISPER_NOTE = (
 ITEMS_NOTE = (
     '[소지품]은 게임 엔진이 관리하는 사실이다. 캐릭터가 가지지 않은 물건을 쓰는 장면을 쓰지 마라. '
     '선언한 행동이 가지지 않은 물건을 쓰려 하면, 찾았지만 없다는 식으로 서술한다.'
+)
+# 돈이 있는 라운드에만 붙는 다루는 법(#278). 돈은 서버가 관리한다.
+# 서술에서 값을 정하거나 돈이 오가도 돈은 바뀌지 않는다. 장면과 장부가 어긋나지 않게 한다
+MONEY_NOTE = (
+    '[소지금]과 사고판 값은 게임 엔진이 관리하는 사실이다. 값을 새로 정하거나, 돈을 주거나 받는 장면을 지어내지 마라. '
+    '거래와 건넨 돈은 결과의 줄 그대로 쓴다.'
 )
 # 테이블의 퀘스트와 지금 상태. 엔진(드러내기, 성공, 실패)이 정한 사실이다(#367).
 # AI 는 퀘스트를 바꾸지 못한다.
@@ -921,7 +929,7 @@ def round_text(request: NarrationRequest) -> str:
     이번 라운드에 한 일은 차례 순서다. 맞붙은 몬스터가 있었으면 캐릭터와 몬스터의 줄이 섞인다(round_lines).
     상태는 이번 라운드의 결과 바로 앞이다. 엔진이 정한 사실이라 결과와 가까이 둔다.
     지목이 있으면 결과 뒤에 다루는 법을 한 줄 붙인다. 찾기로 길을 찾았으면 그것을 다루는 법도 한 줄 붙인다.
-    소지품이 있으면 그것을 다루는 법도 한 줄 붙인다.
+    소지품이 있으면 그것을 다루는 법도 한 줄 붙인다. 돈이 있는 판이면 돈을 다루는 법도 한 줄 붙인다.
     선언한 일을 하기 전에 쓰러지거나 죽은 인물이 있으면 그 일이 일어나지 않았다는 다루는 법도 한 줄 붙인다.
     쉬거나 되살아나기를 굴린 인물이 있으면 그것을 다루는 법도 한 줄 붙인다.
     부탁 앞에 "이번 라운드에 한 일만"과 기한이 다 됐거나 넘긴 퀘스트(deadline_reminders)와 문체를 다시 적는다.
@@ -947,6 +955,8 @@ def round_text(request: NarrationRequest) -> str:
         lines.append(FOUND_NOTE)
     if any(move.items for move in request.moves):
         lines.append(ITEMS_NOTE)
+    if any(move.money is not None for move in request.moves):
+        lines.append(MONEY_NOTE)
     if any(lost_before_acting(move) is not None for move in request.moves):
         lines.append(LOST_TURN_NOTE)
     if any(move.rest is not None or move.revival is not None for move in request.moves):

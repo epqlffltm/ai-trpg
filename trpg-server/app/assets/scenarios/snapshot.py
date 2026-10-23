@@ -99,7 +99,9 @@ from app.engine.sheet import Sheet
 #      조건의 종류에 인물이 죽음(npc_dead)과 물건을 잃음(lose_item)이 더해졌다
 #  44: 사건 규칙(happenings: 조건이 채워지면 한 번 일어나 캐릭터를 옮기는 것)이 있다(#367)
 #  45: 규칙에 서술 지침(rulebook.rules.narration: 분위기, 판정 결과 단계마다의 묘사, 하지 말 것)이 있다(#616)
-SNAPSHOT_FORMAT = 45
+#  46: 돈이 있다(#278). 화폐(currency: 이름, 단위, 시작 돈, 사 주는 백분율), 물건의 값(items[].price),
+#      프리젠이 더 받는 돈(pregens[].money), 퀘스트의 돈의 보상(quests[].reward_money), 상인(npc_sheets[].merchant)
+SNAPSHOT_FORMAT = 46
 
 
 class EntrySnapshot(BaseModel):
@@ -165,6 +167,15 @@ class PlayersSnapshot(BaseModel):
     max: int
 
 
+class CurrencySnapshot(BaseModel):
+    """화폐(#278). 이름과 단위, 캐릭터 모두가 시작할 때 받는 돈, 상인이 사 주는 값의 백분율이다."""
+
+    name: str
+    unit: str = ''
+    starting: int = 0
+    sell_percent: int
+
+
 class ItemStackSnapshot(BaseModel):
     """물건 몇 개. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개다."""
 
@@ -177,12 +188,14 @@ class ItemRuleSnapshot(BaseModel):
     아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.
 
     heals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.
+    price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
     """
 
     entry_id: uuid.UUID
     kind: ItemKind
     heals: str | None = None
     rarity: ItemRarity = ItemRarity.NORMAL
+    price: int | None = None
 
 
 class QuestConditionSnapshot(BaseModel):
@@ -202,7 +215,7 @@ class QuestRuleSnapshot(BaseModel):
     """
     퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.
 
-    start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건이다.
+    start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건, reward_money 는 받는 돈이다.
     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.
     conditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.
     reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.
@@ -212,6 +225,7 @@ class QuestRuleSnapshot(BaseModel):
     entry_id: uuid.UUID
     start: QuestStart = QuestStart.HIDDEN
     reward: list[ItemStackSnapshot] = []
+    reward_money: int = 0
     time_limit_minutes: int | None = None
     conditions: list[QuestConditionSnapshot] = []
     match: QuestMatch = QuestMatch.ALL
@@ -274,13 +288,14 @@ class PregenSnapshot(BaseModel):
     """
     프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다.
 
-    items 는 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품이다.
+    items 와 money 는 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품과 돈이다.
     """
 
     name: str
     description: str
     sheet: Sheet
     items: list[ItemStackSnapshot] = []
+    money: int = 0
 
 
 class CarriedItemSnapshot(BaseModel):
@@ -320,6 +335,8 @@ class NpcSheetSnapshot(BaseModel):
     on_caught: NpcCaught = NpcCaught.HOSTILE
     # 공격들. 몬스터의 것과 같은 모양이다. 형식 41 보다 옛 판의 인물은 공격이 없다
     attacks: list[AttackSnapshot] = []
+    # 상인인가(#278). 소지품 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다. 형식 46 보다 옛 판의 인물은 아니다
+    merchant: bool = False
 
 
 class MonsterSnapshot(BaseModel):
@@ -413,6 +430,8 @@ class Snapshot(BaseModel):
     items: list[ItemRuleSnapshot] = []
     # 시작 소지품. 캐릭터 모두가 테이블이 시작할 때 받는다
     starting_items: list[ItemStackSnapshot] = []
+    # 화폐(#278). 없으면 돈이 없는 판이다. 값, 상인, 돈의 보상이 있으면 반드시 있다
+    currency: CurrencySnapshot | None = None
     # 퀘스트 규칙들. 판 안의 로어북 사건 항목마다 많아야 하나다. 규칙이 없는 사건은 숨긴 채로 시작한다(quest_rule_of)
     quests: list[QuestRuleSnapshot] = []
     # 맵의 시작 장소. 판 안의 로어북 장소 항목이다. 없으면 맵이 없는 판이다(위치도 이동도 없다)
@@ -512,6 +531,23 @@ class Snapshot(BaseModel):
         pointed = [rule.entry_id for rule in self.items] + [stack.entry_id for stack in stacks]
         if any(entry_id not in items for entry_id in pointed):
             raise ValueError('물건 항목이 아닌 것을 가리키는 아이템 규칙이나 소지품이 있습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_currency(self) -> 'Snapshot':
+        """
+        돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있으면 화폐가 있는지 본다. 아니면 거부한다.
+
+        게시할 때 이미 막는다(currency_missing). 판을 읽는 쪽(거래, 보상)은 돈이 있으면 화폐도 있다고 믿고 쓴다.
+        """
+        uses_money = (
+            any(rule.price is not None for rule in self.items)
+            or any(npc_sheet.merchant for npc_sheet in self.npc_sheets)
+            or any(pregen.money for pregen in self.pregens)
+            or any(quest.reward_money for quest in self.quests)
+        )
+        if uses_money and self.currency is None:
+            raise ValueError('돈을 쓰는 칸이 있는데 화폐가 없습니다.')
         return self
 
     @model_validator(mode='after')
@@ -745,6 +781,7 @@ def build_snapshot(
         encounters=[EncounterSnapshot(**encounter) for encounter in scenario.encounters],
         items=[ItemRuleSnapshot(**rule) for rule in scenario.items],
         starting_items=[ItemStackSnapshot(**stack) for stack in scenario.starting_items],
+        currency=CurrencySnapshot(**scenario.currency) if scenario.currency else None,
         quests=[QuestRuleSnapshot(**quest) for quest in scenario.quests],
         start_place=scenario.start_place,
         routes=[RouteSnapshot(**route) for route in scenario.routes],

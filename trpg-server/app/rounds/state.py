@@ -161,6 +161,20 @@ def loot_of(declaration: Declaration | None) -> dict | None:
     return declaration.outcome.get('loot')
 
 
+def trade_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 사기나 팔기의 결과(app/rounds/trades.py). 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('trade')
+
+
+def pay_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 돈 건네기의 결과(app/rounds/trades.py). 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('pay')
+
+
 def rest_of(declaration: Declaration | None) -> dict | None:
     """이 선언에 적힌 쉬기의 결과(app/rounds/rests.py). 쉬는 행동이 아니었거나 결과가 없으면 None."""
     if declaration is None or declaration.outcome is None:

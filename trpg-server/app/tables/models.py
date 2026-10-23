@@ -49,6 +49,7 @@ from app.assets.models import (
     CREATOR_MADE_MODES,
     DEFAULT_CHARACTER_MODES,
     ITEM_STACK_MAX,
+    MONEY_MAX,
     TABLE_MAX_PLAYERS,
     TITLE_MAX_LENGTH,
     CharacterMode,
@@ -454,6 +455,8 @@ class TableSheet(Base):
             'hp = 0 OR (death_successes = 0 AND death_failures = 0 AND died_at IS NULL)',
             name='death_only_when_downed',
         ),
+        # 돈은 0 아래로 내려가지 않고 상한을 넘지 않는다(#278). 엔진의 실수를 DB 가 한 번 더 막는다
+        CheckConstraint(f'money BETWEEN 0 AND {MONEY_MAX}', name='money_range'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -492,6 +495,11 @@ class TableSheet(Base):
     # 시작할 때 판의 시작 장소에 서고, 엔진이 옮긴다(가기와 업고 가기, 판의 사건). 죽은 캐릭터는 쓰러진 곳에 남는다.
     # 서 본 장소는 늘 아는 장소다. 그래서 이 값이 숨긴 장소를 드러내는 일은 없다
     place_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+    # 가진 돈(#278). 판의 화폐로 센다. 시작할 때 판의 시작 돈과 프리젠의 돈을 받는다(app/tables/money.py).
+    # 소지품과 같이 캐릭터의 것이다. 새 캐릭터는 물려받지 않는다. 바꾸는 것은 엔진뿐이다(거래, 건네기, 보상).
+    # 결제의 크레딧과 상관없다
+    money: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

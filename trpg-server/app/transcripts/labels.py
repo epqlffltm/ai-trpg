@@ -19,6 +19,9 @@ class Labels:
     abilities: Mapping[str, str] = field(default_factory=dict)
     difficulties: Mapping[str, str] = field(default_factory=dict)
     injuries: Mapping[str, str] = field(default_factory=dict)
+    # 판의 화폐의 이름과 단위(#278). 돈이 없는 판이면 비어 있다
+    currency_name: str = ''
+    currency_unit: str = ''
 
 
 def labels_of(snapshot: Snapshot) -> Labels:
@@ -28,4 +31,6 @@ def labels_of(snapshot: Snapshot) -> Labels:
         abilities={ability.key: ability.name for ability in rules.abilities},
         difficulties={difficulty.key: difficulty.name for difficulty in rules.difficulties},
         injuries={injury.key: injury.name for injury in rules.injuries},
+        currency_name=snapshot.currency.name if snapshot.currency else '',
+        currency_unit=snapshot.currency.unit if snapshot.currency else '',
     )
