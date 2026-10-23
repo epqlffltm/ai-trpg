@@ -6,7 +6,7 @@
 conftest.py 에 두지 않고 따로 둔다. 테스트 파일이 conftest.py 를 직접 불러오지 않게 하려는 것이다.
 """
 
-from sqlalchemy import Table
+from sqlalchemy import Table, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 import app.catalog.models  # noqa: F401  # 모델을 불러와야 Base.metadata 에 테이블이 들어간다
@@ -14,6 +14,8 @@ import app.conversations.models  # noqa: F401
 import app.gallery.models  # noqa: F401
 import app.lore.models  # noqa: F401
 import app.memory.models  # noqa: F401
+import app.operators.models  # noqa: F401
+import app.reports.models  # noqa: F401
 import app.turns.models  # noqa: F401
 import app.world.models  # noqa: F401
 from app.core.database import Base
@@ -31,13 +33,26 @@ def clearing_order() -> list[Table]:
     return list(reversed(Base.metadata.sorted_tables))
 
 
+def clearing_statement(table: Table):
+    """
+    테이블 하나를 비우는 문장. 보통은 DELETE 다.
+
+    덧붙이기만 하는 테이블(info 의 append_only, 예: operator_reads)은 트리거가 DELETE 를 막는다.
+    그래서 TRUNCATE 로 비운다. 다른 테이블이 가리키지 않는 테이블이라 CASCADE 가 필요 없다.
+    """
+    if table.info.get('append_only'):
+        return text(f'TRUNCATE {table.name}')
+    return table.delete()
+
+
 async def clear_tables(engine: AsyncEngine) -> None:
     """
     모든 테이블의 행을 지운다. 한 트랜잭션이다.
 
-    TRUNCATE 가 아니라 DELETE 다. TRUNCATE 는 테이블과 색인의 파일을 새로 만들어 바꿔 끼워서,
+    TRUNCATE 가 아니라 DELETE 다(덧붙이기만 하는 테이블은 빼고).
+    TRUNCATE 는 테이블과 색인의 파일을 새로 만들어 바꿔 끼워서,
     디스크에 확정하는 일이 느린 곳(Windows 의 Docker)에서 크게 느려진다. 테스트의 테이블에는 행이 몇 개뿐이다.
     """
     async with engine.begin() as connection:
         for table in clearing_order():
-            await connection.execute(table.delete())
+            await connection.execute(clearing_statement(table))
