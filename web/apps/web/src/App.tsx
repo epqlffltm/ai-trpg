@@ -1,26 +1,29 @@
 // web/apps/web/src/App.tsx
 // 경로와 화면을 잇는다. 서비스마다 /trpg, /chat, /story 아래에 둔다(앱은 하나, docs/product/screens.md 의 "프런트 구조").
+// 처음 들어오는 화면(첫 화면, 로그인, 가입, 비밀번호)은 바로 가져오고, 나머지는 처음 갈 때 받는다(routing/pages.ts).
 
 import { Route, Routes } from 'react-router';
 import { RequireSession } from './auth/RequireSession';
 import { AppLayout } from './layout/AppLayout';
 import { HomePage } from './pages/home/HomePage';
 import { LoginPage } from './pages/login/LoginPage';
-import { MyPage } from './pages/me/MyPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ForgotPasswordPage } from './pages/password/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/password/ResetPasswordPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { SignupPage } from './pages/signup/SignupPage';
-import { ChargePage } from './pages/charge/ChargePage';
-import { OrderPage } from './pages/orders/OrderPage';
-import { OrdersPage } from './pages/orders/OrdersPage';
-import { WalletPage } from './pages/wallet/WalletPage';
-import { ScenarioBrowsePage } from './pages/trpg/browse/ScenarioBrowsePage';
-import { LobbyPage } from './pages/trpg/lobby/LobbyPage';
-import { TableRoomPage } from './pages/trpg/room/TableRoomPage';
-import { ScenarioPage } from './pages/trpg/scenario/ScenarioPage';
-import { TableCreatePage } from './pages/trpg/tables/TableCreatePage';
+import {
+  ChargePage,
+  LobbyPage,
+  MyPage,
+  OrderPage,
+  OrdersPage,
+  ScenarioBrowsePage,
+  ScenarioPage,
+  TableCreatePage,
+  TableRoomPage,
+  WalletPage,
+} from './routing/pages';
 
 export function App() {
   return (
