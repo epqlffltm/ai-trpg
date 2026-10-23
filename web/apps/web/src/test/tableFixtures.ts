@@ -26,11 +26,17 @@ export const RULES = {
   ],
   death_save: { target: 10, successes: 3, failures: 3 },
   injuries: [
-    { key: 'sprain', name: '삔 발목', healing: 'rounds' },
-    { key: 'broken_arm', name: '부러진 팔', healing: 'heals' },
-    { key: 'lost_eye', name: '잃은 눈', healing: 'permanent' },
+    { key: 'sprain', name: '삔 발목', healing: 'rounds', aimable: false },
+    { key: 'broken_arm', name: '부러진 팔', healing: 'heals', aimable: true },
+    { key: 'lost_eye', name: '잃은 눈', healing: 'permanent', aimable: true },
   ],
-  magnitudes: [{ key: 'light', name: '가벼움', count: 1, sides: 4 }],
+  magnitudes: [
+    { key: 'light', name: '가벼움', count: 1, sides: 4 },
+    { key: 'heavy', name: '무거움', count: 2, sides: 6 },
+  ],
+  treatment: null,
+  rest: null,
+  steal: null,
   point_buy: {
     budget: 10,
     costs: [
@@ -201,6 +207,7 @@ export function roomRoutes(tableId: string, overrides: Record<string, (request: 
     [`GET ${base}/stream`]: (request: SeenRequest) => sseResponse(request, []),
     [`GET ${base}/rounds/current`]: () => json(200, round(1)),
     [`GET ${base}/rounds`]: () => json(200, { items: [round(1)], total: 1 }),
+    [`GET ${base}/rounds/current/people`]: () => json(200, { round: 1, people: [], monsters: [] }),
     'GET /api/v1/auth/public-names': () => json(200, { names: [] }),
     ...overrides,
   };

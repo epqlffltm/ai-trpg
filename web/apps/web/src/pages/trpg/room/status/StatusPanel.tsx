@@ -3,7 +3,8 @@
 //   - 캐릭터(C): 앉은 사람마다 HP, 부상, 능력치, 떠난 캐릭터
 //   - 소지품(I): 캐릭터마다 지닌 물건
 //   - 퀘스트·장소(J): 게임 안의 시각, 퀘스트, 장소와 길
-// 읽기만 한다. 값은 이벤트가 오면 테이블을 다시 읽어 바뀐다(useBatchedRefetch). 선언으로 가는 단추는 ③-2 다.
+// 상태를 바꾸지 않는다. 값은 이벤트가 오면 테이블을 다시 읽어 바뀐다(useBatchedRefetch).
+// 물건과 장소의 단추는 선언 입력의 행동 칸을 채울 뿐이다(useActionShortcuts). 보내는 것은 선언이다.
 
 import { useState } from 'react';
 import type { TableDetail } from '../../../../api/types';
@@ -12,6 +13,7 @@ import { CharacterCards } from './CharacterCards';
 import { HpBar } from './HpBar';
 import { Inventory } from './Inventory';
 import { STATUS_TABS, type StatusTab } from './statusTabs';
+import { useActionShortcuts } from './useActionShortcuts';
 import { useStatusShortcuts } from './useStatusShortcuts';
 import { WorldInfo } from './WorldInfo';
 
@@ -20,6 +22,7 @@ type Props = { table: TableDetail; myId: string | undefined; nameOf: NameLookup 
 export function StatusPanel({ table, myId, nameOf }: Props) {
   const [tab, setTab] = useState<StatusTab>('characters');
   useStatusShortcuts(setTab);
+  const shortcuts = useActionShortcuts(table, myId);
   const mine = table.members.find((member) => member.user_id === myId);
   return (
     <section className="room-panel status" aria-labelledby="status-heading">
@@ -49,8 +52,8 @@ export function StatusPanel({ table, myId, nameOf }: Props) {
       </div>
       <div id="status-tabpanel" role="tabpanel" aria-labelledby={`status-tab-${tab}`} className="status__body">
         {tab === 'characters' ? <CharacterCards members={table.members} rules={table.rules} myId={myId} nameOf={nameOf} /> : null}
-        {tab === 'items' ? <Inventory table={table} myId={myId} /> : null}
-        {tab === 'world' ? <WorldInfo table={table} mine={mine} /> : null}
+        {tab === 'items' ? <Inventory table={table} myId={myId} shortcuts={shortcuts} /> : null}
+        {tab === 'world' ? <WorldInfo table={table} mine={mine} shortcuts={shortcuts} /> : null}
       </div>
     </section>
   );

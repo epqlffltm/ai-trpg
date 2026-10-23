@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../test/fakeFetch';
 import { renderApp } from '../../../../test/renderApp';
-import { declaration, ME, member, OTHER, round, roomRoutes, sse, sseResponse, tableDetail } from '../../../../test/tableFixtures';
+import { declaration, ME, member, OTHER, round, roomRoutes, sheet, sse, sseResponse, tableDetail } from '../../../../test/tableFixtures';
 
 const TABLE_ID = '00000000-0000-4000-8000-0000000000b7';
 const BASE = `/api/v1/game/tables/${TABLE_ID}`;
@@ -16,8 +16,8 @@ const BASE = `/api/v1/game/tables/${TABLE_ID}`;
 const PLAYING = tableDetail(TABLE_ID, {
   status: 'playing',
   members: [
-    member(ME, { is_host: true, character: { name: '렌', description: '' } }),
-    member(OTHER, { character: { name: '미아', description: '' } }),
+    member(ME, { is_host: true, character: { name: '렌', description: '' }, sheet: sheet() }),
+    member(OTHER, { character: { name: '미아', description: '' }, sheet: sheet() }),
   ],
 });
 
@@ -65,7 +65,7 @@ describe('RoundStage', () => {
 
     const form = within(await screen.findByRole('form', { name: '선언' }));
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '문을 밀어 연다');
-    await userEvent.click(form.getByRole('checkbox', { name: '판정 붙이기' }));
+    await userEvent.selectOptions(form.getByLabelText('행동'), '판정');
     await userEvent.selectOptions(form.getByLabelText('난이도'), '쉬움(10)');
     await userEvent.click(form.getByRole('button', { name: '선언하기' }));
 

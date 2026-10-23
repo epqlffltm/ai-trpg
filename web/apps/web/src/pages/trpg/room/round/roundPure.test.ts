@@ -3,15 +3,22 @@
 
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../../api/errors';
-import type { Declaration, Round, Ruleset } from '../../../../api/types';
-import { declaration, ME, OTHER, round, RULES } from '../../../../test/tableFixtures';
+import type { Declaration, Round, Ruleset, TableDetail, TableMember } from '../../../../api/types';
+import { declaration, ME, member, OTHER, round, RULES, sheet, tableDetail } from '../../../../test/tableFixtures';
 import { routeMessage } from '../streamPolicy';
-import { declarationHints, hasOtherAction, initialDeclarationDraft, toDeclarationUpdate } from './declarationForm';
+import type { ActionContext } from './action/actionOptions';
+import { declarationHints, initialDeclarationDraft, toDeclarationUpdate } from './declarationForm';
 import { applyPreview, type NarrationPreview } from './preview';
 import { describeCloseProblem, describeDeclarationProblem } from './roundProblem';
 import { actionLabel, deathSaveLine, myDeclaration, outcomeLine, pastRounds, remainingSeconds } from './roundView';
 
 const rules = RULES as unknown as Ruleset;
+const TABLE = tableDetail('t', {
+  status: 'playing',
+  members: [member(ME, { character: { name: '렌', description: '' }, sheet: sheet() }), member(OTHER, { character: { name: '미아', description: '' }, sheet: sheet() })],
+  items: [{ entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light' }],
+}) as unknown as TableDetail;
+const CTX: ActionContext = { table: TABLE, me: TABLE.members[0] as TableMember, cast: null };
 
 function chunk(seq: number, text: string, attempt = 1, roundNumber = 3) {
   return { round: roundNumber, attempt, seq, text };
@@ -60,18 +67,30 @@ describe('applyPreview', () => {
 });
 
 describe('roundView', () => {
-  it('판정의 결과는 눈, 보정, 합, 목표, 성공을 적는다', () => {
+  it('판정의 결과는 눈, 보정, 합, 목표, 성공과 바뀐 것을 적는다', () => {
     const outcome = { roll: 13, modifier: 2, total: 15, target: 15, success: true, hindrance: null };
-    expect(outcomeLine(outcome as unknown as Declaration['outcome'])).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공');
+    expect(outcomeLine(outcome as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공');
     const hindered = { ...outcome, modifier: -1, total: 12, success: false, hindrance: { disadvantage: true, injuries: [], penalty: 1, rolls: [13, 4] } };
-    expect(outcomeLine(hindered as unknown as Declaration['outcome'])).toBe('눈 13, 보정 -1, 합 12 / 목표 15 · 불리함 · 실패');
-    expect(outcomeLine({ turn_lost: 'downed' } as unknown as Declaration['outcome'])).toBe('행동하지 못했습니다.');
-    expect(outcomeLine(null)).toBeNull();
+    expect(outcomeLine(hindered as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 -1, 합 12 / 목표 15 · 불리함 · 실패');
+    const hit = { ...outcome, npc_effect: { name: '문지기', kind: 'damage', amount: 4 } };
+    expect(outcomeLine(hit as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공 · 문지기 피해 4');
+    expect(outcomeLine({ turn_lost: 'downed' } as unknown as Declaration['outcome'], rules)).toBe('행동하지 못했습니다.');
+    expect(outcomeLine(null, rules)).toBeNull();
   });
 
-  it('판정은 능력과 난이도의 이름을, 다른 행동은 이름만 적는다. 난이도를 비우면 규칙의 기본이다', () => {
-    expect(actionLabel({ kind: 'check', ability: 'dex', lethal: false }, rules)).toBe('판정 · 민첩, 보통');
-    expect(actionLabel({ kind: 'search' }, rules)).toBe('찾기');
+  it('판정이 아닌 행동의 결과도 한 줄로', () => {
+    const give = { item_give: { given: true, name: '약초', count: 2, target: { user_id: OTHER, character_name: '미아' } } };
+    expect(outcomeLine(give as unknown as Declaration['outcome'], rules)).toBe('약초 ×2 → 미아');
+    const search = { search: { place: null, found: [{ to_place: { entry_id: 'p2', name: '지하실' } }], items: [] } };
+    expect(outcomeLine(search as unknown as Declaration['outcome'], rules)).toBe('찾았습니다: 지하실 쪽 길');
+    expect(outcomeLine({ wait: { waited: true, minutes: 30, reason: null } } as unknown as Declaration['outcome'], rules)).toBe('30분을 기다렸습니다.');
+  });
+
+  it('행동은 종류와 무엇을, 누구에게를 적는다. 난이도를 비우면 규칙의 기본이다', () => {
+    expect(actionLabel({ kind: 'check', ability: 'dex', lethal: false }, TABLE)).toBe('판정 · 민첩, 보통');
+    expect(actionLabel({ kind: 'check', ability: 'str', harm: 'light', lethal: true }, TABLE)).toBe('판정 · 근력, 보통, 죽이려는 공격');
+    expect(actionLabel({ kind: 'give', item: 'i1', count: 2, target: OTHER }, TABLE)).toBe('건네기 · 약초 ×2 → 미아');
+    expect(actionLabel({ kind: 'search' }, TABLE)).toBe('찾기');
   });
 
   it('죽음의 굴림을 한 줄로', () => {
@@ -96,28 +115,32 @@ describe('roundView', () => {
 });
 
 describe('declarationForm', () => {
-  it('글이 있어야 하고, 판정은 규칙의 능력과 난이도만', () => {
+  it('글이 있어야 하고, 행동을 붙이면 그 행동의 칸도 맞아야 한다', () => {
     const empty = initialDeclarationDraft(rules, undefined);
-    expect(empty).toEqual({ content: '', withCheck: false, ability: 'str', difficulty: 'normal' });
-    expect(declarationHints({ ...empty, content: '  ' }, rules).content).toBeDefined();
-    expect(declarationHints({ ...empty, content: '문을 연다', withCheck: true }, rules)).toEqual({});
-    expect(declarationHints({ ...empty, content: '문을 연다', withCheck: true, difficulty: 'hell' }, rules).check).toBeDefined();
+    expect(empty.content).toBe('');
+    expect(empty.action.kind).toBe('none');
+    expect(declarationHints({ ...empty, content: '  ' }, CTX).content).toBeDefined();
+    expect(declarationHints({ ...empty, content: '문을 연다' }, CTX)).toEqual({});
+    const check = { ...empty, content: '문을 연다', action: { ...empty.action, kind: 'check' as const } };
+    expect(declarationHints(check, CTX)).toEqual({});
+    expect(declarationHints({ ...check, action: { ...check.action, difficulty: 'hell' } }, CTX).action).toBeDefined();
   });
 
-  it('판정을 붙이면 check 행동을, 안 붙이면 행동 없이 보낸다', () => {
-    const draft = { content: '문을 연다', withCheck: true, ability: 'str', difficulty: 'easy' };
-    expect(toDeclarationUpdate(draft)).toEqual({
+  it('행동을 붙이면 그 행동을, 안 붙이면 행동 없이 보낸다', () => {
+    const empty = initialDeclarationDraft(rules, undefined);
+    const draft = { content: '문을 연다', action: { ...empty.action, kind: 'check' as const, difficulty: 'easy' } };
+    expect(toDeclarationUpdate(draft, CTX)).toEqual({
       content: '문을 연다',
       action: { kind: 'check', ability: 'str', difficulty: 'easy', lethal: false },
     });
-    expect(toDeclarationUpdate({ ...draft, withCheck: false })).toEqual({ content: '문을 연다' });
+    expect(toDeclarationUpdate({ ...draft, action: empty.action }, CTX)).toEqual({ content: '문을 연다' });
   });
 
-  it('낸 판정으로 채우고, 판정이 아닌 행동은 알린다', () => {
+  it('낸 선언과 그 행동으로 채운다', () => {
     const check = asDeclaration(ME, { content: '민다', action: { kind: 'check', ability: 'con', difficulty: 'easy', lethal: false } });
-    expect(initialDeclarationDraft(rules, check)).toEqual({ content: '민다', withCheck: true, ability: 'con', difficulty: 'easy' });
-    expect(hasOtherAction(check)).toBe(false);
-    expect(hasOtherAction(asDeclaration(ME, { content: '찾는다', action: { kind: 'search' } }))).toBe(true);
+    expect(initialDeclarationDraft(rules, check).action).toMatchObject({ kind: 'check', ability: 'con', difficulty: 'easy', purpose: 'plain' });
+    const give = asDeclaration(ME, { content: '건넨다', action: { kind: 'give', item: 'i1', count: 2, target: OTHER } });
+    expect(initialDeclarationDraft(rules, give).action).toMatchObject({ kind: 'give', item: 'i1', count: 2, target: `member:${OTHER}` });
   });
 });
 

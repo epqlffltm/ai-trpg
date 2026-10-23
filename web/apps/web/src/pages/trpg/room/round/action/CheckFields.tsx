@@ -1,0 +1,104 @@
+// web/apps/web/src/pages/trpg/room/round/action/CheckFields.tsx
+// 판정의 칸. 능력과 난이도, 목적(그냥, 타격, 회복), 대상과 크기, 죽이려는가, 노려 치기, 실패의 대가.
+// 타격은 장면의 인물이나 내가 선 곳의 몬스터에게, 회복은 다른 사람이나 인물에게(비우면 나) 한다. 노려 치기는 인물에게만.
+
+import { Checkbox, Radio } from '@ai-trpg/ui';
+import type { ActionDraft, CheckPurpose } from './actionDraft';
+import { aimableInjuries, harmTargets, healTargets, magnitudes, splitRef, type ActionContext } from './actionOptions';
+import { ChoiceSelect } from './ChoiceSelect';
+
+type Props = { draft: ActionDraft; ctx: ActionContext; onChange: (changes: Partial<ActionDraft>) => void };
+
+const PURPOSES: { value: CheckPurpose; label: string }[] = [
+  { value: 'plain', label: '그냥 판정' },
+  { value: 'harm', label: '공격' },
+  { value: 'recover', label: '회복시키기' },
+];
+
+export function CheckFields({ draft, ctx, onChange }: Props) {
+  const rules = ctx.table.rules;
+  return (
+    <>
+      <div className="ability-grid">
+        <ChoiceSelect
+          label="능력"
+          value={draft.ability}
+          choices={rules.abilities.map((ability) => ({ value: ability.key, label: ability.name }))}
+          onChange={(ability) => onChange({ ability })}
+        />
+        <ChoiceSelect
+          label="난이도"
+          value={draft.difficulty}
+          choices={rules.difficulties.map((entry) => ({ value: entry.key, label: `${entry.name}(${entry.target})` }))}
+          onChange={(difficulty) => onChange({ difficulty })}
+        />
+      </div>
+      <fieldset className="choice-list choice-list--inline">
+        <legend>무엇을 위한 판정인가</legend>
+        {PURPOSES.map((purpose) => (
+          <Radio
+            key={purpose.value}
+            name="check_purpose"
+            label={purpose.label}
+            checked={draft.purpose === purpose.value}
+            onChange={() => onChange({ purpose: purpose.value, target: '' })}
+          />
+        ))}
+      </fieldset>
+      {draft.purpose === 'harm' ? <HarmFields draft={draft} ctx={ctx} onChange={onChange} /> : null}
+      {draft.purpose === 'recover' ? <RecoverFields draft={draft} ctx={ctx} onChange={onChange} /> : null}
+      <ChoiceSelect
+        label="실패의 대가(선택)"
+        value={draft.risk}
+        choices={magnitudes(ctx)}
+        empty="없음"
+        hint="실패하면 내 캐릭터가 이만큼 다칩니다."
+        onChange={(risk) => onChange({ risk })}
+      />
+    </>
+  );
+}
+
+function HarmFields({ draft, ctx, onChange }: Props) {
+  const targets = harmTargets(ctx);
+  const onNpc = splitRef(draft.target)[0] === 'npc';
+  if (targets.length === 0) return <p className="hint">칠 수 있는 대상이 장면에 없습니다.</p>;
+  return (
+    <>
+      <div className="ability-grid">
+        <ChoiceSelect label="대상" value={draft.target} choices={targets} empty="고르기" onChange={(target) => onChange({ target })} />
+        <ChoiceSelect label="피해" value={draft.magnitude} choices={magnitudes(ctx)} onChange={(magnitude) => onChange({ magnitude })} />
+        {onNpc ? (
+          <ChoiceSelect
+            label="노려 치기(선택)"
+            value={draft.aim}
+            choices={aimableInjuries(ctx)}
+            empty="노리지 않음"
+            onChange={(aim) => onChange({ aim })}
+          />
+        ) : null}
+      </div>
+      <Checkbox
+        label="죽이려 한다"
+        description="켜지 않으면 HP 가 0 이 될 때 쓰러뜨리기만 합니다."
+        checked={draft.lethal}
+        onChange={(event) => onChange({ lethal: event.target.checked })}
+      />
+    </>
+  );
+}
+
+function RecoverFields({ draft, ctx, onChange }: Props) {
+  return (
+    <div className="ability-grid">
+      <ChoiceSelect
+        label="회복받을 쪽"
+        value={draft.target}
+        choices={healTargets(ctx, true)}
+        empty="나"
+        onChange={(target) => onChange({ target })}
+      />
+      <ChoiceSelect label="회복" value={draft.magnitude} choices={magnitudes(ctx)} onChange={(magnitude) => onChange({ magnitude })} />
+    </div>
+  );
+}

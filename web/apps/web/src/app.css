@@ -741,7 +741,7 @@ a.ui-button {
 /* 능력치의 칸들. 넓으면 여러 줄로, 좁으면 둘씩 */
 .ability-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 0 12px;
 }
 
@@ -1020,4 +1020,48 @@ a.ui-button {
   .hp-strip {
     display: none;
   }
+}
+
+/* 선언의 행동(③-2)과 패널에서 선언으로 가는 단추 */
+.action-fields {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.choice-list--inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.ability-grid > * {
+  min-width: 0;
+}
+
+.ability-grid .ui-field__input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.action-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.action-chip {
+  font: inherit;
+  font-size: 0.8em;
+  padding: 1px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.action-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
