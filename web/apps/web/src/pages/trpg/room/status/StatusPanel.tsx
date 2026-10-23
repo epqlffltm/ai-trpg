@@ -3,12 +3,15 @@
 //   - 캐릭터(C): 앉은 사람마다 HP, 부상, 능력치, 떠난 캐릭터
 //   - 소지품(I): 캐릭터마다 지닌 물건
 //   - 퀘스트·장소(J): 게임 안의 시각, 퀘스트, 장소와 길
+//   - 일어난 일(L): 이벤트를 한 줄씩(events/EventLog)
 // 상태를 바꾸지 않는다. 값은 이벤트가 오면 테이블을 다시 읽어 바뀐다(useBatchedRefetch).
 // 물건과 장소의 단추는 선언 입력의 행동 칸을 채울 뿐이다(useActionShortcuts). 보내는 것은 선언이다.
 
 import { useState } from 'react';
 import type { TableDetail } from '../../../../api/types';
 import type { NameLookup } from '../../../../hooks/usePublicNames';
+import { EventLog } from '../events/EventLog';
+import { displayName } from '../MemberList';
 import { CharacterCards } from './CharacterCards';
 import { HpBar } from './HpBar';
 import { Inventory } from './Inventory';
@@ -54,6 +57,7 @@ export function StatusPanel({ table, myId, nameOf }: Props) {
         {tab === 'characters' ? <CharacterCards members={table.members} rules={table.rules} myId={myId} nameOf={nameOf} /> : null}
         {tab === 'items' ? <Inventory table={table} myId={myId} shortcuts={shortcuts} /> : null}
         {tab === 'world' ? <WorldInfo table={table} mine={mine} shortcuts={shortcuts} /> : null}
+        {tab === 'log' ? <EventLog table={table} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} /> : null}
       </div>
     </section>
   );

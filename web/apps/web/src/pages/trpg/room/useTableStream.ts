@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/room/useTableStream.ts
 // 테이블 방에 있는 동안 스트림을 붙잡고 있는다. 끊기면 다시 붙고(streamPolicy.ts), 화면을 떠나면 끊는다.
 //
-// 붙는 순서: 채팅의 끝부분을 읽은 뒤(채팅의 마지막 번호), 이벤트와 쪽지의 마지막 번호를 읽고 그 뒤부터 붙는다.
+// 붙는 순서: 채팅과 일어난 일의 끝부분을 읽은 뒤(둘의 마지막 번호), 쪽지의 마지막 번호를 읽고 그 뒤부터 붙는다.
 // 다시 붙을 때는 마지막으로 받은 id 를 Last-Event-ID 로 보낸다. 같은 것이 두 번 오지 않는다.
 // 받은 것은 handlers 로 넘긴다. 열릴 때마다 onOpen 을 부른다(그사이 놓친 테이블의 변화를 다시 읽게).
 
@@ -28,21 +28,26 @@ export type StreamHandlers = {
   onStop: (reason: StopReason) => void;
 };
 
-/** chatCursor: 화면이 읽은 채팅의 마지막 번호. null 이면 아직 읽는 중이라 붙지 않는다 */
-export function useTableStream(tableId: string, chatCursor: number | null, handlers: StreamHandlers): StreamStatus {
+/**
+ * 처음 붙을 번호. 화면이 읽은 채팅과 일어난 일의 마지막 번호. 통째로 null 이면 아직 읽는 중이라 붙지 않는다.
+ * 일어난 일을 읽지 못했으면 events 가 null 이다(그래도 붙는다. 지금부터 받는다)
+ */
+export type StreamStart = { messages: number; events: number | null };
+
+export function useTableStream(tableId: string, start: StreamStart | null, handlers: StreamHandlers): StreamStatus {
   const [status, setStatus] = useState<StreamStatus>({ state: 'connecting' });
   const latest = useRef(handlers);
   useEffect(() => {
     latest.current = handlers;
   });
-  const ready = chatCursor !== null;
+  const ready = start !== null;
 
   useEffect(() => {
-    if (!ready) return undefined;
+    if (!start) return undefined;
     const controller = new AbortController();
-    void runStream(tableId, chatCursor, controller.signal, setStatus, () => latest.current);
+    void runStream(tableId, start, controller.signal, setStatus, () => latest.current);
     return () => controller.abort();
-    // 채팅의 번호는 처음 붙을 때만 쓴다. 그 뒤로는 Last-Event-ID 로 잇는다
+    // 번호는 처음 붙을 때만 쓴다. 그 뒤로는 Last-Event-ID 로 잇는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId, ready]);
 
@@ -51,7 +56,7 @@ export function useTableStream(tableId: string, chatCursor: number | null, handl
 
 async function runStream(
   tableId: string,
-  chatCursor: number,
+  start: StreamStart,
   signal: AbortSignal,
   setStatus: (status: StreamStatus) => void,
   handlers: () => StreamHandlers,
@@ -60,7 +65,7 @@ async function runStream(
   let lastEventId: string | null = null;
   let failures = 0;
   while (!signal.aborted) {
-    const found: StreamCursor | StreamEnd = cursor ?? (await cursorOrEnd(tableId, chatCursor, signal));
+    const found: StreamCursor | StreamEnd = cursor ?? (await cursorOrEnd(tableId, start, signal));
     let end: StreamEnd;
     if ('kind' in found) {
       end = found;
@@ -96,9 +101,9 @@ async function runStream(
 }
 
 /** 처음 붙을 번호. 읽지 못하면 그 까닭을 스트림이 끝난 것처럼 돌려준다(404 면 앉아 있지 않다) */
-async function cursorOrEnd(tableId: string, chatCursor: number, signal: AbortSignal): Promise<StreamCursor | StreamEnd> {
+async function cursorOrEnd(tableId: string, start: StreamStart, signal: AbortSignal): Promise<StreamCursor | StreamEnd> {
   try {
-    return await fetchStreamCursor(tableId, chatCursor, signal);
+    return await fetchStreamCursor(tableId, start, signal);
   } catch (error) {
     if (signal.aborted) return { kind: 'aborted' };
     if (error instanceof ApiError) return { kind: 'http-error', status: error.status };

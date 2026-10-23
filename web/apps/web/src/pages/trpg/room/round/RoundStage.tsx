@@ -1,10 +1,12 @@
 // web/apps/web/src/pages/trpg/room/round/RoundStage.tsx
 // 진행 중과 끝난 테이블의 가운데(B6 의 ③). 최근의 라운드들을 차례로 보이고, 맨 아래에 지금 라운드를 둔다.
-// 더 앞의 라운드는 지난 판 읽기(B10)가 보일 것이다. 상태 패널(B7)은 옆에 있고(status/), 일어난 일은 ④-2 다.
+// 더 앞의 라운드는 지난 판 읽기(B10)가 보일 것이다. 상태 패널(B7)은 옆에 있고(status/), 일어난 일은 그 탭이다(events/).
+// 지금 라운드 바로 위에 서술을 막는 일의 알림을 둔다(events/RoomNotices).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import type { TableDetail } from '../../../../api/types';
+import { RoomNotices } from '../events/RoomNotices';
 import { CurrentRound } from './CurrentRound';
 import type { NarrationPreview } from './preview';
 import { RoundEntry } from './RoundEntry';
@@ -44,6 +46,7 @@ export function RoundStage({ table, myId, preview, nameOfMember }: Props) {
       {past.map((round) => (
         <RoundEntry key={round.number} round={round} table={table} />
       ))}
+      <RoomNotices table={table} currentRound={current.data.number} nameOfMember={nameOfMember} />
       <CurrentRound table={table} round={current.data} myId={myId} preview={preview} nameOfMember={nameOfMember} />
     </section>
   );
