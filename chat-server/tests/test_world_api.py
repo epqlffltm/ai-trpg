@@ -11,6 +11,7 @@
   - 상태는 가지를 따른다. 이동하기 전의 가지로 가면 그때의 장소다. 행동 말에 대한 반응도 다시 생성한다
   - 쓰기와 건네기: 소지품이 바뀌고 옷은 상대가 입는다. 건넬 때 덧붙인 한마디는 행동 말 아래의 사람의 말이고,
     반응은 그 한마디에 답한다(한 번 청구). 가지고 있지 않으면 422
+  - 호감도: 판의 시작 값에서 행동의 규칙대로 바뀌고, 단계로 보이면 숫자를 내려보내지 않는다. 가지를 따른다
 """
 
 import asyncio
@@ -21,11 +22,12 @@ from ai_core.provider import Role
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.conversations.models import Conversation, Message
 from app.main import API_PREFIX, STREAMS
+from app.world.models import MessageState
 from tests.assets import FakeAsset, make_character
 from tests.billing import FakeBillingServer
 from tests.models import FakeRouter, ScriptedProvider
@@ -54,6 +56,7 @@ START = {
     'inventory': [{'item': 'book', 'count': 2}],
     'visited': ['library'],
     'outfit': [],
+    'affection': None,
 }
 
 
@@ -132,7 +135,14 @@ async def test_a_character_without_a_map_has_an_empty_state(
 
     plain = await start(client, asset, mine, None)
 
-    assert plain['state'] == {'place': None, 'minutes': 0, 'inventory': [], 'visited': [], 'outfit': []}
+    assert plain['state'] == {
+        'place': None,
+        'minutes': 0,
+        'inventory': [],
+        'visited': [],
+        'outfit': [],
+        'affection': None,
+    }
 
 
 # --- 이동 ---
@@ -428,3 +438,70 @@ async def test_malformed_item_actions_are_refused(client: AsyncClient, stocked: 
     response = await client.post(f'{CONVERSATIONS_URL}/{stocked["id"]}/actions', json=body, headers=mine)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+# --- 호감도 ---
+
+AFFECTION = {
+    'display': 'stage',
+    'start': 25,
+    'stages': [{'name': '낯섦', 'at': 0}, {'name': '친구', 'at': 30}],
+    'rules': [
+        {'id': 'date', 'on': {'kind': 'reach_place', 'target': 'cafe'}, 'change': 10, 'once': True},
+        {'id': 'gift', 'on': {'kind': 'give_item', 'target': 'scarf'}, 'change': 3, 'once': False},
+    ],
+}
+
+
+@pytest.fixture
+async def liked(clean_tables: None, session: AsyncSession, client: AsyncClient, asset: FakeAsset, mine: dict):
+    """호감도가 있는 캐릭터와의 대화. 단계 이름으로 보인다."""
+    await turn_on_luna(session)
+    return await start(client, asset, mine, {**WORLD, 'affection': AFFECTION})
+
+
+async def test_affection_starts_from_the_version_and_hides_the_number(liked: dict):
+    assert liked['state']['affection'] == {
+        'display': 'stage',
+        'value': None,
+        'stage': '낯섦',
+        'stage_index': 0,
+        'stages': 2,
+    }
+
+
+async def test_a_first_date_raises_affection_once(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, liked: dict, router: FakeRouter, mine: dict
+):
+    await move(client, app, mine, liked, 'cafe')
+    await move(client, app, mine, liked, 'library')
+    await move(client, app, mine, liked, 'cafe')
+
+    state = (await read(client, mine, liked))['state']
+    assert state['affection']['stage'] == '친구'
+    # 숫자는 내려보내지 않지만 서버는 35 를 쥐고 있다(한 번만 올랐다)
+    rows = (await session.execute(select(MessageState.affection))).scalars().all()
+    assert sorted(rows) == [35, 35, 35]
+    assert '사용자에 대한 호감: 친구' in router.provider.calls[-1][0][0].content
+
+
+async def test_affection_follows_the_branch(
+    client: AsyncClient, app: FastAPI, liked: dict, router: FakeRouter, mine: dict
+):
+    first = (await say(client, app, mine, liked, {'content': '안녕'}))[0][1]['user_message']
+    await move(client, app, mine, liked, 'cafe')
+
+    await say(client, app, mine, liked, {'content': '다시', 'edit_of': first['id']})
+
+    assert (await read(client, mine, liked))['state']['affection']['stage'] == '낯섦'
+
+
+async def test_a_state_written_before_affection_reads_as_the_start(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, liked: dict, router: FakeRouter, mine: dict
+):
+    await move(client, app, mine, liked, 'cafe')
+    # 호감도를 더하기 전에 적힌 상태와 같게 만든다
+    await session.execute(update(MessageState).values(affection=None))
+    await session.commit()
+
+    assert (await read(client, mine, liked))['state']['affection']['stage'] == '낯섦'

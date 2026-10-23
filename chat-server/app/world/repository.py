@@ -23,6 +23,8 @@ def to_state(row: MessageState) -> WorldState:
         inventory=holdings,
         visited=tuple(row.visited),
         outfit=tuple(row.outfit),
+        affection=row.affection,
+        fired=tuple(row.fired),
     )
 
 
@@ -35,6 +37,8 @@ def to_row(message_id: uuid.UUID, state: WorldState) -> MessageState:
         inventory=[{'item': holding.item, 'count': holding.count} for holding in state.inventory],
         visited=list(state.visited),
         outfit=list(state.outfit),
+        affection=state.affection,
+        fired=list(state.fired),
     )
 
 
