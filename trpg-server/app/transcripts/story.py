@@ -326,7 +326,7 @@ def place_searched(payload: dict, labels: Labels) -> list[Block]:
 
 
 # 문을 다룬 것의 말(#281)
-DOOR_ACTS = {'lock': '잠금', 'unlock': '엶', 'pick': '땀', 'force': '부숨'}
+DOOR_ACTS = {'lock': '잠금', 'unlock': '엶', 'pick': '땀', 'force': '부숨', 'repair': '고침'}
 DOOR_DEVICES = {'lock': '자물쇠', 'bar': '빗장'}
 
 

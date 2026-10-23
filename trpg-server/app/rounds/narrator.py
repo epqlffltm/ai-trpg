@@ -389,10 +389,10 @@ class DoorNote:
     """
     길의 문을 다룬 결과(app/rounds/door_actions.py, #281). 엔진이 정한 것이다.
 
-    act 는 lock(잠그기), unlock(열기), pick(따기), force(부수기)다.
-    device 는 lock(자물쇠), bar(빗장)다(따기와 부수기는 None).
+    act 는 lock(잠그기), unlock(열기), pick(따기), force(부수기), repair(고치기)다.
+    device 는 lock(자물쇠), bar(빗장)다(따기, 부수기, 고치기는 None).
     other_end 는 그 길의 다른 끝의 이름이다. done 이 거짓이면 reason 이 까닭이다.
-    check 는 따기와 부수기에 굴린 판정의 능력치의 이름이다(굴리지 않았으면 None).
+    check 는 따기, 부수기, 고치기에 굴린 판정의 능력치의 이름이다(굴리지 않았으면 None).
     """
 
     act: str

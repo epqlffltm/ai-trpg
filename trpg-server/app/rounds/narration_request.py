@@ -208,7 +208,7 @@ def to_door(declaration: Declaration | None, ruleset: Ruleset | None = None) -> 
     """
     선언에 적힌 문 다루기의 결과를 서술자에게 줄 모양으로 바꾼다(#281). 문을 다루는 행동이 아니면 None.
 
-    ruleset 은 따기와 부수기의 판정의 능력치의 이름을 찾는다.
+    ruleset 은 따기, 부수기, 고치기의 판정의 능력치의 이름을 찾는다.
     """
     door = door_of(declaration)
     if door is None:

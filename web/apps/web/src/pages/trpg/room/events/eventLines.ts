@@ -208,7 +208,13 @@ function movedText(payload: Payload, ctx: EventContext, event: TableEvent): stri
 }
 
 /** 문을 다룬 것(#281). 해낸 것만 이벤트로 온다 */
-const DOOR_ACTS: Record<string, string> = { lock: '잠갔습니다', unlock: '열었습니다', pick: '땄습니다', force: '부쉈습니다' };
+const DOOR_ACTS: Record<string, string> = {
+  lock: '잠갔습니다',
+  unlock: '열었습니다',
+  pick: '땄습니다',
+  force: '부쉈습니다',
+  repair: '고쳤습니다',
+};
 
 function doorText(payload: Payload, ctx: EventContext, event: TableEvent): string {
   const device = text(payload, 'device') === 'bar' ? '빗장' : '문';

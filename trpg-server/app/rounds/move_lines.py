@@ -420,6 +420,7 @@ DOOR_DONE = {
     ('unlock', 'bar'): '빗장을 풀었다',
     ('pick', None): '자물쇠를 땄다',
     ('force', None): '문을 부숴 열었다',
+    ('repair', None): '부서진 문을 고쳤다',
 }
 # 문을 다루지 못한 까닭의 말. 따기와 부수기의 실패는 door_failure 가 따로 말한다
 DOOR_FAILURES = {
@@ -429,14 +430,21 @@ DOOR_FAILURES = {
     'already': '이미 그렇게 되어 있었다',
     'no_tool': '딸 도구가 없었다',
 }
+# 고치기만의 까닭의 말. 같은 까닭이라도 고치기에서는 뜻이 다르다
+REPAIR_FAILURES = {
+    'already': '부서진 문이 아니었다',
+    'no_tool': '고칠 도구가 없었다',
+}
 # 무엇을 하려 했는지의 말(못 했을 때)
-DOOR_TRIES = {'lock': '잠그려', 'unlock': '열려', 'pick': '따려', 'force': '부수려'}
+DOOR_TRIES = {'lock': '잠그려', 'unlock': '열려', 'pick': '따려', 'force': '부수려', 'repair': '고치려'}
 
 
 def door_failure(note: DoorNote) -> str:
     """문을 다루지 못한 까닭의 말. 판정에 실패했으면 무슨 판정인지 말한다."""
     if note.reason == 'failed':
         return f'{note.check} 판정에 실패했다'
+    if note.act == 'repair' and note.reason in REPAIR_FAILURES:
+        return REPAIR_FAILURES[note.reason]
     return DOOR_FAILURES.get(note.reason, '하지 못했다')
 
 

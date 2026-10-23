@@ -21,6 +21,7 @@ from app.assets.scenarios.snapshot import (
     CurrencySnapshot,
     ForceSnapshot,
     PickSnapshot,
+    RepairSnapshot,
     RouteSnapshot,
     Snapshot,
     cover_at,
@@ -358,10 +359,13 @@ def to_route(table: GameTable, snapshot: Snapshot, route: RouteSnapshot) -> Rout
         broken=route_locks.is_broken(table, route),
         pick=to_cross(snapshot, pick),
         force=to_cross(snapshot, route.force),
+        repair=to_cross(snapshot, route.repair),
     )
 
 
-def to_cross(snapshot: Snapshot, terms: CrossSnapshot | PickSnapshot | ForceSnapshot | None) -> RouteCrossOut | None:
+def to_cross(
+    snapshot: Snapshot, terms: CrossSnapshot | PickSnapshot | ForceSnapshot | RepairSnapshot | None
+) -> RouteCrossOut | None:
     """길에 적힌 판정을 응답으로 바꾼다. 난이도를 비웠으면 규칙의 기본 난이도의 이름표다. 없으면 None."""
     if terms is None:
         return None
