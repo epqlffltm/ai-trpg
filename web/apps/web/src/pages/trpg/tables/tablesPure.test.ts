@@ -33,6 +33,8 @@ describe('createForm', () => {
       narration_style: null,
       round_time_limit: 300,
       narration_model: null,
+      input_step: 0,
+      output_step: 0,
       credit_wait_seconds: 300,
       remove_short_payers: true,
       whisper_notice: false,

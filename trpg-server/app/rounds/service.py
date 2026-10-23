@@ -51,6 +51,7 @@ from app.billing import charges
 from app.billing import repository as billing_repository
 from app.billing.models import NarrationCharge
 from app.billing.price_list import FREE_PRICES, PriceList
+from app.catalog.steps import steps_of
 from app.core.config import BILLING_BUDGET_SECONDS, NARRATION_BUDGET_SECONDS
 from app.engine.dice import Dice
 from app.events import recorder
@@ -67,7 +68,7 @@ from app.rounds.monster_scene import scene_monsters
 from app.rounds.move_lines import round_lines
 from app.rounds.moves import build_moves, frozen_moves, frozen_style, to_monster_notes, to_people
 from app.rounds.narrator import NarrationRequest
-from app.rounds.prompt import HISTORY_ROUNDS
+from app.rounds.prompt import history_rounds
 from app.rounds.records import record_actions, record_death_saves, record_injury_endings, record_recoveries
 from app.rounds.round_price import price_of
 from app.rounds.schemas import DeclarationUpdate
@@ -494,7 +495,8 @@ async def load_closing_request(
     None 이면 할 일이 없다. 다른 작업이 이미 마무리했거나, 그 뒤에 다시 맡겼거나, 테이블이 지워졌다.
     잠그지 않는다. 읽는 것은 모두 더 바뀌지 않는다.
       - 각자 한 일과 문체는 닫기 시작할 때 굳혀 둔 것이다. 그 뒤에 누가 나가도, 방장이 문체를 바꿔도 그대로다.
-      - 서술 모델은 라운드를 열 때 굳혀 둔 것이다. 서술이 돌기 시작한 라운드는 방장이 바꿔도 그대로다.
+      - 서술 모델과 단계는 라운드를 열 때 굳혀 둔 것이다. 서술이 돌기 시작한 라운드는 방장이 바꿔도 그대로다.
+        단계가 지난 기록의 라운드 수와 서술의 예산을 정한다(#387).
       - 이야기의 바탕은 판의 복사본에서 꺼낸다. 판은 고치지 않는다.
       - 지난 라운드는 닫혀서 바뀌지 않는다.
       - NPC 의 상태는 닫기 시작할 때 바뀐 뒤로 다음 라운드가 열릴 때까지 바뀌지 않는다.
@@ -510,7 +512,8 @@ async def load_closing_request(
     round_ = await repository.find_round(session, table_id, number)
     if table is None or not is_run(round_, started):
         return None
-    history = await repository.list_rounds_before(session, table_id, number, HISTORY_ROUNDS)
+    steps = steps_of(round_)
+    history = await repository.list_rounds_before(session, table_id, number, history_rounds(steps))
     whispers = await whisper_repository.list_for_gm(session, table_id, number, GM_WHISPERS_PER_SENDER)
     snapshot = read_snapshot(table.content)
     scene = await load_scene(session, table, round_)
@@ -532,6 +535,7 @@ async def load_closing_request(
         turns=narration_request.to_turn_notes(round_.turns),
         clock=narration_request.to_clock_note(table),
         secrets=narration_request.to_secret_names(snapshot, scene.npcs, round_.scene),
+        steps=steps,
     )
 
 
@@ -614,7 +618,7 @@ async def close_and_open(
     round_.closed_at = now
     playing = table.status == TableStatus.PLAYING
     if playing:
-        price = await price_of(session, prices, table.narration_model, now)
+        price = await price_of(session, prices, table.narration_model, now, steps_of(table))
         await session.flush()
         opener.open_round(session, table, number=round_.number + 1, scene=scene, cause=cause, price=price)
     await charges.settle_round(session, round_.id, paid and playing, now)

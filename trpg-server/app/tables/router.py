@@ -23,7 +23,8 @@ from app.billing.routing import Now, Prices
 from app.calendar import clock
 from app.calendar.responses import to_clock
 from app.catalog import offers
-from app.catalog.offers import OfferedModel
+from app.catalog.offers import OfferedModel, StepPrice
+from app.catalog.steps import input_tokens, output_tokens
 from app.core.dice import Rolling
 from app.limits.routing import Limited
 from app.personas import saving
@@ -91,6 +92,7 @@ from app.tables.schemas import (
     RoundTimeLimitUpdate,
     RouteOut,
     SheetOut,
+    StepPriceOut,
     TableCreate,
     TableDetail,
     TablePage,
@@ -127,6 +129,20 @@ def to_next_out(change: Change | None) -> NextPriceOut | None:
     return NextPriceOut(credits=credits, tier=tier, promo=promo, effective_at=change.effective_at)
 
 
+def to_step_out(sale: StepPrice) -> StepPriceOut:
+    """모델의 단계 하나와 그 값을 응답으로."""
+    return StepPriceOut(
+        input_step=sale.steps.input,
+        output_step=sale.steps.output,
+        input_tokens=input_tokens(sale.steps),
+        output_tokens=output_tokens(sale.steps),
+        credits=sale.credits,
+        tier=sale.tier,
+        promo=sale.promo,
+        next=to_next_out(sale.next),
+    )
+
+
 def to_model_out(found: OfferedModel) -> NarrationModelOut:
     """고를 수 있는 모델 하나를 응답으로."""
     return NarrationModelOut(
@@ -139,6 +155,7 @@ def to_model_out(found: OfferedModel) -> NarrationModelOut:
         promo=found.promo,
         next=to_next_out(found.next),
         retires_on=found.retires_on,
+        options=[to_step_out(sale) for sale in found.options],
     )
 
 
@@ -170,6 +187,8 @@ def to_summary(table: GameTable) -> TableSummary:
         narration_style=table.narration_style,
         round_time_limit=table.round_time_limit,
         narration_model=table.narration_model,
+        input_step=table.input_step,
+        output_step=table.output_step,
         credit_wait_seconds=table.credit_wait_seconds,
         remove_short_payers=table.remove_short_payers,
         whisper_notice=table.whisper_notice,

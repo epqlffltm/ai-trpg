@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot, read_snapshot
+from app.catalog.steps import NarrationSteps, scaled_chars
 from app.lore import repository
 from app.lore.texts import version_entries
 from app.rounds.narrator import LoreNote, NarrationRequest
@@ -51,7 +52,8 @@ from app.tables import repository as table_repository
 
 logger = logging.getLogger(__name__)
 
-# 넣는 항목의 글자 수(이름 + 내용)의 합의 상한. 항목 하나가 600자 안쪽이라 5~6개쯤이다
+# 넣는 항목의 글자 수(이름 + 내용)의 합의 상한. 항목 하나가 600자 안쪽이라 5~6개쯤이다.
+# 기본 단계의 값이다. 입력 단계가 오르면 입력 토큰과 같은 비율로 는다(lore_max_chars, #387)
 LORE_MAX_CHARS = 3000
 # 벡터로 고르는 항목의 수의 상한
 NEAREST_LIMIT = 8
@@ -143,19 +145,30 @@ def near_enough(entry: EntrySnapshot, distances: Mapping[uuid.UUID, float], max_
     return distances.get(entry.id, -math.inf) <= max_distance
 
 
+def lore_max_chars(steps: NarrationSteps) -> int:
+    """그 입력 단계에서 넣는 항목의 글자 수의 상한."""
+    return scaled_chars(LORE_MAX_CHARS, steps)
+
+
 def choose(
-    entries: list[EntrySnapshot], text: str, distances: Mapping[uuid.UUID, float], thresholds: Thresholds
+    entries: list[EntrySnapshot],
+    text: str,
+    distances: Mapping[uuid.UUID, float],
+    thresholds: Thresholds,
+    max_chars: int = LORE_MAX_CHARS,
 ) -> list[EntrySnapshot]:
     """
     넣을 항목을 고른다. 키워드로 걸리고 거리가 가까운 것을 먼저, 그다음 뜻이 가까운 것을, 글자 수 안에서.
 
     distances 는 항목마다 찾는 글과의 거리다. 임베딩이 실패했으면 비어 있고, 그러면 키워드로만 고른다.
     서버와 평가 도구(evals/lore)가 함께 쓴다. 평가한 규칙과 실제로 도는 규칙이 같아야 한다.
+    max_chars 는 글자 수의 상한이다. 서버는 요청의 입력 단계의 것을 준다(lore_max_chars).
     """
     hits = [
         entry for entry in keyword_hits(entries, text) if near_enough(entry, distances, thresholds.keyword_max_distance)
     ]
-    return pick([*hits, *nearest_within(entries, distances, thresholds.max_distance, thresholds.limit)])
+    nearest = nearest_within(entries, distances, thresholds.max_distance, thresholds.limit)
+    return pick([*hits, *nearest], max_chars)
 
 
 def scene_label(entry: EntrySnapshot, text: str) -> str:
@@ -243,7 +256,8 @@ class LoreRetriever:
         text = query_text(request)
         distances = await self.distances(candidates, text)
         labels = scene_labels(candidates.entries, text, candidates.named)
-        return [to_note(entry, labels) for entry in choose(candidates.entries, text, distances, self.thresholds)]
+        chosen = choose(candidates.entries, text, distances, self.thresholds, lore_max_chars(request.steps))
+        return [to_note(entry, labels) for entry in chosen]
 
     async def distances(self, candidates: Candidates, text: str) -> dict[uuid.UUID, float]:
         """

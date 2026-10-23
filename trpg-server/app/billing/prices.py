@@ -23,10 +23,10 @@ from typing import Annotated
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, StringConstraints
 
-# 서술의 가격표 이름의 앞부분(narration.<이름표>.i0.o0)
+from app.catalog.steps import BASE_STEPS, NarrationSteps, steps_code
+
+# 서술의 가격표 이름의 앞부분(narration.<이름표>.i<입력>.o<출력>)
 PRICE_CODE_PREFIX = 'narration'
-# 입력·출력 옵션의 단계. 지금은 기본(0단계)만 판다(model-pricing-plan 4-1)
-BASE_STEPS = 'i0.o0'
 
 # 값의 글자. 결제 서버의 credit.Amount 가 만드는 모양이다("120", "0.0120")
 Credits = Annotated[str, StringConstraints(pattern=r'^\d+(\.\d+)?$')]
@@ -122,9 +122,13 @@ class PriceBook:
 FREE_BOOK = PriceBook(free=True)
 
 
-def narration_code(slug: str) -> str:
-    """모델 이름표의 가격표 이름(narration.claude-sonnet-5-5.i0.o0). 이름표 문자열 그대로 넣는다(9절)."""
-    return f'{PRICE_CODE_PREFIX}.{slug}.{BASE_STEPS}'
+def narration_code(slug: str, steps: NarrationSteps = BASE_STEPS) -> str:
+    """
+    모델 이름표와 단계의 가격표 이름(narration.claude-sonnet-5-5.i1.o0). 이름표 문자열 그대로 넣는다(9절).
+
+    단계는 입력·출력 옵션이다(#387, app/catalog/steps.py). 단계마다 결제 서버의 가격표에 줄이 따로 있다.
+    """
+    return f'{PRICE_CODE_PREFIX}.{slug}.{steps_code(steps)}'
 
 
 def sale_of(credits: str | None, tier: Tier | None, promo: bool | None) -> Sale | None:

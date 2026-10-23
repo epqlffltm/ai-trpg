@@ -60,6 +60,7 @@ from app.assets.models import (
     none_of,
     one_of,
 )
+from app.catalog.steps import MAX_STEP
 from app.core.database import Base
 
 # 초대 코드의 길이(글자 수). 코드를 아는 사람만 테이블에 들어온다
@@ -170,6 +171,9 @@ class GameTable(Base):
         CheckConstraint(
             f'credit_wait_seconds BETWEEN {CREDIT_WAIT_MIN} AND {CREDIT_WAIT_MAX}', name='credit_wait_seconds_range'
         ),
+        # 서술의 입력·출력 단계(#387). 0 부터 MAX_STEP 까지다
+        CheckConstraint(f'input_step BETWEEN 0 AND {MAX_STEP}', name='input_step_range'),
+        CheckConstraint(f'output_step BETWEEN 0 AND {MAX_STEP}', name='output_step_range'),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -229,7 +233,7 @@ class GameTable(Base):
     # 이 칸이 생기기 전에 만든 테이블은 정통이다. 그 테이블의 판도 정통을 추천하는 것으로 읽힌다
     narration_style: Mapped[str] = mapped_column(String(20), server_default=text("'classic'"))
 
-    # 서술 모델(모델 목록의 이름표, app/catalog/). 값은 결제 서버의 narration.<이름표>.i0.o0 이다.
+    # 서술 모델(모델 목록의 이름표, app/catalog/). 값은 결제 서버의 narration.<이름표>.i<입력>.o<출력> 이다.
     # 만들 때 정한다. 방장이 고른 것, 아니면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대체 모델이다
     # (app/tables/model_choice.py). 진행 중에도 방장이 바꿀 수 있다.
     # 비어 있는 것은 이 규칙 전에 만든 테이블뿐이다. 서버의 기본 모델(LLM_MODEL)로 서술하고 옛 가격표로 건다
@@ -238,6 +242,12 @@ class GameTable(Base):
     # 길이는 모델 목록의 이름표와 같다(48자). 모델 목록을 가리키는 외래 키는 두지 않는다.
     # 고를 때 확인한다(app/tables/model_picker.py)
     narration_model: Mapped[str | None] = mapped_column(String(48))
+    # 서술의 입력·출력 단계(#387, app/catalog/steps.py). 모델과 함께 고른다. 가격표 이름의 끝(i<입력>.o<출력>)이다.
+    # 모델과 같은 규칙으로 바꾼다(모집 중에만, 시작한 뒤에는 쓸 수 없게 됐을 때만).
+    # 라운드를 열 때 그 라운드의 것으로 굳는다.
+    # 이 칸이 생기기 전의 테이블은 0, 0 이다(i0.o0, 그때 팔던 단계)
+    input_step: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
+    output_step: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
     # 서술 모델의 은퇴를 어디까지 알렸는가(app/tables/model_retirement.py). 은퇴일과, 알린 단계(30, 14, 7, 1 일 전).
     # 대신할 모델이 없다고 알렸으면 단계가 0 이다. 은퇴일이 바뀌거나 모델이 바뀌면 처음부터 다시 센다
     retire_notice_for: Mapped[date | None] = mapped_column(Date)

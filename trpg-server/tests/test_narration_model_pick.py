@@ -47,6 +47,9 @@ NOW = datetime(2026, 10, 18, 3, 0, tzinfo=UTC)
 
 LAUGH = '크게 웃는다.'
 
+# 단계를 고르지 않은 테이블의 단계(#387). 이벤트에 모델과 함께 실린다
+BASE = {'input_step': 0, 'output_step': 0}
+
 
 @pytest.fixture
 def me(signing_key: SigningKey) -> dict[str, str]:
@@ -189,7 +192,7 @@ async def test_the_host_changes_the_model_and_it_is_recorded(client: AsyncClient
     assert response.status_code == status.HTTP_200_OK, response.text
     assert response.json()['narration_model'] == 'claude-opus-5-5'
     # 아직 라운드가 없다. 테이블의 모델만 바뀌었다
-    assert changed['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None, 'price': None}
+    assert changed['payload'] == {**BASE, 'narration_model': 'claude-opus-5-5', 'round': None, 'price': None}
 
 
 async def test_the_model_cannot_be_cleared(client: AsyncClient, me: dict[str, str]):
@@ -332,6 +335,7 @@ async def test_a_change_while_declaring_applies_to_the_open_round(
     # 결제 서버가 파는 Opus 의 지금 값을 함께 알린다
     assert changed['narration_model'] == 'claude-opus-5-5'
     assert event['payload'] == {
+        **BASE,
         'narration_model': 'claude-opus-5-5',
         'round': 1,
         'price': {'tier': 'standard', 'credits': '20'},
@@ -356,7 +360,7 @@ async def test_a_change_while_narrating_waits_for_the_next_round(
     # 연 때의 모델의 값을 걸었고 그 모델로 서술하는 중이다. 테이블만 바뀌고 다음 라운드부터다
     assert response.json()['narration_model'] == 'claude-opus-5-5'
     assert (await current(client, me, table))['narration_model'] == 'gpt-6-luna'
-    assert event['payload'] == {'narration_model': 'claude-opus-5-5', 'round': None, 'price': None}
+    assert event['payload'] == {**BASE, 'narration_model': 'claude-opus-5-5', 'round': None, 'price': None}
 
 
 async def test_an_old_round_without_a_model_is_narrated_by_the_default(

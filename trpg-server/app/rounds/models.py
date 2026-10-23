@@ -43,6 +43,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.assets.models import CHARACTER_NAME_MAX_LENGTH, NarrationStyle, at_most, one_of
+from app.catalog.steps import MAX_STEP
 from app.core.database import Base
 
 # 선언 하나의 길이(글자 수). 라운드마다 사람 수만큼 AI 의 입력에 들어간다. 길이가 곧 비용이다
@@ -87,6 +88,9 @@ class Round(Base):
         CheckConstraint('number >= 1', name='number_positive'),
         CheckConstraint('auto_retries >= 0', name='auto_retries_not_negative'),
         CheckConstraint('narration_failures >= 0', name='narration_failures_not_negative'),
+        # 서술의 입력·출력 단계(#387). 0 부터 MAX_STEP 까지다
+        CheckConstraint(f'input_step BETWEEN 0 AND {MAX_STEP}', name='input_step_range'),
+        CheckConstraint(f'output_step BETWEEN 0 AND {MAX_STEP}', name='output_step_range'),
         # 한 테이블에 같은 번호의 라운드가 둘일 수 없다
         UniqueConstraint('table_id', 'number'),
         # 한 테이블에 닫히지 않은 라운드(열림, 닫는 중)는 하나뿐이다. 조건이 붙은 유일 색인이다.
@@ -121,10 +125,15 @@ class Round(Base):
     # 비어 있으면 마감이 없다. 시간 제한이 없는 테이블이거나, 이 칸이 생기기 전에 연 라운드다
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 서술 모델(모델 목록의 이름표). 열 때 테이블의 모델로 정한다.
-    # 그 모델의 가격표(narration.<이름표>.i0.o0)로 값을 걸고 그 모델로만 서술한다. 다른 모델로 넘어가지 않는다.
+    # 그 모델과 단계의 가격표(narration.<이름표>.i<입력>.o<출력>)로 값을 걸고 그 모델로만 서술한다.
+    # 다른 모델로 넘어가지 않는다.
     # 아직 서술하지 않은 라운드는 방장이 모델을 바꾸면 함께 바뀐다(app/tables/narration_models.py).
     # 비어 있으면 서버의 기본 모델로 서술하고 옛 가격표로 건다. 모델을 고르는 규칙 전에 연 라운드다
     narration_model: Mapped[str | None] = mapped_column(String(48))
+    # 서술의 입력·출력 단계(#387). 열 때 테이블의 것으로 정한다. 모델과 함께 바뀐다(아직 서술하지 않은 라운드).
+    # 가격표 이름의 끝이고, 서술의 예산과 출력 상한을 정한다. 이 칸이 생기기 전에 연 라운드는 0, 0 이다
+    input_step: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
+    output_step: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
     # 열 때(또는 모델을 바꿀 때) 앉은 사람에게 알린 1인 1라운드의 값과 그 등급(app/rounds/round_price.py).
     # 결제 서버의 가격 목록의 값 그대로다(글자, "120"). 알리지 못했으면 비어 있다. 실제로 홀드한 값은 청구에 있다
     announced_credits: Mapped[str | None] = mapped_column(String(32))

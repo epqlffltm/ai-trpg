@@ -30,7 +30,8 @@ from ai_core.embedder import Embedder
 from ai_core.provider import ProviderError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.lore.retrieval import LORE_MAX_CHARS, query_text
+from app.catalog.steps import scaled_chars
+from app.lore.retrieval import lore_max_chars, query_text
 from app.references import repository
 from app.references.records import StoredReference
 from app.rounds.narrator import NarrationRequest, ReferenceNote
@@ -62,9 +63,13 @@ class ReferenceThresholds:
 
 
 def room_for(request: NarrationRequest, max_chars: int = REFERENCE_MAX_CHARS) -> int:
-    """참고 자료에 쓸 수 있는 글자 수. 로어북이 쓰고 남은 것과 max_chars 중 작은 것이다. 남은 것이 없으면 0 이다."""
+    """
+    참고 자료에 쓸 수 있는 글자 수. 로어북이 쓰고 남은 것과 max_chars 중 작은 것이다. 남은 것이 없으면 0 이다.
+
+    max_chars 는 기본 단계의 상한이다. 둘 다 요청의 입력 단계만큼 는다(#387).
+    """
     used = sum(len(note.name) + len(note.content) for note in request.lore)
-    return max(0, min(max_chars, LORE_MAX_CHARS - used))
+    return max(0, min(scaled_chars(max_chars, request.steps), lore_max_chars(request.steps) - used))
 
 
 def mentions_alias(reference: StoredReference, text: str) -> bool:
