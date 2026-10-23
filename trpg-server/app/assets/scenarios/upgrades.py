@@ -720,6 +720,21 @@ def upgrade_from_43(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_44(document: dict) -> dict:
+    """
+    형식 44 의 문서를 형식 45 로 올린다. 그때는 규칙에 서술 지침이 없었다.
+
+    지침이 없는 것(None)으로 읽는다. SRD5 템플릿의 지침(판타지의 분위기)을 채우지 않는다.
+    그때까지 SRD5 의 규칙은 장르를 가리지 않고 쓰였다. SF 나 현대물의 판에 판타지의 분위기를 얹지 않는다.
+    지침이 없으면 서술은 지금처럼 공통의 지시만으로 한다. DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'narration': None}}
+    upgraded['format'] = 45
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -766,4 +781,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     41: upgrade_from_41,
     42: upgrade_from_42,
     43: upgrade_from_43,
+    44: upgrade_from_44,
 }

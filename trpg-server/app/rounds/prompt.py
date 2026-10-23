@@ -4,7 +4,8 @@
 GM 의 서술을 부탁하는 메시지를 조립한다. 순수 함수다. DB 도 모델도 모른다.
 
 메시지는 이런 순서다(대화형, ai_core/provider.py).
-  1. 시스템: GM 으로서의 지시, 글쓰기의 공통 규칙, 문체, 수위, 룰북의 진행 지침, 세계관의 설정과 GM 메모.
+  1. 시스템: GM 으로서의 지시, 글쓰기의 공통 규칙, 규칙의 서술 지침, 문체, 수위, 룰북의 진행 지침,
+     세계관의 설정과 GM 메모.
      방장이 문체를 바꾸기 전까지 라운드마다 같다.
   2. 지난 라운드들: 모델의 말(그때의 장면)과 사람의 말(그때 플레이어들이 한 말)을 번갈아 둔다.
   3. 이번 라운드: 모델의 말(이번 장면)과 사람의 말(플레이어들이 한 일과 엔진이 정한 결과, 그리고 부탁).
@@ -23,6 +24,12 @@ GM 의 서술을 부탁하는 메시지를 조립한다. 순수 함수다. DB �
 등급은 문체보다 위다. 도파민을 골라도 전체 이용가의 수위를 넘지 않는다. 그래서 수위를 문체 뒤에 둔다.
 "미사용"은 문체도 끝맺음도 지시하지 않는다. 결과를 지키는 GM 의 규칙과 글쓰기의 공통 규칙은 그대로다.
 
+규칙의 서술 지침(#616)은 판을 만든 규칙(템플릿)의 것이다. 분위기, 판정 결과 단계마다 그리는 법, 하지 말 것이다.
+공통 핵심(GM 의 규칙과 글쓰기의 공통 규칙) 바로 뒤에 둔다. 셋을 섞지 않는다: 공통 핵심, 규칙의 지침, 그 뒤의 것.
+모델마다 덧붙이는 지시가 생기면 규칙의 지침 뒤에 둔다. 지침은 결과를 바꾸지 못한다. 그리는 법만 말한다.
+문체(방장)는 글의 결을, 규칙의 지침은 분위기와 결과의 묘사를 정한다.
+지침이 없는 규칙이면 이 덩어리를 빼고 공통의 지시로 쓴다.
+
 틀을 바꾸면 PROMPT_VERSION 을 올린다. AI 호출을 기록할 때(④) 어느 틀로 부탁했는지 함께 적는다.
 """
 
@@ -31,7 +38,8 @@ from dataclasses import dataclass
 from ai_core.provider import ChatMessage, Role
 
 from app.assets.models import LoreKind, NarrationStyle
-from app.rounds.move_lines import describe_injuries, describe_items, lost_before_acting, round_lines
+from app.engine.ruleset import NarrationGuide
+from app.rounds.move_lines import OUTCOME_WORDS, describe_injuries, describe_items, lost_before_acting, round_lines
 from app.rounds.narrator import (
     ClockNote,
     HappeningNote,
@@ -141,7 +149,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 업지 못했으면 그 까닭). 업힌 사람은 스스로 걷지 않았다(#367)
 #   narration-47: 이번 라운드가 닫힐 때 일어난 판의 사건이 "[일어난 사건]"으로 퀘스트 뒤, 시각 앞에 붙는다
 #                 (- 무너지는 다리: 기사 → 강 하류). 옮겨진 인물은 이미 그곳에 있다는 다루는 법이 함께 간다(#367)
-PROMPT_VERSION = 'narration-47'
+#   narration-48: 규칙에 서술 지침이 있으면 공통 핵심 뒤에 "## 규칙의 서술 지침"(분위기, 판정 결과를 그리는 법,
+#                 하지 말 것)이 붙는다. 지침은 결과를 바꾸지 못한다는 줄이 함께 간다(#616)
+PROMPT_VERSION = 'narration-48'
 
 # 지난 기록을 몇 라운드까지 넣는가
 HISTORY_ROUNDS = 3
@@ -269,6 +279,13 @@ STYLE_RULES: dict[NarrationStyle, StyleRule] = {
 }
 
 # 예시 앞에 붙는 줄. 예시의 장면(식당, 비, 국자)이 이야기에 새어 들지 않게 한다
+# 규칙의 서술 지침(#616). 덩어리의 제목과, 지침이 결과를 바꾸지 못한다는 줄
+RULE_GUIDE_TITLE = '규칙의 서술 지침'
+RULE_GUIDE_KEEPS_RESULTS = '이 지침은 그리는 법이다. 엔진이 정한 성공과 실패, 피해와 부상은 그대로 두고 따른다.'
+RULE_GUIDE_TONE = '분위기: {tone}'
+RULE_GUIDE_OUTCOMES = '판정 결과를 그리는 법:'
+RULE_GUIDE_AVOID = '하지 말 것:'
+
 SAMPLE_NOTE = '아래는 이 문체의 예시다. 글의 결만 참고하고, 예시의 장면과 인물과 사물은 가져오지 마라.'
 
 # 문체를 지시할 때 함께 붙는 줄. 선언은 화면이 받는다. 장면 안에서 플레이어에게 묻지 않는다
@@ -499,6 +516,30 @@ def section(title: str, body: str) -> str | None:
     return f'## {title}\n{body}'
 
 
+def rule_guide_lines(guide: NarrationGuide) -> list[str]:
+    """
+    규칙의 서술 지침을 줄로 적는다. 분위기, 판정 결과 단계마다의 지침, 하지 말 것, 결과를 지키라는 줄.
+
+    단계의 이름은 판정 줄과 같은 이름이다(성공, 실패). 적지 않은 단계와 비어 있는 하지 말 것은 뺀다.
+    """
+    lines = [RULE_GUIDE_TONE.format(tone=guide.tone)]
+    if guide.outcomes:
+        lines.append(RULE_GUIDE_OUTCOMES)
+        lines.extend(f'- {OUTCOME_WORDS[item.outcome]}: {item.guide}' for item in guide.outcomes)
+    if guide.avoid:
+        lines.append(RULE_GUIDE_AVOID)
+        lines.extend(f'- {line}' for line in guide.avoid)
+    lines.append(RULE_GUIDE_KEEPS_RESULTS)
+    return lines
+
+
+def rule_guide_text(guide: NarrationGuide | None) -> str | None:
+    """규칙의 서술 지침 덩어리. 지침이 없는 규칙이면 None 이다(공통의 지시만으로 쓴다)."""
+    if guide is None:
+        return None
+    return section(RULE_GUIDE_TITLE, '\n'.join(rule_guide_lines(guide)))
+
+
 def style_text(style: NarrationStyle) -> str | None:
     """문체의 지시. 글의 결, 끝맺음, 직접 묻지 않기, 진행 지침과의 몫, 예시. 미사용이면 None."""
     rule = STYLE_RULES.get(style)
@@ -537,13 +578,14 @@ def deadline_reminders(quests: list[QuestNote]) -> list[str]:
 
 def system_text(story: StoryContext, style: NarrationStyle) -> str:
     """
-    시스템 지시의 글. 지시, 글쓰기의 공통 규칙, 문체, 수위, 이야기의 제목과 바탕 글을 차례로 잇는다.
+    시스템 지시의 글. 지시, 글쓰기의 공통 규칙, 규칙의 서술 지침, 문체, 수위, 이야기의 제목과 바탕 글을 차례로 잇는다.
 
-    미사용 문체와 비어 있는 바탕 글은 뺀다.
+    미사용 문체, 지침이 없는 규칙, 비어 있는 바탕 글은 뺀다.
     """
     parts = [
         GM_RULES,
         WRITING_RULES,
+        rule_guide_text(story.narration),
         style_text(style),
         RATING_RULES[story.rating],
         section('시나리오', story.title),

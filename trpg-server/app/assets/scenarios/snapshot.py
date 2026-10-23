@@ -98,7 +98,8 @@ from app.engine.sheet import Sheet
 #  43: 퀘스트 규칙에 실패하는 조건(quests[].fail)과 그 조건을 맞추는 법(quests[].fail_match)이 있다(#367).
 #      조건의 종류에 인물이 죽음(npc_dead)과 물건을 잃음(lose_item)이 더해졌다
 #  44: 사건 규칙(happenings: 조건이 채워지면 한 번 일어나 캐릭터를 옮기는 것)이 있다(#367)
-SNAPSHOT_FORMAT = 44
+#  45: 규칙에 서술 지침(rulebook.rules.narration: 분위기, 판정 결과 단계마다의 묘사, 하지 말 것)이 있다(#616)
+SNAPSHOT_FORMAT = 45
 
 
 class EntrySnapshot(BaseModel):

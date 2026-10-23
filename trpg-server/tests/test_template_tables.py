@@ -8,6 +8,7 @@
   - 고른 템플릿의 규칙이 룰북에 복사된다.
   - 템플릿마다 그 규칙으로 시나리오를 만들어 게시하고, 테이블을 열어 한 라운드를 판정할 수 있다.
   - 게시한 뒤에 템플릿이 바뀌어도 게시된 판과 그 판의 테이블은 그때의 규칙으로 돈다. 새로 만드는 룰북만 바뀐다.
+  - 서술자는 그 판의 규칙의 서술 지침(#616)을 받는다. 같은 판정 결과라도 템플릿이 다르면 받는 지침이 다르다.
 """
 
 import uuid
@@ -22,6 +23,8 @@ from app.engine.dice import ScriptedDice
 from app.engine.ruleset import Ruleset
 from app.engine.templates import TEMPLATES, Template
 from app.main import API_PREFIX
+from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
+from app.rounds.prompt import build_messages
 from tests.narration_model import with_model
 from tests.signing import SigningKey, make_access_claims, make_token
 
@@ -125,6 +128,17 @@ class WatchedDice:
         return 1
 
 
+class RecordingNarrator:
+    """받은 부탁을 적어 두는 서술자."""
+
+    def __init__(self) -> None:
+        self.requests: list[NarrationRequest] = []
+
+    async def narrate(self, request: NarrationRequest, preview: Preview = NO_PREVIEW) -> str:
+        self.requests.append(request)
+        return '문이 열렸다.'
+
+
 # --- 목록 ---
 
 
@@ -223,3 +237,46 @@ async def test_a_published_version_keeps_the_rules_it_was_published_with(
     assert dice.asked == [10, 10]
     # 바뀐 템플릿은 새로 만드는 룰북에만 간다
     assert (await make_rulebook(client, me, Template.LIGHT))['rules']['die'] == 12
+
+
+# --- 서술 지침(#616) ---
+
+
+async def narrated_round(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, narrated, template: Template
+) -> NarrationRequest:
+    """그 템플릿의 판에서 나는 꼭 맞는 눈으로 성공하고 친구는 한 눈 모자라 실패한 라운드를 서술하게 한다."""
+    rules = TEMPLATES[template].rules
+    table = await start_duo(client, me, friend, await publish(client, me, template))
+    narrator = RecordingNarrator()
+    app.state.narrator = narrator
+    needed = find_difficulty(rules, None).target - modifier_of(rules, middle_score(rules))
+    app.state.dice = ScriptedDice([needed, needed - 1])
+    await declare_check(client, me, table, rules)
+    await declare_check(client, friend, table, rules)
+    await narrated()
+    (request,) = narrator.requests
+    return request
+
+
+async def test_the_narrator_gets_the_guide_of_the_rules_of_the_table(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
+):
+    request = await narrated_round(client, app, me, friend, narrated, Template.HORROR)
+
+    assert request.story.narration == TEMPLATES[Template.HORROR].rules.narration
+    system = build_messages(request)[0].content
+    assert TEMPLATES[Template.HORROR].rules.narration.tone in system
+
+
+async def test_the_same_results_reach_two_templates_with_different_guides(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
+):
+    fantasy = await narrated_round(client, app, me, friend, narrated, Template.SRD5)
+    horror = await narrated_round(client, app, me, friend, narrated, Template.HORROR)
+
+    # 판정 결과는 둘 다 성공 하나, 실패 하나다
+    for request in (fantasy, horror):
+        assert [move.verdict.success for move in request.moves] == [True, False]
+    assert fantasy.story.narration != horror.story.narration
+    assert build_messages(fantasy)[0].content != build_messages(horror)[0].content

@@ -5,7 +5,7 @@
 
 어떤 능력치가 있는지, 주사위가 몇 면인지, 난이도가 몇 단계인지, 피해와 회복이 얼마인지,
 캐릭터의 숫자를 어떻게 정하는지, 쓰러진 캐릭터가 어떻게 죽는지, 어떤 부상이 언제 생기고 어떻게 치료하는지를
-한 묶음(Ruleset)에 담는다.
+한 묶음(Ruleset)에 담는다. 이 규칙으로 하는 판을 어떤 분위기로 서술하는지(narration, #616)도 함께 담는다.
 엔진은 이 묶음을 인자로 받는다. 묶음의 값이 달라져도 엔진의 코드는 그대로다.
 
 규칙은 룰북에 담기고(app/assets/models.py 의 Rulebook.rules), 게시할 때 판에 굳는다.
@@ -52,6 +52,11 @@ RULESET_MAX_HEAL_MINUTES = 365 * 24 * 60
 RULESET_MAX_REST_MINUTES = 7 * 24 * 60
 # 저절로 회복하는 간격(분)의 하한. 너무 짧으면 긴 장면 하나에 주사위를 셀 수 없이 굴린다
 RULESET_MIN_NATURAL_MINUTES = 10
+# 서술 지침의 길이(#616). 라운드마다 서술의 시스템 지시에 들어간다. 다 채워도 1,200자 안팎이다
+NARRATION_TONE_MAX_LENGTH = 300
+NARRATION_OUTCOME_MAX_LENGTH = 200
+NARRATION_AVOID_MAX_LENGTH = 100
+NARRATION_MAX_AVOIDS = 5
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -569,11 +574,59 @@ class Treatment(Part):
     mishaps: MishapTable
 
 
+class Outcome(enum.StrEnum):
+    """
+    판정 결과의 단계. 엔진의 판정(app/engine/check.py)이 내는 것이다.
+
+    지금의 판정은 성공과 실패 둘이다. 부분 성공 같은 단계는 엔진이 그 단계를 정하게 될 때 더한다.
+    """
+
+    SUCCESS = 'success'
+    FAILURE = 'failure'
+
+
+class OutcomeGuide(Part):
+    """판정 결과 한 단계를 어떻게 그리는가. 예: 실패하면 상황이 나빠지는 것을 감각으로 보여 준다."""
+
+    outcome: Outcome
+    guide: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=NARRATION_OUTCOME_MAX_LENGTH)
+    ]
+
+
+AvoidLine = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=NARRATION_AVOID_MAX_LENGTH)
+]
+
+
+class NarrationGuide(Part):
+    """
+    서술 지침(#616). 이 규칙으로 하는 판을 어떤 분위기로, 판정 결과를 어떻게 그리는가, 무엇을 하지 않는가.
+
+    엔진은 보지 않는다. 서술자의 시스템 지시에 들어갈 뿐이다(app/rounds/prompt.py).
+    판정을 바꾸지 못한다. 성공과 실패는 엔진이 이미 정했고, 지침은 그것을 그리는 법만 말한다.
+    결과 단계마다 지침은 하나다. 적지 않은 단계는 공통의 지시대로 그린다.
+    """
+
+    tone: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=NARRATION_TONE_MAX_LENGTH)]
+    outcomes: Annotated[tuple[OutcomeGuide, ...], Field(max_length=len(Outcome))]
+    avoid: Annotated[tuple[AvoidLine, ...], Field(max_length=NARRATION_MAX_AVOIDS)]
+
+    @model_validator(mode='after')
+    def reject_duplicate_outcomes(self) -> Self:
+        """한 단계의 지침이 둘이면 어느 것을 따를지 알 수 없다."""
+        duplicates = find_duplicates([guide.outcome.value for guide in self.outcomes])
+        if duplicates:
+            raise ValueError(f'같은 결과 단계의 지침이 두 번 있습니다: {", ".join(duplicates)}')
+        return self
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
 
     template 은 어느 템플릿에서 왔는지를 적어 둔 것이다(app/engine/templates/). 엔진은 이 값을 보지 않는다.
+    narration(서술 지침)도 엔진은 보지 않는다. 서술자만 읽는다.
     """
 
     template: Key
@@ -620,6 +673,8 @@ class Ruleset(Part):
     steal: Steal | None
     # 쓰러져 있는 동안 빼앗긴 NPC 가 깨어날 때의 반응. None 이면 반응이 없다. 칸 자체는 늘 있어야 한다
     robbed_wake: RobbedWake | None
+    # 서술 지침(#616). 엔진은 보지 않는다. None 이면 공통의 지시만으로 서술한다. 칸 자체는 늘 있어야 한다
+    narration: NarrationGuide | None
 
     @model_validator(mode='after')
     def reject_duplicate_abilities(self) -> Self:
