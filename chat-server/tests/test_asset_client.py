@@ -138,6 +138,26 @@ async def test_the_affection_of_a_format_three_version_is_kept():
     assert make_character().document.affection is None
 
 
+async def test_the_lorebooks_of_a_format_eight_version_are_kept():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    entry = {
+        'id': 'city',
+        'name': '수도',
+        'kind': 'place',
+        'keywords': ['수도'],
+        'content': '일곱 언덕.',
+        'constant': True,
+    }
+    book = {'id': str(uuid.uuid4()), 'version': 3, 'name': '제국', 'entries': [entry]}
+    body['document'] |= {'format': 8, 'lorebooks': [book]}
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    assert fetched.document.model_dump(mode='json')['lorebooks'] == [book]
+    assert make_character().document.lorebooks == []
+
+
 async def test_the_gifts_and_model_step_of_a_format_seven_version_are_kept():
     copy = make_character()
     body = copy.model_dump(mode='json')
