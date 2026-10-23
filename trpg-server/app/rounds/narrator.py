@@ -417,6 +417,14 @@ class LootNote:
 
 
 @dataclass(frozen=True)
+class WornNote:
+    """착용한 물건 하나(#276). 이름과 차지한 칸의 이름들(주손, 보조손)이다."""
+
+    name: str
+    slots: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class TradeNote:
     """
     상인과 사고판 결과(app/rounds/trades.py, #278). 엔진이 정한 것이다. 판정이 없다.
@@ -525,6 +533,9 @@ class Move:
     # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 가진 돈의 글(금화 30닢). 돈이 없는 판이면 None 이다(#278).
     # 서술자는 돈을 주거나 받는 장면을 지어내지 않는다. 돈을 바꾸는 것은 서버뿐이다
     money: str | None = None
+    # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 착용한 물건들(#276). 규칙의 칸의 차례다.
+    # 착용은 서버가 관리한다. 서술자는 착용하지 않은 갑옷이나 쥐지 않은 무기를 그리지 않는다
+    worn: list[WornNote] = field(default_factory=list)
     # 이 라운드가 닫힐 때 이룬 퀘스트가 이 캐릭터에게서 가져간 물건들. 퀘스트마다, 물건마다 한 줄이다
     handed_over: list[HandOverNote] = field(default_factory=list)
     # 겨눈 몬스터를 칠 수 없어 굴리지 않았으면 그 까닭. 아니면 None 이다. verdict 와 함께 있지 않다

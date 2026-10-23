@@ -752,6 +752,31 @@ def upgrade_from_45(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_46(document: dict) -> dict:
+    """
+    형식 46 의 문서를 형식 47 로 올린다. 그때는 장비의 칸이 없었다(#276).
+
+    칸이 없는 규칙으로 읽는다. SRD5 템플릿의 칸(주손, 보조손, 몸, 머리)을 채우지 않는다. 서술 지침(형식 45)과 같다.
+    그때까지 SRD5 의 규칙은 장르를 가리지 않고 쓰였다. 물건은 착용하지 않고, 시작할 때도 착용하지 않는다.
+    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'equipment_slots': []}}
+    upgraded['items'] = [{**rule, 'slots': [], 'slot_count': 1} for rule in document.get('items', [])]
+    upgraded['starting_items'] = [{**stack, 'wear': []} for stack in document.get('starting_items', [])]
+    upgraded['pregens'] = [
+        {**pregen, 'items': [{**stack, 'wear': []} for stack in pregen.get('items', [])]}
+        for pregen in document['pregens']
+    ]
+    upgraded['quests'] = [
+        {**quest, 'reward': [{**stack, 'wear': []} for stack in quest.get('reward', [])]}
+        for quest in document.get('quests', [])
+    ]
+    upgraded['format'] = 47
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -800,4 +825,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     43: upgrade_from_43,
     44: upgrade_from_44,
     45: upgrade_from_45,
+    46: upgrade_from_46,
 }

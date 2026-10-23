@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from app.assets.models import ITEM_STACK_MAX, ItemKind, ItemRarity
 from app.assets.scenarios.snapshot import ItemStackSnapshot, Snapshot, item_entries, item_rule_of
+from app.tables import equipment
 from app.tables.errors import Conflict, TableConflictError, TableOptionError
 from app.tables.models import TableItem, TableSheet
 
@@ -26,6 +27,7 @@ class CatalogItem:
     판에 있는 물건 하나. 이름은 로어북 항목의 이름, 종류와 회복의 양과 등급과 값은 아이템 규칙의 것이다.
 
     price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
+    slots 는 착용할 때 들어갈 수 있는 규칙의 칸, slot_count 는 차지하는 칸의 수다(#276). slots 가 비면 착용하지 않는다.
     """
 
     entry_id: uuid.UUID
@@ -34,6 +36,8 @@ class CatalogItem:
     heals: str | None
     rarity: ItemRarity = ItemRarity.NORMAL
     price: int | None = None
+    slots: tuple[str, ...] = ()
+    slot_count: int = 1
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -42,7 +46,14 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
     for entry in item_entries(snapshot):
         rule = item_rule_of(snapshot, entry.id)
         items[entry.id] = CatalogItem(
-            entry_id=entry.id, name=entry.name, kind=rule.kind, heals=rule.heals, rarity=rule.rarity, price=rule.price
+            entry_id=entry.id,
+            name=entry.name,
+            kind=rule.kind,
+            heals=rule.heals,
+            rarity=rule.rarity,
+            price=rule.price,
+            slots=tuple(rule.slots),
+            slot_count=rule.slot_count,
         )
     return items
 
@@ -135,6 +146,7 @@ def add_up_to(table_id: uuid.UUID, sheet: TableSheet, entry_id: uuid.UUID, count
 def remove_items(sheet: TableSheet, entry_id: uuid.UUID, count: int) -> int:
     """
     이 캐릭터에게서 그 물건을 count 개 뺀다. 뺀 뒤의 개수를 돌려준다. 0 이 되면 그 줄을 지운다.
+    착용하지 않은 것부터 나간다. 가진 것보다 착용한 것이 많아지면 그만큼 벗는다(app/tables/equipment.py, #276).
 
     가진 것보다 많이 빼려 하면 TableConflictError(not_enough_items). 아무것도 바꾸지 않는다.
     """
@@ -144,4 +156,5 @@ def remove_items(sheet: TableSheet, entry_id: uuid.UUID, count: int) -> int:
     item.count -= count
     if item.count == 0:
         sheet.items.remove(item)
+    equipment.trim(sheet, entry_id, item.count)
     return item.count

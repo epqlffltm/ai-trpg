@@ -54,8 +54,24 @@ async def test_a_rarity_is_saved_and_published(client: AsyncClient, me: dict[str
 
     # 종류를 비우면 장비다. 등급을 비우면 노말이다
     assert scenario['items'] == [
-        {'entry_id': lore['rope']['id'], 'kind': 'gear', 'heals': None, 'rarity': 'epic', 'price': None},
-        {'entry_id': lore['potion']['id'], 'kind': 'consumable', 'heals': 'light', 'rarity': 'normal', 'price': None},
+        {
+            'entry_id': lore['rope']['id'],
+            'kind': 'gear',
+            'heals': None,
+            'rarity': 'epic',
+            'price': None,
+            'slots': [],
+            'slot_count': 1,
+        },
+        {
+            'entry_id': lore['potion']['id'],
+            'kind': 'consumable',
+            'heals': 'light',
+            'rarity': 'normal',
+            'price': None,
+            'slots': [],
+            'slot_count': 1,
+        },
     ]
     assert [item['rarity'] for item in snapshot['items']] == ['epic', 'normal']
     # 테이블은 판의 물건 목록으로 이름과 등급을 찾는다(소지품, 판의 물건 목록, 몬스터가 지닌 것)

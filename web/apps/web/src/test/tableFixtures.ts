@@ -37,6 +37,10 @@ export const RULES = {
   treatment: null,
   rest: null,
   steal: null,
+  equipment_slots: [
+    { key: 'main_hand', name: '주손' },
+    { key: 'off_hand', name: '보조손' },
+  ],
   point_buy: {
     budget: 10,
     costs: [

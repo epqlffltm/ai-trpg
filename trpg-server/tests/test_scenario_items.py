@@ -59,7 +59,7 @@ def rule(entry: dict, kind: str = 'consumable', **fields) -> dict:
 
 
 def stack(entry: dict, count: int = 1) -> dict:
-    return {'entry_id': entry['id'], 'count': count}
+    return {'entry_id': entry['id'], 'count': count, 'wear': []}
 
 
 def pregen(name: str, *items: dict) -> dict:
@@ -88,8 +88,24 @@ async def test_items_are_saved_and_read_back(client: AsyncClient, me: dict[str, 
     read = (await client.get(f'{SCENARIOS_URL}/{scenario["id"]}', headers=me)).json()
 
     assert read['items'] == [
-        {'entry_id': lore['potion']['id'], 'kind': 'consumable', 'heals': 'light', 'rarity': 'normal', 'price': None},
-        {'entry_id': lore['rope']['id'], 'kind': 'gear', 'heals': None, 'rarity': 'normal', 'price': None},
+        {
+            'entry_id': lore['potion']['id'],
+            'kind': 'consumable',
+            'heals': 'light',
+            'rarity': 'normal',
+            'price': None,
+            'slots': [],
+            'slot_count': 1,
+        },
+        {
+            'entry_id': lore['rope']['id'],
+            'kind': 'gear',
+            'heals': None,
+            'rarity': 'normal',
+            'price': None,
+            'slots': [],
+            'slot_count': 1,
+        },
     ]
     assert read['starting_items'] == [stack(lore['rope'])]
     assert read['pregens'][0]['items'] == [stack(lore['potion'], 2)]
@@ -168,7 +184,15 @@ async def test_items_are_frozen_into_the_version(client: AsyncClient, me: dict[s
 
     assert snapshot['format'] == SNAPSHOT_FORMAT
     assert snapshot['items'] == [
-        {'entry_id': lore['potion']['id'], 'kind': 'consumable', 'heals': 'light', 'rarity': 'normal', 'price': None}
+        {
+            'entry_id': lore['potion']['id'],
+            'kind': 'consumable',
+            'heals': 'light',
+            'rarity': 'normal',
+            'price': None,
+            'slots': [],
+            'slot_count': 1,
+        }
     ]
     assert snapshot['starting_items'] == [stack(lore['rope'], 3)]
     assert snapshot['pregens'][0]['items'] == [stack(lore['potion'], 2)]
@@ -224,7 +248,15 @@ async def test_a_consumable_may_heal_nothing(client: AsyncClient, me: dict[str, 
     snapshot = await published(client, me, scenario)
 
     assert snapshot['items'] == [
-        {'entry_id': lore['potion']['id'], 'kind': 'consumable', 'heals': None, 'rarity': 'normal', 'price': None}
+        {
+            'entry_id': lore['potion']['id'],
+            'kind': 'consumable',
+            'heals': None,
+            'rarity': 'normal',
+            'price': None,
+            'slots': [],
+            'slot_count': 1,
+        }
     ]
 
 
