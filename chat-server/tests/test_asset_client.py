@@ -148,25 +148,47 @@ async def test_the_start_hours_and_backgrounds_of_a_format_four_version_are_kept
     assert (kept['starts'], kept['places']) == (starts, places)
 
 
-async def test_the_illustrations_of_a_format_five_version_are_kept():
+# asset 서버의 형식 6 의 판에 든 이벤트 씬과 캐릭터 그림
+EVENT_SCENES = [
+    {
+        'id': 'first-date',
+        'title': '첫 데이트',
+        'image_id': str(uuid.UUID(int=9)),
+        'description': '창가 자리에서 마주 앉는다.',
+        'collectible': True,
+        'when': {'kind': 'reach_place', 'target': 'library'},
+    }
+]
+SPRITES = [
+    {'id': 'base', 'image_id': str(uuid.UUID(int=10)), 'expression': '', 'outfit': None},
+    {'id': 'scarf-smile', 'image_id': str(uuid.UUID(int=11)), 'expression': '웃음', 'outfit': 'scarf'},
+]
+
+
+async def test_the_event_scenes_and_sprites_of_a_format_six_version_are_kept():
     copy = make_character()
     body = copy.model_dump(mode='json')
-    illustrations = [
-        {
-            'id': 'first-date',
-            'title': '첫 데이트',
-            'image_id': str(uuid.UUID(int=9)),
-            'scene': '창가 자리에서 마주 앉는다.',
-            'collectible': True,
-            'when': {'kind': 'reach_place', 'target': 'library'},
-        }
-    ]
-    body['document'] |= {'format': 5, **WORLD, 'illustrations': illustrations}
+    body['document'] |= {'format': 6, **WORLD, 'event_scenes': EVENT_SCENES, 'sprites': SPRITES}
 
     fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
 
-    assert fetched.document.model_dump(mode='json')['illustrations'] == illustrations
-    assert make_character().document.illustrations == []
+    kept = fetched.document.model_dump(mode='json')
+    assert (kept['event_scenes'], kept['sprites']) == (EVENT_SCENES, SPRITES)
+    assert (make_character().document.event_scenes, make_character().document.sprites) == ([], [])
+
+
+async def test_a_format_five_version_is_read_with_the_old_names():
+    copy = make_character()
+    body = copy.model_dump(mode='json')
+    old = [
+        {('scene' if key == 'description' else key): value for key, value in scene.items()} for scene in EVENT_SCENES
+    ]
+    body['document'] |= {'format': 5, **WORLD, 'illustrations': old}
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_character(TOKEN, copy.id)
+
+    kept = fetched.document.model_dump(mode='json')
+    assert (kept['event_scenes'], kept['sprites'], 'illustrations' in kept) == (EVENT_SCENES, [], False)
 
 
 async def test_a_format_three_version_starts_at_noon():
