@@ -1411,3 +1411,25 @@ a.ui-button {
   margin: 0;
   font-size: 0.85em;
 }
+
+/* 제작 도구(B9)의 재료 목록 */
+.studio-list__item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.studio-list__description {
+  margin: 4px 0;
+}
+
+.template-attribution {
+  font-size: 0.85em;
+}
+
+.template-choice__about p {
+  margin: 2px 0;
+}
+
+.armor-number {
+  margin-bottom: 12px;
+}

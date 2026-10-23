@@ -18,6 +18,9 @@ import {
   MyPage,
   OrderPage,
   OrdersPage,
+  RulebookEditPage,
+  RulebookNewPage,
+  RulebooksPage,
   ScenarioBrowsePage,
   ScenarioPage,
   TableCreatePage,
@@ -99,6 +102,31 @@ export function App() {
             element={
               <RequireSession>
                 <TableRoomPage />
+              </RequireSession>
+            }
+          />
+          {/* 제작 도구(B9). 지금은 룰북뿐이다. 모두 만든 사람 자신의 것이다 */}
+          <Route
+            path="studio/rulebooks"
+            element={
+              <RequireSession>
+                <RulebooksPage />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="studio/rulebooks/new"
+            element={
+              <RequireSession>
+                <RulebookNewPage />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="studio/rulebooks/:rulebookId"
+            element={
+              <RequireSession>
+                <RulebookEditPage />
               </RequireSession>
             }
           />
