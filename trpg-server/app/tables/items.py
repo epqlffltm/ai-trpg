@@ -125,7 +125,7 @@ def add_up_to(table_id: uuid.UUID, sheet: TableSheet, entry_id: uuid.UUID, count
     이 캐릭터에게 그 물건을 count 개까지 준다. 한 가지의 상한에 닿으면 거기까지만 준다. 준 개수를 돌려준다.
 
     퀘스트의 보상처럼 여럿에게 한꺼번에 주는 것에 쓴다. 한 사람이 가득 찼다고 모두의 보상을 막지 않는다.
-    방장이 한 사람에게 주는 것(add_items)은 넘으면 거절한다. 방장이 개수를 고쳐 다시 줄 수 있다.
+    한 사람이 받는 것(건네기, 사기의 add_items)은 넘으면 거절한다. 받을 때 미리 보고 알린다.
     """
     given = min(count, ITEM_STACK_MAX - count_of(sheet, entry_id))
     add_items(table_id, sheet, entry_id, given)

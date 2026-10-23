@@ -161,12 +161,16 @@ async def test_an_active_quest_counts_from_the_start(client: AsyncClient, me: di
 
 
 async def test_a_revealed_quest_counts_from_the_round_it_was_revealed(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient,
+    me: dict,
+    friend: dict,
+    lore: dict,
+    narrated,
+    session: AsyncSession,
 ):
     table = await start_with_deadlines(client, me, friend, lore)
     await play(client, me, friend, table, narrated)
-    given = await give(client, me, table, ME, lore['rope'])
-    assert given.status_code == status.HTTP_200_OK, given.text
+    await give(session, table, ME, lore['rope'])
 
     # 둘째 라운드는 8시 10분에 열렸다. 그 라운드가 닫힐 때 드러나고 그때부터 한 시간
     await play(client, me, friend, table, narrated)
@@ -237,10 +241,15 @@ async def test_a_quest_already_finished_is_left_alone(
 
 
 async def test_a_quest_without_a_time_limit_never_fails(
-    client: AsyncClient, me: dict, friend: dict, lore: dict, narrated
+    client: AsyncClient,
+    me: dict,
+    friend: dict,
+    lore: dict,
+    narrated,
+    session: AsyncSession,
 ):
     table = await start_with_deadlines(client, me, friend, lore)
-    await give(client, me, table, ME, lore['potion'])
+    await give(session, table, ME, lore['potion'])
     await play(client, me, friend, table, narrated)
 
     await wait_together(client, me, friend, table, 7 * 24 * HOUR, narrated)
