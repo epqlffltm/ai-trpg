@@ -793,6 +793,8 @@ services:
       # 말 한 번의 값을 결제 서버에서 받고 모델의 값을 가격 목록에서 읽는다(chat-server/README.md 의 "모델 목록").
       # chat-server/.env 에 BILLING_SECRET 이 있어야 뜬다(결제 서버의 CHAT_SERVER_SECRET 과 같은 값)
       BILLING_URL: http://billing-server:8003
+      # 요청 수 제한(#671)을 센다. DB 번호 2 는 chat 의 몫이다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
+      REDIS_URL: redis://redis:6379/2
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:
@@ -804,6 +806,8 @@ services:
     depends_on:
       chat-migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   # 화면(web/)을 빌드해 담은 nginx 의 이미지다(web/Dockerfile, #290). /api/ 는 서버로, 그 밖은 화면이다
   proxy:

@@ -94,6 +94,23 @@ class Settings(CoreSettings):
     # 창 밖으로 밀려난 말이 마지막 요약 뒤로 이만큼 쌓이면 요약한다
     summary_after_messages: int = Field(default=8, ge=2, le=200)
 
+    # 요청 수 제한(app/limits/, #671)을 세는 Redis 의 주소(redis://.../2).
+    # 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다)
+    redis_url: str = ''
+    # Redis 를 한 번 부르는 시간의 상한(초). 넘으면 막지 않고 통과시킨다
+    redis_timeout_seconds: float = Field(default=0.5, gt=0, le=5)
+    # 요청 수 제한을 켠다. 테스트가 끈다(제한을 보는 테스트만 켠다)
+    limits_enabled: bool = True
+    # Redis 의 키의 앞부분. 다른 서버의 키와 섞이지 않게 서버 이름을 붙인다
+    limit_key_prefix: str = 'chat:limit'
+    # 모델을 부르는 요청(말 보내기, 행동, 다시 생성, 이어서). 한 사람이 이 시간(초) 안에 이만큼까지
+    generation_limit: int = Field(default=20, ge=1, le=1000)
+    generation_window_seconds: int = Field(default=60, ge=1, le=3600)
+    # 모델을 부르지 않는 쓰기(대화 시작과 지우기, 모델과 가지 바꾸기, 고치기, 기억 메모).
+    # 한 사람이 이 시간(초) 안에 이만큼까지
+    write_limit: int = Field(default=120, ge=1, le=10000)
+    write_window_seconds: int = Field(default=60, ge=1, le=3600)
+
     @model_validator(mode='after')
     def require_an_asset_secret(self) -> Self:
         """asset 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. asset 서버가 모든 요청을 401 로 거절한다."""
