@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/chat/studio/characters/Characters.test.tsx
 // 캐릭터 만들기(C6)의 뼈대. 빈 목록에서 만들기 → 고치기와 게시 점검, 점검에서 탭으로 가기, 운영자만 만드는 때(403),
 // 기본과 시작 상황의 저장 본문(저장하면 점검을 다시 읽는다), 아직 화면이 없는 묶음의 문제, 숨긴 캐릭터, 게시와 걸러 낸 것,
-// 지도(장소, 길, 처음 있는 장소, 지우면 길도)와 물건(시작 소지품, 그림 칸을 그대로 보내기).
+// 지도(장소, 길, 처음 있는 장소, 지우면 길도)와 물건(시작 소지품, 그림 칸을 그대로 보내기),
+// 호감도(켜고 끄기, 단계, 규칙의 대상과 화면이 붙이는 id).
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -161,13 +162,13 @@ describe('캐릭터 만들기', () => {
   it('아직 화면이 없는 묶음의 문제는 이름만 적고, 숨긴 캐릭터면 알린다', async () => {
     signedIn(character({ hidden_at: '2026-10-24T01:00:00Z' }), {
       [`GET ${CHARACTERS}/${ID}/publish-check`]: () =>
-        json(200, { ready: false, problems: ['affection_target_missing', 'item_missing'], removed: [] }),
+        json(200, { ready: false, problems: ['scene_target_missing', 'item_missing'], removed: [] }),
     });
     renderApp(`/chat/studio/characters/${ID}`);
 
     expect(await screen.findByText(/운영자가 숨긴 캐릭터입니다/)).toBeInTheDocument();
     const problems = await screen.findByRole('list', { name: '고칠 것' });
-    expect(within(problems).getByText('(호감도: 화면 준비 중)')).toBeInTheDocument();
+    expect(within(problems).getByText('(그림: 화면 준비 중)')).toBeInTheDocument();
     await userEvent.click(within(problems).getByRole('button', { name: '물건 탭으로' }));
     expect(screen.getByRole('form', { name: '물건' })).toBeVisible();
   });
@@ -247,6 +248,60 @@ describe('캐릭터 만들기', () => {
     expect(body.items[1]).toMatchObject({ name: '외투', kind: 'clothing', giftable: true, consumable: false, image_id: null });
     expect(body.items[1]?.id).toMatch(/^item-[0-9a-f]{8}$/);
     expect(body.start_items).toEqual([{ item: 'i1', count: 2 }]);
+  });
+
+  it('호감도를 켜고 단계와 규칙을 더해 저장한다. 규칙의 대상은 저장한 물건에서 고른다', async () => {
+    const { seen } = signedIn(
+      character({ items: [{ id: 'i1', name: '꽃', description: '', kind: 'thing', consumable: false, giftable: false, image_id: null }] }),
+    );
+    renderApp(`/chat/studio/characters/${ID}?tab=affection`);
+
+    const form = await screen.findByRole('form', { name: '호감도' });
+    expect(within(form).queryByLabelText('보이는 방식')).not.toBeInTheDocument();
+    await userEvent.click(within(form).getByLabelText('호감도를 쓴다'));
+    await userEvent.click(within(form).getByRole('button', { name: '단계 더하기' }));
+    await userEvent.type(within(form).getByLabelText('단계 2의 이름'), '친구');
+    await userEvent.click(within(form).getByRole('button', { name: '규칙 더하기' }));
+    await userEvent.selectOptions(within(form).getByLabelText('규칙 1의 대상'), '꽃');
+    await userEvent.click(within(form).getByLabelText('처음 한 번만'));
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }));
+
+    expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
+    const body = calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body as { affection: { rules: { id: string }[] } };
+    expect(body.affection).toEqual({
+      display: 'number',
+      start: 0,
+      model_step: 3,
+      stages: [
+        { name: '처음', at: 0 },
+        { name: '친구', at: 10 },
+      ],
+      rules: [{ id: expect.stringMatching(/^rule-[0-9a-f]{8}$/), on: { kind: 'give_item', target: 'i1' }, change: 5, once: true }],
+    });
+  });
+
+  it('호감도를 끄면 null 로 보내고, 장소의 규칙은 장소에서 고른다', async () => {
+    const affection = {
+      display: 'stage',
+      start: 10,
+      model_step: 0,
+      stages: [{ name: '처음', at: 0 }],
+      rules: [{ id: 'rule-1', on: { kind: 'give_item', target: 'i1' }, change: 3, once: false }],
+    };
+    const { seen } = signedIn(
+      character({ affection, places: [{ id: 'p1', name: '바다', description: '', image_id: null, backgrounds: {} }] }),
+    );
+    renderApp(`/chat/studio/characters/${ID}?tab=affection`);
+
+    const form = await screen.findByRole('form', { name: '호감도' });
+    await userEvent.selectOptions(within(form).getByLabelText('규칙 1의 행동'), 'reach_place');
+    expect(within(form).getByLabelText('규칙 1의 대상')).toHaveValue('');
+    expect(within(form).getByRole('option', { name: '바다' })).toBeInTheDocument();
+    await userEvent.click(within(form).getByLabelText('호감도를 쓴다'));
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }));
+
+    expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
+    expect(calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body).toEqual({ affection: null });
   });
 
   it('게시하면 판을 알리고 소개에서 걸러 낸 것을 보인다. 판의 목록을 다시 읽는다', async () => {
