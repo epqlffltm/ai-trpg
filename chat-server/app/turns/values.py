@@ -12,8 +12,9 @@ from decimal import Decimal
 
 from ai_core.provider import ChatMessage
 
-from app.assets.schemas import CharacterDocument
+from app.assets.schemas import CharacterDocument, LoreEntryDocument
 from app.conversation.changes import Proposed
+from app.lore.texts import EntryKey
 from app.turns.models import Outcome
 from app.world.state import WorldState
 
@@ -42,6 +43,22 @@ class WorldBase:
 
     document: CharacterDocument
     state: WorldState
+
+
+@dataclass(frozen=True)
+class LorePlan:
+    """
+    로어북을 뜻으로 찾아 더할 바탕(app/lore/recall.py, #672). 판의 사본에 로어북의 항목이 있을 때만 있다.
+    character_id 는 판의 사본, entries 와 keys 는 판의 항목들과 그 열쇠(같은 차례), ranked 는 상시와 키워드로 고른
+    항목의 자리들(차례대로), query 는 찾는 글, block 은 카드에 이미 넣은 "[로어북]" 블록(없으면 None)이다.
+    """
+
+    character_id: uuid.UUID
+    entries: tuple[LoreEntryDocument, ...]
+    keys: tuple[EntryKey, ...]
+    ranked: tuple[int, ...]
+    query: str
+    block: str | None
 
 
 @dataclass(frozen=True)
@@ -74,6 +91,8 @@ class TurnStart:
     expressions: Mapping[str, uuid.UUID] = field(default_factory=dict)
     # 답을 쓰기 전의 판과 상태. 모델의 제안을 받아들일 때 쓴다(차례를 쥔 동안 상태는 바뀌지 않는다)
     world: WorldBase | None = None
+    # 로어북을 뜻으로 찾아 더할 바탕. 모델을 부르기 직전에 찾아 카드의 "[로어북]" 을 바꾼다. 로어북이 없으면 None
+    lore: LorePlan | None = None
 
 
 @dataclass(frozen=True)

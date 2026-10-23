@@ -83,6 +83,9 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `CHAT_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 | `SUMMARY_MODEL` | 비어 있음(요약하지 않음) | [굴리는 요약](#굴리는-요약)의 모델(모델 목록의 이름표). 싼 모델을 쓴다. 사용자에게 팔지 않는(꺼 둔) 모델도 된다. 원가는 서비스가 낸다 |
 | `SUMMARY_AFTER_MESSAGES` | `8` | 창 밖으로 밀려난 말이 마지막 요약 뒤로 이만큼(2~200) 쌓이면 요약한다 |
+| `EMBEDDER` | `off` | [로어북](#로어북)의 뜻으로 찾기. `off` 면 상시와 키워드만, `llm` 이면 임베딩 모델을 부른다(`fake` 는 테스트용). 이름은 trpg-server 와 같다 |
+| `EMBEDDING_MODEL`, `EMBEDDING_BASE_URL` | `bge-m3`, 비어 있음 | 임베딩 모델의 이름과 주소(OpenAI 와 같은 모양, `/embeddings` 앞까지). `llm` 이면 둘 다 있어야 뜬다 |
+| `EMBEDDING_TIMEOUT_SECONDS`, `EMBEDDING_DIMENSIONS` | `30`, 비어 있음 | 임베딩을 한 번 부르는 시간의 상한(벡터를 만들 때), 벡터의 길이(적으면 맞는지 본다) |
 | `REDIS_URL` | 비어 있음(메모리로 셈) | [요청 수 제한](#요청-수-제한)을 세는 Redis(`redis://redis:6379/2`, DB 2 가 chat 의 몫). 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다) |
 | `REDIS_TIMEOUT_SECONDS` | `0.5` | Redis 를 한 번 부르는 시간의 상한. 넘으면 막지 않고 통과시킨다 |
 | `LIMITS_ENABLED` | `true` | 요청 수 제한을 켠다(테스트가 끈다) |
@@ -453,10 +456,25 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 - **고르는 법.** 상시(`constant`) 항목은 늘 넣는다. 나머지는 최근 말 넷(이번에 보낸 말과 건넬 때의 한마디를 포함한다)에 키워드가 나오면 넣는다.
   대소문자는 가리지 않고, 글자가 이어져 있으면 맞는다(조사가 붙어도 맞는다). 업계의 로어북(World Info)과 같은 방식이다(2026-10-23 유저 결정).
-- **차례와 상한.** 상시가 먼저(판의 차례), 그다음 키워드가 가장 최근에 나온 것부터. 항목 여덟, 글자(이름과 내용) 2,000 까지. 들어가지 않는 항목은 건너뛰고 다음 것을 본다.
+  [뜻으로 찾기](#뜻으로-찾기)를 켜면 키워드가 없어도 뜻이 가까운 항목을 더한다(하이브리드).
+- **차례와 상한.** 상시가 먼저(판의 차례), 그다음 키워드가 가장 최근에 나온 것부터, 그 뒤에 뜻으로 찾은 것. 항목 여덟, 글자(이름과 내용) 2,000 까지. 들어가지 않는 항목은 건너뛰고 다음 것을 본다.
 - **자리.** 카드에서 기억 메모 뒤, "[지금]" 앞이다. 항목마다 `- 이름: 내용` 한 줄이다. 고를 것이 없으면 블록이 없다.
-- 원가가 없다(따로 부르지 않는다). 뜻으로 찾는 검색(임베딩)은 다음에 얹는다. 그때도 키워드는 함께 쓴다.
+- 상시와 키워드는 원가가 없다(모델을 따로 부르지 않는다).
 - 로어북을 고쳐도 asset 에서 캐릭터를 다시 게시해야 새 판에 들어간다. 이미 시작한 대화는 그 판의 사본으로 돈다.
+
+#### 뜻으로 찾기
+
+키워드가 맞지 않아도 뜻이 가까운 항목을 찾는다(#672, `app/lore/`). `EMBEDDER` 가 `off` 면 하지 않는다(상시와 키워드만).
+
+- **벡터 만들기**(`app/lore/indexing.py`). 대화를 시작하면 판의 사본에 든 항목을 이름, 키워드, 내용을 합친 글로 바꿔 벡터로 만든다(32개씩, 따로 돈다).
+  사본(사람마다, 판마다 하나)마다 `lore_embeddings` 에 적고, 모델의 이름을 함께 적는다. 같은 사본은 한 번에 하나만 돈다. 사본을 지우면(탈퇴) 함께 지워진다.
+  임베딩 모델을 부르는 동안 DB 의 연결을 쥐지 않는다. 실패하면 로그(`chat.lore_index`)만 남긴다.
+- **찾기**(`app/lore/recall.py`). 말 한 번에 한 번, 모델을 부르기 직전(SSE 를 시작한 뒤)에 최근 말 둘(앞의 답과 이번 말)을 벡터로 바꿔
+  그 사본의 항목들과 코사인 거리를 잰다. 0.45 안에서 가까운 것부터 셋, 이미 고른 것은 뺀다. 카드의 "[로어북]" 을 다시 만든다.
+- **실패와 시간.** 3초 안에 끝나지 않거나 실패하면 상시와 키워드로 답한다(로그 `chat.lore_recall`). 사본의 벡터가 없거나 모자라면 그때 만들기를 맡긴다.
+- **pgvector.** 벡터는 `extensions` 스키마의 pgvector 다. chat 계정이 그 스키마를 쓸 수 있어야 한다(`docker/postgres/init/09-chat-role.sql`).
+  데이터가 이미 있는 볼륨이면 한 번 직접 준다: `docker compose exec postgres psql -U trpg -d trpg -c "GRANT USAGE ON SCHEMA extensions TO chat;"`
+- **원가.** 같은 Ollama(로컬)를 쓰면 거의 없다. 외부 임베딩 API 를 쓰면 서비스가 낸다(청구하지 않는다).
 
 ### 요청 수 제한
 
@@ -589,7 +607,8 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. ch
 
 테이블은 `app/conversations/models.py`(`characters`, `conversations`, `conversation_personas`, `messages`),
 `app/catalog/models.py`(`ai_models`, `ai_model_costs`, `ai_model_snapshots`), `app/turns/models.py`(`generations`),
-`app/memory/models.py`(`memory_notes`, `summaries`), `app/world/models.py`(`message_states`), `app/gallery/models.py`(`scene_unlocks`)에 있다.
+`app/memory/models.py`(`memory_notes`, `summaries`), `app/world/models.py`(`message_states`), `app/gallery/models.py`(`scene_unlocks`),
+`app/lore/models.py`(`lore_embeddings`, pgvector)에 있다. 연결의 search_path 는 `chat`(또는 `chat_test`), `extensions` 다.
 모델 파일을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
 ### 마이그레이션

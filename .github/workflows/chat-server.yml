@@ -74,6 +74,7 @@ jobs:
       # 로컬과 같은 초기화 스크립트로 계정과 스키마를 만든다.
       # 슈퍼유저로 테스트하면 로컬에서 권한 때문에 실패할 코드가 CI 를 통과한다.
       # 다른 서버의 계정과 스키마(auth, game, billing, board, notification, asset)도 만든다. chat 계정이 그 스키마에 닿지 못하는지 테스트가 확인한다
+      # pgvector 의 스키마(03-extensions.sql)는 chat 의 계정 스크립트보다 먼저다. chat 계정이 그 스키마를 쓰게 한다(로어북의 벡터)
       - name: DB 계정과 스키마 만들기
         working-directory: .
         env:
@@ -81,6 +82,7 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/01-auth-role.sql
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/02-game-role.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/03-extensions.sql
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/04-billing-role.sql
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/05-board-role.sql
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/06-notification-role.sql
