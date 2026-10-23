@@ -12,14 +12,18 @@ type Props = {
   draft: SheetDraft;
   hints: Record<string, string>;
   onChange: (draft: SheetDraft) => void;
+  /** 범위 뒤의 알림. 없으면 "모두 비우면 시트가 없는 것으로 저장" */
+  note?: string;
 };
 
-export function SheetFields({ legend, rules, draft, hints, onChange }: Props) {
+const BLANK_NOTE = '모두 비우면 시트가 없는 것으로 저장하고, 게시 점검이 알려 줍니다.';
+
+export function SheetFields({ legend, rules, draft, hints, onChange, note = BLANK_NOTE }: Props) {
   return (
     <fieldset className="scenario-sheet">
       <legend>{legend}</legend>
       <p className="ui-field__hint">
-        점수는 {rules.score_min}~{rules.score_max} 사이입니다. 모두 비우면 시트가 없는 것으로 저장하고, 게시 점검이 알려 줍니다.
+        점수는 {rules.score_min}~{rules.score_max} 사이입니다. {note}
       </p>
       <div className="ability-grid">
         {rules.abilities.map((ability) => (

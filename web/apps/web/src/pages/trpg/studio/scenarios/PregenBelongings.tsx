@@ -12,10 +12,10 @@ import { MONEY_MAX } from './itemRuleForm';
 import { toPregensBody, withBelongings } from './pregenForm';
 import { MAX_STARTING_ITEMS, stackDrafts, stacksHints, toStacks, type StackDraft } from './stacksForm';
 import { StacksEditor } from './StacksEditor';
-import { entryName, type ItemEntry } from './useItemEntries';
+import { entryName, type EntryChoice } from './useLoreEntries';
 import { useScenarioSave } from './useScenarioSave';
 
-type Props = { scenario: ScenarioDetail; rules: Ruleset | null; entries: ItemEntry[] };
+type Props = { scenario: ScenarioDetail; rules: Ruleset | null; entries: EntryChoice[] };
 
 export function PregenBelongings({ scenario, rules, entries }: Props) {
   const [editing, setEditing] = useState<number | null>(null);

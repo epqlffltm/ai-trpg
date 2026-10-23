@@ -9,6 +9,7 @@ import { REFRESH_PATH } from '../../../../api/refresh';
 import type { ItemRule } from '../../../../api/types';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../test/fakeFetch';
 import { renderApp } from '../../../../test/renderApp';
+import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
 import { currencyDraft, currencyHints, moneyText, toCurrency } from './currencyForm';
 import { itemRuleDraft, itemRuleHints, toItemRule } from './itemRuleForm';
@@ -45,34 +46,15 @@ function entry(id: string, name: string, kind: string) {
 }
 
 function scenario(extra: Record<string, unknown> = {}) {
-  return {
-    id: ID,
-    title: '비 내리는 수도원',
-    description: '',
-    visibility: 'private',
-    created_at: '2026-10-23T00:00:00Z',
-    updated_at: '2026-10-23T00:00:00Z',
-    rating: 'all',
+  return scenarioDetail({
     rulebook_id: RULEBOOK,
-    world_id: null,
     lorebook_ids: [LOREBOOK],
-    bestiary_ids: [],
     openings: ['종이 울린다.'],
-    recommended_players: { min: 1, max: 4 },
     pregens: [KNIGHT],
     character_modes: ['pregen'],
-    default_sheet: null,
-    player_made_hp: null,
-    reroll_allowed: false,
     items: [SWORD_RULE],
-    starting_items: [],
-    currency: null,
-    narration_style: 'classic',
-    narration_model: 'glm-air',
-    narration_model_status: { state: 'ok', retires_on: null, replacement: null },
-    clock: { start_day: 1, start_hour: 8, round_minutes: 10 },
     ...extra,
-  };
+  });
 }
 
 function signedIn(start: Record<string, unknown> = {}) {

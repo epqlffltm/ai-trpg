@@ -21,15 +21,15 @@ import {
   withoutItemRule,
   type ItemRuleDraft,
 } from './itemRuleForm';
-import type { ItemEntry } from './useItemEntries';
+import type { EntryChoice } from './useLoreEntries';
 import { useScenarioSave } from './useScenarioSave';
 
-type Props = { scenario: ScenarioDetail; rules: Ruleset | null; entries: ItemEntry[] };
+type Props = { scenario: ScenarioDetail; rules: Ruleset | null; entries: EntryChoice[] };
 
 type Row = { id: string; name: string; listed: boolean };
 
 /** 물건 항목의 줄들과, 항목이 없는 규칙의 줄들 */
-function rowsOf(entries: ItemEntry[], itemRules: ItemRule[]): Row[] {
+function rowsOf(entries: EntryChoice[], itemRules: ItemRule[]): Row[] {
   const listed = entries.map((entry) => ({ id: entry.id, name: entry.name, listed: true }));
   const orphans = itemRules
     .filter((rule) => !entries.some((entry) => entry.id === rule.entry_id))
