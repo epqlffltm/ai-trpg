@@ -162,16 +162,40 @@ function checkEffects(outcome: CheckResult, rules: Ruleset): string[] {
   return blow ? [blow, ...parts] : parts;
 }
 
-const ARMOR_EFFECTS: Record<string, string> = { ac: '목표값에 더함', reduce: '피해에서 뺌' };
+type Blow = NonNullable<CheckResult['blow']>;
 
-/** 타격에 장비가 든 것(#276). "장검 +2 · 몸(노림) · 방어 5(목표값에 더함)". 없으면 null */
+/** 방어가 한 일(ac, reduce). 세이브는 세이브 줄이 따로 말한다 */
+const ARMOR_EFFECTS: Record<string, string> = { ac: '목표값에 더함', reduce: '피해에서 뺌' };
+const SAVE_KINDS: Record<string, string> = { armor: '아머', ward: '불굴' };
+
+/**
+ * 타격에 장비가 든 것(#276). 없으면 null.
+ * "장검 +2 · 몸(노림) · 방어 5(목표값에 더함)", "볼터 +1 · 몸 · 방어 5 · 관통 못 함 · 아머 세이브 10 + 5 → 막음"
+ */
 export function blowLine(blow: CheckResult['blow']): string | null {
   if (!blow) return null;
-  const parts: string[] = [];
-  if (blow.weapon) parts.push(`${blow.weapon.name} +${blow.weapon.bonus}`);
-  if (blow.location_name) parts.push(`${blow.location_name}${blow.aimed ? '(노림)' : ''}`);
-  if (blow.mode && blow.defense > 0) parts.push(`방어 ${blow.defense}(${ARMOR_EFFECTS[blow.mode] ?? blow.mode})`);
+  const parts = [
+    blow.weapon ? `${blow.weapon.name} +${blow.weapon.bonus}` : null,
+    blow.location_name ? `${blow.location_name}${blow.aimed ? '(노림)' : ''}` : null,
+    defensePart(blow),
+    blow.pierce ? (blow.pierce.pierced ? '관통함' : '관통 못 함') : null,
+    savePart(blow.save),
+  ].filter((part): part is string => part !== null);
   return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** 그 부위의 방어. 관통했거나 세이브 방식이면 방어가 목표값이나 피해를 바꾸지 않았으니 하는 일을 붙이지 않는다 */
+function defensePart(blow: Blow): string | null {
+  if (!blow.mode || blow.defense <= 0) return null;
+  const effect = blow.pierce?.pierced ? undefined : ARMOR_EFFECTS[blow.mode];
+  return effect ? `방어 ${blow.defense}(${effect})` : `방어 ${blow.defense}`;
+}
+
+/** 세이브 굴림. "아머 세이브 10 + 5 → 막음". 굴리지 않았으면 null */
+function savePart(save: Blow['save']): string | null {
+  if (!save) return null;
+  const kind = SAVE_KINDS[save.kind] ?? save.kind;
+  return `${kind} 세이브 ${save.roll} + ${save.value} → ${save.saved ? '막음' : '못 막음'}`;
 }
 
 /** 판정이 아닌 행동의 결과 */
