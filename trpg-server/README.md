@@ -179,8 +179,9 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/worlds/{id}` | 내 세계관 하나 | access 토큰 |
 | PATCH | `/api/v1/game/worlds/{id}` | 내 세계관 고치기. 보낸 칸만 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/worlds/{id}` | 내 세계관 지우기. 204 | access 토큰 |
-| POST | `/api/v1/game/rulebooks` | 룰북 만들기. 201. `template` 으로 규칙의 템플릿을 고른다(지금은 `srd5` 하나, 안 보내면 `srd5`) | access 토큰 |
+| POST | `/api/v1/game/rulebooks` | 룰북 만들기. 201. `template` 으로 규칙의 템플릿을 고른다(`srd5`, `horror`, `light`. 안 보내면 `srd5`) | access 토큰 |
 | GET | `/api/v1/game/rulebooks` | 내 룰북 목록. `limit`, `offset` | access 토큰 |
+| GET | `/api/v1/game/rulebooks/templates` | 고를 수 있는 템플릿들(`key`, `name`, `summary`, `attribution`, `notes`, `rules`)과 기본(`default`)(#615) | access 토큰 |
 | GET | `/api/v1/game/rulebooks/{id}` | 내 룰북 하나 | access 토큰 |
 | PATCH | `/api/v1/game/rulebooks/{id}` | 내 룰북 고치기. 보낸 칸만 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/rulebooks/{id}` | 내 룰북 지우기. 204 | access 토큰 |
@@ -372,7 +373,8 @@ app/assets/
   lorebooks/   schemas.py  repository.py  service.py  router.py    로어북과 항목
   bestiaries/  models.py  schemas.py  repository.py  service.py  router.py   몬스터 도감과 몬스터(모델도 여기 있다)
 app/engine/
-  ruleset.py  templates.py                                         규칙의 모양과 내장 템플릿. DB 도 HTTP 도 모른다
+  ruleset.py                                                       규칙의 모양. DB 도 HTTP 도 모른다
+  templates/   __init__.py  srd5.json  horror.json  light.json    내장 템플릿. 원본은 JSON 파일이고 뜰 때 한 번 읽는다
   sheet.py                                                         캐릭터 시트의 모양과, 규칙에 맞는지 보는 함수
   dice.py  check.py                                                주사위와 판정
   action.py                                                        행동의 모양과, 규칙에 맞는지 보는 함수, 행동을 하는 함수
@@ -434,8 +436,23 @@ app/engine/
 
 바꿀 수 있는 것은 값이다. 계산하는 방식은 엔진의 코드에 있다. 사용자가 쓴 코드를 서버에서 실행하지 않는다.
 
-**룰북을 만들 때 템플릿을 고른다.** 템플릿은 미리 채워 둔 규칙이다(`app/engine/templates.py`). 고른 템플릿의 값이 룰북에 복사된다.
-지금은 `srd5` 하나다. 능력치 여섯(근력, 민첩, 건강, 지능, 지혜, 매력), 점수 1~20, 보정은 (점수 - 10) // 2, d20,
+**룰북을 만들 때 템플릿을 고른다(#615).** 템플릿은 미리 채워 둔 규칙이다. 고른 템플릿의 값이 룰북에 복사된다. 참조하지 않는다.
+엔진은 템플릿을 모른다. 규칙(`Ruleset`)만 받는다. 고를 수 있는 것은 `GET /rulebooks/templates` 가 내준다.
+
+| `template` | 이름 | 한 줄 |
+| --- | --- | --- |
+| `srd5`(기본) | d20 판타지 | 능력치 여섯, d20, 난이도 다섯. 부상과 치료, 죽음의 굴림. SRD 5.1 을 본떴다 |
+| `horror` | 공포 | 능력치 넷(몸, 날램, 정신, 직감), d20, 난이도 넷(8, 12, 16, 20). 피해가 크고(1d6, 1d10, 2d10) 마음의 상처(공황, 악몽, 떨치지 못한 기억)가 있다. 죽음의 굴림은 12 이상, 실패 둘이면 죽는다 |
+| `light` | 가벼운 모험 | 능력치 셋(몸, 재치, 마음), 점수 1~5 가 곧 보정, d10, 난이도 셋(6, 8, 11). 부상과 죽음의 굴림이 없다. 쓰러져도 한 시간 쉬면 d10 4 이상으로 일어나고, 네 시간마다 1d4 저절로 회복한다 |
+
+**원본은 파일이다**(`app/engine/templates/`). 템플릿마다 JSON 파일 하나(`srd5.json` …)다. 앱이 뜰 때 한 번 읽고 규칙의 모양으로 검증한다. 하나라도 틀리면 앱이 뜨지 않는다.
+- 파일의 칸: `format`(템플릿 파일의 판. 지금 1. 판정 방식처럼 규칙의 뜻이 바뀌면 올린다, #404), `key`(파일 이름과 같다), `name`, `summary`, `attribution`(출처 표시. 바꾸지 않고 싣는다), `notes`(무엇을 본떴고 무엇을 이 프로젝트가 정했는지), `rules`(룰북에 복사되는 규칙. `rules.template` 도 파일 이름과 같다)
+- JSON 인 까닭: 규칙에는 "없음"(`null`)인 칸이 많다(죽음의 굴림, 저절로 회복하기, 부상 표의 부상 없는 줄). TOML 에는 `null` 이 없다. 칸을 빠뜨리면 "없음"으로 읽지 않고 거절한다. 주석이 없으니 출처와 본뜬 것은 `notes` 와 `attribution` 에 적는다
+- 고를 수 있는 것은 코드의 `Template` 에 적은 것이다. `Template` 과 폴더의 파일이 하나씩 맞아야 한다(테스트가 본다)
+- 템플릿 DB 표는 두지 않았다. 운영자가 배포 없이 고칠 것이 없고, 내놓은 값은 고치지 않기 때문이다
+- 템플릿의 이름에 상용 룰의 이름을 쓰지 않는다. 공개 문서를 본떴으면 그 출처 표시를 `attribution` 에 싣는다
+
+`srd5` 는 능력치 여섯(근력, 민첩, 건강, 지능, 지혜, 매력), 점수 1~20, 보정은 (점수 - 10) // 2, d20,
 난이도 다섯 단계(매우 쉬움 5, 쉬움 10, 보통 15, 어려움 20, 매우 어려움 25), 기본은 보통이다.
 양의 등급은 셋이다(가벼움 1d4, 보통 1d8, 심함 2d8). 이 값은 SRD 의 표가 아니라 기준 시트의 최대 HP(10)에 맞춰 정한 것이다.
 최대 HP 에 닿는 능력치는 건강(`con`)이다.
@@ -450,11 +467,11 @@ app/engine/
 직업, 레벨, 숙련은 없다. 최대 HP 는 제작자가 시트에 직접 적는다.
 
 - 규칙을 직접 보낼 수 없다(422). 템플릿의 이름만 받는다. 만든 뒤에 규칙을 고치는 것도 아직 없다(422).
-- 이미 내놓은 템플릿의 값은 고치지 않는다. 고칠 것이 있으면 새 이름으로 하나 더 낸다. 옛 판을 읽을 때 그 값을 쓰기 때문이다.
+- 이미 내놓은 템플릿의 값은 고치지 않는다. 고칠 것이 있으면 새 이름으로 하나 더 낸다. 옛 판을 읽을 때 그 값(`srd5`)을 쓰기 때문이다. 값이 그대로인지는 `tests/test_templates.py` 가 규칙의 해시로 본다(칸을 더한 것이면 해시를 새로 적는다).
 - 규칙의 모양에 칸이 새로 생기면(양의 등급, 점수제, 주사위로 정하는 법, 죽음의 굴림, 부상, 치료) 템플릿에 그 칸을 더하고, 그 칸이 없던 룰북에는 마이그레이션으로, 옛 판에는 읽을 때 같은 값을 채운다. 빠진 칸을 기본값으로 슬쩍 채우지 않는다. 칸이 없는 문서는 규칙으로 읽히지 않는다.
-- 규칙은 게시할 때 판에 굳는다. 진행 중인 테이블의 규칙은 바뀌지 않는다.
+- 규칙은 게시할 때 판에 굳는다. 진행 중인 테이블의 규칙은 바뀌지 않는다. 템플릿이 바뀌어도 게시된 판과 그 테이블은 그때의 규칙으로 돈다. 새로 만드는 룰북만 바뀐 값을 받는다.
 
-`srd5` 템플릿의 출처는 [출처 표시](#출처-표시)에 있다.
+`srd5` 와 `horror` 템플릿의 출처는 [출처 표시](#출처-표시)에 있다. `light` 는 모든 값을 이 프로젝트가 정했다.
 
 **판정.** 주사위의 눈에 보정을 더한 값이 난이도의 목표값 이상이면 성공이다(`app/engine/check.py`).
 `srd5` 에서 민첩 14(보정 +2)로 보통(15)에 도전해 눈 13 이 나오면, 13 + 2 = 15 로 성공이다.
@@ -3715,7 +3732,7 @@ DB 의 조건이 "능력치가 없다"를 보는 칸(`table_members.abilities`)�
 
 ## 출처 표시
 
-`srd5` 템플릿(`app/engine/templates.py`)의 능력치 구성, 보정을 구하는 방법, 난이도의 숫자, 죽음의 굴림은 System Reference Document 5.1 을 따랐다.
+`srd5` 템플릿(`app/engine/templates/srd5.json`)의 능력치 구성, 보정을 구하는 방법, 난이도의 숫자, 죽음의 굴림은 System Reference Document 5.1 을 따랐다.
 짧은 부상(기절, 중독, 실명, 귀먹음)은 SRD 5.1 의 상태 이상을 본떴다(효과는 이 엔진의 세 종류로 옮겼고, 라운드 수는 이 프로젝트가 정했다). 오래 가는 부상, 결손, 후유증, 부상 표, 노려 치기는 SRD 5.1 에 없다. 이 프로젝트가 정한 값이다.
 
 > This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC
@@ -3728,6 +3745,8 @@ DB 의 조건이 "능력치가 없다"를 보는 칸(`table_members.abilities`)�
 5e-database 는 MIT 라이선스다(Copyright (c) 2018-2020 Adrian Padua, Christopher Ward, https://github.com/5e-bits/5e-database/blob/main/LICENSE).
 
 같은 템플릿의 점수제(`point_buy`)의 총점과 값표, 점수를 주사위로 정하는 법(`score_roll`)은 System Reference Document 5.2.1 을 따랐다. SRD 5.1 에는 둘 다 실려 있지 않다.
+
+`horror` 템플릿(`app/engine/templates/horror.json`)의 보정을 구하는 방법은 SRD 5.1 을, 점수제의 값표와 점수를 주사위로 정하는 법은 SRD 5.2.1 을 따랐다(총점은 능력치가 넷이라 18 로 줄였다). 능력치, 난이도의 숫자, 양의 등급, 죽음의 굴림, 부상과 부상 표, 치료, 쉬기, 훔치기는 이 프로젝트가 정한 값이다. 위와 아래의 출처 표시가 함께 적용된다.
 
 > This work includes material from the System Reference Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC,
 > available at https://www.dndbeyond.com/srd.

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets import service as assets
 from app.assets.models import AssetType, Rulebook
 from app.assets.rulebooks.schemas import RulebookCreate, RulebookUpdate
-from app.engine.templates import from_template
+from app.engine.templates import TemplateFile, all_templates, from_template
 
 
 def build_rulebook(owner_id: uuid.UUID, data: RulebookCreate) -> Rulebook:
@@ -27,6 +27,11 @@ def build_rulebook(owner_id: uuid.UUID, data: RulebookCreate) -> Rulebook:
     asset = assets.build_asset(owner_id, AssetType.RULEBOOK, data)
     rules = from_template(data.template).model_dump(mode='json')
     return Rulebook(asset=asset, gm_guide=data.gm_guide, rules=rules)
+
+
+def list_templates() -> list[TemplateFile]:
+    """고를 수 있는 템플릿들. 파일에서 읽어 둔 것이라 DB 를 보지 않는다."""
+    return all_templates()
 
 
 async def create_rulebook(session: AsyncSession, owner_id: uuid.UUID, data: RulebookCreate) -> Rulebook:
