@@ -1590,7 +1590,8 @@ export interface paths {
          * Read Scene Cast
          * @description 가장 최근 라운드의 장면에 나온 인물들을 돌려준다. 행동의 npc 칸에 이 목록의 id 를 적는다.
          *
-         *     장면에 이름이나 호칭이 나온 인물만 들어간다. 테이블의 인물 전부가 아니다.
+         *     자리가 있는 인물은 살아 있는 캐릭터가 서 있는 장소들의 인물, 없는 인물은 장면에 이름이나 호칭이 나온 인물만
+         *     들어간다(#282). 테이블의 인물 전부가 아니다.
          */
         get: operations["read_scene_cast_api_v1_game_tables__table_id__rounds_current_people_get"];
         put?: never;
@@ -3116,17 +3117,20 @@ export interface components {
          * @description 사건이 일어났을 때 하는 일의 종류(#367). 효과는 목록이라 종류가 늘어도 판의 모양은 그대로다.
          * @enum {string}
          */
-        HappeningEffectKind: "move";
+        HappeningEffectKind: "move" | "move_npc";
         /**
          * HappeningEffectSnapshot
-         * @description 사건의 효과 하나. 지금은 옮기기(move) 하나다. 두 장소는 판의 맵의 장소 항목이다.
+         * @description 사건의 효과 하나. 캐릭터 옮기기(move)와 인물 옮기기(move_npc, #282)다. 장소는 판의 맵의 장소 항목이다.
          *
-         *     from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.
+         *     move: from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.
+         *     move_npc: 판 안의 인물 항목 하나(npc)를 to_place 로 옮긴다. 죽은 인물은 옮기지 않는다. from_place 는 없다.
          */
         HappeningEffectSnapshot: {
             /** From Place */
             from_place?: string | null;
             kind: components["schemas"]["HappeningEffectKind"];
+            /** Npc */
+            npc?: string | null;
             /**
              * To Place
              * Format: uuid
@@ -3143,11 +3147,12 @@ export interface components {
          *     물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).
          *     라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다
          *     (app/rounds/happenings.py).
-         *     가리키는 사건과 장소가 붙인 로어북에 있는지는 게시할 때 본다.
+         *     효과는 캐릭터 옮기기(MoveEffect)와 인물 옮기기(MoveNpcEffect, #282)다. kind 로 가른다.
+         *     가리키는 사건과 장소, 옮기는 인물이 붙인 로어북에 있는지는 게시할 때 본다.
          */
         "HappeningRule-Input": {
             /** Effects */
-            effects: components["schemas"]["MoveEffect-Input"][];
+            effects: (components["schemas"]["MoveEffect-Input"] | components["schemas"]["MoveNpcEffect-Input"])[];
             /**
              * Entry Id
              * Format: uuid
@@ -3168,11 +3173,12 @@ export interface components {
          *     물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).
          *     라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다
          *     (app/rounds/happenings.py).
-         *     가리키는 사건과 장소가 붙인 로어북에 있는지는 게시할 때 본다.
+         *     효과는 캐릭터 옮기기(MoveEffect)와 인물 옮기기(MoveNpcEffect, #282)다. kind 로 가른다.
+         *     가리키는 사건과 장소, 옮기는 인물이 붙인 로어북에 있는지는 게시할 때 본다.
          */
         "HappeningRule-Output": {
             /** Effects */
-            effects: components["schemas"]["MoveEffect-Output"][];
+            effects: (components["schemas"]["MoveEffect-Output"] | components["schemas"]["MoveNpcEffect-Output"])[];
             /** Entry Id */
             entry_id: string;
             /** @default all */
@@ -4375,8 +4381,8 @@ export interface components {
             /** From Place */
             from_place?: string | null;
             /**
-             * Kind
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             kind: "move";
             /**
@@ -4396,12 +4402,56 @@ export interface components {
             /** From Place */
             from_place?: string | null;
             /**
-             * Kind
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             kind: "move";
             /** To Place */
             to_place: string | null;
+        };
+        /**
+         * MoveNpcEffect
+         * @description 사건의 효과 하나: 인물(NPC) 하나(npc)를 맵의 한 장소(to_place)로 옮긴다(#282).
+         *
+         *     인물은 붙인 로어북의 인물 항목이다. 자리를 적지 않은 인물이면 그 뒤로 자리가 있는 인물이 된다.
+         *     쓰러진 인물도 옮겨진다. 죽은 인물은 그 자리에 남는다. 길로 이어져 있지 않아도 된다.
+         *     인물이 인물 항목인지, 장소가 맵의 장소인지는 게시할 때 본다.
+         */
+        "MoveNpcEffect-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "move_npc";
+            /**
+             * Npc
+             * Format: uuid
+             */
+            npc: string;
+            /**
+             * To Place
+             * Format: uuid
+             */
+            to_place: string;
+        };
+        /**
+         * MoveNpcEffect
+         * @description 사건의 효과 하나: 인물(NPC) 하나(npc)를 맵의 한 장소(to_place)로 옮긴다(#282).
+         *
+         *     인물은 붙인 로어북의 인물 항목이다. 자리를 적지 않은 인물이면 그 뒤로 자리가 있는 인물이 된다.
+         *     쓰러진 인물도 옮겨진다. 죽은 인물은 그 자리에 남는다. 길로 이어져 있지 않아도 된다.
+         *     인물이 인물 항목인지, 장소가 맵의 장소인지는 게시할 때 본다.
+         */
+        "MoveNpcEffect-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "move_npc";
+            /** Npc */
+            npc: string;
+            /** To Place */
+            to_place: string;
         };
         /**
          * MoveOut
@@ -4653,6 +4703,54 @@ export interface components {
             /** Rolls */
             rolls: number[];
             status: components["schemas"]["NpcStatus"];
+        };
+        /**
+         * NpcPlace
+         * @description 인물의 자리 하나(#282). 붙인 로어북의 인물 항목 하나(entry_id)가 처음에 맵의 장소 하나(place_id)에 있다.
+         *
+         *     자리가 있는 인물은 캐릭터가 그 장소에 서 있을 때 장면에 나오고, 같은 장소에서만 겨눈다. 서술이 불러내지 못한다.
+         *     NPC 시트가 없는 인물도 자리를 적을 수 있다. 인물이 인물 항목인지, 장소가 맵의 장소인지는 게시할 때 본다.
+         */
+        "NpcPlace-Input": {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /**
+             * Place Id
+             * Format: uuid
+             */
+            place_id: string;
+        };
+        /**
+         * NpcPlace
+         * @description 인물의 자리 하나(#282). 붙인 로어북의 인물 항목 하나(entry_id)가 처음에 맵의 장소 하나(place_id)에 있다.
+         *
+         *     자리가 있는 인물은 캐릭터가 그 장소에 서 있을 때 장면에 나오고, 같은 장소에서만 겨눈다. 서술이 불러내지 못한다.
+         *     NPC 시트가 없는 인물도 자리를 적을 수 있다. 인물이 인물 항목인지, 장소가 맵의 장소인지는 게시할 때 본다.
+         */
+        "NpcPlace-Output": {
+            /** Entry Id */
+            entry_id: string;
+            /** Place Id */
+            place_id: string;
+        };
+        /**
+         * NpcPlaceSnapshot
+         * @description 인물의 자리 하나(#282). 판 안의 인물 항목 하나(entry_id)가 처음에 판 안의 장소 항목 하나(place_id)에 있다.
+         */
+        NpcPlaceSnapshot: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /**
+             * Place Id
+             * Format: uuid
+             */
+            place_id: string;
         };
         /**
          * NpcSheet
@@ -5000,6 +5098,8 @@ export interface components {
         /**
          * PersonOut
          * @description 이번 장면의 인물 하나. 행동으로 겨눌 수 있는 NPC 다(죽은 인물은 겨누지 못한다).
+         *
+         *     자리가 있는 인물(place_id)은 같은 장소에 선 캐릭터만 겨눈다(#282). 자리가 없는 인물은 누구나 겨눈다.
          */
         PersonOut: {
             attitude: components["schemas"]["NpcAttitude"];
@@ -5024,6 +5124,8 @@ export interface components {
             name: string;
             /** Named */
             named: boolean;
+            /** Place Id */
+            place_id?: string | null;
             status: components["schemas"]["NpcStatus"];
         };
         /**
@@ -6538,6 +6640,11 @@ export interface components {
             /** @default classic */
             narration_style: components["schemas"]["NarrationStyle"];
             /**
+             * Npc Places
+             * @default []
+             */
+            npc_places: components["schemas"]["NpcPlace-Input"][];
+            /**
              * Npc Sheets
              * @default []
              */
@@ -6637,6 +6744,8 @@ export interface components {
             narration_model: string | null;
             narration_model_status: components["schemas"]["ModelStatusOut"] | null;
             narration_style: components["schemas"]["NarrationStyle"];
+            /** Npc Places */
+            npc_places: components["schemas"]["NpcPlace-Output"][];
             /** Npc Sheets */
             npc_sheets: components["schemas"]["NpcSheet-Output"][];
             /** Openings */
@@ -6716,7 +6825,7 @@ export interface components {
          *     null 을 보내면 비운다.
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-         *     quests, routes, landmarks, place_items, happenings, character_modes 는
+         *     quests, routes, landmarks, place_items, happenings, npc_places, character_modes 는
          *     보낸 목록으로 통째로 바꾼다.
          *     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
          *     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -6747,6 +6856,8 @@ export interface components {
             /** Narration Model */
             narration_model?: string | null;
             narration_style?: components["schemas"]["NarrationStyle"] | null;
+            /** Npc Places */
+            npc_places?: components["schemas"]["NpcPlace-Input"][] | null;
             /** Npc Sheets */
             npc_sheets?: components["schemas"]["NpcSheet-Input"][] | null;
             /** Openings */
@@ -6779,8 +6890,8 @@ export interface components {
          * SceneCastOut
          * @description 가장 최근 라운드의 장면에 나온 인물들과 몬스터들. 인물은 판의 인물 순서, 몬스터는 판의 몬스터 순서와 번호 순서다.
          *
-         *     장면에 이름이나 호칭이 나온 인물만 들어간다. 로어북의 내용은 싣지 않는다.
-         *     몬스터는 살아 있는 캐릭터가 서 있는 장소들의 마리다. 도감의 글은 싣지 않는다.
+         *     인물은 자리가 있으면 살아 있는 캐릭터가 서 있는 장소들의 인물, 없으면 장면에 이름이나 호칭이 나온 인물이다(#282).
+         *     로어북의 내용은 싣지 않는다. 몬스터는 살아 있는 캐릭터가 서 있는 장소들의 마리다. 도감의 글은 싣지 않는다.
          */
         SceneCastOut: {
             /**
@@ -6999,7 +7110,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 49
+             * @default 50
              */
             format: number;
             /**
@@ -7025,6 +7136,11 @@ export interface components {
              */
             monsters: components["schemas"]["MonsterSnapshot"][];
             narration_style: components["schemas"]["NarrationStyle"];
+            /**
+             * Npc Places
+             * @default []
+             */
+            npc_places: components["schemas"]["NpcPlaceSnapshot"][];
             /** Npc Sheets */
             npc_sheets: components["schemas"]["NpcSheetSnapshot"][];
             /** Openings */

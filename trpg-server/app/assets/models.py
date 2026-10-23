@@ -69,6 +69,8 @@ ROUND_MAX_MINUTES = 7 * 24 * 60
 SCENARIO_MAX_PREGENS = 8
 # 시나리오 하나에 둘 수 있는 NPC 시트의 수. 로어북 하나의 항목이 모두 인물이어도 모자라지 않는 만큼이다
 SCENARIO_MAX_NPC_SHEETS = 100
+# 시나리오 하나에 둘 수 있는 인물의 자리(맵의 어느 장소에 있는가, #282)의 수. 인물 하나에 자리 하나다. NPC 시트와 같다
+SCENARIO_MAX_NPC_PLACES = 100
 # 캐릭터의 이름과 설명. 설명은 턴마다 AI 의 입력에 들어간다. 사람 수만큼 들어가므로 길이가 곧 비용이다
 CHARACTER_NAME_MAX_LENGTH = 50
 CHARACTER_DESCRIPTION_MAX_LENGTH = 1000
@@ -318,6 +320,8 @@ class HappeningEffectKind(enum.StrEnum):
 
     # 캐릭터들을 맵의 한 장소로 옮긴다. 모두이거나, 한 장소에 서 있던 캐릭터들이다
     MOVE = 'move'
+    # 인물(NPC) 하나를 맵의 한 장소로 옮긴다(#282). 죽은 인물은 옮기지 않는다
+    MOVE_NPC = 'move_npc'
 
 
 class Visibility(enum.StrEnum):
@@ -604,6 +608,7 @@ class Scenario(AssetContent):
         CheckConstraint(f'jsonb_array_length(encounters) <= {SCENARIO_MAX_ENCOUNTERS}', name='encounters_count'),
         CheckConstraint(f'jsonb_array_length(place_items) <= {SCENARIO_MAX_PLACE_ITEMS}', name='place_items_count'),
         CheckConstraint(f'jsonb_array_length(happenings) <= {SCENARIO_MAX_HAPPENINGS}', name='happenings_count'),
+        CheckConstraint(f'jsonb_array_length(npc_places) <= {SCENARIO_MAX_NPC_PLACES}', name='npc_places_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
             f'cardinality(character_modes) >= 1 AND {all_of("character_modes", CharacterMode)}',
@@ -732,9 +737,16 @@ class Scenario(AssetContent):
     place_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 사건 규칙들(#367). 하나하나가 {entry_id, when, match, effects} 다. "이 조건이 채워지면 이 일이 한 번 일어난다"는
-    # 뜻이다. 사건은 붙인 로어북의 사건 항목이고, 조건의 모양은 퀘스트의 것과 같다. 효과는 지금 옮기기(move) 하나다.
+    # 뜻이다. 사건은 붙인 로어북의 사건 항목이고, 조건의 모양은 퀘스트의 것과 같다.
+    # 효과는 캐릭터 옮기기(move)와 인물 옮기기(move_npc, #282)다.
     # 잡혀 끌려가기, 함정, 휩쓸림처럼 길로 이어지지 않은 이동을 판이 정한다(app/rounds/happenings.py)
     happenings: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 인물의 자리들(#282). 하나하나가 {entry_id, place_id} 다. "이 인물은 처음에 이 장소에 있다"는 뜻이다.
+    # 인물은 붙인 로어북의 인물 항목, 장소는 맵의 장소다. 자리가 있는 인물은 장면의 글이 아니라 장소로 나온다.
+    # 캐릭터가 같은 장소에 서 있어야 그 인물이 장면에 있고, 같은 장소에서만 겨눈다(app/rounds/cast.py).
+    # 자리를 적지 않은 인물은 지금처럼 장면의 글에 나왔는지로 고른다. 자리는 사건(move_npc)만 옮긴다
+    npc_places: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 기본 NPC 시트. 시트를 받지 못한 인물이 쓰는 숫자다. 문서 하나이고 모양은 Sheet 다.
     # 초안일 때는 비워 둘 수 있다. 시트가 없는 인물 항목이 있으면 게시할 때 있어야 한다

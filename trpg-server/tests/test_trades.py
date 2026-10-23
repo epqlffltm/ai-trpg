@@ -43,7 +43,7 @@ FRIEND = uuid.UUID('22222222-2222-4333-8444-555555555555')
 GOLD = {'name': '금화', 'unit': '닢', 'starting': 30, 'sell_percent': 50}
 OPENING = '시장이다. 상인이 짐을 푼다. 망치를 멘 사내가 지나간다.'
 BUY = '상인에게 물건을 산다.'
-NOT_IN_SCENE = 'action.npc 가 이번 장면의 인물이 아닙니다.'
+NOT_IN_SCENE = 'action.npc 가 이번 장면의 인물이 아니거나 다른 장소에 있습니다.'
 
 
 def bearer(signing_key: SigningKey, user_id: uuid.UUID) -> dict[str, str]:

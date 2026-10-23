@@ -60,13 +60,13 @@ from app.events.models import EventType, TableEvent
 from app.observability.metrics import record_round_closed
 from app.rounds import deadlines, happenings, narration_request, opener, quest_goals, repository, rests, waits
 from app.rounds.acceptance import accept_action, put_declaration
-from app.rounds.cast import Scene, cast_of
+from app.rounds.cast import Scene, cast_of, labels_of
 from app.rounds.errors import Conflict, RoundConflictError, RoundNotFoundError
 from app.rounds.judging import expire_injuries, find_dying, roll_checks, roll_death_saves
 from app.rounds.models import CloseReason, Round, RoundStatus
-from app.rounds.monster_scene import scene_monsters
+from app.rounds.monster_scene import occupied_places, scene_monsters
 from app.rounds.move_lines import round_lines
-from app.rounds.moves import build_moves, frozen_moves, frozen_style, to_monster_notes, to_people
+from app.rounds.moves import build_moves, frozen_moves, frozen_style, place_names, to_monster_notes, to_people
 from app.rounds.narrator import NarrationRequest
 from app.rounds.prompt import history_rounds
 from app.rounds.records import record_actions, record_death_saves, record_injury_endings, record_recoveries
@@ -309,8 +309,9 @@ async def lock_current_round(
 
 async def load_scene(session: AsyncSession, table: GameTable, round_: Round) -> Scene:
     """
-    이번 장면의 NPC 와 몬스터들을 읽는다. 테이블의 NPC 상태 전부와, 그중 라운드의 장면에 나온 인물들,
+    이번 장면의 NPC 와 몬스터들을 읽는다. 테이블의 NPC 상태 전부와, 그중 장면의 인물들,
     그리고 살아 있는 캐릭터가 서 있는 장소들의 몬스터다.
+    장면의 인물은 자리가 있으면 캐릭터가 서 있는 장소들의 인물, 없으면 라운드의 장면에 나온 인물이다(#282).
 
     테이블을 잠근 요청 안에서 부르면 돌려준 인물과 몬스터의 상태를 그대로 고칠 수 있다.
     조우가 없는 판이면 몬스터의 상태를 읽지 않는다. 테이블에 몬스터가 없다.
@@ -320,7 +321,7 @@ async def load_scene(session: AsyncSession, table: GameTable, round_: Round) -> 
     monsters = await table_repository.list_monsters(session, table.id) if snapshot.encounters else []
     return Scene(
         npcs=states,
-        cast=cast_of(snapshot, round_.scene, states),
+        cast=cast_of(snapshot, round_.scene, states, occupied_places(table)),
         monsters=scene_monsters(snapshot, table, monsters),
         all_monsters=monsters,
     )
@@ -527,10 +528,12 @@ async def load_closing_request(
         model=round_.narration_model,
         table_id=table.id,
         host_id=table.host_id,
-        people=to_people(scene.cast, snapshot.rulebook.rules),
+        people=to_people(scene.cast, snapshot.rulebook.rules, place_names(snapshot)),
         whispers=[narration_request.to_whisper_note(whisper) for whisper in whispers],
         quests=narration_request.to_quest_notes(table, snapshot, round_.expired_quests),
-        happenings=narration_request.to_happening_notes(table, snapshot, round_.number),
+        happenings=narration_request.to_happening_notes(
+            table, snapshot, round_.number, labels_of(snapshot, round_.scene, scene.npcs), occupied_places(table)
+        ),
         monsters=to_monster_notes(snapshot, scene.monsters),
         turns=narration_request.to_turn_notes(round_.turns),
         clock=narration_request.to_clock_note(table),

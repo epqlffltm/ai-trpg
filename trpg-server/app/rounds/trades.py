@@ -24,7 +24,7 @@ from app.assets.models import ITEM_STACK_MAX, NpcAttitude
 from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, read_snapshot
 from app.engine.action import BuyAction, PayAction, SellAction
 from app.rounds import item_actions
-from app.rounds.cast import CastMember, Scene, find_cast_member
+from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.tables import carried, items, money, npc_items, sheets
@@ -99,12 +99,13 @@ def require_priced(snapshot: Snapshot, entry_id: uuid.UUID) -> CatalogItem:
     return item
 
 
-def require_merchant(scene: Scene, npc_id: uuid.UUID) -> CastMember:
+def require_merchant(scene: Scene, member: TableMember, npc_id: uuid.UUID) -> CastMember:
     """
-    거래할 상인. 이번 장면의 인물이 아니면 ActionTargetError(npc), 상인이 아니면 RoundConflictError(not_merchant),
+    거래할 상인. 이번 장면의 인물이 아니거나 거래하는 캐릭터와 다른 장소에 있으면 ActionTargetError(npc, #282),
+    상인이 아니면 RoundConflictError(not_merchant),
     쓰러졌거나 죽었거나 적대하면 RoundConflictError(merchant_unavailable).
     """
-    found = find_cast_member(scene.cast, npc_id)
+    found = find_reachable(scene.cast, member, npc_id)
     if found is None:
         raise ActionTargetError('npc')
     if not is_merchant(found):
@@ -139,7 +140,7 @@ def accept_buy(table: GameTable, member: TableMember, scene: Scene, action: BuyA
     snapshot = read_snapshot(table.content)
     require_currency(snapshot)
     item = require_priced(snapshot, action.item)
-    merchant = require_merchant(scene, action.npc)
+    merchant = require_merchant(scene, member, action.npc)
     if unit_count(stock_of(merchant, action.item)) < action.count:
         raise RoundConflictError(Conflict.OUT_OF_STOCK)
     require_money(member, money.buying_price(item.price, action.count))
@@ -163,7 +164,7 @@ def accept_sell(table: GameTable, member: TableMember, scene: Scene, action: Sel
     if currency.sell_percent == 0:
         raise ActionNotInRulesError('kind')
     item = require_priced(snapshot, action.item)
-    require_merchant(scene, action.npc)
+    require_merchant(scene, member, action.npc)
     if member.sheet is None or items.count_of(member.sheet, action.item) < action.count:
         raise RoundConflictError(Conflict.ITEM_NOT_HELD)
     require_room(member, money.selling_price(currency, item.price, action.count))

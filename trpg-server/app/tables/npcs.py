@@ -8,6 +8,7 @@ DB 를 모른다. 이미 읽어 온 판과 상태를 받아 객체를 만들거�
 만들기. 게임을 시작할 때 판의 인물 항목마다 상태를 하나씩 만든다(app/tables/service.py). 숫자는 판에서 온다.
 그 인물의 NPC 시트가 있으면 그것, 없으면 기본 NPC 시트다(app/assets/scenarios/snapshot.py 의 npc_sheet_of).
 HP 는 가득 찬 채로, 살아 있는 채로, 판에 적은 태도로(없으면 중립) 시작한다.
+판에 자리를 적은 인물은 그 장소에서 시작한다(#282). 자리가 없는 인물은 장소가 비어 있다(장면의 글로 나온다).
 
 바꾸기. NPC 의 HP 와 생사를 바꾸는 함수는 change_npc 와 kill 둘이다.
 판정의 결과로 라운드가 부른다(app/rounds/checks.py, app/rounds/treatments.py).
@@ -21,7 +22,7 @@ HP 는 가득 찬 채로, 살아 있는 채로, 판에 적은 태도로(없으�
 import uuid
 
 from app.assets.models import NpcAttitude
-from app.assets.scenarios.snapshot import Snapshot, npc_attitude_of, npc_sheet_of, person_entries
+from app.assets.scenarios.snapshot import Snapshot, npc_attitude_of, npc_place_of, npc_sheet_of, person_entries
 from app.engine import health
 from app.engine.dice import Dice
 from app.engine.health import Change, ChangeKind
@@ -31,9 +32,17 @@ from app.tables.models import NpcStatus, TableNpc
 
 
 def new_npc(
-    table_id: uuid.UUID, entry_id: uuid.UUID, source: Sheet, attitude: NpcAttitude = NpcAttitude.NEUTRAL
+    table_id: uuid.UUID,
+    entry_id: uuid.UUID,
+    source: Sheet,
+    attitude: NpcAttitude = NpcAttitude.NEUTRAL,
+    place_id: uuid.UUID | None = None,
 ) -> TableNpc:
-    """인물 하나의 상태를 만든다. 시트의 숫자를 복사하고, HP 를 가득 채우고, 살아 있는 것으로, 그 태도로 둔다."""
+    """
+    인물 하나의 상태를 만든다. 시트의 숫자를 복사하고, HP 를 가득 채우고, 살아 있는 것으로, 그 태도로 둔다.
+
+    place_id 는 처음 있는 장소다. 자리가 없는 인물이면 None 이다.
+    """
     return TableNpc(
         table_id=table_id,
         entry_id=entry_id,
@@ -42,15 +51,24 @@ def new_npc(
         hp=source.max_hp,
         status=NpcStatus.ALIVE,
         attitude=attitude,
+        place_id=place_id,
+    )
+
+
+def make_npc(table_id: uuid.UUID, snapshot: Snapshot, entry_id: uuid.UUID) -> TableNpc:
+    """판의 인물 하나의 상태를 만든다. 숫자, 태도, 자리를 판에서 찾는다."""
+    return new_npc(
+        table_id,
+        entry_id,
+        npc_sheet_of(snapshot, entry_id),
+        npc_attitude_of(snapshot, entry_id),
+        npc_place_of(snapshot, entry_id),
     )
 
 
 def make_npcs(table_id: uuid.UUID, snapshot: Snapshot) -> list[TableNpc]:
     """이 테이블의 인물마다 상태를 만든다. 판의 인물 항목 순서다. 인물이 없으면 빈 목록이다."""
-    return [
-        new_npc(table_id, entry.id, npc_sheet_of(snapshot, entry.id), npc_attitude_of(snapshot, entry.id))
-        for entry in person_entries(snapshot)
-    ]
+    return [make_npc(table_id, snapshot, entry.id) for entry in person_entries(snapshot)]
 
 
 def is_dead(npc: TableNpc) -> bool:
