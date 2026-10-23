@@ -10,13 +10,16 @@
 하는 일:
   1. 인증 서버의 컨테이너에서 dev_seed_accounts.py 를 돌려 시험 계정 둘(방장, 손님)을 만들고 access 토큰을 받는다.
      개발 환경(APP_ENVIRONMENT=development)이 아니면 거기서 멈춘다. 로그인의 메일 코드는 거치지 않는다
-  2. 방장의 토큰으로 프록시를 거쳐 게임 서버를 부른다. 고를 수 있는 서술 모델 하나, 룰북(SRD5),
+  2. 두 계정을 가짜 본인확인 업체의 토큰으로 본인인증한다(POST /identity/verify, 성년의 생일).
+     인증 서버가 결제 서버에 알려 충전(A7)을 할 수 있고, 환영 실버를 받는다. 이미 했으면 넘어간다.
+     가짜 업체는 개발 환경에서만 있다(auth-server/README.md 의 "본인인증 (가짜 업체)")
+  3. 방장의 토큰으로 프록시를 거쳐 게임 서버를 부른다. 고를 수 있는 서술 모델 하나, 룰북(SRD5),
      로어북(장소, 물건, 인물, 사건. dev_seed_world.py), 시나리오(스타팅 둘, 프리젠 셋, 맵, 물건, NPC, 퀘스트),
      소개 페이지(한 줄 소개, 장르, 태그)를 만들고 게시해 공개한다.
      이미 있으면(제목으로 찾는다) 만들지 않는다. 맵이나 화폐가 없는 앞의 견본이면 세계를 넣고 새 판을 게시한다
-  3. 방장이 로비에 보이는 견본 테이블을 연다. 모집 중인 것이 이미 있으면 열지 않는다.
+  4. 방장이 로비에 보이는 견본 테이블을 연다. 모집 중인 것이 이미 있으면 열지 않는다.
      맵이나 화폐가 없는 앞의 판으로 연 것이면 새로 연다
-  4. 계정과 주소를 찍는다. 화면에서 로그인하면 메일 코드는 auth-mail 의 로그에 찍힌다(메일 서버를 적지 않았을 때)
+  5. 계정과 주소를 찍는다. 화면에서 로그인하면 메일 코드는 auth-mail 의 로그에 찍힌다(메일 서버를 적지 않았을 때)
 
 몇 번 돌려도 같다. 계정의 비밀번호만 다시 정한다.
 
@@ -46,6 +49,11 @@ LOCAL_HOSTS = frozenset({'127.0.0.1', 'localhost', '::1'})
 GAME = '/api/v1/game'
 
 SEED_TITLE = '[견본] 잿빛 수도원'
+
+# 본인인증(가짜 업체). 토큰은 fake:<DI>:<생일> 이다. 생일은 성년이라 결제(충전)를 할 수 있다
+IDENTITY_PATH = '/api/v1/auth/identity/verify'
+IDENTITY_TOKEN_PREFIX = 'fake:'
+ADULT_BIRTHDAY = '1990-01-01'
 TABLE_TITLE = '[견본] 목요일 모임'
 
 # 계정. 아이디와 닉네임은 인증 서버의 규칙(영문 소문자·숫자·밑줄 4~20 자, 닉네임 2~20 자)에 맞는다
@@ -56,7 +64,12 @@ ACCOUNTS = (
 
 
 class SeedError(Exception):
-    """채우지 못했다. 까닭을 사람이 읽을 글로 싣는다."""
+    """채우지 못했다. 까닭을 사람이 읽을 글로 싣는다. 서버가 답했으면 그 상태(status)와 오류의 이름(code)도 싣는다."""
+
+    def __init__(self, message: str, status: int | None = None, code: str | None = None):
+        super().__init__(message)
+        self.status = status
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -156,11 +169,37 @@ def call(proxy: str, token: str, method: str, path: str, body: dict | None = Non
         with urllib.request.urlopen(request, timeout=30) as response:
             raw = response.read()
     except urllib.error.HTTPError as error:
-        raise SeedError(f'{method} {path} → {error.code}: {error.read().decode("utf-8", "replace")}') from error
+        text = error.read().decode('utf-8', 'replace')
+        raise SeedError(f'{method} {path} → {error.code}: {text}', status=error.code, code=error_code(text)) from error
     except urllib.error.URLError as error:
         hint = 'compose 를 --profile app 으로 띄웠는지 본다'
         raise SeedError(f'{proxy} 에 닿지 못했다({error.reason}). {hint}') from error
     return json.loads(raw) if raw else {}
+
+
+def error_code(text: str) -> str | None:
+    """오류 본문의 이름(code). JSON 이 아니거나 없으면 None"""
+    try:
+        body = json.loads(text)
+    except ValueError:
+        return None
+    return body.get('code') if isinstance(body, dict) and isinstance(body.get('code'), str) else None
+
+
+def identity_token(account: Account) -> str:
+    """가짜 본인확인 업체의 토큰. 계정마다 다른 사람(DI)이고 성년이다. 같은 계정이면 늘 같은 토큰이다"""
+    return f'{IDENTITY_TOKEN_PREFIX}{account.username}:{ADULT_BIRTHDAY}'
+
+
+def verify_identity(proxy: str, account: Account) -> str:
+    """본인인증을 한다. verified(이번에 함) 또는 already(이미 했음). 그 밖의 실패는 SeedError"""
+    try:
+        call(proxy, account.access_token, 'POST', IDENTITY_PATH, {'token': identity_token(account)})
+    except SeedError as error:
+        if error.status == 409 and error.code == 'identity_already_verified':
+            return 'already'
+        raise
+    return 'verified'
 
 
 def pick_model(models: dict) -> str:
@@ -311,6 +350,8 @@ def seed_table(proxy: str, token: str, scenario_id: str) -> dict:
 def run(proxy: str, password: str, with_table: bool) -> Seeded:
     ensure_local(proxy)
     accounts = seed_accounts(password)
+    for account in accounts:
+        verify_identity(proxy, account)
     host = accounts[0]
     scenario_id, state = seed_scenario(proxy, host.access_token)
     table = seed_table(proxy, host.access_token, scenario_id) if with_table else None
@@ -334,6 +375,7 @@ def report(seeded: Seeded, proxy: str, password: str) -> str:
         '화면에서 로그인하면 메일 코드가 온다. 메일 서버를 적지 않았으면 로그에 찍힌다:',
         '  docker compose --profile app logs -f auth-mail',
         '두 계정으로 보려면 다른 브라우저나 시크릿 창을 하나 더 쓴다(같은 브라우저의 창은 로그인을 나눈다).',
+        '두 계정은 가짜 업체로 본인인증을 했다(성년). 지갑의 충전(시험용 결제창)을 할 수 있다.',
         '한 판을 따라가는 순서는 docs/operations/local-screens.md 의 "한 판 따라가기"에 있다.',
     ]
     return '\n'.join(lines)

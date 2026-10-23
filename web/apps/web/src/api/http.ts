@@ -17,6 +17,8 @@ export type RequestOptions = {
   body?: unknown;
   /** 쿼리 문자열. 값이 undefined 면 넣지 않는다 */
   query?: Record<string, string | number | undefined>;
+  /** 더 붙일 머리말(결제 서버의 Idempotency-Key 같은 것). 인증과 본문의 머리말은 여기서 덮지 못한다 */
+  headers?: Record<string, string>;
   /** 401 에서 갱신하지 않는다(로그인 단계처럼 토큰과 상관없는 요청) */
   skipRefresh?: boolean;
   signal?: AbortSignal;
@@ -60,7 +62,7 @@ async function send(url: string, options: RequestOptions, token: string | undefi
 }
 
 function headersFor(options: RequestOptions, token: string | undefined): Headers {
-  const headers = new Headers({ Accept: 'application/json' });
+  const headers = new Headers({ ...options.headers, Accept: 'application/json' });
   if (options.body !== undefined) headers.set('Content-Type', 'application/json');
   if (token !== undefined) headers.set('Authorization', `Bearer ${token}`);
   return headers;

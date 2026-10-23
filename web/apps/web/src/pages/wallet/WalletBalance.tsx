@@ -1,8 +1,9 @@
 // web/apps/web/src/pages/wallet/WalletBalance.tsx
-// 지갑의 잔액. 골드와 실버 두 칸, 합, 곧 사라질 실버. 서버가 준 글자를 그대로 보인다.
+// 지갑의 잔액. 골드와 실버 두 칸, 합, 곧 사라질 실버, 충전(A7)으로 가는 길. 서버가 준 글자를 그대로 보인다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { formatDateTime } from '../../format/dateTime';
 import { useNow } from '../../hooks/useNow';
 import { walletProblemText } from './walletProblem';
@@ -47,7 +48,9 @@ export function WalletBalance() {
               곧 사라질 {expiryText(wallet.data, now)}({formatDateTime(wallet.data.next_expiry.expires_at)})
             </p>
           ) : null}
-          <p className="hint">충전과 출석은 준비 중입니다.</p>
+          <p>
+            <Link to="/wallet/charge">충전하기</Link> <span className="hint">· 출석은 준비 중입니다.</span>
+          </p>
         </>
       ) : null}
     </section>

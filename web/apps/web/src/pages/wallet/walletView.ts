@@ -76,7 +76,8 @@ export function balanceShort(wallet: Wallet): string {
 
 /**
  * 크레딧을 바꿀 수 있는 테이블의 일. 이것이 오면 잔액을 다시 읽는다.
- * 라운드를 닫으면 서술 값을 걸고(hold), 서술이 끝나 다음 라운드가 열리면 잡고(capture), 그만두거나 돌려주면 푼다(release).
+ * 라운드가 열리면 곧 그 라운드의 서술 값을 걸고(hold, 게임 서버의 정리 작업이 몇 초 뒤에), 서술을 마치면 잡고(capture),
+ * 그만두거나 끝나면 푼다(release). 그래서 라운드가 닫힐 때(걸린 것이 보인다)와 열릴 때(잡힌 것이 보인다) 읽는다.
  * 모자라다는 알림 뒤에는 충전했는지 볼 수 있게 읽는다.
  */
 export const WALLET_EVENTS: ReadonlySet<TableEvent['type']> = new Set<TableEvent['type']>([
