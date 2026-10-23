@@ -3425,14 +3425,27 @@
         "description": "사건이 일어났을 때 하는 일의 종류(#367). 효과는 목록이라 종류가 늘어도 판의 모양은 그대로다.",
         "enum": [
           "move",
-          "move_npc"
+          "move_npc",
+          "lock_route",
+          "unlock_route",
+          "repair_route"
         ],
         "title": "HappeningEffectKind",
         "type": "string"
       },
       "HappeningEffectSnapshot": {
-        "description": "사건의 효과 하나. 캐릭터 옮기기(move)와 인물 옮기기(move_npc, #282)다. 장소는 판의 맵의 장소 항목이다.\n\nmove: from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.\nmove_npc: 판 안의 인물 항목 하나(npc)를 to_place 로 옮긴다. 죽은 인물은 옮기지 않는다. from_place 는 없다.",
+        "description": "사건의 효과 하나. 캐릭터 옮기기(move), 인물 옮기기(move_npc, #282), 길의 문 다루기(#281)다.\n장소는 판의 맵의 장소 항목이다.\n\nmove: from_place 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 죽지 않은 캐릭터만 to_place 로 옮긴다.\nmove_npc: 판 안의 인물 항목 하나(npc)를 to_place 로 옮긴다. 죽은 인물은 옮기지 않는다. from_place 는 없다.\nlock_route, unlock_route, repair_route: 두 끝이 from_place 와 to_place 인 길(방향은 보지 않는다)의 문을\n잠그고, 열고, 고친다. 잠그고 열기는 device 의 장치만, 비었으면 그 문의 장치 모두다. 형식 54 보다 옛 판에는 없다.",
         "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoorDevice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "from_place": {
             "anyOf": [
               {
@@ -3481,8 +3494,11 @@
             "items": {
               "discriminator": {
                 "mapping": {
+                  "lock_route": "#/components/schemas/RouteDoorEffect-Input",
                   "move": "#/components/schemas/MoveEffect-Input",
-                  "move_npc": "#/components/schemas/MoveNpcEffect-Input"
+                  "move_npc": "#/components/schemas/MoveNpcEffect-Input",
+                  "repair_route": "#/components/schemas/RepairRouteEffect-Input",
+                  "unlock_route": "#/components/schemas/RouteDoorEffect-Input"
                 },
                 "propertyName": "kind"
               },
@@ -3492,6 +3508,12 @@
                 },
                 {
                   "$ref": "#/components/schemas/MoveNpcEffect-Input"
+                },
+                {
+                  "$ref": "#/components/schemas/RouteDoorEffect-Input"
+                },
+                {
+                  "$ref": "#/components/schemas/RepairRouteEffect-Input"
                 }
               ]
             },
@@ -3535,8 +3557,11 @@
             "items": {
               "discriminator": {
                 "mapping": {
+                  "lock_route": "#/components/schemas/RouteDoorEffect-Output",
                   "move": "#/components/schemas/MoveEffect-Output",
-                  "move_npc": "#/components/schemas/MoveNpcEffect-Output"
+                  "move_npc": "#/components/schemas/MoveNpcEffect-Output",
+                  "repair_route": "#/components/schemas/RepairRouteEffect-Output",
+                  "unlock_route": "#/components/schemas/RouteDoorEffect-Output"
                 },
                 "propertyName": "kind"
               },
@@ -3546,6 +3571,12 @@
                 },
                 {
                   "$ref": "#/components/schemas/MoveNpcEffect-Output"
+                },
+                {
+                  "$ref": "#/components/schemas/RouteDoorEffect-Output"
+                },
+                {
+                  "$ref": "#/components/schemas/RepairRouteEffect-Output"
                 }
               ]
             },
@@ -9627,6 +9658,60 @@
         "title": "ReferencesUpdate",
         "type": "object"
       },
+      "RepairRouteEffect-Input": {
+        "additionalProperties": false,
+        "description": "사건의 효과 하나: 길 하나의 부서진 문을 고친다(repair_route, #281).\n\n고친 문은 열린 채다. 다시 잠그려면 뒤에 잠그는 효과(lock_route)를 잇는다. 부서지지 않은 문은 그대로다.",
+        "properties": {
+          "from_place": {
+            "format": "uuid",
+            "title": "From Place",
+            "type": "string"
+          },
+          "kind": {
+            "const": "repair_route",
+            "title": "Kind",
+            "type": "string"
+          },
+          "to_place": {
+            "format": "uuid",
+            "title": "To Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_place",
+          "to_place",
+          "kind"
+        ],
+        "title": "RepairRouteEffect",
+        "type": "object"
+      },
+      "RepairRouteEffect-Output": {
+        "additionalProperties": false,
+        "description": "사건의 효과 하나: 길 하나의 부서진 문을 고친다(repair_route, #281).\n\n고친 문은 열린 채다. 다시 잠그려면 뒤에 잠그는 효과(lock_route)를 잇는다. 부서지지 않은 문은 그대로다.",
+        "properties": {
+          "from_place": {
+            "title": "From Place",
+            "type": "string"
+          },
+          "kind": {
+            "const": "repair_route",
+            "title": "Kind",
+            "type": "string"
+          },
+          "to_place": {
+            "title": "To Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_place",
+          "to_place",
+          "kind"
+        ],
+        "title": "RepairRouteEffect",
+        "type": "object"
+      },
       "Rest": {
         "additionalProperties": false,
         "description": "쉬기. 짧은 휴식과 긴 휴식, 되살아나기, 저절로 회복하기다.\n\n쉬는 것은 캐릭터가 선언하는 행동이다(app/rounds/rests.py). 쉬는 라운드는 적어도 그 휴식의 시간만큼 이어진다.\nrevive 가 None 이면 쓰러진 캐릭터는 쉬어서 일어나지 못한다(치료나 회복으로만 일어난다).\nnatural 이 None 이면 쉬지 않고는 회복하지 않는다.",
@@ -10186,6 +10271,86 @@
           "difficulty"
         ],
         "title": "RouteCrossOut",
+        "type": "object"
+      },
+      "RouteDoorEffect-Input": {
+        "additionalProperties": false,
+        "description": "사건의 효과 하나: 길 하나의 문을 잠그거나(lock_route) 연다(unlock_route, #281).\n\n판이 하는 일이라 열쇠도 서 있는 쪽도 보지 않는다. NPC 나 몬스터가 문을 잠그고 여는 것을 이것으로 적는다.\ndevice 를 적으면 그 장치만, 비우면 그 문의 장치 모두(자물쇠, 빗장)다. 적은 장치가 그 길에 있는지는 게시할 때 본다.\n부서진 문은 잠그지 못한다(고치는 효과를 먼저 적는다). 이미 그렇게 되어 있는 장치는 그대로다.",
+        "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoorDevice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "from_place": {
+            "format": "uuid",
+            "title": "From Place",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "lock_route",
+              "unlock_route"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "to_place": {
+            "format": "uuid",
+            "title": "To Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_place",
+          "to_place",
+          "kind"
+        ],
+        "title": "RouteDoorEffect",
+        "type": "object"
+      },
+      "RouteDoorEffect-Output": {
+        "additionalProperties": false,
+        "description": "사건의 효과 하나: 길 하나의 문을 잠그거나(lock_route) 연다(unlock_route, #281).\n\n판이 하는 일이라 열쇠도 서 있는 쪽도 보지 않는다. NPC 나 몬스터가 문을 잠그고 여는 것을 이것으로 적는다.\ndevice 를 적으면 그 장치만, 비우면 그 문의 장치 모두(자물쇠, 빗장)다. 적은 장치가 그 길에 있는지는 게시할 때 본다.\n부서진 문은 잠그지 못한다(고치는 효과를 먼저 적는다). 이미 그렇게 되어 있는 장치는 그대로다.",
+        "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoorDevice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "from_place": {
+            "title": "From Place",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "lock_route",
+              "unlock_route"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "to_place": {
+            "title": "To Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_place",
+          "to_place",
+          "kind"
+        ],
+        "title": "RouteDoorEffect",
         "type": "object"
       },
       "RouteLock-Input": {
@@ -12655,7 +12820,7 @@
             "type": "array"
           },
           "format": {
-            "default": 53,
+            "default": 54,
             "title": "Format",
             "type": "integer"
           },

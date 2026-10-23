@@ -48,6 +48,7 @@ from app.assets.scenarios.schemas import (
     ItemStack,
     MonsterAttack,
     MonsterSheet,
+    MoveEffect,
     MoveNpcEffect,
     NpcPlace,
     NpcSheet,
@@ -56,6 +57,8 @@ from app.assets.scenarios.schemas import (
     Pregen,
     QuestCondition,
     QuestRule,
+    RepairRouteEffect,
+    RouteDoorEffect,
     RouteRule,
     VersionCreate,
 )
@@ -69,6 +72,7 @@ from app.assets.scenarios.snapshot import (
     wear_fault,
 )
 from app.assets.service import AssetNotFoundError
+from app.engine.action import DoorDevice
 from app.engine.check import find_ability, find_difficulty
 from app.engine.health import find_magnitude
 from app.engine.ruleset import Ruleset
@@ -164,6 +168,8 @@ class Problem(enum.StrEnum):
     HAPPENING_PLACE_OFF_MAP = 'happening_place_off_map'
     # 붙인 로어북의 인물 항목이 아닌 것(없는 항목, 장소, 물건 …)을 옮기는 사건이 있다(move_npc, #282)
     HAPPENING_NPC_NOT_PERSON = 'happening_npc_not_person'
+    # 문을 다루는 사건의 효과(#281)가 판에 없는 길, 문(자물쇠나 빗장)이 없는 길, 그 길에 없는 장치를 가리킨다
+    HAPPENING_ROUTE_INVALID = 'happening_route_invalid'
     # 붙인 로어북의 인물 항목이 아닌 것(없는 항목, 장소, 물건 …)의 자리가 있다(#282)
     NPC_PLACE_NOT_PERSON = 'npc_place_not_person'
     # 인물의 자리가 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)다. 아무도 그 인물을 만날 수 없다
@@ -769,6 +775,9 @@ def read_happenings(scenario: Scenario) -> list[HappeningRule]:
     return [HappeningRule.model_validate(document) for document in scenario.happenings]
 
 
+# 길의 문을 다루는 사건의 효과의 모양(#281)
+ROUTE_EFFECT_TYPES = (RouteDoorEffect, RepairRouteEffect)
+
 # 퀘스트의 조건 문제와 같은 까닭의 사건의 조건 문제. 조건 하나의 문제는 condition_problem 이 함께 본다
 HAPPENING_CONDITION_PROBLEMS = {
     Problem.QUEST_CONDITION_MISSING: Problem.HAPPENING_CONDITION_MISSING,
@@ -778,10 +787,16 @@ HAPPENING_CONDITION_PROBLEMS = {
 
 
 def effect_places(effect: HappeningEffect) -> list[uuid.UUID]:
-    """사건의 효과 하나가 가리키는 장소들. 옮기는 곳과, 캐릭터를 옮기면 옮겨질 사람이 선 곳(있으면)이다."""
-    if isinstance(effect, MoveNpcEffect) or effect.from_place is None:
+    """
+    사건의 효과 하나가 옮기는 데 가리키는 장소들. 옮기는 곳과, 캐릭터를 옮기면 옮겨질 사람이 선 곳(있으면)이다.
+
+    문을 다루는 효과(#281)는 옮기지 않는다. 그 두 끝은 길로 본다(door_effect_invalid).
+    """
+    if isinstance(effect, MoveNpcEffect) or (isinstance(effect, MoveEffect) and effect.from_place is None):
         return [effect.to_place]
-    return [effect.to_place, effect.from_place]
+    if isinstance(effect, MoveEffect):
+        return [effect.to_place, effect.from_place]
+    return []
 
 
 def happening_places(rules: list[HappeningRule]) -> list[uuid.UUID]:
@@ -794,6 +809,27 @@ def moved_npcs(rules: list[HappeningRule]) -> list[uuid.UUID]:
     return [effect.npc for rule in rules for effect in rule.effects if isinstance(effect, MoveNpcEffect)]
 
 
+def route_effects(rules: list[HappeningRule]) -> list[HappeningEffect]:
+    """사건의 효과 중 길의 문을 다루는 것 전부(#281). 잠그기, 열기, 고치기다."""
+    return [effect for rule in rules for effect in rule.effects if isinstance(effect, ROUTE_EFFECT_TYPES)]
+
+
+def door_effect_invalid(effect: HappeningEffect, routes: list[RouteRule]) -> bool:
+    """
+    문을 다루는 효과 하나가 다룰 문이 없는가(#281). 두 끝 사이의 길이 없거나, 그 길에 자물쇠도 빗장도 없거나,
+    적은 장치(device)가 그 길에 없으면 참이다. 길의 방향은 보지 않는다.
+    """
+    ends = {effect.from_place, effect.to_place}
+    route = next((route for route in routes if {route.from_place, route.to_place} == ends), None)
+    if route is None:
+        return True
+    devices = {DoorDevice.LOCK: route.lock, DoorDevice.BAR: route.bar}
+    if not any(devices.values()):
+        return True
+    device = getattr(effect, 'device', None)
+    return device is not None and devices[device] is None
+
+
 def find_happening_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     """
     사건 규칙에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만, 정한 순서로 적는다(#367).
@@ -801,10 +837,12 @@ def find_happening_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     가리키는 것은 붙인 로어북의 사건 항목이어야 한다. 조건은 퀘스트의 조건과 같이 본다(condition_problem).
     효과의 장소는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 맵이 없는 판이면 어느 장소도 맵에 없다.
     옮기는 인물(move_npc)은 붙인 로어북의 인물 항목이어야 한다.
+    문을 다루는 효과(#281)는 판의 길 중 문이 있는 것을 가리켜야 하고, 장치를 적었으면 그 길에 있어야 한다.
     """
     entries = lore_entries(parts)
     rules = read_happenings(scenario)
-    on_map = set(map_places(scenario, read_routes(scenario)))
+    routes = read_routes(scenario)
+    on_map = set(map_places(scenario, routes))
     found = set()
     if any(rule.entry_id not in entries for rule in rules):
         found.add(Problem.HAPPENING_ENTRY_MISSING)
@@ -819,6 +857,8 @@ def find_happening_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
         found.add(Problem.HAPPENING_PLACE_OFF_MAP)
     if any(npc not in person_ids(parts) for npc in moved_npcs(rules)):
         found.add(Problem.HAPPENING_NPC_NOT_PERSON)
+    if any(door_effect_invalid(effect, routes) for effect in route_effects(rules)):
+        found.add(Problem.HAPPENING_ROUTE_INVALID)
     order = [
         Problem.HAPPENING_ENTRY_MISSING,
         Problem.HAPPENING_NOT_EVENT,
@@ -827,6 +867,7 @@ def find_happening_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
         Problem.HAPPENING_CONDITION_IMPOSSIBLE,
         Problem.HAPPENING_PLACE_OFF_MAP,
         Problem.HAPPENING_NPC_NOT_PERSON,
+        Problem.HAPPENING_ROUTE_INVALID,
     ]
     return [problem for problem in order if problem in found]
 

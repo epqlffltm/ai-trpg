@@ -175,7 +175,9 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-57: 문을 다루는 행동(#281). 한 일의 줄에 문의 결과가 붙고((문: 광장 쪽 문. 빗장을 걸었다)),
 #                 나가는 길에 빗장과 부서진 문이 붙는다(창고(빗장 걸림), 지하실(부서진 문)).
 #                 가기의 줄에 빗장을 푼 것과 반대쪽 빗장에 막힌 것이 붙는다. 다루는 법에 빗장이 더해진다
-PROMPT_VERSION = 'narration-57'
+#   narration-58: 판의 사건이 다룬 길의 문(#281). 일행이 그 길의 끝에 있으면 일어난 사건의 줄에 옮겨진 사람 뒤로
+#                 붙는다(성문 ↔ 광장 빗장 걸림). 사건의 다루는 법에 문은 장면이 끝날 때 그 상태라는 말이 더해진다
+PROMPT_VERSION = 'narration-58'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
@@ -517,6 +519,7 @@ HAPPENING_TITLE = '[일어난 사건]'
 HAPPENING_NOTE = (
     '이번 라운드가 끝날 때 게임이 일으킨 사건이다. 정해진 일이니 그대로 따른다. '
     '옮겨진 인물은 장면이 끝날 때 이미 그곳에 있다. 왜, 어떻게 그곳에 가게 됐는지를 장면 속 일로 그려라. '
+    '잠기거나 열린 문은 장면이 끝날 때 그 상태다. 누가 그렇게 했는지는 장면에 맞게 그려도 된다. '
     '사건을 막아 내거나 없던 일로 쓰지 마라.'
 )
 # 옮겨진 사람이 없는 사건(모두 이미 그곳에 있었다)에 붙이는 말
@@ -844,11 +847,15 @@ def happening_lines(happenings: list[HappeningNote]) -> list[str]:
     이번 라운드가 닫힐 때 일어난 판의 사건을 적는 줄들. 다루는 법 한 줄과 사건마다 한 줄(narration-47).
 
     예: - 무너지는 다리: 기사 → 강 하류, 약사 → 강 하류
+        - 경비 교대: 성문 ↔ 광장 빗장 걸림(다룬 문은 옮겨진 사람 뒤에 붙는다, #281)
     끝에 빈 줄이 붙는다. 일어난 사건이 없으면 빈 목록이다.
     """
     if not happenings:
         return []
-    lines = [f'- {happening.name}: {", ".join(happening.moved) or HAPPENING_NO_MOVE}' for happening in happenings]
+    lines = [
+        f'- {happening.name}: {", ".join([*happening.moved, *happening.doors]) or HAPPENING_NO_MOVE}'
+        for happening in happenings
+    ]
     return [HAPPENING_TITLE, HAPPENING_NOTE, *lines, '']
 
 
