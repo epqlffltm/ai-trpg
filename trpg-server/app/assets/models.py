@@ -113,6 +113,8 @@ SCENARIO_MAX_ENCOUNTERS = 50
 ENCOUNTER_MAX_COUNT = 10
 # 시나리오 하나에 둘 수 있는 놓인 물건의 줄 수(장소, 물건, 보이는지의 짝). 한 줄의 개수는 한 가지의 상한(99)까지다
 SCENARIO_MAX_PLACE_ITEMS = 100
+# 시나리오 하나의 커버(장소마다 숨을 곳, #276 의 커버 세이브)의 상한. 장소마다 하나다
+SCENARIO_MAX_COVERS = 100
 # 시나리오 하나에 둘 수 있는 사건 규칙(조건이 채워지면 한 번 일어나는 일, #367)의 수와, 사건 하나의 효과의 수.
 # 조건의 수는 퀘스트와 같다(QUEST_MAX_CONDITIONS)
 SCENARIO_MAX_HAPPENINGS = 50
@@ -607,6 +609,7 @@ class Scenario(AssetContent):
         ),
         CheckConstraint(f'jsonb_array_length(encounters) <= {SCENARIO_MAX_ENCOUNTERS}', name='encounters_count'),
         CheckConstraint(f'jsonb_array_length(place_items) <= {SCENARIO_MAX_PLACE_ITEMS}', name='place_items_count'),
+        CheckConstraint(f'jsonb_array_length(covers) <= {SCENARIO_MAX_COVERS}', name='covers_count'),
         CheckConstraint(f'jsonb_array_length(happenings) <= {SCENARIO_MAX_HAPPENINGS}', name='happenings_count'),
         CheckConstraint(f'jsonb_array_length(npc_places) <= {SCENARIO_MAX_NPC_PLACES}', name='npc_places_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
@@ -735,6 +738,11 @@ class Scenario(AssetContent):
     # 숨긴 물건(hidden)은 찾는 판정(find)으로 드러난다. 테이블을 시작할 때 줄마다 남은 개수를 만든다
     # (app/tables/place_items.py). 가져가면 그 테이블에서 줄어든다. 판은 그대로다
     place_items: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 커버들(#276 의 커버 세이브). 하나하나가 {place_id, cover} 다. "이 장소에는 숨을 곳이 cover 만큼 좋다"는 뜻이다.
+    # 장소는 맵의 장소다. 그 장소에서 엄폐한(cover 행동) 앉은 사람은 그 라운드에 이 값으로 커버 세이브를 받는다.
+    # 세이브 방식의 룰북에서만 쓰인다. 다른 방식이면 엄폐를 받지 않는다(app/rounds/covers.py)
+    covers: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 사건 규칙들(#367). 하나하나가 {entry_id, when, match, effects} 다. "이 조건이 채워지면 이 일이 한 번 일어난다"는
     # 뜻이다. 사건은 붙인 로어북의 사건 항목이고, 조건의 모양은 퀘스트의 것과 같다.

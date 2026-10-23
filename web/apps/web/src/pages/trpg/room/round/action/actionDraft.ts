@@ -155,6 +155,7 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
   switch (draft.kind) {
     case 'none':
     case 'search':
+    case 'cover':
       return null;
     case 'check':
       return checkHint(draft, ctx.table.rules);
@@ -254,6 +255,8 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return { kind: 'move', place: draft.place, ...(draft.carry ? { carry: draft.carry } : {}) };
     case 'search':
       return { kind: 'search' };
+    case 'cover':
+      return { kind: 'cover' };
     case 'take':
       return { kind: 'take', item: draft.item, count: Math.min(draft.count, placeCount(ctx, draft.item)) };
     case 'put_down':

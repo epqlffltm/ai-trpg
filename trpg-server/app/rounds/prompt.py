@@ -167,7 +167,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 장소가 적힌 인물은 그곳에 있고 서술이 다른 곳으로 옮기지 못한다는 줄이 함께 간다.
 #                 판의 사건이 옮긴 인물 중 일행이 본 것이 일어난 사건의 줄에 캐릭터처럼 붙는다(경비대장 → 병영).
 #                 자리가 있는 인물이 없는 판의 글은 그대로다
-PROMPT_VERSION = 'narration-54'
+#   narration-55: 엄폐한 사람의 한 일의 줄에 숨은 곳과 그 커버((엄폐: 무너진 담, 커버 4))가 붙고, 세이브에 커버 세이브
+#                 (커버 세이브 4: 막음)가 있다(#276). 엄폐가 없는 라운드의 글은 그대로다
+PROMPT_VERSION = 'narration-55'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

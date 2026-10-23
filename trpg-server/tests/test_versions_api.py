@@ -460,6 +460,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'routes': [],
         'landmarks': [],
         'place_items': [],
+        'covers': [],
         'happenings': [],
         'npc_places': [],
         'player_made_hp': None,

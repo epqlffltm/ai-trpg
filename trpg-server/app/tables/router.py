@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from app.assets.models import PLAYER_MADE_MODES, CharacterMode
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
-from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, cover_at, read_snapshot
 from app.auth.dependencies import CurrentUser
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import Change
@@ -317,7 +317,12 @@ def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, Catalo
         return None
     return MapOut(
         places=[
-            PlaceOut(entry_id=place.id, name=place.name, items=to_place_items(table, place.id, catalog))
+            PlaceOut(
+                entry_id=place.id,
+                name=place.name,
+                items=to_place_items(table, place.id, catalog),
+                cover=cover_at(snapshot, place.id),
+            )
             for place in known.places
         ],
         routes=[

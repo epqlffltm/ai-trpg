@@ -37,6 +37,7 @@ from app.assets.models import (
 from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import (
+    CoverRule,
     Encounter,
     FindCheck,
     HappeningEffect,
@@ -138,6 +139,8 @@ class Problem(enum.StrEnum):
     PLACE_ITEM_OFF_MAP = 'place_item_off_map'
     # 숨긴 물건을 찾는 판정의 능력치나 난이도가 룰북의 규칙에 없다
     PLACE_ITEM_FIND_INVALID = 'place_item_find_invalid'
+    # 커버의 장소가 맵의 장소가 아니다(시작 장소, 길의 끝, 명소). 맵에 없는 장소에는 아무도 서지 못한다(#276)
+    COVER_OFF_MAP = 'cover_off_map'
     # 붙인 로어북에 없는 항목을 가리키는 사건 규칙이 있다(#367)
     HAPPENING_ENTRY_MISSING = 'happening_entry_missing'
     # 사건이 아닌 항목(인물, 물건 …)을 가리키는 사건 규칙이 있다
@@ -884,6 +887,24 @@ def find_npc_place_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     return problems
 
 
+def read_covers(scenario: Scenario) -> list[CoverRule]:
+    """장소마다의 커버를 읽는다."""
+    return [CoverRule.model_validate(document) for document in scenario.covers]
+
+
+def find_cover_problems(scenario: Scenario) -> list[Problem]:
+    """
+    커버에서 문제를 찾는다(#276). 장소는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소).
+
+    맵의 장소가 장소 항목인지는 맵과 함께 본다(find_map_problems). 룰북이 세이브 방식이 아니어도 막지 않는다.
+    룰북을 고쳐 세이브 방식으로 바꿀 수 있다. 그때까지 엄폐를 받지 않을 뿐이다.
+    """
+    on_map = set(map_places(scenario, read_routes(scenario)))
+    if any(rule.place_id not in on_map for rule in read_covers(scenario)):
+        return [Problem.COVER_OFF_MAP]
+    return []
+
+
 def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
     """
     맵(시작 장소, 길, 명소)에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
@@ -945,6 +966,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_combat_problems(scenario, ruleset))
     problems.extend(find_map_problems(scenario, parts, ruleset))
     problems.extend(find_place_item_problems(scenario, ruleset))
+    problems.extend(find_cover_problems(scenario))
     problems.extend(find_happening_problems(scenario, parts))
     problems.extend(find_npc_place_problems(scenario, parts))
     problems.extend(find_seating_problems(scenario))

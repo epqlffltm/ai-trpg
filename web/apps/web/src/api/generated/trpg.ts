@@ -2490,6 +2490,82 @@ export interface components {
             source: string;
         };
         /**
+         * CoverAction
+         * @description 지금 서 있는 장소의 숨을 곳에 엄폐하는 행동(app/rounds/covers.py, #276 의 커버 세이브). 받는 값이 없다.
+         *
+         *     그 라운드 동안 그 장소의 커버로 커버 세이브를 받는다. 차례를 기다리지 않는다. 숨는 것은 공격에 앞선다.
+         *     그 라운드의 행동을 쓰므로 공격하지 못한다. 그것이 대가다.
+         *     세이브 방식의 룰북에서, 커버가 있는 장소에 서 있을 때만 받는다. 서술이 "벽 뒤에 숨었다"고 써도 엄폐가 아니다.
+         */
+        CoverAction: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "cover";
+        };
+        /**
+         * CoverOut
+         * @description 엄폐한 결과(#276 의 커버 세이브). 엔진이 정했다(app/rounds/covers.py). 굴림이 없다.
+         *
+         *     place 는 숨은 장소, value 는 그 장소의 커버다. 그 라운드 동안 맞힌 공격에 이 값으로 커버 세이브를 굴렸다
+         *     (판정의 blow.save, 몬스터·인물의 차례의 blow.save 의 kind 가 cover). 0 이면 커버가 없는 곳이라 숨지 못했다.
+         */
+        CoverOut: {
+            place: components["schemas"]["PlaceRefOut"] | null;
+            /** Value */
+            value: number;
+        };
+        /**
+         * CoverOutcome
+         * @description 엄폐하는 행동의 결과.
+         */
+        CoverOutcome: {
+            cover: components["schemas"]["CoverOut"];
+        };
+        /**
+         * CoverRule
+         * @description 장소 하나의 커버(#276 의 커버 세이브). 그 장소(place_id)에 숨을 곳이 얼마나 좋은지(cover, 1~10)다.
+         *
+         *     그 장소에서 엄폐한(cover 행동) 앉은 사람은 그 라운드에 이 값으로 커버 세이브를 받는다(app/rounds/covers.py).
+         *     세이브 방식의 룰북에서만 쓰인다. 장소가 맵의 장소인지는 게시할 때 본다.
+         */
+        "CoverRule-Input": {
+            /** Cover */
+            cover: number;
+            /**
+             * Place Id
+             * Format: uuid
+             */
+            place_id: string;
+        };
+        /**
+         * CoverRule
+         * @description 장소 하나의 커버(#276 의 커버 세이브). 그 장소(place_id)에 숨을 곳이 얼마나 좋은지(cover, 1~10)다.
+         *
+         *     그 장소에서 엄폐한(cover 행동) 앉은 사람은 그 라운드에 이 값으로 커버 세이브를 받는다(app/rounds/covers.py).
+         *     세이브 방식의 룰북에서만 쓰인다. 장소가 맵의 장소인지는 게시할 때 본다.
+         */
+        "CoverRule-Output": {
+            /** Cover */
+            cover: number;
+            /** Place Id */
+            place_id: string;
+        };
+        /**
+         * CoverSnapshot
+         * @description 장소 하나의 커버. 판 안의 장소 항목 하나(place_id)에 숨을 곳이 얼마나 좋은지(cover)다.
+         */
+        CoverSnapshot: {
+            /** Cover */
+            cover: number;
+            /**
+             * Place Id
+             * Format: uuid
+             */
+            place_id: string;
+        };
+        /**
          * CreditWaitUpdate
          * @description 크레딧이 모자란 사람을 기다리는 규칙을 바꿀 때 받는 값. 둘 다 적는다. 칸을 빼먹으면 거부한다.
          */
@@ -2607,13 +2683,13 @@ export interface components {
          */
         DeclarationOut: {
             /** Action */
-            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"]) | null;
+            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"]) | null;
             /** Character Name */
             character_name: string;
             /** Content */
             content: string | null;
             /** Outcome */
-            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
+            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["CoverOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
             /**
              * User Id
              * Format: uuid
@@ -2629,7 +2705,7 @@ export interface components {
          */
         DeclarationUpdate: {
             /** Action */
-            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"]) | null;
+            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"]) | null;
             /** Content */
             content: string;
         };
@@ -5306,8 +5382,15 @@ export interface components {
          *     장소의 글은 싣지 않는다. 로어북은 AI 가 읽는 설정이다.
          *     items 는 그곳에 보이게 놓인 물건들이다. 누군가 서 본 장소만 싣는다. 숨긴 물건은 싣지 않는다
          *     (app/tables/place_items.py). 캐릭터가 내려놓은 것(put_down)도 여기 보인다. 줍기(take)로 가져간다.
+         *     cover 는 그 장소의 숨을 곳이 얼마나 좋은지다(#276). 세이브 방식의 판에서 엄폐하면 이 값으로 커버 세이브를 받는다.
+         *     커버가 없는 곳이면 0 이다.
          */
         PlaceOut: {
+            /**
+             * Cover
+             * @default 0
+             */
+            cover: number;
             /**
              * Entry Id
              * Format: uuid
@@ -6554,7 +6637,8 @@ export interface components {
         };
         /**
          * SaveOut
-         * @description 세이브 굴림(#276). kind 는 armor(그 부위의 방어) 또는 ward(불굴). 눈 + value 가 target 이상이면 막았다.
+         * @description 세이브 굴림(#276). kind 는 armor(그 부위의 방어), cover(엄폐한 장소의 커버), ward(불굴) 중 하나다.
+         *     눈 + value 가 target 이상이면 막았다.
          */
         SaveOut: {
             /** Kind */
@@ -6597,6 +6681,11 @@ export interface components {
              *     }
              */
             clock: components["schemas"]["Clock"];
+            /**
+             * Covers
+             * @default []
+             */
+            covers: components["schemas"]["CoverRule-Input"][];
             currency?: components["schemas"]["Currency"] | null;
             default_npc_sheet?: components["schemas"]["Sheet"] | null;
             default_sheet?: components["schemas"]["Sheet"] | null;
@@ -6713,6 +6802,8 @@ export interface components {
             /** Character Modes */
             character_modes: components["schemas"]["CharacterMode"][];
             clock: components["schemas"]["Clock"];
+            /** Covers */
+            covers: components["schemas"]["CoverRule-Output"][];
             /**
              * Created At
              * Format: date-time
@@ -6825,7 +6916,7 @@ export interface components {
          *     null 을 보내면 비운다.
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-         *     quests, routes, landmarks, place_items, happenings, npc_places, character_modes 는
+         *     quests, routes, landmarks, place_items, covers, happenings, npc_places, character_modes 는
          *     보낸 목록으로 통째로 바꾼다.
          *     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
          *     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -6836,6 +6927,8 @@ export interface components {
             /** Character Modes */
             character_modes?: components["schemas"]["CharacterMode"][] | null;
             clock?: components["schemas"]["Clock"] | null;
+            /** Covers */
+            covers?: components["schemas"]["CoverRule-Input"][] | null;
             currency?: components["schemas"]["Currency"] | null;
             default_npc_sheet?: components["schemas"]["Sheet"] | null;
             default_sheet?: components["schemas"]["Sheet"] | null;
@@ -7098,6 +7191,11 @@ export interface components {
              *     }
              */
             clock: components["schemas"]["ClockSnapshot"];
+            /**
+             * Covers
+             * @default []
+             */
+            covers: components["schemas"]["CoverSnapshot"][];
             currency?: components["schemas"]["CurrencySnapshot"] | null;
             default_npc_sheet: components["schemas"]["Sheet"] | null;
             default_sheet: components["schemas"]["Sheet"] | null;
@@ -7110,7 +7208,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 50
+             * @default 51
              */
             format: number;
             /**

@@ -19,6 +19,7 @@
 from app.engine.ruleset import Outcome
 from app.rounds.narrator import (
     BlowNote,
+    CoverNote,
     DeathSaveNote,
     DownedStrikeNote,
     DropNote,
@@ -82,7 +83,7 @@ def describe_verdict(verdict: Verdict) -> str:
 # 방어가 한 일(#276). 규칙의 방어 방식마다다
 ARMOR_EFFECTS = {'ac': '목표값에 더함', 'reduce': '피해에서 뺌', 'save': '세이브'}
 # 세이브의 종류(#276)
-SAVE_KINDS = {'armor': '아머', 'ward': '불굴'}
+SAVE_KINDS = {'armor': '아머', 'cover': '커버', 'ward': '불굴'}
 
 
 def describe_blow(note: BlowNote) -> str:
@@ -280,6 +281,18 @@ def describe_wait(note: WaitNote) -> str:
     if not note.waited:
         return f'(기다리기: {asked}. {WAIT_BREAKS.get(note.reason, "시간이 건너뛰지 않았다")})'
     return f'(기다리기: {asked})'
+
+
+def describe_cover(note: CoverNote) -> str:
+    """
+    엄폐하는 행동의 결과를 한 줄로 적는다(#276). 막았는지는 판정과 차례의 줄의 세이브에 있다.
+
+    예: (엄폐: 무너진 담, 커버 4)
+        (엄폐: 숨을 곳이 없어 숨지 못했다)
+    """
+    if note.value <= 0:
+        return '(엄폐: 숨을 곳이 없어 숨지 못했다)'
+    return f'(엄폐: {note.place}, 커버 {note.value})'
 
 
 def describe_revival(note: RevivalNote) -> str:
@@ -602,6 +615,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_rest(move.rest))
     if move.wait is not None:
         parts.append(describe_wait(move.wait))
+    if move.cover is not None:
+        parts.append(describe_cover(move.cover))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
     if move.revival is not None:

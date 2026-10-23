@@ -129,6 +129,15 @@ export function placeName(map: TableMap, placeId: string | null | undefined): st
 export type Way = { placeId: string; name: string; minutes: number | null };
 
 /** 이 장소에서 아는 길로 갈 수 있는 곳. 한쪽 길은 나가는 쪽만 센다. 이름 차례로 */
+/**
+ * 그 장소의 커버(#276). 세이브 방식의 판에서만 센다(다른 방식이면 엄폐를 받지 않는다). 없으면 0.
+ * 서버의 app/rounds/covers.py 와 같은 조건이다
+ */
+export function placeCover(table: TableDetail, placeId: string | null | undefined): number {
+  if (table.rules.armor?.mode !== 'save' || !placeId) return 0;
+  return table.map?.places.find((place) => place.entry_id === placeId)?.cover ?? 0;
+}
+
 export function waysFrom(map: TableMap, placeId: string | null | undefined): Way[] {
   if (!placeId) return [];
   const ways: Way[] = [];

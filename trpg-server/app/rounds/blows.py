@@ -11,6 +11,8 @@ app/rounds/npc_attacks.py)이 같은 규칙을 쓴다.
     맞는 쪽이 어느 부위에도 방어가 없으면 굴리지 않는다. 어디에 맞아도 같다(모든 부위의 방어만 있어도 같다).
   - 방어: 맞는 쪽이 지금 착용한 것과 타고난 것이다. 앉은 사람은 착용(table_worn), NPC 와 몬스터는 장비 줄의 착용(wear)
     중 아직 지닌 것이다. 몬스터는 부위마다 타고난 방어를 더한다.
+  - 커버: 이번 라운드에 엄폐한 앉은 사람은 그 장소의 커버가 있다(app/rounds/covers.py). 세이브 방식에서만 든다.
+    관통 굴림은 그 부위의 방어와 커버 중 단단한 것을 넘어야 한다. 관통하면 아머도 커버도 막지 못한다.
 결과의 문서(blow)는 판정의 outcome 에 붙는다. 무기도 부위도 방어도 없는 타격이면 붙이지 않는다(그 전과 같다).
 DB 를 모른다. 이미 읽어 온 시트와 장면의 마리와 인물을 받는다.
 """
@@ -46,7 +48,8 @@ class Weapon:
 @dataclass(frozen=True)
 class Blow:
     """
-    타격 하나에 장비가 든 것. 무기, 맞은 부위, 노렸는가, 그 부위의 방어, 관통 굴림, 맞는 쪽의 불굴 세이브의 값이다.
+    타격 하나에 장비가 든 것. 무기, 맞은 부위, 노렸는가, 그 부위의 방어, 관통 굴림, 맞는 쪽의 불굴 세이브의 값과
+    엄폐한 장소의 커버다.
 
     raise_by 는 맞히는 목표값을 올리는 양(ac), cut 은 피해에서 깎는 양(reduce)이다. 규칙의 방어 방식이 정한다.
     관통했으면 둘 다 0 이다. 세이브(save)는 맞힌 뒤에 따로 굴린다(roll_blow_save).
@@ -60,6 +63,7 @@ class Blow:
     cut: int
     pierce: Pierce | None = None
     ward: int = 0
+    cover: int = 0
 
     @property
     def bonus(self) -> int:
@@ -79,10 +83,11 @@ def worn_item(item: CatalogItem | None, slots: Sequence[str]) -> Worn:
 
 
 def member_protection(judging: Judging, member: TableMember) -> Protection:
-    """앉은 사람의 지금 방어. 시트의 착용이다. 시트가 없으면 방어가 없다."""
+    """앉은 사람의 지금 방어. 시트의 착용과, 이번 라운드에 엄폐했으면 그 장소의 커버다. 시트가 없으면 방어가 없다."""
     if member.sheet is None:
         return armor.NO_PROTECTION
-    return armor.protection_of([worn_item(judging.items.get(row.entry_id), row.slots) for row in member.sheet.worn])
+    worn = armor.protection_of([worn_item(judging.items.get(row.entry_id), row.slots) for row in member.sheet.worn])
+    return armor.with_cover(worn, judging.covers.get(member.user_id, 0))
 
 
 def carried_protection(
@@ -147,7 +152,7 @@ def npc_weapon(judging: Judging, person: CastMember, attack: AttackSnapshot) -> 
 def plan_blow(judging: Judging, weapon: Weapon | None, protection: Protection, strike: str | None) -> Blow:
     """
     타격 하나를 준비한다. 판정보다 먼저 굴린다. 노렸으면 그 부위, 아니면 부위를 굴리고, 그 부위의 방어를 센다.
-    무기에 관통력이 있고 그 부위에 방어가 있으면 관통을 굴린다. 관통했으면 방어구가 막지 않는다.
+    무기에 관통력이 있고 그 부위에 방어나 커버가 있으면 관통을 굴린다. 관통했으면 방어구도 커버도 막지 않는다.
 
     맞는 쪽이 어느 부위에도 방어가 없으면 부위를 굴리지 않는다(armor.varies_by_slot). 주사위를 쓸 까닭이 없다.
     """
@@ -156,7 +161,9 @@ def plan_blow(judging: Judging, weapon: Weapon | None, protection: Protection, s
     if location is None and armor.varies_by_slot(protection):
         location = armor.roll_location(ruleset, judging.dice)
     defense = armor.defense_at(protection, location) if ruleset.armor is not None else 0
-    pierce = armor.roll_pierce(ruleset, judging.dice, weapon.ap if weapon is not None else 0, defense)
+    cover = protection.cover if ruleset.armor is not None else 0
+    barrier = armor.barrier(defense, cover)
+    pierce = armor.roll_pierce(ruleset, judging.dice, weapon.ap if weapon is not None else 0, barrier)
     holding = armor.holding(defense, pierce)
     return Blow(
         weapon=weapon,
@@ -167,6 +174,7 @@ def plan_blow(judging: Judging, weapon: Weapon | None, protection: Protection, s
         cut=armor.damage_cut(ruleset, holding),
         pierce=pierce,
         ward=protection.ward if ruleset.armor is not None else 0,
+        cover=cover,
     )
 
 
@@ -174,9 +182,11 @@ def roll_blow_save(judging: Judging, blow: Blow) -> Save | None:
     """
     맞힌 타격에 맞는 쪽이 세이브를 굴린다. 세이브 방식의 규칙이고 막을 값이 있을 때만이다. 아니면 None.
 
-    관통했으면 아머 세이브는 없고 불굴 세이브만 남는다(armor.holding).
+    관통했으면 아머와 커버 세이브는 없고 불굴 세이브만 남는다(armor.holding).
     """
-    return armor.roll_save(judging.ruleset, judging.dice, armor.holding(blow.defense, blow.pierce), blow.ward)
+    defense = armor.holding(blow.defense, blow.pierce)
+    cover = armor.holding(blow.cover, blow.pierce)
+    return armor.roll_save(judging.ruleset, judging.dice, defense, blow.ward, cover)
 
 
 def is_saved(save: Save | None) -> bool:
@@ -215,7 +225,7 @@ def blow_document(ruleset: Ruleset, blow: Blow, save: Save | None = None) -> dic
     mode 는 규칙의 방어 방식, defense 는 맞은 부위의 방어다. 깎인 피해는 변화(effect)의 rolls 와 amount 의 차이다.
     pierce 는 관통 굴림, save 는 세이브 굴림이다. 굴리지 않았으면 None 이다.
     """
-    if blow.weapon is None and blow.location is None and blow.defense == 0 and save is None:
+    if blow.weapon is None and blow.location is None and blow.defense == 0 and blow.pierce is None and save is None:
         return None
     return {
         'weapon': weapon_document(blow.weapon),

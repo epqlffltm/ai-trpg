@@ -61,6 +61,9 @@ class Judging:
     # 라운드를 닫기 시작할 때 이미 쓰러져 있던(죽지 않은) 앉은 사람들(user_id).
     # 몬스터와 NPC 는 이들도 칠 수 있다. 이번 라운드에 쓰러진 사람은 들지 않는다(app/rounds/downed_strikes.py)
     downed_at_start: frozenset[uuid.UUID] = frozenset()
+    # 이번 라운드에 엄폐한 앉은 사람들과 그 장소의 커버(user_id → 커버, #276). 판정을 시작하기 전에 정한다.
+    # 그 라운드 동안 그 사람의 세이브에 든다(app/rounds/covers.py, app/rounds/blows.py)
+    covers: dict[uuid.UUID, int] = field(default_factory=dict)
 
 
 def mark_fight(judging: Judging, monster: TableMonster, member: TableMember) -> None:

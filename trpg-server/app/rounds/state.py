@@ -182,6 +182,13 @@ def rest_of(declaration: Declaration | None) -> dict | None:
     return declaration.outcome.get('rest')
 
 
+def cover_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 엄폐하기의 결과(app/rounds/covers.py). 엄폐하는 행동이 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('cover')
+
+
 def wait_of(declaration: Declaration | None) -> dict | None:
     """이 선언에 적힌 기다리기의 결과(app/rounds/waits.py). 기다리는 행동이 아니었거나 결과가 없으면 None."""
     if declaration is None or declaration.outcome is None:

@@ -653,12 +653,12 @@ def test_a_cut_takes_off_the_roll_but_not_below_zero():
 
 
 def judging_with(ruleset=SRD5, rolls=()) -> SimpleNamespace:
-    return SimpleNamespace(ruleset=ruleset, dice=ScriptedDice(list(rolls)), items=CATALOG)
+    return SimpleNamespace(ruleset=ruleset, dice=ScriptedDice(list(rolls)), items=CATALOG, covers={})
 
 
 def member_wearing(*worn: tuple[uuid.UUID, list[str]]) -> SimpleNamespace:
     rows = [SimpleNamespace(entry_id=entry_id, slots=slots) for entry_id, slots in worn]
-    return SimpleNamespace(sheet=SimpleNamespace(worn=rows))
+    return SimpleNamespace(user_id=uuid.uuid4(), sheet=SimpleNamespace(worn=rows))
 
 
 def test_a_member_is_protected_by_what_is_worn():
