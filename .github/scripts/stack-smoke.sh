@@ -1449,6 +1449,8 @@ check_proxy() {
   report "프록시는 서버끼리만 부르는 게임 주소를 막는다" status_is 404 "$PROXY/api/v1/game/service/users/00000000-0000-4000-8000-000000000000/withdrawal" -X POST
   # 게시판 서버에 닿으면 서명이 없어 401 이다
   report "프록시는 서버끼리만 부르는 게시판 주소를 막는다" status_is 404 "$PROXY/api/v1/board/service/users/00000000-0000-4000-8000-000000000000/withdrawal" -X POST
+  # chat 서버에 닿으면 서명이 없어 401 이다(#670)
+  report "프록시는 서버끼리만 부르는 chat 주소를 막는다" status_is 404 "$PROXY/api/v1/chat/service/users/00000000-0000-4000-8000-000000000000/withdrawal" -X POST
   report "프록시는 서버의 상태 확인 주소를 막는다" status_is 404 "$PROXY/health"
   report "프록시는 서버의 준비 확인 주소를 막는다" status_is 404 "$PROXY/health/ready"
   # asset-server 가 X-Accel-Redirect 로만 넘기는 내부 위치다(#566). 바깥에서 부르면 404 다

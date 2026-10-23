@@ -76,13 +76,17 @@ class Generation(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('conversations.id', ondelete='CASCADE'), index=True)
+    # 대화와 말을 가리키는 칸은 그것이 지워지면 비운다(SET NULL). 기록은 남는다.
+    # 대화가 지워지는 것은 탈퇴뿐이다(app/withdrawal/, #670). 남은 기록은 결제 서버의 원장과 맞추고 원가를 셀 때 쓴다
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('conversations.id', ondelete='SET NULL'), index=True
+    )
     # 크레딧을 내는 사람(인증 서버의 public_id)
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     # 무엇에 답했나(사람의 말). 저장된 답(message_id)의 부모다
-    parent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('messages.id', ondelete='CASCADE'))
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('messages.id', ondelete='SET NULL'))
     # 저장된 답. 글자 없이 실패했거나 아직 끝나지 않았으면 비어 있다
-    message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('messages.id', ondelete='CASCADE'), default=None)
+    message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('messages.id', ondelete='SET NULL'), default=None)
     model_slug: Mapped[str] = mapped_column(ForeignKey('ai_models.slug', ondelete='RESTRICT'))
 
     # 결제 서버의 홀드의 이름표(chat:gen:<id>)와 가격표 이름(chat.<이름표>.i0.o0)

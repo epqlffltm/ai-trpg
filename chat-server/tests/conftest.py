@@ -31,6 +31,8 @@ TEST_SCHEMA = 'chat_test'
 
 # 존재하지 않는 주소. 테스트는 실제 인증 서버에 요청을 보내지 않는다(server_core/testing/tokens.py 의 가짜가 받는다)
 TEST_JWKS_URL = 'http://auth.test/api/v1/auth/jwks'
+# 인증 서버의 테스트용 서명 비밀(탈퇴 알림). 32자 이상이다(설정의 규칙)
+TEST_AUTH_SECRET = 'test-auth-secret-0123456789abcdef'
 
 
 def make_test_settings(**overrides) -> Settings:
@@ -57,6 +59,8 @@ def make_test_settings(**overrides) -> Settings:
         # 요청 수 제한을 끈다. Redis 를 부르지 않는다. 제한을 보는 테스트(tests/test_limits.py)만 켠다
         'limits_enabled': False,
         'redis_url': '',
+        # 인증 서버의 탈퇴 알림을 받는다(tests/test_withdrawal.py). 비밀을 비워 받지 않는 것을 보는 테스트는 따로 만든다
+        'auth_server_secret': TEST_AUTH_SECRET,
     }
     values.update(overrides)
     return Settings(**values)

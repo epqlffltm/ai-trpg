@@ -812,7 +812,7 @@ class ConsentRecord(models.Model):
 class WithdrawalTarget(models.TextChoices):
     """
     탈퇴를 알릴 서버(#603). 탈퇴를 마칠 때 모든 서버에 줄을 적는다. 비밀을 적은 서버에만 보낸다(withdrawal_client.py).
-    새 서버(chat, story)는 받는 주소를 만들 때 여기와 withdrawal_client.DESTINATIONS 에 더한다.
+    새 서버(story)는 받는 주소를 만들 때 여기와 withdrawal_client.DESTINATIONS 에 더한다.
     """
 
     BILLING = 'billing', '결제 서버'
@@ -820,6 +820,7 @@ class WithdrawalTarget(models.TextChoices):
     GAME = 'game', '게임 서버'
     BOARD = 'board', '게시판 서버'
     ASSET = 'asset', 'asset 서버'
+    CHAT = 'chat', 'chat 서버'
 
 
 class WithdrawalNotice(models.Model):
