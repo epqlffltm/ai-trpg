@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { TableSummary } from '../../../api/types';
 import { ratingBadge } from '../../home/labels';
 import { durationLabel, narrationStyleLabel } from '../labels';
+import { stepName } from '../models/modelChoice';
 import { narrationModelsQuery } from '../queries';
 
 type Props = { table: TableSummary; busy: boolean; disabled: boolean; onJoin: () => void };
@@ -43,12 +44,21 @@ export function tableFacts(table: TableSummary, modelName: string | null): strin
     table.has_password ? '비밀번호' : null,
     `문체 ${narrationStyleLabel(table.narration_style)}`,
     `라운드 ${durationLabel(table.round_time_limit)}`,
-    modelName ? `모델 ${modelName}` : null,
+    modelName ? `모델 ${modelName}${stepsNote(table)}` : null,
     `크레딧 기다림 ${durationLabel(table.credit_wait_seconds)}${table.remove_short_payers ? '' : '(빼지 않음)'}`,
     table.whisper_notice ? '쪽지 알림' : null,
     table.references_enabled ? '참고 자료' : null,
   ];
   return facts.filter((fact): fact is string => fact !== null);
+}
+
+/** 기본이 아닌 단계만 적는다. "(기억 1단계, 장면 2단계)" */
+function stepsNote(table: TableSummary): string {
+  const parts = [
+    table.input_step > 0 ? `기억 ${stepName(table.input_step)}` : null,
+    table.output_step > 0 ? `장면 ${stepName(table.output_step)}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? `(${parts.join(', ')})` : '';
 }
 
 /** 모델의 이름표를 보일 이름으로. 목록에 없으면(팔지 않음, 읽지 못함) 이름표 그대로 */
