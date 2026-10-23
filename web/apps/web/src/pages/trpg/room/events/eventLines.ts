@@ -8,7 +8,7 @@
 // 글은 "누가: 무엇" 꼴이다. 이름 뒤의 조사를 고르지 않아도 되게.
 
 import type { TableDetail, TableEvent } from '../../../../api/types';
-import { NARRATION_STYLE_VALUES, durationLabel, narrationStyleLabel } from '../../labels';
+import { NARRATION_STYLE_VALUES, attitudeLabel, durationLabel, narrationStyleLabel } from '../../labels';
 import { dayLabel, stepName } from '../../models/modelChoice';
 import { amountLabel } from '../money';
 import { blowLine, type Blow } from '../round/roundView';
@@ -116,7 +116,6 @@ function questText(payload: Payload): string {
   return `퀘스트 「${text(payload, 'name') ?? ''}」: ${known ? questStatusLabel(status) : (status ?? '')}`;
 }
 
-const ATTITUDES: Record<string, string> = { friendly: '우호', neutral: '중립', wary: '경계', hostile: '적대' };
 
 /** 인물과 몬스터의 피해와 회복. HP 의 숫자는 보이지 않는다(서버가 싣지 않는다) */
 function changeText(payload: Payload, fallback: string): string {
@@ -320,7 +319,7 @@ const DESCRIBE: Record<EventType, Describe> = {
     `${who(p, ctx, e)}: HP ${count(p, 'before') ?? '?'} → ${count(p, 'after') ?? '?'}${flag(p, 'downed') ? ' · 쓰러짐' : ''}`,
   npc_changed: (p) => changeText(p, '인물'),
   monster_changed: (p) => changeText(p, '몬스터'),
-  npc_attitude_changed: (p) => `${text(p, 'name') ?? '인물'}: 태도 ${ATTITUDES[text(p, 'attitude') ?? ''] ?? '?'}`,
+  npc_attitude_changed: (p) => `${text(p, 'name') ?? '인물'}: 태도 ${attitudeLabel(text(p, 'attitude') ?? '') ?? '?'}`,
   monster_attacked: (p, ctx, e) => attackText(p, ctx, e),
   npc_attacked: (p, ctx, e) => attackText(p, ctx, e),
   injury_gained: (p, ctx, e) => `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 입음`,

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../test/fakeFetch';
 import { renderApp } from '../../../../test/renderApp';
+import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME } from '../../../../test/tableFixtures';
 import { basicsHints, modelStatusText, type BasicsDraft } from './basicsForm';
 import { toggleId, toMaterialsBody, withChosen } from './materialsForm';
@@ -34,29 +35,9 @@ function summary(id: string, title: string) {
 }
 
 function scenario(extra: Record<string, unknown> = {}) {
-  return {
-    ...summary(ID, '비 내리는 수도원'),
-    rating: 'all',
-    rulebook_id: null,
-    world_id: null,
-    lorebook_ids: [],
-    bestiary_ids: [],
-    openings: [],
-    recommended_players: { min: 1, max: 4 },
-    pregens: [],
-    character_modes: ['pregen', 'custom'],
-    default_sheet: null,
-    player_made_hp: null,
-    reroll_allowed: false,
-    items: [],
-    starting_items: [],
-    currency: null,
-    narration_style: 'classic',
-    narration_model: 'glm-air',
-    narration_model_status: { state: 'ok', retires_on: null, replacement: null },
-    clock: { start_day: 1, start_hour: 8, round_minutes: 10 },
+  return scenarioDetail({
     ...extra,
-  };
+  });
 }
 
 type Routes = Record<string, (request: SeenRequest) => Response>;
