@@ -36,11 +36,11 @@ export function CurrentRound({ table, round, myId, preview, nameOfMember }: Prop
         <>
           <RoundDeadline deadlineAt={round.deadline_at} />
           <WaitingFor ids={round.waiting_for} nameOfMember={nameOfMember} />
-          <DeclarationPanel tableId={table.id} round={round} rules={table.rules} myId={myId} />
+          <DeclarationPanel table={table} round={round} myId={myId} />
           {isHost ? <CloseRoundButton tableId={table.id} round={round} /> : null}
         </>
       ) : (
-        <DeclarationList round={round} rules={table.rules} />
+        <DeclarationList round={round} table={table} />
       )}
       {round.status === 'closing' && playing ? (
         <>

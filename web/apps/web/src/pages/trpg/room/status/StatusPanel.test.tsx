@@ -97,8 +97,8 @@ describe('StatusPanel', () => {
     expect(status.getByRole('tab', { name: /퀘스트·장소/ })).toHaveAttribute('aria-selected', 'true');
     expect(status.getByText('1일째 08:00 · 아침')).toBeInTheDocument();
     expect(status.getByText('진행 중 · 기한 2일째 06:00')).toBeInTheDocument();
-    expect(status.getByText('지금 있는 곳: 수도원 문')).toBeInTheDocument();
-    expect(status.getByText('여기 놓인 것: 횃불 ×1')).toBeInTheDocument();
+    expect(status.getByText(/지금 있는 곳: 수도원 문/)).toBeInTheDocument();
+    expect(within(status.getByRole('list', { name: '여기 놓인 것' })).getByText(/횃불 ×1/)).toBeInTheDocument();
     expect(within(status.getByRole('list', { name: '갈 수 있는 곳' })).getByText('부엌')).toBeInTheDocument();
   });
 

@@ -2,10 +2,10 @@
 // 한 라운드의 선언들과 그 결과, 죽음의 굴림, 새로 들어온 캐릭터.
 // 선언을 받는 동안 남의 선언은 글과 행동이 가려져 온다(null). 그때는 "선언을 냈습니다"만 적는다.
 
-import type { Round, Ruleset } from '../../../../api/types';
+import type { Round, TableDetail } from '../../../../api/types';
 import { actionLabel, deathSaveLine, outcomeLine } from './roundView';
 
-export function DeclarationList({ round, rules }: { round: Round; rules: Ruleset }) {
+export function DeclarationList({ round, table }: { round: Round; table: TableDetail }) {
   if (round.declarations.length === 0 && round.death_saves.length === 0 && round.arrivals.length === 0) return null;
   return (
     <ul className="declarations">
@@ -17,9 +17,9 @@ export function DeclarationList({ round, rules }: { round: Round; rules: Ruleset
           ) : (
             <span className="hint">선언을 냈습니다.</span>
           )}
-          {declaration.action ? <span className="hint">{actionLabel(declaration.action, rules)}</span> : null}
-          {outcomeLine(declaration.outcome) ? (
-            <span className="declaration__outcome">{outcomeLine(declaration.outcome)}</span>
+          {declaration.action ? <span className="hint">{actionLabel(declaration.action, table)}</span> : null}
+          {outcomeLine(declaration.outcome, table.rules) ? (
+            <span className="declaration__outcome">{outcomeLine(declaration.outcome, table.rules)}</span>
           ) : null}
         </li>
       ))}
