@@ -15,11 +15,13 @@
 소개(intro_html)는 asset 서버가 허용 목록으로 거른 HTML 이다. 글자만 꺼내 보낸다. 태그는 모델에게 쓸모없는 토큰이다.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from html.parser import HTMLParser
 
 from ai_core.provider import ChatMessage, Role
 
+from app.conversation.expressions import instruction as expression_instruction
 from app.conversation.suggestions import instruction
 from app.conversation.window import Turn
 
@@ -129,12 +131,13 @@ def render_card(
     scene: str | None = None,
     memory: str | None = None,
     story: str | None = None,
+    expressions: Sequence[str] = (),
 ) -> str:
     """
     시스템 메시지(카드). 지킬 것, 캐릭터, 사용자, 시작 상황, 앞의 줄거리(story), 기억(memory), 지금(scene),
     다음 답 추천의 지시의 차례다. 빈 블록은 뺀다. story 는 창 밖으로 밀려난 앞부분의 요약,
     memory 는 기억 메모(app/memory), scene 은 지금의 장소와 소지품이다(app/world/scene.py).
-    지시는 suggest 일 때만 넣는다.
+    지시는 suggest 일 때만 넣는다. expressions 가 있으면 표정을 고르는 지시를 넣는다(app/conversation/expressions.py).
     지시를 맨 끝에 두어 본문을 다 쓴 뒤의 일임을 분명히 한다.
     """
     sections = [
@@ -145,6 +148,7 @@ def render_card(
         story,
         memory,
         scene,
+        f'[표정]\n{expression_instruction(expressions)}' if expressions else None,
         f'[다음 답 추천]\n{instruction()}' if suggest else None,
     ]
     return '\n\n'.join(section for section in sections if section)

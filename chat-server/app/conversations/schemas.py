@@ -140,6 +140,8 @@ class MessageOut(BaseModel):
     edited: bool = False
     # 이 말에 답하는 차례에 나온 이벤트 씬(판의 이벤트 씬 id, #669). 이 말의 답들이 그림 창에 그 이벤트 씬을 띄운다
     event_scene: str | None = None
+    # 캐릭터의 답에서 모델이 고른 표정. 기본 표정이면 null 이다. 그림은 상태의 sprite 와 SSE 의 expression 에 있다
+    expression: str | None = None
 
 
 class MessageEdit(BaseModel):

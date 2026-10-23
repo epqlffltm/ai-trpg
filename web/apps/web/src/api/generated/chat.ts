@@ -847,6 +847,8 @@ export interface components {
             edited: boolean;
             /** Event Scene */
             event_scene?: string | null;
+            /** Expression */
+            expression?: string | null;
             /**
              * Id
              * Format: uuid
@@ -1010,6 +1012,8 @@ export interface components {
             edited: boolean;
             /** Event Scene */
             event_scene?: string | null;
+            /** Expression */
+            expression?: string | null;
             /**
              * Id
              * Format: uuid

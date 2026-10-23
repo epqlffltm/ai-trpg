@@ -5,7 +5,8 @@
 """
 
 import uuid
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 
@@ -26,6 +27,8 @@ class SavedMessage:
     created_at: datetime
     suggestions: tuple[str, ...] = ()
     event_scene: str | None = None
+    # 모델이 고른 표정(캐릭터 그림의 표정 이름). 기본 표정이면 None
+    expression: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,8 @@ class TurnStart:
     continued: SavedMessage | None = None
     # 행동에 한마디를 덧붙였으면 그 행동 말. user_message 는 한마디이고 이 말 아래에 있다. 아니면 None
     action: SavedMessage | None = None
+    # 모델이 고를 수 있는 표정과 그 캐릭터 그림(app/world/sprites.py 의 expression_images). 비어 있으면 고르지 않는다
+    expressions: Mapping[str, uuid.UUID] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -67,6 +72,8 @@ class TurnResult:
     outcome: Outcome
     error_code: str | None = None
     suggestions: tuple[str, ...] = ()
+    # 모델이 고른 표정. 기본이거나 고르지 않았으면 None
+    expression: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: Decimal | None = None

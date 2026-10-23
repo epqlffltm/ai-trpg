@@ -27,7 +27,7 @@ from app.billing.prices import PriceBook
 from app.billing.routing import Prices
 from app.catalog.models import AiModel
 from app.conversations import service
-from app.conversations.models import Conversation, ConversationPersona, ImportedCharacter, Message
+from app.conversations.models import Conversation, ConversationPersona, ImportedCharacter, Message, Role
 from app.conversations.schemas import (
     BranchChoice,
     CharacterOut,
@@ -158,6 +158,7 @@ def to_message(message: Message) -> MessageOut:
         suggestions=message.suggestions,
         edited=message.edited,
         event_scene=message.event_scene,
+        expression=message.expression,
     )
 
 
@@ -166,6 +167,12 @@ def to_path_message(message: Message, alternatives: dict[uuid.UUID | None, list[
     return PathMessageOut(
         **to_message(message).model_dump(), alternatives=alternatives.get(message.parent_id, [message.id])
     )
+
+
+def last_expression(messages: list[Message]) -> str | None:
+    """가지에서 가장 뒤의 캐릭터의 답이 고른 표정. 그 뒤에 사람의 말이 있어도 그 표정을 이어 띄운다."""
+    answer = next((message for message in reversed(messages) if message.role == Role.ASSISTANT), None)
+    return answer.expression if answer is not None else None
 
 
 def to_detail(
@@ -194,7 +201,7 @@ def to_detail(
         persona=to_persona(persona),
         model=conversation_model(conversation, character, models, book, now),
         messages=[to_path_message(message, alternatives) for message in messages],
-        state=state_out(state, world.document_of(character), conversation.start_hour),
+        state=state_out(state, world.document_of(character), conversation.start_hour, last_expression(messages)),
         generating=service.is_generating(conversation, now),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
