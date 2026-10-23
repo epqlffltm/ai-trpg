@@ -209,7 +209,7 @@ def record_drop(session: AsyncSession, table: GameTable, drop: dict | None, caus
     """
     몬스터나 NPC 를 쓰러뜨려 얻은 물건을 이벤트로 적는다. 그 대상이 쓰러진 변화의 이벤트(cause)에 잇는다.
 
-    방장이 줄 때와 같은 종류(items_gained)를 물건마다 하나씩 적는다. 나온 곳(drop_origin)과
+    물건을 얻은 이벤트(items_gained)를 물건마다 하나씩 적는다. 나온 곳(drop_origin)과
     상한을 넘어 잃은 개수(lost)가 더 붙는다. 받을 사람이 없어 사라졌으면 아무도 얻지 않아 적지 않는다.
     행한 사람(actor_id)을 적지 않는다. 굴리고 준 것은 엔진이다.
     """
@@ -429,7 +429,7 @@ def record_gained(
     place: dict | None,
     cause: TableEvent,
 ) -> None:
-    """장소에서 얻은 물건 한 가지를 items_gained 로 적는다. 방장이 줄 때와 같은 종류에 출처와 장소가 붙는다."""
+    """장소에서 얻은 물건 한 가지를 items_gained 로 적는다. 드롭과 같은 종류에 출처와 장소가 붙는다."""
     payload = {
         'round': cause.payload['round'],
         'user_id': str(declaration.user_id),

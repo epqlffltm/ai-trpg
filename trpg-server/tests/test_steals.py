@@ -338,10 +338,11 @@ async def test_a_success_takes_the_whole_line(client: AsyncClient, app: FastAPI,
     )
 
 
-async def test_what_does_not_fit_stays_with_the_monster(client: AsyncClient, app: FastAPI, me: dict, narrated):
+async def test_what_does_not_fit_stays_with_the_monster(
+    client: AsyncClient, app: FastAPI, me: dict, narrated, session: AsyncSession
+):
     world = await start(client, me)
-    given = await give(client, me, world['table'], ME, world['pelt'], 98)
-    assert given.status_code == status.HTTP_200_OK, given.text
+    await give(session, world['table'], ME, world['pelt'], 98)
 
     stolen = await steal_now(client, app, me, world, '수로 쥐', 'pelt', [20], narrated)
 

@@ -20,6 +20,7 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.rounds.move_lines import describe_put_down
 from app.rounds.narrator import ItemNote, PutDownNote
@@ -51,19 +52,20 @@ def put_down(world: dict, item: str, count: int = 1) -> dict:
     return {'kind': 'put_down', 'item': world[item]['id'], 'count': count}
 
 
-async def stock(client: AsyncClient, me: dict, table: dict, world: dict, item: str, count: int) -> None:
-    """방장이 나(기사)에게 물건을 준다."""
-    given = await give(client, me, table, ME, world[item], count)
-    assert given.status_code == status.HTTP_200_OK, given.text
+async def stock(session: AsyncSession, table: dict, world: dict, item: str, count: int) -> None:
+    """나(기사)에게 물건을 준다. 테스트의 준비다."""
+    await give(session, table, ME, world[item], count)
 
 
 # --- 내려놓기 ---
 
 
-async def test_putting_down_leaves_it_in_sight(client: AsyncClient, me: dict[str, str], narrated):
+async def test_putting_down_leaves_it_in_sight(
+    client: AsyncClient, me: dict[str, str], narrated, session: AsyncSession
+):
     world = await make_world(client, me)
     table = await start(client, me, world, [])
-    await stock(client, me, table, world, 'potion', 3)
+    await stock(session, table, world, 'potion', 3)
 
     await declare(client, me, table, PUT, put_down(world, 'potion', 2))
     await narrated()
@@ -100,10 +102,12 @@ async def test_putting_down_leaves_it_in_sight(client: AsyncClient, me: dict[str
     }
 
 
-async def test_putting_down_all_empties_the_bag(client: AsyncClient, me: dict[str, str], narrated):
+async def test_putting_down_all_empties_the_bag(
+    client: AsyncClient, me: dict[str, str], narrated, session: AsyncSession
+):
     world = await make_world(client, me)
     table = await start(client, me, world, [])
-    await stock(client, me, table, world, 'potion', 2)
+    await stock(session, table, world, 'potion', 2)
 
     await declare(client, me, table, PUT, put_down(world, 'potion', 2))
     await narrated()
@@ -113,10 +117,12 @@ async def test_putting_down_all_empties_the_bag(client: AsyncClient, me: dict[st
     assert (await outcome(client, me, table, 1))['put_down']['remaining'] == 0
 
 
-async def test_putting_down_joins_what_already_lies_there(client: AsyncClient, me: dict[str, str], narrated):
+async def test_putting_down_joins_what_already_lies_there(
+    client: AsyncClient, me: dict[str, str], narrated, session: AsyncSession
+):
     world = await make_world(client, me)
     table = await start(client, me, world, [], place_items=[lying(world, 'gate', 'potion')])
-    await stock(client, me, table, world, 'potion', 2)
+    await stock(session, table, world, 'potion', 2)
 
     await declare(client, me, table, PUT, put_down(world, 'potion', 2))
     await narrated()
@@ -125,11 +131,15 @@ async def test_putting_down_joins_what_already_lies_there(client: AsyncClient, m
 
 
 async def test_someone_picks_it_up_the_next_round(
-    client: AsyncClient, me: dict[str, str], friend: dict[str, str], narrated
+    client: AsyncClient,
+    me: dict[str, str],
+    friend: dict[str, str],
+    narrated,
+    session: AsyncSession,
 ):
     world = await make_world(client, me)
     table = await start(client, me, world, [], friend)
-    await stock(client, me, table, world, 'potion', 1)
+    await stock(session, table, world, 'potion', 1)
 
     await declare(client, me, table, PUT, put_down(world, 'potion'))
     await declare(client, friend, table)
@@ -144,11 +154,14 @@ async def test_someone_picks_it_up_the_next_round(
 
 
 async def test_what_is_put_down_this_round_cannot_be_taken_yet(
-    client: AsyncClient, me: dict[str, str], friend: dict[str, str]
+    client: AsyncClient,
+    me: dict[str, str],
+    friend: dict[str, str],
+    session: AsyncSession,
 ):
     world = await make_world(client, me)
     table = await start(client, me, world, [], friend)
-    await stock(client, me, table, world, 'potion', 1)
+    await stock(session, table, world, 'potion', 1)
     await declare(client, me, table, PUT, put_down(world, 'potion'))
 
     response = await declare_raw(client, friend, table, take(world, 'potion'))
@@ -162,11 +175,13 @@ async def test_what_is_put_down_this_round_cannot_be_taken_yet(
 
 
 @pytest.mark.parametrize(('held', 'count'), [(0, 1), (1, 2)])
-async def test_only_what_is_held_can_be_put_down(client: AsyncClient, me: dict[str, str], held: int, count: int):
+async def test_only_what_is_held_can_be_put_down(
+    client: AsyncClient, me: dict[str, str], held: int, count: int, session: AsyncSession
+):
     world = await make_world(client, me)
     table = await start(client, me, world, [])
     if held:
-        await stock(client, me, table, world, 'potion', held)
+        await stock(session, table, world, 'potion', held)
 
     response = await declare_raw(client, me, table, put_down(world, 'potion', count))
 
@@ -184,10 +199,10 @@ async def test_an_item_not_in_the_rules_cannot_be_put_down(client: AsyncClient, 
     assert 'item' in response.text
 
 
-async def test_off_the_map_nothing_can_be_put_down(client: AsyncClient, me: dict[str, str]):
+async def test_off_the_map_nothing_can_be_put_down(client: AsyncClient, me: dict[str, str], session: AsyncSession):
     world = await make_world(client, me)
     table = await start(client, me, world, [], start_place=None, routes=[], encounters=[])
-    await stock(client, me, table, world, 'potion', 1)
+    await stock(session, table, world, 'potion', 1)
 
     response = await declare_raw(client, me, table, put_down(world, 'potion'))
 
@@ -209,15 +224,18 @@ async def test_the_count_must_be_sensible(client: AsyncClient, me: dict[str, str
 
 
 async def test_what_is_gone_by_the_turn_is_not_put_down(
-    client: AsyncClient, me: dict[str, str], friend: dict[str, str], narrated
+    client: AsyncClient,
+    me: dict[str, str],
+    friend: dict[str, str],
+    narrated,
+    session: AsyncSession,
 ):
     world = await make_world(client, me)
     table = await start(client, me, world, [], friend)
-    await stock(client, me, table, world, 'potion', 1)
+    await stock(session, table, world, 'potion', 1)
     await declare(client, me, table, PUT, put_down(world, 'potion'))
     # 받은 뒤 차례가 오기 전에 물건이 없어졌다
-    taken = await take_away(client, me, table, ME, world['potion'])
-    assert taken.status_code == status.HTTP_200_OK, taken.text
+    await take_away(session, table, ME, world['potion'])
 
     await declare(client, friend, table)
     await narrated()
@@ -276,12 +294,14 @@ def test_put_down_on_an_empty_table_starts_at_zero():
 # --- 서술 ---
 
 
-async def test_the_narrator_sees_what_was_put_down(client: AsyncClient, app: FastAPI, me: dict[str, str], narrated):
+async def test_the_narrator_sees_what_was_put_down(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], narrated, session: AsyncSession
+):
     narrator = RecordingNarrator()
     app.state.narrator = narrator
     world = await make_world(client, me)
     table = await start(client, me, world, [])
-    await stock(client, me, table, world, 'potion', 2)
+    await stock(session, table, world, 'potion', 2)
 
     await declare(client, me, table, PUT, put_down(world, 'potion'))
     await narrated()
