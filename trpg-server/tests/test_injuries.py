@@ -18,6 +18,7 @@ import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,7 +44,6 @@ from app.engine.templates import SRD5
 from app.rounds import prompt
 from app.rounds.narrator import InjuryNote
 from app.tables.models import TableInjury
-from tests.signing import SigningKey
 from tests.test_npc_actions import (
     FAIL,
     NO_INJURY,

@@ -4,13 +4,14 @@
 이용 등급을 가르는 곳(#59, #390). 누가 어느 등급을 보고 쓸 수 있는지는 여기서만 정한다.
 
 공개 목록, 로비, 테이블 만들기와 들어오기, 시나리오 쓰기와 공개가 모두 이것을 부른다.
-토큰의 값(app/auth/tokens.py 의 AccessClaims)만 보고 DB 를 모른다.
+토큰의 값(server_core/auth/tokens.py 의 AccessClaims)만 보고 DB 를 모른다.
 """
 
 from collections.abc import Sequence
 
+from server_core.auth.tokens import AccessClaims
+
 from app.assets.models import Rating
-from app.auth.tokens import AccessClaims
 
 
 class AdultContentRequiredError(Exception):

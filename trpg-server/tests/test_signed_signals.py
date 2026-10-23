@@ -17,6 +17,7 @@ import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from pydantic import SecretStr, ValidationError
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.main import API_PREFIX
@@ -27,7 +28,6 @@ from app.realtime.signing import BAD_SIGNATURE_ERROR_CODE, SignalSigner, signer_
 from tests.conftest import make_test_settings
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 
 SCENARIOS_URL = f'{API_PREFIX}/scenarios'
 RULEBOOKS_URL = f'{API_PREFIX}/rulebooks'

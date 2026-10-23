@@ -10,9 +10,9 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.routing import MAX_PAGE_SIZE, Session
-from app.auth.dependencies import CurrentUser
 from app.chat import service
 from app.chat.responses import to_message
 from app.chat.schemas import MessageCreate, MessageOut, MessagePage

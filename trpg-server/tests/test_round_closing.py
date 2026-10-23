@@ -30,6 +30,7 @@ import pytest
 from ai_core.provider import ProviderError
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,7 +46,6 @@ from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.retrying_narrator import NarrationFailed
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

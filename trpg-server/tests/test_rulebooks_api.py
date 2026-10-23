@@ -13,6 +13,7 @@ import uuid
 import pytest
 from fastapi import status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.models import RULEBOOK_GM_GUIDE_MAX_LENGTH, Asset, AssetType, Rulebook
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
-from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

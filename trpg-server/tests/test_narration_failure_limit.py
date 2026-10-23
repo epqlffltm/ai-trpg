@@ -16,13 +16,13 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.rounds.llm_narrator import NarrationError
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.service import NARRATION_FAILURE_LIMIT
 from tests.billing import PRICES, FakeBillingServer
-from tests.signing import SigningKey
 from tests.test_narration_billing import charges_of, tick
 from tests.test_npc_actions import bearer, declare, events_of, table_url
 from tests.test_round_time_limit import current, start_with

@@ -13,11 +13,11 @@ import logging
 import pytest
 from fastapi import FastAPI
 from opentelemetry.trace import StatusCode, format_trace_id
+from server_core.observability.context import current_ids, job_scope, outgoing_headers, request_scope
+from server_core.observability.identifiers import new_trace
 
 from app.ai_log.retention import PRUNE_OPERATION, AiLogPruner
 from app.core.jobs import BackgroundJobs
-from app.observability.context import current_ids, job_scope, outgoing_headers, request_scope
-from app.observability.identifiers import new_trace
 from app.observability.spans import ATTRIBUTE_JOB_ID, JOB_FAILED_ERROR_CODE, job_span, span_trace, span_traceparent
 from tests.logs import rendered
 from tests.spans import SpanRecorder, hex_span_id, hex_trace_id

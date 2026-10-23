@@ -15,8 +15,8 @@ traceparent 는 부르는 쪽이 이미 붙였을 때만(outgoing_headers, 우�
 
 import httpx
 from opentelemetry.trace import Span, SpanKind, StatusCode
+from server_core.observability.identifiers import TRACEPARENT_HEADER
 
-from app.observability.identifiers import TRACEPARENT_HEADER
 from app.observability.spans import is_recording, span_traceparent, tracer
 
 # client span 의 이름 앞부분. 메서드만 붙인다(HTTP GET). 주소는 값의 종류가 끝없이 늘어 이름에 넣지 않는다

@@ -21,6 +21,7 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient, Response
+from server_core.testing.tokens import FakeAuthServer
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -37,7 +38,6 @@ from app.tables.models import GameTable, TableMember, TableStatus
 from tests import test_events_api as event_tests
 from tests import test_listings_api as listing_tests
 from tests.conftest import TEST_AUTH_SECRET, make_client, make_test_settings
-from tests.signing import FakeAuthServer
 from tests.test_events_api import FRIEND, ME, join, open_table, read_events, start_duo, table_url, types
 
 pytestmark = pytest.mark.usefixtures('clean_tables')

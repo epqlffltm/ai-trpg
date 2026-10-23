@@ -20,6 +20,7 @@ from ai_core.catalog_file import CostEntry, ModelEntry
 from ai_core.provider import Reasoning
 from fastapi import FastAPI
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,7 +60,6 @@ from tests.catalog_rows import add_cost, put_models
 from tests.cleaning import clear_tables, clearing_order
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

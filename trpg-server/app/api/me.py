@@ -11,8 +11,7 @@ import uuid
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel
-
-from app.auth.dependencies import CurrentUser
+from server_core.auth.dependencies import CurrentUser
 
 router = APIRouter(tags=['me'])
 

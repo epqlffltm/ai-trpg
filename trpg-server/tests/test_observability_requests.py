@@ -13,12 +13,12 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi import FastAPI, status
 from httpx import ASGITransport, AsyncClient
+from server_core.testing.tokens import FakeAuthServer, SigningKey, make_access_claims, make_token
 
 from app.core.config import Settings
 from app.main import API_PREFIX, create_app
 from app.observability.middleware import level_of
 from tests.logs import rendered
-from tests.signing import FakeAuthServer, SigningKey, make_access_claims, make_token
 
 REQUEST_LOGGER = 'app.observability.middleware'
 TRACE_ID = '4bf92f3577b34da6a3ce929d0e0e4736'

@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +33,6 @@ from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.picked_narrator import PickedNarrator
 from tests.billing import PRICES, FakeBillingServer
 from tests.narration_model import TEST_MODEL, TEST_PRICE_CODE
-from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, OPUS, FixedPrices, add_enabled, book, on_sale
 from tests.test_narration_billing import charges_of, tick
 from tests.test_npc_actions import bearer, declare, events_of, table_url

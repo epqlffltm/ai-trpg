@@ -28,8 +28,9 @@ import time
 from collections.abc import Coroutine, Mapping
 from dataclasses import dataclass
 
-from app.observability.context import job_scope
-from app.observability.identifiers import new_job_id
+from server_core.observability.context import job_scope
+from server_core.observability.identifiers import new_job_id
+
 from app.observability.metrics import measured_job
 from app.observability.spans import job_span
 

@@ -14,12 +14,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser
+from server_core.auth.tokens import AccessClaims
 
 from app.assets.routing import MAX_PAGE_SIZE, Paging, Session
 from app.assets.scenarios.router import detail_of, to_version_detail
 from app.assets.scenarios.schemas import ScenarioDetail, VersionDetail
-from app.auth.dependencies import CurrentUser
-from app.auth.tokens import AccessClaims
 from app.billing.routing import Now, Prices
 from app.chat.responses import to_message
 from app.chat.schemas import MessagePage

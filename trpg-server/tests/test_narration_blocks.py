@@ -19,6 +19,7 @@ import pytest
 from ai_core.catalog_file import ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.client import BillingRejected, HoldResult
@@ -28,7 +29,6 @@ from app.billing.routing import utc_now
 from app.billing.settling import Readiness, worst
 from app.rounds.service import NARRATION_FAILURE_LIMIT
 from tests.billing import PRICES, FakeBillingServer
-from tests.signing import SigningKey
 from tests.test_model_offers import LUNA, NOW, OPUS, FixedPrices, add_enabled, book, on_sale
 from tests.test_narration_billing import charges_of, tick
 from tests.test_npc_actions import bearer, declare, events_of, table_url

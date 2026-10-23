@@ -23,6 +23,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,7 +40,6 @@ from app.rounds.models import Round
 from tests.billing import FakeBillingServer
 from tests.logs import rendered
 from tests.narration_model import TEST_PRICE_CODE
-from tests.signing import SigningKey
 from tests.test_round_closing import (
     FRIEND,
     FRIENDS_ACTION,

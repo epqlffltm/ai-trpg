@@ -12,6 +12,8 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from server_core.auth import revocations
+from server_core.auth.jwks import JwksCache
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.ai_log import retention
@@ -33,8 +35,6 @@ from app.assets.scenarios.publishing import ScenarioNotReadyError
 from app.assets.scenarios.recommended_model import RecommendedModelError
 from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
 from app.assets.worlds import router as worlds
-from app.auth import revocations
-from app.auth.jwks import JwksCache
 from app.billing import settler
 from app.billing.price_list import PriceListUnavailable
 from app.billing.setup import build_billing, build_price_list
@@ -216,7 +216,7 @@ def create_app(
     # 요청이나 작업 안에서 부르면 client span 을 건다. 우리 서버를 부를 때는 traceparent 를 그 span 으로 잇는다
     app.state.http_client = http_client or traced_client()
     app.state.jwks = JwksCache(app.state.http_client, settings.auth_jwks_url)
-    # 끊긴 세션의 목록(app/auth/revocations.py). 30초마다 받는다. lifespan 이 돌리고 멈춘다
+    # 끊긴 세션의 목록(server_core/auth/revocations.py). 30초마다 받는다. lifespan 이 돌리고 멈춘다
     app.state.revocations = revocations.RevocationList(app.state.http_client, settings.session_revocations_url)
 
     # 스트림을 열어 둔 연결들을 깨우는 방송실과, 다른 요청(다른 서버)이 보낸 신호를 듣는 것.

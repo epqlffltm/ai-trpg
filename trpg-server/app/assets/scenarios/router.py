@@ -17,6 +17,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.models import Scenario, ScenarioVersion
 from app.assets.ratings import allowed_ratings
@@ -37,7 +38,6 @@ from app.assets.scenarios.schemas import (
     VersionSummary,
 )
 from app.assets.scenarios.snapshot import read_snapshot
-from app.auth.dependencies import CurrentUser
 from app.billing.routing import Now, Prices
 from app.lore.indexing import LoreIndexer
 

@@ -13,11 +13,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
+from server_core.auth.dependencies import CurrentUser
 
 from app.assets.bestiaries.router import to_monster_detail
 from app.assets.lorebooks.router import to_entry_detail
 from app.assets.routing import Paging, Session
-from app.auth.dependencies import CurrentUser
 from app.references import service
 from app.references.copying import NotAMonsterError
 from app.references.records import ReferenceKind, StoredReference

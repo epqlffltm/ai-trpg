@@ -1135,7 +1135,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | | 받는 곳(미들웨어) | 들고 있는 곳 | 보내는 곳 |
 | --- | --- | --- | --- |
 | auth-server | `observability/middleware.py` | `observability/context.py` | `accounts/billing_client.py` 의 `outgoing_headers()` |
-| trpg-server | `app/observability/middleware.py` | `app/observability/context.py` | `app/auth/jwks.py`, `app/auth/revocations.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
+| trpg-server | `app/observability/middleware.py` | `server_core/observability/context.py` | `server_core/auth/jwks.py`, `server_core/auth/revocations.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
 | board-server | `src/observability/request-logging.middleware.ts` | `src/observability/request-context.ts` | `src/auth/jwks.ts` 의 `outgoingHeaders()` |
 | billing-server | `internal/httpapi/observability.go` | `internal/obs/context.go` | `internal/jwks/fetch.go` 의 `obs.SetOutgoingHeaders()` |
 | notification-server, asset-server | `server_core/observability/middleware.py` | `server_core/observability/context.py` | `server_core/auth/jwks.py`, `server_core/auth/revocations.py` 의 `outgoing_headers()` |
@@ -1236,7 +1236,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 
 알림 서버의 것(`app/observability/` 의 `spans.py`, `tracing.py`, `request_spans.py`, `http_spans.py`, `db_spans.py`)을 옮겼다. 다른 것은 셋이다.
 
-- **traceparent 는 부르는 쪽이 붙였을 때만 그 span 으로 바꾼다.** 이 서버는 한 클라이언트로 우리 서버(인증, 결제, 알림)와 바깥(AI 모델의 창구)을 함께 부른다. 우리 서버를 부르는 곳은 이미 `outgoing_headers()` 를 붙인다(`app/auth/`, `app/billing/`, `app/notifications/`). transport 는 그 머리말이 있을 때만 client span 의 것으로 바꾸고, 없으면(AI 모델의 창구) 붙이지 않는다. 어디가 우리 서버인지는 부르는 쪽이 안다. client span 은 둘 다 건다(모델의 답을 기다린 시간을 본다).
+- **traceparent 는 부르는 쪽이 붙였을 때만 그 span 으로 바꾼다.** 이 서버는 한 클라이언트로 우리 서버(인증, 결제, 알림)와 바깥(AI 모델의 창구)을 함께 부른다. 우리 서버를 부르는 곳은 이미 `outgoing_headers()` 를 붙인다(`server_core/auth/`, `app/billing/`, `app/notifications/`). transport 는 그 머리말이 있을 때만 client span 의 것으로 바꾸고, 없으면(AI 모델의 창구) 붙이지 않는다. 어디가 우리 서버인지는 부르는 쪽이 안다. client span 은 둘 다 건다(모델의 답을 기다린 시간을 본다).
 - **작업의 span 은 걸린 span 아래에 놓인다**(`job_span`). 요청이 맡긴 서술(`round.narrate`)은 그 요청의 추적에, 시계의 한 바퀴(`round.close_overdue`)가 맡긴 서술은 그 바퀴의 추적에 이어진다. 로그의 `trace_id` 도 같은 것을 이어 쓴다(`job_scope`). 서버가 뜰 때 시작한 정리 작업의 바퀴(`round.close_overdue`, `charge.settle`, `notification.send`, `ai_log.prune`, `model.retirement`)에는 걸린 span 이 없어 바퀴마다 새 추적이다. 알림 서버의 정리 작업도 같은 결과다(부모가 없다).
 - **테이블의 스트림(`/api/v1/game/tables/{table_id}/stream`)은 span 을 걸지 않는다.** 응답이 몇 시간씩 끝나지 않고, 그동안 새 이벤트마다 도는 쿼리가 한 span 아래에 쌓인다. 상태 확인처럼 실제 경로로 가른다(`request_spans.STREAM_PATH`). 스트림 안의 쿼리는 부모가 없어 span 이 없다.
 

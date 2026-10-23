@@ -20,12 +20,12 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.settling import Readiness, worst
 from tests.billing import FakeBillingServer
 from tests.narration_model import TEST_PRICE_CODE
-from tests.signing import SigningKey
 from tests.test_narration_billing import PRICE, charges_of, close_round, tick
 from tests.test_npc_actions import events_of
 from tests.test_round_closing import (

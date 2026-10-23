@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +29,6 @@ from app.listings.models import LISTING_MAX_GENRES, LISTING_MAX_TAGS, TAG_MAX_LE
 from app.main import API_PREFIX
 from tests.narration_model import TEST_MODEL, with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

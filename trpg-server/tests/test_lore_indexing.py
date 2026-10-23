@@ -20,6 +20,7 @@ from ai_core.fake import FakeEmbedder, word_vector
 from ai_core.provider import ProviderError
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +33,6 @@ from app.lore.texts import batched, entry_text, missing_entries, version_entries
 from app.main import API_PREFIX
 from tests.narration_model import with_model
 from tests.sheets import SHEET
-from tests.signing import SigningKey, make_access_claims, make_token
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 

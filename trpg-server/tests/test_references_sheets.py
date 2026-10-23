@@ -18,6 +18,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,7 +41,6 @@ from app.references.sheets import (
     propose,
 )
 from tests.narration_model import with_model
-from tests.signing import SigningKey, make_access_claims, make_token
 from tests.test_references_copy import document
 from tests.test_srd_references import DATA_FILE
 

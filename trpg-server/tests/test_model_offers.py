@@ -18,6 +18,7 @@ from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from ai_core.catalog_file import CostEntry, ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.price_list import PriceListUnavailable
@@ -28,7 +29,6 @@ from app.catalog.models import Grade
 from app.catalog.offers import ModelCard, OfferedModel, grade_disagrees, offer, offered_models
 from app.main import API_PREFIX
 from tests.catalog_rows import add_cost, put_models
-from tests.signing import SigningKey, make_access_claims, make_token
 
 NOW = datetime(2026, 10, 18, 3, 0, tzinfo=UTC)
 LATER = datetime(2026, 12, 1, tzinfo=UTC)
