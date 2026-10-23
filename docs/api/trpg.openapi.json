@@ -1875,6 +1875,7 @@
                     "pay": "#/components/schemas/PayAction",
                     "pick": "#/components/schemas/PickAction",
                     "put_down": "#/components/schemas/PutDownAction",
+                    "repair": "#/components/schemas/RepairAction",
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
                     "sell": "#/components/schemas/SellAction",
@@ -1950,6 +1951,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ForceAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RepairAction"
                   }
                 ]
               },
@@ -2073,6 +2077,7 @@
                     "pay": "#/components/schemas/PayAction",
                     "pick": "#/components/schemas/PickAction",
                     "put_down": "#/components/schemas/PutDownAction",
+                    "repair": "#/components/schemas/RepairAction",
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
                     "sell": "#/components/schemas/SellAction",
@@ -2148,6 +2153,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ForceAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RepairAction"
                   }
                 ]
               },
@@ -9658,6 +9666,111 @@
         "title": "ReferencesUpdate",
         "type": "object"
       },
+      "RepairAction": {
+        "additionalProperties": false,
+        "description": "지금 서 있는 장소에 닿은 길의 부서진 문을 고치는 행동(#281). 판에 적힌 고치는 판정(능력, 난이도)으로 굴린다.\n\n판에 도구를 적었으면 그 물건을 지녀야 고친다. 성공하면 문이 고쳐져 다시 잠글 수 있다. 고친 문은 열린 채다.\n지나가지는 않는다.",
+        "properties": {
+          "kind": {
+            "const": "repair",
+            "title": "Kind",
+            "type": "string"
+          },
+          "place": {
+            "format": "uuid",
+            "title": "Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "place"
+        ],
+        "title": "RepairAction",
+        "type": "object"
+      },
+      "RepairCheck-Input": {
+        "additionalProperties": false,
+        "description": "부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.\n\n성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.\ntool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.",
+        "properties": {
+          "ability": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "RepairCheck",
+        "type": "object"
+      },
+      "RepairCheck-Output": {
+        "additionalProperties": false,
+        "description": "부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.\n\n성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.\ntool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.",
+        "properties": {
+          "ability": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "RepairCheck",
+        "type": "object"
+      },
       "RepairRouteEffect-Input": {
         "additionalProperties": false,
         "description": "사건의 효과 하나: 길 하나의 부서진 문을 고친다(repair_route, #281).\n\n고친 문은 열린 채다. 다시 잠그려면 뒤에 잠그는 효과(lock_route)를 잇는다. 부서지지 않은 문은 그대로다.",
@@ -9710,6 +9823,43 @@
           "kind"
         ],
         "title": "RepairRouteEffect",
+        "type": "object"
+      },
+      "RepairSnapshot": {
+        "description": "부서진 문을 고치는 판정(#281). 능력치, 난이도의 이름과 있어야 하는 도구(판 안의 물건 항목, 없으면 None).",
+        "properties": {
+          "ability": {
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "RepairSnapshot",
         "type": "object"
       },
       "Rest": {
@@ -10255,7 +10405,7 @@
         "type": "object"
       },
       "RouteCrossOut": {
-        "description": "길에 적힌 판정 하나(#281). 넘기(지날 때마다 가는 사람이 굴린다), 따기, 부수기다.\n\n룰북의 능력치와 난이도의 이름표다.",
+        "description": "길에 적힌 판정 하나(#281). 넘기(지날 때마다 가는 사람이 굴린다), 따기, 부수기, 고치기다.\n\n룰북의 능력치와 난이도의 이름표다.",
         "properties": {
           "ability": {
             "title": "Ability",
@@ -10491,6 +10641,16 @@
               }
             ]
           },
+          "repair": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteCrossOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "to_place": {
             "format": "uuid",
             "title": "To Place",
@@ -10522,7 +10682,7 @@
       },
       "RouteRule-Input": {
         "additionalProperties": false,
-        "description": "길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.\n\ntwo_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).\nvisibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).\n숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.\ntravel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다\n(옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).\n길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,\nforce 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.\n빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.\n가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.",
+        "description": "길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.\n\ntwo_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).\nvisibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).\n숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.\ntravel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다\n(옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).\n길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,\nforce 는 문(자물쇠와 빗장)을 부수는 판정, repair 는 부서진 문을 고치는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.\n빗장, 자물쇠, 넘기 판정의 차례로 본다. force 와 repair 는 자물쇠나 빗장이 있는 길에만 적는다.\n가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.",
         "properties": {
           "bar": {
             "anyOf": [
@@ -10579,6 +10739,16 @@
               }
             ]
           },
+          "repair": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepairCheck-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "to_place": {
             "format": "uuid",
             "title": "To Place",
@@ -10616,7 +10786,7 @@
       },
       "RouteRule-Output": {
         "additionalProperties": false,
-        "description": "길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.\n\ntwo_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).\nvisibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).\n숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.\ntravel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다\n(옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).\n길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,\nforce 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.\n빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.\n가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.",
+        "description": "길 하나. 붙인 로어북의 장소 항목 둘(from_place, to_place)을 잇는다.\n\ntwo_way 면 양쪽으로 다닌다(기본). 아니면 from 에서 to 로만 간다(떨어지는 구멍, 한쪽에서만 열리는 문).\nvisibility 는 플레이어가 길을 언제 아는가다(기본은 처음부터, RouteVisibility).\n숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.\ntravel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다\n(옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).\n길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,\nforce 는 문(자물쇠와 빗장)을 부수는 판정, repair 는 부서진 문을 고치는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.\n빗장, 자물쇠, 넘기 판정의 차례로 본다. force 와 repair 는 자물쇠나 빗장이 있는 길에만 적는다.\n가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.",
         "properties": {
           "bar": {
             "anyOf": [
@@ -10672,6 +10842,16 @@
               }
             ]
           },
+          "repair": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepairCheck-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "to_place": {
             "title": "To Place",
             "type": "string"
@@ -10707,7 +10887,7 @@
         "type": "object"
       },
       "RouteSnapshot": {
-        "description": "길 하나. 판 안의 로어북 장소 항목 둘을 잇는다.\n\ntwo_way 가 아니면 from_place 에서 to_place 로만 간다. visibility 는 플레이어가 길을 언제 아는가다.\n숨긴 길은 찾는 판정(find)으로 드러난다. travel_minutes 는 한 칸 가는 데 걸리는 게임 안의 시간(분)이다.\n비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.\ncross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠의 자물쇠다(#281). 형식 52 보다 옛 판은 둘 다 없다.\nbar 는 한쪽의 빗장, force 는 문을 부수는 판정이다. 형식 53 보다 옛 판은 둘 다 없고 자물쇠를 따지 못한다.",
+        "description": "길 하나. 판 안의 로어북 장소 항목 둘을 잇는다.\n\ntwo_way 가 아니면 from_place 에서 to_place 로만 간다. visibility 는 플레이어가 길을 언제 아는가다.\n숨긴 길은 찾는 판정(find)으로 드러난다. travel_minutes 는 한 칸 가는 데 걸리는 게임 안의 시간(분)이다.\n비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.\ncross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠의 자물쇠다(#281). 형식 52 보다 옛 판은 둘 다 없다.\nbar 는 한쪽의 빗장, force 는 문을 부수는 판정이다. 형식 53 보다 옛 판은 둘 다 없고 자물쇠를 따지 못한다.\nrepair 는 부서진 문을 고치는 판정이다. 형식 55 보다 옛 판은 없다(고치지 못한다).",
         "properties": {
           "bar": {
             "anyOf": [
@@ -10758,6 +10938,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/LockSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repair": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepairSnapshot"
               },
               {
                 "type": "null"
@@ -12820,7 +13010,7 @@
             "type": "array"
           },
           "format": {
-            "default": 54,
+            "default": 55,
             "title": "Format",
             "type": "integer"
           },

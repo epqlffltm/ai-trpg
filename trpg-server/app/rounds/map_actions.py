@@ -133,7 +133,7 @@ def open_lock(judging: Judging, member: TableMember, route: RouteSnapshot) -> tu
 
 
 class Terms(Protocol):
-    """판에 적힌 판정 하나의 능력과 난이도. 넘기, 따기, 부수기(#281)가 이 모양이다."""
+    """판에 적힌 판정 하나의 능력과 난이도. 넘기, 따기, 부수기, 고치기(#281)가 이 모양이다."""
 
     ability: str
     difficulty: str | None
@@ -143,7 +143,7 @@ def roll_terms(judging: Judging, member: TableMember, terms: Terms) -> HinderedC
     """
     판에 적힌 판정을 굴린다. 그 능력과 난이도(비웠으면 규칙의 기본)로, 입은 부상의 영향을 받는다.
 
-    길을 넘을 때, 자물쇠를 딸 때, 문을 부술 때 쓴다. 판에 굳을 때 규칙에 있는 능력과 난이도인지 봤다
+    길을 넘을 때, 자물쇠를 딸 때, 문을 부술 때, 문을 고칠 때 쓴다. 판에 굳을 때 규칙에 있는 능력과 난이도인지 봤다
     (게시의 route_cross_invalid, route_open_invalid).
     """
     ruleset = judging.ruleset

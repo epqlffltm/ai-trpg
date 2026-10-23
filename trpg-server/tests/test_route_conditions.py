@@ -233,6 +233,7 @@ async def test_the_map_shows_locks_and_climbs_but_not_keys(client: AsyncClient, 
         'broken': False,
         'pick': None,
         'force': None,
+        'repair': None,
     }
     # 판에 난이도를 비워도 규칙의 기본 난이도로 보인다. 실패의 피해는 보이지 않는다
     assert route_out(table, keys['gate'], keys['forest'])['cross'] == {'ability': 'str', 'difficulty': 'medium'}
@@ -398,7 +399,7 @@ def test_the_cross_is_named_by_the_rules():
 
 def test_the_map_note_forbids_opening_by_words():
     assert '잠긴 문' in prompt.MAP_NOTE
-    assert prompt.PROMPT_VERSION == 'narration-58'
+    assert prompt.PROMPT_VERSION == 'narration-59'
 
 
 def test_the_climb_feels_the_injuries_on_its_ability(monkeypatch: pytest.MonkeyPatch):

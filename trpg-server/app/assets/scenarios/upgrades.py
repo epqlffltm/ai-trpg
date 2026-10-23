@@ -906,6 +906,18 @@ def upgrade_from_53(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_54(document: dict) -> dict:
+    """
+    형식 54 의 문서를 형식 55 로 올린다. 그때는 부서진 문을 고치는 판정이 없었다(#281).
+
+    고치는 판정이 없는 것으로 읽는다. 사람이 부서진 문을 고치지 못한다(판의 사건 repair_route 는 그대로 고친다).
+    """
+    upgraded = dict(document)
+    upgraded['routes'] = [{**route, 'repair': None} for route in document.get('routes', [])]
+    upgraded['format'] = 55
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -962,4 +974,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     51: upgrade_from_51,
     52: upgrade_from_52,
     53: upgrade_from_53,
+    54: upgrade_from_54,
 }
