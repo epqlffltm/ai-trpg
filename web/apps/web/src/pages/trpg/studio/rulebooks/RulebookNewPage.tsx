@@ -5,6 +5,8 @@ import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import type { RulebookTemplates } from '../../../../api/types';
+import { studioPath } from '../studioKinds';
+import { CREATED_STATE } from '../useSavedNotice';
 import { newRulebookDraft, type RulebookDraft } from './rulebookForm';
 import { rulebookTemplatesQuery } from './rulebookQueries';
 import { RulebookEditor } from './RulebookEditor';
@@ -38,7 +40,7 @@ function CreateForm({ templates }: { templates: RulebookTemplates }) {
 
   async function submit(draft: RulebookDraft) {
     const made = await creating.create(draft);
-    if (made) navigate(`/trpg/studio/rulebooks/${made.id}`, { replace: true, state: { created: true } });
+    if (made) navigate(studioPath('rulebooks', made.id), { replace: true, state: CREATED_STATE });
   }
 
   return (
