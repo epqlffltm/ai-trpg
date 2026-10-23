@@ -194,6 +194,8 @@ CI(`stack`)가 운영 설정도 본다(`.github/scripts/stack-smoke.sh check-sta
 | `trpg-server/.env` 의 `NOTIFICATION_SECRET` | `notification-server/.env` 의 `GAME_SERVER_SECRET` |
 | `billing-server/.env` 의 `NOTIFICATION_SECRET` | `notification-server/.env` 의 `BILLING_SERVER_SECRET` |
 | `board-server/.env` 의 `NOTIFICATION_SECRET` | `notification-server/.env` 의 `BOARD_SERVER_SECRET` |
+| `asset-server/.env` 의 `NOTIFICATION_SECRET` | `notification-server/.env` 의 `ASSET_SERVER_SECRET` |
+| `chat-server/.env` 의 `NOTIFICATION_SECRET` | `notification-server/.env` 의 `CHAT_SERVER_SECRET` |
 
 - 비밀의 원본은 비밀번호 관리자 하나에 둔다. VM 이 사라지면 거기서 다시 만든다. `.env` 를 백업 파일과 같은 곳에 두지 않는다(README "백업과 복원").
 - 어느 프로세스가 어느 비밀을 받는지는 지금처럼 `secret_scope.py` 의 표가 지킨다. 운영 설정을 겹친 뒤에도 CI 가 같은 표로 본다.

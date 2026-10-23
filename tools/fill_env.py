@@ -143,6 +143,16 @@ SECRETS = (
         ('notification-server/.env', 'BOARD_SERVER_SECRET'),
     ),
     shared(
+        'asset 서버 → 알림 서버',
+        ('asset-server/.env', 'NOTIFICATION_SECRET'),
+        ('notification-server/.env', 'ASSET_SERVER_SECRET'),
+    ),
+    shared(
+        'chat 서버 → 알림 서버',
+        ('chat-server/.env', 'NOTIFICATION_SECRET'),
+        ('notification-server/.env', 'CHAT_SERVER_SECRET'),
+    ),
+    shared(
         '인증 서버 → 알림 서버(탈퇴)',
         ('auth-server/.env', 'NOTIFICATION_SECRET'),
         ('notification-server/.env', 'AUTH_SERVER_SECRET'),

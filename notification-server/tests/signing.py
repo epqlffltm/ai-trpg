@@ -17,6 +17,8 @@ TEST_SECRETS = {
     'game': 'test-game-secret-0123456789abcdef',
     'billing': 'test-billing-secret-0123456789abcd',
     'board': 'test-board-secret-0123456789abcdef',
+    'asset': 'test-asset-secret-0123456789abcdef',
+    'chat': 'test-chat-secret-0123456789abcdefgh',
 }
 # 인증 서버의 테스트용 서명 비밀. 탈퇴를 알린다. 위의 것과 다르다
 TEST_AUTH_SECRET = 'test-auth-secret-0123456789abcdefg'

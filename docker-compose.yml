@@ -700,6 +700,8 @@ services:
       GAME_SERVER_SECRET: ""
       BILLING_SERVER_SECRET: ""
       BOARD_SERVER_SECRET: ""
+      ASSET_SERVER_SECRET: ""
+      CHAT_SERVER_SECRET: ""
       AUTH_SERVER_SECRET: ""
     depends_on:
       db:
@@ -737,6 +739,7 @@ services:
       <<: *asset-environment
       CHAT_SERVER_SECRET: ""
       AUTH_SERVER_SECRET: ""
+      NOTIFICATION_SECRET: ""
     depends_on:
       db:
         condition: service_healthy
@@ -778,6 +781,7 @@ services:
       BILLING_URL: ""
       BILLING_SECRET: ""
       AUTH_SERVER_SECRET: ""
+      NOTIFICATION_SECRET: ""
       OPENAI_API_KEY: ""
       ANTHROPIC_API_KEY: ""
       GEMINI_API_KEY: ""
