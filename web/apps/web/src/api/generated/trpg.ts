@@ -1291,51 +1291,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/game/tables/{table_id}/members/{user_id}/items": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Grant Items
-         * @description 방장이 그 사람의 지금 캐릭터에게 물건을 준다. 진행 중에만 된다. 판에 있는 물건(로어북의 물건 항목)만 된다.
-         *
-         *     AI 는 소지품을 바꾸지 못한다. 서술에서 무엇을 얻었으면 방장이 이것으로 옮긴다.
-         *     한 가지를 99 개까지 갖는다. 넘으면 409(too_many_items). 모두에게 이벤트(items_gained)가 간다.
-         */
-        post: operations["grant_items_api_v1_game_tables__table_id__members__user_id__items_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/game/tables/{table_id}/members/{user_id}/items/{entry_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Take Items
-         * @description 방장이 그 사람의 지금 캐릭터에게서 물건을 count 개(기본 하나) 빼앗는다. 진행 중에만 된다.
-         *
-         *     가진 것보다 많으면 409(not_enough_items). 모두에게 이벤트(items_lost)가 간다.
-         */
-        delete: operations["take_items_api_v1_game_tables__table_id__members__user_id__items__entry_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/game/tables/{table_id}/members/{user_id}/reroll": {
         parameters: {
             query?: never;
@@ -3206,22 +3161,6 @@ export interface components {
             called_shot: boolean;
             /** Downed */
             downed: boolean;
-        };
-        /**
-         * ItemChange
-         * @description 방장이 물건을 주거나 빼앗을 때 받는 값. 어느 물건을 몇 개.
-         */
-        ItemChange: {
-            /**
-             * Count
-             * @default 1
-             */
-            count: number;
-            /**
-             * Entry Id
-             * Format: uuid
-             */
-            entry_id: string;
         };
         /**
          * ItemGiveOut
@@ -10333,77 +10272,6 @@ export interface operations {
             path: {
                 table_id: string;
                 user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TableDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    grant_items_api_v1_game_tables__table_id__members__user_id__items_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table_id: string;
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ItemChange"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TableDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    take_items_api_v1_game_tables__table_id__members__user_id__items__entry_id__delete: {
-        parameters: {
-            query?: {
-                count?: number;
-            };
-            header?: never;
-            path: {
-                table_id: string;
-                user_id: string;
-                entry_id: string;
             };
             cookie?: never;
         };

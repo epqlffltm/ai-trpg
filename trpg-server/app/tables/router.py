@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from app.assets.models import ITEM_STACK_MAX, PLAYER_MADE_MODES, CharacterMode
+from app.assets.models import PLAYER_MADE_MODES, CharacterMode
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import PlayerMadeHp, RecommendedPlayers
 from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, read_snapshot
@@ -36,7 +36,6 @@ from app.tables import (
     credit_waits,
     deaths,
     injuries,
-    item_grants,
     items,
     narration_models,
     place_items,
@@ -73,7 +72,6 @@ from app.tables.schemas import (
     FallenOut,
     HostTransfer,
     InjuryOut,
-    ItemChange,
     ItemOut,
     JoinRequest,
     LobbyJoinRequest,
@@ -633,40 +631,6 @@ async def kick_member(
     """
     table = await service.kick_member(session, user.user_id, table_id, user_id)
     await round_service.close_when_ready(session, table_id, closer, dice)
-    return to_detail(table, user.user_id)
-
-
-@router.post('/{table_id}/members/{user_id}/items', response_model=TableDetail, status_code=status.HTTP_200_OK)
-async def grant_items(
-    table_id: uuid.UUID, user_id: uuid.UUID, data: ItemChange, user: CurrentUser, session: Session
-) -> TableDetail:
-    """
-    방장이 그 사람의 지금 캐릭터에게 물건을 준다. 진행 중에만 된다. 판에 있는 물건(로어북의 물건 항목)만 된다.
-
-    AI 는 소지품을 바꾸지 못한다. 서술에서 무엇을 얻었으면 방장이 이것으로 옮긴다.
-    한 가지를 99 개까지 갖는다. 넘으면 409(too_many_items). 모두에게 이벤트(items_gained)가 간다.
-    """
-    table = await item_grants.grant_items(session, user.user_id, table_id, user_id, data.entry_id, data.count)
-    return to_detail(table, user.user_id)
-
-
-@router.delete(
-    '/{table_id}/members/{user_id}/items/{entry_id}', response_model=TableDetail, status_code=status.HTTP_200_OK
-)
-async def take_items(
-    table_id: uuid.UUID,
-    user_id: uuid.UUID,
-    entry_id: uuid.UUID,
-    user: CurrentUser,
-    session: Session,
-    count: Annotated[int, Query(ge=1, le=ITEM_STACK_MAX)] = 1,
-) -> TableDetail:
-    """
-    방장이 그 사람의 지금 캐릭터에게서 물건을 count 개(기본 하나) 빼앗는다. 진행 중에만 된다.
-
-    가진 것보다 많으면 409(not_enough_items). 모두에게 이벤트(items_lost)가 간다.
-    """
-    table = await item_grants.take_items(session, user.user_id, table_id, user_id, entry_id, count)
     return to_detail(table, user.user_id)
 
 

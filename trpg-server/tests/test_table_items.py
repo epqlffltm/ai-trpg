@@ -5,12 +5,11 @@
 
 넷을 본다.
   - 시작 소지품: 시작할 때 판의 시작 소지품과 고른 프리젠의 소지품을 받는다. 새 캐릭터는 물려받지 않고 새로 받는다.
-  - 방장이 주고 빼앗기: 진행 중에, 살아 있는 캐릭터에게, 판의 물건만, 한 가지 99 개까지. 이벤트로 남는다.
+  - 방장은 주지도 빼앗지도 않는다. 얻고 잃는 것은 엔진이 정한다(#367).
   - 보이기: 앉은 사람 모두가 서로의 소지품과 판의 물건 목록을 본다. 물건의 설명(로어북의 글)은 나가지 않는다.
   - 서술: 닫기 시작할 때의 소지품이 서술자에게 간다. 없는 물건을 쓰지 말라는 다루는 법이 붙는다.
 """
 
-import asyncio
 import uuid
 
 import pytest
@@ -156,16 +155,35 @@ async def read_table(client: AsyncClient, headers: dict, table: dict) -> dict:
     return response.json()
 
 
-async def give(client: AsyncClient, headers: dict, table: dict, user_id: uuid.UUID, entry: dict, count: int = 1):
-    """방장이 물건을 주는 요청. 응답을 그대로 돌려준다."""
-    body = {'entry_id': entry['id'], 'count': count}
-    return await client.post(table_url(table, f'/members/{user_id}/items'), json=body, headers=headers)
+async def give(session: AsyncSession, table: dict, user_id: uuid.UUID, entry: dict, count: int = 1) -> None:
+    """
+    서비스를 거치지 않고 그 사람의 지금 캐릭터에게 물건을 준다. 테스트의 준비다.
+
+    게임 안에서 물건을 주는 것은 엔진뿐이다(드롭, 줍기, 건네기, 사기 …). 방장이 주는 길은 없다(#367).
+    """
+    await session.execute(
+        text(
+            'INSERT INTO table_items (id, table_id, sheet_id, entry_id, count) '
+            'SELECT gen_random_uuid(), sheet.table_id, sheet.id, :entry_id, :count FROM table_sheets AS sheet '
+            'WHERE sheet.table_id = :table_id AND sheet.user_id = :user_id AND sheet.died_at IS NULL '
+            'ON CONFLICT (sheet_id, entry_id) DO UPDATE SET count = table_items.count + EXCLUDED.count'
+        ),
+        {'table_id': uuid.UUID(table['id']), 'user_id': user_id, 'entry_id': uuid.UUID(entry['id']), 'count': count},
+    )
+    await session.commit()
 
 
-async def take(client: AsyncClient, headers: dict, table: dict, user_id: uuid.UUID, entry: dict, count: int = 1):
-    """방장이 물건을 빼앗는 요청. 응답을 그대로 돌려준다."""
-    url = table_url(table, f'/members/{user_id}/items/{entry["id"]}')
-    return await client.delete(url, params={'count': count}, headers=headers)
+async def take(session: AsyncSession, table: dict, user_id: uuid.UUID, entry: dict) -> None:
+    """서비스를 거치지 않고 그 사람의 지금 캐릭터에게서 그 물건을 모두 없앤다. 테스트의 준비다."""
+    await session.execute(
+        text(
+            'DELETE FROM table_items USING table_sheets AS sheet '
+            'WHERE table_items.sheet_id = sheet.id AND sheet.table_id = :table_id AND sheet.user_id = :user_id '
+            'AND sheet.died_at IS NULL AND table_items.entry_id = :entry_id'
+        ),
+        {'table_id': uuid.UUID(table['id']), 'user_id': user_id, 'entry_id': uuid.UUID(entry['id'])},
+    )
+    await session.commit()
 
 
 async def events_of(client: AsyncClient, headers: dict, table: dict, kind: str) -> list[dict]:
@@ -256,7 +274,7 @@ async def test_a_new_character_does_not_inherit_but_starts_afresh(
     client: AsyncClient, me: dict, friend: dict, lore: dict, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
-    await give(client, me, table, FRIEND, lore['lamp'])
+    await give(session, table, FRIEND, lore['lamp'])
     await kill(session, FRIEND)
 
     arrived = await client.post(table_url(table, '/character'), json={'name': '새 기사'}, headers=friend)
@@ -281,153 +299,32 @@ async def test_a_new_character_from_a_pregen_gets_its_items(
     assert held(arrived.json(), ME) == [('밧줄', 1), ('등불', 1)]
 
 
-# --- 방장이 주고 빼앗기 ---
+# --- 방장은 주지도 빼앗지도 않는다 ---
 
 
-async def test_the_host_gives_and_everyone_is_told(client: AsyncClient, me: dict, friend: dict, lore: dict):
+async def test_the_host_cannot_give_or_take(client: AsyncClient, me: dict, friend: dict, lore: dict):
     table = await start_duo(client, me, friend, lore)
 
-    response = await give(client, me, table, FRIEND, lore['potion'], 3)
+    giving = await client.post(
+        table_url(table, f'/members/{FRIEND}/items'), json={'entry_id': lore['potion']['id']}, headers=me
+    )
+    taking = await client.delete(table_url(table, f'/members/{FRIEND}/items/{lore["potion"]["id"]}'), headers=me)
 
-    assert response.status_code == status.HTTP_200_OK, response.text
-    assert held(response.json(), FRIEND) == [('치유 물약', 5), ('밧줄', 1)]
-    (gained,) = await events_of(client, friend, table, 'items_gained')
-    assert gained['actor_id'] == str(ME)
-    assert gained['payload'] == {
-        'user_id': str(FRIEND),
-        'character_name': '약사',
-        'entry_id': lore['potion']['id'],
-        'name': '치유 물약',
-        'count': 3,
-        'total': 5,
-    }
-
-
-async def test_things_are_listed_in_the_order_of_the_version(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore)
-
-    await give(client, me, table, ME, lore['lamp'])
-    response = await give(client, me, table, ME, lore['potion'])
-
-    # 받은 순서(밧줄, 등불, 물약)가 아니라 판의 물건 순서다
-    assert held(response.json(), ME) == [('치유 물약', 1), ('밧줄', 1), ('등불', 1)]
-
-
-async def test_the_host_takes_away_and_an_empty_line_goes(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore)
-
-    once = await take(client, me, table, FRIEND, lore['potion'])
-    again = await take(client, me, table, FRIEND, lore['potion'])
-
-    assert held(once.json(), FRIEND) == [('치유 물약', 1), ('밧줄', 1)]
-    assert held(again.json(), FRIEND) == [('밧줄', 1)]
-    lost = await events_of(client, friend, table, 'items_lost')
-    assert [(event['payload']['count'], event['payload']['total']) for event in lost] == [(1, 1), (1, 0)]
-
-
-@pytest.mark.parametrize(('entry', 'count'), [('potion', 3), ('lamp', 1)], ids=['more-than-held', 'not-held'])
-async def test_cannot_take_more_than_is_held(client: AsyncClient, me: dict, friend: dict, lore: dict, entry, count):
-    table = await start_duo(client, me, friend, lore)
-
-    response = await take(client, me, table, FRIEND, lore[entry], count)
-
-    assert response.status_code == status.HTTP_409_CONFLICT
-    assert 'not_enough_items' in response.text
+    # 방장도 PC 다. 얻고 잃는 것은 엔진이 정한다(#367). 그 길이 없다
+    assert (giving.status_code, taking.status_code) == (status.HTTP_404_NOT_FOUND, status.HTTP_404_NOT_FOUND)
     assert held(await read_table(client, me, table), FRIEND) == [('치유 물약', 2), ('밧줄', 1)]
 
 
-async def test_one_thing_stops_at_ninety_nine(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore)
-    await give(client, me, table, FRIEND, lore['potion'], 97)
-
-    over = await give(client, me, table, FRIEND, lore['potion'], 1)
-
-    assert over.status_code == status.HTTP_409_CONFLICT
-    assert 'too_many_items' in over.text
-    assert held(await read_table(client, me, table), FRIEND) == [('치유 물약', 99), ('밧줄', 1)]
-
-
-async def test_only_the_host_gives_or_takes(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore)
-
-    giving = await give(client, friend, table, FRIEND, lore['potion'])
-    taking = await take(client, friend, table, ME, lore['rope'])
-
-    assert (giving.status_code, taking.status_code) == (status.HTTP_403_FORBIDDEN, status.HTTP_403_FORBIDDEN)
-    assert await events_of(client, me, table, 'items_gained') == []
-
-
-async def test_nothing_is_given_before_the_start(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await open_duo(client, me, friend, lore)
-
-    response = await give(client, me, table, FRIEND, lore['potion'])
-
-    assert response.status_code == status.HTTP_409_CONFLICT
-    assert 'not_playing' in response.text
-
-
-async def test_nothing_is_given_after_the_end(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore)
-    await client.post(table_url(table, '/end'), headers=me)
-
-    response = await give(client, me, table, FRIEND, lore['potion'])
-
-    assert response.status_code == status.HTTP_409_CONFLICT
-
-
-async def test_only_to_someone_seated(client: AsyncClient, me: dict, friend: dict, lore: dict):
-    table = await start_duo(client, me, friend, lore)
-
-    response = await give(client, me, table, STRANGER, lore['potion'])
-
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-
-
-async def test_nothing_for_the_dead(client: AsyncClient, me: dict, friend: dict, lore: dict, session: AsyncSession):
-    table = await start_duo(client, me, friend, lore)
-    await kill(session, FRIEND)
-
-    giving = await give(client, me, table, FRIEND, lore['potion'])
-    taking = await take(client, me, table, FRIEND, lore['potion'])
-
-    assert (giving.status_code, taking.status_code) == (status.HTTP_409_CONFLICT, status.HTTP_409_CONFLICT)
-    assert 'character_dead' in giving.text
-
-
-@pytest.mark.parametrize('entry', ['lady', 'unknown'])
-async def test_only_things_of_the_version(client: AsyncClient, me: dict, friend: dict, lore: dict, entry: str):
-    table = await start_duo(client, me, friend, lore)
-    target = {'id': NO_SUCH_ID} if entry == 'unknown' else lore[entry]
-
-    response = await give(client, me, table, FRIEND, target)
-
-    # 인물이나 판에 없는 것은 소지품이 될 수 없다
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert 'entry_id' in response.text
-
-
-@pytest.mark.parametrize('count', [0, 100])
-async def test_rejects_a_bad_count(client: AsyncClient, me: dict, friend: dict, lore: dict, count: int):
-    table = await start_duo(client, me, friend, lore)
-
-    giving = await give(client, me, table, FRIEND, lore['potion'], count)
-    taking = await take(client, me, table, FRIEND, lore['potion'], count)
-
-    assert (giving.status_code, taking.status_code) == (422, 422)
-
-
-async def test_two_gifts_at_once_are_counted_one_after_the_other(
-    client: AsyncClient, me: dict, friend: dict, lore: dict
+async def test_things_are_listed_in_the_order_of_the_version(
+    client: AsyncClient, me: dict, friend: dict, lore: dict, session: AsyncSession
 ):
     table = await start_duo(client, me, friend, lore)
 
-    # 둘 다 60 개를 준다. 하나씩 차례로 세면 둘째는 상한을 넘어 거절된다. 잠그지 않으면 둘 다 "2 개"를 보고 덮어쓴다
-    first, second = await asyncio.gather(
-        give(client, me, table, FRIEND, lore['potion'], 60), give(client, me, table, FRIEND, lore['potion'], 60)
-    )
+    await give(session, table, ME, lore['lamp'])
+    await give(session, table, ME, lore['potion'])
 
-    assert sorted([first.status_code, second.status_code]) == [status.HTTP_200_OK, status.HTTP_409_CONFLICT]
-    assert held(await read_table(client, me, table), FRIEND) == [('치유 물약', 62), ('밧줄', 1)]
+    # 받은 순서(밧줄, 등불, 물약)가 아니라 판의 물건 순서다
+    assert held(await read_table(client, me, table), ME) == [('치유 물약', 1), ('밧줄', 1), ('등불', 1)]
 
 
 async def test_items_leave_with_the_person(

@@ -19,6 +19,7 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.upgrades import upgrade_from_32
 from app.rounds.move_lines import describe_handed_over, describe_move
@@ -62,9 +63,9 @@ def second(rule: dict, world: dict) -> dict:
     return {**rule, 'entry_id': world['secret']['id']}
 
 
-async def stock(client: AsyncClient, me: dict, table: dict, user_id: uuid.UUID, entry: dict, count: int) -> None:
-    given = await give(client, me, table, user_id, entry, count)
-    assert given.status_code == status.HTTP_200_OK, given.text
+async def stock(session: AsyncSession, table: dict, user_id: uuid.UUID, entry: dict, count: int) -> None:
+    """그 사람에게 물건을 준다. 테스트의 준비다."""
+    await give(session, table, user_id, entry, count)
 
 
 async def close_round(client: AsyncClient, table: dict, narrated, *seated: dict) -> None:
@@ -117,13 +118,17 @@ def test_an_old_snapshot_takes_nothing():
 
 
 async def test_a_delivery_takes_the_items_evenly(
-    client: AsyncClient, me: dict[str, str], friend: dict[str, str], narrated
+    client: AsyncClient,
+    me: dict[str, str],
+    friend: dict[str, str],
+    narrated,
+    session: AsyncSession,
 ):
     world = await make_world(client, me)
     reward = [{'entry_id': world['pelt']['id'], 'count': 1}]
     table = await start(client, me, world, [quest(world, delivery(world, 'potion', 3), reward=reward)], friend)
-    await stock(client, me, table, ME, world['potion'], 2)
-    await stock(client, me, table, FRIEND, world['potion'], 2)
+    await stock(session, table, ME, world['potion'], 2)
+    await stock(session, table, FRIEND, world['potion'], 2)
 
     await close_round(client, table, narrated, me, friend)
 
@@ -140,12 +145,16 @@ async def test_a_delivery_takes_the_items_evenly(
 
 
 async def test_one_who_has_little_runs_out_first(
-    client: AsyncClient, me: dict[str, str], friend: dict[str, str], narrated
+    client: AsyncClient,
+    me: dict[str, str],
+    friend: dict[str, str],
+    narrated,
+    session: AsyncSession,
 ):
     world = await make_world(client, me)
     table = await start(client, me, world, [quest(world, delivery(world, 'potion', 4))], friend)
-    await stock(client, me, table, ME, world['potion'], 1)
-    await stock(client, me, table, FRIEND, world['potion'], 5)
+    await stock(session, table, ME, world['potion'], 1)
+    await stock(session, table, FRIEND, world['potion'], 5)
 
     await close_round(client, table, narrated, me, friend)
 
@@ -154,11 +163,11 @@ async def test_one_who_has_little_runs_out_first(
     assert (held_items(seen, ME), held_items(seen, FRIEND)) == ([], [('치유 물약', 2)])
 
 
-async def test_it_takes_before_it_rewards(client: AsyncClient, me: dict[str, str], narrated):
+async def test_it_takes_before_it_rewards(client: AsyncClient, me: dict[str, str], narrated, session: AsyncSession):
     world = await make_world(client, me)
     reward = [{'entry_id': world['potion']['id'], 'count': 1}]
     table = await start(client, me, world, [quest(world, delivery(world, 'potion', 2), reward=reward)])
-    await stock(client, me, table, ME, world['potion'], 99)
+    await stock(session, table, ME, world['potion'], 99)
 
     await close_round(client, table, narrated, me)
 
@@ -168,10 +177,10 @@ async def test_it_takes_before_it_rewards(client: AsyncClient, me: dict[str, str
     assert [(thing['count'], thing['capped']) for thing in rewarded['items']] == [(1, False)]
 
 
-async def test_without_consume_the_items_stay(client: AsyncClient, me: dict[str, str], narrated):
+async def test_without_consume_the_items_stay(client: AsyncClient, me: dict[str, str], narrated, session: AsyncSession):
     world = await make_world(client, me)
     table = await start(client, me, world, [quest(world, goal('hold_item', world['potion'], 2))])
-    await stock(client, me, table, ME, world['potion'], 2)
+    await stock(session, table, ME, world['potion'], 2)
 
     await close_round(client, table, narrated, me)
 
@@ -181,11 +190,13 @@ async def test_without_consume_the_items_stay(client: AsyncClient, me: dict[str,
     assert (await quest_change(client, me, table))['consumed'] == []
 
 
-async def test_any_takes_only_from_the_conditions_met(client: AsyncClient, me: dict[str, str], narrated):
+async def test_any_takes_only_from_the_conditions_met(
+    client: AsyncClient, me: dict[str, str], narrated, session: AsyncSession
+):
     world = await make_world(client, me)
     conditions = [goal('reach_place', world['forest']), delivery(world, 'potion', 5)]
     table = await start(client, me, world, [quest(world, *conditions, match='any')])
-    await stock(client, me, table, ME, world['potion'], 2)
+    await stock(session, table, ME, world['potion'], 2)
 
     await declare(client, me, table, '숲으로 간다.', move(world['forest']))
     await narrated()
@@ -196,11 +207,13 @@ async def test_any_takes_only_from_the_conditions_met(client: AsyncClient, me: d
     assert held_items(seen, ME) == [('치유 물약', 2)]
 
 
-async def test_two_deliveries_of_the_same_thing_go_in_order(client: AsyncClient, me: dict[str, str], narrated):
+async def test_two_deliveries_of_the_same_thing_go_in_order(
+    client: AsyncClient, me: dict[str, str], narrated, session: AsyncSession
+):
     world = await make_world(client, me)
     rules = [quest(world, delivery(world, 'potion', 2)), second(quest(world, delivery(world, 'potion', 2)), world)]
     table = await start(client, me, world, rules)
-    await stock(client, me, table, ME, world['potion'], 3)
+    await stock(session, table, ME, world['potion'], 3)
 
     await close_round(client, table, narrated, me)
 
@@ -231,13 +244,18 @@ async def test_a_reward_can_be_delivered_by_the_next_quest(client: AsyncClient, 
 
 
 async def test_the_narrator_sees_what_was_handed_over(
-    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
+    client: AsyncClient,
+    app: FastAPI,
+    me: dict[str, str],
+    friend: dict[str, str],
+    narrated,
+    session: AsyncSession,
 ):
     narrator = RecordingNarrator()
     app.state.narrator = narrator
     world = await make_world(client, me)
     table = await start(client, me, world, [quest(world, delivery(world, 'potion', 1))], friend)
-    await stock(client, me, table, FRIEND, world['potion'], 1)
+    await stock(session, table, FRIEND, world['potion'], 1)
 
     await close_round(client, table, narrated, me, friend)
 
