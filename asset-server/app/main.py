@@ -8,6 +8,7 @@ asset 서버는 캐릭터, 계정 페르소나, 그림의 원본을 맡는다(do
 다른 서버(chat)가 페르소나의 사본과 판을 가져가는 주소(/service/{caller}/...)는
 그 서버의 서명과 사용자의 토큰을 함께 본다.
 인증 서버가 탈퇴를 알리는 주소(/service/users/...)는 인증 서버의 서명을 본다.
+운영자의 숨김과 신고 처리를 알림 서버에 넣는다(#678, 발송함을 뒤에서 보낸다).
 
 띄우는 법: uv run uvicorn app.main:app --port 8006 --reload
 """
@@ -21,6 +22,9 @@ from fastapi import FastAPI
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_engine, create_session_factory
+from server_core.notifications import dispatcher
+from server_core.notifications.setup import build_notifications
+from server_core.notifications.store import SqlOutboxStore
 from server_core.observability.db_spans import instrument_engine
 from server_core.observability.http_spans import traced_client
 from server_core.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
@@ -47,6 +51,8 @@ from app.images.setup import build_decoder, build_image_store
 from app.images.store import ImageStoreUnavailableError
 from app.lorebooks import router as lorebooks
 from app.lorebooks.service import LorebookNotFoundError
+from app.notifications import outbox
+from app.notifications.models import OutgoingNotification
 from app.operators import router as operators
 from app.personas import router as personas
 from app.personas import supply as persona_supply
@@ -65,12 +71,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     서버가 뜰 때와 꺼질 때 할 일. yield 앞이 뜰 때, 뒤가 꺼질 때다.
 
-    뜰 때 끊긴 세션의 목록 받기(30초마다)를 시작한다. 꺼질 때 그것을 가장 먼저 멈추고,
+    뜰 때 끊긴 세션의 목록 받기(30초마다)와 알림 보내기(5초마다)를 시작한다. 꺼질 때 그것들을 가장 먼저 멈추고,
     DB 연결과 인증 서버로 가는 연결을 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     마지막으로 모아 둔 span 과 메트릭을 보낸다. 보내기를 기다리느라 막히므로 스레드에서 한다.
     """
     revoking = revocations.start(app.state.revocations)
+    dispatching = dispatcher.start(app.state.notification_dispatcher)
     yield
+    await dispatching.halt()
     await revoking.halt()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
@@ -139,6 +147,16 @@ def create_app(
     # 그림 저장소와 그림을 여는 따로 된 프로세스(#566). 저장소도 같은 클라이언트로 부른다(client span 이 걸린다)
     app.state.image_store = build_image_store(settings, app.state.http_client)
     app.state.image_decoder = build_decoder(settings)
+    # 운영자의 숨김과 신고 처리를 넣는 알림 서버(#678). 설정(NOTIFICATION_URL)이 정한다. 비우면 None 이고
+    # 알림은 발송함에 적히기만 한다. 같은 클라이언트로 부른다(client span 과 traceparent 가 걸린다)
+    app.state.notifications = build_notifications(settings, app.state.http_client, outbox.SOURCE)
+    # 발송함의 알림을 몇 초마다 알림 서버에 보내는 작업(server_core/notifications/dispatcher.py).
+    # lifespan 이 돌리고 멈춘다.
+    # 알림 서버를 부르는 것은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
+    app.state.notification_dispatcher = dispatcher.NotificationDispatcher(
+        store=SqlOutboxStore(app.state.session_factory, OutgoingNotification),
+        notifications=lambda: app.state.notifications,
+    )
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)

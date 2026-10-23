@@ -12,6 +12,7 @@
 - 2026-10-21: `shared/server-core` 를 만들고 알림 서버와 asset 서버를 옮겼다(#588). 소개 글의 HTML 을 거르는 코드는 쓰는 곳이 둘이 될 때 옮기기로 했다([소개 글의 HTML](#소개-글의-html)).
 - 2026-10-22: 게임 서버의 `app/ai` 를 `shared/ai-core` 로 옮겼다(#499 의 1단계). 모델 목록을 파일 원본으로 바꾸는 것은 2단계로 남았다.
 - 2026-10-22: 모델 목록의 원본을 `shared/ai-core` 의 TOML 파일 하나로 옮겼다(#499 의 2단계). 게임 서버는 관리 명령(`scripts.models sync`)으로 자기 표에 들여온다. 한 서비스만 쓰는 속성은 그 서비스의 표에 둔다([정한 것](#정한-것)).
+- 2026-10-23: 알림 서버로 보내는 발송함을 trpg-server 에서 `shared/server-core` 로 뽑았다(#678). asset 이 두 번째로 쓰고 chat 이 다음이다. trpg 는 옮길 때(#589) 바꾼다.
 
 ## 목차
 
@@ -57,7 +58,7 @@
 
 | 패키지 | 담는 것 | 쓰는 서버 | 만드는 때 |
 | --- | --- | --- | --- |
-| `shared/server-core` | 토큰 검증, 관측, 서버끼리의 서명, DB 연결, 뒤에서 도는 일의 틀 | FastAPI 서버 모두(trpg, notification, asset, chat, story, 나중에 관리) | 지금. 쓰는 서버가 이미 넷이다 |
+| `shared/server-core` | 토큰 검증, 관측, 서버끼리의 서명, DB 연결, 뒤에서 도는 일의 틀, 알림 발송함 | FastAPI 서버 모두(trpg, notification, asset, chat, story, 나중에 관리) | 지금. 쓰는 서버가 이미 넷이다 |
 | `shared/ai-core` | 모델 호출 | trpg, chat, story | chat-server 의 "한 번의 말"을 만들 때(#499) |
 | `shared/conversation-core` | 대화 트리, 다시 생성과 분기, 요약, 기억, 로어북 검색을 붙이는 법 | chat, story | story-server 가 chat 의 그것을 쓰려 할 때 |
 
@@ -74,6 +75,7 @@ FastAPI 서버들이 함께 쓰는 공통부다(#588). 알림 서버와 asset �
 | `service_auth` | 서버끼리의 서명 만들기와 확인 | 비밀의 이름과 받는 쪽의 목록은 서버의 설정 |
 | `database` | 엔진, 세션의 틀, 요청마다의 세션, 이름 짓는 규칙 | search_path 에 더할 스키마, 풀의 크기는 `create_engine` 에 넘긴다. 표의 부모(`Base`)는 서버마다 둔다 |
 | `loops` | 뒤에서 일정하게 도는 일의 틀 | 바퀴의 일은 서버의 것 |
+| `notifications` | 알림 서버로 보내는 발송함의 칸, 쿼리, 서명해 넣기, 다시 보내기, 보내는 작업과 그 설정(`NotificationSettings`) | 표(`Base` 와 마이그레이션), 서버 이름(주소와 비밀), 무엇을 누구에게 알릴지는 서버의 것. 쿼리는 쓰는 서버(asset)의 테스트가 실제 DB 로 본다 |
 | `testing` | 서버들의 테스트가 함께 쓰는 도구(가짜 인증 서버, span 과 메트릭을 모으는 것, 가짜 수집기, 로그 읽기) | 운영 코드는 가져오지 않는다 |
 
 - 각 서버의 `app/core/config.py` 는 서버에 남는다. 공용 코드는 설정 파일을 읽지 않고, 서버가 만든 설정을 받는다([재정의하는 법](#재정의하는-법)).

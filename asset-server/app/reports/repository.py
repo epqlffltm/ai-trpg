@@ -28,6 +28,14 @@ class OpenGroup:
     last_reported_at: datetime
 
 
+@dataclass(frozen=True)
+class HandledReport:
+    """처리한 신고 하나와 신고한 사람. 처리했다는 알림을 보낼 때 쓴다."""
+
+    report_id: uuid.UUID
+    reporter_id: uuid.UUID
+
+
 def add(session: AsyncSession, report: CharacterReport) -> None:
     """새 신고를 세션에 올린다."""
     session.add(report)
@@ -92,13 +100,14 @@ async def list_for_character(session: AsyncSession, character_id: uuid.UUID) -> 
 
 async def handle_open(
     session: AsyncSession, character_id: uuid.UUID, operator_id: uuid.UUID, outcome: str, now: datetime
-) -> int:
-    """그 캐릭터의 열린 신고를 모두 처리한 것으로 적는다. 적은 수를 돌려준다."""
+) -> list[HandledReport]:
+    """그 캐릭터의 열린 신고를 모두 처리한 것으로 적는다. 처리한 신고와 신고한 사람을 돌려준다(알림)."""
     statement = (
         update(CharacterReport)
         .where(CharacterReport.character_id == character_id, CharacterReport.handled_at.is_(None))
         .values(handled_at=now, handled_by=operator_id, outcome=outcome)
+        .returning(CharacterReport.id, CharacterReport.reporter_id)
         .execution_options(synchronize_session=False)
     )
     result = await session.execute(statement)
-    return result.rowcount
+    return [HandledReport(report_id, reporter_id) for report_id, reporter_id in result]

@@ -55,6 +55,8 @@ def make_test_settings(**overrides) -> Settings:
         'auth_server_secret': TEST_AUTH_SECRET,
         # 그림 저장소는 없다. 그림을 보는 테스트는 가짜 저장소(tests/images.py)를 앱에 꽂는다
         'image_store_endpoint': '',
+        # 알림 서버로 보내지 않는다. 발송함에 적기만 한다. 보내는 것을 보는 테스트는 가짜를 꽂는다
+        'notification_url': '',
     }
     values.update(overrides)
     return Settings(**values)
