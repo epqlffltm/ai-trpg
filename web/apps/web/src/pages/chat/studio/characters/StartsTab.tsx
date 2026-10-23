@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/chat/studio/characters/StartsTab.tsx
 // 캐릭터의 시작 상황 탭(C6). 대화를 여는 사람이 하나를 고른다. 제목은 고르는 목록에, 상황은 모델에 간다.
-// 더하기, 지우기, 앞으로 옮기기. 게시하려면 하나는 있어야 한다. 시작 장소와 소지품은 지도·물건 탭에서 정한다(#673).
+// 더하기, 지우기, 앞으로 옮기기. 게시하려면 하나는 있어야 한다. 처음 있는 장소는 지도 탭, 시작 소지품은 물건 탭에서 정한다.
 
 import { Button, TextField } from '@ai-trpg/ui';
 import { useState } from 'react';
