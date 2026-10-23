@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../../api/errors';
 import type { RulebookDetail, RulebookTemplates } from '../../../../api/types';
 import { newRulebookDraft, rulebookDraft, rulebookHints, toRulebookCreate, toRulebookUpdate, wholeNumber, withTemplate } from './rulebookForm';
-import { describeDeleteProblem, usedByTitles } from './rulebookProblem';
+import { describeDeleteProblem, usedByTitles } from '../studioProblem';
 import { armorSummary, templateDie, templateName } from './rulebookView';
 
 function rules(template: string, armor: unknown, die = 20) {
@@ -69,7 +69,7 @@ describe('룰북의 글', () => {
     const body = { detail: 'x', used_by: [{ id: 'a', title: '안개 마을' }, { id: 'b', title: '등대' }, { id: 'c' }] };
     expect(usedByTitles(body)).toEqual(['안개 마을', '등대']);
     expect(usedByTitles({ used_by: 'x' })).toEqual([]);
-    const problem = describeDeleteProblem(new ApiError({ status: 409, detail: 'x', body }));
+    const problem = describeDeleteProblem(new ApiError({ status: 409, detail: 'x', body }), 'rulebooks');
     expect(problem.message).toContain('쓰는 시나리오: 안개 마을, 등대.');
   });
 });

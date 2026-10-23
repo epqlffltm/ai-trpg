@@ -2,7 +2,7 @@
 // 경로와 화면을 잇는다. 서비스마다 /trpg, /chat, /story 아래에 둔다(앱은 하나, docs/product/screens.md 의 "프런트 구조").
 // 처음 들어오는 화면(첫 화면, 로그인, 가입, 비밀번호)은 바로 가져오고, 나머지는 처음 갈 때 받는다(routing/pages.ts).
 
-import { Route, Routes } from 'react-router';
+import { Outlet, Route, Routes } from 'react-router';
 import { RequireSession } from './auth/RequireSession';
 import { AppLayout } from './layout/AppLayout';
 import { HomePage } from './pages/home/HomePage';
@@ -23,9 +23,13 @@ import {
   RulebooksPage,
   ScenarioBrowsePage,
   ScenarioPage,
+  StudioPage,
   TableCreatePage,
   TableRoomPage,
   WalletPage,
+  WorldEditPage,
+  WorldNewPage,
+  WorldsPage,
 } from './routing/pages';
 
 export function App() {
@@ -105,31 +109,23 @@ export function App() {
               </RequireSession>
             }
           />
-          {/* 제작 도구(B9). 지금은 룰북뿐이다. 모두 만든 사람 자신의 것이다 */}
+          {/* 제작 도구(B9). 모두 만든 사람 자신의 것이라 묶음째 로그인해야 열린다 */}
           <Route
-            path="studio/rulebooks"
+            path="studio"
             element={
               <RequireSession>
-                <RulebooksPage />
+                <Outlet />
               </RequireSession>
             }
-          />
-          <Route
-            path="studio/rulebooks/new"
-            element={
-              <RequireSession>
-                <RulebookNewPage />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="studio/rulebooks/:rulebookId"
-            element={
-              <RequireSession>
-                <RulebookEditPage />
-              </RequireSession>
-            }
-          />
+          >
+            <Route index element={<StudioPage />} />
+            <Route path="rulebooks" element={<RulebooksPage />} />
+            <Route path="rulebooks/new" element={<RulebookNewPage />} />
+            <Route path="rulebooks/:rulebookId" element={<RulebookEditPage />} />
+            <Route path="worlds" element={<WorldsPage />} />
+            <Route path="worlds/new" element={<WorldNewPage />} />
+            <Route path="worlds/:worldId" element={<WorldEditPage />} />
+          </Route>
           <Route path="*" element={<PlaceholderPage service="TRPG" />} />
         </Route>
         <Route path="chat/*" element={<PlaceholderPage service="chat" />} />
