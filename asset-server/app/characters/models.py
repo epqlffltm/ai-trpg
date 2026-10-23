@@ -70,6 +70,9 @@ AFFECTION_MAX_STAGES = 10
 STAGE_NAME_MAX_LENGTH = 20
 AFFECTION_MAX_RULES = 50
 AFFECTION_MAX_CHANGE = 20
+# 모델이 답 하나에 호감도를 바꿀 수 있는 크기의 상한(#676). 제작자가 0~AFFECTION_MAX_CHANGE 로 고른다.
+# 0 이면 모델은 바꾸지 못한다. 적지 않으면 이 값이다. 형식 6 까지의 판도 이 값으로 읽는다
+AFFECTION_MODEL_STEP_DEFAULT = 3
 # 시작 상황의 시작 시각(몇 시, 0~23). 적지 않으면 정오다. 형식 3 까지의 판도 이 값으로 읽는다
 START_HOUR_DEFAULT = 12
 HOURS_PER_DAY = 24
