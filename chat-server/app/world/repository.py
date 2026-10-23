@@ -26,6 +26,7 @@ def to_state(row: MessageState) -> WorldState:
         affection=row.affection,
         fired=tuple(row.fired),
         shown=tuple(row.shown),
+        received=tuple(row.received),
     )
 
 
@@ -41,6 +42,7 @@ def to_row(message_id: uuid.UUID, state: WorldState) -> MessageState:
         affection=state.affection,
         fired=list(state.fired),
         shown=list(state.shown),
+        received=list(state.received),
     )
 
 

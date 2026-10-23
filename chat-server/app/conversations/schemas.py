@@ -6,7 +6,7 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from ai_core.catalog_contract import Grade
 from pydantic import BaseModel, ConfigDict, Field
@@ -125,6 +125,36 @@ class StartOut(BaseModel):
     hour: int
 
 
+class AffectionChangeOut(BaseModel):
+    """
+    모델의 제안으로 바뀐 호감도(#676). rising 은 올랐는가다. delta 는 바뀐 크기인데,
+    단계 이름으로 보이는 캐릭터면 null 이다(숫자를 내려보내지 않는다).
+    """
+
+    kind: Literal['affection']
+    rising: bool
+    delta: int | None
+
+
+class GiftChangeOut(BaseModel):
+    """모델의 제안으로 상대에게 받은 물건(판의 물건 id). 소지품에 하나 더해졌다."""
+
+    kind: Literal['gift']
+    item: str
+
+
+class MoveChangeOut(BaseModel):
+    """모델의 제안으로 함께 간 장소(판의 장소 id)와 걸린 시간(분)."""
+
+    kind: Literal['move']
+    place: str
+    minutes: int
+
+
+# 받아들인 상태의 변화 하나. kind 로 가른다
+ChangeOut = Annotated[AffectionChangeOut | GiftChangeOut | MoveChangeOut, Field(discriminator='kind')]
+
+
 class MessageOut(BaseModel):
     """말 하나."""
 
@@ -142,6 +172,9 @@ class MessageOut(BaseModel):
     event_scene: str | None = None
     # 캐릭터의 답에서 모델이 고른 표정. 기본 표정이면 null 이다. 그림은 상태의 sprite 와 SSE 의 expression 에 있다
     expression: str | None = None
+    # 캐릭터의 답에서 모델이 제안해 서버가 받아들인 상태의 변화(#676). 화면이 답 아래에 칩으로 보인다.
+    # 바뀐 상태는 대화의 state 에 있다
+    changes: list[ChangeOut] = []
 
 
 class MessageEdit(BaseModel):

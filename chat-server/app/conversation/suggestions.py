@@ -10,6 +10,9 @@
   - 선택지: 표식 뒤. 다 받은 뒤에 거른다(parse_suggestions). 말의 suggestions 칸에만 둔다
     (본문에 섞으면 다음 호출에 다시 들어가 모델이 선택지를 흉내 낸다)
 
+본문 뒤에는 상태 바꾸기의 제안(app/conversation/changes.py)도 올 수 있다. 본문은 어느 표식이든 처음 나온 것 앞까지다
+(app/conversation/markers.py).
+
 흘릴 때는 표식이 조각의 경계에 걸릴 수 있다. 그래서 끝의 몇 글자(표식의 앞부분일 수 있는 것)는
 다음 조각이 올 때까지 붙잡는다(MarkerHold). 흘린 글 끝에 빈칸이 남을 수 있지만 저장하는 본문에서는 뺀다.
 마지막 done 메시지가 저장한 말을 싣는다.
@@ -23,9 +26,11 @@
 import re
 from dataclasses import dataclass, field
 
+from app.conversation.markers import END_MARKERS, SUGGESTIONS_CLOSING, SUGGESTIONS_MARKER, block_after, first_marker
+
 # 본문과 선택지를 가르는 표식. 영문 태그가 모델마다 가장 잘 지켜진다. 닫는 태그는 써도 되고 안 써도 된다
-MARKER = '<suggestions>'
-CLOSING = '</suggestions>'
+MARKER = SUGGESTIONS_MARKER
+CLOSING = SUGGESTIONS_CLOSING
 # 선택지의 수와 하나의 길이(글자)의 상한
 MAX_SUGGESTIONS = 3
 SUGGESTION_MAX_CHARS = 200
@@ -47,9 +52,10 @@ def instruction() -> str:
 
 
 def held_length(text: str) -> int:
-    """text 의 끝에서 표식의 앞부분일 수 있는 가장 긴 길이. 표식이 다음 조각에서 마저 올 수 있다."""
-    for size in range(min(len(text), len(MARKER) - 1), 0, -1):
-        if MARKER.startswith(text[-size:]):
+    """text 의 끝에서 어느 표식의 앞부분일 수 있는 가장 긴 길이. 표식이 다음 조각에서 마저 올 수 있다."""
+    longest = max(len(marker) for marker in END_MARKERS) - 1
+    for size in range(min(len(text), longest), 0, -1):
+        if any(marker.startswith(text[-size:]) for marker in END_MARKERS):
             return size
     return 0
 
@@ -57,7 +63,7 @@ def held_length(text: str) -> int:
 @dataclass
 class MarkerHold:
     """
-    흘려 받는 글에서 표식 앞(본문)만 내보낸다. 표식을 만나면 그 뒤(선택지)는 모아 두기만 한다.
+    흘려 받는 글에서 표식 앞(본문)만 내보낸다. 표식을 만나면 그 뒤(선택지, 상태 바꾸기의 제안)는 모아 두기만 한다.
 
     feed 는 지금 내보내도 되는 본문을 돌려준다. 표식의 앞부분일 수 있는 끝의 글자는 붙잡아 둔다.
     다 받은 뒤(또는 끊긴 뒤) release 가 붙잡은 본문을 내준다. 표식을 만났으면 붙잡은 것이 없다.
@@ -73,9 +79,9 @@ class MarkerHold:
             self.tail += piece
             return ''
         text = self.held + piece
-        index = text.find(MARKER)
+        index = first_marker(text)
         if index >= 0:
-            self.tail = text[index + len(MARKER) :]
+            self.tail = text[index:].split('>', 1)[1]
             self.held = ''
             return self.send(text[:index])
         cut = len(text) - held_length(text)
@@ -99,11 +105,14 @@ class MarkerHold:
 
 
 def split_answer(text: str) -> tuple[str, str | None]:
-    """다 받은 글을 본문과 표식 뒤의 글로. 표식이 없으면 (글 전체, None). 본문 끝의 빈칸은 뺀다."""
-    index = text.find(MARKER)
+    """
+    다 받은 글을 본문과 선택지의 블록으로. 본문은 처음 나온 표식 앞까지다(본문 끝의 빈칸은 뺀다).
+    선택지의 블록은 MARKER 뒤에서 닫는 태그나 상태 바꾸기의 표식 앞까지다. MARKER 가 없으면 None.
+    """
+    index = first_marker(text)
     if index < 0:
         return text.rstrip(), None
-    return text[:index].rstrip(), text[index + len(MARKER) :]
+    return text[:index].rstrip(), block_after(text, MARKER, CLOSING)
 
 
 def clean_line(line: str) -> str:

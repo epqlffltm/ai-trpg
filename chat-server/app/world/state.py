@@ -32,6 +32,7 @@ class WorldState:
     outfit 은 상대가 입은 옷들(사용자가 건넨 옷, 건넨 차례)의 물건 id 다.
     affection 은 호감도(0~100, 판에 호감도가 없으면 None), fired 는 이 가지에서 걸린 "처음 한 번만" 규칙의 id 다.
     shown 은 이 가지에서 나온 이벤트 씬의 id 다(나온 차례, #669).
+    received 는 이 가지에서 상대에게 받은 물건의 id 다(받은 차례, #676). 같은 물건은 한 가지에서 한 번만 받는다.
     """
 
     place: str | None
@@ -42,6 +43,7 @@ class WorldState:
     affection: int | None = None
     fired: tuple[str, ...] = ()
     shown: tuple[str, ...] = ()
+    received: tuple[str, ...] = ()
 
 
 def initial_state(document: CharacterDocument) -> WorldState:

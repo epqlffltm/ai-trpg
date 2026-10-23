@@ -69,13 +69,21 @@ async def move_leaf(session: AsyncSession, conversation_id: uuid.UUID, leaf_id: 
 
 
 async def extend_message(
-    session: AsyncSession, message_id: uuid.UUID, content: str, status: str, suggestions: list[str]
+    session: AsyncSession,
+    message_id: uuid.UUID,
+    content: str,
+    status: str,
+    suggestions: list[str],
+    changes: list[dict],
 ) -> None:
-    """끊긴 답에 이어 쓴 글을 붙인 결과로 바꾼다(이어서 출력). 본문과 상태와 선택지를 한꺼번에 바꾼다."""
+    """
+    끊긴 답에 이어 쓴 글을 붙인 결과로 바꾼다(이어서 출력).
+    본문과 상태와 선택지와 받아들인 상태의 변화를 한꺼번에 바꾼다.
+    """
     statement = (
         update(Message)
         .where(Message.id == message_id)
-        .values(content=content, status=status, suggestions=suggestions)
+        .values(content=content, status=status, suggestions=suggestions, changes=changes)
         .execution_options(synchronize_session=False)
     )
     await session.execute(statement)

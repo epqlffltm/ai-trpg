@@ -132,12 +132,14 @@ def render_card(
     memory: str | None = None,
     story: str | None = None,
     expressions: Sequence[str] = (),
+    changes: str | None = None,
 ) -> str:
     """
     시스템 메시지(카드). 지킬 것, 캐릭터, 사용자, 시작 상황, 앞의 줄거리(story), 기억(memory), 지금(scene),
     다음 답 추천의 지시의 차례다. 빈 블록은 뺀다. story 는 창 밖으로 밀려난 앞부분의 요약,
     memory 는 기억 메모(app/memory), scene 은 지금의 장소와 소지품이다(app/world/scene.py).
     지시는 suggest 일 때만 넣는다. expressions 가 있으면 표정을 고르는 지시를 넣는다(app/conversation/expressions.py).
+    changes 는 모델이 제안할 수 있는 상태의 변화의 지시다(app/world/proposals.py 의 render_offer, #676).
     지시를 맨 끝에 두어 본문을 다 쓴 뒤의 일임을 분명히 한다.
     """
     sections = [
@@ -149,6 +151,7 @@ def render_card(
         memory,
         scene,
         f'[표정]\n{expression_instruction(expressions)}' if expressions else None,
+        f'[상태 바꾸기]\n{changes}' if changes else None,
         f'[다음 답 추천]\n{instruction()}' if suggest else None,
     ]
     return '\n\n'.join(section for section in sections if section)

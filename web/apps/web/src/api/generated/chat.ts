@@ -443,12 +443,34 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AffectionChangeOut
+         * @description 모델의 제안으로 바뀐 호감도(#676). rising 은 올랐는가다. delta 는 바뀐 크기인데,
+         *     단계 이름으로 보이는 캐릭터면 null 이다(숫자를 내려보내지 않는다).
+         */
+        AffectionChangeOut: {
+            /** Delta */
+            delta: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "affection";
+            /** Rising */
+            rising: boolean;
+        };
+        /**
          * AffectionDocument
          * @description 캐릭터의 호감도. display 는 number(숫자와 게이지)나 stage(단계 이름과 게이지, 숫자를 내려보내지 않는다)다.
+         *     model_step 은 모델이 답 하나에 바꿀 수 있는 크기다(0 이면 바꾸지 못한다, #676).
          */
         AffectionDocument: {
             /** Display */
             display: string;
+            /**
+             * Model Step
+             * @default 3
+             */
+            model_step: number;
             /**
              * Rules
              * @default []
@@ -756,6 +778,19 @@ export interface components {
             when: components["schemas"]["SceneConditionDocument"];
         };
         /**
+         * GiftChangeOut
+         * @description 모델의 제안으로 상대에게 받은 물건(판의 물건 id). 소지품에 하나 더해졌다.
+         */
+        GiftChangeOut: {
+            /** Item */
+            item: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "gift";
+        };
+        /**
          * GiveAction
          * @description 소지품의 물건을 상대에게 건넨다. 하나 줄고, 옷이면 상대가 입는다.
          *     words 는 덧붙이는 한마디다(없으면 행동만). 행동과 말을 한 턴에 붙이고 반응을 한 번 받는다.
@@ -800,7 +835,7 @@ export interface components {
         /**
          * ItemDocument
          * @description 물건 하나. kind 는 thing 이나 clothing(건네면 상대의 차림에 들어간다)이다. 모르는 종류도 받아 둔다.
-         *     consumable 이면 쓰면 하나 없어진다.
+         *     consumable 이면 쓰면 하나 없어진다. giftable 이면 상대가 사용자에게 줄 수 있다(모델이 제안한다, #676).
          */
         ItemDocument: {
             /**
@@ -810,6 +845,11 @@ export interface components {
             consumable: boolean;
             /** Description */
             description: string;
+            /**
+             * Giftable
+             * @default false
+             */
+            giftable: boolean;
             /** Id */
             id: string;
             /** Image Id */
@@ -853,6 +893,11 @@ export interface components {
          * @description 말 하나.
          */
         MessageOut: {
+            /**
+             * Changes
+             * @default []
+             */
+            changes: (components["schemas"]["AffectionChangeOut"] | components["schemas"]["GiftChangeOut"] | components["schemas"]["MoveChangeOut"])[];
             /** Content */
             content: string;
             /**
@@ -944,6 +989,21 @@ export interface components {
             place: string;
         };
         /**
+         * MoveChangeOut
+         * @description 모델의 제안으로 함께 간 장소(판의 장소 id)와 걸린 시간(분).
+         */
+        MoveChangeOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "move";
+            /** Minutes */
+            minutes: number;
+            /** Place */
+            place: string;
+        };
+        /**
          * NextPriceOut
          * @description 예약된 값의 바뀜. credits 가 null 이면 effective_at 부터 팔지 않는다.
          */
@@ -1023,6 +1083,11 @@ export interface components {
         PathMessageOut: {
             /** Alternatives */
             alternatives: string[];
+            /**
+             * Changes
+             * @default []
+             */
+            changes: (components["schemas"]["AffectionChangeOut"] | components["schemas"]["GiftChangeOut"] | components["schemas"]["MoveChangeOut"])[];
             /** Content */
             content: string;
             /**
