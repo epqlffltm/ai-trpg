@@ -126,6 +126,13 @@ def move_of(declaration: Declaration | None) -> dict | None:
     return declaration.outcome.get('move')
 
 
+def door_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 문 다루기의 결과(app/rounds/door_actions.py, #281). 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('door')
+
+
 def search_of(declaration: Declaration | None) -> dict | None:
     """이 선언에 적힌 찾기의 결과(app/rounds/map_actions.py 의 judge_search). 아니었거나 결과가 없으면 None."""
     if declaration is None or declaration.outcome is None:

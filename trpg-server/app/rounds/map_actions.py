@@ -11,7 +11,8 @@
         열쇠가 없으면 가지 못한다(locked). 열쇠는 없어지지 않는다.
       - 넘기 판정: 지날 때마다 가는 사람이 판에 적힌 능력과 난이도로 굴린다. 부상의 영향은 판정하는 행동과 같다.
         실패하면 그 자리에 남고(cross_failed), 판에 실패의 피해를 적었으면 그만큼 다친다(떨어짐, 휩쓸림).
-      - 둘 다 있으면 자물쇠를 먼저 본다. 열고 나서 넘기에 실패하면 문은 열린 채 그 자리에 남는다.
+      - 빗장(#281): 걸려 있으면 빗장 쪽에 선 사람은 풀고 지나간다. 반대쪽에서는 지나가지 못한다(barred).
+      - 빗장, 자물쇠, 넘기의 차례로 본다. 열고 나서 넘기에 실패하면 문은 열린 채 그 자리에 남는다.
       - 업힌 사람은 따로 굴리지 않는다. 업은 사람이 지나가면 함께 간다.
   - 업고 가기(carry, #367): 같은 장소에 쓰러져 있는(죽지 않은) 동료 한 명을 함께 데려간다. 쓰러진 사람은 선언을 못 하니
     일행이 가면 혼자 남는다. 받을 때 보고, 차례가 오면 다시 본다. 그사이 일어났거나 죽었거나 다른 사람이 먼저 업고
@@ -28,6 +29,7 @@ DB 를 모른다. 시트의 위치와 테이블의 서 본 곳, 찾은 길을 �
 
 import uuid
 from dataclasses import asdict
+from typing import Protocol
 
 from app.assets.scenarios.snapshot import CrossSnapshot, LockSnapshot, RouteSnapshot, read_snapshot
 from app.calendar import state as calendar
@@ -50,6 +52,8 @@ class Reason:
     NOT_ADJACENT = 'not_adjacent'
     # 길이 잠겨 있었고 그 열쇠가 없었다(#281)
     LOCKED = 'locked'
+    # 빗장이 반대쪽에 걸려 있었다(#281)
+    BARRED = 'barred'
     # 길을 넘는 판정에 실패했다(#281)
     CROSS_FAILED = 'cross_failed'
 
@@ -128,28 +132,36 @@ def open_lock(judging: Judging, member: TableMember, route: RouteSnapshot) -> tu
     return True, True
 
 
-def roll_cross(judging: Judging, member: TableMember, cross: CrossSnapshot) -> HinderedCheck:
-    """
-    길을 넘는 판정을 굴린다. 판에 적힌 능력과 난이도(비웠으면 규칙의 기본)로, 입은 부상의 영향을 받는다.
+class Terms(Protocol):
+    """판에 적힌 판정 하나의 능력과 난이도. 넘기, 따기, 부수기(#281)가 이 모양이다."""
 
-    판에 굳을 때 규칙에 있는 능력과 난이도인지 봤다(게시의 route_cross_invalid).
+    ability: str
+    difficulty: str | None
+
+
+def roll_terms(judging: Judging, member: TableMember, terms: Terms) -> HinderedCheck:
+    """
+    판에 적힌 판정을 굴린다. 그 능력과 난이도(비웠으면 규칙의 기본)로, 입은 부상의 영향을 받는다.
+
+    길을 넘을 때, 자물쇠를 딸 때, 문을 부술 때 쓴다. 판에 굳을 때 규칙에 있는 능력과 난이도인지 봤다
+    (게시의 route_cross_invalid, route_open_invalid).
     """
     ruleset = judging.ruleset
     sheet = member.sheet
-    difficulty = find_difficulty(ruleset, cross.difficulty)
-    hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, cross.ability)
-    return resolve_hindered(ruleset, sheet.abilities[cross.ability], difficulty, judging.dice, hindrance)
+    difficulty = find_difficulty(ruleset, terms.difficulty)
+    hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, terms.ability)
+    return resolve_hindered(ruleset, sheet.abilities[terms.ability], difficulty, judging.dice, hindrance)
 
 
-def cross_document(judging: Judging, cross: CrossSnapshot, rolled: HinderedCheck) -> dict:
+def terms_document(judging: Judging, terms: Terms, rolled: HinderedCheck) -> dict:
     """
-    넘기 판정을 결과에 적을 모양. 무엇으로 굴렸는지(능력, 난이도)와 판정, 부상의 영향이다.
+    판에 적힌 판정을 결과에 적을 모양. 무엇으로 굴렸는지(능력, 난이도)와 판정, 부상의 영향이다.
 
     난이도는 판에 비워 뒀으면 규칙의 기본 난이도의 이름표다. 판정하는 행동의 결과와 같은 모양이다.
     """
     return {
-        'ability': cross.ability,
-        'difficulty': find_difficulty(judging.ruleset, cross.difficulty).key,
+        'ability': terms.ability,
+        'difficulty': find_difficulty(judging.ruleset, terms.difficulty).key,
         **asdict(rolled.check),
         'hindrance': round_injuries.hindrance_document(rolled),
     }
@@ -170,26 +182,48 @@ def cross_route(judging: Judging, member: TableMember, cross: CrossSnapshot | No
     """
     if cross is None:
         return True, {'cross': None, 'effect': None}
-    rolled = roll_cross(judging, member, cross)
+    rolled = roll_terms(judging, member, cross)
     passed = rolled.check.success
     effect = None if passed else fall(judging, member, cross)
-    return passed, {'cross': cross_document(judging, cross, rolled), 'effect': effect}
+    return passed, {'cross': terms_document(judging, cross, rolled), 'effect': effect}
+
+
+def lift_bar(judging: Judging, member: TableMember, route: RouteSnapshot) -> tuple[bool, bool]:
+    """
+    길의 빗장을 지나간다. (지나갈 수 있는가, 풀었는가)를 돌려준다.
+
+    걸려 있지 않으면 그냥 지나간다. 걸려 있으면 빗장 쪽에 선 사람만 풀고 지나간다. 반대쪽에서는 지나가지 못한다.
+    """
+    if not route_locks.is_barred(judging.table, route):
+        return True, False
+    if member.sheet.place_id != route.bar.side:
+        return False, False
+    route_locks.unbar(judging.table, route)
+    return True, True
+
+
+# 아무 조건도 지나가지 않은 결과의 칸들
+UNTOUCHED = {'unbarred': False, 'unlocked': False, 'cross': None, 'effect': None}
 
 
 def pass_route(judging: Judging, member: TableMember, route: RouteSnapshot | None) -> tuple[str | None, dict]:
     """
     길을 지나간다. (못 간 까닭, 결과에 더할 칸들)을 돌려준다. 갔으면 까닭이 None 이다.
 
-    아는 길이 없으면 not_adjacent, 잠겼는데 열쇠가 없으면 locked, 넘기에 실패하면 cross_failed 다.
-    칸은 열었는지(unlocked)와 넘기의 것(cross_route)이다.
+    빗장, 자물쇠, 넘기 판정의 차례로 본다. 아는 길이 없으면 not_adjacent, 빗장이 반대쪽에 걸렸으면 barred,
+    잠겼는데 열쇠가 없으면 locked, 넘기에 실패하면 cross_failed 다.
+    칸은 빗장을 풀었는지(unbarred), 자물쇠를 열었는지(unlocked)와 넘기의 것(cross_route)이다.
     """
     if route is None:
-        return Reason.NOT_ADJACENT, {'unlocked': False, 'cross': None, 'effect': None}
+        return Reason.NOT_ADJACENT, UNTOUCHED
+    lifted, unbarred = lift_bar(judging, member, route)
+    if not lifted:
+        return Reason.BARRED, UNTOUCHED
     open_, unlocked = open_lock(judging, member, route)
     if not open_:
-        return Reason.LOCKED, {'unlocked': False, 'cross': None, 'effect': None}
+        return Reason.LOCKED, {**UNTOUCHED, 'unbarred': unbarred}
     crossed, fields = cross_route(judging, member, route.cross)
-    return (None if crossed else Reason.CROSS_FAILED), {'unlocked': unlocked, **fields}
+    return (None if crossed else Reason.CROSS_FAILED), {'unbarred': unbarred, 'unlocked': unlocked, **fields}
 
 
 def judge_move(judging: Judging, member: TableMember, action: MoveAction) -> dict:

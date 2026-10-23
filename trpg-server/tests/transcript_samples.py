@@ -306,6 +306,15 @@ SAMPLES = {
         'to': {'entry_id': 'dbc7f2df-b069-439b-8d01-b55cc1da02d6', 'name': '깊은 수로'},
         'travel_minutes': None,
     },
+    'door_changed': {
+        'round': 1,
+        'user_id': '22222222-2222-4333-8444-555555555555',
+        'character_name': '드워프 기사',
+        'act': 'lock',
+        'device': 'bar',
+        'from': {'entry_id': 'f636e7ee-d24e-404f-91fc-eb6c3fda07c6', 'name': '수로 입구'},
+        'to': {'entry_id': 'dbc7f2df-b069-439b-8d01-b55cc1da02d6', 'name': '깊은 수로'},
+    },
     'happening_occurred': {
         'round': 1,
         'entry_id': '6b0e1c3a-5d2f-4a8e-9c71-2f4d8e6a1b90',

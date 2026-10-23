@@ -425,7 +425,11 @@ class CarryOut(BaseModel):
 
 
 class CrossOut(BaseModel):
-    """길을 넘는 판정(#281). 판에 적힌 능력과 난이도로 엔진이 굴렸다. 굴림은 공개다."""
+    """
+    판에 적힌 판정 하나(#281). 길을 넘을 때, 자물쇠를 딸 때, 문을 부술 때다.
+
+    판에 적힌 능력과 난이도로 엔진이 굴렸다. 굴림은 공개다.
+    """
 
     # 무엇으로 굴렸는가. 룰북의 능력치와 난이도의 이름표다. 판에 난이도를 비웠으면 규칙의 기본 난이도다
     ability: str
@@ -448,13 +452,16 @@ class MoveOut(BaseModel):
     from_: PlaceRefOut | None = Field(alias='from')
     to: PlaceRefOut
     # 갔는가. 못 갔으면 reason 이 있다: not_adjacent(그사이 다른 곳으로 옮겨져 이어진 길이 없었다),
-    # locked(잠겨 있었고 그 열쇠가 없었다, #281), cross_failed(길을 넘는 판정에 실패했다, #281)
+    # locked(잠겨 있었고 그 열쇠가 없었다, #281), cross_failed(길을 넘는 판정에 실패했다, #281),
+    # barred(빗장이 반대쪽에 걸려 있었다, #281)
     moved: bool
     reason: str | None
     # 지나간 길에 걸린 게임 안의 시간(분). 다음 라운드가 열릴 때 적어도 그만큼 흐른다. 안 걸렸거나 못 갔으면 None 이다
     travel_minutes: int | None = None
     # 지닌 열쇠로 잠긴 문을 열었는가(#281). 연 문은 열린 채다
     unlocked: bool = False
+    # 빗장 쪽에서 걸린 빗장을 풀었는가(#281). 푼 빗장은 풀린 채다
+    unbarred: bool = False
     # 길을 넘는 판정(#281). 넘기 판정이 없는 길이거나 그 앞에서 막혔으면 None 이다
     cross: CrossOut | None = None
     # 넘기에 실패해서 다친 것(#281). 판에 실패의 피해를 적지 않았으면 None 이다
@@ -504,6 +511,35 @@ class SearchOut(BaseModel):
     found: list[FoundRouteOut]
     # 찾아서 가진 물건들. 물건을 찾기 전(#279)에 정한 결과에는 없다
     items: list[FoundItemOut] = []
+
+
+class DoorOut(BaseModel):
+    """길의 문을 다룬 결과(#281). 엔진이 정했다(app/rounds/door_actions.py)."""
+
+    user_id: uuid.UUID
+    character_name: str
+    # 차례가 왔을 때 서 있던 곳과, 그 길의 다른 끝
+    from_: PlaceRefOut | None = Field(alias='from')
+    to: PlaceRefOut
+    # lock(잠그기), unlock(열기), pick(따기), force(부수기)
+    act: str
+    # 잠그기와 열기가 다룬 장치. lock(자물쇠) 또는 bar(빗장). 따기와 부수기는 None 이다
+    device: str | None = None
+    # 해냈는가. 못 했으면 reason 이 있다: no_key(열쇠가 없었다), wrong_side(빗장의 반대쪽이었다),
+    # broken(부서진 문은 잠그지 못한다), already(이미 그렇게 되어 있었다), no_tool(따는 도구가 없었다),
+    # failed(따기나 부수기의 판정에 실패했다)
+    done: bool
+    reason: str | None
+    # 따기와 부수기의 판정. 굴리지 않았으면 None 이다
+    check: CrossOut | None = None
+
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+
+class DoorOutcome(BaseModel):
+    """문을 다루는 행동의 결과(#281)."""
+
+    door: DoorOut
 
 
 class SearchOutcome(BaseModel):
@@ -820,6 +856,7 @@ class DeclarationOut(BaseModel):
         | ItemGiveOutcome
         | MoveOutcome
         | SearchOutcome
+        | DoorOutcome
         | TakeOutcome
         | PutDownOutcome
         | StealOutcome

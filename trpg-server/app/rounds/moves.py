@@ -119,6 +119,7 @@ def build_moves(
                 worn=worn_notes_of(snapshot, catalog, member),
                 travel=narration_request.to_travel(declaration, snapshot.rulebook.rules if snapshot else None),
                 search=narration_request.to_search(declaration),
+                door=narration_request.to_door(declaration, snapshot.rulebook.rules if snapshot else None),
                 take=narration_request.to_take(declaration),
                 put_down=narration_request.to_put_down(declaration),
                 steal=narration_request.to_steal(declaration),
@@ -181,10 +182,15 @@ def exit_name(mapping: MapView, here: uuid.UUID, there: uuid.UUID) -> str:
     """
     나가는 길 하나의 이름. 길의 조건이 있으면 이름 뒤에 붙인다(#281).
 
-    예: 광장, 탑(잠긴 문), 절벽 위(넘기: 근력). 무슨 열쇠인지와 실패의 피해는 적지 않는다.
+    예: 광장, 탑(잠긴 문), 절벽 위(넘기: 근력), 창고(빗장 걸림), 지하실(부서진 문).
+    무슨 열쇠인지와 실패의 피해는 적지 않는다.
     """
     route = places.route_between(mapping.known, here, there)
     marks = []
+    if route_locks.is_broken(mapping.table, route):
+        marks.append('부서진 문')
+    if route_locks.is_barred(mapping.table, route):
+        marks.append('빗장 걸림')
     if route_locks.is_locked(mapping.table, route):
         marks.append('잠긴 문')
     if route.cross is not None:

@@ -135,7 +135,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     # 캐릭터의 위치는 공개다. 아는 장소만 적히므로 숨긴 장소는 새지 않는다
     # 업혀 갔으면 업은 사람(carried_by)이 더 있다(#367)
     # 판의 사건이 옮겼으면 그 사건 항목(happening)이 더 있다
-    # 지닌 열쇠로 잠긴 문을 열고 갔으면 unlocked 가 더 있다(#281). 문이 열린 것은 맵에 보이므로 공개다
+    # 지닌 열쇠로 잠긴 문을 열고 갔으면 unlocked, 빗장 쪽에서 빗장을 풀고 갔으면 unbarred 가 더 있다(#281).
+    # 문이 열린 것은 맵에 보이므로 공개다
     EventType.CHARACTER_MOVED: (
         'round',
         'user_id',
@@ -146,11 +147,14 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'carried_by',
         'happening',
         'unlocked',
+        'unbarred',
     ),
     # 판의 사건은 공개다. 일어난 것과 옮긴 것만 적는다. 조건은 적지 않는다(아직 일어나지 않은 사건이 드러나지 않게)
     EventType.HAPPENING_OCCURRED: ('round', 'entry_id', 'name', 'moves'),
     # 찾은 길은 공개다. 찾았으니 이제 모두가 아는 길이다. 굴린 판정은 처음부터 적지 않는다
     EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found', 'items'),
+    # 문은 맵에 보이는 것이다. 무슨 열쇠로 했는지는 적지 않는다(#281)
+    EventType.DOOR_CHANGED: ('round', 'user_id', 'character_name', 'act', 'device', 'from', 'to'),
     # 쉰 것과 그 회복, 깨진 까닭은 공개다. HP 는 다른 회복과 같이 보인다
     EventType.CHARACTER_RESTED: (
         'round',

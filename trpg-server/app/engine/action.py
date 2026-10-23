@@ -95,6 +95,23 @@ class ActionKind(enum.StrEnum):
     PAY = 'pay'
     # 지금 장소의 숨을 곳에 엄폐한다. 그 라운드 동안 그 장소의 커버로 커버 세이브를 받는다(#276). 세이브 방식에서만
     COVER = 'cover'
+    # 지금 장소에 닿은 길의 문을 잠근다. 자물쇠는 그 열쇠로, 빗장은 빗장 쪽에서 건다(#281)
+    LOCK = 'lock'
+    # 지금 장소에 닿은 길의 문을 연다. 자물쇠는 그 열쇠로, 빗장은 빗장 쪽에서 푼다(#281)
+    UNLOCK = 'unlock'
+    # 지금 장소에 닿은 길의 잠긴 자물쇠를 판에 적힌 판정으로 딴다(#281)
+    PICK = 'pick'
+    # 지금 장소에 닿은 길의 문을 판에 적힌 판정으로 부순다(#281)
+    FORCE = 'force'
+
+
+class DoorDevice(enum.StrEnum):
+    """문을 잠그는 장치(#281). 잠그기와 열기가 무엇으로 하는지다."""
+
+    # 자물쇠. 그 열쇠를 지닌 사람이 길의 어느 끝에서든 잠그고 연다
+    LOCK = 'lock'
+    # 빗장. 빗장 쪽에 선 사람이 열쇠 없이 걸고 푼다
+    BAR = 'bar'
 
 
 class RestLength(enum.StrEnum):
@@ -481,6 +498,65 @@ class PayAction(BaseModel):
     amount: int = Field(ge=1, le=PAY_MAX_AMOUNT)
 
 
+class LockAction(BaseModel):
+    """
+    지금 서 있는 장소에 닿은 길(place 로 이어진 길)의 문을 잠그는 행동(#281, app/rounds/door_actions.py).
+
+    device 는 자물쇠(lock)인지 빗장(bar)인지다. 그 길에 하나만 있으면 비워도 된다. 둘 다 있으면 적어야 한다.
+    자물쇠는 그 열쇠를 지녀야 잠그고, 빗장은 빗장 쪽에 서 있어야 건다. 부서진 문은 잠그지 못한다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.LOCK]
+    place: uuid.UUID
+    device: DoorDevice | None = None
+
+
+class UnlockAction(BaseModel):
+    """
+    지금 서 있는 장소에 닿은 길의 문을 여는 행동(#281). 지나가지 않고 열기만 한다. device 는 잠그기와 같다.
+
+    자물쇠는 그 열쇠를 지녀야 열고, 빗장은 빗장 쪽에 서 있어야 푼다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.UNLOCK]
+    place: uuid.UUID
+    device: DoorDevice | None = None
+
+
+class PickAction(BaseModel):
+    """
+    지금 서 있는 장소에 닿은 길의 잠긴 자물쇠를 따는 행동(#281). 판에 적힌 따는 판정(능력, 난이도)으로 굴린다.
+
+    판에 도구를 적었으면 그 물건을 지녀야 딴다. 성공하면 자물쇠가 열린다. 지나가지는 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.PICK]
+    place: uuid.UUID
+
+
+class ForceAction(BaseModel):
+    """
+    지금 서 있는 장소에 닿은 길의 문을 부수는 행동(#281). 판에 적힌 부수는 판정(능력, 난이도)으로 굴린다.
+
+    성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 문은 다시 잠그지 못한다. 지나가지는 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.FORCE]
+    place: uuid.UUID
+
+
+# 문을 다루는 행동들(#281). 같은 곳에서 받고 판정한다(app/rounds/door_actions.py)
+DoorAction = LockAction | UnlockAction | PickAction | ForceAction
+
+
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
 class CoverAction(BaseModel):
     """
@@ -514,6 +590,10 @@ AnyAction = (
     | SellAction
     | PayAction
     | CoverAction
+    | LockAction
+    | UnlockAction
+    | PickAction
+    | ForceAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

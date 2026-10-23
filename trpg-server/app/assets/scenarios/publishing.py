@@ -41,6 +41,7 @@ from app.assets.scenarios.schemas import (
     CrossCheck,
     Encounter,
     FindCheck,
+    ForceCheck,
     HappeningEffect,
     HappeningRule,
     ItemRule,
@@ -50,6 +51,7 @@ from app.assets.scenarios.schemas import (
     MoveNpcEffect,
     NpcPlace,
     NpcSheet,
+    PickCheck,
     PlaceItem,
     Pregen,
     QuestCondition,
@@ -140,6 +142,8 @@ class Problem(enum.StrEnum):
     ROUTE_CROSS_INVALID = 'route_cross_invalid'
     # 열쇠 하나를 두 길의 자물쇠에 적었다. 열쇠 하나는 자물쇠 하나만 연다(#281)
     ROUTE_KEY_REPEATED = 'route_key_repeated'
+    # 자물쇠를 따는 판정이나 문을 부수는 판정의 능력치나 난이도가 룰북의 규칙에 없다(#281)
+    ROUTE_OPEN_INVALID = 'route_open_invalid'
     # 놓인 물건이 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)에 있다. 아무도 그곳에 설 수 없다
     PLACE_ITEM_OFF_MAP = 'place_item_off_map'
     # 숨긴 물건을 찾는 판정의 능력치나 난이도가 룰북의 규칙에 없다
@@ -494,7 +498,7 @@ def read_quest_rules(scenario: Scenario) -> list[QuestRule]:
 def item_references(scenario: Scenario) -> list[uuid.UUID]:
     """
     물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품, 퀘스트마다의 보상,
-    몬스터와 NPC 마다 지닌 물건(장비와 소지품), 장소에 놓인 물건, 길의 자물쇠의 열쇠(#281).
+    몬스터와 NPC 마다 지닌 물건(장비와 소지품), 장소에 놓인 물건, 길의 자물쇠의 열쇠와 따는 도구(#281).
     """
     stacks = [ItemStack.model_validate(document) for document in scenario.starting_items]
     for document in scenario.pregens:
@@ -505,7 +509,8 @@ def item_references(scenario: Scenario) -> list[uuid.UUID]:
     carried = [line.entry_id for sheet in sheets for line in [*sheet.equipment, *sheet.inventory]]
     placed = [rule.entry_id for rule in read_place_items(scenario)]
     rules = [rule.entry_id for rule in read_item_rules(scenario)]
-    keys = lock_keys(read_routes(scenario))
+    routes = read_routes(scenario)
+    keys = lock_keys(routes) + pick_tools(routes)
     return rules + [stack.entry_id for stack in stacks] + carried + placed + keys
 
 
@@ -836,6 +841,21 @@ def lock_keys(routes: list[RouteRule]) -> list[uuid.UUID]:
     return [route.lock.key for route in routes if route.lock is not None]
 
 
+def pick_tools(routes: list[RouteRule]) -> list[uuid.UUID]:
+    """자물쇠를 따는 데 있어야 하는 도구들(#281). 길의 순서다."""
+    return [
+        route.lock.pick.tool
+        for route in routes
+        if route.lock is not None and route.lock.pick is not None and route.lock.pick.tool is not None
+    ]
+
+
+def opening_checks(route: RouteRule) -> list[PickCheck | ForceCheck]:
+    """길의 문을 여는 판정들(#281). 따기와 부수기다. 적지 않은 것은 빠진다."""
+    pick = route.lock.pick if route.lock is not None else None
+    return [check for check in (pick, route.force) if check is not None]
+
+
 def cross_invalid(cross: CrossCheck | None, ruleset: Ruleset) -> bool:
     """
     길을 넘는 판정이 룰북의 규칙에 맞지 않는가(#281). 능력치와 난이도는 찾는 판정과 같이 보고,
@@ -857,8 +877,12 @@ def map_places(scenario: Scenario, routes: list[RouteRule]) -> list[uuid.UUID]:
     return places
 
 
-def find_invalid(find: FindCheck | None, ruleset: Ruleset) -> bool:
-    """찾는 판정(숨긴 길, 숨긴 물건)이 룰북의 규칙에 맞지 않는가. 능력치와 난이도가 규칙에 있어야 한다."""
+def find_invalid(find: FindCheck | PickCheck | ForceCheck | None, ruleset: Ruleset) -> bool:
+    """
+    찾는 판정(숨긴 길, 숨긴 물건)이 룰북의 규칙에 맞지 않는가. 능력치와 난이도가 규칙에 있어야 한다.
+
+    자물쇠를 따는 판정과 문을 부수는 판정(#281)도 같은 모양이라 같이 본다.
+    """
     if find is None:
         return False
     return find_ability(ruleset, find.ability) is None or find_difficulty(ruleset, find.difficulty) is None
@@ -955,6 +979,9 @@ def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None)
     keys = lock_keys(routes)
     if len(set(keys)) != len(keys):
         problems.append(Problem.ROUTE_KEY_REPEATED)
+    opening = [check for route in routes for check in opening_checks(route)]
+    if ruleset and any(find_invalid(check, ruleset) for check in opening):
+        problems.append(Problem.ROUTE_OPEN_INVALID)
     return problems
 
 
