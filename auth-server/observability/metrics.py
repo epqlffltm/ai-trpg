@@ -73,6 +73,7 @@ class Instruments:
     emails_sent: Counter
     rate_limited: Counter
     rate_limits_unavailable: Counter
+    network_blocked: Counter
 
 
 def duration_histogram(meter: Meter, name: str, description: str) -> Histogram:
@@ -103,6 +104,7 @@ def build_instruments(meter: Meter) -> Instruments:
         rate_limits_unavailable=meter.create_counter(
             'auth_rate_limits_unavailable', description='Redis 에 묻지 못해 세지 않고 통과시킨 수'
         ),
+        network_blocked=meter.create_counter('auth_network_blocked', description='막은 IP 에서 와서 거절한 요청의 수'),
     )
 
 
@@ -193,6 +195,11 @@ def record_rate_limited(limit: str) -> None:
 def record_rate_limits_unavailable(limit: str) -> None:
     """Redis 에 묻지 못해 그 제한을 세지 않고 통과시킨 것 하나를 센다."""
     _instruments.rate_limits_unavailable.add(1, {'limit': limit})
+
+
+def record_network_blocked(endpoint: str) -> None:
+    """막은 IP(#638)에서 와서 거절한 요청 하나를 센다. endpoint 는 signup, login, refresh 가운데 하나다."""
+    _instruments.network_blocked.add(1, {'endpoint': endpoint})
 
 
 # --- 보내기 ---

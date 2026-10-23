@@ -24,6 +24,7 @@ from rest_framework.views import APIView
 from accounts.age import korean_today
 from accounts.api_schema import (
     BAD_REQUEST_BODY,
+    NETWORK_BLOCKED,
     ORIGIN_REFUSED,
     TOO_MANY_ATTEMPTS,
     GuardianNoticeAnswerSerializer,
@@ -49,7 +50,7 @@ from accounts.attempt_policies import (
     count_password_change_attempt,
     is_login_blocked_ip,
 )
-from accounts.client_ip import get_attempt_subject
+from accounts.client_ip import get_attempt_subject, get_client_ip
 from accounts.consents import (
     POLICIES,
     ConsentOutdatedError,
@@ -89,6 +90,7 @@ from accounts.identity_status import identity_status_of
 from accounts.jwks import build_jwks
 from accounts.login_tickets import InvalidLoginTicketError
 from accounts.models import User
+from accounts.network_blocks import find_block, log_blocked_request
 from accounts.origin_check import is_allowed_origin, log_refused_origin, read_origin
 from accounts.public_names import InvalidPublicIdsError, find_names, parse_ids
 from accounts.serializers import (
@@ -160,6 +162,7 @@ from accounts.withdrawal import (
     request_withdrawal,
 )
 from accounts.withdrawal_schedule import withdrawal_scheduled_at
+from observability.metrics import record_network_blocked
 
 # 본인의 항목마다의 동의 상태. 읽기, 동의, 철회가 같은 모양으로 답한다(API 목록의 모양)
 CONSENT_STATES = inline_serializer('ConsentStates', {'items': ConsentStateSerializer(many=True)})
@@ -219,6 +222,36 @@ def refuse_unknown_origin(request: Request) -> Response | None:
         return None
     log_refused_origin(origin, request.path)
     return build_origin_refused_response()
+
+
+def build_network_blocked_response() -> Response:
+    """
+    막은 IP 에서 온 요청의 응답(#638). 막혔다고 알린다. 쿠키는 지우지 않는다.
+
+    IP 를 함께 쓰는 곳(학교, 회사)의 다른 사람이 까닭을 알고 문의할 수 있게 숨기지 않는다.
+    쿠키를 지우지 않으므로 막기가 풀리거나 다른 네트워크로 옮기면 로그인한 채로 이어 간다.
+    """
+    return Response(
+        {
+            'detail': '이 네트워크에서는 가입과 로그인이 제한되었습니다. 잘못 막혔다면 고객 문의로 알려 주세요.',
+            'code': 'network_blocked',
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def refuse_blocked_network(request: Request, endpoint: str) -> Response | None:
+    """
+    요청을 보낸 주소가 막은 대역 안이면 거절 응답을, 아니면 None 을 돌려준다(#638).
+
+    endpoint 는 메트릭의 이름표다(signup, login, refresh). 주소를 정하는 규칙은 시도 제한과 같다(client_ip.py).
+    """
+    block = find_block(get_client_ip(request), timezone.now())
+    if block is None:
+        return None
+    record_network_blocked(endpoint)
+    log_blocked_request(block, request.path)
+    return build_network_blocked_response()
 
 
 def build_login_ticket_invalid_response() -> Response:
@@ -301,10 +334,16 @@ class SignupView(APIView):
         responses={
             202: detail('코드를 보냈다. 이미 가입된 주소여도 같은 답이다'),
             400: bad_request(),
+            403: NETWORK_BLOCKED,
             429: TOO_MANY_ATTEMPTS,
         },
     )
     def post(self, request: Request) -> Response:
+        # 막은 IP 면 메일을 보내지 않고 거절한다(#638)
+        blocked = refuse_blocked_network(request, 'signup')
+        if blocked is not None:
+            return blocked
+
         serializer = SignupSerializer(data=request.data)
         # 검증에 실패하면 400 과 필드별 오류 메시지로 응답한다
         serializer.is_valid(raise_exception=True)
@@ -328,9 +367,18 @@ class SignupVerifyView(APIView):
     @extend_schema(
         summary='가입 2단계: 코드를 맞히면 가입 티켓을 준다',
         request=SignupVerifySerializer,
-        responses={200: SignupVerifiedSerializer, 400: bad_request('형식이 틀렸거나 코드가 맞지 않거나 만료됐다')},
+        responses={
+            200: SignupVerifiedSerializer,
+            400: bad_request('형식이 틀렸거나 코드가 맞지 않거나 만료됐다'),
+            403: NETWORK_BLOCKED,
+        },
     )
     def post(self, request: Request) -> Response:
+        # 막은 IP 면 거절한다(#638). 가입의 세 단계 모두 본다
+        blocked = refuse_blocked_network(request, 'signup')
+        if blocked is not None:
+            return blocked
+
         serializer = SignupVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -361,6 +409,7 @@ class SignupCompleteView(APIView):
         responses={
             201: detail('가입했다. 로그인은 따로 한다'),
             400: bad_request('칸의 오류이거나 티켓을 쓸 수 없다(signup_ticket_invalid)'),
+            403: NETWORK_BLOCKED,
             409: OpenApiResponse(
                 response=BAD_REQUEST_BODY,
                 description='이미 가입한 이메일(email_registered)이거나, 다른 가입이 같은 이름을 방금 가져갔다',
@@ -368,6 +417,11 @@ class SignupCompleteView(APIView):
         },
     )
     def post(self, request: Request) -> Response:
+        # 막은 IP 면 계정을 만들지 않는다(#638)
+        blocked = refuse_blocked_network(request, 'signup')
+        if blocked is not None:
+            return blocked
+
         serializer = SignupCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -414,7 +468,7 @@ class LoginView(APIView):
             202: LoginChallengeSerializer,
             400: bad_request(),
             401: detail('아이디 또는 비밀번호가 틀렸다. 막힌 IP 에도 같은 답이다'),
-            403: coded('이메일 인증을 마치지 않았다(email_not_verified)'),
+            403: coded('이메일 인증을 마치지 않았다(email_not_verified) 또는 막은 IP 다(network_blocked)'),
             429: OpenApiResponse(
                 response=RetryLaterSerializer,
                 description='시도가 너무 많다(too_many_attempts) 또는 코드를 자주 요청했다(login_code_unavailable)',
@@ -422,6 +476,11 @@ class LoginView(APIView):
         },
     )
     def post(self, request: Request) -> Response:
+        # 막은 IP 면 비밀번호를 확인하지 않고 거절한다(#638). 막혔다고 알린다
+        blocked = refuse_blocked_network(request, 'login')
+        if blocked is not None:
+            return blocked
+
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -485,9 +544,15 @@ class LoginVerifyView(APIView):
             200: OpenApiResponse(response=LoginResponseSerializer, description='access 토큰. refresh 토큰은 쿠키다'),
             400: bad_request('형식이 틀렸거나 코드가 맞지 않거나 만료됐다'),
             401: coded('로그인 티켓을 쓸 수 없다(login_ticket_invalid). 처음부터 다시 한다'),
+            403: NETWORK_BLOCKED,
         },
     )
     def post(self, request: Request) -> Response:
+        # 막은 IP 면 토큰을 주지 않는다(#638). 1단계 뒤에 막혀도 여기서 멈춘다
+        blocked = refuse_blocked_network(request, 'login')
+        if blocked is not None:
+            return blocked
+
         serializer = LoginVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -517,10 +582,16 @@ class LoginResendView(APIView):
             200: detail('다시 보냈다'),
             400: bad_request(),
             401: coded('로그인 티켓을 쓸 수 없다(login_ticket_invalid)'),
+            403: NETWORK_BLOCKED,
             429: retry_later('코드를 너무 자주 요청했다(login_code_unavailable)'),
         },
     )
     def post(self, request: Request) -> Response:
+        # 막은 IP 면 코드를 다시 보내지 않는다(#638)
+        blocked = refuse_blocked_network(request, 'login')
+        if blocked is not None:
+            return blocked
+
         serializer = LoginTicketSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -657,7 +728,7 @@ class RefreshView(APIView):
         responses={
             200: LoginResponseSerializer,
             401: detail('refresh 쿠키가 없거나 쓸 수 없다. 다시 로그인한다'),
-            403: ORIGIN_REFUSED,
+            403: coded('허용하지 않은 출처의 쿠키 요청(origin_not_allowed) 또는 막은 IP 다(network_blocked)'),
         },
     )
     def post(self, request: Request) -> Response:
@@ -665,6 +736,11 @@ class RefreshView(APIView):
         refused = refuse_unknown_origin(request)
         if refused is not None:
             return refused
+
+        # 막은 IP 면 새 토큰을 주지 않는다(#638). 다른 서버는 지금의 access 토큰이 끝나면 끊긴다
+        blocked = refuse_blocked_network(request, 'refresh')
+        if blocked is not None:
+            return blocked
 
         refresh_token = read_refresh_cookie(request)
         if refresh_token is None:
@@ -696,6 +772,11 @@ class LogoutView(APIView):
         refused = refuse_unknown_origin(request)
         if refused is not None:
             return refused
+
+        # 막은 IP 면 새 토큰을 주지 않는다(#638). 다른 서버는 지금의 access 토큰이 끝나면 끊긴다
+        blocked = refuse_blocked_network(request, 'refresh')
+        if blocked is not None:
+            return blocked
 
         refresh_token = read_refresh_cookie(request)
         if refresh_token is not None:

@@ -15,6 +15,7 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
 
+from accounts.db_fields import CidrField
 from accounts.validators import (
     NICKNAME_MAX_LENGTH,
     USERNAME_MAX_LENGTH,
@@ -400,6 +401,35 @@ class OutgoingMailStatus(models.TextChoices):
     # 워커가 차지하고 메일 서버와 통신하는 중이다. 다음 시도 시각이 임대가 끝나는 시각이다
     SENDING = 'sending', '보내는 중'
     DISCARDED = 'discarded', '버림'
+
+
+class NetworkBlock(models.Model):
+    """
+    가입, 로그인, 토큰 갱신을 막는 IP 주소나 대역(#638). 운영자가 관리 명령(block_network)으로 적는다.
+
+    불법 행위로 정지한 사람이 새 계정과 새 이메일로 돌아오는 것을 막는다.
+    본인인증과 이메일의 값으로 막는 것은 ReturnBlock 이다.
+    IP 는 바뀌고 여럿이 함께 쓴다. 그래서 늘 푸는 시각이 있다(network_blocks.MAX_DAYS 까지).
+    기간이 지나면 막지 않고, 정리(send_security_digest)가 지운다. 운영자는 unblock_network 나 관리 화면에서 지워 푼다.
+    """
+
+    network = CidrField('주소 또는 대역', unique=True)
+    # 운영자가 남긴 사유. 정지의 사유와 같은 길이다. 사람의 이름이나 이메일 주소를 적지 않는다
+    note = models.CharField('사유', max_length=200)
+    expires_at = models.DateTimeField('푸는 시각')
+    created_at = models.DateTimeField('막은 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'IP 막기'
+        verbose_name_plural = 'IP 막기'
+        ordering = ['-created_at']
+        indexes = [
+            # 요청마다 아직 살아 있는 줄만 본다. 정리도 기간이 지난 줄을 이것으로 찾는다
+            models.Index(fields=['expires_at'], name='accounts_network_block_exp_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.network} / {self.expires_at:%Y-%m-%d}까지'
 
 
 class MailKind(models.TextChoices):
