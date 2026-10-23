@@ -214,6 +214,15 @@
             "title": "Greeting",
             "type": "string"
           },
+          "illustrations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Illustration"
+            },
+            "maxItems": 30,
+            "title": "Illustrations",
+            "type": "array"
+          },
           "image_id": {
             "anyOf": [
               {
@@ -359,6 +368,13 @@
             "title": "Id",
             "type": "string"
           },
+          "illustrations": {
+            "items": {
+              "$ref": "#/components/schemas/Illustration"
+            },
+            "title": "Illustrations",
+            "type": "array"
+          },
           "image_id": {
             "anyOf": [
               {
@@ -490,6 +506,7 @@
           "items",
           "start_items",
           "affection",
+          "illustrations",
           "latest_version",
           "published_at",
           "created_at",
@@ -527,6 +544,14 @@
           "greeting": {
             "title": "Greeting",
             "type": "string"
+          },
+          "illustrations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IllustrationDocument"
+            },
+            "title": "Illustrations",
+            "type": "array"
           },
           "image_id": {
             "anyOf": [
@@ -746,6 +771,21 @@
               }
             ],
             "title": "Greeting"
+          },
+          "illustrations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Illustration"
+                },
+                "maxItems": 30,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Illustrations"
           },
           "image_id": {
             "anyOf": [
@@ -970,6 +1010,142 @@
         ],
         "title": "HealthResponse",
         "type": "object"
+      },
+      "Illustration": {
+        "additionalProperties": false,
+        "description": "일러스트 하나(#669). 조건이 맞은 뒤의 첫 응답에 붙어 배경과 캐릭터를 대신한다(chat).\ncollectible 이면 해금 대상이다. 한 번 열면 계정에 남고 갤러리와 소개의 칸에 보인다.\n아니면 이야기 중에만 나온다(칸도 보이지 않는다). scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.",
+        "properties": {
+          "collectible": {
+            "default": true,
+            "title": "Collectible",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "scene": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Scene",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "when": {
+            "$ref": "#/components/schemas/IllustrationCondition"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "image_id",
+          "when"
+        ],
+        "title": "Illustration",
+        "type": "object"
+      },
+      "IllustrationCondition": {
+        "additionalProperties": false,
+        "description": "일러스트가 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/IllustrationWhen"
+          },
+          "target": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "IllustrationCondition",
+        "type": "object"
+      },
+      "IllustrationConditionDocument": {
+        "additionalProperties": false,
+        "description": "일러스트가 나오는 조건(종류, 대상).",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/IllustrationWhen"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "IllustrationConditionDocument",
+        "type": "object"
+      },
+      "IllustrationDocument": {
+        "additionalProperties": false,
+        "description": "일러스트 하나. collectible 이면 해금 대상이다. scene 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.",
+        "properties": {
+          "collectible": {
+            "title": "Collectible",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "scene": {
+            "title": "Scene",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "when": {
+            "$ref": "#/components/schemas/IllustrationConditionDocument"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "image_id",
+          "scene",
+          "collectible",
+          "when"
+        ],
+        "title": "IllustrationDocument",
+        "type": "object"
+      },
+      "IllustrationWhen": {
+        "description": "일러스트가 나오는 조건의 종류(#669). 호감도의 규칙과 같은 (종류, 대상) 모양이다.\n그 장소에 갔다(reach_place, 장소의 id), 그 물건을 처음 건넸다(give_item, 물건의 id),\n호감도가 그 단계에 이르렀다(affection_stage, 단계의 이름). 맞추는 것은 chat 의 엔진이다.",
+        "enum": [
+          "reach_place",
+          "give_item",
+          "affection_stage"
+        ],
+        "title": "IllustrationWhen",
+        "type": "string"
       },
       "ImageDetail": {
         "description": "올린 그림. url 은 그 그림을 내주는 주소다(소개 글의 img 에 그대로 쓴다).",
