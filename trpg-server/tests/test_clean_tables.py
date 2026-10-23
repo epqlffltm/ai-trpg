@@ -51,6 +51,7 @@ from app.tables.models import (
     TableQuest,
     TableSheet,
     TableVisit,
+    TableWorn,
 )
 from app.whispers.models import Whisper
 from tests.catalog_rows import add_cost, put_models
@@ -193,6 +194,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         session.add(Whisper(table_id=uuid.UUID(table['id']), owner_id=ME, **values))
         sheet_id = await session.scalar(select(TableSheet.id).where(TableSheet.table_id == uuid.UUID(table['id'])))
         session.add(TableItem(table_id=uuid.UUID(table['id']), sheet_id=sheet_id, entry_id=uuid.uuid4(), count=1))
+        session.add(
+            TableWorn(table_id=uuid.UUID(table['id']), sheet_id=sheet_id, entry_id=uuid.uuid4(), slots=['body'])
+        )
         session.add(TableQuest(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4(), status=QuestStatus.HIDDEN))
         session.add(TableVisit(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4()))
         session.add(

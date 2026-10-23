@@ -14,6 +14,8 @@
 """
 
 import uuid
+from collections.abc import Mapping, Sequence
+from typing import Protocol
 
 from pydantic import BaseModel, model_validator
 
@@ -101,7 +103,9 @@ from app.engine.sheet import Sheet
 #  45: 규칙에 서술 지침(rulebook.rules.narration: 분위기, 판정 결과 단계마다의 묘사, 하지 말 것)이 있다(#616)
 #  46: 돈이 있다(#278). 화폐(currency: 이름, 단위, 시작 돈, 사 주는 백분율), 물건의 값(items[].price),
 #      프리젠이 더 받는 돈(pregens[].money), 퀘스트의 돈의 보상(quests[].reward_money), 상인(npc_sheets[].merchant)
-SNAPSHOT_FORMAT = 46
+#  47: 장비의 칸이 있다(#276). 규칙의 칸(rulebook.rules.equipment_slots), 물건이 들어가는 칸(items[].slots,
+#      items[].slot_count), 시작할 때 착용하는 칸(starting_items[].wear, pregens[].items[].wear)
+SNAPSHOT_FORMAT = 47
 
 
 class EntrySnapshot(BaseModel):
@@ -177,10 +181,15 @@ class CurrencySnapshot(BaseModel):
 
 
 class ItemStackSnapshot(BaseModel):
-    """물건 몇 개. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개다."""
+    """
+    물건 몇 개. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개다.
+
+    wear 는 그중 하나를 시작할 때 착용하는 규칙의 칸들이다(#276). 비어 있으면 착용하지 않는다.
+    """
 
     entry_id: uuid.UUID
     count: int
+    wear: list[str] = []
 
 
 class ItemRuleSnapshot(BaseModel):
@@ -189,6 +198,8 @@ class ItemRuleSnapshot(BaseModel):
 
     heals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.
     price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
+    slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
+    slots 가 비어 있으면 착용하지 않는 물건이다.
     """
 
     entry_id: uuid.UUID
@@ -196,6 +207,8 @@ class ItemRuleSnapshot(BaseModel):
     heals: str | None = None
     rarity: ItemRarity = ItemRarity.NORMAL
     price: int | None = None
+    slots: list[str] = []
+    slot_count: int = 1
 
 
 class QuestConditionSnapshot(BaseModel):
@@ -534,6 +547,21 @@ class Snapshot(BaseModel):
         return self
 
     @model_validator(mode='after')
+    def require_fitting_wear(self) -> 'Snapshot':
+        """
+        시작할 때의 착용이 맞는지 본다(#276). 시작 소지품만으로도, 프리젠마다 그 소지품을 더해서도 본다.
+        아니면 거부한다.
+
+        게시할 때 이미 막는다(starting_wear_invalid). 판을 읽는 쪽(테이블의 시작)은 그대로 끼운다.
+        """
+        slot_keys = {slot.key for slot in self.rulebook.rules.equipment_slots}
+        fits = {rule.entry_id: (rule.slots, rule.slot_count) for rule in self.items}
+        groups = [self.starting_items, *([*self.starting_items, *pregen.items] for pregen in self.pregens)]
+        if any(wear_fault(slot_keys, fits, group) for group in groups):
+            raise ValueError('시작할 때의 착용이 규칙의 칸이나 물건의 칸과 맞지 않습니다.')
+        return self
+
+    @model_validator(mode='after')
     def require_currency(self) -> 'Snapshot':
         """
         돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있으면 화폐가 있는지 본다. 아니면 거부한다.
@@ -622,6 +650,34 @@ class Snapshot(BaseModel):
         if self.happenings and self.start_place is None:
             raise ValueError('사건 규칙이 있는데 시작 장소가 없습니다.')
         return self
+
+
+class WornStack(Protocol):
+    """시작할 때 착용을 적은 줄. 시나리오의 입력(ItemStack)과 판(ItemStackSnapshot)이 이 모양이다."""
+
+    entry_id: uuid.UUID
+    wear: list[str]
+
+
+def wear_fault(
+    slot_keys: set[str], fits: Mapping[uuid.UUID, tuple[list[str], int]], stacks: Sequence[WornStack]
+) -> bool:
+    """
+    한 캐릭터가 시작할 때 받을 줄들의 착용이 틀렸는가(#276).
+
+    slot_keys 는 규칙의 칸들, fits 는 물건마다 (들어갈 수 있는 칸, 차지하는 칸의 수)다.
+    규칙이 없는 물건은 착용하지 않는다. 착용한 칸은 규칙에 있고, 그 물건이 들어갈 수 있는 칸이고,
+    차지하는 칸의 수와 같아야 한다. 두 줄이 한 칸을 함께 쓰지 않는다.
+    """
+    used: list[str] = []
+    for stack in stacks:
+        if not stack.wear:
+            continue
+        slots, count = fits.get(stack.entry_id, ([], 1))
+        if len(stack.wear) != count or any(slot not in slots or slot not in slot_keys for slot in stack.wear):
+            return True
+        used.extend(stack.wear)
+    return len(set(used)) != len(used)
 
 
 def person_entries(snapshot: Snapshot) -> list[EntrySnapshot]:

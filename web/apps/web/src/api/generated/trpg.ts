@@ -1183,6 +1183,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/tables/{table_id}/equipment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Wear Equipment
+         * @description 자기 캐릭터가 가진 물건 하나를 장비의 칸들에 끼운다(#276). 찬 칸의 것은 벗겨진다. 라운드의 행동이 아니다.
+         *
+         *     선언을 받는 중에만 된다(닫는 중이면 409 round_closing). 쓰러졌거나 죽었으면 409.
+         *     착용하지 않는 물건이나 판에 없는 물건이면 422(entry_id), 칸이 맞지 않으면 422(slots),
+         *     가지고 있지 않으면 409(not_enough_items). 모두에게 이벤트(equipment_changed)가 간다.
+         */
+        put: operations["wear_equipment_api_v1_game_tables__table_id__equipment_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/tables/{table_id}/equipment/{slot}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take Off Equipment
+         * @description 자기 캐릭터의 그 칸을 비운다(#276). 그 칸을 차지한 착용이 통째로 빠진다. 비어 있으면 그대로 돌려준다.
+         *
+         *     선언을 받는 중에만 된다(닫는 중이면 409 round_closing). 쓰러졌거나 죽었으면 409.
+         */
+        delete: operations["take_off_equipment_api_v1_game_tables__table_id__equipment__slot__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/tables/{table_id}/events": {
         parameters: {
             query?: never;
@@ -2117,6 +2163,16 @@ export interface components {
             /** Price */
             price?: number | null;
             rarity: components["schemas"]["ItemRarity"];
+            /**
+             * Slot Count
+             * @default 1
+             */
+            slot_count: number;
+            /**
+             * Slots
+             * @default []
+             */
+            slots: string[];
         };
         /**
          * ChangeKind
@@ -2769,6 +2825,18 @@ export interface components {
             true_names?: string[] | null;
         };
         /**
+         * EquipmentSlot
+         * @description 장비의 칸 하나(#276). 캐릭터가 물건을 착용하는 자리다. 예: 주손, 보조손, 몸.
+         *
+         *     칸마다 하나의 물건이 들어간다. 어느 물건이 어느 칸에 들어가는지는 시나리오의 아이템 규칙이 정한다.
+         */
+        EquipmentSlot: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+        };
+        /**
          * EventOut
          * @description 앉은 사람이 이벤트 하나를 볼 때의 값.
          */
@@ -2815,7 +2883,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_put_down" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -3250,6 +3318,9 @@ export interface components {
          *     rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
          *     price 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.
          *     비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).
+         *     slots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
+         *     두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.
+         *     장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).
          */
         "ItemRule-Input": {
             /**
@@ -3265,6 +3336,16 @@ export interface components {
             price?: number | null;
             /** @default normal */
             rarity: components["schemas"]["ItemRarity"];
+            /**
+             * Slot Count
+             * @default 1
+             */
+            slot_count: number;
+            /**
+             * Slots
+             * @default []
+             */
+            slots: string[];
         };
         /**
          * ItemRule
@@ -3275,6 +3356,9 @@ export interface components {
          *     rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
          *     price 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.
          *     비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).
+         *     slots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
+         *     두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.
+         *     장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).
          */
         "ItemRule-Output": {
             /** Entry Id */
@@ -3287,6 +3371,16 @@ export interface components {
             price?: number | null;
             /** @default normal */
             rarity: components["schemas"]["ItemRarity"];
+            /**
+             * Slot Count
+             * @default 1
+             */
+            slot_count: number;
+            /**
+             * Slots
+             * @default []
+             */
+            slots: string[];
         };
         /**
          * ItemRuleSnapshot
@@ -3294,6 +3388,8 @@ export interface components {
          *
          *     heals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.
          *     price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
+         *     slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
+         *     slots 가 비어 있으면 착용하지 않는 물건이다.
          */
         ItemRuleSnapshot: {
             /**
@@ -3308,12 +3404,24 @@ export interface components {
             price?: number | null;
             /** @default normal */
             rarity: components["schemas"]["ItemRarity"];
+            /**
+             * Slot Count
+             * @default 1
+             */
+            slot_count: number;
+            /**
+             * Slots
+             * @default []
+             */
+            slots: string[];
         };
         /**
          * ItemStack
          * @description 물건 몇 개. 붙인 로어북의 물건 항목 하나(entry_id)를 count 개다. 시작 소지품에 쓴다.
          *
-         *     가리키는 항목이 붙인 로어북에 있는지, 물건인지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.
+         *     wear 는 그중 하나를 시작할 때 착용하는 칸들이다(#276). 비우면 착용하지 않고 시작한다.
+         *     그 물건의 아이템 규칙이 정한 칸 중에서, 차지하는 칸의 수만큼 적는다. 퀘스트의 보상에는 적지 않는다.
+         *     가리키는 항목이 붙인 로어북에 있는지, 물건인지, 칸이 맞는지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.
          */
         "ItemStack-Input": {
             /** Count */
@@ -3323,22 +3431,36 @@ export interface components {
              * Format: uuid
              */
             entry_id: string;
+            /**
+             * Wear
+             * @default []
+             */
+            wear: string[];
         };
         /**
          * ItemStack
          * @description 물건 몇 개. 붙인 로어북의 물건 항목 하나(entry_id)를 count 개다. 시작 소지품에 쓴다.
          *
-         *     가리키는 항목이 붙인 로어북에 있는지, 물건인지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.
+         *     wear 는 그중 하나를 시작할 때 착용하는 칸들이다(#276). 비우면 착용하지 않고 시작한다.
+         *     그 물건의 아이템 규칙이 정한 칸 중에서, 차지하는 칸의 수만큼 적는다. 퀘스트의 보상에는 적지 않는다.
+         *     가리키는 항목이 붙인 로어북에 있는지, 물건인지, 칸이 맞는지는 게시할 때 본다. 로어북은 나중에 바꿀 수 있다.
          */
         "ItemStack-Output": {
             /** Count */
             count: number;
             /** Entry Id */
             entry_id: string;
+            /**
+             * Wear
+             * @default []
+             */
+            wear: string[];
         };
         /**
          * ItemStackSnapshot
          * @description 물건 몇 개. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개다.
+         *
+         *     wear 는 그중 하나를 시작할 때 착용하는 규칙의 칸들이다(#276). 비어 있으면 착용하지 않는다.
          */
         ItemStackSnapshot: {
             /** Count */
@@ -3348,6 +3470,11 @@ export interface components {
              * Format: uuid
              */
             entry_id: string;
+            /**
+             * Wear
+             * @default []
+             */
+            wear: string[];
         };
         /**
          * ItemUseOut
@@ -6048,6 +6175,8 @@ export interface components {
             die: number;
             /** Difficulties */
             difficulties: components["schemas"]["Difficulty"][];
+            /** Equipment Slots */
+            equipment_slots: components["schemas"]["EquipmentSlot"][];
             /** Hp Ability */
             hp_ability: string | null;
             /** Initiative Ability */
@@ -6580,6 +6709,11 @@ export interface components {
             number: number;
             /** Place Id */
             place_id?: string | null;
+            /**
+             * Worn
+             * @default []
+             */
+            worn: components["schemas"]["WornOut"][];
         };
         /**
          * ShortRest
@@ -6621,7 +6755,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 46
+             * @default 47
              */
             format: number;
             /**
@@ -7489,6 +7623,21 @@ export interface components {
             roll: number;
         };
         /**
+         * WearRequest
+         * @description 장비를 착용할 때 받는 값(#276). 가진 물건 하나를 규칙의 칸들에 끼운다.
+         *
+         *     slots 는 그 물건이 들어갈 수 있는 칸 중에서 차지하는 칸의 수만큼 고른다(CatalogItemOut.slots, slot_count).
+         */
+        WearRequest: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Slots */
+            slots: string[];
+        };
+        /**
          * WhisperCreate
          * @description 쪽지를 보낼 때 받는 값. 보낸 사람은 토큰에서 읽는다. 입력으로 받지 않는다.
          */
@@ -7671,6 +7820,21 @@ export interface components {
             setting?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * WornOut
+         * @description 착용한 물건 하나(#276). 무엇을 규칙의 어느 칸들에 끼웠는가. 이름은 판의 로어북 물건 항목의 이름이다.
+         */
+        WornOut: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Name */
+            name: string;
+            /** Slots */
+            slots: string[];
         };
     };
     responses: never;
@@ -10107,6 +10271,73 @@ export interface operations {
             header?: never;
             path: {
                 table_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wear_equipment_api_v1_game_tables__table_id__equipment_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WearRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_off_equipment_api_v1_game_tables__table_id__equipment__slot__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+                slot: string;
             };
             cookie?: never;
         };

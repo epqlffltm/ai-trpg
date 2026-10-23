@@ -22,6 +22,8 @@ class Labels:
     # 판의 화폐의 이름과 단위(#278). 돈이 없는 판이면 비어 있다
     currency_name: str = ''
     currency_unit: str = ''
+    # 장비의 칸의 이름(#276). 이름표(main_hand)에서 이름(주손)으로 간다
+    slots: Mapping[str, str] = field(default_factory=dict)
 
 
 def labels_of(snapshot: Snapshot) -> Labels:
@@ -33,4 +35,5 @@ def labels_of(snapshot: Snapshot) -> Labels:
         injuries={injury.key: injury.name for injury in rules.injuries},
         currency_name=snapshot.currency.name if snapshot.currency else '',
         currency_unit=snapshot.currency.unit if snapshot.currency else '',
+        slots={slot.key: slot.name for slot in rules.equipment_slots},
     )

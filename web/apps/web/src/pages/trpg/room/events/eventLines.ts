@@ -203,6 +203,19 @@ function paidText(payload: Payload, ctx: EventContext, event: TableEvent): strin
   return `${who(payload, ctx, event)}: ${moneyOf(count(payload, 'amount'), ctx)} → ${to}`;
 }
 
+/** 칸의 이름표들을 규칙의 이름으로("주손·보조손"). 규칙에 없는 이름표는 그대로 */
+function slotsOf(payload: Payload, ctx: EventContext): string {
+  const value = payload['slots'];
+  const keys = Array.isArray(value) ? value.filter((key): key is string => typeof key === 'string') : [];
+  const names = new Map(ctx.table.rules.equipment_slots.map((slot) => [slot.key, slot.name]));
+  return keys.map((key) => names.get(key) ?? key).join('·');
+}
+
+function equipmentText(payload: Payload, ctx: EventContext, event: TableEvent): string {
+  const verb = text(payload, 'change') === 'take_off' ? '벗음' : '착용';
+  return `${who(payload, ctx, event)}: ${text(payload, 'name') ?? '물건'} ${verb} (${slotsOf(payload, ctx)})`;
+}
+
 function creditsShortText(payload: Payload, ctx: EventContext): string {
   const what = text(payload, 'reason') === 'gold_required' ? '골드가' : '크레딧이';
   return `${member(payload, ctx)}: ${what} 모자라 서술하지 못합니다. 충전하거나, 방장이 그 사람을 내보내거나 모델을 바꾸면 서술합니다.`;
@@ -298,6 +311,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   steal_attempted: (p, ctx, e) => stealText(p, ctx, e),
   item_traded: (p, ctx, e) => tradeText(p, ctx, e),
   money_paid: (p, ctx, e) => paidText(p, ctx, e),
+  equipment_changed: (p, ctx, e) => equipmentText(p, ctx, e),
   quest_changed: (p) => questText(p),
   character_moved: (p, ctx, e) => movedText(p, ctx, e),
   place_searched: (p, ctx, e) => searchedText(p, ctx, e),

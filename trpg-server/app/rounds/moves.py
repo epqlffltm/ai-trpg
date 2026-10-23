@@ -23,7 +23,7 @@ from app.rounds.cast import CastMember, condition_of
 from app.rounds.models import Round
 from app.rounds.monster_scene import SceneMonster
 from app.rounds.monster_scene import condition as monster_condition
-from app.rounds.narrator import HealNote, InjuryNote, ItemNote, MonsterNote, Move, PersonState, PlaceNote
+from app.rounds.narrator import HealNote, InjuryNote, ItemNote, MonsterNote, Move, PersonState, PlaceNote, WornNote
 from app.rounds.rests import NOTHING, Recovered
 from app.rounds.state import (
     find_arrival,
@@ -35,7 +35,7 @@ from app.rounds.state import (
     rules_of,
     trade_of,
 )
-from app.tables import injuries, items, money, place_items, places, sheets
+from app.tables import equipment, injuries, items, money, place_items, places, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 from app.tables.npc_attitudes import attitude_word
@@ -115,6 +115,7 @@ def build_moves(
                 naming=narration_request.to_naming(naming_of(declaration)),
                 item_action=narration_request.to_item_action(declaration),
                 items=held_notes(catalog, member),
+                worn=worn_notes_of(snapshot, catalog, member),
                 travel=narration_request.to_travel(declaration),
                 search=narration_request.to_search(declaration),
                 take=narration_request.to_take(declaration),
@@ -202,6 +203,17 @@ def held_notes(catalog: dict[uuid.UUID, CatalogItem], member: TableMember) -> li
         return []
     rows = items.in_catalog_order(member.sheet.items, catalog)
     return [ItemNote(name=catalog[item.entry_id].name, count=item.count) for item in rows]
+
+
+def worn_notes_of(
+    snapshot: Snapshot | None, catalog: dict[uuid.UUID, CatalogItem], member: TableMember
+) -> list[WornNote]:
+    """이 사람의 지금 캐릭터가 착용한 물건들을 서술자에게 줄 모양으로(#276). 규칙의 칸의 차례, 칸은 이름이다."""
+    if snapshot is None or member.sheet is None:
+        return []
+    rules = snapshot.rulebook.rules
+    rows = equipment.in_slot_order(member.sheet.worn, rules)
+    return [WornNote(name=catalog[row.entry_id].name, slots=equipment.slot_names(rules, row.slots)) for row in rows]
 
 
 def has_money(table: GameTable) -> bool:

@@ -82,6 +82,7 @@ def load_backfill_rules() -> dict:
     steal = load_migration('steal')
     robbed_wake = load_migration('robbed_wake')
     narration = load_migration('rule_narration')
+    slots = load_migration('equipment_slots')
     treated = [
         {**injury, **treatment.TREATABLE.get(injury['key'], treatment.UNTREATABLE)} for injury in injuries['injuries']
     ]
@@ -99,9 +100,10 @@ def load_backfill_rules() -> dict:
         'initiative_ability': initiative,
     }
     # 오래 가는 부상과 치료의 기간을 분으로 옮긴 것(판 형식 25), 쉬기(판 형식 28)와 훔치기(판 형식 36),
-    # 빼앗긴 인물이 깨어날 때의 반응(판 형식 40), 빈 서술 지침(판 형식 45)을 더한 것
+    # 빼앗긴 인물이 깨어날 때의 반응(판 형식 40), 빈 서술 지침(판 형식 45), 빈 장비의 칸(판 형식 47)을 더한 것
     converted = minutes.convert(filled, minutes.injury_to_minutes, minutes.row_to_minutes)
-    return narration.with_narration(robbed_wake.with_robbed_wake(steal.with_steal(rest.with_rest(converted))))
+    added = narration.with_narration(robbed_wake.with_robbed_wake(steal.with_steal(rest.with_rest(converted))))
+    return slots.with_slots(added)
 
 
 # --- 내장 템플릿 ---
@@ -149,8 +151,9 @@ def test_a_ruleset_survives_the_trip_through_a_document():
 def test_the_migration_filled_old_rulebooks_with_the_same_rules():
     # 옛 판을 읽을 때 SRD5 를 "그때의 규칙"으로 쓴다(upgrades.upgrade_from_3, upgrade_from_5).
     # 그러니 SRD5 의 값은 마이그레이션들이 채운 값과 늘 같아야 한다. 템플릿을 고치면 이 테스트가 깨진다.
-    # 서술 지침만은 다르다. 옛 룰북은 지침이 없는 것으로 둔다(#616). SRD5 의 판타지 분위기를 옛 판에 얹지 않는다
-    assert load_backfill_rules() == {**SRD5.model_dump(mode='json'), 'narration': None}
+    # 서술 지침만은 다르다. 옛 룰북은 지침이 없는 것으로 둔다(#616). SRD5 의 판타지 분위기를 옛 판에 얹지 않는다.
+    # 장비의 칸도 같다. 옛 룰북은 칸이 없는 것으로 둔다(#276)
+    assert load_backfill_rules() == {**SRD5.model_dump(mode='json'), 'narration': None, 'equipment_slots': []}
 
 
 def test_a_ruleset_cannot_be_changed_after_it_is_made():

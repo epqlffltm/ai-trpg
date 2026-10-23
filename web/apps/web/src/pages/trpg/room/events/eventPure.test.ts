@@ -35,6 +35,7 @@ const ALL: EventType[] = [
   'character_revived', 'round_closed', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
   'member_dropped', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
+  'equipment_changed',
 ];
 
 const IN_ROUNDS: EventType[] = ['gm_narration', 'player_action', 'check_rolled'];
@@ -80,6 +81,10 @@ describe('eventLine', () => {
     );
     expect(line('money_paid', { character_name: '렌', amount: 3, paid: true, target: { user_id: OTHER, character_name: '미아' } })?.text).toBe('렌: 3 → 미아');
     expect(line('naming_resolved', { character_name: '렌', correct: true, name: '마르타' })?.text).toBe('렌: 맞혔습니다. 마르타');
+    expect(line('equipment_changed', { character_name: '렌', change: 'wear', name: '대검', slots: ['main_hand', 'off_hand'] })?.text).toBe(
+      '렌: 대검 착용 (주손·보조손)',
+    );
+    expect(line('equipment_changed', { character_name: '렌', change: 'take_off', name: '투구', slots: ['head'] })?.text).toBe('렌: 투구 벗음 (head)');
   });
 
   it('설정과 모델은 보일 이름으로 적는다', () => {
