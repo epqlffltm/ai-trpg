@@ -86,6 +86,7 @@
 | 신고를 처리한다(`operator_actions`). 캐릭터를 숨기는 것은 asset 의 운영자 API 다 | `PUT /api/v1/chat/admin/message-reports/{id}/outcome` | 했다(#678) |
 
 - 사적 대화는 운영자가 열지 않는다. 신고하는 순간 그 답과 앞의 말을 신고에 굳혀 두고, 운영자는 그것만 본다(대화 전체를 여는 API 는 없다).
+- 처리하면 신고한 사람의 알림함에 간다([chat 서버의 신고](../../chat-server/README.md#신고)). asset 처럼 결과와 사유는 싣지 않는다.
 
 계획(아직 하지 않은 것):
 

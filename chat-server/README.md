@@ -74,6 +74,9 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `BILLING_URL` | 비어 있음(받지 않음) | 결제 서버의 주소(`http://127.0.0.1:8003`). 모델의 값을 가격 목록에서 읽고, 말 한 번에 홀드를 건다([모델 목록](#모델-목록)). 비우면 모델은 값 없이 보이고 말은 공짜다 |
 | `BILLING_SECRET` | 비어 있음 | 결제 서버에 보내는 요청에 서명하는 비밀. `billing-server/.env` 의 `CHAT_SERVER_SECRET` 과 같은 값. `BILLING_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `AUTH_SERVER_SECRET` | 비어 있음(받지 않음) | 인증 서버가 [탈퇴](#탈퇴)를 알릴 때 서명하는 비밀. `auth-server/.env` 의 `CHAT_SECRET` 과 같은 값. 적으면 32자 이상이어야 뜬다. 비밀값이다 |
+| `NOTIFICATION_URL` | 비어 있음(보내지 않음) | [신고](#신고)의 처리를 넣는 알림 서버의 주소. compose 가 `http://notification-server:8004` 를 넘긴다. 비우면 발송함에 적기만 한다 |
+| `NOTIFICATION_SECRET` | 비어 있음 | 알림 서버에 넣을 때 서명하는 비밀. `notification-server/.env` 의 `CHAT_SERVER_SECRET` 과 같은 값. 주소를 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
+| `NOTIFICATION_TIMEOUT_SECONDS` | `5` | 알림 서버를 부를 때 기다리는 시간. 넘기면 다시 보낸다 |
 | `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초, 10 까지). 게임 서버와 같다 |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `ZAI_API_KEY`, `DEEPINFRA_API_KEY` | 비어 있음 | 모델 목록의 창구마다의 키. 비밀값이다. 키가 없는 창구의 모델로 말을 보내면 503 `provider_unavailable` 이다. 공급자가 내주는 값이라 `tools/fill_env.py` 가 만들지 않는다. 게임 서버와 다른 키(사용 한도를 따로 거는 키)를 권한다 |
 | `OPENAI_BASE_URL` 등 `*_BASE_URL` | 게임 서버와 같다 | 창구의 주소. `LLM_BASE_URL` 은 모델 목록의 `local` 창구 모델에만 쓴다(지금은 없다) |
@@ -491,6 +494,10 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - **운영자 API**(`/admin/...`, 운영자가 아니면 404). 열린 신고의 목록은 `minor` 가 먼저, 그다음 오래된 것부터이고 대화의 글과 신고한 사람을 싣지 않는다.
   신고 하나를 보려면 사유(`reason`, 쿼리, 1~200자)가 필수이고, 보기 전에 감사 기록(`operator_reads`)을 저장한다. 없는 신고를 본 시도도 남는다.
   처리(`actioned`, `dismissed`)는 감사 기록(`operator_actions`)과 한 트랜잭션이다. 이미 처리했으면 409 `already_handled` 다. 두 기록은 덧붙이기만 한다(트리거).
+- **알림.** 처리하면(받아들이든 아니든) 신고한 사람의 알림함에 `message_report.handled` 를 하나 넣는다. `payload` 는 신고한 때의 캐릭터 이름(`name`)뿐이다.
+  결과, 사유, 대화의 글은 싣지 않는다(asset 의 캐릭터 신고와 같다). 열쇠는 `message_report.handled:<신고>` 다.
+  처리와 한 트랜잭션에 발송함(`outgoing_notifications`, `app/notifications/`)에 적고, 알림 서버에는 뒤에서 5초마다 보낸다.
+  발송함과 보내는 작업은 공용 코드에 있다([server-core 의 알림 보내기](../shared/server-core/README.md#알림-보내기)). 탈퇴하면 보내지 않은 알림을 지운다.
 - **지우기.** 대화를 지운 것으로 적어도 신고는 남는다. 대화의 행이 지워지면(탈퇴) 함께 지워진다. 신고에 든 것은 신고한 사람의 대화라서다. 감사 기록은 남는다.
 
 ### 요청 수 제한
@@ -541,7 +548,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 인증 서버가 유예(7일)가 지난 탈퇴를 알리면 그 사람의 것을 지운다(#670, [탈퇴 설계](../docs/architecture/withdrawal.md), `app/withdrawal/`).
 
-- **지우는 것.** 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본, 그 대화의 [신고](#신고)), 가져온 캐릭터의 판의 사본(과 로어북의 벡터), 연 이벤트 씬의 기록이다. 한 트랜잭션이다.
+- **지우는 것.** 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본, 그 대화의 [신고](#신고)), 가져온 캐릭터의 판의 사본(과 로어북의 벡터), 연 이벤트 씬의 기록, 보내지 않은 알림이다. 한 트랜잭션이다.
 - **남기는 것.** 청구 기록(`generations`)이다. 대화와 말을 가리키는 칸만 비운다(외래 키가 `SET NULL`, 2026-10-23 유저 결정).
   남는 것은 공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표이고 글은 없다. 결제 서버도 원장과 홀드를 공개 ID 로 남기므로 서로 맞추고 원가를 셀 때 쓴다.
 - **받는 길.** `POST /api/v1/chat/service/users/{public_id}/withdrawal`, 본문 `{"withdrawn_at": "..."}`. 인증 서버의 비밀(`AUTH_SERVER_SECRET`)로 서명한다(`app/core/service_auth.py`).
