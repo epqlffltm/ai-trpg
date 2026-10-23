@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { installFakeFetch, json, tokens } from '../test/fakeFetch';
 import { ApiError } from './errors';
-import { apiRequest, isClientError } from './http';
+import { apiBlob, apiRequest, isClientError } from './http';
 import { REFRESH_PATH } from './refresh';
 import { getSession, storeTokens } from './session';
 
@@ -108,5 +108,31 @@ describe('apiRequest', () => {
     installFakeFetch({ [`POST /api/v1/auth/logout`]: () => new Response(null, { status: 204 }) });
 
     await expect(apiRequest('/api/v1/auth/logout', { method: 'POST' })).resolves.toBeUndefined();
+  });
+
+  it('파일은 바이트 그대로, 그 형식으로 보낸다', async () => {
+    signIn('a1');
+    const { seen } = installFakeFetch({ 'POST /api/v1/asset/images': () => json(201, { id: 'img' }) });
+    const file = new File(['png-bytes'], 'a.png', { type: 'image/png' });
+
+    await apiRequest('/api/v1/asset/images', { method: 'POST', file });
+
+    expect(seen[0]?.body).toBe(file);
+    expect(seen[0]?.headers.get('Content-Type')).toBe('image/png');
+    expect(seen[0]?.headers.get('Authorization')).toBe('Bearer a1');
+  });
+
+  it('바이트로 받기는 아무 형식이나 받고, 실패면 ApiError 다', async () => {
+    signIn('a1');
+    const { seen } = installFakeFetch({
+      'GET /api/v1/asset/images/a': () => new Response('pic', { status: 200 }),
+      'GET /api/v1/asset/images/b': () => json(404, { detail: '찾을 수 없습니다.' }),
+    });
+
+    const blob = await apiBlob('/api/v1/asset/images/a');
+
+    expect(await blob.text()).toBe('pic');
+    expect(seen[0]?.headers.get('Accept')).toBe('*/*');
+    await expect(apiBlob('/api/v1/asset/images/b')).rejects.toBeInstanceOf(ApiError);
   });
 });

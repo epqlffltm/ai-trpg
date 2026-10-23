@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/chat/studio/characters/mapForm.ts
 // 캐릭터의 지도 탭(장소, 길, 처음 있는 장소)의 입력. 순수한 함수다. 상한은 서버와 같다(asset-server/app/characters/models.py).
 //
-//   - 장소의 id 는 화면이 붙인다(keys.ts). 그림 칸(image_id, backgrounds)은 그림 단계의 것이라 그대로 들고 있다가 보낸다
+//   - 장소의 id 는 화면이 붙인다(keys.ts). 그림 칸(image_id, backgrounds)은 그림 탭의 것이다.
+//     보낼 때 그림 칸은 가장 최근에 받은 캐릭터(latest)의 것을 쓴다. 이 탭을 연 뒤에 그림 탭에서 붙인 배경을 되돌리지 않는다
 //   - 장소를 지우면 그 장소를 잇는 길을 지우고, 처음 있는 장소였으면 비운다
 //   - 길은 서로 다른 두 장소를 잇고, 같은 두 장소 사이에는 하나다(차례는 가리지 않는다). 시간은 0~1440 분
 //   - 장소가 있는데 처음 있는 장소가 없어도 저장은 된다. 게시 점검이 막는다(start_place_missing)
@@ -110,11 +111,22 @@ export function hasMapHints(hints: MapHints): boolean {
   return Object.keys(hints.places).length > 0 || Object.keys(hints.paths).length > 0;
 }
 
-/** 지도 탭의 칸만 보낸다. 힌트가 없을 때만 부른다. 처음 있는 장소를 고르지 않았으면 null */
-export function toMapBody(draft: MapDraft): AssetCharacterUpdate {
+/** 그 장소의 그림 칸. latest 에 있으면 그것(그림 탭이 고쳤을 수 있다), 새 장소면 draft 의 것 */
+function latestImages(place: AssetPlace, latest: AssetCharacterDetail): Pick<AssetPlace, 'image_id' | 'backgrounds'> {
+  const saved = latest.places.find((one) => one.id === place.id);
+  return saved ? { image_id: saved.image_id ?? null, backgrounds: saved.backgrounds ?? {} } : { image_id: place.image_id ?? null, backgrounds: place.backgrounds ?? {} };
+}
+
+/** 지도 탭의 칸만 보낸다. 힌트가 없을 때만 부른다. 처음 있는 장소를 고르지 않았으면 null. latest 는 가장 최근에 받은 캐릭터다 */
+export function toMapBody(draft: MapDraft, latest: AssetCharacterDetail): AssetCharacterUpdate {
   const paths: AssetPath[] = draft.paths.map((path) => ({ a: path.a, b: path.b, minutes: minutesOf(path.minutes) ?? 0 }));
   return {
-    places: draft.places.map((place) => ({ ...place, name: place.name.trim(), description: (place.description ?? '').trim() })),
+    places: draft.places.map((place) => ({
+      ...place,
+      ...latestImages(place, latest),
+      name: place.name.trim(),
+      description: (place.description ?? '').trim(),
+    })),
     paths,
     start_place: draft.startPlace === '' ? null : draft.startPlace,
   };

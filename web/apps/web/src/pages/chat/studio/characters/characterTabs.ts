@@ -1,12 +1,12 @@
 // web/apps/web/src/pages/chat/studio/characters/characterTabs.ts
 // 캐릭터 고치기(C6)의 탭. 칸의 묶음마다 탭 하나이고, 탭마다 저장한다(그 탭의 칸만 PATCH). 고른 탭은 주소의 ?tab= 에 둔다.
-// 게시 점검의 문제는 묶음을 가리킨다(publishProblems.ts). 아직 탭이 없는 묶음도 있다(그림, 로어북).
+// 게시 점검의 문제는 묶음을 가리킨다(publishProblems.ts). 아직 탭이 없는 묶음도 있다(로어북). 그림 탭은 캐릭터 그림과 이벤트 씬이 아직 없다.
 // 화면을 만들면 CHARACTER_TABS 에 더한다(#673).
 
-export type CharacterTab = 'basics' | 'intro' | 'speech' | 'starts' | 'map' | 'items' | 'affection' | 'publish';
+export type CharacterTab = 'basics' | 'intro' | 'speech' | 'starts' | 'map' | 'items' | 'affection' | 'images' | 'publish';
 
 /** 칸의 묶음. 탭이 있는 것과 아직 화면이 없는 것 */
-export type CharacterSection = CharacterTab | 'images' | 'lorebooks';
+export type CharacterSection = CharacterTab | 'lorebooks';
 
 const SECTION_LABELS: Record<CharacterSection, string> = {
   basics: '기본',
@@ -22,7 +22,7 @@ const SECTION_LABELS: Record<CharacterSection, string> = {
 };
 
 /** 화면의 탭. 차례가 곧 탭의 차례다 */
-export const CHARACTER_TABS: CharacterTab[] = ['basics', 'intro', 'speech', 'starts', 'map', 'items', 'affection', 'publish'];
+export const CHARACTER_TABS: CharacterTab[] = ['basics', 'intro', 'speech', 'starts', 'map', 'items', 'affection', 'images', 'publish'];
 
 export function sectionLabel(section: CharacterSection): string {
   return SECTION_LABELS[section];

@@ -426,7 +426,7 @@ security_headers() {
 }
 
 # 화면의 CSP(#290, docker/nginx/templates/web-headers.inc.template). API 의 것과 다르다
-WEB_CSP="default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+WEB_CSP="default-src 'self'; img-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 
 # 화면의 응답에 보안 머리말 셋이 하나씩, 화면의 값으로 붙었는가. 둘째 인자부터는 curl 에 넘긴다
 web_security_headers() {

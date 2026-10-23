@@ -1595,6 +1595,20 @@ a.ui-button {
   overflow-wrap: anywhere;
 }
 
+/* 그림 한 칸(ImagePicker). 미리 보기는 칸의 폭을 넘지 않는다 */
+.image-picker {
+  margin-bottom: var(--ui-gap);
+}
+
+.image-picker__preview {
+  display: block;
+  max-width: min(100%, 240px);
+  max-height: 240px;
+  margin: 6px 0;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
 /* 둘을 나란히(추천 인원의 최소와 최대, 최대 HP 의 기준값과 상한). 좁으면 줄을 바꾼다 */
 .scenario-players__row {
   display: grid;
