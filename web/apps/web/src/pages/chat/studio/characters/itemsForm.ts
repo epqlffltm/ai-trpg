@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/chat/studio/characters/itemsForm.ts
 // 캐릭터의 물건 탭(물건, 시작 소지품)의 입력. 순수한 함수다. 상한은 서버와 같다(asset-server/app/characters/models.py).
 //
-//   - 물건의 id 는 화면이 붙인다(keys.ts). 그림(image_id)은 그림 단계의 것이라 그대로 들고 있다가 보낸다
+//   - 물건의 id 는 화면이 붙인다(keys.ts). 그림(image_id)은 그림 탭의 것이다.
+//     보낼 때 그림은 가장 최근에 받은 캐릭터(latest)의 것을 쓴다. 이 탭을 연 뒤에 그림 탭에서 붙인 그림을 되돌리지 않는다
 //   - 옷(clothing)은 건네면 상대의 차림에 들어간다. 쓰면 없어지는가(consumable), 상대가 줄 수 있는가(giftable)
 //   - 물건을 지우면 그 물건의 시작 소지품도 지운다
 //   - 시작 소지품은 물건마다 한 줄이고 수는 1~99 다
@@ -106,10 +107,21 @@ export function hasItemsHints(hints: ItemsHints): boolean {
   return Object.keys(hints.items).length > 0 || Object.keys(hints.startItems).length > 0;
 }
 
-/** 물건 탭의 칸만 보낸다. 힌트가 없을 때만 부른다 */
-export function toItemsBody(draft: ItemsDraft): AssetCharacterUpdate {
+/** 그 물건의 그림. latest 에 있으면 그것(그림 탭이 고쳤을 수 있다), 새 물건이면 draft 의 것 */
+function latestImage(item: AssetItem, latest: AssetCharacterDetail): string | null {
+  const saved = latest.items.find((one) => one.id === item.id);
+  return saved ? (saved.image_id ?? null) : (item.image_id ?? null);
+}
+
+/** 물건 탭의 칸만 보낸다. 힌트가 없을 때만 부른다. latest 는 가장 최근에 받은 캐릭터다 */
+export function toItemsBody(draft: ItemsDraft, latest: AssetCharacterDetail): AssetCharacterUpdate {
   return {
-    items: draft.items.map((item) => ({ ...item, name: item.name.trim(), description: (item.description ?? '').trim() })),
+    items: draft.items.map((item) => ({
+      ...item,
+      image_id: latestImage(item, latest),
+      name: item.name.trim(),
+      description: (item.description ?? '').trim(),
+    })),
     start_items: draft.startItems.map((start) => ({ item: start.item, count: countOf(start.count) ?? 1 })),
   };
 }
