@@ -88,7 +88,7 @@ describe('시나리오 만들기와 게시 점검', () => {
       [`POST ${SCENARIOS}`]: () => json(201, scenario()),
       [`GET ${SCENARIOS}/${ID}`]: () => json(200, scenario()),
       [`GET ${SCENARIOS}/${ID}/publish-check`]: () =>
-        json(200, { ready: false, problems: ['rulebook_missing', 'opening_missing', 'default_sheet_missing'] }),
+        json(200, { ready: false, problems: ['rulebook_missing', 'opening_missing', 'map_start_missing'] }),
     });
     renderApp('/trpg/studio/scenarios/new');
 
@@ -105,7 +105,7 @@ describe('시나리오 만들기와 게시 점검', () => {
 
     const check = within(await screen.findByRole('list', { name: '고칠 것' }));
     expect(check.getByText('룰북을 고르지 않았습니다.')).toBeInTheDocument();
-    expect(check.getByText('(캐릭터: 화면 준비 중)')).toBeInTheDocument();
+    expect(check.getByText('(지도: 화면 준비 중)')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '기본' })).toHaveAttribute('aria-selected', 'true');
 
     await userEvent.click(check.getByRole('button', { name: '재료 탭으로' }));
