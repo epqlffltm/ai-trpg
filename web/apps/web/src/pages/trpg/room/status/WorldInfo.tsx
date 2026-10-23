@@ -1,10 +1,14 @@
 // web/apps/web/src/pages/trpg/room/status/WorldInfo.tsx
-// 퀘스트와 장소(J). 게임 안의 시각, 퀘스트(이름, 상태, 기한), 내가 선 곳과 갈 수 있는 곳, 장소마다 누가 있는지.
+// 퀘스트와 장소(J). 게임 안의 시각, 서술 모델과 그 값, 퀘스트(이름, 상태, 기한), 내가 선 곳과 갈 수 있는 곳, 장소마다 누가 있는지.
 // 퀘스트의 글은 서버가 주지 않는다. 숨긴 퀘스트는 방장에게만 온다. 맵이 없는 판이면 장소를 숨긴다.
 // 기한이 지난 퀘스트는 서버가 다음에 닫히는 라운드에서 실패로 바꾼다. 화면이 스스로 바꾸지 않는다.
 // 갈 수 있는 곳에는 "가기", 지금 있는 곳에는 "찾기", 놓인 물건에는 "줍기" 단추가 있다. 누르면 선언 입력의 행동 칸이 채워진다.
 
+import { useQuery } from '@tanstack/react-query';
 import type { TableDetail, TableMember } from '../../../../api/types';
+import { stepName } from '../../models/modelChoice';
+import { ModelPrice } from '../../models/ModelPicker';
+import { narrationModelsQuery } from '../../queries';
 import { ActionButton, type ActionShortcuts } from './ActionButton';
 import {
   clockLabel,
@@ -28,9 +32,32 @@ export function WorldInfo({ table, mine, shortcuts }: Props) {
         <p className="world__clock">{clockLabel(table.clock)}</p>
         <p className="hint">다음 라운드에 {minutesLabel(table.clock.next_step_minutes)}이 흐릅니다.</p>
       </section>
+      <Narration table={table} />
       <Quests table={table} />
       {table.map ? <Places table={table} map={table.map} mine={mine} shortcuts={shortcuts} /> : null}
     </div>
+  );
+}
+
+/** 서술 모델과 단계, 그 값. 방장이 바꾸면 이벤트로 다시 읽어 바뀐다(B8) */
+function Narration({ table }: { table: TableDetail }) {
+  const models = useQuery(narrationModelsQuery());
+  const name = models.data?.models.find((model) => model.slug === table.narration_model)?.display_name;
+  const value = { model: table.narration_model ?? '', inputStep: table.input_step, outputStep: table.output_step };
+  return (
+    <section aria-labelledby="narration-heading">
+      <h3 id="narration-heading" className="waiting-room__label">
+        서술
+      </h3>
+      <p>
+        {name ?? table.narration_model ?? '서버의 기본 모델'}
+        <span className="hint">
+          {' '}
+          · 기억 {stepName(table.input_step)} · 장면 {stepName(table.output_step)}
+        </span>
+      </p>
+      <ModelPrice models={models.data} value={value} recommended={null} />
+    </section>
   );
 }
 

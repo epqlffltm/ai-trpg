@@ -1101,3 +1101,27 @@ a.ui-button {
   padding-top: 10px;
   border-top: 1px dashed var(--ui-border);
 }
+
+/* 옆 칸(340px)의 방장 패널. 고르기 칸이 긴 글로 칸을 넘지 않게 한 줄에 하나씩, 칸의 너비에 맞춘다 */
+.room__side,
+.room-panel {
+  min-width: 0;
+}
+
+.host-panel .ability-grid {
+  grid-template-columns: 1fr;
+}
+
+.host-panel .ui-field__input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.model-price {
+  margin: 4px 0 8px;
+}
+
+.host-model {
+  margin-bottom: var(--ui-gap);
+}
