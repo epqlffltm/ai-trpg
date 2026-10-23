@@ -6,6 +6,7 @@
 //   - 401 이면 갱신을 한 번만 시도하고 한 번만 다시 부른다. 갱신은 refresh.ts 가 하나로 모은다(#30).
 //     그사이 다른 요청이 이미 갱신했으면 다시 갱신하지 않고 새 토큰으로 부른다.
 //   - 성공이 아니면 ApiError 를 던진다. 읽기는 TanStack Query 가, 쓰기는 화면이 받는다.
+//   - 파일(그림)은 JSON 이 아니라 바이트 그대로 보낸다(file). 그림을 받을 때는 Blob 으로 읽는다(apiBlob).
 
 import { ApiError, NetworkError, toApiError } from './errors';
 import { refreshSession } from './refresh';
@@ -15,6 +16,10 @@ export type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** JSON 으로 보낼 본문 */
   body?: unknown;
+  /** 바이트 그대로 보낼 파일(그림 올리기). Content-Type 은 파일의 것이다. body 와 함께 쓰지 않는다 */
+  file?: Blob;
+  /** 받을 형식. 없으면 JSON. apiBlob 이 정한다 */
+  accept?: string;
   /** 쿼리 문자열. 값이 undefined 면 넣지 않는다 */
   query?: Record<string, string | number | undefined>;
   /** 더 붙일 머리말(결제 서버의 Idempotency-Key 같은 것). 인증과 본문의 머리말은 여기서 덮지 못한다 */
@@ -28,6 +33,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const response = await sendWithRefresh(withQuery(path, options.query), options);
   if (!response.ok) throw await toApiError(response);
   return readBody<T>(response);
+}
+
+/** 본문을 바이트(Blob)로 받는다. 토큰을 실어야 볼 수 있는 그림을 화면에 띄울 때 쓴다 */
+export async function apiBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+  const response = await sendWithRefresh(withQuery(path, options.query), { ...options, accept: '*/*' });
+  if (!response.ok) throw await toApiError(response);
+  return response.blob();
 }
 
 async function sendWithRefresh(url: string, options: RequestOptions): Promise<Response> {
@@ -51,7 +63,7 @@ async function send(url: string, options: RequestOptions, token: string | undefi
     return await fetch(url, {
       method: options.method ?? 'GET',
       headers: headersFor(options, token),
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: bodyOf(options),
       credentials: 'same-origin',
       signal: options.signal ?? null,
     });
@@ -61,9 +73,16 @@ async function send(url: string, options: RequestOptions, token: string | undefi
   }
 }
 
+/** 보낼 본문. 파일이면 그대로, 아니면 JSON */
+function bodyOf(options: RequestOptions): BodyInit | undefined {
+  if (options.file !== undefined) return options.file;
+  return options.body === undefined ? undefined : JSON.stringify(options.body);
+}
+
 function headersFor(options: RequestOptions, token: string | undefined): Headers {
-  const headers = new Headers({ ...options.headers, Accept: 'application/json' });
-  if (options.body !== undefined) headers.set('Content-Type', 'application/json');
+  const headers = new Headers({ ...options.headers, Accept: options.accept ?? 'application/json' });
+  if (options.file !== undefined) headers.set('Content-Type', options.file.type || 'application/octet-stream');
+  else if (options.body !== undefined) headers.set('Content-Type', 'application/json');
   if (token !== undefined) headers.set('Authorization', `Bearer ${token}`);
   return headers;
 }

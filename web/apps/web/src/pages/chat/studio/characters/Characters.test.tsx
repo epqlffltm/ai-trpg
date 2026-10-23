@@ -2,7 +2,7 @@
 // 캐릭터 만들기(C6)의 뼈대. 빈 목록에서 만들기 → 고치기와 게시 점검, 점검에서 탭으로 가기, 운영자만 만드는 때(403),
 // 기본과 시작 상황의 저장 본문(저장하면 점검을 다시 읽는다), 아직 화면이 없는 묶음의 문제, 숨긴 캐릭터, 게시와 걸러 낸 것,
 // 지도(장소, 길, 처음 있는 장소, 지우면 길도)와 물건(시작 소지품, 그림 칸을 그대로 보내기),
-// 호감도(켜고 끄기, 단계, 규칙의 대상과 화면이 붙이는 id).
+// 호감도(켜고 끄기, 단계, 규칙의 대상과 화면이 붙이는 id), 그림(올리기, 토큰을 실은 미리 보기, 장소의 배경, 막힌 올리기).
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -162,13 +162,13 @@ describe('캐릭터 만들기', () => {
   it('아직 화면이 없는 묶음의 문제는 이름만 적고, 숨긴 캐릭터면 알린다', async () => {
     signedIn(character({ hidden_at: '2026-10-24T01:00:00Z' }), {
       [`GET ${CHARACTERS}/${ID}/publish-check`]: () =>
-        json(200, { ready: false, problems: ['scene_target_missing', 'item_missing'], removed: [] }),
+        json(200, { ready: false, problems: ['lorebook_missing', 'item_missing'], removed: [] }),
     });
     renderApp(`/chat/studio/characters/${ID}`);
 
     expect(await screen.findByText(/운영자가 숨긴 캐릭터입니다/)).toBeInTheDocument();
     const problems = await screen.findByRole('list', { name: '고칠 것' });
-    expect(within(problems).getByText('(그림: 화면 준비 중)')).toBeInTheDocument();
+    expect(within(problems).getByText('(로어북: 화면 준비 중)')).toBeInTheDocument();
     await userEvent.click(within(problems).getByRole('button', { name: '물건 탭으로' }));
     expect(screen.getByRole('form', { name: '물건' })).toBeVisible();
   });
@@ -302,6 +302,53 @@ describe('캐릭터 만들기', () => {
 
     expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
     expect(calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body).toEqual({ affection: null });
+  });
+
+  it('그림 탭에서 대표 그림과 장소의 밤 배경을 올려 붙인다. 미리 보기는 토큰을 실어 받은 blob 이다', async () => {
+    // jsdom 에는 blob: 주소를 만드는 함수가 없다
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:preview'), revokeObjectURL: vi.fn() });
+    const ids = ['00000000-0000-4000-8000-00000000a001', '00000000-0000-4000-8000-00000000a002'];
+    const home = { id: 'p1', name: '집', description: '', image_id: null, backgrounds: {} };
+    const { seen } = signedIn(character({ places: [home] }), {
+      'POST /api/v1/asset/images': () => json(201, { id: ids.shift(), format: 'png', byte_size: 3, width: 1, height: 1, url: '', created_at: '' }),
+      [`GET /api/v1/asset/images/00000000-0000-4000-8000-00000000a001`]: () => new Response('png', { status: 200 }),
+      [`GET /api/v1/asset/images/00000000-0000-4000-8000-00000000a002`]: () => new Response('png', { status: 200 }),
+    });
+    renderApp(`/chat/studio/characters/${ID}?tab=images`);
+
+    const form = await screen.findByRole('form', { name: '그림' });
+    const file = new File(['png'], 'face.png', { type: 'image/png' });
+    await userEvent.upload(within(form).getByLabelText('대표 그림'), file);
+    expect(await within(form).findByRole('img', { name: '대표 그림' })).toHaveAttribute('src', 'blob:preview');
+    const upload = calls(seen, 'POST', '/api/v1/asset/images')[0];
+    expect(upload?.body).toBe(file);
+    expect(upload?.headers.get('Content-Type')).toBe('image/png');
+
+    await userEvent.click(within(form).getByText('집'));
+    await userEvent.upload(within(form).getByLabelText('집의 밤 배경'), file);
+    await within(form).findByRole('img', { name: '집의 밤 배경' });
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }));
+
+    expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
+    expect(calls(seen, 'PATCH', `${CHARACTERS}/${ID}`)[0]?.body).toEqual({
+      image_id: '00000000-0000-4000-8000-00000000a001',
+      places: [{ ...home, backgrounds: { night: '00000000-0000-4000-8000-00000000a002' } }],
+      items: [],
+    });
+    const preview = calls(seen, 'GET', '/api/v1/asset/images/00000000-0000-4000-8000-00000000a001')[0];
+    expect(preview?.headers.get('Authorization')).toBe('Bearer a1');
+  });
+
+  it('올리기가 막히면 알린다', async () => {
+    signedIn(character(), {
+      'POST /api/v1/asset/images': () => json(415, { detail: 'PNG, JPEG, WebP 그림만 올릴 수 있습니다.', code: 'image_format' }),
+    });
+    renderApp(`/chat/studio/characters/${ID}?tab=images`);
+
+    const form = await screen.findByRole('form', { name: '그림' });
+    await userEvent.upload(within(form).getByLabelText('대표 그림'), new File(['x'], 'a.png', { type: 'image/png' }));
+
+    expect(await within(form).findByText('PNG, JPEG, WebP 그림만 올릴 수 있습니다.')).toBeInTheDocument();
   });
 
   it('게시하면 판을 알리고 소개에서 걸러 낸 것을 보인다. 판의 목록을 다시 읽는다', async () => {

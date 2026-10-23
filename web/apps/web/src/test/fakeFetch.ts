@@ -22,7 +22,8 @@ export function installFakeFetch(routes: Record<string, Handler>) {
       url,
       method: init.method ?? 'GET',
       headers: new Headers(init.headers),
-      body: typeof init.body === 'string' ? JSON.parse(init.body) : undefined,
+      // JSON 은 읽어 두고, 파일(그림)은 그대로 둔다
+      body: typeof init.body === 'string' ? JSON.parse(init.body) : init.body,
       signal: init.signal ?? null,
     };
     seen.push(request);

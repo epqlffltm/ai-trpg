@@ -166,3 +166,5 @@ export type AssetAffection = Asset['schemas']['Affection'];
 export type AssetAffectionDisplay = Asset['schemas']['AffectionDisplay'];
 export type AssetAffectionRule = Asset['schemas']['AffectionRule'];
 export type AssetTriggerKind = Asset['schemas']['TriggerKind'];
+export type AssetImage = Asset['schemas']['ImageDetail'];
+export type TimeOfDay = Asset['schemas']['TimeOfDay'];

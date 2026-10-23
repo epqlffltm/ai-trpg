@@ -14,7 +14,7 @@ const PROBLEMS: Record<string, ProblemText> = {
   affection_target_missing: { text: '호감도의 규칙이 없는 물건이나 장소를 가리킵니다.', section: 'affection' },
   scene_target_missing: { text: '이벤트 씬의 조건이 없는 장소, 물건, 호감도 단계를 가리킵니다.', section: 'images' },
   sprite_outfit_missing: { text: '물건 목록에 없는 옷을 입은 캐릭터 그림이 있습니다.', section: 'images' },
-  image_not_owned: { text: '내가 올리지 않은 그림을 가리킵니다.', section: 'images' },
+  image_not_owned: { text: '내가 올리지 않은 그림을 가리킵니다(소개 글의 그림 포함).', section: 'images' },
   lorebook_missing: { text: '붙인 로어북 가운데 지워진 것이 있습니다.', section: 'lorebooks' },
   lorebook_unpublished: { text: '붙인 로어북 가운데 아직 게시하지 않은 것이 있습니다.', section: 'lorebooks' },
 };

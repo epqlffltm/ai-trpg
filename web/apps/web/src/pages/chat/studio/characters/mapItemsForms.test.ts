@@ -34,6 +34,9 @@ import {
 } from './mapForm';
 
 const IMAGE = '00000000-0000-4000-8000-0000000000f1';
+const NEWER = '00000000-0000-4000-8000-0000000000f2';
+/** 아직 아무것도 저장하지 않은 캐릭터 */
+const EMPTY = { places: [], items: [] } as unknown as AssetCharacterDetail;
 
 function place(id: string, name: string, extra: Partial<AssetPlace> = {}): AssetPlace {
   return { id, name, description: '', image_id: null, backgrounds: {}, ...extra };
@@ -91,16 +94,37 @@ describe('지도', () => {
     expect(addPath(two).paths.at(-1)).toEqual({ a: '', b: '', minutes: '10' });
   });
 
-  it('보낼 때 그림 칸은 그대로 두고, 고르지 않은 처음 장소는 null 이다', () => {
+  it('새 장소의 그림 칸은 그대로 두고, 고르지 않은 처음 장소는 null 이다', () => {
     const pictured = place('p1', ' 집 ', { image_id: IMAGE, backgrounds: { night: IMAGE } });
-    expect(toMapBody({ places: [pictured], paths: [], startPlace: '' })).toEqual({
+    expect(toMapBody({ places: [pictured], paths: [], startPlace: '' }, EMPTY)).toEqual({
       places: [{ id: 'p1', name: '집', description: '', image_id: IMAGE, backgrounds: { night: IMAGE } }],
       paths: [],
       start_place: null,
     });
-    expect(toMapBody(two)).toMatchObject({ paths: [{ a: 'p1', b: 'p2', minutes: 15 }], start_place: 'p1' });
+    expect(toMapBody(two, EMPTY)).toMatchObject({ paths: [{ a: 'p1', b: 'p2', minutes: 15 }], start_place: 'p1' });
     const character = { places: [pictured], paths: [{ a: 'p1', b: 'p9', minutes: 3 }], start_place: null } as unknown as AssetCharacterDetail;
     expect(mapDraft(character)).toEqual({ places: [pictured], paths: [{ a: 'p1', b: 'p9', minutes: '3' }], startPlace: '' });
+  });
+});
+
+describe('탭끼리 그림 칸', () => {
+  it('지도 탭은 저장된 장소의 그림 칸을 가장 최근에 받은 것으로 보낸다(그림 탭이 붙인 배경을 되돌리지 않는다)', () => {
+    const opened = { places: [place('p1', '집')], paths: [], startPlace: 'p1' };
+    const latest = { places: [place('p1', '집', { image_id: NEWER, backgrounds: { night: NEWER } })], items: [] } as unknown as AssetCharacterDetail;
+
+    const body = toMapBody({ ...opened, places: [place('p1', '우리 집')] }, latest);
+
+    expect(body.places).toEqual([{ id: 'p1', name: '우리 집', description: '', image_id: NEWER, backgrounds: { night: NEWER } }]);
+  });
+
+  it('물건 탭도 저장된 물건의 그림은 가장 최근에 받은 것으로 보낸다', () => {
+    const opened: ItemsDraft = {
+      items: [{ id: 'i1', name: '우산', description: '', kind: 'thing', consumable: false, giftable: false, image_id: null }],
+      startItems: [],
+    };
+    const latest = { places: [], items: [{ ...opened.items[0], image_id: NEWER }] } as unknown as AssetCharacterDetail;
+
+    expect(toItemsBody(opened, latest).items?.[0]?.image_id).toBe(NEWER);
   });
 });
 
@@ -144,7 +168,7 @@ describe('물건', () => {
     expect(addItem(one, 'i2').items.at(-1)).toEqual({ id: 'i2', name: '', description: '', kind: 'thing', consumable: false, giftable: false, image_id: null });
     expect(addStartItem(one).startItems.at(-1)).toEqual({ item: '', count: '1' });
     const clothes = changeItem(one, 'i1', { name: ' 외투 ', kind: 'clothing', giftable: true });
-    expect(toItemsBody(clothes)).toEqual({
+    expect(toItemsBody(clothes, EMPTY)).toEqual({
       items: [{ id: 'i1', name: '외투', description: '', kind: 'clothing', consumable: false, giftable: true, image_id: IMAGE }],
       start_items: [{ item: 'i1', count: 2 }],
     });

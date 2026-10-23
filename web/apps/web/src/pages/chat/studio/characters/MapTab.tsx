@@ -39,7 +39,7 @@ export function MapTab({ character }: { character: AssetCharacterDetail }) {
   const update: Update = (change) => setDraft(change);
 
   async function submit() {
-    const saved = await saving.save(toMapBody(draft));
+    const saved = await saving.save(toMapBody(draft, character));
     if (saved) setDraft(mapDraft(saved));
   }
 
