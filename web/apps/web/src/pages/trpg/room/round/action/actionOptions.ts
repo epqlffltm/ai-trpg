@@ -181,6 +181,21 @@ export function aimableInjuries(ctx: ActionContext): Choice[] {
   return ctx.table.rules.injuries.filter((injury) => injury.aimable).map((injury) => ({ value: injury.key, label: injury.name }));
 }
 
+/** 타격에 쓸 무기. 내가 착용한 것 가운데 공격 보정이 있는 것. "장검(+2)" (#276) */
+export function myWeapons(ctx: ActionContext): Choice[] {
+  return (ctx.me.sheet?.worn ?? []).flatMap((worn) => {
+    const attack = ctx.table.items.find((item) => item.entry_id === worn.entry_id)?.attack;
+    return attack ? [{ value: worn.entry_id, label: `${worn.name}(+${attack})` }] : [];
+  });
+}
+
+/** 노릴 부위. 방어 방식과 노려 치기가 있는 규칙에서, 맞을 수 있는 칸(hit_weight 1 이상) (#276, 서버의 armor.can_strike) */
+export function strikeSlots(ctx: ActionContext): Choice[] {
+  const rules = ctx.table.rules;
+  if (!rules.armor || !rules.called_shot) return [];
+  return rules.equipment_slots.filter((slot) => slot.hit_weight > 0).map((slot) => ({ value: slot.key, label: slot.name }));
+}
+
 /** 피해와 회복의 등급. "가벼움(1d4)" */
 export function magnitudes(ctx: ActionContext): Choice[] {
   return ctx.table.rules.magnitudes.map((entry) => ({ value: entry.key, label: `${entry.name}(${entry.count}d${entry.sides})` }));

@@ -12,6 +12,8 @@
   - 퀘스트: 종탑에 닿으면 이룬다. 이루면 저마다 은화를 받는다
   - 사기, 팔기, 돈 건네기(#278): 화폐는 은화. 모두 은화를 조금 가지고 시작한다.
     처마 밑의 떠돌이 행상이 약초와 횃불을 판다
+  - 장비(#276): 룰북(SRD5)의 칸은 주손, 보조손, 몸, 머리다. 프리젠 도르는 두 손 도끼와 가죽 갑옷을 착용하고 시작한다.
+    횃불은 한 손에 쥐는 약한 무기다. 행상은 가죽 갑옷도 판다
 """
 
 LOREBOOK_TITLE = '[견본] 잿빛 수도원의 로어북'
@@ -47,6 +49,8 @@ ENTRIES = (
     {'name': '횃불', 'kind': 'item', 'keywords': ['횃불'], 'content': '송진을 바른 막대.'},
     {'name': '녹슨 열쇠', 'kind': 'item', 'keywords': ['열쇠'], 'content': '종탑 계단의 쇠창살을 여는 열쇠.'},
     {'name': '은 성배', 'kind': 'item', 'keywords': ['성배'], 'content': '수도원의 보물. 안쪽에 이름이 새겨져 있다.'},
+    {'name': '도끼', 'kind': 'item', 'keywords': ['도끼'], 'content': '두 손으로 휘두르는 무거운 도끼.'},
+    {'name': '가죽 갑옷', 'kind': 'item', 'keywords': ['갑옷'], 'content': '기름을 먹인 가죽을 덧댄 갑옷.'},
     {
         'name': '떠돌이 행상',
         'kind': 'person',
@@ -77,12 +81,13 @@ CURRENCY = {'name': '은화', 'unit': '닢', 'starting': 20, 'sell_percent': 50}
 
 def is_current(document: dict) -> bool:
     """
-    지금 세계를 담은 시나리오나 테이블인지. 맵(시작 장소)과 화폐가 모두 있어야 한다.
-    앞의 견본에는 맵이 없었고(#694 전), 그다음 견본에는 화폐가 없었다(#278 전).
+    지금 세계를 담은 시나리오나 테이블인지. 맵(시작 장소)과 화폐와 장비(칸이 있는 물건)가 모두 있어야 한다.
+    앞의 견본에는 맵이 없었고(#694 전), 그다음 견본에는 화폐가 없었고(#278 전), 그다음에는 장비가 없었다(#276 전).
     시나리오는 start_place 와 currency 를, 테이블은 map 과 currency 를 본다.
     """
     has_world = bool(document.get('start_place') or document.get('map'))
-    return has_world and bool(document.get('currency'))
+    has_gear = any(item.get('slots') for item in document.get('items') or [])
+    return has_world and bool(document.get('currency')) and has_gear
 
 
 def sheet(max_hp: int, **scores: int) -> dict:
@@ -116,7 +121,31 @@ def item_rules(ids: dict[str, str]) -> list[dict]:
     """물건의 종류와 등급과 값. 약초는 가볍게 회복한다(SRD5 의 light). 녹슨 열쇠는 값이 없어 사고팔지 못한다."""
     return [
         {'entry_id': ids['약초'], 'kind': 'consumable', 'rarity': 'normal', 'heals': 'light', 'price': 6},
-        {'entry_id': ids['횃불'], 'kind': 'gear', 'rarity': 'normal', 'price': 3},
+        {
+            'entry_id': ids['횃불'],
+            'kind': 'gear',
+            'rarity': 'normal',
+            'price': 3,
+            'slots': ['main_hand', 'off_hand'],
+            'attack': 1,
+        },
+        {
+            'entry_id': ids['도끼'],
+            'kind': 'gear',
+            'rarity': 'normal',
+            'price': 15,
+            'slots': ['main_hand', 'off_hand'],
+            'slot_count': 2,
+            'attack': 2,
+        },
+        {
+            'entry_id': ids['가죽 갑옷'],
+            'kind': 'gear',
+            'rarity': 'normal',
+            'price': 10,
+            'slots': ['body'],
+            'defense': 2,
+        },
         {'entry_id': ids['녹슨 열쇠'], 'kind': 'gear', 'rarity': 'rare'},
         {'entry_id': ids['은 성배'], 'kind': 'gear', 'rarity': 'epic', 'price': 120},
     ]
@@ -139,7 +168,7 @@ def place_items(ids: dict[str, str]) -> list[dict]:
 def npc_sheets(ids: dict[str, str]) -> list[dict]:
     """
     늙은 문지기. 경계한다. 녹슨 열쇠를 품에 지녔고, 들키면 적대한다. 맞으면 등불을 휘두른다.
-    떠돌이 행상. 상인이다. 소지품이 곧 재고다(약초 다섯, 횃불 셋).
+    떠돌이 행상. 상인이다. 소지품이 곧 재고다(약초 다섯, 횃불 셋, 가죽 갑옷 하나).
     """
     return [
         {
@@ -155,7 +184,7 @@ def npc_sheets(ids: dict[str, str]) -> list[dict]:
             'sheet': sheet(8),
             'attitude': 'friendly',
             'merchant': True,
-            'inventory': [stack(ids, '약초', 5), stack(ids, '횃불', 3)],
+            'inventory': [stack(ids, '약초', 5), stack(ids, '횃불', 3), stack(ids, '가죽 갑옷', 1)],
         },
     ]
 
@@ -190,6 +219,10 @@ def pregens(ids: dict[str, str]) -> list[dict]:
             'name': '용병 도르',
             'description': '도끼를 든다. 돈을 받고 왔다.',
             'sheet': sheet(14, str=16, con=14),
+            'items': [
+                {**stack(ids, '도끼'), 'wear': ['main_hand', 'off_hand']},
+                {**stack(ids, '가죽 갑옷'), 'wear': ['body']},
+            ],
             'money': 15,
         },
     ]

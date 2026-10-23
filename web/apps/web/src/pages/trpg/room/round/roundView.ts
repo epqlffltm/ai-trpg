@@ -34,7 +34,7 @@ export function actionLabel(action: DeclaredAction, table: TableDetail): string 
 function actionDetail(action: DeclaredAction, table: TableDetail): string | null {
   switch (action.kind) {
     case 'check':
-      return checkDetail(action, table.rules);
+      return checkDetail(action, table);
     case 'treat':
       return nameOfInjury(table.rules, action.injury);
     case 'name':
@@ -65,12 +65,20 @@ function actionDetail(action: DeclaredAction, table: TableDetail): string | null
   }
 }
 
-function checkDetail(action: Extract<DeclaredAction, { kind: 'check' }>, rules: Ruleset): string {
+function checkDetail(action: Extract<DeclaredAction, { kind: 'check' }>, table: TableDetail): string {
+  const rules = table.rules;
   const ability = rules.abilities.find((entry) => entry.key === action.ability)?.name ?? action.ability;
   const key = action.difficulty ?? rules.default_difficulty;
   const difficulty = rules.difficulties.find((entry) => entry.key === key)?.name ?? key;
   const purpose = action.harm ? (action.lethal ? ', 죽이려는 공격' : ', 공격') : action.recover ? ', 회복' : '';
-  return `${ability}, ${difficulty}${purpose}`;
+  return `${ability}, ${difficulty}${purpose}${gearDetail(action, table)}`;
+}
+
+/** 타격의 무기와 노린 부위(#276). ", 장검, 몸을 노림" */
+function gearDetail(action: Extract<DeclaredAction, { kind: 'check' }>, table: TableDetail): string {
+  const weapon = action.weapon ? `, ${itemName(table, action.weapon)}` : '';
+  const slot = action.strike ? (table.rules.equipment_slots.find((entry) => entry.key === action.strike)?.name ?? action.strike) : null;
+  return `${weapon}${slot ? `, ${slot} 노림` : ''}`;
 }
 
 function itemName(table: TableDetail, entryId: string): string {
@@ -150,7 +158,20 @@ function checkEffects(outcome: CheckResult, rules: Ruleset): string[] {
     parts.push(outcome.treatment.treated ? `${injury} 치료함` : `${injury} 치료하지 못함`);
   }
   if (outcome.drop && outcome.drop.items.length > 0) parts.push('떨어뜨린 물건이 있음');
-  return parts;
+  const blow = blowLine(outcome.blow);
+  return blow ? [blow, ...parts] : parts;
+}
+
+const ARMOR_EFFECTS: Record<string, string> = { ac: '목표값에 더함', reduce: '피해에서 뺌' };
+
+/** 타격에 장비가 든 것(#276). "장검 +2 · 몸(노림) · 방어 5(목표값에 더함)". 없으면 null */
+export function blowLine(blow: CheckResult['blow']): string | null {
+  if (!blow) return null;
+  const parts: string[] = [];
+  if (blow.weapon) parts.push(`${blow.weapon.name} +${blow.weapon.bonus}`);
+  if (blow.location_name) parts.push(`${blow.location_name}${blow.aimed ? '(노림)' : ''}`);
+  if (blow.mode && blow.defense > 0) parts.push(`방어 ${blow.defense}(${ARMOR_EFFECTS[blow.mode] ?? blow.mode})`);
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 /** 판정이 아닌 행동의 결과 */
