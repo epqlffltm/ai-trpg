@@ -9,7 +9,8 @@
 import type { TableEvent } from '../../../../api/types';
 import { eventLine, eventRound, type EventContext, type EventType } from './eventLines';
 
-export type RoomNotice = { key: string; text: string; tone: 'info' | 'error' };
+/** charge 는 내 크레딧이 모자라다는 알림이다. 충전(A7)으로 가는 길을 붙인다 */
+export type RoomNotice = { key: string; text: string; tone: 'info' | 'error'; charge: boolean };
 
 /** 이번 라운드에만 뜻이 있는 일. error 는 지금 서술을 막는다 */
 const ROUND_NOTICES: ReadonlyMap<EventType, RoomNotice['tone']> = new Map<EventType, RoomNotice['tone']>([
@@ -53,15 +54,20 @@ export function modelNoticeEvent(events: TableEvent[]): TableEvent | null {
   return null;
 }
 
-function toNotice(event: TableEvent, ctx: EventContext): RoomNotice | null {
+/** 내 크레딧이 모자라다는 알림인가 */
+function isMyShortage(event: TableEvent, myId: string | undefined): boolean {
+  return event.type === 'narration_credits_short' && myId !== undefined && event.payload?.user_id === myId;
+}
+
+function toNotice(event: TableEvent, ctx: EventContext, myId: string | undefined): RoomNotice | null {
   const line = eventLine(event, ctx);
   const tone = ROUND_NOTICES.get(event.type) ?? MODEL_NOTICES.get(event.type) ?? 'info';
-  return line ? { key: String(event.sequence), text: line.text, tone } : null;
+  return line ? { key: String(event.sequence), text: line.text, tone, charge: isMyShortage(event, myId) } : null;
 }
 
 /** 방 위에 보일 알림. 모델의 알림이 먼저, 그다음 이번 라운드의 알림을 일어난 차례로. events 는 번호 차례다 */
-export function roomNotices(events: TableEvent[], currentRound: number | null, ctx: EventContext): RoomNotice[] {
+export function roomNotices(events: TableEvent[], currentRound: number | null, ctx: EventContext, myId?: string): RoomNotice[] {
   const model = modelNoticeEvent(events);
   const chosen = [...(model ? [model] : []), ...roundNoticeEvents(events, currentRound).sort((a, b) => a.sequence - b.sequence)];
-  return chosen.map((event) => toNotice(event, ctx)).filter((notice): notice is RoomNotice => notice !== null);
+  return chosen.map((event) => toNotice(event, ctx, myId)).filter((notice): notice is RoomNotice => notice !== null);
 }

@@ -17,6 +17,9 @@ COPY packages/ui/package.json packages/ui/
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund
 COPY . .
+# 충전의 결제창(A7). 결제 서버에 꽂힌 결제 대행사(PAYMENT_PROVIDER)에 맞춘다. 지금은 fake(시험용 결제창)뿐이다.
+# 토스페이먼츠를 꽂은 결제 서버 앞에 둘 화면은 toss 결제창을 더한 뒤 빌드할 때 바꾼다(apps/web/src/pages/charge/paymentGateway.ts)
+ARG VITE_PAYMENT_GATEWAY=fake
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.30-alpine3.24 AS runtime
