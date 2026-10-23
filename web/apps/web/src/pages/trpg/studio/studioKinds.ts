@@ -20,7 +20,7 @@ export type StudioKindText = {
   missing: string;
 };
 
-export const STUDIO_KINDS: StudioKind[] = ['rulebooks', 'worlds'];
+export const STUDIO_KINDS: StudioKind[] = ['rulebooks', 'worlds', 'lorebooks', 'bestiaries'];
 
 const TEXTS: Record<StudioKind, StudioKindText> = {
   rulebooks: {
@@ -40,6 +40,24 @@ const TEXTS: Record<StudioKind, StudioKindText> = {
     empty: '아직 만든 세계관이 없습니다.',
     first: '첫 세계관 만들기',
     missing: '세계관을 찾을 수 없습니다. 지워졌을 수 있습니다.',
+  },
+  lorebooks: {
+    label: '로어북',
+    title: '내 로어북',
+    intro: '로어북은 인물, 장소, 물건 같은 설정의 모음입니다. 서술하는 AI 가 키워드로 찾아 읽습니다. 장소는 맵, 물건은 소지품이 됩니다.',
+    create: '새 로어북 만들기',
+    empty: '아직 만든 로어북이 없습니다.',
+    first: '첫 로어북 만들기',
+    missing: '로어북을 찾을 수 없습니다. 지워졌을 수 있습니다.',
+  },
+  bestiaries: {
+    label: '몬스터 모음',
+    title: '내 몬스터 모음',
+    intro: '몬스터 모음은 몬스터의 이름과 설명입니다. HP 와 공격 같은 숫자는 시나리오에서 정합니다.',
+    create: '새 몬스터 모음 만들기',
+    empty: '아직 만든 몬스터 모음이 없습니다.',
+    first: '첫 몬스터 모음 만들기',
+    missing: '몬스터 모음을 찾을 수 없습니다. 지워졌을 수 있습니다.',
   },
 };
 

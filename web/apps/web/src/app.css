@@ -1433,3 +1433,20 @@ a.ui-button {
 .armor-number {
   margin-bottom: 12px;
 }
+
+/* 묶음 재료(로어북, 몬스터 모음)의 담긴 것 한 줄. 왼쪽에 이름과 설명, 오른쪽에 단추 */
+.studio-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* 입력 칸 아래에 늘 보이는 도움말을 붙인 묶음. 다음 칸과의 틈은 묶음이 갖는다 */
+.field-with-hint {
+  margin-bottom: var(--ui-gap);
+}
+
+.field-with-hint .ui-field {
+  margin-bottom: 6px;
+}
