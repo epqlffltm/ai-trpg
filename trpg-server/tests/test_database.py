@@ -5,10 +5,10 @@ DB 연결을 검증한다. 테스트가 정말로 테스트용 스키마에서 �
 다른 서비스의 스키마에 닿지 못하는지는 test_schema_isolation.py 가 본다.
 """
 
+from server_core.database import ping_database
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import ping_database
 from tests.conftest import TEST_SCHEMA
 
 

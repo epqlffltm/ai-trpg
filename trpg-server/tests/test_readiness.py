@@ -13,11 +13,11 @@ import time
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.logs import rendered
 
 from app.api import readiness
 from app.main import create_app
 from tests.conftest import make_client, make_test_settings
-from tests.logs import rendered
 from tests.test_attempt_limits import REDIS_URL
 from tests.test_health import UNREACHABLE_DATABASE_URL
 
@@ -94,11 +94,13 @@ async def test_ready_answers_head_with_503_when_the_database_is_unreachable():
 async def test_an_unavailable_probe_is_a_warning_not_an_error(caplog: pytest.LogCaptureFixture):
     app = create_app(make_test_settings(database_url=UNREACHABLE_DATABASE_URL))
 
-    with caplog.at_level(logging.DEBUG, logger='app.observability.middleware'):
+    with caplog.at_level(logging.DEBUG, logger='server_core.observability.middleware'):
         async with make_client(app) as client:
             await client.get('/health/ready')
 
-    (line,) = [line for line in rendered(caplog.records, 'app.observability.middleware') if 'status_code' in line]
+    (line,) = [
+        line for line in rendered(caplog.records, 'server_core.observability.middleware') if 'status_code' in line
+    ]
     # 503 은 이 주소의 답이다. 서버의 잘못(error)이 아니다. 결과 칸은 다른 5xx 처럼 server_error 다
     assert (line['level'], line['status_code'], line['result']) == ('warning', 503, 'server_error')
 

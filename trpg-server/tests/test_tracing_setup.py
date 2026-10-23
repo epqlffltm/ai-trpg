@@ -1,8 +1,9 @@
 # trpg-server/tests/test_tracing_setup.py
 
 """
-span 을 OTLP(HTTP)로 미는 것(app/observability/tracing.py)과 그 설정(OTEL_EXPORTER_OTLP_ENDPOINT)을 검증한다.
-수집기 대신 이 테스트의 HTTP 서버가 받는다(tests/collector.py).
+이 서버가 span 과 메트릭을 수집기에 미는지, 꺼질 때 남은 것을 보내는지, 그 출처의 이름이 trpg-server 인지 검증한다.
+보내는 길과 설정의 규칙(server_core/observability/tracing.py, metrics.py)은 server-core 의 테스트가 본다(#589).
+수집기 대신 이 테스트의 HTTP 서버가 받는다(server_core/testing/collector.py).
 """
 
 from collections.abc import Iterator
@@ -10,16 +11,15 @@ from collections.abc import Iterator
 import pytest
 from opentelemetry import trace
 from opentelemetry.metrics import NoOpMeterProvider
-from pydantic import ValidationError
+from server_core.observability.metrics import use_meter_provider
+from server_core.observability.setup import service_info
+from server_core.observability.spans import use_provider
+from server_core.observability.tracing import build_resource
+from server_core.testing.collector import Collector
 from server_core.testing.tokens import FakeAuthServer
 
 from app.core.database import create_engine
 from app.main import create_app
-from app.observability.metrics import use_meter_provider
-from app.observability.request_spans import RequestSpanMiddleware
-from app.observability.spans import tracer, use_provider
-from app.observability.tracing import build_provider, configure_tracing, shutdown_tracing
-from tests.collector import Collector
 from tests.conftest import make_client, make_test_settings
 
 
@@ -29,61 +29,6 @@ def restore_provider() -> Iterator[None]:
     yield
     use_provider(trace.NoOpTracerProvider())
     use_meter_provider(NoOpMeterProvider())
-
-
-@pytest.mark.parametrize(
-    ('written', 'read'),
-    [('', ''), ('  ', ''), ('http://alloy:4318', 'http://alloy:4318'), ('https://a.b:4318/', 'https://a.b:4318')],
-)
-def test_the_endpoint_is_read_without_a_path(written: str, read: str):
-    assert make_test_settings(otel_exporter_otlp_endpoint=written).otel_exporter_otlp_endpoint == read
-
-
-@pytest.mark.parametrize(
-    'written',
-    [
-        'http://marked-host:4318/v1/traces',
-        'marked-host:4318',
-        'ftp://marked-host:4318',
-        'http://marked-host:4318?x=1',
-        'http://marked-host:4318#x',
-        'http://',
-    ],
-)
-def test_a_wrong_endpoint_stops_the_server(written: str):
-    with pytest.raises(ValidationError) as error:
-        make_test_settings(otel_exporter_otlp_endpoint=written)
-
-    # 읽은 값은 오류에 싣지 않는다
-    assert 'marked-host' not in str(error.value)
-
-
-def test_without_an_endpoint_nothing_is_made():
-    assert build_provider(make_test_settings()) is None
-    assert configure_tracing(make_test_settings()) is None
-    shutdown_tracing(None)
-
-
-@pytest.mark.usefixtures('restore_provider')
-def test_shutdown_sends_the_spans_with_the_resource(collector: tuple[Collector, str]):
-    received, endpoint = collector
-    settings = make_test_settings(otel_exporter_otlp_endpoint=endpoint, app_version='3f2a9c1', app_environment='test')
-    provider = configure_tracing(settings)
-
-    with tracer().start_as_current_span('ai_log.prune'):
-        pass
-    shutdown_tracing(provider)
-
-    assert received.paths == ['/v1/traces']
-    assert received.span_names() == ['ai_log.prune']
-    resource = received.resource()
-    assert resource['service.name'] == 'trpg-server'
-    assert resource['service.version'] == '3f2a9c1'
-    assert resource['deployment.environment.name'] == 'test'
-    assert resource['service.instance.id'].startswith('server-')
-    assert len(resource['service.instance.id']) == len('server-') + 8
-    # 정한 넷만 싣는다
-    assert set(resource) == {'service.name', 'service.version', 'deployment.environment.name', 'service.instance.id'}
 
 
 @pytest.mark.usefixtures('restore_provider')
@@ -108,12 +53,9 @@ async def test_shutting_down_the_server_sends_what_is_left(
     assert received.resource() == received.metric_resource()
 
 
-async def test_a_scope_that_is_not_http_gets_no_span():
-    seen: list[dict] = []
+def test_the_server_names_itself_trpg_server():
+    # 로그의 service 칸, span 과 메트릭의 출처가 이 이름이다. 바뀌면 대시보드와 경보가 이 서버를 잃는다
+    settings = make_test_settings()
 
-    async def inner(scope, receive, send) -> None:
-        seen.append(scope)
-
-    await RequestSpanMiddleware(inner)({'type': 'lifespan'}, None, None)
-
-    assert seen == [{'type': 'lifespan'}]
+    assert service_info(settings).service == 'trpg-server'
+    assert build_resource(settings).attributes['service.name'] == 'trpg-server'

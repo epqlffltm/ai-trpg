@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.testing.logs import rendered
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -30,7 +31,6 @@ from app.rounds import credit_waits
 from app.rounds.closing import closer_of
 from app.tables.models import CREDIT_WAIT_MAX, CREDIT_WAIT_MIN, DEFAULT_CREDIT_WAIT
 from tests.billing import FakeBillingServer
-from tests.logs import rendered
 from tests.test_narration_billing import PRICE, charges_of, close_round, tick
 from tests.test_npc_actions import events_of
 from tests.test_round_closing import FRIEND, ME, RESULT, GatedNarrator, bearer, current, table_url

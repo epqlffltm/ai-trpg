@@ -1,8 +1,8 @@
 # trpg-server/tests/test_tracing_requests.py
 
 """
-요청마다 서버 span 이 걸리고 로그의 trace_id 가 그 span 의 것인지 검증한다(app/observability/request_spans.py).
-span 은 메모리에 모은다(tests/spans.py). 규격은 docs/observability.md 의 "3. 추적"에 있다.
+요청마다 서버 span 이 걸리고 로그의 trace_id 가 그 span 의 것인지 검증한다(server_core/observability/request_spans.py).
+span 은 메모리에 모은다(server_core/testing/spans.py). 규격은 docs/observability.md 의 "3. 추적"에 있다.
 """
 
 import logging
@@ -11,16 +11,16 @@ from collections.abc import AsyncIterator
 import pytest
 from httpx import ASGITransport, AsyncClient
 from opentelemetry.trace import SpanKind, StatusCode
+from server_core.observability.spans import ATTRIBUTE_REQUEST_ID
+from server_core.testing.logs import rendered
+from server_core.testing.spans import SpanRecorder, hex_span_id, hex_trace_id
 from server_core.testing.tokens import FakeAuthServer
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import Settings
 from app.main import API_PREFIX, create_app
-from app.observability.spans import ATTRIBUTE_REQUEST_ID
-from tests.logs import rendered
-from tests.spans import SpanRecorder, hex_span_id, hex_trace_id
 
-REQUEST_LOGGER = 'app.observability.middleware'
+REQUEST_LOGGER = 'server_core.observability.middleware'
 TRACE_ID = '4bf92f3577b34da6a3ce929d0e0e4736'
 PARENT_ID = '00f067aa0ba902b7'
 TRACEPARENT = f'00-{TRACE_ID}-{PARENT_ID}-01'
