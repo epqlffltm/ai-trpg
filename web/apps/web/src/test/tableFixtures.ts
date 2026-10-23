@@ -72,6 +72,7 @@ export function sheet(extra: Record<string, unknown> = {}) {
     dead: false,
     injuries: [],
     items: [],
+    money: 0,
     place_id: null,
     ...extra,
   };
@@ -133,6 +134,7 @@ export function tableDetail(id: string, extra: Record<string, unknown> = {}) {
     reroll_allowed: true,
     pregens: [pregen('렌'), pregen('미아', { taken_by: OTHER }), pregen('조', { dead: true })],
     items: [],
+    currency: null,
     quests: [],
     map: null,
     clock: { day: 1, hour: 8, minute: 0, time_of_day: 'morning', next_step_minutes: 30, default_step_minutes: 30, step_changed: false },

@@ -157,7 +157,7 @@ class ScenarioTest(unittest.TestCase):
         game = FakeGame(
             {
                 ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [{'id': 's1', 'title': SEED_TITLE}]},
-                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': 'e0'},
+                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': 'e0', 'currency': {'name': '은화'}},
                 ('GET', '/api/v1/game/listings/s1'): {'scenario_id': 's1'},
             }
         )
@@ -169,7 +169,7 @@ class ScenarioTest(unittest.TestCase):
         game = FakeGame(
             {
                 ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [{'id': 's1', 'title': SEED_TITLE}]},
-                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': 'e0'},
+                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': 'e0', 'currency': {'name': '은화'}},
                 ('GET', '/api/v1/game/listings/s1'): SeedError('404'),
                 ('POST', '/api/v1/game/scenarios/s1/versions'): {'number': 2},
                 ('PUT', '/api/v1/game/scenarios/s1/listing/publication'): {},
@@ -199,6 +199,26 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual(patched['start_place'], IDS['수도원 문'])
         self.assertEqual(game.calls[-1][2], {'version': 3})
 
+    def test_seed_with_a_map_but_no_currency_is_upgraded_too(self):
+        game = FakeGame(
+            {
+                ('GET', '/api/v1/game/scenarios?limit=100'): {'items': [{'id': 's1', 'title': SEED_TITLE}]},
+                ('GET', '/api/v1/game/scenarios/s1'): {'id': 's1', 'start_place': 'e0', 'currency': None},
+                ('GET', '/api/v1/game/tables/narration-models'): {'models': [{'slug': 'm1'}]},
+                **lorebook_answers([{'id': IDS[name], 'name': name} for name in IDS if name != '떠돌이 행상']),
+                ('POST', f'{LOREBOOKS}/l1/entries'): {'id': 'new'},
+                ('PATCH', '/api/v1/game/scenarios/s1'): {},
+                ('POST', '/api/v1/game/scenarios/s1/versions'): {'number': 4},
+                ('PUT', '/api/v1/game/scenarios/s1/listing/publication'): {},
+            }
+        )
+        with mock.patch.object(dev_seed, 'call', game):
+            self.assertEqual(seed_scenario(PROXY, 't'), ('s1', 'upgraded'))
+        patched = next(body for method, path, body in game.calls if method == 'PATCH')
+        self.assertEqual(patched['currency'], dev_seed_world.CURRENCY)
+        merchant = next(npc for npc in patched['npc_sheets'] if npc.get('merchant'))
+        self.assertEqual(merchant['entry_id'], 'new')
+
 
 class LorebookTest(unittest.TestCase):
     def test_makes_only_missing_entries(self):
@@ -224,6 +244,20 @@ class WorldTest(unittest.TestCase):
         self.assertTrue(all('find' in route for route in hidden))
         self.assertEqual(dev_seed_world.START_PLACE, '수도원 문')
 
+    def test_money_needs_the_currency_and_the_merchant_sells_priced_items(self):
+        fields = world_fields(IDS, 'l1')
+        self.assertEqual(fields['currency']['name'], '은화')
+        priced = {rule['entry_id'] for rule in fields['items'] if rule.get('price')}
+        merchant = next(npc for npc in fields['npc_sheets'] if npc.get('merchant'))
+        self.assertTrue({line['entry_id'] for line in merchant['inventory']} <= priced)
+        self.assertNotIn(IDS['녹슨 열쇠'], priced)
+
+    def test_is_current_needs_a_world_and_a_currency(self):
+        self.assertTrue(dev_seed_world.is_current({'start_place': 'p', 'currency': {'name': '은화'}}))
+        self.assertTrue(dev_seed_world.is_current({'map': {'places': []}, 'currency': {'name': '은화'}}))
+        self.assertFalse(dev_seed_world.is_current({'start_place': 'p', 'currency': None}))
+        self.assertFalse(dev_seed_world.is_current({'currency': {'name': '은화'}}))
+
 
 class TableTest(unittest.TestCase):
     def test_reuses_a_recruiting_table_of_the_scenario(self):
@@ -235,11 +269,29 @@ class TableTest(unittest.TestCase):
                         {'id': 't1', 'scenario_id': 's1', 'status': 'recruiting'},
                     ]
                 },
-                ('GET', '/api/v1/game/tables/t1'): {'id': 't1', 'invite_code': 'ABC', 'map': {'places': []}},
+                ('GET', '/api/v1/game/tables/t1'): {
+                    'id': 't1',
+                    'invite_code': 'ABC',
+                    'map': {'places': []},
+                    'currency': {'name': '은화'},
+                },
             }
         )
         with mock.patch.object(dev_seed, 'call', game):
             self.assertEqual(seed_table(PROXY, 't', 's1')['id'], 't1')
+
+    def test_a_table_of_the_version_without_currency_is_not_reused(self):
+        game = FakeGame(
+            {
+                ('GET', '/api/v1/game/tables?limit=100'): {
+                    'items': [{'id': 't1', 'scenario_id': 's1', 'status': 'recruiting'}]
+                },
+                ('GET', '/api/v1/game/tables/t1'): {'id': 't1', 'map': {'places': []}, 'currency': None},
+                ('POST', '/api/v1/game/tables'): {'id': 't2', 'invite_code': 'XYZ'},
+            }
+        )
+        with mock.patch.object(dev_seed, 'call', game):
+            self.assertEqual(seed_table(PROXY, 't', 's1')['id'], 't2')
 
     def test_a_table_of_the_old_version_without_a_map_is_not_reused(self):
         game = FakeGame(

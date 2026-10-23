@@ -9,20 +9,21 @@ export function DeclarationList({ round, table }: { round: Round; table: TableDe
   if (round.declarations.length === 0 && round.death_saves.length === 0 && round.arrivals.length === 0) return null;
   return (
     <ul className="declarations">
-      {round.declarations.map((declaration) => (
-        <li key={declaration.user_id} className="declaration">
-          <span className="declaration__name">{declaration.character_name}</span>
-          {declaration.content !== null ? (
-            <span className="prose">{declaration.content}</span>
-          ) : (
-            <span className="hint">선언을 냈습니다.</span>
-          )}
-          {declaration.action ? <span className="hint">{actionLabel(declaration.action, table)}</span> : null}
-          {outcomeLine(declaration.outcome, table.rules) ? (
-            <span className="declaration__outcome">{outcomeLine(declaration.outcome, table.rules)}</span>
-          ) : null}
-        </li>
-      ))}
+      {round.declarations.map((declaration) => {
+        const outcome = outcomeLine(declaration.outcome, table.rules, table.currency ?? null);
+        return (
+          <li key={declaration.user_id} className="declaration">
+            <span className="declaration__name">{declaration.character_name}</span>
+            {declaration.content !== null ? (
+              <span className="prose">{declaration.content}</span>
+            ) : (
+              <span className="hint">선언을 냈습니다.</span>
+            )}
+            {declaration.action ? <span className="hint">{actionLabel(declaration.action, table)}</span> : null}
+            {outcome ? <span className="declaration__outcome">{outcome}</span> : null}
+          </li>
+        );
+      })}
       {round.death_saves.map((save) => (
         <li key={`death-${save.user_id}`} className="declaration declaration--system">
           {deathSaveLine(save)}

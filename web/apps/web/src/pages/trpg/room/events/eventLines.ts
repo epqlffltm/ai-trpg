@@ -10,6 +10,7 @@
 import type { TableDetail, TableEvent } from '../../../../api/types';
 import { NARRATION_STYLE_VALUES, durationLabel, narrationStyleLabel } from '../../labels';
 import { dayLabel, stepName } from '../../models/modelChoice';
+import { amountLabel } from '../money';
 import { clockTimeLabel, injuryName, questStatusLabel } from '../status/statusView';
 
 export type EventType = TableEvent['type'];
@@ -179,10 +180,9 @@ function givenText(payload: Payload, ctx: EventContext, event: TableEvent): stri
   return `${who(payload, ctx, event)}: ${thing(payload)} → ${to}`;
 }
 
-/** 돈. 시나리오의 화폐 단위를 붙인다("12 은화"). 화폐가 없는 판이면 숫자만 */
+/** 돈. 판의 화폐 단위를 붙인다("12닢"). 화폐가 없는 판이면 숫자만 */
 function moneyOf(amount: number | null, ctx: EventContext): string {
-  const unit = ctx.table.currency?.unit;
-  return `${amount ?? '?'}${unit ? ` ${unit}` : ''}`;
+  return amount === null ? '?' : amountLabel(ctx.table.currency, amount);
 }
 
 function tradeText(payload: Payload, ctx: EventContext, event: TableEvent): string {

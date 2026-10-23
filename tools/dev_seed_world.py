@@ -9,7 +9,9 @@
   - 줍기, 내려놓기: 수도원 문에 횃불 둘. 지하 저장고에 숨긴 은 성배(찾기로 드러난다)
   - 쓰기, 건네기: 모두 약초 하나로 시작한다. 프리젠 렌은 하나 더, 미라는 횃불
   - 공격, 지목, 훔치기, 빼앗기: 문 옆의 늙은 문지기(진짜 이름 마르타). 녹슨 열쇠를 지녔다
-  - 퀘스트: 종탑에 닿으면 이룬다
+  - 퀘스트: 종탑에 닿으면 이룬다. 이루면 저마다 은화를 받는다
+  - 사기, 팔기, 돈 건네기(#278): 화폐는 은화. 모두 은화를 조금 가지고 시작한다.
+    처마 밑의 떠돌이 행상이 약초와 횃불을 판다
 """
 
 LOREBOOK_TITLE = '[견본] 잿빛 수도원의 로어북'
@@ -46,6 +48,12 @@ ENTRIES = (
     {'name': '녹슨 열쇠', 'kind': 'item', 'keywords': ['열쇠'], 'content': '종탑 계단의 쇠창살을 여는 열쇠.'},
     {'name': '은 성배', 'kind': 'item', 'keywords': ['성배'], 'content': '수도원의 보물. 안쪽에 이름이 새겨져 있다.'},
     {
+        'name': '떠돌이 행상',
+        'kind': 'person',
+        'keywords': ['행상'],
+        'content': '비를 피해 수도원 처마 밑에 짐을 푼 행상. 값만 맞으면 무엇이든 사고판다.',
+    },
+    {
         'name': '마르타',
         'kind': 'person',
         'keywords': ['문지기', '늙은 문지기'],
@@ -60,8 +68,21 @@ ENTRIES = (
     },
 )
 
-# 지금 세계를 담은 판인지. 시나리오에 시작 장소가 있으면 이 세계를 담았다(앞의 견본에는 맵이 없었다)
+# 시작 장소
 START_PLACE = '수도원 문'
+
+# 판의 화폐(#278). 모두 20닢을 가지고 시작하고, 행상은 값의 절반에 사 준다
+CURRENCY = {'name': '은화', 'unit': '닢', 'starting': 20, 'sell_percent': 50}
+
+
+def is_current(document: dict) -> bool:
+    """
+    지금 세계를 담은 시나리오나 테이블인지. 맵(시작 장소)과 화폐가 모두 있어야 한다.
+    앞의 견본에는 맵이 없었고(#694 전), 그다음 견본에는 화폐가 없었다(#278 전).
+    시나리오는 start_place 와 currency 를, 테이블은 map 과 currency 를 본다.
+    """
+    has_world = bool(document.get('start_place') or document.get('map'))
+    return has_world and bool(document.get('currency'))
 
 
 def sheet(max_hp: int, **scores: int) -> dict:
@@ -92,12 +113,12 @@ def routes(ids: dict[str, str]) -> list[dict]:
 
 
 def item_rules(ids: dict[str, str]) -> list[dict]:
-    """물건의 종류와 등급. 약초는 가볍게 회복한다(SRD5 의 light)."""
+    """물건의 종류와 등급과 값. 약초는 가볍게 회복한다(SRD5 의 light). 녹슨 열쇠는 값이 없어 사고팔지 못한다."""
     return [
-        {'entry_id': ids['약초'], 'kind': 'consumable', 'rarity': 'normal', 'heals': 'light'},
-        {'entry_id': ids['횃불'], 'kind': 'gear', 'rarity': 'normal'},
+        {'entry_id': ids['약초'], 'kind': 'consumable', 'rarity': 'normal', 'heals': 'light', 'price': 6},
+        {'entry_id': ids['횃불'], 'kind': 'gear', 'rarity': 'normal', 'price': 3},
         {'entry_id': ids['녹슨 열쇠'], 'kind': 'gear', 'rarity': 'rare'},
-        {'entry_id': ids['은 성배'], 'kind': 'gear', 'rarity': 'epic'},
+        {'entry_id': ids['은 성배'], 'kind': 'gear', 'rarity': 'epic', 'price': 120},
     ]
 
 
@@ -116,7 +137,10 @@ def place_items(ids: dict[str, str]) -> list[dict]:
 
 
 def npc_sheets(ids: dict[str, str]) -> list[dict]:
-    """늙은 문지기. 경계한다. 녹슨 열쇠를 품에 지녔고, 들키면 적대한다. 맞으면 등불을 휘두른다."""
+    """
+    늙은 문지기. 경계한다. 녹슨 열쇠를 품에 지녔고, 들키면 적대한다. 맞으면 등불을 휘두른다.
+    떠돌이 행상. 상인이다. 소지품이 곧 재고다(약초 다섯, 횃불 셋).
+    """
     return [
         {
             'entry_id': ids['마르타'],
@@ -125,7 +149,14 @@ def npc_sheets(ids: dict[str, str]) -> list[dict]:
             'inventory': [{'entry_id': ids['녹슨 열쇠'], 'count': 1}],
             'on_caught': 'hostile',
             'attacks': [{'name': '등불 휘두르기', 'ability': 'str', 'difficulty': 'medium', 'harm': 'light'}],
-        }
+        },
+        {
+            'entry_id': ids['떠돌이 행상'],
+            'sheet': sheet(8),
+            'attitude': 'friendly',
+            'merchant': True,
+            'inventory': [stack(ids, '약초', 5), stack(ids, '횃불', 3)],
+        },
     ]
 
 
@@ -136,6 +167,7 @@ def quests(ids: dict[str, str]) -> list[dict]:
             'entry_id': ids['울리지 않는 종'],
             'start': 'active',
             'conditions': [{'kind': 'reach_place', 'target': ids['종탑']}],
+            'reward_money': 30,
         }
     ]
 
@@ -154,7 +186,12 @@ def pregens(ids: dict[str, str]) -> list[dict]:
             'sheet': sheet(11, dex=16, wis=12),
             'items': [stack(ids, '횃불')],
         },
-        {'name': '용병 도르', 'description': '도끼를 든다. 돈을 받고 왔다.', 'sheet': sheet(14, str=16, con=14)},
+        {
+            'name': '용병 도르',
+            'description': '도끼를 든다. 돈을 받고 왔다.',
+            'sheet': sheet(14, str=16, con=14),
+            'money': 15,
+        },
     ]
 
 
@@ -171,4 +208,5 @@ def world_fields(ids: dict[str, str], lorebook_id: str) -> dict:
         'quests': quests(ids),
         'pregens': pregens(ids),
         'clock': {'start_day': 1, 'start_hour': 22, 'round_minutes': 10},
+        'currency': CURRENCY,
     }

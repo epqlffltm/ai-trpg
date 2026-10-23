@@ -20,6 +20,7 @@ import { ACTION_LABELS } from './actionLabels';
 import { CheckFields } from './CheckFields';
 import { ChoiceSelect } from './ChoiceSelect';
 import { GiveFields, PutDownFields, TakeFields, UseFields, VictimFields } from './ItemActionFields';
+import { BuyFields, PayFields, SellFields } from './TradeFields';
 import { minutesLabel } from '../../status/statusView';
 
 type Props = {
@@ -75,6 +76,12 @@ function KindFields({ draft, ctx, onChange }: Omit<Props, 'error'>) {
       return <RestFields draft={draft} ctx={ctx} onChange={onChange} />;
     case 'wait':
       return <WaitFields draft={draft} onChange={onChange} />;
+    case 'buy':
+      return <BuyFields draft={draft} ctx={ctx} onChange={onChange} />;
+    case 'sell':
+      return <SellFields draft={draft} ctx={ctx} onChange={onChange} />;
+    case 'pay':
+      return <PayFields draft={draft} ctx={ctx} onChange={onChange} />;
     default:
       return null;
   }
