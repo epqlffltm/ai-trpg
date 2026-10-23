@@ -59,6 +59,8 @@ NARRATION_AVOID_MAX_LENGTH = 100
 NARRATION_MAX_AVOIDS = 5
 # 장비의 칸(#276). 캐릭터 하나가 동시에 착용하는 자리의 수다(손, 몸, 머리 …)
 RULESET_MAX_EQUIPMENT_SLOTS = 8
+# 칸 하나가 맞을 가중치의 상한(#276). 칸마다의 비율만 뜻이 있다
+RULESET_MAX_HIT_WEIGHT = 100
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -632,6 +634,24 @@ class EquipmentSlot(Part):
 
     key: Key
     name: Name
+    # 공격이 이 칸(부위)에 맞을 가중치. 서버가 칸마다의 가중치대로 부위를 굴린다(app/engine/armor.py).
+    # 0 이면 맞지 않는 칸이다(반지 같은 것). 노려서 칠 수도 없다
+    hit_weight: Annotated[int, Field(ge=0, le=RULESET_MAX_HIT_WEIGHT)] = 1
+
+
+class ArmorMode(enum.StrEnum):
+    """방어구가 공격을 막는 방식(#276). 룰북이 고른다."""
+
+    # 맞히기 어렵게 한다. 맞은 부위의 방어만큼 맞히는 목표값이 오른다(D&D 의 AC)
+    AC = 'ac'
+    # 피해를 깎는다. 맞은 부위의 방어만큼 굴린 피해에서 뺀다. 0 아래로는 가지 않는다(WFRP 의 방어 점수)
+    REDUCE = 'reduce'
+
+
+class Armor(Part):
+    """방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다."""
+
+    mode: ArmorMode
 
 
 class Ruleset(Part):
@@ -690,6 +710,8 @@ class Ruleset(Part):
     narration: NarrationGuide | None
     # 장비의 칸들(#276). 비어 있으면 이 규칙에는 착용이 없다. 칸 자체는 늘 있어야 한다
     equipment_slots: Annotated[tuple[EquipmentSlot, ...], Field(max_length=RULESET_MAX_EQUIPMENT_SLOTS)]
+    # 방어구의 규칙(#276). None 이면 방어구가 공격을 막지 않고, 부위도 굴리지 않는다. 칸 자체는 늘 있어야 한다
+    armor: Armor | None
 
     @model_validator(mode='after')
     def reject_duplicate_slots(self) -> Self:

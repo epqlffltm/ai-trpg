@@ -31,6 +31,7 @@ from app.engine.ruleset import Ruleset
 from app.rounds.drops import NPC_SOURCE
 from app.rounds.models import Declaration, Round
 from app.rounds.narrator import (
+    BlowNote,
     ClockNote,
     DeathSaveNote,
     DownedStrikeNote,
@@ -443,6 +444,22 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
         hindrances=hindrance_names(ruleset, outcome.get('hindrance')),
         aimed=aimed_name(ruleset, outcome.get('called_shot')),
         treatment=to_treatment(outcome.get('treatment')),
+        blow=to_blow(outcome.get('blow')),
+    )
+
+
+def to_blow(blow: dict | None) -> BlowNote | None:
+    """판정이나 차례에 적힌 장비가 든 것(#276)을 서술자에게 줄 모양으로. 없으면 None."""
+    if blow is None:
+        return None
+    weapon = blow['weapon']
+    return BlowNote(
+        weapon=weapon['name'] if weapon else None,
+        weapon_bonus=weapon['bonus'] if weapon else 0,
+        location=blow['location_name'],
+        aimed=blow['aimed'],
+        defense=blow['defense'],
+        mode=blow['mode'],
     )
 
 
@@ -670,6 +687,7 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
         hit=outcome['success'],
         impact=to_impact(outcome['effect']),
         downed=to_downed_strike(outcome.get('downed_strike')),
+        blow=to_blow(outcome.get('blow')),
     )
 
 

@@ -56,6 +56,7 @@ from app.assets.scenarios.snapshot import (
     AttackSnapshot,
     CarriedItemSnapshot,
     MonsterSnapshot,
+    NaturalArmorSnapshot,
     build_snapshot,
     snapshot_monster,
     wear_fault,
@@ -168,6 +169,12 @@ class Problem(enum.StrEnum):
     ITEM_SLOT_INVALID = 'item_slot_invalid'
     # 시작할 때의 착용(wear)이 틀렸다. 그 물건의 칸이 아니거나, 차지하는 칸의 수와 다르거나, 두 줄이 한 칸에 겹친다
     STARTING_WEAR_INVALID = 'starting_wear_invalid'
+    # NPC 나 몬스터의 장비가 착용한 칸(wear)이 틀렸다. 시작할 때의 착용과 같은 검사다(#276)
+    CARRIED_WEAR_INVALID = 'carried_wear_invalid'
+    # 몬스터의 타고난 방어(natural_armor)의 부위가 룰북의 칸에 없다(#276)
+    NATURAL_ARMOR_INVALID = 'natural_armor_invalid'
+    # NPC 나 몬스터의 공격의 무기(weapon)가 착용한 장비가 아니거나 공격 보정이 없는 물건이다(#276)
+    ATTACK_WEAPON_INVALID = 'attack_weapon_invalid'
 
 
 class ScenarioNotReadyError(Exception):
@@ -421,6 +428,7 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             [CarriedItemSnapshot(**line.model_dump()) for line in monster_sheet.equipment],
             [CarriedItemSnapshot(**line.model_dump()) for line in monster_sheet.inventory],
             monster_sheet.dull,
+            [NaturalArmorSnapshot(**one.model_dump()) for one in monster_sheet.natural_armor],
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]
@@ -525,6 +533,48 @@ def find_wear_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Prob
     item_slots = {rule.entry_id: (rule.slots, rule.slot_count) for rule in rules}
     if any(wear_fault(slot_keys, item_slots, group) for group in starting_groups(scenario)):
         problems.append(Problem.STARTING_WEAR_INVALID)
+    return problems
+
+
+def armed_holders(scenario: Scenario) -> list[NpcSheet | MonsterSheet]:
+    """장비와 공격을 가진 시트들. NPC 시트와 몬스터 시트다."""
+    return [*read_npc_sheets(scenario), *read_monster_sheets(scenario)]
+
+
+def weapon_fault(holder: NpcSheet | MonsterSheet, attack: MonsterAttack, attacks_of: dict[uuid.UUID, int]) -> bool:
+    """
+    공격의 무기가 틀렸는가. 무기는 그 시트가 착용한 장비 줄의 물건이고, 공격 보정이 있어야 한다.
+
+    attacks_of 는 공격 보정이 있는 물건의 {항목 ID: 보정} 이다. 무기가 장비에 적힌 것인지는 시트가 봤다.
+    """
+    if attack.weapon is None:
+        return False
+    worn = {line.entry_id for line in holder.equipment if line.wear}
+    return attack.weapon not in worn or attack.weapon not in attacks_of
+
+
+def find_combat_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    NPC 와 몬스터의 장비가 공격과 방어에 드는 것에서 문제를 찾는다(#276). 룰북이 없으면 볼 수 없다.
+
+    장비의 착용은 그 물건의 칸에 맞아야 하고(wear_fault), 타고난 방어의 부위는 룰북의 칸이어야 하고,
+    공격의 무기는 착용한 장비 중 공격 보정이 있는 물건이어야 한다.
+    """
+    if ruleset is None:
+        return []
+    slot_keys = {slot.key for slot in ruleset.equipment_slots}
+    rules = read_item_rules(scenario)
+    item_slots = {rule.entry_id: (rule.slots, rule.slot_count) for rule in rules}
+    attacks_of = {rule.entry_id: rule.attack for rule in rules if rule.attack is not None}
+    holders = armed_holders(scenario)
+    problems = []
+    if any(wear_fault(slot_keys, item_slots, holder.equipment) for holder in holders):
+        problems.append(Problem.CARRIED_WEAR_INVALID)
+    natural = [one.slot for sheet in read_monster_sheets(scenario) for one in sheet.natural_armor]
+    if any(slot not in slot_keys for slot in natural):
+        problems.append(Problem.NATURAL_ARMOR_INVALID)
+    if any(weapon_fault(holder, attack, attacks_of) for holder in holders for attack in holder.attacks):
+        problems.append(Problem.ATTACK_WEAPON_INVALID)
     return problems
 
 
@@ -849,6 +899,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_quest_problems(scenario, parts))
     problems.extend(find_currency_problems(scenario))
     problems.extend(find_wear_problems(scenario, ruleset))
+    problems.extend(find_combat_problems(scenario, ruleset))
     problems.extend(find_map_problems(scenario, parts, ruleset))
     problems.extend(find_place_item_problems(scenario, ruleset))
     problems.extend(find_happening_problems(scenario, parts))

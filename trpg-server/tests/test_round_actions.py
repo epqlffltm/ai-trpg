@@ -101,6 +101,8 @@ def stored(action: dict) -> dict:
         'monster': None,
         'lethal': False,
         'aim': None,
+        'weapon': None,
+        'strike': None,
     }
     return {**defaults, **action}
 

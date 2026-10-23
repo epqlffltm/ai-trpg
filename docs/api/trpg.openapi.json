@@ -42,6 +42,29 @@
         "title": "ActionRequest",
         "type": "object"
       },
+      "Armor": {
+        "additionalProperties": false,
+        "description": "방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다.",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/ArmorMode"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "Armor",
+        "type": "object"
+      },
+      "ArmorMode": {
+        "description": "방어구가 공격을 막는 방식(#276). 룰북이 고른다.",
+        "enum": [
+          "ac",
+          "reduce"
+        ],
+        "title": "ArmorMode",
+        "type": "string"
+      },
       "ArrivalOut": {
         "description": "이 라운드에 새로 들어온 캐릭터 하나. 캐릭터가 죽은 플레이어가 들인 새 캐릭터다.",
         "properties": {
@@ -149,6 +172,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "weapon": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weapon"
           }
         },
         "required": [
@@ -236,6 +271,97 @@
           }
         },
         "title": "BestiaryUpdate",
+        "type": "object"
+      },
+      "BlowOut": {
+        "description": "타격에 장비가 든 것(#276). 엔진이 정했다. 무기, 맞은 부위, 노렸는가, 그 부위의 방어다.\n\nmode 는 룰북의 방어 방식이다. ac 면 방어가 목표값(target)에 이미 더해졌고, reduce 면 피해에서 빠졌다\n(변화의 rolls 를 더한 값과 amount 의 차이). 방어 방식이 없는 규칙이면 None 이고 부위도 없다.",
+        "properties": {
+          "aimed": {
+            "title": "Aimed",
+            "type": "boolean"
+          },
+          "defense": {
+            "title": "Defense",
+            "type": "integer"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "weapon": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BlowWeaponOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "weapon",
+          "location",
+          "location_name",
+          "aimed",
+          "defense",
+          "mode"
+        ],
+        "title": "BlowOut",
+        "type": "object"
+      },
+      "BlowWeaponOut": {
+        "description": "타격에 쓴 무기(#276). 판의 물건과 그 이름과 판정의 보정에 더한 공격 보정이다.",
+        "properties": {
+          "bonus": {
+            "title": "Bonus",
+            "type": "integer"
+          },
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_id",
+          "name",
+          "bonus"
+        ],
+        "title": "BlowWeaponOut",
         "type": "object"
       },
       "BuyAction": {
@@ -329,7 +455,7 @@
       },
       "CarriedItem-Input": {
         "additionalProperties": false,
-        "description": "몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.\n\nchance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).\n줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.\n항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).",
+        "description": "몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.\n\nchance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).\n줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.\nwear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.\n떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).\n항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).",
         "properties": {
           "chance": {
             "default": 100,
@@ -349,6 +475,17 @@
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "wear": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Wear",
+            "type": "array"
           }
         },
         "required": [
@@ -359,7 +496,7 @@
       },
       "CarriedItem-Output": {
         "additionalProperties": false,
-        "description": "몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.\n\nchance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).\n줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.\n항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).",
+        "description": "몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.\n\nchance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).\n줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.\nwear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.\n떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).\n항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).",
         "properties": {
           "chance": {
             "default": 100,
@@ -378,6 +515,17 @@
           "entry_id": {
             "title": "Entry Id",
             "type": "string"
+          },
+          "wear": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Wear",
+            "type": "array"
           }
         },
         "required": [
@@ -401,6 +549,14 @@
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "wear": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Wear",
+            "type": "array"
           }
         },
         "required": [
@@ -503,10 +659,43 @@
       "CatalogItemOut": {
         "description": "판에 있는 물건 하나. 로어북의 물건 항목이다.\n\nkind 가 consumable 이면 쓰면 하나 줄어든다. heals 가 있으면 쓸 때 HP 를 그 등급(rules 의 magnitudes)만큼 되돌린다.",
         "properties": {
+          "attack": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attack"
+          },
+          "defense": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defense"
+          },
           "entry_id": {
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "guard": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guard"
           },
           "heals": {
             "anyOf": [
@@ -822,6 +1011,19 @@
             ],
             "title": "Risk"
           },
+          "strike": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strike"
+          },
           "target": {
             "anyOf": [
               {
@@ -833,6 +1035,18 @@
               }
             ],
             "title": "Target"
+          },
+          "weapon": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weapon"
           }
         },
         "required": [
@@ -845,6 +1059,16 @@
       "CheckOutcome": {
         "description": "판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다.",
         "properties": {
+          "blow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BlowOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "called_shot": {
             "anyOf": [
               {
@@ -2210,6 +2434,13 @@
         "additionalProperties": false,
         "description": "장비의 칸 하나(#276). 캐릭터가 물건을 착용하는 자리다. 예: 주손, 보조손, 몸.\n\n칸마다 하나의 물건이 들어간다. 어느 물건이 어느 칸에 들어가는지는 시나리오의 아이템 규칙이 정한다.",
         "properties": {
+          "hit_weight": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Hit Weight",
+            "type": "integer"
+          },
           "key": {
             "maxLength": 20,
             "pattern": "^[a-z][a-z0-9_]*$",
@@ -3285,12 +3516,51 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.",
         "properties": {
+          "attack": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attack"
+          },
+          "defense": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defense"
+          },
           "entry_id": {
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "guard": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guard"
           },
           "heals": {
             "anyOf": [
@@ -3353,11 +3623,50 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.",
         "properties": {
+          "attack": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attack"
+          },
+          "defense": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defense"
+          },
           "entry_id": {
             "title": "Entry Id",
             "type": "string"
+          },
+          "guard": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guard"
           },
           "heals": {
             "anyOf": [
@@ -3421,10 +3730,43 @@
       "ItemRuleSnapshot": {
         "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\nheals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.\nslots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\nslots 가 비어 있으면 착용하지 않는 물건이다.",
         "properties": {
+          "attack": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attack"
+          },
+          "defense": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defense"
+          },
           "entry_id": {
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "guard": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guard"
           },
           "heals": {
             "anyOf": [
@@ -4642,7 +4984,7 @@
         "title": "Modifier",
         "type": "object"
       },
-      "MonsterAttack": {
+      "MonsterAttack-Input": {
         "additionalProperties": false,
         "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.",
         "properties": {
@@ -4669,6 +5011,67 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "weapon": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weapon"
+          }
+        },
+        "required": [
+          "name",
+          "ability",
+          "difficulty",
+          "harm"
+        ],
+        "title": "MonsterAttack",
+        "type": "object"
+      },
+      "MonsterAttack-Output": {
+        "additionalProperties": false,
+        "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.",
+        "properties": {
+          "ability": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Difficulty",
+            "type": "string"
+          },
+          "harm": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Harm",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "weapon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weapon"
           }
         },
         "required": [
@@ -4864,7 +5267,7 @@
           "attacks": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/MonsterAttack"
+              "$ref": "#/components/schemas/MonsterAttack-Input"
             },
             "maxItems": 5,
             "title": "Attacks",
@@ -4898,6 +5301,15 @@
             "title": "Monster Id",
             "type": "string"
           },
+          "natural_armor": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NaturalArmor"
+            },
+            "maxItems": 8,
+            "title": "Natural Armor",
+            "type": "array"
+          },
           "sheet": {
             "$ref": "#/components/schemas/Sheet"
           }
@@ -4916,7 +5328,7 @@
           "attacks": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/MonsterAttack"
+              "$ref": "#/components/schemas/MonsterAttack-Output"
             },
             "maxItems": 5,
             "title": "Attacks",
@@ -4948,6 +5360,15 @@
           "monster_id": {
             "title": "Monster Id",
             "type": "string"
+          },
+          "natural_armor": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NaturalArmor"
+            },
+            "maxItems": 8,
+            "title": "Natural Armor",
+            "type": "array"
           },
           "sheet": {
             "$ref": "#/components/schemas/Sheet"
@@ -5032,6 +5453,14 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "natural_armor": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NaturalArmorSnapshot"
+            },
+            "title": "Natural Armor",
+            "type": "array"
           },
           "sheet": {
             "$ref": "#/components/schemas/Sheet"
@@ -5622,6 +6051,49 @@
         "title": "NarrationStyleUpdate",
         "type": "object"
       },
+      "NaturalArmor": {
+        "additionalProperties": false,
+        "description": "몬스터의 한 부위의 타고난 방어(#276). 칸(slot)은 룰북의 장비의 칸이다. 룰북에 있는지는 게시할 때 본다.",
+        "properties": {
+          "defense": {
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Defense",
+            "type": "integer"
+          },
+          "slot": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Slot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot",
+          "defense"
+        ],
+        "title": "NaturalArmor",
+        "type": "object"
+      },
+      "NaturalArmorSnapshot": {
+        "description": "몬스터의 한 부위의 타고난 방어(#276). 칸은 판 안의 규칙의 장비의 칸이다.",
+        "properties": {
+          "defense": {
+            "title": "Defense",
+            "type": "integer"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot",
+          "defense"
+        ],
+        "title": "NaturalArmorSnapshot",
+        "type": "object"
+      },
       "NaturalRecovery": {
         "additionalProperties": false,
         "description": "저절로 회복하기. 게임 안의 시계가 every_minutes 분의 눈금을 하나 지날 때마다 heal 등급만큼 회복한다.\n\n눈금은 1일째 0시부터 센다. 한 장면에 지난 눈금의 수만큼 굴린다. 짧은 라운드가 이어져도 눈금을 지나면 회복한다.",
@@ -5777,7 +6249,7 @@
           "attacks": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/MonsterAttack"
+              "$ref": "#/components/schemas/MonsterAttack-Input"
             },
             "maxItems": 5,
             "title": "Attacks",
@@ -5842,7 +6314,7 @@
           "attacks": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/MonsterAttack"
+              "$ref": "#/components/schemas/MonsterAttack-Output"
             },
             "maxItems": 5,
             "title": "Attacks",
@@ -8917,6 +9389,16 @@
             "title": "Abilities",
             "type": "array"
           },
+          "armor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Armor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "called_shot": {
             "anyOf": [
               {
@@ -9138,7 +9620,8 @@
           "steal",
           "robbed_wake",
           "narration",
-          "equipment_slots"
+          "equipment_slots",
+          "armor"
         ],
         "title": "Ruleset",
         "type": "object"
@@ -10623,7 +11106,7 @@
             "type": "array"
           },
           "format": {
-            "default": 47,
+            "default": 48,
             "title": "Format",
             "type": "integer"
           },

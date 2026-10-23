@@ -30,11 +30,13 @@ from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine import check as checks
 from app.engine.check import HinderedCheck
 from app.engine.dice import choose
+from app.rounds import blows
 from app.rounds import injuries as round_injuries
+from app.rounds.blows import NO_BLOW, Blow
 from app.rounds.cast import CastMember
 from app.rounds.downed_strikes import can_be_struck
 from app.rounds.effects import Judging, mark_npc_fight
-from app.rounds.monster_attacks import Skipped, hit_outcome
+from app.rounds.monster_attacks import Skipped, hit_outcome, plan_attack_blow, raised_difficulty
 from app.tables.models import NpcStatus, TableMember
 
 # 입은 부상 때문에 움직이지 못했다(기절 같은 것). 몬스터는 부상을 입지 않아 이 까닭이 없다
@@ -84,17 +86,18 @@ def pick_victim(judging: Judging, person: CastMember, victims: list[TableMember]
     return choose(opponents or victims, judging.dice)
 
 
-def roll_attack(judging: Judging, person: CastMember, attack: AttackSnapshot) -> HinderedCheck:
+def roll_attack(judging: Judging, person: CastMember, attack: AttackSnapshot, blow: Blow = NO_BLOW) -> HinderedCheck:
     """
     공격 하나의 판정. 인물의 그 능력치 점수와 공격의 난이도로 굴린다. 인물이 입은 부상의 영향을 받는다.
 
+    무기의 공격 보정을 보정에 더하고, 맞은 부위의 방어만큼 목표값이 오른다(blow, #276).
     능력치와 난이도는 게시할 때 판의 규칙에 있는 것인지 확인했다(app/assets/scenarios/publishing.py).
     """
     ruleset = judging.ruleset
-    difficulty = checks.find_difficulty(ruleset, attack.difficulty)
+    difficulty = raised_difficulty(judging, attack, blow)
     hindrance = round_injuries.hindrance_for(ruleset, person.npc.injuries, attack.ability)
     score = person.npc.abilities[attack.ability]
-    return checks.resolve_hindered(ruleset, score, difficulty, judging.dice, hindrance)
+    return checks.resolve_hindered(ruleset, score, difficulty, judging.dice, hindrance, bonus=blow.bonus)
 
 
 def take_npc_turn(judging: Judging, person: CastMember) -> dict:
@@ -113,6 +116,7 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
     victim = pick_victim(judging, person, victims)
     mark_npc_fight(judging, person.npc, victim)
     attack = choose(person.definition.attacks, judging.dice)
-    rolled = roll_attack(judging, person, attack)
-    outcome = hit_outcome(judging, attack, victim, rolled.check)
+    blow = plan_attack_blow(judging, blows.npc_weapon(judging, person, attack), victim)
+    rolled = roll_attack(judging, person, attack, blow)
+    outcome = hit_outcome(judging, attack, victim, rolled.check, blow)
     return {**outcome, 'hindrance': round_injuries.hindrance_document(rolled)}

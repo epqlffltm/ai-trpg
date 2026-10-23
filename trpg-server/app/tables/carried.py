@@ -37,13 +37,14 @@ class CarriedLines(Protocol):
 
 @dataclass(frozen=True)
 class Carried:
-    """지금 지닌 물건 한 줄. 줄의 번호, 물건, 지금 개수, 장비인지, 떨어질 확률(%)."""
+    """지금 지닌 물건 한 줄. 줄의 번호, 물건, 지금 개수, 장비인지, 떨어질 확률(%), 착용한 칸들(#276)."""
 
     slot: int
     entry_id: uuid.UUID
     count: int
     equipped: bool
     chance: int
+    wear: tuple[str, ...] = ()
 
 
 def lines_of(definition: CarriedLines | None) -> list[tuple[CarriedItemSnapshot, bool]]:
@@ -67,7 +68,7 @@ def count_at(rows: Sequence[CountRow], slot: int, line: CarriedItemSnapshot) -> 
 def carried(rows: Sequence[CountRow], definition: CarriedLines | None) -> list[Carried]:
     """지금 지닌 것. 줄의 차례다. 0 이 된 줄은 뺀다."""
     held = [
-        Carried(slot, line.entry_id, count_at(rows, slot, line), equipped, line.chance)
+        Carried(slot, line.entry_id, count_at(rows, slot, line), equipped, line.chance, tuple(line.wear))
         for slot, (line, equipped) in enumerate(lines_of(definition))
     ]
     return [one for one in held if one.count > 0]

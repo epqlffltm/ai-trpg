@@ -148,7 +148,7 @@ async def test_count_and_chance_default_to_one_and_always(client: AsyncClient, m
 
     assert response.status_code == status.HTTP_201_CREATED, response.text
     (saved,) = response.json()['monster_sheets']
-    assert saved['equipment'] == [{'entry_id': world['tooth']['id'], 'count': 1, 'chance': 100}]
+    assert saved['equipment'] == [{'entry_id': world['tooth']['id'], 'count': 1, 'chance': 100, 'wear': []}]
 
 
 @pytest.mark.parametrize('case', ['both', 'too-much-equipment'])

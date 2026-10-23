@@ -37,6 +37,9 @@
 타격에는 죽이려는지(lethal)를 적는다. HP 가 0 이 됐을 때 쓰러질지 죽을지를 가른다(app/tables/npcs.py).
 타격에는 노릴 부상(aim)도 적을 수 있다(노려 치기). 판정이 어려워지고, 성공하면 그 부상이 확정으로 생긴다.
 얼마나 어려워지는지는 규칙이 정한다(Ruleset.called_shot). 노릴 수 있는 부상도 규칙이 표시한 것뿐이다.
+타격에는 쓰는 무기(weapon, 착용한 물건)와 노릴 부위(strike, 장비의 칸)도 적을 수 있다(#276).
+무기는 그 공격 보정만큼 판정의 보정을 올린다. 부위를 노리면 노려 치기와 같은 대가를 치르고, 부위를 굴리지 않는다.
+부위의 방어가 무엇을 하는지는 규칙의 방어 방식이 정한다(app/engine/armor.py).
 """
 
 import enum
@@ -46,6 +49,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
 
+from app.engine import armor
 from app.engine.check import Check, HinderedCheck, find_ability, find_difficulty, resolve_hindered
 from app.engine.dice import Dice
 from app.engine.health import ChangeKind, find_magnitude
@@ -132,6 +136,11 @@ class CheckAction(BaseModel):
     # 노려 치기. 노릴 부상의 이름표(규칙의 Injury.key)다. 판정이 어려워지고, 성공하면 그 부상을 입힌다.
     # 그 타격에서는 부상 표를 굴리지 않는다
     aim: Key | None = None
+    # 타격에 쓰는 무기(#276). 판의 물건 항목의 id 다. 행동하는 캐릭터가 착용한 것이어야 한다(app/rounds/acceptance.py).
+    # 엔진은 이 값을 읽지 않는다. 공격 보정은 부른 쪽이 넘긴다
+    weapon: uuid.UUID | None = None
+    # 노릴 부위(#276). 규칙의 장비의 칸이다. 노려 치기와 같은 대가를 치른다. 비우면 맞은 부위를 서버가 굴린다
+    strike: Key | None = None
 
     @model_validator(mode='after')
     def require_recover_for_target(self) -> Self:
@@ -182,6 +191,19 @@ class CheckAction(BaseModel):
             raise ValueError('lethal 은 harm 과 함께 적습니다.')
         if self.aim is not None and self.harm is None:
             raise ValueError('aim 은 harm 과 함께 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_harm_for_weapon(self) -> Self:
+        """
+        무기와 노릴 부위는 타격에만 쓴다(#276). 부상을 노리면서 부위도 노리지 않는다. 노려 치기는 하나다.
+        """
+        if self.weapon is not None and self.harm is None:
+            raise ValueError('weapon 은 harm 과 함께 적습니다.')
+        if self.strike is not None and self.harm is None:
+            raise ValueError('strike 는 harm 과 함께 적습니다.')
+        if self.strike is not None and self.aim is not None:
+            raise ValueError('strike 와 aim 은 함께 적지 않습니다.')
         return self
 
 
@@ -533,6 +555,8 @@ def find_fault(ruleset: Ruleset, action: CheckAction) -> str | None:
         return 'harm'
     if action.aim is not None and not can_aim(ruleset, action.aim):
         return 'aim'
+    if action.strike is not None and not armor.can_strike(ruleset, action.strike):
+        return 'strike'
     return None
 
 
@@ -548,9 +572,10 @@ def called_shot_terms(ruleset: Ruleset, action: CheckAction) -> tuple[int, bool]
     """
     노려 치기가 판정을 어렵게 하는 만큼. (목표값을 올리는 양, 불리한가) 다. 노려 치지 않으면 (0, False).
 
+    부상을 노리든(aim) 부위를 노리든(strike, #276) 같은 대가다.
     받을 때 노릴 수 있는지 본 행동(find_fault)에만 쓴다.
     """
-    if action.aim is None or ruleset.called_shot is None:
+    if (action.aim is None and action.strike is None) or ruleset.called_shot is None:
         return 0, False
     shot = ruleset.called_shot
     if shot.mode == CalledShotMode.TARGET_PLUS:
@@ -579,23 +604,32 @@ def attempt(ruleset: Ruleset, action: CheckAction, abilities: dict[str, int], di
 
 
 def attempt_hindered(
-    ruleset: Ruleset, action: CheckAction, abilities: dict[str, int], dice: Dice, hindrance: Hindrance
+    ruleset: Ruleset,
+    action: CheckAction,
+    abilities: dict[str, int],
+    dice: Dice,
+    hindrance: Hindrance,
+    bonus: int = 0,
+    raise_by: int = 0,
 ) -> HinderedCheck:
     """
     부상을 입은 캐릭터가 행동을 한다. 판정을 한 번 하고 그 결과를 돌려준다.
 
     hindrance 는 그 캐릭터의 부상이 이 행동의 능력에 주는 것이다(app/engine/injury.py 의 hindrance_of).
     노려 치면 규칙이 정한 만큼 어려워진다. 목표값이 오르거나(판정의 target 이 오른 값이다), 불리하다.
+    bonus 는 무기의 공격 보정이다. 보정에 더한다. raise_by 는 맞은 부위의 방어가 목표값을 올리는 양이다(#276).
 
     받을 때 규칙에 맞는지 본 행동(find_fault, settle)과, 같은 규칙으로 검사한 시트에만 쓴다.
     그래서 여기서는 능력과 난이도가 있는지 다시 따지지 않는다.
     """
     difficulty = find_difficulty(ruleset, action.difficulty)
-    raise_by, aim_disadvantage = called_shot_terms(ruleset, action)
-    if raise_by:
-        difficulty = difficulty.model_copy(update={'target': difficulty.target + raise_by})
+    aim_raise, aim_disadvantage = called_shot_terms(ruleset, action)
+    if aim_raise or raise_by:
+        difficulty = difficulty.model_copy(update={'target': difficulty.target + aim_raise + raise_by})
     score = abilities[action.ability]
-    return resolve_hindered(ruleset, score, difficulty, dice, hindrance, forced_disadvantage=aim_disadvantage)
+    return resolve_hindered(
+        ruleset, score, difficulty, dice, hindrance, forced_disadvantage=aim_disadvantage, bonus=bonus
+    )
 
 
 def consequence(action: CheckAction, check: Check) -> Consequence | None:

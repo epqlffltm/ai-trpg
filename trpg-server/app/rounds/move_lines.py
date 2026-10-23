@@ -18,6 +18,7 @@
 
 from app.engine.ruleset import Outcome
 from app.rounds.narrator import (
+    BlowNote,
     DeathSaveNote,
     DownedStrikeNote,
     DropNote,
@@ -74,7 +75,29 @@ def describe_verdict(verdict: Verdict) -> str:
     sum_ = f'{verdict.roll} {sign} {abs(verdict.modifier)} = {verdict.total}'
     hindered = f'. 전부터 입은 부상의 영향: {", ".join(verdict.hindrances)}' if verdict.hindrances else ''
     aimed = f'. 노려 치기: {verdict.aimed}' if verdict.aimed else ''
-    return f'({verdict.ability} 판정 {result}: {sum_}, 목표 {verdict.target}{hindered}{aimed})'
+    blow = f'. {describe_blow(verdict.blow)}' if verdict.blow is not None else ''
+    return f'({verdict.ability} 판정 {result}: {sum_}, 목표 {verdict.target}{hindered}{aimed}{blow})'
+
+
+# 방어가 한 일(#276). 규칙의 방어 방식마다다
+ARMOR_EFFECTS = {'ac': '목표값에 더함', 'reduce': '피해에서 뺌'}
+
+
+def describe_blow(note: BlowNote) -> str:
+    """
+    타격에 장비가 든 것을 적는다(#276). 무기, 맞은 부위, 그 부위의 방어가 한 일이다. 없는 것은 뺀다.
+
+    예: 무기: 장검 +2 · 맞은 곳: 몸 · 방어 3(목표값에 더함)
+        맞은 곳: 머리(노림) · 방어 0(피해에서 뺌)
+    """
+    parts = []
+    if note.weapon is not None:
+        parts.append(f'무기: {note.weapon} +{note.weapon_bonus}')
+    if note.location is not None:
+        parts.append(f'맞은 곳: {note.location}' + ('(노림)' if note.aimed else ''))
+    if note.mode is not None:
+        parts.append(f'방어 {note.defense}({ARMOR_EFFECTS.get(note.mode, note.mode)})')
+    return ' · '.join(parts)
 
 
 MISHAPS = {'nothing': '별일 없음', 'pain': '덧나서 아픔', 'worsen': '상처가 덧남', 'fatal': '즉사'}
@@ -622,6 +645,8 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
     result = '맞음' if note.hit else '빗나감'
     target = note.target if note.downed is None else f'쓰러진 {note.target}'
     line = f'{note.name}: {target}에게 {note.attack} ({result})'
+    if note.blow is not None:
+        line += f' [{describe_blow(note.blow)}]'
     if note.impact is not None:
         line += f' {describe_impact(note.impact)}'
     if note.downed is not None and note.downed.added:

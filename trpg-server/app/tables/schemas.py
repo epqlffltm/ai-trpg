@@ -369,6 +369,11 @@ class CatalogItemOut(BaseModel):
     # 칸이 비어 있으면 착용하지 않는 물건이다
     slots: list[str] = []
     slot_count: int = 1
+    # 무기의 공격 보정, 차지한 칸의 방어, 모든 부위의 방어(#276). 없으면 None 이다.
+    # 무기는 타격에 적을 수 있는 착용한 물건이다(rounds 의 CheckAction.weapon). 방어가 하는 일은 rules.armor 가 정한다
+    attack: int | None = None
+    defense: int | None = None
+    guard: int | None = None
 
 
 class WornOut(BaseModel):

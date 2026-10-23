@@ -435,7 +435,8 @@ app/engine/
 | `steal` | 훔치기(#456). 판정하는 능력(`ability`), 시작하는 난이도(`difficulty`), 대상의 눈치 능력(`awareness`, 대상의 그 보정만큼 목표값에 더한다. `null` 이면 보지 않는다), 목표값을 올리는 것(`equipped` 장비, `rarity_step` 등급 한 단계마다), 내리는 것(`dull_kinds` 둔한 타입마다 `kind`, `amount`, `dull` 둔하다고 적은 대상, `unwary` 싸움 전, `distracted` 다른 사람과 싸우는 중). 걸리는 것은 모두 더하고 목표값은 1 보다 낮아지지 않는다. `srd5` 는 민첩, 보통, 지혜, 5, 2, 언데드·구조물 3, 3, 3, 2. `null` 이면 훔치기가 없다 |
 | `robbed_wake` | 쓰러진 동안 빼앗긴 NPC 가 깨어날 때의 반응(#494). 백면체의 눈이 `hostile`(%) 이하면 적대, 그다음 `wary`(%) 만큼이면 경계, 나머지는 눈치채지 못한다. 둘의 합은 100 을 넘지 않는다. `null` 이면 반응이 없다. 칸 자체는 늘 있어야 한다 |
 | `narration` | 서술 지침(#616). 엔진은 보지 않는다. 분위기(`tone`, 300자), 판정 결과 단계마다 그리는 법(`outcomes`: `outcome` 은 `success` 또는 `failure`, `guide` 200자, 단계마다 하나), 하지 말 것(`avoid`, 100자씩 다섯까지). 적지 않은 단계는 공통의 지시대로 그린다. 판정을 고치는 칸은 없다. `null` 이면 지침 없이 공통의 지시만으로 서술한다(옛 룰북과 판). 칸 자체는 늘 있어야 한다 |
-| `equipment_slots` | 장비의 칸(#276). 하나하나가 `{"key", "name"}` 이다(이름표, 이름 30자). 8개까지, 같은 이름표는 거부한다. 칸마다 물건 하나를 착용한다. 목록의 순서가 화면과 서술에서 착용을 놓는 차례다. 비우면 장비를 착용하지 않는 규칙이다. 템플릿은 모두 `main_hand`(주손), `off_hand`(보조손), `body`(몸)를 두고 `srd5` 는 `head`(머리)를 더 둔다 |
+| `equipment_slots` | 장비의 칸(#276). 하나하나가 `{"key", "name", "hit_weight"}` 이다(이름표, 이름 30자, 공격이 그 칸(부위)에 맞을 가중치 0~100, 기본 1. 0 이면 맞지 않는 칸). 8개까지, 같은 이름표는 거부한다. 칸마다 물건 하나를 착용한다. 목록의 순서가 화면과 서술에서 착용을 놓는 차례다. 비우면 장비를 착용하지 않는 규칙이다. 템플릿은 모두 `main_hand`(주손), `off_hand`(보조손), `body`(몸)를 두고 `srd5` 는 `head`(머리)를 더 둔다 |
+| `armor` | 방어구가 공격을 막는 방식(#276). `{"mode"}` 이고 `mode` 는 `ac`(맞은 부위의 방어만큼 맞히는 목표값이 오른다) 또는 `reduce`(맞은 부위의 방어만큼 굴린 피해에서 뺀다, 0 아래로는 안 간다)다. `null` 이면 방어구가 막지 않고 부위도 굴리지 않는다(무기의 공격 보정은 든다). 템플릿은 `srd5` 가 `ac`, `horror` 와 `light` 가 `reduce` 다. [공격과 방어](#장비) |
 
 바꿀 수 있는 것은 값이다. 계산하는 방식은 엔진의 코드에 있다. 사용자가 쓴 코드를 서버에서 실행하지 않는다.
 
@@ -507,11 +508,11 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 | `pregens` (프리젠, 8개) | 제작자가 미리 만들어 둔 캐릭터. 하나하나가 `{"name", "description", "sheet", "items", "money"}` 이다(이름 50자, 설명 1,000자). 플레이어가 테이블에 앉을 때 골라서 자기 캐릭터로 가져갈 수 있다. 같은 이름은 거부한다. `items` 는 그 프리젠을 고른 사람이 더 받는 소지품이다(시작 소지품과 모양이 같다). `money`(0~1,000,000, 기본 0)는 더 받는 돈이다(#278) |
 | `character_modes` (캐릭터 방식) | 테이블에 앉는 사람이 캐릭터를 얻는 방식 중 허용하는 것. 아래 표의 값들이다. 하나는 있어야 한다. 적지 않으면 `pregen` 과 `custom` 이다. 응답에는 늘 같은 순서로 싣는다 |
 | `default_sheet` (기본 시트) | `custom` 으로 만든 캐릭터가 받는 시트. 초안일 때는 비워 둘 수 있다 |
-| `npc_sheets` (NPC 시트, 100개) | 붙인 로어북의 인물 항목에 주는 숫자와 처음 태도, 지닌 물건. 하나하나가 `{"entry_id", "sheet", "attitude", "equipment", "inventory", "dull", "on_caught", "attacks", "merchant"}` 이다. `attitude` 는 `friendly`(우호), `neutral`(중립, 기본), `wary`(경계, #494), `hostile`(적대)이다. 시트가 없는 인물은 중립이다(#474). `equipment`(장비, 5줄), `inventory`(소지품, 10줄), `dull`(둔한지)은 몬스터 시트와 같은 모양이다(#457). 처음 쓰러졌을 때의 드롭은 여기서만 나온다. 시트가 없는 인물은 아무것도 지니지 않는다. `on_caught` 는 훔치다 들켰을 때다. 늘 적대가 되고, `hostile`(기본)은 적대만, `fight` 는 싸움도 붙는다(#457). `attacks`(공격, 5개까지)는 몬스터 시트의 공격과 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다([NPC 의 공격](#라운드)). 비우면 공격하지 않는다. `merchant`(기본 `false`)는 상인인지다(#278). 상인은 `inventory` 중 값이 있는 물건을 팔고(그 개수가 재고), 값이 있는 물건을 사 준다([사고팔기와 돈](#라운드)). 시트는 비워 둘 수 없다. 같은 항목이 두 번 있으면 거부한다 |
+| `npc_sheets` (NPC 시트, 100개) | 붙인 로어북의 인물 항목에 주는 숫자와 처음 태도, 지닌 물건. 하나하나가 `{"entry_id", "sheet", "attitude", "equipment", "inventory", "dull", "on_caught", "attacks", "merchant"}` 이다. `attitude` 는 `friendly`(우호), `neutral`(중립, 기본), `wary`(경계, #494), `hostile`(적대)이다. 시트가 없는 인물은 중립이다(#474). `equipment`(장비, 5줄), `inventory`(소지품, 10줄), `dull`(둔한지)은 몬스터 시트와 같은 모양이다(#457). 처음 쓰러졌을 때의 드롭은 여기서만 나온다. 시트가 없는 인물은 아무것도 지니지 않는다. `on_caught` 는 훔치다 들켰을 때다. 늘 적대가 되고, `hostile`(기본)은 적대만, `fight` 는 싸움도 붙는다(#457). `attacks`(공격, 5개까지)는 몬스터 시트의 공격과 같은 모양이다(#487). 장비의 착용(`wear`)과 공격의 무기(`weapon`)도 몬스터 시트와 같다(#276). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다([NPC 의 공격](#라운드)). 비우면 공격하지 않는다. `merchant`(기본 `false`)는 상인인지다(#278). 상인은 `inventory` 중 값이 있는 물건을 팔고(그 개수가 재고), 값이 있는 물건을 사 준다([사고팔기와 돈](#라운드)). 시트는 비워 둘 수 없다. 같은 항목이 두 번 있으면 거부한다 |
 | `default_npc_sheet` (기본 NPC 시트) | 시트가 없는 인물이 받는 숫자. 초안일 때는 비워 둘 수 있다 |
 | `encounters` (조우, 50개) | 맵의 장소에 있는 몬스터. 하나하나가 `{"place_id", "monster_id", "count", "surprise"}` 이다(1~10마리). `surprise` 는 누가 기습하는가다: `none`(기본, 기습 없음), `monsters`(몬스터가 매복), `party`(일행이 기습, 잠든 무리). 장소는 붙인 로어북의 장소 항목, 몬스터는 시트를 적은 몬스터다. 같은 장소의 같은 몬스터는 한 줄에 마리 수로 적는다(두 줄이면 거부한다). 맵이 있어야 한다(`start_place`) |
-| `monster_sheets` (몬스터 시트, 100개) | 붙인 도감의 몬스터에 주는 숫자와 공격, 지닌 물건. 하나하나가 `{"monster_id", "sheet", "attacks", "equipment", "inventory", "dull"}` 이다. `attacks`(5개)는 공격(스킬) 하나하나가 `{"name", "ability", "difficulty", "harm"}` 이다(이름 30자, 나머지는 룰북의 이름표). 비우면 공격하지 않는 몬스터다. 같은 이름의 공격이 둘이면 거부한다. `equipment`(장비, 5개)와 `inventory`(소지품, 10개)는 마리마다 지닌 물건 하나하나가 `{"entry_id", "count", "chance"}` 이다(붙인 로어북의 물건 항목, 1~99개(기본 1), 쓰러졌을 때 떨어질 확률 1~100%(기본 100)). 장비는 몸에 걸치거나 쥔 것, 소지품은 품에 넣은 것이다. 비우면 아무것도 지니지 않는다. 드롭은 지닌 것에서만 나온다([몬스터의 드롭](#라운드)). 같은 물건이 두 줄이면(장비와 소지품에 걸쳐서도) 거부한다. 예전의 `drops` 는 없어졌다(`inventory` 로 옮겼다, 마이그레이션 `5d2c8e7a1f34`). `dull`(기본 `false`)은 둔한 몬스터다. 훔치기가 룰북의 `steal.dull` 만큼 쉽다. 시트를 적은 몬스터만 이 시나리오가 쓴다(판에 들어간다). 시트는 비워 둘 수 없다. 같은 몬스터가 두 번 있으면 거부한다 |
-| `items` (아이템 규칙, 100개) | 붙인 로어북의 물건 항목이 엔진에서 무엇인지. 하나하나가 `{"entry_id", "kind", "heals", "rarity", "price"}` 이다. `kind` 는 `gear`(장비, 기본) 또는 `consumable`(소모품). `heals` 는 소모품을 쓸 때 되돌리는 HP 의 양으로, 룰북의 등급(`magnitudes`)의 이름이다(예: `light`). 장비에는 적지 않는다. `rarity` 는 물건의 등급으로 `normal`(노말, 기본), `rare`(레어), `unique`(유니크), `epic`(에픽), `legendary`(레전드)의 차례다. 높을수록 훔치기 어렵다. `price`(1~1,000,000)는 상인이 파는 값이다(#278). 비우면(기본) 사고팔 수 없는 물건이다. `slots` 는 그 물건을 착용할 수 있는 룰북의 칸들이고(#276, 8개, 비우면 착용하지 않는 물건), `slot_count`(1~8, 기본 1)는 착용할 때 차지하는 칸의 수다. 두 손 검은 `["main_hand", "off_hand"]` 에 `2` 다. 소모품에는 칸을 적지 않는다. 규칙을 적지 않은 물건은 값이 없는 노말 장비이고 착용하지 않는다. 같은 항목이 두 번 있으면 거부한다 |
+| `monster_sheets` (몬스터 시트, 100개) | 붙인 도감의 몬스터에 주는 숫자와 공격, 지닌 물건. 하나하나가 `{"monster_id", "sheet", "attacks", "equipment", "inventory", "dull"}` 이다. `attacks`(5개)는 공격(스킬) 하나하나가 `{"name", "ability", "difficulty", "harm", "weapon"}` 이다(이름 30자, 나머지는 룰북의 이름표). `weapon` 은 그 공격에 쓰는 무기로, 장비 줄에 적어 착용한 물건 중 공격 보정이 있는 것이다(#276, 비우면 맨몸). 비우면 공격하지 않는 몬스터다. 같은 이름의 공격이 둘이면 거부한다. `equipment`(장비, 5개)와 `inventory`(소지품, 10개)는 마리마다 지닌 물건 하나하나가 `{"entry_id", "count", "chance", "wear"}` 이다(붙인 로어북의 물건 항목, 1~99개(기본 1), 쓰러졌을 때 떨어질 확률 1~100%(기본 100)). 장비는 몸에 걸치거나 쥔 것, 소지품은 품에 넣은 것이다. `wear` 는 장비 줄에만 적는 착용한 칸들이다(#276, 앉은 사람의 시작 착용과 같은 규칙). 비우면 아무것도 지니지 않는다. 드롭은 지닌 것에서만 나온다([몬스터의 드롭](#라운드)). 같은 물건이 두 줄이면(장비와 소지품에 걸쳐서도) 거부한다. 예전의 `drops` 는 없어졌다(`inventory` 로 옮겼다, 마이그레이션 `5d2c8e7a1f34`). `dull`(기본 `false`)은 둔한 몬스터다. 훔치기가 룰북의 `steal.dull` 만큼 쉽다. 시트를 적은 몬스터만 이 시나리오가 쓴다(판에 들어간다). 시트는 비워 둘 수 없다. `natural_armor`(8줄까지)는 부위마다 타고난 방어(가죽, 비늘)로 하나하나가 `{"slot", "defense"}`(룰북의 칸, 1~10)다(#276). 착용한 방어구에 더한다. 같은 몬스터가 두 번 있으면 거부한다 |
+| `items` (아이템 규칙, 100개) | 붙인 로어북의 물건 항목이 엔진에서 무엇인지. 하나하나가 `{"entry_id", "kind", "heals", "rarity", "price"}` 이다. `kind` 는 `gear`(장비, 기본) 또는 `consumable`(소모품). `heals` 는 소모품을 쓸 때 되돌리는 HP 의 양으로, 룰북의 등급(`magnitudes`)의 이름이다(예: `light`). 장비에는 적지 않는다. `rarity` 는 물건의 등급으로 `normal`(노말, 기본), `rare`(레어), `unique`(유니크), `epic`(에픽), `legendary`(레전드)의 차례다. 높을수록 훔치기 어렵다. `price`(1~1,000,000)는 상인이 파는 값이다(#278). 비우면(기본) 사고팔 수 없는 물건이다. `slots` 는 그 물건을 착용할 수 있는 룰북의 칸들이고(#276, 8개, 비우면 착용하지 않는 물건), `slot_count`(1~8, 기본 1)는 착용할 때 차지하는 칸의 수다. 두 손 검은 `["main_hand", "off_hand"]` 에 `2` 다. 소모품에는 칸을 적지 않는다. `attack`(무기의 공격 보정), `defense`(차지한 칸의 방어), `guard`(모든 부위의 방어, 방패)는 1~10 이고 칸이 있는 물건에만 적는다(#276, [공격과 방어](#장비)). 규칙을 적지 않은 물건은 값이 없는 노말 장비이고 착용하지 않는다. 같은 항목이 두 번 있으면 거부한다 |
 | `starting_items` (시작 소지품, 20가지) | 캐릭터 모두가 테이블이 시작할 때 받는 물건. 하나하나가 `{"entry_id", "count", "wear"}` 이다(1~99개). 같은 물건은 한 줄에 개수로 적는다. `wear` 는 시작할 때 그 물건 하나를 착용하는 칸들이다(#276, 비우면 착용하지 않는다). 그 물건의 칸이어야 하고 차지하는 칸의 수와 같아야 한다. 프리젠의 소지품도 같고, 시작 소지품과 고른 프리젠의 소지품의 착용이 같은 칸을 겹쳐 쓰면 게시하지 않는다. 퀘스트의 보상에는 적지 않는다 |
 | `currency` (화폐) | 이 시나리오의 돈(#278). `{"name", "unit", "starting", "sell_percent"}` 이다. `name` 은 화폐의 이름(1~20자, 예: 금화), `unit` 은 단위(10자, 비워도 된다, 예: 닢), `starting` 은 캐릭터 모두가 시작할 때 받는 돈(0~1,000,000, 기본 0), `sell_percent` 는 상인이 사 주는 값의 백분율(0~100, 기본 50, 0 이면 사 주지 않는다)이다. 결제의 크레딧과 상관없는 게임 안의 돈이다. 비우면(기본) 돈이 없는 시나리오다. 값(`items[].price`), 상인(`npc_sheets[].merchant`), 프리젠의 돈(`pregens[].money`), 퀘스트의 돈의 보상(`quests[].reward_money`)은 화폐가 있어야 게시된다(`currency_missing`). `null` 을 보내면 비운다 |
 | `quests` (퀘스트 규칙, 50개) | 붙인 로어북의 사건 항목이 퀘스트로서 어떤지. 하나하나가 `{"entry_id", "start", "reward", "reward_money", "time_limit_minutes", "conditions", "match", "reveal", "reveal_match", "fail", "fail_match"}` 이다. `start` 는 테이블이 시작할 때의 상태로 `hidden`(숨김, 기본) 또는 `active`(진행 중). `reward` 는 성공했을 때 받는 물건으로 시작 소지품과 모양이 같다(20가지, 비워도 된다). `reward_money`(0~1,000,000, 기본 0)는 성공했을 때 살아 있는 캐릭터마다 받는 돈이다(#278). `time_limit_minutes` 는 기한(분, 1~한 해)으로, 퀘스트가 드러난 때부터 게임 안의 시간으로 센다. 비우면(기본) 기한이 없다. `conditions`(5개)는 이루는 조건으로 하나하나가 `{"kind", "target", "count", "consume"}` 다. `kind` 는 `reach_place`(장소 항목에 닿기), `defeat_monster`(시트를 적은 몬스터를 `count` 마리 쓰러뜨리기), `hold_item`(물건 항목을 일행이 합쳐 `count` 개 갖기), `defeat_npc`(인물 항목을 쓰러뜨리기), `npc_dead`(인물 항목이 죽기. 쓰러진 것은 아니다)다. `count` 는 1~99 이고 세는 종류(`defeat_monster`, `hold_item`, `lose_item`)에만 적는다. `consume`(기본 `false`)은 `hold_item` 에만 적고, 참이면 이룰 때 그 물건을 `count` 개 가져간다(배달). 같은 조건이 두 줄이면 거부한다. `match` 는 조건이 여럿일 때 `all`(모두, 기본) 또는 `any`(하나라도)다. 조건이 없으면 성공하지 않는다([퀘스트](#퀘스트)). `reveal`(5개)은 숨긴 퀘스트가 드러나는 조건으로 `conditions` 와 모양이 같고, 종류에 `quest_succeeded`(다른 퀘스트가 성공했다), `quest_failed`(다른 퀘스트가 실패했다)가 더 있다. 이 둘(퀘스트 잇기)은 `reveal` 과 `fail` 에만 적는다. `consume` 은 `conditions` 에만 적는다. `reveal_match` 는 `reveal` 을 맞추는 법이다(`all`, `any`). `reveal` 은 `start: hidden` 인 퀘스트에만 적고, 자기 자신을 가리키면 거부한다. `fail`(5개)은 실패하는 조건으로 모양이 같고(#367), 퀘스트 잇기와 `lose_item`(물건 항목을 일행이 합쳐 `count` 개보다 적게 갖기, `fail` 에만)을 쓸 수 있다. `fail_match` 는 그것을 맞추는 법이다. `fail` 도 자기 자신을 가리키면 거부한다. 같은 사건이 두 번 있으면 거부한다 |
@@ -765,6 +766,9 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `currency_missing` | 돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있는데 화폐(`currency`)가 없다(#278). 초안에서는 따로 고칠 수 있어 저장할 때는 막지 않는다 |
 | `item_slot_invalid` | 룰북의 규칙에 없는 칸을 착용할 수 있는 칸(`items[].slots`)으로 적은 물건이 있다(#276) |
 | `starting_wear_invalid` | 시작할 때의 착용(`starting_items[].wear`, `pregens[].items[].wear`)이 맞지 않는다. 착용하지 않는 물건이거나, 그 물건의 칸이 아니거나, 차지하는 칸의 수와 다르거나, 시작 소지품과 한 프리젠의 소지품을 합쳐 같은 칸을 두 번 썼다(#276) |
+| `carried_wear_invalid` | NPC 나 몬스터의 장비가 착용한 칸(`equipment[].wear`)이 맞지 않는다. 시작할 때의 착용과 같은 검사다(#276) |
+| `natural_armor_invalid` | 몬스터의 타고난 방어(`natural_armor`)의 부위가 룰북의 칸에 없다(#276) |
+| `attack_weapon_invalid` | NPC 나 몬스터의 공격의 무기(`attacks[].weapon`)가 착용한 장비가 아니거나 공격 보정이 없는 물건이다(#276) |
 | `quest_entry_missing` | 붙인 로어북에 없는 항목을 가리키는 퀘스트 규칙이 있다 |
 | `quest_not_event` | 사건이 아닌 항목(인물, 물건 …)을 가리키는 퀘스트 규칙이 있다 |
 | `map_place_missing` | 붙인 로어북에 없는 항목을 가리키는 시작 장소, 길, 명소가 있다 |
@@ -844,6 +848,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
   - 형식 45: 규칙의 서술 지침(`rulebook.rules.narration`, #616). 그 전 판은 지침이 없는 것(`null`)으로 읽는다. `srd5` 의 지침(판타지)을 채우지 않는다. 그때까지 `srd5` 의 규칙은 장르를 가리지 않고 쓰였다. DB 의 룰북에도 `null` 을 채웠다(마이그레이션)
   - 형식 46: 돈(#278). 화폐(`currency`), 물건의 값(`items[].price`), 프리젠의 돈(`pregens[].money`), 퀘스트의 돈의 보상(`quests[].reward_money`), 상인(`npc_sheets[].merchant`). 그 전 판은 돈이 없는 판으로 읽는다(값도 상인도 없고, 캐릭터의 돈은 늘 0)
   - 형식 47: 장비의 칸(#276). 규칙의 칸(`rulebook.rules.equipment_slots`), 물건의 칸(`items[].slots`, `items[].slot_count`), 시작할 때의 착용(`starting_items[].wear`, `pregens[].items[].wear`). 그 전 판은 칸이 없는 규칙(착용하지 않는다)으로 읽는다. 템플릿의 칸을 채우지 않는다. 그때 정하지 않은 칸을 옛 판에 넣지 않는다
+  - 형식 48: 장비가 공격과 방어에 든다(#276). 규칙의 방어 방식(`rulebook.rules.armor`)과 칸의 가중치(`equipment_slots[].hit_weight`), 물건의 공격 보정과 방어(`items[].attack`, `defense`, `guard`), NPC 와 몬스터의 착용(`equipment[].wear`)과 공격의 무기(`attacks[].weapon`), 몬스터의 타고난 방어(`monsters[].natural_armor`). 그 전 판은 방어 방식이 없는 규칙(`null`)과 가중치 1 로 읽는다. 물건에는 보정과 방어가 없고, NPC 와 몬스터는 착용하지 않았고 맨몸으로 친다
 - 규칙을 템플릿의 값으로 채워 읽는 형식(4, 6~10, 14, 15, 23, 25, 28, 36)은 DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 형식 12 의 항목의 종류와 형식 16 의 지목의 정답도 DB 의 항목에 채웠다.
 - 옛 판의 규칙에 점수제가 채워져도 그 판에서 점수제를 쓸 수 있게 되는 것은 아니다. 옛 판이 허용한 방식은 그때 있던 것 그대로다. 방식이 나중에 늘어도 옛 판에 저절로 켜지지 않는다.
 - 게시는 "굳히기"다. 남에게 보이게 하는 것은 따로다([공개와 소개 페이지](#공개와-소개-페이지)). 굳힌 내용(`snapshot`)은 공개해도 만든 사람만 본다.
@@ -1188,7 +1193,7 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 ### 소지품
 
 캐릭터가 가진 물건이다(`table_items`, #202). 어떤 물건인지는 판의 로어북 물건 항목으로만 적고, 이름과 규칙(장비, 소모품)은 판에서 찾는다([시나리오의 아이템](#시나리오)).
-테이블의 응답에 판의 물건 목록(`items`: `entry_id`, `name`, `kind`, `heals`, `rarity`, `price`, `slots`, `slot_count`)이 있고, 앉은 사람마다 지금 캐릭터의 시트에 소지품(`sheet.items`: `entry_id`, `name`, `kind`, `rarity`, `count`)이 있다. 판의 물건 순서로 놓는다.
+테이블의 응답에 판의 물건 목록(`items`: `entry_id`, `name`, `kind`, `heals`, `rarity`, `price`, `slots`, `slot_count`, `attack`, `defense`, `guard`)이 있고, 앉은 사람마다 지금 캐릭터의 시트에 소지품(`sheet.items`: `entry_id`, `name`, `kind`, `rarity`, `count`)이 있다. 판의 물건 순서로 놓는다.
 소지품은 모두에게 보인다(시트, HP 와 같다). 물건의 설명(로어북의 글)은 내보내지 않는다. AI 가 읽는 설정이라 비밀이 들어 있을 수 있다.
 
 - **시작 소지품.** 시작할 때 시트와 함께 받는다. 판의 시작 소지품에 고른 프리젠의 소지품을 더한 것이다(같은 물건이면 개수를 합치고, 99 개에서 멈춘다).
@@ -1224,7 +1229,15 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
   - 바꾸면 `equipment_changed` 이벤트가 남는다. 빈 칸을 비우면 아무것도 남지 않는다.
 - **소지품이 줄면.** 건네거나 팔거나 내려놓거나 빼앗기면 착용하지 않은 것부터 나간다. 가진 것보다 착용한 것이 많아지면 늦게 착용한 것부터 벗는다. 받은 물건은 착용하지 않은 채로 온다.
 - **서술.** 캐릭터마다 착용한 것이 서술자에게 간다(`[착용: 대검(주손·보조손), 사슬 갑옷(몸)]`, `narration-51`). 닫기 시작할 때 굳힌다.
-- 착용은 아직 판정에 쓰이지 않는다. 무기의 공격 보정과 방어구의 방어는 다음 단계다(#276).
+
+**공격과 방어(#276).** 착용한 장비가 타격에 든다. 앉은 사람, NPC, 몬스터에 같은 규칙이다(`app/engine/armor.py`, `app/rounds/blows.py`).
+
+- **무기.** 앉은 사람은 타격하는 판정에 착용한 무기 하나를 적는다(`action.weapon`). 공격 보정(`attack`)이 판정의 보정에 더해진다. NPC 와 몬스터는 공격(스킬)마다 무기를 적는다(`attacks[].weapon`). 판정할 때 그 무기를 착용하고(지니고) 있어야 보정이 든다. 그사이에 건넸거나 빼앗겼으면 보정이 없다.
+- **부위.** 공격이 맞은 부위는 서버가 룰북의 칸마다의 가중치(`hit_weight`)대로 굴린다. 판정보다 먼저다. 맞는 쪽이 어느 부위에도 방어가 없으면 굴리지 않는다(어디에 맞아도 같다). 앉은 사람은 부위를 노릴 수 있다(`action.strike`). 노려 치기와 같은 대가(`rules.called_shot`)를 치르고 굴리지 않는다. 부상을 노리는 `aim` 과는 함께 적지 않는다. 노려 치기가 없는 규칙이나 가중치 0 인 칸은 노릴 수 없다.
+- **방어.** 맞은 부위를 차지한 착용의 `defense` 에, 몬스터는 그 부위의 타고난 방어를, 착용한 모든 물건의 `guard`(방패)를 더한 것이다. NPC 와 몬스터는 장비 줄의 착용 중 아직 지닌 것만 센다.
+- **방어 방식.** 룰북의 `armor.mode` 가 정한다. `ac` 면 방어만큼 맞히는 목표값이 오른다(판정의 `target` 에 이미 들었다). `reduce` 면 굴린 피해에서 방어만큼 뺀다(변화의 `rolls` 를 더한 값과 `amount` 의 차이, 0 아래로는 안 간다). `null` 이면 방어구가 막지 않는다.
+- **결과.** 판정과 차례의 결과에 `blow`(`weapon`, `location`, `location_name`, `aimed`, `defense`, `mode`)가 붙는다. 무기도 부위도 방어도 없는 타격이면 `null` 이다(그 전과 같다). 서술의 줄에도 붙는다(`무기: 장검 +2 · 맞은 곳: 몸 · 방어 5(목표값에 더함)`, `narration-52`).
+- 무기가 공격 보정이 없는 물건이면 422(`weapon`), 착용하고 있지 않으면 409(`weapon_not_worn`), 노릴 수 없는 부위면 422(`strike`).
 
 ### 퀘스트
 
@@ -1404,6 +1417,8 @@ records.py      일어난 일을 이벤트로 적기
 | `monster` | 겨누는 몬스터 한 마리. 이번 장면의 몬스터 목록(아래)의 `id`. `harm` 과만 적는다(회복, `aim` 은 없다). `target`, `npc` 와 함께 적지 않는다 |
 | `lethal` | 타격이 죽이려는 것인가. 적지 않으면 `false`(제압)다. `harm` 과 함께만 적는다 |
 | `aim` | 노려 치기. 노릴 부상의 이름표(규칙의 `injuries[].key`). `harm` 과 함께만 적는다. 판정이 어려워지고, 성공하면 그 부상이 생긴다(아래 "부상") |
+| `weapon` | 타격에 쓰는 무기(#276). 착용한 물건 중 공격 보정이 있는 것의 `entry_id`. `harm` 과 함께만 적는다. 공격 보정이 판정의 보정에 더해진다([공격과 방어](#장비)) |
+| `strike` | 노릴 부위(#276). 룰북의 장비의 칸. `harm` 과 함께만, `aim` 과는 함께 적지 않는다. 노려 치기의 대가를 치르고 부위를 굴리지 않는다 |
 
 - 행동은 하나만 붙인다. 한 사람이 한 라운드에 주사위를 한 번 굴린다.
 - 행동이 없는 선언도 받는다. 판정이 없는 것이다(대화, 둘러보기).
@@ -1919,6 +1934,7 @@ app/rounds/
   - `narration-49`: 장면의 길이 안내가 출력 단계를 따른다(o1 1,100~1,600자·길어도 2,000자, o2 1,600~2,400자·길어도 2,800자, #387). o0 은 그대로다
   - `narration-50`: 돈이 있는 판이면 한 일의 줄에 가진 돈(`[소지금: 금화 30닢]`)과 사고판 결과(`(산 물건: …)`, `(판 물건: …)`), 건넨 돈(`(건넨 돈: …)`)이 붙고, 돈을 다루는 법이 한 줄 붙는다(#278). 돈이 없는 판의 글은 그대로다
   - `narration-51`: 착용한 장비가 있으면 한 일의 줄에 착용(`[착용: 대검(주손·보조손), 사슬 갑옷(몸)]`)이 소지금 뒤에 붙는다(#276)
+  - `narration-52`: 타격에 장비가 들었으면 판정의 줄과 몬스터·인물의 차례의 줄에 무기, 맞은 부위, 그 부위의 방어가 붙는다(`무기: 장검 +2 · 맞은 곳: 몸 · 방어 3(목표값에 더함)`, #276)
   - `narration-47`: 퀘스트 뒤, 시각 앞에 `[일어난 사건]`(그 라운드가 닫힐 때 일어난 판의 사건, `- 함정: 기사 → 지하실`, #367)과 옮겨진 인물은 이미 그곳에 있다는 다루는 법
   - `narration-46`: 가기의 줄에 업고 간 쓰러진 동료(`(간 곳: 성문 → 숲, 약사을(를) 업고)`, 업지 못했으면 그 까닭, #367)
   - `narration-45`: 한 일의 줄에 기다리기(`(기다리기: 3일)`, `(기다리기: 3일. 모두가 기다리지 않아 시간이 건너뛰지 않았다)`, #367)
@@ -2663,13 +2679,13 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
 | `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_model`(이 라운드의 서술 모델. 모델을 고르는 규칙 전의 테이블이면 `null`), `price`(1인 1라운드의 값 `{"credits", "tier"}`. 알릴 수 없으면 `null`), `clock`(게임 안의 시각: `day`, `hour`, `minute`, `time_of_day`), `passed_minutes`(앞 라운드부터 흐른 분. 첫 라운드는 0) |
 | `player_action` | 플레이어가 선언한 행동 | `round`, `character_name`, `content`, `action`(행동. 없으면 `null`) |
-| `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면) |
+| `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면), `blow`(타격에 장비가 들었으면, #276) |
 | `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed`, `injury_roll`(부상 표를 굴렸으면) |
 | `npc_attitude_changed` | 엔진이 NPC 의 태도를 바꿨다. 그렇게 만든 일 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `previous`, `attitude`(`friendly`, `neutral`, `wary`, `hostile`), `reason`(`caught_stealing` 훔치다 들킴, `robbed_while_down` 쓰러진 동안 빼앗기고 깨어남) |
 | `npc_changed` | 엔진이 NPC 의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`. HP 의 숫자는 내보내지 않는다 |
 | `monster_changed` | 엔진이 몬스터 한 마리의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `monster_id`, `name`(부르는 이름), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`. HP 의 숫자는 내보내지 않는다 |
-| `monster_attacked` | 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 쳤다. 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `monster_id`, `name`(부르는 이름), `attack`(`name`, `ability`, `difficulty`, `harm`), `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만). 굴림의 보정과 합은 몬스터의 능력치를 드러내서 내보내지 않는다 |
-| `npc_attacked` | 엔진이 싸우는 NPC 의 차례에 캐릭터 하나를 쳤다(#487). 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `entry_id`, `name`(장면의 호칭), `attack`, `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만). 굴림과 부상의 영향은 내보내지 않는다 |
+| `monster_attacked` | 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 쳤다. 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `monster_id`, `name`(부르는 이름), `attack`(`name`, `ability`, `difficulty`, `harm`), `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만), `blow`(공격에 장비가 들었으면, #276). 굴림의 보정과 합은 몬스터의 능력치를 드러내서 내보내지 않는다 |
+| `npc_attacked` | 엔진이 싸우는 NPC 의 차례에 캐릭터 하나를 쳤다(#487). 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `entry_id`, `name`(장면의 호칭), `attack`, `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만), `blow`(#276). 굴림과 부상의 영향은 내보내지 않는다 |
 | `injury_gained` | 캐릭터나 NPC 가 부상을 입었다. 그 HP 의 변화 바로 뒤에 적힌다 | `round`, 캐릭터면 `user_id`, `character_name`, NPC 면 `entry_id`, `name`, 그리고 `injury`, `source`, `ends_after_round`(짧은 것), `heals_at`(오래 가는 것의 나을 시각: `day`, `hour`, `minute`, `time_of_day`) |
 | `injury_ended` | 부상이 끝났다. 정한 라운드가 지나 풀렸거나 나을 시각이 지나 나았으면 그 라운드의 죽음의 굴림들 뒤, 닫힘 앞에 적힌다. 치료로 나았으면 그 치료 바로 뒤에 적힌다 | `round`, 누구인지(위와 같다), `injury`, `reason`(`expired` 짧은 것이 풀림, `healed` 오래 가는 것이 나음, `treated` 치료로 나음). 후유증이 생겼으면 바로 뒤에 `injury_gained`(`source`: `aftermath`) |
 | `injury_treated` | 엔진이 치료의 결과를 정했다. 그 판정 바로 뒤에 적힌다 | `round`, 누구인지(위와 같다), `injury`, `treated`, `heals_at`, `healed`, `mishap`(실패 표를 굴렸으면 `roll`, `kind`, `rounds`, `delay_minutes`, `magnitude`), `died` |

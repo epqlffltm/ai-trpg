@@ -114,9 +114,26 @@ def check_rolled(payload: dict, labels: Labels) -> list[Block]:
     return [
         Note(
             f'판정: {who(payload)} · {ability}({difficulty}) {numbers}, 목표 {payload.get("target")}'
-            f' → {outcome(payload.get("success"))}'
+            f' → {outcome(payload.get("success"))}{blow_text(payload.get("blow"))}'
         )
     ]
+
+
+def blow_text(blow: object) -> str:
+    """
+    타격에 장비가 든 것(#276)을 줄 뒤에 붙일 글. 없으면 빈 글이다.
+
+    예: (장검 +2 · 몸 · 방어 3)
+    """
+    if not isinstance(blow, dict):
+        return ''
+    weapon = blow.get('weapon')
+    parts = [f'{text_of(weapon.get("name"))} +{weapon.get("bonus")}'] if isinstance(weapon, dict) else []
+    if blow.get('location_name'):
+        parts.append(text_of(blow.get('location_name')) + ('(노림)' if blow.get('aimed') else ''))
+    if blow.get('mode'):
+        parts.append(f'방어 {blow.get("defense")}')
+    return f' ({" · ".join(parts)})' if parts else ''
 
 
 def hp_changed(payload: dict, labels: Labels) -> list[Block]:
@@ -153,7 +170,8 @@ def attacked(payload: dict, labels: Labels) -> list[Block]:
     """몬스터나 NPC 의 공격. 누가 무엇으로 누구를 쳤고 맞혔는가."""
     attack = payload.get('attack') or {}
     hit = '맞음' if payload.get('success') else '빗나감'
-    return [Note(f'{text_of(payload.get("name"))} → {who(payload)}: {text_of(attack.get("name"))} → {hit}')]
+    line = f'{text_of(payload.get("name"))} → {who(payload)}: {text_of(attack.get("name"))} → {hit}'
+    return [Note(line + blow_text(payload.get('blow')))]
 
 
 def body_changed(payload: dict, labels: Labels) -> list[Block]:

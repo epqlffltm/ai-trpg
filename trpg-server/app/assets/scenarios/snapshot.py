@@ -105,7 +105,10 @@ from app.engine.sheet import Sheet
 #      프리젠이 더 받는 돈(pregens[].money), 퀘스트의 돈의 보상(quests[].reward_money), 상인(npc_sheets[].merchant)
 #  47: 장비의 칸이 있다(#276). 규칙의 칸(rulebook.rules.equipment_slots), 물건이 들어가는 칸(items[].slots,
 #      items[].slot_count), 시작할 때 착용하는 칸(starting_items[].wear, pregens[].items[].wear)
-SNAPSHOT_FORMAT = 47
+#  48: 장비가 공격과 방어에 든다(#276). 규칙의 방어 방식(rulebook.rules.armor)과 칸이 맞을 가중치
+#      (equipment_slots[].hit_weight), 물건의 공격 보정과 방어(items[].attack, defense, guard),
+#      NPC 와 몬스터가 착용한 칸(equipment[].wear), 공격의 무기(attacks[].weapon), 몬스터의 타고난 방어(natural_armor)
+SNAPSHOT_FORMAT = 48
 
 
 class EntrySnapshot(BaseModel):
@@ -209,6 +212,10 @@ class ItemRuleSnapshot(BaseModel):
     price: int | None = None
     slots: list[str] = []
     slot_count: int = 1
+    # 무기의 공격 보정, 차지한 칸의 방어, 모든 부위의 방어(#276). 형식 48 보다 옛 판의 물건에는 없다
+    attack: int | None = None
+    defense: int | None = None
+    guard: int | None = None
 
 
 class QuestConditionSnapshot(BaseModel):
@@ -321,6 +328,8 @@ class CarriedItemSnapshot(BaseModel):
     entry_id: uuid.UUID
     count: int
     chance: int
+    # 착용한 칸들(#276). 장비의 줄에만 있다. 형식 48 보다 옛 판에는 없다
+    wear: list[str] = []
 
 
 class AttackSnapshot(BaseModel):
@@ -330,6 +339,8 @@ class AttackSnapshot(BaseModel):
     ability: str
     difficulty: str
     harm: str
+    # 이 공격에 쓰는 무기(#276). 시트의 장비 줄의 물건이다. 형식 48 보다 옛 판의 공격은 맨몸이다
+    weapon: uuid.UUID | None = None
 
 
 class NpcSheetSnapshot(BaseModel):
@@ -350,6 +361,13 @@ class NpcSheetSnapshot(BaseModel):
     attacks: list[AttackSnapshot] = []
     # 상인인가(#278). 소지품 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다. 형식 46 보다 옛 판의 인물은 아니다
     merchant: bool = False
+
+
+class NaturalArmorSnapshot(BaseModel):
+    """몬스터의 한 부위의 타고난 방어(#276). 칸은 판 안의 규칙의 장비의 칸이다."""
+
+    slot: str
+    defense: int
 
 
 class MonsterSnapshot(BaseModel):
@@ -374,6 +392,8 @@ class MonsterSnapshot(BaseModel):
     inventory: list[CarriedItemSnapshot] = []
     # 둔한가. 둔하면 훔치기가 쉽다(규칙의 steal.dull). 형식 36 보다 옛 판의 몬스터는 둔하지 않다
     dull: bool = False
+    # 부위마다 타고난 방어(#276). 형식 48 보다 옛 판의 몬스터는 없다
+    natural_armor: list[NaturalArmorSnapshot] = []
 
 
 class EncounterSnapshot(BaseModel):
@@ -766,8 +786,9 @@ def snapshot_monster(
     equipment: list[CarriedItemSnapshot],
     inventory: list[CarriedItemSnapshot],
     dull: bool = False,
+    natural_armor: list[NaturalArmorSnapshot] | None = None,
 ) -> MonsterSnapshot:
-    """몬스터와 그 시트, 공격, 지닌 물건, 둔한지를 굳힌다."""
+    """몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어를 굳힌다."""
     return MonsterSnapshot(
         id=monster.id,
         name=monster.name,
@@ -779,6 +800,7 @@ def snapshot_monster(
         equipment=equipment,
         inventory=inventory,
         dull=dull,
+        natural_armor=natural_armor or [],
     )
 
 
