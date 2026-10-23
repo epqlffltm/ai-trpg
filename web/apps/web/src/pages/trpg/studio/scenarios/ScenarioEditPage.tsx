@@ -15,6 +15,7 @@ import { BasicsTab } from './BasicsTab';
 import { CharactersTab } from './CharactersTab';
 import { CheckPanel } from './CheckPanel';
 import { ItemsTab } from './ItemsTab';
+import { NpcsTab } from './NpcsTab';
 import { MaterialsTab } from './MaterialsTab';
 import { OpeningsTab } from './OpeningsTab';
 import { PublishTab } from './PublishTab';
@@ -73,6 +74,7 @@ function panelOf(tab: ScenarioTab, scenario: ScenarioDetail, goTo: (tab: Scenari
   if (tab === 'openings') return <OpeningsTab scenario={scenario} />;
   if (tab === 'characters') return <CharactersTab scenario={scenario} goTo={goTo} />;
   if (tab === 'items') return <ItemsTab scenario={scenario} goTo={goTo} />;
+  if (tab === 'npcs') return <NpcsTab scenario={scenario} goTo={goTo} />;
   return <PublishTab scenario={scenario} />;
 }
 
