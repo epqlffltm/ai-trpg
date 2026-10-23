@@ -158,7 +158,7 @@ async def test_creating_a_table_writes_the_first_event(client: AsyncClient, me: 
     (event,) = page['items']
     assert (event['sequence'], event['type'], event['actor_id']) == (1, 'table_created', str(ME))
     # 정한 서술 모델과 시나리오의 추천 모델이 함께 실린다. 둘이 다르면 화면이 대신 쓴 것을 알린다
-    payload = {'narration_model': TEST_MODEL, 'recommended_model': TEST_MODEL}
+    payload = {'narration_model': TEST_MODEL, 'recommended_model': TEST_MODEL, 'input_step': 0, 'output_step': 0}
     assert (event['payload'], event['caused_by_sequence']) == (payload, None)
     assert event['created_at'] is not None
 
@@ -318,6 +318,8 @@ async def test_starting_writes_the_roster_the_scene_and_the_round(
         'number',
         'deadline_at',
         'narration_model',
+        'input_step',
+        'output_step',
         'price',
         'clock',
         'passed_minutes',

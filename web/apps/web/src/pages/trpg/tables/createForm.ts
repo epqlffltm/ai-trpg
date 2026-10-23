@@ -76,6 +76,9 @@ export function toTableCreate(draft: CreateDraft, listing: PublicListingDetail):
     narration_style: draft.narrationStyle === '' ? null : draft.narrationStyle,
     round_time_limit: draft.roundTimeLimit,
     narration_model: draft.narrationModel === '' ? null : draft.narrationModel,
+    // 서술의 입력·출력 단계(#387)는 아직 화면에서 고르지 않는다. 기본 단계다
+    input_step: 0,
+    output_step: 0,
     credit_wait_seconds: draft.creditWaitSeconds,
     remove_short_payers: draft.removeShortPayers,
     whisper_notice: draft.whisperNotice,

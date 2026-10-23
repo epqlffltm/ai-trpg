@@ -5,11 +5,14 @@
 
 고를 수 있는 모델은 둘 다에 있어야 한다.
   - 모델 목록에서 켜져 있고 은퇴하지 않았다(rules.is_offered). 원가를 적고 평가를 통과해 켠 모델이다.
-  - 가격 목록에 그 이름표의 가격표 이름(narration.<이름표>.i0.o0)이 있고 지금 팔고 있다.
+  - 가격 목록에 그 이름표의 기본 가격표 이름(narration.<이름표>.i0.o0)이 있고 지금 팔고 있다.
     값이 바뀌는 예약(next)이 있으면 함께 내준다. 화면이 "12월 1일부터 240"처럼 미리 알린다(유저 결정, 2026-10-18).
+입력·출력 단계(#387, app/catalog/steps.py)는 단계마다 가격표 이름이 따로 있다(i1.o0 …).
+고를 수 있는 모델마다 지금 파는 단계들과 그 값을 함께 내준다(options). 기본 단계를 팔지 않는 모델은 내주지 않는다.
+모델과 단계를 함께 고를 때(find_offered)는 그 단계의 가격표도 지금 팔아야 한다.
 판매가는 결제 서버만 안다. 게임 서버는 받은 값을 그대로 붙여 보여 줄 뿐이다.
 
-결제 서버 없이 도는 서버(가격 목록이 free)는 켜진 모델을 모두 값 없이 내준다(유저 결정, 2026-10-18).
+결제 서버 없이 도는 서버(가격 목록이 free)는 켜진 모델을 모두 값 없이 내준다(유저 결정, 2026-10-18). 단계도 모두다.
 지금도 결제 서버가 없으면 홀드 없이 서술한다. 그 동작과 맞춘다. 로컬에서 모델 고르기를 시험할 수 있다.
 
 결제에 쓰는 등급은 가격표의 등급(tier)이 기준이다(model-pricing-plan 9-1). 모델 목록의 분류(grade)는 보여 주기용이다.
@@ -18,14 +21,15 @@
 시나리오의 추천 모델을 쓸 수 없으면 같은 회사의 다른 모델로 대신한다(replacement_for, 유저 결정, 2026-10-18).
   1. 운영자가 그 회사의 대체 모델로 정한 모델(scripts/models.py fallback)을 지금 고를 수 있으면 그것.
   2. 아니면 그 회사에서 지금 고를 수 있는 standard 중 가장 싼 모델. 값이 같으면 이름표 순서다.
-     standard 는 가격표의 등급으로 본다.
+     standard 는 가격표의 등급으로 본다. 값과 등급은 그 테이블의 단계의 것이다.
+     그 단계를 팔지 않는 모델은 대신하지 않는다.
      결제 서버 없이 도는 서버는 값도 등급도 없으니 모델 목록의 분류로 보고 이름표 순서다.
   3. 둘 다 없으면 없다. 새 테이블은 방장이 고른다.
 """
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -36,6 +40,7 @@ from app.billing.price_list import PriceList
 from app.billing.prices import Change, PriceBook, Tier, narration_code, price_at
 from app.catalog import repository
 from app.catalog.models import AiModel, Grade
+from app.catalog.steps import ALL_STEPS, BASE_STEPS, NarrationSteps
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +57,21 @@ class ModelCard:
     retires_on: date | None
     # 운영자가 정한 그 회사의 대체 모델인가
     vendor_fallback: bool = False
+
+
+@dataclass(frozen=True)
+class StepPrice:
+    """
+    한 모델의 단계 하나와 그 값(#387). 결제 서버 없이 도는 서버면 credits 와 tier 가 None 이다.
+
+    next 는 예약된 바뀜이다. next.sale 이 None 이면 그 시각부터 그 단계를 팔지 않는다.
+    """
+
+    steps: NarrationSteps
+    credits: str | None
+    tier: Tier | None
+    next: Change | None = None
+    promo: bool = False
 
 
 @dataclass(frozen=True)
@@ -75,6 +95,10 @@ class OfferedModel:
     vendor_fallback: bool = False
     # 이 날부터 쓰지 않는다(모델 목록의 은퇴일). 화면이 "12월 1일 종료"를 보여 준다. 정해지지 않았으면 None
     retires_on: date | None = None
+    # 값(credits, tier, next, promo)이 어느 단계의 것인가(#387). 기본 단계(i0.o0)가 아니면 find_offered 가 고른 것이다
+    steps: NarrationSteps = BASE_STEPS
+    # 지금 파는 단계들과 그 값. 기본 단계부터, 입력, 출력의 차례다. 목록(list_offered)만 채운다
+    options: tuple[StepPrice, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -98,7 +122,7 @@ def to_card(model: AiModel) -> ModelCard:
     )
 
 
-def free_offer(card: ModelCard) -> OfferedModel:
+def free_offer(card: ModelCard, steps: NarrationSteps) -> OfferedModel:
     """결제 서버 없이 도는 서버의 내줌. 값이 없다."""
     return OfferedModel(
         card.slug,
@@ -109,26 +133,42 @@ def free_offer(card: ModelCard) -> OfferedModel:
         None,
         vendor_fallback=card.vendor_fallback,
         retires_on=card.retires_on,
+        steps=steps,
     )
 
 
-def offer(card: ModelCard, book: PriceBook, now: datetime) -> OfferedModel | None:
+def step_price(slug: str, steps: NarrationSteps, book: PriceBook, now: datetime) -> StepPrice | None:
     """
-    그 모델을 지금 내줄 수 있으면 값을 붙여 돌려준다. 아니면 None.
+    그 모델의 그 단계를 지금 파는 값. 파는 가격표가 없으면 None. 결제 서버 없이 도는 서버면 값 없이 돌려준다.
 
-    꺼졌거나 은퇴했거나, 가격 목록에 없거나, 지금 팔지 않으면(예약만 있거나 판매를 멈췄다) 내주지 않는다.
+    가격 목록에 없거나, 지금 팔지 않으면(예약만 있거나 판매를 멈췄다) 팔지 않는 것이다.
     """
-    if not is_offered(card, now.date()):
-        return None
     if book.free:
-        return free_offer(card)
-    price = book.prices.get(narration_code(card.slug))
+        return StepPrice(steps, None, None)
+    price = book.prices.get(narration_code(slug, steps))
     if price is None:
         return None
     price = price_at(price, now)
     if price.current is None:
         return None
-    sale = price.current
+    return StepPrice(steps, price.current.credits, price.current.tier, price.next, price.current.promo)
+
+
+def offer(card: ModelCard, book: PriceBook, now: datetime, steps: NarrationSteps = BASE_STEPS) -> OfferedModel | None:
+    """
+    그 모델을 그 단계로 지금 내줄 수 있으면 그 단계의 값을 붙여 돌려준다. 아니면 None.
+
+    꺼졌거나 은퇴했으면 내주지 않는다. 기본 단계와 그 단계를 둘 다 지금 팔아야 한다.
+    """
+    if not is_offered(card, now.date()):
+        return None
+    if book.free:
+        return free_offer(card, steps)
+    if step_price(card.slug, BASE_STEPS, book, now) is None:
+        return None
+    sale = step_price(card.slug, steps, book, now)
+    if sale is None:
+        return None
     return OfferedModel(
         card.slug,
         card.display_name,
@@ -136,17 +176,30 @@ def offer(card: ModelCard, book: PriceBook, now: datetime) -> OfferedModel | Non
         card.grade,
         sale.credits,
         sale.tier,
-        price.next,
+        sale.next,
         sale.promo,
         card.vendor_fallback,
         card.retires_on,
+        steps,
     )
 
 
-def offered_models(cards: Sequence[ModelCard], book: PriceBook, now: datetime) -> list[OfferedModel]:
-    """내줄 수 있는 모델들. 회사, 보이는 이름 순서다(화면이 회사별로 묶는다)."""
-    offers = [found for card in cards if (found := offer(card, book, now)) is not None]
+def options_of(slug: str, book: PriceBook, now: datetime) -> tuple[StepPrice, ...]:
+    """그 모델의 지금 파는 단계들과 그 값. ALL_STEPS 의 차례다."""
+    return tuple(sale for steps in ALL_STEPS if (sale := step_price(slug, steps, book, now)) is not None)
+
+
+def offered_models(
+    cards: Sequence[ModelCard], book: PriceBook, now: datetime, steps: NarrationSteps = BASE_STEPS
+) -> list[OfferedModel]:
+    """그 단계로 내줄 수 있는 모델들. 회사, 보이는 이름 순서다(화면이 회사별로 묶는다)."""
+    offers = [found for card in cards if (found := offer(card, book, now, steps)) is not None]
     return sorted(offers, key=lambda found: (found.vendor, found.display_name))
+
+
+def with_options(found: OfferedModel, book: PriceBook, now: datetime) -> OfferedModel:
+    """내줄 모델에 지금 파는 단계들을 붙인다."""
+    return replace(found, options=options_of(found.slug, book, now))
 
 
 def is_standard(found: OfferedModel) -> bool:
@@ -192,40 +245,48 @@ def warn_disagreements(offers: Sequence[OfferedModel]) -> None:
             )
 
 
-async def find_offered(session: AsyncSession, prices: PriceList, slug: str, now: datetime) -> OfferedModel | None:
+async def find_offered(
+    session: AsyncSession, prices: PriceList, slug: str, now: datetime, steps: NarrationSteps = BASE_STEPS
+) -> OfferedModel | None:
     """
-    그 이름표의 모델을 지금 고를 수 있으면 값을 붙여 돌려준다. 모델 목록에 없거나 고를 수 없으면 None.
+    그 이름표의 모델을 그 단계로 지금 고를 수 있으면 그 단계의 값을 붙여 돌려준다. 고를 수 없으면 None.
 
-    방장이 테이블의 모델을 고를 때 쓴다(app/tables/model_picker.py). 목록(list_offered)과 같은 규칙이다.
+    방장이 테이블의 모델과 단계를 고를 때 쓴다(app/tables/model_picker.py). 목록(list_offered)과 같은 규칙이다.
     가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다.
     """
     model = await repository.get_model(session, slug)
     if model is None:
         return None
-    return offer(to_card(model), await prices.book(), now)
+    return offer(to_card(model), await prices.book(), now, steps)
 
 
 async def find_replacement(
-    session: AsyncSession, prices: PriceList, vendor: str, now: datetime, excluding: str
+    session: AsyncSession,
+    prices: PriceList,
+    vendor: str,
+    now: datetime,
+    excluding: str,
+    steps: NarrationSteps = BASE_STEPS,
 ) -> OfferedModel | None:
     """
-    그 회사의 대신 쓸 모델(replacement_for). 모델 목록과 가격 목록을 읽어 지금 고를 수 있는 모델 안에서 고른다.
+    그 회사의 대신 쓸 모델(replacement_for). 모델 목록과 가격 목록을 읽어 그 단계로 지금 고를 수 있는 것 중에서 고른다.
 
-    excluding 은 대신하려는 모델이다. 그 모델은 후보에서 뺀다.
+    excluding 은 대신하려는 모델이다. 그 모델은 후보에서 뺀다. 값과 등급은 그 단계의 것이다.
     가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다.
     """
     cards = [to_card(model) for model in await repository.list_models(session) if model.slug != excluding]
-    return replacement_for(offered_models(cards, await prices.book(), now), vendor)
+    return replacement_for(offered_models(cards, await prices.book(), now, steps), vendor)
 
 
 async def list_offered(session: AsyncSession, prices: PriceList, now: datetime) -> Offering:
     """
     방장이 고를 수 있는 모델들. 모델 목록을 DB 에서 읽고, 가격 목록을 받아(받아 둔 것) 맞춰 붙인다.
 
+    모델마다 값은 기본 단계의 것이고, 지금 파는 단계들과 그 값을 함께 붙인다(options, #387).
     가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다.
     """
     cards = [to_card(model) for model in await repository.list_models(session)]
     book = await prices.book()
-    offers = offered_models(cards, book, now)
+    offers = [with_options(found, book, now) for found in offered_models(cards, book, now)]
     warn_disagreements(offers)
     return Offering(free=book.free, models=offers)

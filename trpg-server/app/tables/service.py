@@ -39,6 +39,7 @@ from app.auth.tokens import AccessClaims
 from app.billing import charges
 from app.billing.price_list import FREE_PRICES, PriceList
 from app.calendar import state as calendar
+from app.catalog.steps import NarrationSteps, steps_of
 from app.events import recorder
 from app.events.models import EventType
 from app.limits.setup import Limiting
@@ -53,7 +54,7 @@ from app.tables.building import build_table, hash_table_password, new_invite_cod
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
 from app.tables.model_choice import ModelChoice, choose_model
-from app.tables.model_picker import ModelPicker
+from app.tables.model_picker import ModelPicker, require_pickable
 from app.tables.models import DepartureKind, GameTable, TableMember, TableStatus
 from app.tables.password_attempts import guarded_password_check
 from app.tables.schemas import CharacterUpdate, HostTransfer, JoinRequest, LobbyJoinRequest, TableCreate
@@ -88,9 +89,14 @@ async def resolve_version(session: AsyncSession, viewer: AccessClaims, data: Tab
     return version
 
 
-def created_payload(choice: ModelChoice) -> dict:
-    """테이블을 만든 이벤트에 싣는 것. 정한 서술 모델과 시나리오의 추천 모델. 둘이 다르면 화면이 알린다."""
-    return {'narration_model': choice.slug, 'recommended_model': choice.recommended}
+def created_payload(choice: ModelChoice, steps: NarrationSteps) -> dict:
+    """테이블을 만든 이벤트에 싣는 것. 정한 서술 모델과 단계, 시나리오의 추천 모델. 모델이 다르면 화면이 알린다."""
+    return {
+        'narration_model': choice.slug,
+        'recommended_model': choice.recommended,
+        'input_step': steps.input,
+        'output_step': steps.output,
+    }
 
 
 async def create_table(
@@ -105,7 +111,8 @@ async def create_table(
     판이 없으면 AssetNotFoundError, 없는 스타팅이나 판이 허용하지 않는 캐릭터 방식을 골랐으면 TableOptionError,
     성인용 판인데 성인용 내용을 볼 수 없는 사람이면 AdultContentRequiredError,
     그 판으로는 둘 수 없는 정원이면 TableConflictError.
-    서술 모델을 정하지 못하면 TableOptionError(narration_model).
+    서술 모델을 정하지 못하면 TableOptionError(narration_model), 정한 모델이 고른 단계(#387)를 팔지 않으면
+    TableOptionError(narration_steps).
     판의 세계관이 허용하지 않는데 참고 자료를 켜려 했으면 TableOptionError(references_enabled).
     """
     version = await resolve_version(session, viewer, data)
@@ -125,15 +132,18 @@ async def create_table(
 
     recommended = await versions.recommended_model(session, version.scenario_id)
     choice = await choose_model(session, picker, data.narration_model, recommended)
+    steps = NarrationSteps(data.input_step, data.output_step)
+    await require_pickable(session, picker, choice.slug, steps)
     password_hash = await hash_table_password(data.password)
     table = build_table(viewer.user_id, version, snapshot, data, modes, password_hash)
     table.narration_model = choice.slug
+    table.input_step, table.output_step = steps.input, steps.output
     table.references_enabled = data.references_enabled
     calendar.start_clock(table, snapshot)
     repository.add_table(session, table)
     # 테이블을 먼저 DB 에 보낸다. 테이블의 ID 는 그때 정해지고, 이벤트는 그 ID 를 가리킨다
     await session.flush()
-    payload = created_payload(choice)
+    payload = created_payload(choice, steps)
     recorder.record(session, table, EventType.TABLE_CREATED, actor_id=viewer.user_id, payload=payload)
     await commit(session, table)
     return await repository.reload_table(session, table.id)
@@ -398,7 +408,7 @@ async def start_table(
     payload = {'members': roster(table)}
     started = recorder.record(session, table, EventType.TABLE_STARTED, actor_id=host_id, payload=payload)
     opening = snapshot.openings[table.opening_index]
-    price = await price_of(session, prices, table.narration_model, datetime.now(UTC))
+    price = await price_of(session, prices, table.narration_model, datetime.now(UTC), steps_of(table))
     opener.open_round(session, table, number=1, scene=opening, cause=started, price=price)
     return await save(session, table)
 

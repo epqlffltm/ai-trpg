@@ -13,7 +13,7 @@
 
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import pytest
 from ai_core.fake import FakeEmbedder, FakeProvider
@@ -26,6 +26,7 @@ from app.ai_log.call_log import DbCallLog
 from app.ai_log.models import AiInvocation
 from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot
+from app.catalog.steps import NarrationSteps
 from app.main import API_PREFIX
 from app.memory import indexing, repository, texts
 from app.memory.models import RoundMemory
@@ -663,3 +664,18 @@ async def test_closing_a_round_puts_the_memories_in_the_prompt_and_the_record(
     assert all(prompt.MEMORY_TITLE not in call.messages[-1].content for call in provider.calls[:4])
     rows = (await session.scalars(select(AiInvocation).order_by(AiInvocation.round_number))).all()
     assert [row.memory_rounds for row in rows] == [[], [], [], [], [1]]
+
+
+async def test_a_higher_input_step_takes_more_memories(client: AsyncClient, app: FastAPI, me: dict[str, str]):
+    """기억의 수의 상한이 입력 단계를 따른다(#387). 처음 값만큼 더한다(하나 → 둘)."""
+    table_id = await played_table(client, app, me)
+    await indexing.index_table(app.state.session_factory, FakeEmbedder(), table_id)
+    retriever, _, _ = make_retriever(app)
+    retriever = replace(retriever, thresholds=replace(retriever.thresholds, count=1))
+    request = replace(request_for(table_id, '리무진 창문이 내려간다.', '악역영애에게 손을 흔든다.'), round_number=20)
+
+    base = await retriever.find(request)
+    higher = await retriever.find(replace(request, steps=NarrationSteps(1, 0)))
+
+    # 악역영애가 나온 2 와 4 라운드. 기본 단계는 하나, 입력 1 단계는 둘이다
+    assert (numbers(base), numbers(higher)) == ([4], [4, 2])

@@ -5166,6 +5166,13 @@
               }
             ]
           },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/StepPriceOut"
+            },
+            "title": "Options",
+            "type": "array"
+          },
           "promo": {
             "title": "Promo",
             "type": "boolean"
@@ -5210,20 +5217,35 @@
           "tier",
           "promo",
           "next",
-          "retires_on"
+          "retires_on",
+          "options"
         ],
         "title": "NarrationModelOut",
         "type": "object"
       },
       "NarrationModelUpdate": {
         "additionalProperties": false,
-        "description": "서술 모델을 바꿀 때 받는 값. 칸을 빼먹으면 거부한다. 비울 수 없다(서버의 기본 모델로 돌아가지 않는다).",
+        "description": "서술 모델과 단계를 바꿀 때 받는 값. 모델을 빼먹으면 거부한다. 비울 수 없다(서버의 기본 모델로 돌아가지 않는다).\n\n단계(#387)는 모델과 함께 한 가격표를 고르는 것이다. 적지 않으면 0, 0(i0.o0)이다. 그 모델이 그 단계를 팔아야 한다.",
         "properties": {
+          "input_step": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Input Step",
+            "type": "integer"
+          },
           "narration_model": {
             "maxLength": 48,
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "title": "Narration Model",
             "type": "string"
+          },
+          "output_step": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Output Step",
+            "type": "integer"
           }
         },
         "required": [
@@ -7878,6 +7900,10 @@
             "title": "Declarations",
             "type": "array"
           },
+          "input_step": {
+            "title": "Input Step",
+            "type": "integer"
+          },
           "narration_failed_at": {
             "anyOf": [
               {
@@ -7907,6 +7933,10 @@
           },
           "number": {
             "title": "Number",
+            "type": "integer"
+          },
+          "output_step": {
+            "title": "Output Step",
             "type": "integer"
           },
           "price": {
@@ -7946,6 +7976,8 @@
           "created_at",
           "deadline_at",
           "narration_model",
+          "input_step",
+          "output_step",
           "price",
           "closing_at",
           "closed_at",
@@ -10486,6 +10518,74 @@
         "title": "StealOutcome",
         "type": "object"
       },
+      "StepPriceOut": {
+        "description": "모델의 단계 하나와 1인 1라운드의 값(#387). 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.\n\n입력 단계마다 입력 +8,000 토큰(12,000, 20,000, 28,000), 출력 단계마다 출력 +1,000 토큰(1,200, 2,200, 3,200)이다.\n입력이 크면 지난 기록, 로어북, 기억이 더 들어가고, 출력이 크면 장면이 길어진다.",
+        "properties": {
+          "credits": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credits"
+          },
+          "input_step": {
+            "title": "Input Step",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextPriceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output_step": {
+            "title": "Output Step",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "promo": {
+            "title": "Promo",
+            "type": "boolean"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "input_step",
+          "output_step",
+          "input_tokens",
+          "output_tokens",
+          "credits",
+          "tier",
+          "promo",
+          "next"
+        ],
+        "title": "StepPriceOut",
+        "type": "object"
+      },
       "Surprise": {
         "description": "조우에서 누가 기습하는가. 제작자가 조우마다 정한다.\n\n기습한 쪽은 만난 첫 라운드(살아 있는 캐릭터가 그 장소에서 처음 차례를 받는 라운드)에 모두 먼저 움직인다.\n그다음부터는 차례를 정하는 능력치(Ruleset.initiative_ability)의 순서다. 순서를 정하는 것은 라운드 닫기다.",
         "enum": [
@@ -10528,6 +10628,13 @@
             "title": "Credit Wait Seconds",
             "type": "integer"
           },
+          "input_step": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Input Step",
+            "type": "integer"
+          },
           "is_public": {
             "default": false,
             "title": "Is Public",
@@ -10560,6 +10667,13 @@
             "default": 0,
             "minimum": 0.0,
             "title": "Opening Index",
+            "type": "integer"
+          },
+          "output_step": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Output Step",
             "type": "integer"
           },
           "password": {
@@ -10691,6 +10805,10 @@
             "title": "Id",
             "type": "string"
           },
+          "input_step": {
+            "title": "Input Step",
+            "type": "integer"
+          },
           "invite_code": {
             "anyOf": [
               {
@@ -10751,6 +10869,10 @@
           "opening": {
             "title": "Opening",
             "type": "string"
+          },
+          "output_step": {
+            "title": "Output Step",
+            "type": "integer"
           },
           "player_made_hp": {
             "anyOf": [
@@ -10854,6 +10976,8 @@
           "narration_style",
           "round_time_limit",
           "narration_model",
+          "input_step",
+          "output_step",
           "credit_wait_seconds",
           "remove_short_payers",
           "whisper_notice",
@@ -10981,6 +11105,10 @@
             "title": "Id",
             "type": "string"
           },
+          "input_step": {
+            "title": "Input Step",
+            "type": "integer"
+          },
           "is_public": {
             "title": "Is Public",
             "type": "boolean"
@@ -11002,6 +11130,10 @@
           },
           "narration_style": {
             "$ref": "#/components/schemas/NarrationStyle"
+          },
+          "output_step": {
+            "title": "Output Step",
+            "type": "integer"
           },
           "rating": {
             "$ref": "#/components/schemas/Rating"
@@ -11056,6 +11188,8 @@
           "narration_style",
           "round_time_limit",
           "narration_model",
+          "input_step",
+          "output_step",
           "credit_wait_seconds",
           "remove_short_payers",
           "whisper_notice",

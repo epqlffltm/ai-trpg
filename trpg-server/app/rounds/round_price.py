@@ -22,17 +22,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.billing.price_list import PriceList, PriceListUnavailable
 from app.catalog import offers
 from app.catalog.offers import OfferedModel
+from app.catalog.steps import BASE_STEPS, NarrationSteps
 from app.rounds.models import Round
 
 logger = logging.getLogger(__name__)
 
 
-async def price_of(session: AsyncSession, prices: PriceList, slug: str | None, now: datetime) -> OfferedModel | None:
-    """그 모델의 지금 값. 알릴 수 없으면 None. 가격 목록을 받지 못했으면 warning 을 남기고 None."""
+async def price_of(
+    session: AsyncSession, prices: PriceList, slug: str | None, now: datetime, steps: NarrationSteps = BASE_STEPS
+) -> OfferedModel | None:
+    """그 모델과 단계(#387)의 지금 값. 알릴 수 없으면 None. 가격 목록을 받지 못했으면 warning 을 남기고 None."""
     if slug is None:
         return None
     try:
-        return await offers.find_offered(session, prices, slug, now)
+        return await offers.find_offered(session, prices, slug, now, steps)
     except PriceListUnavailable:
         logger.warning('라운드의 값을 알리지 못했습니다. 가격 목록을 받지 못했습니다', extra={'model': slug})
         return None

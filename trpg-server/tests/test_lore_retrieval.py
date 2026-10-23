@@ -19,7 +19,7 @@
 
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import pytest
 from ai_core.fake import FakeEmbedder, FakeProvider, word_vector
@@ -32,6 +32,7 @@ from app.ai_log.call_log import DbCallLog
 from app.ai_log.models import AiInvocation
 from app.assets.models import LoreKind
 from app.assets.scenarios.snapshot import EntrySnapshot
+from app.catalog.steps import NarrationSteps
 from app.lore import indexing, repository
 from app.lore.models import LoreEmbedding
 from app.lore.retrieval import (
@@ -548,3 +549,20 @@ async def version_of(app: FastAPI, table: dict) -> uuid.UUID:
     """테이블이 어느 판에서 왔는가."""
     candidates = await load_candidates(app.state.session_factory, uuid.UUID(table['id']))
     return candidates.version_id
+
+
+async def test_a_higher_input_step_takes_more_lore(client: AsyncClient, me: dict, app: FastAPI):
+    """로어북의 글자 수 상한이 입력 단계를 따른다(#387). 기본 단계 3,000자, 입력 1 단계 5,000자."""
+    entries = [{'name': f'행성{number}', 'keywords': [], 'content': '가' * 500} for number in range(1, 9)]
+    table = await open_table(client, me, entries)
+    await app.state.jobs.drain()
+    # 이름이 나온 항목을 거리와 상관없이 모두 넣는다. 뜻으로는 고르지 않는다
+    retriever, _ = make_retriever(app, thresholds=Thresholds(max_distance=-1.0, keyword_max_distance=2.0))
+    scene = ' '.join(entry['name'] for entry in entries)
+    request = make_request(uuid.UUID(table['id']), scene)
+
+    base = await retriever.find(request)
+    higher = await retriever.find(replace(request, steps=NarrationSteps(1, 0)))
+
+    # 항목 하나가 503자다. 기본 단계는 다섯(2,515자), 입력 1 단계는 여덟 모두(4,024자)
+    assert (len(base), len(higher)) == (5, 8)
