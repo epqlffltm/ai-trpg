@@ -13,11 +13,15 @@
 
 import uuid
 
+from server_core.notifications import repository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.events.models import EventType, TableEvent
 from app.notifications.models import OutgoingNotification
 from app.tables.models import GameTable
+
+# 알림 서버에 넣는 이 서버의 이름. 알림 서버의 주소와 비밀(GAME_SERVER_SECRET)이 이 이름으로 정해진다
+SOURCE = 'game'
 
 # 방장에게 알리는 테이블의 이벤트와 그 알림의 종류
 HOST_NOTICES = {
@@ -29,9 +33,7 @@ HOST_NOTICES = {
 
 def put(session: AsyncSession, user_id: uuid.UUID, kind: str, source_key: str, payload: dict) -> OutgoingNotification:
     """발송함에 알림 하나를 적는다. 저장하지 않는다. 바로 보낼 차례다."""
-    notification = OutgoingNotification(user_id=user_id, kind=kind, source_key=source_key, payload=payload)
-    session.add(notification)
-    return notification
+    return repository.put(session, OutgoingNotification, user_id, kind, source_key, payload)
 
 
 def event_key(kind: str, event: TableEvent) -> str:

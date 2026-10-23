@@ -11,6 +11,7 @@ from functools import lru_cache
 from typing import ClassVar, Literal, Self
 
 from pydantic import Field, SecretStr, model_validator
+from server_core.notifications.settings import NotificationSettings
 from server_core.settings import SCHEMA_PATTERN, CoreSettings
 
 # 서술 하나에 쓰는 시간의 상한(초). 다시 시도하기와 다음 모델로 넘어가기를 모두 이 안에서 한다
@@ -25,9 +26,6 @@ BILLING_BUDGET_SECONDS = 10.0
 # 결제 서버의 비밀의 가장 짧은 길이. 결제 서버(GAME_SERVER_SECRET)와 같은 기준이다
 BILLING_SECRET_MIN_LENGTH = 32
 
-# 알림 서버의 비밀의 가장 짧은 길이. 알림 서버(GAME_SERVER_SECRET)와 같은 기준이다
-NOTIFICATION_SECRET_MIN_LENGTH = 32
-
 # 인증 서버가 탈퇴를 알릴 때의 서명 비밀의 가장 짧은 길이. 다른 서버끼리의 비밀과 같은 기준이다
 AUTH_SERVER_SECRET_MIN_LENGTH = 32
 
@@ -41,9 +39,11 @@ def model_chain(first: str, fallbacks: str) -> list[str]:
     return [first.strip(), *(name for name in names if name)]
 
 
-class Settings(CoreSettings):
+class Settings(CoreSettings, NotificationSettings):
     """
-    설정 값의 목록과 형식. 서버들이 함께 쓰는 칸(로그, 관측, DB, 토큰)은 server-core 의 CoreSettings 에 있다(#589).
+    설정 값의 목록과 형식. 서버들이 함께 쓰는 칸(로그, 관측, DB, 토큰)은 server-core 의 CoreSettings 에,
+    알림 서버의 주소와 비밀(NOTIFICATION_URL, NOTIFICATION_SECRET, NOTIFICATION_TIMEOUT_SECONDS)은
+    NotificationSettings 에 있다(#589).
     여기는 그 기본값과 게임 서버만의 칸이다.
 
     같은 이름의 환경 변수가 있으면 그 값을 쓰고, 없으면 .env 파일, 그것도 없으면 여기 적힌 기본값을 쓴다.
@@ -196,17 +196,6 @@ class Settings(CoreSettings):
     # 결제 서버를 한 번 부르는 시간의 상한(초)
     billing_timeout_seconds: float = Field(default=5.0, gt=0, le=BILLING_BUDGET_SECONDS)
 
-    # 알림 서버의 주소. 방장에게 보내는 알림을 여기 넣는다(app/notifications/). 비우면 보내지 않고 발송함에 적기만 한다.
-    # 테스트와 알림 서버 없는 개발은 비운 채로 돈다. 예: http://127.0.0.1:8004
-    notification_url: str = ''
-
-    # 알림 서버에 보내는 요청에 서명하는 비밀. 알림 서버의 GAME_SERVER_SECRET 과 같은 값이어야 한다. 32자 이상.
-    # 결제 서버의 비밀(BILLING_SECRET)과 다른 값이다. 비밀값이다. 로그와 오류에 싣지 않는다
-    notification_secret: SecretStr = SecretStr('')
-
-    # 알림 서버를 한 번 부르는 시간의 상한(초). 뒤에서 보내므로 사람이 기다리지 않는다
-    notification_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
-
     # 인증 서버가 탈퇴를 알리는 요청(app/withdrawal/)의 서명 비밀. 인증 서버의 GAME_SECRET 과 같은 값이어야 한다.
     # 비우면 탈퇴 알림을 받지 않는다(401). 인증 서버는 받을 때까지 다시 보낸다. 적으면 32자 이상.
     # 비밀값이다. 로그와 오류에 싣지 않는다
@@ -259,15 +248,6 @@ class Settings(CoreSettings):
             raise ValueError(
                 f'BILLING_URL 을 적었으면 BILLING_SECRET 을 {BILLING_SECRET_MIN_LENGTH}자 이상 적어야 합니다'
             )
-        return self
-
-    @model_validator(mode='after')
-    def require_a_notification_secret(self) -> Self:
-        """알림 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. 알림 서버가 모든 알림을 401 로 거절한다."""
-        secret = self.notification_secret.get_secret_value()
-        if self.notification_url.strip() and len(secret) < NOTIFICATION_SECRET_MIN_LENGTH:
-            minimum = NOTIFICATION_SECRET_MIN_LENGTH
-            raise ValueError(f'NOTIFICATION_URL 을 적었으면 NOTIFICATION_SECRET 을 {minimum}자 이상 적어야 합니다')
         return self
 
     @model_validator(mode='after')
