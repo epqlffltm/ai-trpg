@@ -36,6 +36,7 @@ const GATE_TOWER = {
   lock: { key: KEY, locked: true, pick: null },
   bar: null,
   force: null,
+  repair: null,
 };
 
 function entry(id: string, name: string, kind: string) {
@@ -156,6 +157,7 @@ describe('지도 탭', () => {
       lock: null,
       bar: null,
       force: null,
+      repair: null,
     });
 
     await userEvent.click(routes.getByRole('button', { name: '수도원 문–종탑 길 고치기' }));
