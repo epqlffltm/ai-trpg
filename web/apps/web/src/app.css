@@ -1450,3 +1450,79 @@ a.ui-button {
 .field-with-hint .ui-field {
   margin-bottom: 6px;
 }
+
+/* 시나리오 고치기(B9). 넓은 화면에서는 탭이 왼쪽, 게시 점검이 오른쪽. 좁으면 점검이 위 */
+.scenario-editor {
+  display: grid;
+  gap: calc(var(--ui-gap) * 1.5);
+}
+
+.scenario-editor__main {
+  min-width: 0;
+}
+
+.scenario-check {
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  align-self: start;
+}
+
+.scenario-check h2 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.scenario-check__item {
+  padding: 6px 0;
+  border-top: 1px solid var(--ui-border);
+}
+
+@media (min-width: 900px) {
+  .scenario-editor {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+
+  .scenario-check {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 16px;
+  }
+}
+
+.scenario-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: var(--ui-gap);
+}
+
+.scenario-tab {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.scenario-tab[aria-selected='true'] {
+  border-color: currentColor;
+  font-weight: 600;
+}
+
+.scenario-clock,
+.scenario-choices {
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 var(--ui-gap);
+}
+
+.scenario-opening {
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--ui-border);
+}

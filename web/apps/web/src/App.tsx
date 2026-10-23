@@ -28,7 +28,10 @@ import {
   RulebookNewPage,
   RulebooksPage,
   ScenarioBrowsePage,
+  ScenarioEditPage,
+  ScenarioNewPage,
   ScenarioPage,
+  ScenariosPage,
   StudioPage,
   TableCreatePage,
   TableRoomPage,
@@ -137,6 +140,9 @@ export function App() {
             <Route path="bestiaries" element={<BestiariesPage />} />
             <Route path="bestiaries/new" element={<BestiaryNewPage />} />
             <Route path="bestiaries/:bestiaryId" element={<BestiaryEditPage />} />
+            <Route path="scenarios" element={<ScenariosPage />} />
+            <Route path="scenarios/new" element={<ScenarioNewPage />} />
+            <Route path="scenarios/:scenarioId" element={<ScenarioEditPage />} />
           </Route>
           <Route path="*" element={<PlaceholderPage service="TRPG" />} />
         </Route>
