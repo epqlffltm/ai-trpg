@@ -12,6 +12,7 @@ import { AssetLoad } from '../AssetLoad';
 import { kindText, studioPath } from '../studioKinds';
 import { useSavedNotice } from '../useSavedNotice';
 import { BasicsTab } from './BasicsTab';
+import { CharactersTab } from './CharactersTab';
 import { CheckPanel } from './CheckPanel';
 import { MaterialsTab } from './MaterialsTab';
 import { OpeningsTab } from './OpeningsTab';
@@ -56,7 +57,7 @@ function EditScenario({ scenario }: { scenario: ScenarioDetail }) {
               hidden={entry !== tab}
               className="scenario-editor__panel"
             >
-              {panelOf(entry, scenario)}
+              {panelOf(entry, scenario, goTo)}
             </div>
           ))}
         </div>
@@ -65,10 +66,11 @@ function EditScenario({ scenario }: { scenario: ScenarioDetail }) {
   );
 }
 
-function panelOf(tab: ScenarioTab, scenario: ScenarioDetail): ReactNode {
+function panelOf(tab: ScenarioTab, scenario: ScenarioDetail, goTo: (tab: ScenarioTab) => void): ReactNode {
   if (tab === 'basics') return <BasicsTab scenario={scenario} />;
   if (tab === 'materials') return <MaterialsTab scenario={scenario} />;
   if (tab === 'openings') return <OpeningsTab scenario={scenario} />;
+  if (tab === 'characters') return <CharactersTab scenario={scenario} goTo={goTo} />;
   return <PublishTab scenario={scenario} />;
 }
 
