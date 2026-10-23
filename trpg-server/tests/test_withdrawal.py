@@ -21,13 +21,13 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient, Response
+from server_core.service_auth.signing import SIGNATURE_HEADER, TOLERANCE_SECONDS, sign
 from server_core.testing.tokens import FakeAuthServer
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.assets.models import Asset
-from app.billing.signing import SIGNATURE_HEADER, sign
-from app.core.service_auth import BODY_MAX_BYTES, TOLERANCE_SECONDS, is_fresh, is_valid, split_header
+from app.core.service_auth import BODY_MAX_BYTES
 from app.listings.models import Listing
 from app.main import API_PREFIX, create_app
 from app.notifications.models import OutgoingNotification
@@ -199,44 +199,6 @@ async def test_unknown_fields_in_the_body_are_ignored(client: AsyncClient, sessi
 
     assert response.status_code == status.HTTP_200_OK
     assert await personas_of(session, ME) == 0
-
-
-@pytest.mark.parametrize(
-    'header',
-    ['', 't=1', 'v1=abc,t=1', 't=abc,v1=abc', 'x=1,v1=abc'],
-    ids=['empty', 'no-signature', 'reversed', 'time-not-a-number', 'unknown-part'],
-)
-def test_headers_out_of_shape_are_refused(header: str):
-    assert not is_valid(TEST_AUTH_SECRET, header, 'POST', '/x', b'', time.time())
-
-
-def test_the_header_splits_into_time_and_signature():
-    assert split_header('t=123,v1=abc') == ('123', 'abc')
-    assert split_header('t=123;v1=abc') is None
-    assert split_header('v1=abc,t=123') is None
-    assert split_header('t=123,v2=abc') is None
-
-
-@pytest.mark.parametrize(
-    ('sent_at', 'fresh'),
-    [
-        ('1000', True),
-        (str(1000 + TOLERANCE_SECONDS), True),
-        (str(1000 + TOLERANCE_SECONDS + 1), False),
-        ('١٠٠٠', False),
-    ],
-    ids=['now', 'edge', 'past-edge', 'not-ascii'],
-)
-def test_freshness_has_an_edge(sent_at: str, fresh: bool):
-    assert is_fresh(sent_at, 1000) is fresh
-
-
-def test_a_short_secret_accepts_nothing():
-    short = 'x' * 31
-    header = sign(short, int(time.time()), 'POST', '/x', b'')
-
-    assert not is_valid(short, header, 'POST', '/x', b'', time.time())
-    assert is_valid('x' * 32, sign('x' * 32, int(time.time()), 'POST', '/x', b''), 'POST', '/x', b'', time.time())
 
 
 # --- 보관함, 공개, 알림 ---

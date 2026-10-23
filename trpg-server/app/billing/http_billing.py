@@ -31,6 +31,7 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 from server_core.observability.context import outgoing_headers
+from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
 from app.billing.client import (
     GOLD_REQUIRED_CODE,
@@ -41,7 +42,6 @@ from app.billing.client import (
     HoldOutcome,
     HoldResult,
 )
-from app.billing.signing import SIGNATURE_HEADER, sign
 
 HOLDS_PATH = '/api/v1/billing/service/holds'
 CAPTURE_PATH = f'{HOLDS_PATH}/capture'

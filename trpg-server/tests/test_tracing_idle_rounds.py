@@ -2,7 +2,7 @@
 
 """
 할 일이 없던 바퀴의 추적을 보내지 않는 것을 이 서버의 바퀴로 검증한다.
-5초마다 도는 바퀴 셋(app/rounds/clock.py, app/billing/settler.py, app/notifications/dispatcher.py)이
+5초마다 도는 바퀴 셋(app/rounds/clock.py, app/billing/settler.py, server_core/notifications/dispatcher.py)이
 맡은 수를 싣는지 본다.
 버리는 규칙(server_core/observability/idle_rounds.py 의 DropIdleRounds)은 server-core 의 테스트가 본다(#589).
 
@@ -16,11 +16,11 @@ from datetime import datetime
 
 import pytest
 from fastapi import FastAPI
+from server_core.notifications.dispatcher import NotificationDispatcher
 from server_core.observability.spans import ATTRIBUTE_HANDLED, add_handled, job_span, tracer
 from server_core.testing.spans import SpanRecorder
 
 from app.billing.settler import ChargeSettler
-from app.notifications.dispatcher import NotificationDispatcher
 from app.rounds.clock import RoundClock
 
 TABLE = uuid.UUID('00000000-0000-4000-8000-000000000001')
@@ -105,20 +105,23 @@ async def test_the_settler_counts_what_it_released(spans: SpanRecorder):
 
 
 @dataclass(frozen=True)
-class QuietDispatcher(NotificationDispatcher):
-    """DB 대신 정해 둔 수를 돌려주는 알림 보내기. 보낼 곳이 없다."""
+class QuietOutbox:
+    """DB 대신 정해 둔 수를 돌려주는 발송함(server_core/notifications/store.py 의 OutboxStore). 보낼 것은 없다."""
 
     stale: int = 0
 
-    async def drop_stale(self, now: datetime) -> int:
+    async def drop_stale(self, cutoff: datetime) -> int:
         return self.stale
+
+    async def due(self, now: datetime, limit: int) -> list:
+        return []
 
 
 async def test_the_dispatcher_counts_what_it_dropped(spans: SpanRecorder):
-    await QuietDispatcher(session_factory=None, notifications=lambda: None).tick()  # type: ignore[arg-type]
+    await NotificationDispatcher(store=QuietOutbox(), notifications=lambda: None).tick()  # type: ignore[arg-type]
     assert spans.ended() == []
 
-    await QuietDispatcher(session_factory=None, notifications=lambda: None, stale=1).tick()  # type: ignore[arg-type]
+    await NotificationDispatcher(store=QuietOutbox(stale=1), notifications=lambda: None).tick()  # type: ignore[arg-type]
     assert spans.find('notification.send').attributes[ATTRIBUTE_HANDLED] == 1
 
 
