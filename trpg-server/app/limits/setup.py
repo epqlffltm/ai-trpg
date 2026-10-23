@@ -27,6 +27,8 @@ class Limits:
     password_per_table: AttemptLimit
     # 채팅. 한 사람이 한 테이블에 쓴 수
     chat: AttemptLimit
+    # 기록 내려받기(#617). 한 사람이 받은 수. 판 하나를 통째로 읽어 글로 바꾸므로 비싸다
+    transcript: AttemptLimit
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,9 @@ def limits_from(settings: Settings) -> Limits:
         password_per_user=AttemptLimit('table_password', settings.password_attempts_per_user, password_window),
         password_per_table=AttemptLimit('table_password_all', settings.password_attempts_per_table, password_window),
         chat=AttemptLimit('chat', settings.chat_messages_per_window, timedelta(seconds=settings.chat_window_seconds)),
+        transcript=AttemptLimit(
+            'transcript', settings.transcripts_per_window, timedelta(seconds=settings.transcript_window_seconds)
+        ),
     )
 
 

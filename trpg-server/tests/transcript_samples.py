@@ -270,6 +270,19 @@ SAMPLES = {
         'to': {'entry_id': 'dbc7f2df-b069-439b-8d01-b55cc1da02d6', 'name': '깊은 수로'},
         'travel_minutes': None,
     },
+    'happening_occurred': {
+        'round': 1,
+        'entry_id': '6b0e1c3a-5d2f-4a8e-9c71-2f4d8e6a1b90',
+        'name': '함정',
+        'moves': [
+            {
+                'user_id': '11111111-2222-4333-8444-555555555555',
+                'character_name': '기사',
+                'from': {'entry_id': 'dfb856b4-fc40-4fd0-8afc-e46eb20df39e', 'name': '광장'},
+                'to': {'entry_id': 'dbc7f2df-b069-439b-8d01-b55cc1da02d6', 'name': '지하실'},
+            }
+        ],
+    },
     'place_searched': {
         'round': 1,
         'character_name': '기사',
